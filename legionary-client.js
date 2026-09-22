@@ -1,3 +1,4 @@
+/* Fatebound Play build trigger */
 /* Fatebound → SSH host https://136-113-125-3.sslip.io/fatebound */
 (function () {
   const SERVER = (window.LEGIONARY_SERVER || "https://136-113-125-3.sslip.io/fatebound").replace(/\/$/, "");
