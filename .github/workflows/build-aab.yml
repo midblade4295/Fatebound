@@ -55,12 +55,10 @@ jobs:
               p.write_text(t, encoding="utf-8")
           PY
 
-      - name: Create upload keystore
+      - name: Restore Play upload keystore
         run: |
-          keytool -genkeypair -keystore /tmp/upload.jks -storetype JKS \
-            -alias upload -keyalg RSA -keysize 2048 -validity 10000 \
-            -storepass FateboundUpload26 -keypass FateboundUpload26 \
-            -dname "CN=Fatebound, OU=Game, O=midblade4295, C=US"
+          base64 -d android/keystore/upload.jks.b64 > /tmp/upload.jks
+          keytool -list -keystore /tmp/upload.jks -storepass FateboundUpload26
           echo "SIGNING_KEYSTORE=/tmp/upload.jks" >> "$GITHUB_ENV"
           echo "SIGNING_STORE_PASSWORD=FateboundUpload26" >> "$GITHUB_ENV"
           echo "SIGNING_KEY_ALIAS=upload" >> "$GITHUB_ENV"
@@ -78,9 +76,3 @@ jobs:
           name: fatebound-play-aab
           path: android/app/build/outputs/bundle/release/*.aab
           if-no-files-found: error
-
-      - name: Upload signing key (keep this private)
-        uses: actions/upload-artifact@v4
-        with:
-          name: fatebound-upload-keystore
-          path: /tmp/upload.jks
