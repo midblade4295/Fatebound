@@ -17,7 +17,7 @@ import androidx.core.view.WindowInsetsControllerCompat;
 public class MainActivity extends AppCompatActivity {
     private WebView webView;
 
-    @SuppressLint("SetJavaScriptEnabled")
+    @SuppressLint({"SetJavaScriptEnabled", "deprecation"})
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -26,6 +26,7 @@ public class MainActivity extends AppCompatActivity {
         hideSystemBars();
 
         webView = new WebView(this);
+        webView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
         setContentView(webView);
 
         WebSettings s = webView.getSettings();
@@ -34,6 +35,8 @@ public class MainActivity extends AppCompatActivity {
         s.setDatabaseEnabled(true);
         s.setAllowFileAccess(true);
         s.setAllowContentAccess(true);
+        s.setAllowFileAccessFromFileURLs(true);
+        s.setAllowUniversalAccessFromFileURLs(true);
         s.setMediaPlaybackRequiresUserGesture(false);
         s.setLoadWithOverviewMode(true);
         s.setUseWideViewPort(true);
@@ -41,8 +44,15 @@ public class MainActivity extends AppCompatActivity {
         s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
 
         webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
-        webView.setWebViewClient(new WebViewClient());
         webView.setWebChromeClient(new WebChromeClient());
+        webView.setWebViewClient(new WebViewClient() {
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                view.evaluateJavascript(
+                    "(function(){function kick(){try{if(typeof renderHub==='function')renderHub();if(typeof renderDayLogin==='function')renderDayLogin();if(typeof paintHome==='function')paintHome();}catch(e){}}kick();setTimeout(kick,400);setTimeout(kick,1500);setTimeout(kick,4000);}())",
+                    null);
+            }
+        });
         webView.loadUrl("file:///android_asset/index.html");
     }
 
