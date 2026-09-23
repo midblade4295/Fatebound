@@ -1,0 +1,30 @@
+name: Apply clash tension
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "patches/apply_clash_tension.py"
+      - ".github/workflows/apply-clash-tension.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: grok/clash-tension
+          fetch-depth: 0
+      - name: Apply
+        run: |
+          set -euo pipefail
+          python3 patches/apply_clash_tension.py
+          grep -q clashTensionKit fatebound.html
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add fatebound.html
+          git diff --cached --quiet || git commit -m "Clash-style tension: lanes, telegraph, spells, crowns, countdown"
+          git push origin HEAD:grok/clash-tension
