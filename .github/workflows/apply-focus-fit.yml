@@ -4,6 +4,7 @@ on:
   workflow_dispatch:
   push:
     paths:
+      - "patches/apply_focus_fit.py"
       - ".github/workflows/apply-focus-fit.yml"
 
 permissions:
@@ -17,73 +18,14 @@ jobs:
         with:
           ref: grok/focus-fit
           fetch-depth: 0
-      - name: Patch HTML
+      - name: Run apply script
         run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          p=Path('fatebound.html')
-          t=p.read_text(encoding='utf-8')
-          if 'player.allIn' in t and 'focusFitLayout' in t:
-              print('already')
-              raise SystemExit(0)
-          ops=[]
-          ops.append((
-          'rollCost">1 energy · hold for AutoRoll',
-          'rollCost">Focus · tap x for All-in'
-          ))
-          ops.append((
-          'function cycleMult(){ const e = focus(), open = MULTS.filter(x=>x[1] <= Math.max(1,e)).map(x=>x[0]); const i = open.indexOf(player.mult); player.mult = open.length? open[(i+1) % open.length] : 1; renderMult(); SFX.tap(); if (navigator.vibrate) navigator.vibrate(8); }\nfunction renderMult(){ const e = Math.max(1, focus()); if (!multUnlocked(player.mult)) player.mult = (MULTS.filter(x=>x[1] <= e).pop()||[1])[0];',
-          '''function allInPower(){ return Math.max(4, focus()*2); }
-function cycleMult(){ if(!player) return; const e=focus();
-  if(player.allIn){ player.allIn=false; player.mult=1; renderMult(); SFX.tap(); return; }
-  const open=MULTS.filter(x=>x[1]<=Math.max(1,e)).map(x=>x[0]);
-  const i=open.indexOf(player.mult);
-  if(i===open.length-1 && e>=3){ player.allIn=true; player.mult=allInPower(); renderMult(); SFX.tap(); return; }
-  player.mult=open.length? open[(i+1)%open.length]:1; renderMult(); SFX.tap(); if (navigator.vibrate) navigator.vibrate(8); }
-function renderMult(){ const e=Math.max(1, focus());
-  if(player&&player.allIn){ player.mult=allInPower(); const key='allin|'+player.mult+'|'+e; if(_txt.mult===key) return; _txt.mult=key; $('multVal').textContent='ALL-IN x'+player.mult; const nx=$('multNext'); nx.textContent='dumps '+e+' Focus'; nx.className=''; $('multPips').innerHTML='<i class="on"></i>'; return; }
-  if (!multUnlocked(player.mult)) player.mult = (MULTS.filter(x=>x[1] <= e).pop()||[1])[0];'''
-          ))
-          ops.append((
-          'const cost = M.inBoss ? 1 : player.mult, price = (M.inBoss || player.rampage > 0) ? 0 : cost;   // raid/rampage rolls free; paid rolls spend Focus not Fate\n  if (price > 0 && focus()<price){ autoRoll=false; if (focus()<=0) toast(\'No Focus — rotate towers to refill\'); else toast(`x${cost} needs ${price} Focus. You have ${focus()}.`); return false; }',
-          'const allIn=!!player.allIn; const cost = M.inBoss ? 1 : (allIn?allInPower():player.mult); const price = (M.inBoss || player.rampage > 0) ? 0 : (allIn?focus():cost);
-  if (price > 0 && focus()<price){ autoRoll=false; if (focus()<=0) toast(\'No Focus — rotate towers or roll Energy faces\'); else toast(`x${cost} needs ${price} Focus. You have ${focus()}.`); return false; }'
-          ))
-          extra='''<style id="focusFitLayout">
-body.ui-battle-v2 #battle:not([hidden]){padding-bottom:0!important;min-height:0;height:100%;max-height:100dvh}
-body.ui-battle-v2 .arena{min-height:0!important;flex:1 1 auto!important}
-body.ui-battle-v2 .rollbar{padding-bottom:calc(6px + env(safe-area-inset-bottom,0px))!important}
-#battleHeaderV2{height:auto!important;min-height:44px;max-height:64px}
-#battleFooterV2{height:30px!important;min-height:30px}
-.v2-chip{font-size:7px!important;padding:1px 5px!important}
-#v2Energy.v2-meters{flex-wrap:nowrap!important;margin-top:1px!important}
-@media (max-height:760px){
-  :root{--v2-header-h:40px;--v2-momentum-h:18px;--v2-tactical-h:36px;--v2-footer-h:28px}
-  body.ui-battle-v2 #roll{min-height:44px!important}
-  body.ui-battle-v2 #heat,body.ui-battle-v2 #ultBar{height:18px!important}
-}
-</style>'''
-          for old,new in ops:
-              n=t.count(old)
-              print('count',n,old[:70])
-              if n!=1:
-                  raise SystemExit('miss '+old[:80])
-              t=t.replace(old,new,1)
-          if 'focusFitLayout' not in t:
-              if '</body>' not in t: raise SystemExit('nobody')
-              t=t.replace('</body>', extra+'</body>',1)
-          # after successful all-in roll clear flag: hook spendFocus of all focus already zeros bar
-          t=t.replace(
-          'if(price>0)spendFocus(price);});',
-          'if(price>0)spendFocus(price); if(allIn) player.allIn=false;});',
-          1)
-          p.write_text(t,encoding='utf-8')
-          print('ok', p.stat().st_size)
-          PY
+          set -euo pipefail
+          python3 patches/apply_focus_fit.py
           grep -q 'player.allIn' fatebound.html
           grep -q 'focusFitLayout' fatebound.html
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add fatebound.html
-          git commit -m "Fit battle bottom; All-in spends Focus for a big swing"
+          git diff --cached --quiet || git commit -m "Fit battle bottom; All-in spends Focus for a big swing"
           git push origin HEAD:grok/focus-fit
