@@ -4,7 +4,6 @@ on:
   workflow_dispatch:
   push:
     paths:
-      - "patches/resource-hud.patch"
       - ".github/workflows/apply-resource-hud.yml"
 
 permissions:
@@ -18,17 +17,39 @@ jobs:
         with:
           ref: grok/resource-hud
           fetch-depth: 0
-      - name: Apply patch
+      - name: Apply HUD replacements
         run: |
-          set -euo pipefail
-          if grep -q 'id="v2Fate"' fatebound.html && grep -q 'res-lbl' fatebound.html; then
-            echo already applied
-            exit 0
-          fi
-          patch -p0 --forward < patches/resource-hud.patch
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('fatebound.html')
+          t=p.read_text(encoding='utf-8')
+          if 'id="v2Fate"' in t and 'res-lbl' in t:
+              print('already applied')
+              raise SystemExit(0)
+          ops=[
+          ('<svg viewBox="0 0 24 24"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z" fill="#3aa8ff" stroke="#0a2a4a" stroke-width="1.2"/></svg><span id="eval">50/50</span>',
+           '<svg viewBox="0 0 24 24"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z" fill="#3aa8ff" stroke="#0a2a4a" stroke-width="1.2"/></svg><small class="res-lbl">FATE</small><span id="eval">50/50</span>'),
+          ("function paintFocusHud(){ const el=document.getElementById('v2Energy'); if(el&&M&&!M.ended) el.textContent='◈ '+focus()+'/'+(M.focusMax||8); }",
+           "function paintFocusHud(){ let fate=0,cap=50,foc=0,fmax=8; try{fate=energy();cap=R.ENERGY_CAP;}catch(_){} try{if(M&&!M.ended){foc=focus();fmax=M.focusMax||8;}}catch(_){} const old=document.getElementById('v2Energy'); if(old && !document.getElementById('v2Fate')){ old.className='v2-meters'; old.innerHTML='<span class=\"v2-chip\" id=\"v2Fate\"></span><span class=\"v2-chip focus\" id=\"v2Focus\"></span>'; } const fateEl=document.getElementById('v2Fate'); const focEl=document.getElementById('v2Focus'); if(fateEl) fateEl.textContent='FATE '+fate+'/'+cap; if(focEl) focEl.textContent=(M&&!M.ended&&!M.lobby)?('FOCUS '+foc+'/'+fmax):'FOCUS —'; }"),
+          ('<span class="v2-energy" id="v2Energy">⚡ 0</span>',
+           '<span class="v2-meters" id="v2Energy"><span class="v2-chip" id="v2Fate">FATE 0/50</span><span class="v2-chip focus" id="v2Focus">FOCUS 4/8</span></span>'),
+          ('v2$("v2Energy").textContent=`⚡ ${en}${player?` · Lv ${player.level}`:""}`;',
+           'try{paintFocusHud();}catch(_){}'),
+          ]
+          for old,new in ops:
+              n=t.count(old)
+              if n!=1:
+                  raise SystemExit('replace miss count=%s for %r'%(n,old[:80]))
+              t=t.replace(old,new,1)
+          if 'id="resourceHudStyle"' not in t:
+              t=t.replace('</body>','<style id="resourceHudStyle">.stat.energy{display:flex;align-items:center;gap:5px;flex-wrap:wrap}.stat.energy .res-lbl{font-size:8px;letter-spacing:.12em;color:#7ec8ff;font-weight:900}#v2Energy.v2-meters,.v2-meters{margin-top:3px;display:flex;gap:4px;justify-content:center;flex-wrap:wrap}.v2-chip{display:inline-flex;padding:2px 6px;border-radius:999px;background:#132b38;border:1px solid #4aa0c8;color:#d6f3ff;font-size:8px;font-weight:900;white-space:nowrap}.v2-chip.focus{border-color:#d7b056;background:#2a220e;color:#ffe7a3}</style></body>',1)
+          p.write_text(t,encoding='utf-8')
+          print('applied', p.stat().st_size)
+          PY
           grep -q 'id="v2Fate"' fatebound.html
+          grep -q 'res-lbl' fatebound.html
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add fatebound.html
-          git commit -m "Show labeled Fate and Focus on hub and battle HUD"
+          git diff --cached --quiet || git commit -m "Show labeled Fate and Focus on hub and battle HUD"
           git push origin HEAD:grok/resource-hud
