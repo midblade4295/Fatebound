@@ -1,0 +1,48 @@
+--- fatebound.html
++++ fatebound.html
+@@ -609,7 +609,7 @@
+   <div class="hud">
+     <button class="avatar" id="avatarBtn" aria-label="Season pass / ultimate"><svg class="ring" viewBox="0 0 60 60"><circle cx="30" cy="30" r="27" class="bg"/><circle cx="30" cy="30" r="27" class="fg" id="ultRing"/></svg>K<b id="lvl">10</b><i class="dot" id="passDot" hidden></i></button>
+     <div class="xp"><div class="lvrow"><span class="lv" id="lvchip">LEVEL 10</span><span class="xpn" id="xptext">0 / 10,000</span></div><div class="bar"><i id="xpbar"></i></div></div>
+-    <div class="stat energy"><svg viewBox="0 0 24 24"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z" fill="#3aa8ff" stroke="#0a2a4a" stroke-width="1.2"/></svg><span id="eval">50/50</span><span class="plus" id="cheat">+</span><small class="reg" id="ereg"></small></div>
++    <div class="stat energy"><svg viewBox="0 0 24 24"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z" fill="#3aa8ff" stroke="#0a2a4a" stroke-width="1.2"/></svg><small class="res-lbl">FATE</small><span id="eval">50/50</span><span class="plus" id="cheat">+</span><small class="reg" id="ereg"></small></div>
+   </div>
+@@ -1017,7 +1017,20 @@
+ function focus(){ if(!M) return 0; if(M.focus==null) M.focus=4; return Math.max(0, M.focus|0); }
+ function spendFocus(n){ if(!M||!(n>0)) return; M.focus=Math.max(0,(M.focus||0)-n); try{paintFocusHud();}catch(_){} }
+ function addFocus(n){ if(!M||!(n>0)) return; M.focus=Math.min(M.focusMax||8,(M.focus||0)+n); try{paintFocusHud();}catch(_){} }
+-function paintFocusHud(){ const el=document.getElementById('v2Energy'); if(el&&M&&!M.ended) el.textContent='◈ '+focus()+'/'+(M.focusMax||8); }
++function paintFocusHud(){
++  let fate=0,cap=50,foc=0,fmax=8;
++  try{fate=energy();cap=R.ENERGY_CAP;}catch(_){}
++  try{if(M&&!M.ended){foc=focus();fmax=M.focusMax||8;}}catch(_){}
++  const fateEl=document.getElementById('v2Fate');
++  const focEl=document.getElementById('v2Focus');
++  const old=document.getElementById('v2Energy');
++  if(old && !fateEl){ old.className='v2-meters'; old.innerHTML='<span class="v2-chip" id="v2Fate"></span><span class="v2-chip focus" id="v2Focus"></span>'; }
++  const fateEl2=document.getElementById('v2Fate');
++  const focEl2=document.getElementById('v2Focus');
++  if(fateEl2) fateEl2.textContent='FATE '+fate+'/'+cap;
++  if(focEl2) focEl2.textContent=(M&&!M.ended&&!M.lobby)?('FOCUS '+foc+'/'+fmax):'FOCUS —';
++}
+ function spendEnergy(n){economyLog('energy-spent',n);const stored=Math.min(SAVE.bonus||0,n);SAVE.bonus-=stored;const fromPool=n-stored;if(fromPool>0)player.energyAt=Math.max(Date.now(),player.energyAt)+fromPool*R.REGEN_MS;SAVE.energyAt=player.energyAt;persist();energyFxLast=energy();}
+@@ -4136,7 +4149,7 @@
+   const battle=v2$("battle");if(!battle)throw new Error("Battle root missing");
+-  const top=document.createElement("section");top.id="battleTopV2";top.innerHTML=`<div id="battleHeaderV2"><div class="v2-team us"><small>BRASS</small><strong id="v2UsScore">0♕</strong></div><div id="v2Center"><span class="v2-clock" id="v2Clock">5:00</span><span class="v2-phase" id="v2Phase">OPENING</span><span class="v2-energy" id="v2Energy">⚡ 0</span></div><div class="v2-team foe right"><small>CRIMSON</small><strong id="v2FoeScore">0♕</strong></div></div><div id="guildMomentumV2"><div class="v2-mom us"><label>BRASS</label><div class="v2-mom-track"><div class="v2-mom-fill" id="v2MomUs"></div></div></div><div id="v2MomState">MOMENTUM</div><div class="v2-mom foe right"><label>CRIMSON</label><div class="v2-mom-track"><div class="v2-mom-fill" id="v2MomFoe"></div></div></div></div><div id="tacticalV2" hidden data-type="order"><div id="tacticalIconV2">⚔</div><div class="v2-tactical-copy"><small class="v2-tactical-kicker" id="tacticalKickerV2">BATTLE ORDER</small><b class="v2-tactical-title" id="tacticalTitleV2"></b><span class="v2-tactical-body" id="tacticalBodyV2"></span></div><button id="tacticalActionV2" hidden>GO</button><div id="tacticalQueueV2"></div></div>`;battle.insertBefore(top,battle.firstChild);
++  const top=document.createElement("section");top.id="battleTopV2";top.innerHTML=`<div id="battleHeaderV2"><div class="v2-team us"><small>BRASS</small><strong id="v2UsScore">0♕</strong></div><div id="v2Center"><span class="v2-clock" id="v2Clock">5:00</span><span class="v2-phase" id="v2Phase">OPENING</span><span class="v2-meters" id="v2Energy"><span class="v2-chip" id="v2Fate">FATE 0/50</span><span class="v2-chip focus" id="v2Focus">FOCUS 4/8</span></span></div><div class="v2-team foe right"><small>CRIMSON</small><strong id="v2FoeScore">0♕</strong></div></div><div id="guildMomentumV2"><div class="v2-mom us"><label>BRASS</label><div class="v2-mom-track"><div class="v2-mom-fill" id="v2MomUs"></div></div></div><div id="v2MomState">MOMENTUM</div><div class="v2-mom foe right"><label>CRIMSON</label><div class="v2-mom-track"><div class="v2-mom-fill" id="v2MomFoe"></div></div></div></div><div id="tacticalV2" hidden data-type="order"><div id="tacticalIconV2">⚔</div><div class="v2-tactical-copy"><small class="v2-tactical-kicker" id="tacticalKickerV2">BATTLE ORDER</small><b class="v2-tactical-title" id="tacticalTitleV2"></b><span class="v2-tactical-body" id="tacticalBodyV2"></span></div><button id="tacticalActionV2" hidden>GO</button><div id="tacticalQueueV2"></div></div>`;battle.insertBefore(top,battle.firstChild);
+@@ -4165,7 +4178,7 @@
+-function paintHeaderV2(now){if(!battleLiveV2())return;const ph=phaseV2(now),e=excitementV2()||{},us=Math.max(0,safeNum(typeof warScore==="function"?warScore(0):0)),foe=Math.max(0,safeNum(typeof warScore==="function"?warScore(1):0));v2$("v2UsScore").textContent=us+"♕";v2$("v2FoeScore").textContent=foe+"♕";v2$("v2Clock").textContent=shortClockV2(ph.left);v2$("v2Phase").textContent=ph.label;let en=0;try{en=energy();}catch(_){}v2$("v2Energy").textContent=`⚡ ${en}${player?` · Lv ${player.level}`:""}`;const mu=Math.max(0,Math.min(100,e.momentum?.[0]||0)),mf=Math.max(0,Math.min(100,e.momentum?.[1]||0));v2$("v2MomUs").style.width=mu+"%";v2$("v2MomFoe").style.width=mf+"%";v2$("v2MomUs").classList.toggle("surge",now<(e.surgeUntil?.[0]||0));v2$("v2MomFoe").classList.toggle("surge",now<(e.surgeUntil?.[1]||0));v2$("v2MomState").textContent=ph.key==="sudden"?"NEXT LEAD WINS":ph.label;document.body.classList.toggle("v2-final",ph.key==="final"||ph.key==="final30");document.body.classList.toggle("v2-final30",ph.key==="final30");document.body.classList.toggle("v2-sudden",ph.key==="sudden");const t=player&&Number.isInteger(player.tower)?M.towers[player.tower]:null;if(v2$("v2FootTower"))v2$("v2FootTower").textContent=t?`Tower ${t.name} · ${t.pts}♕`:"Choose a tower";}
++function paintHeaderV2(now){if(!battleLiveV2())return;const ph=phaseV2(now),e=excitementV2()||{},us=Math.max(0,safeNum(typeof warScore==="function"?warScore(0):0)),foe=Math.max(0,safeNum(typeof warScore==="function"?warScore(1):0));v2$("v2UsScore").textContent=us+"♕";v2$("v2FoeScore").textContent=foe+"♕";v2$("v2Clock").textContent=shortClockV2(ph.left);v2$("v2Phase").textContent=ph.label;try{paintFocusHud();}catch(_){}const mu=Math.max(0,Math.min(100,e.momentum?.[0]||0)),mf=Math.max(0,Math.min(100,e.momentum?.[1]||0));v2$("v2MomUs").style.width=mu+"%";v2$("v2MomFoe").style.width=mf+"%";v2$("v2MomUs").classList.toggle("surge",now<(e.surgeUntil?.[0]||0));v2$("v2MomFoe").classList.toggle("surge",now<(e.surgeUntil?.[1]||0));v2$("v2MomState").textContent=ph.key==="sudden"?"NEXT LEAD WINS":ph.label;document.body.classList.toggle("v2-final",ph.key==="final"||ph.key==="final30");document.body.classList.toggle("v2-final30",ph.key==="final30");document.body.classList.toggle("v2-sudden",ph.key==="sudden");const t=player&&Number.isInteger(player.tower)?M.towers[player.tower]:null;if(v2$("v2FootTower"))v2$("v2FootTower").textContent=t?`Tower ${t.name} · ${t.pts}♕`:"Choose a tower";}
+@@ -4255,5 +4268,13 @@
+ })();
+ </script>
++
++<style id="resourceHudStyle">
++.stat.energy{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
++.stat.energy .res-lbl{font-size:8px;letter-spacing:.12em;color:#7ec8ff;font-weight:900}
++#v2Energy.v2-meters,.v2-meters{margin-top:3px;display:flex;gap:4px;justify-content:center;flex-wrap:wrap;max-width:100%}
++.v2-chip{display:inline-flex;align-items:center;padding:2px 6px;border-radius:999px;background:#132b38;border:1px solid #4aa0c8;color:#d6f3ff;font-size:8px;font-weight:900;letter-spacing:.04em;white-space:nowrap}
++.v2-chip.focus{border-color:#d7b056;background:#2a220e;color:#ffe7a3}
++</style>
+ </body>
+ </html>

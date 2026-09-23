@@ -1,0 +1,34 @@
+name: Apply resource HUD patch
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "patches/resource-hud.patch"
+      - ".github/workflows/apply-resource-hud.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: grok/resource-hud
+          fetch-depth: 0
+      - name: Apply patch
+        run: |
+          set -euo pipefail
+          if grep -q 'id="v2Fate"' fatebound.html && grep -q 'res-lbl' fatebound.html; then
+            echo already applied
+            exit 0
+          fi
+          patch -p0 --forward < patches/resource-hud.patch
+          grep -q 'id="v2Fate"' fatebound.html
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add fatebound.html
+          git commit -m "Show labeled Fate and Focus on hub and battle HUD"
+          git push origin HEAD:grok/resource-hud
