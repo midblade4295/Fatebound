@@ -1,0 +1,89 @@
+--- dice-skirmish-91(1).html
++++ fatebound-full-36mb.html
+@@ -3,13 +3,13 @@
+ <head>
+ <meta charset="utf-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+-<title>Dice Skirmish</title>
+-<meta name="dice-skirmish-build" content="90-balanced">
++<title>Fatebound</title>
++<meta name="fatebound-build" content="90-balanced">
+ <meta name="mobile-web-app-capable" content="yes">
+ <meta name="apple-mobile-web-app-capable" content="yes">
+ <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+ <meta name="theme-color" content="#0a1015">
+-<link rel="manifest" href='data:application/manifest+json,{"name":"Dice Skirmish","short_name":"Skirmish","display":"fullscreen","orientation":"portrait","background_color":"%230a1015","theme_color":"%230a1015","start_url":"."}'>
++<link rel="manifest" href='data:application/manifest+json,{"name":"Fatebound","short_name":"Fatebound","display":"fullscreen","orientation":"portrait","background_color":"%230a1015","theme_color":"%230a1015","start_url":"."}'>
+ <link rel="preconnect" href="https://fonts.googleapis.com">
+ <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&display=swap" rel="stylesheet">
+ <style>
+@@ -665,7 +665,7 @@
+ 
+ <div class="overlay title" id="setup">
+   <div class="panel tpanel">
+-    <div class="thead"><div><small>YOUR ADVENTURE</small><h1>Dice Skirmish</h1></div><span class="home-badge">BRASS COMPANY</span></div>
++    <div class="thead"><div><small>YOUR ADVENTURE</small><h1>Fatebound</h1></div><span class="home-badge">BRASS COMPANY</span></div>
+     <div class="daylogin" id="daylogin"></div>
+     <section id="hubScene"><div class="hub-copy"><small>YOUR GUILD. YOUR ADVENTURE.</small><h2 id="hubWelcome"></h2><p id="hubSub"></p><div class="hub-power"><span><b id="hubAttack"></b> ATTACK</span><span><b id="hubCrit"></b> CRITICAL</span></div></div><canvas id="hubPortrait" width="340" height="400"></canvas></section>
+     <section class="hub-training"><div><small>HERO ACADEMY</small><h3>Learn by playing</h3><p id="hubTrainingText"></p></div><button id="hubTutorial">Start guided training</button></section>
+@@ -706,7 +706,7 @@
+ </div>
+ <div class="overlay" id="end" hidden>
+   <div class="panel">
+-    <div class="sumhead"><div class="flag l"><span>Brass Company</span></div><div><small>SKIRMISH SUMMARY</small><b id="endScore">0 ♚ 0</b><h2 id="endTitle">Victory</h2></div><div class="flag r"><span>Crimson Vow</span></div></div>
++    <div class="sumhead"><div class="flag l"><span>Brass Company</span></div><div><small>BATTLE SUMMARY</small><b id="endScore">0 ♚ 0</b><h2 id="endTitle">Victory</h2></div><div class="flag r"><span>Crimson Vow</span></div></div>
+     <p id="endSub" style="text-align:center"></p>
+     <h3 class="sumh">HONORED HEROES</h3>
+     <div class="honor" id="honorChamp"></div>
+@@ -862,13 +862,13 @@
+   stats:{ matches:0, wins:0, bestDmg:0, bestKos:0, bestTriples:0, damage:0, kos:0, triples:0, rolls:0, flips:0 },
+   rank:0, ladder:null, daily:{ date:'', q:[], p:{}, done:[] }, login:{ date:'', streak:0 }, chests:[], giftsDue:[], rival:null, tokens:0, relics:{ cap:0, atk:0, crit:0, lucky:0 }, boss:null, bossPending:null, bonus:0, season:{ id:0, pts:0, free:[], prem:[], premium:false }, tiers:{}, shards:{ steel:0, arcane:0, fletch:0 } });
+ let SAVE = SAVE_DEF();
+-try { const j = localStorage.getItem('dice-skirmish-save'); if (j){ const o = JSON.parse(j); if (o && Array.isArray(o.owned)){ const d = SAVE_DEF(); SAVE = Object.assign({}, d, o); SAVE.owned = SAVE.owned.filter(i=>i>=0 && i<9); if (!SAVE.owned.includes(0)) SAVE.owned.unshift(0); if (!SAVE.owned.includes(SAVE.weapon)) SAVE.weapon = 0; if (SAVE.char>4) SAVE.char = 0; SAVE.stats = Object.assign(d.stats, o.stats||{}); SAVE.daily = Object.assign(d.daily, o.daily||{}); SAVE.login = Object.assign(d.login, o.login||{}); SAVE.relics = Object.assign(d.relics, o.relics||{}); SAVE.season = Object.assign(d.season, o.season||{}); SAVE.tiers = Object.assign({}, o.tiers||{}); SAVE.shards = Object.assign(d.shards, o.shards||{}); } } } catch(_){}
++try { const j = localStorage.getItem('fatebound-save')||localStorage.getItem('fatebound-save'); if (j){ const o = JSON.parse(j); if (o && Array.isArray(o.owned)){ const d = SAVE_DEF(); SAVE = Object.assign({}, d, o); SAVE.owned = SAVE.owned.filter(i=>i>=0 && i<9); if (!SAVE.owned.includes(0)) SAVE.owned.unshift(0); if (!SAVE.owned.includes(SAVE.weapon)) SAVE.weapon = 0; if (SAVE.char>4) SAVE.char = 0; SAVE.stats = Object.assign(d.stats, o.stats||{}); SAVE.daily = Object.assign(d.daily, o.daily||{}); SAVE.login = Object.assign(d.login, o.login||{}); SAVE.relics = Object.assign(d.relics, o.relics||{}); SAVE.season = Object.assign(d.season, o.season||{}); SAVE.tiers = Object.assign({}, o.tiers||{}); SAVE.shards = Object.assign(d.shards, o.shards||{}); } } } catch(_){}
+ let economyDepth=0,saveErrorShown=false;
+ var TRAIN;
+ function persist(){
+   if(TRAIN){trainingPersist();return true;}
+   if(economyDepth)return true;
+-  try {if(M?.campaign&&SAVE.war?.model===2){SAVE.war.snapshot=JSON.parse(JSON.stringify(M));SAVE.war.playerId=player.id;}localStorage.setItem('dice-skirmish-save',JSON.stringify(SAVE));return true;}
++  try {if(M?.campaign&&SAVE.war?.model===2){SAVE.war.snapshot=JSON.parse(JSON.stringify(M));SAVE.war.playerId=player.id;}localStorage.setItem('fatebound-save',JSON.stringify(SAVE));return true;}
+   catch(error){if(!saveErrorShown){saveErrorShown=true;setTimeout(()=>alert('Progress could not be saved. Please free browser storage before continuing.'),0);}return false;}
+ }
+ function economyLog(kind,amount){SAVE.economyLog ||= [];SAVE.economyLog.push({at:Date.now(),kind,amount,mode:M?.inBoss?'boss':'war',mult:player?.action?.mult||1,free:player?.action?.free||false});if(SAVE.economyLog.length>200)SAVE.economyLog.splice(0,SAVE.economyLog.length-200);}
+@@ -911,7 +911,7 @@
+   { k:'damage', need:4000, d:'Deal 4,000 damage', r:{gold:500} },
+   { k:'gifts', need:2, d:'Gift 2 guildmates', r:{energy:5} },
+   { k:'flips', need:1, d:'Flip a tower', r:{gold:600} },
+-  { k:'wins', need:1, d:'Win a skirmish', r:{energy:10} },
++  { k:'wins', need:1, d:'Win a battle', r:{energy:10} },
+   { k:'bounties', need:1, d:'Collect a bounty', r:{gold:500} },
+ ];
+ const dayKey = () => new Date().toDateString();
+@@ -1003,7 +1003,7 @@
+   // your rival from last time is back on the other side
+   if (SAVE.rival){ const r = heroes.find(h=>h.side===1 && h.name===SAVE.rival); if (r){ player.rival = r.id; r.level = Math.max(r.level, 6); } }
+   floats = []; anim = null; feedLog.length = 0; player.tower = null; projectiles = []; impacts = []; vfx = [];
+-  feed(`The skirmish begins. ${minutes} minutes, ten towers, 17 points. Pick one to defend.`, 'rally');
++  feed(`The battle begins. ${minutes} minutes, ten towers, 17 points. Pick one to defend.`, 'rally');
+   if (player.rival) feed(`${byId(player.rival).name} is back. Settle it.`, 'flip bad');
+   M.inBoss = false; BR = null; bossCheck(); renderBossBtn(); seasonCheck(); passDot();
+   if (SAVE.bossPending){ const P = SAVE.bossPending; SAVE.bossPending = null; SAVE.tokens += P.tk; toast(`Yesterday's boss (${P.name}): clan #${P.place} — +${P.tk} tokens`); feed(`Clan placing vs ${P.name}: #${P.place}, +${P.tk} boss tokens.`, 'rally'); }
+@@ -3368,7 +3368,7 @@
+ function trainingPersist(){
+  if(!TRAIN)return;
+  TRAIN.saved.tutorialBattle={step:TRAIN.index,done:false,paused:false};
+- localStorage.setItem('dice-skirmish-save',JSON.stringify(TRAIN.saved));
++ localStorage.setItem('fatebound-save',JSON.stringify(TRAIN.saved));
+ }
+ startTraining=function(){
+  if(TRAIN)return;
+@@ -3711,6 +3711,7 @@
+ const begin=enterBoss;enterBoss=function(){if(TRAIN)return;const B=bossCheck();if(B.killed||B.attempts>=BOSS_ATTEMPTS||QTE||$('roll').classList.contains('busy'))return;if(inWar()){saveWar();newMatch(30,true)}begin();if(M.inBoss){M.lobby=false;$('setup').hidden=true;document.body.classList.remove('hub-mode');$('warPanel').hidden=true;lastCW=0;resize()}};
+ const leave=leaveBoss;leaveBoss=function(summary){leave(false);M.lobby=true;homeHub();if(summary)setTimeout(openBossLobby,400)};
+ })();
+-</script><!-- Dice Skirmish build 90: based on user-supplied build 89; full-three-die rolls, XP/economy and raid rebalance. -->
++</script><!-- Fatebound build 90: based on user-supplied build 89; full-three-die rolls, XP/economy and raid rebalance. -->
++<script src="https://cdn.jsdelivr.net/gh/midblade4295/Fatebound@main/legionary-client.js"></script>
+ </body>
+ </html>
