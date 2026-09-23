@@ -1,0 +1,65 @@
+name: Restore verified full Fatebound source
+
+on:
+  push:
+    branches:
+      - grok/restore-full-source
+    paths:
+      - '_restore_payload/**'
+      - '.github/workflows/restore-full-source-from-payload.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: grok/restore-full-source
+          fetch-depth: 0
+
+      - name: Assemble verified Fatebound source
+        shell: bash
+        run: |
+          set -euo pipefail
+          dir="_restore_payload"
+          expected_parts=37
+          expected_bytes=36050716
+          expected_sha="2383c600fa233e5f37c8fc4d22221926852f2cc8dd19478e288c673973d7099a"
+
+          count=$(find "$dir" -maxdepth 1 -type f -name 'part-*.b64' 2>/dev/null | wc -l | tr -d ' ')
+          echo "Payload parts present: $count / $expected_parts"
+          if [ "$count" -ne "$expected_parts" ]; then
+            echo "Waiting for all payload parts."
+            exit 0
+          fi
+
+          find "$dir" -maxdepth 1 -type f -name 'part-*.b64' -print0 | sort -z | xargs -0 cat > /tmp/fatebound-full.b64
+          base64 -d /tmp/fatebound-full.b64 > fatebound.html
+
+          actual_bytes=$(wc -c < fatebound.html | tr -d ' ')
+          actual_sha=$(sha256sum fatebound.html | awk '{print $1}')
+          echo "Bytes: $actual_bytes"
+          echo "SHA256: $actual_sha"
+          test "$actual_bytes" = "$expected_bytes"
+          test "$actual_sha" = "$expected_sha"
+
+          grep -q '<title>Fatebound</title>' fatebound.html
+          grep -q "fatebound-save" fatebound.html
+          grep -q 'id="hubPortrait"' fatebound.html
+          grep -q 'id="hubScene"' fatebound.html
+          grep -q 'id="homeRaid"' fatebound.html || grep -q "homeRaid" fatebound.html
+
+          rm -rf "$dir"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A fatebound.html "$dir"
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          git commit -m "Restore full ~36MB Fatebound HTML as canonical source"
+          git push origin HEAD:grok/restore-full-source
