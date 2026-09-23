@@ -1,0 +1,31 @@
+name: Apply clash lock
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "patches/apply_clash_lock.py"
+      - ".github/workflows/apply-clash-lock.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: grok/clash-lock
+          fetch-depth: 0
+      - name: Apply
+        run: |
+          set -euo pipefail
+          python3 patches/apply_clash_lock.py
+          grep -q clashLockBattle fatebound.html
+          grep -q matchLocked fatebound.html
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add fatebound.html
+          git diff --cached --quiet || git commit -m "Lock battle UI until the war ends; sudden-death banner"
+          git push origin HEAD:grok/clash-lock
