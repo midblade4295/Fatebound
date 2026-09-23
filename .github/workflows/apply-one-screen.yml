@@ -1,0 +1,24 @@
+name: Apply one screen
+on:
+  workflow_dispatch:
+  push:
+    paths: ["patches/apply_one_screen.py",".github/workflows/apply-one-screen.yml"]
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: grok/one-screen
+          fetch-depth: 0
+      - run: |
+          set -euo pipefail
+          python3 patches/apply_one_screen.py
+          grep -q oneScreenFit fatebound.html
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add fatebound.html
+          git diff --cached --quiet || git commit -m "Fit battle to one screen; soften camera shake"
+          git push origin HEAD:grok/one-screen
