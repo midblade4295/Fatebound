@@ -1,0 +1,32 @@
+name: Verify full Fatebound source
+
+on:
+  push:
+    paths:
+      - "fatebound.html"
+      - ".github/workflows/verify-full-source.yml"
+  pull_request:
+    paths:
+      - "fatebound.html"
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reject the incomplete 10.5MB build
+        run: |
+          set -euo pipefail
+          SZ=$(wc -c < fatebound.html)
+          echo "fatebound.html bytes=$SZ"
+          if [ "$SZ" -lt 30000000 ]; then
+            echo "FAIL: fatebound.html is ${SZ} bytes. Canonical source must be the ~36MB full game."
+            exit 1
+          fi
+          grep -q 'id="hubPortrait"' fatebound.html
+          grep -q 'id="hubScene"' fatebound.html
+          grep -qi 'Raid monster' fatebound.html
+          grep -q 'Fatebound' fatebound.html
+          grep -q 'fatebound-save' fatebound.html
+          grep -q 'data-hub="hero"' fatebound.html
+          echo "OK: full Fatebound source markers present"
