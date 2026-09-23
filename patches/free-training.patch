@@ -1,0 +1,11 @@
+--- fatebound.html
++++ fatebound.html
+@@ -3289,10 +3289,8 @@
+ let lessonBusy=false;
+ function startTraining(replay=false){
+  autoRoll=false;
+- if(!replay && energy()<1){ showNoEnergy(); toast('Need 1 Fate to train'); return; }
+- if(!replay) spendEnergy(1);
+  if(!SAVE.tutorial||replay||SAVE.tutorial.done)SAVE.tutorial={step:0,done:false};
+  SAVE.tutorial.paused=false;persist();$('training').hidden=false;renderLesson();
+ }

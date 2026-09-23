@@ -1,0 +1,128 @@
+--- fatebound.html
++++ fatebound.html
+@@ -995,7 +995,7 @@
+   const towers = TOWER_DEF.map(([name,pts],i)=>({ id:i, name, pts, dmg:[0,0], defenders:[[],[]] }));
+   [0,1].forEach(sd=>{ const list = heroes.filter(h=>h.side===sd && h!==player).sort((a,b)=>b.level-a.level);
+     list.forEach((h,k)=>{ const t = towers[9 - Math.floor(k/2)]; h.tower = t.id; t.defenders[sd].push(h.id); }); });
+-  M = { minutes, startAt: now, endAt: now + minutes*60000, ended:false, heroes, towers,
++  M = { minutes, startAt: now, endAt: now + minutes*60000, ended:false, focus:4, focusMax:8, heroes, towers,
+         tally:[{damage:0,shields:0,rolls:0,kos:0},{damage:0,shields:0,rolls:0,kos:0}],
+         rally:[null,null], ralliesLeft:[R.RALLIES,R.RALLIES], rallyCdUntil:[0,0],
+         botRate: R.BOT_ROLLS_PER_MIN/60, lastTick: now, enemyRallyMarks:[0.2,0.6], allyRallyMarks:[0.25,0.65], overtime:false, cards:[], helpAt:0 };
+@@ -1014,6 +1014,10 @@
+ // energy = the regenerating pool (capped) + bought/overflow energy (SAVE.bonus, no cap). Regenerating energy is spent first; refills fill the pool first, then overflow into bonus.
+ function regenEnergy(){ const e = R.ENERGY_CAP - Math.ceil(Math.max(0, player.energyAt - Date.now())/R.REGEN_MS); return Math.max(0, Math.min(R.ENERGY_CAP, e)); }
+ function energy(){ return regenEnergy() + (SAVE.bonus||0); }
++function focus(){ if(!M) return 0; if(M.focus==null) M.focus=4; return Math.max(0, M.focus|0); }
++function spendFocus(n){ if(!M||!(n>0)) return; M.focus=Math.max(0,(M.focus||0)-n); try{paintFocusHud();}catch(_){} }
++function addFocus(n){ if(!M||!(n>0)) return; M.focus=Math.min(M.focusMax||8,(M.focus||0)+n); try{paintFocusHud();}catch(_){} }
++function paintFocusHud(){ const el=document.getElementById('v2Energy'); if(el&&M&&!M.ended) el.textContent='◈ '+focus()+'/'+(M.focusMax||8); }
+ function spendEnergy(n){economyLog('energy-spent',n);const stored=Math.min(SAVE.bonus||0,n);SAVE.bonus-=stored;const fromPool=n-stored;if(fromPool>0)player.energyAt=Math.max(Date.now(),player.energyAt)+fromPool*R.REGEN_MS;SAVE.energyAt=player.energyAt;persist();energyFxLast=energy();}
+ 
+ function addEnergy(n){economyLog('energy-granted',n); const room = Math.max(0, R.ENERGY_CAP - regenEnergy()), toPool = Math.min(room, n); if (toPool > 0) player.energyAt = Math.max(Date.now(), player.energyAt - toPool*R.REGEN_MS); SAVE.bonus = (SAVE.bonus||0) + (n - toPool); SAVE.energyAt = player.energyAt; persist(); energyBolts(n); energyFxLast=energy(); }
+@@ -1065,10 +1069,10 @@
+  setText('spts',String(Math.max(0,(SAVE.season?.pts||0)-rewardPending.spts)));
+ }
+ // roll multipliers unlock with the energy you are holding: hold 100 to swing ×10, 500 to swing ×50
+-const MULTS = [ [1,0], [2,25], [5,50], [10,100], [20,200], [30,300], [50,500] ];
+-const multUnlocked = m => MULTS.find(x=>x[0]===m)[1] <= energy();
+-function cycleMult(){ const e = energy(), open = MULTS.filter(x=>x[1] <= e).map(x=>x[0]); const i = open.indexOf(player.mult); player.mult = open[(i+1) % open.length]; renderMult(); SFX.tap(); if (navigator.vibrate) navigator.vibrate(8); }
+-function renderMult(){ const e = energy(); if (!multUnlocked(player.mult)) player.mult = MULTS.filter(x=>x[1] <= e).pop()[0];
++const MULTS = [ [1,0], [2,2], [3,4], [4,6] ];
++const multUnlocked = m => MULTS.find(x=>x[0]===m)[1] <= focus();
++function cycleMult(){ const e = focus(), open = MULTS.filter(x=>x[1] <= Math.max(1,e)).map(x=>x[0]); const i = open.indexOf(player.mult); player.mult = open.length? open[(i+1) % open.length] : 1; renderMult(); SFX.tap(); if (navigator.vibrate) navigator.vibrate(8); }
++function renderMult(){ const e = Math.max(1, focus()); if (!multUnlocked(player.mult)) player.mult = (MULTS.filter(x=>x[1] <= e).pop()||[1])[0];
+   const next = MULTS.find(x=>x[1] > e); const key = `${player.mult}|${next?next[0]:0}|${e}`; if (_txt.mult === key) return; _txt.mult = key;
+   $('multVal').textContent = `x${player.mult}`; const nx = $('multNext'); nx.textContent = next ? `x${next[0]} at ${next[1]}⚡` : 'max · tap to cycle'; nx.className = next ? 'lock' : '';
+   $('multPips').innerHTML = MULTS.map(x=>`<i class="${x[0]===player.mult?'on':x[1]<=e?'ok':''}"></i>`).join(''); }
+@@ -1174,7 +1178,7 @@
+     out.push(gained ? `1 shield · ${strength} absorption${res.shield==='triple'?' for each ally here':` for ${targets[0]?.name}`} · max 3 slots` : 'shield slots full with equal or stronger protection');
+   }
+   if (res.gold){ const g = Math.round(res.gold * mult * (CHARS[who.char||0].gold||1)), ups = gainGold(who, g); out.push(`${res.tier==='triple'?'TRIPLE gold ':''}+${g} gold${ups ? ` — level ${who.level}!` : ''}`); }
+-  if (res.energy){ if (who===player){ const e = ((res.energy + (CHARS[who.char||0].energy||0)) * mult); addEnergy(e); out.push(`${res.tier==='triple'?'TRIPLE ':''}+${e} energy`); } else out.push('energy'); }
++  if (res.energy){ if (who===player){ const e = ((res.energy + (CHARS[who.char||0].energy||0)) * mult); if(M&&!M.ended&&!M.lobby){ addFocus(e); out.push(`${res.tier==='triple'?'TRIPLE ':''}+${e} Focus`); } else { addEnergy(e); out.push(`${res.tier==='triple'?'TRIPLE ':''}+${e} energy`); } } else out.push('energy'); }
+   if (res.gift){
+     if (who===player){ out.push(res.gift===3 ? 'TRIPLE gift! choose a guildmate' : 'gift! choose a guildmate'); pendingGift = { mult: res.gift * mult, choose: res.gift===3 }; }
+     else if(s===0&&rng()<.05&&energy()<R.ENERGY_CAP&&economyDay().botEnergy<10){const e=Math.min(res.gift,10-economyDay().botEnergy);economyDay().botEnergy+=e;addEnergy(e);out.push(`sent you ${e} energy`);}
+@@ -2134,10 +2138,10 @@
+   if (player.tower===null && !M.inBoss){ toast('Pick a tower on the map first'); return false; }
+   if (M.inBoss && (!BR || BR.ended)){ showMap(); return false; }   // stale boss state: never fail silently, drop back to the map
+   if (down(player)){ toast(`You're down for ${Math.ceil((player.downUntil-Date.now())/1000)}s`); autoRoll=false; return false; }
+-  const cost = M.inBoss ? 1 : player.mult, price = (M.inBoss || player.rampage > 0) ? 0 : cost;   // raid rolls and Rampage rolls are free
+-  if (price > 0 && energy()<price){ autoRoll=false; if (energy()===0) showNoEnergy(); else toast(`x${cost} needs ${price} energy. You have ${energy()}.`); return false; }
++  const cost = M.inBoss ? 1 : player.mult, price = (M.inBoss || player.rampage > 0) ? 0 : cost;   // raid/rampage rolls free; paid rolls spend Focus not Fate
++  if (price > 0 && focus()<price){ autoRoll=false; if (focus()<=0) toast('No Focus — rotate towers to refill'); else toast(`x${cost} needs ${price} Focus. You have ${focus()}.`); return false; }
+   let dice; try { dice=makeDiceThrow(); } catch(e){toast(e.message);return false;}
+-  atomicEconomy(()=>{SAVE.pendingRoll={paid:price};if(price>0)spendEnergy(price);});
++  atomicEconomy(()=>{SAVE.pendingRoll={paid:price};if(price>0)spendFocus(price);});
+   player.action={mult:cost,paid:price,free:price===0,boss:M.inBoss};
+   if(!M.inBoss&&price>0){player.paidRolls++;player.spentEnergy+=price;}
+   SFX.roll();
+@@ -2209,7 +2213,8 @@
+   if (M.rally[0] && now < M.rally[0].until){ toast('Rally already running'); return; }
+   if (!M.ralliesLeft[0]){ toast('No rallies left this match'); return; }
+   if (now < M.rallyCdUntil[0]){ toast(`Rally ready in ${Math.ceil((M.rallyCdUntil[0]-now)/1000)}s`); return; }
+-  callRally(0, player.tower);
++  if (focus()<2){ toast('Rally needs 2 Focus'); return; }
++  spendFocus(2); callRally(0, player.tower);
+ });
+ $('mults').addEventListener('click', ()=>{ if (player && !M.inBoss) cycleMult(); });
+ $('goldPill').addEventListener('click', ()=>{ if(!M || M.ended) return; SFX.tap(); document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('on', x.dataset.tab==='shop')); showScreen('shop'); });
+@@ -2719,6 +2724,8 @@
+  if(inWar()){toast('The daily boss is unavailable during battle training.');return;}
+   if($('roll').classList.contains('busy')||QTE){toast('Finish this roll first.');return;}
+   const B = bossCheck(); if (B.killed || B.attempts >= BOSS_ATTEMPTS) return;
++  if(energy()<5){ showNoEnergy(); toast('Need 5 Fate to raid'); return; }
++  spendEnergy(5);
+   B.attempts++; persist(); autoRoll = false;
+   const now = Date.now();
+   BR = { until: now + BOSS_RUN_MS, staggerMeter: 0, staggerUntil: 0, parryUntil: 0, parried: false, nextStrike: now + 5000, telegraphUntil: 0, hitAt: 0, botAt: now, ended:false, dmg:0 };
+@@ -3147,8 +3154,10 @@
+ function newWar(){const now=Date.now();SAVE.war={model:2,matchVersion:3,id:crypto.randomUUID(),phase:'day',startAt:now,pressureAt:now+WAR_PRESSURE_MS,finaleAt:now+WAR_MATCH_MS-WAR_FINAL_MS,endAt:now+WAR_MATCH_MS,control:[0,0],controlAt:now,controlDuration:0,paid:0,rallyClaimed:false,pressureShown:false,preview:false};}
+ function openWar(){
+  if(!war()||war().model!==2||war().matchVersion!==3||war().phase==='complete')newWar();
+- const w=war(),snap=w.snapshot;newMatch(5);if(snap)SAVE.stats.matches--;M.campaign=true;
+- if(snap){M=snap;M.campaign=true;player=M.heroes.find(h=>h.id===w.playerId)||M.heroes[0];player.gold=SAVE.gold;player.level=SAVE.level;player.xp=SAVE.xp;player.energyAt=SAVE.energyAt;player.char=SAVE.char;player.weapon=SAVE.weapon;player.weaponMult=weaponMultOf(player);recalcHero(player);player.lunge=null;M.towers.forEach(t=>t.sieged=0);M.heroes.forEach(h=>{h.lunge=null;h.hitAt=0;h.ultAt=0;});player.locked=[false,false,false];player.lastFaces=null;player.rerollUsed=true;M.inBoss=false;BR=null;M.cards=[];}
++ const w=war(),snap=w.snapshot;
++ if(!snap && !w.fatePaid){ if(energy()<8){ showNoEnergy(); toast('Need 8 Fate to start a 5-minute battle'); return; } spendEnergy(8); w.fatePaid=true; saveWar&&saveWar(); }
++ newMatch(5);if(snap)SAVE.stats.matches--;M.campaign=true;
++ if(snap){M=snap;if(M.focus==null)M.focus=4;if(!M.focusMax)M.focusMax=8;M.campaign=true;player=M.heroes.find(h=>h.id===w.playerId)||M.heroes[0];player.gold=SAVE.gold;player.level=SAVE.level;player.xp=SAVE.xp;player.energyAt=SAVE.energyAt;player.char=SAVE.char;player.weapon=SAVE.weapon;player.weaponMult=weaponMultOf(player);recalcHero(player);player.lunge=null;M.towers.forEach(t=>t.sieged=0);M.heroes.forEach(h=>{h.lunge=null;h.hitAt=0;h.ultAt=0;});player.locked=[false,false,false];player.lastFaces=null;player.rerollUsed=true;M.inBoss=false;BR=null;M.cards=[];}
+  M.startAt=w.startAt;M.endAt=w.endAt;M.lastTick=Date.now();$('setup').hidden=true;enterTower(player.tower??0);$('warPanel').hidden=false;
+  if(snap)catchUpWar();warTick();saveWar();renderWarPanel();
+  feed('Five-minute battle: normal opening, pressure rises after 2:00, and the final minute boosts attacks ×1.5.','rally');
+@@ -3282,6 +3291,8 @@
+ let lessonBusy=false;
+ function startTraining(replay=false){
+  autoRoll=false;
++ if(!replay && energy()<1){ showNoEnergy(); toast('Need 1 Fate to train'); return; }
++ if(!replay) spendEnergy(1);
+  if(!SAVE.tutorial||replay||SAVE.tutorial.done)SAVE.tutorial={step:0,done:false};
+  SAVE.tutorial.paused=false;persist();$('training').hidden=false;renderLesson();
+ }
+@@ -4225,5 +4236,26 @@
+ if(document.getElementById("battle"))mo.observe(document.getElementById("battle"),{childList:true});
+ })();
+ </script>
++
++<script>
++(()=>{if(window.__fateFocus)return;window.__fateFocus=1;
++if(typeof enterTower==='function'){
++  const prev=enterTower;
++  enterTower=function(ti){
++    const from=player&&player.tower;
++    const out=prev.apply(this,arguments);
++    try{
++      if(M&&!M.ended&&!M.inBoss&&from!=null&&ti!=null&&from!==ti){addFocus(1);}
++      paintFocusHud();
++    }catch(_){}
++    return out;
++  };
++}
++if(typeof paintBattleUiV2==='function'){
++  const prev=paintBattleUiV2;
++  paintBattleUiV2=function(){const r=prev.apply(this,arguments);try{paintFocusHud();}catch(_){}return r;};
++}
++})();
++</script>
+ </body>
+ </html>
