@@ -1,0 +1,35 @@
+name: Apply alert nonblocking patch
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "patches/alert-nonblocking.patch"
+      - ".github/workflows/apply-alert-nonblocking.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: grok/alert-nonblocking
+          fetch-depth: 0
+
+      - name: Apply patch to fatebound.html
+        run: |
+          set -euo pipefail
+          if grep -q 'id="grokAlertLayout"' fatebound.html; then
+            echo "Patch already present"
+            exit 0
+          fi
+          patch -p0 --forward < patches/alert-nonblocking.patch
+          grep -q 'id="grokAlertLayout"' fatebound.html
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add fatebound.html
+          git commit -m "Keep 5-min match alerts from covering map and dice"
+          git push origin HEAD:grok/alert-nonblocking
