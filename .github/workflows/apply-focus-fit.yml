@@ -1,0 +1,31 @@
+name: Apply focus fit
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "patches/apply_focus_fit.py"
+      - ".github/workflows/apply-focus-fit.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: grok/focus-fit
+          fetch-depth: 0
+      - name: Run apply script
+        run: |
+          set -euo pipefail
+          python3 patches/apply_focus_fit.py
+          grep -q 'player.allIn' fatebound.html
+          grep -q 'focusFitLayout' fatebound.html
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add fatebound.html
+          git diff --cached --quiet || git commit -m "Fit battle bottom; All-in spends Focus for a big swing"
+          git push origin HEAD:grok/focus-fit
