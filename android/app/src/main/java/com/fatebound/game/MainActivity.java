@@ -5,8 +5,6 @@ import android.os.Bundle;
 import android.view.View;
 import android.view.WindowManager;
 import android.webkit.WebChromeClient;
-import android.webkit.WebResourceError;
-import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -48,31 +46,17 @@ public class MainActivity extends AppCompatActivity {
         webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
         webView.setWebChromeClient(new WebChromeClient());
         webView.setWebViewClient(new WebViewClient() {
-            private boolean fellBackToBundledGame = false;
-
             @Override
             public void onPageFinished(WebView view, String url) {
                 view.evaluateJavascript(
                     "(function(){function kick(){try{if(typeof renderHub==='function')renderHub();if(typeof renderDayLogin==='function')renderDayLogin();if(typeof paintHome==='function')paintHome();}catch(e){}}kick();setTimeout(kick,400);setTimeout(kick,1500);setTimeout(kick,4000);}())",
                     null);
             }
-
-            @Override
-            public void onReceivedError(
-                    WebView view,
-                    WebResourceRequest request,
-                    WebResourceError error) {
-                super.onReceivedError(view, request, error);
-                if (request.isForMainFrame() && !fellBackToBundledGame) {
-                    fellBackToBundledGame = true;
-                    view.loadUrl("file:///android_asset/index.html");
-                }
-            }
         });
 
-        // Use the same live Fatebound build served by the SSH host.
-        // The bundled copy remains an offline fallback if the host is unavailable.
-        webView.loadUrl("https://136-113-125-3.sslip.io/fatebound/");
+        // Fatebound is fully bundled so the complete art/hero scene renders identically offline.
+        // The separate Fatebound save client still syncs progress to the SSH host.
+        webView.loadUrl("file:///android_asset/index.html");
     }
 
     private void hideSystemBars() {
