@@ -1,0 +1,32 @@
+name: Apply vc14 input and training fix
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "patches/apply_input_training_v14.py"
+      - ".github/workflows/apply-input-training-v14.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/input-training-vc14
+          fetch-depth: 0
+      - name: Apply input recovery and training overhaul
+        run: |
+          set -euo pipefail
+          python3 patches/apply_input_training_v14.py
+          grep -q inputTrainingFixV14 fatebound.html
+          grep -q "versionCode 14" android/app/build.gradle
+          grep -q "Focus and multipliers" fatebound.html
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add fatebound.html android/app/build.gradle
+          git diff --cached --quiet || git commit -m "Fix dead input state and rebuild training for new mechanics"
+          git push origin HEAD:fix/input-training-vc14
