@@ -1,0 +1,33 @@
+name: Apply vc14 training completion fix
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "patches/apply_training_completion_v14.py"
+      - ".github/workflows/apply-training-completion-v14.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/input-training-vc14
+          fetch-depth: 0
+      - name: Restore full training completion path
+        run: |
+          set -euo pipefail
+          python3 patches/apply_training_completion_v14.py
+          grep -q vc14TrainingCompletionFix fatebound.html
+          grep -q "Ready for a real 5-minute battle" fatebound.html
+          grep -q "action:'rally'" fatebound.html
+          grep -q "finish:true" fatebound.html
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add fatebound.html
+          git diff --cached --quiet || git commit -m "Complete vc14 training flow for Focus and battle objectives"
+          git push origin HEAD:fix/input-training-vc14
