@@ -1,0 +1,10 @@
+{
+  "source_sha256": "91f84e86994701bcdaef6591c0b99ce43b92d99a73be1b283b03ada9068c04d8",
+  "source_bytes": 36175422,
+  "git_blob_sha1": "50f2d0a8bfb7fda523409aa224ff2351386609ad",
+  "inline_scripts_parsed": 18,
+  "exact_approved_artifact": true,
+  "android_packaging_changed": false,
+  "new_runtime_tests_run_by_import": false,
+  "existing_runtime_report_preserved": "docs/fatebound-v108-season-pass-test-report.md"
+}

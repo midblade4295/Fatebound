@@ -1,0 +1,15 @@
+{
+  "canonical_file": "fatebound.html",
+  "source_of_truth_branch": "main",
+  "html_version": 108,
+  "build_marker": "108-season-pass-modal-copy-fix",
+  "bytes": 36175422,
+  "sha256": "91f84e86994701bcdaef6591c0b99ce43b92d99a73be1b283b03ada9068c04d8",
+  "git_blob_sha1": "50f2d0a8bfb7fda523409aa224ff2351386609ad",
+  "save_key": "fatebound-save",
+  "battle_session_compatibility": 106,
+  "approved_artifact": "fatebound-v108-season-pass-fix.html",
+  "handoff": "GROKBOT_HANDOFF.md",
+  "runtime_test_report": "docs/fatebound-v108-season-pass-test-report.md",
+  "note": "HTML v108 is not the Android versionCode. This import does not change Android packaging or publish a Play release."
+}
