@@ -1,0 +1,265 @@
+{
+  "fixture": "two scripted human controllers plus 18 standard bots, 500ms tick; identical seed sets and opponent; not human win rates",
+  "seedCount": 50,
+  "policy": {
+    "x1": {
+      "before": {
+        "win": 0.6,
+        "damage": 40502.18,
+        "rolls": 62.86,
+        "spells": 14.62,
+        "kos": 7.96,
+        "gold": 667,
+        "fate": 3.8,
+        "points": 15.64,
+        "xp": 62.86,
+        "eligible": 1,
+        "seconds": 300.95
+      },
+      "after": {
+        "win": 0.46,
+        "damage": 5845.7,
+        "rolls": 82.42,
+        "spells": 16.04,
+        "kos": 1.06,
+        "gold": 828.6,
+        "fate": 3.38,
+        "points": 9.16,
+        "xp": 82.42,
+        "eligible": 1,
+        "seconds": 302.42
+      }
+    },
+    "x2": {
+      "before": {
+        "win": 0.54,
+        "damage": 39282.86,
+        "rolls": 45.12,
+        "spells": 11.14,
+        "kos": 7.82,
+        "gold": 635,
+        "fate": 3.62,
+        "points": 15.16,
+        "xp": 66,
+        "eligible": 1,
+        "seconds": 300.39
+      },
+      "after": {
+        "win": 0.52,
+        "damage": 4363.04,
+        "rolls": 53.9,
+        "spells": 11.22,
+        "kos": 0.82,
+        "gold": 716.1,
+        "fate": 3.56,
+        "points": 9.16,
+        "xp": 73.52,
+        "eligible": 1,
+        "seconds": 300.82
+      }
+    },
+    "allin4": {
+      "before": {
+        "win": 0.34,
+        "damage": 37464.78,
+        "rolls": 7.62,
+        "spells": 4.5,
+        "kos": 8.04,
+        "gold": 556.4,
+        "fate": 3.02,
+        "points": 14.04,
+        "xp": 38.24,
+        "eligible": 1,
+        "seconds": 300
+      },
+      "after": {
+        "win": 0.38,
+        "damage": 2903.7,
+        "rolls": 6.9,
+        "spells": 2.08,
+        "kos": 0.84,
+        "gold": 523.2,
+        "fate": 3.14,
+        "points": 7.5,
+        "xp": 33.88,
+        "eligible": 1,
+        "seconds": 302.24
+      }
+    },
+    "adaptive": {
+      "before": {
+        "win": 0.68,
+        "damage": 42196.12,
+        "rolls": 54.6,
+        "spells": 13.08,
+        "kos": 8.14,
+        "gold": 751.5,
+        "fate": 4.04,
+        "points": 16.22,
+        "xp": 72.42,
+        "eligible": 1,
+        "seconds": 300
+      },
+      "after": {
+        "win": 0.5,
+        "damage": 5208.44,
+        "rolls": 68.48,
+        "spells": 12.66,
+        "kos": 1.3,
+        "gold": 864.6,
+        "fate": 3.5,
+        "points": 8.76,
+        "xp": 84.52,
+        "eligible": 1,
+        "seconds": 301.96
+      }
+    }
+  },
+  "loadouts": {
+    "barrage+bulwark": {
+      "win": 0.5,
+      "damage": 5197.7,
+      "rolls": 68.73,
+      "spells": 13.07,
+      "kos": 1.2,
+      "gold": 810.5,
+      "fate": 3.5,
+      "points": 8.9,
+      "xp": 84.27,
+      "eligible": 1,
+      "seconds": 303.27
+    },
+    "barrage+surge": {
+      "win": 0.53,
+      "damage": 9459.27,
+      "rolls": 67.23,
+      "spells": 12.6,
+      "kos": 2,
+      "gold": 1038.47,
+      "fate": 3.6,
+      "points": 10.8,
+      "xp": 115.83,
+      "eligible": 1,
+      "seconds": 300.65
+    },
+    "bulwark+horn": {
+      "win": 0.57,
+      "damage": 4240.93,
+      "rolls": 68.27,
+      "spells": 10.9,
+      "kos": 1.17,
+      "gold": 842.17,
+      "fate": 3.7,
+      "points": 8.23,
+      "xp": 82.23,
+      "eligible": 1,
+      "seconds": 300.38
+    },
+    "bulwark+surge": {
+      "win": 0.57,
+      "damage": 8899.3,
+      "rolls": 63.83,
+      "spells": 11.47,
+      "kos": 2.27,
+      "gold": 1008.57,
+      "fate": 3.7,
+      "points": 11.13,
+      "xp": 114.43,
+      "eligible": 1,
+      "seconds": 300.12
+    },
+    "horn+surge": {
+      "win": 0.53,
+      "damage": 11106.83,
+      "rolls": 70.8,
+      "spells": 12.87,
+      "kos": 2.4,
+      "gold": 1225.63,
+      "fate": 3.6,
+      "points": 11.57,
+      "xp": 123.3,
+      "eligible": 1,
+      "seconds": 300
+    },
+    "barrage+horn": {
+      "win": 0.57,
+      "damage": 6793.2,
+      "rolls": 62.93,
+      "spells": 13.23,
+      "kos": 1.97,
+      "gold": 792.83,
+      "fate": 3.7,
+      "points": 9.93,
+      "xp": 78.23,
+      "eligible": 1,
+      "seconds": 300
+    }
+  },
+  "heroes": {
+    "0": {
+      "win": 0.53,
+      "damage": 9459.27,
+      "rolls": 67.23,
+      "spells": 12.6,
+      "kos": 2,
+      "gold": 1038.47,
+      "fate": 3.6,
+      "points": 10.8,
+      "xp": 115.83,
+      "eligible": 1,
+      "seconds": 300.65
+    },
+    "1": {
+      "win": 0.57,
+      "damage": 13990.7,
+      "rolls": 66.43,
+      "spells": 12.5,
+      "kos": 2.77,
+      "gold": 965.57,
+      "fate": 3.7,
+      "points": 12.43,
+      "xp": 112.9,
+      "eligible": 1,
+      "seconds": 300.12
+    },
+    "2": {
+      "win": 0.63,
+      "damage": 10146.47,
+      "rolls": 67.1,
+      "spells": 13.5,
+      "kos": 2.43,
+      "gold": 1207.13,
+      "fate": 3.9,
+      "points": 10.83,
+      "xp": 108.4,
+      "eligible": 1,
+      "seconds": 300.58
+    },
+    "3": {
+      "win": 0.5,
+      "damage": 9674.8,
+      "rolls": 59.9,
+      "spells": 12.1,
+      "kos": 2.4,
+      "gold": 1118.87,
+      "fate": 3.5,
+      "points": 10.73,
+      "xp": 105.13,
+      "eligible": 1,
+      "seconds": 300.85
+    },
+    "4": {
+      "win": 0.6,
+      "damage": 11166.07,
+      "rolls": 63.2,
+      "spells": 12.47,
+      "kos": 2.5,
+      "gold": 1135.63,
+      "fate": 3.8,
+      "points": 11.7,
+      "xp": 119.33,
+      "eligible": 1,
+      "seconds": 300
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "html_sha256": "1e4cbc3be1eb1570de9f1269e4c4497936e74b11fc0420e3823decaf42414daf",
+  "backend_tests": 39,
+  "web_host_tests": 9,
+  "browser_suites": {
+    "full-browser-tests.json": 23,
+    "browser-audit.json": 23
+  },
+  "simulated_matches": 730,
+  "physical_device_tests": false,
+  "test_controls_in_production": false,
+  "browser_checks": 46
+}

@@ -1,0 +1,11 @@
+{
+  "verified_utc": "2026-09-25T06:12:46.973659+00:00",
+  "html_sha256": "1e4cbc3be1eb1570de9f1269e4c4497936e74b11fc0420e3823decaf42414daf",
+  "html_bytes": 36248638,
+  "inline_scripts_parsed": 20,
+  "unchanged_embedded_assets": 103,
+  "node_tests_passed": 39,
+  "python_web_tests_passed": 9,
+  "browser_suite_rerun_on_vm": false,
+  "node_version": "v24.20.0"
+}

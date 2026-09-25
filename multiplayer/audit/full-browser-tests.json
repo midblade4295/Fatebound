@@ -1,0 +1,122 @@
+{
+  "sourceSha256": "1e4cbc3be1eb1570de9f1269e4c4497936e74b11fc0420e3823decaf42414daf",
+  "checks": [
+    {
+      "check": "Full audited HTML boots with a preserved completed tutorial save",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Five menus remain exclusive; Season Pass opens and closes above each",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Raid dialog receives touches above Home and Back remains reachable",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Raid attempt opens, rolls and exits without leaving covered roots",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Score help, low-resource and stored-gift modal controls remain above the current menu",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Two-spell selection persists and pinned upgrade reports actual remaining costs",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Preparation and raid modal controls fit six portrait/landscape/desktop viewports",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Live guild create and leader route selection use the real HTTP service",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Equalized offline challenge starts, all dice settle, and Home navigation is absent",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Offline challenge result and Claim return Home without granting resources or mastery",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Two browser clients join one authoritative 20-slot room after the deadline",
+      "status": "PASS",
+      "detail": "18 labelled bots; 10 vs 10"
+    },
+    {
+      "check": "Reload automatically resumes the same room/identity without allocating another seat",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Five server-authorized throws settle on the client and synchronize to the other browser",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Equipped spell casts from the shared charge pool; tower damage agrees across clients",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Tower map remains usable during locked online matches and a map tap returns to battle",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Server result, exact-once reward application, Home restoration and Season Pass after claim",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "A second online battle starts after Claim, pass use and loadout reopening",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Lost claim acknowledgement recovers on document reload without losing or duplicating rewards",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Original solo progression remains playable with two spell buttons",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Guided gift use and menu-navigation lessons retain the coach above their dialogs",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Guided training introduction, scripted roll and safe exit still work",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Unavailable networking presents an explicit error and cancel, never a fake live bot match",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "No uncaught game JavaScript or game-console errors in completed runs",
+      "status": "PASS",
+      "detail": ""
+    }
+  ],
+  "pageErrors": [],
+  "consoleErrors": []
+}

@@ -45,7 +45,7 @@ with sync_playwright() as pw:
  try:
   debug('reset');p=ready_page(browser)
   assert p.evaluate("screen==='home'&&!TRAIN")
-  record('Full v109 HTML boots with a preserved completed tutorial save')
+  record('Full audited HTML boots with a preserved completed tutorial save')
   for menu in ['guild','hero','friends','shop','home']:
    p.locator(f'nav [data-tab="{menu}"]').tap();p.wait_for_timeout(150)
    roots=p.evaluate('activeRoots()');assert roots==[{'home':'setup','guild':'scrGuild','hero':'scrHero','friends':'scrFriends','shop':'scrShop'}[menu]],roots
@@ -90,7 +90,7 @@ with sync_playwright() as pw:
   p.locator('#resultClaim').tap();p.wait_for_function("screen==='home'&&!FBNext.active")
   assert p.evaluate('({gold:SAVE.gold,mastery:JSON.stringify(SAVE.adventure.mastery)})')==beforePractice
   record('Offline challenge result and Claim return Home without granting resources or mastery')
-  p.close();p=ready_page(browser);q=ready_page(browser)
+  p.context.close();p=ready_page(browser);q=ready_page(browser)
   for page in [p,q]:
    page.locator('#adventurePrepareButton').tap();page.locator('#adventureQueue').tap();page.wait_for_function("document.getElementById('queueCount').textContent.includes('/ 20')")
   assert '/ 20 human' in p.locator('#queueCount').inner_text()
@@ -100,7 +100,7 @@ with sync_playwright() as pw:
   assert [len([h for h in a['heroes'] if h['side']==sd]) for sd in [0,1]]==[10,10]
   record('Two browser clients join one authoritative 20-slot room after the deadline', '18 labelled bots; 10 vs 10')
   resumeStore=p.evaluate("({'fatebound-save':localStorage.getItem('fatebound-save'),'fatebound-arena-identity':localStorage.getItem('fatebound-arena-identity')})")
-  old=p;p=ready_page(browser,storage=resumeStore);old.close();p.wait_for_function('FBNext.active');assert p.evaluate('M.arenaId')==a['id'];assert p.evaluate('M.heroes.length')==20
+  p.context.close();p=ready_page(browser,storage=resumeStore);p.wait_for_function('FBNext.active');assert p.evaluate('M.arenaId')==a['id'];assert p.evaluate('M.heroes.length')==20
   record('Reload automatically resumes the same room/identity without allocating another seat')
   for i in range(5):
    debug('boost');p.wait_for_timeout(850);p.locator('#roll').tap();p.wait_for_timeout(3000)
@@ -136,12 +136,12 @@ with sync_playwright() as pw:
   p.route('https://arena.test/fatebound/arena/claim',lost_claim)
   p.locator('#resultClaim').tap();p.wait_for_function("document.getElementById('resultError').textContent.includes('Retry Claim')")
   journalStore=p.evaluate("Object.fromEntries(['fatebound-save','fatebound-arena-identity','fatebound-arena-pending-claim'].map(k=>[k,localStorage.getItem(k)]))")
-  p.close();p=ready_page(browser,storage=journalStore);p.wait_for_function("localStorage.getItem('fatebound-arena-pending-claim')===null")
+  p.context.close();p=ready_page(browser,storage=journalStore);p.wait_for_function("localStorage.getItem('fatebound-arena-pending-claim')===null")
   assert p.evaluate('SAVE.gold')>claimBefore;assert p.evaluate('screen')=='home';claimedGold=p.evaluate('SAVE.gold')
   repeatStore=p.evaluate("Object.fromEntries(['fatebound-save','fatebound-arena-identity'].map(k=>[k,localStorage.getItem(k)]))")
-  p.close();p=ready_page(browser,storage=repeatStore);assert p.evaluate('SAVE.gold')==claimedGold
+  p.context.close();p=ready_page(browser,storage=repeatStore);assert p.evaluate('SAVE.gold')==claimedGold
   record('Lost claim acknowledgement recovers on document reload without losing or duplicating rewards')
-  p.close();q.close()
+  p.context.close();q.context.close()
   # Legacy progression, existing training and all original modal families use a fresh document.
   p=ready_page(browser)
   p.locator('#adventurePrepareButton').tap();p.locator('#adventureSolo').tap();p.wait_for_timeout(1200)
@@ -150,7 +150,7 @@ with sync_playwright() as pw:
   p.locator('#roll').tap();p.wait_for_function('player.rolls>=1',timeout=15000)
   assert p.evaluate('player.rolls')>=1
   record('Original solo progression remains playable with two spell buttons')
-  p.close();p=ready_page(browser);p.locator('#hubTutorial').tap();p.wait_for_timeout(800);assert p.evaluate('!!TRAIN')
+  p.context.close();p=ready_page(browser);p.locator('#hubTutorial').tap();p.wait_for_timeout(800);assert p.evaluate('!!TRAIN')
   p.evaluate('FBNext.openPrep()');assert not p.locator('#adventurePrep').is_visible()
   p.locator('#coachNext').tap();p.locator('#coachNext').tap();p.locator('#roll').tap();p.wait_for_timeout(5000)
   assert p.evaluate('player.rolls')>=1
@@ -173,9 +173,12 @@ with sync_playwright() as pw:
  except Exception as e:
   print('FAIL',repr(e),flush=True);traceback.print_exc()
   results.append({'check':'Runtime suite interrupted','status':'FAIL','detail':str(e)})
-  try:p.screenshot(path=str(ROOT/'docs/browser-failure.png'));print('STATE',p.evaluate('({screen,root:activeRoots(),cls:document.body.className,train:!!TRAIN,active:FBNext.active})'),flush=True)
+  try:p.screenshot(path=str(ROOT/'audit/browser-failure.png'));print('STATE',p.evaluate('({screen,root:activeRoots(),cls:document.body.className,train:!!TRAIN,active:FBNext.active})'),flush=True)
   except Exception:pass
  finally:
   print('ERRORS',errors,'CONSOLE',console_errors,flush=True)
-  (ROOT/'docs/browser-tests.json').write_text(json.dumps({'sourceSha256':SOURCE_SHA256,'checks':results,'pageErrors':errors,'consoleErrors':console_errors},indent=2))
+  (ROOT/'audit/full-browser-tests.json').write_text(json.dumps({'sourceSha256':SOURCE_SHA256,'checks':results,'pageErrors':errors,'consoleErrors':console_errors},indent=2))
   browser.close()
+
+if any(x['status']!='PASS' for x in results) or errors or console_errors:
+ raise SystemExit(1)

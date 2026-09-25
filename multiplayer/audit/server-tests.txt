@@ -1,0 +1,244 @@
+TAP version 13
+# Subtest: ALL-IN triple gifts scale to combat power, not an unrelated 500-damage constant
+ok 1 - ALL-IN triple gifts scale to combat power, not an unrelated 500-damage constant
+  ---
+  duration_ms: 4.012422
+  type: 'test'
+  ...
+# Subtest: both gift banks are capped; transfer overflow remains with sender
+ok 2 - both gift banks are capped; transfer overflow remains with sender
+  ---
+  duration_ms: 0.597208
+  type: 'test'
+  ...
+# Subtest: repeated ALL-IN gifts cannot grow the pending bank beyond two health bars
+ok 3 - repeated ALL-IN gifts cannot grow the pending bank beyond two health bars
+  ---
+  duration_ms: 0.651829
+  type: 'test'
+  ...
+# Subtest: Barrage is 1.5 times a triple sword and never refunds its charge on neutral capture
+ok 4 - Barrage is 1.5 times a triple sword and never refunds its charge on neutral capture
+  ---
+  duration_ms: 0.530971
+  type: 'test'
+  ...
+# Subtest: spells cannot fund spells when flipping an enemy-held objective
+ok 5 - spells cannot fund spells when flipping an enemy-held objective
+  ---
+  duration_ms: 0.50934
+  type: 'test'
+  ...
+# Subtest: paid contested captures reward once per tower per 30 seconds
+ok 6 - paid contested captures reward once per tower per 30 seconds
+  ---
+  duration_ms: 0.349504
+  type: 'test'
+  ...
+# Subtest: paid neutral captures grant no capture bonus, but triples retain their own charge
+ok 7 - paid neutral captures grant no capture bonus, but triples retain their own charge
+  ---
+  duration_ms: 0.345328
+  type: 'test'
+  ...
+# Subtest: Rampage cannot stack free ALL-IN or high multipliers
+ok 8 - Rampage cannot stack free ALL-IN or high multipliers
+  ---
+  duration_ms: 0.295785
+  type: 'test'
+  ...
+# Subtest: invalid multiplier and ALL-IN types reject before spending resources
+ok 9 - invalid multiplier and ALL-IN types reject before spending resources
+  ---
+  duration_ms: 1.963789
+  type: 'test'
+  ...
+# Subtest: substitute actions cannot increase already-qualified human rewards or mastery
+ok 10 - substitute actions cannot increase already-qualified human rewards or mastery
+  ---
+  duration_ms: 1.456763
+  type: 'test'
+  ...
+# Subtest: reconnected player resumes earning without retroactive bot credit
+ok 11 - reconnected player resumes earning without retroactive bot credit
+  ---
+  duration_ms: 0.307022
+  type: 'test'
+  ...
+# Subtest: defense credit is not earned by absent substitutes
+ok 12 - defense credit is not earned by absent substitutes
+  ---
+  duration_ms: 0.58431
+  type: 'test'
+  ...
+# Subtest: Rogue enchanted critical rolls include the advertised bonus multiplier
+ok 13 - Rogue enchanted critical rolls include the advertised bonus multiplier
+  ---
+  duration_ms: 0.255937
+  type: 'test'
+  ...
+# Subtest: Ranger Volley refunds Focus only for actual knockouts
+ok 14 - Ranger Volley refunds Focus only for actual knockouts
+  ---
+  duration_ms: 0.525874
+  type: 'test'
+  ...
+# Subtest: old persisted rooms retain legacy balance and remain resumable
+ok 15 - old persisted rooms retain legacy balance and remain resumable
+  ---
+  duration_ms: 0.764134
+  type: 'test'
+  ...
+# Subtest: new room restore preserves credit and per-tower bonus cooldown
+ok 16 - new room restore preserves credit and per-tower bonus cooldown
+  ---
+  duration_ms: 0.634613
+  type: 'test'
+  ...
+# Subtest: pending rewards remain discoverable and claimable after room cleanup
+ok 17 - pending rewards remain discoverable and claimable after room cleanup
+  ---
+  duration_ms: 5.030549
+  type: 'test'
+  ...
+# Subtest: completed result is cached; later in-memory edits cannot change displayed earnings
+ok 18 - completed result is cached; later in-memory edits cannot change displayed earnings
+  ---
+  duration_ms: 2.282958
+  type: 'test'
+  ...
+# Subtest: completion receipts carry their original season and verified daily statistics
+ok 19 - completion receipts carry their original season and verified daily statistics
+  ---
+  duration_ms: 2.251502
+  type: 'test'
+  ...
+# Subtest: missing runtime room releases the slot instead of trapping the client
+ok 20 - missing runtime room releases the slot instead of trapping the client
+  ---
+  duration_ms: 0.429392
+  type: 'test'
+  ...
+# Subtest: POST non-object JSON is rejected and pending rewards require auth
+ok 21 - POST non-object JSON is rejected and pending rewards require auth
+  ---
+  duration_ms: 63.249978
+  type: 'test'
+  ...
+# Subtest: gift daily credit requires sending a gift, not merely rolling its symbol
+ok 22 - gift daily credit requires sending a gift, not merely rolling its symbol
+  ---
+  duration_ms: 0.348533
+  type: 'test'
+  ...
+# Subtest: guild milestone grants remain pending after a lost reply and claim exactly once
+ok 23 - guild milestone grants remain pending after a lost reply and claim exactly once
+  ---
+  duration_ms: 0.84951
+  type: 'test'
+  ...
+# Subtest: full 20-second wait: zero rooms/bots before deadline, exactly 20 at deadline
+ok 24 - full 20-second wait: zero rooms/bots before deadline, exactly 20 at deadline
+  ---
+  duration_ms: 5.319395
+  type: 'test'
+  ...
+# Subtest: 20 real players still wait for deadline; no bots; 21st gets a different lobby
+ok 25 - 20 real players still wait for deadline; no bots; 21st gets a different lobby
+  ---
+  duration_ms: 5.844497
+  type: 'test'
+  ...
+# Subtest: repeated queue joins cannot create extra seats, cancel removes only that participant
+ok 26 - repeated queue joins cannot create extra seats, cancel removes only that participant
+  ---
+  duration_ms: 1.034882
+  type: 'test'
+  ...
+# Subtest: abandoned queue entries expire and empty lobbies create no phantom matches
+ok 27 - abandoned queue entries expire and empty lobbies create no phantom matches
+  ---
+  duration_ms: 0.388231
+  type: 'test'
+  ...
+# Subtest: two clients receive the same room, same damage and same crown score
+ok 28 - two clients receive the same room, same damage and same crown score
+  ---
+  duration_ms: 2.716686
+  type: 'test'
+  ...
+# Subtest: action retries are idempotent; unauthorized multipliers and rapid rolls rejected
+ok 29 - action retries are idempotent; unauthorized multipliers and rapid rolls rejected
+  ---
+  duration_ms: 2.615557
+  type: 'test'
+  ...
+# Subtest: two equipped spells share charges; absent spell and duplicate loadouts rejected
+ok 30 - two equipped spells share charges; absent spell and duplicate loadouts rejected
+  ---
+  duration_ms: 0.758526
+  type: 'test'
+  ...
+# Subtest: disconnect substitutes in-place; reconnect restores the same slot; autopilot not eligible
+ok 31 - disconnect substitutes in-place; reconnect restores the same slot; autopilot not eligible
+  ---
+  duration_ms: 5.082736
+  type: 'test'
+  ...
+# Subtest: supply objective is warned, resolved once, bounded to one resource bonus
+ok 32 - supply objective is warned, resolved once, bounded to one resource bonus
+  ---
+  duration_ms: 97.762606
+  type: 'test'
+  ...
+# Subtest: five-minute completion, rewards exactly once, new match allowed after claim
+ok 33 - five-minute completion, rewards exactly once, new match allowed after claim
+  ---
+  duration_ms: 377.973143
+  type: 'test'
+  ...
+# Subtest: guild membership, validated contributions, milestone claims cannot be repeated or farmed by rejoining
+ok 34 - guild membership, validated contributions, milestone claims cannot be repeated or farmed by rejoining
+  ---
+  duration_ms: 1.116372
+  type: 'test'
+  ...
+# Subtest: durable sessions, match snapshot and exact-once receipts survive server reconstruction
+ok 35 - durable sessions, match snapshot and exact-once receipts survive server reconstruction
+  ---
+  duration_ms: 2.457104
+  type: 'test'
+  ...
+# Subtest: HTTP endpoint, bearer authorization, CORS rejection and invalid inputs
+ok 36 - HTTP endpoint, bearer authorization, CORS rejection and invalid inputs
+  ---
+  duration_ms: 45.691311
+  type: 'test'
+  ...
+# Subtest: claimed matches never reclaim membership after a server restart; shard choice is immutable
+ok 37 - claimed matches never reclaim membership after a server restart; shard choice is immutable
+  ---
+  duration_ms: 1.229809
+  type: 'test'
+  ...
+# Subtest: full game engine rejects invalid targets, overspending and counterfeit results
+ok 38 - full game engine rejects invalid targets, overspending and counterfeit results
+  ---
+  duration_ms: 0.649345
+  type: 'test'
+  ...
+# Subtest: prototype property names cannot be claimed or used as spell identifiers
+ok 39 - prototype property names cannot be claimed or used as spell identifiers
+  ---
+  duration_ms: 0.232021
+  type: 'test'
+  ...
+1..39
+# tests 39
+# suites 0
+# pass 39
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 654.537334

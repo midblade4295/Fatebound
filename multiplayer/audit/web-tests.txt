@@ -1,0 +1,14 @@
+test_bad_body_never_overwrites_save (web_host_test.WebTests.test_bad_body_never_overwrites_save) ... ok
+test_concurrent_save_writes_are_complete_json (web_host_test.WebTests.test_concurrent_save_writes_are_complete_json) ... ok
+test_cors_rejects_other_sites_allows_local_alpha (web_host_test.WebTests.test_cors_rejects_other_sites_allows_local_alpha) ... ok
+test_head_does_not_send_body (web_host_test.WebTests.test_head_does_not_send_body) ... ok
+test_hidden_folders_get_and_head (web_host_test.WebTests.test_hidden_folders_get_and_head) ... ok
+test_html_cache_invalidates_on_atomic_source_update (web_host_test.WebTests.test_html_cache_invalidates_on_atomic_source_update) ... ok
+test_legacy_save_roundtrip_and_private_permissions (web_host_test.WebTests.test_legacy_save_roundtrip_and_private_permissions) ... ok
+test_path_and_object_ids_rejected (web_host_test.WebTests.test_path_and_object_ids_rejected) ... ok
+test_public_game_client_and_health (web_host_test.WebTests.test_public_game_client_and_health) ... ok
+
+----------------------------------------------------------------------
+Ran 9 tests in 4.569s
+
+OK

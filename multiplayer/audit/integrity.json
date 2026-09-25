@@ -1,0 +1,20 @@
+{
+  "html_sha256": "1e4cbc3be1eb1570de9f1269e4c4497936e74b11fc0420e3823decaf42414daf",
+  "html_bytes": 36248638,
+  "git_blob_sha1": "43ed2ac4a225ce31e4342c67678aa23bdf888bd3",
+  "inline_scripts_parsed": 20,
+  "embedded_assets_unchanged": 103,
+  "base_sha256": "49178287e6e7d05d317b6f497807cee6193f1867a090e187b99d710e8622c6db",
+  "save_key": "fatebound-save",
+  "battle_session_compatibility": 106,
+  "arena_protocol": 1,
+  "new_room_balance_version": 110,
+  "files": {
+    "multiplayer/src/adventure.css": "3d1184a3efffb3a8a359a39eff3fed2e64f952a52ffbd1258d2cea018e0c1334",
+    "multiplayer/src/arena-client.js": "1b1b0dedd42f47a21d6e364a4601fc8319f8d02664b6d8523a00b1d0e3391335",
+    "multiplayer/src/arena-engine.js": "e2e1493a54e68eb7ac4558041125f572a8e870ec21394c9002dff524b58f80a8",
+    "multiplayer/src/arena-server.js": "9bf854cd7c9ec3b1657721d548f66bd000a8364608a79c9a5c4099ef3e031d84",
+    "multiplayer/src/metrics.js": "81caa42dcba0794651675934ef51fb4ace80dd403cb0638dcbec98e1f94fecec",
+    "server/fatebound_host.py": "af9006a6ce3eb7bebb40e2ea0856192c4f92eaa4d098b2fb2aabf5beb43392f8"
+  }
+}

@@ -1,0 +1,123 @@
+{
+  "source_sha256": "1e4cbc3be1eb1570de9f1269e4c4497936e74b11fc0420e3823decaf42414daf",
+  "checks": [
+    {
+      "check": "Interrupted Focus payments refund matching battle Focus, never permanent Fate",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "An old pending roll cannot credit a different battle",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Waiting at capped Focus cannot bank regeneration ticks",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Invalid adventure metadata recovers without blocking the menus",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Malformed daily, tier, gift and Season Pass metadata cannot crash menu rendering",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Training can be exited during a throw; the delayed result cannot affect Home",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Solo Barrage is an actual spell, not a free roll/Focus/charge exploit",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Solo Rampage executes free \u00d71 rolls, not free ALL-IN",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Raid does not display unusable arena spell controls",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Stored raid attacks credit the player and damage quest, not the boss identity",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "A departed raid cannot land delayed dice or bot attacks on the next screen",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Verified online result updates daily quests and lifetime stats once",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Reloading a claimed receipt cannot repeat coins, dailies or lifetime stats",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Old-season rewards retain currency but cannot farm new-season points or current dailies",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "A lost committed roll reply retries the same action ID and spends only once",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "An expired online room returns to usable Home instead of leaving the battle lock",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "A delayed guild connection cannot reopen a dismissed modal",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "A lost guild milestone reply is discovered and recovered once through the real server",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Home cannot sell disappearing battle consumables or unused Fate; forged stale buttons spend nothing",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "A failed relic save rolls back both the token cost and combat bonus",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Forge is atomic on save failure and follows the displayed costs without a hidden nine-weapon gate",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "The labelled practice purchase advances training without spending the real saved gold",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "No uncaught JavaScript errors across the added browser regressions",
+      "status": "PASS",
+      "detail": ""
+    }
+  ],
+  "uncaught_errors": [],
+  "console_errors": [],
+  "fixtures": "isolated full HTML, mobile Chromium, actual loopback arena; deliberate failure/receipt mocks explicitly labelled"
+}
