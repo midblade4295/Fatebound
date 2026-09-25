@@ -1,0 +1,87 @@
+/* v114: final layout contract. Interactive regions reserve space, never overlay the board. */
+html,body,#app{height:var(--game-vh,100dvh)!important;max-height:var(--game-vh,100dvh)!important}
+body.ui-battle-v2,body.ui-battle-v2 #app,body.ui-battle-v2 #battle{height:var(--game-vh,100dvh)!important;max-height:var(--game-vh,100dvh)!important}
+body.ui-battle-v2 #battle:not([hidden]){display:flex!important;flex-direction:column!important;min-height:0!important;max-width:760px!important;margin-inline:auto!important;width:100%!important;padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)!important;box-sizing:border-box!important;isolation:isolate;overflow:hidden!important}
+body.ui-battle-v2 #battleTopV2{position:relative!important;flex:0 0 auto!important;min-height:0!important;z-index:1!important;overflow:visible!important}
+body.ui-battle-v2 #battleHeaderV2{position:relative!important;height:auto!important;min-height:70px!important;max-height:none!important;padding:5px 9px!important;grid-template-columns:minmax(0,1fr) minmax(128px,1.35fr) minmax(0,1fr)!important;box-sizing:border-box!important}
+body.ui-battle-v2 #v2Center{display:grid!important;gap:2px!important;min-width:0!important;line-height:1.2!important}
+body.ui-battle-v2 #v2Clock{font-size:20px!important;line-height:24px!important}
+body.ui-battle-v2 #v2Energy{position:static!important;display:flex!important;height:auto!important;margin:1px 0 0!important;flex-wrap:wrap!important;gap:3px!important;justify-content:center!important;max-width:100%!important}
+body.ui-battle-v2 #v2Energy .v2-chip{font-size:8px!important;line-height:12px!important;padding:1px 5px!important}
+body.ui-battle-v2 #tacticalV2,body.ui-battle-v2 #guildMomentumV2,body.ui-battle-v2 #battleExcitement{display:none!important;pointer-events:none!important}
+body.ui-battle-v2 #battle>.tbar{min-height:30px!important;height:auto!important;max-height:none!important;box-sizing:border-box!important;flex:0 0 auto!important;z-index:1!important;position:relative!important}
+body.ui-battle-v2 #battleTools{position:relative!important;flex:0 0 auto!important;z-index:1!important;height:44px!important;min-height:44px!important;max-height:44px!important;box-sizing:border-box!important}
+body.ui-battle-v2 #battleTools #rivalMiniV2:not([hidden]){display:grid!important;position:static!important;min-height:36px!important;height:36px!important;max-height:36px!important;min-width:0!important;flex:1!important;font-size:10px!important}
+body.ui-battle-v2 #battle .arena{position:relative!important;flex:1 1 0!important;min-height:80px!important;height:auto!important;z-index:0!important;overflow:hidden!important;grid-column:auto!important;grid-row:auto!important}
+body.ui-battle-v2 #board{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;display:block!important}
+#battlePanHint{display:none!important}
+body.ui-battle-v2 #battleNotice{position:relative!important;z-index:1!important;flex:0 0 28px!important;min-height:28px!important;height:28px!important;max-height:28px!important;box-sizing:border-box!important;font-size:10px!important;grid-column:auto!important;grid-row:auto!important}
+body.ui-battle-v2 .toast,body.arena-live .toast{display:none!important;pointer-events:none!important}
+#rollOutcomeV114{display:none}
+body.ui-battle-v2 #battle .rollbar{position:relative!important;inset:auto!important;transform:none!important;flex:0 0 auto!important;z-index:1!important;padding:4px 8px!important;display:grid!important;grid-template-columns:72px minmax(0,1fr) 76px!important;grid-template-areas:'outcome outcome outcome' 'track track track' 'heat ult ult' 'mult roll rally' 'extra extra extra'!important;gap:4px!important;min-height:0!important;max-height:none!important;box-sizing:border-box!important}
+body.ui-battle-v2 #rollOutcomeV114{grid-area:outcome;display:grid;grid-template-columns:auto minmax(0,1fr);column-gap:8px;row-gap:2px;background:#102a35;border:1px solid #49767c;border-radius:9px;padding:5px 8px;min-height:47px;box-sizing:border-box;color:#dceee9;align-items:center;overflow:hidden;font:800 10px/14px Nunito,system-ui}
+#rollOutcomeTitle{font-size:10px;color:#a0efdb;white-space:nowrap}
+#rollOutcomeDetail{overflow-wrap:anywhere;font-size:10px;line-height:14px}
+#rollOutcomeBank{grid-column:1/-1;color:#d6c998;font:700 9px/12px Nunito,system-ui;font-variant-numeric:tabular-nums}
+#rollOutcomeV114[data-symbol='G'] #rollOutcomeTitle{color:#ffe499}#rollOutcomeV114[data-symbol='C'] #rollOutcomeTitle{color:#ffba9f}
+body.ui-battle-v2 #battle #rollTrack{display:flex!important;height:17px!important;min-height:17px!important;max-height:17px!important;margin:0!important;padding:1px 5px!important;box-sizing:border-box!important}
+body.ui-battle-v2 #rollTrackLabel{font-size:9px!important;line-height:12px!important}
+body.ui-battle-v2 #heat,body.ui-battle-v2 #ultBar{height:24px!important;min-height:24px!important;max-height:24px!important}
+body.ui-battle-v2 #battle #mults,body.ui-battle-v2 #battle #roll,body.ui-battle-v2 #battle #rally{height:48px!important;min-height:48px!important;max-height:48px!important;padding-block:3px!important;box-sizing:border-box!important}
+body.ui-battle-v2 #battle #roll{font-size:23px!important;line-height:24px!important}
+body.ui-battle-v2 #rollCost{font-size:9px!important;line-height:12px!important;white-space:normal!important}
+body.ui-battle-v2 #arenaSpells{min-height:40px!important;max-height:none!important}
+body.ui-battle-v2 #arenaSpells button{height:40px!important;min-height:40px!important;font-size:11px!important;line-height:13px!important;padding:3px 6px!important}
+body.ui-battle-v2 #battleFooterV2{position:relative!important;z-index:1!important;flex:0 0 44px!important;height:44px!important;min-height:44px!important;max-height:44px!important;box-sizing:border-box!important;grid-column:auto!important;grid-row:auto!important;padding:3px 8px!important}
+body.ui-battle-v2 #battleGiftToastV2:not([hidden]){position:relative!important;z-index:1!important;flex:0 0 36px!important;width:auto!important;grid-column:auto!important;grid-row:auto!important}
+body.ui-battle-v2 #battleDrawerV2{z-index:760!important;position:fixed!important;left:10px!important;right:10px!important;bottom:calc(10px + env(safe-area-inset-bottom,0px))!important;max-height:calc(var(--game-vh,100dvh) - 32px - env(safe-area-inset-top,0px))!important;overflow-y:auto!important;box-sizing:border-box!important;padding:12px!important}
+body.battle-drawer-open:after{z-index:750!important}
+#battleDrawerV2 .head{position:sticky;top:-12px;background:#0c1821;padding-top:4px;z-index:1}#battleDrawerV2 #v2DrawerClose{min-width:44px;min-height:44px}#battleDrawerV2 .grid{grid-template-columns:1fr!important}#battleDrawerV2 .locknote{line-height:1.5;overflow-wrap:anywhere}
+/* Real mobile keyboard height is used by all later dialogs, not just their dimmed backdrop. */
+.comfort-panel,.adventure-panel{max-height:calc(var(--game-vh,100dvh) - 24px)!important}
+@media(max-height:670px){body.ui-battle-v2 #battleHeaderV2{min-height:61px!important;padding-block:3px!important}body.ui-battle-v2 #v2Clock{font-size:17px!important;line-height:20px!important}body.ui-battle-v2 #rollOutcomeV114{padding:3px 6px;min-height:43px}body.ui-battle-v2 #battle .rollbar{gap:3px!important;padding:3px 6px!important}}
+@media(max-height:480px) and (min-width:550px){
+ body.ui-battle-v2 #battle:not([hidden]){max-width:none!important;display:grid!important;grid-template-columns:minmax(0,1fr) 262px!important;grid-template-rows:62px 44px minmax(60px,1fr) 28px 40px!important}
+ body.ui-battle-v2 #battleTopV2{grid-column:1!important;grid-row:1!important}
+ body.ui-battle-v2 #battleTools{grid-column:1!important;grid-row:2!important}
+ body.ui-battle-v2 #battle>.tbar{display:none!important}
+ body.ui-battle-v2 #battle .arena{grid-column:1!important;grid-row:3!important;min-height:60px!important}
+ body.ui-battle-v2 #battleNotice{grid-column:1!important;grid-row:4!important}
+ body.ui-battle-v2 #battle .rollbar{grid-column:2!important;grid-row:1/5!important;align-content:center!important;grid-template-columns:60px minmax(0,1fr) 61px!important;overflow-y:auto!important}
+ body.ui-battle-v2 #battleFooterV2{grid-column:2!important;grid-row:5!important;height:40px!important;min-height:40px!important;max-height:40px!important}
+ body.ui-battle-v2 #battleGiftToastV2:not([hidden]){grid-column:1!important;grid-row:5!important;height:36px!important;min-height:36px!important}
+ #rollOutcomeV114{grid-template-columns:1fr!important}#rollOutcomeTitle,#rollOutcomeBank{grid-column:1!important}
+}
+/* Guild hall: mounted composer, sticky tabs, independent war-room feed and bounded roster. */
+#scrGuild.guild-hall{padding:14px 12px 20px!important;background:radial-gradient(ellipse at top right,#20453c77,transparent 45%),#081722!important;overflow-y:auto!important;overflow-anchor:none;scroll-behavior:auto!important;min-height:0}
+.guild-hall *{box-sizing:border-box}.guild-hall [hidden]{display:none!important}
+.guild-hall-hero{display:flex;gap:14px;align-items:center;padding:17px 16px;border:1px solid #d2b477;border-radius:18px;background:linear-gradient(130deg,#24473e,#102631 65%);box-shadow:0 8px 20px #0005}
+.guild-crest{flex:none;width:56px;height:66px;display:grid;place-items:center;background:linear-gradient(135deg,#f4d38d,#805c26);clip-path:polygon(0 0,100% 0,100% 77%,50% 100%,0 77%);font:bold 30px Georgia;color:#273023;text-shadow:0 1px #ffe9b8}
+.guild-eyebrow{font:900 9px/13px Nunito,system-ui;letter-spacing:.13em;color:#86d3bb}
+.guild-hall-hero h2{font:500 27px/1.1 Georgia,serif;color:#ffe3a7;margin:5px 0 7px!important;overflow-wrap:anywhere}
+.guild-hall-hero p{margin:0;font:700 11px/16px Nunito,system-ui;color:#c0d7d4}
+.guild-hall #guildExpeditionSlot{min-height:58px;margin:8px 0 0!important}
+.guild-hall #expeditionEntry{border-radius:12px!important;background:linear-gradient(#dcb974,#b18b47)!important;color:#182728!important;min-height:45px!important}
+.guild-tabs{display:flex;gap:5px;position:sticky;top:-14px;z-index:2;background:#0b1c28;padding:10px 0;border-bottom:1px solid #57717b}
+.guild-tabs button{flex:1;min-height:42px;border-radius:10px;background:#18313d;border:1px solid #49616c;color:#bdd5d9;font:900 12px Nunito,system-ui;touch-action:manipulation}
+.guild-tabs button[aria-selected='true']{background:#295449;border-color:#a7d7bc;color:#e1f8e9}
+.guild-pane{padding-top:14px}.guild-pane h3{color:#ffe0a0;font:800 16px/21px Nunito,system-ui;margin:6px 0 10px}
+.guild-live-card,.guild-company-card,.guild-role-card{border:1px solid #45616c;border-radius:16px;background:#132a35;padding:14px;margin:0 0 14px}
+.guild-live-card{background:linear-gradient(145deg,#1e423a,#142c36)}
+.guild-pane p,.guild-pane small{font:700 11px/17px Nunito,system-ui;color:#c1d5d8}.guild-pane small{display:block}
+.guild-expedition-track{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:14px 0;color:#e0ba70;font:900 15px Nunito,system-ui}
+.guild-expedition-track span{background:#091f2b88;border:1px solid #4c746a;border-radius:10px;padding:10px 6px}.guild-expedition-track b{font:800 10px/18px Nunito,system-ui;color:#e0e8d9}
+.guild-hall progress{width:100%;height:9px;accent-color:#8fd1a9;display:block;margin:12px 0}
+.guild-score-row{display:flex;align-items:center;justify-content:space-between;gap:6px;margin:12px 0}.guild-score-row strong{font:900 18px Nunito,system-ui;color:#7cd9e3}.guild-score-row>div:last-child{text-align:right}.guild-score-row>div:last-child strong{color:#ffae82}.guild-score-row>span{color:#bcb69d;font-size:10px}
+.guild-stat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;padding-top:10px;border-top:1px solid #3a5763;color:#b9cbd2;font:800 10px Nunito,system-ui}.guild-stat-grid b{display:block;font-size:19px;line-height:27px;color:#e7eee1}
+.guild-hall .member{display:grid;grid-template-columns:45px minmax(0,1fr) 68px;gap:10px;align-items:center;border:1px solid #42636e;border-radius:12px;background:#122e3a;margin:8px 0;padding:8px}
+.guild-hall .member canvas{width:42px;height:52px}.guild-hall .member-name{font-size:13px;color:#edf2df}.guild-hall .member-hero,.guild-hall .where{font-size:10px;line-height:15px}.guild-hall .member .dmg{text-align:right}.guild-hall .member-damage{color:#8cddd4;font-size:15px}.guild-hall .member .dmg small{font-size:8px}
+.guild-hall .guild-note{color:#9fbfc6;margin:6px 0 10px}
+.guild-hall #glog{height:200px;max-height:34vh;min-height:100px;overflow-y:auto;overscroll-behavior:contain;overflow-anchor:none;border:1px solid #3c606b;border-radius:12px;background:#091d28;padding:10px;margin:10px 0}
+.guild-hall #glog p{border-bottom:1px solid #243e48;padding:8px 2px;margin:0;color:#d4e5e4;overflow-wrap:anywhere}
+.guild-hall #guildComposer{border:1px solid #54797b;background:#12343f;border-radius:12px;padding:10px;position:sticky;bottom:0}
+.guild-composer-row{display:flex;gap:7px;align-items:center}.guild-hall #gmsg{direction:ltr!important;unicode-bidi:plaintext;text-align:left!important;flex:1;min-width:0;width:100%;font:500 16px/22px system-ui!important;border:1px solid #608181;border-radius:9px;background:#061c27;color:#e8f5ee;padding:10px 9px;height:44px!important;user-select:text;-webkit-user-select:text}
+.guild-hall #gsend{flex:none;border:1px solid #adcea6;border-radius:9px;background:#40715e;color:#f4f0d7;min-height:44px;padding:8px 13px;font:900 12px Nunito,system-ui;touch-action:manipulation}
+.guild-hall #guildComposeStatus{display:block;min-height:18px;margin-top:7px;font-size:10px;color:#bdd7ce}
+@media(max-width:370px){.guild-hall-hero{padding:13px 11px;gap:10px}.guild-hall-hero h2{font-size:24px}.guild-crest{width:45px;height:57px}.guild-score-row strong{font-size:16px}}
+@media(prefers-reduced-motion:reduce){body.ui-battle-v2 #battleHeaderV2,body.ui-battle-v2 #v2Clock{animation:none!important}.guild-hall *,#rollOutcomeV114{scroll-behavior:auto!important}}

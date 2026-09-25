@@ -1,0 +1,394 @@
+[
+  {
+    "viewport": [
+      360,
+      640
+    ],
+    "regions": {
+      "#battleHeaderV2": {
+        "x": 0,
+        "y": 0,
+        "width": 360,
+        "height": 61
+      },
+      "#battleTools": {
+        "x": 0,
+        "y": 97.78125,
+        "width": 360,
+        "height": 44
+      },
+      "#board": {
+        "x": 0,
+        "y": 141.78125,
+        "width": 360,
+        "height": 218.21875
+      },
+      "#battleNotice": {
+        "x": 0,
+        "y": 360,
+        "width": 360,
+        "height": 28
+      },
+      "#rollOutcomeV114": {
+        "x": 6,
+        "y": 392,
+        "width": 348,
+        "height": 43
+      },
+      "#arenaSpells": {
+        "x": 6,
+        "y": 553,
+        "width": 348,
+        "height": 40
+      },
+      "#roll": {
+        "x": 81,
+        "y": 485,
+        "width": 194,
+        "height": 48
+      },
+      "#battleFooterV2": {
+        "x": 0,
+        "y": 596,
+        "width": 360,
+        "height": 44
+      }
+    }
+  },
+  {
+    "viewport": [
+      393,
+      852
+    ],
+    "regions": {
+      "#battleHeaderV2": {
+        "x": 0,
+        "y": 0,
+        "width": 393,
+        "height": 70
+      },
+      "#battleTools": {
+        "x": 0,
+        "y": 104.78125,
+        "width": 393,
+        "height": 44
+      },
+      "#board": {
+        "x": 0,
+        "y": 148.78125,
+        "width": 393,
+        "height": 413.21875
+      },
+      "#battleNotice": {
+        "x": 0,
+        "y": 562,
+        "width": 393,
+        "height": 28
+      },
+      "#rollOutcomeV114": {
+        "x": 8,
+        "y": 595,
+        "width": 377,
+        "height": 47
+      },
+      "#arenaSpells": {
+        "x": 8,
+        "y": 764,
+        "width": 377,
+        "height": 40
+      },
+      "#roll": {
+        "x": 84,
+        "y": 695,
+        "width": 221,
+        "height": 48
+      },
+      "#battleFooterV2": {
+        "x": 0,
+        "y": 808,
+        "width": 393,
+        "height": 44
+      }
+    }
+  },
+  {
+    "viewport": [
+      412,
+      915
+    ],
+    "regions": {
+      "#battleHeaderV2": {
+        "x": 0,
+        "y": 0,
+        "width": 412,
+        "height": 70
+      },
+      "#battleTools": {
+        "x": 0,
+        "y": 104.78125,
+        "width": 412,
+        "height": 44
+      },
+      "#board": {
+        "x": 0,
+        "y": 148.78125,
+        "width": 412,
+        "height": 476.21875
+      },
+      "#battleNotice": {
+        "x": 0,
+        "y": 625,
+        "width": 412,
+        "height": 28
+      },
+      "#rollOutcomeV114": {
+        "x": 8,
+        "y": 658,
+        "width": 396,
+        "height": 47
+      },
+      "#arenaSpells": {
+        "x": 8,
+        "y": 827,
+        "width": 396,
+        "height": 40
+      },
+      "#roll": {
+        "x": 84,
+        "y": 758,
+        "width": 240,
+        "height": 48
+      },
+      "#battleFooterV2": {
+        "x": 0,
+        "y": 871,
+        "width": 412,
+        "height": 44
+      }
+    }
+  },
+  {
+    "viewport": [
+      768,
+      1024
+    ],
+    "regions": {
+      "#battleHeaderV2": {
+        "x": 4,
+        "y": 0,
+        "width": 760,
+        "height": 70
+      },
+      "#battleTools": {
+        "x": 4,
+        "y": 104.78125,
+        "width": 760,
+        "height": 44
+      },
+      "#board": {
+        "x": 4,
+        "y": 148.78125,
+        "width": 760,
+        "height": 602.21875
+      },
+      "#battleNotice": {
+        "x": 4,
+        "y": 751,
+        "width": 760,
+        "height": 28
+      },
+      "#rollOutcomeV114": {
+        "x": 12,
+        "y": 784,
+        "width": 744,
+        "height": 47
+      },
+      "#arenaSpells": {
+        "x": 12,
+        "y": 936,
+        "width": 744,
+        "height": 40
+      },
+      "#roll": {
+        "x": 88,
+        "y": 884,
+        "width": 588,
+        "height": 48
+      },
+      "#battleFooterV2": {
+        "x": 4,
+        "y": 980,
+        "width": 760,
+        "height": 44
+      }
+    }
+  },
+  {
+    "viewport": [
+      1280,
+      800
+    ],
+    "regions": {
+      "#battleHeaderV2": {
+        "x": 260,
+        "y": 0,
+        "width": 760,
+        "height": 70
+      },
+      "#battleTools": {
+        "x": 260,
+        "y": 104.78125,
+        "width": 760,
+        "height": 44
+      },
+      "#board": {
+        "x": 260,
+        "y": 148.78125,
+        "width": 760,
+        "height": 378.21875
+      },
+      "#battleNotice": {
+        "x": 260,
+        "y": 527,
+        "width": 760,
+        "height": 28
+      },
+      "#rollOutcomeV114": {
+        "x": 268,
+        "y": 560,
+        "width": 744,
+        "height": 47
+      },
+      "#arenaSpells": {
+        "x": 268,
+        "y": 712,
+        "width": 744,
+        "height": 40
+      },
+      "#roll": {
+        "x": 344,
+        "y": 660,
+        "width": 588,
+        "height": 48
+      },
+      "#battleFooterV2": {
+        "x": 260,
+        "y": 756,
+        "width": 760,
+        "height": 44
+      }
+    }
+  },
+  {
+    "viewport": [
+      640,
+      360
+    ],
+    "regions": {
+      "#battleHeaderV2": {
+        "x": 0,
+        "y": 0,
+        "width": 378,
+        "height": 61
+      },
+      "#battleTools": {
+        "x": 0,
+        "y": 62,
+        "width": 378,
+        "height": 44
+      },
+      "#board": {
+        "x": 0,
+        "y": 106,
+        "width": 378,
+        "height": 186
+      },
+      "#battleNotice": {
+        "x": 0,
+        "y": 292,
+        "width": 378,
+        "height": 28
+      },
+      "#rollOutcomeV114": {
+        "x": 385,
+        "y": 64,
+        "width": 249,
+        "height": 52
+      },
+      "#arenaSpells": {
+        "x": 385,
+        "y": 217,
+        "width": 249,
+        "height": 40
+      },
+      "#roll": {
+        "x": 448,
+        "y": 166,
+        "width": 122,
+        "height": 48
+      },
+      "#battleFooterV2": {
+        "x": 378,
+        "y": 320,
+        "width": 262,
+        "height": 40
+      }
+    }
+  },
+  {
+    "viewport": [
+      320,
+      568
+    ],
+    "regions": {
+      "#battleHeaderV2": {
+        "x": 0,
+        "y": 0,
+        "width": 320,
+        "height": 61
+      },
+      "#battleTools": {
+        "x": 0,
+        "y": 97.78125,
+        "width": 320,
+        "height": 44
+      },
+      "#board": {
+        "x": 0,
+        "y": 141.78125,
+        "width": 320,
+        "height": 163.21875
+      },
+      "#battleNotice": {
+        "x": 0,
+        "y": 305,
+        "width": 320,
+        "height": 28
+      },
+      "#rollOutcomeV114": {
+        "x": 6,
+        "y": 337,
+        "width": 308,
+        "height": 43
+      },
+      "#arenaSpells": {
+        "x": 6,
+        "y": 481,
+        "width": 308,
+        "height": 40
+      },
+      "#roll": {
+        "x": 81,
+        "y": 430,
+        "width": 154,
+        "height": 48
+      },
+      "#battleFooterV2": {
+        "x": 0,
+        "y": 524,
+        "width": 320,
+        "height": 44
+      }
+    }
+  }
+]

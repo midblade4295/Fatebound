@@ -1,0 +1,15 @@
+{
+  "source": "v113 baseline",
+  "injected_map_error": {
+    "caught": "injected atlas failure",
+    "contextIsBattle": false,
+    "contextIsMap": true,
+    "transform": 4
+  },
+  "guild_rekey_while_editing": {
+    "sameInput": false,
+    "selection": 5,
+    "draft": "draft"
+  },
+  "note": "Map failure was fault injection, not the user device stack trace. Guild rekey is an induced identity change; normal desktop typing was not reversed."
+}

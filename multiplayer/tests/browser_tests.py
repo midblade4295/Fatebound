@@ -5,6 +5,7 @@ from pathlib import Path
 import json, requests, time, traceback
 from playwright.sync_api import sync_playwright
 ROOT=Path(__file__).parents[1]
+for folder in ['audit','docs']: (ROOT/folder).mkdir(exist_ok=True)
 GAME_PATH=ROOT/'fatebound.html' if (ROOT/'fatebound.html').exists() else ROOT.parent/'fatebound.html'
 GAME_TEXT=GAME_PATH.read_text()
 import hashlib

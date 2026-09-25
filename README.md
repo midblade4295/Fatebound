@@ -1,3 +1,29 @@
+# Current source: v114 battle and Guild feedback
+
+Use `chatgpt/v114-battle-guild-feedback`, based on v113 head
+`4affef9e8b8611491d50603ded6ce6129622701c`.
+Build `114-battle-guild-feedback`, 36,338,476 bytes; SHA256
+`84697859827127e8c9285b0cf57578a8fc2bcedcb3cf8d3247772f0309f3b4e9`.
+Read `multiplayer/docs/BATTLE_GUILD_V114.md` and `multiplayer/battle-guild-audit/`.
+
+Deploy the paired HTML, arena-engine.js and arena-server.js. Keep v113
+arena-wire.js/http-compression.js and the existing Python web host unchanged.
+The private roll bank travels outside the unchanged compact match projection;
+protocol/store1, transport2, balance110, solo106 and20seconds/20slots/10v10 stay.
+Human substitutes fight in their selected tower but never auto-rotate. Preserve
+continued state polling during pending actions, completed-tap map selection,
+canvas try/finally restoration, explicit roll effects, single-owner HUD/layout,
+the stable native Guild composer, and bounded confirmed spell effects.
+The Company War room remains explicitly DEVICE-LOCAL, not network guild chat.
+No odds/payout/new-role mechanics, save reset, Legionary, Caddy, signing, Android,
+main merge or Google Play change. Installed Android assets need a v114 rebuild.
+52 full-HTML browser checks,64 Node and11 Python checks passed on the exact hash.
+Browser tests emulate touch and include induced faults, not physical Android.
+Live deployment evidence is recorded separately when completed.
+
+---
+## Earlier instructions retained only as historical provenance
+
 # Current continuation: v113 state/dice/network fix
 
 Use branch `chatgpt/v113-sync-dice-compression`, based on v112 head

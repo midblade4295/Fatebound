@@ -1,0 +1,15 @@
+{
+  "html_sha256": "84697859827127e8c9285b0cf57578a8fc2bcedcb3cf8d3247772f0309f3b4e9",
+  "html_bytes": 36338476,
+  "node_tests_passed": 64,
+  "python_web_tests_passed": 11,
+  "new_browser_checks": 29,
+  "original_browser_checks": 23,
+  "browser_total": 52,
+  "inline_scripts": 25,
+  "mirrors": 10,
+  "unchanged_large_embedded_art": 103,
+  "physical_android_tested": false,
+  "public_test": "pending",
+  "new_balance_formulas": false
+}

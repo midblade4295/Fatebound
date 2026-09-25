@@ -1,0 +1,14 @@
+{
+  "verified_utc": "2026-09-25T22:27:28.589675+00:00",
+  "html_sha256": "84697859827127e8c9285b0cf57578a8fc2bcedcb3cf8d3247772f0309f3b4e9",
+  "html_bytes": 36338476,
+  "inline_scripts_parsed": 25,
+  "mirrors": 10,
+  "unchanged_embedded_assets": 103,
+  "node_tests_passed": 64,
+  "python_web_tests_passed": 11,
+  "browser_suite_rerun_on_vm": false,
+  "local_browser_checks": 52,
+  "physical_android_tested": false,
+  "node_version": "v24.20.0"
+}

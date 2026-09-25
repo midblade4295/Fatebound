@@ -1,0 +1,282 @@
+{
+  "source_sha256": "84697859827127e8c9285b0cf57578a8fc2bcedcb3cf8d3247772f0309f3b4e9",
+  "checks": [
+    {
+      "check": "New Guild hall has distinct live-expedition, solo-company and hero-perk sections",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Typing stays left-to-right and mid-text caret survives rekeyed match data and five live refreshes",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "IME confirmation does not prematurely send; a deliberate Send adds exactly one message",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Guild tabs preserve the mounted composer and unsent draft; local feed is labelled honestly",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Guild Overview scroll height/position stays constant through repeated live refreshes",
+      "status": "PASS",
+      "detail": [
+        250,
+        1017
+      ]
+    },
+    {
+      "check": "Both touch clients join the same 20-slot match after the full search deadline",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Confirmed GOLD receipt is visible and does not directly mint online wallet rewards",
+      "status": "PASS",
+      "detail": {
+        "faces": [
+          "G",
+          "G",
+          "H"
+        ],
+        "effects": {
+          "focusBefore": 8,
+          "focusAfter": 8,
+          "focusGained": 1,
+          "shieldAdded": 0,
+          "giftAdded": 0,
+          "goldAdded": 25,
+          "xpAdded": 1,
+          "spellAdded": 0,
+          "ultAdded": 0,
+          "tower": 0,
+          "paidRolls": 1
+        },
+        "detail": "+25 gold banked \u00b7 +1 Focus"
+      }
+    },
+    {
+      "check": "Confirmed SHIELD receipt is visible and does not directly mint online wallet rewards",
+      "status": "PASS",
+      "detail": {
+        "faces": [
+          "H",
+          "G",
+          "H"
+        ],
+        "effects": {
+          "focusBefore": 8,
+          "focusAfter": 8,
+          "focusGained": 1,
+          "shieldAdded": 60,
+          "giftAdded": 0,
+          "goldAdded": 0,
+          "xpAdded": 1,
+          "spellAdded": 0,
+          "ultAdded": 0,
+          "tower": 0,
+          "paidRolls": 2
+        },
+        "detail": "+60 shield absorption \u00b7 +1 Focus"
+      }
+    },
+    {
+      "check": "Confirmed FOCUS receipt is visible and does not directly mint online wallet rewards",
+      "status": "PASS",
+      "detail": {
+        "faces": [
+          "S",
+          "E",
+          "E"
+        ],
+        "effects": {
+          "focusBefore": 8,
+          "focusAfter": 8,
+          "focusGained": 1,
+          "shieldAdded": 0,
+          "giftAdded": 0,
+          "goldAdded": 0,
+          "xpAdded": 1,
+          "spellAdded": 0,
+          "ultAdded": 0,
+          "tower": 0,
+          "paidRolls": 3
+        },
+        "detail": "+1 Focus"
+      }
+    },
+    {
+      "check": "Confirmed TEAM GIFT receipt is visible and does not directly mint online wallet rewards",
+      "status": "PASS",
+      "detail": {
+        "faces": [
+          "F",
+          "F",
+          "G"
+        ],
+        "effects": {
+          "focusBefore": 8,
+          "focusAfter": 8,
+          "focusGained": 1,
+          "shieldAdded": 0,
+          "giftAdded": 75,
+          "goldAdded": 0,
+          "xpAdded": 1,
+          "spellAdded": 0,
+          "ultAdded": 0,
+          "tower": 0,
+          "paidRolls": 4
+        },
+        "detail": "+75 gift damage \u00b7 open Attacks to send \u00b7 +1 Focus"
+      }
+    },
+    {
+      "check": "Confirmed CRITICAL receipt is visible and does not directly mint online wallet rewards",
+      "status": "PASS",
+      "detail": {
+        "faces": [
+          "C",
+          "H",
+          "C"
+        ],
+        "effects": {
+          "focusBefore": 8,
+          "focusAfter": 8,
+          "focusGained": 1,
+          "shieldAdded": 0,
+          "giftAdded": 0,
+          "goldAdded": 0,
+          "xpAdded": 1,
+          "spellAdded": 0,
+          "ultAdded": 0,
+          "tower": 0,
+          "paidRolls": 5
+        },
+        "detail": "198 damage \u00b7 +1 Focus"
+      }
+    },
+    {
+      "check": "Confirmed ATTACK receipt is visible and does not directly mint online wallet rewards",
+      "status": "PASS",
+      "detail": {
+        "faces": [
+          "S",
+          "S",
+          "H"
+        ],
+        "effects": {
+          "focusBefore": 8,
+          "focusAfter": 8,
+          "focusGained": 1,
+          "shieldAdded": 0,
+          "giftAdded": 0,
+          "goldAdded": 0,
+          "xpAdded": 1,
+          "spellAdded": 0,
+          "ultAdded": 0,
+          "tower": 0,
+          "paidRolls": 6
+        },
+        "detail": "66 damage \u00b7 +1 Focus"
+      }
+    },
+    {
+      "check": "Ambient bot notifications do not replace the persistent personal result/earnings panel",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "A delayed action receipt does not stop state polling or strand the dice input",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Tower view opens only after confirmation and cannot grant legacy client-only Focus",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Dragging/scrolling the tower map never counts as a tower selection",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Injected map-atlas failure restores the battle canvas; tower switch and subsequent frames recover",
+      "status": "PASS",
+      "detail": {
+        "correct": true,
+        "count": 1
+      }
+    },
+    {
+      "check": "A failed sprite cannot leave a clipped/scaled canvas corrupting every subsequent frame",
+      "status": "PASS",
+      "detail": {
+        "correct": true,
+        "count": 1
+      }
+    },
+    {
+      "check": "Repeated tower changes preserve authoritative tower, correct canvas scale and interactive ROLL",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Changing tower during a dice animation preserves the accepted reward and cancels old-board tweens",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Confirmed barrage creates its own in-field effect without blocking controls",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Confirmed bulwark creates its own in-field effect without blocking controls",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Confirmed horn creates its own in-field effect without blocking controls",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Confirmed surge creates its own in-field effect without blocking controls",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Spell effects cap at eight active instances and expire without persistent DOM or timers",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Seven viewport sizes keep scoreboard, spells, result, canvas and footer separate; drawer buttons stay above footer",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Battle notifications stay out of control space even with More/Sound dialogs open",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Online banked gold is granted exactly at final Claim, not on each local result animation",
+      "status": "PASS",
+      "detail": 230
+    },
+    {
+      "check": "A second shared battle resets its own feedback/FX without resetting progress or breaking input",
+      "status": "PASS",
+      "detail": ""
+    }
+  ],
+  "errors": [],
+  "console_errors": [],
+  "physical_phone_tested": false
+}

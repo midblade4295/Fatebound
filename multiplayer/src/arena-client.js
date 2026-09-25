@@ -22,7 +22,7 @@ const pref=()=>{
 const API=(window.FATEBOUND_ARENA_URL||((location.protocol==='https:'||location.hostname==='localhost'||location.hostname==='127.0.0.1')?location.origin+'/fatebound/arena':'https://136-113-125-3.sslip.io/fatebound/arena')).replace(/\/$/,'');
 let identity=null;try{identity=JSON.parse(localStorage.getItem('fatebound-arena-identity')||'null');}catch(_){}
 if(identity&&(!identity.playerId||typeof identity.token!=='string'||identity.token.length<20))identity=null;
-let connectionPromise=null,guildEpoch=0,lastReceived=-Infinity,clockAt=0,clockPerf=0,pollInFlight=false;
+let connectionPromise=null,guildEpoch=0,visualSerial=0,rollTimer=0,lastReceipt=null,lastReceived=-Infinity,clockAt=0,clockPerf=0,pollInFlight=false;
 const serverTime=()=>clockAt+Math.max(0,performance.now()-clockPerf);
 const CLAIM_KEY='fatebound-arena-pending-claim';
 async function recoverClaim(){
@@ -34,7 +34,7 @@ async function recoverClaim(){
 }
 
 let renderAt=0,busy=false,pollTimer=0,requestSerial=0,eventSeq=0,frameAt=0,lastState=null,localEngine=null,localPlayerId=null,resultShown='',epoch=0,backFocus=null,onlineProfile=null;
-const N=window.FBNext={active:false,online:false,searching:false,legacyStart:false,rendering:false,warView:null,latest:null,openPrep,frame,roll:()=>action('roll',{mult:player?.mult||1,allIn:!!player?.allIn}),move:t=>action('move',{tower:t}),ultimate:()=>action('ultimate'),rally:()=>action('rally'),claim,openGifts,openExpedition,practiceScenario,serverTime,rollStatus,paintControls,get transport(){return {...decoder.stats,cursor:decoder.cursor(),ageMs:performance.now()-lastReceived};}};
+const N=window.FBNext={active:false,online:false,searching:false,legacyStart:false,rendering:false,warView:null,latest:null,get profile(){return onlineProfile;},openPrep,frame,roll:()=>action('roll',{mult:player?.mult||1,allIn:!!player?.allIn}),move:t=>action('move',{tower:t}),ultimate:()=>action('ultimate'),rally:()=>action('rally'),claim,openGifts,openExpedition,practiceScenario,serverTime,rollStatus,paintControls,get transport(){return {...decoder.stats,cursor:decoder.cursor(),ageMs:performance.now()-lastReceived};}};
 const make=(id,content)=>{let node=el(id);if(!node){node=document.createElement('div');node.id=id;node.className='overlay adventure-modal';node.hidden=true;node.innerHTML=`<section class="adventure-panel" role="dialog" aria-modal="true"><header><h2></h2><button type="button" data-dismiss aria-label="Close dialog">Close</button></header><div class="adventure-scroll"></div><footer></footer></section>`;document.body.append(node);node.querySelector('[data-dismiss]').onclick=()=>{if(N.searching)cancelQueue();else hide(id);};node.addEventListener('keydown',e=>{if(e.key==='Escape'&&!N.active){e.preventDefault();node.querySelector('[data-dismiss]').click();}if(e.key==='Tab'){const f=[...node.querySelectorAll('button:not(:disabled),select,input,a[href]')].filter(n=>n.getClientRects().length);if(f.length&&e.shiftKey&&document.activeElement===f[0]){e.preventDefault();f.at(-1).focus();}else if(f.length&&!e.shiftKey&&document.activeElement===f.at(-1)){e.preventDefault();f[0].focus();}}});}return node;};
 function show(id,title,body,footer=''){const node=make(id);node.querySelector('h2').textContent=title;node.querySelector('[role=dialog]').setAttribute('aria-label',title);node.querySelector('.adventure-scroll').innerHTML=body;node.querySelector('footer').innerHTML=footer;if(node.hidden){node._opener=document.activeElement;SFX.menuOpen();}node.hidden=false;requestAnimationFrame(()=>node.querySelector('button:not(:disabled)')?.focus({preventScroll:true}));return node;}
 function hide(id){if(id==='adventureGuild')guildEpoch++;const node=el(id);if(node&&!node.hidden){node.hidden=true;SFX.menuClose();}if(node?._opener?.isConnected)node._opener.focus({preventScroll:true});}
@@ -148,7 +148,7 @@ function recoverIdle(reason){
 function poll(mine){
  clearTimeout(pollTimer);if(mine!==epoch||(!N.searching&&!N.active))return;
  pollTimer=setTimeout(async()=>{
-  try{if(document.hidden||busy||pollInFlight)return;pollInFlight=true;const state=await request('/state');if(mine!==epoch)return;message('arenaConnection','');accept(state);}
+  try{if(document.hidden||pollInFlight)return;pollInFlight=true;const state=await request('/state');if(mine!==epoch)return;message('arenaConnection','');accept(state);}
   catch(e){
    if(mine!==epoch)return;
    if(e.status===401){recoverIdle('This arena session could not be authenticated. Home remains available.');return;}
@@ -157,11 +157,12 @@ function poll(mine){
   }finally{pollInFlight=false;if(mine===epoch&&(N.searching||N.active))poll(mine);}
  },750);
 }
-function accept(state){lastState=state;if(state.status==='searching'){if(N.active)return;N.searching=true;N.online=true;message('queueCount',`${state.humans} / 20 human players`);message('queueTime',Math.ceil(Math.max(0,state.deadline-state.serverNow)/1000));return;}if(state.status==='idle'){if(N.active){recoverIdle('This battle is no longer active. Reconnect from Prepare to collect any unclaimed rewards.');return;}if(N.searching){N.searching=false;message('queueError','The lobby expired before connection was restored. Close this dialog and search again.');}return;}if(state.status==='battle'||state.status==='complete'){N.searching=false;N.online=true;hide('adventureQueueUI');mount(state.match,identity.playerId);if(state.status==='complete')showResult(state.result,state.receipt);}}
-function mount(snapshot,pid){
+function accept(state){lastState=state;if(state.status==='searching'){if(N.active)return;N.searching=true;N.online=true;message('queueCount',`${state.humans} / 20 human players`);message('queueTime',Math.ceil(Math.max(0,state.deadline-state.serverNow)/1000));return;}if(state.status==='idle'){if(N.active){recoverIdle('This battle is no longer active. Reconnect from Prepare to collect any unclaimed rewards.');return;}if(N.searching){N.searching=false;message('queueError','The lobby expired before connection was restored. Close this dialog and search again.');}return;}if(state.status==='battle'||state.status==='complete'){N.searching=false;N.online=true;hide('adventureQueueUI');mount(state.match,identity.playerId,state.earnings);if(state.status==='complete')showResult(state.result,state.receipt);}}
+function mount(snapshot,pid,earnings=null){
+ const previousTower=player?.tower;
  if(!snapshot||!Array.isArray(snapshot.heroes)||snapshot.heroes.length!==20||!snapshot.heroes.some(h=>h.id===pid)||!Array.isArray(snapshot.towers)||snapshot.towers.length!==10)throw Error('The arena returned an incomplete match. Reconnect to restore your slot.');
  if(N.active&&N.latest?.id===snapshot.id&&N.latest.revision>snapshot.revision)return false;lastReceived=performance.now();clockAt=snapshot.now;clockPerf=lastReceived;const ts=n=>n?n+Date.now()-snapshot.now:0;const starting=!N.active||M?.arenaId!==snapshot.id;N.active=true;N.latest=snapshot;const me=snapshot.heroes.find(h=>h.id===pid);if(!me)throw Error('This device is not in the match');const sideMap=sd=>sd===me.side?0:1;
- if(starting){hide('adventurePrep');if(!snapshot.ended)SFX.matchStart();eventSeq=0;resultShown='';N.rendering=true;newMatch(5,true);M.arena=true;M.arenaId=snapshot.id;M.campaign=true;M.lobby=false;M.training=false;M.cards=[];M.inBoss=false;BR=null;document.body.classList.add('arena-live');document.body.classList.remove('hub-mode');}
+ if(starting){hide('adventurePrep');if(!snapshot.ended)SFX.matchStart();eventSeq=0;resultShown='';lastReceipt=null;newMatch(5,true);M.arena=true;M.arenaId=snapshot.id;M.campaign=true;M.lobby=false;M.training=false;M.cards=[];M.inBoss=false;BR=null;document.body.classList.add('arena-live');document.body.classList.remove('hub-mode');}
  const old=new Map(M.heroes.map(h=>[h.id,h]));M.heroes=snapshot.heroes.map(h=>{const v=old.get(h.id)||mkHero(sideMap(h.side),0,h.level,h.id===pid),wasHp=v.hp,wasShields=v.shieldSlots?.length||0;Object.assign(v,{id:h.id,name:(h.id===pid?'You':h.name)+(h.bot?' [BOT]':h.substitute?' [BOT SUBSTITUTE]':''),side:sideMap(h.side),char:h.char,weapon:h.weapon,tier:0,weaponMult:1,level:h.level,atk:h.atk,maxHp:h.maxHp,hp:h.hp,shields:h.shieldSlots.length,shieldSlots:[...h.shieldSlots],downUntil:ts(h.downUntil),arenaAuthoritative:true,serverDownUntil:h.downUntil,tower:h.tower,damage:h.damage,kos:h.kos,rolls:h.rolls,paidRolls:h.paidRolls,triples:h.triples,shieldsBroken:h.shieldsBroken,ult:h.ult,ultsUsed:h.ultsUsed,streak:h.streak,hot:h.hot,forcedCrits:h.forcedCrits,rampage:h.rampage,rallyJoin:0});if(wasHp>h.hp){v.hitAt=performance.now();v.hitShield=false;if(!starting&&h.id===pid)SFX.hurt({gain:.5});}if(!starting&&wasShields>h.shieldSlots.length&&h.tower===me.tower)SFX.shieldBreak({gain:h.id===pid?.55:.22,ambient:h.id!==pid,group:'shield-break'});if(h.hp<=0){v.lunge=null;v.hitAt=0;}return v;});
  player=M.heroes.find(h=>h.id===pid);player.gold=SAVE.gold;player.xp=SAVE.xp;player.energyAt=SAVE.energyAt;player.mult||=1;if(me.rampage>0){player.mult=1;player.allIn=false;}player.locked=[false,false,false];
  // Restore confirmed dice after reconnect; do not interrupt a throw already showing this action.
@@ -175,15 +176,17 @@ function mount(snapshot,pid){
  if(!starting&&ev.actor!==pid&&snapshot.now-ev.at>=0&&snapshot.now-ev.at<1800&&ev.tower===me.tower){
   const actor=snapshot.heroes.find(x=>x.id===ev.actor),opt={gain:.24,ambient:true,group:'nearby-action',pan:actor?.side===me.side?-.3:.3};
   if(ev.type==='roll')SFX.outcome(ev,WEAPONS[actor?.weapon||0]?.cls,opt);
-  else if(ev.type==='spell')SFX.spell(ev.spell,opt);
+  else if(ev.type==='spell'){SFX.spell(ev.spell,opt);window.FateboundBattle?.spell(ev.spell,ev.actor,ev.tower);}
   else if(ev.type==='ultimate')SFX.ultimate(actor?.char,opt);
   else if(ev.type==='ko')SFX.ko(opt);
  }
- if(!starting&&snapshot.now-ev.at>=0&&snapshot.now-ev.at<1800&&['capture','spell','ultimate','objective','phase'].includes(ev.type)){toast(ev.text,'info');if(ev.type==='objective'||ev.type==='phase')bigBanner(ev.type==='objective'?'SUPPLY OBJECTIVE':'BATTLE PHASE',ev.text);}if(!starting&&snapshot.now-ev.at>=0&&snapshot.now-ev.at<1800&&((ev.type==='roll'&&['S','C'].includes(ev.symbol))||ev.type==='ultimate')){const h=M.heroes.find(x=>x.id===ev.actor),target=h&&M.heroes.find(x=>x.side!==h.side&&x.tower===h.tower&&x.hp>0);if(h&&h.hp>0&&target&&h.id!==pid)try{startLunge(h,target);}catch(_){}}}
- if(starting){M.ended=false;enterTower(me.tower);N.rendering=false;M.ended=snapshot.ended;el('warPanel').hidden=true;}
+ if(!starting&&snapshot.now-ev.at>=0&&snapshot.now-ev.at<1800&&['capture','spell','ultimate','objective','phase'].includes(ev.type)&&(ev.tower===me.tower||['objective','phase'].includes(ev.type))){toast(ev.text,'info');if(ev.type==='objective'||ev.type==='phase')bigBanner(ev.type==='objective'?'SUPPLY OBJECTIVE':'BATTLE PHASE',ev.text);}if(!starting&&snapshot.now-ev.at>=0&&snapshot.now-ev.at<1800&&((ev.type==='roll'&&['S','C'].includes(ev.symbol))||ev.type==='ultimate')){const h=M.heroes.find(x=>x.id===ev.actor),target=h&&M.heroes.find(x=>x.side!==h.side&&x.tower===h.tower&&x.hp>0);if(h&&h.hp>0&&target&&h.id!==pid)try{startLunge(h,target);}catch(_){}}}
+ if(starting){M.ended=false;N.rendering=true;try{enterTower(me.tower);}finally{N.rendering=false;}M.ended=snapshot.ended;el('warPanel').hidden=true;}
+ if(!starting&&previousTower!==me.tower)window.FateboundBattle?.towerChanged(previousTower,me.tower);
+ window.FateboundBattle?.bank(me,N.online,snapshot.practice,earnings);
  if(!snapshot.ended&&screen==='battle'){player.tower=me.tower;el('tbarName').textContent=`Tower ${M.towers[me.tower].name}`;}updateHud();paintExtras();return true;
 }
-async function action(type,payload={}){if(!N.active||M?.ended||busy||(type==='roll'&&(el('roll').classList.contains('busy')||(anim&&performance.now()<anim.settleAt))))return false;if(connectionStale()||currentHero()?.hp<=0){paintControls();return false;}busy=true;const generation=epoch,matchId=M.arenaId,actionId=uid();try{let response;if(N.online){
+async function action(type,payload={}){if(!N.active||M?.ended||busy||(type==='roll'&&(el('roll').classList.contains('busy')||(anim&&performance.now()<anim.settleAt))))return false;if(connectionStale()||currentHero()?.hp<=0){paintControls();return false;}busy=true;const generation=epoch,matchId=M.arenaId,actionId=uid();if(type==='roll')window.FateboundBattle?.pending();try{let response;if(N.online){
   const command={type,...payload,matchId,actionId};
   try{response=await request('/action',command);}
   catch(e){
@@ -194,36 +197,40 @@ async function action(type,payload={}){if(!N.active||M?.ended||busy||(type==='ro
    response=await request('/action',command);
   }
  }else{const result=localEngine.act(localPlayerId,{type,...payload},Date.now());response={result,state:{match:localEngine.snapshot()}};}
- if(generation!==epoch||M?.arenaId!==matchId)return false;mount(response.state.match,N.online?identity.playerId:localPlayerId);
- if(type==='move'){N.rendering=true;try{enterTower(payload.tower);}finally{N.rendering=false;}}
+ if(generation!==epoch||M?.arenaId!==matchId)return false;mount(response.state.match,N.online?identity.playerId:localPlayerId,response.state.earnings);
+ if(type==='move'){
+  ++visualSerial;clearTimeout(rollTimer);anim=null;rollBusy(false);if(lastReceipt){window.FateboundBattle?.outcome(lastReceipt,N.online);lastReceipt=null;}
+  N.rendering=true;try{enterTower(currentHero().tower);}finally{N.rendering=false;}
+ }
  if(type==='roll'){
   const result=response.result,f=result.faces,confirmed=currentHero();
   const superseded=Number.isSafeInteger(result.rollIndex)?result.rollIndex<confirmed.rolls:
    response.replayed&&Array.isArray(confirmed.lastFaces)&&JSON.stringify(f)!==JSON.stringify(confirmed.lastFaces);
   if(superseded){
    player.lastFaces=[...confirmed.lastFaces];player.diceBodies=null;player.confirmedDiceRolls=confirmed.rolls;
-   toast('Earlier roll confirmed · showing the latest server dice','info');return true;
+   window.FateboundBattle?.notice('EARLIER ROLL CONFIRMED','Showing latest server dice · your accepted rewards are in the banked totals');toast('Earlier roll confirmed · showing the latest server dice','info');return true;
   }
   if(!Array.isArray(f)||f.length!==3||W.winningDice(f).symbol!==result.symbol)throw Error('Server dice result did not match the confirmed faces.');
-  let dice=[];try{dice=makeDiceThrow(f);}catch(e){console.warn('Dice visual fallback:',e.message);}
+  lastReceipt=result;let dice=[];try{dice=makeDiceThrow(f);}catch(e){console.warn('Dice visual fallback:',e.message);}
   const t0=performance.now(),dur=dice.length===3?Math.max(...dice.map(d=>d.duration)):0;
   anim=dur?{faces:[...f],t0,dur,settleAt:t0+dur,dice}:null;
   player.lastFaces=[...f];player.diceBodies=dice.length===3?dice:null;player.confirmedDiceRolls=currentHero()?.rolls;
   rollBusy(!!dur);SFX.roll();
-  setTimeout(()=>{
-   if(generation!==epoch||M?.arenaId!==matchId)return;
+  const visual=++visualSerial,sourceTower=currentHero().tower;clearTimeout(rollTimer);rollTimer=setTimeout(()=>{
+   if(generation!==epoch||M?.arenaId!==matchId||visual!==visualSerial)return;
    anim=null;rollBusy(false);SFX.land();SFX.outcome(result,WEAPONS[player.weapon]?.cls,{delay:.045});
    const win=W.winningDice(f),label={S:'SWORDS',C:'CRITICAL',H:'SHIELDS',G:'GOLD',E:'FOCUS',F:'GIFT'}[win.symbol]||'MIXED';
-   toast((win.tier==='none'?'MIXED':win.tier.toUpperCase())+' · '+label+' · '+(win.indices.length>1?'dice '+win.indices.map(i=>i+1).join(' + '):'confirmed result'),'info');
+   window.FateboundBattle?.outcome(result,N.online);lastReceipt=null;
+   // The result panel persists independently of ambient bot announcements.
    // A shield/gold/gift roll never plays a sword lunge. Dead heroes do not attack visually.
    const target=M.heroes.find(h=>h.side===1&&h.tower===player.tower&&h.hp>0);
-   if(player.hp>0&&target&&['S','C'].includes(result.symbol))try{startLunge(player,target);}catch(_){}
+   if(player.tower===sourceTower&&player.hp>0&&target&&['S','C'].includes(result.symbol))try{startLunge(player,target);}catch(_){}
    paintControls();
   },dur);player.allIn=false;player.mult=1;
  }
 
- if(type==='spell'||type==='ultimate'){if(type==='spell')SFX.spell(payload.spell);else SFX.ultimate(player.char);bigBanner(type==='spell'?A.SPELLS[payload.spell].name:'ULTIMATE','');}if(type==='rally')SFX.horn();if(type==='gift')SFX.gift();if(type==='stored')SFX.strike(WEAPONS[player.weapon]?.cls,true);return true;
- }catch(e){if(generation===epoch&&e.state)accept(e.state);SFX.error();toast(e.message,'warn');return false;}finally{busy=false;paintControls();}}
+ if(type==='spell'||type==='ultimate'){if(type==='spell'){SFX.spell(payload.spell);window.FateboundBattle?.spell(payload.spell,player.id,player.tower);}else SFX.ultimate(player.char);bigBanner(type==='spell'?A.SPELLS[payload.spell].name:'ULTIMATE','');}if(type==='rally'){SFX.horn();window.FateboundBattle?.spell('horn',player.id,player.tower);}if(type==='gift')SFX.gift();if(type==='stored'){SFX.strike(WEAPONS[player.weapon]?.cls,true);window.FateboundBattle?.outcome({...response.result,symbol:'S',tier:'stored'},N.online);}return true;
+ }catch(e){if(generation===epoch&&e.state)accept(e.state);SFX.error();toast(e.message,'warn');if(type==='roll')window.FateboundBattle?.failed(e.message);return false;}finally{busy=false;paintControls();}}
 function startPractice(mode,scenario=null){if(N.active||N.searching||TRAIN)return;hide('adventurePrep');++epoch;N.online=false;localPlayerId='local-you';const players=Array.from({length:20},(_,i)=>({id:i?'local-bot-'+i:localPlayerId,name:i?'Bot '+i:'You',bot:i>0,char:i?i%5:SAVE.char,weapon:i?[0,1,4,5,7][i%5]:SAVE.weapon,loadout:pref().loadout}));localEngine=new A.Engine({id:'practice-'+uid(),players,now:Date.now(),seed:crypto.getRandomValues(new Uint32Array(1))[0],mode,practice:true,duration:scenario?60000:300000,scenario});mount(localEngine.snapshot(),localPlayerId);}
 function practiceScenario(){startPractice('standard',pref().lastScenario||{tower:5,deficit:180});}
 function applyReceipt(receipt){

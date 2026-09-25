@@ -76,10 +76,14 @@ class Engine{
  rally(h,now,free=false){check(now>=h.rallyAt,'Rally is cooling down');check(h.ralliesLeft>0,'No rallies remaining');if(!free){check(h.focus>=2,'Rally needs 2 Focus');h.focus-=2;}
   h.ralliesLeft--;h.rallyAt=now+60000;this.s.rally[h.side]={leader:h.id,tower:h.tower,until:now+60000,rollers:[]};
   // Human teammates choose whether to rotate. Only explicitly labelled bots move automatically.
-  for(const b of this.s.heroes)if(b.side===h.side&&(b.bot||b.substitute)&&this.random()<.45)b.tower=h.tower;
+  for(const b of this.s.heroes)if(b.side===h.side&&b.bot&&this.random()<.45)b.tower=h.tower;
   this.event('rally',`${h.name} rallied Tower ${ROMAN[h.tower]}`,now,{actor:h.id,side:h.side,tower:h.tower});
  }
  act(id,input,now){const h=this.hero(id);check(!this.s.ended,'Match has ended');check(h.hp>0,'Wait to respawn');check(input&&typeof input.type==='string','Invalid action');let result={type:input.type};
+  // Report what the server actually changed, not an animation's assumed reward.
+  const earned=()=>this.currentRules()?(h.credit||newCredit()):h;
+  const shields=()=>this.s.heroes.filter(a=>a.side===h.side).reduce((n,a)=>n+a.shieldSlots.reduce((sum,v)=>sum+v,0),0);
+  const before={focus:h.focus,spell:h.spell,ult:h.ult,gift:h.giftDamage,gold:earned().goldEarned||0,xp:earned().xpEarned||0,shield:shields()};
   if(input.type==='move'){check(Number.isInteger(input.tower)&&input.tower>=0&&input.tower<10,'Invalid tower');check(now>=h.moveAt,'Moving too fast');h.tower=input.tower;h.moveAt=now+700;result.tower=h.tower;}
   else if(input.type==='roll'){
    check(now>=h.rollAt,'Dice are still settling');check(input.allIn===undefined||typeof input.allIn==='boolean','Invalid ALL-IN flag');
@@ -129,6 +133,15 @@ class Engine{
    }
    this.event('ultimate',`${h.name} used an ultimate`,now,{actor:id,tower:h.tower});
   }else throw Error('Unknown action');
+  if(['roll','spell','ultimate'].includes(input.type)){
+   const e=earned();result.effects={focusBefore:before.focus,focusAfter:h.focus,
+    focusGained:Math.max(0,h.focus-before.focus+(result.cost||0)),
+    shieldAdded:Math.max(0,shields()-before.shield),giftAdded:Math.max(0,h.giftDamage-before.gift),
+    goldAdded:Math.max(0,Math.min(1500,e.goldEarned||0)-Math.min(1500,before.gold)),
+    xpAdded:Math.max(0,Math.min(150,e.xpEarned||0)-Math.min(150,before.xp)),
+    spellAdded:Math.max(0,h.spell-before.spell),ultAdded:Math.max(0,h.ult-before.ult),
+    tower:h.tower,paidRolls:e.paidRolls||0};
+  }
   this.s.revision++;this.updateScores();return result;
  }
  tick(now){const s=this.s;if(s.ended)return;const prev=s.now,dt=cap(now-prev,0,5000);s.now=now;
@@ -143,7 +156,7 @@ class Engine{
   if(o.status==='active'){const side=this.leader(s.towers[o.tower]);if(side>=0)o.held[side]+=Math.max(0,Math.min(now,o.endAt)-Math.max(prev,o.startAt));if(now>=o.endAt){o.status='complete';o.winner=o.held[0]>o.held[1]?0:o.held[1]>o.held[0]?1:null;if(o.winner!==null)for(const h of s.heroes.filter(h=>h.side===o.winner)){h.focus=Math.min(8,h.focus+1);h.spell=Math.min(2,h.spell+1);}this.event('objective',o.winner===null?'Supply objective tied — no bonus':'Supply objective secured · +1 Focus and spell charge',now,{side:o.winner,tower:o.tower});}}
   const old=s.phase;if(s.phase!=='overtime')s.phase=now>=s.startAt+240000?'finale':now>=s.startAt+120000?'pressure':'day';if(old!==s.phase)this.event('phase',s.phase==='finale'?'FINAL MINUTE · attack ×1.5':'PRESSURE RISING · attack ×1.15',now);
   for(const h of s.heroes){if(!(h.bot||h.substitute)||h.hp<=0||now<h.nextBot)continue;h.nextBot=now+2600+Math.floor(this.random()*2700);
-   try{if(o.status==='active'&&this.random()<.4)h.tower=o.tower;else if(this.random()<.12)h.tower=Math.floor(this.random()*10);
+   try{if(h.bot){if(o.status==='active'&&this.random()<.4)h.tower=o.tower;else if(this.random()<.12)h.tower=Math.floor(this.random()*10);}
     if(h.ult>=100)this.act(h.id,{type:'ultimate'},now);
     else if(h.spell>0&&this.random()<.4)this.act(h.id,{type:'spell',spell:h.loadout[Math.floor(this.random()*2)]},now);
     else if(h.focus>=1||h.rampage>0)this.act(h.id,{type:'roll',mult:h.focus>=4&&this.random()<.4?2:1},now);
