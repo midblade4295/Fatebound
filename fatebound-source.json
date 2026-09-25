@@ -14,7 +14,7 @@
   "match_players_total": 20,
   "team_size": 10,
   "live_activation": "see multiplayer/ui-audio/live-deployment.json when installed",
-  "status": "v112-audio-unlock-fix-ready",
+  "status": "live-alpha-v112-audio-fix",
   "notes": "Android/mobile Web Audio unlock fix on v111 UI/audio client. Balance110/backend/save schemas unchanged.",
   "runtime_test_report": "multiplayer/docs/AUDIO_FIX_V112.md",
   "handoff": "GROKBOT_HANDOFF.md",
@@ -22,7 +22,7 @@
   "parent_commit": "8a04f85e0739a4606266c6ec32f99c8bce8b042e",
   "source_branch": "chatgpt/v112-audio-unlock-fix",
   "base_commit": "8a04f85e0739a4606266c6ec32f99c8bce8b042e",
-  "production_code_commit": null,
-  "deployment_verified_utc": null,
-  "deployment_report": null
+  "production_code_commit": "2a88e04538ab3d21e59f2430a747f6018529fd51",
+  "deployment_verified_utc": "2026-09-25T15:29:43.064528+00:00",
+  "deployment_report": "multiplayer/audio-fix/live-deployment.json"
 }

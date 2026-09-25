@@ -30,3 +30,7 @@ The engine also tried only AudioContext with latencyHint; a WebView that rejects
 - Physical Android audio output must be verified after deployment.
 
 No server restart, save migration, Caddy change, Legionary change, Android build or Play publication is part of this patch.
+
+## Live deployment
+
+The exact v112 HTML was installed atomically at 2026-09-25T15:29:43Z from commit 2a88e04538ab3d21e59f2430a747f6018529fd51. Public HTTP returned 200 and the served bytes matched the audited source plus the existing save-client injection. Arena/web processes were not restarted; balance110, 20-second queue and 20-player capacity remained active. No Caddy, Legionary, save migration, Android or Play change. Physical Android listening is the remaining verification for device audio output.

@@ -64,3 +64,5 @@ The v111 HTML is live as of 2026-09-25 15:07 UTC, verified from code commit
 `f950a49606662733e7091663f4946b7615c8009f`. Read
 `multiplayer/ui-audio/live-deployment.json`. Arena balance110 and its process
 were unchanged; do not overwrite the deployed client with v110.
+
+Live client is now v112 audio-unlock-fix, deployed 2026-09-25T15:29:43Z. Preserve its delayed-resume queue/fallback logic; do not restore v111 audio startup. Balance110/backend remain unchanged.

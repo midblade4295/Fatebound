@@ -1,0 +1,26 @@
+{
+  "deployed_utc": "2026-09-25T15:29:43.064528+00:00",
+  "code_commit": "2a88e04538ab3d21e59f2430a747f6018529fd51",
+  "build": "112-audio-unlock-fix",
+  "source_sha256": "ad01a9aeee842484a330ed6a4eb613b28069ef8ef1b9a670faf09702b6a50985",
+  "source_bytes": 36290105,
+  "public_http_status": 200,
+  "exact_source_plus_existing_save_client": true,
+  "arena_health": {
+    "ok": true,
+    "game": "Fatebound",
+    "protocol": 1,
+    "balanceVersion": 110,
+    "queueMs": 20000,
+    "capacity": 20,
+    "rooms": 2,
+    "activeRooms": 0,
+    "queuedPlayers": 0
+  },
+  "arena_restarted": false,
+  "web_restarted": false,
+  "save_migration": false,
+  "caddy_changed": false,
+  "legionary_changed": false,
+  "backup_directory": "/home/midblade4295/backups/fatebound-v112-20260925T152941Z"
+}

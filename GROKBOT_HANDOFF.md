@@ -68,3 +68,5 @@ were unchanged; do not overwrite the deployed client with v110.
 
 ## v112 mobile audio unlock patch
 The v111 sound synthesis/content remains, but mobile unlock handling is corrected on branch chatgpt/v112-audio-unlock-fix. Preserve the bounded pending-cue queue, delayed AudioContext.resume handling, plain-constructor fallback, silent gesture prime, and Sound Studio status feedback. Do not revert to v111 audio startup logic, which can discard the first cue while Android Chrome is still resuming Web Audio. Balance110/backend/save schemas are unchanged.
+
+Live client is now v112 audio-unlock-fix, deployed 2026-09-25T15:29:43Z. Preserve its delayed-resume queue/fallback logic; do not restore v111 audio startup. Balance110/backend remain unchanged.
