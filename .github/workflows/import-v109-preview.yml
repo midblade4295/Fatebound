@@ -1,0 +1,53 @@
+name: Import and test Fatebound v109 preview
+
+on:
+  push:
+    branches:
+      - chatgpt/v109-adventure-matchmaking
+    paths:
+      - patches/v109/**
+      - .github/workflows/import-v109-preview.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: import-v109-preview
+  cancel-in-progress: false
+
+jobs:
+  import:
+    if: github.ref == 'refs/heads/chatgpt/v109-adventure-matchmaking'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Reconstruct exact tested source, check assets and rerun backend tests
+        run: python3 patches/v109/import.py
+      - name: Verify output before commit
+        run: |
+          set -euo pipefail
+          sha256sum -c fatebound-source.sha256
+          test "$(git hash-object fatebound.html)" = '3b853b01c2e5d33c1cb92545d6b118893079f482'
+          test "$(wc -c < fatebound.html)" -eq 36236165
+      - name: Commit preview only, without force push
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add fatebound.html fatebound-source.json fatebound-source.sha256 AGENTS.md GROKBOT_HANDOFF.md README.md multiplayer
+          git diff --cached --quiet || git commit -m 'Add tested v109 gameplay, modal audit and authoritative matchmaking preview'
+          git push origin HEAD:chatgpt/v109-adventure-matchmaking
+      - name: Record verification and deployment boundary
+        run: |
+          echo '## Preview only — main and live services are unchanged' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Backend tests rerun here; the checksum-bound 23-check browser report is from local Chromium/touch testing.' >> "$GITHUB_STEP_SUMMARY"
+          cat multiplayer/docs/import-verification.json >> "$GITHUB_STEP_SUMMARY"
+          git log -1 --format='%H %s' >> "$GITHUB_STEP_SUMMARY"
