@@ -60,3 +60,8 @@ security/load work remain distinct follow-up verification.
 Live v110 deployment and six real-clock public TLS checks passed on 2026-09-25 UTC.
 See `multiplayer/docs/DEPLOYMENT_V110.md` and `multiplayer/audit/public-smoke.json`.
 Review PR #12 is stacked on v109 PR #11; main is unchanged.
+
+The v111 HTML is live as of 2026-09-25 15:07 UTC, verified from code commit
+`f950a49606662733e7091663f4946b7615c8009f`. Read
+`multiplayer/ui-audio/live-deployment.json`. Arena balance110 and its process
+were unchanged; do not overwrite the deployed client with v110.

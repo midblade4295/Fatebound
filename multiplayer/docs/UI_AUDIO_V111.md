@@ -144,3 +144,24 @@ No main merge, Android version/signing change or Google Play publication is
 implied. The live Fatebound HTML update can be atomic without restarting the
 arena, modifying Caddy or touching Legionary. See the deployment record for the
 actual installed hash and verified public response.
+
+
+## Verified live rollout — 2026-09-25 15:07 UTC
+
+The tested full HTML was atomically installed from code commit
+`f950a49606662733e7091663f4946b7615c8009f`.
+The public page returned HTTP200 and matched the exact v111 bytes plus the
+existing 193-byte save-client injection. The arena and web PIDs were unchanged;
+no process restart, Caddy edit, balance change, save migration or Legionary change
+was performed. The live arena still reports balance110, 20 seconds and 20 slots.
+
+Legacy saves were never written by this deployment. Live-save hash snapshots
+changed during the verification window while the web service remained available;
+the report therefore does not claim an offline-consistent unchanged-data snapshot.
+No save rollback was attempted. A private pre-deployment HTML backup is retained.
+See `multiplayer/ui-audio/live-deployment.json` for the exact evidence and
+`vm-validation.json` for the independent VM parsing/42 Node/9 Python tests.
+
+The existing 64 full-HTML browser checks and 41-cue mixer rendering checks were
+run in the local test environment, not repeated on a physical phone or on the VM.
+This client-only rollout does not change main or publish a Google Play update.

@@ -1,0 +1,38 @@
+{
+  "deployed_utc": "2026-09-25T15:07:33.597766+00:00",
+  "production_code_commit": "f950a49606662733e7091663f4946b7615c8009f",
+  "build": "111-ui-sound-workshop",
+  "source_sha256": "8cb7cc7f5c04898183bc298c4f23fb96ce203cf2794df043534cdc36912dad84",
+  "source_bytes": 36286487,
+  "public_http_status": 200,
+  "served_bytes": 36286680,
+  "exact_source_plus_existing_save_client": true,
+  "arena_health": {
+    "ok": true,
+    "game": "Fatebound",
+    "protocol": 1,
+    "balanceVersion": 110,
+    "queueMs": 20000,
+    "capacity": 20,
+    "rooms": 2,
+    "activeRooms": 0,
+    "queuedPlayers": 0
+  },
+  "arena_pid_unchanged": true,
+  "web_pid_unchanged": true,
+  "unchanged_backend_modules": {
+    "arena-engine.js": "e2e1493a54e68eb7ac4558041125f572a8e870ec21394c9002dff524b58f80a8",
+    "arena-server.js": "9bf854cd7c9ec3b1657721d548f66bd000a8364608a79c9a5c4099ef3e031d84",
+    "metrics.js": "81caa42dcba0794651675934ef51fb4ace80dd403cb0638dcbec98e1f94fecec"
+  },
+  "legacy_save_count": 18,
+  "legacy_saves_unchanged": false,
+  "backup_directory": "/home/midblade4295/backups/fatebound-v111-20260925T150731Z",
+  "caddy_changed": false,
+  "legionary_changed": false,
+  "new_save_reset": false,
+  "legionary_service": "active",
+  "caddy_service": "active",
+  "user_save_files_modified_by_deployment": false,
+  "save_verification_note": "Legacy-save hash snapshots were taken while the live web process accepted saves. They differed, so bit-for-bit save preservation across that time window is not claimed. The deployment writes only the HTML and report; it neither edits saves nor restarts the web/arena services."
+}

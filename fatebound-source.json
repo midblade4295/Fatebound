@@ -14,12 +14,15 @@
   "match_players_total": 20,
   "team_size": 10,
   "live_activation": "see multiplayer/ui-audio/live-deployment.json when installed",
-  "status": "tested-ui-audio-ready-for-deployment",
+  "status": "live-alpha-ui-audio",
   "notes": "UI and original custom audio on the live audited v110 base; balance110 and backend unchanged. No new save reset, main merge or Android publication.",
   "runtime_test_report": "multiplayer/docs/UI_AUDIO_V111.md",
   "handoff": "GROKBOT_HANDOFF.md",
   "balance_version": 110,
   "parent_commit": "8a04f85e0739a4606266c6ec32f99c8bce8b042e",
   "source_branch": "chatgpt/v111-ui-audio",
-  "base_commit": "8a04f85e0739a4606266c6ec32f99c8bce8b042e"
+  "base_commit": "8a04f85e0739a4606266c6ec32f99c8bce8b042e",
+  "production_code_commit": "f950a49606662733e7091663f4946b7615c8009f",
+  "deployment_verified_utc": "2026-09-25T15:07:33.597766+00:00",
+  "deployment_report": "multiplayer/ui-audio/live-deployment.json"
 }
