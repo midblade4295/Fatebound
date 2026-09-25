@@ -1,0 +1,118 @@
+{
+  "baseline_sha256": "ad01a9aeee842484a330ed6a4eb613b28069ef8ef1b9a670faf09702b6a50985",
+  "expired_knockout": {
+    "hp": 0,
+    "deadlineExpired": true,
+    "shownAsDown": false
+  },
+  "roll_track_label_changes_in_1_6s": [
+    "\ud83d\udce6 20 energy to chest",
+    "OFFLINE PRACTICE \u00b7 1 human \u00b7 19 bots",
+    "\ud83d\udce6 20 energy to chest",
+    "OFFLINE PRACTICE \u00b7 1 human \u00b7 19 bots",
+    "\ud83d\udce6 20 energy to chest",
+    "OFFLINE PRACTICE \u00b7 1 human \u00b7 19 bots",
+    "\ud83d\udce6 20 energy to chest",
+    "OFFLINE PRACTICE \u00b7 1 human \u00b7 19 bots",
+    "\ud83d\udce6 20 energy to chest",
+    "OFFLINE PRACTICE \u00b7 1 human \u00b7 19 bots",
+    "\ud83d\udce6 20 energy to chest",
+    "OFFLINE PRACTICE \u00b7 1 human \u00b7 19 bots",
+    "\ud83d\udce6 20 energy to chest",
+    "OFFLINE PRACTICE \u00b7 1 human \u00b7 19 bots",
+    "\ud83d\udce6 20 energy to chest",
+    "OFFLINE PRACTICE \u00b7 1 human \u00b7 19 bots",
+    "\ud83d\udce6 20 energy to chest",
+    "OFFLINE PRACTICE \u00b7 1 human \u00b7 19 bots"
+  ],
+  "pair_resolver_results": [
+    {
+      "faces": [
+        "S",
+        "S",
+        "E"
+      ],
+      "solo": {
+        "action": "S",
+        "tier": "pair",
+        "sym": "S",
+        "faces": [
+          "S",
+          "S",
+          "E"
+        ],
+        "crit": false,
+        "splash": false,
+        "units": 2,
+        "gold": 0,
+        "energy": 0,
+        "shield": null,
+        "gift": 0
+      },
+      "online": {
+        "action": "S",
+        "tier": "pair",
+        "units": 2
+      }
+    },
+    {
+      "faces": [
+        "S",
+        "E",
+        "S"
+      ],
+      "solo": {
+        "action": "S",
+        "tier": "pair",
+        "sym": "S",
+        "faces": [
+          "S",
+          "E",
+          "S"
+        ],
+        "crit": false,
+        "splash": false,
+        "units": 2,
+        "gold": 0,
+        "energy": 0,
+        "shield": null,
+        "gift": 0
+      },
+      "online": {
+        "action": "S",
+        "tier": "pair",
+        "units": 2
+      }
+    },
+    {
+      "faces": [
+        "E",
+        "S",
+        "S"
+      ],
+      "solo": {
+        "action": "S",
+        "tier": "pair",
+        "sym": "S",
+        "faces": [
+          "E",
+          "S",
+          "S"
+        ],
+        "crit": false,
+        "splash": false,
+        "units": 2,
+        "gold": 0,
+        "energy": 0,
+        "shield": null,
+        "gift": 0
+      },
+      "online": {
+        "action": "S",
+        "tier": "pair",
+        "units": 2
+      }
+    }
+  ],
+  "uncaught_errors": []
+}

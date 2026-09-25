@@ -10,7 +10,7 @@ root=a.root;module=root/'multiplayer' if (root/'multiplayer').exists() else root
 html=root/'fatebound.html';text=html.read_text()
 assert 'arenaEngineV109' in text, 'Refusing to modify a game without the installed arena integration'
 changed=[]
-for name,tag,path in [('arenaEngineV109','script','src/arena-engine.js'),('adventureClientV109','script','src/arena-client.js'),('adventureV109','style','src/adventure.css'),('soundDesignV111','script','src/game-audio.js'),('uiComfortV111','style','src/ui-comfort.css'),('uiComfortRuntimeV111','script','src/ui-comfort.js')]:
+for name,tag,path in [('arenaWireV113','script','src/arena-wire.js'),('arenaEngineV109','script','src/arena-engine.js'),('adventureClientV109','script','src/arena-client.js'),('adventureV109','style','src/adventure.css'),('soundDesignV111','script','src/game-audio.js'),('uiComfortV111','style','src/ui-comfort.css'),('uiComfortRuntimeV111','script','src/ui-comfort.js')]:
  pattern=rf'(<{tag} id="{name}">)(.*?)(</{tag}>)';matches=list(re.finditer(pattern,text,re.S));assert len(matches)==1,name
  content=(module/path).read_text();m=matches[0]
  if m[2]!=content:changed.append(path);text=text[:m.start(2)]+content+text[m.end(2):]

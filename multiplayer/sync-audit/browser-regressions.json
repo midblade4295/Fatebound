@@ -1,0 +1,228 @@
+{
+  "source_sha256": "56ad2d138c503d6a9b20bece12276252dd95bcf15e129a7030316383aa159a7f",
+  "checks": [
+    {
+      "check": "All 216 combinations agree across solo, server and displayed winning dice",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Actual recorded dice trajectories land on all three confirmed faces",
+      "status": "PASS",
+      "detail": [
+        {
+          "requested": [
+            "S",
+            "S",
+            "E"
+          ],
+          "top": [
+            "S",
+            "S",
+            "E"
+          ]
+        },
+        {
+          "requested": [
+            "C",
+            "H",
+            "C"
+          ],
+          "top": [
+            "C",
+            "H",
+            "C"
+          ]
+        },
+        {
+          "requested": [
+            "G",
+            "F",
+            "F"
+          ],
+          "top": [
+            "G",
+            "F",
+            "F"
+          ]
+        },
+        {
+          "requested": [
+            "H",
+            "H",
+            "H"
+          ],
+          "top": [
+            "H",
+            "H",
+            "H"
+          ]
+        }
+      ]
+    },
+    {
+      "check": "Two full browser clients negotiate transport2 and share one authoritative 20-slot room",
+      "status": "PASS",
+      "detail": {
+        "full": 1,
+        "delta": 3,
+        "stale": 0,
+        "resync": 0,
+        "cursor": {
+          "match": "a5320058-e42c-4f9b-b0fb-8797a039a8c4",
+          "revision": 20,
+          "seq": 1
+        },
+        "ageMs": 648.2999999998137
+      }
+    },
+    {
+      "check": "Online chest/status row stays identical through overlapping old HUD refresh intervals",
+      "status": "PASS",
+      "detail": [
+        "ONLINE \u00b7 2 humans \u00b7 18 bots"
+      ]
+    },
+    {
+      "check": "Existing saved roll chests stay accessible and are not consumed by online status rendering",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Server KO immediately shows death pose, zero HP and disabled ROLL with respawn countdown",
+      "status": "PASS",
+      "detail": {
+        "down": true,
+        "disabled": true,
+        "pose": "death",
+        "status": "Knocked out \u00b7 45s",
+        "serverHP": 0
+      }
+    },
+    {
+      "check": "Expired local timers and delayed packets never make a zero-HP online hero alive",
+      "status": "PASS",
+      "detail": {
+        "down": true,
+        "hp": 0,
+        "disabled": true,
+        "status": "Reconnecting \u00b7 waiting for server"
+      }
+    },
+    {
+      "check": "Only a server-confirmed positive-HP respawn restores the alive pose and ROLL",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "A delayed poll cannot rewind the HP/roll count from a newer confirmed action",
+      "status": "PASS",
+      "detail": {
+        "before": {
+          "revision": 272,
+          "hp": 2070,
+          "rolls": 1
+        },
+        "after": {
+          "revision": 272,
+          "hp": 2070,
+          "rolls": 1
+        },
+        "decoder": {
+          "full": 1,
+          "delta": 16,
+          "stale": 1,
+          "resync": 0,
+          "cursor": {
+            "match": "a5320058-e42c-4f9b-b0fb-8797a039a8c4",
+            "revision": 288,
+            "seq": 3
+          },
+          "ageMs": 414.79999999981374
+        }
+      }
+    },
+    {
+      "check": "Left/middle, left/right and middle/right pairs highlight exactly their contributing dice and apply correct effects",
+      "status": "PASS",
+      "detail": [
+        {
+          "faces": [
+            "H",
+            "H",
+            "C"
+          ],
+          "highlighted": "pair:H:0,1"
+        },
+        {
+          "faces": [
+            "G",
+            "S",
+            "G"
+          ],
+          "highlighted": "pair:G:0,2"
+        },
+        {
+          "faces": [
+            "E",
+            "F",
+            "F"
+          ],
+          "highlighted": "pair:F:1,2"
+        },
+        {
+          "faces": [
+            "S",
+            "S",
+            "E"
+          ],
+          "highlighted": "pair:S:0,1"
+        }
+      ]
+    },
+    {
+      "check": "Lost first action reply retries exactly once without overwriting newer substitute dice",
+      "status": "PASS",
+      "detail": {
+        "originalReceiptIndex": 6,
+        "current": {
+          "faces": [
+            "G",
+            "G",
+            "E"
+          ],
+          "rolls": 7,
+          "serverFaces": [
+            "G",
+            "G",
+            "E"
+          ],
+          "marker": "pair:G:0,1"
+        }
+      }
+    },
+    {
+      "check": "v112 sound unlock and sample playback remain functional in the browser",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "New status messages preserve ROLL/Chest/Map hit areas in short portrait and landscape",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Completion and claim return Home without consuming saved offline roll chests",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Second shared online match starts after KO, network delay, dice and reward regressions",
+      "status": "PASS",
+      "detail": ""
+    }
+  ],
+  "errors": [],
+  "console_errors": [],
+  "physical_phone_tested": false
+}

@@ -1,0 +1,25 @@
+{
+  "verified_utc": "2026-09-25T20:26:31.101614+00:00",
+  "html_sha256": "56ad2d138c503d6a9b20bece12276252dd95bcf15e129a7030316383aa159a7f",
+  "html_bytes": 36304138,
+  "build": "113-state-dice-network-fix",
+  "inline_scripts_parsed": 23,
+  "unchanged_artwork_blocks": 103,
+  "node_checks_passed": 56,
+  "web_host_checks_passed": 11,
+  "original_full_html_browser_checks": 23,
+  "new_full_html_browser_checks": 15,
+  "browser_total": 38,
+  "browser_uncaught_errors": 0,
+  "browser_console_errors": 0,
+  "physical_phone_tested": false,
+  "unchanged_modules": {
+    "multiplayer/src/arena-engine.js": "e2e1493a54e68eb7ac4558041125f572a8e870ec21394c9002dff524b58f80a8",
+    "multiplayer/src/metrics.js": "81caa42dcba0794651675934ef51fb4ace80dd403cb0638dcbec98e1f94fecec",
+    "multiplayer/src/game-audio.js": "b2023c491e683e906a543c432490b434b2d413b207ad5d3b35e1980a25d3ce12",
+    "multiplayer/src/ui-comfort.js": "6b1ac015072ec68e0970359872aabbdc68ed0fae42e3b0b6dd9a8b67c200cb77",
+    "multiplayer/src/ui-comfort.css": "05732f7d2005716ba19328b865de95d940e20e42a1652bfc0d290e4665945b2a"
+  },
+  "bandwidth_comparison": "bandwidth.json",
+  "live_test_not_yet_run": true
+}

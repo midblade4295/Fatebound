@@ -29,7 +29,7 @@ class WebTests(unittest.TestCase):
    for method in ['GET','HEAD']:self.assertEqual(self.req(path,method=method)[0],404,(path,method))
  def test_public_game_client_and_health(self):
   status,body,_=self.req('/');self.assertEqual(status,200);self.assertIn(b'fatebound-client.js',body)
-  self.assertEqual(self.req('/fatebound-client.js')[0],200);self.assertEqual(json.loads(self.req('/health')[1])['webBuild'],110)
+  self.assertEqual(self.req('/fatebound-client.js')[0],200);self.assertEqual(json.loads(self.req('/health')[1])['webBuild'],113)
  def test_head_does_not_send_body(self):
   status,body,h=self.req('/',method='HEAD');self.assertEqual(status,200);self.assertEqual(body,b'');self.assertGreater(int(h['Content-Length']),0)
  def test_legacy_save_roundtrip_and_private_permissions(self):
@@ -54,4 +54,23 @@ class WebTests(unittest.TestCase):
  def test_html_cache_invalidates_on_atomic_source_update(self):
   self.req('/');p=self.root/'fatebound.html.next';p.write_text('<head></head>New build');p.replace(self.root/'fatebound.html')
   self.assertIn(b'New build',self.req('/')[1])
+ def test_game_gzip_is_exact_and_etag_revalidation_returns_no_body(self):
+  import gzip
+  (self.root/'fatebound.html').write_text('<head></head>'+'<b>Game art fixture</b>'*400)
+  status,raw,plain=self.req('/');self.assertEqual(status,200)
+  status,packed,h=self.req('/',headers={'Accept-Encoding':'gzip'})
+  self.assertEqual(h['Content-Encoding'],'gzip');self.assertEqual(gzip.decompress(packed),raw)
+  self.assertLess(len(packed),len(raw));self.assertEqual(h['ETag'],plain['ETag'])
+  status,body,h304=self.req('/',headers={'Accept-Encoding':'gzip','If-None-Match':h['ETag']})
+  self.assertEqual(status,304);self.assertEqual(body,b'');self.assertIn('must-revalidate',h304['Cache-Control'])
+  (self.root/'fatebound.html').write_text('<head></head>Different release')
+  status,body,new=self.req('/',headers={'If-None-Match':h['ETag']})
+  self.assertEqual(status,200);self.assertNotEqual(h['ETag'],new['ETag'])
+ def test_compression_can_be_declined_and_saves_are_never_cached(self):
+  (self.root/'fatebound.html').write_text('<head></head>'+'repeated data'*200)
+  status,raw,h=self.req('/',headers={'Accept-Encoding':'gzip;q=0,*;q=1'})
+  self.assertEqual(status,200);self.assertIsNone(h.get('Content-Encoding'))
+  self.req('/api/save',{'playerId':'FB-NETW-TEST','save':{'text':'test'*300}})
+  status,b,h=self.req('/api/save?playerId=FB-NETW-TEST',headers={'Accept-Encoding':'gzip'})
+  self.assertEqual(h['Cache-Control'],'no-store');self.assertIsNone(h.get('ETag'))
 if __name__=='__main__':unittest.main(verbosity=2)

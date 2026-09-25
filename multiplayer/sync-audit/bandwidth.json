@@ -1,0 +1,87 @@
+{
+  "method": "Three deterministic 300-second matches with 20 combatants, two rolling scripted humans and 18 bots; 401 snapshots per client per match at 750ms. Same authoritative state encoded with old full+gzip and new full/delta+gzip/Brotli. No physics/game rules changed.",
+  "excludes": "HTTP/TLS/transport headers, uploads, cloud-save sync, initial artwork download, actions between polls and reconnect full syncs. Not physical-phone carrier metering.",
+  "snapshot_count": 1203,
+  "fulls": 3,
+  "deltas": 1200,
+  "totals": {
+    "old_raw": 46561857,
+    "old_gzip": 5241998,
+    "new_raw": 1730357,
+    "new_gzip": 630562,
+    "new_brotli": 626401
+  },
+  "average_bytes_per_snapshot": {
+    "old_raw": 38705,
+    "old_gzip": 4357,
+    "new_raw": 1438,
+    "new_gzip": 524,
+    "new_brotli": 521
+  },
+  "average_payload_bytes_per_5_minute_match": {
+    "old_raw": 15520619,
+    "old_gzip": 1747333,
+    "new_raw": 576786,
+    "new_gzip": 210187,
+    "new_brotli": 208800
+  },
+  "max_bytes": {
+    "old_gzip": 4709,
+    "new_gzip": 1356,
+    "new_brotli": 1199
+  },
+  "vs_previous_gzip_reduction_pct": {
+    "new_gzip": 88,
+    "new_brotli": 88.1
+  },
+  "samples": [
+    {
+      "elapsed_ms": 0,
+      "old_raw": 22402,
+      "old_gzip": 1607,
+      "new_raw": 13944,
+      "new_gzip": 1356,
+      "new_brotli": 1199
+    },
+    {
+      "elapsed_ms": 750,
+      "old_raw": 22412,
+      "old_gzip": 1627,
+      "new_raw": 257,
+      "new_gzip": 176,
+      "new_brotli": 167
+    },
+    {
+      "elapsed_ms": 60000,
+      "old_raw": 39347,
+      "old_gzip": 4283,
+      "new_raw": 2716,
+      "new_gzip": 740,
+      "new_brotli": 727
+    },
+    {
+      "elapsed_ms": 120000,
+      "old_raw": 38923,
+      "old_gzip": 4611,
+      "new_raw": 1255,
+      "new_gzip": 557,
+      "new_brotli": 566
+    },
+    {
+      "elapsed_ms": 240000,
+      "old_raw": 39517,
+      "old_gzip": 4605,
+      "new_raw": 803,
+      "new_gzip": 467,
+      "new_brotli": 463
+    },
+    {
+      "elapsed_ms": 300000,
+      "old_raw": 39240,
+      "old_gzip": 4654,
+      "new_raw": 1182,
+      "new_gzip": 572,
+      "new_brotli": 561
+    }
+  ]
+}

@@ -2,7 +2,7 @@
    Online actions are server-authoritative; unavailable networking is never disguised as PvP. */
 (()=>{
 'use strict';
-const A=window.FBArena,el=id=>document.getElementById(id),esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const A=window.FBArena,W=window.FBArenaWire,decoder=new W.Decoder(),el=id=>document.getElementById(id),esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const uid=()=>crypto.randomUUID?.()||Array.from(crypto.getRandomValues(new Uint8Array(16)),x=>x.toString(16).padStart(2,'0')).join('');
 const pref=()=>{
  if(!SAVE.adventure||typeof SAVE.adventure!=='object'||Array.isArray(SAVE.adventure))SAVE.adventure={};
@@ -22,7 +22,8 @@ const pref=()=>{
 const API=(window.FATEBOUND_ARENA_URL||((location.protocol==='https:'||location.hostname==='localhost'||location.hostname==='127.0.0.1')?location.origin+'/fatebound/arena':'https://136-113-125-3.sslip.io/fatebound/arena')).replace(/\/$/,'');
 let identity=null;try{identity=JSON.parse(localStorage.getItem('fatebound-arena-identity')||'null');}catch(_){}
 if(identity&&(!identity.playerId||typeof identity.token!=='string'||identity.token.length<20))identity=null;
-let connectionPromise=null,guildEpoch=0;
+let connectionPromise=null,guildEpoch=0,lastReceived=-Infinity,clockAt=0,clockPerf=0,pollInFlight=false;
+const serverTime=()=>clockAt+Math.max(0,performance.now()-clockPerf);
 const CLAIM_KEY='fatebound-arena-pending-claim';
 async function recoverClaim(){
  let pending;try{pending=JSON.parse(localStorage.getItem(CLAIM_KEY)||'null');}catch(_){return;}
@@ -33,12 +34,58 @@ async function recoverClaim(){
 }
 
 let renderAt=0,busy=false,pollTimer=0,requestSerial=0,eventSeq=0,frameAt=0,lastState=null,localEngine=null,localPlayerId=null,resultShown='',epoch=0,backFocus=null,onlineProfile=null;
-const N=window.FBNext={active:false,online:false,searching:false,legacyStart:false,rendering:false,warView:null,latest:null,openPrep,frame,roll:()=>action('roll',{mult:player?.mult||1,allIn:!!player?.allIn}),move:t=>action('move',{tower:t}),ultimate:()=>action('ultimate'),rally:()=>action('rally'),claim,openGifts,openExpedition,practiceScenario};
+const N=window.FBNext={active:false,online:false,searching:false,legacyStart:false,rendering:false,warView:null,latest:null,openPrep,frame,roll:()=>action('roll',{mult:player?.mult||1,allIn:!!player?.allIn}),move:t=>action('move',{tower:t}),ultimate:()=>action('ultimate'),rally:()=>action('rally'),claim,openGifts,openExpedition,practiceScenario,serverTime,rollStatus,paintControls,get transport(){return {...decoder.stats,cursor:decoder.cursor(),ageMs:performance.now()-lastReceived};}};
 const make=(id,content)=>{let node=el(id);if(!node){node=document.createElement('div');node.id=id;node.className='overlay adventure-modal';node.hidden=true;node.innerHTML=`<section class="adventure-panel" role="dialog" aria-modal="true"><header><h2></h2><button type="button" data-dismiss aria-label="Close dialog">Close</button></header><div class="adventure-scroll"></div><footer></footer></section>`;document.body.append(node);node.querySelector('[data-dismiss]').onclick=()=>{if(N.searching)cancelQueue();else hide(id);};node.addEventListener('keydown',e=>{if(e.key==='Escape'&&!N.active){e.preventDefault();node.querySelector('[data-dismiss]').click();}if(e.key==='Tab'){const f=[...node.querySelectorAll('button:not(:disabled),select,input,a[href]')].filter(n=>n.getClientRects().length);if(f.length&&e.shiftKey&&document.activeElement===f[0]){e.preventDefault();f.at(-1).focus();}else if(f.length&&!e.shiftKey&&document.activeElement===f.at(-1)){e.preventDefault();f[0].focus();}}});}return node;};
 function show(id,title,body,footer=''){const node=make(id);node.querySelector('h2').textContent=title;node.querySelector('[role=dialog]').setAttribute('aria-label',title);node.querySelector('.adventure-scroll').innerHTML=body;node.querySelector('footer').innerHTML=footer;if(node.hidden){node._opener=document.activeElement;SFX.menuOpen();}node.hidden=false;requestAnimationFrame(()=>node.querySelector('button:not(:disabled)')?.focus({preventScroll:true}));return node;}
 function hide(id){if(id==='adventureGuild')guildEpoch++;const node=el(id);if(node&&!node.hidden){node.hidden=true;SFX.menuClose();}if(node?._opener?.isConnected)node._opener.focus({preventScroll:true});}
-function message(id,text){const n=el(id);if(n)n.textContent=text;}
-async function request(route,body,needsAuth=true){const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),9000);try{const res=await fetch(API+route,{method:body===undefined?'GET':'POST',cache:'no-store',headers:{...(body===undefined?{}:{'Content-Type':'application/json'}),...(needsAuth&&identity?{'Authorization':'Bearer '+identity.token}:{})},...(body===undefined?{}:{body:JSON.stringify(body)}),signal:controller.signal});let data;try{data=await res.json();}catch(_){throw Error('The arena endpoint did not return game data.');}if(!res.ok){const e=new Error(data.error||'Arena connection failed');e.status=res.status;throw e;}return data;}finally{clearTimeout(timeout);}}
+function message(id,text){const n=el(id);if(n&&n.textContent!==String(text))n.textContent=text;}
+async function request(route,body,needsAuth=true,full=false){
+ const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),9000);
+ const synchronized=['/state','/action','/queue','/cancel'].includes(route);
+ const query=new URLSearchParams({transport:'2'});
+ if(!full&&synchronized)for(const [k,v]of Object.entries(decoder.cursor()))query.set(k,String(v));
+ try{
+  const res=await fetch(API+route+(synchronized?'?'+query:''),{method:body===undefined?'GET':'POST',cache:'no-store',headers:{...(body===undefined?{}:{'Content-Type':'application/json'}),...(needsAuth&&identity?{'Authorization':'Bearer '+identity.token}:{})},...(body===undefined?{}:{body:JSON.stringify(body)}),signal:controller.signal});
+  let data;try{data=await res.json();}catch(_){throw Error('The arena endpoint did not return game data.');}
+  const envelope=data.state||data;
+  if(envelope.match?.wire===2){
+   try{envelope.match=decoder.decode(envelope.match);}
+   catch(e){
+    if(!e.resync||full)throw e;
+    // Never replay an already-paid action with a new ID just to recover its snapshot.
+    decoder.clear();const replacement=await request('/state',undefined,true,true);
+    if(data.state)data.state=replacement;else data=replacement;
+   }
+  }
+  if(!res.ok){const e=new Error(data.error||'Arena connection failed');e.status=res.status;e.state=data.state;throw e;}
+  return data;
+ }finally{clearTimeout(timeout);}
+}
+function currentHero(){return N.latest?.heroes.find(h=>h.id===(N.online?identity?.playerId:localPlayerId));}
+function connectionStale(){return N.active&&N.online&&(document.hidden||performance.now()-lastReceived>4000);}
+function rollStatus(){
+ const h=currentHero();if(!N.active||!h)return '';
+ if(connectionStale())return 'Reconnecting · waiting for server';
+ if(h.hp<=0){const left=Math.ceil(Math.max(0,h.downUntil-serverTime())/1000);return left?'Knocked out · '+left+'s':'Waiting for confirmed respawn';}
+ if(busy)return 'Confirming action…';
+ if(anim&&performance.now()<anim.settleAt)return 'Rolling all three dice…';
+ const cooldown=Math.max(0,h.rollAt-serverTime());if(cooldown>0)return 'Ready in '+(cooldown/1000).toFixed(1)+'s';
+ const mult=player.mult||1,cost=h.rampage>0?0:player.allIn?h.focus:mult,minimum=player.allIn?3:({1:1,2:2,3:4,4:6}[mult]||1);
+ if(h.rampage<=0&&h.focus<minimum)return 'Need '+minimum+' Focus · have '+h.focus;
+ return h.rampage>0?'Rampage · free ×1 roll':player.allIn?'ALL-IN · '+cost+' Focus':mult+' Focus · server confirmed';
+}
+function paintControls(){
+ const roll=el('roll');if(!roll)return;
+ if(!N.active){if(roll.dataset.arenaGuard){delete roll.dataset.arenaGuard;roll.disabled=false;roll.setAttribute('aria-disabled','false');}return;}
+ const h=currentHero();if(!h)return;
+ const status=rollStatus(),blocked=connectionStale()||h.hp<=0||busy||(anim&&performance.now()<anim.settleAt)||serverTime()<h.rollAt||status.startsWith('Need ');
+ roll.dataset.arenaGuard='1';roll.disabled=!!blocked;roll.setAttribute('aria-disabled',String(!!blocked));message('rollCost',status);
+ const cannot=connectionStale()||h.hp<=0||busy;
+ el('rally').disabled=cannot||h.ralliesLeft<=0||serverTime()<h.rallyAt||h.focus<2;
+ el('ultBar').disabled=cannot||h.ult<100;
+ el('arenaSpells')?.querySelectorAll('button').forEach(b=>b.disabled=cannot||h.spell<=0||serverTime()<h.spellAt);
+}
+
 async function connect(){
  if(connectionPromise)return connectionPromise;
  const pending=(async()=>{
@@ -90,6 +137,7 @@ async function cancelQueue(){
  if(mine===epoch)hide('adventureQueueUI');
 }
 function recoverIdle(reason){
+ decoder.clear();lastReceived=-Infinity;
  ++epoch;clearTimeout(pollTimer);busy=false;N.active=false;N.searching=false;N.rendering=false;N.warView=null;
  N.latest=null;N.result=null;N.receipt=null;localEngine=null;resultShown='';
  anim=null;autoRoll=false;QTE=null;giftState=null;BR=null;M=null;
@@ -100,22 +148,27 @@ function recoverIdle(reason){
 function poll(mine){
  clearTimeout(pollTimer);if(mine!==epoch||(!N.searching&&!N.active))return;
  pollTimer=setTimeout(async()=>{
-  try{const state=await request('/state');if(mine!==epoch)return;message('arenaConnection','');accept(state);}
+  try{if(document.hidden||busy||pollInFlight)return;pollInFlight=true;const state=await request('/state');if(mine!==epoch)return;message('arenaConnection','');accept(state);}
   catch(e){
    if(mine!==epoch)return;
    if(e.status===401){recoverIdle('This arena session could not be authenticated. Home remains available.');return;}
    message('queueError','Connection interrupted. Reconnecting to the same lobby…');
    message('arenaConnection','Reconnecting — your slot is reserved; a labelled bot may substitute.');
-  }finally{if(mine===epoch&&(N.searching||N.active))poll(mine);}
+  }finally{pollInFlight=false;if(mine===epoch&&(N.searching||N.active))poll(mine);}
  },750);
 }
-function accept(state){lastState=state;if(state.status==='searching'){N.searching=true;N.online=true;message('queueCount',`${state.humans} / 20 human players`);message('queueTime',Math.ceil(Math.max(0,state.deadline-state.serverNow)/1000));return;}if(state.status==='idle'){if(N.active){recoverIdle('This battle is no longer active. Reconnect from Prepare to collect any unclaimed rewards.');return;}if(N.searching){N.searching=false;message('queueError','The lobby expired before connection was restored. Close this dialog and search again.');}return;}if(state.status==='battle'||state.status==='complete'){N.searching=false;N.online=true;hide('adventureQueueUI');mount(state.match,identity.playerId);if(state.status==='complete')showResult(state.result,state.receipt);}}
+function accept(state){lastState=state;if(state.status==='searching'){if(N.active)return;N.searching=true;N.online=true;message('queueCount',`${state.humans} / 20 human players`);message('queueTime',Math.ceil(Math.max(0,state.deadline-state.serverNow)/1000));return;}if(state.status==='idle'){if(N.active){recoverIdle('This battle is no longer active. Reconnect from Prepare to collect any unclaimed rewards.');return;}if(N.searching){N.searching=false;message('queueError','The lobby expired before connection was restored. Close this dialog and search again.');}return;}if(state.status==='battle'||state.status==='complete'){N.searching=false;N.online=true;hide('adventureQueueUI');mount(state.match,identity.playerId);if(state.status==='complete')showResult(state.result,state.receipt);}}
 function mount(snapshot,pid){
  if(!snapshot||!Array.isArray(snapshot.heroes)||snapshot.heroes.length!==20||!snapshot.heroes.some(h=>h.id===pid)||!Array.isArray(snapshot.towers)||snapshot.towers.length!==10)throw Error('The arena returned an incomplete match. Reconnect to restore your slot.');
- if(N.active&&N.latest?.id===snapshot.id&&N.latest.revision>snapshot.revision)return;const ts=n=>n?n+Date.now()-snapshot.now:0;const starting=!N.active||M?.arenaId!==snapshot.id;N.active=true;N.latest=snapshot;const me=snapshot.heroes.find(h=>h.id===pid);if(!me)throw Error('This device is not in the match');const sideMap=sd=>sd===me.side?0:1;
+ if(N.active&&N.latest?.id===snapshot.id&&N.latest.revision>snapshot.revision)return false;lastReceived=performance.now();clockAt=snapshot.now;clockPerf=lastReceived;const ts=n=>n?n+Date.now()-snapshot.now:0;const starting=!N.active||M?.arenaId!==snapshot.id;N.active=true;N.latest=snapshot;const me=snapshot.heroes.find(h=>h.id===pid);if(!me)throw Error('This device is not in the match');const sideMap=sd=>sd===me.side?0:1;
  if(starting){hide('adventurePrep');if(!snapshot.ended)SFX.matchStart();eventSeq=0;resultShown='';N.rendering=true;newMatch(5,true);M.arena=true;M.arenaId=snapshot.id;M.campaign=true;M.lobby=false;M.training=false;M.cards=[];M.inBoss=false;BR=null;document.body.classList.add('arena-live');document.body.classList.remove('hub-mode');}
- const old=new Map(M.heroes.map(h=>[h.id,h]));M.heroes=snapshot.heroes.map(h=>{const v=old.get(h.id)||mkHero(sideMap(h.side),0,h.level,h.id===pid),wasHp=v.hp,wasShields=v.shieldSlots?.length||0;Object.assign(v,{id:h.id,name:(h.id===pid?'You':h.name)+(h.bot?' [BOT]':h.substitute?' [BOT SUBSTITUTE]':''),side:sideMap(h.side),char:h.char,weapon:h.weapon,tier:0,weaponMult:1,level:h.level,atk:h.atk,maxHp:h.maxHp,hp:h.hp,shields:h.shieldSlots.length,shieldSlots:[...h.shieldSlots],downUntil:ts(h.downUntil),tower:h.tower,damage:h.damage,kos:h.kos,rolls:h.rolls,paidRolls:h.paidRolls,triples:h.triples,shieldsBroken:h.shieldsBroken,ult:h.ult,ultsUsed:h.ultsUsed,streak:h.streak,hot:h.hot,forcedCrits:h.forcedCrits,rampage:h.rampage,rallyJoin:0});if(wasHp>h.hp){v.hitAt=performance.now();v.hitShield=false;if(!starting&&h.id===pid)SFX.hurt({gain:.5});}if(!starting&&wasShields>h.shieldSlots.length&&h.tower===me.tower)SFX.shieldBreak({gain:h.id===pid?.55:.22,ambient:h.id!==pid,group:'shield-break'});return v;});
- player=M.heroes.find(h=>h.id===pid);player.gold=SAVE.gold;player.xp=SAVE.xp;player.energyAt=SAVE.energyAt;player.mult||=1;if(me.rampage>0){player.mult=1;player.allIn=false;}player.locked=[false,false,false];M.focus=me.focus;M.focusMax=8;M.spellSurgeUntil=ts(me.surgeUntil);M.startAt=ts(snapshot.startAt);M.endAt=ts(snapshot.endAt);M.ended=snapshot.ended;M.overtime=snapshot.phase==='overtime';M.lastTick=Date.now();
+ const old=new Map(M.heroes.map(h=>[h.id,h]));M.heroes=snapshot.heroes.map(h=>{const v=old.get(h.id)||mkHero(sideMap(h.side),0,h.level,h.id===pid),wasHp=v.hp,wasShields=v.shieldSlots?.length||0;Object.assign(v,{id:h.id,name:(h.id===pid?'You':h.name)+(h.bot?' [BOT]':h.substitute?' [BOT SUBSTITUTE]':''),side:sideMap(h.side),char:h.char,weapon:h.weapon,tier:0,weaponMult:1,level:h.level,atk:h.atk,maxHp:h.maxHp,hp:h.hp,shields:h.shieldSlots.length,shieldSlots:[...h.shieldSlots],downUntil:ts(h.downUntil),arenaAuthoritative:true,serverDownUntil:h.downUntil,tower:h.tower,damage:h.damage,kos:h.kos,rolls:h.rolls,paidRolls:h.paidRolls,triples:h.triples,shieldsBroken:h.shieldsBroken,ult:h.ult,ultsUsed:h.ultsUsed,streak:h.streak,hot:h.hot,forcedCrits:h.forcedCrits,rampage:h.rampage,rallyJoin:0});if(wasHp>h.hp){v.hitAt=performance.now();v.hitShield=false;if(!starting&&h.id===pid)SFX.hurt({gain:.5});}if(!starting&&wasShields>h.shieldSlots.length&&h.tower===me.tower)SFX.shieldBreak({gain:h.id===pid?.55:.22,ambient:h.id!==pid,group:'shield-break'});if(h.hp<=0){v.lunge=null;v.hitAt=0;}return v;});
+ player=M.heroes.find(h=>h.id===pid);player.gold=SAVE.gold;player.xp=SAVE.xp;player.energyAt=SAVE.energyAt;player.mult||=1;if(me.rampage>0){player.mult=1;player.allIn=false;}player.locked=[false,false,false];
+ // Restore confirmed dice after reconnect; do not interrupt a throw already showing this action.
+ if(!(anim&&performance.now()<anim.settleAt)&&Array.isArray(me.lastFaces)&&me.rolls!==(player.confirmedDiceRolls??-1)){
+  player.lastFaces=[...me.lastFaces];player.diceBodies=null;player.confirmedDiceRolls=me.rolls;
+ }
+ M.focus=me.focus;M.focusMax=8;M.spellSurgeUntil=ts(me.surgeUntil);M.startAt=ts(snapshot.startAt);M.endAt=ts(snapshot.endAt);M.ended=snapshot.ended;M.overtime=snapshot.phase==='overtime';M.lastTick=Date.now();
  M.towers=snapshot.towers.map(t=>({...t,dmg:me.side===0?[...t.dmg]:[t.dmg[1],t.dmg[0]],prev:t.prev<0?-1:sideMap(t.prev),defenders:[[],[]]}));M.rally=[0,1].map(sd=>{const r=snapshot.rally[sd===0?me.side:1-me.side];return r?{...r,until:ts(r.until),rollers:[...r.rollers]}:null;});M.ralliesLeft=[me.ralliesLeft,2];M.rallyCdUntil=[ts(me.rallyAt),0];M.tally=[0,1].map(sd=>{const hs=M.heroes.filter(h=>h.side===sd);return {damage:hs.reduce((n,h)=>n+h.damage,0),rolls:hs.reduce((n,h)=>n+h.rolls,0),kos:hs.reduce((n,h)=>n+h.kos,0),shields:hs.reduce((n,h)=>n+h.shieldsBroken,0)};});
  N.warView={model:2,matchVersion:3,phase:snapshot.phase==='pressure'?'day':snapshot.phase,startAt:M.startAt,pressureAt:M.startAt+120000,finaleAt:M.startAt+240000,endAt:M.endAt,control:me.side===0?[...snapshot.control]:[snapshot.control[1],snapshot.control[0]],controlDuration:snapshot.controlDuration,preview:snapshot.practice,paid:me.focusSpent};
  for(const ev of snapshot.events){if(ev.seq<=eventSeq)continue;eventSeq=ev.seq;
@@ -126,11 +179,11 @@ function mount(snapshot,pid){
   else if(ev.type==='ultimate')SFX.ultimate(actor?.char,opt);
   else if(ev.type==='ko')SFX.ko(opt);
  }
- if(!starting&&['capture','spell','ultimate','objective','phase'].includes(ev.type)){toast(ev.text,'info');if(ev.type==='objective'||ev.type==='phase')bigBanner(ev.type==='objective'?'SUPPLY OBJECTIVE':'BATTLE PHASE',ev.text);}if(!starting&&(ev.type==='roll'||ev.type==='ultimate')){const h=M.heroes.find(x=>x.id===ev.actor),target=h&&M.heroes.find(x=>x.side!==h.side&&x.tower===h.tower&&x.hp>0);if(h&&target&&h.id!==pid)try{startLunge(h,target);}catch(_){}}}
+ if(!starting&&snapshot.now-ev.at>=0&&snapshot.now-ev.at<1800&&['capture','spell','ultimate','objective','phase'].includes(ev.type)){toast(ev.text,'info');if(ev.type==='objective'||ev.type==='phase')bigBanner(ev.type==='objective'?'SUPPLY OBJECTIVE':'BATTLE PHASE',ev.text);}if(!starting&&snapshot.now-ev.at>=0&&snapshot.now-ev.at<1800&&((ev.type==='roll'&&['S','C'].includes(ev.symbol))||ev.type==='ultimate')){const h=M.heroes.find(x=>x.id===ev.actor),target=h&&M.heroes.find(x=>x.side!==h.side&&x.tower===h.tower&&x.hp>0);if(h&&h.hp>0&&target&&h.id!==pid)try{startLunge(h,target);}catch(_){}}}
  if(starting){M.ended=false;enterTower(me.tower);N.rendering=false;M.ended=snapshot.ended;el('warPanel').hidden=true;}
- if(!snapshot.ended&&screen==='battle'){player.tower=me.tower;el('tbarName').textContent=`Tower ${M.towers[me.tower].name}`;}updateHud();paintExtras();
+ if(!snapshot.ended&&screen==='battle'){player.tower=me.tower;el('tbarName').textContent=`Tower ${M.towers[me.tower].name}`;}updateHud();paintExtras();return true;
 }
-async function action(type,payload={}){if(!N.active||M?.ended||busy||(type==='roll'&&(el('roll').classList.contains('busy')||(anim&&performance.now()<anim.settleAt))))return false;busy=true;const generation=epoch,matchId=M.arenaId,actionId=uid();try{let response;if(N.online){
+async function action(type,payload={}){if(!N.active||M?.ended||busy||(type==='roll'&&(el('roll').classList.contains('busy')||(anim&&performance.now()<anim.settleAt))))return false;if(connectionStale()||currentHero()?.hp<=0){paintControls();return false;}busy=true;const generation=epoch,matchId=M.arenaId,actionId=uid();try{let response;if(N.online){
   const command={type,...payload,matchId,actionId};
   try{response=await request('/action',command);}
   catch(e){
@@ -143,9 +196,34 @@ async function action(type,payload={}){if(!N.active||M?.ended||busy||(type==='ro
  }else{const result=localEngine.act(localPlayerId,{type,...payload},Date.now());response={result,state:{match:localEngine.snapshot()}};}
  if(generation!==epoch||M?.arenaId!==matchId)return false;mount(response.state.match,N.online?identity.playerId:localPlayerId);
  if(type==='move'){N.rendering=true;try{enterTower(payload.tower);}finally{N.rendering=false;}}
- if(type==='roll'){const f=response.result.faces,dice=makeDiceThrow(f),t0=performance.now(),dur=Math.max(...dice.map(d=>d.duration));anim={faces:f,t0,dur,settleAt:t0+dur,dice};player.lastFaces=f;player.diceBodies=dice;rollBusy(true);SFX.roll();setTimeout(()=>{if(M?.arenaId!==matchId)return;anim=null;rollBusy(false);SFX.land();SFX.outcome(response.result,WEAPONS[player.weapon]?.cls,{delay:.045});const target=M.heroes.find(h=>h.side===1&&h.tower===player.tower&&h.hp>0);if(target)try{startLunge(player,target);}catch(_){}},dur);player.allIn=false;player.mult=1;}
+ if(type==='roll'){
+  const result=response.result,f=result.faces,confirmed=currentHero();
+  const superseded=Number.isSafeInteger(result.rollIndex)?result.rollIndex<confirmed.rolls:
+   response.replayed&&Array.isArray(confirmed.lastFaces)&&JSON.stringify(f)!==JSON.stringify(confirmed.lastFaces);
+  if(superseded){
+   player.lastFaces=[...confirmed.lastFaces];player.diceBodies=null;player.confirmedDiceRolls=confirmed.rolls;
+   toast('Earlier roll confirmed · showing the latest server dice','info');return true;
+  }
+  if(!Array.isArray(f)||f.length!==3||W.winningDice(f).symbol!==result.symbol)throw Error('Server dice result did not match the confirmed faces.');
+  let dice=[];try{dice=makeDiceThrow(f);}catch(e){console.warn('Dice visual fallback:',e.message);}
+  const t0=performance.now(),dur=dice.length===3?Math.max(...dice.map(d=>d.duration)):0;
+  anim=dur?{faces:[...f],t0,dur,settleAt:t0+dur,dice}:null;
+  player.lastFaces=[...f];player.diceBodies=dice.length===3?dice:null;player.confirmedDiceRolls=currentHero()?.rolls;
+  rollBusy(!!dur);SFX.roll();
+  setTimeout(()=>{
+   if(generation!==epoch||M?.arenaId!==matchId)return;
+   anim=null;rollBusy(false);SFX.land();SFX.outcome(result,WEAPONS[player.weapon]?.cls,{delay:.045});
+   const win=W.winningDice(f),label={S:'SWORDS',C:'CRITICAL',H:'SHIELDS',G:'GOLD',E:'FOCUS',F:'GIFT'}[win.symbol]||'MIXED';
+   toast((win.tier==='none'?'MIXED':win.tier.toUpperCase())+' · '+label+' · '+(win.indices.length>1?'dice '+win.indices.map(i=>i+1).join(' + '):'confirmed result'),'info');
+   // A shield/gold/gift roll never plays a sword lunge. Dead heroes do not attack visually.
+   const target=M.heroes.find(h=>h.side===1&&h.tower===player.tower&&h.hp>0);
+   if(player.hp>0&&target&&['S','C'].includes(result.symbol))try{startLunge(player,target);}catch(_){}
+   paintControls();
+  },dur);player.allIn=false;player.mult=1;
+ }
+
  if(type==='spell'||type==='ultimate'){if(type==='spell')SFX.spell(payload.spell);else SFX.ultimate(player.char);bigBanner(type==='spell'?A.SPELLS[payload.spell].name:'ULTIMATE','');}if(type==='rally')SFX.horn();if(type==='gift')SFX.gift();if(type==='stored')SFX.strike(WEAPONS[player.weapon]?.cls,true);return true;
- }catch(e){SFX.error();toast(e.message,'warn');return false;}finally{busy=false;}}
+ }catch(e){if(generation===epoch&&e.state)accept(e.state);SFX.error();toast(e.message,'warn');return false;}finally{busy=false;paintControls();}}
 function startPractice(mode,scenario=null){if(N.active||N.searching||TRAIN)return;hide('adventurePrep');++epoch;N.online=false;localPlayerId='local-you';const players=Array.from({length:20},(_,i)=>({id:i?'local-bot-'+i:localPlayerId,name:i?'Bot '+i:'You',bot:i>0,char:i?i%5:SAVE.char,weapon:i?[0,1,4,5,7][i%5]:SAVE.weapon,loadout:pref().loadout}));localEngine=new A.Engine({id:'practice-'+uid(),players,now:Date.now(),seed:crypto.getRandomValues(new Uint32Array(1))[0],mode,practice:true,duration:scenario?60000:300000,scenario});mount(localEngine.snapshot(),localPlayerId);}
 function practiceScenario(){startPractice('standard',pref().lastScenario||{tower:5,deficit:180});}
 function applyReceipt(receipt){
@@ -201,11 +279,11 @@ function renderExpedition(){const g=onlineProfile.guild;const b=show('adventureG
 function extras(){if(!el('adventurePrepareButton')){const b=document.createElement('button');b.id='adventurePrepareButton';b.textContent='Loadout · goals · mastery';b.onclick=openPrep;el('start').insertAdjacentElement('beforebegin',b);}if(!el('arenaExtras')){const n=document.createElement('div');n.id='arenaExtras';n.innerHTML='<small id="arenaConnection" role="status"></small><small id="arenaObjective"></small><small id="arenaDefense"></small><div id="arenaSpells"></div>';document.querySelector('#battle .rollbar').append(n);}
  if(!el('expeditionEntry')&&el('scrGuild')&&!el('scrGuild').hidden){const b=document.createElement('button');b.id='expeditionEntry';b.className='adventure-entry';b.textContent='Live guild expedition · the solo roster below is simulated';b.onclick=openExpedition;(el('guildExpeditionSlot')||el('scrGuild')).append(b);}const m=mastery();let badge=el('masteryBadge');if(!badge){badge=document.createElement('small');badge.id='masteryBadge';el('hubScene').append(badge);}badge.hidden=!m.rank;const badgeText=m.title+' '+CHARS[SAVE.char].n+' · '+m.k;if(badge.textContent!==badgeText)badge.textContent=badgeText;el('avatarBtn').dataset.mastery=String(m.rank);el('avatarBtn').title=CHARS[SAVE.char].n+' '+m.title+' · '+m.k+' mastery';}
 function paintExtras(){extras();window.FateboundUX?.refreshBadges();const activeBattle=!TRAIN&&M&&!M.ended&&!M.lobby&&!M.inBoss&&screen==='battle';el('arenaExtras').hidden=!activeBattle;document.body.classList.toggle('adventure-combat',!!activeBattle);if(!activeBattle)return;const me=N.active?N.latest.heroes.find(h=>h.id===(N.online?identity.playerId:localPlayerId)):null;const choices=me?me.loadout:(M.adventureLoadout||pref().loadout),charges=me?me.spell:window.FateboundSpells?.charges()||0,key=choices.join('|');const group=el('arenaSpells');if(group.dataset.key!==key){group.dataset.key=key;group.innerHTML=choices.map(k=>`<button data-cast="${k}"><b>${A.SPELLS[k].name}</b><small></small></button>`).join('');group.querySelectorAll('[data-cast]').forEach(b=>b.onclick=()=>{if(N.active)action('spell',{spell:b.dataset.cast});else {N.rallyTapAt=performance.now();window.FateboundSpells?.cast(b.dataset.cast);}});}group.querySelectorAll('button').forEach(b=>{b.disabled=charges<=0||down(player)||busy;b.querySelector('small').textContent=charges+'/2 shared charges';});
- const o=N.active?N.latest.objective:M.adventureObjective;let text='';if(o){const elapsed=Date.now()-M.startAt;if(o.status==='warning')text=`Supply objective: Tower ${ROMAN(o.tower)} in ${Math.max(0,Math.ceil((M.startAt+120000-Date.now())/1000))}s`;else if(o.status==='active')text=`SUPPLY: Tower ${ROMAN(o.tower)} · ${Math.max(0,Math.ceil((M.startAt+150000-Date.now())/1000))}s left`;else if(o.status==='complete')text=o.winner===null?'Supply tied — no bonus':'Supply objective resolved';}message('arenaObjective',text);if(N.active){const ti=me.tower,ss=N.latest,now=ss.now;const ally=Math.ceil(Math.max(0,(ss.holds[me.side][ti]||0)-now)/1000),enemy=Math.ceil(Math.max(0,(ss.holds[1-me.side][ti]||0)-now)/1000),surge=Math.ceil(Math.max(0,me.surgeUntil-now)/1000);message('arenaDefense',[ally?'Allied protection '+ally+'s':'',enemy?'ENEMY PROTECTED '+enemy+'s':'',surge?'Arcane Surge '+surge+'s':''].filter(Boolean).join(' · '));}else message('arenaDefense','');if(N.active){const humans=N.latest.heroes.filter(h=>!h.bot).length;el('rollTrackLabel').textContent=`${N.online?'ONLINE':'OFFLINE PRACTICE'} · ${humans} human${humans===1?'':'s'} · ${20-humans} bots`;el('giftAttackCount').textContent=String((me.giftDamage?1:0)+(me.storedDamage?1:0));}}
+ const o=N.active?N.latest.objective:M.adventureObjective;let text='';if(o){const elapsed=Date.now()-M.startAt;if(o.status==='warning')text=`Supply objective: Tower ${ROMAN(o.tower)} in ${Math.max(0,Math.ceil((M.startAt+120000-Date.now())/1000))}s`;else if(o.status==='active')text=`SUPPLY: Tower ${ROMAN(o.tower)} · ${Math.max(0,Math.ceil((M.startAt+150000-Date.now())/1000))}s left`;else if(o.status==='complete')text=o.winner===null?'Supply tied — no bonus':'Supply objective resolved';}message('arenaObjective',text);if(N.active){const ti=me.tower,ss=N.latest,now=ss.now;const ally=Math.ceil(Math.max(0,(ss.holds[me.side][ti]||0)-now)/1000),enemy=Math.ceil(Math.max(0,(ss.holds[1-me.side][ti]||0)-now)/1000),surge=Math.ceil(Math.max(0,me.surgeUntil-now)/1000);message('arenaDefense',[ally?'Allied protection '+ally+'s':'',enemy?'ENEMY PROTECTED '+enemy+'s':'',surge?'Arcane Surge '+surge+'s':''].filter(Boolean).join(' · '));}else message('arenaDefense','');renderRollTrack();renderStoredAttackCount();paintControls();}
 function ROMAN(t){return ['I','II','III','IV','V','VI','VII','VIII','IX','X'][t];}
 function legacyObjective(){if(N.active||TRAIN||!M?.campaign||M.ended||M.inBoss)return;const now=Date.now(),o=M.adventureObjective||=( {tower:5+Math.floor(Math.random()*3),held:[0,0],at:now,status:'upcoming'}),since=now-M.startAt,dt=Math.min(1000,now-o.at);o.at=now;
  if(o.status==='upcoming'&&since>=105000){o.status='warning';bigBanner('SUPPLY OBJECTIVE',`Tower ${ROMAN(o.tower)} activates at 2:00`);}if(o.status==='warning'&&since>=120000){o.status='active';bigBanner('SUPPLY ACTIVE',`Hold Tower ${ROMAN(o.tower)} until 2:30`);}if(o.status==='active'){const sd=towerLeader(M.towers[o.tower]);if(sd>=0)o.held[sd]+=dt;if(since>=150000){o.status='complete';o.winner=o.held[0]>o.held[1]?0:o.held[1]>o.held[0]?1:null;if(o.winner===0){addFocus(1);window.FateboundSpells?.addCharge();}if(o.winner===1){for(const h of side(1))h.buffUntil=now+5000;}bigBanner('SUPPLY RESOLVED',o.winner===null?'Tied — no bonus':o.winner===0?'+1 Focus · +1 spell charge':'Opponent secured a brief supply boost');}}}
-function frame(){if(Date.now()-frameAt<200)return;frameAt=Date.now();if(localEngine&&N.active&&!localEngine.s.ended){localEngine.tick(Date.now());mount(localEngine.snapshot(),localPlayerId);if(localEngine.s.ended)showResult(localEngine.result(localPlayerId),null);}legacyObjective();paintExtras();}
+function frame(){if(Date.now()-frameAt<200)return;frameAt=Date.now();if(localEngine&&N.active&&!localEngine.s.ended){localEngine.tick(Date.now());mount(localEngine.snapshot(),localPlayerId);if(localEngine.s.ended)showResult(localEngine.result(localPlayerId),null);}legacyObjective();if(N.active&&N.online)message('arenaConnection',connectionStale()?'Reconnecting — waiting for authoritative state':'');paintExtras();}
 // Record meaningful local contributions, not button presses. Never count guided training.
 const absorb=absorbShields;absorbShields=function(h,...args){const r=absorb(h,...args);if(!N.active&&!TRAIN&&M?.campaign&&h.side===0&&r.absorbed){M.adventureMetrics||={absorbed:0,rallyAssists:0};M.adventureMetrics.absorbed+=h===player?r.absorbed:0;}return r;};
 const call=callRally;callRally=function(sd,ti){const r=call(sd,ti);if(!N.active&&!TRAIN&&sd===0&&M?.rally?.[0])M.rally[0].adventureLeader=(performance.now()-(N.rallyTapAt||-10000)<150)?player.id:null;return r;};
@@ -215,6 +293,7 @@ const tutorialStart=startTraining;startTraining=function(...args){if(N.active||N
 const finish=finishMatch;finishMatch=function(...args){const was=M&&!M.ended&&!TRAIN&&!M.arena;const r=finish(...args);if(was&&M?.ended){const id=SAVE.war?.id||'solo-'+M.startAt,p=pref();if(player.paidRolls>=5&&!p.receipts.includes(id)){const m=p.mastery[SAVE.char]||={assault:0,guardian:0,commander:0};m.assault+=Math.min(60,Math.floor(player.damage/150));m.guardian+=Math.min(60,Math.floor((M.adventureMetrics?.absorbed||0)/100));m.commander+=Math.min(60,(M.adventureMetrics?.rallyAssists||0)*3+(player.flips||0)*2);p.receipts.push(id);persist();}p.lastScenario={tower:player.tower??5,deficit:180};setTimeout(()=>{if(!M?.ended||N.active)return;let n=el('adventureSoloSummary');if(!n){n=document.createElement('section');n.id='adventureSoloSummary';el('endRewards').insertAdjacentElement('afterend',n);}n.innerHTML=`<h3>Your next step</h3><p>${esc(goalText())}</p><p>${Math.round(player.damage).toLocaleString()} damage · ${M.adventureMetrics?.absorbed||0} absorbed · ${M.adventureMetrics?.rallyAssists||0} rally participants.</p><p>Mastery earned from actual contributions. Claim rewards, then choose a different spell pairing or practice your last tower.</p>`;},0);}return r;};
 // Keep v108 dialog stacking; all other modals receive the same minimum scene layer.
 for(const modal of document.querySelectorAll('.overlay:not(#setup):not(#end)')){modal.classList.add('adventure-managed-modal');modal.querySelector('.panel')?.setAttribute('role','dialog');}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&(N.active||N.searching))poll(epoch);});
 pref();extras();
 if(identity?.token&&identity?.playerId){
   recoverClaim().catch(e=>{console.info('Saved reward claim will retry on the next connection:',e.message);}).then(()=>request('/state')).then(state=>{

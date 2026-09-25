@@ -5,6 +5,8 @@ Save IDs remain the existing device capability for compatibility, NOT account
 login. This server must not serve its working directory, source, logs or saves.
 Arena authentication/combat authority remains in the separate Node service.
 """
+import gzip
+import hashlib
 import argparse
 import json
 import os
@@ -44,17 +46,38 @@ class Handler(BaseHTTPRequestHandler):
         origin = self.headers.get('Origin')
         return origin is None or origin in self.allowed_origins
 
-    def _send(self, code, blob=b'', kind='application/json'):
+    def _gzip_allowed(self):
+        quality = {}
+        for entry in self.headers.get('Accept-Encoding', '').lower().split(','):
+            parts = [x.strip() for x in entry.split(';')]
+            if not parts[0]:
+                continue
+            try:
+                q = next((float(x[2:]) for x in parts[1:] if x.startswith('q=')), 1.0)
+            except ValueError:
+                q = 0.0
+            quality[parts[0]] = q if 0 <= q <= 1 else 0.0
+        return quality.get('gzip', quality.get('*', 0)) > 0
+
+    def _send(self, code, blob=b'', kind='application/json', *, etag=None, compressed=None):
+        use_gzip = code != 304 and len(blob) >= 256 and self._gzip_allowed()
+        if use_gzip:
+            blob = compressed if compressed is not None else gzip.compress(blob, compresslevel=6, mtime=0)
         self.send_response(code)
         self.send_header('Content-Type', kind)
-        self.send_header('Content-Length', str(len(blob)))
-        self.send_header('Cache-Control', 'no-store')
+        if code != 304:
+            self.send_header('Content-Length', str(len(blob)))
+        self.send_header('Cache-Control', 'private, max-age=0, must-revalidate' if etag else 'no-store')
+        self.send_header('Vary', 'Origin, Accept-Encoding')
+        if etag:
+            self.send_header('ETag', etag)
+        if use_gzip:
+            self.send_header('Content-Encoding', 'gzip')
         self.send_header('X-Content-Type-Options', 'nosniff')
         self.send_header('Referrer-Policy', 'no-referrer')
         origin = self.headers.get('Origin')
         if origin and self._allowed():
             self.send_header('Access-Control-Allow-Origin', origin)
-            self.send_header('Vary', 'Origin')
         self.end_headers()
         if self.command != 'HEAD':
             try:
@@ -86,7 +109,7 @@ class Handler(BaseHTTPRequestHandler):
         parsed = urlsplit(self.path)
         route = parsed.path
         if route == '/health':
-            return self._json(200, {'ok': True, 'game': 'Fatebound', 'webBuild': 110})
+            return self._json(200, {'ok': True, 'game': 'Fatebound', 'webBuild': 113})
         if route in ('/api/save', '/api/save/'):
             pid = (parse_qs(parsed.query).get('playerId') or [''])[0]
             path = self._save_path(pid)
@@ -170,9 +193,15 @@ class Handler(BaseHTTPRequestHandler):
                     text = path.read_text(encoding='utf-8')
                     if 'fatebound-client.js' not in text:
                         text = text.replace('</head>', INJECT + '</head>', 1)
-                    cache = (key, text.encode('utf-8'))
+                    raw = text.encode('utf-8')
+                    etag = 'W/"' + hashlib.sha256(raw).hexdigest() + '"'
+                    # Recompress once per source change, not on every phone request.
+                    cache = (key, raw, gzip.compress(raw, compresslevel=6, mtime=0), etag)
                     type(self).html_cache = cache
-            return self._send(200, cache[1], 'text/html; charset=utf-8')
+            matches = [x.strip().removeprefix('W/') for x in self.headers.get('If-None-Match', '').split(',')]
+            if '*' in matches or cache[3].removeprefix('W/') in matches:
+                return self._send(304, etag=cache[3])
+            return self._send(200, cache[1], 'text/html; charset=utf-8', etag=cache[3], compressed=cache[2])
         except OSError:
             return self._json(503, {'ok': False, 'error': 'game temporarily unavailable'})
 
@@ -201,5 +230,5 @@ if __name__ == '__main__':
     Handler.allowed_origins = set(os.environ.get('FATEBOUND_WEB_ORIGINS',
         'https://136-113-125-3.sslip.io,null').split(','))
     server = Server(('127.0.0.1', args.port), Handler)
-    print(f'Fatebound web v110 on 127.0.0.1:{args.port}; public-file allowlist enabled', flush=True)
+    print(f'Fatebound web v113 on 127.0.0.1:{args.port}; public-file allowlist enabled', flush=True)
     server.serve_forever()

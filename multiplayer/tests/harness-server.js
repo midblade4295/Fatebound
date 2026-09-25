@@ -7,5 +7,9 @@ if(cmd==='/boost'){for(const r of mm.rooms.values())for(const h of r.engine.s.he
 if(cmd==='/finish'){for(const r of mm.rooms.values()){for(const t of r.engine.s.towers)t.dmg=[1e8,0];r.engine.s.endAt=clock();}mm.tick();}
 if(cmd==='/guild-progress'){for(const g of Object.values(mm.store.data.guilds)){g.progress=20;for(const id of g.members)g.contributions[id]=1;}}
 if(cmd==='/reset'){mm.membership.clear();mm.rooms.clear();mm.lobbies=[];}
+// Explicitly local-only state fixtures for synchronization regressions.
+if(cmd==='/knockout'){for(const r of mm.rooms.values()){const h=r.engine.s.heroes.find(x=>x.id===u.searchParams.get('player'));if(h){h.hp=0;h.downUntil=clock()+Number(u.searchParams.get('ms')||45000);r.engine.s.revision++;}}}
+if(cmd==='/force-faces'){const f=(u.searchParams.get('faces')||'').split(',');if(f.length===3&&f.every(x=>['S','C','H','G','E','F'].includes(x)))for(const r of mm.rooms.values()){r.engine.faces=()=>[...f];}}
+if(cmd==='/substitute-roll'){for(const r of mm.rooms.values()){const h=r.engine.s.heroes.find(x=>x.id===u.searchParams.get('player'));if(h){const f=(u.searchParams.get('faces')||'G,G,E').split(',');h.hp=h.maxHp;h.downUntil=0;h.focus=8;h.rollAt=clock();h.substitute=true;r.engine.faces=()=>[...f];r.engine.act(h.id,{type:'roll',mult:1},clock());}}}
 res.setHeader('Content-Type','application/json');res.end(JSON.stringify({now:clock(),rooms:mm.rooms.size,lobbies:mm.lobbies.length}));}).listen(8852,'127.0.0.1');
 console.log('ready');

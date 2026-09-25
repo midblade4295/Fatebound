@@ -1,3 +1,24 @@
+# Current continuation: v113 state/dice/network fix
+
+Use branch `chatgpt/v113-sync-dice-compression`, based on v112 head
+`b322d3b9bb30719a2b7de1e058773ce0473f8bb5`, not old main HTML.
+Build `113-state-dice-network-fix`; 36,304,138 bytes; SHA-256
+`56ad2d138c503d6a9b20bece12276252dd95bcf15e129a7030316383aa159a7f`.
+Read `multiplayer/docs/SYNC_NETWORK_V113.md` and `multiplayer/sync-audit/`.
+Deploy the matching arena-server.js WITH arena-wire.js and http-compression.js.
+Python web-host changes provide gzip and private ETag revalidation. Do not expose
+working directories. New optional transport2 is NOT gameplay protocol2:
+protocol/store1, balance110, session106, 20-second/20-total-slot matchmaking and
+existing v112 audio remain. All103 large embedded assets are unchanged.
+Preserve authoritative HP/respawn, monotonic snapshots, roll-index receipt checks,
+single-owner HUD labels, all-three-dice winning feedback, bounded wire histories,
+Brotli/gzip negotiation and full-snapshot fallback. Never deploy harness controls.
+No save reset, Legionary/Caddy route, main merge, Android or signing changes.
+Deployment evidence will be recorded separately after live verification.
+
+---
+## Earlier instructions retained as historical context
+
 # Fatebound v111 — UI and sound continuation
 
 Current task branch: `chatgpt/v111-ui-audio`, based on v110 head

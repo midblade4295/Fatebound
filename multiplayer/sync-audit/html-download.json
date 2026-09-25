@@ -1,0 +1,6 @@
+{
+  "source_sha256": "714bd18ced28f47b1b879dee9d6fb56b57c7af5219a55532c4acebca5c27d5a9",
+  "html_bytes": 36303576,
+  "gzip_bytes": 26594711,
+  "note": "Full embedded-art game, not a gameplay state packet. Public wrapper adds 193 raw bytes. An unchanged browser conditional reload can receive 304/no body; initial/new/evicted downloads still need the full file."
+}
