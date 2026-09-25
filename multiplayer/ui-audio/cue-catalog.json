@@ -1,0 +1,335 @@
+{
+  "original_design": true,
+  "sample_rate": 32000,
+  "format": "16-bit mono WAV preview; runtime uses floating-point PCM and its own mixer",
+  "cues": [
+    {
+      "cue": "tap",
+      "seconds": 0.12,
+      "peak": 0.56,
+      "rms": 0.09638521206172723
+    },
+    {
+      "cue": "menuOpen",
+      "seconds": 0.3,
+      "peak": 0.56,
+      "rms": 0.11546630992404278
+    },
+    {
+      "cue": "menuClose",
+      "seconds": 0.28,
+      "peak": 0.56,
+      "rms": 0.11758293567898571
+    },
+    {
+      "cue": "confirm",
+      "seconds": 0.36,
+      "peak": 0.56,
+      "rms": 0.12985997995508003
+    },
+    {
+      "cue": "equip",
+      "seconds": 0.32,
+      "peak": 0.56,
+      "rms": 0.11311678658508671
+    },
+    {
+      "cue": "purchase",
+      "seconds": 0.6,
+      "peak": 0.56,
+      "rms": 0.11244590182461947
+    },
+    {
+      "cue": "error",
+      "seconds": 0.28,
+      "peak": 0.56,
+      "rms": 0.134089858083257
+    },
+    {
+      "cue": "roll",
+      "seconds": 1.05,
+      "peak": 0.72,
+      "rms": 0.14594144831620895
+    },
+    {
+      "cue": "land",
+      "seconds": 0.23,
+      "peak": 0.72,
+      "rms": 0.16147549753567506
+    },
+    {
+      "cue": "sword",
+      "seconds": 0.37,
+      "peak": 0.72,
+      "rms": 0.13887172256041694
+    },
+    {
+      "cue": "axe",
+      "seconds": 0.46,
+      "peak": 0.72,
+      "rms": 0.12915787983571564
+    },
+    {
+      "cue": "bow",
+      "seconds": 0.35,
+      "peak": 0.72,
+      "rms": 0.17352962066722444
+    },
+    {
+      "cue": "magic",
+      "seconds": 0.5,
+      "peak": 0.72,
+      "rms": 0.13673084159287363
+    },
+    {
+      "cue": "hit",
+      "seconds": 0.26,
+      "peak": 0.72,
+      "rms": 0.12345128307325924
+    },
+    {
+      "cue": "crit",
+      "seconds": 0.65,
+      "peak": 0.72,
+      "rms": 0.11606754905747221
+    },
+    {
+      "cue": "shield",
+      "seconds": 0.5,
+      "peak": 0.72,
+      "rms": 0.10908877857901077
+    },
+    {
+      "cue": "shieldBreak",
+      "seconds": 0.63,
+      "peak": 0.72,
+      "rms": 0.10144061557839777
+    },
+    {
+      "cue": "hurt",
+      "seconds": 0.24,
+      "peak": 0.72,
+      "rms": 0.11561532470932269
+    },
+    {
+      "cue": "ko",
+      "seconds": 0.7,
+      "peak": 0.72,
+      "rms": 0.12233589219334591
+    },
+    {
+      "cue": "barrage",
+      "seconds": 0.95,
+      "peak": 0.72,
+      "rms": 0.1422875077964675
+    },
+    {
+      "cue": "bulwark",
+      "seconds": 1.05,
+      "peak": 0.72,
+      "rms": 0.16295648601794144
+    },
+    {
+      "cue": "horn",
+      "seconds": 1.25,
+      "peak": 0.72,
+      "rms": 0.1959288660428554
+    },
+    {
+      "cue": "surge",
+      "seconds": 1.2,
+      "peak": 0.72,
+      "rms": 0.14715030917283217
+    },
+    {
+      "cue": "shadow",
+      "seconds": 0.68,
+      "peak": 0.72,
+      "rms": 0.12671013026936653
+    },
+    {
+      "cue": "rampage",
+      "seconds": 1.15,
+      "peak": 0.72,
+      "rms": 0.1394861802849108
+    },
+    {
+      "cue": "meteor",
+      "seconds": 1.35,
+      "peak": 0.72,
+      "rms": 0.13444257862803138
+    },
+    {
+      "cue": "volley",
+      "seconds": 0.9,
+      "peak": 0.72,
+      "rms": 0.14447886438807409
+    },
+    {
+      "cue": "coin",
+      "seconds": 0.34,
+      "peak": 0.56,
+      "rms": 0.09616812571790005
+    },
+    {
+      "cue": "gift",
+      "seconds": 0.63,
+      "peak": 0.56,
+      "rms": 0.13592209540569142
+    },
+    {
+      "cue": "energy",
+      "seconds": 0.48,
+      "peak": 0.72,
+      "rms": 0.18420178304476797
+    },
+    {
+      "cue": "level",
+      "seconds": 1.1,
+      "peak": 0.56,
+      "rms": 0.14871926035252322
+    },
+    {
+      "cue": "flip",
+      "seconds": 0.78,
+      "peak": 0.72,
+      "rms": 0.17974528899784623
+    },
+    {
+      "cue": "chestReady",
+      "seconds": 0.64,
+      "peak": 0.56,
+      "rms": 0.0949739727898165
+    },
+    {
+      "cue": "chest",
+      "seconds": 1.1,
+      "peak": 0.56,
+      "rms": 0.13433682034715472
+    },
+    {
+      "cue": "countdown",
+      "seconds": 0.22,
+      "peak": 0.72,
+      "rms": 0.10571997348506165
+    },
+    {
+      "cue": "tension",
+      "seconds": 0.72,
+      "peak": 0.72,
+      "rms": 0.21920093206428018
+    },
+    {
+      "cue": "miss",
+      "seconds": 0.3,
+      "peak": 0.72,
+      "rms": 0.15587218601041203
+    },
+    {
+      "cue": "matchStart",
+      "seconds": 1.3,
+      "peak": 0.72,
+      "rms": 0.20497759691524678
+    },
+    {
+      "cue": "victory",
+      "seconds": 1.65,
+      "peak": 0.72,
+      "rms": 0.17515482639553423
+    },
+    {
+      "cue": "defeat",
+      "seconds": 1.15,
+      "peak": 0.72,
+      "rms": 0.16229364645179106
+    },
+    {
+      "cue": "parry",
+      "seconds": 0.56,
+      "peak": 0.72,
+      "rms": 0.10278144175705939
+    }
+  ],
+  "demo_timeline": [
+    {
+      "at_seconds": 0,
+      "cue": "menuOpen"
+    },
+    {
+      "at_seconds": 0.55,
+      "cue": "tap"
+    },
+    {
+      "at_seconds": 0.92,
+      "cue": "equip"
+    },
+    {
+      "at_seconds": 1.49,
+      "cue": "purchase"
+    },
+    {
+      "at_seconds": 2.34,
+      "cue": "roll"
+    },
+    {
+      "at_seconds": 3.64,
+      "cue": "land"
+    },
+    {
+      "at_seconds": 4.12,
+      "cue": "sword"
+    },
+    {
+      "at_seconds": 4.74,
+      "cue": "axe"
+    },
+    {
+      "at_seconds": 5.45,
+      "cue": "bow"
+    },
+    {
+      "at_seconds": 6.05,
+      "cue": "magic"
+    },
+    {
+      "at_seconds": 6.8,
+      "cue": "hit"
+    },
+    {
+      "at_seconds": 7.31,
+      "cue": "crit"
+    },
+    {
+      "at_seconds": 8.21,
+      "cue": "shield"
+    },
+    {
+      "at_seconds": 8.96,
+      "cue": "shieldBreak"
+    },
+    {
+      "at_seconds": 9.84,
+      "cue": "barrage"
+    },
+    {
+      "at_seconds": 11.04,
+      "cue": "bulwark"
+    },
+    {
+      "at_seconds": 12.34,
+      "cue": "horn"
+    },
+    {
+      "at_seconds": 13.84,
+      "cue": "surge"
+    },
+    {
+      "at_seconds": 15.29,
+      "cue": "meteor"
+    },
+    {
+      "at_seconds": 16.89,
+      "cue": "victory"
+    }
+  ]
+}

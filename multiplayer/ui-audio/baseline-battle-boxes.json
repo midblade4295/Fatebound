@@ -1,0 +1,128 @@
+{
+  "battle": {
+    "hidden": false,
+    "display": "flex",
+    "x": 0,
+    "y": 0,
+    "w": 393,
+    "h": 852,
+    "text": "BRASS\n0\u265b\n4m 59s\nOPENING\nFATE 57/50\nFOCUS 4/8\nCRIMSON\n0\u265b\nBRASS\nOPENING\nCRIMSON\n\u2620\nREVENGE TARGET\nUlf\n0 KO \u00b7 0 damage\nHUNT\nTower I \u00b7 "
+  },
+  "board": {
+    "hidden": false,
+    "display": "block",
+    "x": 0,
+    "y": 143.78125,
+    "w": 393,
+    "h": 518.21875,
+    "text": ""
+  },
+  "tacticalV2": {
+    "hidden": false,
+    "display": "grid",
+    "x": 7,
+    "y": 70,
+    "w": 379,
+    "h": 36,
+    "text": "\u2620\nREVENGE TARGET\nUlf\n0 KO \u00b7 0 damage\nHUNT"
+  },
+  "rivalMiniV2": {
+    "hidden": false,
+    "display": "grid",
+    "x": 269,
+    "y": 149.78125,
+    "w": 96.760009765625,
+    "h": 26.239990234375,
+    "text": "REVENGE\nUlf\n0 KO \u00b7 0"
+  },
+  "giftAttackButton": {
+    "hidden": false,
+    "display": "flex",
+    "x": 168,
+    "y": 151.78125,
+    "w": 57,
+    "h": 40,
+    "text": "0"
+  },
+  "toast": {
+    "hidden": false,
+    "display": "flex",
+    "x": 8,
+    "y": 702,
+    "w": 260,
+    "h": 54,
+    "text": "\ud83c\udf81\nTest notification: a roll chest is ready to collect"
+  },
+  "arenaSpells": {
+    "hidden": false,
+    "display": "grid",
+    "x": 8,
+    "y": 759,
+    "w": 377,
+    "h": 44,
+    "text": "Barrage\n1/2 shared charges\nBulwark\n1/2 shared charges"
+  },
+  "clashSpellWrap": {
+    "hidden": false,
+    "display": "none",
+    "x": 0,
+    "y": 0,
+    "w": 0,
+    "h": 0,
+    "text": "SPELLBARRAGE1/2Charged \u2014 tap to cast BARRAGE"
+  },
+  "ultBtn": {
+    "hidden": true,
+    "display": "none",
+    "x": 0,
+    "y": 0,
+    "w": 0,
+    "h": 0,
+    "text": "\u26a1ULTIMATEREADY \u00b7 tap"
+  },
+  "roll": {
+    "hidden": false,
+    "display": "block",
+    "x": 97.703125,
+    "y": 708,
+    "w": 197.59375,
+    "h": 44,
+    "text": "ROLL\n1 energy \u00b7 hold for AutoRoll"
+  },
+  "battleFooterV2": {
+    "hidden": false,
+    "display": "grid",
+    "x": 0,
+    "y": 811,
+    "w": 393,
+    "h": 41,
+    "text": "\u25c0 MAP\nTower I \u00b7 1\u265b\n\u2022\u2022\u2022"
+  },
+  "rollTrack": {
+    "hidden": false,
+    "display": "block",
+    "x": 8,
+    "y": 666,
+    "w": 377,
+    "h": 16,
+    "text": "20 energy to your next chest"
+  },
+  "arenaExtras": {
+    "hidden": false,
+    "display": "grid",
+    "x": 8,
+    "y": 759,
+    "w": 377,
+    "h": 44,
+    "text": "Barrage\n1/2 shared charges\nBulwark\n1/2 shared charges"
+  },
+  "battleTopV2": {
+    "hidden": false,
+    "display": "block",
+    "x": 0,
+    "y": 0,
+    "w": 393,
+    "h": 110,
+    "text": "BRASS\n0\u265b\n4m 59s\nOPENING\nFATE 57/50\nFOCUS 4/8\nCRIMSON\n0\u265b\nBRASS\nOPENING\nCRIMSON\n\u2620\nREVENGE TARGET\nUlf\n0 KO \u00b7 0 damage\nHUNT"
+  }
+}

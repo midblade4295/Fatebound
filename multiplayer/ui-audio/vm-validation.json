@@ -1,0 +1,19 @@
+{
+  "verified_utc": "2026-09-25T15:06:36.127750+00:00",
+  "html_sha256": "8cb7cc7f5c04898183bc298c4f23fb96ce203cf2794df043534cdc36912dad84",
+  "html_bytes": 36286487,
+  "inline_scripts_parsed": 22,
+  "unchanged_embedded_assets": 103,
+  "node_tests_passed": 42,
+  "python_web_tests_passed": 9,
+  "browser_suite_rerun_on_vm": false,
+  "local_browser_checks": 64,
+  "actual_mixer_cues_tested": 41,
+  "node_version": "v24.20.0",
+  "unchanged_production_modules": {
+    "multiplayer/src/arena-engine.js": "e2e1493a54e68eb7ac4558041125f572a8e870ec21394c9002dff524b58f80a8",
+    "multiplayer/src/arena-server.js": "9bf854cd7c9ec3b1657721d548f66bd000a8364608a79c9a5c4099ef3e031d84",
+    "multiplayer/src/metrics.js": "81caa42dcba0794651675934ef51fb4ace80dd403cb0638dcbec98e1f94fecec",
+    "server/fatebound_host.py": "af9006a6ce3eb7bebb40e2ea0856192c4f92eaa4d098b2fb2aabf5beb43392f8"
+  }
+}

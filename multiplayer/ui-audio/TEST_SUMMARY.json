@@ -1,0 +1,33 @@
+{
+  "build": "111-ui-sound-workshop",
+  "source_sha256": "8cb7cc7f5c04898183bc298c4f23fb96ce203cf2794df043534cdc36912dad84",
+  "source_bytes": 36286487,
+  "base_commit": "8a04f85e0739a4606266c6ec32f99c8bce8b042e",
+  "verified_utc": "2026-09-25T14:52:19.695023+00:00",
+  "node_tests": 42,
+  "python_web_tests": 9,
+  "full_html_browser_checks": 64,
+  "browser_suites": {
+    "multiplayer/audit/full-browser-tests.json": 23,
+    "multiplayer/audit/browser-audit.json": 23,
+    "multiplayer/ui-audio/browser-tests.json": 13,
+    "multiplayer/ui-audio/extra-tests.json": 5
+  },
+  "actual_mixer_stress_test_cues": 41,
+  "maximum_simultaneous_voices": 16,
+  "maximum_stress_sample_peak": 0.9540225267410278,
+  "inline_javascript_blocks": 22,
+  "unchanged_large_artwork_blocks": 103,
+  "unchanged_production_modules": {
+    "multiplayer/src/arena-engine.js": "e2e1493a54e68eb7ac4558041125f572a8e870ec21394c9002dff524b58f80a8",
+    "multiplayer/src/arena-server.js": "9bf854cd7c9ec3b1657721d548f66bd000a8364608a79c9a5c4099ef3e031d84",
+    "multiplayer/src/metrics.js": "81caa42dcba0794651675934ef51fb4ace80dd403cb0638dcbec98e1f94fecec",
+    "server/fatebound_host.py": "af9006a6ce3eb7bebb40e2ea0856192c4f92eaa4d098b2fb2aabf5beb43392f8"
+  },
+  "balance_version": 110,
+  "battle_session_compatibility": 106,
+  "arena_protocol_and_store": 1,
+  "new_save_reset": false,
+  "physical_phone_tested": false,
+  "test_scope": "Full HTML in installed Chromium, mobile/touch emulation, isolated saves and loopback HTTP arena. No fixture code in production."
+}

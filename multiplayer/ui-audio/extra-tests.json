@@ -1,0 +1,38 @@
+{
+  "source_sha256": "8cb7cc7f5c04898183bc298c4f23fb96ce203cf2794df043534cdc36912dad84",
+  "checks": [
+    {
+      "check": "The actual mixer renders 16 simultaneous Meteor cues below full scale at maximum user volume",
+      "status": "PASS",
+      "detail": {
+        "peak": 0.8788353204727173,
+        "rms": 0.3022271534266035,
+        "samples": 64000,
+        "voices": 16
+      }
+    },
+    {
+      "check": "Missing Web Audio or blocked audio-preference storage does not break gameplay",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Sound sliders scroll while Close and Done stay accessible at six viewport sizes",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Long reconnect/objective/defense text plus a guild gift fit without pushing controls off screen",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Persistent chest access works on the locked tower map as well as Home/battle",
+      "status": "PASS",
+      "detail": ""
+    }
+  ],
+  "errors": [],
+  "console_errors": [],
+  "physical_phone_tested": false
+}

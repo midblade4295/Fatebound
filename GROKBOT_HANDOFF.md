@@ -1,3 +1,30 @@
+# Fatebound v111 — UI and sound continuation
+
+Current task branch: `chatgpt/v111-ui-audio`, based on v110 head
+`8a04f85e0739a4606266c6ec32f99c8bce8b042e`. HTML build
+`111-ui-sound-workshop`, 36,286,487 bytes, SHA-256
+`8cb7cc7f5c04898183bc298c4f23fb96ce203cf2794df043534cdc36912dad84`.
+Read `multiplayer/docs/UI_AUDIO_V111.md`, the manifest and
+`multiplayer/ui-audio/TEST_SUMMARY.json`. Live installation is recorded separately.
+Do not restore older whole-file source over this update; main remains separately
+managed. Preserve the stable Guild nodes/draft/scroll, reserved battle tool and
+announcement rows, persistent chest inbox, and original single-context audio
+mixer. Keep the six readable mirrors synchronized, 103 embedded art assets,
+`fatebound-save`, session106, protocol/store1, balance110, two equipped spells,
+and 20-second/20-slot matchmaking. Held KO loot retains its existing x3 automatic
+end-of-solo-match rule; no reward formulas or backend code were changed here.
+
+Use new task branches; no force-push, token exposure, sudo bypass, save reset,
+Legionary/Caddy change or Play publication without authorization. The test harness
+and audio WAV exports are not production server endpoints. The sound code is
+embedded; do not add unnecessary sample network dependencies. After future edits,
+update hashes and rerun actual menu/chest/audio/battle interactions, not parsing
+alone. Numerical/headless browser checks are not physical-phone listening tests.
+
+---
+
+## Historical v110 instructions and provenance
+
 # Grokbot handoff — Fatebound v110 audit
 
 Continue from `chatgpt/v110-audit-balance` and verify `fatebound-source.sha256`.

@@ -1,0 +1,257 @@
+{
+  "source_sha256": "8cb7cc7f5c04898183bc298c4f23fb96ce203cf2794df043534cdc36912dad84",
+  "cue_count": 41,
+  "simultaneous_voices": 16,
+  "volume": "all buses 100%",
+  "maximum_sample_peak": 0.9540225267410278,
+  "status": "PASS",
+  "measurements": [
+    {
+      "cue": "tap",
+      "peak": 0.7010129690170288,
+      "rms": 0.08825602959244631,
+      "maxVoices": 16
+    },
+    {
+      "cue": "menuOpen",
+      "peak": 0.7935264706611633,
+      "rms": 0.14783826861456845,
+      "maxVoices": 16
+    },
+    {
+      "cue": "menuClose",
+      "peak": 0.7470113039016724,
+      "rms": 0.14019417517564328,
+      "maxVoices": 16
+    },
+    {
+      "cue": "confirm",
+      "peak": 0.7001852989196777,
+      "rms": 0.17409725397221842,
+      "maxVoices": 16
+    },
+    {
+      "cue": "equip",
+      "peak": 0.7160630226135254,
+      "rms": 0.1437738982946738,
+      "maxVoices": 16
+    },
+    {
+      "cue": "purchase",
+      "peak": 0.7088437080383301,
+      "rms": 0.1887123086891848,
+      "maxVoices": 16
+    },
+    {
+      "cue": "error",
+      "peak": 0.7000213861465454,
+      "rms": 0.1491171274595824,
+      "maxVoices": 16
+    },
+    {
+      "cue": "roll",
+      "peak": 0.7589894533157349,
+      "rms": 0.264895653300063,
+      "maxVoices": 16
+    },
+    {
+      "cue": "land",
+      "peak": 0.7019094228744507,
+      "rms": 0.12508290051190105,
+      "maxVoices": 16
+    },
+    {
+      "cue": "sword",
+      "peak": 0.9540225267410278,
+      "rms": 0.135227087229811,
+      "maxVoices": 16
+    },
+    {
+      "cue": "axe",
+      "peak": 0.8925619125366211,
+      "rms": 0.14399644137720993,
+      "maxVoices": 16
+    },
+    {
+      "cue": "bow",
+      "peak": 0.8581670522689819,
+      "rms": 0.15527753709615869,
+      "maxVoices": 16
+    },
+    {
+      "cue": "magic",
+      "peak": 0.8577368259429932,
+      "rms": 0.1768719261189607,
+      "maxVoices": 16
+    },
+    {
+      "cue": "hit",
+      "peak": 0.701969563961029,
+      "rms": 0.10522638300666168,
+      "maxVoices": 16
+    },
+    {
+      "cue": "crit",
+      "peak": 0.8650506734848022,
+      "rms": 0.15547896646166157,
+      "maxVoices": 16
+    },
+    {
+      "cue": "shield",
+      "peak": 0.7094206809997559,
+      "rms": 0.13525315428357135,
+      "maxVoices": 16
+    },
+    {
+      "cue": "shieldBreak",
+      "peak": 0.8514028787612915,
+      "rms": 0.1551993862069096,
+      "maxVoices": 16
+    },
+    {
+      "cue": "hurt",
+      "peak": 0.70083087682724,
+      "rms": 0.10436140684440057,
+      "maxVoices": 16
+    },
+    {
+      "cue": "ko",
+      "peak": 0.7005065083503723,
+      "rms": 0.1977802654713618,
+      "maxVoices": 16
+    },
+    {
+      "cue": "barrage",
+      "peak": 0.8858891725540161,
+      "rms": 0.2288900151943882,
+      "maxVoices": 16
+    },
+    {
+      "cue": "bulwark",
+      "peak": 0.7095918655395508,
+      "rms": 0.30670161683066655,
+      "maxVoices": 16
+    },
+    {
+      "cue": "horn",
+      "peak": 0.7004799842834473,
+      "rms": 0.3533145426727835,
+      "maxVoices": 16
+    },
+    {
+      "cue": "surge",
+      "peak": 0.9152220487594604,
+      "rms": 0.2772719349044096,
+      "maxVoices": 16
+    },
+    {
+      "cue": "shadow",
+      "peak": 0.9062589406967163,
+      "rms": 0.18952307718097514,
+      "maxVoices": 16
+    },
+    {
+      "cue": "rampage",
+      "peak": 0.7227077484130859,
+      "rms": 0.30660374643559457,
+      "maxVoices": 16
+    },
+    {
+      "cue": "meteor",
+      "peak": 0.8788354396820068,
+      "rms": 0.30215794484595015,
+      "maxVoices": 16
+    },
+    {
+      "cue": "volley",
+      "peak": 0.9203364253044128,
+      "rms": 0.26327089131391374,
+      "maxVoices": 16
+    },
+    {
+      "cue": "coin",
+      "peak": 0.7078869938850403,
+      "rms": 0.13058294032794457,
+      "maxVoices": 16
+    },
+    {
+      "cue": "gift",
+      "peak": 0.806653618812561,
+      "rms": 0.23864292410212046,
+      "maxVoices": 16
+    },
+    {
+      "cue": "energy",
+      "peak": 0.7000647783279419,
+      "rms": 0.19249238201512997,
+      "maxVoices": 16
+    },
+    {
+      "cue": "level",
+      "peak": 0.7001377940177917,
+      "rms": 0.3507977471763312,
+      "maxVoices": 16
+    },
+    {
+      "cue": "flip",
+      "peak": 0.7005875706672668,
+      "rms": 0.2620786840795901,
+      "maxVoices": 16
+    },
+    {
+      "cue": "chestReady",
+      "peak": 0.704576849937439,
+      "rms": 0.18301123861647417,
+      "maxVoices": 16
+    },
+    {
+      "cue": "chest",
+      "peak": 0.7299821972846985,
+      "rms": 0.3240124387197833,
+      "maxVoices": 16
+    },
+    {
+      "cue": "countdown",
+      "peak": 0.701386570930481,
+      "rms": 0.07836683908536073,
+      "maxVoices": 16
+    },
+    {
+      "cue": "tension",
+      "peak": 0.7007066011428833,
+      "rms": 0.2720499027229413,
+      "maxVoices": 16
+    },
+    {
+      "cue": "miss",
+      "peak": 0.7018352746963501,
+      "rms": 0.1279017215585761,
+      "maxVoices": 16
+    },
+    {
+      "cue": "matchStart",
+      "peak": 0.7003688812255859,
+      "rms": 0.3458135869879273,
+      "maxVoices": 16
+    },
+    {
+      "cue": "victory",
+      "peak": 0.7007288932800293,
+      "rms": 0.409977556690302,
+      "maxVoices": 16
+    },
+    {
+      "cue": "defeat",
+      "peak": 0.7002764940261841,
+      "rms": 0.28889980394361653,
+      "maxVoices": 16
+    },
+    {
+      "cue": "parry",
+      "peak": 0.7047531604766846,
+      "rms": 0.12513118069140988,
+      "maxVoices": 16
+    }
+  ],
+  "environment": "Chromium OfflineAudioContext with the actual production mixer graph, not physical speakers"
+}
