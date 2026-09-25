@@ -1,0 +1,17 @@
+{
+  "verified_utc": "2026-09-25T15:28:56.426727+00:00",
+  "build": "112-audio-unlock-fix",
+  "html_sha256": "ad01a9aeee842484a330ed6a4eb613b28069ef8ef1b9a670faf09702b6a50985",
+  "html_bytes": 36290105,
+  "inline_scripts_parsed": 22,
+  "node_tests_passed": 44,
+  "python_web_tests_passed": 9,
+  "delayed_resume_regression_ms": 30,
+  "constructor_fallback_tested": true,
+  "playwright_suite_rerun_on_vm": false,
+  "playwright_limit": "Python Playwright/Chromium are not installed on this VM.",
+  "physical_android_audio_tested": false,
+  "backend_changed": false,
+  "balance_changed": false,
+  "save_schema_changed": false
+}

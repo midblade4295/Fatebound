@@ -79,21 +79,34 @@ function render(name,variant=0,sr=SR){
  out[0]=0;out[len-1]=0;return {samples:out,sampleRate:sr,duration:len/sr,peak:target};
 }
 function create(win){
- win=win||window;let ac=null,mixer=null,master=null,buses={},unlocked=false,resuming=null,muted=false,serial=0;
- const voices=new Set(),cache=new Map(),last=new Map(),stats={played:0,dropped:0,contexts:0,peakVoices:0,counts:{}};
+ win=win||window;let ac=null,mixer=null,master=null,buses={},unlocked=false,resuming=null,primed=false,muted=false,serial=0;
+ const voices=new Set(),cache=new Map(),last=new Map(),pending=[];
+ const stats={played:0,dropped:0,queued:0,flushed:0,contexts:0,peakVoices:0,lastError:'',counts:{}};
  let prefs={master:.7,combat:.8,ui:.6};
  try{muted=win.localStorage.getItem('ds-mute')==='1';const p=JSON.parse(win.localStorage.getItem('fatebound-audio-prefs')||'null');if(p)for(const k of Object.keys(prefs))if(Number.isFinite(p[k]))prefs[k]=clamp(p[k],0,1);}catch(_){}
- function stopAll(){for(const v of [...voices]){try{v.node.stop();}catch(_){}v.done();}}
+ function stopAll(clearPending=true){for(const v of [...voices]){try{v.node.stop();}catch(_){}v.done();}if(clearPending)pending.length=0;}
  function volumes(){if(!ac)return;const t=ac.currentTime;master.gain.setTargetAtTime(muted?0:prefs.master,t,.012);for(const k of ['combat','ui'])buses[k].gain.setTargetAtTime(prefs[k],t,.012);}
  function init(){if(ac)return ac;if(!unlocked)return null;try{
-  const C=win.AudioContext||win.webkitAudioContext;if(!C)return null;ac=new C({latencyHint:'interactive'});stats.contexts++;
+  const C=win.AudioContext||win.webkitAudioContext;if(!C){stats.lastError='Web Audio is unavailable in this browser';return null;}
+  try{ac=new C({latencyHint:'interactive'});}catch(_){ac=new C();}
+  stats.contexts++;
   mixer=ac.createDynamicsCompressor();mixer.threshold.value=-13;mixer.knee.value=10;mixer.ratio.value=7;mixer.attack.value=.003;mixer.release.value=.14;
-  const limiter=ac.createWaveShaper(),curve=new Float32Array(2049);for(let i=0;i<curve.length;i++){const x=i*2/(curve.length-1)-1;curve[i]=.7*Math.tanh(2.5*x)/Math.tanh(2.5);}limiter.curve=curve;limiter.oversample='2x';master=ac.createGain();mixer.connect(limiter);limiter.connect(master);master.connect(ac.destination);for(const k of ['combat','ui']){buses[k]=ac.createGain();buses[k].connect(mixer);}volumes();
- }catch(_){ac=null;}return ac;}
- function unlock(){unlocked=true;const a=init();if(a&&(a.state==='suspended'||a.state==='interrupted')&&!resuming&&!win.document.hidden){resuming=a.resume().catch(()=>{}).finally(()=>{resuming=null;});}return a;}
+  const limiter=ac.createWaveShaper(),curve=new Float32Array(2049);for(let i=0;i<curve.length;i++){const x=i*2/(curve.length-1)-1;curve[i]=.7*Math.tanh(2.5*x)/Math.tanh(2.5);}limiter.curve=curve;limiter.oversample='2x';master=ac.createGain();mixer.connect(limiter);limiter.connect(master);master.connect(ac.destination);for(const k of ['combat','ui']){buses[k]=ac.createGain();buses[k].connect(mixer);}volumes();stats.lastError='';
+ }catch(e){stats.lastError=String(e&&e.message||e||'Audio initialization failed');ac=null;}return ac;}
+ function prime(a){if(!a||primed)return;try{const b=a.createBuffer(1,1,a.sampleRate||SR),src=a.createBufferSource();src.buffer=b;src.connect(a.destination);src.start(0);src.onended=()=>{try{src.disconnect();}catch(_){}};primed=true;}catch(_){}}
+ function queue(name,opt){const now=win.performance.now(),key=opt.group||name;for(let i=pending.length-1;i>=0;i--)if(now-pending[i].at>1200||pending[i].key===key)pending.splice(i,1);if(pending.length>=8)pending.shift();pending.push({name,opt:{...opt},key,at:now});stats.queued++;}
+ function flushPending(){if(!ac||ac.state!=='running'||muted||win.document.hidden)return;const now=win.performance.now(),q=pending.splice(0);for(const item of q){if(now-item.at<=1200){stats.flushed++;play(item.name,{...item.opt,_fromQueue:true});}}}
+ function unlock(){unlocked=true;const a=init();if(!a||win.document.hidden)return Promise.resolve(false);prime(a);if(a.state==='running'){flushPending();return Promise.resolve(true);}if(resuming)return resuming;
+  try{resuming=Promise.resolve(a.resume()).then(()=>{const ok=a.state==='running';if(ok){stats.lastError='';flushPending();}else stats.lastError='Audio is still blocked by the browser';return ok;},e=>{stats.lastError=String(e&&e.message||e||'Audio resume was blocked');return false;}).finally(()=>{resuming=null;});}
+  catch(e){stats.lastError=String(e&&e.message||e||'Audio resume was blocked');resuming=Promise.resolve(false).finally(()=>{resuming=null;});}
+  return resuming;
+ }
  function play(name,opt={}){
-  if(!Object.hasOwn(duration,name)||muted||!unlocked||win.document.hidden||prefs.master<=0)return false;
-  const bus=opt.bus==='ui'||UI.has(name)?'ui':'combat';if(prefs[bus]<=0)return false;const a=init();if(!a||a.state!=='running')return false;
+  if(!Object.hasOwn(duration,name)||muted||win.document.hidden||prefs.master<=0)return false;
+  const bus=opt.bus==='ui'||UI.has(name)?'ui':'combat';if(prefs[bus]<=0)return false;
+  if(!unlocked){queue(name,opt);unlock();return true;}
+  const a=init();if(!a)return false;
+  if(a.state!=='running'){if(!opt._fromQueue)queue(name,opt);unlock();return !opt._fromQueue;}
   const now=win.performance.now(),gap=bus==='ui'?55:opt.ambient?160:35,key=opt.group||name;
   if(now-(last.get(key)||-1e6)<gap){stats.dropped++;return false;}
   if(voices.size>=16){if(opt.ambient){stats.dropped++;return false;}const v=[...voices].find(v=>v.ambient)||voices.values().next().value;try{v.node.stop();}catch(_){}v.done();}
@@ -104,14 +117,17 @@ function create(win){
   try{src.start(a.currentTime+clamp(Number(opt.delay)||0,0,.7));}catch(_){v.done();return false;}
   stats.played++;stats.counts[name]=(stats.counts[name]||0)+1;stats.peakVoices=Math.max(stats.peakVoices,voices.size);return true;
  }
- function setVolumes(values){for(const k of Object.keys(prefs))if(Number.isFinite(values[k]))prefs[k]=clamp(values[k],0,1);try{win.localStorage.setItem('fatebound-audio-prefs',JSON.stringify(prefs));}catch(_){}volumes();return {...prefs};}
+ function setVolumes(values){for(const k of Object.keys(prefs))if(Number.isFinite(values[k]))prefs[k]=clamp(values[k],0,1);try{win.localStorage.setItem('fatebound-audio-prefs',JSON.stringify(prefs));}catch(_){}volumes();if(!muted&&prefs.master>0)unlock();return {...prefs};}
  const weapon=(cls)=>cls==='axe'?'axe':cls==='magic'?'magic':cls==='bow'||cls==='crossbow'?'bow':'sword';
- const api={play,unlock,setVolumes,get volumes(){return {...prefs};},get muted(){return muted;},toggle(){muted=!muted;try{win.localStorage.setItem('ds-mute',muted?'1':'0');}catch(_){}if(muted)stopAll();volumes();return muted;},stopAll,
+ const api={play,unlock,setVolumes,get volumes(){return {...prefs};},get muted(){return muted;},toggle(){muted=!muted;try{win.localStorage.setItem('ds-mute',muted?'1':'0');}catch(_){}if(muted)stopAll();else unlock();volumes();return muted;},stopAll,
   strike(cls,critical=false,opt={}){return play(critical?'crit':weapon(cls),opt);},spell(k,opt={}){return play({barrage:'barrage',bulwark:'bulwark',hold:'bulwark',horn:'horn',surge:'surge'}[k]||'magic',opt);},ultimate(char,opt={}){return play(['bulwark','shadow','rampage','meteor','volley'][Number(char)]||'magic',opt);},
   outcome(result,cls,opt={}){const symbol=result.symbol||result.action;if(symbol==='S'||symbol==='C')return api.strike(cls,symbol==='C',opt);return play({H:'shield',G:'coin',E:'energy',F:'gift'}[symbol]||'miss',opt);},
-  get diagnostics(){return {...stats,counts:{...stats.counts},voices:voices.size,cached:cache.size,state:ac?.state||'locked',muted,prefs:{...prefs}};}};
+  get diagnostics(){return {...stats,counts:{...stats.counts},voices:voices.size,pending:pending.length,cached:cache.size,state:ac?.state||'locked',unlocked,muted,prefs:{...prefs}};}};
  for(const name of names)if(!Object.hasOwn(api,name))api[name]=(opt)=>play(name,typeof opt==='object'?opt:{});
  api.rally=api.horn;
+ const gesture=()=>{if(!muted)unlock();};
+ for(const type of ['pointerdown','touchstart','mousedown'])win.document.addEventListener(type,gesture,{capture:true,passive:true});
+ win.document.addEventListener('keydown',gesture,{capture:true,passive:true});
  win.document.addEventListener('visibilitychange',()=>{if(win.document.hidden){stopAll();if(ac?.state==='running')ac.suspend().catch(()=>{});}else if(unlocked&&!muted)unlock();});
  win.addEventListener('pagehide',stopAll);
  return api;

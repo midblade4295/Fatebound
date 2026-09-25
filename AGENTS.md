@@ -58,3 +58,6 @@ source/configuration, signed keys or account tokens. Do not modify Legionary or
 its port3000 service. No sudo bypasses or permission changes. HTML v110 is not
 Android versionCode110; verify consumed Play codes before a separately requested
 build, and never replace the upload key or publish without authorization.
+
+## v112 mobile audio unlock patch
+The v111 sound synthesis/content remains, but mobile unlock handling is corrected on branch chatgpt/v112-audio-unlock-fix. Preserve the bounded pending-cue queue, delayed AudioContext.resume handling, plain-constructor fallback, silent gesture prime, and Sound Studio status feedback. Do not revert to v111 audio startup logic, which can discard the first cue while Android Chrome is still resuming Web Audio. Balance110/backend/save schemas are unchanged.

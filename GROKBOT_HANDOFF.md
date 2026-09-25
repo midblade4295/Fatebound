@@ -65,3 +65,6 @@ The v111 HTML is live as of 2026-09-25 15:07 UTC, verified from code commit
 `f950a49606662733e7091663f4946b7615c8009f`. Read
 `multiplayer/ui-audio/live-deployment.json`. Arena balance110 and its process
 were unchanged; do not overwrite the deployed client with v110.
+
+## v112 mobile audio unlock patch
+The v111 sound synthesis/content remains, but mobile unlock handling is corrected on branch chatgpt/v112-audio-unlock-fix. Preserve the bounded pending-cue queue, delayed AudioContext.resume handling, plain-constructor fallback, silent gesture prime, and Sound Studio status feedback. Do not revert to v111 audio startup logic, which can discard the first cue while Android Chrome is still resuming Web Audio. Balance110/backend/save schemas are unchanged.
