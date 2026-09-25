@@ -29,3 +29,7 @@ The code uses guest-device identity; no claim of Google binding or cross-device
 recovery. Seeded policy simulations guide this tuning but do not establish human
 win rates or perfect balance. Device tests, real-player telemetry and production
 security/load work remain distinct follow-up verification.
+
+Live v110 deployment and six real-clock public TLS checks passed on 2026-09-25 UTC.
+See `multiplayer/docs/DEPLOYMENT_V110.md` and `multiplayer/audit/public-smoke.json`.
+Review PR #12 is stacked on v109 PR #11; main is unchanged.

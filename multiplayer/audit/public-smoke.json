@@ -1,0 +1,42 @@
+{
+  "base": "https://136-113-125-3.sslip.io/fatebound/arena",
+  "started_utc": "2026-09-25T06:14:12Z",
+  "checks": [
+    {
+      "check": "Public TLS health reports audited balance and unchanged queue rules",
+      "status": "PASS"
+    },
+    {
+      "check": "Two public clients wait the real deadline then share a 10-vs-10 room",
+      "status": "PASS",
+      "wait_seconds": 20.62,
+      "humans": 2,
+      "bots": 18
+    },
+    {
+      "check": "Actual rolls, spell, tower move and in-place disconnect/reconnect work",
+      "status": "PASS"
+    },
+    {
+      "check": "Real-clock battle completes with matching scores and eligible own-action rewards",
+      "status": "PASS",
+      "duration_seconds": 300.74,
+      "paid_rolls": [
+        98,
+        106
+      ]
+    },
+    {
+      "check": "Duplicate public claims do not grant twice or change the material choice",
+      "status": "PASS"
+    },
+    {
+      "check": "Both clients can enter a fresh second queue and cancel cleanly",
+      "status": "PASS"
+    }
+  ],
+  "physical_devices": false,
+  "clock_overrides": false,
+  "status": "PASS",
+  "finished_utc": "2026-09-25T06:19:34Z"
+}

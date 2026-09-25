@@ -28,3 +28,7 @@ claims are preserved. Online play remains equalized guest-device alpha.
 Android's existing workflow copies the root HTML into its generated asset.
 Do not edit that generated copy as a second game source, reuse consumed Play
 versionCodes or replace the upload key. No Legionary changes are included.
+
+Live v110 deployment and six real-clock public TLS checks passed on 2026-09-25 UTC.
+See `multiplayer/docs/DEPLOYMENT_V110.md` and `multiplayer/audit/public-smoke.json`.
+Review PR #12 is stacked on v109 PR #11; main is unchanged.

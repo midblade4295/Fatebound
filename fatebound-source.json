@@ -14,10 +14,13 @@
   "match_players_total": 20,
   "team_size": 10,
   "live_activation": "see multiplayer/docs/DEPLOYMENT_V110.md",
-  "status": "audited-release-candidate",
+  "status": "live-alpha-audited",
   "notes": "Audit based on deployed v109; no new save reset or Android build. Matchmaking remains 20 seconds / 20 total players. New rooms use balance 110; existing room balance is retained. Main remains separately managed.",
   "runtime_test_report": "multiplayer/docs/AUDIT_V110.md",
   "handoff": "GROKBOT_HANDOFF.md",
   "balance_version": 110,
-  "parent_commit": "8705e7e2e150dfbcebe94e81df51b71f7f14af6e"
+  "parent_commit": "8705e7e2e150dfbcebe94e81df51b71f7f14af6e",
+  "production_code_commit": "5ff199afc810d6c63d7f69cc012ec7a465a53ade",
+  "public_smoke_report": "multiplayer/audit/public-smoke.json",
+  "deployment_verified_utc": "2026-09-25T06:19:34Z"
 }

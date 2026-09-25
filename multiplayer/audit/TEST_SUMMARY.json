@@ -9,5 +9,8 @@
   "simulated_matches": 730,
   "physical_device_tests": false,
   "test_controls_in_production": false,
-  "browser_checks": 46
+  "browser_checks": 46,
+  "public_tls_checks": 6,
+  "public_test_real_clock": true,
+  "public_test_physical_devices": false
 }

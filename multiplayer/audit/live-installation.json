@@ -1,0 +1,23 @@
+{
+  "deployed_utc": "2026-09-25T06:13:52.902632+00:00",
+  "commit": "5ff199afc810d6c63d7f69cc012ec7a465a53ade",
+  "html_sha256": "1e4cbc3be1eb1570de9f1269e4c4497936e74b11fc0420e3823decaf42414daf",
+  "arena_health": {
+    "ok": true,
+    "game": "Fatebound",
+    "protocol": 1,
+    "balanceVersion": 110,
+    "queueMs": 20000,
+    "capacity": 20,
+    "rooms": 1,
+    "activeRooms": 0,
+    "queuedPlayers": 0
+  },
+  "backup": "/home/midblade4295/backups/fatebound-v110-20260925T061351Z",
+  "legacy_save_files_unchanged": true,
+  "legacy_save_count": 16,
+  "arena_accounts_preserved": true,
+  "arena_guilds_preserved": true,
+  "caddy_changed": false,
+  "legionary_changed": false
+}
