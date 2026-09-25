@@ -9,7 +9,7 @@
   "web_host_checks_passed": 11,
   "original_full_html_browser_checks": 23,
   "new_full_html_browser_checks": 15,
-  "browser_total": 38,
+  "browser_total": 51,
   "browser_uncaught_errors": 0,
   "browser_console_errors": 0,
   "physical_phone_tested": false,
@@ -21,5 +21,10 @@
     "multiplayer/src/ui-comfort.css": "05732f7d2005716ba19328b865de95d940e20e42a1652bfc0d290e4665945b2a"
   },
   "bandwidth_comparison": "bandwidth.json",
-  "live_test_not_yet_run": true
+  "live_test_not_yet_run": false,
+  "ui_audio_regression_checks": 13,
+  "public_tls_checks": 7,
+  "public_test_real_clock": true,
+  "public_test_physical_devices": false,
+  "public_test_finished_utc": "2026-09-25T20:37:35.753Z"
 }

@@ -1,0 +1,106 @@
+{
+  "source_sha256": "56ad2d138c503d6a9b20bece12276252dd95bcf15e129a7030316383aa159a7f",
+  "checks": [
+    {
+      "check": "Guild scroll, expedition button, chat input and draft remain stable across five live refreshes",
+      "status": "PASS",
+      "detail": {
+        "top": 430,
+        "height": 2715,
+        "sameInput": true,
+        "sameEntry": true,
+        "draft": "Unsent draft"
+      }
+    },
+    {
+      "check": "A guild message updates in place; typing and sending do not replace the page",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "First user gesture unlocks one AudioContext; the actual sword cue plays",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Mute and separate volume preferences work and survive a document reload",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Seventy overlapping requests stay within 16 voices and all nodes clean up",
+      "status": "PASS",
+      "detail": {
+        "played": 78,
+        "dropped": 0,
+        "queued": 0,
+        "flushed": 0,
+        "contexts": 1,
+        "peakVoices": 16,
+        "lastError": "",
+        "counts": {
+          "menuOpen": 3,
+          "confirm": 1,
+          "tap": 2,
+          "sword": 1,
+          "menuClose": 1,
+          "barrage": 70
+        },
+        "voices": 0,
+        "pending": 0,
+        "cached": 8,
+        "state": "running",
+        "unlocked": true,
+        "muted": false,
+        "prefs": {
+          "master": 0.7,
+          "combat": 0.8,
+          "ui": 0.6
+        }
+      }
+    },
+    {
+      "check": "Leaving the page stops active sources; there is no delayed sound backlog",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Roll-chest inbox and collection stay available beyond the old notification timeout",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Chests survive menu/reload, grant the original 400 gold and 2 shards once, and reject repeat clicks",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Loot drops can be dismissed and reopened; Hold preserves the original end-of-match bonus",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Battle tools, notifications, spells, ROLL, footer and field do not overlap at six sizes",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Battle menu opens the audio mixer and Chests remains reachable without enabling Home navigation",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Unclaimed roll chest survives battle result/Claim and stays accessible on Home",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "A second solo battle starts after new dialogs, sounds and saved reward activity",
+      "status": "PASS",
+      "detail": ""
+    }
+  ],
+  "errors": [],
+  "console_errors": [],
+  "physical_phone_tested": false
+}

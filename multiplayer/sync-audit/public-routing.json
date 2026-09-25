@@ -1,0 +1,11 @@
+{
+  "verified_utc": "2026-09-25T20:33:46.881794+00:00",
+  "status_only_checks": {
+    "/fatebound/saves/": 404,
+    "/fatebound/server/fatebound_host.py": 404,
+    "/fatebound/fatebound-host.log": 404,
+    "/": 200
+  },
+  "legionary_service": "active",
+  "caddy_service": "active"
+}

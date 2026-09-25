@@ -57,3 +57,52 @@ Deploy the exact client **and** `arena-server.js`, **`arena-wire.js`** and **`ht
 Use a separate worktree from the stated parent; do not replace live source with old `main`. Check active rooms and queued users before a brief arena restart, back up the owned service code and arena data, and preserve current player records. Apply the server first, then atomically replace the HTML. A missing/older peer falls back to full snapshots. Verify public compression headers, health, conditional HTML revalidation, two-client matchmaking and reward flow before describing the rollout as verified.
 
 Keep save key `fatebound-save`, solo compatibility106, gameplay protocol1, store schema1, balance110, the 20-second/20-total-player rule, 10-vs-10 teams, previous Guild/modal/chest fixes and v112 sound behavior. No reset or change to Legionary, Caddy routing, signing keys, Android versionCode, main, or Google Play publication is part of this task. An Android bundle embedding older HTML still needs a matching rebuild; updating the website cannot replace an installed local asset.
+
+
+## Verified live rollout and public traffic — 2026-09-25 UTC
+
+The paired HTML, arena server with both companion modules, and Python web host
+were installed at 20:32:00Z from code commit
+`3e07029d8890e0072266c6370665fd341b8eb7a1` after checking zero active rooms and
+queued players. All 21 legacy save-file hashes and the preexisting arena accounts
+and guilds matched across the installation. No save migration, balance, Caddy,
+Legionary, signing, main merge or Google Play change was made.
+
+The exact public HTML matched the canonical source plus the existing 193-byte
+save-client injection. Its body used gzip and measured 26,594,958 bytes; an
+unchanged conditional reload returned HTTP304 with zero body. This first-load
+cost is separate from small battle updates. Internal files still return404 and
+the existing Legionary root still returns200.
+
+Seven real-clock public HTTPS checks passed, finishing 20:37:35Z. Two explicitly
+labelled programmatic guests waited 20.081 seconds, entered the same 10-vs-10
+room with 18 bots, rolled, cast a spell and moved towers. Heartbeat loss caused
+same-slot substitution, then reconnect restored the participant. Both clients
+observed actual knockouts; one confirmed a positive-HP respawn before the match
+ended. The other did not respawn before completion; no clock or HP was forced.
+The match finished after 300.241 seconds with both clients agreeing on crowns
+23–28. Their own paid-roll counts were86 and76. Repeated claims returned the same
+receipt/material choice, and both clients joined/cancelled a fresh second queue.
+
+The instrumented public requests downloaded 548,763 encoded response-body bytes
+across BOTH clients (about0.55MB total, or0.27MB average each): 936Brotli responses,
+1gzip backward-compatibility sample and72 small uncompressed responses. The
+snapshot stream contained2 full states and930 deltas. Counts include the tested
+queue/actions/claims, but exclude request/TLS headers, initial game download,
+cloud saves and the separate initial health/session calls. This is not phone
+carrier metering or a multi-region load test.
+
+An additional13-check full-HTML Guild/chest/audio/layout suite passed on the same
+source hash, including six viewport sizes. Total full-HTML browser checks are now
+51 (23original,15new synchronization,13UI/audio); all had zero uncaught game or
+console errors. This extra suite ran locally after initial deployment; it did
+not modify production. The VM independently ran56 Node and11 Python tests and
+checked23 inline scripts,7 mirrors and103 unchanged large artwork blocks.
+
+See `multiplayer/sync-audit/public-smoke.json`, `live-deployment.json`,
+`public-routing.json`, `vm-validation.json`, and `ui-audio-regressions.json`.
+Chromium tests emulate touch; live requests were programmatic guests running on
+the VM through public TLS, not two physical phones. The current development
+branch is `chatgpt/v113-sync-dice-compression`, review PR #15 stacked on #14.
+The installed Android app must be rebuilt with v113 HTML to receive its UI fixes;
+updating the website/API does not replace an already bundled older asset.

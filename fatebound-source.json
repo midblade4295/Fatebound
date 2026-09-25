@@ -13,8 +13,8 @@
   "queue_ms": 20000,
   "match_players_total": 20,
   "team_size": 10,
-  "live_activation": "see multiplayer/sync-audit/live-deployment.json after installation",
-  "status": "tested-staging",
+  "live_activation": "deployed and public TLS verified; physical-phone verification remains separate",
+  "status": "live-alpha-v113-verified",
   "notes": "Server-authoritative life state, matching-dice feedback, stable HUD writers, optional transport2 deltas and Brotli/gzip; gameplay balance110 and audio112 preserved.",
   "runtime_test_report": "multiplayer/docs/SYNC_NETWORK_V113.md",
   "handoff": "GROKBOT_HANDOFF.md",
@@ -22,8 +22,9 @@
   "parent_commit": "b322d3b9bb30719a2b7de1e058773ce0473f8bb5",
   "source_branch": "chatgpt/v113-sync-dice-compression",
   "base_commit": "b322d3b9bb30719a2b7de1e058773ce0473f8bb5",
-  "production_code_commit": null,
-  "deployment_verified_utc": null,
-  "deployment_report": null,
-  "arena_transport": 2
+  "production_code_commit": "3e07029d8890e0072266c6370665fd341b8eb7a1",
+  "deployment_verified_utc": "2026-09-25T20:37:35.753Z",
+  "deployment_report": "multiplayer/sync-audit/live-deployment.json",
+  "arena_transport": 2,
+  "public_test_report": "multiplayer/sync-audit/public-smoke.json"
 }

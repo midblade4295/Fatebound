@@ -14,7 +14,10 @@ Preserve authoritative HP/respawn, monotonic snapshots, roll-index receipt check
 single-owner HUD labels, all-three-dice winning feedback, bounded wire histories,
 Brotli/gzip negotiation and full-snapshot fallback. Never deploy harness controls.
 No save reset, Legionary/Caddy route, main merge, Android or signing changes.
-Deployment evidence will be recorded separately after live verification.
+Live rollout and seven real-clock public TLS checks are verified. Read
+`multiplayer/sync-audit/live-deployment.json` and `public-smoke.json`.
+51 browser,56 Node and11 Python checks passed; physical phones are not claimed.
+The code commit is `3e07029d8890e0072266c6370665fd341b8eb7a1`; review PR #15.
 
 ---
 ## Earlier instructions retained as historical context

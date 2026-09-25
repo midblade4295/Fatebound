@@ -1,0 +1,98 @@
+{
+  "status": "PASS",
+  "started_utc": "2026-09-25T20:32:14.706Z",
+  "finished_utc": "2026-09-25T20:37:35.753Z",
+  "checks": [
+    {
+      "check": "Public endpoint advertises transport2, 20-second search, 20 slots and unchanged balance110",
+      "status": "PASS",
+      "details": {
+        "ok": true,
+        "game": "Fatebound",
+        "protocol": 1,
+        "transportVersion": 2,
+        "apiBuild": 113,
+        "balanceVersion": 110,
+        "queueMs": 20000,
+        "capacity": 20,
+        "rooms": 3,
+        "activeRooms": 0,
+        "queuedPlayers": 0
+      }
+    },
+    {
+      "check": "Both clients entered the same correctly filled 10-versus-10 battle",
+      "status": "PASS",
+      "details": {
+        "observedSearchMs": 20081,
+        "humans": 2,
+        "bots": 18
+      }
+    },
+    {
+      "check": "Live rolls, movement, spells and compressed backward-compatible snapshots worked",
+      "status": "PASS",
+      "details": {
+        "moved": true,
+        "spell": true,
+        "legacySample": {
+          "encoding": "gzip",
+          "compressedBytes": 4703,
+          "decodedBytes": 41332,
+          "containsAllHeroes": true
+        }
+      }
+    },
+    {
+      "check": "Heartbeat loss substituted a labelled bot, then restored the same slot",
+      "status": "PASS",
+      "details": {
+        "disconnected": true,
+        "reconnected": true
+      }
+    },
+    {
+      "check": "Real-clock battle completed with synchronized scores and no forced dice/HP changes",
+      "status": "PASS",
+      "details": {
+        "durationMs": 300241,
+        "score": [
+          23,
+          28
+        ],
+        "paidRolls": [
+          86,
+          76
+        ],
+        "knockoutObserved": [
+          true,
+          true
+        ],
+        "confirmedRespawnObserved": [
+          false,
+          true
+        ]
+      }
+    },
+    {
+      "check": "Repeat reward claims remain exact-once with immutable shard choice",
+      "status": "PASS"
+    },
+    {
+      "check": "Both clients joined a fresh second queue and cancelled cleanly",
+      "status": "PASS"
+    }
+  ],
+  "network": {
+    "requests": 1009,
+    "encodedBytes": 548763,
+    "decodedBytes": 1458193,
+    "br": 936,
+    "gzip": 1,
+    "identity": 72,
+    "full": 2,
+    "delta": 930
+  },
+  "physical_devices": false,
+  "source": "Two programmatic guest clients from the VM through its public TLS endpoint. Counts exclude request/TLS headers and initial game download; no test-control endpoints used."
+}
