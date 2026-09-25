@@ -1,0 +1,60 @@
+/* Shared modal contract: game roots below dialogs; level-up/QTE above their parent dialogs. */
+.overlay.adventure-managed-modal:not(#setup):not(#end){position:fixed!important;inset:0!important;z-index:420!important;margin:0!important;padding:max(12px,env(safe-area-inset-top)) 12px max(12px,env(safe-area-inset-bottom))!important;isolation:isolate}
+.overlay.adventure-managed-modal[hidden]{display:none!important;pointer-events:none!important}
+.overlay.adventure-managed-modal:not(#passUI)>.panel{max-height:calc(100dvh - 30px)!important;overflow-y:auto;overscroll-behavior:contain}
+#qte.adventure-managed-modal{z-index:550!important;padding:0!important}
+#training.adventure-managed-modal{z-index:600!important}
+#bossUI .panel.boss{width:min(100%,500px);padding:18px}
+#bossUI .btns{position:sticky;bottom:-1px;background:#0b1821;padding:10px 0 4px;z-index:2}
+#scoreHelp .go{position:sticky;bottom:0}
+#levelUp{z-index:10000!important}
+.adventure-modal{z-index:500!important;position:fixed!important;inset:0!important;padding:12px!important;background:#020911d9!important;isolation:isolate}
+.adventure-modal[hidden]{display:none!important}
+.adventure-panel{display:flex;flex-direction:column;width:min(100%,560px);height:auto;max-height:calc(100dvh - 24px);min-height:0;overflow:hidden;border:2px solid #d3b06b;border-radius:22px;background:linear-gradient(140deg,#21343f,#08141f 65%);color:#edf3ef;box-shadow:0 15px 60px #0009}
+.adventure-panel>header{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:17px 18px;border-bottom:1px solid #d8bc6955;flex:none}
+.adventure-panel h2{font:500 clamp(22px,6vw,30px) Georgia,serif;color:#f9d993;line-height:1.15;margin:0}
+.adventure-panel h3{font-size:16px;margin:16px 0 8px;color:#f2d591}
+.adventure-scroll{padding:16px 18px;overflow-y:auto;min-height:0;overscroll-behavior:contain;touch-action:pan-y;-webkit-overflow-scrolling:touch}
+.adventure-panel p{font-size:12px;line-height:1.6;margin:8px 0 14px;color:#c3d2dc}
+.adventure-panel button,.adventure-entry{font:800 12px Nunito,system-ui;min-height:44px;padding:10px 12px;border:1px solid #6c8b91;border-radius:11px;background:linear-gradient(#233e4d,#102532);color:#f6e5b2;cursor:pointer;touch-action:manipulation}
+.adventure-panel button:disabled{opacity:.45;cursor:default}
+.adventure-panel button.primary{border-color:#f2d48b;background:linear-gradient(#ffe4a0,#d3a039);color:#312311}
+.adventure-panel>footer{flex:none;display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:12px 15px max(12px,env(safe-area-inset-bottom));border-top:1px solid #d8bc6955;background:#07151e}
+.adventure-panel>footer:empty{display:none}
+.spell-choices{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.spell-choices button{min-height:96px;text-align:left;display:grid;align-content:start;gap:6px}
+.spell-choices button small{font-size:10px;color:#c3d2dc;line-height:1.5}
+.spell-choices button[aria-pressed=true]{border:2px solid #80e1d1;box-shadow:inset 0 0 18px #41cbbb28}
+.adventure-panel details{padding:12px 0;border-top:1px solid #62798655}
+.adventure-panel summary{font-size:13px;color:#f3d48e;cursor:pointer;min-height:28px}
+.adventure-panel label{display:grid;gap:7px;font-size:12px;margin:10px 0}
+.adventure-panel select,.adventure-panel input{width:100%;min-height:44px;background:#0c1e2a;border:1px solid #668792;color:white;border-radius:9px;padding:10px;font:inherit}
+.adventure-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.adventure-metrics span{font-size:10px;padding:12px 7px;background:#0a1c27;border-radius:10px;text-align:center}.adventure-metrics b{font-size:19px;display:block;color:#8ce5d6}
+.arena-score{font-size:30px!important;color:#e9d18d!important;text-align:center}
+.adventure-roster,.expedition-stages{display:grid;gap:9px}.expedition-stages section{padding:12px;background:#102630;border:1px solid #496877;border-radius:12px;display:grid;gap:7px}.expedition-stages progress{width:100%;height:8px;accent-color:#8fe0cb}
+#queueTime{text-align:center;font-size:64px;color:#a2f5e8;margin:12px}#queueCount{text-align:center;font-size:20px}
+#queueError,#resultError,#guildMessage{color:#ffd698;font-weight:800}
+#setup .home-play #adventurePrepareButton{width:100%;min-height:32px;background:#14333d;border:1px solid #93cabd;color:#98eee0;border-radius:10px;font:900 11px Nunito,system-ui;margin:0 0 7px;padding:7px;cursor:pointer}
+body.adventure-combat #clashSpellWrap,body.adventure-combat #clashSpellCoach{display:none!important}
+#arenaExtras{grid-column:1/-1;grid-row:auto;display:grid;gap:3px;min-width:0}
+#arenaExtras[hidden]{display:none!important}
+#arenaSpells{display:grid;grid-template-columns:1fr 1fr;gap:7px;min-width:0}
+#arenaSpells button{display:grid;gap:1px;align-items:center;justify-items:center;min-height:44px;border:1px solid #dac180;border-radius:10px;padding:5px;background:#13313f;color:#ffe2a6;font:900 11px Nunito,system-ui;touch-action:manipulation;cursor:pointer}
+#arenaSpells button:disabled{opacity:.46}#arenaSpells small{font-size:9px;color:#98ddd4}
+#arenaConnection,#arenaObjective{text-align:center;font:800 10px/1.4 Nunito,system-ui;color:#ffdb80}#arenaConnection:empty,#arenaObjective:empty{display:none}
+body.adventure-combat.ui-battle-v2 .rollbar{grid-template-areas:"track track track" "heat ult ult" "mult roll rally" "extra extra extra"!important}
+body.adventure-combat #arenaExtras{grid-area:extra}
+body.adventure-combat #battleFooterV2{grid-template-columns:72px minmax(0,1fr) 54px!important;min-height:40px!important;padding-block:4px!important}
+body.arena-live #foeFocusPips,body.arena-live #guildMomentumV2{display:none!important}
+#avatarBtn[data-mastery="1"]{outline:2px solid #73b6cc}#avatarBtn[data-mastery="2"]{outline:2px solid #b190e0}#avatarBtn[data-mastery="3"]{outline:3px solid #ecc370}#avatarBtn[data-mastery="4"]{outline:3px double #f9efb7}
+#adventureSoloSummary{padding:13px;background:#102430;border-radius:12px;margin:10px 0;font-size:12px;line-height:1.5}#adventureSoloSummary h3{color:#ebcd86;margin-bottom:8px}
+@media(max-height:650px){.adventure-panel>header{padding:10px 13px}.adventure-scroll{padding:11px 13px}.adventure-panel>footer{padding:8px;gap:6px}.adventure-panel h2{font-size:22px}.spell-choices button{min-height:85px}body.adventure-combat #tacticalV2{display:none!important}}
+@media(prefers-reduced-motion:reduce){.adventure-modal *{scroll-behavior:auto}}
+
+#masteryBadge{position:absolute;top:8px;left:8px;z-index:3;padding:6px 10px;border:1px solid #d7bc77;border-radius:14px;background:#091824dd;color:#f7d899;font:900 10px Nunito,system-ui;pointer-events:none}#masteryBadge[hidden]{display:none!important}
+#arenaDefense{text-align:center;font:900 10px/1.4 Nunito,system-ui;color:#add7ff}#arenaDefense:empty{display:none}
+/* Feedback must sit above modal content without intercepting its controls. */
+.toast{z-index:900!important;pointer-events:none!important}
+
+body.training-running #battleCoach{z-index:650!important}body.training-running #coachSpot{z-index:640!important;pointer-events:none!important}

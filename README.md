@@ -1,34 +1,29 @@
-# Fatebound
+# Fatebound v109 — Adventure / matchmaking preview
 
-Fatebound arena game plus an Android app bundle for Google Play.
+This feature branch continues the exact approved v108 main. It contains the complete game, raid/modal fixes, two-spell loadouts, pinned goals, cosmetic mastery, supply objective, detailed results, offline daily challenges/practice, and a separate authoritative 20-player arena with asynchronous guild expeditions.
 
-## Current source of truth: v108
+**Live activation is pending.** The authorized host's Remote Desktop Commander connection was offline. No SSH deployment, public matchmaking activation, Play publication, or Legionary change was performed. `main` remains the approved v108 baseline until the preview is reviewed and deployed.
 
-Use **`main` → `fatebound.html`**. This is the exact user-approved `fatebound-v108-season-pass-fix.html`, promoted after the input/menu freeze fixes and Season Pass update.
+- Start with `multiplayer/docs/FEATURES.md` for the exact implemented scope and limitations.
+- Read `multiplayer/docs/TEST_REPORT.md` for actual tests and environments.
+- Use `multiplayer/docs/DEPLOYMENT.md` for the isolated loopback-8081 service and Caddy route.
+- `fatebound.html` is the full game, not a stripped test page; verify `fatebound-source.sha256`.
+- `multiplayer/src` mirrors the named embedded engine/client/CSS; use `multiplayer/tools/sync-inline.py --root .` to check consistency. Do not rebuild from an old v108 transport payload to make future changes.
 
-- HTML build: `108-season-pass-modal-copy-fix`
-- Size: `36,175,422` bytes (full embedded-assets source)
-- SHA-256: `91f84e86994701bcdaef6591c0b99ce43b92d99a73be1b283b03ada9068c04d8`
-- Play Store name: **Fatebound**
-- Android package: `com.fatebound.game`
-- Save key: `fatebound-save`; battle-session compatibility: `106`
+## Matchmaking contract
 
-Read [GROKBOT_HANDOFF.md](GROKBOT_HANDOFF.md) and [AGENTS.md](AGENTS.md) before editing. Older branches, previous HTML attachments and the original restore checksum are not the current game. Start new work from freshly fetched `origin/main`; never replace this with a stripped debug file.
+A lobby waits the full **20 seconds** from its first arrival, including when full. It creates **20 total combatants: 10 vs 10**. Empty slots become explicitly labelled bots only at the deadline. A 21st human goes to another lobby. A disconnected human keeps the same slot with a labelled bot substitute and can reconnect. Cancellation is allowed in the queue, not in the live match.
 
-Verify the checked-out source with:
+Online uses equalized level-10 common-power combat and persistent anonymous guest identity. It is not yet Google-account binding, cross-device account recovery, ranked MMR or party matchmaking. Solo progression and existing saves remain intact. No new save reset is introduced.
 
-```bash
+## Reproduce the checks
+
+```sh
+node --test multiplayer/tests/server.test.js
+python3 multiplayer/tools/sync-inline.py --root .
 sha256sum -c fatebound-source.sha256
 ```
 
-See [fatebound-source.json](fatebound-source.json), the [v108 runtime test report](docs/fatebound-v108-season-pass-test-report.md), and the [import verification](docs/v108-import-verification.json). The runtime report records prior Chromium/mobile-touch tests and their limitations. The promotion verifies exact bytes and parses the 18 inline scripts; it does not claim a new physical-phone test.
+The optional browser regression fixture needs Python Playwright, requests and Chromium at `/usr/bin/chromium`. Run `multiplayer/tests/harness-server.js` only on a development machine, then `python3 multiplayer/tests/browser_tests.py`. Ports 8851/8852 are **local test fixtures**, including clock/resource controls; they are not production endpoints. The production unit runs `arena-server.js` on loopback 8081 only. See the test report for simulated save/network/time conditions.
 
-## Android builds
-
-`.github/workflows/build-aab.yml` copies `fatebound.html` to `android/app/src/main/assets/index.html`, then builds the Android bundle. Edit the root source, not the generated asset.
-
-HTML v108 and Android versionCode are separate. This source promotion does not change packaging or publish a Play release. Before the next release, check Play Console for the highest consumed versionCode and choose a larger one, updating the Android/version metadata together. A vc17 build already exists on an older-source branch; do not go back to that HTML to build a new release.
-
-Use Actions → **Build Play Store AAB** for a requested build and the **fatebound-play-aab** artifact for its output. Keep the existing upload key; do not create a replacement key.
-
-`SOURCE-RESTORE.md` is retained as historical provenance, not a current restore procedure.
+HTML v109 is not Android versionCode 109. Keep the existing upload key and check consumed Play codes before any requested release. Do not alter Legionary, its service, or port 3000.

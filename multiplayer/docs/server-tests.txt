@@ -1,0 +1,106 @@
+TAP version 13
+# Subtest: full 20-second wait: zero rooms/bots before deadline, exactly 20 at deadline
+ok 1 - full 20-second wait: zero rooms/bots before deadline, exactly 20 at deadline
+  ---
+  duration_ms: 6.113822
+  type: 'test'
+  ...
+# Subtest: 20 real players still wait for deadline; no bots; 21st gets a different lobby
+ok 2 - 20 real players still wait for deadline; no bots; 21st gets a different lobby
+  ---
+  duration_ms: 7.95203
+  type: 'test'
+  ...
+# Subtest: repeated queue joins cannot create extra seats, cancel removes only that participant
+ok 3 - repeated queue joins cannot create extra seats, cancel removes only that participant
+  ---
+  duration_ms: 1.346132
+  type: 'test'
+  ...
+# Subtest: abandoned queue entries expire and empty lobbies create no phantom matches
+ok 4 - abandoned queue entries expire and empty lobbies create no phantom matches
+  ---
+  duration_ms: 0.922824
+  type: 'test'
+  ...
+# Subtest: two clients receive the same room, same damage and same crown score
+ok 5 - two clients receive the same room, same damage and same crown score
+  ---
+  duration_ms: 3.369295
+  type: 'test'
+  ...
+# Subtest: action retries are idempotent; unauthorized multipliers and rapid rolls rejected
+ok 6 - action retries are idempotent; unauthorized multipliers and rapid rolls rejected
+  ---
+  duration_ms: 2.746932
+  type: 'test'
+  ...
+# Subtest: two equipped spells share charges; absent spell and duplicate loadouts rejected
+ok 7 - two equipped spells share charges; absent spell and duplicate loadouts rejected
+  ---
+  duration_ms: 0.816563
+  type: 'test'
+  ...
+# Subtest: disconnect substitutes in-place; reconnect restores the same slot; autopilot not eligible
+ok 8 - disconnect substitutes in-place; reconnect restores the same slot; autopilot not eligible
+  ---
+  duration_ms: 4.122763
+  type: 'test'
+  ...
+# Subtest: supply objective is warned, resolved once, bounded to one resource bonus
+ok 9 - supply objective is warned, resolved once, bounded to one resource bonus
+  ---
+  duration_ms: 76.5167
+  type: 'test'
+  ...
+# Subtest: five-minute completion, rewards exactly once, new match allowed after claim
+ok 10 - five-minute completion, rewards exactly once, new match allowed after claim
+  ---
+  duration_ms: 399.205038
+  type: 'test'
+  ...
+# Subtest: guild membership, validated contributions, milestone claims cannot be repeated or farmed by rejoining
+ok 11 - guild membership, validated contributions, milestone claims cannot be repeated or farmed by rejoining
+  ---
+  duration_ms: 1.478567
+  type: 'test'
+  ...
+# Subtest: durable sessions, match snapshot and exact-once receipts survive server reconstruction
+ok 12 - durable sessions, match snapshot and exact-once receipts survive server reconstruction
+  ---
+  duration_ms: 2.996733
+  type: 'test'
+  ...
+# Subtest: HTTP endpoint, bearer authorization, CORS rejection and invalid inputs
+ok 13 - HTTP endpoint, bearer authorization, CORS rejection and invalid inputs
+  ---
+  duration_ms: 65.520186
+  type: 'test'
+  ...
+# Subtest: claimed matches never reclaim membership after a server restart; shard choice is immutable
+ok 14 - claimed matches never reclaim membership after a server restart; shard choice is immutable
+  ---
+  duration_ms: 1.367859
+  type: 'test'
+  ...
+# Subtest: full game engine rejects invalid targets, overspending and counterfeit results
+ok 15 - full game engine rejects invalid targets, overspending and counterfeit results
+  ---
+  duration_ms: 0.995916
+  type: 'test'
+  ...
+# Subtest: prototype property names cannot be claimed or used as spell identifiers
+ok 16 - prototype property names cannot be claimed or used as spell identifiers
+  ---
+  duration_ms: 0.5533
+  type: 'test'
+  ...
+1..16
+# tests 16
+# suites 0
+# pass 16
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 702.633515

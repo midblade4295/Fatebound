@@ -1,0 +1,13 @@
+{
+  "large_base64_payloads": 103,
+  "payloads_unchanged": true,
+  "script_blocks_parsed": 20,
+  "sha256": "49178287e6e7d05d317b6f497807cee6193f1867a090e187b99d710e8622c6db",
+  "bytes": 36236165,
+  "save_key": "fatebound-save",
+  "battle_session_compatibility": 106,
+  "new_save_reset": false,
+  "server_tests_passed": 16,
+  "browser_checks_passed": 23,
+  "live_deployed": false
+}

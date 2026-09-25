@@ -1,0 +1,27 @@
+[Unit]
+Description=Fatebound 20-player arena (separate from Legionary)
+After=network.target
+
+[Service]
+Type=simple
+DynamicUser=yes
+WorkingDirectory=/srv/fatebound-arena
+ExecStart=/usr/bin/node /srv/fatebound-arena/arena-server.js
+Environment=HOST=127.0.0.1
+Environment=PORT=8081
+Environment=DATA_FILE=/var/lib/fatebound-arena/arena.json
+EnvironmentFile=-/etc/fatebound-arena.env
+StateDirectory=fatebound-arena
+StateDirectoryMode=0700
+UMask=0077
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=10
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

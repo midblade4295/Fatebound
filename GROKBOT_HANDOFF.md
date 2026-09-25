@@ -1,48 +1,25 @@
-# Grokbot handoff — Fatebound v108 is the current baseline
+# Grokbot handoff — v109 Adventure / matchmaking preview
 
-Kevin explicitly requested that the approved `fatebound-v108-season-pass-fix.html` replace the older GitHub game as the most up-to-date version. After this promotion reaches `main`, use **`midblade4295/Fatebound`, branch `main`, file `fatebound.html`** as the source of truth.
+## Current status
 
-## Exact approved source
+Kevin requested the complete gameplay package plus real 20-player matchmaking after a full 20-second search, and the raid/modal audit. The code and isolated server are in **`chatgpt/v109-adventure-matchmaking`**. It is based on the exact approved v108 main (`a0f5eb059f4ca4b2c3bede2880783c64cbaad230`). **It is not live and has not replaced main.** The Remote Desktop Commander connection to the existing host was offline, so no SSH deployment was performed.
 
-- HTML build: `108-season-pass-modal-copy-fix`
-- Bytes: `36175422`
-- SHA-256: `91f84e86994701bcdaef6591c0b99ce43b92d99a73be1b283b03ada9068c04d8`
-- Git blob SHA-1: `50f2d0a8bfb7fda523409aa224ff2351386609ad`
-- Save key: `fatebound-save`
-- Battle-session compatibility: `106` (intentionally not bumped by v108).
-- Machine-readable reference: `fatebound-source.json`; checksum file: `fatebound-source.sha256`.
+Use `fatebound-source.json` and `sha256sum -c fatebound-source.sha256` to verify this preview. Do not use a different old branch's HTML merely because its Android versionCode is higher. Preserve all player and Season Pass progress; no new save reset is part of this update.
 
-This is the full approximately 36 MB game with its embedded artwork, not a stripped test page. The imported `fatebound.html` must be byte-for-byte identical to the approved artifact. The earlier restore checksum beginning `2383c600`, old vc13/vc14 game source, touch-fix/vc17 branch source, and v94–v107 HTML copies are historical, not alternative current baselines. A newer Android versionCode on an old branch does not make its HTML newer than v108.
+## Implemented here
 
-## Start work safely
+Two equipped spell buttons with a shared pool; cosmetic hero mastery; pinned weapon goal; choice of existing shard rewards; one announced supply objective; contribution-based results/advice; last-tower practice; equalized rotating offline challenges; and real invite-code guild expeditions driven asynchronously by verified match contributions. The expedition's Citadel is a shared progress objective, not a newly modeled raid arena. The old solo guild roster is explicitly labelled simulated.
 
-```bash
-git fetch origin
-# Inspect the working tree first. Preserve uncommitted work; do not discard it.
-git status --short
-# With a clean tree, start a new, task-specific branch directly from current main:
-git switch -c grok/<task-name> origin/main
-sha256sum -c fatebound-source.sha256
-wc -c fatebound.html
-git log -1 --format='%H %s' -- fatebound.html
-```
+The separate Node server owns actions, dice, damage, timers, Focus, bots, results and receipts. It waits the full 20 seconds from first join (even if full), then starts 20 total combatants, 10 per side, with labelled bots in the remaining slots. Cancellation, in-place disconnect substitution/reconnect, action deduplication, persistent identities/results, reward caps, immutable material choice and a lost-claim recovery journal are implemented. Online is equalized level-10 common-power guest-device alpha, not Google-account/ranked/party play. Existing offline progression remains intact.
 
-At this handoff the checksum must equal the v108 hash above. For later authorized work, compare the latest manifest and commit history before editing; never overwrite a newer main with this historical import. Do not continue an old feature branch without reconciling it with main. Do not force-push, hard-reset the user's work, blindly merge old whole-file replacements, or rerun historical restore/apply workflows. Use focused commits and report your branch, commit, source build and checksum. Do not edit the same branch concurrently with ChatGPT.
+## Before live activation
 
-## Preserve these fixes and mechanics
+Reconnect the authorized existing host. Inspect its current configuration; the prior Fatebound checkout was `/home/midblade4295/Fatebound`, with a save/web service on 127.0.0.1:8080. Follow `multiplayer/docs/DEPLOYMENT.md` to install **only** the separate 8081 arena service and the `/fatebound/arena/*` route, after backups and configuration validation. Do not touch Legionary's files/service/port3000 or signing keys. The provided Caddy file is only a fragment.
 
-Keep the v107 idempotent DOM-observer fix: moving the gift notification only when its position actually changes prevents the recursive callback/input freeze. Keep the hidden-Home layout fix so only the active menu occupies space, restored battle startup functions, usable ROLL/gift hit areas and unclipped Spell/Map controls.
+Verify the private and public health endpoints. Test two separate physical clients through queue/bot-fill/roll/spell/map/disconnect/reconnect/result/claim/second battle before calling multiplayer activated. No production load/security audit, Google binding or account recovery is claimed. Do not deploy `multiplayer/tests/harness-server.js`; it contains test-only controls.
 
-Keep the dedicated five-minute match: Home/Shop/Hero/Guild/Friends navigation is hidden and locked during live battle, while the tower map remains available and the battlefield uses the freed space. Keep the existing four spells, Focus/ALL-IN, current training, rewards and artwork. Do not reintroduce document-wide click-swallowing tutorial gates or browser-history locks.
+## Continue safely
 
-Keep the v108 Season Pass modal above Home and the other menus, with the level-up dialog above the pass; keep internal scrolling and accessible Close/Premium controls. Preserve the current Fate/Focus/spell-charge explanations, points-to-next-tier display, scroll retention and duplicate-claim protections. v108 changes pass presentation/copy, not the existing reward amounts, tier thresholds or Premium token cost.
+Fetch, inspect and preserve any existing working tree, then create your own task branch from this verified feature tip. Read `AGENTS.md`, the features, deployment and test reports. Keep the stable v108 observer fix and pass changes. Never rerun historical import payloads against newer source. Keep the inline modules synchronized and update the source manifest/checksum after tests. Report commit, source hash, test evidence and deployment state separately.
 
-Do not reset progress, season points, claimed rewards, Premium access, or save compatibility as part of this handoff. Do not replace the full file with a small mock/debug file. Do not change Legionary or its deployment.
-
-## Verification and packaging
-
-Read `docs/fatebound-v108-season-pass-test-report.md` for the existing 22-check report and its limits. It describes full-HTML Chromium tests with mobile/touch emulation, staged test saves and blocked external services, not physical-device or live multiplayer validation. `docs/v108-import-verification.json` records the promotion's separate checksum/size/JavaScript parsing checks; it does not claim those browser tests were rerun during import.
-
-For future edits, test Home/menu navigation, pass open/scroll/claim/close including level-up rewards, battle start/roll/spell/map, battle completion/Claim & Home, and starting a second battle. Syntax checks alone are not proof that input works.
-
-The Android workflow copies `fatebound.html` into `android/app/src/main/assets/index.html`; that asset is generated, not a second editable source. This promotion does not change Android packaging, the existing upload key, or publish to Google Play. HTML **v108 is not Android versionCode 108**. Main's packaging was vc14 / 1.0.13 at import, and the repository already contains an older-source vc17 build. Before the next Play release, check the highest versionCode actually used in Play Console and choose a strictly higher code (at least 18 based on the repository evidence), with matching version metadata. Do not reuse an older branch's HTML to get its packaging number.
+HTML v109 is not Android versionCode 109. Before any later requested Play build, verify consumed versionCodes and packaging metadata; do not reuse old codes or swap back to older HTML.

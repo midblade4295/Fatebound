@@ -1,0 +1,8 @@
+# FRAGMENT ONLY: insert inside the existing site's routing configuration.
+# Inspect the existing Caddyfile first. Do not replace it with this file.
+# The arena route must take precedence over the existing /fatebound/* route.
+handle /fatebound/arena/* {
+    reverse_proxy 127.0.0.1:8081
+}
+# Keep all existing Fatebound HTML/save routes (8080), Legionary routes (3000),
+# TLS settings and other host configuration unchanged.
