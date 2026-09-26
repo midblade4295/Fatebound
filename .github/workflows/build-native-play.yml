@@ -1,0 +1,74 @@
+name: Build Native Fatebound Play AAB
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["chatgpt/godot-play-vc22"]
+    paths:
+      - "godot/**"
+      - ".github/workflows/build-native-play.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Install Android SDK components
+        run: |
+          set -euo pipefail
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          "$SDK/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0" "platform-tools"
+      - name: Install matching Godot engine and Android templates
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/godot "$HOME/.local/share/godot/export_templates/4.7.2.stable"
+          BASE="https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable"
+          curl --fail --location --retry 3 "$BASE/Godot_v4.7.2-stable_linux.x86_64.zip" -o /tmp/godot/editor.zip
+          unzip -q /tmp/godot/editor.zip -d /tmp/godot
+          curl --fail --location --retry 3 "$BASE/Godot_v4.7.2-stable_export_templates.tpz" -o /tmp/godot/templates.tpz
+          unzip -j -q /tmp/godot/templates.tpz "templates/android_*" "templates/version.txt" -d "$HOME/.local/share/godot/export_templates/4.7.2.stable"
+          chmod +x /tmp/godot/Godot_v4.7.2-stable_linux.x86_64
+          echo "GODOT=/tmp/godot/Godot_v4.7.2-stable_linux.x86_64" >> "$GITHUB_ENV"
+          rm /tmp/godot/editor.zip /tmp/godot/templates.tpz
+      - name: Reuse established Play upload signing setup
+        run: python3 godot/tools/ci_restore_play_signing.py
+      - name: Configure headless editor paths
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.config/godot"
+          printf '[gd_resource type="EditorSettings" format=3]\n\n[resource]\nexport/android/java_sdk_path="%s"\nexport/android/android_sdk_path="%s"\n' "$JAVA_HOME" "$ANDROID_HOME" > "$HOME/.config/godot/editor_settings-4.7.tres"
+      - name: Build signed native release AAB
+        run: |
+          set -euo pipefail
+          export GODOT_ANDROID_KEYSTORE_RELEASE_PATH="$SIGNING_KEYSTORE"
+          export GODOT_ANDROID_KEYSTORE_RELEASE_USER="$SIGNING_KEY_ALIAS"
+          export GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD="$SIGNING_KEY_PASSWORD"
+          mkdir -p godot/build
+          "$GODOT" --headless --editor --path godot --import
+          "$GODOT" --headless --path godot --install-android-build-template --export-release "Android Play Store" "$PWD/godot/build/Fatebound-Native-vc22-release.aab"
+      - name: Verify bundle signature and export contents
+        run: |
+          set -euo pipefail
+          python3 godot/tools/verify_play_bundle.py godot/build/Fatebound-Native-vc22-release.aab
+          jarsigner -verify godot/build/Fatebound-Native-vc22-release.aab
+          keytool -printcert -jarfile godot/build/Fatebound-Native-vc22-release.aab
+          sha256sum godot/build/Fatebound-Native-vc22-release.aab > godot/build/Fatebound-Native-vc22-release.aab.sha256
+      - name: Upload signed native AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: fatebound-native-play-vc22
+          path: |
+            godot/build/Fatebound-Native-vc22-release.aab
+            godot/build/Fatebound-Native-vc22-release.aab.sha256
+            godot/build/PLAY_BUNDLE_VERIFICATION.json
+          if-no-files-found: error
