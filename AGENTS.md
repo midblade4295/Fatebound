@@ -1,3 +1,13 @@
+# Native preview 0.2 continuation — original art and portrait layout
+
+Branch: `chatgpt/godot-m2-art-layout`, based on M2 `9dc7bb001682b95384b437214dc100bd7ca2021d`.
+Only godot/ is the native migration; production v114 HTML/backend remain unchanged.
+Read godot/README.md and reports/ART_* first. Never treat this preview as a
+complete production-client migration. Keep package com.fatebound.godotpreview,
+same preview signing key and identity storage, next preview versionCode.
+No production signing, main merge, save migration or Play release.
+
+---
 # Current source: v114 battle and Guild feedback
 
 Use `chatgpt/v114-battle-guild-feedback`, based on v113 head

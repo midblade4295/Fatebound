@@ -1,0 +1,47 @@
+{
+  "crowd_panning": true,
+  "failures": [],
+  "layouts": [
+    {
+      "battlefield": "(344.0, 177.0)",
+      "rally": "[P: (276.0, 462.0), S: (76.0, 54.0)]",
+      "resolution": "(360, 640)",
+      "roll": "[P: (74.0, 462.0), S: (196.0, 54.0)]"
+    },
+    {
+      "battlefield": "(374.0, 381.0)",
+      "rally": "[P: (306.0, 666.0), S: (76.0, 54.0)]",
+      "resolution": "(390, 844)",
+      "roll": "[P: (74.0, 666.0), S: (226.0, 54.0)]"
+    },
+    {
+      "battlefield": "(404.0, 473.0)",
+      "rally": "[P: (336.0, 758.0), S: (76.0, 54.0)]",
+      "resolution": "(420, 936)",
+      "roll": "[P: (74.0, 758.0), S: (256.0, 54.0)]"
+    },
+    {
+      "battlefield": "(396.0, 452.0)",
+      "rally": "[P: (328.0, 737.0), S: (76.0, 54.0)]",
+      "resolution": "(412, 915)",
+      "roll": "[P: (74.0, 737.0), S: (248.0, 54.0)]"
+    },
+    {
+      "battlefield": "(584.0, 497.0)",
+      "rally": "[P: (516.0, 782.0), S: (76.0, 54.0)]",
+      "resolution": "(600, 960)",
+      "roll": "[P: (74.0, 782.0), S: (436.0, 54.0)]"
+    },
+    {
+      "battlefield": "(752.0, 561.0)",
+      "rally": "[P: (684.0, 846.0), S: (76.0, 54.0)]",
+      "resolution": "(768, 1024)",
+      "roll": "[P: (74.0, 846.0), S: (604.0, 54.0)]"
+    }
+  ],
+  "physical_android_tested": false,
+  "renderer": "X11",
+  "spell_clipped_and_cleared_on_move": true,
+  "stale_state_ignored": true,
+  "zero_hp_waits_for_server": true
+}

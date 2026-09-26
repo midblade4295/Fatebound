@@ -1,0 +1,18 @@
+{
+  "build": "0.2.0-art-layout",
+  "preview_version_code": 2,
+  "package": "com.fatebound.godotpreview",
+  "apk_bytes": 88848330,
+  "apk_sha256": "3964a3bad51f043f249ac55ca281d7abbf6d2e08d9e28553cdc3ec8042f04dbc",
+  "same_certificate_as_m1": true,
+  "signature_v2_v3_verified": true,
+  "test_sources_excluded_from_apk": true,
+  "source_html_unchanged_sha256": "84697859827127e8c9285b0cf57578a8fc2bcedcb3cf8d3247772f0309f3b4e9",
+  "six_layouts_passed": true,
+  "native_ui_flow_checks": 8,
+  "original_animation_frames_pixel_verified": 1170,
+  "physical_android_tested": false,
+  "production_api_changed": false,
+  "production_html_changed": false,
+  "verified_utc": "2026-09-26T16:30:32.112961+00:00"
+}

@@ -1,0 +1,15 @@
+{
+  "checks": [
+    "native queue / confirmed cancellation",
+    "native battle scene and authoritative controls",
+    "native roll / all faces / human-readable bank",
+    "confirmed native spell VFX",
+    "tower selector / confirmed move / cleared VFX",
+    "authoritative KO and confirmed respawn",
+    "native results / reward button / next-game button",
+    "second native queue / cancellation"
+  ],
+  "local_harness_only": true,
+  "no_physical_phone": true,
+  "status": "PASS"
+}

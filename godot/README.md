@@ -1,31 +1,35 @@
-# Fatebound Godot Client — Milestone 1
+# Fatebound Godot Preview 0.2 — original artwork and responsive layout
 
-This is a parallel client for the existing Fatebound authoritative arena. It does not replace or fork the server rules.
+Separate Android package: `com.fatebound.godotpreview`; versionCode 2.
+This updates preview 0.1 in place using the same debug certificate and user-data
+paths. It does not update production Fatebound or Google Play.
 
-Target engine: Godot 4.7.2 stable.
+This iteration replaces the M1 diagnostic-screen battle with the original v114
+hex terrain, towers and baked character/weapon animations. All 45 hero/weapon
+combinations have idle/attack/heavy/hit/KO frames. 1,170 frames were split into
+225 lossless strips and verified pixel-for-pixel; no source HTML/art was changed.
+The artwork remains 2D baked sprites, as in the existing game. Fully skinned 3D
+models, the permanent Home/Shop/Guild/Raid shell and cross-client progression
+transfer are NOT included.
 
-Implemented in M1:
-- device-local guest arena identity
-- gzip HTTP through Godot HTTPRequest
-- Fatebound transport-v2 full/delta state decoder
-- 20-second / 20-slot / 10v10 matchmaking
-- native tower selection
-- server-authoritative x1–x4 and ALL-IN rolls
-- three confirmed dice faces with pair/triple highlighting
-- authoritative HP/KO/respawn display
-- Barrage, Bulwark, War Horn and Arcane Surge actions and native VFX
-- rally and ultimate actions
-- live hero/tower/score/focus/spell/ultimate state
-- end-of-match result and reward claim
-- same-action-ID retry safety
-- a separate Android preview package so it can coexist with the existing Fatebound app
+Native layout gives ROLL/Rally, two spells and ALL-IN/Ultimate their own rows.
+The oversized horizontal tower list becomes a separate scrollable selector.
+No raw JSON or internal debug output appears in the ordinary battle HUD.
+The battlefield pans independently to show crowded formations; a pan never
+moves a hero to another tower. Server-positive HP is still required to respawn.
 
-The first milestone intentionally uses native vector/control placeholders rather than re-embedding the 36 MB HTML artwork. Art and animation migration comes after the authoritative server loop is proven.
+The original PCM cues are included locally as WAVs and routed through a bounded
+native audio pool. Native audio was not listened to on an Android phone here.
+No new requests fetch graphics/sounds during battle. The existing HTTPS API,
+server authority, transport2 gzip/deltas, balance110 and 20-second/20-slot rule
+remain unchanged.
 
-Run the project with Godot using the godot directory as the project path.
+Test evidence: reports/ART_PIXEL_VERIFICATION.json, ART_LAYOUT_TEST.json and
+ART_FLOW_TEST.json. The screenshot native-art-battle.png is an actual Godot
+OpenGL/Mesa render of a local fixture, not AI-generated imagery or a phone capture.
+Tests cover six portrait/tablet sizes and eight real native-UI flow checks against
+an isolated loopback server fixture. Test sources are excluded from APK exports.
 
-Headless checks:
-- res://tests/wire_smoke.gd
-- res://tests/api_smoke.gd
-
-The API smoke creates or reuses an explicitly named test guest, joins the real queue, verifies 20 seconds / 20 slots, and cancels immediately.
+Engine used: Godot 4.7.2 from the installed migration toolchain. Open project.godot
+with matching export templates. Use the dedicated preview debug key from the VM;
+do not generate a replacement key or use production signing secrets.

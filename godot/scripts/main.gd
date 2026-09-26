@@ -1,92 +1,86 @@
 extends Control
-
-const ArenaApiScript = preload("res://scripts/arena_api.gd")
-const ArenaWireScript = preload("res://scripts/arena_wire.gd")
-const SpellFXScript = preload("res://scripts/spell_fx.gd")
-
+const Api = preload("res://scripts/arena_api.gd")
+const Field = preload("res://scripts/battlefield.gd")
+const Dice = preload("res://scripts/dice_strip.gd")
+const Audio = preload("res://scripts/native_audio.gd")
 const SPELLS := ["barrage","bulwark","horn","surge"]
 const SPELL_NAMES := {"barrage":"Barrage","bulwark":"Bulwark","horn":"War Horn","surge":"Arcane Surge"}
-const FACE_NAMES := {"S":"SWORD","C":"CRIT","H":"SHIELD","G":"GOLD","E":"FOCUS","F":"GIFT"}
-
+const HERO_NAMES := ["Knight","Rogue","Barbarian","Mage","Ranger"]
+const ROMAN := ["I","II","III","IV","V","VI","VII","VIII","IX","X"]
 var api
-var ui_root: Control
+var audio
 var poll_timer: Timer
-var spell_fx
-
-var searching := false
-var active := false
-var polling := false
-var busy := false
+var ui_root: Control
+var page: VBoxContainer
+var margins: MarginContainer
+var board
+var dice
+var screen := "home"
 var latest: Dictionary = {}
 var latest_state: Dictionary = {}
 var current_match_id := ""
+var selected_loadout: Array = ["barrage","bulwark"]
+var selected_char := 0
+var selected_weapon := 0
+var busy := false
+var joining := false
+var polling := false
+var epoch := 0
+var received_ms := 0
 var event_seq := 0
-var hero_rows: Dictionary = {}
-var tower_buttons: Array[Button] = []
-var selected_mult := 1
-var selected_loadout := ["barrage","bulwark"]
-
-var queue_status: Label
-var queue_clock: Label
-var timer_label: Label
-var score_label: Label
-var connection_label: Label
-var net_label: Label
-var tower_label: Label
-var tower_detail: Label
-var focus_label: Label
-var result_label: Label
-var earnings_label: Label
-var dice_labels: Array[Label] = []
+var clock: Label
+var score: Label
+var status: Label
+var roll_result: Label
+var bank: Label
+var focus: Label
 var roll_button: Button
 var rally_button: Button
-var ultimate_button: Button
+var ult_button: Button
+var stored_button: Button
 var spell_buttons: Array[Button] = []
 var mult_select: OptionButton
-var all_in: CheckButton
-var heroes_left: VBoxContainer
-var heroes_right: VBoxContainer
-var battle_field: PanelContainer
-var battle_overlay: Control
+var all_in: Button
+var queue_clock: Label
+var queue_status: Label
+var tower_title: Button
+var modal: Control
+var notice_until := 0
+var home_preview
 
 func _ready() -> void:
-    api = ArenaApiScript.new()
+    api = Api.new()
     add_child(api)
+    audio = Audio.new()
+    add_child(audio)
     poll_timer = Timer.new()
     poll_timer.wait_time = 0.75
-    poll_timer.one_shot = false
     poll_timer.timeout.connect(_poll)
     add_child(poll_timer)
-    spell_fx = SpellFXScript.new()
-    add_child(spell_fx)
+    get_tree().auto_accept_quit = false
+    resized.connect(_safe_area)
     _show_home()
 
+func _notification(what: int) -> void:
+    if what == NOTIFICATION_WM_GO_BACK_REQUEST:
+        if is_instance_valid(modal):
+            modal.queue_free()
+            modal = null
+        elif screen == "battle":
+            _notice("Finish this battle before leaving.")
+        elif screen == "queue":
+            _cancel_queue()
+
 func _process(_delta: float) -> void:
-    if active and not latest.is_empty():
-        _paint_clock_and_controls()
+    if screen == "battle" and not latest.is_empty():
+        _paint_controls()
+    elif screen == "queue" and not latest_state.is_empty() and is_instance_valid(queue_clock):
+        queue_clock.text = str(maxi(0,int(ceil((float(latest_state.get("deadline",0))-_server_now())/1000.0))))
 
-func _clear_ui() -> void:
-    hero_rows.clear()
-    tower_buttons.clear()
-    dice_labels.clear()
-    spell_buttons.clear()
-    battle_field = null
-    battle_overlay = null
-    if is_instance_valid(ui_root):
-        ui_root.queue_free()
-    ui_root = Control.new()
-    ui_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    add_child(ui_root)
-    move_child(spell_fx,get_child_count()-1)
+func _server_now() -> float:
+    return float(latest_state.get("serverNow",latest.get("now",0)))+minf(Time.get_ticks_msec()-received_ms,10000)
 
-func _background() -> ColorRect:
-    var bg := ColorRect.new()
-    bg.color = Color("#071924")
-    bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    ui_root.add_child(bg)
-    return bg
-
-func _style(bg: Color, border := Color("#57717a"), radius := 12) -> StyleBoxFlat:
+func _style(bg: Color, border := Color("#927d51"), radius := 12) -> StyleBoxFlat:
     var s := StyleBoxFlat.new()
     s.bg_color = bg
     s.border_color = border
@@ -94,334 +88,246 @@ func _style(bg: Color, border := Color("#57717a"), radius := 12) -> StyleBoxFlat
     s.set_corner_radius_all(radius)
     s.content_margin_left = 10
     s.content_margin_right = 10
-    s.content_margin_top = 8
-    s.content_margin_bottom = 8
+    s.content_margin_top = 6
+    s.content_margin_bottom = 6
     return s
 
-func _label(text := "", size := 14, color := Color("#d8e7e8")) -> Label:
+func _label(text := "", fontsize := 14, color := Color("#e0e5df"), wrap := false) -> Label:
     var l := Label.new()
     l.text = text
-    l.add_theme_font_size_override("font_size",size)
+    l.add_theme_font_size_override("font_size",fontsize)
     l.add_theme_color_override("font_color",color)
-    l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART if wrap else TextServer.AUTOWRAP_OFF
+    l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+    l.clip_text = not wrap
     return l
 
-func _button(text: String) -> Button:
+func _button(text: String, height := 44) -> Button:
     var b := Button.new()
     b.text = text
-    b.custom_minimum_size = Vector2(0,48)
-    b.add_theme_stylebox_override("normal",_style(Color("#143242"),Color("#8da09a"),10))
-    b.add_theme_stylebox_override("hover",_style(Color("#204a5d"),Color("#e2c47f"),10))
-    b.add_theme_stylebox_override("pressed",_style(Color("#2a5b6d"),Color("#ffe19b"),10))
-    b.add_theme_stylebox_override("disabled",_style(Color("#12232c"),Color("#45565c"),10))
+    b.clip_text = true
+    b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    b.custom_minimum_size = Vector2(0,height)
+    b.add_theme_font_size_override("font_size",15)
+    b.add_theme_color_override("font_color",Color("#f3d999"))
+    b.add_theme_stylebox_override("normal",_style(Color("#16333d")))
+    b.add_theme_stylebox_override("hover",_style(Color("#245363"),Color("#f4dcaa")))
+    b.add_theme_stylebox_override("pressed",_style(Color("#17615d"),Color("#84e6d9")))
+    b.add_theme_stylebox_override("disabled",_style(Color("#142a30"),Color("#415e63")))
+    b.pressed.connect(func(): audio.play("tap"))
     return b
 
+func _row(parent: Node) -> HBoxContainer:
+    var row := HBoxContainer.new()
+    row.add_theme_constant_override("separation",6)
+    parent.add_child(row)
+    return row
+
+func _new_screen(kind: String) -> void:
+    epoch += 1
+    screen = kind
+    modal = null
+    board = null
+    dice = null
+    spell_buttons.clear()
+    if is_instance_valid(ui_root):
+        ui_root.queue_free()
+    ui_root = Control.new()
+    ui_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    add_child(ui_root)
+    var bg := ColorRect.new()
+    bg.color = Color("#071923")
+    bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    ui_root.add_child(bg)
+    margins = MarginContainer.new()
+    margins.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    ui_root.add_child(margins)
+    page = VBoxContainer.new()
+    page.add_theme_constant_override("separation",6)
+    margins.add_child(page)
+    _safe_area()
+
+func _safe_area() -> void:
+    if not is_instance_valid(margins):
+        return
+    var inset := Vector4(8,8,8,8)
+    if OS.get_name() in ["Android","iOS"]:
+        var safe := DisplayServer.get_display_safe_area()
+        var physical := DisplayServer.screen_get_size()
+        if physical.x > 0 and physical.y > 0 and safe.size.x > 0:
+            var scale := get_viewport_rect().size/Vector2(physical)
+            inset = Vector4(maxf(8,safe.position.x*scale.x),maxf(8,safe.position.y*scale.y),maxf(8,(physical.x-safe.end.x)*scale.x),maxf(8,(physical.y-safe.end.y)*scale.y))
+    margins.add_theme_constant_override("margin_left",int(inset.x))
+    margins.add_theme_constant_override("margin_top",int(inset.y))
+    margins.add_theme_constant_override("margin_right",int(inset.z))
+    margins.add_theme_constant_override("margin_bottom",int(inset.w))
+
 func _show_home() -> void:
-    searching = false
-    active = false
+    busy = false
+    joining = false
     poll_timer.stop()
-    _clear_ui()
-    _background()
-    var margin := MarginContainer.new()
-    margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    margin.add_theme_constant_override("margin_left",20)
-    margin.add_theme_constant_override("margin_right",20)
-    margin.add_theme_constant_override("margin_top",max(28,int(get_viewport_rect().size.y*0.05)))
-    margin.add_theme_constant_override("margin_bottom",24)
-    ui_root.add_child(margin)
-    var box := VBoxContainer.new()
-    box.add_theme_constant_override("separation",12)
-    margin.add_child(box)
-    var title := _label("FATEBOUND",34,Color("#f3d488"))
-    title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    box.add_child(title)
-    var sub := _label("Godot native-client milestone 1",15,Color("#7ce1ef"))
-    sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    box.add_child(sub)
-    box.add_child(_label("This preview uses the live authoritative arena. The existing HTML client remains untouched.",13,Color("#a8bbc1")))
-    var name_edit := LineEdit.new()
-    name_edit.name = "PlayerName"
-    name_edit.placeholder_text = "Player name"
-    name_edit.text = "Godot Player"
-    name_edit.custom_minimum_size.y = 48
-    box.add_child(name_edit)
-    var loadout_row := HBoxContainer.new()
-    loadout_row.add_theme_constant_override("separation",8)
-    box.add_child(loadout_row)
+    _new_screen("home")
+    page.add_child(_label("FATEBOUND",32,Color("#f3d693")))
+    page.add_child(_label("NATIVE PREVIEW 0.2 · ORIGINAL BATTLE ART",11,Color("#8de0d5")))
+    home_preview = Field.new()
+    home_preview.preview = true
+    home_preview.preview_char = selected_char
+    home_preview.preview_weapon = selected_weapon
+    home_preview.size_flags_vertical = Control.SIZE_EXPAND_FILL
+    page.add_child(home_preview)
+    var hero_choice := OptionButton.new()
+    hero_choice.fit_to_longest_item = false
+    hero_choice.clip_text = true
+    hero_choice.custom_minimum_size.y = 44
+    for n in HERO_NAMES:
+        hero_choice.add_item(n)
+    hero_choice.selected = selected_char
+    hero_choice.item_selected.connect(func(index):
+        selected_char = index
+        selected_weapon = [0,1,4,5,7][index]
+        home_preview.preview_char = selected_char
+        home_preview.preview_weapon = selected_weapon
+        audio.play("equip")
+    )
+    page.add_child(hero_choice)
+    var edit := LineEdit.new()
+    edit.text = "Godot Player"
+    edit.placeholder_text = "Player name"
+    edit.max_length = 24
+    edit.custom_minimum_size.y = 44
+    page.add_child(edit)
+    var choices := _row(page)
+    var pickers: Array[OptionButton] = []
     for slot in 2:
-        var choose := OptionButton.new()
-        choose.name = "Spell%d" % slot
-        choose.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+        var picker := OptionButton.new()
+        picker.fit_to_longest_item = false
+        picker.clip_text = true
+        picker.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+        picker.custom_minimum_size.y = 44
         for spell in SPELLS:
-            choose.add_item(SPELL_NAMES[spell])
-            choose.set_item_metadata(choose.item_count-1,spell)
-        choose.select(slot)
-        loadout_row.add_child(choose)
-    box.add_child(_label("Milestone combat is level-10 equalized, exactly like the current online alpha. Gzip state responses and transport-v2 deltas are enabled.",12,Color("#9db7bd")))
-    var play := _button("FIND 20-PLAYER BATTLE")
-    play.pressed.connect(func(): _start_queue(name_edit.text))
-    box.add_child(play)
-    var status := _label("Arena endpoint: " + api.base_url,11,Color("#78969d"))
-    status.name = "HomeStatus"
-    box.add_child(status)
+            picker.add_item(SPELL_NAMES[spell])
+        picker.select(maxi(0,SPELLS.find(selected_loadout[slot])))
+        pickers.append(picker)
+        choices.add_child(picker)
+    var start := _button("FIND 20-PLAYER BATTLE",54)
+    start.pressed.connect(func():
+        selected_loadout = [SPELLS[pickers[0].selected],SPELLS[pickers[1].selected]]
+        _start_queue(edit.text)
+    )
+    page.add_child(start)
+    status = _label("5-minute battles · 20-second search · bots fill empty slots",12,Color("#b0c8c8"),true)
+    status.custom_minimum_size.y = 32
+    page.add_child(status)
+    var lower := _row(page)
+    var sound := _button("Sound on" if not audio.muted else "Sound off")
+    sound.pressed.connect(func():
+        audio.toggle()
+        sound.text = "Sound off" if audio.muted else "Sound on"
+        audio.play("menuOpen")
+    )
+    lower.add_child(sound)
+    var note := _label("Separate test profile. Home, guilds, shop and raids are not migrated yet.",10,Color("#92a9ae"),true)
+    page.add_child(note)
 
 func _start_queue(display_name: String) -> void:
-    if searching or active:
+    if joining or screen != "home":
         return
-    var home_status := ui_root.find_child("HomeStatus",true,false) as Label
-    if home_status:
-        home_status.text = "Connecting…"
-    selected_loadout.clear()
-    for slot in 2:
-        var choose := ui_root.find_child("Spell%d" % slot,true,false) as OptionButton
-        selected_loadout.append(str(choose.get_item_metadata(choose.selected)))
     if selected_loadout[0] == selected_loadout[1]:
-        if home_status:
-            home_status.text = "Choose two different spells."
+        status.text = "Choose two different spells."
         return
+    joining = true
+    status.text = "Connecting…"
+    var generation := epoch
     var session: Dictionary = await api.ensure_session(display_name.strip_edges() if not display_name.strip_edges().is_empty() else "Godot Player")
-    if not session.get("ok",false):
-        if home_status:
-            home_status.text = str(session.get("error","Could not create arena session"))
+    if generation != epoch:
         return
-    var state: Dictionary = await api.queue(0,0,selected_loadout)
+    if not session.get("ok",false):
+        joining = false
+        status.text = str(session.get("error","Connection failed"))
+        return
+    var state: Dictionary = await api.queue(selected_char,selected_weapon,selected_loadout)
+    if generation != epoch:
+        return
+    joining = false
     if not state.get("ok",false):
-        if home_status:
-            home_status.text = str(state.get("error","Queue failed"))
+        status.text = str(state.get("error","Queue unavailable"))
         return
     _show_queue()
     _accept(state)
     poll_timer.start()
 
 func _show_queue() -> void:
-    searching = true
-    _clear_ui()
-    _background()
-    var center := CenterContainer.new()
-    center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    ui_root.add_child(center)
-    var panel := PanelContainer.new()
-    panel.custom_minimum_size = Vector2(340,330)
-    panel.add_theme_stylebox_override("panel",_style(Color("#0d2633"),Color("#d0b470"),18))
-    center.add_child(panel)
-    var box := VBoxContainer.new()
-    box.alignment = BoxContainer.ALIGNMENT_CENTER
-    box.add_theme_constant_override("separation",14)
-    panel.add_child(box)
-    var t := _label("FINDING PLAYERS",24,Color("#f2d38a"))
-    t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    box.add_child(t)
-    queue_clock = _label("20",64,Color("#79e7ef"))
-    queue_clock.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    box.add_child(queue_clock)
-    queue_status = _label("Connecting to the arena…",14)
-    queue_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    box.add_child(queue_status)
-    box.add_child(_label("20 total slots · 10 per side\nBots fill only after the 20-second deadline.",12,Color("#9db7bd")))
-    var cancel := _button("CANCEL")
+    _new_screen("queue")
+    page.add_spacer(false)
+    page.add_child(_label("FINDING YOUR BATTLE",25,Color("#f3d693")))
+    queue_clock = _label("20",68,Color("#81e3d4"))
+    page.add_child(queue_clock)
+    queue_status = _label("Searching for players",16)
+    page.add_child(queue_status)
+    page.add_child(_label("10 versus 10\nBots join only after the 20-second deadline.",14,Color("#b9cece"),true))
+    var cancel := _button("CANCEL SEARCH")
     cancel.pressed.connect(_cancel_queue)
-    box.add_child(cancel)
+    page.add_child(cancel)
+    page.add_spacer(false)
 
 func _cancel_queue() -> void:
-    searching = false
-    poll_timer.stop()
-    await api.cancel()
-    _show_home()
-
-func _poll() -> void:
-    if polling or (not searching and not active):
+    if busy or screen != "queue":
         return
-    polling = true
-    var state: Dictionary = await api.state()
-    polling = false
+    busy = true
+    var state: Dictionary = await api.cancel()
+    busy = false
     if state.get("ok",false):
         _accept(state)
-    elif active:
-        if connection_label:
-            connection_label.text = "RECONNECTING"
+    elif is_instance_valid(queue_status):
+        queue_status.text = "Cancel not confirmed. Retrying connection…"
+
+func _poll() -> void:
+    if polling or not screen in ["battle","queue"]:
+        return
+    polling = true
+    var generation := epoch
+    var state: Dictionary = await api.state()
+    polling = false
+    if generation != epoch:
+        return
+    if state.get("ok",false):
+        _accept(state)
+    elif screen == "battle":
+        _notice("Reconnecting · waiting for server")
 
 func _accept(state: Dictionary) -> void:
+    var mode := str(state.get("status",""))
+    var data: Dictionary = state.get("match",{})
+    if not data.is_empty() and str(data.get("id","")) == current_match_id and int(data.get("revision",0)) < int(latest.get("revision",0)):
+        return
     latest_state = state
-    var status := str(state.get("status",""))
-    if status == "searching":
-        searching = true
-        if queue_status:
-            queue_status.text = "%d / 20 human players" % int(state.get("humans",0))
-        if queue_clock:
-            queue_clock.text = str(int(ceil(max(0.0,float(state.get("deadline",0))-float(state.get("serverNow",0)))/1000.0)))
+    received_ms = Time.get_ticks_msec()
+    if mode == "idle":
+        _show_home()
         return
-    if status == "idle":
-        if searching:
-            _show_home()
+    if mode == "searching":
+        if screen != "queue":
+            _show_queue()
+        queue_status.text = "%d / 20 human players" % int(state.get("humans",0))
         return
-    if status != "battle" and status != "complete":
+    if not mode in ["battle","complete"] or data.is_empty():
         return
-    searching = false
-    var match: Dictionary = state.get("match",{})
-    if match.is_empty():
+    var new_room := str(data.get("id","")) != current_match_id
+    if new_room:
+        event_seq = int(data.get("seq",0))
+        current_match_id = str(data.get("id",""))
+    latest = data
+    if mode == "complete":
+        if screen != "result":
+            _show_result(state)
         return
-    latest = match
-    current_match_id = str(match.get("id",""))
-    if not active:
-        active = true
+    if screen != "battle":
+        var me := _me()
+        selected_loadout = me.get("loadout",selected_loadout).duplicate()
         _show_battle()
-    _update_battle(match,state.get("earnings",{}))
-    if status == "complete":
-        poll_timer.stop()
-        _show_result(state)
-
-func _show_battle() -> void:
-    _clear_ui()
-    _background()
-    var safe := MarginContainer.new()
-    safe.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    safe.add_theme_constant_override("margin_left",8)
-    safe.add_theme_constant_override("margin_right",8)
-    safe.add_theme_constant_override("margin_top",8)
-    safe.add_theme_constant_override("margin_bottom",8)
-    ui_root.add_child(safe)
-    var page := VBoxContainer.new()
-    page.add_theme_constant_override("separation",5)
-    safe.add_child(page)
-
-    var header := HBoxContainer.new()
-    page.add_child(header)
-    score_label = _label("0 — 0",20,Color("#f1d184"))
-    score_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    header.add_child(score_label)
-    timer_label = _label("5:00",24,Color.WHITE)
-    timer_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    timer_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    header.add_child(timer_label)
-    connection_label = _label("LIVE",12,Color("#78e7a1"))
-    connection_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-    connection_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    header.add_child(connection_label)
-
-    var tower_scroll := ScrollContainer.new()
-    tower_scroll.custom_minimum_size.y = 54
-    tower_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
-    tower_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-    page.add_child(tower_scroll)
-    var towers := HBoxContainer.new()
-    towers.add_theme_constant_override("separation",5)
-    tower_scroll.add_child(towers)
-    for i in 10:
-        var b := _button(str(i+1))
-        b.custom_minimum_size = Vector2(52,44)
-        b.pressed.connect(_move_to.bind(i))
-        tower_buttons.append(b)
-        towers.add_child(b)
-
-    var field := PanelContainer.new()
-    battle_field = field
-    field.size_flags_vertical = Control.SIZE_EXPAND_FILL
-    field.add_theme_stylebox_override("panel",_style(Color("#173c34"),Color("#6f9b75"),16))
-    page.add_child(field)
-    var fbox := VBoxContainer.new()
-    fbox.add_theme_constant_override("separation",4)
-    field.add_child(fbox)
-    tower_label = _label("Tower",20,Color("#ffe08a"))
-    tower_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    fbox.add_child(tower_label)
-    tower_detail = _label("",11,Color("#b8d0c5"))
-    tower_detail.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    fbox.add_child(tower_detail)
-    var teams := HBoxContainer.new()
-    teams.size_flags_vertical = Control.SIZE_EXPAND_FILL
-    teams.add_theme_constant_override("separation",8)
-    fbox.add_child(teams)
-    heroes_left = VBoxContainer.new()
-    heroes_left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    teams.add_child(heroes_left)
-    heroes_right = VBoxContainer.new()
-    heroes_right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    teams.add_child(heroes_right)
-    _build_hero_rows()
-
-    var dice := HBoxContainer.new()
-    dice.alignment = BoxContainer.ALIGNMENT_CENTER
-    dice.add_theme_constant_override("separation",7)
-    fbox.add_child(dice)
-    for i in 3:
-        var d := _label("—",15,Color("#e6d699"))
-        d.custom_minimum_size = Vector2(88,50)
-        d.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-        d.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-        d.add_theme_stylebox_override("normal",_style(Color("#382b16"),Color("#d0a748"),10))
-        dice_labels.append(d)
-        dice.add_child(d)
-
-    result_label = _label("Server-confirmed roll effects appear here.",11,Color("#c6e2e4"))
-    result_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    fbox.add_child(result_label)
-    earnings_label = _label("",10,Color("#91c7cd"))
-    earnings_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    fbox.add_child(earnings_label)
-
-    var controls := HBoxContainer.new()
-    controls.add_theme_constant_override("separation",5)
-    page.add_child(controls)
-    mult_select = OptionButton.new()
-    mult_select.custom_minimum_size = Vector2(76,48)
-    for m in [1,2,3,4]:
-        mult_select.add_item("×%d" % m,m)
-    controls.add_child(mult_select)
-    all_in = CheckButton.new()
-    all_in.text = "ALL-IN"
-    all_in.custom_minimum_size.x = 75
-    controls.add_child(all_in)
-    roll_button = _button("ROLL")
-    roll_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    roll_button.pressed.connect(_roll)
-    controls.add_child(roll_button)
-    rally_button = _button("RALLY")
-    rally_button.custom_minimum_size.x = 78
-    rally_button.pressed.connect(func(): _do_action("rally"))
-    controls.add_child(rally_button)
-
-    var powers := HBoxContainer.new()
-    powers.add_theme_constant_override("separation",5)
-    page.add_child(powers)
-    ultimate_button = _button("ULTIMATE")
-    ultimate_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    ultimate_button.pressed.connect(func(): _do_action("ultimate"))
-    powers.add_child(ultimate_button)
-    for spell in selected_loadout:
-        var b := _button(SPELL_NAMES[spell])
-        b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-        b.set_meta("spell",spell)
-        b.pressed.connect(_cast_spell.bind(spell))
-        spell_buttons.append(b)
-        powers.add_child(b)
-
-    focus_label = _label("FOCUS",11,Color("#efc875"))
-    focus_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    page.add_child(focus_label)
-    net_label = _label("",9,Color("#6f969e"))
-    net_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    page.add_child(net_label)
-
-    battle_overlay = Control.new()
-    battle_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    battle_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    ui_root.add_child(battle_overlay)
-
-func _build_hero_rows() -> void:
-    for hero in latest.get("heroes",[]):
-        var side := int(hero.get("side",0))
-        var row := VBoxContainer.new()
-        row.add_theme_constant_override("separation",1)
-        var name := _label("",10,Color("#dbe8e6"))
-        name.name = "Name"
-        row.add_child(name)
-        var hp := ProgressBar.new()
-        hp.name = "HP"
-        hp.show_percentage = false
-        hp.custom_minimum_size.y = 8
-        row.add_child(hp)
-        hero_rows[str(hero.get("id",""))] = row
-        (heroes_left if side == 0 else heroes_right).add_child(row)
+    _update_battle(data,state.get("earnings",{}))
 
 func _me() -> Dictionary:
     for hero in latest.get("heroes",[]):
@@ -429,289 +335,339 @@ func _me() -> Dictionary:
             return hero
     return {}
 
-func _update_battle(match: Dictionary, earnings: Variant = {}) -> void:
-    latest = match
+func _show_battle() -> void:
+    _new_screen("battle")
+    var header := _row(page)
+    score = _label("0 — 0",22,Color("#f3d693"))
+    header.add_child(score)
+    clock = _label("5:00",25,Color.WHITE)
+    header.add_child(clock)
+    var menu := _button("MORE",40)
+    menu.size_flags_stretch_ratio = 0.65
+    menu.pressed.connect(_more)
+    header.add_child(menu)
+    tower_title = _button("TOWER I · CHANGE TOWER",38)
+    tower_title.pressed.connect(_tower_map)
+    page.add_child(tower_title)
+    board = Field.new()
+    board.size_flags_vertical = Control.SIZE_EXPAND_FILL
+    page.add_child(board)
+    dice = Dice.new()
+    dice.custom_minimum_size.y = 92
+    page.add_child(dice)
+    roll_result = _label("Roll to attack, defend and support your team.",12,Color("#ecdbb5"),true)
+    roll_result.custom_minimum_size.y = 32
+    page.add_child(roll_result)
+    bank = _label("Banked this match · 0 gold · 0 XP",11,Color("#9bc7cf"))
+    page.add_child(bank)
+    focus = _label("FOCUS 8/8",12,Color("#f6d58c"))
+    page.add_child(focus)
+    var rolls := _row(page)
+    mult_select = OptionButton.new()
+    mult_select.fit_to_longest_item = false
+    mult_select.clip_text = true
+    mult_select.custom_minimum_size = Vector2(60,50)
+    for i in [1,2,3,4]:
+        mult_select.add_item("×%d"%i,i)
+    rolls.add_child(mult_select)
+    roll_button = _button("ROLL",54)
+    roll_button.add_theme_font_size_override("font_size",23)
+    roll_button.add_theme_stylebox_override("normal",_style(Color("#ba6222"),Color("#ffde96")))
+    roll_button.pressed.connect(_roll)
+    rolls.add_child(roll_button)
+    rally_button = _button("RALLY",54)
+    rally_button.size_flags_horizontal = Control.SIZE_FILL
+    rally_button.custom_minimum_size.x = 76
+    rally_button.pressed.connect(func(): _do_action("rally"))
+    rolls.add_child(rally_button)
+    var powers := _row(page)
+    for spell in selected_loadout:
+        var b := _button(SPELL_NAMES.get(spell,spell),44)
+        b.set_meta("spell",spell)
+        b.pressed.connect(_cast.bind(spell))
+        powers.add_child(b)
+        spell_buttons.append(b)
+    var utility := _row(page)
+    all_in = _button("ALL-IN OFF",40)
+    all_in.toggle_mode = true
+    all_in.toggled.connect(func(on): all_in.text = "ALL-IN ON" if on else "ALL-IN OFF")
+    utility.add_child(all_in)
+    ult_button = _button("ULTIMATE 0%",40)
+    ult_button.pressed.connect(func(): _do_action("ultimate"))
+    utility.add_child(ult_button)
+    status = _label("LIVE · 20 combatants",10,Color("#9ebeb9"))
+    page.add_child(status)
+
+func _update_battle(data: Dictionary, earnings: Variant = {}) -> void:
+    if screen != "battle":
+        return
+    board.accept_state(data,api.player_id)
     var me := _me()
-    if me.is_empty():
-        connection_label.text = "SLOT LOST"
+    var crowns: Array = data.get("score",[0,0])
+    var side := int(me.get("side",0))
+    score.text = "%d — %d" % [int(crowns[side]),int(crowns[1-side])]
+    tower_title.text = "TOWER %s · CHANGE TOWER" % ROMAN[int(me.get("tower",0))]
+    if not busy:
+        dice.set_faces(me.get("lastFaces",[]))
+    if earnings is Dictionary:
+        bank.text = "Banked this match · %d gold · %d XP" % [int(earnings.get("gold",0)),int(earnings.get("xp",0))]
+    _events(data)
+    _paint_controls()
+
+func _paint_controls() -> void:
+    if screen != "battle" or not is_instance_valid(roll_button):
         return
-    var tower := int(me.get("tower",0))
-    for i in tower_buttons.size():
-        tower_buttons[i].text = ("● " if i == tower else "") + str(i+1)
-        tower_buttons[i].disabled = busy or int(me.get("hp",0)) <= 0
-    var scores: Array = match.get("score",[0,0])
-    score_label.text = "%d — %d" % [int(scores[0]),int(scores[1])]
-    tower_label.text = str(match.get("towers",[])[tower].get("name","Tower %d" % (tower+1)))
-    var t: Dictionary = match.get("towers",[])[tower]
-    tower_detail.text = "Tower damage %s · phase %s" % [str(t.get("dmg",[0,0])),str(match.get("phase","regulation")).capitalize()]
-    var my_side := int(me.get("side",0))
-    for hero in match.get("heroes",[]):
-        var row: VBoxContainer = hero_rows.get(str(hero.get("id","")))
-        if row == null:
-            continue
-        var visible_here := int(hero.get("tower",-1)) == tower
-        row.visible = visible_here
-        var n := row.get_node("Name") as Label
-        var p := row.get_node("HP") as ProgressBar
-        var hpv := int(hero.get("hp",0))
-        var max_hp: int = maxi(1,int(hero.get("maxHp",1)))
-        p.max_value = max_hp
-        p.value = hpv
-        var shields: Array = hero.get("shieldSlots",[])
-        var suffix := " [KO]" if hpv <= 0 else ("  ◇%d" % shields.size() if shields.size() > 0 else "")
-        n.text = "%s%s%s  %d/%d" % [str(hero.get("name","Hero")),(" [BOT]" if hero.get("bot",false) else ""),suffix,hpv,max_hp]
-        row.modulate.a = 0.55 if hpv <= 0 else 1.0
-        if str(hero.get("id","")) == api.player_id:
-            n.add_theme_color_override("font_color",Color("#ffe18d"))
-        elif int(hero.get("side",0)) == my_side:
-            n.add_theme_color_override("font_color",Color("#8beaff"))
-        else:
-            n.add_theme_color_override("font_color",Color("#ff9d79"))
-    _paint_dice(me.get("lastFaces",[]))
-    _paint_clock_and_controls()
-    if earnings is Dictionary and not earnings.is_empty():
-        earnings_label.text = "Banked: %s" % JSON.stringify(earnings)
-    net_label.text = "transport2 · full %d · delta %d · %.1f KB decoded JSON received" % [api.wire.stats.full,api.wire.stats.delta,float(api.bytes_received)/1024.0]
-    _process_events(match)
-
-func _paint_dice(faces: Array) -> void:
-    var win: Dictionary = ArenaWireScript.winning_dice(faces)
-    for i in 3:
-        var label := dice_labels[i]
-        if i < faces.size():
-            label.text = FACE_NAMES.get(str(faces[i]),str(faces[i]))
-        else:
-            label.text = "—"
-        var winning: bool = (win.get("indices",[]) as Array).has(i)
-        label.add_theme_stylebox_override("normal",_style(Color("#4d3a12") if winning else Color("#2d281b"),Color("#71f0d2") if winning else Color("#907849"),10))
-        label.add_theme_color_override("font_color",Color("#fff0b0") if winning else Color("#d8c991"))
-
-func _animate_confirmed_roll(faces: Array, result: Dictionary) -> void:
-    if faces.size() != 3 or dice_labels.size() != 3:
-        return
-    var cycle := ["S","C","H","G","E","F"]
-    for step in 7:
-        for i in 3:
-            if not is_instance_valid(dice_labels[i]):
-                return
-            var face: String = cycle[(step + i * 2) % cycle.size()]
-            dice_labels[i].text = FACE_NAMES[face]
-            dice_labels[i].rotation = (-0.08 if (step + i) % 2 == 0 else 0.08)
-            dice_labels[i].scale = Vector2.ONE * (1.04 + 0.02 * (step % 2))
-        await get_tree().create_timer(0.055).timeout
-    _paint_dice(faces)
-    var win: Dictionary = ArenaWireScript.winning_dice(faces)
-    for idx in win.get("indices",[]):
-        var i := int(idx)
-        if i < 0 or i >= dice_labels.size() or not is_instance_valid(dice_labels[i]):
-            continue
-        dice_labels[i].rotation = 0.0
-        var tween := create_tween()
-        tween.tween_property(dice_labels[i],"scale",Vector2(1.18,1.18),0.10).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-        tween.tween_property(dice_labels[i],"scale",Vector2.ONE,0.16)
-    for label in dice_labels:
-        if is_instance_valid(label):
-            label.rotation = 0.0
-    _confirmed_feedback(result)
-
-func _overlay_center() -> Vector2:
-    if battle_field == null or battle_overlay == null or not is_instance_valid(battle_field):
-        return get_viewport_rect().size * 0.5
-    var rect := battle_field.get_global_rect()
-    return rect.position + rect.size * 0.5
-
-func _float_feedback(text: String, color: Color, offset := Vector2.ZERO, big := false) -> void:
-    if battle_overlay == null or not is_instance_valid(battle_overlay):
-        return
-    var label := _label(text,26 if big else 18,color)
-    label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-    label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    label.size = Vector2(190,42)
-    label.position = _overlay_center() - label.size * 0.5 + offset
-    label.modulate.a = 0.0
-    battle_overlay.add_child(label)
-    var tween := create_tween().set_parallel(true)
-    tween.tween_property(label,"position",label.position + Vector2(0,-72),0.62).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-    tween.tween_property(label,"modulate:a",1.0,0.08)
-    tween.tween_property(label,"modulate:a",0.0,0.22).set_delay(0.38)
-    tween.chain().tween_callback(label.queue_free)
-
-func _field_flash(color: Color) -> void:
-    if battle_overlay == null or battle_field == null or not is_instance_valid(battle_field):
-        return
-    var rect := battle_field.get_global_rect()
-    var flash := ColorRect.new()
-    flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    flash.color = color
-    flash.position = rect.position
-    flash.size = rect.size
-    flash.modulate.a = 0.0
-    battle_overlay.add_child(flash)
-    var tween := create_tween()
-    tween.tween_property(flash,"modulate:a",0.28,0.05)
-    tween.tween_property(flash,"modulate:a",0.0,0.18)
-    tween.tween_callback(flash.queue_free)
-
-func _shake_field(strength := 7.0) -> void:
-    if battle_field == null or not is_instance_valid(battle_field):
-        return
-    var origin := battle_field.position
-    var tween := create_tween()
-    for offset in [Vector2(strength,0),Vector2(-strength*0.75,strength*0.35),Vector2(strength*0.5,-strength*0.25),Vector2.ZERO]:
-        tween.tween_property(battle_field,"position",origin+offset,0.035)
-    tween.tween_property(battle_field,"position",origin,0.04)
-
-func _confirmed_feedback(result: Dictionary) -> void:
-    var effects: Dictionary = result.get("effects",{})
-    var dealt := int(result.get("dealt",0))
-    var absorbed := int(result.get("absorbed",0))
-    var shield := int(effects.get("shieldAdded",0))
-    var gold := int(effects.get("goldAdded",0))
-    var focus := int(effects.get("focusGained",0))
-    var gift := int(effects.get("giftAdded",0))
-    if dealt > 0:
-        _field_flash(Color("#ff5e4d"))
-        _shake_field(10.0 if str(result.get("symbol","")) == "C" else 6.0)
-        _float_feedback("CRIT -%d" % dealt if str(result.get("symbol","")) == "C" else "-%d" % dealt,Color("#ff765f"),Vector2(0,-18),true)
-    if absorbed > 0:
-        _float_feedback("BLOCK %d" % absorbed,Color("#79eaff"),Vector2(-95,6))
-    if shield > 0:
-        _field_flash(Color("#5ee8ff"))
-        _float_feedback("+%d SHIELD" % shield,Color("#8cf4ff"),Vector2(90,8))
-    if gold > 0:
-        _float_feedback("+%d GOLD" % gold,Color("#ffd66e"),Vector2(0,36))
-    if focus > 0:
-        _float_feedback("+%d FOCUS" % focus,Color("#dba0ff"),Vector2(-70,42))
-    if gift > 0:
-        _float_feedback("+%d GIFT" % gift,Color("#ff9ac4"),Vector2(75,42))
-
-func _paint_clock_and_controls() -> void:
-    if latest.is_empty():
-        return
-    var now := int(latest.get("now",Time.get_unix_time_from_system()*1000))
-    var end_at := int(latest.get("endAt",now))
-    var remain: int = maxi(0,end_at-now)
-    timer_label.text = "%d:%02d" % [remain/60000,(remain/1000)%60]
     var me := _me()
-    if me.is_empty():
-        return
-    var hp := int(me.get("hp",0))
-    var down_until := int(me.get("downUntil",0))
-    var focus := int(me.get("focus",0))
-    focus_label.text = "FOCUS %d/8 · SPELL %d/2 · ULT %d%%" % [focus,int(me.get("spell",0)),int(me.get("ult",0))]
-    connection_label.text = "LIVE" if not me.get("substitute",false) else "RECONNECTING"
-    var ko := hp <= 0
-    var ko_left: int = maxi(0,int(ceil(float(down_until-now)/1000.0)))
-    roll_button.text = "ROLL\n%s" % (("KO %ds" % ko_left) if ko else "server authoritative")
-    var cooldown := int(me.get("rollAt",0)) > now
-    roll_button.disabled = busy or ko or cooldown
-    rally_button.disabled = busy or ko or int(me.get("ralliesLeft",0)) <= 0 or int(me.get("rallyAt",0)) > now or focus < 2
-    ultimate_button.disabled = busy or ko or int(me.get("ult",0)) < 100
+    var now := _server_now()
+    var remain := maxi(0,int(ceil((float(latest.get("endAt",now))-now)/1000.0)))
+    clock.text = "%d:%02d" % [remain/60,remain%60]
+    var ko := int(me.get("hp",0)) <= 0
+    var stale := Time.get_ticks_msec()-received_ms > 4000
+    var wait := maxi(0,int(ceil((float(me.get("downUntil",0))-now)/1000.0)))
+    var energy := int(me.get("focus",0))
+    var mult := mult_select.get_selected_id()
+    var free := int(me.get("rampage",0)) > 0
+    var cost := 0 if free else (mini(8,energy) if all_in.button_pressed else mult)
+    focus.text = "FOCUS %d/8 · SPELLS %d/2" % [energy,int(me.get("spell",0))]
+    var locked := busy or ko or stale or me.is_empty()
+    roll_button.text = "WAITING…" if busy else ("KO %ds"%wait if ko and wait > 0 else ("RESPAWNING…" if ko else "ROLL"))
+    roll_button.disabled = locked or float(me.get("rollAt",0)) > now or (not free and (energy < cost or cost <= 0))
+    tower_title.disabled = locked
+    rally_button.disabled = locked or int(me.get("ralliesLeft",0)) <= 0 or float(me.get("rallyAt",0)) > now or energy < 2
+    ult_button.text = "ULTIMATE %d%%" % int(me.get("ult",0))
+    ult_button.disabled = locked or int(me.get("ult",0)) < 100
+    mult_select.disabled = locked or free
+    if free:
+        mult_select.select(0)
+        all_in.set_pressed_no_signal(false)
+        all_in.text = "ALL-IN OFF"
+    all_in.disabled = locked or free or energy == 0
     for b in spell_buttons:
-        b.disabled = busy or ko or int(me.get("spell",0)) <= 0 or int(me.get("spellAt",0)) > now
+        b.disabled = locked or int(me.get("spell",0)) <= 0 or float(me.get("spellAt",0)) > now
+        if str(b.get_meta("spell")) == "horn":
+            b.disabled = b.disabled or int(me.get("ralliesLeft",0)) <= 0 or float(me.get("rallyAt",0)) > now
+    if stale:
+        status.text = "Reconnecting · waiting for fresh server state"
+    elif Time.get_ticks_msec() > notice_until:
+        var humans := 0
+        for h in latest.get("heroes",[]):
+            if not h.get("bot",true):
+                humans += 1
+        status.text = "LIVE · %d humans · %d bots · Compressed sync" % [humans,20-humans]
 
-func _cast_spell(spell: String) -> void:
-    await _do_action("spell",{"spell":spell})
+func _notice(text: String) -> void:
+    if is_instance_valid(status):
+        status.text = text
+        notice_until = Time.get_ticks_msec()+3500
 
 func _roll() -> void:
-    selected_mult = mult_select.get_selected_id()
-    await _do_action("roll",{"mult":selected_mult,"allIn":all_in.button_pressed})
-    all_in.button_pressed = false
-
-func _move_to(tower: int) -> void:
-    if busy:
+    if roll_button.disabled:
         return
-    await _do_action("move",{"tower":tower})
+    dice.start_roll()
+    audio.play("roll")
+    await _do_action("roll",{"mult":mult_select.get_selected_id(),"allIn":all_in.button_pressed})
+    if screen == "battle" and is_instance_valid(all_in):
+        all_in.set_pressed_no_signal(false)
+        all_in.text = "ALL-IN OFF"
+
+func _cast(spell: String) -> void:
+    await _do_action("spell",{"spell":spell})
 
 func _do_action(kind: String, payload := {}) -> void:
-    if busy or current_match_id.is_empty():
+    if busy or screen != "battle":
         return
     busy = true
-    _paint_clock_and_controls()
-    result_label.text = "Confirming %s with server…" % kind
-    var response: Dictionary = await api.action(kind,current_match_id,payload)
-    busy = false
-    if not response.get("ok",false):
-        if response.get("state",{}) is Dictionary and not response.get("state",{}).is_empty():
-            _accept(response["state"])
-        result_label.text = str(response.get("error","Action rejected"))
-        _paint_clock_and_controls()
+    var generation := epoch
+    var room := current_match_id
+    _paint_controls()
+    var answer: Dictionary = await api.action(kind,room,payload)
+    if epoch != generation or current_match_id != room:
+        busy = false
         return
-    if response.has("state"):
-        _accept(response["state"])
-    var result: Dictionary = response.get("result",{})
+    busy = false
+    if not (answer.get("state",{}) as Dictionary).is_empty():
+        _accept(answer.state)
+    if screen != "battle":
+        return
+    dice.pending = false
+    dice.set_faces(_me().get("lastFaces",[]))
+    if not answer.get("ok",false):
+        _notice(str(answer.get("error","Action not confirmed")))
+        return
+    var result: Dictionary = answer.get("result",{})
     if kind == "roll":
         var effects: Dictionary = result.get("effects",{})
-        await _animate_confirmed_roll(result.get("faces",[]),result)
-        result_label.text = "%s %s · dealt %d · absorbed %d · Focus +%d · shield +%d · gold +%d · XP +%d" % [
-            str(result.get("tier","none")).capitalize(),FACE_NAMES.get(str(result.get("symbol","")),"MIXED"),
-            int(result.get("dealt",0)),int(result.get("absorbed",0)),int(effects.get("focusGained",0)),
-            int(effects.get("shieldAdded",0)),int(effects.get("goldAdded",0)),int(effects.get("xpAdded",0))]
+        var messages: Array[String] = []
+        if int(result.get("dealt",0)) > 0:
+            messages.append("%d damage" % int(result.dealt))
+        if int(result.get("absorbed",0)) > 0:
+            messages.append("%d blocked" % int(result.absorbed))
+        for spec in [["shieldAdded","shield"],["focusGained","Focus"],["goldAdded","gold"],["xpAdded","XP"],["giftAdded","gift power"]]:
+            var n := int(effects.get(spec[0],0))
+            if n > 0:
+                messages.append("+%d %s"%[n,spec[1]])
+        roll_result.text = " · ".join(messages) if not messages.is_empty() else "Roll confirmed · current bonuses and caps preserved"
+        audio.play("land")
     else:
-        result_label.text = "%s confirmed by server." % kind.capitalize()
-        if kind == "spell":
-            spell_fx.play_spell(str(payload.get("spell","")),true)
-        elif kind == "rally":
-            spell_fx.play_spell("horn",true)
-    _paint_clock_and_controls()
+        _notice(kind.capitalize()+" confirmed")
+    _paint_controls()
 
-func _process_events(match: Dictionary) -> void:
-    for event in match.get("events",[]):
+func _events(data: Dictionary) -> void:
+    for event in data.get("events",[]):
         var seq := int(event.get("seq",0))
         if seq <= event_seq:
             continue
         event_seq = seq
-        if str(event.get("type","")) == "spell":
-            var actor_side := -1
-            for hero in match.get("heroes",[]):
-                if str(hero.get("id","")) == str(event.get("actor","")):
-                    actor_side = int(hero.get("side",-1))
-                    break
-            var me := _me()
-            spell_fx.play_spell(str(event.get("spell","")),actor_side == int(me.get("side",-2)))
+        if float(data.get("now",0))-float(event.get("at",0)) > 1800:
+            continue
+        if int(event.get("tower",_me().get("tower",0))) != int(_me().get("tower",0)):
+            continue
+        board.confirm_event(event)
+        var kind := str(event.get("type",""))
+        var own: bool = str(event.get("actor","")) == api.player_id
+        if kind == "roll":
+            if int(event.get("dealt",0)) > 0:
+                audio.play("crit" if event.get("symbol","") == "C" else "hit",not own)
+            elif event.get("symbol","") == "H":
+                audio.play("shield",not own)
+        elif kind == "spell":
+            audio.play(str(event.get("spell","barrage")),not own)
+        elif kind == "rally":
+            audio.play("horn",not own)
+
+func _popup(title: String) -> VBoxContainer:
+    if is_instance_valid(modal):
+        modal.queue_free()
+    modal = Control.new()
+    modal.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    ui_root.add_child(modal)
+    var shade := ColorRect.new()
+    shade.color = Color(0,0,0,0.7)
+    shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    modal.add_child(shade)
+    var safe := MarginContainer.new()
+    safe.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    for edge in ["left","right","top","bottom"]:
+        safe.add_theme_constant_override("margin_"+edge,22)
+    modal.add_child(safe)
+    var panel := PanelContainer.new()
+    panel.add_theme_stylebox_override("panel",_style(Color("#10232e"),Color("#c7ac6a"),16))
+    safe.add_child(panel)
+    var scroll := ScrollContainer.new()
+    scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+    panel.add_child(scroll)
+    var box := VBoxContainer.new()
+    box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    box.add_theme_constant_override("separation",9)
+    scroll.add_child(box)
+    var heading := _row(box)
+    heading.add_child(_label(title,21,Color("#f4d48c")))
+    var close := _button("CLOSE",42)
+    close.size_flags_horizontal = Control.SIZE_FILL
+    close.custom_minimum_size.x = 80
+    close.pressed.connect(func():
+        if is_instance_valid(modal):
+            modal.queue_free()
+            modal = null
+    )
+    heading.add_child(close)
+    audio.play("menuOpen")
+    return box
+
+func _tower_map() -> void:
+    var box := _popup("CHOOSE A TOWER")
+    box.add_child(_label("Tap a tower to move. Scrolling does not move your hero.",12,Color("#acc8cb"),true))
+    var grid := GridContainer.new()
+    grid.columns = 2
+    grid.add_theme_constant_override("h_separation",8)
+    grid.add_theme_constant_override("v_separation",8)
+    box.add_child(grid)
+    var now := _server_now()
+    for i in 10:
+        var tower: Dictionary = latest.get("towers",[])[i]
+        var b := _button("TOWER "+ROMAN[i]+" · "+str(int(tower.get("pts",0)))+" crowns",62)
+        b.disabled = i == int(_me().get("tower",0)) or busy or float(_me().get("moveAt",0)) > now or int(_me().get("hp",0)) <= 0
+        b.pressed.connect(_move_to.bind(i))
+        grid.add_child(b)
+
+func _move_to(tower: int) -> void:
+    if is_instance_valid(modal):
+        modal.queue_free()
+        modal = null
+    await _do_action("move",{"tower":tower})
+
+func _more() -> void:
+    var box := _popup("BATTLE MENU")
+    var sound := _button("Sound off" if audio.muted else "Sound on")
+    sound.pressed.connect(func():
+        audio.toggle()
+        sound.text = "Sound off" if audio.muted else "Sound on"
+        audio.play("menuOpen")
+    )
+    box.add_child(sound)
+    var stored := _button("USE STORED ATTACK · %d power" % int(_me().get("storedDamage",0)))
+    stored.disabled = int(_me().get("storedDamage",0)) <= 0 or busy or int(_me().get("hp",0)) <= 0
+    stored.pressed.connect(func():
+        modal.queue_free()
+        modal = null
+        _do_action("stored")
+    )
+    box.add_child(stored)
+    box.add_child(_label("Gift power ready: %d · choose a teammate" % int(_me().get("giftDamage",0)),12,Color("#efdda1"),true))
+    for hero in latest.get("heroes",[]):
+        if int(hero.get("side",-1)) != int(_me().get("side",0)) or str(hero.id) == api.player_id:
+            continue
+        var send := _button("SEND TO "+str(hero.get("name","Teammate")))
+        send.disabled = int(_me().get("giftDamage",0)) <= 0 or busy or int(_me().get("hp",0)) <= 0
+        send.pressed.connect(_send_gift.bind(str(hero.id)))
+        box.add_child(send)
+    box.add_child(_label("Preview 0.2 · transport 2\n%d full + %d changed-state responses\n%.1f KB decoded JSON (not carrier data)" % [api.wire.stats.full,api.wire.stats.delta,float(api.bytes_received)/1024.0],11,Color("#8daeb4"),true))
+
+func _send_gift(target: String) -> void:
+    if is_instance_valid(modal):
+        modal.queue_free()
+        modal = null
+    await _do_action("gift",{"target":target})
 
 func _show_result(state: Dictionary) -> void:
-    active = false
-    _clear_ui()
-    _background()
-    var center := CenterContainer.new()
-    center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    ui_root.add_child(center)
-    var panel := PanelContainer.new()
-    panel.custom_minimum_size = Vector2(350,470)
-    panel.add_theme_stylebox_override("panel",_style(Color("#0d2633"),Color("#d7b66c"),18))
-    center.add_child(panel)
-    var box := VBoxContainer.new()
-    box.add_theme_constant_override("separation",12)
-    panel.add_child(box)
-    var r: Dictionary = state.get("result",{})
-    var headline := "DRAW" if r.get("draw",false) else ("VICTORY" if r.get("win",false) else "DEFEAT")
-    var title := _label(headline,30,Color("#f2d38a"))
-    title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    box.add_child(title)
-    var score: Array = r.get("score",[0,0])
-    box.add_child(_label("Final crowns: %s — %s" % [score[0],score[1]],20))
-    box.add_child(_label("The server remains authoritative. This result came from the existing Fatebound arena, not duplicated Godot combat logic.",12,Color("#9db7bd")))
-    var shard := OptionButton.new()
-    for key in ["steel","arcane","fletch"]:
-        shard.add_item(key.capitalize())
-        shard.set_item_metadata(shard.item_count-1,key)
-    box.add_child(shard)
-    var claim := _button("CLAIM REWARD")
-    box.add_child(claim)
-    var status := _label("",12,Color("#9fe5be"))
-    box.add_child(status)
+    poll_timer.stop()
+    busy = false
+    _new_screen("result")
+    var result: Dictionary = state.get("result",{})
+    page.add_spacer(false)
+    page.add_child(_label("DRAW" if result.get("draw",false) else ("VICTORY" if result.get("win",false) else "DEFEAT"),32,Color("#f1d491")))
+    var crowns: Array = result.get("score",[0,0])
+    page.add_child(_label("Final crowns · %d — %d" % [int(crowns[0]),int(crowns[1])],22))
+    var reward: Dictionary = result.get("reward",{})
+    page.add_child(_label("%d gold · %d XP" % [int(reward.get("gold",0)),int(reward.get("xp",0))],18,Color("#9de4ce")))
+    var choice := OptionButton.new()
+    choice.fit_to_longest_item = false
+    choice.custom_minimum_size.y = 44
+    for label in ["Steel shards","Arcane shards","Fletch shards"]:
+        choice.add_item(label)
+    page.add_child(choice)
+    status = _label("Rewards belong to this separate preview profile.",12,Color("#abc6c9"),true)
+    page.add_child(status)
+    var claim := _button("CLAIM REWARD",52)
+    var again := _button("PLAY AGAIN",48)
+    again.disabled = true
     claim.pressed.connect(func():
+        if claim.disabled:
+            return
         claim.disabled = true
-        var data: Dictionary = await api.claim(current_match_id,str(shard.get_item_metadata(shard.selected)))
-        if data.get("ok",false):
-            status.text = "Claimed: " + JSON.stringify(data.get("receipt",{}))
+        var answer: Dictionary = await api.claim(current_match_id,["steel","arcane","fletch"][choice.selected])
+        if not is_instance_valid(claim):
+            return
+        if answer.get("ok",false):
+            status.text = "Rewards claimed. Ready for your next battle."
+            claim.text = "CLAIMED"
+            again.disabled = false
+            audio.play("reward")
         else:
-            status.text = str(data.get("error","Claim failed"))
+            status.text = str(answer.get("error","Claim not confirmed. Retry safely."))
             claim.disabled = false
     )
-    var again := _button("QUEUE AGAIN")
     again.pressed.connect(_show_home)
-    box.add_child(again)
-
+    page.add_child(claim)
+    page.add_child(again)
+    page.add_spacer(false)
