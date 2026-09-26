@@ -1,0 +1,14 @@
+{
+  "migration_base_branch": "chatgpt/v114-battle-guild-feedback",
+  "migration_base_commit": "64f19576caebed43ee609bf875a024c35a0ffdba",
+  "production_html_build": "114-battle-guild-feedback",
+  "production_html_sha256": "84697859827127e8c9285b0cf57578a8fc2bcedcb3cf8d3247772f0309f3b4e9",
+  "arena_protocol": 1,
+  "arena_transport": 2,
+  "balance_version": 110,
+  "queue_ms": 20000,
+  "capacity": 20,
+  "team_size": 10,
+  "godot_version": "4.7.2-stable",
+  "preview_package": "com.fatebound.godotpreview"
+}

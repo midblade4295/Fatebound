@@ -1,0 +1,20 @@
+[application]
+config/name="Fatebound Godot M1"
+config/description="Parallel native client prototype for Fatebound's existing authoritative arena."
+run/main_scene="res://scenes/Main.tscn"
+
+[display]
+window/size/viewport_width=420
+window/size/viewport_height=900
+window/size/window_width_override=420
+window/size/window_height_override=900
+window/stretch/mode="canvas_items"
+window/handheld/orientation=1
+
+[rendering]
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+textures/default_filters/use_nearest_mipmap_filter=false
+
+[gui]
+theme/default_font_multichannel_signed_distance_field=true
