@@ -1,0 +1,11 @@
+{
+  "delivered_utc": "2026-09-26T16:32:22.872514+00:00",
+  "build": "0.2.0-art-layout",
+  "http_status": 200,
+  "public_apk_sha256": "3964a3bad51f043f249ac55ca281d7abbf6d2e08d9e28553cdc3ec8042f04dbc",
+  "bytes": 88848330,
+  "same_signature_as_existing_preview": true,
+  "production_processes_restarted": false,
+  "production_html_changed": false,
+  "note": "Only the already-allowlisted preview APK was replaced. No server code, route, save or live-match changes."
+}
