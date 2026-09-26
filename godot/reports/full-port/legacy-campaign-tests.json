@@ -1,0 +1,130 @@
+{
+  "campaign_runs": [
+    {
+      "hero": 0,
+      "result": {
+        "energy": 5,
+        "gold": 180,
+        "kind": "steel",
+        "pts": 18,
+        "season": 8,
+        "shards": 12
+      },
+      "rolls": 172,
+      "score": [
+        43,
+        6
+      ],
+      "spells": 29,
+      "ults": 7
+    },
+    {
+      "hero": 1,
+      "result": {
+        "energy": 5,
+        "gold": 180,
+        "kind": "steel",
+        "pts": 15,
+        "season": 8,
+        "shards": 12
+      },
+      "rolls": 169,
+      "score": [
+        41,
+        8
+      ],
+      "spells": 34,
+      "ults": 6
+    },
+    {
+      "hero": 2,
+      "result": {
+        "energy": 5,
+        "gold": 180,
+        "kind": "steel",
+        "pts": 18,
+        "season": 8,
+        "shards": 12
+      },
+      "rolls": 172,
+      "score": [
+        41,
+        8
+      ],
+      "spells": 32,
+      "ults": 5
+    },
+    {
+      "hero": 3,
+      "result": {
+        "energy": 5,
+        "gold": 180,
+        "kind": "arcane",
+        "pts": 18,
+        "season": 8,
+        "shards": 12
+      },
+      "rolls": 157,
+      "score": [
+        43,
+        7
+      ],
+      "spells": 22,
+      "ults": 5
+    },
+    {
+      "hero": 4,
+      "result": {
+        "energy": 5,
+        "gold": 180,
+        "kind": "fletch",
+        "pts": 18,
+        "season": 8,
+        "shards": 12
+      },
+      "rolls": 172,
+      "score": [
+        44,
+        6
+      ],
+      "spells": 29,
+      "ults": 6
+    }
+  ],
+  "checks": [
+    "compatible session106 converts to native",
+    "converted native snapshot is loadable",
+    "import preserves player HP/tower/shields",
+    "import preserves Focus and participation",
+    "import preserves deadline and banked control",
+    "original web battle preserved separately",
+    "battle conversion does not charge or count a new match",
+    "expired web session preserved without invented rewards",
+    "mid-match JSON restore hero 0",
+    "solo full timed match completes hero 0",
+    "finite state/rewards hero 0",
+    "40-fighter loop stays local hero 0",
+    "mid-match JSON restore hero 1",
+    "solo full timed match completes hero 1",
+    "finite state/rewards hero 1",
+    "40-fighter loop stays local hero 1",
+    "mid-match JSON restore hero 2",
+    "solo full timed match completes hero 2",
+    "finite state/rewards hero 2",
+    "40-fighter loop stays local hero 2",
+    "mid-match JSON restore hero 3",
+    "solo full timed match completes hero 3",
+    "finite state/rewards hero 3",
+    "40-fighter loop stays local hero 3",
+    "mid-match JSON restore hero 4",
+    "solo full timed match completes hero 4",
+    "finite state/rewards hero 4",
+    "40-fighter loop stays local hero 4",
+    "stored attack can finish raid and closes attempt",
+    "personal raid damage and Slayer credited",
+    "ended raid cannot award again"
+  ],
+  "errors": [],
+  "physical_phone": false,
+  "status": "PASS"
+}

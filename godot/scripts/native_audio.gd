@@ -43,6 +43,15 @@ func play(cue: String, quiet := false) -> void:
     for player in voices:
         if not player.playing:
             player.stream = cache[cue]
-            player.volume_db = -22.0 if quiet else -15.0
+            var ui_cue:bool=cue in ["tap","menuOpen","menuClose","equip","purchase","coin","confirm","error","chest","level","energy"]
+            var gain:float=0.12*float(levels.master)*float(levels.ui if ui_cue else levels.combat)*(0.40 if quiet else 1.0)
+            if gain<=0:return
+            player.volume_db = linear_to_db(gain)
             player.play()
             return
+
+var levels:Dictionary={"master":0.75,"combat":0.8,"ui":0.75}
+func set_levels(value:Dictionary)->void:
+    for key in levels:
+        if value.get(key) is float or value.get(key) is int:levels[key]=clampf(float(value[key]),0,1)
+    if float(levels.master)<=0:stop()

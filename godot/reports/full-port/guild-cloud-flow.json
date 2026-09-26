@@ -1,0 +1,18 @@
+{
+  "checks": [
+    "live guild connection renders create form",
+    "native guild create roundtrip",
+    "native leader route changes server route",
+    "qualified live milestone enables claim",
+    "guild receipt pays exact original milestone once",
+    "claimed receipt history deduplicates native award",
+    "native leave-guild roundtrip",
+    "native cloud upload/read/import parser roundtrip",
+    "cloud roundtrip preserves native progression",
+    "native cloud input rejects invalid save code"
+  ],
+  "failures": [],
+  "local_only": true,
+  "physical_phone": false,
+  "status": "PASS"
+}

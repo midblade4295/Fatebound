@@ -3,6 +3,7 @@ const Wire = preload("res://scripts/arena_wire.gd")
 const NAMES := {"S":"SWORD","C":"CRITICAL","H":"SHIELD","G":"GOLD","E":"FOCUS","F":"GIFT"}
 var faces: Array = []
 var pending := false
+var reduce_motion := false
 var rolling_until := 0.0
 var elapsed := 0.0
 var _font: Font
@@ -33,7 +34,7 @@ func _draw() -> void:
     var match_info: Dictionary = Wire.winning_dice(faces)
     var width := minf(size.x/3-14,108)
     var die := minf(width-10,size.y-29)
-    var spinning := pending or elapsed < rolling_until
+    var spinning := (pending or elapsed < rolling_until) and not reduce_motion
     for i in 3:
         var center := Vector2(size.x*(i+0.5)/3,die*0.5+6)
         var symbol: String = str(faces[i]) if faces.size() == 3 else ""

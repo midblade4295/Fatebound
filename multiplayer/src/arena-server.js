@@ -108,6 +108,16 @@ function createServer({dataFile=null,allowedOrigins=[],allowLocal=false,trustPro
    if(route==='/state'||route==='/action')mm.state(u);mm.tick();let out;
    if(route==='/profile'&&req.method==='GET')out=mm.profile(u);
    else if(route==='/pending-rewards'&&req.method==='GET')out=mm.pendingRewards(u);
+   else if(route==='/receipts'&&req.method==='GET'){
+    // Read-only history for native migration/recovery, strictly scoped to this token.
+    const rawLimit=url.searchParams.get('limit')||'100',after=url.searchParams.get('after')||'';
+    assert(/^\d{1,3}$/.test(rawLimit)&&Number(rawLimit)>=1&&Number(rawLimit)<=100,'Invalid receipt limit');
+    assert(after.length<=200&&(!after||/^[0-9]+:[\w:.-]+$/.test(after)),'Invalid receipt cursor');
+    const key=r=>String(Math.floor(r.at||0)).padStart(16,'0')+':'+r.id;
+    const rows=Object.values(u.receipts).filter(r=>r&&typeof r.id==='string').sort((a,b)=>key(a)<key(b)?-1:key(a)>key(b)?1:0);
+    const eligible=after?rows.filter(r=>key(r)>after):rows,limit=Number(rawLimit),page=eligible.slice(0,limit);
+    out={receipts:page,next:eligible.length>limit?key(page[page.length-1]):null};
+   }
    else if(route==='/queue'&&req.method==='POST')out=mm.join(u,body);
    else if(route==='/cancel'&&req.method==='POST')out=mm.cancel(u);
    else if(route==='/state'&&req.method==='GET')out=mm.state(u);

@@ -1,0 +1,39 @@
+{
+  "failures": [],
+  "layouts": [
+    {
+      "battlefieldHeight": 115.0,
+      "menuPages": 12,
+      "size": "(360, 640)"
+    },
+    {
+      "battlefieldHeight": 319.0,
+      "menuPages": 12,
+      "size": "(390, 844)"
+    },
+    {
+      "battlefieldHeight": 411.0,
+      "menuPages": 12,
+      "size": "(420, 936)"
+    },
+    {
+      "battlefieldHeight": 390.0,
+      "menuPages": 12,
+      "size": "(412, 915)"
+    },
+    {
+      "battlefieldHeight": 435.0,
+      "menuPages": 12,
+      "size": "(600, 960)"
+    },
+    {
+      "battlefieldHeight": 499.0,
+      "menuPages": 12,
+      "size": "(768, 1024)"
+    }
+  ],
+  "menuLayoutCombinations": 72,
+  "native_mouse_navigation": true,
+  "physical_phone": false,
+  "renderer": "llvmpipe (LLVM 20.1.2, 256 bits)"
+}

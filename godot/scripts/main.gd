@@ -100,7 +100,7 @@ func _label(text := "", fontsize := 14, color := Color("#e0e5df"), wrap := false
     l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART if wrap else TextServer.AUTOWRAP_OFF
-    l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+    l.text_overrun_behavior = TextServer.OVERRUN_NO_TRIMMING if wrap else TextServer.OVERRUN_TRIM_ELLIPSIS
     l.clip_text = not wrap
     return l
 

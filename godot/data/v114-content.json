@@ -1,0 +1,887 @@
+{
+  "source_sha256": "84697859827127e8c9285b0cf57578a8fc2bcedcb3cf8d3247772f0309f3b4e9",
+  "tables": {
+    "NAMES": [
+      "Aldric",
+      "Bram",
+      "Cass",
+      "Dorn",
+      "Elka",
+      "Fenn",
+      "Gault",
+      "Hesper",
+      "Ivo",
+      "Jory",
+      "Kell",
+      "Lira",
+      "Marek",
+      "Nessa",
+      "Oswin",
+      "Pike",
+      "Quill",
+      "Rook",
+      "Sable",
+      "Tarn",
+      "Ulf",
+      "Vesna",
+      "Wyn",
+      "Yara",
+      "Zed",
+      "Orla",
+      "Bryn",
+      "Corwin",
+      "Dagny",
+      "Emrys",
+      "Falk",
+      "Greer",
+      "Hollis",
+      "Idris",
+      "Jem",
+      "Kit",
+      "Lowen",
+      "Maud",
+      "Niall",
+      "Ottilie"
+    ],
+    "CHARS": [
+      {
+        "id": "knight",
+        "n": "Knight",
+        "d": "Plate and cape · +15% HP",
+        "hp": 1.15,
+        "atk": 1,
+        "crit": 0
+      },
+      {
+        "id": "rogue",
+        "n": "Rogue",
+        "d": "Hooded, quick · +0.3 crit",
+        "hp": 1,
+        "atk": 1,
+        "crit": 0.3
+      },
+      {
+        "id": "barb",
+        "n": "Barbarian",
+        "d": "Bear hat · +10% ATK",
+        "hp": 1,
+        "atk": 1.1,
+        "crit": 0
+      },
+      {
+        "id": "mage",
+        "n": "Mage",
+        "d": "Big hat · gold rolls pay +25%",
+        "hp": 0.95,
+        "atk": 1,
+        "crit": 0.1,
+        "gold": 1.25
+      },
+      {
+        "id": "ranger",
+        "n": "Ranger",
+        "d": "Cape and quiver · +1 on energy rolls",
+        "hp": 1,
+        "atk": 1.05,
+        "crit": 0.1,
+        "energy": 1
+      }
+    ],
+    "WEAPONS": [
+      {
+        "n": "Sword",
+        "m": 1,
+        "cost": 0,
+        "cls": "1h"
+      },
+      {
+        "n": "Twin daggers",
+        "m": 1.15,
+        "crit": 0.2,
+        "cls": "dual",
+        "quest": {
+          "k": "triples",
+          "need": 3,
+          "d": "Roll 3 triples in one match"
+        }
+      },
+      {
+        "n": "Hand axe",
+        "m": 1.1,
+        "cost": 500,
+        "cls": "1h"
+      },
+      {
+        "n": "Greatsword",
+        "m": 1.3,
+        "cls": "2h",
+        "quest": {
+          "k": "kos",
+          "need": 3,
+          "d": "Knock out 3 enemies in one match"
+        }
+      },
+      {
+        "n": "Great axe",
+        "m": 1.5,
+        "cls": "2h",
+        "quest": {
+          "k": "damage",
+          "need": 5000,
+          "d": "Deal 5,000 damage in one match"
+        }
+      },
+      {
+        "n": "Staff",
+        "m": 1.2,
+        "cost": 2500,
+        "cls": "magic"
+      },
+      {
+        "n": "Wand",
+        "m": 1.05,
+        "crit": 0.3,
+        "cls": "magic",
+        "quest": {
+          "k": "shieldsBroken",
+          "need": 5,
+          "d": "Break 5 shields in one match"
+        }
+      },
+      {
+        "n": "Bow",
+        "m": 1.25,
+        "cost": 10000,
+        "cls": "bow"
+      },
+      {
+        "n": "Crossbow",
+        "m": 1.35,
+        "cls": "xbow",
+        "quest": {
+          "k": "rolls",
+          "need": 60,
+          "d": "Roll 60 times in one match"
+        }
+      }
+    ],
+    "TIERS": [
+      {
+        "n": "Common",
+        "col": null,
+        "m": 1,
+        "shards": 0,
+        "gold": 0
+      },
+      {
+        "n": "Rare",
+        "col": "#37c0dd",
+        "m": 1.1,
+        "shards": 20,
+        "gold": 1500
+      },
+      {
+        "n": "Epic",
+        "col": "#c98aff",
+        "m": 1.2,
+        "shards": 40,
+        "gold": 5000,
+        "perk": 1
+      },
+      {
+        "n": "Legendary",
+        "col": "#ffd94a",
+        "m": 1.35,
+        "shards": 80,
+        "gold": 15000,
+        "perk": 2
+      }
+    ],
+    "PERKS": {
+      "1h": {
+        "d": "ultimate charges {v}% faster",
+        "k": "ult",
+        "v": 25
+      },
+      "2h": {
+        "d": "siege damage +{v}%",
+        "k": "siege",
+        "v": 25
+      },
+      "dual": {
+        "d": "+{v} crit",
+        "k": "crit",
+        "v": 0.15
+      },
+      "magic": {
+        "d": "triples hit +{v}% harder",
+        "k": "triple",
+        "v": 20
+      },
+      "bow": {
+        "d": "{v}% of roll energy back per KO (25% max per paid roll)",
+        "k": "koEnergy",
+        "v": 2
+      },
+      "xbow": {
+        "d": "{v}% of roll energy back per KO (25% max per paid roll)",
+        "k": "koEnergy",
+        "v": 2
+      }
+    },
+    "SHARDS": {
+      "steel": {
+        "n": "Steel shards",
+        "ic": "⛏",
+        "d": "melee weapons"
+      },
+      "arcane": {
+        "n": "Arcane shards",
+        "ic": "🔮",
+        "d": "staff & wand"
+      },
+      "fletch": {
+        "n": "Fletch shards",
+        "ic": "🪶",
+        "d": "bow & crossbow"
+      }
+    },
+    "SHARD_OF": {
+      "1h": "steel",
+      "dual": "steel",
+      "2h": "steel",
+      "magic": "arcane",
+      "bow": "fletch",
+      "xbow": "fletch"
+    },
+    "RELICS": [
+      {
+        "id": "cap",
+        "n": "Deep flask",
+        "d": "+2 Fate cap",
+        "cost": 10,
+        "max": 20
+      },
+      {
+        "id": "atk",
+        "n": "Whetstone",
+        "d": "+2% attack",
+        "cost": 15,
+        "max": 10
+      },
+      {
+        "id": "crit",
+        "n": "Bloodstone",
+        "d": "+0.1 crit multiplier",
+        "cost": 25,
+        "max": 5
+      },
+      {
+        "id": "lucky",
+        "n": "Fortune charm",
+        "d": "+5% chest drop chance from your knockouts",
+        "cost": 40,
+        "max": 1
+      }
+    ],
+    "RANKS": [
+      [
+        "Bronze",
+        0
+      ],
+      [
+        "Silver",
+        100
+      ],
+      [
+        "Gold",
+        250
+      ],
+      [
+        "Platinum",
+        500
+      ],
+      [
+        "Diamond",
+        800
+      ],
+      [
+        "Ridge Lord",
+        1200
+      ]
+    ],
+    "DAILY_POOL": [
+      {
+        "k": "shieldsBroken",
+        "need": 10,
+        "d": "Break 10 shields",
+        "r": {
+          "gold": 300
+        }
+      },
+      {
+        "k": "kos",
+        "need": 3,
+        "d": "Knock out 3 enemies",
+        "r": {
+          "gold": 400
+        }
+      },
+      {
+        "k": "triples",
+        "need": 2,
+        "d": "Roll 2 triples",
+        "r": {
+          "energy": 5
+        }
+      },
+      {
+        "k": "rolls",
+        "need": 40,
+        "d": "Roll 40 times",
+        "r": {
+          "gold": 250
+        }
+      },
+      {
+        "k": "damage",
+        "need": 4000,
+        "d": "Deal 4,000 damage",
+        "r": {
+          "gold": 500
+        }
+      },
+      {
+        "k": "gifts",
+        "need": 2,
+        "d": "Gift 2 guildmates",
+        "r": {
+          "energy": 5
+        }
+      },
+      {
+        "k": "flips",
+        "need": 1,
+        "d": "Flip a tower",
+        "r": {
+          "gold": 600
+        }
+      },
+      {
+        "k": "wins",
+        "need": 1,
+        "d": "Win a battle",
+        "r": {
+          "energy": 10
+        }
+      },
+      {
+        "k": "bounties",
+        "need": 1,
+        "d": "Collect a bounty",
+        "r": {
+          "gold": 500
+        }
+      }
+    ],
+    "SEASON_NAMES": [
+      "Rising of the Ridge",
+      "Crimson Tide",
+      "The Long Night",
+      "Iron Harvest",
+      "Wolves at the Gate",
+      "Emberfall"
+    ],
+    "SEASON_TIERS": [
+      [
+        100,
+        {
+          "energy": 20
+        },
+        {
+          "energy": 100,
+          "gold": 300
+        }
+      ],
+      [
+        200,
+        {
+          "gold": 300
+        },
+        {
+          "tokens": 15,
+          "shards": 10
+        }
+      ],
+      [
+        300,
+        {
+          "tokens": 5
+        },
+        {
+          "level": 1
+        }
+      ],
+      [
+        400,
+        {
+          "energy": 50
+        },
+        {
+          "weapon": 2,
+          "title": "Axe of the Season"
+        }
+      ],
+      [
+        500,
+        {
+          "chest": 1,
+          "shards": 5
+        },
+        {
+          "gold": 1500,
+          "energy": 100,
+          "shards": 20
+        }
+      ],
+      [
+        600,
+        {
+          "gold": 800
+        },
+        {
+          "tokens": 30
+        }
+      ],
+      [
+        700,
+        {
+          "energy": 100
+        },
+        {
+          "level": 1,
+          "chest": 2
+        }
+      ],
+      [
+        800,
+        {
+          "tokens": 15
+        },
+        {
+          "weapon": 4,
+          "shards": 30,
+          "title": "Great axe of the Ridge"
+        }
+      ],
+      [
+        900,
+        {
+          "gold": 2000
+        },
+        {
+          "energy": 300
+        }
+      ],
+      [
+        1000,
+        {
+          "chest": 3,
+          "shards": 10
+        },
+        {
+          "tokens": 60,
+          "shards": 60,
+          "title": "Ridge Lord"
+        }
+      ]
+    ],
+    "BOSS_NAMES": [
+      [
+        "Gorr the Ravager",
+        "barb",
+        4
+      ],
+      [
+        "Ser Malachai",
+        "knight",
+        3
+      ],
+      [
+        "The Archmage Vel",
+        "mage",
+        5
+      ],
+      [
+        "Nightshade",
+        "rogue",
+        1
+      ],
+      [
+        "Warden Ashk",
+        "ranger",
+        7
+      ]
+    ],
+    "BOSS_TIERS": [
+      [
+        0.03,
+        150,
+        2,
+        10
+      ],
+      [
+        0.08,
+        250,
+        3,
+        15
+      ],
+      [
+        0.15,
+        350,
+        4,
+        15
+      ],
+      [
+        0.25,
+        450,
+        5,
+        20
+      ]
+    ],
+    "BOSS_MILESTONES": [
+      [
+        0.25,
+        200,
+        2,
+        2,
+        1
+      ],
+      [
+        0.5,
+        300,
+        3,
+        3,
+        1
+      ],
+      [
+        0.75,
+        400,
+        3,
+        4,
+        1
+      ],
+      [
+        1,
+        600,
+        3,
+        6,
+        2
+      ]
+    ],
+    "ULTS": {
+      "knight": {
+        "n": "BULWARK",
+        "d": "3 shield slots max · adds/upgrades 2 shields per ally, 3 for you · strength scales with your roll multiplier · incoming damage halved for 10 s · boss: ×1 shields and delays its strike"
+      },
+      "rogue": {
+        "n": "SHADOWSTRIKE",
+        "d": "your next 3 rolls are forced crits with +1 crit multiplier"
+      },
+      "barb": {
+        "n": "RAMPAGE",
+        "d": "next 5 rolls are free at ×1 and deal double attack damage; no free ALL-IN multiplier"
+      },
+      "mage": {
+        "n": "METEOR",
+        "d": "one blast for 25% of the enemy garrison pool, ignores shields · boss: 4% of its max HP"
+      },
+      "ranger": {
+        "n": "VOLLEY",
+        "d": "six arrows, each a pair-strength hit · every arrow that knocks someone out refunds 3 energy"
+      }
+    },
+    "BATTLE_LESSONS": [
+      {
+        "title": "The real battle screen",
+        "text": "This practice uses the real dice, heroes, tower map, Focus system, and combat controls. Training never charges Fate and does not change live war results.",
+        "target": "#board"
+      },
+      {
+        "title": "Fate and Focus are different",
+        "text": "Fate is persistent soft currency outside combat. Focus is the resource you spend inside the match for roll multipliers and ALL-IN. Wars and raids are free to enter.",
+        "target": ".stat"
+      },
+      {
+        "title": "Roll an attack",
+        "text": "Tap ROLL. This training result is scripted to land three swords so you can see a triple attack and how combat pressure begins.",
+        "target": "#roll",
+        "action": "roll",
+        "faces": [
+          "S",
+          "S",
+          "S"
+        ]
+      },
+      {
+        "title": "Tower control wins the map",
+        "text": "Damage and pressure at a tower help your guild take or defend it. Rotate when another lane matters more.",
+        "target": ".tbar"
+      },
+      {
+        "title": "Build your shields",
+        "text": "Tap ROLL for three shields. Shields absorb damage before health and can keep you standing during an enemy push.",
+        "target": "#roll",
+        "action": "roll",
+        "faces": [
+          "H",
+          "H",
+          "H"
+        ]
+      },
+      {
+        "title": "Read enemy pressure",
+        "text": "Enemy telegraphs and Focus indicators show where danger is building. Defend, rotate, or counterattack before the push lands.",
+        "target": "#board"
+      },
+      {
+        "title": "Gain Focus",
+        "text": "Roll the Focus result. During battle these resource faces refill Focus so you can afford stronger multipliers without spending Fate.",
+        "target": "#roll",
+        "action": "roll",
+        "faces": [
+          "E",
+          "E",
+          "E"
+        ]
+      },
+      {
+        "title": "Choose a multiplier",
+        "text": "Tap the multiplier once to increase it. Higher multipliers spend more Focus and amplify the roll.",
+        "target": "#mults",
+        "action": "mult"
+      },
+      {
+        "title": "Try a multiplied attack",
+        "text": "Tap ROLL at ×2. The same triple now creates a larger swing while consuming more Focus.",
+        "target": "#roll",
+        "action": "roll",
+        "faces": [
+          "S",
+          "S",
+          "S"
+        ],
+        "mult": 2
+      },
+      {
+        "title": "ALL-IN is a commitment",
+        "text": "With enough Focus, cycling beyond normal multipliers reaches ALL-IN. It commits your available Focus to one major roll.",
+        "target": "#mults"
+      },
+      {
+        "title": "Critical attacks",
+        "text": "Tap ROLL for critical symbols. Critical results can trigger a close-up skill sequence and produce a much stronger hit.",
+        "target": "#roll",
+        "action": "roll",
+        "faces": [
+          "C",
+          "C",
+          "C"
+        ]
+      },
+      {
+        "title": "Triples charge SPELL",
+        "text": "Triples charge SPELL. Barrage is a free attack, Bulwark protects a tower and shields allies, War Horn starts a free Rally, and Arcane Surge gives +4 Focus plus a 10-second power boost.",
+        "target": "#roll"
+      },
+      {
+        "title": "Guild gifts",
+        "text": "Tap ROLL for gifts, then choose a guildmate. Stored damage can be saved and activated later by the recipient.",
+        "target": "#roll",
+        "action": "giftRoll",
+        "faces": [
+          "F",
+          "F",
+          "F"
+        ]
+      },
+      {
+        "title": "Choose the bonus recipient",
+        "text": "Tap the glowing card. Its displayed value already includes the special bonus.",
+        "target": "#friends .gift-bonus",
+        "action": "gift"
+      },
+      {
+        "title": "Your trainer sent you an attack",
+        "text": "Captain Rowan has given you a stored 500-damage gift. Tap the sword at the top of the battlefield to see saved attacks.",
+        "target": "#giftAttackButton",
+        "action": "giftOpen"
+      },
+      {
+        "title": "Use the saved attack",
+        "text": "Choose the 500-damage attack. Your hero attacks immediately without a dice roll or Focus cost. Enemy shields can still absorb it.",
+        "target": "#giftAttackList [data-use-attack]",
+        "action": "giftUse"
+      },
+      {
+        "title": "Use your ultimate",
+        "text": "Your training ultimate is fully charged. Tap it now. In a live match, battle actions refill the ultimate meter.",
+        "target": "#ultBar",
+        "action": "ult"
+      },
+      {
+        "title": "Open the war map",
+        "text": "Tap Map. Fatebound has three strategic lanes: Outposts, Camp, and Courtyard.",
+        "target": "#tbarBack",
+        "action": "map"
+      },
+      {
+        "title": "Choose the next tower",
+        "text": "Tap a tower to enter its battlefield. Look at where your guild is winning or losing before choosing.",
+        "target": "#warcv",
+        "action": "tower"
+      },
+      {
+        "title": "Call your guild",
+        "text": "Tap Rally to ask teammates to focus this tower. Use it where coordinated pressure can change the match.",
+        "target": "#rally",
+        "action": "rally"
+      },
+      {
+        "title": "Crowns and the final push",
+        "text": "Tower control shapes crowns. Triples charge SPELL. The last part of the 5-minute clock is where rotations matter most.",
+        "target": "#heat"
+      },
+      {
+        "title": "Return home in training",
+        "text": "Tap Home. Training lets you explore menus because it is not a real match. A live 5-minute battle locks these menus until the result.",
+        "target": "nav [data-tab=\"home\"]",
+        "action": "home"
+      },
+      {
+        "title": "Review your hero",
+        "text": "Tap Hero to inspect attack power, critical attack, equipment, upgrades, and your ultimate.",
+        "target": "nav [data-tab=\"hero\"]",
+        "action": "hero"
+      },
+      {
+        "title": "Equipment and upgrades",
+        "text": "Your Hero page shows character abilities and your armory. Equipment can be changed here and forging uses gold and weapon shards.",
+        "target": "#scrHero"
+      },
+      {
+        "title": "Your guild",
+        "text": "Tap Guild. This page shows your guild’s score, messages, and teammates.",
+        "target": "nav [data-tab=\"guild\"]",
+        "action": "visitGuild"
+      },
+      {
+        "title": "Explore the guild page",
+        "text": "The roster shows each member’s location and damage contribution. Guild messages help coordinate pushes.",
+        "target": "#scrGuild"
+      },
+      {
+        "title": "Friends and gifts",
+        "text": "Tap Friends. You can send help to a guildmate here. Stored damage gifts are used from the sword button on the battlefield.",
+        "target": "nav [data-tab=\"friends\"]",
+        "action": "visitFriends"
+      },
+      {
+        "title": "Your gifts stay saved",
+        "text": "You do not have to spend a damage gift immediately. Keep it for an important tower or the final push.",
+        "target": "#scrFriends"
+      },
+      {
+        "title": "Fate and the shop",
+        "text": "Tap Shop. I’ve added 500 practice gold to demonstrate a purchase. Regular Fate sales are paused; your real gold and Fate are unchanged by this lesson.",
+        "target": "nav [data-tab=\"shop\"]",
+        "action": "visitShop"
+      },
+      {
+        "title": "Buy a Fate flask",
+        "text": "Tap the 300-practice-gold button for +10 stored Fate. This is a demonstration in a temporary save, not a live Shop purchase. Battle multipliers spend Focus instead.",
+        "target": "#scrShop [data-shop=\"energy10\"]",
+        "action": "buyEnergy"
+      },
+      {
+        "title": "Check your Fate balance",
+        "text": "Your Fate increased by 10 and your practice gold decreased by 300. Fate persists outside battle; Focus is separate and resets each match.",
+        "target": ".stat"
+      },
+      {
+        "title": "Back to your home hub",
+        "text": "Tap Home. From here you can access quests, Hero, Guild, Friends, Shop, training, and battle.",
+        "target": "nav [data-tab=\"home\"]",
+        "action": "home"
+      },
+      {
+        "title": "Ready for a real 5-minute battle",
+        "text": "Training is complete. In a real match, manage Focus, rotate lanes, charge SPELL, use Rally and your ultimate, and finish with the stronger crown position.",
+        "target": "nav [data-tab=\"home\"]",
+        "finish": true
+      }
+    ],
+    "SAVE_DEF": {
+      "char": 0,
+      "owned": [
+        0
+      ],
+      "weapon": 0,
+      "gold": 0,
+      "level": 5,
+      "xp": 0,
+      "cap": 50,
+      "energyAt": 0,
+      "stats": {
+        "matches": 0,
+        "wins": 0,
+        "bestDmg": 0,
+        "bestKos": 0,
+        "bestTriples": 0,
+        "damage": 0,
+        "kos": 0,
+        "triples": 0,
+        "rolls": 0,
+        "flips": 0
+      },
+      "rank": 0,
+      "ladder": null,
+      "daily": {
+        "date": "",
+        "q": [],
+        "p": {},
+        "done": []
+      },
+      "login": {
+        "date": "",
+        "streak": 0
+      },
+      "chests": [],
+      "giftsDue": [],
+      "rival": null,
+      "tokens": 0,
+      "relics": {
+        "cap": 0,
+        "atk": 0,
+        "crit": 0,
+        "lucky": 0
+      },
+      "boss": null,
+      "bossPending": null,
+      "bonus": 0,
+      "season": {
+        "id": 0,
+        "pts": 0,
+        "free": [],
+        "prem": [],
+        "premium": false
+      },
+      "tiers": {},
+      "shards": {
+        "steel": 0,
+        "arcane": 0,
+        "fletch": 0
+      }
+    }
+  }
+}
