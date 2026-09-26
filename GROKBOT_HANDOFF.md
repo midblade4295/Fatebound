@@ -19,7 +19,10 @@ No odds/payout/new-role mechanics, save reset, Legionary, Caddy, signing, Androi
 main merge or Google Play change. Installed Android assets need a v114 rebuild.
 52 full-HTML browser checks,64 Node and11 Python checks passed on the exact hash.
 Browser tests emulate touch and include induced faults, not physical Android.
-Live deployment evidence is recorded separately when completed.
+Live rollout and8public HTTPS checks have passed; source was reverified on continuation.
+Read `multiplayer/battle-guild-audit/live-deployment.json`, `public-smoke.json`,
+and `resume-verification.json`. Production code commit: `cca34e6ca9d3e9c63730195dc68018cbd25917d8`.
+PR#16 is the current review; launch v114 rather than older main/v113 assets.
 
 ---
 ## Earlier instructions retained only as historical provenance

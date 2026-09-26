@@ -55,3 +55,50 @@ Node tests also simulate thirty seeds with twenty-four substitute action steps e
 An intermediate browser-test fetch shim accidentally returned a function, which Playwright invoked with null; its wrapper was corrected. Another run completed all23 original checks but failed to write its report because an output directory was missing; the test now creates its report directories and was rerun. These test-runner failures are documented rather than described as production fixes.
 
 Final counts and live-rollout evidence will be recorded under `multiplayer/battle-guild-audit/`. Emulation/induced faults are not physical Android keyboard, phone GPU or acoustic validation. Real guild chat, Google-bound accounts, and production-scale load testing are not added in this patch.
+
+
+## Completed live rollout and continuation verification
+
+The paired engine/server and exact HTML were installed on 2026-09-25 at
+22:28:27 UTC from code commit `cca34e6ca9d3e9c63730195dc68018cbd25917d8`.
+All21 legacy save hashes and the arena accounts/guilds matched at rollout. The
+web host was not restarted; only the arena was restarted after verifying no
+active/queued users. No odds, payouts, save schema, Caddy or Legionary changes.
+
+Eight real-clock public HTTPS checks finished successfully at22:33:57 UTC:
+two labelled programmatic guests waited20.098seconds and entered the same
+10v10 match with18 bots, rolled, cast, changed towers, substituted/reconnected
+without changing human-selected towers, finished a300.061second battle with
+matching26–25 scores, claimed exactly once and joined/cancelled a second queue.
+There were193 numeric roll-receipt checks and758 authoritative bank-total checks.
+One test player had a naturally occurring KO and confirmed respawn. No artificial
+clock/HP/dice override or test-control endpoint was used in the public test.
+
+Those clients downloaded591,385encoded response-body bytes in total (~0.30MB
+average each) over1,034requests:961Brotli,1gzip legacy sample and72tiny identity
+responses. Two full states and955deltas were observed. This excludes initial
+HTML, headers/TLS, uploads and cloud saves; it is not carrier-metered phone data.
+The large initial/new-build HTML body is26,604,696bytes gzip. An unchanged
+conditional reload returns304/zero body. Compression from v113 remains enabled.
+
+When the user requested continuation, no game-code changes or service restart
+were required: the queued full-match test had completed while the conversation
+was paused. Source/modules, public gzip and304 were rechecked, and64Node plus
+11Python tests were rerun successfully. Both existing browser reports identify
+the same exact v114 hash:29new checks plus23original checks,52total. Their clean
+error arrays were checked using each report's actual field names. A first report
+validation command expected the wrong hash key; correcting that read did not
+require a game change. This is documented in resume-verification.json.
+
+See live-deployment.json, public-smoke.json, resume-verification.json and
+TEST_SUMMARY.json in multiplayer/battle-guild-audit/. Browser tests use touch
+emulation/induced faults; public clients are programmatic from the VM through
+public TLS, not two physical phones. Native Android keyboard/GPU/speaker checks
+remain device-specific. Existing Guild War room is explicitly device-local, not
+a multiplayer message service. No new real guild chat or account migration.
+
+Current review PR: #16, branch chatgpt/v114-battle-guild-feedback, stacked on#15.
+Main and Google Play are unchanged. The next Android build must bundle the exact
+v114 HTML, preserving application identity/signing and using a separately
+verified unused Play versionCode. Updating the website does not update an
+already installed app's bundled older HTML.

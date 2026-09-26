@@ -13,8 +13,8 @@
   "queue_ms": 20000,
   "match_players_total": 20,
   "team_size": 10,
-  "live_activation": "deployed and public TLS verified; physical-phone verification remains separate",
-  "status": "v114-tested-candidate",
+  "live_activation": "Paired v114 deployed and public-match verified; resume integrity checked. Physical Android validation remains separate.",
+  "status": "live-alpha-v114-verified",
   "notes": "Confirmed roll/banked feedback, human-owned tower choice, canvas context recovery, rebuilt Guild and bounded spell effects. Balance110, transport2 and save schemas preserved.",
   "runtime_test_report": "multiplayer/docs/BATTLE_GUILD_V114.md",
   "handoff": "GROKBOT_HANDOFF.md",
@@ -22,9 +22,9 @@
   "parent_commit": "4affef9e8b8611491d50603ded6ce6129622701c",
   "source_branch": "chatgpt/v114-battle-guild-feedback",
   "base_commit": "4affef9e8b8611491d50603ded6ce6129622701c",
-  "production_code_commit": null,
-  "deployment_verified_utc": null,
-  "deployment_report": null,
+  "production_code_commit": "cca34e6ca9d3e9c63730195dc68018cbd25917d8",
+  "deployment_verified_utc": "2026-09-26T01:58:16.144536+00:00",
+  "deployment_report": "multiplayer/battle-guild-audit/live-deployment.json",
   "arena_transport": 2,
-  "public_test_report": null
+  "public_test_report": "multiplayer/battle-guild-audit/public-smoke.json"
 }

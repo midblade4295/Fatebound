@@ -10,6 +10,9 @@
   "mirrors": 10,
   "unchanged_large_embedded_art": 103,
   "physical_android_tested": false,
-  "public_test": "pending",
-  "new_balance_formulas": false
+  "public_test": "PASS",
+  "new_balance_formulas": false,
+  "public_checks": 8,
+  "public_test_finished_utc": "2026-09-25T22:33:57.642Z",
+  "resume_verification": "resume-verification.json"
 }

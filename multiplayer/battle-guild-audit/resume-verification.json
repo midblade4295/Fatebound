@@ -1,0 +1,48 @@
+{
+  "verified_utc": "2026-09-26T01:58:16.144536+00:00",
+  "source_sha256": "84697859827127e8c9285b0cf57578a8fc2bcedcb3cf8d3247772f0309f3b4e9",
+  "source_bytes": 36338476,
+  "matched_live_modules": 5,
+  "web_host_matches": true,
+  "node_tests_rerun_passed": 64,
+  "web_tests_rerun_passed": 11,
+  "inline_scripts_parsed": 25,
+  "embedded_assets_preserved": 103,
+  "prior_browser_reports_verified": [
+    {
+      "report": "browser-tests.json",
+      "checks": 29,
+      "same_source_sha256": true
+    },
+    {
+      "report": "original-browser-tests.json",
+      "checks": 23,
+      "same_source_sha256": true
+    }
+  ],
+  "browser_tests_rerun_on_vm": false,
+  "public_html_matches": true,
+  "public_gzip_bytes": 26604696,
+  "conditional_reload": [
+    304,
+    0
+  ],
+  "arena_health": {
+    "ok": true,
+    "game": "Fatebound",
+    "protocol": 1,
+    "transportVersion": 2,
+    "apiBuild": 114,
+    "balanceVersion": 110,
+    "queueMs": 20000,
+    "capacity": 20,
+    "rooms": 7,
+    "activeRooms": 0,
+    "queuedPlayers": 0
+  },
+  "legionary_service": "active",
+  "caddy_service": "active",
+  "game_code_changed_during_resume": false,
+  "services_restarted_during_resume": false,
+  "report_validation_note": "First report-validation attempt assumed snake_case for both reports. Rechecked with each actual hash/error field; the game and tests did not require code changes."
+}

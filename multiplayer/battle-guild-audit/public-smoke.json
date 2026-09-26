@@ -1,0 +1,110 @@
+{
+  "status": "PASS",
+  "started_utc": "2026-09-25T22:28:37.081Z",
+  "finished_utc": "2026-09-25T22:33:57.642Z",
+  "checks": [
+    {
+      "check": "Public endpoint advertises transport2, 20-second search, 20 slots and unchanged balance110",
+      "status": "PASS",
+      "details": {
+        "ok": true,
+        "game": "Fatebound",
+        "protocol": 1,
+        "transportVersion": 2,
+        "apiBuild": 114,
+        "balanceVersion": 110,
+        "queueMs": 20000,
+        "capacity": 20,
+        "rooms": 6,
+        "activeRooms": 0,
+        "queuedPlayers": 0
+      }
+    },
+    {
+      "check": "Both clients entered the same correctly filled 10-versus-10 battle",
+      "status": "PASS",
+      "details": {
+        "observedSearchMs": 20098,
+        "humans": 2,
+        "bots": 18
+      }
+    },
+    {
+      "check": "Live rolls, movement, spells and compressed backward-compatible snapshots worked",
+      "status": "PASS",
+      "details": {
+        "moved": true,
+        "spell": true,
+        "legacySample": {
+          "encoding": "gzip",
+          "compressedBytes": 4770,
+          "decodedBytes": 41220,
+          "containsAllHeroes": true
+        }
+      }
+    },
+    {
+      "check": "Heartbeat loss substituted a labelled bot without moving the human tower, then reconnected in place",
+      "status": "PASS",
+      "details": {
+        "disconnected": true,
+        "reconnected": true,
+        "towers": {
+          "8a39378a-0558-4202-a848-e28a67a8bc60": 1,
+          "368d9287-9ab5-4eb5-88e6-254443c938fd": 0
+        }
+      }
+    },
+    {
+      "check": "Public roll replies include numeric effects and state replies include authoritative bank totals",
+      "status": "PASS",
+      "details": {
+        "receiptChecks": 193,
+        "bankChecks": 758
+      }
+    },
+    {
+      "check": "Real-clock battle completed with synchronized scores and no forced dice/HP changes",
+      "status": "PASS",
+      "details": {
+        "durationMs": 300061,
+        "score": [
+          26,
+          25
+        ],
+        "paidRolls": [
+          88,
+          105
+        ],
+        "knockoutObserved": [
+          false,
+          true
+        ],
+        "confirmedRespawnObserved": [
+          false,
+          true
+        ]
+      }
+    },
+    {
+      "check": "Repeat reward claims remain exact-once with immutable shard choice",
+      "status": "PASS"
+    },
+    {
+      "check": "Both clients joined a fresh second queue and cancelled cleanly",
+      "status": "PASS"
+    }
+  ],
+  "network": {
+    "requests": 1034,
+    "encodedBytes": 591385,
+    "decodedBytes": 1487638,
+    "br": 961,
+    "gzip": 1,
+    "identity": 72,
+    "full": 2,
+    "delta": 955
+  },
+  "physical_devices": false,
+  "source": "Two programmatic guest clients from the VM through its public TLS endpoint. Counts exclude request/TLS headers and initial game download; no test-control endpoints used."
+}
