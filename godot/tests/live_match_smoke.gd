@@ -25,7 +25,7 @@ func _hero(api: Node, state: Dictionary) -> Dictionary:
     return {}
 
 func _safe_state(api: Node) -> Dictionary:
-    var state := await api.state()
+    var state: Dictionary = await api.state()
     if not state.get("ok",false):
         push_warning("state failed: " + str(state))
         await create_timer(0.75).timeout

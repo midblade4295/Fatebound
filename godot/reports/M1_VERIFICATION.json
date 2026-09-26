@@ -1,0 +1,146 @@
+{
+  "verified_utc": "2026-09-26T15:52:23.657157+00:00",
+  "godot_version": "4.7.2.stable.official.ed1daf0bf",
+  "branch": "chatgpt/godot-client-m1",
+  "migration_base_commit": "64f19576caebed43ee609bf875a024c35a0ffdba",
+  "production_html_build": "114-battle-guild-feedback",
+  "production_html_sha256": "84697859827127e8c9285b0cf57578a8fc2bcedcb3cf8d3247772f0309f3b4e9",
+  "server_contract": {
+    "protocol": 1,
+    "transport": 2,
+    "balance": 110,
+    "queue_ms": 20000,
+    "capacity": 20,
+    "team_size": 10
+  },
+  "clean_checkout_boot": true,
+  "wire_smoke_pass": true,
+  "live_queue_cancel_pass": true,
+  "local_transport_delta_smoke_pass": true,
+  "first_live_match_before_cursor_fix": {
+    "a_transport": {
+      "delta": 0,
+      "full": 471,
+      "resync": 0,
+      "stale": 0
+    },
+    "b_transport": {
+      "delta": 0,
+      "full": 471,
+      "resync": 0,
+      "stale": 0
+    },
+    "elapsed_s": 321.391,
+    "kos_seen": [
+      3,
+      3
+    ],
+    "moves": [
+      1,
+      1
+    ],
+    "rallies": [
+      1,
+      1
+    ],
+    "requests_total": 1008,
+    "respawns_seen": [
+      2,
+      2
+    ],
+    "response_bytes_total": 17370207,
+    "rolls": [
+      76,
+      76
+    ],
+    "room": "b9dddf30-95e9-40e6-b41c-92e45691dcbc",
+    "score_a": [
+      23.0,
+      27.0
+    ],
+    "score_b": [
+      23.0,
+      27.0
+    ],
+    "spells": [
+      1,
+      1
+    ],
+    "status": "PASS",
+    "ultimates": [
+      1,
+      1
+    ]
+  },
+  "second_live_match_after_cursor_fix": {
+    "a_transport": {
+      "delta": 458,
+      "full": 1,
+      "resync": 0,
+      "stale": 0
+    },
+    "b_transport": {
+      "delta": 445,
+      "full": 1,
+      "resync": 0,
+      "stale": 0
+    },
+    "elapsed_s": 322.169,
+    "kos_seen": [
+      2,
+      3
+    ],
+    "moves": [
+      1,
+      1
+    ],
+    "rallies": [
+      1,
+      1
+    ],
+    "requests_total": 971,
+    "respawns_seen": [
+      2,
+      3
+    ],
+    "response_bytes_total": 1516000,
+    "rolls": [
+      76,
+      62
+    ],
+    "room": "8bf1890a-5ef7-4796-8d93-4db9a63e8c0c",
+    "score_a": [
+      13.0,
+      37.0
+    ],
+    "score_b": [
+      13.0,
+      37.0
+    ],
+    "spells": [
+      1,
+      1
+    ],
+    "status": "PASS",
+    "ultimates": [
+      1,
+      1
+    ]
+  },
+  "response_body_reduction_percent": 91.27,
+  "second_match_avg_response_body_bytes_per_client": 758000.0,
+  "apk": {
+    "path": "godot/build/Fatebound-Godot-M1.apk",
+    "package": "com.fatebound.godotpreview",
+    "version_code": 1,
+    "version_name": "0.1.0-m1",
+    "min_sdk": 24,
+    "target_sdk": 36,
+    "size_bytes": 56997694,
+    "sha256": "f83dcc6528bf539a5997424606169148d0f1f6b1127c9ab9f2b27f4d87ec589c",
+    "signing": "Android debug key, v2+v3 signature; preview only"
+  },
+  "production_server_modified_for_godot": false,
+  "production_html_replaced": false,
+  "physical_android_tested": false
+}

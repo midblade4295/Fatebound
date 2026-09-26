@@ -44,8 +44,8 @@ func _make_url(route: String, synchronized: bool, full: bool) -> String:
         var c := wire.cursor()
         if not c.is_empty():
             query.append("match=" + str(c.get("match","")).uri_encode())
-            query.append("revision=" + str(c.get("revision",0)))
-            query.append("seq=" + str(c.get("seq",0)))
+            query.append("revision=" + str(int(c.get("revision",0))))
+            query.append("seq=" + str(int(c.get("seq",0))))
     return url + "?" + "&".join(query)
 
 func _request(route: String, body: Variant = null, auth := true, full := false) -> Dictionary:
