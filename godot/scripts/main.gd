@@ -46,6 +46,8 @@ var mult_select: OptionButton
 var all_in: CheckButton
 var heroes_left: VBoxContainer
 var heroes_right: VBoxContainer
+var battle_field: PanelContainer
+var battle_overlay: Control
 
 func _ready() -> void:
     api = ArenaApiScript.new()
@@ -68,6 +70,8 @@ func _clear_ui() -> void:
     tower_buttons.clear()
     dice_labels.clear()
     spell_buttons.clear()
+    battle_field = null
+    battle_overlay = null
     if is_instance_valid(ui_root):
         ui_root.queue_free()
     ui_root = Control.new()
@@ -310,6 +314,7 @@ func _show_battle() -> void:
         towers.add_child(b)
 
     var field := PanelContainer.new()
+    battle_field = field
     field.size_flags_vertical = Control.SIZE_EXPAND_FILL
     field.add_theme_stylebox_override("panel",_style(Color("#173c34"),Color("#6f9b75"),16))
     page.add_child(field)
@@ -397,6 +402,11 @@ func _show_battle() -> void:
     net_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     page.add_child(net_label)
 
+    battle_overlay = Control.new()
+    battle_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    battle_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    ui_root.add_child(battle_overlay)
+
 func _build_hero_rows() -> void:
     for hero in latest.get("heroes",[]):
         var side := int(hero.get("side",0))
@@ -447,7 +457,10 @@ func _update_battle(match: Dictionary, earnings: Variant = {}) -> void:
         var max_hp: int = maxi(1,int(hero.get("maxHp",1)))
         p.max_value = max_hp
         p.value = hpv
-        n.text = "%s%s  %d/%d" % [str(hero.get("name","Hero")),(" [BOT]" if hero.get("bot",false) else ""),hpv,max_hp]
+        var shields: Array = hero.get("shieldSlots",[])
+        var suffix := " [KO]" if hpv <= 0 else ("  ◇%d" % shields.size() if shields.size() > 0 else "")
+        n.text = "%s%s%s  %d/%d" % [str(hero.get("name","Hero")),(" [BOT]" if hero.get("bot",false) else ""),suffix,hpv,max_hp]
+        row.modulate.a = 0.55 if hpv <= 0 else 1.0
         if str(hero.get("id","")) == api.player_id:
             n.add_theme_color_override("font_color",Color("#ffe18d"))
         elif int(hero.get("side",0)) == my_side:
@@ -472,6 +485,106 @@ func _paint_dice(faces: Array) -> void:
         var winning: bool = (win.get("indices",[]) as Array).has(i)
         label.add_theme_stylebox_override("normal",_style(Color("#4d3a12") if winning else Color("#2d281b"),Color("#71f0d2") if winning else Color("#907849"),10))
         label.add_theme_color_override("font_color",Color("#fff0b0") if winning else Color("#d8c991"))
+
+func _animate_confirmed_roll(faces: Array, result: Dictionary) -> void:
+    if faces.size() != 3 or dice_labels.size() != 3:
+        return
+    var cycle := ["S","C","H","G","E","F"]
+    for step in 7:
+        for i in 3:
+            if not is_instance_valid(dice_labels[i]):
+                return
+            var face: String = cycle[(step + i * 2) % cycle.size()]
+            dice_labels[i].text = FACE_NAMES[face]
+            dice_labels[i].rotation = (-0.08 if (step + i) % 2 == 0 else 0.08)
+            dice_labels[i].scale = Vector2.ONE * (1.04 + 0.02 * (step % 2))
+        await get_tree().create_timer(0.055).timeout
+    _paint_dice(faces)
+    var win: Dictionary = ArenaWireScript.winning_dice(faces)
+    for idx in win.get("indices",[]):
+        var i := int(idx)
+        if i < 0 or i >= dice_labels.size() or not is_instance_valid(dice_labels[i]):
+            continue
+        dice_labels[i].rotation = 0.0
+        var tween := create_tween()
+        tween.tween_property(dice_labels[i],"scale",Vector2(1.18,1.18),0.10).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+        tween.tween_property(dice_labels[i],"scale",Vector2.ONE,0.16)
+    for label in dice_labels:
+        if is_instance_valid(label):
+            label.rotation = 0.0
+    _confirmed_feedback(result)
+
+func _overlay_center() -> Vector2:
+    if battle_field == null or battle_overlay == null or not is_instance_valid(battle_field):
+        return get_viewport_rect().size * 0.5
+    var rect := battle_field.get_global_rect()
+    return rect.position + rect.size * 0.5
+
+func _float_feedback(text: String, color: Color, offset := Vector2.ZERO, big := false) -> void:
+    if battle_overlay == null or not is_instance_valid(battle_overlay):
+        return
+    var label := _label(text,26 if big else 18,color)
+    label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+    label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    label.size = Vector2(190,42)
+    label.position = _overlay_center() - label.size * 0.5 + offset
+    label.modulate.a = 0.0
+    battle_overlay.add_child(label)
+    var tween := create_tween().set_parallel(true)
+    tween.tween_property(label,"position",label.position + Vector2(0,-72),0.62).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+    tween.tween_property(label,"modulate:a",1.0,0.08)
+    tween.tween_property(label,"modulate:a",0.0,0.22).set_delay(0.38)
+    tween.chain().tween_callback(label.queue_free)
+
+func _field_flash(color: Color) -> void:
+    if battle_overlay == null or battle_field == null or not is_instance_valid(battle_field):
+        return
+    var rect := battle_field.get_global_rect()
+    var flash := ColorRect.new()
+    flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    flash.color = color
+    flash.position = rect.position
+    flash.size = rect.size
+    flash.modulate.a = 0.0
+    battle_overlay.add_child(flash)
+    var tween := create_tween()
+    tween.tween_property(flash,"modulate:a",0.28,0.05)
+    tween.tween_property(flash,"modulate:a",0.0,0.18)
+    tween.tween_callback(flash.queue_free)
+
+func _shake_field(strength := 7.0) -> void:
+    if battle_field == null or not is_instance_valid(battle_field):
+        return
+    var origin := battle_field.position
+    var tween := create_tween()
+    for offset in [Vector2(strength,0),Vector2(-strength*0.75,strength*0.35),Vector2(strength*0.5,-strength*0.25),Vector2.ZERO]:
+        tween.tween_property(battle_field,"position",origin+offset,0.035)
+    tween.tween_property(battle_field,"position",origin,0.04)
+
+func _confirmed_feedback(result: Dictionary) -> void:
+    var effects: Dictionary = result.get("effects",{})
+    var dealt := int(result.get("dealt",0))
+    var absorbed := int(result.get("absorbed",0))
+    var shield := int(effects.get("shieldAdded",0))
+    var gold := int(effects.get("goldAdded",0))
+    var focus := int(effects.get("focusGained",0))
+    var gift := int(effects.get("giftAdded",0))
+    if dealt > 0:
+        _field_flash(Color("#ff5e4d"))
+        _shake_field(10.0 if str(result.get("symbol","")) == "C" else 6.0)
+        _float_feedback("CRIT -%d" % dealt if str(result.get("symbol","")) == "C" else "-%d" % dealt,Color("#ff765f"),Vector2(0,-18),true)
+    if absorbed > 0:
+        _float_feedback("BLOCK %d" % absorbed,Color("#79eaff"),Vector2(-95,6))
+    if shield > 0:
+        _field_flash(Color("#5ee8ff"))
+        _float_feedback("+%d SHIELD" % shield,Color("#8cf4ff"),Vector2(90,8))
+    if gold > 0:
+        _float_feedback("+%d GOLD" % gold,Color("#ffd66e"),Vector2(0,36))
+    if focus > 0:
+        _float_feedback("+%d FOCUS" % focus,Color("#dba0ff"),Vector2(-70,42))
+    if gift > 0:
+        _float_feedback("+%d GIFT" % gift,Color("#ff9ac4"),Vector2(75,42))
 
 func _paint_clock_and_controls() -> void:
     if latest.is_empty():
@@ -530,6 +643,7 @@ func _do_action(kind: String, payload := {}) -> void:
     var result: Dictionary = response.get("result",{})
     if kind == "roll":
         var effects: Dictionary = result.get("effects",{})
+        await _animate_confirmed_roll(result.get("faces",[]),result)
         result_label.text = "%s %s · dealt %d · absorbed %d · Focus +%d · shield +%d · gold +%d · XP +%d" % [
             str(result.get("tier","none")).capitalize(),FACE_NAMES.get(str(result.get("symbol","")),"MIXED"),
             int(result.get("dealt",0)),int(result.get("absorbed",0)),int(effects.get("focusGained",0)),

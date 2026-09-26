@@ -49,3 +49,10 @@ Only after progression compatibility, physical-device testing and rollback proce
 - HP/respawn and dice results are always server authoritative
 
 The Godot client must not silently add combat formulas that can diverge from the arena engine.
+
+## M2 visual parity started
+
+The first M2 pass adds native confirmed-dice settling, simultaneous matching-dice
+highlight/pulse, damage/shield/gold/focus/gift floating feedback, field flash/shake,
+and KO/shield hero-row treatment. These effects consume server-confirmed results only;
+no combat formulas moved into Godot.
