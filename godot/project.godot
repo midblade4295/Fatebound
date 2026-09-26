@@ -1,6 +1,7 @@
 [application]
-config/name="Fatebound Godot M1"
-config/description="Parallel native client prototype for Fatebound's existing authoritative arena."
+config/name="Fatebound"
+config/icon="res://assets/branding/icon.png"
+config/description="Fatebound native game client — Play testing build."
 run/main_scene="res://scenes/Main.tscn"
 
 [display]
