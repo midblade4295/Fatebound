@@ -537,7 +537,7 @@ func settings()->void:
     var body:VBoxContainer=app._shell("SETTINGS & SAVES","settings")
     var sound:=card(body,"SOUND & EFFECTS")
     sound_panel(sound)
-    var storage:=card(body,"SAVE BACKUP & IMPORT","The native preview is a separate Android app. Android cannot automatically read the old game's private save folder. Import your own Fatebound export or load your own cloud-save code. Preview progress is backed up before an import.")
+    var storage:=card(body,"SAVE BACKUP & IMPORT","This native build does not automatically read the older WebView save. Import your own Fatebound export or load your own cloud-save code. Native progress is backed up before an import.")
     button(storage,"EXPORT SAVE FILE",_export_file,true,"export_file")
     button(storage,"COPY SAVE TO CLIPBOARD",func():DisplayServer.clipboard_set(p.store.export_text());app.flash_message("Save copied. Keep it private; it contains your game progress."),true,"export_clipboard")
     button(storage,"IMPORT SAVE FILE",_import_file,not app.trainer.active,"import_file")
@@ -616,7 +616,7 @@ func _preview_import(text:String)->void:
     if not parsed.get("ok",false):app.flash_message(str(parsed.get("error","Invalid save")));return
     var box:VBoxContainer=app._popup("CONFIRM SAVE IMPORT")
     label(box,str(parsed.summary),18,Color("#eddea9"))
-    label(box,"This replaces this preview's progression after a timestamped backup. It does not change the normal Fatebound app or import its online guest identity.")
+    label(box,"This replaces native progression after a timestamped backup. It does not import the older WebView online guest identity.")
     if parsed.save.get("war") is Dictionary and str(parsed.save.war.get("phase",""))!="complete":label(box,"An old web battle snapshot is present. Its data will be preserved and the native compatibility converter will attempt to resume it.",12,Color("#ffd09d"))
     button(box,"BACK UP & IMPORT",func():
         if not p.store.install_import(parsed.save):app.flash_message(p.store.last_error);return
