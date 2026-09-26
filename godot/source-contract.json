@@ -10,5 +10,11 @@
   "capacity": 20,
   "team_size": 10,
   "godot_version": "4.7.2-stable",
-  "preview_package": "com.fatebound.godotpreview"
+  "preview_package": "com.fatebound.godotpreview",
+  "native_branch": "chatgpt/godot-full-game-port",
+  "native_build": "0.3.0-full-game",
+  "preview_version_code": 3,
+  "progression_schema": 2,
+  "receipt_history_route": "/receipts",
+  "production_html_replaced": false
 }

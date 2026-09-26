@@ -1,3 +1,19 @@
+# Current native development: Fatebound Native 0.3 full-game port
+
+Use `chatgpt/godot-full-game-port`, based on native0.2 commit
+`1adb730f4b3b5231d9f0a9aee1eee430b7310def`. Read godot/README.md and
+`godot/reports/full-port/CONVERSION_COVERAGE.md` before changing the conversion.
+The canonical production HTML remains v114 and is not replaced by this branch.
+Native save key/schema2, existing preview identity and debug certificate remain.
+Protocol1 / transport2 / balance110 /20seconds/20slots/10v10 stay authoritative
+on the existing online server. The only staged server change is private read-only
+receipt history for native recovery. Do not deploy fixture controls or ports.
+Do not merge main, reset saves, use production signing, alter Legionary/Caddy,
+or publish a Play release as a side effect of building the preview.
+
+---
+## Earlier native instructions retained as provenance
+
 # Native preview 0.2 continuation — original art and portrait layout
 
 Branch: `chatgpt/godot-m2-art-layout`, based on M2 `9dc7bb001682b95384b437214dc100bd7ca2021d`.

@@ -5,6 +5,8 @@ const CLIPS := {"idle":6,"attack":8,"big":8,"hit":3,"death":1}
 var snapshot: Dictionary = {}
 var player_id := ""
 var preview := false
+var front_portrait := false
+var reduce_motion := false
 var preview_char := 0
 var preview_weapon := 0
 var pan := 0.0
@@ -41,7 +43,7 @@ func texture(key: String) -> Texture2D:
     _used[key] = Time.get_ticks_msec()
     if _textures.has(key):
         return _textures[key]
-    var path := "res://assets/art/" + key
+    var path := ("res://assets/portraits/" if key.begins_with("portrait_") else "res://assets/art/") + key
     if not ResourceLoader.exists(path):
         return null
     var value: Texture2D = load(path)
@@ -113,7 +115,7 @@ func confirm_event(event: Dictionary) -> void:
     var actor := str(event.get("actor",""))
     if typ == "roll" and (int(event.get("dealt",0)) > 0 or int(event.get("absorbed",0)) > 0):
         _animations[actor] = {"clip":"big" if event.get("tier","") == "triple" else "attack","at":animation_time,"duration":0.65}
-    if typ in ["spell","rally","ultimate","ko"]:
+    if typ in ["spell","rally","ultimate","ko"] and not reduce_motion:
         if _effects.size() >= 8:
             _effects.pop_front()
         _effects.append({"kind":str(event.get("spell",typ)),"at":animation_time,"actor":actor})
@@ -140,9 +142,18 @@ func _draw() -> void:
         draw_texture_rect(bg,Rect2(Vector2((size.x-extent.x)*0.5-pan,0),extent),false)
     _positions.clear()
     if preview:
+        var portrait:=texture("portrait_%02d.webp" % (clampi(preview_char,0,4)*9+clampi(preview_weapon,0,8)))
+        if front_portrait and portrait!=null:
+            var h:=size.y*1.04
+            var w:=h*0.8
+            draw_texture_rect(portrait,Rect2((size.x-w)*0.5,size.y-h,w,h),false)
+            return
         _actor({"id":"preview","name":"","char":preview_char,"weapon":preview_weapon,"hp":1,"maxHp":1,"shieldSlots":[]},Vector2(size.x*0.5,size.y*0.95),minf(size.y*1.4,360.0),false,true)
         return
     if snapshot.is_empty():
+        return
+    if snapshot.get("mode","")=="raid":
+        _draw_raid()
         return
     var side := int(_me().get("side",0))
     var ti := int(_me().get("tower",0))
@@ -220,6 +231,8 @@ func _actor(hero: Dictionary, foot: Vector2, height: float, enemy: bool, hide_la
             frame = mini(int(CLIPS[clip])-1,int(age/float(ani.duration)*int(CLIPS[clip])))
         else:
             _animations.erase(hid)
+    if foot.x+height<0 or foot.x-height>size.x:return
+    if reduce_motion and clip=="idle":frame=0
     var tex := texture("hero_%02d_%s.webp" % [row,clip])
     if tex == null:
         return
@@ -279,3 +292,33 @@ func _draw_effects() -> void:
                     var angle := TAU*i/8+t*2
                     var dir := Vector2(cos(angle),sin(angle))
                     draw_line(origin+dir*(20+t*70),origin+dir*(34+t*90),color,3,true)
+
+func _draw_raid()->void:
+    var boss:Dictionary=snapshot.get("boss",{})
+    if boss.is_empty():return
+    var boss_entity:Dictionary={}
+    var allies:Array=[]
+    for h in snapshot.get("heroes",[]):
+        if str(h.id)=="boss":boss_entity=h
+        elif int(h.side)==0:allies.append(h)
+    var w:=size.x-24
+    _panel(Rect2(12,8,w,51),Color("#081b25ed"),Color("#f29c61"))
+    _text(str(boss.get("name","DAILY BOSS")),Rect2(15,11,w-6,15),14,Color("#ffcc8e"))
+    _text("%d / %d"%[maxi(0,int(boss.get("hp",0))),int(boss.get("max",1))],Rect2(15,30,w-6,12),11,Color.WHITE)
+    draw_rect(Rect2(23,49,w-22,4),Color("#331a13"))
+    var ratio:=clampf(float(boss.get("hp",0))/maxf(1,float(boss.get("max",1))),0,1)
+    draw_rect(Rect2(23,49,(w-22)*ratio,4),Color("#e97843"))
+    if not boss_entity.is_empty():_actor(boss_entity,Vector2(size.x*0.5,size.y*0.46),minf(240,size.y*0.6),true,true)
+    var shown:=mini(20,allies.size())
+    for i in shown:
+        var row:=i/5;var column:=i%5
+        var position:=Vector2(size.x*(column+0.5)/5,size.y*(0.56+row*0.11))
+        var height:=minf(85.0,size.y*0.27)
+        if i==0:height*=1.25
+        _actor(allies[i],position,height,false,true)
+    var run:Dictionary=snapshot.get("raid",{})
+    if int(run.get("telegraphUntil",0))>float(snapshot.get("now",0)):
+        var center:=Vector2(size.x*0.5,size.y*0.3)
+        draw_arc(center,44,0,TAU,40,Color("#ffdd91"),3,true)
+        _text("PARRY",Rect2(center-Vector2(60,10),Vector2(120,20)),17,Color("#fff0b8"))
+    _draw_effects()
