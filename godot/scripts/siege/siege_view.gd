@@ -76,8 +76,8 @@ func _build_lighting() -> void:
 	env.fog_enabled = true
 	env.fog_light_color = Color("#8ea3ad")
 	env.fog_mode = Environment.FOG_MODE_DEPTH
-	env.fog_depth_begin = 34.0
-	env.fog_depth_end = 70.0
+	env.fog_depth_begin = 64.0
+	env.fog_depth_end = 120.0
 	env.fog_density = 0.5
 	env.glow_enabled = true
 	env.glow_intensity = 0.35
@@ -92,7 +92,7 @@ func _build_lighting() -> void:
 	sun.shadow_enabled = true
 	sun.shadow_opacity = 0.8
 	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL
-	sun.directional_shadow_max_distance = 44.0
+	sun.directional_shadow_max_distance = 88.0
 	add_child(sun)
 	var fill := DirectionalLight3D.new()
 	fill.light_color = Color("#9fc2ff")
@@ -102,7 +102,7 @@ func _build_lighting() -> void:
 	camera = Camera3D.new()
 	camera.fov = 50.0
 	camera.near = 0.3
-	camera.far = 110.0
+	camera.far = 190.0
 	add_child(camera)
 
 func _mesh_of(path: String) -> Dictionary:
@@ -126,8 +126,8 @@ func _build_terrain() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 404
 	var groups := {}
-	for row in range(-21, 22):
-		for col in range(-11, 11):
+	for row in range(-28, 29):
+		for col in range(-16, 16):
 			var p := hex_pos(col, row)
 			var ax := absf(p.x)
 			var h := 0.0
@@ -305,7 +305,7 @@ void fragment() {
 	var mat := ShaderMaterial.new()
 	mat.shader = sh
 	var q := QuadMesh.new()
-	q.size = Vector2(1.0, 0.13)
+	q.size = Vector2(2.0, 0.26)
 	var mi := MeshInstance3D.new()
 	mi.mesh = q
 	mi.material_override = mat
@@ -332,7 +332,7 @@ func _ensure_actor(u: Dictionary) -> Dictionary:
 		ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		root.add_child(ring)
 		var bar := _hp_bar()
-		bar.position.y = 2.45
+		bar.position.y = 2.7
 		(bar.material_override as ShaderMaterial).set_shader_parameter("tint", TEAM_COLORS[u.team] if u.id != player_id else Color("#7dff8a"))
 		root.add_child(bar)
 		a = {"root":root, "bar":bar, "ring":ring, "body":null, "player":null, "clip":"", "busy_until":0.0, "dead":false, "last":root.position}
@@ -626,7 +626,7 @@ func number(at: Vector3, text: String, mine: bool) -> void:
 	l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	l.no_depth_test = true
 	l.font_size = 64
-	l.pixel_size = 0.006
+	l.pixel_size = 0.012
 	l.outline_size = 14
 	l.modulate = Color("#ff6b5a") if mine else Color("#fff1c2")
 	l.position = at
@@ -670,7 +670,7 @@ func _update_camera(dt: float) -> void:
 	var ahead := -1.0 if me.get("team", 0) == 0 else 1.0
 	var target := focus + Vector3(0, 0, ahead * 3.2)
 	_cam_target = target if _cam_target == Vector3.ZERO else _cam_target.lerp(target, 1.0 - exp(-dt * 6.0))
-	camera.position = _cam_target + Vector3(0, 19.0, -ahead * 15.0)
+	camera.position = _cam_target + Vector3(0, 38.0, -ahead * 30.0)
 	camera.look_at(_cam_target, Vector3.UP)
 
 func screen_point(world: Vector3) -> Vector2:
