@@ -4,6 +4,7 @@ extends Control
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 const View = preload("res://scripts/siege/siege_view.gd")
 const Hud = preload("res://scripts/siege/siege_hud.gd")
+const Diag = preload("res://scripts/siege/siege_diag.gd")
 
 signal exited
 
@@ -16,6 +17,7 @@ var sim
 var view
 var hud
 var viewport: SubViewport
+var diag
 var _accum := 0.0
 var _result_shown := false
 
@@ -23,6 +25,9 @@ func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	clip_contents = true
+	diag = Diag.new()
+	diag.mode = self
+	add_child(diag)
 	viewport = SubViewport.new()
 	viewport.own_world_3d = true
 	viewport.msaa_3d = Viewport.MSAA_2X
@@ -42,6 +47,7 @@ func _ready() -> void:
 	tex.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(tex)
 	hud = Hud.new()
+	hud.diag = diag
 	add_child(hud)
 	hud.leave_requested.connect(func(): exited.emit())
 	hud.replay_requested.connect(_restart)
@@ -100,6 +106,7 @@ func _on_action(kind: String) -> void:
 func _process(delta: float) -> void:
 	if sim == null:
 		return
+	diag.mark("input")
 	if not hud.pause_panel.visible or sim.ended:
 		sim.set_move(hud.player_id, hud.move_vector())
 		if hud.attack_held():
@@ -107,15 +114,21 @@ func _process(delta: float) -> void:
 			if sim.can_act(me) and not me.carrying:
 				sim.act(hud.player_id, "attack")
 		_accum += minf(delta, 0.1)
+		diag.mark("sim.step")
 		while _accum >= Sim.TICK:
 			_accum -= Sim.TICK
 			sim.step(Sim.TICK)
 		for e in sim.drain_events():
+			diag.mark("event " + str(e.k))
+			diag.event()
 			view.on_event(e)
 			hud.on_event(e)
+	diag.mark("view.sync")
 	view.sync(delta)
+	diag.mark("process done")
 	if sim.ended and not _result_shown:
 		_result_shown = true
+		diag.write("MATCH END winner=%d reason=%s score=%s" % [sim.winner, sim.end_reason, str(sim.score)])
 		hud.show_result()
 
 func request_leave() -> void:
