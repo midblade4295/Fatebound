@@ -24,6 +24,7 @@ var player_id := "you"
 var project: Callable          # world Vector3 -> HUD Vector2
 var on_screen: Callable        # world Vector3 -> bool
 var numbers_source: Callable   # -> Array of {pos, text, mine, at} from the 3D view
+var bars_source: Callable      # -> Array of {pos, fill, color} for 2D health bars
 var numbers_clock: Callable    # -> float, the view clock those "at" values use
 
 var _touchscreen := false
@@ -418,6 +419,7 @@ func _draw_hud() -> void:
 		var c := _toast_color
 		c.a = clampf(2.6 - age, 0.0, 1.0)
 		_text(Vector2(w * 0.5, 176), _toast, 18, c, _bold)
+	_draw_bars()
 	_draw_oracle_marker(me)
 	_draw_numbers()
 	if diag != null and diag.fps_text != "":
@@ -440,6 +442,19 @@ func _draw_hud() -> void:
 	# Combat buttons.
 	for b in _buttons():
 		_draw_button(b, me)
+
+func _draw_bars() -> void:
+	if not bars_source.is_valid() or not project.is_valid():
+		return
+	for b in bars_source.call():
+		if on_screen.is_valid() and not on_screen.call(b.pos):
+			continue
+		var p: Vector2 = project.call(b.pos)
+		if p.y < 150.0:
+			continue
+		var r := Rect2(p - Vector2(17, 3), Vector2(34, 5))
+		draw_rect(r.grow(1.0), Color(0, 0, 0, 0.7))
+		draw_rect(Rect2(r.position, Vector2(r.size.x * float(b.fill), r.size.y)), b.color)
 
 func _draw_numbers() -> void:
 	# Damage numbers: projected from 3D and drawn on the HUD canvas (no Label3D mesh rebuilds).
