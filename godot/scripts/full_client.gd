@@ -111,25 +111,38 @@ func _show_home()->void:
 func _shell(title:String,tab:String="home",navigation:=true)->VBoxContainer:
     _new_screen(tab)
     coach=null;message_label=null;detail_label=null;chests_button=null;raid_parry_button=null
-    var header:=_row(page)
-    header.add_child(_label(title,24,Color("#f3d794")))
+    var masthead:=PanelContainer.new()
+    masthead.add_theme_stylebox_override("panel",VisualTheme.panel(Color("#112735"),VisualTheme.GOLD_DARK,13,8))
+    page.add_child(masthead)
+    var header:=_row(masthead)
+    var heading:=_label(title,22,VisualTheme.GOLD)
+    heading.add_theme_font_override("font",VisualTheme.DISPLAY_FONT)
+    header.add_child(heading)
     if tab!="home":
         var back:=_button("BACK",40);back.custom_minimum_size.x=72;back.size_flags_horizontal=Control.SIZE_FILL
         back.pressed.connect(func():_go("home"));header.add_child(back)
-    wallet=_label("",12,Color("#acdcd6"),false);wallet.custom_minimum_size.y=35;page.add_child(wallet)
+    var wallet_frame:=PanelContainer.new()
+    wallet_frame.add_theme_stylebox_override("panel",VisualTheme.panel(Color("#132d38"),Color("#4e8e91"),9,5))
+    page.add_child(wallet_frame)
+    wallet=_label("",11,Color("#d9e7dc"),false);wallet.custom_minimum_size.y=35;wallet_frame.add_child(wallet)
     _wallet_refresh()
     scroller=ScrollContainer.new();scroller.size_flags_vertical=Control.SIZE_EXPAND_FILL;scroller.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
     scroller.follow_focus=true;page.add_child(scroller)
-    body=VBoxContainer.new();body.size_flags_horizontal=Control.SIZE_EXPAND_FILL;body.add_theme_constant_override("separation",9);scroller.add_child(body)
+    body=VBoxContainer.new();body.size_flags_horizontal=Control.SIZE_EXPAND_FILL;body.add_theme_constant_override("separation",12);scroller.add_child(body)
     message_label=_label("",11,Color("#ffe8a9"),true);message_label.custom_minimum_size.y=20;page.add_child(message_label)
     if not save_store.writable:message_label.text=save_store.last_error
     if trainer!=null and trainer.active:
         training_temp_notice=_label("TRAINING SAVE · Your real resources are unchanged",10,Color("#efba8d"),true);page.add_child(training_temp_notice)
     if navigation:
-        var nav:=_row(page)
+        var nav_frame:=PanelContainer.new()
+        nav_frame.add_theme_stylebox_override("panel",VisualTheme.panel(Color("#102735"),VisualTheme.GOLD_DARK,12,4))
+        page.add_child(nav_frame)
+        var nav:=_row(nav_frame)
         for spec in [["shop","SHOP"],["hero","HERO"],["home","HOME"],["guild","GUILD"],["friends","FRIENDS"]]:
             var b:=_button(spec[1],48);b.add_theme_font_size_override("font_size",11);b.name="nav_"+spec[0]
-            if spec[0]==tab:b.add_theme_stylebox_override("normal",_style(Color("#1d625d"),Color("#80d9c5")))
+            if spec[0]==tab:
+                b.add_theme_stylebox_override("normal",VisualTheme.button(Color("#28525b"),VisualTheme.CYAN,9))
+                b.add_theme_color_override("font_color",VisualTheme.TEXT)
             b.pressed.connect(_go.bind(spec[0]));nav.add_child(b)
     rebuild_coach.call_deferred()
     return body
@@ -138,9 +151,12 @@ func _wallet_refresh()->void:
     var p=active_p
     wallet.text="LEVEL %d · %s / %s XP\nGold %s · Fate %s · Tokens %s · Season %s"%[int(p.d.level),_compact(int(p.d.xp)),_compact(Content.xp_need(int(p.d.level))),_compact(int(p.d.gold)),_compact(p.fate()),_compact(int(p.d.tokens)),_compact(int(p.d.season.pts))]
 func card(parent:Node,title:String,text:="")->VBoxContainer:
-    var panel:=PanelContainer.new();panel.add_theme_stylebox_override("panel",_style(Color("#102630"),Color("#685e42"),12));parent.add_child(panel)
-    var box:=VBoxContainer.new();box.add_theme_constant_override("separation",7);panel.add_child(box)
-    if not title.is_empty():box.add_child(_label(title,17,Color("#f0d79a"),true))
+    var panel:=PanelContainer.new();panel.add_theme_stylebox_override("panel",VisualTheme.panel(Color("#112c39"),VisualTheme.GOLD_DARK,13,12));parent.add_child(panel)
+    var box:=VBoxContainer.new();box.add_theme_constant_override("separation",9);panel.add_child(box)
+    if not title.is_empty():
+        var title_label:=_label(title,17,VisualTheme.GOLD,true)
+        title_label.add_theme_font_override("font",VisualTheme.DISPLAY_FONT)
+        box.add_child(title_label)
     if not text.is_empty():box.add_child(_label(text,12,Color("#bfd0cf"),true))
     return box
 func action_button(parent:Node,text:String,callback:Callable,enabled:=true,key:="")->Button:
@@ -148,7 +164,7 @@ func action_button(parent:Node,text:String,callback:Callable,enabled:=true,key:=
     if not key.is_empty():b.name=key;b.set_meta("action_key",key)
     parent.add_child(b);return b
 func portrait(parent:Node,ci:int,wi:int,height:=160):
-    var field=Field.new();field.preview=true;field.front_portrait=screen=="hero";field.preview_char=ci;field.preview_weapon=wi;field.custom_minimum_size.y=height;parent.add_child(field);return field
+    var field=Field.new();field.preview=true;field.front_portrait=screen in ["hero","home"];field.preview_char=ci;field.preview_weapon=wi;field.custom_minimum_size.y=height;parent.add_child(field);return field
 func flash_message(text:String)->void:
     if is_instance_valid(message_label):message_label.text=text
     elif is_instance_valid(status):_notice(text)

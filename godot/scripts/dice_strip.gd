@@ -31,35 +31,51 @@ func start_roll() -> void:
 func _draw() -> void:
     if _font == null or size.x <= 1:
         return
+    draw_rect(Rect2(0,0,size.x,size.y),Color(0.02,0.07,0.11,0.29))
     var match_info: Dictionary = Wire.winning_dice(faces)
-    var width := minf(size.x/3-14,108)
-    var die := minf(width-10,size.y-29)
+    var width := minf(size.x/3-9,122)
+    var die := minf(width-5,size.y-31)
     var spinning := (pending or elapsed < rolling_until) and not reduce_motion
     for i in 3:
-        var center := Vector2(size.x*(i+0.5)/3,die*0.5+6)
+        var center := Vector2(size.x*(i+0.5)/3,die*0.50+5)
         var symbol: String = str(faces[i]) if faces.size() == 3 else ""
         if spinning:
             symbol = ["S","C","H","G","E","F"][(int(elapsed*18)+i*2)%6]
         var winner: bool = not spinning and (match_info.get("indices",[]) as Array).has(i)
         if winner:
-            draw_arc(center,die*0.65,0,TAU,40,Color("#76f1db"),2.5,true)
+            draw_circle(center,die*0.52,Color(0.21,0.94,0.89,0.20))
+            draw_arc(center,die*0.55,0,TAU,48,Color("#8dfbee"),2.4,true)
+        draw_set_transform(center+Vector2(1,die*0.38),0.0,Vector2(1,0.25))
+        draw_circle(Vector2.ZERO,die*0.43,Color(0,0,0,0.40))
         draw_set_transform(center,0.05*sin(elapsed*34+i) if spinning else 0.0)
-        var half := die*0.45
-        var bevel := die*0.13
-        var points := PackedVector2Array([Vector2(-half,-half+bevel),Vector2(-half+bevel,-half),Vector2(half-bevel,-half),Vector2(half,-half+bevel),Vector2(half,half-bevel),Vector2(half-bevel,half),Vector2(-half+bevel,half),Vector2(-half,half-bevel)])
-        draw_colored_polygon(points,Color("#ba751e"))
-        var style := StyleBoxFlat.new()
-        style.bg_color = Color("#edba4f")
-        style.border_color = Color("#ffe09c")
-        style.set_border_width_all(2)
-        style.set_corner_radius_all(7)
-        draw_style_box(style,Rect2(-half+4,-half+3,die*0.9-8,die*0.9-8))
-        _symbol(symbol,die*0.32)
+        var r := die*0.47
+        var outer := PackedVector2Array()
+        var lower := PackedVector2Array()
+        for corner in 10:
+            var a := TAU*corner/10-PI*0.5
+            outer.append(Vector2(cos(a)*r,sin(a)*r*0.91))
+            lower.append(Vector2(cos(a)*r,sin(a)*r*0.91+die*0.10))
+        draw_colored_polygon(lower,Color("#6f3919"))
+        draw_colored_polygon(outer,Color("#ad651e"))
+        for facet in 10:
+            var next := (facet+1)%10
+            draw_colored_polygon(PackedVector2Array([Vector2.ZERO,outer[facet],outer[next]]),Color("#eab448") if facet%2==0 else Color("#d88f2d"))
+            draw_line(outer[facet],outer[next],Color("#ffe5a2"),1.6,true)
+        var face := PackedVector2Array()
+        for corner in 8:
+            var a := TAU*corner/8-PI*0.5
+            face.append(Vector2(cos(a)*r*0.70,sin(a)*r*0.65))
+        draw_colored_polygon(face,Color("#f5c95c") if not symbol.is_empty() else Color("#bf8e42"))
+        for corner in 8:
+            draw_line(face[corner],face[(corner+1)%8],Color("#ffe8a0"),1.8,true)
+        draw_line(Vector2(-r*0.43,-r*0.43),Vector2(r*0.07,-r*0.58),Color(1,1,0.84,0.38),2,true)
+        if not symbol.is_empty():
+            _symbol(symbol,die*0.22)
         draw_set_transform(Vector2.ZERO)
-        var label: String = NAMES.get(symbol,"ROLL")
+        var label: String = NAMES.get(symbol,"READY")
         if winner and str(match_info.tier) != "none":
             label = str(match_info.tier).to_upper()+" · "+label
-        draw_string(_font,Vector2(size.x*i/3,die+22),label,HORIZONTAL_ALIGNMENT_CENTER,size.x/3,10,Color("#9be7df") if winner else Color("#d9c793"))
+        draw_string(_font,Vector2(size.x*i/3,die+24),label,HORIZONTAL_ALIGNMENT_CENTER,size.x/3,10,Color("#affaf1") if winner else Color("#f0d59a"))
 
 func _symbol(symbol: String, radius: float) -> void:
     var ink := Color("#493013")

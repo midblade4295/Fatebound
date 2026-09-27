@@ -1,0 +1,40 @@
+name: Godot visual review
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "godot/**"
+      - ".github/workflows/godot-visual-review.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  native-ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Godot 4.7.2
+        run: |
+          curl --fail --location --retry 3 \
+            https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip \
+            -o /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp
+          chmod +x /tmp/Godot_v4.7.2-stable_linux.x86_64
+      - name: Import native resources
+        run: /tmp/Godot_v4.7.2-stable_linux.x86_64 --headless --editor --path godot --quit
+      - name: Check UI flows
+        run: /tmp/Godot_v4.7.2-stable_linux.x86_64 --headless --path godot --script res://tests/full_ui_smoke.gd
+      - name: Check layouts and capture screenshots
+        run: xvfb-run -a /tmp/Godot_v4.7.2-stable_linux.x86_64 --rendering-method gl_compatibility --path godot --script res://tests/full_layouts.gd
+      - name: Upload visual review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: godot-visual-review
+          path: |
+            godot/reports/full-port/screens/
+            godot/reports/full-port/layouts.json
+            godot/reports/full-port/native-ui-flow.json
