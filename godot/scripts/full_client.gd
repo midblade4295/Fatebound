@@ -274,6 +274,7 @@ func _show_battle()->void:
     if api.is_local() and api.local_kind=="raid":
         tower_title.text="RAID · "+str(api.local_engine.boss.name)
         tower_title.disabled=true
+        if is_instance_valid(score_ours):score_ours.get_parent().modulate.a=0.0;score_theirs.get_parent().modulate.a=0.0
         all_in.get_parent().visible=false
         mult_select.visible=false;rally_button.visible=false
         for b in spell_buttons:b.visible=false
@@ -323,6 +324,7 @@ func _paint_controls()->void:
         ult_button.disabled=locked or int(h.get("ult",0))<100
         ult_button.text="ULTIMATE %d%%"%int(h.get("ult",0))
         focus.text="HP %d/%d · Attempt %d/3 · FREE ROLLS"%[int(h.get("hp",0)),int(h.get("maxHp",1)),int(api.local_engine.boss.attempts)]
+        if is_instance_valid(roll_hint):roll_hint.text="FREE ROLL · hold for AutoRoll"
         if is_instance_valid(raid_parry_button):
             var r:Dictionary=api.local_engine.run;raid_parry_button.disabled=ko or int(r.telegraphUntil)<=active_p.now() or bool(r.parryHit)
         status.text="SOLO RAID · Simulated company support"
@@ -523,6 +525,7 @@ func apply_settings()->void:
     if audio!=null:audio.set_levels(active_p.d.native.settings)
     if is_instance_valid(board):board.reduce_motion=bool(active_p.d.native.settings.get("reduceMotion",false))
     if is_instance_valid(dice):dice.reduce_motion=bool(active_p.d.native.settings.get("reduceMotion",false))
+    ui_reduce_motion=bool(active_p.d.native.settings.get("reduceMotion",false))
 func resume_imported_war()->void:
     var converted:Dictionary=LegacyImport.convert(progression)
     if not converted.get("ok",false):flash_message(str(converted.get("error","Legacy battle retained without conversion.")))

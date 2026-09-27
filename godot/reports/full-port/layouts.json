@@ -2,32 +2,32 @@
   "failures": [],
   "layouts": [
     {
-      "battlefieldHeight": 115.0,
+      "battlefieldHeight": 231.0,
       "menuPages": 12,
       "size": "(360, 640)"
     },
     {
-      "battlefieldHeight": 319.0,
+      "battlefieldHeight": 397.0,
       "menuPages": 12,
       "size": "(390, 844)"
     },
     {
-      "battlefieldHeight": 411.0,
+      "battlefieldHeight": 489.0,
       "menuPages": 12,
       "size": "(420, 936)"
     },
     {
-      "battlefieldHeight": 390.0,
+      "battlefieldHeight": 468.0,
       "menuPages": 12,
       "size": "(412, 915)"
     },
     {
-      "battlefieldHeight": 435.0,
+      "battlefieldHeight": 513.0,
       "menuPages": 12,
       "size": "(600, 960)"
     },
     {
-      "battlefieldHeight": 499.0,
+      "battlefieldHeight": 577.0,
       "menuPages": 12,
       "size": "(768, 1024)"
     }

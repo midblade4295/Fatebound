@@ -1,6 +1,6 @@
 {
-  "after_wait": 1,
-  "at_release": 1,
+  "after_wait": 2,
+  "at_release": 2,
   "auto_running": false,
   "native_input_events": true,
   "status": "PASS"

@@ -5,6 +5,26 @@ const Dice = preload("res://scripts/dice_strip.gd")
 const Audio = preload("res://scripts/native_audio.gd")
 const VisualTheme = preload("res://scripts/ui/visual_theme.gd")
 const HexBackdrop = preload("res://scripts/ui/hex_backdrop.gd")
+
+# A slow diagonal light sweep across the primary button while it is ready to press.
+class Shimmer:
+    extends Control
+    var button: Button
+    var app
+    var t := 0.0
+    func _process(delta: float) -> void:
+        t += delta
+        queue_redraw()
+    func _draw() -> void:
+        if button == null or button.disabled or (app != null and app.ui_reduce_motion):
+            return
+        var cycle := fmod(t, 2.8) / 1.1
+        if cycle > 1.0:
+            return
+        var x := lerpf(-size.x * 0.3, size.x * 1.3, cycle)
+        var w := size.x * 0.12
+        var pts := PackedVector2Array([Vector2(x, 3), Vector2(x + w, 3), Vector2(x + w - size.y * 0.5, size.y - 8), Vector2(x - size.y * 0.5, size.y - 8)])
+        draw_colored_polygon(pts, Color(1, 1, 1, 0.16))
 const SPELLS := ["barrage","bulwark","horn","surge"]
 const SPELL_NAMES := {"barrage":"Barrage","bulwark":"Bulwark","horn":"War Horn","surge":"Arcane Surge"}
 const HERO_NAMES := ["Knight","Rogue","Barbarian","Mage","Ranger"]
@@ -47,6 +67,10 @@ var all_in: Button
 var queue_clock: Label
 var queue_status: Label
 var tower_title: Button
+var score_ours: Label
+var score_theirs: Label
+var roll_hint: Label
+var ui_reduce_motion := false
 var modal: Control
 var notice_until := 0
 var home_preview
@@ -107,13 +131,25 @@ func _button(text: String, height := 44) -> Button:
     b.custom_minimum_size = Vector2(0,height)
     b.add_theme_font_override("font",VisualTheme.BOLD_FONT)
     b.add_theme_font_size_override("font_size",15)
-    b.add_theme_color_override("font_color",VisualTheme.GOLD)
-    b.add_theme_stylebox_override("normal",VisualTheme.button())
-    b.add_theme_stylebox_override("hover",VisualTheme.button(Color("#254858"),VisualTheme.GOLD))
-    b.add_theme_stylebox_override("pressed",VisualTheme.button(Color("#24534e"),VisualTheme.CYAN))
-    b.add_theme_stylebox_override("disabled",VisualTheme.button(Color("#172832"),Color("#52616b")))
+    VisualTheme.apply_tactile(b,"secondary",11)
     b.pressed.connect(func(): audio.play("tap"))
+    _press_fx(b)
     return b
+
+func _press_fx(b: Button) -> void:
+    # Physical response: the face sinks into its lip (stylebox) and the whole control gives a small squash.
+    b.resized.connect(func(): b.pivot_offset = b.size*0.5)
+    b.button_down.connect(func(): _bump(b,0.955,0.07,false))
+    b.button_up.connect(func(): _bump(b,1.0,0.28,true))
+
+func _bump(b: Button, target: float, seconds: float, springy: bool) -> void:
+    if not is_instance_valid(b):
+        return
+    if ui_reduce_motion:
+        b.scale = Vector2.ONE
+        return
+    var tw := b.create_tween()
+    tw.tween_property(b,"scale",Vector2.ONE*target,seconds).set_trans(Tween.TRANS_BACK if springy else Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 
 func _row(parent: Node) -> HBoxContainer:
     var row := HBoxContainer.new()
@@ -346,36 +382,74 @@ func _me() -> Dictionary:
 
 func _show_battle() -> void:
     _new_screen("battle")
+    page.add_theme_constant_override("separation",6)
+    # --- scoreboard: our crowns, match clock, their crowns ---
     var header_frame := PanelContainer.new()
-    header_frame.add_theme_stylebox_override("panel",VisualTheme.panel(Color("#102633"),VisualTheme.GOLD_DARK,13,6))
+    header_frame.add_theme_stylebox_override("panel",VisualTheme.panel(Color("#0b1820"),Color("#2c4150"),14,6))
     page.add_child(header_frame)
     var header := _row(header_frame)
-    score = _label("0  —  0",20,VisualTheme.GOLD)
-    score.add_theme_font_override("font",VisualTheme.DISPLAY_FONT)
-    header.add_child(score)
-    clock = _label("5:00",24,VisualTheme.TEXT)
+    var ours := VBoxContainer.new()
+    ours.add_theme_constant_override("separation",-4)
+    ours.custom_minimum_size.x = 92
+    header.add_child(ours)
+    var ours_tag := _label("YOUR SIDE",10,Color("#7fdcef"))
+    ours_tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+    ours_tag.add_theme_font_override("font",VisualTheme.BOLD_FONT)
+    ours.add_child(ours_tag)
+    score_ours = _label("0♛",26,Color("#5fd4ea"))
+    score_ours.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+    score_ours.add_theme_font_override("font",VisualTheme.BOLD_FONT)
+    ours.add_child(score_ours)
+    var middle := VBoxContainer.new()
+    middle.add_theme_constant_override("separation",-2)
+    middle.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    header.add_child(middle)
+    clock = _label("5:00",27,VisualTheme.TEXT)
     clock.add_theme_font_override("font",VisualTheme.BOLD_FONT)
-    header.add_child(clock)
-    var menu := _button("⋯",42)
-    menu.name = "battle_more"
-    menu.size_flags_horizontal = Control.SIZE_FILL
-    menu.custom_minimum_size.x = 52
-    menu.pressed.connect(_more)
-    header.add_child(menu)
+    clock.add_theme_color_override("font_outline_color",Color(0,0,0,0.6))
+    clock.add_theme_constant_override("outline_size",4)
+    middle.add_child(clock)
+    score = _label("0  —  0",11,VisualTheme.GOLD)
+    score.add_theme_font_override("font",VisualTheme.BOLD_FONT)
+    middle.add_child(score)
+    score.visible = false
+    var theirs := VBoxContainer.new()
+    theirs.add_theme_constant_override("separation",-4)
+    theirs.custom_minimum_size.x = 92
+    header.add_child(theirs)
+    var theirs_tag := _label("ENEMY",10,Color("#ff9d6a"))
+    theirs_tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+    theirs_tag.add_theme_font_override("font",VisualTheme.BOLD_FONT)
+    theirs.add_child(theirs_tag)
+    score_theirs = _label("0♛",26,Color("#ff8a4a"))
+    score_theirs.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+    score_theirs.add_theme_font_override("font",VisualTheme.BOLD_FONT)
+    theirs.add_child(score_theirs)
     score_meter = ProgressBar.new()
-    score_meter.custom_minimum_size.y = 7
+    score_meter.custom_minimum_size.y = 6
     score_meter.show_percentage = false
     score_meter.value = 50
-    score_meter.add_theme_stylebox_override("background",VisualTheme.panel(Color("#ca6849"),Color.TRANSPARENT,4,0))
-    score_meter.add_theme_stylebox_override("fill",VisualTheme.panel(VisualTheme.CYAN,Color.TRANSPARENT,4,0))
+    score_meter.add_theme_stylebox_override("background",VisualTheme.panel(Color("#d0643a"),Color.TRANSPARENT,4,0))
+    score_meter.add_theme_stylebox_override("fill",VisualTheme.panel(Color("#4fcde6"),Color.TRANSPARENT,4,0))
     page.add_child(score_meter)
-    tower_title = _button("TOWER I  ·  VIEW MAP",42)
-    tower_title.add_theme_font_override("font",VisualTheme.DISPLAY_FONT)
-    tower_title.add_theme_stylebox_override("normal",VisualTheme.button(Color("#142d3a"),VisualTheme.GOLD,10))
+    # --- tower strip: which tower, and a tap target for the war map ---
+    var tower_row := _row(page)
+    tower_title = _button("◀ MAP   ·   TOWER I",38)
+    tower_title.add_theme_font_size_override("font_size",14)
     tower_title.pressed.connect(_tower_map)
-    page.add_child(tower_title)
+    tower_row.add_child(tower_title)
+    var menu := _button("•••",38)
+    menu.name = "battle_more"
+    menu.size_flags_horizontal = Control.SIZE_FILL
+    menu.custom_minimum_size.x = 58
+    menu.pressed.connect(_more)
+    tower_row.add_child(menu)
+    # --- battlefield with the dice tray overlaid on its lower edge ---
     var arena_frame := PanelContainer.new()
-    arena_frame.add_theme_stylebox_override("panel",VisualTheme.panel(Color("#081d28"),VisualTheme.GOLD_DARK,10,2))
+    var arena_style := VisualTheme.panel(Color("#0a141a"),Color("#c9a45c"),12,2)
+    arena_style.set_border_width_all(2)
+    arena_style.shadow_size = 10
+    arena_frame.add_theme_stylebox_override("panel",arena_style)
     arena_frame.size_flags_vertical = Control.SIZE_EXPAND_FILL
     page.add_child(arena_frame)
     board = Field.new()
@@ -386,62 +460,99 @@ func _show_battle() -> void:
     dice.anchor_right = 1.0
     dice.anchor_top = 1.0
     dice.anchor_bottom = 1.0
-    dice.offset_top = -111
-    dice.offset_bottom = -3
+    dice.offset_top = -118
+    dice.offset_bottom = -4
     dice.mouse_filter = Control.MOUSE_FILTER_IGNORE
     board.add_child(dice)
+    # --- action deck ---
     var action_frame := PanelContainer.new()
-    action_frame.add_theme_stylebox_override("panel",VisualTheme.panel(Color("#0b202d"),VisualTheme.GOLD_DARK,12,6))
+    action_frame.add_theme_stylebox_override("panel",VisualTheme.panel(Color("#0b1820"),Color("#2c4150"),14,7))
     page.add_child(action_frame)
     var actions := VBoxContainer.new()
-    actions.add_theme_constant_override("separation",5)
+    actions.add_theme_constant_override("separation",6)
     action_frame.add_child(actions)
-    roll_result = _label("Roll to attack, defend and support your team.",12,VisualTheme.GOLD,true)
-    roll_result.custom_minimum_size.y = 22
-    actions.add_child(roll_result)
-    bank = _label("Banked this match · 0 gold · 0 XP",10,Color("#a7c6ca"))
-    actions.add_child(bank)
-    focus = _label("FOCUS 8/8",12,VisualTheme.GOLD)
+    var result_frame := PanelContainer.new()
+    result_frame.add_theme_stylebox_override("panel",VisualTheme.panel(Color("#071118"),Color("#26404c"),9,6))
+    actions.add_child(result_frame)
+    var result_box := VBoxContainer.new()
+    result_box.add_theme_constant_override("separation",1)
+    result_frame.add_child(result_box)
+    roll_result = _label("Roll to attack, defend and support your team.",12,Color("#e9f4f1"),true)
+    roll_result.custom_minimum_size.y = 18
+    result_box.add_child(roll_result)
+    var meta := _row(result_box)
+    focus = _label("FOCUS 8/8",11,Color("#ffd97a"))
+    focus.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
     focus.add_theme_font_override("font",VisualTheme.BOLD_FONT)
-    actions.add_child(focus)
+    meta.add_child(focus)
+    bank = _label("Banked · 0 gold · 0 XP",10,Color("#8fb3ba"))
+    bank.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+    meta.add_child(bank)
     var rolls := _row(actions)
+    rolls.add_theme_constant_override("separation",7)
     mult_select = OptionButton.new()
     mult_select.fit_to_longest_item = false
     mult_select.clip_text = true
-    mult_select.custom_minimum_size = Vector2(67,56)
+    mult_select.custom_minimum_size = Vector2(70,62)
+    mult_select.add_theme_font_override("font",VisualTheme.BOLD_FONT)
+    mult_select.add_theme_font_size_override("font_size",18)
+    for state in ["normal","hover","pressed","disabled"]:
+        mult_select.add_theme_stylebox_override(state,VisualTheme.tactile("secondary",state,12))
+    mult_select.add_theme_stylebox_override("focus",StyleBoxEmpty.new())
     for i in [1,2,3,4]:
         mult_select.add_item("×%d"%i,i)
     rolls.add_child(mult_select)
-    roll_button = _button("ROLL",56)
-    roll_button.add_theme_font_override("font",VisualTheme.DISPLAY_FONT)
-    roll_button.add_theme_font_size_override("font_size",25)
-    roll_button.add_theme_color_override("font_color",Color("#fff6db"))
-    roll_button.add_theme_stylebox_override("normal",VisualTheme.button(Color("#cd6326"),Color("#ffe4a0"),13))
-    roll_button.add_theme_stylebox_override("hover",VisualTheme.button(Color("#ed8135"),Color("#fff2b7"),13))
-    roll_button.add_theme_stylebox_override("pressed",VisualTheme.button(Color("#ab491e"),Color("#f3d184"),13))
+    roll_button = _button("ROLL",62)
+    VisualTheme.apply_tactile(roll_button,"primary",14)
+    roll_button.add_theme_font_override("font",VisualTheme.BOLD_FONT)
+    roll_button.add_theme_font_size_override("font_size",27)
+    for state in ["normal","hover","pressed","disabled"]:
+        var sb: StyleBox = roll_button.get_theme_stylebox(state)
+        sb.content_margin_bottom += 12
+    roll_button.clip_contents = true
     roll_button.pressed.connect(_roll)
     rolls.add_child(roll_button)
-    rally_button = _button("RALLY",56)
+    roll_hint = _label("1 Focus · hold for AutoRoll",10,Color("#fff1d8"))
+    roll_hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    roll_hint.anchor_left = 0.0
+    roll_hint.anchor_right = 1.0
+    roll_hint.anchor_top = 1.0
+    roll_hint.anchor_bottom = 1.0
+    roll_hint.offset_top = -24
+    roll_hint.offset_bottom = -9
+    roll_hint.add_theme_color_override("font_outline_color",Color(0.35,0.1,0,0.6))
+    roll_hint.add_theme_constant_override("outline_size",3)
+    roll_button.add_child(roll_hint)
+    var shine := Shimmer.new()
+    shine.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    shine.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    shine.button = roll_button
+    shine.app = self
+    roll_button.add_child(shine)
+    rally_button = _button("RALLY",62)
     rally_button.size_flags_horizontal = Control.SIZE_FILL
-    rally_button.custom_minimum_size.x = 83
+    rally_button.custom_minimum_size.x = 86
     rally_button.pressed.connect(func(): _do_action("rally"))
     rolls.add_child(rally_button)
     var powers := _row(actions)
     for spell in selected_loadout:
         var b := _button(SPELL_NAMES.get(spell,spell),44)
+        VisualTheme.apply_tactile(b,"arcane",11)
         b.set_meta("spell",spell)
         b.pressed.connect(_cast.bind(spell))
         powers.add_child(b)
         spell_buttons.append(b)
     var utility := _row(actions)
-    all_in = _button("ALL-IN OFF",40)
+    all_in = _button("ALL-IN OFF",42)
     all_in.toggle_mode = true
-    all_in.toggled.connect(func(on): all_in.text = "ALL-IN ON" if on else "ALL-IN OFF")
+    all_in.toggled.connect(func(on):
+        all_in.text = "ALL-IN ON" if on else "ALL-IN OFF"
+        VisualTheme.apply_tactile(all_in,"active" if on else "secondary",11))
     utility.add_child(all_in)
-    ult_button = _button("ULTIMATE 0%",40)
+    ult_button = _button("ULTIMATE 0%",42)
     ult_button.pressed.connect(func(): _do_action("ultimate"))
     utility.add_child(ult_button)
-    status = _label("LIVE · 20 combatants",10,Color("#a9cbc8"))
+    status = _label("LIVE · 20 combatants",10,Color("#88a7ad"))
     actions.add_child(status)
     _safe_area()
 
@@ -452,11 +563,16 @@ func _update_battle(data: Dictionary, earnings: Variant = {}) -> void:
     var me := _me()
     var crowns: Array = data.get("score",[0,0])
     var side := int(me.get("side",0))
-    score.text = "%d — %d" % [int(crowns[side]),int(crowns[1-side])]
+    score.text = "YOU %d  ·  %d ENEMY" % [int(crowns[side]),int(crowns[1-side])]
+    if is_instance_valid(score_ours):
+        score_ours.text = "%d♛" % int(crowns[side])
+        score_theirs.text = "%d♛" % int(crowns[1-side])
     var total := int(crowns[side])+int(crowns[1-side])
     if is_instance_valid(score_meter):
         score_meter.value = 50.0 if total <= 0 else 100.0*float(crowns[side])/float(total)
-    tower_title.text = "TOWER %s  ·  VIEW MAP" % ROMAN[int(me.get("tower",0))]
+    var tower_i := int(me.get("tower",0))
+    var pts := 3 if tower_i >= 8 else (2 if tower_i >= 5 else 1)
+    tower_title.text = "◀ MAP   ·   TOWER %s  ·  %d♛" % [ROMAN[tower_i],pts]
     if not busy:
         dice.set_faces(me.get("lastFaces",[]))
     if earnings is Dictionary:
@@ -485,6 +601,13 @@ func _paint_controls() -> void:
     tower_title.disabled = locked
     rally_button.disabled = locked or int(me.get("ralliesLeft",0)) <= 0 or float(me.get("rallyAt",0)) > now or energy < 2
     ult_button.text = "ULTIMATE %d%%" % int(me.get("ult",0))
+    if is_instance_valid(roll_hint):
+        roll_hint.text = ("FREE · Rampage" if free else ("%d Focus · ALL-IN" % cost if all_in.button_pressed else "%d Focus · hold for AutoRoll" % cost))
+        roll_hint.visible = not ko and not busy
+    var ult_ready := int(me.get("ult",0)) >= 100
+    if ult_button.get_meta("ready",false) != ult_ready:
+        ult_button.set_meta("ready",ult_ready)
+        VisualTheme.apply_tactile(ult_button,"arcane" if ult_ready else "secondary",11)
     ult_button.disabled = locked or int(me.get("ult",0)) < 100
     mult_select.disabled = locked or free
     if free:
