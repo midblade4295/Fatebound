@@ -15,6 +15,13 @@ const MAX_3D_WIDTH := 720.0
 const FPS_CAP := 60
 var _prev_max_fps := 0
 var fps_cap := FPS_CAP
+# Thermal guard: field logs (S21 Ultra) show fps sliding for several seconds before a GPU hang.
+# If fps stays under GUARD_FPS for GUARD_SECONDS while capped at 60, drop to 30 automatically.
+const GUARD_FPS := 50
+const GUARD_SECONDS := 3
+var _guard_low := 0
+var _guard_clock := 0.0
+var guard_tripped := false
 var low_fx := false
 var audio: Node = null
 
@@ -141,11 +148,28 @@ func _process(delta: float) -> void:
 	diag.mark("view.sync")
 	view.sync(delta)
 	diag.mark("process done")
+	_thermal_guard(delta)
 	diag.add_time("game", Time.get_ticks_usec() - t_start)
 	if sim.ended and not _result_shown:
 		_result_shown = true
 		diag.write("MATCH END winner=%d reason=%s score=%s" % [sim.winner, sim.end_reason, str(sim.score)])
 		hud.show_result()
+
+func _thermal_guard(delta: float) -> void:
+	_guard_clock += delta
+	if _guard_clock < 1.0:
+		return
+	_guard_clock = 0.0
+	if fps_cap != 60 or hud.pause_panel.visible:
+		_guard_low = 0
+		return
+	_guard_low = _guard_low + 1 if Engine.get_frames_per_second() < GUARD_FPS else 0
+	if _guard_low >= GUARD_SECONDS:
+		_guard_low = 0
+		guard_tripped = true
+		diag.write("THERMAL GUARD fps under %d for %ds -> 30 fps" % [GUARD_FPS, GUARD_SECONDS])
+		set_fps_cap(30)
+		hud.toast("Device running hot: 30 FPS mode on", Color("#f2d18d"))
 
 func set_fps_cap(v: int) -> void:
 	fps_cap = v

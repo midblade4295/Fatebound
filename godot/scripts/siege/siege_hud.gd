@@ -210,6 +210,7 @@ func _build_pause_panel() -> void:
 	_label(v, "Carry your Oracle out of the enemy keep and back to your throne. First to %d rescues wins." % Sim.WIN_RESCUES, 13, Color("#d4cbbb"))
 	_button(v, "RESUME", "gold", func(): pause_panel.visible = false)
 	var fps_btn := _button(v, "30 FPS MODE: OFF", "secondary", func(): pass)
+	pause_panel.visibility_changed.connect(func(): fps_btn.text = "30 FPS MODE: " + ("ON" if Engine.max_fps == 30 else "OFF"))
 	fps_btn.pressed.connect(func():
 		fps_toggled.emit()
 		fps_btn.text = "30 FPS MODE: " + ("ON" if Engine.max_fps == 30 else "OFF"))

@@ -86,6 +86,6 @@ func _process(delta: float) -> bool:
 			me.cls, me.state, me.pos.x, me.pos.y, str(s.score), stalls, worst_ms])
 		worst_ms = 0.0
 	if s.ended or frames > 30 * 400:
-		print("HUMAN_SOAK_DONE t=%.1f ended=%s stalls=%d kills=%d deaths=%d rescues=%d" % [s.time, s.ended, stalls, me.kills, me.deaths, me.rescues])
+		print("HUMAN_SOAK_DONE t=%.1f ended=%s reason=%s score=%s winner=%d stalls=%d kills=%d deaths=%d rescues=%d" % [s.time, s.ended, s.end_reason, str(s.score), s.winner, stalls, me.kills, me.deaths, me.rescues])
 		quit(0)
 	return false
