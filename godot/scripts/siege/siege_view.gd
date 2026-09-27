@@ -468,7 +468,11 @@ func sync(dt: float) -> void:
 		root.rotation.y = lerp_angle(root.rotation.y, float(u.face), 1.0 - exp(-dt * 18.0))
 		var bar: MeshInstance3D = a.bar
 		bar.visible = u.state != "dead"
-		(bar.material_override as ShaderMaterial).set_shader_parameter("fill", clampf(u.hp / maxf(1.0, u.max_hp), 0.0, 1.0))
+		# Only touch the bar's material when HP actually changed (each write re-uploads its buffer).
+		var fill := snappedf(clampf(u.hp / maxf(1.0, u.max_hp), 0.0, 1.0), 0.01)
+		if fill != float(a.get("fill", -1.0)):
+			a.fill = fill
+			(bar.material_override as ShaderMaterial).set_shader_parameter("fill", fill)
 		(a.ring as MeshInstance3D).visible = u.state != "dead"
 		_animate(a, u, vel)
 	for id in actors.keys():
@@ -650,17 +654,32 @@ func _make_projectile(kind: String) -> Node3D:
 	return root
 
 # ---------- effects ----------
+# No material or text writes per frame here. In Godot's GLES3 renderer every material parameter
+# change re-uploads that material's buffer (glBufferData), and changing a Label3D's modulate
+# rebuilds its mesh and materials. Field logs showed the Adreno driver hanging after ~5-6k frames
+# of that churn, so effects share cached materials and fade by scale only, and damage numbers
+# are drawn by the 2D HUD instead of Label3D.
+static var _fx_mats: Dictionary = {}
+var numbers: Array = []   # [{pos: Vector3, text, mine, at}] read by the HUD
+
+func _fx_mat(color: Color) -> StandardMaterial3D:
+	var key := color.to_html()
+	if not _fx_mats.has(key):
+		_fx_mats[key] = _unshaded(color)
+	return _fx_mats[key]
+
 func ring_at(at: Vector3, color: Color, grow := 2.2, life := 0.6) -> void:
 	if low_fx and life < 0.5:
 		return
 	var mi := MeshInstance3D.new()
 	mi.mesh = _ring_mesh(0.5, 0.12)
-	var mat := _unshaded(color)
-	mi.material_override = mat
+	var c := color
+	c.a = 0.85
+	mi.material_override = _fx_mat(c)
 	mi.position = at + Vector3(0, 0.08, 0)
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(mi)
-	_fx.append({"node":mi, "mat":mat, "at":_time, "life":life, "kind":"ring", "grow":grow})
+	_fx.append({"node":mi, "at":_time, "life":life, "kind":"ring", "grow":grow})
 
 func spark(at: Vector3, color: Color) -> void:
 	if low_fx:
@@ -674,25 +693,16 @@ func spark(at: Vector3, color: Color) -> void:
 		_spark_mesh.rings = 3
 	mi.mesh = _spark_mesh
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	var mat := _unshaded(color)
-	mi.material_override = mat
+	mi.material_override = _fx_mat(color)
 	mi.position = at
 	add_child(mi)
 	var dir := Vector3(randf_range(-1, 1), randf_range(0.6, 1.6), randf_range(-1, 1))
-	_fx.append({"node":mi, "mat":mat, "at":_time, "life":0.45, "kind":"spark", "p0":at, "dir":dir})
+	_fx.append({"node":mi, "at":_time, "life":0.45, "kind":"spark", "p0":at, "dir":dir})
 
 func number(at: Vector3, text: String, mine: bool) -> void:
-	var l := Label3D.new()
-	l.text = text
-	l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	l.no_depth_test = true
-	l.font_size = 64
-	l.pixel_size = 0.012
-	l.outline_size = 14
-	l.modulate = Color("#ff6b5a") if mine else Color("#fff1c2")
-	l.position = at
-	add_child(l)
-	_fx.append({"node":l, "at":_time, "life":0.7, "kind":"number", "p0":at})
+	numbers.append({"pos":at, "text":text, "mine":mine, "at":_time})
+	if numbers.size() > 40:
+		numbers.pop_front()
 
 func _step_fx() -> void:
 	for i in range(_fx.size()-1, -1, -1):
@@ -707,15 +717,15 @@ func _step_fx() -> void:
 		var u := age / float(fx.life)
 		match str(fx.kind):
 			"ring":
+				# Grow outward and disappear at the end of its life (no alpha fade).
 				var s := 0.4 + u * float(fx.grow)
 				node.scale = Vector3(s, 0.3, s)
-				(fx.mat as StandardMaterial3D).albedo_color.a = (1.0 - u) * 0.9
 			"spark":
 				node.position = fx.p0 + fx.dir * u * 1.2
-				(fx.mat as StandardMaterial3D).albedo_color.a = 1.0 - u
-			"number":
-				node.position = fx.p0 + Vector3(0, u * 1.0, 0)
-				(node as Label3D).modulate.a = 1.0 - u * u
+				node.scale = Vector3.ONE * maxf(0.05, 1.0 - u)
+	for i in range(numbers.size()-1, -1, -1):
+		if _time - float(numbers[i].at) > 0.8:
+			numbers.remove_at(i)
 
 # ---------- camera ----------
 func _update_camera(dt: float) -> void:

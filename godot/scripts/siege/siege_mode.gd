@@ -74,6 +74,8 @@ func _ready() -> void:
 	hud.action_pressed.connect(_on_action)
 	hud.project = func(world: Vector3) -> Vector2: return _to_hud(view.screen_point(world))
 	hud.on_screen = func(world: Vector3) -> bool: return view.is_on_screen(world)
+	hud.numbers_source = func() -> Array: return view.numbers if view != null else []
+	hud.numbers_clock = func() -> float: return view._time if view != null else 0.0
 	resized.connect(_resize_viewport)
 	_start()
 	_resize_viewport()

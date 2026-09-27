@@ -23,6 +23,8 @@ var _bar_style: StyleBox
 var player_id := "you"
 var project: Callable          # world Vector3 -> HUD Vector2
 var on_screen: Callable        # world Vector3 -> bool
+var numbers_source: Callable   # -> Array of {pos, text, mine, at} from the 3D view
+var numbers_clock: Callable    # -> float, the view clock those "at" values use
 
 var _touchscreen := false
 var _touches := {}             # index -> role
@@ -417,6 +419,7 @@ func _draw_hud() -> void:
 		c.a = clampf(2.6 - age, 0.0, 1.0)
 		_text(Vector2(w * 0.5, 176), _toast, 18, c, _bold)
 	_draw_oracle_marker(me)
+	_draw_numbers()
 	if diag != null and diag.fps_text != "":
 		_text(Vector2(w - 212, 142), diag.fps_text, 11, Color(1, 1, 1, 0.6), _font, HORIZONTAL_ALIGNMENT_RIGHT, 200)
 	if me.state == "dead":
@@ -437,6 +440,22 @@ func _draw_hud() -> void:
 	# Combat buttons.
 	for b in _buttons():
 		_draw_button(b, me)
+
+func _draw_numbers() -> void:
+	# Damage numbers: projected from 3D and drawn on the HUD canvas (no Label3D mesh rebuilds).
+	if not numbers_source.is_valid() or not project.is_valid():
+		return
+	var now: float = numbers_clock.call()
+	for n in numbers_source.call():
+		var u := clampf((now - float(n.at)) / 0.8, 0.0, 1.0)
+		if on_screen.is_valid() and not on_screen.call(n.pos):
+			continue
+		var p: Vector2 = project.call(n.pos)
+		if p.y < 150.0:
+			continue   # keep clear of the scoreboard and status lines
+		var c := Color("#ff6b5a") if n.mine else Color("#fff1c2")
+		c.a = 1.0 - u * u
+		_text(p + Vector2(0, -34.0 * u), str(n.text), 18, c, _bold)
 
 func _oracle_status(me: Dictionary) -> String:
 	var o: Dictionary = sim.oracles[me.team]
