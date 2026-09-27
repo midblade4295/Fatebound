@@ -37,6 +37,9 @@ with zipfile.ZipFile(p) as z:
     value=struct.unpack_from(endian+'Q',b,pos+48)[0]; assert value>=16384,(name,value);align.append(value)
   libs.append({'path':name,'load_segment_alignment':align})
  assert any('arm64-v8a' in x['path'] for x in libs)
+ assert any('armeabi-v7a' in x['path'] for x in libs)
+ assert any('/x86/' in x['path'] for x in libs), 'Missing 32-bit x86 ABI'
+ assert any('x86_64' in x['path'] for x in libs)
 report={'file':p.name,'bytes':p.stat().st_size,'sha256':hashlib.sha256(p.read_bytes()).hexdigest(),'upload_certificate_sha256':fp,'matches_previous_vc21_certificate':True,'native_content_tables_equal':True,'content_module':content_module,'content_asset_path':content_path,'test_and_signing_material_excluded':True,'native_64bit_libraries':libs,'physical_phone_tested':False}
 p.with_name('PLAY_BUNDLE_VERIFICATION.json').write_text(json.dumps(report,indent=2)+'\n')
 print(json.dumps(report,indent=2))
@@ -51,8 +54,8 @@ subprocess.run(['java','-jar',str(jar),'validate','--bundle='+str(p)],check=True
 manifest=subprocess.check_output(['java','-jar',str(jar),'dump','manifest','--bundle='+str(p),'--module=base'],text=True)
 root=ET.fromstring(manifest);android='{http://schemas.android.com/apk/res/android}'
 assert root.attrib['package']=='com.fatebound.game'
-assert root.attrib[android+'versionCode']=='22'
-assert root.attrib[android+'versionName']=='1.1.0'
+assert root.attrib[android+'versionCode']=='23'
+assert root.attrib[android+'versionName']=='1.1.1'
 sdk=root.find('uses-sdk');assert sdk.attrib[android+'minSdkVersion']=='24' and sdk.attrib[android+'targetSdkVersion']=='36'
 application=root.find('application');assert application.attrib.get(android+'debuggable','false')=='false'
 permissions=[item.attrib.get(android+'name') for item in root.findall('uses-permission')]
@@ -60,6 +63,6 @@ assert 'android.permission.INTERNET' in permissions
 if content_module!='base':
  delivery=subprocess.check_output(['java','-jar',str(jar),'dump','manifest','--bundle='+str(p),'--module='+content_module],text=True)
  assert 'install-time' in delivery,('Game content not delivered at installation',delivery)
-report.update(bundletool_validation_passed=True,package='com.fatebound.game',version_code=22,version_name='1.1.0',min_sdk=24,target_sdk=36,debuggable=False,game_assets_available_at_install=True)
+report.update(bundletool_validation_passed=True,package='com.fatebound.game',version_code=23,version_name='1.1.1',min_sdk=24,target_sdk=36,debuggable=False,game_assets_available_at_install=True)
 p.with_name('PLAY_BUNDLE_VERIFICATION.json').write_text(json.dumps(report,indent=2)+'\n')
 print('FINAL_VALIDATION',json.dumps(report,indent=2))

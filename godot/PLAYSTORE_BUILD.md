@@ -1,7 +1,7 @@
-# Native Play testing bundle: versionCode22 / 1.1.0
+# Native Play testing bundle: versionCode23 / 1.1.1
 
 Prepared in response to the explicit request for a Play Store upload file.
-Package: com.fatebound.game. Existing upload key is reused by the existing CI
+Package: com.fatebound.game. All four Android ABIs are enabled: arm32, arm64, x86_32, x86_64. Existing upload key is reused by the existing CI
 signing stage. The separate native preview retains its package/certificate.
 No Play Console upload, rollout, main merge or server change is performed.
 
