@@ -1,7 +1,8 @@
 extends Control
-# Native CanvasItem rendering of the exact baked v114 art; no combat rules here.
+# Native CanvasItem presentation. Gameplay remains server-authoritative.
 const CELL := Vector2(340,280)
 const CLIPS := {"idle":6,"attack":8,"big":8,"hit":3,"death":1}
+const HERO_ART := ["hero_knight.webp","hero_rogue.webp","hero_barbarian.webp","hero_mage.webp","hero_ranger.webp"]
 var snapshot: Dictionary = {}
 var player_id := ""
 var preview := false
@@ -43,7 +44,8 @@ func texture(key: String) -> Texture2D:
     _used[key] = Time.get_ticks_msec()
     if _textures.has(key):
         return _textures[key]
-    var path := ("res://assets/portraits/" if key.begins_with("portrait_") else "res://assets/art/") + key
+    var folder := "res://assets/premium/" if key in HERO_ART or key in ["hero_stage.webp","battle_arena.webp"] else ("res://assets/portraits/" if key.begins_with("portrait_") else "res://assets/art/")
+    var path := folder + key
     if not ResourceLoader.exists(path):
         return null
     var value: Texture2D = load(path)
@@ -137,21 +139,18 @@ func _text(text: String, rect: Rect2, font_size: int, color: Color) -> void:
 func _draw() -> void:
     if _font == null or size.x < 1 or size.y < 1:
         return
-    draw_rect(Rect2(Vector2.ZERO,size),Color("#142a32"))
-    # The portrait arena is the original match composition. The panorama used
-    # by the first native build flattened the castles and made fighters tiny.
-    var bg := texture("map.jpeg")
+    draw_rect(Rect2(Vector2.ZERO,size),Color("#07141b"))
+    var bg := texture("hero_stage.webp" if preview else "battle_arena.webp")
     if bg != null:
         var scale_factor := maxf(size.x/bg.get_width(),size.y/bg.get_height())
         var extent := bg.get_size()*scale_factor
-        # Keep the castles in the upper third and the hex floor behind the cast.
-        var crop_y := maxf(0,extent.y-size.y)*0.28
+        var crop_y := maxf(0,extent.y-size.y)*(0.5 if preview else 0.23)
         draw_texture_rect(bg,Rect2(Vector2((size.x-extent.x)*0.5,-crop_y),extent),false)
     if not preview:
-        draw_rect(Rect2(0,0,size.x,minf(120.0,size.y*0.22)),Color(0.02,0.07,0.10,0.22))
-        draw_rect(Rect2(0,maxf(0,size.y-133),size.x,133),Color(0.02,0.08,0.13,0.37))
-        draw_rect(Rect2(0,0,3,size.y),Color("#69d8e1aa"))
-        draw_rect(Rect2(size.x-3,0,3,size.y),Color("#eb8267aa"))
+        draw_rect(Rect2(0,0,size.x,minf(95.0,size.y*0.20)),Color(0.01,0.05,0.09,0.22))
+        draw_rect(Rect2(0,maxf(0,size.y-119),size.x,119),Color(0.01,0.04,0.07,0.42))
+        draw_rect(Rect2(0,0,2,size.y),Color("#7dd5de77"))
+        draw_rect(Rect2(size.x-2,0,2,size.y),Color("#edaf6a77"))
         if not reduce_motion:
             for i in 7:
                 var x := fposmod(i*117.0+animation_time*(11+i%3*3),size.x)
@@ -159,13 +158,16 @@ func _draw() -> void:
                 draw_circle(Vector2(x,y),1.0+i%2,Color(1,0.86,0.58,0.12))
     _positions.clear()
     if preview:
-        var portrait:=texture("portrait_%02d.webp" % (clampi(preview_char,0,4)*9+clampi(preview_weapon,0,8)))
-        if front_portrait and portrait!=null:
-            var h:=size.y*1.04
-            var w:=h*0.8
-            draw_texture_rect(portrait,Rect2((size.x-w)*0.5,size.y-h,w,h),false)
-            return
-        _actor({"id":"preview","name":"","char":preview_char,"weapon":preview_weapon,"hp":1,"maxHp":1,"shieldSlots":[]},Vector2(size.x*0.5,size.y*0.95),minf(size.y*1.4,360.0),false,true)
+        var artwork := texture(HERO_ART[clampi(preview_char,0,4)])
+        if artwork != null:
+            var h := size.y*0.79
+            var w := h*artwork.get_width()/artwork.get_height()
+            var foot := Vector2(size.x*0.5,size.y*0.83)
+            draw_set_transform(foot,0,Vector2(1,0.25))
+            draw_circle(Vector2.ZERO,h*0.24,Color(0,0,0,0.42))
+            draw_set_transform(Vector2.ZERO)
+            var float_y := 0.0 if reduce_motion else sin(animation_time*1.75)*1.5
+            draw_texture_rect(artwork,Rect2(foot.x-w*0.5,foot.y-h+float_y,w,h),false)
         return
     if snapshot.is_empty():
         return
@@ -182,12 +184,8 @@ func _draw() -> void:
     var lead := int(tower.get("prev",-1))
     if float(dmg[0]) != float(dmg[1]):
         lead = 0 if float(dmg[0]) > float(dmg[1]) else 1
-    var tower_image := texture("scaffold.png" if lead < 0 else ("towerB.png" if lead == side else "towerR.png"))
-    if tower_image != null:
-        var h := clampf(size.y*0.24,82,145)
-        var w := h*tower_image.get_width()/tower_image.get_height()
-        draw_texture_rect(tower_image,Rect2(Vector2(size.x*0.5-w*0.5,size.y*0.13),Vector2(w,h)),false)
-    _panel(Rect2(size.x*0.5-54,6,108,27),Color("#0a1e2af2"),Color("#ddb877"))
+    var tower_accent := Color("#86e2e9") if lead==side else (Color("#f2a177") if lead>=0 else Color("#edcd8f"))
+    _panel(Rect2(size.x*0.5-54,6,108,27),Color("#071722f2"),tower_accent)
     _text("TOWER "+str(tower.get("name",ti+1)),Rect2(size.x*0.5-54,9,108,23),12,Color("#ffdf9e"))
     for team in 2:
         var team_side: int = side if team == 0 else 1-side
@@ -235,33 +233,39 @@ func _garrison(heroes: Array, team: int) -> void:
 func _actor(hero: Dictionary, foot: Vector2, height: float, enemy: bool, hide_label := false) -> void:
     var hid := str(hero.get("id",""))
     var dead := int(hero.get("hp",0)) <= 0
-    var row := clampi(int(hero.get("char",0)),0,4)*9+clampi(int(hero.get("weapon",0)),0,8)
     var clip := "death" if dead else "idle"
-    var frame := int(animation_time/0.15 + absi(hid.hash())%6)%6
-    if int(hero.get("weapon",0)) == 8:
-        frame = 0
-    if dead:
-        frame = 0
-    elif _animations.has(hid):
+    var age := 0.0
+    if not dead and _animations.has(hid):
         var ani: Dictionary = _animations[hid]
-        var age := animation_time-float(ani.at)
+        age = animation_time-float(ani.at)
         if age < float(ani.duration):
             clip = str(ani.clip)
-            frame = mini(int(CLIPS[clip])-1,int(age/float(ani.duration)*int(CLIPS[clip])))
         else:
             _animations.erase(hid)
     if foot.x+height<0 or foot.x-height>size.x:return
-    if reduce_motion and clip=="idle":frame=0
-    var tex := texture("hero_%02d_%s.webp" % [row,clip])
+    var cls := 3 if hid=="boss" else clampi(int(hero.get("char",0)),0,4)
+    var tex := texture(HERO_ART[cls])
     if tex == null:
         return
-    var width := height*CELL.x/CELL.y
+    var width := height*tex.get_width()/tex.get_height()
     _positions[hid] = foot
     draw_set_transform(foot,0.0,Vector2(1,0.25))
-    draw_circle(Vector2.ZERO,width*0.28,Color(0,0,0,0.34))
-    draw_set_transform(foot,0.0,Vector2(-1 if enemy else 1,1))
-    var tint := Color(1,1,1,0.50) if dead else Color.WHITE
-    draw_texture_rect_region(tex,Rect2(-width*0.5,-height+height*0.12,width,height),Rect2(frame*340,0,340,280),tint)
+    draw_circle(Vector2.ZERO,width*0.33,Color(0,0,0,0.52))
+    var shift := Vector2.ZERO
+    var angle := 0.0
+    var scale_y := 1.0
+    var tint := Color(0.68,0.75,0.78,0.43) if dead else Color.WHITE
+    if not dead and not reduce_motion:
+        shift.y = sin(animation_time*1.9+float(absi(hid.hash())%7))*1.2
+        scale_y = 1.0+sin(animation_time*1.9+float(absi(hid.hash())%7))*0.008
+        if clip in ["attack","big"]:
+            shift.x = (1 if enemy else -1)*sin(minf(1.0,age/0.65)*PI)*minf(15.0,height*0.13)
+            angle = (0.06 if enemy else -0.06)*sin(minf(1.0,age/0.65)*PI)
+        elif clip=="hit":
+            shift.x = (1 if enemy else -1)*sin(minf(1.0,age/0.38)*PI)*minf(8.0,height*0.08)
+            tint = Color(1.0,0.72,0.64,1.0)
+    draw_set_transform(foot+shift,angle,Vector2(-1 if enemy else 1,scale_y))
+    draw_texture_rect(tex,Rect2(-width*0.5,-height,width,height),false,tint)
     draw_set_transform(Vector2.ZERO)
     if not dead and not (hero.get("shieldSlots",[]) as Array).is_empty():
         draw_arc(foot+Vector2(0,-height*0.38),height*0.37,PI*0.93,TAU+0.3,28,Color(0.5,0.9,1,0.55),2,true)
