@@ -14,6 +14,10 @@ func _run()->void:
     else:
         root.content_scale_size=Vector2i.ZERO;root.size=Vector2i(420,936)
     await fw()
+    if OS.get_environment("KIND")=="home":
+        app.d.gold=540;app.d.tokens=0;app.d.xp=19;app.pages.show("home");await fw(90)
+        await RenderingServer.frame_post_draw
+        root.get_texture().get_image().save_png(out);quit();return
     app.start_local("raid" if OS.get_environment("KIND")=="raid" else "campaign");await fw(40)
     var mode:=OS.get_environment("MODE")
     if mode=="roll":

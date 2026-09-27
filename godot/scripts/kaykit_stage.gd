@@ -469,6 +469,7 @@ func _build_pedestal() -> void:
                 dim.albedo_color = GROUND_TINT*0.62
                 dim.albedo_color.a = 1.0
                 (mi as MeshInstance3D).set_surface_override_material(surf,dim)
+    _stage_embers()
     var rim := OmniLight3D.new()
     rim.light_color = Color("#8fd6ff")
     rim.light_energy = 1.1
@@ -481,6 +482,46 @@ func _build_pedestal() -> void:
     warm.omni_range = 7.0
     warm.position = Vector3(2.2,2.2,2.4)
     add_child(warm)
+
+func _stage_embers() -> void:
+    # Slow warm embers drifting up behind the hero on the armory/home stage.
+    if not preload("res://scripts/ui/fx.gd").enabled():
+        return
+    var quad := QuadMesh.new()
+    quad.size = Vector2(0.07,0.07)
+    var mat := StandardMaterial3D.new()
+    mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+    mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+    mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+    mat.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+    mat.vertex_color_use_as_albedo = true
+    mat.albedo_texture = preload("res://scripts/ui/fx.gd").texture("dot")
+    quad.material = mat
+    var pm := ParticleProcessMaterial.new()
+    pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+    pm.emission_box_extents = Vector3(3.2,1.6,0.6)
+    pm.direction = Vector3(0.15,1,0)
+    pm.spread = 25.0
+    pm.gravity = Vector3.ZERO
+    pm.initial_velocity_min = 0.12
+    pm.initial_velocity_max = 0.35
+    pm.scale_min = 0.6
+    pm.scale_max = 1.4
+    var g := Gradient.new()
+    g.offsets = PackedFloat32Array([0.0,0.3,1.0])
+    g.colors = PackedColorArray([Color(1,0.7,0.3,0),Color(1,0.62,0.22,0.9),Color(1,0.4,0.1,0)])
+    var ramp := GradientTexture1D.new()
+    ramp.gradient = g
+    pm.color_ramp = ramp
+    var p := GPUParticles3D.new()
+    p.amount = 16
+    p.lifetime = 5.0
+    p.preprocess = 4.0
+    p.process_material = pm
+    p.draw_pass_1 = quad
+    p.position = Vector3(0,1.6,-2.2)
+    p.visibility_aabb = AABB(Vector3(-5,-3,-2),Vector3(10,7,4))
+    add_child(p)
 
 func tower_anchor() -> Vector3:
     return Vector3(0,ground(0,-12.1)+7.4,-12.1)

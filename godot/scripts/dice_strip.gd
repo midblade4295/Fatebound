@@ -3,6 +3,7 @@ extends Control
 # server confirmed; nothing here decides an outcome.
 const Wire = preload("res://scripts/arena_wire.gd")
 const VisualTheme = preload("res://scripts/ui/visual_theme.gd")
+const Fx = preload("res://scripts/ui/fx.gd")
 const ATLAS = preload("res://assets/dice/die_faces.png")
 const NAMES := {"S":"SWORD","C":"CRITICAL","H":"SHIELD","G":"GOLD","E":"FOCUS","F":"GIFT"}
 const SYMBOLS := ["S","C","H","G","E","F"]
@@ -138,6 +139,7 @@ func _process(delta: float) -> void:
 func set_faces(value: Variant) -> void:
     if not value is Array or value.size() != 3:
         return
+    var fresh_roll := _rolled
     faces = value.duplicate()
     pending = false
     for i in 3:
@@ -152,6 +154,19 @@ func set_faces(value: Variant) -> void:
         _anim[i].to = _target_basis(i,sym)
         _anim[i].at = elapsed
     _rolled = false
+    if fresh_roll and not reduce_motion and is_inside_tree():
+        # Once the dice have landed: a cyan pulse on each matched die, and sparks when crits match.
+        var info: Dictionary = Wire.winning_dice(faces)
+        var winners: Array = info.get("indices",[])
+        var tier := str(info.get("tier","none"))
+        get_tree().create_timer(0.55).timeout.connect(func():
+            if not is_instance_valid(self):
+                return
+            for i in winners:
+                if tier != "none":
+                    Fx.burst(self,_die_screen(i),"ring")
+                if str(faces[i]) == "C" and tier != "none":
+                    Fx.burst(self,_die_screen(i),"crit"))
     queue_redraw()
 
 func start_roll() -> void:
