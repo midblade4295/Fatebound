@@ -7,7 +7,7 @@ extends Node
 #    which separates "stuck in game code" from "stuck in the renderer/driver".
 const PATH := "user://siege_diag.log"
 const PREV_PATH := "user://siege_diag_prev.log"
-const BUILD := "0.7.5-siege-alpha"
+const BUILD := "0.7.6-siege-alpha"
 
 class ErrorCapture:
 	extends Logger
@@ -134,6 +134,10 @@ func _watch() -> void:
 			_stalled = true
 			_stall_at = Time.get_ticks_msec()
 			write("STALL no frame for %d ms; main thread last in: %s" % [since, phase])
+			# Grab the system log now, from this thread, while the main thread is stuck: the GPU
+			# driver (libGLES_adreno / kgsl) logs faults and hangs there.
+			for line in logcat_tail(250, 80).split("\n", false):
+				write("LOGCAT " + line)
 		elif since > 2000 and Time.get_ticks_msec() - _stall_at > 5000:
 			_stall_at = Time.get_ticks_msec()
 			write("STILL STALLED %d ms; last phase: %s" % [since, phase])
@@ -172,6 +176,29 @@ func _process(delta: float) -> void:
 	_worst_ms = 0.0
 	_events = 0
 
+const LOGCAT_KEYS := ["adreno", "kgsl", "gsl", "gpu", "egl", "gl_", "opengl", "godot", "fatal", "sigsegv", "sigabrt",
+	"abort", "anr", "fault", "hang", "timeout", "lowmemory", "oom", "vulkan", "surfaceflinger", "watchdog"]
+
+static func logcat_tail(lines := 400, keep := 120) -> String:
+	# Android lets an app read its own log lines (same UID), which include the GPU driver's
+	# messages because the driver runs inside the app process. Keeps only relevant lines.
+	if OS.get_name() != "Android":
+		return ""
+	var out: Array = []
+	var err := OS.execute("/system/bin/logcat", ["-d", "-t", str(lines), "-v", "time"], out, true)
+	if err != OK or out.is_empty():
+		return "logcat unavailable (error %d)" % err
+	var picked := PackedStringArray()
+	for line in str(out[0]).split("\n", false):
+		var low := line.to_lower()
+		for k in LOGCAT_KEYS:
+			if low.contains(k):
+				picked.append(line.strip_edges())
+				break
+	if picked.size() > keep:
+		picked = picked.slice(picked.size() - keep)
+	return "\n".join(picked)
+
 static func has_logs() -> bool:
 	return FileAccess.file_exists(PATH) or FileAccess.file_exists(PREV_PATH)
 
@@ -189,4 +216,7 @@ static func read_logs(tail := 120) -> String:
 			if i == 0 or i >= lines.size() - tail or l.contains("STALL") or l.contains("ERROR") or l.contains("RECOVERED") or l.contains("SESSION"):
 				keep.append(l)
 		out += "==== %s (%d lines) ====\n%s\n" % [p.get_file(), lines.size(), "\n".join(keep)]
+	var lc := logcat_tail(1500, 150)
+	if lc != "":
+		out += "==== logcat (this app, filtered) ====\n%s\n" % lc
 	return out
