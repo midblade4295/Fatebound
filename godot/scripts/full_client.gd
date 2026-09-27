@@ -8,6 +8,7 @@ const Factory=preload("res://scripts/game/hero_factory.gd")
 const Trainer=preload("res://scripts/game/training.gd")
 const LegacyImport=preload("res://scripts/game/legacy_import.gd")
 const Pages=preload("res://scripts/ui/pages.gd")
+const Glyph=preload("res://scripts/ui/glyph.gd")
 var save_store
 var progression
 var pages
@@ -16,6 +17,11 @@ var coach:PanelContainer
 var body:VBoxContainer
 var scroller:ScrollContainer
 var wallet:Label
+var wallet_gold:Label
+var wallet_fate:Label
+var wallet_tokens:Label
+var wallet_season:Label
+var wallet_xp:ProgressBar
 var message_label:Label
 var detail_label:Label
 var chests_button:Button
@@ -111,36 +117,88 @@ func _show_home()->void:
 func _shell(title:String,tab:String="home",navigation:=true)->VBoxContainer:
     _new_screen(tab)
     coach=null;message_label=null;detail_label=null;chests_button=null;raid_parry_button=null
-    var header:=_row(page)
-    header.add_child(_label(title,24,Color("#f3d794")))
+    var masthead:=PanelContainer.new()
+    masthead.add_theme_stylebox_override("panel",VisualTheme.panel(Color("#081a24"),VisualTheme.GOLD_DARK,18,6))
+    page.add_child(masthead)
+    var header:=_row(masthead)
+    var heading:=_label(title,25,VisualTheme.GOLD)
+    heading.add_theme_font_override("font",VisualTheme.DISPLAY_FONT)
+    header.add_child(heading)
     if tab!="home":
         var back:=_button("BACK",40);back.custom_minimum_size.x=72;back.size_flags_horizontal=Control.SIZE_FILL
         back.pressed.connect(func():_go("home"));header.add_child(back)
-    wallet=_label("",12,Color("#acdcd6"),false);wallet.custom_minimum_size.y=35;page.add_child(wallet)
+    var wallet_frame:=PanelContainer.new()
+    wallet_frame.add_theme_stylebox_override("panel",VisualTheme.panel(Color("#091b25"),Color("#5f624e"),10,6))
+    page.add_child(wallet_frame)
+    var wallet_box:=VBoxContainer.new();wallet_box.add_theme_constant_override("separation",4);wallet_frame.add_child(wallet_box)
+    wallet=_label("",11,VisualTheme.GOLD,false)
+    wallet.add_theme_font_override("font",VisualTheme.BOLD_FONT)
+    wallet_box.add_child(wallet)
+    wallet_xp=ProgressBar.new();wallet_xp.custom_minimum_size.y=4;wallet_xp.show_percentage=false;wallet_box.add_child(wallet_xp)
+    var currency:=_row(wallet_box)
+    wallet_gold=_currency_chip(currency,"coin")
+    wallet_fate=_currency_chip(currency,"gem")
+    wallet_tokens=_currency_chip(currency,"coin")
+    wallet_season=null
+    if tab=="home":
+        var season_frame:=PanelContainer.new()
+        season_frame.add_theme_stylebox_override("panel",VisualTheme.panel(Color("#091b25"),Color("#745936"),8,3))
+        page.add_child(season_frame)
+        var season_row:=_row(season_frame)
+        var season_icon:=Glyph.new();season_icon.kind="laurel";season_icon.custom_minimum_size=Vector2(24,24);season_row.add_child(season_icon)
+        wallet_season=_label("",13,VisualTheme.GOLD)
+        wallet_season.horizontal_alignment=HORIZONTAL_ALIGNMENT_LEFT
+        season_row.add_child(wallet_season)
     _wallet_refresh()
     scroller=ScrollContainer.new();scroller.size_flags_vertical=Control.SIZE_EXPAND_FILL;scroller.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
     scroller.follow_focus=true;page.add_child(scroller)
-    body=VBoxContainer.new();body.size_flags_horizontal=Control.SIZE_EXPAND_FILL;body.add_theme_constant_override("separation",9);scroller.add_child(body)
+    body=VBoxContainer.new();body.size_flags_horizontal=Control.SIZE_EXPAND_FILL;body.add_theme_constant_override("separation",12);scroller.add_child(body)
     message_label=_label("",11,Color("#ffe8a9"),true);message_label.custom_minimum_size.y=20;page.add_child(message_label)
     if not save_store.writable:message_label.text=save_store.last_error
     if trainer!=null and trainer.active:
         training_temp_notice=_label("TRAINING SAVE · Your real resources are unchanged",10,Color("#efba8d"),true);page.add_child(training_temp_notice)
     if navigation:
-        var nav:=_row(page)
-        for spec in [["shop","SHOP"],["hero","HERO"],["home","HOME"],["guild","GUILD"],["friends","FRIENDS"]]:
-            var b:=_button(spec[1],48);b.add_theme_font_size_override("font_size",11);b.name="nav_"+spec[0]
-            if spec[0]==tab:b.add_theme_stylebox_override("normal",_style(Color("#1d625d"),Color("#80d9c5")))
+        var nav_frame:=PanelContainer.new()
+        nav_frame.add_theme_stylebox_override("panel",VisualTheme.panel(Color("#081b25"),VisualTheme.GOLD_DARK,15,4))
+        page.add_child(nav_frame)
+        var nav:=_row(nav_frame)
+        for spec in [["shop","SHOP","coin"],["hero","HERO","helm"],["home","HOME","castle"],["guild","GUILD","shield"],["friends","FRIENDS","friends"]]:
+            var b:=_button("\n"+spec[1],61);b.add_theme_font_size_override("font_size",10);b.name="nav_"+spec[0]
+            var symbol:=Glyph.new();symbol.kind=spec[2];symbol.custom_minimum_size=Vector2(27,27)
+            symbol.anchor_left=0.5;symbol.anchor_right=0.5;symbol.offset_left=-13.5;symbol.offset_right=13.5;symbol.offset_top=4;symbol.offset_bottom=31
+            b.add_child(symbol)
+            if spec[0]==tab:
+                b.add_theme_stylebox_override("normal",VisualTheme.button(Color("#123642"),VisualTheme.GOLD,9))
+                b.add_theme_color_override("font_color",VisualTheme.TEXT)
             b.pressed.connect(_go.bind(spec[0]));nav.add_child(b)
     rebuild_coach.call_deferred()
     return body
+func _currency_chip(parent:Node,kind:String)->Label:
+    var frame:=PanelContainer.new()
+    frame.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+    frame.add_theme_stylebox_override("panel",VisualTheme.panel(Color("#0c2630"),Color("#665735"),9,3))
+    parent.add_child(frame)
+    var row:=_row(frame)
+    var symbol:=Glyph.new();symbol.kind=kind;symbol.custom_minimum_size=Vector2(24,24);row.add_child(symbol)
+    var value:=_label("",13,VisualTheme.GOLD);value.add_theme_font_override("font",VisualTheme.DISPLAY_FONT);row.add_child(value)
+    return value
 func _wallet_refresh()->void:
     if not is_instance_valid(wallet) or api==null:return
     var p=active_p
-    wallet.text="LEVEL %d · %s / %s XP\nGold %s · Fate %s · Tokens %s · Season %s"%[int(p.d.level),_compact(int(p.d.xp)),_compact(Content.xp_need(int(p.d.level))),_compact(int(p.d.gold)),_compact(p.fate()),_compact(int(p.d.tokens)),_compact(int(p.d.season.pts))]
+    wallet.text="✦  LEVEL %d     ·     %s / %s XP"%[int(p.d.level),_compact(int(p.d.xp)),_compact(Content.xp_need(int(p.d.level)))]
+    wallet_xp.max_value=maxf(1,Content.xp_need(int(p.d.level)))
+    wallet_xp.value=int(p.d.xp)
+    wallet_gold.text=_compact(int(p.d.gold))
+    wallet_fate.text=_compact(p.fate())
+    wallet_tokens.text=_compact(int(p.d.tokens))
+    if is_instance_valid(wallet_season):wallet_season.text="SEASON %s  ✦"%_compact(int(p.d.season.pts))
 func card(parent:Node,title:String,text:="")->VBoxContainer:
-    var panel:=PanelContainer.new();panel.add_theme_stylebox_override("panel",_style(Color("#102630"),Color("#685e42"),12));parent.add_child(panel)
-    var box:=VBoxContainer.new();box.add_theme_constant_override("separation",7);panel.add_child(box)
-    if not title.is_empty():box.add_child(_label(title,17,Color("#f0d79a"),true))
+    var panel:=PanelContainer.new();panel.add_theme_stylebox_override("panel",VisualTheme.panel(Color("#112c39"),VisualTheme.GOLD_DARK,13,12));parent.add_child(panel)
+    var box:=VBoxContainer.new();box.add_theme_constant_override("separation",9);panel.add_child(box)
+    if not title.is_empty():
+        var title_label:=_label(title,17,VisualTheme.GOLD,true)
+        title_label.add_theme_font_override("font",VisualTheme.DISPLAY_FONT)
+        box.add_child(title_label)
     if not text.is_empty():box.add_child(_label(text,12,Color("#bfd0cf"),true))
     return box
 func action_button(parent:Node,text:String,callback:Callable,enabled:=true,key:="")->Button:
@@ -148,7 +206,7 @@ func action_button(parent:Node,text:String,callback:Callable,enabled:=true,key:=
     if not key.is_empty():b.name=key;b.set_meta("action_key",key)
     parent.add_child(b);return b
 func portrait(parent:Node,ci:int,wi:int,height:=160):
-    var field=Field.new();field.preview=true;field.front_portrait=screen=="hero";field.preview_char=ci;field.preview_weapon=wi;field.custom_minimum_size.y=height;parent.add_child(field);return field
+    var field=Field.new();field.preview=true;field.front_portrait=screen in ["hero","home"];field.preview_char=ci;field.preview_weapon=wi;field.custom_minimum_size.y=height;parent.add_child(field);return field
 func flash_message(text:String)->void:
     if is_instance_valid(message_label):message_label.text=text
     elif is_instance_valid(status):_notice(text)

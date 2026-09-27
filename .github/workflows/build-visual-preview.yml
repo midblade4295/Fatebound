@@ -1,0 +1,128 @@
+name: Build Fatebound visual preview APK
+
+on:
+  pull_request:
+    paths:
+      - "godot/**"
+      - ".github/workflows/build-visual-preview.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Install Android SDK
+        run: |
+          set -euo pipefail
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          "$SDK/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0" "platform-tools"
+      - name: Install Godot and matching Android export templates
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/fatebound-godot "$HOME/.local/share/godot/export_templates/4.7.2.stable"
+          BASE="https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable"
+          curl --fail --location --retry 3 "$BASE/Godot_v4.7.2-stable_linux.x86_64.zip" -o /tmp/fatebound-godot/editor.zip
+          unzip -q /tmp/fatebound-godot/editor.zip -d /tmp/fatebound-godot
+          curl --fail --location --retry 3 "$BASE/Godot_v4.7.2-stable_export_templates.tpz" -o /tmp/fatebound-godot/templates.tpz
+          unzip -j -q /tmp/fatebound-godot/templates.tpz "templates/android_*" "templates/version.txt" -d "$HOME/.local/share/godot/export_templates/4.7.2.stable"
+          chmod +x /tmp/fatebound-godot/Godot_v4.7.2-stable_linux.x86_64
+          echo "GODOT=/tmp/fatebound-godot/Godot_v4.7.2-stable_linux.x86_64" >> "$GITHUB_ENV"
+      - name: Configure isolated preview signing
+        run: |
+          set -euo pipefail
+          keytool -genkeypair -keyalg RSA -keysize 2048 -validity 9999 \
+            -alias androiddebugkey -keypass android -storepass android \
+            -dname "CN=Android Debug, O=Fatebound Visual Preview, C=US" \
+            -keystore "$RUNNER_TEMP/fatebound-visual-preview.keystore" -noprompt
+          echo "GODOT_ANDROID_KEYSTORE_DEBUG_PATH=$RUNNER_TEMP/fatebound-visual-preview.keystore" >> "$GITHUB_ENV"
+          echo "GODOT_ANDROID_KEYSTORE_DEBUG_USER=androiddebugkey" >> "$GITHUB_ENV"
+          echo "GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD=android" >> "$GITHUB_ENV"
+          mkdir -p "$HOME/.config/godot"
+          printf '[gd_resource type="EditorSettings" format=3]\n\n[resource]\nexport/android/java_sdk_path="%s"\nexport/android/android_sdk_path="%s"\n' "$JAVA_HOME" "$ANDROID_HOME" > "$HOME/.config/godot/editor_settings-4.7.tres"
+      - name: Export installable APK
+        run: |
+          set -euo pipefail
+          mkdir -p godot/build
+          "$GODOT" --headless --editor --path godot --import
+          "$GODOT" --headless --path godot --export-debug "Android Visual Preview" "$PWD/godot/build/Fatebound-Visual-Preview-arm64.apk"
+      - name: Verify package and signature
+        run: |
+          set -euo pipefail
+          APK=godot/build/Fatebound-Visual-Preview-arm64.apk
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$APK" | tee godot/build/preview-badging.txt
+          grep -q "package: name='com.fatebound.visualpreview' versionCode='1'" godot/build/preview-badging.txt
+          grep -q "native-code: 'arm64-v8a'" godot/build/preview-badging.txt
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose "$APK"
+          unzip -t "$APK" | tail -1
+          sha256sum "$APK" | tee godot/build/Fatebound-Visual-Preview-arm64.apk.sha256
+          split -b 24m -d -a 2 --numeric-suffixes=1 "$APK" godot/build/preview-part-
+      - name: Upload installable APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: fatebound-visual-preview-apk
+          path: |
+            godot/build/Fatebound-Visual-Preview-arm64.apk
+            godot/build/Fatebound-Visual-Preview-arm64.apk.sha256
+            godot/build/preview-badging.txt
+          compression-level: 0
+          retention-days: 14
+          if-no-files-found: error
+      - name: Upload preview part 01
+        uses: actions/upload-artifact@v4
+        with:
+          name: fatebound-preview-part-01
+          path: godot/build/preview-part-01
+          compression-level: 0
+          retention-days: 14
+          if-no-files-found: ignore
+      - name: Upload preview part 02
+        uses: actions/upload-artifact@v4
+        with:
+          name: fatebound-preview-part-02
+          path: godot/build/preview-part-02
+          compression-level: 0
+          retention-days: 14
+          if-no-files-found: ignore
+      - name: Upload preview part 03
+        uses: actions/upload-artifact@v4
+        with:
+          name: fatebound-preview-part-03
+          path: godot/build/preview-part-03
+          compression-level: 0
+          retention-days: 14
+          if-no-files-found: ignore
+      - name: Upload preview part 04
+        uses: actions/upload-artifact@v4
+        with:
+          name: fatebound-preview-part-04
+          path: godot/build/preview-part-04
+          compression-level: 0
+          retention-days: 14
+          if-no-files-found: ignore
+      - name: Upload preview part 05
+        uses: actions/upload-artifact@v4
+        with:
+          name: fatebound-preview-part-05
+          path: godot/build/preview-part-05
+          compression-level: 0
+          retention-days: 14
+          if-no-files-found: ignore
+      - name: Upload preview part 06
+        uses: actions/upload-artifact@v4
+        with:
+          name: fatebound-preview-part-06
+          path: godot/build/preview-part-06
+          compression-level: 0
+          retention-days: 14
+          if-no-files-found: ignore
