@@ -9,6 +9,8 @@ const Trainer=preload("res://scripts/game/training.gd")
 const LegacyImport=preload("res://scripts/game/legacy_import.gd")
 const Pages=preload("res://scripts/ui/pages.gd")
 const Glyph=preload("res://scripts/ui/glyph.gd")
+const Siege=preload("res://scripts/siege/siege_mode.gd")
+var siege:Control
 var save_store
 var progression
 var pages
@@ -80,6 +82,7 @@ func _notification(what:int)->void:
         if qte_busy:return
         if is_instance_valid(modal):modal.queue_free();modal=null
         elif trainer!=null and trainer.active:trainer.finish(false)
+        elif screen=="siege" and is_instance_valid(siege):siege.request_leave()
         elif screen=="battle":
             if api.local_kind=="raid":_confirm_leave_raid()
             else:_notice("Finish this battle before leaving.")
@@ -108,6 +111,15 @@ func _process(delta:float)->void:
             var run:Dictionary=api.local_engine.run
             raid_parry_button.disabled=int(run.telegraphUntil)<=active_p.now() or bool(run.parryHit)
             raid_parry_button.text="PARRY NOW" if not raid_parry_button.disabled else ("PARRIED" if run.parryHit and int(run.telegraphUntil)>0 else "PARRY · WAIT FOR WIND-UP")
+func start_siege()->void:
+    if qte_busy or busy:return
+    _new_screen("siege")
+    margins.visible=false
+    siege=Siege.new()
+    siege.audio=audio
+    siege.low_fx=Fx.low_quality
+    siege.exited.connect(func():siege=null;_show_home())
+    ui_root.add_child(siege)
 func _show_home()->void:
     if pages==null:return
     if api.is_local() and api.local_engine.s.ended and api.local_kind!="training":api.leave_local()
