@@ -25,7 +25,7 @@ func bar(parent:Node,value:float,total:float)->ProgressBar:
     var b:=ProgressBar.new();b.custom_minimum_size.y=10;b.show_percentage=false;b.max_value=maxf(1,total);b.value=clampf(value,0,total);parent.add_child(b);return b
 func stat_chip(parent:Node,icon:String,value:int,title:String)->void:
     var panel:=PanelContainer.new();panel.size_flags_horizontal=Control.SIZE_EXPAND_FILL
-    panel.add_theme_stylebox_override("panel",VisualTheme.panel(Color("#081e27"),Color("#907344"),9,5))
+    panel.add_theme_stylebox_override("panel",VisualTheme.panel(Color("#10171c"),Color("#907344"),9,5))
     parent.add_child(panel)
     var row:HBoxContainer=app._row(panel)
     var mark:=Glyph.new();mark.kind=icon;mark.custom_minimum_size=Vector2(25,25);row.add_child(mark)
@@ -80,7 +80,7 @@ func home()->void:
     var battle_row:HBoxContainer=app._row(battle)
     var battle_copy:=VBoxContainer.new();battle_copy.size_flags_horizontal=Control.SIZE_EXPAND_FILL;battle_row.add_child(battle_copy)
     var battle_title:=label(battle_copy,"THE WAR FOR TEN TOWERS",17,VisualTheme.GOLD)
-    battle_title.add_theme_font_override("font",VisualTheme.DISPLAY_FONT)
+    battle_title.add_theme_font_override("font",VisualTheme.TITLE_FONT)
     battle_title.horizontal_alignment=HORIZONTAL_ALIGNMENT_LEFT
     var battle_desc:=label(battle_copy,"5-minute matches · free entry · Focus powers your rolls",11,Color("#d4cbbb"))
     battle_desc.horizontal_alignment=HORIZONTAL_ALIGNMENT_LEFT
@@ -89,7 +89,8 @@ func home()->void:
     enter.size_flags_horizontal=Control.SIZE_FILL
     VisualTheme.apply_tactile(enter,"primary",14)
     enter.add_theme_font_override("font",VisualTheme.BOLD_FONT)
-    enter.add_theme_font_size_override("font_size",15)
+    enter.add_theme_font_size_override("font_size",16)
+    app.Fx.ambient(enter,"streaks");app.Fx.ambient(enter,"sparks")
     if app.trainer.active:button(battle,"RETURN TO TRAINING BATTLE",func():app.training_show_target("battle"),true,"training_return")
     var links:HBoxContainer=app._row(body)
     var raid_link:=button(links,"   DAILY RAID",func():app._go("raid"),not app.trainer.active,"raid")
@@ -618,6 +619,10 @@ func sound_panel(parent:Node)->void:
     var sample:HBoxContainer=app._row(parent)
     for spec in [["sword","SWORD"],["crit","CRIT"],["barrage","SPELL"]]:button(sample,spec[1],func():app.audio.play(spec[0]),true,"preview_"+spec[0])
     var motion:=CheckButton.new();motion.text="Reduce motion and flashes";motion.button_pressed=bool(d.native.settings.reduceMotion);motion.custom_minimum_size.y=44;parent.add_child(motion)
+    var low_fx:=CheckButton.new();low_fx.text="Low-quality effects (no particles)";low_fx.button_pressed=bool(d.native.settings.get("lowFx",false));low_fx.custom_minimum_size.y=44;parent.add_child(low_fx)
+    low_fx.toggled.connect(func(enabled:bool):
+        p.perform(func():d.native.settings.lowFx=enabled)
+        app.apply_settings())
     motion.toggled.connect(func(enabled):
         p.perform(func():d.native.settings.reduceMotion=enabled)
         app.apply_settings()

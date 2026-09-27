@@ -58,6 +58,7 @@ func _ready()->void:
     api=GameApi.new();api.configure(progression);add_child(api)
     audio=Audio.new();add_child(audio)
     audio.set_levels(progression.d.native.settings)
+    Fx.low_quality=bool(progression.d.native.settings.get("lowFx",false));Fx.reduce_motion=bool(progression.d.native.settings.get("reduceMotion",false))
     pages=Pages.new();pages.app=self
     trainer=Trainer.new()
     poll_timer=Timer.new();poll_timer.wait_time=0.75;poll_timer.timeout.connect(_poll);add_child(poll_timer)
@@ -118,23 +119,29 @@ func _shell(title:String,tab:String="home",navigation:=true)->VBoxContainer:
     _new_screen(tab)
     coach=null;message_label=null;detail_label=null;chests_button=null;raid_parry_button=null
     var masthead:=PanelContainer.new()
-    masthead.add_theme_stylebox_override("panel",VisualTheme.panel(Color("#081a24"),VisualTheme.GOLD_DARK,18,6))
+    masthead.add_theme_stylebox_override("panel",VisualTheme.title_plate(6))
     page.add_child(masthead)
     var header:=_row(masthead)
-    var heading:=_label(title,25,VisualTheme.GOLD)
-    heading.add_theme_font_override("font",VisualTheme.DISPLAY_FONT)
+    var heading:=_label(title,32 if tab=="home" else 24,Color("#f3d58c"))
+    heading.add_theme_font_override("font",VisualTheme.TITLE_FONT)
+    heading.add_theme_color_override("font_shadow_color",Color(0,0,0,0.8));heading.add_theme_constant_override("shadow_offset_y",2)
+    if tab=="home":Fx.ambient(masthead,"title")
     header.add_child(heading)
     if tab!="home":
         var back:=_button("BACK",40);back.custom_minimum_size.x=72;back.size_flags_horizontal=Control.SIZE_FILL
         back.pressed.connect(func():_go("home"));header.add_child(back)
     var wallet_frame:=PanelContainer.new()
-    wallet_frame.add_theme_stylebox_override("panel",VisualTheme.panel(Color("#091b25"),Color("#5f624e"),10,6))
+    wallet_frame.add_theme_stylebox_override("panel",VisualTheme.panel(Color("#10171c"),Color("#5f624e"),10,6))
     page.add_child(wallet_frame)
     var wallet_box:=VBoxContainer.new();wallet_box.add_theme_constant_override("separation",4);wallet_frame.add_child(wallet_box)
     wallet=_label("",11,VisualTheme.GOLD,false)
     wallet.add_theme_font_override("font",VisualTheme.BOLD_FONT)
     wallet_box.add_child(wallet)
-    wallet_xp=ProgressBar.new();wallet_xp.custom_minimum_size.y=4;wallet_xp.show_percentage=false;wallet_box.add_child(wallet_xp)
+    wallet_xp=ProgressBar.new();wallet_xp.custom_minimum_size.y=8;wallet_xp.show_percentage=false;wallet_box.add_child(wallet_xp)
+    var xp_bg:=StyleBoxFlat.new();xp_bg.bg_color=Color("#0a1116");xp_bg.border_color=Color("#3a3226");xp_bg.set_border_width_all(1);xp_bg.set_corner_radius_all(5)
+    var xp_fill:=StyleBoxFlat.new();xp_fill.bg_color=Color("#3fb4ee");xp_fill.border_color=Color("#b9ecff");xp_fill.border_width_top=1;xp_fill.set_corner_radius_all(5)
+    wallet_xp.add_theme_stylebox_override("background",xp_bg);wallet_xp.add_theme_stylebox_override("fill",xp_fill)
+    if tab=="home":Fx.ambient(wallet_xp,"stars")
     var currency:=_row(wallet_box)
     wallet_gold=_currency_chip(currency,"coin")
     wallet_fate=_currency_chip(currency,"gem")
@@ -142,7 +149,7 @@ func _shell(title:String,tab:String="home",navigation:=true)->VBoxContainer:
     wallet_season=null
     if tab=="home":
         var season_frame:=PanelContainer.new()
-        season_frame.add_theme_stylebox_override("panel",VisualTheme.panel(Color("#091b25"),Color("#745936"),8,3))
+        season_frame.add_theme_stylebox_override("panel",VisualTheme.panel(Color("#10171c"),Color("#745936"),8,3))
         page.add_child(season_frame)
         var season_row:=_row(season_frame)
         var season_icon:=Glyph.new();season_icon.kind="laurel";season_icon.custom_minimum_size=Vector2(24,24);season_row.add_child(season_icon)
@@ -159,7 +166,7 @@ func _shell(title:String,tab:String="home",navigation:=true)->VBoxContainer:
         training_temp_notice=_label("TRAINING SAVE · Your real resources are unchanged",10,Color("#efba8d"),true);page.add_child(training_temp_notice)
     if navigation:
         var nav_frame:=PanelContainer.new()
-        nav_frame.add_theme_stylebox_override("panel",VisualTheme.panel(Color("#081b25"),VisualTheme.GOLD_DARK,15,4))
+        nav_frame.add_theme_stylebox_override("panel",VisualTheme.panel(Color("#0e1419"),VisualTheme.GOLD_DARK,15,4))
         page.add_child(nav_frame)
         var nav:=_row(nav_frame)
         for spec in [["shop","SHOP","coin"],["hero","HERO","helm"],["home","HOME","castle"],["guild","GUILD","shield"],["friends","FRIENDS","friends"]]:
@@ -168,19 +175,23 @@ func _shell(title:String,tab:String="home",navigation:=true)->VBoxContainer:
             symbol.anchor_left=0.5;symbol.anchor_right=0.5;symbol.offset_left=-13.5;symbol.offset_right=13.5;symbol.offset_top=4;symbol.offset_bottom=31
             b.add_child(symbol)
             if spec[0]==tab:
-                b.add_theme_stylebox_override("normal",VisualTheme.button(Color("#123642"),VisualTheme.GOLD,9))
-                b.add_theme_color_override("font_color",VisualTheme.TEXT)
+                # The current tab stands taller and lit, like a raised key.
+                VisualTheme.apply_tactile(b,"nav_active",11)
+                b.custom_minimum_size.y=72
+            else:
+                b.size_flags_vertical=Control.SIZE_SHRINK_END
             b.pressed.connect(_go.bind(spec[0]));nav.add_child(b)
     rebuild_coach.call_deferred()
     return body
 func _currency_chip(parent:Node,kind:String)->Label:
     var frame:=PanelContainer.new()
     frame.size_flags_horizontal=Control.SIZE_EXPAND_FILL
-    frame.add_theme_stylebox_override("panel",VisualTheme.panel(Color("#0c2630"),Color("#665735"),9,3))
+    frame.add_theme_stylebox_override("panel",VisualTheme.panel(Color("#11181d"),Color("#665735"),9,3))
     parent.add_child(frame)
     var row:=_row(frame)
     var symbol:=Glyph.new();symbol.kind=kind;symbol.custom_minimum_size=Vector2(24,24);row.add_child(symbol)
-    var value:=_label("",13,VisualTheme.GOLD);value.add_theme_font_override("font",VisualTheme.DISPLAY_FONT);row.add_child(value)
+    var value:=_label("",14,Color("#f3e3b8"));value.add_theme_font_override("font",VisualTheme.DISPLAY_FONT);row.add_child(value)
+    if screen=="home":Fx.ambient(frame,"gems" if kind=="gem" else "gold")
     return value
 func _wallet_refresh()->void:
     if not is_instance_valid(wallet) or api==null:return
@@ -193,11 +204,11 @@ func _wallet_refresh()->void:
     wallet_tokens.text=_compact(int(p.d.tokens))
     if is_instance_valid(wallet_season):wallet_season.text="SEASON %s  ✦"%_compact(int(p.d.season.pts))
 func card(parent:Node,title:String,text:="")->VBoxContainer:
-    var panel:=PanelContainer.new();panel.add_theme_stylebox_override("panel",VisualTheme.panel(Color("#112c39"),VisualTheme.GOLD_DARK,13,12));parent.add_child(panel)
+    var panel:=PanelContainer.new();panel.add_theme_stylebox_override("panel",VisualTheme.panel(Color("#151d23"),VisualTheme.GOLD_DARK,13,12));parent.add_child(panel)
     var box:=VBoxContainer.new();box.add_theme_constant_override("separation",9);panel.add_child(box)
     if not title.is_empty():
-        var title_label:=_label(title,17,VisualTheme.GOLD,true)
-        title_label.add_theme_font_override("font",VisualTheme.DISPLAY_FONT)
+        var title_label:=_label(title,18,Color("#f3d58c"),true)
+        title_label.add_theme_font_override("font",VisualTheme.TITLE_FONT)
         box.add_child(title_label)
     if not text.is_empty():box.add_child(_label(text,12,Color("#bfd0cf"),true))
     return box
@@ -271,7 +282,8 @@ func _show_battle()->void:
     apply_settings()
     roll_button.button_down.connect(_start_hold_roll)
     detail_label=_label("",11,Color("#abddd0"),true);detail_label.custom_minimum_size.y=16;page.add_child(detail_label);page.move_child(detail_label,3)
-    detail_label.add_theme_color_override("font_outline_color",Color(0,0,0,0.85));detail_label.add_theme_constant_override("outline_size",4)
+    detail_label.add_theme_color_override("font_color",Color("#eef3f2"));detail_label.add_theme_font_override("font",VisualTheme.BOLD_FONT);detail_label.add_theme_font_size_override("font_size",12)
+    detail_label.add_theme_color_override("font_shadow_color",Color(0,0,0,0.85));detail_label.add_theme_constant_override("shadow_offset_y",1);detail_label.add_theme_constant_override("shadow_outline_size",3)
     if api.is_local() and api.local_kind=="raid":
         tower_title.text="RAID · "+str(api.local_engine.boss.name)
         tower_title.disabled=true
@@ -531,6 +543,7 @@ func apply_settings()->void:
     if is_instance_valid(board):board.reduce_motion=bool(active_p.d.native.settings.get("reduceMotion",false))
     if is_instance_valid(dice):dice.reduce_motion=bool(active_p.d.native.settings.get("reduceMotion",false))
     ui_reduce_motion=bool(active_p.d.native.settings.get("reduceMotion",false))
+    Fx.low_quality=bool(active_p.d.native.settings.get("lowFx",false));Fx.reduce_motion=ui_reduce_motion
 func resume_imported_war()->void:
     var converted:Dictionary=LegacyImport.convert(progression)
     if not converted.get("ok",false):flash_message(str(converted.get("error","Legacy battle retained without conversion.")))

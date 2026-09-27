@@ -1,7 +1,10 @@
 extends RefCounted
 # One visual language for the native menus and the match HUD.
 const BODY_FONT = preload("res://assets/fonts/DejaVuSans.ttf")
-const BOLD_FONT = preload("res://assets/fonts/DejaVuSans-Bold.ttf")
+const BOLD_FONT = preload("res://assets/fonts/Nunito-ExtraBold.woff2")
+const SANS_BOLD_FALLBACK = preload("res://assets/fonts/DejaVuSans-Bold.ttf")
+# Cinzel (OFL) for big titles; DejaVu fallbacks supply symbols such as ♛ ✦ ⛨ ◀ that the Latin subsets lack.
+const TITLE_FONT = preload("res://assets/fonts/Cinzel-Black.woff2")
 const DISPLAY_FONT = preload("res://assets/fonts/DejaVuSerif-Bold.ttf")
 const INK := Color("#06131b")
 const SURFACE := Color("#091d27")
@@ -12,8 +15,32 @@ const CYAN := Color("#70d8e2")
 const RED := Color("#ed8c68")
 const TEXT := Color("#f3efe1")
 const Tactile = preload("res://scripts/ui/tactile_style.gd")
+const Brass = preload("res://scripts/ui/brass_style.gd")
+const BRASS_LIGHT := Color("#f0cf82")
+const BRASS_DARK := Color("#6f4f1e")
 
-static func panel(bg: Color = SURFACE, stroke: Color = GOLD_DARK, radius: int = 12, padding: int = 12) -> StyleBoxFlat:
+static func ensure_fonts() -> void:
+    var bold: Font = BOLD_FONT
+    var title: Font = TITLE_FONT
+    if bold.fallbacks.is_empty():
+        bold.fallbacks = [SANS_BOLD_FALLBACK]
+    if title.fallbacks.is_empty():
+        title.fallbacks = [DISPLAY_FONT, SANS_BOLD_FALLBACK]
+
+static func panel(bg: Color = SURFACE, stroke: Color = GOLD_DARK, radius: int = 12, padding: int = 12) -> StyleBox:
+    # Framed panels get the beveled brass rim; borderless fills (bars, tracks) stay flat.
+    if padding > 0 and stroke.a > 0.05:
+        var brass: StyleBox = Brass.new()
+        brass.top = Color(bg.lightened(0.06), bg.a)
+        brass.bottom = Color(bg.darkened(0.35), bg.a)
+        var saturated := stroke.s > 0.35 and (stroke.h < 0.06 or stroke.h > 0.18)
+        brass.rim_light = stroke.lightened(0.25) if saturated else BRASS_LIGHT
+        brass.rim_dark = stroke.darkened(0.45) if saturated else BRASS_DARK
+        brass.rim_light.a = maxf(0.6, stroke.a)
+        brass.rim_dark.a = maxf(0.6, stroke.a)
+        brass.radius = radius
+        brass.set_content_margin_all(padding + 2)
+        return brass
     var style := StyleBoxFlat.new()
     style.bg_color = bg
     style.border_color = stroke
@@ -25,6 +52,17 @@ static func panel(bg: Color = SURFACE, stroke: Color = GOLD_DARK, radius: int = 
     style.shadow_size = 7
     style.anti_aliasing = true
     return style
+
+static func title_plate(padding := 8) -> StyleBox:
+    var plate: StyleBox = Brass.new()
+    plate.top = Color("#1a2026")
+    plate.bottom = Color("#080b0e")
+    plate.radius = 14
+    plate.rim = 2.5
+    plate.ornate = true
+    plate.glow = Color(1.0, 0.78, 0.35, 0.22)
+    plate.set_content_margin_all(padding + 2)
+    return plate
 
 static func button(bg: Color = RAISED, stroke: Color = GOLD_DARK, radius: int = 11) -> StyleBox:
     # Kept for existing call sites: any "button" is now a dimensional tactile face in these colours.
@@ -54,22 +92,26 @@ static func tactile_from(bg: Color, stroke: Color, radius: int = 11, state := "n
 # "secondary" the navy/gold standard control, "active" a lit cyan toggle, "arcane" spells/ultimate.
 const PALETTES := {
     "primary": {"top":"#ffb24a","bottom":"#e2571a","lip":"#7c2a07","rim":"#ffe6a6","glow":"#ff9a3a","text":"#fffaf0"},
+    "roll": {"top":"#f4cf6c","bottom":"#9a6414","lip":"#452a05","rim":"#fff1bf","glow":"#ffcf5a","text":"#fffaf0"},
     "gold": {"top":"#ffd875","bottom":"#c98612","lip":"#6b4105","rim":"#fff0b8","glow":"#ffcc55","text":"#2a1604"},
-    "secondary": {"top":"#1f3d4d","bottom":"#10232e","lip":"#050d12","rim":"#b3894b","glow":"","text":"#f2d18d"},
+    "secondary": {"top":"#2c3136","bottom":"#121518","lip":"#040506","rim":"#b8904e","glow":"","text":"#f2d18d"},
     "active": {"top":"#2f8f94","bottom":"#155258","lip":"#062326","rim":"#9ff6ef","glow":"#5ce8e0","text":"#effffd"},
     "arcane": {"top":"#6a4bb0","bottom":"#35226a","lip":"#140a2c","rim":"#d6b8ff","glow":"#a77bff","text":"#f6efff"},
+    "nav_active": {"top":"#35404a","bottom":"#141a1f","lip":"#050608","rim":"#ffe09a","glow":"#ffcc55","text":"#ffffff"},
     "disabled": {"top":"#1a2a33","bottom":"#121e25","lip":"#070d11","rim":"#3d4d56","glow":"","text":"#7f9097"},
 }
 
 static func tactile(kind: String, state := "normal", radius := 12) -> StyleBox:
     var pal: Dictionary = PALETTES.get("disabled" if state == "disabled" else kind, PALETTES.secondary)
+    if state == "disabled" and kind == "arcane":
+        pal = {"top":"#3b2f58","bottom":"#221a36","lip":"#0c0816","rim":"#6d5a92","glow":"","text":"#a595c4"}
     var style: StyleBox = Tactile.new()
     style.top = Color(pal.top)
     style.bottom = Color(pal.bottom)
     style.lip = Color(pal.lip)
     style.rim = Color(pal.rim)
     style.radius = radius
-    style.depth = 5.0 if kind in ["primary","gold"] else 4.0
+    style.depth = 5.0 if kind in ["primary","gold","roll"] else 4.0
     style.pressed = state == "pressed"
     if not str(pal.glow).is_empty() and state != "disabled":
         style.glow = Color(pal.glow)
@@ -97,14 +139,15 @@ static func apply_tactile(b: Button, kind: String, radius := 12) -> void:
     var pal: Dictionary = PALETTES.get(kind, PALETTES.secondary)
     for key in ["font_color","font_hover_color","font_pressed_color","font_focus_color","font_hover_pressed_color"]:
         b.add_theme_color_override(key, Color(pal.text))
-    b.add_theme_color_override("font_disabled_color", Color(PALETTES.disabled.text))
+    b.add_theme_color_override("font_disabled_color", Color("#a595c4") if kind == "arcane" else Color(PALETTES.disabled.text))
     b.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.55) if kind != "gold" else Color(1, 0.95, 0.8, 0.35))
-    b.add_theme_constant_override("outline_size", 3 if kind in ["primary","active","arcane"] else 0)
+    b.add_theme_constant_override("outline_size", 3 if kind in ["primary","active","arcane","roll"] else 0)
 
 static func cta(hover := false) -> StyleBox:
     return tactile("gold", "hover" if hover else "normal", 14)
 
 static func install() -> Theme:
+    ensure_fonts()
     var ui := Theme.new()
     ui.default_font = BODY_FONT
     ui.default_font_size = 14

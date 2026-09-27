@@ -5,6 +5,8 @@ const Dice = preload("res://scripts/dice_strip.gd")
 const Audio = preload("res://scripts/native_audio.gd")
 const VisualTheme = preload("res://scripts/ui/visual_theme.gd")
 const HexBackdrop = preload("res://scripts/ui/hex_backdrop.gd")
+const ChromeLabel = preload("res://scripts/ui/chrome_label.gd")
+const Fx = preload("res://scripts/ui/fx.gd")
 
 # A slow diagonal light sweep across the primary button while it is ready to press.
 class Shimmer:
@@ -112,7 +114,7 @@ func _process(_delta: float) -> void:
 func _server_now() -> float:
     return float(latest_state.get("serverNow",latest.get("now",0)))+minf(Time.get_ticks_msec()-received_ms,10000)
 
-func _style(bg: Color, border := Color("#927d51"), radius := 12) -> StyleBoxFlat:
+func _style(bg: Color, border := Color("#927d51"), radius := 12) -> StyleBox:
     return VisualTheme.panel(bg,border,radius,8)
 
 func _label(text := "", fontsize := 14, color := Color("#e0e5df"), wrap := false) -> Label:
@@ -404,11 +406,13 @@ func _show_battle() -> void:
     ours.add_theme_constant_override("separation",-4)
     ours.custom_minimum_size.x = 92
     header.add_child(ours)
-    var ours_tag := _label("YOUR SIDE",10,Color("#7fdcef"))
+    var ours_tag := _label("YOUR SIDE",12,Color("#8fe6f5"))
     ours_tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
     ours_tag.add_theme_font_override("font",VisualTheme.BOLD_FONT)
     ours.add_child(ours_tag)
-    score_ours = _label("0♛",26,Color("#5fd4ea"))
+    score_ours = _label("0♛",30,Color("#f3cf6e"))
+    score_ours.add_theme_color_override("font_outline_color",Color(0.2,0.12,0.02,0.9))
+    score_ours.add_theme_constant_override("outline_size",3)
     score_ours.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
     score_ours.add_theme_font_override("font",VisualTheme.BOLD_FONT)
     ours.add_child(score_ours)
@@ -416,10 +420,19 @@ func _show_battle() -> void:
     middle.add_theme_constant_override("separation",-2)
     middle.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     header.add_child(middle)
-    clock = _label("5:00",27,VisualTheme.TEXT)
+    clock = ChromeLabel.new()
+    clock.text = "5:00"
+    clock.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    clock.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+    clock.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    clock.size_flags_vertical = Control.SIZE_EXPAND_FILL
     clock.add_theme_font_override("font",VisualTheme.BOLD_FONT)
-    clock.add_theme_color_override("font_outline_color",Color(0,0,0,0.6))
-    clock.add_theme_constant_override("outline_size",4)
+    clock.add_theme_font_size_override("font_size",46)
+    clock.add_theme_color_override("font_color",Color.WHITE)
+    clock.add_theme_color_override("font_outline_color",Color(0.05,0.06,0.08,1))
+    clock.add_theme_constant_override("outline_size",6)
+    clock.add_theme_color_override("font_shadow_color",Color(0,0,0,0.7))
+    clock.add_theme_constant_override("shadow_offset_y",3)
     middle.add_child(clock)
     score = _label("0  —  0",11,VisualTheme.GOLD)
     score.add_theme_font_override("font",VisualTheme.BOLD_FONT)
@@ -429,16 +442,18 @@ func _show_battle() -> void:
     theirs.add_theme_constant_override("separation",-4)
     theirs.custom_minimum_size.x = 92
     header.add_child(theirs)
-    var theirs_tag := _label("ENEMY",10,Color("#ff9d6a"))
+    var theirs_tag := _label("ENEMY",12,Color("#ffa46e"))
     theirs_tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
     theirs_tag.add_theme_font_override("font",VisualTheme.BOLD_FONT)
     theirs.add_child(theirs_tag)
-    score_theirs = _label("0♛",26,Color("#ff8a4a"))
+    score_theirs = _label("0♛",30,Color("#f3cf6e"))
+    score_theirs.add_theme_color_override("font_outline_color",Color(0.2,0.12,0.02,0.9))
+    score_theirs.add_theme_constant_override("outline_size",3)
     score_theirs.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
     score_theirs.add_theme_font_override("font",VisualTheme.BOLD_FONT)
     theirs.add_child(score_theirs)
     score_meter = ProgressBar.new()
-    score_meter.custom_minimum_size.y = 6
+    score_meter.custom_minimum_size.y = 5
     score_meter.show_percentage = false
     score_meter.value = 50
     score_meter.add_theme_stylebox_override("background",VisualTheme.panel(Color("#d0643a"),Color.TRANSPARENT,4,0))
@@ -504,7 +519,7 @@ func _show_battle() -> void:
         mult_select.add_item("×%d"%i,i)
     rolls.add_child(mult_select)
     roll_button = _button("ROLL",62)
-    VisualTheme.apply_tactile(roll_button,"primary",14)
+    VisualTheme.apply_tactile(roll_button,"roll",14)
     roll_button.add_theme_font_override("font",VisualTheme.BOLD_FONT)
     roll_button.add_theme_font_size_override("font_size",27)
     for state in ["normal","hover","pressed","disabled"]:
@@ -647,6 +662,7 @@ func _roll() -> void:
     if roll_button.disabled:
         return
     dice.start_roll()
+    Fx.burst(roll_button,roll_button.size*0.5,"roll")
     audio.play("roll")
     await _do_action("roll",{"mult":mult_select.get_selected_id(),"allIn":all_in.button_pressed})
     if screen == "battle" and is_instance_valid(all_in):

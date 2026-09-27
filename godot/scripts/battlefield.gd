@@ -254,7 +254,56 @@ func _screen(world: Vector3) -> Vector2:
         return p
     return p*size/vs
 
+var _style_cache: Dictionary = {}
+
+func _brass(c: CanvasItem, rect: Rect2, radius := 11, alpha := 0.9) -> void:
+    var key := "brass:%d:%.2f" % [radius,alpha]
+    if not _style_cache.has(key):
+        var b: StyleBox = VisualTheme.Brass.new()
+        b.top = Color(0.09,0.12,0.15,alpha)
+        b.bottom = Color(0.03,0.045,0.06,alpha)
+        b.radius = radius
+        b.shadow = 0.45
+        _style_cache[key] = b
+    c.draw_style_box(_style_cache[key],rect)
+
+# Glossy capsule bar with a faceted gem cap riding the end of the fill.
+func _gem_bar(c: CanvasItem, bar: Rect2, ratio: float, col: Color, gem: Color, gem_at_start: bool) -> void:
+    _pill(c,bar,Color("#0b1318"),Color(0,0,0,0.6))
+    if ratio > 0.0:
+        var fill := Rect2(bar.position,Vector2(maxf(bar.size.y,bar.size.x*ratio),bar.size.y))
+        if gem_at_start:
+            fill.position.x = bar.end.x-fill.size.x
+        _pill(c,fill,col,col.lightened(0.35))
+        c.draw_rect(Rect2(fill.position+Vector2(bar.size.y*0.4,2),Vector2(maxf(2,fill.size.x-bar.size.y*0.8),bar.size.y*0.28)),Color(1,1,1,0.28))
+    var gx := bar.position.x+4 if gem_at_start else bar.position.x+bar.size.x*ratio-4
+    gx = clampf(gx,bar.position.x+4,bar.end.x-4)
+    var cy := bar.position.y+bar.size.y*0.5
+    var r := bar.size.y*0.72
+    var pts := PackedVector2Array([Vector2(gx,cy-r),Vector2(gx+r*0.8,cy),Vector2(gx,cy+r),Vector2(gx-r*0.8,cy)])
+    c.draw_colored_polygon(pts,gem.darkened(0.25))
+    c.draw_colored_polygon(PackedVector2Array([Vector2(gx,cy-r),Vector2(gx+r*0.8,cy),Vector2(gx,cy)]),gem.lightened(0.35))
+    c.draw_colored_polygon(PackedVector2Array([Vector2(gx,cy-r),Vector2(gx,cy),Vector2(gx-r*0.8,cy)]),gem)
+    pts.append(pts[0])
+    c.draw_polyline(pts,Color("#f0cf82"),1.4,true)
+
+func _pill(c: CanvasItem, rect: Rect2, fill: Color, edge: Color) -> void:
+    var key := "pill:%s:%s" % [fill.to_html(),edge.to_html()]
+    if not _style_cache.has(key):
+        var st := StyleBoxFlat.new()
+        st.bg_color = fill
+        st.border_color = edge
+        st.set_border_width_all(1)
+        st.set_corner_radius_all(64)
+        st.anti_aliasing = true
+        _style_cache[key] = st
+    c.draw_style_box(_style_cache[key],rect)
+
 func _panel(c: CanvasItem, rect: Rect2, bg: Color, border: Color, radius := 9, width := 1.5) -> void:
+    var key := "p:%s:%s:%d:%.1f" % [bg.to_html(),border.to_html(),radius,width]
+    if _style_cache.has(key):
+        c.draw_style_box(_style_cache[key],rect)
+        return
     var style := StyleBoxFlat.new()
     style.bg_color = bg
     style.border_color = border
@@ -264,6 +313,7 @@ func _panel(c: CanvasItem, rect: Rect2, bg: Color, border: Color, radius := 9, w
     style.shadow_size = 4
     style.shadow_offset = Vector2(0,2)
     style.anti_aliasing = true
+    _style_cache[key] = style
     c.draw_style_box(style,rect)
 
 func _text(c: CanvasItem, text: String, pos: Vector2, font_size: int, color: Color, font: Font = null, width := -1.0, align := HORIZONTAL_ALIGNMENT_LEFT) -> void:
@@ -325,11 +375,11 @@ func _paint(c: Control) -> void:
         _garrison(c,_roster(side if team == 0 else 1-side),team)
     var title := "Tower "+str(tower.get("name",ti+1))
     var anchor := _screen(stage.tower_anchor())
-    var tw := _bold.get_string_size(title,HORIZONTAL_ALIGNMENT_LEFT,-1,17).x+26
+    var tw := VisualTheme.TITLE_FONT.get_string_size(title,HORIZONTAL_ALIGNMENT_LEFT,-1,17).x+32
     var top := _zone().position.y
     var ty := clampf(anchor.y-34,top+64,top+_zone().size.y*0.35)
-    _panel(c,Rect2(w*0.5-tw*0.5,ty,tw,30),Color("#0a1319e6"),Color("#e9c97a"),8,1)
-    _text(c,title,Vector2(w*0.5-tw*0.5,ty+22),17,Color("#ffd97a"),_bold,tw,HORIZONTAL_ALIGNMENT_CENTER)
+    _brass(c,Rect2(w*0.5-tw*0.5,ty,tw,32),9,0.92)
+    _text(c,title,Vector2(w*0.5-tw*0.5,ty+23),17,Color("#f6d98a"),VisualTheme.TITLE_FONT,tw,HORIZONTAL_ALIGNMENT_CENTER)
     if _pan_limit() > 1:
         _text(c,"◂ drag to see more fighters ▸",Vector2(0,_zone().end.y-8),10,Color(1,1,1,0.75),_font,w,HORIZONTAL_ALIGNMENT_CENTER)
 
@@ -348,23 +398,20 @@ func _garrison(c: CanvasItem, heroes: Array, team: int) -> void:
     var x := 6.0 if team == 0 else size.x-w-6
     var col := Color("#55d3ee") if team == 0 else Color("#ff8a4a")
     var y := _zone().position.y+6
-    _panel(c,Rect2(x,y,w,56),Color("#0a1319d8"),Color(col,0.35),9,1)
+    _brass(c,Rect2(x,y,w,58),11,0.86)
     var title := "YOUR GARRISON" if team == 0 else "ENEMY GARRISON"
     var align := HORIZONTAL_ALIGNMENT_LEFT if team == 0 else HORIZONTAL_ALIGNMENT_RIGHT
-    _text(c,title,Vector2(x+8,y+16),12,col,_bold,w-16,align)
-    var bar := Rect2(x+8,y+21,w-16,15)
-    c.draw_rect(bar,Color("#1a262e"))
+    _text(c,title,Vector2(x+10,y+18),12,col,_bold,w-20,align)
+    var bar := Rect2(x+12,y+23,w-24,15)
     if heroes.is_empty():
         # A wiped or empty garrison: say so instead of drawing an empty bar with a stub of colour.
         _text(c,"NO DEFENDERS",Vector2(bar.position.x,bar.position.y+12),11,Color("#ffd07a") if team == 1 else Color("#ff9a7a"),_bold,bar.size.x,HORIZONTAL_ALIGNMENT_CENTER)
         _text(c,"Tower open — siege it" if team == 1 else "Tower undefended",Vector2(x+8,y+51),11,Color("#9fd8ff"),_font,w-16,align)
         return
     var ratio := clampf(float(hp)/maxf(1.0,float(total)),0,1)
-    if ratio > 0.0:
-        _panel(c,Rect2(bar.position,Vector2(maxf(14,bar.size.x*ratio),bar.size.y)),col,Color(col.lightened(0.3),0.6),7,0)
-        c.draw_rect(Rect2(bar.position+Vector2(4,2),Vector2(maxf(6,bar.size.x*ratio-8),3)),Color(1,1,1,0.22))
+    _gem_bar(c,bar,ratio,Color("#37b5ea") if team == 0 else Color("#f07a2c"),Color("#6fe6ff") if team == 0 else Color("#c65cff"),team == 1)
     _text(c,"%s / %s" % [_k(hp),_k(total)],Vector2(bar.position.x,bar.position.y+12),11,Color.WHITE,_bold,bar.size.x,HORIZONTAL_ALIGNMENT_CENTER)
-    _text(c,"⛨ %d absorb · %d/%d up" % [shields,up,heroes.size()],Vector2(x+8,y+51),11,Color("#9fd8ff"),_font,w-16,align)
+    _text(c,"⛨ %d absorb · %d/%d up" % [shields,up,heroes.size()],Vector2(x+10,y+52),11,Color("#d7e3ea"),_font,w-20,align)
 
 func _k(n: int) -> String:
     if n >= 100000:
