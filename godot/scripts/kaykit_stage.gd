@@ -236,13 +236,39 @@ func _aim_camera() -> void:
         camera.position = Vector3(0, 2.3, 6.2)
         camera.look_at(Vector3(0, 1.05, 0))
     elif mode == "raid":
-        camera.fov = 46.0
         camera.position = Vector3(_pan, 9.0, 15.0)
         camera.look_at(Vector3(_pan, 1.6, -2.5))
+        _project(46.0)
     else:
-        camera.fov = 44.0
         camera.position = Vector3(_pan, 14.2, 16.4)
         camera.look_at(Vector3(_pan, 0.0, -1.3))
+        _project(44.0)
+
+# The battlefield can sit under a translucent HUD. The shot is composed for the clear window between
+# the HUD bars (vertical fov across that window) and lens-shifted so its centre lands there, while the
+# rest of the full-screen render keeps showing the world behind the HUD.
+var clear_zone := Rect2()
+var render_size := Vector2.ZERO
+
+func set_clear_zone(zone: Rect2, full: Vector2) -> void:
+    if zone == clear_zone and full == render_size:
+        return
+    clear_zone = zone
+    render_size = full
+    _aim_camera()
+
+func _project(fov: float) -> void:
+    if clear_zone.size.y < 8.0 or render_size.y < 8.0:
+        camera.projection = Camera3D.PROJECTION_PERSPECTIVE
+        camera.keep_aspect = Camera3D.KEEP_HEIGHT
+        camera.fov = fov
+        return
+    var px := 2.0*camera.near*tan(deg_to_rad(fov*0.5))/clear_zone.size.y
+    var centre := clear_zone.get_center()
+    camera.projection = Camera3D.PROJECTION_FRUSTUM
+    camera.keep_aspect = Camera3D.KEEP_HEIGHT
+    camera.size = render_size.y*px
+    camera.frustum_offset = Vector2((render_size.x*0.5-centre.x)*px,(centre.y-render_size.y*0.5)*px)
 
 func set_pan(value: float) -> void:
     _pan = value

@@ -19,6 +19,8 @@ var preview_char := 0
 var preview_weapon := 0
 var pan := 0.0
 var animation_time := 0.0
+# Part of this control not covered by HUD panels (local coordinates). Empty = the whole control.
+var clear_zone := Rect2()
 
 var stage
 var viewport: SubViewport
@@ -82,6 +84,9 @@ func _process(delta: float) -> void:
         _sync_preview()
     elif is_instance_valid(stage):
         stage.set_pan(pan*WORLD_PER_PX)
+        var zone := _zone()
+        var k := Vector2(viewport.size)/size if size.x > 0 else Vector2.ONE
+        stage.set_clear_zone(Rect2(zone.position*k,zone.size*k) if clear_zone.size.y > 0 else Rect2(),Vector2(viewport.size))
     overlay.queue_redraw()
 
 static func render_scale(node: CanvasItem) -> float:
@@ -133,8 +138,11 @@ func _roster(side: int) -> Array:
     heroes.sort_custom(func(a,b): return str(a.get("id","")) == player_id and str(b.get("id","")) != player_id)
     return heroes
 
+func _zone() -> Rect2:
+    return clear_zone if clear_zone.size.y > 8 else Rect2(Vector2.ZERO,size)
+
 func _max_rows() -> int:
-    return 2 if size.y < 330 else 3
+    return 2 if _zone().size.y < 330 else 3
 
 func _pan_limit() -> float:
     var a := _roster(int(_me().get("side",0))).size()
@@ -281,8 +289,13 @@ func _paint(c: Control) -> void:
     var h := size.y
     var shade := Color(0.02,0.05,0.08,0.34)
     var clear := Color(0.02,0.05,0.08,0.0)
-    c.draw_polygon(PackedVector2Array([Vector2(0,0),Vector2(w,0),Vector2(w,h*0.12),Vector2(0,h*0.12)]),PackedColorArray([shade,shade,clear,clear]))
-    c.draw_polygon(PackedVector2Array([Vector2(0,h*0.8),Vector2(w,h*0.8),Vector2(w,h),Vector2(0,h)]),PackedColorArray([clear,clear,shade,shade]))
+    # Darker bands under the top and bottom HUD so its panels sit on the scene without fighting it.
+    var z := _zone()
+    var deep := Color(0.02,0.05,0.08,0.62 if clear_zone.size.y > 8 else 0.34)
+    var t1 := maxf(h*0.12,z.position.y+40)
+    var b0 := minf(h*0.8,z.end.y-70)
+    c.draw_polygon(PackedVector2Array([Vector2(0,0),Vector2(w,0),Vector2(w,t1),Vector2(0,t1)]),PackedColorArray([deep,deep,clear,clear]))
+    c.draw_polygon(PackedVector2Array([Vector2(0,b0),Vector2(w,b0),Vector2(w,h),Vector2(0,h)]),PackedColorArray([clear,clear,deep,deep]))
     c.draw_polygon(PackedVector2Array([Vector2(0,0),Vector2(w*0.07,0),Vector2(w*0.07,h),Vector2(0,h)]),PackedColorArray([shade,clear,clear,shade]))
     c.draw_polygon(PackedVector2Array([Vector2(w*0.93,0),Vector2(w,0),Vector2(w,h),Vector2(w*0.93,h)]),PackedColorArray([clear,shade,shade,clear]))
     if snapshot.is_empty():
@@ -313,11 +326,12 @@ func _paint(c: Control) -> void:
     var title := "Tower "+str(tower.get("name",ti+1))
     var anchor := _screen(stage.tower_anchor())
     var tw := _bold.get_string_size(title,HORIZONTAL_ALIGNMENT_LEFT,-1,17).x+26
-    var ty := clampf(anchor.y-34,62,h*0.35)
+    var top := _zone().position.y
+    var ty := clampf(anchor.y-34,top+64,top+_zone().size.y*0.35)
     _panel(c,Rect2(w*0.5-tw*0.5,ty,tw,30),Color("#0a1319e6"),Color("#e9c97a"),8,1)
     _text(c,title,Vector2(w*0.5-tw*0.5,ty+22),17,Color("#ffd97a"),_bold,tw,HORIZONTAL_ALIGNMENT_CENTER)
     if _pan_limit() > 1:
-        _text(c,"◂ drag to see more fighters ▸",Vector2(0,h-8),10,Color(1,1,1,0.75),_font,w,HORIZONTAL_ALIGNMENT_CENTER)
+        _text(c,"◂ drag to see more fighters ▸",Vector2(0,_zone().end.y-8),10,Color(1,1,1,0.75),_font,w,HORIZONTAL_ALIGNMENT_CENTER)
 
 func _garrison(c: CanvasItem, heroes: Array, team: int) -> void:
     var hp := 0
@@ -333,16 +347,24 @@ func _garrison(c: CanvasItem, heroes: Array, team: int) -> void:
     var w := minf(size.x*0.44,196.0)
     var x := 6.0 if team == 0 else size.x-w-6
     var col := Color("#55d3ee") if team == 0 else Color("#ff8a4a")
-    _panel(c,Rect2(x,6,w,56),Color("#0a1319e0"),Color(col,0.35),9,1)
+    var y := _zone().position.y+6
+    _panel(c,Rect2(x,y,w,56),Color("#0a1319d8"),Color(col,0.35),9,1)
     var title := "YOUR GARRISON" if team == 0 else "ENEMY GARRISON"
-    _text(c,title,Vector2(x+8,22),12,col,_bold,w-16,HORIZONTAL_ALIGNMENT_LEFT if team == 0 else HORIZONTAL_ALIGNMENT_RIGHT)
-    var bar := Rect2(x+8,27,w-16,15)
+    var align := HORIZONTAL_ALIGNMENT_LEFT if team == 0 else HORIZONTAL_ALIGNMENT_RIGHT
+    _text(c,title,Vector2(x+8,y+16),12,col,_bold,w-16,align)
+    var bar := Rect2(x+8,y+21,w-16,15)
     c.draw_rect(bar,Color("#1a262e"))
+    if heroes.is_empty():
+        # A wiped or empty garrison: say so instead of drawing an empty bar with a stub of colour.
+        _text(c,"NO DEFENDERS",Vector2(bar.position.x,bar.position.y+12),11,Color("#ffd07a") if team == 1 else Color("#ff9a7a"),_bold,bar.size.x,HORIZONTAL_ALIGNMENT_CENTER)
+        _text(c,"Tower open — siege it" if team == 1 else "Tower undefended",Vector2(x+8,y+51),11,Color("#9fd8ff"),_font,w-16,align)
+        return
     var ratio := clampf(float(hp)/maxf(1.0,float(total)),0,1)
-    _panel(c,Rect2(bar.position,Vector2(maxf(14,bar.size.x*ratio),bar.size.y)),col,Color(col.lightened(0.3),0.6),7,0)
-    c.draw_rect(Rect2(bar.position+Vector2(4,2),Vector2(maxf(6,bar.size.x*ratio-8),3)),Color(1,1,1,0.22))
+    if ratio > 0.0:
+        _panel(c,Rect2(bar.position,Vector2(maxf(14,bar.size.x*ratio),bar.size.y)),col,Color(col.lightened(0.3),0.6),7,0)
+        c.draw_rect(Rect2(bar.position+Vector2(4,2),Vector2(maxf(6,bar.size.x*ratio-8),3)),Color(1,1,1,0.22))
     _text(c,"%s / %s" % [_k(hp),_k(total)],Vector2(bar.position.x,bar.position.y+12),11,Color.WHITE,_bold,bar.size.x,HORIZONTAL_ALIGNMENT_CENTER)
-    _text(c,"⛨ %d absorb · %d/%d up" % [shields,up,heroes.size()],Vector2(x+8,57),11,Color("#9fd8ff"),_font,w-16,HORIZONTAL_ALIGNMENT_LEFT if team == 0 else HORIZONTAL_ALIGNMENT_RIGHT)
+    _text(c,"⛨ %d absorb · %d/%d up" % [shields,up,heroes.size()],Vector2(x+8,y+51),11,Color("#9fd8ff"),_font,w-16,align)
 
 func _k(n: int) -> String:
     if n >= 100000:
@@ -418,9 +440,10 @@ func _paint_raid(c: CanvasItem) -> void:
     if boss.is_empty():
         return
     var w := size.x-16
-    _panel(c,Rect2(8,8,w,52),Color("#0a1319e6"),Color("#f29c61"),10,1)
-    _text(c,str(boss.get("name","DAILY BOSS")),Vector2(8,28),15,Color("#ffcc8e"),_bold,w,HORIZONTAL_ALIGNMENT_CENTER)
-    var bar := Rect2(20,36,w-24,15)
+    var y := _zone().position.y
+    _panel(c,Rect2(8,y+8,w,52),Color("#0a1319e6"),Color("#f29c61"),10,1)
+    _text(c,str(boss.get("name","DAILY BOSS")),Vector2(8,y+28),15,Color("#ffcc8e"),_bold,w,HORIZONTAL_ALIGNMENT_CENTER)
+    var bar := Rect2(20,y+36,w-24,15)
     c.draw_rect(bar,Color("#331a13"))
     var ratio := clampf(float(boss.get("hp",0))/maxf(1,float(boss.get("max",1))),0,1)
     _panel(c,Rect2(bar.position,Vector2(maxf(14,bar.size.x*ratio),bar.size.y)),Color("#e0643a"),Color("#ffb27a"),7,0)

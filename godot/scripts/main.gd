@@ -21,10 +21,10 @@ class Shimmer:
         var cycle := fmod(t, 2.8) / 1.1
         if cycle > 1.0:
             return
-        var x := lerpf(-size.x * 0.3, size.x * 1.3, cycle)
+        var x := lerpf(size.y * 0.5 + 10, size.x - 10 - size.x * 0.12, cycle)
         var w := size.x * 0.12
-        var pts := PackedVector2Array([Vector2(x, 3), Vector2(x + w, 3), Vector2(x + w - size.y * 0.5, size.y - 8), Vector2(x - size.y * 0.5, size.y - 8)])
-        draw_colored_polygon(pts, Color(1, 1, 1, 0.16))
+        var pts := PackedVector2Array([Vector2(x, 4), Vector2(x + w, 4), Vector2(x + w - size.y * 0.45, size.y - 9), Vector2(x - size.y * 0.45, size.y - 9)])
+        draw_colored_polygon(pts, Color(1, 1, 1, 0.14 * sin(cycle * PI)))
 const SPELLS := ["barrage","bulwark","horn","surge"]
 const SPELL_NAMES := {"barrage":"Barrage","bulwark":"Bulwark","horn":"War Horn","surge":"Arcane Surge"}
 const HERO_NAMES := ["Knight","Rogue","Barbarian","Mage","Ranger"]
@@ -71,6 +71,7 @@ var score_ours: Label
 var score_theirs: Label
 var roll_hint: Label
 var ui_reduce_motion := false
+var arena_space: Control
 var modal: Control
 var notice_until := 0
 var home_preview
@@ -99,6 +100,10 @@ func _notification(what: int) -> void:
             _cancel_queue()
 
 func _process(_delta: float) -> void:
+    if screen == "battle" and is_instance_valid(board) and is_instance_valid(arena_space) and is_instance_valid(dice):
+        # The battlefield frames its fighters inside the gap between the HUD bars.
+        var top: float = arena_space.get_global_rect().position.y-board.get_global_rect().position.y
+        board.clear_zone = Rect2(0,top,board.size.x,arena_space.size.y+dice.size.y)
     if screen == "battle" and not latest.is_empty():
         _paint_controls()
     elif screen == "queue" and not latest_state.is_empty() and is_instance_valid(queue_clock):
@@ -207,7 +212,7 @@ func _safe_area() -> void:
         roll_result.visible = not compact
         bank.visible = not compact
         status.visible = not compact
-        dice.offset_top = -74 if compact else -111
+        dice.custom_minimum_size.y = 80 if compact else 112
 
 func _show_home() -> void:
     busy = false
@@ -383,9 +388,16 @@ func _me() -> Dictionary:
 func _show_battle() -> void:
     _new_screen("battle")
     page.add_theme_constant_override("separation",6)
+    # Full-screen battlefield: the 3D scene fills the whole screen behind a translucent HUD.
+    board = Field.new()
+    board.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    ui_root.add_child(board)
+    ui_root.move_child(board,1)
+    margins.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    page.mouse_filter = Control.MOUSE_FILTER_IGNORE
     # --- scoreboard: our crowns, match clock, their crowns ---
     var header_frame := PanelContainer.new()
-    header_frame.add_theme_stylebox_override("panel",VisualTheme.panel(Color("#0b1820"),Color("#2c4150"),14,6))
+    header_frame.add_theme_stylebox_override("panel",VisualTheme.panel(Color(0.03,0.08,0.11,0.78),Color(0.75,0.6,0.35,0.55),14,6))
     page.add_child(header_frame)
     var header := _row(header_frame)
     var ours := VBoxContainer.new()
@@ -444,35 +456,24 @@ func _show_battle() -> void:
     menu.custom_minimum_size.x = 58
     menu.pressed.connect(_more)
     tower_row.add_child(menu)
-    # --- battlefield with the dice tray overlaid on its lower edge ---
-    var arena_frame := PanelContainer.new()
-    var arena_style := VisualTheme.panel(Color("#0a141a"),Color("#c9a45c"),12,2)
-    arena_style.set_border_width_all(2)
-    arena_style.shadow_size = 10
-    arena_frame.add_theme_stylebox_override("panel",arena_style)
-    arena_frame.size_flags_vertical = Control.SIZE_EXPAND_FILL
-    page.add_child(arena_frame)
-    board = Field.new()
-    board.size_flags_vertical = Control.SIZE_EXPAND_FILL
-    arena_frame.add_child(board)
+    # --- open window onto the battlefield, with the dice tray standing on its lower edge ---
+    arena_space = Control.new()
+    arena_space.size_flags_vertical = Control.SIZE_EXPAND_FILL
+    arena_space.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    page.add_child(arena_space)
     dice = Dice.new()
-    dice.anchor_left = 0.0
-    dice.anchor_right = 1.0
-    dice.anchor_top = 1.0
-    dice.anchor_bottom = 1.0
-    dice.offset_top = -118
-    dice.offset_bottom = -4
+    dice.custom_minimum_size.y = 112
     dice.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    board.add_child(dice)
+    page.add_child(dice)
     # --- action deck ---
     var action_frame := PanelContainer.new()
-    action_frame.add_theme_stylebox_override("panel",VisualTheme.panel(Color("#0b1820"),Color("#2c4150"),14,7))
+    action_frame.add_theme_stylebox_override("panel",VisualTheme.panel(Color(0.03,0.08,0.11,0.82),Color(0.75,0.6,0.35,0.55),16,7))
     page.add_child(action_frame)
     var actions := VBoxContainer.new()
     actions.add_theme_constant_override("separation",6)
     action_frame.add_child(actions)
     var result_frame := PanelContainer.new()
-    result_frame.add_theme_stylebox_override("panel",VisualTheme.panel(Color("#071118"),Color("#26404c"),9,6))
+    result_frame.add_theme_stylebox_override("panel",VisualTheme.panel(Color(0.02,0.05,0.07,0.7),Color("#26404c"),9,6))
     actions.add_child(result_frame)
     var result_box := VBoxContainer.new()
     result_box.add_theme_constant_override("separation",1)
@@ -509,7 +510,6 @@ func _show_battle() -> void:
     for state in ["normal","hover","pressed","disabled"]:
         var sb: StyleBox = roll_button.get_theme_stylebox(state)
         sb.content_margin_bottom += 12
-    roll_button.clip_contents = true
     roll_button.pressed.connect(_roll)
     rolls.add_child(roll_button)
     roll_hint = _label("1 Focus · hold for AutoRoll",10,Color("#fff1d8"))
@@ -534,22 +534,27 @@ func _show_battle() -> void:
     rally_button.custom_minimum_size.x = 86
     rally_button.pressed.connect(func(): _do_action("rally"))
     rolls.add_child(rally_button)
+    # One compact row: both spells, ALL-IN and the ultimate.
     var powers := _row(actions)
+    powers.add_theme_constant_override("separation",5)
     for spell in selected_loadout:
         var b := _button(SPELL_NAMES.get(spell,spell),44)
+        b.add_theme_font_size_override("font_size",13)
         VisualTheme.apply_tactile(b,"arcane",11)
         b.set_meta("spell",spell)
         b.pressed.connect(_cast.bind(spell))
         powers.add_child(b)
         spell_buttons.append(b)
-    var utility := _row(actions)
-    all_in = _button("ALL-IN OFF",42)
+    var utility := powers
+    all_in = _button("ALL-IN",44)
+    all_in.add_theme_font_size_override("font_size",13)
     all_in.toggle_mode = true
     all_in.toggled.connect(func(on):
-        all_in.text = "ALL-IN ON" if on else "ALL-IN OFF"
+        all_in.text = "ALL-IN ON" if on else "ALL-IN"
         VisualTheme.apply_tactile(all_in,"active" if on else "secondary",11))
     utility.add_child(all_in)
-    ult_button = _button("ULTIMATE 0%",42)
+    ult_button = _button("ULT 0%",44)
+    ult_button.add_theme_font_size_override("font_size",13)
     ult_button.pressed.connect(func(): _do_action("ultimate"))
     utility.add_child(ult_button)
     status = _label("LIVE · 20 combatants",10,Color("#88a7ad"))
@@ -600,7 +605,12 @@ func _paint_controls() -> void:
     roll_button.disabled = locked or float(me.get("rollAt",0)) > now or (not free and (energy < cost or cost <= 0))
     tower_title.disabled = locked
     rally_button.disabled = locked or int(me.get("ralliesLeft",0)) <= 0 or float(me.get("rallyAt",0)) > now or energy < 2
-    ult_button.text = "ULTIMATE %d%%" % int(me.get("ult",0))
+    ult_button.text = "ULT %d%%" % int(me.get("ult",0))
+    # Keep the ALL-IN face in step even when code resets it without a toggle signal.
+    if bool(all_in.get_meta("on",false)) != all_in.button_pressed:
+        all_in.set_meta("on",all_in.button_pressed)
+        VisualTheme.apply_tactile(all_in,"active" if all_in.button_pressed else "secondary",11)
+        all_in.text = "ALL-IN ON" if all_in.button_pressed else "ALL-IN"
     if is_instance_valid(roll_hint):
         roll_hint.text = ("FREE · Rampage" if free else ("%d Focus · ALL-IN" % cost if all_in.button_pressed else "%d Focus · hold for AutoRoll" % cost))
         roll_hint.visible = not ko and not busy
@@ -613,7 +623,7 @@ func _paint_controls() -> void:
     if free:
         mult_select.select(0)
         all_in.set_pressed_no_signal(false)
-        all_in.text = "ALL-IN OFF"
+        all_in.text = "ALL-IN"
     all_in.disabled = locked or free or energy == 0
     for b in spell_buttons:
         b.disabled = locked or int(me.get("spell",0)) <= 0 or float(me.get("spellAt",0)) > now
@@ -641,7 +651,7 @@ func _roll() -> void:
     await _do_action("roll",{"mult":mult_select.get_selected_id(),"allIn":all_in.button_pressed})
     if screen == "battle" and is_instance_valid(all_in):
         all_in.set_pressed_no_signal(false)
-        all_in.text = "ALL-IN OFF"
+        all_in.text = "ALL-IN"
 
 func _cast(spell: String) -> void:
     await _do_action("spell",{"spell":spell})
