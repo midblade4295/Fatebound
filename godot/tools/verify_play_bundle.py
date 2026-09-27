@@ -6,6 +6,7 @@ cert=subprocess.check_output(['keytool','-printcert','-jarfile',str(p)],text=Tru
 fp=re.search(r'SHA256:\s*([0-9A-F:]+)',cert)[1].replace(':','').lower()
 assert fp=='6971a9123d610b397f6e9122c6cb241dbbe9c9c5fdbeb5a8751d5e2e80839084','Upload certificate does not match the existing vc21 bundle'
 libs=[]
+all_abis=set()
 with zipfile.ZipFile(p) as z:
  assert z.testzip() is None
  names=z.namelist()
@@ -26,6 +27,8 @@ with zipfile.ZipFile(p) as z:
  assert content_module in ['base','assetPackInstallTime'],('Unexpected game asset delivery module',content_module)
  for name in names:
   if not name.endswith('.so'):continue
+  if '/lib/' in name:
+   all_abis.add(name.split('/lib/',1)[1].split('/',1)[0])
   b=z.read(name); assert b[:4]==b'\x7fELF'
   if b[4]!=2:continue
   endian='<' if b[5]==1 else '>'
@@ -36,11 +39,10 @@ with zipfile.ZipFile(p) as z:
    if struct.unpack_from(endian+'I',b,pos)[0]==1:
     value=struct.unpack_from(endian+'Q',b,pos+48)[0]; assert value>=16384,(name,value);align.append(value)
   libs.append({'path':name,'load_segment_alignment':align})
+ assert all_abis=={'armeabi-v7a','arm64-v8a','x86','x86_64'},('Missing Android ABI',sorted(all_abis))
  assert any('arm64-v8a' in x['path'] for x in libs)
- assert any('armeabi-v7a' in x['path'] for x in libs)
- assert any('/x86/' in x['path'] for x in libs), 'Missing 32-bit x86 ABI'
  assert any('x86_64' in x['path'] for x in libs)
-report={'file':p.name,'bytes':p.stat().st_size,'sha256':hashlib.sha256(p.read_bytes()).hexdigest(),'upload_certificate_sha256':fp,'matches_previous_vc21_certificate':True,'native_content_tables_equal':True,'content_module':content_module,'content_asset_path':content_path,'test_and_signing_material_excluded':True,'native_64bit_libraries':libs,'physical_phone_tested':False}
+report={'file':p.name,'bytes':p.stat().st_size,'sha256':hashlib.sha256(p.read_bytes()).hexdigest(),'upload_certificate_sha256':fp,'matches_previous_vc21_certificate':True,'native_content_tables_equal':True,'content_module':content_module,'content_asset_path':content_path,'test_and_signing_material_excluded':True,'android_abis':sorted(all_abis),'native_64bit_libraries':libs,'physical_phone_tested':False}
 p.with_name('PLAY_BUNDLE_VERIFICATION.json').write_text(json.dumps(report,indent=2)+'\n')
 print(json.dumps(report,indent=2))
 
