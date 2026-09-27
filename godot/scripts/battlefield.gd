@@ -125,7 +125,10 @@ func _panel(rect: Rect2, color: Color, border: Color, radius := 8) -> void:
     style.bg_color = color
     style.border_color = border
     style.set_border_width_all(1)
+    style.border_width_top = 2
     style.set_corner_radius_all(radius)
+    style.shadow_color = Color(0,0,0,0.33)
+    style.shadow_size = 3
     draw_style_box(style,rect)
 
 func _text(text: String, rect: Rect2, font_size: int, color: Color) -> void:
@@ -134,12 +137,26 @@ func _text(text: String, rect: Rect2, font_size: int, color: Color) -> void:
 func _draw() -> void:
     if _font == null or size.x < 1 or size.y < 1:
         return
-    draw_rect(Rect2(Vector2.ZERO,size),Color("#294838"))
-    var bg := texture("map.jpeg" if preview else "pano.jpeg")
+    draw_rect(Rect2(Vector2.ZERO,size),Color("#142a32"))
+    # The portrait arena is the original match composition. The panorama used
+    # by the first native build flattened the castles and made fighters tiny.
+    var bg := texture("map.jpeg")
     if bg != null:
         var scale_factor := maxf(size.x/bg.get_width(),size.y/bg.get_height())
         var extent := bg.get_size()*scale_factor
-        draw_texture_rect(bg,Rect2(Vector2((size.x-extent.x)*0.5-pan,0),extent),false)
+        # Keep the castles in the upper third and the hex floor behind the cast.
+        var crop_y := maxf(0,extent.y-size.y)*0.28
+        draw_texture_rect(bg,Rect2(Vector2((size.x-extent.x)*0.5,-crop_y),extent),false)
+    if not preview:
+        draw_rect(Rect2(0,0,size.x,minf(120.0,size.y*0.22)),Color(0.02,0.07,0.10,0.22))
+        draw_rect(Rect2(0,maxf(0,size.y-133),size.x,133),Color(0.02,0.08,0.13,0.37))
+        draw_rect(Rect2(0,0,3,size.y),Color("#69d8e1aa"))
+        draw_rect(Rect2(size.x-3,0,3,size.y),Color("#eb8267aa"))
+        if not reduce_motion:
+            for i in 7:
+                var x := fposmod(i*117.0+animation_time*(11+i%3*3),size.x)
+                var y := fposmod(i*131.0-animation_time*(9+i%2*4),size.y*0.68)+size.y*0.17
+                draw_circle(Vector2(x,y),1.0+i%2,Color(1,0.86,0.58,0.12))
     _positions.clear()
     if preview:
         var portrait:=texture("portrait_%02d.webp" % (clampi(preview_char,0,4)*9+clampi(preview_weapon,0,8)))
@@ -167,28 +184,30 @@ func _draw() -> void:
         lead = 0 if float(dmg[0]) > float(dmg[1]) else 1
     var tower_image := texture("scaffold.png" if lead < 0 else ("towerB.png" if lead == side else "towerR.png"))
     if tower_image != null:
-        var h := clampf(size.y*0.25,65,125)
+        var h := clampf(size.y*0.24,82,145)
         var w := h*tower_image.get_width()/tower_image.get_height()
-        draw_texture_rect(tower_image,Rect2(Vector2(size.x*0.5-w*0.5-pan,size.y*0.12),Vector2(w,h)),false)
-    _panel(Rect2(size.x*0.5-43,5,86,25),Color("#0b1a24ed"),Color("#a78a4a"))
-    _text("TOWER "+str(tower.get("name",ti+1)),Rect2(size.x*0.5-43,8,86,23),12,Color("#ffdc89"))
+        draw_texture_rect(tower_image,Rect2(Vector2(size.x*0.5-w*0.5,size.y*0.13),Vector2(w,h)),false)
+    _panel(Rect2(size.x*0.5-54,6,108,27),Color("#0a1e2af2"),Color("#ddb877"))
+    _text("TOWER "+str(tower.get("name",ti+1)),Rect2(size.x*0.5-54,9,108,23),12,Color("#ffdf9e"))
     for team in 2:
         var team_side: int = side if team == 0 else 1-side
         var roster := _roster(team_side)
         var n := roster.size()
         _garrison(roster,team)
         var row_count := mini(_max_rows(),maxi(1,n))
-        var top := maxf(size.y*0.42,110)
-        var bottom := size.y-46
+        var top := maxf(size.y*0.36,105)
+        var bottom := size.y-151
+        if bottom < top:
+            bottom = top+25
         var spacing := (bottom-top)/maxi(1,row_count-1)
         for i in n:
             var row := i%_max_rows()
             var col := i/_max_rows()
-            var x := size.x*0.5 + (-1 if team == 0 else 1)*(size.x*0.235+col*140)-pan
-            var y := top if row_count > 1 else size.y*0.72
+            var x := size.x*0.5 + (-1 if team == 0 else 1)*(size.x*0.255+col*145)-pan
+            var y := top if row_count > 1 else minf(size.y*0.61,size.y-(74 if size.y < 300 else 111)-43)
             if row_count > 1:
                 y += spacing*row
-            var cell_h := minf(170.0,maxf(68.0,spacing*0.95)) if row_count > 1 else minf(205.0,size.y*0.50)
+            var cell_h := minf(190.0,maxf(68.0,spacing*1.15)) if row_count > 1 else minf(225.0,size.y*0.45)
             _actor(roster[i],Vector2(x,y),cell_h,team == 1)
     if _pan_limit() > 1:
         _text("Drag battlefield to see more fighters",Rect2(0,size.y-19,size.x,16),10,Color("#ffffff"))
@@ -203,15 +222,15 @@ func _garrison(heroes: Array, team: int) -> void:
         total += int(hero.get("maxHp",0))
         if int(hero.get("hp",0)) > 0:
             up += 1
-    var w := minf(size.x*0.32,146)
+    var w := minf(size.x*0.38,166)
     var x := 7.0 if team == 0 else size.x-w-7
     var col := Color("#69e4f4") if team == 0 else Color("#ff9867")
-    _panel(Rect2(x,36,w,44),Color("#081b25e8"),col.darkened(0.45))
-    _text("YOUR GARRISON" if team == 0 else "ENEMY GARRISON",Rect2(x,39,w,12),9,col)
-    _text("%d / %d" % [hp,total],Rect2(x,52,w,13),11,Color.WHITE)
-    draw_rect(Rect2(x+8,69,w-16,4),Color("#14232b"))
+    _panel(Rect2(x,39,w,51),Color("#081b25f2"),col.darkened(0.24))
+    _text("YOUR GARRISON" if team == 0 else "ENEMY GARRISON",Rect2(x,43,w,12),9,col)
+    _text("%d / %d  ·  %d UP" % [hp,total,up],Rect2(x,58,w,14),11,Color.WHITE)
+    draw_rect(Rect2(x+9,79,w-18,5),Color("#14232b"))
     if total > 0:
-        draw_rect(Rect2(x+8,69,(w-16)*float(hp)/total,4),col)
+        draw_rect(Rect2(x+9,79,(w-18)*clampf(float(hp)/total,0,1),5),col)
 
 func _actor(hero: Dictionary, foot: Vector2, height: float, enemy: bool, hide_label := false) -> void:
     var hid := str(hero.get("id",""))
@@ -239,7 +258,7 @@ func _actor(hero: Dictionary, foot: Vector2, height: float, enemy: bool, hide_la
     var width := height*CELL.x/CELL.y
     _positions[hid] = foot
     draw_set_transform(foot,0.0,Vector2(1,0.25))
-    draw_circle(Vector2.ZERO,width*0.22,Color(0,0,0,0.25))
+    draw_circle(Vector2.ZERO,width*0.28,Color(0,0,0,0.34))
     draw_set_transform(foot,0.0,Vector2(-1 if enemy else 1,1))
     var tint := Color(1,1,1,0.50) if dead else Color.WHITE
     draw_texture_rect_region(tex,Rect2(-width*0.5,-height+height*0.12,width,height),Rect2(frame*340,0,340,280),tint)
@@ -251,17 +270,17 @@ func _actor(hero: Dictionary, foot: Vector2, height: float, enemy: bool, hide_la
     var col := Color("#ff9367") if enemy else Color("#73ddeb")
     if hid == player_id:
         col = Color("#ffe198")
-    var plate := Rect2(foot.x-53,foot.y+4,106,30)
-    _panel(plate,Color("#061b22e8"),col.darkened(0.30),5)
-    var title := "YOU" if hid == player_id else str(hero.get("name","Hero")).left(14)
-    _text(title,Rect2(plate.position+Vector2(0,1),Vector2(106,12)),10,col)
+    var plate := Rect2(foot.x-58,foot.y+3,116,33)
+    _panel(plate,Color("#061923f2"),col.darkened(0.17),7)
+    var title := "YOU" if hid == player_id else str(hero.get("name","Hero")).left(13)
+    _text(title,Rect2(plate.position+Vector2(0,2),Vector2(116,13)),11,col)
     if dead:
         var remain := maxi(0,int(ceil((float(hero.get("downUntil",0))-float(snapshot.get("now",0)))/1000.0)))
-        _text("KO %ds" % remain if remain > 0 else "Awaiting respawn",Rect2(plate.position+Vector2(0,14),Vector2(106,11)),9,Color("#ddd8c9"))
+        _text("KO %ds" % remain if remain > 0 else "Awaiting respawn",Rect2(plate.position+Vector2(0,16),Vector2(116,11)),9,Color("#ddd8c9"))
     else:
-        draw_rect(Rect2(plate.position+Vector2(6,20),Vector2(94,4)),Color("#122b24"))
+        draw_rect(Rect2(plate.position+Vector2(7,23),Vector2(102,5)),Color("#122b24"))
         var ratio := clampf(float(hero.get("hp",0))/maxf(1,float(hero.get("maxHp",1))),0,1)
-        draw_rect(Rect2(plate.position+Vector2(6,20),Vector2(94*ratio,4)),Color("#9ddc65") if ratio > 0.3 else Color("#ff755a"))
+        draw_rect(Rect2(plate.position+Vector2(7,23),Vector2(102*ratio,5)),Color("#9ddc65") if ratio > 0.3 else Color("#ff755a"))
 
 func _draw_effects() -> void:
     for fx in _effects:

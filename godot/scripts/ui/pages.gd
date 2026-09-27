@@ -2,6 +2,7 @@ extends RefCounted
 const C=preload("res://scripts/game/content.gd")
 const Raid=preload("res://scripts/game/raid.gd")
 const Factory=preload("res://scripts/game/hero_factory.gd")
+const VisualTheme=preload("res://scripts/ui/visual_theme.gd")
 var app
 var result_claimed:=false
 var chat_edit:TextEdit
@@ -42,18 +43,28 @@ func home()->void:
     var body:VBoxContainer=app._shell("FATEBOUND","home")
     if not app.trainer.active and not app.api.is_local():
         var daily_raid=Raid.new();daily_raid.configure(p);daily_raid.ensure_day()
-    var banner:=card(body,"Day %d · %s %d"%[int(d.login.streak),p.rank_title(),int(d.rank)],"Brass Company · Your adventure")
-    app.portrait(banner,int(d.char),int(d.weapon),225)
+    var banner:=card(body,"THE BRASS COMPANY","Day %d · %s %d"%[int(d.login.streak),p.rank_title(),int(d.rank)])
+    app.portrait(banner,int(d.char),int(d.weapon),235)
     var pow:Dictionary=p.hero_power()
-    label(banner,"%s · %s\n%d attack power · %d critical damage · %d health"%[C.character(int(d.char)).n,C.weapon(int(d.weapon)).n,int(pow.power),int(pow.critical),int(pow.maxHp)])
+    var hero_name:=label(banner,"%s  ·  %s"%[C.character(int(d.char)).n,C.weapon(int(d.weapon)).n],17,Color("#f2d99a"))
+    hero_name.add_theme_font_override("font",VisualTheme.DISPLAY_FONT)
+    var power_line:HBoxContainer=app._row(banner)
+    label(power_line,"⚔  %d POWER"%int(pow.power),11,Color("#efbf86"))
+    label(power_line,"✦  %d CRIT"%int(pow.critical),11,Color("#9ed8df"))
+    label(power_line,"♥  %d HP"%int(pow.maxHp),11,Color("#e99b91"))
     if not app.save_store.writable:
         label(body,app.save_store.last_error,14,Color("#ffb49d"))
         button(body,"OPEN SAVE RECOVERY",func():app._go("settings"),true,"recover_save")
         return
     if d.get("levelReward") is Dictionary:
         button(body,"LEVEL UP · COLLECT +%d FATE"%int(d.levelReward.get("energy",0)),level_reward,true,"level_reward")
-    var battle:=card(body,"READY FOR BATTLE","5-minute matches · free entry · Focus powers your rolls")
-    button(battle,"PREPARE & MATCHMAKE",func():app._go("prepare"),not app.trainer.active,"prepare")
+    var battle:=card(body,"THE WAR FOR TEN TOWERS","5-minute matches · free entry · Focus powers your rolls")
+    var enter:=button(battle,"ENTER BATTLE  ›",func():app._go("prepare"),not app.trainer.active,"prepare")
+    enter.custom_minimum_size.y=58
+    enter.add_theme_font_override("font",VisualTheme.DISPLAY_FONT)
+    enter.add_theme_color_override("font_color",Color("#fff4d5"))
+    enter.add_theme_stylebox_override("normal",VisualTheme.button(Color("#ba5727"),Color("#ffe2a0"),12))
+    enter.add_theme_stylebox_override("hover",VisualTheme.button(Color("#dd7130"),Color("#fff1b6"),12))
     if app.trainer.active:button(battle,"RETURN TO TRAINING BATTLE",func():app.training_show_target("battle"),true,"training_return")
     var links:HBoxContainer=app._row(body)
     button(links,"DAILY RAID",func():app._go("raid"),not app.trainer.active,"raid")
