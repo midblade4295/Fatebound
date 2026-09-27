@@ -17,6 +17,7 @@ var _used: Dictionary = {}
 var _animations: Dictionary = {}
 var _effects: Array = []
 var _positions: Dictionary = {}
+var _labels: Array[Dictionary] = []
 var _old_hp: Dictionary = {}
 var _last_tower := -1
 var animation_time := 0.0
@@ -157,6 +158,7 @@ func _draw() -> void:
                 var y := fposmod(i*131.0-animation_time*(9+i%2*4),size.y*0.68)+size.y*0.17
                 draw_circle(Vector2(x,y),1.0+i%2,Color(1,0.86,0.58,0.12))
     _positions.clear()
+    _labels.clear()
     if preview:
         var artwork := texture(HERO_ART[clampi(preview_char,0,4)])
         if artwork != null:
@@ -185,13 +187,10 @@ func _draw() -> void:
     if float(dmg[0]) != float(dmg[1]):
         lead = 0 if float(dmg[0]) > float(dmg[1]) else 1
     var tower_accent := Color("#86e2e9") if lead==side else (Color("#f2a177") if lead>=0 else Color("#edcd8f"))
-    _panel(Rect2(size.x*0.5-54,6,108,27),Color("#071722f2"),tower_accent)
-    _text("TOWER "+str(tower.get("name",ti+1)),Rect2(size.x*0.5-54,9,108,23),12,Color("#ffdf9e"))
     for team in 2:
         var team_side: int = side if team == 0 else 1-side
         var roster := _roster(team_side)
         var n := roster.size()
-        _garrison(roster,team)
         var row_count := mini(_max_rows(),maxi(1,n))
         var top := maxf(size.y*0.36,105)
         var bottom := size.y-151
@@ -205,11 +204,18 @@ func _draw() -> void:
             var y := top if row_count > 1 else minf(size.y*0.61,size.y-(74 if size.y < 300 else 111)-43)
             if row_count > 1:
                 y += spacing*row
-            var cell_h := minf(190.0,maxf(68.0,spacing*1.15)) if row_count > 1 else minf(225.0,size.y*0.45)
+            var cell_h := minf(150.0,maxf(65.0,spacing*0.9)) if row_count > 1 else minf(145.0,size.y*0.36)
             _actor(roster[i],Vector2(x,y),cell_h,team == 1)
+    _draw_effects()
+    # Character art is layered first; every nameplate and score panel stays legible.
+    for item in _labels:
+        _actor_label(item.hero,item.foot,item.enemy)
+    for team in 2:
+        _garrison(_roster(side if team == 0 else 1-side),team)
+    _panel(Rect2(size.x*0.5-54,6,108,27),Color("#071722f2"),tower_accent)
+    _text("TOWER "+str(tower.get("name",ti+1)),Rect2(size.x*0.5-54,9,108,23),12,Color("#ffdf9e"))
     if _pan_limit() > 1:
         _text("Drag battlefield to see more fighters",Rect2(0,size.y-19,size.x,16),10,Color("#ffffff"))
-    _draw_effects()
 
 func _garrison(heroes: Array, team: int) -> void:
     var hp := 0
@@ -269,8 +275,12 @@ func _actor(hero: Dictionary, foot: Vector2, height: float, enemy: bool, hide_la
     draw_set_transform(Vector2.ZERO)
     if not dead and not (hero.get("shieldSlots",[]) as Array).is_empty():
         draw_arc(foot+Vector2(0,-height*0.38),height*0.37,PI*0.93,TAU+0.3,28,Color(0.5,0.9,1,0.55),2,true)
-    if hide_label:
-        return
+    if not hide_label:
+        _labels.append({"hero":hero,"foot":foot,"enemy":enemy})
+
+func _actor_label(hero: Dictionary, foot: Vector2, enemy: bool) -> void:
+    var hid := str(hero.get("id",""))
+    var dead := int(hero.get("hp",0)) <= 0
     var col := Color("#ff9367") if enemy else Color("#73ddeb")
     if hid == player_id:
         col = Color("#ffe198")
