@@ -3,11 +3,11 @@ extends RefCounted
 const BODY_FONT = preload("res://assets/fonts/DejaVuSans.ttf")
 const BOLD_FONT = preload("res://assets/fonts/DejaVuSans-Bold.ttf")
 const DISPLAY_FONT = preload("res://assets/fonts/DejaVuSerif-Bold.ttf")
-const INK := Color("#091923")
-const SURFACE := Color("#102937")
-const RAISED := Color("#1b3947")
-const GOLD := Color("#eac780")
-const GOLD_DARK := Color("#8b704a")
+const INK := Color("#06131b")
+const SURFACE := Color("#091d27")
+const RAISED := Color("#102c37")
+const GOLD := Color("#f2d18d")
+const GOLD_DARK := Color("#ad8651")
 const CYAN := Color("#70d8e2")
 const RED := Color("#ed8c68")
 const TEXT := Color("#f3efe1")
@@ -20,8 +20,8 @@ static func panel(bg: Color = SURFACE, stroke: Color = GOLD_DARK, radius: int = 
     style.border_width_top = 2
     style.set_corner_radius_all(radius)
     style.set_content_margin_all(padding)
-    style.shadow_color = Color(0, 0, 0, 0.30)
-    style.shadow_size = 5
+    style.shadow_color = Color(0, 0, 0, 0.50)
+    style.shadow_size = 7
     style.anti_aliasing = true
     return style
 
@@ -31,6 +31,15 @@ static func button(bg: Color = RAISED, stroke: Color = GOLD_DARK, radius: int = 
     style.content_margin_left = 10
     style.content_margin_right = 10
     style.shadow_size = 3
+    return style
+
+static func cta(hover := false) -> StyleBoxFlat:
+    var style := button(Color("#d58b16") if hover else Color("#a9670d"),Color("#ffdf80"),14)
+    style.set_border_width_all(2)
+    style.border_width_top = 3
+    style.shadow_color = Color("#e8a52d99")
+    style.shadow_size = 10 if hover else 8
+    style.shadow_offset = Vector2(0,2)
     return style
 
 static func install() -> Theme:

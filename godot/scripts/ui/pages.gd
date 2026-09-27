@@ -3,6 +3,7 @@ const C=preload("res://scripts/game/content.gd")
 const Raid=preload("res://scripts/game/raid.gd")
 const Factory=preload("res://scripts/game/hero_factory.gd")
 const VisualTheme=preload("res://scripts/ui/visual_theme.gd")
+const Glyph=preload("res://scripts/ui/glyph.gd")
 var app
 var result_claimed:=false
 var chat_edit:TextEdit
@@ -22,6 +23,20 @@ func button(parent:Node,text:String,call:Callable,enabled:=true,key:="")->Button
 func card(parent:Node,title:String,text:="")->VBoxContainer:return app.card(parent,title,text)
 func bar(parent:Node,value:float,total:float)->ProgressBar:
     var b:=ProgressBar.new();b.custom_minimum_size.y=10;b.show_percentage=false;b.max_value=maxf(1,total);b.value=clampf(value,0,total);parent.add_child(b);return b
+func stat_chip(parent:Node,icon:String,value:int,title:String)->void:
+    var panel:=PanelContainer.new();panel.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+    panel.add_theme_stylebox_override("panel",VisualTheme.panel(Color("#081e27"),Color("#907344"),9,5))
+    parent.add_child(panel)
+    var row:HBoxContainer=app._row(panel)
+    var mark:=Glyph.new();mark.kind=icon;mark.custom_minimum_size=Vector2(25,25);row.add_child(mark)
+    var copy:=VBoxContainer.new();copy.size_flags_horizontal=Control.SIZE_EXPAND_FILL;copy.add_theme_constant_override("separation",0);row.add_child(copy)
+    var number:=label(copy,str(value),16,VisualTheme.GOLD);number.add_theme_font_override("font",VisualTheme.DISPLAY_FONT)
+    label(copy,title,9,Color("#cfba8c"))
+func button_icon(control:Button,icon:String)->void:
+    var mark:=Glyph.new();mark.kind=icon
+    mark.anchor_left=0;mark.anchor_right=0;mark.anchor_top=0.5;mark.anchor_bottom=0.5
+    mark.offset_left=9;mark.offset_right=37;mark.offset_top=-14;mark.offset_bottom=14
+    control.add_child(mark)
 func show(route:String)->void:
     if route!="guild":chat_edit=null
     match route:
@@ -43,32 +58,46 @@ func home()->void:
     var body:VBoxContainer=app._shell("FATEBOUND","home")
     if not app.trainer.active and not app.api.is_local():
         var daily_raid=Raid.new();daily_raid.configure(p);daily_raid.ensure_day()
-    var banner:=card(body,"THE BRASS COMPANY","Day %d · %s %d"%[int(d.login.streak),p.rank_title(),int(d.rank)])
-    app.portrait(banner,int(d.char),int(d.weapon),235)
+    var banner:=card(body,"THE BRASS COMPANY  ✦","Day %d · %s %d"%[int(d.login.streak),p.rank_title(),int(d.rank)])
+    for i in 2:
+        (banner.get_child(i) as Label).horizontal_alignment=HORIZONTAL_ALIGNMENT_LEFT
+    app.portrait(banner,int(d.char),int(d.weapon),257)
     var pow:Dictionary=p.hero_power()
     var hero_name:=label(banner,"%s  ·  %s"%[C.character(int(d.char)).n,C.weapon(int(d.weapon)).n],17,Color("#f2d99a"))
     hero_name.add_theme_font_override("font",VisualTheme.DISPLAY_FONT)
+    hero_name.horizontal_alignment=HORIZONTAL_ALIGNMENT_LEFT
     var power_line:HBoxContainer=app._row(banner)
-    label(power_line,"⚔  %d POWER"%int(pow.power),11,Color("#efbf86"))
-    label(power_line,"✦  %d CRIT"%int(pow.critical),11,Color("#9ed8df"))
-    label(power_line,"♥  %d HP"%int(pow.maxHp),11,Color("#e99b91"))
+    stat_chip(power_line,"swords",int(pow.power),"POWER")
+    stat_chip(power_line,"target",int(pow.critical),"CRIT")
+    stat_chip(power_line,"heart",int(pow.maxHp),"HP")
     if not app.save_store.writable:
         label(body,app.save_store.last_error,14,Color("#ffb49d"))
         button(body,"OPEN SAVE RECOVERY",func():app._go("settings"),true,"recover_save")
         return
     if d.get("levelReward") is Dictionary:
         button(body,"LEVEL UP · COLLECT +%d FATE"%int(d.levelReward.get("energy",0)),level_reward,true,"level_reward")
-    var battle:=card(body,"THE WAR FOR TEN TOWERS","5-minute matches · free entry · Focus powers your rolls")
-    var enter:=button(battle,"ENTER BATTLE  ›",func():app._go("prepare"),not app.trainer.active,"prepare")
-    enter.custom_minimum_size.y=58
+    var battle:=card(body,"","")
+    var battle_row:HBoxContainer=app._row(battle)
+    var battle_copy:=VBoxContainer.new();battle_copy.size_flags_horizontal=Control.SIZE_EXPAND_FILL;battle_row.add_child(battle_copy)
+    var battle_title:=label(battle_copy,"THE WAR FOR TEN TOWERS",17,VisualTheme.GOLD)
+    battle_title.add_theme_font_override("font",VisualTheme.DISPLAY_FONT)
+    battle_title.horizontal_alignment=HORIZONTAL_ALIGNMENT_LEFT
+    var battle_desc:=label(battle_copy,"5-minute matches · free entry · Focus powers your rolls",11,Color("#d4cbbb"))
+    battle_desc.horizontal_alignment=HORIZONTAL_ALIGNMENT_LEFT
+    var enter:=button(battle_row,"ENTER BATTLE  ›",func():app._go("prepare"),not app.trainer.active,"prepare")
+    enter.custom_minimum_size=Vector2(151,65)
+    enter.size_flags_horizontal=Control.SIZE_FILL
     enter.add_theme_font_override("font",VisualTheme.DISPLAY_FONT)
+    enter.add_theme_font_size_override("font_size",15)
     enter.add_theme_color_override("font_color",Color("#fff4d5"))
-    enter.add_theme_stylebox_override("normal",VisualTheme.button(Color("#ba5727"),Color("#ffe2a0"),12))
-    enter.add_theme_stylebox_override("hover",VisualTheme.button(Color("#dd7130"),Color("#fff1b6"),12))
+    enter.add_theme_stylebox_override("normal",VisualTheme.cta())
+    enter.add_theme_stylebox_override("hover",VisualTheme.cta(true))
     if app.trainer.active:button(battle,"RETURN TO TRAINING BATTLE",func():app.training_show_target("battle"),true,"training_return")
     var links:HBoxContainer=app._row(body)
-    button(links,"DAILY RAID",func():app._go("raid"),not app.trainer.active,"raid")
-    button(links,"CHESTS %d"%(d.chests.size()+int(d.rollTrack.ready)),func():app._go("chests"),true,"chests")
+    var raid_link:=button(links,"   DAILY RAID",func():app._go("raid"),not app.trainer.active,"raid")
+    button_icon(raid_link,"swords")
+    var chest_link:=button(links,"   CHESTS %d"%(d.chests.size()+int(d.rollTrack.ready)),func():app._go("chests"),true,"chests")
+    button_icon(chest_link,"chest")
     var academy:=card(body,"HERO ACADEMY","Learn by playing: Focus, ALL-IN, lanes, crowns, spells, stored attacks and upgrades.")
     button(academy,"REPLAY TRAINING" if d.get("tutorialBattle",{}).get("done",false) else "CONTINUE BATTLE TRAINING",app.begin_training,not app.trainer.active,"training")
     var daily:=card(body,"DAILY QUESTS · %d / 3 COMPLETE"%(d.daily.done as Array).size())

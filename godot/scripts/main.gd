@@ -4,6 +4,7 @@ const Field = preload("res://scripts/battlefield.gd")
 const Dice = preload("res://scripts/dice_strip.gd")
 const Audio = preload("res://scripts/native_audio.gd")
 const VisualTheme = preload("res://scripts/ui/visual_theme.gd")
+const HexBackdrop = preload("res://scripts/ui/hex_backdrop.gd")
 const SPELLS := ["barrage","bulwark","horn","surge"]
 const SPELL_NAMES := {"barrage":"Barrage","bulwark":"Bulwark","horn":"War Horn","surge":"Arcane Surge"}
 const HERO_NAMES := ["Knight","Rogue","Barbarian","Mage","Ranger"]
@@ -140,12 +141,7 @@ func _new_screen(kind: String) -> void:
     bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
     ui_root.add_child(bg)
     if kind != "battle":
-        var scene := TextureRect.new()
-        scene.texture = preload("res://assets/art/map.jpeg")
-        scene.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-        scene.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-        scene.modulate = Color(0.43,0.62,0.68,0.16)
-        scene.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        var scene := HexBackdrop.new()
         scene.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
         ui_root.add_child(scene)
     margins = MarginContainer.new()
