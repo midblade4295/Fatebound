@@ -183,7 +183,9 @@ func _new_screen(kind: String) -> void:
     bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
     ui_root.add_child(bg)
-    if kind != "battle":
+    # Full-screen 3D modes cover the whole screen; the backdrop behind them was ~1000 hidden
+    # draw calls per frame on Adreno (Siege field log), so it is skipped there.
+    if kind not in ["battle","siege"]:
         var scene := HexBackdrop.new()
         scene.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
         ui_root.add_child(scene)
