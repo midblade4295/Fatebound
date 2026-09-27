@@ -7,7 +7,7 @@ extends Node
 #    which separates "stuck in game code" from "stuck in the renderer/driver".
 const PATH := "user://siege_diag.log"
 const PREV_PATH := "user://siege_diag_prev.log"
-const BUILD := "0.7.3-siege-alpha"
+const BUILD := "0.7.4-siege-alpha"
 
 class ErrorCapture:
 	extends Logger
@@ -34,6 +34,35 @@ var _last_frame_us := 0
 var _events := 0
 var _error_lines := 0
 var fps_text := ""
+var _times := {}   # label -> [total_us, max_us, count]
+
+func add_time(label: String, us: int) -> void:
+	var t: Array = _times.get(label, [0, 0, 0])
+	t[0] += us
+	t[1] = maxi(t[1], us)
+	t[2] += 1
+	_times[label] = t
+
+func _times_text() -> String:
+	var parts := PackedStringArray()
+	for k in _times:
+		var t: Array = _times[k]
+		parts.append("%s=%.1f/%.1fms" % [k, t[0] / 1000.0 / maxf(1, t[2]), t[1] / 1000.0])
+	_times.clear()
+	return " ".join(parts)
+
+func _viewport_text() -> String:
+	# Draw calls/triangles split by the 3D SubViewport vs the HUD canvas.
+	if mode == null or mode.viewport == null:
+		return ""
+	var v3: RID = mode.viewport.get_viewport_rid()
+	var root: RID = get_viewport().get_viewport_rid()
+	var I := RenderingServer.VIEWPORT_RENDER_INFO_TYPE_VISIBLE
+	var C := RenderingServer.VIEWPORT_RENDER_INFO_TYPE_CANVAS
+	var D := RenderingServer.VIEWPORT_RENDER_INFO_DRAW_CALLS_IN_FRAME
+	var P := RenderingServer.VIEWPORT_RENDER_INFO_PRIMITIVES_IN_FRAME
+	return "3d_draws=%d 3d_prims=%d hud_draws=%d" % [RenderingServer.viewport_get_render_info(v3, I, D),
+		RenderingServer.viewport_get_render_info(v3, I, P), RenderingServer.viewport_get_render_info(root, C, D)]
 
 func _ready() -> void:
 	# Keep the previous session's log (the one that froze) before starting a new one.
@@ -135,7 +164,7 @@ func _process(delta: float) -> void:
 		state = "t=%.0f score=%s kills=%s me=%s/%s hp=%.0f carry=%s fx=%d proj=%d" % [s.time, str(s.score), str(s.kills),
 			me.get("cls", "?"), me.get("state", "?"), me.get("hp", 0.0), me.get("carrying", false),
 			mode.view._fx.size() if mode.view != null else -1, s.projectiles.size()]
-	write("STAT fps=%d worst=%.0fms proc=%.1fms mem=%.1fMB vmem=%.1fMB tex=%.1fMB draws=%d prims=%d objs=%d nodes=%d ev=%d %s" % [fps, _worst_ms,
+	write("STAT fps=%d worst=%.0fms %s %s proc=%.1fms mem=%.1fMB vmem=%.1fMB tex=%.1fMB draws=%d prims=%d objs=%d nodes=%d ev=%d %s" % [fps, _worst_ms, _times_text(), _viewport_text(),
 		Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0, smem, vmem,
 		Performance.get_monitor(Performance.RENDER_TEXTURE_MEM_USED) / 1048576.0,
 		Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME), Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME),

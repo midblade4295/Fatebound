@@ -11,6 +11,7 @@ signal forge_roll(held: Array)
 signal forge_take
 signal forge_leave
 signal action_pressed(kind: String)
+signal fps_toggled
 
 const TEAM_COLORS := [Color("#5fd2f0"), Color("#ff7b52")]
 const FACE_LABEL := {"knight":"KNIGHT","barbarian":"BARB","rogue":"ROGUE","ranger":"RANGER","mage":"MAGE","fate":"FATE ✦"}
@@ -18,6 +19,7 @@ const FACE_COLOR := {"knight":Color("#9fb6c8"),"barbarian":Color("#e0875a"),"rog
 
 var sim
 var diag
+var _bar_style: StyleBox
 var player_id := "you"
 var project: Callable          # world Vector3 -> HUD Vector2
 var on_screen: Callable        # world Vector3 -> bool
@@ -207,6 +209,10 @@ func _build_pause_panel() -> void:
 	_label(v, "SIEGE", 22, VisualTheme.GOLD, _title)
 	_label(v, "Carry your Oracle out of the enemy keep and back to your throne. First to %d rescues wins." % Sim.WIN_RESCUES, 13, Color("#d4cbbb"))
 	_button(v, "RESUME", "gold", func(): pause_panel.visible = false)
+	var fps_btn := _button(v, "30 FPS MODE: OFF", "secondary", func(): pass)
+	fps_btn.pressed.connect(func():
+		fps_toggled.emit()
+		fps_btn.text = "30 FPS MODE: " + ("ON" if Engine.max_fps == 30 else "OFF"))
 	_button(v, "LEAVE MATCH", "secondary", func(): leave_requested.emit())
 
 func show_result() -> void:
@@ -252,7 +258,8 @@ func on_event(e: Dictionary) -> void:
 			toast("Our Oracle was dragged back to her cell" if mine else "Enemy Oracle returned to our keep", Color("#d4cbbb"))
 		"class":
 			if e.id == player_id:
-				toast("You are now a %s" % sim.class_label(me), VisualTheme.GOLD)
+				var nm: String = sim.class_label(me)
+				toast("You are now %s %s" % ["an" if "AEIOU".contains(nm.left(1).to_upper()) else "a", nm], VisualTheme.GOLD)
 		"death":
 			if e.id == player_id:
 				toast("You fell!", VisualTheme.RED)
@@ -367,17 +374,26 @@ func _text(pos: Vector2, text: String, size_px: int, color: Color, font: Font = 
 	draw_string(f, pos, text, align, width, size_px, color)
 
 func _draw() -> void:
-	if sim == null:
-		return
+	var t0 := Time.get_ticks_usec()
 	if diag != null:
 		diag.mark("hud draw")
+	_draw_hud()
+	if diag != null:
+		diag.add_time("hud", Time.get_ticks_usec() - t0)
+		diag.mark("hud drawn, rendering")
+
+func _draw_hud() -> void:
+	if sim == null:
+		return
 	var me: Dictionary = sim.by_id.get(player_id, {})
 	if me.is_empty():
 		return
 	var w := size.x
 	# Scoreboard.
 	var bar := Rect2(8, 8, w - 16, 62)
-	draw_style_box(VisualTheme.panel(Color(0.035, 0.09, 0.12, 0.92), VisualTheme.GOLD_DARK, 12, 8), bar)
+	if _bar_style == null:
+		_bar_style = VisualTheme.panel(Color(0.035, 0.09, 0.12, 0.92), VisualTheme.GOLD_DARK, 12, 8)
+	draw_style_box(_bar_style, bar)
 	var t: int = me.team
 	_text(Vector2(24, 34), "YOUR SIDE", 12, TEAM_COLORS[t], _bold, HORIZONTAL_ALIGNMENT_LEFT, 120)
 	_text(Vector2(24, 60), "%d ♛" % sim.score[t], 26, VisualTheme.GOLD, _title, HORIZONTAL_ALIGNMENT_LEFT, 120)

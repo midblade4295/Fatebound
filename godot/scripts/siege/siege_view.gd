@@ -89,7 +89,8 @@ func _build_lighting() -> void:
 	env.background_color = Color("#9fb0b4")
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = Color("#c9c7b4")
-	env.ambient_light_energy = 0.34
+	env.ambient_light_color = Color("#c3c9c4")
+	env.ambient_light_energy = 0.5
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	env.tonemap_exposure = 0.84
 	env.tonemap_white = 3.0
@@ -113,11 +114,8 @@ func _build_lighting() -> void:
 	# Units get blob shadows instead (see _blob).
 	sun.shadow_enabled = false
 	add_child(sun)
-	var fill := DirectionalLight3D.new()
-	fill.light_color = Color("#9fc2ff")
-	fill.light_energy = 0.28
-	fill.rotation_degrees = Vector3(-25, 150, 0)
-	add_child(fill)
+	# Single directional light: the Compatibility renderer can add a per-object pass for each extra
+	# directional light, so the old cool fill light is folded into ambient instead.
 	camera = Camera3D.new()
 	camera.fov = 50.0
 	camera.near = 0.3
