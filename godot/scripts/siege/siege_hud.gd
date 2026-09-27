@@ -39,6 +39,7 @@ var _title: Font
 var forge_panel: PanelContainer
 var forge_dice: Array[Button] = []
 var forge_held := [false, false, false]
+var _forge_key := ""
 var forge_status: Label
 var forge_take_btn: Button
 var forge_roll_btn: Button
@@ -153,8 +154,14 @@ func _refresh_forge(me: Dictionary) -> void:
 	if not forge_panel.visible:
 		forge_panel.visible = true
 		forge_held = [false, false, false]
+		_forge_key = ""
 		_center(forge_panel)
 	var rolling: bool = f.rolling > 0.0
+	# Only rebuild the dice styling when something changed, not every frame.
+	var state_key := "%s|%s|%s|%s|%d" % [str(f.faces), str(forge_held), f.rolled, rolling, int(_time * 14.0) if rolling else 0]
+	if state_key == _forge_key:
+		return
+	_forge_key = state_key
 	for i in 3:
 		var b := forge_dice[i]
 		var face := str(f.faces[i])
@@ -164,7 +171,6 @@ func _refresh_forge(me: Dictionary) -> void:
 			b.text = FACE_LABEL[Sim.FACES[int(_time * 14.0 + i * 2) % Sim.FACES.size()]]
 		else:
 			b.text = FACE_LABEL[face] + ("\nKEPT" if forge_held[i] else "")
-		b.add_theme_color_override("font_color", FACE_COLOR.get(face, VisualTheme.TEXT) if f.rolled and not rolling else VisualTheme.TEXT)
 		VisualTheme.apply_tactile(b, "active" if forge_held[i] else "secondary", 12)
 		b.add_theme_color_override("font_color", FACE_COLOR.get(face, VisualTheme.TEXT) if f.rolled and not rolling else VisualTheme.TEXT)
 	var r := Sim.forge_result(f.faces)

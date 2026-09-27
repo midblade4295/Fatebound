@@ -22,6 +22,13 @@ const LOOKS := {
 const LOOP_HINTS := ["Idle","Running","Walking","Hammering","Holding","Aiming","_Pose","Blocking"]
 
 static var _libs: Dictionary = {}
+# Shared GPU resources: one mesh/shader per effect type instead of one per hit, so fights don't
+# churn buffers or trigger new shader compiles mid-match.
+static var _bar_shader: Shader
+static var _blob_mat: ShaderMaterial
+static var _spark_mesh: SphereMesh
+static var _rings: Dictionary = {}
+static var _blob_mesh: QuadMesh
 
 var sim
 var player_id := "you"
@@ -61,6 +68,19 @@ func setup(s) -> void:
 	_build_props()
 	for t in 2:
 		oracle_nodes.append(_make_oracle(t))
+	_warm_up()
+
+func _warm_up() -> void:
+	# Draw one of every effect/projectile type in view during the first frames, so their shader
+	# variants compile while the match is loading instead of freezing the first fight.
+	var at := Vector3(Sim.spawn(0).x, 0.5, Sim.spawn(0).y)
+	ring_at(at, GOLD, 1.0, 0.2)
+	spark(at, GOLD)
+	number(at, "0", false)
+	for kind in ["arrow", "fire"]:
+		var n := _make_projectile(kind)
+		n.position = at
+		get_tree().create_timer(0.3).timeout.connect(n.queue_free)
 
 # ---------- world ----------
 func _build_lighting() -> void:
@@ -89,10 +109,9 @@ func _build_lighting() -> void:
 	sun.light_color = Color("#ffe8c4")
 	sun.light_energy = 1.05
 	sun.rotation_degrees = Vector3(-55, -35, 0)
-	sun.shadow_enabled = true
-	sun.shadow_opacity = 0.8
-	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL
-	sun.directional_shadow_max_distance = 88.0
+	# No real-time shadows: at this zoom they doubled every triangle for little visual gain.
+	# Units get blob shadows instead (see _blob).
+	sun.shadow_enabled = false
 	add_child(sun)
 	var fill := DirectionalLight3D.new()
 	fill.light_color = Color("#9fc2ff")
@@ -131,7 +150,8 @@ func _build_terrain() -> void:
 			var p := hex_pos(col, row)
 			var ax := absf(p.x)
 			var h := 0.0
-			var key := "hex_grass:%d" % (rng.randi() % 3)
+			var band := (row + 28) / 8
+			var key := "hex_grass:%d:%d" % [rng.randi() % 3, band]
 			if ax > Sim.HALF_W + 1.5:
 				h = 0.5 + floor(rng.randf()*3.0)*0.25
 			p.y = h
@@ -139,9 +159,10 @@ func _build_terrain() -> void:
 				groups[key] = []
 			groups[key].append(Transform3D(Basis(), p))
 			if h >= 0.99:
-				if not groups.has("hex_grass_bottom:0"):
-					groups["hex_grass_bottom:0"] = []
-				groups["hex_grass_bottom:0"].append(Transform3D(Basis(), Vector3(p.x, h-1.0, p.z)))
+				var bkey := "hex_grass_bottom:0:%d" % band
+				if not groups.has(bkey):
+					groups[bkey] = []
+				groups[bkey].append(Transform3D(Basis(), Vector3(p.x, h-1.0, p.z)))
 	for key in groups:
 		var parts: PackedStringArray = key.split(":")
 		var src := _mesh_of(HEX + parts[0] + ".gltf")
@@ -153,8 +174,10 @@ func _build_terrain() -> void:
 		mm.instance_count = groups[key].size()
 		for i in mm.instance_count:
 			mm.set_instance_transform(i, groups[key][i])
+		# Row bands give each batch a tight AABB, so bands off-screen are culled.
 		var node := MultiMeshInstance3D.new()
 		node.multimesh = mm
+		node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		if parts[0].begins_with("hex_grass") and src.material is StandardMaterial3D:
 			var mat: StandardMaterial3D = (src.material as StandardMaterial3D).duplicate()
 			mat.albedo_color = GROUND_TINT * [1.0, 0.93, 1.05][int(parts[1])]
@@ -234,11 +257,15 @@ func _unshaded(color: Color, additive := true) -> StandardMaterial3D:
 	return m
 
 func _ring_mesh(radius: float, width := 0.14) -> TorusMesh:
+	var key := "%.2f:%.2f" % [radius, width]
+	if _rings.has(key):
+		return _rings[key]
 	var tm := TorusMesh.new()
 	tm.inner_radius = radius - width
 	tm.outer_radius = radius
 	tm.rings = 32
 	tm.ring_segments = 4
+	_rings[key] = tm
 	return tm
 
 func _decal(pos: Vector3, radius: float, color: Color, alpha: float) -> MeshInstance3D:
@@ -281,12 +308,24 @@ func _make_body(cls: String) -> Dictionary:
 	for key in libraries():
 		player.add_animation_library(key, _libs[key])
 	for mi in body.find_children("*", "MeshInstance3D", true, false):
-		(mi as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+		(mi as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	return {"body":body, "player":player}
 
 func _hp_bar() -> MeshInstance3D:
-	var sh := Shader.new()
-	sh.code = """
+	if _bar_shader == null:
+		_bar_shader = Shader.new()
+		_bar_shader.code = _BAR_CODE
+	var mat := ShaderMaterial.new()
+	mat.shader = _bar_shader
+	var q := QuadMesh.new()
+	q.size = Vector2(2.0, 0.26)
+	var mi := MeshInstance3D.new()
+	mi.mesh = q
+	mi.material_override = mat
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return mi
+
+const _BAR_CODE := """
 shader_type spatial;
 render_mode unshaded, cull_disabled, depth_draw_never, fog_disabled;
 uniform float fill = 1.0;
@@ -302,14 +341,30 @@ void fragment() {
 	ALPHA = 0.92;
 }
 """
-	var mat := ShaderMaterial.new()
-	mat.shader = sh
-	var q := QuadMesh.new()
-	q.size = Vector2(2.0, 0.26)
+
+func _blob() -> MeshInstance3D:
+	# Soft dark disc under a unit; one shared mesh and material for everyone.
+	if _blob_mat == null:
+		var sh := Shader.new()
+		sh.code = """
+shader_type spatial;
+render_mode unshaded, cull_disabled, depth_draw_never, fog_disabled;
+void fragment() {
+	float d = length(UV - vec2(0.5)) * 2.0;
+	ALBEDO = vec3(0.0);
+	ALPHA = (1.0 - smoothstep(0.35, 1.0, d)) * 0.42;
+}
+"""
+		_blob_mat = ShaderMaterial.new()
+		_blob_mat.shader = sh
+		_blob_mesh = QuadMesh.new()
+		_blob_mesh.size = Vector2(1.5, 1.5)
+		_blob_mesh.orientation = PlaneMesh.FACE_Y
 	var mi := MeshInstance3D.new()
-	mi.mesh = q
-	mi.material_override = mat
+	mi.mesh = _blob_mesh
+	mi.material_override = _blob_mat
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mi.position.y = 0.03
 	return mi
 
 func _ensure_actor(u: Dictionary) -> Dictionary:
@@ -331,6 +386,7 @@ func _ensure_actor(u: Dictionary) -> Dictionary:
 		ring.position.y = 0.05
 		ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		root.add_child(ring)
+		root.add_child(_blob())
 		var bar := _hp_bar()
 		bar.position.y = 2.7
 		(bar.material_override as ShaderMaterial).set_shader_parameter("tint", TEAM_COLORS[u.team] if u.id != player_id else Color("#7dff8a"))
@@ -354,19 +410,30 @@ func _ensure_actor(u: Dictionary) -> Dictionary:
 	a.busy_until = 0.0
 	_play(a, str(LOOKS.get(u.cls, LOOKS.villager).idle))
 	if u.up:
-		_glow_body(made.body)
+		_tint_body(made.body, Color(1.0, 0.72, 0.3), 0.35)
 	return a
 
-func _glow_body(body: Node3D) -> void:
-	# Upgraded classes get a warm rim of light so a triple roll is readable at a glance.
-	for mi in body.find_children("*", "MeshInstance3D", true, false):
-		var m := (mi as MeshInstance3D)
-		var over := StandardMaterial3D.new()
-		over.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		over.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-		over.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		over.albedo_color = Color(1.0, 0.75, 0.3, 0.16)
-		m.material_overlay = over
+static var _tints: Dictionary = {}
+
+func _tint_body(body: Node3D, glow: Color, energy: float) -> void:
+	# One-time material swap with a warm emission, cached per source material. Unlike an overlay
+	# this adds no extra draw pass.
+	for node in body.find_children("*", "MeshInstance3D", true, false):
+		var mi := node as MeshInstance3D
+		if mi.mesh == null:
+			continue
+		for surf in mi.mesh.get_surface_count():
+			var src := mi.get_active_material(surf)
+			if not src is StandardMaterial3D:
+				continue
+			var key := [src, glow, energy]
+			if not _tints.has(key):
+				var m: StandardMaterial3D = src.duplicate()
+				m.emission_enabled = true
+				m.emission = glow
+				m.emission_energy_multiplier = energy
+				_tints[key] = m
+			mi.set_surface_override_material(surf, _tints[key])
 
 func _play(a: Dictionary, clip: String, speed := 1.0, busy := 0.0) -> void:
 	var player: AnimationPlayer = a.player
@@ -496,13 +563,7 @@ func _make_oracle(team: int) -> Dictionary:
 			slot.queue_free()
 		root.add_child(body)
 		body.scale = Vector3.ONE * 0.95
-		for mi in body.find_children("*", "MeshInstance3D", true, false):
-			var over := StandardMaterial3D.new()
-			over.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-			over.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-			over.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-			over.albedo_color = Color(1.0, 0.8, 0.35, 0.28)
-			(mi as MeshInstance3D).material_overlay = over
+		_tint_body(body, Color(1.0, 0.8, 0.35), 0.55)
 		player.play("g/Idle_B")
 	var halo := MeshInstance3D.new()
 	halo.mesh = _ring_mesh(0.42, 0.07)
@@ -607,12 +668,14 @@ func spark(at: Vector3, color: Color) -> void:
 	if low_fx:
 		return
 	var mi := MeshInstance3D.new()
-	var sm := SphereMesh.new()
-	sm.radius = 0.09
-	sm.height = 0.18
-	sm.radial_segments = 6
-	sm.rings = 3
-	mi.mesh = sm
+	if _spark_mesh == null:
+		_spark_mesh = SphereMesh.new()
+		_spark_mesh.radius = 0.12
+		_spark_mesh.height = 0.24
+		_spark_mesh.radial_segments = 6
+		_spark_mesh.rings = 3
+	mi.mesh = _spark_mesh
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	var mat := _unshaded(color)
 	mi.material_override = mat
 	mi.position = at
