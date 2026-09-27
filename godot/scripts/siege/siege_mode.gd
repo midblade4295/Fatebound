@@ -10,6 +10,11 @@ signal exited
 
 var team_size := 6
 const RENDER_SCALE := 0.8
+# 3D is never rendered wider than this many pixels; at this zoom more is invisible but costs heat.
+const MAX_3D_WIDTH := 720.0
+const FPS_CAP := 60
+var _prev_max_fps := 0
+var fps_cap := FPS_CAP
 var low_fx := false
 var audio: Node = null
 
@@ -28,6 +33,10 @@ func _ready() -> void:
 	diag = Diag.new()
 	diag.mode = self
 	add_child(diag)
+	# Cap Siege's frame rate: uncapped on a 120 Hz phone it ran flat out and thermal-throttled
+	# within ~70 s (field log, S21 Ultra). Restored when leaving.
+	_prev_max_fps = Engine.max_fps
+	set_fps_cap(FPS_CAP)
 	viewport = SubViewport.new()
 	viewport.own_world_3d = true
 	viewport.msaa_3d = Viewport.MSAA_2X
@@ -54,6 +63,7 @@ func _ready() -> void:
 	hud.forge_roll.connect(func(held): _act("forge_roll", held))
 	hud.forge_take.connect(func(): _act("forge_take"))
 	hud.forge_leave.connect(func(): _act("forge_leave"))
+	hud.fps_toggled.connect(func(): set_fps_cap(30 if fps_cap == 60 else 60))
 	hud.action_pressed.connect(_on_action)
 	hud.project = func(world: Vector3) -> Vector2: return _to_hud(view.screen_point(world))
 	hud.on_screen = func(world: Vector3) -> bool: return view.is_on_screen(world)
@@ -85,7 +95,11 @@ func _resize_viewport() -> void:
 	# 3D renders at 80% of physical pixels (the HUD stays full resolution); fill rate is the main
 	# GPU cost on phones and the difference is hard to see at this camera distance.
 	var scale := get_global_transform_with_canvas().get_scale() * RENDER_SCALE
-	viewport.size = Vector2i(maxi(64, int(size.x * scale.x)), maxi(64, int(size.y * scale.y)))
+	var k := minf(1.0, MAX_3D_WIDTH / maxf(1.0, size.x * scale.x))
+	viewport.size = Vector2i(maxi(64, int(size.x * scale.x * k)), maxi(64, int(size.y * scale.y * k)))
+	if diag != null:
+		diag.write("3D RES %dx%d (screen %dx%d logical, refresh %.0f Hz, fps cap %d)" % [viewport.size.x, viewport.size.y,
+			int(size.x), int(size.y), DisplayServer.screen_get_refresh_rate(), fps_cap])
 
 func _to_hud(p: Vector2) -> Vector2:
 	var vs := Vector2(viewport.size)
@@ -107,6 +121,7 @@ func _process(delta: float) -> void:
 	if sim == null:
 		return
 	diag.mark("input")
+	var t_start := Time.get_ticks_usec()
 	if not hud.pause_panel.visible or sim.ended:
 		sim.set_move(hud.player_id, hud.move_vector())
 		if hud.attack_held():
@@ -126,10 +141,20 @@ func _process(delta: float) -> void:
 	diag.mark("view.sync")
 	view.sync(delta)
 	diag.mark("process done")
+	diag.add_time("game", Time.get_ticks_usec() - t_start)
 	if sim.ended and not _result_shown:
 		_result_shown = true
 		diag.write("MATCH END winner=%d reason=%s score=%s" % [sim.winner, sim.end_reason, str(sim.score)])
 		hud.show_result()
+
+func set_fps_cap(v: int) -> void:
+	fps_cap = v
+	Engine.max_fps = v
+	if diag != null:
+		diag.write("FPS CAP %d" % v)
+
+func _exit_tree() -> void:
+	Engine.max_fps = _prev_max_fps
 
 func request_leave() -> void:
 	# Android back button: open the pause panel rather than quitting a match outright.
