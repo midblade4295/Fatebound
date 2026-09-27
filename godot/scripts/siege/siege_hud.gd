@@ -17,6 +17,7 @@ const FACE_LABEL := {"knight":"KNIGHT","barbarian":"BARB","rogue":"ROGUE","range
 const FACE_COLOR := {"knight":Color("#9fb6c8"),"barbarian":Color("#e0875a"),"rogue":Color("#8fd18a"),"ranger":Color("#d9c36a"),"mage":Color("#b28cff"),"fate":Color("#ffd46a")}
 
 var sim
+var diag
 var player_id := "you"
 var project: Callable          # world Vector3 -> HUD Vector2
 var on_screen: Callable        # world Vector3 -> bool
@@ -368,6 +369,8 @@ func _text(pos: Vector2, text: String, size_px: int, color: Color, font: Font = 
 func _draw() -> void:
 	if sim == null:
 		return
+	if diag != null:
+		diag.mark("hud draw")
 	var me: Dictionary = sim.by_id.get(player_id, {})
 	if me.is_empty():
 		return
@@ -397,6 +400,8 @@ func _draw() -> void:
 		c.a = clampf(2.6 - age, 0.0, 1.0)
 		_text(Vector2(w * 0.5, 176), _toast, 18, c, _bold)
 	_draw_oracle_marker(me)
+	if diag != null and diag.fps_text != "":
+		_text(Vector2(w - 212, 142), diag.fps_text, 11, Color(1, 1, 1, 0.6), _font, HORIZONTAL_ALIGNMENT_RIGHT, 200)
 	if me.state == "dead":
 		_text(Vector2(w * 0.5, size.y * 0.45), "RESPAWNING IN %d" % int(ceil(me.respawn_at - sim.time)), 22, VisualTheme.GOLD, _title)
 		return

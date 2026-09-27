@@ -3,6 +3,7 @@ const C=preload("res://scripts/game/content.gd")
 const Raid=preload("res://scripts/game/raid.gd")
 const Factory=preload("res://scripts/game/hero_factory.gd")
 const VisualTheme=preload("res://scripts/ui/visual_theme.gd")
+const SiegeDiag=preload("res://scripts/siege/siege_diag.gd")
 const Glyph=preload("res://scripts/ui/glyph.gd")
 var app
 var result_claimed:=false
@@ -100,6 +101,10 @@ func home()->void:
     var siege_card:=card(body,"SIEGE · ALPHA","Real-time capture the Oracle. Roll at the forge for your class, fight your way into the enemy keep and carry your Oracle home. Offline vs bots.")
     var siege_btn:=button(siege_card,"PLAY SIEGE",app.start_siege,not app.trainer.active,"siege")
     VisualTheme.apply_tactile(siege_btn,"primary",14)
+    if SiegeDiag.has_logs():
+        button(siege_card,"COPY SIEGE DIAGNOSTICS",func():
+            DisplayServer.clipboard_set(SiegeDiag.read_logs())
+            app.flash_message("Diagnostics copied. Paste them to Claude."),true,"siege_diag")
     var academy:=card(body,"HERO ACADEMY","Learn by playing: Focus, ALL-IN, lanes, crowns, spells, stored attacks and upgrades.")
     button(academy,"REPLAY TRAINING" if d.get("tutorialBattle",{}).get("done",false) else "CONTINUE BATTLE TRAINING",app.begin_training,not app.trainer.active,"training")
     var daily:=card(body,"DAILY QUESTS · %d / 3 COMPLETE"%(d.daily.done as Array).size())
