@@ -8,6 +8,7 @@ const Hud = preload("res://scripts/siege/siege_hud.gd")
 signal exited
 
 var team_size := 6
+const RENDER_SCALE := 0.8
 var low_fx := false
 var audio: Node = null
 
@@ -25,6 +26,8 @@ func _ready() -> void:
 	viewport = SubViewport.new()
 	viewport.own_world_3d = true
 	viewport.msaa_3d = Viewport.MSAA_2X
+	# The imports already generate LODs; a higher threshold lets small, distant heroes use them.
+	viewport.mesh_lod_threshold = 4.0
 	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	viewport.handle_input_locally = false
 	viewport.gui_disable_input = true
@@ -34,6 +37,7 @@ func _ready() -> void:
 	tex.texture = viewport.get_texture()
 	tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	tex.stretch_mode = TextureRect.STRETCH_SCALE
+	tex.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	tex.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(tex)
@@ -72,7 +76,9 @@ func _restart() -> void:
 
 func _resize_viewport() -> void:
 	# Render at physical pixel density so the 3D stays crisp under canvas_items stretching.
-	var scale := get_global_transform_with_canvas().get_scale()
+	# 3D renders at 80% of physical pixels (the HUD stays full resolution); fill rate is the main
+	# GPU cost on phones and the difference is hard to see at this camera distance.
+	var scale := get_global_transform_with_canvas().get_scale() * RENDER_SCALE
 	viewport.size = Vector2i(maxi(64, int(size.x * scale.x)), maxi(64, int(size.y * scale.y)))
 
 func _to_hud(p: Vector2) -> Vector2:
