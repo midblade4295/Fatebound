@@ -271,22 +271,27 @@ func _show_battle()->void:
     apply_settings()
     roll_button.button_down.connect(_start_hold_roll)
     detail_label=_label("",11,Color("#abddd0"),true);detail_label.custom_minimum_size.y=16;page.add_child(detail_label);page.move_child(detail_label,3)
+    detail_label.add_theme_color_override("font_outline_color",Color(0,0,0,0.85));detail_label.add_theme_constant_override("outline_size",4)
     if api.is_local() and api.local_kind=="raid":
         tower_title.text="RAID · "+str(api.local_engine.boss.name)
         tower_title.disabled=true
         if is_instance_valid(score_ours):score_ours.get_parent().modulate.a=0.0;score_theirs.get_parent().modulate.a=0.0
-        all_in.get_parent().visible=false
+        all_in.visible=false;ult_button.visible=false
         mult_select.visible=false;rally_button.visible=false
         for b in spell_buttons:b.visible=false
         var row=spell_buttons[0].get_parent()
         raid_parry_button=action_button(row,"PARRY · WAIT FOR WIND-UP",func():_do_action("parry"),false,"parry")
         var ult=action_button(row,"ULTIMATE",func():_do_action("ultimate"),true,"raid_ultimate")
         ult_button=ult
-        var exit=action_button(page,"END RAID ATTEMPT",_confirm_leave_raid,true,"raid_exit")
-        exit.custom_minimum_size.y=36
+        var exit=action_button(tower_title.get_parent(),"END",_confirm_leave_raid,true,"raid_exit")
+        exit.custom_minimum_size=Vector2(64,38);exit.size_flags_horizontal=Control.SIZE_FILL
     if api.is_local():
-        chests_button=action_button(page,"CHESTS & STORED ATTACKS",_battle_inventory,true,"battle_inventory")
-        chests_button.custom_minimum_size.y=34
+        # Chests live in the top strip so the bottom deck stays compact over the battlefield.
+        var strip:=tower_title.get_parent()
+        chests_button=action_button(strip,"CHESTS",_battle_inventory,true,"battle_inventory")
+        chests_button.custom_minimum_size=Vector2(84,38);chests_button.size_flags_horizontal=Control.SIZE_FILL
+        chests_button.add_theme_font_size_override("font_size",13)
+        strip.move_child(chests_button,1)
     mult_select.item_selected.connect(func(_i):
         if trainer.active and mult_select.get_selected_id()==2:trainer.notify("mult")
     )
@@ -385,7 +390,7 @@ func _roll()->void:
     dice.start_roll();audio.play("roll")
     await _do_action("roll",{"mult":mult_select.get_selected_id(),"allIn":all_in.button_pressed,"qte":qte})
     if not trainer.active and api.local_engine!=null:api.local_engine.forced_faces=[]
-    if screen=="battle" and is_instance_valid(all_in):all_in.set_pressed_no_signal(false);all_in.text="ALL-IN OFF"
+    if screen=="battle" and is_instance_valid(all_in):all_in.set_pressed_no_signal(false);all_in.text="ALL-IN"
 func _critical_sequence()->float:
     _stop_auto_roll()
     qte_busy=true;qte_hits=0;qte_epoch=epoch
