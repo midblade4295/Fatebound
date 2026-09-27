@@ -24,11 +24,8 @@ const LOOP_HINTS := ["Idle","Running","Walking","Hammering","Holding","Aiming","
 static var _libs: Dictionary = {}
 # Shared GPU resources: one mesh/shader per effect type instead of one per hit, so fights don't
 # churn buffers or trigger new shader compiles mid-match.
-static var _bar_shader: Shader
-static var _blob_mat: ShaderMaterial
 static var _spark_mesh: SphereMesh
 static var _rings: Dictionary = {}
-static var _blob_mesh: QuadMesh
 
 var sim
 var player_id := "you"
@@ -92,7 +89,9 @@ func _build_lighting() -> void:
 	env.ambient_light_color = Color("#c3c9c4")
 	env.ambient_light_energy = 0.5
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	env.tonemap_exposure = 0.84
+	# Vulkan/Mobile lights in linear space and reads darker than Compatibility; compensate.
+	var vk := RenderingServer.get_current_rendering_method() != "gl_compatibility"
+	env.tonemap_exposure = 0.84 * (1.35 if vk else 1.0)
 	env.tonemap_white = 3.0
 	env.fog_enabled = true
 	env.fog_light_color = Color("#8ea3ad")
@@ -111,7 +110,7 @@ func _build_lighting() -> void:
 	sun.light_energy = 1.05
 	sun.rotation_degrees = Vector3(-55, -35, 0)
 	# No real-time shadows: at this zoom they doubled every triangle for little visual gain.
-	# Units get blob shadows instead (see _blob).
+	# Units are marked by team rings; HP bars are drawn on the 2D HUD.
 	sun.shadow_enabled = false
 	add_child(sun)
 	# Single directional light: the Compatibility renderer can add a per-object pass for each extra
@@ -309,62 +308,6 @@ func _make_body(cls: String) -> Dictionary:
 		(mi as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	return {"body":body, "player":player}
 
-func _hp_bar() -> MeshInstance3D:
-	if _bar_shader == null:
-		_bar_shader = Shader.new()
-		_bar_shader.code = _BAR_CODE
-	var mat := ShaderMaterial.new()
-	mat.shader = _bar_shader
-	var q := QuadMesh.new()
-	q.size = Vector2(2.0, 0.26)
-	var mi := MeshInstance3D.new()
-	mi.mesh = q
-	mi.material_override = mat
-	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	return mi
-
-const _BAR_CODE := """
-shader_type spatial;
-render_mode unshaded, cull_disabled, depth_draw_never, fog_disabled;
-uniform float fill = 1.0;
-uniform vec4 tint : source_color = vec4(0.4, 0.9, 1.0, 1.0);
-void vertex() {
-	MODELVIEW_MATRIX = VIEW_MATRIX * mat4(INV_VIEW_MATRIX[0], INV_VIEW_MATRIX[1], INV_VIEW_MATRIX[2], MODEL_MATRIX[3]);
-}
-void fragment() {
-	vec2 uv = UV;
-	float border = step(uv.x, 0.03) + step(0.97, uv.x) + step(uv.y, 0.12) + step(0.88, uv.y);
-	vec3 col = uv.x < fill ? tint.rgb : vec3(0.08, 0.09, 0.1);
-	ALBEDO = mix(col, vec3(0.02), clamp(border, 0.0, 1.0));
-	ALPHA = 0.92;
-}
-"""
-
-func _blob() -> MeshInstance3D:
-	# Soft dark disc under a unit; one shared mesh and material for everyone.
-	if _blob_mat == null:
-		var sh := Shader.new()
-		sh.code = """
-shader_type spatial;
-render_mode unshaded, cull_disabled, depth_draw_never, fog_disabled;
-void fragment() {
-	float d = length(UV - vec2(0.5)) * 2.0;
-	ALBEDO = vec3(0.0);
-	ALPHA = (1.0 - smoothstep(0.35, 1.0, d)) * 0.42;
-}
-"""
-		_blob_mat = ShaderMaterial.new()
-		_blob_mat.shader = sh
-		_blob_mesh = QuadMesh.new()
-		_blob_mesh.size = Vector2(1.5, 1.5)
-		_blob_mesh.orientation = PlaneMesh.FACE_Y
-	var mi := MeshInstance3D.new()
-	mi.mesh = _blob_mesh
-	mi.material_override = _blob_mat
-	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	mi.position.y = 0.03
-	return mi
-
 func _ensure_actor(u: Dictionary) -> Dictionary:
 	var a: Dictionary = actors.get(u.id, {})
 	var look_key := "%s:%s" % [u.cls, u.up]
@@ -384,12 +327,9 @@ func _ensure_actor(u: Dictionary) -> Dictionary:
 		ring.position.y = 0.05
 		ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		root.add_child(ring)
-		root.add_child(_blob())
-		var bar := _hp_bar()
-		bar.position.y = 2.7
-		(bar.material_override as ShaderMaterial).set_shader_parameter("tint", TEAM_COLORS[u.team] if u.id != player_id else Color("#7dff8a"))
-		root.add_child(bar)
-		a = {"root":root, "bar":bar, "ring":ring, "body":null, "player":null, "clip":"", "busy_until":0.0, "dead":false, "last":root.position}
+		# HP bars are drawn by the 2D HUD (as in the dice battle); no blob-shadow shader quads.
+		a = {"root":root, "ring":ring, "body":null, "player":null, "clip":"", "busy_until":0.0, "dead":false, "last":root.position,
+			"team":u.team}
 		actors[u.id] = a
 	else:
 		root = a.root
@@ -407,31 +347,12 @@ func _ensure_actor(u: Dictionary) -> Dictionary:
 	a.clip = ""
 	a.busy_until = 0.0
 	_play(a, str(LOOKS.get(u.cls, LOOKS.villager).idle))
-	if u.up:
-		_tint_body(made.body, Color(1.0, 0.72, 0.3), 0.35)
+	# Upgraded: bigger body + gold ring (no material overrides on skinned meshes).
+	var rc: Color = GOLD if (u.up or u.id == player_id) else TEAM_COLORS[u.team]
+	rc.a = 0.9
+	(a.ring as MeshInstance3D).material_override = _fx_mat(rc)
+	(a.ring as MeshInstance3D).mesh = _ring_mesh(0.75 if u.up else (0.62 if u.id == player_id else 0.5), 0.14 if u.up else 0.12)
 	return a
-
-static var _tints: Dictionary = {}
-
-func _tint_body(body: Node3D, glow: Color, energy: float) -> void:
-	# One-time material swap with a warm emission, cached per source material. Unlike an overlay
-	# this adds no extra draw pass.
-	for node in body.find_children("*", "MeshInstance3D", true, false):
-		var mi := node as MeshInstance3D
-		if mi.mesh == null:
-			continue
-		for surf in mi.mesh.get_surface_count():
-			var src := mi.get_active_material(surf)
-			if not src is StandardMaterial3D:
-				continue
-			var key := [src, glow, energy]
-			if not _tints.has(key):
-				var m: StandardMaterial3D = src.duplicate()
-				m.emission_enabled = true
-				m.emission = glow
-				m.emission_energy_multiplier = energy
-				_tints[key] = m
-			mi.set_surface_override_material(surf, _tints[key])
 
 func _play(a: Dictionary, clip: String, speed := 1.0, busy := 0.0) -> void:
 	var player: AnimationPlayer = a.player
@@ -466,13 +387,6 @@ func sync(dt: float) -> void:
 			root.position = before.lerp(target, 1.0 - exp(-dt * 22.0))
 		var vel := (root.position - before).length() / maxf(dt, 0.001)
 		root.rotation.y = lerp_angle(root.rotation.y, float(u.face), 1.0 - exp(-dt * 18.0))
-		var bar: MeshInstance3D = a.bar
-		bar.visible = u.state != "dead"
-		# Only touch the bar's material when HP actually changed (each write re-uploads its buffer).
-		var fill := snappedf(clampf(u.hp / maxf(1.0, u.max_hp), 0.0, 1.0), 0.01)
-		if fill != float(a.get("fill", -1.0)):
-			a.fill = fill
-			(bar.material_override as ShaderMaterial).set_shader_parameter("fill", fill)
 		(a.ring as MeshInstance3D).visible = u.state != "dead"
 		_animate(a, u, vel)
 	for id in actors.keys():
@@ -565,7 +479,6 @@ func _make_oracle(team: int) -> Dictionary:
 			slot.queue_free()
 		root.add_child(body)
 		body.scale = Vector3.ONE * 0.95
-		_tint_body(body, Color(1.0, 0.8, 0.35), 0.55)
 		player.play("g/Idle_B")
 	var halo := MeshInstance3D.new()
 	halo.mesh = _ring_mesh(0.42, 0.07)
@@ -573,22 +486,9 @@ func _make_oracle(team: int) -> Dictionary:
 	halo.position.y = 2.55
 	halo.rotation.x = 0.25
 	root.add_child(halo)
-	# A tall beam marks a loose or captive Oracle from across the field.
-	var beam := MeshInstance3D.new()
-	var cyl := CylinderMesh.new()
-	cyl.top_radius = 0.35
-	cyl.bottom_radius = 0.55
-	cyl.height = 14.0
-	beam.mesh = cyl
-	var bc: Color = TEAM_COLORS[team]
-	bc.a = 0.16
-	beam.material_override = _unshaded(bc)
-	beam.position.y = 7.0
-	beam.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	root.add_child(beam)
 	var ground_ring := _decal(Vector3.ZERO, 1.0, TEAM_COLORS[team], 0.8)
 	ground_ring.reparent(root, false)
-	return {"root":root, "body":body, "player":player, "halo":halo, "beam":beam, "ground":ground_ring, "state":""}
+	return {"root":root, "body":body, "player":player, "halo":halo, "ground":ground_ring, "state":""}
 
 func _sync_oracles(dt: float) -> void:
 	for t in 2:
@@ -602,12 +502,10 @@ func _sync_oracles(dt: float) -> void:
 			if not a.is_empty():
 				target = a.root.position + Vector3(0, 1.75, 0)
 				root.rotation.y = a.root.rotation.y
-			(n.beam as Node3D).visible = false
 			(n.ground as Node3D).visible = false
 			if n.state != "carried" and n.player != null:
 				(n.player as AnimationPlayer).play("t/Holding_B" if (n.player as AnimationPlayer).has_animation("t/Holding_B") else "g/Idle_B")
 		else:
-			(n.beam as Node3D).visible = true
 			(n.ground as Node3D).visible = true
 			target.y = 0.0
 			var pulse := 0.8 + sin(_time * 4.0) * 0.2
@@ -743,6 +641,19 @@ func _update_camera(dt: float) -> void:
 	_cam_target = target if _cam_target == Vector3.ZERO else _cam_target.lerp(target, 1.0 - exp(-dt * 6.0))
 	camera.position = _cam_target + Vector3(0, 38.0, -ahead * 30.0)
 	camera.look_at(_cam_target, Vector3.UP)
+
+func bars() -> Array:
+	# [{pos, fill, color}] for the HUD to draw 2D health bars over living units.
+	var out := []
+	for u in sim.units:
+		if u.state == "dead":
+			continue
+		var a: Dictionary = actors.get(u.id, {})
+		if a.is_empty() or not is_instance_valid(a.root):
+			continue
+		var c: Color = Color("#7dff8a") if u.id == player_id else TEAM_COLORS[u.team]
+		out.append({"pos": (a.root as Node3D).position + Vector3(0, 2.7, 0), "fill": clampf(u.hp / maxf(1.0, u.max_hp), 0.0, 1.0), "color": c})
+	return out
 
 func screen_point(world: Vector3) -> Vector2:
 	return camera.unproject_position(world)

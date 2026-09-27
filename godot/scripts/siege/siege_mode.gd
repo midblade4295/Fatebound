@@ -47,9 +47,9 @@ func _ready() -> void:
 	viewport = SubViewport.new()
 	viewport.own_world_3d = true
 	viewport.msaa_3d = Viewport.MSAA_2X
-	# The imports already generate LODs; a higher threshold lets small, distant heroes use them.
-	viewport.mesh_lod_threshold = 4.0
-	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	# Same 3D viewport settings as the dice battle (battlefield.gd), which runs full matches on the
+	# phone that crashes in Siege: default mesh LOD threshold, update when visible.
+	viewport.render_target_update_mode = SubViewport.UPDATE_WHEN_VISIBLE
 	viewport.handle_input_locally = false
 	viewport.gui_disable_input = true
 	viewport.size = Vector2i(64, 64)
@@ -75,6 +75,7 @@ func _ready() -> void:
 	hud.project = func(world: Vector3) -> Vector2: return _to_hud(view.screen_point(world))
 	hud.on_screen = func(world: Vector3) -> bool: return view.is_on_screen(world)
 	hud.numbers_source = func() -> Array: return view.numbers if view != null else []
+	hud.bars_source = func() -> Array: return view.bars() if view != null else []
 	hud.numbers_clock = func() -> float: return view._time if view != null else 0.0
 	resized.connect(_resize_viewport)
 	_start()
