@@ -90,6 +90,18 @@ one player read another player's receipts.
 
 ## Build and validation
 
+### Installable visual preview
+
+The `Android Visual Preview` export produces a debug-signed ARM64 APK with the
+separate package `com.fatebound.visualpreview`. It installs alongside the
+production app and the older `com.fatebound.godotpreview` client, leaving their
+private saves and online guest identities untouched. This preview starts with a
+fresh local profile. CI uses a temporary signing key, so subsequent preview
+artifacts cannot be installed as updates over this one; uninstall this visual
+preview before installing another independently signed build. Do not uninstall
+the older preview or production app to try it. This APK is for direct testing,
+not Play publication.
+
 Engine: the existing Godot 4.7.2 migration toolchain with matching templates.
 Android preview package `com.fatebound.godotpreview`, code3, name0.3.0-full-game,
 minimum24/target36. Use the existing dedicated debug key; never replace it or use
