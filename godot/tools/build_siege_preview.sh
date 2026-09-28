@@ -24,6 +24,10 @@ OUT="${1:-$HERE/build/Fatebound-Siege-${ver}.apk}"
 
 [ -f "$KEYSTORE" ] || { echo "Preview keystore not found: $KEYSTORE (set KEYSTORE=...)" >&2; exit 2; }
 "$GODOT" --version >/dev/null 2>&1 || { echo "Set GODOT=/path/to/Godot_v4.7.2-stable_linux.x86_64" >&2; exit 2; }
+grep -qx 'renderer/rendering_method="mobile"' project.godot \
+  || { echo 'ERROR: project.godot must set renderer/rendering_method="mobile"' >&2; exit 1; }
+grep -qx 'rendering_device/fallback_to_opengl3=false' project.godot \
+  || { echo 'ERROR: project.godot must disable the OpenGL fallback' >&2; exit 1; }
 
 find_tool() {  # zipalign / apksigner: PATH first, then the newest Android build-tools
   if command -v "$1" >/dev/null 2>&1; then command -v "$1"; return; fi
@@ -55,7 +59,73 @@ rm -f "$OUT.idsig"
 "$APKSIGNER" verify "$OUT"
 
 # The Siege build must ship on Vulkan (Kevin's decision; the OpenGL build froze on his S21 Ultra).
-unzip -p "$OUT" assets/project.binary | strings | grep -A1 'rendering_method.mobile' | tail -1 | grep -q gl_compat \
-  && { echo "ERROR: APK renders with gl_compatibility; project.godot must keep rendering_method.mobile=\"mobile\"" >&2; exit 1; }
+# Decode Godot's binary project settings instead of relying on binutils `strings`, which is absent
+# on the deployment VM. Malformed or missing settings fail closed.
+python3 - "$OUT" <<'PY'
+import struct
+import sys
+import zipfile
+
+with zipfile.ZipFile(sys.argv[1]) as apk:
+    packed = apk.read("assets/project.binary")
+
+def u32(data, offset):
+    if offset + 4 > len(data):
+        raise ValueError("truncated uint32")
+    return struct.unpack_from("<I", data, offset)[0]
+
+if packed[:4] != b"ECFG" or len(packed) < 8:
+    raise SystemExit("ERROR: malformed assets/project.binary header")
+
+props = {}
+offset = 8  # ECFG magic + binary format version
+try:
+    while offset < len(packed):
+        key_len = u32(packed, offset)
+        offset += 4
+        key_end = offset + key_len
+        if key_end > len(packed):
+            raise ValueError("truncated key")
+        key = packed[offset:key_end].decode("utf-8")
+        offset = key_end
+        value_len = u32(packed, offset)
+        offset += 4
+        value_end = offset + value_len
+        if value_end > len(packed) or key in props:
+            raise ValueError("truncated value or duplicate key")
+        props[key] = packed[offset:value_end]
+        offset = value_end
+except (UnicodeDecodeError, ValueError) as exc:
+    raise SystemExit(f"ERROR: malformed assets/project.binary: {exc}") from exc
+
+def string_setting(key):
+    value = props.get(key, b"")
+    if len(value) < 8 or u32(value, 0) != 4:  # Godot Variant::STRING
+        raise ValueError(f"{key} is missing or is not a String")
+    size = u32(value, 4)
+    padded = (size + 3) & ~3
+    if len(value) != 8 + padded or any(value[8 + size:]):
+        raise ValueError(f"{key} has malformed String data")
+    return value[8:8 + size].decode("utf-8")
+
+def bool_setting(key):
+    value = props.get(key, b"")
+    if len(value) != 8 or u32(value, 0) != 1:  # Godot Variant::BOOL
+        raise ValueError(f"{key} is missing or is not a bool")
+    raw = u32(value, 4)
+    if raw not in (0, 1):
+        raise ValueError(f"{key} has malformed bool data")
+    return bool(raw)
+
+try:
+    renderer = string_setting("rendering/renderer/rendering_method")
+    fallback = bool_setting("rendering/rendering_device/fallback_to_opengl3")
+except (UnicodeDecodeError, ValueError) as exc:
+    raise SystemExit(f"ERROR: APK renderer settings could not be verified: {exc}") from exc
+if renderer != "mobile" or fallback:
+    print(f"ERROR: APK renderer is {renderer!r}; expected Vulkan mobile", file=sys.stderr)
+    raise SystemExit(1)
+print("Verified APK renderer: Vulkan mobile, OpenGL fallback disabled")
+PY
 echo "OK  $OUT  ($(du -h "$OUT" | cut -f1), Vulkan, signed with $KS_ALIAS)"
 sha256sum "$OUT"

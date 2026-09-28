@@ -48,23 +48,15 @@ jobs:
           echo "GODOT=/tmp/fatebound-godot/Godot_v4.7.2-stable_linux.x86_64" >> "$GITHUB_ENV"
           mkdir -p "$HOME/.config/godot"
           printf '[gd_resource type="EditorSettings" format=3]\n\n[resource]\nexport/android/java_sdk_path="%s"\nexport/android/android_sdk_path="%s"\n' "$JAVA_HOME" "$ANDROID_HOME" > "$HOME/.config/godot/editor_settings-4.7.tres"
-      - name: Export APK
+      - name: Build, verify, and sign with a throwaway preview key
         run: |
           set -euo pipefail
-          mkdir -p godot/build
-          "$GODOT" --headless --editor --path godot --import
-          "$GODOT" --headless --path godot --export-debug "Android KayKit Rebuild" "$PWD/godot/build/unsigned.apk"
-      - name: Align and sign with a throwaway preview key
-        run: |
-          set -euo pipefail
-          BT="$ANDROID_HOME/build-tools/36.0.0"
           keytool -genkeypair -keyalg RSA -keysize 2048 -validity 9999 -alias fbpreview \
             -keypass fbpreview -storepass fbpreview -dname "CN=Fatebound 3D Preview (CI debug), O=Fatebound" \
             -keystore "$RUNNER_TEMP/preview.jks" -noprompt
-          "$BT/zipalign" -f -p 4 godot/build/unsigned.apk godot/build/aligned.apk
-          "$BT/apksigner" sign --ks "$RUNNER_TEMP/preview.jks" --ks-key-alias fbpreview \
-            --ks-pass pass:fbpreview --key-pass pass:fbpreview \
-            --out godot/build/Fatebound-3D-Preview-arm64.apk godot/build/aligned.apk
+          GODOT="$GODOT" KEYSTORE="$RUNNER_TEMP/preview.jks" KS_ALIAS=fbpreview \
+            KS_PASS=fbpreview godot/tools/build_siege_preview.sh \
+            "$PWD/godot/build/Fatebound-3D-Preview-arm64.apk"
       - name: Verify package and signature
         run: |
           set -euo pipefail

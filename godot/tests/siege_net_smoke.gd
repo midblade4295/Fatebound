@@ -13,10 +13,15 @@ var pid := -1
 var mode
 var raw: WebSocketPeer
 var raw_unit := ""
+var raw_hello_sent := false
 var frames := 0
 var t := 0.0
 var phase := "boot"
 var start_pos := Vector2.ZERO
+var move_goal := Vector2.ZERO
+var move_start_goal_distance := 0.0
+var move_touch_pos := Vector2.ZERO
+var saw_authoritative_move := false
 var events_seen := 0
 var snaps_raw := 0
 var fails: Array = []
@@ -76,29 +81,48 @@ func _process(delta: float) -> bool:
 				check(me_id.begins_with("b"), "first player seated on blue (%s)" % me_id)
 				check(not mode.sim.by_id[me_id].bot, "our unit is human-controlled on the mirror")
 				check(mode.sim.time > 0.3, "snapshots advance match time (%.2f s)" % mode.sim.time)
-				start_pos = mode.sim.by_id[me_id].pos
 				raw = WebSocketPeer.new()
 				raw.connect_to_url("ws://127.0.0.1:%d/fatebound/siege/ws" % port)
 				phase = "raw"; t = 0.0
 			elif t > 8.0:
 				check(false, "client joined within 8 s (state=%s)" % mode.net_state); _finish()
 		"raw":
-			if raw.get_ready_state() == WebSocketPeer.STATE_OPEN and t > 0.2 and raw_unit == "" and t < 0.5:
+			if raw.get_ready_state() == WebSocketPeer.STATE_OPEN and not raw_hello_sent:
 				raw.put_packet(Net.encode({"t":"hello", "v":Net.VERSION, "name":"TestB"}))
+				raw_hello_sent = true
 			if raw_unit != "" and snaps_raw >= 3:
 				check(raw_unit.begins_with("r"), "second player seated on red (%s)" % raw_unit)
-				# Hold the stick toward the enemy (north on screen) for ~2 s.
+				# Pick the farther courtyard station, then steer the real touch stick over the
+				# mirror's navigation path. A fixed direction is seed-dependent here: the spawn
+				# is randomized and walls/resources can sit directly in front of it.
+				var me: Dictionary = mode.sim.by_id[mode.hud.player_id]
+				start_pos = me.get("net_to", me.pos)
+				var forge_pos: Vector2 = Sim.forge(me.team)
+				var workshop_pos: Vector2 = Sim.workshop(me.team)
+				move_goal = forge_pos if start_pos.distance_to(forge_pos) > start_pos.distance_to(workshop_pos) else workshop_pos
+				move_start_goal_distance = start_pos.distance_to(move_goal)
 				touch(0, Vector2(100, 600), true)
 				phase = "move"; t = 0.0
 			elif t > 6.0:
 				check(false, "raw client welcomed (unit=%s snaps=%d)" % [raw_unit, snaps_raw]); _finish()
 		"move":
-			drag(0, Vector2(100, 520), Vector2(0, -80))
-			if t > 2.0:
-				touch(0, Vector2(100, 520), false)
-				var me: Dictionary = mode.sim.by_id[mode.hud.player_id]
-				var moved: float = me.pos.distance_to(start_pos)
-				check(moved > 3.0, "our unit moved from touch input through the server (%.1f m)" % moved)
+			var me: Dictionary = mode.sim.by_id[mode.hud.player_id]
+			var authoritative_pos: Vector2 = me.get("net_to", me.pos)
+			saw_authoritative_move = saw_authoritative_move or me.state == "move"
+			var path: PackedVector2Array = mode.sim.find_path(me.team, authoritative_pos, move_goal)
+			var target: Vector2 = path[mini(1, path.size() - 1)] if path.size() > 0 else move_goal
+			var move_dir: Vector2 = (target - authoritative_pos).normalized()
+			move_touch_pos = Vector2(100, 600) + move_dir * 60.0
+			drag(0, move_touch_pos, move_dir * 60.0)
+			var progress: float = move_start_goal_distance - authoritative_pos.distance_to(move_goal)
+			# Snapshots arrive at 10 Hz on the wall clock. Under a loaded test runner the 2 s
+			# check could land on an older mirror snapshot even though the server was moving.
+			# Finish as soon as the authoritative snapshot shows enough movement, with a
+			# bounded timeout so a real input/transport failure still fails quickly.
+			if (progress > 3.0 and saw_authoritative_move) or t > 8.0:
+				touch(0, move_touch_pos, false)
+				check(progress > 3.0 and saw_authoritative_move,
+					"our unit moved from touch input through the server (%.1f m toward goal)" % progress)
 				# Walk to the forge via the protocol and open it + roll.
 				phase = "forge"; t = 0.0
 		"forge":
