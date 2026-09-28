@@ -71,11 +71,15 @@ func _ready() -> void:
 	hud.forge_take.connect(func(): _act("forge_take"))
 	hud.forge_leave.connect(func(): _act("forge_leave"))
 	hud.fps_toggled.connect(func(): set_fps_cap(30 if fps_cap == 60 else 60))
+	hud.workshop_tools.connect(func(): _act("take_tools"))
+	hud.workshop_buy.connect(func(id): _act("buy", id))
+	hud.workshop_leave.connect(func(): _act("workshop_leave"))
 	hud.action_pressed.connect(_on_action)
 	hud.project = func(world: Vector3) -> Vector2: return _to_hud(view.screen_point(world))
 	hud.on_screen = func(world: Vector3) -> bool: return view.is_on_screen(world)
 	hud.numbers_source = func() -> Array: return view.numbers if view != null else []
 	hud.bars_source = func() -> Array: return view.bars() if view != null else []
+	hud.gate_bars_source = func() -> Array: return view.gate_bars() if view != null else []
 	hud.numbers_clock = func() -> float: return view._time if view != null else 0.0
 	resized.connect(_resize_viewport)
 	_start()
