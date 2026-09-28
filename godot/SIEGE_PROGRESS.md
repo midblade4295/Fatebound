@@ -194,7 +194,7 @@ version, everything will be the siege now."
 |---|---|---|
 | E1 | New economy + profile (scripts/meta): currencies, levels, Siege Pass, challenges, shop catalog/rotation, match rewards, one-time migration from the old save (old file untouched) | done |
 | E2 | Siege uses the profile: rewards breakdown, challenge progress, equipped cosmetics shown in battle | done |
-| E3 | New app shell + screens: Home (3D hero showcase, PLAY offline/online), Pass, Shop, Locker, Settings | todo |
+| E3 | New app shell + screens: Home (3D hero showcase, PLAY offline/online), Pass, Shop, Locker, Settings | done |
 | E4 | Remove the old dice-era app (pages, full_client, battle/raid/training/guild/arena code, old tests) | todo |
 | E5 | UI fidelity: new theme, icons, transitions; screenshots | todo |
 | E6 | Tests, APK | todo |
@@ -230,3 +230,18 @@ Design (all cosmetic; no pay-to-win; no real-money purchases until Play Billing 
 - Results panel: itemised lines (+gold/+pass), totals, level-ups, pass tier reached, challenge
   progress; fixed rows overflowing the screen (label helper forces 290 px min width).
 - Test runner now also runs meta_economy_test (13 suites).
+
+## E3 notes
+- scenes/Main.tscn now runs scripts/app/siege_app.gd (the dice-era full_client is no longer the
+  entry; its code is removed in E4).
+- scripts/app: ui.gd (palette, tactile buttons, cards, bars), icon.gd (procedural icons),
+  showcase.gd (3D hero on a stone dais, physical-pixel SubViewport, transforms only per frame),
+  screens.gd (Home, Pass, Shop, Locker, Settings), siege_app.gd (chrome, tabs, toasts, confirm
+  dialogs, match launch, back button, safe-area top inset).
+- Found while testing: overlay labels created before their parent had a width wrapped one
+  letter per line (title drawn mid-card); the name box limit applied before trimming spaces.
+- tests/app_flow_test.gd (21 checks, real time): buy with gold and with gems (confirm), equip,
+  pass claim/premium/claim-all, challenge claim + reroll, rename, offline match -> rewards ->
+  home, unreachable online server -> home, back button, persistence. PASS.
+- Settings links PRIVACY_URL https://136-113-125-3.sslip.io/fatebound/privacy.html (unverified
+  from here).
