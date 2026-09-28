@@ -105,6 +105,10 @@ func _process(d: float) -> bool:
 			press("mode_bots")
 			press("play")
 			check(app.siege != null and not app.chrome.visible, "PLAY starts an offline match with the menu hidden")
+			# The home hero owns a 4x-MSAA physical-resolution 3D viewport plus particles; it must not
+			# keep rendering behind the match (the menu's looping PLAY tweens should pause too).
+			check(not app.hero_layer.is_visible_in_tree() and app.hero_layer.process_mode == Node.PROCESS_MODE_DISABLED, "home hero (3D viewport + motes) is off during a match")
+			check(app.chrome.process_mode == Node.PROCESS_MODE_DISABLED, "menu (and its looping PLAY tweens) paused during a match")
 			wait_until = t + 1.5
 		6:
 			var s = app.siege.sim
@@ -120,6 +124,7 @@ func _process(d: float) -> bool:
 			wait_until = t + 0.5
 		8:
 			check(app.siege == null and app.chrome.visible and app.tab == "home", "HOME from results returns to the menu")
+			check(app.hero_layer.is_visible_in_tree() and app.hero_layer.process_mode != Node.PROCESS_MODE_DISABLED and app.chrome.process_mode != Node.PROCESS_MODE_DISABLED, "hero and menu resume after the match")
 			press("mode_online")
 			press("play")
 			check(app.siege != null and app.siege.online, "online PLAY starts an online session")
