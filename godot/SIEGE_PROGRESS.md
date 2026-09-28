@@ -144,3 +144,22 @@ Each step is committed separately; this file is updated in the same commit.
 - 6-match smoke: 0 clips, 10 rescues (was 2), 49 gate breaks, 56 feedings; 1 match won 3-2 on
   rescues, the rest went to time. Bots rarely raise ladders at 16v16; the smoke test now reports
   catapults/ladders instead of asserting them, and asserts at least one rescue.
+
+# Round 4 (Kevin, 2026-09-28): online multiplayer on his server ("ssh")
+| Step | Scope | Status |
+|---|---|---|
+| N1 | Protocol (scripts/siege/siege_net.gd), headless authoritative server (server/siege_server.gd), online client in siege_mode | done |
+| N2 | Home "PLAY ONLINE", Vulkan screenshot of an online match | todo |
+| N3 | Deploy kit for 136.113.125.3 (systemd, Caddy fragment, install script), docs, APK | todo |
+
+## N1 notes
+- Server = the real SiegeSim, headless Godot, WebSocket on 127.0.0.1:8082 (8080 web/saves,
+  8081 old arena, 3000 Legionary are taken). Bots fill every slot; a joining player takes a bot
+  on the team with fewer humans; a leaver's unit goes back to a bot. New match 15 s after one
+  ends; stops simulating after 30 s with nobody connected.
+- Client = mirror SiegeSim (same map from setup) overwritten by 10 Hz snapshots, positions
+  interpolated between snapshots; inputs at 20 Hz + actions immediately. View/HUD unchanged.
+- Snapshot: unit values as int16 (1 cm, 0.001 rad), zstd. 32 clients: 845 B/snapshot,
+  8.3 KB/s per phone, 267 KB/s server upload, 9.9 % of one core, 118 MB RSS.
+- tests/siege_net_smoke.gd (REAL time, no --fixed-fps): server process + game client + raw
+  client: seating, snapshots, touch movement, forge through the server, leave -> bot. PASS.
