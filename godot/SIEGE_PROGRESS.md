@@ -111,7 +111,7 @@ Each step is committed separately; this file is updated in the same commit.
 | Step | Scope | Status |
 |---|---|---|
 | A | Field 26x58 -> 52x104; castles keep their layout (castle-local coords via Sim._c), gain side walls; nav grid built by stamping bboxes; resources spread over the land; 16 per team | done (cake trees moved to B) |
-| B | Oracle: cake -> size stages (1..6 lifters needed); multi-player lift; captors carry a dropped Oracle back (no instant recapture); tantrum knockback+stun when left on the ground; healing aura for her team while captive | todo |
+| B | Oracle: cake -> size stages (1..6 lifters needed); multi-player lift; captors carry a dropped Oracle back (no instant recapture); tantrum knockback+stun when left on the ground; healing aura for her team while captive | done |
 | C | Tests, perf (32 units), APK | todo |
 
 ## Step A notes
@@ -121,3 +121,14 @@ Each step is committed separately; this file is updated in the same commit.
   Repairs now pause while a gate was hit in the last 3 s; role mix 7 raid/3 escort/3 defend/3 work.
 - After that: 23 gate breaks, 37 pickups, but 0 rescues in 2 matches (carriers die on the ~90 m
   run). To be tuned after step B's mechanics (captor carry-back, tantrum, healing aura).
+
+## Step B notes
+- 6 cake trees (3 mirrored pairs) replace the courtyard altars; a cake every 40 s; 2 cakes per
+  size stage; stages 0..5 need 1..6 lifters. Rescue resets her; drops/returns keep her size.
+- Lift: first lifter leads (a human who joins takes the lead); followers ride a ring around the
+  lead and are wall-resolved after placement (344 clips before that fix). Too few hands -> she
+  won't move. Captors lift a dropped Oracle and carry her back to their cell.
+- Dropped: tantrum after 6 s (then every 6 s): 4 m knockback + 1.6 s stun within 5 m; back to
+  her cell after 25 s. Captive: heals her own team within 3.2 m at 12 hp/s.
+- 2-match smoke: 0 clips; fed 37 (max size reached), lift groups up to 4, 6 carry-backs,
+  1 tantrum, 2 rescues (both while skinny). Verified by Vulkan screenshots.

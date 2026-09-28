@@ -17,7 +17,7 @@ const UNIT_R := 0.45
 const WIN_RESCUES := 3
 const MATCH_TIME := 720.0
 const RESPAWN_TIME := 5.0
-const DROP_RETURN := 12.0
+const DROP_RETURN := 25.0        # a dropped Oracle nobody moves goes back to her cell
 const FORGE_RADIUS := 2.6
 const WORKSHOP_RADIUS := 2.8
 const PICKUP_RADIUS := 1.5
@@ -55,6 +55,17 @@ const LEDGE_R := 0.35
 # ---- fate offerings (the "cake") ----
 const ALTAR_P := Vector2(-3.5, 17.0)   # blue courtyard; mirrored for red
 const OFFERING_EVERY := 30.0
+const CAKE_EVERY := 40.0            # a cake tree ripens a cake every 40 s
+const CAKE_PER_STAGE := 2           # two cakes fatten her one size stage
+const LIFTERS := [1, 2, 3, 4, 5, 6] # players needed to lift her at each stage (skinny .. fully fattened)
+const LIFT_RING := 1.15             # followers hold her from a ring around the lead lifter
+const TANTRUM_AFTER := 6.0          # left on the ground this long -> tantrum
+const TANTRUM_EVERY := 6.0
+const TANTRUM_R := 5.0
+const TANTRUM_PUSH := 4.0
+const TANTRUM_STUN := 1.6
+const HEAL_R := 3.2                 # captive Oracle heals her own team standing next to her
+const HEAL_RATE := 12.0             # hp per second
 const MAX_WEIGHT := 5
 const WEIGHT_SLOW := 0.08            # carrier speed -8 % per weight level
 const FEED_RADIUS := 1.9
@@ -130,7 +141,7 @@ var gates: Array = []          # {id, team, a, b, c, hp, max_hp, broken, open}
 var nodes: Array = []          # resource nodes {id, kind:"wood"/"stone", p, r, amount, max, regen, t}
 var stock := [{"wood":0, "stone":0}, {"wood":0, "stone":0}]
 var levels := [{"gates":0, "armory":0, "forge":0, "catapult":0}, {"gates":0, "armory":0, "forge":0, "catapult":0}]
-var altars: Array = []         # {team, p, ready, t}
+var cake_trees: Array = []     # {id, p, ready, t}  neutral, across the land
 var catapults: Array = []      # {team, p, t, side}
 var shells: Array = []         # catapult stones in flight {id, team, from, to, t, flight}
 var ladders: Array = []        # {id, team (owner), wall (index), p, hp, cells}
@@ -257,6 +268,14 @@ func _build_map() -> void:
 		for rp in [Vector2(-6.0, 25.0), Vector2(8.0, 11.0), Vector2(-16.0, 30.0)]:
 			obstacles.append({"p":_m(t, rp), "r":1.2, "kind":"rock"})
 	obstacles.append({"p":Vector2(0, 0), "r":1.8, "kind":"ruin"})
+	# Cake trees across the land (point-mirrored pairs); any team can pick a cake. The trunk is
+	# solid; the cake is picked from beside it.
+	cake_trees = []
+	for cp in [Vector2(-17.0, 20.0), Vector2(6.5, 7.0), Vector2(-24.0, 0.0)]:
+		for t in 2:
+			var ctp := _m(t, cp)
+			cake_trees.append({"id":cake_trees.size(), "p":ctp, "ready":true, "t":0.0})
+			obstacles.append({"p":ctp, "r":0.6, "kind":"cake_tree"})
 	for s in [-1.0, 1.0]:
 		walls.append({"a":Vector2(s * HILL_X, -HILL_Z), "b":Vector2(s * HILL_X, HILL_Z), "r":LEDGE_R, "team":-1, "kind":"ledge"})
 		walls.append({"a":Vector2(-HILL_X, s * HILL_Z), "b":Vector2(-HILL_STAIR_X, s * HILL_Z), "r":LEDGE_R, "team":-1, "kind":"ledge"})
@@ -424,7 +443,7 @@ func setup(team_size: int, seed_value: int, player_team := 0) -> void:
 	_build_buckets()
 	_build_nav()
 	oracles = [_new_oracle(0), _new_oracle(1)]
-	altars = [{"team":0, "p":altar(0), "ready":true, "t":0.0}, {"team":1, "p":altar(1), "ready":true, "t":0.0}]
+
 	for t in 2:
 		for cx in [-CATAPULT_X, CATAPULT_X]:
 			catapults.append({"team":t, "p":_c(t, Vector2(cx, FRONT_Z + 0.3)), "t":rng.randf() * CATAPULT_EVERY})
@@ -441,12 +460,21 @@ func setup(team_size: int, seed_value: int, player_team := 0) -> void:
 			by_id[id] = u
 			_respawn(u, true)
 
-func _new_oracle(team: int, weight := 0) -> Dictionary:
-	return {"team":team,"state":"cell","pos":cell(team),"carrier":"","dropped_at":0.0,"weight":weight}
+func _new_oracle(team: int, cakes := 0) -> Dictionary:
+	return {"team":team, "state":"cell", "pos":cell(team), "carrier":"", "lifters":[], "carry_team":-1,
+		"dropped_at":0.0, "tantrum_at":0.0, "cakes":cakes, "weight":mini(MAX_WEIGHT, cakes / CAKE_PER_STAGE)}
 
 func _return_to_cell(t: int) -> void:
-	# Recaptured / timed-out Oracles go back to the cell but keep the weight they were fed.
-	oracles[t] = _new_oracle(t, int(oracles[t].get("weight", 0)))
+	# Returned / timed-out Oracles go back to the cell but keep everything they were fed.
+	for id in oracles[t].lifters:
+		var lu: Dictionary = by_id.get(id, {})
+		if not lu.is_empty():
+			lu.carrying = false
+			lu.lifting = -1
+	oracles[t] = _new_oracle(t, int(oracles[t].get("cakes", 0)))
+
+func lifters_needed(o: Dictionary) -> int:
+	return int(LIFTERS[clampi(int(o.weight), 0, LIFTERS.size() - 1)])
 
 func _new_unit(id: String, team: int, bot: bool, role: String) -> Dictionary:
 	return {"id":id,"team":team,"bot":bot,"role":role,"cls":"villager","up":false,"hp":60.0,"max_hp":60.0,
@@ -455,7 +483,7 @@ func _new_unit(id: String, team: int, bot: bool, role: String) -> Dictionary:
 		"dodge_dir":Vector2.ZERO,"target":"","forge":{"open":false,"faces":["fate","fate","fate"],"held":[false,false,false],
 		"rolling":0.0,"rolled":false},"ai_goal":Vector2.ZERO,"lunge_hit":false,
 		"unstick":0.0,"unstick_dir":Vector2.ZERO,"stuck_t":0.0,"last_pos":Vector2.ZERO,
-		"load":{"kind":"", "n":0}, "task":{}, "workshop_open":false, "gathered":0, "repaired":0.0, "gate_dmg":0.0, "offering":false, "fed":0,
+		"lifting":-1, "load":{"kind":"", "n":0}, "task":{}, "workshop_open":false, "gathered":0, "repaired":0.0, "gate_dmg":0.0, "offering":false, "fed":0,
 		"path":PackedVector2Array(), "path_i":0, "path_goal":Vector2(INF, INF), "path_at":-10.0, "path_ver":-1}
 
 func armory_mult(team: int) -> float:
@@ -486,6 +514,7 @@ func _respawn(u: Dictionary, first := false) -> void:
 	u.t = 0.0
 	u.stun = 0.0
 	u.carrying = false
+	u.lifting = -1
 	u.forge.open = false
 	u.workshop_open = false
 	u.task = {}
@@ -540,8 +569,32 @@ func nearest_enemy(u: Dictionary, max_d: float, prefer_front := false) -> Dictio
 	return best
 
 func oracle_carrier(team: int) -> Dictionary:
+	# Lead lifter of this team's Oracle while her OWN team is carrying her home.
 	var o: Dictionary = oracles[team]
-	return by_id.get(o.carrier, {}) if o.state == "carried" else {}
+	return by_id.get(o.carrier, {}) if o.state == "carried" and int(o.carry_team) == team else {}
+
+func oracle_returner(team: int) -> Dictionary:
+	# Lead lifter while the CAPTORS are carrying her back to their dungeon.
+	var o: Dictionary = oracles[team]
+	return by_id.get(o.carrier, {}) if o.state == "carried" and int(o.carry_team) != team else {}
+
+func lifting_oracle(u: Dictionary) -> Dictionary:
+	return oracles[int(u.lifting)] if int(u.get("lifting", -1)) >= 0 else {}
+
+func _liftable(u: Dictionary) -> Dictionary:
+	# The Oracle this unit could start lifting or join right now, if any.
+	if u.carrying or u.offering or u.load.n > 0:
+		return {}
+	for o in oracles:
+		if u.pos.distance_to(o.pos) > PICKUP_RADIUS + (LIFT_RING if o.state == "carried" else 0.0):
+			continue
+		if o.state == "cell" and int(o.team) == u.team:
+			return o                                   # rescue her from the enemy dungeon
+		if o.state == "dropped":
+			return o                                   # either side may pick her up
+		if o.state == "carried" and int(o.carry_team) == u.team and o.lifters.size() < LIFTERS[LIFTERS.size() - 1]:
+			return o                                   # join the lift
+	return {}
 
 # ---------- input (from HUD or bot brain) ----------
 func act(id: String, action: String, arg: Variant = null) -> bool:
@@ -637,18 +690,14 @@ func _interact(u: Dictionary) -> bool:
 	if u.stun > 0.0 or not u.state in ["idle","move"]:
 		return false
 	if u.carrying:
-		_release_oracle(u, true)
+		var ho := lifting_oracle(u)
+		_leave_lift(u, not ho.is_empty() and ho.lifters.size() == 1 and lifters_needed(ho) == 1)
 		return true
 	if _offering_action(u) != "":
 		return _do_offering(u)
-	var mine: Dictionary = oracles[u.team]
-	if not u.offering and mine.state in ["cell","dropped"] and u.pos.distance_to(mine.pos) <= PICKUP_RADIUS:
-		mine.state = "carried"
-		mine.carrier = u.id
-		u.carrying = true
-		u.forge.open = false
-		u.task = {}
-		_event("pickup", {"id":u.id,"team":u.team})
+	var lo := _liftable(u)
+	if not lo.is_empty():
+		_join_lift(u, lo)
 		return true
 	if u.cls == "worker" and not ladder_spot(u).is_empty() and u.load.n == 0:
 		u.task = {"kind":"build_ladder", "t":LADDER_BUILD}
@@ -729,34 +778,43 @@ func _damage_ladder(src: Dictionary, l: Dictionary, amount: float) -> void:
 		nav_version += 1
 		_event("ladder_down", {"ladder":l.id, "team":l.team, "pos":l.p, "by":src.get("id","")})
 
+func near_cake(u: Dictionary) -> Dictionary:
+	for ct in cake_trees:
+		if ct.ready and u.pos.distance_to(ct.p) <= 1.9:
+			return ct
+	return {}
+
 func _offering_action(u: Dictionary) -> String:
 	if u.carrying:
 		return ""
 	if u.offering:
 		var captive: Dictionary = oracles[1 - u.team]
-		if captive.state == "cell" and u.pos.distance_to(captive.pos) <= FEED_RADIUS and int(captive.weight) < MAX_WEIGHT:
+		if captive.state == "cell" and u.pos.distance_to(captive.pos) <= FEED_RADIUS and int(captive.cakes) < MAX_WEIGHT * CAKE_PER_STAGE:
 			return "feed"
 		return ""
-	var al: Dictionary = altars[u.team]
-	if al.ready and u.load.n == 0 and u.pos.distance_to(al.p) <= 1.8:
-		return "offer"
+	if u.load.n == 0 and not near_cake(u).is_empty():
+		return "cake"
 	return ""
 
 func _do_offering(u: Dictionary) -> bool:
 	match _offering_action(u):
-		"offer":
-			altars[u.team].ready = false
-			altars[u.team].t = 0.0
+		"cake":
+			var ct := near_cake(u)
+			ct.ready = false
+			ct.t = 0.0
 			u.offering = true
 			u.task = {}
-			_event("offering_taken", {"id":u.id, "team":u.team})
+			_event("offering_taken", {"id":u.id, "team":u.team, "tree":ct.id})
 			return true
 		"feed":
 			var captive: Dictionary = oracles[1 - u.team]
-			captive.weight = int(captive.weight) + 1
+			var before: int = captive.weight
+			captive.cakes = int(captive.cakes) + 1
+			captive.weight = mini(MAX_WEIGHT, int(captive.cakes) / CAKE_PER_STAGE)
 			u.offering = false
 			u.fed += 1
-			_event("fed", {"id":u.id, "team":1 - u.team, "weight":int(captive.weight)})
+			_event("fed", {"id":u.id, "team":1 - u.team, "weight":int(captive.weight), "cakes":int(captive.cakes),
+				"stage_up":int(captive.weight) > before, "need":lifters_needed(captive)})
 			return true
 	return false
 
@@ -765,13 +823,14 @@ func context_action(u: Dictionary) -> String:
 	if not alive(u):
 		return ""
 	if u.carrying:
-		return "throw"
+		var ho := lifting_oracle(u)
+		return "throw" if (not ho.is_empty() and ho.lifters.size() == 1 and lifters_needed(ho) == 1) else "letgo"
 	var off := _offering_action(u)
 	if off != "":
 		return off
-	var mine: Dictionary = oracles[u.team]
-	if mine.state in ["cell","dropped"] and u.pos.distance_to(mine.pos) <= PICKUP_RADIUS:
-		return "grab"
+	var lo := _liftable(u)
+	if not lo.is_empty():
+		return "join" if lo.state == "carried" else "grab"
 	if u.cls == "worker":
 		if not u.task.is_empty():
 			return str(u.task.kind)
@@ -913,7 +972,7 @@ func _damage(src: Dictionary, dst: Dictionary, amount: float, stun := 0.0) -> vo
 
 func _kill(src: Dictionary, dst: Dictionary) -> void:
 	if dst.carrying:
-		_release_oracle(dst, false)
+		_leave_lift(dst, false)
 	dst.hp = 0.0
 	dst.state = "dead"
 	dst.forge.open = false
@@ -942,14 +1001,53 @@ func _damage_gate(src: Dictionary, g: Dictionary, amount: float) -> void:
 		_update_gate_nav()
 		_event("gate_broken", {"gate":g.id, "team":g.team, "by":src.get("id","")})
 
-func _release_oracle(u: Dictionary, thrown: bool) -> void:
-	var o: Dictionary = oracles[u.team]
+func _join_lift(u: Dictionary, o: Dictionary) -> void:
+	var t: int = o.team
+	if o.state != "carried":
+		o.state = "carried"
+		o.carry_team = u.team
+		o.lifters = []
+		_event("pickup", {"id":u.id, "team":t, "carry_team":u.team})
+	# A human who joins takes the lead so the player steers the group.
+	if not u.bot:
+		o.lifters.push_front(u.id)
+	else:
+		o.lifters.append(u.id)
+	o.carrier = o.lifters[0]
+	u.carrying = true
+	u.lifting = t
+	u.forge.open = false
+	u.workshop_open = false
+	u.task = {}
+	_event("lift_join", {"id":u.id, "team":t, "n":o.lifters.size(), "need":lifters_needed(o)})
+
+func _leave_lift(u: Dictionary, thrown: bool) -> void:
+	var o := lifting_oracle(u)
 	u.carrying = false
+	u.lifting = -1
+	if o.is_empty():
+		return
+	o.lifters.erase(u.id)
+	if not o.lifters.is_empty():
+		o.carrier = o.lifters[0]
+		_event("lift_leave", {"id":u.id, "team":o.team, "n":o.lifters.size(), "need":lifters_needed(o)})
+		return
+	_drop_oracle(o, u, thrown)
+
+func _drop_oracle(o: Dictionary, u: Dictionary, thrown: bool) -> void:
+	for id in o.lifters:
+		var lu: Dictionary = by_id.get(id, {})
+		if not lu.is_empty():
+			lu.carrying = false
+			lu.lifting = -1
 	o.state = "dropped"
 	o.carrier = ""
+	o.lifters = []
+	o.carry_team = -1
 	o.dropped_at = time
-	var p: Vector2 = u.pos
-	if thrown:
+	o.tantrum_at = time
+	var p: Vector2 = o.pos if u.is_empty() else u.pos
+	if thrown and not u.is_empty():
 		var to: Vector2 = u.pos + dir_of(u.face) * 4.5
 		# Don't throw her through a wall: stop at the last clear point.
 		p = u.pos
@@ -958,9 +1056,8 @@ func _release_oracle(u: Dictionary, thrown: bool) -> void:
 			if _blocked_point(q, u.team, 0.4):
 				break
 			p = q
-	o.pos = _clamp_to_field(_push_out(p, 0.6, u.team))
-	_event("drop", {"team":u.team,"thrown":thrown,"id":u.id})
-
+	o.pos = _clamp_to_field(_push_out(p, 0.6, int(o.team)))
+	_event("drop", {"team":o.team, "thrown":thrown, "id":u.get("id", "")})
 func _melee(u: Dictionary, reach: float, arc: float, dmg: float, stun := 0.0) -> int:
 	var fwd := dir_of(u.face)
 	var hits := 0
@@ -1120,7 +1217,15 @@ func _step_unit(u: Dictionary, dt: float) -> void:
 		return
 	var mult := float(CLASSES[u.cls].carry) if u.carrying else 1.0
 	if u.carrying:
-		mult *= 1.0 - WEIGHT_SLOW * float(oracles[u.team].get("weight", 0))
+		var ho := lifting_oracle(u)
+		if ho.is_empty() or ho.carrier != u.id:
+			# Followers hold her from the ring; _step_oracles places them. No steering of their own.
+			u.state = "lift"
+			return
+		mult *= 1.0 - WEIGHT_SLOW * float(ho.weight)
+		# Not enough hands: she won't budge.
+		if ho.lifters.size() < lifters_needed(ho):
+			mult = 0.0
 	if u.offering:
 		mult = minf(mult, 0.9)
 	if not ladders.is_empty() and ladder_climb(u):
@@ -1319,31 +1424,72 @@ func _step_oracles(dt: float) -> void:
 		var o: Dictionary = oracles[t]
 		match o.state:
 			"carried":
-				var c: Dictionary = by_id.get(o.carrier, {})
-				if c.is_empty() or not alive(c):
-					o.state = "dropped"
-					o.dropped_at = time
+				# Drop lifters who died or let go; promote the next one if the lead is gone.
+				var keep := []
+				for id in o.lifters:
+					var lu: Dictionary = by_id.get(id, {})
+					if not lu.is_empty() and alive(lu) and lu.carrying and int(lu.lifting) == t:
+						keep.append(id)
+				o.lifters = keep
+				if o.lifters.is_empty():
+					_drop_oracle(o, {}, false)
 					continue
-				o.pos = c.pos
-				if c.pos.distance_to(throne(t)) <= THRONE_RADIUS:
-					score[t] += 1
-					c.rescues += 1
-					c.carrying = false
-					oracles[t] = _new_oracle(t)
-					_event("rescue", {"team":t,"id":c.id})
-					if score[t] >= WIN_RESCUES:
-						_finish("rescue")
-			"dropped":
-				# Captors touching a loose Oracle drag her straight back to the cell.
-				for u in units:
-					if u.team != t and alive(u) and u.pos.distance_to(o.pos) <= PICKUP_RADIUS:
-						_return_to_cell(t)
-						_event("recaptured", {"team":t,"id":u.id})
-						break
-				if oracles[t].state == "dropped" and time - float(o.dropped_at) >= DROP_RETURN:
+				o.carrier = o.lifters[0]
+				var lead: Dictionary = by_id[o.carrier]
+				o.pos = lead.pos
+				# Followers hold her from a ring around the lead lifter.
+				for i in range(1, o.lifters.size()):
+					var f: Dictionary = by_id[o.lifters[i]]
+					var ang: float = lead.face + TAU * float(i) / float(o.lifters.size())
+					# Placed after the collision pass, so resolve walls here (the ring can overlap
+					# cell bars, ledges and doorways).
+					f.pos = _clamp_to_field(_push_out(_clamp_to_field(lead.pos + dir_of(ang) * LIFT_RING), UNIT_R, f.team))
+					f.face = lead.face
+				if int(o.carry_team) == t:
+					if lead.pos.distance_to(throne(t)) <= THRONE_RADIUS:
+						score[t] += 1
+						for id in o.lifters:
+							var ru: Dictionary = by_id[id]
+							ru.rescues += 1
+							ru.carrying = false
+							ru.lifting = -1
+						_event("rescue", {"team":t, "id":lead.id, "n":o.lifters.size()})
+						oracles[t] = _new_oracle(t)       # a rescue resets her weight
+						if score[t] >= WIN_RESCUES:
+							_finish("rescue")
+				elif lead.pos.distance_to(cell(t)) <= THRONE_RADIUS:
+					_event("recaptured", {"team":t, "id":lead.id})
 					_return_to_cell(t)
-					_event("recaptured", {"team":t,"id":""})
-
+			"dropped":
+				if time - float(o.dropped_at) >= DROP_RETURN:
+					_return_to_cell(t)
+					_event("recaptured", {"team":t, "id":""})
+					continue
+				# Left on the ground too long: she throws a tantrum that knocks back and stuns
+				# everyone nearby, which gives her own team a window to reach her.
+				if time - float(o.dropped_at) >= TANTRUM_AFTER and time - float(o.tantrum_at) >= TANTRUM_EVERY:
+					o.tantrum_at = time
+					var hit := 0
+					for u in units:
+						if not alive(u):
+							continue
+						var off: Vector2 = u.pos - o.pos
+						var d := off.length()
+						if d > TANTRUM_R:
+							continue
+						var dir := off / d if d > 0.05 else dir_of(rng.randf() * TAU)
+						u.pos += dir * TANTRUM_PUSH * (1.0 - 0.5 * d / TANTRUM_R)
+						u.stun = maxf(u.stun, TANTRUM_STUN)
+						u.task = {}
+						if u.state in ["wind", "recover"]:
+							u.state = "idle"
+						hit += 1
+					_event("tantrum", {"team":t, "pos":o.pos, "hit":hit})
+			"cell":
+				# Sanctuary: her own team heals while standing next to her in the enemy dungeon.
+				for u in units:
+					if u.team == t and alive(u) and u.hp < u.max_hp and u.pos.distance_to(o.pos) <= HEAL_R:
+						u.hp = minf(u.max_hp, u.hp + HEAL_RATE * dt)
 func _step_world(dt: float) -> void:
 	# Gates swing open for allies nearby (visual state), resource nodes regrow.
 	for g in gates:
@@ -1388,12 +1534,12 @@ func _step_world(dt: float) -> void:
 				_damage({"team":int(sh.team), "id":"catapult"}, u, CATAPULT_DMG)
 		_event("catapult_hit", {"team":int(sh.team), "pos":sh.to, "shell":sh.id})
 		shells.remove_at(i)
-	for al in altars:
-		if not al.ready:
-			al.t += dt
-			if al.t >= OFFERING_EVERY:
-				al.ready = true
-				_event("offering_ready", {"team":al.team})
+	for ct in cake_trees:
+		if not ct.ready:
+			ct.t += dt
+			if ct.t >= CAKE_EVERY:
+				ct.ready = true
+				_event("cake_ready", {"tree":ct.id})
 	for n in nodes:
 		if n.amount < n.max:
 			n.t += dt
@@ -1636,20 +1782,38 @@ func _think_fighter(u: Dictionary) -> void:
 	var mine: Dictionary = oracles[u.team]
 	var theirs: Dictionary = oracles[1 - u.team]
 	if u.carrying:
-		_nav_to(u, throne(u.team), 0.3)
+		var ho := lifting_oracle(u)
+		if ho.is_empty() or ho.carrier != u.id:
+			u.move = Vector2.ZERO          # followers just hold on
+			return
+		var dest: Vector2 = throne(u.team) if int(ho.team) == u.team else cell(int(ho.team))
+		if ho.lifters.size() < lifters_needed(ho):
+			u.move = Vector2.ZERO          # too heavy: wait for more hands
+		else:
+			_nav_to(u, dest, 0.3)
 		return
 	var goal: Vector2 = u.pos
-	var enemy_carrier := oracle_carrier(1 - u.team)
-	var ally_carrier := oracle_carrier(u.team)
+	var enemy_carrier := oracle_carrier(1 - u.team)    # enemies carrying their Oracle home: stop them
+	var ally_carrier := oracle_carrier(u.team)         # we're carrying ours home
+	var our_returner := oracle_returner(u.team)        # enemies hauling OUR Oracle back to their cell
 	var alarm: Dictionary = _gate_alarm[u.team]
-	if not enemy_carrier.is_empty() and (u.role == "defend" or u.pos.distance_to(enemy_carrier.pos) < 14.0):
+	var short_hands: bool = not ally_carrier.is_empty() and mine.lifters.size() < lifters_needed(mine)
+	var captive_loose: bool = theirs.state == "dropped" or (theirs.state == "carried" and int(theirs.carry_team) == u.team and theirs.lifters.size() < lifters_needed(theirs))
+	var cake_runner: bool = u.role == "defend" and absi(u.id.hash()) % 2 == 0
+	if not enemy_carrier.is_empty() and (u.role == "defend" or u.pos.distance_to(enemy_carrier.pos) < 16.0):
 		goal = enemy_carrier.pos
+	elif not our_returner.is_empty() and (u.role in ["raid", "escort"] or u.pos.distance_to(our_returner.pos) < 16.0):
+		goal = our_returner.pos
+	elif short_hands and u.role in ["raid", "escort"] and u.pos.distance_to(mine.pos) < 40.0:
+		goal = mine.pos
+	elif captive_loose and u.role in ["defend", "escort"] and u.pos.distance_to(theirs.pos) < 30.0:
+		goal = theirs.pos
 	elif u.role == "defend" and time - float(alarm.at) < 4.0 and alarm.gate >= 0:
 		goal = gates[int(alarm.gate)].c + _inward(u.team) * 2.4
-	elif mine.state in ["cell","dropped"] and u.role in ["raid","escort","gather"]:
+	elif mine.state in ["cell", "dropped"] and u.role in ["raid", "escort", "gather"]:
 		goal = mine.pos
 	elif not ally_carrier.is_empty():
-		goal = ally_carrier.pos + dir_of(u.face) * 1.5
+		goal = ally_carrier.pos + dir_of(u.face) * 2.0
 	elif u.role == "defend":
 		goal = theirs.pos + _inward(u.team) * -2.0
 	else:
@@ -1658,8 +1822,9 @@ func _think_fighter(u: Dictionary) -> void:
 	if c.ranged:
 		aggro = maxf(aggro, float(c.range) * (0.6 if u.role == "raid" else 0.95))
 	var foe := nearest_enemy(u, aggro)
-	if not enemy_carrier.is_empty() and u.pos.distance_to(enemy_carrier.pos) < aggro + 3.0:
-		foe = enemy_carrier
+	for carrier in [enemy_carrier, our_returner]:
+		if not carrier.is_empty() and u.pos.distance_to(carrier.pos) < aggro + 3.0:
+			foe = carrier
 	if not foe.is_empty() and _blocked_line(u.pos, foe.pos, u.team):
 		foe = {}   # can't reach through a wall; keep pathing instead
 	if u.hp < u.max_hp * 0.3 and not foe.is_empty() and u.cd_dodge <= 0.0 and rng.randf() < 0.25:
@@ -1672,28 +1837,41 @@ func _think_fighter(u: Dictionary) -> void:
 		else:
 			_fight(u, foe)
 			return
-	# Defenders run offerings from the altar to the captive in our dungeon.
-	if u.role == "defend" or u.offering:
-		var captive: Dictionary = oracles[1 - u.team]
-		if u.offering:
-			if captive.state == "cell" and int(captive.weight) < MAX_WEIGHT:
-				if u.pos.distance_to(captive.pos) <= FEED_RADIUS - 0.3:
-					u.move = Vector2.ZERO
-					_do_offering(u)
-				else:
-					_nav_to(u, captive.pos, FEED_RADIUS - 0.5)
-				return
-		elif altars[u.team].ready and captive.state == "cell" and int(captive.weight) < MAX_WEIGHT and time - float(alarm.at) > 6.0 and enemy_carrier.is_empty():
-			if u.pos.distance_to(altars[u.team].p) <= 1.5:
+	# Cake runs: some defenders fetch cake from the nearest ripe tree and feed the captive.
+	var captive: Dictionary = theirs
+	if u.offering:
+		if captive.state == "cell" and int(captive.cakes) < MAX_WEIGHT * CAKE_PER_STAGE:
+			if u.pos.distance_to(captive.pos) <= FEED_RADIUS - 0.3:
 				u.move = Vector2.ZERO
 				_do_offering(u)
 			else:
-				_nav_to(u, altars[u.team].p, 1.2)
+				_nav_to(u, captive.pos, FEED_RADIUS - 0.5)
 			return
-	# Pick up the Oracle when standing on her.
-	if mine.state in ["cell","dropped"] and u.pos.distance_to(mine.pos) <= PICKUP_RADIUS:
-		_interact(u)
-		return
+	elif cake_runner and captive.state == "cell" and int(captive.cakes) < MAX_WEIGHT * CAKE_PER_STAGE \
+			and time - float(alarm.at) > 6.0 and enemy_carrier.is_empty():
+		var tree := {}
+		var td := INF
+		for ct in cake_trees:
+			var d: float = u.pos.distance_to(ct.p)
+			if ct.ready and d < td and d < 45.0:
+				td = d
+				tree = ct
+		if not tree.is_empty():
+			if td <= 1.5:
+				u.move = Vector2.ZERO
+				_do_offering(u)
+			else:
+				_nav_to(u, tree.p, 1.2)
+			return
+	# Lift: start or join a lift when standing at an Oracle we should be moving.
+	var lo := _liftable(u)
+	if not lo.is_empty():
+		var ours: bool = int(lo.team) == u.team
+		var wanted: bool = lo.state != "carried" or lo.lifters.size() < lifters_needed(lo)
+		if wanted and (ours or lo.state == "dropped" or int(lo.carry_team) == u.team):
+			u.move = Vector2.ZERO
+			_join_lift(u, lo)
+			return
 	_nav_to(u, goal, 0.8)
 	# Siege: our route runs through a standing enemy gate -> break it.
 	var sg := _path_gate(u)
