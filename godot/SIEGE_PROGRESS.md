@@ -70,7 +70,7 @@ Each step is committed separately; this file is updated in the same commit.
 |---|---|---|
 | R1 | 3D at 100 % of PHYSICAL pixels (old code used the canvas scale = 1.0, so it rendered at the logical 336x746 on a 1440x3200 screen); pause-menu Resolution 100/75/50; MSAA off at 100 %; thermal guard step 2 drops to 75 % | done |
 | R2 | Castle layers: raised throne room + dungeon platforms with stairs, midfield plateau with stairs; heights in sim (ledges = walls), view builds platforms/steps | done |
-| R3 | Fate offerings (the cake): altar spawns offerings; feeding the captive enemy Oracle makes her heavier/slower to carry; visibly fatter | todo |
+| R3 | Fate offerings (the cake): altar spawns offerings; feeding the captive enemy Oracle makes her heavier/slower to carry; visibly fatter | done |
 | R4 | Catapult towers (workshop upgrade): auto-fire at enemies near your walls | todo |
 | R5 | Siege ladders: workers build a ladder on an enemy wall; a private passage for their team; enemies can break it | todo |
 | R6 | Tests, screenshots, perf at 100 %, APK | todo |
@@ -84,3 +84,11 @@ Each step is committed separately; this file is updated in the same commit.
 - Arrows/fire pass over ledges and through cell bars.
 - tests/siege_reach.gd: every objective reachable for both teams (enemy cell, own throne,
   forge, workshop, plateau). 6-match smoke: 0 clips, wins 3-3.
+
+## R3 notes
+- Altar per courtyard at (-3.5, 17) (blue space); an offering every 30 s. Carrying one: no
+  attacks, 0.9x speed, lost on death. Feed within 1.9 m of the captive in your dungeon.
+- Weight 0-5; carrier speed x(1 - 0.08*weight). Weight survives drops/recaptures, resets on
+  rescue. Oracle widens 16 % per level. Defender bots feed when there's no alarm/carrier.
+- 6-match smoke: 77 feedings, max weight 5 reached; 0 clips; half the matches now run to the
+  9-minute cap (heavier carries).

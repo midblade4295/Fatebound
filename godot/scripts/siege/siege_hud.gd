@@ -338,6 +338,15 @@ func on_event(e: Dictionary) -> void:
 		"death":
 			if e.id == player_id:
 				toast("You fell!", VisualTheme.RED)
+		"fed":
+			var w := int(e.weight)
+			if mine:
+				toast("The enemy fattened our Oracle! Weight %d/%d" % [w, Sim.MAX_WEIGHT], VisualTheme.RED)
+			else:
+				toast("Their Oracle grows heavier: %d/%d" % [w, Sim.MAX_WEIGHT], Color("#e6b3ff"))
+		"offering_taken":
+			if e.id == player_id:
+				toast("Carry the offering to the captive in our dungeon", Color("#e6b3ff"))
 		"gate_broken":
 			var side: String = str(sim.gates[int(e.gate)].side).to_upper()
 			toast("OUR %s GATE HAS FALLEN!" % side if mine else "ENEMY %s GATE BROKEN — CHARGE!" % side, VisualTheme.RED if mine else VisualTheme.GOLD)
@@ -591,6 +600,11 @@ func _draw_gate_bars() -> void:
 
 func _oracle_status(me: Dictionary) -> String:
 	var o: Dictionary = sim.oracles[me.team]
+	var w := int(o.get("weight", 0))
+	var suffix := "  (weight %d/%d)" % [w, Sim.MAX_WEIGHT] if w > 0 else ""
+	return _oracle_state_text(me, o) + suffix
+
+func _oracle_state_text(me: Dictionary, o: Dictionary) -> String:
 	match str(o.state):
 		"cell": return "Our Oracle: captive in the enemy keep"
 		"carried": return "Our Oracle: YOU are carrying her!" if o.carrier == player_id else "Our Oracle: an ally is carrying her"
@@ -645,7 +659,7 @@ func _draw_button(b: Dictionary, me: Dictionary) -> void:
 			ready = cd <= 0.0 and not me.carrying
 		"action":
 			label = {"forge":"FORGE","grab":"GRAB","throw":"THROW","workshop":"WORKSHOP","chop":"CHOP","mine":"MINE",
-				"repair":"REPAIR","gather":"WORKING","repairing":"REPAIRING"}.get(b.ctx, "USE")
+				"repair":"REPAIR","gather":"WORKING","repairing":"REPAIRING","offer":"OFFERING","feed":"FEED"}.get(b.ctx, "USE")
 			col = Color("#155258")
 			rim = Color("#9ff6ef")
 	var pressed: bool = _time - float(_pressed_at.get(b.id, -10.0)) < 0.12 or (b.id == "attack" and _attack_held)

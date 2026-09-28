@@ -13,7 +13,7 @@ func _init() -> void:
 		seeds = []
 		for s in OS.get_environment("SEEDS").split(","): seeds.append(int(s))
 	var totals := {"matches":0,"rescues":0,"kills":0,"gate_broken":0,"gate_rebuilt":0,"repairs":0,"delivered":0,
-		"upgrades":0,"pickups":0,"wall_violations":0,"gate_violations":0,"wins":[0,0,0],"first_rescue":[]}
+		"upgrades":0,"pickups":0,"fed":0,"max_weight":0,"wall_violations":0,"gate_violations":0,"wins":[0,0,0],"first_rescue":[]}
 	for seed_value in seeds:
 		var sim = Sim.new()
 		sim.setup(6, seed_value)
@@ -36,6 +36,9 @@ func _init() -> void:
 					"deliver": totals.delivered += int(e.n)
 					"upgrade": totals.upgrades += 1
 					"pickup": totals.pickups += 1
+					"fed":
+						totals.fed += 1
+						totals.max_weight = maxi(totals.max_weight, int(e.weight))
 			if steps % 3 == 0:
 				for u in sim.units:
 					if u.state == "dead": continue
@@ -61,6 +64,6 @@ func _init() -> void:
 			sim.winner, sim.end_reason, str(sim.stock), str(sim.levels), str(sim.gates.map(func(g): return int(g.hp))), Time.get_ticks_msec() - t0])
 	print("violations wall=%d gate=%d" % [totals.wall_violations, totals.gate_violations])
 	assert(totals.wall_violations == 0 and totals.gate_violations == 0)
-	assert(totals.kills > 0 and totals.delivered > 0 and totals.gate_broken > 0)
+	assert(totals.kills > 0 and totals.delivered > 0 and totals.gate_broken > 0 and totals.fed > 0)
 	print("SIEGE_SIM_PASS ", totals)
 	quit(0)

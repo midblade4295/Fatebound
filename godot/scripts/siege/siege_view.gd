@@ -38,6 +38,7 @@ var oracle_nodes: Array = []
 var gate_nodes: Dictionary = {}
 var node_nodes: Dictionary = {}
 var stock_piles: Array = []
+var altar_sacks: Array = []
 var proj_nodes: Dictionary = {}
 var _fx: Array = []
 var _time := 0.0
@@ -439,6 +440,12 @@ func _build_castle(t: int) -> void:
 				piece.reparent(pile, true)
 				piece.visible = false
 		piles[kind] = pile
+	# Fate altar: a stone plinth; a glowing sack sits on it while an offering is ready.
+	var ap: Vector2 = Sim.altar(t)
+	_place(HEX + "resource_stone.gltf", Vector3(ap.x, 0, ap.y), 0.3, 3.2)
+	var sack := _place(HEX + "sack.gltf", Vector3(ap.x, 0.75, ap.y), 0.0, 3.0)
+	_decal(Vector3(ap.x, 0.06, ap.y), 1.6, Color("#e6b3ff"), 0.45)
+	altar_sacks.append(sack)
 	var wb: Vector2 = Sim._m(t, Vector2(7.0, 20.3))
 	_place(HEX + "wheelbarrow.gltf", Vector3(wb.x, 0, wb.y), face + 0.8, 3.0)
 	stock_piles.append(piles)
@@ -500,6 +507,16 @@ func _sync_castle(dt: float) -> void:
 			var k := 0.75 + 0.25 * float(n.amount) / float(n.max)
 			(nn.full as Node3D).scale = Vector3.ONE * (3.2 if n.kind == "wood" else 4.4) * k
 	for t in 2:
+		if t < altar_sacks.size() and altar_sacks[t] != null:
+			(altar_sacks[t] as Node3D).visible = bool(sim.altars[t].ready)
+			if sim.altars[t].ready:
+				(altar_sacks[t] as Node3D).rotation.y += dt * 1.2
+		var o_node: Dictionary = oracle_nodes[t] if t < oracle_nodes.size() else {}
+		if not o_node.is_empty() and o_node.body != null:
+			var w := float(sim.oracles[t].get("weight", 0))
+			var want := Vector3(1.0 + 0.16 * w, 1.0 + 0.04 * w, 1.0 + 0.16 * w) * 0.95
+			var body: Node3D = o_node.body
+			body.scale = body.scale.lerp(want, minf(1.0, dt * 3.0))
 		for kind in ["wood", "stone"]:
 			var pile: Node3D = stock_piles[t][kind]
 			var shown := clampi(int(ceil(float(sim.stock[t][kind]) / 5.0)), 0, pile.get_child_count())
@@ -666,6 +683,8 @@ func sync(dt: float) -> void:
 
 func _sync_load(a: Dictionary, u: Dictionary) -> void:
 	var kind: String = u.load.kind if u.load.n > 0 and u.state != "dead" else ""
+	if u.offering and u.state != "dead":
+		kind = "offering"
 	if kind == str(a.get("load_kind", "")):
 		return
 	a.load_kind = kind
@@ -673,7 +692,7 @@ func _sync_load(a: Dictionary, u: Dictionary) -> void:
 		a.load_node.queue_free()
 	if kind == "":
 		return
-	var packed := Stage.scene(HEX + ("resource_lumber.gltf" if kind == "wood" else "resource_stone.gltf"))
+	var packed := Stage.scene(HEX + {"wood":"resource_lumber.gltf", "stone":"resource_stone.gltf", "offering":"sack.gltf"}[kind])
 	if packed == null:
 		return
 	var n: Node3D = packed.instantiate()
@@ -775,6 +794,15 @@ func on_event(e: Dictionary) -> void:
 		"deliver":
 			var ws: Vector2 = Sim.workshop(int(e.team))
 			ring_at(Vector3(ws.x, 0.1, ws.y), Color("#9fe07a"), 1.4, 0.5)
+		"fed":
+			var fo: Dictionary = sim.oracles[int(e.team)]
+			var fp := Vector3(fo.pos.x, Sim.height_at(fo.pos), fo.pos.y)
+			ring_at(fp, Color("#e6b3ff"), 2.4, 0.8)
+			for i in 8:
+				spark(fp + Vector3(randf_range(-0.8, 0.8), 0.6 + randf() * 1.6, randf_range(-0.8, 0.8)), Color("#f0c8ff"))
+		"offering_ready":
+			var arp: Vector2 = Sim.altar(int(e.team))
+			ring_at(Vector3(arp.x, 0.1, arp.y), Color("#e6b3ff"), 2.0, 0.7)
 		"upgrade":
 			var ws2: Vector2 = Sim.workshop(int(e.team))
 			for i in 2:
