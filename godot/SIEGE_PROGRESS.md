@@ -132,3 +132,15 @@ Each step is committed separately; this file is updated in the same commit.
   her cell after 25 s. Captive: heals her own team within 3.2 m at 12 hp/s.
 - 2-match smoke: 0 clips; fed 37 (max size reached), lift groups up to 4, 6 carry-backs,
   1 tantrum, 2 rescues (both while skinny). Verified by Vulkan screenshots.
+
+## Step C: balance (16v16 had 0 rescues in 4 matches)
+- Found after an interrupted session: uncommitted sim changes + tests/_trace.gd (kept as
+  tests/siege_trace.gd). Reviewed and tested before committing:
+  rubble (broken gate can't be rebuilt for 20 s or with an enemy within 6 m); cake every 60 s,
+  3 cakes per stage; carry 0.65x (rogue 0.72x), +10 % per extra lifter; bots wait for enough
+  hands before lifting; tantrum knockback moves in steps and stops at walls.
+- Blessing (NOT in Kevin's screenshots, added for balance): while her own team carries her she
+  heals them within 4.2 m. Same 4 seeds: 7 rescues with it, 2 without. One constant (BLESS_R).
+- 6-match smoke: 0 clips, 10 rescues (was 2), 49 gate breaks, 56 feedings; 1 match won 3-2 on
+  rescues, the rest went to time. Bots rarely raise ladders at 16v16; the smoke test now reports
+  catapults/ladders instead of asserting them, and asserts at least one rescue.
