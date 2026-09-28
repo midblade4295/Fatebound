@@ -43,6 +43,8 @@ Fatebound was a dice-battle game. **Siege is now the whole game** (Kevin's decis
 Princess–style real-time capture game, offline vs bots. Dice survive only at the class forge.
 Renderer **stays Vulkan** (Kevin's decision; see section 8).
 
+- **Modes:** offline (ENTER BATTLE: you + 31 bots) and **online** (PLAY ONLINE: up to 32 humans
+  on Kevin's server, bots fill the rest; section 10).
 - **Match:** 16 v 16 (human + 15 bots vs 16 bots). Field 52 × 104 m. 12-minute cap. First to
   3 rescues wins; at time, more rescues wins, then more kills.
 - **Each team's Oracle** (the "princess") starts captive in the ENEMY castle's dungeon cell.
@@ -93,6 +95,8 @@ Renderer **stays Vulkan** (Kevin's decision; see section 8).
 | `scripts/siege/siege_view.gd` | ~1200 | 3D presentation from KayKit models: terrain (MultiMesh hexes), castles built from `sim.walls`/`sim.gates`, actors (animated rigs), Oracles, cakes (primitive meshes), projectiles, effects, follow camera. Reads the sim; never changes rules. |
 | `scripts/siege/siege_hud.gd` | ~700 | Hand-drawn multitouch HUD (stick + ATTACK/ABILITY/DODGE/ACTION), scoreboard, status lines, forge/workshop/pause/result panels, world-projected HP and gate bars, toasts. |
 | `scripts/siege/siege_mode.gd` | ~230 | Owns SubViewport + sim + view + HUD. 60 fps cap, render scale, thermal guard, rewards grant. |
+| `scripts/siege/siege_net.gd` | ~260 | Online protocol v1: snapshot encode (int16-packed units, zstd) and apply onto a mirror sim; interpolation. Shared by server and client. |
+| `server/siege_server.gd`, `server/siege_probe.gd`, `server/deploy/` | | Headless authoritative server, health probe, systemd unit, Caddy fragment, install script (section 10). |
 | `scripts/siege/siege_diag.gd` | ~260 | Field diagnostics: `user://siege_diag.log` (per-second STAT lines, stalls, engine errors, logcat on stall). Home card button "COPY SIEGE DIAGNOSTICS" puts it on the clipboard. |
 | `scripts/kaykit_stage.gd`, `scripts/dice_strip.gd` | | Home hero portrait / old dice battlefield + 3D dice (still used by the home portrait and forge dice). |
 | `scripts/ui/pages.gd`, `scripts/full_client.gd` | | App shell: home page SIEGE card, `start_siege()`. |
@@ -170,7 +174,9 @@ wall/gate clip invariants, asserts ≥1 rescue; `SEEDS=11,22` to choose), `siege
 objective reachable for both teams), `siege_mode_smoke`, `siege_human_soak` (synthetic touch
 input; must report `stalls=0`), `siege_home_flow` (home → battle → win → rewards saved → replay →
 home), `siege_diag_smoke`, `siege_guard_smoke`, `siege_logcat_filter`, `full_ui_smoke`,
-`full_core_smoke`, `all_modules_parse`. Diagnostics (not in the runner):
+`full_core_smoke`, `all_modules_parse`, `siege_net_smoke` (starts the real server as a separate
+process on port 8092 and plays through it; must run in REAL time, never `--fixed-fps`).
+Diagnostics (not in the runner):
 `tests/siege_profile.gd` (ms per tick by phase; last: 0.99 ms at 16v16) and
 `SEED=33 … tests/siege_trace.gd` (match timeline: gates, pickups, drops, rescues, tantrums).
 `full_ui_smoke` rewrites `reports/full-port/native-ui-flow.json`; the runner reverts it.
@@ -212,7 +218,9 @@ code 18**.
    "COPY SIEGE DIAGNOSTICS" output after a full match. Pause menu has Resolution 100/75/50 %;
    the thermal guard drops to 30 fps, then to 75 % resolution.
 5. `siege_human_soak` stops at its own 400 s cap before the 720 s match ends — extend it.
-6. Not started: online play (the sim is written to run on an authoritative server later).
+6. Online is built and tested locally but **not deployed** (section 10). No client-side
+   prediction yet: your own movement shows after one round trip (~100 ms + ping). No accounts,
+   names are "Player", no lobby/matchmaking beyond "one match, join any time".
    Dice-era hero page / weapon shop don't affect Siege classes yet.
 7. Kevin may want the Blessing removed (section 1).
 
@@ -257,3 +265,45 @@ remove the files, and consider making the repo private. Rewriting history requir
 | `push_siege_branch.sh` | Applies the bundle to a clone and pushes the branch (no force). |
 | `fatebound-siege-preview.jks` | Preview signing key (alias/passwords `fbpreview`). Keep out of the repo. |
 | `Fatebound-Siege-0.10.0.apk` | Latest build Kevin has installed (version code 18). |
+
+---
+
+## 10. Online multiplayer (Kevin's server)
+
+**Server host:** `136.113.125.3` (`https://136-113-125-3.sslip.io`), user `midblade4295`, Caddy in
+front. Existing services: Fatebound web/saves on 127.0.0.1:8080, the old dice arena on 8081
+(`fatebound-arena.service`, Node), Legionary on 3000. **Siege uses 127.0.0.1:8082.**
+Public URL the app uses: `wss://136-113-125-3.sslip.io/fatebound/siege/ws`
+(`siege_net.gd` `DEFAULT_URL`; desktop override: env `SIEGE_URL`).
+
+**Architecture:** the server is headless Godot running the same `SiegeSim` as offline play
+(authoritative, 30 Hz). Bots hold every slot; a joining player takes a bot on the team with fewer
+humans; a leaver's unit goes back to a bot. New match 15 s after one ends; stops simulating
+after 30 s with nobody connected. Clients keep a mirror sim built by `setup()` (same map) and
+overwrite its dynamic state from 10 Hz snapshots, interpolating positions; inputs go up at
+20 Hz plus actions immediately. Server validates everything (action whitelist, clamped move,
+size + rate limits). Protocol version `Net.VERSION` = 1; bump it on any wire change (old clients
+get "Update the game to play online").
+
+**Measured (32 clients, local):** 845 B per snapshot, 8.3 KB/s per phone (~30 MB/hour),
+267 KB/s server upload, 9.9 % of one core, 118 MB RSS.
+
+**Deploy (on the server, from a checkout of this branch):**
+```bash
+cd ~/Fatebound && git fetch && git checkout claude/kaykit-3d-rebuild && git pull
+sudo bash godot/server/deploy/install_siege_server.sh
+```
+Installs Godot 4.7.2 (SHA-512 verified) to `/opt/godot-4.7.2`, a 176 KB server-only project to
+`/srv/fatebound-siege`, the `fatebound-siege` systemd service (DynamicUser, read-only, loopback),
+and ends with a probe that must print `PROBE_OK`. Re-run it to update. Tested here in its
+`NO_SYSTEMD=1` mode and as an unprivileged user from a read-only folder.
+
+**Caddy (one-time, Kevin's call — repo rules forbid unapproved Caddy changes):** back up the
+Caddyfile, add `godot/server/deploy/caddy-route.fragment` inside the sslip.io site next to the
+`/fatebound/arena/*` block, `caddy validate`, `systemctl reload caddy`, then the public probe:
+`SIEGE_PROBE_URL=wss://136-113-125-3.sslip.io/fatebound/siege/ws /opt/godot-4.7.2/godot --headless --path /srv/fatebound-siege -s res://server/siege_probe.gd`.
+Record the deployment like the arena did (`multiplayer/*/live-deployment.json` style).
+
+**Operate:** `journalctl -u fatebound-siege -f` (joins, leaves, match starts/ends),
+`systemctl restart fatebound-siege`, overrides in `/etc/fatebound-siege.env`
+(`SIEGE_MAX_PLAYERS`, `SIEGE_LOG`). Previous install kept at `/srv/fatebound-siege.prev`.

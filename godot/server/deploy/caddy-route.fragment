@@ -1,0 +1,10 @@
+# FRAGMENT ONLY: insert inside the existing site block for 136-113-125-3.sslip.io.
+# Inspect the existing Caddyfile first. Do not replace it with this file.
+# Like the arena route, this must take precedence over the existing /fatebound/* route
+# (put it next to the /fatebound/arena/* block). Caddy proxies the WebSocket upgrade itself.
+handle /fatebound/siege/* {
+    reverse_proxy 127.0.0.1:8082
+}
+# Keep Fatebound HTML/save (8080), the dice arena (8081), Legionary (3000), TLS and all other
+# host configuration unchanged. Then: sudo caddy validate --config /etc/caddy/Caddyfile
+#                                     sudo systemctl reload caddy

@@ -1,0 +1,30 @@
+[Unit]
+Description=Fatebound Siege online server (separate from Legionary and the dice arena)
+After=network.target
+
+[Service]
+Type=simple
+DynamicUser=yes
+WorkingDirectory=/srv/fatebound-siege
+# Godot's user:// data (logs, caches) lives in the state directory.
+Environment=HOME=/var/lib/fatebound-siege
+Environment=SIEGE_HOST=127.0.0.1
+Environment=SIEGE_PORT=8082
+Environment=SIEGE_MAX_PLAYERS=32
+EnvironmentFile=-/etc/fatebound-siege.env
+ExecStart=/opt/godot-4.7.2/godot --headless --path /srv/fatebound-siege -s res://server/siege_server.gd
+StateDirectory=fatebound-siege
+StateDirectoryMode=0700
+UMask=0077
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=10
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+MemoryMax=512M
+
+[Install]
+WantedBy=multi-user.target
