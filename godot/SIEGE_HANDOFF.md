@@ -342,7 +342,7 @@ Based on live `447b97a`. Preview **0.12.0-siege-app, version code 21** (APK 38 M
 
 ## 12. Round 6: home screen and menu art (Blender pipeline)
 
-Preview **0.13.0-siege-art, version code 22**. Pre-rendered art lives in `godot/assets/ui/`
+Preview **0.13.1-siege-art, version code 23**. Pre-rendered art lives in `godot/assets/ui/`
 (3.4 MB); the scripts that make it are committed so it can be re-rendered.
 
 | Art | Made by | Notes |
@@ -368,3 +368,10 @@ Home screen (`scripts/app/siege_app.gd`, `screens.gd`, `showcase.gd`, `ui.gd`):
 - Shop/Locker/Pass use the rendered icons via `Screens.swatch/item_swatch/reward_text`
   (`reward_text` returns `[glyph, text, colour, texture path]`).
 - `tools/app_shots.gd` screenshots every screen with a realistic profile (see its header).
+
+**Rule learned in Round 6 (0.13.0 -> 0.13.1):** anything that owns a SubViewport, particles or
+looping tweens and lives *outside* `chrome` (the home hero layer sits behind it) must be switched
+off when a match starts. 0.13.0 hid only `chrome`, so the hero's 4x-MSAA physical-resolution 3D
+viewport and motes kept rendering behind the match. `SiegeApp._set_menu_active(on)` now hides the
+menu AND disables processing for `chrome` and `hero_layer`; `tests/app_flow_test.gd` asserts it.
+Any new full-screen layer must be added to that helper.

@@ -487,14 +487,24 @@ func start_match(online: bool) -> void:
 	siege.low_fx = bool(profile.d.settings.get("reduce_motion", false))
 	siege.player_name = str(profile.d.name)
 	siege.exited.connect(_end_match)
-	chrome.visible = false
+	_set_menu_active(false)
 	add_child(siege)
+
+func _set_menu_active(on: bool) -> void:
+	# While a match runs nothing of the menu may render or animate: the home hero owns a
+	# physical-resolution 4x-MSAA 3D viewport plus particles, and the PLAY button loops tweens.
+	# A hidden layer alone is not enough for the tweens/particles, so processing is disabled too.
+	chrome.visible = on
+	chrome.process_mode = Node.PROCESS_MODE_INHERIT if on else Node.PROCESS_MODE_DISABLED
+	hero_layer.process_mode = Node.PROCESS_MODE_INHERIT if on else Node.PROCESS_MODE_DISABLED
+	if not on:
+		hero_layer.visible = false          # coming back, show_tab decides (home only)
 
 func _end_match() -> void:
 	if is_instance_valid(siege):
 		siege.queue_free()
 	siege = null
-	chrome.visible = true
+	_set_menu_active(true)
 	show_tab("home")
 
 func _notification(what: int) -> void:

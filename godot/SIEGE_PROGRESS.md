@@ -282,3 +282,9 @@ Design (all cosmetic; no pay-to-win; no real-money purchases until Play Billing 
   sky gradient stops placed outside the ~-12..+30 deg the camera sees; home camera framed for a
   shorter box (character filled the screen).
 - Not done: per-challenge icons, animated number count-ups, a rendered logo.
+
+## 0.13.1 fix
+- Found while packaging 0.13.0: the home hero layer (a sibling of chrome) stayed visible and
+  processing during matches. Proved with two failing asserts in app_flow_test first, then fixed by
+  `_set_menu_active`. All 11 suites pass. (Not measured on a device; the GPU cost is inferred from
+  the viewport settings, not profiled.)
