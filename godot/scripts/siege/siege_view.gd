@@ -641,8 +641,16 @@ func _decal(pos: Vector3, radius: float, color: Color, alpha: float) -> MeshInst
 	return mi
 
 # ---------- actors ----------
-func _make_body(cls: String) -> Dictionary:
-	var look: Dictionary = LOOKS.get(cls, LOOKS.villager)
+# Equipped cosmetics for the local player, per class: {"tint": "#rrggbb", "r": model, "l": model}.
+# Set by the mode from the profile. Only the local player's unit uses them.
+var player_looks: Dictionary = {}
+static var _tint_mats: Dictionary = {}
+
+func _make_body(cls: String, cosmetic: Dictionary = {}) -> Dictionary:
+	var look: Dictionary = (LOOKS.get(cls, LOOKS.villager) as Dictionary).duplicate()
+	for hand in ["r", "l"]:
+		if cosmetic.has(hand):
+			look[hand] = cosmetic[hand]
 	var packed := Stage.scene("res://assets/kaykit/heroes/%s.glb" % look.model)
 	if packed == null:
 		return {}
@@ -669,11 +677,42 @@ func _make_body(cls: String) -> Dictionary:
 		player.add_animation_library(key, _libs[key])
 	for mi in body.find_children("*", "MeshInstance3D", true, false):
 		(mi as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	if cosmetic.has("tint"):
+		_apply_tint(body, str(look.model), Color(str(cosmetic.tint)))
 	return {"body":body, "player":player}
+
+func _apply_tint(body: Node3D, model: String, tint: Color) -> void:
+	# A skin = the model's own material with its albedo multiplied by the tint. Made once per
+	# (model, surface, tint) and cached; set once when the body is built, never per frame.
+	var skel: Skeleton3D = body.find_child("Skeleton3D", true, false)
+	for mi in body.find_children("*", "MeshInstance3D", true, false):
+		var m3 := mi as MeshInstance3D
+		if skel != null and not skel.is_ancestor_of(m3):
+			continue
+		var under_hand := false
+		var n: Node = m3.get_parent()
+		while n != null and n != body:
+			if n is BoneAttachment3D:
+				under_hand = true
+				break
+			n = n.get_parent()
+		if under_hand:
+			continue                       # weapons keep their own colours
+		for surf in m3.mesh.get_surface_count():
+			var base := m3.get_active_material(surf)
+			if not (base is StandardMaterial3D):
+				continue
+			var key := "%s|%s|%d|%s" % [model, m3.name, surf, tint.to_html()]
+			if not _tint_mats.has(key):
+				var m2: StandardMaterial3D = (base as StandardMaterial3D).duplicate()
+				m2.albedo_color = (base as StandardMaterial3D).albedo_color * tint
+				_tint_mats[key] = m2
+			m3.set_surface_override_material(surf, _tint_mats[key])
 
 func _ensure_actor(u: Dictionary) -> Dictionary:
 	var a: Dictionary = actors.get(u.id, {})
-	var look_key := "%s:%s" % [u.cls, u.up]
+	var cosmetic: Dictionary = player_looks.get(u.cls, {}) if u.id == player_id else {}
+	var look_key := "%s:%s:%s" % [u.cls, u.up, str(cosmetic)]
 	if not a.is_empty() and a.look == look_key:
 		return a
 	var root: Node3D
@@ -698,7 +737,7 @@ func _ensure_actor(u: Dictionary) -> Dictionary:
 		root = a.root
 		if is_instance_valid(a.body):
 			a.body.queue_free()
-	var made := _make_body(u.cls)
+	var made := _make_body(u.cls, cosmetic)
 	if made.is_empty():
 		return a
 	root.add_child(made.body)

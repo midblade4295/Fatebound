@@ -26,8 +26,11 @@ var guard_tripped := false
 var _guard_res_low := 0
 var low_fx := false
 var audio: Node = null
-var progression = null   # the app's Progress object; rewards are granted through it
+var progression = null   # legacy app shell (unused once the Siege app shell is in)
+var profile = null       # scripts/meta/profile.gd — rewards, challenges and cosmetics
 var rewards: Dictionary = {}
+var match_result: Dictionary = {}
+var _lifts := 0          # times the player joined a lift of their own Oracle this match
 
 # Online play (set before adding to the tree). The server runs the match; this client mirrors it.
 var online := false
@@ -127,11 +130,27 @@ func _start() -> void:
 	sim.setup(team_size, int(Time.get_unix_time_from_system()) & 0x7fffffff)
 	view = View.new()
 	view.low_fx = low_fx
+	view.player_looks = _looks()
 	viewport.add_child(view)
 	view.setup(sim)
 	hud.sim = sim
 	_accum = 0.0
 	_result_shown = false
+	_lifts = 0
+
+func _looks() -> Dictionary:
+	var out := {}
+	if profile != null:
+		for cls in ["knight", "barbarian", "rogue", "ranger", "mage", "worker"]:
+			var l: Dictionary = profile.look_for(cls)
+			if not l.is_empty():
+				out[cls] = l
+	return out
+
+func _count(e: Dictionary) -> void:
+	if str(e.get("k", "")) == "lift_join" and str(e.get("id", "")) == hud.player_id and sim != null \
+			and sim.by_id.has(hud.player_id) and int(e.get("team", -1)) == int(sim.by_id[hud.player_id].team):
+		_lifts += 1
 
 func _start_online() -> void:
 	ws = WebSocketPeer.new()
@@ -173,11 +192,13 @@ func _build_online_match(msg: Dictionary) -> void:
 	view = View.new()
 	view.low_fx = low_fx
 	view.player_id = me_id
+	view.player_looks = _looks()
 	viewport.add_child(view)
 	view.setup(sim)
 	hud.sim = sim
 	net_match = int(msg.get("match", 0))
 	_result_shown = false
+	_lifts = 0
 	net_state = "playing"
 	diag.write("NET welcome match=%d you=%s players=%d" % [net_match, me_id, int(msg.get("players", 1))])
 	hud.toast("Online: %d player%s" % [int(msg.get("players", 1)), "" if int(msg.get("players", 1)) == 1 else "s"], VisualTheme.GOLD)
@@ -213,6 +234,7 @@ func _net_process(delta: float) -> void:
 				_snap_t = 0.0
 				for e in msg.get("e", []):
 					diag.event()
+					_count(e)
 					view.on_event(e)
 					hud.on_event(e)
 			"bye":
@@ -303,6 +325,7 @@ func _process(delta: float) -> void:
 		for e in sim.drain_events():
 			diag.mark("event " + str(e.k))
 			diag.event()
+			_count(e)
 			view.on_event(e)
 			hud.on_event(e)
 	diag.mark("view.sync")
@@ -313,12 +336,16 @@ func _process(delta: float) -> void:
 	if sim.ended and not _result_shown:
 		_result_shown = true
 		diag.write("MATCH END winner=%d reason=%s score=%s" % [sim.winner, sim.end_reason, str(sim.score)])
-		rewards = Sim.match_rewards(sim.winner, sim.by_id[hud.player_id])
-		var granted := false
-		if progression != null and progression.has_method("grant"):
-			granted = progression.grant(rewards)
-		diag.write("REWARDS %s granted=%s" % [str(rewards), granted])
-		hud.show_result(rewards if granted else {})
+		var me: Dictionary = (sim.by_id[hud.player_id] as Dictionary).duplicate()
+		me["lifts"] = _lifts
+		var won: bool = sim.winner == int(me.team)
+		var draw: bool = sim.winner == -1
+		match_result = {}
+		if profile != null:
+			match_result = profile.apply_match(me, won, draw, online)
+			rewards = match_result.rewards
+		diag.write("REWARDS %s" % str(match_result.get("rewards", {}).get("gold", 0)))
+		hud.show_result(match_result)
 
 func _thermal_guard(delta: float) -> void:
 	_guard_clock += delta

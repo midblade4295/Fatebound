@@ -193,7 +193,7 @@ version, everything will be the siege now."
 | Step | Scope | Status |
 |---|---|---|
 | E1 | New economy + profile (scripts/meta): currencies, levels, Siege Pass, challenges, shop catalog/rotation, match rewards, one-time migration from the old save (old file untouched) | done |
-| E2 | Siege uses the profile: rewards breakdown, challenge progress, equipped cosmetics shown in battle | todo |
+| E2 | Siege uses the profile: rewards breakdown, challenge progress, equipped cosmetics shown in battle | done |
 | E3 | New app shell + screens: Home (3D hero showcase, PLAY offline/online), Pass, Shop, Locker, Settings | todo |
 | E4 | Remove the old dice-era app (pages, full_client, battle/raid/training/guild/arena code, old tests) | todo |
 | E5 | UI fidelity: new theme, icons, transitions; screenshots | todo |
@@ -218,3 +218,15 @@ Design (all cosmetic; no pay-to-win; no real-money purchases until Play Billing 
   challenge progress are re-cast to ints on load.
 - tests/meta_economy_test.gd: 45 checks (migration, rewards, levels, pass/premium, shop, equip,
   challenges, rollover, persistence, corrupt file, catalog integrity). PASS.
+
+## E2 notes
+- siege_mode: rewards via profile.apply_match (offline + online); Oracle lifts counted from the
+  player's own lift_join events (no protocol change). The old shell gets a profile until E3/E4.
+- siege_view: player_looks (tint + weapon/off-hand per class) for the LOCAL player only. The tint
+  is a cached duplicate of the model's StandardMaterial3D with albedo multiplied, set once when
+  the body is built (never per frame). NOTE for any future freeze: this is a static material
+  override on a skinned mesh (the 0.7.8 removal list included animated emission overrides).
+  Other players online still show default looks (would need a protocol change).
+- Results panel: itemised lines (+gold/+pass), totals, level-ups, pass tier reached, challenge
+  progress; fixed rows overflowing the screen (label helper forces 290 px min width).
+- Test runner now also runs meta_economy_test (13 suites).

@@ -111,6 +111,15 @@ func _process(delta:float)->void:
             var run:Dictionary=api.local_engine.run
             raid_parry_button.disabled=int(run.telegraphUntil)<=active_p.now() or bool(run.parryHit)
             raid_parry_button.text="PARRY NOW" if not raid_parry_button.disabled else ("PARRIED" if run.parryHit and int(run.telegraphUntil)>0 else "PARRY · WAIT FOR WIND-UP")
+var _siege_profile=null
+func siege_profile():
+    # Interim: the new Siege profile (scripts/meta) until the Siege app shell replaces this one.
+    if _siege_profile==null:
+        var P=load("res://scripts/meta/profile.gd")
+        var base:String=_save_path_override if not _save_path_override.is_empty() else "user://fatebound-save.json"
+        _siege_profile=P.new(base.get_basename()+".siege_profile.json" if not _save_path_override.is_empty() else "user://siege_profile.json",base)
+        _siege_profile.load_or_create()
+    return _siege_profile
 func start_siege_online()->void:
     start_siege(true)
 func start_siege(online:=false)->void:
@@ -121,6 +130,7 @@ func start_siege(online:=false)->void:
     siege.online=online
     siege.audio=audio
     siege.progression=progression
+    siege.profile=siege_profile()
     siege.low_fx=Fx.low_quality
     siege.exited.connect(func():siege=null;_show_home())
     ui_root.add_child(siege)

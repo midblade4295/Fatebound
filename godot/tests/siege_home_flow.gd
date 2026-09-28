@@ -15,6 +15,10 @@ func find_button(key: String, node: Node = null) -> Button:
 		var r := find_button(key, c)
 		if r != null: return r
 	return null
+func check_ok(ok: bool, what: String) -> void:
+	print(("ok   " if ok else "FAIL ") + what)
+	assert(ok, what)
+
 func _init() -> void:
 	app = Client.new()
 	app.autoload_network = false
@@ -27,7 +31,7 @@ func _process(delta: float) -> bool:
 			assert(find_button(k) == null, "dice-mode entry still on home: " + k)
 		var b := find_button("siege")
 		assert(b != null, "no ENTER BATTLE (siege) button on home")
-		gold0 = int(app.d.gold); xp0 = int(app.d.xp); lvl0 = int(app.d.level); chests0 = app.d.chests.size(); pts0 = int(app.d.season.pts)
+		gold0 = int(app.siege_profile().d.gold)
 		b.pressed.emit()
 	if frames == 20:
 		assert(app.screen == "siege" and is_instance_valid(app.siege), "siege did not start from home")
@@ -36,18 +40,19 @@ func _process(delta: float) -> bool:
 		s.score = [3, 1]
 		s._finish("rescue")
 	if frames == 30:
-		var r: Dictionary = app.siege.rewards
-		assert(r.gold == 120 + 12 and r.xp == 60 and r.chest == 1, "reward formula " + str(r))
-		assert(int(app.d.gold) == gold0 + int(r.gold), "gold not credited")
-		assert(app.d.chests.size() == chests0 + 1, "chest not credited")
-		assert(int(app.d.season.pts) == pts0 + 12, "season points not credited")
-		assert(int(app.d.xp) != xp0 or int(app.d.level) != lvl0, "xp not credited")
+		var res: Dictionary = app.siege.match_result
+		var prof = app.siege.profile
+		check_ok(prof != null and not res.is_empty(), "match result from the Siege profile")
+		var rw: Dictionary = res.rewards
+		check_ok(int(rw.gold) > 0 and int(rw.pass) > 0 and res.first_win, "win rewards incl. first win (%d gold)" % int(rw.gold))
+		check_ok(int(prof.d.gold) >= gold0 + int(rw.gold), "gold credited to the profile")
+		check_ok(int(prof.d.stats.wins) == 1, "win recorded in profile stats")
 		assert(app.siege.hud.result_panel != null and app.siege.hud.result_panel.visible, "no result panel")
-		print("rewards=", r, " gold ", gold0, "->", app.d.gold)
+		gold0 = int(prof.d.gold)
 		app.siege.hud.replay_requested.emit()
 	if frames == 40:
 		assert(not app.siege.sim.ended, "play again did not start a new match")
-		assert(int(app.d.gold) == gold0 + int(app.siege.rewards.gold), "play again re-granted rewards")
+		assert(int(app.siege.profile.d.gold) == gold0, "play again re-granted rewards")
 		app.siege.hud.leave_requested.emit()
 	if frames == 50:
 		assert(app.screen == "home", "HOME did not return to home: " + app.screen)
