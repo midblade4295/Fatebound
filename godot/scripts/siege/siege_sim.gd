@@ -38,6 +38,8 @@ const GATE_HALF := 1.3           # half-width of the passable doorway
 const GATE_SOLID_AT := 0.35      # a broken gate blocks again once repaired to 35 %
 const GATE_OPEN_RADIUS := 4.0    # allies within this distance swing the doors open (visual)
 const REPAIR_LOCK := 3.0         # no repairs while the gate was hit in the last 3 s
+const RUBBLE_TIME := 20.0        # a broken gate can't be rebuilt for 20 s ...
+const RUBBLE_CLEAR := 6.0        # ... or while any enemy is within 6 m of it
 
 # ---- layers (heights are for the view; the sim stays 2D, ledges are walls) ----
 const PLAT_H := 1.6              # throne room + dungeon platforms
@@ -55,8 +57,8 @@ const LEDGE_R := 0.35
 # ---- fate offerings (the "cake") ----
 const ALTAR_P := Vector2(-3.5, 17.0)   # blue courtyard; mirrored for red
 const OFFERING_EVERY := 30.0
-const CAKE_EVERY := 40.0            # a cake tree ripens a cake every 40 s
-const CAKE_PER_STAGE := 2           # two cakes fatten her one size stage
+const CAKE_EVERY := 60.0            # a cake tree ripens a cake every 60 s
+const CAKE_PER_STAGE := 3           # three cakes fatten her one size stage
 const LIFTERS := [1, 2, 3, 4, 5, 6] # players needed to lift her at each stage (skinny .. fully fattened)
 const LIFT_RING := 1.15             # followers hold her from a ring around the lead lifter
 const TANTRUM_AFTER := 6.0          # left on the ground this long -> tantrum
@@ -66,6 +68,8 @@ const TANTRUM_PUSH := 4.0
 const TANTRUM_STUN := 1.6
 const HEAL_R := 3.2                 # captive Oracle heals her own team standing next to her
 const HEAL_RATE := 12.0             # hp per second
+const BLESS_R := 4.2                # while her own team carries her, she heals them within this
+const EXTRA_LIFTER := 0.10          # each lifter beyond the minimum: +10 % carry speed
 const MAX_WEIGHT := 5
 const WEIGHT_SLOW := 0.08            # carrier speed -8 % per weight level
 const FEED_RADIUS := 1.9
@@ -109,19 +113,19 @@ const UPGRADE_NAME := {"knight":"Paladin","barbarian":"Berserker","rogue":"Assas
 # gate: damage multiplier against gates.
 const CLASSES := {
 	"villager": {"name":"Villager","hp":60,"speed":5.2,"dmg":8,"range":1.3,"arc":0.5,"windup":0.2,"recover":0.3,
-		"ranged":false,"ability":"","ab_cd":0.0,"carry":0.5,"gate":0.5},
+		"ranged":false,"ability":"","ab_cd":0.0,"carry":0.65,"gate":0.5},
 	"worker": {"name":"Worker","hp":95,"speed":5.0,"dmg":12,"range":1.5,"arc":0.4,"windup":0.28,"recover":0.4,
-		"ranged":false,"ability":"","ab_cd":0.0,"carry":0.5,"gate":1.2},
+		"ranged":false,"ability":"","ab_cd":0.0,"carry":0.65,"gate":1.2},
 	"knight": {"name":"Knight","hp":150,"speed":4.6,"dmg":18,"range":1.7,"arc":0.4,"windup":0.24,"recover":0.4,
-		"ranged":false,"ability":"bash","ab_cd":7.0,"carry":0.5,"gate":1.0},
+		"ranged":false,"ability":"bash","ab_cd":7.0,"carry":0.65,"gate":1.0},
 	"barbarian": {"name":"Barbarian","hp":130,"speed":4.8,"dmg":26,"range":2.0,"arc":0.25,"windup":0.36,"recover":0.45,
-		"ranged":false,"ability":"spin","ab_cd":7.0,"carry":0.5,"gate":1.6},
+		"ranged":false,"ability":"spin","ab_cd":7.0,"carry":0.65,"gate":1.6},
 	"rogue": {"name":"Rogue","hp":85,"speed":6.2,"dmg":14,"range":1.4,"arc":0.5,"windup":0.13,"recover":0.22,
-		"ranged":false,"ability":"lunge","ab_cd":5.0,"carry":0.58,"gate":0.6},
+		"ranged":false,"ability":"lunge","ab_cd":5.0,"carry":0.72,"gate":0.6},
 	"ranger": {"name":"Ranger","hp":80,"speed":5.4,"dmg":15,"range":11.0,"arc":0.0,"windup":0.3,"recover":0.45,
-		"ranged":true,"proj_speed":22.0,"aoe":0.0,"ability":"volley","ab_cd":7.0,"carry":0.5,"gate":0.35},
+		"ranged":true,"proj_speed":22.0,"aoe":0.0,"ability":"volley","ab_cd":7.0,"carry":0.65,"gate":0.35},
 	"mage": {"name":"Mage","hp":75,"speed":5.0,"dmg":20,"range":9.0,"arc":0.0,"windup":0.4,"recover":0.5,
-		"ranged":true,"proj_speed":15.0,"aoe":1.6,"ability":"nova","ab_cd":8.0,"carry":0.5,"gate":1.0},
+		"ranged":true,"proj_speed":15.0,"aoe":1.6,"ability":"nova","ab_cd":8.0,"carry":0.65,"gate":1.0},
 }
 
 var time := 0.0
@@ -998,6 +1002,7 @@ func _damage_gate(src: Dictionary, g: Dictionary, amount: float) -> void:
 	_event("gate_hit", {"gate":g.id, "team":g.team, "by":src.get("id",""), "dmg":int(round(amount))})
 	if g.hp <= 0.0:
 		g.broken = true
+		g["broken_at"] = time
 		_update_gate_nav()
 		_event("gate_broken", {"gate":g.id, "team":g.team, "by":src.get("id","")})
 
@@ -1222,6 +1227,10 @@ func _step_unit(u: Dictionary, dt: float) -> void:
 			# Followers hold her from the ring; _step_oracles places them. No steering of their own.
 			u.state = "lift"
 			return
+		# Extra hands beyond the minimum speed the carry up, to full walking speed at most.
+		var extra: int = ho.lifters.size() - lifters_needed(ho)
+		if extra > 0:
+			mult = minf(1.0, mult + EXTRA_LIFTER * float(extra))
 		mult *= 1.0 - WEIGHT_SLOW * float(ho.weight)
 		# Not enough hands: she won't budge.
 		if ho.lifters.size() < lifters_needed(ho):
@@ -1273,6 +1282,10 @@ func _step_task(u: Dictionary, dt: float) -> void:
 				return
 			# Under attack: workers can't out-heal an assault; they wait until it lets up.
 			if time - float(g.get("hit_at", -100.0)) < REPAIR_LOCK:
+				task.t = REPAIR_TICK
+				return
+			# Rubble: a broken gate stays down for a while, and can't be rebuilt with enemies in it.
+			if g.broken and (time - float(g.get("broken_at", -100.0)) < RUBBLE_TIME or _enemy_near(g.c, int(g.team), RUBBLE_CLEAR)):
 				task.t = REPAIR_TICK
 				return
 			# One unit of material (whichever the team has more of) buys three repair ticks.
@@ -1335,6 +1348,31 @@ func ladder_climb(u: Dictionary) -> bool:
 		if int(l.team) == u.team and u.pos.distance_to(l.p) <= LADDER_HALF + 0.8:
 			return true
 	return false
+
+func _hands_near(p: Vector2, team: int, r: float) -> int:
+	var n := 0
+	for o in units:
+		if o.team == team and alive(o) and not o.carrying and o.pos.distance_to(p) <= r:
+			n += 1
+	return n
+
+func _enemy_near(p: Vector2, team: int, r: float) -> bool:
+	for o in units:
+		if o.team != team and alive(o) and o.pos.distance_to(p) <= r:
+			return true
+	return false
+
+func _knockback(u: Dictionary, push: Vector2) -> void:
+	# Knockbacks run after collision for the tick, so move in short steps and stop at the first
+	# wall; a 4 m shove in one go ended units inside (or through) a 2 m wall.
+	var steps := maxi(1, int(ceil(push.length() / 0.25)))
+	var p: Vector2 = u.pos
+	for i in steps:
+		var q: Vector2 = _clamp_to_field(p + push / float(steps))
+		if _blocked_point(q, int(u.team), UNIT_R):
+			break
+		p = q
+	u.pos = _clamp_to_field(_push_out(p, UNIT_R, int(u.team)))
 
 func _push_seg(p: Vector2, a: Vector2, b: Vector2, min_d: float) -> Vector2:
 	var cp := seg_closest(p, a, b)
@@ -1424,6 +1462,11 @@ func _step_oracles(dt: float) -> void:
 		var o: Dictionary = oracles[t]
 		match o.state:
 			"carried":
+				# Blessing: while her own team carries her, she heals them and their escort.
+				if int(o.carry_team) == t:
+					for u in units:
+						if u.team == t and alive(u) and u.hp < u.max_hp and u.pos.distance_to(o.pos) <= BLESS_R:
+							u.hp = minf(u.max_hp, u.hp + HEAL_RATE * dt)
 				# Drop lifters who died or let go; promote the next one if the lead is gone.
 				var keep := []
 				for id in o.lifters:
@@ -1478,7 +1521,7 @@ func _step_oracles(dt: float) -> void:
 						if d > TANTRUM_R:
 							continue
 						var dir := off / d if d > 0.05 else dir_of(rng.randf() * TAU)
-						u.pos += dir * TANTRUM_PUSH * (1.0 - 0.5 * d / TANTRUM_R)
+						_knockback(u, dir * TANTRUM_PUSH * (1.0 - 0.5 * d / TANTRUM_R))
 						u.stun = maxf(u.stun, TANTRUM_STUN)
 						u.task = {}
 						if u.state in ["wind", "recover"]:
@@ -1804,7 +1847,7 @@ func _think_fighter(u: Dictionary) -> void:
 		goal = enemy_carrier.pos
 	elif not our_returner.is_empty() and (u.role in ["raid", "escort"] or u.pos.distance_to(our_returner.pos) < 16.0):
 		goal = our_returner.pos
-	elif short_hands and u.role in ["raid", "escort"] and u.pos.distance_to(mine.pos) < 40.0:
+	elif short_hands and u.role in ["raid", "escort"] and u.pos.distance_to(mine.pos) < 60.0:
 		goal = mine.pos
 	elif captive_loose and u.role in ["defend", "escort"] and u.pos.distance_to(theirs.pos) < 30.0:
 		goal = theirs.pos
@@ -1868,6 +1911,10 @@ func _think_fighter(u: Dictionary) -> void:
 	if not lo.is_empty():
 		var ours: bool = int(lo.team) == u.team
 		var wanted: bool = lo.state != "carried" or lo.lifters.size() < lifters_needed(lo)
+		# Don't start a lift she can't move yet: a lone lifter just stands in the enemy dungeon
+		# and dies. Wait beside her (her aura heals us) until enough hands are here.
+		if lo.state != "carried" and _hands_near(lo.pos, u.team, 3.5) < lifters_needed(lo):
+			wanted = false
 		if wanted and (ours or lo.state == "dropped" or int(lo.carry_team) == u.team):
 			u.move = Vector2.ZERO
 			_join_lift(u, lo)
