@@ -13,7 +13,7 @@ func _init() -> void:
 		seeds = []
 		for s in OS.get_environment("SEEDS").split(","): seeds.append(int(s))
 	var totals := {"matches":0,"rescues":0,"kills":0,"gate_broken":0,"gate_rebuilt":0,"repairs":0,"delivered":0,
-		"upgrades":0,"pickups":0,"fed":0,"max_weight":0,"ladders":0,"ladders_down":0,"catapult_shots":0,"wall_violations":0,"gate_violations":0,"wins":[0,0,0],"first_rescue":[]}
+		"upgrades":0,"pickups":0,"fed":0,"max_weight":0,"ladders":0,"ladders_down":0,"catapult_shots":0,"tantrums":0,"carried_back":0,"max_lift":0,"rescue_lifters":[],"wall_violations":0,"gate_violations":0,"wins":[0,0,0],"first_rescue":[]}
 	for seed_value in seeds:
 		var sim = Sim.new()
 		sim.setup(16, seed_value)
@@ -28,6 +28,7 @@ func _init() -> void:
 				match str(e.k):
 					"rescue":
 						totals.rescues += 1
+						totals.rescue_lifters.append(int(e.get("n", 1)))
 						if first < 0.0: first = sim.time
 					"death": totals.kills += 1
 					"gate_broken": totals.gate_broken += 1
@@ -39,6 +40,10 @@ func _init() -> void:
 					"ladder_up": totals.ladders += 1
 					"ladder_down": totals.ladders_down += 1
 					"catapult_fire": totals.catapult_shots += 1
+					"tantrum": totals.tantrums += 1
+					"recaptured":
+						if str(e.id) != "": totals.carried_back += 1
+					"lift_join": totals.max_lift = maxi(totals.max_lift, int(e.n))
 					"fed":
 						totals.fed += 1
 						totals.max_weight = maxi(totals.max_weight, int(e.weight))
@@ -61,7 +66,9 @@ func _init() -> void:
 			for t in 2:
 				var o: Dictionary = sim.oracles[t]
 				if o.state == "carried":
-					assert(sim.by_id[o.carrier].carrying and sim.by_id[o.carrier].team == t)
+					var lead: Dictionary = sim.by_id[o.carrier]
+					assert(lead.carrying and lead.team == int(o.carry_team) and int(lead.lifting) == t)
+					assert(o.lifters.size() >= 1 and o.lifters[0] == o.carrier)
 		assert(sim.ended)
 		totals.matches += 1
 		totals.wins[sim.winner + 1] += 1
@@ -70,7 +77,8 @@ func _init() -> void:
 			sim.winner, sim.end_reason, str(sim.stock), str(sim.levels), str(sim.gates.map(func(g): return int(g.hp))), Time.get_ticks_msec() - t0])
 	print("violations wall=%d gate=%d" % [totals.wall_violations, totals.gate_violations])
 	assert(totals.wall_violations == 0 and totals.gate_violations == 0)
-	print("usage fed=%d ladders=%d ladders_down=%d catapult_shots=%d upgrades=%d" % [totals.fed, totals.ladders, totals.ladders_down, totals.catapult_shots, totals.upgrades])
+	print("usage fed=%d max_weight=%d ladders=%d ladders_down=%d catapult_shots=%d upgrades=%d" % [totals.fed, totals.max_weight, totals.ladders, totals.ladders_down, totals.catapult_shots, totals.upgrades])
+	print("oracle rescues=%d (lifters per rescue %s) pickups=%d tantrums=%d carried_back=%d max_lift=%d first_rescue=%s" % [totals.rescues, str(totals.rescue_lifters), totals.pickups, totals.tantrums, totals.carried_back, totals.max_lift, str(totals.first_rescue)])
 	assert(totals.kills > 0 and totals.delivered > 0 and totals.gate_broken > 0 and totals.fed > 0 and totals.ladders > 0 and totals.catapult_shots > 0)
 	print("SIEGE_SIM_PASS ", totals)
 	quit(0)

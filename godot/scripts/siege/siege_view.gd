@@ -40,7 +40,7 @@ var node_nodes: Dictionary = {}
 var stock_piles: Array = []
 var catapult_nodes: Array = []
 var ladder_nodes: Dictionary = {}
-var altar_sacks: Array = []
+var cake_nodes: Dictionary = {}   # cake tree id -> the cake shown while ripe
 var proj_nodes: Dictionary = {}
 var _fx: Array = []
 var _time := 0.0
@@ -224,6 +224,7 @@ func _build_props() -> void:
 			"workshop_building":
 				_place(HEX + "building_market_%s.gltf" % COLOR[ob.team], p, -PI * 0.5 if ob.team == 0 else PI * 0.5, 2.0)
 	_build_nodes()
+	_build_cake_trees()
 	_build_plateau()
 	# Scenery outside the play field.
 	for i in 72:
@@ -454,12 +455,6 @@ func _build_castle(t: int) -> void:
 				piece.reparent(pile, true)
 				piece.visible = false
 		piles[kind] = pile
-	# Fate altar: a stone plinth; a glowing sack sits on it while an offering is ready.
-	var ap: Vector2 = Sim.altar(t)
-	_place(HEX + "resource_stone.gltf", Vector3(ap.x, 0, ap.y), 0.3, 3.2)
-	var sack := _place(HEX + "sack.gltf", Vector3(ap.x, 0.75, ap.y), 0.0, 3.0)
-	_decal(Vector3(ap.x, 0.06, ap.y), 1.6, Color("#e6b3ff"), 0.45)
-	altar_sacks.append(sack)
 	var wb: Vector2 = Sim._c(t, Vector2(7.0, 20.3))
 	_place(HEX + "wheelbarrow.gltf", Vector3(wb.x, 0, wb.y), face + 0.8, 3.0)
 	stock_piles.append(piles)
@@ -474,6 +469,66 @@ func _bars(a: Vector2, b: Vector2) -> void:
 		var s := 2.0
 		var off := Vector3(1.05 * s, 0, 0).rotated(Vector3.UP, rot)
 		_place(HEX + "fence_wood_straight.gltf", Vector3(c.x, Sim.height_at(c), c.y) + off, rot, s)
+
+static var _cake_mats: Array = []
+
+func _make_cake(s := 1.0) -> Node3D:
+	# Three-tier cake from primitives (the kit has no cake): sponge tiers, pink icing, a cherry.
+	if _cake_mats.is_empty():
+		for c in [Color("#f3dcb4"), Color("#ff9ec8"), Color("#d92b3a")]:
+			var m := StandardMaterial3D.new()
+			m.albedo_color = c
+			m.roughness = 0.6
+			_cake_mats.append(m)
+	var root := Node3D.new()
+	var y := 0.0
+	for i in 3:
+		var r: float = [0.42, 0.32, 0.22][i] * s
+		var h := 0.2 * s
+		var cyl := CylinderMesh.new()
+		cyl.top_radius = r
+		cyl.bottom_radius = r
+		cyl.height = h
+		cyl.radial_segments = 14
+		var tier := MeshInstance3D.new()
+		tier.mesh = cyl
+		tier.material_override = _cake_mats[0]
+		tier.position.y = y + h * 0.5
+		root.add_child(tier)
+		var icing := CylinderMesh.new()
+		icing.top_radius = r * 1.03
+		icing.bottom_radius = r * 1.03
+		icing.height = h * 0.25
+		icing.radial_segments = 14
+		var ic := MeshInstance3D.new()
+		ic.mesh = icing
+		ic.material_override = _cake_mats[1]
+		ic.position.y = y + h - h * 0.1
+		root.add_child(ic)
+		y += h
+	var cherry := SphereMesh.new()
+	cherry.radius = 0.07 * s
+	cherry.height = 0.14 * s
+	var ch := MeshInstance3D.new()
+	ch.mesh = cherry
+	ch.material_override = _cake_mats[2]
+	ch.position.y = y + 0.06 * s
+	root.add_child(ch)
+	for mi in root.get_children():
+		(mi as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return root
+
+func _build_cake_trees() -> void:
+	for ct in sim.cake_trees:
+		var p := Vector3(ct.p.x, 0, ct.p.y)
+		_place(HEX + "tree_single_B.gltf", p, float(ct.id) * 1.3, 3.6)
+		_decal(Vector3(p.x, 0.06, p.z), 1.9, Color("#ff9ec8"), 0.45)
+		var cake := _make_cake(1.3)
+		# Sits on a little stand beside the trunk, facing the middle of the field.
+		var side := Vector2(-ct.p.x, -ct.p.y).normalized() if ct.p.length() > 0.1 else Vector2(1, 0)
+		cake.position = p + Vector3(side.x, 0, side.y) * 1.6 + Vector3(0, 0.55, 0)
+		add_child(cake)
+		cake_nodes[ct.id] = cake
 
 func _build_nodes() -> void:
 	# Trees and quarry stones the workers harvest; a depleted node shows a stump / bare rock.
@@ -520,6 +575,12 @@ func _sync_castle(dt: float) -> void:
 		if has and nn.full != null:
 			var k := 0.75 + 0.25 * float(n.amount) / float(n.max)
 			(nn.full as Node3D).scale = Vector3.ONE * (3.2 if n.kind == "wood" else 4.4) * k
+	for ct in sim.cake_trees:
+		var cake: Node3D = cake_nodes.get(ct.id)
+		if cake != null:
+			cake.visible = bool(ct.ready)
+			if ct.ready:
+				cake.rotation.y += dt * 1.1
 	for cn in catapult_nodes:
 		if cn.arm == null:
 			continue
@@ -532,10 +593,6 @@ func _sync_castle(dt: float) -> void:
 			swing = 1.0 - (age - 0.15) / 0.9
 		(cn.arm as Node3D).rotation.x = float(cn.arm_rest) + swing * 1.4
 	for t in 2:
-		if t < altar_sacks.size() and altar_sacks[t] != null:
-			(altar_sacks[t] as Node3D).visible = bool(sim.altars[t].ready)
-			if sim.altars[t].ready:
-				(altar_sacks[t] as Node3D).rotation.y += dt * 1.2
 		var o_node: Dictionary = oracle_nodes[t] if t < oracle_nodes.size() else {}
 		if not o_node.is_empty() and o_node.body != null:
 			var w := float(sim.oracles[t].get("weight", 0))
@@ -717,10 +774,17 @@ func _sync_load(a: Dictionary, u: Dictionary) -> void:
 		a.load_node.queue_free()
 	if kind == "":
 		return
-	var packed := Stage.scene(HEX + {"wood":"resource_lumber.gltf", "stone":"resource_stone.gltf", "offering":"sack.gltf"}[kind])
+	var n: Node3D
+	if kind == "offering":
+		n = _make_cake(0.9)
+		n.position = Vector3(0, 2.35, 0)
+		(a.root as Node3D).add_child(n)
+		a.load_node = n
+		return
+	var packed := Stage.scene(HEX + {"wood":"resource_lumber.gltf", "stone":"resource_stone.gltf"}[kind])
 	if packed == null:
 		return
-	var n: Node3D = packed.instantiate()
+	n = packed.instantiate()
 	n.scale = Vector3.ONE * 2.2
 	n.position = Vector3(0, 2.35, 0)
 	(a.root as Node3D).add_child(n)
@@ -825,9 +889,19 @@ func on_event(e: Dictionary) -> void:
 			ring_at(fp, Color("#e6b3ff"), 2.4, 0.8)
 			for i in 8:
 				spark(fp + Vector3(randf_range(-0.8, 0.8), 0.6 + randf() * 1.6, randf_range(-0.8, 0.8)), Color("#f0c8ff"))
-		"offering_ready":
-			var arp: Vector2 = Sim.altar(int(e.team))
-			ring_at(Vector3(arp.x, 0.1, arp.y), Color("#e6b3ff"), 2.0, 0.7)
+		"cake_ready":
+			var ctr: Dictionary = sim.cake_trees[int(e.tree)]
+			ring_at(Vector3(ctr.p.x, 0.1, ctr.p.y), Color("#ff9ec8"), 2.2, 0.7)
+		"tantrum":
+			var tp := Vector3(e.pos.x, Sim.height_at(e.pos) + 0.2, e.pos.y)
+			for i in 3:
+				ring_at(tp, Color("#ff5a7a") if i == 0 else Color("#ffd0dc"), Sim.TANTRUM_R * (0.7 + 0.35 * i), 0.5 + 0.2 * i)
+			for i in 14:
+				spark(tp + Vector3(randf_range(-2.5, 2.5), 0.3 + randf() * 2.0, randf_range(-2.5, 2.5)), Color("#ffb3c6"))
+			shake(0.5)
+		"lift_join":
+			var lo: Dictionary = sim.oracles[int(e.team)]
+			ring_at(Vector3(lo.pos.x, Sim.height_at(lo.pos) + 0.1, lo.pos.y), GOLD, 1.6, 0.4)
 		"upgrade":
 			var ws2: Vector2 = Sim.workshop(int(e.team))
 			for i in 2:
@@ -915,10 +989,27 @@ func _sync_oracles(dt: float) -> void:
 		var root: Node3D = n.root
 		var target := Vector3(o.pos.x, Sim.height_at(o.pos), o.pos.y)
 		(n.halo as Node3D).rotation.y += dt * 1.6
+		if not n.has("aura"):
+			n["aura"] = _decal(Vector3.ZERO, Sim.HEAL_R, Color("#7dffa8"), 0.35)
+		var aura: Node3D = n.aura
+		aura.visible = o.state == "cell"
+		if aura.visible:
+			aura.position = Vector3(o.pos.x, Sim.height_at(o.pos) + 0.07, o.pos.y)
+			var ap := 0.92 + sin(_time * 2.2) * 0.08
+			aura.scale = Vector3(ap, 0.15, ap)
 		if o.state == "carried":
 			var a: Dictionary = actors.get(o.carrier, {})
 			if not a.is_empty():
-				target = a.root.position + Vector3(0, 1.75, 0)
+				# Held up in the middle of all her lifters, higher the more there are.
+				var sum := Vector3.ZERO
+				var cnt := 0
+				for id in o.lifters:
+					var la: Dictionary = actors.get(id, {})
+					if not la.is_empty():
+						sum += (la.root as Node3D).position
+						cnt += 1
+				var centre: Vector3 = sum / float(maxi(1, cnt)) if cnt > 0 else a.root.position
+				target = centre + Vector3(0, 1.75 + 0.12 * float(maxi(0, cnt - 1)), 0)
 				root.rotation.y = a.root.rotation.y
 			(n.ground as Node3D).visible = false
 			if n.state != "carried" and n.player != null:
@@ -983,6 +1074,11 @@ func _fx_mat(color: Color) -> StandardMaterial3D:
 	if not _fx_mats.has(key):
 		_fx_mats[key] = _unshaded(color)
 	return _fx_mats[key]
+
+var _shake := 0.0
+
+func shake(amount: float) -> void:
+	_shake = maxf(_shake, amount)
 
 func ring_at(at: Vector3, color: Color, grow := 2.2, life := 0.6) -> void:
 	if low_fx and life < 0.5:
@@ -1070,6 +1166,10 @@ func _update_camera(dt: float) -> void:
 	_cam_target = target if _cam_target == Vector3.ZERO else _cam_target.lerp(target, 1.0 - exp(-dt * 6.0))
 	camera.position = _cam_target + Vector3(0, 38.0, -ahead * 30.0)
 	camera.look_at(_cam_target, Vector3.UP)
+	if _shake > 0.01:
+		# Short camera shake for the tantrum shockwave.
+		camera.position += Vector3(randf_range(-1, 1), randf_range(-0.5, 0.5), randf_range(-1, 1)) * _shake * 0.5
+		_shake = maxf(0.0, _shake - dt * 1.6)
 
 func bars() -> Array:
 	# [{pos, fill, color}] for the HUD to draw 2D health bars over living units.

@@ -271,7 +271,7 @@ func _build_pause_panel() -> void:
 	v.add_theme_constant_override("separation", 10)
 	pause_panel.add_child(v)
 	_label(v, "SIEGE", 22, VisualTheme.GOLD, _title)
-	_label(v, "Break into the enemy castle, free your Oracle from their dungeon cell and carry her to your throne room. First to %d rescues wins. Gates open for your team; enemies must break them. Workers gather wood and stone, repair gates, and fund upgrades at the workshop." % Sim.WIN_RESCUES, 12, Color("#d4cbbb"))
+	_label(v, "Break into the enemy castle and carry your Oracle from their dungeon to your throne room. First to %d rescues wins. Standing by her in their dungeon heals you. Feed cake from the cake trees to THEIR Oracle: each size needs another lifter (up to 6). Left on the ground, an Oracle throws a tantrum that knocks everyone back. Workers gather, repair gates and fund upgrades." % Sim.WIN_RESCUES, 11, Color("#d4cbbb"))
 	_button(v, "RESUME", "gold", func(): pause_panel.visible = false)
 	var fps_btn := _button(v, "30 FPS MODE: OFF", "secondary", func(): pass)
 	pause_panel.visibility_changed.connect(func(): fps_btn.text = "30 FPS MODE: " + ("ON" if Engine.max_fps == 30 else "OFF"))
@@ -339,14 +339,29 @@ func on_event(e: Dictionary) -> void:
 			if e.id == player_id:
 				toast("You fell!", VisualTheme.RED)
 		"fed":
-			var w := int(e.weight)
-			if mine:
-				toast("The enemy fattened our Oracle! Weight %d/%d" % [w, Sim.MAX_WEIGHT], VisualTheme.RED)
-			else:
-				toast("Their Oracle grows heavier: %d/%d" % [w, Sim.MAX_WEIGHT], Color("#e6b3ff"))
+			# Only stage changes are worth a toast (every other cake is just half a stage).
+			if bool(e.get("stage_up", true)):
+				if mine:
+					toast("Our Oracle got fatter! Size %d — needs %d to lift" % [int(e.weight), int(e.need)], VisualTheme.RED)
+				else:
+					toast("Their Oracle grew to size %d — needs %d to lift" % [int(e.weight), int(e.need)], Color("#ff9ec8"))
 		"offering_taken":
 			if e.id == player_id:
-				toast("Carry the offering to the captive in our dungeon", Color("#e6b3ff"))
+				toast("Feed the cake to their Oracle in our dungeon", Color("#ff9ec8"))
+		"tantrum":
+			var tt := int(e.team)
+			if tt == sim.by_id[player_id].team:
+				toast("Our Oracle throws a TANTRUM — reach her now!", VisualTheme.GOLD)
+			else:
+				toast("Their Oracle throws a tantrum!", Color("#ffb3c6"))
+		"lift_join":
+			var lo: Dictionary = sim.oracles[int(e.team)]
+			if lo.carrier == player_id or e.id == player_id:
+				var need := int(e.need)
+				if int(e.n) < need:
+					toast("Lifting %d/%d — need %d more" % [int(e.n), need, need - int(e.n)], Color("#f2d18d"))
+				elif int(e.n) == need:
+					toast("Enough hands — move her!", VisualTheme.GOLD)
 		"gate_broken":
 			var side: String = str(sim.gates[int(e.gate)].side).to_upper()
 			toast("OUR %s GATE HAS FALLEN!" % side if mine else "ENEMY %s GATE BROKEN — CHARGE!" % side, VisualTheme.RED if mine else VisualTheme.GOLD)
@@ -604,22 +619,32 @@ func _draw_gate_bars() -> void:
 
 func _oracle_status(me: Dictionary) -> String:
 	var o: Dictionary = sim.oracles[me.team]
-	var w := int(o.get("weight", 0))
-	var suffix := "  (weight %d/%d)" % [w, Sim.MAX_WEIGHT] if w > 0 else ""
+	var need: int = sim.lifters_needed(o)
+	var suffix := "  · size %d, needs %d" % [int(o.weight), need] if int(o.weight) > 0 else ""
 	return _oracle_state_text(me, o) + suffix
 
 func _oracle_state_text(me: Dictionary, o: Dictionary) -> String:
 	match str(o.state):
-		"cell": return "Our Oracle: captive in the enemy keep"
-		"carried": return "Our Oracle: YOU are carrying her!" if o.carrier == player_id else "Our Oracle: an ally is carrying her"
-		"dropped": return "Our Oracle: loose — returns in %ds" % int(ceil(Sim.DROP_RETURN - (sim.time - o.dropped_at)))
+		"cell": return "Our Oracle: captive in the enemy dungeon"
+		"carried":
+			var n: int = o.lifters.size()
+			var need: int = sim.lifters_needed(o)
+			if int(o.carry_team) != int(o.team):
+				return "Our Oracle: ENEMIES are hauling her back!"
+			if n < need:
+				return "Our Oracle: lifting %d/%d — need %d more!" % [n, need, need - n]
+			return "Our Oracle: YOU lead the lift!" if o.carrier == player_id else "Our Oracle: allies are carrying her"
+		"dropped": return "Our Oracle: loose — back to her cell in %ds" % int(ceil(Sim.DROP_RETURN - (sim.time - o.dropped_at)))
 	return ""
 
 func _draw_oracle_marker(me: Dictionary) -> void:
 	# Point to our Oracle (or home, while carrying her) when she is off-screen.
 	if not project.is_valid() or not on_screen.is_valid():
 		return
-	var goal: Vector2 = Sim.throne(me.team) if me.carrying else sim.oracles[me.team].pos
+	var goal: Vector2 = sim.oracles[me.team].pos
+	if me.carrying:
+		var ho: Dictionary = sim.lifting_oracle(me)
+		goal = Sim.throne(me.team) if int(ho.get("team", me.team)) == me.team else Sim.cell(int(ho.team))
 	var world := Vector3(goal.x, 1.0, goal.y)
 	if on_screen.call(world):
 		return
@@ -662,8 +687,9 @@ func _draw_button(b: Dictionary, me: Dictionary) -> void:
 			cd_max = 2.2
 			ready = cd <= 0.0 and not me.carrying
 		"action":
-			label = {"forge":"FORGE","grab":"GRAB","throw":"THROW","workshop":"WORKSHOP","chop":"CHOP","mine":"MINE",
-				"repair":"REPAIR","gather":"WORKING","repairing":"REPAIRING","ladder":"LADDER","build_ladder":"BUILDING","offer":"OFFERING","feed":"FEED"}.get(b.ctx, "USE")
+			label = {"forge":"FORGE","grab":"LIFT","throw":"THROW","workshop":"WORKSHOP","chop":"CHOP","mine":"MINE",
+				"repair":"REPAIR","gather":"WORKING","repairing":"REPAIRING","ladder":"LADDER","build_ladder":"BUILDING","cake":"TAKE CAKE","feed":"FEED",
+				"join":"HELP LIFT","letgo":"LET GO"}.get(b.ctx, "USE")
 			col = Color("#155258")
 			rim = Color("#9ff6ef")
 	var pressed: bool = _time - float(_pressed_at.get(b.id, -10.0)) < 0.12 or (b.id == "attack" and _attack_held)
