@@ -309,3 +309,31 @@ Record the deployment like the arena did (`multiplayer/*/live-deployment.json` s
 **Operate:** `journalctl -u fatebound-siege -f` (joins, leaves, match starts/ends),
 `systemctl restart fatebound-siege`, overrides in `/etc/fatebound-siege.env`
 (`SIEGE_MAX_PLAYERS`, `SIEGE_LOG`). Previous install kept at `/srv/fatebound-siege.prev`.
+
+---
+
+## 11. Round 5: Siege-only app, Siege Pass, shop, economy (branch `claude/siege-dev-r5`)
+
+Based on live `447b97a`. Preview **0.12.0-siege-app, version code 21** (APK 38 MB, was 76 MB).
+- **Entry:** `scenes/Main.tscn` -> `scripts/app/siege_app.gd`. Tabs: Home (3D hero showcase,
+  VS BOTS / ONLINE 16v16, PLAY, first-win banner, pass summary, daily + weekly challenges),
+  Pass (30 tiers, free/premium, claim all, premium for 950 gems), Shop (weekly featured for gems,
+  daily deals for gold, gems->gold), Locker (per-class skins/weapons, titles), Settings.
+- **Economy/profile:** `scripts/meta/economy.gd` (all tables and formulas) and
+  `scripts/meta/profile.gd` (`user://siege_profile.json`, atomic writes). Everything sold is
+  cosmetic; no real-money purchases (Play Billing not integrated). Season 1 starts 2026-10-01 UTC.
+- **Migration:** first launch converts the old save once (gold 1:1, tokens -> gems, old weapons
+  250 gold each, chests 150 each, level kept); `user://fatebound-save.json` is never modified.
+  Settings can import pasted old progress once if there was no local save.
+- **Cosmetics in battle:** only the local player's look is applied (skin tint = cached static
+  material; weapons swapped). Other players online see defaults (needs a protocol change).
+- **Removed:** the whole dice-era app (reachability scan; see SIEGE_PROGRESS E4). The repo-root
+  web game and its servers are untouched.
+- **Play branch merge (codex/siege-play-vc24):** `tools/verify_play_bundle.py` on this branch is
+  the Play branch's version with its dice-era checks replaced (requires Siege app scripts,
+  rejects dice-era scripts; the old content JSON no longer exists). Keep the Play branch's own
+  `build-native-play.yml` (vc24); this branch still carries the older vc22 workflow file.
+- **Tests:** `tools/run_siege_tests.sh` = 11 suites incl. `app_flow_test` (the app through its
+  real buttons, REAL time) and `meta_economy_test`. `godot-visual-review.yml` runs it on PRs.
+- **Unverified:** Settings > Privacy Policy opens
+  `https://136-113-125-3.sslip.io/fatebound/privacy.html` (not reachable from the dev sandbox).
