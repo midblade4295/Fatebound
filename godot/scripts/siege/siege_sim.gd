@@ -45,6 +45,13 @@ const HILL_STAIR_X := 1.3
 const HILL_STAIR_Z := 5.0
 const LEDGE_R := 0.35
 
+# ---- fate offerings (the "cake") ----
+const ALTAR_P := Vector2(-3.5, 17.0)   # blue courtyard; mirrored for red
+const OFFERING_EVERY := 30.0
+const MAX_WEIGHT := 5
+const WEIGHT_SLOW := 0.08            # carrier speed -8 % per weight level
+const FEED_RADIUS := 1.9
+
 # ---- gathering / crafting ----
 const CARRY_MAX := 5
 const GATHER_TIME := 0.9         # seconds per unit gathered
@@ -98,6 +105,7 @@ var gates: Array = []          # {id, team, a, b, c, hp, max_hp, broken, open}
 var nodes: Array = []          # resource nodes {id, kind:"wood"/"stone", p, r, amount, max, regen, t}
 var stock := [{"wood":0, "stone":0}, {"wood":0, "stone":0}]
 var levels := [{"gates":0, "armory":0, "forge":0}, {"gates":0, "armory":0, "forge":0}]
+var altars: Array = []         # {team, p, ready, t}
 var rng := RandomNumberGenerator.new()
 var nav: Array = []            # AStarGrid2D per team
 var nav_version := 0
@@ -143,6 +151,9 @@ static func forge(team: int) -> Vector2:
 
 static func workshop(team: int) -> Vector2:
 	return _m(team, Vector2(8.5, 18.0))
+
+static func altar(team: int) -> Vector2:
+	return _m(team, ALTAR_P)
 
 static func spawn(team: int) -> Vector2:
 	return _m(team, Vector2(0.0, 18.2))
@@ -315,6 +326,7 @@ func setup(team_size: int, seed_value: int, player_team := 0) -> void:
 	_build_map()
 	_build_nav()
 	oracles = [_new_oracle(0), _new_oracle(1)]
+	altars = [{"team":0, "p":altar(0), "ready":true, "t":0.0}, {"team":1, "p":altar(1), "ready":true, "t":0.0}]
 	# One gatherer per team from 4 players up, two from 8.
 	var roles := ["raid","gather","defend","raid","gather","escort","raid","defend","raid","gather"]
 	for t in 2:
@@ -326,8 +338,12 @@ func setup(team_size: int, seed_value: int, player_team := 0) -> void:
 			by_id[id] = u
 			_respawn(u, true)
 
-func _new_oracle(team: int) -> Dictionary:
-	return {"team":team,"state":"cell","pos":cell(team),"carrier":"","dropped_at":0.0}
+func _new_oracle(team: int, weight := 0) -> Dictionary:
+	return {"team":team,"state":"cell","pos":cell(team),"carrier":"","dropped_at":0.0,"weight":weight}
+
+func _return_to_cell(t: int) -> void:
+	# Recaptured / timed-out Oracles go back to the cell but keep the weight they were fed.
+	oracles[t] = _new_oracle(t, int(oracles[t].get("weight", 0)))
 
 func _new_unit(id: String, team: int, bot: bool, role: String) -> Dictionary:
 	return {"id":id,"team":team,"bot":bot,"role":role,"cls":"villager","up":false,"hp":60.0,"max_hp":60.0,
@@ -336,7 +352,7 @@ func _new_unit(id: String, team: int, bot: bool, role: String) -> Dictionary:
 		"dodge_dir":Vector2.ZERO,"target":"","forge":{"open":false,"faces":["fate","fate","fate"],"held":[false,false,false],
 		"rolling":0.0,"rolled":false},"ai_goal":Vector2.ZERO,"lunge_hit":false,
 		"unstick":0.0,"unstick_dir":Vector2.ZERO,"stuck_t":0.0,"last_pos":Vector2.ZERO,
-		"load":{"kind":"", "n":0}, "task":{}, "workshop_open":false, "gathered":0, "repaired":0.0, "gate_dmg":0.0,
+		"load":{"kind":"", "n":0}, "task":{}, "workshop_open":false, "gathered":0, "repaired":0.0, "gate_dmg":0.0, "offering":false, "fed":0,
 		"path":PackedVector2Array(), "path_i":0, "path_goal":Vector2(INF, INF), "path_at":-10.0, "path_ver":-1}
 
 func armory_mult(team: int) -> float:
@@ -463,7 +479,7 @@ func _aim(u: Dictionary, reach: float) -> void:
 		u.face = angle_of(target.pos - u.pos)
 
 func _start_attack(u: Dictionary, kind: String, aim := true) -> bool:
-	if not can_act(u) or u.carrying:
+	if not can_act(u) or u.carrying or u.offering:
 		return false
 	if kind == "ability":
 		if CLASSES[u.cls].ability == "" or u.cd_ability > 0.0:
@@ -517,8 +533,10 @@ func _interact(u: Dictionary) -> bool:
 	if u.carrying:
 		_release_oracle(u, true)
 		return true
+	if _offering_action(u) != "":
+		return _do_offering(u)
 	var mine: Dictionary = oracles[u.team]
-	if mine.state in ["cell","dropped"] and u.pos.distance_to(mine.pos) <= PICKUP_RADIUS:
+	if not u.offering and mine.state in ["cell","dropped"] and u.pos.distance_to(mine.pos) <= PICKUP_RADIUS:
 		mine.state = "carried"
 		mine.carrier = u.id
 		u.carrying = true
@@ -548,12 +566,46 @@ func _interact(u: Dictionary) -> bool:
 		return true
 	return false
 
+func _offering_action(u: Dictionary) -> String:
+	if u.carrying:
+		return ""
+	if u.offering:
+		var captive: Dictionary = oracles[1 - u.team]
+		if captive.state == "cell" and u.pos.distance_to(captive.pos) <= FEED_RADIUS and int(captive.weight) < MAX_WEIGHT:
+			return "feed"
+		return ""
+	var al: Dictionary = altars[u.team]
+	if al.ready and u.load.n == 0 and u.pos.distance_to(al.p) <= 1.8:
+		return "offer"
+	return ""
+
+func _do_offering(u: Dictionary) -> bool:
+	match _offering_action(u):
+		"offer":
+			altars[u.team].ready = false
+			altars[u.team].t = 0.0
+			u.offering = true
+			u.task = {}
+			_event("offering_taken", {"id":u.id, "team":u.team})
+			return true
+		"feed":
+			var captive: Dictionary = oracles[1 - u.team]
+			captive.weight = int(captive.weight) + 1
+			u.offering = false
+			u.fed += 1
+			_event("fed", {"id":u.id, "team":1 - u.team, "weight":int(captive.weight)})
+			return true
+	return false
+
 func context_action(u: Dictionary) -> String:
 	# What the ACTION button does right now, for the HUD label.
 	if not alive(u):
 		return ""
 	if u.carrying:
 		return "throw"
+	var off := _offering_action(u)
+	if off != "":
+		return off
 	var mine: Dictionary = oracles[u.team]
 	if mine.state in ["cell","dropped"] and u.pos.distance_to(mine.pos) <= PICKUP_RADIUS:
 		return "grab"
@@ -703,6 +755,7 @@ func _kill(src: Dictionary, dst: Dictionary) -> void:
 	dst.workshop_open = false
 	dst.task = {}
 	dst.load = {"kind":"", "n":0}
+	dst.offering = false
 	dst.respawn_at = time + RESPAWN_TIME
 	dst.deaths += 1
 	if not src.is_empty() and src.has("team"):
@@ -878,6 +931,10 @@ func _step_unit(u: Dictionary, dt: float) -> void:
 		_step_task(u, dt)
 		return
 	var mult := float(CLASSES[u.cls].carry) if u.carrying else 1.0
+	if u.carrying:
+		mult *= 1.0 - WEIGHT_SLOW * float(oracles[u.team].get("weight", 0))
+	if u.offering:
+		mult = minf(mult, 0.9)
 	if u.load.n > 0:
 		mult = minf(mult, 0.85)
 	if u.move.length() > 0.08:
@@ -1052,11 +1109,11 @@ func _step_oracles(dt: float) -> void:
 				# Captors touching a loose Oracle drag her straight back to the cell.
 				for u in units:
 					if u.team != t and alive(u) and u.pos.distance_to(o.pos) <= PICKUP_RADIUS:
-						oracles[t] = _new_oracle(t)
+						_return_to_cell(t)
 						_event("recaptured", {"team":t,"id":u.id})
 						break
 				if oracles[t].state == "dropped" and time - float(o.dropped_at) >= DROP_RETURN:
-					oracles[t] = _new_oracle(t)
+					_return_to_cell(t)
 					_event("recaptured", {"team":t,"id":""})
 
 func _step_world(dt: float) -> void:
@@ -1071,6 +1128,12 @@ func _step_world(dt: float) -> void:
 		if open != g.open:
 			g.open = open
 			_event("gate_open" if open else "gate_close", {"gate":g.id, "team":g.team})
+	for al in altars:
+		if not al.ready:
+			al.t += dt
+			if al.t >= OFFERING_EVERY:
+				al.ready = true
+				_event("offering_ready", {"team":al.team})
 	for n in nodes:
 		if n.amount < n.max:
 			n.t += dt
@@ -1311,8 +1374,29 @@ func _think_fighter(u: Dictionary) -> void:
 		_dodge(u)
 		return
 	if not foe.is_empty():
-		_fight(u, foe)
-		return
+		if u.offering:
+			pass   # hands full: keep walking to the cell, dodge if needed
+		else:
+			_fight(u, foe)
+			return
+	# Defenders run offerings from the altar to the captive in our dungeon.
+	if u.role == "defend" or u.offering:
+		var captive: Dictionary = oracles[1 - u.team]
+		if u.offering:
+			if captive.state == "cell" and int(captive.weight) < MAX_WEIGHT:
+				if u.pos.distance_to(captive.pos) <= FEED_RADIUS - 0.3:
+					u.move = Vector2.ZERO
+					_do_offering(u)
+				else:
+					_nav_to(u, captive.pos, FEED_RADIUS - 0.5)
+				return
+		elif altars[u.team].ready and captive.state == "cell" and int(captive.weight) < MAX_WEIGHT and time - float(alarm.at) > 6.0 and enemy_carrier.is_empty():
+			if u.pos.distance_to(altars[u.team].p) <= 1.5:
+				u.move = Vector2.ZERO
+				_do_offering(u)
+			else:
+				_nav_to(u, altars[u.team].p, 1.2)
+			return
 	# Pick up the Oracle when standing on her.
 	if mine.state in ["cell","dropped"] and u.pos.distance_to(mine.pos) <= PICKUP_RADIUS:
 		_interact(u)
