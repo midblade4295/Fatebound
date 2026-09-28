@@ -172,3 +172,17 @@ Each step is committed separately; this file is updated in the same commit.
   verified download, 176 KB server-only project, service, PROBE_OK). Tested in NO_SYSTEMD mode
   with a real download, and as user nobody from a read-only folder.
 - Test runner now includes siege_net_smoke (12 suites, all pass).
+
+# Round 5 (Codex, 2026-09-28): fail-closed Vulkan Android export
+- The 0.11.0 server/client source and all 12 suites passed, but the rebuilt APK packed
+  `renderer/rendering_method=gl_compatibility`. The old build check depended on the optional
+  `strings` command; when it was absent, the pipeline printed an error and still reported OK.
+- Set the base and mobile renderer settings to `mobile`, disabled the OpenGL fallback, replaced
+  the APK check with a Python verifier that fails closed, and routed CI through the same checked
+  build script. Bumped the preview to 0.11.1 / version code 20.
+- Made the real-time network smoke deterministic: the original fixed northward touch could hit
+  a wall from randomized spawns. It now drives the real touch stick along the mirror nav path,
+  requires authoritative movement over 3 m, and retains an 8 s hard failure bound. The raw test
+  client also sends its hello once the socket opens instead of relying on a narrow timing window.
+- Verification: all 12 suites pass in the quick runner; the final network smoke also passed five
+  consecutive standalone server/client runs.
