@@ -288,3 +288,20 @@ Design (all cosmetic; no pay-to-win; no real-money purchases until Play Billing 
   processing during matches. Proved with two failing asserts in app_flow_test first, then fixed by
   `_set_menu_active`. All 11 suites pass. (Not measured on a device; the GPU cost is inferred from
   the viewport settings, not profiled.)
+
+# Round 7 (Kevin, 2026-09-28): Fat Princess-style land, slopes, bigger map, capturable outposts, bridges ("use Blender")
+| Step | Scope | Status |
+|---|---|---|
+| T1 | Blender art: seamless grass (voronoi patches), herringbone brick path, rock ledge texture, wooden bridge model | done |
+| T2 | Sim: bigger field, river with 3 bridges (walls + nav), raised ledges with ramps, rolling slopes (height_at), outposts (capture, respawn, trickle), protocol sync | todo |
+| T3 | View: single terrain mesh (heights from sim) with grass/path/rock shader + path mask, water, bridges, ledge faces, outpost towers | todo |
+| T4 | Bots (outposts), HUD markers, tests, screenshots, APK | todo |
+
+## T1 notes
+- tools/blender/terrain_art.py -> assets/terrain/{grass,path,rock}.png (1024, seamless) + bridge.glb.
+- Seamless by construction: 4D noise sampled on a torus (grass, rock); the herringbone rendered
+  over exactly one period. The 2x1 herringbone lattice (H bricks on (1,1)/(2,-2), V bricks at
+  offset (-1,0), period 4x4) was verified by rasterising before modelling.
+- Bugs found and fixed: brick colours overexposed (Blender colours are linear); per-brick random
+  colour/tilt broke tiling (halves of a wrapped brick differed) -> variation keyed to the brick's
+  position within the period (wrap diff 7.9 -> 1.6, flat control 0.3).
