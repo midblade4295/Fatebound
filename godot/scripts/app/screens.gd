@@ -33,38 +33,55 @@ static func item_kind_text(it: Dictionary) -> String:
 static func rarity(it: Dictionary) -> Color:
 	return Color(str(Eco.RARITY_COLOR.get(str(it.get("rarity", "common")), "#b8c4c9")))
 
-static func item_swatch(parent: Node, it: Dictionary, px := 56) -> void:
-	# A rarity-framed square with the item's icon (skins show their tint).
+static func swatch(parent: Node, tex: Texture2D, edge: Color, px := 56, fallback := "", tint := Color.WHITE) -> void:
+	# A rarity-framed tile showing a pre-rendered icon (or a procedural glyph if there is none).
 	var box := PanelContainer.new()
-	var sb := UI.card_style(Color(0, 0, 0, 0.35), 12, rarity(it), false)
+	var sb := UI.card_style(Color(edge.r * 0.20, edge.g * 0.20, edge.b * 0.26, 0.92), 14, edge, false)
 	sb.set_border_width_all(2)
-	sb.content_margin_left = 6
-	sb.content_margin_right = 6
-	sb.content_margin_top = 6
-	sb.content_margin_bottom = 6
+	for side in ["left", "right", "top", "bottom"]:
+		sb.set("content_margin_" + side, 3.0)
 	box.add_theme_stylebox_override("panel", sb)
 	box.custom_minimum_size = Vector2(px, px)
 	parent.add_child(box)
-	var tint: Color = Color(str(it.tint)) if it.has("tint") else rarity(it).lightened(0.25)
-	var ic := UI.icon(box, item_icon(it), px - 16, tint)
-	ic.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	if tex != null:
+		var t := TextureRect.new()
+		t.texture = tex
+		t.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		t.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		t.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		box.add_child(t)
+	else:
+		var ic := UI.icon(box, fallback, px - 22, tint)
+		ic.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+
+static func item_texture_path(id: String) -> String:
+	match str(Eco.item(id).get("kind", "")):
+		"skin": return "res://assets/ui/skins/%s.png" % id
+		"weapon": return "res://assets/ui/icons/%s.png" % id
+	return ""
+
+static func item_swatch(parent: Node, id: String, px := 56) -> void:
+	var it := Eco.item(id)
+	var tp := item_texture_path(id)
+	swatch(parent, UI.tex(tp) if tp != "" else null, rarity(it), px, item_icon(it), rarity(it).lightened(0.25))
 
 static func reward_text(r: Dictionary) -> Array:
-	# -> [icon kind, text, colour]
+	# -> [glyph kind, text, colour, texture path or ""]
 	if r.has("item"):
 		var it := Eco.item(str(r.item))
-		return [item_icon(it), str(it.get("name", "?")), rarity(it)]
+		return [item_icon(it), str(it.get("name", "?")), rarity(it), item_texture_path(str(r.item))]
 	if r.has("gems"):
-		return ["gem", "%d gems" % int(r.gems), UI.CYAN]
-	return ["coin", "%d gold" % int(r.get("gold", 0)), UI.GOLD]
+		return ["gem", "%d gems" % int(r.gems), UI.CYAN, "res://assets/ui/currency/gem.png"]
+	var g := int(r.get("gold", 0))
+	return ["coin", "%d gold" % g, UI.GOLD, "res://assets/ui/currency/%s.png" % ("coins_s" if g >= 300 else "coin")]
 
 static func price_button(parent: Node, app, id: String) -> Button:
 	var price := Eco.item_price(id)
 	var gems: bool = price.has("gems")
 	var amount: int = int(price.get("gems", price.get("gold", 0)))
-	var b := UI.button(parent, "  %s" % UI.compact(amount), "premium" if gems else "gold", func(): buy(app, id), "buy_" + id, 15, 14)
-	UI.icon(b, "gem" if gems else "coin", 18).position = Vector2(12, 11)
+	var b := UI.button(parent, "      %s" % UI.compact(amount), "premium" if gems else "gold", func(): buy(app, id), "buy_" + id, 15, 14)
+	UI.tex_icon(b, "res://assets/ui/currency/%s.png" % ("gem" if gems else "coin"), 26).position = Vector2(10, 8)
 	b.disabled = not app.profile.can_afford(price)
 	return b
 
@@ -89,66 +106,28 @@ static func buy(app, id: String) -> void:
 static func home(app, root: VBoxContainer) -> void:
 	var p = app.profile
 	var d: Dictionary = p.d
-	# Hero showcase with a class switcher.
-	var hero := PanelContainer.new()
-	var hs := UI.card_style(Color(0.05, 0.09, 0.16, 0.65), 22, UI.CARD_HI)
-	hs.content_margin_left = 0
-	hs.content_margin_right = 0
-	hs.content_margin_top = 0
-	hs.content_margin_bottom = 0
-	hero.add_theme_stylebox_override("panel", hs)
-	hero.custom_minimum_size = Vector2(0, 318)
-	root.add_child(hero)
-	var stage := Control.new()
-	stage.clip_contents = true
-	hero.add_child(stage)
-	var show := Showcase.new()
-	show.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	stage.add_child(show)
-	show.show_look(app.home_class, p.look_for(app.home_class))
-	# Overlay labels: no word-wrap (created before the stage has a width, a wrapping label
-	# sizes itself one letter per line) and explicit top/bottom offsets.
-	var logo := UI.title(stage, "FATEBOUND", 34, UI.GOLD)
-	logo.autowrap_mode = TextServer.AUTOWRAP_OFF
-	logo.anchor_left = 0.0
-	logo.anchor_right = 1.0
-	logo.offset_left = 0
-	logo.offset_right = 0
-	logo.offset_top = 8
-	logo.offset_bottom = 50
-	var sub := UI.label(stage, "S I E G E", 13, Color("#ffe4a8"), UI.HEAVY_FONT, true)
-	sub.autowrap_mode = TextServer.AUTOWRAP_OFF
-	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	sub.anchor_left = 0.0
-	sub.anchor_right = 1.0
-	sub.offset_left = 0
-	sub.offset_right = 0
-	sub.offset_top = 48
-	sub.offset_bottom = 66
-	var bottom := UI.row(stage, 6)
-	bottom.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
-	bottom.offset_top = -52
-	bottom.offset_bottom = -10
-	bottom.offset_left = 10
-	bottom.offset_right = -10
-	var classes: Array = Eco.CLASSES
-	var ci := classes.find(app.home_class)
-	UI.button(bottom, "◀", "ghost", func():
-		app.home_class = classes[(ci - 1 + classes.size()) % classes.size()]
-		app.rebuild(), "home_prev", 16, 12)
-	var mid := VBoxContainer.new()
-	UI.grow(mid)
-	mid.add_theme_constant_override("separation", 0)
-	bottom.add_child(mid)
-	var cn := UI.label(mid, str(Eco.CLASS_NAMES[app.home_class]).to_upper(), 16, UI.TEXT, UI.HEAVY_FONT, true)
-	cn.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	# The hero itself (backdrop, live 3D character, logo) is the app's full-bleed layer behind this
+	# scroll area; here is the space it shows through, then the class picker.
+	app.hero_show(app.home_class, p.look_for(app.home_class))
+	UI.spacer(root, 322.0)
 	var eq: Dictionary = d.equip[app.home_class]
+	var cn := UI.title(root, str(Eco.CLASS_NAMES[app.home_class]).to_upper(), 28, UI.TEXT)
+	cn.add_theme_constant_override("outline_size", 8)
 	var skin_name := str(Eco.item(str(eq.skin)).get("name", "Default look"))
-	var sl := UI.label(mid, skin_name, 11, UI.MUTED)
+	var sl := UI.label(root, skin_name, 12, UI.GOLD, UI.HEAVY_FONT, true)
 	sl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	UI.button(bottom, "▶", "ghost", func():
-		app.home_class = classes[(ci + 1) % classes.size()]
-		app.rebuild(), "home_next", 16, 12)
+	var chips := UI.row(root, 6)
+	for cls in Eco.CLASSES:
+		var sel: bool = app.home_class == cls
+		var cb := UI.button(chips, "", "gold" if sel else "ghost", func():
+			app.home_class = cls
+			app.sfx("tap")
+			app.rebuild(), "home_" + cls, 12, 14)
+		cb.custom_minimum_size = Vector2(0, 46)
+		UI.grow(cb)
+		var ci := UI.icon(cb, cls, 24, Color("#2e1d00") if sel else UI.TEXT)
+		ci.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+		ci.position -= Vector2(12, 12)
 
 	# Mode + PLAY
 	var modes := UI.row(root, 8)
@@ -160,9 +139,7 @@ static func home(app, root: VBoxContainer) -> void:
 		app.play_online = true
 		app.sfx("tap")
 		app.rebuild(), "mode_online", 14))
-	var play := UI.button(root, "PLAY", "primary", func(): app.start_match(app.play_online), "play", 32, 20)
-	play.add_theme_font_override("font", UI.TITLE_FONT)
-	play.custom_minimum_size = Vector2(0, 78)
+	UI.play_button(root, "PLAY", func(): app.start_match(app.play_online), "play")
 	var hint := UI.label(root, "Join the live 16 vs 16 battle on the Siege server" if app.play_online else "You and 15 bots vs 16 bots · works offline", 12, UI.MUTED)
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	if str(d.first_win_day) != Eco.day_key(p.now()):
@@ -327,10 +304,10 @@ static func tier_cell(app, parent: Node, sid: int, t: int, prem: bool) -> void:
 	UI.grow(cell)
 	parent.add_child(cell)
 	var row := UI.row(cell, 6)
-	var tint: Color = rt[2]
-	if r.has("item") and Eco.item(str(r.item)).has("tint"):
-		tint = Color(str(Eco.item(str(r.item)).tint))
-	UI.icon(row, str(rt[0]), 22, tint)
+	if str(rt[3]) != "":
+		UI.tex_icon(row, str(rt[3]), 42)
+	else:
+		UI.icon(row, str(rt[0]), 24, rt[2])
 	var l := UI.label(row, str(rt[1]), 11, UI.TEXT)
 	UI.grow(l)
 	var claimed: bool = (p.d.pass.prem if prem else p.d.pass.free).has(t)
@@ -365,13 +342,12 @@ static func shop(app, root: VBoxContainer) -> void:
 	for off in Eco.EXCHANGE:
 		var c := UI.card(ex)
 		(c.get_parent() as Control).size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		var ir := UI.row(c, 4)
-		ir.alignment = BoxContainer.ALIGNMENT_CENTER
-		UI.icon(ir, "coin", 26)
+		var pile := UI.tex_icon(c, "res://assets/ui/currency/coins_%s.png" % str(off.id).substr(5), 78)
+		pile.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		var gl := UI.label(c, UI.compact(int(off.gold)) + " gold", 15, UI.GOLD, UI.HEAVY_FONT, true)
 		gl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		var oid: String = off.id
-		var b := UI.button(c, "  %d" % int(off.gems), "premium", func():
+		var b := UI.button(c, "     %d" % int(off.gems), "premium", func():
 			var r: Dictionary = p.exchange(oid)
 			if r.ok:
 				app.sfx("coin")
@@ -380,7 +356,7 @@ static func shop(app, root: VBoxContainer) -> void:
 				app.sfx("error")
 				app.toast(str(r.error), UI.RED)
 			app.rebuild(), "exchange_" + oid, 14, 12)
-		UI.icon(b, "gem", 16).position = Vector2(10, 11)
+		UI.tex_icon(b, "res://assets/ui/currency/gem.png", 24).position = Vector2(8, 7)
 		b.disabled = int(p.d.gems) < int(off.gems)
 
 static func item_grid(app, root: Node, ids: Array, big: bool) -> void:
@@ -403,7 +379,7 @@ static func item_grid(app, root: Node, ids: Array, big: bool) -> void:
 		cardp.add_child(v)
 		var sw := CenterContainer.new()
 		v.add_child(sw)
-		item_swatch(sw, it, 84 if big else 64)
+		item_swatch(sw, id, 100 if big else 80)
 		var n := UI.label(v, str(it.name), 14, UI.TEXT, UI.HEAVY_FONT, true)
 		n.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		var k := UI.label(v, item_kind_text(it), 11, UI.MUTED)
@@ -460,23 +436,28 @@ static func locker(app, root: VBoxContainer) -> void:
 		return
 	var cls: String = app.locker_class
 	var hero := PanelContainer.new()
-	var hs := UI.card_style(Color(0.05, 0.09, 0.16, 0.65), 20, UI.CARD_HI)
-	hs.content_margin_left = 0
-	hs.content_margin_right = 0
-	hs.content_margin_top = 0
-	hs.content_margin_bottom = 0
+	var hs := UI.card_style(Color(0.05, 0.09, 0.16, 1.0), 22, UI.CARD_HI)
+	for side in ["left", "right", "top", "bottom"]:
+		hs.set("content_margin_" + side, 0.0)
 	hero.add_theme_stylebox_override("panel", hs)
-	hero.custom_minimum_size = Vector2(0, 250)
+	hero.custom_minimum_size = Vector2(0, 280)
 	root.add_child(hero)
+	var stage := Control.new()
+	stage.clip_contents = true
+	hero.add_child(stage)
+	Showcase.backdrop(stage)
 	var show := Showcase.new()
-	hero.add_child(show)
+	show.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	stage.add_child(show)
 	show.show_look(cls, p.look_for(cls))
-	var cn := UI.title(root, str(Eco.CLASS_NAMES[cls]).to_upper(), 20, UI.TEXT)
+	var nm := UI.title(root, str(Eco.CLASS_NAMES[cls]).to_upper(), 20, UI.TEXT)
 	for slot in ["skin", "weapon"]:
 		section(root, "SKINS" if slot == "skin" else "WEAPONS", "", "skin" if slot == "skin" else "weapon")
 		var def := UI.card(root)
-		var dr := UI.row(def, 8)
-		UI.grow(UI.label(dr, "Default " + ("look" if slot == "skin" else "gear"), 14, UI.TEXT))
+		var dr := UI.row(def, 10)
+		var dtex := UI.tex(("res://assets/ui/skins/default_%s.png" if slot == "skin" else "res://assets/ui/icons/default_%s.png") % cls)
+		swatch(dr, dtex, UI.CARD_HI, 60, "star")
+		UI.grow(UI.label(dr, "Default " + ("look" if slot == "skin" else "gear"), 14, UI.TEXT, UI.HEAVY_FONT))
 		var is_def: bool = str(p.d.equip[cls][slot]) == ""
 		UI.button(dr, "EQUIPPED" if is_def else "EQUIP", "ghost" if is_def else "secondary", func():
 			p.unequip(cls, slot)
@@ -492,7 +473,7 @@ static func locker_row(app, root: Node, id: String) -> void:
 	var it := Eco.item(id)
 	var c := UI.card(root)
 	var r := UI.row(c, 10)
-	item_swatch(r, it, 52)
+	item_swatch(r, id, 64)
 	var v := VBoxContainer.new()
 	UI.grow(v)
 	r.add_child(v)

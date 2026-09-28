@@ -1,9 +1,9 @@
 extends Control
-# 3D hero showcase: the player's equipped look for a class, idling on a stone dais in front of a
-# castle. Rendered in its own SubViewport at physical-pixel resolution, shown via a TextureRect.
-# Only transforms change per frame (no per-frame material or buffer writes).
+# 3D hero: the player's equipped look for a class idling on a small stone dais. Transparent
+# background so it sits on the pre-rendered Blender backdrop (assets/ui/hero_backdrop.jpg).
+# Rendered in its own SubViewport at physical-pixel resolution; only transforms change per frame.
 const View = preload("res://scripts/siege/siege_view.gd")
-const HEX := "res://assets/kaykit/hex/"
+const BACKDROP := "res://assets/ui/hero_backdrop.jpg"
 
 var viewport: SubViewport
 var world: Node3D
@@ -13,10 +13,22 @@ var player: AnimationPlayer
 var cls := "knight"
 var cosmetic: Dictionary = {}
 var _key := ""
-var spin := 0.35
+# Camera framing (set before the node enters the tree): distance, height, look-at height.
+var cam_z := 7.4
+var cam_y := 1.45
+var look_y := 0.88
+
+static func backdrop(parent: Control) -> TextureRect:
+	var t := TextureRect.new()
+	t.texture = load(BACKDROP)
+	t.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	t.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	t.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	t.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(t)
+	return t
 
 func _ready() -> void:
-	clip_contents = true
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	viewport = SubViewport.new()
 	viewport.own_world_3d = true
@@ -47,23 +59,10 @@ func _resize() -> void:
 		ratio = clampf(window.x / logical.x, 1.0, 4.0)
 	viewport.size = Vector2i(maxi(64, int(size.x * ratio)), maxi(64, int(size.y * ratio)))
 
-func _place(path: String, pos: Vector3, rot: float, s: float) -> Node3D:
-	var packed: PackedScene = load(path)
-	if packed == null:
-		return null
-	var n: Node3D = packed.instantiate()
-	n.position = pos
-	n.rotation.y = rot
-	n.scale = Vector3.ONE * s
-	world.add_child(n)
-	for mi in n.find_children("*", "MeshInstance3D", true, false):
-		(mi as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	return n
-
-func _mat(c: Color, metal := 0.0) -> StandardMaterial3D:
+func _mat(c: Color, metal := 0.0, rough := 0.75) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
 	m.albedo_color = c
-	m.roughness = 0.75
+	m.roughness = rough
 	m.metallic = metal
 	return m
 
@@ -71,47 +70,56 @@ func _build_scene() -> void:
 	var env := Environment.new()
 	env.background_mode = Environment.BG_CLEAR_COLOR
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color("#c9d3e6")
+	env.ambient_light_color = Color("#d8cfe6")
 	var vk := RenderingServer.get_current_rendering_method() != "gl_compatibility"
 	# Same measured Vulkan compensation as the battle view.
 	env.ambient_light_energy = 0.55 * (View.VULKAN_AMBIENT if vk else 1.0)
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	env.tonemap_exposure = 0.8 * (View.VULKAN_EXPOSURE if vk else 1.0)
+	env.tonemap_exposure = 0.85 * (View.VULKAN_EXPOSURE if vk else 1.0)
 	env.tonemap_white = 3.0
-	env.glow_enabled = true
-	env.glow_intensity = 0.4
-	env.glow_bloom = 0.05
 	var we := WorldEnvironment.new()
 	we.environment = env
 	world.add_child(we)
+	# Matches the backdrop: low warm sun behind-left (rim), soft key from the front-right.
 	var key := DirectionalLight3D.new()
-	key.light_color = Color("#ffe6c2")
-	key.light_energy = 1.2
-	key.rotation_degrees = Vector3(-35, -30, 0)
+	key.light_color = Color("#ffe2bd")
+	key.light_energy = 1.25
+	key.rotation_degrees = Vector3(-28, 28, 0)
 	world.add_child(key)
-	var rim := OmniLight3D.new()
-	rim.light_color = Color("#6fb8ff")
-	rim.light_energy = 1.6
-	rim.omni_range = 7.0
-	rim.position = Vector3(-2.2, 2.6, -1.8)
-	world.add_child(rim)
+	var sun := OmniLight3D.new()
+	sun.light_color = Color("#ff9a4a")
+	sun.light_energy = 3.2
+	sun.omni_range = 9.0
+	sun.position = Vector3(-2.6, 2.4, -2.2)
+	world.add_child(sun)
+	var cool := OmniLight3D.new()
+	cool.light_color = Color("#7f92ff")
+	cool.light_energy = 0.9
+	cool.omni_range = 8.0
+	cool.position = Vector3(2.8, 1.2, 2.4)
+	world.add_child(cool)
 	var cam := Camera3D.new()
-	cam.fov = 32.0
-	cam.position = Vector3(0, 1.85, 5.6)
+	cam.fov = 30.0
+	# Vertical FOV 30 at 7.4 m sees ~4 m of height: the 2.2 m character fills about half the
+	# frame, feet at ~78% down (below them the menu's class name and picker sit on the fade).
+	cam.position = Vector3(0, cam_y, cam_z)
 	world.add_child(cam)
-	cam.look_at(Vector3(0, 1.05, 0), Vector3.UP)
-	# Dais: a six-sided stone plinth with a gold rim on a dark ground disc (built from primitives
-	# so the colours are controlled; the hex grass tile read as harsh yellow-green here).
-	var ground := MeshInstance3D.new()
-	var gm := CylinderMesh.new()
-	gm.top_radius = 9.0
-	gm.bottom_radius = 9.0
-	gm.height = 0.1
-	gm.radial_segments = 48
-	ground.mesh = gm
-	ground.material_override = _mat(Color("#2c4033"))
-	ground.position = Vector3(0, -0.72, -2.0)
-	world.add_child(ground)
+	cam.look_at(Vector3(0, look_y, 0), Vector3.UP)
+	# Dais: dark disc shadow, gold-rimmed hex plinth.
+	var shadow := MeshInstance3D.new()
+	var sm := CylinderMesh.new()
+	sm.top_radius = 1.9
+	sm.bottom_radius = 1.9
+	sm.height = 0.02
+	sm.radial_segments = 40
+	shadow.mesh = sm
+	var shm := StandardMaterial3D.new()
+	shm.albedo_color = Color(0, 0, 0, 0.32)
+	shm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	shm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	shadow.material_override = shm
+	shadow.position = Vector3(0, -0.6, 0)
+	world.add_child(shadow)
 	var edge := MeshInstance3D.new()
 	var rm := CylinderMesh.new()
 	rm.top_radius = 1.42
@@ -119,8 +127,8 @@ func _build_scene() -> void:
 	rm.height = 0.18
 	rm.radial_segments = 6
 	edge.mesh = rm
-	edge.material_override = _mat(Color("#c99a3a"), 0.35)
-	edge.position = Vector3(0, -0.58, 0)
+	edge.material_override = _mat(Color("#d9a441"), 0.5, 0.35)
+	edge.position = Vector3(0, -0.5, 0)
 	world.add_child(edge)
 	var dais := MeshInstance3D.new()
 	var dm := CylinderMesh.new()
@@ -129,16 +137,11 @@ func _build_scene() -> void:
 	dm.height = 0.28
 	dm.radial_segments = 6
 	dais.mesh = dm
-	dais.material_override = _mat(Color("#6b7892"))
-	dais.position = Vector3(0, -0.46, 0)
+	dais.material_override = _mat(Color("#77839e"))
+	dais.position = Vector3(0, -0.38, 0)
 	world.add_child(dais)
-	_place(HEX + "building_castle_blue.gltf", Vector3(0.4, -1.2, -9.5), 0.0, 3.2)
-	_place(HEX + "building_tower_A_blue.gltf", Vector3(-4.2, -1.2, -7.5), 0.0, 2.2)
-	_place(HEX + "building_tower_A_blue.gltf", Vector3(4.8, -1.2, -7.8), 0.0, 2.2)
-	for x in [-1.9, 1.9]:
-		_place(HEX + "flag_blue.gltf", Vector3(x, -0.35, -0.9), 0.0, 1.6)
 	holder = Node3D.new()
-	holder.position = Vector3(0, -0.32, 0)
+	holder.position = Vector3(0, -0.24, 0)
 	world.add_child(holder)
 
 func show_look(new_cls: String, new_cosmetic: Dictionary) -> void:
@@ -160,11 +163,11 @@ func _rebuild() -> void:
 	body = made.body
 	player = made.player
 	holder.add_child(body)
-	body.scale = Vector3.ONE * 1.05
+	body.scale = Vector3.ONE * 1.12
 	var idle: String = str(View.LOOKS.get(cls, View.LOOKS.knight).idle)
 	if player.has_animation(idle):
 		player.play(idle)
 
-func _process(delta: float) -> void:
+func _process(_delta: float) -> void:
 	if holder != null and is_visible_in_tree():
-		holder.rotation.y = sin(Time.get_ticks_msec() / 1000.0 * spin) * 0.45
+		holder.rotation.y = sin(Time.get_ticks_msec() / 1000.0 * 0.4) * 0.32 - 0.12
