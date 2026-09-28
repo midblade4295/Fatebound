@@ -1,5 +1,12 @@
 # Fatebound Siege — handoff for the next agent
 
+**Live-state correction (2026-09-28):** The historical push/deploy instructions in sections 0
+and 10 are now stale: `claude/kaykit-3d-rebuild` was pushed to GitHub at `447b97a`, and
+`fatebound-siege.service` is deployed and publicly reachable at the WebSocket URL below.
+Read `godot/PLAYSTORE_BUILD.md` and the live-state handoff delivered to Kevin before changing
+the Play build or server. Do not rerun the
+old bundle push or apply the Caddy fragment merely because those old sections say to.
+
 Owner: Kevin (GitHub `midblade4295`, repo `midblade4295/Fatebound`). Solo indie dev. Tests every
 build on a **Samsung Galaxy S21 Ultra** (Adreno 660, 1440×3200).
 

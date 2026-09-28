@@ -186,3 +186,16 @@ Each step is committed separately; this file is updated in the same commit.
   client also sends its hello once the socket opens instead of relying on a narrow timing window.
 - Verification: all 12 suites pass in the quick runner; the final network smoke also passed five
   consecutive standalone server/client runs.
+
+# Round 6 (Codex, 2026-09-28): Play internal-testing bundle preparation
+- Deployed the unchanged 0.11.1 server code on the GCP VM: `fatebound-siege.service` active,
+  `127.0.0.1:8082`, public `wss://136-113-125-3.sslip.io/fatebound/siege/ws` responded
+  `PROBE_OK`. Existing Caddy/arena/Legionary routes were checked after activation.
+- Adapted the established signed native AAB workflow for the Siege client on a new task branch:
+  package `com.fatebound.game`, versionCode 24, versionName `1.2.0-siege-online`, target SDK 36.
+  Preview identity and certificate remain separate. No Play Console rollout or save reset.
+- All 12 headless Siege test suites passed (`godot/tools/run_siege_tests.sh --quick`) on the
+  exact pre-export source tree; the AAB still requires artifact validation and phone testing.
+- Old `SIEGE_HANDOFF.md` push/deploy directions predate the live deployment; see its correction.
+  Production upload key and password are exposed in the public repository; reset the upload
+  key and move future signing to secrets, with explicit approval for any history rewrite.

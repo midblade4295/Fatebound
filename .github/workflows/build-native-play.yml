@@ -1,9 +1,9 @@
-name: Build Native Fatebound Play AAB
+name: Build Fatebound Siege Play AAB
 
 on:
   workflow_dispatch:
   push:
-    branches: ["chatgpt/godot-play-vc22"]
+    branches: ["codex/siege-play-vc24"]
     paths:
       - "godot/**"
       - ".github/workflows/build-native-play.yml"
@@ -55,20 +55,20 @@ jobs:
           export GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD="$SIGNING_KEY_PASSWORD"
           mkdir -p godot/build
           "$GODOT" --headless --editor --path godot --import
-          "$GODOT" --headless --path godot --install-android-build-template --export-release "Android Play Store" "$PWD/godot/build/Fatebound-Native-vc22-release.aab"
+          "$GODOT" --headless --path godot --install-android-build-template --export-release "Android Play Store" "$PWD/godot/build/Fatebound-Siege-Play-vc24-release.aab"
       - name: Verify bundle signature and export contents
         run: |
           set -euo pipefail
-          python3 godot/tools/verify_play_bundle.py godot/build/Fatebound-Native-vc22-release.aab
-          jarsigner -verify godot/build/Fatebound-Native-vc22-release.aab
-          keytool -printcert -jarfile godot/build/Fatebound-Native-vc22-release.aab
-          sha256sum godot/build/Fatebound-Native-vc22-release.aab > godot/build/Fatebound-Native-vc22-release.aab.sha256
+          python3 godot/tools/verify_play_bundle.py godot/build/Fatebound-Siege-Play-vc24-release.aab
+          jarsigner -verify godot/build/Fatebound-Siege-Play-vc24-release.aab
+          keytool -printcert -jarfile godot/build/Fatebound-Siege-Play-vc24-release.aab
+          sha256sum godot/build/Fatebound-Siege-Play-vc24-release.aab > godot/build/Fatebound-Siege-Play-vc24-release.aab.sha256
       - name: Upload signed native AAB
         uses: actions/upload-artifact@v4
         with:
-          name: fatebound-native-play-vc22
+          name: fatebound-siege-play-vc24
           path: |
-            godot/build/Fatebound-Native-vc22-release.aab
-            godot/build/Fatebound-Native-vc22-release.aab.sha256
+            godot/build/Fatebound-Siege-Play-vc24-release.aab
+            godot/build/Fatebound-Siege-Play-vc24-release.aab.sha256
             godot/build/PLAY_BUNDLE_VERIFICATION.json
           if-no-files-found: error
