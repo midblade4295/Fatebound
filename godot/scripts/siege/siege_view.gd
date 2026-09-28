@@ -151,12 +151,12 @@ func _build_terrain() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 404
 	var groups := {}
-	for row in range(-28, 29):
+	for row in range(-34, 35):
 		for col in range(-16, 16):
 			var p := hex_pos(col, row)
 			var ax := absf(p.x)
 			var h := 0.0
-			var band := (row + 28) / 8
+			var band := (row + 34) / 8
 			var key := "hex_grass:%d:%d" % [rng.randi() % 3, band]
 			if ax > Sim.HALF_W + 1.5:
 				h = 0.5 + floor(rng.randf()*3.0)*0.25
@@ -217,16 +217,21 @@ func _build_props() -> void:
 				_place(HEX + "building_scaffolding.gltf", p + Vector3(0, Sim.HILL_H, 0), 0.4, 1.4)
 			"forge_building":
 				_place(HEX + "building_blacksmith_%s.gltf" % COLOR[ob.team], p, PI * 0.5 if ob.team == 0 else -PI * 0.5, 2.3)
+			"rock":
+				# Cover rocks (resource-node rocks are drawn by _build_nodes).
+				if not ob.has("node"):
+					_place(HEX + ["rock_single_D.gltf", "rock_single_E.gltf"][int(absf(ob.p.x)) % 2], p, absf(ob.p.y) * 0.37, float(ob.r) * 3.4)
 			"workshop_building":
 				_place(HEX + "building_market_%s.gltf" % COLOR[ob.team], p, -PI * 0.5 if ob.team == 0 else PI * 0.5, 2.0)
 	_build_nodes()
 	_build_plateau()
 	# Scenery outside the play field.
-	for i in 22:
+	for i in 72:
 		var side := -1.0 if i % 2 == 0 else 1.0
-		var z := -34.0 + i * 3.2
+		var z := -Sim.HALF_L - 4.0 + float(i / 2) * 3.2
 		_place(FOREST + forest_trees[rng.randi() % forest_trees.size()] + ".gltf", Vector3(side * (Sim.HALF_W + 2.5 + rng.randf()*3.0), 0.5, z), rng.randf()*TAU, 0.5 + rng.randf()*0.2)
-	for p in [Vector3(-19, 0.5, -20), Vector3(19, 0.5, 18), Vector3(-19, 0.5, 14), Vector3(19, 0.5, -12)]:
+	for p in [Vector3(-Sim.HALF_W - 7, 0.5, -40), Vector3(Sim.HALF_W + 7, 0.5, 36), Vector3(-Sim.HALF_W - 7, 0.5, 14), Vector3(Sim.HALF_W + 7, 0.5, -12),
+			Vector3(-Sim.HALF_W - 7, 0.5, -10), Vector3(Sim.HALF_W + 7, 0.5, 10), Vector3(0, 0.5, -Sim.HALF_L - 8), Vector3(0, 0.5, Sim.HALF_L + 8)]:
 		_place(HEX + "mountain_A_grass_trees.gltf", p, rng.randf()*TAU, 1.6)
 
 const COLOR := ["blue", "red"]
@@ -246,7 +251,7 @@ func _floor(team: int, x0: float, x1: float, z0: float, z1: float, color: Color,
 	mi.mesh = pm
 	mi.material_override = _floor_mats[key]
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	var c: Vector2 = Sim._m(team, Vector2((x0 + x1) * 0.5, (z0 + z1) * 0.5))
+	var c: Vector2 = Sim._c(team, Vector2((x0 + x1) * 0.5, (z0 + z1) * 0.5))
 	mi.position = Vector3(c.x, y, c.y)
 	add_child(mi)
 
@@ -262,12 +267,13 @@ func _stone(color: Color) -> StandardMaterial3D:
 		_block_mats[key] = m
 	return _block_mats[key]
 
-func _block(team: int, x0: float, x1: float, z0: float, z1: float, h: float, top: Color) -> void:
+func _block(team: int, x0: float, x1: float, z0: float, z1: float, h: float, top: Color, castle := true) -> void:
 	# A raised stone platform (blue-space coords, mirrored for red): stone sides, coloured top.
 	if _box == null:
 		_box = BoxMesh.new()
 		_box.size = Vector3.ONE
-	var c: Vector2 = Sim._m(team, Vector2((x0 + x1) * 0.5, (z0 + z1) * 0.5))
+	var mid := Vector2((x0 + x1) * 0.5, (z0 + z1) * 0.5)
+	var c: Vector2 = Sim._c(team, mid) if castle else Sim._m(team, mid)
 	var body := MeshInstance3D.new()
 	body.mesh = _box
 	body.material_override = _stone(Color("#a09580"))
@@ -283,7 +289,7 @@ func _block(team: int, x0: float, x1: float, z0: float, z1: float, h: float, top
 	lid.position = Vector3(c.x, h + 0.01, c.y)
 	add_child(lid)
 
-func _stairs(team: int, x0: float, x1: float, z0: float, z1: float, h: float, steps: int, rising_with_z: bool) -> void:
+func _stairs(team: int, x0: float, x1: float, z0: float, z1: float, h: float, steps: int, rising_with_z: bool, castle := true) -> void:
 	# One MultiMesh of box steps per staircase (a single draw call).
 	if _box == null:
 		_box = BoxMesh.new()
@@ -297,7 +303,8 @@ func _stairs(team: int, x0: float, x1: float, z0: float, z1: float, h: float, st
 		var sh := h * float(i + 1) / float(steps)
 		var zc := z0 + depth * (float(i) + 0.5) if rising_with_z else z1 - depth * (float(i) + 0.5)
 		# Each step is a full-height block from the ground up to its tread.
-		var c: Vector2 = Sim._m(team, Vector2((x0 + x1) * 0.5, zc))
+		var sp := Vector2((x0 + x1) * 0.5, zc)
+		var c: Vector2 = Sim._c(team, sp) if castle else Sim._m(team, sp)
 		var basis := Basis.from_scale(Vector3(absf(x1 - x0), sh, depth + 0.02))
 		mm.set_instance_transform(i, Transform3D(basis, Vector3(c.x, sh * 0.5, c.y)))
 	var node := MultiMeshInstance3D.new()
@@ -328,9 +335,9 @@ func _parapet(a: Vector2, b: Vector2) -> void:
 
 func _build_plateau() -> void:
 	# Midfield plateau around the ruin with stairs on its north and south faces.
-	_block(0, -Sim.HILL_X, Sim.HILL_X, -Sim.HILL_Z, Sim.HILL_Z, Sim.HILL_H, Color("#6f8a52"))
-	_stairs(0, -Sim.HILL_STAIR_X, Sim.HILL_STAIR_X, Sim.HILL_Z, Sim.HILL_STAIR_Z, Sim.HILL_H, 6, false)
-	_stairs(1, -Sim.HILL_STAIR_X, Sim.HILL_STAIR_X, Sim.HILL_Z, Sim.HILL_STAIR_Z, Sim.HILL_H, 6, false)
+	_block(0, -Sim.HILL_X, Sim.HILL_X, -Sim.HILL_Z, Sim.HILL_Z, Sim.HILL_H, Color("#6f8a52"), false)
+	_stairs(0, -Sim.HILL_STAIR_X, Sim.HILL_STAIR_X, Sim.HILL_Z, Sim.HILL_STAIR_Z, Sim.HILL_H, 6, false, false)
+	_stairs(1, -Sim.HILL_STAIR_X, Sim.HILL_STAIR_X, Sim.HILL_Z, Sim.HILL_STAIR_Z, Sim.HILL_H, 6, false, false)
 	for w in sim.walls:
 		if w.team == -1 and w.kind == "ledge":
 			_parapet(w.a, w.b)
@@ -363,7 +370,7 @@ func _build_castle(t: int) -> void:
 		var x_out: float = side * 13.0
 		var s0: float = side * Sim.STAIR_X0
 		var s1: float = side * Sim.STAIR_X1
-		_block(t, minf(x_in, x_out), maxf(x_in, x_out), Sim.STAIR_Z1, Sim.HALF_L, Sim.PLAT_H, top)
+		_block(t, minf(x_in, x_out), maxf(x_in, x_out), Sim.STAIR_Z1, Sim.CASTLE_BACK, Sim.PLAT_H, top)
 		_block(t, minf(x_in, s0), maxf(x_in, s0), Sim.INNER_Z, Sim.STAIR_Z1, Sim.PLAT_H, top)
 		_block(t, minf(s1, x_out), maxf(s1, x_out), Sim.INNER_Z, Sim.STAIR_Z1, Sim.PLAT_H, top)
 		_stairs(t, minf(s0, s1), maxf(s0, s1), Sim.STAIR_Z0, Sim.STAIR_Z1, Sim.PLAT_H, 8, true)
@@ -399,35 +406,35 @@ func _build_castle(t: int) -> void:
 		gate_nodes[g.id] = {"doors":doors, "rubble":rubble, "open":0.0, "broken":false}
 	# Towers flank both gates; catapult towers on the front corners; the keep at the back.
 	for tx in [-7.8, -2.6, 2.6, 7.8]:
-		var tp: Vector2 = Sim._m(t, Vector2(tx, Sim.FRONT_Z))
+		var tp: Vector2 = Sim._c(t, Vector2(tx, Sim.FRONT_Z))
 		_place(HEX + "building_tower_A_%s.gltf" % col, Vector3(tp.x, 0, tp.y), face, 1.8)
 	for cx in [-12.3, 12.3]:
-		var cp: Vector2 = Sim._m(t, Vector2(cx, Sim.FRONT_Z + 0.3))
+		var cp: Vector2 = Sim._c(t, Vector2(cx, Sim.FRONT_Z + 0.3))
 		var cat := _place(HEX + "building_tower_catapult_%s.gltf" % col, Vector3(cp.x, 0, cp.y), face, 1.9)
 		if cat != null:
 			var turret: Node3D = cat.find_child("*turret*", true, false)
 			var arm: Node3D = cat.find_child("*arm*", true, false)
 			catapult_nodes.append({"team":t, "p":cp, "node":cat, "turret":turret, "arm":arm,
 				"arm_rest":arm.rotation.x if arm != null else 0.0, "fired":-10.0})
-		var bp: Vector2 = Sim._m(t, Vector2(cx, Sim.HALF_L - 0.8))
+		var bp: Vector2 = Sim._c(t, Vector2(cx, Sim.CASTLE_BACK - 0.8))
 		_place(HEX + "building_tower_B_%s.gltf" % col, Vector3(bp.x, 0, bp.y), face, 1.7)
-	var kp: Vector2 = Sim._m(t, Vector2(0.0, 25.4))
+	var kp: Vector2 = Sim._c(t, Vector2(0.0, 25.4))
 	_place(HEX + "building_castle_%s.gltf" % col, Vector3(kp.x, 0, kp.y), face, 2.6)
 	# Throne room: banners either side of the throne, a weapon rack.
 	var th: Vector2 = Sim.throne(t)
 	for fx in [-1.6, 1.6]:
-		var fp: Vector2 = th + Sim._m(t, Vector2(fx, 1.2))
+		var fp: Vector2 = th + Sim._c(t, Vector2(fx, 1.2))
 		_place(HEX + "flag_%s.gltf" % col, Vector3(fp.x, Sim.PLAT_H, fp.y), face, 1.6)
 	_decal(Vector3(th.x, Sim.PLAT_H + 0.06, th.y), Sim.THRONE_RADIUS, TEAM_COLORS[t], 0.6)
-	var wr: Vector2 = Sim._m(t, Vector2(12.0, 23.8))
+	var wr: Vector2 = Sim._c(t, Vector2(12.0, 23.8))
 	_place(HEX + "weaponrack.gltf", Vector3(wr.x, Sim.PLAT_H, wr.y), face + PI * 0.5, 4.0)
 	# Dungeon: the cell on the platform, a ladder against the back wall and barrels.
-	var cc: Vector2 = Sim._m(t, Sim.CELL_C)
+	var cc: Vector2 = Sim._c(t, Sim.CELL_C)
 	_decal(Vector3(cc.x, Sim.PLAT_H + 0.06, cc.y), 1.4, GOLD, 0.35)
-	var lp: Vector2 = Sim._m(t, Vector2(-12.4, 24.0))
+	var lp: Vector2 = Sim._c(t, Vector2(-12.4, 24.0))
 	_place(HEX + "ladder.gltf", Vector3(lp.x, Sim.PLAT_H, lp.y), face + PI * 0.5, 3.4)
 	for bx in [Vector2(-12.2, 28.2), Vector2(-4.0, 28.2)]:
-		var b2: Vector2 = Sim._m(t, bx)
+		var b2: Vector2 = Sim._c(t, bx)
 		_place(HEX + "barrel.gltf", Vector3(b2.x, Sim.PLAT_H, b2.y), randf() * TAU, 2.2)
 	# Courtyard: forge ring, workshop ring + stockpiles (piles scale with the team's stock).
 	var fg: Vector2 = Sim.forge(t)
@@ -436,7 +443,7 @@ func _build_castle(t: int) -> void:
 	_decal(Vector3(ws.x, 0.06, ws.y), Sim.WORKSHOP_RADIUS, Color("#9fe07a"), 0.45)
 	var piles := {}
 	for kind in ["wood", "stone"]:
-		var pp: Vector2 = Sim._m(t, Vector2(10.4, 20.0 if kind == "wood" else 16.2))
+		var pp: Vector2 = Sim._c(t, Vector2(10.4, 20.0 if kind == "wood" else 16.2))
 		var pile := Node3D.new()
 		pile.position = Vector3(pp.x, 0, pp.y)
 		add_child(pile)
@@ -453,7 +460,7 @@ func _build_castle(t: int) -> void:
 	var sack := _place(HEX + "sack.gltf", Vector3(ap.x, 0.75, ap.y), 0.0, 3.0)
 	_decal(Vector3(ap.x, 0.06, ap.y), 1.6, Color("#e6b3ff"), 0.45)
 	altar_sacks.append(sack)
-	var wb: Vector2 = Sim._m(t, Vector2(7.0, 20.3))
+	var wb: Vector2 = Sim._c(t, Vector2(7.0, 20.3))
 	_place(HEX + "wheelbarrow.gltf", Vector3(wb.x, 0, wb.y), face + 0.8, 3.0)
 	stock_piles.append(piles)
 

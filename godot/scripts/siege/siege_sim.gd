@@ -5,11 +5,17 @@ extends RefCounted
 # (team 1) the north end (-z). Red's castle is the point mirror of blue's: (x, z) -> (-x, -z).
 
 const TICK := 1.0 / 30.0
-const HALF_W := 13.0
-const HALF_L := 29.0
+const HALF_W := 26.0
+const HALF_L := 52.0
+# Castle layouts are authored in "castle-local" blue-space coordinates (x -13..13, z 15..29 with
+# the back at z=29) and placed at each end of the field by _c(): shifted so the castle's back
+# sits on the field edge, then mirrored for red.
+const CASTLE_BACK := 29.0
+const CASTLE_SHIFT := HALF_L - CASTLE_BACK
+const CASTLE_HX := 13.0
 const UNIT_R := 0.45
 const WIN_RESCUES := 3
-const MATCH_TIME := 540.0
+const MATCH_TIME := 720.0
 const RESPAWN_TIME := 5.0
 const DROP_RETURN := 12.0
 const FORGE_RADIUS := 2.6
@@ -31,6 +37,7 @@ const GATE_HP := 1500.0
 const GATE_HALF := 1.3           # half-width of the passable doorway
 const GATE_SOLID_AT := 0.35      # a broken gate blocks again once repaired to 35 %
 const GATE_OPEN_RADIUS := 4.0    # allies within this distance swing the doors open (visual)
+const REPAIR_LOCK := 3.0         # no repairs while the gate was hit in the last 3 s
 
 # ---- layers (heights are for the view; the sim stays 2D, ledges are walls) ----
 const PLAT_H := 1.6              # throne room + dungeon platforms
@@ -140,9 +147,13 @@ var _next_proj := 1
 static func _m(team: int, p: Vector2) -> Vector2:
 	return p if team == 0 else -p
 
+static func _c(team: int, p: Vector2) -> Vector2:
+	# Castle-local (blue space) -> world.
+	return _m(team, p + Vector2(0.0, CASTLE_SHIFT))
+
 static func throne(team: int) -> Vector2:
 	# Where a team brings its rescued Oracle: its own throne room (east back room for blue).
-	return _m(team, Vector2(8.0, 26.0))
+	return _c(team, Vector2(8.0, 26.0))
 
 const CELL_C := Vector2(-9.0, 27.0)   # cell centre (blue dungeon); bars x -10.8..-7.2, z 25.4..28.6
 const CELL_HX := 1.8
@@ -150,13 +161,13 @@ const CELL_HZ := 1.6
 
 static func cell(team: int) -> Vector2:
 	# Where a team's own Oracle is held captive: the ENEMY castle's dungeon.
-	return _m(1 - team, CELL_C)
+	return _c(1 - team, CELL_C)
 
 static func height_at(p: Vector2) -> float:
 	# Ground height for rendering. Castles are evaluated in blue space (mirror for red).
-	var q := p if p.y >= 0.0 else -p
+	var q := (p if p.y >= 0.0 else -p) - Vector2(0.0, CASTLE_SHIFT)
 	var ax := absf(q.x)
-	if q.y >= STAIR_Z0 and ax >= KEEP_X:
+	if q.y >= STAIR_Z0 and ax >= KEEP_X and ax <= CASTLE_HX:
 		if ax >= STAIR_X0 and ax <= STAIR_X1 and q.y < STAIR_Z1:
 			return PLAT_H * clampf((q.y - STAIR_Z0) / (STAIR_Z1 - STAIR_Z0), 0.0, 1.0)
 		return PLAT_H
@@ -170,16 +181,16 @@ static func height_at(p: Vector2) -> float:
 	return 0.0
 
 static func forge(team: int) -> Vector2:
-	return _m(team, Vector2(-8.5, 18.0))
+	return _c(team, Vector2(-8.5, 18.0))
 
 static func workshop(team: int) -> Vector2:
-	return _m(team, Vector2(8.5, 18.0))
+	return _c(team, Vector2(8.5, 18.0))
 
 static func altar(team: int) -> Vector2:
-	return _m(team, ALTAR_P)
+	return _c(team, ALTAR_P)
 
 static func spawn(team: int) -> Vector2:
-	return _m(team, Vector2(0.0, 18.2))
+	return _c(team, Vector2(0.0, 18.2))
 
 static func gate_front(g: Dictionary) -> Vector2:
 	# Standing point just outside a gate (the side facing midfield).
@@ -187,7 +198,7 @@ static func gate_front(g: Dictionary) -> Vector2:
 	return g.c + outward * 2.2
 
 func _add_wall(team: int, a: Vector2, b: Vector2, kind := "wall") -> void:
-	walls.append({"a":_m(team, a), "b":_m(team, b), "r":WALL_R, "team":team, "kind":kind})
+	walls.append({"a":_c(team, a), "b":_c(team, b), "r":WALL_R, "team":team, "kind":kind})
 
 func _build_map() -> void:
 	walls.clear()
@@ -198,44 +209,53 @@ func _build_map() -> void:
 		# Front wall at z=15 with two gates; pieces are one 5.2 m wall model each.
 		# Pieces that meet the field edge run 1 m past it, so there is no rounded wall end at the
 		# edge for a unit to be pushed around and clamped back into.
-		_add_wall(t, Vector2(-14.0, FRONT_Z), Vector2(-7.8, FRONT_Z))
+		_add_wall(t, Vector2(-CASTLE_HX, FRONT_Z), Vector2(-7.8, FRONT_Z))
 		_add_wall(t, Vector2(-2.6, FRONT_Z), Vector2(2.6, FRONT_Z))
-		_add_wall(t, Vector2(7.8, FRONT_Z), Vector2(14.0, FRONT_Z))
+		_add_wall(t, Vector2(7.8, FRONT_Z), Vector2(CASTLE_HX, FRONT_Z))
+		# Side walls: the field is wider than the castle, so it needs its own flanks. They run
+		# 1 m past the field edge at the back (no rounded end for a unit to be clamped into).
+		_add_wall(t, Vector2(-CASTLE_HX, FRONT_Z), Vector2(-CASTLE_HX, CASTLE_BACK + 1.0))
+		_add_wall(t, Vector2(CASTLE_HX, FRONT_Z), Vector2(CASTLE_HX, CASTLE_BACK + 1.0))
 		for gx in GATE_X:
 			# The gate model is a 5.2 m wall piece with a ~2.3 m doorway; only the doorway is the
 			# gate. The neighbouring wall ends (radius 1.0) cover the stone pillars either side.
-			var a := _m(t, Vector2(gx - GATE_HALF, FRONT_Z))
-			var b := _m(t, Vector2(gx + GATE_HALF, FRONT_Z))
+			var a := _c(t, Vector2(gx - GATE_HALF, FRONT_Z))
+			var b := _c(t, Vector2(gx + GATE_HALF, FRONT_Z))
 			gates.append({"id":gates.size(), "team":t, "a":a, "b":b, "c":(a + b) * 0.5, "hp":GATE_HP, "max_hp":GATE_HP,
 				"broken":false, "open":false, "side":"west" if gx < 0.0 else "east"})
 		# The back rooms are a raised terrace: its front edge at z=21 is a ledge (retaining wall +
 		# parapet), open only where the two staircases climb it.
-		for seg in [[-14.0, -STAIR_X1], [-STAIR_X0, -KEEP_X], [KEEP_X, STAIR_X0], [STAIR_X1, 14.0]]:
-			walls.append({"a":_m(t, Vector2(seg[0], INNER_Z)), "b":_m(t, Vector2(seg[1], INNER_Z)), "r":LEDGE_R, "team":t, "kind":"ledge"})
+		for seg in [[-CASTLE_HX, -STAIR_X1], [-STAIR_X0, -KEEP_X], [KEEP_X, STAIR_X0], [STAIR_X1, CASTLE_HX]]:
+			walls.append({"a":_c(t, Vector2(seg[0], INNER_Z)), "b":_c(t, Vector2(seg[1], INNER_Z)), "r":LEDGE_R, "team":t, "kind":"ledge"})
 		# Keep block between the dungeon (west) and the throne room (east).
 		_add_wall(t, Vector2(-KEEP_X, INNER_Z + 0.5), Vector2(KEEP_X, INNER_Z + 0.5), "keep")
-		_add_wall(t, Vector2(-KEEP_X, INNER_Z + 0.5), Vector2(-KEEP_X, HALF_L + 1.0), "keep")
-		_add_wall(t, Vector2(KEEP_X, INNER_Z + 0.5), Vector2(KEEP_X, HALF_L + 1.0), "keep")
+		_add_wall(t, Vector2(-KEEP_X, INNER_Z + 0.5), Vector2(-KEEP_X, CASTLE_BACK + 1.0), "keep")
+		_add_wall(t, Vector2(KEEP_X, INNER_Z + 0.5), Vector2(KEEP_X, CASTLE_BACK + 1.0), "keep")
 		# The cell in the dungeon: bars on three sides, open towards the doorway (front).
 		# The back bars sit exactly on the field edge: a narrower gap between them and the edge
 		# (it was 0.4 m) trapped units between the bars and the boundary clamp.
 		var cc := CELL_C
-		var back := HALF_L
-		walls.append({"a":_m(t, cc + Vector2(-CELL_HX, -CELL_HZ)), "b":_m(t, Vector2(cc.x - CELL_HX, back)), "r":0.3, "team":t, "kind":"bars"})
-		walls.append({"a":_m(t, cc + Vector2(CELL_HX, -CELL_HZ)), "b":_m(t, Vector2(cc.x + CELL_HX, back)), "r":0.3, "team":t, "kind":"bars"})
-		walls.append({"a":_m(t, Vector2(cc.x - CELL_HX, back)), "b":_m(t, Vector2(cc.x + CELL_HX, back)), "r":0.3, "team":t, "kind":"bars"})
+		var back := CASTLE_BACK
+		walls.append({"a":_c(t, cc + Vector2(-CELL_HX, -CELL_HZ)), "b":_c(t, Vector2(cc.x - CELL_HX, back)), "r":0.3, "team":t, "kind":"bars"})
+		walls.append({"a":_c(t, cc + Vector2(CELL_HX, -CELL_HZ)), "b":_c(t, Vector2(cc.x + CELL_HX, back)), "r":0.3, "team":t, "kind":"bars"})
+		walls.append({"a":_c(t, Vector2(cc.x - CELL_HX, back)), "b":_c(t, Vector2(cc.x + CELL_HX, back)), "r":0.3, "team":t, "kind":"bars"})
 		# Stair channels up to the platforms: ledges on both sides so you can't step off.
 		for sx in [-1.0, 1.0]:
 			for lx in [STAIR_X0, STAIR_X1]:
-				walls.append({"a":_m(t, Vector2(sx * lx, STAIR_Z0)), "b":_m(t, Vector2(sx * lx, STAIR_Z1)), "r":LEDGE_R, "team":t, "kind":"ledge"})
+				walls.append({"a":_c(t, Vector2(sx * lx, STAIR_Z0)), "b":_c(t, Vector2(sx * lx, STAIR_Z1)), "r":LEDGE_R, "team":t, "kind":"ledge"})
 		# Courtyard buildings (solid): forge + workshop sit against the side walls.
-		obstacles.append({"p":_m(t, Vector2(-11.2, 18.0)), "r":1.4, "kind":"forge_building", "team":t})
-		obstacles.append({"p":_m(t, Vector2(11.2, 18.0)), "r":1.4, "kind":"workshop_building", "team":t})
-		# Resource nodes on each half: trees on the flanks, stone near the middle lanes.
-		for tp in [Vector2(-11.0, 10.5), Vector2(-9.5, 6.5), Vector2(-11.5, 3.0), Vector2(10.8, 8.5), Vector2(11.2, 4.0)]:
+		obstacles.append({"p":_c(t, Vector2(-11.2, 18.0)), "r":1.4, "kind":"forge_building", "team":t})
+		obstacles.append({"p":_c(t, Vector2(11.2, 18.0)), "r":1.4, "kind":"workshop_building", "team":t})
+		# Resource nodes on each half (world coords, point-mirrored): forests on both flanks,
+		# quarries between the lanes, and a few trees near the castle approaches.
+		for tp in [Vector2(-21.0, 33.0), Vector2(-23.0, 26.0), Vector2(-19.5, 19.0), Vector2(-23.5, 12.0), Vector2(-20.0, 5.0),
+				Vector2(21.0, 31.0), Vector2(23.5, 23.0), Vector2(19.0, 15.0), Vector2(22.0, 7.0), Vector2(-9.0, 33.5)]:
 			_add_node(t, "wood", tp)
-		for sp in [Vector2(-4.0, 10.0), Vector2(5.0, 6.0)]:
+		for sp in [Vector2(-12.0, 22.0), Vector2(13.0, 26.0), Vector2(1.5, 17.0), Vector2(-14.0, 8.0)]:
 			_add_node(t, "stone", sp)
+		# Cover between the lanes.
+		for rp in [Vector2(-6.0, 25.0), Vector2(8.0, 11.0), Vector2(-16.0, 30.0)]:
+			obstacles.append({"p":_m(t, rp), "r":1.2, "kind":"rock"})
 	obstacles.append({"p":Vector2(0, 0), "r":1.8, "kind":"ruin"})
 	for s in [-1.0, 1.0]:
 		walls.append({"a":Vector2(s * HILL_X, -HILL_Z), "b":Vector2(s * HILL_X, HILL_Z), "r":LEDGE_R, "team":-1, "kind":"ledge"})
@@ -243,8 +263,8 @@ func _build_map() -> void:
 		walls.append({"a":Vector2(HILL_STAIR_X, s * HILL_Z), "b":Vector2(HILL_X, s * HILL_Z), "r":LEDGE_R, "team":-1, "kind":"ledge"})
 		for sx in [-1.0, 1.0]:
 			walls.append({"a":Vector2(sx * HILL_STAIR_X, s * HILL_Z), "b":Vector2(sx * HILL_STAIR_X, s * HILL_STAIR_Z), "r":LEDGE_R, "team":-1, "kind":"ledge"})
-	_add_node(0, "wood", Vector2(-8.5, 0.5))
-	_add_node(1, "wood", Vector2(-8.5, 0.5))
+	_add_node(0, "wood", Vector2(-12.0, 0.5))
+	_add_node(1, "wood", Vector2(-12.0, 0.5))
 
 func _add_node(team: int, kind: String, p: Vector2) -> void:
 	var pos := _m(team, p)
@@ -255,8 +275,8 @@ func _add_node(team: int, kind: String, p: Vector2) -> void:
 	obstacles.append({"p":pos, "r":n.r, "kind":"tree" if kind == "wood" else "rock", "node":n.id})
 
 # ---------- navigation ----------
-const NAV_W := 26
-const NAV_H := 58
+const NAV_W := int(HALF_W * 2.0)
+const NAV_H := int(HALF_L * 2.0)
 
 static func nav_cell(p: Vector2) -> Vector2i:
 	return Vector2i(clampi(int(floor(p.x + HALF_W)), 0, NAV_W - 1), clampi(int(floor(p.y + HALF_L)), 0, NAV_H - 1))
@@ -269,6 +289,61 @@ static func seg_closest(p: Vector2, a: Vector2, b: Vector2) -> Vector2:
 	var t := clampf((p - a).dot(ab) / maxf(ab.length_squared(), 0.0001), 0.0, 1.0)
 	return a + ab * t
 
+func _cells_near_segment(a: Vector2, b: Vector2, reach: float) -> Array:
+	# Nav cells whose centre lies within `reach` of segment a-b (bounding-box scan only).
+	var out := []
+	var lo := nav_cell(Vector2(minf(a.x, b.x) - reach, minf(a.y, b.y) - reach))
+	var hi := nav_cell(Vector2(maxf(a.x, b.x) + reach, maxf(a.y, b.y) + reach))
+	for x in range(lo.x, hi.x + 1):
+		for y in range(lo.y, hi.y + 1):
+			var c := Vector2i(x, y)
+			var p := nav_point(c)
+			if p.distance_to(seg_closest(p, a, b)) < reach:
+				out.append(c)
+	return out
+
+# ---------- spatial buckets (collision culling) ----------
+# Walls and obstacles never move after _build_map, so each 6 m bucket lists the ones that can
+# touch a unit standing in it. _separate was 1.7 of 2.4 ms per tick at 16v16 testing everything.
+const BUCKET := 6.0
+const BUCKET_REACH := 1.6      # widest wall/obstacle radius + unit radius, with margin
+var _bw := 0
+var _bh := 0
+var _bucket_walls: Array = []
+var _bucket_obs: Array = []
+
+func _build_buckets() -> void:
+	_bw = int(ceil(HALF_W * 2.0 / BUCKET)) + 1
+	_bh = int(ceil(HALF_L * 2.0 / BUCKET)) + 1
+	_bucket_walls = []
+	_bucket_obs = []
+	for i in _bw * _bh:
+		_bucket_walls.append(PackedInt32Array())
+		_bucket_obs.append(PackedInt32Array())
+	for wi in walls.size():
+		var w: Dictionary = walls[wi]
+		for bi in _buckets_in(minf(w.a.x, w.b.x) - w.r - BUCKET_REACH, minf(w.a.y, w.b.y) - w.r - BUCKET_REACH,
+				maxf(w.a.x, w.b.x) + w.r + BUCKET_REACH, maxf(w.a.y, w.b.y) + w.r + BUCKET_REACH):
+			_bucket_walls[bi].append(wi)
+	for oi in obstacles.size():
+		var ob: Dictionary = obstacles[oi]
+		for bi in _buckets_in(ob.p.x - ob.r - BUCKET_REACH, ob.p.y - ob.r - BUCKET_REACH, ob.p.x + ob.r + BUCKET_REACH, ob.p.y + ob.r + BUCKET_REACH):
+			_bucket_obs[bi].append(oi)
+
+func _buckets_in(x0: float, y0: float, x1: float, y1: float) -> Array:
+	var out := []
+	var bx0 := clampi(int(floor((x0 + HALF_W) / BUCKET)), 0, _bw - 1)
+	var by0 := clampi(int(floor((y0 + HALF_L) / BUCKET)), 0, _bh - 1)
+	var bx1 := clampi(int(floor((x1 + HALF_W) / BUCKET)), 0, _bw - 1)
+	var by1 := clampi(int(floor((y1 + HALF_L) / BUCKET)), 0, _bh - 1)
+	for bx in range(bx0, bx1 + 1):
+		for by in range(by0, by1 + 1):
+			out.append(by * _bw + bx)
+	return out
+
+func _bucket(p: Vector2) -> int:
+	return clampi(int(floor((p.y + HALF_L) / BUCKET)), 0, _bh - 1) * _bw + clampi(int(floor((p.x + HALF_W) / BUCKET)), 0, _bw - 1)
+
 func _build_nav() -> void:
 	nav.clear()
 	for t in 2:
@@ -279,38 +354,34 @@ func _build_nav() -> void:
 		g.default_compute_heuristic = AStarGrid2D.HEURISTIC_OCTILE
 		g.default_estimate_heuristic = AStarGrid2D.HEURISTIC_OCTILE
 		g.update()
-		for x in NAV_W:
-			for y in NAV_H:
-				var c := Vector2i(x, y)
-				var p := nav_point(c)
-				var solid := false
-				for w in walls:
-					if p.distance_to(seg_closest(p, w.a, w.b)) < w.r + UNIT_R * 0.9:
-						solid = true
-						break
-				if not solid:
-					for ob in obstacles:
-						if p.distance_to(ob.p) < ob.r + UNIT_R * 0.8:
-							solid = true
-							break
-				g.set_point_solid(c, solid)
 		nav.append(g)
+	# Stamp walls and obstacles into both grids by bounding box instead of testing every cell
+	# against everything (the 52x104 field made the full scan ~1M distance checks).
+	var solid := []
+	for w in walls:
+		solid.append_array(_cells_near_segment(w.a, w.b, w.r + UNIT_R * 0.9))
+	for ob in obstacles:
+		solid.append_array(_cells_near_segment(ob.p, ob.p, ob.r + UNIT_R * 0.8))
+	for c in solid:
+		for t in 2:
+			(nav[t] as AStarGrid2D).set_point_solid(c, true)
+	_gate_cells.clear()
+	for g in gates:
+		_gate_cells.append(_cells_near_segment(g.a, g.b, WALL_R + UNIT_R * 0.9))
 	_update_gate_nav()
+
+var _gate_cells: Array = []
 
 func _update_gate_nav() -> void:
 	# Own gates are free to walk through. Intact enemy gates are walkable but very expensive, so
 	# a path uses one only when there is no other way in; the bot then has to break it.
-	for g in gates:
-		for x in NAV_W:
-			for y in NAV_H:
-				var c := Vector2i(x, y)
-				var p := nav_point(c)
-				if p.distance_to(seg_closest(p, g.a, g.b)) >= WALL_R + UNIT_R * 0.9:
-					continue
-				for t in 2:
-					var grid: AStarGrid2D = nav[t]
-					grid.set_point_solid(c, false)
-					grid.set_point_weight_scale(c, 1.0 if (t == g.team or not gate_blocks(g)) else 60.0)
+	for gi in gates.size():
+		var g: Dictionary = gates[gi]
+		for c in _gate_cells[gi]:
+			for t in 2:
+				var grid: AStarGrid2D = nav[t]
+				grid.set_point_solid(c, false)
+				grid.set_point_weight_scale(c, 1.0 if (t == g.team or not gate_blocks(g)) else 60.0)
 	nav_version += 1
 
 func find_path(team: int, from: Vector2, to: Vector2) -> PackedVector2Array:
@@ -350,14 +421,17 @@ func _path_gate(u: Dictionary) -> Dictionary:
 func setup(team_size: int, seed_value: int, player_team := 0) -> void:
 	rng.seed = seed_value
 	_build_map()
+	_build_buckets()
 	_build_nav()
 	oracles = [_new_oracle(0), _new_oracle(1)]
 	altars = [{"team":0, "p":altar(0), "ready":true, "t":0.0}, {"team":1, "p":altar(1), "ready":true, "t":0.0}]
 	for t in 2:
 		for cx in [-CATAPULT_X, CATAPULT_X]:
-			catapults.append({"team":t, "p":_m(t, Vector2(cx, FRONT_Z + 0.3)), "t":rng.randf() * CATAPULT_EVERY})
+			catapults.append({"team":t, "p":_c(t, Vector2(cx, FRONT_Z + 0.3)), "t":rng.randf() * CATAPULT_EVERY})
 	# One gatherer per team from 4 players up, two from 8.
-	var roles := ["raid","gather","defend","raid","gather","escort","raid","defend","raid","gather"]
+	# 16 per team: 7 raiders (incl. the human), 3 escorts, 3 defenders, 3 workers. Smaller teams
+	# take the first N slots.
+	var roles := ["raid","gather","defend","raid","escort","raid","gather","defend","raid","escort","raid","gather","raid","defend","escort","raid"]
 	for t in 2:
 		for i in team_size:
 			var human := t == player_team and i == 0
@@ -404,7 +478,7 @@ func dice_count(team: int) -> int:
 
 func _respawn(u: Dictionary, first := false) -> void:
 	var sp := spawn(u.team)
-	u.pos = sp + Vector2(rng.randf_range(-3.5,3.5), rng.randf_range(-1.0,1.0))
+	u.pos = sp + Vector2(rng.randf_range(-8.0, 8.0), rng.randf_range(-1.5, 1.5))
 	u.face = PI if u.team == 0 else 0.0
 	u.max_hp = float(stat(u,"hp"))
 	u.hp = u.max_hp
@@ -859,6 +933,7 @@ func _damage_gate(src: Dictionary, g: Dictionary, amount: float) -> void:
 	if not gate_blocks(g):
 		return
 	g.hp = maxf(0.0, g.hp - amount)
+	g["hit_at"] = time
 	if src.has("gate_dmg"):
 		src.gate_dmg += amount
 	_event("gate_hit", {"gate":g.id, "team":g.team, "by":src.get("id",""), "dmg":int(round(amount))})
@@ -953,27 +1028,41 @@ func _resolve_attack(u: Dictionary) -> void:
 			_event("nova", {"id":u.id})
 
 # ---------- stepping ----------
+var profile := false          # tests only: accumulate microseconds per phase in `prof`
+var prof := {}
+
+func _p(key: String, t0: int) -> int:
+	var now := Time.get_ticks_usec()
+	prof[key] = int(prof.get(key, 0)) + (now - t0)
+	return now
+
 func step(dt: float = TICK) -> void:
 	if ended:
 		return
 	time += dt
 	_ai_clock += dt
 	_cmd_clock += dt
+	var t0 := Time.get_ticks_usec() if profile else 0
 	if _ai_clock >= 0.15:
 		_ai_clock = 0.0
 		for u in units:
 			if u.bot:
 				_think(u)
+	if profile: t0 = _p("think", t0)
 	if _cmd_clock >= 2.0:
 		_cmd_clock = 0.0
 		for t in 2:
 			_commander(t)
 	for u in units:
 		_step_unit(u, dt)
+	if profile: t0 = _p("units", t0)
 	_separate()
+	if profile: t0 = _p("separate", t0)
 	_step_projectiles(dt)
+	if profile: t0 = _p("projectiles", t0)
 	_step_oracles(dt)
 	_step_world(dt)
+	if profile: t0 = _p("world", t0)
 	if time >= MATCH_TIME:
 		_finish("time")
 
@@ -1077,6 +1166,10 @@ func _step_task(u: Dictionary, dt: float) -> void:
 				u.task = {}
 				u.state = "idle"
 				return
+			# Under attack: workers can't out-heal an assault; they wait until it lets up.
+			if time - float(g.get("hit_at", -100.0)) < REPAIR_LOCK:
+				task.t = REPAIR_TICK
+				return
 			# One unit of material (whichever the team has more of) buys three repair ticks.
 			task["paid"] = int(task.get("paid", 0)) + 1
 			if int(task.paid) % 3 == 1:
@@ -1093,7 +1186,8 @@ func _step_task(u: Dictionary, dt: float) -> void:
 			task.t = REPAIR_TICK
 
 func _blocked_point(p: Vector2, team: int, r: float) -> bool:
-	for w in walls:
+	for wi in _bucket_walls[_bucket(p)]:
+		var w: Dictionary = walls[wi]
 		if p.distance_to(seg_closest(p, w.a, w.b)) < w.r + r:
 			return true
 	for g in gates:
@@ -1102,15 +1196,17 @@ func _blocked_point(p: Vector2, team: int, r: float) -> bool:
 	return false
 
 func _push_out(p: Vector2, r: float, team := -1) -> Vector2:
-	for ob in obstacles:
+	var bi := _bucket(p)
+	for oi in _bucket_obs[bi]:
+		var ob: Dictionary = obstacles[oi]
 		var off: Vector2 = p - ob.p
 		var min_d: float = ob.r + r
 		var d := off.length()
 		if d < min_d:
 			p = ob.p + (off / d if d > 0.001 else Vector2(1,0)) * min_d
-	for wi in walls.size():
+	for wi in _bucket_walls[bi]:
 		var w: Dictionary = walls[wi]
-		if team >= 0 and w.kind == "wall" and on_ladder(p, wi, team):
+		if team >= 0 and w.kind == "wall" and not ladders.is_empty() and on_ladder(p, wi, team):
 			continue
 		p = _push_seg(p, w.a, w.b, w.r + r)
 	for g in gates:
@@ -1183,12 +1279,15 @@ func _step_projectiles(dt: float) -> void:
 				break
 		var blocked := false
 		var hit_gate := {}
-		for ob in obstacles:
+		var pb := _bucket(p.pos)
+		for oi in _bucket_obs[pb]:
+			var ob: Dictionary = obstacles[oi]
 			if p.pos.distance_to(ob.p) < ob.r:
 				blocked = true
 				break
 		if not blocked:
-			for w in walls:
+			for wi in _bucket_walls[pb]:
+				var w: Dictionary = walls[wi]
 				if w.kind in ["ledge", "bars"]:
 					continue   # low ledges and cell bars don't stop arrows or fire
 				if p.pos.distance_to(seg_closest(p.pos, w.a, w.b)) < w.r * 0.8:
@@ -1369,7 +1468,10 @@ func _nav_to(u: Dictionary, goal: Vector2, stop := 0.5) -> void:
 	var replan: bool = u.path.is_empty() or u.path_goal.distance_to(goal) > 1.5 or time - float(u.path_at) > 1.5 \
 		or int(u.path_ver) != nav_version or int(u.path_i) >= u.path.size()
 	if replan:
+		if profile: prof["replans"] = int(prof.get("replans", 0)) + 1
+		var tp := Time.get_ticks_usec() if profile else 0
 		u.path = find_path(u.team, u.pos, goal)
+		if profile: _p("pathfind", tp)
 		u.path_i = 0
 		u.path_goal = goal
 		u.path_at = time
@@ -1482,13 +1584,13 @@ func _think_worker(u: Dictionary) -> void:
 			if g.team != u.team and gate_blocks(g):
 				enemy_gates_up += 1
 		if own_ladders == 0 and enemy_gates_up >= 1 and time > 60.0:
-			var spot_p: Vector2 = _m(1 - u.team, Vector2(0.0, FRONT_Z)) + _inward(u.team) * 1.6
+			var spot_p: Vector2 = _c(1 - u.team, Vector2(0.0, FRONT_Z)) + _inward(u.team) * 1.6
 			if u.pos.distance_to(spot_p) > 0.8:
 				_nav_to(u, spot_p, 0.5)
 			else:
 				u.move = Vector2.ZERO
 				if not ladder_spot(u).is_empty():
-					u.face = angle_of(_m(1 - u.team, Vector2(0.0, FRONT_Z)) - u.pos)
+					u.face = angle_of(_c(1 - u.team, Vector2(0.0, FRONT_Z)) - u.pos)
 					u.task = {"kind":"build_ladder", "t":LADDER_BUILD}
 			return
 	# Gather whatever the stockpile is shorter on; prefer nodes on our own half.

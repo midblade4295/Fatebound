@@ -8,7 +8,7 @@ const Diag = preload("res://scripts/siege/siege_diag.gd")
 
 signal exited
 
-var team_size := 6
+var team_size := 16
 # 3D resolution as a fraction of the PHYSICAL screen (window pixels, not logical UI units).
 var render_scale := 1.0
 const FPS_CAP := 60
