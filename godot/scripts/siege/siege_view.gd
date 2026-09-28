@@ -888,6 +888,15 @@ func bars() -> Array:
 		out.append({"pos": (a.root as Node3D).position + Vector3(0, 2.7, 0), "fill": clampf(u.hp / maxf(1.0, u.max_hp), 0.0, 1.0), "color": c})
 	return out
 
+func gate_bars() -> Array:
+	# Damaged gates (either team) get a health bar over the arch.
+	var out := []
+	for g in sim.gates:
+		if not sim.gate_blocks(g) or g.hp >= g.max_hp:
+			continue
+		out.append({"pos": Vector3(g.c.x, 4.2, g.c.y), "fill": g.hp / g.max_hp, "color": TEAM_COLORS[g.team]})
+	return out
+
 func screen_point(world: Vector3) -> Vector2:
 	return camera.unproject_position(world)
 

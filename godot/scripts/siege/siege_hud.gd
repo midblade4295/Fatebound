@@ -12,6 +12,9 @@ signal forge_take
 signal forge_leave
 signal action_pressed(kind: String)
 signal fps_toggled
+signal workshop_tools
+signal workshop_buy(id: String)
+signal workshop_leave
 
 const TEAM_COLORS := [Color("#5fd2f0"), Color("#ff7b52")]
 const FACE_LABEL := {"knight":"KNIGHT","barbarian":"BARB","rogue":"ROGUE","ranger":"RANGER","mage":"MAGE","fate":"FATE ✦"}
@@ -44,7 +47,13 @@ var _title: Font
 
 var forge_panel: PanelContainer
 var forge_dice: Array[Button] = []
-var forge_held := [false, false, false]
+var forge_held := [false, false, false, false]
+var workshop_panel: PanelContainer
+var workshop_stock: Label
+var workshop_buttons: Dictionary = {}
+var workshop_tools_btn: Button
+var _workshop_key := ""
+var gate_bars_source: Callable   # -> Array of {pos, fill, color, broken}
 var _forge_key := ""
 var forge_status: Label
 var forge_take_btn: Button
@@ -69,6 +78,7 @@ func _ready() -> void:
 		_center(pause_panel))
 	add_child(pause_btn)
 	_build_forge_panel()
+	_build_workshop_panel()
 	_build_pause_panel()
 	resized.connect(_layout)
 	_layout()
@@ -121,11 +131,11 @@ func _build_forge_panel() -> void:
 	v.add_theme_constant_override("separation", 10)
 	forge_panel.add_child(v)
 	_label(v, "THE FORGE", 22, VisualTheme.GOLD, _title)
-	_label(v, "Roll 3 dice. A pair grants a class, three of a kind its upgraded form. FATE is wild. Tap a die to keep it.", 12, Color("#d4cbbb"))
+	_label(v, "Roll the dice. A pair grants a class, three of a kind its upgraded form. FATE is wild. Tap a die to keep it.", 12, Color("#d4cbbb"))
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 8)
 	v.add_child(row)
-	for i in 3:
+	for i in 4:
 		var b := Button.new()
 		b.custom_minimum_size = Vector2(0, 78)
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -140,9 +150,55 @@ func _build_forge_panel() -> void:
 	var actions := HBoxContainer.new()
 	actions.add_theme_constant_override("separation", 8)
 	v.add_child(actions)
-	forge_roll_btn = _button(actions, "ROLL", "roll", func(): forge_roll.emit(forge_held.duplicate()))
+	forge_roll_btn = _button(actions, "ROLL", "roll", func(): forge_roll.emit(forge_held.slice(0, sim.dice_count(sim.by_id[player_id].team))))
 	forge_take_btn = _button(actions, "TAKE", "primary", func(): forge_take.emit())
 	_button(v, "LEAVE FORGE", "secondary", func(): forge_leave.emit())
+
+func _build_workshop_panel() -> void:
+	workshop_panel = _panel(340)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 9)
+	workshop_panel.add_child(v)
+	_label(v, "THE WORKSHOP", 22, VisualTheme.GOLD, _title)
+	workshop_stock = _label(v, "", 15, VisualTheme.TEXT, _bold)
+	workshop_tools_btn = _button(v, "TAKE TOOLS · BECOME A WORKER", "active", func(): workshop_tools.emit())
+	_label(v, "Workers chop trees and mine stone, carry it here, and repair gates with wood.", 11, Color("#d4cbbb"))
+	for id in ["gates", "armory", "forge"]:
+		var up: Dictionary = Sim.UPGRADES[id]
+		var b := _button(v, str(up.name), "gold", func(): workshop_buy.emit(id))
+		b.custom_minimum_size = Vector2(0, 54)
+		b.add_theme_font_size_override("font_size", 14)
+		workshop_buttons[id] = b
+	_button(v, "LEAVE WORKSHOP", "secondary", func(): workshop_leave.emit())
+
+func _refresh_workshop(me: Dictionary) -> void:
+	if not me.workshop_open:
+		if workshop_panel.visible:
+			workshop_panel.visible = false
+		return
+	var t: int = me.team
+	var key := "%s|%s|%s|%s" % [str(sim.stock[t]), str(sim.levels[t]), me.cls, me.carrying]
+	if workshop_panel.visible and key == _workshop_key:
+		return
+	_workshop_key = key
+	if not workshop_panel.visible:
+		workshop_panel.visible = true
+		_center(workshop_panel)
+	workshop_stock.text = "WOOD %d   ·   STONE %d" % [sim.stock[t].wood, sim.stock[t].stone]
+	workshop_tools_btn.disabled = me.cls == "worker" or me.carrying
+	workshop_tools_btn.text = "YOU ARE A WORKER" if me.cls == "worker" else "TAKE TOOLS · BECOME A WORKER"
+	for id in workshop_buttons:
+		var up: Dictionary = Sim.UPGRADES[id]
+		var lvl: int = sim.levels[t][id]
+		var b: Button = workshop_buttons[id]
+		var cost: Dictionary = sim.upgrade_cost(t, id)
+		if cost.is_empty():
+			b.text = "%s · MAX" % up.name
+			b.disabled = true
+		else:
+			b.text = "%s %s\n%d wood · %d stone" % [up.name, "I".repeat(lvl + 1) if int(up.max) > 1 else "", int(cost.wood), int(cost.stone)]
+			b.disabled = not sim.can_buy(t, id)
+		b.tooltip_text = str(up.desc)
 
 func _toggle_hold(i: int) -> void:
 	var me: Dictionary = sim.by_id.get(player_id, {})
@@ -155,11 +211,11 @@ func _refresh_forge(me: Dictionary) -> void:
 	if not f.open:
 		if forge_panel.visible:
 			forge_panel.visible = false
-			forge_held = [false, false, false]
+			forge_held = [false, false, false, false]
 		return
 	if not forge_panel.visible:
 		forge_panel.visible = true
-		forge_held = [false, false, false]
+		forge_held = [false, false, false, false]
 		_forge_key = ""
 		_center(forge_panel)
 	var rolling: bool = f.rolling > 0.0
@@ -168,7 +224,10 @@ func _refresh_forge(me: Dictionary) -> void:
 	if state_key == _forge_key:
 		return
 	_forge_key = state_key
-	for i in 3:
+	var n_dice: int = f.faces.size()
+	for i in 4:
+		forge_dice[i].visible = i < n_dice
+	for i in n_dice:
 		var b := forge_dice[i]
 		var face := str(f.faces[i])
 		if not f.rolled:
@@ -180,7 +239,7 @@ func _refresh_forge(me: Dictionary) -> void:
 		VisualTheme.apply_tactile(b, "active" if forge_held[i] else "secondary", 12)
 		b.add_theme_color_override("font_color", FACE_COLOR.get(face, VisualTheme.TEXT) if f.rolled and not rolling else VisualTheme.TEXT)
 	var r := Sim.forge_result(f.faces)
-	var triple_fate: bool = f.faces.count("fate") == 3
+	var triple_fate: bool = f.faces.count("fate") == f.faces.size()
 	forge_roll_btn.disabled = rolling
 	forge_roll_btn.text = "ROLL" if not f.rolled else "REROLL"
 	if not f.rolled:
@@ -210,7 +269,7 @@ func _build_pause_panel() -> void:
 	v.add_theme_constant_override("separation", 10)
 	pause_panel.add_child(v)
 	_label(v, "SIEGE", 22, VisualTheme.GOLD, _title)
-	_label(v, "Carry your Oracle out of the enemy keep and back to your throne. First to %d rescues wins." % Sim.WIN_RESCUES, 13, Color("#d4cbbb"))
+	_label(v, "Break into the enemy castle, free your Oracle from their dungeon cell and carry her to your throne room. First to %d rescues wins. Gates open for your team; enemies must break them. Workers gather wood and stone, repair gates, and fund upgrades at the workshop." % Sim.WIN_RESCUES, 12, Color("#d4cbbb"))
 	_button(v, "RESUME", "gold", func(): pause_panel.visible = false)
 	var fps_btn := _button(v, "30 FPS MODE: OFF", "secondary", func(): pass)
 	pause_panel.visibility_changed.connect(func(): fps_btn.text = "30 FPS MODE: " + ("ON" if Engine.max_fps == 30 else "OFF"))
@@ -267,6 +326,16 @@ func on_event(e: Dictionary) -> void:
 		"death":
 			if e.id == player_id:
 				toast("You fell!", VisualTheme.RED)
+		"gate_broken":
+			var side: String = str(sim.gates[int(e.gate)].side).to_upper()
+			toast("OUR %s GATE HAS FALLEN!" % side if mine else "ENEMY %s GATE BROKEN — CHARGE!" % side, VisualTheme.RED if mine else VisualTheme.GOLD)
+		"gate_rebuilt":
+			if mine:
+				toast("Our %s gate is rebuilt" % str(sim.gates[int(e.gate)].side), VisualTheme.CYAN)
+		"upgrade":
+			if mine:
+				var up: Dictionary = Sim.UPGRADES[str(e.upgrade)]
+				toast("%s upgraded (level %d)" % [up.name, int(e.level)], VisualTheme.GOLD)
 
 # ---------- input ----------
 func _buttons() -> Array:
@@ -283,7 +352,7 @@ func _buttons() -> Array:
 	return out
 
 func _modal_open() -> bool:
-	return forge_panel.visible or pause_panel.visible or (result_panel != null and result_panel.visible)
+	return forge_panel.visible or workshop_panel.visible or pause_panel.visible or (result_panel != null and result_panel.visible)
 
 func _input(event: InputEvent) -> void:
 	if sim == null:
@@ -367,6 +436,7 @@ func _process(delta: float) -> void:
 	var me: Dictionary = sim.by_id.get(player_id, {})
 	if not me.is_empty():
 		_refresh_forge(me)
+		_refresh_workshop(me)
 	queue_redraw()
 
 func _text(pos: Vector2, text: String, size_px: int, color: Color, font: Font = null, align := HORIZONTAL_ALIGNMENT_CENTER, width := -1.0) -> void:
@@ -413,6 +483,7 @@ func _draw_hud() -> void:
 	draw_rect(hp_rect, VisualTheme.GOLD_DARK, false, 1.5)
 	_text(Vector2(14, 110), "%s · %d HP" % [sim.class_label(me).to_upper(), int(ceil(me.hp))], 13, VisualTheme.TEXT, _bold, HORIZONTAL_ALIGNMENT_LEFT, 260)
 	_text(Vector2(14, 128), _oracle_status(me), 12, VisualTheme.GOLD, _font, HORIZONTAL_ALIGNMENT_LEFT, w - 80)
+	_draw_castle_status(me)
 	# Toast.
 	var age := _time - _toast_at
 	if age < 2.6 and _toast != "":
@@ -420,6 +491,7 @@ func _draw_hud() -> void:
 		c.a = clampf(2.6 - age, 0.0, 1.0)
 		_text(Vector2(w * 0.5, 176), _toast, 18, c, _bold)
 	_draw_bars()
+	_draw_gate_bars()
 	_draw_oracle_marker(me)
 	_draw_numbers()
 	if diag != null and diag.fps_text != "":
@@ -471,6 +543,39 @@ func _draw_numbers() -> void:
 		var c := Color("#ff6b5a") if n.mine else Color("#fff1c2")
 		c.a = 1.0 - u * u
 		_text(p + Vector2(0, -34.0 * u), str(n.text), 18, c, _bold)
+
+func _draw_castle_status(me: Dictionary) -> void:
+	var t: int = me.team
+	var load_txt := ""
+	if me.load.n > 0:
+		load_txt = "   carrying %d %s" % [me.load.n, me.load.kind]
+	_text(Vector2(14, 146), "WOOD %d · STONE %d%s" % [sim.stock[t].wood, sim.stock[t].stone, load_txt], 12, Color("#cfe8b8"), _bold, HORIZONTAL_ALIGNMENT_LEFT, 300)
+	# Our two gates as small health bars.
+	var x := 14.0
+	for g in sim.gates:
+		if g.team != t:
+			continue
+		var r := Rect2(Vector2(x + 40, 153), Vector2(56, 6))
+		_text(Vector2(x, 160), str(g.side).to_upper().left(1) + " GATE", 10, Color(1, 1, 1, 0.75), _bold, HORIZONTAL_ALIGNMENT_LEFT, 44)
+		draw_rect(r.grow(1), Color(0, 0, 0, 0.6))
+		if sim.gate_blocks(g):
+			draw_rect(Rect2(r.position, Vector2(r.size.x * g.hp / g.max_hp, r.size.y)), TEAM_COLORS[t])
+		else:
+			_text(r.position + Vector2(2, 7), "BROKEN", 9, VisualTheme.RED, _bold, HORIZONTAL_ALIGNMENT_LEFT, 60)
+		x += 112.0
+
+func _draw_gate_bars() -> void:
+	if not gate_bars_source.is_valid() or not project.is_valid():
+		return
+	for b in gate_bars_source.call():
+		if on_screen.is_valid() and not on_screen.call(b.pos):
+			continue
+		var p: Vector2 = project.call(b.pos)
+		if p.y < 170.0:
+			continue
+		var r := Rect2(p - Vector2(30, 4), Vector2(60, 7))
+		draw_rect(r.grow(1.5), Color(0, 0, 0, 0.7))
+		draw_rect(Rect2(r.position, Vector2(r.size.x * float(b.fill), r.size.y)), b.color)
 
 func _oracle_status(me: Dictionary) -> String:
 	var o: Dictionary = sim.oracles[me.team]
@@ -527,7 +632,8 @@ func _draw_button(b: Dictionary, me: Dictionary) -> void:
 			cd_max = 2.2
 			ready = cd <= 0.0 and not me.carrying
 		"action":
-			label = {"forge":"FORGE","grab":"GRAB","throw":"THROW"}.get(b.ctx, "USE")
+			label = {"forge":"FORGE","grab":"GRAB","throw":"THROW","workshop":"WORKSHOP","chop":"CHOP","mine":"MINE",
+				"repair":"REPAIR","gather":"WORKING","repairing":"REPAIRING"}.get(b.ctx, "USE")
 			col = Color("#155258")
 			rim = Color("#9ff6ef")
 	var pressed: bool = _time - float(_pressed_at.get(b.id, -10.0)) < 0.12 or (b.id == "attack" and _attack_held)
