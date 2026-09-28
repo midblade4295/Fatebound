@@ -3,6 +3,9 @@ extends Control
 # InputEventScreenTouch events, because Godot's Buttons only follow the first finger and on a
 # phone you hold the stick while tapping ATTACK. Modal panels (forge, pause, result) use Buttons.
 const VisualTheme = preload("res://scripts/ui/visual_theme.gd")
+const UI = preload("res://scripts/app/ui.gd")
+# The old brass kinds map onto the app's tactile styles so battle panels match the menus.
+const BUTTON_STYLE := {"primary":"primary", "secondary":"secondary", "gold":"gold", "roll":"gold", "active":"claim"}
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 
 signal leave_requested
@@ -74,7 +77,7 @@ func _ready() -> void:
 	pause_btn = Button.new()
 	pause_btn.text = "II"
 	pause_btn.custom_minimum_size = Vector2(44, 40)
-	VisualTheme.apply_tactile(pause_btn, "secondary", 10)
+	UI.style_button(pause_btn, "secondary", 16, 12)
 	pause_btn.pressed.connect(func():
 		pause_panel.visible = true
 		_center(pause_panel))
@@ -91,7 +94,12 @@ func _layout() -> void:
 # ---------- panels ----------
 func _panel(min_w: float) -> PanelContainer:
 	var p := PanelContainer.new()
-	p.add_theme_stylebox_override("panel", VisualTheme.panel(VisualTheme.SURFACE, VisualTheme.GOLD_DARK, 14, 14))
+	var ps := UI.card_style(Color(0.07, 0.11, 0.19, 0.97), 22, UI.CARD_HI)
+	ps.content_margin_left = 18
+	ps.content_margin_right = 18
+	ps.content_margin_top = 16
+	ps.content_margin_bottom = 16
+	p.add_theme_stylebox_override("panel", ps)
 	p.custom_minimum_size = Vector2(min_w, 0)
 	p.visible = false
 	add_child(p)
@@ -115,9 +123,8 @@ func _button(parent: Node, text: String, kind: String, cb: Callable) -> Button:
 	b.text = text
 	b.custom_minimum_size = Vector2(0, 50)
 	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	VisualTheme.apply_tactile(b, kind, 12)
-	b.add_theme_font_override("font", VisualTheme.BOLD_FONT)
-	b.add_theme_font_size_override("font_size", 16)
+	UI.style_button(b, str(BUTTON_STYLE.get(kind, "secondary")), 15, 14)
+	UI.tighten(b, 8)
 	b.pressed.connect(cb)
 	parent.add_child(b)
 	return b
@@ -141,9 +148,8 @@ func _build_forge_panel() -> void:
 		var b := Button.new()
 		b.custom_minimum_size = Vector2(0, 78)
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		b.add_theme_font_override("font", VisualTheme.BOLD_FONT)
-		b.add_theme_font_size_override("font_size", 14)
-		VisualTheme.apply_tactile(b, "secondary", 12)
+		UI.style_button(b, "secondary", 13, 14)
+		UI.tighten(b, 2)
 		var idx := i
 		b.pressed.connect(func(): _toggle_hold(idx))
 		row.add_child(b)
@@ -154,6 +160,9 @@ func _build_forge_panel() -> void:
 	v.add_child(actions)
 	forge_roll_btn = _button(actions, "ROLL", "roll", func(): forge_roll.emit(forge_held.slice(0, sim.dice_count(sim.by_id[player_id].team))))
 	forge_take_btn = _button(actions, "TAKE", "primary", func(): forge_take.emit())
+	# "TAKE BERSERKER" is the longest label; REROLL has room to spare.
+	forge_roll_btn.size_flags_stretch_ratio = 0.7
+	forge_take_btn.size_flags_stretch_ratio = 1.3
 	_button(v, "LEAVE FORGE", "secondary", func(): forge_leave.emit())
 
 func _build_workshop_panel() -> void:
@@ -238,7 +247,8 @@ func _refresh_forge(me: Dictionary) -> void:
 			b.text = FACE_LABEL[Sim.FACES[int(_time * 14.0 + i * 2) % Sim.FACES.size()]]
 		else:
 			b.text = FACE_LABEL[face] + ("\nKEPT" if forge_held[i] else "")
-		VisualTheme.apply_tactile(b, "active" if forge_held[i] else "secondary", 12)
+		UI.style_button(b, "claim" if forge_held[i] else "secondary", 13, 14)
+		UI.tighten(b, 2)
 		b.add_theme_color_override("font_color", FACE_COLOR.get(face, VisualTheme.TEXT) if f.rolled and not rolling else VisualTheme.TEXT)
 	var r := Sim.forge_result(f.faces)
 	var triple_fate: bool = f.faces.count("fate") == f.faces.size()

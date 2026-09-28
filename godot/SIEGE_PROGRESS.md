@@ -196,7 +196,7 @@ version, everything will be the siege now."
 | E2 | Siege uses the profile: rewards breakdown, challenge progress, equipped cosmetics shown in battle | done |
 | E3 | New app shell + screens: Home (3D hero showcase, PLAY offline/online), Pass, Shop, Locker, Settings | done |
 | E4 | Remove the old dice-era app (pages, full_client, battle/raid/training/guild/arena code, old tests) | done |
-| E5 | UI fidelity: new theme, icons, transitions; screenshots | todo |
+| E5 | UI fidelity: new theme, icons, transitions; screenshots | done |
 | E6 | Tests, APK | todo |
 
 Design (all cosmetic; no pay-to-win; no real-money purchases until Play Billing exists):
@@ -262,3 +262,10 @@ Design (all cosmetic; no pay-to-win; no real-money purchases until Play Billing 
   still the older vc22 one (the Play branch owns release builds) — merge carefully.
 - godot-visual-review.yml runs run_siege_tests.sh --quick. New tests/parse_all.gd.
 - Verified from a deleted .godot cache (fresh import): all 11 suites pass.
+
+## E5 notes
+- In-match panels (forge, workshop, pause, results) now use the app's card and tactile button
+  styles (UI.style_button / UI.card_style), so battle and menus look like one game.
+- UI.tighten(): narrow padding + clipping for tight rows. Fixed the 4-die forge overflowing its
+  panel (style reset the dice font to 16 px; 16 px side padding x4); TAKE gets 1.3x of the row so
+  "TAKE BERSERKER" (longest label) fits (193 px available, 149 needed). Verified on Vulkan.
