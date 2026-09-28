@@ -165,7 +165,7 @@ func _build_workshop_panel() -> void:
 	workshop_stock = _label(v, "", 15, VisualTheme.TEXT, _bold)
 	workshop_tools_btn = _button(v, "TAKE TOOLS · BECOME A WORKER", "active", func(): workshop_tools.emit())
 	_label(v, "Workers chop trees and mine stone, carry it here, and repair gates with wood.", 11, Color("#d4cbbb"))
-	for id in ["gates", "armory", "forge"]:
+	for id in ["gates", "armory", "forge", "catapult"]:
 		var up: Dictionary = Sim.UPGRADES[id]
 		var b := _button(v, str(up.name), "gold", func(): workshop_buy.emit(id))
 		b.custom_minimum_size = Vector2(0, 54)
@@ -353,6 +353,10 @@ func on_event(e: Dictionary) -> void:
 		"gate_rebuilt":
 			if mine:
 				toast("Our %s gate is rebuilt" % str(sim.gates[int(e.gate)].side), VisualTheme.CYAN)
+		"ladder_up":
+			toast("Ladder raised on the enemy wall — climb over!" if mine else "Enemy ladder on our wall — knock it down!", VisualTheme.GOLD if mine else VisualTheme.RED)
+		"ladder_down":
+			toast("Our ladder was knocked down" if mine else "Enemy ladder destroyed", Color("#d4cbbb"))
 		"upgrade":
 			if mine:
 				var up: Dictionary = Sim.UPGRADES[str(e.upgrade)]
@@ -659,7 +663,7 @@ func _draw_button(b: Dictionary, me: Dictionary) -> void:
 			ready = cd <= 0.0 and not me.carrying
 		"action":
 			label = {"forge":"FORGE","grab":"GRAB","throw":"THROW","workshop":"WORKSHOP","chop":"CHOP","mine":"MINE",
-				"repair":"REPAIR","gather":"WORKING","repairing":"REPAIRING","offer":"OFFERING","feed":"FEED"}.get(b.ctx, "USE")
+				"repair":"REPAIR","gather":"WORKING","repairing":"REPAIRING","ladder":"LADDER","build_ladder":"BUILDING","offer":"OFFERING","feed":"FEED"}.get(b.ctx, "USE")
 			col = Color("#155258")
 			rim = Color("#9ff6ef")
 	var pressed: bool = _time - float(_pressed_at.get(b.id, -10.0)) < 0.12 or (b.id == "attack" and _attack_held)

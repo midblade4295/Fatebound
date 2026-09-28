@@ -71,8 +71,8 @@ Each step is committed separately; this file is updated in the same commit.
 | R1 | 3D at 100 % of PHYSICAL pixels (old code used the canvas scale = 1.0, so it rendered at the logical 336x746 on a 1440x3200 screen); pause-menu Resolution 100/75/50; MSAA off at 100 %; thermal guard step 2 drops to 75 % | done |
 | R2 | Castle layers: raised throne room + dungeon platforms with stairs, midfield plateau with stairs; heights in sim (ledges = walls), view builds platforms/steps | done |
 | R3 | Fate offerings (the cake): altar spawns offerings; feeding the captive enemy Oracle makes her heavier/slower to carry; visibly fatter | done |
-| R4 | Catapult towers (workshop upgrade): auto-fire at enemies near your walls | todo |
-| R5 | Siege ladders: workers build a ladder on an enemy wall; a private passage for their team; enemies can break it | todo |
+| R4 | Catapult towers (workshop upgrade): auto-fire at enemies near your walls | done |
+| R5 | Siege ladders: workers build a ladder on an enemy wall; a private passage for their team; enemies can break it | done |
 | R6 | Tests, screenshots, perf at 100 %, APK | todo |
 
 ## R2 notes
@@ -92,3 +92,17 @@ Each step is committed separately; this file is updated in the same commit.
   rescue. Oracle widens 16 % per level. Defender bots feed when there's no alarm/carrier.
 - 6-match smoke: 77 feedings, max weight 5 reached; 0 clips; half the matches now run to the
   9-minute cap (heavier carries).
+
+## R4/R5 notes
+- The sim code for both was found uncommitted after an interrupted session, failing its own
+  test (0 catapult shots, 1 ladder in 6 matches). Finished and tuned:
+  catapult 15 wood/25 stone; quartermaster now saves toward a planned upgrade; repairs cost
+  1 material per 3 ticks; ladder builder condition relaxed.
+- Fixed a clip the interrupted cell move introduced (bars 0.4 m from the field edge) and clamp
+  to the field before wall push-out.
+- 6-match smoke: 0 clips, catapults bought in 2/6 matches (47 shots), 3 ladders (1 knocked
+  down), 67 feedings. Bots rarely use these; players can buy/build them directly.
+- View: turret turns to the target, arm throws, stone flies in an arc, impact ring; ladders
+  lean on the outside of the enemy wall and splinter when knocked down. HUD: LADDER action,
+  Catapults in the workshop, ladder toasts. Verified by Vulkan screenshots.
+- Known: red won 4 of 6 bot matches in recent runs; watch for side bias.
