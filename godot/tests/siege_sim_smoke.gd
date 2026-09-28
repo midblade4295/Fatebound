@@ -16,7 +16,7 @@ func _init() -> void:
 		"upgrades":0,"pickups":0,"fed":0,"max_weight":0,"ladders":0,"ladders_down":0,"catapult_shots":0,"wall_violations":0,"gate_violations":0,"wins":[0,0,0],"first_rescue":[]}
 	for seed_value in seeds:
 		var sim = Sim.new()
-		sim.setup(6, seed_value)
+		sim.setup(16, seed_value)
 		sim.by_id["you"].bot = true
 		var first := -1.0
 		var steps := 0

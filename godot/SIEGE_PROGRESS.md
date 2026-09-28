@@ -106,3 +106,18 @@ Each step is committed separately; this file is updated in the same commit.
   lean on the outside of the enemy wall and splinter when knocked down. HUD: LADDER action,
   Catapults in the workshop, ladder toasts. Verified by Vulkan screenshots.
 - Known: red won 4 of 6 bot matches in recent runs; watch for side bias.
+
+# Round 3 (Kevin, 2026-09-28): much larger land, 16v16, princess mechanics from his screenshots
+| Step | Scope | Status |
+|---|---|---|
+| A | Field 26x58 -> 52x104; castles keep their layout (castle-local coords via Sim._c), gain side walls; nav grid built by stamping bboxes; resources spread over the land; 16 per team | done (cake trees moved to B) |
+| B | Oracle: cake -> size stages (1..6 lifters needed); multi-player lift; captors carry a dropped Oracle back (no instant recapture); tantrum knockback+stun when left on the ground; healing aura for her team while captive | todo |
+| C | Tests, perf (32 units), APK | todo |
+
+## Step A notes
+- Sim cost at 16v16 was 2.36 ms/tick, 1.73 of it in _separate (every unit vs every wall).
+  6 m spatial buckets for walls/obstacles: 0.99 ms/tick (profile: tests/siege_profile.gd).
+- Stalemate at 16v16 (0 gates broken in 12 min): 5 workers/team out-repaired the assault.
+  Repairs now pause while a gate was hit in the last 3 s; role mix 7 raid/3 escort/3 defend/3 work.
+- After that: 23 gate breaks, 37 pickups, but 0 rescues in 2 matches (carriers die on the ~90 m
+  run). To be tuned after step B's mechanics (captor carry-back, tantrum, healing aura).

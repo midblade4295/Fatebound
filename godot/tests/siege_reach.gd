@@ -3,7 +3,7 @@ extends SceneTree
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 func _init() -> void:
 	var sim = Sim.new()
-	sim.setup(6, 1)
+	sim.setup(16, 1)
 	for g in sim.gates: g.hp = 0.0; g.broken = true
 	sim._update_gate_nav()
 	for t in 2:
