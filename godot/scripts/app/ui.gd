@@ -101,6 +101,15 @@ static func _button_box(fill: Color, lip: Color, pressed: bool, radius: int) -> 
 static func button(parent: Node, text: String, style: String, on_press: Callable, key := "", size := 16, radius := 16) -> Button:
 	var b := Button.new()
 	b.text = text
+	style_button(b, style, size, radius)
+	if key != "":
+		b.set_meta("action_key", key)
+	b.pressed.connect(on_press)
+	parent.add_child(b)
+	return b
+
+static func style_button(b: Button, style: String, size := 16, radius := 16) -> void:
+	# The shared tactile look; also used by the in-match HUD so menus and battle match.
 	var st: Array = BUTTONS.get(style, BUTTONS.secondary)
 	var fill: Color = st[0]
 	var lip: Color = st[1]
@@ -115,12 +124,18 @@ static func button(parent: Node, text: String, style: String, on_press: Callable
 	for k in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
 		b.add_theme_color_override(k, st[2])
 	b.add_theme_color_override("font_disabled_color", Color(st[2], 0.45))
-	if key != "":
-		b.set_meta("action_key", key)
-	b.pressed.connect(on_press)
 	b.focus_mode = Control.FOCUS_NONE
-	parent.add_child(b)
-	return b
+
+static func tighten(b: Button, side := 6) -> void:
+	# Narrow side padding for buttons in tight rows (in-match dice, two-up action rows); long
+	# labels are clipped instead of pushing the row past its panel.
+	for st_name in ["normal", "hover", "pressed", "disabled"]:
+		var sb := b.get_theme_stylebox(st_name) as StyleBoxFlat
+		if sb != null:
+			sb.content_margin_left = side
+			sb.content_margin_right = side
+	b.clip_text = true
+	b.custom_minimum_size.x = 0
 
 static func icon(parent: Node, kind: String, px := 24, tint := Color.WHITE) -> Control:
 	var i := Icon.new()
