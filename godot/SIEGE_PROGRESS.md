@@ -13,7 +13,7 @@ Each step is committed separately; this file is updated in the same commit.
 | 3 | View: castle from KayKit kit, animated gates, cell, stockpile, worker visuals | done |
 | 4 | HUD: resources, gate health, workshop panel, worker actions | done |
 | 5 | Siege is the game: home entry, rewards into progression, hide dice-only modes | done |
-| 6 | Tests, screenshots, perf check, APK | todo |
+| 6 | Tests, screenshots, perf check, APK | done (0.8.0, version code 16) |
 
 ## Layout (blue = team 0 at +z; red is the point mirror (x,z) -> (-x,-z))
 - Field x -13..13, z -29..29. Walls use wall_straight x2.6 (5.2 long).
@@ -53,3 +53,14 @@ Each step is committed separately; this file is updated in the same commit.
   +40g +15xp per personal rescue, +4g per KO, +1g per resource delivered, +1g per 50 gate dmg.
   Granted once per match (PLAY AGAIN does not re-grant). Shown on the result panel.
 - tests/siege_home_flow.gd: home -> ENTER BATTLE -> win -> gold/xp/pts/chest saved -> replay -> home.
+
+## Step 6 notes
+- Vulkan perf (software renderer, relative): own courtyard 269 draws / 181k tris, midfield
+  254 / 176k, enemy gate 157 / 115k. 0.7.8-0.7.10 ran clean on the S21 Ultra at ~240-300 draws.
+- 0.8.0 APK: Vulkan renderer, castle assets and new scripts verified inside the package.
+
+## Not done yet / next candidates
+- Online: the real-time server (M3) is still to do; Siege is offline vs bots.
+- Hero page, shop weapons and dice-era power stats still exist from the dice game and don't
+  affect Siege classes yet. Daily quests hidden (their goals were dice actions).
+- Fate offerings (the "cake" mechanic), catapults, ladders are not in yet.
