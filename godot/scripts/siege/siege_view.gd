@@ -38,6 +38,8 @@ var oracle_nodes: Array = []
 var gate_nodes: Dictionary = {}
 var node_nodes: Dictionary = {}
 var stock_piles: Array = []
+var catapult_nodes: Array = []
+var ladder_nodes: Dictionary = {}
 var altar_sacks: Array = []
 var proj_nodes: Dictionary = {}
 var _fx: Array = []
@@ -401,7 +403,12 @@ func _build_castle(t: int) -> void:
 		_place(HEX + "building_tower_A_%s.gltf" % col, Vector3(tp.x, 0, tp.y), face, 1.8)
 	for cx in [-12.3, 12.3]:
 		var cp: Vector2 = Sim._m(t, Vector2(cx, Sim.FRONT_Z + 0.3))
-		_place(HEX + "building_tower_catapult_%s.gltf" % col, Vector3(cp.x, 0, cp.y), face, 1.9)
+		var cat := _place(HEX + "building_tower_catapult_%s.gltf" % col, Vector3(cp.x, 0, cp.y), face, 1.9)
+		if cat != null:
+			var turret: Node3D = cat.find_child("*turret*", true, false)
+			var arm: Node3D = cat.find_child("*arm*", true, false)
+			catapult_nodes.append({"team":t, "p":cp, "node":cat, "turret":turret, "arm":arm,
+				"arm_rest":arm.rotation.x if arm != null else 0.0, "fired":-10.0})
 		var bp: Vector2 = Sim._m(t, Vector2(cx, Sim.HALF_L - 0.8))
 		_place(HEX + "building_tower_B_%s.gltf" % col, Vector3(bp.x, 0, bp.y), face, 1.7)
 	var kp: Vector2 = Sim._m(t, Vector2(0.0, 25.4))
@@ -506,6 +513,17 @@ func _sync_castle(dt: float) -> void:
 		if has and nn.full != null:
 			var k := 0.75 + 0.25 * float(n.amount) / float(n.max)
 			(nn.full as Node3D).scale = Vector3.ONE * (3.2 if n.kind == "wood" else 4.4) * k
+	for cn in catapult_nodes:
+		if cn.arm == null:
+			continue
+		var age: float = _time - float(cn.fired)
+		# Throw: snap forward in 0.15 s, wind back over 0.9 s.
+		var swing := 0.0
+		if age < 0.15:
+			swing = age / 0.15
+		elif age < 1.05:
+			swing = 1.0 - (age - 0.15) / 0.9
+		(cn.arm as Node3D).rotation.x = float(cn.arm_rest) + swing * 1.4
 	for t in 2:
 		if t < altar_sacks.size() and altar_sacks[t] != null:
 			(altar_sacks[t] as Node3D).visible = bool(sim.altars[t].ready)
@@ -807,6 +825,52 @@ func on_event(e: Dictionary) -> void:
 			var ws2: Vector2 = Sim.workshop(int(e.team))
 			for i in 2:
 				ring_at(Vector3(ws2.x, 0.1, ws2.y), GOLD, 2.5 + i * 1.5, 0.9)
+		"catapult_fire":
+			var best := {}
+			var bd := INF
+			for cn in catapult_nodes:
+				var d: float = (cn.p as Vector2).distance_to(e.from)
+				if int(cn.team) == int(e.team) and d < bd:
+					bd = d
+					best = cn
+			if not best.is_empty():
+				best.fired = _time
+				if best.turret != null:
+					var tgt: Vector2 = e.to
+					var cat_node: Node3D = best.node
+					var local := cat_node.to_local(Vector3(tgt.x, 0, tgt.y))
+					(best.turret as Node3D).rotation.y = atan2(-local.x, -local.z)
+			var stone := _place(HEX + "projectile_catapult.gltf", Vector3(e.from.x, 4.2, e.from.y), 0.0, 3.2)
+			if stone != null:
+				_fx.append({"node":stone, "at":_time, "life":float(e.flight), "kind":"shell",
+					"p0":Vector3(e.from.x, 4.2, e.from.y), "p1":Vector3(e.to.x, Sim.height_at(e.to) + 0.3, e.to.y)})
+		"catapult_hit":
+			var hp := Vector3(e.pos.x, Sim.height_at(e.pos) + 0.15, e.pos.y)
+			ring_at(hp, Color("#d9c4a0"), Sim.CATAPULT_AOE * 1.3, 0.55)
+			for i in 6:
+				spark(hp + Vector3(randf_range(-1, 1), 0.3 + randf(), randf_range(-1, 1)), Color("#bfb3a0"))
+		"ladder_up":
+			var lp: Vector2 = e.pos
+			var own := int(e.team)
+			# Leans against the outside face of the enemy wall (the side the builder came from).
+			var outward := Vector2(0, 1) if own == 0 else Vector2(0, -1)
+			var base: Vector2 = lp + outward * 1.35
+			var ln := _place(HEX + "ladder.gltf", Vector3(base.x, 0, base.y), 0.0 if own == 0 else PI, 4.6)
+			if ln != null:
+				ln.rotation.x = -0.32 if own == 0 else 0.32
+				ladder_nodes[int(e.ladder)] = ln
+			ring_at(Vector3(base.x, 0.1, base.y), TEAM_COLORS[own], 1.8, 0.6)
+		"ladder_hit":
+			var lh: Node3D = ladder_nodes.get(int(e.ladder))
+			if lh != null:
+				spark(lh.position + Vector3(0, 1.2 + randf(), 0), Color("#c9a26b"))
+		"ladder_down":
+			var ld: Node3D = ladder_nodes.get(int(e.ladder))
+			if ld != null:
+				for i in 6:
+					spark(ld.position + Vector3(randf_range(-0.6, 0.6), 0.4 + randf() * 2.0, randf_range(-0.6, 0.6)), Color("#c9a26b"))
+				ld.queue_free()
+				ladder_nodes.erase(int(e.ladder))
 		"pickup", "drop", "recaptured":
 			var o: Dictionary = sim.oracles[int(e.team)]
 			ring_at(Vector3(o.pos.x, 0.1, o.pos.y), TEAM_COLORS[int(e.team)], 1.8, 0.6)
@@ -965,6 +1029,11 @@ func _step_fx() -> void:
 				# Grow outward and disappear at the end of its life (no alpha fade).
 				var s := 0.4 + u * float(fx.grow)
 				node.scale = Vector3(s, 0.3, s)
+			"shell":
+				var p0: Vector3 = fx.p0
+				var p1: Vector3 = fx.p1
+				node.position = p0.lerp(p1, u) + Vector3(0, 7.0 * u * (1.0 - u), 0)
+				node.rotation.x += 0.25
 			"spark":
 				node.position = fx.p0 + fx.dir * u * 1.2
 				node.scale = Vector3.ONE * maxf(0.05, 1.0 - u)
