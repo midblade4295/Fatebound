@@ -64,3 +64,13 @@ Each step is committed separately; this file is updated in the same commit.
 - Hero page, shop weapons and dice-era power stats still exist from the dice game and don't
   affect Siege classes yet. Daily quests hidden (their goals were dice actions).
 - Fate offerings (the "cake" mechanic), catapults, ladders are not in yet.
+
+# Round 2 (Kevin, 2026-09-28): castle layers + stairs, 100 % resolution, "the rest of stuff"
+| Step | Scope | Status |
+|---|---|---|
+| R1 | 3D at 100 % of PHYSICAL pixels (old code used the canvas scale = 1.0, so it rendered at the logical 336x746 on a 1440x3200 screen); pause-menu Resolution 100/75/50; MSAA off at 100 %; thermal guard step 2 drops to 75 % | done |
+| R2 | Castle layers: raised throne room + dungeon platforms with stairs, midfield plateau with stairs; heights in sim (ledges = walls), view builds platforms/steps | todo |
+| R3 | Fate offerings (the cake): altar spawns offerings; feeding the captive enemy Oracle makes her heavier/slower to carry; visibly fatter | todo |
+| R4 | Catapult towers (workshop upgrade): auto-fire at enemies near your walls | todo |
+| R5 | Siege ladders: workers build a ladder on an enemy wall; a private passage for their team; enemies can break it | todo |
+| R6 | Tests, screenshots, perf at 100 %, APK | todo |

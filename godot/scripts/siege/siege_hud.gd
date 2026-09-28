@@ -12,6 +12,8 @@ signal forge_take
 signal forge_leave
 signal action_pressed(kind: String)
 signal fps_toggled
+signal res_cycled
+var res_label_source: Callable   # -> float render scale
 signal workshop_tools
 signal workshop_buy(id: String)
 signal workshop_leave
@@ -276,6 +278,12 @@ func _build_pause_panel() -> void:
 	fps_btn.pressed.connect(func():
 		fps_toggled.emit()
 		fps_btn.text = "30 FPS MODE: " + ("ON" if Engine.max_fps == 30 else "OFF"))
+	var res_btn := _button(v, "RESOLUTION: 100%", "secondary", func(): pass)
+	res_btn.pressed.connect(func():
+		res_cycled.emit()
+		res_btn.text = "RESOLUTION: %d%%" % int(res_label_source.call() * 100.0) if res_label_source.is_valid() else "RESOLUTION")
+	pause_panel.visibility_changed.connect(func():
+		if res_label_source.is_valid(): res_btn.text = "RESOLUTION: %d%%" % int(res_label_source.call() * 100.0))
 	_button(v, "LEAVE MATCH", "secondary", func(): leave_requested.emit())
 
 func show_result(rewards: Dictionary = {}) -> void:
