@@ -286,7 +286,7 @@ func _build_pause_panel() -> void:
 		if res_label_source.is_valid(): res_btn.text = "RESOLUTION: %d%%" % int(res_label_source.call() * 100.0))
 	_button(v, "LEAVE MATCH", "secondary", func(): leave_requested.emit())
 
-func show_result(rewards: Dictionary = {}) -> void:
+func show_result(result: Dictionary = {}) -> void:
 	if result_panel != null:
 		return
 	var me: Dictionary = sim.by_id.get(player_id, {})
@@ -302,8 +302,30 @@ func show_result(rewards: Dictionary = {}) -> void:
 	_label(v, "You: %d KOs · %d downs · %d rescues" % [me.kills, me.deaths, me.rescues], 14, Color("#d4cbbb"))
 	if me.gathered > 0 or me.gate_dmg > 0.0:
 		_label(v, "Gathered %d · gate damage %d" % [int(me.gathered), int(me.gate_dmg)], 13, Color("#cfe8b8"))
-	if not rewards.is_empty():
-		_label(v, "+%d gold · +%d XP · +%d season%s" % [int(rewards.gold), int(rewards.xp), int(rewards.pts), " · +1 chest" if int(rewards.chest) > 0 else ""], 15, VisualTheme.GOLD, _bold)
+	var rw: Dictionary = result.get("rewards", {})
+	if not rw.is_empty():
+		var box := VBoxContainer.new()
+		box.add_theme_constant_override("separation", 2)
+		v.add_child(box)
+		for ln in rw.lines:
+			var row := HBoxContainer.new()
+			box.add_child(row)
+			# _label() gives every label a 290 px minimum; two of those don't fit a phone row.
+			var name_l := _label(row, str(ln.label), 12, Color("#d4cbbb"))
+			name_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+			name_l.custom_minimum_size = Vector2(150, 0)
+			name_l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			var val := _label(row, "+%d gold  +%d pass" % [int(ln.gold), int(ln.pass)], 12, VisualTheme.GOLD)
+			val.custom_minimum_size = Vector2(130, 0)
+			val.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		_label(v, "+%d GOLD  ·  +%d XP  ·  +%d PASS" % [int(rw.gold), int(rw.xp), int(rw.pass)], 14, VisualTheme.GOLD, _bold)
+		for lv in result.get("levels", []):
+			_label(v, "LEVEL UP! Level %d  ·  +%d gold%s" % [int(lv.level), int(lv.reward.get("gold", 0)), ("  ·  +%d gems" % int(lv.reward.gems)) if lv.reward.has("gems") else ""], 14, VisualTheme.CYAN, _bold)
+		var tiers: Array = result.get("tiers", [])
+		if not tiers.is_empty():
+			_label(v, "Siege Pass tier %s reached — claim it on the Pass screen" % (str(tiers[-1]) if tiers.size() == 1 else "%d–%d" % [tiers[0], tiers[-1]]), 13, Color("#ffcf7a"))
+		for c in (result.get("challenges", []) as Array).slice(0, 4):
+			_label(v, "%s  %s  %d/%d" % ["✔" if c.done else "•", str(c.text), int(c.progress), int(c.goal)], 12, VisualTheme.CYAN if c.done else Color("#b9c3c4"))
 	_button(v, "PLAY AGAIN", "primary", func(): replay_requested.emit())
 	_button(v, "HOME", "secondary", func(): leave_requested.emit())
 	result_panel.visible = true
