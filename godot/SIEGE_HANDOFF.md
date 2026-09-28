@@ -1,0 +1,259 @@
+# Fatebound Siege — handoff for the next agent
+
+Owner: Kevin (GitHub `midblade4295`, repo `midblade4295/Fatebound`). Solo indie dev. Tests every
+build on a **Samsung Galaxy S21 Ultra** (Adreno 660, 1440×3200).
+
+**How Kevin works:** terse and directive. Read the actual code before answering; never guess.
+He pushes back hard on claims not grounded in the files. Show evidence (test output, diffs,
+screenshots), not assurances.
+
+---
+
+## 0. First steps (do these before anything else)
+
+1. **Get the branch.** It is NOT on GitHub yet (35+ commits exist only in a git bundle).
+   Kevin has `Fatebound_Siege_FULL.bundle` and `push_siege_branch.sh`. On a machine with
+   push access:
+   ```bash
+   ./push_siege_branch.sh /path/to/Fatebound_Siege_FULL.bundle ~/Fatebound
+   ```
+   It clones if needed, verifies the bundle, creates local branch `claude/kaykit-3d-rebuild`,
+   checks the expected tip hash and pushes **without force**. Manual equivalent:
+   ```bash
+   git clone git@github.com:midblade4295/Fatebound.git && cd Fatebound
+   git bundle verify /path/to/Fatebound_Siege_FULL.bundle      # needs d43282a (on origin)
+   git fetch /path/to/Fatebound_Siege_FULL.bundle claude/kaykit-3d-rebuild:claude/kaykit-3d-rebuild
+   git checkout claude/kaykit-3d-rebuild
+   git push -u origin claude/kaykit-3d-rebuild
+   ```
+   The bundle's base `d43282a` is on `origin/codex/fatebound-visual-rebuild`; a normal clone
+   has it. (Older bundles named `..._0.x.bundle` need `4ab80fb`, which is NOT on GitHub — ignore them.)
+2. **Check the state is clean:** `git status` and `git log --oneline -5`. Read
+   `godot/SIEGE_PROGRESS.md` (the running log; newest rounds at the bottom).
+3. **Run the tests** (section 5). Everything must pass before you change anything.
+4. **Do work in small committed steps** and append to `godot/SIEGE_PROGRESS.md` in the same commit.
+   Earlier sessions were cut off mid-task several times and left uncommitted, untested edits.
+   If you find uncommitted changes you did not make, read and test them before building on them.
+
+---
+
+## 1. What the game is now
+
+Fatebound was a dice-battle game. **Siege is now the whole game** (Kevin's decision): a Fat
+Princess–style real-time capture game, offline vs bots. Dice survive only at the class forge.
+Renderer **stays Vulkan** (Kevin's decision; see section 8).
+
+- **Match:** 16 v 16 (human + 15 bots vs 16 bots). Field 52 × 104 m. 12-minute cap. First to
+  3 rescues wins; at time, more rescues wins, then more kills.
+- **Each team's Oracle** (the "princess") starts captive in the ENEMY castle's dungeon cell.
+  Carry yours from their dungeon to your own throne room.
+- **Castle** (identical layout, red is the point mirror of blue): front wall with two gates,
+  flanking towers and corner catapult towers, courtyard (spawn, forge, workshop/stockpile),
+  inner ledge with stairs up to raised back rooms: **dungeon** (cell with bars on three sides,
+  open front) and **throne room**, either side of the keep. Side walls. Midfield: a raised
+  plateau with stairs, forests, quarries, cover rocks, six cake trees.
+- **Gates:** 1500 HP. Open (doors swing on hinges) for allies, block enemy units and projectiles
+  until broken. Class damage multipliers vs gates. A broken gate is rubble for 20 s and can't
+  be rebuilt with an enemy within 6 m; workers repair it (solid again at 35 %). Repairs pause
+  while the gate was hit in the last 3 s.
+- **Classes** (forge dice: roll 3 d-faces, pair = class, triple = upgraded, FATE wild; Fourth Die
+  upgrade adds a die): Villager (start), Worker (free at workshop), Knight/Paladin,
+  Barbarian/Berserker, Rogue/Assassin, Ranger/Sniper, Mage/Archmage.
+- **Gathering/crafting:** workers chop trees and mine stone (carry 5), deliver to the stockpile,
+  repair gates, raise siege ladders on enemy walls (8 wood; private crossing for their team;
+  enemies can knock it down). Workshop team upgrades: Reinforced Gates (2), Armory (3),
+  Fourth Die (1), Catapults (1). Bot quartermaster saves toward a plan; on the human's team it
+  only spends surplus (2× cost) so the player chooses first.
+- **Oracle rules (from Kevin's Fat Princess screenshots):**
+  - Cake trees (6, neutral) ripen a cake every 60 s. Feed cake to the ENEMY Oracle held in your
+    dungeon. 3 cakes = one size stage; stages 0–5 need **1–6 lifters** to carry her. She is
+    visibly wider each stage. A rescue resets her size.
+  - Multi-player lift: first lifter leads (a human who joins takes the lead); followers hold a
+    ring around the lead. Not enough hands → she won't move. Extra hands +10 % speed each.
+  - Captors must carry a dropped Oracle back to their cell (no instant recapture).
+  - **Tantrum:** on the ground 6 s → knockback 4 m + 1.6 s stun to everyone within 5 m, every 6 s.
+    Back to her cell after 25 s untouched.
+  - **Healing aura:** captive, she heals her own team within 3.2 m at 12 hp/s.
+  - **Blessing (NOT in Kevin's screenshots, added for balance):** while her own team carries her
+    she heals them within 4.2 m. Same 4 seeds: 7 rescues with it, 2 without. One constant,
+    `BLESS_R` in `siege_sim.gd`. Kevin was told; he may want it removed.
+- **Meta:** home screen's main card is SIEGE / ENTER BATTLE. Rewards via `progression.grant()`:
+  win 120 gold / 60 XP / 12 season pts / +1 chest, draw 70/40/8, loss 40/25/5; plus 40 gold +
+  15 XP per personal rescue, 4 gold per KO, 1 gold per resource delivered, 1 gold per 50 gate
+  damage. Granted once per match. Daily Raid, Hero Academy and daily quests are hidden from home
+  (dice code still exists, unreachable; tests still reach it by route).
+
+---
+
+## 2. Code map (all under `godot/`)
+
+| File | Lines | Role |
+|---|---|---|
+| `scripts/siege/siege_sim.gd` | ~2000 | **All rules.** Pure simulation, no scene nodes, fixed 30 Hz `step()`. Map, walls, gates, nav (AStarGrid2D per team), spatial buckets, combat, projectiles, Oracles, cake, workers, upgrades, catapults, ladders, bot AI, commander, rewards. |
+| `scripts/siege/siege_view.gd` | ~1200 | 3D presentation from KayKit models: terrain (MultiMesh hexes), castles built from `sim.walls`/`sim.gates`, actors (animated rigs), Oracles, cakes (primitive meshes), projectiles, effects, follow camera. Reads the sim; never changes rules. |
+| `scripts/siege/siege_hud.gd` | ~700 | Hand-drawn multitouch HUD (stick + ATTACK/ABILITY/DODGE/ACTION), scoreboard, status lines, forge/workshop/pause/result panels, world-projected HP and gate bars, toasts. |
+| `scripts/siege/siege_mode.gd` | ~230 | Owns SubViewport + sim + view + HUD. 60 fps cap, render scale, thermal guard, rewards grant. |
+| `scripts/siege/siege_diag.gd` | ~260 | Field diagnostics: `user://siege_diag.log` (per-second STAT lines, stalls, engine errors, logcat on stall). Home card button "COPY SIEGE DIAGNOSTICS" puts it on the clipboard. |
+| `scripts/kaykit_stage.gd`, `scripts/dice_strip.gd` | | Home hero portrait / old dice battlefield + 3D dice (still used by the home portrait and forge dice). |
+| `scripts/ui/pages.gd`, `scripts/full_client.gd` | | App shell: home page SIEGE card, `start_siege()`. |
+| `assets/kaykit/` | | KayKit packs (CC0; licences included): `hex/` castle/props, `heroes/`, `anim/` rigs, `weapons/`, `forest/`. |
+| `SIEGE_PROGRESS.md` | | Running log of every round/step, tuning results, known issues. |
+| `tools/run_siege_tests.sh`, `tools/build_siege_preview.sh` | | One-command test and build (section 5). |
+
+**Coordinates:** `Vector2(x, z)` on the ground. Blue = team 0 at +z, red = team 1 at −z; red is
+the point mirror. Castle geometry is authored in castle-local blue space (x −13..13, z 15..29,
+back at 29) and placed with `Sim._c(team, p)`; world-space things (resources, plateau) use
+`Sim._m(team, p)`. `Sim.height_at(p)` gives visual floor height (the sim stays 2D; ledges are walls).
+
+---
+
+## 3. Invariants — do not break these
+
+- **Sim/view split:** rules only in `siege_sim.gd`; the view and HUD only read sim state and
+  events (`drain_events()`). Keep the sim deterministic for a seed (future online server).
+- **Walls are segments with radius**; units slide along them. New walls/obstacles must be added
+  in `_build_map()` (before `_build_buckets()` and `_build_nav()` in `setup`) or collision and
+  pathfinding won't see them.
+- **Clamp to the field before wall push-out** (`_separate`), and walls that meet the field edge
+  run 1 m past it. Both fix real "unit pinned inside a wall" bugs.
+- **Anything that moves units after the collision pass** (lift followers, tantrum knockback)
+  must resolve walls itself (`_push_out`, `_knockback`). The smoke test checks every unit every
+  3 ticks: `wall_violations=0 gate_violations=0` is required.
+- **Gate segment = the doorway only** (±1.3 m); the neighbouring wall ends cover the pillars.
+- **No per-frame GPU buffer churn** in Siege: no `Label3D` (damage numbers/HP bars are 2D HUD),
+  no per-frame material/shader-param writes, shared cached materials. These were suspects in a
+  field freeze (section 8).
+- **Renderer:** `project.godot` must keep `renderer/rendering_method.mobile="mobile"` (Vulkan).
+  `build_siege_preview.sh` refuses to finish if the APK is gl_compatibility.
+- **Brightness is measured, not eyeballed:** `VULKAN_*` constants in `siege_view.gd`
+  (exposure 1.55, ambient 2.25), `kaykit_stage.gd` (battle light 3.75 / ambient 9; portrait
+  2.5 / 4), `dice_strip.gd` (1.28 / 1.9) match Vulkan to Compatibility mean luminance.
+  Backdrop shaders use `source_color` uniforms. Don't change without re-measuring.
+- **Preview identity:** package `com.fatebound.kaykitrebuild`, preset "Android KayKit Rebuild",
+  signed with Kevin's preview key (alias `fbpreview`, store/key password `fbpreview`,
+  cert SHA-256 `1011fc79…3b38b87`). Bump `version/code` every build (next = **19**) and
+  `BUILD` in `siege_diag.gd`. Never use the Play upload key for previews.
+- **Repo rules (from the root `AGENTS.md`):** new task branches, no force-push, no merge to main,
+  no save resets, no Play release, don't touch Legionary/Caddy or production signing.
+
+---
+
+## 4. Current tuning (from `siege_sim.gd`)
+
+| Area | Values |
+|---|---|
+| Match | 30 Hz tick; 16 per team; 720 s; 3 rescues; respawn 5 s |
+| Field | HALF_W 26, HALF_L 52; castle back at local z 29 (shift 23) |
+| Gates | 1500 HP; solid again at 35 %; repair lock 3 s after a hit; rubble 20 s / no enemy within 6 m; repair 30 HP per 0.5 s tick, 1 material per 3 ticks |
+| Workers | carry 5; 0.9 s per unit gathered; bots: 3 per team (one wood-first, one stone-first) |
+| Upgrades (wood/stone) | Gates 15/10, 25/20 · Armory 10/15, 20/25, 30/35 · Fourth Die 10/20 · Catapults 15/25 |
+| Catapults | every 4.5 s, range 5–22 m, 45 dmg, 2.6 m blast |
+| Ladders | 8 wood, 3 s build, 250 HP, crossing at 0.5× speed |
+| Oracle | cake 60 s/tree, 3 cakes/stage, lifters [1..6], weight slow −8 %/stage, carry ×0.65 (rogue 0.72), +10 % per extra lifter; tantrum after 6 s every 6 s, r 5, push 4, stun 1.6; heal r 3.2 @ 12/s; blessing r 4.2; drop return 25 s |
+| Roles (16) | 7 raid (incl. human slot), 3 escort, 3 defend, 3 gather |
+
+---
+
+## 5. Build, test, install
+
+**Toolchain:** Godot **4.7.2-stable** (`Godot_v4.7.2-stable_linux.x86_64`) + its Android export
+templates in `~/.local/share/godot/export_templates/4.7.2.stable/`; JDK 17+; Android SDK
+(`ANDROID_HOME`) with build-tools (zipalign, apksigner). Download:
+`https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/`.
+
+**Tests** (headless, ~3 min; `--quick` ≈ 2 min):
+```bash
+GODOT=/path/to/Godot_v4.7.2-stable_linux.x86_64 godot/tools/run_siege_tests.sh [--quick]
+```
+Runs and checks the pass marker of each: `siege_sim_smoke` (6 full 16v16 bot matches with the
+wall/gate clip invariants, asserts ≥1 rescue; `SEEDS=11,22` to choose), `siege_reach` (every
+objective reachable for both teams), `siege_mode_smoke`, `siege_human_soak` (synthetic touch
+input; must report `stalls=0`), `siege_home_flow` (home → battle → win → rewards saved → replay →
+home), `siege_diag_smoke`, `siege_guard_smoke`, `siege_logcat_filter`, `full_ui_smoke`,
+`full_core_smoke`, `all_modules_parse`. Diagnostics (not in the runner):
+`tests/siege_profile.gd` (ms per tick by phase; last: 0.99 ms at 16v16) and
+`SEED=33 … tests/siege_trace.gd` (match timeline: gates, pickups, drops, rescues, tantrums).
+`full_ui_smoke` rewrites `reports/full-port/native-ui-flow.json`; the runner reverts it.
+
+**Screenshots on Vulkan** (verify visuals; the software renderer is slow but correct):
+```bash
+xvfb-run -a $GODOT --rendering-method mobile --fixed-fps 30 --resolution 420x780 --path godot -s <script>
+```
+`siege_view.gd` has `cam_override = [eye, target]` for test shots. Brightness comparisons use
+`--rendering-method gl_compatibility` vs `mobile`.
+
+**APK** (signed with the preview key so it installs over earlier previews):
+```bash
+GODOT=… KEYSTORE=/path/to/fatebound-siege-preview.jks godot/tools/build_siege_preview.sh
+```
+The GitHub workflow `.github/workflows/build-kaykit-preview.yml` builds this APK on every push to
+`claude/kaykit-3d-rebuild`, **but signs with a new throwaway key each run**, so those APKs can't
+install over each other or over Kevin's current build. To fix: store the preview .jks as a
+base64 repo secret and sign with it in the workflow (do not commit the .jks; the repo is public).
+
+Kevin installs by downloading the APK on the phone. Latest delivered: **0.10.0-siege, version
+code 18**.
+
+---
+
+## 6. Known issues and next work (in priority order)
+
+1. **Most matches end on time.** 6-match smoke: 10 rescues total, one match won 3–2 on rescues,
+   the rest at the 12-minute cap (three 0–0). Levers: raider coordination/escort formation, carry
+   route choice, respawn time at 16v16, defender count. Use `tests/siege_trace.gd` to see where
+   carries die.
+2. **Side bias:** blue won 5 of the last 6 bot matches (earlier rounds favoured red). Small
+   samples — run more seeds before changing anything.
+3. **Bots rarely raise ladders at 16v16**; catapults bought in only some matches (economy
+   dependent). The smoke test reports these but doesn't assert them.
+4. **Unverified on device:** 0.9.0 switched 3D to 100 % physical resolution (was ~25 %:
+   336×746 on a 1440×3200 screen). 16v16 + big map in 0.10.0. Draw calls measured lower than
+   0.9.0 (110–285 vs 315), but fill-rate/thermals on the S21 Ultra are unknown. Ask Kevin for
+   "COPY SIEGE DIAGNOSTICS" output after a full match. Pause menu has Resolution 100/75/50 %;
+   the thermal guard drops to 30 fps, then to 75 % resolution.
+5. `siege_human_soak` stops at its own 400 s cap before the 720 s match ends — extend it.
+6. Not started: online play (the sim is written to run on an authoritative server later).
+   Dice-era hero page / weapon shop don't affect Siege classes yet.
+7. Kevin may want the Blessing removed (section 1).
+
+---
+
+## 7. Security issue in the repo (tell Kevin; don't fix silently)
+
+The **Play Store upload keystore** is committed (`android/keystore/upload.jks.b64`) and its
+password is in plain text in `.github/workflows/build-aab.yml`. The repo is publicly readable
+(unauthenticated clone works). Anyone can sign an APK/AAB as Kevin's upload key. Recommended:
+request an upload-key reset in Play Console, move signing material to GitHub Actions secrets,
+remove the files, and consider making the repo private. Rewriting history requires a force-push
+— only with Kevin's explicit authorization.
+
+---
+
+## 8. History you need (hard-won)
+
+- **GPU freeze (S21 Ultra):** builds 0.7.3–0.7.7 froze the GL render thread after ~5,300–6,000
+  frames regardless of load. 0.7.8 switched to Vulkan AND removed Siege-only GPU features at the
+  same time → no freeze. An OpenGL A/B build was made; Kevin chose to stay on Vulkan, so the
+  root cause (OpenGL driver vs removed features) was never isolated. Don't reintroduce
+  per-frame GPU buffer churn, Label3D, or billboard-shader bars.
+- **Vulkan brightness:** Vulkan lights in linear space; the same settings rendered ~half as bright
+  as Compatibility. All compensation constants were tuned by measured mean luminance, and
+  compensation uses light energy (not exposure) where unshaded backdrops exist.
+- **Resolution:** until 0.9.0 the 3D viewport used logical size (blurry on the phone).
+- **16v16 perf:** `_separate` tested every unit against every wall: 2.36 ms/tick → 0.99 ms with
+  6 m spatial buckets. Nav grid built by stamping bounding boxes (setup ~3 ms).
+- **Stalemates:** at 16v16 workers out-repaired assaults (repair lock + rubble fixed it);
+  carriers died on the ~90 m run (carry speed, extra lifters, bots wait for enough hands,
+  blessing).
+
+---
+
+## 9. Handoff package contents (what Kevin was given)
+
+| File | What |
+|---|---|
+| `SIEGE_HANDOFF.md` | This document (also committed at `godot/SIEGE_HANDOFF.md`). |
+| `Fatebound_Siege_FULL.bundle` | Git bundle: `d43282a..claude/kaykit-3d-rebuild` (all Siege work + these docs). |
+| `push_siege_branch.sh` | Applies the bundle to a clone and pushes the branch (no force). |
+| `fatebound-siege-preview.jks` | Preview signing key (alias/passwords `fbpreview`). Keep out of the repo. |
+| `Fatebound-Siege-0.10.0.apk` | Latest build Kevin has installed (version code 18). |

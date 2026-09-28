@@ -1,3 +1,18 @@
+# Current native development: Fatebound Siege (Fat Princess-style), preview 0.10.0
+
+Use `claude/kaykit-3d-rebuild`, based on `d43282a` (origin/codex/fatebound-visual-rebuild).
+Read `godot/SIEGE_HANDOFF.md` first, then `godot/SIEGE_PROGRESS.md`. Siege is now the whole
+game (16v16 vs bots, castles, breakable gates, workers/crafting, cake/lifting/tantrum Oracle).
+Android preview only: package com.fatebound.kaykitrebuild, preset "Android KayKit Rebuild",
+Kevin's preview key (not the Play key), next versionCode 19, renderer stays Vulkan.
+Test: `godot/tools/run_siege_tests.sh`. Build: `godot/tools/build_siege_preview.sh`.
+Commit each working step and log it in SIEGE_PROGRESS.md. No force-push, main merge, save
+reset, Play release, production signing, Legionary/Caddy changes. The Play upload key is
+committed in this public repo (see SIEGE_HANDOFF.md section 7): report it, don't act alone.
+
+---
+## Earlier native instructions retained as provenance
+
 # Current native development: Fatebound Native 0.3 full-game port
 
 Use `chatgpt/godot-full-game-port`, based on native0.2 commit
