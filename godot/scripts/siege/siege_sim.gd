@@ -291,7 +291,7 @@ func _new_unit(id: String, team: int, bot: bool, role: String) -> Dictionary:
 		"dodge_dir":Vector2.ZERO,"target":"","forge":{"open":false,"faces":["fate","fate","fate"],"held":[false,false,false],
 		"rolling":0.0,"rolled":false},"ai_goal":Vector2.ZERO,"lunge_hit":false,
 		"unstick":0.0,"unstick_dir":Vector2.ZERO,"stuck_t":0.0,"last_pos":Vector2.ZERO,
-		"load":{"kind":"", "n":0}, "task":{}, "workshop_open":false, "gathered":0, "repaired":0.0,
+		"load":{"kind":"", "n":0}, "task":{}, "workshop_open":false, "gathered":0, "repaired":0.0, "gate_dmg":0.0,
 		"path":PackedVector2Array(), "path_i":0, "path_goal":Vector2(INF, INF), "path_at":-10.0, "path_ver":-1}
 
 func armory_mult(team: int) -> float:
@@ -670,6 +670,8 @@ func _damage_gate(src: Dictionary, g: Dictionary, amount: float) -> void:
 	if not gate_blocks(g):
 		return
 	g.hp = maxf(0.0, g.hp - amount)
+	if src.has("gate_dmg"):
+		src.gate_dmg += amount
 	_event("gate_hit", {"gate":g.id, "team":g.team, "by":src.get("id",""), "dmg":int(round(amount))})
 	if g.hp <= 0.0:
 		g.broken = true
@@ -1326,6 +1328,15 @@ func _fight(u: Dictionary, foe: Dictionary) -> void:
 		_start_attack(u, "ability")
 		return
 	_nav_to(u, foe.pos, reach * 0.8)
+
+# ---------- rewards ----------
+static func match_rewards(sim_winner: int, me: Dictionary) -> Dictionary:
+	# Pure function of the result and the player's contribution, credited through progression.
+	var won: bool = sim_winner == int(me.team)
+	var draw: bool = sim_winner == -1
+	var base: Dictionary = {"gold":120, "xp":60, "pts":12, "chest":1} if won else ({"gold":70, "xp":40, "pts":8, "chest":0} if draw else {"gold":40, "xp":25, "pts":5, "chest":0})
+	var gold: int = int(base.gold) + 40 * int(me.rescues) + 4 * int(me.kills) + int(me.gathered) + int(float(me.gate_dmg) / 50.0)
+	return {"gold":gold, "xp":int(base.xp) + 15 * int(me.rescues), "pts":int(base.pts), "chest":int(base.chest)}
 
 func _melee_count(u: Dictionary, r: float) -> int:
 	var n := 0

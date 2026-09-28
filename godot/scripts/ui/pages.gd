@@ -80,38 +80,27 @@ func home()->void:
     var battle:=card(body,"","")
     var battle_row:HBoxContainer=app._row(battle)
     var battle_copy:=VBoxContainer.new();battle_copy.size_flags_horizontal=Control.SIZE_EXPAND_FILL;battle_row.add_child(battle_copy)
-    var battle_title:=label(battle_copy,"THE WAR FOR TEN TOWERS",17,VisualTheme.GOLD)
+    var battle_title:=label(battle_copy,"SIEGE",20,VisualTheme.GOLD)
     battle_title.add_theme_font_override("font",VisualTheme.TITLE_FONT)
     battle_title.horizontal_alignment=HORIZONTAL_ALIGNMENT_LEFT
-    var battle_desc:=label(battle_copy,"5-minute matches · free entry · Focus powers your rolls",11,Color("#d4cbbb"))
+    var battle_desc:=label(battle_copy,"Storm the enemy castle · free your Oracle · 6 vs 6",11,Color("#d4cbbb"))
     battle_desc.horizontal_alignment=HORIZONTAL_ALIGNMENT_LEFT
-    var enter:=button(battle_row,"ENTER BATTLE",func():app._go("prepare"),not app.trainer.active,"prepare")
+    var enter:=button(battle_row,"ENTER BATTLE",app.start_siege,not app.trainer.active,"siege")
     enter.custom_minimum_size=Vector2(151,65)
     enter.size_flags_horizontal=Control.SIZE_FILL
     VisualTheme.apply_tactile(enter,"primary",14)
     enter.add_theme_font_override("font",VisualTheme.BOLD_FONT)
     enter.add_theme_font_size_override("font_size",16)
     app.Fx.ambient(enter,"streaks");app.Fx.ambient(enter,"sparks")
-    if app.trainer.active:button(battle,"RETURN TO TRAINING BATTLE",func():app.training_show_target("battle"),true,"training_return")
-    var links:HBoxContainer=app._row(body)
-    var raid_link:=button(links,"   DAILY RAID",func():app._go("raid"),not app.trainer.active,"raid")
-    button_icon(raid_link,"swords")
-    var chest_link:=button(links,"   CHESTS %d"%(d.chests.size()+int(d.rollTrack.ready)),func():app._go("chests"),true,"chests")
-    button_icon(chest_link,"chest")
-    var siege_card:=card(body,"SIEGE · ALPHA","Real-time capture the Oracle. Roll at the forge for your class, fight your way into the enemy keep and carry your Oracle home. Offline vs bots.")
-    var siege_btn:=button(siege_card,"PLAY SIEGE",app.start_siege,not app.trainer.active,"siege")
-    VisualTheme.apply_tactile(siege_btn,"primary",14)
+    var how:=label(battle,"Roll at the forge for your class. Break the enemy gates, carry your Oracle from their dungeon to your throne. Workers gather wood and stone to repair gates and buy upgrades.",11,Color("#b9c3c4"))
+    how.horizontal_alignment=HORIZONTAL_ALIGNMENT_LEFT
     if SiegeDiag.has_logs():
-        button(siege_card,"COPY SIEGE DIAGNOSTICS",func():
+        button(battle,"COPY SIEGE DIAGNOSTICS",func():
             DisplayServer.clipboard_set(SiegeDiag.read_logs())
             app.flash_message("Diagnostics copied. Paste them to Claude."),true,"siege_diag")
-    var academy:=card(body,"HERO ACADEMY","Learn by playing: Focus, ALL-IN, lanes, crowns, spells, stored attacks and upgrades.")
-    button(academy,"REPLAY TRAINING" if d.get("tutorialBattle",{}).get("done",false) else "CONTINUE BATTLE TRAINING",app.begin_training,not app.trainer.active,"training")
-    var daily:=card(body,"DAILY QUESTS · %d / 3 COMPLETE"%(d.daily.done as Array).size())
-    for id in d.daily.q:
-        var q:Dictionary=C.get_table("DAILY_POOL")[int(id)]
-        label(daily,"%s  %s"%["✓" if d.daily.done.has(int(id)) else "•",q.d],12)
-    button(daily,"QUESTS & REWARDS",func():app._go("quests"),true,"quests")
+    var links:HBoxContainer=app._row(body)
+    var chest_link:=button(links,"   CHESTS %d"%(d.chests.size()+int(d.rollTrack.ready)),func():app._go("chests"),true,"chests")
+    button_icon(chest_link,"chest")
     var season_box:=card(body,"SEASON %d · %s"%[int(d.season.id)+1,C.get_table("SEASON_NAMES")[int(d.season.id)%6]],"%d season points · Free and premium tracks"%int(d.season.pts))
     button(season_box,"VIEW SEASON PASS",func():app._go("season"),true,"season")
     var mastery:Dictionary=p.mastery()
@@ -130,7 +119,7 @@ func home()->void:
         if int(item.get("at",0))<=p.now():due+=1
     if due>0:button(body,"%d RETURN GIFTS READY"%due,func():app._go("friends"))
     if app.api.online_profile.get("pendingRewards",0)>0:button(body,"ONLINE REWARDS WAITING",pending_rewards)
-    label(body,"Native conversion 0.3 · Original v114 equipment, rewards and game rules",10,Color("#809e9f"))
+    label(body,"Fatebound · Siege",10,Color("#809e9f"))
 func hero()->void:
     var body:VBoxContainer=app._shell("HERO & ARMORY","hero")
     var current:Dictionary=C.character(int(d.char));var pow:Dictionary=p.hero_power()
