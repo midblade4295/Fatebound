@@ -8,6 +8,8 @@ const FOREST := "res://assets/kaykit/forest/"
 const GROUND_TINT := Color(0.47, 0.6, 0.38)
 const TEAM_COLORS := [Color("#5fd2f0"), Color("#ff7b52")]
 const GOLD := Color("#ffd46a")
+static var VULKAN_EXPOSURE := 1.55
+static var VULKAN_AMBIENT := 2.25
 
 # Model, weapons (right/left hand) and clips per class. Clip keys: g general, m melee, r ranged,
 # mb movement basic, ma movement advanced, t tools.
@@ -85,13 +87,13 @@ func _build_lighting() -> void:
 	env.background_mode = Environment.BG_COLOR
 	env.background_color = Color("#9fb0b4")
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color("#c9c7b4")
 	env.ambient_light_color = Color("#c3c9c4")
-	env.ambient_light_energy = 0.5
+	env.ambient_light_energy = 0.5 * (VULKAN_AMBIENT if RenderingServer.get_current_rendering_method() != "gl_compatibility" else 1.0)
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	# Vulkan/Mobile lights in linear space and reads darker than Compatibility; compensate.
+	# Vulkan/Mobile lights in linear space and reads darker than Compatibility with the same
+	# settings. Multiplier tuned so Siege's mean brightness matches Compatibility (see commit).
 	var vk := RenderingServer.get_current_rendering_method() != "gl_compatibility"
-	env.tonemap_exposure = 0.84 * (1.35 if vk else 1.0)
+	env.tonemap_exposure = 0.84 * (VULKAN_EXPOSURE if vk else 1.0)
 	env.tonemap_white = 3.0
 	env.fog_enabled = true
 	env.fog_light_color = Color("#8ea3ad")
