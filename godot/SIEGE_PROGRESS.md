@@ -195,7 +195,7 @@ version, everything will be the siege now."
 | E1 | New economy + profile (scripts/meta): currencies, levels, Siege Pass, challenges, shop catalog/rotation, match rewards, one-time migration from the old save (old file untouched) | done |
 | E2 | Siege uses the profile: rewards breakdown, challenge progress, equipped cosmetics shown in battle | done |
 | E3 | New app shell + screens: Home (3D hero showcase, PLAY offline/online), Pass, Shop, Locker, Settings | done |
-| E4 | Remove the old dice-era app (pages, full_client, battle/raid/training/guild/arena code, old tests) | todo |
+| E4 | Remove the old dice-era app (pages, full_client, battle/raid/training/guild/arena code, old tests) | done |
 | E5 | UI fidelity: new theme, icons, transitions; screenshots | todo |
 | E6 | Tests, APK | todo |
 
@@ -245,3 +245,20 @@ Design (all cosmetic; no pay-to-win; no real-money purchases until Play Billing 
   home, unreachable online server -> home, back button, persistence. PASS.
 - Settings links PRIVACY_URL https://136-113-125-3.sslip.io/fatebound/privacy.html (unverified
   from here).
+
+## E4 notes
+- Removal driven by a reachability scan from the new app, Siege, server and their tests (not by
+  guesswork). The only link left to old code was siege_view -> kaykit_stage for a 4-line scene
+  cache, now scripts/siege/asset_cache.gd.
+- Removed: full_client, main, pages, battlefield, dice_strip, kaykit_stage, spell_fx, arena
+  api/wire, scripts/game/* (progression, content, raids, training, campaign, arena...),
+  old UI helpers, 19 old tests, data/v114-content.json, reports/, old tools and docs, and the
+  unreferenced asset folders art/dice/portraits/premium (assets 53 MB -> 19 MB).
+  Kept: assets/branding (app + adaptive icons), visual_theme/brass/tactile (used by the HUD).
+- The repo-root web game and servers (fatebound.html, arena, save host) are untouched: they
+  still serve existing web players on the VM.
+- tools/verify_play_bundle.py: adopted the Play branch version; its dice-era checks now require
+  the Siege app scripts and fail if dice-era scripts ship. The Play workflow on this branch is
+  still the older vc22 one (the Play branch owns release builds) — merge carefully.
+- godot-visual-review.yml runs run_siege_tests.sh --quick. New tests/parse_all.gd.
+- Verified from a deleted .godot cache (fresh import): all 11 suites pass.

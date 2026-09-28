@@ -1,6 +1,6 @@
 extends Node3D
 # Presentation only: mirrors siege_sim state every frame and never changes it.
-const Stage = preload("res://scripts/kaykit_stage.gd")
+const Stage = preload("res://scripts/siege/asset_cache.gd")
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 
 const HEX := "res://assets/kaykit/hex/"

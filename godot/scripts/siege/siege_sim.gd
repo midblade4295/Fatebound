@@ -1978,15 +1978,6 @@ func _fight(u: Dictionary, foe: Dictionary) -> void:
 		return
 	_nav_to(u, foe.pos, reach * 0.8)
 
-# ---------- rewards ----------
-static func match_rewards(sim_winner: int, me: Dictionary) -> Dictionary:
-	# Pure function of the result and the player's contribution, credited through progression.
-	var won: bool = sim_winner == int(me.team)
-	var draw: bool = sim_winner == -1
-	var base: Dictionary = {"gold":120, "xp":60, "pts":12, "chest":1} if won else ({"gold":70, "xp":40, "pts":8, "chest":0} if draw else {"gold":40, "xp":25, "pts":5, "chest":0})
-	var gold: int = int(base.gold) + 40 * int(me.rescues) + 4 * int(me.kills) + int(me.gathered) + int(float(me.gate_dmg) / 50.0)
-	return {"gold":gold, "xp":int(base.xp) + 15 * int(me.rescues), "pts":int(base.pts), "chest":int(base.chest)}
-
 func _melee_count(u: Dictionary, r: float) -> int:
 	var n := 0
 	for o in units:
