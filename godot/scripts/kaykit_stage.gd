@@ -135,7 +135,8 @@ func _build_lighting() -> void:
     env.ambient_light_color = Color("#c9c7b4")
     env.ambient_light_energy = 0.30
     env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-    env.tonemap_exposure = 0.86
+    # Vulkan/Mobile lights in linear space and reads darker than Compatibility; compensate.
+    env.tonemap_exposure = 0.86 * (1.35 if RenderingServer.get_current_rendering_method() != "gl_compatibility" else 1.0)
     env.tonemap_white = 3.0
     env.fog_enabled = true
     env.fog_light_color = Color("#8ea3ad")
