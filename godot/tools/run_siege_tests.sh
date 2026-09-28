@@ -53,6 +53,8 @@ run full_ui_smoke        FULL_UI                  200
 run full_core_smoke      FULL_CORE_SMOKE_PASS     200
 run all_modules_parse    ALL_MODULES_PASS         200
 run meta_economy_test    META_ECONOMY_PASS        120
+# The Siege app shell through its real buttons. REAL time (no --fixed-fps).
+run app_flow_test        APP_FLOW_PASS            150
 # The human soak must never stall the game thread.
 if ! grep -q 'stalls=0' /tmp/siege_test_siege_human_soak.log; then
   echo "FAIL  siege_human_soak reported stalls"; fail=1

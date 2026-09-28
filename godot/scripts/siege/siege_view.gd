@@ -646,7 +646,7 @@ func _decal(pos: Vector3, radius: float, color: Color, alpha: float) -> MeshInst
 var player_looks: Dictionary = {}
 static var _tint_mats: Dictionary = {}
 
-func _make_body(cls: String, cosmetic: Dictionary = {}) -> Dictionary:
+static func make_body(cls: String, cosmetic: Dictionary = {}) -> Dictionary:
 	var look: Dictionary = (LOOKS.get(cls, LOOKS.villager) as Dictionary).duplicate()
 	for hand in ["r", "l"]:
 		if cosmetic.has(hand):
@@ -681,7 +681,7 @@ func _make_body(cls: String, cosmetic: Dictionary = {}) -> Dictionary:
 		_apply_tint(body, str(look.model), Color(str(cosmetic.tint)))
 	return {"body":body, "player":player}
 
-func _apply_tint(body: Node3D, model: String, tint: Color) -> void:
+static func _apply_tint(body: Node3D, model: String, tint: Color) -> void:
 	# A skin = the model's own material with its albedo multiplied by the tint. Made once per
 	# (model, surface, tint) and cached; set once when the body is built, never per frame.
 	var skel: Skeleton3D = body.find_child("Skeleton3D", true, false)
@@ -737,7 +737,7 @@ func _ensure_actor(u: Dictionary) -> Dictionary:
 		root = a.root
 		if is_instance_valid(a.body):
 			a.body.queue_free()
-	var made := _make_body(u.cls, cosmetic)
+	var made := make_body(u.cls, cosmetic)
 	if made.is_empty():
 		return a
 	root.add_child(made.body)
@@ -999,7 +999,7 @@ func on_event(e: Dictionary) -> void:
 func _make_oracle(team: int) -> Dictionary:
 	var root := Node3D.new()
 	add_child(root)
-	var made := _make_body("mage")
+	var made := make_body("mage")
 	var body: Node3D = null
 	var player: AnimationPlayer = null
 	if not made.is_empty():
