@@ -278,7 +278,7 @@ func _build_pause_panel() -> void:
 		fps_btn.text = "30 FPS MODE: " + ("ON" if Engine.max_fps == 30 else "OFF"))
 	_button(v, "LEAVE MATCH", "secondary", func(): leave_requested.emit())
 
-func show_result() -> void:
+func show_result(rewards: Dictionary = {}) -> void:
 	if result_panel != null:
 		return
 	var me: Dictionary = sim.by_id.get(player_id, {})
@@ -292,6 +292,10 @@ func show_result() -> void:
 	_label(v, "Rescues  %d – %d" % [sim.score[me.team], sim.score[1 - me.team]], 17, VisualTheme.TEXT, _bold)
 	_label(v, "Kills  %d – %d" % [sim.kills[me.team], sim.kills[1 - me.team]], 14, Color("#d4cbbb"))
 	_label(v, "You: %d KOs · %d downs · %d rescues" % [me.kills, me.deaths, me.rescues], 14, Color("#d4cbbb"))
+	if me.gathered > 0 or me.gate_dmg > 0.0:
+		_label(v, "Gathered %d · gate damage %d" % [int(me.gathered), int(me.gate_dmg)], 13, Color("#cfe8b8"))
+	if not rewards.is_empty():
+		_label(v, "+%d gold · +%d XP · +%d season%s" % [int(rewards.gold), int(rewards.xp), int(rewards.pts), " · +1 chest" if int(rewards.chest) > 0 else ""], 15, VisualTheme.GOLD, _bold)
 	_button(v, "PLAY AGAIN", "primary", func(): replay_requested.emit())
 	_button(v, "HOME", "secondary", func(): leave_requested.emit())
 	result_panel.visible = true

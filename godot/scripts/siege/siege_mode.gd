@@ -24,6 +24,8 @@ var _guard_clock := 0.0
 var guard_tripped := false
 var low_fx := false
 var audio: Node = null
+var progression = null   # the app's Progress object; rewards are granted through it
+var rewards: Dictionary = {}
 
 var sim
 var view
@@ -160,7 +162,12 @@ func _process(delta: float) -> void:
 	if sim.ended and not _result_shown:
 		_result_shown = true
 		diag.write("MATCH END winner=%d reason=%s score=%s" % [sim.winner, sim.end_reason, str(sim.score)])
-		hud.show_result()
+		rewards = Sim.match_rewards(sim.winner, sim.by_id[hud.player_id])
+		var granted := false
+		if progression != null and progression.has_method("grant"):
+			granted = progression.grant(rewards)
+		diag.write("REWARDS %s granted=%s" % [str(rewards), granted])
+		hud.show_result(rewards if granted else {})
 
 func _thermal_guard(delta: float) -> void:
 	_guard_clock += delta

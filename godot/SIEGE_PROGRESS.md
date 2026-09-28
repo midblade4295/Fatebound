@@ -12,7 +12,7 @@ Each step is committed separately; this file is updated in the same commit.
 | 2 | Sim: Worker class, trees/rocks, carry + stockpile, workshop upgrades, team commander | done |
 | 3 | View: castle from KayKit kit, animated gates, cell, stockpile, worker visuals | done |
 | 4 | HUD: resources, gate health, workshop panel, worker actions | done |
-| 5 | Siege is the game: home entry, rewards into progression, hide dice-only modes | todo |
+| 5 | Siege is the game: home entry, rewards into progression, hide dice-only modes | done |
 | 6 | Tests, screenshots, perf check, APK | todo |
 
 ## Layout (blue = team 0 at +z; red is the point mirror (x,z) -> (-x,-z))
@@ -44,3 +44,12 @@ Each step is committed separately; this file is updated in the same commit.
   WOOD/STONE + load readout, our two gates as HUD bars, world bars over damaged gates,
   action labels CHOP/MINE/REPAIR/WORKSHOP, toasts for gate breaks/rebuilds/upgrades.
 - Verified by Vulkan screenshots; all test suites pass.
+
+## Step 5 notes
+- Home: SIEGE card with ENTER BATTLE (+ how-to line, diagnostics). Removed from home: Daily
+  Raid link, Hero Academy (dice training), daily quests card (dice goals Siege can't progress),
+  Siege alpha card. Dice-mode code is kept but unreachable from the UI (tests still reach it).
+- Rewards via progression.grant(): win 120g/60xp/12pts/+chest, draw 70/40/8, loss 40/25/5;
+  +40g +15xp per personal rescue, +4g per KO, +1g per resource delivered, +1g per 50 gate dmg.
+  Granted once per match (PLAY AGAIN does not re-grant). Shown on the result panel.
+- tests/siege_home_flow.gd: home -> ENTER BATTLE -> win -> gold/xp/pts/chest saved -> replay -> home.

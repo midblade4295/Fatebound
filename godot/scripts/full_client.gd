@@ -117,6 +117,7 @@ func start_siege()->void:
     margins.visible=false
     siege=Siege.new()
     siege.audio=audio
+    siege.progression=progression
     siege.low_fx=Fx.low_quality
     siege.exited.connect(func():siege=null;_show_home())
     ui_root.add_child(siege)
