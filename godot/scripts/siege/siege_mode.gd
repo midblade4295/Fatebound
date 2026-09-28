@@ -5,6 +5,8 @@ const Sim = preload("res://scripts/siege/siege_sim.gd")
 const View = preload("res://scripts/siege/siege_view.gd")
 const Hud = preload("res://scripts/siege/siege_hud.gd")
 const Diag = preload("res://scripts/siege/siege_diag.gd")
+const Net = preload("res://scripts/siege/siege_net.gd")
+const VisualTheme = preload("res://scripts/ui/visual_theme.gd")
 
 signal exited
 
@@ -26,6 +28,20 @@ var low_fx := false
 var audio: Node = null
 var progression = null   # the app's Progress object; rewards are granted through it
 var rewards: Dictionary = {}
+
+# Online play (set before adding to the tree). The server runs the match; this client mirrors it.
+var online := false
+var net_url := Net.DEFAULT_URL
+var player_name := "Player"
+var ws: WebSocketPeer = null
+var net_state := ""                  # "connecting", "waiting", "playing", "closed"
+var net_match := -1
+var _net_started := 0.0
+var _snap_t := 0.0
+var _snap_dt := 1.0 / Net.SNAP_HZ
+var _send_clock := 0.0
+var _sent_move := Vector2(INF, INF)
+var _sent_hold := false
 
 var sim
 var view
@@ -68,7 +84,15 @@ func _ready() -> void:
 	hud.diag = diag
 	add_child(hud)
 	hud.leave_requested.connect(func(): exited.emit())
-	hud.replay_requested.connect(_restart)
+	hud.replay_requested.connect(func():
+		if online:
+			# The server starts the next match on its own; just clear the results screen.
+			if hud.result_panel != null:
+				hud.result_panel.queue_free()
+				hud.result_panel = null
+			hud.toast("Next match starts shortly...", Color("#f2d18d"))
+		else:
+			_restart())
 	hud.forge_roll.connect(func(held): _act("forge_roll", held))
 	hud.forge_take.connect(func(): _act("forge_take"))
 	hud.forge_leave.connect(func(): _act("forge_leave"))
@@ -91,7 +115,10 @@ func _ready() -> void:
 	hud.gate_bars_source = func() -> Array: return view.gate_bars() if view != null else []
 	hud.numbers_clock = func() -> float: return view._time if view != null else 0.0
 	resized.connect(_resize_viewport)
-	_start()
+	if online:
+		_start_online()
+	else:
+		_start()
 	_resize_viewport()
 
 func _start() -> void:
@@ -104,6 +131,105 @@ func _start() -> void:
 	hud.sim = sim
 	_accum = 0.0
 	_result_shown = false
+
+func _start_online() -> void:
+	ws = WebSocketPeer.new()
+	ws.inbound_buffer_size = 1 << 20
+	ws.outbound_buffer_size = 1 << 16
+	var err := ws.connect_to_url(net_url)
+	net_state = "connecting"
+	_net_started = Time.get_ticks_msec() / 1000.0
+	diag.write("NET connect %s err=%d" % [net_url, err])
+	hud.toast("Connecting to the Siege server...", Color("#f2d18d"))
+	if err != OK:
+		_net_fail("Could not reach the server")
+
+func _net_fail(why: String) -> void:
+	if net_state == "closed":
+		return
+	net_state = "closed"
+	diag.write("NET closed: " + why)
+	hud.toast(why, VisualTheme.RED)
+	if sim == null:
+		# Nothing to show: go back home after the message is readable.
+		get_tree().create_timer(2.5).timeout.connect(func(): exited.emit())
+
+func _net_send(msg: Dictionary) -> void:
+	if ws != null and ws.get_ready_state() == WebSocketPeer.STATE_OPEN:
+		ws.put_packet(Net.encode(msg))
+
+func _build_online_match(msg: Dictionary) -> void:
+	# A new match (or the first one): rebuild the mirror sim and the 3D view.
+	if is_instance_valid(view):
+		view.queue_free()
+	if hud.result_panel != null:
+		hud.result_panel.queue_free()
+		hud.result_panel = null
+	sim = Sim.new()
+	sim.setup(int(msg.get("team_size", Net.TEAM_SIZE)), int(msg.get("seed", 1)), -1)
+	var me_id := str(msg.get("you", ""))
+	hud.player_id = me_id
+	view = View.new()
+	view.low_fx = low_fx
+	view.player_id = me_id
+	viewport.add_child(view)
+	view.setup(sim)
+	hud.sim = sim
+	net_match = int(msg.get("match", 0))
+	_result_shown = false
+	net_state = "playing"
+	diag.write("NET welcome match=%d you=%s players=%d" % [net_match, me_id, int(msg.get("players", 1))])
+	hud.toast("Online: %d player%s" % [int(msg.get("players", 1)), "" if int(msg.get("players", 1)) == 1 else "s"], VisualTheme.GOLD)
+
+func _net_process(delta: float) -> void:
+	if ws == null:
+		return
+	ws.poll()
+	var st := ws.get_ready_state()
+	if st == WebSocketPeer.STATE_CONNECTING:
+		if Time.get_ticks_msec() / 1000.0 - _net_started > 10.0:
+			ws.close()
+			_net_fail("Server did not answer")
+		return
+	if st == WebSocketPeer.STATE_CLOSED or st == WebSocketPeer.STATE_CLOSING:
+		if net_state != "closed":
+			_net_fail("Disconnected from the server" if sim != null else "Could not connect to the server")
+		return
+	if net_state == "connecting":
+		net_state = "waiting"
+		_net_send({"t":"hello", "v":Net.VERSION, "name":player_name, "build":Diag.BUILD})
+	while ws.get_available_packet_count() > 0:
+		var msg := Net.decode(ws.get_packet())
+		match str(msg.get("t", "")):
+			"welcome":
+				if int(msg.get("match", -1)) != net_match:
+					_build_online_match(msg)
+			"s":
+				if sim == null:
+					continue
+				Net.apply(sim, msg, hud.player_id)
+				_snap_dt = lerpf(_snap_dt, maxf(0.03, _snap_t), 0.2) if _snap_t > 0.0 else _snap_dt
+				_snap_t = 0.0
+				for e in msg.get("e", []):
+					diag.event()
+					view.on_event(e)
+					hud.on_event(e)
+			"bye":
+				var why := str(msg.get("why", ""))
+				_net_fail({"full":"Server is full", "version":"Update the game to play online"}.get(why, "Server closed the connection"))
+	if sim == null:
+		return
+	_snap_t += delta
+	Net.interpolate(sim, _snap_t / maxf(0.03, _snap_dt))
+	# Inputs: movement and held attack at 20 Hz (or when they change); actions go immediately.
+	_send_clock += delta
+	var mv: Vector2 = hud.move_vector() if not hud.pause_panel.visible else Vector2.ZERO
+	var hold: bool = hud.attack_held() and not hud.pause_panel.visible
+	if _send_clock >= 0.05 or (mv - _sent_move).length() > 0.25 or hold != _sent_hold:
+		_send_clock = 0.0
+		_sent_move = mv
+		_sent_hold = hold
+		_net_send({"t":"in", "m":mv, "h":hold})
 
 func _restart() -> void:
 	if is_instance_valid(view):
@@ -137,6 +263,11 @@ func _to_hud(p: Vector2) -> Vector2:
 	return p * (size / vs) if vs.x > 0 else p
 
 func _act(action: String, arg: Variant = null) -> void:
+	if online:
+		_net_send({"t":"in", "m":hud.move_vector(), "h":hud.attack_held(), "a":action, "arg":arg})
+		if action == "forge_roll" and audio != null and audio.has_method("play"):
+			audio.play("roll")
+		return
 	var ok: bool = sim.act(hud.player_id, action, arg)
 	if ok and action == "forge_roll" and audio != null and audio.has_method("play"):
 		audio.play("roll")
@@ -149,11 +280,15 @@ func _on_action(kind: String) -> void:
 		"action": _act("interact")
 
 func _process(delta: float) -> void:
+	if online:
+		_net_process(delta)
 	if sim == null:
 		return
 	diag.mark("input")
 	var t_start := Time.get_ticks_usec()
-	if not hud.pause_panel.visible or sim.ended:
+	if online:
+		pass   # the server steps the match; _net_process applied the latest snapshot
+	elif not hud.pause_panel.visible or sim.ended:
 		sim.set_move(hud.player_id, hud.move_vector())
 		if hud.attack_held():
 			var me: Dictionary = sim.by_id[hud.player_id]
@@ -222,6 +357,8 @@ func set_fps_cap(v: int) -> void:
 
 func _exit_tree() -> void:
 	Engine.max_fps = _prev_max_fps
+	if ws != null:
+		ws.close(1000, "leave")
 
 func request_leave() -> void:
 	# Android back button: open the pause panel rather than quitting a match outright.
