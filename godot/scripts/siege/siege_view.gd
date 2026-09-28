@@ -211,12 +211,13 @@ func _build_props() -> void:
 		var p := Vector3(ob.p.x, 0, ob.p.y)
 		match str(ob.kind):
 			"ruin":
-				_place(HEX + "building_scaffolding.gltf", p, 0.4, 1.4)
+				_place(HEX + "building_scaffolding.gltf", p + Vector3(0, Sim.HILL_H, 0), 0.4, 1.4)
 			"forge_building":
 				_place(HEX + "building_blacksmith_%s.gltf" % COLOR[ob.team], p, PI * 0.5 if ob.team == 0 else -PI * 0.5, 2.3)
 			"workshop_building":
 				_place(HEX + "building_market_%s.gltf" % COLOR[ob.team], p, -PI * 0.5 if ob.team == 0 else PI * 0.5, 2.0)
 	_build_nodes()
+	_build_plateau()
 	# Scenery outside the play field.
 	for i in 22:
 		var side := -1.0 if i % 2 == 0 else 1.0
@@ -246,6 +247,91 @@ func _floor(team: int, x0: float, x1: float, z0: float, z1: float, color: Color,
 	mi.position = Vector3(c.x, y, c.y)
 	add_child(mi)
 
+static var _block_mats: Dictionary = {}
+static var _box: BoxMesh
+
+func _stone(color: Color) -> StandardMaterial3D:
+	var key := color.to_html()
+	if not _block_mats.has(key):
+		var m := StandardMaterial3D.new()
+		m.albedo_color = color
+		m.roughness = 0.92
+		_block_mats[key] = m
+	return _block_mats[key]
+
+func _block(team: int, x0: float, x1: float, z0: float, z1: float, h: float, top: Color) -> void:
+	# A raised stone platform (blue-space coords, mirrored for red): stone sides, coloured top.
+	if _box == null:
+		_box = BoxMesh.new()
+		_box.size = Vector3.ONE
+	var c: Vector2 = Sim._m(team, Vector2((x0 + x1) * 0.5, (z0 + z1) * 0.5))
+	var body := MeshInstance3D.new()
+	body.mesh = _box
+	body.material_override = _stone(Color("#a09580"))
+	body.scale = Vector3(absf(x1 - x0), h, absf(z1 - z0))
+	body.position = Vector3(c.x, h * 0.5, c.y)
+	add_child(body)
+	var pm := PlaneMesh.new()
+	pm.size = Vector2(absf(x1 - x0), absf(z1 - z0))
+	var lid := MeshInstance3D.new()
+	lid.mesh = pm
+	lid.material_override = _stone(top)
+	lid.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	lid.position = Vector3(c.x, h + 0.01, c.y)
+	add_child(lid)
+
+func _stairs(team: int, x0: float, x1: float, z0: float, z1: float, h: float, steps: int, rising_with_z: bool) -> void:
+	# One MultiMesh of box steps per staircase (a single draw call).
+	if _box == null:
+		_box = BoxMesh.new()
+		_box.size = Vector3.ONE
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.mesh = _box
+	mm.instance_count = steps
+	var depth := (z1 - z0) / float(steps)
+	for i in steps:
+		var sh := h * float(i + 1) / float(steps)
+		var zc := z0 + depth * (float(i) + 0.5) if rising_with_z else z1 - depth * (float(i) + 0.5)
+		# Each step is a full-height block from the ground up to its tread.
+		var c: Vector2 = Sim._m(team, Vector2((x0 + x1) * 0.5, zc))
+		var basis := Basis.from_scale(Vector3(absf(x1 - x0), sh, depth + 0.02))
+		mm.set_instance_transform(i, Transform3D(basis, Vector3(c.x, sh * 0.5, c.y)))
+	var node := MultiMeshInstance3D.new()
+	node.multimesh = mm
+	node.material_override = _stone(Color("#b8ad96"))
+	add_child(node)
+
+func _parapet(a: Vector2, b: Vector2) -> void:
+	# Low stone parapet along a ledge, standing on its high side (clipped to the field).
+	var aa := Vector2(clampf(a.x, -Sim.HALF_W, Sim.HALF_W), a.y)
+	var bb := Vector2(clampf(b.x, -Sim.HALF_W, Sim.HALF_W), b.y)
+	var length := aa.distance_to(bb)
+	if length < 0.3:
+		return
+	var n := maxi(1, int(round(length / 2.6)))
+	var rot := -atan2(bb.y - aa.y, bb.x - aa.x) + PI * 0.5
+	var normal := Vector2(-(bb - aa).y, (bb - aa).x).normalized()
+	var mid := (aa + bb) * 0.5
+	var h := maxf(Sim.height_at(mid + normal * 0.7), Sim.height_at(mid - normal * 0.7))
+	for i in n:
+		var c := aa.lerp(bb, (float(i) + 0.5) / float(n))
+		var piece := length / float(n)
+		var s := 2.4
+		var off := Vector3(1.0 * s, 0, 0).rotated(Vector3.UP, rot)
+		var node := _place(HEX + "fence_stone_straight.gltf", Vector3(c.x, h, c.y) + off, rot, s)
+		if node != null:
+			node.scale.z = s * piece / (1.15 * s)
+
+func _build_plateau() -> void:
+	# Midfield plateau around the ruin with stairs on its north and south faces.
+	_block(0, -Sim.HILL_X, Sim.HILL_X, -Sim.HILL_Z, Sim.HILL_Z, Sim.HILL_H, Color("#6f8a52"))
+	_stairs(0, -Sim.HILL_STAIR_X, Sim.HILL_STAIR_X, Sim.HILL_Z, Sim.HILL_STAIR_Z, Sim.HILL_H, 6, false)
+	_stairs(1, -Sim.HILL_STAIR_X, Sim.HILL_STAIR_X, Sim.HILL_Z, Sim.HILL_STAIR_Z, Sim.HILL_H, 6, false)
+	for w in sim.walls:
+		if w.team == -1 and w.kind == "ledge":
+			_parapet(w.a, w.b)
+
 func _wall_run(a: Vector2, b: Vector2, path: String) -> void:
 	# Lay 5.2 m wall models along a segment (clipped to the field), stretched slightly to fit.
 	var aa := Vector2(clampf(a.x, -Sim.HALF_W, Sim.HALF_W), clampf(a.y, -Sim.HALF_L, Sim.HALF_L))
@@ -267,9 +353,18 @@ func _build_castle(t: int) -> void:
 	var face := 0.0 if t == 0 else PI
 	# Floors: stone courtyard, dark dungeon, carpeted throne room.
 	_floor(t, -13.0, 13.0, Sim.FRONT_Z + 1.0, Sim.INNER_Z, Color("#8f877a"))
-	_floor(t, -13.0, -Sim.KEEP_X, Sim.INNER_Z, Sim.HALF_L, Color("#57524d"))
-	_floor(t, Sim.KEEP_X, 13.0, Sim.INNER_Z, Sim.HALF_L, Color("#8a8174"))
-	_floor(t, 7.2, 8.8, Sim.INNER_Z + 0.2, 27.2, Color("#2f5f8a") if t == 0 else Color("#8a3a2f"), 0.05)
+	# Raised back rooms: dungeon (west) and throne room (east), each cut by a stair channel.
+	for side in [-1.0, 1.0]:
+		var top: Color = Color("#57524d") if side < 0.0 else Color("#8a8174")
+		var x_in: float = side * Sim.KEEP_X
+		var x_out: float = side * 13.0
+		var s0: float = side * Sim.STAIR_X0
+		var s1: float = side * Sim.STAIR_X1
+		_block(t, minf(x_in, x_out), maxf(x_in, x_out), Sim.STAIR_Z1, Sim.HALF_L, Sim.PLAT_H, top)
+		_block(t, minf(x_in, s0), maxf(x_in, s0), Sim.INNER_Z, Sim.STAIR_Z1, Sim.PLAT_H, top)
+		_block(t, minf(s1, x_out), maxf(s1, x_out), Sim.INNER_Z, Sim.STAIR_Z1, Sim.PLAT_H, top)
+		_stairs(t, minf(s0, s1), maxf(s0, s1), Sim.STAIR_Z0, Sim.STAIR_Z1, Sim.PLAT_H, 8, true)
+	_floor(t, 7.2, 8.8, Sim.STAIR_Z1 + 0.2, 28.0, Color("#2f5f8a") if t == 0 else Color("#8a3a2f"), Sim.PLAT_H + 0.02)
 	# Walls from the sim (so collision and visuals always agree).
 	for w in sim.walls:
 		if w.team != t:
@@ -279,6 +374,8 @@ func _build_castle(t: int) -> void:
 				_wall_run(w.a, w.b, HEX + "wall_straight.gltf")
 			"bars":
 				_bars(w.a, w.b)
+			"ledge":
+				_parapet(w.a, w.b)
 	# Gates on the front wall; open archways in the inner wall.
 	for g in sim.gates:
 		if g.team != t:
@@ -297,11 +394,6 @@ func _build_castle(t: int) -> void:
 				r.reparent(rubble, true)
 		rubble.visible = false
 		gate_nodes[g.id] = {"doors":doors, "rubble":rubble, "open":0.0, "broken":false}
-	for dx in Sim.DOOR_X:
-		var dp: Vector2 = Sim._m(t, Vector2(dx, Sim.INNER_Z))
-		var arch := _place(HEX + "wall_straight_gate.gltf", Vector3(dp.x, 0, dp.y), face, Sim.WALL_SCALE)
-		for mi in arch.find_children("*door*", "MeshInstance3D", true, false):
-			mi.queue_free()
 	# Towers flank both gates; catapult towers on the front corners; the keep at the back.
 	for tx in [-7.8, -2.6, 2.6, 7.8]:
 		var tp: Vector2 = Sim._m(t, Vector2(tx, Sim.FRONT_Z))
@@ -317,18 +409,18 @@ func _build_castle(t: int) -> void:
 	var th: Vector2 = Sim.throne(t)
 	for fx in [-1.6, 1.6]:
 		var fp: Vector2 = th + Sim._m(t, Vector2(fx, 1.2))
-		_place(HEX + "flag_%s.gltf" % col, Vector3(fp.x, 0, fp.y), face, 1.6)
-	_decal(Vector3(th.x, 0.06, th.y), Sim.THRONE_RADIUS, TEAM_COLORS[t], 0.6)
-	var wr: Vector2 = Sim._m(t, Vector2(12.0, 23.0))
-	_place(HEX + "weaponrack.gltf", Vector3(wr.x, 0, wr.y), face + PI * 0.5, 4.0)
-	# Dungeon: the cell's open front has a barred door swung open; a ladder and barrels.
-	var cc: Vector2 = Sim._m(t, Vector2(-8.0, 25.5))
-	_decal(Vector3(cc.x, 0.06, cc.y), 1.4, GOLD, 0.35)
-	var lp: Vector2 = Sim._m(t, Vector2(-12.4, 22.0))
-	_place(HEX + "ladder.gltf", Vector3(lp.x, 0, lp.y), face + PI * 0.5, 3.4)
-	for bx in [Vector2(-12.0, 28.0), Vector2(-3.8, 28.0)]:
+		_place(HEX + "flag_%s.gltf" % col, Vector3(fp.x, Sim.PLAT_H, fp.y), face, 1.6)
+	_decal(Vector3(th.x, Sim.PLAT_H + 0.06, th.y), Sim.THRONE_RADIUS, TEAM_COLORS[t], 0.6)
+	var wr: Vector2 = Sim._m(t, Vector2(12.0, 23.8))
+	_place(HEX + "weaponrack.gltf", Vector3(wr.x, Sim.PLAT_H, wr.y), face + PI * 0.5, 4.0)
+	# Dungeon: the cell on the platform, a ladder against the back wall and barrels.
+	var cc: Vector2 = Sim._m(t, Sim.CELL_C)
+	_decal(Vector3(cc.x, Sim.PLAT_H + 0.06, cc.y), 1.4, GOLD, 0.35)
+	var lp: Vector2 = Sim._m(t, Vector2(-12.4, 24.0))
+	_place(HEX + "ladder.gltf", Vector3(lp.x, Sim.PLAT_H, lp.y), face + PI * 0.5, 3.4)
+	for bx in [Vector2(-12.2, 28.2), Vector2(-4.0, 28.2)]:
 		var b2: Vector2 = Sim._m(t, bx)
-		_place(HEX + "barrel.gltf", Vector3(b2.x, 0, b2.y), randf() * TAU, 2.2)
+		_place(HEX + "barrel.gltf", Vector3(b2.x, Sim.PLAT_H, b2.y), randf() * TAU, 2.2)
 	# Courtyard: forge ring, workshop ring + stockpiles (piles scale with the team's stock).
 	var fg: Vector2 = Sim.forge(t)
 	_decal(Vector3(fg.x, 0.06, fg.y), Sim.FORGE_RADIUS, Color("#ffb24a"), 0.45)
@@ -360,7 +452,7 @@ func _bars(a: Vector2, b: Vector2) -> void:
 		var c := a.lerp(b, (float(i) + 0.5) / float(n))
 		var s := 2.0
 		var off := Vector3(1.05 * s, 0, 0).rotated(Vector3.UP, rot)
-		_place(HEX + "fence_wood_straight.gltf", Vector3(c.x, 0, c.y) + off, rot, s)
+		_place(HEX + "fence_wood_straight.gltf", Vector3(c.x, Sim.height_at(c), c.y) + off, rot, s)
 
 func _build_nodes() -> void:
 	# Trees and quarry stones the workers harvest; a depleted node shows a stump / bare rock.
@@ -550,7 +642,7 @@ func sync(dt: float) -> void:
 		if a.is_empty() or not is_instance_valid(a.root):
 			continue
 		var root: Node3D = a.root
-		var target := Vector3(u.pos.x, 0, u.pos.y)
+		var target := Vector3(u.pos.x, Sim.height_at(u.pos), u.pos.y)
 		var before := root.position
 		# Smooth between 30 Hz sim ticks; snap on respawn teleports.
 		if before.distance_to(target) > 6.0:
@@ -722,7 +814,7 @@ func _sync_oracles(dt: float) -> void:
 		var n: Dictionary = oracle_nodes[t]
 		var o: Dictionary = sim.oracles[t]
 		var root: Node3D = n.root
-		var target := Vector3(o.pos.x, 0, o.pos.y)
+		var target := Vector3(o.pos.x, Sim.height_at(o.pos), o.pos.y)
 		(n.halo as Node3D).rotation.y += dt * 1.6
 		if o.state == "carried":
 			var a: Dictionary = actors.get(o.carrier, {})
@@ -734,7 +826,7 @@ func _sync_oracles(dt: float) -> void:
 				(n.player as AnimationPlayer).play("t/Holding_B" if (n.player as AnimationPlayer).has_animation("t/Holding_B") else "g/Idle_B")
 		else:
 			(n.ground as Node3D).visible = true
-			target.y = 0.0
+			target.y = Sim.height_at(o.pos)
 			var pulse := 0.8 + sin(_time * 4.0) * 0.2
 			(n.ground as Node3D).scale = Vector3(pulse, 0.15, pulse)
 			if n.state == "carried" and n.player != null:
@@ -751,7 +843,7 @@ func _sync_projectiles() -> void:
 		if node == null:
 			node = _make_projectile(str(p.kind))
 			proj_nodes[p.id] = node
-		node.position = Vector3(p.pos.x, 1.2, p.pos.y)
+		node.position = Vector3(p.pos.x, 1.2 + Sim.height_at(p.pos), p.pos.y)
 		node.rotation.y = Sim.angle_of(p.vel)
 	for id in proj_nodes.keys():
 		if not live.has(id):

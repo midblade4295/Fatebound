@@ -32,6 +32,19 @@ const GATE_HALF := 1.3           # half-width of the passable doorway
 const GATE_SOLID_AT := 0.35      # a broken gate blocks again once repaired to 35 %
 const GATE_OPEN_RADIUS := 4.0    # allies within this distance swing the doors open (visual)
 
+# ---- layers (heights are for the view; the sim stays 2D, ledges are walls) ----
+const PLAT_H := 1.6              # throne room + dungeon platforms
+const STAIR_Z0 := 21.0           # stairs climb from the inner doorway...
+const STAIR_Z1 := 23.0           # ...to the platform
+const STAIR_X0 := 3.9            # stair channel |x| range (inside the 3.2 m doorway)
+const STAIR_X1 := 6.5
+const HILL_H := 1.2              # midfield plateau around the ruin
+const HILL_X := 4.5
+const HILL_Z := 3.0
+const HILL_STAIR_X := 1.3
+const HILL_STAIR_Z := 5.0
+const LEDGE_R := 0.35
+
 # ---- gathering / crafting ----
 const CARRY_MAX := 5
 const GATHER_TIME := 0.9         # seconds per unit gathered
@@ -98,11 +111,32 @@ static func _m(team: int, p: Vector2) -> Vector2:
 
 static func throne(team: int) -> Vector2:
 	# Where a team brings its rescued Oracle: its own throne room (east back room for blue).
-	return _m(team, Vector2(8.0, 25.5))
+	return _m(team, Vector2(8.0, 26.0))
+
+const CELL_C := Vector2(-9.0, 27.0)   # cell centre (blue dungeon); bars x -10.8..-7.2, z 25.4..28.6
+const CELL_HX := 1.8
+const CELL_HZ := 1.6
 
 static func cell(team: int) -> Vector2:
 	# Where a team's own Oracle is held captive: the ENEMY castle's dungeon.
-	return _m(1 - team, Vector2(-8.0, 25.5))
+	return _m(1 - team, CELL_C)
+
+static func height_at(p: Vector2) -> float:
+	# Ground height for rendering. Castles are evaluated in blue space (mirror for red).
+	var q := p if p.y >= 0.0 else -p
+	var ax := absf(q.x)
+	if q.y >= STAIR_Z0 and ax >= KEEP_X:
+		if ax >= STAIR_X0 and ax <= STAIR_X1 and q.y < STAIR_Z1:
+			return PLAT_H * clampf((q.y - STAIR_Z0) / (STAIR_Z1 - STAIR_Z0), 0.0, 1.0)
+		return PLAT_H
+	# Midfield plateau (symmetric in both axes), stairs on its north and south faces.
+	var az := absf(p.y)
+	var bx := absf(p.x)
+	if bx <= HILL_X and az <= HILL_Z:
+		return HILL_H
+	if bx <= HILL_STAIR_X and az > HILL_Z and az < HILL_STAIR_Z:
+		return HILL_H * clampf((HILL_STAIR_Z - az) / (HILL_STAIR_Z - HILL_Z), 0.0, 1.0)
+	return 0.0
 
 static func forge(team: int) -> Vector2:
 	return _m(team, Vector2(-8.5, 18.0))
@@ -140,18 +174,23 @@ func _build_map() -> void:
 			var b := _m(t, Vector2(gx + GATE_HALF, FRONT_Z))
 			gates.append({"id":gates.size(), "team":t, "a":a, "b":b, "c":(a + b) * 0.5, "hp":GATE_HP, "max_hp":GATE_HP,
 				"broken":false, "open":false, "side":"west" if gx < 0.0 else "east"})
-		# Inner wall at z=21: solid pieces with open doorways behind each gate.
-		_add_wall(t, Vector2(-14.0, INNER_Z), Vector2(-7.8, INNER_Z))
-		_add_wall(t, Vector2(-2.6, INNER_Z), Vector2(2.6, INNER_Z))
-		_add_wall(t, Vector2(7.8, INNER_Z), Vector2(14.0, INNER_Z))
+		# The back rooms are a raised terrace: its front edge at z=21 is a ledge (retaining wall +
+		# parapet), open only where the two staircases climb it.
+		for seg in [[-14.0, -STAIR_X1], [-STAIR_X0, -KEEP_X], [KEEP_X, STAIR_X0], [STAIR_X1, 14.0]]:
+			walls.append({"a":_m(t, Vector2(seg[0], INNER_Z)), "b":_m(t, Vector2(seg[1], INNER_Z)), "r":LEDGE_R, "team":t, "kind":"ledge"})
 		# Keep block between the dungeon (west) and the throne room (east).
-		_add_wall(t, Vector2(-KEEP_X, INNER_Z), Vector2(-KEEP_X, HALF_L + 1.0), "keep")
-		_add_wall(t, Vector2(KEEP_X, INNER_Z), Vector2(KEEP_X, HALF_L + 1.0), "keep")
+		_add_wall(t, Vector2(-KEEP_X, INNER_Z + 0.5), Vector2(KEEP_X, INNER_Z + 0.5), "keep")
+		_add_wall(t, Vector2(-KEEP_X, INNER_Z + 0.5), Vector2(-KEEP_X, HALF_L + 1.0), "keep")
+		_add_wall(t, Vector2(KEEP_X, INNER_Z + 0.5), Vector2(KEEP_X, HALF_L + 1.0), "keep")
 		# The cell in the dungeon: bars on three sides, open towards the doorway (front).
-		var cc := Vector2(-8.0, 25.5)
-		walls.append({"a":_m(t, cc + Vector2(-2.0, -1.6)), "b":_m(t, cc + Vector2(-2.0, 2.0)), "r":0.3, "team":t, "kind":"bars"})
-		walls.append({"a":_m(t, cc + Vector2(2.0, -1.6)), "b":_m(t, cc + Vector2(2.0, 2.0)), "r":0.3, "team":t, "kind":"bars"})
-		walls.append({"a":_m(t, cc + Vector2(-2.0, 2.0)), "b":_m(t, cc + Vector2(2.0, 2.0)), "r":0.3, "team":t, "kind":"bars"})
+		var cc := CELL_C
+		walls.append({"a":_m(t, cc + Vector2(-CELL_HX, -CELL_HZ)), "b":_m(t, cc + Vector2(-CELL_HX, CELL_HZ)), "r":0.3, "team":t, "kind":"bars"})
+		walls.append({"a":_m(t, cc + Vector2(CELL_HX, -CELL_HZ)), "b":_m(t, cc + Vector2(CELL_HX, CELL_HZ)), "r":0.3, "team":t, "kind":"bars"})
+		walls.append({"a":_m(t, cc + Vector2(-CELL_HX, CELL_HZ)), "b":_m(t, cc + Vector2(CELL_HX, CELL_HZ)), "r":0.3, "team":t, "kind":"bars"})
+		# Stair channels up to the platforms: ledges on both sides so you can't step off.
+		for sx in [-1.0, 1.0]:
+			for lx in [STAIR_X0, STAIR_X1]:
+				walls.append({"a":_m(t, Vector2(sx * lx, STAIR_Z0)), "b":_m(t, Vector2(sx * lx, STAIR_Z1)), "r":LEDGE_R, "team":t, "kind":"ledge"})
 		# Courtyard buildings (solid): forge + workshop sit against the side walls.
 		obstacles.append({"p":_m(t, Vector2(-11.2, 18.0)), "r":1.4, "kind":"forge_building", "team":t})
 		obstacles.append({"p":_m(t, Vector2(11.2, 18.0)), "r":1.4, "kind":"workshop_building", "team":t})
@@ -161,6 +200,12 @@ func _build_map() -> void:
 		for sp in [Vector2(-4.0, 10.0), Vector2(5.0, 6.0)]:
 			_add_node(t, "stone", sp)
 	obstacles.append({"p":Vector2(0, 0), "r":1.8, "kind":"ruin"})
+	for s in [-1.0, 1.0]:
+		walls.append({"a":Vector2(s * HILL_X, -HILL_Z), "b":Vector2(s * HILL_X, HILL_Z), "r":LEDGE_R, "team":-1, "kind":"ledge"})
+		walls.append({"a":Vector2(-HILL_X, s * HILL_Z), "b":Vector2(-HILL_STAIR_X, s * HILL_Z), "r":LEDGE_R, "team":-1, "kind":"ledge"})
+		walls.append({"a":Vector2(HILL_STAIR_X, s * HILL_Z), "b":Vector2(HILL_X, s * HILL_Z), "r":LEDGE_R, "team":-1, "kind":"ledge"})
+		for sx in [-1.0, 1.0]:
+			walls.append({"a":Vector2(sx * HILL_STAIR_X, s * HILL_Z), "b":Vector2(sx * HILL_STAIR_X, s * HILL_STAIR_Z), "r":LEDGE_R, "team":-1, "kind":"ledge"})
 	_add_node(0, "wood", Vector2(-8.5, 0.5))
 	_add_node(1, "wood", Vector2(-8.5, 0.5))
 
@@ -958,6 +1003,8 @@ func _step_projectiles(dt: float) -> void:
 				break
 		if not blocked:
 			for w in walls:
+				if w.kind in ["ledge", "bars"]:
+					continue   # low ledges and cell bars don't stop arrows or fire
 				if p.pos.distance_to(seg_closest(p.pos, w.a, w.b)) < w.r * 0.8:
 					blocked = true
 					break
