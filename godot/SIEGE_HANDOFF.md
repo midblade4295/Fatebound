@@ -135,7 +135,7 @@ back at 29) and placed with `Sim._c(team, p)`; world-space things (resources, pl
   Backdrop shaders use `source_color` uniforms. Don't change without re-measuring.
 - **Preview identity:** package `com.fatebound.kaykitrebuild`, preset "Android KayKit Rebuild",
   signed with Kevin's preview key (alias `fbpreview`, store/key password `fbpreview`,
-  cert SHA-256 `1011fc79…3b38b87`). Bump `version/code` every build (next = **19**) and
+  cert SHA-256 `1011fc79…3b38b87`). Bump `version/code` every build (next = **20**) and
   `BUILD` in `siege_diag.gd`. Never use the Play upload key for previews.
 - **Repo rules (from the root `AGENTS.md`):** new task branches, no force-push, no merge to main,
   no save resets, no Play release, don't touch Legionary/Caddy or production signing.
@@ -197,8 +197,8 @@ The GitHub workflow `.github/workflows/build-kaykit-preview.yml` builds this APK
 install over each other or over Kevin's current build. To fix: store the preview .jks as a
 base64 repo secret and sign with it in the workflow (do not commit the .jks; the repo is public).
 
-Kevin installs by downloading the APK on the phone. Latest delivered: **0.10.0-siege, version
-code 18**.
+Kevin installs by downloading the APK on the phone. Latest delivered: **0.11.0-siege-online,
+version code 19** (PLAY ONLINE needs the server deployed, section 10).
 
 ---
 
@@ -264,7 +264,7 @@ remove the files, and consider making the repo private. Rewriting history requir
 | `Fatebound_Siege_FULL.bundle` | Git bundle: `d43282a..claude/kaykit-3d-rebuild` (all Siege work + these docs). |
 | `push_siege_branch.sh` | Applies the bundle to a clone and pushes the branch (no force). |
 | `fatebound-siege-preview.jks` | Preview signing key (alias/passwords `fbpreview`). Keep out of the repo. |
-| `Fatebound-Siege-0.10.0.apk` | Latest build Kevin has installed (version code 18). |
+| `Fatebound-Siege-0.11.0.apk` | Latest build (version code 19): offline + PLAY ONLINE. |
 
 ---
 
