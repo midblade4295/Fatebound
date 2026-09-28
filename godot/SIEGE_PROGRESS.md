@@ -10,7 +10,7 @@ Each step is committed separately; this file is updated in the same commit.
 |---|---|---|
 | 1 | Sim: castle walls/rooms, gates (HP, ally-open, break, repair), wall collision, nav grid pathing | done |
 | 2 | Sim: Worker class, trees/rocks, carry + stockpile, workshop upgrades, team commander | done |
-| 3 | View: castle from KayKit kit, animated gates, cell, stockpile, worker visuals | todo |
+| 3 | View: castle from KayKit kit, animated gates, cell, stockpile, worker visuals | done |
 | 4 | HUD: resources, gate health, workshop panel, worker actions | todo |
 | 5 | Siege is the game: home entry, rewards into progression, hide dice-only modes | todo |
 | 6 | Tests, screenshots, perf check, APK | todo |
@@ -31,3 +31,10 @@ Each step is committed separately; this file is updated in the same commit.
 - Tuning: gate 1500 HP; repair 30 HP/tick, 1 wood per 2 ticks; Oracle carry ~0.5x speed;
   2 workers per 6-player team (one wood-first, one stone-first); repair below 40 % only.
 - Known: red won 4 of 6 (small sample; watch for side bias).
+
+## Step 3 notes
+- Gate segment narrowed to the model's doorway (+/-1.3 m); neighbouring wall ends cover the
+  pillars, so allies can't walk through stone. Re-verified 0 clips.
+- Cell bars are real sim walls on three sides (open front), not decoration.
+- Door pivots are on their outer edges in wall_straight_gate, so doors rotate on their hinges.
+- Verified by Vulkan screenshots: overview, gate (doors open for allies), dungeon cell, courtyard.

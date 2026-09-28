@@ -15,13 +15,14 @@ static var VULKAN_AMBIENT := 2.25
 # mb movement basic, ma movement advanced, t tools.
 const LOOKS := {
 	"villager": {"model":"Rogue","r":"","l":"","idle":"g/Idle_A","attack":"m/Melee_Unarmed_Attack_Punch_A","ability":"m/Melee_Unarmed_Attack_Kick"},
+	"worker": {"model":"Rogue","r":"axe_1handed","l":"","idle":"g/Idle_A","attack":"m/Melee_1H_Attack_Chop","ability":"m/Melee_1H_Attack_Chop"},
 	"knight": {"model":"Knight","r":"sword_1handed","l":"","idle":"g/Idle_A","attack":"m/Melee_1H_Attack_Slice_Diagonal","ability":"m/Melee_Block_Attack"},
 	"barbarian": {"model":"Barbarian","r":"axe_2handed","l":"","idle":"m/Melee_2H_Idle","attack":"m/Melee_2H_Attack_Slice","ability":"m/Melee_2H_Attack_Spin"},
 	"rogue": {"model":"Rogue_Hooded","r":"dagger","l":"dagger","idle":"g/Idle_B","attack":"m/Melee_Dualwield_Attack_Stab","ability":"m/Melee_1H_Attack_Jump_Chop"},
 	"ranger": {"model":"Ranger","r":"","l":"bow_withString","idle":"r/Ranged_Bow_Idle","attack":"r/Ranged_Bow_Release","ability":"r/Ranged_Bow_Release_Up"},
 	"mage": {"model":"Mage","r":"staff","l":"","idle":"g/Idle_B","attack":"r/Ranged_Magic_Shoot","ability":"r/Ranged_Magic_Spellcasting"},
 }
-const LOOP_HINTS := ["Idle","Running","Walking","Hammering","Holding","Aiming","_Pose","Blocking"]
+const LOOP_HINTS := ["Idle","Running","Walking","Hammering","Holding","Aiming","_Pose","Blocking","Chopping","Pickaxing"]
 
 static var _libs: Dictionary = {}
 # Shared GPU resources: one mesh/shader per effect type instead of one per hit, so fights don't
@@ -34,6 +35,9 @@ var player_id := "you"
 var camera: Camera3D
 var actors: Dictionary = {}
 var oracle_nodes: Array = []
+var gate_nodes: Dictionary = {}
+var node_nodes: Dictionary = {}
+var stock_piles: Array = []
 var proj_nodes: Dictionary = {}
 var _fx: Array = []
 var _time := 0.0
@@ -199,50 +203,216 @@ func _place(path: String, pos: Vector3, rot := 0.0, s := 1.0) -> Node3D:
 func _build_props() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 21
-	var trees := ["Tree_1_A_Color1","Tree_1_B_Color1","Tree_2_A_Color1","Tree_2_B_Color1","Tree_3_A_Color1"]
-	var rocks := ["Rock_1_A_Color1","Rock_1_B_Color1","Rock_1_C_Color1","Rock_1_D_Color1"]
+	var forest_trees := ["Tree_1_A_Color1","Tree_1_B_Color1","Tree_2_A_Color1","Tree_2_B_Color1","Tree_3_A_Color1"]
+	for t in 2:
+		_build_castle(t)
+	# Midfield ruin and circular props from the sim.
 	for ob in sim.obstacles:
 		var p := Vector3(ob.p.x, 0, ob.p.y)
 		match str(ob.kind):
-			"keep":
-				var team := 0 if ob.p.y > 0 else 1
-				_place(HEX + "building_castle_%s.gltf" % ["blue","red"][team], p, 0.0 if team == 0 else PI, 2.6)
-				_place(HEX + "building_barracks_%s.gltf" % ["blue","red"][team], p + Vector3(-6.0 if team == 0 else 6.0, 0, 0), 0.0, 1.5)
-			"tower":
-				var team2 := 0 if ob.p.y > 0 else 1
-				_place(HEX + "building_tower_A_%s.gltf" % ["blue","red"][team2], p, 0.0, 1.5)
-			"rock":
-				_place(FOREST + rocks[rng.randi() % rocks.size()] + ".gltf", p, rng.randf()*TAU, float(ob.r) * 2.6)
-			"tree":
-				_place(FOREST + trees[rng.randi() % trees.size()] + ".gltf", p, rng.randf()*TAU, 0.45 + float(ob.r) * 0.12)
 			"ruin":
 				_place(HEX + "building_scaffolding.gltf", p, 0.4, 1.4)
-	for t in 2:
-		var th: Vector2 = Sim.throne(t)
-		var cl: Vector2 = Sim.cell(t)
-		var fg: Vector2 = Sim.forge(t)
-		# Throne: where a team brings its rescued Oracle home.
-		_place(HEX + "flag_%s.gltf" % ["blue","red"][t], Vector3(th.x - 1.4, 0, th.y), 0.0, 1.4)
-		_place(HEX + "flag_%s.gltf" % ["blue","red"][t], Vector3(th.x + 1.4, 0, th.y), 0.0, 1.4)
-		_decal(Vector3(th.x, 0.03, th.y), Sim.THRONE_RADIUS, TEAM_COLORS[t], 0.55)
-		# Cell: a stone pen inside the enemy keep holding this team's Oracle.
-		for i in 5:
-			var a := PI*0.15 + i * PI*0.35
-			_place(HEX + "fence_stone_straight.gltf", Vector3(cl.x + cos(a)*1.9, 0, cl.y + sin(a)*1.9), -a + PI*0.5, 0.9)
-		_decal(Vector3(cl.x, 0.03, cl.y), 1.5, GOLD, 0.35)
-		# Forge: tent, crates and a glowing ring where villagers roll for a class.
-		_place(HEX + "tent.gltf", Vector3(fg.x + (2.2 if t == 0 else -2.2), 0, fg.y), PI*0.5, 1.2)
-		_place(HEX + "barrel.gltf", Vector3(fg.x - 1.6, 0, fg.y + 1.2), 0.0, 1.2)
-		_place(HEX + "crate_A_big.gltf", Vector3(fg.x + 1.2, 0, fg.y - 1.6), 0.5, 1.0)
-		_place(HEX + "resource_stone.gltf", Vector3(fg.x, 0, fg.y), 0.0, 1.1)
-		_decal(Vector3(fg.x, 0.03, fg.y), Sim.FORGE_RADIUS, Color("#ffb24a"), 0.4)
+			"forge_building":
+				_place(HEX + "building_blacksmith_%s.gltf" % COLOR[ob.team], p, PI * 0.5 if ob.team == 0 else -PI * 0.5, 2.3)
+			"workshop_building":
+				_place(HEX + "building_market_%s.gltf" % COLOR[ob.team], p, -PI * 0.5 if ob.team == 0 else PI * 0.5, 2.0)
+	_build_nodes()
 	# Scenery outside the play field.
 	for i in 22:
 		var side := -1.0 if i % 2 == 0 else 1.0
 		var z := -34.0 + i * 3.2
-		_place(FOREST + trees[rng.randi() % trees.size()] + ".gltf", Vector3(side * (Sim.HALF_W + 2.5 + rng.randf()*3.0), 0.5, z), rng.randf()*TAU, 0.5 + rng.randf()*0.2)
+		_place(FOREST + forest_trees[rng.randi() % forest_trees.size()] + ".gltf", Vector3(side * (Sim.HALF_W + 2.5 + rng.randf()*3.0), 0.5, z), rng.randf()*TAU, 0.5 + rng.randf()*0.2)
 	for p in [Vector3(-19, 0.5, -20), Vector3(19, 0.5, 18), Vector3(-19, 0.5, 14), Vector3(19, 0.5, -12)]:
 		_place(HEX + "mountain_A_grass_trees.gltf", p, rng.randf()*TAU, 1.6)
+
+const COLOR := ["blue", "red"]
+static var _floor_mats: Dictionary = {}
+
+func _floor(team: int, x0: float, x1: float, z0: float, z1: float, color: Color, y := 0.03) -> void:
+	# Flat floor over the hex terrain for a castle room (coordinates in blue space, mirrored).
+	var key := color.to_html()
+	if not _floor_mats.has(key):
+		var m := StandardMaterial3D.new()
+		m.albedo_color = color
+		m.roughness = 0.95
+		_floor_mats[key] = m
+	var pm := PlaneMesh.new()
+	pm.size = Vector2(absf(x1 - x0), absf(z1 - z0))
+	var mi := MeshInstance3D.new()
+	mi.mesh = pm
+	mi.material_override = _floor_mats[key]
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var c: Vector2 = Sim._m(team, Vector2((x0 + x1) * 0.5, (z0 + z1) * 0.5))
+	mi.position = Vector3(c.x, y, c.y)
+	add_child(mi)
+
+func _wall_run(a: Vector2, b: Vector2, path: String) -> void:
+	# Lay 5.2 m wall models along a segment (clipped to the field), stretched slightly to fit.
+	var aa := Vector2(clampf(a.x, -Sim.HALF_W, Sim.HALF_W), clampf(a.y, -Sim.HALF_L, Sim.HALF_L))
+	var bb := Vector2(clampf(b.x, -Sim.HALF_W, Sim.HALF_W), clampf(b.y, -Sim.HALF_L, Sim.HALF_L))
+	var length := aa.distance_to(bb)
+	if length < 0.5:
+		return
+	var n := maxi(1, int(round(length / Sim.SEG)))
+	var piece := length / float(n)
+	var rot := -atan2(bb.y - aa.y, bb.x - aa.x)
+	for i in n:
+		var c := aa.lerp(bb, (float(i) + 0.5) / float(n))
+		var node := _place(path, Vector3(c.x, 0, c.y), rot, Sim.WALL_SCALE)
+		if node != null:
+			node.scale.x = Sim.WALL_SCALE * piece / Sim.SEG
+
+func _build_castle(t: int) -> void:
+	var col: String = COLOR[t]
+	var face := 0.0 if t == 0 else PI
+	# Floors: stone courtyard, dark dungeon, carpeted throne room.
+	_floor(t, -13.0, 13.0, Sim.FRONT_Z + 1.0, Sim.INNER_Z, Color("#8f877a"))
+	_floor(t, -13.0, -Sim.KEEP_X, Sim.INNER_Z, Sim.HALF_L, Color("#57524d"))
+	_floor(t, Sim.KEEP_X, 13.0, Sim.INNER_Z, Sim.HALF_L, Color("#8a8174"))
+	_floor(t, 7.2, 8.8, Sim.INNER_Z + 0.2, 27.2, Color("#2f5f8a") if t == 0 else Color("#8a3a2f"), 0.05)
+	# Walls from the sim (so collision and visuals always agree).
+	for w in sim.walls:
+		if w.team != t:
+			continue
+		match str(w.kind):
+			"wall":
+				_wall_run(w.a, w.b, HEX + "wall_straight.gltf")
+			"bars":
+				_bars(w.a, w.b)
+	# Gates on the front wall; open archways in the inner wall.
+	for g in sim.gates:
+		if g.team != t:
+			continue
+		var node := _place(HEX + "wall_straight_gate.gltf", Vector3(g.c.x, 0, g.c.y), face, Sim.WALL_SCALE)
+		var doors := []
+		for mi in node.find_children("*door*", "MeshInstance3D", true, false):
+			doors.append({"node":mi, "sign":1.0 if str(mi.name).contains("left") else -1.0})
+		var rubble := Node3D.new()
+		rubble.position = Vector3(g.c.x, 0, g.c.y)
+		add_child(rubble)
+		for i in 3:
+			var r := _place(HEX + ["rock_single_D.gltf", "rock_single_E.gltf", "crate_open.gltf"][i],
+				Vector3(g.c.x + (i - 1) * 0.9, 0, g.c.y + randf_range(-0.3, 0.3)), randf() * TAU, [3.0, 3.0, 1.6][i])
+			if r != null:
+				r.reparent(rubble, true)
+		rubble.visible = false
+		gate_nodes[g.id] = {"doors":doors, "rubble":rubble, "open":0.0, "broken":false}
+	for dx in Sim.DOOR_X:
+		var dp: Vector2 = Sim._m(t, Vector2(dx, Sim.INNER_Z))
+		var arch := _place(HEX + "wall_straight_gate.gltf", Vector3(dp.x, 0, dp.y), face, Sim.WALL_SCALE)
+		for mi in arch.find_children("*door*", "MeshInstance3D", true, false):
+			mi.queue_free()
+	# Towers flank both gates; catapult towers on the front corners; the keep at the back.
+	for tx in [-7.8, -2.6, 2.6, 7.8]:
+		var tp: Vector2 = Sim._m(t, Vector2(tx, Sim.FRONT_Z))
+		_place(HEX + "building_tower_A_%s.gltf" % col, Vector3(tp.x, 0, tp.y), face, 1.8)
+	for cx in [-12.3, 12.3]:
+		var cp: Vector2 = Sim._m(t, Vector2(cx, Sim.FRONT_Z + 0.3))
+		_place(HEX + "building_tower_catapult_%s.gltf" % col, Vector3(cp.x, 0, cp.y), face, 1.9)
+		var bp: Vector2 = Sim._m(t, Vector2(cx, Sim.HALF_L - 0.8))
+		_place(HEX + "building_tower_B_%s.gltf" % col, Vector3(bp.x, 0, bp.y), face, 1.7)
+	var kp: Vector2 = Sim._m(t, Vector2(0.0, 25.4))
+	_place(HEX + "building_castle_%s.gltf" % col, Vector3(kp.x, 0, kp.y), face, 2.6)
+	# Throne room: banners either side of the throne, a weapon rack.
+	var th: Vector2 = Sim.throne(t)
+	for fx in [-1.6, 1.6]:
+		var fp: Vector2 = th + Sim._m(t, Vector2(fx, 1.2))
+		_place(HEX + "flag_%s.gltf" % col, Vector3(fp.x, 0, fp.y), face, 1.6)
+	_decal(Vector3(th.x, 0.06, th.y), Sim.THRONE_RADIUS, TEAM_COLORS[t], 0.6)
+	var wr: Vector2 = Sim._m(t, Vector2(12.0, 23.0))
+	_place(HEX + "weaponrack.gltf", Vector3(wr.x, 0, wr.y), face + PI * 0.5, 4.0)
+	# Dungeon: the cell's open front has a barred door swung open; a ladder and barrels.
+	var cc: Vector2 = Sim._m(t, Vector2(-8.0, 25.5))
+	_decal(Vector3(cc.x, 0.06, cc.y), 1.4, GOLD, 0.35)
+	var lp: Vector2 = Sim._m(t, Vector2(-12.4, 22.0))
+	_place(HEX + "ladder.gltf", Vector3(lp.x, 0, lp.y), face + PI * 0.5, 3.4)
+	for bx in [Vector2(-12.0, 28.0), Vector2(-3.8, 28.0)]:
+		var b2: Vector2 = Sim._m(t, bx)
+		_place(HEX + "barrel.gltf", Vector3(b2.x, 0, b2.y), randf() * TAU, 2.2)
+	# Courtyard: forge ring, workshop ring + stockpiles (piles scale with the team's stock).
+	var fg: Vector2 = Sim.forge(t)
+	_decal(Vector3(fg.x, 0.06, fg.y), Sim.FORGE_RADIUS, Color("#ffb24a"), 0.45)
+	var ws: Vector2 = Sim.workshop(t)
+	_decal(Vector3(ws.x, 0.06, ws.y), Sim.WORKSHOP_RADIUS, Color("#9fe07a"), 0.45)
+	var piles := {}
+	for kind in ["wood", "stone"]:
+		var pp: Vector2 = Sim._m(t, Vector2(10.4, 20.0 if kind == "wood" else 16.2))
+		var pile := Node3D.new()
+		pile.position = Vector3(pp.x, 0, pp.y)
+		add_child(pile)
+		for i in 6:
+			var piece := _place(HEX + ("resource_lumber.gltf" if kind == "wood" else "resource_stone.gltf"),
+				Vector3(pp.x + (i % 3 - 1) * 0.75, 0.3 * float(i / 3), pp.y + randf_range(-0.2, 0.2)), randf_range(-0.3, 0.3), 2.2)
+			if piece != null:
+				piece.reparent(pile, true)
+				piece.visible = false
+		piles[kind] = pile
+	var wb: Vector2 = Sim._m(t, Vector2(7.0, 20.3))
+	_place(HEX + "wheelbarrow.gltf", Vector3(wb.x, 0, wb.y), face + 0.8, 3.0)
+	stock_piles.append(piles)
+
+func _bars(a: Vector2, b: Vector2) -> void:
+	# Cell bars: wooden fence pieces along the segment (the fence model is offset to a hex edge).
+	var length := a.distance_to(b)
+	var n := maxi(1, int(round(length / 2.3)))
+	var rot := -atan2(b.y - a.y, b.x - a.x) + PI * 0.5
+	for i in n:
+		var c := a.lerp(b, (float(i) + 0.5) / float(n))
+		var s := 2.0
+		var off := Vector3(1.05 * s, 0, 0).rotated(Vector3.UP, rot)
+		_place(HEX + "fence_wood_straight.gltf", Vector3(c.x, 0, c.y) + off, rot, s)
+
+func _build_nodes() -> void:
+	# Trees and quarry stones the workers harvest; a depleted node shows a stump / bare rock.
+	for n in sim.nodes:
+		var p := Vector3(n.p.x, 0, n.p.y)
+		var full: Node3D
+		var empty: Node3D
+		if n.kind == "wood":
+			full = _place(HEX + ("tree_single_A.gltf" if n.id % 2 == 0 else "tree_single_B.gltf"), p, randf() * TAU, 3.2)
+			empty = _place(HEX + ("tree_single_A_cut.gltf" if n.id % 2 == 0 else "tree_single_B_cut.gltf"), p, randf() * TAU, 3.2)
+		else:
+			full = _place(HEX + "resource_stone.gltf", p, randf() * TAU, 4.4)
+			empty = _place(HEX + "rock_single_D.gltf", p, randf() * TAU, 3.5)
+		if empty != null:
+			empty.visible = false
+		node_nodes[n.id] = {"full":full, "empty":empty, "state":true}
+
+func _sync_castle(dt: float) -> void:
+	for g in sim.gates:
+		var gn: Dictionary = gate_nodes.get(g.id, {})
+		if gn.is_empty():
+			continue
+		var broken: bool = not sim.gate_blocks(g)
+		if broken != bool(gn.broken):
+			gn.broken = broken
+			(gn.rubble as Node3D).visible = broken
+			for d in gn.doors:
+				(d.node as Node3D).visible = not broken
+		var want := 1.0 if (g.open and not broken) else 0.0
+		gn.open = move_toward(float(gn.open), want, dt * 2.5)
+		for d in gn.doors:
+			(d.node as Node3D).rotation.y = float(d.sign) * float(gn.open) * PI * 0.5
+	for n in sim.nodes:
+		var nn: Dictionary = node_nodes.get(n.id, {})
+		if nn.is_empty():
+			continue
+		var has: bool = n.amount > 0
+		if has != bool(nn.state):
+			nn.state = has
+			if nn.full != null:
+				(nn.full as Node3D).visible = has
+			if nn.empty != null:
+				(nn.empty as Node3D).visible = not has
+		if has and nn.full != null:
+			var k := 0.75 + 0.25 * float(n.amount) / float(n.max)
+			(nn.full as Node3D).scale = Vector3.ONE * (3.2 if n.kind == "wood" else 4.4) * k
+	for t in 2:
+		for kind in ["wood", "stone"]:
+			var pile: Node3D = stock_piles[t][kind]
+			var shown := clampi(int(ceil(float(sim.stock[t][kind]) / 5.0)), 0, pile.get_child_count())
+			for i in pile.get_child_count():
+				(pile.get_child(i) as Node3D).visible = i < shown
 
 func _unshaded(color: Color, additive := true) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
@@ -390,15 +560,35 @@ func sync(dt: float) -> void:
 		var vel := (root.position - before).length() / maxf(dt, 0.001)
 		root.rotation.y = lerp_angle(root.rotation.y, float(u.face), 1.0 - exp(-dt * 18.0))
 		(a.ring as MeshInstance3D).visible = u.state != "dead"
+		_sync_load(a, u)
 		_animate(a, u, vel)
 	for id in actors.keys():
 		if not seen.has(id):
 			actors[id].root.queue_free()
 			actors.erase(id)
 	_sync_oracles(dt)
+	_sync_castle(dt)
 	_sync_projectiles()
 	_step_fx()
 	_update_camera(dt)
+
+func _sync_load(a: Dictionary, u: Dictionary) -> void:
+	var kind: String = u.load.kind if u.load.n > 0 and u.state != "dead" else ""
+	if kind == str(a.get("load_kind", "")):
+		return
+	a.load_kind = kind
+	if a.has("load_node") and is_instance_valid(a.load_node):
+		a.load_node.queue_free()
+	if kind == "":
+		return
+	var packed := Stage.scene(HEX + ("resource_lumber.gltf" if kind == "wood" else "resource_stone.gltf"))
+	if packed == null:
+		return
+	var n: Node3D = packed.instantiate()
+	n.scale = Vector3.ONE * 2.2
+	n.position = Vector3(0, 2.35, 0)
+	(a.root as Node3D).add_child(n)
+	a.load_node = n
 
 func _animate(a: Dictionary, u: Dictionary, vel: float) -> void:
 	var look: Dictionary = LOOKS.get(u.cls, LOOKS.villager)
@@ -417,6 +607,11 @@ func _animate(a: Dictionary, u: Dictionary, vel: float) -> void:
 	elif u.state == "dodge":
 		_play(a, "ma/Dodge_Forward", 1.6, 0.3)
 	elif u.forge.open:
+		_play(a, "t/Hammering")
+	elif u.state == "gather":
+		var node: Dictionary = sim.nodes[int(u.task.get("node", 0))] if not u.task.is_empty() else {}
+		_play(a, "t/Chopping" if node.get("kind", "wood") == "wood" else "t/Pickaxing")
+	elif u.state == "repair":
 		_play(a, "t/Hammering")
 	elif u.carrying:
 		_play(a, "mb/Walking_A" if vel > 0.5 else "t/Holding_A", clampf(vel / 2.6, 0.7, 1.6))
@@ -462,6 +657,36 @@ func on_event(e: Dictionary) -> void:
 			var th: Vector2 = Sim.throne(int(e.team))
 			for i in 3:
 				ring_at(Vector3(th.x, 0.1, th.y), GOLD, 2.0 + i * 1.5, 0.8 + i * 0.25)
+		"gate_hit":
+			var g: Dictionary = sim.gates[int(e.gate)]
+			var gp: Vector2 = g.c + (Vector2(randf_range(-1.0, 1.0), 0.0))
+			spark(Vector3(gp.x, 1.4 + randf() * 1.2, gp.y), Color("#e8d6b0"))
+			if randf() < 0.35:
+				number(Vector3(g.c.x, 3.2, g.c.y), str(e.dmg), false)
+		"gate_broken":
+			var g2: Dictionary = sim.gates[int(e.gate)]
+			for i in 3:
+				ring_at(Vector3(g2.c.x, 0.2, g2.c.y), Color("#e0c9a0"), 2.5 + i, 0.7 + i * 0.2)
+			for i in 12:
+				spark(Vector3(g2.c.x + randf_range(-2, 2), 0.5 + randf() * 2.5, g2.c.y + randf_range(-1, 1)), Color("#c8b89a"))
+		"gate_rebuilt":
+			var g3: Dictionary = sim.gates[int(e.gate)]
+			ring_at(Vector3(g3.c.x, 0.2, g3.c.y), TEAM_COLORS[int(e.team)], 3.0, 0.8)
+		"repair":
+			var g4: Dictionary = sim.gates[int(e.gate)]
+			if randf() < 0.5:
+				spark(Vector3(g4.c.x + randf_range(-1, 1), 1.0 + randf(), g4.c.y), Color("#ffe29a"))
+		"gather":
+			if not a.is_empty() and randf() < 0.6:
+				var nd: Dictionary = sim.nodes[int(e.node)]
+				spark(Vector3(nd.p.x, 1.0, nd.p.y), Color("#c9a26b") if e.kind == "wood" else Color("#cfd3d6"))
+		"deliver":
+			var ws: Vector2 = Sim.workshop(int(e.team))
+			ring_at(Vector3(ws.x, 0.1, ws.y), Color("#9fe07a"), 1.4, 0.5)
+		"upgrade":
+			var ws2: Vector2 = Sim.workshop(int(e.team))
+			for i in 2:
+				ring_at(Vector3(ws2.x, 0.1, ws2.y), GOLD, 2.5 + i * 1.5, 0.9)
 		"pickup", "drop", "recaptured":
 			var o: Dictionary = sim.oracles[int(e.team)]
 			ring_at(Vector3(o.pos.x, 0.1, o.pos.y), TEAM_COLORS[int(e.team)], 1.8, 0.6)
@@ -628,7 +853,13 @@ func _step_fx() -> void:
 			numbers.remove_at(i)
 
 # ---------- camera ----------
+var cam_override: Array = []   # [eye: Vector3, target: Vector3] for tests/screenshots only
+
 func _update_camera(dt: float) -> void:
+	if cam_override.size() == 2:
+		camera.position = cam_override[0]
+		camera.look_at(cam_override[1], Vector3.UP)
+		return
 	var me: Dictionary = sim.by_id.get(player_id, {})
 	var focus := Vector3.ZERO
 	var a: Dictionary = actors.get(player_id, {})

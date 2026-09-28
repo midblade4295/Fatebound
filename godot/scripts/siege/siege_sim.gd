@@ -28,6 +28,7 @@ const GATE_X := [-5.2, 5.2]      # gate centres on the front wall
 const DOOR_X := [-5.2, 5.2]      # open doorways in the inner wall (behind each gate)
 const KEEP_X := 2.6              # keep block spans x -2.6..2.6, z 21..29
 const GATE_HP := 1500.0
+const GATE_HALF := 1.3           # half-width of the passable doorway
 const GATE_SOLID_AT := 0.35      # a broken gate blocks again once repaired to 35 %
 const GATE_OPEN_RADIUS := 4.0    # allies within this distance swing the doors open (visual)
 
@@ -133,8 +134,10 @@ func _build_map() -> void:
 		_add_wall(t, Vector2(-2.6, FRONT_Z), Vector2(2.6, FRONT_Z))
 		_add_wall(t, Vector2(7.8, FRONT_Z), Vector2(14.0, FRONT_Z))
 		for gx in GATE_X:
-			var a := _m(t, Vector2(gx - SEG * 0.5, FRONT_Z))
-			var b := _m(t, Vector2(gx + SEG * 0.5, FRONT_Z))
+			# The gate model is a 5.2 m wall piece with a ~2.3 m doorway; only the doorway is the
+			# gate. The neighbouring wall ends (radius 1.0) cover the stone pillars either side.
+			var a := _m(t, Vector2(gx - GATE_HALF, FRONT_Z))
+			var b := _m(t, Vector2(gx + GATE_HALF, FRONT_Z))
 			gates.append({"id":gates.size(), "team":t, "a":a, "b":b, "c":(a + b) * 0.5, "hp":GATE_HP, "max_hp":GATE_HP,
 				"broken":false, "open":false, "side":"west" if gx < 0.0 else "east"})
 		# Inner wall at z=21: solid pieces with open doorways behind each gate.
@@ -144,6 +147,11 @@ func _build_map() -> void:
 		# Keep block between the dungeon (west) and the throne room (east).
 		_add_wall(t, Vector2(-KEEP_X, INNER_Z), Vector2(-KEEP_X, HALF_L + 1.0), "keep")
 		_add_wall(t, Vector2(KEEP_X, INNER_Z), Vector2(KEEP_X, HALF_L + 1.0), "keep")
+		# The cell in the dungeon: bars on three sides, open towards the doorway (front).
+		var cc := Vector2(-8.0, 25.5)
+		walls.append({"a":_m(t, cc + Vector2(-2.0, -1.6)), "b":_m(t, cc + Vector2(-2.0, 2.0)), "r":0.3, "team":t, "kind":"bars"})
+		walls.append({"a":_m(t, cc + Vector2(2.0, -1.6)), "b":_m(t, cc + Vector2(2.0, 2.0)), "r":0.3, "team":t, "kind":"bars"})
+		walls.append({"a":_m(t, cc + Vector2(-2.0, 2.0)), "b":_m(t, cc + Vector2(2.0, 2.0)), "r":0.3, "team":t, "kind":"bars"})
 		# Courtyard buildings (solid): forge + workshop sit against the side walls.
 		obstacles.append({"p":_m(t, Vector2(-11.2, 18.0)), "r":1.4, "kind":"forge_building", "team":t})
 		obstacles.append({"p":_m(t, Vector2(11.2, 18.0)), "r":1.4, "kind":"workshop_building", "team":t})
