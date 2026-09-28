@@ -111,11 +111,14 @@ func _process(delta:float)->void:
             var run:Dictionary=api.local_engine.run
             raid_parry_button.disabled=int(run.telegraphUntil)<=active_p.now() or bool(run.parryHit)
             raid_parry_button.text="PARRY NOW" if not raid_parry_button.disabled else ("PARRIED" if run.parryHit and int(run.telegraphUntil)>0 else "PARRY · WAIT FOR WIND-UP")
-func start_siege()->void:
+func start_siege_online()->void:
+    start_siege(true)
+func start_siege(online:=false)->void:
     if qte_busy or busy:return
     _new_screen("siege")
     margins.visible=false
     siege=Siege.new()
+    siege.online=online
     siege.audio=audio
     siege.progression=progression
     siege.low_fx=Fx.low_quality

@@ -83,7 +83,7 @@ func home()->void:
     var battle_title:=label(battle_copy,"SIEGE",20,VisualTheme.GOLD)
     battle_title.add_theme_font_override("font",VisualTheme.TITLE_FONT)
     battle_title.horizontal_alignment=HORIZONTAL_ALIGNMENT_LEFT
-    var battle_desc:=label(battle_copy,"Storm the enemy castle · free your Oracle · 6 vs 6",11,Color("#d4cbbb"))
+    var battle_desc:=label(battle_copy,"Storm the enemy castle · free your Oracle · 16 vs 16",11,Color("#d4cbbb"))
     battle_desc.horizontal_alignment=HORIZONTAL_ALIGNMENT_LEFT
     var enter:=button(battle_row,"ENTER BATTLE",app.start_siege,not app.trainer.active,"siege")
     enter.custom_minimum_size=Vector2(151,65)
@@ -94,6 +94,8 @@ func home()->void:
     app.Fx.ambient(enter,"streaks");app.Fx.ambient(enter,"sparks")
     var how:=label(battle,"Roll at the forge for your class. Break the enemy gates, carry your Oracle from their dungeon to your throne. Workers gather wood and stone to repair gates and buy upgrades.",11,Color("#b9c3c4"))
     how.horizontal_alignment=HORIZONTAL_ALIGNMENT_LEFT
+    var online:=button(battle,"PLAY ONLINE  ·  16 vs 16",app.start_siege_online,not app.trainer.active,"siege_online")
+    VisualTheme.apply_tactile(online,"secondary",14)
     if SiegeDiag.has_logs():
         button(battle,"COPY SIEGE DIAGNOSTICS",func():
             DisplayServer.clipboard_set(SiegeDiag.read_logs())

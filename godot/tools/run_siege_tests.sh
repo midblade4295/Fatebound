@@ -47,6 +47,8 @@ run siege_home_flow      SIEGE_HOME_FLOW_PASS     150 --fixed-fps 30
 run siege_diag_smoke     SIEGE_DIAG_PASS          150 --fixed-fps 30
 run siege_guard_smoke    SIEGE_GUARD_PASS         120
 run siege_logcat_filter  SIEGE_LOGCAT_FILTER_PASS 120
+# Online: real server process + clients over WebSockets. Real time (no --fixed-fps), port 8092.
+run siege_net_smoke      SIEGE_NET_PASS           150
 run full_ui_smoke        FULL_UI                  200
 run full_core_smoke      FULL_CORE_SMOKE_PASS     200
 run all_modules_parse    ALL_MODULES_PASS         200

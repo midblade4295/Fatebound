@@ -31,7 +31,8 @@ var rewards: Dictionary = {}
 
 # Online play (set before adding to the tree). The server runs the match; this client mirrors it.
 var online := false
-var net_url := Net.DEFAULT_URL
+# SIEGE_URL overrides the server for desktop testing (e.g. ws://127.0.0.1:8082/fatebound/siege/ws).
+var net_url := OS.get_environment("SIEGE_URL") if OS.has_environment("SIEGE_URL") else Net.DEFAULT_URL
 var player_name := "Player"
 var ws: WebSocketPeer = null
 var net_state := ""                  # "connecting", "waiting", "playing", "closed"

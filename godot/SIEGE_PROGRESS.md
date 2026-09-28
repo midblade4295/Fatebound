@@ -149,8 +149,8 @@ Each step is committed separately; this file is updated in the same commit.
 | Step | Scope | Status |
 |---|---|---|
 | N1 | Protocol (scripts/siege/siege_net.gd), headless authoritative server (server/siege_server.gd), online client in siege_mode | done |
-| N2 | Home "PLAY ONLINE", Vulkan screenshot of an online match | todo |
-| N3 | Deploy kit for 136.113.125.3 (systemd, Caddy fragment, install script), docs, APK | todo |
+| N2 | Home "PLAY ONLINE", Vulkan screenshot of an online match | done |
+| N3 | Deploy kit for 136.113.125.3 (systemd, Caddy fragment, install script), docs, APK | done (not deployed: needs Kevin/his agent on the server) |
 
 ## N1 notes
 - Server = the real SiegeSim, headless Godot, WebSocket on 127.0.0.1:8082 (8080 web/saves,
@@ -163,3 +163,12 @@ Each step is committed separately; this file is updated in the same commit.
   8.3 KB/s per phone, 267 KB/s server upload, 9.9 % of one core, 118 MB RSS.
 - tests/siege_net_smoke.gd (REAL time, no --fixed-fps): server process + game client + raw
   client: seating, snapshots, touch movement, forge through the server, leave -> bot. PASS.
+
+## N2/N3 notes
+- Home SIEGE card: PLAY ONLINE (16 vs 16) under ENTER BATTLE; card text fixed (was "6 vs 6").
+  Verified on Vulkan: real app -> PLAY ONLINE -> local server -> match renders from snapshots.
+- server/deploy: fatebound-siege.service (DynamicUser, read-only, loopback :8082),
+  caddy-route.fragment (printed, not applied), install_siege_server.sh (Godot 4.7.2 SHA-512
+  verified download, 176 KB server-only project, service, PROBE_OK). Tested in NO_SYSTEMD mode
+  with a real download, and as user nobody from a read-only folder.
+- Test runner now includes siege_net_smoke (12 suites, all pass).
