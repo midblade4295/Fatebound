@@ -52,6 +52,22 @@ const MAX_WEIGHT := 5
 const WEIGHT_SLOW := 0.08            # carrier speed -8 % per weight level
 const FEED_RADIUS := 1.9
 
+# ---- catapults (upgrade) ----
+const CATAPULT_X := 12.3
+const CATAPULT_EVERY := 4.5
+const CATAPULT_MIN := 5.0
+const CATAPULT_MAX := 22.0
+const CATAPULT_FLIGHT := 1.4
+const CATAPULT_DMG := 45.0
+const CATAPULT_AOE := 2.6
+
+# ---- siege ladders ----
+const LADDER_COST := 8
+const LADDER_BUILD := 3.0
+const LADDER_HP := 250.0
+const LADDER_HALF := 1.1          # half-width of the passage along the wall
+const LADDER_CLIMB := 0.5         # speed while crossing the wall
+
 # ---- gathering / crafting ----
 const CARRY_MAX := 5
 const GATHER_TIME := 0.9         # seconds per unit gathered
@@ -64,6 +80,8 @@ const UPGRADES := {
 		"desc":"+12% HP and damage per level for your fighters"},
 	"forge":  {"name":"Fourth Die", "max":1, "cost":[{"wood":10,"stone":20}],
 		"desc":"The forge rolls four dice: easier pairs and triples"},
+	"catapult": {"name":"Catapults", "max":1, "cost":[{"wood":15,"stone":25}],
+		"desc":"Your corner towers lob stones at enemies 5-22 m away"},
 }
 
 const FACES := ["knight","barbarian","rogue","ranger","mage","fate"]
@@ -104,8 +122,13 @@ var walls: Array = []          # segments {a, b, r, team, kind}
 var gates: Array = []          # {id, team, a, b, c, hp, max_hp, broken, open}
 var nodes: Array = []          # resource nodes {id, kind:"wood"/"stone", p, r, amount, max, regen, t}
 var stock := [{"wood":0, "stone":0}, {"wood":0, "stone":0}]
-var levels := [{"gates":0, "armory":0, "forge":0}, {"gates":0, "armory":0, "forge":0}]
+var levels := [{"gates":0, "armory":0, "forge":0, "catapult":0}, {"gates":0, "armory":0, "forge":0, "catapult":0}]
 var altars: Array = []         # {team, p, ready, t}
+var catapults: Array = []      # {team, p, t, side}
+var shells: Array = []         # catapult stones in flight {id, team, from, to, t, flight}
+var ladders: Array = []        # {id, team (owner), wall (index), p, hp, cells}
+var _next_shell := 1
+var _next_ladder := 1
 var rng := RandomNumberGenerator.new()
 var nav: Array = []            # AStarGrid2D per team
 var nav_version := 0
@@ -194,10 +217,13 @@ func _build_map() -> void:
 		_add_wall(t, Vector2(-KEEP_X, INNER_Z + 0.5), Vector2(-KEEP_X, HALF_L + 1.0), "keep")
 		_add_wall(t, Vector2(KEEP_X, INNER_Z + 0.5), Vector2(KEEP_X, HALF_L + 1.0), "keep")
 		# The cell in the dungeon: bars on three sides, open towards the doorway (front).
+		# The back bars sit exactly on the field edge: a narrower gap between them and the edge
+		# (it was 0.4 m) trapped units between the bars and the boundary clamp.
 		var cc := CELL_C
-		walls.append({"a":_m(t, cc + Vector2(-CELL_HX, -CELL_HZ)), "b":_m(t, cc + Vector2(-CELL_HX, CELL_HZ)), "r":0.3, "team":t, "kind":"bars"})
-		walls.append({"a":_m(t, cc + Vector2(CELL_HX, -CELL_HZ)), "b":_m(t, cc + Vector2(CELL_HX, CELL_HZ)), "r":0.3, "team":t, "kind":"bars"})
-		walls.append({"a":_m(t, cc + Vector2(-CELL_HX, CELL_HZ)), "b":_m(t, cc + Vector2(CELL_HX, CELL_HZ)), "r":0.3, "team":t, "kind":"bars"})
+		var back := HALF_L
+		walls.append({"a":_m(t, cc + Vector2(-CELL_HX, -CELL_HZ)), "b":_m(t, Vector2(cc.x - CELL_HX, back)), "r":0.3, "team":t, "kind":"bars"})
+		walls.append({"a":_m(t, cc + Vector2(CELL_HX, -CELL_HZ)), "b":_m(t, Vector2(cc.x + CELL_HX, back)), "r":0.3, "team":t, "kind":"bars"})
+		walls.append({"a":_m(t, Vector2(cc.x - CELL_HX, back)), "b":_m(t, Vector2(cc.x + CELL_HX, back)), "r":0.3, "team":t, "kind":"bars"})
 		# Stair channels up to the platforms: ledges on both sides so you can't step off.
 		for sx in [-1.0, 1.0]:
 			for lx in [STAIR_X0, STAIR_X1]:
@@ -327,6 +353,9 @@ func setup(team_size: int, seed_value: int, player_team := 0) -> void:
 	_build_nav()
 	oracles = [_new_oracle(0), _new_oracle(1)]
 	altars = [{"team":0, "p":altar(0), "ready":true, "t":0.0}, {"team":1, "p":altar(1), "ready":true, "t":0.0}]
+	for t in 2:
+		for cx in [-CATAPULT_X, CATAPULT_X]:
+			catapults.append({"team":t, "p":_m(t, Vector2(cx, FRONT_Z + 0.3)), "t":rng.randf() * CATAPULT_EVERY})
 	# One gatherer per team from 4 players up, two from 8.
 	var roles := ["raid","gather","defend","raid","gather","escort","raid","defend","raid","gather"]
 	for t in 2:
@@ -521,6 +550,9 @@ func near_node(u: Dictionary) -> Dictionary:
 			best_d = d
 	return best
 
+func repair_stock(team: int) -> int:
+	return int(stock[team].wood) + int(stock[team].stone)
+
 func near_repair_gate(u: Dictionary) -> Dictionary:
 	for g in gates:
 		if g.team == u.team and g.hp < g.max_hp and u.pos.distance_to(seg_closest(u.pos, g.a, g.b)) < 3.2:
@@ -544,9 +576,12 @@ func _interact(u: Dictionary) -> bool:
 		u.task = {}
 		_event("pickup", {"id":u.id,"team":u.team})
 		return true
+	if u.cls == "worker" and not ladder_spot(u).is_empty() and u.load.n == 0:
+		u.task = {"kind":"build_ladder", "t":LADDER_BUILD}
+		return true
 	if u.cls == "worker":
 		var g := near_repair_gate(u)
-		if not g.is_empty() and stock[u.team].wood > 0:
+		if not g.is_empty() and repair_stock(u.team) > 0:
 			u.task = {"kind":"repair", "gate":g.id, "t":REPAIR_TICK}
 			return true
 		var n := near_node(u)
@@ -565,6 +600,60 @@ func _interact(u: Dictionary) -> bool:
 		u.workshop_open = true
 		return true
 	return false
+
+func ladder_spot(u: Dictionary) -> Dictionary:
+	# Where a worker could raise a ladder: an enemy front-wall piece right in front of them.
+	if u.cls != "worker" or stock[u.team].wood < LADDER_COST:
+		return {}
+	for wi in walls.size():
+		var w: Dictionary = walls[wi]
+		if w.kind != "wall" or int(w.team) == u.team:
+			continue
+		var cp: Vector2 = seg_closest(u.pos, w.a, w.b)
+		if u.pos.distance_to(cp) > w.r + UNIT_R + 0.5 or absf(cp.x) > HALF_W - 1.0:
+			continue
+		# Not on top of a gate, and not doubling up on an existing ladder.
+		var ok := true
+		for g in gates:
+			if cp.distance_to(g.c) < GATE_HALF + 1.6:
+				ok = false
+		for l in ladders:
+			if int(l.wall) == wi and cp.distance_to(l.p) < LADDER_HALF * 2.5:
+				ok = false
+		if ok:
+			return {"wall":wi, "p":cp}
+	return {}
+
+func _raise_ladder(u: Dictionary, spot: Dictionary) -> void:
+	stock[u.team].wood -= LADDER_COST
+	var l := {"id":_next_ladder, "team":u.team, "wall":int(spot.wall), "p":spot.p, "hp":LADDER_HP, "cells":[]}
+	_next_ladder += 1
+	# Open the passage on the owner's nav grid (walkable but costly).
+	var grid: AStarGrid2D = nav[u.team]
+	var w: Dictionary = walls[int(spot.wall)]
+	for x in NAV_W:
+		for y in NAV_H:
+			var c := Vector2i(x, y)
+			var np := nav_point(c)
+			var along: Vector2 = seg_closest(np, w.a, w.b)
+			if along.distance_to(l.p) <= LADDER_HALF and np.distance_to(along) <= w.r + UNIT_R + 0.6 and grid.is_point_solid(c):
+				grid.set_point_solid(c, false)
+				grid.set_point_weight_scale(c, 4.0)
+				l.cells.append(c)
+	ladders.append(l)
+	nav_version += 1
+	_event("ladder_up", {"id":u.id, "team":u.team, "ladder":l.id, "pos":l.p})
+
+func _damage_ladder(src: Dictionary, l: Dictionary, amount: float) -> void:
+	l.hp -= amount
+	_event("ladder_hit", {"ladder":l.id, "team":l.team, "dmg":int(round(amount))})
+	if l.hp <= 0.0:
+		var grid: AStarGrid2D = nav[int(l.team)]
+		for c in l.cells:
+			grid.set_point_solid(c, true)
+		ladders.erase(l)
+		nav_version += 1
+		_event("ladder_down", {"ladder":l.id, "team":l.team, "pos":l.p, "by":src.get("id","")})
 
 func _offering_action(u: Dictionary) -> String:
 	if u.carrying:
@@ -612,7 +701,9 @@ func context_action(u: Dictionary) -> String:
 	if u.cls == "worker":
 		if not u.task.is_empty():
 			return str(u.task.kind)
-		if not near_repair_gate(u).is_empty() and stock[u.team].wood > 0:
+		if not ladder_spot(u).is_empty() and u.load.n == 0:
+			return "ladder"
+		if not near_repair_gate(u).is_empty() and repair_stock(u.team) > 0:
 			return "repair"
 		var n := near_node(u)
 		if not n.is_empty() and (u.load.n == 0 or u.load.kind == n.kind) and u.load.n < CARRY_MAX:
@@ -809,6 +900,14 @@ func _melee(u: Dictionary, reach: float, arc: float, dmg: float, stun := 0.0) ->
 			continue
 		_damage(u, o, dmg, stun)
 		hits += 1
+	# Swings knock at enemy ladders in reach.
+	for l in ladders.duplicate():
+		if int(l.team) == u.team:
+			continue
+		var offl: Vector2 = l.p - u.pos
+		if offl.length() <= reach + LADDER_HALF and (arc <= -1.0 or offl.length() < 0.3 or fwd.dot(offl.normalized()) >= arc - 0.3):
+			_damage_ladder(u, l, dmg)
+			hits += 1
 	# Swings also land on an enemy gate in reach.
 	for g in gates:
 		if g.team == u.team or not gate_blocks(g):
@@ -935,6 +1034,8 @@ func _step_unit(u: Dictionary, dt: float) -> void:
 		mult *= 1.0 - WEIGHT_SLOW * float(oracles[u.team].get("weight", 0))
 	if u.offering:
 		mult = minf(mult, 0.9)
+	if not ladders.is_empty() and ladder_climb(u):
+		mult *= LADDER_CLIMB
 	if u.load.n > 0:
 		mult = minf(mult, 0.85)
 	if u.move.length() > 0.08:
@@ -964,16 +1065,23 @@ func _step_task(u: Dictionary, dt: float) -> void:
 			if u.load.n >= CARRY_MAX or n.amount <= 0:
 				u.task = {}
 				u.state = "idle"
+		"build_ladder":
+			var spot := ladder_spot(u)
+			if not spot.is_empty():
+				_raise_ladder(u, spot)
+			u.task = {}
+			u.state = "idle"
 		"repair":
 			var g: Dictionary = gates[int(task.gate)]
-			if g.hp >= g.max_hp or stock[u.team].wood <= 0 or u.pos.distance_to(seg_closest(u.pos, g.a, g.b)) > 3.6:
+			if g.hp >= g.max_hp or repair_stock(u.team) <= 0 or u.pos.distance_to(seg_closest(u.pos, g.a, g.b)) > 3.6:
 				u.task = {}
 				u.state = "idle"
 				return
-			# One wood buys two repair ticks.
+			# One unit of material (whichever the team has more of) buys three repair ticks.
 			task["paid"] = int(task.get("paid", 0)) + 1
-			if int(task.paid) % 2 == 1:
-				stock[u.team].wood -= 1
+			if int(task.paid) % 3 == 1:
+				var mat := "wood" if stock[u.team].wood >= stock[u.team].stone else "stone"
+				stock[u.team][mat] -= 1
 			var was_broken: bool = g.broken
 			g.hp = minf(g.max_hp, g.hp + REPAIR_HP)
 			u.repaired += REPAIR_HP
@@ -1000,13 +1108,32 @@ func _push_out(p: Vector2, r: float, team := -1) -> Vector2:
 		var d := off.length()
 		if d < min_d:
 			p = ob.p + (off / d if d > 0.001 else Vector2(1,0)) * min_d
-	for w in walls:
+	for wi in walls.size():
+		var w: Dictionary = walls[wi]
+		if team >= 0 and w.kind == "wall" and on_ladder(p, wi, team):
+			continue
 		p = _push_seg(p, w.a, w.b, w.r + r)
 	for g in gates:
 		# Gates only stop the other team, and only while standing.
 		if team != g.team and gate_blocks(g):
 			p = _push_seg(p, g.a, g.b, WALL_R + r)
 	return p
+
+func on_ladder(p: Vector2, wall_index: int, team: int) -> bool:
+	# Inside a ladder passage over this wall, for the ladder's own team.
+	for l in ladders:
+		if int(l.team) == team and int(l.wall) == wall_index:
+			var w: Dictionary = walls[wall_index]
+			var along: Vector2 = seg_closest(p, w.a, w.b)
+			if along.distance_to(l.p) <= LADDER_HALF and p.distance_to(along) <= w.r + UNIT_R + 0.6:
+				return true
+	return false
+
+func ladder_climb(u: Dictionary) -> bool:
+	for l in ladders:
+		if int(l.team) == u.team and u.pos.distance_to(l.p) <= LADDER_HALF + 0.8:
+			return true
+	return false
 
 func _push_seg(p: Vector2, a: Vector2, b: Vector2, min_d: float) -> Vector2:
 	var cp := seg_closest(p, a, b)
@@ -1040,7 +1167,9 @@ func _separate() -> void:
 				b.pos += push
 	for u in units:
 		if alive(u):
-			u.pos = _clamp_to_field(_push_out(u.pos, UNIT_R, u.team))
+			# Clamp first: pushing a unit that is slightly past the field edge off a wall end can
+			# send it diagonally, and clamping afterwards drops it back inside the wall.
+			u.pos = _clamp_to_field(_push_out(_clamp_to_field(u.pos), UNIT_R, u.team))
 
 func _step_projectiles(dt: float) -> void:
 	for i in range(projectiles.size()-1, -1, -1):
@@ -1128,6 +1257,38 @@ func _step_world(dt: float) -> void:
 		if open != g.open:
 			g.open = open
 			_event("gate_open" if open else "gate_close", {"gate":g.id, "team":g.team})
+	if levels[0].catapult > 0 or levels[1].catapult > 0:
+		for cat in catapults:
+			if levels[int(cat.team)].catapult <= 0:
+				continue
+			cat.t += dt
+			if cat.t < CATAPULT_EVERY:
+				continue
+			var target := {}
+			var best := INF
+			for u in units:
+				if u.team == int(cat.team) or not alive(u):
+					continue
+				var d: float = u.pos.distance_to(cat.p)
+				if d >= CATAPULT_MIN and d <= CATAPULT_MAX and d < best:
+					best = d
+					target = u
+			if target.is_empty():
+				continue
+			cat.t = 0.0
+			shells.append({"id":_next_shell, "team":int(cat.team), "from":cat.p, "to":target.pos, "t":0.0, "flight":CATAPULT_FLIGHT})
+			_event("catapult_fire", {"team":int(cat.team), "shell":_next_shell, "from":cat.p, "to":target.pos, "flight":CATAPULT_FLIGHT})
+			_next_shell += 1
+	for i in range(shells.size() - 1, -1, -1):
+		var sh: Dictionary = shells[i]
+		sh.t += dt
+		if sh.t < sh.flight:
+			continue
+		for u in units:
+			if u.team != int(sh.team) and alive(u) and u.pos.distance_to(sh.to) <= CATAPULT_AOE:
+				_damage({"team":int(sh.team), "id":"catapult"}, u, CATAPULT_DMG)
+		_event("catapult_hit", {"team":int(sh.team), "pos":sh.to, "shell":sh.id})
+		shells.remove_at(i)
 	for al in altars:
 		if not al.ready:
 			al.t += dt
@@ -1144,28 +1305,38 @@ func _step_world(dt: float) -> void:
 					_event("node_regrow", {"node":n.id})
 
 func _commander(team: int) -> void:
-	# Team quartermaster: spends the stockpile on upgrades. On the human's team it only spends
-	# surplus (2x the cost) so the player gets to choose at the workshop first.
+	# Team quartermaster. Works down a plan and saves for the next item instead of buying
+	# whatever is cheapest (which starved the stone-heavy upgrades). A badly damaged gate is the
+	# one exception. On the human's team it only spends surplus (2x the cost) so the player gets
+	# to choose at the workshop first.
 	var human_team := false
 	for u in units:
 		if not u.bot and u.team == team:
 			human_team = true
-	var order := ["gates", "armory", "forge", "armory", "gates", "armory"]
+	var plan := ["armory", "catapult", "gates", "forge", "armory", "gates", "armory"]
+	var seen := {}
+	var target := ""
+	for id in plan:
+		seen[id] = int(seen.get(id, 0)) + 1
+		if int(levels[team][id]) < int(seen[id]) and int(levels[team][id]) < int(UPGRADES[id].max):
+			target = id
+			break
 	var damaged := false
 	for g in gates:
 		if g.team == team and (g.broken or g.hp < g.max_hp * 0.5):
 			damaged = true
-	if damaged:
-		order.push_front("gates")
-	for id in order:
-		if not can_buy(team, id):
-			continue
-		if human_team:
-			var cost := upgrade_cost(team, id)
-			if stock[team].wood < int(cost.wood) * 2 or stock[team].stone < int(cost.stone) * 2:
-				continue
-		buy_upgrade(team, id)
+	var choice := ""
+	if damaged and can_buy(team, "gates"):
+		choice = "gates"
+	elif target != "" and can_buy(team, target):
+		choice = target
+	if choice == "":
 		return
+	if human_team:
+		var cost := upgrade_cost(team, choice)
+		if stock[team].wood < int(cost.wood) * 2 or stock[team].stone < int(cost.stone) * 2:
+			return
+	buy_upgrade(team, choice)
 
 func _finish(reason: String) -> void:
 	ended = true
@@ -1288,8 +1459,8 @@ func _think_worker(u: Dictionary) -> void:
 	if u.load.n >= CARRY_MAX:
 		_nav_to(u, workshop(u.team), WORKSHOP_RADIUS - 0.6)
 		return
-	# Repair a gate that is broken or badly damaged, if there is wood for it.
-	if stock[u.team].wood >= 2:
+	# Repair a gate that is broken or badly damaged, if there is material for it.
+	if repair_stock(u.team) >= 2:
 		for g in gates:
 			if g.team == u.team and (g.broken or g.hp < g.max_hp * 0.4):
 				var inside: Vector2 = g.c + _inward(u.team) * 2.0
@@ -1300,6 +1471,26 @@ func _think_worker(u: Dictionary) -> void:
 					u.face = angle_of(g.c - u.pos)
 					u.task = {"kind":"repair", "gate":g.id, "t":REPAIR_TICK}
 				return
+	# The stone-duty worker raises one ladder on the enemy wall when their gates are holding.
+	if u.get("duty", "") == "stone" and stock[u.team].wood >= LADDER_COST + 4 and u.load.n == 0:
+		var own_ladders := 0
+		for l in ladders:
+			if int(l.team) == u.team:
+				own_ladders += 1
+		var enemy_gates_up := 0
+		for g in gates:
+			if g.team != u.team and gate_blocks(g):
+				enemy_gates_up += 1
+		if own_ladders == 0 and enemy_gates_up >= 1 and time > 60.0:
+			var spot_p: Vector2 = _m(1 - u.team, Vector2(0.0, FRONT_Z)) + _inward(u.team) * 1.6
+			if u.pos.distance_to(spot_p) > 0.8:
+				_nav_to(u, spot_p, 0.5)
+			else:
+				u.move = Vector2.ZERO
+				if not ladder_spot(u).is_empty():
+					u.face = angle_of(_m(1 - u.team, Vector2(0.0, FRONT_Z)) - u.pos)
+					u.task = {"kind":"build_ladder", "t":LADDER_BUILD}
+			return
 	# Gather whatever the stockpile is shorter on; prefer nodes on our own half.
 	var want := "stone" if stock[u.team].stone < stock[u.team].wood else "wood"
 	if u.get("duty", "") == "":
