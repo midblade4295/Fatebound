@@ -337,3 +337,34 @@ Based on live `447b97a`. Preview **0.12.0-siege-app, version code 21** (APK 38 M
   real buttons, REAL time) and `meta_economy_test`. `godot-visual-review.yml` runs it on PRs.
 - **Unverified:** Settings > Privacy Policy opens
   `https://136-113-125-3.sslip.io/fatebound/privacy.html` (not reachable from the dev sandbox).
+
+---
+
+## 12. Round 6: home screen and menu art (Blender pipeline)
+
+Preview **0.13.0-siege-art, version code 22**. Pre-rendered art lives in `godot/assets/ui/`
+(3.4 MB); the scripts that make it are committed so it can be re-rendered.
+
+| Art | Made by | Notes |
+|---|---|---|
+| `hero_backdrop.jpg` | `tools/blender/backdrop.py` | EEVEE render of the KayKit castle at dusk; sky is a painted gradient dome (Nishita washed out under Filmic), warm-violet world light, hills tinted for aerial perspective. ~55 s. |
+| `icons/*.png` (19) | `tools/blender/icons.py` | Weapon/off-hand icons from the real KayKit models. Each model is auto-oriented: longest axis up, tip at the top (the end farther from the grip/origin), broad face to camera. Pairs = weapon behind, gear in front. |
+| `currency/*.png` (6) | `tools/blender/icons.py` | Procedural gold coin, three coin piles (600/1600/4500 in the gem exchange) and cut gems: the kit has none. |
+| `skins/*.png` (18) | `tools/render_skin_icons.gd` | Character busts rendered by the GAME (same builder, idle pose, tint), so icon == in-game look. Needs Xvfb + `--rendering-method mobile`. |
+
+Re-render: `apt-get install blender` (4.0.2 works), then
+`xvfb-run -a blender -b --python godot/tools/blender/icons.py` (`ONLY=name,name` for a subset;
+~3 s each) and `... backdrop.py` (env `RESX RESY SAMPLES`). **Run Blender in the foreground**:
+a `nohup` background run hung at the first render. **Never `pkill -f` a pattern that also appears
+in your own command line** (it kills the shell). After adding a skin/weapon to `economy.gd`,
+re-run the matching render and commit the PNG + `.import`.
+
+Home screen (`scripts/app/siege_app.gd`, `screens.gd`, `showcase.gd`, `ui.gd`):
+- Full-bleed hero layer *behind* the menu (backdrop + live 3D character + scrims + logo + gold
+  motes), parallax/fade on scroll; `Screens.home` reserves its space with a spacer (322 px).
+  Camera: `Showcase.cam_z/cam_y/look_y` (home 9.7/1.6/1.24, Locker default 7.4/1.45/0.88).
+- Class picker = icon chips; animated PLAY button (`UI.play_button`: glow, pulse, light sweep);
+  currency pills use the rendered coin/gem; selected tab has a highlight pill; screens fade in.
+- Shop/Locker/Pass use the rendered icons via `Screens.swatch/item_swatch/reward_text`
+  (`reward_text` returns `[glyph, text, colour, texture path]`).
+- `tools/app_shots.gd` screenshots every screen with a realistic profile (see its header).

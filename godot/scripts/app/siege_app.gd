@@ -5,6 +5,7 @@ const UI = preload("res://scripts/app/ui.gd")
 const Eco = preload("res://scripts/meta/economy.gd")
 const Profile = preload("res://scripts/meta/profile.gd")
 const Screens = preload("res://scripts/app/screens.gd")
+const Showcase = preload("res://scripts/app/showcase.gd")
 const Siege = preload("res://scripts/siege/siege_mode.gd")
 const Audio = preload("res://scripts/native_audio.gd")
 
@@ -33,6 +34,10 @@ var xp_bar: ProgressBar
 var gold_label: Label
 var gems_label: Label
 var modal: Control = null
+var hero_layer: Control
+var hero_node: Control
+const HERO_H := 470.0
+const FADE_COLOR := Color("#0d1627")
 var _toast: Label
 var _toast_box: PanelContainer
 var _toast_until := 0.0
@@ -47,6 +52,7 @@ func _ready() -> void:
 	add_child(audio)
 	_apply_audio()
 	_build_background()
+	_build_hero()
 	_build_chrome()
 	# Toast: a dark pill just above the tab bar, readable over anything.
 	_toast_box = PanelContainer.new()
@@ -71,6 +77,7 @@ func _ready() -> void:
 		profile.save()
 		var m: Dictionary = profile.d.migration
 		call_deferred("toast", "Welcome to Siege! Your progress carried over: +%d gold, +%d gems" % [int(m.gold), int(m.gems)], UI.GOLD)
+	content_scroll.get_v_scroll_bar().value_changed.connect(_on_scroll)
 	show_tab("home")
 
 func _apply_audio() -> void:
@@ -122,6 +129,106 @@ func _build_background() -> void:
 	gl.offset_right = 120
 	gl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(gl)
+
+func _grad(c0: Color, c1: Color, w := 8, h := 64) -> GradientTexture2D:
+	var g := Gradient.new()
+	g.set_color(0, c0)
+	g.set_color(1, c1)
+	var t := GradientTexture2D.new()
+	t.gradient = g
+	t.fill_from = Vector2(0.5, 0.0)
+	t.fill_to = Vector2(0.5, 1.0)
+	t.width = w
+	t.height = h
+	return t
+
+func _band(parent: Control, c0: Color, c1: Color, top: bool, px: float) -> void:
+	var r := TextureRect.new()
+	r.texture = _grad(c0, c1)
+	r.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	r.stretch_mode = TextureRect.STRETCH_SCALE
+	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	r.anchor_right = 1.0
+	if top:
+		r.offset_bottom = px
+	else:
+		r.anchor_top = 1.0
+		r.anchor_bottom = 1.0
+		r.offset_top = -px
+	parent.add_child(r)
+
+func _build_hero() -> void:
+	# Full-bleed home hero behind the menu: Blender backdrop, live 3D character, scrims, logo and
+	# drifting gold motes. Scrolls away with a parallax as the menu is scrolled.
+	hero_layer = Control.new()
+	hero_layer.anchor_right = 1.0
+	hero_layer.offset_bottom = HERO_H
+	hero_layer.clip_contents = true
+	hero_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(hero_layer)
+	Showcase.backdrop(hero_layer)
+	hero_node = Showcase.new()
+	# The home hero is taller than the Locker's box, so the camera sits further back to keep the
+	# helmet clear of the logo: character ~45% of the frame, feet at ~78% down.
+	hero_node.cam_z = 9.7
+	hero_node.cam_y = 1.6
+	hero_node.look_y = 1.24
+	hero_node.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	hero_layer.add_child(hero_node)
+	_band(hero_layer, Color(0.02, 0.03, 0.09, 0.78), Color(0.02, 0.03, 0.09, 0.0), true, 120.0)
+	_band(hero_layer, Color(FADE_COLOR, 0.0), Color(FADE_COLOR, 1.0), false, 210.0)
+	if not bool(profile.d.settings.get("reduce_motion", false)):
+		var glow := Gradient.new()
+		glow.set_color(0, Color(1, 0.85, 0.5, 1.0))
+		glow.set_color(1, Color(1, 0.85, 0.5, 0.0))
+		var gt := GradientTexture2D.new()
+		gt.gradient = glow
+		gt.fill = GradientTexture2D.FILL_RADIAL
+		gt.fill_from = Vector2(0.5, 0.5)
+		gt.fill_to = Vector2(1.0, 0.5)
+		gt.width = 24
+		gt.height = 24
+		var motes := CPUParticles2D.new()
+		motes.texture = gt
+		motes.amount = 22
+		motes.lifetime = 7.0
+		motes.preprocess = 7.0
+		motes.position = Vector2(210, HERO_H - 40)
+		motes.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
+		motes.emission_rect_extents = Vector2(230, 10)
+		motes.direction = Vector2(0.2, -1.0)
+		motes.spread = 18.0
+		motes.gravity = Vector2.ZERO
+		motes.initial_velocity_min = 14.0
+		motes.initial_velocity_max = 34.0
+		motes.scale_amount_min = 0.25
+		motes.scale_amount_max = 0.6
+		var ramp := Gradient.new()
+		ramp.set_color(0, Color(1, 1, 1, 0.0))
+		ramp.set_color(1, Color(1, 1, 1, 0.0))
+		ramp.add_point(0.25, Color(1, 1, 1, 0.9))
+		ramp.add_point(0.75, Color(1, 1, 1, 0.6))
+		motes.color_ramp = ramp
+		hero_layer.add_child(motes)
+	var logo := UI.title(hero_layer, "FATEBOUND", 38, UI.GOLD)
+	logo.autowrap_mode = TextServer.AUTOWRAP_OFF
+	logo.anchor_right = 1.0
+	logo.offset_top = 74
+	logo.offset_bottom = 120
+	logo.add_theme_constant_override("outline_size", 9)
+	var sub := UI.label(hero_layer, "S  I  E  G  E", 13, Color("#ffe4a8"), UI.HEAVY_FONT, true)
+	sub.autowrap_mode = TextServer.AUTOWRAP_OFF
+	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	sub.anchor_right = 1.0
+	sub.offset_top = 118
+	sub.offset_bottom = 138
+
+func hero_show(cls: String, look: Dictionary) -> void:
+	hero_node.show_look(cls, look)
+
+func _on_scroll(v: float) -> void:
+	hero_layer.position.y = -v * 0.55
+	hero_layer.modulate.a = clampf(1.0 - v / 360.0, 0.0, 1.0)
 
 func _safe_top() -> float:
 	# Status bar / notch inset in logical pixels.
@@ -213,7 +320,7 @@ func _pill(parent: Node, kind: String) -> Label:
 	p.add_theme_stylebox_override("panel", st)
 	parent.add_child(p)
 	var r := UI.row(p, 4)
-	UI.icon(r, kind, 20)
+	UI.tex_icon(r, "res://assets/ui/currency/%s.png" % ("coin" if kind == "coin" else "gem"), 26)
 	var l := UI.label(r, "0", 15, UI.TEXT, UI.HEAVY_FONT, true)
 	l.autowrap_mode = TextServer.AUTOWRAP_OFF
 	l.custom_minimum_size = Vector2(38, 0)
@@ -232,8 +339,9 @@ func _pill(parent: Node, kind: String) -> Label:
 
 func _tab_button(parent: Node, id: String, text: String, icon_kind: String) -> Dictionary:
 	var b := Button.new()
-	b.flat = true
 	b.focus_mode = Control.FOCUS_NONE
+	for st_name in ["normal", "hover", "pressed", "focus"]:
+		b.add_theme_stylebox_override(st_name, StyleBoxEmpty.new())
 	b.custom_minimum_size = Vector2(0, 58)
 	b.set_meta("action_key", "tab_" + id)
 	UI.grow(b)
@@ -290,7 +398,23 @@ func show_tab(id: String) -> void:
 		(tb.icon as Control).queue_redraw()
 		(tb.label as Label).add_theme_color_override("font_color", UI.GOLD if on else UI.MUTED)
 		(tb.dot as ColorRect).modulate.a = 1.0 if on else 0.0
+		var pill: StyleBox = StyleBoxEmpty.new()
+		if on:
+			var pf := StyleBoxFlat.new()
+			pf.bg_color = Color(1.0, 0.79, 0.3, 0.14)
+			pf.set_corner_radius_all(16)
+			pf.border_color = Color(1.0, 0.79, 0.3, 0.35)
+			pf.set_border_width_all(1)
+			pill = pf
+		for st_name in ["normal", "hover", "pressed"]:
+			(tb.button as Button).add_theme_stylebox_override(st_name, pill)
+	hero_layer.visible = id == "home"
+	hero_layer.position.y = 0.0
+	hero_layer.modulate.a = 1.0
+	content_scroll.scroll_vertical = 0
 	rebuild()
+	content.modulate.a = 0.0
+	create_tween().tween_property(content, "modulate:a", 1.0, 0.18)
 
 func rebuild() -> void:
 	# Screens are rebuilt from the profile after every change; they're small and static.

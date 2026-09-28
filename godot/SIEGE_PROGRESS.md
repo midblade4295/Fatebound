@@ -269,3 +269,16 @@ Design (all cosmetic; no pay-to-win; no real-money purchases until Play Billing 
 - UI.tighten(): narrow padding + clipping for tight rows. Fixed the 4-die forge overflowing its
   panel (style reset the dice font to 16 px; 16 px side padding x4); TAKE gets 1.3x of the row so
   "TAKE BERSERKER" (longest label) fits (193 px available, 149 needed). Verified on Vulkan.
+
+# Round 6 (Kevin, 2026-09-28): "make the home screen menus look better; use headless Blender if you have to"
+- Baseline problems found from screenshots at 420x933: boxed hero viewport with a flat grey
+  castle and a washed-out tint; every shop item the same tiny glyph (a skin and a weapon showed
+  the identical wand); one coin icon for 600 and 4,500 gold; flat PLAY button.
+- Done: Blender backdrop + 19 gear icons + coin/gem art; 18 skin busts from Godot; full-bleed
+  animated hero; icon chips; PLAY button animation; tab pill; fade transitions; real art in
+  Shop/Locker/Pass. See SIEGE_HANDOFF section 12. All 11 test suites pass.
+- Bugs met on the way: material cache dying across Blender scene resets; a background Blender
+  run that hung (foreground works, 3 s/icon); Nishita sky too pale for a sunset (painted dome);
+  sky gradient stops placed outside the ~-12..+30 deg the camera sees; home camera framed for a
+  shorter box (character filled the screen).
+- Not done: per-challenge icons, animated number count-ups, a rendered logo.

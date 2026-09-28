@@ -137,6 +137,67 @@ static func tighten(b: Button, side := 6) -> void:
 	b.clip_text = true
 	b.custom_minimum_size.x = 0
 
+static var _tex_cache: Dictionary = {}
+
+static func tex(path: String) -> Texture2D:
+	if not _tex_cache.has(path):
+		_tex_cache[path] = load(path) if ResourceLoader.exists(path) else null
+	return _tex_cache[path]
+
+static func tex_icon(parent: Node, path: String, px := 24) -> TextureRect:
+	# A pre-rendered image (Blender/Godot renders in assets/ui) at a fixed size.
+	var t := TextureRect.new()
+	t.texture = tex(path)
+	t.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	t.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	t.custom_minimum_size = Vector2(px, px)
+	t.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(t)
+	return t
+
+static func play_button(parent: Node, text: String, on_press: Callable, key := "") -> Button:
+	# The big call to action: orange glow, a slow pulse and a light sweep every few seconds.
+	var b := button(parent, text, "primary", on_press, key, 34, 22)
+	b.add_theme_font_override("font", TITLE_FONT)
+	b.custom_minimum_size = Vector2(0, 82)
+	for st_name in ["normal", "hover", "pressed"]:
+		var sb := b.get_theme_stylebox(st_name).duplicate() as StyleBoxFlat
+		sb.shadow_color = Color(1.0, 0.5, 0.08, 0.5)
+		sb.shadow_size = 18
+		sb.shadow_offset = Vector2(0, 5)
+		b.add_theme_stylebox_override(st_name, sb)
+	var clip := Control.new()                     # clips the sweep to the button, not the glow
+	clip.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	clip.clip_contents = true
+	clip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	b.add_child(clip)
+	var g := Gradient.new()
+	g.set_color(0, Color(1, 1, 1, 0))
+	g.set_color(1, Color(1, 1, 1, 0))
+	g.add_point(0.5, Color(1, 1, 1, 0.42))
+	var gt := GradientTexture2D.new()
+	gt.gradient = g
+	gt.fill_from = Vector2(0, 0.5)
+	gt.fill_to = Vector2(1, 0.5)
+	gt.width = 128
+	gt.height = 8
+	var band := TextureRect.new()
+	band.texture = gt
+	band.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	band.size = Vector2(110, 90)
+	band.position = Vector2(-140, -4)
+	band.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	clip.add_child(band)
+	b.resized.connect(func(): b.pivot_offset = b.size * 0.5)
+	if b.is_inside_tree():
+		var tw := b.create_tween().set_loops()
+		tw.tween_method(func(v: float): band.position.x = lerpf(-140.0, clip.size.x + 30.0, v), 0.0, 1.0, 0.85).set_trans(Tween.TRANS_SINE)
+		tw.tween_interval(2.6)
+		var pulse := b.create_tween().set_loops()
+		pulse.tween_property(b, "scale", Vector2(1.022, 1.022), 1.1).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		pulse.tween_property(b, "scale", Vector2.ONE, 1.1).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	return b
+
 static func icon(parent: Node, kind: String, px := 24, tint := Color.WHITE) -> Control:
 	var i := Icon.new()
 	i.kind = kind
