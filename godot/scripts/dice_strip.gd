@@ -1,4 +1,7 @@
 extends Control
+# Vulkan (Mobile renderer) reads darker than Compatibility; tuned so the dice match (see commit).
+static var VULKAN_EXPOSURE := 1.28
+static var VULKAN_AMBIENT := 1.9
 # Three real 3D golden d12 dice. They tumble while a roll is pending and settle on the faces the
 # server confirmed; nothing here decides an outcome.
 const Wire = preload("res://scripts/arena_wire.gd")
@@ -52,9 +55,9 @@ func _ready() -> void:
     env.background_mode = Environment.BG_CLEAR_COLOR
     env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
     env.ambient_light_color = Color("#ffe9c0")
-    env.ambient_light_energy = 0.55
+    env.ambient_light_energy = 0.55 * (VULKAN_AMBIENT if RenderingServer.get_current_rendering_method() != "gl_compatibility" else 1.0)
     env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-    env.tonemap_exposure = 1.0
+    env.tonemap_exposure = 1.0 * (VULKAN_EXPOSURE if RenderingServer.get_current_rendering_method() != "gl_compatibility" else 1.0)
     env.tonemap_white = 2.2
     var we := WorldEnvironment.new()
     we.environment = env
