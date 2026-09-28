@@ -43,15 +43,12 @@ run siege_sim_smoke      SIEGE_SIM_PASS           600
 run siege_reach          SIEGE_REACH_PASS         120
 run siege_mode_smoke     SIEGE_MODE_PASS          300 --fixed-fps 30
 SEED=7 run siege_human_soak HUMAN_SOAK_DONE       300 --fixed-fps 30
-run siege_home_flow      SIEGE_HOME_FLOW_PASS     150 --fixed-fps 30
 run siege_diag_smoke     SIEGE_DIAG_PASS          150 --fixed-fps 30
 run siege_guard_smoke    SIEGE_GUARD_PASS         120
 run siege_logcat_filter  SIEGE_LOGCAT_FILTER_PASS 120
 # Online: real server process + clients over WebSockets. Real time (no --fixed-fps), port 8092.
 run siege_net_smoke      SIEGE_NET_PASS           150
-run full_ui_smoke        FULL_UI                  200
-run full_core_smoke      FULL_CORE_SMOKE_PASS     200
-run all_modules_parse    ALL_MODULES_PASS         200
+run parse_all            PARSE_ALL_PASS           120
 run meta_economy_test    META_ECONOMY_PASS        120
 # The Siege app shell through its real buttons. REAL time (no --fixed-fps).
 run app_flow_test        APP_FLOW_PASS            150
@@ -59,8 +56,6 @@ run app_flow_test        APP_FLOW_PASS            150
 if ! grep -q 'stalls=0' /tmp/siege_test_siege_human_soak.log; then
   echo "FAIL  siege_human_soak reported stalls"; fail=1
 fi
-# full_ui_smoke rewrites this report on every run; don't commit that churn.
-git -C "$HERE/.." checkout -q -- godot/reports/full-port/native-ui-flow.json 2>/dev/null || true
 
 [ $fail -eq 0 ] && echo "ALL SIEGE TESTS PASSED" || echo "SOME TESTS FAILED"
 exit $fail

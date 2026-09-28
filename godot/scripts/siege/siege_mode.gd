@@ -26,7 +26,6 @@ var guard_tripped := false
 var _guard_res_low := 0
 var low_fx := false
 var audio: Node = null
-var progression = null   # legacy app shell (unused once the Siege app shell is in)
 var profile = null       # scripts/meta/profile.gd — rewards, challenges and cosmetics
 var rewards: Dictionary = {}
 var match_result: Dictionary = {}
@@ -69,7 +68,7 @@ func _ready() -> void:
 	viewport = SubViewport.new()
 	viewport.own_world_3d = true
 	viewport.msaa_3d = Viewport.MSAA_2X
-	# Same 3D viewport settings as the dice battle (battlefield.gd), which runs full matches on the
+	# Same 3D viewport settings as the (removed) dice battle, which ran full matches on the
 	# phone that crashes in Siege: default mesh LOD threshold, update when visible.
 	viewport.render_target_update_mode = SubViewport.UPDATE_WHEN_VISIBLE
 	viewport.handle_input_locally = false

@@ -98,8 +98,9 @@ Renderer **stays Vulkan** (Kevin's decision; see section 8).
 | `scripts/siege/siege_net.gd` | ~260 | Online protocol v1: snapshot encode (int16-packed units, zstd) and apply onto a mirror sim; interpolation. Shared by server and client. |
 | `server/siege_server.gd`, `server/siege_probe.gd`, `server/deploy/` | | Headless authoritative server, health probe, systemd unit, Caddy fragment, install script (section 10). |
 | `scripts/siege/siege_diag.gd` | ~260 | Field diagnostics: `user://siege_diag.log` (per-second STAT lines, stalls, engine errors, logcat on stall). Home card button "COPY SIEGE DIAGNOSTICS" puts it on the clipboard. |
-| `scripts/kaykit_stage.gd`, `scripts/dice_strip.gd` | | Home hero portrait / old dice battlefield + 3D dice (still used by the home portrait and forge dice). |
-| `scripts/ui/pages.gd`, `scripts/full_client.gd` | | App shell: home page SIEGE card, `start_siege()`. |
+| `scripts/app/` | | Round 5 app shell (entry via `scenes/Main.tscn`): `siege_app.gd` (chrome, tabs, match launch), `screens.gd` (Home, Pass, Shop, Locker, Settings), `ui.gd`, `icon.gd`, `showcase.gd`. |
+| `scripts/meta/` | | `economy.gd` (tables + pure functions), `profile.gd` (user://siege_profile.json, migration from the old save). |
+| `scripts/siege/asset_cache.gd` | | PackedScene cache for Siege models. |
 | `assets/kaykit/` | | KayKit packs (CC0; licences included): `hex/` castle/props, `heroes/`, `anim/` rigs, `weapons/`, `forest/`. |
 | `SIEGE_PROGRESS.md` | | Running log of every round/step, tuning results, known issues. |
 | `tools/run_siege_tests.sh`, `tools/build_siege_preview.sh` | | One-command test and build (section 5). |
@@ -131,8 +132,8 @@ back at 29) and placed with `Sim._c(team, p)`; world-space things (resources, pl
   `rendering_device/fallback_to_opengl3=false`.
   `build_siege_preview.sh` refuses to finish if the APK is gl_compatibility.
 - **Brightness is measured, not eyeballed:** `VULKAN_*` constants in `siege_view.gd`
-  (exposure 1.55, ambient 2.25), `kaykit_stage.gd` (battle light 3.75 / ambient 9; portrait
-  2.5 / 4), `dice_strip.gd` (1.28 / 1.9) match Vulkan to Compatibility mean luminance.
+  (exposure 1.55, ambient 2.25) match Vulkan to Compatibility mean luminance; the home
+  showcase reuses them (exposure x0.8).
   Backdrop shaders use `source_color` uniforms. Don't change without re-measuring.
 - **Preview identity:** package `com.fatebound.kaykitrebuild`, preset "Android KayKit Rebuild",
   signed with Kevin's preview key (alias `fbpreview`, store/key password `fbpreview`,
@@ -173,14 +174,14 @@ GODOT=/path/to/Godot_v4.7.2-stable_linux.x86_64 godot/tools/run_siege_tests.sh [
 Runs and checks the pass marker of each: `siege_sim_smoke` (6 full 16v16 bot matches with the
 wall/gate clip invariants, asserts ≥1 rescue; `SEEDS=11,22` to choose), `siege_reach` (every
 objective reachable for both teams), `siege_mode_smoke`, `siege_human_soak` (synthetic touch
-input; must report `stalls=0`), `siege_home_flow` (home → battle → win → rewards saved → replay →
-home), `siege_diag_smoke`, `siege_guard_smoke`, `siege_logcat_filter`, `full_ui_smoke`,
-`full_core_smoke`, `all_modules_parse`, `siege_net_smoke` (starts the real server as a separate
-process on port 8092 and plays through it; must run in REAL time, never `--fixed-fps`).
+input; must report `stalls=0`), `siege_diag_smoke`, `siege_guard_smoke`, `siege_logcat_filter`,
+`siege_net_smoke` (starts the real server as a separate process on port 8092 and plays through
+it; must run in REAL time, never `--fixed-fps`), `parse_all` (every script loads),
+`meta_economy_test` (economy + profile), `app_flow_test` (the app through its real buttons,
+REAL time).
 Diagnostics (not in the runner):
 `tests/siege_profile.gd` (ms per tick by phase; last: 0.99 ms at 16v16) and
 `SEED=33 … tests/siege_trace.gd` (match timeline: gates, pickups, drops, rescues, tantrums).
-`full_ui_smoke` rewrites `reports/full-port/native-ui-flow.json`; the runner reverts it.
 
 **Screenshots on Vulkan** (verify visuals; the software renderer is slow but correct):
 ```bash

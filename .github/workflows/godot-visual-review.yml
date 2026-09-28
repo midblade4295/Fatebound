@@ -25,16 +25,11 @@ jobs:
           chmod +x /tmp/Godot_v4.7.2-stable_linux.x86_64
       - name: Import native resources
         run: /tmp/Godot_v4.7.2-stable_linux.x86_64 --headless --editor --path godot --quit
-      - name: Check UI flows
-        run: /tmp/Godot_v4.7.2-stable_linux.x86_64 --headless --path godot --script res://tests/full_ui_smoke.gd
-      - name: Check layouts and capture screenshots
-        run: xvfb-run -a /tmp/Godot_v4.7.2-stable_linux.x86_64 --rendering-method gl_compatibility --path godot --script res://tests/full_layouts.gd
-      - name: Upload visual review
+      - name: Siege app and game tests (quick)
+        run: GODOT=/tmp/Godot_v4.7.2-stable_linux.x86_64 godot/tools/run_siege_tests.sh --quick
+      - name: Upload test logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: godot-visual-review
-          path: |
-            godot/reports/full-port/screens/
-            godot/reports/full-port/layouts.json
-            godot/reports/full-port/native-ui-flow.json
+          name: siege-test-logs
+          path: /tmp/siege_test_*.log
