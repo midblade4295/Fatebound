@@ -70,8 +70,9 @@ func _ready() -> void:
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(PREV_PATH))
 		DirAccess.rename_absolute(ProjectSettings.globalize_path(PATH), ProjectSettings.globalize_path(PREV_PATH))
 	_file = FileAccess.open(PATH, FileAccess.WRITE)
-	write("SESSION %s | %s %s | %s | %s | GPU %s %s" % [Time.get_datetime_string_from_system(), OS.get_name(), OS.get_version(),
-		OS.get_model_name(), BUILD, RenderingServer.get_video_adapter_vendor(), RenderingServer.get_video_adapter_name()])
+	write("SESSION %s | %s %s | %s | %s | GPU %s %s | renderer %s (%s)" % [Time.get_datetime_string_from_system(), OS.get_name(), OS.get_version(),
+		OS.get_model_name(), BUILD, RenderingServer.get_video_adapter_vendor(), RenderingServer.get_video_adapter_name(),
+		RenderingServer.get_current_rendering_method(), RenderingServer.get_video_adapter_api_version()])
 	_logger = ErrorCapture.new()
 	_logger.sink = func(line: String):
 		_error_lines += 1
