@@ -186,3 +186,35 @@ Each step is committed separately; this file is updated in the same commit.
   client also sends its hello once the socket opens instead of relying on a narrow timing window.
 - Verification: all 12 suites pass in the quick runner; the final network smoke also passed five
   consecutive standalone server/client runs.
+
+# Round 5 (Kevin, 2026-09-28): Siege-only app, new home, battle pass, shop, economy, UI fidelity
+Branch `claude/siege-dev-r5` from live `447b97a`. "Remove everything that had to do with the old
+version, everything will be the siege now."
+| Step | Scope | Status |
+|---|---|---|
+| E1 | New economy + profile (scripts/meta): currencies, levels, Siege Pass, challenges, shop catalog/rotation, match rewards, one-time migration from the old save (old file untouched) | done |
+| E2 | Siege uses the profile: rewards breakdown, challenge progress, equipped cosmetics shown in battle | todo |
+| E3 | New app shell + screens: Home (3D hero showcase, PLAY offline/online), Pass, Shop, Locker, Settings | todo |
+| E4 | Remove the old dice-era app (pages, full_client, battle/raid/training/guild/arena code, old tests) | todo |
+| E5 | UI fidelity: new theme, icons, transitions; screenshots | todo |
+| E6 | Tests, APK | todo |
+
+Design (all cosmetic; no pay-to-win; no real-money purchases until Play Billing exists):
+- Gold (soft, matches), Gems (premium, earned: pass, challenges, level-ups). Old gold -> gold 1:1,
+  old tokens -> gems 1:1, old owned weapons/chests -> gold, old level kept, old Fate dropped.
+- Siege Pass: 42-day seasons, 30 tiers x 1000 pass XP, free + premium (gems) tracks.
+- Challenges: 3 daily + 3 weekly from Siege stats. First win of the day bonus.
+- Shop: daily rotation (gold), weekly featured (gems), gems -> gold exchange.
+- Cosmetics: per-class color variants (tinted KayKit models) and weapon/off-hand variants from
+  the KayKit weapons pack; titles.
+
+## E1 notes
+- scripts/meta/economy.gd (pure tables/functions), scripts/meta/profile.gd (state, atomic save to
+  user://siege_profile.json, migration, all operations). Season 1 starts 2026-10-01 UTC.
+- 29 cosmetics (per-class tints + KayKit weapon/off-hand variants + titles); 17 weapon models
+  added from the Adventurers pack. Shop: 4 daily gold items, 2 weekly gem items, gem->gold.
+- Bug caught by the tests: JSON loads numbers as floats and the normaliser treated that as a
+  type mismatch, resetting gold/gems/level to defaults on every load. Fixed; claimed tiers and
+  challenge progress are re-cast to ints on load.
+- tests/meta_economy_test.gd: 45 checks (migration, rewards, levels, pass/premium, shop, equip,
+  challenges, rollover, persistence, corrupt file, catalog integrity). PASS.
