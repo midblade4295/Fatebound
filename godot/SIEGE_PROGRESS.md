@@ -69,8 +69,18 @@ Each step is committed separately; this file is updated in the same commit.
 | Step | Scope | Status |
 |---|---|---|
 | R1 | 3D at 100 % of PHYSICAL pixels (old code used the canvas scale = 1.0, so it rendered at the logical 336x746 on a 1440x3200 screen); pause-menu Resolution 100/75/50; MSAA off at 100 %; thermal guard step 2 drops to 75 % | done |
-| R2 | Castle layers: raised throne room + dungeon platforms with stairs, midfield plateau with stairs; heights in sim (ledges = walls), view builds platforms/steps | todo |
+| R2 | Castle layers: raised throne room + dungeon platforms with stairs, midfield plateau with stairs; heights in sim (ledges = walls), view builds platforms/steps | done |
 | R3 | Fate offerings (the cake): altar spawns offerings; feeding the captive enemy Oracle makes her heavier/slower to carry; visibly fatter | todo |
 | R4 | Catapult towers (workshop upgrade): auto-fire at enemies near your walls | todo |
 | R5 | Siege ladders: workers build a ladder on an enemy wall; a private passage for their team; enemies can break it | todo |
 | R6 | Tests, screenshots, perf at 100 %, APK | todo |
+
+## R2 notes
+- The inner wall hid the platforms from every useful angle, so it was replaced by the terrace
+  itself: a 1.6 m retaining edge (ledge) with a stone parapet, cut by two 8-step staircases.
+  Keep still separates dungeon from throne room. Midfield plateau 1.2 m with 6-step stairs N/S.
+- Cell moved to (-9, 27) (blue space): at (-8, 25.5) the stair ledge end and bar end left a
+  0.35 m gap on the 1 m nav grid, so the cell was unreachable.
+- Arrows/fire pass over ledges and through cell bars.
+- tests/siege_reach.gd: every objective reachable for both teams (enemy cell, own throne,
+  forge, workshop, plateau). 6-match smoke: 0 clips, wins 3-3.
