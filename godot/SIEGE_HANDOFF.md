@@ -15,7 +15,7 @@ screenshots), not assurances.
    Kevin has `Fatebound_Siege_FULL.bundle` and `push_siege_branch.sh`. On a machine with
    push access:
    ```bash
-   ./push_siege_branch.sh /path/to/Fatebound_Siege_FULL.bundle ~/Fatebound
+   bash push_siege_branch.sh /path/to/Fatebound_Siege_FULL.bundle ~/Fatebound
    ```
    It clones if needed, verifies the bundle, creates local branch `claude/kaykit-3d-rebuild`,
    checks the expected tip hash and pushes **without force**. Manual equivalent:
