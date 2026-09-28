@@ -9,9 +9,8 @@ const Diag = preload("res://scripts/siege/siege_diag.gd")
 signal exited
 
 var team_size := 6
-const RENDER_SCALE := 0.8
-# 3D is never rendered wider than this many pixels; at this zoom more is invisible but costs heat.
-const MAX_3D_WIDTH := 720.0
+# 3D resolution as a fraction of the PHYSICAL screen (window pixels, not logical UI units).
+var render_scale := 1.0
 const FPS_CAP := 60
 var _prev_max_fps := 0
 var fps_cap := FPS_CAP
@@ -22,6 +21,7 @@ const GUARD_SECONDS := 3
 var _guard_low := 0
 var _guard_clock := 0.0
 var guard_tripped := false
+var _guard_res_low := 0
 var low_fx := false
 var audio: Node = null
 var progression = null   # the app's Progress object; rewards are granted through it
@@ -73,6 +73,13 @@ func _ready() -> void:
 	hud.forge_take.connect(func(): _act("forge_take"))
 	hud.forge_leave.connect(func(): _act("forge_leave"))
 	hud.fps_toggled.connect(func(): set_fps_cap(30 if fps_cap == 60 else 60))
+	hud.res_label_source = func() -> float: return render_scale
+	hud.res_cycled.connect(func():
+		var steps := [1.0, 0.75, 0.5]
+		var i := 0
+		for j in steps.size():
+			if absf(steps[j] - render_scale) < 0.01: i = j
+		set_render_scale(steps[(i + 1) % steps.size()]))
 	hud.workshop_tools.connect(func(): _act("take_tools"))
 	hud.workshop_buy.connect(func(id): _act("buy", id))
 	hud.workshop_leave.connect(func(): _act("workshop_leave"))
@@ -107,15 +114,23 @@ func _restart() -> void:
 	_start()
 
 func _resize_viewport() -> void:
-	# Render at physical pixel density so the 3D stays crisp under canvas_items stretching.
-	# 3D renders at 80% of physical pixels (the HUD stays full resolution); fill rate is the main
-	# GPU cost on phones and the difference is hard to see at this camera distance.
-	var scale := get_global_transform_with_canvas().get_scale() * RENDER_SCALE
-	var k := minf(1.0, MAX_3D_WIDTH / maxf(1.0, size.x * scale.x))
-	viewport.size = Vector2i(maxi(64, int(size.x * scale.x * k)), maxi(64, int(size.y * scale.y * k)))
+	# The canvas transform is 1.0 under canvas_items stretching, so it can't tell logical from
+	# physical pixels (that bug rendered 3D at 336x746 on a 1440x3200 screen). Use the real
+	# window size over the logical viewport size instead.
+	var logical := get_viewport().get_visible_rect().size
+	var window := Vector2(DisplayServer.window_get_size())
+	var phys := window / logical if logical.x > 0.0 and window.x > 0.0 else Vector2.ONE
+	var scale := phys * render_scale
+	viewport.size = Vector2i(maxi(64, int(size.x * scale.x)), maxi(64, int(size.y * scale.y)))
+	# At native density MSAA costs bandwidth for no visible gain; keep it for reduced scales.
+	viewport.msaa_3d = Viewport.MSAA_DISABLED if render_scale >= 0.99 else Viewport.MSAA_2X
 	if diag != null:
-		diag.write("3D RES %dx%d (screen %dx%d logical, refresh %.0f Hz, fps cap %d)" % [viewport.size.x, viewport.size.y,
-			int(size.x), int(size.y), DisplayServer.screen_get_refresh_rate(), fps_cap])
+		diag.write("3D RES %dx%d = %d%% of window %dx%d (logical %dx%d, refresh %.0f Hz, fps cap %d)" % [viewport.size.x, viewport.size.y,
+			int(render_scale * 100.0), int(window.x), int(window.y), int(size.x), int(size.y), DisplayServer.screen_get_refresh_rate(), fps_cap])
+
+func set_render_scale(v: float) -> void:
+	render_scale = clampf(v, 0.25, 1.0)
+	_resize_viewport()
 
 func _to_hud(p: Vector2) -> Vector2:
 	var vs := Vector2(viewport.size)
@@ -174,8 +189,11 @@ func _thermal_guard(delta: float) -> void:
 	if _guard_clock < 1.0:
 		return
 	_guard_clock = 0.0
-	if fps_cap != 60 or hud.pause_panel.visible:
+	if hud.pause_panel.visible:
 		_guard_low = 0
+		return
+	if fps_cap != 60:
+		_thermal_guard_res()
 		return
 	_guard_low = _guard_low + 1 if Engine.get_frames_per_second() < GUARD_FPS else 0
 	if _guard_low >= GUARD_SECONDS:
@@ -184,6 +202,17 @@ func _thermal_guard(delta: float) -> void:
 		diag.write("THERMAL GUARD fps under %d for %ds -> 30 fps" % [GUARD_FPS, GUARD_SECONDS])
 		set_fps_cap(30)
 		hud.toast("Device running hot: 30 FPS mode on", Color("#f2d18d"))
+
+func _thermal_guard_res() -> void:
+	# Second step: already at 30 fps and still missing frames -> drop 3D resolution to 75 %.
+	if fps_cap == 30 and render_scale > 0.8 and Engine.get_frames_per_second() < 26:
+		_guard_res_low += 1
+		if _guard_res_low >= 5:
+			diag.write("THERMAL GUARD still under 26 fps at 30 cap -> 3D resolution 75%")
+			set_render_scale(0.75)
+			hud.toast("Device running hot: resolution 75%", Color("#f2d18d"))
+	else:
+		_guard_res_low = 0
 
 func set_fps_cap(v: int) -> void:
 	fps_cap = v
