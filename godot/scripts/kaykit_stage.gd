@@ -30,7 +30,18 @@ const GROUND_TINT := Color(0.66,0.69,0.5)
 const HEAD_HEIGHT := 2.75
 
 static var _scene_cache: Dictionary = {}
+# Vulkan (Mobile renderer) lights in linear space, so lit surfaces read darker than on
+# Compatibility. Compensate the LIGHTS (sun/fill/ambient), not exposure: exposure would also
+# brighten the unshaded backdrops, which are already colour-correct via source_color.
+# Tuned per mode against Compatibility mean luminance (see commit message).
+static var VULKAN_EXPOSURE := 1.0
+static var VULKAN_AMBIENT := 9.0
+static var VULKAN_LIGHT := 3.75
+static var VULKAN_PORTRAIT_EXPOSURE := 1.0
+static var VULKAN_PORTRAIT_AMBIENT := 4.0
+static var VULKAN_PORTRAIT_LIGHT := 2.5
 static var _anim_libs: Dictionary = {}
+var _vk_light := 1.0
 
 var camera: Camera3D
 var sun: DirectionalLight3D
@@ -133,10 +144,14 @@ func _build_lighting() -> void:
     env.background_color = Color("#9fb0b4")
     env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
     env.ambient_light_color = Color("#c9c7b4")
-    env.ambient_light_energy = 0.30
+    var vk := RenderingServer.get_current_rendering_method() != "gl_compatibility"
+    var vk_amb: float = (VULKAN_PORTRAIT_AMBIENT if mode == "portrait" else VULKAN_AMBIENT) if vk else 1.0
+    var vk_exp: float = (VULKAN_PORTRAIT_EXPOSURE if mode == "portrait" else VULKAN_EXPOSURE) if vk else 1.0
+    _vk_light = (VULKAN_PORTRAIT_LIGHT if mode == "portrait" else VULKAN_LIGHT) if vk else 1.0
+    env.ambient_light_energy = 0.30 * vk_amb
     env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
     # Vulkan/Mobile lights in linear space and reads darker than Compatibility; compensate.
-    env.tonemap_exposure = 0.86 * (1.35 if RenderingServer.get_current_rendering_method() != "gl_compatibility" else 1.0)
+    env.tonemap_exposure = 0.86 * vk_exp
     env.tonemap_white = 3.0
     env.fog_enabled = true
     env.fog_light_color = Color("#8ea3ad")
@@ -157,7 +172,7 @@ func _build_lighting() -> void:
     add_child(we)
     sun = DirectionalLight3D.new()
     sun.light_color = Color("#ffe8c4")
-    sun.light_energy = 1.05
+    sun.light_energy = 1.05 * _vk_light
     sun.rotation_degrees = Vector3(-52,-38,0)
     sun.shadow_enabled = true
     sun.shadow_opacity = 0.86
@@ -167,7 +182,7 @@ func _build_lighting() -> void:
     add_child(sun)
     var fill := DirectionalLight3D.new()
     fill.light_color = Color("#9fc2ff")
-    fill.light_energy = 0.28
+    fill.light_energy = 0.28 * _vk_light
     fill.rotation_degrees = Vector3(-25,150,0)
     add_child(fill)
     camera = Camera3D.new()
@@ -184,12 +199,13 @@ func _build_backdrop() -> void:
         ps.code = """
 shader_type spatial;
 render_mode unshaded, cull_disabled, fog_disabled;
+// source_color: authored in sRGB, converted correctly on both Compatibility and Vulkan.
+uniform vec4 core : source_color = vec4(0.16, 0.24, 0.27, 1.0);
+uniform vec4 edge : source_color = vec4(0.025, 0.05, 0.07, 1.0);
 void fragment() {
     vec2 p = UV - vec2(0.5, 0.42);
     float d = length(p * vec2(1.0, 1.35));
-    vec3 core = vec3(0.16, 0.24, 0.27);
-    vec3 edge = vec3(0.025, 0.05, 0.07);
-    ALBEDO = mix(core, edge, smoothstep(0.02, 0.55, d));
+    ALBEDO = mix(core.rgb, edge.rgb, smoothstep(0.02, 0.55, d));
 }
 """
         var pm := ShaderMaterial.new()
@@ -208,13 +224,14 @@ void fragment() {
     shader.code = """
 shader_type spatial;
 render_mode unshaded, cull_disabled, fog_disabled;
+// source_color: authored in sRGB, converted correctly on both Compatibility and Vulkan.
+uniform vec4 top : source_color = vec4(0.30, 0.38, 0.44, 1.0);
+uniform vec4 mid : source_color = vec4(0.56, 0.63, 0.66, 1.0);
+uniform vec4 low : source_color = vec4(0.80, 0.80, 0.72, 1.0);
 void fragment() {
     float y = UV.y;
-    vec3 top = vec3(0.30, 0.38, 0.44);
-    vec3 mid = vec3(0.56, 0.63, 0.66);
-    vec3 low = vec3(0.80, 0.80, 0.72);
-    vec3 c = mix(top, mid, smoothstep(0.0, 0.55, y));
-    c = mix(c, low, smoothstep(0.55, 1.0, y));
+    vec3 c = mix(top.rgb, mid.rgb, smoothstep(0.0, 0.55, y));
+    c = mix(c, low.rgb, smoothstep(0.55, 1.0, y));
     ALBEDO = c;
 }
 """
@@ -473,13 +490,13 @@ func _build_pedestal() -> void:
     _stage_embers()
     var rim := OmniLight3D.new()
     rim.light_color = Color("#8fd6ff")
-    rim.light_energy = 1.1
+    rim.light_energy = 1.1 * _vk_light
     rim.omni_range = 6.0
     rim.position = Vector3(-1.8,2.6,-1.6)
     add_child(rim)
     var warm := OmniLight3D.new()
     warm.light_color = Color("#ffcf8a")
-    warm.light_energy = 0.9
+    warm.light_energy = 0.9 * _vk_light
     warm.omni_range = 7.0
     warm.position = Vector3(2.2,2.2,2.4)
     add_child(warm)
