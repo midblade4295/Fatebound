@@ -22,6 +22,8 @@ const LOOKS := {
 	"rogue": {"model":"Rogue_Hooded","r":"dagger","l":"dagger","idle":"g/Idle_B","attack":"m/Melee_Dualwield_Attack_Stab","ability":"m/Melee_1H_Attack_Jump_Chop"},
 	"ranger": {"model":"Ranger","r":"","l":"bow_withString","idle":"r/Ranged_Bow_Idle","attack":"r/Ranged_Bow_Release","ability":"r/Ranged_Bow_Release_Up"},
 	"mage": {"model":"Mage","r":"staff","l":"","idle":"g/Idle_B","attack":"r/Ranged_Magic_Shoot","ability":"r/Ranged_Magic_Spellcasting"},
+	# Healer: the Mage model in white-gold robes with a wand (tint set once, cached like skins).
+	"priest": {"model":"Mage","r":"wand","l":"","tint":"#fff1c8","idle":"g/Idle_B","attack":"r/Ranged_Magic_Spellcasting_Long","ability":"r/Ranged_Magic_Raise"},
 }
 const LOOP_HINTS := ["Idle","Running","Walking","Hammering","Holding","Aiming","_Pose","Blocking","Chopping","Pickaxing"]
 
@@ -469,8 +471,8 @@ static func _cheap_flower_mesh(mesh: Mesh) -> Mesh:
 
 # ---------- hats (Round 8) ----------
 const HAT_COLOR := {"knight":Color("#9fb6c8"), "barbarian":Color("#e0875a"), "rogue":Color("#6fd46a"),
-	"ranger":Color("#e8c65a"), "mage":Color("#a879ff"), "worker":Color("#c8a27a")}
-const HAT_WEAPON := {"knight":"sword_1handed", "barbarian":"axe_2handed", "rogue":"dagger", "ranger":"bow_withString", "mage":"staff"}
+	"ranger":Color("#e8c65a"), "mage":Color("#a879ff"), "worker":Color("#c8a27a"), "priest":Color("#fff4d0")}
+const HAT_WEAPON := {"knight":"sword_1handed", "barbarian":"axe_2handed", "rogue":"dagger", "ranger":"bow_withString", "mage":"staff", "priest":"wand"}
 static var _hat_mesh: ArrayMesh = null
 static var _hat_mats: Dictionary = {}
 var stand_nodes: Dictionary = {}       # stand id -> Array of 3 hat MeshInstance3D
@@ -547,6 +549,57 @@ func _build_hat_stands() -> void:
 			add_child(h)
 			stack.append(h)
 		stand_nodes[st.id] = stack
+
+var beam_nodes: Dictionary = {}          # priest unit id -> MeshInstance3D (unit-length cylinder)
+static var _beam_mat: StandardMaterial3D = null
+
+func _sync_beams() -> void:
+	if _beam_mat == null:
+		_beam_mat = StandardMaterial3D.new()
+		_beam_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_beam_mat.albedo_color = Color(1.0, 0.95, 0.55, 0.75)
+		_beam_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		_beam_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		_beam_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	for u in sim.units:
+		var n: MeshInstance3D = beam_nodes.get(u.id)
+		var to: Dictionary = sim.by_id.get(str(u.get("beam", "")), {})
+		if to.is_empty() or not sim.alive(u):
+			if n != null:
+				n.visible = false
+			continue
+		if n == null:
+			n = MeshInstance3D.new()
+			var cm := CylinderMesh.new()
+			cm.top_radius = 0.07
+			cm.bottom_radius = 0.07
+			cm.height = 1.0
+			cm.radial_segments = 6
+			cm.rings = 1
+			n.mesh = cm
+			n.material_override = _beam_mat
+			n.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			add_child(n)
+			beam_nodes[u.id] = n
+		var a: Dictionary = actors.get(u.id, {})
+		var b: Dictionary = actors.get(to.id, {})
+		if a.is_empty() or b.is_empty():
+			n.visible = false
+			continue
+		var p0: Vector3 = (a.root as Node3D).position + Vector3(0, 1.35, 0) + Vector3(sin(float(u.face)), 0, cos(float(u.face))) * 0.35
+		var p1: Vector3 = (b.root as Node3D).position + Vector3(0, 1.1, 0)
+		var len := p0.distance_to(p1)
+		if len < 0.05:
+			n.visible = false
+			continue
+		n.visible = true
+		# A unit cylinder along Y, stretched to the beam's length and aimed at the target; it
+		# flickers a little in width.
+		var up := (p1 - p0) / len
+		var side := up.cross(Vector3.FORWARD if absf(up.dot(Vector3.FORWARD)) < 0.95 else Vector3.RIGHT).normalized()
+		var fwd := side.cross(up)
+		var w := 1.0 + 0.25 * sin(_time * 25.0 + float(hash(u.id) % 100))
+		n.transform = Transform3D(Basis(side * w, up * len, fwd * w), (p0 + p1) * 0.5)
 
 func _sync_hats() -> void:
 	for st in sim.stands:
@@ -962,6 +1015,7 @@ func _build_nodes() -> void:
 func _sync_castle(dt: float) -> void:
 	_sync_outposts()
 	_sync_hats()
+	_sync_beams()
 	for g in sim.gates:
 		var gn: Dictionary = gate_nodes.get(g.id, {})
 		if gn.is_empty():
@@ -1092,6 +1146,9 @@ static func make_body(cls: String, cosmetic: Dictionary = {}) -> Dictionary:
 		player.add_animation_library(key, _libs[key])
 	for mi in body.find_children("*", "MeshInstance3D", true, false):
 		(mi as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	if not cosmetic.has("tint") and look.has("tint"):
+		cosmetic = cosmetic.duplicate()
+		cosmetic["tint"] = look.tint
 	if cosmetic.has("tint"):
 		_apply_tint(body, str(look.model), Color(str(cosmetic.tint)))
 	return {"body":body, "player":player}
@@ -1281,6 +1338,8 @@ func _animate(a: Dictionary, u: Dictionary, vel: float) -> void:
 		_play(a, "g/Hit_B", 0.6)
 	elif u.state == "dodge":
 		_play(a, "ma/Dodge_Forward", 1.6, 0.3)
+	elif str(u.get("beam", "")) != "":
+		_play(a, "r/Ranged_Magic_Spellcasting_Long")
 	elif u.state == "gather":
 		var node: Dictionary = sim.nodes[int(u.task.get("node", 0))] if not u.task.is_empty() else {}
 		_play(a, "t/Chopping" if node.get("kind", "wood") == "wood" else "t/Pickaxing")
@@ -1323,6 +1382,9 @@ func on_event(e: Dictionary) -> void:
 		"nova":
 			if not a.is_empty():
 				ring_at(a.root.position, Color("#ff8a3a"), 3.3, 0.55)
+		"sanctuary":
+			if not a.is_empty():
+				ring_at(a.root.position, Color("#fff1a8"), Sim.SANCTUARY_R, 0.7)
 		"boom":
 			ring_at(Vector3(e.pos.x, 0.2, e.pos.y), Color("#ff8a3a"), 1.6, 0.4)
 			spark(Vector3(e.pos.x, 0.6, e.pos.y), Color("#ffb04a"))

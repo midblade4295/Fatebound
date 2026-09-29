@@ -448,3 +448,23 @@ outposts have NO hat dispensers (respawn point + a closer drop-off for Workers).
 - Class roster unchanged (Knight, Barbarian, Rogue, Ranger, Mage, Worker); Fat Princess's is
   Worker, Warrior, Mage, Ranger, Priest -- not changed without Kevin asking.
 - Protocol still v3 (outpost stock is simply 0). The server must run this build's sim.
+
+# Round 9 (Kevin): "there needs to be a healer class; hold the heal -> magic beam to the nearest ally"
+- Priest (siege_sim.gd CLASSES "priest"): holding ATTACK channels a beam to the nearest injured ally
+  within 9 m (else the nearest ally), 18 HP/s (High Priest x1.4), 70 % walk speed while channelling,
+  no damage. Ability Sanctuary: +35 HP to allies within 4.5 m, 9 s cooldown. 6th hat stand +
+  "High Priest Hats" workshop upgrade. Bots: escorts/defenders may pick Priest; priest bots beam
+  the most hurt ally within 16 m and cast Sanctuary when 2+ are hurt nearby.
+- View: Mage model tinted white-gold (LOOKS "tint", cached static material), wand, casting loop
+  while beaming, beam = unit cylinder moved per frame (transform only), Sanctuary ring.
+- Protocol v4: beam target in unit slot 26; "priest" added to the protocol class list (without it
+  a Priest would have shown as the wrong class online).
+- Balance: at 24 HP/s kills fell ~735 -> ~300 per 2 matches (healers undo fights) -> 18 HP/s.
+  Gates break less (priests keep defenders/repairing workers alive); attackers use ladders. The
+  smoke test now requires a breach (gate or ladder) + rescues, and exits on failure (a failed
+  assert() in _init kept Godot running until the runner's 10-minute timeout).
+- 6th stand placement: next to the others it sealed the corner / the west stairs (reach test);
+  placed at (2.6, 17.0) in the east courtyard until the castle rebuild.
+- Sim cost measured (tests/siege_profile.gd): 2.27 ms/tick (projectiles 1.20) since Round 7 +
+  longer fights -> 1.93 (projectiles 0.89): projectile-only wall buckets, packed enemy positions,
+  gate check only near castle fronts.

@@ -8,7 +8,7 @@ extends RefCounted
 # objects: decode() uses the default allow_objects=false.
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 
-const VERSION := 3               # 3 = Round 8 hats (stands, dropped hats, outpost racks; no dice)
+const VERSION := 4               # 4 = Priest (beam target in unit slot 26, 6 hat stands)
 const DEFAULT_URL := "wss://136-113-125-3.sslip.io/fatebound/siege/ws"
 const DEFAULT_PORT := 8082
 const SNAP_HZ := 10.0
@@ -16,14 +16,14 @@ const MAX_PACKET := 64 * 1024            # client -> server; anything larger is 
 const TEAM_SIZE := 16
 
 const STATES := ["idle", "move", "wind", "recover", "dodge", "dead", "lift", "gather", "repair", "build_ladder"]
-const CLASSES := ["villager", "worker", "knight", "barbarian", "rogue", "ranger", "mage"]
+const CLASSES := ["villager", "worker", "knight", "barbarian", "rogue", "ranger", "mage", "priest"]
 const LOADS := ["", "wood", "stone"]
 const TASKS := ["", "gather", "repair", "build_ladder"]
 const ATKS := ["", "attack", "ability"]
 # Actions a client may ask for (anything else is ignored by the server).
 const ACTIONS := ["attack", "ability", "dodge", "interact", "hat_swap",
 	"take_tools", "buy", "workshop_leave"]
-const HAT_CLS := ["knight", "barbarian", "rogue", "ranger", "mage", "worker"]
+const HAT_CLS := ["knight", "barbarian", "rogue", "ranger", "mage", "worker", "priest"]
 
 # Per-unit values in the snapshot, in this order, each packed as a signed 16-bit integer of
 # value * SCALE[i] (positions to 1 cm, angles to 0.001 rad, timers to 0.01 s).
@@ -110,7 +110,8 @@ static func snapshot(sim, for_unit: String, events: Array) -> Dictionary:
 		u_arr[b + 23] = 1.0 if u.bot else 0.0
 		u_arr[b + 24] = u.respawn_at
 		u_arr[b + 25] = _code(ATKS, u.get("atk", ""))
-		u_arr[b + 26] = 0.0                      # (was the dice forge's open flag; unused since v3)
+		# Priest beam target: its unit index + 1 (0 = none).
+		u_arr[b + 26] = float(sim.units.find(sim.by_id.get(str(u.beam), {})) + 1) if str(u.get("beam", "")) != "" else 0.0
 		u_arr[b + 27] = 1.0 if u.workshop_open else 0.0
 		u_arr[b + 28] = float(u.get("fed", 0))
 		i += 1
@@ -213,6 +214,8 @@ static func apply(sim, msg: Dictionary, me_id: String) -> void:
 		u.bot = u_arr[b + 23] > 0.5
 		u.respawn_at = u_arr[b + 24]
 		u.atk = ATKS[clampi(int(u_arr[b + 25]), 0, ATKS.size() - 1)]
+		var bi := int(round(u_arr[b + 26])) - 1
+		u.beam = str(sim.units[bi].id) if bi >= 0 and bi < sim.units.size() else ""
 		u.workshop_open = u_arr[b + 27] > 0.5
 		u.fed = int(u_arr[b + 28])
 	sim.projectiles.clear()

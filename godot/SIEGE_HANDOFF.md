@@ -440,3 +440,13 @@ can use a stand it reaches (enemy courtyard included; the stand owner's upgrade 
 Workers drop off at held outposts; humans respawn forward only when a dropped hat is near it, bot
 attackers always respawn forward and scavenge (32 m). Gate HP 1100, repair 20/tick. See
 SIEGE_PROGRESS 0.15.1 for the balance trail.
+
+---
+
+## 15. Round 9: Priest healer (preview 0.16.0, code 31, protocol v4)
+
+`CLASSES.priest` + `_beam` / `_step_beam` / `_think_priest` / Sanctuary in `_resolve_attack`;
+ATTACK for a priest = beam (held ATTACK already repeats the action, offline and on the server).
+`BEAM_HOLD`, `BEAM_MOVE`, `SANCTUARY_*`, heal 18/s. View `_sync_beams`. Protocol v4 (slot 26 =
+beam target index + 1; "priest" in the class list). **Redeploy the server.** Next: the castle
+rebuild (Kevin: "much larger and more 3D", Fat Princess castle screenshots).
