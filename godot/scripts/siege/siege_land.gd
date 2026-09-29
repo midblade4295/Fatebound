@@ -206,6 +206,32 @@ static func terrain_height(p: Vector2) -> float:
 	var rim := 1.9 * _smooth(0.0, 5.0, out) + 0.5 * sin(0.37 * p.x + 0.9) * sin(0.29 * p.y + 0.4) * _smooth(1.0, 6.0, out)
 	return maxf(h, 0.0) + rim
 
+# Painted sweeping bands (0.14.4, like the Fat Princess references): concentric light/dark arcs
+# around a few centres, blended where neighbouring ring sets meet, gently warped. Baked into the
+# terrain mask's alpha, so the shader pays nothing extra for them.
+const BAND_W := 5.0                # a few cells wide, like the references
+# Few centres, mostly at or beyond the field edges, so the play area sees long sweeping arcs
+# rather than bullseyes (the first version's 16 centres read as targets).
+const BAND_CENTRES := [Vector2(-44.0, 40.0), Vector2(46.0, 8.0), Vector2(-10.0, 78.0), Vector2(42.0, 54.0)]
+
+static func grass_band(p: Vector2) -> float:
+	var q := p + Vector2(1.3 * sin(0.13 * p.y + 0.4), 1.3 * cos(0.11 * p.x + 1.1))
+	var d1 := INF
+	var d2 := INF
+	for c in BAND_CENTRES:
+		for cc in [c, -c]:
+			var d := q.distance_to(cc)
+			if d < d1:
+				d2 = d1
+				d1 = d
+			elif d < d2:
+				d2 = d
+	var ring := func(d: float) -> float:
+		return _smooth(0.32, 0.68, 0.5 + 0.5 * sin(TAU * d / BAND_W))
+	# Blend the two nearest ring sets across their meeting line (4 m wide).
+	var t := _smooth(-2.0, 2.0, d2 - d1)
+	return lerpf(0.5 * (ring.call(d1) + ring.call(d2)), ring.call(d1), t)
+
 static func bake_rect() -> Rect2:
 	return Rect2(-HALF_W - BAKE_MARGIN, -HALF_L - BAKE_MARGIN, 2.0 * (HALF_W + BAKE_MARGIN), 2.0 * (HALF_L + BAKE_MARGIN))
 

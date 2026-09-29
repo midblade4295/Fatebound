@@ -11,30 +11,28 @@ uniform sampler2D path_tex : source_color, filter_linear_mipmap, repeat_enable;
 uniform sampler2D rock_tex : source_color, filter_linear_mipmap, repeat_enable;
 uniform sampler2D path_mask : filter_linear, repeat_disable;
 uniform vec4 mask_rect;            // x0, z0, width, depth of the mask in world metres
-uniform float grass_scale = 9.0;   // metres per grass tile
+uniform float grass_scale = 16.0;  // metres per grass tile (painted cells ~1.6 m)
 uniform float path_scale = 3.2;    // metres per herringbone period (4 bricks -> 0.8 m bricks)
 uniform float rock_scale = 4.0;
 uniform vec3 tint = vec3(1.0);     // brightness balance vs. the Vulkan exposure compensation
 uniform float grass_sat = 1.0;     // saturation of the grass only
+uniform float band_strength = 1.0; // contrast of the painted sweeping bands
 
 varying vec3 wpos;
 varying vec3 wnorm;
-varying float macro;
 
 void vertex() {
 	wpos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	wnorm = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
-	// Large sunlit/shaded areas: smooth enough to compute per vertex (0.5 m apart).
-	macro = clamp(0.5 + 0.28 * sin(wpos.x * 0.083 + 1.3) * sin(wpos.z * 0.071)
-		+ 0.22 * sin(wpos.x * 0.041 - wpos.z * 0.057 + 0.7), 0.0, 1.0);
 }
 
 void fragment() {
+	vec4 mk = texture(path_mask, (wpos.xz - mask_rect.xy) / mask_rect.zw);
 	vec3 g = texture(grass_tex, wpos.xz / grass_scale).rgb;
-	g *= mix(vec3(0.70, 0.80, 0.80), vec3(1.16, 1.12, 0.88), smoothstep(0.2, 0.8, macro));
+	// Painted sweeping bands (baked in the mask's alpha): lighter/warmer vs darker/cooler arcs.
+	g *= mix(vec3(1.0) - band_strength * vec3(0.18, 0.14, 0.14), vec3(1.0) + band_strength * vec3(0.08, 0.07, 0.02), mk.a);
 	float gl = dot(g, vec3(0.299, 0.587, 0.114));
 	g = mix(vec3(gl), g, grass_sat);
-	vec3 mk = texture(path_mask, (wpos.xz - mask_rect.xy) / mask_rect.zw).rgb;
 	vec3 col = g;
 	// Brick path (only where the mask has one).
 	if (mk.r > 0.02) {

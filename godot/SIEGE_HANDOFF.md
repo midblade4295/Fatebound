@@ -415,3 +415,7 @@ terrain shader's common path at 2 texture reads; see SIEGE_PROGRESS 0.14.2 for t
 animations paused (`SiegeView.anim_cull`), fewer flowers/tufts. **Kevin does not want automatic
 resolution; don't add it.** `tests/perf_bench.gd` now restores each build's own settings, can
 freeze the scene, and prints draw calls/triangles; compare builds by alternating runs.
+
+**0.14.4 (painted grass):** flat Voronoi cell texture (`terrain_art.py grass()`, palette fitted to
+the references' measured green) + sweeping bands baked into the mask alpha (`Land.grass_band`,
+`BAND_W`, `BAND_CENTRES`; shader `band_strength`). Re-run `tools/bake_land.gd` after changing them.

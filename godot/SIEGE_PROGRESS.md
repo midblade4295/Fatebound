@@ -394,3 +394,19 @@ includes shader compile and is ignored.
   230) and tufts (sparser path edges, 340 field clumps, was 520), as Kevin suggested.
 - End to end, 0.14.2 vs 0.14.3 alternated 3x: 90-93 ms -> 70-73 ms (-21 %), 145k -> 90k tris.
   Look unchanged (grass hue/sat/val 105/136/189 both).
+
+# 0.14.4 (Kevin): "make the grass painted instead and have patterns like in the Fat Princess pics"
+- Zoomed the references: two layers, both flat/painted: (1) polygon cells ~1.5-2 m, each one flat
+  green a little lighter/darker than its neighbours, thin darker lines; (2) broad sweeping arcs of
+  lighter/darker green several metres wide. No noise grain.
+- Grass texture (Blender): flat Voronoi cells, 4-tone constant palette, thin dark line + faint light
+  lip. Bugs met: Voronoi Scale left at Blender's default 5 (tiny shards); small torus radius curved
+  cell edges into arcs (radius 1.7 + grass_scale 16 m).
+- Colour from data: sampled the references' grass (mean sRGB 94,197,90, hue 117); first palette
+  measured 121,207,69 in game -> each linear channel rescaled by the ratio -> 89-91,197-199,86-88.
+  (Done in the grass palette, not the shared tint, so paths/rock keep their colour.)
+- Sweeping bands: Land.grass_band baked into the terrain mask's alpha (RGBA8; no extra texture
+  read). Concentric 5 m rings from 4 centres (mirrored) at/beyond the field edges so the play area
+  sees arcs, not bullseyes (the first 16-centre layout read as targets). Shader band_strength 1.6
+  (1x was faint, 3x bold). Vertex macro sine removed.
+- perf_bench vs 0.14.3, alternated 2x: 58.8/60.3 ms -> 54.6/53.5 ms (no regression).
