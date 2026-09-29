@@ -16,13 +16,15 @@ SAMPLES = int(os.environ.get("SAMPLES", "32"))
 def catalog_weapons():
     src = open(os.path.join(GODOT, "scripts/meta/economy.gd")).read()
     out = {}
-    for m in re.finditer(r'"(\w+)":\s*\{"kind":"weapon".*?"r":"(\w*)", "l":"(\w*)"', src):
+    # Model names may be "bits/<name>" (KayKit Fantasy Weapons Bits, Round 11).
+    for m in re.finditer(r'"(\w+)":\s*\{"kind":"weapon".*?"r":"([\w/]*)", "l":"([\w/]*)"', src):
         out[m.group(1)] = (m.group(2), m.group(3))
     return out
 
 DEFAULTS = {"default_knight": ("sword_1handed", ""), "default_barbarian": ("axe_2handed", ""),
             "default_rogue": ("dagger", "dagger"), "default_ranger": ("", "bow_withString"),
-            "default_mage": ("staff", ""), "default_worker": ("axe_1handed", "")}
+            "default_mage": ("staff", ""), "default_worker": ("axe_1handed", ""),
+            "default_priest": ("wand", "")}
 
 # ---------------- scene ----------------
 def setup(ortho):
@@ -91,7 +93,8 @@ def bounds(objs):
 def prep_item(name, longest, roll_deg=None):
     """Import a KayKit weapon model, stand its long axis up with the tip at the top and its
     broad face toward the camera, scale so the long side = `longest`, centre it at the origin."""
-    root, objs = import_model(os.path.join(KAY, "weapons", name + ".gltf"))
+    path = os.path.join(KAY, "bits", name[5:] + ".gltf") if name.startswith("bits/") else os.path.join(KAY, "weapons", name + ".gltf")
+    root, objs = import_model(path)
     lo, hi = bounds(objs)
     ext = hi - lo
     c, b, a = sorted(range(3), key=lambda i: ext[i])          # shortest, middle, longest

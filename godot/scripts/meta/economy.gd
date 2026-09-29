@@ -5,8 +5,8 @@ extends RefCounted
 #
 # Everything sold is cosmetic. The forge still decides your class in battle.
 
-const CLASSES := ["knight", "barbarian", "rogue", "ranger", "mage", "worker"]
-const CLASS_NAMES := {"knight":"Knight", "barbarian":"Barbarian", "rogue":"Rogue", "ranger":"Ranger", "mage":"Mage", "worker":"Worker"}
+const CLASSES := ["knight", "barbarian", "rogue", "ranger", "mage", "priest", "worker"]
+const CLASS_NAMES := {"knight":"Knight", "barbarian":"Barbarian", "rogue":"Rogue", "ranger":"Ranger", "mage":"Mage", "priest":"Priest", "worker":"Worker"}
 const RARITY_COLOR := {"common":"#b8c4c9", "rare":"#5fb6ff", "epic":"#c47bff", "legendary":"#ffb13d"}
 
 # ---------------- account level ----------------
@@ -40,20 +40,24 @@ static func season_ends(sid: int) -> int:
 static func pass_reward(sid: int, tier: int, premium: bool) -> Dictionary:
 	# tier is 1..PASS_TIERS. Deterministic per season; cosmetic items rotate by season.
 	var season_skins: Array = pass_items(sid)
+	# Round 11: 6 free + 10 premium cosmetics per season (was 3 + 5).
 	if not premium:
-		if tier % 10 == 0:
-			return {"item": season_skins[tier / 10 - 1]}                      # 3 free cosmetics
 		if tier % 5 == 0:
+			return {"item": season_skins[tier / 5 - 1]}                       # tiers 5..30: 6 free
+		if tier % 4 == 0:
 			return {"gems": 30}
 		return {"gold": 150 + 5 * tier}
-	if tier % 6 == 0:
-		return {"item": season_skins[3 + tier / 6 - 1]}                        # 5 premium cosmetics
 	if tier % 3 == 0:
+		return {"item": season_skins[PASS_FREE_ITEMS + tier / 3 - 1]}        # tiers 3..30: 10 premium
+	if tier % 4 == 0:
 		return {"gems": 60}
 	return {"gold": 300 + 10 * tier}
 
+const PASS_FREE_ITEMS := 6
+const PASS_PREMIUM_ITEMS := 10
+
 static func pass_items(sid: int) -> Array:
-	# 3 free + 5 premium cosmetics for season `sid`, chosen from the "pass" pool.
+	# 6 free + 10 premium cosmetics for season `sid`, chosen from the "pass" pool.
 	var pool: Array = []
 	for id in CATALOG:
 		if CATALOG[id].get("source", "") == "pass":
@@ -63,9 +67,10 @@ static func pass_items(sid: int) -> Array:
 	rng.seed = hash("pass-%d" % sid)
 	var out := []
 	var src := pool.duplicate()
-	while out.size() < 8 and not src.is_empty():
+	var want := PASS_FREE_ITEMS + PASS_PREMIUM_ITEMS
+	while out.size() < want and not src.is_empty():
 		out.append(src.pop_at(rng.randi() % src.size()))
-	while out.size() < 8:
+	while out.size() < want:
 		out.append(pool[out.size() % pool.size()])
 	return out
 
@@ -104,12 +109,71 @@ const CATALOG := {
 	# --- Worker
 	"worker_skin_miner":   {"kind":"skin", "class":"worker", "name":"Quarry Crew", "rarity":"common", "tint":"#d8c39a", "gold":600, "source":"shop"},
 	"worker_wpn_mug":      {"kind":"weapon", "class":"worker", "name":"Axe & Ale", "rarity":"rare", "r":"axe_1handed", "l":"mug_full", "source":"pass"},
+	# --- Round 11: KayKit Fantasy Weapons Bits ("bits/<model>") and the Priest
+	"knight_wpn_bastion":  {"kind":"weapon", "class":"knight", "name":"Bastion Guard", "rarity":"epic", "r":"bits/sword_B", "l":"bits/shield_D", "gems":280, "source":"shop"},
+	"knight_wpn_oath":     {"kind":"weapon", "class":"knight", "name":"Oathkeeper", "rarity":"legendary", "r":"bits/sword_G", "l":"bits/shield_C", "source":"pass"},
+	"knight_wpn_halberd":  {"kind":"weapon", "class":"knight", "name":"Halberd", "rarity":"epic", "r":"bits/halberd", "l":"", "source":"pass"},
+	"barb_wpn_hammer":     {"kind":"weapon", "class":"barbarian", "name":"War Hammer", "rarity":"rare", "r":"bits/hammer_C", "l":"", "gold":1100, "source":"shop"},
+	"barb_wpn_twinaxe":    {"kind":"weapon", "class":"barbarian", "name":"Twin Axes", "rarity":"epic", "r":"bits/axe_B", "l":"bits/axe_B", "source":"pass"},
+	"barb_wpn_cleaver":    {"kind":"weapon", "class":"barbarian", "name":"Great Cleaver", "rarity":"legendary", "r":"bits/axe_D", "l":"", "source":"pass"},
+	"rogue_wpn_fangs":     {"kind":"weapon", "class":"rogue", "name":"Fang Daggers", "rarity":"rare", "r":"bits/dagger_B", "l":"bits/dagger_B", "gold":1000, "source":"shop"},
+	"rogue_wpn_knuckles":  {"kind":"weapon", "class":"rogue", "name":"Brass Knuckles", "rarity":"epic", "r":"bits/fistweapon_C_right", "l":"bits/fistweapon_C_left", "source":"pass"},
+	"rogue_wpn_reaper":    {"kind":"weapon", "class":"rogue", "name":"Reaper", "rarity":"legendary", "r":"bits/scythe", "l":"", "source":"pass"},
+	"ranger_wpn_recurve":  {"kind":"weapon", "class":"ranger", "name":"Recurve", "rarity":"rare", "r":"", "l":"bits/bow_B_withString", "gold":1000, "source":"shop"},
+	"ranger_wpn_longbow":  {"kind":"weapon", "class":"ranger", "name":"Longbow", "rarity":"epic", "r":"", "l":"bits/bow_C_withString", "source":"pass"},
+	"ranger_wpn_spear":    {"kind":"weapon", "class":"ranger", "name":"Hunter's Spear", "rarity":"rare", "r":"bits/spear_A", "l":"", "source":"pass"},
+	"mage_wpn_crystal":    {"kind":"weapon", "class":"mage", "name":"Crystal Staff", "rarity":"epic", "r":"bits/staff_B", "l":"", "gems":250, "source":"shop"},
+	"mage_wpn_elder":      {"kind":"weapon", "class":"mage", "name":"Elder Staff", "rarity":"legendary", "r":"bits/staff_D", "l":"", "source":"pass"},
+	"mage_wpn_twinwand":   {"kind":"weapon", "class":"mage", "name":"Twin Wands", "rarity":"rare", "r":"bits/wand_A", "l":"bits/wand_A", "source":"pass"},
+	"priest_skin_dawn":    {"kind":"skin", "class":"priest", "name":"Dawn Vestments", "rarity":"rare", "tint":"#ffe7a6", "gold":1200, "source":"shop"},
+	"priest_skin_moon":    {"kind":"skin", "class":"priest", "name":"Moonlit Robes", "rarity":"epic", "tint":"#b9c8ff", "source":"pass"},
+	"priest_wpn_sun":      {"kind":"weapon", "class":"priest", "name":"Sun Staff", "rarity":"legendary", "r":"bits/staff_C", "l":"", "source":"pass"},
+	"priest_wpn_light":    {"kind":"weapon", "class":"priest", "name":"Lightwand", "rarity":"rare", "r":"bits/wand_B", "l":"", "gold":900, "source":"shop"},
+	"worker_wpn_mallet":   {"kind":"weapon", "class":"worker", "name":"War Mallet", "rarity":"rare", "r":"bits/hammer_A", "l":"", "source":"pass"},
+	"title_shieldwall":    {"kind":"title", "class":"", "name":"Shieldwall", "rarity":"epic", "source":"pass"},
+	"title_whirlwind":     {"kind":"title", "class":"", "name":"Whirlwind", "rarity":"epic", "source":"pass"},
+	"title_lightbringer":  {"kind":"title", "class":"", "name":"Lightbringer", "rarity":"legendary", "source":"pass"},
 	# --- Titles
 	"title_gatebreaker":   {"kind":"title", "class":"", "name":"Gatebreaker", "rarity":"rare", "gold":800, "source":"shop"},
 	"title_cake_baron":    {"kind":"title", "class":"", "name":"Cake Baron", "rarity":"epic", "source":"pass"},
 	"title_oracle_sworn":  {"kind":"title", "class":"", "name":"Oracle-Sworn", "rarity":"legendary", "gems":300, "source":"shop"},
 	"title_siege_lord":    {"kind":"title", "class":"", "name":"Siege Lord", "rarity":"epic", "source":"pass"},
 }
+
+# ---------------- packs (Round 11) ----------------
+# Bundles sold for gems in the shop. You pay only for what you don't own yet (proportional to the
+# items' value); a pack you fully own can't be bought.
+const PACKS := {
+	"pack_crusader": {"name":"Crusader Pack", "class":"knight", "rarity":"epic", "gems":420, "items":["knight_skin_royal", "knight_wpn_bastion", "title_gatebreaker"]},
+	"pack_warlord":  {"name":"Warlord Pack", "class":"barbarian", "rarity":"rare", "gems":190, "items":["barb_skin_ember", "barb_wpn_hammer"]},
+	"pack_shadow":   {"name":"Shadow Pack", "class":"rogue", "rarity":"rare", "gems":190, "items":["rogue_skin_night", "rogue_wpn_fangs"]},
+	"pack_hunter":   {"name":"Hunter Pack", "class":"ranger", "rarity":"rare", "gems":190, "items":["ranger_skin_forest", "ranger_wpn_recurve"]},
+	"pack_arcane":   {"name":"Arcane Pack", "class":"mage", "rarity":"epic", "gems":330, "items":["mage_skin_arcane", "mage_wpn_crystal"]},
+	"pack_dawn":     {"name":"Dawn Pack", "class":"priest", "rarity":"rare", "gems":180, "items":["priest_skin_dawn", "priest_wpn_light"]},
+}
+
+static func item_value_gems(id: String) -> float:
+	# Rough value of an item in gems (gold at the exchange's best rate, 4500 gold = 300 gems).
+	var pr := item_price(id)
+	if pr.has("gems"):
+		return float(pr.gems)
+	return float(pr.get("gold", 0)) * 300.0 / 4500.0
+
+static func pack_price(pack_id: String, owned: Array) -> int:
+	# Gems for the part of the pack not owned yet; 0 when everything is owned.
+	var pk: Dictionary = PACKS.get(pack_id, {})
+	if pk.is_empty():
+		return 0
+	var total := 0.0
+	var missing := 0.0
+	for id in pk.items:
+		var v := item_value_gems(id)
+		total += v
+		if not owned.has(id):
+			missing += v
+	if missing <= 0.0:
+		return 0
+	return maxi(10, int(round(float(pk.gems) * missing / maxf(1.0, total) / 10.0)) * 10)
 
 static func item(id: String) -> Dictionary:
 	return CATALOG.get(id, {})

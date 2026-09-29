@@ -469,3 +469,19 @@ rebuild (Kevin: "much larger and more 3D", Fat Princess castle screenshots).
 models (`SiegeView._build_castle_kit`, `_kit_run`), merged per castle into one mesh
 (`_merge_kit`). Buildings: `Castle.BUILDINGS` (solid), props: `Castle.PROPS`. Only floors/steps are
 generated (`castle_mesh.gd`). Kevin rejected the generated sandstone look: keep the KayKit style.
+
+---
+
+## 17. Round 11 (preview 0.18.0, code 34, protocol v6)
+
+- Knight BLOCK: hold ABILITY (HUD `ability_held()`, K); `Sim.ability_of/blocking/shield_seg/
+  shield_blocks`; hits whose path crosses the shield segment are stopped (the knight from the front,
+  allies behind), projectiles crossing it are destroyed; 40 % speed. Online: input flag "b",
+  server applies held block per tick.
+- Berserker WHIRLWIND: `ability_of` = "whirlwind" for upgraded barbarians; 3 s, 2.4 m every 0.3 s,
+  gates too, moving freely, 9 s cooldown; greatsword bits/sword_E.
+- Snapshot unit slots 29 (blocking) and 30 (whirl remaining); F = 31.
+- Hat machines: `Castle.HAT_STANDS` (spread), `SiegeView.MACHINES` (base/up pieces).
+- Weapons Bits: "bits/<model>" in LOOKS and catalog weapons; `Eco.PACKS`, `Profile.buy_pack`,
+  shop PACKS section; pass 6 + 10 items.
+- siege_land_check: squeeze-trap rule. Keep new castle pieces >= 1 m apart or touching.

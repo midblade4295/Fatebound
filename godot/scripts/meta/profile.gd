@@ -239,6 +239,22 @@ func buy(id: String) -> Dictionary:
 	save()
 	return {"ok":true}
 
+func buy_pack(pack_id: String) -> Dictionary:
+	var pk: Dictionary = Eco.PACKS.get(pack_id, {})
+	if pk.is_empty():
+		return {"ok":false, "error":"Not for sale"}
+	var gems := Eco.pack_price(pack_id, d.owned)
+	if gems <= 0:
+		return {"ok":false, "error":"You already own everything in it"}
+	if not can_afford({"gems": gems}):
+		return {"ok":false, "error":"Not enough gems"}
+	d.gems -= gems
+	for id in pk.items:
+		if not d.owned.has(id):
+			d.owned.append(id)
+	save()
+	return {"ok":true, "gems":gems}
+
 func exchange(offer_id: String) -> Dictionary:
 	for off in Eco.EXCHANGE:
 		if off.id == offer_id:

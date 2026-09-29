@@ -76,6 +76,50 @@ static func reward_text(r: Dictionary) -> Array:
 	var g := int(r.get("gold", 0))
 	return ["coin", "%d gold" % g, UI.GOLD, "res://assets/ui/currency/%s.png" % ("coins_s" if g >= 300 else "coin")]
 
+static func pack_list(app, root: Node) -> void:
+	# One card per pack: name, the items' icons, and a gem button (the price covers only what the
+	# player doesn't own yet).
+	var p = app.profile
+	for pid in Eco.PACKS:
+		var pk: Dictionary = Eco.PACKS[pid]
+		var c := UI.card(root)
+		var row := UI.row(c, 10)
+		var v := VBoxContainer.new()
+		v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(v)
+		UI.label(v, str(pk.name).to_upper(), 17, Color(Eco.RARITY_COLOR.get(str(pk.rarity), "#ffffff")))
+		var icons := UI.row(v, 6)
+		for id in pk.items:
+			var it := Eco.item(id)
+			var ic := item_icon(it)
+			if ic != "":
+				var t := UI.tex_icon(icons, ic, 44)
+				t.modulate = Color(1, 1, 1, 0.45) if p.owns(id) else Color.WHITE
+		var names := []
+		for id in pk.items:
+			names.append(str(Eco.item(id).name))
+		UI.label(v, " + ".join(names), 11, UI.MUTED)
+		var gems := Eco.pack_price(pid, p.d.owned)
+		if gems <= 0:
+			UI.label(row, "OWNED", 14, UI.MUTED)
+			continue
+		var b := UI.button(row, "      %s" % UI.compact(gems), "premium", func(): buy_pack(app, pid), "buy_" + pid, 15, 14)
+		UI.tex_icon(b, "res://assets/ui/currency/gem.png", 26).position = Vector2(10, 8)
+		b.disabled = not p.can_afford({"gems": gems})
+
+static func buy_pack(app, pid: String) -> void:
+	var pk: Dictionary = Eco.PACKS[pid]
+	var gems := Eco.pack_price(pid, app.profile.d.owned)
+	app.confirm("BUY %s?" % str(pk.name).to_upper(), "%d items for %d gems." % [pk.items.size(), gems], "BUY", "premium", func():
+		var r: Dictionary = app.profile.buy_pack(pid)
+		if r.ok:
+			app.sfx("purchase")
+			app.toast("Unlocked the %s — equip it in the Locker" % str(pk.name), UI.GOLD)
+		else:
+			app.sfx("error")
+			app.toast(str(r.error), UI.RED)
+		app.rebuild())
+
 static func price_button(parent: Node, app, id: String) -> Button:
 	var price := Eco.item_price(id)
 	var gems: bool = price.has("gems")
@@ -329,12 +373,14 @@ static func shop(app, root: VBoxContainer) -> void:
 	var p = app.profile
 	var now: int = p.now()
 	UI.title(root, "SHOP", 26)
-	var note := UI.label(root, "Everything here is cosmetic. Your class still comes from the forge.", 12, UI.MUTED)
+	var note := UI.label(root, "Everything here is cosmetic. Your class still comes from the hat machines.", 12, UI.MUTED)
 	note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	var days := int(floor(now / 86400.0))
 	var monday := days - ((days + 3) % 7)
 	section(root, "FEATURED", "new in " + UI.duration((monday + 7) * 86400 - now), "crown")
 	item_grid(app, root, Eco.shop_featured(now), true)
+	section(root, "PACKS", "skin + weapon bundles", "crown")
+	pack_list(app, root)
 	section(root, "DAILY DEALS", "new in " + UI.duration((days + 1) * 86400 - now), "clock")
 	item_grid(app, root, Eco.shop_daily(now), false)
 	section(root, "GEMS → GOLD", "", "coin")
