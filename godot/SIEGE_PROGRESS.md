@@ -554,3 +554,24 @@ K2/K3 notes (0.17.0)
   workshop is refused. Bots still buy hat upgrades through the team planner.
 - Knight shield: Weapons Bits shields attach at 0.9 (was 0.55).
 - Protocol unchanged (v6): the server runs this build's sim, so still redeploy with it.
+
+# 0.18.2 (Kevin): "stairs still don't look like stairs; arrows/bolts sometimes fly through enemies"
+- PROJECTILES HIT NO UNITS from 0.16.0 to 0.18.1: the per-team position arrays (my 0.16.0
+  optimisation) were appended through `tpos[t] as PackedVector2Array` -- packed arrays are VALUES in
+  Godot 4, so the appends went to a copy and the arrays stayed empty. Arrows/bolts still hit walls
+  and gates, and melee/catapults kept kills going, so no test noticed. Now: local arrays, a swept
+  path-vs-circle test (the whole move since last tick, from the shooter on the first tick), the
+  nearest hit wins, the projectile explodes at the impact point and the struck unit always takes
+  the full hit. Measured: 0/300 -> 300/300 arrows and bolts on paths through a target. The sim
+  smoke now fires 60 of each and requires every one to hit.
+- With ranged damage back, two collision cases surfaced in bot matches:
+  * a unit squeezed between a terrace wall end and the field edge (1,057 violation ticks): landscape
+    walls ending within 1.5 m of an edge now run 1 m past it; siege_land_check checks wall ends vs
+    the field edge; generic _fill_squeeze_slots() bridges any wall pair closer than a unit
+    (2 fillers on the current map); the land check ignores gaps already covered by a third wall.
+  * a dodging knight stayed inside a concave river-bank corner for 8 ticks: _push_out repeats its
+    wall pass (max 3) while a pass still moves the unit.
+- Stairs from the overhead camera: 6 steps per flight (0.5 m deep, was 9 x 0.33 m), each tread a
+  bright nosing + mid stone + dark shadow band (vertex colours read as sRGB: as linear the dark
+  bands came out pale grey).
+- Bot match results shifted with ranged damage working (seed 11: red 3-0, kills 46-150).

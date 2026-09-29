@@ -142,6 +142,29 @@ func _init() -> void:
 	up_me.pos = rst2.p + Vector2(0.9, 0)
 	assert(us.context_action(up_me) == "hat", "at another class's shop the action is NEW HAT")
 	print("hat shop upgrade rules ok")
+	# Projectiles hit what their path crosses (regression: from 0.16.0 to 0.18.1 arrows and bolts
+	# hit NO units -- the per-team position arrays were appended through a copy).
+	var ps2 = Sim.new()
+	ps2.setup(2, 7)
+	var rng2 := RandomNumberGenerator.new()
+	rng2.seed = 5
+	for cls in ["ranger", "mage"]:
+		var hits := 0
+		for i in 60:
+			for pu in ps2.units: pu.bot = false; pu.move = Vector2.ZERO; pu.pos = Vector2(-25, 0) if pu.team == 0 else Vector2(25, 0); pu.hp = 9999; pu.max_hp = 9999
+			ps2.projectiles.clear()
+			var shooter: Dictionary = ps2.units.filter(func(x): return x.team == 0)[0]
+			var target: Dictionary = ps2.units.filter(func(x): return x.team == 1)[0]
+			ps2._set_class(shooter, cls, false)
+			shooter.pos = Vector2(-8.0, 20.0)
+			target.pos = Vector2(-8.0 + rng2.randf_range(-0.66, 0.66), 20.0 + rng2.randf_range(0.4, 9.0))
+			ps2._shoot(shooter, Sim.angle_of(Vector2(0, 1)), 1.0, float(Sim.CLASSES[cls].aoe), float(Sim.CLASSES[cls].proj_speed), 14.0)
+			for k in 40:
+				ps2.step(Sim.TICK)
+				if ps2.projectiles.is_empty(): break
+			if target.hp < 9999: hits += 1
+		assert(hits == 60, "%s projectiles hit %d/60 targets on their path" % [cls, hits])
+	print("projectile hit rules ok")
 	print("hat rules ok")
 	var seeds := [11, 22, 33, 44, 55, 66]
 	if OS.has_environment("SEEDS"):
