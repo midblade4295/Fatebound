@@ -96,9 +96,6 @@ func _ready() -> void:
 			hud.toast("Next match starts shortly...", Color("#f2d18d"))
 		else:
 			_restart())
-	hud.forge_roll.connect(func(held): _act("forge_roll", held))
-	hud.forge_take.connect(func(): _act("forge_take"))
-	hud.forge_leave.connect(func(): _act("forge_leave"))
 	hud.fps_toggled.connect(func(): set_fps_cap(30 if fps_cap == 60 else 60))
 	hud.res_label_source = func() -> float: return render_scale
 	hud.res_cycled.connect(func():
@@ -287,12 +284,8 @@ func _to_hud(p: Vector2) -> Vector2:
 func _act(action: String, arg: Variant = null) -> void:
 	if online:
 		_net_send({"t":"in", "m":hud.move_vector(), "h":hud.attack_held(), "a":action, "arg":arg})
-		if action == "forge_roll" and audio != null and audio.has_method("play"):
-			audio.play("roll")
 		return
-	var ok: bool = sim.act(hud.player_id, action, arg)
-	if ok and action == "forge_roll" and audio != null and audio.has_method("play"):
-		audio.play("roll")
+	sim.act(hud.player_id, action, arg)
 
 func _on_action(kind: String) -> void:
 	match kind:

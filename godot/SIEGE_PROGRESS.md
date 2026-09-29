@@ -410,3 +410,23 @@ includes shader compile and is ignored.
   sees arcs, not bullseyes (the first 16-centre layout read as targets). Shader band_strength 1.6
   (1x was faint, 3x bold). Vertex macro sine removed.
 - perf_bench vs 0.14.3, alternated 2x: 58.8/60.3 ms -> 54.6/53.5 ms (no regression).
+
+# Round 8 (Kevin): "not feeling the dice class system" -> Fat Princess hats (Kevin chose)
+- Removed: the dice forge (roll/keep/pair/triple/FATE), its building, panel, the Fourth Die
+  upgrade, the per-unit forge state, net actions forge_roll/take/leave.
+- Hats (siege_sim.gd): 5 stands per courtyard (west corner, where the forge was): Villagers
+  walking in take the hat (stock 3, +1 per 6 s); classed units swap with ACTION ("NEW HAT"; the
+  old hat drops). Dying drops your hat where you fall and you respawn as a Villager; anyone
+  (ally or enemy) walking over it as a Villager takes it; it vanishes after 30 s. One workshop
+  upgrade per class makes that stand's hats the upgraded form (Paladin, Berserker, ...).
+  Workers' tools are a hat too (they drop on death).
+- Found by the match smoke: with hats only at the castle, attackers respawning at forward
+  outposts as Villagers walked all the way back: 0 rescues in 2 matches (was 10). Fix: owned
+  outposts carry a small rack (west = Knight, east = Rogue; 3 hats, +1 per 6 s); stand refill
+  10 s -> 6 s. Now 6 rescues / 7 gates in 2 matches, 1,126 hats dropped and 440 picked back up.
+- Bots: villager bots go for a dropped hat within 14 m, else an owned outpost rack if much nearer
+  than the castle, else a stand of their role's classes; they fight as villagers if all are empty.
+- Protocol v3 (stand stock "hs", dropped hats "hd", outpost rack stock). **Redeploy the server.**
+- Tests: sim smoke checks the hat rules (take, drop on death, enemy pickup, swap, upgrade,
+  refill, expiry) and counts hat events; net smoke takes a hat through the real server.
+- Not verified: how a dropped hat looks in play (rendered, but not seen in a screenshot).

@@ -154,9 +154,7 @@ func _handle(cid: int, msg: Dictionary) -> void:
 			var a: String = str(msg.get("a", ""))
 			if a != "" and a in Net.ACTIONS:
 				var arg: Variant = msg.get("arg", null)
-				if a == "forge_roll":
-					arg = _bool_list(arg)
-				elif a == "buy":
+				if a == "buy":
 					arg = str(arg) if str(arg) in Sim.UPGRADES else ""
 				else:
 					arg = null

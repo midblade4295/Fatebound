@@ -1,6 +1,6 @@
 extends SceneTree
 # Plays as the human through real touch events on the HUD (stick, ATTACK, ability, DODGE, ACTION,
-# forge panel) and checks the match keeps advancing: sim time must track frame time, no errors.
+# hat stands) and checks the match keeps advancing: sim time must track frame time, no errors.
 const Mode = preload("res://scripts/siege/siege_mode.gd")
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 var mode
@@ -42,16 +42,8 @@ func _process(delta: float) -> bool:
 	if frames > 10 and not s.ended and not hud.pause_panel.visible:
 		if s.time <= last_time: stalls += 1
 	last_time = s.time
-	if hud.forge_panel.visible:
-		if stick_down: touch(0, Vector2(100, 600), false); stick_down = false
-		# Tap buttons in the forge panel like a player: roll, keep a die, take when possible.
-		if frames % 20 == 0:
-			if not hud.forge_take_btn.disabled: hud.forge_take_btn.pressed.emit()
-			elif not hud.forge_roll_btn.disabled:
-				if me.forge.rolled and rng.randf() < 0.5: hud.forge_dice[rng.randi() % 3].pressed.emit()
-				hud.forge_roll_btn.pressed.emit()
-	elif me.state != "dead":
-		# Steer with the stick toward a goal: forge while a villager, else our Oracle, else home.
+	if me.state != "dead":
+		# Steer with the stick toward a goal: the hat stands while a villager, else our Oracle, else home.
 		var goal: Vector2
 		if me.cls == "villager": goal = Sim.forge(0)
 		elif me.carrying: goal = Sim.throne(0)

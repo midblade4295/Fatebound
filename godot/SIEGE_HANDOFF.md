@@ -419,3 +419,19 @@ freeze the scene, and prints draw calls/triangles; compare builds by alternating
 **0.14.4 (painted grass):** flat Voronoi cell texture (`terrain_art.py grass()`, palette fitted to
 the references' measured green) + sweeping bands baked into the mask alpha (`Land.grass_band`,
 `BAND_W`, `BAND_CENTRES`; shader `band_strength`). Re-run `tools/bake_land.gd` after changing them.
+
+---
+
+## 14. Round 8: Fat Princess hats replace the dice forge (preview 0.15.0, code 29)
+
+- Stands: `Sim.HAT_STANDS` (castle-local, west courtyard), stock `HAT_STOCK_MAX` 3, refill
+  `HAT_REGEN` 6 s; villagers auto-take on walking in (`_step_hats`); `act("hat_swap")` / ACTION
+  swaps for classed units. Dropped hats `sim.hats` ({id, cls, up, pos, t}), `HAT_LIFETIME` 30 s,
+  picked up by any villager within `HAT_PICK_R`. `_kill` drops the hat and resets to villager.
+- Outpost racks (`OUTPOST_HAT_*`): owner-only, west Knight / east Rogue. Without them attackers
+  respawning forward had no class: rescues collapsed (see SIEGE_PROGRESS Round 8).
+- Upgrades `hat_<class>` (workshop grid) replace "Fourth Die". `Sim.forge()` now returns the hat
+  stands' corner (kept for hints/tests).
+- View: pedestal + class weapon + stacked hats per stand, dropped hats bob/spin (transforms only),
+  rack hats beside outpost towers. HUD: dice panel gone, "NEW HAT" action, class toasts.
+- Protocol v3: redeploy the server from this branch before online play.
