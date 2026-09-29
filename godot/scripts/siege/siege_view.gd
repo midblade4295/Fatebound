@@ -235,6 +235,7 @@ func _build_terrain() -> void:
 		mi.mesh = m
 		mi.material_override = _terrain_material()
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mi.set_meta("perf", "terrain")
 		add_child(mi)
 	_build_water()
 	_build_bridges()
@@ -299,6 +300,7 @@ void fragment() {
 	mi.mesh = am
 	mi.material_override = _water_mat
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mi.set_meta("perf", "water")
 	add_child(mi)
 
 func _build_bridges() -> void:
@@ -307,7 +309,8 @@ func _build_bridges() -> void:
 		_place("res://assets/terrain/bridge.glb", Vector3(bc.x, 0.0, bc.y), 0.0, 1.0)
 
 # ---------- foliage: grass tufts + flowers (Round 7b) ----------
-const TUFTS := ["Grass_1_A_Color1", "Grass_2_A_Color1", "Grass_1_B_Color1"]
+# 44-triangle tufts only (Grass_1_B is 132 triangles; dropped in 0.14.2 for frame rate).
+const TUFTS := ["Grass_1_A_Color1", "Grass_2_A_Color1"]
 const FLOWERS := ["red", "blue", "yellow", "white"]
 static var _foliage: Dictionary = {}          # kind -> Array[Transform3D], built once per session
 
@@ -396,6 +399,10 @@ func _build_foliage() -> void:
 	if _foliage.is_empty():
 		_foliage = _plan_foliage()
 	for kind in _foliage:
+		var xfs: Array = _foliage[kind]
+		if low_fx:
+			# "Reduce effects": every other instance.
+			xfs = xfs.filter(func(_x): return true).slice(0, xfs.size(), 2)
 		var src: Dictionary
 		if kind in FLOWERS:
 			src = _mesh_of("res://assets/terrain/flower_%s.glb" % kind)
@@ -405,7 +412,7 @@ func _build_foliage() -> void:
 			continue
 		# One MultiMesh per 32 m band so off-screen bands are culled.
 		var bands := {}
-		for xf in _foliage[kind]:
+		for xf in xfs:
 			var bkey := int(floor((xf.origin.z + Sim.HALF_L) / 32.0))
 			if not bands.has(bkey):
 				bands[bkey] = []
@@ -420,12 +427,42 @@ func _build_foliage() -> void:
 			var mmi := MultiMeshInstance3D.new()
 			mmi.multimesh = mm
 			mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-			if kind in TUFTS and src.material is StandardMaterial3D:
-				# Match the tufts to the terrain's green.
-				var m: StandardMaterial3D = (src.material as StandardMaterial3D).duplicate()
-				m.albedo_color = Color(1.0, 1.18, 0.82)
-				mmi.material_override = m
+			mmi.set_meta("perf", "foliage")
+			mmi.visibility_range_end = 70.0          # bands far up-screen are tiny anyway
+			if kind in TUFTS:
+				mmi.material_override = _tuft_material(src.material)
+			else:
+				mm.mesh = _cheap_flower_mesh(src.mesh)
 			add_child(mmi)
+
+static var _tuft_mat: StandardMaterial3D = null
+static func _tuft_material(base: Material) -> StandardMaterial3D:
+	# Match the tufts to the terrain's green; per-vertex lighting (identical on tiny triangles,
+	# cheaper per pixel on phones).
+	if _tuft_mat == null:
+		_tuft_mat = (base as StandardMaterial3D).duplicate() if base is StandardMaterial3D else StandardMaterial3D.new()
+		_tuft_mat.albedo_color = Color(1.0, 1.18, 0.82)
+		_tuft_mat.shading_mode = BaseMaterial3D.SHADING_MODE_PER_VERTEX
+		_tuft_mat.specular_mode = BaseMaterial3D.SPECULAR_DISABLED
+	return _tuft_mat
+
+static var _flower_meshes: Dictionary = {}
+static func _cheap_flower_mesh(mesh: Mesh) -> Mesh:
+	# The Blender flowers export double-sided; their petals are closed shapes, so back faces are
+	# never seen: cull them, and light per vertex. A MultiMesh has no per-surface overrides, so
+	# this is a cached copy of the mesh with the cheaper materials baked in.
+	if not _flower_meshes.has(mesh):
+		var copy: Mesh = mesh.duplicate()
+		for sidx in copy.get_surface_count():
+			var base := copy.surface_get_material(sidx)
+			if base is StandardMaterial3D:
+				var m: StandardMaterial3D = (base as StandardMaterial3D).duplicate()
+				m.cull_mode = BaseMaterial3D.CULL_BACK
+				m.shading_mode = BaseMaterial3D.SHADING_MODE_PER_VERTEX
+				m.specular_mode = BaseMaterial3D.SPECULAR_DISABLED
+				copy.surface_set_material(sidx, m)
+		_flower_meshes[mesh] = copy
+	return _flower_meshes[mesh]
 
 var outpost_nodes: Dictionary = {}
 

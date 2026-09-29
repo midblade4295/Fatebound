@@ -357,3 +357,25 @@ Design (all cosmetic; no pay-to-win; no real-money purchases until Play Billing 
   172 tris each) in clusters. Kept off paths, bridges, water, castle grounds, cliff bands and
   obstacles.
 - Preview 0.14.1-siege-land, version code 25 (same protocol v2 as 0.14.0).
+
+# 0.14.2 (Kevin): "optimize it, the fps are dropping now"
+Measured with tests/perf_bench.gd (3D SubViewport render time, software Vulkan at 540x960,
+same busy midfield spot; CPU rasterisation is fill-rate bound like a phone GPU, so the ratios
+are what count, not the milliseconds). Each config measured twice; the first pass of a run
+includes shader compile and is ignored.
+| Build / config | 3D ms |
+|---|---|
+| 0.13.1 (smooth on Kevin's phone) | ~119 |
+| 0.14.1 full | ~190 |
+| 0.14.1, terrain shader swapped for a plain texture | 108 |
+| 0.14.1, foliage hidden | 173 |
+| 0.14.1, water hidden / colour adjust off | 186 / 191 (no measurable cost) |
+| **0.14.2** | **~88** (-54% vs 0.14.1, -26% vs 0.13.1) |
+- Terrain shader (was ~43% of the frame): a plain grass pixel reads 2 textures (was 7); brick
+  and rock textures only where the mask/slope needs them (branches); macro variation is
+  arithmetic in the vertex shader; no anisotropic filtering; no second rotated grass sample;
+  specular off. Per-vertex lighting would save only ~3.5% more: not taken (look).
+- Foliage (~9%): 44-tri tufts only (dropped the 132-tri variant), per-vertex lighting, flowers
+  back-face culled (exported double-sided), visibility range 70 m, "Reduce effects" halves it.
+- Look unchanged: grass hue 105 / sat 136 / val 189 vs 103 / 135 / 192 in 0.14.1.
+- Not measured on the phone. Kevin: COPY DIAGNOSTICS after a match gives real fps.
