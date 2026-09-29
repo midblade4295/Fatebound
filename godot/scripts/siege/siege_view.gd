@@ -2,6 +2,7 @@ extends Node3D
 # Presentation only: mirrors siege_sim state every frame and never changes it.
 const Stage = preload("res://scripts/siege/asset_cache.gd")
 const Land = preload("res://scripts/siege/siege_land.gd")
+const Castle = preload("res://scripts/siege/siege_castle.gd")
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 
 const HEX := "res://assets/kaykit/hex/"
@@ -767,7 +768,7 @@ func _block(team: int, x0: float, x1: float, z0: float, z1: float, h: float, top
 	lid.position = Vector3(c.x, h + 0.01, c.y)
 	add_child(lid)
 
-func _stairs(team: int, x0: float, x1: float, z0: float, z1: float, h: float, steps: int, rising_with_z: bool, castle := true) -> void:
+func _stairs(team: int, x0: float, x1: float, z0: float, z1: float, h: float, steps: int, rising_with_z: bool, castle := true, h0 := 0.0) -> void:
 	# One MultiMesh of box steps per staircase (a single draw call).
 	if _box == null:
 		_box = BoxMesh.new()
@@ -778,7 +779,7 @@ func _stairs(team: int, x0: float, x1: float, z0: float, z1: float, h: float, st
 	mm.instance_count = steps
 	var depth := (z1 - z0) / float(steps)
 	for i in steps:
-		var sh := h * float(i + 1) / float(steps)
+		var sh := h0 + (h - h0) * float(i + 1) / float(steps)
 		var zc := z0 + depth * (float(i) + 0.5) if rising_with_z else z1 - depth * (float(i) + 0.5)
 		# Each step is a full-height block from the ground up to its tread.
 		var sp := Vector2((x0 + x1) * 0.5, zc)
@@ -830,20 +831,35 @@ func _wall_run(a: Vector2, b: Vector2, path: String) -> void:
 func _build_castle(t: int) -> void:
 	var col: String = COLOR[t]
 	var face := 0.0 if t == 0 else PI
-	# Floors: stone courtyard, dark dungeon, carpeted throne room.
-	_floor(t, -13.0, 13.0, Sim.FRONT_Z + 1.0, Sim.INNER_Z, Color("#8f877a"))
-	# Raised back rooms: dungeon (west) and throne room (east), each cut by a stair channel.
-	for side in [-1.0, 1.0]:
-		var top: Color = Color("#57524d") if side < 0.0 else Color("#8a8174")
-		var x_in: float = side * Sim.KEEP_X
-		var x_out: float = side * 13.0
-		var s0: float = side * Sim.STAIR_X0
-		var s1: float = side * Sim.STAIR_X1
-		_block(t, minf(x_in, x_out), maxf(x_in, x_out), Sim.STAIR_Z1, Sim.CASTLE_BACK, Sim.PLAT_H, top)
-		_block(t, minf(x_in, s0), maxf(x_in, s0), Sim.INNER_Z, Sim.STAIR_Z1, Sim.PLAT_H, top)
-		_block(t, minf(s1, x_out), maxf(s1, x_out), Sim.INNER_Z, Sim.STAIR_Z1, Sim.PLAT_H, top)
-		_stairs(t, minf(s0, s1), maxf(s0, s1), Sim.STAIR_Z0, Sim.STAIR_Z1, Sim.PLAT_H, 8, true)
-	_floor(t, 7.2, 8.8, Sim.STAIR_Z1 + 0.2, 28.0, Color("#2f5f8a") if t == 0 else Color("#8a3a2f"), Sim.PLAT_H + 0.02)
+	# Round 10 castle (siege_castle.gd): courtyard, then two terraces stepping up to the throne,
+	# joined by grand staircases. Terraces are solid blocks around their stair openings.
+	var hx: float = Castle.HX
+	_floor(t, -hx, hx, Sim.FRONT_Z + 1.0, Castle.L1_Z, Color("#9c8f78"))
+	var terrace := {Castle.L1_Z: [Castle.L1_H, Color("#b3a384"), Castle.L2_Z], Castle.L2_Z: [Castle.L2_H, Color("#c2b08c"), Castle.BACK]}
+	for tz in terrace:
+		var h: float = terrace[tz][0]
+		var top: Color = terrace[tz][1]
+		var z_end: float = terrace[tz][2]
+		var gaps := []
+		var stair_end: float = tz
+		for st in Castle.STAIRS:
+			if absf(float(st.z0) - tz) < 0.01:
+				gaps.append([float(st.x0), float(st.x1)])
+				stair_end = maxf(stair_end, float(st.z1))
+		gaps.sort_custom(func(a, b): return a[0] < b[0])
+		# Behind the stairs: one full-width block; alongside them: blocks between the openings.
+		_block(t, -hx, hx, stair_end, z_end, h, top)
+		var x := -hx
+		for g in gaps:
+			if g[0] - x > 0.05:
+				_block(t, x, g[0], tz, stair_end, h, top)
+			x = g[1]
+		if hx - x > 0.05:
+			_block(t, x, hx, tz, stair_end, h, top)
+	for st in Castle.STAIRS:
+		_stairs(t, float(st.x0), float(st.x1), float(st.z0), float(st.z1), float(st.h1), 9, true, true, float(st.h0))
+	# Royal carpet up to the throne.
+	_floor(t, -1.3, 1.3, Castle.THRONE.y - 1.6, Castle.BACK - 0.2, Color("#2f5f8a") if t == 0 else Color("#8a3a2f"), Castle.L2_H + 0.02)
 	# Walls from the sim (so collision and visuals always agree).
 	for w in sim.walls:
 		if w.team != t:
@@ -874,10 +890,13 @@ func _build_castle(t: int) -> void:
 		rubble.visible = false
 		gate_nodes[g.id] = {"doors":doors, "rubble":rubble, "open":0.0, "broken":false}
 	# Towers flank both gates; catapult towers on the front corners; the keep at the back.
-	for tx in [-7.8, -2.6, 2.6, 7.8]:
+	var tower_xs := []
+	for gx in Sim.GATE_X:
+		tower_xs.append_array([float(gx) - Castle.GATE_PIECE, float(gx) + Castle.GATE_PIECE])
+	for tx in tower_xs:
 		var tp: Vector2 = Sim._c(t, Vector2(tx, Sim.FRONT_Z))
 		_place(HEX + "building_tower_A_%s.gltf" % col, Vector3(tp.x, 0, tp.y), face, 1.8)
-	for cx in [-12.3, 12.3]:
+	for cx in [-Sim.CATAPULT_X, Sim.CATAPULT_X]:
 		var cp: Vector2 = Sim._c(t, Vector2(cx, Sim.FRONT_Z + 0.3))
 		var cat := _place(HEX + "building_tower_catapult_%s.gltf" % col, Vector3(cp.x, 0, cp.y), face, 1.9)
 		if cat != null:
@@ -885,32 +904,31 @@ func _build_castle(t: int) -> void:
 			var arm: Node3D = cat.find_child("*arm*", true, false)
 			catapult_nodes.append({"team":t, "p":cp, "node":cat, "turret":turret, "arm":arm,
 				"arm_rest":arm.rotation.x if arm != null else 0.0, "fired":-10.0})
-		var bp: Vector2 = Sim._c(t, Vector2(cx, Sim.CASTLE_BACK - 0.8))
-		_place(HEX + "building_tower_B_%s.gltf" % col, Vector3(bp.x, 0, bp.y), face, 1.7)
-	var kp: Vector2 = Sim._c(t, Vector2(0.0, 25.4))
-	_place(HEX + "building_castle_%s.gltf" % col, Vector3(kp.x, 0, kp.y), face, 2.6)
+		var bp: Vector2 = Sim._c(t, Vector2(signf(cx) * (Castle.HX - 1.5), Sim.CASTLE_BACK - 0.8))
+		_place(HEX + "building_tower_B_%s.gltf" % col, Vector3(bp.x, Castle.L2_H, bp.y), face, 1.7)
+	# The keep stands behind the throne, just past the field edge (a backdrop, not in the way).
+	var kp: Vector2 = Sim._c(t, Vector2(0.0, Castle.BACK + 2.4))
+	_place(HEX + "building_castle_%s.gltf" % col, Vector3(kp.x, Castle.L2_H, kp.y), face, 3.0)
 	# Throne room: banners either side of the throne, a weapon rack.
 	var th: Vector2 = Sim.throne(t)
 	for fx in [-1.6, 1.6]:
 		var fp: Vector2 = th + Sim._c(t, Vector2(fx, 1.2))
-		_place(HEX + "flag_%s.gltf" % col, Vector3(fp.x, Sim.PLAT_H, fp.y), face, 1.6)
-	_decal(Vector3(th.x, Sim.PLAT_H + 0.06, th.y), Sim.THRONE_RADIUS, TEAM_COLORS[t], 0.6)
-	var wr: Vector2 = Sim._c(t, Vector2(12.0, 23.8))
-	_place(HEX + "weaponrack.gltf", Vector3(wr.x, Sim.PLAT_H, wr.y), face + PI * 0.5, 4.0)
+		_place(HEX + "flag_%s.gltf" % col, Vector3(fp.x, Castle.L2_H, fp.y), face, 1.6)
+	_decal(Vector3(th.x, Castle.L2_H + 0.06, th.y), Sim.THRONE_RADIUS, TEAM_COLORS[t], 0.6)
+	var wr: Vector2 = Sim._c(t, Vector2(12.0, 26.0))
+	_place(HEX + "weaponrack.gltf", Vector3(wr.x, Castle.L2_H, wr.y), face + PI * 0.5, 4.0)
 	# Dungeon: the cell on the platform, a ladder against the back wall and barrels.
 	var cc: Vector2 = Sim._c(t, Sim.CELL_C)
-	_decal(Vector3(cc.x, Sim.PLAT_H + 0.06, cc.y), 1.4, GOLD, 0.35)
-	var lp: Vector2 = Sim._c(t, Vector2(-12.4, 24.0))
-	_place(HEX + "ladder.gltf", Vector3(lp.x, Sim.PLAT_H, lp.y), face + PI * 0.5, 3.4)
-	for bx in [Vector2(-12.2, 28.2), Vector2(-4.0, 28.2)]:
+	_decal(Vector3(cc.x, Castle.L1_H + 0.06, cc.y), 1.4, GOLD, 0.35)
+	for bx in [Vector2(-19.0, 21.2), Vector2(-12.0, 21.2)]:
 		var b2: Vector2 = Sim._c(t, bx)
-		_place(HEX + "barrel.gltf", Vector3(b2.x, Sim.PLAT_H, b2.y), randf() * TAU, 2.2)
+		_place(HEX + "barrel.gltf", Vector3(b2.x, Castle.L1_H, b2.y), randf() * TAU, 2.2)
 	# Courtyard: hat stands, workshop ring + stockpiles (piles scale with the team's stock).
 	var ws: Vector2 = Sim.workshop(t)
 	_decal(Vector3(ws.x, 0.06, ws.y), Sim.WORKSHOP_RADIUS, Color("#9fe07a"), 0.45)
 	var piles := {}
 	for kind in ["wood", "stone"]:
-		var pp: Vector2 = Sim._c(t, Vector2(10.4, 20.0 if kind == "wood" else 16.2))
+		var pp: Vector2 = Sim._c(t, Vector2(15.5, 12.4 if kind == "wood" else 5.6))
 		var pile := Node3D.new()
 		pile.position = Vector3(pp.x, 0, pp.y)
 		add_child(pile)
@@ -921,7 +939,7 @@ func _build_castle(t: int) -> void:
 				piece.reparent(pile, true)
 				piece.visible = false
 		piles[kind] = pile
-	var wb: Vector2 = Sim._c(t, Vector2(7.0, 20.3))
+	var wb: Vector2 = Sim._c(t, Vector2(11.0, 12.6))
 	_place(HEX + "wheelbarrow.gltf", Vector3(wb.x, 0, wb.y), face + 0.8, 3.0)
 	stock_piles.append(piles)
 

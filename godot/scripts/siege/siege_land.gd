@@ -95,11 +95,12 @@ static func outpost_positions() -> Array:
 
 # ---------------- brick paths (visual) ----------------
 # Blue-half polylines from the gates (castle front at z=50) to the bridges, through the ledge ramps.
+# Round 10: the castle front moved from z=50 to z=38 and the gates to x=+-7.
 const PATHS_BLUE_HALF := [
-	[Vector2(-5.2, 50.0), Vector2(-6.5, 44.0), Vector2(-11.0, 36.0), Vector2(-13.0, 24.0), Vector2(-20.0, 22.5),
+	[Vector2(-7.0, 38.0), Vector2(-8.5, 33.0), Vector2(-12.0, 28.0), Vector2(-13.0, 24.0), Vector2(-20.0, 22.5),
 		Vector2(-20.0, 12.0), Vector2(-20.0, 5.6)],
-	[Vector2(5.2, 50.0), Vector2(6.0, 42.0), Vector2(4.0, 30.0), Vector2(0.5, 18.0), Vector2(0.0, 5.6)],
-	[Vector2(6.0, 42.0), Vector2(14.0, 35.0), Vector2(22.0, 27.0), Vector2(22.0, 17.0), Vector2(20.0, 11.0), Vector2(20.0, 5.6)],
+	[Vector2(7.0, 38.0), Vector2(5.5, 33.0), Vector2(4.0, 28.0), Vector2(0.5, 18.0), Vector2(0.0, 5.6)],
+	[Vector2(5.5, 33.0), Vector2(14.0, 31.0), Vector2(22.0, 27.0), Vector2(22.0, 17.0), Vector2(20.0, 11.0), Vector2(20.0, 5.6)],
 ]
 const PATH_HALF_W := 2.1
 
@@ -125,7 +126,7 @@ static func dist_to_paths(p: Vector2) -> float:
 	return best
 
 # ---------------- heights ----------------
-const CASTLE_ZONE := 44.0        # |z| beyond this: castle grounds, flat
+const CASTLE_ZONE := 36.0        # |z| beyond this: castle grounds, flat (front wall at 38 since Round 10)
 
 static func _smooth(e0: float, e1: float, x: float) -> float:
 	var t := clampf((x - e0) / (e1 - e0), 0.0, 1.0)

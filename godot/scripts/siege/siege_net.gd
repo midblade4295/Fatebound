@@ -8,7 +8,7 @@ extends RefCounted
 # objects: decode() uses the default allow_objects=false.
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 
-const VERSION := 4               # 4 = Priest (beam target in unit slot 26, 6 hat stands)
+const VERSION := 5               # 5 = Round 10 castle (bigger, terraced; map geometry changed)
 const DEFAULT_URL := "wss://136-113-125-3.sslip.io/fatebound/siege/ws"
 const DEFAULT_PORT := 8082
 const SNAP_HZ := 10.0

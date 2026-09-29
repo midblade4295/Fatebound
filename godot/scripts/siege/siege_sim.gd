@@ -6,14 +6,15 @@ extends RefCounted
 
 const TICK := 1.0 / 30.0
 const Land = preload("res://scripts/siege/siege_land.gd")
+const Castle = preload("res://scripts/siege/siege_castle.gd")
 const HALF_W := Land.HALF_W
 const HALF_L := Land.HALF_L
 # Castle layouts are authored in "castle-local" blue-space coordinates (x -13..13, z 15..29 with
 # the back at z=29) and placed at each end of the field by _c(): shifted so the castle's back
 # sits on the field edge, then mirrored for red.
-const CASTLE_BACK := 29.0
+const CASTLE_BACK := Castle.BACK
 const CASTLE_SHIFT := HALF_L - CASTLE_BACK
-const CASTLE_HX := 13.0
+const CASTLE_HX := Castle.HX          # 20 since Round 10 (was 13)
 const UNIT_R := 0.45
 const WIN_RESCUES := 3
 const MATCH_TIME := 720.0
@@ -28,11 +29,9 @@ const ROLL_TIME := 0.7
 const WALL_SCALE := 2.6          # KayKit wall_straight is 2.0 long -> 5.2 m
 const SEG := 5.2
 const WALL_R := 1.0              # collision half-thickness of a wall
-const FRONT_Z := 15.0            # outer wall with the two gates
-const INNER_Z := 21.0            # wall between courtyard and the back rooms
-const GATE_X := [-5.2, 5.2]      # gate centres on the front wall
+const FRONT_Z := Castle.FRONT_Z         # front wall with the two gates (3 since Round 10)
+const GATE_X := Castle.GATE_X
 const DOOR_X := [-5.2, 5.2]      # open doorways in the inner wall (behind each gate)
-const KEEP_X := 2.6              # keep block spans x -2.6..2.6, z 21..29
 const GATE_HP := 1100.0
 const GATE_HALF := 1.3           # half-width of the passable doorway
 const GATE_SOLID_AT := 0.35      # a broken gate blocks again once repaired to 35 %
@@ -42,22 +41,17 @@ const RUBBLE_TIME := 20.0        # a broken gate can't be rebuilt for 20 s ...
 const RUBBLE_CLEAR := 6.0        # ... or while any enemy is within 6 m of it
 
 # ---- layers (heights are for the view; the sim stays 2D, ledges are walls) ----
-const PLAT_H := 1.6              # throne room + dungeon platforms
-const STAIR_Z0 := 21.0           # stairs climb from the inner doorway...
-const STAIR_Z1 := 23.0           # ...to the platform
-const STAIR_X0 := 3.9            # stair channel |x| range (inside the 3.2 m doorway)
-const STAIR_X1 := 6.5
 const LEDGE_R := 0.35
 # Round 7 layout (blue half; mirrored). Checked by tests/siege_land_check.gd.
 const RES_WOOD := [Vector2(-28.0, 44.0), Vector2(-24.0, 40.5), Vector2(27.0, 44.0), Vector2(29.5, 38.0), Vector2(-29.0, 9.0),
-	Vector2(-7.5, 30.0), Vector2(10.0, 22.5), Vector2(-3.5, 37.0), Vector2(29.0, 27.0), Vector2(-8.5, 9.5)]
-const RES_STONE := [Vector2(18.5, 44.5), Vector2(-15.0, 41.0), Vector2(9.0, 31.5), Vector2(-26.5, 36.5), Vector2(-15.5, 9.0)]
-const COVER_ROCKS := [Vector2(-3.0, 21.0), Vector2(7.5, 9.0), Vector2(-17.5, 36.5)]
-const CAKE_TREES := [Vector2(-6.0, 25.0), Vector2(17.0, 38.0), Vector2(-27.5, 20.5)]
+	Vector2(-2.5, 30.0), Vector2(10.0, 22.5), Vector2(-2.5, 34.0), Vector2(29.0, 27.0), Vector2(-8.5, 9.5)]
+const RES_STONE := [Vector2(26.0, 50.0), Vector2(-26.0, 50.0), Vector2(12.0, 26.0), Vector2(-26.5, 36.5), Vector2(-15.5, 9.0)]
+const COVER_ROCKS := [Vector2(-3.0, 21.0), Vector2(7.5, 9.0), Vector2(-3.0, 26.0)]
+const CAKE_TREES := [Vector2(-6.0, 25.0), Vector2(17.0, 35.0), Vector2(-27.5, 20.5)]
 const OUTPOST_TRICKLE := 15.0    # owners get +1 wood +1 stone this often per outpost
 
 # ---- fate offerings (the "cake") ----
-const ALTAR_P := Vector2(-3.5, 17.0)   # blue courtyard; mirrored for red
+const ALTAR_P := Castle.ALTAR
 const OFFERING_EVERY := 30.0
 const CAKE_EVERY := 60.0            # a cake tree ripens a cake every 60 s
 const CAKE_PER_STAGE := 3           # three cakes fatten her one size stage
@@ -77,7 +71,7 @@ const WEIGHT_SLOW := 0.08            # carrier speed -8 % per weight level
 const FEED_RADIUS := 1.9
 
 # ---- catapults (upgrade) ----
-const CATAPULT_X := 12.3
+const CATAPULT_X := Castle.CATAPULT_X
 const CATAPULT_EVERY := 4.5
 const CATAPULT_MIN := 5.0
 const CATAPULT_MAX := 22.0
@@ -117,8 +111,8 @@ const UPGRADES := {
 # take its hat and become that class; dying drops your hat where you fall and anyone -- ally or
 # enemy -- who walks over it as a Villager takes it. Classed units swap at a stand with ACTION.
 const HAT_CLASSES := ["knight", "barbarian", "rogue", "ranger", "mage", "priest"]
-const HAT_STANDS := [Vector2(-11.3, 17.0), Vector2(-11.3, 19.8), Vector2(-9.5, 18.4), Vector2(-7.7, 17.0), Vector2(-7.7, 19.8), Vector2(2.6, 17.0)]
-const HAT_HALL := Vector2(-9.5, 18.4)
+const HAT_STANDS := Castle.HAT_STANDS
+const HAT_HALL := Castle.HAT_HALL
 const HAT_TAKE_R := 1.3
 const HAT_STAND_R := 0.45
 const HAT_STOCK_MAX := 3
@@ -213,11 +207,11 @@ static func _c(team: int, p: Vector2) -> Vector2:
 
 static func throne(team: int) -> Vector2:
 	# Where a team brings its rescued Oracle: its own throne room (east back room for blue).
-	return _c(team, Vector2(8.0, 26.0))
+	return _c(team, Castle.THRONE)
 
-const CELL_C := Vector2(-9.0, 27.0)   # cell centre (blue dungeon); bars x -10.8..-7.2, z 25.4..28.6
-const CELL_HX := 1.8
-const CELL_HZ := 1.6
+const CELL_C := Castle.CELL_C      # dungeon cell centre (L1 west wing since Round 10)
+const CELL_HX := Castle.CELL_HX
+const CELL_HZ := Castle.CELL_HZ
 
 static func cell(team: int) -> Vector2:
 	# Where a team's own Oracle is held captive: the ENEMY castle's dungeon.
@@ -226,12 +220,9 @@ static func cell(team: int) -> Vector2:
 static func height_at(p: Vector2) -> float:
 	# Ground height for rendering. Castles are evaluated in blue space (mirror for red).
 	var q := (p if p.y >= 0.0 else -p) - Vector2(0.0, CASTLE_SHIFT)
-	var ax := absf(q.x)
-	if q.y >= STAIR_Z0 and ax >= KEEP_X and ax <= CASTLE_HX:
-		if ax >= STAIR_X0 and ax <= STAIR_X1 and q.y < STAIR_Z1:
-			return PLAT_H * clampf((q.y - STAIR_Z0) / (STAIR_Z1 - STAIR_Z0), 0.0, 1.0)
-		return PLAT_H
-	# Castle grounds are flat; everything else is the landscape (slopes, ledges, bridges).
+	if Castle.inside(q):
+		return Castle.height_local(q)                # courtyard, terraces, grand stairs
+	# Just around the castle is flat; everything else is the landscape (slopes, ledges, bridges).
 	if absf(q.x) <= CASTLE_HX + 1.0 and q.y >= FRONT_Z - 1.0:
 		return 0.0
 	return Land.ground_height(p)
@@ -244,13 +235,13 @@ static func stand_pos(team: int, i: int) -> Vector2:
 	return _c(team, HAT_STANDS[i])
 
 static func workshop(team: int) -> Vector2:
-	return _c(team, Vector2(8.5, 18.0))
+	return _c(team, Castle.WORKSHOP)
 
 static func altar(team: int) -> Vector2:
 	return _c(team, ALTAR_P)
 
 static func spawn(team: int) -> Vector2:
-	return _c(team, Vector2(0.0, 18.2))
+	return _c(team, Castle.SPAWN)
 
 static func gate_front(g: Dictionary) -> Vector2:
 	# Standing point just outside a gate (the side facing midfield).
@@ -268,49 +259,41 @@ func _build_map() -> void:
 	obstacles.clear()
 	nodes.clear()
 	for t in 2:
-		# Front wall at z=15 with two gates; pieces are one 5.2 m wall model each.
-		# Pieces that meet the field edge run 1 m past it, so there is no rounded wall end at the
-		# edge for a unit to be pushed around and clamped back into.
-		_add_wall(t, Vector2(-CASTLE_HX, FRONT_Z), Vector2(-7.8, FRONT_Z))
-		_add_wall(t, Vector2(-2.6, FRONT_Z), Vector2(2.6, FRONT_Z))
-		_add_wall(t, Vector2(7.8, FRONT_Z), Vector2(CASTLE_HX, FRONT_Z))
-		# Side walls: the field is wider than the castle, so it needs its own flanks. They run
-		# 1 m past the field edge at the back (no rounded end for a unit to be clamped into).
+		# Front wall (Round 10: z=3, 40 m wide) with a gatehouse piece around each gate. Pieces that
+		# meet the field edge run 1 m past it (no rounded wall end for a unit to be clamped into).
+		var gp: float = Castle.GATE_PIECE
+		var gx0: float = GATE_X[0]
+		var gx1: float = GATE_X[1]
+		_add_wall(t, Vector2(-CASTLE_HX, FRONT_Z), Vector2(gx0 - gp, FRONT_Z))
+		_add_wall(t, Vector2(gx0 + gp, FRONT_Z), Vector2(gx1 - gp, FRONT_Z))
+		_add_wall(t, Vector2(gx1 + gp, FRONT_Z), Vector2(CASTLE_HX, FRONT_Z))
+		# Side walls: the field is wider than the castle, so it needs its own flanks.
 		_add_wall(t, Vector2(-CASTLE_HX, FRONT_Z), Vector2(-CASTLE_HX, CASTLE_BACK + 1.0))
 		_add_wall(t, Vector2(CASTLE_HX, FRONT_Z), Vector2(CASTLE_HX, CASTLE_BACK + 1.0))
 		for gx in GATE_X:
-			# The gate model is a 5.2 m wall piece with a ~2.3 m doorway; only the doorway is the
-			# gate. The neighbouring wall ends (radius 1.0) cover the stone pillars either side.
+			# The gate model is a wall piece with a ~2.3 m doorway; only the doorway is the gate.
+			# The neighbouring wall ends (radius 1.0) cover the stone pillars either side.
 			var a := _c(t, Vector2(gx - GATE_HALF, FRONT_Z))
 			var b := _c(t, Vector2(gx + GATE_HALF, FRONT_Z))
 			gates.append({"id":gates.size(), "team":t, "a":a, "b":b, "c":(a + b) * 0.5, "hp":GATE_HP, "max_hp":GATE_HP,
 				"broken":false, "open":false, "side":"west" if gx < 0.0 else "east"})
-		# The back rooms are a raised terrace: its front edge at z=21 is a ledge (retaining wall +
-		# parapet), open only where the two staircases climb it.
-		for seg in [[-CASTLE_HX, -STAIR_X1], [-STAIR_X0, -KEEP_X], [KEEP_X, STAIR_X0], [STAIR_X1, CASTLE_HX]]:
-			walls.append({"a":_c(t, Vector2(seg[0], INNER_Z)), "b":_c(t, Vector2(seg[1], INNER_Z)), "r":LEDGE_R, "team":t, "kind":"ledge"})
-		# Keep block between the dungeon (west) and the throne room (east).
-		_add_wall(t, Vector2(-KEEP_X, INNER_Z + 0.5), Vector2(KEEP_X, INNER_Z + 0.5), "keep")
-		_add_wall(t, Vector2(-KEEP_X, INNER_Z + 0.5), Vector2(-KEEP_X, CASTLE_BACK + 1.0), "keep")
-		_add_wall(t, Vector2(KEEP_X, INNER_Z + 0.5), Vector2(KEEP_X, CASTLE_BACK + 1.0), "keep")
-		# The cell in the dungeon: bars on three sides, open towards the doorway (front).
-		# The back bars sit exactly on the field edge: a narrower gap between them and the edge
-		# (it was 0.4 m) trapped units between the bars and the boundary clamp.
+		# Terrace faces (L1 at z=14, L2 at z=22) open only at the staircases, and ledges along each
+		# staircase's sides (siege_castle.gd).
+		for seg in Castle.ledges():
+			walls.append({"a":_c(t, seg[0]), "b":_c(t, seg[1]), "r":LEDGE_R, "team":t, "kind":"ledge"})
+		# The dungeon cell on the L1 west wing: bars on three sides, open towards the front.
 		var cc := CELL_C
-		var back := CASTLE_BACK
-		walls.append({"a":_c(t, cc + Vector2(-CELL_HX, -CELL_HZ)), "b":_c(t, Vector2(cc.x - CELL_HX, back)), "r":0.3, "team":t, "kind":"bars"})
-		walls.append({"a":_c(t, cc + Vector2(CELL_HX, -CELL_HZ)), "b":_c(t, Vector2(cc.x + CELL_HX, back)), "r":0.3, "team":t, "kind":"bars"})
-		walls.append({"a":_c(t, Vector2(cc.x - CELL_HX, back)), "b":_c(t, Vector2(cc.x + CELL_HX, back)), "r":0.3, "team":t, "kind":"bars"})
-		# Stair channels up to the platforms: ledges on both sides so you can't step off.
-		for sx in [-1.0, 1.0]:
-			for lx in [STAIR_X0, STAIR_X1]:
-				walls.append({"a":_c(t, Vector2(sx * lx, STAIR_Z0)), "b":_c(t, Vector2(sx * lx, STAIR_Z1)), "r":LEDGE_R, "team":t, "kind":"ledge"})
+		var cz0: float = cc.y - CELL_HZ
+		var cz1: float = cc.y + CELL_HZ
+		walls.append({"a":_c(t, Vector2(cc.x - CELL_HX, cz0)), "b":_c(t, Vector2(cc.x - CELL_HX, cz1)), "r":0.3, "team":t, "kind":"bars"})
+		walls.append({"a":_c(t, Vector2(cc.x + CELL_HX, cz0)), "b":_c(t, Vector2(cc.x + CELL_HX, cz1)), "r":0.3, "team":t, "kind":"bars"})
+		walls.append({"a":_c(t, Vector2(cc.x - CELL_HX, cz1)), "b":_c(t, Vector2(cc.x + CELL_HX, cz1)), "r":0.3, "team":t, "kind":"bars"})
 		# Hat stands (solid posts) in the west corner; the workshop against the east wall.
 		for i in HAT_CLASSES.size():
 			var sp := _c(t, HAT_STANDS[i])
 			stands.append({"id":stands.size(), "team":t, "cls":HAT_CLASSES[i], "p":sp, "stock":HAT_STOCK_MAX, "t":0.0})
 			obstacles.append({"p":sp, "r":HAT_STAND_R, "kind":"hat_stand", "team":t})
-		obstacles.append({"p":_c(t, Vector2(11.2, 18.0)), "r":1.4, "kind":"workshop_building", "team":t})
+		obstacles.append({"p":_c(t, Castle.WORKSHOP_BUILDING), "r":1.4, "kind":"workshop_building", "team":t})
 		# Resource nodes on each half (world coords, point-mirrored), placed off the paths, clear of
 		# the river, the ledge faces and the outposts (tests/siege_land_check.gd verifies this).
 		for tp in RES_WOOD:
@@ -369,6 +352,19 @@ func _cells_near_segment(a: Vector2, b: Vector2, reach: float) -> Array:
 			var p := nav_point(c)
 			if p.distance_to(seg_closest(p, a, b)) < reach:
 				out.append(c)
+	return out
+
+func _cells_across_segment(a: Vector2, b: Vector2, reach: float) -> Array:
+	# Like _cells_near_segment, but only cells whose centre projects INSIDE a-b (a rectangle, no
+	# rounded ends). Gate doorways use this: the rounded ends of a capsule reached 1.35 m past the
+	# doorway into the wall's end cap, so paths led units into solid wall (Round 10 finding).
+	var out := []
+	var ab := b - a
+	var len2 := maxf(ab.length_squared(), 0.0001)
+	for c in _cells_near_segment(a, b, reach):
+		var t := (nav_point(c) - a).dot(ab) / len2
+		if t >= 0.0 and t <= 1.0:
+			out.append(c)
 	return out
 
 # ---------- spatial buckets (collision culling) ----------
@@ -442,7 +438,7 @@ func _build_nav() -> void:
 			(nav[t] as AStarGrid2D).set_point_solid(c, true)
 	_gate_cells.clear()
 	for g in gates:
-		_gate_cells.append(_cells_near_segment(g.a, g.b, WALL_R + UNIT_R * 0.9))
+		_gate_cells.append(_cells_across_segment(g.a, g.b, WALL_R + UNIT_R * 0.9))
 	_update_gate_nav()
 
 var _gate_cells: Array = []
@@ -972,7 +968,7 @@ func stand_near(u: Dictionary) -> Dictionary:
 static func in_castle(p: Vector2, team: int) -> bool:
 	# Inside team's walls (courtyard or back rooms), in that castle's local coordinates.
 	var q := (p if team == 0 else -p) - Vector2(0.0, CASTLE_SHIFT)
-	return absf(q.x) <= CASTLE_HX and q.y >= FRONT_Z
+	return Castle.inside(q)
 
 func _take_hat(u: Dictionary, st: Dictionary) -> bool:
 	if int(st.stock) <= 0:
