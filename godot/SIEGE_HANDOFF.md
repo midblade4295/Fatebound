@@ -464,3 +464,8 @@ rebuild (Kevin: "much larger and more 3D", Fat Princess castle screenshots).
   capsule (the capsule's ends opened cells inside the wall: units stuck; blue won 4/4 seeds).
 - Pace changed: castles 76 m apart; bot matches end ~260 s on rescues. Tune if Kevin wants longer.
 - Protocol v5: redeploy the server.
+
+**0.17.1 (KayKit castle):** the castle's walls, terrace edges, towers and buildings are KayKit
+models (`SiegeView._build_castle_kit`, `_kit_run`), merged per castle into one mesh
+(`_merge_kit`). Buildings: `Castle.BUILDINGS` (solid), props: `Castle.PROPS`. Only floors/steps are
+generated (`castle_mesh.gd`). Kevin rejected the generated sandstone look: keep the KayKit style.

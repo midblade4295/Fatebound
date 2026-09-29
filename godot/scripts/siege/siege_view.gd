@@ -690,6 +690,7 @@ func _build_props() -> void:
 	var forest_trees := ["Tree_1_A_Color1","Tree_1_B_Color1","Tree_2_A_Color1","Tree_2_B_Color1","Tree_3_A_Color1"]
 	for t in 2:
 		_build_castle(t)
+		_merge_kit()          # per castle, so the one off-screen is culled as a whole
 	# Midfield ruin and circular props from the sim.
 	for ob in sim.obstacles:
 		var p := Vector3(ob.p.x, 0, ob.p.y)
@@ -828,32 +829,129 @@ func _wall_run(a: Vector2, b: Vector2, path: String) -> void:
 		var node := _place(path, Vector3(c.x, 0, c.y), rot, Sim.WALL_SCALE)
 		if node != null:
 			node.scale.x = Sim.WALL_SCALE * piece / Sim.SEG
+			_kit_nodes.append(node)
 
 static var _castle_meshes: Dictionary = {}
 static var _castle_mats: Array = []
 
 func _build_castle_mesh(t: int) -> void:
+	# Generated parts (castle_mesh.gd): herringbone floors (the map's path texture) and grey stone
+	# steps in the KayKit wall colour. Everything else is KayKit models (_build_castle_kit).
 	if _castle_mats.is_empty():
-		# Walls a warmer, darker brick than the pale paving (like the references): the first pass
-		# used one tan for both and the terraces/stairs blended together from above.
-		for pair in [["res://assets/castle/bricks.png", Color(0.76, 0.62, 0.48)], ["res://assets/castle/paving.png", Color(0.98, 0.94, 0.88)]]:
-			var m := StandardMaterial3D.new()
-			m.albedo_texture = load(pair[0])
-			m.albedo_color = pair[1]
-			m.roughness = 0.92
-			m.specular_mode = BaseMaterial3D.SPECULAR_DISABLED
-			m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
-			_castle_mats.append(m)
+		var floor_m := StandardMaterial3D.new()
+		floor_m.albedo_texture = load("res://assets/terrain/path.png")
+		floor_m.albedo_color = Color(0.86, 0.84, 0.8)
+		floor_m.roughness = 0.95
+		floor_m.specular_mode = BaseMaterial3D.SPECULAR_DISABLED
+		var step_m := StandardMaterial3D.new()
+		step_m.albedo_color = Color("#a9adb4")
+		step_m.roughness = 0.9
+		step_m.specular_mode = BaseMaterial3D.SPECULAR_DISABLED
+		_castle_mats = [floor_m, step_m]
 	if not _castle_meshes.has(t):
 		_castle_meshes[t] = CastleMesh.build(sim, t)
 	var parts: Dictionary = _castle_meshes[t]
-	for k in ["bricks", "paving"]:
+	for k in ["floor", "steps"]:
 		var mi := MeshInstance3D.new()
 		mi.mesh = parts[k]
-		mi.material_override = _castle_mats[0 if k == "bricks" else 1]
+		mi.material_override = _castle_mats[0 if k == "floor" else 1]
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		mi.set_meta("perf", "castle")
 		add_child(mi)
+	_build_castle_kit(t)
+
+func _kit_run(a: Vector2, b: Vector2, y0: float, height: float, depth := 1.1) -> void:
+	# KayKit wall_straight pieces along a terrace edge / stair side: stretched to fit the length,
+	# scaled so the walkway sits at the terrace height (crenellations stand above as a parapet).
+	var length := a.distance_to(b)
+	if length < 0.3:
+		return
+	var seg := 2.0 * 1.9                      # target piece length (m)
+	var n := maxi(1, int(round(length / seg)))
+	var piece := length / float(n)
+	var rot := -atan2(b.y - a.y, b.x - a.x)
+	for i in n:
+		var c := a.lerp(b, (float(i) + 0.5) / float(n))
+		var node := _place(HEX + "wall_straight.gltf", Vector3(c.x, y0, c.y), rot, 1.0)
+		if node != null:
+			node.scale = Vector3(piece / 2.0, height / 0.85, depth / 0.8)
+			_kit_nodes.append(node)
+
+var _kit_nodes: Array = []
+
+func _merge_kit() -> void:
+	# All KayKit hex models share one atlas material: bake every static castle piece (walls,
+	# terrace walls, towers, buildings, props, banners, trees) into ONE mesh per material instead
+	# of ~70 separate draw calls per castle. Animated pieces (gates, catapults) and the hat stands
+	# stay separate.
+	var tools := {}
+	for n in _kit_nodes:
+		if n == null or not is_instance_valid(n):
+			continue
+		for mi in (n as Node).find_children("*", "MeshInstance3D", true, false):
+			var m3 := mi as MeshInstance3D
+			var xf: Transform3D = global_transform.affine_inverse() * m3.global_transform
+			for si in m3.mesh.get_surface_count():
+				var mat: Material = m3.get_active_material(si)
+				if not tools.has(mat):
+					var st := SurfaceTool.new()
+					st.begin(Mesh.PRIMITIVE_TRIANGLES)
+					tools[mat] = st
+				(tools[mat] as SurfaceTool).append_from(m3.mesh, si, xf)
+		(n as Node).queue_free()
+	_kit_nodes.clear()
+	for mat in tools:
+		var mi := MeshInstance3D.new()
+		mi.mesh = (tools[mat] as SurfaceTool).commit()
+		mi.material_override = mat
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mi.set_meta("perf", "castle")
+		add_child(mi)
+
+func _build_castle_kit(t: int) -> void:
+	var col: String = COLOR[t]
+	var face := 0.0 if t == 0 else PI
+	# Terrace faces and stair sides: KayKit wall pieces, walkway at the level above.
+	for seg in Castle.ledges():
+		var a: Vector2 = seg[0]
+		var c: Vector2 = seg[1]
+		var wa: Vector2 = Sim._c(t, a)
+		var wc: Vector2 = Sim._c(t, c)
+		if absf(a.y - c.y) < 0.01:
+			var lo := 0.0 if absf(a.y - Castle.L1_Z) < 0.01 else Castle.L1_H
+			var hi := Castle.L1_H if absf(a.y - Castle.L1_Z) < 0.01 else Castle.L2_H
+			_kit_run(wa, wc, lo, hi - lo)
+		else:
+			# A stair side runs along z; it stands on the stair's lower level, as tall as the climb.
+			var lo2 := 0.0 if a.y < Castle.L2_Z - 0.01 else Castle.L1_H
+			var hi2 := Castle.L1_H if a.y < Castle.L2_Z - 0.01 else Castle.L2_H
+			_kit_run(wa, wc, lo2, hi2 - lo2, 0.8)
+	# Towers: squat stone towers at the four corners, blue/red-roofed towers either side of the gates.
+	for sx in [-Castle.HX, Castle.HX]:
+		for sz in [Castle.FRONT_Z, Castle.BACK]:
+			var tp: Vector2 = Sim._c(t, Vector2(sx, sz))
+			_kit_nodes.append(_place(HEX + "building_tower_base_%s.gltf" % col, Vector3(tp.x, 0, tp.y), face, 3.2))
+	for gx in Castle.GATE_X:
+		for side in [-1.0, 1.0]:
+			var gp: Vector2 = Sim._c(t, Vector2(float(gx) + side * Castle.GATE_PIECE, Castle.FRONT_Z))
+			_kit_nodes.append(_place(HEX + "building_tower_A_%s.gltf" % col, Vector3(gp.x, 0, gp.y), face, 2.1))
+	# Buildings (solid in the sim too) and props.
+	for bd in Castle.BUILDINGS:
+		var bp: Vector2 = Sim._c(t, bd.p)
+		_kit_nodes.append(_place(HEX + (str(bd.model) % col) + ".gltf", Vector3(bp.x, float(bd.y), bp.y), face + deg_to_rad(float(bd.rot)), float(bd.scale)))
+	# Banners on the corner towers, small trees in the courtyard's front corners (clear of the
+	# hat stands, workshop and gates).
+	for sx in [-Castle.HX, Castle.HX]:
+		for sz in [Castle.FRONT_Z, Castle.BACK]:
+			var fp: Vector2 = Sim._c(t, Vector2(sx - signf(sx) * 0.4, sz + (0.4 if sz < 10.0 else -0.4)))
+			_kit_nodes.append(_place(HEX + "flag_%s.gltf" % col, Vector3(fp.x, 4.6, fp.y), face, 2.6))
+	for tq in [Vector2(-10.2, 4.6), Vector2(10.4, 4.6), Vector2(-19.0, 13.0), Vector2(19.0, 13.2)]:
+		var tpp: Vector2 = Sim._c(t, tq)
+		_kit_nodes.append(_place(HEX + "tree_single_A.gltf", Vector3(tpp.x, 0, tpp.y), randf() * TAU, 2.2))
+	for pr in Castle.PROPS:
+		var pp: Vector2 = Sim._c(t, pr[1])
+		var name: String = str(pr[0]) % col if str(pr[0]).contains("%s") else str(pr[0])
+		_kit_nodes.append(_place(HEX + name + ".gltf", Vector3(pp.x, Sim.height_at(pp), pp.y), face + randf() * 0.6 - 0.3, float(pr[2])))
 
 func _build_castle(t: int) -> void:
 	var col: String = COLOR[t]
@@ -868,9 +966,11 @@ func _build_castle(t: int) -> void:
 		if w.team != t:
 			continue
 		match str(w.kind):
+			"wall":
+				_wall_run(w.a, w.b, HEX + "wall_straight.gltf")
 			"bars":
 				_bars(w.a, w.b)
-			# "wall" and "ledge" (terrace faces, stair sides) are part of the generated castle.
+			# "ledge" (terrace faces, stair sides) are KayKit wall runs in _build_castle_kit.
 	# Gates on the front wall; open archways in the inner wall.
 	for g in sim.gates:
 		if g.team != t:
@@ -892,8 +992,7 @@ func _build_castle(t: int) -> void:
 	# Towers flank both gates; catapult towers on the front corners; the keep at the back.
 	for cx in [-Sim.CATAPULT_X, Sim.CATAPULT_X]:
 		var cp: Vector2 = Sim._c(t, Vector2(cx, Sim.FRONT_Z + 0.3))
-		# On top of the (now 5.5 m) front wall.
-		var cat := _place(HEX + "building_tower_catapult_%s.gltf" % col, Vector3(cp.x, CastleMesh.WALL_H, cp.y), face, 1.9)
+		var cat := _place(HEX + "building_tower_catapult_%s.gltf" % col, Vector3(cp.x, 0, cp.y), face, 2.2)
 		if cat != null:
 			var turret: Node3D = cat.find_child("*turret*", true, false)
 			var arm: Node3D = cat.find_child("*arm*", true, false)

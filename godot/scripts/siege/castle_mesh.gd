@@ -17,6 +17,7 @@ const TOWER_H := 7.4
 const PARAPET_H := 0.75
 const PARAPET_T := 0.45
 const TILE := 2.0                  # metres per texture tile
+const FLOOR_TILE := 3.2            # the herringbone path texture's period (as on the map paths)
 
 var bricks := SurfaceTool.new()
 var paving := SurfaceTool.new()
@@ -74,7 +75,7 @@ func floor_rect(x0: float, x1: float, z0: float, z1: float, y: float, to_world: 
 	if n.y < 0.0:
 		pts = [a, d, c, b]
 	_quad(paving, Vector3(pts[0].x, y, pts[0].y), Vector3(pts[1].x, y, pts[1].y), Vector3(pts[2].x, y, pts[2].y), Vector3(pts[3].x, y, pts[3].y),
-		pts[0] / TILE, pts[1] / TILE, pts[2] / TILE, pts[3] / TILE)
+		pts[0] / FLOOR_TILE, pts[1] / FLOOR_TILE, pts[2] / FLOOR_TILE, pts[3] / FLOOR_TILE)
 
 func crenellations(p0: Vector2, p1: Vector2, y: float, thick: float) -> void:
 	var L := p0.distance_to(p1)
@@ -117,48 +118,14 @@ func commit(st: SurfaceTool) -> ArrayMesh:
 
 # ---------- the castle ----------
 static func build(sim, team: int) -> Dictionary:
+	# Since the KayKit rebuild (Kevin: "utilize the KayKit assets for the walls") only the parts
+	# the kit doesn't have are generated: herringbone floors and the stone steps.
 	var b = new()
 	var to_world := func(q: Vector2) -> Vector2: return sim._c(team, q)
 	var hx: float = Castle.HX
-	# Outer walls (sim "wall" segments of this team): tall brick with a crenellated parapet.
-	for w in sim.walls:
-		if int(w.team) != team or str(w.kind) != "wall":
-			continue
-		b.box(b.bricks, w.a, w.b, 0.0, WALL_H, WALL_T, b.paving)
-		b.crenellations(w.a, w.b, WALL_H, 0.55)
-	# Gatehouse lintels over each doorway (the door model sits below).
-	for g in sim.gates:
-		if int(g.team) != team:
-			continue
-		b.box(b.bricks, g.a, g.b, 3.3, WALL_H + 0.4, WALL_T + 0.3, b.paving)
-		b.crenellations(g.a, g.b, WALL_H + 0.4, 0.55)
-	# Round towers: slimmer ones either side of each gate (they must stay clear of the 2.3 m
-	# doorway), big ones at the four corners.
-	for gx in Castle.GATE_X:
-		for side in [-1.0, 1.0]:
-			b.tower(to_world.call(Vector2(float(gx) + side * Castle.GATE_PIECE, Castle.FRONT_Z)), 0.0, TOWER_H - 0.4, GATE_TOWER_R)
-	for sx in [-hx, hx]:
-		for sz in [Castle.FRONT_Z, Castle.BACK]:
-			b.tower(to_world.call(Vector2(sx, sz)), 0.0, TOWER_H, TOWER_R)
-	# Floors: courtyard and terrace tops.
-	b.floor_rect(-hx, hx, Castle.FRONT_Z + WALL_T * 0.5, Castle.L1_Z, 0.02, to_world)
-	b.floor_rect(-hx, hx, Castle.L1_Z, Castle.L2_Z, Castle.L1_H + 0.02, to_world)
-	b.floor_rect(-hx, hx, Castle.L2_Z, Castle.BACK + 1.0, Castle.L2_H + 0.02, to_world)
-	# Terrace faces: brick retaining walls from the level below up to the terrace + a parapet on
-	# top, broken where the stairs are (Castle.ledges() gives the terrace-edge segments; the stair
-	# sides are handled with the stairs).
-	for seg in Castle.ledges():
-		var a: Vector2 = seg[0]
-		var c: Vector2 = seg[1]
-		if absf(a.y - c.y) > 0.01:
-			continue                                       # a stair side (vertical in z)
-		var z := a.y
-		var h_lo := 0.0 if absf(z - Castle.L1_Z) < 0.01 else Castle.L1_H
-		var h_hi := Castle.L1_H if absf(z - Castle.L1_Z) < 0.01 else Castle.L2_H
-		var wa: Vector2 = to_world.call(a)
-		var wc: Vector2 = to_world.call(c)
-		b.box(b.bricks, wa, wc, h_lo, h_hi + PARAPET_H, PARAPET_T, b.paving)
-	# Stairs: brick-sided flights, paved treads, and a stepped side wall with a parapet.
+	b.floor_rect(-hx, hx, Castle.FRONT_Z + 0.4, Castle.L1_Z, 0.03, to_world)
+	b.floor_rect(-hx, hx, Castle.L1_Z, Castle.L2_Z, Castle.L1_H + 0.03, to_world)
+	b.floor_rect(-hx, hx, Castle.L2_Z, Castle.BACK + 1.0, Castle.L2_H + 0.03, to_world)
 	for st in Castle.STAIRS:
 		var x0: float = st.x0
 		var x1: float = st.x1
@@ -171,11 +138,5 @@ static func build(sim, team: int) -> Dictionary:
 			var za := z0 + (z1 - z0) * i / steps
 			var zb := z0 + (z1 - z0) * (i + 1) / steps
 			var hy := h0 + (h1 - h0) * (i + 1) / steps
-			var pa: Vector2 = to_world.call(Vector2((x0 + x1) * 0.5, za))
-			var pb: Vector2 = to_world.call(Vector2((x0 + x1) * 0.5, zb))
-			b.box(b.bricks, pa, pb, 0.0, hy, x1 - x0, b.paving)
-		for sx in [x0, x1]:
-			var sa: Vector2 = to_world.call(Vector2(sx, z0 - 0.2))
-			var sb: Vector2 = to_world.call(Vector2(sx, z1))
-			b.box(b.bricks, sa, sb, 0.0, h1 + PARAPET_H, PARAPET_T, b.paving)
-	return {"bricks":b.bricks.commit(), "paving":b.paving.commit()}
+			b.box(b.bricks, to_world.call(Vector2((x0 + x1) * 0.5, za)), to_world.call(Vector2((x0 + x1) * 0.5, zb)), 0.0, hy, x1 - x0)
+	return {"steps":b.bricks.commit(), "floor":b.paving.commit()}

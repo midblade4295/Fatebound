@@ -506,3 +506,20 @@ K2/K3 notes (0.17.0)
   props now in view; hiding the castle meshes saves ~9 % (noisy). Hat stands are ~60 draw calls
   (pedestal + weapon + 3 hats each): merge them if the phone needs it.
 - Next polish: darker stair risers, thicker parapets, throne dais/balustrades, maybe Blender towers.
+
+# 0.17.1 (Kevin): "that castle looks horrible; utilize the KayKit assets for the walls, give the
+# castles some character, not just basic"
+- Dropped the generated sandstone walls/towers/parapets (castle_mesh.gd now only makes the
+  herringbone floors and grey stone steps). Castle = KayKit: wall_straight runs (outer walls and,
+  re-scaled so the walkway sits at the terrace height, every terrace edge and stair side), stone
+  tower_base on the 4 corners, tower_A beside each gate, catapult towers, keep behind the throne.
+- Character: blacksmith (the workshop), archery range (L1 east), church + tavern + two tower_B
+  around the throne (L2), barrels/crates/sacks/targets/weapon rack/wheelbarrow, banners on the
+  corner towers, trees in the courtyard corners. Buildings are solid in the sim
+  (Castle.BUILDINGS -> obstacles "castle_building"); props are visual only (Castle.PROPS).
+- Side stairs 2.5 -> 3.5 m and castle ledge radius 0.35 -> 0.55 (the KayKit edge walls are ~1.1 m
+  thick); reach + land checks pass.
+- Perf: all static KayKit pieces share one atlas material -> merged into one mesh per castle
+  (_merge_kit; per castle so the far one is culled). perf_bench at (4,30): ~141-150k tris,
+  179 draws (0.17.0: ~102-118k, ~165): the detailed buildings cost ~35-40k tris in view.
+- Watch: seed 11 lopsided (red 3-0, kills 18-148); seed 22 even. Check for a side bias.
