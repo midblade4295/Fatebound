@@ -25,7 +25,7 @@ func _nodes(tag: String) -> Array:
 	return mode.view.find_children("*", "", true, false).filter(func(n): return n.get_meta("perf", "") == tag)
 
 func _apply(cfg: String) -> void:
-	for tag in ["terrain", "water", "foliage"]:
+	for tag in ["terrain", "water", "foliage", "castle"]:
 		for n in _nodes(tag):
 			(n as Node3D).visible = true
 	for n in _nodes("terrain"):
@@ -93,6 +93,8 @@ func _apply(cfg: String) -> void:
 			env.adjustment_enabled = false
 		"no_glow":
 			env.glow_enabled = false
+		"no_castle":
+			for n in _nodes("castle"): n.visible = false
 		"nothing_new":
 			for n in _nodes("foliage"): n.visible = false
 			for n in _nodes("water"): n.visible = false

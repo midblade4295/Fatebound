@@ -3,6 +3,7 @@ extends Node3D
 const Stage = preload("res://scripts/siege/asset_cache.gd")
 const Land = preload("res://scripts/siege/siege_land.gd")
 const Castle = preload("res://scripts/siege/siege_castle.gd")
+const CastleMesh = preload("res://scripts/siege/castle_mesh.gd")
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 
 const HEX := "res://assets/kaykit/hex/"
@@ -828,36 +829,38 @@ func _wall_run(a: Vector2, b: Vector2, path: String) -> void:
 		if node != null:
 			node.scale.x = Sim.WALL_SCALE * piece / Sim.SEG
 
+static var _castle_meshes: Dictionary = {}
+static var _castle_mats: Array = []
+
+func _build_castle_mesh(t: int) -> void:
+	if _castle_mats.is_empty():
+		# Walls a warmer, darker brick than the pale paving (like the references): the first pass
+		# used one tan for both and the terraces/stairs blended together from above.
+		for pair in [["res://assets/castle/bricks.png", Color(0.76, 0.62, 0.48)], ["res://assets/castle/paving.png", Color(0.98, 0.94, 0.88)]]:
+			var m := StandardMaterial3D.new()
+			m.albedo_texture = load(pair[0])
+			m.albedo_color = pair[1]
+			m.roughness = 0.92
+			m.specular_mode = BaseMaterial3D.SPECULAR_DISABLED
+			m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+			_castle_mats.append(m)
+	if not _castle_meshes.has(t):
+		_castle_meshes[t] = CastleMesh.build(sim, t)
+	var parts: Dictionary = _castle_meshes[t]
+	for k in ["bricks", "paving"]:
+		var mi := MeshInstance3D.new()
+		mi.mesh = parts[k]
+		mi.material_override = _castle_mats[0 if k == "bricks" else 1]
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mi.set_meta("perf", "castle")
+		add_child(mi)
+
 func _build_castle(t: int) -> void:
 	var col: String = COLOR[t]
 	var face := 0.0 if t == 0 else PI
-	# Round 10 castle (siege_castle.gd): courtyard, then two terraces stepping up to the throne,
-	# joined by grand staircases. Terraces are solid blocks around their stair openings.
-	var hx: float = Castle.HX
-	_floor(t, -hx, hx, Sim.FRONT_Z + 1.0, Castle.L1_Z, Color("#9c8f78"))
-	var terrace := {Castle.L1_Z: [Castle.L1_H, Color("#b3a384"), Castle.L2_Z], Castle.L2_Z: [Castle.L2_H, Color("#c2b08c"), Castle.BACK]}
-	for tz in terrace:
-		var h: float = terrace[tz][0]
-		var top: Color = terrace[tz][1]
-		var z_end: float = terrace[tz][2]
-		var gaps := []
-		var stair_end: float = tz
-		for st in Castle.STAIRS:
-			if absf(float(st.z0) - tz) < 0.01:
-				gaps.append([float(st.x0), float(st.x1)])
-				stair_end = maxf(stair_end, float(st.z1))
-		gaps.sort_custom(func(a, b): return a[0] < b[0])
-		# Behind the stairs: one full-width block; alongside them: blocks between the openings.
-		_block(t, -hx, hx, stair_end, z_end, h, top)
-		var x := -hx
-		for g in gaps:
-			if g[0] - x > 0.05:
-				_block(t, x, g[0], tz, stair_end, h, top)
-			x = g[1]
-		if hx - x > 0.05:
-			_block(t, x, hx, tz, stair_end, h, top)
-	for st in Castle.STAIRS:
-		_stairs(t, float(st.x0), float(st.x1), float(st.z0), float(st.z1), float(st.h1), 9, true, true, float(st.h0))
+	# Round 10 castle geometry (castle_mesh.gd): tall crenellated sandstone walls, round towers,
+	# gatehouse lintels, terraces with brick faces + parapets, walled grand stairs, paved floors.
+	_build_castle_mesh(t)
 	# Royal carpet up to the throne.
 	_floor(t, -1.3, 1.3, Castle.THRONE.y - 1.6, Castle.BACK - 0.2, Color("#2f5f8a") if t == 0 else Color("#8a3a2f"), Castle.L2_H + 0.02)
 	# Walls from the sim (so collision and visuals always agree).
@@ -865,12 +868,9 @@ func _build_castle(t: int) -> void:
 		if w.team != t:
 			continue
 		match str(w.kind):
-			"wall":
-				_wall_run(w.a, w.b, HEX + "wall_straight.gltf")
 			"bars":
 				_bars(w.a, w.b)
-			"ledge":
-				_parapet(w.a, w.b)
+			# "wall" and "ledge" (terrace faces, stair sides) are part of the generated castle.
 	# Gates on the front wall; open archways in the inner wall.
 	for g in sim.gates:
 		if g.team != t:
@@ -890,22 +890,15 @@ func _build_castle(t: int) -> void:
 		rubble.visible = false
 		gate_nodes[g.id] = {"doors":doors, "rubble":rubble, "open":0.0, "broken":false}
 	# Towers flank both gates; catapult towers on the front corners; the keep at the back.
-	var tower_xs := []
-	for gx in Sim.GATE_X:
-		tower_xs.append_array([float(gx) - Castle.GATE_PIECE, float(gx) + Castle.GATE_PIECE])
-	for tx in tower_xs:
-		var tp: Vector2 = Sim._c(t, Vector2(tx, Sim.FRONT_Z))
-		_place(HEX + "building_tower_A_%s.gltf" % col, Vector3(tp.x, 0, tp.y), face, 1.8)
 	for cx in [-Sim.CATAPULT_X, Sim.CATAPULT_X]:
 		var cp: Vector2 = Sim._c(t, Vector2(cx, Sim.FRONT_Z + 0.3))
-		var cat := _place(HEX + "building_tower_catapult_%s.gltf" % col, Vector3(cp.x, 0, cp.y), face, 1.9)
+		# On top of the (now 5.5 m) front wall.
+		var cat := _place(HEX + "building_tower_catapult_%s.gltf" % col, Vector3(cp.x, CastleMesh.WALL_H, cp.y), face, 1.9)
 		if cat != null:
 			var turret: Node3D = cat.find_child("*turret*", true, false)
 			var arm: Node3D = cat.find_child("*arm*", true, false)
 			catapult_nodes.append({"team":t, "p":cp, "node":cat, "turret":turret, "arm":arm,
 				"arm_rest":arm.rotation.x if arm != null else 0.0, "fired":-10.0})
-		var bp: Vector2 = Sim._c(t, Vector2(signf(cx) * (Castle.HX - 1.5), Sim.CASTLE_BACK - 0.8))
-		_place(HEX + "building_tower_B_%s.gltf" % col, Vector3(bp.x, Castle.L2_H, bp.y), face, 1.7)
 	# The keep stands behind the throne, just past the field edge (a backdrop, not in the way).
 	var kp: Vector2 = Sim._c(t, Vector2(0.0, Castle.BACK + 2.4))
 	_place(HEX + "building_castle_%s.gltf" % col, Vector3(kp.x, Castle.L2_H, kp.y), face, 3.0)
