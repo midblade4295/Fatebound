@@ -41,7 +41,7 @@ const RUBBLE_TIME := 20.0        # a broken gate can't be rebuilt for 20 s ...
 const RUBBLE_CLEAR := 6.0        # ... or while any enemy is within 6 m of it
 
 # ---- layers (heights are for the view; the sim stays 2D, ledges are walls) ----
-const LEDGE_R := 0.35
+const LEDGE_R := 0.35                # landscape ledges; castle terraces use Castle.LEDGE_R
 # Round 7 layout (blue half; mirrored). Checked by tests/siege_land_check.gd.
 const RES_WOOD := [Vector2(-28.0, 44.0), Vector2(-24.0, 40.5), Vector2(27.0, 44.0), Vector2(29.5, 38.0), Vector2(-29.0, 9.0),
 	Vector2(-2.5, 30.0), Vector2(10.0, 22.5), Vector2(-2.5, 34.0), Vector2(29.0, 27.0), Vector2(-8.5, 9.5)]
@@ -280,7 +280,7 @@ func _build_map() -> void:
 		# Terrace faces (L1 at z=14, L2 at z=22) open only at the staircases, and ledges along each
 		# staircase's sides (siege_castle.gd).
 		for seg in Castle.ledges():
-			walls.append({"a":_c(t, seg[0]), "b":_c(t, seg[1]), "r":LEDGE_R, "team":t, "kind":"ledge"})
+			walls.append({"a":_c(t, seg[0]), "b":_c(t, seg[1]), "r":Castle.LEDGE_R, "team":t, "kind":"ledge"})
 		# The dungeon cell on the L1 west wing: bars on three sides, open towards the front.
 		var cc := CELL_C
 		var cz0: float = cc.y - CELL_HZ
@@ -293,7 +293,8 @@ func _build_map() -> void:
 			var sp := _c(t, HAT_STANDS[i])
 			stands.append({"id":stands.size(), "team":t, "cls":HAT_CLASSES[i], "p":sp, "stock":HAT_STOCK_MAX, "t":0.0})
 			obstacles.append({"p":sp, "r":HAT_STAND_R, "kind":"hat_stand", "team":t})
-		obstacles.append({"p":_c(t, Castle.WORKSHOP_BUILDING), "r":1.4, "kind":"workshop_building", "team":t})
+		for bd in Castle.BUILDINGS:
+			obstacles.append({"p":_c(t, bd.p), "r":float(bd.r), "kind":"castle_building", "team":t})
 		# Resource nodes on each half (world coords, point-mirrored), placed off the paths, clear of
 		# the river, the ledge faces and the outposts (tests/siege_land_check.gd verifies this).
 		for tp in RES_WOOD:

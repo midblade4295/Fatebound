@@ -26,11 +26,11 @@ const L2_H := 3.6
 # Staircases: {x0, x1, z0, z1, h0, h1}; they rise with z, from the lower level to the terrace.
 const STAIRS := [
 	{"x0": -4.0, "x1": 4.0, "z0": 14.0, "z1": 17.0, "h0": 0.0, "h1": 1.8},    # grand stairs to L1
-	{"x0": -11.0, "x1": -8.5, "z0": 14.0, "z1": 17.0, "h0": 0.0, "h1": 1.8},  # west side stairs
-	{"x0": 8.5, "x1": 11.0, "z0": 14.0, "z1": 17.0, "h0": 0.0, "h1": 1.8},    # east side stairs
+	{"x0": -11.5, "x1": -8.0, "z0": 14.0, "z1": 17.0, "h0": 0.0, "h1": 1.8},  # west side stairs (3.5 m:
+	{"x0": 8.0, "x1": 11.5, "z0": 14.0, "z1": 17.0, "h0": 0.0, "h1": 1.8},    # KayKit terrace walls are thicker)
 	{"x0": -3.0, "x1": 3.0, "z0": 22.0, "z1": 25.0, "h0": 1.8, "h1": 3.6},    # grand stairs to L2
 ]
-const LEDGE_R := 0.35
+const LEDGE_R := 0.55             # the KayKit wall pieces on terrace edges are ~1.1 m thick
 
 # Key places (castle-local).
 const THRONE := Vector2(0.0, 26.8)
@@ -39,7 +39,24 @@ const CELL_HX := 1.8
 const CELL_HZ := 1.6
 const SPAWN := Vector2(0.0, 8.5)
 const WORKSHOP := Vector2(13.5, 9.0)
-const WORKSHOP_BUILDING := Vector2(17.6, 9.0)
+# Buildings (KayKit, team-coloured "%s" = blue/red): solid in the sim (obstacle radius r), placed
+# where gameplay doesn't need the floor. y = the level they stand on; rot in degrees (blue space).
+const BUILDINGS := [
+	{"model": "building_blacksmith_%s", "p": Vector2(17.2, 9.0), "rot": -90.0, "scale": 2.8, "r": 1.7, "y": 0.0},   # the workshop
+	{"model": "building_archeryrange_%s", "p": Vector2(16.0, 19.2), "rot": 180.0, "scale": 2.4, "r": 1.9, "y": 1.8},
+	{"model": "building_church_%s", "p": Vector2(14.5, 26.0), "rot": 180.0, "scale": 2.6, "r": 1.6, "y": 3.6},
+	{"model": "building_tavern_%s", "p": Vector2(-14.5, 26.0), "rot": 180.0, "scale": 2.6, "r": 1.7, "y": 3.6},
+	{"model": "building_tower_B_%s", "p": Vector2(-6.5, 27.4), "rot": 0.0, "scale": 2.2, "r": 1.4, "y": 3.6},
+	{"model": "building_tower_B_%s", "p": Vector2(6.5, 27.4), "rot": 0.0, "scale": 2.2, "r": 1.4, "y": 3.6},
+]
+# Small props (visual only), tucked against walls and terrace faces.
+const PROPS := [
+	["barrel", Vector2(-19.0, 4.6), 2.2], ["barrel", Vector2(-18.2, 4.4), 2.0], ["crate_A_big", Vector2(19.0, 4.8), 2.2],
+	["crate_B_small", Vector2(18.2, 4.3), 2.4], ["weaponrack", Vector2(4.6, 13.2), 3.2], ["target", Vector2(-5.6, 13.1), 3.4],
+	["target", Vector2(-7.0, 13.1), 3.4], ["sack", Vector2(15.0, 12.9), 2.4], ["wheelbarrow", Vector2(11.4, 12.8), 3.0],
+	["barrel", Vector2(-19.2, 21.2), 2.2], ["crate_long_A", Vector2(-11.0, 21.3), 2.2], ["bucket_arrows", Vector2(12.6, 21.2), 3.0],
+	["flag_%s", Vector2(-3.4, 25.4), 2.0], ["flag_%s", Vector2(3.4, 25.4), 2.0],
+]
 const ALTAR := Vector2(-4.0, 11.5)
 const CATAPULT_X := 17.0
 const HAT_HALL := Vector2(-15.0, 8.5)
