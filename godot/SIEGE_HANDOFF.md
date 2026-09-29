@@ -410,3 +410,8 @@ SIEGE_PROGRESS Round 7b); re-measure if you change the tint.
 `--rendering-method mobile --resolution 540x960`; compare the SECOND pass of a config, the first
 includes shader compile). Terrain/water/foliage nodes carry `meta "perf"` for it. Keep the
 terrain shader's common path at 2 texture reads; see SIEGE_PROGRESS 0.14.2 for the numbers.
+
+**0.14.3:** glow off in battle, terrain baked at 1 m (`Land.BAKE_STEP`), off-screen character
+animations paused (`SiegeView.anim_cull`), fewer flowers/tufts. **Kevin does not want automatic
+resolution; don't add it.** `tests/perf_bench.gd` now restores each build's own settings, can
+freeze the scene, and prints draw calls/triangles; compare builds by alternating runs.
