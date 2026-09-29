@@ -15,7 +15,7 @@ func _init() -> void:
 	# 1. obstacles clear of walls, paths, outposts, each other
 	for ob in s.obstacles:
 		var p: Vector2 = ob.p
-		if str(ob.kind) in ["forge_building", "workshop_building"]:
+		if str(ob.kind) in ["hat_stand", "workshop_building"]:
 			continue
 		var wmin := INF
 		for w in s.walls:

@@ -19,7 +19,6 @@ const WIN_RESCUES := 3
 const MATCH_TIME := 720.0
 const RESPAWN_TIME := 5.0
 const DROP_RETURN := 25.0        # a dropped Oracle nobody moves goes back to her cell
-const FORGE_RADIUS := 2.6
 const WORKSHOP_RADIUS := 2.8
 const PICKUP_RADIUS := 1.5
 const THRONE_RADIUS := 2.2
@@ -103,13 +102,33 @@ const UPGRADES := {
 		"desc":"+50% gate HP per level, and repairs all gates"},
 	"armory": {"name":"Armory", "max":3, "cost":[{"wood":10,"stone":15},{"wood":20,"stone":25},{"wood":30,"stone":35}],
 		"desc":"+12% HP and damage per level for your fighters"},
-	"forge":  {"name":"Fourth Die", "max":1, "cost":[{"wood":10,"stone":20}],
-		"desc":"The forge rolls four dice: easier pairs and triples"},
+	"hat_knight":    {"name":"Paladin Hats", "max":1, "cost":[{"wood":12,"stone":12}], "desc":"The Knight stand makes Paladin hats"},
+	"hat_barbarian": {"name":"Berserker Hats", "max":1, "cost":[{"wood":12,"stone":12}], "desc":"The Barbarian stand makes Berserker hats"},
+	"hat_rogue":     {"name":"Assassin Hats", "max":1, "cost":[{"wood":12,"stone":12}], "desc":"The Rogue stand makes Assassin hats"},
+	"hat_ranger":    {"name":"Sniper Hats", "max":1, "cost":[{"wood":12,"stone":12}], "desc":"The Ranger stand makes Sniper hats"},
+	"hat_mage":      {"name":"Archmage Hats", "max":1, "cost":[{"wood":12,"stone":12}], "desc":"The Mage stand makes Archmage hats"},
 	"catapult": {"name":"Catapults", "max":1, "cost":[{"wood":15,"stone":25}],
 		"desc":"Your corner towers lob stones at enemies 5-22 m away"},
 }
 
-const FACES := ["knight","barbarian","rogue","ranger","mage","fate"]
+# ---- hats (Round 8, Fat Princess style; replaced the dice forge) ----
+# Five stands in each courtyard's west corner (castle-local coords). Villagers walking into a stand
+# take its hat and become that class; dying drops your hat where you fall and anyone -- ally or
+# enemy -- who walks over it as a Villager takes it. Classed units swap at a stand with ACTION.
+const HAT_CLASSES := ["knight", "barbarian", "rogue", "ranger", "mage"]
+const HAT_STANDS := [Vector2(-11.3, 17.0), Vector2(-11.3, 19.8), Vector2(-9.5, 18.4), Vector2(-7.7, 17.0), Vector2(-7.7, 19.8)]
+const HAT_HALL := Vector2(-9.5, 18.4)
+const HAT_TAKE_R := 1.3
+const HAT_STAND_R := 0.45
+const HAT_STOCK_MAX := 3
+const HAT_REGEN := 6.0           # seconds per new hat, per stand (10 s starved 16-player teams)
+const HAT_LIFETIME := 30.0       # a dropped hat vanishes after this
+const HAT_PICK_R := 1.0
+# Outposts carry a small hat rack for whoever holds them (attackers respawn there as Villagers;
+# without it every death meant walking back to the castle: 0 rescues in 2 test matches).
+const OUTPOST_HAT_MAX := 3
+const OUTPOST_HAT_REGEN := 6.0
+const OUTPOST_HAT_R := 2.4        # tower radius 1.3 + reach
 const UPGRADE_NAME := {"knight":"Paladin","barbarian":"Berserker","rogue":"Assassin","ranger":"Sniper","mage":"Archmage"}
 
 # range: melee reach or projectile travel. arc: cosine of the half-angle a melee swing covers.
@@ -148,7 +167,16 @@ var gates: Array = []          # {id, team, a, b, c, hp, max_hp, broken, open}
 var nodes: Array = []
 var outposts: Array = []       # {id, p, owner (-1 neutral), prog (-1 red .. +1 blue), t}          # resource nodes {id, kind:"wood"/"stone", p, r, amount, max, regen, t}
 var stock := [{"wood":0, "stone":0}, {"wood":0, "stone":0}]
-var levels := [{"gates":0, "armory":0, "forge":0, "catapult":0}, {"gates":0, "armory":0, "forge":0, "catapult":0}]
+var levels := [_zero_levels(), _zero_levels()]
+var stands: Array = []         # {id, team, cls, p, stock, t}
+var hats: Array = []           # dropped hats on the ground: {id, cls, up, pos, t}
+var _hat_id := 0
+
+static func _zero_levels() -> Dictionary:
+	var d := {}
+	for k in UPGRADES:
+		d[k] = 0
+	return d
 var cake_trees: Array = []     # {id, p, ready, t}  neutral, across the land
 var catapults: Array = []      # {team, p, t, side}
 var shells: Array = []         # catapult stones in flight {id, team, from, to, t, flight}
@@ -196,7 +224,11 @@ static func height_at(p: Vector2) -> float:
 	return Land.ground_height(p)
 
 static func forge(team: int) -> Vector2:
-	return _c(team, Vector2(-8.5, 18.0))
+	# The hat stands' corner (kept under the old name: HUD hints, bots and tests aim here).
+	return _c(team, HAT_HALL)
+
+static func stand_pos(team: int, i: int) -> Vector2:
+	return _c(team, HAT_STANDS[i])
 
 static func workshop(team: int) -> Vector2:
 	return _c(team, Vector2(8.5, 18.0))
@@ -218,6 +250,8 @@ func _add_wall(team: int, a: Vector2, b: Vector2, kind := "wall") -> void:
 func _build_map() -> void:
 	walls.clear()
 	gates.clear()
+	stands.clear()
+	hats.clear()
 	obstacles.clear()
 	nodes.clear()
 	for t in 2:
@@ -258,8 +292,11 @@ func _build_map() -> void:
 		for sx in [-1.0, 1.0]:
 			for lx in [STAIR_X0, STAIR_X1]:
 				walls.append({"a":_c(t, Vector2(sx * lx, STAIR_Z0)), "b":_c(t, Vector2(sx * lx, STAIR_Z1)), "r":LEDGE_R, "team":t, "kind":"ledge"})
-		# Courtyard buildings (solid): forge + workshop sit against the side walls.
-		obstacles.append({"p":_c(t, Vector2(-11.2, 18.0)), "r":1.4, "kind":"forge_building", "team":t})
+		# Hat stands (solid posts) in the west corner; the workshop against the east wall.
+		for i in HAT_CLASSES.size():
+			var sp := _c(t, HAT_STANDS[i])
+			stands.append({"id":stands.size(), "team":t, "cls":HAT_CLASSES[i], "p":sp, "stock":HAT_STOCK_MAX, "t":0.0})
+			obstacles.append({"p":sp, "r":HAT_STAND_R, "kind":"hat_stand", "team":t})
 		obstacles.append({"p":_c(t, Vector2(11.2, 18.0)), "r":1.4, "kind":"workshop_building", "team":t})
 		# Resource nodes on each half (world coords, point-mirrored), placed off the paths, clear of
 		# the river, the ledge faces and the outposts (tests/siege_land_check.gd verifies this).
@@ -274,7 +311,9 @@ func _build_map() -> void:
 	# Outposts: a solid tower in the middle of each capture ring.
 	outposts = []
 	for op in Land.outpost_positions():
-		outposts.append({"id":outposts.size(), "p":op, "owner":-1, "prog":0.0, "t":0.0})
+		# West outposts carry Knight hats, east ones Rogue hats (point-mirrored pairs).
+		outposts.append({"id":outposts.size(), "p":op, "owner":-1, "prog":0.0, "t":0.0,
+			"hat":"knight" if op.x < 0.0 else "rogue", "stock":1, "ht":0.0})
 		obstacles.append({"p":op, "r":Land.OUTPOST_TOWER_R, "kind":"outpost_tower"})
 	# Cake trees across the land (point-mirrored pairs); any team can pick a cake. The trunk is
 	# solid; the cake is picked from beside it.
@@ -480,8 +519,7 @@ func _new_unit(id: String, team: int, bot: bool, role: String) -> Dictionary:
 	return {"id":id,"team":team,"bot":bot,"role":role,"cls":"villager","up":false,"hp":60.0,"max_hp":60.0,
 		"pos":Vector2.ZERO,"face":0.0,"move":Vector2.ZERO,"state":"idle","t":0.0,"atk":"","cd_dodge":0.0,
 		"cd_ability":0.0,"stun":0.0,"carrying":false,"respawn_at":0.0,"kills":0,"deaths":0,"rescues":0,
-		"dodge_dir":Vector2.ZERO,"target":"","forge":{"open":false,"faces":["fate","fate","fate"],"held":[false,false,false],
-		"rolling":0.0,"rolled":false},"ai_goal":Vector2.ZERO,"lunge_hit":false,
+		"dodge_dir":Vector2.ZERO,"target":"","ai_goal":Vector2.ZERO,"lunge_hit":false,
 		"unstick":0.0,"unstick_dir":Vector2.ZERO,"stuck_t":0.0,"last_pos":Vector2.ZERO,
 		"lifting":-1, "load":{"kind":"", "n":0}, "task":{}, "workshop_open":false, "gathered":0, "repaired":0.0, "gate_dmg":0.0, "offering":false, "fed":0,
 		"path":PackedVector2Array(), "path_i":0, "path_goal":Vector2(INF, INF), "path_at":-10.0, "path_ver":-1}
@@ -501,8 +539,6 @@ func stat(u: Dictionary, key: String) -> Variant:
 func class_label(u: Dictionary) -> String:
 	return UPGRADE_NAME.get(u.cls,"") if u.up else str(CLASSES[u.cls].name)
 
-func dice_count(team: int) -> int:
-	return 3 + int(levels[team].forge)
 
 func forward_outpost(team: int) -> Dictionary:
 	# The team's owned outpost closest to the enemy dungeon (where its own Oracle is held).
@@ -533,7 +569,6 @@ func _respawn(u: Dictionary, first := false) -> void:
 	u.stun = 0.0
 	u.carrying = false
 	u.lifting = -1
-	u.forge.open = false
 	u.workshop_open = false
 	u.task = {}
 	u.load = {"kind":"", "n":0}
@@ -624,11 +659,7 @@ func act(id: String, action: String, arg: Variant = null) -> bool:
 		"ability": return _start_attack(u, "ability")
 		"dodge": return _dodge(u)
 		"interact": return _interact(u)
-		"forge_roll": return _forge_roll(u, arg)
-		"forge_take": return _forge_take(u)
-		"forge_leave":
-			u.forge.open = false
-			return true
+		"hat_swap": return _swap_hat(u)
 		"take_tools": return _take_tools(u)
 		"buy": return buy_upgrade(u.team, str(arg), u)
 		"workshop_leave":
@@ -645,7 +676,7 @@ func set_move(id: String, v: Vector2) -> void:
 			u.task = {}
 
 func can_act(u: Dictionary) -> bool:
-	return alive(u) and u.stun <= 0.0 and u.state in ["idle","move"] and not u.forge.open and not u.workshop_open
+	return alive(u) and u.stun <= 0.0 and u.state in ["idle","move"] and not u.workshop_open
 
 func _aim(u: Dictionary, reach: float) -> void:
 	var target := nearest_enemy(u, reach, true)
@@ -673,7 +704,7 @@ func _start_attack(u: Dictionary, kind: String, aim := true) -> bool:
 	return true
 
 func _dodge(u: Dictionary) -> bool:
-	if not alive(u) or u.stun > 0.0 or u.carrying or u.cd_dodge > 0.0 or u.state in ["wind","dodge"] or u.forge.open or u.workshop_open:
+	if not alive(u) or u.stun > 0.0 or u.carrying or u.cd_dodge > 0.0 or u.state in ["wind","dodge"] or u.workshop_open:
 		return false
 	var d: Vector2 = u.move if u.move.length() > 0.2 else dir_of(u.face)
 	u.dodge_dir = d.normalized()
@@ -730,12 +761,7 @@ func _interact(u: Dictionary) -> bool:
 			u.task = {"kind":"gather", "node":n.id, "t":GATHER_TIME}
 			u.face = angle_of(n.p - u.pos)
 			return true
-	if u.pos.distance_to(forge(u.team)) <= FORGE_RADIUS:
-		u.forge.open = true
-		u.forge.rolled = false
-		u.forge.held = []
-		for i in dice_count(u.team):
-			u.forge.held.append(false)
+	if u.cls != "villager" and _swap_hat(u):
 		return true
 	if u.pos.distance_to(workshop(u.team)) <= WORKSHOP_RADIUS:
 		u.workshop_open = true
@@ -859,60 +885,100 @@ func context_action(u: Dictionary) -> String:
 		var n := near_node(u)
 		if not n.is_empty() and (u.load.n == 0 or u.load.kind == n.kind) and u.load.n < CARRY_MAX:
 			return "chop" if n.kind == "wood" else "mine"
-	if u.pos.distance_to(forge(u.team)) <= FORGE_RADIUS:
-		return "forge"
+	if u.cls != "villager":
+		var st := stand_near(u)
+		if not st.is_empty() and st.cls != u.cls and int(st.stock) > 0:
+			return "hat"
 	if u.pos.distance_to(workshop(u.team)) <= WORKSHOP_RADIUS:
 		return "workshop"
 	return ""
 
-# ---------- forge dice ----------
-func _forge_roll(u: Dictionary, held: Variant) -> bool:
-	var f: Dictionary = u.forge
-	if not f.open or f.rolling > 0.0 or u.pos.distance_to(forge(u.team)) > FORGE_RADIUS + 0.6:
+# ---------- hats ----------
+func stand_near(u: Dictionary) -> Dictionary:
+	for st in stands:
+		if int(st.team) == u.team and u.pos.distance_to(st.p) <= HAT_TAKE_R:
+			return st
+	return {}
+
+func _take_hat(u: Dictionary, st: Dictionary) -> bool:
+	if int(st.stock) <= 0 or int(st.team) != u.team:
 		return false
-	var n := dice_count(u.team)
-	while f.faces.size() < n:
-		f.faces.append("fate")
-	while f.held.size() < n:
-		f.held.append(false)
-	for i in n:
-		f.held[i] = bool(held[i]) if (held is Array and f.rolled and i < held.size()) else false
-	for i in n:
-		if not f.held[i]:
-			f.faces[i] = FACES[rng.randi() % FACES.size()]
-	f.rolling = ROLL_TIME
-	f.rolled = true
-	u.state = "idle"
-	_event("forge_roll", {"id":u.id,"faces":f.faces.duplicate()})
+	if u.cls != "villager":
+		_drop_hat(u)                                  # swapping: the old hat goes on the ground
+	st.stock = int(st.stock) - 1
+	_set_class(u, st.cls, int(levels[u.team].get("hat_" + str(st.cls), 0)) > 0)
+	_event("hat_take", {"id":u.id, "cls":st.cls, "team":u.team, "stand":st.id})
 	return true
 
-static func forge_result(faces: Array) -> Dictionary:
-	# Pair of a class (fate faces are wild) grants it; three of a kind grants the upgraded form.
-	var wild := faces.count("fate")
-	var best := ""
-	var best_n := 0
-	for c in ["knight","barbarian","rogue","ranger","mage"]:
-		var n: int = faces.count(c)
-		if n > best_n:
-			best_n = n
-			best = c
-	if best == "":
-		return {"cls":"", "up":false, "n":wild}
-	var total := best_n + wild
-	return {"cls":best if total >= 2 else "", "up":total >= 3, "n":total}
+func _swap_hat(u: Dictionary) -> bool:
+	var st := stand_near(u)
+	if st.is_empty() or st.cls == u.cls:
+		return false
+	return _take_hat(u, st)
 
-func _forge_take(u: Dictionary) -> bool:
-	var f: Dictionary = u.forge
-	if not f.open or f.rolling > 0.0 or not f.rolled:
-		return false
-	var r := forge_result(f.faces)
-	if r.cls == "" and f.faces.count("fate") == f.faces.size():
-		r = {"cls":FACES[rng.randi() % 5], "up":true}
-	if r.cls == "":
-		return false
-	_set_class(u, r.cls, r.up)
-	f.open = false
-	return true
+func _drop_hat(u: Dictionary) -> void:
+	if u.cls == "villager":
+		return
+	var h := {"id":_hat_id, "cls":u.cls, "up":u.up, "pos":u.pos, "t":0.0}
+	_hat_id += 1
+	hats.append(h)
+	_event("hat_drop", {"hat":h.id, "cls":h.cls, "pos":h.pos, "team":u.team})
+
+func _step_hats(dt: float) -> void:
+	for st in stands:
+		if int(st.stock) < HAT_STOCK_MAX:
+			st.t += dt
+			if st.t >= HAT_REGEN:
+				st.t = 0.0
+				st.stock = int(st.stock) + 1
+		else:
+			st.t = 0.0
+	for i in range(hats.size() - 1, -1, -1):
+		hats[i].t += dt
+		if hats[i].t >= HAT_LIFETIME:
+			_event("hat_expire", {"hat":hats[i].id})
+			hats.remove_at(i)
+	for op in outposts:
+		if int(op.owner) >= 0 and int(op.stock) < OUTPOST_HAT_MAX:
+			op.ht += dt
+			if op.ht >= OUTPOST_HAT_REGEN:
+				op.ht = 0.0
+				op.stock = int(op.stock) + 1
+	# Villagers take a hat by walking over one (dropped hats first, then their own stands, then a
+	# rack at an outpost their team holds).
+	for u in units:
+		if not alive(u) or u.cls != "villager" or u.carrying or u.stun > 0.0:
+			continue
+		var picked := false
+		for i in hats.size():
+			var h: Dictionary = hats[i]
+			if u.pos.distance_to(h.pos) <= HAT_PICK_R:
+				hats.remove_at(i)
+				_set_class(u, h.cls, h.up)
+				_event("hat_pick", {"id":u.id, "cls":h.cls, "team":u.team, "hat":h.id})
+				picked = true
+				break
+		if not picked:
+			var st := stand_near(u)
+			if not st.is_empty():
+				picked = _take_hat(u, st)
+		if not picked:
+			for op in outposts:
+				if int(op.owner) == u.team and int(op.stock) > 0 and u.pos.distance_to(op.p) <= OUTPOST_HAT_R:
+					op.stock = int(op.stock) - 1
+					_set_class(u, op.hat, int(levels[u.team].get("hat_" + str(op.hat), 0)) > 0)
+					_event("hat_take", {"id":u.id, "cls":op.hat, "team":u.team, "outpost":op.id})
+					break
+
+func nearest_hat(p: Vector2, max_d: float) -> Dictionary:
+	var best := {}
+	var bd := max_d
+	for h in hats:
+		var d: float = p.distance_to(h.pos)
+		if d < bd:
+			bd = d
+			best = h
+	return best
 
 func _set_class(u: Dictionary, cls: String, up: bool) -> void:
 	var ratio: float = u.hp / maxf(1.0, u.max_hp)
@@ -993,7 +1059,10 @@ func _kill(src: Dictionary, dst: Dictionary) -> void:
 		_leave_lift(dst, false)
 	dst.hp = 0.0
 	dst.state = "dead"
-	dst.forge.open = false
+	# Fat Princess rule: your hat falls where you die; you come back as a Villager.
+	_drop_hat(dst)
+	dst.cls = "villager"
+	dst.up = false
 	dst.workshop_open = false
 	dst.task = {}
 	dst.load = {"kind":"", "n":0}
@@ -1035,7 +1104,6 @@ func _join_lift(u: Dictionary, o: Dictionary) -> void:
 	o.carrier = o.lifters[0]
 	u.carrying = true
 	u.lifting = t
-	u.forge.open = false
 	u.workshop_open = false
 	u.task = {}
 	_event("lift_join", {"id":u.id, "team":t, "n":o.lifters.size(), "need":lifters_needed(o)})
@@ -1189,11 +1257,6 @@ func _step_unit(u: Dictionary, dt: float) -> void:
 		return
 	u.cd_dodge = maxf(0.0, u.cd_dodge - dt)
 	u.cd_ability = maxf(0.0, u.cd_ability - dt)
-	var f: Dictionary = u.forge
-	if f.rolling > 0.0:
-		f.rolling = maxf(0.0, f.rolling - dt)
-	if f.open and u.pos.distance_to(forge(u.team)) > FORGE_RADIUS + 0.8:
-		f.open = false
 	if u.workshop_open and u.pos.distance_to(workshop(u.team)) > WORKSHOP_RADIUS + 0.8:
 		u.workshop_open = false
 	if u.load.n > 0:
@@ -1228,7 +1291,7 @@ func _step_unit(u: Dictionary, dt: float) -> void:
 			if u.t <= 0.0:
 				u.state = "idle"
 			return
-	if f.open or u.workshop_open:
+	if u.workshop_open:
 		u.state = "idle"
 		return
 	if not u.task.is_empty():
@@ -1591,6 +1654,7 @@ func _step_outposts(dt: float) -> void:
 
 func _step_world(dt: float) -> void:
 	_step_outposts(dt)
+	_step_hats(dt)
 	# Gates swing open for allies nearby (visual state), resource nodes regrow.
 	for g in gates:
 		var open := false
@@ -1658,7 +1722,7 @@ func _commander(team: int) -> void:
 	for u in units:
 		if not u.bot and u.team == team:
 			human_team = true
-	var plan := ["armory", "catapult", "gates", "forge", "armory", "gates", "armory"]
+	var plan := ["armory", "catapult", "hat_knight", "gates", "hat_ranger", "armory", "hat_barbarian", "gates", "hat_mage", "armory", "hat_rogue"]
 	var seen := {}
 	var target := ""
 	for id in plan:
@@ -1729,30 +1793,41 @@ func _nav_to(u: Dictionary, goal: Vector2, stop := 0.5) -> void:
 	var d: Vector2 = target - u.pos
 	u.move = d.normalized() if d.length() > 0.05 else Vector2.ZERO
 
-func _bot_forge(u: Dictionary) -> void:
-	var f: Dictionary = u.forge
-	u.move = Vector2.ZERO
-	if not f.open:
-		_interact(u)
-		return
-	if f.rolling > 0.0:
-		return
-	if f.rolled:
-		var r := forge_result(f.faces)
-		if r.cls != "" or f.faces.count("fate") == f.faces.size():
-			_forge_take(u)
-			return
-		var held := []
-		for i in f.faces.size():
-			held.append(f.faces[i] == "fate")
-		_forge_roll(u, held)
-	else:
-		_forge_roll(u, null)
+const ROLE_HATS := {"raid":["rogue", "knight", "barbarian"], "escort":["knight", "barbarian", "mage"],
+	"defend":["ranger", "mage", "knight"]}
+
+func _bot_hat_goal(u: Dictionary) -> Vector2:
+	# A villager bot's way to a class: a dropped hat close by, else a stand of its role's classes
+	# (rotated per bot for variety), else any stand with stock. Vector2.INF = no hat to be had.
+	var h := nearest_hat(u.pos, 14.0)
+	if not h.is_empty():
+		return h.pos
+	# The closest owned outpost rack wins if it is much nearer than the castle stands.
+	var castle_d: float = u.pos.distance_to(forge(u.team))
+	var best_op := {}
+	var bd := castle_d * 0.6
+	for op in outposts:
+		if int(op.owner) == u.team and int(op.stock) > 0:
+			var d: float = u.pos.distance_to(op.p)
+			if d < bd:
+				bd = d
+				best_op = op
+	if not best_op.is_empty():
+		var away: Vector2 = (u.pos - (best_op.p as Vector2)).normalized()
+		return (best_op.p as Vector2) + (away if away != Vector2.ZERO else Vector2(1, 0)) * 1.9
+	var prefs: Array = (ROLE_HATS.get(u.role, HAT_CLASSES) as Array).duplicate()
+	var rot := absi(hash(u.id)) % prefs.size()
+	prefs = prefs.slice(rot) + prefs.slice(0, rot)
+	for c in prefs + HAT_CLASSES:
+		for st in stands:
+			if int(st.team) == u.team and st.cls == c and int(st.stock) > 0:
+				return st.p
+	return Vector2.INF
 
 func _unstick_check(u: Dictionary) -> void:
 	# If a bot wanted to move but barely did, sidestep for a moment.
 	u.unstick = maxf(0.0, u.unstick - 0.15)
-	if u.move.length() > 0.1 and u.task.is_empty() and not u.forge.open and u.pos.distance_to(u.last_pos) < 0.1:
+	if u.move.length() > 0.1 and u.task.is_empty() and u.pos.distance_to(u.last_pos) < 0.1:
 		u.stuck_t += 0.15
 		if u.stuck_t >= 0.75:
 			var side := 1.0 if rng.randf() < 0.5 else -1.0
@@ -1777,12 +1852,11 @@ func _think(u: Dictionary) -> void:
 			else:
 				_nav_to(u, ws, 0.6)
 			return
-		var fg := forge(u.team)
-		if u.pos.distance_to(fg) <= FORGE_RADIUS - 0.4:
-			_bot_forge(u)
-		else:
-			u.forge.open = false
-			_nav_to(u, fg, 0.6)
+		var hg := _bot_hat_goal(u)
+		if hg != Vector2.INF:
+			_nav_to(u, hg, 0.4)
+			return
+		_think_fighter(u)                         # no hats left anywhere: fight as a villager
 		return
 	if u.cls == "worker" and not u.carrying:
 		_think_worker(u)

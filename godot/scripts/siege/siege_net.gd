@@ -8,7 +8,7 @@ extends RefCounted
 # objects: decode() uses the default allow_objects=false.
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 
-const VERSION := 2               # 2 = Round 7 map (river, bridges, ledges) + outposts
+const VERSION := 3               # 3 = Round 8 hats (stands, dropped hats, outpost racks; no dice)
 const DEFAULT_URL := "wss://136-113-125-3.sslip.io/fatebound/siege/ws"
 const DEFAULT_PORT := 8082
 const SNAP_HZ := 10.0
@@ -21,8 +21,9 @@ const LOADS := ["", "wood", "stone"]
 const TASKS := ["", "gather", "repair", "build_ladder"]
 const ATKS := ["", "attack", "ability"]
 # Actions a client may ask for (anything else is ignored by the server).
-const ACTIONS := ["attack", "ability", "dodge", "interact", "forge_roll", "forge_take", "forge_leave",
+const ACTIONS := ["attack", "ability", "dodge", "interact", "hat_swap",
 	"take_tools", "buy", "workshop_leave"]
+const HAT_CLS := ["knight", "barbarian", "rogue", "ranger", "mage", "worker"]
 
 # Per-unit values in the snapshot, in this order, each packed as a signed 16-bit integer of
 # value * SCALE[i] (positions to 1 cm, angles to 0.001 rad, timers to 0.01 s).
@@ -109,7 +110,7 @@ static func snapshot(sim, for_unit: String, events: Array) -> Dictionary:
 		u_arr[b + 23] = 1.0 if u.bot else 0.0
 		u_arr[b + 24] = u.respawn_at
 		u_arr[b + 25] = _code(ATKS, u.get("atk", ""))
-		u_arr[b + 26] = 1.0 if u.forge.open else 0.0
+		u_arr[b + 26] = 0.0                      # (was the dice forge's open flag; unused since v3)
 		u_arr[b + 27] = 1.0 if u.workshop_open else 0.0
 		u_arr[b + 28] = float(u.get("fed", 0))
 		i += 1
@@ -131,25 +132,32 @@ static func snapshot(sim, for_unit: String, events: Array) -> Dictionary:
 		cakes.append(1 if ct.ready else 0)
 	var outposts := PackedFloat32Array()
 	for op in sim.outposts:
-		outposts.append_array([float(op.owner), float(op.prog)])
+		outposts.append_array([float(op.owner), float(op.prog), float(op.get("stock", 0))])
+	# Hats: stock per stand, and every dropped hat as [id, class, upgraded, x, z].
+	var stocks := PackedByteArray()
+	for st in sim.stands:
+		stocks.append(int(st.stock))
+	var hats := PackedFloat32Array()
+	for h in sim.hats:
+		hats.append_array([float(h.id), float(HAT_CLS.find(h.cls)), 1.0 if h.up else 0.0, h.pos.x, h.pos.y])
 	var oracles := []
 	for o in sim.oracles:
 		oracles.append({"state":o.state, "pos":o.pos, "carrier":o.carrier, "lifters":o.lifters.duplicate(),
 			"carry_team":o.carry_team, "dropped_at":o.dropped_at, "cakes":o.cakes, "weight":o.weight})
 	var msg := {"t":"s", "tm":sim.time, "sc":sim.score.duplicate(), "k":sim.kills.duplicate(),
 		"st":sim.stock.duplicate(true), "lv":sim.levels.duplicate(true), "end":[sim.ended, sim.winner, sim.end_reason],
-		"u":packed, "p":proj, "g":gates, "n":nodes, "c":cakes, "o":oracles, "l":sim.ladders.duplicate(true), "op":outposts, "e":events}
+		"u":packed, "p":proj, "g":gates, "n":nodes, "c":cakes, "o":oracles, "l":sim.ladders.duplicate(true), "op":outposts, "hs":stocks, "hd":hats, "e":events}
 	if for_unit != "":
 		return for_player(msg, sim, for_unit)
 	return msg
 
 static func for_player(base: Dictionary, sim, unit_id: String) -> Dictionary:
-	# The shared snapshot plus this player's private bits (forge dice, task). Shallow copy: the
+	# The shared snapshot plus this player's private bits (task). Shallow copy: the
 	# big arrays are shared, only "me" differs, so the server builds the snapshot once per tick.
 	var msg := base.duplicate(false)
 	if sim.by_id.has(unit_id):
 		var me: Dictionary = sim.by_id[unit_id]
-		msg["me"] = {"forge":me.forge.duplicate(true), "task":me.task.duplicate(true)}
+		msg["me"] = {"task":me.task.duplicate(true)}
 	return msg
 
 # ---------------- client side ----------------
@@ -205,7 +213,6 @@ static func apply(sim, msg: Dictionary, me_id: String) -> void:
 		u.bot = u_arr[b + 23] > 0.5
 		u.respawn_at = u_arr[b + 24]
 		u.atk = ATKS[clampi(int(u_arr[b + 25]), 0, ATKS.size() - 1)]
-		u.forge.open = u_arr[b + 26] > 0.5
 		u.workshop_open = u_arr[b + 27] > 0.5
 		u.fed = int(u_arr[b + 28])
 	sim.projectiles.clear()
@@ -232,12 +239,21 @@ static func apply(sim, msg: Dictionary, me_id: String) -> void:
 			o[k] = src[k]
 	sim.ladders = msg.get("l", sim.ladders)
 	var ops: PackedFloat32Array = msg.get("op", PackedFloat32Array())
-	for oi in mini(sim.outposts.size(), ops.size() / 2):
-		sim.outposts[oi].owner = int(ops[oi * 2])
-		sim.outposts[oi].prog = ops[oi * 2 + 1]
+	for oi in mini(sim.outposts.size(), ops.size() / 3):
+		sim.outposts[oi].owner = int(ops[oi * 3])
+		sim.outposts[oi].prog = ops[oi * 3 + 1]
+		sim.outposts[oi].stock = int(ops[oi * 3 + 2])
+	var stocks: PackedByteArray = msg.get("hs", PackedByteArray())
+	for si in mini(sim.stands.size(), stocks.size()):
+		sim.stands[si].stock = stocks[si]
+	var hd: PackedFloat32Array = msg.get("hd", PackedFloat32Array())
+	sim.hats = []
+	for hi in hd.size() / 5:
+		var k := hi * 5
+		sim.hats.append({"id":int(hd[k]), "cls":HAT_CLS[clampi(int(hd[k + 1]), 0, HAT_CLS.size() - 1)], "up":hd[k + 2] > 0.5,
+			"pos":Vector2(hd[k + 3], hd[k + 4]), "t":0.0})
 	if msg.has("me") and sim.by_id.has(me_id):
 		var me: Dictionary = sim.by_id[me_id]
-		me.forge = msg.me.forge
 		me.task = msg.me.task
 
 static func interpolate(sim, alpha: float) -> void:

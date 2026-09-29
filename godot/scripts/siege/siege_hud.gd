@@ -1,7 +1,7 @@
 extends Control
 # Siege HUD. The stick and the combat buttons are drawn and hit-tested by hand from raw
 # InputEventScreenTouch events, because Godot's Buttons only follow the first finger and on a
-# phone you hold the stick while tapping ATTACK. Modal panels (forge, pause, result) use Buttons.
+# phone you hold the stick while tapping ATTACK. Modal panels (workshop, pause, result) use Buttons.
 const VisualTheme = preload("res://scripts/ui/visual_theme.gd")
 const UI = preload("res://scripts/app/ui.gd")
 # The old brass kinds map onto the app's tactile styles so battle panels match the menus.
@@ -10,9 +10,6 @@ const Sim = preload("res://scripts/siege/siege_sim.gd")
 
 signal leave_requested
 signal replay_requested
-signal forge_roll(held: Array)
-signal forge_take
-signal forge_leave
 signal action_pressed(kind: String)
 signal fps_toggled
 signal res_cycled
@@ -22,7 +19,6 @@ signal workshop_buy(id: String)
 signal workshop_leave
 
 const TEAM_COLORS := [Color("#5fd2f0"), Color("#ff7b52")]
-const FACE_LABEL := {"knight":"KNIGHT","barbarian":"BARB","rogue":"ROGUE","ranger":"RANGER","mage":"MAGE","fate":"FATE ✦"}
 const FACE_COLOR := {"knight":Color("#9fb6c8"),"barbarian":Color("#e0875a"),"rogue":Color("#8fd18a"),"ranger":Color("#d9c36a"),"mage":Color("#b28cff"),"fate":Color("#ffd46a")}
 
 var sim
@@ -50,19 +46,12 @@ var _font: Font
 var _bold: Font
 var _title: Font
 
-var forge_panel: PanelContainer
-var forge_dice: Array[Button] = []
-var forge_held := [false, false, false, false]
 var workshop_panel: PanelContainer
 var workshop_stock: Label
 var workshop_buttons: Dictionary = {}
 var workshop_tools_btn: Button
 var _workshop_key := ""
 var gate_bars_source: Callable   # -> Array of {pos, fill, color, broken}
-var _forge_key := ""
-var forge_status: Label
-var forge_take_btn: Button
-var forge_roll_btn: Button
 var pause_panel: PanelContainer
 var result_panel: PanelContainer
 var pause_btn: Button
@@ -82,7 +71,6 @@ func _ready() -> void:
 		pause_panel.visible = true
 		_center(pause_panel))
 	add_child(pause_btn)
-	_build_forge_panel()
 	_build_workshop_panel()
 	_build_pause_panel()
 	resized.connect(_layout)
@@ -134,37 +122,6 @@ func _center(p: Control) -> void:
 	p.reset_size()
 	p.position = ((size - p.size) * 0.5).max(Vector2(10, 10))
 
-func _build_forge_panel() -> void:
-	forge_panel = _panel(340)
-	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 10)
-	forge_panel.add_child(v)
-	_label(v, "THE FORGE", 22, VisualTheme.GOLD, _title)
-	_label(v, "Roll the dice. A pair grants a class, three of a kind its upgraded form. FATE is wild. Tap a die to keep it.", 12, Color("#d4cbbb"))
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 8)
-	v.add_child(row)
-	for i in 4:
-		var b := Button.new()
-		b.custom_minimum_size = Vector2(0, 78)
-		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		UI.style_button(b, "secondary", 13, 14)
-		UI.tighten(b, 2)
-		var idx := i
-		b.pressed.connect(func(): _toggle_hold(idx))
-		row.add_child(b)
-		forge_dice.append(b)
-	forge_status = _label(v, "", 15, VisualTheme.TEXT, _bold)
-	var actions := HBoxContainer.new()
-	actions.add_theme_constant_override("separation", 8)
-	v.add_child(actions)
-	forge_roll_btn = _button(actions, "ROLL", "roll", func(): forge_roll.emit(forge_held.slice(0, sim.dice_count(sim.by_id[player_id].team))))
-	forge_take_btn = _button(actions, "TAKE", "primary", func(): forge_take.emit())
-	# "TAKE BERSERKER" is the longest label; REROLL has room to spare.
-	forge_roll_btn.size_flags_stretch_ratio = 0.7
-	forge_take_btn.size_flags_stretch_ratio = 1.3
-	_button(v, "LEAVE FORGE", "secondary", func(): forge_leave.emit())
-
 func _build_workshop_panel() -> void:
 	workshop_panel = _panel(340)
 	var v := VBoxContainer.new()
@@ -174,11 +131,23 @@ func _build_workshop_panel() -> void:
 	workshop_stock = _label(v, "", 15, VisualTheme.TEXT, _bold)
 	workshop_tools_btn = _button(v, "TAKE TOOLS · BECOME A WORKER", "active", func(): workshop_tools.emit())
 	_label(v, "Workers chop trees and mine stone, carry it here, and repair gates with wood.", 11, Color("#d4cbbb"))
-	for id in ["gates", "armory", "forge", "catapult"]:
+	for id in ["gates", "armory", "catapult"]:
 		var up: Dictionary = Sim.UPGRADES[id]
 		var b := _button(v, str(up.name), "gold", func(): workshop_buy.emit(id))
 		b.custom_minimum_size = Vector2(0, 54)
 		b.add_theme_font_size_override("font_size", 14)
+		workshop_buttons[id] = b
+	_label(v, "HAT UPGRADES · the stand makes the upgraded class", 11, Color("#d4cbbb"))
+	var grid := GridContainer.new()
+	grid.columns = 3
+	grid.add_theme_constant_override("h_separation", 6)
+	grid.add_theme_constant_override("v_separation", 6)
+	v.add_child(grid)
+	for c in Sim.HAT_CLASSES:
+		var id: String = "hat_" + str(c)
+		var b := _button(grid, str(Sim.UPGRADE_NAME[c]), "gold", func(): workshop_buy.emit(id))
+		b.custom_minimum_size = Vector2(0, 46)
+		b.add_theme_font_size_override("font_size", 11)
 		workshop_buttons[id] = b
 	_button(v, "LEAVE WORKSHOP", "secondary", func(): workshop_leave.emit())
 
@@ -204,76 +173,15 @@ func _refresh_workshop(me: Dictionary) -> void:
 		var b: Button = workshop_buttons[id]
 		var cost: Dictionary = sim.upgrade_cost(t, id)
 		if cost.is_empty():
-			b.text = "%s · MAX" % up.name
+			b.text = ("%s ✔" % str(Sim.UPGRADE_NAME[id.substr(4)]).to_upper()) if id.begins_with("hat_") else "%s · MAX" % up.name
 			b.disabled = true
 		else:
-			b.text = "%s %s\n%d wood · %d stone" % [up.name, "I".repeat(lvl + 1) if int(up.max) > 1 else "", int(cost.wood), int(cost.stone)]
+			if id.begins_with("hat_"):
+				b.text = "%s\n%dw · %ds" % [str(Sim.UPGRADE_NAME[id.substr(4)]).to_upper(), int(cost.wood), int(cost.stone)]
+			else:
+				b.text = "%s %s\n%d wood · %d stone" % [up.name, "I".repeat(lvl + 1) if int(up.max) > 1 else "", int(cost.wood), int(cost.stone)]
 			b.disabled = not sim.can_buy(t, id)
 		b.tooltip_text = str(up.desc)
-
-func _toggle_hold(i: int) -> void:
-	var me: Dictionary = sim.by_id.get(player_id, {})
-	if me.is_empty() or not me.forge.rolled or me.forge.rolling > 0.0:
-		return
-	forge_held[i] = not forge_held[i]
-
-func _refresh_forge(me: Dictionary) -> void:
-	var f: Dictionary = me.forge
-	if not f.open:
-		if forge_panel.visible:
-			forge_panel.visible = false
-			forge_held = [false, false, false, false]
-		return
-	if not forge_panel.visible:
-		forge_panel.visible = true
-		forge_held = [false, false, false, false]
-		_forge_key = ""
-		_center(forge_panel)
-	var rolling: bool = f.rolling > 0.0
-	# Only rebuild the dice styling when something changed, not every frame.
-	var state_key := "%s|%s|%s|%s|%d" % [str(f.faces), str(forge_held), f.rolled, rolling, int(_time * 14.0) if rolling else 0]
-	if state_key == _forge_key:
-		return
-	_forge_key = state_key
-	var n_dice: int = f.faces.size()
-	for i in 4:
-		forge_dice[i].visible = i < n_dice
-	for i in n_dice:
-		var b := forge_dice[i]
-		var face := str(f.faces[i])
-		if not f.rolled:
-			b.text = "?"
-		elif rolling and not f.held[i]:
-			b.text = FACE_LABEL[Sim.FACES[int(_time * 14.0 + i * 2) % Sim.FACES.size()]]
-		else:
-			b.text = FACE_LABEL[face] + ("\nKEPT" if forge_held[i] else "")
-		UI.style_button(b, "claim" if forge_held[i] else "secondary", 13, 14)
-		UI.tighten(b, 2)
-		b.add_theme_color_override("font_color", FACE_COLOR.get(face, VisualTheme.TEXT) if f.rolled and not rolling else VisualTheme.TEXT)
-	var r := Sim.forge_result(f.faces)
-	var triple_fate: bool = f.faces.count("fate") == f.faces.size()
-	forge_roll_btn.disabled = rolling
-	forge_roll_btn.text = "ROLL" if not f.rolled else "REROLL"
-	if not f.rolled:
-		forge_status.text = "Current: %s" % sim.class_label(me)
-		forge_take_btn.disabled = true
-		forge_take_btn.text = "TAKE"
-	elif rolling:
-		forge_status.text = "Rolling..."
-		forge_take_btn.disabled = true
-	elif triple_fate:
-		forge_status.text = "Triple FATE — a random upgraded class!"
-		forge_take_btn.disabled = false
-		forge_take_btn.text = "TAKE FATE"
-	elif r.cls != "":
-		var nm: String = Sim.UPGRADE_NAME[r.cls] if r.up else str(Sim.CLASSES[r.cls].name)
-		forge_status.text = ("THREE OF A KIND — " if r.up else "Pair — ") + nm
-		forge_take_btn.disabled = false
-		forge_take_btn.text = "TAKE " + nm.to_upper()
-	else:
-		forge_status.text = "No match. Keep dice and reroll."
-		forge_take_btn.disabled = true
-		forge_take_btn.text = "TAKE"
 
 func _build_pause_panel() -> void:
 	pause_panel = _panel(300)
@@ -340,7 +248,6 @@ func show_result(result: Dictionary = {}) -> void:
 	_button(v, "HOME", "secondary", func(): leave_requested.emit())
 	result_panel.visible = true
 	_center(result_panel)
-	forge_panel.visible = false
 	pause_panel.visible = false
 
 func toast(text: String, color := Color.WHITE) -> void:
@@ -400,6 +307,10 @@ func on_event(e: Dictionary) -> void:
 		"gate_rebuilt":
 			if mine:
 				toast("Our %s gate is rebuilt" % str(sim.gates[int(e.gate)].side), VisualTheme.CYAN)
+		"hat_take", "hat_pick":
+			if str(e.get("id", "")) == player_id:
+				var nm: String = sim.class_label(me)
+				toast(("You are now a%s %s!" % ["n" if nm.left(1) in ["A", "E", "I", "O", "U"] else "", nm]), VisualTheme.GOLD)
 		"outpost_captured":
 			if int(e.team) == me.team:
 				toast("Outpost captured! Attackers respawn there", VisualTheme.GOLD)
@@ -432,7 +343,7 @@ func _buttons() -> Array:
 	return out
 
 func _modal_open() -> bool:
-	return forge_panel.visible or workshop_panel.visible or pause_panel.visible or (result_panel != null and result_panel.visible)
+	return workshop_panel.visible or pause_panel.visible or (result_panel != null and result_panel.visible)
 
 func _input(event: InputEvent) -> void:
 	if sim == null:
@@ -515,7 +426,6 @@ func _process(delta: float) -> void:
 		return
 	var me: Dictionary = sim.by_id.get(player_id, {})
 	if not me.is_empty():
-		_refresh_forge(me)
 		_refresh_workshop(me)
 	queue_redraw()
 
@@ -762,7 +672,7 @@ func _draw_button(b: Dictionary, me: Dictionary) -> void:
 			cd_max = 2.2
 			ready = cd <= 0.0 and not me.carrying
 		"action":
-			label = {"forge":"FORGE","grab":"LIFT","throw":"THROW","workshop":"WORKSHOP","chop":"CHOP","mine":"MINE",
+			label = {"hat":"NEW HAT","grab":"LIFT","throw":"THROW","workshop":"WORKSHOP","chop":"CHOP","mine":"MINE",
 				"repair":"REPAIR","gather":"WORKING","repairing":"REPAIRING","ladder":"LADDER","build_ladder":"BUILDING","cake":"TAKE CAKE","feed":"FEED",
 				"join":"HELP LIFT","letgo":"LET GO"}.get(b.ctx, "USE")
 			col = Color("#155258")

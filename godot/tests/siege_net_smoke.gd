@@ -3,7 +3,7 @@ extends SceneTree
 # Online Siege end to end: starts the real server (server/siege_server.gd) as a separate process,
 # connects the real game client (SiegeMode online) plus a raw second client, and checks:
 # welcome + team seating, snapshots, the player's unit moving from real touch input, actions
-# (walk to the forge, open it, roll), events reaching the view/HUD, disconnect -> bot takes over.
+# (walk to a hat stand and become a class), events reaching the view/HUD, disconnect -> bot takes over.
 const Mode = preload("res://scripts/siege/siege_mode.gd")
 const Net = preload("res://scripts/siege/siege_net.gd")
 const Sim = preload("res://scripts/siege/siege_sim.gd")
@@ -123,33 +123,37 @@ func _process(delta: float) -> bool:
 				touch(0, move_touch_pos, false)
 				check(progress > 3.0 and saw_authoritative_move,
 					"our unit moved from touch input through the server (%.1f m toward goal)" % progress)
-				# Walk to the forge via the protocol and open it + roll.
-				phase = "forge"; t = 0.0
-		"forge":
+				# Walk to one of our hat stands via the protocol; the server hands over the hat.
+				phase = "hat"; t = 0.0
+		"hat":
 			var me2: Dictionary = mode.sim.by_id[mode.hud.player_id]
-			var fg: Vector2 = Sim.forge(me2.team)
-			var d: Vector2 = fg - me2.pos
-			if d.length() > 1.2 and t < 20.0:
-				# Steer along the mirror's own nav path (walls/gates), like a player would.
-				var path: PackedVector2Array = mode.sim.find_path(me2.team, me2.pos, fg)
-				var target: Vector2 = path[mini(1, path.size() - 1)] if path.size() > 0 else fg
-				mode._net_send({"t":"in", "m":(target - me2.pos).normalized(), "h":false})
-				# Keep the mode's 20 Hz sender (HUD stick = zero) from overriding the test input.
-				mode._sent_move = Vector2.ZERO
-				mode._send_clock = -1.0
-			elif not me2.forge.open and t < 22.0:
-				mode._net_send({"t":"in", "m":Vector2.ZERO, "h":false})
-				mode._act("interact")
-			elif me2.forge.open:
-				mode._act("forge_roll", null)
-				phase = "rolled"; t = 0.0
+			if me2.cls != "villager":
+				phase = "hatted"; t = 0.0
 			else:
-				check(false, "reached and opened the forge (dist %.1f)" % d.length()); _finish()
-		"rolled":
-			if t > 1.5:
+				var best := {}
+				for st in mode.sim.stands:
+					if int(st.team) == me2.team and int(st.stock) > 0 and (best.is_empty() or me2.pos.distance_to(st.p) < me2.pos.distance_to(best.p)):
+						best = st
+				var goal: Vector2 = (best.p as Vector2) + ((Sim.spawn(me2.team) - (best.p as Vector2)).normalized() * 0.95) if not best.is_empty() else Sim.forge(me2.team)
+				if t < 24.0:
+					# Steer along the mirror's own nav path (walls/gates), like a player would.
+					var path: PackedVector2Array = mode.sim.find_path(me2.team, me2.pos, goal)
+					var target: Vector2 = path[mini(1, path.size() - 1)] if path.size() > 0 else goal
+					mode._net_send({"t":"in", "m":(target - me2.pos).normalized(), "h":false})
+					# Keep the mode's 20 Hz sender (HUD stick = zero) from overriding the test input.
+					mode._sent_move = Vector2.ZERO
+					mode._send_clock = -1.0
+				else:
+					check(false, "reached a hat stand and became a class (still %s, %.1f m away)" % [me2.cls, me2.pos.distance_to(goal)]); _finish()
+		"hatted":
+			if t > 1.0:
+				mode._net_send({"t":"in", "m":Vector2.ZERO, "h":false})
 				var me3: Dictionary = mode.sim.by_id[mode.hud.player_id]
-				check(me3.forge.open and me3.forge.rolled, "forge opened and rolled on the server (%s)" % str(me3.forge.faces))
-				check(mode.hud.forge_panel.visible, "forge panel shown from server state")
+				check(me3.cls != "villager", "took a hat at a stand on the server (now %s)" % me3.cls)
+				var own_stock := 0
+				for st in mode.sim.stands:
+					if int(st.team) == me3.team: own_stock += int(st.stock)
+				check(own_stock < Sim.HAT_STOCK_MAX * Sim.HAT_CLASSES.size(), "stand stock synced to the mirror (%d left)" % own_stock)
 				check(mode.sim.projectiles.size() >= 0 and mode.diag != null, "mirror sim alive")
 				raw.close()
 				phase = "drop"; t = 0.0

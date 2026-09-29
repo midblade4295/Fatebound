@@ -467,6 +467,128 @@ static func _cheap_flower_mesh(mesh: Mesh) -> Mesh:
 		_flower_meshes[mesh] = copy
 	return _flower_meshes[mesh]
 
+# ---------- hats (Round 8) ----------
+const HAT_COLOR := {"knight":Color("#9fb6c8"), "barbarian":Color("#e0875a"), "rogue":Color("#6fd46a"),
+	"ranger":Color("#e8c65a"), "mage":Color("#a879ff"), "worker":Color("#c8a27a")}
+const HAT_WEAPON := {"knight":"sword_1handed", "barbarian":"axe_2handed", "rogue":"dagger", "ranger":"bow_withString", "mage":"staff"}
+static var _hat_mesh: ArrayMesh = null
+static var _hat_mats: Dictionary = {}
+var stand_nodes: Dictionary = {}       # stand id -> Array of 3 hat MeshInstance3D
+var rack_nodes: Dictionary = {}        # outpost id -> Array of 3 hat MeshInstance3D
+var hat_nodes: Dictionary = {}         # dropped hat id -> Node3D
+
+static func _hat_shape() -> ArrayMesh:
+	# A pointed hat with a brim (cone + flat disc), built once.
+	if _hat_mesh == null:
+		var st := SurfaceTool.new()
+		var cone := CylinderMesh.new()
+		cone.top_radius = 0.0
+		cone.bottom_radius = 0.2
+		cone.height = 0.34
+		cone.radial_segments = 10
+		cone.rings = 1
+		var brim := CylinderMesh.new()
+		brim.top_radius = 0.33
+		brim.bottom_radius = 0.33
+		brim.height = 0.04
+		brim.radial_segments = 14
+		brim.rings = 1
+		st.append_from(cone, 0, Transform3D(Basis(), Vector3(0, 0.19, 0)))
+		st.append_from(brim, 0, Transform3D(Basis(), Vector3(0, 0.02, 0)))
+		_hat_mesh = st.commit()
+	return _hat_mesh
+
+static func _hat_mat(cls: String, up: bool) -> StandardMaterial3D:
+	var key := "%s|%s" % [cls, up]
+	if not _hat_mats.has(key):
+		var m := StandardMaterial3D.new()
+		m.albedo_color = HAT_COLOR.get(cls, Color.WHITE)
+		m.roughness = 0.6
+		if up:
+			m.emission_enabled = true               # upgraded hats glow a little (static, set once)
+			m.emission = Color("#ffd46a")
+			m.emission_energy_multiplier = 0.35
+		_hat_mats[key] = m
+	return _hat_mats[key]
+
+func _hat_instance(cls: String, up: bool, scale_k: float) -> MeshInstance3D:
+	var mi := MeshInstance3D.new()
+	mi.mesh = _hat_shape()
+	mi.material_override = _hat_mat(cls, up)
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mi.scale = Vector3.ONE * scale_k
+	return mi
+
+func _build_hat_stands() -> void:
+	var stone := StandardMaterial3D.new()
+	stone.albedo_color = Color("#8a8f99")
+	stone.roughness = 0.9
+	for st in sim.stands:
+		var base := Vector3(st.p.x, 0.0, st.p.y)
+		var ped := MeshInstance3D.new()
+		var pm := CylinderMesh.new()
+		pm.top_radius = 0.42
+		pm.bottom_radius = 0.5
+		pm.height = 0.9
+		pm.radial_segments = 8
+		ped.mesh = pm
+		ped.material_override = stone
+		ped.position = base + Vector3(0, 0.45, 0)
+		add_child(ped)
+		var col: Color = HAT_COLOR[st.cls]
+		_decal(base + Vector3(0, 0.06, 0), Sim.HAT_TAKE_R, col, 0.5)
+		# The class weapon standing on the pedestal says which hat this is.
+		var w := _place("res://assets/kaykit/weapons/%s.gltf" % HAT_WEAPON[st.cls], base + Vector3(0, 0.95, 0), 0.4, 1.3)
+		if w != null:
+			w.rotation.z = 0.35
+		var stack := []
+		for k in Sim.HAT_STOCK_MAX:
+			var h := _hat_instance(st.cls, false, 1.0)
+			h.position = base + Vector3(-0.12 + 0.12 * k, 0.92 + 0.02 * k, 0.28 - 0.14 * k)
+			add_child(h)
+			stack.append(h)
+		stand_nodes[st.id] = stack
+	for op in sim.outposts:
+		var stack := []
+		for k in Sim.OUTPOST_HAT_MAX:
+			var h := _hat_instance(str(op.hat), false, 1.1)
+			var hp: Vector2 = (op.p as Vector2) + Vector2(-1.9 + 0.45 * k, 1.5)
+			h.position = Vector3(hp.x, Sim.height_at(hp) + 0.02, hp.y)
+			add_child(h)
+			stack.append(h)
+		rack_nodes[op.id] = stack
+
+func _sync_hats() -> void:
+	for st in sim.stands:
+		var stack: Array = stand_nodes.get(st.id, [])
+		for k in stack.size():
+			(stack[k] as Node3D).visible = k < int(st.stock)
+	for op in sim.outposts:
+		var stack: Array = rack_nodes.get(op.id, [])
+		for k in stack.size():
+			(stack[k] as Node3D).visible = int(op.owner) >= 0 and k < int(op.get("stock", 0))
+	# Dropped hats: add new ones, drop vanished ones, bob and spin (transforms only).
+	var seen := {}
+	for h in sim.hats:
+		seen[h.id] = true
+		var n: Node3D = hat_nodes.get(h.id)
+		if n == null:
+			n = Node3D.new()
+			add_child(n)
+			n.add_child(_hat_instance(str(h.cls), bool(h.up), 1.9))
+			var ring := _decal(Vector3.ZERO, 0.75, HAT_COLOR.get(str(h.cls), Color.WHITE), 0.55)
+			ring.reparent(n, false)
+			hat_nodes[h.id] = n
+		var gy := Sim.height_at(h.pos)
+		n.position = Vector3(h.pos.x, gy, h.pos.y)
+		var hat := n.get_child(0) as Node3D
+		hat.position.y = 0.25 + 0.12 * sin(_time * 3.0 + float(h.id))
+		hat.rotation.y = _time * 1.6 + float(h.id)
+	for id in hat_nodes.keys():
+		if not seen.has(id):
+			(hat_nodes[id] as Node3D).queue_free()
+			hat_nodes.erase(id)
+
 var outpost_nodes: Dictionary = {}
 
 func _build_outposts() -> void:
@@ -531,8 +653,6 @@ func _build_props() -> void:
 	for ob in sim.obstacles:
 		var p := Vector3(ob.p.x, 0, ob.p.y)
 		match str(ob.kind):
-			"forge_building":
-				_place(HEX + "building_blacksmith_%s.gltf" % COLOR[ob.team], p, PI * 0.5 if ob.team == 0 else -PI * 0.5, 2.3)
 			"rock":
 				# Cover rocks (resource-node rocks are drawn by _build_nodes).
 				if not ob.has("node"):
@@ -542,6 +662,7 @@ func _build_props() -> void:
 	_build_nodes()
 	_build_cake_trees()
 	_build_outposts()
+	_build_hat_stands()
 	# Scenery outside the play field.
 	for i in 72:
 		var side := -1.0 if i % 2 == 0 else 1.0
@@ -745,9 +866,7 @@ func _build_castle(t: int) -> void:
 	for bx in [Vector2(-12.2, 28.2), Vector2(-4.0, 28.2)]:
 		var b2: Vector2 = Sim._c(t, bx)
 		_place(HEX + "barrel.gltf", Vector3(b2.x, Sim.PLAT_H, b2.y), randf() * TAU, 2.2)
-	# Courtyard: forge ring, workshop ring + stockpiles (piles scale with the team's stock).
-	var fg: Vector2 = Sim.forge(t)
-	_decal(Vector3(fg.x, 0.06, fg.y), Sim.FORGE_RADIUS, Color("#ffb24a"), 0.45)
+	# Courtyard: hat stands, workshop ring + stockpiles (piles scale with the team's stock).
 	var ws: Vector2 = Sim.workshop(t)
 	_decal(Vector3(ws.x, 0.06, ws.y), Sim.WORKSHOP_RADIUS, Color("#9fe07a"), 0.45)
 	var piles := {}
@@ -856,6 +975,7 @@ func _build_nodes() -> void:
 
 func _sync_castle(dt: float) -> void:
 	_sync_outposts()
+	_sync_hats()
 	for g in sim.gates:
 		var gn: Dictionary = gate_nodes.get(g.id, {})
 		if gn.is_empty():
@@ -1175,8 +1295,6 @@ func _animate(a: Dictionary, u: Dictionary, vel: float) -> void:
 		_play(a, "g/Hit_B", 0.6)
 	elif u.state == "dodge":
 		_play(a, "ma/Dodge_Forward", 1.6, 0.3)
-	elif u.forge.open:
-		_play(a, "t/Hammering")
 	elif u.state == "gather":
 		var node: Dictionary = sim.nodes[int(u.task.get("node", 0))] if not u.task.is_empty() else {}
 		_play(a, "t/Chopping" if node.get("kind", "wood") == "wood" else "t/Pickaxing")
