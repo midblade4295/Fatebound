@@ -1,0 +1,99 @@
+extends SceneTree
+# Plays the Herald's tutorial end to end like a player (tutorial.gd): advance the talk, then do
+# each task through the sim (walk, hat shop, hit the dummy, dodge, block, workshop, upgrade at the
+# hat shop, capture the outpost, head for the river), and finish. Also checks the script itself:
+# every line has a unique voice id and text.
+const Mode = preload("res://scripts/siege/siege_mode.gd")
+const Sim = preload("res://scripts/siege/siege_sim.gd")
+const Tutorial = preload("res://scripts/siege/tutorial.gd")
+var mode
+var frames := 0
+var done_steps := []
+var exited := false
+var fails := []
+var last_step := -1
+var t_step := 0.0
+
+func check(ok: bool, what: String) -> void:
+	print(("ok   " if ok else "FAIL ") + what)
+	if not ok:
+		fails.append(what)
+
+func _init() -> void:
+	# The script: unique ids, no empty lines.
+	var ids := {}
+	var n := 0
+	for st in Tutorial.STEPS:
+		for key in ["talk", "done"]:
+			for ln in st.get(key, []):
+				n += 1
+				var id := str(ln[0])
+				if not id.begins_with("t_") or ids.has(id) or str(ln[1]).length() <= 10:
+					check(false, "line %s has a unique id and text" % id)
+				ids[id] = true
+	check(ids.size() == n and n >= 25, "script: %d lines, all ids unique" % n)
+	mode = Mode.new()
+	mode.tutorial = true
+	root.add_child(mode)
+	mode.exited.connect(func(): exited = true)
+
+func _process(delta: float) -> bool:
+	frames += 1
+	if frames == 3:
+		mode.set_fps_cap(0)
+	if frames < 5:
+		return false
+	var tut = mode.tut
+	var s = mode.sim
+	if tut == null:
+		check(false, "the tutorial overlay exists"); quit(1); return false
+	var me: Dictionary = s.by_id[mode.hud.player_id]
+	if tut.step != last_step:
+		last_step = tut.step
+		t_step = 0.0
+	t_step += delta
+	if t_step > 40.0:
+		check(false, "step %s finished within 40 s (phase %s)" % [str(Tutorial.STEPS[tut.step].id), tut.phase]); _end(); return false
+	if exited:
+		_end(); return false
+	if tut.finished:
+		check(done_steps.size() >= 9, "all %d tasks done: %s" % [done_steps.size(), str(done_steps)])
+		tut.next()                             # FINISH
+		return false
+	match str(tut.phase):
+		"talk", "done":
+			tut.next()
+		"task":
+			var id := str(Tutorial.STEPS[tut.step].id)
+			if not done_steps.has(id):
+				done_steps.append(id)
+			match id:
+				"move":
+					me.pos += Vector2(0, -7.0)
+				"hat", "upgrade":
+					var st: Dictionary = tut._stand(me.team, "knight")
+					me.pos = st.p + (Sim.spawn(me.team) - (st.p as Vector2)).normalized() * 0.9
+					if id == "upgrade":
+						s.act(mode.hud.player_id, "interact")
+				"attack":
+					var foe: Dictionary = s.by_id.get(tut._dummy_id, {})
+					if not foe.is_empty():
+						me.face = Sim.angle_of(foe.pos - me.pos)
+						s.act(mode.hud.player_id, "attack")
+				"dodge":
+					s.act(mode.hud.player_id, "dodge")
+				"block":
+					s.act(mode.hud.player_id, "ability")
+				"workshop":
+					me.pos = Sim.workshop(me.team)
+				"outpost":
+					var op: Dictionary = tut._outpost(me.team)
+					me.pos = (op.p as Vector2) + Vector2(2.2, 0)
+				"goal":
+					me.pos = Vector2(0.0, 7.0) if me.team == 0 else Vector2(0.0, -7.0)
+	return false
+
+func _end() -> void:
+	check(exited, "finishing the tutorial returns to the menu")
+	print("TUTORIAL_PASS" if fails.is_empty() else "TUTORIAL_FAIL %s" % str(fails))
+	quit(0 if fails.is_empty() else 1)

@@ -11,6 +11,10 @@ const VisualTheme = preload("res://scripts/ui/visual_theme.gd")
 signal exited
 
 var team_size := 16
+var tutorial := false          # the Herald's walkthrough (scripts/siege/tutorial.gd)
+var tut: Control = null
+const Tutorial = preload("res://scripts/siege/tutorial.gd")
+const TUTORIAL_GOLD := 250
 # 3D resolution as a fraction of the PHYSICAL screen (window pixels, not logical UI units).
 var render_scale := 1.0
 const FPS_CAP := 60
@@ -124,6 +128,8 @@ func _ready() -> void:
 
 func _start() -> void:
 	sim = Sim.new()
+	if tutorial:
+		team_size = 2                      # a quiet castle: one ally, two enemies (one becomes the dummy)
 	sim.setup(team_size, int(Time.get_unix_time_from_system()) & 0x7fffffff)
 	view = View.new()
 	view.low_fx = low_fx
@@ -133,6 +139,10 @@ func _start() -> void:
 	hud.sim = sim
 	_accum = 0.0
 	_result_shown = false
+	if tutorial:
+		tut = Tutorial.new()
+		add_child(tut)                     # after the HUD: drawn on top of it
+		tut.begin(self)
 	_lifts = 0
 
 func _looks() -> Dictionary:
@@ -362,11 +372,20 @@ func _process(delta: float) -> void:
 		var won: bool = sim.winner == int(me.team)
 		var draw: bool = sim.winner == -1
 		match_result = {}
-		if profile != null:
+		if profile != null and not tutorial:      # a tutorial is not a match: no rewards/challenges
 			match_result = profile.apply_match(me, won, draw, online)
 			rewards = match_result.rewards
 		diag.write("REWARDS %s" % str(match_result.get("rewards", {}).get("gold", 0)))
 		hud.show_result(match_result)
+
+func finish_tutorial() -> void:
+	# The Herald's last line: mark it done, pay the recruit, back to the menu.
+	if profile != null:
+		if not bool(profile.d.get("tutorial_done", false)):
+			profile.d.gold = int(profile.d.gold) + TUTORIAL_GOLD
+		profile.d["tutorial_done"] = true
+		profile.save()
+	exited.emit()
 
 func _thermal_guard(delta: float) -> void:
 	_guard_clock += delta
