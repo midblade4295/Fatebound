@@ -91,54 +91,53 @@ def flat_plane_render(sc, build_material, path):
 
 # ---------------- grass ----------------
 def grass():
+    """Round 7b grass (Kevin: 'more like grass', 'more colourful like the samples'): true green
+    (sRGB hue ~110 deg), soft lighter and darker patches, faint wavy lighter lines (the painted
+    swirls of the references -- NOT a polygon network, which read as tiles), a blade grain.
+    Colours are LINEAR (Blender): (0.05,0.36,0.03) ~ sRGB (63,161,48)."""
     sc = reset()
+    def noise4(radius, detail, rough=0.5):
+        vec, w = torus_coords(nt_ref[0], radius)
+        n = nt_ref[0].nodes.new("ShaderNodeTexNoise"); n.noise_dimensions = '4D'
+        n.inputs['Detail'].default_value = detail
+        n.inputs['Roughness'].default_value = rough
+        nt_ref[0].links.new(vec, n.inputs['Vector']); nt_ref[0].links.new(w, n.inputs['W'])
+        return n.outputs['Fac']
+    nt_ref = [None]
     def mat(nt):
-        vec, w = torus_coords(nt, 1.35)
-        # Big soft cells: the lighter "stone-ish" patches of the reference.
-        vor = nt.nodes.new("ShaderNodeTexVoronoi"); vor.voronoi_dimensions = '4D'
-        vor.feature = 'DISTANCE_TO_EDGE'; vor.inputs['Scale'].default_value = 1.0
-        nt.links.new(vec, vor.inputs['Vector']); nt.links.new(w, vor.inputs['W'])
-        vorc = nt.nodes.new("ShaderNodeTexVoronoi"); vorc.voronoi_dimensions = '4D'
-        vorc.inputs['Scale'].default_value = 1.0
-        nt.links.new(vec, vorc.inputs['Vector']); nt.links.new(w, vorc.inputs['W'])
-        # Fine blade noise.
-        vec2, w2 = torus_coords(nt, 9.0)
-        fine = nt.nodes.new("ShaderNodeTexNoise"); fine.noise_dimensions = '4D'
-        fine.inputs['Scale'].default_value = 1.0; fine.inputs['Detail'].default_value = 6.0
-        nt.links.new(vec2, fine.inputs['Vector']); nt.links.new(w2, fine.inputs['W'])
-        vec3, w3 = torus_coords(nt, 2.4)
-        blotch = nt.nodes.new("ShaderNodeTexNoise"); blotch.noise_dimensions = '4D'
-        blotch.inputs['Scale'].default_value = 1.0; blotch.inputs['Detail'].default_value = 2.0
-        nt.links.new(vec3, blotch.inputs['Vector']); nt.links.new(w3, blotch.inputs['W'])
-        # Base: blotchy two-tone green.
-        base = ramp(nt, [(0.40, (0.20, 0.52, 0.06)), (0.62, (0.34, 0.70, 0.12))])
-        nt.links.new(blotch.outputs['Fac'], base.inputs['Fac'])
-        # Per-cell brightness jitter.
-        cellv = nt.nodes.new("ShaderNodeSeparateColor")
-        nt.links.new(vorc.outputs['Color'], cellv.inputs[0])
-        jit = nt.nodes.new("ShaderNodeMapRange")
-        jit.inputs['To Min'].default_value = 0.88; jit.inputs['To Max'].default_value = 1.12
-        nt.links.new(cellv.outputs[0], jit.inputs['Value'])
-        mul = nt.nodes.new("ShaderNodeMix"); mul.data_type = 'RGBA'; mul.blend_type = 'MULTIPLY'
-        mul.inputs[0].default_value = 1.0
-        nt.links.new(base.outputs[0], mul.inputs[6])
-        jcol = nt.nodes.new("ShaderNodeCombineColor")
-        for i in range(3):
-            nt.links.new(jit.outputs[0], jcol.inputs[i])
-        nt.links.new(jcol.outputs[0], mul.inputs[7])
-        # Lighter cell rims.
-        rim = ramp(nt, [(0.0, (0.62, 0.92, 0.30)), (0.07, (0.0, 0.0, 0.0))])
-        nt.links.new(vor.outputs['Distance'], rim.inputs['Fac'])
-        add = nt.nodes.new("ShaderNodeMix"); add.data_type = 'RGBA'; add.blend_type = 'SCREEN'
-        add.inputs[0].default_value = 0.55
-        nt.links.new(mul.outputs[2], add.inputs[6]); nt.links.new(rim.outputs[0], add.inputs[7])
-        # Darker blade speckle.
-        sp = ramp(nt, [(0.45, (1, 1, 1)), (0.72, (0.72, 0.80, 0.62))])
-        nt.links.new(fine.outputs['Fac'], sp.inputs['Fac'])
-        fin = nt.nodes.new("ShaderNodeMix"); fin.data_type = 'RGBA'; fin.blend_type = 'MULTIPLY'
-        fin.inputs[0].default_value = 1.0
-        nt.links.new(add.outputs[2], fin.inputs[6]); nt.links.new(sp.outputs[0], fin.inputs[7])
-        return fin.outputs[2]
+        nt_ref[0] = nt
+        # Soft patches: two octaves of low-frequency noise -> dark/mid/light green.
+        patches = noise4(1.1, 2.0)
+        base = ramp(nt, [(0.30, (0.045, 0.32, 0.026)), (0.50, (0.085, 0.46, 0.042)), (0.70, (0.14, 0.60, 0.065))])
+        nt.links.new(patches, base.inputs['Fac'])
+        # Faint wavy lighter lines: where a mid-frequency noise crosses 0.5.
+        ridge_n = noise4(1.7, 1.5, 0.4)
+        sub = nt.nodes.new("ShaderNodeMath"); sub.operation = 'SUBTRACT'; sub.inputs[1].default_value = 0.5
+        nt.links.new(ridge_n, sub.inputs[0])
+        ab = nt.nodes.new("ShaderNodeMath"); ab.operation = 'ABSOLUTE'
+        nt.links.new(sub.outputs[0], ab.inputs[0])
+        line = ramp(nt, [(0.0, (0.34, 0.80, 0.16)), (0.022, (0.0, 0.0, 0.0))])
+        nt.links.new(ab.outputs[0], line.inputs['Fac'])
+        scr = nt.nodes.new("ShaderNodeMix"); scr.data_type = 'RGBA'; scr.blend_type = 'SCREEN'
+        scr.inputs[0].default_value = 0.35
+        nt.links.new(base.outputs[0], scr.inputs[6]); nt.links.new(line.outputs[0], scr.inputs[7])
+        # Blade grain: dense small cells (tips lighter, roots darker).
+        vec2, w2 = torus_coords(nt, 16.0)
+        blade = nt.nodes.new("ShaderNodeTexVoronoi"); blade.voronoi_dimensions = '4D'
+        nt.links.new(vec2, blade.inputs['Vector']); nt.links.new(w2, blade.inputs['W'])
+        bl = ramp(nt, [(0.0, (1.22, 1.20, 1.10)), (0.3, (1.0, 1.0, 1.0)), (0.7, (0.80, 0.86, 0.76))])
+        nt.links.new(blade.outputs['Distance'], bl.inputs['Fac'])
+        m1 = nt.nodes.new("ShaderNodeMix"); m1.data_type = 'RGBA'; m1.blend_type = 'MULTIPLY'
+        m1.inputs[0].default_value = 1.0
+        nt.links.new(scr.outputs[2], m1.inputs[6]); nt.links.new(bl.outputs[0], m1.inputs[7])
+        # Finer second grain so it doesn't look like dots.
+        fine = noise4(30.0, 4.0, 0.6)
+        fr = ramp(nt, [(0.4, (0.9, 0.93, 0.88)), (0.6, (1.06, 1.05, 1.02))])
+        nt.links.new(fine, fr.inputs['Fac'])
+        m2 = nt.nodes.new("ShaderNodeMix"); m2.data_type = 'RGBA'; m2.blend_type = 'MULTIPLY'
+        m2.inputs[0].default_value = 1.0
+        nt.links.new(m1.outputs[2], m2.inputs[6]); nt.links.new(fr.outputs[0], m2.inputs[7])
+        return m2.outputs[2]
     flat_plane_render(sc, mat, os.path.join(OUTDIR, "grass.png"))
 
 # ---------------- rock ----------------

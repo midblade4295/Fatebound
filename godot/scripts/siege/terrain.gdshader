@@ -12,6 +12,8 @@ uniform float grass_scale = 9.0;   // metres per grass tile
 uniform float path_scale = 3.2;    // metres per herringbone period (4 bricks -> 0.8 m bricks)
 uniform float rock_scale = 4.0;
 uniform vec3 tint = vec3(1.0);     // brightness balance vs. the Vulkan exposure compensation
+uniform sampler2D macro_tex : filter_linear_mipmap, repeat_enable;  // soft large-scale variation
+uniform float grass_sat = 1.0;     // saturation of the grass only
 
 varying vec3 wpos;
 varying vec3 wnorm;
@@ -26,6 +28,11 @@ void fragment() {
 	// Break up the grass tiling with a second, rotated, larger sample.
 	vec2 r2 = mat2(vec2(0.8, 0.6), vec2(-0.6, 0.8)) * wpos.xz / (grass_scale * 2.7);
 	g = mix(g, texture(grass_tex, r2).rgb, 0.35);
+	// Large sunlit and shaded areas across the field (breaks up tiling, adds life).
+	float mac = texture(macro_tex, wpos.xz / 46.0).r;
+	g *= mix(vec3(0.70, 0.80, 0.80), vec3(1.16, 1.12, 0.88), smoothstep(0.2, 0.8, mac));
+	float gl = dot(g, vec3(0.299, 0.587, 0.114));
+	g = mix(vec3(gl), g, grass_sat);
 	vec3 p = texture(path_tex, wpos.xz / path_scale).rgb;
 	vec3 mk = texture(path_mask, (wpos.xz - mask_rect.xy) / mask_rect.zw).rgb;
 	float m = mk.r;

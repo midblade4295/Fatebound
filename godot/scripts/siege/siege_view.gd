@@ -103,6 +103,10 @@ func _build_lighting() -> void:
 	var vk := RenderingServer.get_current_rendering_method() != "gl_compatibility"
 	env.tonemap_exposure = 0.84 * (VULKAN_EXPOSURE if vk else 1.0)
 	env.tonemap_white = 3.0
+	# More colourful, like the Fat Princess references (Kevin, Round 7b).
+	env.adjustment_enabled = true
+	env.adjustment_saturation = 1.08
+	env.adjustment_contrast = 1.04
 	env.fog_enabled = true
 	env.fog_light_color = Color("#8ea3ad")
 	env.fog_mode = Environment.FOG_MODE_DEPTH
@@ -161,8 +165,21 @@ static func _terrain_material() -> ShaderMaterial:
 		m.set_shader_parameter("path_mask", ImageTexture.create_from_image(load(Land.MASK_RES)))
 		var r := Land.bake_rect()
 		m.set_shader_parameter("mask_rect", Vector4(r.position.x, r.position.y, r.size.x, r.size.y))
-		# The battle view's Vulkan compensation (exposure x1.55) washed the rendered textures out.
-		m.set_shader_parameter("tint", Vector3(0.74, 0.76, 0.70))
+		# The battle view's Vulkan compensation (exposure x1.55) brightens everything; a neutral
+		# (not yellowish) darkening keeps the grass a true green.
+		# Measured against Kevin's references (grass hue ~111 deg, sat ~138, value ~190 of 255):
+		# slightly darker and bluer than neutral.
+		m.set_shader_parameter("tint", Vector3(0.71, 0.78, 0.84))
+		m.set_shader_parameter("grass_sat", 0.78)
+		var mt := NoiseTexture2D.new()
+		mt.width = 256
+		mt.height = 256
+		mt.seamless = true
+		var fn := FastNoiseLite.new()
+		fn.frequency = 0.012
+		fn.fractal_octaves = 3
+		mt.noise = fn
+		m.set_shader_parameter("macro_tex", mt)
 		_terrain_mat = m
 	return _terrain_mat
 
@@ -221,6 +238,7 @@ func _build_terrain() -> void:
 		add_child(mi)
 	_build_water()
 	_build_bridges()
+	_build_foliage()
 
 func _build_water() -> void:
 	if _water_mat == null:
@@ -287,6 +305,127 @@ func _build_bridges() -> void:
 	for i in Land.BRIDGE_X.size():
 		var bc := Land.bridge_centre(i)
 		_place("res://assets/terrain/bridge.glb", Vector3(bc.x, 0.0, bc.y), 0.0, 1.0)
+
+# ---------- foliage: grass tufts + flowers (Round 7b) ----------
+const TUFTS := ["Grass_1_A_Color1", "Grass_2_A_Color1", "Grass_1_B_Color1"]
+const FLOWERS := ["red", "blue", "yellow", "white"]
+static var _foliage: Dictionary = {}          # kind -> Array[Transform3D], built once per session
+
+static func _foliage_ok(p: Vector2, mask: Image, obstacles: Array, allow_slope := false) -> bool:
+	if absf(p.x) > Sim.HALF_W - 0.6 or absf(p.y) > Sim.HALF_L - 0.6:
+		return false
+	if absf(p.y - Land.river_c(p.x)) < Land.RIVER_HW + 0.9:
+		return false
+	if absf(p.x) <= Sim.CASTLE_HX + 1.5 and absf(p.y) >= Sim.CASTLE_SHIFT + Sim.FRONT_Z - 1.5:
+		return false
+	var r := Land.bake_rect()
+	var px := Vector2i(clampi(int((p.x - r.position.x) * Land.MASK_PPM), 0, mask.get_width() - 1),
+		clampi(int((p.y - r.position.y) * Land.MASK_PPM), 0, mask.get_height() - 1))
+	var mk := mask.get_pixelv(px)
+	if mk.r > 0.12:
+		return false                          # on a brick path
+	if not allow_slope and mk.g > 0.3:
+		return false                          # on a ledge rim / cliff band
+	for ob in obstacles:
+		if p.distance_to(ob.p) < float(ob.r) + 0.5:
+			return false
+	return true
+
+static func _foliage_xf(p: Vector2, rng: RandomNumberGenerator, s0: float, s1: float) -> Transform3D:
+	var y := Land.ground_height(p, false)
+	var b := Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3.ONE * rng.randf_range(s0, s1))
+	return Transform3D(b, Vector3(p.x, y - 0.03, p.y))
+
+func _plan_foliage() -> Dictionary:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 707
+	var mask: Image = load(Land.MASK_RES)
+	var obs: Array = sim.obstacles
+	var out := {}
+	for k in TUFTS + FLOWERS:
+		out[k] = []
+	var tuft := func(p: Vector2, allow_slope := false):
+		if _foliage_ok(p, mask, obs, allow_slope):
+			out[TUFTS[rng.randi() % TUFTS.size()]].append(_foliage_xf(p, rng, 1.2, 1.7))
+	# 1. Both edges of every brick path (the grassy borders of the references).
+	for pl in Land.paths():
+		for i in range(pl.size() - 1):
+			var a: Vector2 = pl[i]
+			var b: Vector2 = pl[i + 1]
+			var d := (b - a).normalized()
+			var n := Vector2(-d.y, d.x)
+			var L := a.distance_to(b)
+			var t := 0.0
+			while t < L:
+				for side in [-1.0, 1.0]:
+					if rng.randf() < 0.75:
+						tuft.call(a + d * (t + rng.randf_range(-0.3, 0.3)) + n * side * (Land.PATH_HALF_W + rng.randf_range(0.05, 0.45)))
+				t += 0.75
+	# 2. Along the top of every ledge (skip the ramps).
+	for tr in Land.terraces():
+		var corners := [Vector2(tr.x0, tr.z0), Vector2(tr.x1, tr.z0), Vector2(tr.x1, tr.z1), Vector2(tr.x0, tr.z1)]
+		var centre: Vector2 = (corners[0] + corners[2]) * 0.5
+		for i in 4:
+			var a: Vector2 = corners[i]
+			var b: Vector2 = corners[(i + 1) % 4]
+			var L := a.distance_to(b)
+			var t := 0.4
+			while t < L - 0.4:
+				var q := a.lerp(b, t / L)
+				q += (centre - q).normalized() * rng.randf_range(0.25, 0.7)
+				var on_ramp := Land._ramp_height(tr, q + (q - centre).normalized() * 1.2, 0.0) > -INF
+				if not on_ramp and rng.randf() < 0.8:
+					tuft.call(q, true)
+				t += 0.85
+	# 3. Clumps across the fields.
+	for c in 520:
+		var cp := Vector2(rng.randf_range(-Sim.HALF_W, Sim.HALF_W), rng.randf_range(-Sim.HALF_L, Sim.HALF_L))
+		for k in rng.randi_range(2, 5):
+			tuft.call(cp + Vector2(rng.randf_range(-0.8, 0.8), rng.randf_range(-0.8, 0.8)))
+	# 4. Flower clusters.
+	for c in 230:
+		var cp := Vector2(rng.randf_range(-Sim.HALF_W, Sim.HALF_W), rng.randf_range(-Sim.HALF_L, Sim.HALF_L))
+		var col: String = FLOWERS[[0, 0, 0, 1, 1, 1, 2, 2, 3][rng.randi() % 9]]
+		for k in rng.randi_range(2, 4):
+			var fp := cp + Vector2(rng.randf_range(-0.7, 0.7), rng.randf_range(-0.7, 0.7))
+			if _foliage_ok(fp, mask, obs):
+				out[col].append(_foliage_xf(fp, rng, 2.0, 2.6))
+	return out
+
+func _build_foliage() -> void:
+	if _foliage.is_empty():
+		_foliage = _plan_foliage()
+	for kind in _foliage:
+		var src: Dictionary
+		if kind in FLOWERS:
+			src = _mesh_of("res://assets/terrain/flower_%s.glb" % kind)
+		else:
+			src = _mesh_of(FOREST + kind + ".gltf")
+		if src.is_empty():
+			continue
+		# One MultiMesh per 32 m band so off-screen bands are culled.
+		var bands := {}
+		for xf in _foliage[kind]:
+			var bkey := int(floor((xf.origin.z + Sim.HALF_L) / 32.0))
+			if not bands.has(bkey):
+				bands[bkey] = []
+			bands[bkey].append(xf)
+		for bkey in bands:
+			var mm := MultiMesh.new()
+			mm.transform_format = MultiMesh.TRANSFORM_3D
+			mm.mesh = src.mesh
+			mm.instance_count = bands[bkey].size()
+			for i in mm.instance_count:
+				mm.set_instance_transform(i, bands[bkey][i])
+			var mmi := MultiMeshInstance3D.new()
+			mmi.multimesh = mm
+			mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			if kind in TUFTS and src.material is StandardMaterial3D:
+				# Match the tufts to the terrain's green.
+				var m: StandardMaterial3D = (src.material as StandardMaterial3D).duplicate()
+				m.albedo_color = Color(1.0, 1.18, 0.82)
+				mmi.material_override = m
+			add_child(mmi)
 
 var outpost_nodes: Dictionary = {}
 

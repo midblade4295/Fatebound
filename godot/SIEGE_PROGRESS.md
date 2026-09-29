@@ -343,3 +343,17 @@ Design (all cosmetic; no pay-to-win; no real-money purchases until Play Billing 
   Verified by a staged screenshot (owned / enemy / capturing / neutral).
 - Preview 0.14.0-siege-land, version code 24. Protocol v2: the online server must be
   redeployed from this branch (install_siege_server.sh) before this build can play online.
+
+# Round 7b (Kevin): "more colourful like the sample pics, the grass needs to look more like grass"
+- Measured (HSV, green pixels, in-match camera vs Kevin's references): before hue 79 deg /
+  sat 131 / val 209 (yellow, washed); refs 110-112 deg / 138 / ~190; after 103 deg / 135-138 /
+  192-195.
+- Grass texture rebuilt in Blender: true green, soft lighter/darker patches, faint wavy lines
+  (the polygon rim network read as tiles), blade grain; seamless.
+- Terrain shader: large-scale sunlit/shaded variation (noise), grass-only saturation control,
+  cooler tint (was yellowish). Scene: saturation x1.08, contrast x1.04.
+- Foliage (view, MultiMesh per 32 m band, planned once per session): ~1,480 KayKit grass tufts
+  lining path edges and ledge tops + field clumps; ~400 Blender flowers (red/blue/yellow/white,
+  172 tris each) in clusters. Kept off paths, bridges, water, castle grounds, cliff bands and
+  obstacles.
+- Preview 0.14.1-siege-land, version code 25 (same protocol v2 as 0.14.0).

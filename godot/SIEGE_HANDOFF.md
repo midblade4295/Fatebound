@@ -399,3 +399,8 @@ Any new full-screen layer must be added to that helper.
   both -> watch side balance.
 - Not verified on a device: frame rate with the terrain shader at full resolution, the water
   animation, capture rings filling.
+
+**0.14.1 (Round 7b):** greener, more colourful terrain (new Blender grass, `tools/blender/flowers.py`,
+grass tufts + flowers scattered by `SiegeView._plan_foliage`), shader `grass_sat` + macro
+variation, scene saturation 1.08. Colour targets were measured against Kevin's references (see
+SIEGE_PROGRESS Round 7b); re-measure if you change the tint.
