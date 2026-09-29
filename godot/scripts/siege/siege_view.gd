@@ -113,9 +113,9 @@ func _build_lighting() -> void:
 	env.fog_depth_begin = 64.0
 	env.fog_depth_end = 120.0
 	env.fog_density = 0.5
-	env.glow_enabled = true
-	env.glow_intensity = 0.35
-	env.glow_bloom = 0.04
+	# No glow in battle (0.14.3): it is full-screen blur passes at native resolution (~7 % of the
+	# frame in tests/perf_bench.gd, and bandwidth-heavy on phones) for a bloom too faint to see.
+	env.glow_enabled = false
 	var we := WorldEnvironment.new()
 	we.environment = env
 	add_child(we)
@@ -361,9 +361,9 @@ func _plan_foliage() -> Dictionary:
 			var t := 0.0
 			while t < L:
 				for side in [-1.0, 1.0]:
-					if rng.randf() < 0.75:
+					if rng.randf() < 0.6:
 						tuft.call(a + d * (t + rng.randf_range(-0.3, 0.3)) + n * side * (Land.PATH_HALF_W + rng.randf_range(0.05, 0.45)))
-				t += 0.75
+				t += 0.9
 	# 2. Along the top of every ledge (skip the ramps).
 	for tr in Land.terraces():
 		var corners := [Vector2(tr.x0, tr.z0), Vector2(tr.x1, tr.z0), Vector2(tr.x1, tr.z1), Vector2(tr.x0, tr.z1)]
@@ -377,16 +377,16 @@ func _plan_foliage() -> Dictionary:
 				var q := a.lerp(b, t / L)
 				q += (centre - q).normalized() * rng.randf_range(0.25, 0.7)
 				var on_ramp := Land._ramp_height(tr, q + (q - centre).normalized() * 1.2, 0.0) > -INF
-				if not on_ramp and rng.randf() < 0.8:
+				if not on_ramp and rng.randf() < 0.65:
 					tuft.call(q, true)
 				t += 0.85
 	# 3. Clumps across the fields.
-	for c in 520:
+	for c in 340:
 		var cp := Vector2(rng.randf_range(-Sim.HALF_W, Sim.HALF_W), rng.randf_range(-Sim.HALF_L, Sim.HALF_L))
 		for k in rng.randi_range(2, 5):
 			tuft.call(cp + Vector2(rng.randf_range(-0.8, 0.8), rng.randf_range(-0.8, 0.8)))
 	# 4. Flower clusters.
-	for c in 230:
+	for c in 150:
 		var cp := Vector2(rng.randf_range(-Sim.HALF_W, Sim.HALF_W), rng.randf_range(-Sim.HALF_L, Sim.HALF_L))
 		var col: String = FLOWERS[[0, 0, 0, 1, 1, 1, 2, 2, 3][rng.randi() % 9]]
 		for k in rng.randi_range(2, 4):
@@ -428,6 +428,7 @@ func _build_foliage() -> void:
 			mmi.multimesh = mm
 			mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			mmi.set_meta("perf", "foliage")
+			mmi.set_meta("perf_kind", kind)
 			mmi.visibility_range_end = 70.0          # bands far up-screen are tiny anyway
 			if kind in TUFTS:
 				mmi.material_override = _tuft_material(src.material)
@@ -1077,9 +1078,24 @@ func _play(a: Dictionary, clip: String, speed := 1.0, busy := 0.0) -> void:
 	player.play(clip, 0.1)
 	player.speed_scale = speed
 
+# Animation culling (0.14.3): characters outside the camera view don't run their AnimationPlayer
+# (so no skeleton update or skinning upload either); they resume the moment they come into view.
+var anim_cull := true
+var anim_active := 0
+
+func _on_screen(p: Vector3, planes: Array) -> bool:
+	# Bounding sphere (1.8 m) against the camera frustum planes.
+	var c := p + Vector3(0, 1.0, 0)
+	for pl in planes:
+		if (pl as Plane).distance_to(c) > 1.8:
+			return false
+	return true
+
 func sync(dt: float) -> void:
 	_time += dt
 	var seen := {}
+	var planes: Array = camera.get_frustum() if anim_cull and is_instance_valid(camera) and camera.is_inside_tree() else []
+	anim_active = 0
 	for u in sim.units:
 		seen[u.id] = true
 		var a := _ensure_actor(u)
@@ -1098,6 +1114,12 @@ func sync(dt: float) -> void:
 		(a.ring as MeshInstance3D).visible = u.state != "dead"
 		_sync_load(a, u)
 		_animate(a, u, vel)
+		if is_instance_valid(a.player):
+			var show := planes.is_empty() or _on_screen(root.position, planes)
+			if (a.player as AnimationPlayer).active != show:
+				(a.player as AnimationPlayer).active = show
+			if show:
+				anim_active += 1
 	for id in actors.keys():
 		if not seen.has(id):
 			actors[id].root.queue_free()

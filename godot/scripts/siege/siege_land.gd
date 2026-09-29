@@ -190,7 +190,8 @@ static func ledge_rim(p: Vector2) -> Vector2:
 
 # ---------------- baked terrain (visual) ----------------
 const BAKE_MARGIN := 7.0          # terrain extends this far past the field edge
-const BAKE_STEP := 0.5            # metres between height samples
+const BAKE_STEP := 1.0            # metres between height samples (0.5 m cost ~45k more triangles
+                                  # for no visible difference at the game camera; 0.14.3)
 const MASK_PPM := 4.0             # path-mask pixels per metre
 const HEIGHT_RES := "res://assets/terrain/height.res"
 const MASK_RES := "res://assets/terrain/pathmask.res"

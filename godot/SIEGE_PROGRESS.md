@@ -379,3 +379,18 @@ includes shader compile and is ignored.
   back-face culled (exported double-sided), visibility range 70 m, "Reduce effects" halves it.
 - Look unchanged: grass hue 105 / sat 136 / val 189 vs 103 / 135 / 192 in 0.14.1.
 - Not measured on the phone. Kevin: COPY DIAGNOSTICS after a match gives real fps.
+
+# 0.14.3 (Kevin): "a bit more optimization to get that 60 fps lock" -- no automatic resolution
+- Kevin explicitly does NOT want automatic/dynamic resolution (it was built and removed
+  unshipped). Don't add it.
+- Measured (tests/perf_bench.gd, frozen scene, software Vulkan 540x960, interleaved runs; the
+  single-core sandbox is noisy, so only repeated A/B pairs were trusted):
+  flowers ~1 % of the frame, tufts <1 %, characters ~24 % (~95 of ~125 draw calls), glow ~7 %.
+  Game CPU per frame ~2 ms on the dev box (sim 0.6, view 1.1; the rest of a headless frame is
+  the engine's idle wait), so the phone is GPU-bound.
+- Changes: glow off in battle; terrain baked at 1 m (was 0.5 m: -45k triangles, no visible
+  difference at the game camera); off-screen characters' AnimationPlayers paused (no skeleton
+  update / skinning upload; resume on screen, 1.8 m margin); fewer flowers (150 clusters, was
+  230) and tufts (sparser path edges, 340 field clumps, was 520), as Kevin suggested.
+- End to end, 0.14.2 vs 0.14.3 alternated 3x: 90-93 ms -> 70-73 ms (-21 %), 145k -> 90k tris.
+  Look unchanged (grass hue/sat/val 105/136/189 both).
