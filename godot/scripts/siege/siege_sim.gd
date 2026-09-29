@@ -1547,13 +1547,15 @@ func _step_unit(u: Dictionary, dt: float) -> void:
 			return
 		"recover":
 			u.t -= dt
-			u.pos += u.move * speed * 0.25 * dt
+			if not _net_moves(u):
+				u.pos += u.move * speed * 0.25 * dt
 			if u.t <= 0.0:
 				u.state = "idle"
 			return
 		"dodge":
 			u.t -= dt
-			u.pos += u.dodge_dir * 13.0 * dt
+			if not _net_moves(u):
+				u.pos += u.dodge_dir * DODGE_SPEED * dt
 			if u.t <= 0.0:
 				u.state = "idle"
 			return
@@ -1578,21 +1580,17 @@ func _step_unit(u: Dictionary, dt: float) -> void:
 		# Not enough hands: she won't budge.
 		if ho.lifters.size() < lifters_needed(ho):
 			mult = 0.0
-	if u.offering:
-		mult = minf(mult, 0.9)
-	if not ladders.is_empty() and ladder_climb(u):
-		mult *= LADDER_CLIMB
-	if u.load.n > 0:
-		mult = minf(mult, 0.85)
+	mult = move_mult(u, mult)
 	var beaming: bool = str(u.beam) != ""
-	if beaming:
-		mult = minf(mult, BEAM_MOVE)
 	var shield_up := blocking(u)
-	if shield_up:
-		mult = minf(mult, BLOCK_MOVE)
 	if u.move.length() > 0.08:
-		u.pos += u.move * speed * mult * dt
-		if whirling(u):
+		if _net_moves(u):
+			pass                                      # the player's phone moves it (validated, see server)
+		else:
+			u.pos += u.move * speed * mult * dt
+		if _net_moves(u):
+			pass                                      # facing comes from the phone too
+		elif whirling(u):
 			pass                                      # spinning: _step_whirl turns the face
 		elif shield_up:
 			u.face = lerp_angle(u.face, angle_of(u.move), minf(1.0, dt*2.5))   # a slow turn behind the shield
@@ -1601,6 +1599,77 @@ func _step_unit(u: Dictionary, dt: float) -> void:
 		u.state = "move"
 	else:
 		u.state = "idle"
+
+# ---------- client-side prediction (0.18.4, Kevin: "on the server the controls lag") ----------
+# Online, the player's phone moves its own unit immediately with the same code (predict_step) and
+# sends the position; the server takes it if it's plausible (siege_server.gd) instead of moving the
+# unit itself. Server-driven states (dead, stunned, carrying, lunging, tasks) stay server-side.
+const DODGE_SPEED := 13.0
+
+func move_mult(u: Dictionary, mult := 1.0) -> float:
+	# Speed multipliers for free movement (not the Oracle carry, handled by the caller).
+	if u.offering:
+		mult = minf(mult, 0.9)
+	if not ladders.is_empty() and ladder_climb(u):
+		mult *= LADDER_CLIMB
+	if u.load.n > 0:
+		mult = minf(mult, 0.85)
+	if str(u.beam) != "":
+		mult = minf(mult, BEAM_MOVE)
+	if blocking(u):
+		mult = minf(mult, BLOCK_MOVE)
+	return mult
+
+func client_drivable(u: Dictionary) -> bool:
+	if not alive(u) or u.stun > 0.0 or u.carrying or not u.task.is_empty() or u.workshop_open:
+		return false
+	if u.state == "wind" and CLASSES[u.cls].ability == "lunge" and u.atk == "ability":
+		return false
+	return u.state in ["idle", "move", "recover", "dodge", "wind"]
+
+func _net_moves(u: Dictionary) -> bool:
+	return bool(u.get("net_driven", false)) and client_drivable(u)
+
+func predict_step(u: Dictionary, move: Vector2, dt: float) -> void:
+	# The phone's copy of _step_unit's movement for its own unit (same speeds, same collision).
+	var speed := float(stat(u, "speed"))
+	match str(u.state):
+		"dodge":
+			u.pos += u.dodge_dir * DODGE_SPEED * dt
+			u.t -= dt
+			if u.t <= 0.0:
+				u.state = "idle"
+		"recover":
+			u.pos += move * speed * 0.25 * dt
+			u.t -= dt
+			if u.t <= 0.0:
+				u.state = "idle"
+		"wind":
+			u.t -= dt                               # a locally predicted swing: animation only
+			if u.t <= 0.0:
+				u.state = "recover"
+				u.t = float(stat(u, "recover"))
+		_:
+			if move.length() > 0.08:
+				u.pos += move * speed * move_mult(u) * dt
+				if not whirling(u) and str(u.beam) == "":
+					u.face = lerp_angle(u.face, angle_of(move), minf(1.0, dt * (2.5 if blocking(u) else 14.0)))
+				u.state = "move"
+			else:
+				u.state = "idle"
+	u.pos = _clamp_to_field(_push_out(_clamp_to_field(u.pos), UNIT_R, u.team))
+
+func accept_client_pos(u: Dictionary, p: Vector2, face: float, elapsed: float) -> bool:
+	# Server side: take a phone-reported position if the unit could have got there (its speed,
+	# or dodge speed, over the time since the last report, plus slack) and it isn't in a wall.
+	if not client_drivable(u):
+		return false
+	var top := maxf(float(stat(u, "speed")) * move_mult(u), DODGE_SPEED if u.state == "dodge" else 0.0)
+	if p.distance_to(u.pos) > top * clampf(elapsed, 0.0, 0.5) * 1.35 + 0.6:
+		return false
+	u.pos = _clamp_to_field(_push_out(_clamp_to_field(p), UNIT_R, u.team))
+	u.face = face
+	return true
 
 func _step_task(u: Dictionary, dt: float) -> void:
 	var task: Dictionary = u.task

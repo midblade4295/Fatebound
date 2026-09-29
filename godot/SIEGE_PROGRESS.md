@@ -591,3 +591,19 @@ K2/K3 notes (0.17.0)
   still presses it, a drag from the hero area scrolls, a flick glides. Harness note: push events
   with root.push_input(e, true) (viewport coords) and pair each touch with its emulated mouse
   event (device -1) the way a phone delivers them.
+
+# 0.18.4 (Kevin): "optimize the network play; on the server the controls lag a bit"
+- Cause (read in the code): no client-side prediction. The local unit was drawn from 10 Hz
+  snapshots and interpolated like everyone else (+100 ms), so input -> screen was RTT + server
+  tick + snapshot wait + 100 ms (~200-260 ms at a 60 ms RTT).
+- Client-side prediction: the phone moves its own unit every frame with the sim's movement code
+  (Sim.predict_step / move_mult; dodges and swings too, animation only) and sends position + facing
+  with its inputs. Server (siege_server.gd): units of predicting clients are `net_driven` -- the
+  sim doesn't move them; Sim.accept_client_pos takes the reported position if it's within speed x
+  time x 1.35 + 0.6 m and pushes it out of walls, else keeps its own (the phone snaps back). Falls
+  back to server movement if positions stop arriving for 0.3 s. Server-driven states (dead,
+  stunned, carrying, lunge, tasks) and > 2.5 m disagreements follow the server (Net.PREDICT_SNAP).
+- Snapshots 10 -> 15 Hz (measured ~1.3 KB compressed, p95 1.7 KB: ~19 KB/s per player).
+- Protocol v7 (hello "pred", input "p"/"f").
+- siege_net_smoke, against the real server: local move within 3 frames (0.41 m), server 0.21 m
+  behind after 7.2 m, a forged position 20 m away rejected, a swing starts on the press.

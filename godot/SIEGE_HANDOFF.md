@@ -485,3 +485,7 @@ generated (`castle_mesh.gd`). Kevin rejected the generated sandstone look: keep 
 - Weapons Bits: "bits/<model>" in LOOKS and catalog weapons; `Eco.PACKS`, `Profile.buy_pack`,
   shop PACKS section; pass 6 + 10 items.
 - siege_land_check: squeeze-trap rule. Keep new castle pieces >= 1 m apart or touching.
+
+**0.18.4 (network):** client-side prediction for the local unit (Sim.predict_step, Net.apply(...,
+predict=true), server `net_driven` + Sim.accept_client_pos validation, 0.3 s fallback), local
+dodge/swing animation prediction, snapshots 15 Hz. Protocol v7: redeploy the server.

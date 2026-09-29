@@ -8,10 +8,12 @@ extends RefCounted
 # objects: decode() uses the default allow_objects=false.
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 
-const VERSION := 6               # 6 = knight block / berserker whirlwind (held-ability input, 2 unit slots)
+const VERSION := 7               # 7 = client-side prediction (input carries position + facing)
 const DEFAULT_URL := "wss://136-113-125-3.sslip.io/fatebound/siege/ws"
 const DEFAULT_PORT := 8082
-const SNAP_HZ := 10.0
+const SNAP_HZ := 15.0            # 10 -> 15 (0.18.4): ~1.3 KB each, ~19 KB/s per player; remote
+                                 # units' interpolation delay 100 -> 67 ms
+const PREDICT_SNAP := 2.5        # m: a predicting phone snaps to the server beyond this
 const MAX_PACKET := 64 * 1024            # client -> server; anything larger is dropped
 const TEAM_SIZE := 16
 
@@ -164,9 +166,15 @@ static func for_player(base: Dictionary, sim, unit_id: String) -> Dictionary:
 	return msg
 
 # ---------------- client side ----------------
-static func apply(sim, msg: Dictionary, me_id: String) -> void:
+static func apply(sim, msg: Dictionary, me_id: String, predict := false) -> void:
 	# Overwrites the mirror sim's dynamic state. Unit positions go to "net_to" so the client can
 	# interpolate between snapshots; everything else is set directly.
+	# The phone predicts its own unit: keep its position/facing (and a dodge it started) unless the
+	# server disagrees by > PREDICT_SNAP or the unit is in a server-driven state (0.18.4).
+	var mine_prev := {}
+	if predict and sim.by_id.has(me_id):
+		var mp: Dictionary = sim.by_id[me_id]
+		mine_prev = {"pos": mp.pos, "face": mp.face, "state": mp.state, "t": float(mp.get("t", 0.0))}
 	sim.time = float(msg.get("tm", sim.time))
 	sim.score = msg.get("sc", sim.score)
 	sim.kills = msg.get("k", sim.kills)
@@ -260,6 +268,22 @@ static func apply(sim, msg: Dictionary, me_id: String) -> void:
 		var k := hi * 5
 		sim.hats.append({"id":int(hd[k]), "cls":HAT_CLS[clampi(int(hd[k + 1]), 0, HAT_CLS.size() - 1)], "up":hd[k + 2] > 0.5,
 			"pos":Vector2(hd[k + 3], hd[k + 4]), "t":0.0})
+	if not mine_prev.is_empty():
+		var me2: Dictionary = sim.by_id[me_id]
+		var server_pos: Vector2 = me2.get("net_to", me2.pos)
+		me2.erase("net_to")
+		me2.erase("net_from")
+		me2["srv_pos"] = server_pos
+		if sim.client_drivable(me2) and (mine_prev.pos as Vector2).distance_to(server_pos) <= PREDICT_SNAP:
+			me2.pos = mine_prev.pos
+			me2.face = mine_prev.face
+			# A dodge or swing we started locally keeps playing until its timer runs out (the server's
+			# confirmation arrives a round trip later).
+			if str(mine_prev.state) in ["dodge", "wind", "recover"] and float(mine_prev.t) > 0.0:
+				me2.state = mine_prev.state
+				me2.t = mine_prev.t
+		else:
+			me2.pos = server_pos
 	if msg.has("me") and sim.by_id.has(me_id):
 		var me: Dictionary = sim.by_id[me_id]
 		me.task = msg.me.task

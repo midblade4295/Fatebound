@@ -113,6 +113,7 @@ func _drop(cid: int, why: String) -> void:
 		var u: Dictionary = sim.by_id[c.unit]
 		u.bot = true                   # a bot takes the slot back over
 		u.move = Vector2.ZERO
+		u.net_driven = false
 	if c.hello:
 		_log("leave %s (%s) unit=%s players=%d" % [c.name, why, c.unit, _human_count() - 1])
 	clients.erase(cid)
@@ -141,6 +142,7 @@ func _handle(cid: int, msg: Dictionary) -> void:
 				return
 			c.hello = true
 			c.name = str(msg.get("name", "Player")).left(20)
+			c.pred = bool(msg.get("pred", false))         # the phone moves its own unit (0.18.4)
 			if sim == null:
 				_new_match()
 			_seat(cid)
@@ -152,6 +154,12 @@ func _handle(cid: int, msg: Dictionary) -> void:
 				c.move = (m as Vector2).limit_length(1.0)
 			c.hold = bool(msg.get("h", false))
 			c.bhold = bool(msg.get("b", false))
+			var cp: Variant = msg.get("p", null)
+			if cp is Vector2 and is_finite(cp.x) and is_finite(cp.y):
+				c.cpos = cp
+				c.cface = float(msg.get("f", 0.0))
+				c.cpos_new = true
+				c.cpos_rx = Time.get_ticks_msec() / 1000.0
 			var a: String = str(msg.get("a", ""))
 			if a != "" and a in Net.ACTIONS:
 				var arg: Variant = msg.get("arg", null)
@@ -248,6 +256,20 @@ func _run_match(delta: float) -> void:
 		if c.hello and c.unit != "" and sim.by_id.has(c.unit):
 			sim.set_move(c.unit, c.move)
 			var ub: Dictionary = sim.by_id[c.unit]
+			# Client-side prediction: take the phone's position when it's plausible (speed x time
+			# since the last accepted report, not in a wall); otherwise keep ours and the phone snaps.
+			# ...but only while positions keep arriving: after 0.3 s without one (packet loss, a stalled
+			# phone) the server moves the unit from its inputs again instead of freezing it.
+			var now_rx := Time.get_ticks_msec() / 1000.0
+			ub.net_driven = bool(c.get("pred", false)) and now_rx - float(c.get("cpos_rx", -10.0)) < 0.3
+			if ub.net_driven and bool(c.get("cpos_new", false)):
+				c.cpos_new = false
+				var now_s := Time.get_ticks_msec() / 1000.0
+				if sim.accept_client_pos(ub, c.cpos, float(c.cface), now_s - float(c.get("cpos_t", now_s - 0.05))):
+					c.cpos_t = now_s
+					c.pos_ok = int(c.get("pos_ok", 0)) + 1
+				else:
+					c.pos_rejected = int(c.get("pos_rejected", 0)) + 1
 			if bool(c.get("bhold", false)) and sim.ability_of(ub) == "block":
 				sim.act(c.unit, "ability")
 			if c.hold:
