@@ -294,7 +294,7 @@ Design (all cosmetic; no pay-to-win; no real-money purchases until Play Billing 
 |---|---|---|
 | T1 | Blender art: seamless grass (voronoi patches), herringbone brick path, rock ledge texture, wooden bridge model | done |
 | T2 | Sim: bigger field, river with 3 bridges (walls + nav), raised ledges with ramps, rolling slopes (height_at), outposts (capture, respawn, trickle), protocol sync | done |
-| T3 | View: single terrain mesh (heights from sim) with grass/path/rock shader + path mask, water, bridges, ledge faces, outpost towers | todo |
+| T3 | View: single terrain mesh (heights from sim) with grass/path/rock shader + path mask, water, bridges, ledge faces, outpost towers | done |
 | T4 | Bots (outposts), HUD markers, tests, screenshots, APK | todo |
 
 ## T1 notes
@@ -321,3 +321,18 @@ Design (all cosmetic; no pay-to-win; no real-money purchases until Play Billing 
 - Protocol v2 (snapshot "op" = owner, prog per outpost). Old clients get "update the game".
   **The server must be redeployed with this branch before online play works again.**
 - The view still draws the old hex terrain/plateau until T3.
+
+## T3 notes
+- Terrain = baked height map (tools/bake_land.gd -> assets/terrain/height.res, 157x285 @ 0.5 m)
+  meshed in 32 m bands (cached per session) + scripts/siege/terrain.gdshader: grass, herringbone
+  bricks via the baked mask (R), rock on steep faces, rock rim from above (G) and cliff-foot
+  shadow (B). Baking because computing 43k heights at match start took 387 ms on the dev box.
+  tests/siege_land_check.gd fails if the bake is stale: **re-run bake_land.gd after editing
+  siege_land.gd**.
+- Found by screenshots: the bridge deck was hidden because the terrain was baked at deck height
+  (terrain now excludes decks; units still walk on them); ledges were invisible from the game
+  camera (faces point away) -> 1.2 m rock band + rim/shadow in the mask; the Vulkan exposure
+  washed the textures out (shader tint 0.74).
+- Water: animated shader on a strip following the river (TIME only; no per-frame buffers).
+- Outposts: bare stone tower when neutral, team tower + flag when owned, capture ring + an inner
+  ring that grows with progress in the capturing team's colour.

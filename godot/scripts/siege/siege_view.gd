@@ -1,6 +1,7 @@
 extends Node3D
 # Presentation only: mirrors siege_sim state every frame and never changes it.
 const Stage = preload("res://scripts/siege/asset_cache.gd")
+const Land = preload("res://scripts/siege/siege_land.gd")
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 
 const HEX := "res://assets/kaykit/hex/"
@@ -146,51 +147,189 @@ func _mesh_of(path: String) -> Dictionary:
 static func hex_pos(col: int, row: int) -> Vector3:
 	return Vector3(col*2.0 + (1.0 if row % 2 != 0 else 0.0), 0.0, row*1.732)
 
+static var _terrain_meshes: Array = []
+static var _terrain_mat: ShaderMaterial = null
+static var _water_mat: ShaderMaterial = null
+
+static func _terrain_material() -> ShaderMaterial:
+	if _terrain_mat == null:
+		var m := ShaderMaterial.new()
+		m.shader = load("res://scripts/siege/terrain.gdshader")
+		m.set_shader_parameter("grass_tex", load("res://assets/terrain/grass.png"))
+		m.set_shader_parameter("path_tex", load("res://assets/terrain/path.png"))
+		m.set_shader_parameter("rock_tex", load("res://assets/terrain/rock.png"))
+		m.set_shader_parameter("path_mask", ImageTexture.create_from_image(load(Land.MASK_RES)))
+		var r := Land.bake_rect()
+		m.set_shader_parameter("mask_rect", Vector4(r.position.x, r.position.y, r.size.x, r.size.y))
+		# The battle view's Vulkan compensation (exposure x1.55) washed the rendered textures out.
+		m.set_shader_parameter("tint", Vector3(0.74, 0.76, 0.70))
+		_terrain_mat = m
+	return _terrain_mat
+
+static func _make_terrain_meshes() -> Array:
+	# One mesh per 32 m band (tight AABBs -> off-screen bands are culled), vertices every
+	# BAKE_STEP metres straight from the baked height map, normals by central differences.
+	var img: Image = load(Land.HEIGHT_RES)
+	var nx := img.get_width()
+	var nz := img.get_height()
+	var h := img.get_data().to_float32_array()
+	var r := Land.bake_rect()
+	var st := Land.BAKE_STEP
+	var out := []
+	var band := int(32.0 / st)
+	var j0 := 0
+	while j0 < nz - 1:
+		var j1 := mini(nz - 1, j0 + band)
+		var verts := PackedVector3Array()
+		var norms := PackedVector3Array()
+		var idx := PackedInt32Array()
+		for j in range(j0, j1 + 1):
+			for i in nx:
+				var y := h[j * nx + i]
+				verts.append(Vector3(r.position.x + i * st, y, r.position.y + j * st))
+				var hl := h[j * nx + maxi(i - 1, 0)]
+				var hr := h[j * nx + mini(i + 1, nx - 1)]
+				var hd := h[maxi(j - 1, 0) * nx + i]
+				var hu := h[mini(j + 1, nz - 1) * nx + i]
+				norms.append(Vector3(hl - hr, 2.0 * st, hd - hu).normalized())
+		var rows := j1 - j0 + 1
+		for jj in rows - 1:
+			for i in nx - 1:
+				var a := jj * nx + i
+				idx.append_array([a, a + 1, a + nx, a + 1, a + nx + 1, a + nx])
+		var arr := []
+		arr.resize(Mesh.ARRAY_MAX)
+		arr[Mesh.ARRAY_VERTEX] = verts
+		arr[Mesh.ARRAY_NORMAL] = norms
+		arr[Mesh.ARRAY_INDEX] = idx
+		var am := ArrayMesh.new()
+		am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
+		out.append(am)
+		j0 = j1
+	return out
+
 func _build_terrain() -> void:
-	# One MultiMesh per tile look keeps ~900 hexes to a handful of draw calls on phones.
-	var rng := RandomNumberGenerator.new()
-	rng.seed = 404
-	var groups := {}
-	for row in range(-34, 35):
-		for col in range(-16, 16):
-			var p := hex_pos(col, row)
-			var ax := absf(p.x)
-			var h := 0.0
-			var band := (row + 34) / 8
-			var key := "hex_grass:%d:%d" % [rng.randi() % 3, band]
-			if ax > Sim.HALF_W + 1.5:
-				h = 0.5 + floor(rng.randf()*3.0)*0.25
-			p.y = h
-			if not groups.has(key):
-				groups[key] = []
-			groups[key].append(Transform3D(Basis(), p))
-			if h >= 0.99:
-				var bkey := "hex_grass_bottom:0:%d" % band
-				if not groups.has(bkey):
-					groups[bkey] = []
-				groups[bkey].append(Transform3D(Basis(), Vector3(p.x, h-1.0, p.z)))
-	for key in groups:
-		var parts: PackedStringArray = key.split(":")
-		var src := _mesh_of(HEX + parts[0] + ".gltf")
-		if src.is_empty():
+	# Round 7: a single height-mapped ground (grass, herringbone paths, rock ledges) built from the
+	# baked landscape; cached for the session so rematches don't rebuild it.
+	if _terrain_meshes.is_empty():
+		_terrain_meshes = _make_terrain_meshes()
+	for m in _terrain_meshes:
+		var mi := MeshInstance3D.new()
+		mi.mesh = m
+		mi.material_override = _terrain_material()
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(mi)
+	_build_water()
+	_build_bridges()
+
+func _build_water() -> void:
+	if _water_mat == null:
+		var sh := Shader.new()
+		sh.code = """
+shader_type spatial;
+render_mode cull_disabled;
+uniform sampler2D ripples : filter_linear_mipmap, repeat_enable;
+void fragment() {
+	vec2 w = UV * vec2(18.0, 1.0);
+	float a = texture(ripples, w * 0.35 + vec2(TIME * 0.05, TIME * 0.02)).r;
+	float b = texture(ripples, w * 0.21 - vec2(TIME * 0.03, 0.0)).r;
+	float n = a * 0.6 + b * 0.4;
+	float shore = 1.0 - smoothstep(0.0, 0.16, min(UV.y, 1.0 - UV.y));
+	vec3 deep = vec3(0.10, 0.42, 0.72);
+	vec3 shallow = vec3(0.22, 0.66, 0.86);
+	vec3 col = mix(deep, shallow, smoothstep(0.35, 0.75, n));
+	col = mix(col, vec3(0.92, 0.97, 1.0), max(shore * 0.85, smoothstep(0.78, 0.9, n) * 0.5));
+	ALBEDO = col;
+	ROUGHNESS = 0.12;
+	SPECULAR = 0.6;
+}
+"""
+		var m := ShaderMaterial.new()
+		m.shader = sh
+		var nt := NoiseTexture2D.new()
+		nt.width = 256
+		nt.height = 256
+		nt.seamless = true
+		var fn := FastNoiseLite.new()
+		fn.frequency = 0.04
+		nt.noise = fn
+		m.set_shader_parameter("ripples", nt)
+		_water_mat = m
+	var verts := PackedVector3Array()
+	var uvs := PackedVector2Array()
+	var idx := PackedInt32Array()
+	var x0 := -Sim.HALF_W - Land.BAKE_MARGIN
+	var n := int((2.0 * (Sim.HALF_W + Land.BAKE_MARGIN)) / 1.0)
+	for k in n + 1:
+		var x := x0 + k
+		var c := Land.river_c(x)
+		verts.append(Vector3(x, Land.WATER_Y, c - Land.RIVER_HW - 0.35))
+		verts.append(Vector3(x, Land.WATER_Y, c + Land.RIVER_HW + 0.35))
+		uvs.append(Vector2(float(k) / n, 0.0))
+		uvs.append(Vector2(float(k) / n, 1.0))
+		if k < n:
+			var a := k * 2
+			idx.append_array([a, a + 2, a + 1, a + 1, a + 2, a + 3])
+	var arr := []
+	arr.resize(Mesh.ARRAY_MAX)
+	arr[Mesh.ARRAY_VERTEX] = verts
+	arr[Mesh.ARRAY_TEX_UV] = uvs
+	arr[Mesh.ARRAY_INDEX] = idx
+	var am := ArrayMesh.new()
+	am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
+	var mi := MeshInstance3D.new()
+	mi.mesh = am
+	mi.material_override = _water_mat
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(mi)
+
+func _build_bridges() -> void:
+	for i in Land.BRIDGE_X.size():
+		var bc := Land.bridge_centre(i)
+		_place("res://assets/terrain/bridge.glb", Vector3(bc.x, 0.0, bc.y), 0.0, 1.0)
+
+var outpost_nodes: Dictionary = {}
+
+func _build_outposts() -> void:
+	for op in sim.outposts:
+		var p := Vector3(op.p.x, Sim.height_at(op.p), op.p.y)
+		var looks := {}
+		looks[-1] = _place(HEX + "building_tower_base_blue.gltf", p, 0.3, 2.6)
+		looks[0] = _place(HEX + "building_tower_A_blue.gltf", p, 0.3, 2.3)
+		looks[1] = _place(HEX + "building_tower_A_red.gltf", p, 0.3, 2.3)
+		var flags := {}
+		for t in 2:
+			flags[t] = _place(HEX + "flag_%s.gltf" % COLOR[t], p + Vector3(1.7, 0, 1.7), 0.0, 2.2)
+		var ring := _decal(p + Vector3(0, 0.07, 0), Land.OUTPOST_R, Color(1, 1, 1), 0.55)
+		var prog := _decal(p + Vector3(0, 0.08, 0), Land.OUTPOST_R - 0.35, TEAM_COLORS[0], 0.9)
+		outpost_nodes[op.id] = {"looks":looks, "flags":flags, "ring":ring, "prog":prog, "owner":-2}
+
+func _sync_outposts() -> void:
+	for op in sim.outposts:
+		var on: Dictionary = outpost_nodes.get(op.id, {})
+		if on.is_empty():
 			continue
-		var mm := MultiMesh.new()
-		mm.transform_format = MultiMesh.TRANSFORM_3D
-		mm.mesh = src.mesh
-		mm.instance_count = groups[key].size()
-		for i in mm.instance_count:
-			mm.set_instance_transform(i, groups[key][i])
-		# Row bands give each batch a tight AABB, so bands off-screen are culled.
-		var node := MultiMeshInstance3D.new()
-		node.multimesh = mm
-		node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		if parts[0].begins_with("hex_grass") and src.material is StandardMaterial3D:
-			var mat: StandardMaterial3D = (src.material as StandardMaterial3D).duplicate()
-			mat.albedo_color = GROUND_TINT * [1.0, 0.93, 1.05][int(parts[1])]
-			mat.albedo_color.a = 1.0
-			mat.roughness = 0.95
-			node.material_override = mat
-		add_child(node)
+		var owner: int = op.owner
+		if owner != int(on.owner):
+			on.owner = owner
+			for k in on.looks:
+				if on.looks[k] != null:
+					(on.looks[k] as Node3D).visible = int(k) == owner
+			for t in on.flags:
+				if on.flags[t] != null:
+					(on.flags[t] as Node3D).visible = int(t) == owner
+			var rc: Color = Color(1, 1, 1) if owner < 0 else TEAM_COLORS[owner]
+			rc.a = 0.55
+			((on.ring as MeshInstance3D).material_override as StandardMaterial3D).albedo_color = rc
+		# Capture progress: an inner ring that grows with |prog|, in the capturing team's colour.
+		var pr: float = op.prog
+		var pm := on.prog as MeshInstance3D
+		var sc := maxf(0.02, absf(pr))
+		pm.scale = Vector3(sc, 0.15, sc)
+		pm.visible = absf(pr) > 0.02 and absf(pr) < 0.999
+		var pc: Color = TEAM_COLORS[0] if pr > 0.0 else TEAM_COLORS[1]
+		pc.a = 0.9
+		(pm.material_override as StandardMaterial3D).albedo_color = pc
 
 func _place(path: String, pos: Vector3, rot := 0.0, s := 1.0) -> Node3D:
 	var packed := Stage.scene(path)
@@ -213,8 +352,6 @@ func _build_props() -> void:
 	for ob in sim.obstacles:
 		var p := Vector3(ob.p.x, 0, ob.p.y)
 		match str(ob.kind):
-			"ruin":
-				_place(HEX + "building_scaffolding.gltf", p + Vector3(0, Sim.HILL_H, 0), 0.4, 1.4)
 			"forge_building":
 				_place(HEX + "building_blacksmith_%s.gltf" % COLOR[ob.team], p, PI * 0.5 if ob.team == 0 else -PI * 0.5, 2.3)
 			"rock":
@@ -225,15 +362,16 @@ func _build_props() -> void:
 				_place(HEX + "building_market_%s.gltf" % COLOR[ob.team], p, -PI * 0.5 if ob.team == 0 else PI * 0.5, 2.0)
 	_build_nodes()
 	_build_cake_trees()
-	_build_plateau()
+	_build_outposts()
 	# Scenery outside the play field.
 	for i in 72:
 		var side := -1.0 if i % 2 == 0 else 1.0
 		var z := -Sim.HALF_L - 4.0 + float(i / 2) * 3.2
-		_place(FOREST + forest_trees[rng.randi() % forest_trees.size()] + ".gltf", Vector3(side * (Sim.HALF_W + 2.5 + rng.randf()*3.0), 0.5, z), rng.randf()*TAU, 0.5 + rng.randf()*0.2)
+		var tx: float = side * (Sim.HALF_W + 2.5 + rng.randf() * 3.5)
+		_place(FOREST + forest_trees[rng.randi() % forest_trees.size()] + ".gltf", Vector3(tx, Land.terrain_height(Vector2(tx, z)), z), rng.randf()*TAU, 0.5 + rng.randf()*0.2)
 	for p in [Vector3(-Sim.HALF_W - 7, 0.5, -40), Vector3(Sim.HALF_W + 7, 0.5, 36), Vector3(-Sim.HALF_W - 7, 0.5, 14), Vector3(Sim.HALF_W + 7, 0.5, -12),
 			Vector3(-Sim.HALF_W - 7, 0.5, -10), Vector3(Sim.HALF_W + 7, 0.5, 10), Vector3(0, 0.5, -Sim.HALF_L - 8), Vector3(0, 0.5, Sim.HALF_L + 8)]:
-		_place(HEX + "mountain_A_grass_trees.gltf", p, rng.randf()*TAU, 1.6)
+		_place(HEX + "mountain_A_grass_trees.gltf", Vector3(p.x, Land.terrain_height(Vector2(p.x, p.z)) - 0.3, p.z), rng.randf()*TAU, 1.6)
 
 const COLOR := ["blue", "red"]
 static var _floor_mats: Dictionary = {}
@@ -333,15 +471,6 @@ func _parapet(a: Vector2, b: Vector2) -> void:
 		var node := _place(HEX + "fence_stone_straight.gltf", Vector3(c.x, h, c.y) + off, rot, s)
 		if node != null:
 			node.scale.z = s * piece / (1.15 * s)
-
-func _build_plateau() -> void:
-	# Midfield plateau around the ruin with stairs on its north and south faces.
-	_block(0, -Sim.HILL_X, Sim.HILL_X, -Sim.HILL_Z, Sim.HILL_Z, Sim.HILL_H, Color("#6f8a52"), false)
-	_stairs(0, -Sim.HILL_STAIR_X, Sim.HILL_STAIR_X, Sim.HILL_Z, Sim.HILL_STAIR_Z, Sim.HILL_H, 6, false, false)
-	_stairs(1, -Sim.HILL_STAIR_X, Sim.HILL_STAIR_X, Sim.HILL_Z, Sim.HILL_STAIR_Z, Sim.HILL_H, 6, false, false)
-	for w in sim.walls:
-		if w.team == -1 and w.kind == "ledge":
-			_parapet(w.a, w.b)
 
 func _wall_run(a: Vector2, b: Vector2, path: String) -> void:
 	# Lay 5.2 m wall models along a segment (clipped to the field), stretched slightly to fit.
@@ -547,6 +676,7 @@ func _build_nodes() -> void:
 		node_nodes[n.id] = {"full":full, "empty":empty, "state":true}
 
 func _sync_castle(dt: float) -> void:
+	_sync_outposts()
 	for g in sim.gates:
 		var gn: Dictionary = gate_nodes.get(g.id, {})
 		if gn.is_empty():
