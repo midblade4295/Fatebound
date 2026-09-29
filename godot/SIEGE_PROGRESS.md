@@ -473,8 +473,8 @@ outposts have NO hat dispensers (respawn point + a closer drop-off for Workers).
 | Step | Scope | Status |
 |---|---|---|
 | K1 | scripts/siege/siege_castle.gd layout; sim walls/ledges/stairs/heights/positions; basic view; land paths; tests | done |
-| K2 | Blender castle kit: sandstone walls, round towers, crenellations, stairs, terrace faces, paving | todo |
-| K3 | View: assemble the castle from the kit (tall walls, balustrades, towers) | todo |
+| K2 | Blender castle textures (sandstone bricks, paving) | done |
+| K3 | Generated castle geometry (castle_mesh.gd): 5.5 m crenellated walls, round towers, gatehouse lintels, terrace faces + parapets, walled stairs, paved floors | first pass done |
 | K4 | Tuning (match pace), screenshots, perf, APK | todo |
 
 K1 notes
@@ -491,3 +491,18 @@ K1 notes
   4 seeds -- no longer one-sided (small sample). The old castle had the same flaw (smaller effect).
 - Pace: matches now end ~260 s on 3 rescues, first rescue ~100 s (was mostly 7-12 min). Tune in K4.
 - Protocol v5 (map geometry changed).
+
+K2/K3 notes (0.17.0)
+- tools/blender/castle_art.py -> assets/castle/{bricks,paving}.png (1024, one 2 m period, seamless
+  by construction like the herringbone path).
+- scripts/siege/castle_mesh.gd builds each team's castle from sim.walls + siege_castle.gd into two
+  meshes (bricks, paving) with world-scaled UVs; cached per session. ~2k triangles, 4 draw calls.
+  Replaces the KayKit wall runs, parapets, gate-flank and back towers (catapults now sit on the
+  5.5 m wall; gate doors, bars, flags, props kept).
+- Found in screenshots: every face was inside-out (Godot front faces are CLOCKWISE; floors
+  vanished from above) -> triangles emitted reversed; walls and floors the same tan -> warmer
+  brick, paler paving. Gate towers slimmer (1.35 m) so they never overhang the 2.3 m doorway.
+- perf_bench vs 0.16.0 at (4,30) (now in front of the castle): ~70 -> ~84 ms, but mostly units and
+  props now in view; hiding the castle meshes saves ~9 % (noisy). Hat stands are ~60 draw calls
+  (pedestal + weapon + 3 hats each): merge them if the phone needs it.
+- Next polish: darker stair risers, thicker parapets, throne dais/balustrades, maybe Blender towers.
