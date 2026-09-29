@@ -1,6 +1,21 @@
-"""Fail-closed checks for the Siege Play AAB; never ship test, server or signing material."""
+"""Fail-closed checks for the Siege Play AAB; never ship test, server or signing material.
+
+Expected release identity comes from the environment (no hardcoded code/name/certificate):
+  EXPECTED_VERSION_CODE, EXPECTED_VERSION_NAME   e.g. 25 / 1.2.1-siege-r5
+  EXPECTED_UPLOAD_CERT_SHA256                    Play Console's current *upload* certificate SHA-256
+  BUNDLETOOL_JAR (optional)                      path to bundletool-all.jar
+"""
 from pathlib import Path
-import sys,zipfile,subprocess,re,hashlib,json,struct
+import sys,zipfile,subprocess,re,hashlib,json,struct,os
+
+def required_env(name):
+ value=os.environ.get(name,'').strip()
+ assert value,'Set '+name+' to the verified release value'
+ return value
+EXPECTED_CODE=required_env('EXPECTED_VERSION_CODE')
+EXPECTED_NAME=required_env('EXPECTED_VERSION_NAME')
+EXPECTED_CERT=required_env('EXPECTED_UPLOAD_CERT_SHA256').replace(':','').lower()
+assert re.fullmatch(r'[0-9a-f]{64}',EXPECTED_CERT),'EXPECTED_UPLOAD_CERT_SHA256 must be a SHA-256 fingerprint'
 
 def u32(data, offset):
  assert offset+4<=len(data),'Truncated Godot project setting'
@@ -32,7 +47,7 @@ def bool_setting(props,key):
 p=Path(sys.argv[1]); assert p.exists() and p.stat().st_size>1_000_000
 cert=subprocess.check_output(['keytool','-printcert','-jarfile',str(p)],text=True)
 fp=re.search(r'SHA256:\s*([0-9A-F:]+)',cert)[1].replace(':','').lower()
-assert fp=='6971a9123d610b397f6e9122c6cb241dbbe9c9c5fdbeb5a8751d5e2e80839084','Upload certificate does not match the existing Play bundle'
+assert fp==EXPECTED_CERT,('Upload certificate does not match EXPECTED_UPLOAD_CERT_SHA256',fp)
 libs=[]
 all_abis=set()
 with zipfile.ZipFile(p) as z:
@@ -73,22 +88,22 @@ with zipfile.ZipFile(p) as z:
  assert all_abis=={'armeabi-v7a','arm64-v8a','x86','x86_64'},('Missing Android ABI',sorted(all_abis))
  assert any('arm64-v8a' in x['path'] for x in libs)
  assert any('x86_64' in x['path'] for x in libs)
-report={'file':p.name,'bytes':p.stat().st_size,'sha256':hashlib.sha256(p.read_bytes()).hexdigest(),'upload_certificate_sha256':fp,'matches_existing_play_certificate':True,'siege_runtime_present_dice_era_absent':True,'content_module':content_module,'project_asset_path':project_paths[0],'vulkan_mobile_no_gl_fallback':True,'test_server_and_signing_material_excluded':True,'android_abis':sorted(all_abis),'native_64bit_libraries':libs,'physical_phone_tested':False}
+report={'file':p.name,'bytes':p.stat().st_size,'sha256':hashlib.sha256(p.read_bytes()).hexdigest(),'upload_certificate_sha256':fp,'matches_expected_upload_certificate':True,'siege_runtime_present_dice_era_absent':True,'content_module':content_module,'project_asset_path':project_paths[0],'vulkan_mobile_no_gl_fallback':True,'test_server_and_signing_material_excluded':True,'android_abis':sorted(all_abis),'native_64bit_libraries':libs,'physical_phone_tested':False}
 p.with_name('PLAY_BUNDLE_VERIFICATION.json').write_text(json.dumps(report,indent=2)+'\n')
 print(json.dumps(report,indent=2))
 
 # Use Google's validator and inspect the actual protobuf manifest, not merely
 # the intended export settings. Downloaded tool does not contain signing data.
 import urllib.request,xml.etree.ElementTree as ET
-jar=Path('/tmp/bundletool-all-1.18.3.jar')
+jar=Path(os.environ.get('BUNDLETOOL_JAR','/tmp/bundletool-all-1.18.3.jar'))
 if not jar.exists():
  urllib.request.urlretrieve('https://github.com/google/bundletool/releases/download/1.18.3/bundletool-all-1.18.3.jar',jar)
 subprocess.run(['java','-jar',str(jar),'validate','--bundle='+str(p)],check=True)
 manifest=subprocess.check_output(['java','-jar',str(jar),'dump','manifest','--bundle='+str(p),'--module=base'],text=True)
 root=ET.fromstring(manifest);android='{http://schemas.android.com/apk/res/android}'
 assert root.attrib['package']=='com.fatebound.game'
-assert root.attrib[android+'versionCode']=='24'
-assert root.attrib[android+'versionName']=='1.2.0-siege-online'
+assert root.attrib[android+'versionCode']==EXPECTED_CODE,('versionCode',root.attrib[android+'versionCode'])
+assert root.attrib[android+'versionName']==EXPECTED_NAME,('versionName',root.attrib[android+'versionName'])
 sdk=root.find('uses-sdk');assert sdk.attrib[android+'minSdkVersion']=='24' and sdk.attrib[android+'targetSdkVersion']=='36'
 application=root.find('application');assert application.attrib.get(android+'debuggable','false')=='false'
 permissions=[item.attrib.get(android+'name') for item in root.findall('uses-permission')]
@@ -96,6 +111,6 @@ assert 'android.permission.INTERNET' in permissions
 if content_module!='base':
  delivery=subprocess.check_output(['java','-jar',str(jar),'dump','manifest','--bundle='+str(p),'--module='+content_module],text=True)
  assert 'install-time' in delivery,('Game content not delivered at installation',delivery)
-report.update(bundletool_validation_passed=True,package='com.fatebound.game',version_code=24,version_name='1.2.0-siege-online',min_sdk=24,target_sdk=36,debuggable=False,game_assets_available_at_install=True)
+report.update(bundletool_validation_passed=True,package='com.fatebound.game',version_code=int(EXPECTED_CODE),version_name=EXPECTED_NAME,min_sdk=24,target_sdk=36,debuggable=False,game_assets_available_at_install=True)
 p.with_name('PLAY_BUNDLE_VERIFICATION.json').write_text(json.dumps(report,indent=2)+'\n')
 print('FINAL_VALIDATION',json.dumps(report,indent=2))
