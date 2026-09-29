@@ -41,6 +41,8 @@ static func bridge_deck(p: Vector2) -> float:
 # Blue-half rectangles; each ramp is a gap in one edge that slopes down RAMP_L metres outward.
 const LEDGE_H := 1.5
 const RAMP_L := 4.0
+const CLIFF_W := 1.2             # rock band sloping down outside each ledge edge (visible from the camera)
+const WALL_OUT := 0.6            # ledge walls sit mid-band: tops stay on the flat, feet at the base
 const RAMP_HALF := 2.3
 const TERRACES := [
 	{"x0": -31.0, "x1": -15.0, "z0": 16.0, "z1": 32.0,
@@ -138,22 +140,73 @@ static func rolling(p: Vector2) -> float:
 	# for building the terrain; the brick paths follow the gentle slopes instead.)
 	return h * fade
 
-static func ground_height(p: Vector2) -> float:
-	# The terrain surface (castle floors/platforms are drawn separately and handled by the sim).
-	var deck := bridge_deck(p)
-	if deck > -INF:
-		return deck
+static func ground_height(p: Vector2, with_decks := true) -> float:
+	# Where units stand (castle floors/platforms are drawn separately and handled by the sim).
+	# with_decks=false gives the visual terrain: under a bridge that is the river, so the wooden
+	# deck model shows instead of grass drawn at deck height over it.
+	if with_decks:
+		var deck := bridge_deck(p)
+		if deck > -INF:
+			return deck
 	var dr := absf(p.y - river_c(p.x))
 	if dr < RIVER_HW + 0.8:
 		return lerpf(BED_Y, 0.0, _smooth(RIVER_HW - 0.6, RIVER_HW + 0.8, dr))
 	var base := rolling(p)
+	var best := base
 	for t in terraces():
 		if p.x >= t.x0 and p.x <= t.x1 and p.y >= t.z0 and p.y <= t.z1:
 			return LEDGE_H
 		var r := _ramp_height(t, p, base)
 		if r > -INF:
 			return r
-	return base
+		# Cliff band just outside the edge: steep rock from LEDGE_H down to the ground.
+		var dx := maxf(maxf(float(t.x0) - p.x, p.x - float(t.x1)), 0.0)
+		var dz := maxf(maxf(float(t.z0) - p.y, p.y - float(t.z1)), 0.0)
+		var d := sqrt(dx * dx + dz * dz)
+		if d < CLIFF_W:
+			best = maxf(best, lerpf(LEDGE_H, base, _smooth(0.0, 1.0, d / CLIFF_W)))
+	return best
+
+static func ledge_rim(p: Vector2) -> Vector2:
+	# (rim, shadow) for the terrain mask: rim = rocky lip on top + the cliff band; shadow = a dark
+	# band on the ground at the cliff foot. Ramps stay clean. Point-symmetric like everything else.
+	var rim := 0.0
+	var shadow := 0.0
+	for t in terraces():
+		if _ramp_height(t, p, 0.0) > -INF:
+			continue
+		var dx := maxf(float(t.x0) - p.x, p.x - float(t.x1))
+		var dz := maxf(float(t.z0) - p.y, p.y - float(t.z1))
+		var d: float                                  # signed distance to the rectangle edge
+		if dx > 0.0 and dz > 0.0:
+			d = sqrt(dx * dx + dz * dz)
+		else:
+			d = maxf(dx, dz)
+		# on the ramps' sides (d measured from the gap corners) keep a rim too: handled by d
+		rim = maxf(rim, 1.0 - _smooth(-0.7, -0.35, -d) if d < 0.0 else (1.0 - _smooth(CLIFF_W, CLIFF_W + 0.25, d)))
+		if d > CLIFF_W - 0.2:
+			shadow = maxf(shadow, 1.0 - _smooth(CLIFF_W, CLIFF_W + 1.4, d))
+	return Vector2(clampf(rim, 0.0, 1.0), clampf(shadow, 0.0, 1.0))
+
+# ---------------- baked terrain (visual) ----------------
+const BAKE_MARGIN := 7.0          # terrain extends this far past the field edge
+const BAKE_STEP := 0.5            # metres between height samples
+const MASK_PPM := 4.0             # path-mask pixels per metre
+const HEIGHT_RES := "res://assets/terrain/height.res"
+const MASK_RES := "res://assets/terrain/pathmask.res"
+
+static func terrain_height(p: Vector2) -> float:
+	# ground_height inside the field; beyond it a rim of low hills (not playable, just scenery).
+	var out := maxf(absf(p.x) - HALF_W, absf(p.y) - HALF_L)
+	var inside := Vector2(clampf(p.x, -HALF_W, HALF_W), clampf(p.y, -HALF_L, HALF_L))
+	var h := ground_height(inside, false)
+	if out <= 0.0:
+		return h
+	var rim := 1.9 * _smooth(0.0, 5.0, out) + 0.5 * sin(0.37 * p.x + 0.9) * sin(0.29 * p.y + 0.4) * _smooth(1.0, 6.0, out)
+	return maxf(h, 0.0) + rim
+
+static func bake_rect() -> Rect2:
+	return Rect2(-HALF_W - BAKE_MARGIN, -HALF_L - BAKE_MARGIN, 2.0 * (HALF_W + BAKE_MARGIN), 2.0 * (HALF_L + BAKE_MARGIN))
 
 # ---------------- walls (for the sim) ----------------
 static func walls() -> Array:
@@ -185,8 +238,13 @@ static func walls() -> Array:
 				"r": RAIL_R, "team": -1, "kind": "rail"})
 	# Terrace faces with ramp gaps, plus the ramp side walls.
 	for t in terraces():
-		var edges := {"S": [Vector2(t.x0, t.z0), Vector2(t.x1, t.z0)], "N": [Vector2(t.x0, t.z1), Vector2(t.x1, t.z1)],
-			"W": [Vector2(t.x0, t.z0), Vector2(t.x0, t.z1)], "E": [Vector2(t.x1, t.z0), Vector2(t.x1, t.z1)]}
+		var o := WALL_OUT
+		var x0: float = float(t.x0) - o
+		var x1: float = float(t.x1) + o
+		var z0: float = float(t.z0) - o
+		var z1: float = float(t.z1) + o
+		var edges := {"S": [Vector2(x0, z0), Vector2(x1, z0)], "N": [Vector2(x0, z1), Vector2(x1, z1)],
+			"W": [Vector2(x0, z0), Vector2(x0, z1)], "E": [Vector2(x1, z0), Vector2(x1, z1)]}
 		for side in edges:
 			var a: Vector2 = edges[side][0]
 			var b: Vector2 = edges[side][1]
@@ -207,7 +265,7 @@ static func walls() -> Array:
 				var dirv := {"E": Vector2(1, 0), "W": Vector2(-1, 0), "N": Vector2(0, 1), "S": Vector2(0, -1)}[side] as Vector2
 				for e in [c - RAMP_HALF, c + RAMP_HALF]:
 					var p0 := Vector2(e, fixed) if horiz else Vector2(fixed, e)
-					out.append({"a": p0, "b": p0 + dirv * (RAMP_L - 0.4), "r": 0.3, "team": -1, "kind": "ledge"})
+					out.append({"a": p0, "b": p0 + dirv * (RAMP_L - 0.4 - WALL_OUT), "r": 0.3, "team": -1, "kind": "ledge"})
 			_edge(out, horiz, fixed, cur, stop)
 	return out
 

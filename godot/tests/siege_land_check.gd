@@ -66,6 +66,20 @@ func _init() -> void:
 					on_bridge = true
 			check(on_bridge, "castle-to-castle path crosses the river off a bridge at %s" % str(a))
 	check(crossings >= 1, "castle-to-castle path never crosses the river")
+	# 5. the baked terrain must match the landscape code (re-run tools/bake_land.gd after edits)
+	var himg: Image = load(Land.HEIGHT_RES)
+	var r := Land.bake_rect()
+	var nx := int(round(r.size.x / Land.BAKE_STEP)) + 1
+	var nz := int(round(r.size.y / Land.BAKE_STEP)) + 1
+	check(himg != null and himg.get_width() == nx and himg.get_height() == nz, "baked height map missing or wrong size: re-run tools/bake_land.gd")
+	if himg != null and himg.get_width() == nx:
+		var worst := 0.0
+		for k in 300:
+			var i := rng.randi() % nx
+			var j := rng.randi() % nz
+			worst = maxf(worst, absf(himg.get_pixel(i, j).r - Land.terrain_height(r.position + Vector2(i, j) * Land.BAKE_STEP)))
+		check(worst < 0.001, "baked heights are stale (worst diff %.3f m): re-run tools/bake_land.gd" % worst)
+	check(load(Land.MASK_RES) != null, "baked path mask missing: run tools/bake_land.gd")
 	print("walls %d obstacles %d outposts %d" % [s.walls.size(), s.obstacles.size(), s.outposts.size()])
 	print("SIEGE_LAND_PASS" if fails.is_empty() else "SIEGE_LAND_FAIL %d problems" % fails.size())
 	quit(0 if fails.is_empty() else 1)

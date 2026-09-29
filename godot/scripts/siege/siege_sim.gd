@@ -48,11 +48,6 @@ const STAIR_Z0 := 21.0           # stairs climb from the inner doorway...
 const STAIR_Z1 := 23.0           # ...to the platform
 const STAIR_X0 := 3.9            # stair channel |x| range (inside the 3.2 m doorway)
 const STAIR_X1 := 6.5
-const HILL_H := 1.2              # midfield plateau around the ruin
-const HILL_X := 4.5
-const HILL_Z := 3.0
-const HILL_STAIR_X := 1.3
-const HILL_STAIR_Z := 5.0
 const LEDGE_R := 0.35
 # Round 7 layout (blue half; mirrored). Checked by tests/siege_land_check.gd.
 const RES_WOOD := [Vector2(-28.0, 44.0), Vector2(-24.0, 40.5), Vector2(27.0, 44.0), Vector2(29.5, 38.0), Vector2(-29.0, 9.0),
