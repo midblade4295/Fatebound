@@ -575,3 +575,19 @@ K2/K3 notes (0.17.0)
   bright nosing + mid stone + dark shadow band (vertex colours read as sRGB: as linear the dark
   bands came out pale grey).
 - Bot match results shifted with ranged damage working (seed 11: red 3-0, kills 46-150).
+
+# 0.18.3 (Kevin): "fix the main menu not being able to scroll up and down"
+- Reproduced: the home content was 1377 px on a 648 px page, but touch drags never scrolled. Every
+  screen is cards/buttons (and the hero spacer), which STOP input, so Godot's ScrollContainer
+  touch-drag (mouse events emulated from touch) never received the drag. Switching controls to
+  PASS isn't enough on a phone: buttons still claim the press.
+- Fix (siege_app.gd `_input`): the app scrolls the menu itself. A press inside the menu that moves
+  > 14 px vertically becomes a scroll (content follows the finger, flick glides and eases out); the
+  pressed control gets a cancelled press (pointer moved off-screen, then released there -- buttons
+  only update "pressing inside" on motion, so without the move PLAY still fired after a scroll);
+  the emulated finger-lift release after a scroll is swallowed; short taps pass through. The
+  built-in drag is off (scroll_deadzone 1e6). Skipped during a match and while a dialog is open.
+- tests/app_scroll_test.gd (in the runner): drag from PLAY scrolls and doesn't press PLAY, a tap
+  still presses it, a drag from the hero area scrolls, a flick glides. Harness note: push events
+  with root.push_input(e, true) (viewport coords) and pair each touch with its emulated mouse
+  event (device -1) the way a phone delivers them.
