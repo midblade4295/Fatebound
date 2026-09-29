@@ -7,7 +7,7 @@ extends Node
 #    which separates "stuck in game code" from "stuck in the renderer/driver".
 const PATH := "user://siege_diag.log"
 const PREV_PATH := "user://siege_diag_prev.log"
-const BUILD := "0.14.0-siege-land"
+const BUILD := "0.14.1-siege-land"
 
 class ErrorCapture:
 	extends Logger
