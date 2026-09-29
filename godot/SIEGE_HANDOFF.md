@@ -489,3 +489,12 @@ generated (`castle_mesh.gd`). Kevin rejected the generated sandstone look: keep 
 **0.18.4 (network):** client-side prediction for the local unit (Sim.predict_step, Net.apply(...,
 predict=true), server `net_driven` + Sim.accept_client_pos validation, 0.3 s fallback), local
 dodge/swing animation prediction, snapshots 15 Hz. Protocol v7: redeploy the server.
+
+---
+
+## 18. Tutorial (preview 0.19.0, code 39)
+
+`scripts/siege/tutorial.gd` (STEPS = the Herald's script and tasks), `SiegeMode.tutorial`,
+`SiegeApp.start_tutorial()`, Home card + HOW TO PLAY. Voiceover files go in `assets/vo/tutorial/`
+as `<id>.ogg` (list: `assets/vo/tutorial/SCRIPT.md`; regenerate it after editing STEPS). Test:
+`tests/tutorial_test.gd`. When a new mechanic ships, add a step (talk + task + task_done check).

@@ -18,6 +18,7 @@ var frames := 0
 var t := 0.0
 var pred_from := Vector2.ZERO
 var pred_frames := 0
+var pred_dt := 0.0
 var pred_checked := false
 var cheat_at := Vector2.ZERO
 var phase := "boot"
@@ -167,8 +168,15 @@ func _process(delta: float) -> bool:
 				mode.hud._stick_pos = Vector2(100 + 60, 600)
 		"predict":
 			var mep: Dictionary = mode.sim.by_id[mode.hud.player_id]
+			# Frame times vary (uncapped headless frames can be ~5 ms), so compare the local move with
+			# what the unit's speed allows in the time elapsed: prediction moves it at once, without
+			# waiting for the server (which alone would show ~0 m this early).
+			if pred_frames >= 1 and pred_frames <= 3:
+				pred_dt += delta
 			if pred_frames == 3:
-				check(mep.pos.distance_to(pred_from) > 0.1, "client-side prediction: our unit moved %.2f m locally within 3 frames" % mep.pos.distance_to(pred_from))
+				var spd: float = float(mode.sim.stat(mep, "speed"))
+				var moved: float = mep.pos.distance_to(pred_from)
+				check(moved >= 0.5 * spd * pred_dt and moved > 0.0, "client-side prediction: moved %.3f m locally in %.0f ms (speed allows %.3f)" % [moved, pred_dt * 1000.0, spd * pred_dt])
 			pred_frames += 1
 			if t > 1.2 and not pred_checked:
 				pred_checked = true

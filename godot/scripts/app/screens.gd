@@ -183,9 +183,17 @@ static func home(app, root: VBoxContainer) -> void:
 		app.play_online = true
 		app.sfx("tap")
 		app.rebuild(), "mode_online", 14))
+	if not bool(d.get("tutorial_done", false)):
+		# First visit: the Herald offers the walkthrough (0.19.0).
+		var tc := UI.card(root, Color(0.2, 0.14, 0.05, 0.9), UI.GOLD)
+		var tr := UI.row(tc, 10)
+		UI.icon(tr, "crown", 28, UI.GOLD)
+		UI.grow(UI.label(tr, "New here? The Royal Herald will show you the ropes. (+%d gold)" % app.TUTORIAL_GOLD, 14, Color("#ffe4a8")))
+		UI.button(tc, "PLAY TUTORIAL", "gold", func(): app.start_tutorial(), "tutorial_start", 15)
 	UI.play_button(root, "PLAY", func(): app.start_match(app.play_online), "play")
 	var hint := UI.label(root, "Join the live 16 vs 16 battle on the Siege server" if app.play_online else "You and 15 bots vs 16 bots · works offline", 12, UI.MUTED)
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	UI.button(root, "HOW TO PLAY", "ghost", func(): app.start_tutorial(), "tutorial", 13)
 	if str(d.first_win_day) != Eco.day_key(p.now()):
 		var fw := UI.card(root, Color(0.35, 0.22, 0.05, 0.85), UI.GOLD)
 		var fr := UI.row(fw, 10)

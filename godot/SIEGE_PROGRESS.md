@@ -607,3 +607,22 @@ K2/K3 notes (0.17.0)
 - Protocol v7 (hello "pred", input "p"/"f").
 - siege_net_smoke, against the real server: local move within 3 frames (0.41 m), server 0.21 m
   behind after 7.2 m, a forged position 20 m away rejected, a swing starts on the press.
+
+# 0.19.0 (Kevin): "a tutorial walkthrough; a narrator talking to the player with humor; I'll add the
+# voiceover later"
+- scripts/siege/tutorial.gd: the Royal Herald. 13 steps, 30 lines (each [voice id, text]); 9 tasks
+  the player must DO, checked from the sim each frame: walk, take the Knight hat at its shop, hit a
+  training dummy 3x (an enemy posted in the courtyard with 9999 HP, sent home afterwards), dodge,
+  hold ABILITY to block 1 s, reach the workshop, upgrade Knight hats at the hat shop (materials
+  topped up), capture the home outpost, head for the river. Talk-only steps: dropped hats, the goal
+  (gates, ladders, carrying the Oracle, 3 rescues), cake. Typewriter panel under the HUD status
+  lines with NEXT on the right (the joystick owns the left side), crown badge, bouncing arrow over
+  the target or an edge arrow when it's off-screen, pulsing ring on the button to press.
+- Match: SiegeMode.tutorial -> 2 v 2, everyone else frozen; no match rewards/challenges; finish sets
+  profile tutorial_done and pays 250 gold once, then returns to the menu.
+- Home: "New here?" card with PLAY TUTORIAL until done; HOW TO PLAY under PLAY always.
+- Voiceover: res://assets/vo/tutorial/<id>.ogg|wav|mp3 plays with its line if present (verified
+  with a temporary tone, then removed); assets/vo/tutorial/SCRIPT.md is generated from STEPS.
+- tests/tutorial_test.gd (runner): plays it end to end (16 s) and checks the script (unique ids).
+- siege_net_smoke: the prediction check now compares the local move with speed x elapsed time (a
+  fixed 0.1 m in 3 frames failed when uncapped frames were ~5 ms).

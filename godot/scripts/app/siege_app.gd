@@ -565,12 +565,19 @@ func _process(_delta: float) -> void:
 			_toast_box.visible = false
 
 # ---------------- matches ----------------
-func start_match(online: bool) -> void:
+const TUTORIAL_GOLD := 250
+
+func start_tutorial() -> void:
+	# The Herald's walkthrough: a small offline match (siege_mode.gd tutorial = true).
+	start_match(false, true)
+
+func start_match(online: bool, tutorial := false) -> void:
 	if siege != null:
 		return
 	sfx("matchStart")
 	siege = Siege.new()
 	siege.online = online
+	siege.tutorial = tutorial
 	siege.profile = profile
 	siege.audio = audio
 	siege.low_fx = bool(profile.d.settings.get("reduce_motion", false))
