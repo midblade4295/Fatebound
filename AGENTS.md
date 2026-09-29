@@ -1,11 +1,11 @@
-# Current native development: Fatebound Siege (Fat Princess-style), preview 0.18.0
+# Current native development: Fatebound Siege (Fat Princess-style), preview 0.18.1
 
 Round 5 work is on `claude/siege-dev-r5`, based on live `447b97a` (`claude/kaykit-3d-rebuild`).
 Read `godot/SIEGE_HANDOFF.md` first (section 11 = Round 5), then `godot/SIEGE_PROGRESS.md`.
 Siege is the whole game: the dice-era app was removed. Entry `scenes/Main.tscn` ->
 `scripts/app/siege_app.gd`; economy/profile in `scripts/meta/` (all cosmetic, no real money).
 Android preview only: package com.fatebound.kaykitrebuild, preset "Android KayKit Rebuild",
-Kevin's preview key (not the Play key), next versionCode 35, renderer stays Vulkan.
+Kevin's preview key (not the Play key), next versionCode 36, renderer stays Vulkan.
 Test: `godot/tools/run_siege_tests.sh`. Build: `godot/tools/build_siege_preview.sh`.
 Commit each working step and log it in SIEGE_PROGRESS.md. No force-push, main merge, save
 reset, Play release, production signing, Legionary/Caddy changes. The Play upload key is
