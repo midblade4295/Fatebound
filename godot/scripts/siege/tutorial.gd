@@ -17,7 +17,7 @@ const TYPE_CPS := 48.0
 # once it's done). Lines are [voice id, text].
 const STEPS := [
 	{"id": "intro", "talk": [
-		["t_intro_1", "Ah, a new recruit! Welcome to the siege. I'm the Royal Herald. I announce things. Loudly. It's a living."],
+		["t_intro_1", "Ah, a new recruit! Welcome to Fatebound. I'm the Royal Herald. I announce things. Loudly. It's a living."],
 		["t_intro_2", "Across that field, the enemy is holding our Oracle hostage. We'd like her back. She does the prophecies. And the baking."]]},
 	{"id": "move", "talk": [
 		["t_move_1", "First things first: walking. Drag your thumb on the left side of the screen. Yes, like that. No, the other left."]],
@@ -29,7 +29,7 @@ const STEPS := [
 		"task": "Get a Knight hat at the Knight hat shop",
 		"done": [["t_hat_done", "A Knight! Look at you. Positively shiny. Try not to lose that hat. You'll see why in a moment."]]},
 	{"id": "attack", "talk": [
-		["t_attack_1", "Here's a training dummy. It volunteered. Well. 'Volunteered'. Tap ATTACK to whack it, or hold ATTACK to keep whacking."]],
+		["t_attack_1", "A training dummy awaits in the courtyard. It volunteered. Well. 'Volunteered'. Walk up to it and tap ATTACK, or hold ATTACK to keep whacking."]],
 		"task": "Hit the dummy 3 times",
 		"done": [["t_attack_done", "Excellent violence. The dummy has filed a complaint. It will be ignored."]]},
 	{"id": "dodge", "talk": [
@@ -58,17 +58,30 @@ const STEPS := [
 		"task": "Capture the outpost",
 		"done": [["t_out_done", "It's ours! We can respawn here, workers can drop resources off here, and it earns us wood and stone. Passive income. The true magic."]]},
 	{"id": "goal", "talk": [
-		["t_goal_1", "Now, the actual point of all this. The enemy's dungeon is inside their castle, behind their gates. Our Oracle is in there. Probably bored."],
+		["t_goal_1", "Now, the actual point of Fatebound. The enemy's dungeon is inside their castle, behind their gates. Our Oracle is in there. Probably bored."],
 		["t_goal_2", "Break a gate down, and Barbarians are marvellous at that, or have a Worker build a ladder over the wall. Then grab her and carry her home to our throne."],
-		["t_goal_3", "Rescue her three times and we win. They're trying to do the exact same thing to us, so leave a few friends at home. Trust issues are healthy here."]],
-		"task": "Head out toward the river",
-		"done": [["t_goal_done", "Behold, the battlefield. Lovely, isn't it? Mind the enemy. And the river. And the catapults. Mostly the enemy."]]},
+		["t_goal_3", "Rescue her three times and we win. They're trying to do the exact same thing to us, so leave a few friends at home. Trust issues are healthy here."]]},
 	{"id": "cake", "talk": [
-		["t_cake_1", "One more thing. There are cake trees out there. Feed cake to the enemy's captive and she gets heavier, so they need more people to carry her home."],
-		["t_cake_2", "Is it tactically brilliant? Yes. Is it ethically questionable? Also yes. Welcome to siege warfare."]]},
+		["t_cake_1", "But first, a dirty trick. See that tree? It grows cake. Walk up and press ACTION to take a slice. Don't eat it. It's not for you."]],
+		"task": "Take a slice of cake from the cake tree (ACTION)",
+		"done": [["t_cake_took", "Lovely. Now, we have a guest in OUR dungeon: the enemy's Oracle. She looks peckish."]]},
+	{"id": "feed", "talk": [
+		["t_feed_1", "Bring her that cake and press ACTION to feed her. Every bite makes her heavier, so the enemy needs more people to carry her home. Delicious sabotage."]],
+		"task": "Feed the cake to their Oracle in our dungeon (ACTION)",
+		"done": [["t_feed_done", "She said thank you! Is it tactically brilliant? Yes. Is it ethically questionable? Also yes. Welcome to Fatebound."]]},
+	{"id": "shortcut", "talk": [
+		["t_rescue_1", "Right. Let's get OUR Oracle back. Normally you'd march over, smash a gate and fight your way in. Today I've arranged a shortcut. Don't ask how. Royal paperwork."]]},
+	{"id": "grab", "talk": [
+		["t_grab_1", "Here we are. Their gate is, ahem, 'mysteriously broken'. Get inside, find our Oracle in their dungeon and press ACTION to lift her."]],
+		"task": "Lift our Oracle in their dungeon (ACTION)",
+		"done": [["t_grab_done", "Got her! You're slower while carrying. Heavier Oracles need friends to help lift, which is exactly why we feed THEIRS so much cake."]]},
+	{"id": "carry", "talk": [
+		["t_carry_1", "Now carry her all the way home to our throne. Follow the arrow. And don't drop her. She will never let you forget it."]],
+		"task": "Carry our Oracle home to our throne",
+		"done": [["t_carry_done", "RESCUED! That's one! Rescue her three times and the match is ours. The crowd goes mild."]]},
 	{"id": "end", "talk": [
 		["t_end_1", "That's everything! Well. Not everything. But everything I was paid to say."],
-		["t_end_2", "Go forth, recruit. Win glory. Rescue the Oracle. And please, try to keep your hat on."]]},
+		["t_end_2", "Go forth, recruit. Fatebound awaits. Win glory, rescue the Oracle, and please, try to keep your hat on."]]},
 ]
 
 var mode                      # siege_mode.gd
@@ -84,6 +97,10 @@ var _dummy_id := ""
 var _dummy_hp := 0.0
 var _hits := 0
 var _block_t := 0.0
+var _fed0 := 0
+var _path := PackedVector2Array()
+var _path_clock := 0.0
+const DUMMY_AT := Vector2(4.0, 6.6)      # castle-local: open courtyard floor
 var _time := 0.0
 var voice: AudioStreamPlayer
 var panel: PanelContainer
@@ -200,7 +217,29 @@ func _next_step() -> void:
 		finished = true
 		_refresh()
 		return
+	if str(STEPS[step].id) == "grab":
+		_shortcut()
 	_show_line()
+
+func _shortcut() -> void:
+	# The Herald's "royal paperwork": the recruit appears outside the enemy gate on their dungeon's
+	# side, and that gate is broken (walking the whole map would drag in a tutorial).
+	var me: Dictionary = sim.by_id[hud.player_id]
+	var foe_team := 1 - int(me.team)
+	var cell: Vector2 = Sim.cell(me.team)                  # our Oracle is held in THEIR dungeon
+	var best: Dictionary = {}
+	for g in sim.gates:
+		if int(g.team) == foe_team and (best.is_empty() or (g.c as Vector2).distance_to(cell) < (best.c as Vector2).distance_to(cell)):
+			best = g
+	if best.is_empty():
+		return
+	best.hp = 0.0
+	best.broken = true
+	sim._update_gate_nav()
+	me.pos = Sim.gate_front(best)
+	me.face = Sim.angle_of((best.c as Vector2) - me.pos)
+	if mode.view != null and mode.view.has_method("snap_camera"):
+		mode.view.snap_camera()
 
 func _complete_task() -> void:
 	phase = "done"
@@ -252,7 +291,9 @@ func _enter_task() -> void:
 			foe.move = Vector2.ZERO
 			foe.max_hp = 9999.0
 			foe.hp = 9999.0
-			foe.pos = me.pos + Vector2(sin(me.face), cos(me.face)) * 1.6
+			# Open courtyard floor between the spawn and the east gate: clear of every building (next
+			# to the knight armory it blended in, Kevin 0.19.0). Its own marker says what it is.
+			foe.pos = Sim._c(me.team, DUMMY_AT)
 			_dummy_hp = foe.hp
 			_hits = 0
 		"upgrade":
@@ -261,6 +302,8 @@ func _enter_task() -> void:
 			sim.stock[me.team].stone = maxi(int(sim.stock[me.team].stone), int(cost.get("stone", 12)))
 		"block":
 			_block_t = 0.0
+		"feed":
+			_fed0 = int(me.fed)
 
 func _leave_step() -> void:
 	if str(STEPS[step].id) == "attack" and _dummy_id != "":
@@ -272,25 +315,44 @@ func _leave_step() -> void:
 			foe.pos = Sim.spawn(foe.team)
 		_dummy_id = ""
 
-func task_target() -> Variant:
-	# Where the arrow points (world Vector2), or a HUD button id (String), or null.
+func task_info() -> Dictionary:
+	# Guidance for the current task: "pos" (world Vector2) + "label" for the marker and path line,
+	# and/or "button" (a HUD button id) to ring.
 	var me: Dictionary = sim.by_id[hud.player_id]
 	match str(STEPS[step].id):
 		"hat", "upgrade":
-			return _stand(me.team, "knight").p
+			return {"pos": _stand(me.team, "knight").p, "label": "KNIGHT HAT SHOP"}
 		"attack":
-			return "attack"
+			var foe: Dictionary = sim.by_id.get(_dummy_id, {})
+			return {"pos": foe.pos, "label": "TRAINING DUMMY", "button": "attack"} if not foe.is_empty() else {"button": "attack"}
 		"dodge":
-			return "dodge"
+			return {"button": "dodge"}
 		"block":
-			return "ability"
+			return {"button": "ability", "hold": true}
 		"workshop":
-			return Sim.workshop(me.team)
+			return {"pos": Sim.workshop(me.team), "label": "WORKSHOP"}
 		"outpost":
-			return _outpost(me.team).p
-		"goal":
-			return Vector2(0.0, 4.0) if me.team == 0 else Vector2(0.0, -4.0)
-	return null
+			return {"pos": _outpost(me.team).p, "label": "OUTPOST"}
+		"cake":
+			var ct := _cake_tree(me)
+			return {"pos": ct.p, "label": "CAKE TREE"} if not ct.is_empty() else {}
+		"feed":
+			return {"pos": sim.oracles[1 - int(me.team)].pos, "label": "THEIR ORACLE"}
+		"grab":
+			return {"pos": sim.oracles[int(me.team)].pos, "label": "OUR ORACLE"}
+		"carry":
+			return {"pos": Sim.throne(me.team), "label": "OUR THRONE"}
+	return {}
+
+func _cake_tree(me: Dictionary) -> Dictionary:
+	# The nearest cake tree with a cake on it (nearest at all if none is ready).
+	var best: Dictionary = {}
+	for ct in sim.cake_trees:
+		var better: bool = best.is_empty() or (bool(ct.ready) and not bool(best.ready)) \
+			or (bool(ct.ready) == bool(best.ready) and me.pos.distance_to(ct.p) < me.pos.distance_to(best.p))
+		if better:
+			best = ct
+	return best
 
 func _stand(team: int, cls: String) -> Dictionary:
 	for st in sim.stands:
@@ -332,8 +394,14 @@ func task_done() -> bool:
 			return int(sim.levels[me.team].get("hat_knight", 0)) >= 1
 		"outpost":
 			return int(_outpost(me.team).owner) == me.team
-		"goal":
-			return (me.pos.y < 8.0) if me.team == 0 else (me.pos.y > -8.0)
+		"cake":
+			return bool(me.offering)
+		"feed":
+			return int(me.fed) > _fed0
+		"grab":
+			return bool(me.carrying)
+		"carry":
+			return int(sim.score[int(me.team)]) >= 1
 	return true
 
 func _process(delta: float) -> void:
@@ -345,6 +413,7 @@ func _process(delta: float) -> void:
 	if me.is_empty():
 		return
 	if phase == "task":
+		_update_path(delta)
 		if str(STEPS[step].id) == "block" and sim.blocking(me):
 			_block_t += delta
 		if str(STEPS[step].id) == "hat" and me.cls not in ["villager", "knight"]:
@@ -357,31 +426,145 @@ func _process(delta: float) -> void:
 		text_label.text = full.substr(0, int(shown))
 	queue_redraw()
 
-# ---------------- drawing: arrows and button rings ----------------
+# ---------------- drawing: guidance (0.19.1, Kevin: "make the arrows more obvious and clear") ----------------
+# A marching dotted line along the actual walking route (nav path: through gates and up stairs),
+# a pulsing ring on the ground at the target, a big outlined arrow over it with a name + distance
+# plate, a big labelled edge arrow when the target is off-screen, and TAP / HOLD rings on buttons.
+const GOLD := Color("#ffd257")
+const INK := Color(0.08, 0.05, 0.02, 0.9)
+
+func _update_path(delta: float) -> void:
+	_path_clock -= delta
+	if _path_clock > 0.0:
+		return
+	_path_clock = 0.4
+	var info := task_info()
+	var me: Dictionary = sim.by_id[hud.player_id]
+	_path = sim.find_path(me.team, me.pos, info.pos) if info.has("pos") else PackedVector2Array()
+
+func _w(p: Vector2, lift := 0.15) -> Vector3:
+	return Vector3(p.x, Sim.height_at(p) + lift, p.y)
+
+func _plate(center: Vector2, text: String) -> void:
+	var font: Font = ThemeDB.fallback_font
+	var fs := 15
+	var w := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x + 20.0
+	var r := Rect2(center.x - w * 0.5, center.y - 14, w, 26)
+	draw_rect(r.grow(2), INK)
+	draw_rect(r, Color(0.12, 0.09, 0.03, 0.95))
+	draw_rect(Rect2(r.position, Vector2(r.size.x, 3)), GOLD)
+	draw_string(font, Vector2(r.position.x + 10, r.position.y + 19), text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color.WHITE)
+
+func _arrow_down(tip: Vector2, s: float) -> void:
+	# A fat downward arrow with a dark outline.
+	var pts := PackedVector2Array([tip, tip + Vector2(-22, -26) * s, tip + Vector2(-9, -26) * s, tip + Vector2(-9, -52) * s,
+		tip + Vector2(9, -52) * s, tip + Vector2(9, -26) * s, tip + Vector2(22, -26) * s])
+	var out := PackedVector2Array()
+	var c := Vector2.ZERO
+	for q in pts: c += q
+	c /= pts.size()
+	for q in pts: out.append(c + (q - c) * 1.18)
+	draw_colored_polygon(out, INK)
+	draw_colored_polygon(pts, GOLD)
+
+func _arrow_up(tip: Vector2, s: float) -> void:
+	var pts := PackedVector2Array([tip, tip + Vector2(22, 26) * s, tip + Vector2(9, 26) * s, tip + Vector2(9, 52) * s,
+		tip + Vector2(-9, 52) * s, tip + Vector2(-9, 26) * s, tip + Vector2(-22, 26) * s])
+	var out := PackedVector2Array()
+	var c := Vector2.ZERO
+	for q in pts: c += q
+	c /= pts.size()
+	for q in pts: out.append(c + (q - c) * 1.18)
+	draw_colored_polygon(out, INK)
+	draw_colored_polygon(pts, GOLD)
+
 func _draw() -> void:
 	if sim == null or phase != "task":
 		return
-	var tgt: Variant = task_target()
+	var info := task_info()
 	var pulse := 0.5 + 0.5 * sin(_time * 5.0)
-	var gold := Color("#f2c76b")
-	if tgt is String:
+	var me: Dictionary = sim.by_id[hud.player_id]
+	if info.has("button"):
 		for b in hud._buttons():
-			if str(b.id) == str(tgt):
-				draw_arc(b.c, float(b.r) + 10.0 + 6.0 * pulse, 0.0, TAU, 40, gold, 4.0, true)
+			if str(b.id) == str(info.button):
+				var rr: float = float(b.r) + 12.0 + 8.0 * pulse
+				draw_arc(b.c, rr + 3.0, 0.0, TAU, 48, INK, 9.0, true)
+				draw_arc(b.c, rr, 0.0, TAU, 48, GOLD, 6.0, true)
+				_plate(b.c + Vector2(0, -float(b.r) - 34.0), "HOLD" if info.get("hold", false) else "TAP")
+	if not info.has("pos"):
 		return
-	if not (tgt is Vector2):
-		return
-	var world := Vector3(tgt.x, Sim.height_at(tgt) + 2.2, tgt.y)
-	var sp: Vector2 = hud.project.call(world)
-	if hud.on_screen.call(world):
-		# A bouncing arrow over the spot.
-		var tip := sp + Vector2(0, -8.0 * pulse)
-		draw_colored_polygon(PackedVector2Array([tip, tip + Vector2(-16, -26), tip + Vector2(16, -26)]), gold)
-		draw_rect(Rect2(tip + Vector2(-6, -52), Vector2(12, 28)), gold)
+	var tgt: Vector2 = info.pos
+	# The route: dots every 1.1 m along the nav path, marching toward the target.
+	var pts := PackedVector2Array([me.pos])
+	pts.append_array(_path)
+	pts.append(tgt)
+	var step_len := 1.1
+	var along := fmod(_time * 2.2, step_len)
+	var walked := 0.0
+	for i in range(pts.size() - 1):
+		var a: Vector2 = pts[i]
+		var b2: Vector2 = pts[i + 1]
+		var seg := a.distance_to(b2)
+		while along < seg and walked + along < 40.0:
+			var q := a.lerp(b2, along / seg)
+			var wq := _w(q)
+			if hud.on_screen.call(wq):
+				var sq: Vector2 = hud.project.call(wq)
+				draw_circle(sq, 7.0, INK)
+				draw_circle(sq, 5.0, GOLD)
+			along += step_len
+		along -= seg
+		walked += seg
+	# Walking distance along the route (not straight through walls), and a guide point ~8 m ahead
+	# on it: the edge arrow points there, so it always agrees with the dots. (Projecting the far
+	# target itself flipped the arrow when it was behind the camera.)
+	var route := 0.0
+	var guide: Vector2 = tgt
+	var got_guide := false
+	for i in range(pts.size() - 1):
+		var seg2: float = (pts[i] as Vector2).distance_to(pts[i + 1])
+		if not got_guide and route + seg2 >= 8.0:
+			guide = (pts[i] as Vector2).lerp(pts[i + 1], (8.0 - route) / maxf(seg2, 0.001))
+			got_guide = true
+		route += seg2
+	var label := "%s · %d m" % [str(info.get("label", "HERE")), int(round(route))]
+	var top := _w(tgt, 2.6)
+	if hud.on_screen.call(_w(tgt, 0.0)):
+		# A pulsing ring on the ground at the target.
+		var ring := PackedVector2Array()
+		var inner := PackedVector2Array()
+		for k in 33:
+			var ang := TAU * k / 32.0
+			var off := Vector2(cos(ang), sin(ang))
+			ring.append(hud.project.call(_w(tgt + off * 1.4, 0.08)))
+			inner.append(hud.project.call(_w(tgt + off * (0.5 + 0.8 * pulse), 0.08)))
+		draw_polyline(ring, INK, 9.0, true)
+		draw_polyline(ring, GOLD, 5.0, true)
+		draw_polyline(inner, Color(GOLD, 0.8 - 0.6 * pulse), 3.0, true)
+		var tip: Vector2 = hud.project.call(top) + Vector2(0, -10.0 * pulse)
+		var panel_bottom: float = panel.get_rect().end.y + 12.0
+		if tip.y - 104.0 > panel_bottom:
+			_arrow_down(tip, 1.25)
+			_plate(tip + Vector2(0, -84), label)
+		else:
+			# Too close to the Herald's panel: point up at the target from below it instead.
+			var base: Vector2 = hud.project.call(_w(tgt, 0.0))
+			var tip2 := base + Vector2(0, 26.0 + 10.0 * pulse)
+			_arrow_up(tip2, 1.25)
+			_plate(tip2 + Vector2(0, 84), label)
 	else:
-		# Off-screen: an arrow at the screen edge pointing the way.
+		# Off-screen: a big edge arrow pointing the way, with the name and distance.
 		var center := size * 0.5
-		var dir := (sp - center).normalized()
-		var edge := center + dir * minf(size.x * 0.42, size.y * 0.36)
+		var from_s: Vector2 = hud.project.call(_w(me.pos, 1.0))
+		var to_s: Vector2 = hud.project.call(_w(guide, 1.0))
+		var dir := (to_s - from_s).normalized()
+		if dir == Vector2.ZERO:
+			dir = Vector2(0, -1)
+		var edge := center + dir * minf(size.x * 0.40, size.y * 0.34)
+		edge.y = maxf(edge.y, panel.get_rect().end.y + 60.0)     # never under the Herald's panel
 		var side := Vector2(-dir.y, dir.x)
-		draw_colored_polygon(PackedVector2Array([edge + dir * 22, edge - dir * 10 + side * 14, edge - dir * 10 - side * 14]), gold)
+		var tri := PackedVector2Array([edge + dir * 34, edge - dir * 14 + side * 24, edge - dir * 14 - side * 24])
+		var tri_o := PackedVector2Array([edge + dir * 40, edge - dir * 18 + side * 30, edge - dir * 18 - side * 30])
+		draw_colored_polygon(tri_o, INK)
+		draw_colored_polygon(tri, GOLD)
+		_plate(edge - dir * 46, label)

@@ -57,7 +57,8 @@ func _process(delta: float) -> bool:
 	if exited:
 		_end(); return false
 	if tut.finished:
-		check(done_steps.size() >= 9, "all %d tasks done: %s" % [done_steps.size(), str(done_steps)])
+		check(done_steps.size() >= 12, "all %d tasks done: %s" % [done_steps.size(), str(done_steps)])
+		check(int(s.score[int(me.team)]) >= 1, "the rescue scored")
 		tut.next()                             # FINISH
 		return false
 	match str(tut.phase):
@@ -78,6 +79,9 @@ func _process(delta: float) -> bool:
 				"attack":
 					var foe: Dictionary = s.by_id.get(tut._dummy_id, {})
 					if not foe.is_empty():
+						# Walk up to it (it stands in the open courtyard now), then swing.
+						if me.pos.distance_to(foe.pos) > 1.6:
+							me.pos = (foe.pos as Vector2) + Vector2(1.2, 0)
 						me.face = Sim.angle_of(foe.pos - me.pos)
 						s.act(mode.hud.player_id, "attack")
 				"dodge":
@@ -89,8 +93,18 @@ func _process(delta: float) -> bool:
 				"outpost":
 					var op: Dictionary = tut._outpost(me.team)
 					me.pos = (op.p as Vector2) + Vector2(2.2, 0)
-				"goal":
-					me.pos = Vector2(0.0, 7.0) if me.team == 0 else Vector2(0.0, -7.0)
+				"cake":
+					var ct: Dictionary = tut._cake_tree(me)
+					me.pos = (ct.p as Vector2) + Vector2(1.3, 0)
+					s.act(mode.hud.player_id, "interact")
+				"feed":
+					me.pos = (s.oracles[1 - int(me.team)].pos as Vector2) + Vector2(0.6, 0)
+					s.act(mode.hud.player_id, "interact")
+				"grab":
+					me.pos = (s.oracles[int(me.team)].pos as Vector2) + Vector2(0.6, 0)
+					s.act(mode.hud.player_id, "interact")
+				"carry":
+					me.pos = Sim.throne(me.team)
 	return false
 
 func _end() -> void:

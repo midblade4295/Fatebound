@@ -163,9 +163,15 @@ func _process(delta: float) -> bool:
 				phase = "predict"; t = 0.0
 				pred_from = mode.sim.by_id[mode.hud.player_id].pos
 				# Push the HUD stick (a phone's thumb): our unit must move locally at once.
+				# Toward the open courtyard around the spawn: pushing "right" from wherever the hat was
+				# taken sometimes walked straight into a stand or wall (collision, not a prediction bug).
+				var me_d: Dictionary = mode.sim.by_id[mode.hud.player_id]
+				var open_dir: Vector2 = (Sim.spawn(me_d.team) - (me_d.pos as Vector2)).normalized()
+				if open_dir == Vector2.ZERO:
+					open_dir = Vector2(1, 0)
 				mode.hud._stick_active = true
 				mode.hud._stick_origin = Vector2(100, 600)
-				mode.hud._stick_pos = Vector2(100 + 60, 600)
+				mode.hud._stick_pos = Vector2(100, 600) + open_dir * 60.0
 		"predict":
 			var mep: Dictionary = mode.sim.by_id[mode.hud.player_id]
 			# Frame times vary (uncapped headless frames can be ~5 ms), so compare the local move with
