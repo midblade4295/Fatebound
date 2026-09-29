@@ -524,33 +524,98 @@ func _hat_instance(cls: String, up: bool, scale_k: float) -> MeshInstance3D:
 	mi.scale = Vector3.ONE * scale_k
 	return mi
 
+# Hat machines (Round 11, Kevin): one themed structure per class, with an upgraded look that
+# appears once the team buys that class's hat upgrade. Pieces: [path, offset (x, y, z) in the
+# machine's frame, yaw, scale]. "bits/" = KayKit Fantasy Weapons Bits, "%s" = team colour.
+const MACHINES := {
+	"knight": {"base": [["weaponrack", Vector3(0, 0, 0.55), 0.0, 3.0], ["bits/shield_B", Vector3(-0.6, 0.55, 0.1), 0.3, 0.8],
+			["bits/sword_A", Vector3(0.62, 0.0, 0.05), 0.0, 0.75], ["crate_B_small", Vector3(0, 0, -0.1), 0.0, 2.6]],
+		"up": [["bits/shield_D", Vector3(-0.7, 0.6, 0.1), 0.3, 0.8], ["bits/sword_G", Vector3(0.7, 0.0, 0.1), 0.0, 0.8],
+			["flag_%s", Vector3(0.0, 0.0, 0.9), 0.0, 2.6]]},
+	"barbarian": {"base": [["tent", Vector3(0, 0, 0.25), 0.0, 2.6], ["resource_lumber", Vector3(0.75, 0, -0.35), 0.4, 2.2],
+			["bits/axe_A", Vector3(0.75, 0.35, -0.35), 0.0, 0.75]],
+		"up": [["bits/sword_E", Vector3(-0.75, 0.0, -0.3), 0.2, 0.55], ["bits/axe_D", Vector3(0.95, 0.35, 0.0), 0.8, 0.75],
+			["flag_%s", Vector3(-0.9, 0.0, 0.7), 0.0, 2.6]]},
+	"rogue": {"base": [["crate_A_big", Vector3(0, 0, 0.35), 0.2, 2.4], ["crate_B_small", Vector3(0.7, 0, -0.2), 0.6, 2.4],
+			["sack", Vector3(-0.7, 0, -0.1), 0.0, 2.4], ["bits/dagger_A", Vector3(0.1, 0.55, 0.35), 0.0, 0.8]],
+		"up": [["bits/dagger_C", Vector3(-0.25, 0.55, 0.35), 0.4, 0.8], ["bits/fistweapon_A", Vector3(0.7, 0.35, -0.2), 0.0, 0.8],
+			["barrel", Vector3(-0.8, 0, 0.6), 0.0, 2.2]]},
+	"ranger": {"base": [["target", Vector3(0, 0, 0.6), 0.0, 3.6], ["bucket_arrows", Vector3(0.7, 0, -0.1), 0.0, 3.0],
+			["bits/bow_A_withString", Vector3(-0.6, 0.0, 0.0), 0.0, 0.8]],
+		"up": [["bits/bow_C_withString", Vector3(-0.85, 0.0, 0.3), 0.3, 0.8], ["target", Vector3(0.8, 0, 0.7), 0.5, 3.0],
+			["flag_%s", Vector3(0.0, 0.0, -0.8), 0.0, 2.4]]},
+	"mage": {"base": [["building_tower_base_%s", Vector3(0, 0, 0.4), 0.0, 0.95], ["bits/staff_A", Vector3(0.65, 0.0, -0.2), 0.0, 0.75]],
+		"up": [["bits/staff_D", Vector3(-0.7, 0.0, -0.2), 0.0, 0.75], ["bits/wand_B", Vector3(0.65, 0.9, -0.2), 0.0, 0.8],
+			["flag_%s", Vector3(0.0, 1.4, 0.45), 0.0, 2.0]]},
+	"priest": {"base": [["building_well_%s", Vector3(0, 0, 0.35), 0.0, 1.6], ["bits/wand_A", Vector3(0.7, 0.0, -0.3), 0.0, 0.8]],
+		"up": [["bits/staff_C", Vector3(-0.75, 0.0, -0.3), 0.0, 0.75], ["flag_%s", Vector3(0.85, 0.0, 0.55), 0.0, 2.4]]},
+}
+const MACHINE_GLOW := {"mage": Color("#b98cff"), "priest": Color("#fff0a8")}
+var machine_up: Dictionary = {}        # stand id -> {"up": Node3D, "glow": MeshInstance3D, "state": bool}
+
+func _machine_piece(root: Node3D, piece: Array, col: String) -> void:
+	var name := str(piece[0])
+	if name.contains("%s"):
+		name = name % col
+	var path := ("res://assets/kaykit/bits/%s.gltf" % name.substr(5)) if name.begins_with("bits/") else (HEX + name + ".gltf")
+	var packed := Stage.scene(path)
+	if packed == null:
+		return
+	var n: Node3D = packed.instantiate()
+	n.position = piece[1]
+	n.rotation.y = float(piece[2])
+	n.scale = Vector3.ONE * float(piece[3])
+	root.add_child(n)
+
 func _build_hat_stands() -> void:
-	var stone := StandardMaterial3D.new()
-	stone.albedo_color = Color("#8a8f99")
-	stone.roughness = 0.9
 	for st in sim.stands:
-		var base := Vector3(st.p.x, 0.0, st.p.y)
-		var ped := MeshInstance3D.new()
-		var pm := CylinderMesh.new()
-		pm.top_radius = 0.42
-		pm.bottom_radius = 0.5
-		pm.height = 0.9
-		pm.radial_segments = 8
-		ped.mesh = pm
-		ped.material_override = stone
-		ped.position = base + Vector3(0, 0.45, 0)
-		add_child(ped)
-		var col: Color = HAT_COLOR[st.cls]
-		_decal(base + Vector3(0, 0.06, 0), Sim.HAT_TAKE_R, col, 0.5)
-		# The class weapon standing on the pedestal says which hat this is.
-		var w := _place("res://assets/kaykit/weapons/%s.gltf" % HAT_WEAPON[st.cls], base + Vector3(0, 0.95, 0), 0.4, 1.3)
-		if w != null:
-			w.rotation.z = 0.35
+		var cls := str(st.cls)
+		var col: String = COLOR[int(st.team)]
+		var gy := Sim.height_at(st.p)
+		var root := Node3D.new()
+		root.position = Vector3(st.p.x, gy, st.p.y)
+		# Face the machine towards the castle's middle (mirrored per team).
+		var mid: Vector2 = Sim._c(int(st.team), Vector2(0.0, 12.0))
+		root.rotation.y = atan2(mid.x - st.p.x, mid.y - st.p.y)
+		add_child(root)
+		var def: Dictionary = MACHINES.get(cls, {})
+		for piece in def.get("base", []):
+			_machine_piece(root, piece, col)
+		var up_root := Node3D.new()
+		root.add_child(up_root)
+		for piece in def.get("up", []):
+			_machine_piece(up_root, piece, col)
+		up_root.visible = false
+		var glow: MeshInstance3D = null
+		if MACHINE_GLOW.has(cls):
+			# A floating orb (static material; the upgrade makes it bigger).
+			glow = MeshInstance3D.new()
+			var sm := SphereMesh.new()
+			sm.radius = 0.18
+			sm.height = 0.36
+			sm.radial_segments = 12
+			sm.rings = 6
+			glow.mesh = sm
+			# Lit + emission (an UNSHADED orb here hung the software-Vulkan renderer at pipeline
+			# compile in combination with the mage/priest pieces; same look, safer pipeline).
+			var gm := StandardMaterial3D.new()
+			gm.albedo_color = MACHINE_GLOW[cls]
+			gm.emission_enabled = true
+			gm.emission = MACHINE_GLOW[cls]
+			gm.emission_energy_multiplier = 1.4
+			gm.roughness = 0.4
+			glow.material_override = gm
+			glow.position = Vector3(0, 2.25 if cls == "mage" else 1.6, 0.35)
+			root.add_child(glow)
+		machine_up[st.id] = {"up": up_root, "glow": glow, "state": false}
+		var colr: Color = HAT_COLOR[cls]
+		_decal(Vector3(st.p.x, gy + 0.06, st.p.y), Sim.HAT_TAKE_R, colr, 0.5)
+		# The hat stack sits on the front of the machine (visible stock).
 		var stack := []
 		for k in Sim.HAT_STOCK_MAX:
-			var h := _hat_instance(st.cls, false, 1.0)
-			h.position = base + Vector3(-0.12 + 0.12 * k, 0.92 + 0.02 * k, 0.28 - 0.14 * k)
-			add_child(h)
+			var h := _hat_instance(cls, false, 1.0)
+			h.position = Vector3(-0.2 + 0.2 * k, 0.05 + 0.02 * k, -0.55)
+			root.add_child(h)
 			stack.append(h)
 		stand_nodes[st.id] = stack
 
@@ -647,6 +712,16 @@ func _sync_hats() -> void:
 		var stack: Array = stand_nodes.get(st.id, [])
 		for k in stack.size():
 			(stack[k] as Node3D).visible = k < int(st.stock)
+		# Upgraded look once the team owns this class's hat upgrade.
+		var mu: Dictionary = machine_up.get(st.id, {})
+		if not mu.is_empty():
+			var up: bool = int(sim.levels[int(st.team)].get("hat_" + str(st.cls), 0)) > 0
+			if up != bool(mu.state):
+				mu.state = up
+				(mu.up as Node3D).visible = up
+				if mu.glow != null:
+					(mu.glow as Node3D).scale = Vector3.ONE * (1.8 if up else 1.0)
+					(mu.glow as Node3D).position.y += 0.25 if up else -0.25
 	# Dropped hats: add new ones, drop vanished ones, bob and spin (transforms only).
 	var seen := {}
 	for h in sim.hats:
