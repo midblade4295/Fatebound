@@ -1,3 +1,5 @@
+> Current Play Store build/upload instructions: [godot/PLAY_STORE_HANDOFF.md](godot/PLAY_STORE_HANDOFF.md). Read this before preparing an AAB; older Play/version/signing notes below are historical. The R5 branch is already published and the server is deployed.
+
 # Current native development: Fatebound Siege (Fat Princess-style), preview 0.19.1
 
 Round 5 work is on `claude/siege-dev-r5`, based on live `447b97a` (`claude/kaykit-3d-rebuild`).
@@ -8,8 +10,8 @@ Android preview only: package com.fatebound.kaykitrebuild, preset "Android KayKi
 Kevin's preview key (not the Play key), next versionCode 41, renderer stays Vulkan.
 Test: `godot/tools/run_siege_tests.sh`. Build: `godot/tools/build_siege_preview.sh`.
 Commit each working step and log it in SIEGE_PROGRESS.md. No force-push, main merge, save
-reset, Play release, production signing, Legionary/Caddy changes. The Play upload key is
-committed in this public repo (see SIEGE_HANDOFF.md section 7): report it, don't act alone.
+reset, Play release, production signing, Legionary/Caddy changes. The exposed Play upload key was removed from this branch history; older branches still contain it.
+Never restore it. Follow PLAY_STORE_HANDOFF.md for private signing and release preparation.
 
 ---
 ## Earlier native instructions retained as provenance

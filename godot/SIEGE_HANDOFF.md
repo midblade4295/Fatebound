@@ -1,3 +1,5 @@
+> Current Play Store build/upload guide: [PLAY_STORE_HANDOFF.md](PLAY_STORE_HANDOFF.md). The R5 branch is now published and deployed; old bundle import, deployment, and Play version instructions below are historical.
+
 # Fatebound Siege — handoff for the next agent
 
 Owner: Kevin (GitHub `midblade4295`, repo `midblade4295/Fatebound`). Solo indie dev. Tests every

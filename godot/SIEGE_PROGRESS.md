@@ -644,3 +644,8 @@ K2/K3 notes (0.17.0)
 - tutorial_test: 12 tasks incl. cake, feed, grab, carry; the rescue must score.
 - net smoke: the stick points toward the open courtyard (pushing "right" sometimes walked into a
   stand -> the prediction check failed on collision, not prediction).
+
+# 2026-09-29: current Grokbot Play Store handoff
+- Added PLAY_STORE_HANDOFF.md and entry links in AGENTS.md, GROKBOT_HANDOFF.md, and SIEGE_HANDOFF.md.
+- Documents the sanitized R5 source, verified live server, release AAB identity, Console-verified version selection, private signing, legacy workflow/verifier corrections, checks, and upload steps.
+- Documentation only: no Play build, signing, upload, or rollout performed.
