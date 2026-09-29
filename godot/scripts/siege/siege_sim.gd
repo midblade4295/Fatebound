@@ -33,7 +33,7 @@ const INNER_Z := 21.0            # wall between courtyard and the back rooms
 const GATE_X := [-5.2, 5.2]      # gate centres on the front wall
 const DOOR_X := [-5.2, 5.2]      # open doorways in the inner wall (behind each gate)
 const KEEP_X := 2.6              # keep block spans x -2.6..2.6, z 21..29
-const GATE_HP := 1500.0
+const GATE_HP := 1100.0
 const GATE_HALF := 1.3           # half-width of the passable doorway
 const GATE_SOLID_AT := 0.35      # a broken gate blocks again once repaired to 35 %
 const GATE_OPEN_RADIUS := 4.0    # allies within this distance swing the doors open (visual)
@@ -96,7 +96,7 @@ const LADDER_CLIMB := 0.5         # speed while crossing the wall
 const CARRY_MAX := 5
 const GATHER_TIME := 0.9         # seconds per unit gathered
 const REPAIR_TICK := 0.5
-const REPAIR_HP := 30.0          # per tick, costs 1 wood
+const REPAIR_HP := 20.0          # per tick, costs 1 wood (30 made gates unbreakable once classes stopped persisting)
 const UPGRADES := {
 	"gates":  {"name":"Reinforced Gates", "max":2, "cost":[{"wood":15,"stone":10},{"wood":25,"stone":20}],
 		"desc":"+50% gate HP per level, and repairs all gates"},
@@ -124,11 +124,15 @@ const HAT_STOCK_MAX := 3
 const HAT_REGEN := 6.0           # seconds per new hat, per stand (10 s starved 16-player teams)
 const HAT_LIFETIME := 30.0       # a dropped hat vanishes after this
 const HAT_PICK_R := 1.0
-# Outposts carry a small hat rack for whoever holds them (attackers respawn there as Villagers;
-# without it every death meant walking back to the castle: 0 rescues in 2 test matches).
-const OUTPOST_HAT_MAX := 3
-const OUTPOST_HAT_REGEN := 6.0
-const OUTPOST_HAT_R := 2.4        # tower radius 1.3 + reach
+# Fat Princess rules (Kevin, 0.15.1): stands exist only inside the castles, but ANY team may use
+# them (sneak into the enemy courtyard to switch class). Outposts have no hat dispenser: they are a
+# respawn point (attackers respawn there only when a dropped hat is close by) and a resource
+# drop-off for Workers.
+const OUTPOST_DROP_R := 3.2       # workers deliver within this of an outpost their team holds
+const RESPAWN_HAT_NEAR := 28.0    # humans: a dropped hat this close to the forward outpost -> respawn
+                                  # there. Bot attackers always respawn forward and scavenge (like
+                                  # Fat Princess players choosing an outpost spawn).
+const BOT_HAT_SEARCH := 32.0      # villager bots scavenge dropped hats this far (14 m: most expired unused)
 const UPGRADE_NAME := {"knight":"Paladin","barbarian":"Berserker","rogue":"Assassin","ranger":"Sniper","mage":"Archmage"}
 
 # range: melee reach or projectile travel. arc: cosine of the half-angle a melee swing covers.
@@ -311,9 +315,7 @@ func _build_map() -> void:
 	# Outposts: a solid tower in the middle of each capture ring.
 	outposts = []
 	for op in Land.outpost_positions():
-		# West outposts carry Knight hats, east ones Rogue hats (point-mirrored pairs).
-		outposts.append({"id":outposts.size(), "p":op, "owner":-1, "prog":0.0, "t":0.0,
-			"hat":"knight" if op.x < 0.0 else "rogue", "stock":1, "ht":0.0})
+		outposts.append({"id":outposts.size(), "p":op, "owner":-1, "prog":0.0, "t":0.0})
 		obstacles.append({"p":op, "r":Land.OUTPOST_TOWER_R, "kind":"outpost_tower"})
 	# Cake trees across the land (point-mirrored pairs); any team can pick a cake. The trunk is
 	# solid; the cake is picked from beside it.
@@ -555,10 +557,11 @@ func forward_outpost(team: int) -> Dictionary:
 func _respawn(u: Dictionary, first := false) -> void:
 	var sp := spawn(u.team)
 	u.pos = sp + Vector2(rng.randf_range(-8.0, 8.0), rng.randf_range(-1.5, 1.5))
-	# Attackers come back at the forward outpost their team holds (defenders/workers at the castle).
+	# Attackers come back at the forward outpost their team holds, but only when a dropped hat lies
+	# close to it (they respawn as Villagers and outposts have no hats); otherwise at the castle.
 	if not first and u.role in ["raid", "escort"]:
 		var fo := forward_outpost(u.team)
-		if not fo.is_empty():
+		if not fo.is_empty() and (u.bot or not nearest_hat(fo.p, RESPAWN_HAT_NEAR).is_empty()):
 			var a := rng.randf() * TAU
 			u.pos = (fo.p as Vector2) + Vector2(cos(a), sin(a)) * rng.randf_range(2.3, 3.4)
 	u.face = PI if u.team == 0 else 0.0
@@ -895,19 +898,25 @@ func context_action(u: Dictionary) -> String:
 
 # ---------- hats ----------
 func stand_near(u: Dictionary) -> Dictionary:
+	# Any team's stand: a stand inside the enemy courtyard works for whoever gets in there.
 	for st in stands:
-		if int(st.team) == u.team and u.pos.distance_to(st.p) <= HAT_TAKE_R:
+		if u.pos.distance_to(st.p) <= HAT_TAKE_R:
 			return st
 	return {}
 
+static func in_castle(p: Vector2, team: int) -> bool:
+	# Inside team's walls (courtyard or back rooms), in that castle's local coordinates.
+	var q := (p if team == 0 else -p) - Vector2(0.0, CASTLE_SHIFT)
+	return absf(q.x) <= CASTLE_HX and q.y >= FRONT_Z
+
 func _take_hat(u: Dictionary, st: Dictionary) -> bool:
-	if int(st.stock) <= 0 or int(st.team) != u.team:
+	if int(st.stock) <= 0:
 		return false
 	if u.cls != "villager":
 		_drop_hat(u)                                  # swapping: the old hat goes on the ground
 	st.stock = int(st.stock) - 1
-	_set_class(u, st.cls, int(levels[u.team].get("hat_" + str(st.cls), 0)) > 0)
-	_event("hat_take", {"id":u.id, "cls":st.cls, "team":u.team, "stand":st.id})
+	_set_class(u, st.cls, int(levels[int(st.team)].get("hat_" + str(st.cls), 0)) > 0)
+	_event("hat_take", {"id":u.id, "cls":st.cls, "team":u.team, "stand":st.id, "enemy":int(st.team) != u.team})
 	return true
 
 func _swap_hat(u: Dictionary) -> bool:
@@ -938,14 +947,7 @@ func _step_hats(dt: float) -> void:
 		if hats[i].t >= HAT_LIFETIME:
 			_event("hat_expire", {"hat":hats[i].id})
 			hats.remove_at(i)
-	for op in outposts:
-		if int(op.owner) >= 0 and int(op.stock) < OUTPOST_HAT_MAX:
-			op.ht += dt
-			if op.ht >= OUTPOST_HAT_REGEN:
-				op.ht = 0.0
-				op.stock = int(op.stock) + 1
-	# Villagers take a hat by walking over one (dropped hats first, then their own stands, then a
-	# rack at an outpost their team holds).
+	# Villagers take a hat by walking over one (dropped hats first, then any stand they reach).
 	for u in units:
 		if not alive(u) or u.cls != "villager" or u.carrying or u.stun > 0.0:
 			continue
@@ -961,14 +963,7 @@ func _step_hats(dt: float) -> void:
 		if not picked:
 			var st := stand_near(u)
 			if not st.is_empty():
-				picked = _take_hat(u, st)
-		if not picked:
-			for op in outposts:
-				if int(op.owner) == u.team and int(op.stock) > 0 and u.pos.distance_to(op.p) <= OUTPOST_HAT_R:
-					op.stock = int(op.stock) - 1
-					_set_class(u, op.hat, int(levels[u.team].get("hat_" + str(op.hat), 0)) > 0)
-					_event("hat_take", {"id":u.id, "cls":op.hat, "team":u.team, "outpost":op.id})
-					break
+				_take_hat(u, st)
 
 func nearest_hat(p: Vector2, max_d: float) -> Dictionary:
 	var best := {}
@@ -1034,8 +1029,28 @@ func buy_upgrade(team: int, id: String, by: Dictionary = {}) -> bool:
 	_event("upgrade", {"team":team, "upgrade":id, "level":levels[team][id], "id":by.get("id", "")})
 	return true
 
+func drop_point(u: Dictionary) -> Vector2:
+	# The nearest place to deliver a load: the workshop, or an outpost the team holds.
+	var best: Vector2 = workshop(u.team)
+	var bd: float = u.pos.distance_to(best)
+	for op in outposts:
+		if int(op.owner) == u.team:
+			var p: Vector2 = (op.p as Vector2) + ((u.pos - (op.p as Vector2)).normalized() * 2.2)
+			var d: float = u.pos.distance_to(p)
+			if d < bd:
+				bd = d
+				best = p
+	return best
+
 func _deliver(u: Dictionary) -> void:
-	if u.load.n <= 0 or u.pos.distance_to(workshop(u.team)) > WORKSHOP_RADIUS + 0.4:
+	if u.load.n <= 0:
+		return
+	var here: bool = u.pos.distance_to(workshop(u.team)) <= WORKSHOP_RADIUS + 0.4
+	if not here:
+		for op in outposts:
+			if int(op.owner) == u.team and u.pos.distance_to(op.p) <= OUTPOST_DROP_R:
+				here = true
+	if not here:
 		return
 	stock[u.team][u.load.kind] += u.load.n
 	u.gathered += u.load.n
@@ -1799,22 +1814,17 @@ const ROLE_HATS := {"raid":["rogue", "knight", "barbarian"], "escort":["knight",
 func _bot_hat_goal(u: Dictionary) -> Vector2:
 	# A villager bot's way to a class: a dropped hat close by, else a stand of its role's classes
 	# (rotated per bot for variety), else any stand with stock. Vector2.INF = no hat to be had.
-	var h := nearest_hat(u.pos, 14.0)
+	var h := nearest_hat(u.pos, BOT_HAT_SEARCH)
 	if not h.is_empty():
 		return h.pos
-	# The closest owned outpost rack wins if it is much nearer than the castle stands.
-	var castle_d: float = u.pos.distance_to(forge(u.team))
-	var best_op := {}
-	var bd := castle_d * 0.6
-	for op in outposts:
-		if int(op.owner) == u.team and int(op.stock) > 0:
-			var d: float = u.pos.distance_to(op.p)
-			if d < bd:
-				bd = d
-				best_op = op
-	if not best_op.is_empty():
-		var away: Vector2 = (u.pos - (best_op.p as Vector2)).normalized()
-		return (best_op.p as Vector2) + (away if away != Vector2.ZERO else Vector2(1, 0)) * 1.9
+	# Already inside the enemy castle: their stands are right here.
+	if in_castle(u.pos, 1 - u.team):
+		var best_e := {}
+		for st in stands:
+			if int(st.team) != u.team and int(st.stock) > 0 and (best_e.is_empty() or u.pos.distance_to(st.p) < u.pos.distance_to(best_e.p)):
+				best_e = st
+		if not best_e.is_empty():
+			return best_e.p
 	var prefs: Array = (ROLE_HATS.get(u.role, HAT_CLASSES) as Array).duplicate()
 	var rot := absi(hash(u.id)) % prefs.size()
 	prefs = prefs.slice(rot) + prefs.slice(0, rot)
@@ -1879,7 +1889,7 @@ func _think_worker(u: Dictionary) -> void:
 		return
 	# Deliver a full (or stranded) load.
 	if u.load.n >= CARRY_MAX:
-		_nav_to(u, workshop(u.team), WORKSHOP_RADIUS - 0.6)
+		_nav_to(u, drop_point(u), 0.8)
 		return
 	# Repair a gate that is broken or badly damaged, if there is material for it.
 	if repair_stock(u.team) >= 2:
@@ -1938,12 +1948,12 @@ func _think_worker(u: Dictionary) -> void:
 			best = n
 	if best.is_empty():
 		if u.load.n > 0:
-			_nav_to(u, workshop(u.team), WORKSHOP_RADIUS - 0.6)
+			_nav_to(u, drop_point(u), 0.8)
 		return
 	var stand: Vector2 = best.p + (u.pos - best.p).normalized() * (best.r + 0.8)
 	if u.pos.distance_to(best.p) - best.r <= 1.2:
 		if u.load.n > 0 and u.load.kind != best.kind:
-			_nav_to(u, workshop(u.team), WORKSHOP_RADIUS - 0.6)
+			_nav_to(u, drop_point(u), 0.8)
 			return
 		u.move = Vector2.ZERO
 		u.face = angle_of(best.p - u.pos)

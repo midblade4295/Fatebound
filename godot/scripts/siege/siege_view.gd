@@ -474,7 +474,6 @@ const HAT_WEAPON := {"knight":"sword_1handed", "barbarian":"axe_2handed", "rogue
 static var _hat_mesh: ArrayMesh = null
 static var _hat_mats: Dictionary = {}
 var stand_nodes: Dictionary = {}       # stand id -> Array of 3 hat MeshInstance3D
-var rack_nodes: Dictionary = {}        # outpost id -> Array of 3 hat MeshInstance3D
 var hat_nodes: Dictionary = {}         # dropped hat id -> Node3D
 
 static func _hat_shape() -> ArrayMesh:
@@ -548,25 +547,12 @@ func _build_hat_stands() -> void:
 			add_child(h)
 			stack.append(h)
 		stand_nodes[st.id] = stack
-	for op in sim.outposts:
-		var stack := []
-		for k in Sim.OUTPOST_HAT_MAX:
-			var h := _hat_instance(str(op.hat), false, 1.1)
-			var hp: Vector2 = (op.p as Vector2) + Vector2(-1.9 + 0.45 * k, 1.5)
-			h.position = Vector3(hp.x, Sim.height_at(hp) + 0.02, hp.y)
-			add_child(h)
-			stack.append(h)
-		rack_nodes[op.id] = stack
 
 func _sync_hats() -> void:
 	for st in sim.stands:
 		var stack: Array = stand_nodes.get(st.id, [])
 		for k in stack.size():
 			(stack[k] as Node3D).visible = k < int(st.stock)
-	for op in sim.outposts:
-		var stack: Array = rack_nodes.get(op.id, [])
-		for k in stack.size():
-			(stack[k] as Node3D).visible = int(op.owner) >= 0 and k < int(op.get("stock", 0))
 	# Dropped hats: add new ones, drop vanished ones, bob and spin (transforms only).
 	var seen := {}
 	for h in sim.hats:

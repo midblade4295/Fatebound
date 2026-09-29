@@ -430,3 +430,21 @@ includes shader compile and is ignored.
 - Tests: sim smoke checks the hat rules (take, drop on death, enemy pickup, swap, upgrade,
   refill, expiry) and counts hat events; net smoke takes a hat through the real server.
 - Not verified: how a dropped hat looks in play (rendered, but not seen in a screenshot).
+
+# 0.15.1 (Kevin, with a Fat Princess wiki screenshot): "make like this"
+Rules from the screenshot: hat machines only inside each castle; dropped hats (friend or foe) can
+be picked up anywhere; you can use the ENEMY's hat machines if you get inside their castle;
+outposts have NO hat dispensers (respawn point + a closer drop-off for Workers).
+- Removed the 0.15.0 outpost hat racks. Stands work for any team (tier = the stand owner's
+  upgrade). Workers deliver at outposts their team holds (`drop_point`, `OUTPOST_DROP_R`).
+- Respawn: humans respawn at the forward outpost only if a dropped hat is within 28 m of it (else
+  the castle); bot attackers always respawn forward and scavenge dropped hats within 32 m, and use
+  enemy stands once inside the enemy castle.
+- Balance trail (2 matches each): racks removed, 14 m scavenging -> 0 rescues, 0 pickups (most
+  hats expired unused); 32 m scavenging -> 1 rescue, 0 gates broken (repairs 60 HP/s per worker
+  beat smaller waves); gate HP 1500 -> 1100 and repair 30 -> 20 per tick -> 3 gates, 0 rescues;
+  bots always respawn forward -> 5 rescues, 12 Oracle pickups, 4 gates, 522/681 hats recycled.
+  One of the two seeds still ends 0-0 on time.
+- Class roster unchanged (Knight, Barbarian, Rogue, Ranger, Mage, Worker); Fat Princess's is
+  Worker, Warrior, Mage, Ranger, Priest -- not changed without Kevin asking.
+- Protocol still v3 (outpost stock is simply 0). The server must run this build's sim.
