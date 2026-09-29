@@ -404,3 +404,9 @@ Any new full-screen layer must be added to that helper.
 grass tufts + flowers scattered by `SiegeView._plan_foliage`), shader `grass_sat` + macro
 variation, scene saturation 1.08. Colour targets were measured against Kevin's references (see
 SIEGE_PROGRESS Round 7b); re-measure if you change the tint.
+
+**0.14.2 (performance):** `tests/perf_bench.gd` measures the 3D render time per config
+(`BENCH=full,no_foliage,no_terrain_shader,no_water,no_adjust,nothing_new`; run under Xvfb with
+`--rendering-method mobile --resolution 540x960`; compare the SECOND pass of a config, the first
+includes shader compile). Terrain/water/foliage nodes carry `meta "perf"` for it. Keep the
+terrain shader's common path at 2 texture reads; see SIEGE_PROGRESS 0.14.2 for the numbers.
