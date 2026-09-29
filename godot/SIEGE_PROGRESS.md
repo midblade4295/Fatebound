@@ -293,7 +293,7 @@ Design (all cosmetic; no pay-to-win; no real-money purchases until Play Billing 
 | Step | Scope | Status |
 |---|---|---|
 | T1 | Blender art: seamless grass (voronoi patches), herringbone brick path, rock ledge texture, wooden bridge model | done |
-| T2 | Sim: bigger field, river with 3 bridges (walls + nav), raised ledges with ramps, rolling slopes (height_at), outposts (capture, respawn, trickle), protocol sync | todo |
+| T2 | Sim: bigger field, river with 3 bridges (walls + nav), raised ledges with ramps, rolling slopes (height_at), outposts (capture, respawn, trickle), protocol sync | done |
 | T3 | View: single terrain mesh (heights from sim) with grass/path/rock shader + path mask, water, bridges, ledge faces, outpost towers | todo |
 | T4 | Bots (outposts), HUD markers, tests, screenshots, APK | todo |
 
@@ -305,3 +305,19 @@ Design (all cosmetic; no pay-to-win; no real-money purchases until Play Billing 
 - Bugs found and fixed: brick colours overexposed (Blender colours are linear); per-brick random
   colour/tilt broke tiling (halves of a wrapped brick differed) -> variation keyed to the brick's
   position within the period (wrap diff 7.9 -> 1.6, flat control 0.3).
+
+## T2 notes
+- scripts/siege/siege_land.gd: field 64x128 (was 52x104); river c(x)=1.5 sin(0.16x) (odd, so it
+  is its own point mirror), 6 m wide, bridges at x=-20/0/20 (rails, deck arch); 4 raised ledges
+  (1.5 m) with ramps; rolling slopes (sin*sin + cos*cos, even under the mirror); 4 outposts on
+  the ledges; brick path routes gate -> ramps -> bridges.
+- Sim: walls from the land ("river" and "rail" don't block arrows), outposts (lone team captures,
+  ~9.5 s alone / 4.8 s with 4; contested freezes; crossing 0 neutralises; +1 wood +1 stone per
+  15 s; raiders/escorts respawn at the forward outpost), escorts capture. Old plateau + ruin gone.
+- tests/siege_land_check.gd (placement clear of walls/paths/rings, flat rings, point symmetry,
+  nav reaches bridges/outposts, river only crossed on bridges) caught 6 bad hand placements.
+- 2 matches: both ended 3-2 on rescues (~7 min; before, most went to time); outposts captured 35 /
+  lost 27; 0 clips. Red won both: watch side balance.
+- Protocol v2 (snapshot "op" = owner, prog per outpost). Old clients get "update the game".
+  **The server must be redeployed with this branch before online play works again.**
+- The view still draws the old hex terrain/plateau until T3.

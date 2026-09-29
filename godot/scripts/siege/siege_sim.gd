@@ -5,8 +5,9 @@ extends RefCounted
 # (team 1) the north end (-z). Red's castle is the point mirror of blue's: (x, z) -> (-x, -z).
 
 const TICK := 1.0 / 30.0
-const HALF_W := 26.0
-const HALF_L := 52.0
+const Land = preload("res://scripts/siege/siege_land.gd")
+const HALF_W := Land.HALF_W
+const HALF_L := Land.HALF_L
 # Castle layouts are authored in "castle-local" blue-space coordinates (x -13..13, z 15..29 with
 # the back at z=29) and placed at each end of the field by _c(): shifted so the castle's back
 # sits on the field edge, then mirrored for red.
@@ -53,6 +54,13 @@ const HILL_Z := 3.0
 const HILL_STAIR_X := 1.3
 const HILL_STAIR_Z := 5.0
 const LEDGE_R := 0.35
+# Round 7 layout (blue half; mirrored). Checked by tests/siege_land_check.gd.
+const RES_WOOD := [Vector2(-28.0, 44.0), Vector2(-24.0, 40.5), Vector2(27.0, 44.0), Vector2(29.5, 38.0), Vector2(-29.0, 9.0),
+	Vector2(-7.5, 30.0), Vector2(10.0, 22.5), Vector2(-3.5, 37.0), Vector2(29.0, 27.0), Vector2(-8.5, 9.5)]
+const RES_STONE := [Vector2(18.5, 44.5), Vector2(-15.0, 41.0), Vector2(9.0, 31.5), Vector2(-26.5, 36.5), Vector2(-15.5, 9.0)]
+const COVER_ROCKS := [Vector2(-3.0, 21.0), Vector2(7.5, 9.0), Vector2(-17.5, 36.5)]
+const CAKE_TREES := [Vector2(-6.0, 25.0), Vector2(17.0, 38.0), Vector2(-27.5, 20.5)]
+const OUTPOST_TRICKLE := 15.0    # owners get +1 wood +1 stone this often per outpost
 
 # ---- fate offerings (the "cake") ----
 const ALTAR_P := Vector2(-3.5, 17.0)   # blue courtyard; mirrored for red
@@ -142,7 +150,8 @@ var events: Array = []
 var obstacles: Array = []      # circles: trees, rocks, ruin, buildings  {p, r, kind, team?}
 var walls: Array = []          # segments {a, b, r, team, kind}
 var gates: Array = []          # {id, team, a, b, c, hp, max_hp, broken, open}
-var nodes: Array = []          # resource nodes {id, kind:"wood"/"stone", p, r, amount, max, regen, t}
+var nodes: Array = []
+var outposts: Array = []       # {id, p, owner (-1 neutral), prog (-1 red .. +1 blue), t}          # resource nodes {id, kind:"wood"/"stone", p, r, amount, max, regen, t}
 var stock := [{"wood":0, "stone":0}, {"wood":0, "stone":0}]
 var levels := [{"gates":0, "armory":0, "forge":0, "catapult":0}, {"gates":0, "armory":0, "forge":0, "catapult":0}]
 var cake_trees: Array = []     # {id, p, ready, t}  neutral, across the land
@@ -186,14 +195,10 @@ static func height_at(p: Vector2) -> float:
 		if ax >= STAIR_X0 and ax <= STAIR_X1 and q.y < STAIR_Z1:
 			return PLAT_H * clampf((q.y - STAIR_Z0) / (STAIR_Z1 - STAIR_Z0), 0.0, 1.0)
 		return PLAT_H
-	# Midfield plateau (symmetric in both axes), stairs on its north and south faces.
-	var az := absf(p.y)
-	var bx := absf(p.x)
-	if bx <= HILL_X and az <= HILL_Z:
-		return HILL_H
-	if bx <= HILL_STAIR_X and az > HILL_Z and az < HILL_STAIR_Z:
-		return HILL_H * clampf((HILL_STAIR_Z - az) / (HILL_STAIR_Z - HILL_Z), 0.0, 1.0)
-	return 0.0
+	# Castle grounds are flat; everything else is the landscape (slopes, ledges, bridges).
+	if absf(q.x) <= CASTLE_HX + 1.0 and q.y >= FRONT_Z - 1.0:
+		return 0.0
+	return Land.ground_height(p)
 
 static func forge(team: int) -> Vector2:
 	return _c(team, Vector2(-8.5, 18.0))
@@ -261,33 +266,29 @@ func _build_map() -> void:
 		# Courtyard buildings (solid): forge + workshop sit against the side walls.
 		obstacles.append({"p":_c(t, Vector2(-11.2, 18.0)), "r":1.4, "kind":"forge_building", "team":t})
 		obstacles.append({"p":_c(t, Vector2(11.2, 18.0)), "r":1.4, "kind":"workshop_building", "team":t})
-		# Resource nodes on each half (world coords, point-mirrored): forests on both flanks,
-		# quarries between the lanes, and a few trees near the castle approaches.
-		for tp in [Vector2(-21.0, 33.0), Vector2(-23.0, 26.0), Vector2(-19.5, 19.0), Vector2(-23.5, 12.0), Vector2(-20.0, 5.0),
-				Vector2(21.0, 31.0), Vector2(23.5, 23.0), Vector2(19.0, 15.0), Vector2(22.0, 7.0), Vector2(-9.0, 33.5)]:
+		# Resource nodes on each half (world coords, point-mirrored), placed off the paths, clear of
+		# the river, the ledge faces and the outposts (tests/siege_land_check.gd verifies this).
+		for tp in RES_WOOD:
 			_add_node(t, "wood", tp)
-		for sp in [Vector2(-12.0, 22.0), Vector2(13.0, 26.0), Vector2(1.5, 17.0), Vector2(-14.0, 8.0)]:
+		for sp in RES_STONE:
 			_add_node(t, "stone", sp)
-		# Cover between the lanes.
-		for rp in [Vector2(-6.0, 25.0), Vector2(8.0, 11.0), Vector2(-16.0, 30.0)]:
+		for rp in COVER_ROCKS:
 			obstacles.append({"p":_m(t, rp), "r":1.2, "kind":"rock"})
-	obstacles.append({"p":Vector2(0, 0), "r":1.8, "kind":"ruin"})
+	# Landscape: river banks, bridge rails, ledge faces and ramp sides (Round 7).
+	walls.append_array(Land.walls())
+	# Outposts: a solid tower in the middle of each capture ring.
+	outposts = []
+	for op in Land.outpost_positions():
+		outposts.append({"id":outposts.size(), "p":op, "owner":-1, "prog":0.0, "t":0.0})
+		obstacles.append({"p":op, "r":Land.OUTPOST_TOWER_R, "kind":"outpost_tower"})
 	# Cake trees across the land (point-mirrored pairs); any team can pick a cake. The trunk is
 	# solid; the cake is picked from beside it.
 	cake_trees = []
-	for cp in [Vector2(-17.0, 20.0), Vector2(6.5, 7.0), Vector2(-24.0, 0.0)]:
+	for cp in CAKE_TREES:
 		for t in 2:
 			var ctp := _m(t, cp)
 			cake_trees.append({"id":cake_trees.size(), "p":ctp, "ready":true, "t":0.0})
 			obstacles.append({"p":ctp, "r":0.6, "kind":"cake_tree"})
-	for s in [-1.0, 1.0]:
-		walls.append({"a":Vector2(s * HILL_X, -HILL_Z), "b":Vector2(s * HILL_X, HILL_Z), "r":LEDGE_R, "team":-1, "kind":"ledge"})
-		walls.append({"a":Vector2(-HILL_X, s * HILL_Z), "b":Vector2(-HILL_STAIR_X, s * HILL_Z), "r":LEDGE_R, "team":-1, "kind":"ledge"})
-		walls.append({"a":Vector2(HILL_STAIR_X, s * HILL_Z), "b":Vector2(HILL_X, s * HILL_Z), "r":LEDGE_R, "team":-1, "kind":"ledge"})
-		for sx in [-1.0, 1.0]:
-			walls.append({"a":Vector2(sx * HILL_STAIR_X, s * HILL_Z), "b":Vector2(sx * HILL_STAIR_X, s * HILL_STAIR_Z), "r":LEDGE_R, "team":-1, "kind":"ledge"})
-	_add_node(0, "wood", Vector2(-12.0, 0.5))
-	_add_node(1, "wood", Vector2(-12.0, 0.5))
 
 func _add_node(team: int, kind: String, p: Vector2) -> void:
 	var pos := _m(team, p)
@@ -508,9 +509,27 @@ func class_label(u: Dictionary) -> String:
 func dice_count(team: int) -> int:
 	return 3 + int(levels[team].forge)
 
+func forward_outpost(team: int) -> Dictionary:
+	# The team's owned outpost closest to the enemy dungeon (where its own Oracle is held).
+	var best := {}
+	var bd := INF
+	for op in outposts:
+		if int(op.owner) == team:
+			var d: float = (op.p as Vector2).distance_to(cell(team))
+			if d < bd:
+				bd = d
+				best = op
+	return best
+
 func _respawn(u: Dictionary, first := false) -> void:
 	var sp := spawn(u.team)
 	u.pos = sp + Vector2(rng.randf_range(-8.0, 8.0), rng.randf_range(-1.5, 1.5))
+	# Attackers come back at the forward outpost their team holds (defenders/workers at the castle).
+	if not first and u.role in ["raid", "escort"]:
+		var fo := forward_outpost(u.team)
+		if not fo.is_empty():
+			var a := rng.randf() * TAU
+			u.pos = (fo.p as Vector2) + Vector2(cos(a), sin(a)) * rng.randf_range(2.3, 3.4)
 	u.face = PI if u.team == 0 else 0.0
 	u.max_hp = float(stat(u,"hp"))
 	u.hp = u.max_hp
@@ -1431,7 +1450,7 @@ func _step_projectiles(dt: float) -> void:
 		if not blocked:
 			for wi in _bucket_walls[pb]:
 				var w: Dictionary = walls[wi]
-				if w.kind in ["ledge", "bars"]:
+				if w.kind in ["ledge", "bars", "river", "rail"]:
 					continue   # low ledges and cell bars don't stop arrows or fire
 				if p.pos.distance_to(seg_closest(p.pos, w.a, w.b)) < w.r * 0.8:
 					blocked = true
@@ -1533,7 +1552,50 @@ func _step_oracles(dt: float) -> void:
 				for u in units:
 					if u.team == t and alive(u) and u.hp < u.max_hp and u.pos.distance_to(o.pos) <= HEAL_R:
 						u.hp = minf(u.max_hp, u.hp + HEAL_RATE * dt)
+func _step_outposts(dt: float) -> void:
+	for op in outposts:
+		var n := [0, 0]
+		for u in units:
+			if alive(u) and u.pos.distance_to(op.p) <= Land.OUTPOST_R:
+				n[u.team] += 1
+		var dir := 0
+		var count := 0
+		if n[0] > 0 and n[1] == 0:
+			dir = 1
+			count = n[0]
+		elif n[1] > 0 and n[0] == 0:
+			dir = -1
+			count = n[1]
+		var prog: float = op.prog
+		if dir != 0:
+			# One unit takes ~9.5 s from neutral to captured, four or more ~4.8 s.
+			prog = clampf(prog + dir * (0.07 + 0.035 * mini(count, 4)) * dt, -1.0, 1.0)
+		elif n[0] == 0 and n[1] == 0:
+			var target := 1.0 if int(op.owner) == 0 else (-1.0 if int(op.owner) == 1 else 0.0)
+			prog = move_toward(prog, target, 0.04 * dt)
+		# (both teams inside: contested, nothing moves)
+		var owner: int = op.owner
+		if (owner == 0 and prog <= 0.0) or (owner == 1 and prog >= 0.0):
+			op.owner = -1
+			_event("outpost_lost", {"id":op.id, "team":owner})
+		if prog >= 1.0 and int(op.owner) != 0:
+			op.owner = 0
+			op.t = 0.0
+			_event("outpost_captured", {"id":op.id, "team":0})
+		elif prog <= -1.0 and int(op.owner) != 1:
+			op.owner = 1
+			op.t = 0.0
+			_event("outpost_captured", {"id":op.id, "team":1})
+		op.prog = prog
+		if int(op.owner) >= 0:
+			op.t += dt
+			if op.t >= OUTPOST_TRICKLE:
+				op.t = 0.0
+				stock[int(op.owner)].wood += 1
+				stock[int(op.owner)].stone += 1
+
 func _step_world(dt: float) -> void:
+	_step_outposts(dt)
 	# Gates swing open for allies nearby (visual state), resource nodes regrow.
 	for g in gates:
 		var open := false
@@ -1853,6 +1915,10 @@ func _think_fighter(u: Dictionary) -> void:
 		goal = theirs.pos
 	elif u.role == "defend" and time - float(alarm.at) < 4.0 and alarm.gate >= 0:
 		goal = gates[int(alarm.gate)].c + _inward(u.team) * 2.4
+	elif u.role == "escort" and ally_carrier.is_empty() and not _capture_target(u).is_empty():
+		# Escorts take outposts the team doesn't hold (forward respawns + resources).
+		var cap := _capture_target(u)
+		goal = (cap.p as Vector2) + dir_of(float(hash(u.id) % 628) / 100.0) * 2.8
 	elif mine.state in ["cell", "dropped"] and u.role in ["raid", "escort", "gather"]:
 		goal = mine.pos
 	elif not ally_carrier.is_empty():
@@ -1937,6 +2003,20 @@ func _think_fighter(u: Dictionary) -> void:
 				_start_attack(u, "ability", false)
 			else:
 				_start_attack(u, "attack", false)
+
+func _capture_target(u: Dictionary) -> Dictionary:
+	var best := {}
+	var bd := 70.0
+	for op in outposts:
+		if int(op.owner) == u.team:
+			continue
+		var d: float = u.pos.distance_to(op.p)
+		if int(op.owner) == -1:
+			d *= 0.8                              # neutral ones first
+		if d < bd:
+			bd = d
+			best = op
+	return best
 
 func _blocked_line(a: Vector2, b: Vector2, team: int) -> bool:
 	for i in range(1, 6):

@@ -41,6 +41,7 @@ run() {   # run <name> <marker> <timeout> [extra godot args...]
 if [ $QUICK -eq 1 ]; then export SEEDS=11,22; fi
 run siege_sim_smoke      SIEGE_SIM_PASS           600
 run siege_reach          SIEGE_REACH_PASS         120
+run siege_land_check     SIEGE_LAND_PASS          120
 run siege_mode_smoke     SIEGE_MODE_PASS          300 --fixed-fps 30
 SEED=7 run siege_human_soak HUMAN_SOAK_DONE       300 --fixed-fps 30
 run siege_diag_smoke     SIEGE_DIAG_PASS          150 --fixed-fps 30

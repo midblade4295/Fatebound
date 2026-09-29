@@ -8,7 +8,7 @@ extends RefCounted
 # objects: decode() uses the default allow_objects=false.
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 
-const VERSION := 1
+const VERSION := 2               # 2 = Round 7 map (river, bridges, ledges) + outposts
 const DEFAULT_URL := "wss://136-113-125-3.sslip.io/fatebound/siege/ws"
 const DEFAULT_PORT := 8082
 const SNAP_HZ := 10.0
@@ -129,13 +129,16 @@ static func snapshot(sim, for_unit: String, events: Array) -> Dictionary:
 	var cakes := PackedByteArray()
 	for ct in sim.cake_trees:
 		cakes.append(1 if ct.ready else 0)
+	var outposts := PackedFloat32Array()
+	for op in sim.outposts:
+		outposts.append_array([float(op.owner), float(op.prog)])
 	var oracles := []
 	for o in sim.oracles:
 		oracles.append({"state":o.state, "pos":o.pos, "carrier":o.carrier, "lifters":o.lifters.duplicate(),
 			"carry_team":o.carry_team, "dropped_at":o.dropped_at, "cakes":o.cakes, "weight":o.weight})
 	var msg := {"t":"s", "tm":sim.time, "sc":sim.score.duplicate(), "k":sim.kills.duplicate(),
 		"st":sim.stock.duplicate(true), "lv":sim.levels.duplicate(true), "end":[sim.ended, sim.winner, sim.end_reason],
-		"u":packed, "p":proj, "g":gates, "n":nodes, "c":cakes, "o":oracles, "l":sim.ladders.duplicate(true), "e":events}
+		"u":packed, "p":proj, "g":gates, "n":nodes, "c":cakes, "o":oracles, "l":sim.ladders.duplicate(true), "op":outposts, "e":events}
 	if for_unit != "":
 		return for_player(msg, sim, for_unit)
 	return msg
@@ -228,6 +231,10 @@ static func apply(sim, msg: Dictionary, me_id: String) -> void:
 		for k in src:
 			o[k] = src[k]
 	sim.ladders = msg.get("l", sim.ladders)
+	var ops: PackedFloat32Array = msg.get("op", PackedFloat32Array())
+	for oi in mini(sim.outposts.size(), ops.size() / 2):
+		sim.outposts[oi].owner = int(ops[oi * 2])
+		sim.outposts[oi].prog = ops[oi * 2 + 1]
 	if msg.has("me") and sim.by_id.has(me_id):
 		var me: Dictionary = sim.by_id[me_id]
 		me.forge = msg.me.forge

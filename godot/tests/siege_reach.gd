@@ -9,7 +9,7 @@ func _init() -> void:
 	for t in 2:
 		for pair in [[Sim.spawn(t), Sim.cell(t), "spawn->enemy cell"], [Sim.cell(t), Sim.throne(t), "enemy cell->own throne"],
 				[Sim.spawn(t), Sim.forge(t), "spawn->forge"], [Sim.spawn(t), Sim.workshop(t), "spawn->workshop"],
-				[Sim.spawn(t), Vector2(0.0, 2.0), "spawn->plateau top"]]:
+				[Sim.spawn(t), Vector2(0.0, 0.0), "spawn->centre bridge"], [Sim.spawn(t), Vector2(-23.0, 28.5), "spawn->outpost on the ledge"]]:
 			var path: PackedVector2Array = sim.find_path(t, pair[0], pair[1])
 			var end: Vector2 = path[path.size() - 1] if path.size() > 0 else pair[0]
 			var miss: float = end.distance_to(pair[1])
