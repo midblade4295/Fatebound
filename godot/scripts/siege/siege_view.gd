@@ -1990,6 +1990,10 @@ func _step_fx() -> void:
 # ---------- camera ----------
 var cam_override: Array = []   # [eye: Vector3, target: Vector3] for tests/screenshots only
 
+func snap_camera() -> void:
+	# Jump straight to the player next frame (after a teleport) instead of gliding across the map.
+	_cam_target = Vector3.ZERO
+
 func _update_camera(dt: float) -> void:
 	if cam_override.size() == 2:
 		camera.position = cam_override[0]

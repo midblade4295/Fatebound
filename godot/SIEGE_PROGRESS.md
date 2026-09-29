@@ -626,3 +626,21 @@ K2/K3 notes (0.17.0)
 - tests/tutorial_test.gd (runner): plays it end to end (16 s) and checks the script (unique ids).
 - siege_net_smoke: the prediction check now compares the local move with speed x elapsed time (a
   fixed 0.1 m in 3 frames failed when uncapped frames were ~5 ms).
+
+# 0.19.1 (Kevin): tutorial says "Fatebound"; clearer arrows; dummy somewhere better; end with carrying
+# the Oracle home; walk through feeding her
+- Script: "Fatebound" in the intro, goal, feed and end lines; 36 lines now (VO script regenerated).
+- New ending: cake (take a slice, ACTION) -> feed their Oracle in OUR dungeon (ACTION) -> the Herald's
+  "shortcut" (recruit placed outside the enemy gate on their dungeon's side, that gate broken;
+  camera snaps) -> lift our Oracle (ACTION) -> carry her home to our throne (scores a rescue) -> end.
+  The old "walk to the river" task is gone (the goal step is talk-only).
+- Dummy: open courtyard floor (castle-local (4, 6.6)), with its own TRAINING DUMMY marker (next to
+  the knight armory it blended in).
+- Guidance: marching dotted line along the nav route (through gates, up stairs), pulsing ground
+  ring + big outlined arrow over the target with a "NAME · N m" plate (walking distance), flipped
+  below the target when it would sit under the Herald's panel; off-screen: big labelled edge arrow
+  pointing along the route (projecting the far target flipped it when it was behind the camera);
+  TAP / HOLD plates on button rings.
+- tutorial_test: 12 tasks incl. cake, feed, grab, carry; the rescue must score.
+- net smoke: the stick points toward the open courtyard (pushing "right" sometimes walked into a
+  stand -> the prediction check failed on collision, not prediction).
