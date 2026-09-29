@@ -19,7 +19,9 @@ static var VULKAN_AMBIENT := 2.25
 const LOOKS := {
 	"villager": {"model":"Rogue","r":"","l":"","idle":"g/Idle_A","attack":"m/Melee_Unarmed_Attack_Punch_A","ability":"m/Melee_Unarmed_Attack_Kick"},
 	"worker": {"model":"Rogue","r":"axe_1handed","l":"","idle":"g/Idle_A","attack":"m/Melee_1H_Attack_Chop","ability":"m/Melee_1H_Attack_Chop"},
-	"knight": {"model":"Knight","r":"sword_1handed","l":"","idle":"g/Idle_A","attack":"m/Melee_1H_Attack_Slice_Diagonal","ability":"m/Melee_Block_Attack"},
+	"knight": {"model":"Knight","r":"sword_1handed","l":"bits/shield_B","idle":"g/Idle_A","attack":"m/Melee_1H_Attack_Slice_Diagonal","ability":"m/Melee_Blocking"},
+	# Upgraded barbarian (Round 11): two-handed greatsword, whirlwind.
+	"berserker": {"model":"Barbarian","r":"bits/sword_E","l":"","idle":"m/Melee_2H_Idle","attack":"m/Melee_2H_Attack_Chop","ability":"m/Melee_2H_Attack_Spinning"},
 	"barbarian": {"model":"Barbarian","r":"axe_2handed","l":"","idle":"m/Melee_2H_Idle","attack":"m/Melee_2H_Attack_Slice","ability":"m/Melee_2H_Attack_Spin"},
 	"rogue": {"model":"Rogue_Hooded","r":"dagger","l":"dagger","idle":"g/Idle_B","attack":"m/Melee_Dualwield_Attack_Stab","ability":"m/Melee_1H_Attack_Jump_Chop"},
 	"ranger": {"model":"Ranger","r":"","l":"bow_withString","idle":"r/Ranged_Bow_Idle","attack":"r/Ranged_Bow_Release","ability":"r/Ranged_Bow_Release_Up"},
@@ -551,6 +553,43 @@ func _build_hat_stands() -> void:
 			add_child(h)
 			stack.append(h)
 		stand_nodes[st.id] = stack
+
+var shield_nodes: Dictionary = {}        # knight id -> translucent shield-wall panel
+static var _shield_mat: StandardMaterial3D = null
+
+func _sync_shields() -> void:
+	# A translucent panel where the sim's shield segment is, while a knight blocks (transform only).
+	if _shield_mat == null:
+		_shield_mat = StandardMaterial3D.new()
+		_shield_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_shield_mat.albedo_color = Color(0.55, 0.8, 1.0, 0.32)
+		_shield_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		_shield_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	for u in sim.units:
+		if u.cls != "knight":
+			continue
+		var n: MeshInstance3D = shield_nodes.get(u.id)
+		if not sim.blocking(u):
+			if n != null:
+				n.visible = false
+			continue
+		if n == null:
+			n = MeshInstance3D.new()
+			var q := QuadMesh.new()
+			q.size = Vector2(1.0, 1.6)
+			n.mesh = q
+			n.material_override = _shield_mat
+			n.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			add_child(n)
+			shield_nodes[u.id] = n
+		var sg: Array = sim.shield_seg(u)
+		var a2: Vector2 = sg[0]
+		var b2: Vector2 = sg[1]
+		var mid := (a2 + b2) * 0.5
+		var y := Sim.height_at(mid) + 0.85
+		var along := Vector3(b2.x - a2.x, 0, b2.y - a2.y)
+		n.visible = true
+		n.transform = Transform3D(Basis(along, Vector3.UP, along.normalized().cross(Vector3.UP)), Vector3(mid.x, y, mid.y))
 
 var beam_nodes: Dictionary = {}          # priest unit id -> MeshInstance3D (unit-length cylinder)
 static var _beam_mat: StandardMaterial3D = null
@@ -1130,6 +1169,7 @@ func _sync_castle(dt: float) -> void:
 	_sync_outposts()
 	_sync_hats()
 	_sync_beams()
+	_sync_shields()
 	for g in sim.gates:
 		var gn: Dictionary = gate_nodes.get(g.id, {})
 		if gn.is_empty():
@@ -1247,10 +1287,14 @@ static func make_body(cls: String, cosmetic: Dictionary = {}) -> Dictionary:
 			var slot := BoneAttachment3D.new()
 			slot.bone_name = "handslot.%s" % hand
 			skeleton.add_child(slot)
-			var weapon := Stage.scene("res://assets/kaykit/weapons/%s.gltf" % file)
+			# "bits/<name>" = KayKit Fantasy Weapons Bits (Round 11): larger models, scaled down.
+			var bits := file.begins_with("bits/")
+			var weapon := Stage.scene(("res://assets/kaykit/bits/%s.gltf" % file.substr(5)) if bits else ("res://assets/kaykit/weapons/%s.gltf" % file))
 			if weapon != null:
 				var model: Node3D = weapon.instantiate()
-				if file.begins_with("bow"):
+				if bits:
+					model.scale = Vector3.ONE * 0.55
+				if file.contains("bow"):
 					model.rotation.y = PI
 				slot.add_child(model)
 	var player := AnimationPlayer.new()
@@ -1323,7 +1367,7 @@ func _ensure_actor(u: Dictionary) -> Dictionary:
 		root = a.root
 		if is_instance_valid(a.body):
 			a.body.queue_free()
-	var made := make_body(u.cls, cosmetic)
+	var made := make_body("berserker" if (u.cls == "barbarian" and u.up) else u.cls, cosmetic)
 	if made.is_empty():
 		return a
 	root.add_child(made.body)
@@ -1452,6 +1496,10 @@ func _animate(a: Dictionary, u: Dictionary, vel: float) -> void:
 		_play(a, "g/Hit_B", 0.6)
 	elif u.state == "dodge":
 		_play(a, "ma/Dodge_Forward", 1.6, 0.3)
+	elif sim.whirling(u):
+		_play(a, "m/Melee_2H_Attack_Spinning")
+	elif sim.blocking(u):
+		_play(a, "m/Melee_Blocking")
 	elif str(u.get("beam", "")) != "":
 		_play(a, "r/Ranged_Magic_Spellcasting_Long")
 	elif u.state == "gather":

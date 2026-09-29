@@ -81,5 +81,32 @@ func _init() -> void:
 		check(worst < 0.001, "baked heights are stale (worst diff %.3f m): re-run tools/bake_land.gd" % worst)
 	check(load(Land.MASK_RES) != null, "baked path mask missing: run tools/bake_land.gd")
 	print("walls %d obstacles %d outposts %d" % [s.walls.size(), s.obstacles.size(), s.outposts.size()])
+	# Squeeze traps (Round 11): two solid things in a castle closer together than a unit is wide
+	# but not touching. The push-out resolves walls one at a time, so a unit wedged into such a
+	# slot gets pushed from one into the other every tick (a knight ended inside a terrace wall
+	# behind the dungeon cell: 0.55 m slot between the cell bars and the L2 face).
+	var solids := []
+	for w in s.walls:
+		if int(w.team) >= 0:
+			solids.append({"a":w.a, "b":w.b, "r":float(w.r), "what":str(w.kind)})
+	for ob in s.obstacles:
+		if str(ob.kind) in ["castle_building", "hat_stand"]:
+			solids.append({"a":ob.p, "b":ob.p, "r":float(ob.r), "what":str(ob.kind)})
+	var need := Sim.UNIT_R * 2.0 + 0.1
+	for i in solids.size():
+		for j in range(i + 1, solids.size()):
+			var A: Dictionary = solids[i]
+			var B: Dictionary = solids[j]
+			# Closest distance between the two segments (sampled along both).
+			var best := INF
+			for k in 13:
+				var pa: Vector2 = (A.a as Vector2).lerp(A.b, k / 12.0)
+				best = minf(best, pa.distance_to(Sim.seg_closest(pa, B.a, B.b)))
+				var pb: Vector2 = (B.a as Vector2).lerp(B.b, k / 12.0)
+				best = minf(best, pb.distance_to(Sim.seg_closest(pb, A.a, A.b)))
+			var gap: float = best - A.r - B.r
+			if gap > 0.02 and gap < need:
+				fails.append("squeeze trap %.2f m between %s %s-%s and %s %s-%s" % [gap, A.what, str(A.a), str(A.b), B.what, str(B.a), str(B.b)])
+				print("FAIL ", fails[-1])
 	print("SIEGE_LAND_PASS" if fails.is_empty() else "SIEGE_LAND_FAIL %d problems" % fails.size())
 	quit(0 if fails.is_empty() else 1)

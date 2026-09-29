@@ -89,6 +89,37 @@ func _init() -> void:
 	assert(near.hp >= minf(near.max_hp, h1 + Sim.SANCTUARY_HEAL) - 0.5, "sanctuary heals allies close by (capped at max HP)")
 	assert(Sim.HAT_CLASSES.has("priest") and ps.stands.any(func(x): return x.cls == "priest"), "priest hat stand exists")
 	print("priest rules ok")
+	# Knight block + berserker whirlwind (Round 11).
+	var bs = Sim.new()
+	bs.setup(4, 3)
+	for bu in bs.units: bu.bot = false; bu.move = Vector2.ZERO; bu.pos = Vector2(0, -20) if bu.team == 1 else Vector2(0, 20)
+	var kn: Dictionary = bs.by_id["you"]
+	bs._set_class(kn, "knight", false)
+	kn.pos = Vector2.ZERO; kn.face = Sim.angle_of(Vector2(0, -1))
+	var behind: Dictionary = bs.units.filter(func(x): return x.team == 0 and x.id != "you")[0]
+	behind.pos = Vector2(0, 1.5)
+	var foe2: Dictionary = bs.units.filter(func(x): return x.team == 1)[0]
+	foe2.pos = Vector2(0, -1.6)
+	assert(bs.act("you", "ability") and bs.blocking(kn), "hold ability raises the shield")
+	bs._blockers = bs.units.filter(func(x): return bs.blocking(x))
+	var k0: float = kn.hp
+	var b0: float = behind.hp
+	bs._damage(foe2, kn, 30.0)
+	bs._damage(foe2, behind, 30.0)
+	assert(kn.hp == k0 and behind.hp == b0, "the shield stops hits on the knight (front) and on allies behind it")
+	foe2.pos = Vector2(0, 3.0)
+	bs._damage(foe2, kn, 10.0)
+	assert(kn.hp < k0, "no protection from behind")
+	for i in 12: bs.step(Sim.TICK)
+	assert(not bs.blocking(kn), "releasing ability lowers the shield")
+	var bz: Dictionary = behind
+	bs._set_class(bz, "barbarian", true)
+	bz.pos = Vector2(8, 0); bz.cd_ability = 0.0
+	assert(bs.ability_of(bz) == "whirlwind" and bs.act(bz.id, "ability"), "berserker whirlwind starts")
+	var t_start: float = bs.time
+	while bs.whirling(bz): bs.step(Sim.TICK)
+	assert(absf(bs.time - t_start - Sim.WHIRL_TIME) < 0.1, "whirlwind lasts 3 s")
+	print("block + whirlwind rules ok")
 	print("hat rules ok")
 	var seeds := [11, 22, 33, 44, 55, 66]
 	if OS.has_environment("SEEDS"):
@@ -165,7 +196,12 @@ func _init() -> void:
 		print("seed=%d time=%.0fs score=%s kills=%s winner=%d reason=%s stock=%s levels=%s gates_hp=%s ms=%d" % [seed_value, sim.time, str(sim.score), str(sim.kills),
 			sim.winner, sim.end_reason, str(sim.stock), str(sim.levels), str(sim.gates.map(func(g): return int(g.hp))), Time.get_ticks_msec() - t0])
 	print("violations wall=%d gate=%d" % [totals.wall_violations, totals.gate_violations])
-	assert(totals.wall_violations == 0 and totals.gate_violations == 0)
+	if totals.wall_violations != 0 or totals.gate_violations != 0:
+		# Fail loudly and quit (a failed assert() in _init keeps Godot running until the runner's
+		# 10-minute timeout).
+		print("SIEGE_SIM_FAIL wall/gate violations")
+		quit(1)
+		return
 	print("usage fed=%d max_weight=%d ladders=%d ladders_down=%d catapult_shots=%d upgrades=%d" % [totals.fed, totals.max_weight, totals.ladders, totals.ladders_down, totals.catapult_shots, totals.upgrades])
 	print("outposts captured=%d lost=%d" % [totals.outpost_caps, totals.outpost_lost])
 	print("hats taken at stands=%d picked up=%d dropped=%d | priest beams=%d sanctuaries=%d" % [totals.hat_take, totals.hat_pick, totals.hat_drop, totals.beams, totals.heal_bursts])

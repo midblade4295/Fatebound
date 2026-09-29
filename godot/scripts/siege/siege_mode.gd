@@ -45,6 +45,7 @@ var _snap_dt := 1.0 / Net.SNAP_HZ
 var _send_clock := 0.0
 var _sent_move := Vector2(INF, INF)
 var _sent_hold := false
+var _sent_bhold := false
 
 var sim
 var view
@@ -244,11 +245,13 @@ func _net_process(delta: float) -> void:
 	_send_clock += delta
 	var mv: Vector2 = hud.move_vector() if not hud.pause_panel.visible else Vector2.ZERO
 	var hold: bool = hud.attack_held() and not hud.pause_panel.visible
-	if _send_clock >= 0.05 or (mv - _sent_move).length() > 0.25 or hold != _sent_hold:
+	var bhold: bool = hud.ability_held() and not hud.pause_panel.visible
+	if _send_clock >= 0.05 or (mv - _sent_move).length() > 0.25 or hold != _sent_hold or bhold != _sent_bhold:
 		_send_clock = 0.0
 		_sent_move = mv
 		_sent_hold = hold
-		_net_send({"t":"in", "m":mv, "h":hold})
+		_sent_bhold = bhold
+		_net_send({"t":"in", "m":mv, "h":hold, "b":bhold})
 
 func _restart() -> void:
 	if is_instance_valid(view):
@@ -283,7 +286,7 @@ func _to_hud(p: Vector2) -> Vector2:
 
 func _act(action: String, arg: Variant = null) -> void:
 	if online:
-		_net_send({"t":"in", "m":hud.move_vector(), "h":hud.attack_held(), "a":action, "arg":arg})
+		_net_send({"t":"in", "m":hud.move_vector(), "h":hud.attack_held(), "b":hud.ability_held(), "a":action, "arg":arg})
 		return
 	sim.act(hud.player_id, action, arg)
 
@@ -305,6 +308,9 @@ func _process(delta: float) -> void:
 		pass   # the server steps the match; _net_process applied the latest snapshot
 	elif not hud.pause_panel.visible or sim.ended:
 		sim.set_move(hud.player_id, hud.move_vector())
+		var me_b: Dictionary = sim.by_id.get(hud.player_id, {})
+		if hud.ability_held() and not me_b.is_empty() and sim.ability_of(me_b) == "block":
+			sim.act(hud.player_id, "ability")
 		if hud.attack_held():
 			var me: Dictionary = sim.by_id[hud.player_id]
 			if sim.can_act(me) and not me.carrying:
