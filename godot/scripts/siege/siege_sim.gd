@@ -262,6 +262,60 @@ static func gate_front(g: Dictionary) -> Vector2:
 	var outward := Vector2(0, -1) if g.team == 0 else Vector2(0, 1)
 	return g.c + outward * 2.2
 
+static func seg_seg_closest(a0: Vector2, a1: Vector2, b0: Vector2, b1: Vector2) -> Array:
+	# Closest points between two segments (sampled; walls are short or straight).
+	var best := INF
+	var pa := a0
+	var pb := b0
+	for k in 17:
+		var q: Vector2 = a0.lerp(a1, k / 16.0)
+		var c: Vector2 = seg_closest(q, b0, b1)
+		if q.distance_squared_to(c) < best:
+			best = q.distance_squared_to(c); pa = q; pb = c
+		var q2: Vector2 = b0.lerp(b1, k / 16.0)
+		var c2: Vector2 = seg_closest(q2, a0, a1)
+		if q2.distance_squared_to(c2) < best:
+			best = q2.distance_squared_to(c2); pa = c2; pb = q2
+	return [pa, pb]
+
+func _fill_squeeze_slots() -> void:
+	# Any two walls closer together than a unit is wide (but not touching) make a slot a unit can
+	# be shoved into and never pushed out of -- the push-out resolves walls one at a time (a knight
+	# stuck behind the dungeon cell, then at a river bank / bridge rail, Round 11-12). Bridge every
+	# such slot with a filler segment. Fillers between walls arrows fly over stay arrow-passable.
+	var need := UNIT_R * 2.0 + 0.1
+	var fills := []
+	var n := walls.size()
+	for i in n:
+		var A: Dictionary = walls[i]
+		for j in range(i + 1, n):
+			var B: Dictionary = walls[j]
+			var reach: float = float(A.r) + float(B.r) + need
+			if minf(A.a.x, A.b.x) - reach > maxf(B.a.x, B.b.x) or minf(B.a.x, B.b.x) - reach > maxf(A.a.x, A.b.x) \
+					or minf(A.a.y, A.b.y) - reach > maxf(B.a.y, B.b.y) or minf(B.a.y, B.b.y) - reach > maxf(A.a.y, A.b.y):
+				continue
+			var cp: Array = seg_seg_closest(A.a, A.b, B.a, B.b)
+			var gap: float = (cp[0] as Vector2).distance_to(cp[1]) - float(A.r) - float(B.r)
+			if gap <= 0.02 or gap >= need:
+				continue
+			# Already closed by a third wall? (e.g. two segments of one river bank)
+			var mid: Vector2 = ((cp[0] as Vector2) + (cp[1] as Vector2)) * 0.5
+			var covered := false
+			for k in n:
+				if k == i or k == j:
+					continue
+				var C: Dictionary = walls[k]
+				if mid.distance_to(seg_closest(mid, C.a, C.b)) < float(C.r):
+					covered = true
+					break
+			if covered:
+				continue
+			var passable: bool = PROJ_PASS_KINDS.has(A.kind) and PROJ_PASS_KINDS.has(B.kind)
+			fills.append({"a":cp[0], "b":cp[1], "r":maxf(float(A.r), float(B.r)), "team":A.team if int(A.team) == int(B.team) else -1,
+				"kind":"ledge" if passable else "fill"})
+	walls.append_array(fills)
+	squeeze_fills = fills.size()
+
 func _add_wall(team: int, a: Vector2, b: Vector2, kind := "wall") -> void:
 	walls.append({"a":_c(team, a), "b":_c(team, b), "r":WALL_R, "team":team, "kind":kind})
 
@@ -319,6 +373,7 @@ func _build_map() -> void:
 			obstacles.append({"p":_m(t, rp), "r":1.2, "kind":"rock"})
 	# Landscape: river banks, bridge rails, ledge faces and ramp sides (Round 7).
 	walls.append_array(Land.walls())
+	_fill_squeeze_slots()
 	# Outposts: a solid tower in the middle of each capture ring.
 	outposts = []
 	for op in Land.outpost_positions():
@@ -391,6 +446,7 @@ var _bw := 0
 var _bh := 0
 var _bucket_walls: Array = []
 var _blockers: Array = []             # knights with their shield up this tick
+var squeeze_fills := 0                # slots closed by _fill_squeeze_slots (see there)
 var _bucket_walls_proj: Array = []   # only walls that stop projectiles (not ledges/bars/river/rails)
 const PROJ_PASS_KINDS := ["ledge", "bars", "river", "rail"]
 var _bucket_obs: Array = []
@@ -1385,7 +1441,7 @@ func _melee(u: Dictionary, reach: float, arc: float, dmg: float, stun := 0.0) ->
 
 func _shoot(u: Dictionary, angle: float, dmg: float, aoe: float, speed: float, reach: float) -> void:
 	var d := dir_of(angle)
-	projectiles.append({"id":_next_proj,"team":u.team,"owner":u.id,"pos":u.pos + d*0.6,"vel":d*speed,
+	projectiles.append({"id":_next_proj,"team":u.team,"owner":u.id,"pos":u.pos + d*0.6,"from":u.pos,"vel":d*speed,
 		"dmg":dmg,"aoe":aoe,"life":reach/speed,"kind":"fire" if aoe > 0.0 else "arrow",
 		"gate_mult":float(CLASSES[u.cls].gate)})
 	_event("proj", {"pid":_next_proj,"kind":"fire" if aoe > 0.0 else "arrow"})
@@ -1620,11 +1676,18 @@ func _push_out(p: Vector2, r: float, team := -1) -> Vector2:
 		var d := off.length()
 		if d < min_d:
 			p = ob.p + (off / d if d > 0.001 else Vector2(1,0)) * min_d
-	for wi in _bucket_walls[bi]:
-		var w: Dictionary = walls[wi]
-		if team >= 0 and w.kind == "wall" and not ladders.is_empty() and on_ladder(p, wi, team):
-			continue
-		p = _push_seg(p, w.a, w.b, w.r + r)
+	# Walls one at a time, repeated while a pass still moves the unit: at a concave corner between
+	# two segments, pushing off the second shoves it back into the first, and a dodging knight
+	# (0.43 m per tick into a river-bank corner) stayed inside for the whole dodge (Round 12).
+	for pass_i in 3:
+		var before := p
+		for wi in _bucket_walls[bi]:
+			var w: Dictionary = walls[wi]
+			if team >= 0 and w.kind == "wall" and not ladders.is_empty() and on_ladder(p, wi, team):
+				continue
+			p = _push_seg(p, w.a, w.b, w.r + r)
+		if p.distance_squared_to(before) < 0.000001:
+			break
 	for g in gates:
 		# Gates only stop the other team, and only while standing.
 		if team != g.team and gate_blocks(g):
@@ -1713,12 +1776,20 @@ func _step_projectiles(dt: float) -> void:
 		return
 	# Each team's living units as packed positions, built once per tick: a projectile only checks
 	# the other team, without dictionary lookups (was ~830 checks/tick through alive(); 1 ms/tick).
-	var tpos := [PackedVector2Array(), PackedVector2Array()]
+	# (Packed arrays are VALUES in Godot 4: appending through `tpos[t] as PackedVector2Array`
+	# appended to a copy, so these stayed empty and arrows/bolts hit NO units from 0.16.0 to
+	# 0.18.1. Build them as locals.)
+	var pos0 := PackedVector2Array()
+	var pos1 := PackedVector2Array()
 	var tunit := [[], []]
 	for o in units:
 		if alive(o):
-			(tpos[o.team] as PackedVector2Array).append(o.pos)
+			if o.team == 0:
+				pos0.append(o.pos)
+			else:
+				pos1.append(o.pos)
 			(tunit[o.team] as Array).append(o)
+	var tpos := [pos0, pos1]
 	var hit_r2 := (UNIT_R + 0.25) * (UNIT_R + 0.25)
 	for i in range(projectiles.size()-1, -1, -1):
 		var p: Dictionary = projectiles[i]
@@ -1738,18 +1809,28 @@ func _step_projectiles(dt: float) -> void:
 			continue
 		p.life -= dt
 		var hit := {}
-		var et := 1 - int(p.team) if int(p.team) >= 0 else -1
+		var et: int = (1 - int(p.team)) if int(p.team) >= 0 else -1
+		# Swept test: the whole path since last tick (from the shooter on the first tick) against
+		# each enemy's hit circle -- an arrow moves 0.73 m a tick, and checking only its new point
+		# let glancing shots skip past a target. The nearest hit along the path wins.
+		var from: Vector2 = p.get("from", prev)
+		p.erase("from")
+		var best_t := INF
+		var impact := Vector2.ZERO
 		for t in ([et] if et >= 0 else [0, 1]):
 			var arr: PackedVector2Array = tpos[t]
-			var pp: Vector2 = p.pos
 			for k in arr.size():
-				if arr[k].distance_squared_to(pp) < hit_r2:
+				var c: Vector2 = arr[k]
+				var cp := seg_closest(c, from, p.pos)
+				if c.distance_squared_to(cp) < hit_r2:
 					var o: Dictionary = tunit[t][k]
-					if alive(o):                      # another projectile may have killed it this tick
+					var along := from.distance_squared_to(cp)
+					if alive(o) and along < best_t:        # another projectile may have killed it this tick
+						best_t = along
 						hit = o
-						break
-			if not hit.is_empty():
-				break
+						impact = cp
+		if not hit.is_empty():
+			p.pos = impact                            # explode / stop where it struck, not past it
 		var blocked := false
 		var hit_gate := {}
 		var pb := _bucket(p.pos)
@@ -1780,9 +1861,11 @@ func _step_projectiles(dt: float) -> void:
 		if not hit_gate.is_empty():
 			_damage_gate(owner, hit_gate, p.dmg * float(p.gate_mult))
 		if p.aoe > 0.0:
+			if not hit.is_empty():
+				_damage(owner, hit, p.dmg)                 # the struck unit: full damage, always
 			for o in units:
-				if o.team != p.team and alive(o) and o.pos.distance_to(p.pos) <= p.aoe:
-					_damage(owner, o, p.dmg * (1.0 if o == hit else 0.6))
+				if o != hit and o.team != p.team and alive(o) and o.pos.distance_to(p.pos) <= p.aoe:
+					_damage(owner, o, p.dmg * 0.6)
 			_event("boom", {"pos":p.pos})
 		elif not hit.is_empty():
 			_damage(owner, hit, p.dmg)

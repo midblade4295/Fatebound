@@ -80,15 +80,16 @@ func _init() -> void:
 			worst = maxf(worst, absf(himg.get_pixel(i, j).r - Land.terrain_height(r.position + Vector2(i, j) * Land.BAKE_STEP)))
 		check(worst < 0.001, "baked heights are stale (worst diff %.3f m): re-run tools/bake_land.gd" % worst)
 	check(load(Land.MASK_RES) != null, "baked path mask missing: run tools/bake_land.gd")
-	print("walls %d obstacles %d outposts %d" % [s.walls.size(), s.obstacles.size(), s.outposts.size()])
+	print("walls %d obstacles %d outposts %d squeeze fillers %d" % [s.walls.size(), s.obstacles.size(), s.outposts.size(), s.squeeze_fills])
 	# Squeeze traps (Round 11): two solid things in a castle closer together than a unit is wide
 	# but not touching. The push-out resolves walls one at a time, so a unit wedged into such a
 	# slot gets pushed from one into the other every tick (a knight ended inside a terrace wall
 	# behind the dungeon cell: 0.55 m slot between the cell bars and the L2 face).
 	var solids := []
 	for w in s.walls:
-		if int(w.team) >= 0:
-			solids.append({"a":w.a, "b":w.b, "r":float(w.r), "what":str(w.kind)})
+		# Castle AND landscape walls (river banks, bridge rails, terrace faces): a dodging knight
+		# got wedged between a bank end and a bridge rail (Round 12).
+		solids.append({"a":w.a, "b":w.b, "r":float(w.r), "what":str(w.kind)})
 	for ob in s.obstacles:
 		if str(ob.kind) in ["castle_building", "hat_stand"]:
 			solids.append({"a":ob.p, "b":ob.p, "r":float(ob.r), "what":str(ob.kind)})
@@ -97,6 +98,10 @@ func _init() -> void:
 		for j in range(i + 1, solids.size()):
 			var A: Dictionary = solids[i]
 			var B: Dictionary = solids[j]
+			var reach: float = float(A.r) + float(B.r) + need
+			if minf(A.a.x, A.b.x) - reach > maxf(B.a.x, B.b.x) or minf(B.a.x, B.b.x) - reach > maxf(A.a.x, A.b.x) \
+					or minf(A.a.y, A.b.y) - reach > maxf(B.a.y, B.b.y) or minf(B.a.y, B.b.y) - reach > maxf(A.a.y, A.b.y):
+				continue
 			# Closest distance between the two segments (sampled along both).
 			var best := INF
 			for k in 13:
@@ -106,7 +111,27 @@ func _init() -> void:
 				best = minf(best, pb.distance_to(Sim.seg_closest(pb, A.a, A.b)))
 			var gap: float = best - A.r - B.r
 			if gap > 0.02 and gap < need:
+				# Closed by a third solid (a filler, or the segment between two parts of a chain)?
+				var cpp: Array = Sim.seg_seg_closest(A.a, A.b, B.a, B.b)
+				var mid: Vector2 = ((cpp[0] as Vector2) + (cpp[1] as Vector2)) * 0.5
+				var covered := false
+				for C in solids:
+					if C != A and C != B and mid.distance_to(Sim.seg_closest(mid, C.a, C.b)) < float(C.r):
+						covered = true
+						break
+				if covered:
+					continue
 				fails.append("squeeze trap %.2f m between %s %s-%s and %s %s-%s" % [gap, A.what, str(A.a), str(A.b), B.what, str(B.a), str(B.b)])
 				print("FAIL ", fails[-1])
+	# Squeeze traps at the field boundary: a wall end whose cap stops just short of the edge.
+	for w in s.walls:
+		for q in [w.a, w.b]:
+			for axis in [0, 1]:
+				var half: float = Sim.HALF_W if axis == 0 else Sim.HALF_L
+				var v: float = absf(q.x if axis == 0 else q.y)
+				var gap: float = half - v - float(w.r)
+				if gap > 0.02 and gap < Sim.UNIT_R * 2.0 + 0.1:
+					fails.append("squeeze trap %.2f m between a %s wall end %s and the field edge" % [gap, str(w.kind), str(q)])
+					print("FAIL ", fails[-1])
 	print("SIEGE_LAND_PASS" if fails.is_empty() else "SIEGE_LAND_FAIL %d problems" % fails.size())
 	quit(0 if fails.is_empty() else 1)

@@ -30,7 +30,8 @@ const STAIRS := [
 	{"x0": 8.0, "x1": 11.5, "z0": 14.0, "z1": 17.0, "h0": 0.0, "h1": 1.8},    # KayKit terrace walls are thicker)
 	{"x0": -3.0, "x1": 3.0, "z0": 22.0, "z1": 25.0, "h0": 1.8, "h1": 3.6},    # grand stairs to L2
 ]
-const STAIR_STEPS := 9.0          # steps per flight (castle_mesh.gd draws exactly this many)
+const STAIR_STEPS := 6.0          # steps per flight (castle_mesh.gd draws exactly this many); 0.5 m deep so the
+                                  # step stripes read from the overhead camera (9 thin ones looked like a slab)
 const LEDGE_R := 0.55             # the KayKit wall pieces on terrace edges are ~1.1 m thick
 
 # Key places (castle-local).

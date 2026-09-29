@@ -1030,7 +1030,8 @@ func _build_castle_mesh(t: int) -> void:
 		step_m.roughness = 0.9
 		step_m.specular_mode = BaseMaterial3D.SPECULAR_DISABLED
 		var tread_m := StandardMaterial3D.new()
-		tread_m.albedo_color = Color("#d4d6da")        # treads: pale stone
+		tread_m.vertex_color_use_as_albedo = true       # treads: striped bands (castle_mesh.gd)
+		tread_m.vertex_color_is_srgb = true             # (read as linear, the dark bands came out pale grey)
 		tread_m.roughness = 0.9
 		tread_m.specular_mode = BaseMaterial3D.SPECULAR_DISABLED
 		_castle_mats = [floor_m, step_m, tread_m]

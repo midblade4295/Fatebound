@@ -85,6 +85,21 @@ func floor_rect(x0: float, x1: float, z0: float, z1: float, y: float, to_world: 
 	_quad(paving, Vector3(pts[0].x, y, pts[0].y), Vector3(pts[1].x, y, pts[1].y), Vector3(pts[2].x, y, pts[2].y), Vector3(pts[3].x, y, pts[3].y),
 		pts[0] / FLOOR_TILE, pts[1] / FLOOR_TILE, pts[2] / FLOOR_TILE, pts[3] / FLOOR_TILE)
 
+func tread_band(x0: float, x1: float, z0: float, z1: float, y: float, col: Color, to_world: Callable) -> void:
+	# One coloured band of a step's tread (vertex colours), facing up whatever the team mirror.
+	var a: Vector2 = to_world.call(Vector2(x0, z0))
+	var b2: Vector2 = to_world.call(Vector2(x1, z0))
+	var c: Vector2 = to_world.call(Vector2(x1, z1))
+	var d: Vector2 = to_world.call(Vector2(x0, z1))
+	var pts := [a, b2, c, d]
+	var n := (Vector3(b2.x, 0, b2.y) - Vector3(a.x, 0, a.y)).cross(Vector3(d.x, 0, d.y) - Vector3(a.x, 0, a.y))
+	if n.y < 0.0:
+		pts = [a, d, c, b2]
+	for v in [pts[0], pts[2], pts[1], pts[0], pts[3], pts[2]]:
+		treads.set_color(col)
+		treads.set_normal(Vector3.UP)
+		treads.add_vertex(Vector3(v.x, y, v.y))
+
 func crenellations(p0: Vector2, p1: Vector2, y: float, thick: float) -> void:
 	var L := p0.distance_to(p1)
 	var n := int(floor(L / MERLON_STEP))
@@ -162,10 +177,21 @@ static func build(sim, team: int) -> Dictionary:
 		var h1: float = st.h1
 		var steps := int(Castle.STAIR_STEPS)
 		for i in steps:
-			# Each step overlaps the one below by 3 cm: edge-to-edge blocks left hairline seams
+			# Each step overlaps the one below by 3 cm (bodies only; the tread bands tile exactly): edge-to-edge blocks left hairline seams
 			# that showed the grass underneath.
 			var za := z0 + (z1 - z0) * i / steps - (0.03 if i > 0 else 0.0)
 			var zb := z0 + (z1 - z0) * (i + 1) / steps
 			var hy := h0 + (h1 - h0) * (i + 1) / steps
-			b.box(b.bricks, to_world.call(Vector2((x0 + x1) * 0.5, za)), to_world.call(Vector2((x0 + x1) * 0.5, zb)), 0.0, hy, x1 - x0, b.treads)
+			b.box(b.bricks, to_world.call(Vector2((x0 + x1) * 0.5, za)), to_world.call(Vector2((x0 + x1) * 0.5, zb)), 0.0, hy, x1 - x0)
+			# From the (nearly overhead) game camera the risers are invisible: stairs read by
+			# their stripes. Tread = bright nosing at the front edge, mid stone, dark band at the
+			# back where the next riser shades it; lower steps a little darker (Kevin: "the stairs
+			# still don't look like stairs", 0.18.1).
+			var k := 0.8 + 0.2 * float(i) / steps
+			var zf: float = z0 + (z1 - z0) * i / steps
+			var dz := zb - zf
+			var y := hy + 0.004
+			b.tread_band(x0, x1, zf, zf + dz * 0.12, y, Color(0.92, 0.88, 0.8), to_world)
+			b.tread_band(x0, x1, zf + dz * 0.12, zf + dz * 0.62, y, Color(0.64, 0.6, 0.53) * k, to_world)
+			b.tread_band(x0, x1, zf + dz * 0.62, zb, y, Color(0.31, 0.28, 0.24) * k, to_world)
 	return {"steps":b.bricks.commit(), "floor":b.paving.commit(), "treads":b.treads.commit()}

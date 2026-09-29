@@ -295,6 +295,17 @@ static func walls() -> Array:
 					var p0 := Vector2(e, fixed) if horiz else Vector2(fixed, e)
 					out.append({"a": p0, "b": p0 + dirv * (RAMP_L - 0.4 - WALL_OUT), "r": 0.3, "team": -1, "kind": "ledge"})
 			_edge(out, horiz, fixed, cur, stop)
+	# A wall that ends just short of the field edge leaves a slot narrower than a unit between its
+	# end cap and the boundary clamp; a knight dodged into one and stuck (1,057 violation ticks,
+	# Round 12). Walls ending within 1.5 m of an edge run 1 m past it instead (like the castle's).
+	for w in out:
+		for key in ["a", "b"]:
+			var q: Vector2 = w[key]
+			if absf(q.x) > HALF_W - 1.5 and absf(q.x) < HALF_W + 0.5:
+				q.x = signf(q.x) * (HALF_W + 1.0)
+			if absf(q.y) > HALF_L - 1.5 and absf(q.y) < HALF_L + 0.5:
+				q.y = signf(q.y) * (HALF_L + 1.0)
+			w[key] = q
 	return out
 
 static func _edge(out: Array, horiz: bool, fixed: float, from: float, to: float) -> void:
