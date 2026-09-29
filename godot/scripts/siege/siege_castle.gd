@@ -30,6 +30,7 @@ const STAIRS := [
 	{"x0": 8.0, "x1": 11.5, "z0": 14.0, "z1": 17.0, "h0": 0.0, "h1": 1.8},    # KayKit terrace walls are thicker)
 	{"x0": -3.0, "x1": 3.0, "z0": 22.0, "z1": 25.0, "h0": 1.8, "h1": 3.6},    # grand stairs to L2
 ]
+const STAIR_STEPS := 9.0          # steps per flight (castle_mesh.gd draws exactly this many)
 const LEDGE_R := 0.55             # the KayKit wall pieces on terrace edges are ~1.1 m thick
 
 # Key places (castle-local).
@@ -72,7 +73,12 @@ static func height_local(q: Vector2) -> float:
 	# Floor height inside the castle footprint (q in castle-local coords).
 	for st in STAIRS:
 		if q.x >= float(st.x0) and q.x <= float(st.x1) and q.y >= float(st.z0) and q.y < float(st.z1):
-			return lerpf(float(st.h0), float(st.h1), (q.y - float(st.z0)) / (float(st.z1) - float(st.z0)))
+			# One riser above the ramp: the drawn steps are blocks whose tops sit above the straight
+			# ramp for most of each step, so feet on the ramp sank into them. Ramp + one riser is
+			# >= the tread under the unit everywhere on the flight (9 steps, see castle_mesh.gd).
+			var t := (q.y - float(st.z0)) / (float(st.z1) - float(st.z0))
+			var riser := (float(st.h1) - float(st.h0)) / STAIR_STEPS
+			return minf(float(st.h1), lerpf(float(st.h0), float(st.h1), t) + riser)
 	if q.y >= L2_Z:
 		return L2_H
 	if q.y >= L1_Z:

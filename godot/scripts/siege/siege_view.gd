@@ -844,17 +844,21 @@ func _build_castle_mesh(t: int) -> void:
 		floor_m.roughness = 0.95
 		floor_m.specular_mode = BaseMaterial3D.SPECULAR_DISABLED
 		var step_m := StandardMaterial3D.new()
-		step_m.albedo_color = Color("#a9adb4")
+		step_m.albedo_color = Color("#80858e")         # risers: darker, so each step reads
 		step_m.roughness = 0.9
 		step_m.specular_mode = BaseMaterial3D.SPECULAR_DISABLED
-		_castle_mats = [floor_m, step_m]
+		var tread_m := StandardMaterial3D.new()
+		tread_m.albedo_color = Color("#d4d6da")        # treads: pale stone
+		tread_m.roughness = 0.9
+		tread_m.specular_mode = BaseMaterial3D.SPECULAR_DISABLED
+		_castle_mats = [floor_m, step_m, tread_m]
 	if not _castle_meshes.has(t):
 		_castle_meshes[t] = CastleMesh.build(sim, t)
 	var parts: Dictionary = _castle_meshes[t]
-	for k in ["floor", "steps"]:
+	for k in ["floor", "steps", "treads"]:
 		var mi := MeshInstance3D.new()
 		mi.mesh = parts[k]
-		mi.material_override = _castle_mats[0 if k == "floor" else 1]
+		mi.material_override = _castle_mats[{"floor":0, "steps":1, "treads":2}[k]]
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		mi.set_meta("perf", "castle")
 		add_child(mi)
