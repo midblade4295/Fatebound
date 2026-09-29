@@ -107,6 +107,7 @@ const UPGRADES := {
 	"hat_rogue":     {"name":"Assassin Hats", "max":1, "cost":[{"wood":12,"stone":12}], "desc":"The Rogue stand makes Assassin hats"},
 	"hat_ranger":    {"name":"Sniper Hats", "max":1, "cost":[{"wood":12,"stone":12}], "desc":"The Ranger stand makes Sniper hats"},
 	"hat_mage":      {"name":"Archmage Hats", "max":1, "cost":[{"wood":12,"stone":12}], "desc":"The Mage stand makes Archmage hats"},
+	"hat_priest":    {"name":"High Priest Hats", "max":1, "cost":[{"wood":12,"stone":12}], "desc":"The Priest stand makes High Priest hats"},
 	"catapult": {"name":"Catapults", "max":1, "cost":[{"wood":15,"stone":25}],
 		"desc":"Your corner towers lob stones at enemies 5-22 m away"},
 }
@@ -115,8 +116,8 @@ const UPGRADES := {
 # Five stands in each courtyard's west corner (castle-local coords). Villagers walking into a stand
 # take its hat and become that class; dying drops your hat where you fall and anyone -- ally or
 # enemy -- who walks over it as a Villager takes it. Classed units swap at a stand with ACTION.
-const HAT_CLASSES := ["knight", "barbarian", "rogue", "ranger", "mage"]
-const HAT_STANDS := [Vector2(-11.3, 17.0), Vector2(-11.3, 19.8), Vector2(-9.5, 18.4), Vector2(-7.7, 17.0), Vector2(-7.7, 19.8)]
+const HAT_CLASSES := ["knight", "barbarian", "rogue", "ranger", "mage", "priest"]
+const HAT_STANDS := [Vector2(-11.3, 17.0), Vector2(-11.3, 19.8), Vector2(-9.5, 18.4), Vector2(-7.7, 17.0), Vector2(-7.7, 19.8), Vector2(2.6, 17.0)]
 const HAT_HALL := Vector2(-9.5, 18.4)
 const HAT_TAKE_R := 1.3
 const HAT_STAND_R := 0.45
@@ -133,7 +134,11 @@ const RESPAWN_HAT_NEAR := 28.0    # humans: a dropped hat this close to the forw
                                   # there. Bot attackers always respawn forward and scavenge (like
                                   # Fat Princess players choosing an outpost spawn).
 const BOT_HAT_SEARCH := 32.0      # villager bots scavenge dropped hats this far (14 m: most expired unused)
-const UPGRADE_NAME := {"knight":"Paladin","barbarian":"Berserker","rogue":"Assassin","ranger":"Sniper","mage":"Archmage"}
+const UPGRADE_NAME := {"knight":"Paladin","barbarian":"Berserker","rogue":"Assassin","ranger":"Sniper","mage":"Archmage","priest":"High Priest"}
+const BEAM_HOLD := 0.22           # the beam stays up this long after the last ATTACK (held ATTACK refreshes it)
+const BEAM_MOVE := 0.7            # walking speed while channelling
+const SANCTUARY_R := 4.5
+const SANCTUARY_HEAL := 35.0
 
 # range: melee reach or projectile travel. arc: cosine of the half-angle a melee swing covers.
 # gate: damage multiplier against gates.
@@ -152,6 +157,10 @@ const CLASSES := {
 		"ranged":true,"proj_speed":22.0,"aoe":0.0,"ability":"volley","ab_cd":7.0,"carry":0.65,"gate":0.35},
 	"mage": {"name":"Mage","hp":75,"speed":5.0,"dmg":20,"range":9.0,"arc":0.0,"windup":0.4,"recover":0.5,
 		"ranged":true,"proj_speed":15.0,"aoe":1.6,"ability":"nova","ab_cd":8.0,"carry":0.65,"gate":1.0},
+	# Healer (Round 9, Kevin): hold ATTACK to channel a healing beam into the nearest injured ally
+	# (range = beam reach); the ability heals every ally close by. No damage.
+	"priest": {"name":"Priest","hp":90,"speed":5.2,"dmg":0,"range":9.0,"arc":0.0,"windup":0.3,"recover":0.4,
+		"ranged":true,"proj_speed":0.0,"aoe":0.0,"ability":"sanctuary","ab_cd":9.0,"carry":0.65,"gate":0.3,"heal":18.0},
 }
 
 var time := 0.0
@@ -370,21 +379,27 @@ const BUCKET_REACH := 1.6      # widest wall/obstacle radius + unit radius, with
 var _bw := 0
 var _bh := 0
 var _bucket_walls: Array = []
+var _bucket_walls_proj: Array = []   # only walls that stop projectiles (not ledges/bars/river/rails)
+const PROJ_PASS_KINDS := ["ledge", "bars", "river", "rail"]
 var _bucket_obs: Array = []
 
 func _build_buckets() -> void:
 	_bw = int(ceil(HALF_W * 2.0 / BUCKET)) + 1
 	_bh = int(ceil(HALF_L * 2.0 / BUCKET)) + 1
 	_bucket_walls = []
+	_bucket_walls_proj = []
 	_bucket_obs = []
 	for i in _bw * _bh:
 		_bucket_walls.append(PackedInt32Array())
+		_bucket_walls_proj.append(PackedInt32Array())
 		_bucket_obs.append(PackedInt32Array())
 	for wi in walls.size():
 		var w: Dictionary = walls[wi]
 		for bi in _buckets_in(minf(w.a.x, w.b.x) - w.r - BUCKET_REACH, minf(w.a.y, w.b.y) - w.r - BUCKET_REACH,
 				maxf(w.a.x, w.b.x) + w.r + BUCKET_REACH, maxf(w.a.y, w.b.y) + w.r + BUCKET_REACH):
 			_bucket_walls[bi].append(wi)
+			if not PROJ_PASS_KINDS.has(w.kind):
+				_bucket_walls_proj[bi].append(wi)
 	for oi in obstacles.size():
 		var ob: Dictionary = obstacles[oi]
 		for bi in _buckets_in(ob.p.x - ob.r - BUCKET_REACH, ob.p.y - ob.r - BUCKET_REACH, ob.p.x + ob.r + BUCKET_REACH, ob.p.y + ob.r + BUCKET_REACH):
@@ -523,7 +538,7 @@ func _new_unit(id: String, team: int, bot: bool, role: String) -> Dictionary:
 		"cd_ability":0.0,"stun":0.0,"carrying":false,"respawn_at":0.0,"kills":0,"deaths":0,"rescues":0,
 		"dodge_dir":Vector2.ZERO,"target":"","ai_goal":Vector2.ZERO,"lunge_hit":false,
 		"unstick":0.0,"unstick_dir":Vector2.ZERO,"stuck_t":0.0,"last_pos":Vector2.ZERO,
-		"lifting":-1, "load":{"kind":"", "n":0}, "task":{}, "workshop_open":false, "gathered":0, "repaired":0.0, "gate_dmg":0.0, "offering":false, "fed":0,
+		"lifting":-1, "beam":"", "beam_until":0.0, "load":{"kind":"", "n":0}, "task":{}, "workshop_open":false, "gathered":0, "repaired":0.0, "gate_dmg":0.0, "offering":false, "fed":0,
 		"path":PackedVector2Array(), "path_i":0, "path_goal":Vector2(INF, INF), "path_at":-10.0, "path_ver":-1}
 
 func armory_mult(team: int) -> float:
@@ -658,7 +673,7 @@ func act(id: String, action: String, arg: Variant = null) -> bool:
 	if u.is_empty() or ended or not alive(u):
 		return false
 	match action:
-		"attack": return _start_attack(u, "attack")
+		"attack": return _beam(u) if u.cls == "priest" else _start_attack(u, "attack")
 		"ability": return _start_attack(u, "ability")
 		"dodge": return _dodge(u)
 		"interact": return _interact(u)
@@ -705,6 +720,56 @@ func _start_attack(u: Dictionary, kind: String, aim := true) -> bool:
 	u.lunge_hit = false
 	_event("attack", {"id":u.id,"kind":kind,"ability":CLASSES[u.cls].ability if kind == "ability" else ""})
 	return true
+
+# ---------- priest beam ----------
+func beam_target(u: Dictionary) -> Dictionary:
+	# The nearest injured ally in reach, else the nearest ally in reach (the beam shows, heals 0).
+	var reach := float(CLASSES["priest"].range)
+	var best := {}
+	var bd := INF
+	var any := {}
+	var ad := INF
+	for a in units:
+		if a.id == u.id or a.team != u.team or not alive(a):
+			continue
+		var d: float = u.pos.distance_to(a.pos)
+		if d > reach:
+			continue
+		if d < ad:
+			ad = d
+			any = a
+		if a.hp < a.max_hp - 0.5 and d < bd:
+			bd = d
+			best = a
+	return best if not best.is_empty() else any
+
+func _beam(u: Dictionary) -> bool:
+	if not alive(u) or u.stun > 0.0 or u.carrying or u.state in ["wind", "recover", "dodge"] or u.workshop_open:
+		return false
+	var cur: Dictionary = by_id.get(str(u.beam), {})
+	# Keep a locked, still-injured target in reach; otherwise pick again.
+	if cur.is_empty() or not alive(cur) or cur.hp >= cur.max_hp - 0.5 or u.pos.distance_to(cur.pos) > float(CLASSES["priest"].range) + 1.0:
+		cur = beam_target(u)
+	if cur.is_empty():
+		u.beam = ""
+		return false
+	if str(u.beam) != str(cur.id):
+		_event("beam", {"id":u.id, "to":cur.id})
+	u.beam = cur.id
+	u.beam_until = time + BEAM_HOLD
+	u.face = angle_of(cur.pos - u.pos)
+	return true
+
+func _step_beam(u: Dictionary, dt: float) -> void:
+	if str(u.beam) == "":
+		return
+	var t: Dictionary = by_id.get(str(u.beam), {})
+	if time > u.beam_until or u.cls != "priest" or not alive(u) or t.is_empty() or not alive(t) \
+			or u.pos.distance_to(t.pos) > float(CLASSES["priest"].range) + 1.0:
+		u.beam = ""
+		return
+	var rate := float(CLASSES["priest"].heal) * (1.4 if u.up else 1.0)
+	t.hp = minf(t.max_hp, t.hp + rate * dt)
 
 func _dodge(u: Dictionary) -> bool:
 	if not alive(u) or u.stun > 0.0 or u.carrying or u.cd_dodge > 0.0 or u.state in ["wind","dodge"] or u.workshop_open:
@@ -1074,6 +1139,7 @@ func _kill(src: Dictionary, dst: Dictionary) -> void:
 		_leave_lift(dst, false)
 	dst.hp = 0.0
 	dst.state = "dead"
+	dst.beam = ""
 	# Fat Princess rule: your hat falls where you die; you come back as a Villager.
 	_drop_hat(dst)
 	dst.cls = "villager"
@@ -1225,6 +1291,12 @@ func _resolve_attack(u: Dictionary) -> void:
 		"nova":
 			_melee(u, 3.3, -2.0, dmg*1.4)
 			_event("nova", {"id":u.id})
+		"sanctuary":
+			var amount := SANCTUARY_HEAL * (1.4 if u.up else 1.0)
+			for a in units:
+				if alive(a) and a.team == u.team and a.pos.distance_to(u.pos) <= SANCTUARY_R:
+					a.hp = minf(a.max_hp, a.hp + amount)
+			_event("sanctuary", {"id":u.id, "team":u.team})
 
 # ---------- stepping ----------
 var profile := false          # tests only: accumulate microseconds per phase in `prof`
@@ -1276,6 +1348,7 @@ func _step_unit(u: Dictionary, dt: float) -> void:
 		u.workshop_open = false
 	if u.load.n > 0:
 		_deliver(u)
+	_step_beam(u, dt)
 	if u.stun > 0.0:
 		u.stun -= dt
 		return
@@ -1333,9 +1406,13 @@ func _step_unit(u: Dictionary, dt: float) -> void:
 		mult *= LADDER_CLIMB
 	if u.load.n > 0:
 		mult = minf(mult, 0.85)
+	var beaming: bool = str(u.beam) != ""
+	if beaming:
+		mult = minf(mult, BEAM_MOVE)
 	if u.move.length() > 0.08:
 		u.pos += u.move * speed * mult * dt
-		u.face = lerp_angle(u.face, angle_of(u.move), minf(1.0, dt*14.0))
+		if not beaming:                               # a channelling priest keeps facing the target
+			u.face = lerp_angle(u.face, angle_of(u.move), minf(1.0, dt*14.0))
 		u.state = "move"
 	else:
 		u.state = "idle"
@@ -1503,14 +1580,33 @@ func _separate() -> void:
 			u.pos = _clamp_to_field(_push_out(_clamp_to_field(u.pos), UNIT_R, u.team))
 
 func _step_projectiles(dt: float) -> void:
+	if projectiles.is_empty():
+		return
+	# Each team's living units as packed positions, built once per tick: a projectile only checks
+	# the other team, without dictionary lookups (was ~830 checks/tick through alive(); 1 ms/tick).
+	var tpos := [PackedVector2Array(), PackedVector2Array()]
+	var tunit := [[], []]
+	for o in units:
+		if alive(o):
+			(tpos[o.team] as PackedVector2Array).append(o.pos)
+			(tunit[o.team] as Array).append(o)
+	var hit_r2 := (UNIT_R + 0.25) * (UNIT_R + 0.25)
 	for i in range(projectiles.size()-1, -1, -1):
 		var p: Dictionary = projectiles[i]
 		p.pos += p.vel * dt
 		p.life -= dt
 		var hit := {}
-		for o in units:
-			if o.team != p.team and alive(o) and o.pos.distance_to(p.pos) < UNIT_R + 0.25:
-				hit = o
+		var et := 1 - int(p.team) if int(p.team) >= 0 else -1
+		for t in ([et] if et >= 0 else [0, 1]):
+			var arr: PackedVector2Array = tpos[t]
+			var pp: Vector2 = p.pos
+			for k in arr.size():
+				if arr[k].distance_squared_to(pp) < hit_r2:
+					var o: Dictionary = tunit[t][k]
+					if alive(o):                      # another projectile may have killed it this tick
+						hit = o
+						break
+			if not hit.is_empty():
 				break
 		var blocked := false
 		var hit_gate := {}
@@ -1521,14 +1617,16 @@ func _step_projectiles(dt: float) -> void:
 				blocked = true
 				break
 		if not blocked:
-			for wi in _bucket_walls[pb]:
+			# Pre-filtered at build time: ledges, cell bars, river banks and rails don't stop arrows or
+			# fire (the old per-wall `kind in [...]` built an array every check: 1.2 ms/tick).
+			for wi in _bucket_walls_proj[pb]:
 				var w: Dictionary = walls[wi]
-				if w.kind in ["ledge", "bars", "river", "rail"]:
-					continue   # low ledges and cell bars don't stop arrows or fire
 				if p.pos.distance_to(seg_closest(p.pos, w.a, w.b)) < w.r * 0.8:
 					blocked = true
 					break
-		if not blocked:
+		# Gates only exist at the castle fronts (|z| = CASTLE_SHIFT + FRONT_Z): skip the check anywhere
+		# else (it was ~30 % of the projectile step, measured).
+		if not blocked and absf(p.pos.y) >= CASTLE_SHIFT + FRONT_Z - 3.0:
 			for g in gates:
 				if g.team != p.team and gate_blocks(g) and p.pos.distance_to(seg_closest(p.pos, g.a, g.b)) < WALL_R * 0.8:
 					hit_gate = g
@@ -1737,7 +1835,7 @@ func _commander(team: int) -> void:
 	for u in units:
 		if not u.bot and u.team == team:
 			human_team = true
-	var plan := ["armory", "catapult", "hat_knight", "gates", "hat_ranger", "armory", "hat_barbarian", "gates", "hat_mage", "armory", "hat_rogue"]
+	var plan := ["armory", "catapult", "hat_knight", "gates", "hat_ranger", "hat_priest", "armory", "hat_barbarian", "gates", "hat_mage", "armory", "hat_rogue"]
 	var seen := {}
 	var target := ""
 	for id in plan:
@@ -1808,8 +1906,8 @@ func _nav_to(u: Dictionary, goal: Vector2, stop := 0.5) -> void:
 	var d: Vector2 = target - u.pos
 	u.move = d.normalized() if d.length() > 0.05 else Vector2.ZERO
 
-const ROLE_HATS := {"raid":["rogue", "knight", "barbarian"], "escort":["knight", "barbarian", "mage"],
-	"defend":["ranger", "mage", "knight"]}
+const ROLE_HATS := {"raid":["rogue", "knight", "barbarian"], "escort":["knight", "priest", "barbarian", "mage"],
+	"defend":["ranger", "mage", "priest", "knight"]}
 
 func _bot_hat_goal(u: Dictionary) -> Vector2:
 	# A villager bot's way to a class: a dropped hat close by, else a stand of its role's classes
@@ -1961,7 +2059,36 @@ func _think_worker(u: Dictionary) -> void:
 	else:
 		_nav_to(u, stand, 0.4)
 
+func _think_priest(u: Dictionary) -> bool:
+	# Priest bots: go to the most hurt ally close by and beam them; true if that's what it did.
+	var best := {}
+	var worst := 0.98
+	for a in units:
+		if a.id == u.id or a.team != u.team or not alive(a):
+			continue
+		var d: float = u.pos.distance_to(a.pos)
+		var ratio: float = a.hp / maxf(1.0, a.max_hp)
+		if d <= 16.0 and ratio < worst:
+			worst = ratio
+			best = a
+	if best.is_empty():
+		return false
+	if u.pos.distance_to(best.pos) > float(CLASSES["priest"].range) * 0.7:
+		_nav_to(u, best.pos, 1.0)
+	else:
+		u.move = Vector2.ZERO
+	_beam(u)
+	var near := 0
+	for a in units:
+		if a.team == u.team and alive(a) and a.pos.distance_to(u.pos) <= SANCTUARY_R and a.hp < a.max_hp * 0.7:
+			near += 1
+	if near >= 2:
+		_start_attack(u, "ability")
+	return true
+
 func _think_fighter(u: Dictionary) -> void:
+	if u.cls == "priest" and not u.carrying and _think_priest(u):
+		return
 	var c: Dictionary = CLASSES[u.cls]
 	var mine: Dictionary = oracles[u.team]
 	var theirs: Dictionary = oracles[1 - u.team]
