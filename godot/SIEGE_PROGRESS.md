@@ -468,3 +468,26 @@ outposts have NO hat dispensers (respawn point + a closer drop-off for Workers).
 - Sim cost measured (tests/siege_profile.gd): 2.27 ms/tick (projectiles 1.20) since Round 7 +
   longer fights -> 1.93 (projectiles 0.89): projectile-only wall buckets, packed enemy positions,
   gate check only near castle fronts.
+
+# Round 10 (Kevin): "castles much larger and more 3D like the pictures" -- step K1: geometry
+| Step | Scope | Status |
+|---|---|---|
+| K1 | scripts/siege/siege_castle.gd layout; sim walls/ledges/stairs/heights/positions; basic view; land paths; tests | done |
+| K2 | Blender castle kit: sandstone walls, round towers, crenellations, stairs, terrace faces, paving | todo |
+| K3 | View: assemble the castle from the kit (tall walls, balustrades, towers) | todo |
+| K4 | Tuning (match pace), screenshots, perf, APK | todo |
+
+K1 notes
+- Castle 40 x 26 m (was 26 x 14): front wall z=3 local (world 38, was 50), gates x=+-7; L0 courtyard
+  (spawn, 6 hat stands in 2 rows 3 m apart, workshop east); L1 terrace 1.8 m (dungeon west wing,
+  grand stairs 8 m + two side stairs); L2 terrace 3.6 m (throne, 6 m grand stairs). Stair sides
+  are ledges. Castle-to-castle gap 76 m (was 100).
+- Land: path starts moved to the new gates, flat castle zone 44 -> 36, rebaked; 7 placements moved
+  (land check).
+- Bug found by a per-team stuck/death trace (blue won 4/4 seeds, kills 3-5x): each team's own gates
+  cleared nav cells with a CAPSULE around the doorway whose rounded ends reached 1.35 m into the
+  wall's end cap, so paths led units into solid wall (red workers/priests stuck ~865 ticks at their
+  east gate). Doorways now clear a rectangle (_cells_across_segment). Afterwards: red 3 / blue 1 of
+  4 seeds -- no longer one-sided (small sample). The old castle had the same flaw (smaller effect).
+- Pace: matches now end ~260 s on 3 rescues, first rescue ~100 s (was mostly 7-12 min). Tune in K4.
+- Protocol v5 (map geometry changed).
