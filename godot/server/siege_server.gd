@@ -151,6 +151,7 @@ func _handle(cid: int, msg: Dictionary) -> void:
 			if m is Vector2 and is_finite(m.x) and is_finite(m.y):
 				c.move = (m as Vector2).limit_length(1.0)
 			c.hold = bool(msg.get("h", false))
+			c.bhold = bool(msg.get("b", false))
 			var a: String = str(msg.get("a", ""))
 			if a != "" and a in Net.ACTIONS:
 				var arg: Variant = msg.get("arg", null)
@@ -246,6 +247,9 @@ func _run_match(delta: float) -> void:
 		var c: Dictionary = clients[cid]
 		if c.hello and c.unit != "" and sim.by_id.has(c.unit):
 			sim.set_move(c.unit, c.move)
+			var ub: Dictionary = sim.by_id[c.unit]
+			if bool(c.get("bhold", false)) and sim.ability_of(ub) == "block":
+				sim.act(c.unit, "ability")
 			if c.hold:
 				var u: Dictionary = sim.by_id[c.unit]
 				if sim.can_act(u) and not u.carrying:

@@ -129,7 +129,21 @@ const RESPAWN_HAT_NEAR := 28.0    # humans: a dropped hat this close to the forw
                                   # Fat Princess players choosing an outpost spawn).
 const BOT_HAT_SEARCH := 32.0      # villager bots scavenge dropped hats this far (14 m: most expired unused)
 const UPGRADE_NAME := {"knight":"Paladin","barbarian":"Berserker","rogue":"Assassin","ranger":"Sniper","mage":"Archmage","priest":"High Priest"}
-const BEAM_HOLD := 0.22           # the beam stays up this long after the last ATTACK (held ATTACK refreshes it)
+const BEAM_HOLD := 0.22
+# Knight BLOCK (Round 11, Kevin): hold ABILITY -> shield up, walk forward slowly; the shield (a
+# segment in front of the knight) stops every hit whose path crosses it -- for the knight (from the
+# front) and for anyone behind it -- and destroys projectiles that fly into it.
+const BLOCK_HOLD := 0.22
+const BLOCK_MOVE := 0.4
+const SHIELD_FWD := 0.7
+const SHIELD_HALF := 1.3          # Paladin x1.4
+# Berserker WHIRLWIND (upgraded barbarian, two-handed sword): 3 s of spinning, moving freely,
+# hitting everything within WHIRL_R every WHIRL_TICK.
+const WHIRL_TIME := 3.0
+const WHIRL_TICK := 0.3
+const WHIRL_R := 2.4
+const WHIRL_DMG := 0.55           # x barbarian damage per tick
+const WHIRL_CD := 9.0           # the beam stays up this long after the last ATTACK (held ATTACK refreshes it)
 const BEAM_MOVE := 0.7            # walking speed while channelling
 const SANCTUARY_R := 4.5
 const SANCTUARY_HEAL := 35.0
@@ -142,7 +156,7 @@ const CLASSES := {
 	"worker": {"name":"Worker","hp":95,"speed":5.0,"dmg":12,"range":1.5,"arc":0.4,"windup":0.28,"recover":0.4,
 		"ranged":false,"ability":"","ab_cd":0.0,"carry":0.65,"gate":1.2},
 	"knight": {"name":"Knight","hp":150,"speed":4.6,"dmg":18,"range":1.7,"arc":0.4,"windup":0.24,"recover":0.4,
-		"ranged":false,"ability":"bash","ab_cd":7.0,"carry":0.65,"gate":1.0},
+		"ranged":false,"ability":"block","ab_cd":0.0,"carry":0.65,"gate":1.0},
 	"barbarian": {"name":"Barbarian","hp":130,"speed":4.8,"dmg":26,"range":2.0,"arc":0.25,"windup":0.36,"recover":0.45,
 		"ranged":false,"ability":"spin","ab_cd":7.0,"carry":0.65,"gate":1.6},
 	"rogue": {"name":"Rogue","hp":85,"speed":6.2,"dmg":14,"range":1.4,"arc":0.5,"windup":0.13,"recover":0.22,
@@ -376,6 +390,7 @@ const BUCKET_REACH := 1.6      # widest wall/obstacle radius + unit radius, with
 var _bw := 0
 var _bh := 0
 var _bucket_walls: Array = []
+var _blockers: Array = []             # knights with their shield up this tick
 var _bucket_walls_proj: Array = []   # only walls that stop projectiles (not ledges/bars/river/rails)
 const PROJ_PASS_KINDS := ["ledge", "bars", "river", "rail"]
 var _bucket_obs: Array = []
@@ -535,7 +550,7 @@ func _new_unit(id: String, team: int, bot: bool, role: String) -> Dictionary:
 		"cd_ability":0.0,"stun":0.0,"carrying":false,"respawn_at":0.0,"kills":0,"deaths":0,"rescues":0,
 		"dodge_dir":Vector2.ZERO,"target":"","ai_goal":Vector2.ZERO,"lunge_hit":false,
 		"unstick":0.0,"unstick_dir":Vector2.ZERO,"stuck_t":0.0,"last_pos":Vector2.ZERO,
-		"lifting":-1, "beam":"", "beam_until":0.0, "load":{"kind":"", "n":0}, "task":{}, "workshop_open":false, "gathered":0, "repaired":0.0, "gate_dmg":0.0, "offering":false, "fed":0,
+		"lifting":-1, "beam":"", "beam_until":0.0, "block_until":0.0, "whirl_until":0.0, "whirl_t":0.0, "load":{"kind":"", "n":0}, "task":{}, "workshop_open":false, "gathered":0, "repaired":0.0, "gate_dmg":0.0, "offering":false, "fed":0,
 		"path":PackedVector2Array(), "path_i":0, "path_goal":Vector2(INF, INF), "path_at":-10.0, "path_ver":-1}
 
 func armory_mult(team: int) -> float:
@@ -671,7 +686,11 @@ func act(id: String, action: String, arg: Variant = null) -> bool:
 		return false
 	match action:
 		"attack": return _beam(u) if u.cls == "priest" else _start_attack(u, "attack")
-		"ability": return _start_attack(u, "ability")
+		"ability":
+			match ability_of(u):
+				"block": return _block(u)
+				"whirlwind": return _whirl(u)
+				_: return _start_attack(u, "ability")
 		"dodge": return _dodge(u)
 		"interact": return _interact(u)
 		"hat_swap": return _swap_hat(u)
@@ -699,7 +718,7 @@ func _aim(u: Dictionary, reach: float) -> void:
 		u.face = angle_of(target.pos - u.pos)
 
 func _start_attack(u: Dictionary, kind: String, aim := true) -> bool:
-	if not can_act(u) or u.carrying or u.offering:
+	if not can_act(u) or u.carrying or u.offering or blocking(u) or whirling(u):
 		return false
 	if kind == "ability":
 		if CLASSES[u.cls].ability == "" or u.cd_ability > 0.0:
@@ -717,6 +736,82 @@ func _start_attack(u: Dictionary, kind: String, aim := true) -> bool:
 	u.lunge_hit = false
 	_event("attack", {"id":u.id,"kind":kind,"ability":CLASSES[u.cls].ability if kind == "ability" else ""})
 	return true
+
+# ---------- knight block / berserker whirlwind ----------
+func ability_of(u: Dictionary) -> String:
+	if u.cls == "barbarian" and u.up:
+		return "whirlwind"
+	return str(CLASSES[u.cls].ability)
+
+func blocking(u: Dictionary) -> bool:
+	return u.cls == "knight" and time < float(u.get("block_until", 0.0)) and alive(u)
+
+func whirling(u: Dictionary) -> bool:
+	return time < float(u.get("whirl_until", 0.0)) and alive(u)
+
+func shield_seg(k: Dictionary) -> Array:
+	var f := Vector2(sin(k.face), cos(k.face))
+	var c: Vector2 = k.pos + f * SHIELD_FWD
+	var side := Vector2(f.y, -f.x) * SHIELD_HALF * (1.4 if k.up else 1.0)
+	return [c - side, c + side]
+
+static func _seg_cross(p1: Vector2, p2: Vector2, q1: Vector2, q2: Vector2) -> bool:
+	var d1 := (p2 - p1).cross(q1 - p1)
+	var d2 := (p2 - p1).cross(q2 - p1)
+	var d3 := (q2 - q1).cross(p1 - q1)
+	var d4 := (q2 - q1).cross(p2 - q1)
+	return d1 * d2 < 0.0 and d3 * d4 < 0.0
+
+func shield_blocks(from: Vector2, dst: Dictionary) -> bool:
+	# A hit from `from` on dst is stopped by a raised shield of dst's team: the knight itself from
+	# the front, or anyone the shield stands between.
+	for k in _blockers:
+		if int(k.team) != int(dst.team):
+			continue
+		if k == dst:
+			if Vector2(sin(k.face), cos(k.face)).dot(from - k.pos) > 0.0:
+				return true
+			continue
+		var s: Array = shield_seg(k)
+		if _seg_cross(from, dst.pos, s[0], s[1]):
+			return true
+	return false
+
+func _block(u: Dictionary) -> bool:
+	if not alive(u) or u.stun > 0.0 or u.carrying or u.state in ["wind", "recover", "dodge"] or u.workshop_open:
+		return false
+	if not blocking(u):
+		_event("block_up", {"id":u.id})
+	u.block_until = time + BLOCK_HOLD
+	return true
+
+func _whirl(u: Dictionary) -> bool:
+	if u.cd_ability > 0.0 or not can_act(u) or u.carrying or u.offering:
+		return false
+	u.whirl_until = time + WHIRL_TIME
+	u.whirl_t = 0.0
+	u.cd_ability = WHIRL_CD
+	_event("whirl", {"id":u.id})
+	return true
+
+func _step_whirl(u: Dictionary, dt: float) -> void:
+	if not whirling(u):
+		return
+	if u.stun > 0.0 or u.carrying:
+		u.whirl_until = 0.0
+		return
+	u.face += dt * 14.0                        # spinning (the view reads the face)
+	u.whirl_t -= dt
+	if u.whirl_t > 0.0:
+		return
+	u.whirl_t = WHIRL_TICK
+	var dmg := float(stat(u, "dmg")) * WHIRL_DMG
+	for o in units:
+		if o.team != u.team and alive(o) and o.pos.distance_to(u.pos) <= WHIRL_R:
+			_damage(u, o, dmg)
+	for g in gates:
+		if g.team != u.team and gate_blocks(g) and u.pos.distance_to(seg_closest(u.pos, g.a, g.b)) <= WHIRL_R:
+			_damage_gate(u, g, dmg * float(CLASSES[u.cls].gate))
 
 # ---------- priest beam ----------
 func beam_target(u: Dictionary) -> Dictionary:
@@ -1123,6 +1218,9 @@ func _deliver(u: Dictionary) -> void:
 func _damage(src: Dictionary, dst: Dictionary, amount: float, stun := 0.0) -> void:
 	if not alive(dst) or dst.state == "dodge":
 		return
+	if not _blockers.is_empty() and src.has("pos") and shield_blocks(src.pos, dst):
+		_event("blocked", {"id":dst.id, "pos":dst.pos})
+		return
 	dst.hp -= amount
 	if stun > 0.0:
 		dst.stun = maxf(dst.stun, stun)
@@ -1137,6 +1235,8 @@ func _kill(src: Dictionary, dst: Dictionary) -> void:
 	dst.hp = 0.0
 	dst.state = "dead"
 	dst.beam = ""
+	dst.block_until = 0.0
+	dst.whirl_until = 0.0
 	# Fat Princess rule: your hat falls where you die; you come back as a Villager.
 	_drop_hat(dst)
 	dst.cls = "villager"
@@ -1321,6 +1421,7 @@ func step(dt: float = TICK) -> void:
 		_cmd_clock = 0.0
 		for t in 2:
 			_commander(t)
+	_blockers = units.filter(func(k): return blocking(k))
 	for u in units:
 		_step_unit(u, dt)
 	if profile: t0 = _p("units", t0)
@@ -1346,6 +1447,7 @@ func _step_unit(u: Dictionary, dt: float) -> void:
 	if u.load.n > 0:
 		_deliver(u)
 	_step_beam(u, dt)
+	_step_whirl(u, dt)
 	if u.stun > 0.0:
 		u.stun -= dt
 		return
@@ -1406,9 +1508,16 @@ func _step_unit(u: Dictionary, dt: float) -> void:
 	var beaming: bool = str(u.beam) != ""
 	if beaming:
 		mult = minf(mult, BEAM_MOVE)
+	var shield_up := blocking(u)
+	if shield_up:
+		mult = minf(mult, BLOCK_MOVE)
 	if u.move.length() > 0.08:
 		u.pos += u.move * speed * mult * dt
-		if not beaming:                               # a channelling priest keeps facing the target
+		if whirling(u):
+			pass                                      # spinning: _step_whirl turns the face
+		elif shield_up:
+			u.face = lerp_angle(u.face, angle_of(u.move), minf(1.0, dt*2.5))   # a slow turn behind the shield
+		elif not beaming:                             # a channelling priest keeps facing the target
 			u.face = lerp_angle(u.face, angle_of(u.move), minf(1.0, dt*14.0))
 		u.state = "move"
 	else:
@@ -1590,7 +1699,20 @@ func _step_projectiles(dt: float) -> void:
 	var hit_r2 := (UNIT_R + 0.25) * (UNIT_R + 0.25)
 	for i in range(projectiles.size()-1, -1, -1):
 		var p: Dictionary = projectiles[i]
+		var prev: Vector2 = p.pos
 		p.pos += p.vel * dt
+		var shielded := false
+		for k in _blockers:
+			if int(k.team) != int(p.team):
+				var sg: Array = shield_seg(k)
+				if _seg_cross(prev, p.pos, sg[0], sg[1]):
+					shielded = true
+					break
+		if shielded:
+			_event("blocked", {"pos":p.pos})
+			_event("proj_end", {"pid":p.id})
+			projectiles.remove_at(i)
+			continue
 		p.life -= dt
 		var hit := {}
 		var et := 1 - int(p.team) if int(p.team) >= 0 else -1
@@ -2083,7 +2205,38 @@ func _think_priest(u: Dictionary) -> bool:
 		_start_attack(u, "ability")
 	return true
 
+func _think_shields(u: Dictionary) -> void:
+	# Knight bots raise the shield toward archers/mages in range, or toward anyone close when hurt;
+	# berserker bots whirl into a crowd. Movement (the goal) is decided by the rest of the brain.
+	if u.carrying:
+		return
+	if u.cls == "knight":
+		var best := {}
+		var bd := 12.0
+		for o in units:
+			if o.team == u.team or not alive(o):
+				continue
+			var d: float = u.pos.distance_to(o.pos)
+			var threat: bool = bool(CLASSES[o.cls].get("ranged", false)) or (u.hp < u.max_hp * 0.5 and d < 4.0)
+			if threat and d < bd:
+				bd = d
+				best = o
+		if not best.is_empty():
+			u.face = lerp_angle(u.face, angle_of(best.pos - u.pos), 0.6)
+			_block(u)
+	elif ability_of(u) == "whirlwind" and u.cd_ability <= 0.0:
+		var near := 0
+		for o in units:
+			if o.team != u.team and alive(o) and o.pos.distance_to(u.pos) <= 3.0:
+				near += 1
+		if near >= 2:
+			_whirl(u)
+
 func _think_fighter(u: Dictionary) -> void:
+	# Shield / whirlwind first; the normal brain below still moves the unit (its attacks are
+	# refused while blocking or whirling, so knights advance behind the shield and berserkers
+	# chase through the crowd). (u.ai_goal is never set: don't steer by it.)
+	_think_shields(u)
 	if u.cls == "priest" and not u.carrying and _think_priest(u):
 		return
 	var c: Dictionary = CLASSES[u.cls]

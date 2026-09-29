@@ -35,7 +35,9 @@ const LEDGE_R := 0.55             # the KayKit wall pieces on terrace edges are 
 
 # Key places (castle-local).
 const THRONE := Vector2(0.0, 26.8)
-const CELL_C := Vector2(-15.5, 19.0)  # dungeon cell (L1 west wing); bars on 3 sides, open front
+# Dungeon cell (L1 west wing); bars on 3 sides, open front. Its back bars sit ON the L2 face
+# (z = 22): at z 20.6 they left a 0.55 m squeeze slot a knight got wedged into (Round 11).
+const CELL_C := Vector2(-15.5, 20.4)
 const CELL_HX := 1.8
 const CELL_HZ := 1.6
 const SPAWN := Vector2(0.0, 8.5)
@@ -43,8 +45,9 @@ const WORKSHOP := Vector2(13.5, 9.0)
 # Buildings (KayKit, team-coloured "%s" = blue/red): solid in the sim (obstacle radius r), placed
 # where gameplay doesn't need the floor. y = the level they stand on; rot in degrees (blue space).
 const BUILDINGS := [
-	{"model": "building_blacksmith_%s", "p": Vector2(17.2, 9.0), "rot": -90.0, "scale": 2.8, "r": 1.7, "y": 0.0},   # the workshop
-	{"model": "building_archeryrange_%s", "p": Vector2(16.0, 19.2), "rot": 180.0, "scale": 2.4, "r": 1.9, "y": 1.8},
+	# Buildings against a wall TOUCH it (no squeeze slot behind them).
+	{"model": "building_blacksmith_%s", "p": Vector2(17.35, 9.0), "rot": -90.0, "scale": 2.8, "r": 1.7, "y": 0.0},   # the workshop
+	{"model": "building_archeryrange_%s", "p": Vector2(16.0, 19.6), "rot": 180.0, "scale": 2.4, "r": 1.9, "y": 1.8},
 	{"model": "building_church_%s", "p": Vector2(14.5, 26.0), "rot": 180.0, "scale": 2.6, "r": 1.6, "y": 3.6},
 	{"model": "building_tavern_%s", "p": Vector2(-14.5, 26.0), "rot": 180.0, "scale": 2.6, "r": 1.7, "y": 3.6},
 	{"model": "building_tower_B_%s", "p": Vector2(-6.5, 27.4), "rot": 0.0, "scale": 2.2, "r": 1.4, "y": 3.6},
@@ -60,10 +63,14 @@ const PROPS := [
 ]
 const ALTAR := Vector2(-4.0, 11.5)
 const CATAPULT_X := 17.0
-const HAT_HALL := Vector2(-15.0, 8.5)
-# Six hat stands in two rows of three, 3 m apart: every stand reachable from outside (1.3 m gaps).
-const HAT_STANDS := [Vector2(-18.0, 6.5), Vector2(-15.0, 6.5), Vector2(-12.0, 6.5),
-	Vector2(-18.0, 10.5), Vector2(-15.0, 10.5), Vector2(-12.0, 10.5)]
+# Hat machines spread around the castle (Round 11, Kevin), one per class, each >= 1 m from any wall
+# or building (tests/siege_land_check.gd: no squeeze traps). Order = Sim.HAT_CLASSES:
+# knight (courtyard west, by the gate), barbarian (courtyard east, by the blacksmith), rogue
+# (courtyard back-west corner), ranger (L1 east, by the archery range), mage (L2 west, by the
+# tavern), priest (L2 east, by the church).
+const HAT_STANDS := [Vector2(-13.0, 5.6), Vector2(14.5, 12.0), Vector2(-16.5, 11.0),
+	Vector2(12.2, 19.6), Vector2(-9.5, 25.0), Vector2(9.5, 25.0)]
+const HAT_HALL := Vector2(-13.0, 7.4)     # open floor by the knight machine (hints / tests)
 
 static func _smooth(x: float) -> float:
 	x = clampf(x, 0.0, 1.0)

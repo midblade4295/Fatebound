@@ -37,6 +37,7 @@ var _stick_origin := Vector2.ZERO
 var _stick_pos := Vector2.ZERO
 var _stick_active := false
 var _attack_held := false
+var _ability_held := false
 var _pressed_at := {}
 var _toast := ""
 var _toast_at := -10.0
@@ -373,6 +374,8 @@ func _touch(index: int, pos: Vector2, pressed: bool) -> void:
 				_pressed_at[b.id] = _time
 				if b.id == "attack":
 					_attack_held = true
+				elif b.id == "ability":
+					_ability_held = true
 				action_pressed.emit(b.id)
 				get_viewport().set_input_as_handled()
 				return
@@ -389,6 +392,8 @@ func _touch(index: int, pos: Vector2, pressed: bool) -> void:
 			_stick_active = false
 		elif role == "attack":
 			_attack_held = false
+		elif role == "ability":
+			_ability_held = false
 		if role != "":
 			get_viewport().set_input_as_handled()
 
@@ -415,6 +420,10 @@ func move_vector() -> Vector2:
 		if Input.is_physical_key_pressed(KEY_S): v.y += 1
 		v = v.limit_length(1.0)
 	return v
+
+func ability_held() -> bool:
+	# Knights hold ABILITY to keep the shield up (K on a keyboard).
+	return _ability_held or (not _modal_open() and Input.is_physical_key_pressed(KEY_K))
 
 func attack_held() -> bool:
 	return _attack_held or (not _modal_open() and (Input.is_physical_key_pressed(KEY_J) or Input.is_physical_key_pressed(KEY_SPACE)))
@@ -659,7 +668,7 @@ func _draw_button(b: Dictionary, me: Dictionary) -> void:
 			rim = Color("#fff1bf")
 			ready = not me.carrying
 		"ability":
-			var ab := str(Sim.CLASSES[me.cls].ability)
+			var ab := str(sim.ability_of(me))
 			label = ab.to_upper() if ab != "" else "—"
 			col = Color("#35226a")
 			rim = Color("#d6b8ff")
