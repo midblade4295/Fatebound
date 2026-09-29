@@ -400,6 +400,14 @@ func on_event(e: Dictionary) -> void:
 		"gate_rebuilt":
 			if mine:
 				toast("Our %s gate is rebuilt" % str(sim.gates[int(e.gate)].side), VisualTheme.CYAN)
+		"outpost_captured":
+			if int(e.team) == me.team:
+				toast("Outpost captured! Attackers respawn there", VisualTheme.GOLD)
+			else:
+				toast("The enemy took an outpost", VisualTheme.RED)
+		"outpost_lost":
+			if int(e.team) == me.team:
+				toast("We lost an outpost", VisualTheme.RED)
 		"ladder_up":
 			toast("Ladder raised on the enemy wall — climb over!" if mine else "Enemy ladder on our wall — knock it down!", VisualTheme.GOLD if mine else VisualTheme.RED)
 		"ladder_down":
@@ -635,6 +643,41 @@ func _draw_castle_status(me: Dictionary) -> void:
 		else:
 			_text(r.position + Vector2(2, 7), "BROKEN", 9, VisualTheme.RED, _bold, HORIZONTAL_ALIGNMENT_LEFT, 60)
 		x += 112.0
+	_draw_outpost_pips(t, x + 4.0)
+
+var _outpost_alert_at := -100.0
+var _outpost_prev: Dictionary = {}
+
+func _draw_outpost_pips(t: int, x: float) -> void:
+	# One diamond per outpost: owner colour (grey neutral); while a capture is in progress it
+	# fills with the capturing team's colour. Ours first, then the enemy side.
+	if sim.outposts.is_empty():
+		return
+	_text(Vector2(x, 160), "POSTS", 10, Color(1, 1, 1, 0.75), _bold, HORIZONTAL_ALIGNMENT_LEFT, 44)
+	var cx := x + 44.0
+	for op in sim.outposts:
+		var c := Vector2(cx, 156)
+		var pts := PackedVector2Array([c + Vector2(0, -7), c + Vector2(7, 0), c + Vector2(0, 7), c + Vector2(-7, 0)])
+		var owner: int = op.owner
+		draw_colored_polygon(pts, Color(0, 0, 0, 0.6))
+		var inner := PackedVector2Array([c + Vector2(0, -5), c + Vector2(5, 0), c + Vector2(0, 5), c + Vector2(-5, 0)])
+		var base: Color = Color(0.55, 0.58, 0.62) if owner < 0 else TEAM_COLORS[owner]
+		draw_colored_polygon(inner, base)
+		var pr: float = op.prog
+		var capturing: bool = (owner < 0 and absf(pr) > 0.02) or (owner == 0 and pr < 0.999) or (owner == 1 and pr > -0.999)
+		if capturing:
+			var towards: Color = TEAM_COLORS[0] if pr > 0.0 else TEAM_COLORS[1]
+			var f := absf(pr) if owner < 0 else 1.0 - absf(pr)
+			draw_arc(c, 9.0, -PI / 2, -PI / 2 + TAU * clampf(f, 0.0, 1.0), 18, towards, 2.5, true)
+		cx += 20.0
+	# Alert once when enemies start taking one of ours.
+	for op in sim.outposts:
+		var prev: float = _outpost_prev.get(op.id, op.prog)
+		var losing: bool = int(op.owner) == t and ((t == 0 and op.prog < prev - 0.0001) or (t == 1 and op.prog > prev + 0.0001))
+		if losing and _time - _outpost_alert_at > 10.0:
+			_outpost_alert_at = _time
+			toast("Enemies are taking one of our outposts!", VisualTheme.RED)
+		_outpost_prev[op.id] = op.prog
 
 func _draw_gate_bars() -> void:
 	if not gate_bars_source.is_valid() or not project.is_valid():

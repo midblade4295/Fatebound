@@ -295,7 +295,7 @@ Design (all cosmetic; no pay-to-win; no real-money purchases until Play Billing 
 | T1 | Blender art: seamless grass (voronoi patches), herringbone brick path, rock ledge texture, wooden bridge model | done |
 | T2 | Sim: bigger field, river with 3 bridges (walls + nav), raised ledges with ramps, rolling slopes (height_at), outposts (capture, respawn, trickle), protocol sync | done |
 | T3 | View: single terrain mesh (heights from sim) with grass/path/rock shader + path mask, water, bridges, ledge faces, outpost towers | done |
-| T4 | Bots (outposts), HUD markers, tests, screenshots, APK | todo |
+| T4 | Bots (outposts), HUD markers, tests, screenshots, APK | done (0.14.0, code 24) |
 
 ## T1 notes
 - tools/blender/terrain_art.py -> assets/terrain/{grass,path,rock}.png (1024, seamless) + bridge.glb.
@@ -336,3 +336,10 @@ Design (all cosmetic; no pay-to-win; no real-money purchases until Play Billing 
 - Water: animated shader on a strip following the river (TIME only; no per-frame buffers).
 - Outposts: bare stone tower when neutral, team tower + flag when owned, capture ring + an inner
   ring that grows with progress in the capturing team's colour.
+
+## T4 notes
+- HUD: POSTS pips (owner colour, arc = capture in progress in the capturing team's colour),
+  toasts on capture/loss, "enemies are taking one of our outposts" alert (throttled 10 s).
+  Verified by a staged screenshot (owned / enemy / capturing / neutral).
+- Preview 0.14.0-siege-land, version code 24. Protocol v2: the online server must be
+  redeployed from this branch (install_siege_server.sh) before this build can play online.

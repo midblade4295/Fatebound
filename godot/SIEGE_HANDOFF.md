@@ -342,7 +342,7 @@ Based on live `447b97a`. Preview **0.12.0-siege-app, version code 21** (APK 38 M
 
 ## 12. Round 6: home screen and menu art (Blender pipeline)
 
-Preview **0.13.1-siege-art, version code 23**. Pre-rendered art lives in `godot/assets/ui/`
+Preview **0.13.1-siege-art, version code 23** (superseded: see section 13). Pre-rendered art lives in `godot/assets/ui/`
 (3.4 MB); the scripts that make it are committed so it can be re-rendered.
 
 | Art | Made by | Notes |
@@ -375,3 +375,27 @@ off when a match starts. 0.13.0 hid only `chrome`, so the hero's 4x-MSAA physica
 viewport and motes kept rendering behind the match. `SiegeApp._set_menu_active(on)` now hides the
 menu AND disables processing for `chrome` and `hero_layer`; `tests/app_flow_test.gd` asserts it.
 Any new full-screen layer must be added to that helper.
+
+---
+
+## 13. Round 7: Fat Princess land, bigger map, bridges, outposts (preview 0.14.0, code 24)
+
+- **Landscape** (`scripts/siege/siege_land.gd`, all point-symmetric): field 64x128; river
+  `c(x)=1.5 sin(0.16x)` (odd, so it mirrors onto itself), 6 m wide, bridges at x=-20/0/20;
+  four raised ledges (1.5 m) with ramps and a 1.2 m rock band (walls sit mid-band so units stand
+  on the flat top or at the foot); rolling slopes; brick path routes gate -> ramps -> bridges.
+- **Outposts** (sim): 4 on the ledges. Lone team in the 5 m ring captures (1 unit ~9.5 s, 4+
+  ~4.8 s), contested freezes, crossing 0 neutralises, owners get +1 wood +1 stone / 15 s,
+  raiders/escorts respawn at the forward outpost, escort bots capture. HUD pips + toasts.
+- **Art**: `tools/blender/terrain_art.py` (grass/path/rock textures, seamless; bridge.glb).
+- **Terrain**: `tools/bake_land.gd` bakes `assets/terrain/height.res` + `pathmask.res`
+  (R path, G ledge rim, B cliff-foot shadow); `scripts/siege/terrain.gdshader`. **After
+  editing siege_land.gd, re-run the bake**: `tests/siege_land_check.gd` fails on a stale bake.
+  The visual terrain excludes bridge decks (the deck model is drawn instead); units use decks.
+- **Protocol v2** (outposts in snapshots; new map). **Redeploy the server from this branch
+  before online play**; v1 phones are told to update.
+- Tests: `siege_land_check` (placement, symmetry, nav across bridges only, stale bake) in the
+  runner. Two 16v16 matches ended 3-2 on rescues in ~7 min (before: mostly time-outs); red won
+  both -> watch side balance.
+- Not verified on a device: frame rate with the terrain shader at full resolution, the water
+  animation, capture rings filling.
