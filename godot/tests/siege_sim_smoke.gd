@@ -13,7 +13,7 @@ func _init() -> void:
 		seeds = []
 		for s in OS.get_environment("SEEDS").split(","): seeds.append(int(s))
 	var totals := {"matches":0,"rescues":0,"kills":0,"gate_broken":0,"gate_rebuilt":0,"repairs":0,"delivered":0,
-		"upgrades":0,"pickups":0,"fed":0,"max_weight":0,"ladders":0,"ladders_down":0,"catapult_shots":0,"tantrums":0,"carried_back":0,"max_lift":0,"rescue_lifters":[],"wall_violations":0,"gate_violations":0,"wins":[0,0,0],"first_rescue":[]}
+		"upgrades":0,"pickups":0,"fed":0,"max_weight":0,"ladders":0,"ladders_down":0,"catapult_shots":0,"tantrums":0,"carried_back":0,"outpost_caps":0,"outpost_lost":0,"max_lift":0,"rescue_lifters":[],"wall_violations":0,"gate_violations":0,"wins":[0,0,0],"first_rescue":[]}
 	for seed_value in seeds:
 		var sim = Sim.new()
 		sim.setup(16, seed_value)
@@ -41,6 +41,8 @@ func _init() -> void:
 					"ladder_down": totals.ladders_down += 1
 					"catapult_fire": totals.catapult_shots += 1
 					"tantrum": totals.tantrums += 1
+					"outpost_captured": totals.outpost_caps += 1
+					"outpost_lost": totals.outpost_lost += 1
 					"recaptured":
 						if str(e.id) != "": totals.carried_back += 1
 					"lift_join": totals.max_lift = maxi(totals.max_lift, int(e.n))
@@ -78,6 +80,7 @@ func _init() -> void:
 	print("violations wall=%d gate=%d" % [totals.wall_violations, totals.gate_violations])
 	assert(totals.wall_violations == 0 and totals.gate_violations == 0)
 	print("usage fed=%d max_weight=%d ladders=%d ladders_down=%d catapult_shots=%d upgrades=%d" % [totals.fed, totals.max_weight, totals.ladders, totals.ladders_down, totals.catapult_shots, totals.upgrades])
+	print("outposts captured=%d lost=%d" % [totals.outpost_caps, totals.outpost_lost])
 	print("oracle rescues=%d (lifters per rescue %s) pickups=%d tantrums=%d carried_back=%d max_lift=%d first_rescue=%s" % [totals.rescues, str(totals.rescue_lifters), totals.pickups, totals.tantrums, totals.carried_back, totals.max_lift, str(totals.first_rescue)])
 	# Catapults and ladders depend on each match's economy: reported above, not required.
 	assert(totals.kills > 0 and totals.delivered > 0 and totals.gate_broken > 0 and totals.fed > 0)
