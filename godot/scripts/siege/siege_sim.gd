@@ -695,7 +695,11 @@ func act(id: String, action: String, arg: Variant = null) -> bool:
 		"interact": return _interact(u)
 		"hat_swap": return _swap_hat(u)
 		"take_tools": return _take_tools(u)
-		"buy": return buy_upgrade(u.team, str(arg), u)
+		"buy":
+			# Hat upgrades are bought AT the hat shop (Round 12), not through the workshop menu.
+			if str(arg).begins_with("hat_"):
+				return false
+			return buy_upgrade(u.team, str(arg), u)
 		"workshop_leave":
 			u.workshop_open = false
 			return true
@@ -800,7 +804,7 @@ func _step_whirl(u: Dictionary, dt: float) -> void:
 	if u.stun > 0.0 or u.carrying:
 		u.whirl_until = 0.0
 		return
-	u.face += dt * 14.0                        # spinning (the view reads the face)
+	u.face += dt * 26.0                        # ~4 turns a second (the view reads the face)
 	u.whirl_t -= dt
 	if u.whirl_t > 0.0:
 		return
@@ -921,6 +925,12 @@ func _interact(u: Dictionary) -> bool:
 			u.task = {"kind":"gather", "node":n.id, "t":GATHER_TIME}
 			u.face = angle_of(n.p - u.pos)
 			return true
+	var hs := hat_shop_upgrade(u)
+	if hs != "":
+		var ok := buy_upgrade(u.team, hs, u)
+		if ok:
+			_event("hat_upgrade", {"id":u.id, "team":u.team, "up":hs})
+		return ok
 	if u.cls != "villager" and _swap_hat(u):
 		return true
 	if u.pos.distance_to(workshop(u.team)) <= WORKSHOP_RADIUS:
@@ -1046,6 +1056,8 @@ func context_action(u: Dictionary) -> String:
 		if not n.is_empty() and (u.load.n == 0 or u.load.kind == n.kind) and u.load.n < CARRY_MAX:
 			return "chop" if n.kind == "wood" else "mine"
 	if u.cls != "villager":
+		if hat_shop_upgrade(u) != "":
+			return "hat_up"
 		var st := stand_near(u)
 		if not st.is_empty() and st.cls != u.cls and int(st.stock) > 0:
 			return "hat"
@@ -1075,6 +1087,17 @@ func _take_hat(u: Dictionary, st: Dictionary) -> bool:
 	_set_class(u, st.cls, int(levels[int(st.team)].get("hat_" + str(st.cls), 0)) > 0)
 	_event("hat_take", {"id":u.id, "cls":st.cls, "team":u.team, "stand":st.id, "enemy":int(st.team) != u.team})
 	return true
+
+func hat_shop_upgrade(u: Dictionary) -> String:
+	# At your own team's hat shop for your current class, with that upgrade not owned yet: the
+	# upgrade id you can buy here ("" otherwise). Players upgrade hats only at the shops.
+	var st := stand_near(u)
+	if st.is_empty() or int(st.team) != u.team or str(st.cls) != u.cls:
+		return ""
+	var id := "hat_" + str(st.cls)
+	if int(levels[u.team].get(id, 0)) >= int(UPGRADES[id].max):
+		return ""
+	return id
 
 func _swap_hat(u: Dictionary) -> bool:
 	var st := stand_near(u)

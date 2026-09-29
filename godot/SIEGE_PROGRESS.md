@@ -541,3 +541,16 @@ K2/K3 notes (0.17.0)
   every season was the same). Icons: tools/blender/icons.py (bits/ models), priest busts.
 - Open: the Priest is the Mage model tinted white-gold and reads almost like a Mage (a tint can
   only darken the purple robes); needs its own model or re-texture.
+
+# 0.18.1 (Kevin): faster whirlwind with WoW-style spin FX, station titles, hat upgrades at the
+# hat shops (not the workshop), bigger knight shield
+- Whirlwind: sim spin 14 -> 26 rad/s (~4 turns/s), spinning anim x1.8, two translucent blade-trail
+  ribbons (partial rings fading along the arc, additive) circling at 7 and 5.5 turns/s, tilted
+  opposite ways; built once per unit, transform-only per frame.
+- Titles: HUD-projected plates over every hat shop (class name, ★ + upgraded name when upgraded,
+  stock) and workshop in view within 24 m. No 3D text nodes.
+- Hat upgrades: ACTION at your own team's shop for your current class = UPGRADE (gold button, cost
+  under it, dim when unaffordable); the workshop's hat grid is gone and "buy hat_*" through the
+  workshop is refused. Bots still buy hat upgrades through the team planner.
+- Knight shield: Weapons Bits shields attach at 0.9 (was 0.55).
+- Protocol unchanged (v6): the server runs this build's sim, so still redeploy with it.

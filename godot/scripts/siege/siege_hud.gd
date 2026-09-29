@@ -138,18 +138,7 @@ func _build_workshop_panel() -> void:
 		b.custom_minimum_size = Vector2(0, 54)
 		b.add_theme_font_size_override("font_size", 14)
 		workshop_buttons[id] = b
-	_label(v, "HAT UPGRADES · the stand makes the upgraded class", 11, Color("#d4cbbb"))
-	var grid := GridContainer.new()
-	grid.columns = 3
-	grid.add_theme_constant_override("h_separation", 6)
-	grid.add_theme_constant_override("v_separation", 6)
-	v.add_child(grid)
-	for c in Sim.HAT_CLASSES:
-		var id: String = "hat_" + str(c)
-		var b := _button(grid, str(Sim.UPGRADE_NAME[c]), "gold", func(): workshop_buy.emit(id))
-		b.custom_minimum_size = Vector2(0, 46)
-		b.add_theme_font_size_override("font_size", 11)
-		workshop_buttons[id] = b
+	_label(v, "Hat upgrades are bought at each hat shop.", 11, Color("#d4cbbb"))
 	_button(v, "LEAVE WORKSHOP", "secondary", func(): workshop_leave.emit())
 
 func _refresh_workshop(me: Dictionary) -> void:
@@ -462,6 +451,7 @@ func _draw_hud() -> void:
 	if me.is_empty():
 		return
 	var w := size.x
+	_draw_station_titles(me)                  # first, so buttons and panels draw over them
 	# Scoreboard.
 	var bar := Rect2(8, 8, w - 16, 62)
 	if _bar_style == null:
@@ -631,6 +621,34 @@ func _oracle_state_text(me: Dictionary, o: Dictionary) -> String:
 		"dropped": return "Our Oracle: loose — back to her cell in %ds" % int(ceil(Sim.DROP_RETURN - (sim.time - o.dropped_at)))
 	return ""
 
+func _draw_station_titles(me: Dictionary) -> void:
+	# Name plates over the hat shops and the workshops in view (Round 12, Kevin: "so players know
+	# what they are"). Drawn in the HUD from projected positions: no 3D text nodes.
+	if not project.is_valid() or not on_screen.is_valid():
+		return
+	var spots := []
+	for st in sim.stands:
+		var up: bool = int(sim.levels[int(st.team)].get("hat_" + str(st.cls), 0)) > 0
+		var nm: String = (str(Sim.UPGRADE_NAME[st.cls]) if up else str(Sim.CLASSES[st.cls].name)).to_upper()
+		spots.append([st.p, "%s%s" % [nm, " ★" if up else ""], "HAT SHOP · %d" % int(st.stock), int(st.team)])
+	for t in 2:
+		spots.append([Sim.workshop(t), "WORKSHOP", "upgrades · tools", t])
+	for sp in spots:
+		var p2: Vector2 = sp[0]
+		if p2.distance_to(me.pos) > 24.0:
+			continue
+		var world := Vector3(p2.x, Sim.height_at(p2) + 3.1, p2.y)
+		if not on_screen.call(world):
+			continue
+		var s: Vector2 = project.call(world)
+		var col: Color = TEAM_COLORS[int(sp[3])]
+		var w := maxf(96.0, 9.0 * float(str(sp[1]).length()) + 24.0)
+		var r := Rect2(s.x - w * 0.5, s.y - 30, w, 34)
+		draw_rect(r, Color(0.04, 0.07, 0.1, 0.78))
+		draw_rect(Rect2(r.position, Vector2(r.size.x, 3)), col)
+		_text(Vector2(r.position.x, r.position.y + 17), str(sp[1]), 13, Color.WHITE, _bold, HORIZONTAL_ALIGNMENT_CENTER, r.size.x)
+		_text(Vector2(r.position.x, r.position.y + 30), str(sp[2]), 10, Color(1, 1, 1, 0.7), null, HORIZONTAL_ALIGNMENT_CENTER, r.size.x)
+
 func _draw_oracle_marker(me: Dictionary) -> void:
 	# Point to our Oracle (or home, while carrying her) when she is off-screen.
 	if not project.is_valid() or not on_screen.is_valid():
@@ -681,11 +699,20 @@ func _draw_button(b: Dictionary, me: Dictionary) -> void:
 			cd_max = 2.2
 			ready = cd <= 0.0 and not me.carrying
 		"action":
-			label = {"hat":"NEW HAT","grab":"LIFT","throw":"THROW","workshop":"WORKSHOP","chop":"CHOP","mine":"MINE",
+			label = {"hat_up":"UPGRADE","hat":"NEW HAT","grab":"LIFT","throw":"THROW","workshop":"WORKSHOP","chop":"CHOP","mine":"MINE",
 				"repair":"REPAIR","gather":"WORKING","repairing":"REPAIRING","ladder":"LADDER","build_ladder":"BUILDING","cake":"TAKE CAKE","feed":"FEED",
 				"join":"HELP LIFT","letgo":"LET GO"}.get(b.ctx, "USE")
 			col = Color("#155258")
 			rim = Color("#9ff6ef")
+			if b.ctx == "hat_up":
+				# Upgrade at the hat shop: gold button, cost underneath, dim when unaffordable.
+				var hid: String = sim.hat_shop_upgrade(me)
+				if hid != "":
+					var cost: Dictionary = sim.upgrade_cost(me.team, hid)
+					ready = sim.can_buy(me.team, hid)
+					col = Color("#8a5a10")
+					rim = Color("#ffe39a")
+					_text(b.c + Vector2(-60, b.r + 18), "%dw · %ds" % [int(cost.wood), int(cost.stone)], 11, Color(1, 1, 1, 0.85), _bold, HORIZONTAL_ALIGNMENT_CENTER, 120)
 	var pressed: bool = _time - float(_pressed_at.get(b.id, -10.0)) < 0.12 or (b.id == "attack" and _attack_held)
 	var body := col.lightened(0.15) if pressed else col
 	if not ready:

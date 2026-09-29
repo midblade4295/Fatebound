@@ -619,6 +619,74 @@ func _build_hat_stands() -> void:
 			stack.append(h)
 		stand_nodes[st.id] = stack
 
+# Whirlwind FX (Round 12, Kevin: "spin visuals like World of Warcraft"): two translucent blade-trail
+# ribbons (partial rings fading along their arc) circling the berserker at different heights and
+# tilts, spinning faster than the body; built once per unit, then only rotated (transform only).
+var whirl_nodes: Dictionary = {}
+static var _whirl_mesh: ArrayMesh = null
+static var _whirl_mat: StandardMaterial3D = null
+
+static func _whirl_ribbon() -> ArrayMesh:
+	if _whirl_mesh == null:
+		var st := SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		var seg := 28
+		var arc := TAU * 0.72
+		for i in seg:
+			var t0 := float(i) / seg
+			var t1 := float(i + 1) / seg
+			var pts := []
+			for t in [t0, t1]:
+				var ang: float = arc * t
+				var fade: float = pow(t, 1.6)                  # bright at the leading edge
+				var inner := Vector3(cos(ang), 0, sin(ang)) * 0.62
+				var outer := Vector3(cos(ang), 0, sin(ang)) * 1.0
+				pts.append([inner + Vector3(0, -0.12, 0), outer + Vector3(0, 0.12, 0), fade])
+			var a0: Array = pts[0]
+			var a1: Array = pts[1]
+			for v in [[a0[0], a0[2]], [a1[0], a1[2]], [a1[1], a1[2]], [a0[0], a0[2]], [a1[1], a1[2]], [a0[1], a0[2]]]:
+				st.set_color(Color(1, 1, 1, float(v[1])))
+				st.add_vertex(v[0])
+		_whirl_mesh = st.commit()
+	return _whirl_mesh
+
+func _sync_whirls() -> void:
+	if _whirl_mat == null:
+		_whirl_mat = StandardMaterial3D.new()
+		_whirl_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_whirl_mat.vertex_color_use_as_albedo = true
+		_whirl_mat.albedo_color = Color(0.92, 0.95, 1.0, 0.75)
+		_whirl_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		_whirl_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		_whirl_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	for u in sim.units:
+		var fx: Node3D = whirl_nodes.get(u.id)
+		if not sim.whirling(u):
+			if fx != null:
+				fx.visible = false
+			continue
+		if fx == null:
+			fx = Node3D.new()
+			for k in 2:
+				var mi := MeshInstance3D.new()
+				mi.mesh = _whirl_ribbon()
+				mi.material_override = _whirl_mat
+				mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+				fx.add_child(mi)
+			add_child(fx)
+			whirl_nodes[u.id] = fx
+		var a: Dictionary = actors.get(u.id, {})
+		if a.is_empty():
+			fx.visible = false
+			continue
+		fx.visible = true
+		fx.position = (a.root as Node3D).position
+		var r0 := fx.get_child(0) as Node3D
+		var r1 := fx.get_child(1) as Node3D
+		# Faster than the body (4 turns/s): ~7 and ~5.5 turns/s, tilted opposite ways.
+		r0.transform = Transform3D(Basis(Vector3.UP, -_time * 44.0).rotated(Vector3.RIGHT, 0.18).scaled(Vector3(2.3, 1.0, 2.3)), Vector3(0, 1.05, 0))
+		r1.transform = Transform3D(Basis(Vector3.UP, -_time * 34.0 + 2.0).rotated(Vector3.RIGHT, -0.22).scaled(Vector3(2.7, 1.0, 2.7)), Vector3(0, 0.6, 0))
+
 var shield_nodes: Dictionary = {}        # knight id -> translucent shield-wall panel
 static var _shield_mat: StandardMaterial3D = null
 
@@ -1245,6 +1313,7 @@ func _sync_castle(dt: float) -> void:
 	_sync_hats()
 	_sync_beams()
 	_sync_shields()
+	_sync_whirls()
 	for g in sim.gates:
 		var gn: Dictionary = gate_nodes.get(g.id, {})
 		if gn.is_empty():
@@ -1368,7 +1437,8 @@ static func make_body(cls: String, cosmetic: Dictionary = {}) -> Dictionary:
 			if weapon != null:
 				var model: Node3D = weapon.instantiate()
 				if bits:
-					model.scale = Vector3.ONE * 0.55
+					# Shields bigger so it's obvious a knight carries one (Round 12, Kevin).
+					model.scale = Vector3.ONE * (0.9 if file.contains("shield") else 0.55)
 				if file.contains("bow"):
 					model.rotation.y = PI
 				slot.add_child(model)
@@ -1572,7 +1642,7 @@ func _animate(a: Dictionary, u: Dictionary, vel: float) -> void:
 	elif u.state == "dodge":
 		_play(a, "ma/Dodge_Forward", 1.6, 0.3)
 	elif sim.whirling(u):
-		_play(a, "m/Melee_2H_Attack_Spinning")
+		_play(a, "m/Melee_2H_Attack_Spinning", 1.8)
 	elif sim.blocking(u):
 		_play(a, "m/Melee_Blocking")
 	elif str(u.get("beam", "")) != "":

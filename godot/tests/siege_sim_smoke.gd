@@ -120,6 +120,28 @@ func _init() -> void:
 	while bs.whirling(bz): bs.step(Sim.TICK)
 	assert(absf(bs.time - t_start - Sim.WHIRL_TIME) < 0.1, "whirlwind lasts 3 s")
 	print("block + whirlwind rules ok")
+	# Hat upgrades are bought at the hat shop, not the workshop (Round 12).
+	var us = Sim.new()
+	us.setup(4, 5)
+	for uu in us.units: uu.bot = false; uu.move = Vector2.ZERO; uu.pos = Vector2(0, -20) if uu.team == 1 else Vector2(0, 20)
+	var up_me: Dictionary = us.by_id["you"]
+	us.stock[0] = {"wood": 50, "stone": 50}
+	up_me.pos = us.workshop(0)
+	assert(not us.act("you", "buy", "hat_knight"), "the workshop menu can't buy hat upgrades")
+	var kst: Dictionary = us.stands.filter(func(x): return x.team == 0 and x.cls == "knight")[0]
+	us._set_class(up_me, "knight", false)
+	up_me.pos = kst.p + Vector2(0.9, 0)
+	assert(us.context_action(up_me) == "hat_up", "at your class's hat shop the action is UPGRADE (was %s)" % us.context_action(up_me))
+	assert(us.act("you", "interact") and int(us.levels[0].hat_knight) == 1, "upgrading at the hat shop works")
+	assert(us.context_action(up_me) != "hat_up", "no second upgrade offered")
+	var ally3: Dictionary = us.units.filter(func(x): return x.team == 0 and x.id != "you")[0]
+	ally3.pos = kst.p + Vector2(-0.9, 0)
+	us.step(Sim.TICK)
+	assert(ally3.cls == "knight" and ally3.up, "the upgraded shop now gives Paladin hats")
+	var rst2: Dictionary = us.stands.filter(func(x): return x.team == 0 and x.cls == "rogue")[0]
+	up_me.pos = rst2.p + Vector2(0.9, 0)
+	assert(us.context_action(up_me) == "hat", "at another class's shop the action is NEW HAT")
+	print("hat shop upgrade rules ok")
 	print("hat rules ok")
 	var seeds := [11, 22, 33, 44, 55, 66]
 	if OS.has_environment("SEEDS"):
