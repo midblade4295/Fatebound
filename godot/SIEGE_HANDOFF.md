@@ -428,10 +428,15 @@ the references' measured green) + sweeping bands baked into the mask alpha (`Lan
   `HAT_REGEN` 6 s; villagers auto-take on walking in (`_step_hats`); `act("hat_swap")` / ACTION
   swaps for classed units. Dropped hats `sim.hats` ({id, cls, up, pos, t}), `HAT_LIFETIME` 30 s,
   picked up by any villager within `HAT_PICK_R`. `_kill` drops the hat and resets to villager.
-- Outpost racks (`OUTPOST_HAT_*`): owner-only, west Knight / east Rogue. Without them attackers
-  respawning forward had no class: rescues collapsed (see SIEGE_PROGRESS Round 8).
+- Outpost racks were removed in 0.15.1 (Fat Princess outposts have no hat dispensers).
 - Upgrades `hat_<class>` (workshop grid) replace "Fourth Die". `Sim.forge()` now returns the hat
   stands' corner (kept for hints/tests).
 - View: pedestal + class weapon + stacked hats per stand, dropped hats bob/spin (transforms only),
   rack hats beside outpost towers. HUD: dice panel gone, "NEW HAT" action, class toasts.
 - Protocol v3: redeploy the server from this branch before online play.
+
+**0.15.1 (Fat Princess hat rules, from Kevin's wiki screenshot):** no outpost hat racks; any team
+can use a stand it reaches (enemy courtyard included; the stand owner's upgrade decides the tier);
+Workers drop off at held outposts; humans respawn forward only when a dropped hat is near it, bot
+attackers always respawn forward and scavenge (32 m). Gate HP 1100, repair 20/tick. See
+SIEGE_PROGRESS 0.15.1 for the balance trail.

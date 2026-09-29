@@ -32,6 +32,37 @@ func _init() -> void:
 	assert(int(st.stock) == Sim.HAT_STOCK_MAX, "stands refill")
 	for i in int(Sim.HAT_LIFETIME / Sim.TICK) + 2: hs.step(Sim.TICK)
 	assert(hs.hats.is_empty(), "dropped hats expire")
+	# Fat Princess rules (0.15.1): enemy stands work for whoever gets inside; outposts have no hats;
+	# workers drop off at held outposts; attackers respawn forward only near a dropped hat.
+	var red: Dictionary = hs.units.filter(func(x): return x.team == 1 and x.cls == "villager")[0]
+	var bst: Dictionary = hs.stands.filter(func(x): return x.team == 0 and x.cls == "mage")[0]
+	bst.stock = 1
+	red.pos = bst.p + Vector2(0.9, 0)
+	assert(Sim.in_castle(red.pos, 0), "the blue stand is inside the blue castle")
+	hs.step(Sim.TICK)
+	assert(red.cls == "mage" and red.up, "a red villager uses a blue stand (blue's upgrade applies)")
+	var op: Dictionary = hs.outposts[0]
+	op.owner = 0
+	op.prog = 1.0
+	var v2: Dictionary = hs.units.filter(func(x): return x.team == 0 and x.cls == "villager")[0]
+	v2.pos = (op.p as Vector2) + Vector2(2.0, 0)
+	for i in 30: hs.step(Sim.TICK)
+	assert(v2.cls == "villager", "outposts give no hats")
+	hs._set_class(v2, "worker", false)
+	v2.load = {"kind":"wood", "n":4}
+	var w0: int = hs.stock[0].wood
+	v2.pos = (op.p as Vector2) + Vector2(2.4, 0)
+	hs.step(Sim.TICK)
+	assert(hs.stock[0].wood == w0 + 4, "workers drop off at an outpost their team holds")
+	hs.hats.clear()
+	var r1: Dictionary = hs.units.filter(func(x): return x.team == 0 and x.id != "you")[0]
+	r1.role = "raid"
+	r1.bot = false                              # the hat-near rule is for human respawns
+	hs._respawn(r1)
+	assert(r1.pos.distance_to(Sim.spawn(0)) < 10.0, "no dropped hat near the outpost -> respawn at the castle")
+	hs.hats.append({"id":777, "cls":"knight", "up":false, "pos":(op.p as Vector2) + Vector2(12, 0), "t":0.0})
+	hs._respawn(r1)
+	assert(r1.pos.distance_to(op.p) < 4.0, "a dropped hat near the forward outpost -> respawn there")
 	print("hat rules ok")
 	var seeds := [11, 22, 33, 44, 55, 66]
 	if OS.has_environment("SEEDS"):
@@ -111,6 +142,7 @@ func _init() -> void:
 	print("outposts captured=%d lost=%d" % [totals.outpost_caps, totals.outpost_lost])
 	print("hats taken at stands=%d picked up=%d dropped=%d" % [totals.hat_take, totals.hat_pick, totals.hat_drop])
 	print("oracle rescues=%d (lifters per rescue %s) pickups=%d tantrums=%d carried_back=%d max_lift=%d first_rescue=%s" % [totals.rescues, str(totals.rescue_lifters), totals.pickups, totals.tantrums, totals.carried_back, totals.max_lift, str(totals.first_rescue)])
+	print("kills=%d delivered=%d gate_broken=%d fed=%d" % [totals.kills, totals.delivered, totals.gate_broken, totals.fed])
 	# Catapults and ladders depend on each match's economy: reported above, not required.
 	assert(totals.kills > 0 and totals.delivered > 0 and totals.gate_broken > 0 and totals.fed > 0)
 	assert(totals.rescues > 0, "no rescues at all")
