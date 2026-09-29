@@ -279,6 +279,9 @@ func _build_chrome() -> void:
 	content_scroll = ScrollContainer.new()
 	content_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	content_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	# Drag-scrolling is done by _input below; the built-in one never saw drags that started on a
+	# card or button (they stop the event) and would fight ours where it did.
+	content_scroll.scroll_deadzone = 1000000
 	chrome.add_child(content_scroll)
 	var margin := MarginContainer.new()
 	margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -468,7 +471,93 @@ func close_modal() -> void:
 		modal.queue_free()
 	modal = null
 
+# ---------------- menu drag-scroll (0.18.3, Kevin: "the main menu can't scroll up and down") ----------------
+# Every screen is cards and buttons, and those stop input, so the ScrollContainer's own touch drag
+# never started. Here the app sees events before the controls: a press inside the menu that moves
+# more than DRAG_START px vertically becomes a scroll; the control under the finger gets a
+# cancelled press (released off-screen) so it doesn't fire; short taps pass through untouched.
+const DRAG_START := 14.0
+var _drag_down := false
+var _dragging := false
+var _drag_from := Vector2.ZERO
+var _drag_scroll0 := 0.0
+var _fling := 0.0
+var _cancelling := false
+var _swallow_up := false
+
+func _menu_scroll_live() -> bool:
+	return siege == null and modal == null and is_instance_valid(content_scroll) and content_scroll.is_visible_in_tree()
+
+func _input(event: InputEvent) -> void:
+	if _cancelling or not _menu_scroll_live():
+		return
+	# Touch (the phone) or a real mouse (desktop). Mouse events emulated from touch are ignored
+	# here (the touch events drive it) and swallowed while a scroll is in progress.
+	var is_touch: bool = event is InputEventScreenTouch or event is InputEventScreenDrag
+	var emulated: bool = (event is InputEventMouse) and event.device == InputEvent.DEVICE_ID_EMULATION
+	if is_touch and int(event.get("index")) != 0:
+		return
+	if emulated:
+		# Swallow the pointer while scrolling, and the finger-lift release that follows a scroll
+		# (whichever order the platform delivers the touch and its emulated mouse event in).
+		if _dragging or (_swallow_up and event is InputEventMouseButton and not event.pressed):
+			if event is InputEventMouseButton and not event.pressed:
+				_swallow_up = false
+			get_viewport().set_input_as_handled()
+		return
+	var press: bool = (event is InputEventScreenTouch) or (event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT)
+	var motion: bool = (event is InputEventScreenDrag) or (event is InputEventMouseMotion and (event.button_mask & MOUSE_BUTTON_MASK_LEFT) != 0)
+	if press:
+		if event.pressed:
+			_swallow_up = false
+			if content_scroll.get_global_rect().has_point(event.position):
+				_drag_down = true
+				_dragging = false
+				_drag_from = event.position
+				_drag_scroll0 = content_scroll.scroll_vertical
+				_fling = 0.0
+		else:
+			if _dragging:
+				get_viewport().set_input_as_handled()
+				_swallow_up = true
+			_drag_down = false
+			_dragging = false
+	elif motion and _drag_down:
+		var dy: float = event.position.y - _drag_from.y
+		if not _dragging and absf(dy) > DRAG_START:
+			_dragging = true
+			_cancel_press()
+		if _dragging:
+			content_scroll.scroll_vertical = int(_drag_scroll0 - dy)
+			var vy: float = event.velocity.y if "velocity" in event else event.relative.y * 60.0
+			_fling = clampf(-vy, -4000.0, 4000.0)
+			get_viewport().set_input_as_handled()
+
+func _cancel_press() -> void:
+	# Cancel the pressed control: move the pointer off-screen first (buttons update "pressing
+	# inside" only from motion, and the drag's motion is swallowed -- without this PLAY still fired
+	# after a scroll), then release there. Godot buttons only fire when released over them.
+	_cancelling = true
+	var away := InputEventMouseMotion.new()
+	away.position = Vector2(-10000, -10000)
+	away.global_position = away.position
+	away.button_mask = MOUSE_BUTTON_MASK_LEFT
+	get_viewport().push_input(away, true)
+	var up := InputEventMouseButton.new()
+	up.button_index = MOUSE_BUTTON_LEFT
+	up.pressed = false
+	up.position = Vector2(-10000, -10000)
+	up.global_position = up.position
+	get_viewport().push_input(up, true)
+	_cancelling = false
+
 func _process(_delta: float) -> void:
+	# Keep gliding after a flick, easing out.
+	if not _drag_down and absf(_fling) > 30.0 and _menu_scroll_live():
+		content_scroll.scroll_vertical = int(content_scroll.scroll_vertical + _fling * _delta)
+		_fling *= pow(0.04, _delta)
+	elif not _drag_down:
+		_fling = 0.0
 	if _toast_box.visible:
 		var left := _toast_until - Time.get_ticks_msec() / 1000.0
 		_toast_box.modulate.a = clampf(left / 0.5, 0.0, 1.0)
