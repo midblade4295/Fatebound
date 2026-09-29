@@ -19,12 +19,14 @@ const PARAPET_T := 0.45
 const TILE := 2.0                  # metres per texture tile
 const FLOOR_TILE := 3.2            # the herringbone path texture's period (as on the map paths)
 
-var bricks := SurfaceTool.new()
-var paving := SurfaceTool.new()
+var bricks := SurfaceTool.new()      # step risers / sides (darker stone)
+var paving := SurfaceTool.new()      # floors (herringbone)
+var treads := SurfaceTool.new()      # step tops (light stone)
 
 func _init() -> void:
 	bricks.begin(Mesh.PRIMITIVE_TRIANGLES)
 	paving.begin(Mesh.PRIMITIVE_TRIANGLES)
+	treads.begin(Mesh.PRIMITIVE_TRIANGLES)
 
 # ---------- primitives ----------
 func _quad(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, d: Vector3, uva: Vector2, uvb: Vector2, uvc: Vector2, uvd: Vector2) -> void:
@@ -60,8 +62,14 @@ func box(st: SurfaceTool, p0: Vector2, p1: Vector2, y0: float, y1: float, thick:
 			Vector2((u0 + w) / TILE, -y0 / TILE), Vector2(u0 / TILE, -y0 / TILE), Vector2(u0 / TILE, -y1 / TILE), Vector2((u0 + w) / TILE, -y1 / TILE))
 		u0 += w
 	var lid: SurfaceTool = top if top != null else st
-	_quad(lid, Vector3(c[0].x, y1, c[0].y), Vector3(c[3].x, y1, c[3].y), Vector3(c[2].x, y1, c[2].y), Vector3(c[1].x, y1, c[1].y),
-		Vector2(c[0].x, c[0].y) / TILE, Vector2(c[3].x, c[3].y) / TILE, Vector2(c[2].x, c[2].y) / TILE, Vector2(c[1].x, c[1].y) / TILE)
+	# The lid must face up whatever the corner order / team mirror: pick the order whose normal
+	# points +y (a fixed order turned the step treads face-down after the winding fix).
+	var l := [c[0], c[3], c[2], c[1]]
+	var ln := (Vector3(l[1].x, 0, l[1].y) - Vector3(l[0].x, 0, l[0].y)).cross(Vector3(l[3].x, 0, l[3].y) - Vector3(l[0].x, 0, l[0].y))
+	if ln.y < 0.0:
+		l = [c[0], c[1], c[2], c[3]]
+	_quad(lid, Vector3(l[0].x, y1, l[0].y), Vector3(l[1].x, y1, l[1].y), Vector3(l[2].x, y1, l[2].y), Vector3(l[3].x, y1, l[3].y),
+		Vector2(l[0].x, l[0].y) / TILE, Vector2(l[1].x, l[1].y) / TILE, Vector2(l[2].x, l[2].y) / TILE, Vector2(l[3].x, l[3].y) / TILE)
 
 func floor_rect(x0: float, x1: float, z0: float, z1: float, y: float, to_world: Callable) -> void:
 	# A paved floor (castle-local rect -> world via to_world), world-scaled UVs.
@@ -124,8 +132,27 @@ static func build(sim, team: int) -> Dictionary:
 	var to_world := func(q: Vector2) -> Vector2: return sim._c(team, q)
 	var hx: float = Castle.HX
 	b.floor_rect(-hx, hx, Castle.FRONT_Z + 0.4, Castle.L1_Z, 0.03, to_world)
-	b.floor_rect(-hx, hx, Castle.L1_Z, Castle.L2_Z, Castle.L1_H + 0.03, to_world)
-	b.floor_rect(-hx, hx, Castle.L2_Z, Castle.BACK + 1.0, Castle.L2_H + 0.03, to_world)
+	# Terrace floors with OPENINGS where their stairs climb (a full-width floor covered the steps
+	# and hid anyone climbing: Kevin's screenshot, 0.17.1).
+	for lv in [[Castle.L1_Z, Castle.L2_Z, Castle.L1_H], [Castle.L2_Z, Castle.BACK + 1.0, Castle.L2_H]]:
+		var tz: float = lv[0]
+		var z_end: float = lv[1]
+		var h: float = lv[2]
+		var gaps := []
+		var stair_end := tz
+		for st in Castle.STAIRS:
+			if absf(float(st.z0) - tz) < 0.01:
+				gaps.append([float(st.x0), float(st.x1)])
+				stair_end = maxf(stair_end, float(st.z1))
+		gaps.sort_custom(func(a, c): return a[0] < c[0])
+		b.floor_rect(-hx, hx, stair_end, z_end, h + 0.03, to_world)
+		var x := -hx
+		for g in gaps:
+			if g[0] - x > 0.05:
+				b.floor_rect(x, g[0], tz, stair_end, h + 0.03, to_world)
+			x = g[1]
+		if hx - x > 0.05:
+			b.floor_rect(x, hx, tz, stair_end, h + 0.03, to_world)
 	for st in Castle.STAIRS:
 		var x0: float = st.x0
 		var x1: float = st.x1
@@ -133,10 +160,12 @@ static func build(sim, team: int) -> Dictionary:
 		var z1: float = st.z1
 		var h0: float = st.h0
 		var h1: float = st.h1
-		var steps := 9
+		var steps := int(Castle.STAIR_STEPS)
 		for i in steps:
-			var za := z0 + (z1 - z0) * i / steps
+			# Each step overlaps the one below by 3 cm: edge-to-edge blocks left hairline seams
+			# that showed the grass underneath.
+			var za := z0 + (z1 - z0) * i / steps - (0.03 if i > 0 else 0.0)
 			var zb := z0 + (z1 - z0) * (i + 1) / steps
 			var hy := h0 + (h1 - h0) * (i + 1) / steps
-			b.box(b.bricks, to_world.call(Vector2((x0 + x1) * 0.5, za)), to_world.call(Vector2((x0 + x1) * 0.5, zb)), 0.0, hy, x1 - x0)
-	return {"steps":b.bricks.commit(), "floor":b.paving.commit()}
+			b.box(b.bricks, to_world.call(Vector2((x0 + x1) * 0.5, za)), to_world.call(Vector2((x0 + x1) * 0.5, zb)), 0.0, hy, x1 - x0, b.treads)
+	return {"steps":b.bricks.commit(), "floor":b.paving.commit(), "treads":b.treads.commit()}
