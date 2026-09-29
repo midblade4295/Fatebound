@@ -216,7 +216,7 @@ func _net_process(delta: float) -> void:
 		return
 	if net_state == "connecting":
 		net_state = "waiting"
-		_net_send({"t":"hello", "v":Net.VERSION, "name":player_name, "build":Diag.BUILD})
+		_net_send({"t":"hello", "v":Net.VERSION, "name":player_name, "build":Diag.BUILD, "pred":true})
 	while ws.get_available_packet_count() > 0:
 		var msg := Net.decode(ws.get_packet())
 		match str(msg.get("t", "")):
@@ -226,7 +226,7 @@ func _net_process(delta: float) -> void:
 			"s":
 				if sim == null:
 					continue
-				Net.apply(sim, msg, hud.player_id)
+				Net.apply(sim, msg, hud.player_id, true)
 				_snap_dt = lerpf(_snap_dt, maxf(0.03, _snap_t), 0.2) if _snap_t > 0.0 else _snap_dt
 				_snap_t = 0.0
 				for e in msg.get("e", []):
@@ -246,12 +246,24 @@ func _net_process(delta: float) -> void:
 	var mv: Vector2 = hud.move_vector() if not hud.pause_panel.visible else Vector2.ZERO
 	var hold: bool = hud.attack_held() and not hud.pause_panel.visible
 	var bhold: bool = hud.ability_held() and not hud.pause_panel.visible
+	# Client-side prediction: move our own unit now (same movement code as the server); the server
+	# validates the position we send. Snapshots only correct us when we've drifted > 2.5 m.
+	var me_p: Dictionary = sim.by_id.get(hud.player_id, {})
+	if not me_p.is_empty() and sim.client_drivable(me_p):
+		sim.predict_step(me_p, mv, delta)
+		# Held ATTACK: the server swings every time it can; start the same swings locally.
+		if hold and me_p.cls != "priest" and sim.can_act(me_p) and not me_p.carrying:
+			sim._start_attack(me_p, "attack")
 	if _send_clock >= 0.05 or (mv - _sent_move).length() > 0.25 or hold != _sent_hold or bhold != _sent_bhold:
 		_send_clock = 0.0
 		_sent_move = mv
 		_sent_hold = hold
 		_sent_bhold = bhold
-		_net_send({"t":"in", "m":mv, "h":hold, "b":bhold})
+		var msg_in := {"t":"in", "m":mv, "h":hold, "b":bhold}
+		if not me_p.is_empty():
+			msg_in["p"] = me_p.pos
+			msg_in["f"] = me_p.face
+		_net_send(msg_in)
 
 func _restart() -> void:
 	if is_instance_valid(view):
@@ -286,7 +298,18 @@ func _to_hud(p: Vector2) -> Vector2:
 
 func _act(action: String, arg: Variant = null) -> void:
 	if online:
-		_net_send({"t":"in", "m":hud.move_vector(), "h":hud.attack_held(), "b":hud.ability_held(), "a":action, "arg":arg})
+		var me_a: Dictionary = sim.by_id.get(hud.player_id, {})
+		if action in ["dodge", "attack"] and not me_a.is_empty() and sim.client_drivable(me_a):
+			# Predict dodges and swings locally: the animation starts now, the server resolves the hit.
+			if action == "dodge":
+				sim._dodge(me_a)
+			elif me_a.cls != "priest":
+				sim._start_attack(me_a, "attack")
+		var msg_a := {"t":"in", "m":hud.move_vector(), "h":hud.attack_held(), "b":hud.ability_held(), "a":action, "arg":arg}
+		if not me_a.is_empty():
+			msg_a["p"] = me_a.pos
+			msg_a["f"] = me_a.face
+		_net_send(msg_a)
 		return
 	sim.act(hud.player_id, action, arg)
 

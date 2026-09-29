@@ -16,6 +16,10 @@ var raw_unit := ""
 var raw_hello_sent := false
 var frames := 0
 var t := 0.0
+var pred_from := Vector2.ZERO
+var pred_frames := 0
+var pred_checked := false
+var cheat_at := Vector2.ZERO
 var phase := "boot"
 var start_pos := Vector2.ZERO
 var move_goal := Vector2.ZERO
@@ -155,6 +159,33 @@ func _process(delta: float) -> bool:
 					if int(st.team) == me3.team: own_stock += int(st.stock)
 				check(own_stock < Sim.HAT_STOCK_MAX * Sim.HAT_CLASSES.size(), "stand stock synced to the mirror (%d left)" % own_stock)
 				check(mode.sim.projectiles.size() >= 0 and mode.diag != null, "mirror sim alive")
+				phase = "predict"; t = 0.0
+				pred_from = mode.sim.by_id[mode.hud.player_id].pos
+				# Push the HUD stick (a phone's thumb): our unit must move locally at once.
+				mode.hud._stick_active = true
+				mode.hud._stick_origin = Vector2(100, 600)
+				mode.hud._stick_pos = Vector2(100 + 60, 600)
+		"predict":
+			var mep: Dictionary = mode.sim.by_id[mode.hud.player_id]
+			if pred_frames == 3:
+				check(mep.pos.distance_to(pred_from) > 0.1, "client-side prediction: our unit moved %.2f m locally within 3 frames" % mep.pos.distance_to(pred_from))
+			pred_frames += 1
+			if t > 1.2 and not pred_checked:
+				pred_checked = true
+				var srv: Vector2 = mep.get("srv_pos", Vector2.INF)
+				check(srv != Vector2.INF and srv.distance_to(mep.pos) < 1.5 and srv.distance_to(pred_from) > 1.0,
+					"the server follows the predicted position (server %.2f m behind, moved %.2f m)" % [srv.distance_to(mep.pos), srv.distance_to(pred_from)])
+				mode.hud._stick_active = false
+				# Pressing ATTACK starts the swing locally at once (the server resolves the hit).
+				if mode.sim.can_act(mep) and mep.cls != "priest":
+					mode._act("attack")
+					check(mep.state == "wind", "a swing starts locally the moment ATTACK is pressed (state %s)" % mep.state)
+				# A forged far-away position must be refused.
+				cheat_at = mep.pos + Vector2(20, 0)
+				mode._net_send({"t":"in", "m":Vector2.ZERO, "h":false, "p":cheat_at, "f":0.0})
+			if t > 1.9 and pred_checked:
+				var srv2: Vector2 = mep.get("srv_pos", Vector2.INF)
+				check(srv2.distance_to(cheat_at) > 10.0, "a forged position 20 m away is rejected (server %.1f m from it)" % srv2.distance_to(cheat_at))
 				raw.close()
 				phase = "drop"; t = 0.0
 		"drop":
