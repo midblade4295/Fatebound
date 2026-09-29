@@ -649,3 +649,8 @@ K2/K3 notes (0.17.0)
 - Added PLAY_STORE_HANDOFF.md and entry links in AGENTS.md, GROKBOT_HANDOFF.md, and SIEGE_HANDOFF.md.
 - Documents the sanitized R5 source, verified live server, release AAB identity, Console-verified version selection, private signing, legacy workflow/verifier corrections, checks, and upload steps.
 - Documentation only: no Play build, signing, upload, or rollout performed.
+
+# 2026-09-29: Grokbot store listing package
+- Imported Fatebound-PlayStore-AI.zip under godot/store-listing, including copy, 8 phone screenshots, feature graphic, raw renders, fastlane metadata, generation tools, fonts, and licenses.
+- Linked from Grokbot/agent handoffs and corrected regeneration paths for the imported location.
+- Checked ZIP integrity, PNG decoding/dimensions, JSON, and listing text limits. No Play Console changes or publication.

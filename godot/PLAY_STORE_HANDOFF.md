@@ -83,6 +83,10 @@ SIEGE_PROBE_URL=wss://136-113-125-3.sslip.io/fatebound/siege/ws \
 
 Healthy requires `active` plus `PROBE_OK` with snapshots. The libfontconfig warning alone is not a failure. Verify online play, tutorial, settings, and privacy URL on Android before claiming device QA.
 
+## Store listing package
+
+Read [store-listing/README_FOR_AI.md](store-listing/README_FOR_AI.md) for the supplied en-US copy, eight ordered phone screenshots, feature graphic, fastlane metadata, and regeneration tools. These are listing assets, not an AAB; the package does not include the required app icon. Exclude `store-listing/*` from client exports. Do not infer Play publication approval from the request to store this package on GitHub.
+
 ## Upload in Play Console
 
 Open the existing **Fatebound** app (`com.fatebound.game`), use the track Kevin has authorized, create/edit its release, and upload the validated signed AAB. Enter accurate release notes and resolve Console validation errors. Record acceptance, version code, track, and release status. Deliver the AAB and verification report to Kevin.

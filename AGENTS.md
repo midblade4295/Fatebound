@@ -1,3 +1,5 @@
+> Store listing copy, screenshots, feature graphic, and Grokbot instructions: [godot/store-listing/README_FOR_AI.md](godot/store-listing/README_FOR_AI.md).
+
 > Current Play Store build/upload instructions: [godot/PLAY_STORE_HANDOFF.md](godot/PLAY_STORE_HANDOFF.md). Read this before preparing an AAB; older Play/version/signing notes below are historical. The R5 branch is already published and the server is deployed.
 
 # Current native development: Fatebound Siege (Fat Princess-style), preview 0.19.1

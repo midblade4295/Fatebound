@@ -1,0 +1,132 @@
+{
+  "language": "en-US",
+  "app_name": "Fatebound: Siege",
+  "short_description": "Storm castles, steal hats and rescue your Oracle in chaotic 16v16 sieges!",
+  "full_description": "Your Oracle has been kidnapped. Rude. Grab a hat, rally your team and storm the enemy castle to bring her home!\n\nFatebound: Siege is a chaotic medieval team battle for 16 vs 16 players. Break down the gates, carry your Oracle out of the enemy dungeon and get her back to your throne. Three rescues wins the match. Meanwhile, the other team is trying to do the exact same thing to you.\n\nTHE HAT MAKES THE HERO\nEveryone starts as a humble Villager. Walk into a hat shop and become a hero:\n• Knight: raise your shield and protect everyone standing behind you\n• Barbarian: smash gates, then upgrade to Berserker and whirlwind through crowds\n• Rogue: lunge in for the quick strike\n• Ranger: rain down volleys of arrows\n• Mage: blast groups apart with an arcane nova\n• Priest: heal allies with a holy beam and a sanctuary\n• Worker: chop wood, mine stone, repair gates and build ladders\nFall in battle and your hat drops where you stood. Anyone can pick it up. Yes, even the enemy.\n\nSIEGE LIKE YOU MEAN IT\n• Break the gates or build ladders over the walls to get into the enemy castle\n• Carry your Oracle home together. The heavier she is, the more hands it takes\n• Feed the enemy's captive cake to make her heavier. Delicious sabotage.\n• Capture outposts to earn wood and stone and to respawn closer to the action\n• Spend resources at the workshop on reinforced gates, better armor and catapults\n• Upgrade each hat shop to unlock the Paladin, Berserker, Assassin, Sniper, Archmage and High Priest\n\nPLAY YOUR WAY\n• Jump into online 16 vs 16 battles\n• Or play offline against bots, anytime\n• Learn the ropes with the Royal Herald's funny, hands-on tutorial\n\nMAKE IT YOURS\n• Unlock skins, weapons, titles and bundles\n• Level up the Siege Pass and complete daily and weekly challenges\n• Everything you unlock is cosmetic. No pay-to-win.\n\nThe Oracle is waiting. Probably bored. Go get her!",
+  "lengths": {
+    "app_name": [
+      16,
+      30
+    ],
+    "short_description": [
+      73,
+      80
+    ],
+    "full_description": [
+      1878,
+      4000
+    ]
+  },
+  "phone_screenshots": [
+    {
+      "order": 1,
+      "file": "graphics/phone_screenshots/01_battle.png",
+      "headline": "STORM THE CASTLE",
+      "subline": "16 vs 16 sieges, online or offline with bots",
+      "shows": "a full assault at the enemy gate",
+      "size": "1080x1920 RGB PNG (9:16, no alpha)"
+    },
+    {
+      "order": 2,
+      "file": "graphics/phone_screenshots/02_rescue.png",
+      "headline": "RESCUE YOUR ORACLE",
+      "subline": "Carry her home from the enemy dungeon. Three rescues wins.",
+      "shows": "a Paladin carrying the Oracle home with allies",
+      "size": "1080x1920 RGB PNG (9:16, no alpha)"
+    },
+    {
+      "order": 3,
+      "file": "graphics/phone_screenshots/03_hats.png",
+      "headline": "THE HAT MAKES THE HERO",
+      "subline": "Walk into a hat shop and become a Knight, Mage, Priest and more",
+      "shows": "the courtyard hat shops with their titles",
+      "size": "1080x1920 RGB PNG (9:16, no alpha)"
+    },
+    {
+      "order": 4,
+      "file": "graphics/phone_screenshots/04_abilities.png",
+      "headline": "SPIN. SHIELD. SMASH.",
+      "subline": "Every class has its own ability",
+      "shows": "a Berserker whirlwind hitting six enemies",
+      "size": "1080x1920 RGB PNG (9:16, no alpha)"
+    },
+    {
+      "order": 5,
+      "file": "graphics/phone_screenshots/05_feed.png",
+      "headline": "FEED THEIR ORACLE CAKE",
+      "subline": "Heavier captives are harder to carry home. Delicious sabotage.",
+      "shows": "a Rogue feeding the captive enemy Oracle",
+      "size": "1080x1920 RGB PNG (9:16, no alpha)"
+    },
+    {
+      "order": 6,
+      "file": "graphics/phone_screenshots/06_tutorial.png",
+      "headline": "LEARN FROM THE HERALD",
+      "subline": "A funny, hands-on walkthrough gets you battle-ready",
+      "shows": "the tutorial Herald with route guidance",
+      "size": "1080x1920 RGB PNG (9:16, no alpha)"
+    },
+    {
+      "order": 7,
+      "file": "graphics/phone_screenshots/07_shop.png",
+      "headline": "SKINS, WEAPONS & PACKS",
+      "subline": "Cosmetics only. No pay-to-win.",
+      "shows": "the in-game shop",
+      "size": "1080x1920 RGB PNG (9:16, no alpha)"
+    },
+    {
+      "order": 8,
+      "file": "graphics/phone_screenshots/08_home.png",
+      "headline": "SEVEN CLASSES",
+      "subline": "Knight, Barbarian, Rogue, Ranger, Mage, Priest and Worker",
+      "shows": "the home screen",
+      "size": "1080x1920 RGB PNG (9:16, no alpha)"
+    }
+  ],
+  "feature_graphic": {
+    "file": "graphics/feature_graphic_1024x500.png",
+    "size": "1024x500 RGB PNG (no alpha)"
+  },
+  "app_icon": null,
+  "rendered_from": {
+    "repo": "github.com/midblade4295/Fatebound",
+    "branch": "claude/siege-dev-r5",
+    "game_build": "0.19.1-siege-tutorial (versionCode 40)"
+  },
+  "android_packages": {
+    "com.fatebound.game": "export preset 'Android Play Store' (the Play package)",
+    "com.fatebound.kaykitrebuild": "export preset 'Android KayKit Rebuild' (Siege preview APKs, preview-signed; NOT for Play)"
+  },
+  "game_facts": {
+    "mode": "16 vs 16 team siege; online (Siege server) or offline vs bots",
+    "win": "3 Oracle rescues (carry your Oracle from the enemy dungeon to your throne); 12-minute match timer",
+    "classes": {
+      "Villager": "starting class, no ability",
+      "Worker": "chops wood, mines stone, repairs gates, builds ladders",
+      "Knight": "block: hold to raise a shield that stops hits for the knight (front) and allies behind",
+      "Barbarian": "spin; upgraded Berserker: 3 s whirlwind with a greatsword",
+      "Rogue": "lunge",
+      "Ranger": "volley",
+      "Mage": "nova",
+      "Priest": "healing beam (attack) + sanctuary"
+    },
+    "upgraded_classes": [
+      "Paladin",
+      "Berserker",
+      "Assassin",
+      "Sniper",
+      "Archmage",
+      "High Priest"
+    ],
+    "hats": "classes come from hat shops in each castle; upgrades are bought at each hat shop; dropped hats can be taken by anyone",
+    "workshop": [
+      "Reinforced Gates",
+      "Armory",
+      "Catapults"
+    ],
+    "outposts": "capture to respawn forward; each pays +1 wood +1 stone every 15 s",
+    "cake": "feed cake to the enemy's captive Oracle to make her heavier (more lifters needed)",
+    "tutorial": "narrated by the Royal Herald; voiceover-ready",
+    "meta": "Siege Pass (free + premium tracks), daily and weekly challenges, cosmetic skins/weapons/titles/packs; shop is cosmetic only"
+  }
+}
