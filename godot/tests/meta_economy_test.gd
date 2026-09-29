@@ -28,7 +28,8 @@ func _init() -> void:
 		if it.kind == "weapon":
 			for hand in ["r", "l"]:
 				var m := str(it.get(hand, ""))
-				if m != "" and not FileAccess.file_exists("res://assets/kaykit/weapons/%s.gltf" % m):
+				var mpath := ("res://assets/kaykit/bits/%s.gltf" % m.substr(5)) if m.begins_with("bits/") else ("res://assets/kaykit/weapons/%s.gltf" % m)
+				if m != "" and not FileAccess.file_exists(mpath):
 					models_ok = false; print("   missing model ", m, " for ", id)
 		if it.kind == "skin" and not Color.html_is_valid(str(it.tint)):
 			models_ok = false
@@ -38,7 +39,17 @@ func _init() -> void:
 	var items := Eco.pass_items(1)
 	var uniq := {}
 	for i in items: uniq[i] = true
-	check(items.size() == 8 and uniq.size() == 8, "season pass has 8 distinct cosmetics")
+	var want := Eco.PASS_FREE_ITEMS + Eco.PASS_PREMIUM_ITEMS
+	check(items.size() == want and uniq.size() == want, "season pass has %d distinct cosmetics" % want)
+	# Packs: price covers only what isn't owned; a fully owned pack can't be bought.
+	var pk: Dictionary = Eco.PACKS["pack_warlord"]
+	var full := Eco.pack_price("pack_warlord", [])
+	var half := Eco.pack_price("pack_warlord", [pk.items[0]])
+	check(full == int(pk.gems) and half > 0 and half < full and Eco.pack_price("pack_warlord", pk.items) == 0,
+		"pack price: full %d, one item owned %d, all owned 0" % [full, half])
+	for pid in Eco.PACKS:
+		for id in Eco.PACKS[pid].items:
+			check(not Eco.item(id).is_empty(), "pack %s item %s exists" % [pid, id])
 	var pass_valid := true
 	for tier in range(1, Eco.PASS_TIERS + 1):
 		for prem in [false, true]:
@@ -109,7 +120,7 @@ func _init() -> void:
 	check(not s.buy_premium().ok, "premium needs gems")
 	s.d.gems = Eco.PREMIUM_COST + 5
 	check(s.buy_premium().ok and s.d.gems == 5 and s.claim_tier(6, true).ok, "premium bought and premium tier 6 claimed")
-	check(s.owns(Eco.pass_items(1)[3]), "premium tier 6 cosmetic owned")
+	check(s.owns(Eco.pass_items(1)[Eco.PASS_FREE_ITEMS + 1]), "premium tier 6 cosmetic owned")
 	var s2 := Profile.new(s.path, s.legacy_path)
 	s2.now_override = s.now_override
 	s2.load_or_create()

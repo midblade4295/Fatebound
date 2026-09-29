@@ -523,3 +523,21 @@ K2/K3 notes (0.17.0)
   (_merge_kit; per castle so the far one is culled). perf_bench at (4,30): ~141-150k tris,
   179 draws (0.17.0: ~102-118k, ~165): the detailed buildings cost ~35-40k tris in view.
 - Watch: seed 11 lopsided (red 3-0, kills 18-148); seed 22 even. Check for a side bias.
+
+# Round 11 (Kevin): stairs, hat machines, Weapons Bits cosmetics, knight block, berserker whirlwind
+- Stairs: terrace floors had no openings (covered the steps, climbers under the floor); box lids
+  faced down after the winding fix; height = ramp + one riser. Treads pale, risers dark.
+- Knight BLOCK / Berserker WHIRLWIND (see handoff 17). Protocol v6.
+- Squeeze traps: a blocking knight got wedged into a 0.55 m slot (cell bars vs L2 face); the
+  push-out resolves walls one at a time. siege_land_check now finds any castle slot narrower than
+  a unit: 7 per castle, all fixed (cell on the L2 face, buildings touching walls, stands 1 m off).
+- Hat machines spread (knight/rogue/barbarian courtyard, ranger L1, mage/priest L2), each a themed
+  KayKit structure with an upgraded look. An UNSHADED orb + the mage/priest pieces hung the
+  software-Vulkan renderer before the first frame (bisected per class, per piece; each alone
+  fine) -> lit emissive orbs.
+- Cosmetics: KayKit Fantasy Weapons Bits (assets/kaykit/bits): 18 weapon cosmetics + 2 priest
+  skins + 3 titles; Priest in the Locker; 6 class packs (gems, pay only for what you don't own);
+  pass 6 free + 10 premium cosmetics per season (was 3 + 5; the pool was exactly 8 before, so
+  every season was the same). Icons: tools/blender/icons.py (bits/ models), priest busts.
+- Open: the Priest is the Mage model tinted white-gold and reads almost like a Mage (a tint can
+  only darken the purple robes); needs its own model or re-texture.
