@@ -169,8 +169,10 @@ static func _terrain_material() -> ShaderMaterial:
 		# (not yellowish) darkening keeps the grass a true green.
 		# Measured against Kevin's references (grass hue ~111 deg, sat ~138, value ~190 of 255):
 		# slightly darker and bluer than neutral.
-		m.set_shader_parameter("tint", Vector3(0.71, 0.78, 0.84))
-		m.set_shader_parameter("grass_sat", 0.78)
+		# Re-measured for the painted grass (0.14.4) against Kevin's references.
+		m.set_shader_parameter("tint", Vector3(0.64, 0.73, 0.80))
+		m.set_shader_parameter("grass_sat", 0.95)
+		m.set_shader_parameter("band_strength", 1.6)     # between the 1x (faint) and 3x (bold) tests
 		var mt := NoiseTexture2D.new()
 		mt.width = 256
 		mt.height = 256

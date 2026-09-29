@@ -91,53 +91,41 @@ def flat_plane_render(sc, build_material, path):
 
 # ---------------- grass ----------------
 def grass():
-    """Round 7b grass (Kevin: 'more like grass', 'more colourful like the samples'): true green
-    (sRGB hue ~110 deg), soft lighter and darker patches, faint wavy lighter lines (the painted
-    swirls of the references -- NOT a polygon network, which read as tiles), a blade grain.
-    Colours are LINEAR (Blender): (0.05,0.36,0.03) ~ sRGB (63,161,48)."""
+    """Painted grass like Kevin's Fat Princess references (0.14.4): flat polygon cells, each one
+    flat green tone a little lighter/darker than its neighbours, thin darker lines between them.
+    No noise grain. The large sweeping light/dark bands are baked into the terrain mask (alpha)
+    so they can run across the whole field. Colours LINEAR: (0.13, 0.54, 0.05) ~ sRGB (100,193,64)."""
     sc = reset()
-    def noise4(radius, detail, rough=0.5):
-        vec, w = torus_coords(nt_ref[0], radius)
-        n = nt_ref[0].nodes.new("ShaderNodeTexNoise"); n.noise_dimensions = '4D'
-        n.inputs['Detail'].default_value = detail
-        n.inputs['Roughness'].default_value = rough
-        nt_ref[0].links.new(vec, n.inputs['Vector']); nt_ref[0].links.new(w, n.inputs['W'])
-        return n.outputs['Fac']
-    nt_ref = [None]
     def mat(nt):
-        nt_ref[0] = nt
-        # Soft patches: two octaves of low-frequency noise -> dark/mid/light green.
-        patches = noise4(1.1, 2.0)
-        base = ramp(nt, [(0.30, (0.045, 0.32, 0.026)), (0.50, (0.085, 0.46, 0.042)), (0.70, (0.14, 0.60, 0.065))])
-        nt.links.new(patches, base.inputs['Fac'])
-        # Faint wavy lighter lines: where a mid-frequency noise crosses 0.5.
-        ridge_n = noise4(1.7, 1.5, 0.4)
-        sub = nt.nodes.new("ShaderNodeMath"); sub.operation = 'SUBTRACT'; sub.inputs[1].default_value = 0.5
-        nt.links.new(ridge_n, sub.inputs[0])
-        ab = nt.nodes.new("ShaderNodeMath"); ab.operation = 'ABSOLUTE'
-        nt.links.new(sub.outputs[0], ab.inputs[0])
-        line = ramp(nt, [(0.0, (0.34, 0.80, 0.16)), (0.022, (0.0, 0.0, 0.0))])
-        nt.links.new(ab.outputs[0], line.inputs['Fac'])
-        scr = nt.nodes.new("ShaderNodeMix"); scr.data_type = 'RGBA'; scr.blend_type = 'SCREEN'
-        scr.inputs[0].default_value = 0.35
-        nt.links.new(base.outputs[0], scr.inputs[6]); nt.links.new(line.outputs[0], scr.inputs[7])
-        # Blade grain: dense small cells (tips lighter, roots darker).
-        vec2, w2 = torus_coords(nt, 16.0)
-        blade = nt.nodes.new("ShaderNodeTexVoronoi"); blade.voronoi_dimensions = '4D'
-        nt.links.new(vec2, blade.inputs['Vector']); nt.links.new(w2, blade.inputs['W'])
-        bl = ramp(nt, [(0.0, (1.22, 1.20, 1.10)), (0.3, (1.0, 1.0, 1.0)), (0.7, (0.80, 0.86, 0.76))])
-        nt.links.new(blade.outputs['Distance'], bl.inputs['Fac'])
-        m1 = nt.nodes.new("ShaderNodeMix"); m1.data_type = 'RGBA'; m1.blend_type = 'MULTIPLY'
-        m1.inputs[0].default_value = 1.0
-        nt.links.new(scr.outputs[2], m1.inputs[6]); nt.links.new(bl.outputs[0], m1.inputs[7])
-        # Finer second grain so it doesn't look like dots.
-        fine = noise4(30.0, 4.0, 0.6)
-        fr = ramp(nt, [(0.4, (0.9, 0.93, 0.88)), (0.6, (1.06, 1.05, 1.02))])
-        nt.links.new(fine, fr.inputs['Fac'])
-        m2 = nt.nodes.new("ShaderNodeMix"); m2.data_type = 'RGBA'; m2.blend_type = 'MULTIPLY'
-        m2.inputs[0].default_value = 1.0
-        nt.links.new(m1.outputs[2], m2.inputs[6]); nt.links.new(fr.outputs[0], m2.inputs[7])
-        return m2.outputs[2]
+        # A bigger torus bends each cell less (smaller radii curved the cell edges into arcs); the
+        # tile covers 16 m in the game (terrain.gdshader grass_scale), so cells stay ~1.6 m.
+        vec, w = torus_coords(nt, 1.7)
+        cell = nt.nodes.new("ShaderNodeTexVoronoi"); cell.voronoi_dimensions = '4D'
+        cell.inputs['Scale'].default_value = 1.0         # (Blender's default 5 made tiny shards)
+        cell.inputs['Randomness'].default_value = 0.85
+        nt.links.new(vec, cell.inputs['Vector']); nt.links.new(w, cell.inputs['W'])
+        edge = nt.nodes.new("ShaderNodeTexVoronoi"); edge.voronoi_dimensions = '4D'
+        edge.feature = 'DISTANCE_TO_EDGE'
+        edge.inputs['Scale'].default_value = 1.0
+        edge.inputs['Randomness'].default_value = 0.85
+        nt.links.new(vec, edge.inputs['Vector']); nt.links.new(w, edge.inputs['W'])
+        # One flat tone per cell: a palette of close greens.
+        sep = nt.nodes.new("ShaderNodeSeparateColor")
+        nt.links.new(cell.outputs['Color'], sep.inputs[0])
+        # Mint greens: the first palette measured sRGB (121,207,69) in game vs the references'
+        # (94,197,90); each channel rescaled by that ratio (linear R x0.59, G x0.89, B x1.70).
+        pal = ramp(nt, [(0.0, (0.062, 0.42, 0.068)), (0.35, (0.073, 0.465, 0.082)),
+                        (0.7, (0.085, 0.505, 0.094)), (1.0, (0.097, 0.536, 0.105))])
+        pal.color_ramp.interpolation = 'CONSTANT'
+        nt.links.new(sep.outputs[0], pal.inputs['Fac'])
+        # Thin darker line between cells, with a faint lighter lip inside it (painted bevel).
+        line = ramp(nt, [(0.0, (0.70, 0.78, 0.66)), (0.012, (0.70, 0.78, 0.66)), (0.02, (1.07, 1.06, 1.03)),
+                         (0.045, (1.0, 1.0, 1.0))])
+        nt.links.new(edge.outputs['Distance'], line.inputs['Fac'])
+        m = nt.nodes.new("ShaderNodeMix"); m.data_type = 'RGBA'; m.blend_type = 'MULTIPLY'
+        m.inputs[0].default_value = 1.0
+        nt.links.new(pal.outputs[0], m.inputs[6]); nt.links.new(line.outputs[0], m.inputs[7])
+        return m.outputs[2]
     flat_plane_render(sc, mat, os.path.join(OUTDIR, "grass.png"))
 
 # ---------------- rock ----------------
