@@ -6,7 +6,7 @@ extends SceneTree
 # sound effects are recorded by the Movie Maker. Cameras ease between a start and an end pose.
 const Mode = preload("res://scripts/siege/siege_mode.gd")
 const Sim = preload("res://scripts/siege/siege_sim.gd")
-const LENGTH := {"aerial": 5.0, "captive": 4.0, "hats": 4.5, "assault": 6.0, "whirl": 3.5, "cake": 4.0, "carry": 5.0, "finale": 6.0}
+const LENGTH := {"aerial": 5.0, "captive": 4.0, "hats": 4.5, "assault": 6.0, "whirl": 3.5, "cake": 4.0, "backstab": 4.0, "carry": 5.0, "finale": 6.0}
 var mode
 var shot := "aerial"
 var frames := 0
@@ -16,6 +16,10 @@ var cam_b := []            # ... and at the end
 var orbit := {}            # optional: {"c": Vector3, "r": float, "h": float, "a0": float, "a1": float}
 var follow := ""           # optional: unit id the camera tracks (with cam offsets relative to it)
 var hold := []             # knights holding the shield up
+var walkers := {}          # unit id -> move vector re-applied every frame (not the player: the match
+                           # writes the joystick into the player's move each frame, so "you" can't walk)
+var chasers := []          # unit ids that head for `follow` every frame
+var beats := []            # [time, unit id, action] fired once
 
 func _init() -> void:
 	shot = OS.get_environment("SHOT") if OS.has_environment("SHOT") else "aerial"
@@ -135,29 +139,71 @@ func _stage() -> void:
 			cam_a = [_v((cap.pos as Vector2) + Vector2(-5.5, -6.5), cy2 + 5.5), _v((cap.pos as Vector2) + Vector2(-1.2, -0.8), cy2 + 0.8)]
 			cam_b = [_v((cap.pos as Vector2) + Vector2(-3.2, -4.0), cy2 + 3.4), _v(cap.pos, cy2 + 0.9)]
 		"carry":
-			# Carrying her home across the field, escorts around, the enemy on her heels.
-			s._set_class(me, "knight", true)
-			me.bot = false
+			# An ally carries our Oracle home over the centre bridge, escorts beside her, the enemy
+			# closing in behind. (Kevin: the carrier has to actually walk her home.)
+			var start := Vector2(0.0, -9.0)
+			var home_dir := Vector2(0.0, 1.0)
+			var allies: Array = s.units.filter(func(x): return x.team == 0 and x.id != me.id)
+			var foes: Array = s.units.filter(func(x): return x.team == 1)
+			var carrier: Dictionary = allies[0]
+			s._set_class(carrier, "knight", true)
 			var o: Dictionary = s.oracles[0]
-			me.pos = o.pos + Vector2(0.5, 0)
-			s.act(me.id, "interact")
-			var start := Vector2(-6.0, -6.0)
-			me.pos = start
+			carrier.bot = false
+			carrier.pos = o.pos + Vector2(0.5, 0)
+			s.act(carrier.id, "interact")
+			carrier.pos = start
 			o.pos = start
-			me.move = Vector2(0.15, 1.0).normalized()
-			var k2 := 0
-			for u in s.units:
-				if u.id == me.id:
-					continue
-				if u.team == 0 and k2 < 5:
-					u.pos = start + Vector2(-2.4 + k2 * 1.2, 1.0 + (k2 % 2) * 1.6)
-					k2 += 1
-				elif u.team == 1 and k2 < 12:
-					u.pos = start + Vector2(-4.0 + (k2 - 5) * 1.4, -6.0 - (k2 % 2) * 1.5)
-					k2 += 1
-			follow = me.id
-			cam_a = [Vector3(7.0, 6.5, -7.0), Vector3(0, 1.0, 1.5)]      # offsets from the carrier
-			cam_b = [Vector3(4.0, 8.0, -9.5), Vector3(0, 1.0, 3.0)]
+			walkers[carrier.id] = home_dir
+			for k in 3:
+				var es: Dictionary = allies[k + 1]
+				s._set_class(es, ["barbarian", "priest", "ranger"][k], k == 0)
+				es.bot = false
+				es.pos = start + Vector2([-1.6, 1.6, 0.0][k], [-0.6, -0.6, -2.0][k])
+				walkers[es.id] = home_dir
+			for k in 4:
+				var fo: Dictionary = foes[k]
+				s._set_class(fo, ["rogue", "knight", "barbarian", "rogue"][k], false)
+				fo.bot = false
+				fo.pos = start + Vector2(-2.0 + k * 1.4, -7.5 - (k % 2) * 1.2)
+				chasers.append(fo.id)
+			me.pos = Sim.spawn(0)
+			follow = carrier.id
+			cam_a = [Vector3(6.5, 6.0, -6.0), Vector3(0, 1.0, 2.0)]
+			cam_b = [Vector3(3.5, 7.5, -9.0), Vector3(0, 1.0, 3.5)]
+		"backstab":
+			# Fight dirty: a rogue creeps up behind a guard who's looking the other way and pulls
+			# her knives. (Replaces the cake shot, Kevin.)
+			var spot := Vector2(9.0, 15.0)
+			var allies2: Array = s.units.filter(func(x): return x.team == 0 and x.id != me.id)
+			var foes2: Array = s.units.filter(func(x): return x.team == 1)
+			var guard: Dictionary = foes2[0]
+			s._set_class(guard, "knight", false)
+			guard.bot = false
+			guard.move = Vector2.ZERO
+			guard.pos = spot
+			guard.face = Sim.angle_of(Vector2(0.3, -1.0))             # looking away
+			guard.max_hp = 5000.0
+			guard.hp = 5000.0
+			var mate: Dictionary = foes2[1]
+			s._set_class(mate, "ranger", false)
+			mate.bot = false
+			mate.pos = spot + Vector2(2.2, -1.6)
+			mate.face = Sim.angle_of(Vector2(-0.6, -1.0))
+			mate.max_hp = 5000.0
+			mate.hp = 5000.0
+			var rogue: Dictionary = allies2[0]
+			s._set_class(rogue, "rogue", false)
+			rogue.bot = false
+			rogue.pos = spot + Vector2(-0.8, 4.2)
+			var creep: Vector2 = (spot + Vector2(0, 1.0) - (rogue.pos as Vector2)).normalized() * 0.32
+			walkers[rogue.id] = creep
+			rogue.face = Sim.angle_of(creep)
+			beats = [[1.55, rogue.id, "stop"], [1.6, rogue.id, "attack"], [2.25, rogue.id, "attack"], [2.9, rogue.id, "attack"]]
+			set_meta("stab_target", guard.id)
+			me.pos = Sim.spawn(0)
+			var mid := spot + Vector2(0, 2.0)
+			cam_a = [_v(mid + Vector2(-6.5, 3.5), 3.6), _v(mid, 1.0)]
+			cam_b = [_v(mid + Vector2(-4.0, 1.5), 2.6), _v(mid + Vector2(0, -0.6), 1.0)]
 		"finale":
 			# Pull back from their castle for the title card.
 			var eg2: Dictionary = s.gates.filter(func(g): return g.team == 1)[0]
@@ -191,6 +237,25 @@ func _process(delta: float) -> bool:
 		mode.view.cam_override = [fp + (cam_a[0] as Vector3).lerp(cam_b[0], e), fp + (cam_a[1] as Vector3).lerp(cam_b[1], e)]
 	elif not cam_a.is_empty():
 		mode.view.cam_override = [(cam_a[0] as Vector3).lerp(cam_b[0], e), (cam_a[1] as Vector3).lerp(cam_b[1], e)]
+	for id in walkers:
+		s.by_id[id].move = walkers[id]
+	if follow != "":
+		for id in chasers:
+			var ch: Dictionary = s.by_id[id]
+			ch.move = ((s.by_id[follow].pos as Vector2) - (ch.pos as Vector2)).normalized()
+	for b in beats.duplicate():
+		if t >= float(b[0]):
+			beats.erase(b)
+			var bu: Dictionary = s.by_id[b[1]]
+			if str(b[2]) == "stop":
+				walkers.erase(b[1])
+				bu.move = Vector2.ZERO
+				if has_meta("stab_target"):
+					bu.face = Sim.angle_of((s.by_id[get_meta("stab_target")].pos as Vector2) - (bu.pos as Vector2))
+			else:
+				if has_meta("stab_target"):
+					bu.face = Sim.angle_of((s.by_id[get_meta("stab_target")].pos as Vector2) - (bu.pos as Vector2))
+				s.act(bu.id, str(b[2]))
 	if shot == "cake" and has_meta("feed_at") and t >= float(get_meta("feed_at")):
 		remove_meta("feed_at")
 		var me: Dictionary = s.by_id[mode.hud.player_id]

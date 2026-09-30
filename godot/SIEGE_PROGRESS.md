@@ -699,3 +699,16 @@ K2/K3 notes (0.17.0)
 - perf_bench (mid-field): 146-154k tris / 186 draws (was ~141-150k / 179); timings within noise.
 - Trailer re-rendered: the opening starts on the sky and tilts down onto our castle; the finale pulls
   back and tilts up so the title sits over castle, mountains and sky; title dim 0.45 -> 0.25.
+
+# Trailer with Kevin's music (his Suno track, Spooky_3.wav, 103 s)
+- Scored with the song: its drop at 42.5 s (loudness x1.46 after a quieter stretch) lands on the title
+  card (29.7 s): python3 tools/trailer_edit.py --song Spooky_3.wav --song-hit 42.5 (the song plays from
+  12.8 s, 0.6 s fade in, 1.4 s fade out). The WAV came in quiet (-23.8 LUFS, peaks -9.9 dB): one steady
+  gain to -15 LUFS (+9.5 dB); final mix -15.6 LUFS, true peak -1.5 dB. Measured: x1.37 louder in the
+  second after the title than before it.
+- "BRING HER HOME.": an ally carries her (the match writes the joystick into the player's move every
+  frame, so "you" stood still) across the centre bridge toward our castle, escorts beside, enemies
+  closing in behind.
+- "FIGHT DIRTY.": a rogue creeps up behind a guard looking away and strikes three times (replaces the
+  cake shot).
+- The song isn't in the repo (Kevin's track, large); keep it with the trailer sources.

@@ -18,11 +18,11 @@ CUT = [
     ("hats", "GRAB A HAT."),
     ("assault", "STORM THE CASTLE."),
     ("whirl", "SPIN. SHIELD. SMASH."),
-    ("cake", "FIGHT DIRTY."),
+    ("backstab", "FIGHT DIRTY."),
     ("carry", "BRING HER HOME."),
     ("finale", ""),
 ]
-LENGTH = {"aerial": 5.0, "captive": 4.0, "hats": 4.5, "assault": 6.0, "whirl": 3.5, "cake": 4.0, "carry": 5.0, "finale": 6.0}
+LENGTH = {"aerial": 5.0, "captive": 4.0, "hats": 4.5, "assault": 6.0, "whirl": 3.5, "cake": 4.0, "backstab": 4.0, "carry": 5.0, "finale": 6.0}
 HEAD = 0.1          # trim the first frames (the camera settling onto the staged scene)
 XF = 0.4            # crossfade
 TITLE_AT = 1.2      # seconds into the finale when the title lands (on the music's hit)
@@ -43,6 +43,9 @@ def main() -> None:
     ap.add_argument("--out", default="trailer.mp4")
     ap.add_argument("--fonts", default="tools/fonts")
     ap.add_argument("--music", default="", help="existing score .wav (default: generate one)")
+    ap.add_argument("--song", default="", help="a song to score the trailer with (e.g. Kevin's Suno track)")
+    ap.add_argument("--song-hit", type=float, default=-1.0,
+                    help="time in the song (s) of the drop that should land on the title card")
     a = ap.parse_args()
     title_ttf = os.path.join(a.fonts, "Cinzel-Black.ttf")
     body_ttf = os.path.join(a.fonts, "Nunito-ExtraBold.ttf")
@@ -55,7 +58,29 @@ def main() -> None:
     total = sum(durs) - XF * (len(CUT) - 1)
     hit = offsets[-1] + TITLE_AT
     music = a.music or os.path.join(a.shots, "score.wav")
-    if not a.music:
+    if a.song:
+        # Cut the song so its drop lands on the title: start = drop - title time, fade in if that's
+        # mid-song, fade out at the end.
+        start = max(0.0, a.song_hit - hit) if a.song_hit >= 0 else 0.0
+        music = os.path.join(a.shots, "song_cut.wav")
+        fade_in = 0.6 if start > 0 else 0.0
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", f"{start:.3f}", "-t", f"{total:.3f}", "-i", a.song,
+                        "-af", f"afade=t=in:d={fade_in},afade=t=out:st={total - 1.4:.3f}:d=1.4" if fade_in else
+                        f"afade=t=out:st={total - 1.4:.3f}:d=1.4", "-ar", "48000", "-ac", "2", music], check=True)
+        # Songs can come in quiet (Kevin's Suno WAV: -23.8 LUFS, peaks -9.9 dB): one steady gain to
+        # -15 LUFS (online video sits near -14; the game's SFX add on top), capped so peaks stay under -1 dB.
+        meas = subprocess.run(["ffmpeg", "-v", "info", "-i", music, "-af", "loudnorm=I=-15:TP=-1:print_format=json",
+                               "-f", "null", "-"], capture_output=True, text=True).stderr
+        import re as _re
+        li = float(_re.search(r'"input_i" : "(-?[0-9.]+)"', meas).group(1))
+        tp = float(_re.search(r'"input_tp" : "(-?[0-9.]+)"', meas).group(1))
+        gain = min(-15.0 - li, -1.0 - tp)
+        leveled = os.path.join(a.shots, "song_level.wav")
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", music, "-af", f"volume={gain:.2f}dB", leveled], check=True)
+        music = leveled
+        print(f"song from {start:.2f} s: its drop at {a.song_hit:.2f} s lands on the title at {hit:.2f} s; "
+              f"gain {gain:+.1f} dB ({li:.1f} LUFS -> {li + gain:.1f})")
+    elif not a.music:
         here = os.path.dirname(os.path.abspath(__file__))
         subprocess.run(["python3", os.path.join(here, "trailer_music.py"), music, "--length", f"{total:.3f}", "--hit", f"{hit:.3f}"], check=True)
     inputs = []
