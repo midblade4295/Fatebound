@@ -2222,7 +2222,9 @@ func _make_projectile(kind: String) -> Node3D:
 		var packed := Stage.scene("res://assets/kaykit/weapons/arrow_bow.gltf")
 		if packed != null:
 			var arrow: Node3D = packed.instantiate()
-			arrow.rotation.x = PI * 0.5
+			# The model already lies along +Z, arrowhead forward (measured: z -0.64..0.62, the narrow end at
+			# +Z), and the root turns +Z onto the flight path. The old 90 deg turn about X stood every arrow
+			# on its tip (Kevin: "arrows flying sideways instead of straight").
 			arrow.scale = Vector3.ONE * 1.3
 			root.add_child(arrow)
 			return root

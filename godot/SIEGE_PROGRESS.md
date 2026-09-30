@@ -959,3 +959,9 @@ K2/K3 notes (0.17.0)
   your King home." Song from 7.2 s: its drop lands on the title at 35.3 s (measured -20 -> -13 dB).
 - Shot scripts must not walk the player's unit: the match loop overwrites its move with the idle joystick.
 - Herald trailer VO: 11 lines, waiting for Kevin's recording (tools/trailer2_edit.py --vo DIR, 1..11.mp3).
+
+# 0.24.4 (Kevin): "fix the arrows flying sideways instead of straight (this happens in game also)"
+- The arrow model (weapons/arrow_bow.gltf) lies along +Z, head forward (measured z -0.64..0.62, narrow end +Z);
+  the projectile root already turns +Z onto the flight path. _make_projectile's extra rotation.x = PI/2 stood
+  every arrow on its tip. Removed; checked from the game camera and the side (head leading, fletching trailing).
+- Trailer 2: clash, assault and rampart re-rendered and their segments rebuilt; final re-cut (42.9 s, title 35.3 s).
