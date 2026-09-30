@@ -89,6 +89,51 @@ def choose_cuts(rows, lead, tail, gaps):
     return segs
 
 
+PRON = {"ahem": "AH HH EH M", "bards": "B AA R D Z", "fatebound": "F EY T B AW N D", "peckish": "P EH K IH SH"}
+
+
+def refine_cuts(rows, segs, path, gaps):
+    # Each boundary, left to right: force-align the two lines' text over their two pieces (the union
+    # holds both lines even when the length-fit cut drifted by a sentence) and move the cut into the
+    # pause between the last word of one and the first word of the next. (The 17-line re-record put
+    # "Rescue him three times..." at the end of the piece before it; the word check didn't catch it.)
+    from pocketsphinx import Decoder
+    raw = tempfile.NamedTemporaryFile(suffix=".raw", delete=False).name
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", path, "-ac", "1", "-ar", "16000", "-f", "s16le", raw], check=True)
+    audio = open(raw, "rb").read()
+    os.unlink(raw)
+    d = Decoder(samprate=16000)
+    for w, ph in PRON.items():
+        if d.lookup_word(w) is None:
+            d.add_word(w, ph, True)
+    moved = 0
+    for i in range(len(segs) - 1):
+        a, b = segs[i]["start"], segs[i + 1]["end"]
+        wa, wb = words(rows[i][2]), words(rows[i + 1][2])
+        d.set_align_text(" ".join(wa + wb))
+        d.start_utt()
+        d.process_raw(audio[int(a * 16000) * 2:int(b * 16000) * 2], full_utt=True)
+        d.end_utt()
+        # The forced hypothesis's word segmentation carries the timings (get_alignment() stays empty
+        # without a second alignment pass in this PocketSphinx).
+        ws = [(sg.word, a + sg.start_frame / 100.0, a + (sg.end_frame + 1) / 100.0) for sg in d.seg()
+              if sg.word not in ("<sil>", "<s>", "</s>") and not sg.word.startswith("[") and not sg.word.startswith("+")]
+        if len(ws) != len(wa) + len(wb):
+            continue
+        end_prev, start_next = ws[len(wa) - 1][2], ws[len(wa)][1]
+        mid = (end_prev + start_next) * 0.5
+        best = None
+        for g in gaps:
+            if g[0] <= start_next + 0.3 and g[1] >= end_prev - 0.3:
+                if best is None or abs((g[0] + g[1]) * 0.5 - mid) < abs((best[0] + best[1]) * 0.5 - mid):
+                    best = g
+        new_end, new_start = (best[0], best[1]) if best else (mid, mid)
+        if abs(new_end - segs[i]["end"]) > 0.05:
+            moved += 1
+        segs[i]["end"], segs[i + 1]["start"] = new_end, new_start
+    return moved
+
+
 def asr_check(rows, segs, path):
     from pocketsphinx import Decoder
     raw = tempfile.NamedTemporaryFile(suffix=".raw", delete=False).name
@@ -107,6 +152,8 @@ def asr_check(rows, segs, path):
         leak = max([len((content[j] - content[k]) & hw) / max(1, len(content[j] - content[k]))
                     for j in (k - 1, k + 1) if 0 <= j < len(rows)] or [0.0])
         s["own"], s["leak"] = round(own, 2), round(leak, 2)
+        hw_list = (d.hyp().hypstr if d.hyp() else "").split()
+        s["heard"] = " ".join(hw_list[:3]) + " ... " + " ".join(hw_list[-3:])
         if own < 0.35 or leak > own * 0.6:
             flagged.append((s["n"], s["id"]))
     return flagged
@@ -136,16 +183,27 @@ def main():
     ap.add_argument("read")
     ap.add_argument("--out", default=os.path.join(HERE, "..", "assets", "vo", "tutorial"))
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--ids", default="", help="comma-separated line ids: the read holds just these, in this order "
+                    "(a partial re-record); default: every line of SCRIPT.md")
     a = ap.parse_args()
     rows = script_rows()
+    if a.ids:
+        by_id = {r[1]: r for r in rows}
+        want = [x.strip() for x in a.ids.split(",") if x.strip()]
+        missing = [x for x in want if x not in by_id]
+        if missing:
+            raise SystemExit("unknown line ids: %s" % missing)
+        rows = [by_id[x] for x in want]
     total = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", a.read],
                                  capture_output=True, text=True).stdout)
     lead, tail, gaps = pauses(a.read, total)
     segs = choose_cuts(rows, lead, tail, gaps)
+    moved = refine_cuts(rows, segs, a.read, gaps)
+    print("alignment moved %d of %d cuts" % (moved, len(segs) - 1))
     flagged = asr_check(rows, segs, a.read)
     for s in segs:
-        print("%2d %-14s %7.2f-%7.2f  %5.2fs (expected %5.2f)  words: own %.2f, neighbours %.2f"
-              % (s["n"], s["id"], s["start"], s["end"], s["end"] - s["start"], s["exp"], s["own"], s["leak"]))
+        print("%2d %-14s %7.2f-%7.2f  %5.2fs (expected %5.2f)  words: own %.2f, neighbours %.2f | %s"
+              % (s["n"], s["id"], s["start"], s["end"], s["end"] - s["start"], s["exp"], s["own"], s["leak"], s.get("heard", "")))
     if flagged:
         print("FLAGGED (not exported):", flagged)
         raise SystemExit(1)

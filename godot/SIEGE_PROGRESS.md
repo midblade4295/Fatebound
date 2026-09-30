@@ -922,3 +922,12 @@ K2/K3 notes (0.17.0)
   map is in /home/claude/vo_staging/needed_map.json (1 t_intro_2, 2 t_hat_2, 3 t_up_1, 4 t_rampart_1,
   5 t_goal_1, 6 t_goal_2, 7 t_goal_3, 8 t_cake_1, 9 t_cake_took, 10 t_feed_1, 11 t_feed_done, 12 t_rescue_1,
   13 t_grab_1, 14 t_grab_done, 15 t_carry_1, 16 t_carry_done, 17 t_end_2).
+
+# 0.24.2 (Kevin): the 17-line re-record -- the tutorial is fully voiced again (37/37)
+- Kevin's read (167 s; ElevenLabs ignored the break tags again: longest pause 0.69 s). tools/vo_split.py --ids
+  takes a subset in order. The length-fit + word check passed it, but the new head/tail transcripts showed three
+  cuts in a row one sentence off (t_goal_2 ended "...and we win", t_goal_3 "...a dirty trick", t_cake_1
+  "...magnificent"). New refine_cuts: per boundary, force-align the two lines' text over their two pieces and cut
+  in the pause between the aligned last/first words (timings from the forced hypothesis's seg(): get_alignment()
+  is empty without a second pass). It moved exactly those 3; every piece now starts and ends on its own line.
+- Exported (+1.96 dB to -16 LUFS), 37 recordings, tutorial_test pending list empty.
