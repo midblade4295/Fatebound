@@ -1282,6 +1282,9 @@ func _build_castle_kit(t: int) -> void:
 		if absf(a.y - c.y) < 0.01:
 			var lo := 0.0 if absf(a.y - Castle.L1_Z) < 0.01 else Castle.L1_H
 			var hi := Castle.L1_H if absf(a.y - Castle.L1_Z) < 0.01 else Castle.L2_H
+			if absf(a.y - Castle.WALK_Z1) < 0.01:
+				lo = 0.0                               # the rampart's front edge (Round 15)
+				hi = Castle.WALK_H
 			_kit_run(wa, wc, lo, hi - lo)
 		else:
 			# A stair side runs along z; it stands on the stair's lower level, as tall as the climb.

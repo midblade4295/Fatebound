@@ -615,14 +615,26 @@ func _return_to_cell(t: int) -> void:
 	_reset_jail(1 - t)
 
 func _reset_jail(castle_team: int) -> void:
-	# Whenever a King is back in his cell, the jail door of the castle holding him is whole again.
+	# Whenever a King is back in his cell, the jail door of the castle holding him is whole again --
+	# as soon as no enemy stands in the doorway or the cell (Round 15: snapping shut on a rescuer put
+	# him inside the door; anyone in the cell would have been locked in with the King).
 	for g in gates:
 		if int(g.team) == castle_team and str(g.get("kind", "")) == "jail" and (g.broken or g.hp < g.max_hp):
-			g.hp = g.max_hp
-			g.broken = false
-			g.erase("broken_at")
-			_update_gate_nav()
-			_event("jail_reset", {"gate":g.id, "team":g.team})
+			g["relock"] = true
+			_try_relock(g)
+
+func _try_relock(g: Dictionary) -> void:
+	var cell := _c(int(g.team), CELL_C)
+	var reach: float = float(g.get("r", WALL_R)) + UNIT_R + 0.3
+	for u in units:
+		if u.team != g.team and alive(u) and (u.pos.distance_to(cell) < 3.0 or u.pos.distance_to(seg_closest(u.pos, g.a, g.b)) < reach):
+			return                                  # someone's in the way: try again next tick
+	g.erase("relock")
+	g.hp = g.max_hp
+	g.broken = false
+	g.erase("broken_at")
+	_update_gate_nav()
+	_event("jail_reset", {"gate":g.id, "team":g.team})
 
 func lifters_needed(o: Dictionary) -> int:
 	return int(LIFTERS[clampi(int(o.weight), 0, LIFTERS.size() - 1)])
@@ -1470,7 +1482,9 @@ func _shoot(u: Dictionary, angle: float, dmg: float, aoe: float, speed: float, r
 	var d := dir_of(angle)
 	projectiles.append({"id":_next_proj,"team":u.team,"owner":u.id,"pos":u.pos + d*0.6,"from":u.pos,"vel":d*speed,
 		"dmg":dmg,"aoe":aoe,"life":reach/speed,"kind":"fire" if aoe > 0.0 else "arrow",
-		"gate_mult":float(CLASSES[u.cls].gate)})
+		"gate_mult":float(CLASSES[u.cls].gate),
+		# Shot from the rampart (or a terrace): flies over the castle walls and gates (Round 15).
+		"high":height_at(u.pos) >= 1.5})
 	_event("proj", {"pid":_next_proj,"kind":"fire" if aoe > 0.0 else "arrow"})
 	_next_proj += 1
 
@@ -1938,14 +1952,17 @@ func _step_projectiles(dt: float) -> void:
 		if not blocked:
 			# Pre-filtered at build time: ledges, cell bars, river banks and rails don't stop arrows or
 			# fire (the old per-wall `kind in [...]` built an array every check: 1.2 ms/tick).
+			var high: bool = bool(p.get("high", false))
 			for wi in _bucket_walls_proj[pb]:
 				var w: Dictionary = walls[wi]
+				if high and (w.kind == "wall" or w.kind == "backwall"):
+					continue                           # over the parapet
 				if p.pos.distance_to(seg_closest(p.pos, w.a, w.b)) < w.r * 0.8:
 					blocked = true
 					break
 		# Gates only exist at the castle fronts (|z| = CASTLE_SHIFT + FRONT_Z): skip the check anywhere
 		# else (it was ~30 % of the projectile step, measured).
-		if not blocked and absf(p.pos.y) >= CASTLE_SHIFT + FRONT_Z - 3.0:
+		if not blocked and not bool(p.get("high", false)) and absf(p.pos.y) >= CASTLE_SHIFT + FRONT_Z - 3.0:
 			for g in gates:
 				if g.team != p.team and gate_blocks(g) and p.pos.distance_to(seg_closest(p.pos, g.a, g.b)) < float(g.get("r", WALL_R)) * 0.8:
 					hit_gate = g
@@ -2092,6 +2109,8 @@ func _step_world(dt: float) -> void:
 	_step_hats(dt)
 	# Gates swing open for allies nearby (visual state), resource nodes regrow.
 	for g in gates:
+		if g.has("relock"):
+			_try_relock(g)
 		var open := false
 		if gate_blocks(g):
 			for u in units:

@@ -29,7 +29,15 @@ const STAIRS := [
 	{"x0": -11.5, "x1": -8.0, "z0": 14.0, "z1": 17.0, "h0": 0.0, "h1": 1.8},  # west side stairs (3.5 m:
 	{"x0": 8.0, "x1": 11.5, "z0": 14.0, "z1": 17.0, "h0": 0.0, "h1": 1.8},    # KayKit terrace walls are thicker)
 	{"x0": -3.0, "x1": 3.0, "z0": 22.0, "z1": 25.0, "h0": 1.8, "h1": 3.6},    # grand stairs to L2
+	{"x0": -1.6, "x1": 1.6, "z0": 6.0, "z1": 9.0, "h0": 1.8, "h1": 0.0},      # down from the rampart (descends to +z)
 ]
+# The rampart (Round 15, Kevin: "a stair to this platform on the wall so players can walk on the wall
+# and shoot arrows from it"): a walkway behind the front wall's middle section, between the two
+# gatehouses, at L1 height (the wall top is 2.86 m: a waist-high parapet), 2 m deep, stairs down into
+# the courtyard at its centre. Arrows shot from up here fly over the castle walls (siege_sim.gd).
+const WALK_X := 4.4                # |x| extent: the middle wall runs between the gatehouse pieces
+const WALK_Z1 := 6.0               # from the wall's inner face (FRONT_Z + 1) to here
+const WALK_H := 1.8
 const STAIR_STEPS := 6.0          # steps per flight (castle_mesh.gd draws exactly this many); 0.5 m deep so the
                                   # step stripes read from the overhead camera (9 thin ones looked like a slab)
 const LEDGE_R := 0.55             # the KayKit wall pieces on terrace edges are ~1.1 m thick
@@ -72,7 +80,7 @@ static func dungeon_ledges() -> Array:
 	# stairs rise to the L1 floor, 1.8 m above it).
 	return [[Vector2(DSTAIR.x0, DSTAIR.z0), Vector2(DSTAIR.x1, DSTAIR.z0)],
 		[Vector2(DSTAIR.x0, DSTAIR.z1), Vector2(DSTAIR.x1, DSTAIR.z1)]]
-const SPAWN := Vector2(0.0, 8.5)
+const SPAWN := Vector2(0.0, 10.5)     # in front of the rampart stairs (8.5 until Round 15: now the stairs)
 const WORKSHOP := Vector2(13.5, 9.0)
 # Buildings (KayKit, team-coloured "%s" = blue/red): solid in the sim (obstacle radius r), placed
 # where gameplay doesn't need the floor. y = the level they stand on; rot in degrees (blue space).
@@ -120,10 +128,13 @@ static func height_local(q: Vector2) -> float:
 		if q.x >= float(st.x0) and q.x <= float(st.x1) and q.y >= float(st.z0) and q.y < float(st.z1):
 			# One riser above the ramp: the drawn steps are blocks whose tops sit above the straight
 			# ramp for most of each step, so feet on the ramp sank into them. Ramp + one riser is
-			# >= the tread under the unit everywhere on the flight (9 steps, see castle_mesh.gd).
+			# >= the tread under the unit everywhere on the flight. Works for flights that descend
+			# along +z too (the rampart's).
 			var t := (q.y - float(st.z0)) / (float(st.z1) - float(st.z0))
-			var riser := (float(st.h1) - float(st.h0)) / STAIR_STEPS
-			return minf(float(st.h1), lerpf(float(st.h0), float(st.h1), t) + riser)
+			var riser := absf(float(st.h1) - float(st.h0)) / STAIR_STEPS
+			return minf(maxf(float(st.h0), float(st.h1)), lerpf(float(st.h0), float(st.h1), t) + riser)
+	if absf(q.x) <= WALK_X and q.y >= FRONT_Z and q.y < WALK_Z1:
+		return WALK_H                               # the rampart
 	if q.y >= L2_Z:
 		return L2_H
 	if q.y >= L1_Z:
@@ -153,4 +164,10 @@ static func ledges() -> Array:
 	for st in STAIRS:
 		for sx in [float(st.x0), float(st.x1)]:
 			out.append([Vector2(sx, float(st.z0)), Vector2(sx, float(st.z1))])
+	# The rampart's inner edge (open at its stairs) and its two ends above the gate passages.
+	var rs: Dictionary = STAIRS[STAIRS.size() - 1]
+	out.append([Vector2(-WALK_X, WALK_Z1), Vector2(float(rs.x0), WALK_Z1)])
+	out.append([Vector2(float(rs.x1), WALK_Z1), Vector2(WALK_X, WALK_Z1)])
+	for sx in [-WALK_X, WALK_X]:
+		out.append([Vector2(sx, FRONT_Z + 1.0), Vector2(sx, WALK_Z1)])
 	return out

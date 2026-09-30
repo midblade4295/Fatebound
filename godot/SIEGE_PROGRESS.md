@@ -817,3 +817,19 @@ K2/K3 notes (0.17.0)
 - The jail door stays shut while any enemy is within JAIL_SHUT_R (3.5 m), defenders or not (sim; the
   door never let enemies through anyway). sim smoke checks both.
 - Note: seed 11 has had 0 rescues since the dungeon wing (seed 22: 5); rescues are harder now.
+
+# 0.22.0 (Kevin): stairs up onto the wall so players can walk on it and shoot arrows from it
+- Rampart behind the front wall's middle section (between the gatehouses, |x| <= 4.4): walkway from the
+  wall's inner face to z=6 at WALK_H=1.8 (L1 height; wall top 2.86 -> waist-high parapet). Stairs down at
+  its centre (x +-1.6, z 6..9, descending along +z -- Castle.STAIRS/height_local/castle_mesh now handle
+  descending flights). Ledges: its inner edge (gap at the stairs) and both ends above the gate passages.
+  SPAWN (0, 8.5) -> (0, 10.5): in front of the stairs instead of on them.
+- Arrows/fire shot from >= 1.5 m ("high": the rampart, and the terraces) fly over castle walls ("wall",
+  "backwall") and gates; from the courtyard floor the wall still stops them. sim smoke: rampart rules.
+- Jail re-lock waits (g.relock -> _try_relock each tick) until no enemy is in the doorway or within 3 m of
+  the cell: snapping shut on a rescuer put him inside the door (gate violation) and would have locked
+  anyone in the cell in with the King. sim smoke checks the wait.
+- net smoke: the moved spawn sent the player east, to the ranger stand, whose goal cell is solid; steering
+  at the path's end (the unit's own cell) stalled it 1.8 m short. Now it walks straight at the stand when
+  the path runs out (3/3 at 14 s).
+- Protocol v10.

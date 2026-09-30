@@ -164,7 +164,12 @@ func _init() -> void:
 		js.act(jfoe.id, "attack")
 		js.step(Sim.TICK)
 	assert(jail.broken, "the enemy can smash the jail door (hp %d)" % int(jail.hp))
+	# It re-locks once the King is back in his cell -- but not on top of an enemy in the doorway.
+	jfoe.pos = jail.c
 	js._return_to_cell(1)
+	assert(jail.broken, "the jail door waits while an enemy stands in the doorway")
+	jfoe.pos = Vector2(0, -40)
+	js.step(Sim.TICK)
 	assert(not jail.broken and jail.hp >= jail.max_hp, "the jail door locks again when the King is back in his cell")
 	# It lifts for a defender, but not while an enemy is near it.
 	var def: Dictionary = js.units.filter(func(x): return x.team == 0)[0]
@@ -180,6 +185,35 @@ func _init() -> void:
 	js.step(Sim.TICK)
 	assert(not jail.open, "the jail door stays shut while an enemy is near it")
 	print("jail rules ok")
+	# The rampart (Round 15): at L1 height behind the front wall, stairs down; arrows from up there
+	# fly over the wall, arrows from the courtyard floor don't.
+	var rs = Sim.new()
+	rs.setup(4, 5)
+	var walk_p: Vector2 = Sim._c(0, Vector2(2.5, 5.0))
+	assert(absf(Sim.height_at(walk_p) - Castle.WALK_H) < 0.01, "the rampart is at %.1f m" % Sim.height_at(walk_p))
+	var sh := Sim.height_at(Sim._c(0, Vector2(0.0, 7.5)))
+	assert(sh > 0.3 and sh < Castle.WALK_H, "the rampart stairs climb from the courtyard (%.2f m midway)" % sh)
+	var wall_z: float = Sim._c(0, Vector2(0.0, Castle.FRONT_Z)).y
+	var outward: float = Sim.angle_of(Sim._c(0, Vector2(2.5, -10.0)) - walk_p)
+	var arch: Dictionary = rs.units.filter(func(x): return x.team == 0)[0]
+	arch.bot = false
+	for u in rs.units:
+		if u.id != arch.id: u.pos = Vector2(-25, 0); u.bot = false
+	var results := []
+	for spot in [walk_p, Sim._c(0, Vector2(2.5, 7.4))]:
+		rs.projectiles.clear()
+		arch.pos = spot
+		rs._shoot(arch, outward, 1.0, 0.0, 22.0, 14.0)
+		var passed := false
+		for i in 40:
+			rs.step(Sim.TICK)
+			for rpr in rs.projectiles:
+				if absf(float(rpr.pos.y)) < absf(wall_z) - 1.5:
+					passed = true
+		results.append(passed)
+	assert(results[0], "an arrow from the rampart flies over the front wall")
+	assert(not results[1], "an arrow from the courtyard floor is stopped by the wall")
+	print("rampart rules ok")
 	# Projectiles hit what their path crosses (regression: from 0.16.0 to 0.18.1 arrows and bolts
 	# hit NO units -- the per-team position arrays were appended through a copy).
 	var ps2 = Sim.new()

@@ -143,13 +143,16 @@ func _process(delta: float) -> bool:
 				if t < 24.0:
 					# Steer along the mirror's own nav path (walls/gates), like a player would.
 					var path: PackedVector2Array = mode.sim.find_path(me2.team, me2.pos, goal)
-					var target: Vector2 = path[mini(1, path.size() - 1)] if path.size() > 0 else goal
+					# When the path has nothing left to follow (the goal's nav cell can be solid around
+					# the stand), walk straight at the stand like a player would: steering at the
+					# path's end = the unit's own cell centre stalled it 1.8 m short (Round 15).
+					var target: Vector2 = path[1] if path.size() > 1 else (best.p if not best.is_empty() else goal)
 					mode._net_send({"t":"in", "m":(target - me2.pos).normalized(), "h":false})
 					# Keep the mode's 20 Hz sender (HUD stick = zero) from overriding the test input.
 					mode._sent_move = Vector2.ZERO
 					mode._send_clock = -1.0
 				else:
-					check(false, "reached a hat stand and became a class (still %s, %.1f m away)" % [me2.cls, me2.pos.distance_to(goal)]); _finish()
+					check(false, "reached a hat stand and became a class (still %s, %.1f m away; stand %s at %s, me at %s, goal %s)" % [me2.cls, me2.pos.distance_to(goal), str(best.get("cls","?")), str(best.get("p","?")), str(me2.pos), str(goal)]); _finish()
 		"hatted":
 			if t > 1.0:
 				mode._net_send({"t":"in", "m":Vector2.ZERO, "h":false})

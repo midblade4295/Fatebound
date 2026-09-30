@@ -181,7 +181,8 @@ static func build(sim, team: int) -> Dictionary:
 			# that showed the grass underneath.
 			var za := z0 + (z1 - z0) * i / steps - (0.03 if i > 0 else 0.0)
 			var zb := z0 + (z1 - z0) * (i + 1) / steps
-			var hy := h0 + (h1 - h0) * (i + 1) / steps
+			# A step's top is the higher of its two ends (flights may descend along +z: the rampart's).
+			var hy := maxf(h0 + (h1 - h0) * i / steps, h0 + (h1 - h0) * (i + 1) / steps)
 			b.box(b.bricks, to_world.call(Vector2((x0 + x1) * 0.5, za)), to_world.call(Vector2((x0 + x1) * 0.5, zb)), 0.0, hy, x1 - x0)
 			# From the (nearly overhead) game camera the risers are invisible: stairs read by
 			# their stripes. Tread = bright nosing at the front edge, mid stone, dark band at the
@@ -191,9 +192,18 @@ static func build(sim, team: int) -> Dictionary:
 			var zf: float = z0 + (z1 - z0) * i / steps
 			var dz := zb - zf
 			var y := hy + 0.004
-			b.tread_band(x0, x1, zf, zf + dz * 0.12, y, Color(0.92, 0.88, 0.8), to_world)
-			b.tread_band(x0, x1, zf + dz * 0.12, zf + dz * 0.62, y, Color(0.64, 0.6, 0.53) * k, to_world)
-			b.tread_band(x0, x1, zf + dz * 0.62, zb, y, Color(0.31, 0.28, 0.24) * k, to_world)
+			if h1 >= h0:
+				b.tread_band(x0, x1, zf, zf + dz * 0.12, y, Color(0.92, 0.88, 0.8), to_world)
+				b.tread_band(x0, x1, zf + dz * 0.12, zf + dz * 0.62, y, Color(0.64, 0.6, 0.53) * k, to_world)
+				b.tread_band(x0, x1, zf + dz * 0.62, zb, y, Color(0.31, 0.28, 0.24) * k, to_world)
+			else:
+				# Descending: the nosing is the step's far (+z, downhill) edge; the shadow by the riser above.
+				var k2 := 0.8 + 0.2 * float(steps - 1 - i) / steps
+				b.tread_band(x0, x1, zf, zf + dz * 0.38, y, Color(0.31, 0.28, 0.24) * k2, to_world)
+				b.tread_band(x0, x1, zf + dz * 0.38, zf + dz * 0.88, y, Color(0.64, 0.6, 0.53) * k2, to_world)
+				b.tread_band(x0, x1, zf + dz * 0.88, zb, y, Color(0.92, 0.88, 0.8), to_world)
+	# The rampart's walkway (Round 15), from just inside the front wall to its edge.
+	b.floor_rect(-Castle.WALK_X, Castle.WALK_X, Castle.FRONT_Z + 0.9, Castle.WALK_Z1, Castle.WALK_H + 0.03, to_world)
 	# The dungeon wing (Round 13): its sunken floor and the stairs down, which run along x.
 	b.floor_rect(Castle.ANNEX_X0, -hx, Castle.ANNEX_Z0, Castle.ANNEX_Z1, Castle.DUNGEON_H + 0.03, to_world)
 	var ds: Dictionary = Castle.DSTAIR
