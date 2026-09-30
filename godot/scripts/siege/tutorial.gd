@@ -235,6 +235,11 @@ func _shortcut() -> void:
 		return
 	best.hp = 0.0
 	best.broken = true
+	# ...and their jail door down in the dungeon wing (Round 13), or the recruit would face bars.
+	for g in sim.gates:
+		if int(g.team) == foe_team and str(g.get("kind", "")) == "jail":
+			g.hp = 0.0
+			g.broken = true
 	sim._update_gate_nav()
 	me.pos = Sim.gate_front(best)
 	me.face = Sim.angle_of((best.c as Vector2) - me.pos)

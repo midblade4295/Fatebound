@@ -498,3 +498,7 @@ dodge/swing animation prediction, snapshots 15 Hz. Protocol v7: redeploy the ser
 `SiegeApp.start_tutorial()`, Home card + HOW TO PLAY. Voiceover files go in `assets/vo/tutorial/`
 as `<id>.ogg` (list: `assets/vo/tutorial/SCRIPT.md`; regenerate it after editing STEPS). Test:
 `tests/tutorial_test.gd`. When a new mechanic ships, add a step (talk + task + task_done check).
+
+**0.21.0 (dungeon wing):** Castle.ANNEX_*/DSTAIR/JAIL_*/CELL_C, Castle.in_annex/dungeon_ledges,
+Land.in_dungeon_pit (re-run tools/bake_land.gd after changing the wing), jail = gate kind "jail"
+(Sim._reset_jail). Protocol v8: redeploy the server.

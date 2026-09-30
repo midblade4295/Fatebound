@@ -43,9 +43,9 @@ const RUBBLE_CLEAR := 6.0        # ... or while any enemy is within 6 m of it
 # ---- layers (heights are for the view; the sim stays 2D, ledges are walls) ----
 const LEDGE_R := 0.35                # landscape ledges; castle terraces use Castle.LEDGE_R
 # Round 7 layout (blue half; mirrored). Checked by tests/siege_land_check.gd.
-const RES_WOOD := [Vector2(-28.0, 44.0), Vector2(-24.0, 40.5), Vector2(27.0, 44.0), Vector2(29.5, 38.0), Vector2(-29.0, 9.0),
+const RES_WOOD := [Vector2(-24.5, 7.5), Vector2(-31.0, 36.5), Vector2(27.0, 44.0), Vector2(29.5, 38.0), Vector2(-29.0, 9.0),
 	Vector2(-2.5, 30.0), Vector2(10.0, 22.5), Vector2(-2.5, 34.0), Vector2(29.0, 27.0), Vector2(-8.5, 9.5)]
-const RES_STONE := [Vector2(26.0, 50.0), Vector2(-26.0, 50.0), Vector2(12.0, 26.0), Vector2(-26.5, 36.5), Vector2(-15.5, 9.0)]
+const RES_STONE := [Vector2(26.0, 50.0), Vector2(-30.0, 28.0), Vector2(12.0, 26.0), Vector2(-26.5, 36.5), Vector2(-15.5, 9.0)]
 const COVER_ROCKS := [Vector2(-3.0, 21.0), Vector2(7.5, 9.0), Vector2(-3.0, 26.0)]
 const CAKE_TREES := [Vector2(-6.0, 25.0), Vector2(17.0, 35.0), Vector2(-27.5, 20.5)]
 const OUTPOST_TRICKLE := 15.0    # owners get +1 wood +1 stone this often per outpost
@@ -336,7 +336,12 @@ func _build_map() -> void:
 		_add_wall(t, Vector2(gx0 + gp, FRONT_Z), Vector2(gx1 - gp, FRONT_Z))
 		_add_wall(t, Vector2(gx1 + gp, FRONT_Z), Vector2(CASTLE_HX, FRONT_Z))
 		# Side walls: the field is wider than the castle, so it needs its own flanks.
-		_add_wall(t, Vector2(-CASTLE_HX, FRONT_Z), Vector2(-CASTLE_HX, CASTLE_BACK + 1.0))
+		# West wall with the doorway down to the dungeon wing (Round 13); the wing's three walls.
+		_add_wall(t, Vector2(-CASTLE_HX, FRONT_Z), Vector2(-CASTLE_HX, Castle.DOOR_Z0 - 1.0))
+		_add_wall(t, Vector2(-CASTLE_HX, Castle.DOOR_Z1 + 1.0), Vector2(-CASTLE_HX, CASTLE_BACK + 1.0))
+		_add_wall(t, Vector2(Castle.ANNEX_X0, Castle.ANNEX_Z0), Vector2(Castle.ANNEX_X0, Castle.ANNEX_Z1))
+		_add_wall(t, Vector2(Castle.ANNEX_X0, Castle.ANNEX_Z0), Vector2(-CASTLE_HX, Castle.ANNEX_Z0))
+		_add_wall(t, Vector2(Castle.ANNEX_X0, Castle.ANNEX_Z1), Vector2(-CASTLE_HX, Castle.ANNEX_Z1))
 		_add_wall(t, Vector2(CASTLE_HX, FRONT_Z), Vector2(CASTLE_HX, CASTLE_BACK + 1.0))
 		for gx in GATE_X:
 			# The gate model is a wall piece with a ~2.3 m doorway; only the doorway is the gate.
@@ -349,13 +354,20 @@ func _build_map() -> void:
 		# staircase's sides (siege_castle.gd).
 		for seg in Castle.ledges():
 			walls.append({"a":_c(t, seg[0]), "b":_c(t, seg[1]), "r":Castle.LEDGE_R, "team":t, "kind":"ledge"})
-		# The dungeon cell on the L1 west wing: bars on three sides, open towards the front.
-		var cc := CELL_C
-		var cz0: float = cc.y - CELL_HZ
-		var cz1: float = cc.y + CELL_HZ
-		walls.append({"a":_c(t, Vector2(cc.x - CELL_HX, cz0)), "b":_c(t, Vector2(cc.x - CELL_HX, cz1)), "r":0.3, "team":t, "kind":"bars"})
-		walls.append({"a":_c(t, Vector2(cc.x + CELL_HX, cz0)), "b":_c(t, Vector2(cc.x + CELL_HX, cz1)), "r":0.3, "team":t, "kind":"bars"})
-		walls.append({"a":_c(t, Vector2(cc.x - CELL_HX, cz1)), "b":_c(t, Vector2(cc.x + CELL_HX, cz1)), "r":0.3, "team":t, "kind":"bars"})
+		# The dungeon wing (Round 13): walls along both sides of the stairs down; the jail cell in
+		# the wing's front-west corner -- iron bars on its east side and the barred door on its north
+		# side (a "jail" gate: lifts for this castle's team, the enemy has to smash it). The other two
+		# sides are the wing's own walls.
+		for seg in Castle.dungeon_ledges():
+			walls.append({"a":_c(t, seg[0]), "b":_c(t, seg[1]), "r":Castle.LEDGE_R, "team":t, "kind":"ledge"})
+		var wall_in_x: float = Castle.ANNEX_X0 + WALL_R
+		var wall_in_z: float = Castle.ANNEX_Z0 + WALL_R
+		walls.append({"a":_c(t, Vector2(Castle.JAIL_X1, wall_in_z)), "b":_c(t, Vector2(Castle.JAIL_X1, Castle.JAIL_Z1)),
+			"r":Castle.JAIL_R, "team":t, "kind":"bars"})
+		var ja := _c(t, Vector2(wall_in_x, Castle.JAIL_Z1))
+		var jb := _c(t, Vector2(Castle.JAIL_X1, Castle.JAIL_Z1))
+		gates.append({"id":gates.size(), "team":t, "a":ja, "b":jb, "c":(ja + jb) * 0.5, "hp":Castle.JAIL_HP,
+			"max_hp":Castle.JAIL_HP, "broken":false, "open":false, "side":"jail", "kind":"jail", "r":Castle.JAIL_R})
 		# Hat stands (solid posts) in the west corner; the workshop against the east wall.
 		for i in HAT_CLASSES.size():
 			var sp := _c(t, HAT_STANDS[i])
@@ -510,7 +522,7 @@ func _build_nav() -> void:
 			(nav[t] as AStarGrid2D).set_point_solid(c, true)
 	_gate_cells.clear()
 	for g in gates:
-		_gate_cells.append(_cells_across_segment(g.a, g.b, WALL_R + UNIT_R * 0.9))
+		_gate_cells.append(_cells_across_segment(g.a, g.b, float(g.get("r", WALL_R)) + UNIT_R * 0.9))
 	_update_gate_nav()
 
 var _gate_cells: Array = []
@@ -556,7 +568,7 @@ func _path_gate(u: Dictionary) -> Dictionary:
 	var path: PackedVector2Array = u.path
 	for i in range(u.path_i, mini(u.path_i + 5, path.size())):
 		for g in gates:
-			if g.team != u.team and gate_blocks(g) and path[i].distance_to(seg_closest(path[i], g.a, g.b)) < WALL_R + 0.6:
+			if g.team != u.team and gate_blocks(g) and path[i].distance_to(seg_closest(path[i], g.a, g.b)) < float(g.get("r", WALL_R)) + 0.6:
 				return g
 	return {}
 
@@ -596,6 +608,17 @@ func _return_to_cell(t: int) -> void:
 			lu.carrying = false
 			lu.lifting = -1
 	oracles[t] = _new_oracle(t, int(oracles[t].get("cakes", 0)))
+	_reset_jail(1 - t)
+
+func _reset_jail(castle_team: int) -> void:
+	# Whenever a King is back in his cell, the jail door of the castle holding him is whole again.
+	for g in gates:
+		if int(g.team) == castle_team and str(g.get("kind", "")) == "jail" and (g.broken or g.hp < g.max_hp):
+			g.hp = g.max_hp
+			g.broken = false
+			g.erase("broken_at")
+			_update_gate_nav()
+			_event("jail_reset", {"gate":g.id, "team":g.team})
 
 func lifters_needed(o: Dictionary) -> int:
 	return int(LIFTERS[clampi(int(o.weight), 0, LIFTERS.size() - 1)])
@@ -1250,7 +1273,7 @@ func buy_upgrade(team: int, id: String, by: Dictionary = {}) -> bool:
 	match id:
 		"gates":
 			for g in gates:
-				if g.team == team:
+				if g.team == team and str(g.get("kind", "gate")) != "jail":      # not the jail door
 					g.max_hp = GATE_HP * (1.0 + 0.5 * float(levels[team].gates))
 					g.hp = minf(g.max_hp, g.hp + g.max_hp * 0.5)
 					if g.broken and g.hp >= g.max_hp * GATE_SOLID_AT:
@@ -1431,7 +1454,7 @@ func _melee(u: Dictionary, reach: float, arc: float, dmg: float, stun := 0.0) ->
 		var cp := seg_closest(u.pos, g.a, g.b)
 		var off2: Vector2 = cp - u.pos
 		var d2 := off2.length()
-		if d2 > reach + WALL_R + 0.3:
+		if d2 > reach + float(g.get("r", WALL_R)) + 0.3:
 			continue
 		if arc > -1.0 and d2 > 0.3 and fwd.dot(off2 / d2) < arc - 0.2:
 			continue
@@ -1732,7 +1755,7 @@ func _blocked_point(p: Vector2, team: int, r: float) -> bool:
 		if p.distance_to(seg_closest(p, w.a, w.b)) < w.r + r:
 			return true
 	for g in gates:
-		if g.team != team and gate_blocks(g) and p.distance_to(seg_closest(p, g.a, g.b)) < WALL_R + r:
+		if g.team != team and gate_blocks(g) and p.distance_to(seg_closest(p, g.a, g.b)) < float(g.get("r", WALL_R)) + r:
 			return true
 	return false
 
@@ -1760,7 +1783,7 @@ func _push_out(p: Vector2, r: float, team := -1) -> Vector2:
 	for g in gates:
 		# Gates only stop the other team, and only while standing.
 		if team != g.team and gate_blocks(g):
-			p = _push_seg(p, g.a, g.b, WALL_R + r)
+			p = _push_seg(p, g.a, g.b, float(g.get("r", WALL_R)) + r)
 	return p
 
 func on_ladder(p: Vector2, wall_index: int, team: int) -> bool:
@@ -1920,7 +1943,7 @@ func _step_projectiles(dt: float) -> void:
 		# else (it was ~30 % of the projectile step, measured).
 		if not blocked and absf(p.pos.y) >= CASTLE_SHIFT + FRONT_Z - 3.0:
 			for g in gates:
-				if g.team != p.team and gate_blocks(g) and p.pos.distance_to(seg_closest(p.pos, g.a, g.b)) < WALL_R * 0.8:
+				if g.team != p.team and gate_blocks(g) and p.pos.distance_to(seg_closest(p.pos, g.a, g.b)) < float(g.get("r", WALL_R)) * 0.8:
 					hit_gate = g
 					blocked = true
 					break
@@ -1982,6 +2005,7 @@ func _step_oracles(dt: float) -> void:
 							ru.lifting = -1
 						_event("rescue", {"team":t, "id":lead.id, "n":o.lifters.size()})
 						oracles[t] = _new_oracle(t)       # a rescue resets her weight
+						_reset_jail(1 - t)
 						if score[t] >= WIN_RESCUES:
 							_finish("rescue")
 				elif lead.pos.distance_to(cell(t)) <= THRONE_RADIUS:
@@ -2139,7 +2163,7 @@ func _commander(team: int) -> void:
 			break
 	var damaged := false
 	for g in gates:
-		if g.team == team and (g.broken or g.hp < g.max_hp * 0.5):
+		if g.team == team and str(g.get("kind", "gate")) != "jail" and (g.broken or g.hp < g.max_hp * 0.5):
 			damaged = true
 	var choice := ""
 	if damaged and can_buy(team, "gates"):

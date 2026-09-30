@@ -293,7 +293,14 @@ func on_event(e: Dictionary) -> void:
 					toast("Enough hands — move him!", VisualTheme.GOLD)
 		"gate_broken":
 			var side: String = str(sim.gates[int(e.gate)].side).to_upper()
-			toast("OUR %s GATE HAS FALLEN!" % side if mine else "ENEMY %s GATE BROKEN — CHARGE!" % side, VisualTheme.RED if mine else VisualTheme.GOLD)
+			if side == "JAIL":
+				# The jail door in the dungeon wing (Round 13).
+				toast("THEY SMASHED OUR JAIL — stop them taking their King!" if mine else "THEIR JAIL IS OPEN — grab our King!", VisualTheme.RED if mine else VisualTheme.GOLD)
+			else:
+				toast("OUR %s GATE HAS FALLEN!" % side if mine else "ENEMY %s GATE BROKEN — CHARGE!" % side, VisualTheme.RED if mine else VisualTheme.GOLD)
+		"jail_reset":
+			if mine:
+				toast("Our jail is locked again", VisualTheme.CYAN)
 		"gate_rebuilt":
 			if mine:
 				toast("Our %s gate is rebuilt" % str(sim.gates[int(e.gate)].side), VisualTheme.CYAN)
@@ -542,7 +549,7 @@ func _draw_castle_status(me: Dictionary) -> void:
 	# Our two gates as small health bars.
 	var x := 14.0
 	for g in sim.gates:
-		if g.team != t:
+		if g.team != t or str(g.get("kind", "")) == "jail":      # the jail door shows its own bar in the world
 			continue
 		var r := Rect2(Vector2(x + 40, 153), Vector2(56, 6))
 		_text(Vector2(x, 160), str(g.side).to_upper().left(1) + " GATE", 10, Color(1, 1, 1, 0.75), _bold, HORIZONTAL_ALIGNMENT_LEFT, 44)

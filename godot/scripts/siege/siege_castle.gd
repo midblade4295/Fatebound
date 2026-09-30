@@ -38,9 +38,35 @@ const LEDGE_R := 0.55             # the KayKit wall pieces on terrace edges are 
 const THRONE := Vector2(0.0, 26.8)
 # Dungeon cell (L1 west wing); bars on 3 sides, open front. Its back bars sit ON the L2 face
 # (z = 22): at z 20.6 they left a 0.55 m squeeze slot a knight got wedged into (Round 11).
-const CELL_C := Vector2(-15.5, 20.4)
-const CELL_HX := 1.8
+# ---- The dungeon wing (Round 13, Kevin: "make the dungeon down steps where I circled", option A):
+# a walled, sunken wing off the west wall. Stairs lead down from the L1 west wing through a doorway
+# in the west wall; the King's jail cell sits in the wing's front-west corner (two of its sides are
+# the wing's own walls), iron bars on the east side and a barred DOOR on the north side -- a "jail"
+# gate: it lifts for the castle's own team and has to be smashed by the enemy.
+const ANNEX_X0 := -31.0               # the wing's outer wall line (its outer face is the field edge, -32)
+const ANNEX_Z0 := 8.0                 # front wall line of the wing
+const ANNEX_Z1 := 24.0                # back wall line of the wing
+const DUNGEON_H := -1.6               # the wing's floor, below ground
+const DOOR_Z0 := 17.0                 # clear doorway in the west wall (the wall stops 1 m short of it)
+const DOOR_Z1 := 20.0
+# Stairs down: along x, from the doorway (L1, 1.8 m) west to the dungeon floor.
+const DSTAIR := {"x0": -25.8, "x1": -20.0, "z0": 17.0, "z1": 20.0, "h0": -1.6, "h1": 1.8, "steps": 11.0}
+const JAIL_X1 := -26.6                # east bars
+const JAIL_Z1 := 12.4                 # the door (north side)
+const JAIL_HP := 500.0
+const JAIL_R := 0.35                  # collision half-thickness of bars and door (walls are 1.0)
+const CELL_C := Vector2(-28.4, 10.6)  # the King stands here: inside the jail cell
+const CELL_HX := 1.6
 const CELL_HZ := 1.6
+
+static func in_annex(q: Vector2) -> bool:
+	return q.x >= ANNEX_X0 - 1.0 and q.x < -HX and q.y >= ANNEX_Z0 - 1.0 and q.y <= ANNEX_Z1 + 1.0
+
+static func dungeon_ledges() -> Array:
+	# The stairs down have walls on both sides (the dungeon floor is 1.6 m below the ground and the
+	# stairs rise to the L1 floor, 1.8 m above it).
+	return [[Vector2(DSTAIR.x0, DSTAIR.z0), Vector2(DSTAIR.x1, DSTAIR.z0)],
+		[Vector2(DSTAIR.x0, DSTAIR.z1), Vector2(DSTAIR.x1, DSTAIR.z1)]]
 const SPAWN := Vector2(0.0, 8.5)
 const WORKSHOP := Vector2(13.5, 9.0)
 # Buildings (KayKit, team-coloured "%s" = blue/red): solid in the sim (obstacle radius r), placed
@@ -79,6 +105,14 @@ static func _smooth(x: float) -> float:
 
 static func height_local(q: Vector2) -> float:
 	# Floor height inside the castle footprint (q in castle-local coords).
+	if q.x < -HX:
+		# The dungeon wing: the stairs down (along x, one riser above the ramp as on the other
+		# stairs), else the sunken floor.
+		if q.x >= float(DSTAIR.x0) and q.y >= float(DSTAIR.z0) and q.y < float(DSTAIR.z1):
+			var t := clampf((q.x - float(DSTAIR.x0)) / (float(DSTAIR.x1) - float(DSTAIR.x0)), 0.0, 1.0)
+			var riser := (float(DSTAIR.h1) - float(DSTAIR.h0)) / float(DSTAIR.steps)
+			return minf(float(DSTAIR.h1), lerpf(float(DSTAIR.h0), float(DSTAIR.h1), t) + riser)
+		return DUNGEON_H
 	for st in STAIRS:
 		if q.x >= float(st.x0) and q.x <= float(st.x1) and q.y >= float(st.z0) and q.y < float(st.z1):
 			# One riser above the ramp: the drawn steps are blocks whose tops sit above the straight
@@ -94,7 +128,7 @@ static func height_local(q: Vector2) -> float:
 	return 0.0
 
 static func inside(q: Vector2) -> bool:
-	return absf(q.x) <= HX and q.y >= FRONT_Z
+	return (absf(q.x) <= HX and q.y >= FRONT_Z) or in_annex(q)
 
 static func ledges() -> Array:
 	# Terrace faces with gaps where the stairs are, plus a ledge along each stair side (you can't

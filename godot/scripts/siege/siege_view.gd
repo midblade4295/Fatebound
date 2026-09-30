@@ -1276,6 +1276,16 @@ func _build_castle_kit(t: int) -> void:
 			var lo2 := 0.0 if a.y < Castle.L2_Z - 0.01 else Castle.L1_H
 			var hi2 := Castle.L1_H if a.y < Castle.L2_Z - 0.01 else Castle.L2_H
 			_kit_run(wa, wc, lo2, hi2 - lo2, 0.8)
+	# The dungeon wing (Round 13): stone sides for the pit under the wing's walls and the castle's
+	# west wall, and walls along both sides of the stairs down.
+	var ax0: float = Castle.ANNEX_X0
+	var az0: float = Castle.ANNEX_Z0
+	var az1: float = Castle.ANNEX_Z1
+	for seg in [[Vector2(ax0, az0), Vector2(ax0, az1)], [Vector2(ax0, az0), Vector2(-Castle.HX, az0)],
+			[Vector2(ax0, az1), Vector2(-Castle.HX, az1)], [Vector2(-Castle.HX, az0), Vector2(-Castle.HX, az1)]]:
+		_kit_run(Sim._c(t, seg[0]), Sim._c(t, seg[1]), Castle.DUNGEON_H, -Castle.DUNGEON_H + 0.05, 2.0)
+	for seg in Castle.dungeon_ledges():
+		_kit_run(Sim._c(t, seg[0]), Sim._c(t, seg[1]), Castle.DUNGEON_H, float(Castle.DSTAIR.h1) - Castle.DUNGEON_H, 0.8)
 	# Towers: squat stone towers at the four corners, blue/red-roofed towers either side of the gates.
 	for sx in [-Castle.HX, Castle.HX]:
 		for sz in [Castle.FRONT_Z, Castle.BACK]:
@@ -1324,6 +1334,14 @@ func _build_castle(t: int) -> void:
 	# Gates on the front wall; open archways in the inner wall.
 	for g in sim.gates:
 		if g.team != t:
+			continue
+		if str(g.get("kind", "")) == "jail":
+			# The jail door: an iron grille that slides up into the ceiling when the castle's own
+			# players come near (g.open), gone when the enemy smashes it.
+			var door := _iron_bars(g.a, g.b, 2.3)
+			door.position = Vector3(g.c.x, Sim.height_at(g.c), g.c.y)
+			add_child(door)
+			gate_nodes[g.id] = {"jail": true, "door": door, "y0": door.position.y, "open": 0.0, "broken": false}
 			continue
 		var node := _place(HEX + "wall_straight_gate.gltf", Vector3(g.c.x, 0, g.c.y), face, Sim.WALL_SCALE)
 		var doors := []
@@ -1386,15 +1404,50 @@ func _build_castle(t: int) -> void:
 	stock_piles.append(piles)
 
 func _bars(a: Vector2, b: Vector2) -> void:
-	# Cell bars: wooden fence pieces along the segment (the fence model is offset to a hex edge).
+	# Cell bars (Round 13, Kevin: "actual jail bars"): an iron grille on the dungeon floor.
+	var n := _iron_bars(a, b, 2.3)
+	var mid := (a + b) * 0.5
+	n.position = Vector3(mid.x, Sim.height_at(mid), mid.y)
+	add_child(n)
+
+static var _iron_mat: StandardMaterial3D = null
+
+func _iron_bars(a: Vector2, b: Vector2, height: float) -> Node3D:
+	# Vertical iron bars every 0.2 m between a top and a bottom rail, centred on (a+b)/2.
+	if _iron_mat == null:
+		_iron_mat = StandardMaterial3D.new()
+		_iron_mat.albedo_color = Color("#3b3f47")
+		_iron_mat.metallic = 0.65
+		_iron_mat.roughness = 0.42
 	var length := a.distance_to(b)
-	var n := maxi(1, int(round(length / 2.3)))
-	var rot := -atan2(b.y - a.y, b.x - a.x) + PI * 0.5
-	for i in n:
-		var c := a.lerp(b, (float(i) + 0.5) / float(n))
-		var s := 2.0
-		var off := Vector3(1.05 * s, 0, 0).rotated(Vector3.UP, rot)
-		_place(HEX + "fence_wood_straight.gltf", Vector3(c.x, Sim.height_at(c), c.y) + off, rot, s)
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var half := length * 0.5
+	var n := maxi(2, int(length / 0.2))
+	for i in n + 1:
+		var x := -half + length * float(i) / n
+		_bar_box(st, Vector3(x, height * 0.5, 0), Vector3(0.045, height * 0.5, 0.045))
+	for y in [0.18, height - 0.12]:
+		_bar_box(st, Vector3(0, y, 0), Vector3(half, 0.05, 0.06))
+	st.generate_normals()
+	var mi := MeshInstance3D.new()
+	mi.mesh = st.commit()
+	mi.material_override = _iron_mat
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var root := Node3D.new()
+	root.rotation.y = -atan2(b.y - a.y, b.x - a.x)
+	root.add_child(mi)
+	return root
+
+static func _bar_box(st: SurfaceTool, c: Vector3, h: Vector3) -> void:
+	var v := []
+	for sx in [-1, 1]:
+		for sy in [-1, 1]:
+			for sz in [-1, 1]:
+				v.append(c + Vector3(h.x * sx, h.y * sy, h.z * sz))
+	for f in [[0, 1, 3, 2], [4, 6, 7, 5], [0, 4, 5, 1], [2, 3, 7, 6], [0, 2, 6, 4], [1, 5, 7, 3]]:
+		for k in [0, 2, 1, 0, 3, 2]:
+			st.add_vertex(v[f[k]])
 
 static var _cake_mats: Array = []
 
@@ -1483,6 +1536,12 @@ func _sync_castle(dt: float) -> void:
 		if gn.is_empty():
 			continue
 		var broken: bool = not sim.gate_blocks(g)
+		if gn.has("jail"):
+			gn.broken = broken
+			(gn.door as Node3D).visible = not broken
+			gn.open = move_toward(float(gn.open), 1.0 if (g.open and not broken) else 0.0, dt * 2.2)
+			(gn.door as Node3D).position.y = float(gn.y0) + float(gn.open) * 2.25
+			continue
 		if broken != bool(gn.broken):
 			gn.broken = broken
 			(gn.rubble as Node3D).visible = broken
@@ -1879,15 +1938,17 @@ func on_event(e: Dictionary) -> void:
 		"gate_hit":
 			var g: Dictionary = sim.gates[int(e.gate)]
 			var gp: Vector2 = g.c + (Vector2(randf_range(-1.0, 1.0), 0.0))
-			spark(Vector3(gp.x, 1.4 + randf() * 1.2, gp.y), Color("#e8d6b0"))
+			var gy := Sim.height_at(g.c)
+			spark(Vector3(gp.x, gy + 1.4 + randf() * 1.2, gp.y), Color("#e8d6b0"))
 			if randf() < 0.35:
-				number(Vector3(g.c.x, 3.2, g.c.y), str(e.dmg), false)
+				number(Vector3(g.c.x, gy + 3.2, g.c.y), str(e.dmg), false)
 		"gate_broken":
 			var g2: Dictionary = sim.gates[int(e.gate)]
+			var gy2 := Sim.height_at(g2.c)
 			for i in 3:
-				ring_at(Vector3(g2.c.x, 0.2, g2.c.y), Color("#e0c9a0"), 2.5 + i, 0.7 + i * 0.2)
+				ring_at(Vector3(g2.c.x, gy2 + 0.2, g2.c.y), Color("#e0c9a0"), 2.5 + i, 0.7 + i * 0.2)
 			for i in 12:
-				spark(Vector3(g2.c.x + randf_range(-2, 2), 0.5 + randf() * 2.5, g2.c.y + randf_range(-1, 1)), Color("#c8b89a"))
+				spark(Vector3(g2.c.x + randf_range(-2, 2), gy2 + 0.5 + randf() * 2.5, g2.c.y + randf_range(-1, 1)), Color("#c8b89a"))
 		"gate_rebuilt":
 			var g3: Dictionary = sim.gates[int(e.gate)]
 			ring_at(Vector3(g3.c.x, 0.2, g3.c.y), TEAM_COLORS[int(e.team)], 3.0, 0.8)

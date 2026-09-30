@@ -197,7 +197,17 @@ const MASK_PPM := 4.0             # path-mask pixels per metre
 const HEIGHT_RES := "res://assets/terrain/height.res"
 const MASK_RES := "res://assets/terrain/pathmask.res"
 
+# The castles' sunken dungeon wings (siege_castle.gd, Round 13): the terrain dips to the dungeon
+# floor there, or the grass would cover the pit. (Blue space; red is point-mirrored.)
+const _CastleL = preload("res://scripts/siege/siege_castle.gd")
+
+static func in_dungeon_pit(p: Vector2) -> bool:
+	var q := (p if p.y >= 0.0 else -p) - Vector2(0.0, HALF_L - _CastleL.BACK)
+	return q.x >= _CastleL.ANNEX_X0 and q.x <= -_CastleL.HX and q.y >= _CastleL.ANNEX_Z0 and q.y <= _CastleL.ANNEX_Z1
+
 static func terrain_height(p: Vector2) -> float:
+	if in_dungeon_pit(p):
+		return _CastleL.DUNGEON_H
 	# ground_height inside the field; beyond it a rim of low hills (not playable, just scenery).
 	var out := maxf(absf(p.x) - HALF_W, absf(p.y) - HALF_L)
 	var inside := Vector2(clampf(p.x, -HALF_W, HALF_W), clampf(p.y, -HALF_L, HALF_L))

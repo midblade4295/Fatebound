@@ -772,3 +772,22 @@ K2/K3 notes (0.17.0)
   (bisected: model alone fine, with its normal map, back-face culling, a shadow light -- all fine; full
   scene with King shadows off fine). Other characters don't cast real shadows either.
 - The trailer and store screenshots still show the 0.20.0 Knight King until re-rendered.
+
+# 0.21.0 (Kevin): the dungeon moved down into a walled wing off the west wall, with real jail bars
+- Kevin circled the grass strip outside the west wall; option A: a walled, sunken wing (castle-local
+  x -31..-20, z 8..24, floor -1.6 m). Doorway in the west wall off the L1 west wing (z 17..20); 11 stairs
+  down along x (Castle.DSTAIR) with walls both sides; the old L1 cell is gone.
+- Jail cell in the wing's front-west corner (two sides are the wing's walls): iron bars on the east side
+  and a barred DOOR on the north side = a gate of kind "jail" (500 hp, r 0.35): it lifts for the castle's
+  team (the existing gate "open" mechanic drives the view), blocks the enemy, has to be smashed (bots path
+  through it at the enemy-gate cost and attack it), and _reset_jail() locks it again whenever the King is
+  back in his cell (rescue or return). Excluded from the Reinforced Gates upgrade and the bots' "gates
+  damaged" check; per-gate radius used everywhere gates collide/stamp nav/stop projectiles.
+- Terrain: Land.in_dungeon_pit -> terrain dips to the dungeon floor (rebaked). Three resource nodes per
+  half moved out of the wing's footprint (land check: no squeeze traps, all clear).
+- View: iron-bar grilles (procedural, lit) replace the wooden-fence cell bars; the jail door slides up
+  2.25 m when open; stone sides for the pit; the dungeon floor and striped stairs in castle_mesh.
+- HUD: jail alerts ("THEY SMASHED OUR JAIL" / "THEIR JAIL IS OPEN"), "Our jail is locked again"; the
+  jail isn't in the W/E gate bars. Tutorial shortcut also breaks the enemy jail. Protocol v8.
+- sim smoke: jail rules (ally through, enemy blocked, enemy smashes it, re-locks) + matches: rescues still
+  happen (first at ~100-220 s), 0 violations.

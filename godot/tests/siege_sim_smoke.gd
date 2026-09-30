@@ -1,5 +1,6 @@
 extends SceneTree
 const Sim = preload("res://scripts/siege/siege_sim.gd")
+const Castle = preload("res://scripts/siege/siege_castle.gd")
 
 func _init() -> void:
 	# Hat rules (Round 8, Fat Princess style).
@@ -142,6 +143,30 @@ func _init() -> void:
 	up_me.pos = rst2.p + Vector2(0.9, 0)
 	assert(us.context_action(up_me) == "hat", "at another class's shop the action is NEW HAT")
 	print("hat shop upgrade rules ok")
+	# The dungeon wing's jail door (Round 13): lifts for the castle's team, blocks and must be
+	# smashed by the enemy, locks again when the King is back in his cell.
+	var js = Sim.new()
+	js.setup(4, 9)
+	var jail: Dictionary = js.gates.filter(func(x): return x.team == 0 and str(x.get("kind", "")) == "jail")[0]
+	var inside: Vector2 = Sim._c(0, Castle.CELL_C)
+	var outside: Vector2 = (jail.c as Vector2) + ((jail.c as Vector2) - inside).normalized() * 1.2
+	assert(js._push_out(inside, Sim.UNIT_R, 0).distance_to(inside) < 0.05, "the King's own cell floor is clear for the castle's team")
+	var through: Vector2 = jail.c
+	assert(js._push_out(through, Sim.UNIT_R, 0).distance_to(through) < 0.05, "the castle's own players walk through the jail door")
+	assert(js._push_out(through, Sim.UNIT_R, 1).distance_to(through) > 0.3, "the enemy is pushed back by the jail door")
+	var jfoe: Dictionary = js.units.filter(func(x): return x.team == 1)[0]
+	js._set_class(jfoe, "barbarian", false)
+	jfoe.bot = false
+	jfoe.pos = outside
+	jfoe.face = Sim.angle_of((jail.c as Vector2) - outside)
+	for i in 400:
+		if jail.broken: break
+		js.act(jfoe.id, "attack")
+		js.step(Sim.TICK)
+	assert(jail.broken, "the enemy can smash the jail door (hp %d)" % int(jail.hp))
+	js._return_to_cell(1)
+	assert(not jail.broken and jail.hp >= jail.max_hp, "the jail door locks again when the King is back in his cell")
+	print("jail rules ok")
 	# Projectiles hit what their path crosses (regression: from 0.16.0 to 0.18.1 arrows and bolts
 	# hit NO units -- the per-team position arrays were appended through a copy).
 	var ps2 = Sim.new()
@@ -224,7 +249,7 @@ func _init() -> void:
 							if totals.wall_violations <= 3:
 								print("WALL VIOLATION t=%.1f %s cls=%s state=%s pos=%s wall=%s-%s" % [sim.time, u.id, u.cls, u.state, str(u.pos), str(w.a), str(w.b)])
 					for g in sim.gates:
-						if g.team != u.team and sim.gate_blocks(g) and u.pos.distance_to(Sim.seg_closest(u.pos, g.a, g.b)) < Sim.WALL_R + Sim.UNIT_R - 0.05:
+						if g.team != u.team and sim.gate_blocks(g) and u.pos.distance_to(Sim.seg_closest(u.pos, g.a, g.b)) < float(g.get("r", Sim.WALL_R)) + Sim.UNIT_R - 0.05:
 							totals.gate_violations += 1
 							if totals.gate_violations <= 3:
 								print("GATE VIOLATION t=%.1f %s team=%d state=%s pos=%s gate=%d hp=%.0f broken=%s" % [sim.time, u.id, u.team, u.state, str(u.pos), g.id, g.hp, g.broken])
