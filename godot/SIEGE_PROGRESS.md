@@ -754,3 +754,19 @@ K2/K3 notes (0.17.0)
 - Store: tools/store_compose.py headlines in gold Luckiest Guy, text in Fredoka, feature graphic without
   "SIEGE"; listing name "Fatebound"; all store screenshots re-rendered (King, new signs, new logo); the
   AI store package rebuilt.
+
+# 0.20.2 (Kevin): his King models -- kingT1/kingT2 x fat/fatter/fattest
+- Kevin's 6 GLBs: static meshes (no rig/animations), one "BakedMaterial" each (4K-ish baseColor, normal,
+  metallicRoughness PNGs: ~21 MB per file), ~10.4k tris, 1.9 tall, origin at the centre. T1 = red robes,
+  T2 = purple robes -> matched by colour: T1 leads red, T2 leads blue (Kevin numbered them team 1/2).
+- Optimised in Blender (/tmp/kings/optimize.py pattern): origin at the feet, baseColor 1024 JPEG, normal
+  512, metallicRoughness dropped (matte 0.78), geometry untouched -> assets/kings/king_{blue,red}_{fat,
+  fatter,fattest}.glb, ~2.7 MB each.
+- View: each King root holds all three; sim weight 0-5 -> stage weight/2 (0-1 fat, 2-3 fatter, 4-5
+  fattest), +5 % on odd weights, a puff when a stage goes up; breathing + sway at rest, a wobble while
+  carried (the models aren't rigged). Scaled to 2.6 tall (the Knight hero is 2.54). The Knight-body
+  King and the procedural crown are gone.
+- Their shadows are OFF: a shadow-casting King + the full scene hung llvmpipe before the first frame
+  (bisected: model alone fine, with its normal map, back-face culling, a shadow light -- all fine; full
+  scene with King shadows off fine). Other characters don't cast real shadows either.
+- The trailer and store screenshots still show the 0.20.0 Knight King until re-rendered.

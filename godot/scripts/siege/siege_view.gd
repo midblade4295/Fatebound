@@ -1526,10 +1526,23 @@ func _sync_castle(dt: float) -> void:
 	for t in 2:
 		var o_node: Dictionary = oracle_nodes[t] if t < oracle_nodes.size() else {}
 		if not o_node.is_empty() and o_node.body != null:
-			var w := float(sim.oracles[t].get("weight", 0))
-			var want := Vector3(1.0 + 0.16 * w, 1.0 + 0.04 * w, 1.0 + 0.16 * w) * 0.95
+			var w := int(sim.oracles[t].get("weight", 0))
+			var stage := clampi(w / 2, 0, KING_STAGES.size() - 1)
+			if stage != int(o_node.stage):
+				for k in (o_node.stages as Array).size():
+					(o_node.stages[k] as Node3D).visible = k == stage
+				o_node.puff = 1.0 if stage > int(o_node.stage) else 0.0    # he just got fatter
+				o_node.stage = stage
+			o_node.puff = maxf(0.0, float(o_node.puff) - dt * 2.5)
 			var body: Node3D = o_node.body
-			body.scale = body.scale.lerp(want, minf(1.0, dt * 3.0))
+			var bump := 1.0 + 0.05 * float(w % 2)                         # the odd weights show too
+			var breathe := 1.0 + 0.018 * sin(_time * 2.4 + t)
+			var puff := 1.0 + 0.18 * sin(float(o_node.puff) * PI)
+			body.scale = Vector3(bump * puff * (2.0 - breathe), bump * breathe, bump * puff * (2.0 - breathe))
+			if str(sim.oracles[t].state) == "carried":
+				body.rotation = Vector3(0.12 * sin(_time * 5.2), 0.0, 0.16 * sin(_time * 4.1 + 0.7))
+			else:
+				body.rotation = Vector3(0.0, 0.08 * sin(_time * 0.9 + t * 2.0), 0.035 * sin(_time * 1.3 + t))
 		for kind in ["wood", "stone"]:
 			var pile: Node3D = stock_piles[t][kind]
 			var shown := clampi(int(ceil(float(sim.stock[t][kind]) / 5.0)), 0, pile.get_child_count())
@@ -1963,115 +1976,34 @@ func on_event(e: Dictionary) -> void:
 			ring_at(Vector3(o.pos.x, 0.1, o.pos.y), TEAM_COLORS[int(e.team)], 1.8, 0.6)
 
 # ---------- Oracle ----------
-# The captive is each castle's KING (0.20.0, Kevin; was "the Oracle"): the Knight body with its
-# helmet off, weapons stripped, a team-coloured royal cape and a gold crown on the head bone.
-# (Internal names -- sim.oracles, oracle_nodes -- stay: players never see them.)
-static var _crown_mesh: ArrayMesh = null
-static var _gold_mat: StandardMaterial3D = null
-static var _cape_mats: Array = []
-
-static func _crown() -> Node3D:
-	if _gold_mat == null:
-		_gold_mat = StandardMaterial3D.new()
-		_gold_mat.albedo_color = Color("#f6c84c")
-		_gold_mat.metallic = 0.55
-		_gold_mat.roughness = 0.32
-		_gold_mat.cull_mode = BaseMaterial3D.CULL_DISABLED     # the band is open: see its inside too
-	if _crown_mesh == null:
-		var st := SurfaceTool.new()
-		st.begin(Mesh.PRIMITIVE_TRIANGLES)
-		var r := 0.2
-		var h := 0.11
-		var seg := 20
-		for i in seg:                                      # the band
-			var a0 := TAU * i / seg
-			var a1 := TAU * (i + 1) / seg
-			var p0 := Vector3(cos(a0) * r, 0, sin(a0) * r)
-			var p1 := Vector3(cos(a1) * r, 0, sin(a1) * r)
-			var n0 := Vector3(cos(a0), 0, sin(a0))
-			var n1 := Vector3(cos(a1), 0, sin(a1))
-			for v in [[p0, n0], [p1 + Vector3(0, h, 0), n1], [p1, n1], [p0, n0], [p0 + Vector3(0, h, 0), n0], [p1 + Vector3(0, h, 0), n1]]:
-				st.set_normal(v[1])
-				st.add_vertex(v[0])
-		for k in 5:                                        # five points
-			var a := TAU * k / 5.0 + PI * 0.5
-			var c := Vector3(cos(a) * r, h, sin(a) * r)
-			var side := Vector3(-sin(a), 0, cos(a)) * 0.07
-			var apex := c + Vector3(0, 0.13, 0)
-			var n := Vector3(cos(a), 0.3, sin(a)).normalized()
-			for v in [c - side, apex, c + side]:
-				st.set_normal(n)
-				st.add_vertex(v)
-		_crown_mesh = st.commit()
-	var root := Node3D.new()
-	var band := MeshInstance3D.new()
-	band.mesh = _crown_mesh
-	band.material_override = _gold_mat
-	root.add_child(band)
-	var gem := MeshInstance3D.new()                        # a ruby at the front
-	var sm := SphereMesh.new()
-	sm.radius = 0.038
-	sm.height = 0.076
-	sm.radial_segments = 8
-	sm.rings = 4
-	gem.mesh = sm
-	var gm := StandardMaterial3D.new()
-	gm.albedo_color = Color("#d8263a")
-	gm.roughness = 0.2
-	gem.material_override = gm
-	gem.position = Vector3(0, 0.055, 0.205)
-	root.add_child(gem)
-	return root
+# The captive is each castle's KING (0.20.0; models 0.20.2, Kevin): three hand-made models per team,
+# fat / fatter / fattest, swapped by his weight (sim weight 0-5 -> stage weight/2), a little bigger on
+# the odd weights so every feeding shows. The models aren't rigged, so he's animated by hand: breathing
+# and a sway at rest, a wobble while carried, a puff when he fattens. Kevin named them kingT1 / kingT2;
+# matched by robe colour: T2 (purple) leads blue, T1 (red) leads red. (Internal names -- sim.oracles,
+# oracle_nodes -- stay: players never see them.)
+const KING_STAGES := ["fat", "fatter", "fattest"]
+const KING_HEIGHT := 2.6              # the Knight hero is 2.54; the king a touch taller (and much wider)
 
 func _make_oracle(team: int) -> Dictionary:
 	var root := Node3D.new()
 	add_child(root)
-	var made := make_body("knight")
-	var body: Node3D = null
-	var player: AnimationPlayer = null
-	var crown: Node3D = null
-	if not made.is_empty():
-		body = made.body
-		player = made.player
-		# A captive king: no sword, no shield.
-		for slot in body.find_children("*", "BoneAttachment3D", true, false):
-			slot.queue_free()
-		if _cape_mats.is_empty():
-			for c in [Color("#2f5fc8"), Color("#c23a33")]:
-				var cm := StandardMaterial3D.new()
-				cm.albedo_color = c
-				cm.roughness = 0.8
-				_cape_mats.append(cm)
-		var head_top := 0.0
-		var head_c := Vector3.ZERO
-		for mi in body.find_children("*", "MeshInstance3D", true, false):
-			var nm := str(mi.name)
-			if nm in ["Knight_Helmet", "Knight_HelmetVisor"]:
-				(mi as MeshInstance3D).visible = false     # bare-headed: the crown goes on
-			elif nm == "Knight_Cape":
-				(mi as MeshInstance3D).material_override = _cape_mats[team]
-			elif nm == "Knight_Head":
-				var ab: AABB = (mi as MeshInstance3D).mesh.get_aabb()
-				head_top = ab.end.y
-				head_c = ab.get_center()
-		var sks := body.find_children("*", "Skeleton3D", true, false)
-		if not sks.is_empty():
-			var sk: Skeleton3D = sks[0]
-			var hb := sk.find_bone("head")
-			if hb >= 0:
-				var att := BoneAttachment3D.new()
-				att.bone_name = "head"
-				sk.add_child(att)
-				crown = _crown()
-				# On the head mesh's measured top (in the head bone's space), sunk in a little.
-				crown.position = sk.get_bone_global_rest(hb).affine_inverse() * Vector3(head_c.x, head_top - 0.07, head_c.z)
-				att.add_child(crown)
-		root.add_child(body)
-		body.scale = Vector3.ONE * 0.95
-		player.play("g/Idle_B")
+	var body := Node3D.new()                     # the part that breathes, wobbles and grows
+	root.add_child(body)
+	var stages := []
+	for st in KING_STAGES:
+		var packed := Stage.scene("res://assets/kings/king_%s_%s.glb" % ["blue" if team == 0 else "red", st])
+		var m: Node3D = packed.instantiate() if packed != null else Node3D.new()
+		m.scale = Vector3.ONE * (KING_HEIGHT / 1.9)          # the models are 1.9 tall, feet at 0
+		for mi in m.find_children("*", "MeshInstance3D", true, false):
+			(mi as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		m.visible = st == "fat"
+		body.add_child(m)
+		stages.append(m)
 	var ground_ring := _decal(Vector3.ZERO, 1.0, TEAM_COLORS[team], 0.8)
 	ground_ring.reparent(root, false)
-	return {"root":root, "body":body, "player":player, "halo":crown, "ground":ground_ring, "state":""}
+	return {"root":root, "body":body, "player":null, "stages":stages, "stage":0, "puff":0.0,
+		"ground":ground_ring, "state":""}
 
 func _sync_oracles(dt: float) -> void:
 	for t in 2:
