@@ -649,5 +649,5 @@ static func settings(app, root: VBoxContainer) -> void:
 			DisplayServer.clipboard_set(Diag.read_logs())
 			app.toast("Diagnostics copied", UI.CYAN), "copy_diag", 13)
 	UI.button(help, "PRIVACY POLICY", "ghost", func(): OS.shell_open(PRIVACY_URL), "privacy", 13)
-	var ver := UI.label(root, "Fatebound Siege %s" % Diag.BUILD, 11, UI.MUTED)
+	var ver := UI.label(root, "Fatebound %s" % Diag.BUILD, 11, UI.MUTED)
 	ver.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

@@ -178,7 +178,7 @@ func _build_pause_panel() -> void:
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 10)
 	pause_panel.add_child(v)
-	_label(v, "SIEGE", 22, VisualTheme.GOLD, _title)
+	_label(v, "FATEBOUND", 22, VisualTheme.GOLD, _title)
 	_label(v, "Break into the enemy castle and carry your King from their dungeon to his throne room. First to %d rescues wins. Standing by him in their dungeon heals you. Feed cake from the cake trees to THEIR King: each size needs another lifter (up to 6). Left on the ground, a King throws a tantrum that knocks everyone back. Workers gather, repair gates and fund upgrades." % Sim.WIN_RESCUES, 11, Color("#d4cbbb"))
 	_button(v, "RESUME", "gold", func(): pause_panel.visible = false)
 	var fps_btn := _button(v, "30 FPS MODE: OFF", "secondary", func(): pass)

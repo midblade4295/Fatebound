@@ -28,6 +28,71 @@ XF = 0.4            # crossfade
 TITLE_AT = 1.2      # seconds into the finale when the title lands (on the music's hit)
 
 
+# Text art (Kevin: Luckiest Guy; the game is just "Fatebound", no "Siege"): pre-rendered as transparent
+# PNGs with a gold gradient, dark outline and soft shadow (ffmpeg's drawtext can't do gradients),
+# then faded in/out over the footage.
+FONT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets", "fonts")
+
+
+def _gold(img, text, font, cx, y, stroke):
+    from PIL import Image, ImageDraw, ImageFilter
+    W, H = img.size
+    bb = font.getbbox(text, stroke_width=stroke)
+    w, h = bb[2] - bb[0], bb[3] - bb[1]
+    x, yy = cx - w // 2 - bb[0], y - bb[1]
+    sh = Image.new("L", (W, H), 0)
+    ImageDraw.Draw(sh).text((x + stroke // 2, yy + stroke), text, font=font, fill=190, stroke_width=stroke, stroke_fill=190)
+    sh = sh.filter(ImageFilter.GaussianBlur(max(3, stroke)))
+    img.paste((0, 0, 0, 255), (0, 0), sh)
+    ImageDraw.Draw(img).text((x, yy), text, font=font, fill=(46, 25, 8, 255), stroke_width=stroke, stroke_fill=(46, 25, 8, 255))
+    mask = Image.new("L", (W, H), 0)
+    ImageDraw.Draw(mask).text((x, yy), text, font=font, fill=255)
+    grad = Image.new("RGBA", (W, H))
+    gd = ImageDraw.Draw(grad)
+    for y2 in range(H):
+        t = min(1.0, max(0.0, (y2 - y) / max(1, h)))
+        gd.line([(0, y2), (W, y2)], fill=(int(255 - 10 * t), int(236 - 80 * t), int(140 - 110 * t), 255))
+    img.paste(grad, (0, 0), mask)
+    return y + h
+
+
+def _plain(img, text, font, cx, y, fill, stroke):
+    from PIL import ImageDraw
+    bb = font.getbbox(text, stroke_width=stroke)
+    ImageDraw.Draw(img).text((cx - (bb[2] - bb[0]) // 2 - bb[0], y - bb[1]), text, font=font, fill=fill,
+                             stroke_width=stroke, stroke_fill=(20, 14, 8, 255))
+
+
+def make_overlays(folder: str) -> dict:
+    from PIL import Image, ImageFont
+    title_ttf = os.path.join(FONT_DIR, "LuckiestGuy-Regular.ttf")
+    out = {}
+    for s, cap in CUT:
+        if cap:
+            im = Image.new("RGBA", (1920, 1080), (0, 0, 0, 0))
+            _gold(im, cap, ImageFont.truetype(title_ttf, 118), 960, 770, 9)
+            out[s] = os.path.join(folder, f"ovl_{s}.png")
+            im.save(out[s])
+    title = Image.new("RGBA", (1920, 1080), (0, 0, 0, 0))
+    _gold(title, "FATEBOUND", ImageFont.truetype(title_ttf, 250), 960, 300, 15)
+    out["title"] = os.path.join(folder, "ovl_title.png")
+    title.save(out["title"])
+    tag = Image.new("RGBA", (1920, 1080), (0, 0, 0, 0))
+    fred = os.path.join(FONT_DIR, "Fredoka-Variable.ttf")
+    f1 = ImageFont.truetype(fred, 64)
+    f2 = ImageFont.truetype(fred, 46)
+    for f in (f1, f2):
+        try:
+            f.set_variation_by_name("SemiBold")
+        except Exception:
+            pass
+    _plain(tag, "Storm castles. Steal hats. Rescue the King.", f1, 960, 690, (255, 255, 255, 255), 4)
+    _plain(tag, "16 vs 16  ·  Online or offline with bots", f2, 960, 790, (230, 222, 204, 255), 3)
+    out["tag"] = os.path.join(folder, "ovl_tag.png")
+    tag.save(out["tag"])
+    return out
+
+
 def esc(s: str) -> str:
     return s.replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'").replace(",", "\\,")
 
@@ -87,26 +152,37 @@ def main() -> None:
     for s, _ in CUT:
         inputs += ["-i", os.path.join(a.shots, s + ".avi")]
     inputs += ["-i", music]
+    ovl = make_overlays(a.shots)
+    ov_idx = {}
+    nxt = len(CUT) + 1
+    for s, cap in CUT:
+        if s in ovl:
+            inputs += ["-loop", "1", "-framerate", "30", "-t", f"{LENGTH[s]:.3f}", "-i", ovl[s]]
+            ov_idx[s] = nxt
+            nxt += 1
+    for key in ("title", "tag"):
+        inputs += ["-loop", "1", "-framerate", "30", "-t", f"{LENGTH['finale']:.3f}", "-i", ovl[key]]
+        ov_idx[key] = nxt
+        nxt += 1
     f = []
     for k, (s, cap) in enumerate(CUT):
         d = durs[k]
         chain = f"[{k}:v]trim=start={HEAD}:duration={d},setpts=PTS-STARTPTS,fps=30,format=yuv420p,settb=AVTB"
-        if cap:
-            chain += (f",drawtext=fontfile='{title_ttf}':text='{esc(cap)}':fontsize=92:fontcolor=0xFFD257"
-                      f":borderw=5:bordercolor=0x281806:shadowx=0:shadowy=6:shadowcolor=black@0.5"
-                      f":x=(w-text_w)/2:y=h*0.74:alpha='{fade_alpha(d)}'")
         if s == "finale":
-            show = f"gte(t\\,{TITLE_AT})"
-            chain += (f",drawbox=x=0:y=0:w=iw:h=ih:color=black@0.25:t=fill:enable='{show}'"
-                      f",drawtext=fontfile='{title_ttf}':text='FATEBOUND':fontsize=200:fontcolor=0xFFD257"
-                      f":borderw=8:bordercolor=0x281806:x=(w-text_w)/2:y=h*0.26:enable='{show}'"
-                      f",drawtext=fontfile='{title_ttf}':text='S I E G E':fontsize=64:fontcolor=0xF0E4C8"
-                      f":x=(w-text_w)/2:y=h*0.26+230:enable='{show}'"
-                      f",drawtext=fontfile='{body_ttf}':text='{esc('Storm castles. Steal hats. Rescue the King.')}'"
-                      f":fontsize=50:fontcolor=white:x=(w-text_w)/2:y=h*0.64:enable='gte(t\\,{TITLE_AT + 0.6})'"
-                      f",drawtext=fontfile='{body_ttf}':text='{esc('16 vs 16  ·  Online or offline with bots')}'"
-                      f":fontsize=40:fontcolor=0xD8D0BE:x=(w-text_w)/2:y=h*0.64+72:enable='gte(t\\,{TITLE_AT + 1.0})'")
-        f.append(chain + f"[v{k}]")
+            chain += f",drawbox=x=0:y=0:w=iw:h=ih:color=black@0.25:t=fill:enable='gte(t\\,{TITLE_AT})'"
+        f.append(chain + f"[b{k}]")
+        if cap:
+            f.append(f"[{ov_idx[s]}:v]format=rgba,setpts=PTS-STARTPTS,fade=t=in:st=0.3:d=0.45:alpha=1,"
+                     f"fade=t=out:st={d - 0.55:.3f}:d=0.45:alpha=1[o{k}]")
+            f.append(f"[b{k}][o{k}]overlay=0:0:shortest=1,format=yuv420p,settb=AVTB[v{k}]")
+        elif s == "finale":
+            f.append(f"[{ov_idx['title']}:v]format=rgba,setpts=PTS-STARTPTS,fade=t=in:st={TITLE_AT}:d=0.12:alpha=1[ot]")
+            f.append(f"[{ov_idx['tag']}:v]format=rgba,setpts=PTS-STARTPTS,fade=t=in:st={TITLE_AT + 0.6}:d=0.4:alpha=1[og]")
+            f.append(f"[b{k}][ot]overlay=0:0:shortest=1[bt{k}]")
+            f.append(f"[bt{k}][og]overlay=0:0:shortest=1,format=yuv420p,settb=AVTB[v{k}]")
+        else:
+            f.append(f"[b{k}]null[v{k}]")
+
         f.append(f"[{k}:a]atrim=start={HEAD}:duration={d},asetpts=PTS-STARTPTS,aresample=48000,volume=0.55[a{k}]")
     prev_v, prev_a = "v0", "a0"
     for k in range(1, len(CUT)):

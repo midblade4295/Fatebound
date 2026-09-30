@@ -33,19 +33,41 @@ SHOTS = [
 
 
 def fonts(font_dir: str) -> tuple:
+    # Kevin's pick: Luckiest Guy for headlines (gold gradient), Fredoka for text. Both ship in
+    # assets/fonts as .ttf (licences alongside), so no conversion is needed.
     here = os.path.dirname(os.path.abspath(__file__))
-    woff = os.path.join(here, "..", "assets", "fonts")
-    out = []
-    for name in ["Cinzel-Black", "Nunito-ExtraBold"]:
-        ttf = os.path.join(font_dir, name + ".ttf")
-        if not os.path.exists(ttf):
-            from fontTools.ttLib import TTFont
-            f = TTFont(os.path.join(woff, name + ".woff2"))
-            f.flavor = None
-            os.makedirs(font_dir, exist_ok=True)
-            f.save(ttf)
-        out.append(ttf)
-    return tuple(out)
+    a = os.path.join(here, "..", "assets", "fonts")
+    return os.path.join(a, "LuckiestGuy-Regular.ttf"), os.path.join(a, "Fredoka-Variable.ttf")
+
+
+def body_font(path, size):
+    f = ImageFont.truetype(path, size)
+    try:
+        f.set_variation_by_name("SemiBold")
+    except Exception:
+        pass
+    return f
+
+
+def gold(img, text, font, cx, y, stroke):
+    # Gold gradient fill, dark outline, soft shadow (the trailer's title treatment).
+    W, H = img.size
+    bb = font.getbbox(text, stroke_width=stroke)
+    w, h = bb[2] - bb[0], bb[3] - bb[1]
+    x, yy = cx - w // 2 - bb[0], y - bb[1]
+    sh = Image.new("L", (W, H), 0)
+    ImageDraw.Draw(sh).text((x + stroke // 2, yy + stroke), text, font=font, fill=190, stroke_width=stroke, stroke_fill=190)
+    img.paste(Image.new("RGB", (W, H), (0, 0, 0)), (0, 0), sh.filter(ImageFilter.GaussianBlur(max(3, stroke))))
+    ImageDraw.Draw(img).text((x, yy), text, font=font, fill=(46, 25, 8), stroke_width=stroke, stroke_fill=(46, 25, 8))
+    mask = Image.new("L", (W, H), 0)
+    ImageDraw.Draw(mask).text((x, yy), text, font=font, fill=255)
+    grad = Image.new("RGB", (W, H))
+    gd = ImageDraw.Draw(grad)
+    for y2 in range(H):
+        t = min(1.0, max(0.0, (y2 - y) / max(1, h)))
+        gd.line([(0, y2), (W, y2)], fill=(int(255 - 10 * t), int(236 - 80 * t), int(140 - 110 * t)))
+    img.paste(grad, (0, 0), mask)
+    return h
 
 
 def background() -> Image.Image:
@@ -94,11 +116,12 @@ def outlined(d: ImageDraw.ImageDraw, xy: tuple, text: str, font, fill, px: int) 
 def screenshot(raw: str, out: str, idx: int, name: str, head: str, sub: str, title_ttf: str, body_ttf: str) -> str:
     im = background()
     d = ImageDraw.Draw(im)
-    hf = fit(title_ttf, head, W - 110, 84)
-    x, y = (W - hf.getlength(head)) / 2, 70
-    outlined(d, (x, y), head, hf, GOLD, 3)
-    sf = ImageFont.truetype(body_ttf, 40)
-    ly = y + hf.size + 36
+    hf = fit(title_ttf, head, W - 110, 96)
+    y = 64
+    hh = gold(im, head, hf, W // 2, y, 6)
+    d = ImageDraw.Draw(im)
+    sf = body_font(body_ttf, 42)
+    ly = y + hh + 30
     for line in wrap(sub, sf, W - 140):
         d.text(((W - sf.getlength(line)) / 2, ly), line, font=sf, fill=(240, 236, 226))
         ly += 52
@@ -134,9 +157,11 @@ def feature(raw: str, out: str, title_ttf: str, body_ttf: str) -> str:
     fg = Image.composite(Image.new("RGB", (fw, fh), (8, 12, 28)), fg, shade)
     d = ImageDraw.Draw(fg)
     x, y = 40, 120
-    outlined(d, (x, y), "FATEBOUND", ImageFont.truetype(title_ttf, 84), GOLD, 4)
-    d.text((x + 6, y + 100), "S I E G E", font=ImageFont.truetype(title_ttf, 30), fill=(240, 228, 200))
-    bf = ImageFont.truetype(body_ttf, 30)
+    # The game is just "Fatebound" (no "Siege" line).
+    th = gold(fg, "FATEBOUND", ImageFont.truetype(title_ttf, 96), 40 + ImageFont.truetype(title_ttf, 96).getbbox("FATEBOUND")[2] // 2, y + 10, 6)
+    d = ImageDraw.Draw(fg)
+    y = y + 10 + th - 132
+    bf = body_font(body_ttf, 32)
     for k, line in enumerate(["Storm castles. Steal hats.", "Rescue the King."]):
         d.text((x + 6, y + 162 + k * 40), line, font=bf, fill=(0, 0, 0))
         d.text((x + 4, y + 160 + k * 40), line, font=bf, fill=(255, 255, 255))

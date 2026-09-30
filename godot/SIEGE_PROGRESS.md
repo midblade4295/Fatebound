@@ -741,3 +741,16 @@ K2/K3 notes (0.17.0)
 - Trailer captions/tagline and store captions/listing text now say King; the store images, the
   feature graphic and the trailer footage still show the Oracle until they're re-rendered (planned with
   the new trailer VO). The AI store package zip is stale until then.
+
+# 0.20.1 (Kevin): Luckiest Guy for titles; the game is just "Fatebound" (no "Siege")
+- Fonts added: assets/fonts/LuckiestGuy-Regular.ttf (Apache 2.0) and Fredoka-Variable.ttf (OFL), licences
+  alongside. Home logo: "FATEBOUND" in Luckiest Guy (gold, dark outline, shadow), the "S I E G E" line
+  removed. Pause heading "FATEBOUND", settings version "Fatebound <build>", migration toast "Welcome to
+  Fatebound!". Feature names (Siege Pass, Siege server, "Frost Siege" season, "Siege Lord" title) kept.
+- Trailer: text art pre-rendered as transparent PNGs (gold gradient Luckiest Guy, Fredoka tagline) and
+  overlaid with fades (tools/trailer_edit.py make_overlays; ffmpeg drawtext can't do gradients); the
+  title card is just FATEBOUND. Captive/carry/finale re-rendered with the King. Output renamed
+  Fatebound-Trailer.mp4.
+- Store: tools/store_compose.py headlines in gold Luckiest Guy, text in Fredoka, feature graphic without
+  "SIEGE"; listing name "Fatebound"; all store screenshots re-rendered (King, new signs, new logo); the
+  AI store package rebuilt.
