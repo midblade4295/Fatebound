@@ -183,10 +183,17 @@ def main():
     ap.add_argument("read")
     ap.add_argument("--out", default=os.path.join(HERE, "..", "assets", "vo", "tutorial"))
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--accept", default="", help="comma-separated ids of flagged pieces reviewed by hand and accepted "
+                    "(the recogniser mishears short dramatic lines; check the head/tail transcripts first)")
+    ap.add_argument("--lines-file", default="", help="a plain text file, one line per row, instead of SCRIPT.md; "
+                    "pieces are named 1, 2, 3... (the trailer's Herald: tools/trailer2_edit.py --vo)")
     ap.add_argument("--ids", default="", help="comma-separated line ids: the read holds just these, in this order "
                     "(a partial re-record); default: every line of SCRIPT.md")
     a = ap.parse_args()
     rows = script_rows()
+    if a.lines_file:
+        texts = [t.strip() for t in open(a.lines_file) if t.strip()]
+        rows = [(k + 1, str(k + 1), t) for k, t in enumerate(texts)]
     if a.ids:
         by_id = {r[1]: r for r in rows}
         want = [x.strip() for x in a.ids.split(",") if x.strip()]
@@ -201,6 +208,10 @@ def main():
     moved = refine_cuts(rows, segs, a.read, gaps)
     print("alignment moved %d of %d cuts" % (moved, len(segs) - 1))
     flagged = asr_check(rows, segs, a.read)
+    accepted = {x.strip() for x in a.accept.split(",") if x.strip()}
+    if accepted:
+        print("accepted after review:", [f for f in flagged if f[1] in accepted])
+        flagged = [f for f in flagged if f[1] not in accepted]
     for s in segs:
         print("%2d %-14s %7.2f-%7.2f  %5.2fs (expected %5.2f)  words: own %.2f, neighbours %.2f | %s"
               % (s["n"], s["id"], s["start"], s["end"], s["end"] - s["start"], s["exp"], s["own"], s["leak"], s.get("heard", "")))

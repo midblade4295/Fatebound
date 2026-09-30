@@ -120,15 +120,26 @@ def main():
                     break
     if vo_files:
         labels = []
+        prev_end = 0.0
         for n, (k, f) in enumerate(vo_files):
             inputs += ["-i", f]
             at = (title_global + 0.9) if SHOTS[k] == "reveal" else (starts[k] + VO_LEAD)
-            fl.append(f"[{si + 1 + n}:a]aresample=48000,volume=2.0,adelay={int(at * 1000)}|{int(at * 1000)}[h{n}]")
+            # Never on top of the line before: a long read tails into the next shot's crossfade, and the
+            # next line waits for it (plus a beat).
+            vlen = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", f],
+                                        capture_output=True, text=True).stdout or 0.0)
+            at = max(at, prev_end + 0.12)
+            prev_end = at + vlen
+            print(f"  VO {k + 1:2d} at {at:5.2f}-{prev_end:5.2f} s ({SHOTS[k]})", flush=True)
+            # The last line sits on the drop, the loudest music in the trailer: 3 dB more so it cuts through.
+            gain = 2.8 if SHOTS[k] == "reveal" else 2.0
+            fl.append(f"[{si + 1 + n}:a]aresample=48000,volume={gain},adelay={int(at * 1000)}|{int(at * 1000)}[h{n}]")
             labels.append(f"[h{n}]")
         fl.append(f"{''.join(labels)}amix=inputs={len(labels)}:normalize=0,apad=whole_dur={total:.3f}[herald]")
         fl.append("[herald]asplit=2[hsc][hmix]")
-        fl.append("[music][hsc]sidechaincompress=threshold=0.02:ratio=8:attack=15:release=350[ducked]")
-        fl.append(f"[ducked][hmix]amix=inputs=2:normalize=0,atrim=duration={total:.3f}[aout]")
+        fl.append("[music][hsc]sidechaincompress=threshold=0.012:ratio=12:attack=10:release=400[ducked]")
+        # A limiter at -1 dBFS: the Herald on top of the music peaked at +4 dBFS (clipping) without it.
+        fl.append(f"[ducked][hmix]amix=inputs=2:normalize=0,alimiter=limit=0.891:attack=5:release=60:level=disabled,atrim=duration={total:.3f}[aout]")
     else:
         fl.append(f"[music]atrim=duration={total:.3f}[aout]")
     tmp = a.out + ".part.mp4"

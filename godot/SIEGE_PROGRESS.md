@@ -965,3 +965,14 @@ K2/K3 notes (0.17.0)
   the projectile root already turns +Z onto the flight path. _make_projectile's extra rotation.x = PI/2 stood
   every arrow on its tip. Removed; checked from the game camera and the side (head leading, fletching trailing).
 - Trailer 2: clash, assault and rampart re-rendered and their segments rebuilt; final re-cut (42.9 s, title 35.3 s).
+
+# Trailer 2 with the Herald (Kevin's 11-line trailer read, 24 s)
+- tools/vo_split.py: --lines-file (plain text, pieces named 1..N) and --accept (reviewed flags). Forced alignment
+  moved 8 of 10 cuts; 4 short lines were flagged only because the recogniser mishears them ("They stole our King"
+  -> "restore locked in"); neighbours 0.00 everywhere, lengths as expected -> accepted. Lines in
+  tools/trailer2_vo (1..11.ogg + lines.txt; .gdignore keeps them out of the game).
+- tools/trailer2_edit.py --vo: lines scheduled so none starts before the previous ends (+0.12 s); the music ducks
+  under the Herald (sidechain threshold 0.012, ratio 12); the finale line +3 dB over the drop (it was masked:
+  heard as "they see these free trial"); limiter at -1 dBFS (the sum peaked at +4 dBFS). Measured: lines 6-9 dB
+  over the music; max -0.8 dBFS.
+- Outputs: Fatebound-Trailer-2.mp4 (with the Herald), Fatebound-Trailer-2-NoVO.mp4.
