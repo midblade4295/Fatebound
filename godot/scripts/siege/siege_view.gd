@@ -106,8 +106,10 @@ func _build_lighting() -> void:
 	sky_mat.sky_top_color = Color("#3a79c8")
 	sky_mat.sky_horizon_color = Color("#bcd8ea")
 	sky_mat.sky_curve = 0.12
-	sky_mat.ground_horizon_color = Color("#bcd8ea")
-	sky_mat.ground_bottom_color = Color("#5f7f63")
+	# Below the horizon = the fog colour: wherever no land is drawn it reads as distant haze, never
+	# as a grey patch.
+	sky_mat.ground_horizon_color = Color("#b3cfe1")
+	sky_mat.ground_bottom_color = Color("#b3cfe1")
 	sky_mat.sun_angle_max = 24.0
 	var sky := Sky.new()
 	sky.sky_material = sky_mat
@@ -255,11 +257,10 @@ static func _make_outer_meshes() -> Array:
 			for k in np - 1:
 				var a := ring * np + k
 				var b := a + np
-				# Wound so the faces point up whichever way the side runs.
-				if side in [0, 2]:
-					idx.append_array([a, b, a + 1, a + 1, b, b + 1] if side == 0 else [a, a + 1, b, a + 1, b + 1, b])
-				else:
-					idx.append_array([a, a + 1, b, a + 1, b + 1, b] if side == 1 else [a, b, a + 1, a + 1, b, b + 1])
+				# Every side runs the same way round the map with rings going outward, so one winding
+				# faces up on all four. (0.19.4 special-cased sides 1 and 2 the wrong way round: they
+				# were culled and the sky's grey underside showed through -- Kevin's screenshots.)
+				idx.append_array([a, b, a + 1, a + 1, b, b + 1])
 		var arr := []
 		arr.resize(Mesh.ARRAY_MAX)
 		arr[Mesh.ARRAY_VERTEX] = verts

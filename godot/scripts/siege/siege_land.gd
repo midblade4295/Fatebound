@@ -244,11 +244,13 @@ static func outer_height(p: Vector2) -> float:
 	var q := Vector2(clampf(p.x, r.position.x, r.end.x), clampf(p.y, r.position.y, r.end.y))
 	var d := p.distance_to(q)
 	var hills := 1.2 * sin(p.x * 0.07 + 1.3) * sin(p.y * 0.055 + 0.4) + 0.9 * sin(p.x * 0.031 - p.y * 0.043 + 2.0)
-	var rise := clampf((d - 8.0) / 60.0, 0.0, 1.0)
-	var h := hills * (0.6 + 3.5 * rise) + rise * rise * 10.0
-	var mtn := smoothstep(110.0, 210.0, d)
-	h += mtn * (30.0 + 16.0 * sin(p.x * 0.021 + 0.7) * sin(p.y * 0.017 + 1.9) + 9.0 * sin(p.x * 0.05 + p.y * 0.037))
-	h = lerpf(terrain_height(q), h, smoothstep(0.0, 20.0, d))      # meets the playfield's edge exactly
+	# Hills close in within ~30 m and mountains rise from 40 m (0.19.5, Kevin: "mountains or something"
+	# at the edges): from the play camera the field reads as a valley between rocky slopes.
+	var rise := clampf((d - 5.0) / 28.0, 0.0, 1.0)
+	var h := hills * (0.6 + 4.0 * rise) + rise * rise * 7.0
+	var mtn := smoothstep(40.0, 130.0, d)
+	h += mtn * (28.0 + 14.0 * sin(p.x * 0.021 + 0.7) * sin(p.y * 0.017 + 1.9) + 8.0 * sin(p.x * 0.05 + p.y * 0.037))
+	h = lerpf(terrain_height(q), h, smoothstep(0.0, 14.0, d))      # meets the playfield's edge exactly
 	if d > 0.0:
 		var off := absf(p.y - river_c(p.x))
 		h = lerpf(WATER_Y - 0.7, h, smoothstep(RIVER_HW - 0.5, RIVER_HW + 6.0 + d * 0.05, off))

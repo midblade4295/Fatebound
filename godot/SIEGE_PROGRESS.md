@@ -712,3 +712,16 @@ K2/K3 notes (0.17.0)
 - "FIGHT DIRTY.": a rogue creeps up behind a guard looking away and strikes three times (replaces the
   cake shot).
 - The song isn't in the repo (Kevin's track, large); keep it with the trailer sources.
+
+# 0.19.5 (Kevin): "the edge of the map still has grey spots -- mountains or something"; "better text above the buildings"
+- The grey was the sky's ground colour showing through: 0.19.4 special-cased the triangle winding per
+  side and got sides 1 (east) and 2 (behind the blue castle) backwards, so they were culled. All four
+  sides run the same way round the rect with rings going outward, so one winding ([a, b, a+1, a+1, b,
+  b+1]) is right for every side. My 0.19.4 test views only looked at sides 0 and 3.
+- The sky's below-horizon colours = the fog colour: any gap now reads as distant haze.
+- Outer land: hills close in within ~30 m, mountains from 40 m (was 110 m), blend from the field edge
+  over 14 m: from the play camera the field sits in a valley between rocky slopes.
+- Station plates restyled (HUD): rounded signboard (StyleBoxFlat, anti-aliased), gold rim (brighter +
+  ★ when upgraded), team-coloured top stripe, soft shadow, pointer to the building; name in Cinzel
+  (the logo font), subtitle in Nunito, hat stock as pips; fade in over 6 m; clamped on screen.
+- Trailer re-rendered (all 8 shots) with the fixed land; same song/drop.

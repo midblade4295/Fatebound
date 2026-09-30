@@ -621,33 +621,96 @@ func _oracle_state_text(me: Dictionary, o: Dictionary) -> String:
 		"dropped": return "Our Oracle: loose — back to her cell in %ds" % int(ceil(Sim.DROP_RETURN - (sim.time - o.dropped_at)))
 	return ""
 
+static var _plate_styles: Dictionary = {}
+
+func _plate_style(team: int, up: bool) -> StyleBoxFlat:
+	# A signboard: dark lacquered panel, gold rim (brighter when upgraded), a team-coloured top edge,
+	# a soft shadow. Anti-aliased rounded corners. Cached.
+	var key := "%d:%s" % [team, up]
+	if not _plate_styles.has(key):
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.10, 0.08, 0.06, 0.93)
+		sb.border_color = Color("#ffd257") if up else Color("#c9a45a")
+		sb.set_border_width_all(2)
+		sb.border_width_top = 4
+		sb.set_corner_radius_all(9)
+		sb.shadow_color = Color(0, 0, 0, 0.45)
+		sb.shadow_size = 6
+		sb.shadow_offset = Vector2(0, 3)
+		sb.anti_aliasing = true
+		sb.set_meta("team", team)
+		_plate_styles[key] = sb
+	return _plate_styles[key]
+
 func _draw_station_titles(me: Dictionary) -> void:
-	# Name plates over the hat shops and the workshops in view (Round 12, Kevin: "so players know
-	# what they are"). Drawn in the HUD from projected positions: no 3D text nodes.
+	# Name plates over the hat shops and the workshops in view (Round 12; restyled 0.19.5, Kevin:
+	# "better text so it looks more high quality"). A signboard with a pointer, the name in the game's
+	# title font (Cinzel), a subtitle, hat stock as pips; fades in with distance, never cut off by the
+	# screen edge. Drawn in the HUD from projected positions: no 3D text nodes.
 	if not project.is_valid() or not on_screen.is_valid():
 		return
 	var spots := []
 	for st in sim.stands:
 		var up: bool = int(sim.levels[int(st.team)].get("hat_" + str(st.cls), 0)) > 0
 		var nm: String = (str(Sim.UPGRADE_NAME[st.cls]) if up else str(Sim.CLASSES[st.cls].name)).to_upper()
-		spots.append([st.p, "%s%s" % [nm, " ★" if up else ""], "HAT SHOP · %d" % int(st.stock), int(st.team)])
+		spots.append({"p": st.p, "name": nm, "sub": "HAT SHOP", "stock": int(st.stock), "team": int(st.team), "up": up})
 	for t in 2:
-		spots.append([Sim.workshop(t), "WORKSHOP", "upgrades · tools", t])
+		spots.append({"p": Sim.workshop(t), "name": "WORKSHOP", "sub": "UPGRADES · TOOLS", "stock": -1, "team": t, "up": false})
+	var title_font: Font = VisualTheme.TITLE_FONT
 	for sp in spots:
-		var p2: Vector2 = sp[0]
-		if p2.distance_to(me.pos) > 24.0:
+		var dist: float = (sp.p as Vector2).distance_to(me.pos)
+		if dist > 24.0:
 			continue
-		var world := Vector3(p2.x, Sim.height_at(p2) + 3.1, p2.y)
+		var world := Vector3(sp.p.x, Sim.height_at(sp.p) + 3.1, sp.p.y)
 		if not on_screen.call(world):
 			continue
+		var fade := clampf((24.0 - dist) / 6.0, 0.0, 1.0)
 		var s: Vector2 = project.call(world)
-		var col: Color = TEAM_COLORS[int(sp[3])]
-		var w := maxf(96.0, 9.0 * float(str(sp[1]).length()) + 24.0)
-		var r := Rect2(s.x - w * 0.5, s.y - 30, w, 34)
-		draw_rect(r, Color(0.04, 0.07, 0.1, 0.78))
-		draw_rect(Rect2(r.position, Vector2(r.size.x, 3)), col)
-		_text(Vector2(r.position.x, r.position.y + 17), str(sp[1]), 13, Color.WHITE, _bold, HORIZONTAL_ALIGNMENT_CENTER, r.size.x)
-		_text(Vector2(r.position.x, r.position.y + 30), str(sp[2]), 10, Color(1, 1, 1, 0.7), null, HORIZONTAL_ALIGNMENT_CENTER, r.size.x)
+		var name_px := 17
+		var sub_px := 10
+		var title := ("★ " if sp.up else "") + str(sp.name)
+		var tw := title_font.get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1, name_px).x
+		var sub_text := str(sp.sub)
+		var sw: float = _bold.get_string_size(sub_text, HORIZONTAL_ALIGNMENT_LEFT, -1, sub_px).x + (3 * 11.0 + 8.0 if int(sp.stock) >= 0 else 0.0)
+		var w := maxf(tw, sw) + 30.0
+		var h := 44.0
+		var x := clampf(s.x - w * 0.5, 8.0, size.x - w - 8.0)       # never cut off at the edge
+		var r := Rect2(x, s.y - h - 12.0, w, h)
+		var sb := _plate_style(int(sp.team), bool(sp.up))
+		var team_col: Color = TEAM_COLORS[int(sp.team)]
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		var mod := Color(1, 1, 1, fade)
+		# Pointer down to the building (clamped under the panel).
+		var tip := Vector2(clampf(s.x, r.position.x + 14.0, r.end.x - 14.0), r.end.y + 9.0)
+		draw_colored_polygon(PackedVector2Array([tip, tip + Vector2(-9, -11), tip + Vector2(9, -11)]), Color(sb.border_color, fade))
+		draw_colored_polygon(PackedVector2Array([tip + Vector2(0, -3), tip + Vector2(-6, -11), tip + Vector2(6, -11)]), Color(sb.bg_color, sb.bg_color.a * fade))
+		sb.bg_color.a = 0.93 * fade
+		sb.border_color.a = fade
+		sb.shadow_color.a = 0.45 * fade
+		draw_style_box(sb, r)
+		sb.bg_color.a = 0.93
+		sb.border_color.a = 1.0
+		sb.shadow_color.a = 0.45
+		draw_rect(Rect2(r.position + Vector2(9, 2), Vector2(r.size.x - 18, 2)), Color(team_col, 0.9 * fade))
+		# Name: Cinzel, warm white, dark outline.
+		var name_col := Color("#ffe9b0") if sp.up else Color("#fff6e3")
+		var ny := r.position.y + 25.0
+		draw_string_outline(title_font, Vector2(r.position.x, ny), title, HORIZONTAL_ALIGNMENT_CENTER, r.size.x, name_px, 4, Color(0, 0, 0, 0.7 * fade))
+		draw_string(title_font, Vector2(r.position.x, ny), title, HORIZONTAL_ALIGNMENT_CENTER, r.size.x, name_px, Color(name_col, fade))
+		# Subtitle + stock pips.
+		var sy := r.position.y + 38.0
+		var sub_w := _bold.get_string_size(sub_text, HORIZONTAL_ALIGNMENT_LEFT, -1, sub_px).x
+		var total := sub_w + (3 * 11.0 + 8.0 if int(sp.stock) >= 0 else 0.0)
+		var sx := r.position.x + (r.size.x - total) * 0.5
+		draw_string(_bold, Vector2(sx, sy), sub_text, HORIZONTAL_ALIGNMENT_LEFT, -1, sub_px, Color(0.86, 0.79, 0.64, fade))
+		if int(sp.stock) >= 0:
+			for k in 3:
+				var c := Vector2(sx + sub_w + 12.0 + k * 11.0, sy - 3.5)
+				if k < int(sp.stock):
+					draw_circle(c, 3.6, Color(team_col, fade))
+					draw_arc(c, 3.6, 0.0, TAU, 14, Color(1, 1, 1, 0.55 * fade), 1.0, true)
+				else:
+					draw_arc(c, 3.4, 0.0, TAU, 14, Color(0.86, 0.79, 0.64, 0.6 * fade), 1.2, true)
 
 func _draw_oracle_marker(me: Dictionary) -> void:
 	# Point to our Oracle (or home, while carrying her) when she is off-screen.
