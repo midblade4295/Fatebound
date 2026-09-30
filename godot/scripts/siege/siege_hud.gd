@@ -179,7 +179,7 @@ func _build_pause_panel() -> void:
 	v.add_theme_constant_override("separation", 10)
 	pause_panel.add_child(v)
 	_label(v, "SIEGE", 22, VisualTheme.GOLD, _title)
-	_label(v, "Break into the enemy castle and carry your Oracle from their dungeon to your throne room. First to %d rescues wins. Standing by her in their dungeon heals you. Feed cake from the cake trees to THEIR Oracle: each size needs another lifter (up to 6). Left on the ground, an Oracle throws a tantrum that knocks everyone back. Workers gather, repair gates and fund upgrades." % Sim.WIN_RESCUES, 11, Color("#d4cbbb"))
+	_label(v, "Break into the enemy castle and carry your King from their dungeon to his throne room. First to %d rescues wins. Standing by him in their dungeon heals you. Feed cake from the cake trees to THEIR King: each size needs another lifter (up to 6). Left on the ground, a King throws a tantrum that knocks everyone back. Workers gather, repair gates and fund upgrades." % Sim.WIN_RESCUES, 11, Color("#d4cbbb"))
 	_button(v, "RESUME", "gold", func(): pause_panel.visible = false)
 	var fps_btn := _button(v, "30 FPS MODE: OFF", "secondary", func(): pass)
 	pause_panel.visibility_changed.connect(func(): fps_btn.text = "30 FPS MODE: " + ("ON" if Engine.max_fps == 30 else "OFF"))
@@ -252,14 +252,14 @@ func on_event(e: Dictionary) -> void:
 	var mine: bool = e.get("team", -1) == me.team
 	match str(e.k):
 		"rescue":
-			toast("OUR ORACLE IS HOME!" if mine else "THE ENEMY RESCUED THEIR ORACLE", VisualTheme.GOLD if mine else VisualTheme.RED)
+			toast("OUR KING IS HOME!" if mine else "THE ENEMY RESCUED THEIR KING", VisualTheme.GOLD if mine else VisualTheme.RED)
 		"pickup":
-			toast("You have the Oracle — run home!" if e.id == player_id else ("An ally has our Oracle — escort!" if mine else "Enemy took their Oracle — stop them!"), VisualTheme.CYAN if mine else VisualTheme.RED)
+			toast("You have the King — run home!" if e.id == player_id else ("An ally has our King — escort!" if mine else "Enemy took their King — stop them!"), VisualTheme.CYAN if mine else VisualTheme.RED)
 		"drop":
 			if mine:
-				toast("Our Oracle is loose — grab her!", VisualTheme.GOLD)
+				toast("Our King is loose — grab him!", VisualTheme.GOLD)
 		"recaptured":
-			toast("Our Oracle was dragged back to her cell" if mine else "Enemy Oracle returned to our keep", Color("#d4cbbb"))
+			toast("Our King was dragged back to his cell" if mine else "Enemy King returned to our keep", Color("#d4cbbb"))
 		"class":
 			if e.id == player_id:
 				var nm: String = sim.class_label(me)
@@ -271,18 +271,18 @@ func on_event(e: Dictionary) -> void:
 			# Only stage changes are worth a toast (every other cake is just half a stage).
 			if bool(e.get("stage_up", true)):
 				if mine:
-					toast("Our Oracle got fatter! Size %d — needs %d to lift" % [int(e.weight), int(e.need)], VisualTheme.RED)
+					toast("Our King got fatter! Size %d — needs %d to lift" % [int(e.weight), int(e.need)], VisualTheme.RED)
 				else:
-					toast("Their Oracle grew to size %d — needs %d to lift" % [int(e.weight), int(e.need)], Color("#ff9ec8"))
+					toast("Their King grew to size %d — needs %d to lift" % [int(e.weight), int(e.need)], Color("#ff9ec8"))
 		"offering_taken":
 			if e.id == player_id:
-				toast("Feed the cake to their Oracle in our dungeon", Color("#ff9ec8"))
+				toast("Feed the cake to their King in our dungeon", Color("#ff9ec8"))
 		"tantrum":
 			var tt := int(e.team)
 			if tt == sim.by_id[player_id].team:
-				toast("Our Oracle throws a TANTRUM — reach her now!", VisualTheme.GOLD)
+				toast("Our King throws a TANTRUM — reach him now!", VisualTheme.GOLD)
 			else:
-				toast("Their Oracle throws a tantrum!", Color("#ffb3c6"))
+				toast("Their King throws a tantrum!", Color("#ffb3c6"))
 		"lift_join":
 			var lo: Dictionary = sim.oracles[int(e.team)]
 			if lo.carrier == player_id or e.id == player_id:
@@ -290,7 +290,7 @@ func on_event(e: Dictionary) -> void:
 				if int(e.n) < need:
 					toast("Lifting %d/%d — need %d more" % [int(e.n), need, need - int(e.n)], Color("#f2d18d"))
 				elif int(e.n) == need:
-					toast("Enough hands — move her!", VisualTheme.GOLD)
+					toast("Enough hands — move him!", VisualTheme.GOLD)
 		"gate_broken":
 			var side: String = str(sim.gates[int(e.gate)].side).to_upper()
 			toast("OUR %s GATE HAS FALLEN!" % side if mine else "ENEMY %s GATE BROKEN — CHARGE!" % side, VisualTheme.RED if mine else VisualTheme.GOLD)
@@ -609,16 +609,16 @@ func _oracle_status(me: Dictionary) -> String:
 
 func _oracle_state_text(me: Dictionary, o: Dictionary) -> String:
 	match str(o.state):
-		"cell": return "Our Oracle: captive in the enemy dungeon"
+		"cell": return "Our King: captive in the enemy dungeon"
 		"carried":
 			var n: int = o.lifters.size()
 			var need: int = sim.lifters_needed(o)
 			if int(o.carry_team) != int(o.team):
-				return "Our Oracle: ENEMIES are hauling her back!"
+				return "Our King: ENEMIES are hauling him back!"
 			if n < need:
-				return "Our Oracle: lifting %d/%d — need %d more!" % [n, need, need - n]
-			return "Our Oracle: YOU lead the lift!" if o.carrier == player_id else "Our Oracle: allies are carrying her"
-		"dropped": return "Our Oracle: loose — back to her cell in %ds" % int(ceil(Sim.DROP_RETURN - (sim.time - o.dropped_at)))
+				return "Our King: lifting %d/%d — need %d more!" % [n, need, need - n]
+			return "Our King: YOU lead the lift!" if o.carrier == player_id else "Our King: allies are carrying him"
+		"dropped": return "Our King: loose — back to his cell in %ds" % int(ceil(Sim.DROP_RETURN - (sim.time - o.dropped_at)))
 	return ""
 
 static var _plate_styles: Dictionary = {}
@@ -731,7 +731,7 @@ func _draw_oracle_marker(me: Dictionary) -> void:
 	var tip := edge + dir * 16
 	var side := Vector2(-dir.y, dir.x) * 11
 	draw_colored_polygon(PackedVector2Array([tip, edge - dir * 6 + side, edge - dir * 6 - side]), col)
-	_text(edge - dir * 22 + Vector2(0, 5), "HOME" if me.carrying else "ORACLE", 11, col, _bold)
+	_text(edge - dir * 22 + Vector2(0, 5), "HOME" if me.carrying else "KING", 11, col, _bold)
 
 func _draw_button(b: Dictionary, me: Dictionary) -> void:
 	var c: Vector2 = b.c

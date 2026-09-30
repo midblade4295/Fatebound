@@ -577,7 +577,7 @@ static func settings(app, root: VBoxContainer) -> void:
 	grid.columns = 2
 	grid.add_theme_constant_override("h_separation", 16)
 	prof.add_child(grid)
-	for pair in [["Matches", st.matches], ["Wins", st.wins], ["Oracle rescues", st.rescues], ["Knockouts", st.kills],
+	for pair in [["Matches", st.matches], ["Wins", st.wins], ["King rescues", st.rescues], ["Knockouts", st.kills],
 			["Gate damage", int(st.gates) * 100], ["Gathered", st.gathered], ["Cakes fed", st.fed], ["Level", d.level]]:
 		var kl := UI.label(grid, str(pair[0]), 12, UI.MUTED)
 		kl.autowrap_mode = TextServer.AUTOWRAP_OFF

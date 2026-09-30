@@ -1963,30 +1963,115 @@ func on_event(e: Dictionary) -> void:
 			ring_at(Vector3(o.pos.x, 0.1, o.pos.y), TEAM_COLORS[int(e.team)], 1.8, 0.6)
 
 # ---------- Oracle ----------
+# The captive is each castle's KING (0.20.0, Kevin; was "the Oracle"): the Knight body with its
+# helmet off, weapons stripped, a team-coloured royal cape and a gold crown on the head bone.
+# (Internal names -- sim.oracles, oracle_nodes -- stay: players never see them.)
+static var _crown_mesh: ArrayMesh = null
+static var _gold_mat: StandardMaterial3D = null
+static var _cape_mats: Array = []
+
+static func _crown() -> Node3D:
+	if _gold_mat == null:
+		_gold_mat = StandardMaterial3D.new()
+		_gold_mat.albedo_color = Color("#f6c84c")
+		_gold_mat.metallic = 0.55
+		_gold_mat.roughness = 0.32
+		_gold_mat.cull_mode = BaseMaterial3D.CULL_DISABLED     # the band is open: see its inside too
+	if _crown_mesh == null:
+		var st := SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		var r := 0.2
+		var h := 0.11
+		var seg := 20
+		for i in seg:                                      # the band
+			var a0 := TAU * i / seg
+			var a1 := TAU * (i + 1) / seg
+			var p0 := Vector3(cos(a0) * r, 0, sin(a0) * r)
+			var p1 := Vector3(cos(a1) * r, 0, sin(a1) * r)
+			var n0 := Vector3(cos(a0), 0, sin(a0))
+			var n1 := Vector3(cos(a1), 0, sin(a1))
+			for v in [[p0, n0], [p1 + Vector3(0, h, 0), n1], [p1, n1], [p0, n0], [p0 + Vector3(0, h, 0), n0], [p1 + Vector3(0, h, 0), n1]]:
+				st.set_normal(v[1])
+				st.add_vertex(v[0])
+		for k in 5:                                        # five points
+			var a := TAU * k / 5.0 + PI * 0.5
+			var c := Vector3(cos(a) * r, h, sin(a) * r)
+			var side := Vector3(-sin(a), 0, cos(a)) * 0.07
+			var apex := c + Vector3(0, 0.13, 0)
+			var n := Vector3(cos(a), 0.3, sin(a)).normalized()
+			for v in [c - side, apex, c + side]:
+				st.set_normal(n)
+				st.add_vertex(v)
+		_crown_mesh = st.commit()
+	var root := Node3D.new()
+	var band := MeshInstance3D.new()
+	band.mesh = _crown_mesh
+	band.material_override = _gold_mat
+	root.add_child(band)
+	var gem := MeshInstance3D.new()                        # a ruby at the front
+	var sm := SphereMesh.new()
+	sm.radius = 0.038
+	sm.height = 0.076
+	sm.radial_segments = 8
+	sm.rings = 4
+	gem.mesh = sm
+	var gm := StandardMaterial3D.new()
+	gm.albedo_color = Color("#d8263a")
+	gm.roughness = 0.2
+	gem.material_override = gm
+	gem.position = Vector3(0, 0.055, 0.205)
+	root.add_child(gem)
+	return root
+
 func _make_oracle(team: int) -> Dictionary:
 	var root := Node3D.new()
 	add_child(root)
-	var made := make_body("mage")
+	var made := make_body("knight")
 	var body: Node3D = null
 	var player: AnimationPlayer = null
+	var crown: Node3D = null
 	if not made.is_empty():
 		body = made.body
 		player = made.player
-		# Strip the staff: the Oracle is a captive, not a fighter.
+		# A captive king: no sword, no shield.
 		for slot in body.find_children("*", "BoneAttachment3D", true, false):
 			slot.queue_free()
+		if _cape_mats.is_empty():
+			for c in [Color("#2f5fc8"), Color("#c23a33")]:
+				var cm := StandardMaterial3D.new()
+				cm.albedo_color = c
+				cm.roughness = 0.8
+				_cape_mats.append(cm)
+		var head_top := 0.0
+		var head_c := Vector3.ZERO
+		for mi in body.find_children("*", "MeshInstance3D", true, false):
+			var nm := str(mi.name)
+			if nm in ["Knight_Helmet", "Knight_HelmetVisor"]:
+				(mi as MeshInstance3D).visible = false     # bare-headed: the crown goes on
+			elif nm == "Knight_Cape":
+				(mi as MeshInstance3D).material_override = _cape_mats[team]
+			elif nm == "Knight_Head":
+				var ab: AABB = (mi as MeshInstance3D).mesh.get_aabb()
+				head_top = ab.end.y
+				head_c = ab.get_center()
+		var sks := body.find_children("*", "Skeleton3D", true, false)
+		if not sks.is_empty():
+			var sk: Skeleton3D = sks[0]
+			var hb := sk.find_bone("head")
+			if hb >= 0:
+				var att := BoneAttachment3D.new()
+				att.bone_name = "head"
+				sk.add_child(att)
+				crown = _crown()
+				# On the head mesh's measured top (in the head bone's space), sunk in a little.
+				crown.position = sk.get_bone_global_rest(hb).affine_inverse() * Vector3(head_c.x, head_top - 0.07, head_c.z)
+				att.add_child(crown)
 		root.add_child(body)
 		body.scale = Vector3.ONE * 0.95
 		player.play("g/Idle_B")
-	var halo := MeshInstance3D.new()
-	halo.mesh = _ring_mesh(0.42, 0.07)
-	halo.material_override = _unshaded(Color(1.0, 0.85, 0.4, 0.95))
-	halo.position.y = 2.55
-	halo.rotation.x = 0.25
-	root.add_child(halo)
 	var ground_ring := _decal(Vector3.ZERO, 1.0, TEAM_COLORS[team], 0.8)
 	ground_ring.reparent(root, false)
-	return {"root":root, "body":body, "player":player, "halo":halo, "ground":ground_ring, "state":""}
+	return {"root":root, "body":body, "player":player, "halo":crown, "ground":ground_ring, "state":""}
 
 func _sync_oracles(dt: float) -> void:
 	for t in 2:
@@ -1994,7 +2079,6 @@ func _sync_oracles(dt: float) -> void:
 		var o: Dictionary = sim.oracles[t]
 		var root: Node3D = n.root
 		var target := Vector3(o.pos.x, Sim.height_at(o.pos), o.pos.y)
-		(n.halo as Node3D).rotation.y += dt * 1.6
 		if not n.has("aura"):
 			n["aura"] = _decal(Vector3.ZERO, Sim.HEAL_R, Color("#7dffa8"), 0.35)
 		var aura: Node3D = n.aura

@@ -14,12 +14,12 @@ import subprocess
 # (shot, caption) in order; shot lengths match LENGTH in tools/trailer_shots.gd.
 CUT = [
     ("aerial", ""),
-    ("captive", "THEY TOOK OUR ORACLE."),
+    ("captive", "THEY TOOK OUR KING."),
     ("hats", "GRAB A HAT."),
     ("assault", "STORM THE CASTLE."),
     ("whirl", "SPIN. SHIELD. SMASH."),
     ("backstab", "FIGHT DIRTY."),
-    ("carry", "BRING HER HOME."),
+    ("carry", "BRING HIM HOME."),
     ("finale", ""),
 ]
 LENGTH = {"aerial": 5.0, "captive": 4.0, "hats": 4.5, "assault": 6.0, "whirl": 3.5, "cake": 4.0, "backstab": 4.0, "carry": 5.0, "finale": 6.0}
@@ -102,7 +102,7 @@ def main() -> None:
                       f":borderw=8:bordercolor=0x281806:x=(w-text_w)/2:y=h*0.26:enable='{show}'"
                       f",drawtext=fontfile='{title_ttf}':text='S I E G E':fontsize=64:fontcolor=0xF0E4C8"
                       f":x=(w-text_w)/2:y=h*0.26+230:enable='{show}'"
-                      f",drawtext=fontfile='{body_ttf}':text='{esc('Storm castles. Steal hats. Rescue the Oracle.')}'"
+                      f",drawtext=fontfile='{body_ttf}':text='{esc('Storm castles. Steal hats. Rescue the King.')}'"
                       f":fontsize=50:fontcolor=white:x=(w-text_w)/2:y=h*0.64:enable='gte(t\\,{TITLE_AT + 0.6})'"
                       f",drawtext=fontfile='{body_ttf}':text='{esc('16 vs 16  ·  Online or offline with bots')}'"
                       f":fontsize=40:fontcolor=0xD8D0BE:x=(w-text_w)/2:y=h*0.64+72:enable='gte(t\\,{TITLE_AT + 1.0})'")

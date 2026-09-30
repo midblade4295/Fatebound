@@ -725,3 +725,19 @@ K2/K3 notes (0.17.0)
   ★ when upgraded), team-coloured top stripe, soft shadow, pointer to the building; name in Cinzel
   (the logo font), subtitle in Nunito, hat stock as pips; fade in over 6 m; clamped on screen.
 - Trailer re-rendered (all 8 shots) with the fixed land; same song/drop.
+
+# 0.20.0 (Kevin): the Oracle becomes each castle's KING
+- Every visible string: HUD rules/status/toasts/marker, stats screen ("King rescues"), economy (season
+  "The King's Keep", challenges, reward line; the cosmetic title shows "Kingsworn" but keeps its id
+  title_oracle_sworn so owned copies survive), tutorial lines/tasks/labels. Scan of every quoted string
+  in scripts/: no visible "Oracle" left. Internal names (sim.oracles, oracle_nodes, protocol keys) are
+  unchanged -- players never see them.
+- The King: the Knight body, helmet and visor hidden, weapons stripped, team cape (royal blue / crimson),
+  a gold five-point crown with a ruby on the head bone (placed at the head mesh's measured top); the halo
+  and its spin are gone; the healing aura stays.
+- Tutorial VO: 13 lines rewritten (him/his/King); their Oracle-era recordings pulled from the game until
+  Kevin re-records (kept in staging), so the voice never contradicts the text. tutorial_test has the
+  explicit pending list (13) and fails if it goes stale. Re-record sheet: Fatebound-Tutorial-VO-Rerecord.txt.
+- Trailer captions/tagline and store captions/listing text now say King; the store images, the
+  feature graphic and the trailer footage still show the Oracle until they're re-rendered (planned with
+  the new trailer VO). The AI store package zip is stale until then.

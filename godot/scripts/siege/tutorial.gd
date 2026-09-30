@@ -18,7 +18,7 @@ const TYPE_CPS := 48.0
 const STEPS := [
 	{"id": "intro", "talk": [
 		["t_intro_1", "Ah, a new recruit! Welcome to Fatebound. I'm the Royal Herald. I announce things. Loudly. It's a living."],
-		["t_intro_2", "Across that field, the enemy is holding our Oracle hostage. We'd like her back. She does the prophecies. And the baking."]]},
+		["t_intro_2", "Across that field, the enemy is holding our King hostage. We'd like him back. He does the ruling. And the waving."]]},
 	{"id": "move", "talk": [
 		["t_move_1", "First things first: walking. Drag your thumb on the left side of the screen. Yes, like that. No, the other left."]],
 		"task": "Walk around a bit",
@@ -58,30 +58,30 @@ const STEPS := [
 		"task": "Capture the outpost",
 		"done": [["t_out_done", "It's ours! We can respawn here, workers can drop resources off here, and it earns us wood and stone. Passive income. The true magic."]]},
 	{"id": "goal", "talk": [
-		["t_goal_1", "Now, the actual point of Fatebound. The enemy's dungeon is inside their castle, behind their gates. Our Oracle is in there. Probably bored."],
-		["t_goal_2", "Break a gate down, and Barbarians are marvellous at that, or have a Worker build a ladder over the wall. Then grab her and carry her home to our throne."],
-		["t_goal_3", "Rescue her three times and we win. They're trying to do the exact same thing to us, so leave a few friends at home. Trust issues are healthy here."]]},
+		["t_goal_1", "Now, the actual point of Fatebound. The enemy's dungeon is inside their castle, behind their gates. Our King is in there. Probably complaining."],
+		["t_goal_2", "Break a gate down, and Barbarians are marvellous at that, or have a Worker build a ladder over the wall. Then grab him and carry him home to his throne."],
+		["t_goal_3", "Rescue him three times and we win. They're trying to do the exact same thing to us, so leave a few friends at home. Trust issues are healthy here."]]},
 	{"id": "cake", "talk": [
 		["t_cake_1", "But first, a dirty trick. See that tree? It grows cake. Walk up and press ACTION to take a slice. Don't eat it. It's not for you."]],
 		"task": "Take a slice of cake from the cake tree (ACTION)",
-		"done": [["t_cake_took", "Lovely. Now, we have a guest in OUR dungeon: the enemy's Oracle. She looks peckish."]]},
+		"done": [["t_cake_took", "Lovely. Now, we have a guest in OUR dungeon: the enemy's King. He looks peckish."]]},
 	{"id": "feed", "talk": [
-		["t_feed_1", "Bring her that cake and press ACTION to feed her. Every bite makes her heavier, so the enemy needs more people to carry her home. Delicious sabotage."]],
-		"task": "Feed the cake to their Oracle in our dungeon (ACTION)",
-		"done": [["t_feed_done", "She said thank you! Is it tactically brilliant? Yes. Is it ethically questionable? Also yes. Welcome to Fatebound."]]},
+		["t_feed_1", "Bring him that cake and press ACTION to feed him. Every bite makes him heavier, so the enemy needs more people to carry him home. Delicious sabotage."]],
+		"task": "Feed the cake to their King in our dungeon (ACTION)",
+		"done": [["t_feed_done", "He said thank you! Is it tactically brilliant? Yes. Is it ethically questionable? Also yes. Welcome to Fatebound."]]},
 	{"id": "shortcut", "talk": [
-		["t_rescue_1", "Right. Let's get OUR Oracle back. Normally you'd march over, smash a gate and fight your way in. Today I've arranged a shortcut. Don't ask how. Royal paperwork."]]},
+		["t_rescue_1", "Right. Let's get OUR King back. Normally you'd march over, smash a gate and fight your way in. Today I've arranged a shortcut. Don't ask how. Royal paperwork."]]},
 	{"id": "grab", "talk": [
-		["t_grab_1", "Here we are. Their gate is, ahem, 'mysteriously broken'. Get inside, find our Oracle in their dungeon and press ACTION to lift her."]],
-		"task": "Lift our Oracle in their dungeon (ACTION)",
-		"done": [["t_grab_done", "Got her! You're slower while carrying. Heavier Oracles need friends to help lift, which is exactly why we feed THEIRS so much cake."]]},
+		["t_grab_1", "Here we are. Their gate is, ahem, 'mysteriously broken'. Get inside, find our King in their dungeon and press ACTION to lift him."]],
+		"task": "Lift our King in their dungeon (ACTION)",
+		"done": [["t_grab_done", "Got him! You're slower while carrying. Heavier Kings need friends to help lift, which is exactly why we feed THEIRS so much cake."]]},
 	{"id": "carry", "talk": [
-		["t_carry_1", "Now carry her all the way home to our throne. Follow the arrow. And don't drop her. She will never let you forget it."]],
-		"task": "Carry our Oracle home to our throne",
-		"done": [["t_carry_done", "RESCUED! That's one! Rescue her three times and the match is ours. The crowd goes mild."]]},
+		["t_carry_1", "Now carry him all the way home to his throne. Follow the arrow. And don't drop him. He will never let you forget it."]],
+		"task": "Carry our King home to his throne",
+		"done": [["t_carry_done", "RESCUED! That's one! Rescue him three times and the match is ours. The crowd goes mild."]]},
 	{"id": "end", "talk": [
 		["t_end_1", "That's everything! Well. Not everything. But everything I was paid to say."],
-		["t_end_2", "Go forth, recruit. Fatebound awaits. Win glory, rescue the Oracle, and please, try to keep your hat on."]]},
+		["t_end_2", "Go forth, recruit. Fatebound awaits. Win glory, rescue the King, and please, try to keep your hat on."]]},
 ]
 
 var mode                      # siege_mode.gd
@@ -347,9 +347,9 @@ func task_info() -> Dictionary:
 			var ct := _cake_tree(me)
 			return {"pos": ct.p, "label": "CAKE TREE"} if not ct.is_empty() else {}
 		"feed":
-			return {"pos": sim.oracles[1 - int(me.team)].pos, "label": "THEIR ORACLE"}
+			return {"pos": sim.oracles[1 - int(me.team)].pos, "label": "THEIR KING"}
 		"grab":
-			return {"pos": sim.oracles[int(me.team)].pos, "label": "OUR ORACLE"}
+			return {"pos": sim.oracles[int(me.team)].pos, "label": "OUR KING"}
 		"carry":
 			return {"pos": Sim.throne(me.team), "label": "OUR THRONE"}
 	return {}

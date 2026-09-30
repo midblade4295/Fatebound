@@ -22,10 +22,10 @@ GOLD = (255, 210, 87)
 # (raw render name, headline, subline) in store order. Every claim is true of build 0.19.1.
 SHOTS = [
     ("battle",    "STORM THE CASTLE",        "16 vs 16 sieges, online or offline with bots"),
-    ("rescue",    "RESCUE YOUR ORACLE",      "Carry her home from the enemy dungeon. Three rescues wins."),
+    ("rescue",    "RESCUE YOUR KING",        "Carry him home from the enemy dungeon. Three rescues wins."),
     ("hats",      "THE HAT MAKES THE HERO",  "Walk into a hat shop and become a Knight, Mage, Priest and more"),
     ("abilities", "SPIN. SHIELD. SMASH.",    "Every class has its own ability"),
-    ("feed",      "FEED THEIR ORACLE CAKE",  "Heavier captives are harder to carry home. Delicious sabotage."),
+    ("feed",      "FEED THEIR KING CAKE",    "Heavier captives are harder to carry home. Delicious sabotage."),
     ("tutorial",  "LEARN FROM THE HERALD",   "A funny, hands-on walkthrough gets you battle-ready"),
     ("shop",      "SKINS, WEAPONS & PACKS",  "Cosmetics only. No pay-to-win."),
     ("home",      "SEVEN CLASSES",           "Knight, Barbarian, Rogue, Ranger, Mage, Priest and Worker"),
@@ -137,7 +137,7 @@ def feature(raw: str, out: str, title_ttf: str, body_ttf: str) -> str:
     outlined(d, (x, y), "FATEBOUND", ImageFont.truetype(title_ttf, 84), GOLD, 4)
     d.text((x + 6, y + 100), "S I E G E", font=ImageFont.truetype(title_ttf, 30), fill=(240, 228, 200))
     bf = ImageFont.truetype(body_ttf, 30)
-    for k, line in enumerate(["Storm castles. Steal hats.", "Rescue the Oracle."]):
+    for k, line in enumerate(["Storm castles. Steal hats.", "Rescue the King."]):
         d.text((x + 6, y + 162 + k * 40), line, font=bf, fill=(0, 0, 0))
         d.text((x + 4, y + 160 + k * 40), line, font=bf, fill=(255, 255, 255))
     path = os.path.join(out, "feature_graphic_1024x500.png")
