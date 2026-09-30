@@ -2182,6 +2182,14 @@ func _sync_oracles(dt: float) -> void:
 		else:
 			(n.ground as Node3D).visible = true
 			target.y = Sim.height_at(o.pos)
+			# Facing (Kevin: "the king is facing the wall"): in his cell he looks out through the bars at
+			# the cell door; on his throne, out over his castle; dropped, he keeps his last facing.
+			if o.state == "cell":
+				for g in sim.gates:
+					if int(g.team) != t and str(g.get("kind", "")) == "jail":
+						root.rotation.y = lerp_angle(root.rotation.y, Sim.angle_of((g.c as Vector2) - (o.pos as Vector2)), 1.0 - exp(-dt * 6.0))
+			elif (o.pos as Vector2).distance_to(Sim.throne(t)) < 1.5:
+				root.rotation.y = lerp_angle(root.rotation.y, Sim.angle_of(Sim._c(t, Vector2(0.0, 0.0)) - Sim.throne(t)), 1.0 - exp(-dt * 6.0))
 			var pulse := 0.8 + sin(_time * 4.0) * 0.2
 			(n.ground as Node3D).scale = Vector3(pulse, 0.15, pulse)
 			if n.state == "carried" and n.player != null:

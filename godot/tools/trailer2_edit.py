@@ -16,12 +16,19 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 HERE = os.path.dirname(os.path.abspath(__file__))
 FONT = os.path.join(HERE, "..", "assets", "fonts", "LuckiestGuy-Regular.ttf")
 W, H = 1920, 1080
-SHOTS = ["dawn", "captive", "heroes", "assault", "rampart", "whirl", "feast", "carry", "reveal"]
-LENGTH = {"dawn": 5.0, "captive": 4.0, "heroes": 4.0, "assault": 5.5, "rampart": 4.0, "whirl": 3.0,
-          "feast": 4.0, "carry": 5.0, "reveal": 9.0}
-CAPTIONS = {"dawn": "A KINGDOM AT WAR", "captive": "OUR KING... KIDNAPPED!", "heroes": "GRAB A HAT. BECOME A LEGEND.",
-            "assault": "STORM THEIR GATES!", "rampart": "RAIN ARROWS FROM THE WALLS", "whirl": "SPIN! SMASH! REPEAT!",
-            "feast": "FATTEN THEIR KING", "carry": "BRING HIM HOME!"}
+# Round 22 (Kevin: show what you actually do -- what hats are -- and pump the 16 v 16 multiplayer): the armies
+# clash, the goal (they stole our King), hats (a villager becomes a Knight; all seven classes), the action,
+# fattening their King, carrying ours home, how you win (the throne), the reveal.
+SHOTS = ["clash", "captive", "heroes", "lineup", "assault", "rampart", "whirl", "feast", "carry", "throne", "reveal"]
+LENGTH = {"clash": 4.5, "captive": 4.0, "heroes": 4.0, "lineup": 4.0, "assault": 5.5, "rampart": 4.0, "whirl": 3.0,
+          "feast": 4.0, "carry": 5.0, "throne": 4.0, "reveal": 9.0}
+# Shots used shorter than they were rendered (trimmed from the start + HEAD).
+USE = {"captive": 3.6, "heroes": 3.4, "lineup": 3.8, "assault": 4.6, "rampart": 3.6, "whirl": 2.9, "feast": 3.8,
+       "carry": 4.2, "throne": 3.8}
+CAPTIONS = {"clash": "16 VS 16 CASTLE SIEGE", "captive": "THEY STOLE OUR KING!", "heroes": "GRAB A HAT...",
+            "lineup": "...BECOME A HERO", "assault": "STORM THEIR CASTLE", "rampart": "RAIN ARROWS FROM THE WALLS",
+            "whirl": "SPIN! SMASH! REPEAT!", "feast": "STUFF THEIR KING WITH FISH", "carry": "CARRY YOUR KING HOME",
+            "throne": "FIRST TO 3 RESCUES WINS"}
 HEAD = 0.1          # skip the frames before each shot is staged
 XF = 0.4
 TITLE_AT = 1.4      # in reveal_fx.avi
@@ -59,7 +66,7 @@ def main():
                     help="segments: each shot trimmed with its caption burned in (resumable: existing ones are kept); "
                          "final: crossfades + audio. Split so each step fits a short time limit.")
     a = ap.parse_args()
-    dur = [LENGTH[s] - HEAD - 0.05 for s in SHOTS]
+    dur = [min(USE.get(s, 99.0), LENGTH[s] - HEAD - 0.05) for s in SHOTS]
     starts = []
     t = 0.0
     for k, d in enumerate(dur):
@@ -126,7 +133,7 @@ def main():
         fl.append(f"[music]atrim=duration={total:.3f}[aout]")
     tmp = a.out + ".part.mp4"
     subprocess.run(["ffmpeg", "-v", "error", "-y"] + inputs + ["-filter_complex", ";".join(fl), "-map", "[vout]", "-map", "[aout]",
-                    "-c:v", "libx264", "-preset", "fast", "-crf", "18", "-pix_fmt", "yuv420p", "-r", "30",
+                    "-c:v", "libx264", "-preset", "faster", "-crf", "18", "-pix_fmt", "yuv420p", "-r", "30",
                     "-c:a", "aac", "-b:a", "192k", "-t", f"{total:.3f}", "-movflags", "+faststart", tmp], check=True)
     os.replace(tmp, a.out)
     print(f"wrote {a.out}: {total:.1f} s, title at {title_global:.2f} s, song from {song_start:.2f} s, {len(vo_files)} VO lines", flush=True)

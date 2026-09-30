@@ -52,19 +52,25 @@ def title_layer():
 
 
 def tagline_layer():
-    fred = os.path.join(FONTS, "Fredoka-Variable.ttf")
+    # Round 22 (Kevin: "change the caption under the title to something better", and pump up the 16 v 16
+    # multiplayer): the hype line in Luckiest Guy, then what you do, in Fredoka.
     out = []
-    for text, size, y, col in [("Storm castles. Steal hats. Rescue the King.", 64, 470, (255, 255, 255, 255)),
-                               ("16 vs 16  \u00b7  Online or offline with bots", 44, 560, (240, 230, 210, 255))]:
-        f = ImageFont.truetype(fred, size)
-        try:
-            f.set_variation_by_name("SemiBold")
-        except Exception:
-            pass
+    lines = [("THE ULTIMATE 16 VS 16 CASTLE SIEGE", os.path.join(FONTS, "LuckiestGuy-Regular.ttf"), 76, 470, (255, 255, 255, 255), 8),
+             ("Grab a hat. Storm the castle. Bring your King home.", os.path.join(FONTS, "Fredoka-Variable.ttf"), 50, 572, (250, 236, 206, 255), 5)]
+    for text, font, size, y, col, stroke in lines:
+        f = ImageFont.truetype(font, size)
+        if "Fredoka" in font:
+            try:
+                f.set_variation_by_name("SemiBold")
+            except Exception:
+                pass
         img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-        bb = f.getbbox(text, stroke_width=4)
-        ImageDraw.Draw(img).text(((W - (bb[2] - bb[0])) // 2 - bb[0], y - bb[1]), text, font=f, fill=col,
-                                 stroke_width=4, stroke_fill=(30, 18, 8, 255))
+        bb = f.getbbox(text, stroke_width=stroke)
+        x = (W - (bb[2] - bb[0])) // 2 - bb[0]
+        sh = Image.new("L", (W, H), 0)
+        ImageDraw.Draw(sh).text((x + 3, y - bb[1] + 6), text, font=f, fill=150, stroke_width=stroke, stroke_fill=150)
+        img.paste((0, 0, 0, 255), (0, 0), sh.filter(ImageFilter.GaussianBlur(6)))
+        ImageDraw.Draw(img).text((x, y - bb[1]), text, font=f, fill=col, stroke_width=stroke, stroke_fill=(30, 18, 8, 255))
         out.append(np.asarray(img).astype(np.float32) / 255.0)
     return out
 

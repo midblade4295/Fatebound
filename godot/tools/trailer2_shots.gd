@@ -10,8 +10,8 @@ extends SceneTree
 const Mode = preload("res://scripts/siege/siege_mode.gd")
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 const Castle = preload("res://scripts/siege/siege_castle.gd")
-const LENGTH := {"dawn": 5.0, "captive": 4.0, "heroes": 4.0, "assault": 5.5, "rampart": 4.0, "whirl": 3.0,
-	"feast": 4.0, "carry": 5.0, "reveal": 9.0}
+const LENGTH := {"dawn": 5.0, "clash": 4.5, "captive": 4.0, "heroes": 4.0, "lineup": 4.0, "assault": 5.5,
+	"rampart": 4.0, "whirl": 3.0, "feast": 4.0, "carry": 5.0, "throne": 4.0, "reveal": 9.0}
 const SUN_DIR := Vector3(0.0, 0.16, -1.0)        # where the reveal's sun sits: low, beyond the enemy castle
 var mode
 var shot := "dawn"
@@ -98,23 +98,89 @@ func _stage() -> void:
 			cam_a = [_v(cell + out * 7.0 + side * 2.5, cy + 6.5), _v(cell, cy + 1.0)]
 			cam_b = [_v(cell + out * 3.6 + side * 1.2, cy + 2.8), _v(cell, cy + 1.2)]
 		"heroes":
-			# Villagers stride into the Barracks and the Market and come out heroes.
-			var picks := ["knight", "rogue", "knight"]
-			var j := 0
+			# One villager walks up to the Barracks door and comes out a Knight -- close, so it reads.
+			var st: Dictionary = s.stands.filter(func(x): return x.team == 0 and x.cls == "knight")[0]
+			var door: Vector2 = st.p
+			# (Not the player's unit: the match loop overwrites its move with the idle joystick.)
+			var hero: Dictionary = s.units.filter(func(x): return x.team == 0 and x.id != me.id)[0]
+			s._set_class(hero, "villager", false)
+			hero.bot = false
+			hero.pos = door + Vector2(4.5, 0.8)
+			walkers[hero.id] = (door - (hero.pos as Vector2)).normalized() * 0.7
+			me.pos = Sim._c(0, Vector2(6.0, 12.0))
 			for u in s.units:
-				if u.team == 0 and j < 3:
-					s._set_class(u, "villager", false)
+				if u.id != hero.id and u.id != me.id:
+					u.pos = Sim.spawn(u.team) if u.team == 1 else Sim._c(0, Vector2(6.0, 12.0))
 					u.bot = false
-					var st: Dictionary = s.stands.filter(func(x): return x.team == 0 and x.cls == picks[j])[0]
-					var from: Vector2 = (st.p as Vector2) + Vector2(4.2 + j * 0.8, (j - 1) * 0.9)
-					u.pos = from
-					walkers[u.id] = ((st.p as Vector2) - from).normalized() * 0.75
-					j += 1
-				elif u.team == 1:
-					u.pos = Sim.spawn(1)
-			var mid: Vector2 = Sim._c(0, Vector2(-14.0, 8.7))
-			cam_a = [_v(mid + Vector2(12.0, -8.0), 10.0), _v(mid, 0.8)]
-			cam_b = [_v(mid + Vector2(9.0, -4.0), 7.0), _v(mid + Vector2(-1.0, 0.5), 1.2)]
+					u.move = Vector2.ZERO
+			cam_a = [_v(door + Vector2(6.5, 4.8), 3.6), _v(door + Vector2(1.2, 0.4), 1.2)]
+			cam_b = [_v(door + Vector2(4.2, 3.4), 2.7), _v(door + Vector2(0.6, 0.0), 1.2)]
+		"lineup":
+			# Every hat is a hero: the seven classes in a row, the camera sliding along them.
+			var classes := ["knight", "barbarian", "rogue", "ranger", "mage", "priest", "worker"]
+			var j2 := 0
+			for u in s.units:
+				u.bot = false
+				u.move = Vector2.ZERO
+				if u.team == 0 and j2 < classes.size():
+					s._set_class(u, classes[j2], j2 % 2 == 0)
+					u.pos = Sim._c(0, Vector2(-7.2 + j2 * 2.4, 12.2))
+					u.face = Sim.angle_of(Vector2(0.0, -1.0))
+					j2 += 1
+				else:
+					u.pos = Sim.spawn(1) if u.team == 1 else Sim._c(0, Vector2(0.0, 24.0))
+			cam_a = [_v(Sim._c(0, Vector2(-8.5, 7.6)), 2.6), _v(Sim._c(0, Vector2(-3.5, 12.2)), 1.3)]
+			cam_b = [_v(Sim._c(0, Vector2(8.5, 7.6)), 2.6), _v(Sim._c(0, Vector2(3.5, 12.2)), 1.3)]
+		"clash":
+			# Sixteen against sixteen: both armies charge into each other on our side of the river.
+			var mix2 := ["knight", "barbarian", "ranger", "rogue", "mage", "priest", "knight", "barbarian"]
+			var bi := 0
+			var ri := 0
+			for u in s.units:
+				u.bot = false
+				if u.team == 0:
+					s._set_class(u, mix2[bi % mix2.size()], bi % 3 == 0)
+					u.pos = Vector2(-13.0 + (bi % 8) * 3.6, 23.0 + (bi / 8) * 2.2)
+					walkers[u.id] = Vector2(0.0, -1.0)
+					bi += 1
+				else:
+					s._set_class(u, mix2[(ri + 3) % mix2.size()], ri % 3 == 1)
+					u.pos = Vector2(-12.0 + (ri % 8) * 3.6, 9.5 - (ri / 8) * 2.2)
+					walkers[u.id] = Vector2(0.0, 1.0)
+					ri += 1
+				_revive(u)
+			beats = [[1.2, "", "melee"]]
+			cam_a = [Vector3(-19.0, 3.2, 15.5), Vector3(-2.0, 1.2, 16.0)]
+			cam_b = [Vector3(-12.0, 4.6, 12.0), Vector3(4.0, 1.2, 16.5)]
+		"throne":
+			# The last steps: a knight carries our King into the throne room and sets him down -- a rescue.
+			var o2: Dictionary = s.oracles[0]
+			var bearer: Dictionary = s.units.filter(func(x): return x.team == 0 and x.id != me.id)[0]
+			s._set_class(bearer, "knight", true)
+			bearer.bot = false
+			bearer.pos = (o2.pos as Vector2) + Vector2(0.5, 0.0)
+			s.act(bearer.id, "interact")
+			var th: Vector2 = Sim.throne(0)
+			var start2: Vector2 = Sim._c(0, Vector2(0.0, 24.2))
+			bearer.pos = start2
+			o2.pos = start2
+			walkers[bearer.id] = (th - start2).normalized()
+			# Four allies flank the throne (none between the camera and it); the rest far away.
+			var flank := [Vector2(-3.2, 26.2), Vector2(-2.2, 27.4), Vector2(2.4, 27.2), Vector2(3.4, 26.0)]
+			var fi := 0
+			for u in s.units:
+				if u.id != bearer.id:
+					u.bot = false
+					u.move = Vector2.ZERO
+					if u.team == 0 and u.id != me.id and fi < flank.size():
+						u.pos = Sim._c(0, flank[fi])
+						fi += 1
+					else:
+						u.pos = Sim.spawn(u.team)
+					u.face = Sim.angle_of(th - (u.pos as Vector2))
+			var thy := Sim.height_at(th)
+			cam_a = [_v(Sim._c(0, Vector2(5.5, 21.0)), thy + 4.2), _v(th + (start2 - th) * 0.5, thy + 1.0)]
+			cam_b = [_v(Sim._c(0, Vector2(3.5, 22.6)), thy + 3.2), _v(th, thy + 1.2)]
 		"assault":
 			var eg: Dictionary = s.gates.filter(func(g): return g.team == 1 and str(g.get("kind", "")) != "jail")[0]
 			var front: Vector2 = Sim.gate_front(eg)
@@ -188,15 +254,18 @@ func _stage() -> void:
 			cap.weight = 3
 			var jail2: Dictionary = s.gates.filter(func(g): return g.team == 0 and str(g.get("kind", "")) == "jail")[0]
 			var out3: Vector2 = ((jail2.c as Vector2) - (cap.pos as Vector2)).normalized()
-			s._set_class(me, "rogue", false)
-			me.bot = false
-			me.offering = true
-			me.pos = (jail2.c as Vector2) + out3 * 2.2
-			walkers[me.id] = -out3 * 0.6
-			beats = [[1.9, me.id, "feed"]]
+			var feeder: Dictionary = s.units.filter(func(x): return x.team == 0 and x.id != me.id)[0]
+			s._set_class(feeder, "rogue", false)
+			feeder.bot = false
+			feeder.offering = true
+			feeder.pos = (jail2.c as Vector2) + out3 * 2.2
+			walkers[feeder.id] = -out3 * 0.6
+			beats = [[1.9, feeder.id, "feed"]]
 			for u in s.units:
-				if u.id != me.id:
+				if u.id != feeder.id:
 					u.pos = Sim.spawn(u.team)
+					u.bot = false
+					u.move = Vector2.ZERO
 			var cy2 := Sim.height_at(cap.pos)
 			var side3 := Vector2(out3.y, -out3.x)
 			cam_a = [_v((cap.pos as Vector2) + out3 * 6.0 + side3 * 3.0, cy2 + 4.6), _v(cap.pos, cy2 + 1.2)]
@@ -272,6 +341,12 @@ func _process(delta: float) -> bool:
 			var ch: Dictionary = s.by_id[id]
 			ch.move = ((s.by_id[follow].pos as Vector2) - (ch.pos as Vector2)).normalized()
 	for b in beats.duplicate():
+		if t >= float(b[0]) and str(b[2]) == "melee":
+			beats.erase(b)
+			walkers.clear()
+			for u in s.units:
+				u.bot = true
+			continue
 		if t >= float(b[0]):
 			beats.erase(b)
 			var bu: Dictionary = s.by_id[b[1]]
@@ -279,6 +354,17 @@ func _process(delta: float) -> bool:
 			bu.move = Vector2.ZERO
 			if str(b[2]) == "feed":
 				s.act(bu.id, "interact")
+	if shot == "throne" and int(s.score[0]) > 0 and not has_meta("seated"):
+		set_meta("seated", true)
+		var ok: Dictionary = s.oracles[0]
+		ok.state = "dropped"
+		ok.pos = Sim.throne(0) + (Sim._c(0, Vector2(0.0, 0.0)) - Sim.throne(0)).normalized() * 0.9
+		ok.carrier = ""
+		ok.lifters = []
+		ok.dropped_at = s.time
+		walkers.clear()
+		for u in s.units:
+			u.move = Vector2.ZERO
 	if shot == "reveal":
 		var cam: Camera3D = mode.view.camera
 		var sp := cam.unproject_position(cam.global_position + SUN_DIR.normalized() * 3000.0)

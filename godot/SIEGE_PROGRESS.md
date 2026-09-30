@@ -946,3 +946,16 @@ K2/K3 notes (0.17.0)
   (Split in two: a single pass with full-length caption loops ran past the 5-minute tool limit; a background
   process doesn't survive the end of a tool call.)
 - Output: Fatebound-Trailer-2.mp4, 38.9 s 1080p30. Herald trailer lines: waiting for Kevin's recording.
+
+# 0.24.3 + trailer 2 v2 (Kevin: the King faces the wall; the trailer doesn't convey what you do -- what hats are;
+# pump the thrilling 16 v 16 multiplayer; a better caption under the title)
+- View: the King in his cell faces his cell door (out through the bars); within 1.5 m of his throne he faces out
+  over his castle; dropped, he keeps his last facing (rotation was only ever set while carried).
+- Trailer: 11 shots, 42.9 s -- clash (16 v 16 armies charge, then fight as bots) "16 VS 16 CASTLE SIEGE", captive
+  "THEY STOLE OUR KING!", heroes (a villager walks into the Barracks door, comes out a Knight) "GRAB A HAT...",
+  lineup (the 7 classes) "...BECOME A HERO", assault, rampart, whirl, feast "STUFF THEIR KING WITH FISH", carry
+  "CARRY YOUR KING HOME", throne (the rescue; the King is stood at his throne after it scores) "FIRST TO 3
+  RESCUES WINS", reveal. Tagline: "THE ULTIMATE 16 VS 16 CASTLE SIEGE" / "Grab a hat. Storm the castle. Bring
+  your King home." Song from 7.2 s: its drop lands on the title at 35.3 s (measured -20 -> -13 dB).
+- Shot scripts must not walk the player's unit: the match loop overwrites its move with the idle joystick.
+- Herald trailer VO: 11 lines, waiting for Kevin's recording (tools/trailer2_edit.py --vo DIR, 1..11.mp3).
