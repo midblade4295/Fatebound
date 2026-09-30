@@ -658,3 +658,15 @@ K2/K3 notes (0.17.0)
   largest step 0.29 m (old drawing 1.47 m), no stalls, ends 0.40 m from the target it hit.
 - Protocol unchanged (v7; the extra event field is ignored by older builds). Redeploy the server
   so it sends impact points.
+
+# Trailer (Kevin: "make a cinematic trailer")
+- Fatebound-Siege-Trailer.mp4: 34.4 s, 1920x1080 @ 30, H.264 + AAC. Cut: aerial -> captive ("THEY TOOK OUR
+  ORACLE.") -> hats ("GRAB A HAT.") -> gate assault ("STORM THE CASTLE.") -> whirlwind ("SPIN. SHIELD.
+  SMASH.") -> cake ("FIGHT DIRTY.") -> carry ("BRING HER HOME.") -> title card on the score's hit.
+- tools/trailer_shots.gd: staged shots + eased cinematic cameras, recorded by Godot's Movie Maker
+  (game SFX included). 1080p needs a TEMPORARY godot/override.cfg with window size 1920x1080 (the
+  project's 420x780 window override beats --resolution in Movie Maker) -- delete it afterwards, never
+  commit it. Render in the foreground (a backgrounded Xvfb gets reaped when the command returns).
+- tools/trailer_music.py: procedural placeholder score (90 BPM D minor; drums, pad, ostinato, riser,
+  title hit). tools/trailer_edit.py: crossfades, captions (Cinzel), title card, score + SFX mix; it
+  places the hit on the title (29.7 s; verified: the loudest 0.1 s of the mix is at 29.7 s).
