@@ -90,13 +90,11 @@ const WORKSHOP := Vector2(13.5, 9.0)
 const BUILDINGS := [
 	# Buildings against a wall TOUCH it (no squeeze slot behind them).
 	{"model": "building_blacksmith_%s", "p": Vector2(17.35, 9.0), "rot": -90.0, "scale": 2.8, "r": 1.7, "y": 0.0},   # the workshop
-	{"model": "building_archeryrange_%s", "p": Vector2(16.0, 19.6), "rot": 180.0, "scale": 2.4, "r": 1.9, "y": 1.8},
-	{"model": "building_church_%s", "p": Vector2(14.5, 26.0), "rot": 180.0, "scale": 2.6, "r": 1.6, "y": 3.6},
-	{"model": "building_tavern_%s", "p": Vector2(-14.5, 26.0), "rot": 180.0, "scale": 2.6, "r": 1.7, "y": 3.6},
+	# (The archery range and the church are the ranger's and priest's hat shops now: HAT_SHOPS.)
 ]
 # Small props (visual only), tucked against walls and terrace faces.
 const PROPS := [
-	["barrel", Vector2(-19.0, 4.6), 2.2], ["barrel", Vector2(-18.2, 4.4), 2.0], ["crate_A_big", Vector2(19.0, 4.8), 2.2],
+	["crate_A_big", Vector2(19.0, 4.8), 2.2],
 	["crate_B_small", Vector2(18.2, 4.3), 2.4], ["weaponrack", Vector2(4.6, 13.2), 3.2], ["target", Vector2(-5.6, 13.1), 3.4],
 	["target", Vector2(-7.0, 13.1), 3.4], ["sack", Vector2(15.0, 12.9), 2.4], ["wheelbarrow", Vector2(11.4, 12.8), 3.0],
 	["barrel", Vector2(-19.2, 21.2), 2.2], ["crate_long_A", Vector2(-11.0, 21.3), 2.2], ["bucket_arrows", Vector2(12.6, 21.2), 3.0],
@@ -109,10 +107,19 @@ const CATAPULT_X := 17.0
 # knight (courtyard west, by the gate), barbarian (courtyard east, by the blacksmith), rogue
 # (courtyard back-west corner), ranger (L1 east, by the archery range), mage (L2 west, by the
 # tavern), priest (L2 east, by the church).
-# Barbarian moved to the west courtyard's open floor in Round 18 (Kevin: it was cramped against the
-# workshop at (14.5, 12), 3.2 m from its ring).
-const HAT_STANDS := [Vector2(-13.0, 5.6), Vector2(-7.5, 9.5), Vector2(-16.5, 11.0),
-	Vector2(12.2, 19.6), Vector2(-9.5, 25.0), Vector2(9.5, 25.0)]
+# Hat shops ARE buildings (Round 20, Kevin: "make it so the hat shops are the buildings themselves and not
+# some items right next to building"): one per class (HAT_CLASSES order), solid; you take the hat at its
+# door. b = building centre, door = where you stand, rot = which way the door faces (0 = +z, 180 = -z,
+# 90 = +x, -90 = -x; blue space), y = the level it stands on. Buildings against a wall touch it.
+const HAT_SHOPS := [
+	{"cls": "knight", "model": "building_barracks_%s", "b": Vector2(-17.2, 5.8), "rot": 90.0, "scale": 2.4, "r": 1.8, "y": 0.0, "door": Vector2(-14.6, 5.8)},
+	{"cls": "barbarian", "model": "building_lumbermill_%s", "b": Vector2(-15.2, 26.0), "rot": 180.0, "scale": 2.4, "r": 1.8, "y": 3.6, "door": Vector2(-15.2, 23.6)},
+	{"cls": "rogue", "model": "building_market_%s", "b": Vector2(-17.2, 11.65), "rot": 90.0, "scale": 2.4, "r": 1.8, "y": 0.0, "door": Vector2(-14.6, 11.65)},
+	{"cls": "ranger", "model": "building_archeryrange_%s", "b": Vector2(16.0, 19.6), "rot": 180.0, "scale": 2.4, "r": 1.9, "y": 1.8, "door": Vector2(16.0, 17.0)},
+	{"cls": "mage", "model": "building_tower_A_%s", "b": Vector2(-8.8, 26.3), "rot": 180.0, "scale": 2.2, "r": 1.5, "y": 3.6, "door": Vector2(-8.8, 24.2)},
+	{"cls": "priest", "model": "building_church_%s", "b": Vector2(14.5, 26.0), "rot": 180.0, "scale": 2.6, "r": 1.6, "y": 3.6, "door": Vector2(14.5, 23.8)},
+]
+const HAT_STANDS := [Vector2(-14.6, 5.8), Vector2(-15.2, 23.6), Vector2(-14.6, 11.65), Vector2(16.0, 17.0), Vector2(-8.8, 24.2), Vector2(14.5, 23.8)]
 const HAT_HALL := Vector2(-13.0, 7.4)     # open floor by the knight machine (hints / tests)
 
 static func _smooth(x: float) -> float:

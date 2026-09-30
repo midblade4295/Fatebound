@@ -898,3 +898,17 @@ K2/K3 notes (0.17.0)
   pointing backward), and our line runs from its real tip (ROD_TIP, highest vertex, through the rod's live
   global transform) to the float in the water.
 - Fixed: a freed cached rod (body rebuilt on a class change) assigned to a typed var -> script error (mode smoke).
+
+# 0.24.0 (Kevin): "make it so the hat shops are the buildings themselves and not some items right next to building"
+- Castle.HAT_SHOPS: one KayKit building per class, solid (obstacle r at the building), take the hat at its door
+  (HAT_STANDS = the doors): knight barracks + rogue market against the west courtyard wall (doors face the
+  courtyard), ranger = the archery range (L1 east), barbarian lumbermill (replaces the L2 tavern) and mage tower
+  (L2 west), priest = the church (L2 east). The themed machines and hat stacks are gone (the plate's dots show
+  stock); an upgraded shop flies a team flag on its roof (plus the plate's star). Plates sit over the roofs
+  (stand "b"/"top"). The west-front barrels went (the barracks is there).
+- Land check: the dungeon wing's front/back walls now end 1 m inside the west wall (their rounded ends made a
+  squeeze slot with the barracks); the market touches the L1 face (was 0.45 m off).
+- Bots: bots fed 0 fish -- both teams' fish runners had become priests and held rampart posts (and kept the post
+  after respawning as other classes). Fish runners are exempt from rampart duty; a post is dropped when the unit
+  stops being a ranged defender. Match: fed 2, 8 rescues, 0 violations; rampart test picks non-runners.
+- Protocol v13.

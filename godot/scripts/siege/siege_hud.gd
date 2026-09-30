@@ -662,7 +662,8 @@ func _draw_station_titles(me: Dictionary) -> void:
 	for st in sim.stands:
 		var up: bool = int(sim.levels[int(st.team)].get("hat_" + str(st.cls), 0)) > 0
 		var nm: String = (str(Sim.UPGRADE_NAME[st.cls]) if up else str(Sim.CLASSES[st.cls].name)).to_upper()
-		spots.append({"p": st.p, "name": nm, "stock": int(st.stock), "team": int(st.team), "up": up})
+		spots.append({"p": st.p, "name": nm, "stock": int(st.stock), "team": int(st.team), "up": up,
+			"at": st.get("b", st.p), "top": float(st.get("top", 2.7))})
 	for t in 2:
 		spots.append({"p": Sim.workshop(t), "name": "WORKSHOP", "stock": -1, "team": t, "up": false})
 	var title_font: Font = VisualTheme.TITLE_FONT
@@ -671,7 +672,9 @@ func _draw_station_titles(me: Dictionary) -> void:
 		var dist: float = (sp.p as Vector2).distance_to(me.pos)
 		if dist > 16.0:
 			continue
-		var world := Vector3(sp.p.x, Sim.height_at(sp.p) + 2.7, sp.p.y)
+		# Over the building's roof for hat shops (Round 20), over the spot otherwise.
+		var at: Vector2 = sp.get("at", sp.p)
+		var world := Vector3(at.x, Sim.height_at(sp.p) + float(sp.get("top", 2.7)) - (Sim.height_at(sp.p) if sp.has("top") else 0.0), at.y)
 		if not on_screen.call(world):
 			continue
 		var fade := clampf((16.0 - dist) / 4.0, 0.0, 1.0)

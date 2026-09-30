@@ -256,7 +256,8 @@ func _init() -> void:
 	for u in rbs.units:
 		u.bot = u.team == 0
 		if u.team == 0:
-			if archers.size() < 3:
+			# Fish runners (id hash even) stay off the rampart since Round 20: pick the others.
+			if archers.size() < 3 and absi(str(u.id).hash()) % 2 == 1:
 				rbs._set_class(u, "ranger", false)
 				u.role = "defend"
 				u.pos = Sim._c(0, Vector2(-6.0 + archers.size() * 6.0, 11.0))

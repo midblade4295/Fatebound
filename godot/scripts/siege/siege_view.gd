@@ -732,56 +732,25 @@ func _machine_piece(root: Node3D, piece: Array, col: String) -> void:
 	root.add_child(n)
 
 func _build_hat_stands() -> void:
+	# Hat shops are buildings (Round 20): the class's building, team-coloured, its door facing the way
+	# HAT_SHOPS says; the take ring at the door; a team flag on the roof once the class is upgraded.
 	for st in sim.stands:
 		var cls := str(st.cls)
-		var col: String = COLOR[int(st.team)]
+		var t := int(st.team)
+		var col: String = COLOR[t]
+		var shop: Dictionary = Castle.HAT_SHOPS[Sim.HAT_CLASSES.find(cls)]
+		var bp: Vector2 = st.b
+		var face := 0.0 if t == 0 else PI
+		var node := _place(HEX + (str(shop.model) % col) + ".gltf", Vector3(bp.x, float(shop.y), bp.y), face + deg_to_rad(float(shop.rot)), float(shop.scale))
+		if node != null:
+			node.set_meta("perf", "hat_shop")
 		var gy := Sim.height_at(st.p)
-		var root := Node3D.new()
-		root.position = Vector3(st.p.x, gy, st.p.y)
-		# Face the machine towards the castle's middle (mirrored per team).
-		var mid: Vector2 = Sim._c(int(st.team), Vector2(0.0, 12.0))
-		root.rotation.y = atan2(mid.x - st.p.x, mid.y - st.p.y)
-		add_child(root)
-		var def: Dictionary = MACHINES.get(cls, {})
-		for piece in def.get("base", []):
-			_machine_piece(root, piece, col)
-		var up_root := Node3D.new()
-		root.add_child(up_root)
-		for piece in def.get("up", []):
-			_machine_piece(up_root, piece, col)
-		up_root.visible = false
-		var glow: MeshInstance3D = null
-		if MACHINE_GLOW.has(cls):
-			# A floating orb (static material; the upgrade makes it bigger).
-			glow = MeshInstance3D.new()
-			var sm := SphereMesh.new()
-			sm.radius = 0.18
-			sm.height = 0.36
-			sm.radial_segments = 12
-			sm.rings = 6
-			glow.mesh = sm
-			# Lit + emission (an UNSHADED orb here hung the software-Vulkan renderer at pipeline
-			# compile in combination with the mage/priest pieces; same look, safer pipeline).
-			var gm := StandardMaterial3D.new()
-			gm.albedo_color = MACHINE_GLOW[cls]
-			gm.emission_enabled = true
-			gm.emission = MACHINE_GLOW[cls]
-			gm.emission_energy_multiplier = 1.4
-			gm.roughness = 0.4
-			glow.material_override = gm
-			glow.position = Vector3(0, 2.25 if cls == "mage" else 1.6, 0.35)
-			root.add_child(glow)
-		machine_up[st.id] = {"up": up_root, "glow": glow, "state": false}
-		var colr: Color = HAT_COLOR[cls]
-		_decal(Vector3(st.p.x, gy + 0.06, st.p.y), Sim.HAT_TAKE_R, colr, 0.5)
-		# The hat stack sits on the front of the machine (visible stock).
-		var stack := []
-		for k in Sim.HAT_STOCK_MAX:
-			var h := _hat_instance(cls, false, 1.0)
-			h.position = Vector3(-0.2 + 0.2 * k, 0.05 + 0.02 * k, -0.55)
-			root.add_child(h)
-			stack.append(h)
-		stand_nodes[st.id] = stack
+		_decal(Vector3(st.p.x, gy + 0.06, st.p.y), Sim.HAT_TAKE_R, HAT_COLOR[cls], 0.5)
+		var flag := _place(HEX + "flag_%s.gltf" % col, Vector3(bp.x, float(shop.y) + 3.4, bp.y), face, 2.2)
+		if flag != null:
+			flag.visible = false
+		machine_up[st.id] = {"up": flag if flag != null else Node3D.new(), "glow": null, "state": false}
+		stand_nodes[st.id] = []
 
 # Whirlwind FX (Round 12, Kevin: "spin visuals like World of Warcraft"): two translucent blade-trail
 # ribbons (partial rings fading along their arc) circling the berserker at different heights and

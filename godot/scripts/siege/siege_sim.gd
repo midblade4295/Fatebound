@@ -344,8 +344,10 @@ func _build_map() -> void:
 		_add_wall(t, Vector2(-CASTLE_HX, FRONT_Z), Vector2(-CASTLE_HX, Castle.DOOR_Z0 - 1.0))
 		_add_wall(t, Vector2(-CASTLE_HX, Castle.DOOR_Z1 + 1.0), Vector2(-CASTLE_HX, CASTLE_BACK + 1.0))
 		_add_wall(t, Vector2(Castle.ANNEX_X0, Castle.ANNEX_Z0), Vector2(Castle.ANNEX_X0, Castle.ANNEX_Z1))
-		_add_wall(t, Vector2(Castle.ANNEX_X0, Castle.ANNEX_Z0), Vector2(-CASTLE_HX, Castle.ANNEX_Z0))
-		_add_wall(t, Vector2(Castle.ANNEX_X0, Castle.ANNEX_Z1), Vector2(-CASTLE_HX, Castle.ANNEX_Z1))
+		# (They stop 1 m inside the west wall's thickness: ending on its inner face, their rounded ends
+		# made a squeeze slot with the knight's barracks -- Round 20.)
+		_add_wall(t, Vector2(Castle.ANNEX_X0, Castle.ANNEX_Z0), Vector2(-CASTLE_HX - 1.0, Castle.ANNEX_Z0))
+		_add_wall(t, Vector2(Castle.ANNEX_X0, Castle.ANNEX_Z1), Vector2(-CASTLE_HX - 1.0, Castle.ANNEX_Z1))
 		_add_wall(t, Vector2(CASTLE_HX, FRONT_Z), Vector2(CASTLE_HX, CASTLE_BACK + 1.0))
 		for gx in GATE_X:
 			# The gate model is a wall piece with a ~2.3 m doorway; only the doorway is the gate.
@@ -378,8 +380,13 @@ func _build_map() -> void:
 		# Hat stands (solid posts) in the west corner; the workshop against the east wall.
 		for i in HAT_CLASSES.size():
 			var sp := _c(t, HAT_STANDS[i])
-			stands.append({"id":stands.size(), "team":t, "cls":HAT_CLASSES[i], "p":sp, "stock":HAT_STOCK_MAX, "t":0.0})
-			obstacles.append({"p":sp, "r":HAT_STAND_R, "kind":"hat_stand", "team":t})
+			# The shop is the building (Round 20): solid, and you take the hat at its door (sp). b / top: where
+			# its name plate goes (over the roof).
+			var shop: Dictionary = Castle.HAT_SHOPS[i]
+			var bpos := _c(t, shop.b)
+			stands.append({"id":stands.size(), "team":t, "cls":HAT_CLASSES[i], "p":sp, "stock":HAT_STOCK_MAX, "t":0.0,
+				"b":bpos, "top":float(shop.y) + 4.4})
+			obstacles.append({"p":bpos, "r":float(shop.r), "kind":"castle_building", "team":t})
 		for bd in Castle.BUILDINGS:
 			obstacles.append({"p":_c(t, bd.p), "r":float(bd.r), "kind":"castle_building", "team":t})
 		# Resource nodes on each half (world coords, point-mirrored), placed off the paths, clear of
@@ -2510,6 +2517,10 @@ func _think_fighter(u: Dictionary) -> void:
 	var short_hands: bool = not ally_carrier.is_empty() and mine.lifters.size() < lifters_needed(mine)
 	var captive_loose: bool = theirs.state == "dropped" or (theirs.state == "carried" and int(theirs.carry_team) == u.team and theirs.lifters.size() < lifters_needed(theirs))
 	var fish_runner: bool = u.role == "defend" and absi(u.id.hash()) % 2 == 0
+	# A rampart post belongs to a ranged defender that isn't a fish runner; drop it otherwise (a post
+	# kept after dying and coming back as another class blocked fishing for the rest of the match).
+	if u.has("post") and (not c.ranged or u.role != "defend" or fish_runner):
+		u.erase("post")
 	if not enemy_carrier.is_empty() and (u.role == "defend" or u.pos.distance_to(enemy_carrier.pos) < 16.0):
 		goal = enemy_carrier.pos
 	elif not our_returner.is_empty() and (u.role in ["raid", "escort"] or u.pos.distance_to(our_returner.pos) < 16.0):
@@ -2518,7 +2529,7 @@ func _think_fighter(u: Dictionary) -> void:
 		goal = mine.pos
 	elif captive_loose and u.role in ["defend", "escort"] and u.pos.distance_to(theirs.pos) < 30.0:
 		goal = theirs.pos
-	elif u.role == "defend" and c.ranged and _rampart_post(u) != Vector2.INF:
+	elif u.role == "defend" and c.ranged and not fish_runner and _rampart_post(u) != Vector2.INF:
 		goal = _rampart_post(u)                     # man the rampart (Round 16, Kevin)
 	elif u.role == "defend" and time - float(alarm.at) < 4.0 and alarm.gate >= 0:
 		goal = gates[int(alarm.gate)].c + _inward(u.team) * 2.4
