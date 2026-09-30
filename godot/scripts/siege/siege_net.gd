@@ -8,7 +8,7 @@ extends RefCounted
 # objects: decode() uses the default allow_objects=false.
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 
-const VERSION := 10              # 10 = rampart + stairs, spawn moved; 9 = back wall/throne; 8 = dungeon wing
+const VERSION := 11              # 11 = barbarian stand moved; 10 = rampart; 9 = back wall/throne; 8 = dungeon wing
 const DEFAULT_URL := "wss://136-113-125-3.sslip.io/fatebound/siege/ws"
 const DEFAULT_PORT := 8082
 const SNAP_HZ := 15.0            # 10 -> 15 (0.18.4): ~1.3 KB each, ~19 KB/s per player; remote

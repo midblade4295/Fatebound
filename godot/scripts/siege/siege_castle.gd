@@ -109,7 +109,9 @@ const CATAPULT_X := 17.0
 # knight (courtyard west, by the gate), barbarian (courtyard east, by the blacksmith), rogue
 # (courtyard back-west corner), ranger (L1 east, by the archery range), mage (L2 west, by the
 # tavern), priest (L2 east, by the church).
-const HAT_STANDS := [Vector2(-13.0, 5.6), Vector2(14.5, 12.0), Vector2(-16.5, 11.0),
+# Barbarian moved to the west courtyard's open floor in Round 18 (Kevin: it was cramped against the
+# workshop at (14.5, 12), 3.2 m from its ring).
+const HAT_STANDS := [Vector2(-13.0, 5.6), Vector2(-7.5, 9.5), Vector2(-16.5, 11.0),
 	Vector2(12.2, 19.6), Vector2(-9.5, 25.0), Vector2(9.5, 25.0)]
 const HAT_HALL := Vector2(-13.0, 7.4)     # open floor by the knight machine (hints / tests)
 

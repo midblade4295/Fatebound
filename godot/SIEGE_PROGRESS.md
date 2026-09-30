@@ -862,3 +862,11 @@ K2/K3 notes (0.17.0)
   most every 2.6 s. Knights also hunt archers/mages within 9 m unless someone is already in their face.
 - tests/knight_ai_test.gd (runner): melee 0 % blocking / 15 swings / 216 dmg; vs a lone archer 9 %
   blocking, 5 shots blocked, 10 swings. Matches: kills 126/189 and 213/245 (were 59/147 and 137/53).
+
+# 0.22.3 (Kevin): the shop name plates are bulky and cover the ground; the barbarian shop is cramped
+- Plates: one slim line -- the name (Cinzel 13, was 17) and, for hat shops, the stock as inline dots; the
+  "HAT SHOP" / "UPGRADES - TOOLS" subtitle dropped; 22 px tall (was 44); thin rim, smaller pointer and
+  shadow; shown within 16 m (was 24), fading over the last 4.
+- Barbarian hat shop (14.5, 12) -> (-7.5, 9.5): it was 3.2 m from the workshop's ring, its machine on top
+  of the workshop area; now on the west courtyard's open floor by the knight and rogue shops (3.6 m from
+  the archery targets). Land check / reach pass. Protocol v11 (stand positions are map data).
