@@ -760,8 +760,10 @@ K2/K3 notes (0.17.0)
   metallicRoughness PNGs: ~21 MB per file), ~10.4k tris, 1.9 tall, origin at the centre. T1 = red robes,
   T2 = purple robes -> matched by colour: T1 leads red, T2 leads blue (Kevin numbered them team 1/2).
 - Optimised in Blender (/tmp/kings/optimize.py pattern): origin at the feet, baseColor 1024 JPEG, normal
-  512, metallicRoughness dropped (matte 0.78), geometry untouched -> assets/kings/king_{blue,red}_{fat,
-  fatter,fattest}.glb, ~2.7 MB each.
+  512 -> then halved (APK: 1024/512 textures cost 17 MB for six kings): baseColor 512 JPEG, normal
+  256, metallicRoughness dropped (matte 0.78), geometry untouched -> assets/kings/king_{blue,red}_{fat,
+  fatter,fattest}.glb, ~1.1 MB each, 6.6 MB imported; side-by-side at gameplay/close-up size: no visible
+  difference.
 - View: each King root holds all three; sim weight 0-5 -> stage weight/2 (0-1 fat, 2-3 fatter, 4-5
   fattest), +5 % on odd weights, a puff when a stage goes up; breathing + sway at rest, a wobble while
   carried (the models aren't rigged). Scaled to 2.6 tall (the Knight hero is 2.54). The Knight-body
