@@ -47,7 +47,6 @@ var node_nodes: Dictionary = {}
 var stock_piles: Array = []
 var catapult_nodes: Array = []
 var ladder_nodes: Dictionary = {}
-var cake_nodes: Dictionary = {}   # cake tree id -> the cake shown while ripe
 var proj_nodes: Dictionary = {}
 var proj_lead := 0.0          # offline: seconds since the last sim tick (projectiles drawn ahead by vel * this)
 var _fx: Array = []
@@ -1050,7 +1049,6 @@ func _build_props() -> void:
 			"workshop_building":
 				_place(HEX + "building_market_%s.gltf" % COLOR[ob.team], p, -PI * 0.5 if ob.team == 0 else PI * 0.5, 2.0)
 	_build_nodes()
-	_build_cake_trees()
 	_build_outposts()
 	_build_hat_stands()
 	# Scenery outside the play field.
@@ -1484,66 +1482,6 @@ static func _bar_box(st: SurfaceTool, c: Vector3, h: Vector3) -> void:
 		for k in [0, 2, 1, 0, 3, 2]:
 			st.add_vertex(v[f[k]])
 
-static var _cake_mats: Array = []
-
-func _make_cake(s := 1.0) -> Node3D:
-	# Three-tier cake from primitives (the kit has no cake): sponge tiers, pink icing, a cherry.
-	if _cake_mats.is_empty():
-		for c in [Color("#f3dcb4"), Color("#ff9ec8"), Color("#d92b3a")]:
-			var m := StandardMaterial3D.new()
-			m.albedo_color = c
-			m.roughness = 0.6
-			_cake_mats.append(m)
-	var root := Node3D.new()
-	var y := 0.0
-	for i in 3:
-		var r: float = [0.42, 0.32, 0.22][i] * s
-		var h := 0.2 * s
-		var cyl := CylinderMesh.new()
-		cyl.top_radius = r
-		cyl.bottom_radius = r
-		cyl.height = h
-		cyl.radial_segments = 14
-		var tier := MeshInstance3D.new()
-		tier.mesh = cyl
-		tier.material_override = _cake_mats[0]
-		tier.position.y = y + h * 0.5
-		root.add_child(tier)
-		var icing := CylinderMesh.new()
-		icing.top_radius = r * 1.03
-		icing.bottom_radius = r * 1.03
-		icing.height = h * 0.25
-		icing.radial_segments = 14
-		var ic := MeshInstance3D.new()
-		ic.mesh = icing
-		ic.material_override = _cake_mats[1]
-		ic.position.y = y + h - h * 0.1
-		root.add_child(ic)
-		y += h
-	var cherry := SphereMesh.new()
-	cherry.radius = 0.07 * s
-	cherry.height = 0.14 * s
-	var ch := MeshInstance3D.new()
-	ch.mesh = cherry
-	ch.material_override = _cake_mats[2]
-	ch.position.y = y + 0.06 * s
-	root.add_child(ch)
-	for mi in root.get_children():
-		(mi as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	return root
-
-func _build_cake_trees() -> void:
-	for ct in sim.cake_trees:
-		var p := Vector3(ct.p.x, 0, ct.p.y)
-		_place(HEX + "tree_single_B.gltf", p, float(ct.id) * 1.3, 3.6)
-		_decal(Vector3(p.x, 0.06, p.z), 1.9, Color("#ff9ec8"), 0.45)
-		var cake := _make_cake(1.3)
-		# Sits on a little stand beside the trunk, facing the middle of the field.
-		var side := Vector2(-ct.p.x, -ct.p.y).normalized() if ct.p.length() > 0.1 else Vector2(1, 0)
-		cake.position = p + Vector3(side.x, 0, side.y) * 1.6 + Vector3(0, 0.55, 0)
-		add_child(cake)
-		cake_nodes[ct.id] = cake
-
 func _build_nodes() -> void:
 	# Trees and quarry stones the workers harvest; a depleted node shows a stump / bare rock.
 	for n in sim.nodes:
@@ -1600,12 +1538,6 @@ func _sync_castle(dt: float) -> void:
 		if has and nn.full != null:
 			var k := 0.75 + 0.25 * float(n.amount) / float(n.max)
 			(nn.full as Node3D).scale = Vector3.ONE * (3.2 if n.kind == "wood" else 4.4) * k
-	for ct in sim.cake_trees:
-		var cake: Node3D = cake_nodes.get(ct.id)
-		if cake != null:
-			cake.visible = bool(ct.ready)
-			if ct.ready:
-				cake.rotation.y += dt * 1.1
 	for cn in catapult_nodes:
 		if cn.arm == null:
 			continue
@@ -1852,6 +1784,7 @@ func sync(dt: float) -> void:
 		root.rotation.y = lerp_angle(root.rotation.y, float(u.face), 1.0 - exp(-dt * 18.0))
 		(a.ring as MeshInstance3D).visible = u.state != "dead"
 		_sync_load(a, u)
+		_sync_hand(a, u)
 		_animate(a, u, vel)
 		if is_instance_valid(a.player):
 			var show := planes.is_empty() or _on_screen(root.position, planes)
@@ -1869,6 +1802,122 @@ func sync(dt: float) -> void:
 	_step_fx()
 	_update_camera(dt)
 
+# ---------- hand tools (Round 19, KayKit RPG Tools Bits) ----------
+const TOOLS := "res://assets/kaykit/tools/"
+# Scaled to working size (measured: axe 1.05, pickaxe 1.45, hammer 0.82, rod 4.75 units; the old worker
+# axe was 1.24): axe ~1.2 m, pickaxe ~1.3, hammer ~1.0, rod ~2.85.
+const TOOL_SCALES := {"axe": 1.15, "pickaxe": 0.9, "hammer": 1.2, "fishing_rod": 0.6}
+static var _line_mat: StandardMaterial3D = null
+
+func _gather_kind(u: Dictionary) -> String:
+	if u.load.n > 0:
+		return str(u.load.kind)
+	var best := "wood"
+	var bd := 3.2
+	for n in sim.nodes:
+		var d: float = u.pos.distance_to(n.p)
+		if d < bd:
+			bd = d
+			best = str(n.kind)
+	return best
+
+func _sync_hand(a: Dictionary, u: Dictionary) -> void:
+	# What's in the right hand: a fishing rod while fishing (anyone); for workers the tool for the job --
+	# pickaxe on stone, axe on trees, hammer for repairs and ladders, the axe otherwise. Otherwise the
+	# class weapon. Plus, while fishing, a float bobbing in the water and a line to it.
+	var want := ""
+	var fishing: bool = u.state == "fish"
+	if fishing:
+		want = "fishing_rod"
+	elif u.cls == "worker" and u.state != "dead":
+		match str(u.state):
+			"gather":
+				want = "pickaxe" if _gather_kind(u) == "stone" else "axe"
+			"repair", "build_ladder":
+				want = "hammer"
+			_:
+				want = "axe"
+	if fishing and not a.has("fish_from"):
+		a.fish_from = sim.time
+	elif not fishing:
+		a.erase("fish_from")
+	_sync_fishing_gear(a, u, fishing)
+	if want == str(a.get("hand_tool", "")):
+		return
+	a.hand_tool = want
+	if not a.has("hand_slot") or not is_instance_valid(a.hand_slot):
+		var sk: Skeleton3D = (a.body as Node3D).find_child("Skeleton3D", true, false) if a.get("body") != null else null
+		if sk == null:
+			return
+		var slot: BoneAttachment3D = null
+		for c in sk.get_children():
+			if c is BoneAttachment3D and str((c as BoneAttachment3D).bone_name) == "handslot.r":
+				slot = c
+		if slot == null:
+			slot = BoneAttachment3D.new()
+			slot.bone_name = "handslot.r"
+			sk.add_child(slot)
+		a.hand_slot = slot
+		a.hand_default = slot.get_children()
+		a.tools = {}
+	var slot2: BoneAttachment3D = a.hand_slot
+	for c in a.hand_default:
+		if is_instance_valid(c):
+			(c as Node3D).visible = want == ""
+	for k in a.tools:
+		(a.tools[k] as Node3D).visible = k == want
+	if want != "" and not (a.tools as Dictionary).has(want):
+		var packed := Stage.scene(TOOLS + want + ".gltf")
+		if packed != null:
+			var m: Node3D = packed.instantiate()
+			m.scale = Vector3.ONE * float(TOOL_SCALES.get(want, 1.0))
+			slot2.add_child(m)
+			a.tools[want] = m
+
+func _sync_fishing_gear(a: Dictionary, u: Dictionary, fishing: bool) -> void:
+	if not fishing:
+		for k in ["float_node", "line_node"]:
+			if a.has(k) and is_instance_valid(a[k]):
+				(a[k] as Node3D).visible = false
+		return
+	if not a.has("float_node") or not is_instance_valid(a.float_node):
+		var fp := Stage.scene(TOOLS + "fishing_floater.gltf")
+		a.float_node = fp.instantiate() if fp != null else Node3D.new()
+		(a.float_node as Node3D).scale = Vector3.ONE * 1.4
+		add_child(a.float_node)
+		if _line_mat == null:
+			_line_mat = StandardMaterial3D.new()
+			_line_mat.albedo_color = Color(0.92, 0.92, 0.88, 0.85)
+			_line_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		var cm := CylinderMesh.new()
+		cm.top_radius = 0.012
+		cm.bottom_radius = 0.012
+		cm.height = 1.0
+		cm.radial_segments = 4
+		cm.rings = 1
+		var line := MeshInstance3D.new()
+		line.mesh = cm
+		line.material_override = _line_mat
+		line.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(line)
+		a.line_node = line
+	var dir := Sim.dir_of(u.face)
+	var reach: float = absf(u.pos.y - Land.river_c(u.pos.x)) - Land.RIVER_HW + 1.1
+	var wp: Vector2 = u.pos + dir * reach
+	var bob := sin(float(sim.time) * 3.4 + float(u.pos.x)) * 0.04
+	var fl: Node3D = a.float_node
+	fl.visible = true
+	fl.position = Vector3(wp.x, Land.WATER_Y + 0.06 + bob, wp.y)
+	var root_p: Vector3 = (a.root as Node3D).position
+	var tip := root_p + Vector3(dir.x * 1.0, 2.5, dir.y * 1.0)
+	var line2: MeshInstance3D = a.line_node
+	line2.visible = true
+	var span := fl.position - tip
+	line2.position = tip + span * 0.5
+	line2.scale = Vector3(1.0, maxf(0.05, span.length()), 1.0)
+	if span.length() > 0.01:
+		line2.basis = Basis(Quaternion(Vector3.UP, span.normalized())) * Basis.from_scale(Vector3(1.0, span.length(), 1.0))
+
 func _sync_load(a: Dictionary, u: Dictionary) -> void:
 	var kind: String = u.load.kind if u.load.n > 0 and u.state != "dead" else ""
 	if u.offering and u.state != "dead":
@@ -1882,8 +1931,12 @@ func _sync_load(a: Dictionary, u: Dictionary) -> void:
 		return
 	var n: Node3D
 	if kind == "offering":
-		n = _make_cake(0.9)
-		n.position = Vector3(0, 2.35, 0)
+		# A fish held overhead (Round 19: the catch from the river; was a cake).
+		var fp := Stage.scene("res://assets/props/fish.glb")
+		n = fp.instantiate() if fp != null else Node3D.new()
+		n.scale = Vector3.ONE * 0.85
+		n.rotation = Vector3(0.0, PI * 0.5, 0.25)
+		n.position = Vector3(0, 2.45, 0)
 		(a.root as Node3D).add_child(n)
 		a.load_node = n
 		return
@@ -1923,6 +1976,10 @@ func _animate(a: Dictionary, u: Dictionary, vel: float) -> void:
 		_play(a, "t/Chopping" if node.get("kind", "wood") == "wood" else "t/Pickaxing")
 	elif u.state == "repair":
 		_play(a, "t/Hammering")
+	elif u.state == "fish":
+		# Cast, wait, reel in (Round 19; the KayKit tools rig has a fishing set).
+		var ft := float(sim.time) - float(a.get("fish_from", sim.time))
+		_play(a, "t/Fishing_Cast" if ft < 0.7 else ("t/Fishing_Reeling" if ft > Sim.FISH_TIME - 0.7 else "t/Fishing_Idle"))
 	elif u.carrying:
 		_play(a, "mb/Walking_A" if vel > 0.5 else "t/Holding_A", clampf(vel / 2.6, 0.7, 1.6))
 	elif vel > 0.6:
@@ -2004,9 +2061,15 @@ func on_event(e: Dictionary) -> void:
 			ring_at(fp, Color("#e6b3ff"), 2.4, 0.8)
 			for i in 8:
 				spark(fp + Vector3(randf_range(-0.8, 0.8), 0.6 + randf() * 1.6, randf_range(-0.8, 0.8)), Color("#f0c8ff"))
-		"cake_ready":
-			var ctr: Dictionary = sim.cake_trees[int(e.tree)]
-			ring_at(Vector3(ctr.p.x, 0.1, ctr.p.y), Color("#ff9ec8"), 2.2, 0.7)
+		"fish_caught", "fish_lost":
+			var fp2: Vector2 = e.pos
+			var face_d := Sim.dir_of(float(sim.by_id.get(str(e.id), {}).get("face", 0.0)))
+			var reach2: float = absf(fp2.y - Land.river_c(fp2.x)) - Land.RIVER_HW + 1.1
+			var wp2: Vector2 = fp2 + face_d * reach2
+			ring_at(Vector3(wp2.x, Land.WATER_Y + 0.08, wp2.y), Color("#dff4ff"), 1.2 if str(e.k) == "fish_caught" else 0.7, 0.5)
+			if str(e.k) == "fish_caught":
+				for k2 in 6:
+					spark(Vector3(wp2.x + randf_range(-0.4, 0.4), Land.WATER_Y + 0.3 + randf() * 0.6, wp2.y + randf_range(-0.4, 0.4)), Color("#bfe6ff"))
 		"tantrum":
 			var tp := Vector3(e.pos.x, Sim.height_at(e.pos) + 0.2, e.pos.y)
 			for i in 3:

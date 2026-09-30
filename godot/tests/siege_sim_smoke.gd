@@ -185,6 +185,40 @@ func _init() -> void:
 	js.step(Sim.TICK)
 	assert(not jail.open, "the jail door stays shut while an enemy is near it")
 	print("jail rules ok")
+	# Fishing (Round 19): ACTION on a river bank casts, the fish comes FISH_TIME later unless you're hit;
+	# away from the river there's nothing to do; the fish fattens their King like the cake did.
+	var fs = Sim.new()
+	fs.setup(4, 17)
+	var fisher: Dictionary = fs.units.filter(func(x): return x.team == 0)[0]
+	for u in fs.units:
+		u.bot = false
+		u.move = Vector2.ZERO
+		if u.id != fisher.id: u.pos = Vector2(0, -50)
+	fisher.pos = Vector2(0.0, 30.0)
+	fs.act(fisher.id, "interact")
+	assert(str(fisher.task.get("kind", "")) != "fish", "no fishing away from the river")
+	fisher.pos = fs._fish_spot(fisher)
+	assert(fs.at_river_bank(fisher.pos), "the fish spot is on the bank")
+	fs.act(fisher.id, "interact")
+	assert(str(fisher.task.get("kind", "")) == "fish", "ACTION on the bank casts")
+	for i in int((Sim.FISH_TIME + 0.3) / Sim.TICK):
+		fs.step(Sim.TICK)
+	assert(fisher.offering, "a fish after %.1f s on the bank" % Sim.FISH_TIME)
+	fisher.offering = false
+	fs.act(fisher.id, "interact")
+	for i in int(1.0 / Sim.TICK):
+		fs.step(Sim.TICK)
+	fs._damage({"team": 1, "id": "x"}, fisher, 1.0)
+	for i in int(2.0 / Sim.TICK):
+		fs.step(Sim.TICK)
+	assert(not fisher.offering, "a hit makes the fish get away")
+	fisher.offering = true
+	var cap: Dictionary = fs.oracles[1]
+	var fed0 := int(cap.cakes)
+	fisher.pos = (cap.pos as Vector2) + Vector2(0.6, 0.0)
+	fs.act(fisher.id, "interact")
+	assert(int(cap.cakes) == fed0 + 1 and not fisher.offering, "the fish feeds their King")
+	print("fishing rules ok")
 	# The rampart (Round 15): at L1 height behind the front wall, stairs down; arrows from up there
 	# fly over the wall, arrows from the courtyard floor don't.
 	var rs = Sim.new()

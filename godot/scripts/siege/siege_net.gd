@@ -8,7 +8,7 @@ extends RefCounted
 # objects: decode() uses the default allow_objects=false.
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 
-const VERSION := 11              # 11 = barbarian stand moved; 10 = rampart; 9 = back wall/throne; 8 = dungeon wing
+const VERSION := 12              # 12 = fishing replaces cake (state "fish", no cake trees); 11 = barbarian stand moved
 const DEFAULT_URL := "wss://136-113-125-3.sslip.io/fatebound/siege/ws"
 const DEFAULT_PORT := 8082
 const SNAP_HZ := 15.0            # 10 -> 15 (0.18.4): ~1.3 KB each, ~19 KB/s per player; remote
@@ -17,7 +17,7 @@ const PREDICT_SNAP := 2.5        # m: a predicting phone snaps to the server bey
 const MAX_PACKET := 64 * 1024            # client -> server; anything larger is dropped
 const TEAM_SIZE := 16
 
-const STATES := ["idle", "move", "wind", "recover", "dodge", "dead", "lift", "gather", "repair", "build_ladder"]
+const STATES := ["idle", "move", "wind", "recover", "dodge", "dead", "lift", "gather", "repair", "build_ladder", "fish"]
 const CLASSES := ["villager", "worker", "knight", "barbarian", "rogue", "ranger", "mage", "priest"]
 const LOADS := ["", "wood", "stone"]
 const TASKS := ["", "gather", "repair", "build_ladder"]
@@ -132,9 +132,6 @@ static func snapshot(sim, for_unit: String, events: Array) -> Dictionary:
 	var nodes := PackedInt32Array()
 	for n in sim.nodes:
 		nodes.append(n.amount)
-	var cakes := PackedByteArray()
-	for ct in sim.cake_trees:
-		cakes.append(1 if ct.ready else 0)
 	var outposts := PackedFloat32Array()
 	for op in sim.outposts:
 		outposts.append_array([float(op.owner), float(op.prog), float(op.get("stock", 0))])
@@ -151,7 +148,7 @@ static func snapshot(sim, for_unit: String, events: Array) -> Dictionary:
 			"carry_team":o.carry_team, "dropped_at":o.dropped_at, "cakes":o.cakes, "weight":o.weight})
 	var msg := {"t":"s", "tm":sim.time, "sc":sim.score.duplicate(), "k":sim.kills.duplicate(),
 		"st":sim.stock.duplicate(true), "lv":sim.levels.duplicate(true), "end":[sim.ended, sim.winner, sim.end_reason],
-		"u":packed, "p":proj, "g":gates, "n":nodes, "c":cakes, "o":oracles, "l":sim.ladders.duplicate(true), "op":outposts, "hs":stocks, "hd":hats, "e":events}
+		"u":packed, "p":proj, "g":gates, "n":nodes, "o":oracles, "l":sim.ladders.duplicate(true), "op":outposts, "hs":stocks, "hd":hats, "e":events}
 	if for_unit != "":
 		return for_player(msg, sim, for_unit)
 	return msg
@@ -266,9 +263,6 @@ static func apply(sim, msg: Dictionary, me_id: String, predict := false) -> void
 	var nodes: PackedInt32Array = msg.get("n", PackedInt32Array())
 	for ni in mini(sim.nodes.size(), nodes.size()):
 		sim.nodes[ni].amount = nodes[ni]
-	var cakes: PackedByteArray = msg.get("c", PackedByteArray())
-	for ci in mini(sim.cake_trees.size(), cakes.size()):
-		sim.cake_trees[ci].ready = cakes[ci] == 1
 	var oracles: Array = msg.get("o", [])
 	for t in mini(2, oracles.size()):
 		var src: Dictionary = oracles[t]

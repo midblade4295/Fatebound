@@ -61,20 +61,20 @@ const STEPS := [
 		["t_goal_1", "Now, the actual point of Fatebound. The enemy's dungeon is inside their castle, behind their gates. Our King is in there. Probably complaining."],
 		["t_goal_2", "Break a gate down, and Barbarians are marvellous at that, or have a Worker build a ladder over the wall. Then grab him and carry him home to his throne."],
 		["t_goal_3", "Rescue him three times and we win. They're trying to do the exact same thing to us, so leave a few friends at home. Trust issues are healthy here."]]},
-	{"id": "cake", "talk": [
-		["t_cake_1", "But first, a dirty trick. See that tree? It grows cake. Walk up and press ACTION to take a slice. Don't eat it. It's not for you."]],
-		"task": "Take a slice of cake from the cake tree (ACTION)",
-		"done": [["t_cake_took", "Lovely. Now, we have a guest in OUR dungeon: the enemy's King. He looks peckish."]]},
+	{"id": "fish", "talk": [
+		["t_cake_1", "But first, a dirty trick. See the river? It's full of fish. Stand on the bank and press ACTION to cast your line. Patience. Fish are not known for their punctuality."]],
+		"task": "Catch a fish at the river (ACTION on the bank)",
+		"done": [["t_cake_took", "A fish! Magnificent. Now, we have a guest in OUR dungeon: the enemy's King. He looks peckish."]]},
 	{"id": "feed", "talk": [
-		["t_feed_1", "Bring him that cake and press ACTION to feed him. Every bite makes him heavier, so the enemy needs more people to carry him home. Delicious sabotage."]],
-		"task": "Feed the cake to their King in our dungeon (ACTION)",
+		["t_feed_1", "Bring him that fish and press ACTION to feed him. Every bite makes him heavier, so the enemy needs more people to carry him home. Delicious sabotage."]],
+		"task": "Feed the fish to their King in our dungeon (ACTION)",
 		"done": [["t_feed_done", "He said thank you! Is it tactically brilliant? Yes. Is it ethically questionable? Also yes. Welcome to Fatebound."]]},
 	{"id": "shortcut", "talk": [
 		["t_rescue_1", "Right. Let's get OUR King back. Normally you'd march over, smash a gate and fight your way in. Today I've arranged a shortcut. Don't ask how. Royal paperwork."]]},
 	{"id": "grab", "talk": [
 		["t_grab_1", "Here we are. Their gate is, ahem, 'mysteriously broken'. Get inside, find our King in their dungeon and press ACTION to lift him."]],
 		"task": "Lift our King in their dungeon (ACTION)",
-		"done": [["t_grab_done", "Got him! You're slower while carrying. Heavier Kings need friends to help lift, which is exactly why we feed THEIRS so much cake."]]},
+		"done": [["t_grab_done", "Got him! You're slower while carrying. Heavier Kings need friends to help lift, which is exactly why we feed THEIRS so much fish."]]},
 	{"id": "carry", "talk": [
 		["t_carry_1", "Now carry him all the way home to his throne. Follow the arrow. And don't drop him. He will never let you forget it."]],
 		"task": "Carry our King home to his throne",
@@ -348,9 +348,9 @@ func task_info() -> Dictionary:
 			return {"pos": Sim.workshop(me.team), "label": "WORKSHOP"}
 		"outpost":
 			return {"pos": _outpost(me.team).p, "label": "OUTPOST"}
-		"cake":
-			var ct := _cake_tree(me)
-			return {"pos": ct.p, "label": "CAKE TREE"} if not ct.is_empty() else {}
+		"fish":
+			var spot: Vector2 = sim._fish_spot(me)
+			return {"pos": spot, "label": "RIVER"} if spot != Vector2.INF else {}
 		"feed":
 			return {"pos": sim.oracles[1 - int(me.team)].pos, "label": "THEIR KING"}
 		"grab":
@@ -358,16 +358,6 @@ func task_info() -> Dictionary:
 		"carry":
 			return {"pos": Sim.throne(me.team), "label": "OUR THRONE"}
 	return {}
-
-func _cake_tree(me: Dictionary) -> Dictionary:
-	# The nearest cake tree with a cake on it (nearest at all if none is ready).
-	var best: Dictionary = {}
-	for ct in sim.cake_trees:
-		var better: bool = best.is_empty() or (bool(ct.ready) and not bool(best.ready)) \
-			or (bool(ct.ready) == bool(best.ready) and me.pos.distance_to(ct.p) < me.pos.distance_to(best.p))
-		if better:
-			best = ct
-	return best
 
 func _stand(team: int, cls: String) -> Dictionary:
 	for st in sim.stands:
@@ -409,7 +399,7 @@ func task_done() -> bool:
 			return int(sim.levels[me.team].get("hat_knight", 0)) >= 1
 		"outpost":
 			return int(_outpost(me.team).owner) == me.team
-		"cake":
+		"fish":
 			return bool(me.offering)
 		"feed":
 			return int(me.fed) > _fed0

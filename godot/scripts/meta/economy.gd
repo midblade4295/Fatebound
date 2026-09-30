@@ -26,7 +26,7 @@ const SEASON_DAYS := 42
 const PASS_TIERS := 30
 const TIER_XP := 1000
 const PREMIUM_COST := 950                # gems
-const SEASON_NAMES := ["The King's Keep", "Ashen Ramparts", "Frost Siege", "The Cake Wars", "Iron Tide", "Summer of Stones"]
+const SEASON_NAMES := ["The King's Keep", "Ashen Ramparts", "Frost Siege", "The Fish Wars", "Iron Tide", "Summer of Stones"]
 
 static func season_id(unix: int) -> int:
 	return 1 + maxi(0, int(floor(float(unix - SEASON_EPOCH) / (SEASON_DAYS * 86400.0))))
@@ -135,7 +135,7 @@ const CATALOG := {
 	"title_lightbringer":  {"kind":"title", "class":"", "name":"Lightbringer", "rarity":"legendary", "source":"pass"},
 	# --- Titles
 	"title_gatebreaker":   {"kind":"title", "class":"", "name":"Gatebreaker", "rarity":"rare", "gold":800, "source":"shop"},
-	"title_cake_baron":    {"kind":"title", "class":"", "name":"Cake Baron", "rarity":"epic", "source":"pass"},
+	"title_cake_baron":    {"kind":"title", "class":"", "name":"Fish Baron", "rarity":"epic", "source":"pass"},
 	"title_oracle_sworn":  {"kind":"title", "class":"", "name":"Kingsworn", "rarity":"legendary", "gems":300, "source":"shop"},
 	"title_siege_lord":    {"kind":"title", "class":"", "name":"Siege Lord", "rarity":"epic", "source":"pass"},
 }
@@ -231,13 +231,13 @@ const CHALLENGES := {
 	"kos15":    {"text":"Knock out 15 enemies", "stat":"kills", "goal":15, "pass":400, "gold":80, "span":"daily"},
 	"gate5":    {"text":"Deal 500 gate damage", "stat":"gates", "goal":5, "pass":450, "gold":90, "span":"daily"},
 	"gather40": {"text":"Gather 40 wood or stone", "stat":"gathered", "goal":40, "pass":400, "gold":80, "span":"daily"},
-	"feed3":    {"text":"Feed 3 cakes to their King", "stat":"fed", "goal":3, "pass":450, "gold":90, "span":"daily"},
+	"feed3":    {"text":"Feed 3 fish to their King", "stat":"fed", "goal":3, "pass":450, "gold":90, "span":"daily"},
 	"lift2":    {"text":"Help lift your King twice", "stat":"lifts", "goal":2, "pass":400, "gold":80, "span":"daily"},
 	"w_win5":   {"text":"Win 5 matches", "stat":"wins", "goal":5, "pass":2000, "gems":40, "span":"weekly"},
 	"w_rescue4":{"text":"Rescue your King 4 times", "stat":"rescues", "goal":4, "pass":2000, "gems":40, "span":"weekly"},
 	"w_kos100": {"text":"Knock out 100 enemies", "stat":"kills", "goal":100, "pass":1800, "gems":30, "span":"weekly"},
 	"w_gate30": {"text":"Deal 3,000 gate damage", "stat":"gates", "goal":30, "pass":1800, "gems":30, "span":"weekly"},
-	"w_feed12": {"text":"Feed 12 cakes", "stat":"fed", "goal":12, "pass":1800, "gems":30, "span":"weekly"},
+	"w_feed12": {"text":"Feed 12 fish", "stat":"fed", "goal":12, "pass":1800, "gems":30, "span":"weekly"},
 	"w_play12": {"text":"Play 12 matches", "stat":"matches", "goal":12, "pass":1600, "gems":25, "span":"weekly"},
 }
 const DAILY_COUNT := 3
@@ -287,7 +287,7 @@ static func match_rewards(stats: Dictionary, won: bool, draw: bool, online: bool
 		lines.append({"label":"Gate damage", "gold":2 * gd, "xp":3 * gd, "pass":3 * gd})
 	var f: int = mini(10, int(stats.get("fed", 0)))
 	if f > 0:
-		lines.append({"label":"Cakes fed x%d" % f, "gold":10 * f, "xp":10 * f, "pass":15 * f})
+		lines.append({"label":"Fish fed x%d" % f, "gold":10 * f, "xp":10 * f, "pass":15 * f})
 	if online:
 		var sub := {"gold":0, "xp":0, "pass":0}
 		for ln in lines:

@@ -870,3 +870,21 @@ K2/K3 notes (0.17.0)
 - Barbarian hat shop (14.5, 12) -> (-7.5, 9.5): it was 3.2 m from the workshop's ring, its machine on top
   of the workshop area; now on the west courtyard's open floor by the knight and rogue shops (3.6 m from
   the archery targets). Land check / reach pass. Protocol v11 (stand positions are map data).
+
+# 0.23.0 (Kevin): KayKit RPG Tools Bits (CC0) for tools; fishing replaces the cake mechanic
+- assets/kaykit/tools: axe, pickaxe, hammer, fishing_rod, fishing_floater, fishing_tacklebox, lantern, torch
+  (+ texture, licence). assets/props/fish.glb: Blender low-poly fish (338 tris).
+- Workers hold the tool for the job (view _sync_hand): pickaxe on stone, axe on trees, hammer for repairs and
+  ladders, the axe otherwise (scales measured: axe 1.15, pickaxe 0.9, hammer 1.2, rod 0.6).
+- Fishing (sim): cake trees gone (and their ripening, obstacles, net sync). ACTION within 0.2..2.4 m of the
+  river's edge (at_river_bank) starts a "fish" task (FISH_TIME 2.5 s, facing the water); done -> u.offering (a
+  fish); a hit clears the task ("fish_lost"). Feeding unchanged (oracle "cakes" count kept as the fed count).
+  Bots' fish runners use a cached clear spot on their own bank (_fish_spot). View: rod in hand, float in the
+  water with a line (plus the rod's own bobber), Fishing_Cast/Idle/Reeling (KayKit tools rig), splash on
+  catch; the carried item is the fish overhead. HUD: FISH button, catch/lost toasts, rules text.
+- Tutorial: the cake step is "fish" (guide to our bank, "RIVER"); t_cake_1 rewritten (and t_cake_took,
+  t_feed_1, t_grab_done now say fish) -> 14 lines pending re-record. Economy: "Feed 3 fish", "The Fish Wars",
+  "Fish Baron" (id kept), stats "Fish fed"; store caption "FEED THEIR KING FISH".
+- sim smoke: fishing rules (bank only, 2.5 s, a hit loses it, it feeds their King); bots fed 4 in a match.
+- Protocol v12 (state "fish", no cake trees).
+- Next: hat shops as the buildings themselves (Kevin, same message).

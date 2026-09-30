@@ -35,13 +35,13 @@ the text. Generated from `scripts/siege/tutorial.gd` (STEPS) — edit the lines 
 | 23 | `t_goal_1` | goal | Now, the actual point of Fatebound. The enemy's dungeon is inside their castle, behind their gates. Our King is in there. Probably complaining. |
 | 24 | `t_goal_2` | goal | Break a gate down, and Barbarians are marvellous at that, or have a Worker build a ladder over the wall. Then grab him and carry him home to his throne. |
 | 25 | `t_goal_3` | goal | Rescue him three times and we win. They're trying to do the exact same thing to us, so leave a few friends at home. Trust issues are healthy here. |
-| 26 | `t_cake_1` | cake — before the task | But first, a dirty trick. See that tree? It grows cake. Walk up and press ACTION to take a slice. Don't eat it. It's not for you. |
-| 27 | `t_cake_took` | cake — after the task | Lovely. Now, we have a guest in OUR dungeon: the enemy's King. He looks peckish. |
-| 28 | `t_feed_1` | feed — before the task | Bring him that cake and press ACTION to feed him. Every bite makes him heavier, so the enemy needs more people to carry him home. Delicious sabotage. |
+| 26 | `t_cake_1` | fish — before the task | But first, a dirty trick. See the river? It's full of fish. Stand on the bank and press ACTION to cast your line. Patience. Fish are not known for their punctuality. |
+| 27 | `t_cake_took` | fish — after the task | A fish! Magnificent. Now, we have a guest in OUR dungeon: the enemy's King. He looks peckish. |
+| 28 | `t_feed_1` | feed — before the task | Bring him that fish and press ACTION to feed him. Every bite makes him heavier, so the enemy needs more people to carry him home. Delicious sabotage. |
 | 29 | `t_feed_done` | feed — after the task | He said thank you! Is it tactically brilliant? Yes. Is it ethically questionable? Also yes. Welcome to Fatebound. |
 | 30 | `t_rescue_1` | shortcut | Right. Let's get OUR King back. Normally you'd march over, smash a gate and fight your way in. Today I've arranged a shortcut. Don't ask how. Royal paperwork. |
 | 31 | `t_grab_1` | grab — before the task | Here we are. Their gate is, ahem, 'mysteriously broken'. Get inside, find our King in their dungeon and press ACTION to lift him. |
-| 32 | `t_grab_done` | grab — after the task | Got him! You're slower while carrying. Heavier Kings need friends to help lift, which is exactly why we feed THEIRS so much cake. |
+| 32 | `t_grab_done` | grab — after the task | Got him! You're slower while carrying. Heavier Kings need friends to help lift, which is exactly why we feed THEIRS so much fish. |
 | 33 | `t_carry_1` | carry — before the task | Now carry him all the way home to his throne. Follow the arrow. And don't drop him. He will never let you forget it. |
 | 34 | `t_carry_done` | carry — after the task | RESCUED! That's one! Rescue him three times and the match is ours. The crowd goes mild. |
 | 35 | `t_end_1` | end | That's everything! Well. Not everything. But everything I was paid to say. |

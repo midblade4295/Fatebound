@@ -45,7 +45,7 @@ func _init() -> void:
 			short.append(id)
 	# The Oracle became each castle's King (0.20.0): these 13 lines were rewritten and their old
 	# recordings pulled until Kevin re-records them. Remove ids from here as the new files arrive.
-	var pending := ["t_intro_2", "t_goal_1", "t_goal_2", "t_goal_3", "t_cake_took", "t_feed_1", "t_feed_done",
+	var pending := ["t_intro_2", "t_goal_1", "t_goal_2", "t_goal_3", "t_cake_1", "t_cake_took", "t_feed_1", "t_feed_done",
 		"t_rescue_1", "t_grab_1", "t_grab_done", "t_carry_1", "t_carry_done", "t_end_2"]
 	var unexpected := missing.filter(func(x): return not pending.has(x))
 	check(unexpected.is_empty(), "every line has its voice file except the %d awaiting re-record (missing: %s)" % [pending.size(), str(unexpected)])
@@ -115,10 +115,11 @@ func _process(delta: float) -> bool:
 				"outpost":
 					var op: Dictionary = tut._outpost(me.team)
 					me.pos = (op.p as Vector2) + Vector2(2.2, 0)
-				"cake":
-					var ct: Dictionary = tut._cake_tree(me)
-					me.pos = (ct.p as Vector2) + Vector2(1.3, 0)
-					s.act(mode.hud.player_id, "interact")
+				"fish":
+					# Stand on our bank and cast; the catch comes FISH_TIME later (the loop keeps stepping).
+					me.pos = s._fish_spot(me)
+					if str(me.task.get("kind", "")) != "fish":
+						s.act(mode.hud.player_id, "interact")
 				"feed":
 					me.pos = (s.oracles[1 - int(me.team)].pos as Vector2) + Vector2(0.6, 0)
 					s.act(mode.hud.player_id, "interact")

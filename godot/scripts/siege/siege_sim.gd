@@ -50,14 +50,16 @@ const RES_WOOD := [Vector2(-24.5, 7.5), Vector2(-31.0, 36.5), Vector2(27.0, 44.0
 	Vector2(-2.5, 30.0), Vector2(10.0, 22.5), Vector2(-2.5, 34.0), Vector2(29.0, 27.0), Vector2(-8.5, 9.5)]
 const RES_STONE := [Vector2(26.0, 50.0), Vector2(-30.0, 28.0), Vector2(12.0, 26.0), Vector2(-26.5, 36.5), Vector2(-15.5, 9.0)]
 const COVER_ROCKS := [Vector2(-3.0, 21.0), Vector2(7.5, 9.0), Vector2(-3.0, 26.0)]
-const CAKE_TREES := [Vector2(-6.0, 25.0), Vector2(17.0, 35.0), Vector2(-27.5, 20.5)]
 const OUTPOST_TRICKLE := 15.0    # owners get +1 wood +1 stone this often per outpost
 
 # ---- fate offerings (the "cake") ----
 const ALTAR_P := Castle.ALTAR
 const OFFERING_EVERY := 30.0
-const CAKE_EVERY := 60.0            # a cake tree ripens a cake every 60 s
-const CAKE_PER_STAGE := 3           # three cakes fatten her one size stage
+const CAKE_PER_STAGE := 3           # three fish fatten him one size stage (name kept from the cake days)
+# Fishing (Round 19, Kevin: the cake trees are gone -- catch fish from the river and feed them to the
+# enemy King). ACTION on a river bank casts; FISH_TIME later you hold a fish, if nothing hit you.
+const FISH_TIME := 2.5
+const FISH_REACH := 2.4            # how far back from the water's edge you can still fish
 const LIFTERS := [1, 2, 3, 4, 5, 6] # players needed to lift her at each stage (skinny .. fully fattened)
 const LIFT_RING := 1.15             # followers hold her from a ring around the lead lifter
 const TANTRUM_AFTER := 6.0          # left on the ground this long -> tantrum
@@ -201,7 +203,6 @@ static func _zero_levels() -> Dictionary:
 	for k in UPGRADES:
 		d[k] = 0
 	return d
-var cake_trees: Array = []     # {id, p, ready, t}  neutral, across the land
 var catapults: Array = []      # {team, p, t, side}
 var shells: Array = []         # catapult stones in flight {id, team, from, to, t, flight}
 var ladders: Array = []        # {id, team (owner), wall (index), p, hp, cells}
@@ -397,14 +398,6 @@ func _build_map() -> void:
 	for op in Land.outpost_positions():
 		outposts.append({"id":outposts.size(), "p":op, "owner":-1, "prog":0.0, "t":0.0})
 		obstacles.append({"p":op, "r":Land.OUTPOST_TOWER_R, "kind":"outpost_tower"})
-	# Cake trees across the land (point-mirrored pairs); any team can pick a cake. The trunk is
-	# solid; the cake is picked from beside it.
-	cake_trees = []
-	for cp in CAKE_TREES:
-		for t in 2:
-			var ctp := _m(t, cp)
-			cake_trees.append({"id":cake_trees.size(), "p":ctp, "ready":true, "t":0.0})
-			obstacles.append({"p":ctp, "r":0.6, "kind":"cake_tree"})
 
 func _add_node(team: int, kind: String, p: Vector2) -> void:
 	var pos := _m(team, p)
@@ -1089,11 +1082,10 @@ func _damage_ladder(src: Dictionary, l: Dictionary, amount: float) -> void:
 		nav_version += 1
 		_event("ladder_down", {"ladder":l.id, "team":l.team, "pos":l.p, "by":src.get("id","")})
 
-func near_cake(u: Dictionary) -> Dictionary:
-	for ct in cake_trees:
-		if ct.ready and u.pos.distance_to(ct.p) <= 1.9:
-			return ct
-	return {}
+func at_river_bank(p: Vector2) -> bool:
+	# On the field, 0.2 .. FISH_REACH m back from the river's edge (not on a bridge: that's over it).
+	var off := absf(p.y - Land.river_c(p.x))
+	return absf(p.x) <= HALF_W - 1.0 and off >= Land.RIVER_HW + 0.2 and off <= Land.RIVER_HW + FISH_REACH
 
 func _offering_action(u: Dictionary) -> String:
 	if u.carrying:
@@ -1103,19 +1095,17 @@ func _offering_action(u: Dictionary) -> String:
 		if captive.state == "cell" and u.pos.distance_to(captive.pos) <= FEED_RADIUS and int(captive.cakes) < MAX_WEIGHT * CAKE_PER_STAGE:
 			return "feed"
 		return ""
-	if u.load.n == 0 and not near_cake(u).is_empty():
-		return "cake"
+	if u.load.n == 0 and u.task.is_empty() and at_river_bank(u.pos):
+		return "fish"
 	return ""
 
 func _do_offering(u: Dictionary) -> bool:
 	match _offering_action(u):
-		"cake":
-			var ct := near_cake(u)
-			ct.ready = false
-			ct.t = 0.0
-			u.offering = true
-			u.task = {}
-			_event("offering_taken", {"id":u.id, "team":u.team, "tree":ct.id})
+		"fish":
+			u.move = Vector2.ZERO
+			u.face = angle_of(Vector2(0.0, Land.river_c(u.pos.x) - u.pos.y))    # face the water
+			u.task = {"kind":"fish", "t":FISH_TIME}
+			_event("fish_cast", {"id":u.id, "team":u.team, "pos":u.pos})
 			return true
 		"feed":
 			var captive: Dictionary = oracles[1 - u.team]
@@ -1344,6 +1334,8 @@ func _damage(src: Dictionary, dst: Dictionary, amount: float, stun := 0.0) -> vo
 	dst.hp -= amount
 	if stun > 0.0:
 		dst.stun = maxf(dst.stun, stun)
+	if str(dst.task.get("kind", "")) == "fish":
+		_event("fish_lost", {"id":dst.id, "team":dst.team, "pos":dst.pos})
 	dst.task = {}
 	_event("hit", {"id":dst.id,"by":src.get("id",""),"dmg":int(round(amount))})
 	if dst.hp <= 0.0:
@@ -1722,6 +1714,12 @@ func _step_task(u: Dictionary, dt: float) -> void:
 	if task.t > 0.0:
 		return
 	match str(task.kind):
+		"fish":
+			u.task = {}
+			u.state = "idle"
+			if at_river_bank(u.pos) and not u.offering:
+				u.offering = true
+				_event("fish_caught", {"id":u.id, "team":u.team, "pos":u.pos})
 		"gather":
 			var n: Dictionary = nodes[int(task.node)]
 			if n.amount <= 0 or u.load.n >= CARRY_MAX or u.pos.distance_to(n.p) - n.r > 1.6:
@@ -2161,12 +2159,6 @@ func _step_world(dt: float) -> void:
 				_damage({"team":int(sh.team), "id":"catapult"}, u, CATAPULT_DMG)
 		_event("catapult_hit", {"team":int(sh.team), "pos":sh.to, "shell":sh.id})
 		shells.remove_at(i)
-	for ct in cake_trees:
-		if not ct.ready:
-			ct.t += dt
-			if ct.t >= CAKE_EVERY:
-				ct.ready = true
-				_event("cake_ready", {"tree":ct.id})
 	for n in nodes:
 		if n.amount < n.max:
 			n.t += dt
@@ -2517,7 +2509,7 @@ func _think_fighter(u: Dictionary) -> void:
 	var alarm: Dictionary = _gate_alarm[u.team]
 	var short_hands: bool = not ally_carrier.is_empty() and mine.lifters.size() < lifters_needed(mine)
 	var captive_loose: bool = theirs.state == "dropped" or (theirs.state == "carried" and int(theirs.carry_team) == u.team and theirs.lifters.size() < lifters_needed(theirs))
-	var cake_runner: bool = u.role == "defend" and absi(u.id.hash()) % 2 == 0
+	var fish_runner: bool = u.role == "defend" and absi(u.id.hash()) % 2 == 0
 	if not enemy_carrier.is_empty() and (u.role == "defend" or u.pos.distance_to(enemy_carrier.pos) < 16.0):
 		goal = enemy_carrier.pos
 	elif not our_returner.is_empty() and (u.role in ["raid", "escort"] or u.pos.distance_to(our_returner.pos) < 16.0):
@@ -2592,21 +2584,18 @@ func _think_fighter(u: Dictionary) -> void:
 			else:
 				_nav_to(u, captive.pos, FEED_RADIUS - 0.5)
 			return
-	elif cake_runner and captive.state == "cell" and int(captive.cakes) < MAX_WEIGHT * CAKE_PER_STAGE \
+	elif fish_runner and captive.state == "cell" and int(captive.cakes) < MAX_WEIGHT * CAKE_PER_STAGE \
 			and time - float(alarm.at) > 6.0 and enemy_carrier.is_empty() and int(u.get("post", -1)) < 0:
-		var tree := {}
-		var td := INF
-		for ct in cake_trees:
-			var d: float = u.pos.distance_to(ct.p)
-			if ct.ready and d < td and d < 45.0:
-				td = d
-				tree = ct
-		if not tree.is_empty():
-			if td <= 1.5:
-				u.move = Vector2.ZERO
+		# Fish runs (Round 19): to a spot on our bank of the river, cast, then carry the catch to the cell.
+		if str(u.task.get("kind", "")) == "fish":
+			u.move = Vector2.ZERO
+			return
+		var spot := _fish_spot(u)
+		if spot != Vector2.INF:
+			if u.pos.distance_to(spot) <= 0.8 and at_river_bank(u.pos):
 				_do_offering(u)
 			else:
-				_nav_to(u, tree.p, 1.2)
+				_nav_to(u, spot, 0.4)
 			return
 	# Lift: start or join a lift when standing at an Oracle we should be moving.
 	var lo := _liftable(u)
@@ -2652,6 +2641,22 @@ func _capture_target(u: Dictionary) -> Dictionary:
 		if d < bd:
 			bd = d
 			best = op
+	return best
+
+func _fish_spot(u: Dictionary) -> Vector2:
+	# A clear spot on this team's own bank of the river, the nearest to the unit; cached per unit.
+	if u.has("fish_spot"):
+		return u.fish_spot
+	var side := 1.0 if spawn(u.team).y > 0.0 else -1.0
+	var best := Vector2.INF
+	for i in range(-14, 15):
+		var x := i * 2.0
+		var p := Vector2(x, Land.river_c(x) + side * (Land.RIVER_HW + 1.3))
+		if not at_river_bank(p) or _blocked_point(p, u.team, UNIT_R + 0.1):
+			continue
+		if best == Vector2.INF or u.pos.distance_to(p) < u.pos.distance_to(best):
+			best = p
+	u["fish_spot"] = best
 	return best
 
 var _rampart_alert := [-100.0, -100.0]     # when an enemy was last near each castle's front

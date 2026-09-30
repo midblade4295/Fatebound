@@ -179,7 +179,7 @@ func _build_pause_panel() -> void:
 	v.add_theme_constant_override("separation", 10)
 	pause_panel.add_child(v)
 	_label(v, "FATEBOUND", 22, VisualTheme.GOLD, _title)
-	_label(v, "Break into the enemy castle and carry your King from their dungeon to his throne room. First to %d rescues wins. Standing by him in their dungeon heals you. Feed cake from the cake trees to THEIR King: each size needs another lifter (up to 6). Left on the ground, a King throws a tantrum that knocks everyone back. Workers gather, repair gates and fund upgrades." % Sim.WIN_RESCUES, 11, Color("#d4cbbb"))
+	_label(v, "Break into the enemy castle and carry your King from their dungeon to his throne room. First to %d rescues wins. Standing by him in their dungeon heals you. Catch fish from the river (ACTION on a bank) and feed them to THEIR King: each size needs another lifter (up to 6). Left on the ground, a King throws a tantrum that knocks everyone back. Workers gather, repair gates and fund upgrades." % Sim.WIN_RESCUES, 11, Color("#d4cbbb"))
 	_button(v, "RESUME", "gold", func(): pause_panel.visible = false)
 	var fps_btn := _button(v, "30 FPS MODE: OFF", "secondary", func(): pass)
 	pause_panel.visibility_changed.connect(func(): fps_btn.text = "30 FPS MODE: " + ("ON" if Engine.max_fps == 30 else "OFF"))
@@ -268,15 +268,18 @@ func on_event(e: Dictionary) -> void:
 			if e.id == player_id:
 				toast("You fell!", VisualTheme.RED)
 		"fed":
-			# Only stage changes are worth a toast (every other cake is just half a stage).
+			# Only stage changes are worth a toast (every other fish is just a third of a stage).
 			if bool(e.get("stage_up", true)):
 				if mine:
 					toast("Our King got fatter! Size %d — needs %d to lift" % [int(e.weight), int(e.need)], VisualTheme.RED)
 				else:
 					toast("Their King grew to size %d — needs %d to lift" % [int(e.weight), int(e.need)], Color("#ff9ec8"))
-		"offering_taken":
+		"fish_caught":
 			if e.id == player_id:
-				toast("Feed the cake to their King in our dungeon", Color("#ff9ec8"))
+				toast("Caught a fish! Feed it to their King in our dungeon", Color("#9fdcff"))
+		"fish_lost":
+			if e.id == player_id:
+				toast("The fish got away!", Color("#c8d4dc"))
 		"tantrum":
 			var tt := int(e.team)
 			if tt == sim.by_id[player_id].team:
@@ -757,7 +760,7 @@ func _draw_button(b: Dictionary, me: Dictionary) -> void:
 			ready = cd <= 0.0 and not me.carrying
 		"action":
 			label = {"hat_up":"UPGRADE","hat":"NEW HAT","grab":"LIFT","throw":"THROW","workshop":"WORKSHOP","chop":"CHOP","mine":"MINE",
-				"repair":"REPAIR","gather":"WORKING","repairing":"REPAIRING","ladder":"LADDER","build_ladder":"BUILDING","cake":"TAKE CAKE","feed":"FEED",
+				"repair":"REPAIR","gather":"WORKING","repairing":"REPAIRING","ladder":"LADDER","build_ladder":"BUILDING","fish":"FISH","feed":"FEED",
 				"join":"HELP LIFT","letgo":"LET GO"}.get(b.ctx, "USE")
 			col = Color("#155258")
 			rim = Color("#9ff6ef")

@@ -25,7 +25,7 @@ SHOTS = [
     ("rescue",    "RESCUE YOUR KING",        "Carry him home from the enemy dungeon. Three rescues wins."),
     ("hats",      "THE HAT MAKES THE HERO",  "Walk into a hat shop and become a Knight, Mage, Priest and more"),
     ("abilities", "SPIN. SHIELD. SMASH.",    "Every class has its own ability"),
-    ("feed",      "FEED THEIR KING CAKE",    "Heavier captives are harder to carry home. Delicious sabotage."),
+    ("feed",      "FEED THEIR KING FISH",    "Catch fish from the river. Heavier Kings are harder to carry home."),
     ("tutorial",  "LEARN FROM THE HERALD",   "A funny, hands-on walkthrough gets you battle-ready"),
     ("shop",      "SKINS, WEAPONS & PACKS",  "Cosmetics only. No pay-to-win."),
     ("home",      "SEVEN CLASSES",           "Knight, Barbarian, Rogue, Ranger, Mage, Priest and Worker"),
