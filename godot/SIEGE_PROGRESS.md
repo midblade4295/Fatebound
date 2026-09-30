@@ -931,3 +931,18 @@ K2/K3 notes (0.17.0)
   in the pause between the aligned last/first words (timings from the forced hypothesis's seg(): get_alignment()
   is empty without a second pass). It moved exactly those 3; every piece now starts and ends on its own line.
 - Exported (+1.96 dB to -16 LUFS), 37 recordings, tutorial_test pending list empty.
+
+# Trailer 2 (Kevin: cinematic trailer, the Herald hyping it up, a spectacular title reveal with VFX, the whole kingdom
+# behind it and the sun god-raying through the title)
+- tools/trailer2_shots.gd: dawn captive heroes assault rampart whirl feast carry reveal (Movie Maker, one shot per
+  run, SHOT=...). "reveal" is golden hour (sun low beyond the enemy castle: light + sky + fog retinted for that shot)
+  and writes the sun's screen position per frame (reveal_sun.json).
+- tools/trailer2_reveal_fx.py: over the reveal -- sun glow broken into slowly turning beams, occluded by the title's
+  letters and zoom-blurred from the sun (quarter res), a flash, FATEBOUND slamming in from 112 % (sun behind the
+  letters' upper half), rim glow, a lens streak, rising embers, tagline + subline.
+- tools/trailer2_edit.py: --stage segments (each shot trimmed + its gold caption; resumable) then --stage final
+  (crossfades, a dip to black into the reveal, fade-out, Kevin's Spooky_3 from 11.1 s so its drop at 42.5 s hits the
+  title at 31.4 s; --vo DIR with 1..9.mp3 drops the Herald into each shot and sidechain-ducks the music).
+  (Split in two: a single pass with full-length caption loops ran past the 5-minute tool limit; a background
+  process doesn't survive the end of a tool call.)
+- Output: Fatebound-Trailer-2.mp4, 38.9 s 1080p30. Herald trailer lines: waiting for Kevin's recording.
