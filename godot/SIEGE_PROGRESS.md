@@ -644,3 +644,17 @@ K2/K3 notes (0.17.0)
 - tutorial_test: 12 tasks incl. cake, feed, grab, carry; the rescue must score.
 - net smoke: the stick points toward the open courtyard (pushing "right" sometimes walked into a
   stand -> the prediction check failed on collision, not prediction).
+
+# 0.19.2 (Kevin): "the projectiles skip across the screen in online mode"
+- Cause (siege_net.gd apply): every snapshot replaced the mirror's projectile list and the view drew
+  each at its snapshot position, so at 15 Hz an arrow (22 m/s) sat still 66 ms then jumped 1.47 m.
+  Units were interpolated (net_from -> net_to); projectiles never were.
+- Fix: projectiles persist across snapshots with net_from/net_to and Net.interpolate slides them on
+  the same one-interval-behind timeline as the units; a new one starts at its spawn point; one that
+  ended gets one last slide to the impact point (proj_end events now carry "pos") before vanishing.
+  Offline, the view draws projectiles ahead by vel x the time since the last 30 Hz tick
+  (view.proj_lead = mode._accum).
+- tests/net_interp_test.gd (runner): real snapshot/encode/decode/apply, 5 samples per interval:
+  largest step 0.29 m (old drawing 1.47 m), no stalls, ends 0.40 m from the target it hit.
+- Protocol unchanged (v7; the extra event field is ignored by older builds). Redeploy the server
+  so it sends impact points.

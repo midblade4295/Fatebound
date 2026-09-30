@@ -1873,7 +1873,7 @@ func _step_projectiles(dt: float) -> void:
 					break
 		if shielded:
 			_event("blocked", {"pos":p.pos})
-			_event("proj_end", {"pid":p.id})
+			_event("proj_end", {"pid":p.id, "pos":p.pos})
 			projectiles.remove_at(i)
 			continue
 		p.life -= dt
@@ -1938,7 +1938,7 @@ func _step_projectiles(dt: float) -> void:
 			_event("boom", {"pos":p.pos})
 		elif not hit.is_empty():
 			_damage(owner, hit, p.dmg)
-		_event("proj_end", {"pid":p.id})
+		_event("proj_end", {"pid":p.id, "pos":p.pos})      # pos = the impact point (clients fly it there)
 		projectiles.remove_at(i)
 
 func _step_oracles(dt: float) -> void:

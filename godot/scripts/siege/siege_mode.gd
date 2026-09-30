@@ -360,6 +360,7 @@ func _process(delta: float) -> void:
 			view.on_event(e)
 			hud.on_event(e)
 	diag.mark("view.sync")
+	view.proj_lead = 0.0 if online else _accum          # online, projectiles interpolate (Net)
 	view.sync(delta)
 	diag.mark("process done")
 	_thermal_guard(delta)

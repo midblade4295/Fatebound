@@ -231,9 +231,31 @@ static func apply(sim, msg: Dictionary, me_id: String, predict := false) -> void
 		u.block_until = 1.0e9 if u_arr[b + 29] > 0.5 else 0.0
 		u.whirl_until = 1.0e9 if u_arr[b + 30] > 0.005 else 0.0
 		u.fed = int(u_arr[b + 28])
+	# Projectiles slide between snapshots like units (0.18.5, Kevin: "projectiles skip across the
+	# screen online"): they used to be redrawn only at each snapshot's position, so an arrow at
+	# 22 m/s sat still for 66 ms and then jumped 1.5 m. Now each keeps from/to: a new one starts at
+	# its spawn point (on the same one-interval-behind timeline as the units it flies between), and
+	# one that ended this snapshot gets one last slide to its impact point before it disappears.
+	var old := {}
+	for p in sim.projectiles:
+		old[p.id] = p
 	sim.projectiles.clear()
+	var seen := {}
 	for p in msg.get("p", []):
-		sim.projectiles.append({"id":p[0], "pos":p[1], "vel":p[2], "kind":p[3], "team":-1})
+		var prev: Dictionary = old.get(p[0], {})
+		var from: Vector2 = prev.get("net_to", p[1])
+		sim.projectiles.append({"id":p[0], "pos":from, "net_from":from, "net_to":p[1], "vel":p[2], "kind":p[3], "team":-1})
+		seen[p[0]] = true
+	var ends := {}
+	for e in msg.get("e", []):
+		if e is Dictionary and str(e.get("k", "")) == "proj_end" and e.has("pos"):
+			ends[e.get("pid")] = e.pos
+	for id in old:
+		var gone: Dictionary = old[id]
+		if not seen.has(id) and ends.has(id) and not bool(gone.get("ghost", false)):
+			var last: Vector2 = gone.get("net_to", gone.pos)
+			sim.projectiles.append({"id":id, "pos":last, "net_from":last, "net_to":ends[id], "vel":gone.vel,
+				"kind":gone.kind, "team":-1, "ghost":true})
 	var gates: PackedFloat32Array = msg.get("g", PackedFloat32Array())
 	for gi in mini(sim.gates.size(), gates.size() / 4):
 		var g: Dictionary = sim.gates[gi]
@@ -295,3 +317,6 @@ static func interpolate(sim, alpha: float) -> void:
 	for u in sim.units:
 		if u.has("net_to"):
 			u.pos = (u.net_from as Vector2).lerp(u.net_to, a)
+	for p in sim.projectiles:
+		if p.has("net_to"):
+			p.pos = (p.net_from as Vector2).lerp(p.net_to, a)

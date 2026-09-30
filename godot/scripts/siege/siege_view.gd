@@ -49,6 +49,7 @@ var catapult_nodes: Array = []
 var ladder_nodes: Dictionary = {}
 var cake_nodes: Dictionary = {}   # cake tree id -> the cake shown while ripe
 var proj_nodes: Dictionary = {}
+var proj_lead := 0.0          # offline: seconds since the last sim tick (projectiles drawn ahead by vel * this)
 var _fx: Array = []
 var _time := 0.0
 var _cam_target := Vector3.ZERO
@@ -1876,7 +1877,9 @@ func _sync_projectiles() -> void:
 		if node == null:
 			node = _make_projectile(str(p.kind))
 			proj_nodes[p.id] = node
-		node.position = Vector3(p.pos.x, 1.2 + Sim.height_at(p.pos), p.pos.y)
+		# Offline the sim ticks at 30 Hz while frames run at 60: draw it where it is *now*.
+		var at: Vector2 = p.pos + (p.vel as Vector2) * proj_lead
+		node.position = Vector3(at.x, 1.2 + Sim.height_at(at), at.y)
 		node.rotation.y = Sim.angle_of(p.vel)
 	for id in proj_nodes.keys():
 		if not live.has(id):
