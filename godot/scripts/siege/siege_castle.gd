@@ -38,6 +38,9 @@ const STAIRS := [
 const WALK_X := 4.4                # |x| extent: the middle wall runs between the gatehouse pieces
 const WALK_Z1 := 6.0               # from the wall's inner face (FRONT_Z + 1) to here
 const WALK_H := 1.8
+# Where defending bots stand on it: on the walkway's walkable nav row (z ~4.5, |x| <= 2.5 -- the end
+# ledges and the front edge make the cells beyond solid; a post there was unreachable and bots wandered).
+const RAMPART_POSTS := [Vector2(-2.5, 4.6), Vector2(2.5, 4.6), Vector2(-1.0, 4.6), Vector2(1.0, 4.6)]
 const STAIR_STEPS := 6.0          # steps per flight (castle_mesh.gd draws exactly this many); 0.5 m deep so the
                                   # step stripes read from the overhead camera (9 thin ones looked like a slab)
 const LEDGE_R := 0.55             # the KayKit wall pieces on terrace edges are ~1.1 m thick

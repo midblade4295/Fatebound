@@ -833,3 +833,21 @@ K2/K3 notes (0.17.0)
   at the path's end (the unit's own cell) stalled it 1.8 m short. Now it walks straight at the stand when
   the path runs out (3/3 at 14 s).
 - Protocol v10.
+
+# 0.22.1 (Kevin): bots man the rampart; black 3D world for a few seconds at match start
+- Rampart bots: enemies within RAMPART_THREAT_R (26 m) of a castle's front (refreshed each AI tick) send
+  its ranged "defend" bots to Castle.RAMPART_POSTS (4, handed out first come; released RAMPART_HOLD = 8 s
+  after the front clears). On a post they hold and shoot (no kiting); ranged units >= 1.5 m up skip the
+  wall line-of-sight check (their shots fly over). Three bugs on the way: posts at x +-3.4 were in solid
+  nav cells (partial paths: bots wandered into the dungeon) -> posts on the walkable row z 4.6, |x| <= 2.5;
+  bots heading up got pulled out through the gates by enemies seen through them -> ignore foes > 3 m
+  until on the post; defenders' cake runs came first -> skipped while holding a post. sim smoke: 3/3 up,
+  96 high shots; matches 3-0 / 3-0, 0 violations.
+- Black world at match start: not reproducible here (llvmpipe compiles pipelines synchronously); the phone
+  compiles the scene's new materials in the background and draws nothing until they're ready. Warm-up
+  cover in siege_mode.gd: a FATEBOUND card ("Preparing the battlefield...") while the camera visits both
+  castles, dungeons, thrones, the field and the outposts (2 frames each) so their pipelines compile behind
+  it; it lifts when RenderingServer's pipeline-compilation counters have been still 0.5 s (min 0.6 s,
+  max 10 s), fading over 0.3 s. Offline the match clock waits (verified: sim time 0.2 s when it lifted).
+  Skipped under scripted main loops (tests, render tools) unless FB_FORCE_WARMUP is set. Diag logs
+  "warm-up X s, N pipeline compiles" -- check a field log for the real phone timing.

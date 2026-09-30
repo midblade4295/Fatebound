@@ -214,6 +214,41 @@ func _init() -> void:
 	assert(results[0], "an arrow from the rampart flies over the front wall")
 	assert(not results[1], "an arrow from the courtyard floor is stopped by the wall")
 	print("rampart rules ok")
+	# Bots man it (Round 16): enemies at the blue front put blue's ranged defenders on its posts, and
+	# they shoot over the wall from there.
+	var rbs = Sim.new()
+	rbs.setup(8, 13)
+	var archers := []
+	for u in rbs.units:
+		u.bot = u.team == 0
+		if u.team == 0:
+			if archers.size() < 3:
+				rbs._set_class(u, "ranger", false)
+				u.role = "defend"
+				u.pos = Sim._c(0, Vector2(-6.0 + archers.size() * 6.0, 11.0))
+				archers.append(u)
+			else:
+				u.pos = Sim._c(0, Vector2(0.0, 26.0))
+				u.bot = false
+				u.move = Vector2.ZERO
+		else:
+			u.bot = false
+			u.move = Vector2.ZERO
+			u.pos = Sim._c(0, Vector2(-8.0 + (rbs.units.find(u) % 6) * 3.0, -2.5))   # just outside the wall
+			u.max_hp = 9999.0
+			u.hp = 9999.0
+	var high_shots := 0
+	var seen := {}
+	for i in int(20.0 / Sim.TICK):
+		rbs.step(Sim.TICK)
+		for pr2 in rbs.projectiles:
+			if bool(pr2.get("high", false)) and not seen.has(pr2.id):
+				seen[pr2.id] = true
+				high_shots += 1
+	var manned := archers.filter(func(x): return Sim.height_at(x.pos) >= 1.7 and int(x.get("post", -1)) >= 0).size()
+	assert(manned >= 2, "ranged defenders man the rampart when the front is threatened (%d of 3 up)" % manned)
+	assert(high_shots >= 5, "and shoot over the wall from it (%d high shots)" % high_shots)
+	print("rampart bots ok (%d up, %d shots)" % [manned, high_shots])
 	# Projectiles hit what their path crosses (regression: from 0.16.0 to 0.18.1 arrows and bolts
 	# hit NO units -- the per-team position arrays were appended through a copy).
 	var ps2 = Sim.new()

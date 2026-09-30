@@ -34,6 +34,8 @@ const GATE_X := Castle.GATE_X
 const DOOR_X := [-5.2, 5.2]      # open doorways in the inner wall (behind each gate)
 const GATE_HP := 1100.0
 const JAIL_SHUT_R := 3.5         # an enemy this close keeps the jail door shut, defenders or not
+const RAMPART_THREAT_R := 26.0   # enemies this close to a castle's front put its ranged defenders on the rampart
+const RAMPART_HOLD := 8.0        # ... and they stay up there this long after the last one left
 const GATE_HALF := 1.3           # half-width of the passable doorway
 const GATE_SOLID_AT := 0.35      # a broken gate blocks again once repaired to 35 %
 const GATE_OPEN_RADIUS := 4.0    # allies within this distance swing the doors open (visual)
@@ -1533,6 +1535,7 @@ func step(dt: float = TICK) -> void:
 	var t0 := Time.get_ticks_usec() if profile else 0
 	if _ai_clock >= 0.15:
 		_ai_clock = 0.0
+		_update_rampart_alert()
 		for u in units:
 			if u.bot:
 				_think(u)
@@ -2497,6 +2500,8 @@ func _think_fighter(u: Dictionary) -> void:
 		goal = mine.pos
 	elif captive_loose and u.role in ["defend", "escort"] and u.pos.distance_to(theirs.pos) < 30.0:
 		goal = theirs.pos
+	elif u.role == "defend" and c.ranged and _rampart_post(u) != Vector2.INF:
+		goal = _rampart_post(u)                     # man the rampart (Round 16, Kevin)
 	elif u.role == "defend" and time - float(alarm.at) < 4.0 and alarm.gate >= 0:
 		goal = gates[int(alarm.gate)].c + _inward(u.team) * 2.4
 	elif u.role == "escort" and ally_carrier.is_empty() and not _capture_target(u).is_empty():
@@ -2518,8 +2523,19 @@ func _think_fighter(u: Dictionary) -> void:
 	for carrier in [enemy_carrier, our_returner]:
 		if not carrier.is_empty() and u.pos.distance_to(carrier.pos) < aggro + 3.0:
 			foe = carrier
-	if not foe.is_empty() and _blocked_line(u.pos, foe.pos, u.team):
-		foe = {}   # can't reach through a wall; keep pathing instead
+	var high_shot: bool = c.ranged and height_at(u.pos) >= 1.5
+	if not foe.is_empty() and not high_shot and _blocked_line(u.pos, foe.pos, u.team):
+		foe = {}   # can't reach through a wall; keep pathing instead (from the rampart they shoot over it)
+	if not foe.is_empty() and int(u.get("post", -1)) >= 0 and u.pos.distance_to(goal) >= 0.9 \
+			and u.pos.distance_to(foe.pos) > 3.0:
+		foe = {}   # on the way up to a rampart post: don't get pulled out through a gate (Round 16)
+	if not foe.is_empty() and int(u.get("post", -1)) >= 0 and u.pos.distance_to(goal) < 0.9:
+		# On a rampart post: hold it and shoot -- no kiting off the wall.
+		u.move = Vector2.ZERO
+		if u.pos.distance_to(foe.pos) <= float(c.range) * 0.95:
+			u.face = angle_of(foe.pos - u.pos)
+			_start_attack(u, "ability" if u.cd_ability <= 0.0 and rng.randf() < 0.3 else "attack")
+		return
 	if u.hp < u.max_hp * 0.3 and not foe.is_empty() and u.cd_dodge <= 0.0 and rng.randf() < 0.25:
 		u.move = (u.pos - foe.pos).normalized()
 		_dodge(u)
@@ -2541,7 +2557,7 @@ func _think_fighter(u: Dictionary) -> void:
 				_nav_to(u, captive.pos, FEED_RADIUS - 0.5)
 			return
 	elif cake_runner and captive.state == "cell" and int(captive.cakes) < MAX_WEIGHT * CAKE_PER_STAGE \
-			and time - float(alarm.at) > 6.0 and enemy_carrier.is_empty():
+			and time - float(alarm.at) > 6.0 and enemy_carrier.is_empty() and int(u.get("post", -1)) < 0:
 		var tree := {}
 		var td := INF
 		for ct in cake_trees:
@@ -2601,6 +2617,37 @@ func _capture_target(u: Dictionary) -> Dictionary:
 			bd = d
 			best = op
 	return best
+
+var _rampart_alert := [-100.0, -100.0]     # when an enemy was last near each castle's front
+
+func _update_rampart_alert() -> void:
+	for t in 2:
+		var front: Vector2 = _c(t, Vector2(0.0, FRONT_Z - 6.0))
+		for u in units:
+			if u.team != t and alive(u) and u.pos.distance_to(front) < RAMPART_THREAT_R:
+				_rampart_alert[t] = time
+				break
+
+func _rampart_post(u: Dictionary) -> Vector2:
+	# A post on our rampart while the front is threatened (or was, recently); INF otherwise. Posts are
+	# handed out to the first ranged defenders who ask, one each.
+	if time - float(_rampart_alert[u.team]) > RAMPART_HOLD:
+		u.erase("post")
+		return Vector2.INF
+	var mine := int(u.get("post", -1))
+	if mine < 0:
+		var taken := {}
+		for o in units:
+			if o.team == u.team and o.id != u.id and alive(o) and int(o.get("post", -1)) >= 0:
+				taken[int(o.post)] = true
+		for i in Castle.RAMPART_POSTS.size():
+			if not taken.has(i):
+				mine = i
+				break
+		if mine < 0:
+			return Vector2.INF
+		u["post"] = mine
+	return _c(u.team, Castle.RAMPART_POSTS[mine])
 
 func _blocked_line(a: Vector2, b: Vector2, team: int) -> bool:
 	for i in range(1, 6):
