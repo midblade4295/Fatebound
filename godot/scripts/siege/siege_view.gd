@@ -1807,6 +1807,10 @@ const TOOLS := "res://assets/kaykit/tools/"
 # Scaled to working size (measured: axe 1.05, pickaxe 1.45, hammer 0.82, rod 4.75 units; the old worker
 # axe was 1.24): axe ~1.2 m, pickaxe ~1.3, hammer ~1.0, rod ~2.85.
 const TOOL_SCALES := {"axe": 1.15, "pickaxe": 0.9, "hammer": 1.2, "fishing_rod": 0.6}
+# The rod is the bare one (fishing_rod_base: fishing_rod has its own line and bobber dangling from the
+# grip); our line runs from its tip -- measured: the highest vertex, the rod bends toward +Z.
+const ROD_MODEL := "fishing_rod_base"
+const ROD_TIP := Vector3(-0.0067, 2.3678, 0.9882)
 static var _line_mat: StandardMaterial3D = null
 
 func _gather_kind(u: Dictionary) -> String:
@@ -1865,12 +1869,17 @@ func _sync_hand(a: Dictionary, u: Dictionary) -> void:
 		if is_instance_valid(c):
 			(c as Node3D).visible = want == ""
 	for k in a.tools:
-		(a.tools[k] as Node3D).visible = k == want
+		if is_instance_valid(a.tools[k]):
+			(a.tools[k] as Node3D).visible = k == want
 	if want != "" and not (a.tools as Dictionary).has(want):
-		var packed := Stage.scene(TOOLS + want + ".gltf")
+		var packed := Stage.scene(TOOLS + (ROD_MODEL if want == "fishing_rod" else want) + ".gltf")
 		if packed != null:
 			var m: Node3D = packed.instantiate()
 			m.scale = Vector3.ONE * float(TOOL_SCALES.get(want, 1.0))
+			if want == "axe":
+				m.rotation.y = PI          # edge down (Kevin: "the axe is held upside down" -- edge was up)
+			elif want == "fishing_rod":
+				m.rotation.x = PI          # the fishing animation's hand points it backward otherwise
 			slot2.add_child(m)
 			a.tools[want] = m
 
@@ -1908,8 +1917,14 @@ func _sync_fishing_gear(a: Dictionary, u: Dictionary, fishing: bool) -> void:
 	var fl: Node3D = a.float_node
 	fl.visible = true
 	fl.position = Vector3(wp.x, Land.WATER_Y + 0.06 + bob, wp.y)
+	# The line starts at the rod's own tip, wherever the animation has it (Kevin: "the fishing pole
+	# doesn't have string attached"); fall back to above the hands if the rod isn't there yet.
 	var root_p: Vector3 = (a.root as Node3D).position
 	var tip := root_p + Vector3(dir.x * 1.0, 2.5, dir.y * 1.0)
+	# (Untyped first: the body -- and the cached rod -- can have been rebuilt and freed on a class change.)
+	var rod_v = (a.get("tools", {}) as Dictionary).get("fishing_rod")
+	if rod_v != null and is_instance_valid(rod_v) and (rod_v as Node3D).is_inside_tree():
+		tip = (rod_v as Node3D).global_transform * ROD_TIP
 	var line2: MeshInstance3D = a.line_node
 	line2.visible = true
 	var span := fl.position - tip

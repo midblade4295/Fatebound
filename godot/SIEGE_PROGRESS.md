@@ -888,3 +888,13 @@ K2/K3 notes (0.17.0)
 - sim smoke: fishing rules (bank only, 2.5 s, a hit loses it, it feeds their King); bots fed 4 in a match.
 - Protocol v12 (state "fish", no cake trees).
 - Next: hat shops as the buildings themselves (Kevin, same message).
+
+# 0.23.1 (Kevin): "the axe is held upside down"; "the fishing pole doesn't have string attached"
+- Measured the tool models: all grip at the origin, head up +Y, like the weapon axe -- the axe's blade faced
+  edge-up when held forward (both old and new axes; the new one is bigger). Axe turned 180 deg about the
+  handle (edge down). Pickaxe/hammer symmetric.
+- fishing_rod has its own line + bobber hanging from the grip (y -2.38..2.37): that was the bobber by the hand.
+  Now fishing_rod_base (bare rod, y -0.24..2.37), turned 180 deg about X (the fishing animation held it
+  pointing backward), and our line runs from its real tip (ROD_TIP, highest vertex, through the rod's live
+  global transform) to the float in the water.
+- Fixed: a freed cached rod (body rebuilt on a class change) assigned to a typed var -> script error (mode smoke).
