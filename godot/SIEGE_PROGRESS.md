@@ -684,3 +684,18 @@ K2/K3 notes (0.17.0)
 - tutorial.gd: the voice follows the Settings master volume and the mute switch (native_audio.gd
   levels); it sits above the effects (those play at 0.12 x master x effects).
 - tutorial_test: every line has a loadable recording >= 1.5 s; the first line plays.
+
+# 0.19.4 (Kevin): "land on the edges of the map instead of nothing; a sky (mainly for the trailer)"
+- Outer land (view only, no sim change): Land.outer_height starts at the terrain's own edge height
+  (blends over 20 m), rolls into meadows and hills, rises to snow-capped mountains beyond ~110 m, and
+  carves the river's valley on out of the map (river_c holds for any x). Four ring meshes (one per
+  side, 15 rings to 260 m; the first tucked 1 m under the terrain edge so no crack shows), shader
+  scripts/siege/outer_land.gdshader = the terrain's grass/tint/saturation + its sweeping bands faded
+  out over 12 m, rock on steep/high ground, snow on peaks. ~260 kit trees in groves (MultiMesh per
+  side x type, off-screen sides culled). The water now spans the outer land too (ripple density kept).
+- Sky: ProceduralSkyMaterial as background only (ambient stays a colour, reflections off: the field's
+  lighting is unchanged, no radiance map). Fog = the sky's horizon colour, 70 -> 285 m (the land ends
+  ~300 m out: fully fogged there, so its rim never shows), fog_sky_affect 0.
+- perf_bench (mid-field): 146-154k tris / 186 draws (was ~141-150k / 179); timings within noise.
+- Trailer re-rendered: the opening starts on the sky and tilts down onto our castle; the finale pulls
+  back and tilts up so the title sits over castle, mountains and sky; title dim 0.45 -> 0.25.

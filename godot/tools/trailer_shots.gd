@@ -46,8 +46,9 @@ func _stage() -> void:
 			for i in int(70.0 / Sim.TICK):
 				s.step(Sim.TICK)
 				s.drain_events()
+			# Open on the horizon (sky, mountains, the river valley), tilt down onto our castle.
 			var home: Vector2 = Sim.spawn(0)
-			cam_a = [Vector3(-26, 34, -8), _v(Vector2(0, 18), 0)]
+			cam_a = [Vector3(-44, 20, -34), Vector3(40, 16, 150)]
 			cam_b = [Vector3(-9, 17, 22), _v(home + Vector2(0, -6), 2)]
 		"captive":
 			# Our Oracle, locked in their dungeon; their guards standing about.
@@ -161,8 +162,9 @@ func _stage() -> void:
 			# Pull back from their castle for the title card.
 			var eg2: Dictionary = s.gates.filter(func(g): return g.team == 1)[0]
 			var c2: Vector2 = Sim.gate_front(eg2)
+			# Pull back and tilt up: their castle, the mountains and the sky behind it for the title.
 			cam_a = [_v(c2 + Vector2(6, 9), 9.0), _v(c2 + Vector2(0, -8), 3.0)]
-			cam_b = [_v(c2 + Vector2(10, 24), 20.0), _v(c2 + Vector2(0, -12), 2.0)]
+			cam_b = [_v(c2 + Vector2(12, 34), 22.0), _v(c2 + Vector2(0, -90), 26.0)]
 	mode.view.snap_camera()
 
 func _ease(x: float) -> float:

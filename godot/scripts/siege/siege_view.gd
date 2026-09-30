@@ -99,8 +99,22 @@ func _warm_up() -> void:
 # ---------- world ----------
 func _build_lighting() -> void:
 	var env := Environment.new()
-	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color("#9fb0b4")
+	# A real sky (0.19.4, Kevin: "there needs to be a sky, mainly for the trailer"). Background only:
+	# ambient stays a flat colour and reflections are off, so lighting on the field is unchanged and
+	# no radiance map is computed.
+	var sky_mat := ProceduralSkyMaterial.new()
+	sky_mat.sky_top_color = Color("#3a79c8")
+	sky_mat.sky_horizon_color = Color("#bcd8ea")
+	sky_mat.sky_curve = 0.12
+	sky_mat.ground_horizon_color = Color("#bcd8ea")
+	sky_mat.ground_bottom_color = Color("#5f7f63")
+	sky_mat.sun_angle_max = 24.0
+	var sky := Sky.new()
+	sky.sky_material = sky_mat
+	sky.radiance_size = Sky.RADIANCE_SIZE_32
+	env.background_mode = Environment.BG_SKY
+	env.sky = sky
+	env.reflected_light_source = Environment.REFLECTION_SOURCE_DISABLED
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = Color("#c3c9c4")
 	env.ambient_light_energy = 0.5 * (VULKAN_AMBIENT if RenderingServer.get_current_rendering_method() != "gl_compatibility" else 1.0)
@@ -115,11 +129,12 @@ func _build_lighting() -> void:
 	env.adjustment_saturation = 1.08
 	env.adjustment_contrast = 1.04
 	env.fog_enabled = true
-	env.fog_light_color = Color("#8ea3ad")
+	env.fog_light_color = Color("#b3cfe1")      # the sky's horizon: distant hills fade into it
 	env.fog_mode = Environment.FOG_MODE_DEPTH
-	env.fog_depth_begin = 64.0
-	env.fog_depth_end = 120.0
-	env.fog_density = 0.5
+	env.fog_depth_begin = 70.0
+	env.fog_depth_end = 285.0                  # the land ends at ~300 m: fully fogged there, so no rim shows
+	env.fog_density = 0.85
+	env.fog_sky_affect = 0.0                   # the sky itself stays clear
 	# No glow in battle (0.14.3): it is full-screen blur passes at native resolution (~7 % of the
 	# frame in tests/perf_bench.gd, and bandwidth-heavy on phones) for a bloom too faint to see.
 	env.glow_enabled = false
@@ -192,6 +207,148 @@ static func _terrain_material() -> ShaderMaterial:
 		_terrain_mat = m
 	return _terrain_mat
 
+# ---------- the land beyond the playfield (0.19.4) ----------
+static var _outer_meshes: Array = []
+static var _outer_mat: ShaderMaterial = null
+const OUTER_RINGS := [-1.0, 0.0, 2.0, 5.0, 9.0, 14.0, 21.0, 30.0, 42.0, 58.0, 80.0, 110.0, 150.0, 200.0, 260.0]
+const OUTER_TREES := ["Tree_1_A_Color1", "Tree_2_A_Color1", "Tree_4_A_Color1"]
+
+static func _outer_side_points(side: int) -> Array:
+	# Points along one side of the baked rect, with their outward directions; each side also owns
+	# the fan of directions around its first corner, so the four sides tile the ring.
+	var r := Land.bake_rect()
+	var c := [r.position, Vector2(r.end.x, r.position.y), r.end, Vector2(r.position.x, r.end.y)]
+	var nrm := [Vector2(0, -1), Vector2(1, 0), Vector2(0, 1), Vector2(-1, 0)]
+	var a: Vector2 = c[side]
+	var b: Vector2 = c[(side + 1) % 4]
+	var n: Vector2 = nrm[side]
+	var prev: Vector2 = nrm[(side + 3) % 4]
+	var pts := []
+	for k in 6:                                   # corner fan from the previous side's normal to ours
+		pts.append([a, prev.slerp(n, k / 6.0).normalized()])
+	var len := a.distance_to(b)
+	var steps := int(ceil(len / 2.0))
+	for k in steps + 1:
+		pts.append([a.lerp(b, float(k) / steps), n])
+	return pts
+
+static func _make_outer_meshes() -> Array:
+	var out := []
+	for side in 4:
+		var pts := _outer_side_points(side)
+		var np := pts.size()
+		var verts := PackedVector3Array()
+		var norms := PackedVector3Array()
+		var idx := PackedInt32Array()
+		for ring in OUTER_RINGS.size():
+			var d: float = OUTER_RINGS[ring]
+			for pt in pts:
+				var p: Vector2 = (pt[0] as Vector2) + (pt[1] as Vector2) * d
+				# The first ring tucks 1 m under the terrain's edge so no crack can show.
+				var y: float = Land.terrain_height(pt[0]) - 0.06 if d <= 0.0 else Land.outer_height(p)
+				verts.append(Vector3(p.x, y, p.y))
+				var e := 1.0
+				var hx := Land.outer_height(p + Vector2(e, 0)) - Land.outer_height(p - Vector2(e, 0))
+				var hz := Land.outer_height(p + Vector2(0, e)) - Land.outer_height(p - Vector2(0, e))
+				norms.append(Vector3(-hx, 2.0 * e, -hz).normalized())
+		for ring in OUTER_RINGS.size() - 1:
+			for k in np - 1:
+				var a := ring * np + k
+				var b := a + np
+				# Wound so the faces point up whichever way the side runs.
+				if side in [0, 2]:
+					idx.append_array([a, b, a + 1, a + 1, b, b + 1] if side == 0 else [a, a + 1, b, a + 1, b + 1, b])
+				else:
+					idx.append_array([a, a + 1, b, a + 1, b + 1, b] if side == 1 else [a, b, a + 1, a + 1, b, b + 1])
+		var arr := []
+		arr.resize(Mesh.ARRAY_MAX)
+		arr[Mesh.ARRAY_VERTEX] = verts
+		arr[Mesh.ARRAY_NORMAL] = norms
+		arr[Mesh.ARRAY_INDEX] = idx
+		var am := ArrayMesh.new()
+		am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
+		out.append(am)
+	return out
+
+func _build_outer_land() -> void:
+	if _outer_meshes.is_empty():
+		_outer_meshes = _make_outer_meshes()
+	if _outer_mat == null:
+		var tm: ShaderMaterial = _terrain_material()
+		_outer_mat = ShaderMaterial.new()
+		_outer_mat.shader = load("res://scripts/siege/outer_land.gdshader")
+		for k in ["grass_tex", "rock_tex", "path_mask", "mask_rect", "grass_scale", "rock_scale", "tint", "grass_sat", "band_strength"]:
+			_outer_mat.set_shader_parameter(k, tm.get_shader_parameter(k))
+	for m in _outer_meshes:
+		var mi := MeshInstance3D.new()
+		mi.mesh = m
+		mi.material_override = _outer_mat
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mi.set_meta("perf", "outer_land")
+		add_child(mi)
+	_build_outer_trees()
+
+func _build_outer_trees() -> void:
+	# Groves in the meadows and on the lower hills: batched per side and tree type (MultiMesh), so
+	# a side off-screen costs nothing. Not in the river, not on steep or high ground.
+	var r := Land.bake_rect()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 911
+	var per := {}                                     # "side:type" -> Array[Transform3D]
+	var placed := 0
+	var tries := 0
+	while placed < 260 and tries < 6000:
+		tries += 1
+		var d := 2.0 + pow(rng.randf(), 1.7) * 150.0           # denser near the playfield
+		var side := rng.randi() % 4
+		var along := rng.randf()
+		var q: Vector2
+		var n: Vector2
+		match side:
+			0: q = Vector2(lerpf(r.position.x, r.end.x, along), r.position.y); n = Vector2(0, -1)
+			1: q = Vector2(r.end.x, lerpf(r.position.y, r.end.y, along)); n = Vector2(1, 0)
+			2: q = Vector2(lerpf(r.end.x, r.position.x, along), r.end.y); n = Vector2(0, 1)
+			_: q = Vector2(r.position.x, lerpf(r.end.y, r.position.y, along)); n = Vector2(-1, 0)
+		var p := q + n * d + Vector2(n.y, -n.x) * rng.randf_range(-6.0, 6.0)
+		# Groves, not an even carpet.
+		if sin(p.x * 0.09 + 1.1) * sin(p.y * 0.08 + 0.3) + rng.randf() * 0.6 < 0.25:
+			continue
+		if absf(p.y - Land.river_c(p.x)) < Land.RIVER_HW + 4.0:
+			continue
+		var h := Land.outer_height(p)
+		var slope := absf(Land.outer_height(p + Vector2(1, 0)) - Land.outer_height(p - Vector2(1, 0))) \
+			+ absf(Land.outer_height(p + Vector2(0, 1)) - Land.outer_height(p - Vector2(0, 1)))
+		if h > 22.0 or slope > 1.4 or p.distance_to(q) < 1.5:
+			continue
+		var t := rng.randi() % OUTER_TREES.size()
+		var sc := rng.randf_range(0.6, 1.0)
+		var xf := Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3.ONE * sc), Vector3(p.x, h - 0.1, p.y))
+		var key := "%d:%d" % [side, t]
+		if not per.has(key):
+			per[key] = []
+		(per[key] as Array).append(xf)
+		placed += 1
+	for key in per:
+		var t := int(str(key).split(":")[1])
+		var packed := Stage.scene(FOREST + OUTER_TREES[t] + ".gltf")
+		if packed == null:
+			continue
+		var node: Node3D = packed.instantiate()
+		var src: MeshInstance3D = node.find_children("*", "MeshInstance3D", true, false)[0]
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.mesh = src.mesh
+		var list: Array = per[key]
+		mm.instance_count = list.size()
+		for i in list.size():
+			mm.set_instance_transform(i, (list[i] as Transform3D) * src.transform)
+		node.free()
+		var mmi := MultiMeshInstance3D.new()
+		mmi.multimesh = mm
+		mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mmi.set_meta("perf", "outer_trees")
+		add_child(mmi)
+
 static func _make_terrain_meshes() -> Array:
 	# One mesh per 32 m band (tight AABBs -> off-screen bands are culled), vertices every
 	# BAKE_STEP metres straight from the baked height map, normals by central differences.
@@ -247,6 +404,7 @@ func _build_terrain() -> void:
 		mi.set_meta("perf", "terrain")
 		add_child(mi)
 	_build_water()
+	_build_outer_land()
 	_build_bridges()
 	_build_foliage()
 
@@ -286,15 +444,18 @@ void fragment() {
 	var verts := PackedVector3Array()
 	var uvs := PackedVector2Array()
 	var idx := PackedInt32Array()
-	var x0 := -Sim.HALF_W - Land.BAKE_MARGIN
-	var n := int((2.0 * (Sim.HALF_W + Land.BAKE_MARGIN)) / 1.0)
+	# The river runs on out of the map (0.19.4): the water spans the outer land too. UV.x keeps the
+	# old density (one unit per 78 m) so the ripples look the same.
+	var x0 := -Sim.HALF_W - Land.BAKE_MARGIN - Land.OUTER_REACH
+	var n := int((2.0 * (Sim.HALF_W + Land.BAKE_MARGIN + Land.OUTER_REACH)) / 1.0)
+	var span := 2.0 * (Sim.HALF_W + Land.BAKE_MARGIN)
 	for k in n + 1:
 		var x := x0 + k
 		var c := Land.river_c(x)
 		verts.append(Vector3(x, Land.WATER_Y, c - Land.RIVER_HW - 0.35))
 		verts.append(Vector3(x, Land.WATER_Y, c + Land.RIVER_HW + 0.35))
-		uvs.append(Vector2(float(k) / n, 0.0))
-		uvs.append(Vector2(float(k) / n, 1.0))
+		uvs.append(Vector2(float(k) / span, 0.0))
+		uvs.append(Vector2(float(k) / span, 1.0))
 		if k < n:
 			var a := k * 2
 			idx.append_array([a, a + 2, a + 1, a + 1, a + 2, a + 3])

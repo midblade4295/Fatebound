@@ -72,7 +72,7 @@ def main() -> None:
                       f":x=(w-text_w)/2:y=h*0.74:alpha='{fade_alpha(d)}'")
         if s == "finale":
             show = f"gte(t\\,{TITLE_AT})"
-            chain += (f",drawbox=x=0:y=0:w=iw:h=ih:color=black@0.45:t=fill:enable='{show}'"
+            chain += (f",drawbox=x=0:y=0:w=iw:h=ih:color=black@0.25:t=fill:enable='{show}'"
                       f",drawtext=fontfile='{title_ttf}':text='FATEBOUND':fontsize=200:fontcolor=0xFFD257"
                       f":borderw=8:bordercolor=0x281806:x=(w-text_w)/2:y=h*0.26:enable='{show}'"
                       f",drawtext=fontfile='{title_ttf}':text='S I E G E':fontsize=64:fontcolor=0xF0E4C8"

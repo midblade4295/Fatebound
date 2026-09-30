@@ -233,6 +233,27 @@ static func grass_band(p: Vector2) -> float:
 	var t := _smooth(-2.0, 2.0, d2 - d1)
 	return lerpf(0.5 * (ring.call(d1) + ring.call(d2)), ring.call(d1), t)
 
+# ---------------- the world beyond the playfield (0.19.4, Kevin: "land on the edges of the map") ----------------
+# View-only scenery out to OUTER_REACH past the baked terrain: it starts at the terrain's own edge
+# height, rolls into meadows and hills, rises to a ring of mountains, and the river carries on out
+# through a valley of its own (river_c is defined for any x). Nothing here touches the sim.
+const OUTER_REACH := 260.0
+
+static func outer_height(p: Vector2) -> float:
+	var r := bake_rect()
+	var q := Vector2(clampf(p.x, r.position.x, r.end.x), clampf(p.y, r.position.y, r.end.y))
+	var d := p.distance_to(q)
+	var hills := 1.2 * sin(p.x * 0.07 + 1.3) * sin(p.y * 0.055 + 0.4) + 0.9 * sin(p.x * 0.031 - p.y * 0.043 + 2.0)
+	var rise := clampf((d - 8.0) / 60.0, 0.0, 1.0)
+	var h := hills * (0.6 + 3.5 * rise) + rise * rise * 10.0
+	var mtn := smoothstep(110.0, 210.0, d)
+	h += mtn * (30.0 + 16.0 * sin(p.x * 0.021 + 0.7) * sin(p.y * 0.017 + 1.9) + 9.0 * sin(p.x * 0.05 + p.y * 0.037))
+	h = lerpf(terrain_height(q), h, smoothstep(0.0, 20.0, d))      # meets the playfield's edge exactly
+	if d > 0.0:
+		var off := absf(p.y - river_c(p.x))
+		h = lerpf(WATER_Y - 0.7, h, smoothstep(RIVER_HW - 0.5, RIVER_HW + 6.0 + d * 0.05, off))
+	return h
+
 static func bake_rect() -> Rect2:
 	return Rect2(-HALF_W - BAKE_MARGIN, -HALF_L - BAKE_MARGIN, 2.0 * (HALF_W + BAKE_MARGIN), 2.0 * (HALF_L + BAKE_MARGIN))
 
