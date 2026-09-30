@@ -3,7 +3,8 @@
 Narrator: **the Royal Herald** — pompous, theatrical, a little tired of it all, fond of the recruit
 despite himself. Dry comic timing: let the punchline land after a tiny pause.
 
-Drop each recording in this folder as `<id>.ogg` (or `.wav` / `.mp3`). The game plays it with the
+Recorded (0.19.3): Kevin's ElevenLabs read, split with `tools/vo_split.py FULL_READ.mp3` (re-run it
+after a re-record; it checks every cut before writing). Or drop a single recording in as `<id>.ogg` (or `.wav` / `.mp3`). The game plays it with the
 line automatically; lines without a file just show the text. Generated from
 `scripts/siege/tutorial.gd` (STEPS) — edit the lines there, then regenerate this file.
 

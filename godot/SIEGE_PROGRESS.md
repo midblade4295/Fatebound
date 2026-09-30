@@ -670,3 +670,17 @@ K2/K3 notes (0.17.0)
 - tools/trailer_music.py: procedural placeholder score (90 BPM D minor; drums, pad, ostinato, riser,
   title hit). tools/trailer_edit.py: crossfades, captions (Cinzel), title card, score + SFX mix; it
   places the hit on the title (29.7 s; verified: the loudest 0.1 s of the mix is at 29.7 s).
+
+# 0.19.3 (Kevin): the Herald's voiceover
+- Kevin's ElevenLabs read ("Edward - British, Dark, Low"): all 36 lines in one 319 s file. The break
+  tags weren't rendered as pauses (longest pause 0.93 s; ~a dozen >= 0.8 s), so silence alone couldn't
+  separate lines from the Herald's dramatic pauses. tools/vo_split.py: cuts chosen among all 144
+  pauses so each piece's length fits its line's text length (DP, prefers longer pauses; pieces 0.87-1.20
+  of expected), then blind PocketSphinx recognition per piece: own-line word recall 0.36-1.00,
+  neighbour leak <= 0.14, starts/ends match (e.g. #13 "oh cool with legs" = "A wall with legs!").
+  Whole-file forced alignment returned nothing (too long for PocketSphinx), hence this two-step way.
+- Export: one gain for the whole read (+1.62 dB to -16 LUFS), limiter -1.5 dB, fades, mono OGG
+  Vorbis q5; 36 files, 3.3 MB, in assets/vo/tutorial/<id>.ogg.
+- tutorial.gd: the voice follows the Settings master volume and the mute switch (native_audio.gd
+  levels); it sits above the effects (those play at 0.12 x master x effects).
+- tutorial_test: every line has a loadable recording >= 1.5 s; the first line plays.

@@ -255,6 +255,16 @@ func _show_line() -> void:
 	shown = 0.0
 	var id := str(current_line()[0])
 	voice.stop()
+	# The Herald follows the Settings "Master volume" slider and the mute switch, like every other
+	# sound (native_audio.gd); he plays above the effects, which run at 0.12 x master x effects.
+	var master := 1.0
+	var muted := false
+	if mode != null and mode.audio != null:
+		master = float(mode.audio.levels.get("master", 0.8))
+		muted = bool(mode.audio.get("muted"))
+	if muted or master <= 0.0:
+		return
+	voice.volume_db = linear_to_db(master)
 	for ext in [".ogg", ".wav", ".mp3"]:
 		var p: String = VO_DIR + id + ext
 		if id != "" and ResourceLoader.exists(p):

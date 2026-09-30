@@ -32,6 +32,19 @@ func _init() -> void:
 					check(false, "line %s has a unique id and text" % id)
 				ids[id] = true
 	check(ids.size() == n and n >= 25, "script: %d lines, all ids unique" % n)
+	# The Herald's recordings (Kevin's ElevenLabs read, split per line): every line has one.
+	var missing := []
+	var short := []
+	for id in ids:
+		var path := "res://assets/vo/tutorial/%s.ogg" % id
+		if not ResourceLoader.exists(path):
+			missing.append(id)
+			continue
+		var st: AudioStream = load(path)
+		if st == null or st.get_length() < 1.5:
+			short.append(id)
+	check(missing.is_empty(), "every line has its voice file (missing: %s)" % str(missing))
+	check(short.is_empty(), "every voice file loads and is a real line (>= 1.5 s; bad: %s)" % str(short))
 	mode = Mode.new()
 	mode.tutorial = true
 	root.add_child(mode)
@@ -45,6 +58,8 @@ func _process(delta: float) -> bool:
 		return false
 	var tut = mode.tut
 	var s = mode.sim
+	if frames == 5 and tut != null:
+		check(tut.voice.playing and tut.voice.stream != null, "the Herald's first line plays its recording")
 	if tut == null:
 		check(false, "the tutorial overlay exists"); quit(1); return false
 	var me: Dictionary = s.by_id[mode.hud.player_id]
