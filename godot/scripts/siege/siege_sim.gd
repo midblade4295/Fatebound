@@ -358,6 +358,9 @@ func _build_map() -> void:
 		# the wing's front-west corner -- iron bars on its east side and the barred door on its north
 		# side (a "jail" gate: lifts for this castle's team, the enemy has to smash it). The other two
 		# sides are the wing's own walls.
+		# The back wall along the L2 back edge and the throne against it (Round 14).
+		_add_wall(t, Vector2(-CASTLE_HX, Castle.BACK_WALL_Z), Vector2(CASTLE_HX, Castle.BACK_WALL_Z), "backwall")
+		obstacles.append({"p":_c(t, Castle.THRONE_SEAT), "r":0.9, "kind":"castle_building", "team":t})
 		for seg in Castle.dungeon_ledges():
 			walls.append({"a":_c(t, seg[0]), "b":_c(t, seg[1]), "r":Castle.LEDGE_R, "team":t, "kind":"ledge"})
 		var wall_in_x: float = Castle.ANNEX_X0 + WALL_R

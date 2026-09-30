@@ -83,7 +83,7 @@ static func _ramp_height(t: Dictionary, p: Vector2, base: float) -> float:
 
 # ---------------- outposts ----------------
 const OUTPOST_R := 5.0           # capture radius
-const OUTPOST_TOWER_R := 1.3     # solid tower in the middle
+const OUTPOST_TOWER_R := 1.8     # solid tower in the middle (1.3 until the towers grew 40 %, Round 14)
 const OUTPOSTS_BLUE_HALF := [Vector2(-23.0, 25.0), Vector2(22.5, 15.0)]
 
 static func outpost_positions() -> Array:
@@ -201,9 +201,9 @@ const MASK_RES := "res://assets/terrain/pathmask.res"
 # floor there, or the grass would cover the pit. (Blue space; red is point-mirrored.)
 const _CastleL = preload("res://scripts/siege/siege_castle.gd")
 
-static func in_dungeon_pit(p: Vector2) -> bool:
+static func in_dungeon_pit(p: Vector2, margin := 0.0) -> bool:
 	var q := (p if p.y >= 0.0 else -p) - Vector2(0.0, HALF_L - _CastleL.BACK)
-	return q.x >= _CastleL.ANNEX_X0 and q.x <= -_CastleL.HX and q.y >= _CastleL.ANNEX_Z0 and q.y <= _CastleL.ANNEX_Z1
+	return q.x >= _CastleL.ANNEX_X0 - margin and q.x <= -_CastleL.HX + margin and q.y >= _CastleL.ANNEX_Z0 - margin and q.y <= _CastleL.ANNEX_Z1 + margin
 
 static func terrain_height(p: Vector2) -> float:
 	if in_dungeon_pit(p):

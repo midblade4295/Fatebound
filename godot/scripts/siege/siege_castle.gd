@@ -43,7 +43,8 @@ const THRONE := Vector2(0.0, 26.8)
 # in the west wall; the King's jail cell sits in the wing's front-west corner (two of its sides are
 # the wing's own walls), iron bars on the east side and a barred DOOR on the north side -- a "jail"
 # gate: it lifts for the castle's own team and has to be smashed by the enemy.
-const ANNEX_X0 := -31.0               # the wing's outer wall line (its outer face is the field edge, -32)
+const ANNEX_X0 := -33.0               # the wing's outer wall line: wholly outside the field (inner face = the
+                                      # field edge, -32), so no rounded wall end sits inside it (Round 12 rule)
 const ANNEX_Z0 := 8.0                 # front wall line of the wing
 const ANNEX_Z1 := 24.0                # back wall line of the wing
 const DUNGEON_H := -1.6               # the wing's floor, below ground
@@ -51,11 +52,15 @@ const DOOR_Z0 := 17.0                 # clear doorway in the west wall (the wall
 const DOOR_Z1 := 20.0
 # Stairs down: along x, from the doorway (L1, 1.8 m) west to the dungeon floor.
 const DSTAIR := {"x0": -25.8, "x1": -20.0, "z0": 17.0, "z1": 20.0, "h0": -1.6, "h1": 1.8, "steps": 11.0}
-const JAIL_X1 := -26.6                # east bars
+const JAIL_X1 := -28.6                # east bars (the cell is 3.4 m wide, like before)
 const JAIL_Z1 := 12.4                 # the door (north side)
 const JAIL_HP := 500.0
+# The back of the castle (Round 14, Kevin): a wall along the L2 back edge (not a "wall" kind -- no
+# ladders from off the map), the throne against it (Blender model, assets/props/throne.glb).
+const BACK_WALL_Z := 30.2              # wall line; its face (29.2) is just past the field edge (29)
+const THRONE_SEAT := Vector2(0.0, 28.3) # the throne model, flush with the back wall; THRONE (the rescue point) is 1.5 m in front
 const JAIL_R := 0.35                  # collision half-thickness of bars and door (walls are 1.0)
-const CELL_C := Vector2(-28.4, 10.6)  # the King stands here: inside the jail cell
+const CELL_C := Vector2(-30.3, 10.6)  # the King stands here: inside the jail cell
 const CELL_HX := 1.6
 const CELL_HZ := 1.6
 
@@ -77,8 +82,6 @@ const BUILDINGS := [
 	{"model": "building_archeryrange_%s", "p": Vector2(16.0, 19.6), "rot": 180.0, "scale": 2.4, "r": 1.9, "y": 1.8},
 	{"model": "building_church_%s", "p": Vector2(14.5, 26.0), "rot": 180.0, "scale": 2.6, "r": 1.6, "y": 3.6},
 	{"model": "building_tavern_%s", "p": Vector2(-14.5, 26.0), "rot": 180.0, "scale": 2.6, "r": 1.7, "y": 3.6},
-	{"model": "building_tower_B_%s", "p": Vector2(-6.5, 27.4), "rot": 0.0, "scale": 2.2, "r": 1.4, "y": 3.6},
-	{"model": "building_tower_B_%s", "p": Vector2(6.5, 27.4), "rot": 0.0, "scale": 2.2, "r": 1.4, "y": 3.6},
 ]
 # Small props (visual only), tucked against walls and terrace faces.
 const PROPS := [

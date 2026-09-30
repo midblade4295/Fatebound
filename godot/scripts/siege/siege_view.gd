@@ -492,6 +492,8 @@ static func _foliage_ok(p: Vector2, mask: Image, obstacles: Array, allow_slope :
 		return false
 	if absf(p.x) <= Sim.CASTLE_HX + 1.5 and absf(p.y) >= Sim.CASTLE_SHIFT + Sim.FRONT_Z - 1.5:
 		return false
+	if Land.in_dungeon_pit(p, 1.5):
+		return false                          # the dungeon wing's floor and walls (Kevin: grass on the floor)
 	var r := Land.bake_rect()
 	var px := Vector2i(clampi(int((p.x - r.position.x) * Land.MASK_PPM), 0, mask.get_width() - 1),
 		clampi(int((p.y - r.position.y) * Land.MASK_PPM), 0, mask.get_height() - 1))
@@ -981,12 +983,13 @@ func _build_outposts() -> void:
 	for op in sim.outposts:
 		var p := Vector3(op.p.x, Sim.height_at(op.p), op.p.y)
 		var looks := {}
-		looks[-1] = _place(HEX + "building_tower_base_blue.gltf", p, 0.3, 2.6)
-		looks[0] = _place(HEX + "building_tower_A_blue.gltf", p, 0.3, 2.3)
-		looks[1] = _place(HEX + "building_tower_A_red.gltf", p, 0.3, 2.3)
+		# 40 % bigger since Round 14 (Kevin); collision grew with them (Land.OUTPOST_TOWER_R).
+		looks[-1] = _place(HEX + "building_tower_base_blue.gltf", p, 0.3, 3.6)
+		looks[0] = _place(HEX + "building_tower_A_blue.gltf", p, 0.3, 3.2)
+		looks[1] = _place(HEX + "building_tower_A_red.gltf", p, 0.3, 3.2)
 		var flags := {}
 		for t in 2:
-			flags[t] = _place(HEX + "flag_%s.gltf" % COLOR[t], p + Vector3(1.7, 0, 1.7), 0.0, 2.2)
+			flags[t] = _place(HEX + "flag_%s.gltf" % COLOR[t], p + Vector3(2.3, 0, 2.3), 0.0, 2.6)
 		var ring := _decal(p + Vector3(0, 0.07, 0), Land.OUTPOST_R, Color(1, 1, 1), 0.55)
 		var prog := _decal(p + Vector3(0, 0.08, 0), Land.OUTPOST_R - 0.35, TEAM_COLORS[0], 0.9)
 		outpost_nodes[op.id] = {"looks":looks, "flags":flags, "ring":ring, "prog":prog, "owner":-2}
@@ -1159,10 +1162,10 @@ func _parapet(a: Vector2, b: Vector2) -> void:
 		if node != null:
 			node.scale.z = s * piece / (1.15 * s)
 
-func _wall_run(a: Vector2, b: Vector2, path: String) -> void:
-	# Lay 5.2 m wall models along a segment (clipped to the field), stretched slightly to fit.
-	var aa := Vector2(clampf(a.x, -Sim.HALF_W, Sim.HALF_W), clampf(a.y, -Sim.HALF_L, Sim.HALF_L))
-	var bb := Vector2(clampf(b.x, -Sim.HALF_W, Sim.HALF_W), clampf(b.y, -Sim.HALF_L, Sim.HALF_L))
+func _wall_run(a: Vector2, b: Vector2, path: String, y := 0.0, clip := true) -> void:
+	# Lay 5.2 m wall models along a segment (clipped to the field unless told not to), stretched to fit.
+	var aa := Vector2(clampf(a.x, -Sim.HALF_W, Sim.HALF_W), clampf(a.y, -Sim.HALF_L, Sim.HALF_L)) if clip else a
+	var bb := Vector2(clampf(b.x, -Sim.HALF_W, Sim.HALF_W), clampf(b.y, -Sim.HALF_L, Sim.HALF_L)) if clip else b
 	var length := aa.distance_to(bb)
 	if length < 0.5:
 		return
@@ -1171,7 +1174,7 @@ func _wall_run(a: Vector2, b: Vector2, path: String) -> void:
 	var rot := -atan2(bb.y - aa.y, bb.x - aa.x)
 	for i in n:
 		var c := aa.lerp(bb, (float(i) + 0.5) / float(n))
-		var node := _place(path, Vector3(c.x, 0, c.y), rot, Sim.WALL_SCALE)
+		var node := _place(path, Vector3(c.x, y, c.y), rot, Sim.WALL_SCALE)
 		if node != null:
 			node.scale.x = Sim.WALL_SCALE * piece / Sim.SEG
 			_kit_nodes.append(node)
@@ -1328,6 +1331,8 @@ func _build_castle(t: int) -> void:
 		match str(w.kind):
 			"wall":
 				_wall_run(w.a, w.b, HEX + "wall_straight.gltf")
+			"backwall":
+				_wall_run(w.a, w.b, HEX + "wall_straight.gltf", Castle.L2_H, false)    # on its own line, behind the throne
 			"bars":
 				_bars(w.a, w.b)
 			# "ledge" (terrace faces, stair sides) are KayKit wall runs in _build_castle_kit.
@@ -1366,9 +1371,20 @@ func _build_castle(t: int) -> void:
 			var arm: Node3D = cat.find_child("*arm*", true, false)
 			catapult_nodes.append({"team":t, "p":cp, "node":cat, "turret":turret, "arm":arm,
 				"arm_rest":arm.rotation.x if arm != null else 0.0, "fired":-10.0})
-	# The keep stands behind the throne, just past the field edge (a backdrop, not in the way).
-	var kp: Vector2 = Sim._c(t, Vector2(0.0, Castle.BACK + 2.4))
-	_place(HEX + "building_castle_%s.gltf" % col, Vector3(kp.x, Castle.L2_H, kp.y), face, 3.0)
+	# The throne (Round 14, Kevin's ask; the keep that stood here blocked it): a Blender model against
+	# the back wall, velvet in the castle's colour, facing the courtyard.
+	var tp: Vector2 = Sim._c(t, Castle.THRONE_SEAT)
+	var throne := _place("res://assets/props/throne.glb", Vector3(tp.x, Castle.L2_H, tp.y), PI if t == 0 else 0.0, 1.0)
+	if throne != null:
+		var velvet := StandardMaterial3D.new()
+		velvet.albedo_color = Color("#2d58b8") if t == 0 else Color("#b3223a")
+		velvet.roughness = 0.85
+		for mi in throne.find_children("*", "MeshInstance3D", true, false):
+			var m: MeshInstance3D = mi
+			for si in m.mesh.get_surface_count():
+				var sm := m.mesh.surface_get_material(si)
+				if sm != null and str(sm.resource_name) == "Velvet":
+					m.set_surface_override_material(si, velvet)
 	# Throne room: banners either side of the throne, a weapon rack.
 	var th: Vector2 = Sim.throne(t)
 	for fx in [-1.6, 1.6]:

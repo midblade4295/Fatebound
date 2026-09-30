@@ -791,3 +791,17 @@ K2/K3 notes (0.17.0)
   jail isn't in the W/E gate bars. Tutorial shortcut also breaks the enemy jail. Protocol v8.
 - sim smoke: jail rules (ally through, enemy blocked, enemy smashes it, re-locks) + matches: rescues still
   happen (first at ~100-220 s), 0 violations.
+
+# 0.21.1 (Kevin): grass in the dungeon, keep blocking the throne, a throne, back walls, no inner towers, bigger outposts
+- Grass tufts on the dungeon floor: foliage excluded only the main castle rect -> also Land.in_dungeon_pit(p, 1.5).
+- The keep (building_castle, behind the throne) and the two tower_B flanking it removed.
+- Back wall along the L2 back edge: kind "backwall" (ladders only use "wall"), line z=30.2 so its face (29.2)
+  is just past the field edge -- 1.6 m clear of the church/tavern (29.6 made squeeze traps); drawn at L2 height,
+  unclipped (clipped to the field edge it ran through the throne).
+- Throne: Blender model (assets/props/throne.glb, 2.4k tris, 169 KB: stone dais, gold frame, velvet seat/back,
+  crown); velvet recoloured per castle; at THRONE_SEAT (0, 28.3) flush with the wall, obstacle r 0.9; the
+  rescue point THRONE (26.8) stays 1.5 m in front (0.95 m at 27.6 swallowed it: reach test).
+- Outpost towers 40 % bigger (base 3.6, tower 3.2), collision 1.3 -> 1.8.
+- Dungeon wing's outer wall moved to x=-33 (wholly outside the field): at -31 its rounded end sat on the field
+  edge and a unit walking the edge got squeezed into it (215 wall violations). Cell keeps 3.4 m (bars -28.6).
+  Rebaked. Protocol v9 (map changed).
