@@ -2442,19 +2442,7 @@ func _think_shields(u: Dictionary) -> void:
 	if u.carrying:
 		return
 	if u.cls == "knight":
-		var best := {}
-		var bd := 12.0
-		for o in units:
-			if o.team == u.team or not alive(o):
-				continue
-			var d: float = u.pos.distance_to(o.pos)
-			var threat: bool = bool(CLASSES[o.cls].get("ranged", false)) or (u.hp < u.max_hp * 0.5 and d < 4.0)
-			if threat and d < bd:
-				bd = d
-				best = o
-		if not best.is_empty():
-			u.face = lerp_angle(u.face, angle_of(best.pos - u.pos), 0.6)
-			_block(u)
+		_think_knight_shield(u)
 	elif ability_of(u) == "whirlwind" and u.cd_ability <= 0.0:
 		var near := 0
 		for o in units:
@@ -2462,6 +2450,44 @@ func _think_shields(u: Dictionary) -> void:
 				near += 1
 		if near >= 2:
 			_whirl(u)
+
+func _think_knight_shield(u: Dictionary) -> void:
+	# Round 17 (Kevin: "all they do is hold block when enemies are near" -- measured: blocking 98 % of
+	# the time, 0 swings, because any archer within 12 m raised the shield). Now the shield goes up only
+	# when it matters, and the rest of the time the knight fights:
+	#  - an enemy shot will pass within 1.3 m in the next 0.7 s (the shield covers allies behind it too),
+	#    unless an enemy is at arm's length and we're healthy (then swing);
+	#  - badly hurt with an enemy at arm's length: short guard bursts (1 s, at most every 2.6 s).
+	var arm := float(stat(u, "range")) + UNIT_R + 0.3
+	var adjacent := nearest_enemy(u, arm)
+	var incoming := Vector2.ZERO
+	var soonest := 0.7
+	for p in projectiles:
+		if int(p.team) == u.team:
+			continue
+		var v: Vector2 = p.vel
+		var vv := v.length_squared()
+		if vv < 0.01:
+			continue
+		var t: float = (u.pos - (p.pos as Vector2)).dot(v) / vv          # time of closest approach
+		if t < 0.0 or t > soonest:
+			continue
+		if ((p.pos as Vector2) + v * t).distance_to(u.pos) < 1.3:
+			soonest = t
+			incoming = -v.normalized()
+	if incoming != Vector2.ZERO and (adjacent.is_empty() or u.hp < u.max_hp * 0.5):
+		u.face = angle_of(incoming)
+		_block(u)
+		return
+	if not adjacent.is_empty() and u.hp < u.max_hp * 0.35:
+		if time < float(u.get("guard_until", -1.0)):
+			u.face = angle_of(adjacent.pos - u.pos)
+			_block(u)
+		elif time >= float(u.get("guard_next", 0.0)) and rng.randf() < 0.5:
+			u.guard_until = time + 1.0
+			u.guard_next = time + 2.6
+			u.face = angle_of(adjacent.pos - u.pos)
+			_block(u)
 
 func _think_fighter(u: Dictionary) -> void:
 	# Shield / whirlwind first; the normal brain below still moves the unit (its attacks are
@@ -2520,6 +2546,16 @@ func _think_fighter(u: Dictionary) -> void:
 	if c.ranged:
 		aggro = maxf(aggro, float(c.range) * (0.6 if u.role == "raid" else 0.95))
 	var foe := nearest_enemy(u, aggro)
+	if u.cls == "knight" and (foe.is_empty() or u.pos.distance_to(foe.pos) > float(stat(u, "range")) + UNIT_R + 0.6):
+		# Knights go for the archers and mages (their shield is made for it) -- Round 17.
+		var hunt := {}
+		var hd := maxf(aggro, 9.0)
+		for o in units:
+			if o.team != u.team and alive(o) and bool(CLASSES[o.cls].ranged) and u.pos.distance_to(o.pos) < hd:
+				hd = u.pos.distance_to(o.pos)
+				hunt = o
+		if not hunt.is_empty():
+			foe = hunt
 	for carrier in [enemy_carrier, our_returner]:
 		if not carrier.is_empty() and u.pos.distance_to(carrier.pos) < aggro + 3.0:
 			foe = carrier

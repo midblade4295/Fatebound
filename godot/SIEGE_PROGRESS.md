@@ -851,3 +851,14 @@ K2/K3 notes (0.17.0)
   max 10 s), fading over 0.3 s. Offline the match clock waits (verified: sim time 0.2 s when it lifted).
   Skipped under scripted main loops (tests, render tools) unless FB_FORCE_WARMUP is set. Diag logs
   "warm-up X s, N pipeline compiles" -- check a field log for the real phone timing.
+
+# 0.22.2 (Kevin): "the knight AI needs to be better -- all they do is hold block when enemies are near"
+- Cause (_think_shields): any enemy archer/mage/priest within 12 m (or anyone within 4 m when below half hp)
+  kept the shield up; blocking refuses attacks and slows to 40 %. Measured: 98 % blocking, 0 swings, 0
+  damage, even standing 2 m from an archer.
+- _think_knight_shield: the shield goes up only when an enemy shot will pass within 1.3 m in the next 0.7 s
+  (predicted from its velocity; the shield covers allies behind too) -- not while an enemy is at arm's
+  length unless below half hp -- or, below 35 % hp with an enemy at arm's length, in 1 s guard bursts at
+  most every 2.6 s. Knights also hunt archers/mages within 9 m unless someone is already in their face.
+- tests/knight_ai_test.gd (runner): melee 0 % blocking / 15 swings / 216 dmg; vs a lone archer 9 %
+  blocking, 5 shots blocked, 10 swings. Matches: kills 126/189 and 213/245 (were 59/147 and 137/53).
