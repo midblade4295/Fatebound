@@ -25,8 +25,8 @@ const STEPS := [
 		"done": [["t_move_done", "Magnificent. You've mastered the ancient art of 'going places'. The bards will sing of it. Briefly."]]},
 	{"id": "hat", "talk": [
 		["t_hat_1", "Right now you're a Villager. Villagers are brave, loyal, and hit like a wet sock."],
-		["t_hat_2", "Walk into the Knight's hat shop. In this kingdom the hat makes the hero. Don't ask me why. I just read the scrolls."]],
-		"task": "Get a Knight hat at the Knight hat shop",
+		["t_hat_2", "See the Barracks? That's the Knight's hat shop. Walk up to its door. In this kingdom the hat makes the hero. Don't ask me why. I just read the scrolls."]],
+		"task": "Get a Knight hat at the Barracks door",
 		"done": [["t_hat_done", "A Knight! Look at you. Positively shiny. Try not to lose that hat. You'll see why in a moment."]]},
 	{"id": "attack", "talk": [
 		["t_attack_1", "A training dummy awaits in the courtyard. It volunteered. Well. 'Volunteered'. Walk up to it and tap ATTACK, or hold ATTACK to keep whacking."]],
@@ -50,29 +50,31 @@ const STEPS := [
 			["t_ws_done", "Workers bring wood and stone here. Spend it on stronger gates, better armor and catapults. Walls don't build themselves. Believe me, I asked."],
 			["t_ws_worker", "Want to be a Worker? Take tools here. Workers chop trees, mine rocks, repair gates and build ladders. Glamorous? No. Essential? Also no. Just kidding. Very essential."]]},
 	{"id": "upgrade", "talk": [
-		["t_up_1", "The treasury has kindly 'found' some materials for you. Go back to the Knight hat shop and press UPGRADE."]],
-		"task": "Upgrade the Knight hats at the Knight hat shop",
+		["t_up_1", "The treasury has kindly 'found' some materials for you. Go back to the Barracks and press UPGRADE."]],
+		"task": "Upgrade the Knight hats at the Barracks",
 		"done": [["t_up_done", "Paladin hats! Every hat from that shop is fancier now. Upgrades are bought at each hat shop, not the workshop. The workshop is still sulking about it."]]},
+	{"id": "rampart", "talk": [
+		["t_rampart_1", "One more trick for defending. See the walkway on our front wall? Take its stairs up, and your arrows fly right over the wall. Archers adore it. The enemy does not."]]},
 	{"id": "outpost", "talk": [
 		["t_out_1", "See that tower up on the ledge? That's an outpost. Stand in its ring to capture it. Capturing is mostly standing around looking important. You're a natural."]],
 		"task": "Capture the outpost",
 		"done": [["t_out_done", "It's ours! We can respawn here, workers can drop resources off here, and it earns us wood and stone. Passive income. The true magic."]]},
 	{"id": "goal", "talk": [
-		["t_goal_1", "Now, the actual point of Fatebound. The enemy's dungeon is inside their castle, behind their gates. Our King is in there. Probably complaining."],
-		["t_goal_2", "Break a gate down, and Barbarians are marvellous at that, or have a Worker build a ladder over the wall. Then grab him and carry him home to his throne."],
+		["t_goal_1", "Now, the actual point of Fatebound. The enemy's dungeon is down a flight of stairs inside their castle, behind their gates. Our King is in there, behind bars. Probably complaining."],
+		["t_goal_2", "Break a gate down, and Barbarians are marvellous at that, or have a Worker build a ladder over the wall. Then smash his cell open, grab him and carry him home to his throne."],
 		["t_goal_3", "Rescue him three times and we win. They're trying to do the exact same thing to us, so leave a few friends at home. Trust issues are healthy here."]]},
 	{"id": "fish", "talk": [
 		["t_cake_1", "But first, a dirty trick. See the river? It's full of fish. Stand on the bank and press ACTION to cast your line. Patience. Fish are not known for their punctuality."]],
 		"task": "Catch a fish at the river (ACTION on the bank)",
 		"done": [["t_cake_took", "A fish! Magnificent. Now, we have a guest in OUR dungeon: the enemy's King. He looks peckish."]]},
 	{"id": "feed", "talk": [
-		["t_feed_1", "Bring him that fish and press ACTION to feed him. Every bite makes him heavier, so the enemy needs more people to carry him home. Delicious sabotage."]],
+		["t_feed_1", "Our dungeon is down the stairs, and the cell door opens for friends. Bring him that fish and press ACTION to feed him. Every bite makes him heavier. Delicious sabotage."]],
 		"task": "Feed the fish to their King in our dungeon (ACTION)",
 		"done": [["t_feed_done", "He said thank you! Is it tactically brilliant? Yes. Is it ethically questionable? Also yes. Welcome to Fatebound."]]},
 	{"id": "shortcut", "talk": [
 		["t_rescue_1", "Right. Let's get OUR King back. Normally you'd march over, smash a gate and fight your way in. Today I've arranged a shortcut. Don't ask how. Royal paperwork."]]},
 	{"id": "grab", "talk": [
-		["t_grab_1", "Here we are. Their gate is, ahem, 'mysteriously broken'. Get inside, find our King in their dungeon and press ACTION to lift him."]],
+		["t_grab_1", "Here we are. Their gate is, ahem, 'mysteriously broken'. So is his cell door. Go down to their dungeon, find our King and press ACTION to lift him."]],
 		"task": "Lift our King in their dungeon (ACTION)",
 		"done": [["t_grab_done", "Got him! You're slower while carrying. Heavier Kings need friends to help lift, which is exactly why we feed THEIRS so much fish."]]},
 	{"id": "carry", "talk": [

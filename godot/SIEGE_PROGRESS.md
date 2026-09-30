@@ -912,3 +912,13 @@ K2/K3 notes (0.17.0)
   after respawning as other classes). Fish runners are exempt from rampart duty; a post is dropped when the unit
   stops being a ranged defender. Match: fed 2, 8 rescues, 0 violations; rampart test picks non-runners.
 - Protocol v13.
+
+# 0.24.1 (Kevin): tutorial updated for the recent changes; only the VO text we need
+- Lines: t_hat_2 / hat task (the Barracks door), t_up_1 / upgrade task (the Barracks), t_goal_1 (dungeon down
+  stairs, King behind bars), t_goal_2 (smash his cell open), t_feed_1 (our dungeon down the stairs, the cell door
+  opens for friends), t_grab_1 (their gate and his cell door broken, dungeon downstairs); new talk-only step
+  "rampart" (t_rampart_1). 37 lines; 17 await recording (t_hat_2 and t_up_1 pulled: their old audio said "hat
+  shop"). Kevin's sheet: Fatebound-Tutorial-VO-Needed.txt, numbered 1..17 in tutorial order; the number -> id
+  map is in /home/claude/vo_staging/needed_map.json (1 t_intro_2, 2 t_hat_2, 3 t_up_1, 4 t_rampart_1,
+  5 t_goal_1, 6 t_goal_2, 7 t_goal_3, 8 t_cake_1, 9 t_cake_took, 10 t_feed_1, 11 t_feed_done, 12 t_rescue_1,
+  13 t_grab_1, 14 t_grab_done, 15 t_carry_1, 16 t_carry_done, 17 t_end_2).

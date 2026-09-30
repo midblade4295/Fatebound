@@ -45,7 +45,7 @@ func _init() -> void:
 			short.append(id)
 	# The Oracle became each castle's King (0.20.0): these 13 lines were rewritten and their old
 	# recordings pulled until Kevin re-records them. Remove ids from here as the new files arrive.
-	var pending := ["t_intro_2", "t_goal_1", "t_goal_2", "t_goal_3", "t_cake_1", "t_cake_took", "t_feed_1", "t_feed_done",
+	var pending := ["t_hat_2", "t_up_1", "t_rampart_1", "t_intro_2", "t_goal_1", "t_goal_2", "t_goal_3", "t_cake_1", "t_cake_took", "t_feed_1", "t_feed_done",
 		"t_rescue_1", "t_grab_1", "t_grab_done", "t_carry_1", "t_carry_done", "t_end_2"]
 	var unexpected := missing.filter(func(x): return not pending.has(x))
 	check(unexpected.is_empty(), "every line has its voice file except the %d awaiting re-record (missing: %s)" % [pending.size(), str(unexpected)])
