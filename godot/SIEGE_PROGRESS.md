@@ -805,3 +805,15 @@ K2/K3 notes (0.17.0)
 - Dungeon wing's outer wall moved to x=-33 (wholly outside the field): at -31 its rounded end sat on the field
   edge and a unit walking the edge got squeezed into it (215 wall violations). Cell keeps 3.4 m (bars -28.6).
   Rebaked. Protocol v9 (map changed).
+
+# 0.21.2 (Kevin): walls backwards, the cage clipping into the wall, the cage opening near enemies
+- The kit wall's stone face is its local +Z (the other side has the walkway lip; model centred, AABB z
+  -0.4..0.4). _wall_run turned pieces by the segment's direction, which put +Z on the segment's left: the
+  castle interior for both castles' front walls (the red castle's walls are point-mirrored, so they run the
+  other way). Now _wall_run(..., inside) turns each piece stone-side away from a point inside what the
+  wall encloses (castle centre, or the dungeon wing's centre for its walls); gate pieces face + PI.
+- The cage clipped into the wing's outer wall: that wall (line x=-33) was drawn clipped to the field edge,
+  1 m inside its real line; the wing's walls are drawn unclipped now, the cage meets the wall face.
+- The jail door stays shut while any enemy is within JAIL_SHUT_R (3.5 m), defenders or not (sim; the
+  door never let enemies through anyway). sim smoke checks both.
+- Note: seed 11 has had 0 rescues since the dungeon wing (seed 22: 5); rescues are harder now.

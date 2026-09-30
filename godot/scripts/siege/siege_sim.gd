@@ -33,6 +33,7 @@ const FRONT_Z := Castle.FRONT_Z         # front wall with the two gates (3 since
 const GATE_X := Castle.GATE_X
 const DOOR_X := [-5.2, 5.2]      # open doorways in the inner wall (behind each gate)
 const GATE_HP := 1100.0
+const JAIL_SHUT_R := 3.5         # an enemy this close keeps the jail door shut, defenders or not
 const GATE_HALF := 1.3           # half-width of the passable doorway
 const GATE_SOLID_AT := 0.35      # a broken gate blocks again once repaired to 35 %
 const GATE_OPEN_RADIUS := 4.0    # allies within this distance swing the doors open (visual)
@@ -2097,6 +2098,12 @@ func _step_world(dt: float) -> void:
 				if u.team == g.team and alive(u) and u.pos.distance_to(g.c) < GATE_OPEN_RADIUS:
 					open = true
 					break
+			# The jail door stays shut while any enemy is near it (Round 14, Kevin).
+			if open and str(g.get("kind", "")) == "jail":
+				for u in units:
+					if u.team != g.team and alive(u) and u.pos.distance_to(g.c) < JAIL_SHUT_R:
+						open = false
+						break
 		if open != g.open:
 			g.open = open
 			_event("gate_open" if open else "gate_close", {"gate":g.id, "team":g.team})

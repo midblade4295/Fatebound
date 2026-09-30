@@ -1162,7 +1162,11 @@ func _parapet(a: Vector2, b: Vector2) -> void:
 		if node != null:
 			node.scale.z = s * piece / (1.15 * s)
 
-func _wall_run(a: Vector2, b: Vector2, path: String, y := 0.0, clip := true) -> void:
+func _wall_run(a: Vector2, b: Vector2, path: String, y := 0.0, clip := true, inside := Vector2.INF) -> void:
+	# inside (optional): a point inside what the wall encloses. The kit wall's stone face is its local +Z
+	# (the other side has the walkway lip); pieces turn so the stone faces AWAY from it (Round 14,
+	# Kevin: "the castle walls are backwards" -- the rotation came from the segment's direction, and
+	# the red castle's mirrored walls run the other way; the model is centred, so turning doesn't shift it).
 	# Lay 5.2 m wall models along a segment (clipped to the field unless told not to), stretched to fit.
 	var aa := Vector2(clampf(a.x, -Sim.HALF_W, Sim.HALF_W), clampf(a.y, -Sim.HALF_L, Sim.HALF_L)) if clip else a
 	var bb := Vector2(clampf(b.x, -Sim.HALF_W, Sim.HALF_W), clampf(b.y, -Sim.HALF_L, Sim.HALF_L)) if clip else b
@@ -1172,6 +1176,11 @@ func _wall_run(a: Vector2, b: Vector2, path: String, y := 0.0, clip := true) -> 
 	var n := maxi(1, int(round(length / Sim.SEG)))
 	var piece := length / float(n)
 	var rot := -atan2(bb.y - aa.y, bb.x - aa.x)
+	if inside != Vector2.INF:
+		var d := (bb - aa).normalized()
+		var stone := Vector2(-d.y, d.x)                  # where local +Z points with this rotation
+		if stone.dot((aa + bb) * 0.5 - inside) < 0.0:
+			rot += PI
 	for i in n:
 		var c := aa.lerp(bb, (float(i) + 0.5) / float(n))
 		var node := _place(path, Vector3(c.x, y, c.y), rot, Sim.WALL_SCALE)
@@ -1330,9 +1339,15 @@ func _build_castle(t: int) -> void:
 			continue
 		match str(w.kind):
 			"wall":
-				_wall_run(w.a, w.b, HEX + "wall_straight.gltf")
+				# The dungeon wing's walls enclose the wing (and are drawn on their real line: clipped to
+				# the field edge the outer one sat 1 m inside and the cage ran into it); the rest the castle.
+				var mid: Vector2 = (w.a + w.b) * 0.5
+				var ql: Vector2 = (mid if t == 0 else -mid) - Vector2(0.0, Sim.CASTLE_SHIFT)
+				var wing: bool = ql.x < -Castle.HX - 0.5
+				var inside: Vector2 = Sim._c(t, Vector2(-26.5, 16.0) if wing else Vector2(0.0, 16.0))
+				_wall_run(w.a, w.b, HEX + "wall_straight.gltf", 0.0, not wing, inside)
 			"backwall":
-				_wall_run(w.a, w.b, HEX + "wall_straight.gltf", Castle.L2_H, false)    # on its own line, behind the throne
+				_wall_run(w.a, w.b, HEX + "wall_straight.gltf", Castle.L2_H, false, Sim._c(t, Vector2(0.0, 16.0)))
 			"bars":
 				_bars(w.a, w.b)
 			# "ledge" (terrace faces, stair sides) are KayKit wall runs in _build_castle_kit.
@@ -1348,7 +1363,8 @@ func _build_castle(t: int) -> void:
 			add_child(door)
 			gate_nodes[g.id] = {"jail": true, "door": door, "y0": door.position.y, "open": 0.0, "broken": false}
 			continue
-		var node := _place(HEX + "wall_straight_gate.gltf", Vector3(g.c.x, 0, g.c.y), face, Sim.WALL_SCALE)
+		# Stone face (local +Z) outwards, like the walls: face alone pointed it into the castle.
+		var node := _place(HEX + "wall_straight_gate.gltf", Vector3(g.c.x, 0, g.c.y), face + PI, Sim.WALL_SCALE)
 		var doors := []
 		for mi in node.find_children("*door*", "MeshInstance3D", true, false):
 			doors.append({"node":mi, "sign":1.0 if str(mi.name).contains("left") else -1.0})

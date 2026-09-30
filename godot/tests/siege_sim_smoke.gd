@@ -166,6 +166,19 @@ func _init() -> void:
 	assert(jail.broken, "the enemy can smash the jail door (hp %d)" % int(jail.hp))
 	js._return_to_cell(1)
 	assert(not jail.broken and jail.hp >= jail.max_hp, "the jail door locks again when the King is back in his cell")
+	# It lifts for a defender, but not while an enemy is near it.
+	var def: Dictionary = js.units.filter(func(x): return x.team == 0)[0]
+	def.bot = false
+	def.move = Vector2.ZERO
+	def.pos = (jail.c as Vector2) + ((jail.c as Vector2) - inside).normalized() * 1.0
+	jfoe.pos = Vector2(0, -40)
+	jfoe.bot = false
+	js.step(Sim.TICK)
+	assert(jail.open, "the jail door lifts for a defender")
+	jfoe.pos = (jail.c as Vector2) + ((jail.c as Vector2) - inside).normalized() * 2.5
+	jfoe.hp = jfoe.max_hp
+	js.step(Sim.TICK)
+	assert(not jail.open, "the jail door stays shut while an enemy is near it")
 	print("jail rules ok")
 	# Projectiles hit what their path crosses (regression: from 0.16.0 to 0.18.1 arrows and bolts
 	# hit NO units -- the per-team position arrays were appended through a copy).
