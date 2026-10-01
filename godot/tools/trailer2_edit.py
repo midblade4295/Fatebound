@@ -49,7 +49,7 @@ VO_GAIN = 1.7
 VO_GAIN_FINALE = 2.6
 # Lines over louder stretches of the song get more, so every line sits ~10-12 dB over the music (measured with
 # --duck-out: the backstab line was only 6 dB over it).
-VO_GAIN_SHOT = {"backstab": 2.7}
+VO_GAIN_SHOT = {"backstab": 2.7, "assault": 2.4, "hatsteal": 2.3, "carry2": 2.3, "gather": 2.3, "heroes": 2.1, "feast": 2.1}
 
 
 FINALE_TEXT = "this is fatebound"       # the Herald's last line, as the aligner hears it
@@ -211,7 +211,7 @@ def main():
         else:
             fl.append("[ducked0]anull[ducked]")
         # A limiter at -1 dBFS: the Herald on top of the music peaked at +4 dBFS (clipping) without it.
-        fl.append(f"[ducked][hmix]amix=inputs=2:normalize=0,alimiter=limit=0.891:attack=5:release=60:level=disabled,atrim=duration={total:.3f}[aout]")
+        fl.append(f"[ducked][hmix]amix=inputs=2:normalize=0,alimiter=limit=0.80:attack=5:release=60:level=disabled,atrim=duration={total:.3f}[aout]")
     else:
         fl.append(f"[music]atrim=duration={total:.3f}[aout]")
     tmp = a.out + ".part.mp4"

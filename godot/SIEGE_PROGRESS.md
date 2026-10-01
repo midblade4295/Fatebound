@@ -1053,3 +1053,11 @@ K2/K3 notes (0.17.0)
 - Music: the title on the song's biggest hit (72.5 s); the first drop (42.5 s) lands at 29.1 s as "getting in"
   starts. 66.6 s. The finale line is anchored ("FATEBOUND" on the title wins over the no-overlap rule).
 - VO: 1 and 11 reused; 10 new lines (15..24) pending Kevin's read.
+
+# Trailer 3 with the Herald (Kevin's 10-line read)
+- Split clean (cuts on real pauses; 1, 5, 7, 8 accepted after review: misheard, e.g. "Or just knock" -> "all the
+  snow"); lines 15-24 in tools/trailer2_vo. All 12 lines placed, no overlaps; "Rule two: don't drop him" on the drop,
+  "Need a way in? Chop. Mine." on the song's first drop, "FATEBOUND" on the title.
+- Lines over the busier music lifted (VO_GAIN_SHOT: assault, hatsteal, carry2, gather, heroes, feast): every line
+  8.8-13.8 dB over the music. Limiter ceiling 0.80: the AAC encode overshot to 0.0 dBFS with 0.85; now -1.2 dBFS
+  true peak.
