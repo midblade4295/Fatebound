@@ -266,10 +266,13 @@ func _sync_ambience(dt: float) -> void:
 # proportion to its speed, so wakes, rings and bank reflections come out of the physics. The water shader lights the
 # resulting slopes (plus flowing detail), reflects the sky at grazing angles, is see-through over the bed, and foams
 # on the banks and the wave crests. High-quality graphics only; without it the old water stays.
-const RIP_W := 512
-const RIP_H := 52
-const RIP_HALF := 34.0                         # the simulated stretch: x in [-34, 34]
-const RIP_ACROSS := (3.0 + 0.35) * 2.0         # bank to bank, as the water mesh's UV.y (Land.RIVER_HW + 0.35)
+# 0.30.0: the field is wider and the river opens into a lake round the island, so the simulated patch spans the
+# whole field and the lake's full width (still ~13 cm cells). UV.y on the water mesh is this patch's across
+# coordinate (centred on the river line); UV2.y runs 0..1 bank to bank for the shallows.
+const RIP_W := 680
+const RIP_H := 198
+const RIP_HALF := Land.HALF_W                  # the simulated stretch: x in [-44, 44]
+const RIP_ACROSS := (Land.RIVER_HW + Land.LAKE_EXTRA + 0.35) * 2.0     # the lake at its widest
 var _rip_vp: Array = []
 var _rip_mat: Array = []
 var _rip_i := 0
@@ -310,7 +313,7 @@ void fragment() {
 	slope += vec2(hx, hz) * rip_strength;
 	vec3 wn = normalize(vec3(-slope.x, 1.0, -slope.y));
 	NORMAL = normalize((VIEW_MATRIX * vec4(wn, 0.0)).xyz);
-	float edge = min(UV.y, 1.0 - UV.y);
+	float edge = min(UV2.y, 1.0 - UV2.y);
 	float depth = smoothstep(0.02, 0.4, edge);
 	vec3 col = mix(shallow_col, deep_col, depth);
 	float fres = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 4.0);
@@ -988,7 +991,7 @@ void fragment() {
 	float a = texture(ripples, w * 0.35 + vec2(TIME * 0.05, TIME * 0.02)).r;
 	float b = texture(ripples, w * 0.21 - vec2(TIME * 0.03, 0.0)).r;
 	float n = a * 0.6 + b * 0.4;
-	float shore = 1.0 - smoothstep(0.0, 0.16, min(UV.y, 1.0 - UV.y));
+	float shore = 1.0 - smoothstep(0.0, 0.16, min(UV2.y, 1.0 - UV2.y));
 	vec3 deep = vec3(0.10, 0.42, 0.72);
 	vec3 shallow = vec3(0.22, 0.66, 0.86);
 	vec3 col = mix(deep, shallow, smoothstep(0.35, 0.75, n));
@@ -1013,23 +1016,97 @@ void fragment() {
 		m.set_shader_parameter("ripples", nt)
 		m.set_shader_parameter("glint", 1.3 if _cast_static else 0.0)
 		_water_mat = m
+	# The river runs on out of the map (0.19.4). 0.26.0: as wide as the lake in the middle; on the
+	# east it pours over the cliff side (a waterfall) and carries on in the valley below.
+	var x0 := -Sim.HALF_W - Land.BAKE_MARGIN - Land.OUTER_REACH
+	var x1 := Sim.HALF_W + Land.BAKE_MARGIN + Land.OUTER_REACH
+	var span := 2.0 * (Sim.HALF_W + Land.BAKE_MARGIN)
+	_water_strip(x0, Land.FALL_X, Land.WATER_Y, span, "water")
+	_water_strip(Land.FALL_X + 2.2, x1, Land.VALLEY_WATER_Y, span, "water_valley")
+	_build_waterfall()
+
+func _water_strip(xa: float, xb: float, y: float, span: float, tag: String) -> void:
+	var verts := PackedVector3Array()
+	var uvs := PackedVector2Array()
+	var uv2s := PackedVector2Array()
+	var idx := PackedInt32Array()
+	var n := int(ceil(xb - xa))
+	for k in n + 1:
+		var x := minf(xa + k, xb)
+		var c := Land.river_c(x)
+		var hw := Land.river_hw(x) + 0.35
+		verts.append(Vector3(x, y, c - hw))
+		verts.append(Vector3(x, y, c + hw))
+		uvs.append(Vector2((x - xa) / span, 0.5 - hw / RIP_ACROSS))
+		uvs.append(Vector2((x - xa) / span, 0.5 + hw / RIP_ACROSS))
+		uv2s.append(Vector2(0.0, 0.0))
+		uv2s.append(Vector2(0.0, 1.0))
+		if k < n:
+			var a := k * 2
+			idx.append_array([a, a + 2, a + 1, a + 1, a + 2, a + 3])
+	var arr := []
+	arr.resize(Mesh.ARRAY_MAX)
+	arr[Mesh.ARRAY_VERTEX] = verts
+	arr[Mesh.ARRAY_TEX_UV] = uvs
+	arr[Mesh.ARRAY_TEX_UV2] = uv2s
+	arr[Mesh.ARRAY_INDEX] = idx
+	var am := ArrayMesh.new()
+	am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
+	var mi := MeshInstance3D.new()
+	mi.mesh = am
+	mi.material_override = _water_mat
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mi.set_meta("perf", tag)
+	add_child(mi)
+
+static var _fall_mat: ShaderMaterial = null
+
+func _build_waterfall() -> void:
+	# The river going over the cliff side: a curved sheet from the lip down to the valley, white
+	# streaks running down it, and a ring of foam where it lands.
+	if _fall_mat == null:
+		var sh := Shader.new()
+		sh.code = """
+shader_type spatial;
+render_mode cull_disabled, specular_disabled;
+uniform sampler2D streaks : filter_linear_mipmap, repeat_enable;
+void fragment() {
+	float a = texture(streaks, vec2(UV.x * 3.0, UV.y * 0.9 - TIME * 0.9)).r;
+	float b = texture(streaks, vec2(UV.x * 5.0 + 0.3, UV.y * 1.3 - TIME * 1.4)).r;
+	float n = a * 0.55 + b * 0.45;
+	vec3 deep = vec3(0.16, 0.50, 0.78);
+	vec3 col = mix(deep, vec3(0.93, 0.97, 1.0), smoothstep(0.42, 0.68, n));
+	col = mix(col, vec3(0.95, 0.98, 1.0), smoothstep(0.75, 1.0, UV.y) * 0.8);
+	ALBEDO = col;
+	ROUGHNESS = 0.2;
+}
+"""
+		_fall_mat = ShaderMaterial.new()
+		_fall_mat.shader = sh
+		var nt := NoiseTexture2D.new()
+		nt.width = 128
+		nt.height = 256
+		nt.seamless = true
+		var fn := FastNoiseLite.new()
+		fn.frequency = 0.05
+		nt.noise = fn
+		_fall_mat.set_shader_parameter("streaks", nt)
 	var verts := PackedVector3Array()
 	var uvs := PackedVector2Array()
 	var idx := PackedInt32Array()
-	# The river runs on out of the map (0.19.4): the water spans the outer land too. UV.x keeps the
-	# old density (one unit per 78 m) so the ripples look the same.
-	var x0 := -Sim.HALF_W - Land.BAKE_MARGIN - Land.OUTER_REACH
-	var n := int((2.0 * (Sim.HALF_W + Land.BAKE_MARGIN + Land.OUTER_REACH)) / 1.0)
-	var span := 2.0 * (Sim.HALF_W + Land.BAKE_MARGIN)
-	for k in n + 1:
-		var x := x0 + k
-		var c := Land.river_c(x)
-		verts.append(Vector3(x, Land.WATER_Y, c - Land.RIVER_HW - 0.35))
-		verts.append(Vector3(x, Land.WATER_Y, c + Land.RIVER_HW + 0.35))
-		uvs.append(Vector2(float(k) / span, 0.0))
-		uvs.append(Vector2(float(k) / span, 1.0))
-		if k < n:
-			var a := k * 2
+	var c := Land.river_c(Land.FALL_X)
+	var hw := Land.river_hw(Land.FALL_X) + 0.6
+	var rows := 10
+	for r in rows + 1:
+		var t := float(r) / rows
+		var x := Land.FALL_X + 2.2 * t * t                      # curls out over the lip, then drops
+		var y := lerpf(Land.WATER_Y, Land.VALLEY_WATER_Y, t)
+		verts.append(Vector3(x, y, c - hw * (1.0 + 0.2 * t)))
+		verts.append(Vector3(x, y, c + hw * (1.0 + 0.2 * t)))
+		uvs.append(Vector2(0.0, t))
+		uvs.append(Vector2(1.0, t))
+		if r < rows:
+			var a := r * 2
 			idx.append_array([a, a + 2, a + 1, a + 1, a + 2, a + 3])
 	var arr := []
 	arr.resize(Mesh.ARRAY_MAX)
@@ -1040,15 +1117,18 @@ void fragment() {
 	am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
 	var mi := MeshInstance3D.new()
 	mi.mesh = am
-	mi.material_override = _water_mat
+	mi.material_override = _fall_mat
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	mi.set_meta("perf", "water")
+	mi.set_meta("perf", "waterfall")
 	add_child(mi)
+	var foam := _decal(Vector3(Land.FALL_X + 2.6, Land.VALLEY_WATER_Y + 0.08, c), hw * 1.25, Color(0.95, 0.98, 1.0), 0.75)
+	foam.set_meta("perf", "waterfall")
 
 func _build_bridges() -> void:
-	for i in Land.BRIDGE_X.size():
-		var bc := Land.bridge_centre(i)
-		_place("res://assets/terrain/bridge.glb", Vector3(bc.x, 0.0, bc.y), 0.0, 1.0)
+	for b in Land.bridges():
+		var n := _place("res://assets/terrain/bridge.glb", Vector3(b.c.x, 0.0, b.c.y), 0.0, 1.0)
+		if n != null:
+			n.scale = Vector3(float(b.sx), 1.0, float(b.sz))
 
 # ---------- foliage: grass tufts + flowers (Round 7b) ----------
 # 44-triangle tufts only (Grass_1_B is 132 triangles; dropped in 0.14.2 for frame rate).
@@ -1059,7 +1139,7 @@ static var _foliage: Dictionary = {}          # kind -> Array[Transform3D], buil
 static func _foliage_ok(p: Vector2, mask: Image, obstacles: Array, allow_slope := false) -> bool:
 	if absf(p.x) > Sim.HALF_W - 0.6 or absf(p.y) > Sim.HALF_L - 0.6:
 		return false
-	if absf(p.y - Land.river_c(p.x)) < Land.RIVER_HW + 0.9:
+	if Land.shore(p) < 0.9 or Land.edge_dist(p) > -0.9 or Land.on_bridge(p, 0.6):
 		return false
 	if absf(p.x) <= Sim.CASTLE_HX + 1.5 and absf(p.y) >= Sim.CASTLE_SHIFT + Sim.FRONT_Z - 1.5:
 		return false
@@ -1108,29 +1188,29 @@ func _plan_foliage() -> Dictionary:
 					if rng.randf() < 0.6:
 						tuft.call(a + d * (t + rng.randf_range(-0.3, 0.3)) + n * side * (Land.PATH_HALF_W + rng.randf_range(0.05, 0.45)))
 				t += 0.9
-	# 2. Along the top of every ledge (skip the ramps).
-	for tr in Land.terraces():
-		var corners := [Vector2(tr.x0, tr.z0), Vector2(tr.x1, tr.z0), Vector2(tr.x1, tr.z1), Vector2(tr.x0, tr.z1)]
-		var centre: Vector2 = (corners[0] + corners[2]) * 0.5
-		for i in 4:
-			var a: Vector2 = corners[i]
-			var b: Vector2 = corners[(i + 1) % 4]
+	# 2. Along the top of every plateau rim (skip the ramps).
+	for pl in Land.plateaus():
+		var pts: Array = pl.pts
+		var centre: Vector2 = pl.cen
+		for i in pts.size():
+			var a: Vector2 = pts[i]
+			var b: Vector2 = pts[(i + 1) % pts.size()]
 			var L := a.distance_to(b)
 			var t := 0.4
 			while t < L - 0.4:
 				var q := a.lerp(b, t / L)
 				q += (centre - q).normalized() * rng.randf_range(0.25, 0.7)
-				var on_ramp := Land._ramp_height(tr, q + (q - centre).normalized() * 1.2, 0.0) > -INF
+				var on_ramp := Land.ramp_height(pl, q + (q - centre).normalized() * 1.2, 0.0) > -INF
 				if not on_ramp and rng.randf() < 0.65:
 					tuft.call(q, true)
 				t += 0.85
 	# 3. Clumps across the fields.
-	for c in 340:
+	for c in 520:
 		var cp := Vector2(rng.randf_range(-Sim.HALF_W, Sim.HALF_W), rng.randf_range(-Sim.HALF_L, Sim.HALF_L))
 		for k in rng.randi_range(2, 5):
 			tuft.call(cp + Vector2(rng.randf_range(-0.8, 0.8), rng.randf_range(-0.8, 0.8)))
 	# 4. Flower clusters.
-	for c in 150:
+	for c in 230:
 		var cp := Vector2(rng.randf_range(-Sim.HALF_W, Sim.HALF_W), rng.randf_range(-Sim.HALF_L, Sim.HALF_L))
 		var col: String = FLOWERS[[0, 0, 0, 1, 1, 1, 2, 2, 3][rng.randi() % 9]]
 		for k in rng.randi_range(2, 4):
@@ -1633,14 +1713,24 @@ func _build_props() -> void:
 	_build_nodes()
 	_build_outposts()
 	_build_hat_stands()
-	# Scenery outside the play field.
-	for i in 72:
-		var side := -1.0 if i % 2 == 0 else 1.0
-		var z := -Sim.HALF_L - 4.0 + float(i / 2) * 3.2
-		var tx: float = side * (Sim.HALF_W + 2.5 + rng.randf() * 3.5)
-		_place(FOREST + forest_trees[rng.randi() % forest_trees.size()] + ".gltf", Vector3(tx, Land.terrain_height(Vector2(tx, z)), z), rng.randf()*TAU, 0.5 + rng.randf()*0.2)
-	for p in [Vector3(-Sim.HALF_W - 7, 0.5, -40), Vector3(Sim.HALF_W + 7, 0.5, 36), Vector3(-Sim.HALF_W - 7, 0.5, 14), Vector3(Sim.HALF_W + 7, 0.5, -12),
-			Vector3(-Sim.HALF_W - 7, 0.5, -10), Vector3(Sim.HALF_W + 7, 0.5, 10), Vector3(0, 0.5, -Sim.HALF_L - 8), Vector3(0, 0.5, Sim.HALF_L + 8)]:
+	# Scenery beyond the field's edge (0.26.0): trees along the tops of the rock walls, none over
+	# the cliff side or in the river's gorge; a few wooded hills further out.
+	var loop := Land.edge_loop()
+	for i in loop.size():
+		var a: Vector2 = loop[i]
+		var b: Vector2 = loop[(i + 1) % loop.size()]
+		var L := a.distance_to(b)
+		var nrm := Vector2((b - a).y, -(b - a).x).normalized()
+		if Land.inside_field((a + b) * 0.5 + nrm * 1.5):
+			nrm = -nrm
+		var t := rng.randf_range(0.0, 2.0)
+		while t < L:
+			var q := a.lerp(b, t / L) + nrm * rng.randf_range(3.5, 7.5)
+			if Land.drop_weight(q) < 0.25 and absf(q.y - Land.river_c(q.x)) > Land.RIVER_HW + 3.5 and not Land.in_dungeon_pit(q, 2.0):
+				_place(FOREST + forest_trees[rng.randi() % forest_trees.size()] + ".gltf", Vector3(q.x, Land.terrain_height(q), q.y), rng.randf()*TAU, 0.5 + rng.randf()*0.2)
+			t += rng.randf_range(4.0, 6.5)
+	for p in [Vector3(-Sim.HALF_W - 8, 0.5, -40), Vector3(-Sim.HALF_W - 8, 0.5, 14), Vector3(-Sim.HALF_W - 8, 0.5, -10),
+			Vector3(Sim.HALF_W - 4, 0.5, 64), Vector3(Sim.HALF_W - 4, 0.5, -64), Vector3(0, 0.5, -Sim.HALF_L - 8), Vector3(0, 0.5, Sim.HALF_L + 8)]:
 		_place(HEX + "mountain_A_grass_trees.gltf", Vector3(p.x, Land.terrain_height(Vector2(p.x, p.z)) - 0.3, p.z), rng.randf()*TAU, 1.6)
 
 const COLOR := ["blue", "red"]
@@ -2363,7 +2453,8 @@ func sync(dt: float) -> void:
 		if a.is_empty() or not is_instance_valid(a.root):
 			continue
 		var root: Node3D = a.root
-		var gy := Sim.height_at(u.pos)
+		var tw := int(u.get("tower", -1))
+		var gy := Sim.height_at(u.pos) if tw < 0 or tw >= sim.outposts.size() else Sim.height_at(sim.outposts[tw].p) + Land.TOWER_FLOOR
 		# On a ladder: up the rungs, over the wall, down the far side (Round 25).
 		var climb_d: float = sim.ladder_depth(u.pos, u.team) if not sim.ladders.is_empty() and u.state != "dead" else INF
 		a.climb = climb_d != INF and Sim.ladder_lift(climb_d, gy) > gy + 0.15
@@ -2505,7 +2596,7 @@ func _sync_fishing_gear(a: Dictionary, u: Dictionary, fishing: bool) -> void:
 		add_child(line)
 		a.line_node = line
 	var dir := Sim.dir_of(u.face)
-	var reach: float = absf(u.pos.y - Land.river_c(u.pos.x)) - Land.RIVER_HW + 1.1
+	var reach: float = absf(u.pos.y - Land.river_c(u.pos.x)) - Land.river_hw(u.pos.x) + 1.1
 	var wp: Vector2 = u.pos + dir * reach
 	var bob := sin(float(sim.time) * 3.4 + float(u.pos.x)) * 0.04
 	var fl: Node3D = a.float_node
@@ -2683,7 +2774,7 @@ func on_event(e: Dictionary) -> void:
 		"fish_caught", "fish_lost":
 			var fp2: Vector2 = e.pos
 			var face_d := Sim.dir_of(float(sim.by_id.get(str(e.id), {}).get("face", 0.0)))
-			var reach2: float = absf(fp2.y - Land.river_c(fp2.x)) - Land.RIVER_HW + 1.1
+			var reach2: float = absf(fp2.y - Land.river_c(fp2.x)) - Land.river_hw(fp2.x) + 1.1
 			var wp2: Vector2 = fp2 + face_d * reach2
 			ring_at(Vector3(wp2.x, Land.WATER_Y + 0.08, wp2.y), Color("#dff4ff"), 1.2 if str(e.k) == "fish_caught" else 0.7, 0.5)
 			if str(e.k) == "fish_caught":

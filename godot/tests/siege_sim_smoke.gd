@@ -64,7 +64,7 @@ func _init() -> void:
 	assert(r1.pos.distance_to(Sim.spawn(0)) < 10.0, "no dropped hat near the outpost -> respawn at the castle")
 	hs.hats.append({"id":777, "cls":"knight", "up":false, "pos":(op.p as Vector2) + Vector2(12, 0), "t":0.0})
 	hs._respawn(r1)
-	assert(r1.pos.distance_to(op.p) < 4.0, "a dropped hat near the forward outpost -> respawn there")
+	assert(r1.pos.distance_to(Sim.spawn(0)) < 10.0, "0.26.0: towers are no spawn points -- back at the castle even with a hat by the tower")
 	# Priest (Round 9): holding ATTACK beams the nearest injured ally; Sanctuary heals around.
 	var ps = Sim.new()
 	ps.setup(4, 2)
@@ -320,14 +320,14 @@ func _init() -> void:
 		if u.id != lw.id and u.id != lk.id: u.pos = Sim.spawn(u.team)
 	ls._set_class(lw, "worker", false)
 	ls.stock[0].wood = 60
-	lw.pos = Vector2(-14.0, -36.3)
+	lw.pos = Vector2(-14.0, -42.3)
 	ls.act(lw.id, "interact")
 	for i in int(3.3 / Sim.TICK):
 		ls.step(Sim.TICK)
 	assert(ls.ladders.size() == 1, "the worker raised a ladder")
-	lw.pos = Vector2(-18.0, -30.0)
+	lw.pos = Vector2(-18.0, -36.0)
 	ls._set_class(lk, "knight", false)
-	lk.pos = Vector2(-14.0, -34.5)
+	lk.pos = Vector2(-14.0, -40.5)
 	var top := 0.0
 	var t_on := -1.0
 	var t_off := -1.0
@@ -339,7 +339,7 @@ func _init() -> void:
 		top = maxf(top, lift)
 		if dd != INF and t_on < 0.0: t_on = ls.time
 		if dd == INF and t_on >= 0.0 and t_off < 0.0: t_off = ls.time
-	var got_in: bool = (lk.pos as Vector2).y < -40.0          # past the wall (z -38) into their courtyard
+	var got_in: bool = (lk.pos as Vector2).y < -46.0          # past the wall (z -44 since 0.26.0) into their courtyard
 	assert(top >= Sim.LADDER_TOP - 0.05, "climbers go up to the wall top (%.2f m)" % top)
 	assert(t_off > t_on and t_off - t_on > 1.5 and t_off - t_on < 5.0, "the climb takes a believable time (%.1f s)" % (t_off - t_on))
 	assert(got_in, "and ends up inside their castle (%s)" % str(lk.pos))

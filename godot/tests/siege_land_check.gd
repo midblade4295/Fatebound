@@ -26,7 +26,7 @@ func _init() -> void:
 			check(Land.dist_to_paths(p) >= Land.PATH_HALF_W + float(ob.r) + 0.3, "%s at %s sits on a brick path" % [ob.kind, str(p)])
 			for op in s.outposts:
 				check(p.distance_to(op.p) >= Land.OUTPOST_R + float(ob.r), "%s at %s is inside outpost %d's ring" % [ob.kind, str(p), op.id])
-		check(absf(p.x) <= Sim.HALF_W - 1.0 and absf(p.y) <= Sim.HALF_L - 1.0, "%s at %s outside the field" % [ob.kind, str(p)])
+		check(Land.edge_dist(p) <= -(float(ob.r) + 1.2) or str(ob.kind) == "castle_building", "%s at %s outside the field or against its edge" % [ob.kind, str(p)])
 	for i in s.obstacles.size():
 		for j in range(i + 1, s.obstacles.size()):
 			var a: Dictionary = s.obstacles[i]
@@ -46,10 +46,10 @@ func _init() -> void:
 		check(absf(Sim.height_at(q) - Sim.height_at(-q)) < 0.001, "height not symmetric at %s" % str(q))
 	# 4. nav: every bridge and ramp reachable from both spawns; the river only crossable on bridges
 	for t in 2:
-		for i in Land.BRIDGE_X.size():
-			var bc := Land.bridge_centre(i)
+		for br in Land.bridges():
+			var bc: Vector2 = br.c
 			var path: PackedVector2Array = s.find_path(t, Sim.spawn(t), bc)
-			check(path.size() > 0 and path[path.size() - 1].distance_to(bc) < 1.5, "team %d can't reach bridge %d" % [t, i])
+			check(path.size() > 0 and path[path.size() - 1].distance_to(bc) < 1.5, "team %d can't reach bridge %d" % [t, Land.bridges().find(br)])
 		for op in s.outposts:
 			var pp: PackedVector2Array = s.find_path(t, Sim.spawn(t), (op.p as Vector2) + Vector2(3.0, 0.0))
 			check(pp.size() > 0 and pp[pp.size() - 1].distance_to((op.p as Vector2) + Vector2(3.0, 0.0)) < 1.5, "team %d can't reach outpost %d" % [t, op.id])
@@ -61,9 +61,8 @@ func _init() -> void:
 		if signf(a.y - Land.river_c(a.x)) != signf(b.y - Land.river_c(b.x)):
 			crossings += 1
 			var on_bridge := false
-			for bx in Land.BRIDGE_X:
-				if absf(a.x - bx) <= Land.BRIDGE_HALF:
-					on_bridge = true
+			if Land.on_bridge(a, 0.6) or Land.on_bridge(b, 0.6) or Land.island_off(a) < 0.0 or Land.island_off(b) < 0.0:
+				on_bridge = true
 			check(on_bridge, "castle-to-castle path crosses the river off a bridge at %s" % str(a))
 	check(crossings >= 1, "castle-to-castle path never crosses the river")
 	# 5. the baked terrain must match the landscape code (re-run tools/bake_land.gd after edits)

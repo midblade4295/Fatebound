@@ -307,7 +307,7 @@ func on_event(e: Dictionary) -> void:
 				toast(("You are now a%s %s!" % ["n" if nm.left(1) in ["A", "E", "I", "O", "U"] else "", nm]), VisualTheme.GOLD)
 		"outpost_captured":
 			if int(e.team) == me.team:
-				toast("Outpost captured! Attackers respawn there", VisualTheme.GOLD)
+				toast("Tower captured! Archers and mages can climb it", VisualTheme.GOLD)
 			else:
 				toast("The enemy took an outpost", VisualTheme.RED)
 		"outpost_lost":
@@ -758,7 +758,7 @@ func _draw_button(b: Dictionary, me: Dictionary) -> void:
 		"action":
 			label = {"hat_up":"UPGRADE","hat":"NEW HAT","grab":"LIFT","throw":"THROW","workshop":"WORKSHOP","chop":"CHOP","mine":"MINE",
 				"repair":"REPAIR","gather":"WORKING","repairing":"REPAIRING","ladder":"LADDER","build_ladder":"BUILDING","fish":"FISH","feed":"FEED",
-				"join":"HELP LIFT","letgo":"LET GO"}.get(b.ctx, "USE")
+				"join":"HELP LIFT","letgo":"LET GO","tower_up":"CLIMB","tower_down":"CLIMB DOWN"}.get(b.ctx, "USE")
 			col = Color("#155258")
 			rim = Color("#9ff6ef")
 			if b.ctx == "hat_up":

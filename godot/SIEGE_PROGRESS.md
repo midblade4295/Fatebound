@@ -1159,3 +1159,29 @@ K2/K3 notes (0.17.0)
   water_depth now counts only within the river band (|z - river_c| <= RIVER_HW + 1.6). Measured before: both
   dungeons depth 1.15, move_mult 0.45; after: 0 and 1.0. sim smoke asserts it; the same seed's bot match now ends
   3-2 by rescue at 5:36 (was a 12-minute time-out). Protocol v18 (movement rule; server and client must agree).
+
+# 0.30.0 (Kevin, Fat Princess map reference): a bigger, natural map; towers you climb; no tower respawns
+- Land (siege_land.gd): field 88 x 140 m (was 64 x 128) with a natural edge (EDGE_BLUE, point-mirrored; "edge" walls,
+  nav cells beyond it solid). Scenery beyond it: rock walls on the west and behind the castles; on the east between
+  the castles a sheer 24 m drop (the cliff side) with the river pouring over a waterfall into a valley (view only).
+- The river widens into a lake round an island (ellipse 9 x 5.5 m). The island lane: one narrow bridge (rails
+  +-1.25 m) from each bank to the island's tips; two full bridges at x = +-24. Everything stays wadeable (Round 33).
+- Rounded plateaus (polygons with ramps, rock faces) replace the box terraces: a west highland and an east bluff
+  on the cliff edge per side. 5 towers: one on each plateau + the island tower. The tower nearest each castle is
+  on the highland, so the tutorial's "tower up on the ledge" stays true.
+- Paths, resources, cover rocks re-placed; siege_land_check covers them; terrain rebaked.
+- Towers (sim): archers and mages of the holding team climb (ACTION within 3.4 m; CLIMB / CLIMB DOWN), 4 places.
+  On top: pinned, +30 % range, shots fly over walls, no dodge, no mage nova; melee can't reach or target them;
+  arrows/fire/catapult still hit (towers no longer stop projectiles). Capture counts ground units only; losing the
+  tower throws everyone off (0.8 s stun). Bots (ranged, not raiders) climb when an enemy is within 18 m of a tower
+  we hold, max 2 bots per tower, and climb down after 8 quiet seconds or when a King is on the move.
+- No respawning at towers (the forward-outpost rule is gone). Workers still bank loads at towers we hold (3.4 m).
+- Net: protocol v19 (unit field 31 = tower + 1; clients rebuild op.occ). Server redeploy needed for online.
+- Water (view): the simulated patch now spans the field and the lake's width (680 x 198); UV2 carries the bank-to-
+  bank coordinate for the shallows. Waterfall sheet + valley river on the cliff side.
+- Tutorial: t_out_done re-recorded in the Herald's voice (ElevenLabs, eleven_v4, Edward), text in SCRIPT.md.
+- Tests: tower_test (21 checks) new; land_check, reach updated; sim smoke's ladder coordinates moved with the castle.
+- KNOWN PROBLEM: bot matches on this map: 0 King pickups in seeds 11 and 22 (0.29.1 map: seed 22 rescues).
+  Over 300 s of seed 22, 34 of 57 blue raider deaths are inside blue's own courtyard behind the west gate
+  (-6, 48) (0.29.1 map: 3 in blue's half, 27 in red's). Not yet diagnosed. LANE_NAV_COST 2.2 added (bots used to
+  pile into the lane) did not fix it. siege_sim_smoke fails on rescues=0 until this is solved.

@@ -46,10 +46,11 @@ const RUBBLE_CLEAR := 6.0        # ... or while any enemy is within 6 m of it
 # ---- layers (heights are for the view; the sim stays 2D, ledges are walls) ----
 const LEDGE_R := 0.35                # landscape ledges; castle terraces use Castle.LEDGE_R
 # Round 7 layout (blue half; mirrored). Checked by tests/siege_land_check.gd.
-const RES_WOOD := [Vector2(-24.5, 7.5), Vector2(-31.0, 36.5), Vector2(27.0, 44.0), Vector2(29.5, 38.0), Vector2(-29.0, 9.0),
-	Vector2(-2.5, 30.0), Vector2(10.0, 22.5), Vector2(-2.5, 34.0), Vector2(29.0, 27.0), Vector2(-8.5, 9.5)]
-const RES_STONE := [Vector2(26.0, 50.0), Vector2(-30.0, 28.0), Vector2(12.0, 26.0), Vector2(-26.5, 36.5), Vector2(-15.5, 9.0)]
-const COVER_ROCKS := [Vector2(-3.0, 21.0), Vector2(7.5, 9.0), Vector2(-3.0, 26.0)]
+# Resource nodes and cover rocks, blue half (0.26.0 land); tests/siege_land_check.gd checks the spacing.
+const RES_WOOD := [Vector2(-29.5, 43.0), Vector2(26.0, 40.5), Vector2(26.5, 53.0), Vector2(-11.0, 20.0), Vector2(12.0, 19.0),
+	Vector2(9.0, 32.5)]
+const RES_STONE := [Vector2(26.0, 62.0), Vector2(-26.5, 45.0), Vector2(-6.0, 26.5), Vector2(9.0, 16.5), Vector2(-31.0, 10.0)]
+const COVER_ROCKS := [Vector2(-4.0, 18.5), Vector2(15.5, 26.0), Vector2(-10.0, 31.0)]
 const OUTPOST_TRICKLE := 15.0    # owners get +1 wood +1 stone this often per outpost
 
 # ---- fate offerings (the "cake") ----
@@ -91,6 +92,10 @@ const LADDER_HP := 250.0
 const LADDER_HALF := 1.1          # half-width of the passage along the wall
 const WATER_MOVE := 0.45         # wading speed in the river (Round 33)
 const WATER_NAV_COST := 2.5      # river cells cost this much in the nav grid: bots still prefer a nearby bridge
+# The island lane (0.30.0) is the shortest way across but one lane wide: every bot raider took it and the
+# whole army died in the bottleneck (no King picked up in two 12-minute bot matches). Costing its cells a
+# little more spreads the bots over the side bridges too; players still take whichever way they like.
+const LANE_NAV_COST := 2.2
 const LADDER_CLIMB := 0.5         # (old flat crossing speed; the climb now goes by ladder_depth, below)
 # Climbing (Round 25, Kevin: "when players use a ladder they climb up it and over the wall"): the ladder stands
 # 1.35 m out from the wall and reaches its top; climbers go up the rungs, over the top, and drop down inside.
@@ -134,8 +139,17 @@ const HAT_PICK_R := 1.0
 # them (sneak into the enemy courtyard to switch class). Outposts have no hat dispenser: they are a
 # respawn point (attackers respawn there only when a dropped hat is close by) and a resource
 # drop-off for Workers.
-const OUTPOST_DROP_R := 3.2       # workers deliver within this of an outpost their team holds
-const RESPAWN_HAT_NEAR := 28.0    # humans: a dropped hat this close to the forward outpost -> respawn
+const OUTPOST_DROP_R := 3.4       # workers deliver within this of an outpost their team holds
+# Towers (0.26.0, Kevin): the team holding an outpost can climb its tower -- archers and mages only --
+# and shoot down from the top. Up there they can't be reached by melee; arrows, fire and catapult
+# stones still hit them. Lose the tower and everyone on it is thrown off. No respawning at towers.
+const TOWER_CLASSES := ["ranger", "mage"]
+const TOWER_SLOTS := 4
+const TOWER_ENTER_R := 3.4        # from the tower's centre (its wall is 1.8 m out)
+const TOWER_RANGE := 1.3          # range bonus from the top
+const TOWER_BOT_MAX := 2          # bots leave the other places for players
+const TOWER_SLOT_OFF := [Vector2(0.46, 0.46), Vector2(-0.46, -0.46), Vector2(-0.46, 0.46), Vector2(0.46, -0.46)]
+const RESPAWN_HAT_NEAR := 28.0    # (unused since 0.26.0: towers are no longer respawn points)
                                   # there. Bot attackers always respawn forward and scavenge (like
                                   # Fat Princess players choosing an outpost spawn).
 const BOT_HAT_SEARCH := 32.0      # villager bots scavenge dropped hats this far (14 m: most expired unused)
@@ -413,7 +427,7 @@ func _build_map() -> void:
 	# Outposts: a solid tower in the middle of each capture ring.
 	outposts = []
 	for op in Land.outpost_positions():
-		outposts.append({"id":outposts.size(), "p":op, "owner":-1, "prog":0.0, "t":0.0})
+		outposts.append({"id":outposts.size(), "p":op, "owner":-1, "prog":0.0, "t":0.0, "occ":[]})
 		obstacles.append({"p":op, "r":Land.OUTPOST_TOWER_R, "kind":"outpost_tower"})
 
 func _add_node(team: int, kind: String, p: Vector2) -> void:
@@ -476,8 +490,9 @@ var _bucket_walls: Array = []
 var _blockers: Array = []             # knights with their shield up this tick
 var squeeze_fills := 0                # slots closed by _fill_squeeze_slots (see there)
 var _bucket_walls_proj: Array = []   # only walls that stop projectiles (not ledges/bars/river/rails)
-const PROJ_PASS_KINDS := ["ledge", "bars", "river", "rail"]
+const PROJ_PASS_KINDS := ["ledge", "bars", "river", "rail", "edge"]
 var _bucket_obs: Array = []
+var _bucket_obs_proj: Array = []      # obstacles that stop shots (not the towers)
 
 func _build_buckets() -> void:
 	_bw = int(ceil(HALF_W * 2.0 / BUCKET)) + 1
@@ -485,10 +500,12 @@ func _build_buckets() -> void:
 	_bucket_walls = []
 	_bucket_walls_proj = []
 	_bucket_obs = []
+	_bucket_obs_proj = []
 	for i in _bw * _bh:
 		_bucket_walls.append(PackedInt32Array())
 		_bucket_walls_proj.append(PackedInt32Array())
 		_bucket_obs.append(PackedInt32Array())
+		_bucket_obs_proj.append(PackedInt32Array())
 	for wi in walls.size():
 		var w: Dictionary = walls[wi]
 		for bi in _buckets_in(minf(w.a.x, w.b.x) - w.r - BUCKET_REACH, minf(w.a.y, w.b.y) - w.r - BUCKET_REACH,
@@ -500,6 +517,8 @@ func _build_buckets() -> void:
 		var ob: Dictionary = obstacles[oi]
 		for bi in _buckets_in(ob.p.x - ob.r - BUCKET_REACH, ob.p.y - ob.r - BUCKET_REACH, ob.p.x + ob.r + BUCKET_REACH, ob.p.y + ob.r + BUCKET_REACH):
 			_bucket_obs[bi].append(oi)
+			if str(ob.kind) != "outpost_tower":
+				_bucket_obs_proj[bi].append(oi)
 
 func _buckets_in(x0: float, y0: float, x1: float, y1: float) -> Array:
 	var out := []
@@ -533,6 +552,7 @@ func _build_nav() -> void:
 		solid.append_array(_cells_near_segment(w.a, w.b, w.r + UNIT_R * 0.9))
 	for ob in obstacles:
 		solid.append_array(_cells_near_segment(ob.p, ob.p, ob.r + UNIT_R * 0.8))
+	solid.append_array(_outside_cells())
 	for c in solid:
 		for t in 2:
 			(nav[t] as AStarGrid2D).set_point_solid(c, true)
@@ -544,6 +564,9 @@ func _build_nav() -> void:
 			if water_depth(nav_point(cc)) > 0.15:
 				for t in 2:
 					(nav[t] as AStarGrid2D).set_point_weight_scale(cc, WATER_NAV_COST)
+			elif _lane_cell(nav_point(cc)):
+				for t in 2:
+					(nav[t] as AStarGrid2D).set_point_weight_scale(cc, LANE_NAV_COST)
 	_gate_cells.clear()
 	for g in gates:
 		_gate_cells.append(_cells_across_segment(g.a, g.b, float(g.get("r", WALL_R)) + UNIT_R * 0.9))
@@ -683,7 +706,7 @@ func _new_unit(id: String, team: int, bot: bool, role: String) -> Dictionary:
 		"cd_ability":0.0,"stun":0.0,"carrying":false,"respawn_at":0.0,"kills":0,"deaths":0,"rescues":0,
 		"dodge_dir":Vector2.ZERO,"target":"","ai_goal":Vector2.ZERO,"lunge_hit":false,
 		"unstick":0.0,"unstick_dir":Vector2.ZERO,"stuck_t":0.0,"last_pos":Vector2.ZERO,
-		"lifting":-1, "beam":"", "beam_until":0.0, "block_until":0.0, "whirl_until":0.0, "whirl_t":0.0, "load":{"kind":"", "n":0}, "task":{}, "workshop_open":false, "gathered":0, "repaired":0.0, "gate_dmg":0.0, "offering":false, "fed":0,
+		"lifting":-1, "tower":-1, "beam":"", "beam_until":0.0, "block_until":0.0, "whirl_until":0.0, "whirl_t":0.0, "load":{"kind":"", "n":0}, "task":{}, "workshop_open":false, "gathered":0, "repaired":0.0, "gate_dmg":0.0, "offering":false, "fed":0,
 		"path":PackedVector2Array(), "path_i":0, "path_goal":Vector2(INF, INF), "path_at":-10.0, "path_ver":-1}
 
 func armory_mult(team: int) -> float:
@@ -717,13 +740,6 @@ func forward_outpost(team: int) -> Dictionary:
 func _respawn(u: Dictionary, first := false) -> void:
 	var sp := spawn(u.team)
 	u.pos = sp + Vector2(rng.randf_range(-8.0, 8.0), rng.randf_range(-1.5, 1.5))
-	# Attackers come back at the forward outpost their team holds, but only when a dropped hat lies
-	# close to it (they respawn as Villagers and outposts have no hats); otherwise at the castle.
-	if not first and u.role in ["raid", "escort"]:
-		var fo := forward_outpost(u.team)
-		if not fo.is_empty() and (u.bot or not nearest_hat(fo.p, RESPAWN_HAT_NEAR).is_empty()):
-			var a := rng.randf() * TAU
-			u.pos = (fo.p as Vector2) + Vector2(cos(a), sin(a)) * rng.randf_range(2.3, 3.4)
 	u.face = PI if u.team == 0 else 0.0
 	u.max_hp = float(stat(u,"hp"))
 	u.hp = u.max_hp
@@ -769,9 +785,12 @@ func nearest_enemy(u: Dictionary, max_d: float, prefer_front := false) -> Dictio
 	var best := {}
 	var best_score := INF
 	var fwd := dir_of(u.face)
+	var reach_top: bool = CLASSES[u.cls].ranged
 	for o in units:
 		if o.team == u.team or not alive(o):
 			continue
+		if int(o.tower) >= 0 and not reach_top:
+			continue                           # up a tower: out of a sword's reach
 		var off: Vector2 = o.pos - u.pos
 		var d := off.length()
 		if d > max_d:
@@ -857,13 +876,18 @@ func _aim(u: Dictionary, reach: float) -> void:
 func _start_attack(u: Dictionary, kind: String, aim := true) -> bool:
 	if not can_act(u) or u.carrying or u.offering or blocking(u) or whirling(u):
 		return false
+	var on_tower := int(u.get("tower", -1)) >= 0
 	if kind == "ability":
 		if CLASSES[u.cls].ability == "" or u.cd_ability > 0.0:
 			return false
+		if on_tower and CLASSES[u.cls].ability != "volley":
+			return false                       # the mage's nova is a blast round her feet
 		u.cd_ability = float(CLASSES[u.cls].ab_cd)
 	var reach := float(stat(u,"range")) * (1.0 if CLASSES[u.cls].ranged else 1.9)
 	if kind == "ability" and CLASSES[u.cls].ability == "lunge":
 		reach = 6.0
+	if on_tower:
+		reach *= TOWER_RANGE
 	if aim:
 		_aim(u, reach)
 	u.task = {}
@@ -1001,7 +1025,8 @@ func _step_beam(u: Dictionary, dt: float) -> void:
 	t.hp = minf(t.max_hp, t.hp + rate * dt)
 
 func _dodge(u: Dictionary) -> bool:
-	if not alive(u) or u.stun > 0.0 or u.carrying or u.cd_dodge > 0.0 or u.state in ["wind","dodge"] or u.workshop_open:
+	if not alive(u) or u.stun > 0.0 or u.carrying or u.cd_dodge > 0.0 or u.state in ["wind","dodge"] or u.workshop_open \
+			or int(u.tower) >= 0:
 		return false
 	var d: Vector2 = u.move if u.move.length() > 0.2 else dir_of(u.face)
 	u.dodge_dir = d.normalized()
@@ -1041,6 +1066,11 @@ func _interact(u: Dictionary) -> bool:
 		return true
 	if _offering_action(u) != "":
 		return _do_offering(u)
+	if int(u.get("tower", -1)) >= 0:
+		return _leave_tower(u)
+	var tw := tower_to_enter(u)
+	if not tw.is_empty():
+		return _enter_tower(u, tw)
 	var lo := _liftable(u)
 	if not lo.is_empty():
 		_join_lift(u, lo)
@@ -1127,8 +1157,8 @@ func _damage_ladder(src: Dictionary, l: Dictionary, amount: float) -> void:
 
 func at_river_bank(p: Vector2) -> bool:
 	# On the field, 0.2 .. FISH_REACH m back from the river's edge (not on a bridge: that's over it).
-	var off := absf(p.y - Land.river_c(p.x))
-	return absf(p.x) <= HALF_W - 1.0 and off >= Land.RIVER_HW + 0.2 and off <= Land.RIVER_HW + FISH_REACH
+	var off := Land.river_off(p)
+	return absf(p.x) <= HALF_W - 1.0 and off >= 0.2 and off <= FISH_REACH and Land.inside_field(p) and not Land.on_bridge(p, 0.5)
 
 func _offering_action(u: Dictionary) -> String:
 	if u.carrying:
@@ -1172,6 +1202,10 @@ func context_action(u: Dictionary) -> String:
 	var off := _offering_action(u)
 	if off != "":
 		return off
+	if int(u.get("tower", -1)) >= 0:
+		return "tower_down"
+	if not tower_to_enter(u).is_empty():
+		return "tower_up"
 	var lo := _liftable(u)
 	if not lo.is_empty():
 		return "join" if lo.state == "carried" else "grab"
@@ -1387,6 +1421,8 @@ func _damage(src: Dictionary, dst: Dictionary, amount: float, stun := 0.0) -> vo
 func _kill(src: Dictionary, dst: Dictionary) -> void:
 	if dst.carrying:
 		_leave_lift(dst, false)
+	if int(dst.tower) >= 0:
+		_free_tower_slot(dst)
 	dst.hp = 0.0
 	dst.state = "dead"
 	dst.beam = ""
@@ -1482,7 +1518,7 @@ func _melee(u: Dictionary, reach: float, arc: float, dmg: float, stun := 0.0) ->
 	var fwd := dir_of(u.face)
 	var hits := 0
 	for o in units:
-		if o.team == u.team or not alive(o):
+		if o.team == u.team or not alive(o) or int(o.tower) >= 0:
 			continue
 		var off: Vector2 = o.pos - u.pos
 		var d := off.length()
@@ -1540,9 +1576,9 @@ func _shoot(u: Dictionary, angle: float, dmg: float, aoe: float, speed: float, r
 	projectiles.append({"id":_next_proj,"team":u.team,"owner":u.id,"pos":u.pos + d*0.6,"from":u.pos,"vel":d*speed,
 		"dmg":dmg,"aoe":aoe,"life":reach/speed,"kind":"fire" if aoe > 0.0 else "arrow",
 		"gate_mult":float(CLASSES[u.cls].gate),
-		# Shot from the rampart (or a terrace), or aimed at an enemy ON a rampart: flies over the castle walls and
-		# gates (Round 15; Round 38).
-		"high":height_at(u.pos) >= 1.5 or _lob_at_rampart(u, d, reach)})
+		# Shot from the rampart (or a terrace), or aimed at an enemy ON a rampart, or from the top of a tower:
+		# flies over the castle walls and gates (Round 15; Round 38; towers 0.30.0).
+		"high":height_at(u.pos) >= 1.5 or _lob_at_rampart(u, d, reach) or int(u.get("tower", -1)) >= 0})
 	_event("proj", {"pid":_next_proj,"kind":"fire" if aoe > 0.0 else "arrow"})
 	_next_proj += 1
 
@@ -1551,7 +1587,7 @@ func _resolve_attack(u: Dictionary) -> void:
 	var dmg := float(stat(u,"dmg"))
 	if u.atk == "attack":
 		if c.ranged:
-			_shoot(u, u.face, dmg, float(c.aoe), float(c.proj_speed), float(c.range))
+			_shoot(u, u.face, dmg, float(c.aoe), float(c.proj_speed), float(c.range) * tower_range(u))
 		else:
 			_melee(u, float(c.range), float(c.arc), dmg)
 		return
@@ -1562,7 +1598,7 @@ func _resolve_attack(u: Dictionary) -> void:
 			_melee(u, 2.8, -2.0, dmg*1.15)
 		"volley":
 			for i in 5:
-				_shoot(u, u.face + (i-2)*0.13, dmg*0.8, 0.0, float(c.proj_speed), float(c.range))
+				_shoot(u, u.face + (i-2)*0.13, dmg*0.8, 0.0, float(c.proj_speed), float(c.range) * tower_range(u))
 		"nova":
 			_melee(u, 3.3, -2.0, dmg*1.4)
 			_event("nova", {"id":u.id})
@@ -1662,6 +1698,11 @@ func _step_unit(u: Dictionary, dt: float) -> void:
 	if u.workshop_open:
 		u.state = "idle"
 		return
+	if int(u.tower) >= 0:
+		u.state = "idle"
+		if u.move.length() > 0.3 and not _net_moves(u):
+			u.face = lerp_angle(u.face, angle_of(u.move), minf(1.0, dt * 14.0))   # the stick aims
+		return
 	if not u.task.is_empty():
 		_step_task(u, dt)
 		return
@@ -1711,7 +1752,7 @@ static func water_depth(p: Vector2) -> float:
 	# Only within the river's band (Round 39, Kevin: "movement slows down in the dungeon like there is water"): the
 	# dungeon floor (-1.6 m) is below the waterline, so it counted as 1.15 m of water -- wading speed, river nav
 	# cost, no blood, splashes.
-	if absf(p.y - Land.river_c(p.x)) > Land.RIVER_HW + 1.6:
+	if Land.river_off(p) > 1.6:                    # (lake-aware since 0.30.0; the island is dry land)
 		return 0.0
 	return maxf(0.0, Land.WATER_Y - height_at(p))
 
@@ -1737,7 +1778,7 @@ func move_mult(u: Dictionary, mult := 1.0) -> float:
 	return mult
 
 func client_drivable(u: Dictionary) -> bool:
-	if not alive(u) or u.stun > 0.0 or u.carrying or not u.task.is_empty() or u.workshop_open:
+	if not alive(u) or u.stun > 0.0 or u.carrying or not u.task.is_empty() or u.workshop_open or int(u.get("tower", -1)) >= 0:
 		return false
 	if u.state == "wind" and CLASSES[u.cls].ability == "lunge" and u.atk == "ability":
 		return false
@@ -1748,6 +1789,8 @@ func _net_moves(u: Dictionary) -> bool:
 
 func predict_step(u: Dictionary, move: Vector2, dt: float) -> void:
 	# The phone's copy of _step_unit's movement for its own unit (same speeds, same collision).
+	if int(u.get("tower", -1)) >= 0:
+		return                                     # on a tower: the server places it
 	var speed := float(stat(u, "speed"))
 	match str(u.state):
 		"dodge":
@@ -1972,11 +2015,11 @@ func _clamp_to_field(p: Vector2) -> Vector2:
 func _separate() -> void:
 	for i in units.size():
 		var a: Dictionary = units[i]
-		if not alive(a):
+		if not alive(a) or int(a.tower) >= 0:
 			continue
 		for j in range(i+1, units.size()):
 			var b: Dictionary = units[j]
-			if not alive(b):
+			if not alive(b) or int(b.tower) >= 0:
 				continue
 			var off: Vector2 = b.pos - a.pos
 			var d := off.length()
@@ -1985,7 +2028,9 @@ func _separate() -> void:
 				a.pos -= push
 				b.pos += push
 	for u in units:
-		if alive(u):
+		if alive(u) and int(u.tower) >= 0:
+			u.pos = tower_slot_pos(u)              # pinned to its place on the tower top
+		elif alive(u):
 			# Clamp first: pushing a unit that is slightly past the field edge off a wall end can
 			# send it diagonally, and clamping afterwards drops it back inside the wall.
 			u.pos = _clamp_to_field(_push_out(_clamp_to_field(u.pos), UNIT_R, u.team))
@@ -2053,7 +2098,7 @@ func _step_projectiles(dt: float) -> void:
 		var blocked := false
 		var hit_gate := {}
 		var pb := _bucket(p.pos)
-		for oi in _bucket_obs[pb]:
+		for oi in _bucket_obs_proj[pb]:
 			var ob: Dictionary = obstacles[oi]
 			if p.pos.distance_to(ob.p) < ob.r:
 				blocked = true
@@ -2175,7 +2220,7 @@ func _step_outposts(dt: float) -> void:
 	for op in outposts:
 		var n := [0, 0]
 		for u in units:
-			if alive(u) and u.pos.distance_to(op.p) <= Land.OUTPOST_R:
+			if alive(u) and int(u.tower) < 0 and u.pos.distance_to(op.p) <= Land.OUTPOST_R:
 				n[u.team] += 1
 		var dir := 0
 		var count := 0
@@ -2196,6 +2241,7 @@ func _step_outposts(dt: float) -> void:
 		var owner: int = op.owner
 		if (owner == 0 and prog <= 0.0) or (owner == 1 and prog >= 0.0):
 			op.owner = -1
+			_eject_tower(op)
 			_event("outpost_lost", {"id":op.id, "team":owner})
 		if prog >= 1.0 and int(op.owner) != 0:
 			op.owner = 0
@@ -2405,6 +2451,9 @@ func _unstick_check(u: Dictionary) -> void:
 
 func _think(u: Dictionary) -> void:
 	if not alive(u) or u.stun > 0.0 or u.state in ["wind","recover","dodge"]:
+		return
+	if int(u.tower) >= 0:
+		_think_tower(u)
 		return
 	_unstick_check(u)
 	if u.cls == "villager" and not u.carrying:
@@ -2616,6 +2665,8 @@ func _think_fighter(u: Dictionary) -> void:
 		else:
 			_nav_to(u, dest, 0.3)
 		return
+	if _bot_climb(u):
+		return
 	var goal: Vector2 = u.pos
 	var enemy_carrier := oracle_carrier(1 - u.team)    # enemies carrying their Oracle home: stop them
 	var ally_carrier := oracle_carrier(u.team)         # we're carrying ours home
@@ -2767,9 +2818,9 @@ func _fish_spot(u: Dictionary) -> Vector2:
 		return u.fish_spot
 	var side := 1.0 if spawn(u.team).y > 0.0 else -1.0
 	var best := Vector2.INF
-	for i in range(-14, 15):
+	for i in range(-20, 21):
 		var x := i * 2.0
-		var p := Vector2(x, Land.river_c(x) + side * (Land.RIVER_HW + 1.3))
+		var p := Vector2(x, Land.river_c(x) + side * (Land.river_hw(x) + 1.3))
 		if not at_river_bank(p) or _blocked_point(p, u.team, UNIT_R + 0.1):
 			continue
 		if best == Vector2.INF or u.pos.distance_to(p) < u.pos.distance_to(best):
@@ -2854,3 +2905,135 @@ func _melee_count(u: Dictionary, r: float) -> int:
 		if o.team != u.team and alive(o) and o.pos.distance_to(u.pos) <= r:
 			n += 1
 	return n
+
+
+# ---------- towers (0.26.0) ----------
+static var _outside: Array = []
+
+static func _outside_cells() -> Array:
+	# Nav cells beyond the field's natural edge (walls alone left closed-off pockets pathable).
+	if _outside.is_empty():
+		for x in NAV_W:
+			for y in NAV_H:
+				var c := Vector2i(x, y)
+				if not Land.inside_field(nav_point(c)):
+					_outside.append(c)
+	return _outside
+
+func tower_range(u: Dictionary) -> float:
+	return TOWER_RANGE if int(u.get("tower", -1)) >= 0 else 1.0
+
+func tower_slot_pos(u: Dictionary) -> Vector2:
+	var op: Dictionary = outposts[int(u.tower)]
+	var k: int = (op.occ as Array).find(u.id)
+	return (op.p as Vector2) + TOWER_SLOT_OFF[maxi(k, 0) % TOWER_SLOT_OFF.size()]
+
+func tower_to_enter(u: Dictionary) -> Dictionary:
+	# The tower this unit could climb right now: archers and mages, at a tower their team holds.
+	if not alive(u) or not TOWER_CLASSES.has(u.cls) or u.carrying or u.offering or int(u.get("tower", -1)) >= 0:
+		return {}
+	for op in outposts:
+		if int(op.owner) == u.team and u.pos.distance_to(op.p) <= TOWER_ENTER_R and (op.occ as Array).size() < TOWER_SLOTS:
+			return op
+	return {}
+
+func _enter_tower(u: Dictionary, op: Dictionary) -> bool:
+	(op.occ as Array).append(u.id)
+	u.tower = int(op.id)
+	u.task = {}
+	u.move = Vector2.ZERO
+	u.path = PackedVector2Array()
+	u["tower_seen"] = time
+	u.pos = tower_slot_pos(u)
+	_event("tower_up", {"id":u.id, "tower":op.id, "team":u.team})
+	return true
+
+func _free_tower_slot(u: Dictionary) -> Vector2:
+	# Off the tower: back on the ground beside it, on the side the unit faces. Returns that spot.
+	var op: Dictionary = outposts[int(u.tower)]
+	(op.occ as Array).erase(u.id)
+	u.tower = -1
+	var spot: Vector2 = (op.p as Vector2) + dir_of(u.face) * (Land.OUTPOST_TOWER_R + UNIT_R + 0.35)
+	u.pos = _clamp_to_field(_push_out(_clamp_to_field(spot), UNIT_R, u.team))
+	return u.pos
+
+func _leave_tower(u: Dictionary, thrown := false) -> bool:
+	if int(u.get("tower", -1)) < 0:
+		return false
+	var tid := int(u.tower)
+	_free_tower_slot(u)
+	u.state = "idle"
+	if thrown:
+		u.stun = maxf(u.stun, 0.8)
+	_event("tower_down", {"id":u.id, "tower":tid, "team":u.team, "thrown":thrown})
+	return true
+
+func _eject_tower(op: Dictionary) -> void:
+	for id in (op.occ as Array).duplicate():
+		var o: Dictionary = by_id.get(id, {})
+		if not o.is_empty():
+			_leave_tower(o, true)
+	(op.occ as Array).clear()
+
+func _think_tower(u: Dictionary) -> void:
+	# A bot on a tower shoots whatever comes in range and climbs down once things go quiet (or our
+	# King needs everyone).
+	u.move = Vector2.ZERO
+	var foe := nearest_enemy(u, float(CLASSES[u.cls].range) * TOWER_RANGE * 0.95)
+	if not foe.is_empty():
+		u["tower_seen"] = time
+		u.face = angle_of(foe.pos - u.pos)
+		_start_attack(u, "ability" if u.cls == "ranger" and u.cd_ability <= 0.0 and rng.randf() < 0.3 else "attack")
+		return
+	var urgent: bool = not oracle_carrier(1 - u.team).is_empty() or not oracle_returner(u.team).is_empty() \
+		or not oracle_carrier(u.team).is_empty()
+	if urgent or time - float(u.get("tower_seen", time)) > 8.0:
+		_leave_tower(u)
+
+func _bot_climb(u: Dictionary) -> bool:
+	# Archer and mage bots climb a tower we hold when a fight comes near it (not raiders, not while a
+	# King is on the move). True when this tick's move is decided.
+	if not TOWER_CLASSES.has(u.cls) or u.role == "raid" or u.offering or u.has("post") or u.carrying:
+		return false
+	if not oracle_carrier(1 - u.team).is_empty() or not oracle_carrier(u.team).is_empty() or not oracle_returner(u.team).is_empty():
+		return false
+	var best := {}
+	var bd := 14.0
+	for op in outposts:
+		if int(op.owner) != u.team:
+			continue
+		var d: float = u.pos.distance_to(op.p)
+		if d > bd:
+			continue
+		var bots := 0
+		for id in op.occ:
+			if bool((by_id.get(id, {}) as Dictionary).get("bot", false)):
+				bots += 1
+		if bots >= TOWER_BOT_MAX or (op.occ as Array).size() >= TOWER_SLOTS:
+			continue
+		var threat := false
+		for o in units:
+			if o.team != u.team and alive(o) and (o.pos as Vector2).distance_to(op.p) < 18.0:
+				threat = true
+				break
+		if threat:
+			bd = d
+			best = op
+	if best.is_empty():
+		return false
+	if u.pos.distance_to(best.p) <= TOWER_ENTER_R - 0.3:
+		u.move = Vector2.ZERO
+		return _enter_tower(u, best)
+	var side: Vector2 = (u.pos - (best.p as Vector2)).normalized()
+	_nav_to(u, (best.p as Vector2) + side * (Land.OUTPOST_TOWER_R + 1.0), 0.4)
+	return true
+
+
+static func _lane_cell(p: Vector2) -> bool:
+	# On the island lane: its two bridges or the island between them.
+	if Land.island_off(p) < 0.5:
+		return true
+	for b in Land.bridges():
+		if bool(b.lane) and absf(p.x - (b.c as Vector2).x) <= float(b.half_w) + 0.6 and absf(p.y - (b.c as Vector2).y) <= float(b.half_len):
+			return true
+	return false

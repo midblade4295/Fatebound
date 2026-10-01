@@ -8,7 +8,7 @@ extends RefCounted
 # objects: decode() uses the default allow_objects=false.
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 
-const VERSION := 18              # 18 = no "water" in the dungeons (wading only in the river); 17 = rampart shots
+const VERSION := 19              # 19 = climbable towers + the bigger natural map; 18 = no "water" in the dungeons (wading only in the river); 17 = rampart shots
 const DEFAULT_URL := "wss://136-113-125-3.sslip.io/fatebound/siege/ws"
 const DEFAULT_PORT := 8082
 const SNAP_HZ := 15.0            # 10 -> 15 (0.18.4): ~1.3 KB each, ~19 KB/s per player; remote
@@ -29,10 +29,10 @@ const HAT_CLS := ["knight", "barbarian", "rogue", "ranger", "mage", "worker", "p
 
 # Per-unit values in the snapshot, in this order, each packed as a signed 16-bit integer of
 # value * SCALE[i] (positions to 1 cm, angles to 0.001 rad, timers to 0.01 s).
-const F := 31
+const F := 32
 const SCALE := [1.0, 1.0, 100.0, 100.0, 1000.0, 1.0, 1.0, 1.0, 100.0, 1.0,
 	1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 100.0, 100.0, 1.0, 1.0,
-	1.0, 1.0, 0.1, 1.0, 10.0, 1.0, 1.0, 1.0, 1.0, 1.0, 100.0]
+	1.0, 1.0, 0.1, 1.0, 10.0, 1.0, 1.0, 1.0, 1.0, 1.0, 100.0, 1.0]
 
 # Wire format: 1 byte tag + payload. "R" = var_to_bytes, "Z" = zstd(var_to_bytes) with the raw
 # size in 4 bytes. Snapshots are compressed; small client messages go raw.
@@ -118,6 +118,7 @@ static func snapshot(sim, for_unit: String, events: Array) -> Dictionary:
 		u_arr[b + 28] = float(u.get("fed", 0))
 		u_arr[b + 29] = 1.0 if sim.blocking(u) else 0.0
 		u_arr[b + 30] = maxf(0.0, float(u.get("whirl_until", 0.0)) - sim.time)
+		u_arr[b + 31] = float(int(u.get("tower", -1)) + 1)       # 0 = on the ground
 		i += 1
 	var packed := PackedByteArray()
 	packed.resize(vals.size() * 2)
@@ -228,6 +229,14 @@ static func apply(sim, msg: Dictionary, me_id: String, predict := false) -> void
 		u.block_until = 1.0e9 if u_arr[b + 29] > 0.5 else 0.0
 		u.whirl_until = 1.0e9 if u_arr[b + 30] > 0.005 else 0.0
 		u.fed = int(u_arr[b + 28])
+		u.tower = int(round(u_arr[b + 31])) - 1
+	# Who is up which tower, rebuilt from the units (the view and the HUD read op.occ).
+	for op in sim.outposts:
+		op.occ = []
+	for u in sim.units:
+		var tw := int(u.get("tower", -1))
+		if tw >= 0 and tw < sim.outposts.size():
+			(sim.outposts[tw].occ as Array).append(u.id)
 	# Projectiles slide between snapshots like units (0.18.5, Kevin: "projectiles skip across the
 	# screen online"): they used to be redrawn only at each snapshot's position, so an arrow at
 	# 22 m/s sat still for 66 ms and then jumped 1.5 m. Now each keeps from/to: a new one starts at
