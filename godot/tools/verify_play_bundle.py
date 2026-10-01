@@ -55,7 +55,13 @@ with zipfile.ZipFile(p) as z:
  names=z.namelist()
  assert 'BundleConfig.pb' in names and 'base/manifest/AndroidManifest.xml' in names
  assert 'base/dex/classes.dex' in names
- assert not any('/tests/' in n or '/reports/' in n or '/tools/' in n or '/server/' in n or n.endswith(('.keystore','.jks','.b64')) for n in names)
+ # Project-root dev folders (res://tests, reports, tools, server, store-listing) must not ship. Game assets
+ # may legitimately live in folders named "tools" (e.g. assets/kaykit/tools = the in-game axe/pickaxe models).
+ def res_path(n):
+  return n.split('/assets/',1)[1] if '/assets/' in n else ''
+ dev_roots=('tests/','reports/','tools/','server/','store-listing/')
+ leaked=[n for n in names if res_path(n).startswith(dev_roots) or '/tests/' in n or '/reports/' in n or '/server/' in n or '/store-listing/' in n or n.endswith(('.keystore','.jks','.b64','.p12'))]
+ assert not leaked,('Development/test/server/signing files shipped',leaked[:10])
  assert not any(n.endswith('/index.html') or n.endswith('/fatebound.html') for n in names)
  # Godot's Gradle AAB uses an install-time asset pack rather than the APK's direct base
  # assets. Locate the game's module from its packed project settings (every export has one).
