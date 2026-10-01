@@ -219,6 +219,42 @@ func _init() -> void:
 	fs.act(fisher.id, "interact")
 	assert(int(cap.cakes) == fed0 + 1 and not fisher.offering, "the fish feeds their King")
 	print("fishing rules ok")
+	# Ladder climbing (Round 25): over a ladder a unit goes up the rungs to the wall top, over, and down inside,
+	# slower on the rungs.
+	var ls = Sim.new()
+	ls.setup(4, 19)
+	var lw: Dictionary = ls.units.filter(func(x): return x.team == 0)[1]
+	var lk: Dictionary = ls.units.filter(func(x): return x.team == 0)[2]
+	for u in ls.units:
+		u.bot = false
+		u.move = Vector2.ZERO
+		if u.id != lw.id and u.id != lk.id: u.pos = Sim.spawn(u.team)
+	ls._set_class(lw, "worker", false)
+	ls.stock[0].wood = 60
+	lw.pos = Vector2(-14.0, -36.3)
+	ls.act(lw.id, "interact")
+	for i in int(3.3 / Sim.TICK):
+		ls.step(Sim.TICK)
+	assert(ls.ladders.size() == 1, "the worker raised a ladder")
+	lw.pos = Vector2(-18.0, -30.0)
+	ls._set_class(lk, "knight", false)
+	lk.pos = Vector2(-14.0, -34.5)
+	var top := 0.0
+	var t_on := -1.0
+	var t_off := -1.0
+	for i in int(8.0 / Sim.TICK):
+		lk.move = Vector2(0.0, -1.0)
+		ls.step(Sim.TICK)
+		var dd: float = ls.ladder_depth(lk.pos, 0)
+		var lift: float = Sim.ladder_lift(dd, Sim.height_at(lk.pos))
+		top = maxf(top, lift)
+		if dd != INF and t_on < 0.0: t_on = ls.time
+		if dd == INF and t_on >= 0.0 and t_off < 0.0: t_off = ls.time
+	var got_in: bool = (lk.pos as Vector2).y < -40.0          # past the wall (z -38) into their courtyard
+	assert(top >= Sim.LADDER_TOP - 0.05, "climbers go up to the wall top (%.2f m)" % top)
+	assert(t_off > t_on and t_off - t_on > 1.5 and t_off - t_on < 5.0, "the climb takes a believable time (%.1f s)" % (t_off - t_on))
+	assert(got_in, "and ends up inside their castle (%s)" % str(lk.pos))
+	print("ladder climb ok (top %.2f m, %.1f s across)" % [top, t_off - t_on])
 	# The rampart (Round 15): at L1 height behind the front wall, stairs down; arrows from up there
 	# fly over the wall, arrows from the courtyard floor don't.
 	var rs = Sim.new()

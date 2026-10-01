@@ -89,7 +89,11 @@ const LADDER_COST := 8
 const LADDER_BUILD := 3.0
 const LADDER_HP := 250.0
 const LADDER_HALF := 1.1          # half-width of the passage along the wall
-const LADDER_CLIMB := 0.5         # speed while crossing the wall
+const LADDER_CLIMB := 0.5         # (old flat crossing speed; the climb now goes by ladder_depth, below)
+# Climbing (Round 25, Kevin: "when players use a ladder they climb up it and over the wall"): the ladder stands
+# 1.35 m out from the wall and reaches its top; climbers go up the rungs, over the top, and drop down inside.
+const LADDER_FOOT := 1.35         # where the ladder meets the ground, out from the wall line
+const LADDER_TOP := 2.9           # the height they go over at
 
 # ---- gathering / crafting ----
 const CARRY_MAX := 5
@@ -1653,8 +1657,11 @@ func move_mult(u: Dictionary, mult := 1.0) -> float:
 	# Speed multipliers for free movement (not the Oracle carry, handled by the caller).
 	if u.offering:
 		mult = minf(mult, 0.9)
-	if not ladders.is_empty() and ladder_climb(u):
-		mult *= LADDER_CLIMB
+	if not ladders.is_empty():
+		var ld := ladder_depth(u.pos, u.team)
+		if ld != INF:
+			# Slow on the rungs (so the climb reads), quicker over the top, quicker still dropping down.
+			mult *= 0.3 if ld >= 0.35 else (0.45 if ld >= -0.35 else 0.7)
 	if u.load.n > 0:
 		mult = minf(mult, 0.85)
 	if str(u.beam) != "":
@@ -1821,6 +1828,34 @@ func on_ladder(p: Vector2, wall_index: int, team: int) -> bool:
 			if along.distance_to(l.p) <= LADDER_HALF and p.distance_to(along) <= w.r + UNIT_R + 0.6:
 				return true
 	return false
+
+func ladder_depth(p: Vector2, team: int) -> float:
+	# How far across one of `team`'s ladders p is: + on the ladder's side of the wall (where it stands),
+	# - on the far side; INF when not on one.
+	for l in ladders:
+		if int(l.team) != team:
+			continue
+		var w: Dictionary = walls[int(l.wall)]
+		var along: Vector2 = seg_closest(p, w.a, w.b)
+		if along.distance_to(l.p) > LADDER_HALF:
+			continue
+		var outward := Vector2(0, 1) if int(l.team) == 0 else Vector2(0, -1)
+		var d: float = (p - along).dot(outward)
+		if absf(d) <= float(w.r) + UNIT_R + 0.6:
+			return d
+	return INF
+
+static func ladder_lift(d: float, ground: float) -> float:
+	# A climber's height at depth d: up the rungs (LADDER_FOOT -> 0.35), a little arc over the top, then a drop
+	# to the ground on the far side (accelerating).
+	if d == INF or d >= LADDER_FOOT:
+		return ground
+	if d >= 0.35:
+		return maxf(ground, LADDER_TOP * (LADDER_FOOT - d) / (LADDER_FOOT - 0.35))
+	if d >= -0.35:
+		return LADDER_TOP + 0.15 * (1.0 - (d / 0.35) * (d / 0.35))
+	var k := clampf((-0.35 - d) / 1.5, 0.0, 1.0)
+	return lerpf(LADDER_TOP, ground, k * k)
 
 func ladder_climb(u: Dictionary) -> bool:
 	for l in ladders:

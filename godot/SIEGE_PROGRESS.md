@@ -1010,3 +1010,13 @@ K2/K3 notes (0.17.0)
   stab finishes her (hp 12). "STAB THEM IN THE BACK". Shots trimmed (USE) so the title (41.7 s) stays on the drop.
 - VO pending: 12 gather "Chop wood! Mine stone!", 13 build "Build ladders and climb into their castle!",
   14 backstab "Sneak up... and stab them in the back!". Line 7 (the spin) is unused now.
+
+# 0.25.0 (Kevin): "when players use a ladder they climb up it and over the wall"
+- Before: a ladder only let its team walk through the wall at ground level at half speed.
+- Sim: ladder_depth(p, team) = how far across one of the team's ladders (+ on its side, - beyond, INF off it);
+  ladder_lift(d, ground): up the rungs from the foot (1.35 m out) to the top (LADDER_TOP 2.9 m), a 0.15 m arc over,
+  then an accelerating drop to the ground beyond (the courtyard, or the rampart walkway). Speeds by zone: 0.3 on
+  the rungs, 0.45 over the top, 0.7 dropping. Visual height only (not "high ground" for arrows).
+- View: units on a ladder are lifted by ladder_lift and play the arms-up Jump_Idle pose (the rigs have no climb).
+- sim smoke "ladder climb": a knight peaks at 3.05 m, takes 2.1 s across, ends inside their courtyard.
+- Protocol v14 (movement rule: server and client prediction must agree).

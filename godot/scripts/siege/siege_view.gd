@@ -1742,7 +1742,11 @@ func sync(dt: float) -> void:
 		if a.is_empty() or not is_instance_valid(a.root):
 			continue
 		var root: Node3D = a.root
-		var target := Vector3(u.pos.x, Sim.height_at(u.pos), u.pos.y)
+		var gy := Sim.height_at(u.pos)
+		# On a ladder: up the rungs, over the wall, down the far side (Round 25).
+		var climb_d: float = sim.ladder_depth(u.pos, u.team) if not sim.ladders.is_empty() and u.state != "dead" else INF
+		a.climb = climb_d != INF and Sim.ladder_lift(climb_d, gy) > gy + 0.15
+		var target := Vector3(u.pos.x, Sim.ladder_lift(climb_d, gy) if climb_d != INF else gy, u.pos.y)
 		var before := root.position
 		# Smooth between 30 Hz sim ticks; snap on respawn teleports.
 		if before.distance_to(target) > 6.0:
@@ -1947,6 +1951,8 @@ func _animate(a: Dictionary, u: Dictionary, vel: float) -> void:
 		return
 	if u.stun > 0.0:
 		_play(a, "g/Hit_B", 0.6)
+	elif bool(a.get("climb", false)):
+		_play(a, "mb/Jump_Idle")                 # arms up on the rungs / over the top (Round 25)
 	elif u.state == "dodge":
 		_play(a, "ma/Dodge_Forward", 1.6, 0.3)
 	elif sim.whirling(u):
