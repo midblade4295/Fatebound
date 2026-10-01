@@ -1041,3 +1041,15 @@ K2/K3 notes (0.17.0)
 - tools/store2_compose.py: gold Luckiest Guy headline + Fredoka subline over a dark top band; feature graphic
   1024x500 cut from the title reveal (title, god rays, tagline). 8 screenshots: assault, captive, heroes, build,
   rampart, backstab, feast, carry. Every claim true of 0.25.0.
+
+# 0.25.1 (Kevin): new game icon
+- The old icon (a realistic armoured knight holding a die, from the dice-game days) -> Kevin's King: an engine
+  render (tools/icon_render.gd: transparent SubViewport, portrait lighting, aimed at the measured head) composed
+  by tools/icon_compose.py as a sticker (navy outline) on a royal-blue sunburst. Play Store icon 512x512 (output),
+  legacy 192 (assets/branding/icon.png), adaptive foreground (head and crown inside the 288 px safe circle),
+  background (the sunburst) and monochrome (his silhouette, for themed icons) -- all three Android presets now set
+  the background and monochrome layers too. Checked in the APK's mipmaps.
+- store-listing/.gdignore: the merged store listing pack (31 MB of screenshots) was being imported and shipped in the
+  APK (57 -> 81 MB); excluded again (57 MB).
+- The version bump used line numbers in export_presets.cfg, which moved when the icon lines were added: bump by
+  value now (version/code=N, version/name="...").
