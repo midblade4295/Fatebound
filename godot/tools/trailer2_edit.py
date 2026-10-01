@@ -48,6 +48,9 @@ VO_LEAD = 0.35      # a line starts this far into its shot
 DUCK = "threshold=0.12:ratio=2:attack=40:release=700:knee=6"
 VO_GAIN = 1.7
 VO_GAIN_FINALE = 2.6
+# Lines over louder stretches of the song get more, so every line sits ~10-12 dB over the music (measured with
+# --duck-out: the backstab line was only 6 dB over it).
+VO_GAIN_SHOT = {"backstab": 2.7}
 
 
 FINALE_TEXT = "this is fatebound"       # the Herald's last line, as the aligner hears it
@@ -191,7 +194,7 @@ def main():
             prev_end = at + vlen
             print(f"  {SHOTS[k]:8s} line {VO_FILE[SHOTS[k]]:2d} at {at:5.2f}-{prev_end:5.2f} s", flush=True)
             # The last line sits on the drop, the loudest music in the trailer: a little more so it cuts through.
-            gain = VO_GAIN_FINALE if SHOTS[k] == "reveal" else VO_GAIN
+            gain = VO_GAIN_FINALE if SHOTS[k] == "reveal" else VO_GAIN_SHOT.get(SHOTS[k], VO_GAIN)
             fl.append(f"[{si + 1 + n}:a]aresample=48000,volume={gain},adelay={int(at * 1000)}|{int(at * 1000)}[h{n}]")
             labels.append(f"[h{n}]")
         fl.append(f"{''.join(labels)}amix=inputs={len(labels)}:normalize=0,apad=whole_dur={total:.3f}[herald]")
