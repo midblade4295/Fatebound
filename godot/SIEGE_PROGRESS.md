@@ -1082,3 +1082,9 @@ K2/K3 notes (0.17.0)
   1.12, contrast 1.06; MSAA 4x (2x without it).
 - The software renderer (llvmpipe: tests, trailer and store renders) keeps the old look unless FB_FORCE_HQ: it once
   hung on shadow-casting Kings. Checked with FB_FORCE_HQ: shadows under walls, steps, buildings and units, no acne.
+
+# 0.25.3 (Kevin: "make the auto 30fps toggled")
+- The thermal guard (under 50 fps for 3 s at the 60 cap -> 30 fps, then 75 % 3D resolution if still under 26) is now
+  a setting: "Auto 30 FPS when the phone runs hot" in Settings and "AUTO 30 FPS: ON/OFF" in the pause menu (same
+  profile setting auto_30fps, default on = the old behaviour). Off: it never drops fps or resolution on its own.
+- siege_guard_smoke: phase 2 with it off at ~30 fps -> no trip, cap stays 60.

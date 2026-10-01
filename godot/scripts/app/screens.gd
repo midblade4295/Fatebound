@@ -622,6 +622,16 @@ static func settings(app, root: VBoxContainer) -> void:
 		d.settings.hq_graphics = on
 		p.save())
 	au.add_child(hq)
+	var af := CheckButton.new()
+	af.text = "Auto 30 FPS when the phone runs hot"
+	af.button_pressed = bool(d.settings.get("auto_30fps", true))
+	af.add_theme_font_override("font", UI.HEAVY_FONT)
+	af.add_theme_font_size_override("font_size", 13)
+	af.set_meta("action_key", "auto_30fps")
+	af.toggled.connect(func(on: bool):
+		d.settings.auto_30fps = on
+		p.save())
+	au.add_child(af)
 	# Old progress
 	var mig: Dictionary = d.migration
 	var old := UI.card(root)

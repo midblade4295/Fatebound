@@ -13,6 +13,8 @@ signal replay_requested
 signal action_pressed(kind: String)
 signal fps_toggled
 signal res_cycled
+signal auto_fps_toggled
+var auto_fps_source: Callable          # -> bool: the match's Auto 30 FPS setting
 var res_label_source: Callable   # -> float render scale
 signal workshop_tools
 signal workshop_buy(id: String)
@@ -186,6 +188,13 @@ func _build_pause_panel() -> void:
 	fps_btn.pressed.connect(func():
 		fps_toggled.emit()
 		fps_btn.text = "30 FPS MODE: " + ("ON" if Engine.max_fps == 30 else "OFF"))
+	var auto_btn := _button(v, "AUTO 30 FPS: ON", "secondary", func(): pass)
+	var auto_text := func() -> String:
+		return "AUTO 30 FPS: " + ("ON" if (not auto_fps_source.is_valid() or bool(auto_fps_source.call())) else "OFF")
+	pause_panel.visibility_changed.connect(func(): auto_btn.text = auto_text.call())
+	auto_btn.pressed.connect(func():
+		auto_fps_toggled.emit()
+		auto_btn.text = auto_text.call())
 	var res_btn := _button(v, "RESOLUTION: 100%", "secondary", func(): pass)
 	res_btn.pressed.connect(func():
 		res_cycled.emit()

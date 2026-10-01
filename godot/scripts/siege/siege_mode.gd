@@ -30,6 +30,7 @@ var guard_tripped := false
 var _guard_res_low := 0
 var low_fx := false
 var hq_gfx := true          # High-quality graphics (Settings): shadows, glow, smoother edges
+var auto_fps := true        # Auto 30 FPS (Settings / pause menu): the thermal guard may drop fps and resolution
 var audio: Node = null
 var profile = null       # scripts/meta/profile.gd — rewards, challenges and cosmetics
 var rewards: Dictionary = {}
@@ -107,6 +108,12 @@ func _ready() -> void:
 			_restart())
 	hud.fps_toggled.connect(func(): set_fps_cap(30 if fps_cap == 60 else 60))
 	hud.res_label_source = func() -> float: return render_scale
+	hud.auto_fps_source = func() -> bool: return auto_fps
+	hud.auto_fps_toggled.connect(func():
+		auto_fps = not auto_fps
+		if profile != null:
+			profile.d.settings["auto_30fps"] = auto_fps
+			profile.save())
 	hud.res_cycled.connect(func():
 		var steps := [1.0, 0.75, 0.5]
 		var i := 0
@@ -495,6 +502,10 @@ func finish_tutorial() -> void:
 	exited.emit()
 
 func _thermal_guard(delta: float) -> void:
+	if not auto_fps:
+		_guard_low = 0
+		_guard_res_low = 0
+		return                    # switched off (Round 31, Kevin): never drops fps or resolution on its own
 	_guard_clock += delta
 	if _guard_clock < 1.0:
 		return
