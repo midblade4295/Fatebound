@@ -41,6 +41,33 @@ VO_GAIN = 1.7
 VO_GAIN_FINALE = 2.6
 
 
+FINALE_TEXT = "this is fatebound"       # the Herald's last line, as the aligner hears it
+FINALE_WORD = "fatebound"               # ... and the word the title pops in on
+FINALE_WORD_FALLBACK = 1.11             # measured in Kevin's read (s into the line), if pocketsphinx is missing
+
+
+def word_onset(path, text, word):
+    # Where `word` starts in the recording at `path`: force-align the known text (Kevin: "right when he says
+    # 'fatebound' the title of the game pops in").
+    try:
+        from pocketsphinx import Decoder
+    except ImportError:
+        return FINALE_WORD_FALLBACK
+    raw = subprocess.run(["ffmpeg", "-v", "error", "-i", path, "-ac", "1", "-ar", "16000", "-f", "s16le", "-"],
+                         capture_output=True, check=True).stdout
+    d = Decoder(samprate=16000)
+    if d.lookup_word("fatebound") is None:
+        d.add_word("fatebound", "F EY T B AW N D", True)
+    d.set_align_text(text)
+    d.start_utt()
+    d.process_raw(raw, full_utt=True)
+    d.end_utt()
+    for sg in d.seg():
+        if sg.word.split("(")[0] == word:
+            return sg.start_frame / 100.0
+    return FINALE_WORD_FALLBACK
+
+
 def caption_png(text, path):
     f = ImageFont.truetype(FONT, 88)
     img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
@@ -134,7 +161,13 @@ def main():
         prev_end = 0.0
         for n, (k, f) in enumerate(vo_files):
             inputs += ["-i", f]
-            at = (title_global + 0.9) if SHOTS[k] == "reveal" else (starts[k] + VO_LEAD)
+            if SHOTS[k] == "reveal":
+                # "This... is FATEBOUND!": placed so the word starts exactly as the title pops in (on the drop).
+                onset = word_onset(f, FINALE_TEXT, FINALE_WORD)
+                at = title_global - onset
+                print(f"  '{FINALE_WORD}' starts {onset:.2f} s into the line -> line at {at:.2f} s, the word at {title_global:.2f} s (title)", flush=True)
+            else:
+                at = starts[k] + VO_LEAD
             # Never on top of the line before: a long read tails into the next shot's crossfade, and the
             # next line waits for it (plus a beat).
             vlen = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", f],

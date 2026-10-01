@@ -982,3 +982,9 @@ K2/K3 notes (0.17.0)
   0.06 / 2.5 still 6-10). Now threshold 0.12, ratio 2, knee 6, attack 40 ms, release 700 ms: 2.7-5.1 dB dips
   (~4 avg), the Herald 7-15 dB over the music; VO gain 1.7 (finale 2.6: 7.2 dB over the drop); limiter, -0.8 dBFS.
 - New --stage audio: rebuilds just the mix onto an existing cut (video stream copied) in ~7 s.
+
+# Trailer 2: the title pops in on "FATEBOUND" (Kevin: "right when he says 'fatebound' the title pops in")
+- trailer2_edit.py finds the word's onset in the last line by forced alignment (word_onset; "fatebound" at 1.11 s
+  in Kevin's read) and places the line so the word starts at the title (35.30 s, also the song's drop): line at
+  34.19 s. Checked in the final mix: "fatebound" aligns at 35.29 s; the flash is on the 35.27 s frame, the title
+  solid by 35.45 s.
