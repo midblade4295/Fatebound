@@ -445,11 +445,12 @@ func _apply_hq(env: Environment, sun: DirectionalLight3D) -> void:
 	# a warm sun against cool sky-blue shade instead of flat grey, a subtle glow on the brightest highlights
 	# (low glow levels only: the cheap passes), and 2x MSAA (cheap on tile-based phone GPUs).
 	sun.shadow_enabled = true
-	# One shadow pass over 45 m (Round 35, Kevin: 21 fps in a big gate fight). tests/battle_bench.gd: two splits to
-	# 80 m drew 323k shadow triangles in 325 draw calls -- more than the visible scene; one pass to 45 m (the
-	# camera sees ~40 m) draws 121k in 97, and with MSAA 2x the frame costs 35 % of before.
+	# One shadow pass reaching the top of the screen (Round 36, Kevin: "I don't see shadows from trees"). The camera
+	# is 38 m up: the visible ground is 28 m deep at the bottom of the screen and ~70 m at the top, so 0.27.2's 45 m
+	# left the upper half (field, trees, rocks, bridges) unshadowed. tests/battle_bench.gd with MSAA 2x: one pass to
+	# 75 m costs +4 % over 45 m (two splits to 80 m +7 %) -- the 21 fps was MSAA 4x, not shadow reach.
 	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL
-	sun.directional_shadow_max_distance = 45.0
+	sun.directional_shadow_max_distance = 75.0
 	sun.shadow_bias = 0.03
 	sun.shadow_normal_bias = 1.1
 	sun.shadow_blur = 1.3

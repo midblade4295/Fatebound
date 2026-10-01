@@ -1127,3 +1127,9 @@ K2/K3 notes (0.17.0)
   scene). Script cost of the same fight headless, uncapped: 4.2 ms avg, 6.6 ms 95th (x86) -- not the bottleneck.
 - Fix: MSAA back to 2x; one orthogonal shadow pass to 45 m (the camera sees ~40 m): 283 ms (-65 %), shadow pass
   121k triangles in 97 calls; shadows look the same (render compared). Glow, water and motes kept.
+
+# 0.27.3 (Kevin: "I don't see shadows from trees and stuff")
+- 0.27.2 cut the shadow reach to 45 m on a wrong assumption ("the camera sees ~40 m"). Measured: the camera is 38 m
+  up, the visible ground is 28 m deep at the bottom of the screen and ~70 m at the top, so the upper half had no
+  shadows. One orthogonal pass to 75 m: trees, rocks, ledges and bridges shadowed again (render compared).
+  battle_bench (MSAA 2x): 45 m 326 ms, 75 m 340 ms (+4 %), two splits to 80 m 349 ms -- the 21 fps was MSAA 4x.

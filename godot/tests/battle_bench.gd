@@ -43,6 +43,13 @@ func _apply(cfg: String) -> void:
 			_vp().msaa_3d = Viewport.MSAA_2X
 			sun.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL
 			sun.directional_shadow_max_distance = 45.0
+		"ortho75":
+			# one shadow pass reaching the top of the screen (the game camera sees ground out to ~70 m deep)
+			_vp().msaa_3d = Viewport.MSAA_2X
+			sun.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL
+			sun.directional_shadow_max_distance = 75.0
+		"split2_80_msaa2":
+			_vp().msaa_3d = Viewport.MSAA_2X
 		"hq_off_like":
 			sun.shadow_enabled = false
 			_vp().msaa_3d = Viewport.MSAA_2X
