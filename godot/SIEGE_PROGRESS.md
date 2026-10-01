@@ -1033,3 +1033,11 @@ K2/K3 notes (0.17.0)
   listing pack and Kevin's PLAY_STORE_HANDOFF.md. Merged it (85b04de): the 26 conflicts were older copies of code
   already newer here (ours kept); the merge adds only those 41 docs files. The bundle is now based on a269a43,
   and the push was tested against a stand-in of GitHub's current state: fast-forward, nothing overwritten.
+
+# Cinematic Play Store graphics (Kevin: "new cinematic screenshots for the Play Store")
+- tools/store2_shots.gd (extends trailer2_shots.gd): SHOT/STILL_AT/OUT -> a 1080x1920 still of a staged trailer shot,
+  HUD hidden; portrait cameras for captive (over the guards), build (along the wall), rampart (low, outside, up at
+  the rangers), clash (unused: a jumble in portrait -> the gate assault opens the set instead).
+- tools/store2_compose.py: gold Luckiest Guy headline + Fredoka subline over a dark top band; feature graphic
+  1024x500 cut from the title reveal (title, god rays, tagline). 8 screenshots: assault, captive, heroes, build,
+  rampart, backstab, feast, carry. Every claim true of 0.25.0.
