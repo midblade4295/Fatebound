@@ -1026,3 +1026,10 @@ K2/K3 notes (0.17.0)
   mind ... would mind stone"); now in tools/trailer2_vo. All 13 lines in the cut, no overlaps, -0.8 dBFS.
 - Backstab: the archer turned round to face the rogue before he struck -- _start_attack aims at the nearest enemy.
   Her shots now fire without aim ("shoot" beat, aim=false) and her facing stays locked away from him.
+
+# GitHub sync (Kevin: "upload to GitHub")
+- No credentials in this environment (no token, credential store or gh CLI): Kevin pushes with push_siege_r5.sh.
+- GitHub's claude/siege-dev-r5 (a269a43) had been rewritten (same work, different ids) and gained Codex's store
+  listing pack and Kevin's PLAY_STORE_HANDOFF.md. Merged it (85b04de): the 26 conflicts were older copies of code
+  already newer here (ours kept); the merge adds only those 41 docs files. The bundle is now based on a269a43,
+  and the push was tested against a stand-in of GitHub's current state: fast-forward, nothing overwritten.
