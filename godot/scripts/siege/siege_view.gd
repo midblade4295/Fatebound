@@ -53,6 +53,7 @@ var _fx: Array = []
 var _time := 0.0
 var _cam_target := Vector3.ZERO
 var low_fx := false
+var hq_gfx := true          # High-quality graphics (Round 30): set by SiegeMode from Settings before _ready
 
 static func libraries() -> Dictionary:
 	if _libs.is_empty():
@@ -96,7 +97,58 @@ func _warm_up() -> void:
 		get_tree().create_timer(0.3).timeout.connect(n.queue_free)
 
 # ---------- world ----------
+var _hq_cached := -1
+static var _cast_static := false     # for the static make_body: set from _hq() before any unit is built
+
+func _hq() -> bool:
+	# High-quality graphics, except under the software renderer this project is built and tested with (it hung
+	# on shadow-casting Kings in the full scene): there only when FB_FORCE_HQ is set, to check the look. Cached.
+	if _hq_cached < 0:
+		var soft := RenderingServer.get_video_adapter_name().to_lower().contains("llvmpipe")
+		_hq_cached = 1 if hq_gfx and (not soft or OS.has_environment("FB_FORCE_HQ")) else 0
+	return _hq_cached == 1
+
+func _cast() -> GeometryInstance3D.ShadowCastingSetting:
+	# Solid things (castles, buildings, blocks, iron bars, units) cast shadows in high quality; ground, water,
+	# grass, decals and effects never do (they only receive).
+	return GeometryInstance3D.SHADOW_CASTING_SETTING_ON if _hq() else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+func _apply_hq(env: Environment, sun: DirectionalLight3D) -> void:
+	# Round 30 (Kevin: "increase the graphical fidelity -- lighting, shadows"). The Mobile renderer has no SSAO,
+	# SSR or GI, so: real sun shadows (castles, buildings, trees, units, Kings; grass and flowers stay out),
+	# a warm sun against cool sky-blue shade instead of flat grey, a subtle glow on the brightest highlights
+	# (low glow levels only: the cheap passes), and 2x MSAA (cheap on tile-based phone GPUs).
+	sun.shadow_enabled = true
+	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
+	sun.directional_shadow_max_distance = 80.0
+	sun.directional_shadow_split_1 = 0.3
+	sun.directional_shadow_blend_splits = true
+	sun.shadow_bias = 0.03
+	sun.shadow_normal_bias = 1.1
+	sun.shadow_blur = 1.3
+	sun.shadow_opacity = 1.0
+	# Rebalanced so shadows read: the ambient fill was tuned for a shadowless world (about as strong as the sun,
+	# so a shadow only removed half the light and the tonemap flattened it). Less fill, more sun: sunlit ground
+	# about as bright as before, shade ~40 % of it, tinted cool blue.
+	sun.light_energy = 1.45
+	RenderingServer.directional_shadow_atlas_set_size(2048, true)
+	RenderingServer.directional_soft_shadow_filter_set_quality(RenderingServer.SHADOW_QUALITY_SOFT_LOW)
+	env.ambient_light_color = Color("#a9bcd8")
+	env.ambient_light_energy *= 0.75
+	env.glow_enabled = true
+	for i in 7:
+		env.set_glow_level(i, i == 1 or i == 2)
+	env.glow_intensity = 0.5
+	env.glow_strength = 0.9
+	env.glow_bloom = 0.0
+	env.glow_hdr_threshold = 0.95
+	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SOFTLIGHT
+	env.adjustment_saturation = 1.12
+	env.adjustment_contrast = 1.06
+	env.tonemap_exposure *= 1.05                # the shade costs ~6 % mean brightness: give it back
+
 func _build_lighting() -> void:
+	_cast_static = _hq()
 	var env := Environment.new()
 	# A real sky (0.19.4, Kevin: "there needs to be a sky, mainly for the trailer"). Background only:
 	# ambient stays a flat colour and reflections are off, so lighting on the field is unchanged and
@@ -149,6 +201,8 @@ func _build_lighting() -> void:
 	# No real-time shadows: at this zoom they doubled every triangle for little visual gain.
 	# Units are marked by team rings; HP bars are drawn on the 2D HUD.
 	sun.shadow_enabled = false
+	if _hq():
+		_apply_hq(env, sun)
 	add_child(sun)
 	# Single directional light: the Compatibility renderer can add a per-object pass for each extra
 	# directional light, so the old cool fill light is folded into ambient instead.
@@ -1081,7 +1135,7 @@ func _block(team: int, x0: float, x1: float, z0: float, z1: float, h: float, top
 	var lid := MeshInstance3D.new()
 	lid.mesh = pm
 	lid.material_override = _stone(top)
-	lid.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	lid.cast_shadow = _cast()
 	lid.position = Vector3(c.x, h + 0.01, c.y)
 	add_child(lid)
 
@@ -1184,7 +1238,7 @@ func _build_castle_mesh(t: int) -> void:
 		var mi := MeshInstance3D.new()
 		mi.mesh = parts[k]
 		mi.material_override = _castle_mats[{"floor":0, "steps":1, "treads":2}[k]]
-		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mi.cast_shadow = _cast()
 		mi.set_meta("perf", "castle")
 		add_child(mi)
 	_build_castle_kit(t)
@@ -1233,7 +1287,7 @@ func _merge_kit() -> void:
 		var mi := MeshInstance3D.new()
 		mi.mesh = (tools[mat] as SurfaceTool).commit()
 		mi.material_override = mat
-		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mi.cast_shadow = _cast()
 		mi.set_meta("perf", "castle")
 		add_child(mi)
 
@@ -1435,7 +1489,7 @@ func _iron_bars(a: Vector2, b: Vector2, height: float) -> Node3D:
 	var mi := MeshInstance3D.new()
 	mi.mesh = st.commit()
 	mi.material_override = _iron_mat
-	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mi.cast_shadow = _cast()
 	var root := Node3D.new()
 	root.rotation.y = -atan2(b.y - a.y, b.x - a.x)
 	root.add_child(mi)
@@ -1620,7 +1674,7 @@ static func make_body(cls: String, cosmetic: Dictionary = {}) -> Dictionary:
 	for key in libraries():
 		player.add_animation_library(key, _libs[key])
 	for mi in body.find_children("*", "MeshInstance3D", true, false):
-		(mi as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		(mi as MeshInstance3D).cast_shadow = (GeometryInstance3D.SHADOW_CASTING_SETTING_ON if _cast_static else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
 	if not cosmetic.has("tint") and look.has("tint"):
 		cosmetic = cosmetic.duplicate()
 		cosmetic["tint"] = look.tint
@@ -2145,7 +2199,7 @@ func _make_oracle(team: int) -> Dictionary:
 		var m: Node3D = packed.instantiate() if packed != null else Node3D.new()
 		m.scale = Vector3.ONE * (KING_HEIGHT / 1.9)          # the models are 1.9 tall, feet at 0
 		for mi in m.find_children("*", "MeshInstance3D", true, false):
-			(mi as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			(mi as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if _hq() else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		m.visible = st == "fat"
 		body.add_child(m)
 		stages.append(m)

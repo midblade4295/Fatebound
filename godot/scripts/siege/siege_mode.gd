@@ -29,6 +29,7 @@ var _guard_clock := 0.0
 var guard_tripped := false
 var _guard_res_low := 0
 var low_fx := false
+var hq_gfx := true          # High-quality graphics (Settings): shadows, glow, smoother edges
 var audio: Node = null
 var profile = null       # scripts/meta/profile.gd — rewards, challenges and cosmetics
 var rewards: Dictionary = {}
@@ -72,7 +73,10 @@ func _ready() -> void:
 	set_fps_cap(FPS_CAP)
 	viewport = SubViewport.new()
 	viewport.own_world_3d = true
-	viewport.msaa_3d = Viewport.MSAA_2X
+	# 4x with High-quality graphics (Round 30) -- on real GPUs; the software renderer used for tests and renders
+	# keeps 2x unless FB_FORCE_HQ (same rule as SiegeView._hq()).
+	var soft_gpu := RenderingServer.get_video_adapter_name().to_lower().contains("llvmpipe")
+	viewport.msaa_3d = Viewport.MSAA_4X if hq_gfx and (not soft_gpu or OS.has_environment("FB_FORCE_HQ")) else Viewport.MSAA_2X
 	# Same 3D viewport settings as the (removed) dice battle, which ran full matches on the
 	# phone that crashes in Siege: default mesh LOD threshold, update when visible.
 	viewport.render_target_update_mode = SubViewport.UPDATE_WHEN_VISIBLE
@@ -133,6 +137,7 @@ func _start() -> void:
 	sim.setup(team_size, int(Time.get_unix_time_from_system()) & 0x7fffffff)
 	view = View.new()
 	view.low_fx = low_fx
+	view.hq_gfx = hq_gfx
 	view.player_looks = _looks()
 	viewport.add_child(view)
 	view.setup(sim)
@@ -198,6 +203,7 @@ func _build_online_match(msg: Dictionary) -> void:
 	hud.player_id = me_id
 	view = View.new()
 	view.low_fx = low_fx
+	view.hq_gfx = hq_gfx
 	view.player_id = me_id
 	view.player_looks = _looks()
 	viewport.add_child(view)

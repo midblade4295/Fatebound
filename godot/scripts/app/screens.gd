@@ -612,6 +612,16 @@ static func settings(app, root: VBoxContainer) -> void:
 		d.settings.reduce_motion = on
 		p.save())
 	au.add_child(rm)
+	var hq := CheckButton.new()
+	hq.text = "High-quality graphics (shadows, glow, smooth edges)"
+	hq.button_pressed = bool(d.settings.get("hq_graphics", true))
+	hq.add_theme_font_override("font", UI.HEAVY_FONT)
+	hq.add_theme_font_size_override("font_size", 13)
+	hq.set_meta("action_key", "hq_graphics")
+	hq.toggled.connect(func(on: bool):
+		d.settings.hq_graphics = on
+		p.save())
+	au.add_child(hq)
 	# Old progress
 	var mig: Dictionary = d.migration
 	var old := UI.card(root)

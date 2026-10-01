@@ -1070,3 +1070,15 @@ K2/K3 notes (0.17.0)
   pressed on it is held ~1.45 m out; no move covers that in one tick). The jail door is unchanged.
 - sim smoke "one-way gates" (out through an intact gate, can't come back in, path from inside uses the gate); match
   gate-violation check allows exits. Protocol v15.
+
+# 0.25.2 (Kevin: "increase the graphical fidelity -- lighting, shadows")
+- Settings > "High-quality graphics (shadows, glow, smooth edges)", on by default (hq_graphics -> SiegeMode.hq_gfx ->
+  SiegeView.hq_gfx). The Mobile renderer has no SSAO/SSR/GI; what it adds: real sun shadows (2 PSSM splits to 80 m,
+  2048 atlas, soft-low filter); casters = castles (merged kit), castle blocks, steps, iron bars, units, Kings
+  (_cast(); make_body reads the static _cast_static); ground, water, grass, decals and FX only receive. Light
+  rebalanced so the shadows read (the fill was tuned for a shadowless world -- shade kept ~52 % of lit, tonemapped
+  flat): ambient x0.75 and cooler (#a9bcd8), sun 1.45, exposure +5 %: shade ~40 % of lit, cool blue against warm
+  sun; contrast 36 -> 40 (std), mean brightness about the same. Subtle glow (levels 1-2, softlight), saturation
+  1.12, contrast 1.06; MSAA 4x (2x without it).
+- The software renderer (llvmpipe: tests, trailer and store renders) keeps the old look unless FB_FORCE_HQ: it once
+  hung on shadow-casting Kings. Checked with FB_FORCE_HQ: shadows under walls, steps, buildings and units, no acne.
