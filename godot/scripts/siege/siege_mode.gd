@@ -73,10 +73,9 @@ func _ready() -> void:
 	set_fps_cap(FPS_CAP)
 	viewport = SubViewport.new()
 	viewport.own_world_3d = true
-	# 4x with High-quality graphics (Round 30) -- on real GPUs; the software renderer used for tests and renders
-	# keeps 2x unless FB_FORCE_HQ (same rule as SiegeView._hq()).
-	var soft_gpu := RenderingServer.get_video_adapter_name().to_lower().contains("llvmpipe")
-	viewport.msaa_3d = Viewport.MSAA_4X if hq_gfx and (not soft_gpu or OS.has_environment("FB_FORCE_HQ")) else Viewport.MSAA_2X
+	# 2x (Round 35): 4x with High-quality graphics was the largest single cost in a big fight (tests/battle_bench.gd:
+	# 4x -> 2x more than halved the frame).
+	viewport.msaa_3d = Viewport.MSAA_2X
 	# Same 3D viewport settings as the (removed) dice battle, which ran full matches on the
 	# phone that crashes in Siege: default mesh LOD threshold, update when visible.
 	viewport.render_target_update_mode = SubViewport.UPDATE_WHEN_VISIBLE

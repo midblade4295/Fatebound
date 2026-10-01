@@ -445,10 +445,11 @@ func _apply_hq(env: Environment, sun: DirectionalLight3D) -> void:
 	# a warm sun against cool sky-blue shade instead of flat grey, a subtle glow on the brightest highlights
 	# (low glow levels only: the cheap passes), and 2x MSAA (cheap on tile-based phone GPUs).
 	sun.shadow_enabled = true
-	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
-	sun.directional_shadow_max_distance = 80.0
-	sun.directional_shadow_split_1 = 0.3
-	sun.directional_shadow_blend_splits = true
+	# One shadow pass over 45 m (Round 35, Kevin: 21 fps in a big gate fight). tests/battle_bench.gd: two splits to
+	# 80 m drew 323k shadow triangles in 325 draw calls -- more than the visible scene; one pass to 45 m (the
+	# camera sees ~40 m) draws 121k in 97, and with MSAA 2x the frame costs 35 % of before.
+	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL
+	sun.directional_shadow_max_distance = 45.0
 	sun.shadow_bias = 0.03
 	sun.shadow_normal_bias = 1.1
 	sun.shadow_blur = 1.3

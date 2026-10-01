@@ -1118,3 +1118,12 @@ K2/K3 notes (0.17.0)
 - No foam anywhere: the High-quality water's shore and crest foam, and the plain water's white banks (now a slight
   shade). Without foam the wakes read through the physics: twice the push per wading unit (0.005 + 0.0085/(m/s)),
   ripple shading x28 (was 15), crests lighter / troughs darker (wake_tint 4.5), damping 0.989 (trails last longer).
+
+# 0.27.2 (Kevin: "fps dropping here" -- 21 fps in a big fight at his front gate, resolution auto-dropped to 75 %)
+- Measured, not guessed: tests/battle_bench.gd stages a 32-bot fight at the blue gate and measures each graphics
+  configuration live (3D viewport render time, draw calls and triangles for the main and the shadow pass).
+  Full High-quality 805 ms/frame (software renderer); without glow -4 %; without water sim + motes -8 %; MSAA 4x->2x
+  -54 %; without shadows -32 %; two shadow splits to 80 m drew 323k triangles in 325 calls (more than the visible
+  scene). Script cost of the same fight headless, uncapped: 4.2 ms avg, 6.6 ms 95th (x86) -- not the bottleneck.
+- Fix: MSAA back to 2x; one orthogonal shadow pass to 45 m (the camera sees ~40 m): 283 ms (-65 %), shadow pass
+  121k triangles in 97 calls; shadows look the same (render compared). Glow, water and motes kept.
