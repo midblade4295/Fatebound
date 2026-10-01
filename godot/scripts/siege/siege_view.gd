@@ -283,7 +283,8 @@ uniform sampler2D ripples : filter_linear_mipmap, repeat_enable;
 uniform sampler2D rip_tex : filter_linear, repeat_disable;
 uniform float rip_half = 34.0;
 uniform vec2 rip_texel = vec2(0.001953, 0.019231);
-uniform float rip_strength = 15.0;
+uniform float rip_strength = 28.0;
+uniform float wake_tint = 4.5;            // crests lighter, troughs darker: how the wakes show without foam
 uniform vec3 deep_col : source_color = vec3(0.05, 0.27, 0.42);
 uniform vec3 shallow_col : source_color = vec3(0.24, 0.62, 0.66);
 uniform vec3 sky_col : source_color = vec3(0.62, 0.80, 0.95);
@@ -313,16 +314,14 @@ void fragment() {
 	vec3 col = mix(shallow_col, deep_col, depth);
 	float fres = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 4.0);
 	col = mix(col, sky_col, clamp(fres * 0.75, 0.0, 0.75));
-	float shore = (1.0 - smoothstep(0.0, 0.075, edge)) * (0.45 + 0.55 * texture(ripples, wpos.xz * 0.45 + vec2(-TIME * 0.12, 0.0)).r);
-	float crest = smoothstep(0.045, 0.11, abs(h));
-	float foam = clamp(max(shore, crest * 0.6), 0.0, 1.0);
-	col = mix(col, vec3(0.94, 0.97, 1.0), foam);
+	// No foam (Round 34, Kevin). The wakes read as light crests and dark troughs instead.
+	col *= 1.0 + clamp(h, -0.12, 0.12) * wake_tint;
 	ALBEDO = col;
-	ALPHA = clamp(mix(0.58, 0.86, depth) + foam * 0.35, 0.0, 1.0);
+	ALPHA = mix(0.58, 0.86, depth);
 	ROUGHNESS = 0.05;
 	SPECULAR = 0.75;
 	float sg = texture(ripples, wpos.xz * 0.19 + vec2(-TIME * 0.09, TIME * 0.05)).r * texture(ripples, wpos.xz * 0.13 + vec2(TIME * 0.07, -TIME * 0.04)).r;
-	EMISSION = vec3(1.0, 0.97, 0.88) * smoothstep(0.58, 0.64, sg) * glint * (1.0 - foam);
+	EMISSION = vec3(1.0, 0.97, 0.88) * smoothstep(0.58, 0.64, sg) * glint;
 }
 """
 	var m := ShaderMaterial.new()
@@ -350,7 +349,7 @@ uniform vec2 texel;
 uniform vec2 cell_m;
 uniform vec4 drops[16];
 uniform int drop_count = 0;
-uniform float damping = 0.984;
+uniform float damping = 0.989;            // wakes trail longer (Round 34)
 void fragment() {
 	vec4 p = texture(prev, UV);
 	float n = texture(prev, UV + vec2(texel.x, 0.0)).r + texture(prev, UV - vec2(texel.x, 0.0)).r
@@ -399,7 +398,7 @@ func _sync_ripples(dt: float) -> void:
 		var spd: float = (p - (last[0] as Vector2)).length() / maxf(dt, 0.001)
 		if wet and drops.size() < 16:
 			var v := (p.y - (Land.river_c(p.x) - RIP_ACROSS * 0.5)) / RIP_ACROSS
-			var strength := 0.002 + minf(spd, 6.0) * 0.0032
+			var strength := 0.005 + minf(spd, 6.0) * 0.0085          # (Round 34: twice as strong, no foam to hide it)
 			var radius := 0.42
 			if not bool(last[1]):
 				strength = 0.06                              # stepping in: a splash
@@ -812,7 +811,7 @@ void fragment() {
 	vec3 deep = vec3(0.10, 0.42, 0.72);
 	vec3 shallow = vec3(0.22, 0.66, 0.86);
 	vec3 col = mix(deep, shallow, smoothstep(0.35, 0.75, n));
-	col = mix(col, vec3(0.92, 0.97, 1.0), max(shore * 0.85, smoothstep(0.78, 0.9, n) * 0.5));
+	col *= 1.0 - shore * 0.18;                     // no foam (Round 34): the banks just shade a little
 	ALBEDO = col;
 	ROUGHNESS = 0.12;
 	SPECULAR = 0.6;

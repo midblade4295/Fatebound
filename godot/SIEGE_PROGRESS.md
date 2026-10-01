@@ -1113,3 +1113,8 @@ K2/K3 notes (0.17.0)
   slopes plus flowing detail, deep/shallow colour, sky reflection at grazing angles (fresnel), see-through (bed and
   legs show), shore foam and foam on crests, sparse glints. Tuned on renders: first pass foamed everywhere
   (drops halved, crest foam 0.045-0.11, ripple shading x15). Without High-quality graphics: the old water, still wadeable.
+
+# 0.27.1 (Kevin: "remove the foam effect and make the wake more noticeable")
+- No foam anywhere: the High-quality water's shore and crest foam, and the plain water's white banks (now a slight
+  shade). Without foam the wakes read through the physics: twice the push per wading unit (0.005 + 0.0085/(m/s)),
+  ripple shading x28 (was 15), crests lighter / troughs darker (wake_tint 4.5), damping 0.989 (trails last longer).
