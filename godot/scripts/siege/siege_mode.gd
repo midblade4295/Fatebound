@@ -17,7 +17,7 @@ const Tutorial = preload("res://scripts/siege/tutorial.gd")
 const TUTORIAL_GOLD := 250
 # 3D resolution as a fraction of the PHYSICAL screen (window pixels, not logical UI units).
 var render_scale := 1.0
-const FPS_CAP := 60
+const FPS_CAP := 30         # hard-locked (Round 32, Kevin: no fps options) -- the sim ticks at 30 Hz anyway
 var _prev_max_fps := 0
 var fps_cap := FPS_CAP
 # Thermal guard: field logs (S21 Ultra) show fps sliding for several seconds before a GPU hang.
@@ -30,7 +30,6 @@ var guard_tripped := false
 var _guard_res_low := 0
 var low_fx := false
 var hq_gfx := true          # High-quality graphics (Settings): shadows, glow, smoother edges
-var auto_fps := true        # Auto 30 FPS (Settings / pause menu): the thermal guard may drop fps and resolution
 var audio: Node = null
 var profile = null       # scripts/meta/profile.gd — rewards, challenges and cosmetics
 var rewards: Dictionary = {}
@@ -106,14 +105,7 @@ func _ready() -> void:
 			hud.toast("Next match starts shortly...", Color("#f2d18d"))
 		else:
 			_restart())
-	hud.fps_toggled.connect(func(): set_fps_cap(30 if fps_cap == 60 else 60))
 	hud.res_label_source = func() -> float: return render_scale
-	hud.auto_fps_source = func() -> bool: return auto_fps
-	hud.auto_fps_toggled.connect(func():
-		auto_fps = not auto_fps
-		if profile != null:
-			profile.d.settings["auto_30fps"] = auto_fps
-			profile.save())
 	hud.res_cycled.connect(func():
 		var steps := [1.0, 0.75, 0.5]
 		var i := 0
@@ -502,10 +494,6 @@ func finish_tutorial() -> void:
 	exited.emit()
 
 func _thermal_guard(delta: float) -> void:
-	if not auto_fps:
-		_guard_low = 0
-		_guard_res_low = 0
-		return                    # switched off (Round 31, Kevin): never drops fps or resolution on its own
 	_guard_clock += delta
 	if _guard_clock < 1.0:
 		return
@@ -513,16 +501,8 @@ func _thermal_guard(delta: float) -> void:
 	if hud.pause_panel.visible:
 		_guard_low = 0
 		return
-	if fps_cap != 60:
-		_thermal_guard_res()
-		return
-	_guard_low = _guard_low + 1 if Engine.get_frames_per_second() < GUARD_FPS else 0
-	if _guard_low >= GUARD_SECONDS:
-		_guard_low = 0
-		guard_tripped = true
-		diag.write("THERMAL GUARD fps under %d for %ds -> 30 fps" % [GUARD_FPS, GUARD_SECONDS])
-		set_fps_cap(30)
-		hud.toast("Device running hot: 30 FPS mode on", Color("#f2d18d"))
+	# Locked at 30 fps (Round 32): what's left of the guard is the resolution step when even 30 can't be held.
+	_thermal_guard_res()
 
 func _thermal_guard_res() -> void:
 	# Second step: already at 30 fps and still missing frames -> drop 3D resolution to 75 %.
@@ -530,6 +510,7 @@ func _thermal_guard_res() -> void:
 		_guard_res_low += 1
 		if _guard_res_low >= 5:
 			diag.write("THERMAL GUARD still under 26 fps at 30 cap -> 3D resolution 75%")
+			guard_tripped = true
 			set_render_scale(0.75)
 			hud.toast("Device running hot: resolution 75%", Color("#f2d18d"))
 	else:

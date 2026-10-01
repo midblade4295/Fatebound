@@ -78,6 +78,7 @@ static func libraries() -> Dictionary:
 func setup(s) -> void:
 	sim = s
 	_build_lighting()
+	_build_ambience()
 	_build_terrain()
 	_build_props()
 	for t in 2:
@@ -95,6 +96,167 @@ func _warm_up() -> void:
 		var n := _make_projectile(kind)
 		n.position = at
 		get_tree().create_timer(0.3).timeout.connect(n.queue_free)
+
+# ---------- High-quality ambience (Round 32: "add even more effects to make the game look more beautiful") ----------
+const CLOUD_STRENGTH := 0.2
+static var _cloud_tex: NoiseTexture2D = null
+var _motes: GPUParticles3D = null
+var _torches: Array = []          # [light, flame, base energy, phase]
+
+static func _clouds() -> NoiseTexture2D:
+	if _cloud_tex == null:
+		_cloud_tex = NoiseTexture2D.new()
+		_cloud_tex.width = 256
+		_cloud_tex.height = 256
+		_cloud_tex.seamless = true
+		var fn := FastNoiseLite.new()
+		fn.frequency = 0.02
+		fn.fractal_octaves = 4
+		_cloud_tex.noise = fn
+	return _cloud_tex
+
+static func _cloud_floor_material(tex: Texture2D, tint_col: Color) -> ShaderMaterial:
+	# The castle floor with the terrain's drifting cloud shadows, so they don't stop at the castle walls.
+	var sh := Shader.new()
+	sh.code = """
+shader_type spatial;
+render_mode specular_disabled;
+uniform sampler2D tex : source_color, filter_linear_mipmap, repeat_enable;
+uniform sampler2D cloud_tex : filter_linear_mipmap, repeat_enable;
+uniform vec4 tint_col : source_color;
+uniform float cloud_strength = 0.2;
+varying vec3 wpos;
+void vertex() { wpos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz; }
+void fragment() {
+	float cl = smoothstep(0.46, 0.74, texture(cloud_tex, wpos.xz / 95.0 + vec2(TIME * 0.006, TIME * 0.0035)).r);
+	ALBEDO = texture(tex, UV).rgb * tint_col.rgb * (1.0 - cloud_strength * cl);
+	ROUGHNESS = 0.95;
+}
+"""
+	var m := ShaderMaterial.new()
+	m.shader = sh
+	m.set_shader_parameter("tex", tex)
+	m.set_shader_parameter("tint_col", tint_col)
+	m.set_shader_parameter("cloud_tex", _clouds())
+	m.set_shader_parameter("cloud_strength", CLOUD_STRENGTH)
+	return m
+
+static func _bright(c: Color) -> Color:
+	# Effects bright enough for the glow to bloom (High-quality graphics); rings and decals don't use this.
+	if not _cast_static:
+		return c
+	return Color(c.r * 1.8, c.g * 1.8, c.b * 1.8, c.a)
+
+static func _soft_dot() -> GradientTexture2D:
+	var g := Gradient.new()
+	g.set_color(0, Color(1, 1, 1, 1))
+	g.set_color(1, Color(1, 1, 1, 0))
+	var t := GradientTexture2D.new()
+	t.gradient = g
+	t.fill = GradientTexture2D.FILL_RADIAL
+	t.fill_from = Vector2(0.5, 0.5)
+	t.fill_to = Vector2(1.0, 0.5)
+	t.width = 64
+	t.height = 64
+	return t
+
+func _build_ambience() -> void:
+	if not _hq():
+		return
+	# Warm motes of pollen drifting in the sunlight around where the camera looks.
+	var pm := ParticleProcessMaterial.new()
+	pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+	pm.emission_box_extents = Vector3(20.0, 2.5, 20.0)
+	pm.gravity = Vector3(0.0, 0.06, 0.0)
+	pm.initial_velocity_min = 0.05
+	pm.initial_velocity_max = 0.25
+	pm.direction = Vector3(0.3, 0.4, 0.2)
+	pm.spread = 180.0
+	pm.turbulence_enabled = true
+	pm.turbulence_noise_strength = 0.6
+	pm.turbulence_noise_scale = 3.0
+	pm.scale_min = 0.6
+	pm.scale_max = 1.4
+	var ramp := Gradient.new()
+	ramp.set_color(0, Color(1, 1, 1, 0))
+	ramp.add_point(0.2, Color(1, 1, 1, 1))
+	ramp.add_point(0.8, Color(1, 1, 1, 1))
+	ramp.set_color(ramp.get_point_count() - 1, Color(1, 1, 1, 0))
+	var rt := GradientTexture1D.new()
+	rt.gradient = ramp
+	pm.color_ramp = rt
+	var quad := QuadMesh.new()
+	quad.size = Vector2(0.16, 0.16)
+	var mm := StandardMaterial3D.new()
+	mm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mm.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	mm.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	mm.vertex_color_use_as_albedo = true
+	mm.albedo_texture = _soft_dot()
+	mm.albedo_color = Color(2.2, 2.0, 1.4, 0.75)
+	quad.material = mm
+	_motes = GPUParticles3D.new()
+	_motes.amount = 90
+	_motes.lifetime = 9.0
+	_motes.preprocess = 9.0
+	_motes.local_coords = false
+	_motes.process_material = pm
+	_motes.draw_pass_1 = quad
+	_motes.visibility_aabb = AABB(Vector3(-24, -4, -24), Vector3(48, 10, 48))
+	_motes.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(_motes)
+	# Wall torches in each dungeon: a warm, flickering light (the KayKit RPG Tools torch).
+	var torch_scene := Stage.scene("res://assets/kaykit/tools/torch.gltf")
+	for t in 2:
+		for spot in [[Vector2(-24.5, 23.0), Vector2(0.0, -1.0)], [Vector2(-32.0, 16.0), Vector2(1.0, 0.0)]]:
+			var p: Vector2 = Sim._c(t, spot[0])
+			var into: Vector2 = Sim._c(t, spot[0] + spot[1]) - p
+			var fy := Sim.height_at(p + into * 0.6) + 1.9
+			if torch_scene != null:
+				var tm: Node3D = torch_scene.instantiate()
+				tm.scale = Vector3.ONE * 2.2
+				add_child(tm)
+				tm.global_position = Vector3(p.x, fy - 1.3, p.y) + Vector3(into.x, 0.0, into.y) * 0.35
+				tm.rotation = Vector3(0.0, Sim.angle_of(into), 0.0)
+				tm.rotate_object_local(Vector3.RIGHT, 0.35)
+			var light := OmniLight3D.new()
+			light.light_color = Color("#ffb05a")
+			light.light_energy = 1.6
+			light.omni_range = 6.0
+			light.omni_attenuation = 1.3
+			light.shadow_enabled = false
+			add_child(light)
+			light.global_position = Vector3(p.x, fy, p.y) + Vector3(into.x, 0.0, into.y) * 0.6
+			var flame := MeshInstance3D.new()
+			var fq := QuadMesh.new()
+			fq.size = Vector2(0.6, 0.9)
+			var fmat := StandardMaterial3D.new()
+			fmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			fmat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			fmat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+			fmat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+			fmat.albedo_texture = _soft_dot()
+			fmat.albedo_color = Color(2.4, 1.3, 0.45, 0.9)
+			fq.material = fmat
+			flame.mesh = fq
+			flame.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			add_child(flame)
+			flame.global_position = light.global_position + Vector3(0.0, -0.15, 0.0)
+			_torches.append([light, flame, 1.6, randf() * 10.0])
+
+func _sync_ambience(dt: float) -> void:
+	if _motes != null and is_instance_valid(camera) and camera.is_inside_tree():
+		var cp := camera.global_position
+		var fwd := -camera.global_transform.basis.z
+		if fwd.y < -0.05:
+			var hit := cp + fwd * (-cp.y / fwd.y)
+			_motes.global_position = hit + Vector3(0.0, 2.2, 0.0)
+	for tr in _torches:
+		var ph: float = float(tr[3])
+		var k := 0.82 + 0.1 * sin(_time * 9.0 + ph) + 0.08 * sin(_time * 23.0 + ph * 1.7)
+		(tr[0] as OmniLight3D).light_energy = float(tr[2]) * k
+		(tr[1] as Node3D).scale = Vector3.ONE * (0.9 + 0.12 * k)
 
 # ---------- world ----------
 var _hq_cached := -1
@@ -259,6 +421,8 @@ static func _terrain_material() -> ShaderMaterial:
 		fn.fractal_octaves = 3
 		mt.noise = fn
 		m.set_shader_parameter("macro_tex", mt)
+		m.set_shader_parameter("cloud_tex", _clouds())
+		m.set_shader_parameter("cloud_strength", CLOUD_STRENGTH if _cast_static else 0.0)
 		_terrain_mat = m
 	return _terrain_mat
 
@@ -469,6 +633,7 @@ func _build_water() -> void:
 shader_type spatial;
 render_mode cull_disabled;
 uniform sampler2D ripples : filter_linear_mipmap, repeat_enable;
+uniform float glint = 0.0;
 void fragment() {
 	vec2 w = UV * vec2(18.0, 1.0);
 	float a = texture(ripples, w * 0.35 + vec2(TIME * 0.05, TIME * 0.02)).r;
@@ -482,6 +647,9 @@ void fragment() {
 	ALBEDO = col;
 	ROUGHNESS = 0.12;
 	SPECULAR = 0.6;
+	// Sun glints (High-quality graphics): sparse sparkles where two scrolling layers line up; bright enough to glow.
+	float sg = texture(ripples, w * 1.3 + vec2(-TIME * 0.09, TIME * 0.05)).r * texture(ripples, w * 0.9 + vec2(TIME * 0.07, -TIME * 0.04)).r;
+	EMISSION = vec3(1.0, 0.97, 0.88) * smoothstep(0.58, 0.64, sg) * glint;      // sparse: only the brightest crossings
 }
 """
 		var m := ShaderMaterial.new()
@@ -494,6 +662,7 @@ void fragment() {
 		fn.frequency = 0.04
 		nt.noise = fn
 		m.set_shader_parameter("ripples", nt)
+		m.set_shader_parameter("glint", 1.3 if _cast_static else 0.0)
 		_water_mat = m
 	var verts := PackedVector3Array()
 	var uvs := PackedVector2Array()
@@ -663,7 +832,48 @@ func _build_foliage() -> void:
 			add_child(mmi)
 
 static var _tuft_mat: StandardMaterial3D = null
-static func _tuft_material(base: Material) -> StandardMaterial3D:
+static var _tuft_wind: ShaderMaterial = null
+static func _tuft_material(base: Material) -> Material:
+	if _cast_static:
+		# High-quality graphics: the tufts sway in rolling gusts (tips move, roots stay), lit per vertex like before.
+		if _tuft_wind == null:
+			var sh := Shader.new()
+			sh.code = """
+shader_type spatial;
+render_mode cull_disabled, vertex_lighting, specular_disabled;
+uniform sampler2D albedo_tex : source_color, filter_linear_mipmap;
+uniform vec4 albedo_col : source_color = vec4(1.0);
+uniform bool use_tex = false;
+void vertex() {
+	vec3 wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+	float h = clamp(VERTEX.y / 0.5, 0.0, 1.0);
+	float gust = sin(TIME * 1.3 + wp.x * 0.18 + wp.z * 0.11) * 0.5 + 0.5;
+	float flutter = sin(TIME * 4.2 + wp.x * 1.3 + wp.z * 0.9);
+	float sway = (gust * 0.10 + flutter * 0.025) * h;
+	VERTEX.x += sway;
+	VERTEX.z += sway * 0.5;
+}
+void fragment() {
+	vec3 c = albedo_col.rgb;
+	if (use_tex) { c *= texture(albedo_tex, UV).rgb; }
+	ALBEDO = c;
+}
+"""
+			var m := ShaderMaterial.new()
+			m.shader = sh
+			var sm := base as StandardMaterial3D
+			var col := Color(1.0, 1.18, 0.82)
+			if sm != null:
+				col = sm.albedo_color * Color(1.0, 1.18, 0.82)
+				if sm.albedo_texture != null:
+					m.set_shader_parameter("albedo_tex", sm.albedo_texture)
+					m.set_shader_parameter("use_tex", true)
+			m.set_shader_parameter("albedo_col", col)
+			_tuft_wind = m
+		return _tuft_wind
+	return _tuft_material_plain(base)
+
+static func _tuft_material_plain(base: Material) -> StandardMaterial3D:
 	# Match the tufts to the terrain's green; per-vertex lighting (identical on tiny triangles,
 	# cheaper per pixel on phones).
 	if _tuft_mat == null:
@@ -1216,11 +1426,16 @@ func _build_castle_mesh(t: int) -> void:
 	# Generated parts (castle_mesh.gd): herringbone floors (the map's path texture) and grey stone
 	# steps in the KayKit wall colour. Everything else is KayKit models (_build_castle_kit).
 	if _castle_mats.is_empty():
-		var floor_m := StandardMaterial3D.new()
-		floor_m.albedo_texture = load("res://assets/terrain/path.png")
-		floor_m.albedo_color = Color(0.86, 0.84, 0.8)
-		floor_m.roughness = 0.95
-		floor_m.specular_mode = BaseMaterial3D.SPECULAR_DISABLED
+		var floor_m: Material
+		if _cast_static:
+			floor_m = _cloud_floor_material(load("res://assets/terrain/path.png"), Color(0.86, 0.84, 0.8))
+		else:
+			var fm := StandardMaterial3D.new()
+			fm.albedo_texture = load("res://assets/terrain/path.png")
+			fm.albedo_color = Color(0.86, 0.84, 0.8)
+			fm.roughness = 0.95
+			fm.specular_mode = BaseMaterial3D.SPECULAR_DISABLED
+			floor_m = fm
 		var step_m := StandardMaterial3D.new()
 		step_m.albedo_color = Color("#80858e")         # risers: darker, so each step reads
 		step_m.roughness = 0.9
@@ -1787,6 +2002,7 @@ func _on_screen(p: Vector3, planes: Array) -> bool:
 
 func sync(dt: float) -> void:
 	_time += dt
+	_sync_ambience(dt)
 	var seen := {}
 	var planes: Array = camera.get_frustum() if anim_cull and is_instance_valid(camera) and camera.is_inside_tree() else []
 	anim_active = 0
@@ -2293,7 +2509,7 @@ func _make_projectile(kind: String) -> Node3D:
 	sm.radius = 0.28 if kind == "fire" else 0.12
 	sm.height = sm.radius * 2.0
 	ball.mesh = sm
-	ball.material_override = _unshaded(Color(1.0, 0.55, 0.15, 0.95) if kind == "fire" else Color(1, 1, 0.8, 0.9))
+	ball.material_override = _unshaded(_bright(Color(1.0, 0.55, 0.15, 0.95) if kind == "fire" else Color(1, 1, 0.8, 0.9)))
 	root.add_child(ball)
 	return root
 
@@ -2309,7 +2525,7 @@ var numbers: Array = []   # [{pos: Vector3, text, mine, at}] read by the HUD
 func _fx_mat(color: Color) -> StandardMaterial3D:
 	var key := color.to_html()
 	if not _fx_mats.has(key):
-		_fx_mats[key] = _unshaded(color)
+		_fx_mats[key] = _unshaded(_bright(color))
 	return _fx_mats[key]
 
 var _shake := 0.0

@@ -11,10 +11,7 @@ const Sim = preload("res://scripts/siege/siege_sim.gd")
 signal leave_requested
 signal replay_requested
 signal action_pressed(kind: String)
-signal fps_toggled
 signal res_cycled
-signal auto_fps_toggled
-var auto_fps_source: Callable          # -> bool: the match's Auto 30 FPS setting
 var res_label_source: Callable   # -> float render scale
 signal workshop_tools
 signal workshop_buy(id: String)
@@ -183,18 +180,6 @@ func _build_pause_panel() -> void:
 	_label(v, "FATEBOUND", 22, VisualTheme.GOLD, _title)
 	_label(v, "Break into the enemy castle and carry your King from their dungeon to his throne room. First to %d rescues wins. Standing by him in their dungeon heals you. Catch fish from the river (ACTION on a bank) and feed them to THEIR King: each size needs another lifter (up to 6). Left on the ground, a King throws a tantrum that knocks everyone back. Workers gather, repair gates and fund upgrades." % Sim.WIN_RESCUES, 11, Color("#d4cbbb"))
 	_button(v, "RESUME", "gold", func(): pause_panel.visible = false)
-	var fps_btn := _button(v, "30 FPS MODE: OFF", "secondary", func(): pass)
-	pause_panel.visibility_changed.connect(func(): fps_btn.text = "30 FPS MODE: " + ("ON" if Engine.max_fps == 30 else "OFF"))
-	fps_btn.pressed.connect(func():
-		fps_toggled.emit()
-		fps_btn.text = "30 FPS MODE: " + ("ON" if Engine.max_fps == 30 else "OFF"))
-	var auto_btn := _button(v, "AUTO 30 FPS: ON", "secondary", func(): pass)
-	var auto_text := func() -> String:
-		return "AUTO 30 FPS: " + ("ON" if (not auto_fps_source.is_valid() or bool(auto_fps_source.call())) else "OFF")
-	pause_panel.visibility_changed.connect(func(): auto_btn.text = auto_text.call())
-	auto_btn.pressed.connect(func():
-		auto_fps_toggled.emit()
-		auto_btn.text = auto_text.call())
 	var res_btn := _button(v, "RESOLUTION: 100%", "secondary", func(): pass)
 	res_btn.pressed.connect(func():
 		res_cycled.emit()

@@ -18,6 +18,9 @@ uniform vec3 tint = vec3(1.0);     // brightness balance vs. the Vulkan exposure
 uniform float grass_sat = 1.0;     // saturation of the grass only
 uniform float band_strength = 1.0; // contrast of the painted sweeping bands
 
+uniform sampler2D cloud_tex : filter_linear_mipmap, repeat_enable;
+uniform float cloud_strength = 0.0;  // High-quality graphics: drifting cloud shadows (Round 32)
+
 varying vec3 wpos;
 varying vec3 wnorm;
 
@@ -51,6 +54,7 @@ void fragment() {
 		col = mix(col, texture(rock_tex, wpos.xz / rock_scale).rgb, smoothstep(0.2, 0.8, mk.g));
 	}
 	col *= 1.0 - 0.38 * mk.b;                            // shadow at the cliff foot
-	ALBEDO = col * tint;
+	float cl = smoothstep(0.46, 0.74, texture(cloud_tex, wpos.xz / 95.0 + vec2(TIME * 0.006, TIME * 0.0035)).r);
+	ALBEDO = col * tint * (1.0 - cloud_strength * cl);
 	ROUGHNESS = mix(0.95, 0.85, rockw);
 }

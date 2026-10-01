@@ -584,7 +584,6 @@ func start_match(online: bool, tutorial := false) -> void:
 	siege.audio = audio
 	siege.low_fx = bool(profile.d.settings.get("reduce_motion", false))
 	siege.hq_gfx = bool(profile.d.settings.get("hq_graphics", true))
-	siege.auto_fps = bool(profile.d.settings.get("auto_30fps", true))
 	siege.player_name = str(profile.d.name)
 	siege.exited.connect(_end_match)
 	_set_menu_active(false)

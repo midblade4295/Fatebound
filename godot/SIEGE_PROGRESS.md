@@ -1088,3 +1088,14 @@ K2/K3 notes (0.17.0)
   a setting: "Auto 30 FPS when the phone runs hot" in Settings and "AUTO 30 FPS: ON/OFF" in the pause menu (same
   profile setting auto_30fps, default on = the old behaviour). Off: it never drops fps or resolution on its own.
 - siege_guard_smoke: phase 2 with it off at ~30 fps -> no trip, cap stays 60.
+
+# 0.26.0 (Kevin: "remove options for fps and just hard lock to 30. Also add even more effects")
+- Locked at 30 fps (FPS_CAP 30; the sim ticks at 30 Hz): the pause menu's 30 FPS MODE / AUTO 30 FPS buttons, the
+  Settings switch and the guard's fps step are gone; the guard keeps its resolution step (75 % when even 30 can't be
+  held). siege_guard_smoke: cap 30 throughout; at ~20 fps the resolution steps down.
+- More effects with High-quality graphics (the 30 fps budget pays for them): drifting cloud shadows on the terrain
+  and the castle floors (terrain.gdshader + _cloud_floor_material; 20 %), grass tufts sway in gusts (vertex shader,
+  still per-vertex lit), warm light motes drifting where the camera looks (GPUParticles3D, 90), sparse sun glints
+  on the river (emission -> glow), projectiles and spark FX brighter so the glow blooms (_bright; rings/decals
+  untouched), wall torches in each dungeon (RPG Tools torch, flickering OmniLight + flame). Checked with
+  FB_FORCE_HQ (glints were first far too dense -> threshold 0.58-0.64; motes 0.16 m; torch 2.2x).
