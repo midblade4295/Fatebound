@@ -1185,3 +1185,21 @@ K2/K3 notes (0.17.0)
   Over 300 s of seed 22, 34 of 57 blue raider deaths are inside blue's own courtyard behind the west gate
   (-6, 48) (0.29.1 map: 3 in blue's half, 27 in red's). Not yet diagnosed. LANE_NAV_COST 2.2 added (bots used to
   pile into the lane) did not fix it. siege_sim_smoke fails on rescues=0 until this is solved.
+
+# 0.30.1 (Kevin, phone screenshots: cliffs, outposts)
+- Cliffs: new rock.png (grey layered stone slabs, was brown flagstones); terrain.gdshader samples it triplanar
+  (no stretching on angled faces), blends rock/grass on a ragged noisy edge, adds faint strata and moss on faces
+  that turn up. Plateau faces wander (Land.wobble, even so heights stay point-symmetric); the field's rock walls
+  wander a metre (edge_jit), step once on the way up and vary in height; their tops are grass with stony patches
+  (they were one flat brown sheet). Tried KayKit rocks along the cliffs: hexagonal prisms, read as fence posts in
+  tools/terrain_shot.gd renders -- dropped (_plan_cliff_rocks kept, unused).
+- Not every outpost on a plateau: the east tower is on open ground at (25, 17); the east bluff stays as high
+  ground (one ramp, north). 2 of 5 towers raised (the highland ones, so the tutorial's "up on the ledge" holds).
+- No climbing (TOWERS_CLIMBABLE = false; code kept). Towers stop shots again. Protocol v20.
+- Towers 25 % bigger (model 4.0, base 4.5, OUTPOST_TOWER_R 2.25, worker drop 3.8 m), sunk 0.14 m, a level patch
+  round each foot (rolling fades out), bushes and a ring of grass tufts and flowers round the base.
+- Tutorial t_out_done: Kevin's original take with "We can respawn here," cut out at the pauses (heard back
+  exactly as the new text); the 0.30.0 ElevenLabs re-record is no longer used.
+- Tests: tower_test rewritten (no climb, solid, capture from the ground, no respawn, worker drop-off, 2 of 5 raised);
+  reach points moved. Full quick suite passes; bot matches: seed 22 blue wins 3-0 by rescue at 650 s, seed 11 0-0
+  on time (as on the 0.29.1 map) -- the 0.30.0 rescue regression is gone.

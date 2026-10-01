@@ -149,10 +149,10 @@ const PLATEAUS := [
 	{"pts": [Vector2(-47.0, 18.5), Vector2(-37.5, 16.0), Vector2(-30.0, 15.0), Vector2(-23.5, 16.5), Vector2(-19.5, 21.5),
 		Vector2(-19.5, 28.5), Vector2(-23.0, 33.5), Vector2(-30.0, 35.5), Vector2(-38.0, 35.0), Vector2(-47.0, 33.0)],
 		"ramps": [{"edge": 4, "t": 0.5}, {"edge": 2, "t": 0.5}, {"edge": 6, "t": 0.5}]},
-	# The east bluff on the cliff edge, with its own tower.
-	{"pts": [Vector2(24.5, 9.5), Vector2(31.0, 7.5), Vector2(47.0, 8.5), Vector2(47.0, 26.5), Vector2(37.0, 27.5),
-		Vector2(30.0, 26.5), Vector2(25.0, 22.0), Vector2(23.5, 15.5)],
-		"ramps": [{"edge": 6, "t": 0.5}, {"edge": 4, "t": 0.5}]},
+	# The east bluff on the cliff edge: high ground, no tower (0.30.1, Kevin: not every outpost on a plateau).
+	{"pts": [Vector2(31.5, 9.5), Vector2(37.0, 7.5), Vector2(47.0, 8.5), Vector2(47.0, 26.5), Vector2(40.0, 27.5),
+		Vector2(34.5, 26.0), Vector2(31.0, 21.5), Vector2(30.0, 15.0)],
+		"ramps": [{"edge": 4, "t": 0.5}]},
 ]
 
 static func _prep_plateau(pts: Array, ramps: Array) -> Dictionary:
@@ -216,9 +216,9 @@ static func ramp_height(pl: Dictionary, p: Vector2, base: float) -> float:
 
 # ---------------- outposts (towers) ----------------
 const OUTPOST_R := 5.0           # capture radius
-const OUTPOST_TOWER_R := 1.8     # solid tower in the middle
+const OUTPOST_TOWER_R := 2.25    # solid tower in the middle (1.8 until 0.30.1: the towers grew 25 %)
 const TOWER_FLOOR := 4.48        # its walkable top (KayKit tower_A floor at 1.40, scaled 3.2)
-const OUTPOSTS_BLUE_HALF := [Vector2(-31.0, 25.0), Vector2(34.0, 17.5)]
+const OUTPOSTS_BLUE_HALF := [Vector2(-31.0, 25.0), Vector2(25.0, 17.0)]   # the highland's; one on open ground
 const ISLAND_TOWER := Vector2.ZERO
 
 static func outpost_positions() -> Array:
@@ -242,8 +242,7 @@ const PATHS_BLUE_HALF := [
 	[Vector2(-9.5, 39.0), Vector2(-4.0, 35.0), Vector2(2.0, 31.0)],
 	[Vector2(5.0, 38.5), Vector2(13.0, 35.0), Vector2(19.0, 28.5), Vector2(19.5, 21.0), Vector2(20.0, 13.5),
 		Vector2(21.0, 8.5), Vector2(24.0, 4.7)],
-	[Vector2(20.2, 19.6), Vector2(24.25, 18.75), Vector2(29.0, 18.0)],
-	[Vector2(19.0, 28.5), Vector2(26.5, 31.5), Vector2(32.9, 31.0), Vector2(33.5, 27.0), Vector2(33.8, 22.5)],
+	[Vector2(19.0, 28.5), Vector2(27.0, 31.5), Vector2(36.2, 30.6), Vector2(37.25, 26.75), Vector2(38.0, 22.0)],
 ]
 const PATH_HALF_W := 2.1
 
@@ -276,11 +275,21 @@ static func _smooth(e0: float, e1: float, x: float) -> float:
 	var t := clampf((x - e0) / (e1 - e0), 0.0, 1.0)
 	return t * t * (3.0 - 2.0 * t)
 
+static func wobble(p: Vector2) -> float:
+	# Smooth -1..1 noise, even in p (so the plateaus stay point-symmetric): it pushes cliff faces in and out.
+	return 0.5 * cos(0.9 * p.x + 0.7 * p.y) + 0.3 * cos(2.1 * p.x - 1.7 * p.y) + 0.2 * sin(1.3 * p.x) * sin(2.9 * p.y)
+
+static func edge_jit(p: Vector2) -> float:
+	# The field's edge as drawn: the rock face wanders a metre in and out of the wall line (scenery only).
+	return edge_dist(p) + 0.9 * (0.6 * sin(0.37 * p.x + 1.1) * sin(0.41 * p.y + 0.3) + 0.4 * sin(1.13 * p.x - 0.9 * p.y))
+
 static func rolling(p: Vector2) -> float:
 	# Gentle hills. sin*sin and cos*cos are even under (x,z)->(-x,-z), so both halves match.
 	var h := 0.34 * sin(0.19 * p.x) * sin(0.23 * p.y) + 0.26 * cos(0.13 * p.x) * cos(0.11 * p.y)
 	var fade := 1.0 - _smooth(CASTLE_ZONE - 6.0, CASTLE_ZONE, absf(p.y))
 	fade *= _smooth(1.5, 6.0, river_off(p))       # flat by the water (and on the island)
+	for q in OUTPOSTS_BLUE_HALF:                    # a level patch round each tower's foot (0.30.1)
+		fade *= _smooth(5.5, 9.5, minf(p.distance_to(q), p.distance_to(-q)))
 	return h * fade
 
 static func ground_height(p: Vector2, with_decks := true) -> float:
@@ -305,8 +314,9 @@ static func ground_height(p: Vector2, with_decks := true) -> float:
 		var r := ramp_height(pl, p, base)
 		if r > -INF:
 			return r
-		if d < CLIFF_W:
-			best = maxf(best, lerpf(LEDGE_H, base, _smooth(0.0, 1.0, d / CLIFF_W)))
+		var cw := CLIFF_W * (1.0 + 0.45 * wobble(p))          # the face's run varies: not one straight slope
+		if d < cw:
+			best = maxf(best, lerpf(LEDGE_H, base, _smooth(0.0, 1.0, d / cw)))
 	return best
 
 static func ledge_rim(p: Vector2) -> Vector2:
@@ -324,11 +334,15 @@ static func ledge_rim(p: Vector2) -> Vector2:
 		rim = maxf(rim, 1.0 - _smooth(-0.7, -0.35, -d) if d < 0.0 else (1.0 - _smooth(CLIFF_W, CLIFF_W + 0.25, d)))
 		if d > CLIFF_W - 0.2:
 			shadow = maxf(shadow, 1.0 - _smooth(CLIFF_W, CLIFF_W + 1.4, d))
-	var ed := edge_dist(p)
+	var ed := edge_jit(p)
 	if ed > -3.0:
 		var rise := 1.0 - drop_weight(p)
-		rim = maxf(rim, _smooth(-0.3, 0.6, ed) * (0.55 + 0.45 * rise))
-		shadow = maxf(shadow, (1.0 - _smooth(0.0, 2.2, -ed)) * rise * 0.9)
+		# The face (and a ragged lip above it) is stone; the top of the rock walls is grass again, with stony
+		# patches -- not one flat brown sheet (0.30.1, Kevin: "more natural, like actual stone, and blend").
+		var face := _smooth(-0.4, 0.4, ed) * (1.0 - _smooth(3.2, 4.4, ed))
+		var patches := _smooth(0.35, 0.8, 0.5 + 0.5 * sin(0.53 * p.x + 0.2) * sin(0.47 * p.y + 1.7)) * _smooth(3.0, 5.0, ed) * 0.7
+		rim = maxf(rim, maxf(face, patches) * (0.6 + 0.4 * rise))
+		shadow = maxf(shadow, (1.0 - _smooth(0.0, 2.2, -ed)) * rise * 0.8)
 	return Vector2(clampf(rim, 0.0, 1.0), clampf(shadow, 0.0, 1.0))
 
 # ---------------- baked terrain (visual) ----------------
@@ -351,12 +365,15 @@ static func terrain_height(p: Vector2) -> float:
 		return _CastleL.DUNGEON_H
 	var inside := Vector2(clampf(p.x, -HALF_W - 1.5, HALF_W + 1.5), clampf(p.y, -HALF_L, HALF_L))
 	var h := ground_height(inside, false)
-	var ed := edge_dist(p)
-	if ed <= 0.0:
-		return h
-	# Beyond the edge (scenery): rock walls rising on most sides, a sheer drop on the cliff side.
+	if edge_dist(p) <= 0.0:
+		return h                                   # the field itself is exactly the walkable ground
+	var ed := maxf(edge_jit(p), 0.0)
+	# Beyond the edge (scenery): rock walls rising on most sides, a sheer drop on the cliff side. The face wanders
+	# (edge_jit), steps once on the way up, and its height varies, so it reads as rock rather than a wall.
 	var dw := drop_weight(p)
-	var rise := RISE_H * _smooth(0.0, 2.6, ed) + 1.3 * _smooth(3.0, 10.0, ed) * (0.5 + 0.5 * sin(0.41 * p.x + 0.7) * sin(0.33 * p.y + 1.3))
+	var hi := RISE_H * (0.85 + 0.3 * sin(0.21 * p.x + 0.5) * sin(0.17 * p.y + 1.1))
+	var rise := hi * (0.55 * _smooth(0.0, 1.6, ed) + 0.45 * _smooth(2.2, 3.6, ed)) \
+		+ 1.3 * _smooth(4.0, 10.0, ed) * (0.5 + 0.5 * sin(0.41 * p.x + 0.7) * sin(0.33 * p.y + 1.3))
 	var fall := -DROP_DEPTH * _smooth(0.2, 3.4, ed)
 	var top := maxf(h, 0.0)
 	var out := top + lerpf(rise, fall, dw)

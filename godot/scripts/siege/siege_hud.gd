@@ -307,7 +307,7 @@ func on_event(e: Dictionary) -> void:
 				toast(("You are now a%s %s!" % ["n" if nm.left(1) in ["A", "E", "I", "O", "U"] else "", nm]), VisualTheme.GOLD)
 		"outpost_captured":
 			if int(e.team) == me.team:
-				toast("Tower captured! Archers and mages can climb it", VisualTheme.GOLD)
+				toast("Outpost captured! Workers can drop resources here", VisualTheme.GOLD)
 			else:
 				toast("The enemy took an outpost", VisualTheme.RED)
 		"outpost_lost":

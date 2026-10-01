@@ -139,10 +139,11 @@ const HAT_PICK_R := 1.0
 # them (sneak into the enemy courtyard to switch class). Outposts have no hat dispenser: they are a
 # respawn point (attackers respawn there only when a dropped hat is close by) and a resource
 # drop-off for Workers.
-const OUTPOST_DROP_R := 3.4       # workers deliver within this of an outpost their team holds
+const OUTPOST_DROP_R := 3.8       # workers deliver within this of an outpost their team holds (bigger towers, 0.30.1)
 # Towers (0.26.0, Kevin): the team holding an outpost can climb its tower -- archers and mages only --
 # and shoot down from the top. Up there they can't be reached by melee; arrows, fire and catapult
 # stones still hit them. Lose the tower and everyone on it is thrown off. No respawning at towers.
+const TOWERS_CLIMBABLE := false   # 0.30.1, Kevin: "don't have option to climb to top of outpost" (kept, switched off)
 const TOWER_CLASSES := ["ranger", "mage"]
 const TOWER_SLOTS := 4
 const TOWER_ENTER_R := 3.4        # from the tower's centre (its wall is 1.8 m out)
@@ -517,8 +518,8 @@ func _build_buckets() -> void:
 		var ob: Dictionary = obstacles[oi]
 		for bi in _buckets_in(ob.p.x - ob.r - BUCKET_REACH, ob.p.y - ob.r - BUCKET_REACH, ob.p.x + ob.r + BUCKET_REACH, ob.p.y + ob.r + BUCKET_REACH):
 			_bucket_obs[bi].append(oi)
-			if str(ob.kind) != "outpost_tower":
-				_bucket_obs_proj[bi].append(oi)
+			if TOWERS_CLIMBABLE == false or str(ob.kind) != "outpost_tower":
+				_bucket_obs_proj[bi].append(oi)        # nobody shoots from inside a tower: towers stop shots again
 
 func _buckets_in(x0: float, y0: float, x1: float, y1: float) -> Array:
 	var out := []
@@ -2930,7 +2931,7 @@ func tower_slot_pos(u: Dictionary) -> Vector2:
 
 func tower_to_enter(u: Dictionary) -> Dictionary:
 	# The tower this unit could climb right now: archers and mages, at a tower their team holds.
-	if not alive(u) or not TOWER_CLASSES.has(u.cls) or u.carrying or u.offering or int(u.get("tower", -1)) >= 0:
+	if not TOWERS_CLIMBABLE or not alive(u) or not TOWER_CLASSES.has(u.cls) or u.carrying or u.offering or int(u.get("tower", -1)) >= 0:
 		return {}
 	for op in outposts:
 		if int(op.owner) == u.team and u.pos.distance_to(op.p) <= TOWER_ENTER_R and (op.occ as Array).size() < TOWER_SLOTS:
@@ -2993,7 +2994,7 @@ func _think_tower(u: Dictionary) -> void:
 func _bot_climb(u: Dictionary) -> bool:
 	# Archer and mage bots climb a tower we hold when a fight comes near it (not raiders, not while a
 	# King is on the move). True when this tick's move is decided.
-	if not TOWER_CLASSES.has(u.cls) or u.role == "raid" or u.offering or u.has("post") or u.carrying:
+	if not TOWERS_CLIMBABLE or not TOWER_CLASSES.has(u.cls) or u.role == "raid" or u.offering or u.has("post") or u.carrying:
 		return false
 	if not oracle_carrier(1 - u.team).is_empty() or not oracle_carrier(u.team).is_empty() or not oracle_returner(u.team).is_empty():
 		return false

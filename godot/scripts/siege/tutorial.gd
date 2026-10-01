@@ -58,7 +58,7 @@ const STEPS := [
 	{"id": "outpost", "talk": [
 		["t_out_1", "See that tower up on the ledge? That's an outpost. Stand in its ring to capture it. Capturing is mostly standing around looking important. You're a natural."]],
 		"task": "Capture the outpost",
-		"done": [["t_out_done", "It's ours! Archers and mages can climb it and shoot from the top, workers can drop resources off here, and it earns us wood and stone. Passive income. The true magic."]]},
+		"done": [["t_out_done", "It's ours! Workers can drop resources off here, and it earns us wood and stone. Passive income. The true magic."]]},
 	{"id": "goal", "talk": [
 		["t_goal_1", "Now, the actual point of Fatebound. The enemy's dungeon is down a flight of stairs inside their castle, behind their gates. Our King is in there, behind bars. Probably complaining."],
 		["t_goal_2", "Break a gate down, and Barbarians are marvellous at that, or have a Worker build a ladder over the wall. Then smash his cell open, grab him and carry him home to his throne."],

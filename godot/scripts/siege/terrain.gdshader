@@ -21,6 +21,8 @@ uniform float band_strength = 1.0; // contrast of the painted sweeping bands
 uniform sampler2D cloud_tex : filter_linear_mipmap, repeat_enable;
 uniform float cloud_strength = 0.0;  // High-quality graphics: drifting cloud shadows (Round 32)
 
+uniform sampler2D macro_tex : filter_linear_mipmap, repeat_enable;
+uniform vec3 rock_col = vec3(0.78, 0.80, 0.78);
 varying vec3 wpos;
 varying vec3 wnorm;
 
@@ -44,17 +46,28 @@ void fragment() {
 		col = mix(g, p, smoothstep(0.42, 0.58, edge));
 		col *= 1.0 - 0.18 * (smoothstep(0.25, 0.5, mk.r) * (1.0 - smoothstep(0.5, 0.75, mk.r)));
 	}
-	// Rock: steep faces (mapped on the face) and ledge rims seen from above.
+	// Rock (0.30.1, Kevin: "look more natural like actual stone, and blend"): grey layered stone, sampled
+	// triplanar so angled faces don't stretch, a ragged noisy edge against the grass, faint strata, and moss
+	// where a face turns up. The rock texture is read only where there is rock.
+	float mn = texture(macro_tex, wpos.xz / 38.0).r;
 	float steep = 1.0 - clamp(wnorm.y, 0.0, 1.0);
-	float rockw = smoothstep(0.32, 0.5, steep);
-	if (rockw > 0.001) {
-		vec2 ruv = abs(wnorm.x) > abs(wnorm.z) ? vec2(wpos.z, -wpos.y) : vec2(wpos.x, -wpos.y);
-		col = mix(col, texture(rock_tex, ruv / rock_scale).rgb, rockw);
-	} else if (mk.g > 0.2) {
-		col = mix(col, texture(rock_tex, wpos.xz / rock_scale).rgb, smoothstep(0.2, 0.8, mk.g));
+	float jit = (mn - 0.5) * 0.24 + (g.g - 0.55) * 0.35;
+	float rockw = smoothstep(0.30, 0.52, steep + jit);
+	float rimw = mk.g > 0.15 ? smoothstep(0.25, 0.8, mk.g + jit) : 0.0;
+	float rw = max(rockw, rimw);
+	if (rw > 0.001) {
+		vec3 an = pow(abs(wnorm), vec3(4.0));
+		an /= (an.x + an.y + an.z);
+		vec3 r = texture(rock_tex, vec2(wpos.z, -wpos.y) / rock_scale).rgb * an.x
+			+ texture(rock_tex, wpos.xz / rock_scale).rgb * an.y
+			+ texture(rock_tex, vec2(wpos.x, -wpos.y) / rock_scale).rgb * an.z;
+		r *= rock_col * (0.9 + 0.1 * sin(wpos.y * 2.4 + mn * 7.0));
+		float moss = smoothstep(0.6, 0.9, wnorm.y) * smoothstep(0.42, 0.62, mn + (g.g - 0.55));
+		r = mix(r, g * 0.9, moss * 0.65);
+		col = mix(col, r, rw);
 	}
 	col *= 1.0 - 0.38 * mk.b;                            // shadow at the cliff foot
 	float cl = smoothstep(0.46, 0.74, texture(cloud_tex, wpos.xz / 95.0 + vec2(TIME * 0.006, TIME * 0.0035)).r);
 	ALBEDO = col * tint * (1.0 - cloud_strength * cl);
-	ROUGHNESS = mix(0.95, 0.85, rockw);
+	ROUGHNESS = mix(0.95, 0.88, rw);
 }

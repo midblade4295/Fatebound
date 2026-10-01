@@ -32,7 +32,7 @@ the text. Generated from `scripts/siege/tutorial.gd` (STEPS) — edit the lines 
 | 20 | `t_up_done` | upgrade — after the task | Paladin hats! Every hat from that shop is fancier now. Upgrades are bought at each hat shop, not the workshop. The workshop is still sulking about it. |
 | 21 | `t_rampart_1` | rampart | One more trick for defending. See the walkway on our front wall? Take its stairs up, and your arrows fly right over the wall. Archers adore it. The enemy does not. |
 | 22 | `t_out_1` | outpost — before the task | See that tower up on the ledge? That's an outpost. Stand in its ring to capture it. Capturing is mostly standing around looking important. You're a natural. |
-| 23 | `t_out_done` | outpost — after the task | It's ours! We can respawn here, workers can drop resources off here, and it earns us wood and stone. Passive income. The true magic. |
+| 23 | `t_out_done` | outpost — after the task | It's ours! Workers can drop resources off here, and it earns us wood and stone. Passive income. The true magic. |
 | 24 | `t_goal_1` | goal | Now, the actual point of Fatebound. The enemy's dungeon is down a flight of stairs inside their castle, behind their gates. Our King is in there, behind bars. Probably complaining. |
 | 25 | `t_goal_2` | goal | Break a gate down, and Barbarians are marvellous at that, or have a Worker build a ladder over the wall. Then smash his cell open, grab him and carry him home to his throne. |
 | 26 | `t_goal_3` | goal | Rescue him three times and we win. They're trying to do the exact same thing to us, so leave a few friends at home. Trust issues are healthy here. |
