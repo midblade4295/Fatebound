@@ -20,28 +20,27 @@ W, H = 1920, 1080
 # clash, the goal (they stole our King), hats (a villager becomes a Knight; all seven classes), the action,
 # fattening their King, carrying ours home, how you win (the throne), the reveal.
 # Round 23 (Kevin: "should also include mechanics about gathering resources"): gather + build after the heroes.
-# Round 24 (Kevin): the ladder shot shows climbing INTO their castle; the hat shot shows the transformation; the
-# whirlwind is replaced by a rogue's backstab.
-SHOTS = ["clash", "captive", "heroes", "lineup", "gather", "build", "assault", "rampart", "backstab", "feast", "carry",
-         "throne", "reveal"]
-LENGTH = {"clash": 4.5, "captive": 4.0, "heroes": 4.3, "lineup": 4.0, "gather": 4.0, "build": 4.9, "assault": 5.5,
-          "rampart": 4.0, "backstab": 4.0, "feast": 4.0, "carry": 5.0, "throne": 4.0, "reveal": 9.0}
-# The Herald's recordings by shot (files 1..11 are Kevin's first trailer read; 12, 13 the economy lines).
-VO_FILE = {"clash": 1, "captive": 2, "heroes": 3, "lineup": 4, "assault": 5, "rampart": 6, "whirl": 7, "feast": 8,
-           "carry": 9, "throne": 10, "reveal": 11, "gather": 12, "build": 13, "backstab": 14}
-# Shots used shorter than they were rendered (trimmed from the start + HEAD).
-# (Trimmed so the title still lands on the song's drop at 42.5 s with the song playing from ~0.8 s.)
-USE = {"clash": 4.2, "captive": 3.3, "heroes": 3.9, "lineup": 3.4, "gather": 3.6, "build": 4.6, "assault": 4.2,
-       "rampart": 3.3, "backstab": 3.6, "feast": 3.6, "carry": 4.0, "throne": 3.5}
-CAPTIONS = {"clash": "16 VS 16 CASTLE SIEGE", "captive": "THEY STOLE OUR KING!", "heroes": "GRAB A HAT...",
-            "lineup": "...BECOME A HERO", "gather": "CHOP WOOD. MINE STONE.",
-            "build": "BUILD LADDERS. CLIMB INTO THEIR CASTLE.", "backstab": "STAB THEM IN THE BACK", "assault": "STORM THEIR CASTLE", "rampart": "RAIN ARROWS FROM THE WALLS",
-            "whirl": "SPIN! SMASH! REPEAT!", "feast": "STUFF THEIR KING WITH FISH", "carry": "CARRY YOUR KING HOME",
-            "throne": "FIRST TO 3 RESCUES WINS"}
+# Round 28 (Kevin, after Derek Lieu's "Sheepherds" makeover): the core action first and given time (break in, grab
+# the King, run; the carry goes wrong; the rescue scores), then the layers (their King fattened until one raider can't
+# lift him; getting in; hats), the variety last; few title cards; a struggle and a comedy beat.
+SHOTS = ["breakin", "carry2", "throne", "feast", "toofat", "gather", "build", "assault", "heroes", "hatsteal",
+         "rampart", "backstab", "clash", "reveal"]
+LENGTH = {"breakin": 10.6, "carry2": 7.9, "throne": 4.0, "feast": 4.0, "toofat": 5.5, "gather": 4.0, "build": 4.9,
+          "assault": 5.5, "heroes": 4.3, "hatsteal": 5.0, "rampart": 4.0, "backstab": 4.0, "clash": 4.5, "reveal": 9.0}
+USE = {"breakin": 10.3, "carry2": 7.6, "throne": 3.8, "feast": 3.8, "toofat": 5.2, "gather": 3.6, "build": 4.6,
+       "assault": 4.4, "heroes": 3.9, "hatsteal": 4.7, "rampart": 3.3, "backstab": 3.6, "clash": 4.2}
+# Title cards only where the picture can't say it.
+CAPTIONS = {"throne": "FIRST TO 3 RESCUES WINS", "clash": "16 VS 16"}
+# The Herald, by shot: 15.. = the new read (pending), 1 = "Sixteen against sixteen!", 11 = "This... is FATEBOUND!".
+VO_FILE = {"breakin": 15, "carry2": 16, "throne": 17, "feast": 18, "toofat": 19, "gather": 20, "build": 21,
+           "assault": 22, "heroes": 23, "hatsteal": 24, "clash": 1, "reveal": 11}
+# Where in its shot a line starts (default VO_LEAD): "Rule two: don't drop him" on the drop, the hat line once he's
+# fallen, "Or just knock" as they reach the gate.
+VO_AT = {"carry2": 1.25, "hatsteal": 0.9, "assault": 1.2, "toofat": 1.0, "clash": 0.0}
 HEAD = 0.1          # skip the frames before each shot is staged
 XF = 0.4
 TITLE_AT = 1.4      # in reveal_fx.avi
-SONG_DROP = 42.5    # seconds into Kevin's song
+SONG_DROP = 72.5    # the song's biggest hit (the first drop is at 42.5)
 VO_LEAD = 0.35      # a line starts this far into its shot
 # Ducking (Kevin: "the music volume drops too much when voice happens, it needs to blend better"): was threshold
 # 0.012 / ratio 12, about 10 dB under every line. Now a gentle, soft-kneed dip with a slow release.
@@ -125,7 +124,11 @@ def main():
     total = starts[-1] + dur[-1]
     title_global = starts[-1] + (TITLE_AT - HEAD)
     song_start = SONG_DROP - title_global
-    segs = [os.path.join(a.dir, f"seg_{k}_{s}.mp4") for k, s in enumerate(SHOTS)]
+    segs = [os.path.join(a.dir, f"seg3_{k}_{s}.mp4") for k, s in enumerate(SHOTS)]
+    first_drop = 42.5 - song_start
+    near = min(range(len(starts)), key=lambda k: abs(starts[k] - first_drop))
+    print(f"title {title_global:.2f} s, song from {song_start:.2f} s; first drop at {first_drop:.2f} s "
+          f"(nearest cut: {SHOTS[near]} at {starts[near]:.2f} s)", flush=True)
     if a.stage in ("segments", "all"):
         for k, s in enumerate(SHOTS):
             if os.path.exists(segs[k]):
@@ -169,6 +172,8 @@ def main():
     vo_files = []
     if a.vo:
         for k in range(len(SHOTS)):
+            if SHOTS[k] not in VO_FILE:
+                continue                          # shots with no line (the music carries them)
             for ext in ("mp3", "wav", "ogg"):
                 f = os.path.join(a.vo, f"{VO_FILE[SHOTS[k]]}.{ext}")
                 if os.path.exists(f):
@@ -185,12 +190,13 @@ def main():
                 at = title_global - onset
                 print(f"  '{FINALE_WORD}' starts {onset:.2f} s into the line -> line at {at:.2f} s, the word at {title_global:.2f} s (title)", flush=True)
             else:
-                at = starts[k] + VO_LEAD
+                at = starts[k] + VO_AT.get(SHOTS[k], VO_LEAD)
             # Never on top of the line before: a long read tails into the next shot's crossfade, and the
             # next line waits for it (plus a beat).
             vlen = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", f],
                                         capture_output=True, text=True).stdout or 0.0)
-            at = max(at, prev_end + 0.12)
+            if SHOTS[k] != "reveal":
+                at = max(at, prev_end + 0.12)     # the finale line is anchored: "FATEBOUND" on the title wins
             prev_end = at + vlen
             print(f"  {SHOTS[k]:8s} line {VO_FILE[SHOTS[k]]:2d} at {at:5.2f}-{prev_end:5.2f} s", flush=True)
             # The last line sits on the drop, the loudest music in the trailer: a little more so it cuts through.
@@ -210,7 +216,7 @@ def main():
         fl.append(f"[music]atrim=duration={total:.3f}[aout]")
     tmp = a.out + ".part.mp4"
     vmap = ["-map", "0:v", "-c:v", "copy"] if a.stage == "audio" else \
-        ["-map", "[vout]", "-c:v", "libx264", "-preset", "faster", "-crf", "18", "-pix_fmt", "yuv420p", "-r", "30"]
+        ["-map", "[vout]", "-c:v", "libx264", "-preset", "veryfast", "-crf", "17", "-pix_fmt", "yuv420p", "-r", "30"]
     extra = ["-map", "[dk]", "-t", f"{total:.3f}", a.duck_out] if (a.duck_out and vo_files) else []
     subprocess.run(["ffmpeg", "-v", "error", "-y"] + inputs + ["-filter_complex", ";".join(fl)] + vmap + ["-map", "[aout]",
                     "-c:a", "aac", "-b:a", "192k", "-t", f"{total:.3f}", "-movflags", "+faststart", tmp] + extra, check=True)

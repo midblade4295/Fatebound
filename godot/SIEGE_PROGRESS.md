@@ -1041,3 +1041,15 @@ K2/K3 notes (0.17.0)
 - tools/store2_compose.py: gold Luckiest Guy headline + Fredoka subline over a dark top band; feature graphic
   1024x500 cut from the title reveal (title, god rays, tagline). 8 screenshots: assault, captive, heroes, build,
   rampart, backstab, feast, carry. Every claim true of 0.25.0.
+
+# Trailer 3 (Kevin approved the recut after Derek Lieu's "Sheepherds" makeover)
+- Core action first and given time: breakin (10 s, one shot: smash their cell door, grab our King, the bots carry him
+  up the dungeon stairs; a gate pre-broken for the way out; camera follows the King), carry2 (a rogue's stab drops
+  the carrier -- scripted "die" beat, a swing at a moving target can miss -- the King lies there a beat, the
+  barbarian scoops him when in reach), throne. Then the layers: feast, toofat (their lone raider lifts their
+  stage-4 King and can't move; our barbarian ends it; camera above the dungeon wall), gather, build, assault (the
+  gate gives way), heroes, hatsteal (a villager walks over a fallen knight's hat). Variety last: rampart, backstab,
+  clash (16 VS 16), reveal. Two title cards only (FIRST TO 3 RESCUES WINS, 16 VS 16).
+- Music: the title on the song's biggest hit (72.5 s); the first drop (42.5 s) lands at 29.1 s as "getting in"
+  starts. 66.6 s. The finale line is anchored ("FATEBOUND" on the title wins over the no-overlap rule).
+- VO: 1 and 11 reused; 10 new lines (15..24) pending Kevin's read.

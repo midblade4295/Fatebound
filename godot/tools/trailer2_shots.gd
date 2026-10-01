@@ -11,7 +11,9 @@ const Mode = preload("res://scripts/siege/siege_mode.gd")
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 const Castle = preload("res://scripts/siege/siege_castle.gd")
 const LENGTH := {"dawn": 5.0, "clash": 4.5, "captive": 4.0, "heroes": 4.3, "lineup": 4.0, "gather": 4.0, "build": 4.9, "backstab": 4.0, "assault": 5.5,
-	"rampart": 4.0, "whirl": 3.0, "feast": 4.0, "carry": 5.0, "throne": 4.0, "reveal": 9.0}
+	"rampart": 4.0, "whirl": 3.0, "feast": 4.0, "carry": 5.0, "throne": 4.0, "reveal": 9.0,
+	# Round 28 (Kevin + Derek Lieu's makeover advice: core action first, struggle, comedy, fewer cards)
+	"breakin": 10.6, "carry2": 7.9, "toofat": 5.5, "hatsteal": 5.0}
 const SUN_DIR := Vector3(0.0, 0.16, -1.0)        # where the reveal's sun sits: low, beyond the enemy castle
 var mode
 var shot := "dawn"
@@ -21,6 +23,7 @@ var cam_a := []
 var cam_b := []
 var orbit := {}
 var follow := ""
+var follow_king := -1        # camera tracks this team's King (cam_a/cam_b are offsets from him)
 var walkers := {}
 var chasers := []
 var beats := []
@@ -132,6 +135,150 @@ func _stage() -> void:
 					u.pos = Sim.spawn(1) if u.team == 1 else Sim._c(0, Vector2(0.0, 24.0))
 			cam_a = [_v(Sim._c(0, Vector2(-8.5, 7.6)), 2.6), _v(Sim._c(0, Vector2(-3.5, 12.2)), 1.3)]
 			cam_b = [_v(Sim._c(0, Vector2(8.5, 7.6)), 2.6), _v(Sim._c(0, Vector2(3.5, 12.2)), 1.3)]
+		"breakin":
+			# Cold open (Lieu: get straight into the core action): smash their cell door, grab our King, run.
+			var cell0: Vector2 = Sim.cell(0)
+			var jail1: Dictionary = s.gates.filter(func(g): return g.team == 1 and str(g.get("kind", "")) == "jail")[0]
+			var outj: Vector2 = ((jail1.c as Vector2) - cell0).normalized()
+			var sidej := Vector2(outj.y, -outj.x)
+			jail1.hp = 45.0
+			for g in s.gates:
+				if g.team == 1 and str(g.get("kind", "")) != "jail":
+					g.broken = true                      # a way back out of their castle
+					g.hp = 0.0
+					break
+			s._update_gate_nav()
+			var crew2: Array = s.units.filter(func(x): return x.team == 0 and x.id != me.id)
+			var smasher: Dictionary = crew2[0]
+			var grabber: Dictionary = crew2[1]
+			var escort2: Dictionary = crew2[2]
+			s._set_class(smasher, "barbarian", true)
+			s._set_class(grabber, "knight", true)
+			s._set_class(escort2, "ranger", false)
+			smasher.pos = (jail1.c as Vector2) + outj * 1.35
+			smasher.face = Sim.angle_of(-outj)
+			grabber.pos = (jail1.c as Vector2) + outj * 2.5 + sidej * 1.2
+			escort2.pos = (jail1.c as Vector2) + outj * 2.7 - sidej * 1.3
+			for u in s.units:
+				u.bot = false
+				u.move = Vector2.ZERO
+				if not [smasher.id, grabber.id, escort2.id].has(u.id):
+					u.pos = Sim.spawn(u.team)
+			for u in [smasher, grabber, escort2]:
+				_sturdy(u)
+			beats = [[0.25, smasher.id, "smash"], [0.85, smasher.id, "smash"], [1.45, smasher.id, "smash"], [2.05, smasher.id, "smash"],
+				[2.0, grabber.id, "to_king"], [3.3, grabber.id, "grab_go"]]
+			follow_king = 0
+			var ca: Vector2 = outj * 5.2 + sidej * 2.2
+			var cb: Vector2 = outj * 4.0 + sidej * 3.6
+			cam_a = [Vector3(ca.x, 4.6, ca.y), Vector3(outj.x * 1.2, 0.6, outj.y * 1.2)]
+			cam_b = [Vector3(cb.x, 5.6, cb.y), Vector3(0.0, 0.8, 0.0)]
+		"carry2":
+			# The carry home with a struggle (Lieu: don't make it look easy): a rogue ambushes the carrier, our
+			# King drops, and a teammate scoops him up.
+			var start3 := Vector2(0.0, -9.0)
+			var home3 := Vector2(0.0, 1.0)
+			var al: Array = s.units.filter(func(x): return x.team == 0 and x.id != me.id)
+			var carrier3: Dictionary = al[0]
+			var scooper: Dictionary = al[1]
+			s._set_class(carrier3, "knight", false)
+			s._set_class(scooper, "barbarian", true)
+			var o3: Dictionary = s.oracles[0]
+			carrier3.bot = false
+			carrier3.pos = o3.pos + Vector2(0.5, 0)
+			s.act(carrier3.id, "interact")
+			carrier3.pos = start3
+			o3.pos = start3
+			carrier3.hp = 6.0
+			walkers[carrier3.id] = home3
+			scooper.bot = false
+			scooper.pos = start3 + Vector2(-1.2, -1.6)
+			_sturdy(scooper)
+			walkers[scooper.id] = home3 * 0.8                 # a step behind the carrier
+			var amb: Dictionary = s.units.filter(func(x): return x.team == 1)[0]
+			s._set_class(amb, "rogue", false)
+			amb.bot = false
+			amb.pos = start3 + Vector2(1.0, 3.3)
+			amb.face = Sim.angle_of(-home3)
+			_sturdy(amb)
+			for u in s.units:
+				if not [carrier3.id, scooper.id, amb.id].has(u.id):
+					u.bot = false
+					u.move = Vector2.ZERO
+					u.pos = Sim.spawn(u.team)
+			amb.pos = start3 + Vector2(-0.7, 2.9)              # the far side of the path: not between camera and King
+			# The stab is a scripted beat (a swing at a moving target can miss): it lands as the swing does. Then
+			# the barbarian makes for the King and scoops him the moment he's within reach.
+			# After the stab the rogue backs off out of the path; the barbarian stops, and only goes for the King after
+			# a beat, so the drop reads (he'd scooped him within 0.2 s).
+			beats = [[0.85, amb.id, "attack"], [1.1, carrier3.id, "die"], [1.15, scooper.id, "stop"], [1.4, amb.id, "retreat"], [2.5, amb.id, "stop"]]
+			set_meta("scoop", scooper.id)
+			set_meta("scoop_after", 2.0)
+			follow_king = 0
+			cam_a = [Vector3(6.0, 4.6, -1.0), Vector3(0.0, 1.0, 1.2)]
+			cam_b = [Vector3(5.0, 5.4, -3.5), Vector3(0.0, 1.0, 2.5)]
+		"toofat":
+			# Comedy and the heavy-King rule, shown not told: their lone raider lifts their fattened King in our
+			# dungeon and can't budge; our barbarian sends him home without him.
+			var capf: Dictionary = s.oracles[1]
+			capf.cakes = 12
+			capf.weight = 4
+			var jail0: Dictionary = s.gates.filter(func(g): return g.team == 0 and str(g.get("kind", "")) == "jail")[0]
+			jail0.broken = true
+			jail0.hp = 0.0
+			s._update_gate_nav()
+			var outf: Vector2 = ((jail0.c as Vector2) - (capf.pos as Vector2)).normalized()
+			var sidef := Vector2(outf.y, -outf.x)
+			var raider: Dictionary = s.units.filter(func(x): return x.team == 1)[0]
+			s._set_class(raider, "knight", false)
+			raider.bot = false
+			raider.pos = (capf.pos as Vector2) + outf * 1.0
+			raider.hp = 40.0
+			var guard2: Dictionary = s.units.filter(func(x): return x.team == 0 and x.id != me.id)[0]
+			s._set_class(guard2, "barbarian", true)
+			guard2.bot = false
+			guard2.pos = (jail0.c as Vector2) + outf * 2.2 + sidef * 1.8       # comes in from the far side
+			_sturdy(guard2)
+			for u in s.units:
+				if u.id != raider.id and u.id != guard2.id:
+					u.bot = false
+					u.move = Vector2.ZERO
+					u.pos = Sim.spawn(u.team)
+			beats = [[0.5, raider.id, "grab_stuck"], [2.2, guard2.id, "to_raider"], [3.25, guard2.id, "attack"], [3.5, raider.id, "die"]]
+			set_meta("raider", raider.id)
+			var cyf := Sim.height_at(capf.pos)
+			# Above the dungeon wall, looking down into the cell (lower, it put the wall across the frame).
+			cam_a = [_v((capf.pos as Vector2) + outf * 5.0 - sidef * 1.4, cyf + 5.6), _v((capf.pos as Vector2) + outf * 0.6, cyf + 1.2)]
+			cam_b = [_v((capf.pos as Vector2) + outf * 4.2 - sidef * 1.0, cyf + 5.0), _v((capf.pos as Vector2) + outf * 0.8, cyf + 1.3)]
+		"hatsteal":
+			# Hats are power -- and they drop: their barbarian downs our knight, and their villager walks over his
+			# hat and becomes a knight.
+			var spot4 := Vector2(-6.0, 18.0)
+			var victim4: Dictionary = s.units.filter(func(x): return x.team == 0 and x.id != me.id)[0]
+			var killer: Dictionary = s.units.filter(func(x): return x.team == 1)[0]
+			var thief: Dictionary = s.units.filter(func(x): return x.team == 1)[1]
+			s._set_class(victim4, "knight", false)
+			victim4.bot = false
+			victim4.pos = spot4
+			victim4.hp = 8.0
+			victim4.face = Sim.angle_of(Vector2(1.0, 0.0))
+			s._set_class(killer, "barbarian", false)
+			killer.bot = false
+			killer.pos = spot4 + Vector2(1.5, 0.0)
+			killer.face = Sim.angle_of(Vector2(-1.0, 0.0))
+			_sturdy(killer)
+			s._set_class(thief, "villager", false)
+			thief.bot = false
+			thief.pos = spot4 + Vector2(-3.8, 2.2)
+			for u in s.units:
+				if not [victim4.id, killer.id, thief.id].has(u.id):
+					u.bot = false
+					u.move = Vector2.ZERO
+					u.pos = Sim.spawn(u.team)
+			beats = [[0.35, killer.id, "attack"], [1.05, thief.id, "to_hat"]]
+			set_meta("hero", thief.id)
+			cam_a = [_v(spot4 + Vector2(1.5, 5.6), 2.6), _v(spot4 + Vector2(-1.0, 0.6), 1.0)]
+			cam_b = [_v(spot4 + Vector2(0.4, 4.8), 2.3), _v(spot4 + Vector2(-1.2, 0.8), 1.1)]
 		"gather":
 			# The economy (Kevin: "the trailer should include gathering resources"): workers chop a tree and
 			# mine a rock with their tools; one hauls lumber home.
@@ -299,6 +446,7 @@ func _stage() -> void:
 					u.pos = front + out2 * (0.6 + (r % 2) * 1.2) + side2 * ((r / 2) * 2.0 - 4.0)
 					r += 1
 				_revive(u)
+			eg.hp = 160.0                                # it gives way during the shot (Round 28)
 			orbit = {"c": _v(front + out2 * 2.0, 0.8), "r": 13.0, "h": 8.5, "a0": Sim.angle_of(out2) - 0.9, "a1": Sim.angle_of(out2) + 0.5}
 		"rampart":
 			# Rangers on our rampart loose volleys over the wall at the attackers below.
@@ -428,6 +576,10 @@ func _process(delta: float) -> bool:
 		var ang: float = lerpf(orbit.a0, orbit.a1, e)
 		var c: Vector3 = orbit.c
 		mode.view.cam_override = [c + Vector3(sin(ang) * orbit.r, orbit.h, cos(ang) * orbit.r), c]
+	elif follow_king >= 0:
+		var ok2: Dictionary = s.oracles[follow_king]
+		var kp := Vector3(ok2.pos.x, Sim.height_at(ok2.pos), ok2.pos.y)
+		mode.view.cam_override = [kp + (cam_a[0] as Vector3).lerp(cam_b[0], e), kp + (cam_a[1] as Vector3).lerp(cam_b[1], e)]
 	elif follow != "":
 		var fu: Dictionary = s.by_id[follow]
 		var fp := Vector3(fu.pos.x, Sim.height_at(fu.pos), fu.pos.y)
@@ -455,7 +607,43 @@ func _process(delta: float) -> bool:
 			if str(b[2]) == "feed":
 				s.act(bu.id, "interact")
 			elif str(b[2]) == "stop":
+				walkers.erase(bu.id)
 				bu.move = Vector2.ZERO
+			elif str(b[2]) == "retreat":
+				walkers[bu.id] = Vector2(-1.0, -0.4).normalized() * 0.6
+			elif str(b[2]) == "die":
+				s._damage({"team": 1 - int(bu.team), "id": "trailer", "pos": bu.pos}, bu, 9999.0)
+			elif str(b[2]) == "smash":
+				bu.cd_attack = 0.0
+				s._start_attack(bu, "attack", false)
+			elif str(b[2]) == "to_king":
+				var tk: Dictionary = s.oracles[bu.team]
+				walkers[bu.id] = ((tk.pos as Vector2) - (bu.pos as Vector2)).normalized() * 0.8
+			elif str(b[2]) == "grab_go":
+				walkers.erase(bu.id)
+				bu.move = Vector2.ZERO
+				s.act(bu.id, "interact")
+				for u in s.units:
+					if u.team == 0 and u.id != s.by_id[mode.hud.player_id].id:
+						u.bot = true
+						u.role = "escort"
+			elif str(b[2]) == "grab_home":
+				walkers.erase(bu.id)
+				bu.move = Vector2.ZERO
+				s.act(bu.id, "interact")
+				walkers[bu.id] = Vector2(0.0, 1.0)
+			elif str(b[2]) == "grab_stuck":
+				s.act(bu.id, "interact")
+				walkers[bu.id] = ((bu.pos as Vector2) - Sim.cell(1)).normalized()     # tries to walk out -- can't
+			elif str(b[2]) == "to_raider":
+				var rd: Dictionary = s.by_id[str(get_meta("raider"))]
+				walkers[bu.id] = ((rd.pos as Vector2) - (bu.pos as Vector2)).normalized() * 0.85
+			elif str(b[2]) == "to_hat":
+				var hp4 := Vector2.INF
+				for h in s.hats:
+					hp4 = h.pos
+				if hp4 != Vector2.INF:
+					walkers[bu.id] = (hp4 - (bu.pos as Vector2)).normalized() * 0.75
 			elif str(b[2]) == "shoot":
 				bu.cd_attack = 0.0
 				s._start_attack(bu, "attack", false)
@@ -471,10 +659,10 @@ func _process(delta: float) -> bool:
 		var vu: Dictionary = s.by_id[str(aw[0])]
 		if vu.state != "dead":
 			vu.face = float(aw[1])
-	if shot == "heroes" and has_meta("hero") and not has_meta("transformed"):
+	if (shot == "heroes" or shot == "hatsteal") and has_meta("hero") and not has_meta("transformed"):
 		# The hat goes on: stop at the door, turn to the camera in a burst of gold, then a swing.
 		var hu: Dictionary = s.by_id[str(get_meta("hero"))]
-		if hu.cls != "villager":
+		if hu.cls != "villager" and hu.state != "dead":
 			set_meta("transformed", true)
 			walkers.erase(hu.id)
 			hu.move = Vector2.ZERO
@@ -484,7 +672,17 @@ func _process(delta: float) -> bool:
 			mode.view.ring_at(hp3 + Vector3(0, 0.08, 0), Color("#ffd257"), 2.2, 0.7)
 			for k7 in 14:
 				mode.view.spark(hp3 + Vector3(randf_range(-0.7, 0.7), 0.4 + randf() * 1.8, randf_range(-0.7, 0.7)), Color("#ffe08a"))
-			beats.append([t + 0.55, hu.id, "attack"])
+			beats.append([t + 0.55, hu.id, "smash"])
+	if shot == "carry2" and has_meta("scoop") and not has_meta("scooped"):
+		var sc: Dictionary = s.by_id[str(get_meta("scoop"))]
+		var kg: Dictionary = s.oracles[0]
+		if str(kg.state) == "dropped" and t >= float(get_meta("scoop_after", 0.0)):
+			walkers[sc.id] = ((kg.pos as Vector2) - (sc.pos as Vector2)).normalized() * 0.85
+			if (sc.pos as Vector2).distance_to(kg.pos) < 1.1:
+				set_meta("scooped", true)
+				sc.move = Vector2.ZERO
+				s.act(sc.id, "interact")
+				walkers[sc.id] = Vector2(0.0, 1.0)
 	if shot == "throne" and int(s.score[0]) > 0 and not has_meta("seated"):
 		set_meta("seated", true)
 		var ok: Dictionary = s.oracles[0]
