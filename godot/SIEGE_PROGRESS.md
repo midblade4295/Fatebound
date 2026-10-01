@@ -988,3 +988,13 @@ K2/K3 notes (0.17.0)
   in Kevin's read) and places the line so the word starts at the title (35.30 s, also the song's drop): line at
   34.19 s. Checked in the final mix: "fatebound" aligns at 35.29 s; the flash is on the 35.27 s frame, the title
   solid by 35.45 s.
+
+# Trailer 2: the economy (Kevin: "the trailer should also include mechanics about gathering resources")
+- Two shots after the heroes: "gather" (workers chopping a tree and mining a rock -- the nearest wood/stone pair on
+  our side -- one hauling lumber) "CHOP WOOD. MINE STONE."; "build" (a worker raises a ladder against their wall,
+  3 s, steps aside; a knight heads up it) "BUILD LADDERS. UPGRADE YOUR CASTLE." (captions shrink to fit).
+  The ladder was there but hidden: the worker and the knight stood at its foot, in line with the camera -> the
+  builder steps aside and the camera comes from the front-right.
+- 50.0 s; title at 42.5 s = the song's drop, so the song now plays from its start (lead pad if ever negative).
+- VO by shot name (VO_FILE): 1..11 = Kevin's read, 12 gather / 13 build pending: "Chop wood! Mine stone!",
+  "Build ladders and upgrade your castle!".

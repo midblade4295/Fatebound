@@ -10,7 +10,7 @@ extends SceneTree
 const Mode = preload("res://scripts/siege/siege_mode.gd")
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 const Castle = preload("res://scripts/siege/siege_castle.gd")
-const LENGTH := {"dawn": 5.0, "clash": 4.5, "captive": 4.0, "heroes": 4.0, "lineup": 4.0, "assault": 5.5,
+const LENGTH := {"dawn": 5.0, "clash": 4.5, "captive": 4.0, "heroes": 4.0, "lineup": 4.0, "gather": 4.0, "build": 4.5, "assault": 5.5,
 	"rampart": 4.0, "whirl": 3.0, "feast": 4.0, "carry": 5.0, "throne": 4.0, "reveal": 9.0}
 const SUN_DIR := Vector3(0.0, 0.16, -1.0)        # where the reveal's sun sits: low, beyond the enemy castle
 var mode
@@ -131,6 +131,67 @@ func _stage() -> void:
 					u.pos = Sim.spawn(1) if u.team == 1 else Sim._c(0, Vector2(0.0, 24.0))
 			cam_a = [_v(Sim._c(0, Vector2(-8.5, 7.6)), 2.6), _v(Sim._c(0, Vector2(-3.5, 12.2)), 1.3)]
 			cam_b = [_v(Sim._c(0, Vector2(8.5, 7.6)), 2.6), _v(Sim._c(0, Vector2(3.5, 12.2)), 1.3)]
+		"gather":
+			# The economy (Kevin: "the trailer should include gathering resources"): workers chop a tree and
+			# mine a rock with their tools; one hauls lumber home.
+			var best_w := {}
+			var best_s := {}
+			var bd := INF
+			for nw in s.nodes:
+				if nw.kind != "wood" or (nw.p as Vector2).y < 6.0 or (nw.p as Vector2).y > 30.0:
+					continue
+				for ns in s.nodes:
+					if ns.kind == "stone" and (ns.p as Vector2).distance_to(nw.p) < bd:
+						bd = (ns.p as Vector2).distance_to(nw.p)
+						best_w = nw
+						best_s = ns
+			var crew: Array = s.units.filter(func(x): return x.team == 0 and x.id != me.id).slice(0, 4)
+			var spots := [[best_w, Vector2(1.0, 0.3)], [best_w, Vector2(-0.9, 0.6)], [best_s, Vector2(1.0, -0.2)]]
+			for k4 in 3:
+				var wk: Dictionary = crew[k4]
+				var node: Dictionary = spots[k4][0]
+				s._set_class(wk, "worker", false)
+				wk.bot = false
+				wk.pos = (node.p as Vector2) + (spots[k4][1] as Vector2).normalized() * (float(node.r) + 0.75)
+				wk.face = Sim.angle_of((node.p as Vector2) - (wk.pos as Vector2))
+				wk.task = {"kind": "gather", "t": 99.0, "node": node.id}
+			var hauler: Dictionary = crew[3]
+			s._set_class(hauler, "worker", false)
+			hauler.bot = false
+			hauler.load = {"kind": "wood", "n": 3}
+			hauler.pos = (best_w.p as Vector2) + Vector2(-3.5, -1.5)
+			walkers[hauler.id] = Vector2(0.15, 1.0).normalized() * 0.55
+			for u in s.units:
+				if not crew.has(u):
+					u.bot = false
+					u.move = Vector2.ZERO
+					u.pos = Sim.spawn(u.team)
+			var mid2: Vector2 = ((best_w.p as Vector2) + (best_s.p as Vector2)) * 0.5
+			orbit = {"c": _v(mid2, 0.9), "r": 7.5, "h": 3.6, "a0": 2.6, "a1": 3.5}
+		"build":
+			# Spending it: a worker raises a ladder against their wall (3 s), and a knight heads up it.
+			s.stock[0].wood = 60
+			var spot2 := Vector2(-14.0, -36.3)
+			var builder: Dictionary = s.units.filter(func(x): return x.team == 0 and x.id != me.id)[0]
+			var climber: Dictionary = s.units.filter(func(x): return x.team == 0 and x.id != me.id)[1]
+			s._set_class(builder, "worker", false)
+			builder.bot = false
+			builder.pos = spot2
+			builder.face = Sim.angle_of(Vector2(0.0, -1.0))
+			s._set_class(climber, "knight", true)
+			climber.bot = false
+			climber.pos = spot2 + Vector2(3.4, 2.6)
+			for u in s.units:
+				if u.id != builder.id and u.id != climber.id:
+					u.bot = false
+					u.move = Vector2.ZERO
+					u.pos = Sim.spawn(u.team)
+			s.act(builder.id, "interact")
+			# Once it's up the builder steps aside and the knight heads up it; the camera from the front-right so
+			# the ladder isn't hidden behind them (standing at its foot, they hid it).
+			beats = [[3.05, builder.id, "aside"], [3.2, climber.id, "climb"]]
+			cam_a = [_v(spot2 + Vector2(5.5, 5.0), 3.4), _v(Vector2(-14.0, -37.6), 1.6)]
+			cam_b = [_v(spot2 + Vector2(4.0, 4.2), 3.0), _v(Vector2(-14.0, -37.6), 1.9)]
 		"clash":
 			# Sixteen against sixteen: both armies charge into each other on our side of the river.
 			var mix2 := ["knight", "barbarian", "ranger", "rogue", "mage", "priest", "knight", "barbarian"]
@@ -354,6 +415,10 @@ func _process(delta: float) -> bool:
 			bu.move = Vector2.ZERO
 			if str(b[2]) == "feed":
 				s.act(bu.id, "interact")
+			elif str(b[2]) == "aside":
+				walkers[bu.id] = Vector2(-1.0, 0.35).normalized() * 0.6
+			elif str(b[2]) == "climb":
+				walkers[bu.id] = ((Vector2(-14.0, -38.0)) - (bu.pos as Vector2)).normalized()
 	if shot == "throne" and int(s.score[0]) > 0 and not has_meta("seated"):
 		set_meta("seated", true)
 		var ok: Dictionary = s.oracles[0]

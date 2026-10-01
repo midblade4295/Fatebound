@@ -19,14 +19,20 @@ W, H = 1920, 1080
 # Round 22 (Kevin: show what you actually do -- what hats are -- and pump the 16 v 16 multiplayer): the armies
 # clash, the goal (they stole our King), hats (a villager becomes a Knight; all seven classes), the action,
 # fattening their King, carrying ours home, how you win (the throne), the reveal.
-SHOTS = ["clash", "captive", "heroes", "lineup", "assault", "rampart", "whirl", "feast", "carry", "throne", "reveal"]
-LENGTH = {"clash": 4.5, "captive": 4.0, "heroes": 4.0, "lineup": 4.0, "assault": 5.5, "rampart": 4.0, "whirl": 3.0,
-          "feast": 4.0, "carry": 5.0, "throne": 4.0, "reveal": 9.0}
+# Round 23 (Kevin: "should also include mechanics about gathering resources"): gather + build after the heroes.
+SHOTS = ["clash", "captive", "heroes", "lineup", "gather", "build", "assault", "rampart", "whirl", "feast", "carry",
+         "throne", "reveal"]
+LENGTH = {"clash": 4.5, "captive": 4.0, "heroes": 4.0, "lineup": 4.0, "gather": 4.0, "build": 4.5, "assault": 5.5,
+          "rampart": 4.0, "whirl": 3.0, "feast": 4.0, "carry": 5.0, "throne": 4.0, "reveal": 9.0}
+# The Herald's recordings by shot (files 1..11 are Kevin's first trailer read; 12, 13 the economy lines).
+VO_FILE = {"clash": 1, "captive": 2, "heroes": 3, "lineup": 4, "assault": 5, "rampart": 6, "whirl": 7, "feast": 8,
+           "carry": 9, "throne": 10, "reveal": 11, "gather": 12, "build": 13}
 # Shots used shorter than they were rendered (trimmed from the start + HEAD).
-USE = {"captive": 3.6, "heroes": 3.4, "lineup": 3.8, "assault": 4.6, "rampart": 3.6, "whirl": 2.9, "feast": 3.8,
+USE = {"captive": 3.6, "heroes": 3.4, "lineup": 3.8, "gather": 3.7, "build": 4.3, "assault": 4.6, "rampart": 3.6, "whirl": 2.9, "feast": 3.8,
        "carry": 4.2, "throne": 3.8}
 CAPTIONS = {"clash": "16 VS 16 CASTLE SIEGE", "captive": "THEY STOLE OUR KING!", "heroes": "GRAB A HAT...",
-            "lineup": "...BECOME A HERO", "assault": "STORM THEIR CASTLE", "rampart": "RAIN ARROWS FROM THE WALLS",
+            "lineup": "...BECOME A HERO", "gather": "CHOP WOOD. MINE STONE.",
+            "build": "BUILD LADDERS. UPGRADE YOUR CASTLE.", "assault": "STORM THEIR CASTLE", "rampart": "RAIN ARROWS FROM THE WALLS",
             "whirl": "SPIN! SMASH! REPEAT!", "feast": "STUFF THEIR KING WITH FISH", "carry": "CARRY YOUR KING HOME",
             "throne": "FIRST TO 3 RESCUES WINS"}
 HEAD = 0.1          # skip the frames before each shot is staged
@@ -69,7 +75,11 @@ def word_onset(path, text, word):
 
 
 def caption_png(text, path):
-    f = ImageFont.truetype(FONT, 88)
+    size = 88
+    f = ImageFont.truetype(FONT, size)
+    while f.getbbox(text, stroke_width=9)[2] - f.getbbox(text, stroke_width=9)[0] > W - 160 and size > 50:
+        size -= 4
+        f = ImageFont.truetype(FONT, size)            # long captions shrink to fit
     img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     bb = f.getbbox(text, stroke_width=9)
     x, y = (W - (bb[2] - bb[0])) // 2 - bb[0], H - 190 - bb[1]
@@ -146,13 +156,15 @@ def main():
             prev = f"x{k}"
         fl.append(f"[{prev}]fade=t=out:st={total - 1.0:.2f}:d=1.0,format=yuv420p[vout]")
     si = 1 if a.stage == "audio" else len(SHOTS)
-    inputs += ["-ss", f"{song_start:.3f}", "-t", f"{total:.3f}", "-i", a.song]
-    fl.append(f"[{si}:a]volume=9.5dB,afade=t=in:st=0:d=0.8,afade=t=out:st={total - 1.6:.2f}:d=1.6,aresample=48000[music]")
+    # (If the cut grows past the song's lead-in, the song starts late instead of before its beginning.)
+    lead_pad = max(0.0, -song_start)
+    inputs += ["-ss", f"{max(0.0, song_start):.3f}", "-t", f"{total:.3f}", "-i", a.song]
+    fl.append(f"[{si}:a]adelay={int(lead_pad * 1000)}|{int(lead_pad * 1000)},volume=9.5dB,afade=t=in:st=0:d=0.8,afade=t=out:st={total - 1.6:.2f}:d=1.6,aresample=48000[music]")
     vo_files = []
     if a.vo:
         for k in range(len(SHOTS)):
             for ext in ("mp3", "wav", "ogg"):
-                f = os.path.join(a.vo, f"{k + 1}.{ext}")
+                f = os.path.join(a.vo, f"{VO_FILE[SHOTS[k]]}.{ext}")
                 if os.path.exists(f):
                     vo_files.append((k, f))
                     break
@@ -174,7 +186,7 @@ def main():
                                         capture_output=True, text=True).stdout or 0.0)
             at = max(at, prev_end + 0.12)
             prev_end = at + vlen
-            print(f"  VO {k + 1:2d} at {at:5.2f}-{prev_end:5.2f} s ({SHOTS[k]})", flush=True)
+            print(f"  {SHOTS[k]:8s} line {VO_FILE[SHOTS[k]]:2d} at {at:5.2f}-{prev_end:5.2f} s", flush=True)
             # The last line sits on the drop, the loudest music in the trailer: a little more so it cuts through.
             gain = VO_GAIN_FINALE if SHOTS[k] == "reveal" else VO_GAIN
             fl.append(f"[{si + 1 + n}:a]aresample=48000,volume={gain},adelay={int(at * 1000)}|{int(at * 1000)}[h{n}]")
