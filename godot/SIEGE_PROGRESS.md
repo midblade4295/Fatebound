@@ -976,3 +976,9 @@ K2/K3 notes (0.17.0)
   heard as "they see these free trial"); limiter at -1 dBFS (the sum peaked at +4 dBFS). Measured: lines 6-9 dB
   over the music; max -0.8 dBFS.
 - Outputs: Fatebound-Trailer-2.mp4 (with the Herald), Fatebound-Trailer-2-NoVO.mp4.
+
+# Trailer 2 mix (Kevin: "the music volume drops too much when voice happens, it needs to blend better")
+- Measured the ducked music alone (--duck-out): it was dipping 6-10 dB under every line (threshold 0.012 / ratio 12;
+  0.06 / 2.5 still 6-10). Now threshold 0.12, ratio 2, knee 6, attack 40 ms, release 700 ms: 2.7-5.1 dB dips
+  (~4 avg), the Herald 7-15 dB over the music; VO gain 1.7 (finale 2.6: 7.2 dB over the drop); limiter, -0.8 dBFS.
+- New --stage audio: rebuilds just the mix onto an existing cut (video stream copied) in ~7 s.

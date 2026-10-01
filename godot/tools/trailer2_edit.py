@@ -34,6 +34,11 @@ XF = 0.4
 TITLE_AT = 1.4      # in reveal_fx.avi
 SONG_DROP = 42.5    # seconds into Kevin's song
 VO_LEAD = 0.35      # a line starts this far into its shot
+# Ducking (Kevin: "the music volume drops too much when voice happens, it needs to blend better"): was threshold
+# 0.012 / ratio 12, about 10 dB under every line. Now a gentle, soft-kneed dip with a slow release.
+DUCK = "threshold=0.12:ratio=2:attack=40:release=700:knee=6"
+VO_GAIN = 1.7
+VO_GAIN_FINALE = 2.6
 
 
 def caption_png(text, path):
@@ -62,7 +67,9 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--vo", default="")
     ap.add_argument("--dir", default="/tmp/trailer2")
-    ap.add_argument("--stage", default="all", choices=["segments", "final", "all"],
+    ap.add_argument("--video", default="", help="--stage audio: the finished video to put the new mix on (video copied)")
+    ap.add_argument("--duck-out", default="", help="--stage audio: also write the ducked music alone (for measuring)")
+    ap.add_argument("--stage", default="all", choices=["segments", "final", "all", "audio"],
                     help="segments: each shot trimmed with its caption burned in (resumable: existing ones are kept); "
                          "final: crossfades + audio. Split so each step fits a short time limit.")
     a = ap.parse_args()
@@ -96,18 +103,22 @@ def main():
                             "-c:v", "libx264", "-preset", "veryfast", "-crf", "14", "-t", f"{dur[k]:.3f}", tmp], check=True)
             os.replace(tmp, segs[k])
             print("segment", k, s, flush=True)
-    if a.stage not in ("final", "all"):
+    if a.stage not in ("final", "all", "audio"):
         return
     inputs, fl = [], []
-    for k in range(len(SHOTS)):
-        inputs += ["-i", segs[k]]
-    prev = "0:v"
-    for k in range(1, len(SHOTS)):
-        tr = "fadeblack" if SHOTS[k] == "reveal" else "fade"
-        fl.append(f"[{prev}][{k}:v]xfade=transition={tr}:duration={XF}:offset={starts[k]:.3f}[x{k}]")
-        prev = f"x{k}"
-    fl.append(f"[{prev}]fade=t=out:st={total - 1.0:.2f}:d=1.0,format=yuv420p[vout]")
-    si = len(SHOTS)
+    if a.stage == "audio":
+        # Just the mix, put on an existing cut (video stream copied): seconds instead of minutes.
+        inputs += ["-i", a.video]
+    else:
+        for k in range(len(SHOTS)):
+            inputs += ["-i", segs[k]]
+        prev = "0:v"
+        for k in range(1, len(SHOTS)):
+            tr = "fadeblack" if SHOTS[k] == "reveal" else "fade"
+            fl.append(f"[{prev}][{k}:v]xfade=transition={tr}:duration={XF}:offset={starts[k]:.3f}[x{k}]")
+            prev = f"x{k}"
+        fl.append(f"[{prev}]fade=t=out:st={total - 1.0:.2f}:d=1.0,format=yuv420p[vout]")
+    si = 1 if a.stage == "audio" else len(SHOTS)
     inputs += ["-ss", f"{song_start:.3f}", "-t", f"{total:.3f}", "-i", a.song]
     fl.append(f"[{si}:a]volume=9.5dB,afade=t=in:st=0:d=0.8,afade=t=out:st={total - 1.6:.2f}:d=1.6,aresample=48000[music]")
     vo_files = []
@@ -131,21 +142,27 @@ def main():
             at = max(at, prev_end + 0.12)
             prev_end = at + vlen
             print(f"  VO {k + 1:2d} at {at:5.2f}-{prev_end:5.2f} s ({SHOTS[k]})", flush=True)
-            # The last line sits on the drop, the loudest music in the trailer: 3 dB more so it cuts through.
-            gain = 2.8 if SHOTS[k] == "reveal" else 2.0
+            # The last line sits on the drop, the loudest music in the trailer: a little more so it cuts through.
+            gain = VO_GAIN_FINALE if SHOTS[k] == "reveal" else VO_GAIN
             fl.append(f"[{si + 1 + n}:a]aresample=48000,volume={gain},adelay={int(at * 1000)}|{int(at * 1000)}[h{n}]")
             labels.append(f"[h{n}]")
         fl.append(f"{''.join(labels)}amix=inputs={len(labels)}:normalize=0,apad=whole_dur={total:.3f}[herald]")
         fl.append("[herald]asplit=2[hsc][hmix]")
-        fl.append("[music][hsc]sidechaincompress=threshold=0.012:ratio=12:attack=10:release=400[ducked]")
+        fl.append(f"[music][hsc]sidechaincompress={DUCK}[ducked0]")
+        if a.duck_out:
+            fl.append("[ducked0]asplit=2[ducked][dk]")
+        else:
+            fl.append("[ducked0]anull[ducked]")
         # A limiter at -1 dBFS: the Herald on top of the music peaked at +4 dBFS (clipping) without it.
         fl.append(f"[ducked][hmix]amix=inputs=2:normalize=0,alimiter=limit=0.891:attack=5:release=60:level=disabled,atrim=duration={total:.3f}[aout]")
     else:
         fl.append(f"[music]atrim=duration={total:.3f}[aout]")
     tmp = a.out + ".part.mp4"
-    subprocess.run(["ffmpeg", "-v", "error", "-y"] + inputs + ["-filter_complex", ";".join(fl), "-map", "[vout]", "-map", "[aout]",
-                    "-c:v", "libx264", "-preset", "faster", "-crf", "18", "-pix_fmt", "yuv420p", "-r", "30",
-                    "-c:a", "aac", "-b:a", "192k", "-t", f"{total:.3f}", "-movflags", "+faststart", tmp], check=True)
+    vmap = ["-map", "0:v", "-c:v", "copy"] if a.stage == "audio" else \
+        ["-map", "[vout]", "-c:v", "libx264", "-preset", "faster", "-crf", "18", "-pix_fmt", "yuv420p", "-r", "30"]
+    extra = ["-map", "[dk]", "-t", f"{total:.3f}", a.duck_out] if (a.duck_out and vo_files) else []
+    subprocess.run(["ffmpeg", "-v", "error", "-y"] + inputs + ["-filter_complex", ";".join(fl)] + vmap + ["-map", "[aout]",
+                    "-c:a", "aac", "-b:a", "192k", "-t", f"{total:.3f}", "-movflags", "+faststart", tmp] + extra, check=True)
     os.replace(tmp, a.out)
     print(f"wrote {a.out}: {total:.1f} s, title at {title_global:.2f} s, song from {song_start:.2f} s, {len(vo_files)} VO lines", flush=True)
 
