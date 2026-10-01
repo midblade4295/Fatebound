@@ -1133,3 +1133,11 @@ K2/K3 notes (0.17.0)
   up, the visible ground is 28 m deep at the bottom of the screen and ~70 m at the top, so the upper half had no
   shadows. One orthogonal pass to 75 m: trees, rocks, ledges and bridges shadowed again (render compared).
   battle_bench (MSAA 2x): 45 m 326 ms, 75 m 340 ms (+4 %), two splits to 80 m 349 ms -- the 21 fps was MSAA 4x.
+
+# 0.28.0 (Kevin: "blood will splatter on the ground when hit, and when a player dies there will be a pool of blood")
+- View only (no sim/protocol change). On "hit": a splat beside the target on the side away from the attacker (sized
+  by damage) and 3-7 droplets flung outward under gravity that land as small spots. On "death": a pool spreading
+  under the body over 3 s (ease-out). Procedural splatter textures (4 splat variants with satellite drops, 1 pool),
+  lit and glossy (roughness 0.22) so sun and shadows fall on them. Splats last 18 s, pools 25 s, then fade 3 s;
+  recycled with hard caps (90 splats, 24 pools, 60 droplets). Not on the river. Tuned on renders: first pass too
+  small and near-black at the game camera -> brighter red, splats x1.6, pools x1.6.

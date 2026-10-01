@@ -79,6 +79,7 @@ func setup(s) -> void:
 	sim = s
 	_build_lighting()
 	_build_ambience()
+	_build_blood()
 	_build_terrain()
 	_build_props()
 	for t in 2:
@@ -421,6 +422,184 @@ func _sync_ripples(dt: float) -> void:
 	(_rip_vp[cur] as SubViewport).render_target_update_mode = SubViewport.UPDATE_ONCE
 	_water_mat.set_shader_parameter("rip_tex", (_rip_vp[other] as SubViewport).get_texture())
 	_rip_i += 1
+
+# ---------- Blood (Round 37, Kevin: "blood will splatter on the ground when hit, and when a player dies there will be
+# a pool of blood") ----------
+# Flat, lit, glossy marks on the ground (procedural splatter textures), droplets flung away from the attacker that
+# land as small spots, and a pool that spreads under a body. Recycled pools of nodes with hard caps; each mark fades
+# after a while. Not on the river.
+const BLOOD_COL := Color(0.56, 0.03, 0.04)      # a red that reads as blood from the game camera (darker went black)
+const SPLAT_MAX := 90
+const POOL_MAX := 24
+const DROP_MAX := 60
+const SPLAT_LIFE := 18.0
+const POOL_LIFE := 25.0
+const BLOOD_FADE := 3.0
+static var _blood_tex: Array = []          # [splat variants..., pool]
+var _splats: Array = []                    # {mi, born, life, r0, r1, grow}
+var _splat_i := 0
+var _pools: Array = []
+var _pool_i := 0
+var _drops: Array = []                     # {mi, p: Vector3, v: Vector3, size}
+var _drop_i := 0
+var _blood_layer := 0
+
+static func _blood_texture(seed_v: int, pool: bool) -> ImageTexture:
+	var n := 128
+	var img := Image.create(n, n, false, Image.FORMAT_RGBA8)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_v
+	var c := Vector2(n, n) * 0.5
+	var phases := []
+	for k in 6:
+		phases.append([rng.randf() * TAU, rng.randf_range(0.04, 0.12) * (0.4 if pool else 1.0), 2 + k * (1 if pool else 2)])
+	var base_r := n * (0.36 if pool else 0.26)
+	var drops := []
+	if not pool:
+		for k in rng.randi_range(5, 9):
+			var ang := rng.randf() * TAU
+			var dist := base_r * rng.randf_range(1.15, 1.7)
+			drops.append([c + Vector2(cos(ang), sin(ang)) * dist, rng.randf_range(1.6, 4.5)])
+	for y in n:
+		for x in n:
+			var p := Vector2(x + 0.5, y + 0.5)
+			var d := p - c
+			var ang := atan2(d.y, d.x)
+			var r := base_r
+			for ph in phases:
+				r *= 1.0 + float(ph[1]) * sin(ang * float(ph[2]) + float(ph[0]))
+			var a := clampf((r - d.length()) / 1.6, 0.0, 1.0)
+			for dr in drops:
+				a = maxf(a, clampf((float(dr[1]) - p.distance_to(dr[0])) / 1.2, 0.0, 1.0))
+			# a little darker toward the middle, where it's thicker
+			var shade := 1.0 - 0.25 * clampf(1.0 - d.length() / maxf(r, 1.0), 0.0, 1.0)
+			img.set_pixel(x, y, Color(shade, shade, shade, a))
+	return ImageTexture.create_from_image(img)
+
+func _blood_mat(tex: Texture2D) -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
+	m.albedo_texture = tex
+	m.albedo_color = BLOOD_COL
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.roughness = 0.22                     # wet
+	m.metallic_specular = 0.6
+	m.cull_mode = BaseMaterial3D.CULL_BACK
+	return m
+
+func _build_blood() -> void:
+	if _blood_tex.is_empty():
+		for k in 4:
+			_blood_tex.append(_blood_texture(71 + k * 13, false))
+		_blood_tex.append(_blood_texture(503, true))
+	var quad := PlaneMesh.new()
+	quad.size = Vector2(1.0, 1.0)
+	for k in SPLAT_MAX:
+		var mi := MeshInstance3D.new()
+		mi.mesh = quad
+		mi.material_override = _blood_mat(_blood_tex[k % 4])
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mi.visible = false
+		add_child(mi)
+		_splats.append({"mi": mi, "born": -999.0, "life": SPLAT_LIFE, "r0": 1.0, "r1": 1.0, "grow": 0.0})
+	for k in POOL_MAX:
+		var mi := MeshInstance3D.new()
+		mi.mesh = quad
+		mi.material_override = _blood_mat(_blood_tex[4])
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mi.visible = false
+		add_child(mi)
+		_pools.append({"mi": mi, "born": -999.0, "life": POOL_LIFE, "r0": 0.2, "r1": 1.0, "grow": 3.0})
+	var dm := SphereMesh.new()
+	dm.radius = 0.045
+	dm.height = 0.09
+	dm.radial_segments = 6
+	dm.rings = 3
+	var dmat := StandardMaterial3D.new()
+	dmat.albedo_color = BLOOD_COL
+	dmat.roughness = 0.25
+	dm.material = dmat
+	for k in DROP_MAX:
+		var mi := MeshInstance3D.new()
+		mi.mesh = dm
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mi.visible = false
+		add_child(mi)
+		_drops.append({"mi": mi, "p": Vector3.ZERO, "v": Vector3.ZERO, "size": 0.2, "on": false})
+
+func _blood_mark(list: Array, idx: int, p: Vector2, radius: float, grow: float, life: float) -> void:
+	# Lay one mark flat on the ground at p (not on the river).
+	if Sim.water_depth(p) > 0.05:
+		return
+	var m: Dictionary = list[idx]
+	var mi: MeshInstance3D = m.mi
+	_blood_layer = (_blood_layer + 1) % 40
+	mi.position = Vector3(p.x, Sim.height_at(p) + 0.02 + _blood_layer * 0.0006, p.y)
+	mi.rotation = Vector3(0.0, randf() * TAU, 0.0)
+	m.born = _time
+	m.life = life
+	m.r1 = radius
+	m.r0 = radius * (0.2 if grow > 0.0 else 1.0)
+	m.grow = grow
+	mi.scale = Vector3.ONE * (m.r0 * 2.0)
+	(mi.material_override as StandardMaterial3D).albedo_color = BLOOD_COL
+	mi.visible = true
+
+func blood_hit(target: Vector2, from: Vector2, dmg: float) -> void:
+	if _splats.is_empty():
+		return
+	var away := (target - from).normalized() if target.distance_to(from) > 0.05 else Vector2.from_angle(randf() * TAU)
+	var amt := clampf(dmg / 40.0, 0.35, 1.6)
+	var sp := target + away * randf_range(0.35, 0.8) + Vector2(randf_range(-0.2, 0.2), randf_range(-0.2, 0.2))
+	_blood_mark(_splats, _splat_i, sp, randf_range(0.45, 0.68) * (0.7 + amt * 0.5), 0.0, SPLAT_LIFE)
+	_splat_i = (_splat_i + 1) % SPLAT_MAX
+	var y0 := Sim.height_at(target) + 1.0
+	for k in int(3 + amt * 3):
+		var d: Dictionary = _drops[_drop_i]
+		_drop_i = (_drop_i + 1) % DROP_MAX
+		var dir2 := away.rotated(randf_range(-0.7, 0.7))
+		d.p = Vector3(target.x, y0 + randf_range(-0.2, 0.3), target.y)
+		d.v = Vector3(dir2.x, 0.0, dir2.y) * randf_range(1.5, 3.8) + Vector3(0.0, randf_range(1.0, 2.8), 0.0)
+		d.size = randf_range(0.13, 0.24)
+		d.on = true
+		(d.mi as MeshInstance3D).position = d.p
+		(d.mi as MeshInstance3D).visible = true
+
+func blood_pool(p: Vector2) -> void:
+	if _pools.is_empty():
+		return
+	_blood_mark(_pools, _pool_i, p, randf_range(1.45, 1.8), 3.0, POOL_LIFE)
+	_pool_i = (_pool_i + 1) % POOL_MAX
+
+func _sync_blood(dt: float) -> void:
+	for d in _drops:
+		if not bool(d.on):
+			continue
+		d.v += Vector3(0.0, -9.8, 0.0) * dt
+		d.p += d.v * dt
+		var g := Sim.height_at(Vector2(d.p.x, d.p.z))
+		if d.p.y <= g + 0.03:
+			d.on = false
+			(d.mi as MeshInstance3D).visible = false
+			_blood_mark(_splats, _splat_i, Vector2(d.p.x, d.p.z), float(d.size), 0.0, SPLAT_LIFE * 0.8)
+			_splat_i = (_splat_i + 1) % SPLAT_MAX
+		else:
+			(d.mi as MeshInstance3D).position = d.p
+	for list in [_splats, _pools]:
+		for m in list:
+			var mi: MeshInstance3D = m.mi
+			if not mi.visible:
+				continue
+			var age: float = _time - float(m.born)
+			if age > float(m.life) + BLOOD_FADE:
+				mi.visible = false
+				continue
+			if float(m.grow) > 0.0 and age < float(m.grow):
+				var k := 1.0 - pow(1.0 - age / float(m.grow), 3.0)          # spreads fast, then slows
+				mi.scale = Vector3.ONE * lerpf(float(m.r0), float(m.r1), k) * 2.0
+			if age > float(m.life):
+				var c := BLOOD_COL
+				c.a = 1.0 - (age - float(m.life)) / BLOOD_FADE
+				(mi.material_override as StandardMaterial3D).albedo_color = c
 
 # ---------- world ----------
 var _hq_cached := -1
@@ -2174,6 +2353,7 @@ func sync(dt: float) -> void:
 	_time += dt
 	_sync_ambience(dt)
 	_sync_ripples(dt)
+	_sync_blood(dt)
 	var seen := {}
 	var planes: Array = camera.get_frustum() if anim_cull and is_instance_valid(camera) and camera.is_inside_tree() else []
 	anim_active = 0
@@ -2433,9 +2613,17 @@ func on_event(e: Dictionary) -> void:
 			if a.is_empty():
 				return
 			spark(a.root.position + Vector3(0, 1.3, 0), Color("#ffd27a"))
+			var hu: Dictionary = sim.by_id.get(str(e.id), {})
+			if not hu.is_empty():
+				var src: Dictionary = sim.by_id.get(str(e.get("by", "")), {})
+				blood_hit(hu.pos, src.pos if not src.is_empty() else (hu.pos as Vector2) - Vector2.from_angle(float(hu.face)), float(e.get("dmg", 20)))
 			number(a.root.position + Vector3(0, 2.2, 0), str(e.dmg), e.id == player_id)
 			if _time >= float(a.busy_until):
 				_play(a, "g/Hit_A", 1.4, 0.3)
+		"death":
+			var du: Dictionary = sim.by_id.get(str(e.get("id", "")), {})
+			if not du.is_empty():
+				blood_pool(du.pos)
 		"spawn":
 			if not a.is_empty():
 				a.root.position = Vector3(sim.by_id[e.id].pos.x, 0, sim.by_id[e.id].pos.y)
