@@ -1152,3 +1152,10 @@ K2/K3 notes (0.17.0)
 - proj_speed: ranger 22 -> 33 m/s, mage 15 -> 24 m/s (life = reach / speed: same range).
 - sim smoke "shooting the rampart": a ground ranger outside takes a rampart defender 60 -> 15 hp; a defender in the
   courtyard behind the wall is untouched. Protocol v17.
+
+# 0.29.1 (Kevin: "movement slows down in the dungeon like there is water")
+- Bug from 0.27.0: water_depth = WATER_Y - height_at with no check for the river; the dungeon floor (-1.6 m) read as
+  1.15 m of water -> wading speed (0.45), river nav cost 2.5 (bots avoided it), no blood, splash/wave pushes.
+  water_depth now counts only within the river band (|z - river_c| <= RIVER_HW + 1.6). Measured before: both
+  dungeons depth 1.15, move_mult 0.45; after: 0 and 1.0. sim smoke asserts it; the same seed's bot match now ends
+  3-2 by rescue at 5:36 (was a 12-minute time-out). Protocol v18 (movement rule; server and client must agree).

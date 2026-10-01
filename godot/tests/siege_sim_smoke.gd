@@ -304,6 +304,9 @@ func _init() -> void:
 	for q in bpath:
 		if Sim.water_depth(q) > 0.15: waded += 1
 	assert(waded == 0, "next to a bridge the path takes the bridge (%d wet steps)" % waded)
+	for dp in [Sim.cell(0), Sim.cell(1), Sim._c(0, Vector2(-26.0, 16.0)), Sim._c(1, Vector2(-26.0, 16.0))]:
+		wu.pos = dp
+		assert(Sim.water_depth(dp) == 0.0 and ws.move_mult(wu) == 1.0, "no water in the dungeon (depth %.2f at %s)" % [Sim.water_depth(dp), str(dp)])
 	print("wading ok (across in %.1f s vs %.1f s on land)" % [t_cross, on_land])
 	# Ladder climbing (Round 25): over a ladder a unit goes up the rungs to the wall top, over, and down inside,
 	# slower on the rungs.

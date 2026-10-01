@@ -1708,6 +1708,11 @@ const DODGE_SPEED := 13.0
 
 static func water_depth(p: Vector2) -> float:
 	# How far the river's surface is above the ground here (0 on land and on the bridges, ~0.5 m mid-channel).
+	# Only within the river's band (Round 39, Kevin: "movement slows down in the dungeon like there is water"): the
+	# dungeon floor (-1.6 m) is below the waterline, so it counted as 1.15 m of water -- wading speed, river nav
+	# cost, no blood, splashes.
+	if absf(p.y - Land.river_c(p.x)) > Land.RIVER_HW + 1.6:
+		return 0.0
 	return maxf(0.0, Land.WATER_Y - height_at(p))
 
 func move_mult(u: Dictionary, mult := 1.0) -> float:
