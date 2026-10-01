@@ -173,9 +173,9 @@ const CLASSES := {
 	"rogue": {"name":"Rogue","hp":85,"speed":6.2,"dmg":14,"range":1.4,"arc":0.5,"windup":0.13,"recover":0.22,
 		"ranged":false,"ability":"lunge","ab_cd":5.0,"carry":0.72,"gate":0.6},
 	"ranger": {"name":"Ranger","hp":80,"speed":5.4,"dmg":15,"range":11.0,"arc":0.0,"windup":0.3,"recover":0.45,
-		"ranged":true,"proj_speed":22.0,"aoe":0.0,"ability":"volley","ab_cd":7.0,"carry":0.65,"gate":0.35},
+		"ranged":true,"proj_speed":33.0,"aoe":0.0,"ability":"volley","ab_cd":7.0,"carry":0.65,"gate":0.35},
 	"mage": {"name":"Mage","hp":75,"speed":5.0,"dmg":20,"range":9.0,"arc":0.0,"windup":0.4,"recover":0.5,
-		"ranged":true,"proj_speed":15.0,"aoe":1.6,"ability":"nova","ab_cd":8.0,"carry":0.65,"gate":1.0},
+		"ranged":true,"proj_speed":24.0,"aoe":1.6,"ability":"nova","ab_cd":8.0,"carry":0.65,"gate":1.0},
 	# Healer (Round 9, Kevin): hold ATTACK to channel a healing beam into the nearest injured ally
 	# (range = beam reach); the ability heals every ally close by. No damage.
 	"priest": {"name":"Priest","hp":90,"speed":5.2,"dmg":0,"range":9.0,"arc":0.0,"windup":0.3,"recover":0.4,
@@ -1515,13 +1515,34 @@ func _melee(u: Dictionary, reach: float, arc: float, dmg: float, stun := 0.0) ->
 		hits += 1
 	return hits
 
+static func on_rampart(p: Vector2) -> bool:
+	# On a castle's rampart walkway (behind the front wall's middle, Castle.WALK_*).
+	var q := (p if p.y >= 0.0 else -p) - Vector2(0.0, CASTLE_SHIFT)
+	return absf(q.x) <= Castle.WALK_X and q.y >= FRONT_Z + 0.5 and q.y < Castle.WALK_Z1
+
+func _lob_at_rampart(u: Dictionary, d: Vector2, reach: float) -> bool:
+	# A shot aimed (within ~11 deg) at an enemy on a rampart, in range: lobbed over the parapet (Round 38, Kevin:
+	# "players should be able to shoot other players on the wall"). Only the walkway -- not every raised floor, or
+	# arrows from outside would drop on the terraces deep inside.
+	for o in units:
+		if o.team == u.team or not alive(o) or not on_rampart(o.pos):
+			continue
+		var off: Vector2 = o.pos - u.pos
+		var dist := off.length()
+		if dist < 0.5 or dist > reach + 1.0:
+			continue
+		if absf(d.angle_to(off)) <= 0.2:
+			return true
+	return false
+
 func _shoot(u: Dictionary, angle: float, dmg: float, aoe: float, speed: float, reach: float) -> void:
 	var d := dir_of(angle)
 	projectiles.append({"id":_next_proj,"team":u.team,"owner":u.id,"pos":u.pos + d*0.6,"from":u.pos,"vel":d*speed,
 		"dmg":dmg,"aoe":aoe,"life":reach/speed,"kind":"fire" if aoe > 0.0 else "arrow",
 		"gate_mult":float(CLASSES[u.cls].gate),
-		# Shot from the rampart (or a terrace): flies over the castle walls and gates (Round 15).
-		"high":height_at(u.pos) >= 1.5})
+		# Shot from the rampart (or a terrace), or aimed at an enemy ON a rampart: flies over the castle walls and
+		# gates (Round 15; Round 38).
+		"high":height_at(u.pos) >= 1.5 or _lob_at_rampart(u, d, reach)})
 	_event("proj", {"pid":_next_proj,"kind":"fire" if aoe > 0.0 else "arrow"})
 	_next_proj += 1
 
@@ -2643,7 +2664,7 @@ func _think_fighter(u: Dictionary) -> void:
 	for carrier in [enemy_carrier, our_returner]:
 		if not carrier.is_empty() and u.pos.distance_to(carrier.pos) < aggro + 3.0:
 			foe = carrier
-	var high_shot: bool = c.ranged and height_at(u.pos) >= 1.5
+	var high_shot: bool = c.ranged and (height_at(u.pos) >= 1.5 or (not foe.is_empty() and on_rampart(foe.pos)))
 	if not foe.is_empty() and not high_shot and _blocked_line(u.pos, foe.pos, u.team):
 		foe = {}   # can't reach through a wall; keep pathing instead (from the rampart they shoot over it)
 	if not foe.is_empty() and int(u.get("post", -1)) >= 0 and u.pos.distance_to(goal) >= 0.9 \

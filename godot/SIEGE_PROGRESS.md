@@ -1141,3 +1141,14 @@ K2/K3 notes (0.17.0)
   lit and glossy (roughness 0.22) so sun and shadows fall on them. Splats last 18 s, pools 25 s, then fade 3 s;
   recycled with hard caps (90 splats, 24 pools, 60 droplets). Not on the river. Tuned on renders: first pass too
   small and near-black at the game camera -> brighter red, splats x1.6, pools x1.6.
+
+# 0.29.0 (Kevin: "players should be able to shoot other players on the wall; mage and arrow projectiles faster -- hard
+# to hit players moving")
+- Before: hits are 2D, but every low shot died at a castle wall each tick, so a defender behind the parapet on the
+  rampart could only be hit from another rampart. Now Sim.on_rampart(p) (the walkway, Castle.WALK_*) and
+  _lob_at_rampart: a ranged shot aimed within ~11 deg of an enemy on a rampart, in range, is "high" (over the walls
+  and gates, like shots from the rampart). Only the walkway: not terraces deep inside. Bots treat a rampart foe as
+  shootable. Auto-aim already considered them (nearest_enemy has no line-of-sight check).
+- proj_speed: ranger 22 -> 33 m/s, mage 15 -> 24 m/s (life = reach / speed: same range).
+- sim smoke "shooting the rampart": a ground ranger outside takes a rampart defender 60 -> 15 hp; a defender in the
+  courtyard behind the wall is untouched. Protocol v17.

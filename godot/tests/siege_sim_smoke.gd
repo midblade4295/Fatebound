@@ -244,6 +244,39 @@ func _init() -> void:
 	var outp: PackedVector2Array = gs.find_path(0, (eg2.c as Vector2) + inw2 * 3.0, (eg2.c as Vector2) - inw2 * 6.0)
 	assert(outp.size() > 0 and outp[outp.size() - 1].distance_to((eg2.c as Vector2) - inw2 * 6.0) < 1.5 and outp.size() < 14, "a path from inside goes out through the gate (%d steps)" % outp.size())
 	print("one-way gates ok")
+	# Shooting players on the wall (Round 38): a ranger on the ground outside hits a defender on the rampart; a
+	# defender standing in the courtyard behind the wall (not on the rampart) is still covered by it.
+	var r38_sim = Sim.new()
+	r38_sim.setup(4, 31)
+	var r38_shooter: Dictionary = r38_sim.units.filter(func(o): return o.team == 1)[0]
+	var r38_wall: Dictionary = r38_sim.units.filter(func(o): return o.team == 0)[1]
+	var r38_yard: Dictionary = r38_sim.units.filter(func(o): return o.team == 0)[2]
+	for o in r38_sim.units:
+		o.bot = false
+		o.move = Vector2.ZERO
+		if not [r38_shooter.id, r38_wall.id, r38_yard.id].has(o.id): o.pos = Sim.spawn(o.team)
+	r38_sim._set_class(r38_shooter, "ranger", false)
+	r38_wall.pos = Sim._c(0, Vector2(1.0, Sim.FRONT_Z + 1.6))
+	r38_yard.pos = Sim._c(0, Vector2(-9.0, Sim.FRONT_Z + 4.0))
+	assert(Sim.on_rampart(r38_wall.pos) and not Sim.on_rampart(r38_yard.pos))
+	r38_shooter.pos = Sim._c(0, Vector2(1.0, Sim.FRONT_Z - 8.0))
+	var r38_hp_wall: float = r38_wall.hp
+	var r38_hp_yard: float = r38_yard.hp
+	for r38_k in 3:
+		r38_shooter.face = Sim.angle_of((r38_wall.pos as Vector2) - (r38_shooter.pos as Vector2))
+		r38_shooter.cd_attack = 0.0
+		r38_sim._start_attack(r38_shooter, "attack", false)
+		for i in int(1.2 / Sim.TICK): r38_sim.step(Sim.TICK)
+	assert(r38_wall.hp < r38_hp_wall, "the defender on the rampart was hit from below (%.0f -> %.0f)" % [r38_hp_wall, r38_wall.hp])
+	r38_shooter.pos = Sim._c(0, Vector2(-9.0, Sim.FRONT_Z - 6.0))
+	for r38_k in 3:
+		r38_shooter.face = Sim.angle_of((r38_yard.pos as Vector2) - (r38_shooter.pos as Vector2))
+		r38_shooter.cd_attack = 0.0
+		r38_sim._start_attack(r38_shooter, "attack", false)
+		for i in int(1.2 / Sim.TICK): r38_sim.step(Sim.TICK)
+	assert(r38_yard.hp == r38_hp_yard, "the wall still covers someone in the courtyard behind it")
+	assert(float(Sim.CLASSES.ranger.proj_speed) == 33.0 and float(Sim.CLASSES.mage.proj_speed) == 24.0)
+	print("shooting the rampart ok (defender %.0f -> %.0f hp; courtyard untouched)" % [r38_hp_wall, r38_wall.hp])
 	# Wading (Round 33): no bank walls -- a unit walks across the river where there's no bridge, but much slower than
 	# on land; a path between the banks next to a bridge still takes the bridge.
 	var ws = Sim.new()
