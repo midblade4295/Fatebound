@@ -219,6 +219,30 @@ func _init() -> void:
 	fs.act(fisher.id, "interact")
 	assert(int(cap.cakes) == fed0 + 1 and not fisher.offering, "the fish feeds their King")
 	print("fishing rules ok")
+	# One-way gates (Round 29): an enemy inside their castle walks out through an intact gate; from outside the gate
+	# still stops him; and a path from inside uses the gate.
+	var gs = Sim.new()
+	gs.setup(4, 23)
+	var gw: Dictionary = gs.units.filter(func(x): return x.team == 0)[1]
+	for u in gs.units:
+		u.bot = false
+		u.move = Vector2.ZERO
+		if u.id != gw.id: u.pos = Sim.spawn(u.team)
+	var eg2: Dictionary = gs.gates.filter(func(g): return g.team == 1 and not g.has("kind"))[0]
+	var inw2: Vector2 = eg2["in"]
+	assert(gs.gate_blocks(eg2), "their gate is intact")
+	gw.pos = (eg2.c as Vector2) + inw2 * 2.5
+	for i in int(2.5 / Sim.TICK):
+		gw.move = -inw2
+		gs.step(Sim.TICK)
+	assert(((gw.pos as Vector2) - (eg2.c as Vector2)).dot(inw2) < -1.0, "from inside their castle he walks out through the intact gate (%s)" % str(gw.pos))
+	for i in int(2.5 / Sim.TICK):
+		gw.move = inw2
+		gs.step(Sim.TICK)
+	assert(((gw.pos as Vector2) - (eg2.c as Vector2)).dot(inw2) < 0.0, "but he can't walk back in")
+	var outp: PackedVector2Array = gs.find_path(0, (eg2.c as Vector2) + inw2 * 3.0, (eg2.c as Vector2) - inw2 * 6.0)
+	assert(outp.size() > 0 and outp[outp.size() - 1].distance_to((eg2.c as Vector2) - inw2 * 6.0) < 1.5 and outp.size() < 14, "a path from inside goes out through the gate (%d steps)" % outp.size())
+	print("one-way gates ok")
 	# Ladder climbing (Round 25): over a ladder a unit goes up the rungs to the wall top, over, and down inside,
 	# slower on the rungs.
 	var ls = Sim.new()
@@ -402,7 +426,7 @@ func _init() -> void:
 							if totals.wall_violations <= 3:
 								print("WALL VIOLATION t=%.1f %s cls=%s state=%s pos=%s wall=%s-%s" % [sim.time, u.id, u.cls, u.state, str(u.pos), str(w.a), str(w.b)])
 					for g in sim.gates:
-						if g.team != u.team and sim.gate_blocks(g) and u.pos.distance_to(Sim.seg_closest(u.pos, g.a, g.b)) < float(g.get("r", Sim.WALL_R)) + Sim.UNIT_R - 0.05:
+						if g.team != u.team and sim.gate_blocks(g) and not Sim.lets_out(g, u.pos) and u.pos.distance_to(Sim.seg_closest(u.pos, g.a, g.b)) < float(g.get("r", Sim.WALL_R)) + Sim.UNIT_R - 0.05:
 							totals.gate_violations += 1
 							if totals.gate_violations <= 3:
 								print("GATE VIOLATION t=%.1f %s team=%d state=%s pos=%s gate=%d hp=%.0f broken=%s" % [sim.time, u.id, u.team, u.state, str(u.pos), g.id, g.hp, g.broken])

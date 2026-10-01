@@ -1061,3 +1061,12 @@ K2/K3 notes (0.17.0)
 - Lines over the busier music lifted (VO_GAIN_SHOT: assault, hatsteal, carry2, gather, heroes, feast): every line
   8.8-13.8 dB over the music. Limiter ceiling 0.80: the AAC encode overshot to 0.0 dBFS with 0.85; now -1.2 dBFS
   true peak.
+
+# 0.25.1 (Kevin: "in the tutorial I couldn't exit the enemy castle -- doors should let them exit but not enter")
+- Castle gates are one-way for the enemy: each gate has an inward normal ("in"); Sim.lets_out(g, p) = p on its
+  castle's side. Push-out (collision), the bot's stop-and-break-the-gate check (_path_gate) and the gate's open
+  visual honour it; find_path from inside an enemy castle temporarily makes that castle's intact gates cheap (the
+  tutorial's guide arrow ran through a standing gate). From outside a gate still blocks until broken (a unit
+  pressed on it is held ~1.45 m out; no move covers that in one tick). The jail door is unchanged.
+- sim smoke "one-way gates" (out through an intact gate, can't come back in, path from inside uses the gate); match
+  gate-violation check allows exits. Protocol v15.

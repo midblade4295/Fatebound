@@ -358,8 +358,12 @@ func _build_map() -> void:
 			# The neighbouring wall ends (radius 1.0) cover the stone pillars either side.
 			var a := _c(t, Vector2(gx - GATE_HALF, FRONT_Z))
 			var b := _c(t, Vector2(gx + GATE_HALF, FRONT_Z))
+			# "in": the gate's inward normal (toward its castle) -- enemies on that side may walk out (lets_out).
+			var inw: Vector2 = Vector2(-(b - a).y, (b - a).x).normalized()
+			if inw.dot(_c(t, Vector2(0.0, 16.0)) - (a + b) * 0.5) < 0.0:
+				inw = -inw
 			gates.append({"id":gates.size(), "team":t, "a":a, "b":b, "c":(a + b) * 0.5, "hp":GATE_HP, "max_hp":GATE_HP,
-				"broken":false, "open":false, "side":"west" if gx < 0.0 else "east"})
+				"broken":false, "open":false, "side":"west" if gx < 0.0 else "east", "in":inw})
 		# Terrace faces (L1 at z=14, L2 at z=22) open only at the staircases, and ledges along each
 		# staircase's sides (siege_castle.gd).
 		for seg in Castle.ledges():
@@ -551,9 +555,20 @@ func _update_gate_nav() -> void:
 
 func find_path(team: int, from: Vector2, to: Vector2) -> PackedVector2Array:
 	var grid: AStarGrid2D = nav[team]
+	# Starting inside an enemy castle: its intact gates are a way out (lets_out), not an obstacle, for this search.
+	var opened := []
+	for gi in gates.size():
+		var g: Dictionary = gates[gi]
+		if g.team != team and gate_blocks(g) and lets_out(g, from):
+			opened.append(gi)
+			for c in _gate_cells[gi]:
+				grid.set_point_weight_scale(c, 1.0)
 	var a := _free_cell(grid, nav_cell(from))
 	var b := _free_cell(grid, nav_cell(to))
 	var ids := grid.get_id_path(a, b, true)
+	for gi in opened:
+		for c in _gate_cells[gi]:
+			grid.set_point_weight_scale(c, 60.0)
 	var out := PackedVector2Array()
 	for i in range(1, ids.size()):
 		out.append(nav_point(ids[i]))
@@ -573,12 +588,19 @@ func _free_cell(grid: AStarGrid2D, c: Vector2i) -> Vector2i:
 func gate_blocks(g: Dictionary) -> bool:
 	return not g.broken and g.hp > 0.0
 
+static func lets_out(g: Dictionary, p: Vector2) -> bool:
+	# Castle gates are one-way for the enemy (Round 29, Kevin: he couldn't get back out of their castle in the
+	# tutorial): an enemy already inside may walk out through an intact gate; from outside it still blocks until
+	# broken. Not the jail door.
+	return g.has("in") and (p - (g.c as Vector2)).dot(g["in"]) > 0.0
+
 func _path_gate(u: Dictionary) -> Dictionary:
 	# The intact enemy gate the bot's current path runs through within the next few steps, if any.
 	var path: PackedVector2Array = u.path
 	for i in range(u.path_i, mini(u.path_i + 5, path.size())):
 		for g in gates:
-			if g.team != u.team and gate_blocks(g) and path[i].distance_to(seg_closest(path[i], g.a, g.b)) < float(g.get("r", WALL_R)) + 0.6:
+			if g.team != u.team and gate_blocks(g) and not lets_out(g, u.pos) \
+					and path[i].distance_to(seg_closest(path[i], g.a, g.b)) < float(g.get("r", WALL_R)) + 0.6:
 				return g
 	return {}
 
@@ -1815,7 +1837,7 @@ func _push_out(p: Vector2, r: float, team := -1) -> Vector2:
 			break
 	for g in gates:
 		# Gates only stop the other team, and only while standing.
-		if team != g.team and gate_blocks(g):
+		if team != g.team and gate_blocks(g) and not lets_out(g, p):
 			p = _push_seg(p, g.a, g.b, float(g.get("r", WALL_R)) + r)
 	return p
 
@@ -2160,6 +2182,12 @@ func _step_world(dt: float) -> void:
 				if u.team == g.team and alive(u) and u.pos.distance_to(g.c) < GATE_OPEN_RADIUS:
 					open = true
 					break
+			# It also swings open for an enemy walking out (lets_out).
+			if not open and g.has("in"):
+				for u in units:
+					if u.team != g.team and alive(u) and lets_out(g, u.pos) and u.pos.distance_to(g.c) < GATE_OPEN_RADIUS:
+						open = true
+						break
 			# The jail door stays shut while any enemy is near it (Round 14, Kevin).
 			if open and str(g.get("kind", "")) == "jail":
 				for u in units:
