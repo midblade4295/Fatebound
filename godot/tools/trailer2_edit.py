@@ -30,7 +30,8 @@ LENGTH = {"breakin": 10.6, "carry2": 7.9, "throne": 4.0, "feast": 4.0, "toofat":
 USE = {"breakin": 10.3, "carry2": 7.6, "throne": 3.8, "feast": 3.8, "toofat": 5.2, "gather": 3.6, "build": 4.6,
        "assault": 4.4, "heroes": 3.9, "hatsteal": 4.7, "rampart": 3.3, "backstab": 3.6, "clash": 4.2}
 # Title cards only where the picture can't say it.
-CAPTIONS = {"throne": "FIRST TO 3 RESCUES WINS", "clash": "16 VS 16"}
+CAPTIONS = {}         # none: the Herald and the picture carry it (Kevin: "remove the other subtitles"); the title
+                      # reveal's own title and tagline stay
 # The Herald, by shot: 15.. = the new read (pending), 1 = "Sixteen against sixteen!", 11 = "This... is FATEBOUND!".
 VO_FILE = {"breakin": 15, "carry2": 16, "throne": 17, "feast": 18, "toofat": 19, "gather": 20, "build": 21,
            "assault": 22, "heroes": 23, "hatsteal": 24, "clash": 1, "reveal": 11}
