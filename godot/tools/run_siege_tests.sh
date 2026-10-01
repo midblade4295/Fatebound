@@ -55,6 +55,8 @@ run meta_economy_test    META_ECONOMY_PASS        120
 run app_flow_test        APP_FLOW_PASS            150
 run app_scroll_test      APP_SCROLL_PASS          60
 run tutorial_test        TUTORIAL_PASS            120
+run net_interp_test      NET_INTERP_PASS          60
+run knight_ai_test       KNIGHT_AI_PASS           90
 # The human soak must never stall the game thread.
 if ! grep -q 'stalls=0' /tmp/siege_test_siege_human_soak.log; then
   echo "FAIL  siege_human_soak reported stalls"; fail=1

@@ -178,8 +178,8 @@ func _build_pause_panel() -> void:
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 10)
 	pause_panel.add_child(v)
-	_label(v, "SIEGE", 22, VisualTheme.GOLD, _title)
-	_label(v, "Break into the enemy castle and carry your Oracle from their dungeon to your throne room. First to %d rescues wins. Standing by her in their dungeon heals you. Feed cake from the cake trees to THEIR Oracle: each size needs another lifter (up to 6). Left on the ground, an Oracle throws a tantrum that knocks everyone back. Workers gather, repair gates and fund upgrades." % Sim.WIN_RESCUES, 11, Color("#d4cbbb"))
+	_label(v, "FATEBOUND", 22, VisualTheme.GOLD, _title)
+	_label(v, "Break into the enemy castle and carry your King from their dungeon to his throne room. First to %d rescues wins. Standing by him in their dungeon heals you. Catch fish from the river (ACTION on a bank) and feed them to THEIR King: each size needs another lifter (up to 6). Left on the ground, a King throws a tantrum that knocks everyone back. Workers gather, repair gates and fund upgrades." % Sim.WIN_RESCUES, 11, Color("#d4cbbb"))
 	_button(v, "RESUME", "gold", func(): pause_panel.visible = false)
 	var fps_btn := _button(v, "30 FPS MODE: OFF", "secondary", func(): pass)
 	pause_panel.visibility_changed.connect(func(): fps_btn.text = "30 FPS MODE: " + ("ON" if Engine.max_fps == 30 else "OFF"))
@@ -252,14 +252,14 @@ func on_event(e: Dictionary) -> void:
 	var mine: bool = e.get("team", -1) == me.team
 	match str(e.k):
 		"rescue":
-			toast("OUR ORACLE IS HOME!" if mine else "THE ENEMY RESCUED THEIR ORACLE", VisualTheme.GOLD if mine else VisualTheme.RED)
+			toast("OUR KING IS HOME!" if mine else "THE ENEMY RESCUED THEIR KING", VisualTheme.GOLD if mine else VisualTheme.RED)
 		"pickup":
-			toast("You have the Oracle — run home!" if e.id == player_id else ("An ally has our Oracle — escort!" if mine else "Enemy took their Oracle — stop them!"), VisualTheme.CYAN if mine else VisualTheme.RED)
+			toast("You have the King — run home!" if e.id == player_id else ("An ally has our King — escort!" if mine else "Enemy took their King — stop them!"), VisualTheme.CYAN if mine else VisualTheme.RED)
 		"drop":
 			if mine:
-				toast("Our Oracle is loose — grab her!", VisualTheme.GOLD)
+				toast("Our King is loose — grab him!", VisualTheme.GOLD)
 		"recaptured":
-			toast("Our Oracle was dragged back to her cell" if mine else "Enemy Oracle returned to our keep", Color("#d4cbbb"))
+			toast("Our King was dragged back to his cell" if mine else "Enemy King returned to our keep", Color("#d4cbbb"))
 		"class":
 			if e.id == player_id:
 				var nm: String = sim.class_label(me)
@@ -268,21 +268,24 @@ func on_event(e: Dictionary) -> void:
 			if e.id == player_id:
 				toast("You fell!", VisualTheme.RED)
 		"fed":
-			# Only stage changes are worth a toast (every other cake is just half a stage).
+			# Only stage changes are worth a toast (every other fish is just a third of a stage).
 			if bool(e.get("stage_up", true)):
 				if mine:
-					toast("Our Oracle got fatter! Size %d — needs %d to lift" % [int(e.weight), int(e.need)], VisualTheme.RED)
+					toast("Our King got fatter! Size %d — needs %d to lift" % [int(e.weight), int(e.need)], VisualTheme.RED)
 				else:
-					toast("Their Oracle grew to size %d — needs %d to lift" % [int(e.weight), int(e.need)], Color("#ff9ec8"))
-		"offering_taken":
+					toast("Their King grew to size %d — needs %d to lift" % [int(e.weight), int(e.need)], Color("#ff9ec8"))
+		"fish_caught":
 			if e.id == player_id:
-				toast("Feed the cake to their Oracle in our dungeon", Color("#ff9ec8"))
+				toast("Caught a fish! Feed it to their King in our dungeon", Color("#9fdcff"))
+		"fish_lost":
+			if e.id == player_id:
+				toast("The fish got away!", Color("#c8d4dc"))
 		"tantrum":
 			var tt := int(e.team)
 			if tt == sim.by_id[player_id].team:
-				toast("Our Oracle throws a TANTRUM — reach her now!", VisualTheme.GOLD)
+				toast("Our King throws a TANTRUM — reach him now!", VisualTheme.GOLD)
 			else:
-				toast("Their Oracle throws a tantrum!", Color("#ffb3c6"))
+				toast("Their King throws a tantrum!", Color("#ffb3c6"))
 		"lift_join":
 			var lo: Dictionary = sim.oracles[int(e.team)]
 			if lo.carrier == player_id or e.id == player_id:
@@ -290,10 +293,17 @@ func on_event(e: Dictionary) -> void:
 				if int(e.n) < need:
 					toast("Lifting %d/%d — need %d more" % [int(e.n), need, need - int(e.n)], Color("#f2d18d"))
 				elif int(e.n) == need:
-					toast("Enough hands — move her!", VisualTheme.GOLD)
+					toast("Enough hands — move him!", VisualTheme.GOLD)
 		"gate_broken":
 			var side: String = str(sim.gates[int(e.gate)].side).to_upper()
-			toast("OUR %s GATE HAS FALLEN!" % side if mine else "ENEMY %s GATE BROKEN — CHARGE!" % side, VisualTheme.RED if mine else VisualTheme.GOLD)
+			if side == "JAIL":
+				# The jail door in the dungeon wing (Round 13).
+				toast("THEY SMASHED OUR JAIL — stop them taking their King!" if mine else "THEIR JAIL IS OPEN — grab our King!", VisualTheme.RED if mine else VisualTheme.GOLD)
+			else:
+				toast("OUR %s GATE HAS FALLEN!" % side if mine else "ENEMY %s GATE BROKEN — CHARGE!" % side, VisualTheme.RED if mine else VisualTheme.GOLD)
+		"jail_reset":
+			if mine:
+				toast("Our jail is locked again", VisualTheme.CYAN)
 		"gate_rebuilt":
 			if mine:
 				toast("Our %s gate is rebuilt" % str(sim.gates[int(e.gate)].side), VisualTheme.CYAN)
@@ -542,7 +552,7 @@ func _draw_castle_status(me: Dictionary) -> void:
 	# Our two gates as small health bars.
 	var x := 14.0
 	for g in sim.gates:
-		if g.team != t:
+		if g.team != t or str(g.get("kind", "")) == "jail":      # the jail door shows its own bar in the world
 			continue
 		var r := Rect2(Vector2(x + 40, 153), Vector2(56, 6))
 		_text(Vector2(x, 160), str(g.side).to_upper().left(1) + " GATE", 10, Color(1, 1, 1, 0.75), _bold, HORIZONTAL_ALIGNMENT_LEFT, 44)
@@ -609,45 +619,98 @@ func _oracle_status(me: Dictionary) -> String:
 
 func _oracle_state_text(me: Dictionary, o: Dictionary) -> String:
 	match str(o.state):
-		"cell": return "Our Oracle: captive in the enemy dungeon"
+		"cell": return "Our King: captive in the enemy dungeon"
 		"carried":
 			var n: int = o.lifters.size()
 			var need: int = sim.lifters_needed(o)
 			if int(o.carry_team) != int(o.team):
-				return "Our Oracle: ENEMIES are hauling her back!"
+				return "Our King: ENEMIES are hauling him back!"
 			if n < need:
-				return "Our Oracle: lifting %d/%d — need %d more!" % [n, need, need - n]
-			return "Our Oracle: YOU lead the lift!" if o.carrier == player_id else "Our Oracle: allies are carrying her"
-		"dropped": return "Our Oracle: loose — back to her cell in %ds" % int(ceil(Sim.DROP_RETURN - (sim.time - o.dropped_at)))
+				return "Our King: lifting %d/%d — need %d more!" % [n, need, need - n]
+			return "Our King: YOU lead the lift!" if o.carrier == player_id else "Our King: allies are carrying him"
+		"dropped": return "Our King: loose — back to his cell in %ds" % int(ceil(Sim.DROP_RETURN - (sim.time - o.dropped_at)))
 	return ""
 
+static var _plate_styles: Dictionary = {}
+
+func _plate_style(team: int, up: bool) -> StyleBoxFlat:
+	# A slim signboard: dark lacquered panel, thin gold rim (brighter when upgraded), a team-coloured
+	# top edge, a soft shadow. Anti-aliased rounded corners. Cached.
+	var key := "%d:%s" % [team, up]
+	if not _plate_styles.has(key):
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.10, 0.08, 0.06, 0.88)
+		sb.border_color = Color("#ffd257") if up else Color("#c9a45a")
+		sb.set_border_width_all(1)
+		sb.border_width_top = 2
+		sb.set_corner_radius_all(6)
+		sb.shadow_color = Color(0, 0, 0, 0.35)
+		sb.shadow_size = 3
+		sb.shadow_offset = Vector2(0, 2)
+		sb.anti_aliasing = true
+		_plate_styles[key] = sb
+	return _plate_styles[key]
+
 func _draw_station_titles(me: Dictionary) -> void:
-	# Name plates over the hat shops and the workshops in view (Round 12, Kevin: "so players know
-	# what they are"). Drawn in the HUD from projected positions: no 3D text nodes.
+	# Name plates over the hat shops and the workshops in view. Round 18 (Kevin: "very bulky and
+	# covering a lot of the ground"): one slim line -- the name (Cinzel 13) and, for hat shops, the stock
+	# as dots -- about half the height of the 0.19.5 two-line signboard; shown within 16 m, fading over
+	# the last 4. A pointer marks the building; kept on screen at the edges.
 	if not project.is_valid() or not on_screen.is_valid():
 		return
 	var spots := []
 	for st in sim.stands:
 		var up: bool = int(sim.levels[int(st.team)].get("hat_" + str(st.cls), 0)) > 0
 		var nm: String = (str(Sim.UPGRADE_NAME[st.cls]) if up else str(Sim.CLASSES[st.cls].name)).to_upper()
-		spots.append([st.p, "%s%s" % [nm, " ★" if up else ""], "HAT SHOP · %d" % int(st.stock), int(st.team)])
+		spots.append({"p": st.p, "name": nm, "stock": int(st.stock), "team": int(st.team), "up": up,
+			"at": st.get("b", st.p), "top": float(st.get("top", 2.7))})
 	for t in 2:
-		spots.append([Sim.workshop(t), "WORKSHOP", "upgrades · tools", t])
+		spots.append({"p": Sim.workshop(t), "name": "WORKSHOP", "stock": -1, "team": t, "up": false})
+	var title_font: Font = VisualTheme.TITLE_FONT
+	var name_px := 13
 	for sp in spots:
-		var p2: Vector2 = sp[0]
-		if p2.distance_to(me.pos) > 24.0:
+		var dist: float = (sp.p as Vector2).distance_to(me.pos)
+		if dist > 16.0:
 			continue
-		var world := Vector3(p2.x, Sim.height_at(p2) + 3.1, p2.y)
+		# Over the building's roof for hat shops (Round 20), over the spot otherwise.
+		var at: Vector2 = sp.get("at", sp.p)
+		var world := Vector3(at.x, Sim.height_at(sp.p) + float(sp.get("top", 2.7)) - (Sim.height_at(sp.p) if sp.has("top") else 0.0), at.y)
 		if not on_screen.call(world):
 			continue
+		var fade := clampf((16.0 - dist) / 4.0, 0.0, 1.0)
 		var s: Vector2 = project.call(world)
-		var col: Color = TEAM_COLORS[int(sp[3])]
-		var w := maxf(96.0, 9.0 * float(str(sp[1]).length()) + 24.0)
-		var r := Rect2(s.x - w * 0.5, s.y - 30, w, 34)
-		draw_rect(r, Color(0.04, 0.07, 0.1, 0.78))
-		draw_rect(Rect2(r.position, Vector2(r.size.x, 3)), col)
-		_text(Vector2(r.position.x, r.position.y + 17), str(sp[1]), 13, Color.WHITE, _bold, HORIZONTAL_ALIGNMENT_CENTER, r.size.x)
-		_text(Vector2(r.position.x, r.position.y + 30), str(sp[2]), 10, Color(1, 1, 1, 0.7), null, HORIZONTAL_ALIGNMENT_CENTER, r.size.x)
+		var title := ("★ " if sp.up else "") + str(sp.name)
+		var tw := title_font.get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1, name_px).x
+		var pips := int(sp.stock) >= 0
+		var w := tw + 18.0 + (3 * 7.5 + 5.0 if pips else 0.0)
+		var h := 22.0
+		var x := clampf(s.x - w * 0.5, 6.0, size.x - w - 6.0)          # never cut off at the edge
+		var r := Rect2(x, s.y - h - 7.0, w, h)
+		var sb := _plate_style(int(sp.team), bool(sp.up))
+		var team_col: Color = TEAM_COLORS[int(sp.team)]
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		var tip := Vector2(clampf(s.x, r.position.x + 8.0, r.end.x - 8.0), r.end.y + 5.0)
+		draw_colored_polygon(PackedVector2Array([tip, tip + Vector2(-5, -6), tip + Vector2(5, -6)]), Color(sb.border_color, fade))
+		sb.bg_color.a = 0.88 * fade
+		sb.border_color.a = fade
+		sb.shadow_color.a = 0.35 * fade
+		draw_style_box(sb, r)
+		sb.bg_color.a = 0.88
+		sb.border_color.a = 1.0
+		sb.shadow_color.a = 0.35
+		draw_rect(Rect2(r.position + Vector2(6, 1), Vector2(r.size.x - 12, 1.5)), Color(team_col, 0.9 * fade))
+		var name_col := Color("#ffe9b0") if sp.up else Color("#fff6e3")
+		var tx := r.position.x + 9.0
+		var ty := r.position.y + 16.0
+		draw_string_outline(title_font, Vector2(tx, ty), title, HORIZONTAL_ALIGNMENT_LEFT, -1, name_px, 3, Color(0, 0, 0, 0.6 * fade))
+		draw_string(title_font, Vector2(tx, ty), title, HORIZONTAL_ALIGNMENT_LEFT, -1, name_px, Color(name_col, fade))
+		if pips:
+			for k in 3:
+				var c := Vector2(tx + tw + 8.0 + k * 7.5, r.position.y + h * 0.5 + 0.5)
+				if k < int(sp.stock):
+					draw_circle(c, 2.6, Color(team_col, fade))
+				else:
+					draw_arc(c, 2.4, 0.0, TAU, 12, Color(0.86, 0.79, 0.64, 0.6 * fade), 1.0, true)
 
 func _draw_oracle_marker(me: Dictionary) -> void:
 	# Point to our Oracle (or home, while carrying her) when she is off-screen.
@@ -668,7 +731,7 @@ func _draw_oracle_marker(me: Dictionary) -> void:
 	var tip := edge + dir * 16
 	var side := Vector2(-dir.y, dir.x) * 11
 	draw_colored_polygon(PackedVector2Array([tip, edge - dir * 6 + side, edge - dir * 6 - side]), col)
-	_text(edge - dir * 22 + Vector2(0, 5), "HOME" if me.carrying else "ORACLE", 11, col, _bold)
+	_text(edge - dir * 22 + Vector2(0, 5), "HOME" if me.carrying else "KING", 11, col, _bold)
 
 func _draw_button(b: Dictionary, me: Dictionary) -> void:
 	var c: Vector2 = b.c
@@ -700,7 +763,7 @@ func _draw_button(b: Dictionary, me: Dictionary) -> void:
 			ready = cd <= 0.0 and not me.carrying
 		"action":
 			label = {"hat_up":"UPGRADE","hat":"NEW HAT","grab":"LIFT","throw":"THROW","workshop":"WORKSHOP","chop":"CHOP","mine":"MINE",
-				"repair":"REPAIR","gather":"WORKING","repairing":"REPAIRING","ladder":"LADDER","build_ladder":"BUILDING","cake":"TAKE CAKE","feed":"FEED",
+				"repair":"REPAIR","gather":"WORKING","repairing":"REPAIRING","ladder":"LADDER","build_ladder":"BUILDING","fish":"FISH","feed":"FEED",
 				"join":"HELP LIFT","letgo":"LET GO"}.get(b.ctx, "USE")
 			col = Color("#155258")
 			rim = Color("#9ff6ef")

@@ -1,5 +1,5 @@
 extends SceneTree
-# Round 7 landscape sanity: every tree/stone/rock/cake/outpost sits clear of walls (river, rails,
+# Round 7 landscape sanity: every tree/stone/rock/outpost sits clear of walls (river, rails,
 # ledge faces, castle), off the brick paths, outside other things; the land is point-symmetric;
 # bridges and ramps connect (nav). Prints each problem.
 const Sim = preload("res://scripts/siege/siege_sim.gd")

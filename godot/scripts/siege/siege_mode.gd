@@ -330,10 +330,110 @@ func _on_action(kind: String) -> void:
 		"dodge": _act("dodge")
 		"action": _act("interact")
 
+# ---- Warm-up cover (Round 16, Kevin: the 3D world showed black for a few seconds at match start: the
+# phone compiling the scene's shader pipelines). A FATEBOUND card covers the first moments while the
+# camera visits the key places so their materials compile behind it; it lifts once the engine's
+# pipeline-compilation counters have been still for WARM_STILL (never before WARM_MIN, at most
+# WARM_MAX). Offline the match clock waits. Skipped under scripted main loops (tests, render tools).
+const WARM_MIN := 0.6
+const WARM_MAX := 10.0
+const WARM_STILL := 0.5
+const _LOGO_FONT = preload("res://assets/fonts/LuckiestGuy-Regular.ttf")
+var _warm: Dictionary = {}
+var _warm_done := false
+
+func _warm_begin() -> void:
+	_warm_done = true
+	if get_tree().get_script() != null and not OS.has_environment("FB_FORCE_WARMUP"):
+		return
+	var cover := ColorRect.new()
+	cover.color = Color("#120c07")
+	cover.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	cover.mouse_filter = Control.MOUSE_FILTER_STOP
+	cover.z_index = 100
+	var box := VBoxContainer.new()
+	box.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	box.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	box.grow_vertical = Control.GROW_DIRECTION_BOTH
+	box.alignment = BoxContainer.ALIGNMENT_CENTER
+	box.add_theme_constant_override("separation", 14)
+	cover.add_child(box)
+	var title := Label.new()
+	title.text = "FATEBOUND"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_override("font", _LOGO_FONT)
+	title.add_theme_font_size_override("font_size", 52)
+	title.add_theme_color_override("font_color", Color("#ffd257"))
+	title.add_theme_color_override("font_outline_color", Color("#2e1908"))
+	title.add_theme_constant_override("outline_size", 12)
+	box.add_child(title)
+	var sub := Label.new()
+	sub.text = "Preparing the battlefield"
+	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	sub.add_theme_font_override("font", VisualTheme.BOLD_FONT)
+	sub.add_theme_font_size_override("font_size", 18)
+	sub.add_theme_color_override("font_color", Color("#f0e4c8"))
+	box.add_child(sub)
+	add_child(cover)
+	var spots := []
+	for t in 2:
+		for q in [Vector2(0.0, 6.0), Vector2(0.0, 20.0), Vector2(0.0, 27.0), Vector2(-26.5, 14.0), Vector2(0.0, -6.0)]:
+			spots.append(Sim._c(t, q))
+	spots.append(Vector2.ZERO)
+	for op in sim.outposts:
+		spots.append(op.p)
+	_warm = {"cover": cover, "sub": sub, "t": 0.0, "last": -1, "still": 0.0, "spots": spots, "i": 0, "fade": -1.0}
+
+func _warm_step(delta: float) -> bool:
+	# True while the match should wait behind the cover.
+	var w := _warm
+	w.t = float(w.t) + delta
+	var spots: Array = w.spots
+	var i := int(w.i)
+	if i < spots.size() * 2:
+		var p: Vector2 = spots[i / 2]
+		var y := Sim.height_at(p)
+		view.cam_override = [Vector3(p.x + 6.0, y + 16.0, p.y + 10.0), Vector3(p.x, y, p.y)]
+		w.i = i + 1
+	elif i == spots.size() * 2:
+		view.cam_override = []
+		view.snap_camera()
+		w.i = i + 1
+	var c := 0
+	for k in [RenderingServer.RENDERING_INFO_PIPELINE_COMPILATIONS_CANVAS, RenderingServer.RENDERING_INFO_PIPELINE_COMPILATIONS_MESH,
+			RenderingServer.RENDERING_INFO_PIPELINE_COMPILATIONS_SURFACE, RenderingServer.RENDERING_INFO_PIPELINE_COMPILATIONS_DRAW,
+			RenderingServer.RENDERING_INFO_PIPELINE_COMPILATIONS_SPECIALIZATION]:
+		c += RenderingServer.get_rendering_info(k)
+	if c != int(w.last):
+		w.last = c
+		w.still = 0.0
+	else:
+		w.still = float(w.still) + delta
+	(w.sub as Label).text = "Preparing the battlefield" + ".".repeat(1 + int(float(w.t) * 3.0) % 3)
+	var cover: ColorRect = w.cover
+	if float(w.fade) < 0.0:
+		if (int(w.i) > spots.size() * 2 and float(w.t) >= WARM_MIN and float(w.still) >= WARM_STILL) or float(w.t) >= WARM_MAX:
+			w.fade = 0.0
+			diag.mark("warm-up %.1f s, %d pipeline compiles" % [float(w.t), c])
+		return true
+	w.fade = float(w.fade) + delta
+	cover.modulate.a = clampf(1.0 - float(w.fade) / 0.3, 0.0, 1.0)
+	if float(w.fade) >= 0.3:
+		cover.queue_free()
+		_warm = {}
+		return false
+	return float(w.fade) < 0.15
+
 func _process(delta: float) -> void:
 	if online:
 		_net_process(delta)
 	if sim == null:
+		return
+	if not _warm_done:
+		_warm_begin()
+	if not _warm.is_empty() and _warm_step(delta):
+		view.proj_lead = 0.0
+		view.sync(delta)
 		return
 	diag.mark("input")
 	var t_start := Time.get_ticks_usec()
@@ -360,6 +460,7 @@ func _process(delta: float) -> void:
 			view.on_event(e)
 			hud.on_event(e)
 	diag.mark("view.sync")
+	view.proj_lead = 0.0 if online else _accum          # online, projectiles interpolate (Net)
 	view.sync(delta)
 	diag.mark("process done")
 	_thermal_guard(delta)

@@ -1,5 +1,3 @@
-> Current Play Store build/upload guide: [PLAY_STORE_HANDOFF.md](PLAY_STORE_HANDOFF.md). The R5 branch is now published and deployed; old bundle import, deployment, and Play version instructions below are historical.
-
 # Fatebound Siege — handoff for the next agent
 
 Owner: Kevin (GitHub `midblade4295`, repo `midblade4295/Fatebound`). Solo indie dev. Tests every
@@ -500,3 +498,7 @@ dodge/swing animation prediction, snapshots 15 Hz. Protocol v7: redeploy the ser
 `SiegeApp.start_tutorial()`, Home card + HOW TO PLAY. Voiceover files go in `assets/vo/tutorial/`
 as `<id>.ogg` (list: `assets/vo/tutorial/SCRIPT.md`; regenerate it after editing STEPS). Test:
 `tests/tutorial_test.gd`. When a new mechanic ships, add a step (talk + task + task_done check).
+
+**0.21.0 (dungeon wing):** Castle.ANNEX_*/DSTAIR/JAIL_*/CELL_C, Castle.in_annex/dungeon_ledges,
+Land.in_dungeon_pit (re-run tools/bake_land.gd after changing the wing), jail = gate kind "jail"
+(Sim._reset_jail). Protocol v8: redeploy the server.

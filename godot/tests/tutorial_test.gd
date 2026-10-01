@@ -32,6 +32,25 @@ func _init() -> void:
 					check(false, "line %s has a unique id and text" % id)
 				ids[id] = true
 	check(ids.size() == n and n >= 25, "script: %d lines, all ids unique" % n)
+	# The Herald's recordings (Kevin's ElevenLabs read, split per line): every line has one.
+	var missing := []
+	var short := []
+	for id in ids:
+		var path := "res://assets/vo/tutorial/%s.ogg" % id
+		if not ResourceLoader.exists(path):
+			missing.append(id)
+			continue
+		var st: AudioStream = load(path)
+		if st == null or st.get_length() < 1.5:
+			short.append(id)
+	# The Oracle became each castle's King (0.20.0): these 13 lines were rewritten and their old
+	# recordings pulled until Kevin re-records them. Remove ids from here as the new files arrive.
+	var pending := []                      # all 37 lines recorded (Kevin's 17-line re-record, 0.24.2)
+	var unexpected := missing.filter(func(x): return not pending.has(x))
+	check(unexpected.is_empty(), "every line has its voice file except the %d awaiting re-record (missing: %s)" % [pending.size(), str(unexpected)])
+	var stale := pending.filter(func(x): return not missing.has(x))
+	check(stale.is_empty(), "pending re-record list is current (these now have files: %s)" % str(stale))
+	check(short.is_empty(), "every voice file loads and is a real line (>= 1.5 s; bad: %s)" % str(short))
 	mode = Mode.new()
 	mode.tutorial = true
 	root.add_child(mode)
@@ -45,6 +64,8 @@ func _process(delta: float) -> bool:
 		return false
 	var tut = mode.tut
 	var s = mode.sim
+	if frames == 5 and tut != null:
+		check(tut.voice.playing and tut.voice.stream != null, "the Herald's first line plays its recording")
 	if tut == null:
 		check(false, "the tutorial overlay exists"); quit(1); return false
 	var me: Dictionary = s.by_id[mode.hud.player_id]
@@ -93,10 +114,11 @@ func _process(delta: float) -> bool:
 				"outpost":
 					var op: Dictionary = tut._outpost(me.team)
 					me.pos = (op.p as Vector2) + Vector2(2.2, 0)
-				"cake":
-					var ct: Dictionary = tut._cake_tree(me)
-					me.pos = (ct.p as Vector2) + Vector2(1.3, 0)
-					s.act(mode.hud.player_id, "interact")
+				"fish":
+					# Stand on our bank and cast; the catch comes FISH_TIME later (the loop keeps stepping).
+					me.pos = s._fish_spot(me)
+					if str(me.task.get("kind", "")) != "fish":
+						s.act(mode.hud.player_id, "interact")
 				"feed":
 					me.pos = (s.oracles[1 - int(me.team)].pos as Vector2) + Vector2(0.6, 0)
 					s.act(mode.hud.player_id, "interact")

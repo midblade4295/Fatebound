@@ -47,8 +47,8 @@ var node_nodes: Dictionary = {}
 var stock_piles: Array = []
 var catapult_nodes: Array = []
 var ladder_nodes: Dictionary = {}
-var cake_nodes: Dictionary = {}   # cake tree id -> the cake shown while ripe
 var proj_nodes: Dictionary = {}
+var proj_lead := 0.0          # offline: seconds since the last sim tick (projectiles drawn ahead by vel * this)
 var _fx: Array = []
 var _time := 0.0
 var _cam_target := Vector3.ZERO
@@ -98,8 +98,24 @@ func _warm_up() -> void:
 # ---------- world ----------
 func _build_lighting() -> void:
 	var env := Environment.new()
-	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color("#9fb0b4")
+	# A real sky (0.19.4, Kevin: "there needs to be a sky, mainly for the trailer"). Background only:
+	# ambient stays a flat colour and reflections are off, so lighting on the field is unchanged and
+	# no radiance map is computed.
+	var sky_mat := ProceduralSkyMaterial.new()
+	sky_mat.sky_top_color = Color("#3a79c8")
+	sky_mat.sky_horizon_color = Color("#bcd8ea")
+	sky_mat.sky_curve = 0.12
+	# Below the horizon = the fog colour: wherever no land is drawn it reads as distant haze, never
+	# as a grey patch.
+	sky_mat.ground_horizon_color = Color("#b3cfe1")
+	sky_mat.ground_bottom_color = Color("#b3cfe1")
+	sky_mat.sun_angle_max = 24.0
+	var sky := Sky.new()
+	sky.sky_material = sky_mat
+	sky.radiance_size = Sky.RADIANCE_SIZE_32
+	env.background_mode = Environment.BG_SKY
+	env.sky = sky
+	env.reflected_light_source = Environment.REFLECTION_SOURCE_DISABLED
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = Color("#c3c9c4")
 	env.ambient_light_energy = 0.5 * (VULKAN_AMBIENT if RenderingServer.get_current_rendering_method() != "gl_compatibility" else 1.0)
@@ -114,11 +130,12 @@ func _build_lighting() -> void:
 	env.adjustment_saturation = 1.08
 	env.adjustment_contrast = 1.04
 	env.fog_enabled = true
-	env.fog_light_color = Color("#8ea3ad")
+	env.fog_light_color = Color("#b3cfe1")      # the sky's horizon: distant hills fade into it
 	env.fog_mode = Environment.FOG_MODE_DEPTH
-	env.fog_depth_begin = 64.0
-	env.fog_depth_end = 120.0
-	env.fog_density = 0.5
+	env.fog_depth_begin = 70.0
+	env.fog_depth_end = 285.0                  # the land ends at ~300 m: fully fogged there, so no rim shows
+	env.fog_density = 0.85
+	env.fog_sky_affect = 0.0                   # the sky itself stays clear
 	# No glow in battle (0.14.3): it is full-screen blur passes at native resolution (~7 % of the
 	# frame in tests/perf_bench.gd, and bandwidth-heavy on phones) for a bloom too faint to see.
 	env.glow_enabled = false
@@ -191,6 +208,147 @@ static func _terrain_material() -> ShaderMaterial:
 		_terrain_mat = m
 	return _terrain_mat
 
+# ---------- the land beyond the playfield (0.19.4) ----------
+static var _outer_meshes: Array = []
+static var _outer_mat: ShaderMaterial = null
+const OUTER_RINGS := [-1.0, 0.0, 2.0, 5.0, 9.0, 14.0, 21.0, 30.0, 42.0, 58.0, 80.0, 110.0, 150.0, 200.0, 260.0]
+const OUTER_TREES := ["Tree_1_A_Color1", "Tree_2_A_Color1", "Tree_4_A_Color1"]
+
+static func _outer_side_points(side: int) -> Array:
+	# Points along one side of the baked rect, with their outward directions; each side also owns
+	# the fan of directions around its first corner, so the four sides tile the ring.
+	var r := Land.bake_rect()
+	var c := [r.position, Vector2(r.end.x, r.position.y), r.end, Vector2(r.position.x, r.end.y)]
+	var nrm := [Vector2(0, -1), Vector2(1, 0), Vector2(0, 1), Vector2(-1, 0)]
+	var a: Vector2 = c[side]
+	var b: Vector2 = c[(side + 1) % 4]
+	var n: Vector2 = nrm[side]
+	var prev: Vector2 = nrm[(side + 3) % 4]
+	var pts := []
+	for k in 6:                                   # corner fan from the previous side's normal to ours
+		pts.append([a, prev.slerp(n, k / 6.0).normalized()])
+	var len := a.distance_to(b)
+	var steps := int(ceil(len / 2.0))
+	for k in steps + 1:
+		pts.append([a.lerp(b, float(k) / steps), n])
+	return pts
+
+static func _make_outer_meshes() -> Array:
+	var out := []
+	for side in 4:
+		var pts := _outer_side_points(side)
+		var np := pts.size()
+		var verts := PackedVector3Array()
+		var norms := PackedVector3Array()
+		var idx := PackedInt32Array()
+		for ring in OUTER_RINGS.size():
+			var d: float = OUTER_RINGS[ring]
+			for pt in pts:
+				var p: Vector2 = (pt[0] as Vector2) + (pt[1] as Vector2) * d
+				# The first ring tucks 1 m under the terrain's edge so no crack can show.
+				var y: float = Land.terrain_height(pt[0]) - 0.06 if d <= 0.0 else Land.outer_height(p)
+				verts.append(Vector3(p.x, y, p.y))
+				var e := 1.0
+				var hx := Land.outer_height(p + Vector2(e, 0)) - Land.outer_height(p - Vector2(e, 0))
+				var hz := Land.outer_height(p + Vector2(0, e)) - Land.outer_height(p - Vector2(0, e))
+				norms.append(Vector3(-hx, 2.0 * e, -hz).normalized())
+		for ring in OUTER_RINGS.size() - 1:
+			for k in np - 1:
+				var a := ring * np + k
+				var b := a + np
+				# Every side runs the same way round the map with rings going outward, so one winding
+				# faces up on all four. (0.19.4 special-cased sides 1 and 2 the wrong way round: they
+				# were culled and the sky's grey underside showed through -- Kevin's screenshots.)
+				idx.append_array([a, b, a + 1, a + 1, b, b + 1])
+		var arr := []
+		arr.resize(Mesh.ARRAY_MAX)
+		arr[Mesh.ARRAY_VERTEX] = verts
+		arr[Mesh.ARRAY_NORMAL] = norms
+		arr[Mesh.ARRAY_INDEX] = idx
+		var am := ArrayMesh.new()
+		am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
+		out.append(am)
+	return out
+
+func _build_outer_land() -> void:
+	if _outer_meshes.is_empty():
+		_outer_meshes = _make_outer_meshes()
+	if _outer_mat == null:
+		var tm: ShaderMaterial = _terrain_material()
+		_outer_mat = ShaderMaterial.new()
+		_outer_mat.shader = load("res://scripts/siege/outer_land.gdshader")
+		for k in ["grass_tex", "rock_tex", "path_mask", "mask_rect", "grass_scale", "rock_scale", "tint", "grass_sat", "band_strength"]:
+			_outer_mat.set_shader_parameter(k, tm.get_shader_parameter(k))
+	for m in _outer_meshes:
+		var mi := MeshInstance3D.new()
+		mi.mesh = m
+		mi.material_override = _outer_mat
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mi.set_meta("perf", "outer_land")
+		add_child(mi)
+	_build_outer_trees()
+
+func _build_outer_trees() -> void:
+	# Groves in the meadows and on the lower hills: batched per side and tree type (MultiMesh), so
+	# a side off-screen costs nothing. Not in the river, not on steep or high ground.
+	var r := Land.bake_rect()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 911
+	var per := {}                                     # "side:type" -> Array[Transform3D]
+	var placed := 0
+	var tries := 0
+	while placed < 260 and tries < 6000:
+		tries += 1
+		var d := 2.0 + pow(rng.randf(), 1.7) * 150.0           # denser near the playfield
+		var side := rng.randi() % 4
+		var along := rng.randf()
+		var q: Vector2
+		var n: Vector2
+		match side:
+			0: q = Vector2(lerpf(r.position.x, r.end.x, along), r.position.y); n = Vector2(0, -1)
+			1: q = Vector2(r.end.x, lerpf(r.position.y, r.end.y, along)); n = Vector2(1, 0)
+			2: q = Vector2(lerpf(r.end.x, r.position.x, along), r.end.y); n = Vector2(0, 1)
+			_: q = Vector2(r.position.x, lerpf(r.end.y, r.position.y, along)); n = Vector2(-1, 0)
+		var p := q + n * d + Vector2(n.y, -n.x) * rng.randf_range(-6.0, 6.0)
+		# Groves, not an even carpet.
+		if sin(p.x * 0.09 + 1.1) * sin(p.y * 0.08 + 0.3) + rng.randf() * 0.6 < 0.25:
+			continue
+		if absf(p.y - Land.river_c(p.x)) < Land.RIVER_HW + 4.0:
+			continue
+		var h := Land.outer_height(p)
+		var slope := absf(Land.outer_height(p + Vector2(1, 0)) - Land.outer_height(p - Vector2(1, 0))) \
+			+ absf(Land.outer_height(p + Vector2(0, 1)) - Land.outer_height(p - Vector2(0, 1)))
+		if h > 22.0 or slope > 1.4 or p.distance_to(q) < 1.5:
+			continue
+		var t := rng.randi() % OUTER_TREES.size()
+		var sc := rng.randf_range(0.6, 1.0)
+		var xf := Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3.ONE * sc), Vector3(p.x, h - 0.1, p.y))
+		var key := "%d:%d" % [side, t]
+		if not per.has(key):
+			per[key] = []
+		(per[key] as Array).append(xf)
+		placed += 1
+	for key in per:
+		var t := int(str(key).split(":")[1])
+		var packed := Stage.scene(FOREST + OUTER_TREES[t] + ".gltf")
+		if packed == null:
+			continue
+		var node: Node3D = packed.instantiate()
+		var src: MeshInstance3D = node.find_children("*", "MeshInstance3D", true, false)[0]
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.mesh = src.mesh
+		var list: Array = per[key]
+		mm.instance_count = list.size()
+		for i in list.size():
+			mm.set_instance_transform(i, (list[i] as Transform3D) * src.transform)
+		node.free()
+		var mmi := MultiMeshInstance3D.new()
+		mmi.multimesh = mm
+		mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mmi.set_meta("perf", "outer_trees")
+		add_child(mmi)
+
 static func _make_terrain_meshes() -> Array:
 	# One mesh per 32 m band (tight AABBs -> off-screen bands are culled), vertices every
 	# BAKE_STEP metres straight from the baked height map, normals by central differences.
@@ -246,6 +404,7 @@ func _build_terrain() -> void:
 		mi.set_meta("perf", "terrain")
 		add_child(mi)
 	_build_water()
+	_build_outer_land()
 	_build_bridges()
 	_build_foliage()
 
@@ -285,15 +444,18 @@ void fragment() {
 	var verts := PackedVector3Array()
 	var uvs := PackedVector2Array()
 	var idx := PackedInt32Array()
-	var x0 := -Sim.HALF_W - Land.BAKE_MARGIN
-	var n := int((2.0 * (Sim.HALF_W + Land.BAKE_MARGIN)) / 1.0)
+	# The river runs on out of the map (0.19.4): the water spans the outer land too. UV.x keeps the
+	# old density (one unit per 78 m) so the ripples look the same.
+	var x0 := -Sim.HALF_W - Land.BAKE_MARGIN - Land.OUTER_REACH
+	var n := int((2.0 * (Sim.HALF_W + Land.BAKE_MARGIN + Land.OUTER_REACH)) / 1.0)
+	var span := 2.0 * (Sim.HALF_W + Land.BAKE_MARGIN)
 	for k in n + 1:
 		var x := x0 + k
 		var c := Land.river_c(x)
 		verts.append(Vector3(x, Land.WATER_Y, c - Land.RIVER_HW - 0.35))
 		verts.append(Vector3(x, Land.WATER_Y, c + Land.RIVER_HW + 0.35))
-		uvs.append(Vector2(float(k) / n, 0.0))
-		uvs.append(Vector2(float(k) / n, 1.0))
+		uvs.append(Vector2(float(k) / span, 0.0))
+		uvs.append(Vector2(float(k) / span, 1.0))
 		if k < n:
 			var a := k * 2
 			idx.append_array([a, a + 2, a + 1, a + 1, a + 2, a + 3])
@@ -329,6 +491,8 @@ static func _foliage_ok(p: Vector2, mask: Image, obstacles: Array, allow_slope :
 		return false
 	if absf(p.x) <= Sim.CASTLE_HX + 1.5 and absf(p.y) >= Sim.CASTLE_SHIFT + Sim.FRONT_Z - 1.5:
 		return false
+	if Land.in_dungeon_pit(p, 1.5):
+		return false                          # the dungeon wing's floor and walls (Kevin: grass on the floor)
 	var r := Land.bake_rect()
 	var px := Vector2i(clampi(int((p.x - r.position.x) * Land.MASK_PPM), 0, mask.get_width() - 1),
 		clampi(int((p.y - r.position.y) * Land.MASK_PPM), 0, mask.get_height() - 1))
@@ -568,56 +732,25 @@ func _machine_piece(root: Node3D, piece: Array, col: String) -> void:
 	root.add_child(n)
 
 func _build_hat_stands() -> void:
+	# Hat shops are buildings (Round 20): the class's building, team-coloured, its door facing the way
+	# HAT_SHOPS says; the take ring at the door; a team flag on the roof once the class is upgraded.
 	for st in sim.stands:
 		var cls := str(st.cls)
-		var col: String = COLOR[int(st.team)]
+		var t := int(st.team)
+		var col: String = COLOR[t]
+		var shop: Dictionary = Castle.HAT_SHOPS[Sim.HAT_CLASSES.find(cls)]
+		var bp: Vector2 = st.b
+		var face := 0.0 if t == 0 else PI
+		var node := _place(HEX + (str(shop.model) % col) + ".gltf", Vector3(bp.x, float(shop.y), bp.y), face + deg_to_rad(float(shop.rot)), float(shop.scale))
+		if node != null:
+			node.set_meta("perf", "hat_shop")
 		var gy := Sim.height_at(st.p)
-		var root := Node3D.new()
-		root.position = Vector3(st.p.x, gy, st.p.y)
-		# Face the machine towards the castle's middle (mirrored per team).
-		var mid: Vector2 = Sim._c(int(st.team), Vector2(0.0, 12.0))
-		root.rotation.y = atan2(mid.x - st.p.x, mid.y - st.p.y)
-		add_child(root)
-		var def: Dictionary = MACHINES.get(cls, {})
-		for piece in def.get("base", []):
-			_machine_piece(root, piece, col)
-		var up_root := Node3D.new()
-		root.add_child(up_root)
-		for piece in def.get("up", []):
-			_machine_piece(up_root, piece, col)
-		up_root.visible = false
-		var glow: MeshInstance3D = null
-		if MACHINE_GLOW.has(cls):
-			# A floating orb (static material; the upgrade makes it bigger).
-			glow = MeshInstance3D.new()
-			var sm := SphereMesh.new()
-			sm.radius = 0.18
-			sm.height = 0.36
-			sm.radial_segments = 12
-			sm.rings = 6
-			glow.mesh = sm
-			# Lit + emission (an UNSHADED orb here hung the software-Vulkan renderer at pipeline
-			# compile in combination with the mage/priest pieces; same look, safer pipeline).
-			var gm := StandardMaterial3D.new()
-			gm.albedo_color = MACHINE_GLOW[cls]
-			gm.emission_enabled = true
-			gm.emission = MACHINE_GLOW[cls]
-			gm.emission_energy_multiplier = 1.4
-			gm.roughness = 0.4
-			glow.material_override = gm
-			glow.position = Vector3(0, 2.25 if cls == "mage" else 1.6, 0.35)
-			root.add_child(glow)
-		machine_up[st.id] = {"up": up_root, "glow": glow, "state": false}
-		var colr: Color = HAT_COLOR[cls]
-		_decal(Vector3(st.p.x, gy + 0.06, st.p.y), Sim.HAT_TAKE_R, colr, 0.5)
-		# The hat stack sits on the front of the machine (visible stock).
-		var stack := []
-		for k in Sim.HAT_STOCK_MAX:
-			var h := _hat_instance(cls, false, 1.0)
-			h.position = Vector3(-0.2 + 0.2 * k, 0.05 + 0.02 * k, -0.55)
-			root.add_child(h)
-			stack.append(h)
-		stand_nodes[st.id] = stack
+		_decal(Vector3(st.p.x, gy + 0.06, st.p.y), Sim.HAT_TAKE_R, HAT_COLOR[cls], 0.5)
+		var flag := _place(HEX + "flag_%s.gltf" % col, Vector3(bp.x, float(shop.y) + 3.4, bp.y), face, 2.2)
+		if flag != null:
+			flag.visible = false
+		machine_up[st.id] = {"up": flag if flag != null else Node3D.new(), "glow": null, "state": false}
+		stand_nodes[st.id] = []
 
 # Whirlwind FX (Round 12, Kevin: "spin visuals like World of Warcraft"): two translucent blade-trail
 # ribbons (partial rings fading along their arc) circling the berserker at different heights and
@@ -818,12 +951,13 @@ func _build_outposts() -> void:
 	for op in sim.outposts:
 		var p := Vector3(op.p.x, Sim.height_at(op.p), op.p.y)
 		var looks := {}
-		looks[-1] = _place(HEX + "building_tower_base_blue.gltf", p, 0.3, 2.6)
-		looks[0] = _place(HEX + "building_tower_A_blue.gltf", p, 0.3, 2.3)
-		looks[1] = _place(HEX + "building_tower_A_red.gltf", p, 0.3, 2.3)
+		# 40 % bigger since Round 14 (Kevin); collision grew with them (Land.OUTPOST_TOWER_R).
+		looks[-1] = _place(HEX + "building_tower_base_blue.gltf", p, 0.3, 3.6)
+		looks[0] = _place(HEX + "building_tower_A_blue.gltf", p, 0.3, 3.2)
+		looks[1] = _place(HEX + "building_tower_A_red.gltf", p, 0.3, 3.2)
 		var flags := {}
 		for t in 2:
-			flags[t] = _place(HEX + "flag_%s.gltf" % COLOR[t], p + Vector3(1.7, 0, 1.7), 0.0, 2.2)
+			flags[t] = _place(HEX + "flag_%s.gltf" % COLOR[t], p + Vector3(2.3, 0, 2.3), 0.0, 2.6)
 		var ring := _decal(p + Vector3(0, 0.07, 0), Land.OUTPOST_R, Color(1, 1, 1), 0.55)
 		var prog := _decal(p + Vector3(0, 0.08, 0), Land.OUTPOST_R - 0.35, TEAM_COLORS[0], 0.9)
 		outpost_nodes[op.id] = {"looks":looks, "flags":flags, "ring":ring, "prog":prog, "owner":-2}
@@ -884,7 +1018,6 @@ func _build_props() -> void:
 			"workshop_building":
 				_place(HEX + "building_market_%s.gltf" % COLOR[ob.team], p, -PI * 0.5 if ob.team == 0 else PI * 0.5, 2.0)
 	_build_nodes()
-	_build_cake_trees()
 	_build_outposts()
 	_build_hat_stands()
 	# Scenery outside the play field.
@@ -996,19 +1129,28 @@ func _parapet(a: Vector2, b: Vector2) -> void:
 		if node != null:
 			node.scale.z = s * piece / (1.15 * s)
 
-func _wall_run(a: Vector2, b: Vector2, path: String) -> void:
-	# Lay 5.2 m wall models along a segment (clipped to the field), stretched slightly to fit.
-	var aa := Vector2(clampf(a.x, -Sim.HALF_W, Sim.HALF_W), clampf(a.y, -Sim.HALF_L, Sim.HALF_L))
-	var bb := Vector2(clampf(b.x, -Sim.HALF_W, Sim.HALF_W), clampf(b.y, -Sim.HALF_L, Sim.HALF_L))
+func _wall_run(a: Vector2, b: Vector2, path: String, y := 0.0, clip := true, inside := Vector2.INF) -> void:
+	# inside (optional): a point inside what the wall encloses. The kit wall's stone face is its local +Z
+	# (the other side has the walkway lip); pieces turn so the stone faces AWAY from it (Round 14,
+	# Kevin: "the castle walls are backwards" -- the rotation came from the segment's direction, and
+	# the red castle's mirrored walls run the other way; the model is centred, so turning doesn't shift it).
+	# Lay 5.2 m wall models along a segment (clipped to the field unless told not to), stretched to fit.
+	var aa := Vector2(clampf(a.x, -Sim.HALF_W, Sim.HALF_W), clampf(a.y, -Sim.HALF_L, Sim.HALF_L)) if clip else a
+	var bb := Vector2(clampf(b.x, -Sim.HALF_W, Sim.HALF_W), clampf(b.y, -Sim.HALF_L, Sim.HALF_L)) if clip else b
 	var length := aa.distance_to(bb)
 	if length < 0.5:
 		return
 	var n := maxi(1, int(round(length / Sim.SEG)))
 	var piece := length / float(n)
 	var rot := -atan2(bb.y - aa.y, bb.x - aa.x)
+	if inside != Vector2.INF:
+		var d := (bb - aa).normalized()
+		var stone := Vector2(-d.y, d.x)                  # where local +Z points with this rotation
+		if stone.dot((aa + bb) * 0.5 - inside) < 0.0:
+			rot += PI
 	for i in n:
 		var c := aa.lerp(bb, (float(i) + 0.5) / float(n))
-		var node := _place(path, Vector3(c.x, 0, c.y), rot, Sim.WALL_SCALE)
+		var node := _place(path, Vector3(c.x, y, c.y), rot, Sim.WALL_SCALE)
 		if node != null:
 			node.scale.x = Sim.WALL_SCALE * piece / Sim.SEG
 			_kit_nodes.append(node)
@@ -1107,12 +1249,25 @@ func _build_castle_kit(t: int) -> void:
 		if absf(a.y - c.y) < 0.01:
 			var lo := 0.0 if absf(a.y - Castle.L1_Z) < 0.01 else Castle.L1_H
 			var hi := Castle.L1_H if absf(a.y - Castle.L1_Z) < 0.01 else Castle.L2_H
+			if absf(a.y - Castle.WALK_Z1) < 0.01:
+				lo = 0.0                               # the rampart's front edge (Round 15)
+				hi = Castle.WALK_H
 			_kit_run(wa, wc, lo, hi - lo)
 		else:
 			# A stair side runs along z; it stands on the stair's lower level, as tall as the climb.
 			var lo2 := 0.0 if a.y < Castle.L2_Z - 0.01 else Castle.L1_H
 			var hi2 := Castle.L1_H if a.y < Castle.L2_Z - 0.01 else Castle.L2_H
 			_kit_run(wa, wc, lo2, hi2 - lo2, 0.8)
+	# The dungeon wing (Round 13): stone sides for the pit under the wing's walls and the castle's
+	# west wall, and walls along both sides of the stairs down.
+	var ax0: float = Castle.ANNEX_X0
+	var az0: float = Castle.ANNEX_Z0
+	var az1: float = Castle.ANNEX_Z1
+	for seg in [[Vector2(ax0, az0), Vector2(ax0, az1)], [Vector2(ax0, az0), Vector2(-Castle.HX, az0)],
+			[Vector2(ax0, az1), Vector2(-Castle.HX, az1)], [Vector2(-Castle.HX, az0), Vector2(-Castle.HX, az1)]]:
+		_kit_run(Sim._c(t, seg[0]), Sim._c(t, seg[1]), Castle.DUNGEON_H, -Castle.DUNGEON_H + 0.05, 2.0)
+	for seg in Castle.dungeon_ledges():
+		_kit_run(Sim._c(t, seg[0]), Sim._c(t, seg[1]), Castle.DUNGEON_H, float(Castle.DSTAIR.h1) - Castle.DUNGEON_H, 0.8)
 	# Towers: squat stone towers at the four corners, blue/red-roofed towers either side of the gates.
 	for sx in [-Castle.HX, Castle.HX]:
 		for sz in [Castle.FRONT_Z, Castle.BACK]:
@@ -1154,7 +1309,15 @@ func _build_castle(t: int) -> void:
 			continue
 		match str(w.kind):
 			"wall":
-				_wall_run(w.a, w.b, HEX + "wall_straight.gltf")
+				# The dungeon wing's walls enclose the wing (and are drawn on their real line: clipped to
+				# the field edge the outer one sat 1 m inside and the cage ran into it); the rest the castle.
+				var mid: Vector2 = (w.a + w.b) * 0.5
+				var ql: Vector2 = (mid if t == 0 else -mid) - Vector2(0.0, Sim.CASTLE_SHIFT)
+				var wing: bool = ql.x < -Castle.HX - 0.5
+				var inside: Vector2 = Sim._c(t, Vector2(-26.5, 16.0) if wing else Vector2(0.0, 16.0))
+				_wall_run(w.a, w.b, HEX + "wall_straight.gltf", 0.0, not wing, inside)
+			"backwall":
+				_wall_run(w.a, w.b, HEX + "wall_straight.gltf", Castle.L2_H, false, Sim._c(t, Vector2(0.0, 16.0)))
 			"bars":
 				_bars(w.a, w.b)
 			# "ledge" (terrace faces, stair sides) are KayKit wall runs in _build_castle_kit.
@@ -1162,7 +1325,16 @@ func _build_castle(t: int) -> void:
 	for g in sim.gates:
 		if g.team != t:
 			continue
-		var node := _place(HEX + "wall_straight_gate.gltf", Vector3(g.c.x, 0, g.c.y), face, Sim.WALL_SCALE)
+		if str(g.get("kind", "")) == "jail":
+			# The jail door: an iron grille that slides up into the ceiling when the castle's own
+			# players come near (g.open), gone when the enemy smashes it.
+			var door := _iron_bars(g.a, g.b, 2.3)
+			door.position = Vector3(g.c.x, Sim.height_at(g.c), g.c.y)
+			add_child(door)
+			gate_nodes[g.id] = {"jail": true, "door": door, "y0": door.position.y, "open": 0.0, "broken": false}
+			continue
+		# Stone face (local +Z) outwards, like the walls: face alone pointed it into the castle.
+		var node := _place(HEX + "wall_straight_gate.gltf", Vector3(g.c.x, 0, g.c.y), face + PI, Sim.WALL_SCALE)
 		var doors := []
 		for mi in node.find_children("*door*", "MeshInstance3D", true, false):
 			doors.append({"node":mi, "sign":1.0 if str(mi.name).contains("left") else -1.0})
@@ -1185,9 +1357,20 @@ func _build_castle(t: int) -> void:
 			var arm: Node3D = cat.find_child("*arm*", true, false)
 			catapult_nodes.append({"team":t, "p":cp, "node":cat, "turret":turret, "arm":arm,
 				"arm_rest":arm.rotation.x if arm != null else 0.0, "fired":-10.0})
-	# The keep stands behind the throne, just past the field edge (a backdrop, not in the way).
-	var kp: Vector2 = Sim._c(t, Vector2(0.0, Castle.BACK + 2.4))
-	_place(HEX + "building_castle_%s.gltf" % col, Vector3(kp.x, Castle.L2_H, kp.y), face, 3.0)
+	# The throne (Round 14, Kevin's ask; the keep that stood here blocked it): a Blender model against
+	# the back wall, velvet in the castle's colour, facing the courtyard.
+	var tp: Vector2 = Sim._c(t, Castle.THRONE_SEAT)
+	var throne := _place("res://assets/props/throne.glb", Vector3(tp.x, Castle.L2_H, tp.y), PI if t == 0 else 0.0, 1.0)
+	if throne != null:
+		var velvet := StandardMaterial3D.new()
+		velvet.albedo_color = Color("#2d58b8") if t == 0 else Color("#b3223a")
+		velvet.roughness = 0.85
+		for mi in throne.find_children("*", "MeshInstance3D", true, false):
+			var m: MeshInstance3D = mi
+			for si in m.mesh.get_surface_count():
+				var sm := m.mesh.surface_get_material(si)
+				if sm != null and str(sm.resource_name) == "Velvet":
+					m.set_surface_override_material(si, velvet)
 	# Throne room: banners either side of the throne, a weapon rack.
 	var th: Vector2 = Sim.throne(t)
 	for fx in [-1.6, 1.6]:
@@ -1223,75 +1406,50 @@ func _build_castle(t: int) -> void:
 	stock_piles.append(piles)
 
 func _bars(a: Vector2, b: Vector2) -> void:
-	# Cell bars: wooden fence pieces along the segment (the fence model is offset to a hex edge).
+	# Cell bars (Round 13, Kevin: "actual jail bars"): an iron grille on the dungeon floor.
+	var n := _iron_bars(a, b, 2.3)
+	var mid := (a + b) * 0.5
+	n.position = Vector3(mid.x, Sim.height_at(mid), mid.y)
+	add_child(n)
+
+static var _iron_mat: StandardMaterial3D = null
+
+func _iron_bars(a: Vector2, b: Vector2, height: float) -> Node3D:
+	# Vertical iron bars every 0.2 m between a top and a bottom rail, centred on (a+b)/2.
+	if _iron_mat == null:
+		_iron_mat = StandardMaterial3D.new()
+		_iron_mat.albedo_color = Color("#3b3f47")
+		_iron_mat.metallic = 0.65
+		_iron_mat.roughness = 0.42
 	var length := a.distance_to(b)
-	var n := maxi(1, int(round(length / 2.3)))
-	var rot := -atan2(b.y - a.y, b.x - a.x) + PI * 0.5
-	for i in n:
-		var c := a.lerp(b, (float(i) + 0.5) / float(n))
-		var s := 2.0
-		var off := Vector3(1.05 * s, 0, 0).rotated(Vector3.UP, rot)
-		_place(HEX + "fence_wood_straight.gltf", Vector3(c.x, Sim.height_at(c), c.y) + off, rot, s)
-
-static var _cake_mats: Array = []
-
-func _make_cake(s := 1.0) -> Node3D:
-	# Three-tier cake from primitives (the kit has no cake): sponge tiers, pink icing, a cherry.
-	if _cake_mats.is_empty():
-		for c in [Color("#f3dcb4"), Color("#ff9ec8"), Color("#d92b3a")]:
-			var m := StandardMaterial3D.new()
-			m.albedo_color = c
-			m.roughness = 0.6
-			_cake_mats.append(m)
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var half := length * 0.5
+	var n := maxi(2, int(length / 0.2))
+	for i in n + 1:
+		var x := -half + length * float(i) / n
+		_bar_box(st, Vector3(x, height * 0.5, 0), Vector3(0.045, height * 0.5, 0.045))
+	for y in [0.18, height - 0.12]:
+		_bar_box(st, Vector3(0, y, 0), Vector3(half, 0.05, 0.06))
+	st.generate_normals()
+	var mi := MeshInstance3D.new()
+	mi.mesh = st.commit()
+	mi.material_override = _iron_mat
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	var root := Node3D.new()
-	var y := 0.0
-	for i in 3:
-		var r: float = [0.42, 0.32, 0.22][i] * s
-		var h := 0.2 * s
-		var cyl := CylinderMesh.new()
-		cyl.top_radius = r
-		cyl.bottom_radius = r
-		cyl.height = h
-		cyl.radial_segments = 14
-		var tier := MeshInstance3D.new()
-		tier.mesh = cyl
-		tier.material_override = _cake_mats[0]
-		tier.position.y = y + h * 0.5
-		root.add_child(tier)
-		var icing := CylinderMesh.new()
-		icing.top_radius = r * 1.03
-		icing.bottom_radius = r * 1.03
-		icing.height = h * 0.25
-		icing.radial_segments = 14
-		var ic := MeshInstance3D.new()
-		ic.mesh = icing
-		ic.material_override = _cake_mats[1]
-		ic.position.y = y + h - h * 0.1
-		root.add_child(ic)
-		y += h
-	var cherry := SphereMesh.new()
-	cherry.radius = 0.07 * s
-	cherry.height = 0.14 * s
-	var ch := MeshInstance3D.new()
-	ch.mesh = cherry
-	ch.material_override = _cake_mats[2]
-	ch.position.y = y + 0.06 * s
-	root.add_child(ch)
-	for mi in root.get_children():
-		(mi as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.rotation.y = -atan2(b.y - a.y, b.x - a.x)
+	root.add_child(mi)
 	return root
 
-func _build_cake_trees() -> void:
-	for ct in sim.cake_trees:
-		var p := Vector3(ct.p.x, 0, ct.p.y)
-		_place(HEX + "tree_single_B.gltf", p, float(ct.id) * 1.3, 3.6)
-		_decal(Vector3(p.x, 0.06, p.z), 1.9, Color("#ff9ec8"), 0.45)
-		var cake := _make_cake(1.3)
-		# Sits on a little stand beside the trunk, facing the middle of the field.
-		var side := Vector2(-ct.p.x, -ct.p.y).normalized() if ct.p.length() > 0.1 else Vector2(1, 0)
-		cake.position = p + Vector3(side.x, 0, side.y) * 1.6 + Vector3(0, 0.55, 0)
-		add_child(cake)
-		cake_nodes[ct.id] = cake
+static func _bar_box(st: SurfaceTool, c: Vector3, h: Vector3) -> void:
+	var v := []
+	for sx in [-1, 1]:
+		for sy in [-1, 1]:
+			for sz in [-1, 1]:
+				v.append(c + Vector3(h.x * sx, h.y * sy, h.z * sz))
+	for f in [[0, 1, 3, 2], [4, 6, 7, 5], [0, 4, 5, 1], [2, 3, 7, 6], [0, 2, 6, 4], [1, 5, 7, 3]]:
+		for k in [0, 2, 1, 0, 3, 2]:
+			st.add_vertex(v[f[k]])
 
 func _build_nodes() -> void:
 	# Trees and quarry stones the workers harvest; a depleted node shows a stump / bare rock.
@@ -1320,6 +1478,12 @@ func _sync_castle(dt: float) -> void:
 		if gn.is_empty():
 			continue
 		var broken: bool = not sim.gate_blocks(g)
+		if gn.has("jail"):
+			gn.broken = broken
+			(gn.door as Node3D).visible = not broken
+			gn.open = move_toward(float(gn.open), 1.0 if (g.open and not broken) else 0.0, dt * 2.2)
+			(gn.door as Node3D).position.y = float(gn.y0) + float(gn.open) * 2.25
+			continue
 		if broken != bool(gn.broken):
 			gn.broken = broken
 			(gn.rubble as Node3D).visible = broken
@@ -1343,12 +1507,6 @@ func _sync_castle(dt: float) -> void:
 		if has and nn.full != null:
 			var k := 0.75 + 0.25 * float(n.amount) / float(n.max)
 			(nn.full as Node3D).scale = Vector3.ONE * (3.2 if n.kind == "wood" else 4.4) * k
-	for ct in sim.cake_trees:
-		var cake: Node3D = cake_nodes.get(ct.id)
-		if cake != null:
-			cake.visible = bool(ct.ready)
-			if ct.ready:
-				cake.rotation.y += dt * 1.1
 	for cn in catapult_nodes:
 		if cn.arm == null:
 			continue
@@ -1363,10 +1521,23 @@ func _sync_castle(dt: float) -> void:
 	for t in 2:
 		var o_node: Dictionary = oracle_nodes[t] if t < oracle_nodes.size() else {}
 		if not o_node.is_empty() and o_node.body != null:
-			var w := float(sim.oracles[t].get("weight", 0))
-			var want := Vector3(1.0 + 0.16 * w, 1.0 + 0.04 * w, 1.0 + 0.16 * w) * 0.95
+			var w := int(sim.oracles[t].get("weight", 0))
+			var stage := clampi(w / 2, 0, KING_STAGES.size() - 1)
+			if stage != int(o_node.stage):
+				for k in (o_node.stages as Array).size():
+					(o_node.stages[k] as Node3D).visible = k == stage
+				o_node.puff = 1.0 if stage > int(o_node.stage) else 0.0    # he just got fatter
+				o_node.stage = stage
+			o_node.puff = maxf(0.0, float(o_node.puff) - dt * 2.5)
 			var body: Node3D = o_node.body
-			body.scale = body.scale.lerp(want, minf(1.0, dt * 3.0))
+			var bump := 1.0 + 0.05 * float(w % 2)                         # the odd weights show too
+			var breathe := 1.0 + 0.018 * sin(_time * 2.4 + t)
+			var puff := 1.0 + 0.18 * sin(float(o_node.puff) * PI)
+			body.scale = Vector3(bump * puff * (2.0 - breathe), bump * breathe, bump * puff * (2.0 - breathe))
+			if str(sim.oracles[t].state) == "carried":
+				body.rotation = Vector3(0.12 * sin(_time * 5.2), 0.0, 0.16 * sin(_time * 4.1 + 0.7))
+			else:
+				body.rotation = Vector3(0.0, 0.08 * sin(_time * 0.9 + t * 2.0), 0.035 * sin(_time * 1.3 + t))
 		for kind in ["wood", "stone"]:
 			var pile: Node3D = stock_piles[t][kind]
 			var shown := clampi(int(ceil(float(sim.stock[t][kind]) / 5.0)), 0, pile.get_child_count())
@@ -1571,7 +1742,11 @@ func sync(dt: float) -> void:
 		if a.is_empty() or not is_instance_valid(a.root):
 			continue
 		var root: Node3D = a.root
-		var target := Vector3(u.pos.x, Sim.height_at(u.pos), u.pos.y)
+		var gy := Sim.height_at(u.pos)
+		# On a ladder: up the rungs, over the wall, down the far side (Round 25).
+		var climb_d: float = sim.ladder_depth(u.pos, u.team) if not sim.ladders.is_empty() and u.state != "dead" else INF
+		a.climb = climb_d != INF and Sim.ladder_lift(climb_d, gy) > gy + 0.15
+		var target := Vector3(u.pos.x, Sim.ladder_lift(climb_d, gy) if climb_d != INF else gy, u.pos.y)
 		var before := root.position
 		# Smooth between 30 Hz sim ticks; snap on respawn teleports.
 		if before.distance_to(target) > 6.0:
@@ -1582,6 +1757,7 @@ func sync(dt: float) -> void:
 		root.rotation.y = lerp_angle(root.rotation.y, float(u.face), 1.0 - exp(-dt * 18.0))
 		(a.ring as MeshInstance3D).visible = u.state != "dead"
 		_sync_load(a, u)
+		_sync_hand(a, u)
 		_animate(a, u, vel)
 		if is_instance_valid(a.player):
 			var show := planes.is_empty() or _on_screen(root.position, planes)
@@ -1599,6 +1775,137 @@ func sync(dt: float) -> void:
 	_step_fx()
 	_update_camera(dt)
 
+# ---------- hand tools (Round 19, KayKit RPG Tools Bits) ----------
+const TOOLS := "res://assets/kaykit/tools/"
+# Scaled to working size (measured: axe 1.05, pickaxe 1.45, hammer 0.82, rod 4.75 units; the old worker
+# axe was 1.24): axe ~1.2 m, pickaxe ~1.3, hammer ~1.0, rod ~2.85.
+const TOOL_SCALES := {"axe": 1.15, "pickaxe": 0.9, "hammer": 1.2, "fishing_rod": 0.6}
+# The rod is the bare one (fishing_rod_base: fishing_rod has its own line and bobber dangling from the
+# grip); our line runs from its tip -- measured: the highest vertex, the rod bends toward +Z.
+const ROD_MODEL := "fishing_rod_base"
+const ROD_TIP := Vector3(-0.0067, 2.3678, 0.9882)
+static var _line_mat: StandardMaterial3D = null
+
+func _gather_kind(u: Dictionary) -> String:
+	if u.load.n > 0:
+		return str(u.load.kind)
+	var best := "wood"
+	var bd := 3.2
+	for n in sim.nodes:
+		var d: float = u.pos.distance_to(n.p)
+		if d < bd:
+			bd = d
+			best = str(n.kind)
+	return best
+
+func _sync_hand(a: Dictionary, u: Dictionary) -> void:
+	# What's in the right hand: a fishing rod while fishing (anyone); for workers the tool for the job --
+	# pickaxe on stone, axe on trees, hammer for repairs and ladders, the axe otherwise. Otherwise the
+	# class weapon. Plus, while fishing, a float bobbing in the water and a line to it.
+	var want := ""
+	var fishing: bool = u.state == "fish"
+	if fishing:
+		want = "fishing_rod"
+	elif u.cls == "worker" and u.state != "dead":
+		match str(u.state):
+			"gather":
+				want = "pickaxe" if _gather_kind(u) == "stone" else "axe"
+			"repair", "build_ladder":
+				want = "hammer"
+			_:
+				want = "axe"
+	if fishing and not a.has("fish_from"):
+		a.fish_from = sim.time
+	elif not fishing:
+		a.erase("fish_from")
+	_sync_fishing_gear(a, u, fishing)
+	if want == str(a.get("hand_tool", "")):
+		return
+	a.hand_tool = want
+	if not a.has("hand_slot") or not is_instance_valid(a.hand_slot):
+		var sk: Skeleton3D = (a.body as Node3D).find_child("Skeleton3D", true, false) if a.get("body") != null else null
+		if sk == null:
+			return
+		var slot: BoneAttachment3D = null
+		for c in sk.get_children():
+			if c is BoneAttachment3D and str((c as BoneAttachment3D).bone_name) == "handslot.r":
+				slot = c
+		if slot == null:
+			slot = BoneAttachment3D.new()
+			slot.bone_name = "handslot.r"
+			sk.add_child(slot)
+		a.hand_slot = slot
+		a.hand_default = slot.get_children()
+		a.tools = {}
+	var slot2: BoneAttachment3D = a.hand_slot
+	for c in a.hand_default:
+		if is_instance_valid(c):
+			(c as Node3D).visible = want == ""
+	for k in a.tools:
+		if is_instance_valid(a.tools[k]):
+			(a.tools[k] as Node3D).visible = k == want
+	if want != "" and not (a.tools as Dictionary).has(want):
+		var packed := Stage.scene(TOOLS + (ROD_MODEL if want == "fishing_rod" else want) + ".gltf")
+		if packed != null:
+			var m: Node3D = packed.instantiate()
+			m.scale = Vector3.ONE * float(TOOL_SCALES.get(want, 1.0))
+			if want == "axe":
+				m.rotation.y = PI          # edge down (Kevin: "the axe is held upside down" -- edge was up)
+			elif want == "fishing_rod":
+				m.rotation.x = PI          # the fishing animation's hand points it backward otherwise
+			slot2.add_child(m)
+			a.tools[want] = m
+
+func _sync_fishing_gear(a: Dictionary, u: Dictionary, fishing: bool) -> void:
+	if not fishing:
+		for k in ["float_node", "line_node"]:
+			if a.has(k) and is_instance_valid(a[k]):
+				(a[k] as Node3D).visible = false
+		return
+	if not a.has("float_node") or not is_instance_valid(a.float_node):
+		var fp := Stage.scene(TOOLS + "fishing_floater.gltf")
+		a.float_node = fp.instantiate() if fp != null else Node3D.new()
+		(a.float_node as Node3D).scale = Vector3.ONE * 1.4
+		add_child(a.float_node)
+		if _line_mat == null:
+			_line_mat = StandardMaterial3D.new()
+			_line_mat.albedo_color = Color(0.92, 0.92, 0.88, 0.85)
+			_line_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		var cm := CylinderMesh.new()
+		cm.top_radius = 0.012
+		cm.bottom_radius = 0.012
+		cm.height = 1.0
+		cm.radial_segments = 4
+		cm.rings = 1
+		var line := MeshInstance3D.new()
+		line.mesh = cm
+		line.material_override = _line_mat
+		line.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(line)
+		a.line_node = line
+	var dir := Sim.dir_of(u.face)
+	var reach: float = absf(u.pos.y - Land.river_c(u.pos.x)) - Land.RIVER_HW + 1.1
+	var wp: Vector2 = u.pos + dir * reach
+	var bob := sin(float(sim.time) * 3.4 + float(u.pos.x)) * 0.04
+	var fl: Node3D = a.float_node
+	fl.visible = true
+	fl.position = Vector3(wp.x, Land.WATER_Y + 0.06 + bob, wp.y)
+	# The line starts at the rod's own tip, wherever the animation has it (Kevin: "the fishing pole
+	# doesn't have string attached"); fall back to above the hands if the rod isn't there yet.
+	var root_p: Vector3 = (a.root as Node3D).position
+	var tip := root_p + Vector3(dir.x * 1.0, 2.5, dir.y * 1.0)
+	# (Untyped first: the body -- and the cached rod -- can have been rebuilt and freed on a class change.)
+	var rod_v = (a.get("tools", {}) as Dictionary).get("fishing_rod")
+	if rod_v != null and is_instance_valid(rod_v) and (rod_v as Node3D).is_inside_tree():
+		tip = (rod_v as Node3D).global_transform * ROD_TIP
+	var line2: MeshInstance3D = a.line_node
+	line2.visible = true
+	var span := fl.position - tip
+	line2.position = tip + span * 0.5
+	line2.scale = Vector3(1.0, maxf(0.05, span.length()), 1.0)
+	if span.length() > 0.01:
+		line2.basis = Basis(Quaternion(Vector3.UP, span.normalized())) * Basis.from_scale(Vector3(1.0, span.length(), 1.0))
+
 func _sync_load(a: Dictionary, u: Dictionary) -> void:
 	var kind: String = u.load.kind if u.load.n > 0 and u.state != "dead" else ""
 	if u.offering and u.state != "dead":
@@ -1612,8 +1919,12 @@ func _sync_load(a: Dictionary, u: Dictionary) -> void:
 		return
 	var n: Node3D
 	if kind == "offering":
-		n = _make_cake(0.9)
-		n.position = Vector3(0, 2.35, 0)
+		# A fish held overhead (Round 19: the catch from the river; was a cake).
+		var fp := Stage.scene("res://assets/props/fish.glb")
+		n = fp.instantiate() if fp != null else Node3D.new()
+		n.scale = Vector3.ONE * 0.85
+		n.rotation = Vector3(0.0, PI * 0.5, 0.25)
+		n.position = Vector3(0, 2.45, 0)
 		(a.root as Node3D).add_child(n)
 		a.load_node = n
 		return
@@ -1640,6 +1951,8 @@ func _animate(a: Dictionary, u: Dictionary, vel: float) -> void:
 		return
 	if u.stun > 0.0:
 		_play(a, "g/Hit_B", 0.6)
+	elif bool(a.get("climb", false)):
+		_play(a, "mb/Jump_Idle")                 # arms up on the rungs / over the top (Round 25)
 	elif u.state == "dodge":
 		_play(a, "ma/Dodge_Forward", 1.6, 0.3)
 	elif sim.whirling(u):
@@ -1653,6 +1966,10 @@ func _animate(a: Dictionary, u: Dictionary, vel: float) -> void:
 		_play(a, "t/Chopping" if node.get("kind", "wood") == "wood" else "t/Pickaxing")
 	elif u.state == "repair":
 		_play(a, "t/Hammering")
+	elif u.state == "fish":
+		# Cast, wait, reel in (Round 19; the KayKit tools rig has a fishing set).
+		var ft := float(sim.time) - float(a.get("fish_from", sim.time))
+		_play(a, "t/Fishing_Cast" if ft < 0.7 else ("t/Fishing_Reeling" if ft > Sim.FISH_TIME - 0.7 else "t/Fishing_Idle"))
 	elif u.carrying:
 		_play(a, "mb/Walking_A" if vel > 0.5 else "t/Holding_A", clampf(vel / 2.6, 0.7, 1.6))
 	elif vel > 0.6:
@@ -1703,15 +2020,17 @@ func on_event(e: Dictionary) -> void:
 		"gate_hit":
 			var g: Dictionary = sim.gates[int(e.gate)]
 			var gp: Vector2 = g.c + (Vector2(randf_range(-1.0, 1.0), 0.0))
-			spark(Vector3(gp.x, 1.4 + randf() * 1.2, gp.y), Color("#e8d6b0"))
+			var gy := Sim.height_at(g.c)
+			spark(Vector3(gp.x, gy + 1.4 + randf() * 1.2, gp.y), Color("#e8d6b0"))
 			if randf() < 0.35:
-				number(Vector3(g.c.x, 3.2, g.c.y), str(e.dmg), false)
+				number(Vector3(g.c.x, gy + 3.2, g.c.y), str(e.dmg), false)
 		"gate_broken":
 			var g2: Dictionary = sim.gates[int(e.gate)]
+			var gy2 := Sim.height_at(g2.c)
 			for i in 3:
-				ring_at(Vector3(g2.c.x, 0.2, g2.c.y), Color("#e0c9a0"), 2.5 + i, 0.7 + i * 0.2)
+				ring_at(Vector3(g2.c.x, gy2 + 0.2, g2.c.y), Color("#e0c9a0"), 2.5 + i, 0.7 + i * 0.2)
 			for i in 12:
-				spark(Vector3(g2.c.x + randf_range(-2, 2), 0.5 + randf() * 2.5, g2.c.y + randf_range(-1, 1)), Color("#c8b89a"))
+				spark(Vector3(g2.c.x + randf_range(-2, 2), gy2 + 0.5 + randf() * 2.5, g2.c.y + randf_range(-1, 1)), Color("#c8b89a"))
 		"gate_rebuilt":
 			var g3: Dictionary = sim.gates[int(e.gate)]
 			ring_at(Vector3(g3.c.x, 0.2, g3.c.y), TEAM_COLORS[int(e.team)], 3.0, 0.8)
@@ -1732,9 +2051,15 @@ func on_event(e: Dictionary) -> void:
 			ring_at(fp, Color("#e6b3ff"), 2.4, 0.8)
 			for i in 8:
 				spark(fp + Vector3(randf_range(-0.8, 0.8), 0.6 + randf() * 1.6, randf_range(-0.8, 0.8)), Color("#f0c8ff"))
-		"cake_ready":
-			var ctr: Dictionary = sim.cake_trees[int(e.tree)]
-			ring_at(Vector3(ctr.p.x, 0.1, ctr.p.y), Color("#ff9ec8"), 2.2, 0.7)
+		"fish_caught", "fish_lost":
+			var fp2: Vector2 = e.pos
+			var face_d := Sim.dir_of(float(sim.by_id.get(str(e.id), {}).get("face", 0.0)))
+			var reach2: float = absf(fp2.y - Land.river_c(fp2.x)) - Land.RIVER_HW + 1.1
+			var wp2: Vector2 = fp2 + face_d * reach2
+			ring_at(Vector3(wp2.x, Land.WATER_Y + 0.08, wp2.y), Color("#dff4ff"), 1.2 if str(e.k) == "fish_caught" else 0.7, 0.5)
+			if str(e.k) == "fish_caught":
+				for k2 in 6:
+					spark(Vector3(wp2.x + randf_range(-0.4, 0.4), Land.WATER_Y + 0.3 + randf() * 0.6, wp2.y + randf_range(-0.4, 0.4)), Color("#bfe6ff"))
 		"tantrum":
 			var tp := Vector3(e.pos.x, Sim.height_at(e.pos) + 0.2, e.pos.y)
 			for i in 3:
@@ -1800,30 +2125,34 @@ func on_event(e: Dictionary) -> void:
 			ring_at(Vector3(o.pos.x, 0.1, o.pos.y), TEAM_COLORS[int(e.team)], 1.8, 0.6)
 
 # ---------- Oracle ----------
+# The captive is each castle's KING (0.20.0; models 0.20.2, Kevin): three hand-made models per team,
+# fat / fatter / fattest, swapped by his weight (sim weight 0-5 -> stage weight/2), a little bigger on
+# the odd weights so every feeding shows. The models aren't rigged, so he's animated by hand: breathing
+# and a sway at rest, a wobble while carried, a puff when he fattens. Kevin named them kingT1 / kingT2;
+# matched by robe colour: T2 (purple) leads blue, T1 (red) leads red. (Internal names -- sim.oracles,
+# oracle_nodes -- stay: players never see them.)
+const KING_STAGES := ["fat", "fatter", "fattest"]
+const KING_HEIGHT := 2.6              # the Knight hero is 2.54; the king a touch taller (and much wider)
+
 func _make_oracle(team: int) -> Dictionary:
 	var root := Node3D.new()
 	add_child(root)
-	var made := make_body("mage")
-	var body: Node3D = null
-	var player: AnimationPlayer = null
-	if not made.is_empty():
-		body = made.body
-		player = made.player
-		# Strip the staff: the Oracle is a captive, not a fighter.
-		for slot in body.find_children("*", "BoneAttachment3D", true, false):
-			slot.queue_free()
-		root.add_child(body)
-		body.scale = Vector3.ONE * 0.95
-		player.play("g/Idle_B")
-	var halo := MeshInstance3D.new()
-	halo.mesh = _ring_mesh(0.42, 0.07)
-	halo.material_override = _unshaded(Color(1.0, 0.85, 0.4, 0.95))
-	halo.position.y = 2.55
-	halo.rotation.x = 0.25
-	root.add_child(halo)
+	var body := Node3D.new()                     # the part that breathes, wobbles and grows
+	root.add_child(body)
+	var stages := []
+	for st in KING_STAGES:
+		var packed := Stage.scene("res://assets/kings/king_%s_%s.glb" % ["blue" if team == 0 else "red", st])
+		var m: Node3D = packed.instantiate() if packed != null else Node3D.new()
+		m.scale = Vector3.ONE * (KING_HEIGHT / 1.9)          # the models are 1.9 tall, feet at 0
+		for mi in m.find_children("*", "MeshInstance3D", true, false):
+			(mi as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		m.visible = st == "fat"
+		body.add_child(m)
+		stages.append(m)
 	var ground_ring := _decal(Vector3.ZERO, 1.0, TEAM_COLORS[team], 0.8)
 	ground_ring.reparent(root, false)
-	return {"root":root, "body":body, "player":player, "halo":halo, "ground":ground_ring, "state":""}
+	return {"root":root, "body":body, "player":null, "stages":stages, "stage":0, "puff":0.0,
+		"ground":ground_ring, "state":""}
 
 func _sync_oracles(dt: float) -> void:
 	for t in 2:
@@ -1831,7 +2160,6 @@ func _sync_oracles(dt: float) -> void:
 		var o: Dictionary = sim.oracles[t]
 		var root: Node3D = n.root
 		var target := Vector3(o.pos.x, Sim.height_at(o.pos), o.pos.y)
-		(n.halo as Node3D).rotation.y += dt * 1.6
 		if not n.has("aura"):
 			n["aura"] = _decal(Vector3.ZERO, Sim.HEAL_R, Color("#7dffa8"), 0.35)
 		var aura: Node3D = n.aura
@@ -1860,6 +2188,14 @@ func _sync_oracles(dt: float) -> void:
 		else:
 			(n.ground as Node3D).visible = true
 			target.y = Sim.height_at(o.pos)
+			# Facing (Kevin: "the king is facing the wall"): in his cell he looks out through the bars at
+			# the cell door; on his throne, out over his castle; dropped, he keeps his last facing.
+			if o.state == "cell":
+				for g in sim.gates:
+					if int(g.team) != t and str(g.get("kind", "")) == "jail":
+						root.rotation.y = lerp_angle(root.rotation.y, Sim.angle_of((g.c as Vector2) - (o.pos as Vector2)), 1.0 - exp(-dt * 6.0))
+			elif (o.pos as Vector2).distance_to(Sim.throne(t)) < 1.5:
+				root.rotation.y = lerp_angle(root.rotation.y, Sim.angle_of(Sim._c(t, Vector2(0.0, 0.0)) - Sim.throne(t)), 1.0 - exp(-dt * 6.0))
 			var pulse := 0.8 + sin(_time * 4.0) * 0.2
 			(n.ground as Node3D).scale = Vector3(pulse, 0.15, pulse)
 			if n.state == "carried" and n.player != null:
@@ -1876,7 +2212,9 @@ func _sync_projectiles() -> void:
 		if node == null:
 			node = _make_projectile(str(p.kind))
 			proj_nodes[p.id] = node
-		node.position = Vector3(p.pos.x, 1.2 + Sim.height_at(p.pos), p.pos.y)
+		# Offline the sim ticks at 30 Hz while frames run at 60: draw it where it is *now*.
+		var at: Vector2 = p.pos + (p.vel as Vector2) * proj_lead
+		node.position = Vector3(at.x, 1.2 + Sim.height_at(at), at.y)
 		node.rotation.y = Sim.angle_of(p.vel)
 	for id in proj_nodes.keys():
 		if not live.has(id):
@@ -1890,7 +2228,9 @@ func _make_projectile(kind: String) -> Node3D:
 		var packed := Stage.scene("res://assets/kaykit/weapons/arrow_bow.gltf")
 		if packed != null:
 			var arrow: Node3D = packed.instantiate()
-			arrow.rotation.x = PI * 0.5
+			# The model already lies along +Z, arrowhead forward (measured: z -0.64..0.62, the narrow end at
+			# +Z), and the root turns +Z onto the flight path. The old 90 deg turn about X stood every arrow
+			# on its tip (Kevin: "arrows flying sideways instead of straight").
 			arrow.scale = Vector3.ONE * 1.3
 			root.add_child(arrow)
 			return root

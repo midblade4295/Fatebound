@@ -1,5 +1,6 @@
 extends SceneTree
 const Sim = preload("res://scripts/siege/siege_sim.gd")
+const Castle = preload("res://scripts/siege/siege_castle.gd")
 
 func _init() -> void:
 	# Hat rules (Round 8, Fat Princess style).
@@ -142,6 +143,183 @@ func _init() -> void:
 	up_me.pos = rst2.p + Vector2(0.9, 0)
 	assert(us.context_action(up_me) == "hat", "at another class's shop the action is NEW HAT")
 	print("hat shop upgrade rules ok")
+	# The dungeon wing's jail door (Round 13): lifts for the castle's team, blocks and must be
+	# smashed by the enemy, locks again when the King is back in his cell.
+	var js = Sim.new()
+	js.setup(4, 9)
+	var jail: Dictionary = js.gates.filter(func(x): return x.team == 0 and str(x.get("kind", "")) == "jail")[0]
+	var inside: Vector2 = Sim._c(0, Castle.CELL_C)
+	var outside: Vector2 = (jail.c as Vector2) + ((jail.c as Vector2) - inside).normalized() * 1.2
+	assert(js._push_out(inside, Sim.UNIT_R, 0).distance_to(inside) < 0.05, "the King's own cell floor is clear for the castle's team")
+	var through: Vector2 = jail.c
+	assert(js._push_out(through, Sim.UNIT_R, 0).distance_to(through) < 0.05, "the castle's own players walk through the jail door")
+	assert(js._push_out(through, Sim.UNIT_R, 1).distance_to(through) > 0.3, "the enemy is pushed back by the jail door")
+	var jfoe: Dictionary = js.units.filter(func(x): return x.team == 1)[0]
+	js._set_class(jfoe, "barbarian", false)
+	jfoe.bot = false
+	jfoe.pos = outside
+	jfoe.face = Sim.angle_of((jail.c as Vector2) - outside)
+	for i in 400:
+		if jail.broken: break
+		js.act(jfoe.id, "attack")
+		js.step(Sim.TICK)
+	assert(jail.broken, "the enemy can smash the jail door (hp %d)" % int(jail.hp))
+	# It re-locks once the King is back in his cell -- but not on top of an enemy in the doorway.
+	jfoe.pos = jail.c
+	js._return_to_cell(1)
+	assert(jail.broken, "the jail door waits while an enemy stands in the doorway")
+	jfoe.pos = Vector2(0, -40)
+	js.step(Sim.TICK)
+	assert(not jail.broken and jail.hp >= jail.max_hp, "the jail door locks again when the King is back in his cell")
+	# It lifts for a defender, but not while an enemy is near it.
+	var def: Dictionary = js.units.filter(func(x): return x.team == 0)[0]
+	def.bot = false
+	def.move = Vector2.ZERO
+	def.pos = (jail.c as Vector2) + ((jail.c as Vector2) - inside).normalized() * 1.0
+	jfoe.pos = Vector2(0, -40)
+	jfoe.bot = false
+	js.step(Sim.TICK)
+	assert(jail.open, "the jail door lifts for a defender")
+	jfoe.pos = (jail.c as Vector2) + ((jail.c as Vector2) - inside).normalized() * 2.5
+	jfoe.hp = jfoe.max_hp
+	js.step(Sim.TICK)
+	assert(not jail.open, "the jail door stays shut while an enemy is near it")
+	print("jail rules ok")
+	# Fishing (Round 19): ACTION on a river bank casts, the fish comes FISH_TIME later unless you're hit;
+	# away from the river there's nothing to do; the fish fattens their King like the cake did.
+	var fs = Sim.new()
+	fs.setup(4, 17)
+	var fisher: Dictionary = fs.units.filter(func(x): return x.team == 0)[0]
+	for u in fs.units:
+		u.bot = false
+		u.move = Vector2.ZERO
+		if u.id != fisher.id: u.pos = Vector2(0, -50)
+	fisher.pos = Vector2(0.0, 30.0)
+	fs.act(fisher.id, "interact")
+	assert(str(fisher.task.get("kind", "")) != "fish", "no fishing away from the river")
+	fisher.pos = fs._fish_spot(fisher)
+	assert(fs.at_river_bank(fisher.pos), "the fish spot is on the bank")
+	fs.act(fisher.id, "interact")
+	assert(str(fisher.task.get("kind", "")) == "fish", "ACTION on the bank casts")
+	for i in int((Sim.FISH_TIME + 0.3) / Sim.TICK):
+		fs.step(Sim.TICK)
+	assert(fisher.offering, "a fish after %.1f s on the bank" % Sim.FISH_TIME)
+	fisher.offering = false
+	fs.act(fisher.id, "interact")
+	for i in int(1.0 / Sim.TICK):
+		fs.step(Sim.TICK)
+	fs._damage({"team": 1, "id": "x"}, fisher, 1.0)
+	for i in int(2.0 / Sim.TICK):
+		fs.step(Sim.TICK)
+	assert(not fisher.offering, "a hit makes the fish get away")
+	fisher.offering = true
+	var cap: Dictionary = fs.oracles[1]
+	var fed0 := int(cap.cakes)
+	fisher.pos = (cap.pos as Vector2) + Vector2(0.6, 0.0)
+	fs.act(fisher.id, "interact")
+	assert(int(cap.cakes) == fed0 + 1 and not fisher.offering, "the fish feeds their King")
+	print("fishing rules ok")
+	# Ladder climbing (Round 25): over a ladder a unit goes up the rungs to the wall top, over, and down inside,
+	# slower on the rungs.
+	var ls = Sim.new()
+	ls.setup(4, 19)
+	var lw: Dictionary = ls.units.filter(func(x): return x.team == 0)[1]
+	var lk: Dictionary = ls.units.filter(func(x): return x.team == 0)[2]
+	for u in ls.units:
+		u.bot = false
+		u.move = Vector2.ZERO
+		if u.id != lw.id and u.id != lk.id: u.pos = Sim.spawn(u.team)
+	ls._set_class(lw, "worker", false)
+	ls.stock[0].wood = 60
+	lw.pos = Vector2(-14.0, -36.3)
+	ls.act(lw.id, "interact")
+	for i in int(3.3 / Sim.TICK):
+		ls.step(Sim.TICK)
+	assert(ls.ladders.size() == 1, "the worker raised a ladder")
+	lw.pos = Vector2(-18.0, -30.0)
+	ls._set_class(lk, "knight", false)
+	lk.pos = Vector2(-14.0, -34.5)
+	var top := 0.0
+	var t_on := -1.0
+	var t_off := -1.0
+	for i in int(8.0 / Sim.TICK):
+		lk.move = Vector2(0.0, -1.0)
+		ls.step(Sim.TICK)
+		var dd: float = ls.ladder_depth(lk.pos, 0)
+		var lift: float = Sim.ladder_lift(dd, Sim.height_at(lk.pos))
+		top = maxf(top, lift)
+		if dd != INF and t_on < 0.0: t_on = ls.time
+		if dd == INF and t_on >= 0.0 and t_off < 0.0: t_off = ls.time
+	var got_in: bool = (lk.pos as Vector2).y < -40.0          # past the wall (z -38) into their courtyard
+	assert(top >= Sim.LADDER_TOP - 0.05, "climbers go up to the wall top (%.2f m)" % top)
+	assert(t_off > t_on and t_off - t_on > 1.5 and t_off - t_on < 5.0, "the climb takes a believable time (%.1f s)" % (t_off - t_on))
+	assert(got_in, "and ends up inside their castle (%s)" % str(lk.pos))
+	print("ladder climb ok (top %.2f m, %.1f s across)" % [top, t_off - t_on])
+	# The rampart (Round 15): at L1 height behind the front wall, stairs down; arrows from up there
+	# fly over the wall, arrows from the courtyard floor don't.
+	var rs = Sim.new()
+	rs.setup(4, 5)
+	var walk_p: Vector2 = Sim._c(0, Vector2(2.5, 5.0))
+	assert(absf(Sim.height_at(walk_p) - Castle.WALK_H) < 0.01, "the rampart is at %.1f m" % Sim.height_at(walk_p))
+	var sh := Sim.height_at(Sim._c(0, Vector2(0.0, 7.5)))
+	assert(sh > 0.3 and sh < Castle.WALK_H, "the rampart stairs climb from the courtyard (%.2f m midway)" % sh)
+	var wall_z: float = Sim._c(0, Vector2(0.0, Castle.FRONT_Z)).y
+	var outward: float = Sim.angle_of(Sim._c(0, Vector2(2.5, -10.0)) - walk_p)
+	var arch: Dictionary = rs.units.filter(func(x): return x.team == 0)[0]
+	arch.bot = false
+	for u in rs.units:
+		if u.id != arch.id: u.pos = Vector2(-25, 0); u.bot = false
+	var results := []
+	for spot in [walk_p, Sim._c(0, Vector2(2.5, 7.4))]:
+		rs.projectiles.clear()
+		arch.pos = spot
+		rs._shoot(arch, outward, 1.0, 0.0, 22.0, 14.0)
+		var passed := false
+		for i in 40:
+			rs.step(Sim.TICK)
+			for rpr in rs.projectiles:
+				if absf(float(rpr.pos.y)) < absf(wall_z) - 1.5:
+					passed = true
+		results.append(passed)
+	assert(results[0], "an arrow from the rampart flies over the front wall")
+	assert(not results[1], "an arrow from the courtyard floor is stopped by the wall")
+	print("rampart rules ok")
+	# Bots man it (Round 16): enemies at the blue front put blue's ranged defenders on its posts, and
+	# they shoot over the wall from there.
+	var rbs = Sim.new()
+	rbs.setup(8, 13)
+	var archers := []
+	for u in rbs.units:
+		u.bot = u.team == 0
+		if u.team == 0:
+			# Fish runners (id hash even) stay off the rampart since Round 20: pick the others.
+			if archers.size() < 3 and absi(str(u.id).hash()) % 2 == 1:
+				rbs._set_class(u, "ranger", false)
+				u.role = "defend"
+				u.pos = Sim._c(0, Vector2(-6.0 + archers.size() * 6.0, 11.0))
+				archers.append(u)
+			else:
+				u.pos = Sim._c(0, Vector2(0.0, 26.0))
+				u.bot = false
+				u.move = Vector2.ZERO
+		else:
+			u.bot = false
+			u.move = Vector2.ZERO
+			u.pos = Sim._c(0, Vector2(-8.0 + (rbs.units.find(u) % 6) * 3.0, -2.5))   # just outside the wall
+			u.max_hp = 9999.0
+			u.hp = 9999.0
+	var high_shots := 0
+	var seen := {}
+	for i in int(20.0 / Sim.TICK):
+		rbs.step(Sim.TICK)
+		for pr2 in rbs.projectiles:
+			if bool(pr2.get("high", false)) and not seen.has(pr2.id):
+				seen[pr2.id] = true
+				high_shots += 1
+	var manned := archers.filter(func(x): return Sim.height_at(x.pos) >= 1.7 and int(x.get("post", -1)) >= 0).size()
+	assert(manned >= 2, "ranged defenders man the rampart when the front is threatened (%d of 3 up)" % manned)
+	assert(high_shots >= 5, "and shoot over the wall from it (%d high shots)" % high_shots)
+	print("rampart bots ok (%d up, %d shots)" % [manned, high_shots])
 	# Projectiles hit what their path crosses (regression: from 0.16.0 to 0.18.1 arrows and bolts
 	# hit NO units -- the per-team position arrays were appended through a copy).
 	var ps2 = Sim.new()
@@ -224,7 +402,7 @@ func _init() -> void:
 							if totals.wall_violations <= 3:
 								print("WALL VIOLATION t=%.1f %s cls=%s state=%s pos=%s wall=%s-%s" % [sim.time, u.id, u.cls, u.state, str(u.pos), str(w.a), str(w.b)])
 					for g in sim.gates:
-						if g.team != u.team and sim.gate_blocks(g) and u.pos.distance_to(Sim.seg_closest(u.pos, g.a, g.b)) < Sim.WALL_R + Sim.UNIT_R - 0.05:
+						if g.team != u.team and sim.gate_blocks(g) and u.pos.distance_to(Sim.seg_closest(u.pos, g.a, g.b)) < float(g.get("r", Sim.WALL_R)) + Sim.UNIT_R - 0.05:
 							totals.gate_violations += 1
 							if totals.gate_violations <= 3:
 								print("GATE VIOLATION t=%.1f %s team=%d state=%s pos=%s gate=%d hp=%.0f broken=%s" % [sim.time, u.id, u.team, u.state, str(u.pos), g.id, g.hp, g.broken])

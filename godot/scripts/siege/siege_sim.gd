@@ -33,6 +33,9 @@ const FRONT_Z := Castle.FRONT_Z         # front wall with the two gates (3 since
 const GATE_X := Castle.GATE_X
 const DOOR_X := [-5.2, 5.2]      # open doorways in the inner wall (behind each gate)
 const GATE_HP := 1100.0
+const JAIL_SHUT_R := 3.5         # an enemy this close keeps the jail door shut, defenders or not
+const RAMPART_THREAT_R := 26.0   # enemies this close to a castle's front put its ranged defenders on the rampart
+const RAMPART_HOLD := 8.0        # ... and they stay up there this long after the last one left
 const GATE_HALF := 1.3           # half-width of the passable doorway
 const GATE_SOLID_AT := 0.35      # a broken gate blocks again once repaired to 35 %
 const GATE_OPEN_RADIUS := 4.0    # allies within this distance swing the doors open (visual)
@@ -43,18 +46,20 @@ const RUBBLE_CLEAR := 6.0        # ... or while any enemy is within 6 m of it
 # ---- layers (heights are for the view; the sim stays 2D, ledges are walls) ----
 const LEDGE_R := 0.35                # landscape ledges; castle terraces use Castle.LEDGE_R
 # Round 7 layout (blue half; mirrored). Checked by tests/siege_land_check.gd.
-const RES_WOOD := [Vector2(-28.0, 44.0), Vector2(-24.0, 40.5), Vector2(27.0, 44.0), Vector2(29.5, 38.0), Vector2(-29.0, 9.0),
+const RES_WOOD := [Vector2(-24.5, 7.5), Vector2(-31.0, 36.5), Vector2(27.0, 44.0), Vector2(29.5, 38.0), Vector2(-29.0, 9.0),
 	Vector2(-2.5, 30.0), Vector2(10.0, 22.5), Vector2(-2.5, 34.0), Vector2(29.0, 27.0), Vector2(-8.5, 9.5)]
-const RES_STONE := [Vector2(26.0, 50.0), Vector2(-26.0, 50.0), Vector2(12.0, 26.0), Vector2(-26.5, 36.5), Vector2(-15.5, 9.0)]
+const RES_STONE := [Vector2(26.0, 50.0), Vector2(-30.0, 28.0), Vector2(12.0, 26.0), Vector2(-26.5, 36.5), Vector2(-15.5, 9.0)]
 const COVER_ROCKS := [Vector2(-3.0, 21.0), Vector2(7.5, 9.0), Vector2(-3.0, 26.0)]
-const CAKE_TREES := [Vector2(-6.0, 25.0), Vector2(17.0, 35.0), Vector2(-27.5, 20.5)]
 const OUTPOST_TRICKLE := 15.0    # owners get +1 wood +1 stone this often per outpost
 
 # ---- fate offerings (the "cake") ----
 const ALTAR_P := Castle.ALTAR
 const OFFERING_EVERY := 30.0
-const CAKE_EVERY := 60.0            # a cake tree ripens a cake every 60 s
-const CAKE_PER_STAGE := 3           # three cakes fatten her one size stage
+const CAKE_PER_STAGE := 3           # three fish fatten him one size stage (name kept from the cake days)
+# Fishing (Round 19, Kevin: the cake trees are gone -- catch fish from the river and feed them to the
+# enemy King). ACTION on a river bank casts; FISH_TIME later you hold a fish, if nothing hit you.
+const FISH_TIME := 2.5
+const FISH_REACH := 2.4            # how far back from the water's edge you can still fish
 const LIFTERS := [1, 2, 3, 4, 5, 6] # players needed to lift her at each stage (skinny .. fully fattened)
 const LIFT_RING := 1.15             # followers hold her from a ring around the lead lifter
 const TANTRUM_AFTER := 6.0          # left on the ground this long -> tantrum
@@ -84,7 +89,11 @@ const LADDER_COST := 8
 const LADDER_BUILD := 3.0
 const LADDER_HP := 250.0
 const LADDER_HALF := 1.1          # half-width of the passage along the wall
-const LADDER_CLIMB := 0.5         # speed while crossing the wall
+const LADDER_CLIMB := 0.5         # (old flat crossing speed; the climb now goes by ladder_depth, below)
+# Climbing (Round 25, Kevin: "when players use a ladder they climb up it and over the wall"): the ladder stands
+# 1.35 m out from the wall and reaches its top; climbers go up the rungs, over the top, and drop down inside.
+const LADDER_FOOT := 1.35         # where the ladder meets the ground, out from the wall line
+const LADDER_TOP := 2.9           # the height they go over at
 
 # ---- gathering / crafting ----
 const CARRY_MAX := 5
@@ -198,7 +207,6 @@ static func _zero_levels() -> Dictionary:
 	for k in UPGRADES:
 		d[k] = 0
 	return d
-var cake_trees: Array = []     # {id, p, ready, t}  neutral, across the land
 var catapults: Array = []      # {team, p, t, side}
 var shells: Array = []         # catapult stones in flight {id, team, from, to, t, flight}
 var ladders: Array = []        # {id, team (owner), wall (index), p, hp, cells}
@@ -336,7 +344,14 @@ func _build_map() -> void:
 		_add_wall(t, Vector2(gx0 + gp, FRONT_Z), Vector2(gx1 - gp, FRONT_Z))
 		_add_wall(t, Vector2(gx1 + gp, FRONT_Z), Vector2(CASTLE_HX, FRONT_Z))
 		# Side walls: the field is wider than the castle, so it needs its own flanks.
-		_add_wall(t, Vector2(-CASTLE_HX, FRONT_Z), Vector2(-CASTLE_HX, CASTLE_BACK + 1.0))
+		# West wall with the doorway down to the dungeon wing (Round 13); the wing's three walls.
+		_add_wall(t, Vector2(-CASTLE_HX, FRONT_Z), Vector2(-CASTLE_HX, Castle.DOOR_Z0 - 1.0))
+		_add_wall(t, Vector2(-CASTLE_HX, Castle.DOOR_Z1 + 1.0), Vector2(-CASTLE_HX, CASTLE_BACK + 1.0))
+		_add_wall(t, Vector2(Castle.ANNEX_X0, Castle.ANNEX_Z0), Vector2(Castle.ANNEX_X0, Castle.ANNEX_Z1))
+		# (They stop 1 m inside the west wall's thickness: ending on its inner face, their rounded ends
+		# made a squeeze slot with the knight's barracks -- Round 20.)
+		_add_wall(t, Vector2(Castle.ANNEX_X0, Castle.ANNEX_Z0), Vector2(-CASTLE_HX - 1.0, Castle.ANNEX_Z0))
+		_add_wall(t, Vector2(Castle.ANNEX_X0, Castle.ANNEX_Z1), Vector2(-CASTLE_HX - 1.0, Castle.ANNEX_Z1))
 		_add_wall(t, Vector2(CASTLE_HX, FRONT_Z), Vector2(CASTLE_HX, CASTLE_BACK + 1.0))
 		for gx in GATE_X:
 			# The gate model is a wall piece with a ~2.3 m doorway; only the doorway is the gate.
@@ -349,18 +364,33 @@ func _build_map() -> void:
 		# staircase's sides (siege_castle.gd).
 		for seg in Castle.ledges():
 			walls.append({"a":_c(t, seg[0]), "b":_c(t, seg[1]), "r":Castle.LEDGE_R, "team":t, "kind":"ledge"})
-		# The dungeon cell on the L1 west wing: bars on three sides, open towards the front.
-		var cc := CELL_C
-		var cz0: float = cc.y - CELL_HZ
-		var cz1: float = cc.y + CELL_HZ
-		walls.append({"a":_c(t, Vector2(cc.x - CELL_HX, cz0)), "b":_c(t, Vector2(cc.x - CELL_HX, cz1)), "r":0.3, "team":t, "kind":"bars"})
-		walls.append({"a":_c(t, Vector2(cc.x + CELL_HX, cz0)), "b":_c(t, Vector2(cc.x + CELL_HX, cz1)), "r":0.3, "team":t, "kind":"bars"})
-		walls.append({"a":_c(t, Vector2(cc.x - CELL_HX, cz1)), "b":_c(t, Vector2(cc.x + CELL_HX, cz1)), "r":0.3, "team":t, "kind":"bars"})
+		# The dungeon wing (Round 13): walls along both sides of the stairs down; the jail cell in
+		# the wing's front-west corner -- iron bars on its east side and the barred door on its north
+		# side (a "jail" gate: lifts for this castle's team, the enemy has to smash it). The other two
+		# sides are the wing's own walls.
+		# The back wall along the L2 back edge and the throne against it (Round 14).
+		_add_wall(t, Vector2(-CASTLE_HX, Castle.BACK_WALL_Z), Vector2(CASTLE_HX, Castle.BACK_WALL_Z), "backwall")
+		obstacles.append({"p":_c(t, Castle.THRONE_SEAT), "r":0.9, "kind":"castle_building", "team":t})
+		for seg in Castle.dungeon_ledges():
+			walls.append({"a":_c(t, seg[0]), "b":_c(t, seg[1]), "r":Castle.LEDGE_R, "team":t, "kind":"ledge"})
+		var wall_in_x: float = Castle.ANNEX_X0 + WALL_R
+		var wall_in_z: float = Castle.ANNEX_Z0 + WALL_R
+		walls.append({"a":_c(t, Vector2(Castle.JAIL_X1, wall_in_z)), "b":_c(t, Vector2(Castle.JAIL_X1, Castle.JAIL_Z1)),
+			"r":Castle.JAIL_R, "team":t, "kind":"bars"})
+		var ja := _c(t, Vector2(wall_in_x, Castle.JAIL_Z1))
+		var jb := _c(t, Vector2(Castle.JAIL_X1, Castle.JAIL_Z1))
+		gates.append({"id":gates.size(), "team":t, "a":ja, "b":jb, "c":(ja + jb) * 0.5, "hp":Castle.JAIL_HP,
+			"max_hp":Castle.JAIL_HP, "broken":false, "open":false, "side":"jail", "kind":"jail", "r":Castle.JAIL_R})
 		# Hat stands (solid posts) in the west corner; the workshop against the east wall.
 		for i in HAT_CLASSES.size():
 			var sp := _c(t, HAT_STANDS[i])
-			stands.append({"id":stands.size(), "team":t, "cls":HAT_CLASSES[i], "p":sp, "stock":HAT_STOCK_MAX, "t":0.0})
-			obstacles.append({"p":sp, "r":HAT_STAND_R, "kind":"hat_stand", "team":t})
+			# The shop is the building (Round 20): solid, and you take the hat at its door (sp). b / top: where
+			# its name plate goes (over the roof).
+			var shop: Dictionary = Castle.HAT_SHOPS[i]
+			var bpos := _c(t, shop.b)
+			stands.append({"id":stands.size(), "team":t, "cls":HAT_CLASSES[i], "p":sp, "stock":HAT_STOCK_MAX, "t":0.0,
+				"b":bpos, "top":float(shop.y) + 4.4})
+			obstacles.append({"p":bpos, "r":float(shop.r), "kind":"castle_building", "team":t})
 		for bd in Castle.BUILDINGS:
 			obstacles.append({"p":_c(t, bd.p), "r":float(bd.r), "kind":"castle_building", "team":t})
 		# Resource nodes on each half (world coords, point-mirrored), placed off the paths, clear of
@@ -379,14 +409,6 @@ func _build_map() -> void:
 	for op in Land.outpost_positions():
 		outposts.append({"id":outposts.size(), "p":op, "owner":-1, "prog":0.0, "t":0.0})
 		obstacles.append({"p":op, "r":Land.OUTPOST_TOWER_R, "kind":"outpost_tower"})
-	# Cake trees across the land (point-mirrored pairs); any team can pick a cake. The trunk is
-	# solid; the cake is picked from beside it.
-	cake_trees = []
-	for cp in CAKE_TREES:
-		for t in 2:
-			var ctp := _m(t, cp)
-			cake_trees.append({"id":cake_trees.size(), "p":ctp, "ready":true, "t":0.0})
-			obstacles.append({"p":ctp, "r":0.6, "kind":"cake_tree"})
 
 func _add_node(team: int, kind: String, p: Vector2) -> void:
 	var pos := _m(team, p)
@@ -510,7 +532,7 @@ func _build_nav() -> void:
 			(nav[t] as AStarGrid2D).set_point_solid(c, true)
 	_gate_cells.clear()
 	for g in gates:
-		_gate_cells.append(_cells_across_segment(g.a, g.b, WALL_R + UNIT_R * 0.9))
+		_gate_cells.append(_cells_across_segment(g.a, g.b, float(g.get("r", WALL_R)) + UNIT_R * 0.9))
 	_update_gate_nav()
 
 var _gate_cells: Array = []
@@ -556,7 +578,7 @@ func _path_gate(u: Dictionary) -> Dictionary:
 	var path: PackedVector2Array = u.path
 	for i in range(u.path_i, mini(u.path_i + 5, path.size())):
 		for g in gates:
-			if g.team != u.team and gate_blocks(g) and path[i].distance_to(seg_closest(path[i], g.a, g.b)) < WALL_R + 0.6:
+			if g.team != u.team and gate_blocks(g) and path[i].distance_to(seg_closest(path[i], g.a, g.b)) < float(g.get("r", WALL_R)) + 0.6:
 				return g
 	return {}
 
@@ -596,6 +618,29 @@ func _return_to_cell(t: int) -> void:
 			lu.carrying = false
 			lu.lifting = -1
 	oracles[t] = _new_oracle(t, int(oracles[t].get("cakes", 0)))
+	_reset_jail(1 - t)
+
+func _reset_jail(castle_team: int) -> void:
+	# Whenever a King is back in his cell, the jail door of the castle holding him is whole again --
+	# as soon as no enemy stands in the doorway or the cell (Round 15: snapping shut on a rescuer put
+	# him inside the door; anyone in the cell would have been locked in with the King).
+	for g in gates:
+		if int(g.team) == castle_team and str(g.get("kind", "")) == "jail" and (g.broken or g.hp < g.max_hp):
+			g["relock"] = true
+			_try_relock(g)
+
+func _try_relock(g: Dictionary) -> void:
+	var cell := _c(int(g.team), CELL_C)
+	var reach: float = float(g.get("r", WALL_R)) + UNIT_R + 0.3
+	for u in units:
+		if u.team != g.team and alive(u) and (u.pos.distance_to(cell) < 3.0 or u.pos.distance_to(seg_closest(u.pos, g.a, g.b)) < reach):
+			return                                  # someone's in the way: try again next tick
+	g.erase("relock")
+	g.hp = g.max_hp
+	g.broken = false
+	g.erase("broken_at")
+	_update_gate_nav()
+	_event("jail_reset", {"gate":g.id, "team":g.team})
 
 func lifters_needed(o: Dictionary) -> int:
 	return int(LIFTERS[clampi(int(o.weight), 0, LIFTERS.size() - 1)])
@@ -1048,11 +1093,10 @@ func _damage_ladder(src: Dictionary, l: Dictionary, amount: float) -> void:
 		nav_version += 1
 		_event("ladder_down", {"ladder":l.id, "team":l.team, "pos":l.p, "by":src.get("id","")})
 
-func near_cake(u: Dictionary) -> Dictionary:
-	for ct in cake_trees:
-		if ct.ready and u.pos.distance_to(ct.p) <= 1.9:
-			return ct
-	return {}
+func at_river_bank(p: Vector2) -> bool:
+	# On the field, 0.2 .. FISH_REACH m back from the river's edge (not on a bridge: that's over it).
+	var off := absf(p.y - Land.river_c(p.x))
+	return absf(p.x) <= HALF_W - 1.0 and off >= Land.RIVER_HW + 0.2 and off <= Land.RIVER_HW + FISH_REACH
 
 func _offering_action(u: Dictionary) -> String:
 	if u.carrying:
@@ -1062,19 +1106,17 @@ func _offering_action(u: Dictionary) -> String:
 		if captive.state == "cell" and u.pos.distance_to(captive.pos) <= FEED_RADIUS and int(captive.cakes) < MAX_WEIGHT * CAKE_PER_STAGE:
 			return "feed"
 		return ""
-	if u.load.n == 0 and not near_cake(u).is_empty():
-		return "cake"
+	if u.load.n == 0 and u.task.is_empty() and at_river_bank(u.pos):
+		return "fish"
 	return ""
 
 func _do_offering(u: Dictionary) -> bool:
 	match _offering_action(u):
-		"cake":
-			var ct := near_cake(u)
-			ct.ready = false
-			ct.t = 0.0
-			u.offering = true
-			u.task = {}
-			_event("offering_taken", {"id":u.id, "team":u.team, "tree":ct.id})
+		"fish":
+			u.move = Vector2.ZERO
+			u.face = angle_of(Vector2(0.0, Land.river_c(u.pos.x) - u.pos.y))    # face the water
+			u.task = {"kind":"fish", "t":FISH_TIME}
+			_event("fish_cast", {"id":u.id, "team":u.team, "pos":u.pos})
 			return true
 		"feed":
 			var captive: Dictionary = oracles[1 - u.team]
@@ -1250,7 +1292,7 @@ func buy_upgrade(team: int, id: String, by: Dictionary = {}) -> bool:
 	match id:
 		"gates":
 			for g in gates:
-				if g.team == team:
+				if g.team == team and str(g.get("kind", "gate")) != "jail":      # not the jail door
 					g.max_hp = GATE_HP * (1.0 + 0.5 * float(levels[team].gates))
 					g.hp = minf(g.max_hp, g.hp + g.max_hp * 0.5)
 					if g.broken and g.hp >= g.max_hp * GATE_SOLID_AT:
@@ -1303,6 +1345,8 @@ func _damage(src: Dictionary, dst: Dictionary, amount: float, stun := 0.0) -> vo
 	dst.hp -= amount
 	if stun > 0.0:
 		dst.stun = maxf(dst.stun, stun)
+	if str(dst.task.get("kind", "")) == "fish":
+		_event("fish_lost", {"id":dst.id, "team":dst.team, "pos":dst.pos})
 	dst.task = {}
 	_event("hit", {"id":dst.id,"by":src.get("id",""),"dmg":int(round(amount))})
 	if dst.hp <= 0.0:
@@ -1431,7 +1475,7 @@ func _melee(u: Dictionary, reach: float, arc: float, dmg: float, stun := 0.0) ->
 		var cp := seg_closest(u.pos, g.a, g.b)
 		var off2: Vector2 = cp - u.pos
 		var d2 := off2.length()
-		if d2 > reach + WALL_R + 0.3:
+		if d2 > reach + float(g.get("r", WALL_R)) + 0.3:
 			continue
 		if arc > -1.0 and d2 > 0.3 and fwd.dot(off2 / d2) < arc - 0.2:
 			continue
@@ -1443,7 +1487,9 @@ func _shoot(u: Dictionary, angle: float, dmg: float, aoe: float, speed: float, r
 	var d := dir_of(angle)
 	projectiles.append({"id":_next_proj,"team":u.team,"owner":u.id,"pos":u.pos + d*0.6,"from":u.pos,"vel":d*speed,
 		"dmg":dmg,"aoe":aoe,"life":reach/speed,"kind":"fire" if aoe > 0.0 else "arrow",
-		"gate_mult":float(CLASSES[u.cls].gate)})
+		"gate_mult":float(CLASSES[u.cls].gate),
+		# Shot from the rampart (or a terrace): flies over the castle walls and gates (Round 15).
+		"high":height_at(u.pos) >= 1.5})
 	_event("proj", {"pid":_next_proj,"kind":"fire" if aoe > 0.0 else "arrow"})
 	_next_proj += 1
 
@@ -1492,6 +1538,7 @@ func step(dt: float = TICK) -> void:
 	var t0 := Time.get_ticks_usec() if profile else 0
 	if _ai_clock >= 0.15:
 		_ai_clock = 0.0
+		_update_rampart_alert()
 		for u in units:
 			if u.bot:
 				_think(u)
@@ -1610,8 +1657,11 @@ func move_mult(u: Dictionary, mult := 1.0) -> float:
 	# Speed multipliers for free movement (not the Oracle carry, handled by the caller).
 	if u.offering:
 		mult = minf(mult, 0.9)
-	if not ladders.is_empty() and ladder_climb(u):
-		mult *= LADDER_CLIMB
+	if not ladders.is_empty():
+		var ld := ladder_depth(u.pos, u.team)
+		if ld != INF:
+			# Slow on the rungs (so the climb reads), quicker over the top, quicker still dropping down.
+			mult *= 0.3 if ld >= 0.35 else (0.45 if ld >= -0.35 else 0.7)
 	if u.load.n > 0:
 		mult = minf(mult, 0.85)
 	if str(u.beam) != "":
@@ -1678,6 +1728,12 @@ func _step_task(u: Dictionary, dt: float) -> void:
 	if task.t > 0.0:
 		return
 	match str(task.kind):
+		"fish":
+			u.task = {}
+			u.state = "idle"
+			if at_river_bank(u.pos) and not u.offering:
+				u.offering = true
+				_event("fish_caught", {"id":u.id, "team":u.team, "pos":u.pos})
 		"gather":
 			var n: Dictionary = nodes[int(task.node)]
 			if n.amount <= 0 or u.load.n >= CARRY_MAX or u.pos.distance_to(n.p) - n.r > 1.6:
@@ -1732,7 +1788,7 @@ func _blocked_point(p: Vector2, team: int, r: float) -> bool:
 		if p.distance_to(seg_closest(p, w.a, w.b)) < w.r + r:
 			return true
 	for g in gates:
-		if g.team != team and gate_blocks(g) and p.distance_to(seg_closest(p, g.a, g.b)) < WALL_R + r:
+		if g.team != team and gate_blocks(g) and p.distance_to(seg_closest(p, g.a, g.b)) < float(g.get("r", WALL_R)) + r:
 			return true
 	return false
 
@@ -1760,7 +1816,7 @@ func _push_out(p: Vector2, r: float, team := -1) -> Vector2:
 	for g in gates:
 		# Gates only stop the other team, and only while standing.
 		if team != g.team and gate_blocks(g):
-			p = _push_seg(p, g.a, g.b, WALL_R + r)
+			p = _push_seg(p, g.a, g.b, float(g.get("r", WALL_R)) + r)
 	return p
 
 func on_ladder(p: Vector2, wall_index: int, team: int) -> bool:
@@ -1772,6 +1828,34 @@ func on_ladder(p: Vector2, wall_index: int, team: int) -> bool:
 			if along.distance_to(l.p) <= LADDER_HALF and p.distance_to(along) <= w.r + UNIT_R + 0.6:
 				return true
 	return false
+
+func ladder_depth(p: Vector2, team: int) -> float:
+	# How far across one of `team`'s ladders p is: + on the ladder's side of the wall (where it stands),
+	# - on the far side; INF when not on one.
+	for l in ladders:
+		if int(l.team) != team:
+			continue
+		var w: Dictionary = walls[int(l.wall)]
+		var along: Vector2 = seg_closest(p, w.a, w.b)
+		if along.distance_to(l.p) > LADDER_HALF:
+			continue
+		var outward := Vector2(0, 1) if int(l.team) == 0 else Vector2(0, -1)
+		var d: float = (p - along).dot(outward)
+		if absf(d) <= float(w.r) + UNIT_R + 0.6:
+			return d
+	return INF
+
+static func ladder_lift(d: float, ground: float) -> float:
+	# A climber's height at depth d: up the rungs (LADDER_FOOT -> 0.35), a little arc over the top, then a drop
+	# to the ground on the far side (accelerating).
+	if d == INF or d >= LADDER_FOOT:
+		return ground
+	if d >= 0.35:
+		return maxf(ground, LADDER_TOP * (LADDER_FOOT - d) / (LADDER_FOOT - 0.35))
+	if d >= -0.35:
+		return LADDER_TOP + 0.15 * (1.0 - (d / 0.35) * (d / 0.35))
+	var k := clampf((-0.35 - d) / 1.5, 0.0, 1.0)
+	return lerpf(LADDER_TOP, ground, k * k)
 
 func ladder_climb(u: Dictionary) -> bool:
 	for l in ladders:
@@ -1873,7 +1957,7 @@ func _step_projectiles(dt: float) -> void:
 					break
 		if shielded:
 			_event("blocked", {"pos":p.pos})
-			_event("proj_end", {"pid":p.id})
+			_event("proj_end", {"pid":p.id, "pos":p.pos})
 			projectiles.remove_at(i)
 			continue
 		p.life -= dt
@@ -1911,16 +1995,19 @@ func _step_projectiles(dt: float) -> void:
 		if not blocked:
 			# Pre-filtered at build time: ledges, cell bars, river banks and rails don't stop arrows or
 			# fire (the old per-wall `kind in [...]` built an array every check: 1.2 ms/tick).
+			var high: bool = bool(p.get("high", false))
 			for wi in _bucket_walls_proj[pb]:
 				var w: Dictionary = walls[wi]
+				if high and (w.kind == "wall" or w.kind == "backwall"):
+					continue                           # over the parapet
 				if p.pos.distance_to(seg_closest(p.pos, w.a, w.b)) < w.r * 0.8:
 					blocked = true
 					break
 		# Gates only exist at the castle fronts (|z| = CASTLE_SHIFT + FRONT_Z): skip the check anywhere
 		# else (it was ~30 % of the projectile step, measured).
-		if not blocked and absf(p.pos.y) >= CASTLE_SHIFT + FRONT_Z - 3.0:
+		if not blocked and not bool(p.get("high", false)) and absf(p.pos.y) >= CASTLE_SHIFT + FRONT_Z - 3.0:
 			for g in gates:
-				if g.team != p.team and gate_blocks(g) and p.pos.distance_to(seg_closest(p.pos, g.a, g.b)) < WALL_R * 0.8:
+				if g.team != p.team and gate_blocks(g) and p.pos.distance_to(seg_closest(p.pos, g.a, g.b)) < float(g.get("r", WALL_R)) * 0.8:
 					hit_gate = g
 					blocked = true
 					break
@@ -1938,7 +2025,7 @@ func _step_projectiles(dt: float) -> void:
 			_event("boom", {"pos":p.pos})
 		elif not hit.is_empty():
 			_damage(owner, hit, p.dmg)
-		_event("proj_end", {"pid":p.id})
+		_event("proj_end", {"pid":p.id, "pos":p.pos})      # pos = the impact point (clients fly it there)
 		projectiles.remove_at(i)
 
 func _step_oracles(dt: float) -> void:
@@ -1982,6 +2069,7 @@ func _step_oracles(dt: float) -> void:
 							ru.lifting = -1
 						_event("rescue", {"team":t, "id":lead.id, "n":o.lifters.size()})
 						oracles[t] = _new_oracle(t)       # a rescue resets her weight
+						_reset_jail(1 - t)
 						if score[t] >= WIN_RESCUES:
 							_finish("rescue")
 				elif lead.pos.distance_to(cell(t)) <= THRONE_RADIUS:
@@ -2064,12 +2152,20 @@ func _step_world(dt: float) -> void:
 	_step_hats(dt)
 	# Gates swing open for allies nearby (visual state), resource nodes regrow.
 	for g in gates:
+		if g.has("relock"):
+			_try_relock(g)
 		var open := false
 		if gate_blocks(g):
 			for u in units:
 				if u.team == g.team and alive(u) and u.pos.distance_to(g.c) < GATE_OPEN_RADIUS:
 					open = true
 					break
+			# The jail door stays shut while any enemy is near it (Round 14, Kevin).
+			if open and str(g.get("kind", "")) == "jail":
+				for u in units:
+					if u.team != g.team and alive(u) and u.pos.distance_to(g.c) < JAIL_SHUT_R:
+						open = false
+						break
 		if open != g.open:
 			g.open = open
 			_event("gate_open" if open else "gate_close", {"gate":g.id, "team":g.team})
@@ -2105,12 +2201,6 @@ func _step_world(dt: float) -> void:
 				_damage({"team":int(sh.team), "id":"catapult"}, u, CATAPULT_DMG)
 		_event("catapult_hit", {"team":int(sh.team), "pos":sh.to, "shell":sh.id})
 		shells.remove_at(i)
-	for ct in cake_trees:
-		if not ct.ready:
-			ct.t += dt
-			if ct.t >= CAKE_EVERY:
-				ct.ready = true
-				_event("cake_ready", {"tree":ct.id})
 	for n in nodes:
 		if n.amount < n.max:
 			n.t += dt
@@ -2139,7 +2229,7 @@ func _commander(team: int) -> void:
 			break
 	var damaged := false
 	for g in gates:
-		if g.team == team and (g.broken or g.hp < g.max_hp * 0.5):
+		if g.team == team and str(g.get("kind", "gate")) != "jail" and (g.broken or g.hp < g.max_hp * 0.5):
 			damaged = true
 	var choice := ""
 	if damaged and can_buy(team, "gates"):
@@ -2386,19 +2476,7 @@ func _think_shields(u: Dictionary) -> void:
 	if u.carrying:
 		return
 	if u.cls == "knight":
-		var best := {}
-		var bd := 12.0
-		for o in units:
-			if o.team == u.team or not alive(o):
-				continue
-			var d: float = u.pos.distance_to(o.pos)
-			var threat: bool = bool(CLASSES[o.cls].get("ranged", false)) or (u.hp < u.max_hp * 0.5 and d < 4.0)
-			if threat and d < bd:
-				bd = d
-				best = o
-		if not best.is_empty():
-			u.face = lerp_angle(u.face, angle_of(best.pos - u.pos), 0.6)
-			_block(u)
+		_think_knight_shield(u)
 	elif ability_of(u) == "whirlwind" and u.cd_ability <= 0.0:
 		var near := 0
 		for o in units:
@@ -2406,6 +2484,44 @@ func _think_shields(u: Dictionary) -> void:
 				near += 1
 		if near >= 2:
 			_whirl(u)
+
+func _think_knight_shield(u: Dictionary) -> void:
+	# Round 17 (Kevin: "all they do is hold block when enemies are near" -- measured: blocking 98 % of
+	# the time, 0 swings, because any archer within 12 m raised the shield). Now the shield goes up only
+	# when it matters, and the rest of the time the knight fights:
+	#  - an enemy shot will pass within 1.3 m in the next 0.7 s (the shield covers allies behind it too),
+	#    unless an enemy is at arm's length and we're healthy (then swing);
+	#  - badly hurt with an enemy at arm's length: short guard bursts (1 s, at most every 2.6 s).
+	var arm := float(stat(u, "range")) + UNIT_R + 0.3
+	var adjacent := nearest_enemy(u, arm)
+	var incoming := Vector2.ZERO
+	var soonest := 0.7
+	for p in projectiles:
+		if int(p.team) == u.team:
+			continue
+		var v: Vector2 = p.vel
+		var vv := v.length_squared()
+		if vv < 0.01:
+			continue
+		var t: float = (u.pos - (p.pos as Vector2)).dot(v) / vv          # time of closest approach
+		if t < 0.0 or t > soonest:
+			continue
+		if ((p.pos as Vector2) + v * t).distance_to(u.pos) < 1.3:
+			soonest = t
+			incoming = -v.normalized()
+	if incoming != Vector2.ZERO and (adjacent.is_empty() or u.hp < u.max_hp * 0.5):
+		u.face = angle_of(incoming)
+		_block(u)
+		return
+	if not adjacent.is_empty() and u.hp < u.max_hp * 0.35:
+		if time < float(u.get("guard_until", -1.0)):
+			u.face = angle_of(adjacent.pos - u.pos)
+			_block(u)
+		elif time >= float(u.get("guard_next", 0.0)) and rng.randf() < 0.5:
+			u.guard_until = time + 1.0
+			u.guard_next = time + 2.6
+			u.face = angle_of(adjacent.pos - u.pos)
+			_block(u)
 
 func _think_fighter(u: Dictionary) -> void:
 	# Shield / whirlwind first; the normal brain below still moves the unit (its attacks are
@@ -2435,7 +2551,11 @@ func _think_fighter(u: Dictionary) -> void:
 	var alarm: Dictionary = _gate_alarm[u.team]
 	var short_hands: bool = not ally_carrier.is_empty() and mine.lifters.size() < lifters_needed(mine)
 	var captive_loose: bool = theirs.state == "dropped" or (theirs.state == "carried" and int(theirs.carry_team) == u.team and theirs.lifters.size() < lifters_needed(theirs))
-	var cake_runner: bool = u.role == "defend" and absi(u.id.hash()) % 2 == 0
+	var fish_runner: bool = u.role == "defend" and absi(u.id.hash()) % 2 == 0
+	# A rampart post belongs to a ranged defender that isn't a fish runner; drop it otherwise (a post
+	# kept after dying and coming back as another class blocked fishing for the rest of the match).
+	if u.has("post") and (not c.ranged or u.role != "defend" or fish_runner):
+		u.erase("post")
 	if not enemy_carrier.is_empty() and (u.role == "defend" or u.pos.distance_to(enemy_carrier.pos) < 16.0):
 		goal = enemy_carrier.pos
 	elif not our_returner.is_empty() and (u.role in ["raid", "escort"] or u.pos.distance_to(our_returner.pos) < 16.0):
@@ -2444,6 +2564,8 @@ func _think_fighter(u: Dictionary) -> void:
 		goal = mine.pos
 	elif captive_loose and u.role in ["defend", "escort"] and u.pos.distance_to(theirs.pos) < 30.0:
 		goal = theirs.pos
+	elif u.role == "defend" and c.ranged and not fish_runner and _rampart_post(u) != Vector2.INF:
+		goal = _rampart_post(u)                     # man the rampart (Round 16, Kevin)
 	elif u.role == "defend" and time - float(alarm.at) < 4.0 and alarm.gate >= 0:
 		goal = gates[int(alarm.gate)].c + _inward(u.team) * 2.4
 	elif u.role == "escort" and ally_carrier.is_empty() and not _capture_target(u).is_empty():
@@ -2462,11 +2584,32 @@ func _think_fighter(u: Dictionary) -> void:
 	if c.ranged:
 		aggro = maxf(aggro, float(c.range) * (0.6 if u.role == "raid" else 0.95))
 	var foe := nearest_enemy(u, aggro)
+	if u.cls == "knight" and (foe.is_empty() or u.pos.distance_to(foe.pos) > float(stat(u, "range")) + UNIT_R + 0.6):
+		# Knights go for the archers and mages (their shield is made for it) -- Round 17.
+		var hunt := {}
+		var hd := maxf(aggro, 9.0)
+		for o in units:
+			if o.team != u.team and alive(o) and bool(CLASSES[o.cls].ranged) and u.pos.distance_to(o.pos) < hd:
+				hd = u.pos.distance_to(o.pos)
+				hunt = o
+		if not hunt.is_empty():
+			foe = hunt
 	for carrier in [enemy_carrier, our_returner]:
 		if not carrier.is_empty() and u.pos.distance_to(carrier.pos) < aggro + 3.0:
 			foe = carrier
-	if not foe.is_empty() and _blocked_line(u.pos, foe.pos, u.team):
-		foe = {}   # can't reach through a wall; keep pathing instead
+	var high_shot: bool = c.ranged and height_at(u.pos) >= 1.5
+	if not foe.is_empty() and not high_shot and _blocked_line(u.pos, foe.pos, u.team):
+		foe = {}   # can't reach through a wall; keep pathing instead (from the rampart they shoot over it)
+	if not foe.is_empty() and int(u.get("post", -1)) >= 0 and u.pos.distance_to(goal) >= 0.9 \
+			and u.pos.distance_to(foe.pos) > 3.0:
+		foe = {}   # on the way up to a rampart post: don't get pulled out through a gate (Round 16)
+	if not foe.is_empty() and int(u.get("post", -1)) >= 0 and u.pos.distance_to(goal) < 0.9:
+		# On a rampart post: hold it and shoot -- no kiting off the wall.
+		u.move = Vector2.ZERO
+		if u.pos.distance_to(foe.pos) <= float(c.range) * 0.95:
+			u.face = angle_of(foe.pos - u.pos)
+			_start_attack(u, "ability" if u.cd_ability <= 0.0 and rng.randf() < 0.3 else "attack")
+		return
 	if u.hp < u.max_hp * 0.3 and not foe.is_empty() and u.cd_dodge <= 0.0 and rng.randf() < 0.25:
 		u.move = (u.pos - foe.pos).normalized()
 		_dodge(u)
@@ -2487,21 +2630,18 @@ func _think_fighter(u: Dictionary) -> void:
 			else:
 				_nav_to(u, captive.pos, FEED_RADIUS - 0.5)
 			return
-	elif cake_runner and captive.state == "cell" and int(captive.cakes) < MAX_WEIGHT * CAKE_PER_STAGE \
-			and time - float(alarm.at) > 6.0 and enemy_carrier.is_empty():
-		var tree := {}
-		var td := INF
-		for ct in cake_trees:
-			var d: float = u.pos.distance_to(ct.p)
-			if ct.ready and d < td and d < 45.0:
-				td = d
-				tree = ct
-		if not tree.is_empty():
-			if td <= 1.5:
-				u.move = Vector2.ZERO
+	elif fish_runner and captive.state == "cell" and int(captive.cakes) < MAX_WEIGHT * CAKE_PER_STAGE \
+			and time - float(alarm.at) > 6.0 and enemy_carrier.is_empty() and int(u.get("post", -1)) < 0:
+		# Fish runs (Round 19): to a spot on our bank of the river, cast, then carry the catch to the cell.
+		if str(u.task.get("kind", "")) == "fish":
+			u.move = Vector2.ZERO
+			return
+		var spot := _fish_spot(u)
+		if spot != Vector2.INF:
+			if u.pos.distance_to(spot) <= 0.8 and at_river_bank(u.pos):
 				_do_offering(u)
 			else:
-				_nav_to(u, tree.p, 1.2)
+				_nav_to(u, spot, 0.4)
 			return
 	# Lift: start or join a lift when standing at an Oracle we should be moving.
 	var lo := _liftable(u)
@@ -2548,6 +2688,53 @@ func _capture_target(u: Dictionary) -> Dictionary:
 			bd = d
 			best = op
 	return best
+
+func _fish_spot(u: Dictionary) -> Vector2:
+	# A clear spot on this team's own bank of the river, the nearest to the unit; cached per unit.
+	if u.has("fish_spot"):
+		return u.fish_spot
+	var side := 1.0 if spawn(u.team).y > 0.0 else -1.0
+	var best := Vector2.INF
+	for i in range(-14, 15):
+		var x := i * 2.0
+		var p := Vector2(x, Land.river_c(x) + side * (Land.RIVER_HW + 1.3))
+		if not at_river_bank(p) or _blocked_point(p, u.team, UNIT_R + 0.1):
+			continue
+		if best == Vector2.INF or u.pos.distance_to(p) < u.pos.distance_to(best):
+			best = p
+	u["fish_spot"] = best
+	return best
+
+var _rampart_alert := [-100.0, -100.0]     # when an enemy was last near each castle's front
+
+func _update_rampart_alert() -> void:
+	for t in 2:
+		var front: Vector2 = _c(t, Vector2(0.0, FRONT_Z - 6.0))
+		for u in units:
+			if u.team != t and alive(u) and u.pos.distance_to(front) < RAMPART_THREAT_R:
+				_rampart_alert[t] = time
+				break
+
+func _rampart_post(u: Dictionary) -> Vector2:
+	# A post on our rampart while the front is threatened (or was, recently); INF otherwise. Posts are
+	# handed out to the first ranged defenders who ask, one each.
+	if time - float(_rampart_alert[u.team]) > RAMPART_HOLD:
+		u.erase("post")
+		return Vector2.INF
+	var mine := int(u.get("post", -1))
+	if mine < 0:
+		var taken := {}
+		for o in units:
+			if o.team == u.team and o.id != u.id and alive(o) and int(o.get("post", -1)) >= 0:
+				taken[int(o.post)] = true
+		for i in Castle.RAMPART_POSTS.size():
+			if not taken.has(i):
+				mine = i
+				break
+		if mine < 0:
+			return Vector2.INF
+		u["post"] = mine
+	return _c(u.team, Castle.RAMPART_POSTS[mine])
 
 func _blocked_line(a: Vector2, b: Vector2, team: int) -> bool:
 	for i in range(1, 6):

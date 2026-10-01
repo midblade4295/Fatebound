@@ -1,19 +1,18 @@
-> Store listing copy, screenshots, feature graphic, and Grokbot instructions: [godot/store-listing/README_FOR_AI.md](godot/store-listing/README_FOR_AI.md).
+> Current Play build guide: [godot/PLAY_STORE_HANDOFF.md](godot/PLAY_STORE_HANDOFF.md). Store listing pack: [godot/store-listing/README_FOR_AI.md](godot/store-listing/README_FOR_AI.md).
+> Source is preview 0.25.0 / protocol v14; the previous live deployment was 0.19.1. This GitHub import does not deploy the server.
 
-> Current Play Store build/upload instructions: [godot/PLAY_STORE_HANDOFF.md](godot/PLAY_STORE_HANDOFF.md). Read this before preparing an AAB; older Play/version/signing notes below are historical. The R5 branch is already published and the server is deployed.
-
-# Current native development: Fatebound Siege (Fat Princess-style), preview 0.19.1
+# Current native development: Fatebound Siege (Fat Princess-style), preview 0.25.0
 
 Round 5 work is on `claude/siege-dev-r5`, based on live `447b97a` (`claude/kaykit-3d-rebuild`).
 Read `godot/SIEGE_HANDOFF.md` first (section 11 = Round 5), then `godot/SIEGE_PROGRESS.md`.
 Siege is the whole game: the dice-era app was removed. Entry `scenes/Main.tscn` ->
 `scripts/app/siege_app.gd`; economy/profile in `scripts/meta/` (all cosmetic, no real money).
 Android preview only: package com.fatebound.kaykitrebuild, preset "Android KayKit Rebuild",
-Kevin's preview key (not the Play key), next versionCode 41, renderer stays Vulkan.
+Kevin's preview key (not the Play key), next versionCode 63, renderer stays Vulkan.
 Test: `godot/tools/run_siege_tests.sh`. Build: `godot/tools/build_siege_preview.sh`.
 Commit each working step and log it in SIEGE_PROGRESS.md. No force-push, main merge, save
-reset, Play release, production signing, Legionary/Caddy changes. The exposed Play upload key was removed from this branch history; older branches still contain it.
-Never restore it. Follow PLAY_STORE_HANDOFF.md for private signing and release preparation.
+reset, Play release, production signing, Legionary/Caddy changes. The existing upload key is retained locally and excluded from GitHub by automatic approval review.
+The repository is public; do not add other signing keys or credentials.
 
 ---
 ## Earlier native instructions retained as provenance

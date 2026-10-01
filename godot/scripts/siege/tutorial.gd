@@ -18,15 +18,15 @@ const TYPE_CPS := 48.0
 const STEPS := [
 	{"id": "intro", "talk": [
 		["t_intro_1", "Ah, a new recruit! Welcome to Fatebound. I'm the Royal Herald. I announce things. Loudly. It's a living."],
-		["t_intro_2", "Across that field, the enemy is holding our Oracle hostage. We'd like her back. She does the prophecies. And the baking."]]},
+		["t_intro_2", "Across that field, the enemy is holding our King hostage. We'd like him back. He does the ruling. And the waving."]]},
 	{"id": "move", "talk": [
 		["t_move_1", "First things first: walking. Drag your thumb on the left side of the screen. Yes, like that. No, the other left."]],
 		"task": "Walk around a bit",
 		"done": [["t_move_done", "Magnificent. You've mastered the ancient art of 'going places'. The bards will sing of it. Briefly."]]},
 	{"id": "hat", "talk": [
 		["t_hat_1", "Right now you're a Villager. Villagers are brave, loyal, and hit like a wet sock."],
-		["t_hat_2", "Walk into the Knight's hat shop. In this kingdom the hat makes the hero. Don't ask me why. I just read the scrolls."]],
-		"task": "Get a Knight hat at the Knight hat shop",
+		["t_hat_2", "See the Barracks? That's the Knight's hat shop. Walk up to its door. In this kingdom the hat makes the hero. Don't ask me why. I just read the scrolls."]],
+		"task": "Get a Knight hat at the Barracks door",
 		"done": [["t_hat_done", "A Knight! Look at you. Positively shiny. Try not to lose that hat. You'll see why in a moment."]]},
 	{"id": "attack", "talk": [
 		["t_attack_1", "A training dummy awaits in the courtyard. It volunteered. Well. 'Volunteered'. Walk up to it and tap ATTACK, or hold ATTACK to keep whacking."]],
@@ -50,38 +50,40 @@ const STEPS := [
 			["t_ws_done", "Workers bring wood and stone here. Spend it on stronger gates, better armor and catapults. Walls don't build themselves. Believe me, I asked."],
 			["t_ws_worker", "Want to be a Worker? Take tools here. Workers chop trees, mine rocks, repair gates and build ladders. Glamorous? No. Essential? Also no. Just kidding. Very essential."]]},
 	{"id": "upgrade", "talk": [
-		["t_up_1", "The treasury has kindly 'found' some materials for you. Go back to the Knight hat shop and press UPGRADE."]],
-		"task": "Upgrade the Knight hats at the Knight hat shop",
+		["t_up_1", "The treasury has kindly 'found' some materials for you. Go back to the Barracks and press UPGRADE."]],
+		"task": "Upgrade the Knight hats at the Barracks",
 		"done": [["t_up_done", "Paladin hats! Every hat from that shop is fancier now. Upgrades are bought at each hat shop, not the workshop. The workshop is still sulking about it."]]},
+	{"id": "rampart", "talk": [
+		["t_rampart_1", "One more trick for defending. See the walkway on our front wall? Take its stairs up, and your arrows fly right over the wall. Archers adore it. The enemy does not."]]},
 	{"id": "outpost", "talk": [
 		["t_out_1", "See that tower up on the ledge? That's an outpost. Stand in its ring to capture it. Capturing is mostly standing around looking important. You're a natural."]],
 		"task": "Capture the outpost",
 		"done": [["t_out_done", "It's ours! We can respawn here, workers can drop resources off here, and it earns us wood and stone. Passive income. The true magic."]]},
 	{"id": "goal", "talk": [
-		["t_goal_1", "Now, the actual point of Fatebound. The enemy's dungeon is inside their castle, behind their gates. Our Oracle is in there. Probably bored."],
-		["t_goal_2", "Break a gate down, and Barbarians are marvellous at that, or have a Worker build a ladder over the wall. Then grab her and carry her home to our throne."],
-		["t_goal_3", "Rescue her three times and we win. They're trying to do the exact same thing to us, so leave a few friends at home. Trust issues are healthy here."]]},
-	{"id": "cake", "talk": [
-		["t_cake_1", "But first, a dirty trick. See that tree? It grows cake. Walk up and press ACTION to take a slice. Don't eat it. It's not for you."]],
-		"task": "Take a slice of cake from the cake tree (ACTION)",
-		"done": [["t_cake_took", "Lovely. Now, we have a guest in OUR dungeon: the enemy's Oracle. She looks peckish."]]},
+		["t_goal_1", "Now, the actual point of Fatebound. The enemy's dungeon is down a flight of stairs inside their castle, behind their gates. Our King is in there, behind bars. Probably complaining."],
+		["t_goal_2", "Break a gate down, and Barbarians are marvellous at that, or have a Worker build a ladder over the wall. Then smash his cell open, grab him and carry him home to his throne."],
+		["t_goal_3", "Rescue him three times and we win. They're trying to do the exact same thing to us, so leave a few friends at home. Trust issues are healthy here."]]},
+	{"id": "fish", "talk": [
+		["t_cake_1", "But first, a dirty trick. See the river? It's full of fish. Stand on the bank and press ACTION to cast your line. Patience. Fish are not known for their punctuality."]],
+		"task": "Catch a fish at the river (ACTION on the bank)",
+		"done": [["t_cake_took", "A fish! Magnificent. Now, we have a guest in OUR dungeon: the enemy's King. He looks peckish."]]},
 	{"id": "feed", "talk": [
-		["t_feed_1", "Bring her that cake and press ACTION to feed her. Every bite makes her heavier, so the enemy needs more people to carry her home. Delicious sabotage."]],
-		"task": "Feed the cake to their Oracle in our dungeon (ACTION)",
-		"done": [["t_feed_done", "She said thank you! Is it tactically brilliant? Yes. Is it ethically questionable? Also yes. Welcome to Fatebound."]]},
+		["t_feed_1", "Our dungeon is down the stairs, and the cell door opens for friends. Bring him that fish and press ACTION to feed him. Every bite makes him heavier. Delicious sabotage."]],
+		"task": "Feed the fish to their King in our dungeon (ACTION)",
+		"done": [["t_feed_done", "He said thank you! Is it tactically brilliant? Yes. Is it ethically questionable? Also yes. Welcome to Fatebound."]]},
 	{"id": "shortcut", "talk": [
-		["t_rescue_1", "Right. Let's get OUR Oracle back. Normally you'd march over, smash a gate and fight your way in. Today I've arranged a shortcut. Don't ask how. Royal paperwork."]]},
+		["t_rescue_1", "Right. Let's get OUR King back. Normally you'd march over, smash a gate and fight your way in. Today I've arranged a shortcut. Don't ask how. Royal paperwork."]]},
 	{"id": "grab", "talk": [
-		["t_grab_1", "Here we are. Their gate is, ahem, 'mysteriously broken'. Get inside, find our Oracle in their dungeon and press ACTION to lift her."]],
-		"task": "Lift our Oracle in their dungeon (ACTION)",
-		"done": [["t_grab_done", "Got her! You're slower while carrying. Heavier Oracles need friends to help lift, which is exactly why we feed THEIRS so much cake."]]},
+		["t_grab_1", "Here we are. Their gate is, ahem, 'mysteriously broken'. So is his cell door. Go down to their dungeon, find our King and press ACTION to lift him."]],
+		"task": "Lift our King in their dungeon (ACTION)",
+		"done": [["t_grab_done", "Got him! You're slower while carrying. Heavier Kings need friends to help lift, which is exactly why we feed THEIRS so much fish."]]},
 	{"id": "carry", "talk": [
-		["t_carry_1", "Now carry her all the way home to our throne. Follow the arrow. And don't drop her. She will never let you forget it."]],
-		"task": "Carry our Oracle home to our throne",
-		"done": [["t_carry_done", "RESCUED! That's one! Rescue her three times and the match is ours. The crowd goes mild."]]},
+		["t_carry_1", "Now carry him all the way home to his throne. Follow the arrow. And don't drop him. He will never let you forget it."]],
+		"task": "Carry our King home to his throne",
+		"done": [["t_carry_done", "RESCUED! That's one! Rescue him three times and the match is ours. The crowd goes mild."]]},
 	{"id": "end", "talk": [
 		["t_end_1", "That's everything! Well. Not everything. But everything I was paid to say."],
-		["t_end_2", "Go forth, recruit. Fatebound awaits. Win glory, rescue the Oracle, and please, try to keep your hat on."]]},
+		["t_end_2", "Go forth, recruit. Fatebound awaits. Win glory, rescue the King, and please, try to keep your hat on."]]},
 ]
 
 var mode                      # siege_mode.gd
@@ -235,6 +237,11 @@ func _shortcut() -> void:
 		return
 	best.hp = 0.0
 	best.broken = true
+	# ...and their jail door down in the dungeon wing (Round 13), or the recruit would face bars.
+	for g in sim.gates:
+		if int(g.team) == foe_team and str(g.get("kind", "")) == "jail":
+			g.hp = 0.0
+			g.broken = true
 	sim._update_gate_nav()
 	me.pos = Sim.gate_front(best)
 	me.face = Sim.angle_of((best.c as Vector2) - me.pos)
@@ -255,6 +262,16 @@ func _show_line() -> void:
 	shown = 0.0
 	var id := str(current_line()[0])
 	voice.stop()
+	# The Herald follows the Settings "Master volume" slider and the mute switch, like every other
+	# sound (native_audio.gd); he plays above the effects, which run at 0.12 x master x effects.
+	var master := 1.0
+	var muted := false
+	if mode != null and mode.audio != null:
+		master = float(mode.audio.levels.get("master", 0.8))
+		muted = bool(mode.audio.get("muted"))
+	if muted or master <= 0.0:
+		return
+	voice.volume_db = linear_to_db(master)
 	for ext in [".ogg", ".wav", ".mp3"]:
 		var p: String = VO_DIR + id + ext
 		if id != "" and ResourceLoader.exists(p):
@@ -333,26 +350,16 @@ func task_info() -> Dictionary:
 			return {"pos": Sim.workshop(me.team), "label": "WORKSHOP"}
 		"outpost":
 			return {"pos": _outpost(me.team).p, "label": "OUTPOST"}
-		"cake":
-			var ct := _cake_tree(me)
-			return {"pos": ct.p, "label": "CAKE TREE"} if not ct.is_empty() else {}
+		"fish":
+			var spot: Vector2 = sim._fish_spot(me)
+			return {"pos": spot, "label": "RIVER"} if spot != Vector2.INF else {}
 		"feed":
-			return {"pos": sim.oracles[1 - int(me.team)].pos, "label": "THEIR ORACLE"}
+			return {"pos": sim.oracles[1 - int(me.team)].pos, "label": "THEIR KING"}
 		"grab":
-			return {"pos": sim.oracles[int(me.team)].pos, "label": "OUR ORACLE"}
+			return {"pos": sim.oracles[int(me.team)].pos, "label": "OUR KING"}
 		"carry":
 			return {"pos": Sim.throne(me.team), "label": "OUR THRONE"}
 	return {}
-
-func _cake_tree(me: Dictionary) -> Dictionary:
-	# The nearest cake tree with a cake on it (nearest at all if none is ready).
-	var best: Dictionary = {}
-	for ct in sim.cake_trees:
-		var better: bool = best.is_empty() or (bool(ct.ready) and not bool(best.ready)) \
-			or (bool(ct.ready) == bool(best.ready) and me.pos.distance_to(ct.p) < me.pos.distance_to(best.p))
-		if better:
-			best = ct
-	return best
 
 func _stand(team: int, cls: String) -> Dictionary:
 	for st in sim.stands:
@@ -394,7 +401,7 @@ func task_done() -> bool:
 			return int(sim.levels[me.team].get("hat_knight", 0)) >= 1
 		"outpost":
 			return int(_outpost(me.team).owner) == me.team
-		"cake":
+		"fish":
 			return bool(me.offering)
 		"feed":
 			return int(me.fed) > _fed0

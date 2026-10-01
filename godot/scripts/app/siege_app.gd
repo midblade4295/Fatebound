@@ -76,7 +76,7 @@ func _ready() -> void:
 		profile.d.migration["shown"] = true
 		profile.save()
 		var m: Dictionary = profile.d.migration
-		call_deferred("toast", "Welcome to Siege! Your progress carried over: +%d gold, +%d gems" % [int(m.gold), int(m.gems)], UI.GOLD)
+		call_deferred("toast", "Welcome to Fatebound! Your progress carried over: +%d gold, +%d gems" % [int(m.gold), int(m.gems)], UI.GOLD)
 	content_scroll.get_v_scroll_bar().value_changed.connect(_on_scroll)
 	show_tab("home")
 
@@ -210,18 +210,20 @@ func _build_hero() -> void:
 		ramp.add_point(0.75, Color(1, 1, 1, 0.6))
 		motes.color_ramp = ramp
 		hero_layer.add_child(motes)
-	var logo := UI.title(hero_layer, "FATEBOUND", 38, UI.GOLD)
+	# The game is just "Fatebound" (Kevin): no "Siege" subtitle; the logo in Luckiest Guy, like the
+	# trailer and store art.
+	var logo := UI.title(hero_layer, "FATEBOUND", 46, UI.GOLD)
+	logo.add_theme_font_override("font", LOGO_FONT)
+	logo.add_theme_color_override("font_outline_color", Color("#2e1908"))
+	logo.add_theme_constant_override("outline_size", 12)
+	logo.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.45))
+	logo.add_theme_constant_override("shadow_offset_y", 4)
 	logo.autowrap_mode = TextServer.AUTOWRAP_OFF
 	logo.anchor_right = 1.0
-	logo.offset_top = 74
-	logo.offset_bottom = 120
-	logo.add_theme_constant_override("outline_size", 9)
-	var sub := UI.label(hero_layer, "S  I  E  G  E", 13, Color("#ffe4a8"), UI.HEAVY_FONT, true)
-	sub.autowrap_mode = TextServer.AUTOWRAP_OFF
-	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	sub.anchor_right = 1.0
-	sub.offset_top = 118
-	sub.offset_bottom = 138
+	logo.offset_top = 78
+	logo.offset_bottom = 132
+
+const LOGO_FONT = preload("res://assets/fonts/LuckiestGuy-Regular.ttf")
 
 func hero_show(cls: String, look: Dictionary) -> void:
 	hero_node.show_look(cls, look)

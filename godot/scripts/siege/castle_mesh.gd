@@ -181,7 +181,8 @@ static func build(sim, team: int) -> Dictionary:
 			# that showed the grass underneath.
 			var za := z0 + (z1 - z0) * i / steps - (0.03 if i > 0 else 0.0)
 			var zb := z0 + (z1 - z0) * (i + 1) / steps
-			var hy := h0 + (h1 - h0) * (i + 1) / steps
+			# A step's top is the higher of its two ends (flights may descend along +z: the rampart's).
+			var hy := maxf(h0 + (h1 - h0) * i / steps, h0 + (h1 - h0) * (i + 1) / steps)
 			b.box(b.bricks, to_world.call(Vector2((x0 + x1) * 0.5, za)), to_world.call(Vector2((x0 + x1) * 0.5, zb)), 0.0, hy, x1 - x0)
 			# From the (nearly overhead) game camera the risers are invisible: stairs read by
 			# their stripes. Tread = bright nosing at the front edge, mid stone, dark band at the
@@ -191,7 +192,35 @@ static func build(sim, team: int) -> Dictionary:
 			var zf: float = z0 + (z1 - z0) * i / steps
 			var dz := zb - zf
 			var y := hy + 0.004
-			b.tread_band(x0, x1, zf, zf + dz * 0.12, y, Color(0.92, 0.88, 0.8), to_world)
-			b.tread_band(x0, x1, zf + dz * 0.12, zf + dz * 0.62, y, Color(0.64, 0.6, 0.53) * k, to_world)
-			b.tread_band(x0, x1, zf + dz * 0.62, zb, y, Color(0.31, 0.28, 0.24) * k, to_world)
+			if h1 >= h0:
+				b.tread_band(x0, x1, zf, zf + dz * 0.12, y, Color(0.92, 0.88, 0.8), to_world)
+				b.tread_band(x0, x1, zf + dz * 0.12, zf + dz * 0.62, y, Color(0.64, 0.6, 0.53) * k, to_world)
+				b.tread_band(x0, x1, zf + dz * 0.62, zb, y, Color(0.31, 0.28, 0.24) * k, to_world)
+			else:
+				# Descending: the nosing is the step's far (+z, downhill) edge; the shadow by the riser above.
+				var k2 := 0.8 + 0.2 * float(steps - 1 - i) / steps
+				b.tread_band(x0, x1, zf, zf + dz * 0.38, y, Color(0.31, 0.28, 0.24) * k2, to_world)
+				b.tread_band(x0, x1, zf + dz * 0.38, zf + dz * 0.88, y, Color(0.64, 0.6, 0.53) * k2, to_world)
+				b.tread_band(x0, x1, zf + dz * 0.88, zb, y, Color(0.92, 0.88, 0.8), to_world)
+	# The rampart's walkway (Round 15), from just inside the front wall to its edge.
+	b.floor_rect(-Castle.WALK_X, Castle.WALK_X, Castle.FRONT_Z + 0.9, Castle.WALK_Z1, Castle.WALK_H + 0.03, to_world)
+	# The dungeon wing (Round 13): its sunken floor and the stairs down, which run along x.
+	b.floor_rect(Castle.ANNEX_X0, -hx, Castle.ANNEX_Z0, Castle.ANNEX_Z1, Castle.DUNGEON_H + 0.03, to_world)
+	var ds: Dictionary = Castle.DSTAIR
+	var dsteps := int(ds.steps)
+	var dz0: float = ds.z0
+	var dz1: float = ds.z1
+	var dx := (float(ds.x1) - float(ds.x0)) / dsteps
+	for i in dsteps:
+		var xa: float = float(ds.x0) + dx * i - (0.03 if i > 0 else 0.0)
+		var xb: float = float(ds.x0) + dx * (i + 1)
+		var hy: float = float(ds.h0) + (float(ds.h1) - float(ds.h0)) * (i + 1) / dsteps
+		var zc := (dz0 + dz1) * 0.5
+		b.box(b.bricks, to_world.call(Vector2(xa, zc)), to_world.call(Vector2(xb, zc)), Castle.DUNGEON_H, hy, dz1 - dz0)
+		var k := 0.8 + 0.2 * float(i) / dsteps
+		var xf: float = float(ds.x0) + dx * i
+		var y := hy + 0.004
+		b.tread_band(xf, xf + dx * 0.12, dz0, dz1, y, Color(0.92, 0.88, 0.8), to_world)
+		b.tread_band(xf + dx * 0.12, xf + dx * 0.62, dz0, dz1, y, Color(0.64, 0.6, 0.53) * k, to_world)
+		b.tread_band(xf + dx * 0.62, xf + dx, dz0, dz1, y, Color(0.31, 0.28, 0.24) * k, to_world)
 	return {"steps":b.bricks.commit(), "floor":b.paving.commit(), "treads":b.treads.commit()}

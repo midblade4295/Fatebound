@@ -83,7 +83,7 @@ static func _ramp_height(t: Dictionary, p: Vector2, base: float) -> float:
 
 # ---------------- outposts ----------------
 const OUTPOST_R := 5.0           # capture radius
-const OUTPOST_TOWER_R := 1.3     # solid tower in the middle
+const OUTPOST_TOWER_R := 1.8     # solid tower in the middle (1.3 until the towers grew 40 %, Round 14)
 const OUTPOSTS_BLUE_HALF := [Vector2(-23.0, 25.0), Vector2(22.5, 15.0)]
 
 static func outpost_positions() -> Array:
@@ -197,7 +197,17 @@ const MASK_PPM := 4.0             # path-mask pixels per metre
 const HEIGHT_RES := "res://assets/terrain/height.res"
 const MASK_RES := "res://assets/terrain/pathmask.res"
 
+# The castles' sunken dungeon wings (siege_castle.gd, Round 13): the terrain dips to the dungeon
+# floor there, or the grass would cover the pit. (Blue space; red is point-mirrored.)
+const _CastleL = preload("res://scripts/siege/siege_castle.gd")
+
+static func in_dungeon_pit(p: Vector2, margin := 0.0) -> bool:
+	var q := (p if p.y >= 0.0 else -p) - Vector2(0.0, HALF_L - _CastleL.BACK)
+	return q.x >= _CastleL.ANNEX_X0 - margin and q.x <= -_CastleL.HX + margin and q.y >= _CastleL.ANNEX_Z0 - margin and q.y <= _CastleL.ANNEX_Z1 + margin
+
 static func terrain_height(p: Vector2) -> float:
+	if in_dungeon_pit(p):
+		return _CastleL.DUNGEON_H
 	# ground_height inside the field; beyond it a rim of low hills (not playable, just scenery).
 	var out := maxf(absf(p.x) - HALF_W, absf(p.y) - HALF_L)
 	var inside := Vector2(clampf(p.x, -HALF_W, HALF_W), clampf(p.y, -HALF_L, HALF_L))
@@ -232,6 +242,29 @@ static func grass_band(p: Vector2) -> float:
 	# Blend the two nearest ring sets across their meeting line (4 m wide).
 	var t := _smooth(-2.0, 2.0, d2 - d1)
 	return lerpf(0.5 * (ring.call(d1) + ring.call(d2)), ring.call(d1), t)
+
+# ---------------- the world beyond the playfield (0.19.4, Kevin: "land on the edges of the map") ----------------
+# View-only scenery out to OUTER_REACH past the baked terrain: it starts at the terrain's own edge
+# height, rolls into meadows and hills, rises to a ring of mountains, and the river carries on out
+# through a valley of its own (river_c is defined for any x). Nothing here touches the sim.
+const OUTER_REACH := 260.0
+
+static func outer_height(p: Vector2) -> float:
+	var r := bake_rect()
+	var q := Vector2(clampf(p.x, r.position.x, r.end.x), clampf(p.y, r.position.y, r.end.y))
+	var d := p.distance_to(q)
+	var hills := 1.2 * sin(p.x * 0.07 + 1.3) * sin(p.y * 0.055 + 0.4) + 0.9 * sin(p.x * 0.031 - p.y * 0.043 + 2.0)
+	# Hills close in within ~30 m and mountains rise from 40 m (0.19.5, Kevin: "mountains or something"
+	# at the edges): from the play camera the field reads as a valley between rocky slopes.
+	var rise := clampf((d - 5.0) / 28.0, 0.0, 1.0)
+	var h := hills * (0.6 + 4.0 * rise) + rise * rise * 7.0
+	var mtn := smoothstep(40.0, 130.0, d)
+	h += mtn * (28.0 + 14.0 * sin(p.x * 0.021 + 0.7) * sin(p.y * 0.017 + 1.9) + 8.0 * sin(p.x * 0.05 + p.y * 0.037))
+	h = lerpf(terrain_height(q), h, smoothstep(0.0, 14.0, d))      # meets the playfield's edge exactly
+	if d > 0.0:
+		var off := absf(p.y - river_c(p.x))
+		h = lerpf(WATER_Y - 0.7, h, smoothstep(RIVER_HW - 0.5, RIVER_HW + 6.0 + d * 0.05, off))
+	return h
 
 static func bake_rect() -> Rect2:
 	return Rect2(-HALF_W - BAKE_MARGIN, -HALF_L - BAKE_MARGIN, 2.0 * (HALF_W + BAKE_MARGIN), 2.0 * (HALF_L + BAKE_MARGIN))

@@ -645,12 +645,397 @@ K2/K3 notes (0.17.0)
 - net smoke: the stick points toward the open courtyard (pushing "right" sometimes walked into a
   stand -> the prediction check failed on collision, not prediction).
 
-# 2026-09-29: current Grokbot Play Store handoff
-- Added PLAY_STORE_HANDOFF.md and entry links in AGENTS.md, GROKBOT_HANDOFF.md, and SIEGE_HANDOFF.md.
-- Documents the sanitized R5 source, verified live server, release AAB identity, Console-verified version selection, private signing, legacy workflow/verifier corrections, checks, and upload steps.
-- Documentation only: no Play build, signing, upload, or rollout performed.
+# 0.19.2 (Kevin): "the projectiles skip across the screen in online mode"
+- Cause (siege_net.gd apply): every snapshot replaced the mirror's projectile list and the view drew
+  each at its snapshot position, so at 15 Hz an arrow (22 m/s) sat still 66 ms then jumped 1.47 m.
+  Units were interpolated (net_from -> net_to); projectiles never were.
+- Fix: projectiles persist across snapshots with net_from/net_to and Net.interpolate slides them on
+  the same one-interval-behind timeline as the units; a new one starts at its spawn point; one that
+  ended gets one last slide to the impact point (proj_end events now carry "pos") before vanishing.
+  Offline, the view draws projectiles ahead by vel x the time since the last 30 Hz tick
+  (view.proj_lead = mode._accum).
+- tests/net_interp_test.gd (runner): real snapshot/encode/decode/apply, 5 samples per interval:
+  largest step 0.29 m (old drawing 1.47 m), no stalls, ends 0.40 m from the target it hit.
+- Protocol unchanged (v7; the extra event field is ignored by older builds). Redeploy the server
+  so it sends impact points.
 
-# 2026-09-29: Grokbot store listing package
-- Imported Fatebound-PlayStore-AI.zip under godot/store-listing, including copy, 8 phone screenshots, feature graphic, raw renders, fastlane metadata, generation tools, fonts, and licenses.
-- Linked from Grokbot/agent handoffs and corrected regeneration paths for the imported location.
-- Checked ZIP integrity, PNG decoding/dimensions, JSON, and listing text limits. No Play Console changes or publication.
+# Trailer (Kevin: "make a cinematic trailer")
+- Fatebound-Siege-Trailer.mp4: 34.4 s, 1920x1080 @ 30, H.264 + AAC. Cut: aerial -> captive ("THEY TOOK OUR
+  ORACLE.") -> hats ("GRAB A HAT.") -> gate assault ("STORM THE CASTLE.") -> whirlwind ("SPIN. SHIELD.
+  SMASH.") -> cake ("FIGHT DIRTY.") -> carry ("BRING HER HOME.") -> title card on the score's hit.
+- tools/trailer_shots.gd: staged shots + eased cinematic cameras, recorded by Godot's Movie Maker
+  (game SFX included). 1080p needs a TEMPORARY godot/override.cfg with window size 1920x1080 (the
+  project's 420x780 window override beats --resolution in Movie Maker) -- delete it afterwards, never
+  commit it. Render in the foreground (a backgrounded Xvfb gets reaped when the command returns).
+- tools/trailer_music.py: procedural placeholder score (90 BPM D minor; drums, pad, ostinato, riser,
+  title hit). tools/trailer_edit.py: crossfades, captions (Cinzel), title card, score + SFX mix; it
+  places the hit on the title (29.7 s; verified: the loudest 0.1 s of the mix is at 29.7 s).
+
+# 0.19.3 (Kevin): the Herald's voiceover
+- Kevin's ElevenLabs read ("Edward - British, Dark, Low"): all 36 lines in one 319 s file. The break
+  tags weren't rendered as pauses (longest pause 0.93 s; ~a dozen >= 0.8 s), so silence alone couldn't
+  separate lines from the Herald's dramatic pauses. tools/vo_split.py: cuts chosen among all 144
+  pauses so each piece's length fits its line's text length (DP, prefers longer pauses; pieces 0.87-1.20
+  of expected), then blind PocketSphinx recognition per piece: own-line word recall 0.36-1.00,
+  neighbour leak <= 0.14, starts/ends match (e.g. #13 "oh cool with legs" = "A wall with legs!").
+  Whole-file forced alignment returned nothing (too long for PocketSphinx), hence this two-step way.
+- Export: one gain for the whole read (+1.62 dB to -16 LUFS), limiter -1.5 dB, fades, mono OGG
+  Vorbis q5; 36 files, 3.3 MB, in assets/vo/tutorial/<id>.ogg.
+- tutorial.gd: the voice follows the Settings master volume and the mute switch (native_audio.gd
+  levels); it sits above the effects (those play at 0.12 x master x effects).
+- tutorial_test: every line has a loadable recording >= 1.5 s; the first line plays.
+
+# 0.19.4 (Kevin): "land on the edges of the map instead of nothing; a sky (mainly for the trailer)"
+- Outer land (view only, no sim change): Land.outer_height starts at the terrain's own edge height
+  (blends over 20 m), rolls into meadows and hills, rises to snow-capped mountains beyond ~110 m, and
+  carves the river's valley on out of the map (river_c holds for any x). Four ring meshes (one per
+  side, 15 rings to 260 m; the first tucked 1 m under the terrain edge so no crack shows), shader
+  scripts/siege/outer_land.gdshader = the terrain's grass/tint/saturation + its sweeping bands faded
+  out over 12 m, rock on steep/high ground, snow on peaks. ~260 kit trees in groves (MultiMesh per
+  side x type, off-screen sides culled). The water now spans the outer land too (ripple density kept).
+- Sky: ProceduralSkyMaterial as background only (ambient stays a colour, reflections off: the field's
+  lighting is unchanged, no radiance map). Fog = the sky's horizon colour, 70 -> 285 m (the land ends
+  ~300 m out: fully fogged there, so its rim never shows), fog_sky_affect 0.
+- perf_bench (mid-field): 146-154k tris / 186 draws (was ~141-150k / 179); timings within noise.
+- Trailer re-rendered: the opening starts on the sky and tilts down onto our castle; the finale pulls
+  back and tilts up so the title sits over castle, mountains and sky; title dim 0.45 -> 0.25.
+
+# Trailer with Kevin's music (his Suno track, Spooky_3.wav, 103 s)
+- Scored with the song: its drop at 42.5 s (loudness x1.46 after a quieter stretch) lands on the title
+  card (29.7 s): python3 tools/trailer_edit.py --song Spooky_3.wav --song-hit 42.5 (the song plays from
+  12.8 s, 0.6 s fade in, 1.4 s fade out). The WAV came in quiet (-23.8 LUFS, peaks -9.9 dB): one steady
+  gain to -15 LUFS (+9.5 dB); final mix -15.6 LUFS, true peak -1.5 dB. Measured: x1.37 louder in the
+  second after the title than before it.
+- "BRING HER HOME.": an ally carries her (the match writes the joystick into the player's move every
+  frame, so "you" stood still) across the centre bridge toward our castle, escorts beside, enemies
+  closing in behind.
+- "FIGHT DIRTY.": a rogue creeps up behind a guard looking away and strikes three times (replaces the
+  cake shot).
+- The song isn't in the repo (Kevin's track, large); keep it with the trailer sources.
+
+# 0.19.5 (Kevin): "the edge of the map still has grey spots -- mountains or something"; "better text above the buildings"
+- The grey was the sky's ground colour showing through: 0.19.4 special-cased the triangle winding per
+  side and got sides 1 (east) and 2 (behind the blue castle) backwards, so they were culled. All four
+  sides run the same way round the rect with rings going outward, so one winding ([a, b, a+1, a+1, b,
+  b+1]) is right for every side. My 0.19.4 test views only looked at sides 0 and 3.
+- The sky's below-horizon colours = the fog colour: any gap now reads as distant haze.
+- Outer land: hills close in within ~30 m, mountains from 40 m (was 110 m), blend from the field edge
+  over 14 m: from the play camera the field sits in a valley between rocky slopes.
+- Station plates restyled (HUD): rounded signboard (StyleBoxFlat, anti-aliased), gold rim (brighter +
+  ★ when upgraded), team-coloured top stripe, soft shadow, pointer to the building; name in Cinzel
+  (the logo font), subtitle in Nunito, hat stock as pips; fade in over 6 m; clamped on screen.
+- Trailer re-rendered (all 8 shots) with the fixed land; same song/drop.
+
+# 0.20.0 (Kevin): the Oracle becomes each castle's KING
+- Every visible string: HUD rules/status/toasts/marker, stats screen ("King rescues"), economy (season
+  "The King's Keep", challenges, reward line; the cosmetic title shows "Kingsworn" but keeps its id
+  title_oracle_sworn so owned copies survive), tutorial lines/tasks/labels. Scan of every quoted string
+  in scripts/: no visible "Oracle" left. Internal names (sim.oracles, oracle_nodes, protocol keys) are
+  unchanged -- players never see them.
+- The King: the Knight body, helmet and visor hidden, weapons stripped, team cape (royal blue / crimson),
+  a gold five-point crown with a ruby on the head bone (placed at the head mesh's measured top); the halo
+  and its spin are gone; the healing aura stays.
+- Tutorial VO: 13 lines rewritten (him/his/King); their Oracle-era recordings pulled from the game until
+  Kevin re-records (kept in staging), so the voice never contradicts the text. tutorial_test has the
+  explicit pending list (13) and fails if it goes stale. Re-record sheet: Fatebound-Tutorial-VO-Rerecord.txt.
+- Trailer captions/tagline and store captions/listing text now say King; the store images, the
+  feature graphic and the trailer footage still show the Oracle until they're re-rendered (planned with
+  the new trailer VO). The AI store package zip is stale until then.
+
+# 0.20.1 (Kevin): Luckiest Guy for titles; the game is just "Fatebound" (no "Siege")
+- Fonts added: assets/fonts/LuckiestGuy-Regular.ttf (Apache 2.0) and Fredoka-Variable.ttf (OFL), licences
+  alongside. Home logo: "FATEBOUND" in Luckiest Guy (gold, dark outline, shadow), the "S I E G E" line
+  removed. Pause heading "FATEBOUND", settings version "Fatebound <build>", migration toast "Welcome to
+  Fatebound!". Feature names (Siege Pass, Siege server, "Frost Siege" season, "Siege Lord" title) kept.
+- Trailer: text art pre-rendered as transparent PNGs (gold gradient Luckiest Guy, Fredoka tagline) and
+  overlaid with fades (tools/trailer_edit.py make_overlays; ffmpeg drawtext can't do gradients); the
+  title card is just FATEBOUND. Captive/carry/finale re-rendered with the King. Output renamed
+  Fatebound-Trailer.mp4.
+- Store: tools/store_compose.py headlines in gold Luckiest Guy, text in Fredoka, feature graphic without
+  "SIEGE"; listing name "Fatebound"; all store screenshots re-rendered (King, new signs, new logo); the
+  AI store package rebuilt.
+
+# 0.20.2 (Kevin): his King models -- kingT1/kingT2 x fat/fatter/fattest
+- Kevin's 6 GLBs: static meshes (no rig/animations), one "BakedMaterial" each (4K-ish baseColor, normal,
+  metallicRoughness PNGs: ~21 MB per file), ~10.4k tris, 1.9 tall, origin at the centre. T1 = red robes,
+  T2 = purple robes -> matched by colour: T1 leads red, T2 leads blue (Kevin numbered them team 1/2).
+- Optimised in Blender (/tmp/kings/optimize.py pattern): origin at the feet, baseColor 1024 JPEG, normal
+  512 -> then halved (APK: 1024/512 textures cost 17 MB for six kings): baseColor 512 JPEG, normal
+  256, metallicRoughness dropped (matte 0.78), geometry untouched -> assets/kings/king_{blue,red}_{fat,
+  fatter,fattest}.glb, ~1.1 MB each, 6.6 MB imported; side-by-side at gameplay/close-up size: no visible
+  difference.
+- View: each King root holds all three; sim weight 0-5 -> stage weight/2 (0-1 fat, 2-3 fatter, 4-5
+  fattest), +5 % on odd weights, a puff when a stage goes up; breathing + sway at rest, a wobble while
+  carried (the models aren't rigged). Scaled to 2.6 tall (the Knight hero is 2.54). The Knight-body
+  King and the procedural crown are gone.
+- Their shadows are OFF: a shadow-casting King + the full scene hung llvmpipe before the first frame
+  (bisected: model alone fine, with its normal map, back-face culling, a shadow light -- all fine; full
+  scene with King shadows off fine). Other characters don't cast real shadows either.
+- The trailer and store screenshots still show the 0.20.0 Knight King until re-rendered.
+
+# 0.21.0 (Kevin): the dungeon moved down into a walled wing off the west wall, with real jail bars
+- Kevin circled the grass strip outside the west wall; option A: a walled, sunken wing (castle-local
+  x -31..-20, z 8..24, floor -1.6 m). Doorway in the west wall off the L1 west wing (z 17..20); 11 stairs
+  down along x (Castle.DSTAIR) with walls both sides; the old L1 cell is gone.
+- Jail cell in the wing's front-west corner (two sides are the wing's walls): iron bars on the east side
+  and a barred DOOR on the north side = a gate of kind "jail" (500 hp, r 0.35): it lifts for the castle's
+  team (the existing gate "open" mechanic drives the view), blocks the enemy, has to be smashed (bots path
+  through it at the enemy-gate cost and attack it), and _reset_jail() locks it again whenever the King is
+  back in his cell (rescue or return). Excluded from the Reinforced Gates upgrade and the bots' "gates
+  damaged" check; per-gate radius used everywhere gates collide/stamp nav/stop projectiles.
+- Terrain: Land.in_dungeon_pit -> terrain dips to the dungeon floor (rebaked). Three resource nodes per
+  half moved out of the wing's footprint (land check: no squeeze traps, all clear).
+- View: iron-bar grilles (procedural, lit) replace the wooden-fence cell bars; the jail door slides up
+  2.25 m when open; stone sides for the pit; the dungeon floor and striped stairs in castle_mesh.
+- HUD: jail alerts ("THEY SMASHED OUR JAIL" / "THEIR JAIL IS OPEN"), "Our jail is locked again"; the
+  jail isn't in the W/E gate bars. Tutorial shortcut also breaks the enemy jail. Protocol v8.
+- sim smoke: jail rules (ally through, enemy blocked, enemy smashes it, re-locks) + matches: rescues still
+  happen (first at ~100-220 s), 0 violations.
+
+# 0.21.1 (Kevin): grass in the dungeon, keep blocking the throne, a throne, back walls, no inner towers, bigger outposts
+- Grass tufts on the dungeon floor: foliage excluded only the main castle rect -> also Land.in_dungeon_pit(p, 1.5).
+- The keep (building_castle, behind the throne) and the two tower_B flanking it removed.
+- Back wall along the L2 back edge: kind "backwall" (ladders only use "wall"), line z=30.2 so its face (29.2)
+  is just past the field edge -- 1.6 m clear of the church/tavern (29.6 made squeeze traps); drawn at L2 height,
+  unclipped (clipped to the field edge it ran through the throne).
+- Throne: Blender model (assets/props/throne.glb, 2.4k tris, 169 KB: stone dais, gold frame, velvet seat/back,
+  crown); velvet recoloured per castle; at THRONE_SEAT (0, 28.3) flush with the wall, obstacle r 0.9; the
+  rescue point THRONE (26.8) stays 1.5 m in front (0.95 m at 27.6 swallowed it: reach test).
+- Outpost towers 40 % bigger (base 3.6, tower 3.2), collision 1.3 -> 1.8.
+- Dungeon wing's outer wall moved to x=-33 (wholly outside the field): at -31 its rounded end sat on the field
+  edge and a unit walking the edge got squeezed into it (215 wall violations). Cell keeps 3.4 m (bars -28.6).
+  Rebaked. Protocol v9 (map changed).
+
+# 0.21.2 (Kevin): walls backwards, the cage clipping into the wall, the cage opening near enemies
+- The kit wall's stone face is its local +Z (the other side has the walkway lip; model centred, AABB z
+  -0.4..0.4). _wall_run turned pieces by the segment's direction, which put +Z on the segment's left: the
+  castle interior for both castles' front walls (the red castle's walls are point-mirrored, so they run the
+  other way). Now _wall_run(..., inside) turns each piece stone-side away from a point inside what the
+  wall encloses (castle centre, or the dungeon wing's centre for its walls); gate pieces face + PI.
+- The cage clipped into the wing's outer wall: that wall (line x=-33) was drawn clipped to the field edge,
+  1 m inside its real line; the wing's walls are drawn unclipped now, the cage meets the wall face.
+- The jail door stays shut while any enemy is within JAIL_SHUT_R (3.5 m), defenders or not (sim; the
+  door never let enemies through anyway). sim smoke checks both.
+- Note: seed 11 has had 0 rescues since the dungeon wing (seed 22: 5); rescues are harder now.
+
+# 0.22.0 (Kevin): stairs up onto the wall so players can walk on it and shoot arrows from it
+- Rampart behind the front wall's middle section (between the gatehouses, |x| <= 4.4): walkway from the
+  wall's inner face to z=6 at WALK_H=1.8 (L1 height; wall top 2.86 -> waist-high parapet). Stairs down at
+  its centre (x +-1.6, z 6..9, descending along +z -- Castle.STAIRS/height_local/castle_mesh now handle
+  descending flights). Ledges: its inner edge (gap at the stairs) and both ends above the gate passages.
+  SPAWN (0, 8.5) -> (0, 10.5): in front of the stairs instead of on them.
+- Arrows/fire shot from >= 1.5 m ("high": the rampart, and the terraces) fly over castle walls ("wall",
+  "backwall") and gates; from the courtyard floor the wall still stops them. sim smoke: rampart rules.
+- Jail re-lock waits (g.relock -> _try_relock each tick) until no enemy is in the doorway or within 3 m of
+  the cell: snapping shut on a rescuer put him inside the door (gate violation) and would have locked
+  anyone in the cell in with the King. sim smoke checks the wait.
+- net smoke: the moved spawn sent the player east, to the ranger stand, whose goal cell is solid; steering
+  at the path's end (the unit's own cell) stalled it 1.8 m short. Now it walks straight at the stand when
+  the path runs out (3/3 at 14 s).
+- Protocol v10.
+
+# 0.22.1 (Kevin): bots man the rampart; black 3D world for a few seconds at match start
+- Rampart bots: enemies within RAMPART_THREAT_R (26 m) of a castle's front (refreshed each AI tick) send
+  its ranged "defend" bots to Castle.RAMPART_POSTS (4, handed out first come; released RAMPART_HOLD = 8 s
+  after the front clears). On a post they hold and shoot (no kiting); ranged units >= 1.5 m up skip the
+  wall line-of-sight check (their shots fly over). Three bugs on the way: posts at x +-3.4 were in solid
+  nav cells (partial paths: bots wandered into the dungeon) -> posts on the walkable row z 4.6, |x| <= 2.5;
+  bots heading up got pulled out through the gates by enemies seen through them -> ignore foes > 3 m
+  until on the post; defenders' cake runs came first -> skipped while holding a post. sim smoke: 3/3 up,
+  96 high shots; matches 3-0 / 3-0, 0 violations.
+- Black world at match start: not reproducible here (llvmpipe compiles pipelines synchronously); the phone
+  compiles the scene's new materials in the background and draws nothing until they're ready. Warm-up
+  cover in siege_mode.gd: a FATEBOUND card ("Preparing the battlefield...") while the camera visits both
+  castles, dungeons, thrones, the field and the outposts (2 frames each) so their pipelines compile behind
+  it; it lifts when RenderingServer's pipeline-compilation counters have been still 0.5 s (min 0.6 s,
+  max 10 s), fading over 0.3 s. Offline the match clock waits (verified: sim time 0.2 s when it lifted).
+  Skipped under scripted main loops (tests, render tools) unless FB_FORCE_WARMUP is set. Diag logs
+  "warm-up X s, N pipeline compiles" -- check a field log for the real phone timing.
+
+# 0.22.2 (Kevin): "the knight AI needs to be better -- all they do is hold block when enemies are near"
+- Cause (_think_shields): any enemy archer/mage/priest within 12 m (or anyone within 4 m when below half hp)
+  kept the shield up; blocking refuses attacks and slows to 40 %. Measured: 98 % blocking, 0 swings, 0
+  damage, even standing 2 m from an archer.
+- _think_knight_shield: the shield goes up only when an enemy shot will pass within 1.3 m in the next 0.7 s
+  (predicted from its velocity; the shield covers allies behind too) -- not while an enemy is at arm's
+  length unless below half hp -- or, below 35 % hp with an enemy at arm's length, in 1 s guard bursts at
+  most every 2.6 s. Knights also hunt archers/mages within 9 m unless someone is already in their face.
+- tests/knight_ai_test.gd (runner): melee 0 % blocking / 15 swings / 216 dmg; vs a lone archer 9 %
+  blocking, 5 shots blocked, 10 swings. Matches: kills 126/189 and 213/245 (were 59/147 and 137/53).
+
+# 0.22.3 (Kevin): the shop name plates are bulky and cover the ground; the barbarian shop is cramped
+- Plates: one slim line -- the name (Cinzel 13, was 17) and, for hat shops, the stock as inline dots; the
+  "HAT SHOP" / "UPGRADES - TOOLS" subtitle dropped; 22 px tall (was 44); thin rim, smaller pointer and
+  shadow; shown within 16 m (was 24), fading over the last 4.
+- Barbarian hat shop (14.5, 12) -> (-7.5, 9.5): it was 3.2 m from the workshop's ring, its machine on top
+  of the workshop area; now on the west courtyard's open floor by the knight and rogue shops (3.6 m from
+  the archery targets). Land check / reach pass. Protocol v11 (stand positions are map data).
+
+# 0.23.0 (Kevin): KayKit RPG Tools Bits (CC0) for tools; fishing replaces the cake mechanic
+- assets/kaykit/tools: axe, pickaxe, hammer, fishing_rod, fishing_floater, fishing_tacklebox, lantern, torch
+  (+ texture, licence). assets/props/fish.glb: Blender low-poly fish (338 tris).
+- Workers hold the tool for the job (view _sync_hand): pickaxe on stone, axe on trees, hammer for repairs and
+  ladders, the axe otherwise (scales measured: axe 1.15, pickaxe 0.9, hammer 1.2, rod 0.6).
+- Fishing (sim): cake trees gone (and their ripening, obstacles, net sync). ACTION within 0.2..2.4 m of the
+  river's edge (at_river_bank) starts a "fish" task (FISH_TIME 2.5 s, facing the water); done -> u.offering (a
+  fish); a hit clears the task ("fish_lost"). Feeding unchanged (oracle "cakes" count kept as the fed count).
+  Bots' fish runners use a cached clear spot on their own bank (_fish_spot). View: rod in hand, float in the
+  water with a line (plus the rod's own bobber), Fishing_Cast/Idle/Reeling (KayKit tools rig), splash on
+  catch; the carried item is the fish overhead. HUD: FISH button, catch/lost toasts, rules text.
+- Tutorial: the cake step is "fish" (guide to our bank, "RIVER"); t_cake_1 rewritten (and t_cake_took,
+  t_feed_1, t_grab_done now say fish) -> 14 lines pending re-record. Economy: "Feed 3 fish", "The Fish Wars",
+  "Fish Baron" (id kept), stats "Fish fed"; store caption "FEED THEIR KING FISH".
+- sim smoke: fishing rules (bank only, 2.5 s, a hit loses it, it feeds their King); bots fed 4 in a match.
+- Protocol v12 (state "fish", no cake trees).
+- Next: hat shops as the buildings themselves (Kevin, same message).
+
+# 0.23.1 (Kevin): "the axe is held upside down"; "the fishing pole doesn't have string attached"
+- Measured the tool models: all grip at the origin, head up +Y, like the weapon axe -- the axe's blade faced
+  edge-up when held forward (both old and new axes; the new one is bigger). Axe turned 180 deg about the
+  handle (edge down). Pickaxe/hammer symmetric.
+- fishing_rod has its own line + bobber hanging from the grip (y -2.38..2.37): that was the bobber by the hand.
+  Now fishing_rod_base (bare rod, y -0.24..2.37), turned 180 deg about X (the fishing animation held it
+  pointing backward), and our line runs from its real tip (ROD_TIP, highest vertex, through the rod's live
+  global transform) to the float in the water.
+- Fixed: a freed cached rod (body rebuilt on a class change) assigned to a typed var -> script error (mode smoke).
+
+# 0.24.0 (Kevin): "make it so the hat shops are the buildings themselves and not some items right next to building"
+- Castle.HAT_SHOPS: one KayKit building per class, solid (obstacle r at the building), take the hat at its door
+  (HAT_STANDS = the doors): knight barracks + rogue market against the west courtyard wall (doors face the
+  courtyard), ranger = the archery range (L1 east), barbarian lumbermill (replaces the L2 tavern) and mage tower
+  (L2 west), priest = the church (L2 east). The themed machines and hat stacks are gone (the plate's dots show
+  stock); an upgraded shop flies a team flag on its roof (plus the plate's star). Plates sit over the roofs
+  (stand "b"/"top"). The west-front barrels went (the barracks is there).
+- Land check: the dungeon wing's front/back walls now end 1 m inside the west wall (their rounded ends made a
+  squeeze slot with the barracks); the market touches the L1 face (was 0.45 m off).
+- Bots: bots fed 0 fish -- both teams' fish runners had become priests and held rampart posts (and kept the post
+  after respawning as other classes). Fish runners are exempt from rampart duty; a post is dropped when the unit
+  stops being a ranged defender. Match: fed 2, 8 rescues, 0 violations; rampart test picks non-runners.
+- Protocol v13.
+
+# 0.24.1 (Kevin): tutorial updated for the recent changes; only the VO text we need
+- Lines: t_hat_2 / hat task (the Barracks door), t_up_1 / upgrade task (the Barracks), t_goal_1 (dungeon down
+  stairs, King behind bars), t_goal_2 (smash his cell open), t_feed_1 (our dungeon down the stairs, the cell door
+  opens for friends), t_grab_1 (their gate and his cell door broken, dungeon downstairs); new talk-only step
+  "rampart" (t_rampart_1). 37 lines; 17 await recording (t_hat_2 and t_up_1 pulled: their old audio said "hat
+  shop"). Kevin's sheet: Fatebound-Tutorial-VO-Needed.txt, numbered 1..17 in tutorial order; the number -> id
+  map is in /home/claude/vo_staging/needed_map.json (1 t_intro_2, 2 t_hat_2, 3 t_up_1, 4 t_rampart_1,
+  5 t_goal_1, 6 t_goal_2, 7 t_goal_3, 8 t_cake_1, 9 t_cake_took, 10 t_feed_1, 11 t_feed_done, 12 t_rescue_1,
+  13 t_grab_1, 14 t_grab_done, 15 t_carry_1, 16 t_carry_done, 17 t_end_2).
+
+# 0.24.2 (Kevin): the 17-line re-record -- the tutorial is fully voiced again (37/37)
+- Kevin's read (167 s; ElevenLabs ignored the break tags again: longest pause 0.69 s). tools/vo_split.py --ids
+  takes a subset in order. The length-fit + word check passed it, but the new head/tail transcripts showed three
+  cuts in a row one sentence off (t_goal_2 ended "...and we win", t_goal_3 "...a dirty trick", t_cake_1
+  "...magnificent"). New refine_cuts: per boundary, force-align the two lines' text over their two pieces and cut
+  in the pause between the aligned last/first words (timings from the forced hypothesis's seg(): get_alignment()
+  is empty without a second pass). It moved exactly those 3; every piece now starts and ends on its own line.
+- Exported (+1.96 dB to -16 LUFS), 37 recordings, tutorial_test pending list empty.
+
+# Trailer 2 (Kevin: cinematic trailer, the Herald hyping it up, a spectacular title reveal with VFX, the whole kingdom
+# behind it and the sun god-raying through the title)
+- tools/trailer2_shots.gd: dawn captive heroes assault rampart whirl feast carry reveal (Movie Maker, one shot per
+  run, SHOT=...). "reveal" is golden hour (sun low beyond the enemy castle: light + sky + fog retinted for that shot)
+  and writes the sun's screen position per frame (reveal_sun.json).
+- tools/trailer2_reveal_fx.py: over the reveal -- sun glow broken into slowly turning beams, occluded by the title's
+  letters and zoom-blurred from the sun (quarter res), a flash, FATEBOUND slamming in from 112 % (sun behind the
+  letters' upper half), rim glow, a lens streak, rising embers, tagline + subline.
+- tools/trailer2_edit.py: --stage segments (each shot trimmed + its gold caption; resumable) then --stage final
+  (crossfades, a dip to black into the reveal, fade-out, Kevin's Spooky_3 from 11.1 s so its drop at 42.5 s hits the
+  title at 31.4 s; --vo DIR with 1..9.mp3 drops the Herald into each shot and sidechain-ducks the music).
+  (Split in two: a single pass with full-length caption loops ran past the 5-minute tool limit; a background
+  process doesn't survive the end of a tool call.)
+- Output: Fatebound-Trailer-2.mp4, 38.9 s 1080p30. Herald trailer lines: waiting for Kevin's recording.
+
+# 0.24.3 + trailer 2 v2 (Kevin: the King faces the wall; the trailer doesn't convey what you do -- what hats are;
+# pump the thrilling 16 v 16 multiplayer; a better caption under the title)
+- View: the King in his cell faces his cell door (out through the bars); within 1.5 m of his throne he faces out
+  over his castle; dropped, he keeps his last facing (rotation was only ever set while carried).
+- Trailer: 11 shots, 42.9 s -- clash (16 v 16 armies charge, then fight as bots) "16 VS 16 CASTLE SIEGE", captive
+  "THEY STOLE OUR KING!", heroes (a villager walks into the Barracks door, comes out a Knight) "GRAB A HAT...",
+  lineup (the 7 classes) "...BECOME A HERO", assault, rampart, whirl, feast "STUFF THEIR KING WITH FISH", carry
+  "CARRY YOUR KING HOME", throne (the rescue; the King is stood at his throne after it scores) "FIRST TO 3
+  RESCUES WINS", reveal. Tagline: "THE ULTIMATE 16 VS 16 CASTLE SIEGE" / "Grab a hat. Storm the castle. Bring
+  your King home." Song from 7.2 s: its drop lands on the title at 35.3 s (measured -20 -> -13 dB).
+- Shot scripts must not walk the player's unit: the match loop overwrites its move with the idle joystick.
+- Herald trailer VO: 11 lines, waiting for Kevin's recording (tools/trailer2_edit.py --vo DIR, 1..11.mp3).
+
+# 0.24.4 (Kevin): "fix the arrows flying sideways instead of straight (this happens in game also)"
+- The arrow model (weapons/arrow_bow.gltf) lies along +Z, head forward (measured z -0.64..0.62, narrow end +Z);
+  the projectile root already turns +Z onto the flight path. _make_projectile's extra rotation.x = PI/2 stood
+  every arrow on its tip. Removed; checked from the game camera and the side (head leading, fletching trailing).
+- Trailer 2: clash, assault and rampart re-rendered and their segments rebuilt; final re-cut (42.9 s, title 35.3 s).
+
+# Trailer 2 with the Herald (Kevin's 11-line trailer read, 24 s)
+- tools/vo_split.py: --lines-file (plain text, pieces named 1..N) and --accept (reviewed flags). Forced alignment
+  moved 8 of 10 cuts; 4 short lines were flagged only because the recogniser mishears them ("They stole our King"
+  -> "restore locked in"); neighbours 0.00 everywhere, lengths as expected -> accepted. Lines in
+  tools/trailer2_vo (1..11.ogg + lines.txt; .gdignore keeps them out of the game).
+- tools/trailer2_edit.py --vo: lines scheduled so none starts before the previous ends (+0.12 s); the music ducks
+  under the Herald (sidechain threshold 0.012, ratio 12); the finale line +3 dB over the drop (it was masked:
+  heard as "they see these free trial"); limiter at -1 dBFS (the sum peaked at +4 dBFS). Measured: lines 6-9 dB
+  over the music; max -0.8 dBFS.
+- Outputs: Fatebound-Trailer-2.mp4 (with the Herald), Fatebound-Trailer-2-NoVO.mp4.
+
+# Trailer 2 mix (Kevin: "the music volume drops too much when voice happens, it needs to blend better")
+- Measured the ducked music alone (--duck-out): it was dipping 6-10 dB under every line (threshold 0.012 / ratio 12;
+  0.06 / 2.5 still 6-10). Now threshold 0.12, ratio 2, knee 6, attack 40 ms, release 700 ms: 2.7-5.1 dB dips
+  (~4 avg), the Herald 7-15 dB over the music; VO gain 1.7 (finale 2.6: 7.2 dB over the drop); limiter, -0.8 dBFS.
+- New --stage audio: rebuilds just the mix onto an existing cut (video stream copied) in ~7 s.
+
+# Trailer 2: the title pops in on "FATEBOUND" (Kevin: "right when he says 'fatebound' the title pops in")
+- trailer2_edit.py finds the word's onset in the last line by forced alignment (word_onset; "fatebound" at 1.11 s
+  in Kevin's read) and places the line so the word starts at the title (35.30 s, also the song's drop): line at
+  34.19 s. Checked in the final mix: "fatebound" aligns at 35.29 s; the flash is on the 35.27 s frame, the title
+  solid by 35.45 s.
+
+# Trailer 2: the economy (Kevin: "the trailer should also include mechanics about gathering resources")
+- Two shots after the heroes: "gather" (workers chopping a tree and mining a rock -- the nearest wood/stone pair on
+  our side -- one hauling lumber) "CHOP WOOD. MINE STONE."; "build" (a worker raises a ladder against their wall,
+  3 s, steps aside; a knight heads up it) "BUILD LADDERS. UPGRADE YOUR CASTLE." (captions shrink to fit).
+  The ladder was there but hidden: the worker and the knight stood at its foot, in line with the camera -> the
+  builder steps aside and the camera comes from the front-right.
+- 50.0 s; title at 42.5 s = the song's drop, so the song now plays from its start (lead pad if ever negative).
+- VO by shot name (VO_FILE): 1..11 = Kevin's read, 12 gather / 13 build pending: "Chop wood! Mine stone!",
+  "Build ladders and upgrade your castle!".
+
+# Trailer 2 (Kevin: ladders must clearly be for getting INTO their castle; the hat villager ran into the wall --
+# show him equipping the hat and becoming the hero; replace the spin with a rogue's backstab)
+- build: the ladder's 3 s build mostly happens before recording (it goes up 0.5 s in), the builder steps aside,
+  a knight, a barbarian and a ranger climb over one after another, and the camera cranes up over the wall as they
+  drop into the enemy courtyard. "BUILD LADDERS. CLIMB INTO THEIR CASTLE."
+- heroes: when the villager becomes a Knight at the Barracks door he stops, turns to the camera in a gold ring and
+  sparkle burst, then swings (closer, frontal camera).
+- backstab replaces whirl: their ranger shoots the other way; our rogue creeps up behind (move 0.3) and the first
+  stab finishes her (hp 12). "STAB THEM IN THE BACK". Shots trimmed (USE) so the title (41.7 s) stays on the drop.
+- VO pending: 12 gather "Chop wood! Mine stone!", 13 build "Build ladders and climb into their castle!",
+  14 backstab "Sneak up... and stab them in the back!". Line 7 (the spin) is unused now.
+
+# 0.25.0 (Kevin): "when players use a ladder they climb up it and over the wall"
+- Before: a ladder only let its team walk through the wall at ground level at half speed.
+- Sim: ladder_depth(p, team) = how far across one of the team's ladders (+ on its side, - beyond, INF off it);
+  ladder_lift(d, ground): up the rungs from the foot (1.35 m out) to the top (LADDER_TOP 2.9 m), a 0.15 m arc over,
+  then an accelerating drop to the ground beyond (the courtyard, or the rampart walkway). Speeds by zone: 0.3 on
+  the rungs, 0.45 over the top, 0.7 dropping. Visual height only (not "high ground" for arrows).
+- View: units on a ladder are lifted by ladder_lift and play the arms-up Jump_Idle pose (the rigs have no climb).
+- sim smoke "ladder climb": a knight peaks at 3.05 m, takes 2.1 s across, ends inside their courtyard.
+- Protocol v14 (movement rule: server and client prediction must agree).
+
+# Trailer 2: the last three Herald lines; the backstab from behind
+- Kevin's 3-line read split (12 gather, 13 build, 14 backstab; line 12 accepted after review: heard "drop would
+  mind ... would mind stone"); now in tools/trailer2_vo. All 13 lines in the cut, no overlaps, -0.8 dBFS.
+- Backstab: the archer turned round to face the rogue before he struck -- _start_attack aims at the nearest enemy.
+  Her shots now fire without aim ("shoot" beat, aim=false) and her facing stays locked away from him.
+
+# GitHub sync (Kevin: "upload to GitHub")
+- No credentials in this environment (no token, credential store or gh CLI): Kevin pushes with push_siege_r5.sh.
+- GitHub's claude/siege-dev-r5 (a269a43) had been rewritten (same work, different ids) and gained Codex's store
+  listing pack and Kevin's PLAY_STORE_HANDOFF.md. Merged it (85b04de): the 26 conflicts were older copies of code
+  already newer here (ours kept); the merge adds only those 41 docs files. The bundle is now based on a269a43,
+  and the push was tested against a stand-in of GitHub's current state: fast-forward, nothing overwritten.
+
+# 2026-10-01: sanitized GitHub import
+- Imported the final source tree from supplied bundle tip 5aede5cca92af6c4d6e7ac8dc4fcaf1a94521fed as a new commit on published a269a43; preserves existing GitHub ancestry.
+- Retained android/keystore/upload.jks.b64 locally; automatic approval review blocked publishing it to the public repository. Retained the published GitHub visual-review workflow. The separately supplied preview keystore was not uploaded.
+- Game/source/trailer files otherwise match the supplied tree. Bundle integrity verified; gameplay tests were not rerun for this source upload.
+- GitHub source import only: no live server deployment, Play signing, or Play release. Preview 0.25.0 uses protocol v14 and needs a matching server before online use.
