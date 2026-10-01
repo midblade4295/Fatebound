@@ -258,6 +258,171 @@ func _sync_ambience(dt: float) -> void:
 		(tr[0] as OmniLight3D).light_energy = float(tr[2]) * k
 		(tr[1] as Node3D).scale = Vector3.ONE * (0.9 + 0.12 * k)
 
+# ---------- Water you can wade through, with simulated waves (Round 33) ----------
+# Kevin: "make the water look much more realistic, like actually simulated water ... realistic physics that create
+# wakes". A height field over the river (RIP_W x RIP_H, ~13 cm cells) is stepped every frame on the GPU with the
+# wave equation (two SubViewports ping-pong: R = height now, G = height a step ago). Each wading unit pushes on it in
+# proportion to its speed, so wakes, rings and bank reflections come out of the physics. The water shader lights the
+# resulting slopes (plus flowing detail), reflects the sky at grazing angles, is see-through over the bed, and foams
+# on the banks and the wave crests. High-quality graphics only; without it the old water stays.
+const RIP_W := 512
+const RIP_H := 52
+const RIP_HALF := 34.0                         # the simulated stretch: x in [-34, 34]
+const RIP_ACROSS := (3.0 + 0.35) * 2.0         # bank to bank, as the water mesh's UV.y (Land.RIVER_HW + 0.35)
+var _rip_vp: Array = []
+var _rip_mat: Array = []
+var _rip_i := 0
+var _rip_prev: Dictionary = {}                 # unit id -> [last pos, was wet]
+
+func _water_hq_material() -> ShaderMaterial:
+	var sh := Shader.new()
+	sh.code = """
+shader_type spatial;
+render_mode cull_disabled, blend_mix, depth_draw_opaque;
+uniform sampler2D ripples : filter_linear_mipmap, repeat_enable;
+uniform sampler2D rip_tex : filter_linear, repeat_disable;
+uniform float rip_half = 34.0;
+uniform vec2 rip_texel = vec2(0.001953, 0.019231);
+uniform float rip_strength = 15.0;
+uniform vec3 deep_col : source_color = vec3(0.05, 0.27, 0.42);
+uniform vec3 shallow_col : source_color = vec3(0.24, 0.62, 0.66);
+uniform vec3 sky_col : source_color = vec3(0.62, 0.80, 0.95);
+uniform float glint = 0.0;
+varying vec3 wpos;
+void vertex() { wpos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz; }
+float detail(vec2 p) {
+	return texture(ripples, p * 0.11 + vec2(-TIME * 0.035, 0.0)).r * 0.6
+		+ texture(ripples, p * 0.23 + vec2(-TIME * 0.05, TIME * 0.02)).r * 0.4;
+}
+void fragment() {
+	// Flowing detail (the river runs toward -x) from finite differences of two scrolling layers.
+	float e = 0.2;
+	float d0 = detail(wpos.xz);
+	vec2 slope = vec2(detail(wpos.xz + vec2(e, 0.0)) - d0, detail(wpos.xz + vec2(0.0, e)) - d0) / e * 0.22;
+	// The simulated waves.
+	vec2 ruv = vec2((wpos.x + rip_half) / (2.0 * rip_half), UV.y);
+	float inside = step(0.0, ruv.x) * step(ruv.x, 1.0);
+	float h = texture(rip_tex, ruv).r * inside;
+	float hx = (texture(rip_tex, ruv + vec2(rip_texel.x, 0.0)).r - texture(rip_tex, ruv - vec2(rip_texel.x, 0.0)).r) * inside;
+	float hz = (texture(rip_tex, ruv + vec2(0.0, rip_texel.y)).r - texture(rip_tex, ruv - vec2(0.0, rip_texel.y)).r) * inside;
+	slope += vec2(hx, hz) * rip_strength;
+	vec3 wn = normalize(vec3(-slope.x, 1.0, -slope.y));
+	NORMAL = normalize((VIEW_MATRIX * vec4(wn, 0.0)).xyz);
+	float edge = min(UV.y, 1.0 - UV.y);
+	float depth = smoothstep(0.02, 0.4, edge);
+	vec3 col = mix(shallow_col, deep_col, depth);
+	float fres = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 4.0);
+	col = mix(col, sky_col, clamp(fres * 0.75, 0.0, 0.75));
+	float shore = (1.0 - smoothstep(0.0, 0.075, edge)) * (0.45 + 0.55 * texture(ripples, wpos.xz * 0.45 + vec2(-TIME * 0.12, 0.0)).r);
+	float crest = smoothstep(0.045, 0.11, abs(h));
+	float foam = clamp(max(shore, crest * 0.6), 0.0, 1.0);
+	col = mix(col, vec3(0.94, 0.97, 1.0), foam);
+	ALBEDO = col;
+	ALPHA = clamp(mix(0.58, 0.86, depth) + foam * 0.35, 0.0, 1.0);
+	ROUGHNESS = 0.05;
+	SPECULAR = 0.75;
+	float sg = texture(ripples, wpos.xz * 0.19 + vec2(-TIME * 0.09, TIME * 0.05)).r * texture(ripples, wpos.xz * 0.13 + vec2(TIME * 0.07, -TIME * 0.04)).r;
+	EMISSION = vec3(1.0, 0.97, 0.88) * smoothstep(0.58, 0.64, sg) * glint * (1.0 - foam);
+}
+"""
+	var m := ShaderMaterial.new()
+	m.shader = sh
+	var nt := NoiseTexture2D.new()
+	nt.width = 256
+	nt.height = 256
+	nt.seamless = true
+	var fn := FastNoiseLite.new()
+	fn.frequency = 0.04
+	nt.noise = fn
+	m.set_shader_parameter("ripples", nt)
+	m.set_shader_parameter("glint", 1.3)
+	m.set_shader_parameter("rip_half", RIP_HALF)
+	m.set_shader_parameter("rip_texel", Vector2(1.0 / RIP_W, 1.0 / RIP_H))
+	return m
+
+func _build_ripples() -> void:
+	var sh := Shader.new()
+	sh.code = """
+shader_type canvas_item;
+render_mode blend_disabled;
+uniform sampler2D prev : filter_nearest, repeat_disable;
+uniform vec2 texel;
+uniform vec2 cell_m;
+uniform vec4 drops[16];
+uniform int drop_count = 0;
+uniform float damping = 0.984;
+void fragment() {
+	vec4 p = texture(prev, UV);
+	float n = texture(prev, UV + vec2(texel.x, 0.0)).r + texture(prev, UV - vec2(texel.x, 0.0)).r
+		+ texture(prev, UV + vec2(0.0, texel.y)).r + texture(prev, UV - vec2(0.0, texel.y)).r;
+	float h = (n * 0.5 - p.g) * damping;
+	for (int i = 0; i < 16; i++) {
+		if (i >= drop_count) { break; }
+		vec2 d = (UV - drops[i].xy) / texel * cell_m;
+		float r = drops[i].z;
+		h += drops[i].w * exp(-dot(d, d) / (r * r));
+	}
+	h *= smoothstep(0.0, 0.03, UV.y) * smoothstep(1.0, 0.97, UV.y);
+	COLOR = vec4(h, p.r, 0.0, 1.0);
+}
+"""
+	for k in 2:
+		var vp := SubViewport.new()
+		vp.size = Vector2i(RIP_W, RIP_H)
+		vp.use_hdr_2d = true
+		vp.disable_3d = true
+		vp.transparent_bg = false
+		vp.render_target_update_mode = SubViewport.UPDATE_DISABLED
+		var cr := ColorRect.new()
+		cr.size = Vector2(RIP_W, RIP_H)
+		var m := ShaderMaterial.new()
+		m.shader = sh
+		m.set_shader_parameter("texel", Vector2(1.0 / RIP_W, 1.0 / RIP_H))
+		m.set_shader_parameter("cell_m", Vector2(2.0 * RIP_HALF / RIP_W, RIP_ACROSS / RIP_H))
+		cr.material = m
+		vp.add_child(cr)
+		add_child(vp)
+		_rip_vp.append(vp)
+		_rip_mat.append(m)
+
+func _sync_ripples(dt: float) -> void:
+	if _rip_vp.is_empty() or _water_mat == null:
+		return
+	var drops := []
+	for u in sim.units:
+		if not sim.alive(u):
+			_rip_prev.erase(u.id)
+			continue
+		var p: Vector2 = u.pos
+		var wet := Sim.water_depth(p) > 0.12 and absf(p.x) < RIP_HALF - 0.5
+		var last: Array = _rip_prev.get(u.id, [p, false])
+		var spd: float = (p - (last[0] as Vector2)).length() / maxf(dt, 0.001)
+		if wet and drops.size() < 16:
+			var v := (p.y - (Land.river_c(p.x) - RIP_ACROSS * 0.5)) / RIP_ACROSS
+			var strength := 0.002 + minf(spd, 6.0) * 0.0032
+			var radius := 0.42
+			if not bool(last[1]):
+				strength = 0.06                              # stepping in: a splash
+				radius = 0.7
+				var sp := Vector3(p.x, Land.WATER_Y + 0.05, p.y)
+				for k in 8:
+					spark(sp + Vector3(randf_range(-0.4, 0.4), randf_range(0.0, 0.6), randf_range(-0.4, 0.4)), Color(0.9, 0.96, 1.0))
+			drops.append(Vector4((p.x + RIP_HALF) / (2.0 * RIP_HALF), v, radius, strength))
+		_rip_prev[u.id] = [p, wet]
+	var cur := _rip_i % 2
+	var other := 1 - cur
+	var m: ShaderMaterial = _rip_mat[cur]
+	m.set_shader_parameter("prev", (_rip_vp[other] as SubViewport).get_texture())
+	var arr := PackedVector4Array()
+	arr.resize(16)
+	for i in drops.size():
+		arr[i] = drops[i]
+	m.set_shader_parameter("drops", arr)
+	m.set_shader_parameter("drop_count", drops.size())
+	(_rip_vp[cur] as SubViewport).render_target_update_mode = SubViewport.UPDATE_ONCE
+	_water_mat.set_shader_parameter("rip_tex", (_rip_vp[other] as SubViewport).get_texture())
+	_rip_i += 1
+
 # ---------- world ----------
 var _hq_cached := -1
 static var _cast_static := false     # for the static make_body: set from _hq() before any unit is built
@@ -627,6 +792,10 @@ func _build_terrain() -> void:
 	_build_foliage()
 
 func _build_water() -> void:
+	_water_mat = null                 # rebuilt per match: the High-quality setting may have changed
+	if _hq():
+		_water_mat = _water_hq_material()
+		_build_ripples()
 	if _water_mat == null:
 		var sh := Shader.new()
 		sh.code = """
@@ -2003,6 +2172,7 @@ func _on_screen(p: Vector3, planes: Array) -> bool:
 func sync(dt: float) -> void:
 	_time += dt
 	_sync_ambience(dt)
+	_sync_ripples(dt)
 	var seen := {}
 	var planes: Array = camera.get_frustum() if anim_cull and is_instance_valid(camera) and camera.is_inside_tree() else []
 	anim_active = 0

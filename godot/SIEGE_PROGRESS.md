@@ -1099,3 +1099,17 @@ K2/K3 notes (0.17.0)
   on the river (emission -> glow), projectiles and spark FX brighter so the glow blooms (_bright; rings/decals
   untouched), wall torches in each dungeon (RPG Tools torch, flickering OmniLight + flame). Checked with
   FB_FORCE_HQ (glints were first far too dense -> threshold 0.58-0.64; motes 0.16 m; torch 2.2x).
+
+# 0.27.0 (Kevin: "make the water look much more realistic, like actually simulated water; let players walk through
+# it but much slower; realistic physics on water that creates wakes")
+- Wading: no river bank walls (Land.walls skips them); Sim.water_depth(p) = WATER_Y - height_at (0..0.5 m, the bed
+  is at -0.95); move_mult eases to WATER_MOVE 0.45 by 0.35 m depth (carriers too); river nav cells cost 2.5, so a
+  path near a bridge takes it. Bridge rails still block. Protocol v16. sim smoke "wading": across 11 m in 3.9 s
+  (2.4 s on land); next to a bridge the path stays dry.
+- Simulated water (High-quality graphics): a 512x52 height field over the river (x -34..34, ~13 cm cells) stepped
+  each frame on the GPU with the wave equation (two SubViewports ping-pong, HDR 2D: R = now, G = a step ago,
+  damping 0.984); each wading unit adds a Gaussian push scaled by its speed (16 max), a splash + spray when it steps
+  in -- wakes, rings and bank reflections come out of the physics. New water shader: normals from the field's
+  slopes plus flowing detail, deep/shallow colour, sky reflection at grazing angles (fresnel), see-through (bed and
+  legs show), shore foam and foam on crests, sparse glints. Tuned on renders: first pass foamed everywhere
+  (drops halved, crest foam 0.045-0.11, ripple shading x15). Without High-quality graphics: the old water, still wadeable.

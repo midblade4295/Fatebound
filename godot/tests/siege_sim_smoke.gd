@@ -1,4 +1,5 @@
 extends SceneTree
+const Land = preload("res://scripts/siege/siege_land.gd")
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 const Castle = preload("res://scripts/siege/siege_castle.gd")
 
@@ -243,6 +244,34 @@ func _init() -> void:
 	var outp: PackedVector2Array = gs.find_path(0, (eg2.c as Vector2) + inw2 * 3.0, (eg2.c as Vector2) - inw2 * 6.0)
 	assert(outp.size() > 0 and outp[outp.size() - 1].distance_to((eg2.c as Vector2) - inw2 * 6.0) < 1.5 and outp.size() < 14, "a path from inside goes out through the gate (%d steps)" % outp.size())
 	print("one-way gates ok")
+	# Wading (Round 33): no bank walls -- a unit walks across the river where there's no bridge, but much slower than
+	# on land; a path between the banks next to a bridge still takes the bridge.
+	var ws = Sim.new()
+	ws.setup(4, 29)
+	var wu: Dictionary = ws.units.filter(func(x): return x.team == 0)[1]
+	for u in ws.units:
+		u.bot = false
+		u.move = Vector2.ZERO
+		if u.id != wu.id: u.pos = Sim.spawn(u.team)
+	ws._set_class(wu, "knight", false)
+	var cz: float = Land.river_c(10.0)
+	wu.pos = Vector2(10.0, cz - 5.5)
+	var t_cross := -1.0
+	var land_speed := float(ws.stat(wu, "speed"))
+	for i in int(12.0 / Sim.TICK):
+		wu.move = Vector2(0.0, 1.0)
+		ws.step(Sim.TICK)
+		if t_cross < 0.0 and (wu.pos as Vector2).y > cz + 5.5:
+			t_cross = ws.time
+	assert(t_cross > 0.0, "a knight wades across the river where there's no bridge")
+	var on_land := 11.0 / land_speed
+	assert(t_cross > on_land * 1.6, "wading is much slower than walking (%.1f s vs %.1f s on land)" % [t_cross, on_land])
+	var bpath: PackedVector2Array = ws.find_path(0, Vector2(1.5, Land.river_c(1.5) - 6.0), Vector2(1.5, Land.river_c(1.5) + 6.0))
+	var waded := 0
+	for q in bpath:
+		if Sim.water_depth(q) > 0.15: waded += 1
+	assert(waded == 0, "next to a bridge the path takes the bridge (%d wet steps)" % waded)
+	print("wading ok (across in %.1f s vs %.1f s on land)" % [t_cross, on_land])
 	# Ladder climbing (Round 25): over a ladder a unit goes up the rungs to the wall top, over, and down inside,
 	# slower on the rungs.
 	var ls = Sim.new()

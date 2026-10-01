@@ -274,8 +274,9 @@ static func walls() -> Array:
 	# {a, b, r, team:-1, kind}: "river" banks (units stay out of the water, arrows fly over),
 	# bridge "rail"s, and "ledge" faces of the terraces (gaps where the ramps are) + ramp sides.
 	var out := []
-	# River banks, broken at the bridges.
-	for side in [-1.0, 1.0]:
+	# River banks: none since Round 33 (Kevin: "let players walk through it, but much slower") -- the river is
+	# waded (Sim.move_mult). The loop stays for the record, skipped.
+	for side in ([] as Array):
 		var pts := []
 		var x := -HALF_W - 1.0
 		while x <= HALF_W + 1.0:

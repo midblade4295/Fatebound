@@ -89,6 +89,8 @@ const LADDER_COST := 8
 const LADDER_BUILD := 3.0
 const LADDER_HP := 250.0
 const LADDER_HALF := 1.1          # half-width of the passage along the wall
+const WATER_MOVE := 0.45         # wading speed in the river (Round 33)
+const WATER_NAV_COST := 2.5      # river cells cost this much in the nav grid: bots still prefer a nearby bridge
 const LADDER_CLIMB := 0.5         # (old flat crossing speed; the climb now goes by ladder_depth, below)
 # Climbing (Round 25, Kevin: "when players use a ladder they climb up it and over the wall"): the ladder stands
 # 1.35 m out from the wall and reaches its top; climbers go up the rungs, over the top, and drop down inside.
@@ -534,6 +536,14 @@ func _build_nav() -> void:
 	for c in solid:
 		for t in 2:
 			(nav[t] as AStarGrid2D).set_point_solid(c, true)
+	# The river is walkable but slow: its cells cost more, so a path crosses at a bridge unless one is far.
+	var grid0: AStarGrid2D = nav[0]
+	for ix in range(grid0.region.position.x, grid0.region.end.x):
+		for iz in range(grid0.region.position.y, grid0.region.end.y):
+			var cc := Vector2i(ix, iz)
+			if water_depth(nav_point(cc)) > 0.15:
+				for t in 2:
+					(nav[t] as AStarGrid2D).set_point_weight_scale(cc, WATER_NAV_COST)
 	_gate_cells.clear()
 	for g in gates:
 		_gate_cells.append(_cells_across_segment(g.a, g.b, float(g.get("r", WALL_R)) + UNIT_R * 0.9))
@@ -1675,8 +1685,16 @@ func _step_unit(u: Dictionary, dt: float) -> void:
 # unit itself. Server-driven states (dead, stunned, carrying, lunging, tasks) stay server-side.
 const DODGE_SPEED := 13.0
 
+static func water_depth(p: Vector2) -> float:
+	# How far the river's surface is above the ground here (0 on land and on the bridges, ~0.5 m mid-channel).
+	return maxf(0.0, Land.WATER_Y - height_at(p))
+
 func move_mult(u: Dictionary, mult := 1.0) -> float:
 	# Speed multipliers for free movement (not the Oracle carry, handled by the caller).
+	# Wading (Round 33): slower the deeper it gets, down to WATER_MOVE past ~0.35 m.
+	var wd := water_depth(u.pos)
+	if wd > 0.0:
+		mult *= lerpf(1.0, WATER_MOVE, clampf(wd / 0.35, 0.0, 1.0))
 	if u.offering:
 		mult = minf(mult, 0.9)
 	if not ladders.is_empty():
