@@ -224,7 +224,10 @@ func _stage() -> void:
 					u.bot = false
 					u.move = Vector2.ZERO
 					u.pos = Sim.spawn(u.team)
-			beats = [[0.3, victim.id, "attack"], [1.05, victim.id, "attack"], [1.8, victim.id, "attack"],
+			# Her shots don't auto-aim (aiming turned her round to face the nearest enemy -- the rogue -- so he
+			# stabbed her from the front; Kevin), and her facing stays locked away from him.
+			set_meta("away", [victim.id, victim.face])
+			beats = [[0.3, victim.id, "shoot"], [1.05, victim.id, "shoot"], [1.8, victim.id, "shoot"],
 				[1.9, rogue2.id, "stop"], [1.95, rogue2.id, "attack"], [2.55, rogue2.id, "attack"]]
 			cam_a = [_v(spot3 + Vector2(4.2, -2.6), 2.2), _v(spot3 + Vector2(-0.3, 1.6), 1.0)]
 			cam_b = [_v(spot3 + Vector2(3.0, -1.6), 1.9), _v(spot3 + Vector2(-0.2, 0.9), 1.1)]
@@ -453,6 +456,9 @@ func _process(delta: float) -> bool:
 				s.act(bu.id, "interact")
 			elif str(b[2]) == "stop":
 				bu.move = Vector2.ZERO
+			elif str(b[2]) == "shoot":
+				bu.cd_attack = 0.0
+				s._start_attack(bu, "attack", false)
 			elif str(b[2]) == "attack":
 				bu.cd_attack = 0.0
 				s._start_attack(bu, "attack")
@@ -460,6 +466,11 @@ func _process(delta: float) -> bool:
 				walkers[bu.id] = Vector2(-1.0, 0.35).normalized() * 0.6
 			elif str(b[2]) == "climb":
 				walkers[bu.id] = ((Vector2(-14.0, -38.0)) - (bu.pos as Vector2)).normalized()
+	if shot == "backstab" and has_meta("away"):
+		var aw: Array = get_meta("away")
+		var vu: Dictionary = s.by_id[str(aw[0])]
+		if vu.state != "dead":
+			vu.face = float(aw[1])
 	if shot == "heroes" and has_meta("hero") and not has_meta("transformed"):
 		# The hat goes on: stop at the door, turn to the camera in a burst of gold, then a swing.
 		var hu: Dictionary = s.by_id[str(get_meta("hero"))]

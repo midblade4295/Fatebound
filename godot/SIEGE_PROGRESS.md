@@ -1020,3 +1020,9 @@ K2/K3 notes (0.17.0)
 - View: units on a ladder are lifted by ladder_lift and play the arms-up Jump_Idle pose (the rigs have no climb).
 - sim smoke "ladder climb": a knight peaks at 3.05 m, takes 2.1 s across, ends inside their courtyard.
 - Protocol v14 (movement rule: server and client prediction must agree).
+
+# Trailer 2: the last three Herald lines; the backstab from behind
+- Kevin's 3-line read split (12 gather, 13 build, 14 backstab; line 12 accepted after review: heard "drop would
+  mind ... would mind stone"); now in tools/trailer2_vo. All 13 lines in the cut, no overlaps, -0.8 dBFS.
+- Backstab: the archer turned round to face the rogue before he struck -- _start_attack aims at the nearest enemy.
+  Her shots now fire without aim ("shoot" beat, aim=false) and her facing stays locked away from him.
