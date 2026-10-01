@@ -998,3 +998,15 @@ K2/K3 notes (0.17.0)
 - 50.0 s; title at 42.5 s = the song's drop, so the song now plays from its start (lead pad if ever negative).
 - VO by shot name (VO_FILE): 1..11 = Kevin's read, 12 gather / 13 build pending: "Chop wood! Mine stone!",
   "Build ladders and upgrade your castle!".
+
+# Trailer 2 (Kevin: ladders must clearly be for getting INTO their castle; the hat villager ran into the wall --
+# show him equipping the hat and becoming the hero; replace the spin with a rogue's backstab)
+- build: the ladder's 3 s build mostly happens before recording (it goes up 0.5 s in), the builder steps aside,
+  a knight, a barbarian and a ranger climb over one after another, and the camera cranes up over the wall as they
+  drop into the enemy courtyard. "BUILD LADDERS. CLIMB INTO THEIR CASTLE."
+- heroes: when the villager becomes a Knight at the Barracks door he stops, turns to the camera in a gold ring and
+  sparkle burst, then swings (closer, frontal camera).
+- backstab replaces whirl: their ranger shoots the other way; our rogue creeps up behind (move 0.3) and the first
+  stab finishes her (hp 12). "STAB THEM IN THE BACK". Shots trimmed (USE) so the title (41.7 s) stays on the drop.
+- VO pending: 12 gather "Chop wood! Mine stone!", 13 build "Build ladders and climb into their castle!",
+  14 backstab "Sneak up... and stab them in the back!". Line 7 (the spin) is unused now.

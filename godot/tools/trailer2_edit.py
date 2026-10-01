@@ -20,19 +20,22 @@ W, H = 1920, 1080
 # clash, the goal (they stole our King), hats (a villager becomes a Knight; all seven classes), the action,
 # fattening their King, carrying ours home, how you win (the throne), the reveal.
 # Round 23 (Kevin: "should also include mechanics about gathering resources"): gather + build after the heroes.
-SHOTS = ["clash", "captive", "heroes", "lineup", "gather", "build", "assault", "rampart", "whirl", "feast", "carry",
+# Round 24 (Kevin): the ladder shot shows climbing INTO their castle; the hat shot shows the transformation; the
+# whirlwind is replaced by a rogue's backstab.
+SHOTS = ["clash", "captive", "heroes", "lineup", "gather", "build", "assault", "rampart", "backstab", "feast", "carry",
          "throne", "reveal"]
-LENGTH = {"clash": 4.5, "captive": 4.0, "heroes": 4.0, "lineup": 4.0, "gather": 4.0, "build": 4.5, "assault": 5.5,
-          "rampart": 4.0, "whirl": 3.0, "feast": 4.0, "carry": 5.0, "throne": 4.0, "reveal": 9.0}
+LENGTH = {"clash": 4.5, "captive": 4.0, "heroes": 4.3, "lineup": 4.0, "gather": 4.0, "build": 4.9, "assault": 5.5,
+          "rampart": 4.0, "backstab": 4.0, "feast": 4.0, "carry": 5.0, "throne": 4.0, "reveal": 9.0}
 # The Herald's recordings by shot (files 1..11 are Kevin's first trailer read; 12, 13 the economy lines).
 VO_FILE = {"clash": 1, "captive": 2, "heroes": 3, "lineup": 4, "assault": 5, "rampart": 6, "whirl": 7, "feast": 8,
-           "carry": 9, "throne": 10, "reveal": 11, "gather": 12, "build": 13}
+           "carry": 9, "throne": 10, "reveal": 11, "gather": 12, "build": 13, "backstab": 14}
 # Shots used shorter than they were rendered (trimmed from the start + HEAD).
-USE = {"captive": 3.6, "heroes": 3.4, "lineup": 3.8, "gather": 3.7, "build": 4.3, "assault": 4.6, "rampart": 3.6, "whirl": 2.9, "feast": 3.8,
-       "carry": 4.2, "throne": 3.8}
+# (Trimmed so the title still lands on the song's drop at 42.5 s with the song playing from ~0.8 s.)
+USE = {"clash": 4.2, "captive": 3.3, "heroes": 3.9, "lineup": 3.4, "gather": 3.6, "build": 4.6, "assault": 4.2,
+       "rampart": 3.3, "backstab": 3.6, "feast": 3.6, "carry": 4.0, "throne": 3.5}
 CAPTIONS = {"clash": "16 VS 16 CASTLE SIEGE", "captive": "THEY STOLE OUR KING!", "heroes": "GRAB A HAT...",
             "lineup": "...BECOME A HERO", "gather": "CHOP WOOD. MINE STONE.",
-            "build": "BUILD LADDERS. UPGRADE YOUR CASTLE.", "assault": "STORM THEIR CASTLE", "rampart": "RAIN ARROWS FROM THE WALLS",
+            "build": "BUILD LADDERS. CLIMB INTO THEIR CASTLE.", "backstab": "STAB THEM IN THE BACK", "assault": "STORM THEIR CASTLE", "rampart": "RAIN ARROWS FROM THE WALLS",
             "whirl": "SPIN! SMASH! REPEAT!", "feast": "STUFF THEIR KING WITH FISH", "carry": "CARRY YOUR KING HOME",
             "throne": "FIRST TO 3 RESCUES WINS"}
 HEAD = 0.1          # skip the frames before each shot is staged

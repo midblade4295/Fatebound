@@ -10,7 +10,7 @@ extends SceneTree
 const Mode = preload("res://scripts/siege/siege_mode.gd")
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 const Castle = preload("res://scripts/siege/siege_castle.gd")
-const LENGTH := {"dawn": 5.0, "clash": 4.5, "captive": 4.0, "heroes": 4.0, "lineup": 4.0, "gather": 4.0, "build": 4.5, "assault": 5.5,
+const LENGTH := {"dawn": 5.0, "clash": 4.5, "captive": 4.0, "heroes": 4.3, "lineup": 4.0, "gather": 4.0, "build": 4.9, "backstab": 4.0, "assault": 5.5,
 	"rampart": 4.0, "whirl": 3.0, "feast": 4.0, "carry": 5.0, "throne": 4.0, "reveal": 9.0}
 const SUN_DIR := Vector3(0.0, 0.16, -1.0)        # where the reveal's sun sits: low, beyond the enemy castle
 var mode
@@ -113,8 +113,9 @@ func _stage() -> void:
 					u.pos = Sim.spawn(u.team) if u.team == 1 else Sim._c(0, Vector2(6.0, 12.0))
 					u.bot = false
 					u.move = Vector2.ZERO
-			cam_a = [_v(door + Vector2(6.5, 4.8), 3.6), _v(door + Vector2(1.2, 0.4), 1.2)]
-			cam_b = [_v(door + Vector2(4.2, 3.4), 2.7), _v(door + Vector2(0.6, 0.0), 1.2)]
+			set_meta("hero", hero.id)
+			cam_a = [_v(door + Vector2(4.6, 3.4), 2.8), _v(door + Vector2(1.6, 0.4), 1.1)]
+			cam_b = [_v(door + Vector2(3.4, 2.4), 2.2), _v(door + Vector2(1.0, 0.2), 1.2)]
 		"lineup":
 			# Every hat is a hero: the seven classes in a row, the camera sliding along them.
 			var classes := ["knight", "barbarian", "rogue", "ranger", "mage", "priest", "worker"]
@@ -169,29 +170,64 @@ func _stage() -> void:
 			var mid2: Vector2 = ((best_w.p as Vector2) + (best_s.p as Vector2)) * 0.5
 			orbit = {"c": _v(mid2, 0.9), "r": 7.5, "h": 3.6, "a0": 2.6, "a1": 3.5}
 		"build":
-			# Spending it: a worker raises a ladder against their wall (3 s), and a knight heads up it.
+			# Ladders get you INTO their castle (Kevin): the ladder goes up half a second in (most of the 3 s build
+			# happens before recording), the builder steps aside, and three heroes climb over and drop inside
+			# while the camera cranes up over the wall after them.
 			s.stock[0].wood = 60
 			var spot2 := Vector2(-14.0, -36.3)
-			var builder: Dictionary = s.units.filter(func(x): return x.team == 0 and x.id != me.id)[0]
-			var climber: Dictionary = s.units.filter(func(x): return x.team == 0 and x.id != me.id)[1]
+			var team0: Array = s.units.filter(func(x): return x.team == 0 and x.id != me.id)
+			var builder: Dictionary = team0[0]
 			s._set_class(builder, "worker", false)
 			builder.bot = false
 			builder.pos = spot2
 			builder.face = Sim.angle_of(Vector2(0.0, -1.0))
-			s._set_class(climber, "knight", true)
-			climber.bot = false
-			climber.pos = spot2 + Vector2(3.4, 2.6)
+			var climbers := []
+			for k5 in 3:
+				var c5: Dictionary = team0[k5 + 1]
+				s._set_class(c5, ["knight", "barbarian", "ranger"][k5], k5 == 0)
+				c5.bot = false
+				c5.pos = spot2 + Vector2(1.8 + k5 * 1.1, 2.0 + k5 * 1.3)
+				climbers.append(c5)
 			for u in s.units:
-				if u.id != builder.id and u.id != climber.id:
+				if u.id != builder.id and not climbers.has(u):
 					u.bot = false
 					u.move = Vector2.ZERO
 					u.pos = Sim.spawn(u.team)
 			s.act(builder.id, "interact")
-			# Once it's up the builder steps aside and the knight heads up it; the camera from the front-right so
-			# the ladder isn't hidden behind them (standing at its foot, they hid it).
-			beats = [[3.05, builder.id, "aside"], [3.2, climber.id, "climb"]]
-			cam_a = [_v(spot2 + Vector2(5.5, 5.0), 3.4), _v(Vector2(-14.0, -37.6), 1.6)]
-			cam_b = [_v(spot2 + Vector2(4.0, 4.2), 3.0), _v(Vector2(-14.0, -37.6), 1.9)]
+			for i in int(2.5 / Sim.TICK):
+				s.step(Sim.TICK)
+			beats = [[0.65, builder.id, "aside"]]
+			for k6 in 3:
+				beats.append([0.75 + k6 * 0.35, climbers[k6].id, "climb"])
+			cam_a = [_v(spot2 + Vector2(5.0, 4.8), 3.2), _v(Vector2(-14.0, -37.6), 1.6)]
+			cam_b = [_v(spot2 + Vector2(2.5, 1.2), 8.5), _v(Vector2(-14.6, -42.5), 0.4)]
+		"backstab":
+			# Fight dirty (Kevin: "a rogue sneaking up and stabbing someone in the back"): their archer is busy
+			# shooting the other way; our rogue creeps up behind her and stabs.
+			var spot3 := Vector2(8.0, 14.0)
+			var victim: Dictionary = s.units.filter(func(x): return x.team == 1)[0]
+			var rogue2: Dictionary = s.units.filter(func(x): return x.team == 0 and x.id != me.id)[0]
+			s._set_class(victim, "ranger", false)
+			victim.bot = false
+			victim.move = Vector2.ZERO
+			victim.pos = spot3
+			victim.face = Sim.angle_of(Vector2(0.25, -1.0))          # looking (and shooting) away
+			victim.hp = 12.0                                         # the first stab in the back finishes her
+			s._set_class(rogue2, "rogue", false)
+			rogue2.bot = false
+			rogue2.pos = spot3 + Vector2(-0.6, 4.4)
+			var creep2: Vector2 = (spot3 + Vector2(-0.1, 0.95) - (rogue2.pos as Vector2)).normalized() * 0.3
+			walkers[rogue2.id] = creep2
+			rogue2.face = Sim.angle_of(creep2)
+			for u in s.units:
+				if u.id != victim.id and u.id != rogue2.id:
+					u.bot = false
+					u.move = Vector2.ZERO
+					u.pos = Sim.spawn(u.team)
+			beats = [[0.3, victim.id, "attack"], [1.05, victim.id, "attack"], [1.8, victim.id, "attack"],
+				[1.9, rogue2.id, "stop"], [1.95, rogue2.id, "attack"], [2.55, rogue2.id, "attack"]]
+			cam_a = [_v(spot3 + Vector2(4.2, -2.6), 2.2), _v(spot3 + Vector2(-0.3, 1.6), 1.0)]
+			cam_b = [_v(spot3 + Vector2(3.0, -1.6), 1.9), _v(spot3 + Vector2(-0.2, 0.9), 1.1)]
 		"clash":
 			# Sixteen against sixteen: both armies charge into each other on our side of the river.
 			var mix2 := ["knight", "barbarian", "ranger", "rogue", "mage", "priest", "knight", "barbarian"]
@@ -415,10 +451,29 @@ func _process(delta: float) -> bool:
 			bu.move = Vector2.ZERO
 			if str(b[2]) == "feed":
 				s.act(bu.id, "interact")
+			elif str(b[2]) == "stop":
+				bu.move = Vector2.ZERO
+			elif str(b[2]) == "attack":
+				bu.cd_attack = 0.0
+				s._start_attack(bu, "attack")
 			elif str(b[2]) == "aside":
 				walkers[bu.id] = Vector2(-1.0, 0.35).normalized() * 0.6
 			elif str(b[2]) == "climb":
 				walkers[bu.id] = ((Vector2(-14.0, -38.0)) - (bu.pos as Vector2)).normalized()
+	if shot == "heroes" and has_meta("hero") and not has_meta("transformed"):
+		# The hat goes on: stop at the door, turn to the camera in a burst of gold, then a swing.
+		var hu: Dictionary = s.by_id[str(get_meta("hero"))]
+		if hu.cls != "villager":
+			set_meta("transformed", true)
+			walkers.erase(hu.id)
+			hu.move = Vector2.ZERO
+			var eye: Vector3 = mode.view.cam_override[0] if not mode.view.cam_override.is_empty() else Vector3.ZERO
+			hu.face = Sim.angle_of(Vector2(eye.x, eye.z) - (hu.pos as Vector2))
+			var hp3 := Vector3(hu.pos.x, Sim.height_at(hu.pos), hu.pos.y)
+			mode.view.ring_at(hp3 + Vector3(0, 0.08, 0), Color("#ffd257"), 2.2, 0.7)
+			for k7 in 14:
+				mode.view.spark(hp3 + Vector3(randf_range(-0.7, 0.7), 0.4 + randf() * 1.8, randf_range(-0.7, 0.7)), Color("#ffe08a"))
+			beats.append([t + 0.55, hu.id, "attack"])
 	if shot == "throne" and int(s.score[0]) > 0 and not has_meta("seated"):
 		set_meta("seated", true)
 		var ok: Dictionary = s.oracles[0]
