@@ -193,7 +193,7 @@ const CLASSES := {
 		"ranged":false,"ability":"","ab_cd":0.0,"carry":0.65,"gate":0.5},
 	"worker": {"name":"Worker","hp":80,"speed":5.0,"dmg":12,"range":1.5,"arc":0.4,"windup":0.28,"recover":0.4,
 		"ranged":false,"ability":"","ab_cd":0.0,"carry":0.65,"gate":1.2},
-	"knight": {"name":"Knight","hp":150,"speed":4.6,"dmg":21,"range":1.7,"arc":0.4,"windup":0.24,"recover":0.4,
+	"knight": {"name":"Knight","hp":150,"speed":4.6,"dmg":21,"range":2.0,"arc":0.4,"windup":0.24,"recover":0.4,
 		"ranged":false,"ability":"block","ab_cd":0.0,"carry":0.65,"gate":1.0},
 	"barbarian": {"name":"Barbarian","hp":130,"speed":4.8,"dmg":26,"range":2.0,"arc":0.25,"windup":0.36,"recover":0.45,
 		"ranged":false,"ability":"spin","ab_cd":7.0,"carry":0.65,"gate":1.6},
@@ -2842,6 +2842,8 @@ func _think_fighter(u: Dictionary) -> void:
 	else:
 		goal = mine.pos
 	var aggro := {"raid":3.5,"escort":6.5,"defend":8.0}.get(u.role, 5.0) as float
+	if u.cls == "knight":
+		aggro += KNIGHT_AGGRO                 # 0.31.7: bot Knights (mostly escorts) step in to fight instead of standing by
 	if c.ranged:
 		aggro = maxf(aggro, float(c.range) * (0.6 if u.role == "raid" else 0.95))
 	var foe := nearest_enemy(u, aggro)
@@ -3594,3 +3596,8 @@ func is_fish_runner(u: Dictionary) -> bool:
 				ids.append(o.id)
 		_fish_runners[u.team] = ids
 	return (_fish_runners[u.team] as Array).has(u.id)
+
+
+# 0.31.7 (Kevin: make the bot Knight change). Measured: bot Knights hit 80 % of their swings and block under 1 % of the time --
+# they just swung a quarter as often as Rogues because, as escorts, they only engaged within 6.5 m. They now engage further.
+const KNIGHT_AGGRO := 3.0

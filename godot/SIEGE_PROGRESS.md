@@ -1424,3 +1424,11 @@ K2/K3 notes (0.17.0)
   every match, setting out 3 s after a gate alarm (was 6 s). Seeds 11/22: 10/10 and 12/11 feeds per team. (2 per team left
   too few on the rampart: the rampart-bots rule test fell to 1 of 3.)
 - Quick suite: all pass except siege_sim_smoke (seeds 11/22 0-0; heavier captive Kings make rescues harder).
+
+# 0.31.7 (Kevin: "I meant make that knight change")
+- Measured first (seed 11, 5 min): bot Knights hit 80 % of their swings and block < 1 % of the time; they simply swung
+  half as often as Barbarians/Rogues because as escorts they only engaged within 6.5 m.
+- KNIGHT_AGGRO 3.0: bot Knights engage 3 m further out (escort 9.5, defend 11, raid 6.5). Same seed: 6.3 -> 12.4 swings/min,
+  5.1 -> 10.7 hits/min (Barbarian 17.5, Rogue 14.1 hits/min).
+- Knight reach 1.7 -> 2.0 m (class table, seeds 11/22/44: Knight K/D 1.08 -> 1.31, gate damage 9 -> 32/min).
+- Quick suite: all pass except siege_sim_smoke (seeds 11/22 0-0; 7 King pickups, 2 carried back, no rescue).
