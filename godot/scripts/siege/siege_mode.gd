@@ -548,6 +548,13 @@ var _snd_rng := RandomNumberGenerator.new()
 var _step_t := 0.0
 var _step_last := Vector2.INF
 var _amb := {}
+# Match music (0.30.9): the trailers' song, looping under everything. It sits well below the effects and ducks
+# a further ~6 dB while loud things happen near you (_duck: the loudest recent nearby cue, easing back over ~1 s).
+const MUSIC_PATH := "res://assets/music/match.ogg"
+const MUSIC_GAIN := 0.10          # x master x music; the track is mastered to -16 LUFS (tools/music_prep.sh)
+const MUSIC_DUCK := 0.5           # at a full-volume cue nearby the music drops to half (-6 dB)
+var _duck := 0.0
+var _music: AudioStreamPlayer = null
 
 func _listener() -> Vector2:
 	var me: Dictionary = sim.by_id.get(str(hud.player_id), {})
@@ -564,6 +571,7 @@ func _cue(base: String, n: int, at: Vector2, reach := HEAR_R, always := false, g
 	var v := clampf(1.0 - (d - 6.0) / maxf(reach - 6.0, 1.0), 0.0, 1.0)
 	var cue := base if n <= 1 else "%s%d" % [base, 1 + _snd_rng.randi() % n]
 	audio.play(cue, false, v * gain)
+	_duck = maxf(_duck, v * gain)
 
 func _unit_pos(id: Variant) -> Vector2:
 	var u: Dictionary = sim.by_id.get(str(id), {})
@@ -714,3 +722,23 @@ func _ambience(delta: float) -> void:
 		var g := float(want.get(k, 0.0)) * base
 		var cur := db_to_linear(pl.volume_db)
 		pl.volume_db = linear_to_db(maxf(lerpf(cur, g, minf(1.0, delta * 3.0)), 0.00001))
+	_music_step(delta, muted, lv)
+
+func _music_step(delta: float, muted: bool, lv: Dictionary) -> void:
+	if _music == null:
+		if not ResourceLoader.exists(MUSIC_PATH):
+			return
+		var st = load(MUSIC_PATH)
+		if st == null:
+			return
+		st.loop = true
+		_music = AudioStreamPlayer.new()
+		_music.stream = st
+		_music.volume_db = -80.0
+		add_child(_music)
+		_music.play()
+	_duck = maxf(0.0, _duck - delta * 1.1)
+	var target := 0.0 if muted else MUSIC_GAIN * float(lv.get("master", 0.75)) * float(lv.get("music", 0.6)) * (1.0 - MUSIC_DUCK * clampf(_duck, 0.0, 1.0))
+	var cur := db_to_linear(_music.volume_db)
+	var k := minf(1.0, delta * (12.0 if target < cur else 2.5))      # duck fast, come back slowly
+	_music.volume_db = linear_to_db(maxf(lerpf(cur, target, k), 0.00001))

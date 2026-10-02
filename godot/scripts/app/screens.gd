@@ -588,14 +588,14 @@ static func settings(app, root: VBoxContainer) -> void:
 	# Audio + graphics
 	var au := UI.card(root)
 	section(au, "SOUND & DISPLAY", "", "gear")
-	for pair in [["master", "Master volume"], ["sfx", "Effects"]]:
+	for pair in [["master", "Master volume"], ["sfx", "Effects"], ["music", "Music"]]:
 		var key: String = pair[0]
 		UI.label(au, str(pair[1]), 12, UI.MUTED)
 		var sl := HSlider.new()
 		sl.min_value = 0.0
 		sl.max_value = 1.0
 		sl.step = 0.05
-		sl.value = float(d.settings.get(key, 0.8))
+		sl.value = float(d.settings.get(key, 0.6 if key == "music" else 0.8))
 		sl.set_meta("action_key", "slider_" + key)
 		sl.value_changed.connect(func(v: float):
 			d.settings[key] = v

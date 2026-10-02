@@ -101,6 +101,23 @@ func _process(_d: float) -> bool:
 		if float(v) < 0.99:
 			quiet += 1
 	check(quiet > 0, "sounds further off play quieter (%d of %d)" % [quiet, rec.vols.size()])
+	# Music (when a track is installed): plays under the effects and ducks after a loud cue next to you.
+	if ResourceLoader.exists(mode.MUSIC_PATH):
+		mode._duck = 0.0
+		for i in 120:
+			mode._ambience(0.05)
+		var calm: float = db_to_linear(mode._music.volume_db)
+		mode._cue("tm_sword_hit", 3, mode._listener(), 24.0, true)
+		for i in 6:
+			mode._ambience(0.05)
+		var ducked: float = db_to_linear(mode._music.volume_db)
+		for i in 80:
+			mode._ambience(0.05)
+		var back: float = db_to_linear(mode._music.volume_db)
+		check(mode._music.stream != null and calm > 0.0, "the match music is loaded and audible (%.3f)" % calm)
+		check(ducked < calm * 0.7 and back > ducked * 1.3, "it ducks under a nearby hit and comes back (%.3f -> %.3f -> %.3f)" % [calm, ducked, back])
+	else:
+		print("(no match music installed: music checks skipped)")
 	print("MATCH_AUDIO_PASS" if fails.is_empty() else "MATCH_AUDIO_FAIL %d" % fails.size())
 	quit()
 	return true

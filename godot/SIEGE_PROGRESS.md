@@ -1298,3 +1298,14 @@ K2/K3 notes (0.17.0)
   waterfall near the cliff-side falls; follows master x sfx volume, muted/unfocused silences it.
 - native_audio: 16 voices (was 8); play(cue, quiet, vol) volume factor.
 - tests/match_audio_test.gd: cues exist, attacks/hits heard, footsteps per surface, distance fade. Quick suite pass.
+
+# Match music, ready for the song (Kevin: "play the game's music ... not drowning out the sound effects"; "use trailers")
+- The game had no music (a saved "music" setting at 0.6 that nothing used). The trailers' music is Kevin's Suno track
+  Spooky_3.wav, which isn't in the repo -- waiting for it.
+- SiegeMode._music_step: loops res://assets/music/match.ogg if present. Gain MUSIC_GAIN 0.10 x master x music
+  (track normalised to -16 LUFS by tools/music_prep.sh, which also crossfades its end into its start for the loop).
+  Ducking: every placed cue raises _duck to its volume; the music drops by up to MUSIC_DUCK (half, -6 dB) within
+  ~0.1 s and eases back over ~1 s. Muted/unfocused: silent.
+- Settings: a Music slider (Master, Effects, Music); siege_app passes it as audio.levels.music.
+- Checked with a stand-in (the procedural trailer placeholder, not committed): loads, audible, ducks 0.045 -> 0.028
+  under a nearby hit and returns to 0.045. match_audio_test runs those checks when a track is installed.

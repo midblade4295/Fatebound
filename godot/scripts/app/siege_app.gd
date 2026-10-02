@@ -83,7 +83,8 @@ func _ready() -> void:
 func _apply_audio() -> void:
 	var st: Dictionary = profile.d.settings
 	if audio.has_method("set_levels"):
-		audio.set_levels({"master":float(st.get("master", 0.8)), "combat":float(st.get("sfx", 0.8)), "ui":float(st.get("sfx", 0.8))})
+		audio.set_levels({"master":float(st.get("master", 0.8)), "combat":float(st.get("sfx", 0.8)), "ui":float(st.get("sfx", 0.8)),
+			"music":float(st.get("music", 0.6))})
 
 func sfx(cue: String) -> void:
 	if audio != null and audio.has_method("play"):

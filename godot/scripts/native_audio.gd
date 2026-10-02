@@ -50,7 +50,7 @@ func play(cue: String, quiet := false, vol := 1.0) -> void:
             player.play()
             return
 
-var levels:Dictionary={"master":0.75,"combat":0.8,"ui":0.75}
+var levels:Dictionary={"master":0.75,"combat":0.8,"ui":0.75,"music":0.6}
 func set_levels(value:Dictionary)->void:
     for key in levels:
         if value.get(key) is float or value.get(key) is int:levels[key]=clampf(float(value[key]),0,1)
