@@ -1243,3 +1243,15 @@ K2/K3 notes (0.17.0)
 - Walking past the deck's edge (TOWER_TOP_R) while moving outward jumps you down on that side (same as CLIMB
   DOWN); ACTION still works.
 - tower_test: walk about, run off the edge, climb back, arrow launch height/aim distance. Quick suite all pass.
+
+# 0.30.5 (Kevin: the Knight's upgrade is the Crusader, with Hammer Throw)
+- UPGRADE_NAME knight: Paladin -> Crusader (hat shop "Crusader Hats"). ability_of(upgraded knight) = "hammer"
+  (like the Berserker's whirlwind replacing spin): the Crusader trades the shield for Hammer Throw.
+- Hammer Throw: a "hammer" projectile (stepped by _step_hammer, not the arrow code): 9 m out at 17 m/s through
+  everyone in its path, then back to wherever the thrower is now; each enemy hit once out and once back for one
+  swing's damage (stat dmg); walls/gates turn it early; no swinging while it's out; 10 s cooldown (HUD ring uses
+  HAMMER_CD); not from a tower deck. Dies with its thrower. Bots throw at 2+ enemies in a line within 9 m, or one
+  standing back past 3.5 m. View: a glowing gold head on a wooden handle spinning end over end. Protocol v24.
+- Tutorial t_up_done: "Crusader hats!" generated in the Herald's voice (ElevenLabs, eleven_v4, Edward, 14 credits)
+  spliced in place of "Paladin hats!" at the pause; the rest is Kevin's original take (heard back exactly).
+- tests/hammer_test.gd (11 checks) added to the suite. Quick suite all pass (seed 22: red wins 3-0 by rescue).

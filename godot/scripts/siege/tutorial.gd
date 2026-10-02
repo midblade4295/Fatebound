@@ -52,7 +52,7 @@ const STEPS := [
 	{"id": "upgrade", "talk": [
 		["t_up_1", "The treasury has kindly 'found' some materials for you. Go back to the Barracks and press UPGRADE."]],
 		"task": "Upgrade the Knight hats at the Barracks",
-		"done": [["t_up_done", "Paladin hats! Every hat from that shop is fancier now. Upgrades are bought at each hat shop, not the workshop. The workshop is still sulking about it."]]},
+		"done": [["t_up_done", "Crusader hats! Every hat from that shop is fancier now. Upgrades are bought at each hat shop, not the workshop. The workshop is still sulking about it."]]},
 	{"id": "rampart", "talk": [
 		["t_rampart_1", "One more trick for defending. See the walkway on our front wall? Take its stairs up, and your arrows fly right over the wall. Archers adore it. The enemy does not."]]},
 	{"id": "outpost", "talk": [

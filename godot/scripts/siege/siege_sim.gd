@@ -112,7 +112,7 @@ const UPGRADES := {
 		"desc":"+50% gate HP per level, and repairs all gates"},
 	"armory": {"name":"Armory", "max":3, "cost":[{"wood":10,"stone":15},{"wood":20,"stone":25},{"wood":30,"stone":35}],
 		"desc":"+12% HP and damage per level for your fighters"},
-	"hat_knight":    {"name":"Paladin Hats", "max":1, "cost":[{"wood":12,"stone":12}], "desc":"The Knight stand makes Paladin hats"},
+	"hat_knight":    {"name":"Crusader Hats", "max":1, "cost":[{"wood":12,"stone":12}], "desc":"The Knight stand makes Crusader hats: Hammer Throw"},
 	"hat_barbarian": {"name":"Berserker Hats", "max":1, "cost":[{"wood":12,"stone":12}], "desc":"The Barbarian stand makes Berserker hats"},
 	"hat_rogue":     {"name":"Assassin Hats", "max":1, "cost":[{"wood":12,"stone":12}], "desc":"The Rogue stand makes Assassin hats"},
 	"hat_ranger":    {"name":"Sniper Hats", "max":1, "cost":[{"wood":12,"stone":12}], "desc":"The Ranger stand makes Sniper hats"},
@@ -156,7 +156,7 @@ const RESPAWN_HAT_NEAR := 28.0    # (unused since 0.26.0: towers are no longer r
                                   # there. Bot attackers always respawn forward and scavenge (like
                                   # Fat Princess players choosing an outpost spawn).
 const BOT_HAT_SEARCH := 32.0      # villager bots scavenge dropped hats this far (14 m: most expired unused)
-const UPGRADE_NAME := {"knight":"Paladin","barbarian":"Berserker","rogue":"Assassin","ranger":"Sniper","mage":"Archmage","priest":"High Priest"}
+const UPGRADE_NAME := {"knight":"Crusader","barbarian":"Berserker","rogue":"Assassin","ranger":"Sniper","mage":"Archmage","priest":"High Priest"}
 const BEAM_HOLD := 0.22
 # Knight BLOCK (Round 11, Kevin): hold ABILITY -> shield up, walk forward slowly; the shield (a
 # segment in front of the knight) stops every hit whose path crosses it -- for the knight (from the
@@ -164,7 +164,7 @@ const BEAM_HOLD := 0.22
 const BLOCK_HOLD := 0.22
 const BLOCK_MOVE := 0.4
 const SHIELD_FWD := 0.7
-const SHIELD_HALF := 1.3          # Paladin x1.4
+const SHIELD_HALF := 1.3          # (the Knight; its upgrade, the Crusader, throws a hammer instead since 0.30.5)
 # Berserker WHIRLWIND (upgraded barbarian, two-handed sword): 3 s of spinning, moving freely,
 # hitting everything within WHIRL_R every WHIRL_TICK.
 const WHIRL_TIME := 3.0
@@ -845,6 +845,7 @@ func act(id: String, action: String, arg: Variant = null) -> bool:
 			match ability_of(u):
 				"block": return _block(u)
 				"whirlwind": return _whirl(u)
+				"hammer": return _throw_hammer(u)
 				_: return _start_attack(u, "ability")
 		"dodge": return _dodge(u)
 		"interact": return _interact(u)
@@ -882,6 +883,8 @@ func _start_attack(u: Dictionary, kind: String, aim := true) -> bool:
 	if not can_act(u) or u.carrying or u.offering or blocking(u) or whirling(u):
 		return false
 	var on_tower := int(u.get("tower", -1)) >= 0
+	if int(u.get("hammer_out", -1)) >= 0:
+		return false                           # the Crusader's hammer is still flying
 	if on_tower and not TOWER_SHOOTERS.has(u.cls):
 		return false                           # up a tower only archers and mages can attack
 	if kind == "ability":
@@ -909,6 +912,8 @@ func _start_attack(u: Dictionary, kind: String, aim := true) -> bool:
 func ability_of(u: Dictionary) -> String:
 	if u.cls == "barbarian" and u.up:
 		return "whirlwind"
+	if u.cls == "knight" and u.up:
+		return "hammer"                        # the Crusader (0.30.5, Kevin): Hammer Throw instead of the shield
 	return str(CLASSES[u.cls].ability)
 
 func blocking(u: Dictionary) -> bool:
@@ -1436,6 +1441,7 @@ func _kill(src: Dictionary, dst: Dictionary) -> void:
 		_leave_lift(dst, false)
 	if int(dst.tower) >= 0:
 		_free_tower_slot(dst)
+	dst["hammer_out"] = -1                     # its hammer, if out, drops (_step_hammer)
 	dst.hp = 0.0
 	dst.state = "dead"
 	dst.beam = ""
@@ -2086,6 +2092,10 @@ func _step_projectiles(dt: float) -> void:
 	var hit_r2 := (UNIT_R + 0.25) * (UNIT_R + 0.25)
 	for i in range(projectiles.size()-1, -1, -1):
 		var p: Dictionary = projectiles[i]
+		if str(p.kind) == "hammer":
+			if _step_hammer(p, dt, tunit):
+				projectiles.remove_at(i)
+			continue
 		var prev: Vector2 = p.pos
 		p.pos += p.vel * dt
 		var shielded := false
@@ -2621,6 +2631,9 @@ func _think_priest(u: Dictionary) -> bool:
 	return true
 
 func _think_shields(u: Dictionary) -> void:
+	if ability_of(u) == "hammer":
+		_think_hammer(u)
+		return
 	# Knight bots raise the shield toward archers/mages in range, or toward anyone close when hurt;
 	# berserker bots whirl into a crowd. Movement (the goal) is decided by the rest of the brain.
 	if u.carrying:
@@ -3074,3 +3087,83 @@ static func _lane_cell(p: Vector2) -> bool:
 		if bool(b.lane) and absf(p.x - (b.c as Vector2).x) <= float(b.half_w) + 0.6 and absf(p.y - (b.c as Vector2).y) <= float(b.half_len):
 			return true
 	return false
+
+
+# ---------- the Crusader's Hammer Throw (0.30.5, Kevin: the Knight's upgrade) ----------
+# The hammer flies HAMMER_RANGE straight ahead through everyone in its path, then comes back to wherever the
+# Crusader is now, hitting each enemy once going out and once coming back (one swing's damage each time). Walls
+# and gates turn it round early. No swinging while it is out; not from a tower's deck (only bows and spells there).
+const HAMMER_RANGE := 9.0
+const HAMMER_SPEED := 17.0
+const HAMMER_CD := 10.0
+const HAMMER_HIT_R := 0.55
+
+func _throw_hammer(u: Dictionary) -> bool:
+	if not alive(u) or u.stun > 0.0 or u.carrying or u.cd_ability > 0.0 or int(u.get("tower", -1)) >= 0 \
+			or u.state in ["wind", "dodge"] or int(u.get("hammer_out", -1)) >= 0 or u.workshop_open:
+		return false
+	_aim(u, HAMMER_RANGE)
+	var d := dir_of(u.face)
+	var id := _next_proj
+	projectiles.append({"id":id, "team":u.team, "owner":u.id, "pos":u.pos + d * 0.6, "from":u.pos, "vel":d * HAMMER_SPEED,
+		"dmg":float(stat(u, "dmg")), "aoe":0.0, "life":99.0, "kind":"hammer", "gate_mult":0.0, "high":false,
+		"out":true, "trav":0.0, "hit":[]})
+	_event("proj", {"pid":id, "kind":"hammer"})
+	_next_proj += 1
+	u["hammer_out"] = id
+	u.cd_ability = HAMMER_CD
+	u.state = "recover"
+	u.t = 0.25
+	_event("attack", {"id":u.id, "kind":"ability", "ability":"hammer"})
+	return true
+
+func _step_hammer(p: Dictionary, dt: float, tunit: Array) -> bool:
+	# True when the hammer is done (back in hand, or its thrower fell).
+	var owner: Dictionary = by_id.get(p.owner, {})
+	if owner.is_empty() or not alive(owner) or int(owner.get("hammer_out", -1)) != int(p.id):
+		return true
+	var prev: Vector2 = p.pos
+	if bool(p.out):
+		p.pos += (p.vel as Vector2) * dt
+		p.trav = float(p.trav) + (p.vel as Vector2).length() * dt
+		if float(p.trav) >= HAMMER_RANGE or _blocked_point(p.pos, int(p.team), 0.15) \
+				or absf((p.pos as Vector2).x) > HALF_W or absf((p.pos as Vector2).y) > HALF_L:
+			p.pos = prev if _blocked_point(p.pos, int(p.team), 0.15) else p.pos
+			p.out = false
+			p.hit = []                             # on the way back everyone can be hit again
+	else:
+		var to: Vector2 = (owner.pos as Vector2) - (p.pos as Vector2)
+		var step := HAMMER_SPEED * dt
+		if to.length() <= maxf(step, 0.7):
+			owner["hammer_out"] = -1
+			return true
+		p.vel = to.normalized() * HAMMER_SPEED
+		p.pos += (p.vel as Vector2) * dt
+	var r := UNIT_R + HAMMER_HIT_R
+	for o in tunit[1 - int(p.team)]:
+		if (p.hit as Array).has(o.id) or not alive(o):
+			continue
+		if (o.pos as Vector2).distance_to(p.pos) < r:
+			(p.hit as Array).append(o.id)
+			_damage(owner, o, float(p.dmg))
+	return false
+
+func _think_hammer(u: Dictionary) -> void:
+	# Bots throw when two or more enemies line up within reach, or one stands back out of sword range.
+	if u.cd_ability > 0.0 or int(u.get("hammer_out", -1)) >= 0 or u.carrying or int(u.get("tower", -1)) >= 0:
+		return
+	var foe := nearest_enemy(u, HAMMER_RANGE - 0.5)
+	if foe.is_empty():
+		return
+	var d: Vector2 = ((foe.pos as Vector2) - u.pos).normalized()
+	var lined := 0
+	for o in units:
+		if o.team == u.team or not alive(o) or int(o.tower) >= 0:
+			continue
+		var q: Vector2 = (o.pos as Vector2) - u.pos
+		var along := q.dot(d)
+		if along > 0.0 and along < HAMMER_RANGE and absf(q.cross(d)) < 1.0:
+			lined += 1
+	if lined >= 2 or (lined >= 1 and u.pos.distance_to(foe.pos) > 3.5):
+		u.face = angle_of(d)
+		_throw_hammer(u)

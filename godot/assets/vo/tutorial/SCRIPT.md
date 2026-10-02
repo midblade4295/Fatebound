@@ -29,7 +29,7 @@ the text. Generated from `scripts/siege/tutorial.gd` (STEPS) — edit the lines 
 | 17 | `t_ws_done` | workshop — after the task | Workers bring wood and stone here. Spend it on stronger gates, better armor and catapults. Walls don't build themselves. Believe me, I asked. |
 | 18 | `t_ws_worker` | workshop — after the task | Want to be a Worker? Take tools here. Workers chop trees, mine rocks, repair gates and build ladders. Glamorous? No. Essential? Also no. Just kidding. Very essential. |
 | 19 | `t_up_1` | upgrade — before the task | The treasury has kindly 'found' some materials for you. Go back to the Barracks and press UPGRADE. |
-| 20 | `t_up_done` | upgrade — after the task | Paladin hats! Every hat from that shop is fancier now. Upgrades are bought at each hat shop, not the workshop. The workshop is still sulking about it. |
+| 20 | `t_up_done` | upgrade — after the task | Crusader hats! Every hat from that shop is fancier now. Upgrades are bought at each hat shop, not the workshop. The workshop is still sulking about it. |
 | 21 | `t_rampart_1` | rampart | One more trick for defending. See the walkway on our front wall? Take its stairs up, and your arrows fly right over the wall. Archers adore it. The enemy does not. |
 | 22 | `t_out_1` | outpost — before the task | See that tower up on the ledge? That's an outpost. Stand in its ring to capture it. Capturing is mostly standing around looking important. You're a natural. |
 | 23 | `t_out_done` | outpost — after the task | It's ours! Workers can drop resources off here, and it earns us wood and stone. Passive income. The true magic. |

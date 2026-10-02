@@ -3007,6 +3007,10 @@ func _sync_projectiles() -> void:
 				pitch = atan2(top - (1.2 + Sim.height_at(at)), maxf(float(p.dd), 0.5))
 		node.position = Vector3(at.x, y, at.y)
 		node.rotation = Vector3(pitch, Sim.angle_of(p.vel), 0.0)     # +X tips the +Z nose down
+		if str(p.kind) == "hammer":
+			var sp := node.get_node_or_null("spin") as Node3D
+			if sp != null:
+				sp.rotation.x = Time.get_ticks_msec() * 0.018          # end over end
 	for id in proj_nodes.keys():
 		if not live.has(id):
 			proj_nodes[id].queue_free()
@@ -3015,6 +3019,37 @@ func _sync_projectiles() -> void:
 func _make_projectile(kind: String) -> Node3D:
 	var root := Node3D.new()
 	add_child(root)
+	if kind == "hammer":
+		# The Crusader's hammer (0.30.5): a glowing gold head on a wooden handle, spinning end over end.
+		var spin := Node3D.new()
+		spin.name = "spin"
+		root.add_child(spin)
+		var handle := MeshInstance3D.new()
+		var hm := CylinderMesh.new()
+		hm.top_radius = 0.05
+		hm.bottom_radius = 0.06
+		hm.height = 0.8
+		handle.mesh = hm
+		var wood := StandardMaterial3D.new()
+		wood.albedo_color = Color("#7a4e2a")
+		handle.material_override = wood
+		spin.add_child(handle)
+		var head := MeshInstance3D.new()
+		var bm := BoxMesh.new()
+		bm.size = Vector3(0.46, 0.26, 0.26)
+		head.mesh = bm
+		head.position = Vector3(0.0, 0.4, 0.0)
+		var gold := StandardMaterial3D.new()
+		gold.albedo_color = Color("#f2c94c")
+		gold.emission_enabled = true
+		gold.emission = Color("#ffd766")
+		gold.emission_energy_multiplier = 1.3
+		gold.metallic = 0.6
+		gold.roughness = 0.35
+		head.material_override = gold
+		spin.add_child(head)
+		root.scale = Vector3.ONE * 1.25
+		return root
 	if kind == "arrow":
 		var packed := Stage.scene("res://assets/kaykit/weapons/arrow_bow.gltf")
 		if packed != null:

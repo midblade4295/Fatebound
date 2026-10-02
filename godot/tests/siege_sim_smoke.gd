@@ -139,7 +139,7 @@ func _init() -> void:
 	var ally3: Dictionary = us.units.filter(func(x): return x.team == 0 and x.id != "you")[0]
 	ally3.pos = kst.p + Vector2(-0.9, 0)
 	us.step(Sim.TICK)
-	assert(ally3.cls == "knight" and ally3.up, "the upgraded shop now gives Paladin hats")
+	assert(ally3.cls == "knight" and ally3.up, "the upgraded shop now gives Crusader hats")
 	var rst2: Dictionary = us.stands.filter(func(x): return x.team == 0 and x.cls == "rogue")[0]
 	up_me.pos = rst2.p + Vector2(0.9, 0)
 	assert(us.context_action(up_me) == "hat", "at another class's shop the action is NEW HAT")
