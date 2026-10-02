@@ -1463,3 +1463,18 @@ K2/K3 notes (0.17.0)
 - Kept on purpose: CLASS_CAP machinery (empty; class_full()/can_take_class() make re-adding caps a one-line change) and
   the tower-climb code paths.
 - Quick suite: all pass except siege_sim_smoke (seeds 11/22 0-0, 0 pickups this run).
+
+# 0.31.10 (Kevin, screenshot of the dungeon: jail door should sink into the floor; a ring floating above the King;
+# "AI is running in king cell and just running against wall")
+- Measured (seeds 11/22, 10 min): 9 bot defenders spent > 4 s inside their own team's jail cell. Their guard spot was
+  theirs.pos - 2 m "outward", which since the cell moved to the west wing lies behind the cell's back wall: the door lifts
+  for the castle's own team, so they walked in and pushed against that wall. The floating ring in the screenshot is the
+  stuck defender's own ring and health bar inside the wall.
+- Defenders now guard from jail_outside() (1.5 m outside the cell door), spread along it. Fish runners feed the captive
+  through the bars (within JAIL_FEED_R 1.3 m of that spot, or FEED_RADIUS of the King as before) and never enter.
+  Re-measured: 0 own-team units in a cell; one enemy rescuer waiting beside a King in a broken jail (intended: waiting
+  for enough lifters). Feeding still happens (smoke: fed=58).
+- The jail door sinks 2.35 m into the floor when it opens (was rising).
+- 7 rings drawn at a fixed height (King pick-up/drop/recapture, gate and jail breaks, workshop, catapult, throne) now sit on
+  the floor under them (Sim.height_at), so none float in the 1.6 m-deep dungeon.
+- Quick suite: all pass except siege_sim_smoke (rescues 0 in seeds 11/22).

@@ -1179,8 +1179,9 @@ func _offering_action(u: Dictionary) -> String:
 		return ""
 	if u.offering:
 		var captive: Dictionary = oracles[1 - u.team]
-		if captive.state == "cell" and u.pos.distance_to(captive.pos) <= FEED_RADIUS and int(captive.cakes) < MAX_WEIGHT * CAKE_PER_STAGE:
-			return "feed"
+		if captive.state == "cell" and int(captive.cakes) < MAX_WEIGHT * CAKE_PER_STAGE \
+				and (u.pos.distance_to(captive.pos) <= FEED_RADIUS or u.pos.distance_to(jail_outside(u.team)) <= JAIL_FEED_R):
+			return "feed"                              # beside him, or through the bars of his cell door
 		return ""
 	if u.load.n == 0 and u.task.is_empty() and at_river_bank(u.pos):
 		return "fish"
@@ -2803,7 +2804,10 @@ func _think_fighter(u: Dictionary) -> void:
 	elif not ally_carrier.is_empty():
 		goal = ally_carrier.pos + dir_of(u.face) * 2.0
 	elif u.role == "defend":
-		goal = theirs.pos + _inward(u.team) * -2.0
+		# Guard the captive from outside his cell door (0.31.10: the old spot, 2 m from the King, lay behind the cell's
+		# back wall, so defenders walked into the cell and ran into that wall all match).
+		var side := Vector2(-(jail_outside(u.team) - _c(u.team, CELL_C)).normalized().y, (jail_outside(u.team) - _c(u.team, CELL_C)).normalized().x)
+		goal = jail_outside(u.team) + side * (float(absi(hash(u.id)) % 5) - 2.0) * 0.8
 	else:
 		goal = mine.pos
 	var aggro := {"raid":3.5,"escort":6.5,"defend":8.0}.get(u.role, 5.0) as float
@@ -2852,11 +2856,11 @@ func _think_fighter(u: Dictionary) -> void:
 	var captive: Dictionary = theirs
 	if u.offering:
 		if captive.state == "cell" and int(captive.cakes) < MAX_WEIGHT * CAKE_PER_STAGE:
-			if u.pos.distance_to(captive.pos) <= FEED_RADIUS - 0.3:
+			if _offering_action(u) == "feed":
 				u.move = Vector2.ZERO
 				_do_offering(u)
 			else:
-				_nav_to(u, captive.pos, FEED_RADIUS - 0.5)
+				_nav_to(u, jail_outside(u.team), 0.4)        # feed through the bars; never walk into the cell
 			return
 	elif fish_runner and captive.state == "cell" and int(captive.cakes) < MAX_WEIGHT * CAKE_PER_STAGE \
 			and time - float(alarm.at) > 3.0 and enemy_carrier.is_empty() and int(u.get("post", -1)) < 0:
@@ -3575,3 +3579,15 @@ func is_fish_runner(u: Dictionary) -> bool:
 # 0.31.7 (Kevin: make the bot Knight change). Measured: bot Knights hit 80 % of their swings and block under 1 % of the time --
 # they just swung a quarter as often as Rogues because, as escorts, they only engaged within 6.5 m. They now engage further.
 const KNIGHT_AGGRO := 3.0
+
+
+# The jail door's outer side (0.31.10): where bots guard the captive and feed him through the bars.
+const JAIL_FEED_R := 1.3
+
+func jail_outside(castle_team: int) -> Vector2:
+	var cell: Vector2 = _c(castle_team, CELL_C)
+	for g in gates:
+		if int(g.team) == castle_team and str(g.get("kind", "")) == "jail":
+			var c: Vector2 = g.c
+			return c + (c - cell).normalized() * 1.5
+	return cell

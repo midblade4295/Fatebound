@@ -2224,7 +2224,7 @@ func _sync_castle(dt: float) -> void:
 			gn.broken = broken
 			(gn.door as Node3D).visible = not broken
 			gn.open = move_toward(float(gn.open), 1.0 if (g.open and not broken) else 0.0, dt * 2.2)
-			(gn.door as Node3D).position.y = float(gn.y0) + float(gn.open) * 2.25
+			(gn.door as Node3D).position.y = float(gn.y0) - float(gn.open) * 2.35      # sinks into the floor (0.31.10, Kevin)
 			continue
 		if broken != bool(gn.broken):
 			gn.broken = broken
@@ -2787,12 +2787,12 @@ func on_event(e: Dictionary) -> void:
 			if not a.is_empty():
 				ring_at(a.root.position, Color("#fff1a8"), Sim.SANCTUARY_R, 0.7)
 		"boom":
-			ring_at(Vector3(e.pos.x, 0.2, e.pos.y), Color("#ff8a3a"), 1.6, 0.4)
+			ring_at(Vector3(e.pos.x, Sim.height_at(Vector2(e.pos.x, e.pos.y)) + 0.2, e.pos.y), Color("#ff8a3a"), 1.6, 0.4)
 			spark(Vector3(e.pos.x, 0.6, e.pos.y), Color("#ffb04a"))
 		"rescue":
 			var th: Vector2 = Sim.throne(int(e.team))
 			for i in 3:
-				ring_at(Vector3(th.x, 0.1, th.y), GOLD, 2.0 + i * 1.5, 0.8 + i * 0.25)
+				ring_at(Vector3(th.x, Sim.height_at(Vector2(th.x, th.y)) + 0.1, th.y), GOLD, 2.0 + i * 1.5, 0.8 + i * 0.25)
 		"gate_hit":
 			var g: Dictionary = sim.gates[int(e.gate)]
 			var gp: Vector2 = g.c + (Vector2(randf_range(-1.0, 1.0), 0.0))
@@ -2809,7 +2809,7 @@ func on_event(e: Dictionary) -> void:
 				spark(Vector3(g2.c.x + randf_range(-2, 2), gy2 + 0.5 + randf() * 2.5, g2.c.y + randf_range(-1, 1)), Color("#c8b89a"))
 		"gate_rebuilt":
 			var g3: Dictionary = sim.gates[int(e.gate)]
-			ring_at(Vector3(g3.c.x, 0.2, g3.c.y), TEAM_COLORS[int(e.team)], 3.0, 0.8)
+			ring_at(Vector3(g3.c.x, Sim.height_at(Vector2(g3.c.x, g3.c.y)) + 0.2, g3.c.y), TEAM_COLORS[int(e.team)], 3.0, 0.8)
 		"repair":
 			var g4: Dictionary = sim.gates[int(e.gate)]
 			if randf() < 0.5:
@@ -2820,7 +2820,7 @@ func on_event(e: Dictionary) -> void:
 				spark(Vector3(nd.p.x, 1.0, nd.p.y), Color("#c9a26b") if e.kind == "wood" else Color("#cfd3d6"))
 		"deliver":
 			var ws: Vector2 = Sim.workshop(int(e.team))
-			ring_at(Vector3(ws.x, 0.1, ws.y), Color("#9fe07a"), 1.4, 0.5)
+			ring_at(Vector3(ws.x, Sim.height_at(Vector2(ws.x, ws.y)) + 0.1, ws.y), Color("#9fe07a"), 1.4, 0.5)
 		"fed":
 			var fo: Dictionary = sim.oracles[int(e.team)]
 			var fp := Vector3(fo.pos.x, Sim.height_at(fo.pos), fo.pos.y)
@@ -2849,7 +2849,7 @@ func on_event(e: Dictionary) -> void:
 		"upgrade":
 			var ws2: Vector2 = Sim.workshop(int(e.team))
 			for i in 2:
-				ring_at(Vector3(ws2.x, 0.1, ws2.y), GOLD, 2.5 + i * 1.5, 0.9)
+				ring_at(Vector3(ws2.x, Sim.height_at(Vector2(ws2.x, ws2.y)) + 0.1, ws2.y), GOLD, 2.5 + i * 1.5, 0.9)
 		"catapult_fire":
 			var best := {}
 			var bd := INF
@@ -2884,7 +2884,7 @@ func on_event(e: Dictionary) -> void:
 			if ln != null:
 				ln.rotation.x = -0.32 if own == 0 else 0.32
 				ladder_nodes[int(e.ladder)] = ln
-			ring_at(Vector3(base.x, 0.1, base.y), TEAM_COLORS[own], 1.8, 0.6)
+			ring_at(Vector3(base.x, Sim.height_at(Vector2(base.x, base.y)) + 0.1, base.y), TEAM_COLORS[own], 1.8, 0.6)
 		"ladder_hit":
 			var lh: Node3D = ladder_nodes.get(int(e.ladder))
 			if lh != null:
@@ -2898,7 +2898,7 @@ func on_event(e: Dictionary) -> void:
 				ladder_nodes.erase(int(e.ladder))
 		"pickup", "drop", "recaptured":
 			var o: Dictionary = sim.oracles[int(e.team)]
-			ring_at(Vector3(o.pos.x, 0.1, o.pos.y), TEAM_COLORS[int(e.team)], 1.8, 0.6)
+			ring_at(Vector3(o.pos.x, Sim.height_at(Vector2(o.pos.x, o.pos.y)) + 0.1, o.pos.y), TEAM_COLORS[int(e.team)], 1.8, 0.6)
 
 # ---------- Oracle ----------
 # The captive is each castle's KING (0.20.0; models 0.20.2, Kevin): three hand-made models per team,
