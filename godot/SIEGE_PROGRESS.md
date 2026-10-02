@@ -1233,3 +1233,13 @@ K2/K3 notes (0.17.0)
   them; climbing down drops you on the side you stand on. Protocol v22.
 - Tests: tower_test adds walking about on the deck. Quick suite all pass; bot matches: see the smoke line in the
   round report (rescues > 0 again).
+
+# 0.30.4 (Kevin: "projectiles are firing from the base of the outpost instead of from the top"; "player can run
+# off top of outpost")
+- Shots from a tower's deck carry h0 (TOWER_FLOOR), their origin o and dd (the aimed target's distance, from _aim;
+  full reach if nothing was aimed at). The view starts them at the shooter's height and brings them down onto
+  the target, nose tipped down; past it they fly on at normal height. Online the snapshot sends [id, pos, vel,
+  kind, o, h0, dd] for those (the last slide to impact keeps them). Protocol v23.
+- Walking past the deck's edge (TOWER_TOP_R) while moving outward jumps you down on that side (same as CLIMB
+  DOWN); ACTION still works.
+- tower_test: walk about, run off the edge, climb back, arrow launch height/aim distance. Quick suite all pass.

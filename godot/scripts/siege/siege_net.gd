@@ -8,7 +8,7 @@ extends RefCounted
 # objects: decode() uses the default allow_objects=false.
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 
-const VERSION := 22              # 22 = wide roofless towers you walk about on, bigger capture rings; 21 = natural hills, every class climbs; 20 = bigger towers; 19 = the bigger natural map; 18 = no "water" in the dungeons (wading only in the river); 17 = rampart shots
+const VERSION := 23              # 23 = tower shots carry their launch height, run off a tower deck; 22 = wide roofless towers; 21 = natural hills, every class climbs; 20 = bigger towers; 19 = the bigger natural map; 18 = no "water" in the dungeons (wading only in the river); 17 = rampart shots
 const DEFAULT_URL := "wss://136-113-125-3.sslip.io/fatebound/siege/ws"
 const DEFAULT_PORT := 8082
 const SNAP_HZ := 15.0            # 10 -> 15 (0.18.4): ~1.3 KB each, ~19 KB/s per player; remote
@@ -126,7 +126,10 @@ static func snapshot(sim, for_unit: String, events: Array) -> Dictionary:
 		_pack(packed, k, vals[k])
 	var proj := []
 	for p in sim.projectiles:
-		proj.append([p.id, p.pos, p.vel, p.kind])
+		if p.has("h0"):
+			proj.append([p.id, p.pos, p.vel, p.kind, p.o, p.h0, p.dd])     # from a tower's deck
+		else:
+			proj.append([p.id, p.pos, p.vel, p.kind])
 	var gates := PackedFloat32Array()
 	for g in sim.gates:
 		gates.append_array([g.hp, g.max_hp, 1.0 if g.broken else 0.0, 1.0 if g.open else 0.0])
@@ -250,7 +253,12 @@ static func apply(sim, msg: Dictionary, me_id: String, predict := false) -> void
 	for p in msg.get("p", []):
 		var prev: Dictionary = old.get(p[0], {})
 		var from: Vector2 = prev.get("net_to", p[1])
-		sim.projectiles.append({"id":p[0], "pos":from, "net_from":from, "net_to":p[1], "vel":p[2], "kind":p[3], "team":-1})
+		var np := {"id":p[0], "pos":from, "net_from":from, "net_to":p[1], "vel":p[2], "kind":p[3], "team":-1}
+		if (p as Array).size() >= 7:
+			np["o"] = p[4]
+			np["h0"] = p[5]
+			np["dd"] = p[6]
+		sim.projectiles.append(np)
 		seen[p[0]] = true
 	var ends := {}
 	for e in msg.get("e", []):
@@ -260,8 +268,12 @@ static func apply(sim, msg: Dictionary, me_id: String, predict := false) -> void
 		var gone: Dictionary = old[id]
 		if not seen.has(id) and ends.has(id) and not bool(gone.get("ghost", false)):
 			var last: Vector2 = gone.get("net_to", gone.pos)
-			sim.projectiles.append({"id":id, "pos":last, "net_from":last, "net_to":ends[id], "vel":gone.vel,
-				"kind":gone.kind, "team":-1, "ghost":true})
+			var gp := {"id":id, "pos":last, "net_from":last, "net_to":ends[id], "vel":gone.vel,
+				"kind":gone.kind, "team":-1, "ghost":true}
+			for key in ["o", "h0", "dd"]:
+				if gone.has(key):
+					gp[key] = gone[key]
+			sim.projectiles.append(gp)
 	var gates: PackedFloat32Array = msg.get("g", PackedFloat32Array())
 	for gi in mini(sim.gates.size(), gates.size() / 4):
 		var g: Dictionary = sim.gates[gi]

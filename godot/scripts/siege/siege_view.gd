@@ -2995,8 +2995,18 @@ func _sync_projectiles() -> void:
 			proj_nodes[p.id] = node
 		# Offline the sim ticks at 30 Hz while frames run at 60: draw it where it is *now*.
 		var at: Vector2 = p.pos + (p.vel as Vector2) * proj_lead
-		node.position = Vector3(at.x, 1.2 + Sim.height_at(at), at.y)
-		node.rotation.y = Sim.angle_of(p.vel)
+		var y := 1.2 + Sim.height_at(at)
+		var pitch := 0.0
+		if p.has("h0"):
+			# From a tower's deck: starts up where the shooter stands and comes down onto the aimed spot.
+			var o: Vector2 = p.o
+			var top: float = Sim.height_at(o) + float(p.h0) + 1.2
+			var k := clampf(at.distance_to(o) / maxf(float(p.dd), 0.5), 0.0, 1.0)
+			y = lerpf(top, y, k)
+			if k < 1.0:
+				pitch = atan2(top - (1.2 + Sim.height_at(at)), maxf(float(p.dd), 0.5))
+		node.position = Vector3(at.x, y, at.y)
+		node.rotation = Vector3(pitch, Sim.angle_of(p.vel), 0.0)     # +X tips the +Z nose down
 	for id in proj_nodes.keys():
 		if not live.has(id):
 			proj_nodes[id].queue_free()

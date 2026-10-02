@@ -873,8 +873,10 @@ func can_act(u: Dictionary) -> bool:
 
 func _aim(u: Dictionary, reach: float) -> void:
 	var target := nearest_enemy(u, reach, true)
+	u["aim_d"] = 0.0
 	if not target.is_empty():
 		u.face = angle_of(target.pos - u.pos)
+		u["aim_d"] = u.pos.distance_to(target.pos)
 
 func _start_attack(u: Dictionary, kind: String, aim := true) -> bool:
 	if not can_act(u) or u.carrying or u.offering or blocking(u) or whirling(u):
@@ -1590,6 +1592,14 @@ func _shoot(u: Dictionary, angle: float, dmg: float, aoe: float, speed: float, r
 		# Shot from the rampart (or a terrace), or aimed at an enemy ON a rampart, or from the top of a tower:
 		# flies over the castle walls and gates (Round 15; Round 38; towers 0.30.0).
 		"high":height_at(u.pos) >= 1.5 or _lob_at_rampart(u, d, reach) or int(u.get("tower", -1)) >= 0})
+	if int(u.get("tower", -1)) >= 0:
+		# Shot from a tower's deck (0.30.4, Kevin: "projectiles are firing from the base"): the view starts it up
+		# at the shooter and brings it down onto the aimed target (or over its full reach).
+		var pj: Dictionary = projectiles[projectiles.size() - 1]
+		pj["h0"] = Land.TOWER_FLOOR
+		pj["o"] = u.pos
+		var ad := float(u.get("aim_d", 0.0))
+		pj["dd"] = ad if ad > 0.5 else reach
 	_event("proj", {"pid":_next_proj,"kind":"fire" if aoe > 0.0 else "arrow"})
 	_next_proj += 1
 
@@ -1715,6 +1725,10 @@ func _step_unit(u: Dictionary, dt: float) -> void:
 			u.pos += u.move * speed * dt
 			u.face = lerp_angle(u.face, angle_of(u.move), minf(1.0, dt * 14.0))
 			u.state = "move"
+			# Running off the edge (0.30.4, Kevin): jump down on that side.
+			var off: Vector2 = u.pos - ((outposts[int(u.tower)] as Dictionary).p as Vector2)
+			if off.length() > Land.TOWER_TOP_R + 0.05 and off.dot(u.move) > 0.0:
+				_leave_tower(u)
 		else:
 			u.state = "idle"
 		return

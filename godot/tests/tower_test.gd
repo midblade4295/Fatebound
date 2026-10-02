@@ -47,10 +47,19 @@ func _init() -> void:
 	for i in 3: s.step()
 	check(r.pos.distance_to(tp) <= Land.TOWER_TOP_R + 0.01 and k.pos.distance_to(tp) <= Land.TOWER_TOP_R + 0.01, "both stand on the deck")
 	var k0: Vector2 = k.pos
-	k.move = Vector2(0, 1)
-	for i in 30: s.step()
+	k.move = (tp - k.pos).normalized()
+	for i in 6: s.step()
 	k.move = Vector2.ZERO
-	check(k.pos.distance_to(k0) > 0.5 and k.pos.distance_to(tp) <= Land.TOWER_TOP_R + 0.01, "the knight walks about on the deck and stays on it")
+	check(k.pos.distance_to(k0) > 0.5 and int(k.tower) >= 0, "the knight walks about on the deck")
+	k.move = (k.pos - tp).normalized() if k.pos.distance_to(tp) > 0.1 else Vector2(1, 0)
+	for i in 40:
+		s.step()
+		if int(k.tower) < 0:
+			break
+	k.move = Vector2.ZERO
+	check(int(k.tower) < 0 and k.pos.distance_to(tp) >= Land.OUTPOST_TOWER_R, "running off the edge drops him to the ground beside the tower")
+	s.act(k.id, "interact")
+	check(int(k.tower) >= 0, "and he can climb back up")
 	check(not s._start_attack(k, "attack") and not s._block(k), "the knight can't fight from up there (no bow)")
 	er.pos = tp + Vector2(0, 8.0)
 	var ek := _unit(s, 1, "knight", 1)
@@ -67,6 +76,11 @@ func _init() -> void:
 	er.pos = Sim.spawn(1)
 	r.state = "idle"
 	check(s._start_attack(r, "attack"), "the ranger shoots from the top")
+	for i in 12:
+		s.step()
+	var tower_shot: Array = s.projectiles.filter(func(pj): return pj.has("h0"))
+	check(not tower_shot.is_empty() and float(tower_shot[0].h0) >= Land.TOWER_FLOOR - 0.01 and float(tower_shot[0].dd) > 10.0,
+		"the arrow carries its launch height and comes down over the aimed distance (%s)" % ("none" if tower_shot.is_empty() else "%.1f m" % float(tower_shot[0].dd)))
 	for i in 40: s.step()
 	check(far.hp < 500.0, "and hits 13 m out (beyond 11 m on the ground)")
 	er.pos = tp + Vector2(8.0, 0.0)
