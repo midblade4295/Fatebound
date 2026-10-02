@@ -1404,3 +1404,12 @@ K2/K3 notes (0.17.0)
   (105/min); Necromancer 20 kills / 3 deaths (12.6 min, small sample); Crusader 2.07; Barbarian 1.80; Archmage 1.43;
   Assassin 1.41 (7 min); Berserker 1.07; Rogue 1.01; Knight 1.04 with the lowest damage of the fighters (121/min);
   Workers 0.08 (321 deaths). Bot class choices and play are scripted -- read as direction, not truth.
+
+# 0.31.5 balance (from the 0.31.4 table)
+- Necromancer heals himself for DRAIN_SELF 0.5 of what he drains (was all of it). Mage fireball x MAGE_BOLT 0.9 (nova damage and
+  radius unchanged). Knight dmg 18 -> 21 (the Crusader's swing and hammer scale with it).
+- Re-run (seeds 11, 22, 44; scores 0-0, 0-1, 1-1): Mage K/D 2.39 -> 1.74 (dmg/min 313 -> 287), now level with Barbarian 1.72
+  and Archmage 1.73; Crusader 2.00; Berserker 2.39 (18 min); Assassin 1.28; Rogue 0.90; Knight 0.75, dmg/min 111 -- the extra
+  damage didn't show because bot knights spend their time blocking (_think_shields), not swinging; Necromancer 6 kills / 0
+  deaths in 7 min (too little play to judge).
+- Quick suite: all pass except siege_sim_smoke (seeds 11/22 0-0; 4 pickups, 1 carried back, no rescue).

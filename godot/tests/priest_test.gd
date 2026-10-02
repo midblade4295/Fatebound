@@ -116,7 +116,7 @@ func _init() -> void:
 		s4.step()
 	check(str(nc.beam) == str(en.id) and str(nc.beam2) == str(ally.id), "green beam on the enemy, white beam on the ally")
 	check(en.hp <= 200.0 - 1.6 * Sim.DRAIN_DPS, "the enemy is drained (%.0f lost in 2 s)" % (200.0 - en.hp))
-	check(nc.hp >= nh0 + 1.6 * Sim.DRAIN_DPS, "and the Necromancer heals by it (+%.0f)" % (nc.hp - nh0))
+	check(nc.hp >= nh0 + 1.6 * Sim.DRAIN_DPS * Sim.DRAIN_SELF and nc.hp <= nh0 + 2.2 * Sim.DRAIN_DPS * Sim.DRAIN_SELF, "and the Necromancer heals by half of it (+%.0f)" % (nc.hp - nh0))
 	check(ally.hp >= 20.0 + 1.6 * Sim.NECRO_ALLY_HEAL, "and the ally is healed (+%.0f)" % (ally.hp - 20.0))
 	en.pos = Sim.spawn(1)
 	nc.beam = ""

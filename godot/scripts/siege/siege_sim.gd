@@ -193,7 +193,7 @@ const CLASSES := {
 		"ranged":false,"ability":"","ab_cd":0.0,"carry":0.65,"gate":0.5},
 	"worker": {"name":"Worker","hp":80,"speed":5.0,"dmg":12,"range":1.5,"arc":0.4,"windup":0.28,"recover":0.4,
 		"ranged":false,"ability":"","ab_cd":0.0,"carry":0.65,"gate":1.2},
-	"knight": {"name":"Knight","hp":150,"speed":4.6,"dmg":18,"range":1.7,"arc":0.4,"windup":0.24,"recover":0.4,
+	"knight": {"name":"Knight","hp":150,"speed":4.6,"dmg":21,"range":1.7,"arc":0.4,"windup":0.24,"recover":0.4,
 		"ranged":false,"ability":"block","ab_cd":0.0,"carry":0.65,"gate":1.0},
 	"barbarian": {"name":"Barbarian","hp":130,"speed":4.8,"dmg":26,"range":2.0,"arc":0.25,"windup":0.36,"recover":0.45,
 		"ranged":false,"ability":"spin","ab_cd":7.0,"carry":0.65,"gate":1.6},
@@ -1671,7 +1671,8 @@ func _resolve_attack(u: Dictionary) -> void:
 	var dmg := float(stat(u,"dmg"))
 	if u.atk == "attack":
 		if c.ranged:
-			_shoot(u, u.face, dmg, float(c.aoe), float(c.proj_speed), float(c.range) * tower_range(u))
+			# 0.31.5 balance: the Mage's fireball does 10 % less (MAGE_BOLT); her nova keeps its damage and size.
+			_shoot(u, u.face, dmg * (MAGE_BOLT if u.cls == "mage" else 1.0), float(c.aoe), float(c.proj_speed), float(c.range) * tower_range(u))
 		else:
 			_melee(u, float(c.range), float(c.arc), dmg)
 		return
@@ -3507,6 +3508,8 @@ func _resurrect(u: Dictionary) -> bool:
 const DRAIN_DPS := 14.0
 const NECRO_ALLY_HEAL := 22.0
 const DRAIN_CHUNK := 7.0
+const DRAIN_SELF := 0.5          # share of the drain that heals the Necromancer (all of it until 0.31.5)
+const MAGE_BOLT := 0.9           # the Mage's fireball damage factor (0.31.5)
 
 func is_necro(u: Dictionary) -> bool:
 	return u.cls == "priest" and bool(u.up)
@@ -3531,7 +3534,7 @@ func _necro_beam(u: Dictionary) -> bool:
 
 func _step_drain(u: Dictionary, foe: Dictionary, dt: float) -> void:
 	var take := DRAIN_DPS * dt
-	u.hp = minf(u.max_hp, u.hp + take)
+	u.hp = minf(u.max_hp, u.hp + take * DRAIN_SELF)
 	u.drain_acc = float(u.get("drain_acc", 0.0)) + take
 	if float(u.drain_acc) >= DRAIN_CHUNK:
 		var chunk := float(u.drain_acc)
