@@ -1363,3 +1363,17 @@ K2/K3 notes (0.17.0)
 - Protocol v26. tests/priest_test.gd (12 checks).
 - Quick suite: all pass except siege_sim_smoke: seeds 11 and 22 both 0-0 on time (0.31.0: 3 rescues in 22). Seeds 33, 44,
   55: 0-0, 3-0 by rescue at 316 s, 2-1. Bot rescues remain seed-dependent; not changed here.
+
+# 0.31.2 (Kevin: High Priest -> Necromancer with the Necromancer skin and the skull staff; his beam drains an enemy (green)
+# and heals him, with a second white beam healing an ally)
+- KayKit Skeletons 1.1 (CC0, EXTRA tier; LICENSE-skeletons.txt): heroes/Necromancer.glb (Rig_Medium like the Adventurers,
+  so the existing animation libraries drive it), weapons/Skeleton_Staff.gltf (+ .bin, skeleton_texture_A.png).
+- UPGRADE_NAME priest: Necromancer; hat shop "Necromancer Hats". View.look_key(): upgraded priest -> "necromancer" look
+  (model Necromancer, right hand Skeleton_Staff, the priest's casting animations).
+- The Necromancer's beam (attack): _necro_beam locks a green beam on the nearest enemy in reach (9 m) and drains DRAIN_DPS 14
+  life/s (applied in 7-point chunks; kills count), healing himself the same; while draining, a white beam (beam2) heals the
+  nearest injured ally in reach by NECRO_ALLY_HEAL 22/s. No enemy in reach: no beams. Resurrection stays his ability.
+  Bots drain the nearest enemy in reach, close in on one within 16 m. Drain hits make no sword sounds.
+- Net: unit field 32 = beam2 (+1 index); protocol v27. View: gold heal (Priest), green drain + white heal (Necromancer).
+- priest_test: +9 checks (name, model, staff, both beams, drain/self-heal/ally-heal, no enemy no beams, online beam2).
+- Quick suite: all pass except siege_sim_smoke (seeds 11/22 0-0 on time, as in 0.31.1).

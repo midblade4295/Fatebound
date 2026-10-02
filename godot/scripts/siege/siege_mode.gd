@@ -605,8 +605,8 @@ func _event_sound(e: Dictionary) -> void:
 				return
 			var by: Dictionary = sim.by_id.get(str(e.get("by", "")), {})
 			var hurt_me := mine or str(e.get("by", "")) == str(hud.player_id)
-			if by.is_empty():
-				return                                       # catapult stones have their own crash
+			if by.is_empty() or by.cls == "priest":
+				return                                       # catapult stones have their own crash; a drain is silent
 			elif by.cls == "ranger":
 				_cue("tm_bow_hit", 3, at, HEAR_R, hurt_me)
 			elif by.cls == "mage":

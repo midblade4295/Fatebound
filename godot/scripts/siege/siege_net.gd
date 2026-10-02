@@ -8,7 +8,7 @@ extends RefCounted
 # objects: decode() uses the default allow_objects=false.
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 
-const VERSION := 26              # 26 = High Priest Resurrection, bigger nova/sanctuary; 25 = logs/rocks (it); 24 = the Crusader and its thrown hammer; 23 = tower shot heights, run off a deck; 22 = wide roofless towers; 21 = natural hills, every class climbs; 20 = bigger towers; 19 = the bigger natural map; 18 = no "water" in the dungeons (wading only in the river); 17 = rampart shots
+const VERSION := 27              # 27 = the Necromancer (drain + heal beams, unit field 32); 26 = Resurrection, bigger nova/sanctuary; 25 = logs/rocks (it); 24 = the Crusader and its thrown hammer; 23 = tower shot heights, run off a deck; 22 = wide roofless towers; 21 = natural hills, every class climbs; 20 = bigger towers; 19 = the bigger natural map; 18 = no "water" in the dungeons (wading only in the river); 17 = rampart shots
 const DEFAULT_URL := "wss://136-113-125-3.sslip.io/fatebound/siege/ws"
 const DEFAULT_PORT := 8082
 const SNAP_HZ := 15.0            # 10 -> 15 (0.18.4): ~1.3 KB each, ~19 KB/s per player; remote
@@ -29,10 +29,10 @@ const HAT_CLS := ["knight", "barbarian", "rogue", "ranger", "mage", "worker", "p
 
 # Per-unit values in the snapshot, in this order, each packed as a signed 16-bit integer of
 # value * SCALE[i] (positions to 1 cm, angles to 0.001 rad, timers to 0.01 s).
-const F := 32
+const F := 33
 const SCALE := [1.0, 1.0, 100.0, 100.0, 1000.0, 1.0, 1.0, 1.0, 100.0, 1.0,
 	1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 100.0, 100.0, 1.0, 1.0,
-	1.0, 1.0, 0.1, 1.0, 10.0, 1.0, 1.0, 1.0, 1.0, 1.0, 100.0, 1.0]
+	1.0, 1.0, 0.1, 1.0, 10.0, 1.0, 1.0, 1.0, 1.0, 1.0, 100.0, 1.0, 1.0]
 
 # Wire format: 1 byte tag + payload. "R" = var_to_bytes, "Z" = zstd(var_to_bytes) with the raw
 # size in 4 bytes. Snapshots are compressed; small client messages go raw.
@@ -119,6 +119,7 @@ static func snapshot(sim, for_unit: String, events: Array) -> Dictionary:
 		u_arr[b + 29] = 1.0 if sim.blocking(u) else 0.0
 		u_arr[b + 30] = maxf(0.0, float(u.get("whirl_until", 0.0)) - sim.time)
 		u_arr[b + 31] = float(int(u.get("tower", -1)) + 1)       # 0 = on the ground
+		u_arr[b + 32] = float(sim.units.find(sim.by_id.get(str(u.get("beam2", "")), {})) + 1) if str(u.get("beam2", "")) != "" else 0.0
 		i += 1
 	var packed := PackedByteArray()
 	packed.resize(vals.size() * 2)
@@ -233,6 +234,8 @@ static func apply(sim, msg: Dictionary, me_id: String, predict := false) -> void
 		u.whirl_until = 1.0e9 if u_arr[b + 30] > 0.005 else 0.0
 		u.fed = int(u_arr[b + 28])
 		u.tower = int(round(u_arr[b + 31])) - 1
+		var b2 := int(round(u_arr[b + 32])) - 1
+		u.beam2 = str(sim.units[b2].id) if b2 >= 0 and b2 < sim.units.size() else ""
 	# Who is up which tower, rebuilt from the units (the view and the HUD read op.occ).
 	for op in sim.outposts:
 		op.occ = []

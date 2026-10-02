@@ -117,7 +117,7 @@ const UPGRADES := {
 	"hat_rogue":     {"name":"Assassin Hats", "max":1, "cost":[{"wood":12,"stone":12}], "desc":"The Rogue stand makes Assassin hats"},
 	"hat_ranger":    {"name":"Sniper Hats", "max":1, "cost":[{"wood":12,"stone":12}], "desc":"The Ranger stand makes Sniper hats"},
 	"hat_mage":      {"name":"Archmage Hats", "max":1, "cost":[{"wood":12,"stone":12}], "desc":"The Mage stand makes Archmage hats"},
-	"hat_priest":    {"name":"High Priest Hats", "max":1, "cost":[{"wood":12,"stone":12}], "desc":"The Priest stand makes High Priest hats"},
+	"hat_priest":    {"name":"Necromancer Hats", "max":1, "cost":[{"wood":12,"stone":12}], "desc":"The Priest stand makes Necromancer hats: drain enemies, heal allies, raise the fallen"},
 	"catapult": {"name":"Catapults", "max":1, "cost":[{"wood":15,"stone":25}],
 		"desc":"Your corner towers lob stones at enemies 5-22 m away"},
 }
@@ -156,7 +156,7 @@ const RESPAWN_HAT_NEAR := 28.0    # (unused since 0.26.0: towers are no longer r
                                   # there. Bot attackers always respawn forward and scavenge (like
                                   # Fat Princess players choosing an outpost spawn).
 const BOT_HAT_SEARCH := 32.0      # villager bots scavenge dropped hats this far (14 m: most expired unused)
-const UPGRADE_NAME := {"knight":"Crusader","barbarian":"Berserker","rogue":"Assassin","ranger":"Sniper","mage":"Archmage","priest":"High Priest"}
+const UPGRADE_NAME := {"knight":"Crusader","barbarian":"Berserker","rogue":"Assassin","ranger":"Sniper","mage":"Archmage","priest":"Necromancer"}
 const BEAM_HOLD := 0.22
 # Knight BLOCK (Round 11, Kevin): hold ABILITY -> shield up, walk forward slowly; the shield (a
 # segment in front of the knight) stops every hit whose path crosses it -- for the knight (from the
@@ -713,7 +713,7 @@ func _new_unit(id: String, team: int, bot: bool, role: String) -> Dictionary:
 		"cd_ability":0.0,"stun":0.0,"carrying":false,"respawn_at":0.0,"kills":0,"deaths":0,"rescues":0,
 		"dodge_dir":Vector2.ZERO,"target":"","ai_goal":Vector2.ZERO,"lunge_hit":false,
 		"unstick":0.0,"unstick_dir":Vector2.ZERO,"stuck_t":0.0,"last_pos":Vector2.ZERO,
-		"lifting":-1, "tower":-1, "beam":"", "beam_until":0.0, "block_until":0.0, "whirl_until":0.0, "whirl_t":0.0, "load":{"kind":"", "n":0}, "task":{}, "workshop_open":false, "gathered":0, "repaired":0.0, "gate_dmg":0.0, "offering":false, "fed":0,
+		"lifting":-1, "tower":-1, "beam":"", "beam2":"", "drain_acc":0.0, "beam_until":0.0, "block_until":0.0, "whirl_until":0.0, "whirl_t":0.0, "load":{"kind":"", "n":0}, "task":{}, "workshop_open":false, "gathered":0, "repaired":0.0, "gate_dmg":0.0, "offering":false, "fed":0,
 		"path":PackedVector2Array(), "path_i":0, "path_goal":Vector2(INF, INF), "path_at":-10.0, "path_ver":-1}
 
 func armory_mult(team: int) -> float:
@@ -920,7 +920,7 @@ func ability_of(u: Dictionary) -> String:
 	if u.cls == "knight" and u.up:
 		return "hammer"
 	if u.cls == "priest" and u.up:
-		return "resurrect"                     # the High Priest (0.31.1, Kevin)                        # the Crusader (0.30.5, Kevin): Hammer Throw instead of the shield
+		return "resurrect"                     # the Necromancer (High Priest until 0.31.2; Resurrection 0.31.1, Kevin)                        # the Crusader (0.30.5, Kevin): Hammer Throw instead of the shield
 	return str(CLASSES[u.cls].ability)
 
 func blocking(u: Dictionary) -> bool:
@@ -1024,6 +1024,8 @@ func _beam(u: Dictionary) -> bool:
 		return false                           # nothing but bows and spells up a tower
 	if not alive(u) or u.stun > 0.0 or u.carrying or u.state in ["wind", "recover", "dodge"] or u.workshop_open:
 		return false
+	if is_necro(u):
+		return _necro_beam(u)
 	var cur: Dictionary = by_id.get(str(u.beam), {})
 	# Keep a locked, still-injured target in reach; otherwise pick again.
 	if cur.is_empty() or not alive(cur) or cur.hp >= cur.max_hp - 0.5 or u.pos.distance_to(cur.pos) > float(CLASSES["priest"].range) + 1.0:
@@ -1045,6 +1047,10 @@ func _step_beam(u: Dictionary, dt: float) -> void:
 	if time > u.beam_until or u.cls != "priest" or not alive(u) or t.is_empty() or not alive(t) \
 			or u.pos.distance_to(t.pos) > float(CLASSES["priest"].range) + 1.0:
 		u.beam = ""
+		u.beam2 = ""
+		return
+	if is_necro(u):
+		_step_drain(u, t, dt)
 		return
 	var rate := float(CLASSES["priest"].heal) * (1.4 if u.up else 1.0)
 	t.hp = minf(t.max_hp, t.hp + rate * dt)
@@ -1457,6 +1463,7 @@ func _kill(src: Dictionary, dst: Dictionary) -> void:
 	dst.hp = 0.0
 	dst.state = "dead"
 	dst.beam = ""
+	dst.beam2 = ""
 	dst.block_until = 0.0
 	dst.whirl_until = 0.0
 	# Fat Princess rule: your hat falls where you die; you come back as a Villager. (A High Priest can bring you
@@ -2644,6 +2651,18 @@ func _think_priest(u: Dictionary) -> bool:
 	if ability_of(u) == "resurrect" and u.cd_ability <= 0.0 and not resurrect_target(u).is_empty():
 		u.move = Vector2.ZERO
 		return _resurrect(u)
+	if is_necro(u):
+		# The Necromancer drains the nearest enemy in reach (healing himself and an ally); closes in on one nearby.
+		var reach := float(CLASSES["priest"].range)
+		var foe := nearest_enemy(u, reach)
+		if not foe.is_empty():
+			u.move = Vector2.ZERO
+			return _beam(u)
+		var near := nearest_enemy(u, 16.0)
+		if not near.is_empty():
+			_nav_to(u, near.pos, reach * 0.8)
+			return true
+		return false
 	var best := {}
 	var worst := 0.98
 	for a in units:
@@ -3442,3 +3461,48 @@ func _resurrect(u: Dictionary) -> bool:
 	u.t = 0.4
 	_event("resurrect", {"id":a.id, "by":u.id, "team":u.team, "pos":a.pos})
 	return true
+
+
+# ---------- the Necromancer's drain (0.31.2, Kevin: "cast on enemy (green beam) which sucks their life out and then it heals
+# player and also shoot another beam (white beam) to a near ally and heals") ----------
+# The upgraded Priest's beam: a green beam locks onto the nearest enemy in reach and drains DRAIN_DPS of their life, which
+# heals the Necromancer; while it drains, a white beam heals the nearest injured ally in reach by NECRO_ALLY_HEAL. No enemy in
+# reach, no beams. Damage lands in DRAIN_CHUNK pieces so a drain isn't 30 hits a second.
+const DRAIN_DPS := 14.0
+const NECRO_ALLY_HEAL := 22.0
+const DRAIN_CHUNK := 7.0
+
+func is_necro(u: Dictionary) -> bool:
+	return u.cls == "priest" and bool(u.up)
+
+func _necro_beam(u: Dictionary) -> bool:
+	var reach := float(CLASSES["priest"].range)
+	var foe: Dictionary = by_id.get(str(u.beam), {})
+	if foe.is_empty() or not alive(foe) or foe.team == u.team or u.pos.distance_to(foe.pos) > reach + 1.0:
+		foe = nearest_enemy(u, reach)
+	if foe.is_empty():
+		u.beam = ""
+		u.beam2 = ""
+		return false
+	if str(u.beam) != str(foe.id):
+		_event("drain", {"id":u.id, "to":foe.id})
+	u.beam = foe.id
+	u.beam_until = time + BEAM_HOLD
+	u.face = angle_of((foe.pos as Vector2) - u.pos)
+	var ally := beam_target(u)
+	u.beam2 = ally.id if not ally.is_empty() and ally.hp < ally.max_hp - 0.5 else ""
+	return true
+
+func _step_drain(u: Dictionary, foe: Dictionary, dt: float) -> void:
+	var take := DRAIN_DPS * dt
+	u.hp = minf(u.max_hp, u.hp + take)
+	u.drain_acc = float(u.get("drain_acc", 0.0)) + take
+	if float(u.drain_acc) >= DRAIN_CHUNK:
+		var chunk := float(u.drain_acc)
+		u.drain_acc = 0.0
+		_damage(u, foe, chunk)
+	var ally: Dictionary = by_id.get(str(u.get("beam2", "")), {})
+	if not ally.is_empty() and alive(ally) and u.pos.distance_to(ally.pos) <= float(CLASSES["priest"].range) + 1.0:
+		ally.hp = minf(ally.max_hp, ally.hp + NECRO_ALLY_HEAL * dt)
+	else:
+		u.beam2 = ""

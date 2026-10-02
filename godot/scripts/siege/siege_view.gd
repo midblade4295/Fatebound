@@ -28,6 +28,8 @@ const LOOKS := {
 	"mage": {"model":"Mage","r":"staff","l":"","idle":"g/Idle_B","attack":"r/Ranged_Magic_Shoot","ability":"r/Ranged_Magic_Spellcasting"},
 	# Healer: the Mage model in white-gold robes with a wand (tint set once, cached like skins).
 	"priest": {"model":"Mage","r":"wand","l":"","tint":"#fff1c8","idle":"g/Idle_B","attack":"r/Ranged_Magic_Spellcasting_Long","ability":"r/Ranged_Magic_Raise"},
+	# Upgraded priest (0.31.2, Kevin): the Necromancer from KayKit Skeletons (CC0, same Rig_Medium) with the skull staff.
+	"necromancer": {"model":"Necromancer","r":"Skeleton_Staff","l":"","idle":"g/Idle_B","attack":"r/Ranged_Magic_Spellcasting_Long","ability":"r/Ranged_Magic_Raise"},
 }
 const LOOP_HINTS := ["Idle","Running","Walking","Hammering","Holding","Aiming","_Pose","Blocking","Chopping","Pickaxing"]
 
@@ -1571,53 +1573,61 @@ func _sync_shields() -> void:
 var beam_nodes: Dictionary = {}          # priest unit id -> MeshInstance3D (unit-length cylinder)
 static var _beam_mat: StandardMaterial3D = null
 
+static var _beam_mats := {}
+
+func _beam_material(key: String) -> StandardMaterial3D:
+	if not _beam_mats.has(key):
+		var m := StandardMaterial3D.new()
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		m.albedo_color = {"heal":Color(1.0, 0.95, 0.55, 0.75), "drain":Color(0.35, 1.0, 0.4, 0.85), "white":Color(1.0, 1.0, 1.0, 0.85)}[key]
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		m.cull_mode = BaseMaterial3D.CULL_DISABLED
+		_beam_mats[key] = m
+	return _beam_mats[key]
+
 func _sync_beams() -> void:
-	if _beam_mat == null:
-		_beam_mat = StandardMaterial3D.new()
-		_beam_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		_beam_mat.albedo_color = Color(1.0, 0.95, 0.55, 0.75)
-		_beam_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		_beam_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-		_beam_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	# The Priest's gold healing beam; the Necromancer's green drain on an enemy plus a white heal to an ally (0.31.2).
 	for u in sim.units:
-		var n: MeshInstance3D = beam_nodes.get(u.id)
-		var to: Dictionary = sim.by_id.get(str(u.get("beam", "")), {})
-		if to.is_empty() or not sim.alive(u):
-			if n != null:
+		var necro: bool = u.cls == "priest" and bool(u.get("up", false))
+		for slot in [["beam", str(u.id), "drain" if necro else "heal"], ["beam2", str(u.id) + "#2", "white"]]:
+			var n: MeshInstance3D = beam_nodes.get(slot[1])
+			var to: Dictionary = sim.by_id.get(str(u.get(slot[0], "")), {})
+			if to.is_empty() or not sim.alive(u):
+				if n != null:
+					n.visible = false
+				continue
+			if n == null:
+				n = MeshInstance3D.new()
+				var cm := CylinderMesh.new()
+				cm.top_radius = 0.07
+				cm.bottom_radius = 0.07
+				cm.height = 1.0
+				cm.radial_segments = 6
+				cm.rings = 1
+				n.mesh = cm
+				n.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+				add_child(n)
+				beam_nodes[slot[1]] = n
+			n.material_override = _beam_material(slot[2])
+			var a: Dictionary = actors.get(u.id, {})
+			var b: Dictionary = actors.get(to.id, {})
+			if a.is_empty() or b.is_empty():
 				n.visible = false
-			continue
-		if n == null:
-			n = MeshInstance3D.new()
-			var cm := CylinderMesh.new()
-			cm.top_radius = 0.07
-			cm.bottom_radius = 0.07
-			cm.height = 1.0
-			cm.radial_segments = 6
-			cm.rings = 1
-			n.mesh = cm
-			n.material_override = _beam_mat
-			n.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-			add_child(n)
-			beam_nodes[u.id] = n
-		var a: Dictionary = actors.get(u.id, {})
-		var b: Dictionary = actors.get(to.id, {})
-		if a.is_empty() or b.is_empty():
-			n.visible = false
-			continue
-		var p0: Vector3 = (a.root as Node3D).position + Vector3(0, 1.35, 0) + Vector3(sin(float(u.face)), 0, cos(float(u.face))) * 0.35
-		var p1: Vector3 = (b.root as Node3D).position + Vector3(0, 1.1, 0)
-		var len := p0.distance_to(p1)
-		if len < 0.05:
-			n.visible = false
-			continue
-		n.visible = true
-		# A unit cylinder along Y, stretched to the beam's length and aimed at the target; it
-		# flickers a little in width.
-		var up := (p1 - p0) / len
-		var side := up.cross(Vector3.FORWARD if absf(up.dot(Vector3.FORWARD)) < 0.95 else Vector3.RIGHT).normalized()
-		var fwd := side.cross(up)
-		var w := 1.0 + 0.25 * sin(_time * 25.0 + float(hash(u.id) % 100))
-		n.transform = Transform3D(Basis(side * w, up * len, fwd * w), (p0 + p1) * 0.5)
+				continue
+			var p0: Vector3 = (a.root as Node3D).position + Vector3(0, 1.35, 0) + Vector3(sin(float(u.face)), 0, cos(float(u.face))) * 0.35
+			var p1: Vector3 = (b.root as Node3D).position + Vector3(0, 1.1, 0)
+			var len := p0.distance_to(p1)
+			if len < 0.05:
+				n.visible = false
+				continue
+			n.visible = true
+			# A unit cylinder along Y, stretched to the beam's length and aimed at the target; it flickers a little in width.
+			var up := (p1 - p0) / len
+			var side := up.cross(Vector3.FORWARD if absf(up.dot(Vector3.FORWARD)) < 0.95 else Vector3.RIGHT).normalized()
+			var fwd := side.cross(up)
+			var w := (1.25 if slot[2] == "drain" else 1.0) + 0.25 * sin(_time * 25.0 + float(hash(slot[1]) % 100))
+			n.transform = Transform3D(Basis(side * w, up * len, fwd * w), (p0 + p1) * 0.5)
 
 func _sync_hats() -> void:
 	for st in sim.stands:
@@ -2366,6 +2376,13 @@ func _decal(pos: Vector3, radius: float, color: Color, alpha: float) -> MeshInst
 var player_looks: Dictionary = {}
 static var _tint_mats: Dictionary = {}
 
+static func look_key(u: Dictionary) -> String:
+	if u.cls == "barbarian" and u.up:
+		return "berserker"
+	if u.cls == "priest" and u.up:
+		return "necromancer"
+	return u.cls
+
 static func make_body(cls: String, cosmetic: Dictionary = {}) -> Dictionary:
 	var look: Dictionary = (LOOKS.get(cls, LOOKS.villager) as Dictionary).duplicate()
 	for hand in ["r", "l"]:
@@ -2465,7 +2482,7 @@ func _ensure_actor(u: Dictionary) -> Dictionary:
 		root = a.root
 		if is_instance_valid(a.body):
 			a.body.queue_free()
-	var made := make_body("berserker" if (u.cls == "barbarian" and u.up) else u.cls, cosmetic)
+	var made := make_body(look_key(u), cosmetic)
 	if made.is_empty():
 		return a
 	root.add_child(made.body)

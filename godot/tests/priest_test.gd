@@ -86,5 +86,48 @@ func _init() -> void:
 	s3.act(mg.id, "ability")
 	for i in 30: s3.step()
 	check(foe.hp < 200.0, "the Mage's nova now reaches 4.3 m (radius %.1f m)" % Sim.NOVA_R)
+	# 0.31.2: the Necromancer -- green drain on an enemy heals him, white beam heals an ally.
+	check(str(Sim.UPGRADE_NAME["priest"]) == "Necromancer", "the Priest's upgrade is called the Necromancer")
+	var View = load("res://scripts/siege/siege_view.gd")
+	var s4 = _fresh(4)
+	var m4: Array = s4.units.filter(func(u): return u.team == 0)
+	var nc: Dictionary = m4[0]
+	s4._set_class(nc, "priest", true)
+	check(View.look_key(nc) == "necromancer", "he wears the Necromancer model")
+	var body: Dictionary = View.make_body("necromancer")
+	var staff := false
+	for c in (body.get("root", body.get("body")) as Node).find_children("*", "", true, false):
+		if str(c.name).contains("Skeleton_Staff"):
+			staff = true
+	check(staff, "holding the skull staff")
+	nc.pos = base
+	nc.hp = nc.max_hp * 0.5
+	var ally: Dictionary = m4[1]
+	ally.pos = base + Vector2(0.0, 4.0)
+	ally.max_hp = 500.0                      # stays injured for the whole test (the white beam stops on a full ally)
+	ally.hp = 20.0
+	var en: Dictionary = s4.units.filter(func(u): return u.team == 1)[0]
+	en.pos = base + Vector2(6.0, 0.0)
+	en.hp = 200.0
+	en.max_hp = 200.0
+	var nh0: float = nc.hp
+	for i in int(2.0 / Sim.TICK):
+		s4.act(nc.id, "attack")
+		s4.step()
+	check(str(nc.beam) == str(en.id) and str(nc.beam2) == str(ally.id), "green beam on the enemy, white beam on the ally")
+	check(en.hp <= 200.0 - 1.6 * Sim.DRAIN_DPS, "the enemy is drained (%.0f lost in 2 s)" % (200.0 - en.hp))
+	check(nc.hp >= nh0 + 1.6 * Sim.DRAIN_DPS, "and the Necromancer heals by it (+%.0f)" % (nc.hp - nh0))
+	check(ally.hp >= 20.0 + 1.6 * Sim.NECRO_ALLY_HEAL, "and the ally is healed (+%.0f)" % (ally.hp - 20.0))
+	en.pos = Sim.spawn(1)
+	nc.beam = ""
+	nc.beam2 = ""
+	check(not s4.act(nc.id, "attack") and str(nc.beam2) == "", "no enemy in reach: no beams")
+	var Net = load("res://scripts/siege/siege_net.gd")
+	en.pos = base + Vector2(6.0, 0.0)
+	s4.act(nc.id, "attack")
+	var snap: Dictionary = Net.snapshot(s4, str(nc.id), [])
+	var s5 = _fresh(4)
+	Net.apply(s5, snap, str(nc.id))
+	check(str(s5.by_id[str(nc.id)].beam2) == str(ally.id), "online players see both beams")
 	print("PRIEST_PASS" if fails.is_empty() else "PRIEST_FAIL %d" % fails.size())
 	quit()
