@@ -1389,3 +1389,18 @@ K2/K3 notes (0.17.0)
 - View: above every stand, your team's count of that class / cap (green; red when full).
 - Protocol v28. tests/caps_test.gd (7 checks; 5 min of 16v16 bots peak at the caps, never over).
 - Quick suite: ALL PASS (bot matches: seed 11 1-0 by rescue at 203 s, seed 22 0-0).
+
+# 0.31.4 (Kevin: no class caps after all; balance through the stands, no heal stacking, flatter armory, weaker workers,
+# per-class stats)
+- CLASS_CAP emptied (class_full() always false); the stand count labels, FULL label and worker count are gone.
+- Stands per class: STAND_STOCK knight/barbarian/rogue/ranger 3, mage/priest 2; STAND_REGEN 6 / 6 / 6 / 8 / 10 / 12 s.
+- Healing doesn't stack: a target gets one Sanctuary per 3 s; a second healer beam (Priest's or Necromancer's white) on a
+  target already beam-healed this tick heals at half.
+- armory_mult: +8 % a level (was +12 %; max +24 %). Worker hp 95 -> 80.
+- Sim.class_stats (per class label: damage dealt/taken, kills, deaths, seconds alive); tools/class_balance.gd runs seeds and
+  prints the table. Protocol v29. tests/stands_test.gd replaces caps_test (9 checks).
+- Quick suite: all pass except siege_sim_smoke (seeds 11/22 0-0 again).
+- First balance table (seeds 11, 22, 44; 16v16 bots): Mage K/D 2.39 with the least damage taken per minute of any fighter
+  (105/min); Necromancer 20 kills / 3 deaths (12.6 min, small sample); Crusader 2.07; Barbarian 1.80; Archmage 1.43;
+  Assassin 1.41 (7 min); Berserker 1.07; Rogue 1.01; Knight 1.04 with the lowest damage of the fighters (121/min);
+  Workers 0.08 (321 deaths). Bot class choices and play are scripted -- read as direction, not truth.

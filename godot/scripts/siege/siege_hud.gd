@@ -155,10 +155,8 @@ func _refresh_workshop(me: Dictionary) -> void:
 		_center(workshop_panel)
 	workshop_stock.text = "WOOD %d   ·   STONE %d" % [sim.stock[t].wood, sim.stock[t].stone]
 	workshop_tools_btn.disabled = me.cls == "worker" or me.carrying
-	var wn: int = sim.class_count(me.team, "worker") if sim.has_method("class_count") else 0
-	var wcap := int(Sim.CLASS_CAP.get("worker", 99))
-	workshop_tools_btn.text = "YOU ARE A WORKER" if me.cls == "worker" else ("WORKERS FULL · %d/%d" % [wn, wcap] if wn >= wcap else "TAKE TOOLS · BECOME A WORKER (%d/%d)" % [wn, wcap])
-	workshop_tools_btn.disabled = me.cls != "worker" and wn >= wcap
+	workshop_tools_btn.text = "YOU ARE A WORKER" if me.cls == "worker" else "TAKE TOOLS · BECOME A WORKER"
+	workshop_tools_btn.disabled = false
 	for id in workshop_buttons:
 		var up: Dictionary = Sim.UPGRADES[id]
 		var lvl: int = sim.levels[t][id]

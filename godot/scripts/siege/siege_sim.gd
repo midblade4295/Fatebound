@@ -132,9 +132,15 @@ const HAT_HALL := Castle.HAT_HALL
 const HAT_TAKE_R := 1.3
 const HAT_STAND_R := 0.45
 const HAT_STOCK_MAX := 3
-# Class caps per team (0.31.3, Kevin: caps for balance, set for 16-player teams since bots fill every match). An upgraded
-# class counts as its base class (a Necromancer takes a Priest place). Villagers are never capped.
-const CLASS_CAP := {"knight":4, "barbarian":3, "rogue":3, "ranger":3, "mage":2, "priest":2, "worker":3}
+# 0.31.4 (Kevin: no per-class caps after all): the stands steer the mix instead -- the strong/rare classes hold fewer hats
+# and restock more slowly. (CLASS_CAP left empty: class_full() is always false.)
+const CLASS_CAP := {}
+const STAND_STOCK := {"knight":3, "barbarian":3, "rogue":3, "ranger":3, "mage":2, "priest":2}
+const STAND_REGEN := {"knight":6.0, "barbarian":6.0, "rogue":6.0, "ranger":8.0, "mage":10.0, "priest":12.0}
+# Healing doesn't stack (0.31.4): one Sanctuary per target every SANCT_ONCE s; a second healer beam on a target already
+# healed by a beam this tick heals at BEAM_STACK.
+const SANCT_ONCE := 3.0
+const BEAM_STACK := 0.5
 const HAT_REGEN := 6.0           # seconds per new hat, per stand (10 s starved 16-player teams)
 const HAT_LIFETIME := 30.0       # a dropped hat vanishes after this
 const HAT_PICK_R := 1.0
@@ -185,7 +191,7 @@ const SANCTUARY_HEAL := 35.0
 const CLASSES := {
 	"villager": {"name":"Villager","hp":60,"speed":5.2,"dmg":8,"range":1.3,"arc":0.5,"windup":0.2,"recover":0.3,
 		"ranged":false,"ability":"","ab_cd":0.0,"carry":0.65,"gate":0.5},
-	"worker": {"name":"Worker","hp":95,"speed":5.0,"dmg":12,"range":1.5,"arc":0.4,"windup":0.28,"recover":0.4,
+	"worker": {"name":"Worker","hp":80,"speed":5.0,"dmg":12,"range":1.5,"arc":0.4,"windup":0.28,"recover":0.4,
 		"ranged":false,"ability":"","ab_cd":0.0,"carry":0.65,"gate":1.2},
 	"knight": {"name":"Knight","hp":150,"speed":4.6,"dmg":18,"range":1.7,"arc":0.4,"windup":0.24,"recover":0.4,
 		"ranged":false,"ability":"block","ab_cd":0.0,"carry":0.65,"gate":1.0},
@@ -416,7 +422,7 @@ func _build_map() -> void:
 			# its name plate goes (over the roof).
 			var shop: Dictionary = Castle.HAT_SHOPS[i]
 			var bpos := _c(t, shop.b)
-			stands.append({"id":stands.size(), "team":t, "cls":HAT_CLASSES[i], "p":sp, "stock":HAT_STOCK_MAX, "t":0.0,
+			stands.append({"id":stands.size(), "team":t, "cls":HAT_CLASSES[i], "p":sp, "stock":int(STAND_STOCK.get(HAT_CLASSES[i], HAT_STOCK_MAX)), "t":0.0,
 				"b":bpos, "top":float(shop.y) + 4.4})
 			obstacles.append({"p":bpos, "r":float(shop.r), "kind":"castle_building", "team":t})
 		for bd in Castle.BUILDINGS:
@@ -720,7 +726,7 @@ func _new_unit(id: String, team: int, bot: bool, role: String) -> Dictionary:
 		"path":PackedVector2Array(), "path_i":0, "path_goal":Vector2(INF, INF), "path_at":-10.0, "path_ver":-1}
 
 func armory_mult(team: int) -> float:
-	return 1.0 + 0.12 * float(levels[team].armory)
+	return 1.0 + 0.08 * float(levels[team].armory)        # +12 % a level until 0.31.4
 
 func stat(u: Dictionary, key: String) -> Variant:
 	var base: Variant = CLASSES[u.cls][key]
@@ -1056,7 +1062,7 @@ func _step_beam(u: Dictionary, dt: float) -> void:
 		_step_drain(u, t, dt)
 		return
 	var rate := float(CLASSES["priest"].heal) * (1.4 if u.up else 1.0)
-	t.hp = minf(t.max_hp, t.hp + rate * dt)
+	t.hp = minf(t.max_hp, t.hp + rate * dt * _beam_share(t))
 
 func _dodge(u: Dictionary) -> bool:
 	if not alive(u) or u.stun > 0.0 or u.carrying or u.cd_dodge > 0.0 or u.state in ["wind","dodge"] or u.workshop_open \
@@ -1334,9 +1340,9 @@ func _drop_hat(u: Dictionary) -> void:
 
 func _step_hats(dt: float) -> void:
 	for st in stands:
-		if int(st.stock) < HAT_STOCK_MAX:
+		if int(st.stock) < int(STAND_STOCK.get(st.cls, HAT_STOCK_MAX)):
 			st.t += dt
-			if st.t >= HAT_REGEN:
+			if st.t >= float(STAND_REGEN.get(st.cls, HAT_REGEN)):
 				st.t = 0.0
 				st.stock = int(st.stock) + 1
 		else:
@@ -1467,6 +1473,8 @@ func _damage(src: Dictionary, dst: Dictionary, amount: float, stun := 0.0) -> vo
 		_event("blocked", {"id":dst.id, "pos":dst.pos})
 		return
 	dst.hp -= amount
+	_stat_add(src, "dmg", amount)
+	_stat_add(dst, "taken", amount)
 	if stun > 0.0:
 		dst.stun = maxf(dst.stun, stun)
 	if str(dst.task.get("kind", "")) == "fish":
@@ -1490,6 +1498,8 @@ func _kill(src: Dictionary, dst: Dictionary) -> void:
 	dst.whirl_until = 0.0
 	# Fat Princess rule: your hat falls where you die; you come back as a Villager. (A High Priest can bring you
 	# back where you fell before you respawn: remember what you were and which hat you dropped.)
+	_stat_add(src, "kills", 1.0)
+	_stat_add(dst, "deaths", 1.0)
 	dst["died_cls"] = dst.cls
 	dst["died_up"] = dst.up
 	dst["died_at"] = time
@@ -1679,7 +1689,9 @@ func _resolve_attack(u: Dictionary) -> void:
 		"sanctuary":
 			var amount := SANCTUARY_HEAL * (1.4 if u.up else 1.0)
 			for a in units:
-				if alive(a) and a.team == u.team and a.pos.distance_to(u.pos) <= SANCTUARY_R:
+				if alive(a) and a.team == u.team and a.pos.distance_to(u.pos) <= SANCTUARY_R \
+						and time - float(a.get("sanct_t", -INF)) >= SANCT_ONCE:
+					a["sanct_t"] = time
 					a.hp = minf(a.max_hp, a.hp + amount)
 			_event("sanctuary", {"id":u.id, "team":u.team})
 
@@ -2414,6 +2426,7 @@ func _step_world(dt: float) -> void:
 				n.amount = n.max
 				_event("node_regrow", {"node":n.id})
 	_step_items(dt)
+	_stat_time(dt)
 
 func _commander(team: int) -> void:
 	# Team quartermaster. Works down a plan and saves for the next item instead of buying
@@ -3526,7 +3539,7 @@ func _step_drain(u: Dictionary, foe: Dictionary, dt: float) -> void:
 		_damage(u, foe, chunk)
 	var ally: Dictionary = by_id.get(str(u.get("beam2", "")), {})
 	if not ally.is_empty() and alive(ally) and u.pos.distance_to(ally.pos) <= float(CLASSES["priest"].range) + 1.0:
-		ally.hp = minf(ally.max_hp, ally.hp + NECRO_ALLY_HEAL * dt)
+		ally.hp = minf(ally.max_hp, ally.hp + NECRO_ALLY_HEAL * dt * _beam_share(ally))
 	else:
 		u.beam2 = ""
 
@@ -3536,3 +3549,28 @@ func _class_full_note(u: Dictionary, cls: String) -> void:
 	if not bool(u.get("bot", false)) and time - float(u.get("full_note_t", -10.0)) > 1.5:
 		u["full_note_t"] = time
 		_event("class_full", {"id":u.id, "cls":cls, "team":u.team, "n":class_count(u.team, cls), "cap":int(CLASS_CAP.get(cls, 0))})
+
+
+func _beam_share(t: Dictionary) -> float:
+	# The first beam to heal t this tick heals in full; any more heal at BEAM_STACK.
+	if float(t.get("beam_heal_t", -1.0)) == time:
+		return BEAM_STACK
+	t["beam_heal_t"] = time
+	return 1.0
+
+# Per-class combat stats for balance tuning (0.31.4): {label: {dmg, taken, kills, deaths, time}} -- "time" is seconds
+# alive in that class (sampled each step by _stat_time). Labels are class_label() (upgrades counted separately).
+var class_stats := {}
+
+func _stat_add(u: Dictionary, key: String, v: float) -> void:
+	if u.is_empty() or not u.has("cls"):
+		return
+	var lbl: String = class_label(u)
+	if not class_stats.has(lbl):
+		class_stats[lbl] = {"dmg":0.0, "taken":0.0, "kills":0.0, "deaths":0.0, "time":0.0}
+	class_stats[lbl][key] = float(class_stats[lbl][key]) + v
+
+func _stat_time(dt: float) -> void:
+	for u in units:
+		if alive(u):
+			_stat_add(u, "time", dt)
