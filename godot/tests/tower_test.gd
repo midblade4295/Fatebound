@@ -45,7 +45,12 @@ func _init() -> void:
 	check(s.tower_to_enter(er).is_empty(), "the enemy can't climb our tower")
 	check(s.act(r.id, "interact") and s.act(k.id, "interact") and int(r.tower) >= 0 and int(k.tower) >= 0, "the ranger and the knight climb")
 	for i in 3: s.step()
-	check(r.pos.distance_to(tp) < 1.0 and k.pos.distance_to(tp) < 1.0, "both stand on the top")
+	check(r.pos.distance_to(tp) <= Land.TOWER_TOP_R + 0.01 and k.pos.distance_to(tp) <= Land.TOWER_TOP_R + 0.01, "both stand on the deck")
+	var k0: Vector2 = k.pos
+	k.move = Vector2(0, 1)
+	for i in 30: s.step()
+	k.move = Vector2.ZERO
+	check(k.pos.distance_to(k0) > 0.5 and k.pos.distance_to(tp) <= Land.TOWER_TOP_R + 0.01, "the knight walks about on the deck and stays on it")
 	check(not s._start_attack(k, "attack") and not s._block(k), "the knight can't fight from up there (no bow)")
 	er.pos = tp + Vector2(0, 8.0)
 	var ek := _unit(s, 1, "knight", 1)

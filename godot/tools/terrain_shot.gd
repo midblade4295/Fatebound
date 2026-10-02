@@ -5,9 +5,8 @@ const View = preload("res://scripts/siege/siege_view.gd")
 const Land = preload("res://scripts/siege/siege_land.gd")
 var frames := 0
 var cams := [
-	["west_hill", Vector3(-20.0, 12.0, 6.0), Vector3(-33.0, 1.5, 20.0)],
-	["east_rise", Vector3(28.0, 14.0, 2.0), Vector3(40.0, 0.5, 15.0)],
-	["overview", Vector3(0.0, 46.0, 52.0), Vector3(0.0, 0.0, 18.0)],
+	["east_tower", Vector3(35.0, 16.0, 31.0), Vector3(35.0, 2.0, 18.5)],
+	["west_tower", Vector3(-24.0, 15.0, 36.0), Vector3(-31.0, 2.0, 25.0)],
 ]
 var cam: Camera3D
 var ci := 0
@@ -20,11 +19,38 @@ func _init() -> void:
 		mi.mesh = m
 		mi.material_override = View._terrain_material()
 		root3.add_child(mi)
-	for p in [Vector2(-31.0, 25.0), Vector2(25.0, 17.0)]:
+	var posts := []
+	var rings := []
+	var caps := []
+	for p in [Vector2(-31.0, 25.0), Vector2(35.0, 18.5)]:
 		var t: Node3D = load(View.HEX + "building_tower_A_blue.gltf").instantiate()
 		t.position = Vector3(p.x, Land.ground_height(p, false) - 0.14, p.y)
-		t.scale = Vector3.ONE * 4.0
+		t.scale = Land.TOWER_SCALE
+		for c in t.find_children("*", "Node3D", true, false):
+			if "_top_" in str(c.name):
+				c.visible = false
 		root3.add_child(t)
+		var deck := MeshInstance3D.new()
+		var dm := CylinderMesh.new()
+		dm.top_radius = 2.35
+		dm.bottom_radius = 2.35
+		dm.height = 0.12
+		deck.mesh = dm
+		deck.position = Vector3(p.x, Land.ground_height(p, false) + Land.TOWER_FLOOR - 0.06, p.y)
+		var wood := StandardMaterial3D.new()
+		wood.albedo_color = Color("#9c7a52")
+		deck.material_override = wood
+		root3.add_child(deck)
+		posts.append(Vector4(p.x, p.y, Land.OUTPOST_R, 0.45))
+		rings.append(Vector4(0.37, 0.82, 0.94, 0.9))
+		caps.append(Vector4(1.0, 0.48, 0.32, 0.42 if p.x > 0.0 else 0.0))
+	for k in 4:
+		posts.append(Vector4.ZERO)
+		rings.append(Vector4.ZERO)
+		caps.append(Vector4.ZERO)
+	View._terrain_material().set_shader_parameter("posts", posts)
+	View._terrain_material().set_shader_parameter("post_ring", rings)
+	View._terrain_material().set_shader_parameter("post_cap", caps)
 	var water := MeshInstance3D.new()
 	var pm := PlaneMesh.new()
 	pm.size = Vector2(Land.HALF_W * 2.0 + 3.0, 26.0)

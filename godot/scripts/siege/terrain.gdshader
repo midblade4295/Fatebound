@@ -23,6 +23,11 @@ uniform float cloud_strength = 0.0;  // High-quality graphics: drifting cloud sh
 
 uniform sampler2D macro_tex : filter_linear_mipmap, repeat_enable;
 uniform vec3 rock_col = vec3(0.78, 0.80, 0.78);
+// Outpost capture rings, painted on the ground (0.30.3): xy centre, z radius, w |capture progress|;
+// post_ring rgb + strength; post_cap rgb + strength of the capture fill (0 when nothing is being captured).
+uniform vec4 posts[6];
+uniform vec4 post_ring[6];
+uniform vec4 post_cap[6];
 varying vec3 wpos;
 varying vec3 wnorm;
 
@@ -66,7 +71,19 @@ void fragment() {
 		r = mix(r, g * 0.9, moss * 0.65);
 		col = mix(col, r, rw);
 	}
-	col *= 1.0 - 0.38 * mk.b;                            // shadow at the cliff foot
+	col *= 1.0 - 0.38 * mk.b;
+	for (int i = 0; i < 6; i++) {
+		float rr = posts[i].z;
+		if (rr <= 0.0) { continue; }
+		float d = distance(wpos.xz, posts[i].xy);
+		if (d > rr + 0.6) { continue; }
+		float line = 1.0 - smoothstep(0.12, 0.26, abs(d - rr));
+		float dash = 0.75 + 0.25 * step(0.5, fract(atan(wpos.z - posts[i].y, wpos.x - posts[i].x) * 5.0));
+		col = mix(col, post_ring[i].rgb, line * post_ring[i].a * dash);
+		col = mix(col, post_ring[i].rgb, (1.0 - smoothstep(rr - 1.2, rr, d)) * step(d, rr) * 0.10 * post_ring[i].a);
+		float fill = (1.0 - smoothstep(rr * posts[i].w - 0.08, rr * posts[i].w + 0.08, d)) * post_cap[i].a;
+		col = mix(col, post_cap[i].rgb, fill);
+	}                            // shadow at the cliff foot
 	float cl = smoothstep(0.46, 0.74, texture(cloud_tex, wpos.xz / 95.0 + vec2(TIME * 0.006, TIME * 0.0035)).r);
 	ALBEDO = col * tint * (1.0 - cloud_strength * cl);
 	ROUGHNESS = mix(0.95, 0.88, rw);

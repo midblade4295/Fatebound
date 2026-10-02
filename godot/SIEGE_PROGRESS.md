@@ -1219,3 +1219,17 @@ K2/K3 notes (0.17.0)
   no respawn, worker drop-off, 2 of 5 raised). Quick suite: all pass except siege_sim_smoke (rescues=0 in seeds
   11 and 22; 0.30.1 had 3 in seed 22). Seed 22 trace: red breaks blue's west gate at 84 s and a red barbarian
   inside kills 12 respawned blue villagers in the courtyard -- the defence collapses early. Not fixed yet.
+
+# 0.30.3 (Kevin, phone screenshots: rings, tower spot, roofs)
+- Capture rings are painted by the terrain shader (uniform arrays posts / post_ring / post_cap, set in
+  _sync_outposts): a dashed ring in the owner's colour (white neutral) with a faint inner tint, and while a capture
+  is under way a fill growing from the middle in the capturing team's colour. On hills the old torus decals sank
+  into the slope; the ground now draws them. OUTPOST_R 5 -> 6.5.
+- The east tower moved to Kevin's circle on the east rise: (35, 18.5) (the hill re-centred on it, r0 7 m flat top;
+  its scarp moved south to the hill's edge).
+- Towers: roofs off (the KayKit "_top_" piece hidden), x6 wide / x4 tall, a plank deck inside the rim at 5.68 m,
+  the owner's flag on the rim. OUTPOST_TOWER_R 3.0; climb within 4.0 m; worker drop 4.4 m. People on the deck
+  walk about freely (kept within TOWER_TOP_R 1.85 m of the centre; they push each other but not the ground), 8 of
+  them; climbing down drops you on the side you stand on. Protocol v22.
+- Tests: tower_test adds walking about on the deck. Quick suite all pass; bot matches: see the smoke line in the
+  round report (rescues > 0 again).

@@ -143,14 +143,14 @@ const FALL_X := 45.6              # where the river pours over the cliff
 # on its outer side the hill drops away within SCARP_W, tapering off toward both ends so the face fades back into
 # slope; only the steep middle has a wall. Blue half (z > 0); red is the point mirror.
 const HILLS := [
-	{"c": Vector2(-33.0, 25.0), "h": 2.2, "r0": 6.0, "r1": 14.0},     # the west highland (its tower on top)
-	{"c": Vector2(41.0, 17.0), "h": 2.6, "r0": 3.5, "r1": 11.0},      # the east rise at the cliff edge
+	{"c": Vector2(-33.0, 25.0), "h": 2.2, "r0": 7.5, "r1": 15.0},     # the west highland (its tower on top)
+	{"c": Vector2(36.0, 18.0), "h": 2.4, "r0": 7.0, "r1": 13.0},      # the east rise at the cliff edge (its tower on top, 0.30.3)
 	{"c": Vector2(8.0, 26.0), "h": 1.1, "r0": 1.5, "r1": 8.0},        # a knoll mid-field
 ]
 const SCARPS := [
 	{"hill": 0, "pts": [Vector2(-40.5, 19.0), Vector2(-34.0, 16.5), Vector2(-28.0, 17.0)]},
 	{"hill": 0, "pts": [Vector2(-40.0, 30.0), Vector2(-35.5, 33.0)]},
-	{"hill": 1, "pts": [Vector2(35.5, 13.0), Vector2(40.0, 11.0), Vector2(43.5, 11.5)]},
+	{"hill": 1, "pts": [Vector2(33.5, 10.0), Vector2(38.5, 9.0), Vector2(42.5, 9.5)]},
 ]
 const SCARP_W := 1.0             # the face's horizontal run
 const SCARP_TAPER := 2.6         # metres at each end where the face fades back into slope
@@ -242,10 +242,12 @@ static func scarp_rim(p: Vector2) -> Vector2:
 	return Vector2(rim, shadow)
 
 # ---------------- outposts (towers) ----------------
-const OUTPOST_R := 5.0           # capture radius
-const OUTPOST_TOWER_R := 2.25    # solid tower in the middle (1.8 until 0.30.1: the towers grew 25 %)
-const TOWER_FLOOR := 5.6         # its walkable top (KayKit tower_A floor at 1.40, scaled 4.0)
-const OUTPOSTS_BLUE_HALF := [Vector2(-31.0, 25.0), Vector2(25.0, 17.0)]   # the highland's; one on open ground
+const OUTPOST_R := 6.5           # capture radius (5 until 0.30.3; the towers are wider)
+const OUTPOST_TOWER_R := 3.0     # solid tower in the middle: the KayKit body (r 0.5) at x6 wide (0.30.3, Kevin: "widen")
+const TOWER_SCALE := Vector3(6.0, 4.0, 6.0)   # wide and squat: a lookout you can walk about on, roof removed
+const TOWER_FLOOR := 5.68        # its walkable top (a deck inside the body's rim at 1.42, x4 high)
+const TOWER_TOP_R := 1.85        # how far from the centre a unit up there can walk (deck radius 2.3 - a unit)
+const OUTPOSTS_BLUE_HALF := [Vector2(-31.0, 25.0), Vector2(35.0, 18.5)]   # on the highland; on the east rise (Kevin's circle)
 const ISLAND_TOWER := Vector2.ZERO
 
 static func outpost_positions() -> Array:
@@ -268,7 +270,7 @@ const PATHS_BLUE_HALF := [
 	[Vector2(-9.5, 39.0), Vector2(-4.0, 35.0), Vector2(2.0, 31.0)],
 	[Vector2(5.0, 38.5), Vector2(13.0, 35.0), Vector2(19.0, 28.5), Vector2(19.5, 21.0), Vector2(20.0, 13.5),
 		Vector2(21.0, 8.5), Vector2(24.0, 4.7)],
-	[Vector2(19.0, 28.5), Vector2(27.0, 31.5), Vector2(36.2, 30.6), Vector2(37.25, 26.75), Vector2(38.0, 22.0)],
+	[Vector2(19.0, 28.5), Vector2(27.0, 31.5), Vector2(34.5, 30.5), Vector2(35.5, 25.5)],
 ]
 const PATH_HALF_W := 2.1
 
@@ -315,7 +317,7 @@ static func rolling(p: Vector2) -> float:
 	var fade := 1.0 - _smooth(CASTLE_ZONE - 6.0, CASTLE_ZONE, absf(p.y))
 	fade *= _smooth(1.5, 6.0, river_off(p))       # flat by the water (and on the island)
 	for q in OUTPOSTS_BLUE_HALF:                    # a level patch round each tower's foot (0.30.1)
-		fade *= _smooth(5.5, 9.5, minf(p.distance_to(q), p.distance_to(-q)))
+		fade *= _smooth(7.0, 11.0, minf(p.distance_to(q), p.distance_to(-q)))
 	return h * fade
 
 static func ground_height(p: Vector2, with_decks := true) -> float:

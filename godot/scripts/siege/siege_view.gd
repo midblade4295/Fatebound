@@ -1655,20 +1655,44 @@ var outpost_nodes: Dictionary = {}
 
 func _build_outposts() -> void:
 	for op in sim.outposts:
-		# Sunk a little into the ground (0.30.1, Kevin: "blend into ground better"); 25 % bigger again (collision:
-		# Land.OUTPOST_TOWER_R), with bushes, stones and a ring of grass round the foot.
+		# 0.30.3 (Kevin: "remove the roofs ... so you can see players on them and widen their size so players can
+		# walk around on top"): the KayKit tower body only (its roof piece hidden), x6 wide and x4 tall, with a
+		# plank deck inside its rim; the owner's flag flies from the rim. Sunk a little, bushes and grass round
+		# the foot. The capture ring is painted on the ground by the terrain shader (_sync_outposts).
 		var p := Vector3(op.p.x, Sim.height_at(op.p) - 0.14, op.p.y)
 		var looks := {}
-		looks[-1] = _place(HEX + "building_tower_base_blue.gltf", p, 0.3, 4.5)
-		looks[0] = _place(HEX + "building_tower_A_blue.gltf", p, 0.3, 4.0)
-		looks[1] = _place(HEX + "building_tower_A_red.gltf", p, 0.3, 4.0)
+		looks[-1] = _tower_body(HEX + "building_tower_base_blue.gltf", p)
+		looks[0] = _tower_body(HEX + "building_tower_A_blue.gltf", p)
+		looks[1] = _tower_body(HEX + "building_tower_A_red.gltf", p)
+		var deck := MeshInstance3D.new()
+		var dm := CylinderMesh.new()
+		dm.top_radius = 2.35
+		dm.bottom_radius = 2.35
+		dm.height = 0.12
+		dm.radial_segments = 24
+		deck.mesh = dm
+		var wood := StandardMaterial3D.new()
+		wood.albedo_color = Color("#9c7a52")
+		wood.roughness = 0.9
+		deck.material_override = wood
+		deck.position = Vector3(p.x, Sim.height_at(op.p) + Land.TOWER_FLOOR - 0.06, p.z)
+		add_child(deck)
 		var flags := {}
+		var top_y := Sim.height_at(op.p) + Land.TOWER_FLOOR
 		for t in 2:
-			flags[t] = _place(HEX + "flag_%s.gltf" % COLOR[t], p + Vector3(2.9, 0, 2.9), 0.0, 2.6)
+			flags[t] = _place(HEX + "flag_%s.gltf" % COLOR[t], Vector3(p.x + 1.75, top_y, p.z + 1.75), 0.0, 2.6)
 		_dress_tower_base(op.p, int(op.id))
-		var ring := _decal(p + Vector3(0, 0.07, 0), Land.OUTPOST_R, Color(1, 1, 1), 0.55)
-		var prog := _decal(p + Vector3(0, 0.08, 0), Land.OUTPOST_R - 0.35, TEAM_COLORS[0], 0.9)
-		outpost_nodes[op.id] = {"looks":looks, "flags":flags, "ring":ring, "prog":prog, "owner":-2}
+		outpost_nodes[op.id] = {"looks":looks, "flags":flags, "owner":-2}
+
+func _tower_body(path: String, at: Vector3) -> Node3D:
+	var n := _place(path, at, 0.3, 1.0)
+	if n == null:
+		return null
+	n.scale = Land.TOWER_SCALE
+	for c in n.find_children("*", "Node3D", true, false):
+		if "_top_" in str(c.name):
+			(c as Node3D).visible = false              # the roof and its band of windows
+	return n
 
 func _dress_tower_base(c: Vector2, seed_id: int) -> void:
 	var rng := RandomNumberGenerator.new()
@@ -1684,6 +1708,9 @@ func _dress_tower_base(c: Vector2, seed_id: int) -> void:
 			rng.randf_range(4.5, 6.0) if k % 2 == 0 else rng.randf_range(2.3, 3.0))
 
 func _sync_outposts() -> void:
+	var posts := []
+	var rings := []
+	var caps := []
 	for op in sim.outposts:
 		var on: Dictionary = outpost_nodes.get(op.id, {})
 		if on.is_empty():
@@ -1697,18 +1724,24 @@ func _sync_outposts() -> void:
 			for t in on.flags:
 				if on.flags[t] != null:
 					(on.flags[t] as Node3D).visible = int(t) == owner
-			var rc: Color = Color(1, 1, 1) if owner < 0 else TEAM_COLORS[owner]
-			rc.a = 0.55
-			((on.ring as MeshInstance3D).material_override as StandardMaterial3D).albedo_color = rc
-		# Capture progress: an inner ring that grows with |prog|, in the capturing team's colour.
+		# Painted on the ground (0.30.3, Kevin: "make sure the capture rings paint on the ground"): the ring in the
+		# owner's colour (white when neutral), and while a capture is under way a fill growing from the middle in
+		# the capturing team's colour. Hills can't hide it: the terrain itself draws it.
 		var pr: float = op.prog
-		var pm := on.prog as MeshInstance3D
-		var sc := maxf(0.02, absf(pr))
-		pm.scale = Vector3(sc, 0.15, sc)
-		pm.visible = absf(pr) > 0.02 and absf(pr) < 0.999
+		var rc: Color = Color(1, 1, 1) if owner < 0 else TEAM_COLORS[owner]
 		var pc: Color = TEAM_COLORS[0] if pr > 0.0 else TEAM_COLORS[1]
-		pc.a = 0.9
-		(pm.material_override as StandardMaterial3D).albedo_color = pc
+		var capturing := absf(pr) > 0.02 and absf(pr) < 0.999
+		posts.append(Vector4(op.p.x, op.p.y, Land.OUTPOST_R, absf(pr)))
+		rings.append(Vector4(rc.r, rc.g, rc.b, 0.9 if owner >= 0 else 0.75))
+		caps.append(Vector4(pc.r, pc.g, pc.b, 0.42 if capturing else 0.0))
+	while posts.size() < 6:
+		posts.append(Vector4(0, 0, 0, 0))
+		rings.append(Vector4(0, 0, 0, 0))
+		caps.append(Vector4(0, 0, 0, 0))
+	var tm: ShaderMaterial = _terrain_material()
+	tm.set_shader_parameter("posts", posts)
+	tm.set_shader_parameter("post_ring", rings)
+	tm.set_shader_parameter("post_cap", caps)
 
 func _place(path: String, pos: Vector3, rot := 0.0, s := 1.0) -> Node3D:
 	var packed := Stage.scene(path)

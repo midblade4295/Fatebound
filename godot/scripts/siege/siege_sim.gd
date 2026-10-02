@@ -139,7 +139,7 @@ const HAT_PICK_R := 1.0
 # them (sneak into the enemy courtyard to switch class). Outposts have no hat dispenser: they are a
 # respawn point (attackers respawn there only when a dropped hat is close by) and a resource
 # drop-off for Workers.
-const OUTPOST_DROP_R := 3.8       # workers deliver within this of an outpost their team holds (bigger towers, 0.30.1)
+const OUTPOST_DROP_R := 4.4       # workers deliver within this of an outpost their team holds (wider towers, 0.30.3)
 # Towers (0.26.0, Kevin): the team holding an outpost can climb its tower -- archers and mages only --
 # and shoot down from the top. Up there they can't be reached by melee; arrows, fire and catapult
 # stones still hit them. Lose the tower and everyone on it is thrown off. No respawning at towers.
@@ -147,8 +147,8 @@ const TOWERS_CLIMBABLE := true    # 0.30.2, Kevin: "make it so players can climb
 const TOWER_CLASSES := ["villager", "worker", "knight", "barbarian", "rogue", "ranger", "mage", "priest"]
 const TOWER_SHOOTERS := ["ranger", "mage"]   # Kevin: "only mages and archers can shoot from top"
 const TOWER_BOTS := false        # bots stay on the ground for now (players climb)
-const TOWER_SLOTS := 4
-const TOWER_ENTER_R := 3.4        # from the tower's centre (its wall is 1.8 m out)
+const TOWER_SLOTS := 8            # the deck is wide now (0.30.3): people walk about on it
+const TOWER_ENTER_R := 4.0        # from the tower's centre (its wall is 3 m out)
 const TOWER_RANGE := 1.3          # range bonus from the top
 const TOWER_BOT_MAX := 2          # bots leave the other places for players
 const TOWER_SLOT_OFF := [Vector2(0.46, 0.46), Vector2(-0.46, -0.46), Vector2(-0.46, 0.46), Vector2(0.46, -0.46)]
@@ -1710,9 +1710,13 @@ func _step_unit(u: Dictionary, dt: float) -> void:
 		u.state = "idle"
 		return
 	if int(u.tower) >= 0:
-		u.state = "idle"
-		if u.move.length() > 0.3 and not _net_moves(u):
-			u.face = lerp_angle(u.face, angle_of(u.move), minf(1.0, dt * 14.0))   # the stick aims
+		# Up on the deck (0.30.3, Kevin: "walk around on top"): free movement, kept on the deck by _separate.
+		if u.move.length() > 0.08:
+			u.pos += u.move * speed * dt
+			u.face = lerp_angle(u.face, angle_of(u.move), minf(1.0, dt * 14.0))
+			u.state = "move"
+		else:
+			u.state = "idle"
 		return
 	if not u.task.is_empty():
 		_step_task(u, dt)
@@ -2026,12 +2030,12 @@ func _clamp_to_field(p: Vector2) -> Vector2:
 func _separate() -> void:
 	for i in units.size():
 		var a: Dictionary = units[i]
-		if not alive(a) or int(a.tower) >= 0:
+		if not alive(a):
 			continue
 		for j in range(i+1, units.size()):
 			var b: Dictionary = units[j]
-			if not alive(b) or int(b.tower) >= 0:
-				continue
+			if not alive(b) or int(b.tower) != int(a.tower):
+				continue                           # the ground and a tower's deck don't touch
 			var off: Vector2 = b.pos - a.pos
 			var d := off.length()
 			if d < UNIT_R*2.0 and d > 0.0001:
@@ -2040,7 +2044,7 @@ func _separate() -> void:
 				b.pos += push
 	for u in units:
 		if alive(u) and int(u.tower) >= 0:
-			u.pos = tower_slot_pos(u)              # pinned to its place on the tower top
+			u.pos = tower_deck_clamp(u)            # kept on the tower's deck
 		elif alive(u):
 			# Clamp first: pushing a unit that is slightly past the field edge off a wall end can
 			# send it diagonally, and clamping afterwards drops it back inside the wall.
@@ -2934,6 +2938,11 @@ static func _outside_cells() -> Array:
 func tower_range(u: Dictionary) -> float:
 	return TOWER_RANGE if int(u.get("tower", -1)) >= 0 else 1.0
 
+func tower_deck_clamp(u: Dictionary) -> Vector2:
+	var c: Vector2 = (outposts[int(u.tower)] as Dictionary).p
+	var off: Vector2 = u.pos - c
+	return c + off.limit_length(Land.TOWER_TOP_R)
+
 func tower_slot_pos(u: Dictionary) -> Vector2:
 	var op: Dictionary = outposts[int(u.tower)]
 	var k: int = (op.occ as Array).find(u.id)
@@ -2955,7 +2964,8 @@ func _enter_tower(u: Dictionary, op: Dictionary) -> bool:
 	u.move = Vector2.ZERO
 	u.path = PackedVector2Array()
 	u["tower_seen"] = time
-	u.pos = tower_slot_pos(u)
+	var side: Vector2 = (u.pos - (op.p as Vector2))
+	u.pos = (op.p as Vector2) + (side.normalized() if side.length() > 0.01 else Vector2(1, 0)) * Land.TOWER_TOP_R * 0.7
 	_event("tower_up", {"id":u.id, "tower":op.id, "team":u.team})
 	return true
 
@@ -2964,7 +2974,9 @@ func _free_tower_slot(u: Dictionary) -> Vector2:
 	var op: Dictionary = outposts[int(u.tower)]
 	(op.occ as Array).erase(u.id)
 	u.tower = -1
-	var spot: Vector2 = (op.p as Vector2) + dir_of(u.face) * (Land.OUTPOST_TOWER_R + UNIT_R + 0.35)
+	var off: Vector2 = u.pos - (op.p as Vector2)
+	var dirv: Vector2 = off.normalized() if off.length() > 0.3 else dir_of(u.face)     # down the side they stand on
+	var spot: Vector2 = (op.p as Vector2) + dirv * (Land.OUTPOST_TOWER_R + UNIT_R + 0.35)
 	u.pos = _clamp_to_field(_push_out(_clamp_to_field(spot), UNIT_R, u.team))
 	return u.pos
 
