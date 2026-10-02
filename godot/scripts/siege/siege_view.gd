@@ -2809,7 +2809,12 @@ func on_event(e: Dictionary) -> void:
 					spark(a.root.position + Vector3(randf_range(-0.6, 0.6), 0.4 + randf()*1.4, randf_range(-0.6, 0.6)), GOLD)
 		"nova":
 			if not a.is_empty():
-				ring_at(a.root.position, Color("#ff8a3a"), 3.3, 0.55)
+				ring_at(a.root.position, Color("#ff8a3a"), Sim.NOVA_R, 0.55)
+		"resurrect":                                          # 0.31.1: a High Priest brings someone back
+			var rp := Vector3(e.pos.x, Sim.height_at(e.pos) + 0.1, e.pos.y)
+			ring_at(rp, Color("#fff1a8"), 1.6, 0.9)
+			for i in 14:
+				spark(rp + Vector3(randf_range(-0.5, 0.5), randf() * 2.4, randf_range(-0.5, 0.5)), Color("#fff1a8"))
 		"sanctuary":
 			if not a.is_empty():
 				ring_at(a.root.position, Color("#fff1a8"), Sim.SANCTUARY_R, 0.7)

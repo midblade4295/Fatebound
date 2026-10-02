@@ -173,7 +173,8 @@ const WHIRL_R := 2.4
 const WHIRL_DMG := 0.55           # x barbarian damage per tick
 const WHIRL_CD := 9.0           # the beam stays up this long after the last ATTACK (held ATTACK refreshes it)
 const BEAM_MOVE := 0.7            # walking speed while channelling
-const SANCTUARY_R := 4.5
+const SANCTUARY_R := 6.5          # 4.5 until 0.31.1 (Kevin: bigger priest heal)
+const NOVA_R := 4.8               # the mage's nova, 3.3 until 0.31.1 (Kevin: bigger wizard AoE)
 const SANCTUARY_HEAL := 35.0
 
 # range: melee reach or projectile travel. arc: cosine of the half-angle a melee swing covers.
@@ -849,6 +850,7 @@ func act(id: String, action: String, arg: Variant = null) -> bool:
 				"block": return _block(u)
 				"whirlwind": return _whirl(u)
 				"hammer": return _throw_hammer(u)
+				"resurrect": return _resurrect(u)
 				_: return _start_attack(u, "ability")
 		"dodge": return _dodge(u)
 		"interact": return _interact(u)
@@ -916,7 +918,9 @@ func ability_of(u: Dictionary) -> String:
 	if u.cls == "barbarian" and u.up:
 		return "whirlwind"
 	if u.cls == "knight" and u.up:
-		return "hammer"                        # the Crusader (0.30.5, Kevin): Hammer Throw instead of the shield
+		return "hammer"
+	if u.cls == "priest" and u.up:
+		return "resurrect"                     # the High Priest (0.31.1, Kevin)                        # the Crusader (0.30.5, Kevin): Hammer Throw instead of the shield
 	return str(CLASSES[u.cls].ability)
 
 func blocking(u: Dictionary) -> bool:
@@ -1455,8 +1459,14 @@ func _kill(src: Dictionary, dst: Dictionary) -> void:
 	dst.beam = ""
 	dst.block_until = 0.0
 	dst.whirl_until = 0.0
-	# Fat Princess rule: your hat falls where you die; you come back as a Villager.
+	# Fat Princess rule: your hat falls where you die; you come back as a Villager. (A High Priest can bring you
+	# back where you fell before you respawn: remember what you were and which hat you dropped.)
+	dst["died_cls"] = dst.cls
+	dst["died_up"] = dst.up
+	dst["died_at"] = time
+	var hats_before := hats.size()
 	_drop_hat(dst)
+	dst["died_hat"] = int(hats[hats.size() - 1].id) if hats.size() > hats_before else -1
 	dst.cls = "villager"
 	dst.up = false
 	dst.workshop_open = false
@@ -1635,7 +1645,7 @@ func _resolve_attack(u: Dictionary) -> void:
 			for i in 5:
 				_shoot(u, u.face + (i-2)*0.13, dmg*0.8, 0.0, float(c.proj_speed), float(c.range) * tower_range(u))
 		"nova":
-			_melee(u, 3.3, -2.0, dmg*1.4)
+			_melee(u, NOVA_R, -2.0, dmg*1.4)
 			_event("nova", {"id":u.id})
 		"sanctuary":
 			var amount := SANCTUARY_HEAL * (1.4 if u.up else 1.0)
@@ -2631,6 +2641,9 @@ func _think_worker(u: Dictionary) -> void:
 
 func _think_priest(u: Dictionary) -> bool:
 	# Priest bots: go to the most hurt ally close by and beam them; true if that's what it did.
+	if ability_of(u) == "resurrect" and u.cd_ability <= 0.0 and not resurrect_target(u).is_empty():
+		u.move = Vector2.ZERO
+		return _resurrect(u)
 	var best := {}
 	var worst := 0.98
 	for a in units:
@@ -2652,7 +2665,7 @@ func _think_priest(u: Dictionary) -> bool:
 	for a in units:
 		if a.team == u.team and alive(a) and a.pos.distance_to(u.pos) <= SANCTUARY_R and a.hp < a.max_hp * 0.7:
 			near += 1
-	if near >= 2:
+	if near >= 2 and ability_of(u) == "sanctuary":
 		_start_attack(u, "ability")
 	return true
 
@@ -2946,7 +2959,7 @@ func _fight(u: Dictionary, foe: Dictionary) -> void:
 			u.move = Vector2.ZERO
 		if d <= reach * 0.9:
 			u.face = angle_of(foe.pos - u.pos)
-			if u.cd_ability <= 0.0 and rng.randf() < 0.35:
+			if u.cd_ability <= 0.0 and (str(c.ability) != "nova" or _melee_count(u, NOVA_R) >= 1) and rng.randf() < 0.35:
 				_start_attack(u, "ability")
 			else:
 				_start_attack(u, "attack")
@@ -3382,3 +3395,50 @@ func _step_items(dt: float) -> void:
 				var push := off / d * (ra + rb - d) * 0.5
 				ia.pos = (ia.pos as Vector2) - push
 				ib.pos = (ib.pos as Vector2) + push
+
+
+# ---------- the High Priest's Resurrection (0.31.1, Kevin) ----------
+# Brings back the ally who fell most recently within RESURRECT_R, where they fell, at RESURRECT_HP of their health -- before
+# their respawn takes them back to the castle. They get their class back if their hat is still lying there.
+const RESURRECT_R := 6.0
+const RESURRECT_CD := 30.0
+const RESURRECT_HP := 0.4
+
+func resurrect_target(u: Dictionary) -> Dictionary:
+	var best := {}
+	var latest := -INF
+	for a in units:
+		if a.team != u.team or a.state != "dead" or a.id == u.id:
+			continue
+		if (a.pos as Vector2).distance_to(u.pos) <= RESURRECT_R and float(a.get("died_at", -INF)) > latest:
+			latest = float(a.get("died_at", -INF))
+			best = a
+	return best
+
+func _resurrect(u: Dictionary) -> bool:
+	if not alive(u) or u.stun > 0.0 or u.cd_ability > 0.0 or u.carrying or int(u.get("tower", -1)) >= 0 or u.state in ["wind", "dodge"]:
+		return false
+	var a := resurrect_target(u)
+	if a.is_empty():
+		return false
+	var hid := int(a.get("died_hat", -1))
+	for h in hats:
+		if int(h.id) == hid:
+			hats.erase(h)
+			a.cls = str(a.get("died_cls", "villager"))
+			a.up = bool(a.get("died_up", false))
+			_event("hat_pick", {"hat":hid, "id":a.id, "cls":a.cls})
+			break
+	a.max_hp = float(stat(a, "hp"))
+	a.hp = a.max_hp * RESURRECT_HP
+	a.state = "idle"
+	a.t = 0.0
+	a.stun = 0.0
+	a.respawn_at = INF
+	a.task = {}
+	u.cd_ability = RESURRECT_CD
+	u.face = angle_of((a.pos as Vector2) - u.pos)
+	u.state = "recover"
+	u.t = 0.4
+	_event("resurrect", {"id":a.id, "by":u.id, "team":u.team, "pos":a.pos})
+	return true

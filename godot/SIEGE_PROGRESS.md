@@ -1352,3 +1352,14 @@ K2/K3 notes (0.17.0)
   stockpiled stone shows rocks (was the KayKit ingot stack). Sounds: tree down (wood thud), boulder break (crumble),
   pick-ups. Event "item_pickup" (not "pickup": that is the King's).
 - tests/items_test.gd (15 checks incl. 120 units delivered by bots in 4 min). Quick suite all pass.
+
+# 0.31.1 (Kevin: High Priest gets Resurrection; bigger priest heal and wizard AoE)
+- ability_of(upgraded priest) = "resurrect" (Sanctuary stays on the Priest): raises the ally who fell most recently
+  within RESURRECT_R 6 m, where they fell, at 40 % health, before their 5 s respawn takes them to the castle; their class
+  comes back if their dropped hat is still there (the hat is taken off the ground). Cooldown 30 s (HUD ring). Bots use
+  it when someone's down within reach. Light ring + sparks; sound: the pack's "Firebuff 1" as tm_revive.
+- SANCTUARY_R 4.5 -> 6.5; NOVA_R (new constant) 3.3 -> 4.8, its ring drawn to match. Mage bots now nova only with an enemy
+  inside NOVA_R (they used to fire it 35 % of the time at any range).
+- Protocol v26. tests/priest_test.gd (12 checks).
+- Quick suite: all pass except siege_sim_smoke: seeds 11 and 22 both 0-0 on time (0.31.0: 3 rescues in 22). Seeds 33, 44,
+  55: 0-0, 3-0 by rescue at 316 s, 2-1. Bot rescues remain seed-dependent; not changed here.

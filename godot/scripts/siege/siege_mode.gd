@@ -665,6 +665,8 @@ func _event_sound(e: Dictionary) -> void:
 				_cue("tm_land_wood", 1, e.get("pos", Vector2.INF), 26.0, false, 1.0)
 			else:
 				_cue("tm_crumble", 2, e.get("pos", Vector2.INF), 26.0)
+		"resurrect":
+			_cue("tm_revive", 1, e.get("pos", Vector2.INF), HEAR_R, str(e.get("by", "")) == str(hud.player_id) or mine)
 		"item_pickup":
 			_cue("tm_land_wood" if str(e.get("kind", "")) == "log" else "tm_mine", 1 if str(e.get("kind", "")) == "log" else 5,
 				_unit_pos(e.get("id", "")), 14.0, mine, 0.8)
