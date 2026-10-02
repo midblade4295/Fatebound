@@ -1309,3 +1309,11 @@ K2/K3 notes (0.17.0)
 - Settings: a Music slider (Master, Effects, Music); siege_app passes it as audio.levels.music.
 - Checked with a stand-in (the procedural trailer placeholder, not committed): loads, audible, ducks 0.045 -> 0.028
   under a nearby hit and returns to 0.045. match_audio_test runs those checks when a track is installed.
+
+# 0.30.9 (Kevin: music steady, no dipping, quiet by default; river quieter)
+- Ducking removed: the music sits at one level (MUSIC_GAIN 0.10 -> 0.045, so 0.020 linear at the default master
+  0.75 x music 0.6: about -50 LUFS for a -16 LUFS track); it only eases when muted or the Music slider moves.
+  match_audio_test checks it stays put through a nearby hit and a gate crash.
+- River ambience 0.55 -> 0.14 (at the bank: -35.5 -> -47.4 dB, the forest bed is -49.0); the waterfall was louder
+  still (-30.0) and came down with it (0.7 -> 0.12: -45.3 dB at its closest).
+- Still waiting for the trailer song (Spooky_3.wav) for assets/music/match.ogg.

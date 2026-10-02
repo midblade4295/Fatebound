@@ -548,12 +548,10 @@ var _snd_rng := RandomNumberGenerator.new()
 var _step_t := 0.0
 var _step_last := Vector2.INF
 var _amb := {}
-# Match music (0.30.9): the trailers' song, looping under everything. It sits well below the effects and ducks
-# a further ~6 dB while loud things happen near you (_duck: the loudest recent nearby cue, easing back over ~1 s).
+# Match music (0.30.9): the trailers' song, looping at a steady, quiet level under everything (Kevin: no dipping;
+# quiet enough not to drown out other sound). Only the Music slider moves it.
 const MUSIC_PATH := "res://assets/music/match.ogg"
-const MUSIC_GAIN := 0.10          # x master x music; the track is mastered to -16 LUFS (tools/music_prep.sh)
-const MUSIC_DUCK := 0.5           # at a full-volume cue nearby the music drops to half (-6 dB)
-var _duck := 0.0
+const MUSIC_GAIN := 0.045         # x master x music; the track is normalised to -16 LUFS (tools/music_prep.sh)
 var _music: AudioStreamPlayer = null
 
 func _listener() -> Vector2:
@@ -571,7 +569,6 @@ func _cue(base: String, n: int, at: Vector2, reach := HEAR_R, always := false, g
 	var v := clampf(1.0 - (d - 6.0) / maxf(reach - 6.0, 1.0), 0.0, 1.0)
 	var cue := base if n <= 1 else "%s%d" % [base, 1 + _snd_rng.randi() % n]
 	audio.play(cue, false, v * gain)
-	_duck = maxf(_duck, v * gain)
 
 func _unit_pos(id: Variant) -> Vector2:
 	var u: Dictionary = sim.by_id.get(str(id), {})
@@ -714,8 +711,10 @@ func _ambience(delta: float) -> void:
 	var at := _listener()
 	var want := {
 		"forest_day": 0.22,
-		"river": 0.55 * clampf(1.0 - Land.river_off(at) / 16.0, 0.0, 1.0),
-		"waterfall": 0.7 * clampf(1.0 - at.distance_to(Vector2(Land.FALL_X, Land.river_c(Land.FALL_X))) / 30.0, 0.0, 1.0),
+		# 0.30.9 (Kevin: "lower the volume of the river"): 0.55 -> 0.14 and the waterfall 0.7 -> 0.12. The river file
+		# is ~5 dB hotter than the forest bed and the waterfall ~9 dB, so these now peak near the bed's level.
+		"river": 0.14 * clampf(1.0 - Land.river_off(at) / 16.0, 0.0, 1.0),
+		"waterfall": 0.12 * clampf(1.0 - at.distance_to(Vector2(Land.FALL_X, Land.river_c(Land.FALL_X))) / 30.0, 0.0, 1.0),
 	}
 	for k in _amb:
 		var pl: AudioStreamPlayer = _amb[k]
@@ -737,8 +736,6 @@ func _music_step(delta: float, muted: bool, lv: Dictionary) -> void:
 		_music.volume_db = -80.0
 		add_child(_music)
 		_music.play()
-	_duck = maxf(0.0, _duck - delta * 1.1)
-	var target := 0.0 if muted else MUSIC_GAIN * float(lv.get("master", 0.75)) * float(lv.get("music", 0.6)) * (1.0 - MUSIC_DUCK * clampf(_duck, 0.0, 1.0))
+	var target := 0.0 if muted else MUSIC_GAIN * float(lv.get("master", 0.75)) * float(lv.get("music", 0.6))
 	var cur := db_to_linear(_music.volume_db)
-	var k := minf(1.0, delta * (12.0 if target < cur else 2.5))      # duck fast, come back slowly
-	_music.volume_db = linear_to_db(maxf(lerpf(cur, target, k), 0.00001))
+	_music.volume_db = linear_to_db(maxf(lerpf(cur, target, minf(1.0, delta * 2.0)), 0.00001))   # eases only on mute / slider
