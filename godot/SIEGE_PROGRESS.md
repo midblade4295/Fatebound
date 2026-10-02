@@ -1478,3 +1478,10 @@ K2/K3 notes (0.17.0)
 - 7 rings drawn at a fixed height (King pick-up/drop/recapture, gate and jail breaks, workshop, catapult, throne) now sit on
   the floor under them (Sim.height_at), so none float in the 1.6 m-deep dungeon.
 - Quick suite: all pass except siege_sim_smoke (rescues 0 in seeds 11/22).
+
+# 0.31.11 (Kevin: "the gold ring is still floating above the King's head")
+- It was the gold cell marker decal in _build_castle, drawn at Castle.L1_H + 0.06 (1.86 m: the level-1 platform where the
+  cell used to stand); the cell is now in the sunken dungeon (floor -1.6), so it hung 3.5 m up. Now at Sim.height_at(cell).
+  (0.31.10's diagnosis -- a stuck defender's ring -- was wrong for this ring; the stuck defenders were real and are fixed.)
+- Scanned every flat decal in a running match against the floor under it: the only other one off the floor is the
+  waterfall foam, which is meant to be in the valley 24 m below.

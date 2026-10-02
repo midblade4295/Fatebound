@@ -2116,7 +2116,9 @@ func _build_castle(t: int) -> void:
 	_place(HEX + "weaponrack.gltf", Vector3(wr.x, Castle.L2_H, wr.y), face + PI * 0.5, 4.0)
 	# Dungeon: the cell on the platform, a ladder against the back wall and barrels.
 	var cc: Vector2 = Sim._c(t, Sim.CELL_C)
-	_decal(Vector3(cc.x, Castle.L1_H + 0.06, cc.y), 1.4, GOLD, 0.35)
+	# 0.31.11: on the cell's floor. (It was at the level-1 height from when the cell stood on the platform; since the cell
+	# moved into the sunken dungeon that put it 3.5 m up, floating over the King's head.)
+	_decal(Vector3(cc.x, Sim.height_at(cc) + 0.06, cc.y), 1.4, GOLD, 0.35)
 	for bx in [Vector2(-19.0, 21.2), Vector2(-12.0, 21.2)]:
 		var b2: Vector2 = Sim._c(t, bx)
 		_place(HEX + "barrel.gltf", Vector3(b2.x, Castle.L1_H, b2.y), randf() * TAU, 2.2)
