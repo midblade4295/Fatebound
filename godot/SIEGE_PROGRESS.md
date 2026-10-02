@@ -1278,3 +1278,23 @@ K2/K3 notes (0.17.0)
   off; bus high-pass 55 Hz, soft clip, 0.18 s fade, peak 0.56. 44.1 kHz (the old cues are 32 kHz). "Punchy"
   version installed as hammerThrow.wav; a "heavy" version (more body, slower spin) handed over as an option.
 - SFX credits so far: ~410 (12/18-credit fixed-length takes; auto-length takes cost 50 each).
+
+# 0.30.8 (Kevin: "use sounds in this pack and put them in game where they should go" -- TomMusic Free Fantasy SFX Pack)
+- License (itch.io page): royalty-free, commercial use OK, credit appreciated, no resale/redistribution of the pack.
+  CREDITS.md added. NOTE: the GitHub repo is public; pushing these files there may count as redistribution.
+- 95 one-shots converted (mono 44.1 kHz WAV, leading silence trimmed, length capped, peak 0.56 combat / 0.32
+  footsteps) as assets/sounds/tm_*.wav (5.2 MB); 3 ambience loops as Ogg (2.6 MB). Converter: /tmp/convert_tm.py
+  (not kept; the mapping is in SiegeMode._event_sound and below).
+- SiegeMode: every sound is placed relative to you (full within 6 m, fading out by 24 m; gate breaks, catapults
+  and gate hits carry further; your own actions always full). Mapping: swings (sword pack) for melee attacks incl.
+  villagers/workers, bow shots, fireballs (mage), firespray (nova), sword/bow/spell impact by attacker class, sword
+  blocked (shield blocks), chop/mine (gathering), mine (gate repair), chest close (worker delivers), chest open
+  (upgrades bought), unsheath/sheath (hat taken/dropped), door thuds (gate hits), rock-wall crumble (gate broken),
+  gate open/close (allies passing; soft, 12 m), gate close (rebuilt), lock (jail reset), meteor throw/swarm
+  (catapult fire/impact), spell impact (fire explosions), wood/dirt landings (ladder, tower up/down), dirt jump
+  (dodge), water spray / jump (fishing). Hammer throw keeps its own sound.
+- Your footsteps: water when wading, wood on bridges/tower decks, stone in castles and on brick paths, earth
+  elsewhere; Knights/Crusaders use the chain-mail variants. Ambience: forest day bed, river louder near the water,
+  waterfall near the cliff-side falls; follows master x sfx volume, muted/unfocused silences it.
+- native_audio: 16 voices (was 8); play(cue, quiet, vol) volume factor.
+- tests/match_audio_test.gd: cues exist, attacks/hits heard, footsteps per surface, distance fade. Quick suite pass.

@@ -2,6 +2,7 @@ extends Control
 # Offline Siege match: you plus bots. Owns the simulation, steps it at a fixed rate, and feeds the
 # 3D view and HUD. Emits `exited` when the player leaves.
 const Sim = preload("res://scripts/siege/siege_sim.gd")
+const Land = preload("res://scripts/siege/siege_land.gd")
 const View = preload("res://scripts/siege/siege_view.gd")
 const Hud = preload("res://scripts/siege/siege_hud.gd")
 const Diag = preload("res://scripts/siege/siege_diag.gd")
@@ -441,6 +442,8 @@ func _process(delta: float) -> void:
 		view.sync(delta)
 		return
 	diag.mark("input")
+	_footsteps(delta)
+	_ambience(delta)
 	var t_start := Time.get_ticks_usec()
 	if online:
 		pass   # the server steps the match; _net_process applied the latest snapshot
@@ -537,16 +540,177 @@ func request_leave() -> void:
 		hud._center(hud.pause_panel)
 
 
-func _event_sound(e: Dictionary) -> void:
-	# In-match sound cues (0.30.6: the Crusader's hammer throw, ElevenLabs SFX). Full volume for your own throw or
-	# one close by, quieter further off, silent beyond ~28 m.
+# ---------------- match sound (0.30.8: TomMusic "Free Fantasy SFX Pack", royalty-free; the hammer is ElevenLabs) ----
+# Every sound is placed: full volume within 6 m of you, fading out by HEAR_R (big events carry further), so 32
+# units fighting across the map don't drown out what's next to you. Variants are picked at random.
+const HEAR_R := 24.0
+var _snd_rng := RandomNumberGenerator.new()
+var _step_t := 0.0
+var _step_last := Vector2.INF
+var _amb := {}
+
+func _listener() -> Vector2:
+	var me: Dictionary = sim.by_id.get(str(hud.player_id), {})
+	if not me.is_empty():
+		return me.pos
+	return _step_last if _step_last != Vector2.INF else Vector2.ZERO
+
+func _cue(base: String, n: int, at: Vector2, reach := HEAR_R, always := false, gain := 1.0) -> void:
 	if audio == null or not audio.has_method("play"):
 		return
-	if str(e.get("k", "")) == "attack" and str(e.get("ability", "")) == "hammer":
-		var src: Dictionary = sim.by_id.get(str(e.get("id", "")), {})
-		if src.is_empty():
-			return
-		var me: Dictionary = sim.by_id.get(str(hud.player_id), {})
-		var d: float = 0.0 if me.is_empty() or str(src.id) == str(hud.player_id) else (src.pos as Vector2).distance_to(me.pos)
-		if d < 28.0:
-			audio.play("hammerThrow", d > 9.0)
+	var d := 0.0 if always else _listener().distance_to(at)
+	if d > reach:
+		return
+	var v := clampf(1.0 - (d - 6.0) / maxf(reach - 6.0, 1.0), 0.0, 1.0)
+	var cue := base if n <= 1 else "%s%d" % [base, 1 + _snd_rng.randi() % n]
+	audio.play(cue, false, v * gain)
+
+func _unit_pos(id: Variant) -> Vector2:
+	var u: Dictionary = sim.by_id.get(str(id), {})
+	return u.pos if not u.is_empty() else Vector2.INF
+
+func _gate_pos(gid: Variant) -> Vector2:
+	for g in sim.gates:
+		if str(g.id) == str(gid):
+			return Sim.gate_front(g)
+	return Vector2.INF
+
+func _event_sound(e: Dictionary) -> void:
+	if audio == null or not audio.has_method("play"):
+		return
+	var mine := str(e.get("id", "")) == str(hud.player_id)
+	match str(e.get("k", "")):
+		"attack":
+			var src: Dictionary = sim.by_id.get(str(e.get("id", "")), {})
+			if src.is_empty():
+				return
+			var ab := str(e.get("ability", ""))
+			if ab == "hammer":
+				_cue("hammerThrow", 1, src.pos, HEAR_R + 4.0, mine)
+			elif src.cls == "ranger":
+				_cue("tm_bow_shot", 2, src.pos, HEAR_R, mine)
+			elif src.cls == "mage":
+				if ab == "":
+					_cue("tm_fireball", 3, src.pos, HEAR_R, mine)
+			elif src.cls != "priest":
+				_cue("tm_sword_swing", 3, src.pos, HEAR_R, mine)
+		"hit":
+			var at := _unit_pos(e.get("id", ""))
+			if at == Vector2.INF:
+				return
+			var by: Dictionary = sim.by_id.get(str(e.get("by", "")), {})
+			var hurt_me := mine or str(e.get("by", "")) == str(hud.player_id)
+			if by.is_empty():
+				return                                       # catapult stones have their own crash
+			elif by.cls == "ranger":
+				_cue("tm_bow_hit", 3, at, HEAR_R, hurt_me)
+			elif by.cls == "mage":
+				_cue("tm_spell_hit", 3, at, HEAR_R, hurt_me)
+			else:
+				_cue("tm_sword_hit", 3, at, HEAR_R, hurt_me)
+		"blocked":
+			_cue("tm_sword_block", 3, e.get("pos", _unit_pos(e.get("id", ""))), HEAR_R, mine)
+		"nova":
+			_cue("tm_firespray", 2, _unit_pos(e.get("id", "")), HEAR_R, mine)
+		"whirl":
+			_cue("tm_sword_swing", 3, _unit_pos(e.get("id", "")), HEAR_R, mine)
+		"gather":
+			_cue("tm_chop" if str(e.get("kind", "")) == "wood" else "tm_mine", 4 if str(e.get("kind", "")) == "wood" else 5,
+				_unit_pos(e.get("id", "")), 18.0, mine)
+		"repair":
+			_cue("tm_mine", 5, _unit_pos(e.get("id", "")), 18.0, mine)
+		"deliver":
+			_cue("tm_chest_close", 2, _unit_pos(e.get("id", "")), 16.0, mine)
+		"upgrade", "hat_upgrade":
+			_cue("tm_chest_open", 2, _unit_pos(e.get("id", "")), 16.0, mine or str(e.get("id", "")) == "")
+		"hat_take", "hat_pick":
+			_cue("tm_unsheath", 2, _unit_pos(e.get("id", "")), 14.0, mine)
+		"hat_drop":
+			_cue("tm_sheath", 2, e.get("pos", Vector2.INF), 14.0)
+		"gate_hit":
+			_cue("tm_gate_hit", 2, _gate_pos(e.get("gate", "")), HEAR_R + 6.0)
+		"gate_broken":
+			_cue("tm_crumble", 2, _gate_pos(e.get("gate", "")), 48.0)
+		"gate_rebuilt":
+			_cue("tm_gate_close", 1, _gate_pos(e.get("gate", "")), 18.0)
+		"gate_close":                                        # allies pass through every few seconds: keep it soft
+			_cue("tm_gate_close", 1, _gate_pos(e.get("gate", "")), 12.0, false, 0.55)
+		"gate_open":
+			_cue("tm_gate_open", 1, _gate_pos(e.get("gate", "")), 12.0, false, 0.55)
+		"jail_reset":
+			_cue("tm_unlock", 1, _gate_pos(e.get("gate", "")), 18.0)
+		"catapult_fire":
+			_cue("tm_rock_throw", 2, e.get("from", Vector2.INF), 32.0)
+		"catapult_hit":
+			_cue("tm_rock_hit", 2, e.get("pos", Vector2.INF), 36.0)
+		"boom":
+			_cue("tm_spell_hit", 3, e.get("pos", Vector2.INF), HEAR_R)
+		"ladder_up", "tower_up":
+			_cue("tm_land_wood", 1, _unit_pos(e.get("id", "")), 16.0, mine)
+		"tower_down":
+			_cue("tm_land_dirt", 1, _unit_pos(e.get("id", "")), 16.0, mine)
+		"dodge":
+			_cue("tm_jump_dirt", 1, _unit_pos(e.get("id", "")), 14.0, mine)
+		"fish_cast":
+			_cue("tm_splash", 1, e.get("pos", Vector2.INF), 16.0, mine)
+		"fish_caught":
+			_cue("tm_water_jump", 1, e.get("pos", Vector2.INF), 16.0, mine)
+
+func _footsteps(delta: float) -> void:
+	# Your own footsteps, by what you're walking on: water when wading, wood on bridges, tower decks and ladders,
+	# stone in the castles and on the brick paths, earth elsewhere. Knights (and Crusaders) clink in mail.
+	if audio == null or not audio.has_method("play"):
+		return
+	var me: Dictionary = sim.by_id.get(str(hud.player_id), {})
+	if me.is_empty() or not sim.alive(me):
+		_step_last = Vector2.INF
+		return
+	var p: Vector2 = me.pos
+	var moved := 0.0 if _step_last == Vector2.INF else p.distance_to(_step_last)
+	_step_last = p
+	if moved / maxf(delta, 0.001) < 1.2:
+		_step_t = 0.12                                       # first step lands soon after you start moving
+		return
+	_step_t -= delta
+	if _step_t > 0.0:
+		return
+	var speed := moved / maxf(delta, 0.001)
+	_step_t = clampf(1.55 / maxf(speed, 1.0), 0.24, 0.42)
+	var surf := "dirt"
+	if Sim.water_depth(p) > 0.15:
+		surf = "water"
+	elif int(me.get("tower", -1)) >= 0 or Land.on_bridge(p, 0.2):
+		surf = "wood"
+	elif (absf(p.x) <= Sim.CASTLE_HX + 1.0 and absf(p.y) >= Sim.CASTLE_SHIFT + Sim.FRONT_Z - 0.5) or Land.dist_to_paths(p) < Land.PATH_HALF_W:
+		surf = "stone"
+	var chain := "_chain" if me.cls == "knight" else ""
+	audio.play("tm_step_%s%s%d" % [surf, chain, 1 + _snd_rng.randi() % 5], false, 1.0)
+
+func _ambience(delta: float) -> void:
+	# Forest birds under the whole match; the river louder as you near it; the waterfall over the cliff side.
+	if _amb.is_empty():
+		for k in ["forest_day", "river", "waterfall"]:
+			var st = load("res://assets/sounds/ambience/%s.ogg" % k)
+			if st == null:
+				continue
+			st.loop = true
+			var pl := AudioStreamPlayer.new()
+			pl.stream = st
+			pl.volume_db = -80.0
+			add_child(pl)
+			pl.play(randf() * 50.0)
+			_amb[k] = pl
+	var muted: bool = audio == null or bool(audio.get("muted")) or not get_window().has_focus()
+	var lv: Dictionary = audio.get("levels") if audio != null and audio.get("levels") != null else {"master":0.75, "combat":0.8}
+	var base := 0.0 if muted else float(lv.get("master", 0.75)) * float(lv.get("combat", 0.8))
+	var at := _listener()
+	var want := {
+		"forest_day": 0.22,
+		"river": 0.55 * clampf(1.0 - Land.river_off(at) / 16.0, 0.0, 1.0),
+		"waterfall": 0.7 * clampf(1.0 - at.distance_to(Vector2(Land.FALL_X, Land.river_c(Land.FALL_X))) / 30.0, 0.0, 1.0),
+	}
+	for k in _amb:
+		var pl: AudioStreamPlayer = _amb[k]
+		var g := float(want.get(k, 0.0)) * base
+		var cur := db_to_linear(pl.volume_db)
+		pl.volume_db = linear_to_db(maxf(lerpf(cur, g, minf(1.0, delta * 3.0)), 0.00001))

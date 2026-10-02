@@ -9,7 +9,7 @@ func _ready() -> void:
     var cfg := ConfigFile.new()
     if cfg.load("user://native_audio.cfg") == OK:
         muted = bool(cfg.get_value("audio","muted",false))
-    for i in 8:
+    for i in 16:      # 8 until 0.30.8: matches now play combat, gathering, gate and footstep sounds
         var player := AudioStreamPlayer.new()
         player.volume_db = -15.0
         add_child(player)
@@ -28,7 +28,7 @@ func toggle() -> void:
     cfg.set_value("audio","muted",muted)
     cfg.save("user://native_audio.cfg")
 
-func play(cue: String, quiet := false) -> void:
+func play(cue: String, quiet := false, vol := 1.0) -> void:
     if muted or not get_window().has_focus():
         return
     var now := Time.get_ticks_msec()
@@ -44,7 +44,7 @@ func play(cue: String, quiet := false) -> void:
         if not player.playing:
             player.stream = cache[cue]
             var ui_cue:bool=cue in ["tap","menuOpen","menuClose","equip","purchase","coin","confirm","error","chest","level","energy"]
-            var gain:float=0.12*float(levels.master)*float(levels.ui if ui_cue else levels.combat)*(0.40 if quiet else 1.0)
+            var gain:float=0.12*float(levels.master)*float(levels.ui if ui_cue else levels.combat)*(0.40 if quiet else 1.0)*clampf(vol,0.0,1.0)
             if gain<=0:return
             player.volume_db = linear_to_db(gain)
             player.play()
