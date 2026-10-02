@@ -2,8 +2,8 @@ extends RefCounted
 # Fatebound Siege landscape (Round 7; reshaped in 0.26.0 after Kevin's Fat Princess reference):
 # a bigger field with a natural edge (rock walls on the west and behind the castles, a sheer drop
 # with a waterfall on the east -- the "cliff side"), the river widening into a lake round an island
-# tower reached by one narrow bridge lane from each bank, two normal bridges, rounded plateaus with
-# rock faces and ramps, rolling slopes, the towers (outposts) and the brick path routes.
+# tower reached by one narrow bridge lane from each bank, two normal bridges, natural hills (walkable,
+# with a few steep rock scarps), rolling slopes, the towers (outposts) and the brick path routes.
 # Pure static data + functions: the sim turns it into walls/nav/heights, the view into terrain.
 # Everything is defined for blue's half (+z) and point-mirrored for red: (x, z) -> (-x, -z).
 # (Only the scenery OUTSIDE the field -- which side drops away -- is not mirrored; it can't be walked.)
@@ -136,88 +136,115 @@ const RISE_H := 6.5               # the rock walls elsewhere
 const VALLEY_WATER_Y := WATER_Y - DROP_DEPTH
 const FALL_X := 45.6              # where the river pours over the cliff
 
-# ---------------- plateaus (raised grassy land with rock faces) ----------------
-# Blue-half outlines (rounded); each ramp is a gap in one edge that slopes down RAMP_L metres
-# outward. Points beyond the field edge make a plateau run into the rock walls / cliff.
-const LEDGE_H := 1.5
-const RAMP_L := 4.0
-const CLIFF_W := 1.2             # rock band sloping down outside each plateau edge
-const WALL_OUT := 0.6            # plateau walls sit mid-band: tops stay on the flat, feet at the base
-const RAMP_HALF := 2.3
-const PLATEAUS := [
-	# The west highland: the tower nearest each castle stands up here.
-	{"pts": [Vector2(-47.0, 18.5), Vector2(-37.5, 16.0), Vector2(-30.0, 15.0), Vector2(-23.5, 16.5), Vector2(-19.5, 21.5),
-		Vector2(-19.5, 28.5), Vector2(-23.0, 33.5), Vector2(-30.0, 35.5), Vector2(-38.0, 35.0), Vector2(-47.0, 33.0)],
-		"ramps": [{"edge": 4, "t": 0.5}, {"edge": 2, "t": 0.5}, {"edge": 6, "t": 0.5}]},
-	# The east bluff on the cliff edge: high ground, no tower (0.30.1, Kevin: not every outpost on a plateau).
-	{"pts": [Vector2(31.5, 9.5), Vector2(37.0, 7.5), Vector2(47.0, 8.5), Vector2(47.0, 26.5), Vector2(40.0, 27.5),
-		Vector2(34.5, 26.0), Vector2(31.0, 21.5), Vector2(30.0, 15.0)],
-		"ramps": [{"edge": 4, "t": 0.5}]},
+# ---------------- hills and scarps (0.30.2, Kevin: "naturally formed ... slight hills where players can climb up
+# in a lot of it and maybe there will be steeper spots") ----------------
+# Hills are smooth rises you can walk up from almost anywhere (no walls): a flat-ish top out to r0, easing down to
+# the surrounding ground at r1, the outline wobbling. A scarp cuts one flank of a hill into a short rock face:
+# on its outer side the hill drops away within SCARP_W, tapering off toward both ends so the face fades back into
+# slope; only the steep middle has a wall. Blue half (z > 0); red is the point mirror.
+const HILLS := [
+	{"c": Vector2(-33.0, 25.0), "h": 2.2, "r0": 6.0, "r1": 14.0},     # the west highland (its tower on top)
+	{"c": Vector2(41.0, 17.0), "h": 2.6, "r0": 3.5, "r1": 11.0},      # the east rise at the cliff edge
+	{"c": Vector2(8.0, 26.0), "h": 1.1, "r0": 1.5, "r1": 8.0},        # a knoll mid-field
 ]
+const SCARPS := [
+	{"hill": 0, "pts": [Vector2(-40.5, 19.0), Vector2(-34.0, 16.5), Vector2(-28.0, 17.0)]},
+	{"hill": 0, "pts": [Vector2(-40.0, 30.0), Vector2(-35.5, 33.0)]},
+	{"hill": 1, "pts": [Vector2(35.5, 13.0), Vector2(40.0, 11.0), Vector2(43.5, 11.5)]},
+]
+const SCARP_W := 1.0             # the face's horizontal run
+const SCARP_TAPER := 2.6         # metres at each end where the face fades back into slope
+const SCARP_WALL_OUT := 0.5      # its wall sits mid-face
+const LEDGE_H := 1.5             # (kept for callers: "raised ground" means above this-ish)
 
-static func _prep_plateau(pts: Array, ramps: Array) -> Dictionary:
-	var poly := PackedVector2Array(pts)
-	var cen := Vector2.ZERO
-	for q in pts:
-		cen += q
-	cen /= pts.size()
-	var rp := []
-	for r in ramps:
-		var a: Vector2 = pts[int(r.edge)]
-		var b: Vector2 = pts[(int(r.edge) + 1) % pts.size()]
-		var u := (b - a).normalized()
-		var n := Vector2(u.y, -u.x)
-		var mid := (a + b) * 0.5
-		if n.dot(cen - mid) > 0.0:
-			n = -n
-		rp.append({"a": a, "u": u, "n": n, "s0": a.distance_to(b) * float(r.t), "edge": int(r.edge)})
-	var lo := Vector2(INF, INF)
-	var hi := Vector2(-INF, -INF)
-	for q in pts:
-		lo = Vector2(minf(lo.x, q.x), minf(lo.y, q.y))
-		hi = Vector2(maxf(hi.x, q.x), maxf(hi.y, q.y))
-	return {"pts": pts, "poly": poly, "cen": cen, "ramps": rp, "lo": lo - Vector2(RAMP_L + 2.0, RAMP_L + 2.0), "hi": hi + Vector2(RAMP_L + 2.0, RAMP_L + 2.0)}
+static func _hill_raw(hl: Dictionary, q: Vector2) -> float:
+	var off: Vector2 = q - (hl.c as Vector2)
+	var d := off.length() * (1.0 + 0.14 * wobble(off * 0.8))
+	return float(hl.h) * (1.0 - _smooth(float(hl.r0), float(hl.r1), d))
 
-static var _plateaus: Array = []
-static func plateaus() -> Array:
-	if _plateaus.is_empty():
-		for pl in PLATEAUS:
-			_plateaus.append(_prep_plateau(pl.pts, pl.ramps))
-			var m := []
-			for q in pl.pts:
-				m.append(-q)
-			_plateaus.append(_prep_plateau(m, pl.ramps))
-	return _plateaus
-
-static func _poly_dist(pl: Dictionary, p: Vector2) -> float:
-	# Signed distance to the plateau's outline: negative inside.
-	var pts: Array = pl.pts
+static func _scarp_cut(sc: Dictionary, q: Vector2) -> float:
+	# 1 = no cut; toward 0 just outside the face (strength tapers to nothing at the ends).
+	var pts: Array = sc.pts
+	var cen: Vector2 = (HILLS[int(sc.hill)] as Dictionary).c
 	var best := INF
-	for i in pts.size():
+	var along := 0.0
+	var acc := 0.0
+	var total := 0.0
+	var side := 0.0
+	var interior := false
+	for i in pts.size() - 1:
+		total += (pts[i] as Vector2).distance_to(pts[i + 1])
+	for i in pts.size() - 1:
 		var a: Vector2 = pts[i]
-		var b: Vector2 = pts[(i + 1) % pts.size()]
+		var b: Vector2 = pts[i + 1]
 		var ab := b - a
-		var t := clampf((p - a).dot(ab) / maxf(ab.length_squared(), 0.0001), 0.0, 1.0)
-		best = minf(best, p.distance_to(a + ab * t))
-	return -best if Geometry2D.is_point_in_polygon(p, pl.poly) else best
+		var t := clampf((q - a).dot(ab) / maxf(ab.length_squared(), 0.0001), 0.0, 1.0)
+		var cp := a + ab * t
+		var d := q.distance_to(cp)
+		if d < best:
+			best = d
+			along = acc + ab.length() * t
+			var n := Vector2(ab.y, -ab.x).normalized()
+			if n.dot(cen - (a + b) * 0.5) > 0.0:
+				n = -n
+			side = (q - cp).dot(n)
+			interior = not ((i == 0 and t <= 0.0) or (i == pts.size() - 2 and t >= 1.0))
+		acc += ab.length()
+	if not interior or side <= 0.0 or best > SCARP_W + 0.6:
+		return 1.0 if not interior or side <= 0.0 else 1.0 - _taper(along, total)
+	return 1.0 - _taper(along, total) * _smooth(0.0, SCARP_W, best)
 
-static func _near(pl: Dictionary, p: Vector2) -> bool:
-	return p.x >= pl.lo.x and p.x <= pl.hi.x and p.y >= pl.lo.y and p.y <= pl.hi.y
+static func _taper(along: float, total: float) -> float:
+	return _smooth(0.0, SCARP_TAPER, along) * _smooth(0.0, SCARP_TAPER, total - along)
 
-static func ramp_height(pl: Dictionary, p: Vector2, base: float) -> float:
-	# Height on one of this plateau's ramps, or -INF if p is not on one.
-	for r in pl.ramps:
-		var q: Vector2 = p - (r.a as Vector2)
-		var along := q.dot(r.u)
-		var out := q.dot(r.n)
-		if absf(along - float(r.s0)) <= RAMP_HALF and out >= -0.01 and out <= RAMP_L:
-			return lerpf(LEDGE_H, base, clampf(out / RAMP_L, 0.0, 1.0))
-	return -INF
+static func hills_height(p: Vector2) -> float:
+	var q := p if p.y >= 0.0 else -p
+	var best := 0.0
+	for k in HILLS.size():
+		var hl: Dictionary = HILLS[k]
+		if q.distance_to(hl.c) > float(hl.r1) * 1.2:
+			continue
+		var h := _hill_raw(hl, q)
+		for sc in SCARPS:
+			if int(sc.hill) == k:
+				h *= _scarp_cut(sc, q)
+		best = maxf(best, h)
+	return best
+
+static func scarp_rim(p: Vector2) -> Vector2:
+	# (rock, shadow) near a scarp: the face and a ragged lip above it; a dark band at its foot.
+	var q := p if p.y >= 0.0 else -p
+	var rim := 0.0
+	var shadow := 0.0
+	for sc in SCARPS:
+		var pts: Array = sc.pts
+		var cen: Vector2 = (HILLS[int(sc.hill)] as Dictionary).c
+		var total := 0.0
+		for i in pts.size() - 1:
+			total += (pts[i] as Vector2).distance_to(pts[i + 1])
+		var acc := 0.0
+		for i in pts.size() - 1:
+			var a: Vector2 = pts[i]
+			var b: Vector2 = pts[i + 1]
+			var ab := b - a
+			var t := clampf((q - a).dot(ab) / maxf(ab.length_squared(), 0.0001), 0.0, 1.0)
+			var cp := a + ab * t
+			var n := Vector2(ab.y, -ab.x).normalized()
+			if n.dot(cen - (a + b) * 0.5) > 0.0:
+				n = -n
+			var sd := (q - cp).dot(n)                 # + outside (down the face), - up on the hill
+			var tp := _taper(acc + ab.length() * t, total)
+			if q.distance_to(cp) < SCARP_W + 2.5:
+				rim = maxf(rim, tp * (1.0 - _smooth(-0.55, -0.25, -sd) if sd < 0.0 else 1.0 - _smooth(SCARP_W, SCARP_W + 0.3, sd)))
+				if sd > SCARP_W - 0.2:
+					shadow = maxf(shadow, tp * (1.0 - _smooth(SCARP_W, SCARP_W + 1.4, sd)))
+			acc += ab.length()
+	return Vector2(rim, shadow)
 
 # ---------------- outposts (towers) ----------------
 const OUTPOST_R := 5.0           # capture radius
 const OUTPOST_TOWER_R := 2.25    # solid tower in the middle (1.8 until 0.30.1: the towers grew 25 %)
-const TOWER_FLOOR := 4.48        # its walkable top (KayKit tower_A floor at 1.40, scaled 3.2)
+const TOWER_FLOOR := 5.6         # its walkable top (KayKit tower_A floor at 1.40, scaled 4.0)
 const OUTPOSTS_BLUE_HALF := [Vector2(-31.0, 25.0), Vector2(25.0, 17.0)]   # the highland's; one on open ground
 const ISLAND_TOWER := Vector2.ZERO
 
@@ -236,7 +263,6 @@ const PATHS_BLUE_HALF := [
 	[Vector2(-7.0, 44.0), Vector2(-9.5, 39.0), Vector2(-13.5, 34.5), Vector2(-15.5, 29.0), Vector2(-15.8, 22.0),
 		Vector2(-18.0, 14.5), Vector2(-22.0, 9.5), Vector2(-24.0, 6.6)],
 	[Vector2(-15.6, 25.0), Vector2(-19.5, 25.0), Vector2(-25.5, 25.0)],
-	[Vector2(-25.85, 11.9), Vector2(-26.75, 15.75), Vector2(-28.5, 20.5)],
 	[Vector2(-9.5, 39.0), Vector2(-18.5, 40.5), Vector2(-27.6, 38.4), Vector2(-26.5, 34.5), Vector2(-28.0, 30.0)],
 	[Vector2(7.0, 44.0), Vector2(5.0, 38.5), Vector2(2.0, 31.0), Vector2(0.5, 22.0), Vector2(0.0, 13.6)],
 	[Vector2(-9.5, 39.0), Vector2(-4.0, 35.0), Vector2(2.0, 31.0)],
@@ -285,7 +311,7 @@ static func edge_jit(p: Vector2) -> float:
 
 static func rolling(p: Vector2) -> float:
 	# Gentle hills. sin*sin and cos*cos are even under (x,z)->(-x,-z), so both halves match.
-	var h := 0.34 * sin(0.19 * p.x) * sin(0.23 * p.y) + 0.26 * cos(0.13 * p.x) * cos(0.11 * p.y)
+	var h := 0.42 * sin(0.19 * p.x) * sin(0.23 * p.y) + 0.32 * cos(0.13 * p.x) * cos(0.11 * p.y)
 	var fade := 1.0 - _smooth(CASTLE_ZONE - 6.0, CASTLE_ZONE, absf(p.y))
 	fade *= _smooth(1.5, 6.0, river_off(p))       # flat by the water (and on the island)
 	for q in OUTPOSTS_BLUE_HALF:                    # a level patch round each tower's foot (0.30.1)
@@ -303,37 +329,15 @@ static func ground_height(p: Vector2, with_decks := true) -> float:
 	var sh := shore(p)
 	if sh < 0.8:
 		return lerpf(BED_Y, 0.0, _smooth(-0.6, 0.8, sh))
-	var base := rolling(p)
-	var best := base
-	for pl in plateaus():
-		if not _near(pl, p):
-			continue
-		var d := _poly_dist(pl, p)
-		if d <= 0.0:
-			return LEDGE_H
-		var r := ramp_height(pl, p, base)
-		if r > -INF:
-			return r
-		var cw := CLIFF_W * (1.0 + 0.45 * wobble(p))          # the face's run varies: not one straight slope
-		if d < cw:
-			best = maxf(best, lerpf(LEDGE_H, base, _smooth(0.0, 1.0, d / cw)))
-	return best
+	return rolling(p) + hills_height(p)
 
 static func ledge_rim(p: Vector2) -> Vector2:
 	# (rim, shadow) for the terrain mask: rim = rocky lip on top + the cliff band (plateaus) and the
 	# rock beyond the field's edge; shadow = a dark band on the ground at each cliff foot. Ramps stay
 	# clean. The plateau part is point-symmetric; the edge part follows the scenery.
-	var rim := 0.0
-	var shadow := 0.0
-	for pl in plateaus():
-		if not _near(pl, p):
-			continue
-		if ramp_height(pl, p, 0.0) > -INF:
-			continue
-		var d := _poly_dist(pl, p)
-		rim = maxf(rim, 1.0 - _smooth(-0.7, -0.35, -d) if d < 0.0 else (1.0 - _smooth(CLIFF_W, CLIFF_W + 0.25, d)))
-		if d > CLIFF_W - 0.2:
-			shadow = maxf(shadow, 1.0 - _smooth(CLIFF_W, CLIFF_W + 1.4, d))
+	var sr := scarp_rim(p)
+	var rim := sr.x
+	var shadow := sr.y
 	var ed := edge_jit(p)
 	if ed > -3.0:
 		var rise := 1.0 - drop_weight(p)
@@ -474,40 +478,29 @@ static func walls() -> Array:
 		for s in [-1.0, 1.0]:
 			out.append({"a": Vector2(c.x + s * hw, c.y - hl + 0.6), "b": Vector2(c.x + s * hw, c.y + hl - 0.6),
 				"r": RAIL_R, "team": -1, "kind": "rail"})
-	# Plateau faces with ramp gaps, plus the ramp side walls.
-	for pl in plateaus():
-		var pts: Array = pl.pts
-		var cnt := pts.size()
-		# Offset the outline outward by WALL_OUT (vertex normals = averaged edge normals).
-		var off := []
-		for i in cnt:
-			var p0: Vector2 = pts[(i - 1 + cnt) % cnt]
-			var p1: Vector2 = pts[i]
-			var p2: Vector2 = pts[(i + 1) % cnt]
-			var n1 := _out_normal(p0, p1, pl.cen)
-			var n2 := _out_normal(p1, p2, pl.cen)
-			var bis := (n1 + n2).normalized()
-			off.append(p1 + bis * WALL_OUT / maxf(0.5, bis.dot(n2)))
-		for i in cnt:
-			var a: Vector2 = off[i]
-			var b: Vector2 = off[(i + 1) % cnt]
-			var cuts := []
-			for r in pl.ramps:
-				if int(r.edge) == i:
-					cuts.append(r)
-			if cuts.is_empty():
-				_edge(out, a, b, 0.35, "ledge")
-				continue
-			# One ramp per edge (by construction): wall up to the gap, after it, and the ramp's sides.
-			var r0: Dictionary = cuts[0]
-			var u := (b - a).normalized()
-			var s0 := ((r0.a as Vector2) + (r0.u as Vector2) * float(r0.s0) - a).dot(u)
-			var g0 := a + u * (s0 - RAMP_HALF)
-			var g1 := a + u * (s0 + RAMP_HALF)
-			_edge(out, a, g0, 0.35, "ledge")
-			_edge(out, g1, b, 0.35, "ledge")
-			for e in [g0, g1]:
-				_edge(out, e, e + (r0.n as Vector2) * (RAMP_L - 0.4 - WALL_OUT), 0.3, "ledge")
+	# Scarp faces: a wall along the steep middle of each (the tapered ends are walkable slope).
+	for half in [1.0, -1.0]:
+		for sc in SCARPS:
+			var pts: Array = sc.pts
+			var cen: Vector2 = (HILLS[int(sc.hill)] as Dictionary).c
+			var total := 0.0
+			for i in pts.size() - 1:
+				total += (pts[i] as Vector2).distance_to(pts[i + 1])
+			var acc := 0.0
+			for i in pts.size() - 1:
+				var a: Vector2 = pts[i]
+				var b: Vector2 = pts[i + 1]
+				var L := a.distance_to(b)
+				var nrm := Vector2((b - a).y, -(b - a).x).normalized()
+				if nrm.dot(cen - (a + b) * 0.5) > 0.0:
+					nrm = -nrm
+				var t0 := clampf((SCARP_TAPER * 0.55 - acc) / L, 0.0, 1.0)
+				var t1 := clampf((total - SCARP_TAPER * 0.55 - acc) / L, 0.0, 1.0)
+				if t1 > t0:
+					var wa := a.lerp(b, t0) + nrm * SCARP_WALL_OUT
+					var wb := a.lerp(b, t1) + nrm * SCARP_WALL_OUT
+					_edge(out, wa * half, wb * half, 0.35, "ledge")
+				acc += L
 	# The field's edge.
 	var lp := edge_loop()
 	var half := EDGE_BLUE.size()

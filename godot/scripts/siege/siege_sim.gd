@@ -143,8 +143,10 @@ const OUTPOST_DROP_R := 3.8       # workers deliver within this of an outpost th
 # Towers (0.26.0, Kevin): the team holding an outpost can climb its tower -- archers and mages only --
 # and shoot down from the top. Up there they can't be reached by melee; arrows, fire and catapult
 # stones still hit them. Lose the tower and everyone on it is thrown off. No respawning at towers.
-const TOWERS_CLIMBABLE := false   # 0.30.1, Kevin: "don't have option to climb to top of outpost" (kept, switched off)
-const TOWER_CLASSES := ["ranger", "mage"]
+const TOWERS_CLIMBABLE := true    # 0.30.2, Kevin: "make it so players can climb up captured towers" (any class)
+const TOWER_CLASSES := ["villager", "worker", "knight", "barbarian", "rogue", "ranger", "mage", "priest"]
+const TOWER_SHOOTERS := ["ranger", "mage"]   # Kevin: "only mages and archers can shoot from top"
+const TOWER_BOTS := false        # bots stay on the ground for now (players climb)
 const TOWER_SLOTS := 4
 const TOWER_ENTER_R := 3.4        # from the tower's centre (its wall is 1.8 m out)
 const TOWER_RANGE := 1.3          # range bonus from the top
@@ -878,6 +880,8 @@ func _start_attack(u: Dictionary, kind: String, aim := true) -> bool:
 	if not can_act(u) or u.carrying or u.offering or blocking(u) or whirling(u):
 		return false
 	var on_tower := int(u.get("tower", -1)) >= 0
+	if on_tower and not TOWER_SHOOTERS.has(u.cls):
+		return false                           # up a tower only archers and mages can attack
 	if kind == "ability":
 		if CLASSES[u.cls].ability == "" or u.cd_ability > 0.0:
 			return false
@@ -940,6 +944,8 @@ func shield_blocks(from: Vector2, dst: Dictionary) -> bool:
 	return false
 
 func _block(u: Dictionary) -> bool:
+	if int(u.get("tower", -1)) >= 0:
+		return false                           # nothing but bows and spells up a tower
 	if not alive(u) or u.stun > 0.0 or u.carrying or u.state in ["wind", "recover", "dodge"] or u.workshop_open:
 		return false
 	if not blocking(u):
@@ -948,6 +954,8 @@ func _block(u: Dictionary) -> bool:
 	return true
 
 func _whirl(u: Dictionary) -> bool:
+	if int(u.get("tower", -1)) >= 0:
+		return false                           # nothing but bows and spells up a tower
 	if u.cd_ability > 0.0 or not can_act(u) or u.carrying or u.offering:
 		return false
 	u.whirl_until = time + WHIRL_TIME
@@ -998,6 +1006,8 @@ func beam_target(u: Dictionary) -> Dictionary:
 	return best if not best.is_empty() else any
 
 func _beam(u: Dictionary) -> bool:
+	if int(u.get("tower", -1)) >= 0:
+		return false                           # nothing but bows and spells up a tower
 	if not alive(u) or u.stun > 0.0 or u.carrying or u.state in ["wind", "recover", "dodge"] or u.workshop_open:
 		return false
 	var cur: Dictionary = by_id.get(str(u.beam), {})
@@ -2994,7 +3004,7 @@ func _think_tower(u: Dictionary) -> void:
 func _bot_climb(u: Dictionary) -> bool:
 	# Archer and mage bots climb a tower we hold when a fight comes near it (not raiders, not while a
 	# King is on the move). True when this tick's move is decided.
-	if not TOWERS_CLIMBABLE or not TOWER_CLASSES.has(u.cls) or u.role == "raid" or u.offering or u.has("post") or u.carrying:
+	if not TOWERS_CLIMBABLE or not TOWER_BOTS or not TOWER_SHOOTERS.has(u.cls) or u.role == "raid" or u.offering or u.has("post") or u.carrying:
 		return false
 	if not oracle_carrier(1 - u.team).is_empty() or not oracle_carrier(u.team).is_empty() or not oracle_returner(u.team).is_empty():
 		return false

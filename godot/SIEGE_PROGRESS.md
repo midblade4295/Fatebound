@@ -1203,3 +1203,19 @@ K2/K3 notes (0.17.0)
 - Tests: tower_test rewritten (no climb, solid, capture from the ground, no respawn, worker drop-off, 2 of 5 raised);
   reach points moved. Full quick suite passes; bot matches: seed 22 blue wins 3-0 by rescue at 650 s, seed 11 0-0
   on time (as on the 0.29.1 map) -- the 0.30.0 rescue regression is gone.
+
+# 0.30.2 (Kevin: "naturally formed ... slight hills where players can climb up in a lot of it and maybe steeper
+# spots"; "make it so players can climb up captured towers")
+- Plateaus and ramps are gone. Land.HILLS: smooth rises walkable from almost anywhere (flat-ish top to r0, easing
+  out by r1, wobbling outline): the west highland (2.2 m, its tower on top), the east rise at the cliff edge
+  (2.6 m), a 1.1 m knoll mid-field. Land.SCARPS cut short rock faces into three hill flanks (the hill drops away
+  within 1 m outside the line, tapering to slope over 2.6 m at each end); walls only along the steep middles.
+  Rolling ground a little livelier (amplitude x1.25). Rock on the scarp faces/lips via the terrain mask.
+- Towers: any class of the holding team climbs again (TOWERS_CLIMBABLE, TOWER_CLASSES = all); only archers and
+  mages attack from the top (TOWER_SHOOTERS); block/whirlwind/priest beam don't work up there. Bots don't climb
+  (TOWER_BOTS = false). Top floor 5.6 m (tower model x4.0). Towers don't stop shots (people stand inside them).
+  Protocol v21.
+- Tests: tower_test (climb any class, knight can't fight up there, ranger reach, arrows hit, ejected on capture,
+  no respawn, worker drop-off, 2 of 5 raised). Quick suite: all pass except siege_sim_smoke (rescues=0 in seeds
+  11 and 22; 0.30.1 had 3 in seed 22). Seed 22 trace: red breaks blue's west gate at 84 s and a red barbarian
+  inside kills 12 respawned blue villagers in the courtyard -- the defence collapses early. Not fixed yet.

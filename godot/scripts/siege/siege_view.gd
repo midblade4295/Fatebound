@@ -1188,22 +1188,22 @@ func _plan_foliage() -> Dictionary:
 					if rng.randf() < 0.6:
 						tuft.call(a + d * (t + rng.randf_range(-0.3, 0.3)) + n * side * (Land.PATH_HALF_W + rng.randf_range(0.05, 0.45)))
 				t += 0.9
-	# 2. Along the top of every plateau rim (skip the ramps).
-	for pl in Land.plateaus():
-		var pts: Array = pl.pts
-		var centre: Vector2 = pl.cen
-		for i in pts.size():
-			var a: Vector2 = pts[i]
-			var b: Vector2 = pts[(i + 1) % pts.size()]
-			var L := a.distance_to(b)
-			var t := 0.4
-			while t < L - 0.4:
-				var q := a.lerp(b, t / L)
-				q += (centre - q).normalized() * rng.randf_range(0.25, 0.7)
-				var on_ramp := Land.ramp_height(pl, q + (q - centre).normalized() * 1.2, 0.0) > -INF
-				if not on_ramp and rng.randf() < 0.65:
-					tuft.call(q, true)
-				t += 0.85
+	# 2. Along the top of every scarp (natural hills, 0.30.2).
+	for half in [1.0, -1.0]:
+		for sc in Land.SCARPS:
+			var pts: Array = sc.pts
+			var cen: Vector2 = (Land.HILLS[int(sc.hill)] as Dictionary).c
+			for i in pts.size() - 1:
+				var a: Vector2 = pts[i]
+				var b: Vector2 = pts[i + 1]
+				var L := a.distance_to(b)
+				var t := 0.4
+				while t < L - 0.4:
+					var q := a.lerp(b, t / L)
+					q += (cen - q).normalized() * rng.randf_range(0.3, 0.8)
+					if rng.randf() < 0.65:
+						tuft.call(q * half, true)
+					t += 0.85
 	# 2b. A ring of grass and a few flowers round each tower's foot (0.30.1, Kevin).
 	for op in sim.outposts:
 		var c: Vector2 = op.p
@@ -1683,83 +1683,6 @@ func _dress_tower_base(c: Vector2, seed_id: int) -> void:
 		_place(FOREST + ["Bush_1_A_Color1", "Bush_2_A_Color1"][k % 2] + ".gltf", Vector3(q.x, y, q.y), rng.randf() * TAU,
 			rng.randf_range(4.5, 6.0) if k % 2 == 0 else rng.randf_range(2.3, 3.0))
 
-# ---------- natural cliffs (0.30.1): stones along the plateau faces and the field's rock walls ----------
-const CLIFF_ROCKS := ["Rock_1_A_Color1", "Rock_1_B_Color1", "Rock_1_C_Color1", "Rock_1_D_Color1", "Rock_1_E_Color1", "Rock_1_F_Color1"]
-static var _cliff_plan: Dictionary = {}
-
-static func _plan_cliff_rocks() -> Dictionary:
-	var rng := RandomNumberGenerator.new()
-	rng.seed = 5150
-	var out := {}
-	for k in CLIFF_ROCKS:
-		out[k] = []
-	var put := func(q: Vector2, y: float, big: bool) -> void:
-		var kind: String = CLIFF_ROCKS[rng.randi() % CLIFF_ROCKS.size()]
-		var e := kind.begins_with("Rock_1_E") or kind.begins_with("Rock_1_F")
-		var sc: float = (rng.randf_range(1.6, 2.4) if big else rng.randf_range(1.0, 1.5)) * (1.0 if e else 1.8)
-		var b := Basis(Vector3.UP, rng.randf() * TAU).rotated(Vector3(1, 0, 0), rng.randf_range(-0.2, 0.2)).scaled(Vector3(sc, sc * rng.randf_range(0.8, 1.2), sc))
-		(out[kind] as Array).append(Transform3D(b, Vector3(q.x, y, q.y)))
-	# Plateau faces: half-buried stones hugging the rock, not on the ramps.
-	for pl in Land.plateaus():
-		var pts: Array = pl.pts
-		for i in pts.size():
-			var a: Vector2 = pts[i]
-			var b: Vector2 = pts[(i + 1) % pts.size()]
-			var L := a.distance_to(b)
-			var n := Vector2((b - a).y, -(b - a).x).normalized()
-			if n.dot((pl.cen as Vector2) - (a + b) * 0.5) > 0.0:
-				n = -n
-			var t := rng.randf_range(0.3, 1.6)
-			while t < L:
-				var q := a.lerp(b, t / L) + n * rng.randf_range(0.1, 0.45)
-				t += rng.randf_range(1.7, 3.0)
-				if Land.ramp_height(pl, q + n * 0.6, 0.0) > -INF or Land.edge_dist(q) > -0.5:
-					continue
-				put.call(q, Land.ground_height(q, false) - 0.3, false)
-	# The field's edge: bigger stones on the rock walls, smaller ones along the lip of the drop.
-	var lp := Land.edge_loop()
-	var half := Land.EDGE_BLUE.size()
-	for i in lp.size():
-		var k := i % half
-		if k == half - 1 or k == Land.EDGE_SKIP:
-			continue
-		var a: Vector2 = lp[i]
-		var b: Vector2 = lp[(i + 1) % lp.size()]
-		var L := a.distance_to(b)
-		var n := Vector2((b - a).y, -(b - a).x).normalized()
-		if Land.inside_field((a + b) * 0.5 + n * 1.5):
-			n = -n
-		var t := rng.randf_range(0.0, 2.0)
-		while t < L:
-			var base := a.lerp(b, t / L)
-			t += rng.randf_range(2.0, 3.4)
-			if Land.shore(base) < 2.5 or Land.in_dungeon_pit(base, 2.0):
-				continue
-			var drop := Land.drop_weight(base) > 0.5
-			var q := base + n * (rng.randf_range(-0.2, 0.5) if drop else rng.randf_range(0.6, 2.6))
-			put.call(q, Land.terrain_height(q) - (0.3 if drop else 0.5), not drop)
-	return out
-
-func _build_cliff_rocks() -> void:
-	if _cliff_plan.is_empty():
-		_cliff_plan = _plan_cliff_rocks()
-	for kind in _cliff_plan:
-		var xfs: Array = _cliff_plan[kind]
-		var src := _mesh_of(FOREST + kind + ".gltf")
-		if src.is_empty() or xfs.is_empty():
-			continue
-		var mm := MultiMesh.new()
-		mm.transform_format = MultiMesh.TRANSFORM_3D
-		mm.mesh = src.mesh
-		mm.instance_count = xfs.size()
-		for i in xfs.size():
-			mm.set_instance_transform(i, xfs[i])
-		var mmi := MultiMeshInstance3D.new()
-		mmi.multimesh = mm
-		mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		mmi.set_meta("perf", "cliff_rocks")
-		add_child(mmi)
-
 func _sync_outposts() -> void:
 	for op in sim.outposts:
 		var on: Dictionary = outpost_nodes.get(op.id, {})
@@ -1817,8 +1740,6 @@ func _build_props() -> void:
 				_place(HEX + "building_market_%s.gltf" % COLOR[ob.team], p, -PI * 0.5 if ob.team == 0 else PI * 0.5, 2.0)
 	_build_nodes()
 	_build_outposts()
-	# (_build_cliff_rocks is not used: KayKit's rocks are hexagonal prisms, and a row of them along a cliff read
-	# as fence posts in the test renders. The stone shader and the wandering faces carry the cliffs instead.)
 	_build_hat_stands()
 	# Scenery beyond the field's edge (0.26.0): trees along the tops of the rock walls, none over
 	# the cliff side or in the river's gorge; a few wooded hills further out.

@@ -1,13 +1,13 @@
 extends SceneTree
-# Terrain-only renders (the baked land, its shader, the cliff stones, a flat water sheet): a quick look at
+# Terrain-only renders (the baked land, its shader, two towers, a flat water sheet): a quick look at
 # cliffs and rock without the whole game.  Xvfb ... godot --rendering-method mobile -s res://tools/terrain_shot.gd
 const View = preload("res://scripts/siege/siege_view.gd")
 const Land = preload("res://scripts/siege/siege_land.gd")
 var frames := 0
 var cams := [
-	["west", Vector3(-12.0, 15.0, 33.0), Vector3(-24.0, 0.0, 22.0)],
-	["east", Vector3(28.0, 16.0, 30.0), Vector3(40.0, 0.0, 16.0)],
-	["tower", Vector3(25.0, 13.0, 27.0), Vector3(25.0, 0.0, 17.0)],
+	["west_hill", Vector3(-20.0, 12.0, 6.0), Vector3(-33.0, 1.5, 20.0)],
+	["east_rise", Vector3(28.0, 14.0, 2.0), Vector3(40.0, 0.5, 15.0)],
+	["overview", Vector3(0.0, 46.0, 52.0), Vector3(0.0, 0.0, 18.0)],
 ]
 var cam: Camera3D
 var ci := 0
@@ -20,19 +20,6 @@ func _init() -> void:
 		mi.mesh = m
 		mi.material_override = View._terrain_material()
 		root3.add_child(mi)
-	var plan: Dictionary = View._plan_cliff_rocks()
-	for kind in plan:
-		var sc: Node = load(View.FOREST + kind + ".gltf").instantiate()
-		var src: MeshInstance3D = sc.find_children("*", "MeshInstance3D", true, false)[0]
-		var mm := MultiMesh.new()
-		mm.transform_format = MultiMesh.TRANSFORM_3D
-		mm.mesh = src.mesh
-		mm.instance_count = (plan[kind] as Array).size()
-		for i in mm.instance_count:
-			mm.set_instance_transform(i, plan[kind][i])
-		var mmi := MultiMeshInstance3D.new()
-		mmi.multimesh = mm
-		root3.add_child(mmi)
 	for p in [Vector2(-31.0, 25.0), Vector2(25.0, 17.0)]:
 		var t: Node3D = load(View.HEX + "building_tower_A_blue.gltf").instantiate()
 		t.position = Vector3(p.x, Land.ground_height(p, false) - 0.14, p.y)
