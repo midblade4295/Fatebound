@@ -251,10 +251,10 @@
     },
     {
       "cue": "hammerThrow",
-      "seconds": 1.05,
+      "seconds": 0.92,
       "peak": 0.56,
-      "rms": 0.14855404198169708,
-      "source": "ElevenLabs Sound Effects v2 (eleven_text_to_sound_v2), 0.30.6"
+      "rms": 0.14150662051021448,
+      "source": "0.30.7: mixed from ElevenLabs SFX layers (two hammer-swing whooshes + a spinning whirr, eleven_text_to_sound_v2), saturated for phone speakers, a synthesized air swish pulsing at the spin rate, doppler pitch fall on the whirr; 44.1 kHz"
     }
   ],
   "demo_timeline": [

@@ -1264,3 +1264,17 @@ K2/K3 notes (0.17.0)
   the rest of the cue catalog (cue-catalog.json entry added).
 - SiegeMode._event_sound: plays it on the Crusader's "attack"/"hammer" event, offline and online; full volume for
   your own throw or one within 9 m, quieter to 28 m, silent beyond. (It is the first in-match combat cue.)
+
+# 0.30.7 (Kevin: the hammer sound should be much better, "like Thor throwing his hammer (without thunder)")
+- Rounds 2 and 3 of single-prompt generations were rejected. The model guide (eleven_text_to_sound_v2) asks for
+  one short concrete sound per prompt, no cinematic words, separate nodes for layers. Generated layers that way:
+  "Heavy iron war hammer swung hard through the air, deep powerful whoosh, close-mic" (2 takes), "Heavy metal
+  hammer spinning fast through the air, deep rhythmic whirring hum, passing by" (Kevin picked take 2), an electric
+  charge (Kevin: neither). Kevin: combine both whooshes.
+- Both whoosh takes were almost all sub-bass (93 % / 63 % under 120 Hz): a phone speaker plays little of that.
+  Mix (tools/hammer_sfx_mix.py): whoosh B as the punch at 0 s, whoosh A trimmed so its peak lands just
+  behind (a thick double hit), both saturated so they grow harmonics; a synthesized noise swish sweeping 6.5 ->
+  1.5 kHz, pulsing at ~13 Hz (the spin); spin take 2 from 70 ms with its pitch falling 4 semitones as it flies
+  off; bus high-pass 55 Hz, soft clip, 0.18 s fade, peak 0.56. 44.1 kHz (the old cues are 32 kHz). "Punchy"
+  version installed as hammerThrow.wav; a "heavy" version (more body, slower spin) handed over as an option.
+- SFX credits so far: ~410 (12/18-credit fixed-length takes; auto-length takes cost 50 each).
