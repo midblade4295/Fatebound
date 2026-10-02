@@ -46,4 +46,31 @@ func _init() -> void:
 	var mimg := Image.create_from_data(mw, mh, false, Image.FORMAT_RGBA8, md)
 	var e2 := ResourceSaver.save(mimg, Land.MASK_RES)
 	print("BAKE_LAND height %dx%d (err %d)  mask %dx%d (err %d)  in %d ms" % [nx, nz, e1, mw, mh, e2, Time.get_ticks_msec() - t0])
+	_bake_cache()
 	quit(0 if e1 == OK and e2 == OK else 1)
+
+func _bake_cache() -> void:
+	# 0.31.8: the start-up cache (see scripts/siege/terrain_cache.gd).
+	var tc := Time.get_ticks_msec()
+	var View = load("res://scripts/siege/siege_view.gd")
+	var Sim = load("res://scripts/siege/siege_sim.gd")
+	var cache = load("res://scripts/siege/terrain_cache.gd").new()
+	cache.key = Land.bake_key()
+	View._terrain_meshes = []
+	View._outer_meshes = []
+	cache.terrain = View._make_terrain_meshes()
+	cache.outer = View._make_outer_meshes()
+	var sim = Sim.new()
+	sim.setup(16, 1)
+	var v = View.new()
+	v.sim = sim
+	cache.foliage = v._plan_foliage()
+	v.free()
+	for k in 4:
+		cache.blood.append(View._blood_image(71 + k * 13, false))
+	cache.blood.append(View._blood_image(503, true))
+	var err := ResourceSaver.save(cache, "res://assets/terrain/cache.res")
+	var fol := 0
+	for kind in cache.foliage:
+		fol += (cache.foliage[kind] as Array).size()
+	print("BAKE_CACHE terrain %d meshes, outer %d, foliage %d instances, blood %d (err %d) in %d ms" % [cache.terrain.size(), cache.outer.size(), fol, cache.blood.size(), err, Time.get_ticks_msec() - tc])

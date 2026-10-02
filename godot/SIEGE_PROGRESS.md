@@ -1432,3 +1432,20 @@ K2/K3 notes (0.17.0)
   5.1 -> 10.7 hits/min (Barbarian 17.5, Rogue 14.1 hits/min).
 - Knight reach 1.7 -> 2.0 m (class table, seeds 11/22/44: Knight K/D 1.08 -> 1.31, gate damage 9 -> 32/min).
 - Quick suite: all pass except siege_sim_smoke (seeds 11/22 0-0; 7 King pickups, 2 carried back, no rescue).
+
+# 0.31.8 (Kevin: optimise fps, fix the long start after Play, shrink online packets)
+- Match start, measured headless on the build box: 1,435 ms to the first frame -> 548 ms.
+  * assets/terrain/cache.res (SiegeTerrainCache, baked by tools/bake_land.gd, 1 MB): terrain and outer-land meshes, the
+    foliage plan (1,515 instances) and the 5 blood textures. View._load_cache() uses it when Land.bake_key() matches
+    (land data hash), else generates as before. siege_land_check should be extended to check the key.
+  * AssetCache.preload_async()/poll(): the app loads the 78 models a match needs (assets/terrain/preload.txt, written by
+    tools/preload_list.gd) on a thread while the menus are up; AssetCache.scene() waits for a pending load.
+  * HUD: the workshop and pause panels (~370 ms together) are built on first open (Hud.paused()/show_pause()).
+  * Left: terrain build 120-190 ms (water strips, MultiMesh fill), castle kit 65 ms, Sim.setup ~50 ms.
+- Sim tick 2.17 -> 1.54 ms (16v16, 2 min avg): resting logs/rocks sleep until a unit is within 3 m; the ground slope under
+  an item is re-read every 6th tick; _sync_outposts uploads the ring uniforms only when a ring changed.
+- Net (protocol v30): snapshots 5,525 B raw / 1,702 B zstd -> 3,406 / 1,111 (-35 %): 24.9 -> 16.3 KB/s per player at 15 Hz.
+  Projectiles 11 x int16 (22 B each; was ~60 B of Variants), items 7 x int16, Kings as plain arrays; slow state (st, lv,
+  g, n, op, hs, hd, l) only when its hash changed, in full every FULL_EVERY 15 snapshots. Units (2,112 B) are now 62 %.
+- Timing instrumentation kept: Mode.ready_times, View.build_times (static dictionaries).
+- Quick suite: all pass except siege_sim_smoke (seeds 11/22 0-0).

@@ -43,11 +43,13 @@ func _init() -> void:
 		var snap := Net.snapshot(s, "", events)
 		var msg := Net.decode(Net.encode(Net.for_player(snap, s, "you"), true))
 		Net.apply(m, msg, "you")
-		for p in msg.get("p", []):
-			if p[0] == pid:
+		var pb: PackedByteArray = msg.get("p", PackedByteArray())
+		for pi in pb.size() / 22:
+			if pb.decode_s16(pi * 22) + 32768 == pid:
+				var raw := Vector2(pb.decode_s16(pi * 22 + 2) / 100.0, pb.decode_s16(pi * 22 + 4) / 100.0)
 				if last_raw != Vector2.INF:
-					old_jump = maxf(old_jump, last_raw.distance_to(p[1]))
-				last_raw = p[1]
+					old_jump = maxf(old_jump, last_raw.distance_to(raw))
+				last_raw = raw
 		var here := false
 		for a in [0.2, 0.4, 0.6, 0.8, 1.0]:
 			Net.interpolate(m, a)

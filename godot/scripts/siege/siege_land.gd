@@ -351,6 +351,12 @@ static func ledge_rim(p: Vector2) -> Vector2:
 		shadow = maxf(shadow, (1.0 - _smooth(0.0, 2.2, -ed)) * rise * 0.8)
 	return Vector2(clampf(rim, 0.0, 1.0), clampf(shadow, 0.0, 1.0))
 
+static func bake_key() -> String:
+	# Changes whenever the land's shape data changes: the baked cache (tools/bake_land.gd) is only trusted when it matches.
+	var parts := [HALF_W, HALF_L, RIVER_AMP, RIVER_K, RIVER_HW, LAKE_EXTRA, LAKE_SIGMA, ISLAND_RX, ISLAND_RZ, SIDE_BRIDGE_X, LANE_HALF,
+		EDGE_BLUE, HILLS, SCARPS, OUTPOSTS_BLUE_HALF, PATHS_BLUE_HALF, BAKE_MARGIN, BAKE_STEP, "cache-v1"]
+	return str(hash(str(parts)))
+
 # ---------------- baked terrain (visual) ----------------
 const BAKE_MARGIN := 7.0          # terrain extends this far past the field edge
 const BAKE_STEP := 1.0            # metres between height samples

@@ -56,7 +56,10 @@ var pause_panel: PanelContainer
 var result_panel: PanelContainer
 var pause_btn: Button
 
+static var ready_times := {}
+
 func _ready() -> void:
+	var _t0 := Time.get_ticks_msec()
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_touchscreen = DisplayServer.is_touchscreen_available()
@@ -68,13 +71,15 @@ func _ready() -> void:
 	pause_btn.custom_minimum_size = Vector2(44, 40)
 	UI.style_button(pause_btn, "secondary", 16, 12)
 	pause_btn.pressed.connect(func():
+		if pause_panel == null:
+			_build_pause_panel()
 		pause_panel.visible = true
 		_center(pause_panel))
 	add_child(pause_btn)
-	_build_workshop_panel()
-	_build_pause_panel()
+	# 0.31.8: the workshop and pause panels are built the first time they open (they cost ~370 ms at match start).
 	resized.connect(_layout)
 	_layout()
+	ready_times["hud _ready total"] = Time.get_ticks_msec() - _t0
 
 func _layout() -> void:
 	pause_btn.position = Vector2(size.x - 52, 78)
@@ -140,11 +145,22 @@ func _build_workshop_panel() -> void:
 	_label(v, "Hat upgrades are bought at each hat shop.", 11, Color("#d4cbbb"))
 	_button(v, "LEAVE WORKSHOP", "secondary", func(): workshop_leave.emit())
 
+func paused() -> bool:
+	return pause_panel != null and pause_panel.visible
+
+func show_pause() -> void:
+	if pause_panel == null:
+		_build_pause_panel()
+	pause_panel.visible = true
+	_center(pause_panel)
+
 func _refresh_workshop(me: Dictionary) -> void:
 	if not me.workshop_open:
-		if workshop_panel.visible:
+		if workshop_panel != null and workshop_panel.visible:
 			workshop_panel.visible = false
 		return
+	if workshop_panel == null:
+		_build_workshop_panel()
 	var t: int = me.team
 	var key := "%s|%s|%s|%s" % [str(sim.stock[t]), str(sim.levels[t]), me.cls, me.carrying]
 	if workshop_panel.visible and key == _workshop_key:
@@ -233,7 +249,8 @@ func show_result(result: Dictionary = {}) -> void:
 	_button(v, "HOME", "secondary", func(): leave_requested.emit())
 	result_panel.visible = true
 	_center(result_panel)
-	pause_panel.visible = false
+	if pause_panel != null:
+		pause_panel.visible = false
 
 func toast(text: String, color := Color.WHITE) -> void:
 	_toast = text
@@ -341,7 +358,7 @@ func _buttons() -> Array:
 	return out
 
 func _modal_open() -> bool:
-	return workshop_panel.visible or pause_panel.visible or (result_panel != null and result_panel.visible)
+	return (workshop_panel != null and workshop_panel.visible) or paused() or (result_panel != null and result_panel.visible)
 
 func _input(event: InputEvent) -> void:
 	if sim == null:

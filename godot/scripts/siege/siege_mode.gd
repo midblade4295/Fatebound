@@ -61,7 +61,11 @@ var diag
 var _accum := 0.0
 var _result_shown := false
 
+static var ready_times := {}      # ms per start-up step of the last match (diag / tools)
+
 func _ready() -> void:
+	ready_times = {}
+	var _t_ready := Time.get_ticks_msec()
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	clip_contents = true
@@ -92,9 +96,11 @@ func _ready() -> void:
 	tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	tex.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(tex)
+	var _t_hud := Time.get_ticks_msec()
 	hud = Hud.new()
 	hud.diag = diag
 	add_child(hud)
+	ready_times["hud"] = Time.get_ticks_msec() - _t_hud
 	hud.leave_requested.connect(func(): exited.emit())
 	hud.replay_requested.connect(func():
 		if online:
@@ -123,17 +129,22 @@ func _ready() -> void:
 	hud.gate_bars_source = func() -> Array: return view.gate_bars() if view != null else []
 	hud.numbers_clock = func() -> float: return view._time if view != null else 0.0
 	resized.connect(_resize_viewport)
+	var _t_start := Time.get_ticks_msec()
 	if online:
 		_start_online()
 	else:
 		_start()
+	ready_times["start"] = Time.get_ticks_msec() - _t_start
 	_resize_viewport()
+	ready_times["_ready total"] = Time.get_ticks_msec() - _t_ready
 
 func _start() -> void:
 	sim = Sim.new()
 	if tutorial:
 		team_size = 2                      # a quiet castle: one ally, two enemies (one becomes the dummy)
+	var _t_sim := Time.get_ticks_msec()
 	sim.setup(team_size, int(Time.get_unix_time_from_system()) & 0x7fffffff)
+	ready_times["sim.setup"] = Time.get_ticks_msec() - _t_sim
 	view = View.new()
 	view.low_fx = low_fx
 	view.hq_gfx = hq_gfx
@@ -259,9 +270,9 @@ func _net_process(delta: float) -> void:
 	Net.interpolate(sim, _snap_t / maxf(0.03, _snap_dt))
 	# Inputs: movement and held attack at 20 Hz (or when they change); actions go immediately.
 	_send_clock += delta
-	var mv: Vector2 = hud.move_vector() if not hud.pause_panel.visible else Vector2.ZERO
-	var hold: bool = hud.attack_held() and not hud.pause_panel.visible
-	var bhold: bool = hud.ability_held() and not hud.pause_panel.visible
+	var mv: Vector2 = hud.move_vector() if not hud.paused() else Vector2.ZERO
+	var hold: bool = hud.attack_held() and not hud.paused()
+	var bhold: bool = hud.ability_held() and not hud.paused()
 	# Client-side prediction: move our own unit now (same movement code as the server); the server
 	# validates the position we send. Snapshots only correct us when we've drifted > 2.5 m.
 	var me_p: Dictionary = sim.by_id.get(hud.player_id, {})
@@ -447,7 +458,7 @@ func _process(delta: float) -> void:
 	var t_start := Time.get_ticks_usec()
 	if online:
 		pass   # the server steps the match; _net_process applied the latest snapshot
-	elif not hud.pause_panel.visible or sim.ended:
+	elif not hud.paused() or sim.ended:
 		sim.set_move(hud.player_id, hud.move_vector())
 		var me_b: Dictionary = sim.by_id.get(hud.player_id, {})
 		if hud.ability_held() and not me_b.is_empty() and sim.ability_of(me_b) == "block":
@@ -502,7 +513,7 @@ func _thermal_guard(delta: float) -> void:
 	if _guard_clock < 1.0:
 		return
 	_guard_clock = 0.0
-	if hud.pause_panel.visible:
+	if hud.paused():
 		_guard_low = 0
 		return
 	# Locked at 30 fps (Round 32): what's left of the guard is the resolution step when even 30 can't be held.
@@ -536,7 +547,7 @@ func request_leave() -> void:
 	if hud.result_panel != null:
 		exited.emit()
 	else:
-		hud.pause_panel.visible = true
+		hud.show_pause()
 		hud._center(hud.pause_panel)
 
 

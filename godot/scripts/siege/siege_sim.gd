@@ -3271,7 +3271,7 @@ func _think_hammer(u: Dictionary) -> void:
 # physics where they will roll and can get pushed around if player walk into them. Player will then have to click to pick
 # the logs up. Do the same with the iron") ----------
 # A felled tree drops LOGS_PER_TREE logs, a broken boulder ROCKS_PER_BOULDER rocks, each worth ITEM_VALUE. They are simple
-# 2D bodies: units shove them as they walk into them (logs spin when hit off-centre), they roll down slopes (a is_log rolls
+# 2D bodies: units shove them as they walk into them (logs spin when hit off-centre), they roll down slopes (a log rolls
 # sideways easily and slides along its length hardly at all), logs float off downstream in the river and rocks drag,
 # walls and gates stop them. A Worker picks one up with ACTION. Unclaimed ones vanish after ITEM_LIFE.
 const TREE_CHOPS := 5
@@ -3372,9 +3372,17 @@ func _step_items(dt: float) -> void:
 		var is_log: bool = it.kind == "log"
 		var r := LOG_R if is_log else ROCK_R
 		var vel: Vector2 = it.vel
+		# Resting and nobody near: nothing to do (0.31.8 perf: most logs lie still most of the time).
+		var near_unit := false
+		for u in units:
+			if uvel.has(u.id) and (u.pos as Vector2).distance_squared_to(it.pos) < 9.0:
+				near_unit = true
+				break
+		if vel == Vector2.ZERO and not near_unit and bool(it.get("asleep", false)):
+			continue
 		# Shoves: anyone walking into it pushes it out of the way (logs spin when hit off-centre).
 		for u in units:
-			if not uvel.has(u.id):
+			if not uvel.has(u.id) or (u.pos as Vector2).distance_squared_to(it.pos) > 16.0:
 				continue
 			var up: Vector2 = u.pos
 			var cp: Vector2 = it.pos
@@ -3394,8 +3402,13 @@ func _step_items(dt: float) -> void:
 			if is_log:
 				var lever := (cp - (it.pos as Vector2))
 				it.spin = float(it.spin) + (lever.x * nrm.y - lever.y * nrm.x) * push * 0.9
-		# Slopes: downhill; a is_log rolls sideways, barely slides lengthways.
-		var acc := -_ground_grad(it.pos) * ITEM_SLOPE_G
+		# Slopes: downhill; a log rolls sideways, barely slides lengthways. (The ground's slope is re-read every 6th tick.)
+		if not it.has("grad") or int(it.get("grad_t", 0)) <= 0 or (it.pos as Vector2).distance_squared_to(it.get("grad_p", Vector2.INF)) > 0.25:
+			it["grad"] = _ground_grad(it.pos)
+			it["grad_p"] = it.pos
+			it["grad_t"] = 6
+		it["grad_t"] = int(it.grad_t) - 1
+		var acc: Vector2 = -(it.grad as Vector2) * ITEM_SLOPE_G
 		var wet := water_depth(it.pos) > 0.15
 		if is_log:
 			var ax := _item_axis(it)
@@ -3424,6 +3437,7 @@ func _step_items(dt: float) -> void:
 			it.roll = float(it.roll) + vel.length() * dt / ROCK_R
 		if not wet and vel.length() < 0.04 and acc.length() < 0.6:
 			vel = Vector2.ZERO                         # settled (in the river a log keeps drifting)
+		it["asleep"] = vel == Vector2.ZERO and not wet and acc.length() < 0.6
 		# Move; walls, gates, trees and towers stop it (a little bounce).
 		var want: Vector2 = (it.pos as Vector2) + vel * dt
 		var got := _push_out(want, r + (0.2 if is_log else 0.0))

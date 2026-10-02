@@ -8,11 +8,14 @@ extends RefCounted
 # objects: decode() uses the default allow_objects=false.
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 
-const VERSION := 29              # 29 = no class caps; per-class stand stock/restock, no heal stacking, armory +8 %, worker 80 hp; 28 = class caps; 27 = the Necromancer (drain + heal beams, unit field 32); 26 = Resurrection, bigger nova/sanctuary; 25 = logs/rocks (it); 24 = the Crusader and its thrown hammer; 23 = tower shot heights, run off a deck; 22 = wide roofless towers; 21 = natural hills, every class climbs; 20 = bigger towers; 19 = the bigger natural map; 18 = no "water" in the dungeons (wading only in the river); 17 = rampart shots
+const VERSION := 30              # 30 = smaller snapshots: packed projectiles/items/Kings, slow state only when it changes (0.31.8); 29 = no class caps; per-class stand stock/restock, no heal stacking, armory +8 %, worker 80 hp; 28 = class caps; 27 = the Necromancer (drain + heal beams, unit field 32); 26 = Resurrection, bigger nova/sanctuary; 25 = logs/rocks (it); 24 = the Crusader and its thrown hammer; 23 = tower shot heights, run off a deck; 22 = wide roofless towers; 21 = natural hills, every class climbs; 20 = bigger towers; 19 = the bigger natural map; 18 = no "water" in the dungeons (wading only in the river); 17 = rampart shots
 const DEFAULT_URL := "wss://136-113-125-3.sslip.io/fatebound/siege/ws"
 const DEFAULT_PORT := 8082
-const SNAP_HZ := 15.0            # 10 -> 15 (0.18.4): ~1.3 KB each, ~19 KB/s per player; remote
-                                 # units' interpolation delay 100 -> 67 ms
+const SNAP_HZ := 15.0            # 10 -> 15 (0.18.4); remote units' interpolation delay 100 -> 67 ms
+const FULL_EVERY := 15           # 0.31.8: slow-changing state (stock, levels, nodes, stands, outposts, gates, ladders,
+                                 # dropped hats) rides along only when it changed, and in full once a second
+const PROJ_KINDS := ["arrow", "fire", "hammer"]
+const ORACLE_STATES := ["cell", "carried", "dropped", "home", "returning", "rescued", "loose"]
 const PREDICT_SNAP := 2.5        # m: a predicting phone snaps to the server beyond this
 const MAX_PACKET := 64 * 1024            # client -> server; anything larger is dropped
 const TEAM_SIZE := 16
@@ -77,6 +80,9 @@ static func _code(list: Array, value: Variant) -> int:
 	return maxi(0, i)
 
 # ---------------- server side ----------------
+static var _slow_hash := {}
+static var _slow_n := 0
+
 static func snapshot(sim, for_unit: String, events: Array) -> Dictionary:
 	# for_unit "" = the shared part only (see for_player).
 	var vals := PackedFloat32Array()
@@ -125,12 +131,19 @@ static func snapshot(sim, for_unit: String, events: Array) -> Dictionary:
 	packed.resize(vals.size() * 2)
 	for k in vals.size():
 		_pack(packed, k, vals[k])
-	var proj := []
+	# Projectiles: 11 int16 each (id, x, z, vx, vz, kind, from-tower flag, origin x/z, launch height, drop distance).
+	var proj := PackedByteArray()
+	proj.resize(sim.projectiles.size() * 22)
+	var pi := 0
 	for p in sim.projectiles:
-		if p.has("h0"):
-			proj.append([p.id, p.pos, p.vel, p.kind, p.o, p.h0, p.dd])     # from a tower's deck
-		else:
-			proj.append([p.id, p.pos, p.vel, p.kind])
+		var tower: bool = p.has("h0")
+		var o: Vector2 = p.o if tower else Vector2.ZERO
+		var vals_p := [int(p.id) % 65536 - 32768, (p.pos as Vector2).x * 100.0, (p.pos as Vector2).y * 100.0, (p.vel as Vector2).x * 100.0,
+			(p.vel as Vector2).y * 100.0, PROJ_KINDS.find(str(p.kind)), 1 if tower else 0, o.x * 100.0, o.y * 100.0,
+			float(p.get("h0", 0.0)) * 100.0, float(p.get("dd", 0.0)) * 100.0]
+		for k in 11:
+			proj.encode_s16((pi * 11 + k) * 2, clampi(int(round(float(vals_p[k]))), -32768, 32767))
+		pi += 1
 	var gates := PackedFloat32Array()
 	for g in sim.gates:
 		gates.append_array([g.hp, g.max_hp, 1.0 if g.broken else 0.0, 1.0 if g.open else 0.0])
@@ -147,13 +160,25 @@ static func snapshot(sim, for_unit: String, events: Array) -> Dictionary:
 	var hats := PackedFloat32Array()
 	for h in sim.hats:
 		hats.append_array([float(h.id), float(HAT_CLS.find(h.cls)), 1.0 if h.up else 0.0, h.pos.x, h.pos.y])
+	# The Kings: [state code, x, z, carrier unit index+1, carry_team+1, dropped_at, cakes, weight, lifter indices...] each.
 	var oracles := []
 	for o in sim.oracles:
-		oracles.append({"state":o.state, "pos":o.pos, "carrier":o.carrier, "lifters":o.lifters.duplicate(),
-			"carry_team":o.carry_team, "dropped_at":o.dropped_at, "cakes":o.cakes, "weight":o.weight})
-	var msg := {"t":"s", "tm":sim.time, "sc":sim.score.duplicate(), "k":sim.kills.duplicate(),
-		"st":sim.stock.duplicate(true), "lv":sim.levels.duplicate(true), "end":[sim.ended, sim.winner, sim.end_reason],
-		"it":_pack_items(sim), "u":packed, "p":proj, "g":gates, "n":nodes, "o":oracles, "l":sim.ladders.duplicate(true), "op":outposts, "hs":stocks, "hd":hats, "e":events}
+		var lif := []
+		for id in o.lifters:
+			lif.append(sim.units.find(sim.by_id.get(str(id), {})))
+		oracles.append([_code(ORACLE_STATES, o.state), snappedf((o.pos as Vector2).x, 0.01), snappedf((o.pos as Vector2).y, 0.01),
+			sim.units.find(sim.by_id.get(str(o.carrier), {})) + 1, int(o.carry_team) + 1, snappedf(float(o.dropped_at), 0.1), int(o.cakes), int(o.weight), lif])
+	var msg := {"t":"s", "tm":sim.time, "sc":sim.score.duplicate(), "k":sim.kills.duplicate(), "end":[sim.ended, sim.winner, sim.end_reason],
+		"it":_pack_items(sim), "u":packed, "p":proj, "o":oracles, "e":events}
+	# Slow-changing state: only when it changed, and in full once a second (FULL_EVERY) so a late joiner catches up.
+	_slow_n += 1
+	var full := _slow_n % FULL_EVERY == 0
+	for pair in [["st", sim.stock.duplicate(true)], ["lv", sim.levels.duplicate(true)], ["g", gates], ["n", nodes], ["op", outposts],
+			["hs", stocks], ["hd", hats], ["l", sim.ladders.duplicate(true)]]:
+		var h := hash(pair[1])
+		if full or int(_slow_hash.get(pair[0], 0)) != h:
+			_slow_hash[pair[0]] = h
+			msg[pair[0]] = pair[1]
 	if for_unit != "":
 		return for_player(msg, sim, for_unit)
 	return msg
@@ -253,16 +278,23 @@ static func apply(sim, msg: Dictionary, me_id: String, predict := false) -> void
 		old[p.id] = p
 	sim.projectiles.clear()
 	var seen := {}
-	for p in msg.get("p", []):
-		var prev: Dictionary = old.get(p[0], {})
-		var from: Vector2 = prev.get("net_to", p[1])
-		var np := {"id":p[0], "pos":from, "net_from":from, "net_to":p[1], "vel":p[2], "kind":p[3], "team":-1}
-		if (p as Array).size() >= 7:
-			np["o"] = p[4]
-			np["h0"] = p[5]
-			np["dd"] = p[6]
+	var pb: PackedByteArray = msg.get("p", PackedByteArray())
+	for pi in pb.size() / 22:
+		var v := []
+		for k in 11:
+			v.append(pb.decode_s16((pi * 11 + k) * 2))
+		var pid := int(v[0]) + 32768
+		var to := Vector2(float(v[1]) / 100.0, float(v[2]) / 100.0)
+		var prev: Dictionary = old.get(pid, {})
+		var from: Vector2 = prev.get("net_to", to)
+		var np := {"id":pid, "pos":from, "net_from":from, "net_to":to, "vel":Vector2(float(v[3]) / 100.0, float(v[4]) / 100.0),
+			"kind":PROJ_KINDS[clampi(int(v[5]), 0, PROJ_KINDS.size() - 1)], "team":-1}
+		if int(v[6]) == 1:
+			np["o"] = Vector2(float(v[7]) / 100.0, float(v[8]) / 100.0)
+			np["h0"] = float(v[9]) / 100.0
+			np["dd"] = float(v[10]) / 100.0
 		sim.projectiles.append(np)
-		seen[p[0]] = true
+		seen[pid] = true
 	var ends := {}
 	for e in msg.get("e", []):
 		if e is Dictionary and str(e.get("k", "")) == "proj_end" and e.has("pos"):
@@ -284,16 +316,27 @@ static func apply(sim, msg: Dictionary, me_id: String, predict := false) -> void
 		g.max_hp = gates[gi * 4 + 1]
 		g.broken = gates[gi * 4 + 2] > 0.5
 		g.open = gates[gi * 4 + 3] > 0.5
-	_apply_items(sim, msg.get("it", []))
+	_apply_items(sim, msg.get("it", PackedByteArray()))
 	var nodes: PackedInt32Array = msg.get("n", PackedInt32Array())
 	for ni in mini(sim.nodes.size(), nodes.size()):
 		sim.nodes[ni].amount = nodes[ni]
 	var oracles: Array = msg.get("o", [])
 	for t in mini(2, oracles.size()):
-		var src: Dictionary = oracles[t]
+		var a: Array = oracles[t]
 		var o: Dictionary = sim.oracles[t]
-		for k in src:
-			o[k] = src[k]
+		o.state = ORACLE_STATES[clampi(int(a[0]), 0, ORACLE_STATES.size() - 1)]
+		o.pos = Vector2(float(a[1]), float(a[2]))
+		var ci := int(a[3]) - 1
+		o.carrier = str(sim.units[ci].id) if ci >= 0 and ci < sim.units.size() else ""
+		o.carry_team = int(a[4]) - 1
+		o.dropped_at = float(a[5])
+		o.cakes = int(a[6])
+		o.weight = int(a[7])
+		var lif := []
+		for li in a[8]:
+			if int(li) >= 0 and int(li) < sim.units.size():
+				lif.append(sim.units[int(li)].id)
+		o.lifters = lif
 	sim.ladders = msg.get("l", sim.ladders)
 	var ops: PackedFloat32Array = msg.get("op", PackedFloat32Array())
 	for oi in mini(sim.outposts.size(), ops.size() / 3):
@@ -304,7 +347,8 @@ static func apply(sim, msg: Dictionary, me_id: String, predict := false) -> void
 	for si in mini(sim.stands.size(), stocks.size()):
 		sim.stands[si].stock = stocks[si]
 	var hd: PackedFloat32Array = msg.get("hd", PackedFloat32Array())
-	sim.hats = []
+	if msg.has("hd"):
+		sim.hats = []
 	for hi in hd.size() / 5:
 		var k := hi * 5
 		sim.hats.append({"id":int(hd[k]), "cls":HAT_CLS[clampi(int(hd[k + 1]), 0, HAT_CLS.size() - 1)], "up":hd[k + 2] > 0.5,
@@ -342,18 +386,27 @@ static func interpolate(sim, alpha: float) -> void:
 
 
 # Loose logs and rocks (0.31.0): [id, 0 log / 1 rock, x, z, ang, roll, rax] each, positions to 1 cm.
-static func _pack_items(sim) -> Array:
-	var out := []
+static func _pack_items(sim) -> PackedByteArray:
+	# 7 int16 each: id, log/rock, x, z (cm), ang, roll, rax (mrad).
+	var out := PackedByteArray()
+	out.resize(sim.items.size() * 14)
+	var i := 0
 	for it in sim.items:
-		out.append([int(it.id), 0 if it.kind == "log" else 1, snappedf((it.pos as Vector2).x, 0.01), snappedf((it.pos as Vector2).y, 0.01),
-			snappedf(float(it.ang), 0.01), snappedf(fmod(float(it.roll), TAU), 0.01), snappedf(float(it.rax), 0.01)])
+		var vals := [int(it.id) % 65536 - 32768, 0 if it.kind == "log" else 1, (it.pos as Vector2).x * 100.0, (it.pos as Vector2).y * 100.0,
+			wrapf(float(it.ang), -PI, PI) * 1000.0, fmod(float(it.roll), TAU) * 1000.0, wrapf(float(it.rax), -PI, PI) * 1000.0]
+		for k in 7:
+			out.encode_s16((i * 7 + k) * 2, clampi(int(round(float(vals[k]))), -32768, 32767))
+		i += 1
 	return out
 
-static func _apply_items(sim, arr: Array) -> void:
+static func _apply_items(sim, arr: PackedByteArray) -> void:
 	var out := []
-	for a in arr:
-		var log_kind := int(a[1]) == 0
-		out.append({"id":int(a[0]), "kind":"log" if log_kind else "rock", "res":"wood" if log_kind else "stone",
-			"pos":Vector2(float(a[2]), float(a[3])), "vel":Vector2.ZERO, "ang":float(a[4]), "spin":0.0, "roll":float(a[5]),
-			"rax":float(a[6]), "born":sim.time, "val":Sim.ITEM_VALUE})
+	for i in arr.size() / 14:
+		var v := []
+		for k in 7:
+			v.append(arr.decode_s16((i * 7 + k) * 2))
+		var log_kind := int(v[1]) == 0
+		out.append({"id":int(v[0]) + 32768, "kind":"log" if log_kind else "rock", "res":"wood" if log_kind else "stone",
+			"pos":Vector2(float(v[2]) / 100.0, float(v[3]) / 100.0), "vel":Vector2.ZERO, "ang":float(v[4]) / 1000.0, "spin":0.0,
+			"roll":float(v[5]) / 1000.0, "rax":float(v[6]) / 1000.0, "born":sim.time, "val":Sim.ITEM_VALUE})
 	sim.items = out

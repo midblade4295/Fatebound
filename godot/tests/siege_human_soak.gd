@@ -39,7 +39,7 @@ func _process(delta: float) -> bool:
 	var s = mode.sim
 	var me: Dictionary = s.by_id["you"]
 	# Stall detector: sim time must keep moving while the match is live and not paused.
-	if frames > 10 and not s.ended and not hud.pause_panel.visible:
+	if frames > 10 and not s.ended and not hud.paused():
 		if s.time <= last_time: stalls += 1
 	last_time = s.time
 	if me.state != "dead":

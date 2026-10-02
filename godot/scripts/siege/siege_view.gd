@@ -77,16 +77,45 @@ static func libraries() -> Dictionary:
 			holder.free()
 	return _libs
 
+static var build_times := {}      # last setup's ms per step (siege_diag / tools read it)
+const CACHE_RES := "res://assets/terrain/cache.res"
+static var _cache_tried := false
+
+static func _load_cache() -> void:
+	# The baked start-up cache (0.31.8): terrain and outer meshes, the foliage plan and blood textures, generated once by
+	# tools/bake_land.gd. Used only when its key matches the land; otherwise the view generates (slower first start).
+	if _cache_tried:
+		return
+	_cache_tried = true
+	if not ResourceLoader.exists(CACHE_RES):
+		return
+	var c = load(CACHE_RES)
+	if c == null or str(c.get("key")) != Land.bake_key():
+		push_warning("siege: terrain cache is stale (run tools/bake_land.gd); generating at start instead")
+		return
+	_terrain_meshes = c.terrain.duplicate()
+	_outer_meshes = c.outer.duplicate()
+	_foliage = c.foliage.duplicate()
+	_blood_tex = []
+	for img in c.blood:
+		_blood_tex.append(ImageTexture.create_from_image(img))
+
 func setup(s) -> void:
 	sim = s
-	_build_lighting()
-	_build_ambience()
-	_build_blood()
-	_build_terrain()
-	_build_props()
-	for t in 2:
-		oracle_nodes.append(_make_oracle(t))
+	build_times = {}
+	var t := Time.get_ticks_msec()
+	_load_cache()
+	build_times["cache"] = Time.get_ticks_msec() - t
+	t = Time.get_ticks_msec()
+	for step in ["_build_lighting", "_build_ambience", "_build_blood", "_build_terrain", "_build_props"]:
+		call(step)
+		var now := Time.get_ticks_msec()
+		build_times[step] = now - t
+		t = now
+	for tm in 2:
+		oracle_nodes.append(_make_oracle(tm))
 	_warm_up()
+	build_times["oracles+warm"] = Time.get_ticks_msec() - t
 
 func _warm_up() -> void:
 	# Draw one of every effect/projectile type in view during the first frames, so their shader
@@ -455,6 +484,9 @@ var _drop_i := 0
 var _blood_layer := 0
 
 static func _blood_texture(seed_v: int, pool: bool) -> ImageTexture:
+	return ImageTexture.create_from_image(_blood_image(seed_v, pool))
+
+static func _blood_image(seed_v: int, pool: bool) -> Image:
 	var n := 128
 	var img := Image.create(n, n, false, Image.FORMAT_RGBA8)
 	var rng := RandomNumberGenerator.new()
@@ -484,7 +516,7 @@ static func _blood_texture(seed_v: int, pool: bool) -> ImageTexture:
 			# a little darker toward the middle, where it's thicker
 			var shade := 1.0 - 0.25 * clampf(1.0 - d.length() / maxf(r, 1.0), 0.0, 1.0)
 			img.set_pixel(x, y, Color(shade, shade, shade, a))
-	return ImageTexture.create_from_image(img)
+	return img
 
 func _blood_mat(tex: Texture2D) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
@@ -1773,9 +1805,12 @@ func _build_props() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 21
 	var forest_trees := ["Tree_1_A_Color1","Tree_1_B_Color1","Tree_2_A_Color1","Tree_2_B_Color1","Tree_3_A_Color1"]
+	var tt := Time.get_ticks_msec()
 	for t in 2:
 		_build_castle(t)
 		_merge_kit()          # per castle, so the one off-screen is culled as a whole
+	build_times["  castles"] = Time.get_ticks_msec() - tt
+	tt = Time.get_ticks_msec()
 	# Midfield ruin and circular props from the sim.
 	for ob in sim.obstacles:
 		var p := Vector3(ob.p.x, 0, ob.p.y)
@@ -1789,6 +1824,8 @@ func _build_props() -> void:
 	_build_nodes()
 	_build_outposts()
 	_build_hat_stands()
+	build_times["  props+nodes+stands"] = Time.get_ticks_msec() - tt
+	tt = Time.get_ticks_msec()
 	# Scenery beyond the field's edge (0.26.0): trees along the tops of the rock walls, none over
 	# the cliff side or in the river's gorge; a few wooded hills further out.
 	var loop := Land.edge_loop()
@@ -1808,6 +1845,7 @@ func _build_props() -> void:
 	for p in [Vector3(-Sim.HALF_W - 8, 0.5, -40), Vector3(-Sim.HALF_W - 8, 0.5, 14), Vector3(-Sim.HALF_W - 8, 0.5, -10),
 			Vector3(Sim.HALF_W - 4, 0.5, 64), Vector3(Sim.HALF_W - 4, 0.5, -64), Vector3(0, 0.5, -Sim.HALF_L - 8), Vector3(0, 0.5, Sim.HALF_L + 8)]:
 		_place(HEX + "mountain_A_grass_trees.gltf", Vector3(p.x, Land.terrain_height(Vector2(p.x, p.z)) - 0.3, p.z), rng.randf()*TAU, 1.6)
+	build_times["  edge scenery"] = Time.get_ticks_msec() - tt
 
 const COLOR := ["blue", "red"]
 static var _floor_mats: Dictionary = {}

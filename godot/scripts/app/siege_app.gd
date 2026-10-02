@@ -8,6 +8,7 @@ const Screens = preload("res://scripts/app/screens.gd")
 const Showcase = preload("res://scripts/app/showcase.gd")
 const Siege = preload("res://scripts/siege/siege_mode.gd")
 const Audio = preload("res://scripts/native_audio.gd")
+const Assets = preload("res://scripts/siege/asset_cache.gd")
 
 const TABS := [["home", "HOME", "home"], ["pass", "PASS", "pass"], ["shop", "SHOP", "shop"], ["locker", "LOCKER", "locker"], ["settings", "SETTINGS", "gear"]]
 
@@ -45,6 +46,7 @@ var _toast_until := 0.0
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	get_tree().auto_accept_quit = false
+	Assets.preload_async()                 # 0.31.8: load the match's models on a thread while the menus are up
 	profile = Profile.new(profile_path, legacy_path)
 	profile.now_override = now_override
 	profile.load_or_create()
@@ -555,6 +557,7 @@ func _cancel_press() -> void:
 	_cancelling = false
 
 func _process(_delta: float) -> void:
+	Assets.poll()
 	# Keep gliding after a flick, easing out.
 	if not _drag_down and absf(_fling) > 30.0 and _menu_scroll_live():
 		content_scroll.scroll_vertical = int(content_scroll.scroll_vertical + _fling * _delta)
