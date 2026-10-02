@@ -1255,3 +1255,12 @@ K2/K3 notes (0.17.0)
 - Tutorial t_up_done: "Crusader hats!" generated in the Herald's voice (ElevenLabs, eleven_v4, Edward, 14 credits)
   spliced in place of "Paladin hats!" at the pause; the rest is Kevin's original take (heard back exactly).
 - tests/hammer_test.gd (11 checks) added to the suite. Quick suite all pass (seed 22: red wins 3-0 by rescue).
+
+# 0.30.6 (Kevin: a sound effect for throwing the hammer)
+- assets/sounds/hammerThrow.wav: ElevenLabs Sound Effects v2 (eleven_text_to_sound_v2, 1.2 s, prompt influence
+  0.55; prompt: heavy war hammer thrown hard, whoosh then spinning end over end, faint magical shimmer, cartoon
+  fantasy, dry). 3 takes (12 credits each); picked the one with a strong opening whoosh and three heavy spinning
+  whomps (the other was a thin continuous whirr), trimmed to 1.05 s with a fade, 32 kHz 16-bit mono, peak 0.56 like
+  the rest of the cue catalog (cue-catalog.json entry added).
+- SiegeMode._event_sound: plays it on the Crusader's "attack"/"hammer" event, offline and online; full volume for
+  your own throw or one within 9 m, quieter to 28 m, silent beyond. (It is the first in-match combat cue.)

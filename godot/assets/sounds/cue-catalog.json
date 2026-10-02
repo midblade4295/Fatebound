@@ -248,6 +248,13 @@
       "seconds": 0.56,
       "peak": 0.72,
       "rms": 0.10278144175705939
+    },
+    {
+      "cue": "hammerThrow",
+      "seconds": 1.05,
+      "peak": 0.56,
+      "rms": 0.14855404198169708,
+      "source": "ElevenLabs Sound Effects v2 (eleven_text_to_sound_v2), 0.30.6"
     }
   ],
   "demo_timeline": [

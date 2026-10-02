@@ -247,6 +247,7 @@ func _net_process(delta: float) -> void:
 					diag.event()
 					_count(e)
 					view.on_event(e)
+					_event_sound(e)
 					hud.on_event(e)
 			"bye":
 				var why := str(msg.get("why", ""))
@@ -463,6 +464,7 @@ func _process(delta: float) -> void:
 			_count(e)
 			view.on_event(e)
 			hud.on_event(e)
+			_event_sound(e)
 	diag.mark("view.sync")
 	view.proj_lead = 0.0 if online else _accum          # online, projectiles interpolate (Net)
 	view.sync(delta)
@@ -533,3 +535,18 @@ func request_leave() -> void:
 	else:
 		hud.pause_panel.visible = true
 		hud._center(hud.pause_panel)
+
+
+func _event_sound(e: Dictionary) -> void:
+	# In-match sound cues (0.30.6: the Crusader's hammer throw, ElevenLabs SFX). Full volume for your own throw or
+	# one close by, quieter further off, silent beyond ~28 m.
+	if audio == null or not audio.has_method("play"):
+		return
+	if str(e.get("k", "")) == "attack" and str(e.get("ability", "")) == "hammer":
+		var src: Dictionary = sim.by_id.get(str(e.get("id", "")), {})
+		if src.is_empty():
+			return
+		var me: Dictionary = sim.by_id.get(str(hud.player_id), {})
+		var d: float = 0.0 if me.is_empty() or str(src.id) == str(hud.player_id) else (src.pos as Vector2).distance_to(me.pos)
+		if d < 28.0:
+			audio.play("hammerThrow", d > 9.0)
