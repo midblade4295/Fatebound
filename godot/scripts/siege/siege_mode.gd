@@ -660,6 +660,14 @@ func _event_sound(e: Dictionary) -> void:
 			_cue("tm_splash", 1, e.get("pos", Vector2.INF), 16.0, mine)
 		"fish_caught":
 			_cue("tm_water_jump", 1, e.get("pos", Vector2.INF), 16.0, mine)
+		"node_fell":                                          # 0.31.0: a tree comes down / a boulder breaks
+			if str(e.get("kind", "")) == "wood":
+				_cue("tm_land_wood", 1, e.get("pos", Vector2.INF), 26.0, false, 1.0)
+			else:
+				_cue("tm_crumble", 2, e.get("pos", Vector2.INF), 26.0)
+		"item_pickup":
+			_cue("tm_land_wood" if str(e.get("kind", "")) == "log" else "tm_mine", 1 if str(e.get("kind", "")) == "log" else 5,
+				_unit_pos(e.get("id", "")), 14.0, mine, 0.8)
 
 func _footsteps(delta: float) -> void:
 	# Your own footsteps, by what you're walking on: water when wading, wood on bridges, tower decks and ladders,

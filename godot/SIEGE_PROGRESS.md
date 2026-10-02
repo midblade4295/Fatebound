@@ -1334,3 +1334,21 @@ K2/K3 notes (0.17.0)
   its samples and clamps the slope; (2) glare: the high-quality water's sun specular (roughness 0.05, specular
   0.75) and sky mix (up to 0.75) over a lake-wide sheet -- now roughness 0.16, specular 0.35, sky mix up to 0.5;
   standard water specular 0.6 -> 0.35, roughness 0.12 -> 0.18.
+
+# 0.31.0 (Kevin: boulder-shaped "iron" (stone) nodes; trees chop down into logs, boulders break into rocks; logs/rocks
+# have physics -- roll, get pushed by walking into them; click to pick up)
+- Nodes: "amount" now counts swings left (trees 5, boulders 6); the last swing fells the tree into LOGS_PER_TREE 4
+  logs lying along where it fell (boulder: ROCKS_PER_BOULDER 4 rocks scattered), each worth ITEM_VALUE 2; a stump /
+  rubble stays and the node grows back whole after NODE_REGROW (35 s / 45 s). Chopping no longer fills your arms.
+- Sim.items: 2D bodies (logs = capsules, half-length 0.85, r 0.24; rocks = balls r 0.32). Anyone walking into one
+  shoves it (logs spin when hit off-centre); they roll down slopes (gravity along the ground gradient; a log rolls
+  sideways and hardly slides lengthways); logs float off downstream in the river, rocks drag; walls, gates, trees and
+  towers stop them with a little bounce; they keep apart; unclaimed ones vanish after 150 s.
+- Workers pick one up with ACTION ("PICK UP"), up to 3 (CARRY_MAX 5 -> 6), one kind at a time, and bank them as before.
+  Bots: pick up any matching logs/rocks within ~32 m first, otherwise chop/mine, deliver when the next won't fit.
+- Net: protocol v25, snapshot "it": [id, log/rock, x, z, ang, roll, rax].
+- View: boulder nodes are procedural low-poly boulders (icosphere + smooth noise, squashed, flat-shaded greys), rubble
+  when broken; logs are bark cylinders with pale cut ends rolling about their axis; rocks small boulders; carried and
+  stockpiled stone shows rocks (was the KayKit ingot stack). Sounds: tree down (wood thud), boulder break (crumble),
+  pick-ups. Event "item_pickup" (not "pickup": that is the King's).
+- tests/items_test.gd (15 checks incl. 120 units delivered by bots in 4 min). Quick suite all pass.

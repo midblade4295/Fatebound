@@ -2169,8 +2169,9 @@ func _build_castle(t: int) -> void:
 		pile.position = Vector3(pp.x, 0, pp.y)
 		add_child(pile)
 		for i in 6:
-			var piece := _place(HEX + ("resource_lumber.gltf" if kind == "wood" else "resource_stone.gltf"),
-				Vector3(pp.x + (i % 3 - 1) * 0.75, 0.3 * float(i / 3), pp.y + randf_range(-0.2, 0.2)), randf_range(-0.3, 0.3), 2.2)
+			var at := Vector3(pp.x + (i % 3 - 1) * 0.75, 0.3 * float(i / 3), pp.y + randf_range(-0.2, 0.2))
+			var piece: Node3D = _place(HEX + "resource_lumber.gltf", at, randf_range(-0.3, 0.3), 2.2) if kind == "wood" \
+				else _mesh_node(boulder_mesh(60 + i, 0.34, 1), at + Vector3(0, 0.2, 0), randf() * TAU)
 			if piece != null:
 				piece.reparent(pile, true)
 				piece.visible = false
@@ -2235,8 +2236,14 @@ func _build_nodes() -> void:
 			full = _place(HEX + ("tree_single_A.gltf" if n.id % 2 == 0 else "tree_single_B.gltf"), p, randf() * TAU, 3.2)
 			empty = _place(HEX + ("tree_single_A_cut.gltf" if n.id % 2 == 0 else "tree_single_B_cut.gltf"), p, randf() * TAU, 3.2)
 		else:
-			full = _place(HEX + "resource_stone.gltf", p, randf() * TAU, 4.4)
-			empty = _place(HEX + "rock_single_D.gltf", p, randf() * TAU, 3.5)
+			# 0.31.0 (Kevin: "iron nodes ... shape of boulders"): a low-poly boulder; rubble once it's broken.
+			full = _mesh_node(boulder_mesh(n.id, 1.25, 2), p + Vector3(0, -0.28, 0), randf() * TAU)
+			empty = Node3D.new()
+			empty.position = p
+			add_child(empty)
+			for k in 3:
+				var bit := _mesh_node(boulder_mesh(n.id * 7 + k, 0.38, 1), Vector3(cos(k * 2.1) * 0.55, -0.08, sin(k * 2.1) * 0.55), randf() * TAU)
+				bit.reparent(empty, false)
 		if empty != null:
 			empty.visible = false
 		node_nodes[n.id] = {"full":full, "empty":empty, "state":true}
@@ -2280,7 +2287,7 @@ func _sync_castle(dt: float) -> void:
 				(nn.empty as Node3D).visible = not has
 		if has and nn.full != null:
 			var k := 0.75 + 0.25 * float(n.amount) / float(n.max)
-			(nn.full as Node3D).scale = Vector3.ONE * (3.2 if n.kind == "wood" else 4.4) * k
+			(nn.full as Node3D).scale = Vector3.ONE * (3.2 if n.kind == "wood" else 1.0) * k
 	for cn in catapult_nodes:
 		if cn.arm == null:
 			continue
@@ -2507,6 +2514,7 @@ func _on_screen(p: Vector3, planes: Array) -> bool:
 
 func sync(dt: float) -> void:
 	_time += dt
+	_sync_items(dt)
 	_sync_ambience(dt)
 	_sync_ripples(dt)
 	_sync_blood(dt)
@@ -2703,6 +2711,15 @@ func _sync_load(a: Dictionary, u: Dictionary) -> void:
 		n.scale = Vector3.ONE * 0.85
 		n.rotation = Vector3(0.0, PI * 0.5, 0.25)
 		n.position = Vector3(0, 2.45, 0)
+		(a.root as Node3D).add_child(n)
+		a.load_node = n
+		return
+	if kind == "stone":
+		n = Node3D.new()                                         # rocks carried overhead (0.31.0: boulders, not ingots)
+		for k in 2:
+			var bit := _mesh_node(boulder_mesh(40 + k, 0.3, 1), Vector3((k - 0.5) * 0.4, 0.0, 0.0), k * 1.7)
+			bit.reparent(n, false)
+		n.position = Vector3(0, 2.35, 0)
 		(a.root as Node3D).add_child(n)
 		a.load_node = n
 		return
@@ -3216,3 +3233,150 @@ func screen_point(world: Vector3) -> Vector2:
 
 func is_on_screen(world: Vector3) -> bool:
 	return not camera.is_position_behind(world) and Rect2(Vector2.ZERO, get_viewport().get_visible_rect().size).has_point(camera.unproject_position(world))
+
+
+# ---------- boulders, logs and rocks (0.31.0) ----------
+static var _boulder_cache := {}
+static var _boulder_mat: StandardMaterial3D = null
+static var _bark_mat: StandardMaterial3D = null
+var item_nodes := {}
+
+static func boulder_mesh(seed_n: int, radius: float, detail := 1) -> ArrayMesh:
+	# A low-poly boulder: an icosphere pushed in and out by smooth noise, squashed a little, flat-shaded faces in
+	# slightly different greys. Cached per (seed, size, detail).
+	var key := "%d_%d_%d" % [seed_n, int(radius * 100.0), detail]
+	if _boulder_cache.has(key):
+		return _boulder_cache[key]
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 9100 + seed_n
+	var t := (1.0 + sqrt(5.0)) / 2.0
+	var vs: Array = [Vector3(-1, t, 0), Vector3(1, t, 0), Vector3(-1, -t, 0), Vector3(1, -t, 0), Vector3(0, -1, t), Vector3(0, 1, t),
+		Vector3(0, -1, -t), Vector3(0, 1, -t), Vector3(t, 0, -1), Vector3(t, 0, 1), Vector3(-t, 0, -1), Vector3(-t, 0, 1)]
+	for i in vs.size():
+		vs[i] = (vs[i] as Vector3).normalized()
+	var fs: Array = [[0, 11, 5], [0, 5, 1], [0, 1, 7], [0, 7, 10], [0, 10, 11], [1, 5, 9], [5, 11, 4], [11, 10, 2], [10, 7, 6], [7, 1, 8],
+		[3, 9, 4], [3, 4, 2], [3, 2, 6], [3, 6, 8], [3, 8, 9], [4, 9, 5], [2, 4, 11], [6, 2, 10], [8, 6, 7], [9, 8, 1]]
+	for d in detail:
+		var mids := {}
+		var nf: Array = []
+		for f in fs:
+			var m := []
+			for e in [[f[0], f[1]], [f[1], f[2]], [f[2], f[0]]]:
+				var k2 := "%d_%d" % [mini(e[0], e[1]), maxi(e[0], e[1])]
+				if not mids.has(k2):
+					vs.append(((vs[e[0]] as Vector3) + (vs[e[1]] as Vector3)).normalized())
+					mids[k2] = vs.size() - 1
+				m.append(mids[k2])
+			nf.append([f[0], m[0], m[2]])
+			nf.append([f[1], m[1], m[0]])
+			nf.append([f[2], m[2], m[1]])
+			nf.append([m[0], m[1], m[2]])
+		fs = nf
+	var dirs := []
+	for k in 4:
+		dirs.append(Vector3(rng.randf_range(-1, 1), rng.randf_range(-1, 1), rng.randf_range(-1, 1)).normalized() * rng.randf_range(1.6, 3.2))
+	var sq := Vector3(rng.randf_range(0.95, 1.15), rng.randf_range(0.62, 0.78), rng.randf_range(0.85, 1.0)) * radius
+	var pos := []
+	for v in vs:
+		var bump := 0.0
+		for dv in dirs:
+			bump += sin((v as Vector3).dot(dv) * 1.7 + float(dirs.find(dv))) * 0.07
+		bump += rng.randf_range(-0.045, 0.045)
+		pos.append((v as Vector3) * (1.0 + bump) * sq)
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for f in fs:
+		var a: Vector3 = pos[f[0]]
+		var b: Vector3 = pos[f[1]]
+		var c: Vector3 = pos[f[2]]
+		var nrm := (b - a).cross(c - a).normalized()
+		if nrm.dot((a + b + c) / 3.0) < 0.0:
+			nrm = -nrm
+			var tmp := b
+			b = c
+			c = tmp
+		var g := rng.randf_range(0.28, 0.45)                    # darker, more contrast (the first try read washed-out)
+		var col := Color(g * rng.randf_range(0.97, 1.04), g, g * rng.randf_range(0.96, 1.05))
+		for vtx in [a, c, b]:
+			st.set_color(col)
+			st.set_normal(nrm)
+			st.add_vertex(vtx)
+	var mesh := st.commit()
+	if _boulder_mat == null:
+		_boulder_mat = StandardMaterial3D.new()
+		_boulder_mat.vertex_color_use_as_albedo = true
+		_boulder_mat.roughness = 0.92
+	mesh.surface_set_material(0, _boulder_mat)
+	_boulder_cache[key] = mesh
+	return mesh
+
+func _mesh_node(mesh: Mesh, at: Vector3, yaw: float) -> MeshInstance3D:
+	var mi := MeshInstance3D.new()
+	mi.mesh = mesh
+	mi.position = at
+	mi.rotation.y = yaw
+	add_child(mi)
+	return mi
+
+func _log_node() -> Node3D:
+	if _bark_mat == null:
+		_bark_mat = StandardMaterial3D.new()
+		_bark_mat.albedo_color = Color("#7a5230")
+		_bark_mat.roughness = 0.95
+	var root := Node3D.new()
+	var mi := MeshInstance3D.new()
+	var cm := CylinderMesh.new()
+	cm.top_radius = Sim.LOG_R
+	cm.bottom_radius = Sim.LOG_R * 1.06
+	cm.height = Sim.LOG_HALF * 2.0
+	cm.radial_segments = 10
+	cm.rings = 1
+	mi.mesh = cm
+	mi.material_override = _bark_mat
+	root.add_child(mi)
+	# pale cut ends
+	for end in [-1.0, 1.0]:
+		var cap := MeshInstance3D.new()
+		var cyl := CylinderMesh.new()
+		cyl.top_radius = Sim.LOG_R * 0.86
+		cyl.bottom_radius = Sim.LOG_R * 0.86
+		cyl.height = 0.03
+		cyl.radial_segments = 10
+		cap.mesh = cyl
+		var wood := StandardMaterial3D.new()
+		wood.albedo_color = Color("#d9b27c")
+		cap.material_override = wood
+		cap.position = Vector3(0, Sim.LOG_HALF * end, 0)
+		root.add_child(cap)
+	add_child(root)
+	return root
+
+func _sync_items(dt: float) -> void:
+	var seen := {}
+	for it in sim.items:
+		var id := int(it.id)
+		seen[id] = true
+		var nd: Node3D = item_nodes.get(id, null)
+		var is_log: bool = it.kind == "log"
+		var r: float = Sim.LOG_R if is_log else Sim.ROCK_R
+		var p: Vector2 = it.pos
+		var y := Sim.height_at(p) + r
+		if is_log and Sim.water_depth(p) > 0.15:
+			y = Land.WATER_Y + 0.06                           # floating
+		var target := Vector3(p.x, y, p.y)
+		if nd == null:
+			nd = _log_node() if is_log else _mesh_node(boulder_mesh(id % 9, Sim.ROCK_R + 0.04, 1), target, 0.0)
+			nd.position = target
+			item_nodes[id] = nd
+		nd.position = nd.position.lerp(target, minf(1.0, dt * 16.0))
+		if is_log:
+			var ang := float(it.ang)
+			var ax := Vector3(cos(ang), 0.0, sin(ang))
+			nd.basis = Basis(ax, float(it.roll)) * Basis(Vector3.UP, -ang) * Basis(Vector3(0, 0, 1), PI * 0.5)
+		else:
+			var rax := float(it.rax)
+			nd.basis = Basis(Vector3(sin(rax), 0.0, -cos(rax)), float(it.roll))
+	for id in item_nodes.keys():
+		if not seen.has(id):
+			(item_nodes[id] as Node3D).queue_free()
+			item_nodes.erase(id)

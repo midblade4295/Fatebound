@@ -103,7 +103,7 @@ const LADDER_FOOT := 1.35         # where the ladder meets the ground, out from 
 const LADDER_TOP := 2.9           # the height they go over at
 
 # ---- gathering / crafting ----
-const CARRY_MAX := 5
+const CARRY_MAX := 6              # 3 logs or 3 rocks (0.31.0; was 5 units)
 const GATHER_TIME := 0.9         # seconds per unit gathered
 const REPAIR_TICK := 0.5
 const REPAIR_HP := 20.0          # per tick, costs 1 wood (30 made gates unbreakable once classes stopped persisting)
@@ -214,6 +214,7 @@ var obstacles: Array = []      # circles: trees, rocks, ruin, buildings  {p, r, 
 var walls: Array = []          # segments {a, b, r, team, kind}
 var gates: Array = []          # {id, team, a, b, c, hp, max_hp, broken, open}
 var nodes: Array = []
+var items: Array = []               # loose logs and rocks on the ground (0.31.0)
 var outposts: Array = []       # {id, p, owner (-1 neutral), prog (-1 red .. +1 blue), t}          # resource nodes {id, kind:"wood"/"stone", p, r, amount, max, regen, t}
 var stock := [{"wood":0, "stone":0}, {"wood":0, "stone":0}]
 var levels := [_zero_levels(), _zero_levels()]
@@ -435,9 +436,11 @@ func _build_map() -> void:
 
 func _add_node(team: int, kind: String, p: Vector2) -> void:
 	var pos := _m(team, p)
+	# 0.31.0: "amount" counts the chops/hits left; at 0 the tree falls into logs (the boulder breaks into rocks),
+	# a stump/rubble stays, and it grows back whole after NODE_REGROW.
+	var hits: int = TREE_CHOPS if kind == "wood" else ROCK_HITS
 	var n := {"id":nodes.size(), "kind":kind, "p":pos, "r":0.9 if kind == "wood" else 1.0,
-		"amount":10 if kind == "wood" else 15, "max":10 if kind == "wood" else 15,
-		"regen":10.0 if kind == "wood" else 12.0, "t":0.0}
+		"amount":hits, "max":hits, "regen":float(NODE_REGROW[kind]), "t":0.0}
 	nodes.append(n)
 	obstacles.append({"p":pos, "r":n.r, "kind":"tree" if kind == "wood" else "rock", "node":n.id})
 
@@ -1102,7 +1105,10 @@ func _interact(u: Dictionary) -> bool:
 			u.task = {"kind":"repair", "gate":g.id, "t":REPAIR_TICK}
 			return true
 		var n := near_node(u)
-		if not n.is_empty() and (u.load.n == 0 or u.load.kind == n.kind) and u.load.n < CARRY_MAX:
+		var it := item_to_pick(u)
+		if not it.is_empty():
+			return _pick_item(u, it)
+		if not n.is_empty():
 			u.task = {"kind":"gather", "node":n.id, "t":GATHER_TIME}
 			u.face = angle_of(n.p - u.pos)
 			return true
@@ -1235,7 +1241,9 @@ func context_action(u: Dictionary) -> String:
 		if not near_repair_gate(u).is_empty() and repair_stock(u.team) > 0:
 			return "repair"
 		var n := near_node(u)
-		if not n.is_empty() and (u.load.n == 0 or u.load.kind == n.kind) and u.load.n < CARRY_MAX:
+		if not item_to_pick(u).is_empty():
+			return "pick_up"
+		if not n.is_empty():
 			return "chop" if n.kind == "wood" else "mine"
 	if u.cls != "villager":
 		if hat_shop_upgrade(u) != "":
@@ -1880,15 +1888,16 @@ func _step_task(u: Dictionary, dt: float) -> void:
 				_event("fish_caught", {"id":u.id, "team":u.team, "pos":u.pos})
 		"gather":
 			var n: Dictionary = nodes[int(task.node)]
-			if n.amount <= 0 or u.load.n >= CARRY_MAX or u.pos.distance_to(n.p) - n.r > 1.6:
+			if n.amount <= 0 or u.pos.distance_to(n.p) - n.r > 1.6:
 				u.task = {}
 				u.state = "idle"
 				return
 			n.amount -= 1
-			u.load = {"kind":n.kind, "n":u.load.n + 1}
 			_event("gather", {"id":u.id, "node":n.id, "kind":n.kind, "n":u.load.n})
 			task.t = GATHER_TIME
-			if u.load.n >= CARRY_MAX or n.amount <= 0:
+			if n.amount <= 0:
+				n.t = 0.0
+				_fell_node(n, u.pos)
 				u.task = {}
 				u.state = "idle"
 		"build_ladder":
@@ -2359,13 +2368,13 @@ func _step_world(dt: float) -> void:
 		_event("catapult_hit", {"team":int(sh.team), "pos":sh.to, "shell":sh.id})
 		shells.remove_at(i)
 	for n in nodes:
-		if n.amount < n.max:
+		if n.amount <= 0:
 			n.t += dt
 			if n.t >= n.regen:
 				n.t = 0.0
-				n.amount += 1
-				if n.amount == 1:
-					_event("node_regrow", {"node":n.id})
+				n.amount = n.max
+				_event("node_regrow", {"node":n.id})
+	_step_items(dt)
 
 func _commander(team: int) -> void:
 	# Team quartermaster. Works down a plan and saves for the next item instead of buying
@@ -2529,8 +2538,8 @@ func _think_worker(u: Dictionary) -> void:
 	if not u.task.is_empty():
 		u.move = Vector2.ZERO
 		return
-	# Deliver a full (or stranded) load.
-	if u.load.n >= CARRY_MAX:
+	# Deliver a full (or stranded) load: no room for another log/rock.
+	if u.load.n + ITEM_VALUE > CARRY_MAX:
 		_nav_to(u, drop_point(u), 0.8)
 		return
 	# Repair a gate that is broken or badly damaged, if there is material for it.
@@ -2577,6 +2586,23 @@ func _think_worker(u: Dictionary) -> void:
 		want = u.duty
 	if u.load.n > 0:
 		want = u.load.kind
+	# Logs/rocks lying about come first (ours or anyone's): walk to the nearest and pick it up.
+	var bi := {}
+	var bis := 32.0
+	for itm in items:
+		if u.load.n > 0 and itm.res != u.load.kind:
+			continue
+		var si: float = u.pos.distance_to(itm.pos) + (0.0 if itm.res == want else 8.0)
+		if si < bis:
+			bis = si
+			bi = itm
+	if not bi.is_empty():
+		if _item_dist(u.pos, bi) <= PICK_R:
+			u.move = Vector2.ZERO
+			_pick_item(u, bi)
+		else:
+			_nav_to(u, bi.pos, 0.3)
+		return
 	var best := {}
 	var best_score := INF
 	for n in nodes:
@@ -3167,3 +3193,192 @@ func _think_hammer(u: Dictionary) -> void:
 	if lined >= 2 or (lined >= 1 and u.pos.distance_to(foe.pos) > 3.5):
 		u.face = angle_of(d)
 		_throw_hammer(u)
+
+
+# ---------- loose logs and rocks (0.31.0, Kevin: "when chopping down a tree I want it to turn into logs and give the logs
+# physics where they will roll and can get pushed around if player walk into them. Player will then have to click to pick
+# the logs up. Do the same with the iron") ----------
+# A felled tree drops LOGS_PER_TREE logs, a broken boulder ROCKS_PER_BOULDER rocks, each worth ITEM_VALUE. They are simple
+# 2D bodies: units shove them as they walk into them (logs spin when hit off-centre), they roll down slopes (a is_log rolls
+# sideways easily and slides along its length hardly at all), logs float off downstream in the river and rocks drag,
+# walls and gates stop them. A Worker picks one up with ACTION. Unclaimed ones vanish after ITEM_LIFE.
+const TREE_CHOPS := 5
+const ROCK_HITS := 6
+const NODE_REGROW := {"wood":35.0, "stone":45.0}
+const LOGS_PER_TREE := 4
+const ROCKS_PER_BOULDER := 4
+const ITEM_VALUE := 2
+const ITEM_LIFE := 150.0
+const LOG_HALF := 0.85
+const LOG_R := 0.24
+const ROCK_R := 0.32
+const PICK_R := 1.25
+const ITEM_SLOPE_G := 7.0
+const RIVER_FLOW := Vector2(-0.7, 0.0)
+var _next_item := 1
+var _item_last := {}
+
+func _fell_node(n: Dictionary, from: Vector2) -> void:
+	var is_log := str(n.kind) == "wood"
+	var cnt := LOGS_PER_TREE if is_log else ROCKS_PER_BOULDER
+	var away: Vector2 = ((n.p as Vector2) - from).normalized() if from.distance_to(n.p) > 0.1 else Vector2(1, 0)
+	for k in cnt:
+		var p: Vector2
+		var vel: Vector2
+		var ang := 0.0
+		if is_log:
+			# The trunk falls away from the axe and lies in pieces along where it fell, rolling apart a little.
+			var side := Vector2(-away.y, away.x)
+			p = (n.p as Vector2) + away * (n.r + 0.6 + k * 1.15) + side * rng.randf_range(-0.35, 0.35)
+			ang = angle_of(side) + rng.randf_range(-0.25, 0.25)
+			vel = side * rng.randf_range(-1.2, 1.2) + away * 0.6
+		else:
+			var a := TAU * k / cnt + rng.randf_range(-0.5, 0.5)
+			var d := Vector2(cos(a), sin(a))
+			p = (n.p as Vector2) + d * (n.r + 0.45)
+			vel = d * rng.randf_range(1.8, 3.2)
+		p = _clamp_to_field(_push_out(p, LOG_R if is_log else ROCK_R))
+		items.append({"id":_next_item, "kind":"log" if is_log else "rock", "res":n.kind, "pos":p, "vel":vel, "ang":ang,
+			"spin":0.0, "roll":0.0, "rax":angle_of(vel), "born":time, "val":ITEM_VALUE})
+		_next_item += 1
+	_event("node_fell", {"node":n.id, "kind":n.kind, "pos":n.p})
+
+func _item_axis(it: Dictionary) -> Vector2:
+	return dir_of(float(it.ang))
+
+func _item_dist(p: Vector2, it: Dictionary) -> float:
+	# Distance from p to the item's surface (logs are capsules, rocks are balls).
+	if it.kind == "log":
+		var ax := _item_axis(it)
+		var t := clampf((p - (it.pos as Vector2)).dot(ax), -LOG_HALF, LOG_HALF)
+		return p.distance_to((it.pos as Vector2) + ax * t) - LOG_R
+	return p.distance_to(it.pos) - ROCK_R
+
+func item_to_pick(u: Dictionary) -> Dictionary:
+	if not alive(u) or u.cls != "worker" or u.carrying or int(u.get("tower", -1)) >= 0:
+		return {}
+	var best := {}
+	var bd := PICK_R
+	for it in items:
+		if u.load.n + int(it.val) > CARRY_MAX or (u.load.n > 0 and u.load.kind != it.res):
+			continue
+		var d := _item_dist(u.pos, it)
+		if d <= bd:
+			bd = d
+			best = it
+	return best
+
+func _pick_item(u: Dictionary, it: Dictionary) -> bool:
+	items.erase(it)
+	u.load = {"kind":it.res, "n":u.load.n + int(it.val)}
+	u.face = angle_of((it.pos as Vector2) - u.pos)
+	_event("item_pickup", {"id":u.id, "kind":it.kind, "item":it.id, "n":u.load.n})
+	return true
+
+func _ground_grad(p: Vector2) -> Vector2:
+	var e := 0.5
+	return Vector2(height_at(p + Vector2(e, 0)) - height_at(p - Vector2(e, 0)),
+		height_at(p + Vector2(0, e)) - height_at(p - Vector2(0, e))) / (2.0 * e)
+
+func _step_items(dt: float) -> void:
+	if items.is_empty():
+		_item_last.clear()
+		return
+	# How each unit moved this tick (its shove).
+	var uvel := {}
+	for u in units:
+		if alive(u) and int(u.get("tower", -1)) < 0:
+			var last: Vector2 = _item_last.get(u.id, u.pos)
+			uvel[u.id] = ((u.pos as Vector2) - last) / maxf(dt, 0.001)
+			_item_last[u.id] = u.pos
+	for i in range(items.size() - 1, -1, -1):
+		var it: Dictionary = items[i]
+		if time - float(it.born) > ITEM_LIFE:
+			items.remove_at(i)
+			_event("item_gone", {"item":it.id})
+			continue
+		var is_log: bool = it.kind == "log"
+		var r := LOG_R if is_log else ROCK_R
+		var vel: Vector2 = it.vel
+		# Shoves: anyone walking into it pushes it out of the way (logs spin when hit off-centre).
+		for u in units:
+			if not uvel.has(u.id):
+				continue
+			var up: Vector2 = u.pos
+			var cp: Vector2 = it.pos
+			if is_log:
+				var ax0 := _item_axis(it)
+				cp = (it.pos as Vector2) + ax0 * clampf((up - (it.pos as Vector2)).dot(ax0), -LOG_HALF, LOG_HALF)
+			var dvec := cp - up
+			var dist := dvec.length()
+			if dist >= UNIT_R + r or dist < 0.0001:
+				continue
+			var nrm := dvec / dist
+			it.pos = (it.pos as Vector2) + nrm * (UNIT_R + r - dist)
+			var push: float = maxf(0.0, (uvel[u.id] as Vector2).dot(nrm))
+			var vn := vel.dot(nrm)
+			if vn < push * 1.1:
+				vel += nrm * (push * 1.1 - vn)
+			if is_log:
+				var lever := (cp - (it.pos as Vector2))
+				it.spin = float(it.spin) + (lever.x * nrm.y - lever.y * nrm.x) * push * 0.9
+		# Slopes: downhill; a is_log rolls sideways, barely slides lengthways.
+		var acc := -_ground_grad(it.pos) * ITEM_SLOPE_G
+		var wet := water_depth(it.pos) > 0.15
+		if is_log:
+			var ax := _item_axis(it)
+			var side := Vector2(-ax.y, ax.x)
+			acc = side * acc.dot(side) + ax * acc.dot(ax) * 0.12
+		vel += acc * dt
+		if wet:
+			if is_log:
+				vel = vel.lerp(RIVER_FLOW, minf(1.0, dt * 1.2))      # floats off downstream
+			else:
+				vel *= exp(-6.0 * dt)
+		# Friction.
+		if is_log:
+			var ax2 := _item_axis(it)
+			var sd := Vector2(-ax2.y, ax2.x)
+			var vs := vel.dot(sd) * (1.0 if wet else exp(-1.1 * dt))       # afloat: the current's drag only
+			var va := vel.dot(ax2) * (1.0 if wet else exp(-7.0 * dt))
+			vel = sd * vs + ax2 * va
+			it.roll = float(it.roll) + vs * dt / LOG_R
+			it.ang = float(it.ang) + float(it.spin) * dt
+			it.spin = float(it.spin) * exp(-3.5 * dt)
+		else:
+			vel *= exp(-2.2 * dt)
+			if vel.length() > 0.05:
+				it.rax = angle_of(vel)
+			it.roll = float(it.roll) + vel.length() * dt / ROCK_R
+		if not wet and vel.length() < 0.04 and acc.length() < 0.6:
+			vel = Vector2.ZERO                         # settled (in the river a log keeps drifting)
+		# Move; walls, gates, trees and towers stop it (a little bounce).
+		var want: Vector2 = (it.pos as Vector2) + vel * dt
+		var got := _push_out(want, r + (0.2 if is_log else 0.0))
+		if is_log:
+			var ax3 := _item_axis(it)
+			for end in [-1.0, 1.0]:
+				var e: Vector2 = got + ax3 * LOG_HALF * end
+				var fixed := _push_out(e, r)
+				got += (fixed - e) * 0.5
+		got = _clamp_to_field(got)
+		if got.distance_to(want) > 0.001:
+			var hit := (got - want).normalized()
+			var into := vel.dot(hit)
+			if into < 0.0:
+				vel -= hit * into * 1.3
+		it.pos = got
+		it.vel = vel
+	# Items keep apart from each other.
+	for a in items.size():
+		for b in range(a + 1, items.size()):
+			var ia: Dictionary = items[a]
+			var ib: Dictionary = items[b]
+			var ra: float = 0.55 if ia.kind == "log" else ROCK_R
+			var rb: float = 0.55 if ib.kind == "log" else ROCK_R
+			var off: Vector2 = (ib.pos as Vector2) - (ia.pos as Vector2)
+			var d := off.length()
+			if d < ra + rb and d > 0.0001:
+				var push := off / d * (ra + rb - d) * 0.5
+				ia.pos = (ia.pos as Vector2) - push
+				ib.pos = (ib.pos as Vector2) + push

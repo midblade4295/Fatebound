@@ -8,7 +8,7 @@ extends RefCounted
 # objects: decode() uses the default allow_objects=false.
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 
-const VERSION := 24              # 24 = the Crusader (Knight upgrade) and its thrown hammer; 23 = tower shot heights, run off a deck; 22 = wide roofless towers; 21 = natural hills, every class climbs; 20 = bigger towers; 19 = the bigger natural map; 18 = no "water" in the dungeons (wading only in the river); 17 = rampart shots
+const VERSION := 25              # 25 = felled trees/broken boulders drop logs/rocks (it); 24 = the Crusader and its thrown hammer; 23 = tower shot heights, run off a deck; 22 = wide roofless towers; 21 = natural hills, every class climbs; 20 = bigger towers; 19 = the bigger natural map; 18 = no "water" in the dungeons (wading only in the river); 17 = rampart shots
 const DEFAULT_URL := "wss://136-113-125-3.sslip.io/fatebound/siege/ws"
 const DEFAULT_PORT := 8082
 const SNAP_HZ := 15.0            # 10 -> 15 (0.18.4): ~1.3 KB each, ~19 KB/s per player; remote
@@ -152,7 +152,7 @@ static func snapshot(sim, for_unit: String, events: Array) -> Dictionary:
 			"carry_team":o.carry_team, "dropped_at":o.dropped_at, "cakes":o.cakes, "weight":o.weight})
 	var msg := {"t":"s", "tm":sim.time, "sc":sim.score.duplicate(), "k":sim.kills.duplicate(),
 		"st":sim.stock.duplicate(true), "lv":sim.levels.duplicate(true), "end":[sim.ended, sim.winner, sim.end_reason],
-		"u":packed, "p":proj, "g":gates, "n":nodes, "o":oracles, "l":sim.ladders.duplicate(true), "op":outposts, "hs":stocks, "hd":hats, "e":events}
+		"it":_pack_items(sim), "u":packed, "p":proj, "g":gates, "n":nodes, "o":oracles, "l":sim.ladders.duplicate(true), "op":outposts, "hs":stocks, "hd":hats, "e":events}
 	if for_unit != "":
 		return for_player(msg, sim, for_unit)
 	return msg
@@ -281,6 +281,7 @@ static func apply(sim, msg: Dictionary, me_id: String, predict := false) -> void
 		g.max_hp = gates[gi * 4 + 1]
 		g.broken = gates[gi * 4 + 2] > 0.5
 		g.open = gates[gi * 4 + 3] > 0.5
+	_apply_items(sim, msg.get("it", []))
 	var nodes: PackedInt32Array = msg.get("n", PackedInt32Array())
 	for ni in mini(sim.nodes.size(), nodes.size()):
 		sim.nodes[ni].amount = nodes[ni]
@@ -335,3 +336,21 @@ static func interpolate(sim, alpha: float) -> void:
 	for p in sim.projectiles:
 		if p.has("net_to"):
 			p.pos = (p.net_from as Vector2).lerp(p.net_to, a)
+
+
+# Loose logs and rocks (0.31.0): [id, 0 log / 1 rock, x, z, ang, roll, rax] each, positions to 1 cm.
+static func _pack_items(sim) -> Array:
+	var out := []
+	for it in sim.items:
+		out.append([int(it.id), 0 if it.kind == "log" else 1, snappedf((it.pos as Vector2).x, 0.01), snappedf((it.pos as Vector2).y, 0.01),
+			snappedf(float(it.ang), 0.01), snappedf(fmod(float(it.roll), TAU), 0.01), snappedf(float(it.rax), 0.01)])
+	return out
+
+static func _apply_items(sim, arr: Array) -> void:
+	var out := []
+	for a in arr:
+		var log_kind := int(a[1]) == 0
+		out.append({"id":int(a[0]), "kind":"log" if log_kind else "rock", "res":"wood" if log_kind else "stone",
+			"pos":Vector2(float(a[2]), float(a[3])), "vel":Vector2.ZERO, "ang":float(a[4]), "spin":0.0, "roll":float(a[5]),
+			"rax":float(a[6]), "born":sim.time, "val":Sim.ITEM_VALUE})
+	sim.items = out
