@@ -1449,3 +1449,17 @@ K2/K3 notes (0.17.0)
   g, n, op, hs, hd, l) only when its hash changed, in full every FULL_EVERY 15 snapshots. Units (2,112 B) are now 62 %.
 - Timing instrumentation kept: Mode.ready_times, View.build_times (static dictionaries).
 - Quick suite: all pass except siege_sim_smoke (seeds 11/22 0-0).
+
+# 0.31.9 code cleanliness pass (gdlint 4.5 + a reference scan over scripts/, tests/, tools/, server/)
+- Removed dead code: sim stand_pos, altar, forward_outpost, enemies_of, ladder_climb, tower_slot_pos and the constants
+  ROLL_TIME, DOOR_X, OFFERING_EVERY, LADDER_CLIMB, HAT_STAND_R, RESPAWN_HAT_NEAR, TOWER_SLOT_OFF, ALTAR_P; view hex_pos,
+  _machine_piece, _stairs, _parapet, GROUND_TINT, HAT_WEAPON, MACHINES (22-line table), MACHINE_GLOW, _beam_mat; land
+  _out_normal, LEDGE_H; hud FACE_COLOR; ui CARD_EDGE, GOLD_DEEP, ORANGE; visual_theme title_plate, apply_tactile, cta,
+  install; castle_mesh WALL_H, WALL_T, TOWER_R, GATE_TOWER_R, TOWER_H, PARAPET_H, PARAPET_T; server _bool_list.
+- Land: one preload of siege_castle.gd (Castle) instead of two; view: path.png preloaded once (PATH_TEX) instead of three
+  loads; elif-after-return, two unused arguments marked, timing variables renamed.
+- gdlint now reports only style preferences the codebase deliberately keeps (long lines, definition order, single-letter
+  geometry variables, long files).
+- Kept on purpose: CLASS_CAP machinery (empty; class_full()/can_take_class() make re-adding caps a one-line change) and
+  the tower-climb code paths.
+- Quick suite: all pass except siege_sim_smoke (seeds 11/22 0-0, 0 pickups this run).

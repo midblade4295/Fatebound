@@ -53,17 +53,6 @@ static func panel(bg: Color = SURFACE, stroke: Color = GOLD_DARK, radius: int = 
     style.anti_aliasing = true
     return style
 
-static func title_plate(padding := 8) -> StyleBox:
-    var plate: StyleBox = Brass.new()
-    plate.top = Color("#1a2026")
-    plate.bottom = Color("#080b0e")
-    plate.radius = 14
-    plate.rim = 2.5
-    plate.ornate = true
-    plate.glow = Color(1.0, 0.78, 0.35, 0.22)
-    plate.set_content_margin_all(padding + 2)
-    return plate
-
 static func button(bg: Color = RAISED, stroke: Color = GOLD_DARK, radius: int = 11) -> StyleBox:
     # Kept for existing call sites: any "button" is now a dimensional tactile face in these colours.
     return tactile_from(bg, stroke, radius)
@@ -132,44 +121,3 @@ static func tactile(kind: String, state := "normal", radius := 12) -> StyleBox:
     style.content_margin_bottom = d + 4 - (d - 1 if state == "pressed" else 0.0)
     return style
 
-static func apply_tactile(b: Button, kind: String, radius := 12) -> void:
-    for state in ["normal","hover","pressed","disabled"]:
-        b.add_theme_stylebox_override(state, tactile(kind, state, radius))
-    b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
-    var pal: Dictionary = PALETTES.get(kind, PALETTES.secondary)
-    for key in ["font_color","font_hover_color","font_pressed_color","font_focus_color","font_hover_pressed_color"]:
-        b.add_theme_color_override(key, Color(pal.text))
-    b.add_theme_color_override("font_disabled_color", Color("#a595c4") if kind == "arcane" else Color(PALETTES.disabled.text))
-    b.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.55) if kind != "gold" else Color(1, 0.95, 0.8, 0.35))
-    b.add_theme_constant_override("outline_size", 3 if kind in ["primary","active","arcane","roll"] else 0)
-
-static func cta(hover := false) -> StyleBox:
-    return tactile("gold", "hover" if hover else "normal", 14)
-
-static func install() -> Theme:
-    ensure_fonts()
-    var ui := Theme.new()
-    ui.default_font = BODY_FONT
-    ui.default_font_size = 14
-    for kind in ["Label", "Button", "OptionButton", "LineEdit", "TextEdit", "RichTextLabel"]:
-        ui.set_font("font", kind, BODY_FONT)
-        ui.set_color("font_color", kind, TEXT)
-    ui.set_font("font", "Button", BOLD_FONT)
-    ui.set_font("font", "OptionButton", BOLD_FONT)
-    for state in ["normal","hover","pressed","disabled"]:
-        ui.set_stylebox(state, "Button", tactile("secondary", state, 11))
-    ui.set_stylebox("focus", "Button", StyleBoxEmpty.new())
-    ui.set_color("font_color", "Button", GOLD)
-    ui.set_color("font_hover_color", "Button", Color("#ffe4a6"))
-    ui.set_color("font_pressed_color", "Button", Color("#ffe4a6"))
-    ui.set_color("font_disabled_color", "Button", Color("#7f9097"))
-    for state in ["normal", "hover", "pressed", "disabled", "focus"]:
-        ui.set_stylebox(state, "OptionButton", ui.get_stylebox(state, "Button"))
-    ui.set_stylebox("panel", "PanelContainer", panel())
-    ui.set_stylebox("normal", "LineEdit", panel(INK, GOLD_DARK, 9, 8))
-    ui.set_stylebox("focus", "LineEdit", panel(INK, CYAN, 9, 8))
-    ui.set_stylebox("normal", "TextEdit", panel(INK, GOLD_DARK, 9, 8))
-    ui.set_stylebox("focus", "TextEdit", panel(INK, CYAN, 9, 8))
-    ui.set_stylebox("background", "ProgressBar", panel(INK, Color("#27404c"), 5, 0))
-    ui.set_stylebox("fill", "ProgressBar", panel(CYAN, CYAN, 5, 0))
-    return ui

@@ -65,7 +65,7 @@ static var ready_times := {}      # ms per start-up step of the last match (diag
 
 func _ready() -> void:
 	ready_times = {}
-	var _t_ready := Time.get_ticks_msec()
+	var t_ready := Time.get_ticks_msec()
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	clip_contents = true
@@ -96,11 +96,11 @@ func _ready() -> void:
 	tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	tex.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(tex)
-	var _t_hud := Time.get_ticks_msec()
+	var t_hud := Time.get_ticks_msec()
 	hud = Hud.new()
 	hud.diag = diag
 	add_child(hud)
-	ready_times["hud"] = Time.get_ticks_msec() - _t_hud
+	ready_times["hud"] = Time.get_ticks_msec() - t_hud
 	hud.leave_requested.connect(func(): exited.emit())
 	hud.replay_requested.connect(func():
 		if online:
@@ -129,22 +129,22 @@ func _ready() -> void:
 	hud.gate_bars_source = func() -> Array: return view.gate_bars() if view != null else []
 	hud.numbers_clock = func() -> float: return view._time if view != null else 0.0
 	resized.connect(_resize_viewport)
-	var _t_start := Time.get_ticks_msec()
+	var t_start := Time.get_ticks_msec()
 	if online:
 		_start_online()
 	else:
 		_start()
-	ready_times["start"] = Time.get_ticks_msec() - _t_start
+	ready_times["start"] = Time.get_ticks_msec() - t_start
 	_resize_viewport()
-	ready_times["_ready total"] = Time.get_ticks_msec() - _t_ready
+	ready_times["_ready total"] = Time.get_ticks_msec() - t_ready
 
 func _start() -> void:
 	sim = Sim.new()
 	if tutorial:
 		team_size = 2                      # a quiet castle: one ally, two enemies (one becomes the dummy)
-	var _t_sim := Time.get_ticks_msec()
+	var t_sim := Time.get_ticks_msec()
 	sim.setup(team_size, int(Time.get_unix_time_from_system()) & 0x7fffffff)
-	ready_times["sim.setup"] = Time.get_ticks_msec() - _t_sim
+	ready_times["sim.setup"] = Time.get_ticks_msec() - t_sim
 	view = View.new()
 	view.low_fx = low_fx
 	view.hq_gfx = hq_gfx
@@ -618,7 +618,7 @@ func _event_sound(e: Dictionary) -> void:
 			var hurt_me := mine or str(e.get("by", "")) == str(hud.player_id)
 			if by.is_empty() or by.cls == "priest":
 				return                                       # catapult stones have their own crash; a drain is silent
-			elif by.cls == "ranger":
+			if by.cls == "ranger":
 				_cue("tm_bow_hit", 3, at, HEAR_R, hurt_me)
 			elif by.cls == "mage":
 				_cue("tm_spell_hit", 3, at, HEAR_R, hurt_me)

@@ -23,7 +23,6 @@ const DROP_RETURN := 25.0        # a dropped Oracle nobody moves goes back to he
 const WORKSHOP_RADIUS := 2.8
 const PICKUP_RADIUS := 1.5
 const THRONE_RADIUS := 2.2
-const ROLL_TIME := 0.7
 
 # ---- castle geometry (blue side; red mirrored) ----
 const WALL_SCALE := 2.6          # KayKit wall_straight is 2.0 long -> 5.2 m
@@ -31,7 +30,6 @@ const SEG := 5.2
 const WALL_R := 1.0              # collision half-thickness of a wall
 const FRONT_Z := Castle.FRONT_Z         # front wall with the two gates (3 since Round 10)
 const GATE_X := Castle.GATE_X
-const DOOR_X := [-5.2, 5.2]      # open doorways in the inner wall (behind each gate)
 const GATE_HP := 1100.0
 const JAIL_SHUT_R := 3.5         # an enemy this close keeps the jail door shut, defenders or not
 const RAMPART_THREAT_R := 26.0   # enemies this close to a castle's front put its ranged defenders on the rampart
@@ -54,8 +52,6 @@ const COVER_ROCKS := [Vector2(-4.0, 18.5), Vector2(15.5, 26.0), Vector2(-10.0, 3
 const OUTPOST_TRICKLE := 15.0    # owners get +1 wood +1 stone this often per outpost
 
 # ---- fate offerings (the "cake") ----
-const ALTAR_P := Castle.ALTAR
-const OFFERING_EVERY := 30.0
 const CAKE_PER_STAGE := 3           # three fish fatten him one size stage (name kept from the cake days)
 # Fishing (Round 19, Kevin: the cake trees are gone -- catch fish from the river and feed them to the
 # enemy King). ACTION on a river bank casts; FISH_TIME later you hold a fish, if nothing hit you.
@@ -96,7 +92,6 @@ const WATER_NAV_COST := 2.5      # river cells cost this much in the nav grid: b
 # whole army died in the bottleneck (no King picked up in two 12-minute bot matches). Costing its cells a
 # little more spreads the bots over the side bridges too; players still take whichever way they like.
 const LANE_NAV_COST := 2.2
-const LADDER_CLIMB := 0.5         # (old flat crossing speed; the climb now goes by ladder_depth, below)
 # Climbing (Round 25, Kevin: "when players use a ladder they climb up it and over the wall"): the ladder stands
 # 1.35 m out from the wall and reaches its top; climbers go up the rungs, over the top, and drop down inside.
 const LADDER_FOOT := 1.35         # where the ladder meets the ground, out from the wall line
@@ -130,7 +125,6 @@ const HAT_CLASSES := ["knight", "barbarian", "rogue", "ranger", "mage", "priest"
 const HAT_STANDS := Castle.HAT_STANDS
 const HAT_HALL := Castle.HAT_HALL
 const HAT_TAKE_R := 1.3
-const HAT_STAND_R := 0.45
 const HAT_STOCK_MAX := 3
 # 0.31.4 (Kevin: no per-class caps after all): the stands steer the mix instead -- the strong/rare classes hold fewer hats
 # and restock more slowly. (CLASS_CAP left empty: class_full() is always false.)
@@ -160,8 +154,6 @@ const TOWER_SLOTS := 8            # the deck is wide now (0.30.3): people walk a
 const TOWER_ENTER_R := 4.0        # from the tower's centre (its wall is 3 m out)
 const TOWER_RANGE := 1.3          # range bonus from the top
 const TOWER_BOT_MAX := 2          # bots leave the other places for players
-const TOWER_SLOT_OFF := [Vector2(0.46, 0.46), Vector2(-0.46, -0.46), Vector2(-0.46, 0.46), Vector2(0.46, -0.46)]
-const RESPAWN_HAT_NEAR := 28.0    # (unused since 0.26.0: towers are no longer respawn points)
                                   # there. Bot attackers always respawn forward and scavenge (like
                                   # Fat Princess players choosing an outpost spawn).
 const BOT_HAT_SEARCH := 32.0      # villager bots scavenge dropped hats this far (14 m: most expired unused)
@@ -283,14 +275,8 @@ static func forge(team: int) -> Vector2:
 	# The hat stands' corner (kept under the old name: HUD hints, bots and tests aim here).
 	return _c(team, HAT_HALL)
 
-static func stand_pos(team: int, i: int) -> Vector2:
-	return _c(team, HAT_STANDS[i])
-
 static func workshop(team: int) -> Vector2:
 	return _c(team, Castle.WORKSHOP)
-
-static func altar(team: int) -> Vector2:
-	return _c(team, ALTAR_P)
 
 static func spawn(team: int) -> Vector2:
 	return _c(team, Castle.SPAWN)
@@ -741,18 +727,6 @@ func class_label(u: Dictionary) -> String:
 	return UPGRADE_NAME.get(u.cls,"") if u.up else str(CLASSES[u.cls].name)
 
 
-func forward_outpost(team: int) -> Dictionary:
-	# The team's owned outpost closest to the enemy dungeon (where its own Oracle is held).
-	var best := {}
-	var bd := INF
-	for op in outposts:
-		if int(op.owner) == team:
-			var d: float = (op.p as Vector2).distance_to(cell(team))
-			if d < bd:
-				bd = d
-				best = op
-	return best
-
 func _respawn(u: Dictionary, first := false) -> void:
 	var sp := spawn(u.team)
 	u.pos = sp + Vector2(rng.randf_range(-8.0, 8.0), rng.randf_range(-1.5, 1.5))
@@ -793,9 +767,6 @@ static func angle_of(v: Vector2) -> float:
 
 func alive(u: Dictionary) -> bool:
 	return u.state != "dead"
-
-func enemies_of(u: Dictionary) -> Array:
-	return units.filter(func(o): return o.team != u.team and alive(o))
 
 func nearest_enemy(u: Dictionary, max_d: float, prefer_front := false) -> Dictionary:
 	var best := {}
@@ -2063,12 +2034,6 @@ static func ladder_lift(d: float, ground: float) -> float:
 	var k := clampf((-0.35 - d) / 1.5, 0.0, 1.0)
 	return lerpf(LADDER_TOP, ground, k * k)
 
-func ladder_climb(u: Dictionary) -> bool:
-	for l in ladders:
-		if int(l.team) == u.team and u.pos.distance_to(l.p) <= LADDER_HALF + 0.8:
-			return true
-	return false
-
 func _hands_near(p: Vector2, team: int, r: float) -> int:
 	var n := 0
 	for o in units:
@@ -3067,11 +3032,6 @@ func tower_deck_clamp(u: Dictionary) -> Vector2:
 	var c: Vector2 = (outposts[int(u.tower)] as Dictionary).p
 	var off: Vector2 = u.pos - c
 	return c + off.limit_length(Land.TOWER_TOP_R)
-
-func tower_slot_pos(u: Dictionary) -> Vector2:
-	var op: Dictionary = outposts[int(u.tower)]
-	var k: int = (op.occ as Array).find(u.id)
-	return (op.p as Vector2) + TOWER_SLOT_OFF[maxi(k, 0) % TOWER_SLOT_OFF.size()]
 
 func tower_to_enter(u: Dictionary) -> Dictionary:
 	# The tower this unit could climb right now: archers and mages, at a tower their team holds.

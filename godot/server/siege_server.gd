@@ -169,14 +169,6 @@ func _handle(cid: int, msg: Dictionary) -> void:
 					arg = null
 				sim.act(c.unit, a, arg)
 
-func _bool_list(v: Variant) -> Variant:
-	if not (v is Array):
-		return null
-	var out := []
-	for i in mini(4, (v as Array).size()):
-		out.append(bool(v[i]))
-	return out
-
 func _seat(cid: int) -> void:
 	# Take over a bot on the team with fewer humans (blue on ties).
 	var c: Dictionary = clients[cid]

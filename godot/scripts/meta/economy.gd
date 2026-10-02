@@ -260,7 +260,7 @@ static func roll_challenges(span: String, key: String, count: int, exclude: Arra
 # ---------------- match rewards ----------------
 const FIRST_WIN := {"gold":300, "pass":500}
 
-static func match_stats(me: Dictionary, won: bool, draw: bool) -> Dictionary:
+static func match_stats(me: Dictionary, won: bool, _draw: bool) -> Dictionary:
 	# Contribution numbers from the player's unit at the end of a match (offline or online).
 	var s := {"matches":1, "wins":1 if won else 0, "rescues":int(me.get("rescues", 0)), "kills":int(me.get("kills", 0)),
 		"gates":int(float(me.get("gate_dmg", 0.0)) / 100.0), "gathered":int(me.get("gathered", 0)), "fed":int(me.get("fed", 0)),

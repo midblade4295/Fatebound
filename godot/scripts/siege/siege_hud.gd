@@ -18,7 +18,6 @@ signal workshop_buy(id: String)
 signal workshop_leave
 
 const TEAM_COLORS := [Color("#5fd2f0"), Color("#ff7b52")]
-const FACE_COLOR := {"knight":Color("#9fb6c8"),"barbarian":Color("#e0875a"),"rogue":Color("#8fd18a"),"ranger":Color("#d9c36a"),"mage":Color("#b28cff"),"fate":Color("#ffd46a")}
 
 var sim
 var diag
@@ -59,7 +58,7 @@ var pause_btn: Button
 static var ready_times := {}
 
 func _ready() -> void:
-	var _t0 := Time.get_ticks_msec()
+	var t0 := Time.get_ticks_msec()
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_touchscreen = DisplayServer.is_touchscreen_available()
@@ -79,7 +78,7 @@ func _ready() -> void:
 	# 0.31.8: the workshop and pause panels are built the first time they open (they cost ~370 ms at match start).
 	resized.connect(_layout)
 	_layout()
-	ready_times["hud _ready total"] = Time.get_ticks_msec() - _t0
+	ready_times["hud _ready total"] = Time.get_ticks_msec() - t0
 
 func _layout() -> void:
 	pause_btn.position = Vector2(size.x - 52, 78)
@@ -632,7 +631,7 @@ func _oracle_status(me: Dictionary) -> String:
 	var suffix := "  · size %d, needs %d" % [int(o.weight), need] if int(o.weight) > 0 else ""
 	return _oracle_state_text(me, o) + suffix
 
-func _oracle_state_text(me: Dictionary, o: Dictionary) -> String:
+func _oracle_state_text(_me: Dictionary, o: Dictionary) -> String:
 	match str(o.state):
 		"cell": return "Our King: captive in the enemy dungeon"
 		"carried":

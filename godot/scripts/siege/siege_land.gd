@@ -155,7 +155,6 @@ const SCARPS := [
 const SCARP_W := 1.0             # the face's horizontal run
 const SCARP_TAPER := 2.6         # metres at each end where the face fades back into slope
 const SCARP_WALL_OUT := 0.5      # its wall sits mid-face
-const LEDGE_H := 1.5             # (kept for callers: "raised ground" means above this-ish)
 
 static func _hill_raw(hl: Dictionary, q: Vector2) -> float:
 	var off: Vector2 = q - (hl.c as Vector2)
@@ -296,8 +295,8 @@ static func dist_to_paths(p: Vector2) -> float:
 	return best
 
 # ---------------- heights ----------------
-const _CastleZ = preload("res://scripts/siege/siege_castle.gd")
-const CASTLE_ZONE := HALF_L - _CastleZ.BACK + _CastleZ.FRONT_Z - 2.0   # |z| beyond this: castle grounds, flat
+const Castle = preload("res://scripts/siege/siege_castle.gd")
+const CASTLE_ZONE := HALF_L - Castle.BACK + Castle.FRONT_Z - 2.0   # |z| beyond this: castle grounds, flat
 
 static func _smooth(e0: float, e1: float, x: float) -> float:
 	var t := clampf((x - e0) / (e1 - e0), 0.0, 1.0)
@@ -366,15 +365,14 @@ const MASK_RES := "res://assets/terrain/pathmask.res"
 
 # The castles' sunken dungeon wings (siege_castle.gd, Round 13): the terrain dips to the dungeon
 # floor there, or the grass would cover the pit. (Blue space; red is point-mirrored.)
-const _CastleL = preload("res://scripts/siege/siege_castle.gd")
 
 static func in_dungeon_pit(p: Vector2, margin := 0.0) -> bool:
-	var q := (p if p.y >= 0.0 else -p) - Vector2(0.0, HALF_L - _CastleL.BACK)
-	return q.x >= _CastleL.ANNEX_X0 - margin and q.x <= -_CastleL.HX + margin and q.y >= _CastleL.ANNEX_Z0 - margin and q.y <= _CastleL.ANNEX_Z1 + margin
+	var q := (p if p.y >= 0.0 else -p) - Vector2(0.0, HALF_L - Castle.BACK)
+	return q.x >= Castle.ANNEX_X0 - margin and q.x <= -Castle.HX + margin and q.y >= Castle.ANNEX_Z0 - margin and q.y <= Castle.ANNEX_Z1 + margin
 
 static func terrain_height(p: Vector2) -> float:
 	if in_dungeon_pit(p):
-		return _CastleL.DUNGEON_H
+		return Castle.DUNGEON_H
 	var inside := Vector2(clampf(p.x, -HALF_W - 1.5, HALF_W + 1.5), clampf(p.y, -HALF_L, HALF_L))
 	var h := ground_height(inside, false)
 	if edge_dist(p) <= 0.0:
@@ -539,11 +537,6 @@ static func _bridge_gap(mid: Vector2) -> bool:
 		if absf(mid.x - c.x) < open and absf(mid.y - c.y) < float(br.half_len) + 1.5:
 			return true
 	return false
-
-static func _out_normal(a: Vector2, b: Vector2, cen: Vector2) -> Vector2:
-	var u := (b - a).normalized()
-	var n := Vector2(u.y, -u.x)
-	return -n if n.dot(cen - (a + b) * 0.5) > 0.0 else n
 
 static func _edge(out: Array, a: Vector2, b: Vector2, r: float, kind: String) -> void:
 	# Clip to the field rectangle (+1 m); skip slivers.

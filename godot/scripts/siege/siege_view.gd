@@ -4,11 +4,11 @@ const Stage = preload("res://scripts/siege/asset_cache.gd")
 const Land = preload("res://scripts/siege/siege_land.gd")
 const Castle = preload("res://scripts/siege/siege_castle.gd")
 const CastleMesh = preload("res://scripts/siege/castle_mesh.gd")
+const PATH_TEX := preload("res://assets/terrain/path.png")
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 
 const HEX := "res://assets/kaykit/hex/"
 const FOREST := "res://assets/kaykit/forest/"
-const GROUND_TINT := Color(0.47, 0.6, 0.38)
 const TEAM_COLORS := [Color("#5fd2f0"), Color("#ff7b52")]
 const GOLD := Color("#ffd46a")
 static var VULKAN_EXPOSURE := 1.55
@@ -277,7 +277,7 @@ func _build_ambience() -> void:
 			flame.global_position = light.global_position + Vector3(0.0, -0.15, 0.0)
 			_torches.append([light, flame, 1.6, randf() * 10.0])
 
-func _sync_ambience(dt: float) -> void:
+func _sync_ambience(_dt: float) -> void:
 	if _motes != null and is_instance_valid(camera) and camera.is_inside_tree():
 		var cp := camera.global_position
 		var fwd := -camera.global_transform.basis.z
@@ -774,9 +774,6 @@ func _mesh_of(path: String) -> Dictionary:
 	holder.free()
 	return out
 
-static func hex_pos(col: int, row: int) -> Vector3:
-	return Vector3(col*2.0 + (1.0 if row % 2 != 0 else 0.0), 0.0, row*1.732)
-
 static var _terrain_meshes: Array = []
 static var _terrain_mat: ShaderMaterial = null
 static var _water_mat: ShaderMaterial = null
@@ -786,7 +783,7 @@ static func _terrain_material() -> ShaderMaterial:
 		var m := ShaderMaterial.new()
 		m.shader = load("res://scripts/siege/terrain.gdshader")
 		m.set_shader_parameter("grass_tex", load("res://assets/terrain/grass.png"))
-		m.set_shader_parameter("path_tex", load("res://assets/terrain/path.png"))
+		m.set_shader_parameter("path_tex", PATH_TEX)
 		m.set_shader_parameter("rock_tex", load("res://assets/terrain/rock.png"))
 		m.set_shader_parameter("path_mask", ImageTexture.create_from_image(load(Land.MASK_RES)))
 		var r := Land.bake_rect()
@@ -1385,7 +1382,6 @@ static func _cheap_flower_mesh(mesh: Mesh) -> Mesh:
 # ---------- hats (Round 8) ----------
 const HAT_COLOR := {"knight":Color("#9fb6c8"), "barbarian":Color("#e0875a"), "rogue":Color("#6fd46a"),
 	"ranger":Color("#e8c65a"), "mage":Color("#a879ff"), "worker":Color("#c8a27a"), "priest":Color("#fff4d0")}
-const HAT_WEAPON := {"knight":"sword_1handed", "barbarian":"axe_2handed", "rogue":"dagger", "ranger":"bow_withString", "mage":"staff", "priest":"wand"}
 static var _hat_mesh: ArrayMesh = null
 static var _hat_mats: Dictionary = {}
 var stand_nodes: Dictionary = {}       # stand id -> Array of 3 hat MeshInstance3D
@@ -1436,45 +1432,7 @@ func _hat_instance(cls: String, up: bool, scale_k: float) -> MeshInstance3D:
 # Hat machines (Round 11, Kevin): one themed structure per class, with an upgraded look that
 # appears once the team buys that class's hat upgrade. Pieces: [path, offset (x, y, z) in the
 # machine's frame, yaw, scale]. "bits/" = KayKit Fantasy Weapons Bits, "%s" = team colour.
-const MACHINES := {
-	"knight": {"base": [["weaponrack", Vector3(0, 0, 0.55), 0.0, 3.0], ["bits/shield_B", Vector3(-0.6, 0.55, 0.1), 0.3, 0.8],
-			["bits/sword_A", Vector3(0.62, 0.0, 0.05), 0.0, 0.75], ["crate_B_small", Vector3(0, 0, -0.1), 0.0, 2.6]],
-		"up": [["bits/shield_D", Vector3(-0.7, 0.6, 0.1), 0.3, 0.8], ["bits/sword_G", Vector3(0.7, 0.0, 0.1), 0.0, 0.8],
-			["flag_%s", Vector3(0.0, 0.0, 0.9), 0.0, 2.6]]},
-	"barbarian": {"base": [["tent", Vector3(0, 0, 0.25), 0.0, 2.6], ["resource_lumber", Vector3(0.75, 0, -0.35), 0.4, 2.2],
-			["bits/axe_A", Vector3(0.75, 0.35, -0.35), 0.0, 0.75]],
-		"up": [["bits/sword_E", Vector3(-0.75, 0.0, -0.3), 0.2, 0.55], ["bits/axe_D", Vector3(0.95, 0.35, 0.0), 0.8, 0.75],
-			["flag_%s", Vector3(-0.9, 0.0, 0.7), 0.0, 2.6]]},
-	"rogue": {"base": [["crate_A_big", Vector3(0, 0, 0.35), 0.2, 2.4], ["crate_B_small", Vector3(0.7, 0, -0.2), 0.6, 2.4],
-			["sack", Vector3(-0.7, 0, -0.1), 0.0, 2.4], ["bits/dagger_A", Vector3(0.1, 0.55, 0.35), 0.0, 0.8]],
-		"up": [["bits/dagger_C", Vector3(-0.25, 0.55, 0.35), 0.4, 0.8], ["bits/fistweapon_A", Vector3(0.7, 0.35, -0.2), 0.0, 0.8],
-			["barrel", Vector3(-0.8, 0, 0.6), 0.0, 2.2]]},
-	"ranger": {"base": [["target", Vector3(0, 0, 0.6), 0.0, 3.6], ["bucket_arrows", Vector3(0.7, 0, -0.1), 0.0, 3.0],
-			["bits/bow_A_withString", Vector3(-0.6, 0.0, 0.0), 0.0, 0.8]],
-		"up": [["bits/bow_C_withString", Vector3(-0.85, 0.0, 0.3), 0.3, 0.8], ["target", Vector3(0.8, 0, 0.7), 0.5, 3.0],
-			["flag_%s", Vector3(0.0, 0.0, -0.8), 0.0, 2.4]]},
-	"mage": {"base": [["building_tower_base_%s", Vector3(0, 0, 0.4), 0.0, 0.95], ["bits/staff_A", Vector3(0.65, 0.0, -0.2), 0.0, 0.75]],
-		"up": [["bits/staff_D", Vector3(-0.7, 0.0, -0.2), 0.0, 0.75], ["bits/wand_B", Vector3(0.65, 0.9, -0.2), 0.0, 0.8],
-			["flag_%s", Vector3(0.0, 1.4, 0.45), 0.0, 2.0]]},
-	"priest": {"base": [["building_well_%s", Vector3(0, 0, 0.35), 0.0, 1.6], ["bits/wand_A", Vector3(0.7, 0.0, -0.3), 0.0, 0.8]],
-		"up": [["bits/staff_C", Vector3(-0.75, 0.0, -0.3), 0.0, 0.75], ["flag_%s", Vector3(0.85, 0.0, 0.55), 0.0, 2.4]]},
-}
-const MACHINE_GLOW := {"mage": Color("#b98cff"), "priest": Color("#fff0a8")}
 var machine_up: Dictionary = {}        # stand id -> {"up": Node3D, "glow": MeshInstance3D, "state": bool}
-
-func _machine_piece(root: Node3D, piece: Array, col: String) -> void:
-	var name := str(piece[0])
-	if name.contains("%s"):
-		name = name % col
-	var path := ("res://assets/kaykit/bits/%s.gltf" % name.substr(5)) if name.begins_with("bits/") else (HEX + name + ".gltf")
-	var packed := Stage.scene(path)
-	if packed == null:
-		return
-	var n: Node3D = packed.instantiate()
-	n.position = piece[1]
-	n.rotation.y = float(piece[2])
-	n.scale = Vector3.ONE * float(piece[3])
-	root.add_child(n)
 
 func _build_hat_stands() -> void:
 	# Hat shops are buildings (Round 20): the class's building, team-coloured, its door facing the way
@@ -1603,7 +1561,6 @@ func _sync_shields() -> void:
 		n.transform = Transform3D(Basis(along, Vector3.UP, along.normalized().cross(Vector3.UP)), Vector3(mid.x, y, mid.y))
 
 var beam_nodes: Dictionary = {}          # priest unit id -> MeshInstance3D (unit-length cylinder)
-static var _beam_mat: StandardMaterial3D = null
 
 static var _beam_mats := {}
 
@@ -1902,50 +1859,6 @@ func _block(team: int, x0: float, x1: float, z0: float, z1: float, h: float, top
 	lid.position = Vector3(c.x, h + 0.01, c.y)
 	add_child(lid)
 
-func _stairs(team: int, x0: float, x1: float, z0: float, z1: float, h: float, steps: int, rising_with_z: bool, castle := true, h0 := 0.0) -> void:
-	# One MultiMesh of box steps per staircase (a single draw call).
-	if _box == null:
-		_box = BoxMesh.new()
-		_box.size = Vector3.ONE
-	var mm := MultiMesh.new()
-	mm.transform_format = MultiMesh.TRANSFORM_3D
-	mm.mesh = _box
-	mm.instance_count = steps
-	var depth := (z1 - z0) / float(steps)
-	for i in steps:
-		var sh := h0 + (h - h0) * float(i + 1) / float(steps)
-		var zc := z0 + depth * (float(i) + 0.5) if rising_with_z else z1 - depth * (float(i) + 0.5)
-		# Each step is a full-height block from the ground up to its tread.
-		var sp := Vector2((x0 + x1) * 0.5, zc)
-		var c: Vector2 = Sim._c(team, sp) if castle else Sim._m(team, sp)
-		var basis := Basis.from_scale(Vector3(absf(x1 - x0), sh, depth + 0.02))
-		mm.set_instance_transform(i, Transform3D(basis, Vector3(c.x, sh * 0.5, c.y)))
-	var node := MultiMeshInstance3D.new()
-	node.multimesh = mm
-	node.material_override = _stone(Color("#b8ad96"))
-	add_child(node)
-
-func _parapet(a: Vector2, b: Vector2) -> void:
-	# Low stone parapet along a ledge, standing on its high side (clipped to the field).
-	var aa := Vector2(clampf(a.x, -Sim.HALF_W, Sim.HALF_W), a.y)
-	var bb := Vector2(clampf(b.x, -Sim.HALF_W, Sim.HALF_W), b.y)
-	var length := aa.distance_to(bb)
-	if length < 0.3:
-		return
-	var n := maxi(1, int(round(length / 2.6)))
-	var rot := -atan2(bb.y - aa.y, bb.x - aa.x) + PI * 0.5
-	var normal := Vector2(-(bb - aa).y, (bb - aa).x).normalized()
-	var mid := (aa + bb) * 0.5
-	var h := maxf(Sim.height_at(mid + normal * 0.7), Sim.height_at(mid - normal * 0.7))
-	for i in n:
-		var c := aa.lerp(bb, (float(i) + 0.5) / float(n))
-		var piece := length / float(n)
-		var s := 2.4
-		var off := Vector3(1.0 * s, 0, 0).rotated(Vector3.UP, rot)
-		var node := _place(HEX + "fence_stone_straight.gltf", Vector3(c.x, h, c.y) + off, rot, s)
-		if node != null:
-			node.scale.z = s * piece / (1.15 * s)
-
 func _wall_run(a: Vector2, b: Vector2, path: String, y := 0.0, clip := true, inside := Vector2.INF) -> void:
 	# inside (optional): a point inside what the wall encloses. The kit wall's stone face is its local +Z
 	# (the other side has the walkway lip); pieces turn so the stone faces AWAY from it (Round 14,
@@ -1981,10 +1894,10 @@ func _build_castle_mesh(t: int) -> void:
 	if _castle_mats.is_empty():
 		var floor_m: Material
 		if _cast_static:
-			floor_m = _cloud_floor_material(load("res://assets/terrain/path.png"), Color(0.86, 0.84, 0.8))
+			floor_m = _cloud_floor_material(PATH_TEX, Color(0.86, 0.84, 0.8))
 		else:
 			var fm := StandardMaterial3D.new()
-			fm.albedo_texture = load("res://assets/terrain/path.png")
+			fm.albedo_texture = PATH_TEX
 			fm.albedo_color = Color(0.86, 0.84, 0.8)
 			fm.roughness = 0.95
 			fm.specular_mode = BaseMaterial3D.SPECULAR_DISABLED

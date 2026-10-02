@@ -6,16 +6,9 @@ extends RefCounted
 # tile covers 2 m of wall whatever a wall's length.
 const Castle = preload("res://scripts/siege/siege_castle.gd")
 
-const WALL_H := 5.5
-const WALL_T := 1.8                # a little inside the 2 m collision thickness
 const MERLON_W := 0.75
 const MERLON_H := 0.9
 const MERLON_STEP := 1.5
-const TOWER_R := 2.1
-const GATE_TOWER_R := 1.35         # gate half-doorway 1.15 + margin: never over the doorway
-const TOWER_H := 7.4
-const PARAPET_H := 0.75
-const PARAPET_T := 0.45
 const TILE := 2.0                  # metres per texture tile
 const FLOOR_TILE := 3.2            # the herringbone path texture's period (as on the map paths)
 
