@@ -1527,6 +1527,7 @@ func _damage_gate(src: Dictionary, g: Dictionary, amount: float) -> void:
 	g["hit_at"] = time
 	if src.has("gate_dmg"):
 		src.gate_dmg += amount
+	_stat_add(src, "gate", amount)
 	_event("gate_hit", {"gate":g.id, "team":g.team, "by":src.get("id",""), "dmg":int(round(amount))})
 	if g.hp <= 0.0:
 		g.broken = true
@@ -2811,7 +2812,7 @@ func _think_fighter(u: Dictionary) -> void:
 	var alarm: Dictionary = _gate_alarm[u.team]
 	var short_hands: bool = not ally_carrier.is_empty() and mine.lifters.size() < lifters_needed(mine)
 	var captive_loose: bool = theirs.state == "dropped" or (theirs.state == "carried" and int(theirs.carry_team) == u.team and theirs.lifters.size() < lifters_needed(theirs))
-	var fish_runner: bool = u.role == "defend" and absi(u.id.hash()) % 2 == 0
+	var fish_runner: bool = is_fish_runner(u)
 	# A rampart post belongs to a ranged defender that isn't a fish runner; drop it otherwise (a post
 	# kept after dying and coming back as another class blocked fishing for the rest of the match).
 	if u.has("post") and (not c.ranged or u.role != "defend" or fish_runner):
@@ -2891,7 +2892,7 @@ func _think_fighter(u: Dictionary) -> void:
 				_nav_to(u, captive.pos, FEED_RADIUS - 0.5)
 			return
 	elif fish_runner and captive.state == "cell" and int(captive.cakes) < MAX_WEIGHT * CAKE_PER_STAGE \
-			and time - float(alarm.at) > 6.0 and enemy_carrier.is_empty() and int(u.get("post", -1)) < 0:
+			and time - float(alarm.at) > 3.0 and enemy_carrier.is_empty() and int(u.get("post", -1)) < 0:
 		# Fish runs (Round 19): to a spot on our bank of the river, cast, then carry the catch to the cell.
 		if str(u.task.get("kind", "")) == "fish":
 			u.move = Vector2.ZERO
@@ -3570,10 +3571,26 @@ func _stat_add(u: Dictionary, key: String, v: float) -> void:
 		return
 	var lbl: String = class_label(u)
 	if not class_stats.has(lbl):
-		class_stats[lbl] = {"dmg":0.0, "taken":0.0, "kills":0.0, "deaths":0.0, "time":0.0}
+		class_stats[lbl] = {"dmg":0.0, "taken":0.0, "kills":0.0, "deaths":0.0, "time":0.0, "gate":0.0}
 	class_stats[lbl][key] = float(class_stats[lbl][key]) + v
 
 func _stat_time(dt: float) -> void:
 	for u in units:
 		if alive(u):
 			_stat_add(u, "time", dt)
+
+
+# Fish runners (0.31.6, Kevin: "I don't think bots fish and feed the King"): measured, they did, but only the defenders whose id
+# hashed even -- one per team on average, none in some matches (seed 22: one team fed the enemy King 0 times in 12 minutes).
+# Now the first FISH_RUNNERS defenders of each team are runners, every match.
+const FISH_RUNNERS := 1           # one per team: the other defenders keep their rampart posts
+var _fish_runners := {}
+
+func is_fish_runner(u: Dictionary) -> bool:
+	if not _fish_runners.has(u.team):
+		var ids := []
+		for o in units:
+			if o.team == u.team and o.role == "defend" and ids.size() < FISH_RUNNERS:
+				ids.append(o.id)
+		_fish_runners[u.team] = ids
+	return (_fish_runners[u.team] as Array).has(u.id)

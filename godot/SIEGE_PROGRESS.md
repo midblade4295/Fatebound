@@ -1413,3 +1413,14 @@ K2/K3 notes (0.17.0)
   damage didn't show because bot knights spend their time blocking (_think_shields), not swinging; Necromancer 6 kills / 0
   deaths in 7 min (too little play to judge).
 - Quick suite: all pass except siege_sim_smoke (seeds 11/22 0-0; 4 pickups, 1 carried back, no rescue).
+
+# 0.31.6 (Kevin: bot Knight change; "I don't think bots fish and feed the King")
+- Knights, measured (seed 11, 10 min, 12,039 samples of bot knights): blocking 0.9 % of the time (Round 17 already limits the
+  shield), moving 42 %, idle 15 %, swinging 41 %; 65 % of their time as escorts, 29 % defending, 6 % raiding. Their low damage
+  is not the shield. Gate damage now counts in the class table (gate/min): knights 9/min, so not gates either. Likely: slowest
+  class (4.6 m/s) with a short reach (1.7 m) swinging at enemies that move away. No knight change made.
+- Fishing, measured: bots did fish and feed, but only defenders whose id hashed even -- about one per team, sometimes none
+  (seed 22: one team fed the enemy King 0 times in 12 min). Now exactly FISH_RUNNERS 1 defender per team is a fish runner
+  every match, setting out 3 s after a gate alarm (was 6 s). Seeds 11/22: 10/10 and 12/11 feeds per team. (2 per team left
+  too few on the rampart: the rampart-bots rule test fell to 1 of 3.)
+- Quick suite: all pass except siege_sim_smoke (seeds 11/22 0-0; heavier captive Kings make rescues harder).
