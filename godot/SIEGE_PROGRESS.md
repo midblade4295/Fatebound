@@ -1317,3 +1317,9 @@ K2/K3 notes (0.17.0)
 - River ambience 0.55 -> 0.14 (at the bank: -35.5 -> -47.4 dB, the forest bed is -49.0); the waterfall was louder
   still (-30.0) and came down with it (0.7 -> 0.12: -45.3 dB at its closest).
 - Still waiting for the trailer song (Spooky_3.wav) for assets/music/match.ogg.
+
+# 0.30.10: the match music is the Fatebound theme (Kevin's track, Fatebound-Theme-Spooky_3.wav, the trailers' song)
+- tools/music_prep.sh: 103.4 s at -23.9 LUFS -> normalised to -15.3 LUFS (target -16), last 1.5 s blended into the
+  first (equal-power) -> assets/music/match.ogg, 101.9 s loop, Ogg q5, 2.0 MB. The song has no fade-out (ends at
+  -25 dB RMS, starts at -29), so the seam holds level (checked 3 s either side).
+- Plays steady at 0.020 linear at default settings (about -49 LUFS in the mix), under the effects; Music slider.
