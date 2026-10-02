@@ -551,7 +551,7 @@ var _amb := {}
 # Match music (0.30.9): the trailers' song, looping at a steady, quiet level under everything (Kevin: no dipping;
 # quiet enough not to drown out other sound). Only the Music slider moves it.
 const MUSIC_PATH := "res://assets/music/match.ogg"
-const MUSIC_GAIN := 0.045         # x master x music; the track is normalised to -16 LUFS (tools/music_prep.sh)
+const MUSIC_GAIN := 0.064         # x master x music (0.045 until 0.30.11, Kevin: "just a bit louder": +3 dB); track at -16 LUFS
 var _music: AudioStreamPlayer = null
 
 func _listener() -> Vector2:

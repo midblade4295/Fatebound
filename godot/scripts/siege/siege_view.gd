@@ -310,20 +310,21 @@ void fragment() {
 	float h = texture(rip_tex, ruv).r * inside;
 	float hx = (texture(rip_tex, ruv + vec2(rip_texel.x, 0.0)).r - texture(rip_tex, ruv - vec2(rip_texel.x, 0.0)).r) * inside;
 	float hz = (texture(rip_tex, ruv + vec2(0.0, rip_texel.y)).r - texture(rip_tex, ruv - vec2(0.0, rip_texel.y)).r) * inside;
-	slope += vec2(hx, hz) * rip_strength;
+	if (isnan(h + hx + hz) || isinf(h + hx + hz)) { h = 0.0; hx = 0.0; hz = 0.0; }
+	slope += clamp(vec2(hx, hz) * rip_strength, vec2(-1.5), vec2(1.5));
 	vec3 wn = normalize(vec3(-slope.x, 1.0, -slope.y));
 	NORMAL = normalize((VIEW_MATRIX * vec4(wn, 0.0)).xyz);
 	float edge = min(UV2.y, 1.0 - UV2.y);
 	float depth = smoothstep(0.02, 0.4, edge);
 	vec3 col = mix(shallow_col, deep_col, depth);
 	float fres = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 4.0);
-	col = mix(col, sky_col, clamp(fres * 0.75, 0.0, 0.75));
+	col = mix(col, sky_col, clamp(fres * 0.5, 0.0, 0.5));      // was up to 0.75: a lake-wide sheet read as white
 	// No foam (Round 34, Kevin). The wakes read as light crests and dark troughs instead.
 	col *= 1.0 + clamp(h, -0.12, 0.12) * wake_tint;
 	ALBEDO = col;
 	ALPHA = mix(0.58, 0.86, depth);
-	ROUGHNESS = 0.05;
-	SPECULAR = 0.75;
+	ROUGHNESS = 0.16;                 // 0.30.11: was 0.05 / 0.75 -- the sun's glare spread white over the wide lake
+	SPECULAR = 0.35;
 	float sg = texture(ripples, wpos.xz * 0.19 + vec2(-TIME * 0.09, TIME * 0.05)).r * texture(ripples, wpos.xz * 0.13 + vec2(TIME * 0.07, -TIME * 0.04)).r;
 	EMISSION = vec3(1.0, 0.97, 0.88) * smoothstep(0.58, 0.64, sg) * glint;
 }
@@ -366,7 +367,11 @@ void fragment() {
 		h += drops[i].w * exp(-dot(d, d) / (r * r));
 	}
 	h *= smoothstep(0.0, 0.03, UV.y) * smoothstep(1.0, 0.97, UV.y);
-	COLOR = vec4(h, p.r, 0.0, 1.0);
+	// 0.30.11: the lake made the simulated patch 5x bigger. A bad cell (NaN/inf) would spread and the water would
+	// render white (Kevin's screenshot): clamp and scrub every step.
+	h = (isnan(h) || isinf(h)) ? 0.0 : clamp(h, -0.6, 0.6);
+	float pr = (isnan(p.r) || isinf(p.r)) ? 0.0 : clamp(p.r, -0.6, 0.6);
+	COLOR = vec4(h, pr, 0.0, 1.0);
 }
 """
 	for k in 2:
@@ -997,8 +1002,8 @@ void fragment() {
 	vec3 col = mix(deep, shallow, smoothstep(0.35, 0.75, n));
 	col *= 1.0 - shore * 0.18;                     // no foam (Round 34): the banks just shade a little
 	ALBEDO = col;
-	ROUGHNESS = 0.12;
-	SPECULAR = 0.6;
+	ROUGHNESS = 0.18;
+	SPECULAR = 0.35;                  // 0.30.11: was 0.6 (see the high-quality water)
 	// Sun glints (High-quality graphics): sparse sparkles where two scrolling layers line up; bright enough to glow.
 	float sg = texture(ripples, w * 1.3 + vec2(-TIME * 0.09, TIME * 0.05)).r * texture(ripples, w * 0.9 + vec2(TIME * 0.07, -TIME * 0.04)).r;
 	EMISSION = vec3(1.0, 0.97, 0.88) * smoothstep(0.58, 0.64, sg) * glint;      // sparse: only the brightest crossings

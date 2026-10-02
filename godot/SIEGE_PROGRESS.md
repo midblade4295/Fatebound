@@ -1323,3 +1323,14 @@ K2/K3 notes (0.17.0)
   first (equal-power) -> assets/music/match.ogg, 101.9 s loop, Ogg q5, 2.0 MB. The song has no fade-out (ends at
   -25 dB RMS, starts at -29), so the seam holds level (checked 3 s either side).
 - Plays steady at 0.020 linear at default settings (about -49 LUFS in the mix), under the effects; Music slider.
+
+# 0.30.11 (Kevin: music "just a bit louder"; "there is white on water" -- screenshot: the lake south of a straight
+# line past the island tower rendered flat white)
+- Music: MUSIC_GAIN 0.045 -> 0.064 (+3 dB).
+- White water: could not reproduce here (tools/water_shot.gd renders the lake with the real terrain, both water
+  shaders, the game's lighting and the ripple step: no white on llvmpipe). Likely causes on the phone, all hardened:
+  (1) the ripple simulation now covers the whole lake (5x the cells): one bad cell (NaN/inf) spreads and the water
+  shader renders it white -- the step shader now scrubs NaN/inf and clamps to +-0.6, and the water shader guards
+  its samples and clamps the slope; (2) glare: the high-quality water's sun specular (roughness 0.05, specular
+  0.75) and sky mix (up to 0.75) over a lake-wide sheet -- now roughness 0.16, specular 0.35, sky mix up to 0.5;
+  standard water specular 0.6 -> 0.35, roughness 0.12 -> 0.18.
