@@ -1438,7 +1438,7 @@ K2/K3 notes (0.17.0)
   * assets/terrain/cache.res (SiegeTerrainCache, baked by tools/bake_land.gd, 1 MB): terrain and outer-land meshes, the
     foliage plan (1,515 instances) and the 5 blood textures. View._load_cache() uses it when Land.bake_key() matches
     (land data hash), else generates as before. siege_land_check should be extended to check the key.
-  * AssetCache.preload_async()/poll(): the app loads the 78 models a match needs (assets/terrain/preload.txt, written by
+  * AssetCache.preload_async()/poll(): the app loads the 78 models a match needs (assets/terrain/preload.json, written by
     tools/preload_list.gd) on a thread while the menus are up; AssetCache.scene() waits for a pending load.
   * HUD: the workshop and pause panels (~370 ms together) are built on first open (Hud.paused()/show_pause()).
   * Left: terrain build 120-190 ms (water strips, MultiMesh fill), castle kit 65 ms, Sim.setup ~50 ms.

@@ -11,14 +11,17 @@ static func scene(path: String) -> PackedScene:
 # ---- background preload (0.31.8: "the game takes long to start after pressing Play") ----
 # At app start the menus are idle, so the models a match needs are loaded on a thread then. Pressing Play then finds
 # them in the cache. The list is written by tools/preload_list.gd (everything a match build asked for).
-const PRELOAD_LIST := "res://assets/terrain/preload.txt"
+const PRELOAD_LIST := "res://assets/terrain/preload.json"   # (.txt files are not exported; JSON is)
 static var _pending: Array = []
 
 static func preload_async() -> void:
 	if not _pending.is_empty() or not FileAccess.file_exists(PRELOAD_LIST):
 		return
-	for line in FileAccess.get_file_as_string(PRELOAD_LIST).split("\n"):
-		var path := line.strip_edges()
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(PRELOAD_LIST))
+	if not parsed is Array:
+		return
+	for line in parsed:
+		var path := str(line).strip_edges()
 		if path == "" or _scene_cache.has(path) or _pending.has(path) or not ResourceLoader.exists(path):
 			continue
 		if ResourceLoader.load_threaded_request(path, "", true) == OK:
