@@ -1377,3 +1377,15 @@ K2/K3 notes (0.17.0)
 - Net: unit field 32 = beam2 (+1 index); protocol v27. View: gold heal (Priest), green drain + white heal (Necromancer).
 - priest_test: +9 checks (name, model, staff, both beams, drain/self-heal/ally-heal, no enemy no beams, online beam2).
 - Quick suite: all pass except siege_sim_smoke (seeds 11/22 0-0 on time, as in 0.31.1).
+
+# 0.31.3 (Kevin: class caps for balance, tuned for 16-player teams -- bots fill every match)
+- Sim.CLASS_CAP per team: knight 4, barbarian 3, rogue 3, ranger 3, mage 2, priest 2, worker 3; villagers uncapped. An
+  upgraded class counts as its base (a Necromancer is one of the 2 priests). Counted over living units (the dead are
+  villagers), so a place frees when someone falls.
+- Enforced everywhere a class is gained: stands (walk-over and swap), dropped hats (stay on the ground while full), the
+  workshop's tools, a Resurrection (comes back a villager if their class filled meanwhile; the hat stays). Bots only head
+  for hats/stands they may take. Players get "Knights full · 4/4" (HUD toast, 1.5 s apart); a full stand's ACTION says
+  FULL; the workshop button reads "TAKE TOOLS · BECOME A WORKER (n/3)" / "WORKERS FULL · 3/3" (disabled).
+- View: above every stand, your team's count of that class / cap (green; red when full).
+- Protocol v28. tests/caps_test.gd (7 checks; 5 min of 16v16 bots peak at the caps, never over).
+- Quick suite: ALL PASS (bot matches: seed 11 1-0 by rescue at 203 s, seed 22 0-0).

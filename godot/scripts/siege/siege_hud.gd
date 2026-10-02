@@ -155,7 +155,10 @@ func _refresh_workshop(me: Dictionary) -> void:
 		_center(workshop_panel)
 	workshop_stock.text = "WOOD %d   ·   STONE %d" % [sim.stock[t].wood, sim.stock[t].stone]
 	workshop_tools_btn.disabled = me.cls == "worker" or me.carrying
-	workshop_tools_btn.text = "YOU ARE A WORKER" if me.cls == "worker" else "TAKE TOOLS · BECOME A WORKER"
+	var wn: int = sim.class_count(me.team, "worker") if sim.has_method("class_count") else 0
+	var wcap := int(Sim.CLASS_CAP.get("worker", 99))
+	workshop_tools_btn.text = "YOU ARE A WORKER" if me.cls == "worker" else ("WORKERS FULL · %d/%d" % [wn, wcap] if wn >= wcap else "TAKE TOOLS · BECOME A WORKER (%d/%d)" % [wn, wcap])
+	workshop_tools_btn.disabled = me.cls != "worker" and wn >= wcap
 	for id in workshop_buttons:
 		var up: Dictionary = Sim.UPGRADES[id]
 		var lvl: int = sim.levels[t][id]
@@ -244,6 +247,9 @@ func on_event(e: Dictionary) -> void:
 	if me.is_empty():
 		return
 	var mine: bool = e.get("team", -1) == me.team
+	if str(e.k) == "class_full" and str(e.get("id", "")) == str(player_id):
+		toast("%s full · %d/%d" % [str(Sim.CLASSES.get(str(e.cls), {"name":str(e.cls).capitalize()}).get("name", str(e.cls).capitalize())) + ("s" if str(e.cls) != "worker" else "s"), int(e.n), int(e.cap)], VisualTheme.GOLD)
+		return
 	match str(e.k):
 		"rescue":
 			toast("OUR KING IS HOME!" if mine else "THE ENEMY RESCUED THEIR KING", VisualTheme.GOLD if mine else VisualTheme.RED)
@@ -756,7 +762,7 @@ func _draw_button(b: Dictionary, me: Dictionary) -> void:
 			cd_max = 2.2
 			ready = cd <= 0.0 and not me.carrying
 		"action":
-			label = {"hat_up":"UPGRADE","hat":"NEW HAT","grab":"LIFT","throw":"THROW","workshop":"WORKSHOP","chop":"CHOP","mine":"MINE",
+			label = {"hat_up":"UPGRADE","hat":"NEW HAT","class_full":"FULL","grab":"LIFT","throw":"THROW","workshop":"WORKSHOP","chop":"CHOP","mine":"MINE",
 				"repair":"REPAIR","gather":"WORKING","repairing":"REPAIRING","ladder":"LADDER","build_ladder":"BUILDING","fish":"FISH","feed":"FEED",
 				"join":"HELP LIFT","letgo":"LET GO","tower_up":"CLIMB","tower_down":"CLIMB DOWN","pick_up":"PICK UP"}.get(b.ctx, "USE")
 			col = Color("#155258")

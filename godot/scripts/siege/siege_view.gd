@@ -1629,7 +1629,33 @@ func _sync_beams() -> void:
 			var w := (1.25 if slot[2] == "drain" else 1.0) + 0.25 * sin(_time * 25.0 + float(hash(slot[1]) % 100))
 			n.transform = Transform3D(Basis(side * w, up * len, fwd * w), (p0 + p1) * 0.5)
 
+var stand_labels := {}
+
+func _sync_stand_counts() -> void:
+	# 0.31.3: above every stand, your team's count of that class against its cap (green, red when full).
+	var me: Dictionary = sim.by_id.get(str(player_id), {})
+	var team: int = int(me.get("team", 0))
+	for st in sim.stands:
+		var lb: Label3D = stand_labels.get(st.id)
+		if lb == null:
+			lb = Label3D.new()
+			lb.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+			lb.font_size = 64
+			lb.pixel_size = 0.012
+			lb.outline_size = 14
+			lb.no_depth_test = true
+			lb.position = Vector3(st.p.x, Sim.height_at(st.p) + 3.3, st.p.y)
+			add_child(lb)
+			stand_labels[st.id] = lb
+		var n: int = sim.class_count(team, str(st.cls))
+		var cap := int(Sim.CLASS_CAP.get(str(st.cls), 0))
+		var txt := "%d/%d" % [n, cap]
+		if lb.text != txt:
+			lb.text = txt
+			lb.modulate = Color("#ff6b5a") if n >= cap else Color("#9dff8a")
+
 func _sync_hats() -> void:
+	_sync_stand_counts()
 	for st in sim.stands:
 		var stack: Array = stand_nodes.get(st.id, [])
 		for k in stack.size():

@@ -132,6 +132,9 @@ const HAT_HALL := Castle.HAT_HALL
 const HAT_TAKE_R := 1.3
 const HAT_STAND_R := 0.45
 const HAT_STOCK_MAX := 3
+# Class caps per team (0.31.3, Kevin: caps for balance, set for 16-player teams since bots fill every match). An upgraded
+# class counts as its base class (a Necromancer takes a Priest place). Villagers are never capped.
+const CLASS_CAP := {"knight":4, "barbarian":3, "rogue":3, "ranger":3, "mage":2, "priest":2, "worker":3}
 const HAT_REGEN := 6.0           # seconds per new hat, per stand (10 s starved 16-player teams)
 const HAT_LIFETIME := 30.0       # a dropped hat vanishes after this
 const HAT_PICK_R := 1.0
@@ -1260,7 +1263,7 @@ func context_action(u: Dictionary) -> String:
 			return "hat_up"
 		var st := stand_near(u)
 		if not st.is_empty() and st.cls != u.cls and int(st.stock) > 0:
-			return "hat"
+			return "hat" if can_take_class(u, str(st.cls)) else "class_full"
 	if u.pos.distance_to(workshop(u.team)) <= WORKSHOP_RADIUS:
 		return "workshop"
 	return ""
@@ -1278,8 +1281,24 @@ static func in_castle(p: Vector2, team: int) -> bool:
 	var q := (p if team == 0 else -p) - Vector2(0.0, CASTLE_SHIFT)
 	return Castle.inside(q)
 
+func class_count(team: int, cls: String) -> int:
+	var n := 0
+	for o in units:
+		if o.team == team and alive(o) and o.cls == cls:
+			n += 1
+	return n
+
+func class_full(team: int, cls: String) -> bool:
+	return CLASS_CAP.has(cls) and class_count(team, cls) >= int(CLASS_CAP[cls])
+
+func can_take_class(u: Dictionary, cls: String) -> bool:
+	return u.cls == cls or not class_full(u.team, cls)
+
 func _take_hat(u: Dictionary, st: Dictionary) -> bool:
 	if int(st.stock) <= 0:
+		return false
+	if not can_take_class(u, str(st.cls)):
+		_class_full_note(u, str(st.cls))
 		return false
 	if u.cls != "villager":
 		_drop_hat(u)                                  # swapping: the old hat goes on the ground
@@ -1334,7 +1353,7 @@ func _step_hats(dt: float) -> void:
 		var picked := false
 		for i in hats.size():
 			var h: Dictionary = hats[i]
-			if u.pos.distance_to(h.pos) <= HAT_PICK_R:
+			if u.pos.distance_to(h.pos) <= HAT_PICK_R and can_take_class(u, str(h.cls)):
 				hats.remove_at(i)
 				_set_class(u, h.cls, h.up)
 				_event("hat_pick", {"id":u.id, "cls":h.cls, "team":u.team, "hat":h.id})
@@ -1370,6 +1389,9 @@ func _set_class(u: Dictionary, cls: String, up: bool) -> void:
 # ---------- workshop: tools and team upgrades ----------
 func _take_tools(u: Dictionary) -> bool:
 	if u.pos.distance_to(workshop(u.team)) > WORKSHOP_RADIUS + 0.6 or u.carrying:
+		return false
+	if not can_take_class(u, "worker"):
+		_class_full_note(u, "worker")
 		return false
 	_set_class(u, "worker", false)
 	u.workshop_open = false
@@ -2480,13 +2502,14 @@ func _bot_hat_goal(u: Dictionary) -> Vector2:
 	# A villager bot's way to a class: a dropped hat close by, else a stand of its role's classes
 	# (rotated per bot for variety), else any stand with stock. Vector2.INF = no hat to be had.
 	var h := nearest_hat(u.pos, BOT_HAT_SEARCH)
-	if not h.is_empty():
+	if not h.is_empty() and can_take_class(u, str(h.cls)):
 		return h.pos
 	# Already inside the enemy castle: their stands are right here.
 	if in_castle(u.pos, 1 - u.team):
 		var best_e := {}
 		for st in stands:
-			if int(st.team) != u.team and int(st.stock) > 0 and (best_e.is_empty() or u.pos.distance_to(st.p) < u.pos.distance_to(best_e.p)):
+			if int(st.team) != u.team and int(st.stock) > 0 and can_take_class(u, str(st.cls)) \
+					and (best_e.is_empty() or u.pos.distance_to(st.p) < u.pos.distance_to(best_e.p)):
 				best_e = st
 		if not best_e.is_empty():
 			return best_e.p
@@ -2495,7 +2518,7 @@ func _bot_hat_goal(u: Dictionary) -> Vector2:
 	prefs = prefs.slice(rot) + prefs.slice(0, rot)
 	for c in prefs + HAT_CLASSES:
 		for st in stands:
-			if int(st.team) == u.team and st.cls == c and int(st.stock) > 0:
+			if int(st.team) == u.team and st.cls == c and int(st.stock) > 0 and can_take_class(u, c):
 				return st.p
 	return Vector2.INF
 
@@ -3442,7 +3465,7 @@ func _resurrect(u: Dictionary) -> bool:
 		return false
 	var hid := int(a.get("died_hat", -1))
 	for h in hats:
-		if int(h.id) == hid:
+		if int(h.id) == hid and can_take_class(a, str(a.get("died_cls", "villager"))):
 			hats.erase(h)
 			a.cls = str(a.get("died_cls", "villager"))
 			a.up = bool(a.get("died_up", false))
@@ -3506,3 +3529,10 @@ func _step_drain(u: Dictionary, foe: Dictionary, dt: float) -> void:
 		ally.hp = minf(ally.max_hp, ally.hp + NECRO_ALLY_HEAL * dt)
 	else:
 		u.beam2 = ""
+
+
+func _class_full_note(u: Dictionary, cls: String) -> void:
+	# Tell the player once per try (bots never ask for a full class).
+	if not bool(u.get("bot", false)) and time - float(u.get("full_note_t", -10.0)) > 1.5:
+		u["full_note_t"] = time
+		_event("class_full", {"id":u.id, "cls":cls, "team":u.team, "n":class_count(u.team, cls), "cap":int(CLASS_CAP.get(cls, 0))})
