@@ -1485,3 +1485,24 @@ K2/K3 notes (0.17.0)
   (0.31.10's diagnosis -- a stuck defender's ring -- was wrong for this ring; the stuck defenders were real and are fixed.)
 - Scanned every flat decal in a running match against the floor under it: the only other one off the floor is the
   waterfall foam, which is meant to be in the valley 24 m below.
+
+# Trailer 4 (Kevin: a cinematic trailer showing off the scenery, building to the title moving into the shot with the sun's
+# light reflecting off it; trailer 2's rules; then: no captions, only the final title; new Herald lines to match)
+- Rendering here: this box has 1 CPU core; Godot's worker pool then has one thread and deadlocks on pipeline compiles
+  (the process sits at ~3 % CPU, all threads in futex waits). /tmp/trailer4/override.cfg (6 worker threads, 1920x1080
+  window) is copied into the project only for a render and removed after -- it must never be in an export. Godot also
+  hangs on exit after Movie Maker here: the shot prints SHOT_DONE and render.sh kills it. Xvfb (2560x1440) does not
+  survive between turns. ~0.5 s per 1080p frame.
+- tools/trailer4_shots.gd: sky, river, island, hills, castle, deck, logs, clash, golden (keyframed cameras; STILL_AT for
+  single-frame checks). "golden": the in-engine title -- a TextMesh FATEBOUND in Luckiest Guy, extruded 0.5, with a
+  gold shader (fake golden-hour environment reflection, darker sides, a sharp glint lobe that sweeps left to right as it
+  settles) flying in from the right and turning to face the camera (TITLE_IN 3.6 -> TITLE_SET 6.4 s). Falls shot
+  dropped (unreadable from every camera tried).
+- tools/trailer4_title_fx.py: god rays (bright sky round the sun zoom-blurred from its tracked screen position), lens
+  streak, a flash as the title lands (4.9 s), fade-out; tagline off (--tag-at 999).
+- tools/trailer4_edit.py: segments (no captions), crossfades, fadeblack into golden, the song from 29.1 s so its hit
+  (72.5 s) lands on the title (43.4 s), the Herald per shot, music ducked as trailer 2 (0.12 / 2 / knee 6 / 40 / 700),
+  limiter 0.70 with level=disabled (auto-level had pushed the AAC to +0.2 dBFS); --stage audio rebuilds only the mix.
+- tools/trailer4_vo 1..9.ogg: ElevenLabs Edward (eleven_v4), one 21 s take split on word timings + the finale line
+  (267 credits). "FATEBOUND" heard at 43.46 s in the cut. Output: Fatebound-Trailer-4.mp4, 48.5 s 1080p30,
+  -14.6 LUFS, -2.5 dBFS peak.
