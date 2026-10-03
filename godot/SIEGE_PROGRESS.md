@@ -1518,3 +1518,16 @@ K2/K3 notes (0.17.0)
   song from 50.82 s so the title lands on its hit (72.64 s on the grid) at 21.82 s; no opening line; 27.0 s.
   "FATEBOUND" heard at 21.86 s; -12.6 LUFS, -1.7 dBFS peak. All shots re-rendered on the new landscape.
 - Quick suite: all pass except siege_sim_smoke (rescues 0 in seeds 11/22).
+
+# 0.31.13 (Kevin: "make the cliff side of the map look like the other side ... in a valley instead of a cliff; as natural
+# as possible")
+- No drop side any more: drop_weight, DROP_DEPTH, VALLEY_WATER_Y, FALL_X removed. terrain_height raises the rock walls all
+  round (the east like the west) and cuts the river's gorge both ways; ledge_rim paints the rock face and its foot shadow
+  on the east too; outer_height loses its valley branch (hills close in, mountains beyond, on every side). The waterfall
+  mesh, its foam and valley water strip, and the waterfall ambience (and its .ogg) are gone; one river strip runs right
+  through at water level. Trees now line the east edge too.
+- The river's own valley out among the hills widens with distance (RIVER_HW + 6 + 0.32 d, was + 0.05 d): it was a 6 m cut
+  whose sides stood as sheer flat rock in the mountains; now a soft V between green hills.
+- Checked from two new cameras in tools/trailer4_shots.gd ("east", "eastwide"). Terrain and start-up cache re-baked.
+- Trailer 4's footage still shows the old cliff side (re-render the shots if it should match).
+- Quick suite: all pass except siege_sim_smoke (rescues 0 in seeds 11/22).

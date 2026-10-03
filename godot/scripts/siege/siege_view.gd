@@ -1054,14 +1054,11 @@ void fragment() {
 		m.set_shader_parameter("ripples", nt)
 		m.set_shader_parameter("glint", 1.3 if _cast_static else 0.0)
 		_water_mat = m
-	# The river runs on out of the map (0.19.4). 0.26.0: as wide as the lake in the middle; on the
-	# east it pours over the cliff side (a waterfall) and carries on in the valley below.
+	# The river runs on out of the map both ways (0.19.4; 0.31.13: no more waterfall -- the east is a valley like the west).
 	var x0 := -Sim.HALF_W - Land.BAKE_MARGIN - Land.OUTER_REACH
 	var x1 := Sim.HALF_W + Land.BAKE_MARGIN + Land.OUTER_REACH
 	var span := 2.0 * (Sim.HALF_W + Land.BAKE_MARGIN)
-	_water_strip(x0, Land.FALL_X, Land.WATER_Y, span, "water")
-	_water_strip(Land.FALL_X + 2.2, x1, Land.VALLEY_WATER_Y, span, "water_valley")
-	_build_waterfall()
+	_water_strip(x0, x1, Land.WATER_Y, span, "water")
 
 func _water_strip(xa: float, xb: float, y: float, span: float, tag: String) -> void:
 	var verts := PackedVector3Array()
@@ -1098,69 +1095,6 @@ func _water_strip(xa: float, xb: float, y: float, span: float, tag: String) -> v
 	add_child(mi)
 
 static var _fall_mat: ShaderMaterial = null
-
-func _build_waterfall() -> void:
-	# The river going over the cliff side: a curved sheet from the lip down to the valley, white
-	# streaks running down it, and a ring of foam where it lands.
-	if _fall_mat == null:
-		var sh := Shader.new()
-		sh.code = """
-shader_type spatial;
-render_mode cull_disabled, specular_disabled;
-uniform sampler2D streaks : filter_linear_mipmap, repeat_enable;
-void fragment() {
-	float a = texture(streaks, vec2(UV.x * 3.0, UV.y * 0.9 - TIME * 0.9)).r;
-	float b = texture(streaks, vec2(UV.x * 5.0 + 0.3, UV.y * 1.3 - TIME * 1.4)).r;
-	float n = a * 0.55 + b * 0.45;
-	vec3 deep = vec3(0.16, 0.50, 0.78);
-	vec3 col = mix(deep, vec3(0.93, 0.97, 1.0), smoothstep(0.42, 0.68, n));
-	col = mix(col, vec3(0.95, 0.98, 1.0), smoothstep(0.75, 1.0, UV.y) * 0.8);
-	ALBEDO = col;
-	ROUGHNESS = 0.2;
-}
-"""
-		_fall_mat = ShaderMaterial.new()
-		_fall_mat.shader = sh
-		var nt := NoiseTexture2D.new()
-		nt.width = 128
-		nt.height = 256
-		nt.seamless = true
-		var fn := FastNoiseLite.new()
-		fn.frequency = 0.05
-		nt.noise = fn
-		_fall_mat.set_shader_parameter("streaks", nt)
-	var verts := PackedVector3Array()
-	var uvs := PackedVector2Array()
-	var idx := PackedInt32Array()
-	var c := Land.river_c(Land.FALL_X)
-	var hw := Land.river_hw(Land.FALL_X) + 0.6
-	var rows := 10
-	for r in rows + 1:
-		var t := float(r) / rows
-		var x := Land.FALL_X + 2.2 * t * t                      # curls out over the lip, then drops
-		var y := lerpf(Land.WATER_Y, Land.VALLEY_WATER_Y, t)
-		verts.append(Vector3(x, y, c - hw * (1.0 + 0.2 * t)))
-		verts.append(Vector3(x, y, c + hw * (1.0 + 0.2 * t)))
-		uvs.append(Vector2(0.0, t))
-		uvs.append(Vector2(1.0, t))
-		if r < rows:
-			var a := r * 2
-			idx.append_array([a, a + 2, a + 1, a + 1, a + 2, a + 3])
-	var arr := []
-	arr.resize(Mesh.ARRAY_MAX)
-	arr[Mesh.ARRAY_VERTEX] = verts
-	arr[Mesh.ARRAY_TEX_UV] = uvs
-	arr[Mesh.ARRAY_INDEX] = idx
-	var am := ArrayMesh.new()
-	am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
-	var mi := MeshInstance3D.new()
-	mi.mesh = am
-	mi.material_override = _fall_mat
-	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	mi.set_meta("perf", "waterfall")
-	add_child(mi)
-	var foam := _decal(Vector3(Land.FALL_X + 2.6, Land.VALLEY_WATER_Y + 0.08, c), hw * 1.25, Color(0.95, 0.98, 1.0), 0.75)
-	foam.set_meta("perf", "waterfall")
 
 func _build_bridges() -> void:
 	for b in Land.bridges():
@@ -1798,7 +1732,7 @@ func _build_props() -> void:
 		var t := rng.randf_range(0.0, 2.0)
 		while t < L:
 			var q := a.lerp(b, t / L) + nrm * rng.randf_range(3.5, 7.5)
-			if Land.drop_weight(q) < 0.25 and absf(q.y - Land.river_c(q.x)) > Land.RIVER_HW + 3.5 and not Land.in_dungeon_pit(q, 2.0):
+			if absf(q.y - Land.river_c(q.x)) > Land.RIVER_HW + 3.5 and not Land.in_dungeon_pit(q, 2.0):
 				_place(FOREST + forest_trees[rng.randi() % forest_trees.size()] + ".gltf", Vector3(q.x, Land.terrain_height(q), q.y), rng.randf()*TAU, 0.5 + rng.randf()*0.2)
 			t += rng.randf_range(4.0, 6.5)
 	for p in [Vector3(-Sim.HALF_W - 8, 0.5, -40), Vector3(-Sim.HALF_W - 8, 0.5, 14), Vector3(-Sim.HALF_W - 8, 0.5, -10),

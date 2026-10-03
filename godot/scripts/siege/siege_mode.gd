@@ -713,9 +713,9 @@ func _footsteps(delta: float) -> void:
 	audio.play("tm_step_%s%s%d" % [surf, chain, 1 + _snd_rng.randi() % 5], false, 1.0)
 
 func _ambience(delta: float) -> void:
-	# Forest birds under the whole match; the river louder as you near it; the waterfall over the cliff side.
+	# Forest birds under the whole match; the river louder as you near it.
 	if _amb.is_empty():
-		for k in ["forest_day", "river", "waterfall"]:
+		for k in ["forest_day", "river"]:
 			var st = load("res://assets/sounds/ambience/%s.ogg" % k)
 			if st == null:
 				continue
@@ -735,7 +735,6 @@ func _ambience(delta: float) -> void:
 		# 0.30.9 (Kevin: "lower the volume of the river"): 0.55 -> 0.14 and the waterfall 0.7 -> 0.12. The river file
 		# is ~5 dB hotter than the forest bed and the waterfall ~9 dB, so these now peak near the bed's level.
 		"river": 0.14 * clampf(1.0 - Land.river_off(at) / 16.0, 0.0, 1.0),
-		"waterfall": 0.12 * clampf(1.0 - at.distance_to(Vector2(Land.FALL_X, Land.river_c(Land.FALL_X))) / 30.0, 0.0, 1.0),
 	}
 	for k in _amb:
 		var pl: AudioStreamPlayer = _amb[k]

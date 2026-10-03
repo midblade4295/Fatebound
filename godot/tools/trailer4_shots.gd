@@ -8,7 +8,7 @@ extends SceneTree
 const Mode = preload("res://scripts/siege/siege_mode.gd")
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 const Land = preload("res://scripts/siege/siege_land.gd")
-const LENGTH := {"probe": 0.2, "sky": 5.5, "falls": 5.5, "river": 6.0, "island": 5.5, "hills": 5.0, "castle": 6.0, "deck": 5.0,
+const LENGTH := {"probe": 0.2, "sky": 5.5, "east": 3.0, "eastwide": 3.0, "river": 6.0, "island": 5.5, "hills": 5.0, "castle": 6.0, "deck": 5.0,
 	"logs": 4.5, "clash": 5.0, "golden": 10.0}
 # The finale's title: a 3D gold FATEBOUND (Luckiest Guy, extruded) flies in and turns to face the camera; a glint of the
 # low sun sweeps across the letters as it settles (TITLE_IN..TITLE_SET, then GLINT_* for the sweep).
@@ -102,17 +102,18 @@ func _stage() -> void:
 	for i in int(warm / Sim.TICK):
 		s.step(Sim.TICK)
 		s.drain_events()
-	var fx := Land.FALL_X
 	match shot:
 		"sky":
 			_morning()
 			path = [[0.0, Vector3(70, 34, 52), Vector3(10, 70, -60)], [0.55, Vector3(68, 28, 44), Vector3(14, 26, -30)],
 				[1.0, Vector3(66, 22, 36), Vector3(10, -2, 0)]]
-		"falls":
+		"east":
+			# a look at the east side (0.31.13 check: it rises like the west now)
 			_morning()
-			# along the river to the edge, then out over it: the water pouring down into the valley below
-			var rc := Land.river_c(fx)
-			path = [[0.0, Vector3(fx - 16, 5.0, rc + 7.0), Vector3(fx + 4.0, -6.0, rc)], [1.0, Vector3(fx - 3, 9.0, rc + 9.0), Vector3(fx + 14.0, -22.0, rc)]]
+			path = [[0.0, Vector3(14, 12, 26), Vector3(60, 3, -4)], [1.0, Vector3(18, 14, 22), Vector3(64, 3, -8)]]
+		"eastwide":
+			_morning()
+			path = [[0.0, Vector3(-20, 40, 40), Vector3(60, 0, 0)], [1.0, Vector3(-18, 42, 38), Vector3(62, 0, -2)]]
 		"river":
 			_morning()
 			# a little higher than first cut (0.31.11 review: the island's bushes filled the lower frame mid-shot)

@@ -58,7 +58,7 @@ func _process(_d: float) -> bool:
 			for k in range(1, 6):
 				if not ResourceLoader.exists("res://assets/sounds/tm_step_%s%s%d.wav" % [surf, ch, k]):
 					bad.append("tm_step_%s%s%d" % [surf, ch, k])
-	for a in ["forest_day", "river", "waterfall"]:
+	for a in ["forest_day", "river"]:
 		if not ResourceLoader.exists("res://assets/sounds/ambience/%s.ogg" % a):
 			bad.append(a)
 	check(bad.is_empty(), "every sound the code can ask for exists (%s)" % str(bad))

@@ -51,7 +51,7 @@ func _setup(k: int) -> void:
 	if v._water_mat == null:
 		v._build_water()                      # standard water (adds its own strips)
 	else:
-		v._water_strip(-Land.HALF_W - 7.0, Land.FALL_X, Land.WATER_Y, 2.0 * (Land.HALF_W + 7.0), "water")
+		v._water_strip(-Land.HALF_W - 7.0, Land.HALF_W + 7.0, Land.WATER_Y, 2.0 * (Land.HALF_W + 7.0), "water")
 		if v._rip_vp.is_empty():
 			v._build_ripples()                  # compile + run the ripple step shader too
 		for vp in v._rip_vp:

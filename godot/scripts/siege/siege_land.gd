@@ -1,7 +1,7 @@
 extends RefCounted
 # Fatebound Siege landscape (Round 7; reshaped in 0.26.0 after Kevin's Fat Princess reference):
-# a bigger field with a natural edge (rock walls on the west and behind the castles, a sheer drop
-# with a waterfall on the east -- the "cliff side"), the river widening into a lake round an island
+# a bigger field with a natural edge (rock walls rising all round -- the field lies in a valley; the east was a sheer
+# drop with a waterfall until 0.31.13), the river widening into a lake round an island
 # tower reached by one narrow bridge lane from each bank, two normal bridges, natural hills (walkable,
 # with a few steep rock scarps), rolling slopes, the towers (outposts) and the brick path routes.
 # Pure static data + functions: the sim turns it into walls/nav/heights, the view into terrain.
@@ -126,15 +126,10 @@ static func edge_dist(p: Vector2) -> float:
 		best = minf(best, p.distance_to(a + ab * t))
 	return -best if Geometry2D.is_point_in_polygon(p, lp) else best
 
-static func drop_weight(p: Vector2) -> float:
-	# Scenery only: 1 where the land beyond the edge falls away (the east side between the
-	# castles -- Kevin's "cliff side"), 0 where it rises into rock walls.
-	return _smooth(-4.0, 4.0, p.x) * (1.0 - _smooth(37.0, 41.0, absf(p.y)))
-
-const DROP_DEPTH := 24.0          # the valley below the cliff side
-const RISE_H := 6.5               # the rock walls elsewhere
-const VALLEY_WATER_Y := WATER_Y - DROP_DEPTH
-const FALL_X := 45.6              # where the river pours over the cliff
+# 0.31.13 (Kevin: "make the cliff side look like the other side ... in a valley instead of a cliff"): the east no longer
+# drops away to a waterfall; the field lies in a valley with rock walls and hills rising on every side, the river running
+# on out east through its own gorge as it does west.
+const RISE_H := 6.5               # the rock walls round the field
 
 # ---------------- hills and scarps (0.30.2, Kevin: "naturally formed ... slight hills where players can climb up
 # in a lot of it and maybe there will be steeper spots") ----------------
@@ -341,7 +336,7 @@ static func ledge_rim(p: Vector2) -> Vector2:
 	var shadow := sr.y
 	var ed := edge_jit(p)
 	if ed > -3.0:
-		var rise := 1.0 - drop_weight(p)
+		var rise := 1.0
 		# The face (and a ragged lip above it) is stone; the top of the rock walls is grass again, with stony
 		# patches -- not one flat brown sheet (0.30.1, Kevin: "more natural, like actual stone, and blend").
 		var face := _smooth(-0.4, 0.4, ed) * (1.0 - _smooth(3.2, 4.4, ed))
@@ -378,18 +373,15 @@ static func terrain_height(p: Vector2) -> float:
 	if edge_dist(p) <= 0.0:
 		return h                                   # the field itself is exactly the walkable ground
 	var ed := maxf(edge_jit(p), 0.0)
-	# Beyond the edge (scenery): rock walls rising on most sides, a sheer drop on the cliff side. The face wanders
-	# (edge_jit), steps once on the way up, and its height varies, so it reads as rock rather than a wall.
-	var dw := drop_weight(p)
+	# Beyond the edge (scenery): rock walls rising all round. The face wanders (edge_jit), steps once on the way up, and
+	# its height varies, so it reads as rock rather than a wall.
 	var hi := RISE_H * (0.85 + 0.3 * sin(0.21 * p.x + 0.5) * sin(0.17 * p.y + 1.1))
 	var rise := hi * (0.55 * _smooth(0.0, 1.6, ed) + 0.45 * _smooth(2.2, 3.6, ed)) \
 		+ 1.3 * _smooth(4.0, 10.0, ed) * (0.5 + 0.5 * sin(0.41 * p.x + 0.7) * sin(0.33 * p.y + 1.3))
-	var fall := -DROP_DEPTH * _smooth(0.2, 3.4, ed)
 	var top := maxf(h, 0.0)
-	var out := top + lerpf(rise, fall, dw)
-	# The river carries on through: a gorge between the rock walls (the cliff side has the falls).
-	if dw < 0.5:
-		out = lerpf(BED_Y, out, _smooth(-0.4, 2.8, river_off(p)))
+	var out := top + rise
+	# The river carries on through, both ways: a gorge between the rock walls.
+	out = lerpf(BED_Y, out, _smooth(-0.4, 2.8, river_off(p)))
 	return out
 
 # Painted sweeping bands (0.14.4, like the Fat Princess references): concentric light/dark arcs
@@ -435,24 +427,12 @@ static func outer_height(p: Vector2) -> float:
 	var h := RISE_H + hills * (0.6 + 4.0 * rise) + rise * rise * 7.0
 	var mtn := smoothstep(40.0, 130.0, d)
 	h += mtn * (28.0 + 14.0 * sin(p.x * 0.021 + 0.7) * sin(p.y * 0.017 + 1.9) + 8.0 * sin(p.x * 0.05 + p.y * 0.037))
-	# Below the cliff side (0.26.0): a wooded valley, mountains only far off. 0.31.12: the valley/mountain border widens
-	# with distance from the field -- at drop_weight's 4 m it stood as a 50 m sheer, flat-textured wall running out to the
-	# horizon along y = +-39 (the "unnatural" wall in Kevin's trailer still).
-	var dw := _smooth(-4.0 - d * 0.4, 4.0 + d * 0.4, p.x) * (1.0 - _smooth(37.0, 41.0 + d * 0.9, absf(p.y)))
-	if dw > 0.0:
-		# 0.31.12 (Kevin, trailer still: "this needs to look more natural"): the valley's far side was one smooth 50 m
-		# ramp -- steep and high enough to be all rock texture, a flat-looking wall under the fog. Now it climbs gently
-		# over a longer run in rolling, uneven hills (grass, wooded by _build_outer_trees), staying below the rock line.
-		var rolling := 3.6 * sin(p.x * 0.083 + p.y * 0.047 + 0.9) * sin(p.y * 0.068 - 0.6) \
-			+ 2.2 * sin(p.x * 0.151 - 1.1) * cos(p.y * 0.127 + 0.3) + 1.2 * sin(p.x * 0.29 + p.y * 0.21)
-		var climb := pow(smoothstep(55.0, 260.0, d), 1.25) * (24.0 + 7.0 * sin(p.y * 0.019 + 0.4) + 4.0 * sin(p.x * 0.013 - 0.7))
-		var valley := -DROP_DEPTH + hills * 0.8 + climb + rolling * smoothstep(35.0, 110.0, d)
-		h = lerpf(h, valley, dw)
 	h = lerpf(terrain_height(q), h, smoothstep(0.0, 14.0, d))      # meets the baked terrain's edge exactly
 	if d > 0.0:
 		var off := absf(p.y - river_c(p.x))
-		var wl := lerpf(WATER_Y, VALLEY_WATER_Y, dw)
-		h = lerpf(wl - 0.7, h, smoothstep(RIVER_HW - 0.5, RIVER_HW + 6.0 + d * 0.05, off))
+		# The river's own valley widens as it runs out between the hills (0.31.13: it was a 6 m-wide cut, so out among the
+		# mountains its sides stood as sheer flat rock), a soft V rather than a canyon.
+		h = lerpf(WATER_Y - 0.7, h, smoothstep(RIVER_HW - 0.5, RIVER_HW + 6.0 + d * 0.32, off))
 	return h
 
 static func bake_rect() -> Rect2:

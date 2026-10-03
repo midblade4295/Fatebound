@@ -22,7 +22,7 @@ func _init() -> void:
 			if Land.shore(p) < 0.0 and ed <= 2.0:
 				c = Color("#2f86c9")
 			elif ed > 0.4:
-				c = Color("#7d7a72").darkened(0.0) if Land.drop_weight(p) < 0.5 else Color("#3d4a5a")
+				c = Color("#7d7a72")
 			else:
 				var rs := Land.ledge_rim(p)
 				if rs.x > 0.5:
