@@ -642,6 +642,34 @@ func _stage() -> void:
 func _ease(x: float) -> float:
 	return x * x * (3.0 - 2.0 * x)
 
+func _clear_sightline() -> void:
+	# Hide props (boulders, rocks, trees, barrels) standing between the camera and what it's looking at (Kevin: a boulder
+	# blocked the opening). Actors, terrain and water are left alone.
+	if cam_a.is_empty():
+		return
+	var keep := {}
+	for a in mode.view.actors.values():
+		keep[a.root] = true
+	var segs := [[cam_a[0], cam_a[1]], [cam_b[0], cam_b[1]]]
+	var hidden := 0
+	for c in mode.view.get_children():
+		if not (c is Node3D) or keep.has(c) or not (c as Node3D).visible:
+			continue
+		var p: Vector3 = (c as Node3D).global_position
+		if p.length() < 0.5:
+			continue                                   # terrain, water and other meshes built at the origin
+		for sg in segs:
+			var e: Vector3 = sg[0]
+			var t2: Vector3 = sg[1]
+			var ab := Vector2(t2.x - e.x, t2.z - e.z)
+			var ap := Vector2(p.x - e.x, p.z - e.z)
+			var k := clampf(ap.dot(ab) / maxf(ab.length_squared(), 0.001), 0.0, 1.15)
+			if ap.distance_to(ab * k) < 2.4:
+				(c as Node3D).visible = false
+				hidden += 1
+				break
+	printerr("cleared %d props from the sightline" % hidden)
+
 func _slow_scale(tt: float) -> float:
 	for w in SLOW.get(shot, []):
 		if tt >= float(w[0]) and tt < float(w[1]):
@@ -655,6 +683,8 @@ func _process(delta: float) -> bool:
 	mode._guard_clock = -1.0e9
 	if frames == 2:
 		_stage()
+		if shot in ["hook", "necro", "hammer"]:
+			_clear_sightline()
 	if frames < 2:
 		return false
 	t += delta
