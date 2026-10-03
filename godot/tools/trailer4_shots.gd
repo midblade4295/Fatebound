@@ -8,7 +8,7 @@ extends SceneTree
 const Mode = preload("res://scripts/siege/siege_mode.gd")
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 const Land = preload("res://scripts/siege/siege_land.gd")
-const LENGTH := {"probe": 0.2, "sky": 5.5, "east": 3.0, "eastwide": 3.0, "river": 6.0, "island": 5.5, "hills": 5.0, "castle": 6.0, "deck": 5.0,
+const LENGTH := {"probe": 0.2, "sky": 5.5, "east": 3.0, "eastwide": 3.0, "edge_e": 2.0, "edge_w": 2.0, "river": 6.0, "island": 5.5, "hills": 5.0, "castle": 6.0, "deck": 5.0,
 	"logs": 4.5, "clash": 5.0, "golden": 10.0}
 # The finale's title: a 3D gold FATEBOUND (Luckiest Guy, extruded) flies in and turns to face the camera; a glint of the
 # low sun sweeps across the letters as it settles (TITLE_IN..TITLE_SET, then GLINT_* for the sweep).
@@ -111,6 +111,14 @@ func _stage() -> void:
 			# a look at the east side (0.31.13 check: it rises like the west now)
 			_morning()
 			path = [[0.0, Vector3(14, 12, 26), Vector3(60, 3, -4)], [1.0, Vector3(18, 14, 22), Vector3(64, 3, -8)]]
+		"edge_e":
+			_morning()
+			var ge := Sim.height_at(Vector2(37, 22))
+			path = [[0.0, Vector3(37, ge + 21.0, 34.0), Vector3(37, ge, 22.0)], [1.0, Vector3(37, ge + 21.0, 34.0), Vector3(37, ge, 22.0)]]
+		"edge_w":
+			_morning()
+			var gw := Sim.height_at(Vector2(-37, 22))
+			path = [[0.0, Vector3(-37, gw + 21.0, 34.0), Vector3(-37, gw, 22.0)], [1.0, Vector3(-37, gw + 21.0, 34.0), Vector3(-37, gw, 22.0)]]
 		"eastwide":
 			_morning()
 			path = [[0.0, Vector3(-20, 40, 40), Vector3(60, 0, 0)], [1.0, Vector3(-18, 42, 38), Vector3(62, 0, -2)]]

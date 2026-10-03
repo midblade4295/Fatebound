@@ -96,6 +96,24 @@ func _ready() -> void:
 	tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	tex.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(tex)
+	# 0.31.14 atmosphere: a soft vignette over the 3D view (under the HUD) draws the eye in and deepens the corners.
+	var vig := TextureRect.new()
+	var gt := GradientTexture2D.new()
+	gt.fill = GradientTexture2D.FILL_RADIAL
+	gt.fill_from = Vector2(0.5, 0.5)
+	gt.fill_to = Vector2(1.08, 1.08)
+	var gr := Gradient.new()
+	gr.set_color(0, Color(0.05, 0.03, 0.02, 0.0))
+	gr.set_color(1, Color(0.05, 0.03, 0.02, 0.32))
+	gr.add_point(0.55, Color(0.05, 0.03, 0.02, 0.0))
+	gt.gradient = gr
+	gt.width = 256
+	gt.height = 256
+	vig.texture = gt
+	vig.stretch_mode = TextureRect.STRETCH_SCALE
+	vig.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	vig.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(vig)
 	var t_hud := Time.get_ticks_msec()
 	hud = Hud.new()
 	hud.diag = diag

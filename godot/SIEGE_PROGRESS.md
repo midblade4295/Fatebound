@@ -1531,3 +1531,16 @@ K2/K3 notes (0.17.0)
 - Checked from two new cameras in tools/trailer4_shots.gd ("east", "eastwide"). Terrain and start-up cache re-baked.
 - Trailer 4's footage still shows the old cliff side (re-render the shots if it should match).
 - Quick suite: all pass except siege_sim_smoke (rescues 0 in seeds 11/22).
+
+# 0.31.14 (Kevin, screenshots at the east edge: grass not blending in spots; "more atmosphere ... better lighting")
+- The straight-edged light slabs were the seam between the baked terrain and the outer land: outer_land.gdshader lit
+  them differently (specular on, no cloud shadows, a different rock). It now shades like the field (specular off, the
+  same drifting cloud shadows and triplanar tinted rock with moss, meadow variation only from 4-14 m out); the view
+  copies cloud_tex/cloud_strength/macro_tex/rock_col across.
+- The stone patches on the wall tops faded over 0.25..0.8 and read as smeared, see-through rock; now a narrow jittered
+  threshold (0.44..0.58) -- crisp, ragged stone breaking through the turf.
+- Atmosphere: haze from 48 m (was 70) with warm sun scatter (0.22) and a little low-ground fog (height -0.2, density
+  0.05); the sun warmer (#ffdfb4) and lower (-47 deg, was -55) for longer shadows against the cool ambient; HQ glow a
+  touch stronger (0.6 / 0.95, bloom 0.04), contrast 1.08; a soft radial vignette under the HUD.
+- tools/trailer4_shots.gd: "edge_e"/"edge_w" play-camera views of both field edges for checks.
+- Quick suite: all pass except siege_sim_smoke (rescues 0 in seeds 11/22).

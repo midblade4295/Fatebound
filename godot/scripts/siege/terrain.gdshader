@@ -58,7 +58,10 @@ void fragment() {
 	float steep = 1.0 - clamp(wnorm.y, 0.0, 1.0);
 	float jit = (mn - 0.5) * 0.24 + (g.g - 0.55) * 0.35;
 	float rockw = smoothstep(0.30, 0.52, steep + jit);
-	float rimw = mk.g > 0.15 ? smoothstep(0.25, 0.8, mk.g + jit) : 0.0;
+	// 0.31.14 (Kevin: grass "isn't blending" in spots): the rim/patch rock used a wide fade (0.25..0.8), so on the wall
+	// tops it read as smeared, see-through stone. A narrow, jittered threshold gives a crisp, ragged edge instead --
+	// stone breaking through the turf along the painted cells.
+	float rimw = mk.g > 0.15 ? smoothstep(0.44, 0.58, mk.g + jit * 1.2) : 0.0;
 	float rw = max(rockw, rimw);
 	if (rw > 0.001) {
 		vec3 an = pow(abs(wnorm), vec3(4.0));

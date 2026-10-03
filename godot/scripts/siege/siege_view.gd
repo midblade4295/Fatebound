@@ -687,13 +687,13 @@ func _apply_hq(env: Environment, sun: DirectionalLight3D) -> void:
 	env.glow_enabled = true
 	for i in 7:
 		env.set_glow_level(i, i == 1 or i == 2)
-	env.glow_intensity = 0.5
-	env.glow_strength = 0.9
-	env.glow_bloom = 0.0
+	env.glow_intensity = 0.6
+	env.glow_strength = 0.95
+	env.glow_bloom = 0.04
 	env.glow_hdr_threshold = 0.95
 	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SOFTLIGHT
 	env.adjustment_saturation = 1.12
-	env.adjustment_contrast = 1.06
+	env.adjustment_contrast = 1.08
 	env.tonemap_exposure *= 1.05                # the shade costs ~6 % mean brightness: give it back
 
 func _build_lighting() -> void:
@@ -733,9 +733,14 @@ func _build_lighting() -> void:
 	env.fog_enabled = true
 	env.fog_light_color = Color("#b3cfe1")      # the sky's horizon: distant hills fade into it
 	env.fog_mode = Environment.FOG_MODE_DEPTH
-	env.fog_depth_begin = 70.0
-	env.fog_depth_end = 285.0                  # the land ends at ~300 m: fully fogged there, so no rim shows
-	env.fog_density = 0.85
+	# 0.31.14 atmosphere (Kevin: "more atmosphere ... better lighting"): the haze starts nearer (aerial depth over the far
+	# side of the field), scatters warm towards the sun, and settles a little in the low ground (river, gorges).
+	env.fog_depth_begin = 48.0
+	env.fog_depth_end = 270.0                  # the land ends at ~300 m: fully fogged there, so no rim shows
+	env.fog_density = 0.9
+	env.fog_sun_scatter = 0.22
+	env.fog_height = -0.2
+	env.fog_height_density = 0.05
 	env.fog_sky_affect = 0.0                   # the sky itself stays clear
 	# No glow in battle (0.14.3): it is full-screen blur passes at native resolution (~7 % of the
 	# frame in tests/perf_bench.gd, and bandwidth-heavy on phones) for a bloom too faint to see.
@@ -744,9 +749,9 @@ func _build_lighting() -> void:
 	we.environment = env
 	add_child(we)
 	var sun := DirectionalLight3D.new()
-	sun.light_color = Color("#ffe8c4")
-	sun.light_energy = 1.05
-	sun.rotation_degrees = Vector3(-55, -35, 0)
+	sun.light_color = Color("#ffdfb4")         # warmer (0.31.14), against the cool sky ambient
+	sun.light_energy = 1.08
+	sun.rotation_degrees = Vector3(-47, -33, 0)  # a little lower: longer, softer shadows give the ground depth
 	# No real-time shadows: at this zoom they doubled every triangle for little visual gain.
 	# Units are marked by team rings; HP bars are drawn on the 2D HUD.
 	sun.shadow_enabled = false
@@ -879,7 +884,8 @@ func _build_outer_land() -> void:
 		var tm: ShaderMaterial = _terrain_material()
 		_outer_mat = ShaderMaterial.new()
 		_outer_mat.shader = load("res://scripts/siege/outer_land.gdshader")
-		for k in ["grass_tex", "rock_tex", "path_mask", "mask_rect", "grass_scale", "rock_scale", "tint", "grass_sat", "band_strength"]:
+		for k in ["grass_tex", "rock_tex", "path_mask", "mask_rect", "grass_scale", "rock_scale", "tint", "grass_sat", "band_strength",
+				"cloud_tex", "cloud_strength", "macro_tex", "rock_col"]:
 			_outer_mat.set_shader_parameter(k, tm.get_shader_parameter(k))
 	for m in _outer_meshes:
 		var mi := MeshInstance3D.new()
