@@ -899,10 +899,12 @@ func _build_outer_trees() -> void:
 	var per := {}                                     # "side:type" -> Array[Transform3D]
 	var placed := 0
 	var tries := 0
-	while placed < 260 and tries < 6000:
+	while placed < 420 and tries < 9000:             # 260 until 0.31.12: the valley's hills get their woods too
 		tries += 1
 		var d := 2.0 + pow(rng.randf(), 1.7) * 150.0           # denser near the playfield
 		var side := rng.randi() % 4
+		if side == 1 and rng.randf() < 0.5:
+			d = 30.0 + rng.randf() * 190.0                      # the valley beyond the cliff side: woods all the way up
 		var along := rng.randf()
 		var q: Vector2
 		var n: Vector2

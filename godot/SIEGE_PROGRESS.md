@@ -1506,3 +1506,15 @@ K2/K3 notes (0.17.0)
 - tools/trailer4_vo 1..9.ogg: ElevenLabs Edward (eleven_v4), one 21 s take split on word timings + the finale line
   (267 credits). "FATEBOUND" heard at 43.46 s in the cut. Output: Fatebound-Trailer-4.mp4, 48.5 s 1080p30,
   -14.6 LUFS, -2.5 dBFS peak.
+
+# 0.31.12 (Kevin, trailer still: the land beyond the cliff side "needs to look more natural"; the trailer is too slow)
+- Land.outer_height: the valley/mountain border (drop_weight's 4 m band) stood as a 50 m sheer, flat-textured wall running
+  out along y = +-39; it now widens with distance from the field (x band 4 + 0.4 d, y band 37..41 + 0.9 d). The valley's
+  far side, one smooth 50 m ramp (rock texture by slope and height), now climbs gently over a longer run in uneven
+  rolling hills below the rock line. _build_outer_trees: 420 trees (was 260), half of the east side's spread over the
+  valley up to 220 m out. Start-up cache re-baked.
+- Trailer 4 recut for energy (tools/trailer4_edit.py): beat-sized slices from the middle of each render, sped 1.25x
+  (logs 1.15x), hard cuts on the song's beats (126.5 BPM, 0.474 s, measured by spectral flux + autocorrelation), the
+  song from 50.82 s so the title lands on its hit (72.64 s on the grid) at 21.82 s; no opening line; 27.0 s.
+  "FATEBOUND" heard at 21.86 s; -12.6 LUFS, -1.7 dBFS peak. All shots re-rendered on the new landscape.
+- Quick suite: all pass except siege_sim_smoke (rescues 0 in seeds 11/22).

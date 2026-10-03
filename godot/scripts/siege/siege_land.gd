@@ -435,10 +435,18 @@ static func outer_height(p: Vector2) -> float:
 	var h := RISE_H + hills * (0.6 + 4.0 * rise) + rise * rise * 7.0
 	var mtn := smoothstep(40.0, 130.0, d)
 	h += mtn * (28.0 + 14.0 * sin(p.x * 0.021 + 0.7) * sin(p.y * 0.017 + 1.9) + 8.0 * sin(p.x * 0.05 + p.y * 0.037))
-	# Below the cliff side (0.26.0): a wooded valley, mountains only far off.
-	var dw := drop_weight(p)
+	# Below the cliff side (0.26.0): a wooded valley, mountains only far off. 0.31.12: the valley/mountain border widens
+	# with distance from the field -- at drop_weight's 4 m it stood as a 50 m sheer, flat-textured wall running out to the
+	# horizon along y = +-39 (the "unnatural" wall in Kevin's trailer still).
+	var dw := _smooth(-4.0 - d * 0.4, 4.0 + d * 0.4, p.x) * (1.0 - _smooth(37.0, 41.0 + d * 0.9, absf(p.y)))
 	if dw > 0.0:
-		var valley := -DROP_DEPTH + hills * 0.8 + smoothstep(70.0, 190.0, d) * (40.0 + 10.0 * sin(p.y * 0.019 + 0.4))
+		# 0.31.12 (Kevin, trailer still: "this needs to look more natural"): the valley's far side was one smooth 50 m
+		# ramp -- steep and high enough to be all rock texture, a flat-looking wall under the fog. Now it climbs gently
+		# over a longer run in rolling, uneven hills (grass, wooded by _build_outer_trees), staying below the rock line.
+		var rolling := 3.6 * sin(p.x * 0.083 + p.y * 0.047 + 0.9) * sin(p.y * 0.068 - 0.6) \
+			+ 2.2 * sin(p.x * 0.151 - 1.1) * cos(p.y * 0.127 + 0.3) + 1.2 * sin(p.x * 0.29 + p.y * 0.21)
+		var climb := pow(smoothstep(55.0, 260.0, d), 1.25) * (24.0 + 7.0 * sin(p.y * 0.019 + 0.4) + 4.0 * sin(p.x * 0.013 - 0.7))
+		var valley := -DROP_DEPTH + hills * 0.8 + climb + rolling * smoothstep(35.0, 110.0, d)
 		h = lerpf(h, valley, dw)
 	h = lerpf(terrain_height(q), h, smoothstep(0.0, 14.0, d))      # meets the baked terrain's edge exactly
 	if d > 0.0:
