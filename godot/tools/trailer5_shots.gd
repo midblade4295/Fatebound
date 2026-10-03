@@ -34,6 +34,7 @@ var sun_track := []
 func _init() -> void:
 	shot = OS.get_environment("SHOT") if OS.has_environment("SHOT") else "dawn"
 	mode = Mode.new()
+	mode.hq_gfx = true          # High-quality graphics (render with FB_FORCE_HQ=1: the view keeps HQ off on llvmpipe otherwise)
 	root.add_child(mode)
 
 func _v(p: Vector2, y: float) -> Vector3:
