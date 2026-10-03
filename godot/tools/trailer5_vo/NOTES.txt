@@ -1,0 +1,12 @@
+shout: FATEBOUND onset ~1.04 s (shoutA)
+Herald, ElevenLabs eleven_v4, voice Edward (goT3UYdM9bhm0n2lmKQx), one 49.6 s take (651 credits) cut on word timings:
+1 Ah. Another peaceful day in the kingdom.        9  Someone's been feeding him.
+2 Two castles. Two Kings. One small problem.        10 Carry him home! All of him!
+3 They kidnapped our King.                          11 Drain the living...
+4 So we kidnapped theirs. ... hard King to kidnap.  12 ...hammer the stubborn...
+5 Grab a hat, become a hero. ... Don't question it. 13 ...and when in doubt... spin.
+6 Workers chop, mine, build ladders... complain.    14 Sixteen against sixteen!
+7 Then storm their castle, smash the cell...        15 First to three rescues wins the crown.
+8 ...and LIFT!                                      16 Kings may be heavier than they appear.
+shout.ogg: "This... is... FATEBOUND!!!" (separate take, 26 credits; the louder of two)
+score.mp3: ElevenLabs Music v2.5, 58 s instrumental (take B of 2, 870 credits each): impact at 0, drop 37.5-40 s, climax hits 45.9 / 48.7 s
