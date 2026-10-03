@@ -12,7 +12,7 @@ const Mode = preload("res://scripts/siege/siege_mode.gd")
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 const Castle = preload("res://scripts/siege/siege_castle.gd")
 const SLOW := {"hook": [[0.95, 2.1, 0.18]], "necro": [[0.6, 2.6, 0.25]], "hammer": [[0.35, 1.5, 0.22]]}
-const LENGTH := {"hook": 2.6, "necro": 3.0, "hammer": 2.0, "dawn": 5.0, "clash": 4.5, "captive": 4.0, "heroes": 4.3, "lineup": 4.0, "gather": 4.0, "build": 4.9, "backstab": 4.0, "assault": 5.5,
+const LENGTH := {"hook": 2.6, "necro": 3.0, "hammer": 2.0, "dawn": 5.0, "clash": 4.5, "captive": 4.0, "heroes": 4.3, "lineup": 4.0, "gather": 4.0, "build": 7.0, "backstab": 4.0, "assault": 5.5,
 	"rampart": 4.0, "whirl": 3.0, "feast": 4.0, "carry": 5.0, "throne": 4.0, "reveal": 9.0,
 	# Round 28 (Kevin + Derek Lieu's makeover advice: core action first, struggle, comedy, fewer cards)
 	"breakin": 10.6, "carry2": 7.9, "toofat": 5.5, "hatsteal": 5.0}
@@ -102,7 +102,7 @@ func _stage() -> void:
 					u.pos = Sim.spawn(u.team)
 			beats = [[0.35, kn.id, "attack"], [0.75, bb.id, "smash"]]
 			cam_a = [_v(spot + Vector2(-1.4, 2.9), 1.15), _v(spot + Vector2(0.9, -0.3), 1.0)]
-			cam_b = [_v(spot + Vector2(-2.2, 2.0), 1.35), _v(spot + Vector2(0.8, -0.2), 1.05)]
+			cam_b = [_v(spot + Vector2(1.6, 4.4), 1.9), _v(spot + Vector2(-0.4, 0.2), 0.6)]   # eases round to see him land
 		"necro":
 			# The Necromancer in slow motion: green life-drain on their Knight, the white heal on our wounded Rogue.
 			var c := Vector2(-6.0, 30.0)
@@ -401,7 +401,19 @@ func _stage() -> void:
 			# happens before recording), the builder steps aside, and three heroes climb over and drop inside
 			# while the camera cranes up over the wall after them.
 			s.stock[0].wood = 60
-			var spot2 := Vector2(-14.0, -36.3)
+			# (trailer 5) the enemy castle's front wall on today's map: the old fixed spot no longer touched it, so no ladder
+			# was ever raised. Take their front-most plain wall segment, a point on it clear of the gate, just outside it.
+			var fw: Dictionary = {}
+			for w in s.walls:
+				if str(w.kind) != "wall" or int(w.team) != 1:
+					continue
+				var mid: Vector2 = ((w.a as Vector2) + (w.b as Vector2)) * 0.5
+				if absf(mid.x) < 6.0 or absf(mid.x) > 22.0 or ((w.a as Vector2) - (w.b as Vector2)).length() < 5.0:
+					continue
+				if fw.is_empty() or mid.y > (((fw.a as Vector2) + (fw.b as Vector2)) * 0.5).y:
+					fw = w
+			var cp2: Vector2 = Sim.seg_closest(((fw.a as Vector2) + (fw.b as Vector2)) * 0.5, fw.a, fw.b)
+			var spot2 := cp2 + Vector2(0.0, float(fw.r) + Sim.UNIT_R + 0.35)
 			var team0: Array = s.units.filter(func(x): return x.team == 0 and x.id != me.id)
 			var builder: Dictionary = team0[0]
 			s._set_class(builder, "worker", false)
@@ -421,13 +433,15 @@ func _stage() -> void:
 					u.move = Vector2.ZERO
 					u.pos = Sim.spawn(u.team)
 			s.act(builder.id, "interact")
-			for i in int(2.5 / Sim.TICK):
+			for i in int(0.7 / Sim.TICK):
 				s.step(Sim.TICK)
-			beats = [[0.65, builder.id, "aside"]]
+			# (trailer 5, Kevin: show the ladder actually going up and being climbed) the worker is still hammering when
+			# recording starts; the ladder swings up at ~2.3 s; the heroes climb it after.
+			beats = [[2.9, builder.id, "aside"]]
 			for k6 in 3:
-				beats.append([0.75 + k6 * 0.35, climbers[k6].id, "climb"])
-			cam_a = [_v(spot2 + Vector2(5.0, 4.8), 3.2), _v(Vector2(-14.0, -37.6), 1.6)]
-			cam_b = [_v(spot2 + Vector2(2.5, 1.2), 8.5), _v(Vector2(-14.6, -42.5), 0.4)]
+				beats.append([3.2 + k6 * 0.5, climbers[k6].id, "climb"])
+			cam_a = [_v(spot2 + Vector2(5.0, 5.4), 3.0), _v(cp2 + Vector2(0.0, 0.6), 1.8)]
+			cam_b = [_v(spot2 + Vector2(3.4, 3.4), 6.2), _v(cp2 + Vector2(-0.2, -2.2), 1.6)]
 		"backstab":
 			# Fight dirty (Kevin: "a rogue sneaking up and stabbing someone in the back"): their archer is busy
 			# shooting the other way; our rogue creeps up behind her and stabs.
@@ -781,16 +795,43 @@ func _process(delta: float) -> bool:
 			elif str(b[2]) == "aside":
 				walkers[bu.id] = Vector2(-1.0, 0.35).normalized() * 0.6
 			elif str(b[2]) == "climb":
-				walkers[bu.id] = ((Vector2(-14.0, -38.0)) - (bu.pos as Vector2)).normalized()
+				# (trailer 5) to the foot of the ladder actually raised, then up and over it (was a fixed point on the old map)
+				var cl: Array = get_meta("climbers", [])
+				cl.append(bu.id)
+				set_meta("climbers", cl)
+	if shot == "build" and has_meta("climbers"):
+		var lads: Array = s.ladders.filter(func(l): return int(l.team) == 0)
+		if not lads.is_empty():
+			var foot: Vector2 = (lads[0].p as Vector2) + Vector2(0.0, 1.15)
+			for cid in get_meta("climbers"):
+				var cu: Dictionary = s.by_id[str(cid)]
+				var up_k := "up_" + str(cid)
+				if not has_meta(up_k) and (cu.pos as Vector2).distance_to(foot) < 0.45:
+					set_meta(up_k, true)
+				walkers[cid] = Vector2(0.0, -1.0) if has_meta(up_k) else (foot - (cu.pos as Vector2)).normalized()
 	if shot == "hook" and has_meta("bleed"):
 		var bu2: Dictionary = s.by_id[str(get_meta("bleed"))]
 		var was := float(get_meta("bleed_hp", bu2.hp))
 		set_meta("bleed_hp", bu2.hp)
-		if bu2.hp < was - 1.0:                    # he was just hit
+		if bu2.hp < was - 1.0 and not has_meta("fly_t0"):   # he was just hit: thrown back, dead before he lands
+			var bb2: Dictionary = s.units.filter(func(x): return x.team == 1)[0]
+			set_meta("fly_t0", t)
+			set_meta("fly_p0", bu2.pos)
+			set_meta("fly_dir", ((bu2.pos as Vector2) - (bb2.pos as Vector2)).normalized())
+			bu2.state = "dead"
+			bu2.respawn_at = INF
+			bu2.move = Vector2.ZERO
 			var hp5 := Vector3(bu2.pos.x, Sim.height_at(bu2.pos) + 1.15, bu2.pos.y)
 			for k8 in 46:
 				mode.view.spark(hp5 + Vector3(randf_range(-0.15, 0.15), randf_range(-0.2, 0.3), randf_range(-0.15, 0.15)),
 					Color(0.62 + randf() * 0.2, 0.02, 0.03))
+	if shot == "hook" and has_meta("fly_t0"):
+		var fu: Dictionary = s.by_id[str(get_meta("bleed"))]
+		var fk := clampf((t - float(get_meta("fly_t0"))) / 0.55, 0.0, 1.0)
+		fu.pos = (get_meta("fly_p0") as Vector2) + (get_meta("fly_dir") as Vector2) * 1.7 * (1.0 - pow(1.0 - fk, 2.0))
+		var fa: Dictionary = mode.view.actors.get(fu.id, {})
+		if not fa.is_empty() and fa.get("body") != null:
+			(fa.body as Node3D).position.y = 0.95 * 4.0 * fk * (1.0 - fk)
 	if shot == "necro" and has_meta("necro"):
 		s.act(str(get_meta("necro")), "attack")
 	if shot == "backstab" and has_meta("away"):

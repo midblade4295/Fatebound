@@ -1544,3 +1544,14 @@ K2/K3 notes (0.17.0)
   touch stronger (0.6 / 0.95, bloom 0.04), contrast 1.08; a soft radial vignette under the HUD.
 - tools/trailer4_shots.gd: "edge_e"/"edge_w" play-camera views of both field edges for checks.
 - Quick suite: all pass except siege_sim_smoke (rescues 0 in seeds 11/22).
+
+# 0.31.15 (trailer 5 notes from Kevin: the boulder in the opening; the Knight should fly back and die; show the ladder
+# actually going up and being climbed)
+- Game: ladders swing up off the ground into their lean (View._sync_raising, LADDER_RAISE 0.9 s, slight overshoot) and stand
+  on the ground under them (Sim.height_at) instead of popping in at y 0.
+- tools/trailer5_shots.gd: props in the close-ups' sightline hidden (_clear_sightline); "hook": on the hit the Knight is
+  thrown 1.7 m back in a 0.95 m arc, dead (state only: he stays a Knight, no hat drop), landing in frame; "build": staged at
+  the enemy castle's real front wall (the old fixed spot no longer touched a wall, so no ladder was ever raised), the
+  worker still hammering as recording starts, three heroes walk to the ladder's foot then up and over.
+- Trailer 5 recut; 58 s, -12.8 LUFS, -2.2 dBFS.
+- Quick suite: all pass except siege_sim_smoke (rescues 0 in seeds 11/22).

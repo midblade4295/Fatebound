@@ -23,8 +23,8 @@ CUTS = [
     ("feast", 0.00, 4.10, 1.0),
     ("toofat", 0.00, 3.50, 0.6),     # a slow push on a very fat King
     ("heroes", 0.20, 4.00, 1.0),
-    ("gather", 0.60, 2.20, 1.0),
-    ("build", 0.80, 3.20, 1.0),
+    ("gather", 0.60, 1.40, 1.0),
+    ("build", 2.30, 4.00, 1.0),      # hammering, the ladder swings up, three heroes climb it
     ("breakin", 1.50, 5.20, 1.0),
     ("toofat", 2.10, 3.10, 1.0),     # ...and LIFT
     ("carry2", 1.00, 2.30, 1.0),

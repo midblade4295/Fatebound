@@ -2427,6 +2427,7 @@ func _on_screen(p: Vector3, planes: Array) -> bool:
 func sync(dt: float) -> void:
 	_time += dt
 	_sync_items(dt)
+	_sync_raising()
 	_sync_ambience(dt)
 	_sync_ripples(dt)
 	_sync_blood(dt)
@@ -2824,9 +2825,12 @@ func on_event(e: Dictionary) -> void:
 			# Leans against the outside face of the enemy wall (the side the builder came from).
 			var outward := Vector2(0, 1) if own == 0 else Vector2(0, -1)
 			var base: Vector2 = lp + outward * 1.35
-			var ln := _place(HEX + "ladder.gltf", Vector3(base.x, 0, base.y), 0.0 if own == 0 else PI, 4.6)
+			var ln := _place(HEX + "ladder.gltf", Vector3(base.x, Sim.height_at(base), base.y), 0.0 if own == 0 else PI, 4.6)
 			if ln != null:
-				ln.rotation.x = -0.32 if own == 0 else 0.32
+				# 0.31.15 (Kevin: "show the actual ladder being put up"): it swings up off the ground into its lean.
+				var lean := -0.32 if own == 0 else 0.32
+				ln.rotation.x = lean * 4.4
+				_raising.append({"node":ln, "t0":_time, "to":lean, "from":lean * 4.4})
 				ladder_nodes[int(e.ladder)] = ln
 			ring_at(Vector3(base.x, Sim.height_at(Vector2(base.x, base.y)) + 0.1, base.y), TEAM_COLORS[own], 1.8, 0.6)
 		"ladder_hit":
@@ -3297,3 +3301,23 @@ func _sync_items(dt: float) -> void:
 		if not seen.has(id):
 			(item_nodes[id] as Node3D).queue_free()
 			item_nodes.erase(id)
+
+
+# Ladders going up (0.31.15): from lying on the ground to their lean against the wall over LADDER_RAISE s, a little
+# overshoot as they land on the wall.
+const LADDER_RAISE := 0.9
+var _raising: Array = []
+
+func _sync_raising() -> void:
+	for i in range(_raising.size() - 1, -1, -1):
+		var r: Dictionary = _raising[i]
+		var n: Node3D = r.node
+		if not is_instance_valid(n):
+			_raising.remove_at(i)
+			continue
+		var k := clampf((_time - float(r.t0)) / LADDER_RAISE, 0.0, 1.0)
+		var e := 1.0 + 2.2 * pow(k - 1.0, 3.0) + 1.2 * pow(k - 1.0, 2.0)     # ease out with a small overshoot
+		n.rotation.x = lerpf(float(r.from), float(r.to), e)
+		if k >= 1.0:
+			n.rotation.x = float(r.to)
+			_raising.remove_at(i)
