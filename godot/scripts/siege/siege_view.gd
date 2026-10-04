@@ -2453,7 +2453,13 @@ func sync(dt: float) -> void:
 		else:
 			root.position = before.lerp(target, 1.0 - exp(-dt * 22.0))
 		var vel := (root.position - before).length() / maxf(dt, 0.001)
-		root.rotation.y = lerp_angle(root.rotation.y, float(u.face), 1.0 - exp(-dt * 18.0))
+		if float(u.get("whirl_until", 0.0)) > sim.time and u.state != "dead":
+			# 0.31.16 (Kevin: "the barbarian model should spin with the vfx"): he turns with his whirlwind, 2.4 turns a second.
+			a["whirl_spin"] = float(a.get("whirl_spin", 0.0)) + dt * TAU * 2.4
+			root.rotation.y = float(u.face) + float(a.whirl_spin)
+		else:
+			a["whirl_spin"] = 0.0
+			root.rotation.y = lerp_angle(root.rotation.y, float(u.face), 1.0 - exp(-dt * 18.0))
 		(a.ring as MeshInstance3D).visible = u.state != "dead"
 		_sync_load(a, u)
 		_sync_hand(a, u)

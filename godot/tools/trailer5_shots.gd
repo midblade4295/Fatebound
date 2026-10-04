@@ -11,8 +11,8 @@ extends SceneTree
 const Mode = preload("res://scripts/siege/siege_mode.gd")
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 const Castle = preload("res://scripts/siege/siege_castle.gd")
-const SLOW := {"hook": [[0.95, 2.1, 0.18]], "necro": [[0.6, 2.6, 0.25]], "hammer": [[0.35, 1.5, 0.22]], "whirl": [[0.8, 2.4, 0.22]]}
-const LENGTH := {"hook": 2.6, "necro": 3.0, "hammer": 2.0, "dawn": 5.0, "clash": 4.5, "captive": 4.0, "heroes": 4.3, "lineup": 4.0, "gather": 4.0, "build": 7.0, "backstab": 4.0, "assault": 5.5,
+const SLOW := {"hook": [[0.95, 2.1, 0.18]], "necro": [[0.6, 2.6, 0.25]], "hammer": [[0.55, 1.75, 0.22]], "whirl": [[0.8, 2.4, 0.22]]}
+const LENGTH := {"hook": 2.6, "necro": 3.0, "hammer": 2.4, "dawn": 5.0, "clash": 4.5, "captive": 4.0, "heroes": 4.3, "lineup": 4.0, "gather": 4.0, "build": 7.0, "backstab": 4.0, "assault": 5.5,
 	"rampart": 4.0, "whirl": 3.2, "feast": 4.0, "carry": 5.0, "throne": 4.0, "reveal": 9.0,
 	# Round 28 (Kevin + Derek Lieu's makeover advice: core action first, struggle, comedy, fewer cards)
 	"breakin": 10.6, "carry2": 7.9, "toofat": 5.5, "hatsteal": 5.0}
@@ -130,8 +130,9 @@ func _stage() -> void:
 					u.move = Vector2.ZERO
 					u.pos = Sim.spawn(u.team)
 			set_meta("necro", nc.id)
-			cam_a = [_v(c + Vector2(0.9, 5.8), 1.5), _v(c + Vector2(0.0, 0.0), 1.35)]       # in front of him: his face
-			cam_b = [_v(c + Vector2(0.2, 4.6), 1.25), _v(c + Vector2(0.0, 0.0), 1.4)]
+			# (trailer 5, Kevin) from the front, pulled back so the Knight he drains and the Rogue he heals are both in frame
+			cam_a = [_v(c + Vector2(-0.6, 8.6), 2.7), _v(c + Vector2(0.0, -1.6), 1.0)]
+			cam_b = [_v(c + Vector2(0.7, 7.6), 2.4), _v(c + Vector2(0.0, -1.6), 1.05)]
 		"hammer":
 			# The Crusader's hammer in slow motion, spinning through a line of three.
 			var hc := Vector2(-14.0, 32.0)
@@ -147,17 +148,20 @@ func _stage() -> void:
 				s._set_class(fo, ["barbarian", "rogue", "mage"][k], false)
 				fo.bot = false
 				_revive(fo)
-				fo.move = Vector2.ZERO
-				fo.pos = hc + Vector2(2.8 + k * 2.1, (k - 1) * 0.35)
+				fo.pos = hc + Vector2(5.0 + k * 1.9, (k - 1) * 0.45)
 				fo.face = Sim.angle_of((cr.pos as Vector2) - (fo.pos as Vector2))
+				_sturdy(fo)
+				walkers[fo.id] = ((cr.pos as Vector2) - (fo.pos as Vector2)).normalized()   # (Kevin) charging, not standing
+			set_meta("rush", foes.map(func(x): return x.id))
+			set_meta("striker", cr.id)
 			for u in s.units:
 				if u.id != cr.id and not foes.has(u):
 					u.bot = false
 					u.move = Vector2.ZERO
 					u.pos = Sim.spawn(u.team)
-			beats = [[0.25, cr.id, "hammer"]]
-			cam_a = [_v(hc + Vector2(3.0, 4.2), 1.6), _v(hc + Vector2(3.5, 0.0), 1.0)]
-			cam_b = [_v(hc + Vector2(5.5, 3.8), 1.5), _v(hc + Vector2(6.0, 0.0), 1.0)]
+			beats = [[0.45, cr.id, "hammer"]]
+			cam_a = [_v(hc + Vector2(3.4, 5.4), 1.8), _v(hc + Vector2(4.4, 0.0), 1.0)]
+			cam_b = [_v(hc + Vector2(5.2, 4.8), 1.6), _v(hc + Vector2(5.0, 0.0), 1.0)]
 		"dawn":
 			for i in int(60.0 / Sim.TICK):
 				s.step(Sim.TICK)
@@ -811,8 +815,8 @@ func _process(delta: float) -> bool:
 				var cl: Array = get_meta("climbers", [])
 				cl.append(bu.id)
 				set_meta("climbers", cl)
-	if shot == "whirl" and has_meta("rush"):
-		var me3: Dictionary = s.by_id[str(mode.hud.player_id)]
+	if (shot == "whirl" or shot == "hammer") and has_meta("rush"):
+		var me3: Dictionary = s.by_id[str(get_meta("striker", mode.hud.player_id))]
 		for rid in get_meta("rush"):
 			var ru: Dictionary = s.by_id[str(rid)]
 			var hk := "rhp_" + str(rid)
