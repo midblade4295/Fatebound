@@ -1583,3 +1583,20 @@ K2/K3 notes (0.17.0)
   separate to strand; out of range or hidden it relaxes to the plain cape. 0.40 ms a frame for ~8 capes on the build box
   (was 1.5 ms plus the mesh uploads).
 - Quick suite: all pass except siege_sim_smoke (rescues 0 in seeds 11/22).
+
+# 0.31.19 (Kevin: the workshop makes a powerful bomb, carried and thrown by players, one at a time; the throw lights
+# the fuse; it kills everyone in its radius, friends too; half of a door's health, all of a jail door's) -- protocol 31
+- Sim: bombs[team] ({} or one dict) -- one per workshop at a time, first at BOMB_FIRST 40 s, the next BOMB_RESPAWN 45 s
+  after one goes off, at bomb_spot() beside the workshop (outside its ACTION ring). ACTION picks it up (bomb_to_pick,
+  1.6 m; not while lifting a King, holding a fish, in a tower or on a task); carrier runs at 85 %; ACTION or ATTACK throws
+  it 9 m where he faces (_push_out keeps it out of walls; it flies over them), 0.75 s arc; the throw lights a 2.4 s fuse
+  (a lit bomb can be picked up and thrown back, fuse running); a carrier who dies drops it (unlit stays unlit).
+  _explode_bomb: everyone alive within BOMB_R 4.5 m dies (kill credit only for enemies), every door in reach loses half
+  its max health (open doors too), a jail door in reach is destroyed outright. Bots run from a lit or flying bomb.
+- Net v31: "bm" per team [state, x, y, h, fuse left, carrier, to x, to y]; clients set bomb_held from it.
+- View: iron ball with a brass band and a fuse; held over the carrier's head; spins in flight; lit, the fuse spits sparks
+  and the ball throbs red faster as it runs down. Blast: additive fireball, two rings, sparks, smoke, a scorch that
+  fades over 25 s, camera shake by distance. Sounds: fireball + crumble (heard 70 m), fuse catching, pick-up clank.
+  HUD: PICK UP BOMB / THROW BOMB. tools/trailer5_shots.gd "bomb" check shot.
+- tests/bomb_test.gd (in the suite). Quick suite: all pass except siege_sim_smoke (rescues 0 in seeds 11/22).
+- Bots don't pick bombs up yet.

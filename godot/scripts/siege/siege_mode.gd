@@ -663,6 +663,13 @@ func _event_sound(e: Dictionary) -> void:
 			_cue("tm_sheath", 2, e.get("pos", Vector2.INF), 14.0)
 		"gate_hit":
 			_cue("tm_gate_hit", 2, _gate_pos(e.get("gate", "")), HEAR_R + 6.0)
+		"bomb_boom":                                    # 0.31.19: the bomb -- a fireball and a crumble together, heard far off
+			_cue("tm_fireball", 3, e.pos, 70.0, false, 1.6)
+			_cue("tm_crumble", 2, e.pos, 70.0, false, 1.3)
+		"bomb_throw":
+			_cue("tm_firespray", 2, e.from, HEAR_R, false, 0.8)      # the fuse catching
+		"bomb_pick", "bomb_spawn":
+			_cue("tm_gate_close", 1, e.get("pos", _listener()) if e.k == "bomb_spawn" else _unit_pos(str(e.id)), 14.0, false, 0.5)
 		"gate_broken":
 			_cue("tm_crumble", 2, _gate_pos(e.get("gate", "")), 48.0)
 		"gate_rebuilt":

@@ -217,6 +217,12 @@ var walls: Array = []          # segments {a, b, r, team, kind}
 var gates: Array = []          # {id, team, a, b, c, hp, max_hp, broken, open}
 var nodes: Array = []
 var items: Array = []               # loose logs and rocks on the ground (0.31.0)
+# The bomb (0.31.19, Kevin): each workshop makes one powerful bomb at a time. Anyone can pick it up (ACTION) and throw
+# it (ACTION or ATTACK); the throw lights the fuse. It kills everyone in BOMB_R -- friends too -- takes half of any
+# door's health and all of a jail door's. Per team: {} when there is none, else
+# {"id","team","state" ready|carried|flying|lit|loose, "p","h","carrier","by","from","to","t0","lit_at"}.
+var bombs: Array = [{}, {}]
+var bomb_next: Array = [0.0, 0.0]
 var outposts: Array = []       # {id, p, owner (-1 neutral), prog (-1 red .. +1 blue), t}          # resource nodes {id, kind:"wood"/"stone", p, r, amount, max, regen, t}
 var stock := [{"wood":0, "stone":0}, {"wood":0, "stone":0}]
 var levels := [_zero_levels(), _zero_levels()]
@@ -641,6 +647,8 @@ func _path_gate(u: Dictionary) -> Dictionary:
 
 # ---------- setup ----------
 func setup(team_size: int, seed_value: int, player_team := 0) -> void:
+	bombs = [{}, {}]
+	bomb_next = [BOMB_FIRST, BOMB_FIRST]
 	rng.seed = seed_value
 	_build_map()
 	_build_buckets()
@@ -824,7 +832,10 @@ func act(id: String, action: String, arg: Variant = null) -> bool:
 	if u.is_empty() or ended or not alive(u):
 		return false
 	match action:
-		"attack": return _beam(u) if u.cls == "priest" else _start_attack(u, "attack")
+		"attack":
+			if bool(u.get("bomb_held", false)):
+				return _throw_bomb(u)
+			return _beam(u) if u.cls == "priest" else _start_attack(u, "attack")
 		"ability":
 			match ability_of(u):
 				"block": return _block(u)
@@ -1075,6 +1086,11 @@ func _interact(u: Dictionary) -> bool:
 		var ho := lifting_oracle(u)
 		_leave_lift(u, not ho.is_empty() and ho.lifters.size() == 1 and lifters_needed(ho) == 1)
 		return true
+	if bool(u.get("bomb_held", false)):
+		return _throw_bomb(u)
+	var bm := bomb_to_pick(u)
+	if not bm.is_empty():
+		return _pick_bomb(u, bm)
 	if _offering_action(u) != "":
 		return _do_offering(u)
 	if int(u.get("tower", -1)) >= 0:
@@ -1214,6 +1230,10 @@ func context_action(u: Dictionary) -> String:
 	if u.carrying:
 		var ho := lifting_oracle(u)
 		return "throw" if (not ho.is_empty() and ho.lifters.size() == 1 and lifters_needed(ho) == 1) else "letgo"
+	if bool(u.get("bomb_held", false)):
+		return "bomb_throw"
+	if not bomb_to_pick(u).is_empty():
+		return "bomb_pick"
 	var off := _offering_action(u)
 	if off != "":
 		return off
@@ -1462,6 +1482,7 @@ func _kill(src: Dictionary, dst: Dictionary) -> void:
 	if int(dst.tower) >= 0:
 		_free_tower_slot(dst)
 	dst["hammer_out"] = -1                     # its hammer, if out, drops (_step_hammer)
+	_drop_bomb(dst)
 	dst.hp = 0.0
 	dst.state = "dead"
 	dst.beam = ""
@@ -1860,6 +1881,8 @@ func predict_step(u: Dictionary, move: Vector2, dt: float) -> void:
 	if int(u.get("tower", -1)) >= 0:
 		return                                     # on a tower: the server places it
 	var speed := float(stat(u, "speed"))
+	if bool(u.get("bomb_held", false)):
+		speed *= BOMB_SLOW
 	match str(u.state):
 		"dodge":
 			u.pos += u.dodge_dir * DODGE_SPEED * dt
@@ -2394,6 +2417,7 @@ func _step_world(dt: float) -> void:
 				n.amount = n.max
 				_event("node_regrow", {"node":n.id})
 	_step_items(dt)
+	_step_bombs()
 	_stat_time(dt)
 
 func _commander(team: int) -> void:
@@ -2519,6 +2543,12 @@ func _unstick_check(u: Dictionary) -> void:
 	u.last_pos = u.pos
 
 func _think(u: Dictionary) -> void:
+	# Run from a lit bomb (or one in the air) before anything else.
+	for b in bombs:
+		if not b.is_empty() and (b.state == "lit" or b.state == "flying") and u.pos.distance_to(b.to if b.state == "flying" else b.p) < BOMB_R + 1.5:
+			var away: Vector2 = u.pos - (b.to if b.state == "flying" else b.p)
+			u.move = away.normalized() if away.length() > 0.01 else dir_of(u.face + PI)
+			return
 	if not alive(u) or u.stun > 0.0 or u.state in ["wind","recover","dodge"]:
 		return
 	if int(u.tower) >= 0:
@@ -3591,3 +3621,140 @@ func jail_outside(castle_team: int) -> Vector2:
 			var c: Vector2 = g.c
 			return c + (c - cell).normalized() * 1.5
 	return cell
+
+
+# ---------- the bomb (0.31.19) ----------
+const BOMB_FIRST := 40.0          # the first bomb at each workshop
+const BOMB_RESPAWN := 45.0        # the next, after one goes off
+const BOMB_PICK_R := 1.6
+const BOMB_THROW := 9.0           # how far it's thrown
+const BOMB_FLIGHT := 0.75
+const BOMB_FUSE := 2.4            # from the throw that lit it
+const BOMB_R := 4.5               # blast radius: everyone inside dies
+const BOMB_GATE := 0.5            # of a door's full health
+const BOMB_SLOW := 0.85           # a carrier's speed
+
+func bomb_spot(team: int) -> Vector2:
+	# beside the workshop, towards the middle of the castle, outside its ACTION ring
+	var w := workshop(team)
+	return w + (_c(team, Vector2(0.0, 18.0)) - w).normalized() * (WORKSHOP_RADIUS + 1.0)
+
+func bomb_to_pick(u: Dictionary) -> Dictionary:
+	if u.carrying or u.offering or int(u.get("tower", -1)) >= 0 or not u.task.is_empty() or bool(u.get("bomb_held", false)):
+		return {}
+	for b in bombs:
+		if not b.is_empty() and b.state in ["ready", "loose", "lit"] and u.pos.distance_to(b.p) <= BOMB_PICK_R:
+			return b
+	return {}
+
+func _pick_bomb(u: Dictionary, b: Dictionary) -> bool:
+	b.state = "carried"
+	b.carrier = u.id
+	b.h = 1.9
+	u["bomb_held"] = true
+	u.workshop_open = false
+	_event("bomb_pick", {"id":u.id, "team":u.team, "bomb":b.team, "lit":float(b.lit_at) >= 0.0})
+	return true
+
+func held_bomb(u: Dictionary) -> Dictionary:
+	for b in bombs:
+		if not b.is_empty() and b.state == "carried" and str(b.carrier) == str(u.id):
+			return b
+	return {}
+
+func _throw_bomb(u: Dictionary) -> bool:
+	var b := held_bomb(u)
+	u["bomb_held"] = false
+	if b.is_empty() or not alive(u):
+		return false
+	var to := _push_out(u.pos + dir_of(u.face) * BOMB_THROW, 0.3)
+	b.state = "flying"
+	b.from = u.pos
+	b.to = to
+	b.t0 = time
+	b.by = u.id
+	b.carrier = ""
+	if float(b.lit_at) < 0.0:
+		b.lit_at = time                        # the throw lights the fuse (a re-thrown lit bomb keeps its fuse)
+	_event("bomb_throw", {"id":u.id, "team":u.team, "from":u.pos, "to":to, "fuse":BOMB_FUSE - (time - float(b.lit_at))})
+	return true
+
+func _drop_bomb(u: Dictionary) -> void:
+	if not bool(u.get("bomb_held", false)):
+		return
+	u["bomb_held"] = false
+	var b := held_bomb(u)
+	if b.is_empty():
+		return
+	b.state = "lit" if float(b.lit_at) >= 0.0 else "loose"
+	b.p = u.pos
+	b.h = 0.0
+	b.carrier = ""
+	_event("bomb_drop", {"id":u.id, "team":u.team})
+
+func _step_bombs() -> void:
+	for t in 2:
+		var b: Dictionary = bombs[t]
+		if b.is_empty():
+			if time >= float(bomb_next[t]):
+				bombs[t] = {"id":t, "team":t, "state":"ready", "p":bomb_spot(t), "h":0.0, "carrier":"", "by":"",
+					"from":Vector2.ZERO, "to":Vector2.ZERO, "t0":0.0, "lit_at":-1.0}
+				_event("bomb_spawn", {"team":t, "pos":bomb_spot(t)})
+			continue
+		match str(b.state):
+			"carried":
+				var c: Dictionary = by_id.get(str(b.carrier), {})
+				if c.is_empty() or not alive(c) or not bool(c.get("bomb_held", false)):
+					b.state = "lit" if float(b.lit_at) >= 0.0 else "loose"
+					b.h = 0.0
+					b.carrier = ""
+				else:
+					b.p = c.pos
+			"flying":
+				var k := clampf((time - float(b.t0)) / BOMB_FLIGHT, 0.0, 1.0)
+				b.p = (b.from as Vector2).lerp(b.to, k)
+				b.h = lerpf(1.7, 0.0, k) + 3.0 * k * (1.0 - k)
+				if k >= 1.0:
+					b.state = "lit"
+					b.h = 0.0
+					_event("bomb_land", {"team":t, "pos":b.p})
+		if float(b.lit_at) >= 0.0 and time >= float(b.lit_at) + BOMB_FUSE:
+			_explode_bomb(b)
+
+func _explode_bomb(b: Dictionary) -> void:
+	var at: Vector2 = b.p
+	if b.state == "carried":                   # it went off in someone's hands
+		var c: Dictionary = by_id.get(str(b.carrier), {})
+		if not c.is_empty():
+			c["bomb_held"] = false
+	var thrower: Dictionary = by_id.get(str(b.by), {})
+	var killed := 0
+	for u in units:
+		if alive(u) and u.pos.distance_to(at) <= BOMB_R:
+			# kill credit only for enemies: blowing up your own side scores nothing
+			_kill(thrower if (not thrower.is_empty() and thrower.team != u.team) else {}, u)
+			killed += 1
+	var src: Dictionary = thrower if not thrower.is_empty() else {"id":""}
+	for g in gates:
+		if g.broken or at.distance_to(seg_closest(at, g.a, g.b)) > BOMB_R:
+			continue
+		if str(g.get("kind", "")) == "jail":
+			g.hp = 0.0                          # the whole jail door
+			g.broken = true
+			g["broken_at"] = time
+			_update_gate_nav()
+			_event("gate_broken", {"gate":g.id, "team":g.team, "by":src.get("id", "")})
+		else:
+			var was_open: bool = not gate_blocks(g)
+			if was_open:
+				g.hp = maxf(0.0, g.hp - float(g.max_hp) * BOMB_GATE)    # an open door still takes the blast
+				if g.hp <= 0.0:
+					g.broken = true
+					g["broken_at"] = time
+					_update_gate_nav()
+					_event("gate_broken", {"gate":g.id, "team":g.team, "by":src.get("id", "")})
+			else:
+				_damage_gate(src, g, float(g.max_hp) * BOMB_GATE)
+	_event("bomb_boom", {"team":b.team, "pos":at, "killed":killed, "by":str(b.by)})
+	bombs[int(b.team)] = {}
+	bomb_next[int(b.team)] = time + BOMB_RESPAWN

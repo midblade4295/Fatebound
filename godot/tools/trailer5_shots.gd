@@ -12,7 +12,7 @@ const Mode = preload("res://scripts/siege/siege_mode.gd")
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 const Castle = preload("res://scripts/siege/siege_castle.gd")
 const SLOW := {"hook": [[0.95, 2.1, 0.18]], "necro": [[0.6, 2.6, 0.25]], "hammer": [[0.55, 1.75, 0.22]], "whirl": [[0.8, 2.4, 0.22]]}
-const LENGTH := {"hook": 2.6, "necro": 3.0, "hammer": 2.4, "dawn": 5.0, "clash": 4.5, "captive": 4.0, "heroes": 4.3, "lineup": 4.0, "gather": 4.0, "build": 7.0, "backstab": 4.0, "assault": 5.5,
+const LENGTH := {"bomb": 4.6, "hook": 2.6, "necro": 3.0, "hammer": 2.4, "dawn": 5.0, "clash": 4.5, "captive": 4.0, "heroes": 4.3, "lineup": 4.0, "gather": 4.0, "build": 7.0, "backstab": 4.0, "assault": 5.5,
 	"rampart": 4.0, "whirl": 3.2, "feast": 4.0, "carry": 5.0, "throne": 4.0, "reveal": 9.0,
 	# Round 28 (Kevin + Derek Lieu's makeover advice: core action first, struggle, comedy, fewer cards)
 	"breakin": 10.6, "carry2": 7.9, "toofat": 5.5, "hatsteal": 5.0}
@@ -80,6 +80,36 @@ func _stage() -> void:
 		_revive(u)
 		u.bot = true
 	match shot:
+		"bomb":
+			# (0.31.19) a Knight hurls the workshop's bomb into three of theirs; it lands, fizzes, and goes off.
+			var bc := Vector2(-8.0, 30.0)
+			var kb: Dictionary = s.units.filter(func(x): return x.team == 0 and x.id != me.id)[0]
+			s._set_class(kb, "knight", false)
+			kb.bot = false
+			_revive(kb)
+			kb.pos = bc
+			kb.face = Sim.angle_of(Vector2(0.0, -1.0))
+			kb.move = Vector2.ZERO
+			var tg: Array = s.units.filter(func(x): return x.team == 1).slice(0, 3)
+			for k in tg.size():
+				s._set_class(tg[k], ["barbarian", "rogue", "mage"][k], false)
+				tg[k].bot = false
+				_revive(tg[k])
+				tg[k].move = Vector2.ZERO
+				tg[k].pos = bc + Vector2(-1.2 + k * 1.2, -Sim.BOMB_THROW + (k % 2) * 0.6)
+				tg[k].face = Sim.angle_of(Vector2(0.0, 1.0))
+			for u in s.units:
+				if u.id != kb.id and not tg.has(u):
+					u.bot = false
+					u.move = Vector2.ZERO
+					u.pos = Sim.spawn(u.team)
+			s.bombs[0] = {"id":0, "team":0, "state":"carried", "p":bc, "h":1.9, "carrier":kb.id, "by":"",
+				"from":Vector2.ZERO, "to":Vector2.ZERO, "t0":0.0, "lit_at":-1.0}
+			kb["bomb_held"] = true
+			s.bomb_next = [INF, INF]
+			beats = [[0.7, kb.id, "interact"]]
+			cam_a = [_v(bc + Vector2(7.5, -2.0), 3.6), _v(bc + Vector2(0.0, -5.0), 1.0)]
+			cam_b = [_v(bc + Vector2(8.0, -4.0), 3.4), _v(bc + Vector2(0.0, -7.0), 0.9)]
 		"hook":
 			# The opening: their Barbarian's axe comes down on our Knight -- slow motion as it lands, blood in the air.
 			var spot := Vector2(-10.0, 30.0)
@@ -804,6 +834,8 @@ func _process(delta: float) -> bool:
 				s._start_attack(bu, "attack", false)
 			elif str(b[2]) == "spin":
 				s.act(bu.id, "ability")          # they keep charging into it; each stops when it cuts him down
+			elif str(b[2]) == "interact":
+				s.act(bu.id, "interact")
 			elif str(b[2]) == "hammer":
 				s._throw_hammer(bu)
 			elif str(b[2]) == "attack":

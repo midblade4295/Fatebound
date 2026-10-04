@@ -8,7 +8,7 @@ extends RefCounted
 # objects: decode() uses the default allow_objects=false.
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 
-const VERSION := 30              # 30 = smaller snapshots: packed projectiles/items/Kings, slow state only when it changes (0.31.8); 29 = no class caps; per-class stand stock/restock, no heal stacking, armory +8 %, worker 80 hp; 28 = class caps; 27 = the Necromancer (drain + heal beams, unit field 32); 26 = Resurrection, bigger nova/sanctuary; 25 = logs/rocks (it); 24 = the Crusader and its thrown hammer; 23 = tower shot heights, run off a deck; 22 = wide roofless towers; 21 = natural hills, every class climbs; 20 = bigger towers; 19 = the bigger natural map; 18 = no "water" in the dungeons (wading only in the river); 17 = rampart shots
+const VERSION := 31              # 31 = the bomb (bm); 30 = smaller snapshots: packed projectiles/items/Kings, slow state only when it changes (0.31.8); 29 = no class caps; per-class stand stock/restock, no heal stacking, armory +8 %, worker 80 hp; 28 = class caps; 27 = the Necromancer (drain + heal beams, unit field 32); 26 = Resurrection, bigger nova/sanctuary; 25 = logs/rocks (it); 24 = the Crusader and its thrown hammer; 23 = tower shot heights, run off a deck; 22 = wide roofless towers; 21 = natural hills, every class climbs; 20 = bigger towers; 19 = the bigger natural map; 18 = no "water" in the dungeons (wading only in the river); 17 = rampart shots
 const DEFAULT_URL := "wss://136-113-125-3.sslip.io/fatebound/siege/ws"
 const DEFAULT_PORT := 8082
 const SNAP_HZ := 15.0            # 10 -> 15 (0.18.4); remote units' interpolation delay 100 -> 67 ms
@@ -169,7 +169,7 @@ static func snapshot(sim, for_unit: String, events: Array) -> Dictionary:
 		oracles.append([_code(ORACLE_STATES, o.state), snappedf((o.pos as Vector2).x, 0.01), snappedf((o.pos as Vector2).y, 0.01),
 			sim.units.find(sim.by_id.get(str(o.carrier), {})) + 1, int(o.carry_team) + 1, snappedf(float(o.dropped_at), 0.1), int(o.cakes), int(o.weight), lif])
 	var msg := {"t":"s", "tm":sim.time, "sc":sim.score.duplicate(), "k":sim.kills.duplicate(), "end":[sim.ended, sim.winner, sim.end_reason],
-		"it":_pack_items(sim), "u":packed, "p":proj, "o":oracles, "e":events}
+		"it":_pack_items(sim), "bm":_pack_bombs(sim), "u":packed, "p":proj, "o":oracles, "e":events}
 	# Slow-changing state: only when it changed, and in full once a second (FULL_EVERY) so a late joiner catches up.
 	_slow_n += 1
 	var full := _slow_n % FULL_EVERY == 0
@@ -317,6 +317,7 @@ static func apply(sim, msg: Dictionary, me_id: String, predict := false) -> void
 		g.broken = gates[gi * 4 + 2] > 0.5
 		g.open = gates[gi * 4 + 3] > 0.5
 	_apply_items(sim, msg.get("it", PackedByteArray()))
+	_apply_bombs(sim, msg.get("bm", []))
 	var nodes: PackedInt32Array = msg.get("n", PackedInt32Array())
 	for ni in mini(sim.nodes.size(), nodes.size()):
 		sim.nodes[ni].amount = nodes[ni]
@@ -410,3 +411,34 @@ static func _apply_items(sim, arr: PackedByteArray) -> void:
 			"pos":Vector2(float(v[2]) / 100.0, float(v[3]) / 100.0), "vel":Vector2.ZERO, "ang":float(v[4]) / 1000.0, "spin":0.0,
 			"roll":float(v[5]) / 1000.0, "rax":float(v[6]) / 1000.0, "born":sim.time, "val":Sim.ITEM_VALUE})
 	sim.items = out
+
+
+# The bombs (0.31.19): per team [] or [state, x, y, h, fuse left (-1 unlit), carrier id, to x, to y].
+const BOMB_STATES := ["", "ready", "carried", "flying", "lit", "loose"]
+
+static func _pack_bombs(sim) -> Array:
+	var out := []
+	for b in sim.bombs:
+		if b.is_empty():
+			out.append([])
+			continue
+		var left := -1.0 if float(b.lit_at) < 0.0 else maxf(0.0, sim.BOMB_FUSE - (sim.time - float(b.lit_at)))
+		out.append([BOMB_STATES.find(str(b.state)), snappedf(b.p.x, 0.01), snappedf(b.p.y, 0.01), snappedf(float(b.h), 0.01),
+			snappedf(left, 0.01), str(b.carrier), snappedf(b.to.x, 0.01), snappedf(b.to.y, 0.01)])
+	return out
+
+static func _apply_bombs(sim, packed: Array) -> void:
+	for u in sim.units:
+		u["bomb_held"] = false
+	for t in mini(2, packed.size()):
+		var a: Array = packed[t]
+		if a.size() < 8:
+			sim.bombs[t] = {}
+			continue
+		var left := float(a[4])
+		var b := {"id":t, "team":t, "state":BOMB_STATES[clampi(int(a[0]), 0, BOMB_STATES.size() - 1)], "p":Vector2(float(a[1]), float(a[2])),
+			"h":float(a[3]), "carrier":str(a[5]), "by":"", "from":Vector2(float(a[1]), float(a[2])), "to":Vector2(float(a[6]), float(a[7])),
+			"t0":sim.time, "lit_at":-1.0 if left < 0.0 else sim.time - (sim.BOMB_FUSE - left)}
+		sim.bombs[t] = b
+		if b.state == "carried" and sim.by_id.has(b.carrier):
+			sim.by_id[b.carrier]["bomb_held"] = true

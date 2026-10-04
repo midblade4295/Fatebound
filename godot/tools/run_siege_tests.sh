@@ -63,6 +63,7 @@ run match_audio_test     MATCH_AUDIO_PASS         280
 run items_test           ITEMS_PASS               290
 run priest_test          PRIEST_PASS              200
 run stands_test          STANDS_PASS              200
+run bomb_test            BOMB_TEST_PASS           200
 # The human soak must never stall the game thread.
 if ! grep -q 'stalls=0' /tmp/siege_test_siege_human_soak.log; then
   echo "FAIL  siege_human_soak reported stalls"; fail=1

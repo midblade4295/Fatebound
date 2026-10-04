@@ -2429,6 +2429,7 @@ func sync(dt: float) -> void:
 	_time += dt
 	_sync_items(dt)
 	_sync_raising()
+	_sync_bombs(dt)
 	_sync_ambience(dt)
 	_sync_ripples(dt)
 	_sync_blood(dt)
@@ -2730,6 +2731,13 @@ func on_event(e: Dictionary) -> void:
 				ring_at(a.root.position, GOLD, 3.0 if e.up else 2.0, 0.8)
 				for i in (10 if e.up else 5):
 					spark(a.root.position + Vector3(randf_range(-0.6, 0.6), 0.4 + randf()*1.4, randf_range(-0.6, 0.6)), GOLD)
+		"bomb_boom":
+			bomb_blast(e.pos)
+		"bomb_spawn":
+			var bs := Vector3(e.pos.x, Sim.height_at(e.pos) + 0.1, e.pos.y)
+			ring_at(bs, GOLD, 1.4, 0.7)
+			for i in 6:
+				spark(bs + Vector3(randf_range(-0.4, 0.4), 0.3 + randf() * 0.8, randf_range(-0.4, 0.4)), GOLD)
 		"nova":
 			if not a.is_empty():
 				ring_at(a.root.position, Color("#ff8a3a"), Sim.NOVA_R, 0.55)
@@ -3517,3 +3525,194 @@ func _cape_link(pos: PackedVector3Array, rest: PackedVector3Array, i: int, j: in
 	else:
 		pos[i] += corr * 0.5
 		pos[j] -= corr * 0.5
+
+
+# ---------- the bomb (0.31.19) ----------
+# A round iron bomb with a band and a fuse, sitting by its workshop, held up over the carrier's head, spinning through
+# the air when thrown; once lit the fuse spits sparks and the bomb throbs red as it runs down. The blast: a fireball
+# flash, a ring out to the blast radius, sparks, smoke rising, a scorch on the ground, and the camera shakes.
+var bomb_nodes: Array = [null, null]
+var _booms: Array = []
+
+func _make_bomb() -> Node3D:
+	var n := Node3D.new()
+	var iron := StandardMaterial3D.new()
+	iron.albedo_color = Color("#2a2c31")
+	iron.metallic = 0.55
+	iron.roughness = 0.38
+	iron.emission_enabled = true
+	iron.emission = Color(1.0, 0.18, 0.08)
+	iron.emission_energy_multiplier = 0.0
+	var ball := MeshInstance3D.new()
+	var sm := SphereMesh.new()
+	sm.radius = 0.36
+	sm.height = 0.72
+	ball.mesh = sm
+	ball.material_override = iron
+	n.add_child(ball)
+	var band := MeshInstance3D.new()
+	var bm := CylinderMesh.new()
+	bm.top_radius = 0.365
+	bm.bottom_radius = 0.365
+	bm.height = 0.08
+	band.mesh = bm
+	var brass := StandardMaterial3D.new()
+	brass.albedo_color = Color("#b98a3e")
+	brass.metallic = 0.7
+	brass.roughness = 0.35
+	band.material_override = brass
+	n.add_child(band)
+	var cap := MeshInstance3D.new()
+	var cm := CylinderMesh.new()
+	cm.top_radius = 0.1
+	cm.bottom_radius = 0.12
+	cm.height = 0.12
+	cap.mesh = cm
+	cap.material_override = brass
+	cap.position = Vector3(0.0, 0.36, 0.0)
+	n.add_child(cap)
+	var fuse := MeshInstance3D.new()
+	var fm := CylinderMesh.new()
+	fm.top_radius = 0.022
+	fm.bottom_radius = 0.026
+	fm.height = 0.26
+	fuse.mesh = fm
+	var rope := StandardMaterial3D.new()
+	rope.albedo_color = Color("#8a6a44")
+	fuse.material_override = rope
+	fuse.position = Vector3(0.05, 0.52, 0.0)
+	fuse.rotation.z = -0.4
+	n.add_child(fuse)
+	var tip := MeshInstance3D.new()
+	var tm := SphereMesh.new()
+	tm.radius = 0.07
+	tm.height = 0.14
+	tip.mesh = tm
+	tip.material_override = _fx_mat(Color(1.0, 0.75, 0.25))
+	tip.position = Vector3(0.1, 0.64, 0.0)
+	tip.visible = false
+	n.add_child(tip)
+	n.set_meta("iron", iron)
+	n.set_meta("tip", tip)
+	add_child(n)
+	return n
+
+func _sync_bombs(dt: float) -> void:
+	for t in 2:
+		var b: Dictionary = sim.bombs[t] if t < sim.bombs.size() else {}
+		var n: Node3D = bomb_nodes[t]
+		if b.is_empty():
+			if n != null:
+				n.visible = false
+			continue
+		if n == null:
+			n = _make_bomb()
+			bomb_nodes[t] = n
+		n.visible = true
+		var target: Vector3
+		if str(b.state) == "carried" and actors.has(str(b.carrier)):
+			var ca: Dictionary = actors[str(b.carrier)]
+			target = (ca.root as Node3D).global_position + Vector3(0.0, 2.15, 0.0)      # held up over his head
+		else:
+			target = Vector3(b.p.x, Sim.height_at(b.p) + float(b.h) + 0.34, b.p.y)
+		n.position = target if n.position.distance_to(target) > 4.0 else n.position.lerp(target, 1.0 - exp(-dt * 20.0))
+		if str(b.state) == "flying":
+			n.rotation.x += dt * 9.0
+			n.rotation.z += dt * 6.0
+		elif str(b.state) != "carried":
+			n.rotation = n.rotation.lerp(Vector3.ZERO, 1.0 - exp(-dt * 6.0))
+		var lit := float(b.lit_at) >= 0.0
+		var tip: MeshInstance3D = n.get_meta("tip")
+		tip.visible = lit
+		var iron: StandardMaterial3D = n.get_meta("iron")
+		if lit:
+			var left := maxf(0.0, Sim.BOMB_FUSE - (sim.time - float(b.lit_at)))
+			var rate := lerpf(16.0, 4.0, left / Sim.BOMB_FUSE)                # throbs faster as it runs down
+			iron.emission_energy_multiplier = (0.5 + 0.5 * sin(_time * rate * 3.0)) * lerpf(2.2, 0.4, left / Sim.BOMB_FUSE)
+			tip.scale = Vector3.ONE * (0.8 + 0.6 * randf())
+			if randf() < dt * 30.0:
+				spark(n.position + Vector3(0.1, 0.66, 0.0), Color(1.0, 0.7 + randf() * 0.3, 0.2))
+		else:
+			iron.emission_energy_multiplier = 0.0
+	# the blasts going on
+	for i in range(_booms.size() - 1, -1, -1):
+		var bo: Dictionary = _booms[i]
+		var k := (_time - float(bo.t0)) / float(bo.life)
+		var node: Node3D = bo.node
+		if k >= 1.0 or not is_instance_valid(node):
+			if is_instance_valid(node):
+				node.queue_free()
+			_booms.remove_at(i)
+			continue
+		match str(bo.kind):
+			"flash":
+				node.scale = Vector3.ONE * lerpf(0.5, Sim.BOMB_R * 0.95, sqrt(k))
+				((node as MeshInstance3D).material_override as StandardMaterial3D).albedo_color.a = 0.85 * (1.0 - k)
+			"smoke":
+				node.position += (bo.vel as Vector3) * dt
+				node.scale = Vector3.ONE * lerpf(0.6, 2.2, k)
+				((node as MeshInstance3D).material_override as StandardMaterial3D).albedo_color.a = 0.55 * (1.0 - k)
+			"scorch":
+				((node as MeshInstance3D).material_override as StandardMaterial3D).albedo_color.a = 0.55 * (1.0 - k * k)
+
+func bomb_blast(at2: Vector2) -> void:
+	var at := Vector3(at2.x, Sim.height_at(at2) + 0.6, at2.y)
+	var fl := MeshInstance3D.new()
+	var sm := SphereMesh.new()
+	sm.radius = 1.0
+	sm.height = 2.0
+	sm.radial_segments = 16
+	sm.rings = 8
+	fl.mesh = sm
+	var fm := StandardMaterial3D.new()
+	fm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	fm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	fm.blend_mode = BaseMaterial3D.BLEND_MODE_ADD          # a glowing fireball rather than an orange dome
+	fm.albedo_color = Color(1.0, 0.55, 0.18, 0.85)
+	fl.material_override = fm
+	fl.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	fl.position = at
+	add_child(fl)
+	_booms.append({"node":fl, "kind":"flash", "t0":_time, "life":0.45})
+	ring_at(Vector3(at.x, at.y - 0.5, at.z), Color(1.0, 0.55, 0.2), Sim.BOMB_R, 0.7)
+	ring_at(Vector3(at.x, at.y - 0.5, at.z), Color(1.0, 0.9, 0.6), Sim.BOMB_R * 0.6, 0.4)
+	for i in 46:
+		spark(at + Vector3(randf_range(-0.8, 0.8), randf_range(-0.3, 1.2), randf_range(-0.8, 0.8)),
+			[Color(1.0, 0.55, 0.15), Color(1.0, 0.85, 0.3), Color(1.0, 1.0, 0.85)][i % 3])
+	for i in 9:
+		var sp := MeshInstance3D.new()
+		var ssm := SphereMesh.new()
+		ssm.radius = 0.7
+		ssm.height = 1.4
+		ssm.radial_segments = 10
+		ssm.rings = 5
+		sp.mesh = ssm
+		var smat := StandardMaterial3D.new()
+		smat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		smat.albedo_color = Color(0.32, 0.3, 0.29, 0.55)
+		smat.roughness = 1.0
+		sp.material_override = smat
+		sp.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var dir := Vector3(randf_range(-1, 1), 0.0, randf_range(-1, 1)).normalized()
+		sp.position = at + dir * randf_range(0.3, 1.6)
+		add_child(sp)
+		_booms.append({"node":sp, "kind":"smoke", "t0":_time, "life":randf_range(1.6, 2.4),
+			"vel":dir * randf_range(0.6, 1.4) + Vector3(0.0, randf_range(1.2, 2.2), 0.0)})
+	var sc := MeshInstance3D.new()
+	var cyl := CylinderMesh.new()
+	cyl.top_radius = Sim.BOMB_R * 0.65
+	cyl.bottom_radius = Sim.BOMB_R * 0.65
+	cyl.height = 0.02
+	cyl.radial_segments = 24
+	sc.mesh = cyl
+	var scm := StandardMaterial3D.new()
+	scm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	scm.albedo_color = Color(0.08, 0.06, 0.05, 0.55)
+	scm.roughness = 1.0
+	sc.material_override = scm
+	sc.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	sc.position = Vector3(at2.x, Sim.height_at(at2) + 0.04, at2.y)
+	add_child(sc)
+	_booms.append({"node":sc, "kind":"scorch", "t0":_time, "life":25.0})
+	if is_instance_valid(camera):
+		shake(clampf(1.0 - Vector2(camera.global_position.x - at.x, camera.global_position.z - at.z).length() / 45.0, 0.15, 1.0) * 0.9)
