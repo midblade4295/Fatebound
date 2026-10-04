@@ -1617,3 +1617,14 @@ K2/K3 notes (0.17.0)
   the hand slots come loose as RigidBody3D boxes thrown with the push, lie 30 s (24 at most). Hats tumble while they slide.
 - project.godot: 3D physics engine Jolt (stabler ragdolls).
 - Quick suite: ALL PASSED (siege_sim_smoke too: seed 11 had a rescue).
+
+# 0.31.21 (Kevin: the water reacts to a bomb with huge waves; weapons and bodies react to bombs and catapults; weapons
+# and hats are pushed around on the ground)
+- Water: the river/lake surface now rises and falls with the GPU wave simulation (vertex displacement, wave_height 1.5,
+  held at the banks; the strip has WATER_ROWS 10 vertices across, was 2). water_blast(): a bomb (or catapult stone,
+  0.6 power) in the water or within 5 m of it pushes the surface down hard for 4 frames at the nearest water, plus spray
+  and a ring; the rings run out across the river and the lake.
+- Sim: _blast_push() -- bomb (BOMB_R + 2, 7 m/s) and catapult (AOE + 1.5, 4.5 m/s) throw hats, logs and rocks. Hats are
+  kicked along by whoever walks into them (as the logs and rocks), unless a Villager who can wear it walks over it.
+- View: _blast_bodies() -- ragdolls and loose weapons within the blast are thrown up and away; _kick_debris() -- loose
+  weapons are kicked along by walking units. tools/trailer5_shots.gd "waterbomb" check shot.

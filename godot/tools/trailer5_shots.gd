@@ -10,9 +10,10 @@ extends SceneTree
 # SLOW: time-scale windows per shot (game seconds); LENGTH is game seconds, so slowed parts take more frames.
 const Mode = preload("res://scripts/siege/siege_mode.gd")
 const Sim = preload("res://scripts/siege/siege_sim.gd")
+const Land = preload("res://scripts/siege/siege_land.gd")
 const Castle = preload("res://scripts/siege/siege_castle.gd")
 const SLOW := {"hook": [[0.95, 2.1, 0.18]], "necro": [[0.6, 2.6, 0.25]], "hammer": [[0.55, 1.75, 0.22]], "whirl": [[0.8, 2.4, 0.22]]}
-const LENGTH := {"bomb": 4.6, "hook": 2.6, "necro": 3.0, "hammer": 2.4, "dawn": 5.0, "clash": 4.5, "captive": 4.0, "heroes": 4.3, "lineup": 4.0, "gather": 4.0, "build": 7.0, "backstab": 4.0, "assault": 5.5,
+const LENGTH := {"waterbomb": 6.0, "bomb": 4.6, "hook": 2.6, "necro": 3.0, "hammer": 2.4, "dawn": 5.0, "clash": 4.5, "captive": 4.0, "heroes": 4.3, "lineup": 4.0, "gather": 4.0, "build": 7.0, "backstab": 4.0, "assault": 5.5,
 	"rampart": 4.0, "whirl": 3.2, "feast": 4.0, "carry": 5.0, "throne": 4.0, "reveal": 9.0,
 	# Round 28 (Kevin + Derek Lieu's makeover advice: core action first, struggle, comedy, fewer cards)
 	"breakin": 10.6, "carry2": 7.9, "toofat": 5.5, "hatsteal": 5.0}
@@ -80,6 +81,30 @@ func _stage() -> void:
 		_revive(u)
 		u.bot = true
 	match shot:
+		"waterbomb":
+			# (0.31.21 check) the bomb thrown into the river: the water heaves and the rings run out across it
+			var wx := -22.0
+			var wc := Land.river_c(wx)
+			var whw := Land.river_hw(wx)
+			var kw: Dictionary = s.units.filter(func(x): return x.team == 0 and x.id != me.id)[0]
+			s._set_class(kw, "knight", false)
+			kw.bot = false
+			_revive(kw)
+			kw.pos = Vector2(wx, wc + whw + 2.6)
+			kw.face = Sim.angle_of(Vector2(0.0, -1.0))
+			kw.move = Vector2.ZERO
+			for u in s.units:
+				if u.id != kw.id:
+					u.bot = false
+					u.move = Vector2.ZERO
+					u.pos = Sim.spawn(u.team)
+			s.bombs[0] = {"id":0, "team":0, "state":"carried", "p":kw.pos, "h":1.9, "carrier":kw.id, "by":"",
+				"from":Vector2.ZERO, "to":Vector2.ZERO, "t0":0.0, "lit_at":-1.0}
+			kw["bomb_held"] = true
+			s.bomb_next = [INF, INF]
+			beats = [[0.5, kw.id, "interact"]]
+			cam_a = [_v(Vector2(wx + 9.0, wc + 13.0), 9.0), _v(Vector2(wx - 1.0, wc), 0.0)]
+			cam_b = [_v(Vector2(wx + 9.5, wc + 12.0), 8.5), _v(Vector2(wx - 1.5, wc), 0.0)]
 		"bomb":
 			# (0.31.19) a Knight hurls the workshop's bomb into three of theirs; it lands, fizzes, and goes off.
 			var bc := Vector2(-8.0, 30.0)

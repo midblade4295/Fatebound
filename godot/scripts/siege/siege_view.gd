@@ -301,6 +301,7 @@ func _sync_ambience(_dt: float) -> void:
 # whole field and the lake's full width (still ~13 cm cells). UV.y on the water mesh is this patch's across
 # coordinate (centred on the river line); UV2.y runs 0..1 bank to bank for the shallows.
 const RIP_W := 680
+const WATER_ROWS := 10                      # 0.31.21: vertices across the river, so waves can lift the surface
 const RIP_H := 198
 const RIP_HALF := Land.HALF_W                  # the simulated stretch: x in [-44, 44]
 const RIP_ACROSS := (Land.RIVER_HW + Land.LAKE_EXTRA + 0.35) * 2.0     # the lake at its widest
@@ -324,8 +325,18 @@ uniform vec3 deep_col : source_color = vec3(0.05, 0.27, 0.42);
 uniform vec3 shallow_col : source_color = vec3(0.24, 0.62, 0.66);
 uniform vec3 sky_col : source_color = vec3(0.62, 0.80, 0.95);
 uniform float glint = 0.0;
+uniform float wave_height = 1.5;          // 0.31.21: the surface rises and falls with the simulated waves
 varying vec3 wpos;
-void vertex() { wpos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz; }
+void vertex() {
+	wpos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+	vec2 ruv = vec2((wpos.x + rip_half) / (2.0 * rip_half), UV.y);
+	float inside = step(0.0, ruv.x) * step(ruv.x, 1.0);
+	float h = textureLod(rip_tex, ruv, 0.0).r * inside;
+	h = (isnan(h) || isinf(h)) ? 0.0 : h;
+	float edge = smoothstep(0.0, 0.1, UV2.y) * smoothstep(1.0, 0.9, UV2.y);     // held at the banks
+	VERTEX.y += h * wave_height * edge;
+	wpos.y += h * wave_height * edge;
+}
 float detail(vec2 p) {
 	return texture(ripples, p * 0.11 + vec2(-TIME * 0.035, 0.0)).r * 0.6
 		+ texture(ripples, p * 0.23 + vec2(-TIME * 0.05, TIME * 0.02)).r * 0.4;
@@ -374,6 +385,26 @@ void fragment() {
 	m.set_shader_parameter("rip_half", RIP_HALF)
 	m.set_shader_parameter("rip_texel", Vector2(1.0 / RIP_W, 1.0 / RIP_H))
 	return m
+
+var _rip_kicks: Array = []
+
+func water_blast(at: Vector2, power: float) -> void:
+	# 0.31.21 (Kevin: "the water to react to the bomb explosion and make huge waves"): a blast in or beside the river
+	# pushes the water down hard where it hits for a few frames; the wave equation throws the rings out across it.
+	# Also a column of spray.
+	var c := Land.river_c(at.x)
+	var hw := Land.river_hw(at.x)
+	var off := at.y - c
+	var reach := absf(off) - hw                   # how far from the water's edge (negative: in the water)
+	if reach > 5.0 or absf(at.x) > RIP_HALF - 1.0:
+		return
+	var p := Vector2(at.x, c + clampf(off, -hw + 0.6, hw - 0.6))
+	var k := power * clampf(1.0 - maxf(reach, 0.0) / 5.0, 0.25, 1.0)
+	_rip_kicks.append({"p":p, "frames":4, "r":2.4 * sqrt(power), "s":-0.5 * k})
+	var sp := Vector3(p.x, Land.WATER_Y + 0.1, p.y)
+	for i in int(30 * k):
+		spark(sp + Vector3(randf_range(-1.2, 1.2), randf_range(0.0, 3.5 * k), randf_range(-1.2, 1.2)), Color(0.88, 0.95, 1.0))
+	ring_at(sp, Color(0.85, 0.95, 1.0), 4.0 * k + 1.0, 0.9)
 
 func _build_ripples() -> void:
 	var sh := Shader.new()
@@ -448,6 +479,16 @@ func _sync_ripples(dt: float) -> void:
 					spark(sp + Vector3(randf_range(-0.4, 0.4), randf_range(0.0, 0.6), randf_range(-0.4, 0.4)), Color(0.9, 0.96, 1.0))
 			drops.append(Vector4((p.x + RIP_HALF) / (2.0 * RIP_HALF), v, radius, strength))
 		_rip_prev[u.id] = [p, wet]
+	for i in range(_rip_kicks.size() - 1, -1, -1):
+		var kk: Dictionary = _rip_kicks[i]
+		var kp: Vector2 = kk.p
+		var kv := (kp.y - (Land.river_c(kp.x) - RIP_ACROSS * 0.5)) / RIP_ACROSS
+		drops.push_front(Vector4((kp.x + RIP_HALF) / (2.0 * RIP_HALF), kv, float(kk.r), float(kk.s)))
+		kk.frames = int(kk.frames) - 1
+		if int(kk.frames) <= 0:
+			_rip_kicks.remove_at(i)
+	if drops.size() > 16:
+		drops.resize(16)
 	var cur := _rip_i % 2
 	var other := 1 - cur
 	var m: ShaderMaterial = _rip_mat[cur]
@@ -1072,19 +1113,21 @@ func _water_strip(xa: float, xb: float, y: float, span: float, tag: String) -> v
 	var uv2s := PackedVector2Array()
 	var idx := PackedInt32Array()
 	var n := int(ceil(xb - xa))
+	var rows := WATER_ROWS
 	for k in n + 1:
 		var x := minf(xa + k, xb)
 		var c := Land.river_c(x)
 		var hw := Land.river_hw(x) + 0.35
-		verts.append(Vector3(x, y, c - hw))
-		verts.append(Vector3(x, y, c + hw))
-		uvs.append(Vector2((x - xa) / span, 0.5 - hw / RIP_ACROSS))
-		uvs.append(Vector2((x - xa) / span, 0.5 + hw / RIP_ACROSS))
-		uv2s.append(Vector2(0.0, 0.0))
-		uv2s.append(Vector2(0.0, 1.0))
+		for r in rows + 1:
+			var f := float(r) / float(rows)
+			verts.append(Vector3(x, y, c - hw + 2.0 * hw * f))
+			uvs.append(Vector2((x - xa) / span, 0.5 + (2.0 * f - 1.0) * hw / RIP_ACROSS))
+			uv2s.append(Vector2(0.0, f))
 		if k < n:
-			var a := k * 2
-			idx.append_array([a, a + 2, a + 1, a + 1, a + 2, a + 3])
+			for r in rows:
+				var a := k * (rows + 1) + r
+				var b := a + rows + 1
+				idx.append_array([a, b, a + 1, a + 1, b, b + 1])
 	var arr := []
 	arr.resize(Mesh.ARRAY_MAX)
 	arr[Mesh.ARRAY_VERTEX] = verts
@@ -2446,6 +2489,7 @@ func sync(dt: float) -> void:
 	_sync_items(dt)
 	_sync_raising()
 	_sync_bombs(dt)
+	_kick_debris()
 	_sync_ambience(dt)
 	_sync_ripples(dt)
 	_sync_blood(dt)
@@ -2756,6 +2800,8 @@ func on_event(e: Dictionary) -> void:
 					spark(a.root.position + Vector3(randf_range(-0.6, 0.6), 0.4 + randf()*1.4, randf_range(-0.6, 0.6)), GOLD)
 		"bomb_boom":
 			bomb_blast(e.pos)
+			water_blast(e.pos, 1.0)
+			_blast_bodies(e.pos, Sim.BOMB_R + 2.5, 7.0)
 		"bomb_spawn":
 			var bs := Vector3(e.pos.x, Sim.height_at(e.pos) + 0.1, e.pos.y)
 			ring_at(bs, GOLD, 1.4, 0.7)
@@ -2856,6 +2902,8 @@ func on_event(e: Dictionary) -> void:
 				_fx.append({"node":stone, "at":_time, "life":float(e.flight), "kind":"shell",
 					"p0":Vector3(e.from.x, 4.2, e.from.y), "p1":Vector3(e.to.x, Sim.height_at(e.to) + 0.3, e.to.y)})
 		"catapult_hit":
+			water_blast(e.pos, 0.6)                                  # 0.31.21: a stone in the river makes waves too
+			_blast_bodies(e.pos, Sim.CATAPULT_AOE + 1.5, 4.5)       # ...and throws the dead and loose weapons
 			var hp := Vector3(e.pos.x, Sim.height_at(e.pos) + 0.15, e.pos.y)
 			ring_at(hp, Color("#d9c4a0"), Sim.CATAPULT_AOE * 1.3, 0.55)
 			for i in 6:
@@ -3677,6 +3725,65 @@ func _sync_bombs(dt: float) -> void:
 				((node as MeshInstance3D).material_override as StandardMaterial3D).albedo_color.a = 0.55 * (1.0 - k)
 			"scorch":
 				((node as MeshInstance3D).material_override as StandardMaterial3D).albedo_color.a = 0.55 * (1.0 - k * k)
+
+func _blast_bodies(at2: Vector2, radius: float, speed: float) -> void:
+	# 0.31.21: the dead and the loose weapons lying round a blast are thrown by it
+	var at := Vector3(at2.x, Sim.height_at(at2), at2.y)
+	for a in _ragdolls:
+		var rg = a.get("rag")
+		if rg == null or not is_instance_valid(rg.sim):
+			continue
+		for pb in (rg.sim as Node).get_children():
+			if not (pb is PhysicalBone3D):
+				continue
+			var d: Vector3 = (pb as Node3D).global_position - at
+			var dist := Vector2(d.x, d.z).length()
+			if dist > radius:
+				continue
+			var dir := Vector3(d.x, 0.0, d.z).normalized() if dist > 0.05 else Vector3(randf_range(-1, 1), 0.0, randf_range(-1, 1)).normalized()
+			var f := speed * (1.0 - 0.6 * dist / radius)
+			(pb as PhysicalBone3D).linear_velocity += dir * f + Vector3(0.0, f * 0.7, 0.0)
+			(pb as PhysicalBone3D).angular_velocity += Vector3(randf_range(-1, 1), randf_range(-1, 1), randf_range(-1, 1)) * f
+	for db in _debris:
+		var rb = db.node
+		if not is_instance_valid(rb):
+			continue
+		var d2: Vector3 = (rb as Node3D).global_position - at
+		var dist2 := Vector2(d2.x, d2.z).length()
+		if dist2 > radius:
+			continue
+		var dir2 := Vector3(d2.x, 0.0, d2.z).normalized() if dist2 > 0.05 else Vector3(randf_range(-1, 1), 0.0, randf_range(-1, 1)).normalized()
+		var f2 := speed * 1.2 * (1.0 - 0.6 * dist2 / radius)
+		(rb as RigidBody3D).sleeping = false
+		(rb as RigidBody3D).linear_velocity += dir2 * f2 + Vector3(0.0, f2 * 0.8, 0.0)
+		(rb as RigidBody3D).angular_velocity += Vector3(randf_range(-8, 8), randf_range(-8, 8), randf_range(-8, 8))
+
+func _kick_debris() -> void:
+	# loose weapons are kicked along by whoever walks into them
+	if _debris.is_empty():
+		return
+	for db in _debris:
+		var rb = db.node
+		if not is_instance_valid(rb):
+			continue
+		var wp: Vector3 = (rb as Node3D).global_position
+		for a in actors.values():
+			if a.get("dead", false) or a.get("rag") != null:
+				continue
+			var ap: Vector3 = (a.root as Node3D).global_position
+			var d := Vector2(wp.x - ap.x, wp.z - ap.z)
+			if d.length() > 0.62 or absf(wp.y - ap.y) > 1.2:
+				continue
+			var lp: Vector3 = a.get("kick_last", ap)
+			var mv := Vector2(ap.x - lp.x, ap.z - lp.z)
+			if mv.length() < 0.004:
+				continue
+			var dir := (d.normalized() * 0.5 + mv.normalized() * 0.5).normalized()
+			(rb as RigidBody3D).sleeping = false
+			(rb as RigidBody3D).linear_velocity = Vector3(dir.x * 3.2, 1.0, dir.y * 3.2)
+			(rb as RigidBody3D).angular_velocity += Vector3(randf_range(-4, 4), randf_range(-4, 4), randf_range(-4, 4))
+	for a in actors.values():
+		a["kick_last"] = (a.root as Node3D).global_position
 
 func bomb_blast(at2: Vector2) -> void:
 	var at := Vector3(at2.x, Sim.height_at(at2) + 0.6, at2.y)

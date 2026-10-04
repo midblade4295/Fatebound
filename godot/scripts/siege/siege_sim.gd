@@ -2427,6 +2427,7 @@ func _step_world(dt: float) -> void:
 			if u.team != int(sh.team) and alive(u) and u.pos.distance_to(sh.to) <= CATAPULT_AOE:
 				_next_push = _push_from(sh.to, u.pos, 4.4, 3.6)
 				_damage({"team":int(sh.team), "id":"catapult"}, u, CATAPULT_DMG)
+		_blast_push(sh.to, CATAPULT_AOE + 1.5, 4.5)
 		_event("catapult_hit", {"team":int(sh.team), "pos":sh.to, "shell":sh.id})
 		shells.remove_at(i)
 	for n in nodes:
@@ -3779,6 +3780,7 @@ func _explode_bomb(b: Dictionary) -> void:
 					_event("gate_broken", {"gate":g.id, "team":g.team, "by":src.get("id", "")})
 			else:
 				_damage_gate(src, g, float(g.max_hp) * BOMB_GATE)
+	_blast_push(at, BOMB_R + 2.0, 7.0)
 	_event("bomb_boom", {"team":b.team, "pos":at, "killed":killed, "by":str(b.by)})
 	bombs[int(b.team)] = {}
 	bomb_next[int(b.team)] = time + BOMB_RESPAWN
@@ -3795,7 +3797,36 @@ func _push_from(from: Vector2, to: Vector2, speed: float, up: float) -> Vector3:
 	return Vector3(d.x * speed, up, d.y * speed)
 
 const HAT_FRICTION := 3.2           # m/s lost per second on the ground
+const HAT_R := 0.26
+var _hat_last := {}
 func _step_hat_motion(dt: float) -> void:
+	if hats.is_empty():
+		_hat_last.clear()
+		return
+	# 0.31.21 (Kevin: "weapons and hats pushed around on the ground"): whoever walks into a hat kicks it along, as with
+	# the logs and rocks (a Villager who can wear it picks it up instead -- _step_hats).
+	var uvel := {}
+	for u in units:
+		if alive(u) and int(u.get("tower", -1)) < 0:
+			var last: Vector2 = _hat_last.get(u.id, u.pos)
+			uvel[u.id] = ((u.pos as Vector2) - last) / maxf(dt, 0.001)
+			_hat_last[u.id] = u.pos
+	for h in hats:
+		for u in units:
+			if not uvel.has(u.id) or (u.pos as Vector2).distance_squared_to(h.pos) > 1.0:
+				continue
+			if u.cls == "villager" and can_take_class(u, str(h.cls)):
+				continue
+			var dvec: Vector2 = (h.pos as Vector2) - (u.pos as Vector2)
+			var dist := dvec.length()
+			if dist >= UNIT_R + HAT_R or dist < 0.0001:
+				continue
+			var nrm := dvec / dist
+			h.pos = (h.pos as Vector2) + nrm * (UNIT_R + HAT_R - dist)
+			var kick: float = maxf(0.0, (uvel[u.id] as Vector2).dot(nrm))
+			var hv: Vector2 = h.get("vel", Vector2.ZERO)
+			if hv.dot(nrm) < kick * 1.25:
+				h["vel"] = hv + nrm * (kick * 1.25 - hv.dot(nrm))
 	for h in hats:
 		var v: Vector2 = h.get("vel", Vector2.ZERO)
 		var wet := water_depth(h.pos) > 0.15
@@ -3811,3 +3842,20 @@ func _step_hat_motion(dt: float) -> void:
 			v = Vector2.ZERO if sp <= drop else v * ((sp - drop) / sp)
 		h.pos = _push_out((h.pos as Vector2) + v * dt, 0.25)
 		h["vel"] = v if v.length() > 0.04 or wet else Vector2.ZERO
+
+
+func _blast_push(at: Vector2, radius: float, speed: float) -> void:
+	# a blast throws the loose things lying round it: hats, logs and rocks (0.31.21)
+	for h in hats:
+		var d: Vector2 = (h.pos as Vector2) - at
+		if d.length() < radius:
+			var dir := d.normalized() if d.length() > 0.05 else dir_of(rng.randf() * TAU)
+			h["vel"] = (h.get("vel", Vector2.ZERO) as Vector2) + dir * speed * (1.0 - 0.5 * d.length() / radius)
+	for it in items:
+		var d2: Vector2 = (it.pos as Vector2) - at
+		if d2.length() < radius:
+			var dir2 := d2.normalized() if d2.length() > 0.05 else dir_of(rng.randf() * TAU)
+			it.vel = (it.vel as Vector2) + dir2 * speed * 0.7 * (1.0 - 0.5 * d2.length() / radius)
+			it["asleep"] = false
+			if it.kind == "log":
+				it.spin = float(it.spin) + rng.randf_range(-3.0, 3.0)
