@@ -11,9 +11,9 @@ extends SceneTree
 const Mode = preload("res://scripts/siege/siege_mode.gd")
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 const Castle = preload("res://scripts/siege/siege_castle.gd")
-const SLOW := {"hook": [[0.95, 2.1, 0.18]], "necro": [[0.6, 2.6, 0.25]], "hammer": [[0.35, 1.5, 0.22]]}
+const SLOW := {"hook": [[0.95, 2.1, 0.18]], "necro": [[0.6, 2.6, 0.25]], "hammer": [[0.35, 1.5, 0.22]], "whirl": [[0.8, 2.4, 0.22]]}
 const LENGTH := {"hook": 2.6, "necro": 3.0, "hammer": 2.0, "dawn": 5.0, "clash": 4.5, "captive": 4.0, "heroes": 4.3, "lineup": 4.0, "gather": 4.0, "build": 7.0, "backstab": 4.0, "assault": 5.5,
-	"rampart": 4.0, "whirl": 3.0, "feast": 4.0, "carry": 5.0, "throne": 4.0, "reveal": 9.0,
+	"rampart": 4.0, "whirl": 3.2, "feast": 4.0, "carry": 5.0, "throne": 4.0, "reveal": 9.0,
 	# Round 28 (Kevin + Derek Lieu's makeover advice: core action first, struggle, comedy, fewer cards)
 	"breakin": 10.6, "carry2": 7.9, "toofat": 5.5, "hatsteal": 5.0}
 const SUN_DIR := Vector3(0.0, 0.16, -1.0)        # where the reveal's sun sits: low, beyond the enemy castle
@@ -118,8 +118,8 @@ func _stage() -> void:
 				_revive(u)
 				u.move = Vector2.ZERO
 			nc.pos = c
-			foe.pos = c + Vector2(-3.6, -2.4)      # left, behind: the green drain
-			ally.pos = c + Vector2(3.4, -2.0)      # right, behind: the white heal
+			foe.pos = c + Vector2(-2.6, 3.4)       # front-left (towards the camera): the green drain -- he faces it
+			ally.pos = c + Vector2(3.0, 2.2)       # front-right: the white heal
 			_sturdy(foe)
 			ally.max_hp = 400.0
 			ally.hp = 60.0
@@ -130,8 +130,8 @@ func _stage() -> void:
 					u.move = Vector2.ZERO
 					u.pos = Sim.spawn(u.team)
 			set_meta("necro", nc.id)
-			cam_a = [_v(c + Vector2(-0.8, 5.6), 2.1), _v(c + Vector2(0.0, -1.2), 1.1)]
-			cam_b = [_v(c + Vector2(0.9, 4.9), 1.7), _v(c + Vector2(0.0, -1.2), 1.15)]
+			cam_a = [_v(c + Vector2(0.9, 5.8), 1.5), _v(c + Vector2(0.0, 0.0), 1.35)]       # in front of him: his face
+			cam_b = [_v(c + Vector2(0.2, 4.6), 1.25), _v(c + Vector2(0.0, 0.0), 1.4)]
 		"hammer":
 			# The Crusader's hammer in slow motion, spinning through a line of three.
 			var hc := Vector2(-14.0, 32.0)
@@ -571,24 +571,33 @@ func _stage() -> void:
 			cam_a = [_v(eye0, 6.5), _v(Sim._c(0, Vector2(0.0, -6.0)), 0.8)]
 			cam_b = [_v(eye1, 5.2), _v(Sim._c(0, Vector2(-1.0, -7.0)), 0.8)]
 		"whirl":
-			var field := Vector2(-6.0, 16.0)
+			# (trailer 5, Kevin) three of theirs charge our Berserker; he goes into a spin and cuts them all down -- in slow
+			# motion from the moment he spins; each is thrown back dead (state only, so nobody turns into a villager).
+			var field := Vector2(-6.0, 22.0)
 			s._set_class(me, "barbarian", true)
 			me.bot = false
+			_revive(me)
 			me.pos = field
 			me.cd_ability = 0.0
-			var foes := 0
+			me.face = Sim.angle_of(Vector2(0, -1))
+			var rush := []
 			for u in s.units:
-				if u.team == 1 and foes < 6:
+				if u.team == 1 and rush.size() < 3:
+					var k9 := rush.size()
 					u.bot = false
-					u.move = Vector2.ZERO
-					s._set_class(u, ["knight", "rogue", "barbarian", "ranger", "mage", "rogue"][foes], false)
-					u.pos = field + Vector2(cos(foes * 1.05 + 0.3) * 2.1, sin(foes * 1.05 + 0.3) * 2.1)
+					_revive(u)
+					s._set_class(u, ["knight", "rogue", "mage"][k9], false)     # no second barbarian to confuse with ours
+					var ang := -PI * 0.5 + (k9 - 1) * 0.95
+					u.pos = field + Vector2(cos(ang), sin(ang)) * 5.6
+					u.face = Sim.angle_of(field - (u.pos as Vector2))
 					_sturdy(u)
-					foes += 1
+					rush.append(u.id)
+					walkers[u.id] = (field - (u.pos as Vector2)).normalized()
 				elif u.team == 0 and u.id != me.id:
 					u.pos = Sim.spawn(0)
-			s.act(me.id, "ability")
-			orbit = {"c": _v(field, 1.0), "r": 6.5, "h": 3.4, "a0": 0.4, "a1": 2.2}
+			set_meta("rush", rush)
+			beats = [[0.78, me.id, "spin"]]
+			orbit = {"c": _v(field + Vector2(0.0, -1.2), 1.0), "r": 6.2, "h": 2.4, "a0": 1.15, "a1": 2.1}
 		"feast":
 			# A rogue walks a fish into our dungeon (the cell door lifts for friends) and feeds THEIR King:
 			# he goes from fatter to fattest, with a puff.
@@ -788,6 +797,8 @@ func _process(delta: float) -> bool:
 			elif str(b[2]) == "shoot":
 				bu.cd_attack = 0.0
 				s._start_attack(bu, "attack", false)
+			elif str(b[2]) == "spin":
+				s.act(bu.id, "ability")          # they keep charging into it; each stops when it cuts him down
 			elif str(b[2]) == "hammer":
 				s._throw_hammer(bu)
 			elif str(b[2]) == "attack":
@@ -800,6 +811,31 @@ func _process(delta: float) -> bool:
 				var cl: Array = get_meta("climbers", [])
 				cl.append(bu.id)
 				set_meta("climbers", cl)
+	if shot == "whirl" and has_meta("rush"):
+		var me3: Dictionary = s.by_id[str(mode.hud.player_id)]
+		for rid in get_meta("rush"):
+			var ru: Dictionary = s.by_id[str(rid)]
+			var hk := "rhp_" + str(rid)
+			var fk3 := "rfly_" + str(rid)
+			var was3 := float(get_meta(hk, ru.hp))
+			set_meta(hk, ru.hp)
+			if ru.hp < was3 - 1.0 and not has_meta(fk3):
+				set_meta(fk3, [t, ru.pos, ((ru.pos as Vector2) - (me3.pos as Vector2)).normalized()])
+				ru.state = "dead"
+				ru.respawn_at = INF
+				ru.move = Vector2.ZERO
+				walkers.erase(rid)
+				var bp := Vector3(ru.pos.x, Sim.height_at(ru.pos) + 1.1, ru.pos.y)
+				for k10 in 30:
+					mode.view.spark(bp + Vector3(randf_range(-0.15, 0.15), randf_range(-0.2, 0.3), randf_range(-0.15, 0.15)),
+						Color(0.62 + randf() * 0.2, 0.02, 0.03))
+			if has_meta(fk3):
+				var fl: Array = get_meta(fk3)
+				var kk := clampf((t - float(fl[0])) / 0.5, 0.0, 1.0)
+				ru.pos = (fl[1] as Vector2) + (fl[2] as Vector2) * 1.6 * (1.0 - pow(1.0 - kk, 2.0))
+				var ra: Dictionary = mode.view.actors.get(ru.id, {})
+				if not ra.is_empty() and ra.get("body") != null:
+					(ra.body as Node3D).position.y = 0.8 * 4.0 * kk * (1.0 - kk)
 	if shot == "build" and has_meta("climbers"):
 		var lads: Array = s.ladders.filter(func(l): return int(l.team) == 0)
 		if not lads.is_empty():

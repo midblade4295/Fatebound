@@ -30,8 +30,7 @@ CUTS = [
     ("carry2", 1.00, 2.30, 1.0),
     ("necro", 2.00, 1.50, 1.0),      # slow motion in the render
     ("hammer", 1.30, 1.25, 1.0),     # slow motion in the render
-    ("whirl", 0.50, 2.05, 1.0),
-    ("clash", 1.50, 1.13, 1.0),
+    ("whirl", 0.30, 3.18, 1.5),      # three charge, he spins: slow motion in the render, 1.5x here
     ("throne", 0.80, 2.76, 1.0),
     ("golden", 4.40, None, 1.0),     # to the end; the last frame held
 ]
