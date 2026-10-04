@@ -63,6 +63,8 @@ with zipfile.ZipFile(p) as z:
  leaked=[n for n in names if res_path(n).startswith(dev_roots) or '/tests/' in n or '/reports/' in n or '/server/' in n or '/store-listing/' in n or n.endswith(('.keystore','.jks','.b64','.p12'))]
  assert not leaked,('Development/test/server/signing files shipped',leaked[:10])
  assert not any(n.endswith('/index.html') or n.endswith('/fatebound.html') for n in names)
+ # Render-only settings (godot/override.cfg, gitignored; FB_FORCE_HQ trailer renders) must never ship.
+ assert not any(n.endswith('override.cfg') for n in names),'override.cfg shipped'
  # Godot's Gradle AAB uses an install-time asset pack rather than the APK's direct base
  # assets. Locate the game's module from its packed project settings (every export has one).
  project_paths=[n for n in names if n.endswith('/assets/project.binary')]
