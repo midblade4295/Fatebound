@@ -160,8 +160,9 @@ func _stage() -> void:
 					u.move = Vector2.ZERO
 					u.pos = Sim.spawn(u.team)
 			beats = [[0.45, cr.id, "hammer"]]
-			cam_a = [_v(hc + Vector2(3.4, 5.4), 1.8), _v(hc + Vector2(4.4, 0.0), 1.0)]
-			cam_b = [_v(hc + Vector2(5.2, 4.8), 1.6), _v(hc + Vector2(5.0, 0.0), 1.0)]
+			# pulled back (Kevin: "zoom out a bit") so the Crusader's throw and the whole charge are in frame
+			cam_a = [_v(hc + Vector2(2.4, 8.4), 2.7), _v(hc + Vector2(3.4, 0.0), 1.0)]
+			cam_b = [_v(hc + Vector2(3.8, 7.6), 2.4), _v(hc + Vector2(4.0, 0.0), 1.0)]
 		"dawn":
 			for i in int(60.0 / Sim.TICK):
 				s.step(Sim.TICK)

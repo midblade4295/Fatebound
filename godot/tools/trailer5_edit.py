@@ -29,8 +29,8 @@ CUTS = [
     ("toofat", 2.10, 3.10, 1.0),     # ...and LIFT
     ("carry2", 1.00, 2.30, 1.0),
     ("necro", 2.00, 1.50, 1.0),      # slow motion in the render
-    ("hammer", 1.30, 1.25, 1.0),     # slow motion in the render
-    ("whirl", 0.30, 3.18, 1.5),      # three charge, he spins: slow motion in the render, 1.5x here
+    ("hammer", 0.20, 1.65, 1.5),     # from just before the throw (Kevin); slow motion in the render, 1.5x here
+    ("whirl", 0.30, 2.78, 1.5),      # three charge, he spins: slow motion in the render, 1.5x here
     ("throne", 0.80, 2.76, 1.0),
     ("golden", 4.40, None, 1.0),     # to the end; the last frame held
 ]
