@@ -3333,19 +3333,49 @@ func _sync_raising() -> void:
 			_raising.remove_at(i)
 
 
-# ---------- cloth capes (0.31.17, Kevin: "realistic cloth physics for the capes") ----------
-# The Knight, Mage, Ranger and both Rogues wear a cape (a rigid skinned mesh in the KayKit models). Near the camera it is
-# swapped for a cloth: a CAPE_COLS x CAPE_ROWS Verlet sheet pinned across the shoulders to the chest bone, falling under
-# gravity with a little wind, held in shape by stretch and bend links, kept off the body (behind the back, outside a
-# capsule round the torso) and above the ground. It swings and trails when he runs, flies back when he's thrown, settles
-# when he stops. Rendered as a double-sided strip in the cape's own atlas colour. Far away (or off screen) the original
-# cape shows and nothing is simulated.
-const CAPE_COLS := 5
-const CAPE_ROWS := 6
-const CAPE_NEAR := 34.0          # simulate within this of the camera's focus
+# ---------- cloth capes (0.31.17, Kevin: "realistic cloth physics for the capes"; 0.31.18: "floating capes ... very
+# jittery") ----------
+# The Knight, Mage, Ranger and both Rogues wear a cape (a skinned 56-vertex mesh in the KayKit models, rigid on the
+# torso). Near the camera it hangs from a small spring grid -- CAPE_COLS x CAPE_ROWS points, the top row pinned across
+# the shoulders to the chest bone, the rest falling under gravity with a little wind, held by stretch and bend links,
+# kept behind the back, outside the torso and above the ground -- stepped at a fixed 30 Hz and eased onto the screen.
+# The cape mesh itself is bent by the grid in its vertex shader, so there is no separate cloth object to be left
+# behind (0.31.17's floating capes) and no mesh rebuilt each frame (its cost on phones).
+const CAPE_COLS := 3
+const CAPE_ROWS := 4
+const CAPE_NEAR := 32.0          # ground distance from the camera
 const CAPE_GRAVITY := 7.5
-const CAPE_DAMP := 0.93
+const CAPE_DAMP := 0.9
 const CAPE_ITERS := 2
+const CAPE_STEP := 1.0 / 30.0
+const CAPE_SHADER := """
+shader_type spatial;
+render_mode cull_disabled;
+uniform sampler2D albedo_tex : source_color, filter_linear_mipmap;
+uniform vec4 albedo : source_color = vec4(1.0);
+uniform float roughness = 0.5;
+uniform vec3 offs[12];
+void vertex() {
+	// model-space position -> place on the 3 x 4 grid (shoulders at y 1.2, hem at 0.12, 0.94 m across)
+	float u = clamp((VERTEX.x + 0.47) / 0.94, 0.0, 1.0) * 2.0;
+	float v = clamp((1.2 - VERTEX.y) / 1.08, 0.0, 1.0) * 3.0;
+	int c0 = int(min(floor(u), 1.0));
+	int r0 = int(min(floor(v), 2.0));
+	float fu = u - float(c0);
+	float fv = v - float(r0);
+	vec3 a = mix(offs[r0 * 3 + c0], offs[r0 * 3 + c0 + 1], fu);
+	vec3 b = mix(offs[(r0 + 1) * 3 + c0], offs[(r0 + 1) * 3 + c0 + 1], fu);
+	VERTEX += mix(a, b, fv);
+}
+void fragment() {
+	vec4 t = texture(albedo_tex, UV) * albedo;
+	ALBEDO = t.rgb;
+	ROUGHNESS = roughness;
+}
+"""
+static var _cape_shader: Shader = null
+static var cape_usec := 0           # time spent in cloth this session (diag/tests)
+static var cape_active := 0
 
 func _cape_setup(a: Dictionary) -> void:
 	a["cape"] = null
@@ -3355,44 +3385,32 @@ func _cape_setup(a: Dictionary) -> void:
 		orig = c
 		break
 	var skel: Skeleton3D = body.find_child("Skeleton3D", true, false)
-	if orig == null or skel == null:
+	if orig == null or skel == null or skel.find_bone("chest") < 0:
 		return
-	var chest := skel.find_bone("chest")
-	if chest < 0:
-		return
-	# the cape's colour: its vertices all sample one patch of the atlas
-	var uv := Vector2(0.5, 0.5)
-	var arr := orig.mesh.surface_get_arrays(0)
-	if arr[Mesh.ARRAY_TEX_UV] != null and (arr[Mesh.ARRAY_TEX_UV] as PackedVector2Array).size() > 0:
-		uv = (arr[Mesh.ARRAY_TEX_UV] as PackedVector2Array)[0]
-	var mat = orig.get_active_material(0)
-	var cm: Material = mat.duplicate() if mat != null else StandardMaterial3D.new()
-	if cm is BaseMaterial3D:
-		(cm as BaseMaterial3D).cull_mode = BaseMaterial3D.CULL_DISABLED
+	if _cape_shader == null:
+		_cape_shader = Shader.new()
+		_cape_shader.code = CAPE_SHADER
+	var sm := ShaderMaterial.new()
+	sm.shader = _cape_shader
+	var src = orig.get_active_material(0)
+	if src is BaseMaterial3D:
+		sm.set_shader_parameter("albedo_tex", (src as BaseMaterial3D).albedo_texture)
+		sm.set_shader_parameter("albedo", (src as BaseMaterial3D).albedo_color)
+		sm.set_shader_parameter("roughness", (src as BaseMaterial3D).roughness)
+	var zero := PackedVector3Array()
+	zero.resize(CAPE_COLS * CAPE_ROWS)
+	sm.set_shader_parameter("offs", zero)
+	orig.material_override = sm
 	var rest := PackedVector3Array()
 	for r in CAPE_ROWS:
 		var fv := float(r) / float(CAPE_ROWS - 1)
 		for c2 in CAPE_COLS:
 			var fu := float(c2) / float(CAPE_COLS - 1)
-			# across the shoulders at the top, a little wider and flared back at the hem (the model's own shape)
-			var half := lerpf(0.36, 0.47, fv)
+			var half := lerpf(0.40, 0.47, fv)
 			rest.append(Vector3(lerpf(-half, half, fu), lerpf(1.2, 0.12, fv), lerpf(-0.08, -0.36, fv)))
-	var cloth := MeshInstance3D.new()
-	cloth.top_level = true
-	cloth.mesh = ArrayMesh.new()
-	cloth.visible = false
-	(a.root as Node3D).add_child(cloth)
-	a["cape"] = {"orig":orig, "skel":skel, "chest":chest, "b0i":skel.get_bone_global_rest(chest).affine_inverse(),
-		"rest":rest, "pos":PackedVector3Array(), "prev":PackedVector3Array(), "node":cloth, "mat":cm, "uv":uv, "on":false,
-		"phase":randi() % 2}
-
-func _cape_rigid(cp: Dictionary) -> Transform3D:
-	# model space -> world, rigidly following the chest bone (the shoulders' frame)
-	var skel: Skeleton3D = cp.skel
-	return skel.global_transform * skel.get_bone_global_pose(int(cp.chest)) * (cp.b0i as Transform3D)
-
-static var cape_usec := 0           # time spent in cloth this session (diag/tests)
-static var cape_active := 0
+	var chest := skel.find_bone("chest")
+	a["cape"] = {"skel":skel, "chest":chest, "b0i":skel.get_bone_global_rest(chest).affine_inverse(), "rest":rest,
+		"pos":PackedVector3Array(), "prev":PackedVector3Array(), "shown":zero.duplicate(), "mat":sm, "on":false, "acc":0.0}
 
 func _cape_step(a: Dictionary, dt: float) -> void:
 	var t0 := Time.get_ticks_usec()
@@ -3402,27 +3420,27 @@ func _cape_step(a: Dictionary, dt: float) -> void:
 func _cape_step_inner(a: Dictionary, dt: float) -> void:
 	var cp: Dictionary = a.cape
 	var skel: Skeleton3D = cp.skel
+	if not is_instance_valid(skel):
+		a["cape"] = null
+		return
 	var ap: Vector3 = (a.root as Node3D).global_position
 	var cpos: Vector3 = camera.global_position if is_instance_valid(camera) else ap
-	var near := Vector2(ap.x - cpos.x, ap.z - cpos.z).length() < CAPE_NEAR and (a.root as Node3D).visible   # ground distance
+	var near := Vector2(ap.x - cpos.x, ap.z - cpos.z).length() < CAPE_NEAR and skel.is_visible_in_tree()
+	var n := CAPE_COLS * CAPE_ROWS
 	if not near:
-		if bool(cp.on):
+		if bool(cp.on):                                  # back to the plain cape
 			cp.on = false
-			(cp.node as MeshInstance3D).visible = false
-			(cp.orig as MeshInstance3D).visible = true
+			var z := PackedVector3Array()
+			z.resize(n)
+			cp.shown = z
+			(cp.mat as ShaderMaterial).set_shader_parameter("offs", z)
 		return
-	# Further off, half rate: step every other frame with the time saved up.
-	cp["acc"] = float(cp.get("acc", 0.0)) + dt
-	if Vector2(ap.x - cpos.x, ap.z - cpos.z).length() > CAPE_NEAR * 0.7 and bool(cp.on) \
-			and (Engine.get_process_frames() + int(cp.get("phase", 0))) % 2 == 1:
-		return
-	dt = float(cp.acc)
-	cp.acc = 0.0
-	var rig := _cape_rigid(cp)
+	var model: Transform3D = skel.global_transform
+	var rig_m: Transform3D = skel.get_bone_global_pose(int(cp.chest)) * (cp.b0i as Transform3D)   # model space, rigid on the chest
+	var rig: Transform3D = model * rig_m
 	var rest: PackedVector3Array = cp.rest
 	var pos: PackedVector3Array = cp.pos
 	var prev: PackedVector3Array = cp.prev
-	var n := CAPE_COLS * CAPE_ROWS
 	if not bool(cp.on) or pos.size() != n:
 		pos.resize(n)
 		prev.resize(n)
@@ -3430,25 +3448,24 @@ func _cape_step_inner(a: Dictionary, dt: float) -> void:
 			pos[i] = rig * rest[i]
 			prev[i] = pos[i]
 		cp.on = true
-		(cp.node as MeshInstance3D).visible = true
-		(cp.orig as MeshInstance3D).visible = false
-	var h := clampf(dt, 0.0, 0.05)
-	var steps := 2 if h > 0.026 else 1
-	h /= float(steps)
-	var g := Vector3(0.0, -CAPE_GRAVITY, 0.0)
-	var wind := Vector3(sin(_time * 1.3 + float(hash(a.root)) * 0.001) * 0.9, 0.0, cos(_time * 0.9) * 0.6)
+		cp.acc = 0.0
+	# fixed 30 Hz steps (frame times vary on phones; a variable step made it shiver)
+	cp.acc = minf(float(cp.acc) + dt, CAPE_STEP * 3.0)
+	var h2 := CAPE_STEP * CAPE_STEP
 	var inv := rig.affine_inverse()
-	var ground := (a.root as Node3D).global_position.y + 0.03
-	for st in steps:
+	var ground := ap.y + 0.03
+	var wind := Vector3(sin(_time * 1.3 + float(int(cp.chest) + rest.size())) * 0.8, 0.0, cos(_time * 0.9) * 0.5)
+	while float(cp.acc) >= CAPE_STEP:
+		cp.acc = float(cp.acc) - CAPE_STEP
 		for i in n:
 			if i < CAPE_COLS:
 				prev[i] = pos[i]
-				pos[i] = rig * rest[i]                     # pinned across the shoulders
+				pos[i] = rig * rest[i]                         # pinned across the shoulders
 				continue
 			var p: Vector3 = pos[i]
 			var v: Vector3 = (p - prev[i]) * CAPE_DAMP
 			prev[i] = p
-			pos[i] = p + v + (g + wind) * h * h
+			pos[i] = p + v + (Vector3(0.0, -CAPE_GRAVITY, 0.0) + wind) * h2
 		for it in CAPE_ITERS:
 			for r in CAPE_ROWS:
 				for c in CAPE_COLS:
@@ -3458,8 +3475,7 @@ func _cape_step_inner(a: Dictionary, dt: float) -> void:
 					if r + 1 < CAPE_ROWS:
 						_cape_link(pos, rest, i, i + CAPE_COLS, r == 0)
 					if r + 2 < CAPE_ROWS:
-						_cape_link(pos, rest, i, i + 2 * CAPE_COLS, r == 0)      # bend: keeps it from folding flat
-			# keep it off the body (in the shoulders' frame) and above the ground
+						_cape_link(pos, rest, i, i + 2 * CAPE_COLS, r == 0)
 			for i in range(CAPE_COLS, n):
 				var m: Vector3 = inv * pos[i]
 				var moved := false
@@ -3478,8 +3494,16 @@ func _cape_step_inner(a: Dictionary, dt: float) -> void:
 					pos[i].y = ground
 	cp.pos = pos
 	cp.prev = prev
+	# the bend each point makes, in the cape's model space, eased onto the screen
+	var inv_model := model.affine_inverse()
+	var shown: PackedVector3Array = cp.shown
+	var k := 1.0 - exp(-dt * 30.0)
+	for i in n:
+		var off: Vector3 = inv_model * pos[i] - rig_m * rest[i]
+		shown[i] = shown[i].lerp(off, k)
+	cp.shown = shown
+	(cp.mat as ShaderMaterial).set_shader_parameter("offs", shown)
 	cape_active += 1
-	_cape_draw(cp)
 
 func _cape_link(pos: PackedVector3Array, rest: PackedVector3Array, i: int, j: int, pin_i: bool) -> void:
 	var d: Vector3 = pos[j] - pos[i]
@@ -3489,39 +3513,7 @@ func _cape_link(pos: PackedVector3Array, rest: PackedVector3Array, i: int, j: in
 	var want: float = rest[i].distance_to(rest[j])
 	var corr := d * ((l - want) / l)
 	if pin_i:
-		pos[j] -= corr                                 # the shoulder end doesn't move
+		pos[j] -= corr                                     # the shoulder end doesn't move
 	else:
 		pos[i] += corr * 0.5
 		pos[j] -= corr * 0.5
-
-static var _cape_idx := PackedInt32Array()
-
-func _cape_draw(cp: Dictionary) -> void:
-	var pos: PackedVector3Array = cp.pos
-	if _cape_idx.is_empty():
-		for r in CAPE_ROWS - 1:
-			for c in CAPE_COLS - 1:
-				var i := r * CAPE_COLS + c
-				_cape_idx.append_array([i, i + CAPE_COLS, i + 1, i + 1, i + CAPE_COLS, i + CAPE_COLS + 1])
-	var nrm := PackedVector3Array()
-	nrm.resize(pos.size())
-	for rr in CAPE_ROWS:
-		for cc in CAPE_COLS:
-			var tx: Vector3 = pos[rr * CAPE_COLS + mini(cc + 1, CAPE_COLS - 1)] - pos[rr * CAPE_COLS + maxi(cc - 1, 0)]
-			var ty: Vector3 = pos[mini(rr + 1, CAPE_ROWS - 1) * CAPE_COLS + cc] - pos[maxi(rr - 1, 0) * CAPE_COLS + cc]
-			nrm[rr * CAPE_COLS + cc] = ty.cross(tx).normalized()
-	if not cp.has("uvs"):
-		var uvs := PackedVector2Array()
-		uvs.resize(pos.size())
-		uvs.fill(cp.uv)
-		cp["uvs"] = uvs
-	var arrays := []
-	arrays.resize(Mesh.ARRAY_MAX)
-	arrays[Mesh.ARRAY_VERTEX] = pos
-	arrays[Mesh.ARRAY_NORMAL] = nrm
-	arrays[Mesh.ARRAY_TEX_UV] = cp.uvs
-	arrays[Mesh.ARRAY_INDEX] = _cape_idx
-	var am: ArrayMesh = (cp.node as MeshInstance3D).mesh
-	am.clear_surfaces()
-	am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
-	am.surface_set_material(0, cp.mat)

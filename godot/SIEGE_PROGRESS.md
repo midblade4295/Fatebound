@@ -1573,3 +1573,13 @@ K2/K3 notes (0.17.0)
   while the cloth shows. Only within CAPE_NEAR 34 m (ground distance) of the camera; past 70 % of that, half rate.
 - Cost measured in a 16v16 match on the build box: ~7.8 capes simulated a frame, 1.5 ms a frame (0.19 ms each).
 - Quick suite: all pass except siege_sim_smoke (rescues 0 in seeds 11/22).
+
+# 0.31.18 (Kevin: "there are floating capes; the capes are very jittery"; 22 fps in his screenshot)
+- 0.31.17's cloth was a separate world-space mesh per cape: it was left behind wherever the body vanished or was rebuilt
+  (floating capes), stepped with the raw frame time and every other frame further off (shivering), and rebuilt and
+  re-uploaded an ArrayMesh per cape per frame (costly on phones).
+- Now the original cape mesh is bent in its vertex shader (CAPE_SHADER, uniform offs[12]) by a 3 x 4 spring grid (top row
+  pinned to the chest bone), stepped at a fixed 30 Hz with an accumulator and eased onto the screen (1 - e^-30dt). Nothing
+  separate to strand; out of range or hidden it relaxes to the plain cape. 0.40 ms a frame for ~8 capes on the build box
+  (was 1.5 ms plus the mesh uploads).
+- Quick suite: all pass except siege_sim_smoke (rescues 0 in seeds 11/22).
