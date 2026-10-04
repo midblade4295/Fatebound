@@ -15,3 +15,4 @@ android/app/src/main/assets/index.html
 *.aab
 *.keystore
 *.jks
+godot/override.cfg
