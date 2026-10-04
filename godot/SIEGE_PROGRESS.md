@@ -1562,3 +1562,14 @@ K2/K3 notes (0.17.0)
   the hammer meets a charge (wider, from the throw), the spin: three charge and are cut down in slow motion; all trailer
   renders in High-quality (FB_FORCE_HQ=1 -- the view keeps HQ off on llvmpipe otherwise).
 - Quick suite: all pass except siege_sim_smoke (rescues 0 in seeds 11/22).
+
+# 0.31.17 (Kevin: "realistic cloth physics for the capes")
+- The Knight, Mage, Ranger, Rogue and hooded Rogue capes (separate 56-vertex skinned meshes in KayKit, rigid on
+  spine/hips/chest) become cloth near the camera: View._cape_setup/_cape_step. A 5 x 6 Verlet sheet in world space, its
+  top row pinned across the shoulders to the chest bone (rest grid taken from the model's cape shape, flared at the hem),
+  gravity 7.5, damping 0.93, a little wind, stretch links across and down plus bend links two rows down, 2 solver passes,
+  kept behind the back plane and outside a 0.3 m capsule round the torso (in the chest frame) and above the ground.
+  Drawn as a double-sided ArrayMesh (one array upload a frame) in the cape's own atlas colour; the original cape hides
+  while the cloth shows. Only within CAPE_NEAR 34 m (ground distance) of the camera; past 70 % of that, half rate.
+- Cost measured in a 16v16 match on the build box: ~7.8 capes simulated a frame, 1.5 ms a frame (0.19 ms each).
+- Quick suite: all pass except siege_sim_smoke (rescues 0 in seeds 11/22).
