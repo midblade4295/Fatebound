@@ -22,3 +22,7 @@ textures/default_filters/use_nearest_mipmap_filter=false
 
 [gui]
 theme/default_font_multichannel_signed_distance_field=true
+
+[physics]
+
+3d/physics_engine="Jolt Physics"

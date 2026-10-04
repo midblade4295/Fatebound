@@ -222,6 +222,9 @@ var items: Array = []               # loose logs and rocks on the ground (0.31.0
 # door's health and all of a jail door's. Per team: {} when there is none, else
 # {"id","team","state" ready|carried|flying|lit|loose, "p","h","carrier","by","from","to","t0","lit_at"}.
 var bombs: Array = [{}, {}]
+# The shove of the killing blow (0.31.20): callers set it before _damage; _kill sends it with the death so bodies,
+# weapons and hats go the way the blow went. Reset after every _damage.
+var _next_push := Vector3.ZERO
 var bomb_next: Array = [0.0, 0.0]
 var outposts: Array = []       # {id, p, owner (-1 neutral), prog (-1 red .. +1 blue), t}          # resource nodes {id, kind:"wood"/"stone", p, r, amount, max, regen, t}
 var stock := [{"wood":0, "stone":0}, {"wood":0, "stone":0}]
@@ -1325,7 +1328,9 @@ func _swap_hat(u: Dictionary) -> bool:
 func _drop_hat(u: Dictionary) -> void:
 	if u.cls == "villager":
 		return
-	var h := {"id":_hat_id, "cls":u.cls, "up":u.up, "pos":u.pos, "t":0.0}
+	var dp: Vector3 = u.get("death_push", Vector3.ZERO)
+	var fling := Vector2(dp.x, dp.z) * 0.75 + dir_of(rng.randf() * TAU) * 0.6
+	var h := {"id":_hat_id, "cls":u.cls, "up":u.up, "pos":u.pos, "t":0.0, "vel":fling}
 	_hat_id += 1
 	hats.append(h)
 	_event("hat_drop", {"hat":h.id, "cls":h.cls, "pos":h.pos, "team":u.team})
@@ -1475,6 +1480,7 @@ func _damage(src: Dictionary, dst: Dictionary, amount: float, stun := 0.0) -> vo
 	_event("hit", {"id":dst.id,"by":src.get("id",""),"dmg":int(round(amount))})
 	if dst.hp <= 0.0:
 		_kill(src, dst)
+	_next_push = Vector3.ZERO
 
 func _kill(src: Dictionary, dst: Dictionary) -> void:
 	if dst.carrying:
@@ -1491,6 +1497,16 @@ func _kill(src: Dictionary, dst: Dictionary) -> void:
 	dst.whirl_until = 0.0
 	# Fat Princess rule: your hat falls where you die; you come back as a Villager. (A High Priest can bring you
 	# back where you fell before you respawn: remember what you were and which hat you dropped.)
+	# which way the blow threw him (x, up, z in m/s): melee and beams push straight away from the killer
+	var push := _next_push
+	_next_push = Vector3.ZERO
+	if push == Vector3.ZERO:
+		var away := Vector2.ZERO
+		if src.has("pos"):
+			away = (dst.pos as Vector2) - (src.pos as Vector2)
+		away = away.normalized() if away.length() > 0.01 else dir_of(float(dst.face) + PI)
+		push = Vector3(away.x * 3.2, 1.6, away.y * 3.2)
+	dst["death_push"] = push
 	_stat_add(src, "kills", 1.0)
 	_stat_add(dst, "deaths", 1.0)
 	dst["died_cls"] = dst.cls
@@ -1511,7 +1527,7 @@ func _kill(src: Dictionary, dst: Dictionary) -> void:
 		kills[src.team] += 1
 		if src.has("kills"):
 			src.kills += 1
-	_event("death", {"id":dst.id,"by":src.get("id","")})
+	_event("death", {"id":dst.id,"by":src.get("id",""), "push":[snappedf(push.x, 0.01), snappedf(push.y, 0.01), snappedf(push.z, 0.01)]})
 
 func _damage_gate(src: Dictionary, g: Dictionary, amount: float) -> void:
 	if not gate_blocks(g):
@@ -2219,12 +2235,15 @@ func _step_projectiles(dt: float) -> void:
 			_damage_gate(owner, hit_gate, p.dmg * float(p.gate_mult))
 		if p.aoe > 0.0:
 			if not hit.is_empty():
+				_next_push = _push_along(p.vel, 3.6, 1.4)
 				_damage(owner, hit, p.dmg)                 # the struck unit: full damage, always
 			for o in units:
 				if o != hit and o.team != p.team and alive(o) and o.pos.distance_to(p.pos) <= p.aoe:
+					_next_push = _push_from(p.pos, o.pos, 4.0, 2.4)
 					_damage(owner, o, p.dmg * 0.6)
 			_event("boom", {"pos":p.pos})
 		elif not hit.is_empty():
+			_next_push = _push_along(p.vel, 3.2, 1.2)
 			_damage(owner, hit, p.dmg)
 		_event("proj_end", {"pid":p.id, "pos":p.pos})      # pos = the impact point (clients fly it there)
 		projectiles.remove_at(i)
@@ -2406,6 +2425,7 @@ func _step_world(dt: float) -> void:
 			continue
 		for u in units:
 			if u.team != int(sh.team) and alive(u) and u.pos.distance_to(sh.to) <= CATAPULT_AOE:
+				_next_push = _push_from(sh.to, u.pos, 4.4, 3.6)
 				_damage({"team":int(sh.team), "id":"catapult"}, u, CATAPULT_DMG)
 		_event("catapult_hit", {"team":int(sh.team), "pos":sh.to, "shell":sh.id})
 		shells.remove_at(i)
@@ -2417,6 +2437,7 @@ func _step_world(dt: float) -> void:
 				n.amount = n.max
 				_event("node_regrow", {"node":n.id})
 	_step_items(dt)
+	_step_hat_motion(dt)
 	_step_bombs()
 	_stat_time(dt)
 
@@ -3237,6 +3258,7 @@ func _step_hammer(p: Dictionary, dt: float, tunit: Array) -> bool:
 			continue
 		if (o.pos as Vector2).distance_to(p.pos) < r:
 			(p.hit as Array).append(o.id)
+			_next_push = _push_along(p.vel, 4.6, 2.2)      # a hammer kill throws him the way it was going
 			_damage(owner, o, float(p.dmg))
 	return false
 
@@ -3732,6 +3754,8 @@ func _explode_bomb(b: Dictionary) -> void:
 	for u in units:
 		if alive(u) and u.pos.distance_to(at) <= BOMB_R:
 			# kill credit only for enemies: blowing up your own side scores nothing
+			var close := 1.0 - 0.45 * clampf(u.pos.distance_to(at) / BOMB_R, 0.0, 1.0)
+			_next_push = _push_from(at, u.pos, 5.2 * close, 4.2 * close)      # blown off their feet, away from it
 			_kill(thrower if (not thrower.is_empty() and thrower.team != u.team) else {}, u)
 			killed += 1
 	var src: Dictionary = thrower if not thrower.is_empty() else {"id":""}
@@ -3758,3 +3782,32 @@ func _explode_bomb(b: Dictionary) -> void:
 	_event("bomb_boom", {"team":b.team, "pos":at, "killed":killed, "by":str(b.by)})
 	bombs[int(b.team)] = {}
 	bomb_next[int(b.team)] = time + BOMB_RESPAWN
+
+
+# ---------- the killing blow's push, and hats that slide (0.31.20) ----------
+func _push_along(v: Vector2, speed: float, up: float) -> Vector3:
+	var d := v.normalized() if v.length() > 0.01 else Vector2(0.0, 1.0)
+	return Vector3(d.x * speed, up, d.y * speed)
+
+func _push_from(from: Vector2, to: Vector2, speed: float, up: float) -> Vector3:
+	var d := to - from
+	d = d.normalized() if d.length() > 0.01 else dir_of(rng.randf() * TAU)
+	return Vector3(d.x * speed, up, d.y * speed)
+
+const HAT_FRICTION := 3.2           # m/s lost per second on the ground
+func _step_hat_motion(dt: float) -> void:
+	for h in hats:
+		var v: Vector2 = h.get("vel", Vector2.ZERO)
+		var wet := water_depth(h.pos) > 0.15
+		if v == Vector2.ZERO and not wet:
+			continue
+		if wet:
+			v = v.lerp(RIVER_FLOW, minf(1.0, dt * 1.2))                          # floats off downstream, as the logs do
+		else:
+			v += -_ground_grad(h.pos) * ITEM_SLOPE_G * 0.6 * dt                  # rolls a little downhill
+		var sp := v.length()
+		if sp > 0.0:
+			var drop := (HAT_FRICTION * (0.3 if wet else 1.0)) * dt
+			v = Vector2.ZERO if sp <= drop else v * ((sp - drop) / sp)
+		h.pos = _push_out((h.pos as Vector2) + v * dt, 0.25)
+		h["vel"] = v if v.length() > 0.04 or wet else Vector2.ZERO

@@ -1588,10 +1588,24 @@ func _sync_hats() -> void:
 			ring.reparent(n, false)
 			hat_nodes[h.id] = n
 		var gy := Sim.height_at(h.pos)
-		n.position = Vector3(h.pos.x, gy, h.pos.y)
+		var newp := Vector3(h.pos.x, gy, h.pos.y)
+		var mv: Vector3 = newp - n.position
+		n.position = newp
 		var hat := n.get_child(0) as Node3D
-		hat.position.y = 0.25 + 0.12 * sin(_time * 3.0 + float(h.id))
-		hat.rotation.y = _time * 1.6 + float(h.id)
+		var moving: bool = Vector2(mv.x, mv.z).length() > 0.004 and bool(n.get_meta("placed", false))
+		n.set_meta("placed", true)
+		if moving:                                    # 0.31.20: tumbling along the ground with its slide
+			var ax := Vector3(mv.z, 0.0, -mv.x).normalized()
+			hat.rotate(ax, Vector2(mv.x, mv.z).length() / 0.22)
+			hat.position.y = lerpf(hat.position.y, 0.18, 0.3)
+			n.set_meta("still_since", _time)
+		elif _time - float(n.get_meta("still_since", -10.0)) < 0.6:
+			hat.rotation = hat.rotation.lerp(Vector3(0.0, hat.rotation.y, 0.0), 0.15)   # settles upright
+		else:
+			hat.rotation.x = 0.0
+			hat.rotation.z = 0.0
+			hat.position.y = 0.25 + 0.12 * sin(_time * 3.0 + float(h.id))
+			hat.rotation.y = _time * 1.6 + float(h.id)
 	for id in hat_nodes.keys():
 		if not seen.has(id):
 			(hat_nodes[id] as Node3D).queue_free()
@@ -2355,6 +2369,8 @@ func _ensure_actor(u: Dictionary) -> Dictionary:
 	var look_key := "%s:%s:%s" % [u.cls, u.up, str(cosmetic)]
 	if not a.is_empty() and a.look == look_key:
 		return a
+	if not a.is_empty() and u.state == "dead" and a.get("body") != null:
+		return a                                    # 0.31.20: the body stays as it fell until he respawns
 	var root: Node3D
 	if a.is_empty():
 		root = Node3D.new()
@@ -2661,10 +2677,12 @@ func _animate(a: Dictionary, u: Dictionary, vel: float) -> void:
 	if u.state == "dead":
 		if not a.dead:
 			a.dead = true
-			_play(a, "g/Death_A", 1.0, 99.0)
+			if a.get("rag") == null:
+				_play(a, "g/Death_A", 1.0, 99.0)       # far off (no ragdoll): the old fall
 		return
 	if a.dead:
 		a.dead = false
+		_ragdoll_end(a)
 		a.busy_until = 0.0
 	if _time < float(a.busy_until):
 		return
@@ -2722,6 +2740,11 @@ func on_event(e: Dictionary) -> void:
 			var du: Dictionary = sim.by_id.get(str(e.get("id", "")), {})
 			if not du.is_empty():
 				blood_pool(du.pos)
+			if not a.is_empty():
+				var pa: Array = e.get("push", [0.0, 1.6, 0.0])
+				var push := Vector3(float(pa[0]), float(pa[1]), float(pa[2])) if pa.size() >= 3 else Vector3(0.0, 1.6, 0.0)
+				_drop_weapons(a, push)
+				_ragdoll(a, push)
 		"spawn":
 			if not a.is_empty():
 				a.root.position = Vector3(sim.by_id[e.id].pos.x, 0, sim.by_id[e.id].pos.y)
@@ -3716,3 +3739,201 @@ func bomb_blast(at2: Vector2) -> void:
 	_booms.append({"node":sc, "kind":"scorch", "t0":_time, "life":25.0})
 	if is_instance_valid(camera):
 		shake(clampf(1.0 - Vector2(camera.global_position.x - at.x, camera.global_position.z - at.z).length() / 45.0, 0.15, 1.0) * 0.9)
+
+
+# ---------- ragdolls and dropped weapons (0.31.20, Kevin: "ragdoll physics so when they die they fall to the ground
+# in a way that they were killed"; "when a player dies their weapons fall on the ground too") ----------
+# A death near the camera turns the body into a ragdoll: 11 physics bodies on the KayKit skeleton (hips, chest, head,
+# upper and lower arms and legs) joined by cones (hips, shoulders, neck) and hinges (elbows, knees), thrown with the
+# killing blow's push from the sim (a sword: back from the killer; an arrow or hammer: the way it flew; a bomb or a
+# catapult stone: up and away from the blast) and tumbling. The ground under it is a small height-field patch sampled
+# from the land (castle floors included). The weapons in his hands come loose as rigid bodies thrown the same way.
+# All of it is freed when he respawns; at most RAG_MAX at once (the oldest is let go).
+const RAG_MAX := 8
+const RAG_NEAR := 40.0
+const RAG_SPEC := [
+	# bone, child bone (for its length), radius, joint (0 none, 1 cone, 2 hinge), mass
+	["hips", "spine", 0.24, 0, 3.0], ["chest", "head", 0.27, 1, 3.0], ["head", "", 0.4, 1, 2.0],
+	["upperarm.l", "lowerarm.l", 0.08, 1, 0.6], ["lowerarm.l", "wrist.l", 0.07, 2, 0.5],
+	["upperarm.r", "lowerarm.r", 0.08, 1, 0.6], ["lowerarm.r", "wrist.r", 0.07, 2, 0.5],
+	["upperleg.l", "lowerleg.l", 0.1, 1, 0.9], ["lowerleg.l", "foot.l", 0.09, 2, 0.7],
+	["upperleg.r", "lowerleg.r", 0.1, 1, 0.9], ["lowerleg.r", "foot.r", 0.09, 2, 0.7]]
+var _ragdolls: Array = []
+var _debris: Array = []
+
+func _ground_patch(c: Vector3, half: int = 7) -> StaticBody3D:
+	var hm := HeightMapShape3D.new()
+	var w := half * 2 + 1
+	hm.map_width = w
+	hm.map_depth = w
+	var data := PackedFloat32Array()
+	data.resize(w * w)
+	for zi in w:
+		for xi in w:
+			data[zi * w + xi] = Sim.height_at(Vector2(c.x + float(xi - half), c.z + float(zi - half)))
+	hm.map_data = data
+	var sb := StaticBody3D.new()
+	var cs := CollisionShape3D.new()
+	cs.shape = hm
+	sb.add_child(cs)
+	sb.position = Vector3(roundf(c.x), 0.0, roundf(c.z))
+	sb.physics_material_override = PhysicsMaterial.new()
+	sb.physics_material_override.friction = 0.9
+	add_child(sb)
+	return sb
+
+func _ragdoll(a: Dictionary, push: Vector3) -> void:
+	if a.get("rag") != null or a.get("body") == null:
+		return
+	var root: Node3D = a.root
+	if is_instance_valid(camera) and Vector2(root.global_position.x - camera.global_position.x, root.global_position.z - camera.global_position.z).length() > RAG_NEAR:
+		return
+	var skel: Skeleton3D = (a.body as Node3D).find_child("Skeleton3D", true, false)
+	if skel == null:
+		return
+	while _ragdolls.size() >= RAG_MAX:
+		_ragdoll_end(_ragdolls[0])
+	var sim3 := PhysicalBoneSimulator3D.new()
+	skel.add_child(sim3)
+	var bones: Array = []
+	for sp in RAG_SPEC:
+		var bi := skel.find_bone(str(sp[0]))
+		if bi < 0:
+			continue
+		var length := 0.6
+		var dir := Vector3.UP
+		if str(sp[1]) != "":
+			var ci := skel.find_bone(str(sp[1]))
+			if ci >= 0:
+				var co: Vector3 = skel.get_bone_rest(ci).origin
+				length = maxf(co.length(), 0.05)
+				dir = co / length
+		var pb := PhysicalBone3D.new()
+		pb.bone_name = str(sp[0])
+		var r: float = sp[2]
+		var basis := Basis(Quaternion(Vector3.UP, dir)) if dir.distance_to(Vector3.UP) > 0.001 else Basis()
+		var reach := length * 0.5 if str(sp[0]) != "head" else 0.42
+		pb.body_offset = Transform3D(basis, dir * reach)
+		pb.joint_offset = Transform3D(Basis(), Vector3(0.0, -reach, 0.0))
+		var cs := CollisionShape3D.new()
+		if str(sp[0]) == "head":
+			var sph := SphereShape3D.new()
+			sph.radius = r
+			cs.shape = sph
+		else:
+			var cap := CapsuleShape3D.new()
+			cap.radius = r
+			cap.height = maxf(length, r * 2.0 + 0.02)
+			cs.shape = cap
+		pb.add_child(cs)
+		pb.mass = float(sp[4])
+		pb.friction = 0.85
+		pb.bounce = 0.05
+		pb.linear_damp = 0.6
+		pb.angular_damp = 1.6
+		match int(sp[3]):
+			1:
+				pb.joint_type = PhysicalBone3D.JOINT_TYPE_CONE
+			2:
+				pb.joint_type = PhysicalBone3D.JOINT_TYPE_HINGE
+			_:
+				pb.joint_type = PhysicalBone3D.JOINT_TYPE_NONE
+		sim3.add_child(pb)
+		if int(sp[3]) == 1:
+			pb.set("joint_constraints/swing_span", 50.0)
+			pb.set("joint_constraints/twist_span", 25.0)
+		elif int(sp[3]) == 2:
+			pb.set("joint_constraints/angular_limit_enabled", true)
+			pb.set("joint_constraints/angular_limit_upper", 0.0)
+			pb.set("joint_constraints/angular_limit_lower", -110.0)
+		bones.append(pb)
+	if bones.is_empty():
+		sim3.queue_free()
+		return
+	var ground := _ground_patch(root.global_position, 10)       # room for the throw (a bomb carries them ~4 m)
+	if a.get("player") != null:
+		(a.player as AnimationPlayer).pause()
+	sim3.physical_bones_start_simulation()
+	var spin := push.length() * 0.9
+	for pb in bones:
+		(pb as PhysicalBone3D).linear_velocity = push + Vector3(randf_range(-0.4, 0.4), randf_range(0.0, 0.3), randf_range(-0.4, 0.4))
+		(pb as PhysicalBone3D).angular_velocity = Vector3(randf_range(-1, 1), randf_range(-1, 1), randf_range(-1, 1)) * spin
+	(a.ring as MeshInstance3D).visible = false
+	a["rag"] = {"sim":sim3, "ground":ground, "t0":_time}
+	_ragdolls.append(a)
+
+func _ragdoll_end(a: Dictionary) -> void:
+	var rg = a.get("rag")
+	if rg == null:
+		return
+	if is_instance_valid(rg.sim):
+		(rg.sim as PhysicalBoneSimulator3D).physical_bones_stop_simulation()
+		(rg.sim as Node).queue_free()
+	if is_instance_valid(rg.ground):
+		(rg.ground as Node).queue_free()
+	a["rag"] = null
+	if a.get("player") != null and is_instance_valid(a.player):
+		(a.player as AnimationPlayer).play()
+	_ragdolls.erase(a)
+
+func _drop_weapons(a: Dictionary, push: Vector3) -> void:
+	# whatever he held comes loose: each weapon or shield becomes a tumbling rigid body thrown with him
+	if a.get("body") == null:
+		return
+	var root: Node3D = a.root
+	if is_instance_valid(camera) and Vector2(root.global_position.x - camera.global_position.x, root.global_position.z - camera.global_position.z).length() > RAG_NEAR:
+		return
+	var ground: StaticBody3D = null
+	for slot in (a.body as Node3D).find_children("*", "BoneAttachment3D", true, false):
+		if not str((slot as BoneAttachment3D).bone_name).begins_with("handslot"):
+			continue
+		for w in (slot as Node3D).get_children():
+			if not (w is Node3D) or not (w as Node3D).visible:
+				continue
+			var aabb := _node_aabb(w as Node3D)
+			if aabb.size.length() < 0.05:
+				continue
+			if ground == null:
+				ground = _ground_patch(root.global_position, 6)
+			var rb := RigidBody3D.new()
+			var gt: Transform3D = (w as Node3D).global_transform
+			var copy := (w as Node3D).duplicate() as Node3D
+			rb.add_child(copy)
+			copy.transform = Transform3D(gt.basis, Vector3.ZERO)
+			var cs := CollisionShape3D.new()
+			var bx := BoxShape3D.new()
+			bx.size = Vector3(maxf(aabb.size.x, 0.08), maxf(aabb.size.y, 0.08), maxf(aabb.size.z, 0.08)) * gt.basis.get_scale()
+			cs.shape = bx
+			cs.transform = Transform3D(gt.basis.orthonormalized(), gt.basis * aabb.get_center())
+			rb.add_child(cs)
+			rb.mass = 0.8
+			rb.physics_material_override = PhysicsMaterial.new()
+			rb.physics_material_override.bounce = 0.2
+			rb.physics_material_override.friction = 0.7
+			add_child(rb)
+			rb.global_position = gt.origin
+			rb.linear_velocity = push * 1.1 + Vector3(randf_range(-0.8, 0.8), 1.2 + randf(), randf_range(-0.8, 0.8))
+			rb.angular_velocity = Vector3(randf_range(-6, 6), randf_range(-6, 6), randf_range(-6, 6))
+			(w as Node3D).visible = false
+			_debris.append({"node":rb, "ground":ground, "t0":_time, "id":str(a.get("id", ""))})
+	# loose weapons lie a while, then go (with their bit of ground)
+	for i in range(_debris.size() - 1, -1, -1):
+		if _time - float(_debris[i].t0) > 30.0 or _debris.size() > 24:
+			var d: Dictionary = _debris[i]
+			if is_instance_valid(d.node):
+				(d.node as Node).queue_free()
+			if is_instance_valid(d.ground) and _debris.filter(func(x): return x.ground == d.ground).size() <= 1:
+				(d.ground as Node).queue_free()
+			_debris.remove_at(i)
+
+func _node_aabb(n: Node3D) -> AABB:
+	var box := AABB()
+	var first := true
+	for m in n.find_children("*", "MeshInstance3D", true, false) + ([n] if n is MeshInstance3D else []):
+		var mi := m as MeshInstance3D
+		if mi.mesh == null:
+			continue
+		var b := n.global_transform.affine_inverse() * mi.global_transform * mi.mesh.get_aabb()
+		box = b if first else box.merge(b)
+		first = false
+	return box

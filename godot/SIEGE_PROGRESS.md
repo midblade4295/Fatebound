@@ -1600,3 +1600,20 @@ K2/K3 notes (0.17.0)
   HUD: PICK UP BOMB / THROW BOMB. tools/trailer5_shots.gd "bomb" check shot.
 - tests/bomb_test.gd (in the suite). Quick suite: all pass except siege_sim_smoke (rescues 0 in seeds 11/22).
 - Bots don't pick bombs up yet.
+
+# 0.31.20 (Kevin: weapons fall when a player dies; weapons and hats get physics like the logs and stones; ragdolls that
+# fall the way they were killed -- a bomb throws them and their weapons a short way to tumble; a flying hammer throws
+# the body the way it went)
+- Sim: the killing blow's push (_next_push, set before _damage; _kill falls back to straight away from the killer,
+  3.2 m/s + 1.6 up) goes out with the death event ("push") and onto the unit (death_push). Arrows/bolts 3.2-3.6 along
+  their flight, fireball splash 4 away from the burst, the Crusader's hammer 4.6 the way it flew, catapult 4.4 + 3.6 up
+  away from the strike, the bomb 5.2 + 4.2 up away from it (less further out). Dropped hats are flung with it (0.75 of
+  the push + a little scatter) and slide (friction 3.2 m/s^2), roll a little downhill, float off downstream like the logs,
+  stay out of walls (_step_hat_motion).
+- View: deaths within 40 m of the camera become ragdolls -- PhysicalBoneSimulator3D on the KayKit skeleton, 11 bodies
+  (hips, chest, head sphere, upper/lower arms and legs; cones at hips/shoulders/neck, hinges at elbows/knees) started with
+  the push and a tumble, on a HeightMapShape3D patch (21 x 21 m) sampled from Sim.height_at; at most 8 at once; freed on
+  respawn. The dying body keeps its class look until respawn (no swap to the Villager mid-fall). Weapons and shields in
+  the hand slots come loose as RigidBody3D boxes thrown with the push, lie 30 s (24 at most). Hats tumble while they slide.
+- project.godot: 3D physics engine Jolt (stabler ragdolls).
+- Quick suite: ALL PASSED (siege_sim_smoke too: seed 11 had a rescue).
