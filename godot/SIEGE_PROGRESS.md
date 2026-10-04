@@ -1555,3 +1555,10 @@ K2/K3 notes (0.17.0)
   worker still hammering as recording starts, three heroes walk to the ladder's foot then up and over.
 - Trailer 5 recut; 58 s, -12.8 LUFS, -2.2 dBFS.
 - Quick suite: all pass except siege_sim_smoke (rescues 0 in seeds 11/22).
+
+# 0.31.16 (Kevin: "upload game version to github")
+- The Berserker's body turns with his whirlwind (View: root yaw = face - accumulated 38 rad/s while Sim.whirling(), the same
+  way round as the ribbons at 44/34 rad/s). Trailer 5 notes since 0.31.15 (tools only): Necromancer from the front and wider,
+  the hammer meets a charge (wider, from the throw), the spin: three charge and are cut down in slow motion; all trailer
+  renders in High-quality (FB_FORCE_HQ=1 -- the view keeps HQ off on llvmpipe otherwise).
+- Quick suite: all pass except siege_sim_smoke (rescues 0 in seeds 11/22).
