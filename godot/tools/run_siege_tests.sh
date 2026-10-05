@@ -49,6 +49,7 @@ run siege_guard_smoke    SIEGE_GUARD_PASS         120
 run siege_logcat_filter  SIEGE_LOGCAT_FILTER_PASS 120
 # Online: real server process + clients over WebSockets. Real time (no --fixed-fps), port 8092.
 run siege_net_smoke      SIEGE_NET_PASS           150
+run siege_bandwidth_test SIEGE_BANDWIDTH_PASS     60
 run parse_all            PARSE_ALL_PASS           120
 run meta_economy_test    META_ECONOMY_PASS        120
 # The Siege app shell through its real buttons. REAL time (no --fixed-fps).

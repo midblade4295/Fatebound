@@ -1,0 +1,62 @@
+Validation record, 2026-10-05 UTC
+The first suite test used unmodified code; all subsequent suite tests used patched code.
+The new bandwidth regression ran separately. Live production files were unchanged.
+
+/tmp/codex-fatebound-bandwidth-baseline-suite.log
+Importing assets (first run)...
+FAIL  siege_sim_smoke         490s  (log: /tmp/siege_test_siege_sim_smoke.log)
+PASS  siege_reach               2s
+PASS  siege_land_check          1s
+PASS  siege_mode_smoke         83s
+PASS  siege_human_soak        141s
+PASS  siege_diag_smoke         10s
+PASS  siege_guard_smoke        13s
+PASS  siege_logcat_filter       1s
+PASS  siege_net_smoke          14s
+PASS  parse_all                 3s
+PASS  meta_economy_test         1s
+PASS  app_flow_test            12s
+PASS  app_scroll_test           3s
+PASS  tutorial_test            18s
+PASS  net_interp_test           1s
+PASS  knight_ai_test            1s
+PASS  tower_test                1s
+PASS  hammer_test               1s
+PASS  match_audio_test         34s
+PASS  items_test               19s
+PASS  priest_test               2s
+PASS  stands_test              15s
+SOME TESTS FAILED
+
+/tmp/codex-bandwidth-targeted-summary.log
+PASS parse_all
+PASS net_interp_test
+PASS siege_net_smoke
+
+/tmp/codex-fatebound-bandwidth-regression.log
+libfontconfig.so.1: cannot open shared object file: No such file or directory
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+BENCH_START level=3 seeds=[1337, 424242] steps_per_seed=240
+BENCH_SEED_DONE level=3 seed=1337 errors=0 simtime=8.000 ended=false
+BENCH_SEED_DONE level=3 seed=424242 errors=0 simtime=8.000 ended=false
+BENCH_RESULT {"baseline_MB_hour":31.3956,"baseline_broadcast_us_avg":2263.0625,"baseline_bytes":139536,"baseline_encode_us_avg":164.3875,"baseline_encode_us_p99":260,"broadcast_samples":16,"candidate_MB_hour":24.93675,"candidate_broadcast_us_avg":287.125,"candidate_bytes":110830,"candidate_encode_us_avg":94.775,"candidate_encode_us_p99":794,"candidate_packet_max":864,"candidate_packet_min":287,"errors":0,"events":{"class":54,"gate_close":14,"gate_open":14,"gather":9,"hat_take":42,"node_fell":1},"level":3,"private_tasks_per_broadcast_avg":0.5625,"raw_baseline_bytes":666672,"raw_candidate_bytes":568368,"saving_pct_same_level":20.5724687535833,"seeds":[1337,424242],"sim_seconds":16.0,"snapshots":240,"wall_seconds":7.424391}
+SIEGE_BANDWIDTH_PASS seeds=2 ticks_per_seed=240 snapshots=240 errors=0
+
+/tmp/codex-fatebound-bandwidth-20261005/legacy-ws.log
+libfontconfig.so.1: cannot open shared object file: No such file or directory
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+LEGACY_WS_PASS protocol30 clients=2 snapshots=[28, 20] errors=0 reason=two joins, full snapshots, legacy decode/apply, clean disconnect
+
+Isolated full installer on port 18084: PROBE_OK; selected override config checksum matched.
+Narrow updater --check: BANDWIDTH_PREFLIGHT_OK.
+Shell syntax and git diff whitespace checks: passed.
+
+Post-deployment verification: live Net/server/config match the reviewed files; protected Sim/project unchanged; local/public PROBE_OK; Legionary/Caddy PIDs unchanged.
+/tmp/codex-fatebound-bandwidth-postdeploy-traffic.log
+libfontconfig.so.1: cannot open shared object file: No such file or directory
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+TRAFFIC_RESULT {"combined_MB_hour":46.9705908552805,"download_MB_hour":36.8293802913471,"download_bytes":613964,"download_bytes_second":10230.3834142631,"input_hz":19.978744215787,"input_packets":1199,"match":2,"method":"live local WebSocket payload, original protocol30 codec, synthetic idle inputs at20Hz; excludes handshake and transport overhead","protocol":30,"sample_seconds":60.013782,"seed":1274090615,"snapshot_bytes_avg":680.669623059867,"snapshot_bytes_max":1274,"snapshot_bytes_min":266,"snapshot_bytes_p95":971,"snapshots":902,"upload_MB_hour":10.1412105639335,"upload_bytes":169059,"upload_bytes_second":2817.00293442596}
+TRAFFIC_PASS

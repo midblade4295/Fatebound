@@ -12,8 +12,8 @@ const VERSION := 30              # 30 = smaller snapshots: packed projectiles/it
 const DEFAULT_URL := "wss://136-113-125-3.sslip.io/fatebound/siege/ws"
 const DEFAULT_PORT := 8082
 const SNAP_HZ := 15.0            # 10 -> 15 (0.18.4); remote units' interpolation delay 100 -> 67 ms
-const FULL_EVERY := 60           # 0.31.8: slow-changing state (stock, levels, nodes, stands, outposts, gates, ladders,
-                                 # dropped hats) rides along only when it changed, and in full once every four seconds
+const FULL_EVERY := 15           # 0.31.8: slow-changing state (stock, levels, nodes, stands, outposts, gates, ladders,
+                                 # dropped hats) rides along only when it changed, and in full once a second
 const PROJ_KINDS := ["arrow", "fire", "hammer"]
 const ORACLE_STATES := ["cell", "carried", "dropped", "home", "returning", "rescued", "loose"]
 const PREDICT_SNAP := 2.5        # m: a predicting phone snaps to the server beyond this
@@ -131,9 +131,6 @@ static func snapshot(sim, for_unit: String, events: Array) -> Dictionary:
 	packed.resize(vals.size() * 2)
 	for k in vals.size():
 		_pack(packed, k, vals[k])
-		if k % F == 30:
-			# The existing decoder consumes only the packed timer's positive/zero flag.
-			packed.encode_s16(k * 2, 100 if packed.decode_s16(k * 2) > 0 else 0)
 	# Projectiles: 11 int16 each (id, x, z, vx, vz, kind, from-tower flag, origin x/z, launch height, drop distance).
 	var proj := PackedByteArray()
 	proj.resize(sim.projectiles.size() * 22)
@@ -171,23 +168,16 @@ static func snapshot(sim, for_unit: String, events: Array) -> Dictionary:
 			lif.append(sim.units.find(sim.by_id.get(str(id), {})))
 		oracles.append([_code(ORACLE_STATES, o.state), snappedf((o.pos as Vector2).x, 0.01), snappedf((o.pos as Vector2).y, 0.01),
 			sim.units.find(sim.by_id.get(str(o.carrier), {})) + 1, int(o.carry_team) + 1, snappedf(float(o.dropped_at), 0.1), int(o.cakes), int(o.weight), lif])
-	var msg := {"t":"s", "tm":sim.time, "it":_pack_items(sim), "u":packed, "p":proj}
-	if not events.is_empty():
-		msg["e"] = events
-	if sim.ended or sim.winner != -1 or sim.end_reason != "":
-		msg["end"] = [sim.ended, sim.winner, sim.end_reason]
-	# Protocol 30 clients retain omitted fields. Joins receive a full unicast without
-	# consuming changes that existing clients must still receive on the next broadcast.
-	var unicast_full := for_unit != ""
-	if not unicast_full:
-		_slow_n += 1
-	var full := unicast_full or _slow_n % FULL_EVERY == 0
-	for pair in [["sc", sim.score.duplicate()], ["k", sim.kills.duplicate()], ["o", oracles], ["st", sim.stock.duplicate(true)], ["lv", sim.levels.duplicate(true)], ["g", gates], ["n", nodes], ["op", outposts],
+	var msg := {"t":"s", "tm":sim.time, "sc":sim.score.duplicate(), "k":sim.kills.duplicate(), "end":[sim.ended, sim.winner, sim.end_reason],
+		"it":_pack_items(sim), "u":packed, "p":proj, "o":oracles, "e":events}
+	# Slow-changing state: only when it changed, and in full once a second (FULL_EVERY) so a late joiner catches up.
+	_slow_n += 1
+	var full := _slow_n % FULL_EVERY == 0
+	for pair in [["st", sim.stock.duplicate(true)], ["lv", sim.levels.duplicate(true)], ["g", gates], ["n", nodes], ["op", outposts],
 			["hs", stocks], ["hd", hats], ["l", sim.ladders.duplicate(true)]]:
 		var h := hash(pair[1])
 		if full or int(_slow_hash.get(pair[0], 0)) != h:
-			if not unicast_full:
-				_slow_hash[pair[0]] = h
+			_slow_hash[pair[0]] = h
 			msg[pair[0]] = pair[1]
 	if for_unit != "":
 		return for_player(msg, sim, for_unit)
@@ -199,8 +189,7 @@ static func for_player(base: Dictionary, sim, unit_id: String) -> Dictionary:
 	var msg := base.duplicate(false)
 	if sim.by_id.has(unit_id):
 		var me: Dictionary = sim.by_id[unit_id]
-		if not me.task.is_empty():
-			msg["me"] = {"task":me.task.duplicate(true)}
+		msg["me"] = {"task":me.task.duplicate(true)}
 	return msg
 
 # ---------------- client side ----------------
