@@ -13,7 +13,7 @@ const Sim = preload("res://scripts/siege/siege_sim.gd")
 const Land = preload("res://scripts/siege/siege_land.gd")
 const Castle = preload("res://scripts/siege/siege_castle.gd")
 const SLOW := {"hook": [[0.95, 2.1, 0.18]], "necro": [[0.6, 2.6, 0.25]], "hammer": [[0.55, 1.75, 0.22]], "whirl": [[0.8, 2.4, 0.22]]}
-const LENGTH := {"catcheck": 1.0, "waterbomb": 6.0, "bomb": 4.6, "hook": 2.6, "necro": 3.0, "hammer": 2.4, "dawn": 5.0, "clash": 4.5, "captive": 4.0, "heroes": 4.3, "lineup": 4.0, "gather": 4.0, "build": 7.0, "backstab": 4.0, "assault": 5.5,
+const LENGTH := {"launch": 10.0, "catcheck": 1.0, "waterbomb": 6.0, "bomb": 4.6, "hook": 2.6, "necro": 3.0, "hammer": 2.4, "dawn": 5.0, "clash": 4.5, "captive": 4.0, "heroes": 4.3, "lineup": 4.0, "gather": 4.0, "build": 7.0, "backstab": 4.0, "assault": 5.5,
 	"rampart": 4.0, "whirl": 3.2, "feast": 4.0, "carry": 5.0, "throne": 4.0, "reveal": 9.0,
 	# Round 28 (Kevin + Derek Lieu's makeover advice: core action first, struggle, comedy, fewer cards)
 	"breakin": 10.6, "carry2": 7.9, "toofat": 5.5, "hatsteal": 5.0}
@@ -81,6 +81,25 @@ func _stage() -> void:
 		_revive(u)
 		u.bot = true
 	match shot:
+		"launch":
+			# (0.31.28 check) three on our launch pad, the lever pulled, the countdown, the flight over the field
+			s.levels[0]["launcher"] = 1
+			var lpad: Vector2 = s.launch_pad(0)
+			var team0: Array = s.units.filter(func(x): return x.team == 0 and x.id != me.id).slice(0, 4)
+			for k in team0.size():
+				s._set_class(team0[k], ["knight", "barbarian", "rogue", "mage"][k], false)
+				team0[k].bot = false
+				_revive(team0[k])
+				team0[k].move = Vector2.ZERO
+				team0[k].pos = lpad + Vector2(-0.9 + (k % 2) * 1.6, -0.7 + (k / 2) * 1.3) if k < 3 else s.launch_lever(0)
+			for u in s.units:
+				if not team0.has(u):
+					u.bot = false
+					u.move = Vector2.ZERO
+					u.pos = Sim.spawn(u.team) + Vector2(0.0, 6.0 if u.team == 0 else -6.0)
+			beats = [[0.6, team0[3].id, "interact"]]
+			cam_a = [_v(lpad + Vector2(6.0, 9.0), 7.0), _v(lpad + Vector2(0.0, 0.0), 1.0)]
+			cam_b = [_v(lpad + Vector2(10.0, -14.0), 26.0), _v(lpad + Vector2(0.0, -40.0), 4.0)]
 		"catcheck":
 			# (0.31.22 check) our catapult tower seen from the field
 			var cpt: Vector2 = Sim._c(0, Vector2(Sim.CATAPULT_X, Sim.FRONT_Z + 0.3))

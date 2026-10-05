@@ -722,6 +722,13 @@ func _event_sound(e: Dictionary) -> void:
 			_cue("tm_gate_open", 1, _gate_pos(e.get("gate", "")), 12.0, false, 0.55)
 		"jail_reset":
 			_cue("tm_unlock", 1, _gate_pos(e.get("gate", "")), 18.0)
+		"launch_count":                                 # 0.31.28: the launcher's lever
+			_cue("tm_gate_close", 1, e.pos, 30.0, false, 0.8)
+		"launch":
+			_cue("tm_rock_throw", 2, e.pos, 60.0, false, 1.5)
+			_cue("tm_crumble", 2, e.pos, 40.0, false, 0.5)
+		"land":
+			_cue("tm_rock_hit", 2, e.pos, 30.0, false, 0.9)
 		"catapult_fire":
 			_cue("tm_rock_throw", 2, e.get("from", Vector2.INF), 32.0)
 		"catapult_hit":

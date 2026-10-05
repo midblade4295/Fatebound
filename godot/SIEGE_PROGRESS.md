@@ -1704,3 +1704,21 @@ K2/K3 notes (0.17.0)
   target (melee charge him, ranged shoot back; swords don't chase someone up a tower), unless an enemy is already at
   arm's length. tests/answer_test.gd: 4 of 4 waiting raiders go for an archer hitting one of them from 11 m.
 - Quick suite: ALL PASSED (26).
+
+# 0.31.28 (Kevin: a player launcher in each castle -- built with a lot of resources, a lever, a 5 s countdown, everyone
+# on it launched into the enemy castle, flying in real time) -- protocol 33
+- Workshop upgrade "launcher" (60 wood + 45 stone). Pad at castle-local LAUNCH_PAD (-5, 10), r 2.5 m; lever at
+  (-1.4, 10). ACTION at the lever ("PULL LEVER") starts LAUNCH_COUNT 5 s; then everyone on the pad -- either side, not
+  King/fish/bomb carriers, tower archers or workers on a task -- gets state "fly": a straight line over the ground to a
+  spread spot round the enemy courtyard (LAUNCH_LAND (0, 10)), 2.6-4 s at LAUNCH_SPEED 32, with Sim.flight_height an arc
+  peaking ~17 m. Untouchable in the air (no targeting, arrows pass). Land with a 0.45 s stagger. Lever reloads 20 s.
+- Bots: bot-only teams buy it after the second armory level; raiders gather on the pad, the first there pulls the lever
+  once 3 are on it (or after 8 s) and they ride it in (measured: 2-6 launches a match once built). A team with a player
+  leaves the buy to the players.
+- Net v33: state "fly" in STATES, "la" [[count_at, ready_at] x2]; clients take each flyer's arc from the "launch" event.
+- View: stone base, wooden pad, brass rim (glows when ready, throbs faster through the countdown), spring coils, a lever
+  on a post that swings when pulled, the countdown 5..1 over the pad; launch: ring, dust, shake, catapult whoosh; landing:
+  dust ring and thump. The flyer's model follows the arc (measured up to 16.8 m) and the camera with it.
+- Answering fire (0.31.27) cost rescues (3-2/3-1 -> 0-0): a raider on the push now answers only within 6 m, and swords
+  never chase someone on a rampart. Back to 0-1 / 1-1 in seeds 11/22.
+- tests/launcher_test.gd. Quick suite: all pass.

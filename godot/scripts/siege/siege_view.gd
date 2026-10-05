@@ -2493,6 +2493,7 @@ func sync(dt: float) -> void:
 	_sync_raising()
 	_sync_bombs(dt)
 	_kick_debris()
+	_sync_launchers(dt)
 	_sync_ambience(dt)
 	_sync_ripples(dt)
 	_sync_blood(dt)
@@ -2511,6 +2512,8 @@ func sync(dt: float) -> void:
 		var climb_d: float = sim.ladder_depth(u.pos, u.team) if not sim.ladders.is_empty() and u.state != "dead" else INF
 		a.climb = climb_d != INF and Sim.ladder_lift(climb_d, gy) > gy + 0.15
 		var target := Vector3(u.pos.x, Sim.ladder_lift(climb_d, gy) if climb_d != INF else gy, u.pos.y)
+		if u.state == "fly":
+			target.y += sim.flight_height(u)             # 0.31.28: off the launcher, high over the field
 		var before := root.position
 		# Smooth between 30 Hz sim ticks; snap on respawn teleports.
 		if before.distance_to(target) > 6.0:
@@ -2806,6 +2809,20 @@ func on_event(e: Dictionary) -> void:
 				ring_at(a.root.position, GOLD, 3.0, 0.8)
 				for i in 10:
 					spark(a.root.position + Vector3(randf_range(-0.6, 0.6), 0.4 + randf() * 1.4, randf_range(-0.6, 0.6)), GOLD)
+		"launch":
+			for f in e.get("flown", []):
+				if sim.by_id.has(str(f.id)):
+					sim.by_id[str(f.id)]["fly"] = {"from":f.from, "to":f.to, "t0":float(e.t0), "dur":float(f.dur)}
+			var lp := Vector3(e.pos.x, Sim.height_at(e.pos) + 0.2, e.pos.y)
+			ring_at(lp, Color(1.0, 0.85, 0.4), Sim.LAUNCH_PAD_R * 2.2, 0.6)
+			for i in 18:
+				spark(lp + Vector3(randf_range(-1.5, 1.5), randf() * 1.5, randf_range(-1.5, 1.5)), Color(0.85, 0.75, 0.55))
+			shake(0.35)
+		"land":
+			var ld := Vector3(e.pos.x, Sim.height_at(e.pos) + 0.1, e.pos.y)
+			ring_at(ld, Color(0.85, 0.78, 0.62), 2.2, 0.5)
+			for i in 8:
+				spark(ld + Vector3(randf_range(-0.6, 0.6), randf() * 0.5, randf_range(-0.6, 0.6)), Color(0.8, 0.72, 0.58))
 		"bomb_boom":
 			bomb_blast(e.pos)
 			water_blast(e.pos, 1.0)
@@ -4060,3 +4077,140 @@ func _node_aabb(n: Node3D) -> AABB:
 		box = b if first else box.merge(b)
 		first = false
 	return box
+
+
+# ---------- the player launcher (0.31.28) ----------
+# A round wooden pad on a stone base with a brass rim and a great spring under it, and a lever on a post beside it;
+# only once the team has built it. Pulling the lever: the countdown (5..1) hangs over the pad and the rim glows,
+# faster to the end; then everyone on it is thrown (the arc comes from Sim.flight_height).
+var launcher_nodes: Array = [null, null]
+
+func _make_launcher(t: int) -> Dictionary:
+	var root := Node3D.new()
+	var c: Vector2 = sim.launch_pad(t)
+	root.position = Vector3(c.x, Sim.height_at(c), c.y)
+	add_child(root)
+	var stone := StandardMaterial3D.new()
+	stone.albedo_color = Color("#8d8a84")
+	stone.roughness = 0.9
+	var wood := StandardMaterial3D.new()
+	wood.albedo_color = Color("#9c6a3c")
+	wood.roughness = 0.8
+	var brass := StandardMaterial3D.new()
+	brass.albedo_color = Color("#c79a45")
+	brass.metallic = 0.7
+	brass.roughness = 0.35
+	brass.emission_enabled = true
+	brass.emission = Color(1.0, 0.7, 0.25)
+	brass.emission_energy_multiplier = 0.0
+	var base := MeshInstance3D.new()
+	var bm := CylinderMesh.new()
+	bm.top_radius = Sim.LAUNCH_PAD_R + 0.15
+	bm.bottom_radius = Sim.LAUNCH_PAD_R + 0.35
+	bm.height = 0.3
+	base.mesh = bm
+	base.material_override = stone
+	base.position.y = 0.15
+	root.add_child(base)
+	var pad := MeshInstance3D.new()
+	var pm := CylinderMesh.new()
+	pm.top_radius = Sim.LAUNCH_PAD_R
+	pm.bottom_radius = Sim.LAUNCH_PAD_R
+	pm.height = 0.12
+	pad.mesh = pm
+	pad.material_override = wood
+	pad.position.y = 0.36
+	root.add_child(pad)
+	var rim := MeshInstance3D.new()
+	var tm := TorusMesh.new()
+	tm.inner_radius = Sim.LAUNCH_PAD_R - 0.12
+	tm.outer_radius = Sim.LAUNCH_PAD_R + 0.05
+	rim.mesh = tm
+	rim.material_override = brass
+	rim.position.y = 0.42
+	root.add_child(rim)
+	for k in 4:                                       # the spring's coils showing under the pad
+		var coil := MeshInstance3D.new()
+		var cm := TorusMesh.new()
+		cm.inner_radius = 0.55
+		cm.outer_radius = 0.68
+		coil.mesh = cm
+		coil.material_override = brass
+		coil.position = Vector3(0.0, 0.05 + k * 0.07, 0.0)
+		root.add_child(coil)
+	var lv: Vector2 = sim.launch_lever(t)
+	var lever := Node3D.new()
+	lever.position = Vector3(lv.x, Sim.height_at(lv), lv.y)
+	add_child(lever)
+	var post := MeshInstance3D.new()
+	var pom := BoxMesh.new()
+	pom.size = Vector3(0.35, 0.9, 0.35)
+	post.mesh = pom
+	post.material_override = wood
+	post.position.y = 0.45
+	lever.add_child(post)
+	var arm := Node3D.new()
+	arm.position.y = 0.85
+	lever.add_child(arm)
+	var stick := MeshInstance3D.new()
+	var sm := CylinderMesh.new()
+	sm.top_radius = 0.05
+	sm.bottom_radius = 0.06
+	sm.height = 1.0
+	stick.mesh = sm
+	stick.material_override = brass
+	stick.position.y = 0.5
+	arm.add_child(stick)
+	var knob := MeshInstance3D.new()
+	var km := SphereMesh.new()
+	km.radius = 0.13
+	km.height = 0.26
+	knob.mesh = km
+	var red := StandardMaterial3D.new()
+	red.albedo_color = Color("#c0392b")
+	knob.material_override = red
+	knob.position.y = 1.0
+	arm.add_child(knob)
+	arm.rotation.x = -0.6
+	var lbl := Label3D.new()
+	lbl.font_size = 220
+	lbl.outline_size = 36
+	lbl.modulate = Color(1.0, 0.86, 0.4)
+	lbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	lbl.no_depth_test = true
+	lbl.position = Vector3(0.0, 3.2, 0.0)
+	lbl.visible = false
+	root.add_child(lbl)
+	return {"root":root, "lever":lever, "arm":arm, "rim":brass, "label":lbl}
+
+func _sync_launchers(dt: float) -> void:
+	for t in 2:
+		var built: bool = sim.launcher_built(t)
+		var ln = launcher_nodes[t]
+		if not built:
+			if ln != null:
+				(ln.root as Node3D).visible = false
+				(ln.lever as Node3D).visible = false
+			continue
+		if ln == null:
+			ln = _make_launcher(t)
+			launcher_nodes[t] = ln
+			ring_at((ln.root as Node3D).position + Vector3(0.0, 0.3, 0.0), GOLD, 3.5, 0.9)
+		(ln.root as Node3D).visible = true
+		(ln.lever as Node3D).visible = true
+		var l: Dictionary = sim.launchers[t]
+		var counting := float(l.count_at) >= 0.0
+		var lbl: Label3D = ln.label
+		lbl.visible = counting
+		(ln.arm as Node3D).rotation.x = lerpf((ln.arm as Node3D).rotation.x, 0.6 if counting else -0.6, 1.0 - exp(-dt * 10.0))
+		if counting:
+			var left := maxf(0.0, Sim.LAUNCH_COUNT - (sim.time - float(l.count_at)))
+			var n := int(ceil(left))
+			if lbl.text != str(n):
+				lbl.text = str(n)
+				lbl.scale = Vector3.ONE * 1.4
+			lbl.scale = lbl.scale.lerp(Vector3.ONE, 1.0 - exp(-dt * 8.0))
+			(ln.rim as StandardMaterial3D).emission_energy_multiplier = 1.5 + 1.5 * sin(_time * lerpf(6.0, 22.0, 1.0 - left / Sim.LAUNCH_COUNT))
+		else:
+			var ready: bool = sim.time >= float(l.ready_at)
+			(ln.rim as StandardMaterial3D).emission_energy_multiplier = (0.6 + 0.4 * sin(_time * 2.0)) if ready else 0.0

@@ -66,6 +66,7 @@ run stands_test          STANDS_PASS              200
 run bomb_test            BOMB_TEST_PASS           200
 run digest_test          DIGEST_PASS              60
 run answer_test          ANSWER_PASS              60
+run launcher_test        LAUNCHER_PASS            60
 run net_load_test        NET_LOAD_PASS            120
 # The human soak must never stall the game thread.
 if ! grep -q 'stalls=0' /tmp/siege_test_siege_human_soak.log; then

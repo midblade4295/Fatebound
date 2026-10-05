@@ -8,7 +8,7 @@ extends RefCounted
 # objects: decode() uses the default allow_objects=false.
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 
-const VERSION := 32              # 32 = one snapshot for all + "m" task messages, timed interpolation; 31 = the bomb (bm); 30 = smaller snapshots: packed projectiles/items/Kings, slow state only when it changes (0.31.8); 29 = no class caps; per-class stand stock/restock, no heal stacking, armory +8 %, worker 80 hp; 28 = class caps; 27 = the Necromancer (drain + heal beams, unit field 32); 26 = Resurrection, bigger nova/sanctuary; 25 = logs/rocks (it); 24 = the Crusader and its thrown hammer; 23 = tower shot heights, run off a deck; 22 = wide roofless towers; 21 = natural hills, every class climbs; 20 = bigger towers; 19 = the bigger natural map; 18 = no "water" in the dungeons (wading only in the river); 17 = rampart shots
+const VERSION := 33              # 33 = the player launcher (state "fly", "la"); 32 = one snapshot for all + "m" task messages, timed interpolation; 31 = the bomb (bm); 30 = smaller snapshots: packed projectiles/items/Kings, slow state only when it changes (0.31.8); 29 = no class caps; per-class stand stock/restock, no heal stacking, armory +8 %, worker 80 hp; 28 = class caps; 27 = the Necromancer (drain + heal beams, unit field 32); 26 = Resurrection, bigger nova/sanctuary; 25 = logs/rocks (it); 24 = the Crusader and its thrown hammer; 23 = tower shot heights, run off a deck; 22 = wide roofless towers; 21 = natural hills, every class climbs; 20 = bigger towers; 19 = the bigger natural map; 18 = no "water" in the dungeons (wading only in the river); 17 = rampart shots
 const DEFAULT_URL := "wss://136-113-125-3.sslip.io/fatebound/siege/ws"
 const DEFAULT_PORT := 8082
 const SNAP_HZ := 20.0            # 15 -> 20 (0.31.23); 10 -> 15 (0.18.4)
@@ -23,7 +23,7 @@ const PREDICT_SOFT := 0.7        # m: beyond this it is eased back toward the se
 const MAX_PACKET := 64 * 1024            # client -> server; anything larger is dropped
 const TEAM_SIZE := 16
 
-const STATES := ["idle", "move", "wind", "recover", "dodge", "dead", "lift", "gather", "repair", "build_ladder", "fish"]
+const STATES := ["idle", "move", "wind", "recover", "dodge", "dead", "lift", "gather", "repair", "build_ladder", "fish", "fly"]
 const CLASSES := ["villager", "worker", "knight", "barbarian", "rogue", "ranger", "mage", "priest"]
 const LOADS := ["", "wood", "stone"]
 const TASKS := ["", "gather", "repair", "build_ladder"]
@@ -172,7 +172,8 @@ static func snapshot(sim, for_unit: String, events: Array) -> Dictionary:
 		oracles.append([_code(ORACLE_STATES, o.state), snappedf((o.pos as Vector2).x, 0.01), snappedf((o.pos as Vector2).y, 0.01),
 			sim.units.find(sim.by_id.get(str(o.carrier), {})) + 1, int(o.carry_team) + 1, snappedf(float(o.dropped_at), 0.1), int(o.cakes), int(o.weight), lif])
 	var msg := {"t":"s", "tm":sim.time, "sc":sim.score.duplicate(), "k":sim.kills.duplicate(), "end":[sim.ended, sim.winner, sim.end_reason],
-		"it":_pack_items(sim), "bm":_pack_bombs(sim), "u":packed, "p":proj, "o":oracles, "e":events}
+		"it":_pack_items(sim), "bm":_pack_bombs(sim), "u":packed, "p":proj, "o":oracles, "e":events,
+		"la":[[sim.launchers[0].count_at, sim.launchers[0].ready_at], [sim.launchers[1].count_at, sim.launchers[1].ready_at]]}
 	# Slow-changing state: only when it changed, and in full once a second (FULL_EVERY) so a late joiner catches up.
 	_slow_n += 1
 	var full := _slow_n % FULL_EVERY == 0
@@ -325,6 +326,9 @@ static func apply(sim, msg: Dictionary, me_id: String, predict := false) -> void
 		g.open = gates[gi * 4 + 3] > 0.5
 	_apply_items(sim, msg.get("it", PackedByteArray()))
 	_apply_bombs(sim, msg.get("bm", []))
+	var la: Array = msg.get("la", [])
+	for t in mini(2, la.size()):
+		sim.launchers[t] = {"count_at":float(la[t][0]), "ready_at":float(la[t][1])}
 	var nodes: PackedInt32Array = msg.get("n", PackedInt32Array())
 	for ni in mini(sim.nodes.size(), nodes.size()):
 		sim.nodes[ni].amount = nodes[ni]

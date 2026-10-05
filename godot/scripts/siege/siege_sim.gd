@@ -115,6 +115,8 @@ const UPGRADES := {
 	"hat_priest":    {"name":"Necromancer Hats", "max":1, "cost":[{"wood":12,"stone":12}], "desc":"The Priest stand makes Necromancer hats: drain enemies, heal allies, raise the fallen"},
 	"catapult": {"name":"Catapults", "max":1, "cost":[{"wood":15,"stone":25}],
 		"desc":"Your corner towers lob stones at enemies 5-22 m away"},
+	"launcher": {"name":"Player Launcher", "max":1, "cost":[{"wood":60,"stone":45}],
+		"desc":"A launch pad in your castle: pull its lever, and 5 s later everyone on it flies into the enemy castle"},
 }
 
 # ---- hats (Round 8, Fat Princess style; replaced the dice forge) ----
@@ -650,6 +652,7 @@ func _path_gate(u: Dictionary) -> Dictionary:
 
 # ---------- setup ----------
 func setup(team_size: int, seed_value: int, player_team := 0) -> void:
+	launchers = [{"count_at":-1.0, "ready_at":0.0}, {"count_at":-1.0, "ready_at":0.0}]
 	bombs = [{}, {}]
 	bomb_next = [BOMB_FIRST, BOMB_FIRST]
 	rng.seed = seed_value
@@ -789,6 +792,8 @@ func nearest_enemy(u: Dictionary, max_d: float, prefer_front := false) -> Dictio
 			continue
 		if int(o.tower) >= 0 and not reach_top:
 			continue                           # up a tower: out of a sword's reach
+		if o.state == "fly":
+			continue                           # in the air off the launcher
 		var off: Vector2 = o.pos - u.pos
 		var d := off.length()
 		if d > max_d:
@@ -1098,6 +1103,8 @@ func _interact(u: Dictionary) -> bool:
 		return true
 	if bool(u.get("bomb_held", false)):
 		return _throw_bomb(u)
+	if can_pull_lever(u):
+		return pull_lever(u)
 	var bm := bomb_to_pick(u)
 	if not bm.is_empty():
 		return _pick_bomb(u, bm)
@@ -1253,6 +1260,8 @@ func context_action(u: Dictionary) -> String:
 		return "throw" if (not ho.is_empty() and ho.lifters.size() == 1 and lifters_needed(ho) == 1) else "letgo"
 	if bool(u.get("bomb_held", false)):
 		return "bomb_throw"
+	if can_pull_lever(u):
+		return "launch_lever"
 	if not bomb_to_pick(u).is_empty():
 		return "bomb_pick"
 	var off := _offering_action(u)
@@ -1784,6 +1793,9 @@ func _step_unit(u: Dictionary, dt: float) -> void:
 		if time >= u.respawn_at:
 			_respawn(u)
 		return
+	if u.state == "fly":
+		_step_flight(u)
+		return
 	u.cd_dodge = maxf(0.0, u.cd_dodge - dt)
 	u.cd_ability = maxf(0.0, u.cd_ability - dt)
 	if u.workshop_open and u.pos.distance_to(workshop(u.team)) > WORKSHOP_RADIUS + 0.8:
@@ -1915,7 +1927,8 @@ func move_mult(u: Dictionary, mult := 1.0) -> float:
 	return mult
 
 func client_drivable(u: Dictionary) -> bool:
-	if not alive(u) or u.stun > 0.0 or u.carrying or not u.task.is_empty() or u.workshop_open or int(u.get("tower", -1)) >= 0:
+	if not alive(u) or u.stun > 0.0 or u.carrying or not u.task.is_empty() or u.workshop_open or int(u.get("tower", -1)) >= 0 \
+			or u.state == "fly":
 		return false
 	if u.state == "wind" and CLASSES[u.cls].ability == "lunge" and u.atk == "ability":
 		return false
@@ -2227,7 +2240,7 @@ func _step_projectiles(dt: float) -> void:
 				if c.distance_squared_to(cp) < hit_r2:
 					var o: Dictionary = tunit[t][k]
 					var along := from.distance_squared_to(cp)
-					if alive(o) and along < best_t:        # another projectile may have killed it this tick
+					if alive(o) and o.state != "fly" and along < best_t:        # another projectile may have killed it this tick
 						best_t = along
 						hit = o
 						impact = cp
@@ -2489,6 +2502,7 @@ func _step_world(dt: float) -> void:
 	_step_items(dt)
 	_step_hat_motion(dt)
 	_step_bombs()
+	_step_launchers()
 	_stat_time(dt)
 
 func _commander(team: int) -> void:
@@ -2500,7 +2514,9 @@ func _commander(team: int) -> void:
 	for u in units:
 		if not u.bot and u.team == team:
 			human_team = true
-	var plan := ["armory", "catapult", "hat_knight", "gates", "hat_ranger", "hat_priest", "armory", "hat_barbarian", "gates", "hat_mage", "armory", "hat_rogue"]
+	var plan := ["armory", "catapult", "hat_knight", "gates", "hat_ranger", "hat_priest", "armory", "launcher", "hat_barbarian", "gates", "hat_mage", "armory", "hat_rogue"]
+	if human_team:
+		plan.erase("launcher")                       # (0.31.28) a team with a player leaves that big buy to the players
 	var seen := {}
 	var target := ""
 	for id in plan:
@@ -2878,6 +2894,8 @@ func _think_fighter(u: Dictionary) -> void:
 	if _bot_climb(u):
 		return
 	if u.bot and _think_bomb(u):
+		return
+	if u.bot and _think_launcher(u):
 		return
 	var goal: Vector2 = u.pos
 	var enemy_carrier := oracle_carrier(1 - u.team)    # enemies carrying their Oracle home: stop them
@@ -4098,8 +4116,12 @@ const ANSWER_R := 22.0
 const ANSWER_FRIEND := 9.0
 
 func _attacker_to_answer(u: Dictionary) -> Dictionary:
+	# (0.31.28: measured -- answering everything made raids chase archers on the walls and stop rescuing (3-2/3-1 became
+	# 0-0). A raider on the push only answers within 6 m; swords never chase someone on a rampart.)
 	var best := {}
 	var bd := ANSWER_R
+	if u.role == "raid" and time < float(_assault[u.team].until):
+		bd = 6.0
 	for o in units:
 		if o.team != u.team or not alive(o) or time - float(o.get("hurt_at", -99.0)) > ANSWER_FOR:
 			continue
@@ -4108,10 +4130,134 @@ func _attacker_to_answer(u: Dictionary) -> Dictionary:
 		var a: Dictionary = by_id.get(str(o.get("hurt_by", "")), {})
 		if a.is_empty() or not alive(a) or a.team == u.team:
 			continue
-		if int(a.get("tower", -1)) >= 0 and not bool(CLASSES[u.cls].ranged):
-			continue                                  # up a tower: a sword can't answer it
+		if (int(a.get("tower", -1)) >= 0 or on_rampart(a.pos)) and not bool(CLASSES[u.cls].ranged):
+			continue                                  # up a tower or on a wall: a sword can't answer it
 		var d: float = u.pos.distance_to(a.pos)
 		if d < bd:
 			bd = d
 			best = a
 	return best
+
+
+# ---------- the player launcher (0.31.28, Kevin) ----------
+# Built at the workshop ("launcher", 60 wood + 45 stone): a launch pad in the castle courtyard with a lever beside it.
+# ACTION at the lever starts a LAUNCH_COUNT s countdown; then everyone standing on the pad (any side -- an enemy on it
+# goes too) is thrown in a high arc into the enemy castle, flying in real time (LAUNCH_SPEED, 2.6-4 s), untouchable in
+# the air, landing spread round the middle of their courtyard with a short stagger. The lever needs LAUNCH_RELOAD s
+# before it can be pulled again. Carriers of a King, fish, a bomb, tower archers and workers on a task stay behind.
+const LAUNCH_PAD := Vector2(-5.0, 10.0)        # castle-local, a clear patch of the courtyard
+const LAUNCH_LEVER := Vector2(-1.4, 10.0)
+const LAUNCH_PAD_R := 2.5
+const LAUNCH_LEVER_R := 1.5
+const LAUNCH_COUNT := 5.0
+const LAUNCH_RELOAD := 20.0
+const LAUNCH_LAND := Vector2(0.0, 10.0)        # castle-local, in the ENEMY castle
+const LAUNCH_SPEED := 32.0
+const LAUNCH_STAGGER := 0.45
+var launchers: Array = [{"count_at":-1.0, "ready_at":0.0}, {"count_at":-1.0, "ready_at":0.0}]
+
+func launch_pad(team: int) -> Vector2:
+	return _c(team, LAUNCH_PAD)
+
+func launch_lever(team: int) -> Vector2:
+	return _c(team, LAUNCH_LEVER)
+
+func launcher_built(team: int) -> bool:
+	return int(levels[team].get("launcher", 0)) > 0
+
+func can_pull_lever(u: Dictionary) -> bool:
+	if not alive(u) or u.carrying or u.state == "fly" or not launcher_built(u.team):
+		return false
+	var l: Dictionary = launchers[u.team]
+	return float(l.count_at) < 0.0 and time >= float(l.ready_at) and u.pos.distance_to(launch_lever(u.team)) <= LAUNCH_LEVER_R
+
+func pull_lever(u: Dictionary) -> bool:
+	if not can_pull_lever(u):
+		return false
+	launchers[u.team].count_at = time
+	_event("launch_count", {"team":u.team, "id":u.id, "pos":launch_pad(u.team), "secs":LAUNCH_COUNT})
+	return true
+
+func on_pad(u: Dictionary, team: int) -> bool:
+	return alive(u) and u.state != "fly" and int(u.get("tower", -1)) < 0 and u.pos.distance_to(launch_pad(team)) <= LAUNCH_PAD_R
+
+func _step_launchers() -> void:
+	for t in 2:
+		var l: Dictionary = launchers[t]
+		if float(l.count_at) < 0.0 or time < float(l.count_at) + LAUNCH_COUNT:
+			continue
+		l.count_at = -1.0
+		l.ready_at = time + LAUNCH_RELOAD
+		var flown := []
+		var land := _c(1 - t, LAUNCH_LAND)
+		var k := 0
+		for u in units:
+			if not on_pad(u, t) or u.carrying or u.offering or bool(u.get("bomb_held", false)) or not u.task.is_empty():
+				continue
+			var spot := _push_out(land + dir_of(float(k) * 2.4) * (1.2 + 0.7 * float(k % 3)), UNIT_R, 1 - t)
+			var dist: float = u.pos.distance_to(spot)
+			u.state = "fly"
+			u["fly"] = {"from":u.pos, "to":spot, "t0":time, "dur":clampf(dist / LAUNCH_SPEED, 2.6, 4.0)}
+			u.move = Vector2.ZERO
+			u.path = PackedVector2Array()
+			u.workshop_open = false
+			u.face = angle_of(spot - u.pos)
+			flown.append({"id":u.id, "from":u.pos, "to":spot, "dur":float(u.fly.dur)})
+			k += 1
+		_event("launch", {"team":t, "pos":launch_pad(t), "flown":flown, "t0":time})
+
+func _step_flight(u: Dictionary) -> void:
+	var f: Dictionary = u.get("fly", {})
+	if f.is_empty():
+		u.state = "idle"
+		return
+	var k := clampf((time - float(f.t0)) / float(f.dur), 0.0, 1.0)
+	u.pos = (f.from as Vector2).lerp(f.to, k)
+	if k >= 1.0:
+		u.state = "idle"
+		u.stun = LAUNCH_STAGGER
+		u.erase("fly")
+		u.pos = _push_out(u.pos, UNIT_R, u.team)
+		_event("land", {"id":u.id, "pos":u.pos})
+
+func flight_height(u: Dictionary) -> float:
+	# the arc's height above the straight line (for the view): high and quick, peaking mid-flight
+	var f: Dictionary = u.get("fly", {})
+	if f.is_empty():
+		return 0.0
+	var k := clampf((time - float(f.t0)) / float(f.dur), 0.0, 1.0)
+	return 4.0 * (8.0 + 3.0 * float(f.dur)) * k * (1.0 - k)
+
+func _think_launcher(u: Dictionary) -> bool:
+	# Raiders use it when it's built: gather on the pad; the first there pulls the lever once 3 are on it (or after 8 s).
+	if u.role not in ["raid", "escort"] or u.cls in ["villager", "worker"] or u.carrying or u.offering \
+			or not launcher_built(u.team) or in_castle(u.pos, 1 - u.team) or u.hp < u.max_hp * 0.5:
+		return false
+	var l: Dictionary = launchers[u.team]
+	if float(l.count_at) < 0.0 and time < float(l.ready_at) - 4.0:
+		return false
+	if u.pos.distance_to(launch_pad(u.team)) > 40.0:
+		return false
+	if float(l.count_at) >= 0.0:
+		if on_pad(u, u.team):
+			u.move = Vector2.ZERO
+		else:
+			_nav_to(u, launch_pad(u.team) + dir_of(float(absi(hash(u.id)) % 628) / 100.0) * 1.2, 0.3)
+		return true
+	var aboard := 0
+	for o in units:
+		if o.team == u.team and o.bot and on_pad(o, u.team):
+			aboard += 1
+	if on_pad(u, u.team):
+		u["pad_since"] = float(u.get("pad_since", time))
+		if aboard >= 3 or time - float(u.pad_since) > 8.0:
+			if u.pos.distance_to(launch_lever(u.team)) > LAUNCH_LEVER_R - 0.2:
+				_nav_to(u, launch_lever(u.team), 0.3)
+			else:
+				pull_lever(u)
+		else:
+			u.move = Vector2.ZERO
+		return true
+	u.erase("pad_since")
+	_nav_to(u, launch_pad(u.team) + dir_of(float(absi(hash(u.id)) % 628) / 100.0) * 1.2, 0.3)
+	return true

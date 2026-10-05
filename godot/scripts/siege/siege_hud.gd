@@ -135,7 +135,7 @@ func _build_workshop_panel() -> void:
 	workshop_stock = _label(v, "", 15, VisualTheme.TEXT, _bold)
 	workshop_tools_btn = _button(v, "TAKE TOOLS · BECOME A WORKER", "active", func(): workshop_tools.emit())
 	_label(v, "Workers chop trees and mine stone, carry it here, and repair gates with wood.", 11, Color("#d4cbbb"))
-	for id in ["gates", "armory", "catapult"]:
+	for id in ["gates", "armory", "catapult", "launcher"]:
 		var up: Dictionary = Sim.UPGRADES[id]
 		var b := _button(v, str(up.name), "gold", func(): workshop_buy.emit(id))
 		b.custom_minimum_size = Vector2(0, 54)
@@ -780,7 +780,8 @@ func _draw_button(b: Dictionary, me: Dictionary) -> void:
 				"repair":"REPAIR","gather":"WORKING","repairing":"REPAIRING","ladder":"LADDER","build_ladder":"BUILDING","fish":"FISH","feed":"FEED",
 				"join":"HELP LIFT","letgo":"LET GO","tower_up":"CLIMB","tower_down":"CLIMB DOWN","pick_up":"PICK UP",
 				"bomb_pick":"PICK UP BOMB","bomb_throw":"THROW BOMB",
-				"hat_pick":"PICK UP HAT","hat_equip_up":"WEAR UPGRADE"}.get(b.ctx, "USE")
+				"hat_pick":"PICK UP HAT","hat_equip_up":"WEAR UPGRADE",
+				"launch_lever":"PULL LEVER"}.get(b.ctx, "USE")
 			col = Color("#155258")
 			rim = Color("#9ff6ef")
 			if b.ctx == "hat_up":
