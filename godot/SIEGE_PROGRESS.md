@@ -1859,3 +1859,10 @@ K2/K3 notes (0.17.0)
   with them. All gold (900-3,600): gold-bought items 24 -> 43, ~62,000 gold in all. Arrows and the bare bow frames are
   left out (not weapons).
 - render_skin_icons renders any weapon without an icon; 19 new thumbnails. Quick suite: ALL PASSED (32).
+
+# 0.31.41 (Kevin: the Knight always uses a shield)
+- Four Knight/Crusader weapons had an empty left hand; each now comes with a shield (ids kept, so owners keep them):
+  Greatsword & Kite Shield (shield_A), Crimson Blade & Shield (shield_round_color), Halberd & Tower Shield
+  (shield_square_color), Judgment Maul & Shield (shield_badge). View.make_body: a Knight body (the Knight and the
+  Crusader) with nothing in the left hand gets its own shield_B, so no future item can leave it bare. meta_economy_test:
+  every Knight/Crusader weapon has a shield. Thumbnails re-rendered. Quick suite: ALL PASSED (32).

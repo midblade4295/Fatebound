@@ -181,6 +181,12 @@ func _init() -> void:
 		if str(Eco.CATALOG[cid].kind) == "skin":
 			skins += 1
 	check(skins == 0, "no skins left in the catalog")
+	var shieldless := []
+	for cid in Eco.CATALOG:
+		var ci: Dictionary = Eco.CATALOG[cid]
+		if str(ci.kind) == "weapon" and str(ci["class"]) in ["knight", "crusader"] and not str(ci.get("l", "")).contains("shield"):
+			shieldless.append(cid)
+	check(shieldless.is_empty(), "every Knight and Crusader weapon comes with a shield (0.31.41) %s" % str(shieldless))
 	var rf := fresh("refund")
 	var rawsave := rf.d.duplicate(true)
 	rawsave.owned = ["knight_skin_royal", "knight_skin_gilded", "knight_wpn_greatsword"]

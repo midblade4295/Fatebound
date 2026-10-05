@@ -2350,6 +2350,8 @@ static func make_body(cls: String, cosmetic: Dictionary = {}) -> Dictionary:
 	for hand in ["r", "l"]:
 		if cosmetic.has(hand):
 			look[hand] = cosmetic[hand]
+	if str(look.model) == "Knight" and str(look.l) == "":
+		look.l = "bits/shield_B"            # 0.31.41 (Kevin): a Knight (and a Crusader) always carries a shield
 	var packed := Stage.scene("res://assets/kaykit/heroes/%s.glb" % look.model)
 	if packed == null:
 		return {}

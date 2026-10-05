@@ -105,10 +105,10 @@ static func pass_items(sid: int) -> Array:
 # kind "title": text shown on the profile. source "shop" (gold/gems), "pass", "level".
 const CATALOG := {
 	# --- Knight
-	"knight_wpn_greatsword":{"kind":"weapon", "class":"knight", "name":"Greatsword", "rarity":"rare", "r":"sword_2handed", "l":"", "gold":900, "source":"shop"},
+	"knight_wpn_greatsword":{"kind":"weapon", "class":"knight", "name":"Greatsword & Kite Shield", "rarity":"rare", "r":"sword_2handed", "l":"bits/shield_A", "gold":900, "source":"shop"},
 	"knight_wpn_crest":    {"kind":"weapon", "class":"knight", "name":"Sword & Crest", "rarity":"rare", "r":"sword_1handed", "l":"shield_badge_color", "gold":1100, "source":"shop"},
 	"knight_wpn_tower":    {"kind":"weapon", "class":"knight", "name":"Sword & Tower Shield", "rarity":"epic", "r":"sword_1handed", "l":"shield_square_color", "gems":250, "source":"shop"},
-	"knight_wpn_crimson":  {"kind":"weapon", "class":"knight", "name":"Crimson Greatsword", "rarity":"epic", "r":"sword_2handed_color", "l":"", "source":"pass"},
+	"knight_wpn_crimson":  {"kind":"weapon", "class":"knight", "name":"Crimson Blade & Shield", "rarity":"epic", "r":"sword_2handed_color", "l":"shield_round_color", "source":"pass"},
 	# --- Barbarian
 	"barb_wpn_raider":     {"kind":"weapon", "class":"barbarian", "name":"Axe & Buckler", "rarity":"rare", "r":"axe_1handed", "l":"shield_round_barbarian", "gold":1000, "source":"shop"},
 	"barb_wpn_spiked":     {"kind":"weapon", "class":"barbarian", "name":"Axe & Spiked Shield", "rarity":"epic", "r":"axe_1handed", "l":"shield_spikes_color", "gems":250, "source":"shop"},
@@ -126,7 +126,7 @@ const CATALOG := {
 	# --- Round 11: KayKit Fantasy Weapons Bits ("bits/<model>") and the Priest
 	"knight_wpn_bastion":  {"kind":"weapon", "class":"knight", "name":"Bastion Guard", "rarity":"epic", "r":"bits/sword_B", "l":"bits/shield_D", "gems":280, "source":"shop"},
 	"knight_wpn_oath":     {"kind":"weapon", "class":"knight", "name":"Oathkeeper", "rarity":"legendary", "r":"bits/sword_G", "l":"bits/shield_C", "source":"pass"},
-	"knight_wpn_halberd":  {"kind":"weapon", "class":"knight", "name":"Halberd", "rarity":"epic", "r":"bits/halberd", "l":"", "source":"pass"},
+	"knight_wpn_halberd":  {"kind":"weapon", "class":"knight", "name":"Halberd & Tower Shield", "rarity":"epic", "r":"bits/halberd", "l":"shield_square_color", "source":"pass"},
 	"barb_wpn_hammer":     {"kind":"weapon", "class":"barbarian", "name":"War Hammer", "rarity":"rare", "r":"bits/hammer_C", "l":"", "gold":1100, "source":"shop"},
 	"barb_wpn_twinaxe":    {"kind":"weapon", "class":"barbarian", "name":"Twin Axes", "rarity":"epic", "r":"bits/axe_B", "l":"bits/axe_B", "source":"pass"},
 	"barb_wpn_cleaver":    {"kind":"weapon", "class":"barbarian", "name":"Great Cleaver", "rarity":"legendary", "r":"bits/axe_D", "l":"", "source":"pass"},
@@ -179,7 +179,7 @@ const CATALOG := {
 	"priest_wpn_pilgrim":  {"kind":"weapon", "class":"priest", "name":"Pilgrim's Staff", "rarity":"rare", "r":"bits/staff_A", "l":"", "gold":1000, "source":"shop"},
 	"priest_wpn_mace":     {"kind":"weapon", "class":"priest", "name":"Mace & Holy Shield", "rarity":"epic", "r":"bits/hammer_B", "l":"shield_badge", "gold":2000, "source":"shop"},
 	"worker_wpn_felling":  {"kind":"weapon", "class":"worker", "name":"Felling Axe", "rarity":"rare", "r":"bits/axe_C", "l":"", "gold":900, "source":"shop"},
-	"crus_wpn_maul":       {"kind":"weapon", "class":"crusader", "name":"Judgment Maul", "rarity":"legendary", "r":"bits/hammer_D", "l":"", "gold":3600, "source":"shop"},
+	"crus_wpn_maul":       {"kind":"weapon", "class":"crusader", "name":"Judgment Maul & Shield", "rarity":"legendary", "r":"bits/hammer_D", "l":"shield_badge", "gold":3600, "source":"shop"},
 	"bers_wpn_broad":      {"kind":"weapon", "class":"berserker", "name":"Broadblade", "rarity":"rare", "r":"bits/sword_D", "l":"", "gold":1200, "source":"shop"},
 	"necro_wpn_spear":     {"kind":"weapon", "class":"necromancer", "name":"Bone Spear", "rarity":"epic", "r":"bits/spear_B", "l":"", "gold":2400, "source":"shop"},
 	"assn_wpn_night":      {"kind":"weapon", "class":"assassin", "name":"Night Blades", "rarity":"epic", "r":"bits/dagger_C", "l":"bits/dagger_C", "gold":2400, "source":"shop"},
