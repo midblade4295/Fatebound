@@ -12,12 +12,17 @@ func _init() -> void:
 	var st: Dictionary = hs.stands.filter(func(x): return x.team == 0 and x.cls == "knight")[0]
 	me.pos = st.p + Vector2(0.9, 0)
 	hs.step(Sim.TICK)
+	assert(me.cls == "villager", "0.31.22: a player doesn't take a hat by walking up")
+	hs.act(me.id, "interact")                       # ACTION takes it
+	hs.step(Sim.TICK)
 	assert(me.cls == "knight" and not me.up and int(st.stock) == Sim.HAT_STOCK_MAX - 1, "villager takes a hat at a stand")
 	hs._kill({}, me)
 	assert(me.cls == "villager" and hs.hats.size() == 1 and hs.hats[0].cls == "knight", "death drops the hat")
 	var foe: Dictionary = hs.units.filter(func(x): return x.team == 1)[0]
+	hs.hats[0].vel = Vector2.ZERO                   # (0.31.20: dropped hats slide; this one is settled)
 	foe.pos = hs.hats[0].pos
 	hs.step(Sim.TICK)
+	hs.act(foe.id, "interact")                      # 0.31.22: picked up with ACTION
 	assert(foe.cls == "knight" and hs.hats.is_empty(), "an enemy villager picks the dropped hat up")
 	var ally: Dictionary = hs.units.filter(func(x): return x.team == 0 and x.id != "you")[0]
 	hs._set_class(ally, "ranger", false)
@@ -29,6 +34,7 @@ func _init() -> void:
 	var ally2: Dictionary = hs.units.filter(func(x): return x.team == 0 and x.id != "you" and x.id != ally.id)[0]
 	ally2.pos = mst.p + Vector2(0.9, 0)
 	hs.step(Sim.TICK)
+	hs.act(ally2.id, "interact")                    # 0.31.22: ACTION
 	assert(ally2.cls == "mage" and ally2.up, "upgraded stand gives the upgraded hat")
 	for i in int(Sim.HAT_REGEN / Sim.TICK) + 2: hs.step(Sim.TICK)
 	assert(int(st.stock) == Sim.HAT_STOCK_MAX, "stands refill")
@@ -42,6 +48,7 @@ func _init() -> void:
 	red.pos = bst.p + Vector2(0.9, 0)
 	assert(Sim.in_castle(red.pos, 0), "the blue stand is inside the blue castle")
 	hs.step(Sim.TICK)
+	hs.act(red.id, "interact")                      # 0.31.22: ACTION
 	assert(red.cls == "mage" and red.up, "a red villager uses a blue stand (blue's upgrade applies)")
 	var op: Dictionary = hs.outposts[0]
 	op.owner = 0
@@ -139,7 +146,9 @@ func _init() -> void:
 	var ally3: Dictionary = us.units.filter(func(x): return x.team == 0 and x.id != "you")[0]
 	ally3.pos = kst.p + Vector2(-0.9, 0)
 	us.step(Sim.TICK)
+	us.act(ally3.id, "interact")                    # 0.31.22: ACTION takes it
 	assert(ally3.cls == "knight" and ally3.up, "the upgraded shop now gives Crusader hats")
+	assert(up_me.up, "0.31.22: the player who bought the upgrade wears it straight away")
 	var rst2: Dictionary = us.stands.filter(func(x): return x.team == 0 and x.cls == "rogue")[0]
 	up_me.pos = rst2.p + Vector2(0.9, 0)
 	assert(us.context_action(up_me) == "hat", "at another class's shop the action is NEW HAT")

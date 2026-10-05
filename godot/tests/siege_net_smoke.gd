@@ -148,6 +148,9 @@ func _process(delta: float) -> bool:
 					# path's end = the unit's own cell centre stalled it 1.8 m short (Round 15).
 					var target: Vector2 = path[1] if path.size() > 1 else (best.p if not best.is_empty() else goal)
 					mode._net_send({"t":"in", "m":(target - me2.pos).normalized(), "h":false})
+					if not best.is_empty() and me2.pos.distance_to(best.p) < 2.2:
+						# 0.31.22: hats are taken with ACTION -- step up to the stand and press it
+						mode._net_send({"t":"in", "m":((best.p as Vector2) - me2.pos).normalized() * 0.5, "h":false, "a":"interact"})
 					# Keep the mode's 20 Hz sender (HUD stick = zero) from overriding the test input.
 					mode._sent_move = Vector2.ZERO
 					mode._send_clock = -1.0

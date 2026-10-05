@@ -26,7 +26,7 @@ const STEPS := [
 	{"id": "hat", "talk": [
 		["t_hat_1", "Right now you're a Villager. Villagers are brave, loyal, and hit like a wet sock."],
 		["t_hat_2", "See the Barracks? That's the Knight's hat shop. Walk up to its door. In this kingdom the hat makes the hero. Don't ask me why. I just read the scrolls."]],
-		"task": "Get a Knight hat at the Barracks door",
+		"task": "Get a Knight hat at the Barracks door (press NEW HAT)",
 		"done": [["t_hat_done", "A Knight! Look at you. Positively shiny. Try not to lose that hat. You'll see why in a moment."]]},
 	{"id": "attack", "talk": [
 		["t_attack_1", "A training dummy awaits in the courtyard. It volunteered. Well. 'Volunteered'. Walk up to it and tap ATTACK, or hold ATTACK to keep whacking."]],

@@ -13,7 +13,7 @@ const Sim = preload("res://scripts/siege/siege_sim.gd")
 const Land = preload("res://scripts/siege/siege_land.gd")
 const Castle = preload("res://scripts/siege/siege_castle.gd")
 const SLOW := {"hook": [[0.95, 2.1, 0.18]], "necro": [[0.6, 2.6, 0.25]], "hammer": [[0.55, 1.75, 0.22]], "whirl": [[0.8, 2.4, 0.22]]}
-const LENGTH := {"waterbomb": 6.0, "bomb": 4.6, "hook": 2.6, "necro": 3.0, "hammer": 2.4, "dawn": 5.0, "clash": 4.5, "captive": 4.0, "heroes": 4.3, "lineup": 4.0, "gather": 4.0, "build": 7.0, "backstab": 4.0, "assault": 5.5,
+const LENGTH := {"catcheck": 1.0, "waterbomb": 6.0, "bomb": 4.6, "hook": 2.6, "necro": 3.0, "hammer": 2.4, "dawn": 5.0, "clash": 4.5, "captive": 4.0, "heroes": 4.3, "lineup": 4.0, "gather": 4.0, "build": 7.0, "backstab": 4.0, "assault": 5.5,
 	"rampart": 4.0, "whirl": 3.2, "feast": 4.0, "carry": 5.0, "throne": 4.0, "reveal": 9.0,
 	# Round 28 (Kevin + Derek Lieu's makeover advice: core action first, struggle, comedy, fewer cards)
 	"breakin": 10.6, "carry2": 7.9, "toofat": 5.5, "hatsteal": 5.0}
@@ -81,6 +81,12 @@ func _stage() -> void:
 		_revive(u)
 		u.bot = true
 	match shot:
+		"catcheck":
+			# (0.31.22 check) our catapult tower seen from the field
+			var cpt: Vector2 = Sim._c(0, Vector2(Sim.CATAPULT_X, Sim.FRONT_Z + 0.3))
+			var out: Vector2 = (Vector2.ZERO - cpt).normalized()
+			cam_a = [_v(cpt + out * 13.0 + Vector2(4.0, 0.0), 8.0), _v(cpt, 4.5)]
+			cam_b = cam_a
 		"waterbomb":
 			# (0.31.21 check) the bomb thrown into the river: the water heaves and the rings run out across it
 			var wx := -22.0

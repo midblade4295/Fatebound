@@ -2089,6 +2089,9 @@ func _build_castle(t: int) -> void:
 		if cat != null:
 			var turret: Node3D = cat.find_child("*turret*", true, false)
 			var arm: Node3D = cat.find_child("*arm*", true, false)
+			if turret != null:                                  # 0.31.22: at rest it faces the field, not the castle
+				var fl := cat.to_local(Vector3(0.0, 0.0, 0.0))
+				turret.rotation.y = atan2(fl.x, fl.z)
 			catapult_nodes.append({"team":t, "p":cp, "node":cat, "turret":turret, "arm":arm,
 				"arm_rest":arm.rotation.x if arm != null else 0.0, "fired":-10.0})
 	# The throne (Round 14, Kevin's ask; the keep that stood here blocked it): a Blender model against
@@ -2798,6 +2801,11 @@ func on_event(e: Dictionary) -> void:
 				ring_at(a.root.position, GOLD, 3.0 if e.up else 2.0, 0.8)
 				for i in (10 if e.up else 5):
 					spark(a.root.position + Vector3(randf_range(-0.6, 0.6), 0.4 + randf()*1.4, randf_range(-0.6, 0.6)), GOLD)
+		"hat_equip_up":
+			if not a.is_empty():
+				ring_at(a.root.position, GOLD, 3.0, 0.8)
+				for i in 10:
+					spark(a.root.position + Vector3(randf_range(-0.6, 0.6), 0.4 + randf() * 1.4, randf_range(-0.6, 0.6)), GOLD)
 		"bomb_boom":
 			bomb_blast(e.pos)
 			water_blast(e.pos, 1.0)
@@ -2896,7 +2904,7 @@ func on_event(e: Dictionary) -> void:
 					var tgt: Vector2 = e.to
 					var cat_node: Node3D = best.node
 					var local := cat_node.to_local(Vector3(tgt.x, 0, tgt.y))
-					(best.turret as Node3D).rotation.y = atan2(-local.x, -local.z)
+					(best.turret as Node3D).rotation.y = atan2(local.x, local.z)      # 0.31.22: the model throws along +z
 			var stone := _place(HEX + "projectile_catapult.gltf", Vector3(e.from.x, 4.2, e.from.y), 0.0, 3.2)
 			if stone != null:
 				_fx.append({"node":stone, "at":_time, "life":float(e.flight), "kind":"shell",
@@ -3202,9 +3210,17 @@ func _update_camera(dt: float) -> void:
 	var a: Dictionary = actors.get(player_id, {})
 	if not a.is_empty():
 		focus = a.root.position
-	if not me.is_empty() and me.state == "dead":
-		var sp: Vector2 = Sim.spawn(me.team)
-		focus = Vector3(sp.x, 0, sp.y)
+	if not me.is_empty() and me.state == "dead" and not a.is_empty():
+		# 0.31.22 (Kevin): the camera stays with your body through the countdown (it cut to your spawn) -- with the
+		# ragdoll's hips if it has one, so it follows where you were thrown
+		var rg = a.get("rag")
+		focus = a.root.position
+		if rg != null and is_instance_valid(rg.sim):
+			for pb in (rg.sim as Node).get_children():
+				if pb is PhysicalBone3D and str((pb as PhysicalBone3D).bone_name) == "hips":
+					focus = (pb as Node3D).global_position
+					focus.y = 0.0
+					break
 	# Look up-field (toward the enemy keep) so more of what's ahead is on screen.
 	var ahead := -1.0 if me.get("team", 0) == 0 else 1.0
 	var target := focus + Vector3(0, 0, ahead * 3.2)

@@ -779,7 +779,8 @@ func _draw_button(b: Dictionary, me: Dictionary) -> void:
 			label = {"hat_up":"UPGRADE","hat":"NEW HAT","class_full":"FULL","grab":"LIFT","throw":"THROW","workshop":"WORKSHOP","chop":"CHOP","mine":"MINE",
 				"repair":"REPAIR","gather":"WORKING","repairing":"REPAIRING","ladder":"LADDER","build_ladder":"BUILDING","fish":"FISH","feed":"FEED",
 				"join":"HELP LIFT","letgo":"LET GO","tower_up":"CLIMB","tower_down":"CLIMB DOWN","pick_up":"PICK UP",
-				"bomb_pick":"PICK UP BOMB","bomb_throw":"THROW BOMB"}.get(b.ctx, "USE")
+				"bomb_pick":"PICK UP BOMB","bomb_throw":"THROW BOMB",
+				"hat_pick":"PICK UP HAT","hat_equip_up":"WEAR UPGRADE"}.get(b.ctx, "USE")
 			col = Color("#155258")
 			rim = Color("#9ff6ef")
 			if b.ctx == "hat_up":

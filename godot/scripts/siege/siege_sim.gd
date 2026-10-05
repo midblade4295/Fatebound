@@ -1121,12 +1121,23 @@ func _interact(u: Dictionary) -> bool:
 			u.task = {"kind":"gather", "node":n.id, "t":GATHER_TIME}
 			u.face = angle_of(n.p - u.pos)
 			return true
+	if u.cls == "villager":
+		# 0.31.22 (Kevin: "don't have hats be auto pickup"): a player takes a hat with ACTION -- a dropped one, else a stand's
+		var dh := hat_to_pick(u)
+		if not dh.is_empty():
+			return _pick_dropped_hat(u, dh)
+		var vst := stand_near(u)
+		if not vst.is_empty():
+			return _take_hat(u, vst)
 	var hs := hat_shop_upgrade(u)
 	if hs != "":
 		var ok := buy_upgrade(u.team, hs, u)
 		if ok:
 			_event("hat_upgrade", {"id":u.id, "team":u.team, "up":hs})
+			_equip_upgrade(u)                         # the one who paid for it wears it straight away
 		return ok
+	if can_equip_upgrade(u):
+		return _equip_upgrade(u)
 	if u.cls != "villager" and _swap_hat(u):
 		return true
 	if u.pos.distance_to(workshop(u.team)) <= WORKSHOP_RADIUS:
@@ -1259,9 +1270,17 @@ func context_action(u: Dictionary) -> String:
 			return "pick_up"
 		if not n.is_empty():
 			return "chop" if n.kind == "wood" else "mine"
+	if u.cls == "villager":
+		if not hat_to_pick(u).is_empty():
+			return "hat_pick"
+		var vst := stand_near(u)
+		if not vst.is_empty() and int(vst.stock) > 0:
+			return "hat" if can_take_class(u, str(vst.cls)) else "class_full"
 	if u.cls != "villager":
 		if hat_shop_upgrade(u) != "":
 			return "hat_up"
+		if can_equip_upgrade(u):
+			return "hat_equip_up"
 		var st := stand_near(u)
 		if not st.is_empty() and st.cls != u.cls and int(st.stock) > 0:
 			return "hat" if can_take_class(u, str(st.cls)) else "class_full"
@@ -1349,9 +1368,12 @@ func _step_hats(dt: float) -> void:
 		if hats[i].t >= HAT_LIFETIME:
 			_event("hat_expire", {"hat":hats[i].id})
 			hats.remove_at(i)
-	# Villagers take a hat by walking over one (dropped hats first, then any stand they reach).
+	# Bot Villagers take a hat by walking over one (dropped hats first, then any stand they reach); players press ACTION
+	# (0.31.22). Bots also swap to the upgraded hat at their stand once the team owns the upgrade.
 	for u in units:
-		if not alive(u) or u.cls != "villager" or u.carrying or u.stun > 0.0:
+		if alive(u) and u.bot and u.cls != "villager" and can_equip_upgrade(u):
+			_equip_upgrade(u)
+		if not alive(u) or u.cls != "villager" or u.carrying or u.stun > 0.0 or not u.bot:
 			continue
 		var picked := false
 		for i in hats.size():
@@ -3859,3 +3881,38 @@ func _blast_push(at: Vector2, radius: float, speed: float) -> void:
 			it["asleep"] = false
 			if it.kind == "log":
 				it.spin = float(it.spin) + rng.randf_range(-3.0, 3.0)
+
+
+# ---------- hats by hand, and putting on the upgrade (0.31.22) ----------
+func hat_to_pick(u: Dictionary) -> Dictionary:
+	if u.cls != "villager" or u.carrying or not alive(u):
+		return {}
+	for h in hats:
+		if u.pos.distance_to(h.pos) <= HAT_PICK_R + 0.3 and can_take_class(u, str(h.cls)):
+			return h
+	return {}
+
+func _pick_dropped_hat(u: Dictionary, h: Dictionary) -> bool:
+	hats.erase(h)
+	_set_class(u, h.cls, h.up)
+	_event("hat_pick", {"id":u.id, "cls":h.cls, "team":u.team, "hat":h.id})
+	return true
+
+func can_equip_upgrade(u: Dictionary) -> bool:
+	# Kevin: "the player can equip the upgraded hat at the shop when it gets upgraded": at your own team's stand for
+	# your class, once the team owns that hat upgrade, an ordinary hat can be traded for the upgraded one.
+	if not alive(u) or u.cls == "villager" or u.up or u.carrying:
+		return false
+	var st := stand_near(u)
+	if st.is_empty() or int(st.team) != u.team or str(st.cls) != u.cls:
+		return false
+	return int(levels[u.team].get("hat_" + str(u.cls), 0)) > 0
+
+func _equip_upgrade(u: Dictionary) -> bool:
+	if u.up or u.cls == "villager":
+		return false
+	var hp_frac: float = u.hp / maxf(1.0, float(stat(u, "hp")))
+	_set_class(u, u.cls, true)
+	u.hp = maxf(u.hp, float(stat(u, "hp")) * hp_frac)
+	_event("hat_equip_up", {"id":u.id, "cls":u.cls, "team":u.team})
+	return true

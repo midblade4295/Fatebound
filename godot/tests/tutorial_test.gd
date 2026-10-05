@@ -95,8 +95,7 @@ func _process(delta: float) -> bool:
 				"hat", "upgrade":
 					var st: Dictionary = tut._stand(me.team, "knight")
 					me.pos = st.p + (Sim.spawn(me.team) - (st.p as Vector2)).normalized() * 0.9
-					if id == "upgrade":
-						s.act(mode.hud.player_id, "interact")
+					s.act(mode.hud.player_id, "interact")      # 0.31.22: hats are taken with ACTION
 				"attack":
 					var foe: Dictionary = s.by_id.get(tut._dummy_id, {})
 					if not foe.is_empty():

@@ -1628,3 +1628,15 @@ K2/K3 notes (0.17.0)
   kicked along by whoever walks into them (as the logs and rocks), unless a Villager who can wear it walks over it.
 - View: _blast_bodies() -- ragdolls and loose weapons within the blast are thrown up and away; _kick_debris() -- loose
   weapons are kicked along by walking units. tools/trailer5_shots.gd "waterbomb" check shot.
+
+# 0.31.22 (Kevin: the catapult model is backwards; the camera stays with the body through the respawn countdown; hats
+# not auto-pickup; equip the upgraded hat at the shop once it's upgraded)
+- Catapult towers: the turret faces the field at rest (it faced the castle) and aims with atan2(local.x, local.z) (the
+  model throws along +z; it was turned the wrong way round when firing).
+- Camera: while you're dead it stays with your body (the ragdoll's hips if there is one), not your spawn.
+- Hats: players take them with ACTION -- a dropped hat (hat_to_pick, "PICK UP HAT") or a stand ("NEW HAT"); bots still take
+  them by walking over (their AI's button press). At your own team's stand for your class, once the team owns that hat
+  upgrade, ACTION trades your ordinary hat for the upgraded one (can_equip_upgrade/_equip_upgrade, "WEAR UPGRADE"); the
+  player who buys the upgrade at the stand wears it at once; bots swap when they're at their stand. Tutorial hat task
+  text: "(press NEW HAT)". Tests updated (stands, tutorial, net smoke, sim smoke hat rules).
+- Quick suite: all pass except siege_sim_smoke (rescues 0 in seeds 11/22; its hat-rule checks all pass).

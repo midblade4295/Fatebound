@@ -24,7 +24,20 @@ func _init() -> void:
 	var v: Dictionary = mine[7]
 	v.pos = st.p
 	s.step()
-	check(v.cls == "knight", "no cap: a 7th knight takes a hat")
+	check(v.cls == "villager", "0.31.22: a player doesn't take a hat just by walking up")
+	check(s.context_action(v) == "hat", "the button offers the hat at the stand")
+	s.act(v.id, "interact")
+	s.step()
+	check(v.cls == "knight", "no cap: a 7th knight takes a hat (ACTION)")
+	# 0.31.22: once the team owns the Crusader upgrade, a Knight can put on the upgraded hat at the stand
+	var kup: Dictionary = mine[0]
+	kup.pos = st.p
+	s.levels[0]["hat_knight"] = 1
+	check(s.context_action(kup) == "hat_equip_up", "the button offers the upgraded hat to a Knight at his stand")
+	s.act(kup.id, "interact")
+	check(kup.up and kup.cls == "knight", "the Knight now wears the upgraded hat")
+	s.levels[0]["hat_knight"] = 0
+	s._set_class(kup, "knight", false)              # back to an ordinary Knight for the checks below
 	var ps: Dictionary = s.stands.filter(func(x): return int(x.team) == 0 and x.cls == "priest")[0]
 	var ms: Dictionary = s.stands.filter(func(x): return int(x.team) == 0 and x.cls == "mage")[0]
 	check(int(ps.stock) == 2 and int(ms.stock) == 2 and int(st.stock) == 2, "priest and mage stands hold 2 hats (knight 3, one taken)")
