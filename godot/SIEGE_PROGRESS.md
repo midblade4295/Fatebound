@@ -1722,3 +1722,15 @@ K2/K3 notes (0.17.0)
 - Answering fire (0.31.27) cost rescues (3-2/3-1 -> 0-0): a raider on the push now answers only within 6 m, and swords
   never chase someone on a rampart. Back to 0-1 / 1-1 in seeds 11/22.
 - tests/launcher_test.gd. Quick suite: all pass.
+
+# 0.31.29 (Kevin: double kills, triple kills, etc.)
+- Sim._multi_kill: enemy kills by the same player each within MULTI_WINDOW 4 s of the last chain: 2 DOUBLE KILL,
+  3 TRIPLE KILL, 4 QUADRA KILL, 5 PENTA KILL, 6+ LEGENDARY; event "multikill" {id, team, n, name}; best_multi kept per
+  unit. Friendly kills (a bomb on your own side) don't count; a bomb that kills three enemies at once is a TRIPLE.
+- HUD: your own multi-kill slams onto the middle of the screen in Luckiest Guy (white-gold -> orange -> red -> pink ->
+  purple by tier), settles and fades over 1.8 s; anyone else's triple or better shows as a line ("An ally: TRIPLE
+  KILL" / "An enemy: ...").
+- The Herald calls yours: assets/vo/herald/mk_double/triple/quadra/penta/legendary.ogg (ElevenLabs Edward, one take:
+  "Double kill!", "Triple kill!", "Quadra kill! Show-off.", "Penta kill! Somebody stop him!", "LEGENDARY!"), at the
+  master volume; a newer call cuts off the one before (Mode._herald_say).
+- tests/multikill_test.gd. Quick suite: ALL PASSED (28).

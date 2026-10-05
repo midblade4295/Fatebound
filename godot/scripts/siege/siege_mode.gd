@@ -722,6 +722,9 @@ func _event_sound(e: Dictionary) -> void:
 			_cue("tm_gate_open", 1, _gate_pos(e.get("gate", "")), 12.0, false, 0.55)
 		"jail_reset":
 			_cue("tm_unlock", 1, _gate_pos(e.get("gate", "")), 18.0)
+		"multikill":                                    # 0.31.29: the Herald calls your multi-kills
+			if str(e.get("id", "")) == hud.player_id:
+				_herald_say("mk_" + ["", "", "double", "triple", "quadra", "penta", "legendary"][mini(int(e.n), 6)])
 		"launch_count":                                 # 0.31.28: the launcher's lever
 			_cue("tm_gate_close", 1, e.pos, 30.0, false, 0.8)
 		"launch":
@@ -833,3 +836,27 @@ func _music_step(delta: float, muted: bool, lv: Dictionary) -> void:
 	var target := 0.0 if muted else MUSIC_GAIN * float(lv.get("master", 0.75)) * float(lv.get("music", 0.6))
 	var cur := db_to_linear(_music.volume_db)
 	_music.volume_db = linear_to_db(maxf(lerpf(cur, target, minf(1.0, delta * 2.0)), 0.00001))   # eases only on mute / slider
+
+
+# The Herald's in-match lines (0.31.29): assets/vo/herald/<id>.ogg, at the master volume like the tutorial's voice,
+# a newer line cutting off the one before (a quick triple steps on the double).
+var _herald: AudioStreamPlayer = null
+func _herald_say(id: String) -> void:
+	var path := "res://assets/vo/herald/%s.ogg" % id
+	if not ResourceLoader.exists(path):
+		return
+	var master := 1.0
+	var muted := false
+	if audio != null:
+		master = float(audio.levels.get("master", 0.8))
+		muted = bool(audio.get("muted"))
+	if muted or master <= 0.0:
+		return
+	if _herald == null:
+		_herald = AudioStreamPlayer.new()
+		_herald.bus = "Master"
+		add_child(_herald)
+	_herald.stop()
+	_herald.stream = load(path)
+	_herald.volume_db = linear_to_db(master)
+	_herald.play()

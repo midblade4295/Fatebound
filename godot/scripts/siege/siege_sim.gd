@@ -1548,6 +1548,7 @@ func _kill(src: Dictionary, dst: Dictionary) -> void:
 		away = away.normalized() if away.length() > 0.01 else dir_of(float(dst.face) + PI)
 		push = Vector3(away.x * 3.2, 1.6, away.y * 3.2)
 	dst["death_push"] = push
+	_multi_kill(src, dst)
 	_stat_add(src, "kills", 1.0)
 	_stat_add(dst, "deaths", 1.0)
 	dst["died_cls"] = dst.cls
@@ -4261,3 +4262,23 @@ func _think_launcher(u: Dictionary) -> bool:
 	u.erase("pad_since")
 	_nav_to(u, launch_pad(u.team) + dir_of(float(absi(hash(u.id)) % 628) / 100.0) * 1.2, 0.3)
 	return true
+
+
+# ---------- multi-kills (0.31.29, Kevin) ----------
+# Kills by the same player each within MULTI_WINDOW s of the last chain: 2 DOUBLE, 3 TRIPLE, 4 QUADRA, 5 PENTA, 6+
+# LEGENDARY. Enemy kills only (a bomb on your own side counts for nothing). Each step is an event; the best a player
+# reaches is kept for the match stats ("best_multi").
+const MULTI_WINDOW := 4.0
+const MULTI_NAMES := ["", "", "DOUBLE KILL", "TRIPLE KILL", "QUADRA KILL", "PENTA KILL", "LEGENDARY"]
+
+func _multi_kill(src: Dictionary, dst: Dictionary) -> void:
+	if src.is_empty() or not src.has("pos") or int(src.get("team", -1)) == int(dst.team) or not by_id.has(str(src.get("id", ""))):
+		return
+	var n := 1
+	if time - float(src.get("mk_t", -99.0)) <= MULTI_WINDOW:
+		n = int(src.get("mk_n", 1)) + 1
+	src["mk_n"] = n
+	src["mk_t"] = time
+	if n >= 2:
+		src["best_multi"] = maxi(int(src.get("best_multi", 0)), n)
+		_event("multikill", {"id":src.id, "team":int(src.team), "n":n, "name":MULTI_NAMES[mini(n, MULTI_NAMES.size() - 1)]})

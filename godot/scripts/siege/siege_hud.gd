@@ -38,6 +38,9 @@ var _attack_held := false
 var _ability_held := false
 var _pressed_at := {}
 var _toast := ""
+var _multi: Label = null                 # 0.31.29: DOUBLE KILL ... LEGENDARY
+var _multi_at := -10.0
+const MULTI_COLORS := [Color.WHITE, Color.WHITE, Color("#ffe08a"), Color("#ffb04a"), Color("#ff6a3d"), Color("#ff3d6e"), Color("#c77dff")]
 var _toast_at := -10.0
 var _toast_color := Color.WHITE
 var _time := 0.0
@@ -265,6 +268,13 @@ func on_event(e: Dictionary) -> void:
 		toast("%s full · %d/%d" % [str(Sim.CLASSES.get(str(e.cls), {"name":str(e.cls).capitalize()}).get("name", str(e.cls).capitalize())) + ("s" if str(e.cls) != "worker" else "s"), int(e.n), int(e.cap)], VisualTheme.GOLD)
 		return
 	match str(e.k):
+		"multikill":
+			var n := int(e.n)
+			if str(e.id) == str(player_id):
+				_show_multi(str(e.name), n)
+			elif n >= 3:
+				var who: String = "An ally" if mine else "An enemy"
+				toast("%s: %s" % [who, str(e.name)], VisualTheme.CYAN if mine else VisualTheme.RED)
 		"rescue":
 			toast("OUR KING IS HOME!" if mine else "THE ENEMY RESCUED THEIR KING", VisualTheme.GOLD if mine else VisualTheme.RED)
 		"pickup":
@@ -442,7 +452,39 @@ func attack_held() -> bool:
 	return _attack_held or (not _modal_open() and (Input.is_physical_key_pressed(KEY_J) or Input.is_physical_key_pressed(KEY_SPACE)))
 
 # ---------- drawing ----------
+func _show_multi(text: String, n: int) -> void:
+	if _multi == null:
+		_multi = Label.new()
+		_multi.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_multi.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		_multi.add_theme_font_override("font", load("res://assets/fonts/LuckiestGuy-Regular.ttf"))
+		_multi.add_theme_constant_override("outline_size", 14)
+		_multi.add_theme_color_override("font_outline_color", Color(0.12, 0.06, 0.02))
+		_multi.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(_multi)
+	_multi.text = text
+	_multi.add_theme_font_size_override("font_size", 64 + 4 * mini(n - 2, 3))     # fits a portrait phone at rest
+	_multi.add_theme_color_override("font_color", MULTI_COLORS[mini(n, MULTI_COLORS.size() - 1)])
+	_multi_at = _time
+	_multi.visible = true
+
+func _sync_multi() -> void:
+	if _multi == null or not _multi.visible:
+		return
+	var k := (_time - _multi_at) / 1.8
+	if k >= 1.0:
+		_multi.visible = false
+		return
+	var vs := get_viewport_rect().size
+	_multi.size = Vector2(vs.x, 120.0)
+	_multi.pivot_offset = _multi.size * 0.5
+	_multi.position = Vector2(0.0, vs.y * 0.3)
+	var pop := 1.0 + 0.45 * maxf(0.0, 1.0 - k * 6.0)          # slams in big, settles
+	_multi.scale = Vector2.ONE * pop
+	_multi.modulate.a = clampf((1.0 - k) * 3.0, 0.0, 1.0)
+
 func _process(delta: float) -> void:
+	_sync_multi()
 	_time += delta
 	if sim == null:
 		return
