@@ -19,6 +19,7 @@ const FULL_EVERY := 15           # 0.31.8: slow-changing state (stock, levels, n
 const PROJ_KINDS := ["arrow", "fire", "hammer"]
 const ORACLE_STATES := ["cell", "carried", "dropped", "home", "returning", "rescued", "loose"]
 const PREDICT_SNAP := 2.5        # m: a predicting phone snaps to the server beyond this
+const PREDICT_SOFT := 0.7        # m: beyond this it is eased back toward the server's position (0.31.24)
 const MAX_PACKET := 64 * 1024            # client -> server; anything larger is dropped
 const TEAM_SIZE := 16
 
@@ -366,8 +367,11 @@ static func apply(sim, msg: Dictionary, me_id: String, predict := false) -> void
 		me2.erase("net_to")
 		me2.erase("net_from")
 		me2["srv_pos"] = server_pos
-		if sim.client_drivable(me2) and (mine_prev.pos as Vector2).distance_to(server_pos) <= PREDICT_SNAP:
-			me2.pos = mine_prev.pos
+		var drift: float = (mine_prev.pos as Vector2).distance_to(server_pos)
+		if sim.client_drivable(me2) and drift <= PREDICT_SNAP:
+			# 0.31.24: past PREDICT_SOFT the server's position pulls ours back a little each snapshot, so a correction
+			# is a slide rather than a 2.5 m teleport (the server's position is a round trip old, so only a little)
+			me2.pos = mine_prev.pos if drift <= PREDICT_SOFT else (mine_prev.pos as Vector2).lerp(server_pos, 0.12)
 			me2.face = mine_prev.face
 			# A dodge or swing we started locally keeps playing until its timer runs out (the server's
 			# confirmation arrives a round trip later).

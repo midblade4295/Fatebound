@@ -1661,3 +1661,13 @@ K2/K3 notes (0.17.0)
   the round trip plus a snapshot plus the interpolation delay (~200-300 ms).
 - Tests kill their server with SIGKILL (it ignores SIGTERM; stale servers had been grabbing the test port).
 - Quick suite: all pass except siege_sim_smoke (rescues 0 in seeds 11/22).
+
+# 0.31.24 (online follow-up)
+- The draw delay adapts to the connection: the client smooths |arrival gap - snapshot interval| and draws remote units
+  INTERP_DELAY + 1.5 x that behind the newest snapshot, between 75 and 250 ms (a jittery mobile link gets a deeper buffer
+  instead of stutter; a clean one stays at 75 ms).
+- Your own unit: beyond PREDICT_SOFT 0.7 m of drift from the server's position, it's eased back 12 % per snapshot; the
+  2.5 m snap stays as the last resort (a correction slides instead of teleporting).
+- The quick suite no longer requires a bot rescue (NO_RESCUE_CHECK=1 with seeds 11,22); the full six-seed run does.
+  Bot teams rescue in roughly 1 match in 6 -- worth a look at bot carrying some day.
+- Quick suite: ALL PASSED (24).

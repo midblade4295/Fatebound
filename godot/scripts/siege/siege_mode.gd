@@ -49,6 +49,9 @@ var _net_started := 0.0
 var _snap_t := 0.0
 var _net_rt := -1.0                 # 0.31.23: the render clock (server seconds) remote units are drawn at
 var _net_latest := 0.0              # the newest snapshot's server time
+var _net_delay := Net.INTERP_DELAY  # 0.31.24: the draw delay in use (grows with jitter, up to 250 ms)
+var _net_jitter := 0.0              # smoothed |arrival gap - snapshot interval|
+var _net_rx_last := 0.0
 var _pred_fx := {}                  # ability effects shown ahead of the server, by kind: time
 var _snap_dt := 1.0 / Net.SNAP_HZ
 var _send_clock := 0.0
@@ -277,8 +280,15 @@ func _net_process(delta: float) -> void:
 				_snap_dt = lerpf(_snap_dt, maxf(0.03, _snap_t), 0.2) if _snap_t > 0.0 else _snap_dt
 				_snap_t = 0.0
 				_net_latest = float(msg.get("tm", _net_latest))
+				# 0.31.24: the draw delay adapts to the connection -- the gap between arrivals vs the snapshot interval
+				var now_rx := Time.get_ticks_msec() / 1000.0
+				if _net_rx_last > 0.0:
+					var gap := now_rx - _net_rx_last
+					_net_jitter = lerpf(_net_jitter, absf(gap - 1.0 / Net.SNAP_HZ), 0.1)
+				_net_rx_last = now_rx
+				_net_delay = clampf(Net.INTERP_DELAY + 1.5 * _net_jitter, Net.INTERP_DELAY, 0.25)
 				if _net_rt < 0.0:
-					_net_rt = _net_latest - Net.INTERP_DELAY
+					_net_rt = _net_latest - _net_delay
 				for e in msg.get("e", []):
 					diag.event()
 					_count(e)
@@ -302,7 +312,7 @@ func _net_process(delta: float) -> void:
 	# 0.31.23: a render clock in server time, INTERP_DELAY behind the newest snapshot, eased so jitter doesn't show
 	if _net_rt >= 0.0:
 		_net_rt += delta
-		var want := _net_latest - Net.INTERP_DELAY
+		var want := _net_latest - _net_delay
 		var err := want - _net_rt
 		if absf(err) > 0.3:
 			_net_rt = want
