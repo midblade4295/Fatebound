@@ -22,7 +22,7 @@ NO_SYSTEMD="${NO_SYSTEMD:-0}"
 SRC="$(cd "$(dirname "$0")/../.." && pwd)"                  # .../godot
 SERVICE_SRC="$SRC/server/deploy/fatebound-siege.service"
 
-for f in scripts/siege/siege_sim.gd scripts/siege/siege_net.gd scripts/siege/siege_land.gd scripts/siege/siege_castle.gd server/siege_server.gd server/siege_probe.gd; do
+for f in scripts/siege/siege_sim.gd scripts/siege/siege_net.gd scripts/siege/siege_land.gd scripts/siege/siege_castle.gd server/siege_server.gd server/siege_probe.gd server/deploy/bandwidth-server.cfg; do
   [ -f "$SRC/$f" ] || { echo "Missing $SRC/$f — run this from a checkout of the release source." >&2; exit 1; }
 done
 if [ "$NO_SYSTEMD" != "1" ] && [ "$(id -u)" -ne 0 ]; then
@@ -73,6 +73,7 @@ config/name="Fatebound Siege Server"
 [debug]
 file_logging/enable_file_logging=false
 PROJ
+cp "$SRC/server/deploy/bandwidth-server.cfg" "$STAGE/override.cfg"
 # Build Godot's script cache once, so the service can run from a read-only directory.
 "$GODOT_BIN" --headless --path "$STAGE" --import >/dev/null 2>&1 || true
 if [ -d "$DEST" ]; then

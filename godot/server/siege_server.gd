@@ -97,13 +97,16 @@ func _poll_clients() -> void:
 				continue
 			_handle(cid, Net.decode(pkt))
 
-func _send(cid: int, msg: Dictionary) -> void:
+func _send_packet(cid: int, packet: PackedByteArray) -> void:
 	var c: Dictionary = clients.get(cid, {})
 	if c.is_empty():
 		return
 	var ws: WebSocketPeer = c.ws
 	if ws.get_ready_state() == WebSocketPeer.STATE_OPEN:
-		ws.put_packet(Net.encode(msg, msg.get("t", "") == "s"))
+		ws.put_packet(packet)
+
+func _send(cid: int, msg: Dictionary) -> void:
+	_send_packet(cid, Net.encode(msg, msg.get("t", "") == "s"))
 
 func _drop(cid: int, why: String) -> void:
 	var c: Dictionary = clients.get(cid, {})
@@ -281,7 +284,9 @@ func _run_match(delta: float) -> void:
 		var events := _pending_events
 		_pending_events = []
 		var base := Net.snapshot(sim, "", events)      # built once, shared by every player
+		var shared_packet := Net.encode(base, true)  # most players have no private task
 		for cid in clients:
 			var c: Dictionary = clients[cid]
 			if c.hello:
-				_send(cid, Net.for_player(base, sim, c.unit))
+				var msg := Net.for_player(base, sim, c.unit)
+				_send_packet(cid, Net.encode(msg, true) if msg.has("me") else shared_packet)
