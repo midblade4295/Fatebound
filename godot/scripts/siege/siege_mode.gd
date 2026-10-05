@@ -724,7 +724,7 @@ func _event_sound(e: Dictionary) -> void:
 			_cue("tm_gate_open", 1, _gate_pos(e.get("gate", "")), 12.0, false, 0.55)
 		"jail_reset":
 			_cue("tm_unlock", 1, _gate_pos(e.get("gate", "")), 18.0)
-		"pickup", "drop", "rescue", "gate_broken":
+		"pickup", "drop", "rescue", "gate_broken", "outpost_captured", "outpost_lost":
 			_announce_event(e)
 		"multikill":                                    # 0.31.29: the Herald calls your multi-kills
 			if str(e.get("id", "")) == hud.player_id:
@@ -878,7 +878,8 @@ const ANNOUNCE := {
 	"start":[2, 0.0], "our_pickup":[2, 25.0], "their_pickup":[2, 25.0], "our_drop":[2, 20.0],
 	"our_rescue":[3, 0.0], "their_rescue":[3, 0.0], "our_gate":[2, 45.0], "their_gate":[2, 45.0],
 	"their_jail":[2, 45.0], "our_jail":[2, 45.0], "match_point_us":[3, 0.0], "match_point_them":[3, 0.0],
-	"last_minute":[3, 0.0], "ten_seconds":[3, 0.0], "victory":[3, 0.0], "defeat":[3, 0.0], "draw":[3, 0.0]}
+	"last_minute":[3, 0.0], "ten_seconds":[3, 0.0], "victory":[3, 0.0], "defeat":[3, 0.0], "draw":[3, 0.0],
+	"our_outpost":[2, 20.0], "their_outpost":[2, 20.0]}          # 0.31.31: towers taken
 var _ann_last := {}
 var _ann_queue: Array = []                  # [key, priority, wanted_at]
 var _ann_flags := {}
@@ -956,6 +957,11 @@ func _announce_event(e: Dictionary) -> void:
 					_ann_queue.append(["match_point_us", 2, _ann_clock])
 				elif int(sim.score[1 - mine]) == Sim.WIN_RESCUES - 1:
 					_ann_queue.append(["match_point_them", 2, _ann_clock])
+		"outpost_captured":
+			_announce("our_outpost" if int(e.team) == mine else "their_outpost")
+		"outpost_lost":
+			if int(e.team) == mine:
+				_announce("their_outpost")             # one of ours fell to them
 		"gate_broken":
 			var g: Dictionary = sim.gates[int(e.gate)] if int(e.gate) < sim.gates.size() else {}
 			if g.is_empty():

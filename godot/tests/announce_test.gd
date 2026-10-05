@@ -40,6 +40,13 @@ func _process(_d):
 			check(str(said[-1]).begins_with("an_our_rescue_"), "our rescue cuts straight in (%s)" % said[-1])
 		1500:
 			check(said.has("an_match_point_us_1"), "then 'One more rescue and we win!' (%s)" % str(said))
+			mode._announce_event({"k":"outpost_captured", "id":0, "team":t})
+		1800:
+			check(said.any(func(x): return str(x).begins_with("an_our_outpost_")), "a tower taken by us is called (0.31.31)")
+			mode._announce_event({"k":"outpost_lost", "id":1, "team":t})
+		2100:
+			check(said.any(func(x): return str(x).begins_with("an_their_outpost_")), "losing one of ours is called")
+		2110:
 			print("ANNOUNCE_PASS" if fails.is_empty() else "ANNOUNCE_FAIL %s" % str(fails))
 			quit(0 if fails.is_empty() else 1)
 	return false

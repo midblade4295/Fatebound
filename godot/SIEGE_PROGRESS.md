@@ -1744,3 +1744,9 @@ K2/K3 notes (0.17.0)
   jails 45 s, pickups 25 s, a drop 20 s). Lines are timed by their length on the frame clock (the player's playing flag
   sticks on the dummy audio driver). Not in the tutorial. Multi-kill calls share the voice.
 - tests/announce_test.gd. Quick suite: ALL PASSED (29).
+
+# 0.31.31 (Kevin: "announce outposts also")
+- The Herald calls towers: taken by us -- "Tower taken! The view is lovely." / "That tower is ours now!"; taken from us
+  (one of ours lost, or theirs captured) -- "They've taken a tower! Take it back!" / "We've lost a tower. Rude."
+  (an_our_outpost_1/2, an_their_outpost_1/2; ElevenLabs, Edward). Priority 2, a 20 s cooldown each (a tower lost and
+  then captured by them a moment later is one call). announce_test covers both. Quick suite: ALL PASSED (29).
