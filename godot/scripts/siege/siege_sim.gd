@@ -1507,6 +1507,9 @@ func _damage(src: Dictionary, dst: Dictionary, amount: float, stun := 0.0) -> vo
 		_event("fish_lost", {"id":dst.id, "team":dst.team, "pos":dst.pos})
 	dst.task = {}
 	_event("hit", {"id":dst.id,"by":src.get("id",""),"dmg":int(round(amount))})
+	if src.has("pos") and str(src.get("id", "")) != "" and int(src.get("team", -1)) != int(dst.team):
+		dst["hurt_by"] = str(src.id)                  # 0.31.27: bots answer whoever is hurting them (or a friend nearby)
+		dst["hurt_at"] = time
 	if dst.hp <= 0.0:
 		_kill(src, dst)
 	_next_push = Vector3.ZERO
@@ -2925,6 +2928,10 @@ func _think_fighter(u: Dictionary) -> void:
 	if c.ranged:
 		aggro = maxf(aggro, float(c.range) * (0.6 if u.role == "raid" else 0.95))
 	var foe := nearest_enemy(u, aggro)
+	if u.bot and not u.carrying and not u.offering:
+		var hitter := _attacker_to_answer(u)
+		if not hitter.is_empty() and (foe.is_empty() or u.pos.distance_to(foe.pos) > 2.5):
+			foe = hitter
 	if u.cls == "knight" and (foe.is_empty() or u.pos.distance_to(foe.pos) > float(stat(u, "range")) + UNIT_R + 0.6):
 		# Knights go for the archers and mages (their shield is made for it) -- Round 17.
 		var hunt := {}
@@ -4080,3 +4087,31 @@ func _think_bomb(u: Dictionary) -> bool:
 		return true
 	_nav_to(u, b.p, 0.6)
 	return true
+
+
+# ---------- answering fire (0.31.27, Kevin: bots waiting at their rally point didn't react to being shot) ----------
+# A bot that was hit in the last ANSWER_FOR s -- or sees a friend within ANSWER_FRIEND m hit -- takes the attacker as its
+# target if he's within ANSWER_R: melee bots go for the archer, ranged ones shoot back. Before, a bot only looked for
+# enemies within its role's aggro (3.5 m for a raider), so an archer at 10 m could pick off a waiting raid untouched.
+const ANSWER_FOR := 3.0
+const ANSWER_R := 22.0
+const ANSWER_FRIEND := 9.0
+
+func _attacker_to_answer(u: Dictionary) -> Dictionary:
+	var best := {}
+	var bd := ANSWER_R
+	for o in units:
+		if o.team != u.team or not alive(o) or time - float(o.get("hurt_at", -99.0)) > ANSWER_FOR:
+			continue
+		if o.id != u.id and u.pos.distance_to(o.pos) > ANSWER_FRIEND:
+			continue
+		var a: Dictionary = by_id.get(str(o.get("hurt_by", "")), {})
+		if a.is_empty() or not alive(a) or a.team == u.team:
+			continue
+		if int(a.get("tower", -1)) >= 0 and not bool(CLASSES[u.cls].ranged):
+			continue                                  # up a tower: a sword can't answer it
+		var d: float = u.pos.distance_to(a.pos)
+		if d < bd:
+			bd = d
+			best = a
+	return best

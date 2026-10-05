@@ -1696,3 +1696,11 @@ K2/K3 notes (0.17.0)
 - Result (seeds 11/22, 12 min): matches now end 3-2 and 3-1 on rescues (both were 0-0 last week); jails broken at
   59-165 s; the King reaches stage 1-2 under feeding. siege_sim_smoke: rescues in both quick seeds.
 - Quick suite: ALL PASSED (25).
+
+# 0.31.27 (Kevin, screenshot: bots waiting at their rally point didn't react to him shooting them)
+- A raider only looked for enemies within its role's aggro (3.5 m; 2 m while pushing), so an archer at 10+ m could
+  pick off a waiting raid. Now _damage records hurt_by/hurt_at, and _attacker_to_answer(): a bot hit in the last
+  ANSWER_FOR 3 s -- or seeing a friend within ANSWER_FRIEND 9 m hit -- takes the attacker within ANSWER_R 22 m as its
+  target (melee charge him, ranged shoot back; swords don't chase someone up a tower), unless an enemy is already at
+  arm's length. tests/answer_test.gd: 4 of 4 waiting raiders go for an archer hitting one of them from 11 m.
+- Quick suite: ALL PASSED (26).
