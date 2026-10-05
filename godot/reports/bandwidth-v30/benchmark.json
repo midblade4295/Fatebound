@@ -71,7 +71,7 @@
         1337,
         424242
       ],
-      "sim_seconds": 252.0,
+      "sim_seconds": 252,
       "snapshots": 3780,
       "wall_seconds": 113.397416
     },
@@ -100,7 +100,7 @@
         1337,
         424242
       ],
-      "sim_seconds": 252.0,
+      "sim_seconds": 252,
       "snapshots": 3780,
       "wall_seconds": 18.836802
     },
@@ -129,7 +129,7 @@
         1337,
         424242
       ],
-      "sim_seconds": 252.0,
+      "sim_seconds": 252,
       "snapshots": 3780,
       "wall_seconds": 18.98857
     },
@@ -158,7 +158,7 @@
         1337,
         424242
       ],
-      "sim_seconds": 252.0,
+      "sim_seconds": 252,
       "snapshots": 3780,
       "wall_seconds": 28.534476
     },
@@ -187,7 +187,7 @@
         1337,
         424242
       ],
-      "sim_seconds": 252.0,
+      "sim_seconds": 252,
       "snapshots": 3780,
       "wall_seconds": 53.724252
     }
@@ -195,7 +195,7 @@
   "worst_32_private_tasks": {
     "9": {
       "MB_hour_per_private_client": 46.4169107142857,
-      "broadcast_us_avg": 11666.0,
+      "broadcast_us_avg": 11666,
       "broadcast_us_max": 23377,
       "broadcast_us_p99": 23377,
       "errors": 0,
@@ -240,5 +240,27 @@
     "combined_MB_hour": 65.31002406811132
   },
   "scope": "decimal MB, WebSocket game payload only; excludes framing/TLS/TCP/IP overhead; not a phone measurement",
-  "live_deployment": "pending administrator command"
+  "live_deployment": "deployed and verified, 2026-10-05T01:05:30Z",
+  "post_deployment_live_sample": {
+    "combined_MB_hour": 46.9705908552805,
+    "download_MB_hour": 36.8293802913471,
+    "download_bytes": 613964,
+    "download_bytes_second": 10230.3834142631,
+    "input_hz": 19.978744215787,
+    "input_packets": 1199,
+    "match": 2,
+    "method": "live local WebSocket payload, original protocol30 codec, synthetic idle inputs at20Hz; excludes handshake and transport overhead",
+    "protocol": 30,
+    "sample_seconds": 60.013782,
+    "seed": 1274090615,
+    "snapshot_bytes_avg": 680.669623059867,
+    "snapshot_bytes_max": 1274,
+    "snapshot_bytes_min": 266,
+    "snapshot_bytes_p95": 971,
+    "snapshots": 902,
+    "upload_MB_hour": 10.1412105639335,
+    "upload_bytes": 169059,
+    "upload_bytes_second": 2817.00293442596
+  },
+  "live_sample_comparison_note": "Different random matches; observed live rate change is not an isolated optimization effect. The common-fixture download reduction remains 15.51%."
 }

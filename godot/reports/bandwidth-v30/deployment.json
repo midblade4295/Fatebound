@@ -1,0 +1,25 @@
+{
+  "status": "deployed",
+  "verified_at_utc": "2026-10-05T01:07:56.482503+00:00",
+  "started_at_utc": "2026-10-05T01:05:30Z",
+  "protocol": 30,
+  "snapshot_hz": 15,
+  "zstd_level": 9,
+  "service_pid": 773427,
+  "unchanged_legionary_pid": 352495,
+  "unchanged_caddy_pid": 64460,
+  "live_sha256": {
+    "scripts/siege/siege_net.gd": "04faf1cbb7a50a2c220066365ce49f645e4ed01e66e505b8589432805714a2e6",
+    "server/siege_server.gd": "3a0a3c20b0b3ad91ffb019b9a7b1d267a41884bb9ad15dc9abed630089701584",
+    "scripts/siege/siege_sim.gd": "6780488f843b02e9df6879efb0cf0835594930d08f2c2f68c69754e8e0bb97e5",
+    "project.godot": "54771746110c275009b97bc3c2222409c7c6ca6103546abbf928f0fe90e522dc",
+    "override.cfg": "9917fef5fe66cb5062973e92b6f091e8aa0ed778c7fb8064f4104584489d605f"
+  },
+  "backup_directory": "/home/midblade4295/backups/fatebound-bandwidth-20261005T010525Z",
+  "local_probe": "PROBE_OK",
+  "public_probe": "PROBE_OK",
+  "service_active": true,
+  "automatic_restarts": 0,
+  "protected_simulation_and_project_unchanged": true,
+  "deployment_commit": "2d736832e370f2b28de92e7e1455c67576c755e3"
+}

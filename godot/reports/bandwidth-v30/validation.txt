@@ -52,3 +52,11 @@ LEGACY_WS_PASS protocol30 clients=2 snapshots=[28, 20] errors=0 reason=two joins
 Isolated full installer on port 18084: PROBE_OK; selected override config checksum matched.
 Narrow updater --check: BANDWIDTH_PREFLIGHT_OK.
 Shell syntax and git diff whitespace checks: passed.
+
+Post-deployment verification: live Net/server/config match the reviewed files; protected Sim/project unchanged; local/public PROBE_OK; Legionary/Caddy PIDs unchanged.
+/tmp/codex-fatebound-bandwidth-postdeploy-traffic.log
+libfontconfig.so.1: cannot open shared object file: No such file or directory
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+TRAFFIC_RESULT {"combined_MB_hour":46.9705908552805,"download_MB_hour":36.8293802913471,"download_bytes":613964,"download_bytes_second":10230.3834142631,"input_hz":19.978744215787,"input_packets":1199,"match":2,"method":"live local WebSocket payload, original protocol30 codec, synthetic idle inputs at20Hz; excludes handshake and transport overhead","protocol":30,"sample_seconds":60.013782,"seed":1274090615,"snapshot_bytes_avg":680.669623059867,"snapshot_bytes_max":1274,"snapshot_bytes_min":266,"snapshot_bytes_p95":971,"snapshots":902,"upload_MB_hour":10.1412105639335,"upload_bytes":169059,"upload_bytes_second":2817.00293442596}
+TRAFFIC_PASS

@@ -17,7 +17,7 @@ Two deterministic seeds (1337 and 424242), 32 units, 252 simulation seconds, and
 
 Level 9 saves **15.51%** of downloads against the installed codec at level 3. Typical broadcast samples had 1.79 private tasks on average. With all 32 recipients on private tasks, level 9 averaged 11.67 ms per broadcast and peaked at 23.38 ms across 63 samples; level 12 peaked at 52.93 ms and level 15 at 86.82 ms. The snapshot interval is 66.67 ms. These are elapsed timings under shared host load, not process CPU counters or a full concurrent-user load test.
 
-The earlier 60-second live probe measured 65.29 MB/hour received and 10.15 MB/hour sent with synthetic 20 Hz inputs. Applying the controlled download ratio estimates **55.16 MB/hour received + 10.15 sent = 65.31 combined**, versus 75.44 before. This is a projection, not a post-deployment measurement. Traffic depends on match activity and client inputs. All figures use decimal MB and game payload bytes; WebSocket framing, TLS, TCP, and IP overhead are excluded. No physical Android device was measured.
+The earlier 60-second live probe measured 65.29 MB/hour received and 10.15 MB/hour sent with synthetic 20 Hz inputs. Applying the controlled download ratio estimates **55.16 MB/hour received + 10.15 sent = 65.31 combined**, versus 75.44 before. This was the pre-deployment projection. Traffic depends on match activity and client inputs. All figures use decimal MB and game payload bytes; WebSocket framing, TLS, TCP, and IP overhead are excluded. No physical Android device was measured.
 
 Raw measurements are in [benchmark.json](benchmark.json).
 
@@ -54,7 +54,7 @@ The standard quick runner now includes this regression. The legacy codec in `tes
 
 The checked-out Play source is based on 53690c51b42425f5d7ac811440c82b4beb3bb3de. Its original Net and server files exactly match the live protocol-30 files, but its simulation is newer. **Do not run the full installer for this rollout.** The narrow helper updates only the Net script, server script, and dedicated compression override.
 
-The helper requires the exact original Net/server/simulation/project hashes, no existing override, an active Fatebound service, and no established player connections. It backs up the original scripts and project, restarts Fatebound, probes local and public sockets, verifies the simulation and unrelated service PIDs, and restores the prior state on failure. Live deployment is pending administrator access; the connected remote tool blocks `sudo`.
+The helper requires the exact original Net/server/simulation/project hashes, no existing override, an active Fatebound service, and no established player connections. It backs up the original scripts and project, restarts Fatebound, probes local and public sockets, verifies the simulation and unrelated service PIDs, and restores the prior state on failure. The user applied the narrow installer, and deployment was independently verified at 2026-10-05 01:05:30 UTC. Live Net/server/config exactly match the reviewed files; protected simulation/project hashes and unrelated service PIDs are unchanged. Local and public probes passed. See [deployment.json](deployment.json).
 
 On the server:
 
@@ -63,4 +63,4 @@ bash /home/midblade4295/fatebound-bandwidth-v30/godot/server/deploy/update_siege
 sudo bash /home/midblade4295/fatebound-bandwidth-v30/godot/server/deploy/update_siege_bandwidth.sh
 ```
 
-A successful application prints `BANDWIDTH_DEPLOY_OK` and the backup directory. A post-deployment live bandwidth sample is still needed to replace the projection with measured production traffic.
+A successful application prints `BANDWIDTH_DEPLOY_OK` and the backup directory. The post-deployment 60.013782-second live probe decoded/applied 902 snapshots using the original protocol-30 codec, while sending 1,199 synthetic input packets (19.98 Hz). It measured **36.83 MB/hour received + 10.14 sent = 46.97 combined per player**. This is a different random match from the earlier sample, so activity contributes to the larger observed drop; the isolated same-fixture download improvement remains 15.51%. Both probes measure payload only, not transport overhead or physical-phone usage. The probe disconnected cleanly; the live listener stayed healthy.
