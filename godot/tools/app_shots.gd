@@ -50,7 +50,11 @@ func _process(_d: float) -> bool:
 	# optional scrolled shot at +38.
 	for i in tabs.size():
 		var base_f := 10 + i * 45
-		if frames == base_f: app.show_tab(tabs[i])
+		if frames == base_f:
+			app.show_tab(tabs[i])
+			if tabs[i] == "locker" and OS.has_environment("SHOT_LOCKER"):
+				app.locker_class = OS.get_environment("SHOT_LOCKER")
+				app.rebuild()
 		if frames == base_f + 30: pending = tabs[i]
 		if scroll > 0 and frames == base_f + 34: app.content_scroll.scroll_vertical = scroll
 		if scroll > 0 and frames == base_f + 42: pending = tabs[i] + "_2"

@@ -22,7 +22,7 @@ func now() -> int:
 
 static func defaults() -> Dictionary:
 	var equip := {}
-	for c in Eco.CLASSES:
+	for c in Eco.CLASSES + Eco.UP_CLASSES:
 		equip[c] = {"skin":"", "weapon":""}
 	return {"schema":SCHEMA, "name":"Player", "gold":0, "gems":0, "level":1, "xp":0,
 		"pass":{"season":0, "xp":0, "premium":false, "free":[], "prem":[]},
@@ -60,7 +60,9 @@ func _normalized(v: Dictionary) -> Dictionary:
 		if Eco.CATALOG.has(str(id)) and not owned.has(str(id)):
 			owned.append(str(id))
 	out.owned = owned
-	for c in Eco.CLASSES:
+	for c in Eco.CLASSES + Eco.UP_CLASSES:
+		if not out.equip.has(c):
+			out.equip[c] = {"skin":"", "weapon":""}
 		for slot in ["skin", "weapon"]:
 			var id := str(out.equip[c].get(slot, ""))
 			if id != "" and not owned.has(id):

@@ -1,4 +1,5 @@
 extends Control
+const Eco = preload("res://scripts/meta/economy.gd")
 # 3D hero: the player's equipped look for a class idling on a small stone dais. Transparent
 # background so it sits on the pre-rendered Blender backdrop (assets/ui/hero_backdrop.jpg).
 # Rendered in its own SubViewport at physical-pixel resolution; only transforms change per frame.
@@ -157,14 +158,15 @@ func _rebuild() -> void:
 	_key = key
 	if body != null:
 		body.queue_free()
-	var made: Dictionary = View.make_body(cls, cosmetic)
+	var body_key := str(Eco.UP_LOOK.get(cls, cls))          # 0.31.38: a Crusader is built as a Knight, etc.
+	var made: Dictionary = View.make_body(body_key, cosmetic)
 	if made.is_empty():
 		return
 	body = made.body
 	player = made.player
 	holder.add_child(body)
 	body.scale = Vector3.ONE * 1.12
-	var idle: String = str(View.LOOKS.get(cls, View.LOOKS.knight).idle)
+	var idle: String = str(View.LOOKS.get(body_key, View.LOOKS.knight).idle)
 	if player.has_animation(idle):
 		player.play(idle)
 

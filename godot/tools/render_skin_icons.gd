@@ -8,6 +8,7 @@ const Eco = preload("res://scripts/meta/economy.gd")
 const SIZE := 320
 
 var vp: SubViewport
+var cam3: Camera3D
 var holder: Node3D
 var only: Array = []
 
@@ -49,32 +50,47 @@ func _initialize() -> void:
 	cam.fov = 30.0
 	cam.position = Vector3(0.0, 1.62, 3.0)
 	vp.add_child(cam)
-	cam.look_at(Vector3(0, 1.42, 0), Vector3.UP)
+	cam.transform = Transform3D(Basis.looking_at(Vector3(0, 1.42, 0) - cam.position, Vector3.UP), cam.position)
+	cam3 = cam
 	holder = Node3D.new()
 	vp.add_child(holder)
 	_run()
 
 func _run() -> void:
 	var jobs: Array = []
-	for cls in Eco.CLASSES:
+	for cls in Eco.CLASSES + Eco.UP_CLASSES:
 		jobs.append(["default_" + cls, cls, ""])
 	for id in Eco.CATALOG:
 		var it: Dictionary = Eco.CATALOG[id]
 		if it.kind == "skin":
 			jobs.append([id, str(it["class"]), str(it.tint)])
+		elif it.kind == "weapon" and Eco.UP_CLASSES.has(str(it["class"])):
+			jobs.append([id, str(it["class"]), "", str(it.get("r", "")), str(it.get("l", ""))])      # 0.31.38: weapon icons
+	for ucls in Eco.UP_CLASSES:
+		jobs.append(["wdefault_" + ucls, ucls, "", "-", "-"])
 	for job in jobs:
 		if not only.is_empty() and not only.has(job[0]):
 			continue
 		for c in holder.get_children():
 			c.queue_free()
 		var cosmetic := {"r": "", "l": ""}                  # busts show the outfit, not the gear
+		var weapon_job: bool = job.size() > 3
+		if weapon_job:
+			cosmetic = {}                                   # the class's own gear ("-") or the item's
+			if str(job[3]) != "-":
+				cosmetic = {"r": job[3], "l": job[4]}
 		if job[2] != "":
 			cosmetic["tint"] = job[2]
-		var made: Dictionary = View.make_body(job[1], cosmetic)
+		var body_key := str(Eco.UP_LOOK.get(job[1], job[1]))
+		var made: Dictionary = View.make_body(body_key, cosmetic)
 		var body: Node3D = made.body
 		holder.add_child(body)
 		body.rotation.y = deg_to_rad(-18.0)
-		var idle: String = str(View.LOOKS.get(job[1], View.LOOKS.knight).idle)
+		var idle: String = str(View.LOOKS.get(body_key, View.LOOKS.knight).idle)
+		var cam: Camera3D = cam3
+		var cpos := Vector3(0.0, 1.15, 4.4) if weapon_job else Vector3(0.0, 1.62, 3.0)       # whole figure for gear
+		var aim := Vector3(0, 0.95, 0) if weapon_job else Vector3(0, 1.42, 0)
+		cam.transform = Transform3D(Basis.looking_at(aim - cpos, Vector3.UP), cpos)
 		if made.player.has_animation(idle):
 			made.player.play(idle)
 			made.player.seek(0.35, true)
@@ -82,7 +98,10 @@ func _run() -> void:
 			await process_frame
 		await RenderingServer.frame_post_draw
 		var img := vp.get_texture().get_image()
-		img.save_png(ProjectSettings.globalize_path("res://assets/ui/skins/%s.png" % job[0]))
+		var out_path: String = "res://assets/ui/skins/%s.png" % job[0]
+		if weapon_job:
+			out_path = "res://assets/ui/icons/%s.png" % (str(job[0]).replace("wdefault_", "default_"))
+		img.save_png(ProjectSettings.globalize_path(out_path))
 		print("SKIN_DONE ", job[0])
 	print("SKINS_ALL_DONE")
 	quit(0)

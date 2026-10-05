@@ -553,6 +553,29 @@ static func locker(app, root: VBoxContainer) -> void:
 		var ic := UI.icon(b, "title" if cls == "titles" else cls, 24, Color("#2e1d00") if sel else UI.TEXT)
 		ic.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 		ic.position -= Vector2(12, 14)
+	# 0.31.38: the upgraded classes, a second row -- their base class's icon in gold, the name under it
+	var uptabs := UI.row(root, 6)
+	for ucls in Eco.UP_CLASSES:
+		var usel: bool = app.locker_class == ucls
+		var ub := UI.button(uptabs, "", "gold" if usel else "ghost", func():
+			app.locker_class = ucls
+			app.sfx("tap")
+			app.rebuild(), "locker_" + ucls, 9, 12)
+		ub.custom_minimum_size = Vector2(0, 56)
+		UI.grow(ub)
+		var uic := UI.icon(ub, str(Eco.UP_BASE[ucls]), 22, Color("#2e1d00") if usel else UI.GOLD)
+		uic.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
+		uic.position += Vector2(-11, 7)
+		var short := {"crusader":"CRUSADER", "berserker":"BERSERK", "necromancer":"NECRO", "assassin":"ASSASSIN", "sniper":"SNIPER", "archmage":"ARCHMAGE"}
+		var ul := UI.label(ub, str(short[ucls]), 8, Color("#2e1d00") if usel else UI.TEXT, UI.HEAVY_FONT)
+		ul.autowrap_mode = TextServer.AUTOWRAP_OFF
+		ul.clip_text = true
+		ul.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		ul.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+		ul.offset_left = 2
+		ul.offset_right = -2
+		ul.offset_top = -17
+		ul.offset_bottom = -4
 	if app.locker_class == "titles":
 		section(root, "TITLES", "shown next to your name", "title")
 		var none := UI.card(root)

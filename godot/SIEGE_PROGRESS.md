@@ -1821,3 +1821,18 @@ K2/K3 notes (0.17.0)
   rule line ("never sold"), WHAT'S INSIDE? with the odds. Results panel: "<chest> earned!" or "slots full, turned into
   gold". tests/chest_test.gd. Quick suite: ALL PASSED (32).
 - Gem packs for real money: designed; needs Play Billing + products in Play Console (not built).
+
+# 0.31.38 (Kevin: more to spend gold on -- upgraded-class cosmetics first)
+- Measured: gold bought 19 items, 18,900 gold in all; a regular player earns ~1,400 gold a day -- everything in ~2 weeks.
+- Economy: UP_CLASSES crusader/berserker/necromancer/assassin/sniper/archmage (UP_BASE, UP_LOOK: the Crusader is a Knight
+  body), own CLASS_NAMES, cosmetic_class(cls, up). 30 new cosmetics, 5 per upgraded class: a rare skin (1,500 gold), an
+  epic skin (2,800), a legendary skin (400 gems), a rare weapon (1,200) and an epic weapon (2,400) -- 47,400 gold more to
+  spend (gold items 19 -> 43), using the KayKit bits weapons (hammers and shields, halberd, scythe, fang daggers, fist
+  claws, recurve/heartwood bows, crystal staff/rod). All "shop": they rotate through the shop and drop from chests.
+  DAILY_SLOTS 4 -> 6, FEATURED_SLOTS 2 -> 3 so the bigger pool still comes round.
+- Profile: equip slots for the upgraded classes (old saves get them). Match: an upgraded player wears his upgraded
+  class's cosmetics, not the base class's (a Berserker no longer gets the Barbarian's axe and tint). Mode._looks sends
+  them. Showcase and render_skin_icons build each on its own body; the tool now also renders weapon icons (whole
+  figure, gear in hand) and the upgraded defaults; 42 new thumbnails. Locker: a second tab row for the upgraded classes.
+- render_skin_icons: the camera is aimed by transform (look_at failed: not in the tree in _initialize).
+- meta_economy_test covers it. Quick suite: ALL PASSED (32).

@@ -1,4 +1,5 @@
 extends Node3D
+const Eco = preload("res://scripts/meta/economy.gd")
 # Presentation only: mirrors siege_sim state every frame and never changes it.
 const Stage = preload("res://scripts/siege/asset_cache.gd")
 const Land = preload("res://scripts/siege/siege_land.gd")
@@ -2417,7 +2418,8 @@ static func _apply_tint(body: Node3D, model: String, tint: Color) -> void:
 
 func _ensure_actor(u: Dictionary) -> Dictionary:
 	var a: Dictionary = actors.get(u.id, {})
-	var cosmetic: Dictionary = player_looks.get(u.cls, {}) if u.id == player_id else {}
+	# 0.31.38: an upgraded class wears its own cosmetics (the Crusader's, the Berserker's...), not the base class's
+	var cosmetic: Dictionary = player_looks.get(Eco.cosmetic_class(str(u.cls), bool(u.up)), {}) if u.id == player_id else {}
 	var look_key := "%s:%s:%s" % [u.cls, u.up, str(cosmetic)]
 	if not a.is_empty() and a.look == look_key:
 		return a

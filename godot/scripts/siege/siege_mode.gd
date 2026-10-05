@@ -187,7 +187,7 @@ func _start() -> void:
 func _looks() -> Dictionary:
 	var out := {}
 	if profile != null:
-		for cls in ["knight", "barbarian", "rogue", "ranger", "mage", "worker"]:
+		for cls in ["knight", "barbarian", "rogue", "ranger", "mage", "worker", "crusader", "berserker", "necromancer", "assassin", "sniper", "archmage"]:
 			var l: Dictionary = profile.look_for(cls)
 			if not l.is_empty():
 				out[cls] = l

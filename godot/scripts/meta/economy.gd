@@ -6,7 +6,21 @@ extends RefCounted
 # Everything sold is cosmetic. The forge still decides your class in battle.
 
 const CLASSES := ["knight", "barbarian", "rogue", "ranger", "mage", "priest", "worker"]
-const CLASS_NAMES := {"knight":"Knight", "barbarian":"Barbarian", "rogue":"Rogue", "ranger":"Ranger", "mage":"Mage", "priest":"Priest", "worker":"Worker"}
+# 0.31.38: the upgraded classes have their own cosmetics (and equip slots): what they upgrade from, and which body
+# the game builds for them (the Crusader is a Knight body)
+const UP_CLASSES := ["crusader", "berserker", "necromancer", "assassin", "sniper", "archmage"]
+const UP_BASE := {"crusader":"knight", "berserker":"barbarian", "necromancer":"priest", "assassin":"rogue", "sniper":"ranger", "archmage":"mage"}
+const UP_LOOK := {"crusader":"knight", "berserker":"berserker", "necromancer":"necromancer", "assassin":"assassin", "sniper":"sniper", "archmage":"archmage"}
+const CLASS_NAMES := {"knight":"Knight", "barbarian":"Barbarian", "rogue":"Rogue", "ranger":"Ranger", "mage":"Mage", "priest":"Priest", "worker":"Worker",
+	"crusader":"Crusader", "berserker":"Berserker", "necromancer":"Necromancer", "assassin":"Assassin", "sniper":"Sniper", "archmage":"Archmage"}
+
+static func cosmetic_class(cls: String, up: bool) -> String:
+	# which equip slot dresses a unit: the upgraded one once he wears the upgraded hat
+	if up:
+		for k in UP_BASE:
+			if UP_BASE[k] == cls:
+				return k
+	return cls
 const RARITY_COLOR := {"common":"#b8c4c9", "rare":"#5fb6ff", "epic":"#c47bff", "legendary":"#ffb13d"}
 
 # ---------------- account level ----------------
@@ -149,6 +163,37 @@ const CATALOG := {
 	"title_cake_baron":    {"kind":"title", "class":"", "name":"Fish Baron", "rarity":"epic", "source":"pass"},
 	"title_oracle_sworn":  {"kind":"title", "class":"", "name":"Kingsworn", "rarity":"legendary", "gems":300, "source":"shop"},
 	"title_siege_lord":    {"kind":"title", "class":"", "name":"Siege Lord", "rarity":"epic", "source":"pass"},
+	# --- 0.31.38: the upgraded classes (gold for the rare/epic pieces, gems for the legendary look) ---
+	"crus_skin_holy":      {"kind":"skin", "class":"crusader", "name":"Holy Order", "rarity":"rare", "tint":"#f4e7c0", "gold":1500, "source":"shop"},
+	"crus_skin_templar":   {"kind":"skin", "class":"crusader", "name":"Templar", "rarity":"epic", "tint":"#d36a6a", "gold":2800, "source":"shop"},
+	"crus_skin_sunforged": {"kind":"skin", "class":"crusader", "name":"Sunforged", "rarity":"legendary", "tint":"#ffe08a", "gems":400, "source":"shop"},
+	"crus_wpn_mace":       {"kind":"weapon", "class":"crusader", "name":"Mace & Kite Shield", "rarity":"rare", "r":"bits/hammer_C", "l":"bits/shield_A", "gold":1200, "source":"shop"},
+	"crus_wpn_warhammer":  {"kind":"weapon", "class":"crusader", "name":"Warhammer & Bulwark", "rarity":"epic", "r":"bits/hammer_A", "l":"bits/shield_D", "gold":2400, "source":"shop"},
+	"bers_skin_bloodrage": {"kind":"skin", "class":"berserker", "name":"Bloodrage", "rarity":"rare", "tint":"#e07a6a", "gold":1500, "source":"shop"},
+	"bers_skin_glacier":   {"kind":"skin", "class":"berserker", "name":"Glacier Fury", "rarity":"epic", "tint":"#a8dcff", "gold":2800, "source":"shop"},
+	"bers_skin_volcanic":  {"kind":"skin", "class":"berserker", "name":"Volcanic", "rarity":"legendary", "tint":"#ff9a4a", "gems":400, "source":"shop"},
+	"bers_wpn_twinaxe":    {"kind":"weapon", "class":"berserker", "name":"Twin-Edged Axe", "rarity":"rare", "r":"axe_2handed", "l":"", "gold":1200, "source":"shop"},
+	"bers_wpn_halberd":    {"kind":"weapon", "class":"berserker", "name":"Great Halberd", "rarity":"epic", "r":"bits/halberd", "l":"", "gold":2400, "source":"shop"},
+	"necro_skin_plague":   {"kind":"skin", "class":"necromancer", "name":"Plaguebringer", "rarity":"rare", "tint":"#a9c98a", "gold":1500, "source":"shop"},
+	"necro_skin_frost":    {"kind":"skin", "class":"necromancer", "name":"Grave Frost", "rarity":"epic", "tint":"#9fb8e8", "gold":2800, "source":"shop"},
+	"necro_skin_boneking": {"kind":"skin", "class":"necromancer", "name":"Bone King", "rarity":"legendary", "tint":"#f0e8d6", "gems":400, "source":"shop"},
+	"necro_wpn_tome":      {"kind":"weapon", "class":"necromancer", "name":"Grim Tome", "rarity":"rare", "r":"Skeleton_Staff", "l":"spellbook_open", "gold":1200, "source":"shop"},
+	"necro_wpn_scythe":    {"kind":"weapon", "class":"necromancer", "name":"Reaper's Scythe", "rarity":"epic", "r":"bits/scythe", "l":"", "gold":2400, "source":"shop"},
+	"assn_skin_crimson":   {"kind":"skin", "class":"assassin", "name":"Crimson Veil", "rarity":"rare", "tint":"#b05060", "gold":1500, "source":"shop"},
+	"assn_skin_midnight":  {"kind":"skin", "class":"assassin", "name":"Midnight", "rarity":"epic", "tint":"#5a6aa0", "gold":2800, "source":"shop"},
+	"assn_skin_phantom":   {"kind":"skin", "class":"assassin", "name":"Phantom", "rarity":"legendary", "tint":"#d8d0ff", "gems":400, "source":"shop"},
+	"assn_wpn_fangs":      {"kind":"weapon", "class":"assassin", "name":"Serpent Fangs", "rarity":"rare", "r":"bits/dagger_B", "l":"bits/dagger_B", "gold":1200, "source":"shop"},
+	"assn_wpn_fists":      {"kind":"weapon", "class":"assassin", "name":"Shadow Claws", "rarity":"epic", "r":"bits/fistweapon_C_right", "l":"bits/fistweapon_C_left", "gold":2400, "source":"shop"},
+	"snip_skin_desert":    {"kind":"skin", "class":"sniper", "name":"Desert Scout", "rarity":"rare", "tint":"#d8b884", "gold":1500, "source":"shop"},
+	"snip_skin_winter":    {"kind":"skin", "class":"sniper", "name":"Winter Watch", "rarity":"epic", "tint":"#e6eef4", "gold":2800, "source":"shop"},
+	"snip_skin_golden":    {"kind":"skin", "class":"sniper", "name":"Golden Eye", "rarity":"legendary", "tint":"#ffd36b", "gems":400, "source":"shop"},
+	"snip_wpn_recurve":    {"kind":"weapon", "class":"sniper", "name":"Recurve Longbow", "rarity":"rare", "r":"", "l":"bits/bow_B_withString", "gold":1200, "source":"shop"},
+	"snip_wpn_heartwood":  {"kind":"weapon", "class":"sniper", "name":"Heartwood Bow", "rarity":"epic", "r":"", "l":"bits/bow_C_withString", "gold":2400, "source":"shop"},
+	"arch_skin_frost":     {"kind":"skin", "class":"archmage", "name":"Frostcaller", "rarity":"rare", "tint":"#8cc0ff", "gold":1500, "source":"shop"},
+	"arch_skin_void":      {"kind":"skin", "class":"archmage", "name":"Voidweaver", "rarity":"epic", "tint":"#7a5ab0", "gold":2800, "source":"shop"},
+	"arch_skin_starborn":  {"kind":"skin", "class":"archmage", "name":"Starborn", "rarity":"legendary", "tint":"#fff0b0", "gems":400, "source":"shop"},
+	"arch_wpn_crystal":    {"kind":"weapon", "class":"archmage", "name":"Crystal Staff & Tome", "rarity":"rare", "r":"bits/staff_C", "l":"spellbook_open", "gold":1200, "source":"shop"},
+	"arch_wpn_rod":        {"kind":"weapon", "class":"archmage", "name":"Arcane Rod", "rarity":"epic", "r":"bits/staff_D", "l":"", "gold":2400, "source":"shop"},
 }
 
 # ---------------- packs (Round 11) ----------------
@@ -198,8 +243,8 @@ static func item_price(id: String) -> Dictionary:
 	return {}
 
 # ---------------- shop rotation ----------------
-const DAILY_SLOTS := 4
-const FEATURED_SLOTS := 2
+const DAILY_SLOTS := 6              # 0.31.38: 4 -> 6 (gold items in rotation went 19 -> 43 with the upgraded classes)
+const FEATURED_SLOTS := 3           # 2 -> 3 (gem items 9 -> 15)
 const EXCHANGE := [{"id":"gold_s", "gems":50, "gold":600}, {"id":"gold_m", "gems":120, "gold":1600}, {"id":"gold_l", "gems":300, "gold":4500}]
 
 static func day_key(unix: int) -> String:

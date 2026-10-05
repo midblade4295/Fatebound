@@ -36,7 +36,7 @@ func _init() -> void:
 					models_ok = false; print("   missing model ", m, " for ", id)
 		if it.kind == "skin" and not Color.html_is_valid(str(it.tint)):
 			models_ok = false
-		if it.kind != "title" and not Eco.CLASSES.has(str(it["class"])):
+		if it.kind != "title" and not (Eco.CLASSES + Eco.UP_CLASSES).has(str(it["class"])):        # (0.31.38: upgraded classes too)
 			models_ok = false
 	check(models_ok, "every catalog weapon model exists, skins have valid tints, classes valid")
 	var items := Eco.pass_items(1)
@@ -163,5 +163,17 @@ func _init() -> void:
 	r.refresh()
 	check(int(r.d.pass.season) == 2 and int(r.d.pass.xp) == 0, "new season resets the pass")
 
+	# ---- 0.31.38: the upgraded classes' cosmetics ----
+	var up := fresh("upcos")
+	up.d.gold = 10000
+	check(Eco.cosmetic_class("knight", true) == "crusader" and Eco.cosmetic_class("knight", false) == "knight" and Eco.cosmetic_class("worker", true) == "worker", "an upgraded Knight dresses from the Crusader slot")
+	up.d.owned.append("crus_skin_holy")              # (buying depends on the day's rotation; tested above)
+	check(bool(up.equip("crus_skin_holy").get("ok", false)), "a Crusader skin owned and worn")
+	check(str(up.look_for("crusader").get("tint", "")) == "#f4e7c0" and not up.look_for("knight").has("tint"), "it dresses the Crusader, not the plain Knight")
+	var upcount := 0
+	for cid in Eco.CATALOG:
+		if Eco.UP_CLASSES.has(str(Eco.CATALOG[cid].get("class", ""))):
+			upcount += 1
+	check(upcount == 30, "30 upgraded-class cosmetics (5 for each of 6 classes): %d" % upcount)
 	print("META_ECONOMY_PASS" if fails.is_empty() else "META_ECONOMY_FAIL %s" % str(fails))
 	quit(0 if fails.is_empty() else 1)
