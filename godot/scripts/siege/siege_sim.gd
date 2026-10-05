@@ -2277,7 +2277,24 @@ func _step_projectiles(dt: float) -> void:
 		_event("proj_end", {"pid":p.id, "pos":p.pos})      # pos = the impact point (clients fly it there)
 		projectiles.remove_at(i)
 
+const DIGEST_EVERY := 75.0          # 0.31.26 (Kevin): a King works off one fish every 75 s -- feeding has to be kept up (40 s made him never fat)
+
 func _step_oracles(dt: float) -> void:
+	for o in oracles:
+		if int(o.cakes) <= 0:
+			o["digest_t"] = 0.0
+			continue
+		o["digest_t"] = float(o.get("digest_t", 0.0)) + dt
+		if float(o.digest_t) >= DIGEST_EVERY:
+			o.digest_t = 0.0
+			o.cakes = int(o.cakes) - 1
+			var w := mini(MAX_WEIGHT, int(o.cakes) / CAKE_PER_STAGE)
+			if w != int(o.weight):
+				o.weight = w
+				_event("digest", {"team":int(o.team), "weight":w, "cakes":int(o.cakes)})
+	_step_oracles_inner(dt)
+
+func _step_oracles_inner(dt: float) -> void:
 	for t in 2:
 		var o: Dictionary = oracles[t]
 		match o.state:
@@ -2938,6 +2955,23 @@ func _think_fighter(u: Dictionary) -> void:
 		u.move = (u.pos - foe.pos).normalized()
 		_dodge(u)
 		return
+	if u.bot and u.hp < u.max_hp * 0.35 and not u.carrying and not u.offering and u.cls != "priest" and u.cls != "villager" \
+			and (foe.is_empty() or u.pos.distance_to(foe.pos) > 2.2):
+		# 0.31.26: badly hurt -- to the nearest priest of ours (its beam and Sanctuary), else back toward the rally
+		var healer := {}
+		for o in units:
+			if o.team == u.team and alive(o) and o.cls == "priest" and o.id != u.id and u.pos.distance_to(o.pos) < 22.0 \
+					and (healer.is_empty() or u.pos.distance_to(o.pos) < u.pos.distance_to(healer.pos)):
+				healer = o
+		if not healer.is_empty():
+			if u.pos.distance_to(healer.pos) > 2.0:
+				_nav_to(u, healer.pos, 1.6)
+			else:
+				u.move = Vector2.ZERO
+			return
+		if not foe.is_empty() and u.role in ["raid", "escort"] and not in_castle(u.pos, 1 - u.team):
+			_nav_to(u, _rally_spot(u), 1.0)
+			return
 	if not foe.is_empty():
 		if u.offering:
 			pass   # hands full: keep walking to the cell, dodge if needed
@@ -3079,7 +3113,8 @@ func _fight(u: Dictionary, foe: Dictionary) -> void:
 			u.move = Vector2.ZERO
 		if d <= reach * 0.9:
 			u.face = angle_of(foe.pos - u.pos)
-			if u.cd_ability <= 0.0 and (str(c.ability) != "nova" or _melee_count(u, NOVA_R) >= 1) and rng.randf() < 0.35:
+			var nova_now: bool = str(c.ability) == "nova" and _melee_count(u, NOVA_R) >= 2      # 0.31.26: a burst, not a single-target nova
+			if u.cd_ability <= 0.0 and (nova_now or (str(c.ability) != "nova" and rng.randf() < 0.35)):
 				_start_attack(u, "ability")
 			else:
 				_start_attack(u, "attack")
@@ -3995,7 +4030,13 @@ func _assault_on(u: Dictionary) -> bool:
 		a.first = time
 	if ready == 0:
 		a.first = -1.0
-	if ready >= RALLY_HANDS or (float(a.first) >= 0.0 and time - float(a.first) > RALLY_WAIT and ready >= 2):
+	var home_guard := 0                              # 0.31.26: how many of theirs are at home
+	for o in units:
+		if o.team != u.team and alive(o) and in_castle(o.pos, 1 - u.team):
+			home_guard += 1
+	var waited: float = time - float(a.first) if float(a.first) >= 0.0 else 0.0
+	var quiet: bool = home_guard <= 6 or waited > RALLY_WAIT * 1.5
+	if (ready >= RALLY_HANDS and quiet) or (float(a.first) >= 0.0 and waited > RALLY_WAIT and ready >= 2 and quiet) or waited > RALLY_WAIT * 2.5:
 		a.until = time + ASSAULT_LEN
 		a.first = -1.0
 		return true

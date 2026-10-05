@@ -1686,3 +1686,13 @@ K2/K3 notes (0.17.0)
   raiders die in the field to the enemy's raid and mages before a lift forms. Next: shield the push with Knights blocking
   in front, retreat to the priest at low hp, time the push for when the enemy's raid is out, and lift coordination.
 - Quick suite: ALL PASSED (24).
+
+# 0.31.26 (Kevin: bots round two; "add the king digesting")
+- The King digests: DIGEST_EVERY 75 s a captive (or any) King works off one fish; weight and lifters needed follow.
+  (40 s left him never fat: one fish runner feeds about one per 45-60 s.) Event "digest". tests/digest_test.gd.
+- Bots: the push waits until at most 6 of theirs are at home (their raid is out), unless it has waited 1.5x RALLY_WAIT;
+  it always goes after 2.5x. Badly hurt bots (< 35 %, not carrying, no foe at arm's length) go to the nearest priest of
+  theirs within 22 m (beam + Sanctuary) or back toward the rally. Mages keep Nova for 2+ enemies in its radius.
+- Result (seeds 11/22, 12 min): matches now end 3-2 and 3-1 on rescues (both were 0-0 last week); jails broken at
+  59-165 s; the King reaches stage 1-2 under feeding. siege_sim_smoke: rescues in both quick seeds.
+- Quick suite: ALL PASSED (25).
