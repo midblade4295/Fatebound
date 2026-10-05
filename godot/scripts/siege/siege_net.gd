@@ -8,10 +8,12 @@ extends RefCounted
 # objects: decode() uses the default allow_objects=false.
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 
-const VERSION := 31              # 31 = the bomb (bm); 30 = smaller snapshots: packed projectiles/items/Kings, slow state only when it changes (0.31.8); 29 = no class caps; per-class stand stock/restock, no heal stacking, armory +8 %, worker 80 hp; 28 = class caps; 27 = the Necromancer (drain + heal beams, unit field 32); 26 = Resurrection, bigger nova/sanctuary; 25 = logs/rocks (it); 24 = the Crusader and its thrown hammer; 23 = tower shot heights, run off a deck; 22 = wide roofless towers; 21 = natural hills, every class climbs; 20 = bigger towers; 19 = the bigger natural map; 18 = no "water" in the dungeons (wading only in the river); 17 = rampart shots
+const VERSION := 32              # 32 = one snapshot for all + "m" task messages, timed interpolation; 31 = the bomb (bm); 30 = smaller snapshots: packed projectiles/items/Kings, slow state only when it changes (0.31.8); 29 = no class caps; per-class stand stock/restock, no heal stacking, armory +8 %, worker 80 hp; 28 = class caps; 27 = the Necromancer (drain + heal beams, unit field 32); 26 = Resurrection, bigger nova/sanctuary; 25 = logs/rocks (it); 24 = the Crusader and its thrown hammer; 23 = tower shot heights, run off a deck; 22 = wide roofless towers; 21 = natural hills, every class climbs; 20 = bigger towers; 19 = the bigger natural map; 18 = no "water" in the dungeons (wading only in the river); 17 = rampart shots
 const DEFAULT_URL := "wss://136-113-125-3.sslip.io/fatebound/siege/ws"
 const DEFAULT_PORT := 8082
-const SNAP_HZ := 15.0            # 10 -> 15 (0.18.4); remote units' interpolation delay 100 -> 67 ms
+const SNAP_HZ := 20.0            # 15 -> 20 (0.31.23); 10 -> 15 (0.18.4)
+const INTERP_DELAY := 1.5 / SNAP_HZ   # 0.31.23: remote units are drawn this far behind the newest snapshot (75 ms)
+const HIST := 4
 const FULL_EVERY := 15           # 0.31.8: slow-changing state (stock, levels, nodes, stands, outposts, gates, ladders,
                                  # dropped hats) rides along only when it changed, and in full once a second
 const PROJ_KINDS := ["arrow", "fire", "hammer"]
@@ -203,6 +205,7 @@ static func apply(sim, msg: Dictionary, me_id: String, predict := false) -> void
 		var mp: Dictionary = sim.by_id[me_id]
 		mine_prev = {"pos": mp.pos, "face": mp.face, "state": mp.state, "t": float(mp.get("t", 0.0))}
 	sim.time = float(msg.get("tm", sim.time))
+	var snap_t: float = sim.time
 	sim.score = msg.get("sc", sim.score)
 	sim.kills = msg.get("k", sim.kills)
 	sim.stock = msg.get("st", sim.stock)
@@ -226,6 +229,7 @@ static func apply(sim, msg: Dictionary, me_id: String, predict := false) -> void
 		var to := Vector2(u_arr[b + 2], u_arr[b + 3])
 		u["net_from"] = u.pos
 		u["net_to"] = to
+		_push_hist(u, snap_t, to, u_arr[b + 4])
 		var state: String = STATES[clampi(int(u_arr[b + 5]), 0, STATES.size() - 1)]
 		if was_dead != (state == "dead") or u.pos.distance_to(to) > 6.0:
 			u.pos = to                       # respawn / teleport: no sliding across the map
@@ -287,8 +291,10 @@ static func apply(sim, msg: Dictionary, me_id: String, predict := false) -> void
 		var to := Vector2(float(v[1]) / 100.0, float(v[2]) / 100.0)
 		var prev: Dictionary = old.get(pid, {})
 		var from: Vector2 = prev.get("net_to", to)
+		var t0: float = float(prev.get("net_t", snap_t - 1.0 / SNAP_HZ))
 		var np := {"id":pid, "pos":from, "net_from":from, "net_to":to, "vel":Vector2(float(v[3]) / 100.0, float(v[4]) / 100.0),
-			"kind":PROJ_KINDS[clampi(int(v[5]), 0, PROJ_KINDS.size() - 1)], "team":-1}
+			"kind":PROJ_KINDS[clampi(int(v[5]), 0, PROJ_KINDS.size() - 1)], "team":-1,
+			"net_t":snap_t, "net_t0":t0, "net_dt":maxf(snap_t - t0, 0.001)}
 		if int(v[6]) == 1:
 			np["o"] = Vector2(float(v[7]) / 100.0, float(v[8]) / 100.0)
 			np["h0"] = float(v[9]) / 100.0
@@ -442,3 +448,49 @@ static func _apply_bombs(sim, packed: Array) -> void:
 		sim.bombs[t] = b
 		if b.state == "carried" and sim.by_id.has(b.carrier):
 			sim.by_id[b.carrier]["bomb_held"] = true
+
+
+# ---------- timed interpolation (0.31.23) ----------
+# Every snapshot's positions are kept with their server time (HIST per unit). The client draws remote units at a render
+# time INTERP_DELAY behind the newest snapshot, between the two samples round that time, so a late or early packet
+# doesn't freeze or jump them (the old scheme slid from the last position to the newest over an estimated interval and
+# stuttered with any jitter). Past the newest sample it extrapolates a little, then holds.
+static func _push_hist(o: Dictionary, t: float, pos: Vector2, face: float) -> void:
+	var h: Array = o.get("net_hist", [])
+	if not h.is_empty() and float(h[-1][0]) >= t:
+		return
+	h.append([t, pos, face])
+	while h.size() > HIST:
+		h.pop_front()
+	o["net_hist"] = h
+
+static func interpolate_at(sim, rt: float, skip_id: String) -> void:
+	for u in sim.units:
+		if u.id == skip_id or not u.has("net_hist"):
+			continue
+		var h: Array = u.net_hist
+		if h.size() < 2:
+			continue
+		var newest: Array = h[-1]
+		if rt >= float(newest[0]):
+			# a little extrapolation, then hold (a late packet shouldn't drag him to a halt)
+			var prev: Array = h[-2]
+			var span := maxf(float(newest[0]) - float(prev[0]), 0.001)
+			var ahead := minf(rt - float(newest[0]), 0.12)
+			u.pos = (newest[1] as Vector2) + ((newest[1] as Vector2) - (prev[1] as Vector2)) * (ahead / span)
+			u.face = newest[2]
+			continue
+		for k in range(h.size() - 1, 0, -1):
+			var b: Array = h[k]
+			var a2: Array = h[k - 1]
+			if rt >= float(a2[0]):
+				var f := clampf((rt - float(a2[0])) / maxf(float(b[0]) - float(a2[0]), 0.001), 0.0, 1.0)
+				if (a2[1] as Vector2).distance_to(b[1]) > 6.0:
+					f = 1.0 if f > 0.5 else 0.0            # a respawn or teleport between samples: no sliding
+				u.pos = (a2[1] as Vector2).lerp(b[1], f)
+				u.face = lerp_angle(float(a2[2]), float(b[2]), f)
+				break
+	for p in sim.projectiles:
+		if p.has("net_to"):
+			var pt := clampf((rt - float(p.get("net_t0", rt))) / maxf(float(p.get("net_dt", 1.0 / SNAP_HZ)), 0.001), 0.0, 1.2)
+			p.pos = (p.net_from as Vector2).lerp(p.net_to, pt)

@@ -59,6 +59,7 @@ func _init() -> void:
 func _finish() -> void:
 	if pid > 0:
 		OS.kill(pid)
+		OS.execute("kill", ["-9", str(pid)])            # the server ignores SIGTERM (0.31.23)
 	print("SIEGE_NET_PASS" if fails.is_empty() else "SIEGE_NET_FAIL %s" % str(fails))
 	quit(0 if fails.is_empty() else 1)
 

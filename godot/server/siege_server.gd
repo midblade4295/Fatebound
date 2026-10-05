@@ -98,12 +98,54 @@ func _poll_clients() -> void:
 			_handle(cid, Net.decode(pkt))
 
 func _send(cid: int, msg: Dictionary) -> void:
+	_send_raw(cid, Net.encode(msg, msg.get("t", "") == "s"))
+
+func _send_raw(cid: int, bytes: PackedByteArray) -> void:
 	var c: Dictionary = clients.get(cid, {})
 	if c.is_empty():
 		return
 	var ws: WebSocketPeer = c.ws
 	if ws.get_ready_state() == WebSocketPeer.STATE_OPEN:
-		ws.put_packet(Net.encode(msg, msg.get("t", "") == "s"))
+		ws.put_packet(bytes)
+
+# Load stats (0.31.23): every STATS_EVERY s, how long the sim steps, the snapshot build and the sends took per second,
+# and the bytes sent -- logged with SIEGE_STATS=1 (the net load test reads them).
+const STATS_EVERY := 5.0
+var _st_step := 0
+var _st_snap := 0
+var _st_send := 0
+var _st_bytes := 0
+var _st_snaps := 0
+var _st_clock := 0.0
+var _st_frames := 0
+var _st_frame_max := 0.0
+func _stats_tick(delta: float) -> void:
+	_st_clock += delta
+	_st_frames += 1
+	_st_frame_max = maxf(_st_frame_max, delta)
+	if _st_clock < STATS_EVERY:
+		return
+	if OS.has_environment("SIEGE_STATS"):
+		var n := _human_count()
+		var line := "SIEGE_STATS players=%d bots=%d step=%.1fms/s snapshot=%.1fms/s send=%.1fms/s kB/s=%.1f snaps/s=%.1f frames/s=%.1f worst_frame=%.0fms" % [
+			n, sim.units.size() - n if sim != null else 0, _st_step / 1000.0 / _st_clock, _st_snap / 1000.0 / _st_clock, _st_send / 1000.0 / _st_clock,
+			_st_bytes / 1024.0 / _st_clock, _st_snaps / _st_clock, _st_frames / _st_clock, _st_frame_max * 1000.0]
+		print(line)
+		if OS.has_environment("SIEGE_STATS_FILE"):          # flushed per line (the load test reads it while we run)
+			var f := FileAccess.open(OS.get_environment("SIEGE_STATS_FILE"), FileAccess.READ_WRITE if FileAccess.file_exists(OS.get_environment("SIEGE_STATS_FILE")) else FileAccess.WRITE)
+			if f != null:
+				f.seek_end()
+				f.store_line(line)
+				f.flush()
+				f.close()
+	_st_step = 0
+	_st_snap = 0
+	_st_send = 0
+	_st_bytes = 0
+	_st_snaps = 0
+	_st_frames = 0
+	_st_frame_max = 0.0
+	_st_clock = 0.0
 
 func _drop(cid: int, why: String) -> void:
 	var c: Dictionary = clients.get(cid, {})
@@ -269,10 +311,12 @@ func _run_match(delta: float) -> void:
 				if sim.can_act(u) and not u.carrying:
 					sim.act(c.unit, "attack")
 	_accum = minf(_accum + delta, TICK * 6)
+	var t_step := Time.get_ticks_usec()
 	while _accum >= TICK and not sim.ended:
 		_accum -= TICK
 		sim.step(TICK)
 		_pending_events.append_array(sim.drain_events())
+	_st_step += Time.get_ticks_usec() - t_step
 	if sim.ended:
 		_pending_events.append_array(sim.drain_events())
 	_snap_accum += delta
@@ -280,8 +324,25 @@ func _run_match(delta: float) -> void:
 		_snap_accum = minf(_snap_accum - 1.0 / Net.SNAP_HZ, 1.0 / Net.SNAP_HZ)
 		var events := _pending_events
 		_pending_events = []
+		var t_snap := Time.get_ticks_usec()
 		var base := Net.snapshot(sim, "", events)      # built once, shared by every player
+		_st_snap += Time.get_ticks_usec() - t_snap
+		var t_send := Time.get_ticks_usec()
+		# 0.31.23: encoded and compressed ONCE and sent to everyone; each player's private bit (their task) goes in its
+		# own small "m" message, only when it changes. Before, every player's copy was encoded and compressed separately.
+		var bytes := Net.encode(base, true)
 		for cid in clients:
 			var c: Dictionary = clients[cid]
-			if c.hello:
-				_send(cid, Net.for_player(base, sim, c.unit))
+			if not c.hello:
+				continue
+			_send_raw(cid, bytes)
+			_st_bytes += bytes.size()
+			var me: Dictionary = sim.by_id.get(c.unit, {})
+			if not me.is_empty():
+				var th := hash(me.task)
+				if int(c.get("task_hash", -1)) != th:
+					c.task_hash = th
+					_send(cid, {"t":"m", "task":me.task.duplicate(true)})
+		_st_send += Time.get_ticks_usec() - t_send
+		_st_snaps += 1
+	_stats_tick(delta)

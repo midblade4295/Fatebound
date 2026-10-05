@@ -1640,3 +1640,24 @@ K2/K3 notes (0.17.0)
   player who buys the upgrade at the stand wears it at once; bots swap when they're at their stand. Tutorial hat task
   text: "(press NEW HAT)". Tests updated (stands, tutorial, net smoke, sim smoke hat rules).
 - Quick suite: all pass except siege_sim_smoke (rescues 0 in seeds 11/22; its hat-rule checks all pass).
+
+# 0.31.23 (Kevin: abilities lag online; optimise online play and the net code for 32 players without lag or stutter)
+# -- protocol 32, server redeploy needed
+- Server: one snapshot encoded + zstd-compressed per tick for everyone (it was encoded and compressed once per player);
+  each player's private bit (their task) is its own small "m" message, only when it changes. SIEGE_STATS=1 logs load
+  every 5 s (ms/s in sim steps, snapshot build, sends; kB/s; worst frame); SIEGE_STATS_FILE writes them flushed.
+- tests/net_load_test.gd (in the suite): the real server with 32 connected players sending inputs at 20 Hz for 25 s.
+  Build box: sim 40 ms/s, snapshot 11 ms/s, sends 6 ms/s (about 6 % of one core), 340 kB/s out, 10.6 kB/s per
+  player, 60 frames/s, worst frame 17 ms. The server was never the bottleneck.
+- Client: SNAP_HZ 15 -> 20. Timed interpolation (Net.interpolate_at): each unit keeps its last 4 snapshot positions
+  with their server times; the client runs a render clock INTERP_DELAY (75 ms) behind the newest snapshot, eased, and
+  draws every remote unit between the two samples round it, extrapolating up to 120 ms past the newest. The old scheme
+  slid from the last drawn position to the newest over an estimated interval and stuttered with any jitter.
+  net_interp_test: a walker under +-25 ms jitter and a dropped snapshot moves at a steady 5 m/s (worst frame step
+  within 15 % of the mean, no stalls). Decode + apply + interpolate: 0.4 ms per 32-unit snapshot.
+- Abilities: Sim.predict_ability() -- pressing the button starts the swing/spin/ring on the client at once (block,
+  whirlwind state, hammer/resurrect/nova wind-ups and cooldowns); the server resolves the effect; the server's own copy
+  of the effect for that player within 0.6 s isn't shown twice (_pred_fx). Before, an ability showed only after
+  the round trip plus a snapshot plus the interpolation delay (~200-300 ms).
+- Tests kill their server with SIGKILL (it ignores SIGTERM; stale servers had been grabbing the test port).
+- Quick suite: all pass except siege_sim_smoke (rescues 0 in seeds 11/22).

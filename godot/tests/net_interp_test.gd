@@ -72,5 +72,67 @@ func _init() -> void:
 	var end: Vector2 = samples[-1]
 	check(end.distance_to(target.pos) < 1.0, "it reaches the target before vanishing (ends %.2f m from it)" % end.distance_to(target.pos))
 	check(target.hp < 9999.0, "the arrow hit the target on the server")
+	_jitter_check()
 	print("NET_INTERP_PASS" if fails.is_empty() else "NET_INTERP_FAIL %s" % str(fails))
 	quit(0 if fails.is_empty() else 1)
+
+func _jitter_check() -> void:
+	# 0.31.23: a remote unit walking a straight line at 5 m/s, snapshots at SNAP_HZ arriving with +-25 ms of jitter and
+	# one dropped, drawn at 60 fps through the render clock (as siege_mode does). Steps between frames must stay even:
+	# no freezes, no jumps -- the old slide-to-the-newest scheme stalled and leapt under the same jitter.
+	var srv = Sim.new()
+	srv.setup(2, 5)
+	var cli = Sim.new()
+	cli.setup(2, 5)
+	for u in srv.units:
+		u.bot = false
+		u.move = Vector2.ZERO
+	var walker: Dictionary = srv.units[1]
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7
+	var rt := -1.0
+	var latest := 0.0
+	var next_snap := 0.0
+	var arrivals := []                               # [arrival wall time, msg]
+	var wall := 0.0
+	var steps := []
+	var lastp := Vector2.INF
+	var cu: Dictionary = cli.units[1]
+	for frame in 240:
+		var dt := 1.0 / 60.0
+		wall += dt
+		walker.pos += Vector2(5.0 * dt, 0.0)
+		srv.time += dt
+		if srv.time >= next_snap:
+			next_snap += 1.0 / Net.SNAP_HZ
+			if frame != 90:                          # one snapshot lost
+				arrivals.append([wall + rng.randf_range(-0.025, 0.025) + 0.04, Net.snapshot(srv, "", [])])
+		arrivals.sort_custom(func(x, y): return x[0] < y[0])
+		while not arrivals.is_empty() and arrivals[0][0] <= wall:
+			var msg: Dictionary = arrivals.pop_front()[1]
+			Net.apply(cli, msg, "you")
+			latest = float(msg.tm)
+			if rt < 0.0:
+				rt = latest - Net.INTERP_DELAY
+		if rt >= 0.0:
+			rt += dt
+			var want := latest - Net.INTERP_DELAY
+			var err := want - rt
+			rt = want if absf(err) > 0.3 else rt + err * minf(1.0, dt * 3.0)
+			Net.interpolate_at(cli, rt, "you")
+			if lastp != Vector2.INF and frame > 40:
+				steps.append((cu.pos as Vector2).distance_to(lastp))
+			lastp = cu.pos
+	var mean := 0.0
+	for st in steps:
+		mean += st
+	mean /= maxf(steps.size(), 1)
+	var worst := 0.0
+	var stalls := 0
+	for st in steps:
+		worst = maxf(worst, absf(st - mean))
+		if st < mean * 0.25:
+			stalls += 1
+	check(mean > 0.06 and mean < 0.1, "the walker advances ~5 m/s on screen (%.3f m per frame)" % mean)
+	check(worst < mean * 1.5, "under jitter and a dropped snapshot, the worst frame step is within 1.5x the mean (%.3f vs %.3f)" % [worst, mean])
+	check(stalls <= 2, "no more than 2 near-stalled frames (%d)" % stalls)

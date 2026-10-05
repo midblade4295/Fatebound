@@ -47,6 +47,9 @@ var net_state := ""                  # "connecting", "waiting", "playing", "clos
 var net_match := -1
 var _net_started := 0.0
 var _snap_t := 0.0
+var _net_rt := -1.0                 # 0.31.23: the render clock (server seconds) remote units are drawn at
+var _net_latest := 0.0              # the newest snapshot's server time
+var _pred_fx := {}                  # ability effects shown ahead of the server, by kind: time
 var _snap_dt := 1.0 / Net.SNAP_HZ
 var _send_clock := 0.0
 var _sent_move := Vector2(INF, INF)
@@ -273,19 +276,39 @@ func _net_process(delta: float) -> void:
 				Net.apply(sim, msg, hud.player_id, true)
 				_snap_dt = lerpf(_snap_dt, maxf(0.03, _snap_t), 0.2) if _snap_t > 0.0 else _snap_dt
 				_snap_t = 0.0
+				_net_latest = float(msg.get("tm", _net_latest))
+				if _net_rt < 0.0:
+					_net_rt = _net_latest - Net.INTERP_DELAY
 				for e in msg.get("e", []):
 					diag.event()
 					_count(e)
+					# an effect of my own that I already showed when I pressed the button: don't show it twice
+					if str(e.get("id", "")) == hud.player_id and _pred_fx.has(str(e.k)) and Time.get_ticks_msec() / 1000.0 - float(_pred_fx[str(e.k)]) < 0.6:
+						_pred_fx.erase(str(e.k))
+						hud.on_event(e)
+						continue
 					view.on_event(e)
 					_event_sound(e)
 					hud.on_event(e)
+			"m":                                              # 0.31.23: my task, sent on its own when it changes
+				if sim != null and sim.by_id.has(hud.player_id):
+					sim.by_id[hud.player_id].task = msg.get("task", {})
 			"bye":
 				var why := str(msg.get("why", ""))
 				_net_fail({"full":"Server is full", "version":"Update the game to play online"}.get(why, "Server closed the connection"))
 	if sim == null:
 		return
 	_snap_t += delta
-	Net.interpolate(sim, _snap_t / maxf(0.03, _snap_dt))
+	# 0.31.23: a render clock in server time, INTERP_DELAY behind the newest snapshot, eased so jitter doesn't show
+	if _net_rt >= 0.0:
+		_net_rt += delta
+		var want := _net_latest - Net.INTERP_DELAY
+		var err := want - _net_rt
+		if absf(err) > 0.3:
+			_net_rt = want
+		else:
+			_net_rt += err * minf(1.0, delta * 3.0)
+		Net.interpolate_at(sim, _net_rt, hud.player_id)
 	# Inputs: movement and held attack at 20 Hz (or when they change); actions go immediately.
 	_send_clock += delta
 	var mv: Vector2 = hud.move_vector() if not hud.paused() else Vector2.ZERO
@@ -299,6 +322,7 @@ func _net_process(delta: float) -> void:
 		# Held ATTACK: the server swings every time it can; start the same swings locally.
 		if hold and me_p.cls != "priest" and sim.can_act(me_p) and not me_p.carrying:
 			sim._start_attack(me_p, "attack")
+		sim.drain_events()                         # (prediction events are shown in _act; nothing else should pile up)
 	if _send_clock >= 0.05 or (mv - _sent_move).length() > 0.25 or hold != _sent_hold or bhold != _sent_bhold:
 		_send_clock = 0.0
 		_sent_move = mv
@@ -350,6 +374,14 @@ func _act(action: String, arg: Variant = null) -> void:
 				sim._dodge(me_a)
 			elif me_a.cls != "priest":
 				sim._start_attack(me_a, "attack")
+		elif action == "ability" and not me_a.is_empty() and sim.client_drivable(me_a):
+			# 0.31.23 (Kevin: "abilities lag"): the ability's start shows now -- the swing, the spin, the ring; the
+			# server resolves what it does (the predicted start happens in _process right after this frame's input)
+			if sim.predict_ability(me_a):
+				for e in sim.drain_events():
+					_pred_fx[str(e.k)] = Time.get_ticks_msec() / 1000.0
+					view.on_event(e)
+					_event_sound(e)
 		var msg_a := {"t":"in", "m":hud.move_vector(), "h":hud.attack_held(), "b":hud.ability_held(), "a":action, "arg":arg}
 		if not me_a.is_empty():
 			msg_a["p"] = me_a.pos

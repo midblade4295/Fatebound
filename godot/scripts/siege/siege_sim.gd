@@ -3916,3 +3916,24 @@ func _equip_upgrade(u: Dictionary) -> bool:
 	u.hp = maxf(u.hp, float(stat(u, "hp")) * hp_frac)
 	_event("hat_equip_up", {"id":u.id, "cls":u.cls, "team":u.team})
 	return true
+
+
+# ---------- predicted ability starts (0.31.23, online) ----------
+func predict_ability(u: Dictionary) -> bool:
+	# The client shows the start of its own ability at once: the state and cooldown the server will set, and the
+	# events the view draws from. Nothing that hurts or heals anyone happens here (the client never steps the sim).
+	if not can_act(u) or u.cd_ability > 0.0 or u.carrying or u.offering or int(u.get("tower", -1)) >= 0:
+		return false
+	match ability_of(u):
+		"block":
+			return _block(u)
+		"whirlwind":
+			return _whirl(u)                                   # the spin's damage is dealt in step(), server-side only
+		"hammer":
+			u.cd_ability = HAMMER_CD
+			return _start_attack(u, "ability")                 # the throw animation; the hammer itself is the server's
+		"resurrect":
+			u.cd_ability = RESURRECT_CD
+			return _start_attack(u, "ability")
+		_:
+			return _start_attack(u, "ability")                 # nova, sanctuary, ...: the wind-up; the burst comes from the server
