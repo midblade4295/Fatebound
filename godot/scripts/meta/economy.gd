@@ -163,6 +163,28 @@ const CATALOG := {
 	"snip_wpn_heartwood":  {"kind":"weapon", "class":"sniper", "name":"Heartwood Bow", "rarity":"epic", "r":"", "l":"bits/bow_C_withString", "gold":2400, "source":"shop"},
 	"arch_wpn_crystal":    {"kind":"weapon", "class":"archmage", "name":"Crystal Staff & Tome", "rarity":"rare", "r":"bits/staff_C", "l":"spellbook_open", "gold":1200, "source":"shop"},
 	"arch_wpn_rod":        {"kind":"weapon", "class":"archmage", "name":"Arcane Rod", "rarity":"epic", "r":"bits/staff_D", "l":"", "gold":2400, "source":"shop"},
+	# --- 0.31.40: the rest of the KayKit weapons, given to the classes they suit (one-handed swords/axes/maces with
+	# shields to the Knight and Crusader, big blades and axes to the Barbarian and Berserker, daggers and knuckles to the
+	# Rogue and Assassin, bows to the archers, staves to the casters) ---
+	"knight_wpn_arming":   {"kind":"weapon", "class":"knight", "name":"Arming Sword & Round Shield", "rarity":"rare", "r":"bits/sword_A", "l":"shield_round", "gold":1000, "source":"shop"},
+	"knight_wpn_longsword":{"kind":"weapon", "class":"knight", "name":"Longsword & Square Shield", "rarity":"epic", "r":"bits/sword_C", "l":"shield_square", "gold":2000, "source":"shop"},
+	"knight_wpn_spiked":   {"kind":"weapon", "class":"knight", "name":"Broadsword & Spiked Shield", "rarity":"epic", "r":"bits/sword_D", "l":"shield_spikes", "gold":2200, "source":"shop"},
+	"barb_wpn_bearded":    {"kind":"weapon", "class":"barbarian", "name":"Bearded Axe & Buckler", "rarity":"rare", "r":"bits/axe_A", "l":"shield_round_color", "gold":1000, "source":"shop"},
+	"barb_wpn_butcher":    {"kind":"weapon", "class":"barbarian", "name":"Butcher's Blade", "rarity":"epic", "r":"bits/sword_F", "l":"", "gold":2000, "source":"shop"},
+	"barb_wpn_gauntlets":  {"kind":"weapon", "class":"barbarian", "name":"Brawler's Gauntlets", "rarity":"epic", "r":"bits/fistweapon_B", "l":"bits/fistweapon_B", "gold":2200, "source":"shop"},
+	"rogue_wpn_stilettos": {"kind":"weapon", "class":"rogue", "name":"Twin Stilettos", "rarity":"rare", "r":"bits/dagger_A", "l":"bits/dagger_A", "gold":1000, "source":"shop"},
+	"rogue_wpn_brass":     {"kind":"weapon", "class":"rogue", "name":"Brass Knuckles", "rarity":"rare", "r":"bits/fistweapon_A", "l":"bits/fistweapon_A", "gold":900, "source":"shop"},
+	"ranger_wpn_hunting":  {"kind":"weapon", "class":"ranger", "name":"Hunting Bow", "rarity":"rare", "r":"", "l":"bits/bow_A_withString", "gold":1000, "source":"shop"},
+	"mage_wpn_ritual":     {"kind":"weapon", "class":"mage", "name":"Ritual Knife & Tome", "rarity":"rare", "r":"bits/dagger_C", "l":"spellbook_open", "gold":1000, "source":"shop"},
+	"priest_wpn_pilgrim":  {"kind":"weapon", "class":"priest", "name":"Pilgrim's Staff", "rarity":"rare", "r":"bits/staff_A", "l":"", "gold":1000, "source":"shop"},
+	"priest_wpn_mace":     {"kind":"weapon", "class":"priest", "name":"Mace & Holy Shield", "rarity":"epic", "r":"bits/hammer_B", "l":"shield_badge", "gold":2000, "source":"shop"},
+	"worker_wpn_felling":  {"kind":"weapon", "class":"worker", "name":"Felling Axe", "rarity":"rare", "r":"bits/axe_C", "l":"", "gold":900, "source":"shop"},
+	"crus_wpn_maul":       {"kind":"weapon", "class":"crusader", "name":"Judgment Maul", "rarity":"legendary", "r":"bits/hammer_D", "l":"", "gold":3600, "source":"shop"},
+	"bers_wpn_broad":      {"kind":"weapon", "class":"berserker", "name":"Broadblade", "rarity":"rare", "r":"bits/sword_D", "l":"", "gold":1200, "source":"shop"},
+	"necro_wpn_spear":     {"kind":"weapon", "class":"necromancer", "name":"Bone Spear", "rarity":"epic", "r":"bits/spear_B", "l":"", "gold":2400, "source":"shop"},
+	"assn_wpn_night":      {"kind":"weapon", "class":"assassin", "name":"Night Blades", "rarity":"epic", "r":"bits/dagger_C", "l":"bits/dagger_C", "gold":2400, "source":"shop"},
+	"snip_wpn_repeater":   {"kind":"weapon", "class":"sniper", "name":"Repeater", "rarity":"rare", "r":"", "l":"crossbow_1handed", "gold":1200, "source":"shop"},
+	"arch_wpn_elder":      {"kind":"weapon", "class":"archmage", "name":"Elder Oak & Tome", "rarity":"rare", "r":"bits/staff_A", "l":"spellbook_open", "gold":1200, "source":"shop"},
 }
 
 # 0.31.39 (Kevin: "only the weapons are cosmetics -- so it's easy to tell who's playing what class"): the skins (tints)

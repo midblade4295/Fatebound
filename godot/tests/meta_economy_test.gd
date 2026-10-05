@@ -174,7 +174,7 @@ func _init() -> void:
 	for cid in Eco.CATALOG:
 		if Eco.UP_CLASSES.has(str(Eco.CATALOG[cid].get("class", ""))):
 			upcount += 1
-	check(upcount == 12, "12 upgraded-class weapons (2 for each of 6 classes): %d" % upcount)
+	check(upcount == 18, "18 upgraded-class weapons (3 for each of 6 classes, 0.31.40): %d" % upcount)
 	# ---- 0.31.39: weapons only -- no skins; bought skins refunded once ----
 	var skins := 0
 	for cid in Eco.CATALOG:

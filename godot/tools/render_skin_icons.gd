@@ -64,7 +64,7 @@ func _run() -> void:
 		var it: Dictionary = Eco.CATALOG[id]
 		if it.kind == "skin":
 			jobs.append([id, str(it["class"]), str(it.tint)])
-		elif it.kind == "weapon" and Eco.UP_CLASSES.has(str(it["class"])):
+		elif it.kind == "weapon" and (Eco.UP_CLASSES.has(str(it["class"])) or not FileAccess.file_exists("res://assets/ui/icons/%s.png" % id)):
 			jobs.append([id, str(it["class"]), "", str(it.get("r", "")), str(it.get("l", ""))])      # 0.31.38: weapon icons
 	for ucls in Eco.UP_CLASSES:
 		jobs.append(["wdefault_" + ucls, ucls, "", "-", "-"])

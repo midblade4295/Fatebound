@@ -1847,3 +1847,15 @@ K2/K3 notes (0.17.0)
   thumbnails deleted (class defaults kept).
 - Gold sink: gold-bought items 43 -> 24 (~32,000 gold). More weapons per class would bring it back.
 - meta_economy_test: no skins, refund paid once, no tints in battle. Quick suite: ALL PASSED (32).
+
+# 0.31.40 (Kevin: add the remaining KayKit models to the classes that suit them)
+- Every unused KayKit weapon model is now a cosmetic (measured lengths decide one- or two-handed): 19 weapons --
+  Knight: Arming Sword & Round Shield (sword_A), Longsword & Square Shield (sword_C), Broadsword & Spiked Shield
+  (sword_D); Barbarian: Bearded Axe & Buckler (axe_A), Butcher's Blade (sword_F), Brawler's Gauntlets (fistweapon_B);
+  Rogue: Twin Stilettos (dagger_A), Brass Knuckles (fistweapon_A); Ranger: Hunting Bow (bow_A_withString); Mage: Ritual
+  Knife & Tome (dagger_C); Priest: Pilgrim's Staff (staff_A), Mace & Holy Shield (hammer_B); Worker: Felling Axe (axe_C);
+  Crusader: Judgment Maul (hammer_D, legendary, 3,600 gold); Berserker: Broadblade; Necromancer: Bone Spear (spear_B);
+  Assassin: Night Blades; Sniper: Repeater (crossbow_1handed); Archmage: Elder Oak & Tome. The five unused shields go
+  with them. All gold (900-3,600): gold-bought items 24 -> 43, ~62,000 gold in all. Arrows and the bare bow frames are
+  left out (not weapons).
+- render_skin_icons renders any weapon without an icon; 19 new thumbnails. Quick suite: ALL PASSED (32).
