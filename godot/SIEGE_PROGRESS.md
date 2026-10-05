@@ -1734,3 +1734,13 @@ K2/K3 notes (0.17.0)
   "Double kill!", "Triple kill!", "Quadra kill! Show-off.", "Penta kill! Somebody stop him!", "LEGENDARY!"), at the
   master volume; a newer call cuts off the one before (Mode._herald_say).
 - tests/multikill_test.gd. Quick suite: ALL PASSED (28).
+
+# 0.31.30 (Kevin: the Herald does match announcements -- "only important ones")
+- assets/vo/herald/an_<key>_<n>.ogg, 22 lines from one ElevenLabs take (Edward): start (2), our_pickup (2),
+  their_pickup (2), our_drop, our_rescue (2), their_rescue (2), our_gate, their_gate, their_jail ("The jail is open! Grab
+  our King!"), our_jail, match_point_us, match_point_them, last_minute, ten_seconds, victory, defeat, draw.
+- Mode announcer: from your team's side; priority 3 (rescues, match point, last minute, ten seconds, victory/defeat/draw)
+  cuts in, priority 2 queues behind the line playing (dropped if it can't play within 5 s); per-key cooldowns (gates and
+  jails 45 s, pickups 25 s, a drop 20 s). Lines are timed by their length on the frame clock (the player's playing flag
+  sticks on the dummy audio driver). Not in the tutorial. Multi-kill calls share the voice.
+- tests/announce_test.gd. Quick suite: ALL PASSED (29).

@@ -502,6 +502,8 @@ func _warm_step(delta: float) -> bool:
 	return float(w.fade) < 0.15
 
 func _process(delta: float) -> void:
+	_ann_clock += delta
+	_announce_tick()
 	if online:
 		_net_process(delta)
 	if sim == null:
@@ -722,6 +724,8 @@ func _event_sound(e: Dictionary) -> void:
 			_cue("tm_gate_open", 1, _gate_pos(e.get("gate", "")), 12.0, false, 0.55)
 		"jail_reset":
 			_cue("tm_unlock", 1, _gate_pos(e.get("gate", "")), 18.0)
+		"pickup", "drop", "rescue", "gate_broken":
+			_announce_event(e)
 		"multikill":                                    # 0.31.29: the Herald calls your multi-kills
 			if str(e.get("id", "")) == hud.player_id:
 				_herald_say("mk_" + ["", "", "double", "triple", "quadra", "penta", "legendary"][mini(int(e.n), 6)])
@@ -841,6 +845,8 @@ func _music_step(delta: float, muted: bool, lv: Dictionary) -> void:
 # The Herald's in-match lines (0.31.29): assets/vo/herald/<id>.ogg, at the master volume like the tutorial's voice,
 # a newer line cutting off the one before (a quick triple steps on the double).
 var _herald: AudioStreamPlayer = null
+var _herald_until := 0.0                    # when the line playing ends (by its length: the playing flag can stick)
+var _ann_clock := 0.0                       # frame time since the match opened (the announcer's clock)
 func _herald_say(id: String) -> void:
 	var path := "res://assets/vo/herald/%s.ogg" % id
 	if not ResourceLoader.exists(path):
@@ -860,3 +866,102 @@ func _herald_say(id: String) -> void:
 	_herald.stream = load(path)
 	_herald.volume_db = linear_to_db(master)
 	_herald.play()
+	_herald_until = _ann_clock + _herald.stream.get_length()
+
+
+# ---------- the Herald's match announcements (0.31.30, Kevin: "only important ones") ----------
+# assets/vo/herald/an_<key>_<n>.ogg (n variants, picked at random). From your team's side. Priorities: 3 cuts in on
+# anything (rescues, match point, the end, ten seconds); 2 waits for the line playing to finish; lower-priority calls
+# that can't play within 5 s are dropped. Each key has a cooldown (gates break often). Multi-kill calls (priority 2)
+# share the same voice.
+const ANNOUNCE := {
+	"start":[2, 0.0], "our_pickup":[2, 25.0], "their_pickup":[2, 25.0], "our_drop":[2, 20.0],
+	"our_rescue":[3, 0.0], "their_rescue":[3, 0.0], "our_gate":[2, 45.0], "their_gate":[2, 45.0],
+	"their_jail":[2, 45.0], "our_jail":[2, 45.0], "match_point_us":[3, 0.0], "match_point_them":[3, 0.0],
+	"last_minute":[3, 0.0], "ten_seconds":[3, 0.0], "victory":[3, 0.0], "defeat":[3, 0.0], "draw":[3, 0.0]}
+var _ann_last := {}
+var _ann_queue: Array = []                  # [key, priority, wanted_at]
+var _ann_flags := {}
+
+func _announce(key: String) -> void:
+	if not ANNOUNCE.has(key):
+		return
+	var now := _ann_clock
+	var cd: float = ANNOUNCE[key][1]
+	if cd > 0.0 and now - float(_ann_last.get(key, -999.0)) < cd:
+		return
+	_ann_last[key] = now
+	var pri: int = ANNOUNCE[key][0]
+	if pri >= 3:
+		_ann_queue.clear()
+		_herald_say(_ann_file(key))
+	else:
+		_ann_queue.append([key, pri, now])
+
+func _ann_file(key: String) -> String:
+	var n := 0
+	while ResourceLoader.exists("res://assets/vo/herald/an_%s_%d.ogg" % [key, n + 1]):
+		n += 1
+	return "an_%s_%d" % [key, randi_range(1, maxi(n, 1))]
+
+func _announce_tick() -> void:
+	# the queue, and the clock-driven calls (start, last minute, ten seconds, the end)
+	if sim == null or tutorial:
+		return
+	var now := _ann_clock
+	if not _ann_queue.is_empty() and now >= _herald_until:
+		var item: Array = _ann_queue.pop_front()
+		if now - float(item[2]) <= 5.0:
+			_herald_say(_ann_file(str(item[0])))
+	if not _ann_flags.has("start") and sim.time > 1.0:
+		_ann_flags["start"] = true
+		_announce("start")
+	var left: float = Sim.MATCH_TIME - sim.time
+	if not _ann_flags.has("minute") and left <= 60.0 and left > 55.0:
+		_ann_flags["minute"] = true
+		_announce("last_minute")
+	if not _ann_flags.has("ten") and left <= 10.0 and left > 8.0 and not sim.ended:
+		_ann_flags["ten"] = true
+		_announce("ten_seconds")
+	if not _ann_flags.has("end") and sim.ended:
+		_ann_flags["end"] = true
+		var me: Dictionary = sim.by_id.get(hud.player_id, {})
+		var team: int = int(me.get("team", 0))
+		_announce("draw" if int(sim.winner) < 0 else ("victory" if int(sim.winner) == team else "defeat"))
+
+func _announce_event(e: Dictionary) -> void:
+	if sim == null or tutorial:
+		return
+	var me: Dictionary = sim.by_id.get(hud.player_id, {})
+	if me.is_empty():
+		return
+	var mine: int = int(me.team)
+	match str(e.k):
+		"pickup":
+			if int(e.team) == mine and int(e.get("carry_team", -1)) == mine:
+				_announce("our_pickup")
+			elif int(e.team) != mine and int(e.get("carry_team", -1)) != mine:
+				_announce("their_pickup")
+		"drop":
+			var carrier: Dictionary = sim.by_id.get(str(e.get("id", "")), {})
+			if int(e.team) == mine and not carrier.is_empty() and int(carrier.team) == mine:
+				_announce("our_drop")
+		"rescue":
+			if int(e.team) == mine:
+				_announce("our_rescue")
+			else:
+				_announce("their_rescue")
+			if not sim.ended:
+				if int(sim.score[mine]) == Sim.WIN_RESCUES - 1:
+					_ann_queue.append(["match_point_us", 2, _ann_clock])
+				elif int(sim.score[1 - mine]) == Sim.WIN_RESCUES - 1:
+					_ann_queue.append(["match_point_them", 2, _ann_clock])
+		"gate_broken":
+			var g: Dictionary = sim.gates[int(e.gate)] if int(e.gate) < sim.gates.size() else {}
+			if g.is_empty():
+				return
+			var jail: bool = str(g.get("kind", "")) == "jail"
+			if int(g.team) == mine:
+				_announce("our_jail" if jail else "our_gate")
+			else:
+				_announce("their_jail" if jail else "their_gate")
