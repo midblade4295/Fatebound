@@ -1795,3 +1795,13 @@ K2/K3 notes (0.17.0)
   same arc (no easing in flight) and tumbles it. Chopping/mining keeps the small hop and the confetti chips.
   Online clients (no flight data) use the view's stand-in pop.
 - Quick suite: ALL PASSED (31).
+
+# 0.31.36 (Kevin: the pass lasts 4 weeks)
+- Economy.SEASON_DAYS 42 -> 28. Season 1 (from 2026-10-01) now ends 2026-10-29, season 2 on 2026-11-26; saved pass
+  progress is keyed by season id, so nothing resets early.
+- Measured the pace first: a match pays ~420 pass XP (64 player-matches over two bot matches), the three dailies ~1,300,
+  the weeklies ~5,700 a week; at TIER_XP 1,000 the 30 tiers filled in 8-9 days even at 2 matches a day. TIER_XP 2,500
+  (75,000): ~20 days at 3 a day with the challenges, ~23 at 2, ~16 at 5.
+- meta_economy_test's scratch profiles were named by ticks-since-start, which repeat between runs: a previous run's
+  file (with today's first win) was occasionally reloaded. Now wall-clock ms + a random number.
+- Chests and gem packs are designed (not built yet); waiting on Kevin: instant-open vs timed.

@@ -22,9 +22,12 @@ static func level_reward(level: int) -> Dictionary:
 
 # ---------------- Siege Pass ----------------
 const SEASON_EPOCH := 1790812800         # 2026-10-01 00:00 UTC; seasons before that are season 1
-const SEASON_DAYS := 42
+const SEASON_DAYS := 28                  # 4 weeks (Kevin, 0.31.36; was 42)
 const PASS_TIERS := 30
-const TIER_XP := 1000
+# 0.31.36: measured -- a match gives ~420 pass XP, the three dailies ~1,300, the weeklies ~5,700 a week; at 1,000 a tier
+# the 30 tiers filled in 8-9 days. At 2,500 (75,000 in all): ~20 days at 3 matches a day with the challenges done,
+# ~23 at 2 a day, ~16 at 5 a day -- inside the 28 days for a regular player, a goal for a casual one.
+const TIER_XP := 2500
 const PREMIUM_COST := 950                # gems
 const SEASON_NAMES := ["The King's Keep", "Ashen Ramparts", "Frost Siege", "The Fish Wars", "Iron Tide", "Summer of Stones"]
 

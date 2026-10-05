@@ -11,7 +11,10 @@ func check(ok: bool, what: String) -> void:
 		fails.append(what); print("FAIL ", what)
 
 func fresh(tag: String, legacy: Dictionary = {}) -> Profile:
-	var base := "user://meta-test-%s-%d" % [tag, Time.get_ticks_usec()]
+	# (0.31.36: ticks since start repeat from run to run, so an old run's profile could be picked up -- a left-over
+	# first win made "first win of the day" fail now and then in the suite. Wall-clock ms + a random number now.)
+	randomize()
+	var base := "user://meta-test-%s-%d-%d" % [tag, int(Time.get_unix_time_from_system() * 1000.0), randi()]
 	if not legacy.is_empty():
 		var f := FileAccess.open(base + "-legacy.json", FileAccess.WRITE)
 		f.store_string(JSON.stringify(legacy)); f.close()
