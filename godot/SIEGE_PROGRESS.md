@@ -1766,3 +1766,14 @@ K2/K3 notes (0.17.0)
   draw; Archmage -- Mage, crimson, staff and an open spellbook, summon cast. Ability buttons: VANISH / PIERCE / METEOR
   with their cooldowns. Sounds from the pack (fire spray, fireball, crumble, bow hits).
 - Net v34: "pierce" in PROJ_KINDS; vanish/meteor by events. tests/upgrades_test.gd. Quick suite: ALL PASSED (30).
+
+# 0.31.33 (Kevin: logs and rocks pop into the air and fall like confetti; explosions destroy trees and rocks in their
+# path and fling the material away)
+- View: a new log or rock pops up (4.5-6.5 m/s; 9-12 if a bomb or meteor went off within 12 m in the last 0.6 s),
+  tumbles about a random axis, falls (16 m/s^2), bounces once and settles where the sim has it. Chips: every chop or pick
+  throws 4; a tree falling or a boulder breaking throws 18 (26, faster and away from the blast, if a blast did it) --
+  small spinning bits, bark/pale wood/leaf green or greys, air-slowed like confetti, one bounce, fading at 1.6-2.4 s.
+- Sim: _blast_nodes(at, r, speed) -- the bomb (BOMB_R, 7.5 m/s) and the meteor (METEOR_R, 6 m/s) fell every tree and
+  shatter every boulder they reach; _fell_node(..., blast) flings all the pieces away from the blast (spread 0.7 rad,
+  0.7-1.15 x speed, spinning); they regrow as if worked out. tests/blast_nodes_test.gd; "treeblast" check shot.
+- Quick suite: ALL PASSED (31).

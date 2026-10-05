@@ -2499,6 +2499,7 @@ func sync(dt: float) -> void:
 	_sync_raising()
 	_sync_bombs(dt)
 	_sync_meteor_fx(dt)
+	_sync_chips(dt)
 	_kick_debris()
 	_sync_launchers(dt)
 	_sync_ambience(dt)
@@ -2843,12 +2844,26 @@ func on_event(e: Dictionary) -> void:
 		"meteor_warn":
 			_meteor_warn(e.pos, float(e.delay), int(e.team))
 		"meteor_hit":
+			_recent_blasts.append([e.pos, _time])
 			_meteor_hit(e.pos, float(e.burn))
 		"pierce_hit":
 			var ph := Vector3(e.pos.x, Sim.height_at(e.pos) + 1.1, e.pos.y)
 			for i in 6:
 				spark(ph, Color(0.85, 0.95, 1.0))
+		"node_fell":                                         # 0.31.33: a burst of chips (away from a blast if one did it)
+			var nfp := Vector3(e.pos.x, Sim.height_at(e.pos), e.pos.y)
+			var bl := float(e.get("blast", 0.0))
+			var away := Vector2.ZERO
+			if bl > 0.0:
+				away = ((e.pos as Vector2) - (e.get("from", e.pos) as Vector2)).normalized()
+			_chip_burst(nfp, str(e.kind) == "wood", 26 if bl > 0.0 else 18, 1.3 if bl > 0.0 else 1.0, away)
+		"gather":
+			var gn: int = int(e.get("node", -1))
+			if gn >= 0 and gn < sim.nodes.size():
+				var gp: Vector2 = sim.nodes[gn].p
+				_chip_burst(Vector3(gp.x, Sim.height_at(gp), gp.y), str(e.get("kind", "wood")) == "wood", 4, 0.6)
 		"bomb_boom":
+			_recent_blasts.append([e.pos, _time])
 			bomb_blast(e.pos)
 			water_blast(e.pos, 1.0)
 			_blast_bodies(e.pos, Sim.BOMB_R + 2.5, 7.0)
@@ -3456,7 +3471,37 @@ func _sync_items(dt: float) -> void:
 			nd = _log_node() if is_log else _mesh_node(boulder_mesh(id % 9, Sim.ROCK_R + 0.04, 1), target, 0.0)
 			nd.position = target
 			item_nodes[id] = nd
-		nd.position = nd.position.lerp(target, minf(1.0, dt * 16.0))
+			# 0.31.33 (Kevin): a new log or rock pops up into the air and tumbles down, like confetti -- higher if a
+			# blast threw it
+			var blasted := false
+			for b in _recent_blasts:
+				if _time - float(b[1]) < 0.6 and (b[0] as Vector2).distance_to(p) < 12.0:
+					blasted = true
+			nd.set_meta("pop_vz", randf_range(9.0, 12.0) if blasted else randf_range(4.5, 6.5))
+			nd.set_meta("pop_h", 0.05)
+			nd.set_meta("pop_ax", Vector3(randf_range(-1, 1), randf_range(-0.3, 0.3), randf_range(-1, 1)).normalized())
+			nd.set_meta("pop_spin", randf_range(7.0, 13.0) * (1.6 if blasted else 1.0))
+			nd.set_meta("pop_rot", 0.0)
+		if nd.has_meta("pop_vz"):
+			var vz: float = nd.get_meta("pop_vz")
+			var ph: float = nd.get_meta("pop_h")
+			vz -= ITEM_POP_G * dt
+			ph += vz * dt
+			nd.set_meta("pop_rot", float(nd.get_meta("pop_rot")) + float(nd.get_meta("pop_spin")) * dt)
+			if ph <= 0.0:
+				if vz < -3.0:
+					vz = -vz * 0.28                          # one small bounce
+					ph = 0.0
+				else:
+					nd.remove_meta("pop_vz")
+					ph = 0.0
+			if nd.has_meta("pop_vz"):
+				nd.set_meta("pop_vz", vz)
+				nd.set_meta("pop_h", ph)
+			target.y += ph
+			nd.position = Vector3(nd.position.x, target.y, nd.position.z).lerp(target, minf(1.0, dt * 16.0))
+		else:
+			nd.position = nd.position.lerp(target, minf(1.0, dt * 16.0))
 		if is_log:
 			var ang := float(it.ang)
 			var ax := Vector3(cos(ang), 0.0, sin(ang))
@@ -3464,6 +3509,8 @@ func _sync_items(dt: float) -> void:
 		else:
 			var rax := float(it.rax)
 			nd.basis = Basis(Vector3(sin(rax), 0.0, -cos(rax)), float(it.roll))
+		if nd.has_meta("pop_vz"):
+			nd.basis = Basis(nd.get_meta("pop_ax"), float(nd.get_meta("pop_rot"))) * nd.basis      # tumbling in the air
 	for id in item_nodes.keys():
 		if not seen.has(id):
 			(item_nodes[id] as Node3D).queue_free()
@@ -4371,3 +4418,71 @@ func _sync_meteor_fx(dt: float) -> void:
 			if randf() < dt * 22.0:                       # the burning ground
 				var off := Vector3(randf_range(-1, 1), 0.0, randf_range(-1, 1)).normalized() * randf() * Sim.METEOR_R * 0.8
 				spark((m.burn_at as Vector3) + off, [Color(1.0, 0.5, 0.15), Color(1.0, 0.8, 0.25), Color(0.6, 0.2, 0.08)][randi() % 3])
+
+
+# ---------- confetti from the woodpile and the quarry (0.31.33) ----------
+# Every chop or pick throws a few chips; a tree coming down or a boulder breaking throws a burst (a blast, a bigger one,
+# away from it). Small spinning bits -- bark and pale wood for trees, grey and dark stone for boulders -- that pop up,
+# fall, bounce once and fade. Logs and rocks themselves pop and tumble in _sync_items.
+const ITEM_POP_G := 16.0
+const CHIP_G := 13.0
+var _chips: Array = []
+var _recent_blasts: Array = []        # [pos, time]: items appearing next to one pop higher
+static var _chip_mesh: BoxMesh = null
+
+func _chip_burst(at: Vector3, wood: bool, n: int, power: float, away := Vector2.ZERO) -> void:
+	if low_fx:
+		n = n / 3
+	if _chip_mesh == null:
+		_chip_mesh = BoxMesh.new()
+		_chip_mesh.size = Vector3(0.16, 0.05, 0.11)
+	var cols: Array = [Color("#7a5230"), Color("#c9a46b"), Color("#a57744"), Color("#5f9e3d")] if wood else [Color("#8b8a86"), Color("#a9a7a1"), Color("#6b6a66")]
+	for i in n:
+		var mi := MeshInstance3D.new()
+		mi.mesh = _chip_mesh
+		var m := StandardMaterial3D.new()
+		m.albedo_color = cols[i % cols.size()]
+		m.roughness = 0.9
+		mi.material_override = m
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mi.position = at + Vector3(randf_range(-0.4, 0.4), randf_range(0.2, 1.4), randf_range(-0.4, 0.4))
+		var sc := randf_range(0.7, 1.5)
+		mi.scale = Vector3.ONE * sc
+		add_child(mi)
+		var out := Vector2(randf_range(-1, 1), randf_range(-1, 1)).normalized() * randf_range(0.8, 3.0) * power
+		if away != Vector2.ZERO:
+			out = out * 0.5 + away.rotated(randf_range(-0.8, 0.8)) * randf_range(2.0, 6.0) * power
+		_chips.append({"node":mi, "vel":Vector3(out.x, randf_range(4.0, 8.0) * power, out.y), "ax":Vector3(randf_range(-1, 1), randf_range(-1, 1), randf_range(-1, 1)).normalized(),
+			"spin":randf_range(8.0, 20.0), "t0":_time, "life":randf_range(1.6, 2.4), "bounced":false, "sc":sc})
+
+func _sync_chips(dt: float) -> void:
+	while not _recent_blasts.is_empty() and _time - float(_recent_blasts[0][1]) > 1.0:
+		_recent_blasts.pop_front()
+	for i in range(_chips.size() - 1, -1, -1):
+		var c: Dictionary = _chips[i]
+		var mi: MeshInstance3D = c.node
+		var age := _time - float(c.t0)
+		if age > float(c.life) or not is_instance_valid(mi):
+			if is_instance_valid(mi):
+				mi.queue_free()
+			_chips.remove_at(i)
+			continue
+		var v: Vector3 = c.vel
+		v.y -= CHIP_G * dt
+		v.x *= 1.0 - 0.6 * dt                        # light bits: the air slows them (confetti, not stones)
+		v.z *= 1.0 - 0.6 * dt
+		var np: Vector3 = mi.position + v * dt
+		var gy := Sim.height_at(Vector2(np.x, np.z)) + 0.03
+		if np.y < gy:
+			np.y = gy
+			if not bool(c.bounced) and v.y < -2.0:
+				v = Vector3(v.x * 0.5, -v.y * 0.3, v.z * 0.5)
+				c.bounced = true
+			else:
+				v = Vector3(v.x * 0.2, 0.0, v.z * 0.2)
+				c.spin = float(c.spin) * 0.8
+		c.vel = v
+		mi.position = np
+		mi.rotate(c.ax, float(c.spin) * dt)
+		var fade := clampf((float(c.life) - age) / 0.5, 0.0, 1.0)
+		mi.scale = Vector3.ONE * float(c.sc) * fade

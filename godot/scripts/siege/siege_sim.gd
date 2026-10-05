@@ -3452,7 +3452,7 @@ const RIVER_FLOW := Vector2(-0.7, 0.0)
 var _next_item := 1
 var _item_last := {}
 
-func _fell_node(n: Dictionary, from: Vector2) -> void:
+func _fell_node(n: Dictionary, from: Vector2, blast := 0.0) -> void:
 	var is_log := str(n.kind) == "wood"
 	var cnt := LOGS_PER_TREE if is_log else ROCKS_PER_BOULDER
 	var away: Vector2 = ((n.p as Vector2) - from).normalized() if from.distance_to(n.p) > 0.1 else Vector2(1, 0)
@@ -3460,7 +3460,13 @@ func _fell_node(n: Dictionary, from: Vector2) -> void:
 		var p: Vector2
 		var vel: Vector2
 		var ang := 0.0
-		if is_log:
+		if blast > 0.0:
+			# 0.31.33: blown apart by an explosion -- every piece flung away from the blast, spread a little
+			var spread := away.rotated(rng.randf_range(-0.7, 0.7))
+			p = (n.p as Vector2) + spread * (n.r * 0.6) + Vector2(rng.randf_range(-0.3, 0.3), rng.randf_range(-0.3, 0.3))
+			vel = spread * blast * rng.randf_range(0.7, 1.15)
+			ang = rng.randf() * TAU
+		elif is_log:
 			# The trunk falls away from the axe and lies in pieces along where it fell, rolling apart a little.
 			var side := Vector2(-away.y, away.x)
 			p = (n.p as Vector2) + away * (n.r + 0.6 + k * 1.15) + side * rng.randf_range(-0.35, 0.35)
@@ -3473,9 +3479,20 @@ func _fell_node(n: Dictionary, from: Vector2) -> void:
 			vel = d * rng.randf_range(1.8, 3.2)
 		p = _clamp_to_field(_push_out(p, LOG_R if is_log else ROCK_R))
 		items.append({"id":_next_item, "kind":"log" if is_log else "rock", "res":n.kind, "pos":p, "vel":vel, "ang":ang,
-			"spin":0.0, "roll":0.0, "rax":angle_of(vel), "born":time, "val":ITEM_VALUE})
+			"spin":rng.randf_range(-4.0, 4.0) if blast > 0.0 else 0.0, "roll":0.0, "rax":angle_of(vel), "born":time, "val":ITEM_VALUE})
 		_next_item += 1
-	_event("node_fell", {"node":n.id, "kind":n.kind, "pos":n.p})
+	_event("node_fell", {"node":n.id, "kind":n.kind, "pos":n.p, "blast":blast, "from":from})
+
+func _blast_nodes(at: Vector2, radius: float, speed: float) -> void:
+	# 0.31.33 (Kevin): an explosion fells the trees and shatters the boulders in its reach; the logs and rocks fly
+	# away from it (they regrow as if worked out)
+	for n in nodes:
+		if int(n.amount) <= 0:
+			continue
+		if (n.p as Vector2).distance_to(at) <= radius + float(n.r):
+			n.amount = 0
+			n.t = 0.0
+			_fell_node(n, at, speed)
 
 func _item_axis(it: Dictionary) -> Vector2:
 	return dir_of(float(it.ang))
@@ -3926,6 +3943,7 @@ func _explode_bomb(b: Dictionary) -> void:
 			else:
 				_damage_gate(src, g, float(g.max_hp) * BOMB_GATE)
 	_blast_push(at, BOMB_R + 2.0, 7.0)
+	_blast_nodes(at, BOMB_R, 7.5)
 	_event("bomb_boom", {"team":b.team, "pos":at, "killed":killed, "by":str(b.by)})
 	bombs[int(b.team)] = {}
 	bomb_next[int(b.team)] = time + BOMB_RESPAWN
@@ -4400,6 +4418,7 @@ func _step_meteors(dt: float) -> void:
 					_next_push = _push_from(m.at, o.pos, 4.6, 3.8)
 					_damage(owner if not owner.is_empty() else {"team":int(m.team), "id":""}, o, float(m.dmg) * (1.0 - 0.5 * d / METEOR_R), 0.4)
 			_blast_push(m.at, METEOR_R + 1.5, 5.0)
+			_blast_nodes(m.at, METEOR_R, 6.0)
 			m.burn_until = time + METEOR_BURN
 			_event("meteor_hit", {"team":int(m.team), "pos":m.at, "burn":METEOR_BURN})
 			continue

@@ -13,7 +13,7 @@ const Sim = preload("res://scripts/siege/siege_sim.gd")
 const Land = preload("res://scripts/siege/siege_land.gd")
 const Castle = preload("res://scripts/siege/siege_castle.gd")
 const SLOW := {"hook": [[0.95, 2.1, 0.18]], "necro": [[0.6, 2.6, 0.25]], "hammer": [[0.55, 1.75, 0.22]], "whirl": [[0.8, 2.4, 0.22]]}
-const LENGTH := {"upcheck": 3.2, "launch": 10.0, "catcheck": 1.0, "waterbomb": 6.0, "bomb": 4.6, "hook": 2.6, "necro": 3.0, "hammer": 2.4, "dawn": 5.0, "clash": 4.5, "captive": 4.0, "heroes": 4.3, "lineup": 4.0, "gather": 4.0, "build": 7.0, "backstab": 4.0, "assault": 5.5,
+const LENGTH := {"treeblast": 5.5, "upcheck": 3.2, "launch": 10.0, "catcheck": 1.0, "waterbomb": 6.0, "bomb": 4.6, "hook": 2.6, "necro": 3.0, "hammer": 2.4, "dawn": 5.0, "clash": 4.5, "captive": 4.0, "heroes": 4.3, "lineup": 4.0, "gather": 4.0, "build": 7.0, "backstab": 4.0, "assault": 5.5,
 	"rampart": 4.0, "whirl": 3.2, "feast": 4.0, "carry": 5.0, "throne": 4.0, "reveal": 9.0,
 	# Round 28 (Kevin + Derek Lieu's makeover advice: core action first, struggle, comedy, fewer cards)
 	"breakin": 10.6, "carry2": 7.9, "toofat": 5.5, "hatsteal": 5.0}
@@ -81,6 +81,29 @@ func _stage() -> void:
 		_revive(u)
 		u.bot = true
 	match shot:
+		"treeblast":
+			# (0.31.33 check) a worker fells a tree (logs pop and chips fly), then a bomb goes off by the next trees
+			var tn: Array = s.nodes.filter(func(n): return str(n.kind) == "wood" and int(n.amount) > 0)
+			var t1: Dictionary = tn[0]
+			var wk: Dictionary = s.units.filter(func(x): return x.team == 0 and x.id != me.id)[0]
+			s._set_class(wk, "worker", false)
+			wk.bot = false
+			_revive(wk)
+			wk.pos = (t1.p as Vector2) + Vector2(0.0, float(t1.r) + 0.6)
+			wk.face = Sim.angle_of((t1.p as Vector2) - (wk.pos as Vector2))
+			t1.amount = 1
+			for u in s.units:
+				if u.id != wk.id:
+					u.bot = false
+					u.move = Vector2.ZERO
+					u.pos = Sim.spawn(u.team)
+			beats = [[0.3, wk.id, "interact"]]
+			var t2p: Vector2 = (t1.p as Vector2) + Vector2(5.0, -2.0)
+			s.bombs[1] = {"id":1, "team":1, "state":"lit", "p":t2p, "h":0.0, "carrier":"", "by":"", "from":t2p, "to":t2p,
+				"t0":0.0, "lit_at":s.time + 2.6 - Sim.BOMB_FUSE}
+			s.bomb_next = [INF, INF]
+			cam_a = [_v((t1.p as Vector2) + Vector2(3.0, 11.0), 6.5), _v((t1.p as Vector2) + Vector2(2.5, -1.0), 1.0)]
+			cam_b = [_v((t1.p as Vector2) + Vector2(4.0, 12.0), 7.5), _v((t1.p as Vector2) + Vector2(3.0, -1.5), 1.0)]
 		"upcheck":
 			# (0.31.32 check) the Assassin, the Sniper and the Archmage; meteor, vanish and a piercing shot
 			var uc := Vector2(-6.0, 30.0)
