@@ -148,7 +148,7 @@ func _init() -> void:
 	var it := Eco.item(target)
 	var look := b.look_for(str(it.get("class", "knight")))
 	check(it.kind == "title" or not look.is_empty(), "equipped look reaches the battle view (%s)" % str(look))
-	check(not b.equip("knight_skin_gilded").ok or b.owns("knight_skin_gilded"), "can't equip unowned items")
+	check(not b.equip("knight_wpn_tower").ok or b.owns("knight_wpn_tower"), "can't equip unowned items")
 	b.d.gems = 200
 	check(b.exchange("gold_m").ok and b.d.gems == 80, "gems -> gold exchange")
 
@@ -167,13 +167,31 @@ func _init() -> void:
 	var up := fresh("upcos")
 	up.d.gold = 10000
 	check(Eco.cosmetic_class("knight", true) == "crusader" and Eco.cosmetic_class("knight", false) == "knight" and Eco.cosmetic_class("worker", true) == "worker", "an upgraded Knight dresses from the Crusader slot")
-	up.d.owned.append("crus_skin_holy")              # (buying depends on the day's rotation; tested above)
-	check(bool(up.equip("crus_skin_holy").get("ok", false)), "a Crusader skin owned and worn")
-	check(str(up.look_for("crusader").get("tint", "")) == "#f4e7c0" and not up.look_for("knight").has("tint"), "it dresses the Crusader, not the plain Knight")
+	up.d.owned.append("crus_wpn_warhammer")          # (buying depends on the day's rotation; tested above)
+	check(bool(up.equip("crus_wpn_warhammer").get("ok", false)), "a Crusader weapon owned and equipped")
+	check(str(up.look_for("crusader").get("r", "")) == "bits/hammer_A" and not up.look_for("knight").has("r"), "it arms the Crusader, not the plain Knight")
 	var upcount := 0
 	for cid in Eco.CATALOG:
 		if Eco.UP_CLASSES.has(str(Eco.CATALOG[cid].get("class", ""))):
 			upcount += 1
-	check(upcount == 30, "30 upgraded-class cosmetics (5 for each of 6 classes): %d" % upcount)
+	check(upcount == 12, "12 upgraded-class weapons (2 for each of 6 classes): %d" % upcount)
+	# ---- 0.31.39: weapons only -- no skins; bought skins refunded once ----
+	var skins := 0
+	for cid in Eco.CATALOG:
+		if str(Eco.CATALOG[cid].kind) == "skin":
+			skins += 1
+	check(skins == 0, "no skins left in the catalog")
+	var rf := fresh("refund")
+	var rawsave := rf.d.duplicate(true)
+	rawsave.owned = ["knight_skin_royal", "knight_skin_gilded", "knight_wpn_greatsword"]
+	rawsave.erase("skins_refunded")
+	rawsave.gold = 100
+	rawsave.gems = 10
+	var after := rf._normalized(rawsave)
+	check(int(after.gold) == 100 + 1200 and int(after.gems) == 10 + 400 and after.owned == ["knight_wpn_greatsword"], "an old save's bought skins come back as their price (gold %d, gems %d)" % [int(after.gold), int(after.gems)])
+	var again := rf._normalized(after)
+	check(int(again.gold) == int(after.gold) and int(again.gems) == int(after.gems), "and only once")
+	var lk := up.look_for("knight")
+	check(not lk.has("tint"), "no tints reach the battle")
 	print("META_ECONOMY_PASS" if fails.is_empty() else "META_ECONOMY_FAIL %s" % str(fails))
 	quit(0 if fails.is_empty() else 1)

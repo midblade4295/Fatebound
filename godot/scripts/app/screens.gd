@@ -157,8 +157,13 @@ static func home(app, root: VBoxContainer) -> void:
 	var eq: Dictionary = d.equip[app.home_class]
 	var cn := UI.title(root, str(Eco.CLASS_NAMES[app.home_class]).to_upper(), 28, UI.TEXT)
 	cn.add_theme_constant_override("outline_size", 8)
-	var skin_name := str(Eco.item(str(eq.skin)).get("name", "Default look"))
-	var sl := UI.label(root, skin_name, 12, UI.GOLD, UI.HEAVY_FONT, true)
+	var gear_name := str(Eco.item(str(eq.weapon)).get("name", "Default gear"))
+	var sl := UI.label(root, gear_name, 12, UI.GOLD, UI.HEAVY_FONT, true)
+	if d.has("refund_note"):                              # 0.31.39: skins removed -- tell them once what came back
+		var rn: Dictionary = d.refund_note
+		app.toast("Skins have been retired -- refunded %s" % ", ".join([("%d gold" % int(rn.gold)) if int(rn.gold) > 0 else "", ("%d gems" % int(rn.gems)) if int(rn.gems) > 0 else ""].filter(func(x): return x != "")), UI.GOLD)
+		d.erase("refund_note")
+		p.save()
 	sl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	var chips := UI.row(root, 6)
 	for cls in Eco.CLASSES:
@@ -605,7 +610,7 @@ static func locker(app, root: VBoxContainer) -> void:
 	stage.add_child(show)
 	show.show_look(cls, p.look_for(cls))
 	var nm := UI.title(root, str(Eco.CLASS_NAMES[cls]).to_upper(), 20, UI.TEXT)
-	for slot in ["skin", "weapon"]:
+	for slot in ["weapon"]:                                 # 0.31.39: weapons are the only class cosmetic
 		section(root, "SKINS" if slot == "skin" else "WEAPONS", "", "skin" if slot == "skin" else "weapon")
 		var def := UI.card(root)
 		var dr := UI.row(def, 10)

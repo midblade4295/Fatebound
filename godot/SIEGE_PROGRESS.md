@@ -1836,3 +1836,14 @@ K2/K3 notes (0.17.0)
   figure, gear in hand) and the upgraded defaults; 42 new thumbnails. Locker: a second tab row for the upgraded classes.
 - render_skin_icons: the camera is aimed by transform (look_at failed: not in the tree in _initialize).
 - meta_economy_test covers it. Quick suite: ALL PASSED (32).
+
+# 0.31.39 (Kevin: only weapons are cosmetics, so it's easy to tell who's playing what class)
+- All 32 skins (tints) are gone from the catalog: 19 gold and 9 gem shop skins, 4 pass skins. The class looks (and the
+  upgraded classes' own colours) are fixed. REMOVED_SKIN_REFUND keeps the 28 bought skins' prices; Profile._normalized
+  pays them back once (skins_refunded) and the home screen says what came back. Pass skins (free) just go.
+- Packs are weapon bundles now ("Arsenal": two weapons per class, the Knight's with its title), ~80 % of the items'
+  value; the Priest pack (one shop weapon) is gone. Chests drop weapons only. The pass draws from 15 weapons + 5 titles.
+- look_for() sends no tint; the locker shows WEAPONS only; the home screen shows the equipped weapon's name. 64 skin
+  thumbnails deleted (class defaults kept).
+- Gold sink: gold-bought items 43 -> 24 (~32,000 gold). More weapons per class would bring it back.
+- meta_economy_test: no skins, refund paid once, no tints in battle. Quick suite: ALL PASSED (32).

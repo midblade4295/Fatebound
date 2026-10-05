@@ -100,39 +100,28 @@ static func pass_items(sid: int) -> Array:
 	return out
 
 # ---------------- cosmetics ----------------
-# kind "skin": a tint over the class model. kind "weapon": right/left hand models for a class.
+# kind "weapon": right/left hand models for a class (0.31.39: the only class cosmetic -- no skins/tints, so every
+# class keeps its own readable look). kind "title": text on the profile.
 # kind "title": text shown on the profile. source "shop" (gold/gems), "pass", "level".
 const CATALOG := {
 	# --- Knight
-	"knight_skin_royal":   {"kind":"skin", "class":"knight", "name":"Royal Guard", "rarity":"rare", "tint":"#9fc3ff", "gold":1200, "source":"shop"},
-	"knight_skin_gilded":  {"kind":"skin", "class":"knight", "name":"Gilded Champion", "rarity":"legendary", "tint":"#ffd36b", "gems":400, "source":"shop"},
-	"knight_skin_obsidian":{"kind":"skin", "class":"knight", "name":"Obsidian Oath", "rarity":"epic", "tint":"#6f6a8a", "source":"pass"},
 	"knight_wpn_greatsword":{"kind":"weapon", "class":"knight", "name":"Greatsword", "rarity":"rare", "r":"sword_2handed", "l":"", "gold":900, "source":"shop"},
 	"knight_wpn_crest":    {"kind":"weapon", "class":"knight", "name":"Sword & Crest", "rarity":"rare", "r":"sword_1handed", "l":"shield_badge_color", "gold":1100, "source":"shop"},
 	"knight_wpn_tower":    {"kind":"weapon", "class":"knight", "name":"Sword & Tower Shield", "rarity":"epic", "r":"sword_1handed", "l":"shield_square_color", "gems":250, "source":"shop"},
 	"knight_wpn_crimson":  {"kind":"weapon", "class":"knight", "name":"Crimson Greatsword", "rarity":"epic", "r":"sword_2handed_color", "l":"", "source":"pass"},
 	# --- Barbarian
-	"barb_skin_ember":     {"kind":"skin", "class":"barbarian", "name":"Ember Hide", "rarity":"rare", "tint":"#ffb08a", "gold":1200, "source":"shop"},
-	"barb_skin_frost":     {"kind":"skin", "class":"barbarian", "name":"Frostborn", "rarity":"epic", "tint":"#a8e6ff", "source":"pass"},
 	"barb_wpn_raider":     {"kind":"weapon", "class":"barbarian", "name":"Axe & Buckler", "rarity":"rare", "r":"axe_1handed", "l":"shield_round_barbarian", "gold":1000, "source":"shop"},
 	"barb_wpn_spiked":     {"kind":"weapon", "class":"barbarian", "name":"Axe & Spiked Shield", "rarity":"epic", "r":"axe_1handed", "l":"shield_spikes_color", "gems":250, "source":"shop"},
 	# --- Rogue
-	"rogue_skin_night":    {"kind":"skin", "class":"rogue", "name":"Nightshade", "rarity":"rare", "tint":"#8e8fc8", "gold":1200, "source":"shop"},
-	"rogue_skin_venom":    {"kind":"skin", "class":"rogue", "name":"Venom", "rarity":"epic", "tint":"#9df28a", "source":"pass"},
 	"rogue_wpn_bomb":      {"kind":"weapon", "class":"rogue", "name":"Dagger & Smoke Bomb", "rarity":"rare", "r":"dagger", "l":"smokebomb", "gold":900, "source":"shop"},
 	"rogue_wpn_bolt":      {"kind":"weapon", "class":"rogue", "name":"Hand Crossbow", "rarity":"epic", "r":"dagger", "l":"crossbow_1handed", "gems":250, "source":"shop"},
 	# --- Ranger
-	"ranger_skin_forest":  {"kind":"skin", "class":"ranger", "name":"Deepwood", "rarity":"rare", "tint":"#9fd98a", "gold":1200, "source":"shop"},
-	"ranger_skin_dusk":    {"kind":"skin", "class":"ranger", "name":"Duskstalker", "rarity":"legendary", "tint":"#d69cff", "gems":400, "source":"shop"},
 	"ranger_wpn_crossbow": {"kind":"weapon", "class":"ranger", "name":"Heavy Crossbow", "rarity":"epic", "r":"", "l":"crossbow_2handed", "source":"pass"},
 	"ranger_wpn_quiver":   {"kind":"weapon", "class":"ranger", "name":"Bow & Quiver", "rarity":"rare", "r":"quiver", "l":"bow_withString", "gold":900, "source":"shop"},
 	# --- Mage
-	"mage_skin_arcane":    {"kind":"skin", "class":"mage", "name":"Arcanist", "rarity":"rare", "tint":"#9fb4ff", "gold":1200, "source":"shop"},
-	"mage_skin_solar":     {"kind":"skin", "class":"mage", "name":"Solar Magus", "rarity":"legendary", "tint":"#ffd89a", "gems":400, "source":"shop"},
 	"mage_wpn_tome":       {"kind":"weapon", "class":"mage", "name":"Wand & Tome", "rarity":"rare", "r":"wand", "l":"spellbook_open", "gold":1000, "source":"shop"},
 	"mage_wpn_wand":       {"kind":"weapon", "class":"mage", "name":"Wand", "rarity":"common", "r":"wand", "l":"", "gold":500, "source":"shop"},
 	# --- Worker
-	"worker_skin_miner":   {"kind":"skin", "class":"worker", "name":"Quarry Crew", "rarity":"common", "tint":"#d8c39a", "gold":600, "source":"shop"},
 	"worker_wpn_mug":      {"kind":"weapon", "class":"worker", "name":"Axe & Ale", "rarity":"rare", "r":"axe_1handed", "l":"mug_full", "source":"pass"},
 	# --- Round 11: KayKit Fantasy Weapons Bits ("bits/<model>") and the Priest
 	"knight_wpn_bastion":  {"kind":"weapon", "class":"knight", "name":"Bastion Guard", "rarity":"epic", "r":"bits/sword_B", "l":"bits/shield_D", "gems":280, "source":"shop"},
@@ -150,8 +139,6 @@ const CATALOG := {
 	"mage_wpn_crystal":    {"kind":"weapon", "class":"mage", "name":"Crystal Staff", "rarity":"epic", "r":"bits/staff_B", "l":"", "gems":250, "source":"shop"},
 	"mage_wpn_elder":      {"kind":"weapon", "class":"mage", "name":"Elder Staff", "rarity":"legendary", "r":"bits/staff_D", "l":"", "source":"pass"},
 	"mage_wpn_twinwand":   {"kind":"weapon", "class":"mage", "name":"Twin Wands", "rarity":"rare", "r":"bits/wand_A", "l":"bits/wand_A", "source":"pass"},
-	"priest_skin_dawn":    {"kind":"skin", "class":"priest", "name":"Dawn Vestments", "rarity":"rare", "tint":"#ffe7a6", "gold":1200, "source":"shop"},
-	"priest_skin_moon":    {"kind":"skin", "class":"priest", "name":"Moonlit Robes", "rarity":"epic", "tint":"#b9c8ff", "source":"pass"},
 	"priest_wpn_sun":      {"kind":"weapon", "class":"priest", "name":"Sun Staff", "rarity":"legendary", "r":"bits/staff_C", "l":"", "source":"pass"},
 	"priest_wpn_light":    {"kind":"weapon", "class":"priest", "name":"Lightwand", "rarity":"rare", "r":"bits/wand_B", "l":"", "gold":900, "source":"shop"},
 	"worker_wpn_mallet":   {"kind":"weapon", "class":"worker", "name":"War Mallet", "rarity":"rare", "r":"bits/hammer_A", "l":"", "source":"pass"},
@@ -163,49 +150,63 @@ const CATALOG := {
 	"title_cake_baron":    {"kind":"title", "class":"", "name":"Fish Baron", "rarity":"epic", "source":"pass"},
 	"title_oracle_sworn":  {"kind":"title", "class":"", "name":"Kingsworn", "rarity":"legendary", "gems":300, "source":"shop"},
 	"title_siege_lord":    {"kind":"title", "class":"", "name":"Siege Lord", "rarity":"epic", "source":"pass"},
-	# --- 0.31.38: the upgraded classes (gold for the rare/epic pieces, gems for the legendary look) ---
-	"crus_skin_holy":      {"kind":"skin", "class":"crusader", "name":"Holy Order", "rarity":"rare", "tint":"#f4e7c0", "gold":1500, "source":"shop"},
-	"crus_skin_templar":   {"kind":"skin", "class":"crusader", "name":"Templar", "rarity":"epic", "tint":"#d36a6a", "gold":2800, "source":"shop"},
-	"crus_skin_sunforged": {"kind":"skin", "class":"crusader", "name":"Sunforged", "rarity":"legendary", "tint":"#ffe08a", "gems":400, "source":"shop"},
+	# --- 0.31.38: the upgraded classes (0.31.39: weapons only)
 	"crus_wpn_mace":       {"kind":"weapon", "class":"crusader", "name":"Mace & Kite Shield", "rarity":"rare", "r":"bits/hammer_C", "l":"bits/shield_A", "gold":1200, "source":"shop"},
 	"crus_wpn_warhammer":  {"kind":"weapon", "class":"crusader", "name":"Warhammer & Bulwark", "rarity":"epic", "r":"bits/hammer_A", "l":"bits/shield_D", "gold":2400, "source":"shop"},
-	"bers_skin_bloodrage": {"kind":"skin", "class":"berserker", "name":"Bloodrage", "rarity":"rare", "tint":"#e07a6a", "gold":1500, "source":"shop"},
-	"bers_skin_glacier":   {"kind":"skin", "class":"berserker", "name":"Glacier Fury", "rarity":"epic", "tint":"#a8dcff", "gold":2800, "source":"shop"},
-	"bers_skin_volcanic":  {"kind":"skin", "class":"berserker", "name":"Volcanic", "rarity":"legendary", "tint":"#ff9a4a", "gems":400, "source":"shop"},
 	"bers_wpn_twinaxe":    {"kind":"weapon", "class":"berserker", "name":"Twin-Edged Axe", "rarity":"rare", "r":"axe_2handed", "l":"", "gold":1200, "source":"shop"},
 	"bers_wpn_halberd":    {"kind":"weapon", "class":"berserker", "name":"Great Halberd", "rarity":"epic", "r":"bits/halberd", "l":"", "gold":2400, "source":"shop"},
-	"necro_skin_plague":   {"kind":"skin", "class":"necromancer", "name":"Plaguebringer", "rarity":"rare", "tint":"#a9c98a", "gold":1500, "source":"shop"},
-	"necro_skin_frost":    {"kind":"skin", "class":"necromancer", "name":"Grave Frost", "rarity":"epic", "tint":"#9fb8e8", "gold":2800, "source":"shop"},
-	"necro_skin_boneking": {"kind":"skin", "class":"necromancer", "name":"Bone King", "rarity":"legendary", "tint":"#f0e8d6", "gems":400, "source":"shop"},
 	"necro_wpn_tome":      {"kind":"weapon", "class":"necromancer", "name":"Grim Tome", "rarity":"rare", "r":"Skeleton_Staff", "l":"spellbook_open", "gold":1200, "source":"shop"},
 	"necro_wpn_scythe":    {"kind":"weapon", "class":"necromancer", "name":"Reaper's Scythe", "rarity":"epic", "r":"bits/scythe", "l":"", "gold":2400, "source":"shop"},
-	"assn_skin_crimson":   {"kind":"skin", "class":"assassin", "name":"Crimson Veil", "rarity":"rare", "tint":"#b05060", "gold":1500, "source":"shop"},
-	"assn_skin_midnight":  {"kind":"skin", "class":"assassin", "name":"Midnight", "rarity":"epic", "tint":"#5a6aa0", "gold":2800, "source":"shop"},
-	"assn_skin_phantom":   {"kind":"skin", "class":"assassin", "name":"Phantom", "rarity":"legendary", "tint":"#d8d0ff", "gems":400, "source":"shop"},
 	"assn_wpn_fangs":      {"kind":"weapon", "class":"assassin", "name":"Serpent Fangs", "rarity":"rare", "r":"bits/dagger_B", "l":"bits/dagger_B", "gold":1200, "source":"shop"},
 	"assn_wpn_fists":      {"kind":"weapon", "class":"assassin", "name":"Shadow Claws", "rarity":"epic", "r":"bits/fistweapon_C_right", "l":"bits/fistweapon_C_left", "gold":2400, "source":"shop"},
-	"snip_skin_desert":    {"kind":"skin", "class":"sniper", "name":"Desert Scout", "rarity":"rare", "tint":"#d8b884", "gold":1500, "source":"shop"},
-	"snip_skin_winter":    {"kind":"skin", "class":"sniper", "name":"Winter Watch", "rarity":"epic", "tint":"#e6eef4", "gold":2800, "source":"shop"},
-	"snip_skin_golden":    {"kind":"skin", "class":"sniper", "name":"Golden Eye", "rarity":"legendary", "tint":"#ffd36b", "gems":400, "source":"shop"},
 	"snip_wpn_recurve":    {"kind":"weapon", "class":"sniper", "name":"Recurve Longbow", "rarity":"rare", "r":"", "l":"bits/bow_B_withString", "gold":1200, "source":"shop"},
 	"snip_wpn_heartwood":  {"kind":"weapon", "class":"sniper", "name":"Heartwood Bow", "rarity":"epic", "r":"", "l":"bits/bow_C_withString", "gold":2400, "source":"shop"},
-	"arch_skin_frost":     {"kind":"skin", "class":"archmage", "name":"Frostcaller", "rarity":"rare", "tint":"#8cc0ff", "gold":1500, "source":"shop"},
-	"arch_skin_void":      {"kind":"skin", "class":"archmage", "name":"Voidweaver", "rarity":"epic", "tint":"#7a5ab0", "gold":2800, "source":"shop"},
-	"arch_skin_starborn":  {"kind":"skin", "class":"archmage", "name":"Starborn", "rarity":"legendary", "tint":"#fff0b0", "gems":400, "source":"shop"},
 	"arch_wpn_crystal":    {"kind":"weapon", "class":"archmage", "name":"Crystal Staff & Tome", "rarity":"rare", "r":"bits/staff_C", "l":"spellbook_open", "gold":1200, "source":"shop"},
 	"arch_wpn_rod":        {"kind":"weapon", "class":"archmage", "name":"Arcane Rod", "rarity":"epic", "r":"bits/staff_D", "l":"", "gold":2400, "source":"shop"},
 }
+
+# 0.31.39 (Kevin: "only the weapons are cosmetics -- so it's easy to tell who's playing what class"): the skins (tints)
+# are gone. Anyone who bought one gets its price back once (Profile._normalized).
+const REMOVED_SKIN_REFUND := {
+	"knight_skin_royal":{"gold":1200},
+	"knight_skin_gilded":{"gems":400},
+	"barb_skin_ember":{"gold":1200},
+	"rogue_skin_night":{"gold":1200},
+	"ranger_skin_forest":{"gold":1200},
+	"ranger_skin_dusk":{"gems":400},
+	"mage_skin_arcane":{"gold":1200},
+	"mage_skin_solar":{"gems":400},
+	"worker_skin_miner":{"gold":600},
+	"priest_skin_dawn":{"gold":1200},
+	"crus_skin_holy":{"gold":1500},
+	"crus_skin_templar":{"gold":2800},
+	"crus_skin_sunforged":{"gems":400},
+	"bers_skin_bloodrage":{"gold":1500},
+	"bers_skin_glacier":{"gold":2800},
+	"bers_skin_volcanic":{"gems":400},
+	"necro_skin_plague":{"gold":1500},
+	"necro_skin_frost":{"gold":2800},
+	"necro_skin_boneking":{"gems":400},
+	"assn_skin_crimson":{"gold":1500},
+	"assn_skin_midnight":{"gold":2800},
+	"assn_skin_phantom":{"gems":400},
+	"snip_skin_desert":{"gold":1500},
+	"snip_skin_winter":{"gold":2800},
+	"snip_skin_golden":{"gems":400},
+	"arch_skin_frost":{"gold":1500},
+	"arch_skin_void":{"gold":2800},
+	"arch_skin_starborn":{"gems":400}}
 
 # ---------------- packs (Round 11) ----------------
 # Bundles sold for gems in the shop. You pay only for what you don't own yet (proportional to the
 # items' value); a pack you fully own can't be bought.
 const PACKS := {
-	"pack_crusader": {"name":"Crusader Pack", "class":"knight", "rarity":"epic", "gems":420, "items":["knight_skin_royal", "knight_wpn_bastion", "title_gatebreaker"]},
-	"pack_warlord":  {"name":"Warlord Pack", "class":"barbarian", "rarity":"rare", "gems":190, "items":["barb_skin_ember", "barb_wpn_hammer"]},
-	"pack_shadow":   {"name":"Shadow Pack", "class":"rogue", "rarity":"rare", "gems":190, "items":["rogue_skin_night", "rogue_wpn_fangs"]},
-	"pack_hunter":   {"name":"Hunter Pack", "class":"ranger", "rarity":"rare", "gems":190, "items":["ranger_skin_forest", "ranger_wpn_recurve"]},
-	"pack_arcane":   {"name":"Arcane Pack", "class":"mage", "rarity":"epic", "gems":330, "items":["mage_skin_arcane", "mage_wpn_crystal"]},
-	"pack_dawn":     {"name":"Dawn Pack", "class":"priest", "rarity":"rare", "gems":180, "items":["priest_skin_dawn", "priest_wpn_light"]},
+	# 0.31.39: weapon bundles (each had a skin); priced at about 80 % of the items' value
+	"pack_crusader": {"name":"Knight Arsenal", "class":"knight", "rarity":"epic", "gems":330, "items":["knight_wpn_bastion", "knight_wpn_crest", "title_gatebreaker"]},
+	"pack_warlord":  {"name":"Warlord Arsenal", "class":"barbarian", "rarity":"epic", "gems":260, "items":["barb_wpn_spiked", "barb_wpn_hammer"]},
+	"pack_shadow":   {"name":"Shadow Arsenal", "class":"rogue", "rarity":"epic", "gems":250, "items":["rogue_wpn_bolt", "rogue_wpn_fangs"]},
+	"pack_hunter":   {"name":"Hunter Arsenal", "class":"ranger", "rarity":"rare", "gems":120, "items":["ranger_wpn_recurve", "ranger_wpn_quiver"]},
+	"pack_arcane":   {"name":"Arcane Arsenal", "class":"mage", "rarity":"epic", "gems":250, "items":["mage_wpn_crystal", "mage_wpn_tome"]},
 }
 
 static func item_value_gems(id: String) -> float:
@@ -397,7 +398,7 @@ static func chest_pool(rarity: String) -> Array:
 	var ids := []
 	for id in CATALOG:
 		var it: Dictionary = CATALOG[id]
-		if str(it.get("source", "")) == "shop" and str(it.get("rarity", "")) == rarity and str(it.get("kind", "")) in ["skin", "weapon"]:
+		if str(it.get("source", "")) == "shop" and str(it.get("rarity", "")) == rarity and str(it.get("kind", "")) == "weapon":
 			ids.append(id)
 	return ids
 

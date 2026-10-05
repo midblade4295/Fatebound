@@ -37,7 +37,7 @@ func _process(_d: float) -> bool:
 		var p = app.profile
 		p.d.gems += 400
 		p.d.pass.xp = 3 * 1000 + 450
-		p.d.owned.append("knight_skin_royal"); p.equip("knight_skin_royal")
+		p.d.owned.append("knight_wpn_greatsword"); p.equip("knight_wpn_greatsword")
 		p.d.challenges.daily[0].progress = 99
 		# (0.31.37) chests: one opening ready, one unlocking, two waiting
 		for k in ["silver", "gold", "wooden", "royal"]:

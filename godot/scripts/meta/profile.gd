@@ -60,6 +60,19 @@ func _normalized(v: Dictionary) -> Dictionary:
 		if Eco.CATALOG.has(str(id)) and not owned.has(str(id)):
 			owned.append(str(id))
 	out.owned = owned
+	# 0.31.39: skins were removed -- give back what any bought ones cost, once
+	if not bool(out.get("skins_refunded", false)):
+		var back := {"gold":0, "gems":0}
+		for sid in v.get("owned", []):
+			if Eco.REMOVED_SKIN_REFUND.has(str(sid)):
+				var pr: Dictionary = Eco.REMOVED_SKIN_REFUND[str(sid)]
+				back.gold += int(pr.get("gold", 0))
+				back.gems += int(pr.get("gems", 0))
+		out.gold = int(out.gold) + back.gold
+		out.gems = int(out.gems) + back.gems
+		out["skins_refunded"] = true
+		if back.gold + back.gems > 0:
+			out["refund_note"] = back
 	for c in Eco.CLASSES + Eco.UP_CLASSES:
 		if not out.equip.has(c):
 			out.equip[c] = {"skin":"", "weapon":""}
@@ -297,10 +310,7 @@ func look_for(cls: String) -> Dictionary:
 	var out := {}
 	if not d.equip.has(cls):
 		return out
-	var skin := Eco.item(str(d.equip[cls].skin))
-	if not skin.is_empty():
-		out["tint"] = str(skin.tint)
-	var wpn := Eco.item(str(d.equip[cls].weapon))
+	var wpn := Eco.item(str(d.equip[cls].weapon))           # (0.31.39: weapons only -- no skins)
 	if not wpn.is_empty():
 		out["r"] = str(wpn.r)
 		out["l"] = str(wpn.l)
