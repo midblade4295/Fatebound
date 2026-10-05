@@ -13,7 +13,7 @@ const Sim = preload("res://scripts/siege/siege_sim.gd")
 const Land = preload("res://scripts/siege/siege_land.gd")
 const Castle = preload("res://scripts/siege/siege_castle.gd")
 const SLOW := {"hook": [[0.95, 2.1, 0.18]], "necro": [[0.6, 2.6, 0.25]], "hammer": [[0.55, 1.75, 0.22]], "whirl": [[0.8, 2.4, 0.22]]}
-const LENGTH := {"launch": 10.0, "catcheck": 1.0, "waterbomb": 6.0, "bomb": 4.6, "hook": 2.6, "necro": 3.0, "hammer": 2.4, "dawn": 5.0, "clash": 4.5, "captive": 4.0, "heroes": 4.3, "lineup": 4.0, "gather": 4.0, "build": 7.0, "backstab": 4.0, "assault": 5.5,
+const LENGTH := {"upcheck": 3.2, "launch": 10.0, "catcheck": 1.0, "waterbomb": 6.0, "bomb": 4.6, "hook": 2.6, "necro": 3.0, "hammer": 2.4, "dawn": 5.0, "clash": 4.5, "captive": 4.0, "heroes": 4.3, "lineup": 4.0, "gather": 4.0, "build": 7.0, "backstab": 4.0, "assault": 5.5,
 	"rampart": 4.0, "whirl": 3.2, "feast": 4.0, "carry": 5.0, "throne": 4.0, "reveal": 9.0,
 	# Round 28 (Kevin + Derek Lieu's makeover advice: core action first, struggle, comedy, fewer cards)
 	"breakin": 10.6, "carry2": 7.9, "toofat": 5.5, "hatsteal": 5.0}
@@ -81,6 +81,31 @@ func _stage() -> void:
 		_revive(u)
 		u.bot = true
 	match shot:
+		"upcheck":
+			# (0.31.32 check) the Assassin, the Sniper and the Archmage; meteor, vanish and a piercing shot
+			var uc := Vector2(-6.0, 30.0)
+			var ours: Array = s.units.filter(func(x): return x.team == 0 and x.id != me.id).slice(0, 3)
+			var theirs: Array = s.units.filter(func(x): return x.team == 1).slice(0, 3)
+			for k in 3:
+				s._set_class(ours[k], ["rogue", "ranger", "mage"][k], true)
+				ours[k].bot = false
+				_revive(ours[k])
+				ours[k].move = Vector2.ZERO
+				ours[k].pos = uc + Vector2(-2.4 + k * 2.4, 0.0)
+				ours[k].face = Sim.angle_of(Vector2(0.0, -1.0))
+				s._set_class(theirs[k], "knight", false)
+				theirs[k].bot = false
+				_revive(theirs[k])
+				theirs[k].move = Vector2.ZERO
+				theirs[k].pos = uc + Vector2(-1.0 + k * 1.0, -8.0)
+			for u in s.units:
+				if not ours.has(u) and not theirs.has(u):
+					u.bot = false
+					u.move = Vector2.ZERO
+					u.pos = Sim.spawn(u.team)
+			beats = [[0.4, ours[2].id, "ability"], [0.7, ours[0].id, "ability"], [1.6, ours[1].id, "ability"]]
+			cam_a = [_v(uc + Vector2(0.0, 7.5), 3.4), _v(uc + Vector2(0.0, -3.0), 0.8)]
+			cam_b = [_v(uc + Vector2(3.0, 7.0), 4.4), _v(uc + Vector2(0.0, -4.5), 0.6)]
 		"launch":
 			# (0.31.28 check) three on our launch pad, the lever pulled, the countdown, the flight over the field
 			s.levels[0]["launcher"] = 1
@@ -884,6 +909,8 @@ func _process(delta: float) -> bool:
 				s._start_attack(bu, "attack", false)
 			elif str(b[2]) == "spin":
 				s.act(bu.id, "ability")          # they keep charging into it; each stops when it cuts him down
+			elif str(b[2]) == "ability":
+				s.act(bu.id, "ability")
 			elif str(b[2]) == "interact":
 				s.act(bu.id, "interact")
 			elif str(b[2]) == "hammer":

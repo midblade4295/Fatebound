@@ -29,6 +29,10 @@ const LOOKS := {
 	# Healer: the Mage model in white-gold robes with a wand (tint set once, cached like skins).
 	"priest": {"model":"Mage","r":"wand","l":"","tint":"#fff1c8","idle":"g/Idle_B","attack":"r/Ranged_Magic_Spellcasting_Long","ability":"r/Ranged_Magic_Raise"},
 	# Upgraded priest (0.31.2, Kevin): the Necromancer from KayKit Skeletons (CC0, same Rig_Medium) with the skull staff.
+	# 0.31.32: the last three upgrades get their own looks
+	"assassin": {"model":"Rogue_Hooded","r":"dagger","l":"dagger","idle":"g/Idle_B","attack":"m/Melee_Dualwield_Attack_Stab","ability":"m/Melee_1H_Attack_Jump_Chop","tint":"#5b4f73"},
+	"sniper": {"model":"Ranger","r":"","l":"crossbow_2handed","idle":"r/Ranged_Bow_Idle","attack":"r/Ranged_Bow_Release","ability":"r/Ranged_Bow_Draw","tint":"#4f6b4a"},
+	"archmage": {"model":"Mage","r":"staff","l":"spellbook_open","idle":"g/Idle_B","attack":"r/Ranged_Magic_Shoot","ability":"r/Ranged_Magic_Summon","tint":"#a33d3d"},
 	"necromancer": {"model":"Necromancer","r":"Skeleton_Staff","l":"","idle":"g/Idle_B","attack":"r/Ranged_Magic_Spellcasting_Long","ability":"r/Ranged_Magic_Raise"},
 }
 const LOOP_HINTS := ["Idle","Running","Walking","Hammering","Holding","Aiming","_Pose","Blocking","Chopping","Pickaxing"]
@@ -2336,6 +2340,8 @@ static func look_key(u: Dictionary) -> String:
 		return "berserker"
 	if u.cls == "priest" and u.up:
 		return "necromancer"
+	if u.up and u.cls in ["rogue", "ranger", "mage"]:
+		return {"rogue":"assassin", "ranger":"sniper", "mage":"archmage"}[u.cls]
 	return u.cls
 
 static func make_body(cls: String, cosmetic: Dictionary = {}) -> Dictionary:
@@ -2492,6 +2498,7 @@ func sync(dt: float) -> void:
 	_sync_items(dt)
 	_sync_raising()
 	_sync_bombs(dt)
+	_sync_meteor_fx(dt)
 	_kick_debris()
 	_sync_launchers(dt)
 	_sync_ambience(dt)
@@ -2530,6 +2537,7 @@ func sync(dt: float) -> void:
 			a["whirl_spin"] = 0.0
 			root.rotation.y = lerp_angle(root.rotation.y, float(u.face), 1.0 - exp(-dt * 18.0))
 		(a.ring as MeshInstance3D).visible = u.state != "dead"
+		_sync_vanish(a, u)
 		_sync_load(a, u)
 		_sync_hand(a, u)
 		_animate(a, u, vel)
@@ -2823,6 +2831,23 @@ func on_event(e: Dictionary) -> void:
 			ring_at(ld, Color(0.85, 0.78, 0.62), 2.2, 0.5)
 			for i in 8:
 				spark(ld + Vector3(randf_range(-0.6, 0.6), randf() * 0.5, randf_range(-0.6, 0.6)), Color(0.8, 0.72, 0.58))
+		"vanish":
+			if sim.by_id.has(str(e.id)):
+				sim.by_id[str(e.id)]["vanish_until"] = float(e.until)
+			if not a.is_empty():
+				for i in 10:
+					spark((a.root as Node3D).position + Vector3(randf_range(-0.5, 0.5), 0.3 + randf() * 1.4, randf_range(-0.5, 0.5)), Color(0.35, 0.3, 0.45))
+		"unvanish":
+			if sim.by_id.has(str(e.id)):
+				sim.by_id[str(e.id)]["vanish_until"] = sim.time
+		"meteor_warn":
+			_meteor_warn(e.pos, float(e.delay), int(e.team))
+		"meteor_hit":
+			_meteor_hit(e.pos, float(e.burn))
+		"pierce_hit":
+			var ph := Vector3(e.pos.x, Sim.height_at(e.pos) + 1.1, e.pos.y)
+			for i in 6:
+				spark(ph, Color(0.85, 0.95, 1.0))
 		"bomb_boom":
 			bomb_blast(e.pos)
 			water_blast(e.pos, 1.0)
@@ -3107,6 +3132,26 @@ func _make_projectile(kind: String) -> Node3D:
 		spin.add_child(head)
 		root.scale = Vector3.ONE * 1.25
 		return root
+	if kind == "pierce":
+		# the Sniper's shot (0.31.32): a long arrow with a pale glowing streak behind it
+		var pr := Node3D.new()
+		var pk := Stage.scene("res://assets/kaykit/weapons/arrow_bow.gltf")
+		if pk != null:
+			var ar: Node3D = pk.instantiate()
+			ar.scale = Vector3(1.6, 1.6, 2.0)
+			pr.add_child(ar)
+		var streak := MeshInstance3D.new()
+		var cm := CylinderMesh.new()
+		cm.top_radius = 0.06
+		cm.bottom_radius = 0.0
+		cm.height = 3.2
+		streak.mesh = cm
+		streak.material_override = _fx_mat(Color(0.85, 0.95, 1.0))
+		streak.rotation.x = PI * 0.5
+		streak.position.z = -1.7
+		pr.add_child(streak)
+		add_child(pr)
+		return pr
 	if kind == "arrow":
 		var packed := Stage.scene("res://assets/kaykit/weapons/arrow_bow.gltf")
 		if packed != null:
@@ -4214,3 +4259,115 @@ func _sync_launchers(dt: float) -> void:
 		else:
 			var ready: bool = sim.time >= float(l.ready_at)
 			(ln.rim as StandardMaterial3D).emission_energy_multiplier = (0.6 + 0.4 * sin(_time * 2.0)) if ready else 0.0
+
+
+# ---------- the upgrades' new abilities in the view (0.31.32) ----------
+func _sync_vanish(a: Dictionary, u: Dictionary) -> void:
+	# an Assassin in Vanish: almost nothing for the enemy (8 % opaque), a ghost for his own side (45 %); ring hidden from
+	# the enemy. Each mesh gets a see-through copy of its material while it lasts (GeometryInstance3D.transparency
+	# didn't show on the phone renderer in the check render).
+	var v: bool = sim.vanished(u)
+	var want: float = 0.0
+	if v:
+		want = 0.55 if int(u.team) == int(sim.by_id.get(player_id, {}).get("team", 0)) else 0.92
+	var on: bool = bool(a.get("vanish_on", false))
+	if v and not on:
+		a["vanish_on"] = true
+		for mi in (a.body as Node3D).find_children("*", "MeshInstance3D", true, false):
+			var m3 := mi as MeshInstance3D
+			if m3.mesh == null:
+				continue
+			for si in m3.mesh.get_surface_count():
+				var base: Material = m3.get_active_material(si)
+				if base is BaseMaterial3D:
+					var ghost := (base as BaseMaterial3D).duplicate() as BaseMaterial3D
+					ghost.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+					ghost.albedo_color.a = 1.0 - want
+					m3.set_meta("vanish_prev_%d" % si, m3.get_surface_override_material(si))
+					m3.set_surface_override_material(si, ghost)
+		if want > 0.9:
+			(a.ring as MeshInstance3D).visible = false
+	elif not v and on:
+		a["vanish_on"] = false
+		for mi in (a.body as Node3D).find_children("*", "MeshInstance3D", true, false):
+			var m3 := mi as MeshInstance3D
+			if m3.mesh == null:
+				continue
+			for si in m3.mesh.get_surface_count():
+				if m3.has_meta("vanish_prev_%d" % si):
+					m3.set_surface_override_material(si, m3.get_meta("vanish_prev_%d" % si))
+					m3.remove_meta("vanish_prev_%d" % si)
+	elif v and want > 0.9:
+		(a.ring as MeshInstance3D).visible = false
+
+var _meteors_fx: Array = []
+
+func _meteor_warn(p2: Vector2, delay: float, team: int) -> void:
+	var at := Vector3(p2.x, Sim.height_at(p2), p2.y)
+	var ring := _decal(at + Vector3(0.0, 0.05, 0.0), Sim.METEOR_R, Color(1.0, 0.35, 0.15), 0.6)
+	var rock := MeshInstance3D.new()
+	var sm := SphereMesh.new()
+	sm.radius = 0.9
+	sm.height = 1.8
+	sm.radial_segments = 10
+	sm.rings = 6
+	rock.mesh = sm
+	var mm := StandardMaterial3D.new()
+	mm.albedo_color = Color(0.35, 0.18, 0.1)
+	mm.emission_enabled = true
+	mm.emission = Color(1.0, 0.45, 0.12)
+	mm.emission_energy_multiplier = 2.5
+	rock.material_override = mm
+	var from := at + Vector3(7.0, 28.0, 5.0)
+	rock.position = from
+	add_child(rock)
+	_meteors_fx.append({"ring":ring, "rock":rock, "from":from, "to":at, "t0":_time, "dur":delay})
+
+func _meteor_hit(p2: Vector2, burn: float) -> void:
+	var at := Vector3(p2.x, Sim.height_at(p2) + 0.4, p2.y)
+	var fl := MeshInstance3D.new()
+	var sm := SphereMesh.new()
+	sm.radius = 1.0
+	sm.height = 2.0
+	fl.mesh = sm
+	var fm := StandardMaterial3D.new()
+	fm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	fm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	fm.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	fm.albedo_color = Color(1.0, 0.45, 0.12, 0.85)
+	fl.material_override = fm
+	fl.position = at
+	add_child(fl)
+	_booms.append({"node":fl, "kind":"flash", "t0":_time, "life":0.4})
+	ring_at(at, Color(1.0, 0.5, 0.15), Sim.METEOR_R * 1.3, 0.6)
+	for i in 30:
+		spark(at + Vector3(randf_range(-0.8, 0.8), randf_range(0.0, 1.2), randf_range(-0.8, 0.8)), [Color(1.0, 0.5, 0.15), Color(1.0, 0.85, 0.3)][i % 2])
+	shake(0.5)
+	_blast_bodies(p2, Sim.METEOR_R + 1.5, 5.0)
+	water_blast(p2, 0.7)
+	_meteors_fx.append({"burn_at":at, "until":_time + burn})
+
+func _sync_meteor_fx(dt: float) -> void:
+	for i in range(_meteors_fx.size() - 1, -1, -1):
+		var m: Dictionary = _meteors_fx[i]
+		if m.has("rock"):
+			var k := clampf((_time - float(m.t0)) / maxf(float(m.dur), 0.01), 0.0, 1.0)
+			if is_instance_valid(m.rock):
+				(m.rock as Node3D).position = (m.from as Vector3).lerp(m.to, k * k)
+				if randf() < dt * 40.0:
+					spark((m.rock as Node3D).position, Color(1.0, 0.6, 0.2))
+			if is_instance_valid(m.ring):
+				(m.ring as Node3D).scale = Vector3(1.0, 0.15, 1.0) * (0.8 + 0.2 * sin(_time * 18.0))
+			if k >= 1.0:
+				if is_instance_valid(m.rock):
+					(m.rock as Node).queue_free()
+				if is_instance_valid(m.ring):
+					(m.ring as Node).queue_free()
+				_meteors_fx.remove_at(i)
+		else:
+			if _time >= float(m.until):
+				_meteors_fx.remove_at(i)
+				continue
+			if randf() < dt * 22.0:                       # the burning ground
+				var off := Vector3(randf_range(-1, 1), 0.0, randf_range(-1, 1)).normalized() * randf() * Sim.METEOR_R * 0.8
+				spark((m.burn_at as Vector3) + off, [Color(1.0, 0.5, 0.15), Color(1.0, 0.8, 0.25), Color(0.6, 0.2, 0.08)][randi() % 3])

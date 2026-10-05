@@ -810,7 +810,8 @@ func _draw_button(b: Dictionary, me: Dictionary) -> void:
 			col = Color("#35226a")
 			rim = Color("#d6b8ff")
 			cd = me.cd_ability
-			cd_max = maxf(0.1, Sim.HAMMER_CD if ab == "hammer" else (Sim.RESURRECT_CD if ab == "resurrect" else float(Sim.CLASSES[me.cls].ab_cd)))
+			cd_max = maxf(0.1, {"hammer":Sim.HAMMER_CD, "resurrect":Sim.RESURRECT_CD, "vanish":Sim.VANISH_CD, "pierce":Sim.PIERCE_CD,
+				"meteor":Sim.METEOR_CD}.get(ab, float(Sim.CLASSES[me.cls].ab_cd)))
 			ready = ab != "" and cd <= 0.0 and not me.carrying
 		"dodge":
 			label = "DODGE"

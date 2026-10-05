@@ -1750,3 +1750,19 @@ K2/K3 notes (0.17.0)
   (one of ours lost, or theirs captured) -- "They've taken a tower! Take it back!" / "We've lost a tower. Rude."
   (an_our_outpost_1/2, an_their_outpost_1/2; ElevenLabs, Edward). Priority 2, a 20 s cooldown each (a tower lost and
   then captured by them a moment later is one call). announce_test covers both. Quick suite: ALL PASSED (29).
+
+# 0.31.32 (Kevin: the last three upgrades get their own abilities -- all three) -- protocol 34
+- Assassin -- VANISH (14 s cd): 4 s unseen; nobody can pick him out as a target beyond 1.6 m; his first strike out of it
+  does 2x and reveals him, as does any hit he takes. View: see-through copies of his materials -- a ghost (45 %) to his
+  own side, almost nothing (8 %) to the enemy, ring hidden from them (GeometryInstance3D.transparency didn't show on the
+  Mobile renderer in a check render). Bots vanish to close 3-11 m on a target.
+- Sniper -- PIERCE (9 s cd): a heavy arrow (2.2x, 42 m/s, 30 m) that goes through everyone in its path once each,
+  thrown along its line; a long arrow with a pale streak. Bots fire it at two or more in a line, or at range past 16 m.
+- Archmage -- METEOR (12 s cd): on the nearest enemy within 12 m (else ahead), a red warning circle and a burning rock
+  falling for 1 s, then 2.4x damage (half at the 3.2 m edge) with a stagger, bodies, weapons, hats and logs blown out,
+  waves if it's near water, and the ground burning 3.5 s (9 dps to enemies in it). Bots aim it at two or more or at a
+  King carrier.
+- Looks: Assassin -- hooded Rogue, dark violet, two daggers; Sniper -- Ranger, forest green, two-handed crossbow, bow
+  draw; Archmage -- Mage, crimson, staff and an open spellbook, summon cast. Ability buttons: VANISH / PIERCE / METEOR
+  with their cooldowns. Sounds from the pack (fire spray, fireball, crumble, bow hits).
+- Net v34: "pierce" in PROJ_KINDS; vanish/meteor by events. tests/upgrades_test.gd. Quick suite: ALL PASSED (30).

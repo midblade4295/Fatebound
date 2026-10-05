@@ -652,6 +652,7 @@ func _path_gate(u: Dictionary) -> Dictionary:
 
 # ---------- setup ----------
 func setup(team_size: int, seed_value: int, player_team := 0) -> void:
+	meteors = []
 	launchers = [{"count_at":-1.0, "ready_at":0.0}, {"count_at":-1.0, "ready_at":0.0}]
 	bombs = [{}, {}]
 	bomb_next = [BOMB_FIRST, BOMB_FIRST]
@@ -798,6 +799,8 @@ func nearest_enemy(u: Dictionary, max_d: float, prefer_front := false) -> Dictio
 		var d := off.length()
 		if d > max_d:
 			continue
+		if vanished(o) and d > 1.6:
+			continue                           # 0.31.32: an Assassin in Vanish can't be picked out (until he's on you)
 		var s := d
 		if prefer_front and d > 0.01:
 			s += (1.0 - fwd.dot(off / d)) * 2.0
@@ -857,6 +860,7 @@ func act(id: String, action: String, arg: Variant = null) -> bool:
 				"whirlwind": return _whirl(u)
 				"hammer": return _throw_hammer(u)
 				"resurrect": return _resurrect(u)
+				"vanish": return _vanish(u)
 				_: return _start_attack(u, "ability")
 		"dodge": return _dodge(u)
 		"interact": return _interact(u)
@@ -926,7 +930,13 @@ func ability_of(u: Dictionary) -> String:
 	if u.cls == "knight" and u.up:
 		return "hammer"
 	if u.cls == "priest" and u.up:
-		return "resurrect"                     # the Necromancer (High Priest until 0.31.2; Resurrection 0.31.1, Kevin)                        # the Crusader (0.30.5, Kevin): Hammer Throw instead of the shield
+		return "resurrect"
+	if u.cls == "rogue" and u.up:
+		return "vanish"                         # 0.31.32: the Assassin
+	if u.cls == "ranger" and u.up:
+		return "pierce"                         # 0.31.32: the Sniper
+	if u.cls == "mage" and u.up:
+		return "meteor"                         # 0.31.32: the Archmage                     # the Necromancer (High Priest until 0.31.2; Resurrection 0.31.1, Kevin)                        # the Crusader (0.30.5, Kevin): Hammer Throw instead of the shield
 	return str(CLASSES[u.cls].ability)
 
 func blocking(u: Dictionary) -> bool:
@@ -1502,6 +1512,11 @@ func _deliver(u: Dictionary) -> void:
 
 # ---------- damage ----------
 func _damage(src: Dictionary, dst: Dictionary, amount: float, stun := 0.0) -> void:
+	if not src.is_empty() and vanished(src):
+		amount *= VANISH_STRIKE                   # 0.31.32: the first strike out of Vanish
+		_unvanish(src)
+	if vanished(dst):
+		_unvanish(dst)
 	if not alive(dst) or dst.state == "dodge":
 		return
 	if not _blockers.is_empty() and src.has("pos") and shield_blocks(src.pos, dst):
@@ -1728,6 +1743,15 @@ func _resolve_attack(u: Dictionary) -> void:
 		else:
 			_melee(u, float(c.range), float(c.arc), dmg)
 		return
+	match ability_of(u):
+		"pierce":
+			_pierce_shot(u, dmg)
+			u.cd_ability = PIERCE_CD
+			return
+		"meteor":
+			_call_meteor(u, dmg)
+			u.cd_ability = METEOR_CD
+			return
 	match str(c.ability):
 		"bash":
 			_melee(u, 2.3, 0.3, dmg*0.7, 1.3)
@@ -2245,6 +2269,23 @@ func _step_projectiles(dt: float) -> void:
 						best_t = along
 						hit = o
 						impact = cp
+		if str(p.kind) == "pierce":
+			# 0.31.32: the Sniper's shot goes through everyone in its path, each once
+			var already: Array = p.get("hit", [])
+			var owner_p: Dictionary = by_id.get(str(p.owner), {})
+			for t2 in ([et] if et >= 0 else [0, 1]):
+				var arr2: PackedVector2Array = tpos[t2]
+				for k2 in arr2.size():
+					var o2: Dictionary = tunit[t2][k2]
+					if already.has(o2.id) or not alive(o2) or o2.state == "fly":
+						continue
+					if arr2[k2].distance_squared_to(seg_closest(arr2[k2], from, p.pos)) < hit_r2:
+						already.append(o2.id)
+						_next_push = _push_along(p.vel, 4.0, 1.4)
+						_damage(owner_p, o2, float(p.dmg))
+						_event("pierce_hit", {"id":o2.id, "pos":o2.pos})
+			p["hit"] = already
+			hit = {}
 		if not hit.is_empty():
 			p.pos = impact                            # explode / stop where it struck, not past it
 		var blocked := false
@@ -2501,6 +2542,7 @@ func _step_world(dt: float) -> void:
 				n.amount = n.max
 				_event("node_regrow", {"node":n.id})
 	_step_items(dt)
+	_step_meteors(dt)
 	_step_hat_motion(dt)
 	_step_bombs()
 	_step_launchers()
@@ -3129,6 +3171,8 @@ func _blocked_line(a: Vector2, b: Vector2, team: int) -> bool:
 func _fight(u: Dictionary, foe: Dictionary) -> void:
 	var c: Dictionary = CLASSES[u.cls]
 	var d: float = u.pos.distance_to(foe.pos)
+	if u.bot and u.up and u.cls in ["rogue", "ranger", "mage"] and _bot_upgrade_ability(u, foe):
+		return
 	var reach := float(c.range)
 	if c.ranged:
 		if d < reach * 0.45:
@@ -4282,3 +4326,122 @@ func _multi_kill(src: Dictionary, dst: Dictionary) -> void:
 	if n >= 2:
 		src["best_multi"] = maxi(int(src.get("best_multi", 0)), n)
 		_event("multikill", {"id":src.id, "team":int(src.team), "n":n, "name":MULTI_NAMES[mini(n, MULTI_NAMES.size() - 1)]})
+
+
+# ---------- the three upgrades' own abilities (0.31.32, Kevin) ----------
+# ASSASSIN -- Vanish: VANISH_TIME s unseen (no one can pick him out as a target until he's within 1.6 m; the view shows
+# his own side a shimmer and the enemy almost nothing); his first strike out of it does VANISH_STRIKE x and reveals him,
+# as does taking any hit.
+const VANISH_TIME := 4.0
+const VANISH_CD := 14.0
+const VANISH_STRIKE := 2.0
+
+func vanished(u: Dictionary) -> bool:
+	return time < float(u.get("vanish_until", 0.0)) and alive(u)
+
+func _vanish(u: Dictionary) -> bool:
+	if not can_act(u) or u.cd_ability > 0.0 or u.carrying or u.offering or bool(u.get("bomb_held", false)):
+		return false
+	u["vanish_until"] = time + VANISH_TIME
+	u.cd_ability = VANISH_CD
+	_event("vanish", {"id":u.id, "team":u.team, "until":time + VANISH_TIME})
+	return true
+
+func _unvanish(u: Dictionary) -> void:
+	if float(u.get("vanish_until", 0.0)) > time:
+		u.vanish_until = time
+		_event("unvanish", {"id":u.id})
+
+# SNIPER -- Piercing Shot: a heavy arrow that flies PIERCE_RANGE and passes through everyone in its path.
+const PIERCE_RANGE := 30.0
+const PIERCE_SPEED := 42.0
+const PIERCE_DMG := 2.2
+const PIERCE_CD := 9.0
+
+func _pierce_shot(u: Dictionary, dmg: float) -> void:
+	var d := dir_of(u.face)
+	projectiles.append({"id":_next_proj, "team":u.team, "owner":u.id, "pos":u.pos + d * 0.6, "from":u.pos, "vel":d * PIERCE_SPEED,
+		"dmg":dmg * PIERCE_DMG, "aoe":0.0, "life":PIERCE_RANGE / PIERCE_SPEED, "kind":"pierce", "gate_mult":0.6, "hit":[],
+		"high":height_at(u.pos) >= 1.5 or int(u.get("tower", -1)) >= 0})
+	_event("proj", {"pid":_next_proj, "kind":"pierce"})
+	_next_proj += 1
+
+# ARCHMAGE -- Meteor: on the nearest enemy within METEOR_RANGE (else that far ahead), a warning circle for METEOR_DELAY,
+# then the strike: METEOR_DMG x damage at the centre (half at the edge of METEOR_R), bodies and loose things blown out,
+# and the ground burning for METEOR_BURN s (BURN_DPS to enemies standing in it).
+const METEOR_RANGE := 12.0
+const METEOR_DELAY := 1.0
+const METEOR_R := 3.2
+const METEOR_DMG := 2.4
+const METEOR_BURN := 3.5
+const BURN_DPS := 9.0
+const METEOR_CD := 12.0
+var meteors: Array = []
+
+func _call_meteor(u: Dictionary, dmg: float) -> void:
+	var foe := nearest_enemy(u, METEOR_RANGE, true)
+	var at: Vector2 = foe.pos if not foe.is_empty() else u.pos + dir_of(u.face) * METEOR_RANGE * 0.75
+	at = _push_out(at, 0.2)
+	meteors.append({"team":u.team, "owner":u.id, "at":at, "t_hit":time + METEOR_DELAY, "dmg":dmg * METEOR_DMG, "burn_until":-1.0})
+	_event("meteor_warn", {"id":u.id, "team":u.team, "pos":at, "delay":METEOR_DELAY})
+
+func _step_meteors(dt: float) -> void:
+	for i in range(meteors.size() - 1, -1, -1):
+		var m: Dictionary = meteors[i]
+		var owner: Dictionary = by_id.get(str(m.owner), {})
+		if float(m.burn_until) < 0.0:
+			if time < float(m.t_hit):
+				continue
+			for o in units:
+				if o.team == int(m.team) or not alive(o) or o.state == "fly":
+					continue
+				var d: float = (o.pos as Vector2).distance_to(m.at)
+				if d <= METEOR_R:
+					_next_push = _push_from(m.at, o.pos, 4.6, 3.8)
+					_damage(owner if not owner.is_empty() else {"team":int(m.team), "id":""}, o, float(m.dmg) * (1.0 - 0.5 * d / METEOR_R), 0.4)
+			_blast_push(m.at, METEOR_R + 1.5, 5.0)
+			m.burn_until = time + METEOR_BURN
+			_event("meteor_hit", {"team":int(m.team), "pos":m.at, "burn":METEOR_BURN})
+			continue
+		if time >= float(m.burn_until):
+			meteors.remove_at(i)
+			continue
+		for o in units:
+			if o.team != int(m.team) and alive(o) and o.state != "fly" and (o.pos as Vector2).distance_to(m.at) <= METEOR_R * 0.8:
+				o.hp -= BURN_DPS * dt
+				if o.hp <= 0.0:
+					o.hp = 0.1
+					_damage(owner if not owner.is_empty() else {"team":int(m.team), "id":""}, o, 1.0)
+
+# Bots: when to use them (called from _fight).
+func _bot_upgrade_ability(u: Dictionary, foe: Dictionary) -> bool:
+	if u.cd_ability > 0.0 or not can_act(u) or foe.is_empty():
+		return false
+	var d: float = u.pos.distance_to(foe.pos)
+	match ability_of(u):
+		"vanish":
+			if d > 3.0 and d < 11.0 and not vanished(u):
+				return _vanish(u)                       # slip in unseen, strike from it
+		"pierce":
+			if d > 6.0 and d < PIERCE_RANGE * 0.9:
+				var line := 0                            # worth it if two or more stand along the line
+				var dirv: Vector2 = (foe.pos - u.pos).normalized()
+				for o in units:
+					if o.team != u.team and alive(o):
+						var off: Vector2 = o.pos - u.pos
+						var along: float = off.dot(dirv)
+						if along > 0.0 and along < PIERCE_RANGE and absf(off.cross(dirv)) < 1.0:
+							line += 1
+				if line >= 2 or d > 16.0:
+					u.face = angle_of(foe.pos - u.pos)
+					return _start_attack(u, "ability")
+		"meteor":
+			if d < METEOR_RANGE:
+				var crowd := 0
+				for o in units:
+					if o.team != u.team and alive(o) and (o.pos as Vector2).distance_to(foe.pos) <= METEOR_R:
+						crowd += 1
+				if crowd >= 2 or foe.carrying or (d > 5.0 and rng.randf() < 0.2):
+					u.face = angle_of(foe.pos - u.pos)
+					return _start_attack(u, "ability")
+	return false

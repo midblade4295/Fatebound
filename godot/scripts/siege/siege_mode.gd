@@ -729,6 +729,15 @@ func _event_sound(e: Dictionary) -> void:
 		"multikill":                                    # 0.31.29: the Herald calls your multi-kills
 			if str(e.get("id", "")) == hud.player_id:
 				_herald_say("mk_" + ["", "", "double", "triple", "quadra", "penta", "legendary"][mini(int(e.n), 6)])
+		"vanish":                                       # 0.31.32: the three upgrades' new abilities
+			_cue("tm_firespray", 2, _unit_pos(str(e.id)), 14.0, false, 0.35)
+		"meteor_warn":
+			_cue("tm_fireball", 3, e.pos, 40.0, false, 0.9)
+		"meteor_hit":
+			_cue("tm_fireball", 3, e.pos, 60.0, false, 1.5)
+			_cue("tm_crumble", 2, e.pos, 50.0, false, 0.9)
+		"pierce_hit":
+			_cue("tm_bow_hit", 3, e.pos, HEAR_R, false, 1.1)
 		"launch_count":                                 # 0.31.28: the launcher's lever
 			_cue("tm_gate_close", 1, e.pos, 30.0, false, 0.8)
 		"launch":

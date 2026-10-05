@@ -8,7 +8,7 @@ extends RefCounted
 # objects: decode() uses the default allow_objects=false.
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 
-const VERSION := 33              # 33 = the player launcher (state "fly", "la"); 32 = one snapshot for all + "m" task messages, timed interpolation; 31 = the bomb (bm); 30 = smaller snapshots: packed projectiles/items/Kings, slow state only when it changes (0.31.8); 29 = no class caps; per-class stand stock/restock, no heal stacking, armory +8 %, worker 80 hp; 28 = class caps; 27 = the Necromancer (drain + heal beams, unit field 32); 26 = Resurrection, bigger nova/sanctuary; 25 = logs/rocks (it); 24 = the Crusader and its thrown hammer; 23 = tower shot heights, run off a deck; 22 = wide roofless towers; 21 = natural hills, every class climbs; 20 = bigger towers; 19 = the bigger natural map; 18 = no "water" in the dungeons (wading only in the river); 17 = rampart shots
+const VERSION := 34              # 34 = the Sniper's piercing shot (PROJ_KINDS); 33 = the player launcher (state "fly", "la"); 32 = one snapshot for all + "m" task messages, timed interpolation; 31 = the bomb (bm); 30 = smaller snapshots: packed projectiles/items/Kings, slow state only when it changes (0.31.8); 29 = no class caps; per-class stand stock/restock, no heal stacking, armory +8 %, worker 80 hp; 28 = class caps; 27 = the Necromancer (drain + heal beams, unit field 32); 26 = Resurrection, bigger nova/sanctuary; 25 = logs/rocks (it); 24 = the Crusader and its thrown hammer; 23 = tower shot heights, run off a deck; 22 = wide roofless towers; 21 = natural hills, every class climbs; 20 = bigger towers; 19 = the bigger natural map; 18 = no "water" in the dungeons (wading only in the river); 17 = rampart shots
 const DEFAULT_URL := "wss://136-113-125-3.sslip.io/fatebound/siege/ws"
 const DEFAULT_PORT := 8082
 const SNAP_HZ := 20.0            # 15 -> 20 (0.31.23); 10 -> 15 (0.18.4)
@@ -16,7 +16,7 @@ const INTERP_DELAY := 1.5 / SNAP_HZ   # 0.31.23: remote units are drawn this far
 const HIST := 4
 const FULL_EVERY := 15           # 0.31.8: slow-changing state (stock, levels, nodes, stands, outposts, gates, ladders,
                                  # dropped hats) rides along only when it changed, and in full once a second
-const PROJ_KINDS := ["arrow", "fire", "hammer"]
+const PROJ_KINDS := ["arrow", "fire", "hammer", "pierce"]
 const ORACLE_STATES := ["cell", "carried", "dropped", "home", "returning", "rescued", "loose"]
 const PREDICT_SNAP := 2.5        # m: a predicting phone snaps to the server beyond this
 const PREDICT_SOFT := 0.7        # m: beyond this it is eased back toward the server's position (0.31.24)
