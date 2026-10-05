@@ -2532,6 +2532,7 @@ func _step_world(dt: float) -> void:
 				_next_push = _push_from(sh.to, u.pos, 4.4, 3.6)
 				_damage({"team":int(sh.team), "id":"catapult"}, u, CATAPULT_DMG)
 		_blast_push(sh.to, CATAPULT_AOE + 1.5, 4.5)
+		_blast_nodes(sh.to, CATAPULT_AOE + 0.6, 6.0)     # 0.31.34 (Kevin): a catapult stone breaks trees and boulders too
 		_event("catapult_hit", {"team":int(sh.team), "pos":sh.to, "shell":sh.id})
 		shells.remove_at(i)
 	for n in nodes:

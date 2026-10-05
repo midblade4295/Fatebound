@@ -2845,6 +2845,7 @@ func on_event(e: Dictionary) -> void:
 			_meteor_warn(e.pos, float(e.delay), int(e.team))
 		"meteor_hit":
 			_recent_blasts.append([e.pos, _time])
+			_launch_items(e.pos, Sim.METEOR_R + 1.5, 0.85)
 			_meteor_hit(e.pos, float(e.burn))
 		"pierce_hit":
 			var ph := Vector3(e.pos.x, Sim.height_at(e.pos) + 1.1, e.pos.y)
@@ -2864,6 +2865,7 @@ func on_event(e: Dictionary) -> void:
 				_chip_burst(Vector3(gp.x, Sim.height_at(gp), gp.y), str(e.get("kind", "wood")) == "wood", 4, 0.6)
 		"bomb_boom":
 			_recent_blasts.append([e.pos, _time])
+			_launch_items(e.pos, Sim.BOMB_R + 2.0, 1.0)
 			bomb_blast(e.pos)
 			water_blast(e.pos, 1.0)
 			_blast_bodies(e.pos, Sim.BOMB_R + 2.5, 7.0)
@@ -2967,6 +2969,8 @@ func on_event(e: Dictionary) -> void:
 				_fx.append({"node":stone, "at":_time, "life":float(e.flight), "kind":"shell",
 					"p0":Vector3(e.from.x, 4.2, e.from.y), "p1":Vector3(e.to.x, Sim.height_at(e.to) + 0.3, e.to.y)})
 		"catapult_hit":
+			_recent_blasts.append([e.pos, _time])                    # 0.31.34: the logs and rocks it breaks fly high
+			_launch_items(e.pos, Sim.CATAPULT_AOE + 1.5, 0.7)        # ...and those already lying round it go up again
 			water_blast(e.pos, 0.6)                                  # 0.31.21: a stone in the river makes waves too
 			_blast_bodies(e.pos, Sim.CATAPULT_AOE + 1.5, 4.5)       # ...and throws the dead and loose weapons
 			var hp := Vector3(e.pos.x, Sim.height_at(e.pos) + 0.15, e.pos.y)
@@ -4486,3 +4490,19 @@ func _sync_chips(dt: float) -> void:
 		mi.rotate(c.ax, float(c.spin) * dt)
 		var fade := clampf((float(c.life) - age) / 0.5, 0.0, 1.0)
 		mi.scale = Vector3.ONE * float(c.sc) * fade
+
+
+func _launch_items(at2: Vector2, radius: float, power: float) -> void:
+	# 0.31.34 (Kevin: "make sure the materials get flung from explosion/catapult"): logs and rocks already lying in a
+	# blast go up into the air again, tumbling (the sim throws them outward along the ground at the same moment)
+	for id in item_nodes.keys():
+		var nd: Node3D = item_nodes[id]
+		var d := Vector2(nd.position.x - at2.x, nd.position.z - at2.y).length()
+		if d > radius:
+			continue
+		nd.set_meta("pop_vz", lerpf(11.0, 6.0, d / radius) * power + randf_range(-1.0, 1.0))
+		nd.set_meta("pop_h", maxf(float(nd.get_meta("pop_h", 0.0)), 0.05))
+		nd.set_meta("pop_ax", Vector3(randf_range(-1, 1), randf_range(-0.3, 0.3), randf_range(-1, 1)).normalized())
+		nd.set_meta("pop_spin", randf_range(10.0, 20.0))
+		if not nd.has_meta("pop_rot"):
+			nd.set_meta("pop_rot", 0.0)

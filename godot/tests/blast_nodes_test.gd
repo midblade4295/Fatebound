@@ -24,5 +24,19 @@ func _init():
 	var amt: int = far.amount
 	s._blast_nodes(tree.p, Sim.BOMB_R, 7.5)
 	ok = ok and int(far.amount) == amt
+	# 0.31.34: a catapult stone breaks them too
+	var t3s: Array = s.nodes.filter(func(n): return str(n.kind) == "wood" and int(n.amount) > 0)
+	var t3: Dictionary = t3s[0]
+	var before3: int = s.items.size()
+	s.shells.append({"id":999, "team":1, "from":Vector2(0, -40), "to":(t3.p as Vector2) + Vector2(1.0, 0.0), "t":0.0, "flight":0.2})
+	var hit_at: Vector2 = (t3.p as Vector2) + Vector2(1.0, 0.0)
+	for i in 12:
+		s.step()
+		s.drain_events()
+		if s.items.size() > before3:
+			break                                        # the tick it landed: the pieces' launch speeds
+	var flung3: Array = s.items.slice(before3).filter(func(it): return (it.vel as Vector2).length() > 2.0 and (it.vel as Vector2).dot((it.pos as Vector2) - hit_at) > 0.0)
+	print("catapult: tree amount %d, %d pieces flung" % [t3.amount, flung3.size()])
+	ok = ok and int(t3.amount) == 0 and flung3.size() >= Sim.LOGS_PER_TREE
 	print("BLAST_NODES_PASS" if ok else "BLAST_NODES_FAIL")
 	quit(0 if ok else 1)

@@ -1777,3 +1777,11 @@ K2/K3 notes (0.17.0)
   shatter every boulder they reach; _fell_node(..., blast) flings all the pieces away from the blast (spread 0.7 rad,
   0.7-1.15 x speed, spinning); they regrow as if worked out. tests/blast_nodes_test.gd; "treeblast" check shot.
 - Quick suite: ALL PASSED (31).
+
+# 0.31.34 (Kevin: catapults break trees and rocks too; materials flung by explosions and catapults -- two versions:
+# chopping/mining does the confetti, explosions and catapults break and launch)
+- Sim: a catapult strike calls _blast_nodes (CATAPULT_AOE + 0.6, 6 m/s) like the bomb and the meteor.
+- View: _launch_items(at, r, power) -- logs and rocks already lying in a bomb (BOMB_R + 2), meteor (METEOR_R + 1.5) or
+  catapult (CATAPULT_AOE + 1.5) blast go up into the air again (6-11 m/s by distance) and tumble while the sim throws
+  them outward; pieces broken by a catapult pop high like a bomb's (it's a recent blast). Chopping and mining keep the
+  small pop and the confetti chips. blast_nodes_test covers the catapult. Quick suite: ALL PASSED (31).
