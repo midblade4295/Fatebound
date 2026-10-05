@@ -1671,3 +1671,18 @@ K2/K3 notes (0.17.0)
 - The quick suite no longer requires a bot rescue (NO_RESCUE_CHECK=1 with seeds 11,22); the full six-seed run does.
   Bot teams rescue in roughly 1 match in 6 -- worth a look at bot carrying some day.
 - Quick suite: ALL PASSED (24).
+
+# 0.31.25 (Kevin: "make the bots much smarter") -- first round
+- Measured first (seed 11, 12 min): the jail was never broken by either side, no raider ever got within 4 m of the
+  captive King, 85 raid/escort deaths in 400 s of which 73 in the field (both raids brawling mid-map), raiders were
+  picking up dead workers' tools (11 "workers" on a team) and marching out as Villagers when the stands were empty.
+- Raids now gather at a rally spot RALLY_OUT 21 m outside the enemy front wall and push in together with RALLY_HANDS 4
+  (or after RALLY_WAIT 28 s with 2+), for ASSAULT_LEN 70 s; pushing in, raiders' aggro drops to 2 m outside the castle
+  so they aren't drawn into the field brawl. A raider takes the workshop's bomb (one claims it) and throws it at the
+  enemy front gate, or at the jail door once the gate is down. Targeting: bots finish wounded enemies (< 35 % hp, a 3 m
+  bonus); archers and mages go for priests and mages first. Villagers never take tools unless their role is gather, and
+  wait at their stand for the next hat instead of leaving as Villagers.
+- After: the enemy gate goes down at ~60 s (the bomb), jails get broken (70 s / 610 s in seed 11), but still no rescue:
+  raiders die in the field to the enemy's raid and mages before a lift forms. Next: shield the push with Knights blocking
+  in front, retreat to the priest at low hp, time the push for when the enemy's raid is out, and lift coordination.
+- Quick suite: ALL PASSED (24).

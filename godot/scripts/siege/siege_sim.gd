@@ -796,6 +796,13 @@ func nearest_enemy(u: Dictionary, max_d: float, prefer_front := false) -> Dictio
 		var s := d
 		if prefer_front and d > 0.01:
 			s += (1.0 - fwd.dot(off / d)) * 2.0
+		# 0.31.25 (smarter bots): a wounded enemy is worth a few metres' detour; archers and mages go for the
+		# enemy's healers and casters first
+		if u.bot:
+			if o.hp < o.max_hp * 0.35:
+				s -= 3.0
+			if reach_top and o.cls in ["priest", "mage"]:
+				s -= 2.0
 		if s < best_score:
 			best_score = s
 			best = o
@@ -2551,8 +2558,8 @@ func _bot_hat_goal(u: Dictionary) -> Vector2:
 	# A villager bot's way to a class: a dropped hat close by, else a stand of its role's classes
 	# (rotated per bot for variety), else any stand with stock. Vector2.INF = no hat to be had.
 	var h := nearest_hat(u.pos, BOT_HAT_SEARCH)
-	if not h.is_empty() and can_take_class(u, str(h.cls)):
-		return h.pos
+	if not h.is_empty() and can_take_class(u, str(h.cls)) and (str(h.cls) != "worker" or u.role == "gather"):
+		return h.pos                                  # (0.31.25: raiders no longer pick up a dead worker's tools)
 	# Already inside the enemy castle: their stands are right here.
 	if in_castle(u.pos, 1 - u.team):
 		var best_e := {}
@@ -2569,6 +2576,11 @@ func _bot_hat_goal(u: Dictionary) -> Vector2:
 		for st in stands:
 			if int(st.team) == u.team and st.cls == c and int(st.stock) > 0 and can_take_class(u, c):
 				return st.p
+	# 0.31.25: every stand is empty -- wait at the preferred one for the next hat (6-12 s) instead of marching out as a
+	# Villager and dying
+	for st in stands:
+		if int(st.team) == u.team and st.cls == prefs[0]:
+			return st.p
 	return Vector2.INF
 
 func _unstick_check(u: Dictionary) -> void:
@@ -2845,6 +2857,8 @@ func _think_fighter(u: Dictionary) -> void:
 		return
 	if _bot_climb(u):
 		return
+	if u.bot and _think_bomb(u):
+		return
 	var goal: Vector2 = u.pos
 	var enemy_carrier := oracle_carrier(1 - u.team)    # enemies carrying their Oracle home: stop them
 	var ally_carrier := oracle_carrier(u.team)         # we're carrying ours home
@@ -2875,6 +2889,8 @@ func _think_fighter(u: Dictionary) -> void:
 		goal = (cap.p as Vector2) + dir_of(float(hash(u.id) % 628) / 100.0) * 2.8
 	elif mine.state in ["cell", "dropped"] and u.role in ["raid", "escort", "gather"]:
 		goal = mine.pos
+		if u.bot and u.role != "gather" and not _assault_on(u):
+			goal = _rally_spot(u)                      # 0.31.25: gather outside their castle and go in together
 	elif not ally_carrier.is_empty():
 		goal = ally_carrier.pos + dir_of(u.face) * 2.0
 	elif u.role == "defend":
@@ -2885,6 +2901,8 @@ func _think_fighter(u: Dictionary) -> void:
 	else:
 		goal = mine.pos
 	var aggro := {"raid":3.5,"escort":6.5,"defend":8.0}.get(u.role, 5.0) as float
+	if u.bot and u.role == "raid" and time < float(_assault[u.team].until) and not in_castle(u.pos, 1 - u.team):
+		aggro = 2.0                                  # 0.31.25: pushing in, don't get drawn into the field brawl
 	if u.cls == "knight":
 		aggro += KNIGHT_AGGRO                 # 0.31.7: bot Knights (mostly escorts) step in to fight instead of standing by
 	if c.ranged:
@@ -3937,3 +3955,87 @@ func predict_ability(u: Dictionary) -> bool:
 			return _start_attack(u, "ability")
 		_:
 			return _start_attack(u, "ability")                 # nova, sanctuary, ...: the wind-up; the burst comes from the server
+
+
+# ---------- smarter raids (0.31.25) ----------
+# Raiders used to trickle at the enemy castle one at a time and die to the defenders on the wall, so a bot team almost
+# never got a King out. Now the raid gathers at a rally spot outside their castle (beyond the catapults' aim), and goes
+# in together once enough hands are there (or after a wait); if the push dwindles it falls back to gather again.
+const RALLY_OUT := 21.0            # m outside the enemy front wall
+const RALLY_HANDS := 4             # go in together with at least this many, or after RALLY_WAIT
+const RALLY_WAIT := 28.0
+const ASSAULT_LEN := 70.0
+var _assault: Array = [{"until":-1.0, "first":-1.0}, {"until":-1.0, "first":-1.0}]
+
+func _rally_spot(u: Dictionary) -> Vector2:
+	var eg := _enemy_front_gate(u.team)
+	var spot: Vector2 = ((eg.c as Vector2) + _inward(1 - u.team) * -RALLY_OUT) if not eg.is_empty() else spawn(u.team)
+	return spot + dir_of(float(absi(hash(u.id)) % 628) / 100.0) * 2.6
+
+func _enemy_front_gate(team: int) -> Dictionary:
+	var best := {}
+	for g in gates:
+		if int(g.team) != 1 - team or str(g.get("kind", "")) == "jail":
+			continue
+		if best.is_empty() or (g.broken and not best.broken) or (g.broken == best.broken and g.hp < best.hp):
+			best = g
+	return best
+
+func _assault_on(u: Dictionary) -> bool:
+	var a: Dictionary = _assault[u.team]
+	if time < float(a.until):
+		return true
+	var spot := _rally_spot(u) - dir_of(float(absi(hash(u.id)) % 628) / 100.0) * 2.6
+	var ready := 0
+	for o in units:
+		if o.team == u.team and o.bot and alive(o) and o.role in ["raid", "escort"] and o.cls != "villager" \
+				and o.hp >= o.max_hp * 0.5 and o.pos.distance_to(spot) < 9.0:
+			ready += 1
+	if ready > 0 and float(a.first) < 0.0:
+		a.first = time
+	if ready == 0:
+		a.first = -1.0
+	if ready >= RALLY_HANDS or (float(a.first) >= 0.0 and time - float(a.first) > RALLY_WAIT and ready >= 2):
+		a.until = time + ASSAULT_LEN
+		a.first = -1.0
+		return true
+	return false
+
+func _think_bomb(u: Dictionary) -> bool:
+	# The workshop's bomb: a raider takes it on the way out and throws it at the enemy gate (or, once that's down,
+	# at the jail door). Only one bot goes for it.
+	if u.carrying or u.offering or u.role not in ["raid", "escort"] or int(u.get("tower", -1)) >= 0:
+		return false
+	if bool(u.get("bomb_held", false)):
+		var eg := _enemy_front_gate(u.team)
+		var target := Vector2.INF
+		if not eg.is_empty() and not eg.broken:
+			target = eg.c
+		else:
+			for g in gates:
+				if int(g.team) == 1 - u.team and str(g.get("kind", "")) == "jail" and not g.broken:
+					target = g.c
+		if target == Vector2.INF:
+			return false                               # nothing worth it: carry on as a fighter (it goes off on a foe)
+		var d: float = (u.pos as Vector2).distance_to(target)
+		if d <= BOMB_THROW * 0.9 and not _blocked_line(u.pos, u.pos + (target - u.pos).normalized() * 1.5, u.team):
+			u.face = angle_of(target - u.pos)
+			u.move = Vector2.ZERO
+			_throw_bomb(u)
+			return true
+		_nav_to(u, target, BOMB_THROW * 0.8)
+		return true
+	var b: Dictionary = bombs[u.team]
+	if b.is_empty() or b.state != "ready":
+		return false
+	var claim := str(b.get("bot_claim", ""))
+	if claim != "" and claim != u.id and by_id.has(claim) and alive(by_id[claim]):
+		return false
+	if u.pos.distance_to(b.p) > 26.0:
+		return false
+	b["bot_claim"] = u.id
+	if not bomb_to_pick(u).is_empty():
+		_pick_bomb(u, b)
+		return true
+	_nav_to(u, b.p, 0.6)
+	return true
