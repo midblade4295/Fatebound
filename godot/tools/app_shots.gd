@@ -39,6 +39,11 @@ func _process(_d: float) -> bool:
 		p.d.pass.xp = 3 * 1000 + 450
 		p.d.owned.append("knight_skin_royal"); p.equip("knight_skin_royal")
 		p.d.challenges.daily[0].progress = 99
+		# (0.31.37) chests: one opening ready, one unlocking, two waiting
+		for k in ["silver", "gold", "wooden", "royal"]:
+			p.add_chest(k, {})
+		p.d.chests.slots[0].start = p.now() - 99999
+		p.d.chests.slots[1].start = p.now() - 3600
 		p.save()
 		app.rebuild()
 	# 40 frames per tab: switch at +5, shot at +30 (lets the 3D showcase and animations settle),

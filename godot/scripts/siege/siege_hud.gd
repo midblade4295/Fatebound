@@ -1,4 +1,5 @@
 extends Control
+const Sim_Eco = preload("res://scripts/meta/economy.gd")
 # Siege HUD. The stick and the combat buttons are drawn and hit-tested by hand from raw
 # InputEventScreenTouch events, because Godot's Buttons only follow the first finger and on a
 # phone you hold the stick while tapping ATTACK. Modal panels (workshop, pause, result) use Buttons.
@@ -242,6 +243,12 @@ func show_result(result: Dictionary = {}) -> void:
 		_label(v, "+%d GOLD  ·  +%d XP  ·  +%d PASS" % [int(rw.gold), int(rw.xp), int(rw.pass)], 14, VisualTheme.GOLD, _bold)
 		for lv in result.get("levels", []):
 			_label(v, "LEVEL UP! Level %d  ·  +%d gold%s" % [int(lv.level), int(lv.reward.get("gold", 0)), ("  ·  +%d gems" % int(lv.reward.gems)) if lv.reward.has("gems") else ""], 14, VisualTheme.CYAN, _bold)
+		for ch in result.get("chests", []):                     # 0.31.37
+			var cn := str(Sim_Eco.CHESTS[str(ch.kind)].name)
+			if bool(ch.get("full", false)):
+				_label(v, "%s earned — chest slots full, turned into %d gold" % [cn, int(ch.gold)], 13, Color("#d4cbbb"))
+			else:
+				_label(v, "%s earned! Unlock it from the home screen" % cn, 14, Color(str(Sim_Eco.CHESTS[str(ch.kind)].color)), _bold)
 		var tiers: Array = result.get("tiers", [])
 		if not tiers.is_empty():
 			_label(v, "Siege Pass tier %s reached — claim it on the Pass screen" % (str(tiers[-1]) if tiers.size() == 1 else "%d–%d" % [tiers[0], tiers[-1]]), 13, Color("#ffcf7a"))

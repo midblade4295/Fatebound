@@ -30,6 +30,7 @@ static func defaults() -> Dictionary:
 		"challenges":{"day":"", "daily":[], "week":"", "weekly":[], "rerolled":false},
 		"stats":{"matches":0, "wins":0, "rescues":0, "kills":0, "gates":0, "gathered":0, "fed":0},
 		"first_win_day":"", "history":[], "migration":{},
+		"chests":{"slots":[], "next":1, "pity":0},
 		"settings":{"master":0.8, "music":0.6, "sfx":0.8, "reduce_motion":false}}
 
 # ---------------- load / save ----------------
@@ -162,6 +163,8 @@ func _add_xp(amount: int, out: Dictionary) -> void:
 		var r := Eco.level_reward(int(d.level))
 		d.gold += int(r.get("gold", 0))
 		d.gems += int(r.get("gems", 0))
+		if r.has("chest"):
+			add_chest(str(r.chest), out)
 		out.levels.append({"level":d.level, "reward":r})
 
 func _add_pass_xp(amount: int, out: Dictionary) -> void:
@@ -212,6 +215,8 @@ func buy_premium() -> Dictionary:
 func _grant(r: Dictionary) -> void:
 	d.gold += int(r.get("gold", 0))
 	d.gems += int(r.get("gems", 0))
+	if r.has("chest"):
+		add_chest(str(r.chest), {})
 	var id := str(r.get("item", ""))
 	if id != "" and not d.owned.has(id):
 		d.owned.append(id)
@@ -324,12 +329,15 @@ func claim_challenge(span: String, index: int) -> Dictionary:
 	if bool(c.claimed) or int(c.progress) < int(def.goal):
 		return {"ok":false}
 	c.claimed = true
-	var out := {"levels":[], "tiers":[]}
+	var out := {"levels":[], "tiers":[], "chests":[]}
 	_add_pass_xp(int(def.get("pass", 0)), out)
 	d.gold += int(def.get("gold", 0))
 	d.gems += int(def.get("gems", 0))
+	# 0.31.37: the whole day's challenges done -> a Silver chest; the whole week's -> a Gold chest
+	if list.all(func(x): return bool(x.claimed)):
+		add_chest("silver" if span == "daily" else "gold", out)
 	save()
-	return {"ok":true, "tiers":out.tiers}
+	return {"ok":true, "tiers":out.tiers, "chests":out.chests}
 
 # ---------------- matches ----------------
 func apply_match(me: Dictionary, won: bool, draw: bool, online: bool) -> Dictionary:
@@ -342,8 +350,13 @@ func apply_match(me: Dictionary, won: bool, draw: bool, online: bool) -> Diction
 	if first_win:
 		d.first_win_day = today
 	var r := Eco.match_rewards(stats, won, draw, online, first_win)
-	var out := {"rewards":r, "levels":[], "tiers":[], "challenges":[], "first_win":first_win}
+	var out := {"rewards":r, "levels":[], "tiers":[], "challenges":[], "first_win":first_win, "chests":[]}
 	d.gold += int(r.gold)
+	# 0.31.37: chests -- every win a Wooden one (Silver for a rescue or a multi-kill); the first win of the day a Silver
+	if won:
+		add_chest("silver" if int(stats.get("rescues", 0)) > 0 or int(me.get("best_multi", 0)) >= 2 else "wooden", out)
+	if first_win:
+		add_chest("silver", out)
 	_add_xp(int(r.xp), out)
 	_add_pass_xp(int(r.pass), out)
 	for key in ["matches", "wins", "rescues", "kills", "gates", "gathered", "fed"]:
@@ -363,3 +376,78 @@ func apply_match(me: Dictionary, won: bool, draw: bool, online: bool) -> Diction
 		d.history.resize(20)
 	save()
 	return out
+
+
+# ---------------- chests (0.31.37) ----------------
+func chests() -> Array:
+	return d.chests.slots
+
+func add_chest(kind: String, out: Dictionary) -> void:
+	# a new chest takes a free slot; with all CHEST_SLOTS full it's turned into gold at once
+	if not out.has("chests"):
+		out["chests"] = []
+	if d.chests.slots.size() >= Eco.CHEST_SLOTS:
+		var g: int = int(Eco.CHEST_FULL_GOLD[kind])
+		d.gold += g
+		out.chests.append({"kind":kind, "full":true, "gold":g})
+		return
+	var c := {"id":int(d.chests.next), "kind":kind, "got":now(), "start":-1}
+	d.chests.next = int(d.chests.next) + 1
+	d.chests.slots.append(c)
+	out.chests.append({"kind":kind, "full":false})
+
+func chest_left(c: Dictionary) -> int:
+	# seconds until it's unlocked (its full time if not started)
+	var t: int = int(Eco.CHESTS[c.kind].unlock)
+	if int(c.start) < 0:
+		return t
+	return maxi(0, int(c.start) + t - now())
+
+func chest_ready(c: Dictionary) -> bool:
+	return int(c.start) >= 0 and chest_left(c) <= 0
+
+func unlocking() -> Dictionary:
+	for c in d.chests.slots:
+		if int(c.start) >= 0 and chest_left(c) > 0:
+			return c
+	return {}
+
+func start_unlock(index: int) -> bool:
+	if index < 0 or index >= d.chests.slots.size() or not unlocking().is_empty():
+		return false
+	var c: Dictionary = d.chests.slots[index]
+	if int(c.start) >= 0:
+		return false
+	c.start = now()
+	save()
+	return true
+
+func skip_chest(index: int) -> Dictionary:
+	if index < 0 or index >= d.chests.slots.size():
+		return {"ok":false}
+	var c: Dictionary = d.chests.slots[index]
+	var cost := Eco.skip_cost(chest_left(c))
+	if chest_ready(c) or int(d.gems) < cost:
+		return {"ok":false, "cost":cost}
+	d.gems = int(d.gems) - cost
+	c.start = now() - int(Eco.CHESTS[c.kind].unlock)
+	save()
+	return {"ok":true, "cost":cost}
+
+func open_chest(index: int) -> Dictionary:
+	if index < 0 or index >= d.chests.slots.size():
+		return {"ok":false}
+	var c: Dictionary = d.chests.slots[index]
+	if not chest_ready(c):
+		return {"ok":false}
+	var roll := Eco.roll_chest(str(c.kind), hash([str(d.get("name", "")), int(c.id), int(c.got)]), d.owned, int(d.chests.pity))
+	d.chests.pity = int(roll.pity)
+	d.gold += int(roll.gold) + int(roll.dupe_gold)
+	d.gems += int(roll.gems)
+	if str(roll.item) != "" and not d.owned.has(roll.item):
+		d.owned.append(roll.item)
+	d.chests.slots.remove_at(index)
+	save()
+	roll["ok"] = true
+	roll["kind"] = c.kind
+	return roll

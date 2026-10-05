@@ -115,6 +115,15 @@ func _draw() -> void:
 		"plus":
 			draw_rect(Rect2(-2, -9, 4, 18), w)
 			draw_rect(Rect2(-9, -2, 18, 4), w)
+		"chest":                                         # 0.31.37: a chest -- lid, body, band and lock, in the tint
+			var body := tint if tint != Color.WHITE else Color("#c48a4a")
+			draw_rect(Rect2(-13, -2, 26, 13), body.darkened(0.15))
+			draw_colored_polygon(PackedVector2Array([Vector2(-13, -2), Vector2(-13, -7), Vector2(-9, -12), Vector2(9, -12), Vector2(13, -7), Vector2(13, -2)]), body)
+			draw_rect(Rect2(-13, -3, 26, 2), Color(0.15, 0.1, 0.06))
+			draw_rect(Rect2(-9, -12, 3, 23), Color(0.2, 0.14, 0.08, 0.6))
+			draw_rect(Rect2(6, -12, 3, 23), Color(0.2, 0.14, 0.08, 0.6))
+			draw_rect(Rect2(-3, -5, 6, 7), Color("#ffd75e"))
+			draw_rect(Rect2(-1, -2, 2, 3), Color(0.15, 0.1, 0.06))
 		"trophy":
 			draw_colored_polygon(PackedVector2Array([Vector2(-9, -12), Vector2(9, -12), Vector2(7, -2), Vector2(0, 3), Vector2(-7, -2)]), w)
 			draw_rect(Rect2(-2, 3, 4, 5), w)

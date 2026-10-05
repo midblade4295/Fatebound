@@ -1805,3 +1805,19 @@ K2/K3 notes (0.17.0)
 - meta_economy_test's scratch profiles were named by ticks-since-start, which repeat between runs: a previous run's
   file (with today's first win) was occasionally reloaded. Now wall-clock ms + a random number.
 - Chests and gem packs are designed (not built yet); waiting on Kevin: instant-open vs timed.
+
+# 0.31.37 (Kevin: a chest system; chests unlock over time)
+- Economy: CHESTS wooden (30 min) / silver (3 h) / gold (8 h) / royal (12 h) -- gold, gems and a chance (wooden 15 %,
+  silver 35 %) or certainty of a shop cosmetic by rarity table; duplicates turn into gold (100/250/600/1500); Gold and
+  Royal chests guarantee an epic or better at least every PITY_EPIC 10; skip_cost 1 gem per 10 minutes left; roll_chest
+  seeded by the chest (opening can't be re-rolled by reloading); chest_odds() prints them plainly. Earned by playing,
+  never sold (no paid loot boxes): every win a Wooden (Silver with a rescue or a multi-kill), the first win of the day a
+  Silver, all three dailies a Silver, all weeklies a Gold, levels 5/15/25... a Gold and 10/20/30... a Royal (replaces the
+  25 gems), the pass free tiers 12 and 24 Silver, premium 8 and 16 Gold and 28 Royal.
+- Profile: d.chests {slots, next, pity}; CHEST_SLOTS 4 (full: the chest becomes 50/120/300/700 gold at once); one
+  unlocks at a time; start_unlock / skip_chest / open_chest. Old saves get the empty chests block (merge of defaults).
+  Online: my own multi-kills are kept on my unit from the events (the sim's count is on the server).
+- Home screen: a CHESTS card -- four slots (tier icon in its colour, OPEN / time left with a gem skip / UNLOCK), the
+  rule line ("never sold"), WHAT'S INSIDE? with the odds. Results panel: "<chest> earned!" or "slots full, turned into
+  gold". tests/chest_test.gd. Quick suite: ALL PASSED (32).
+- Gem packs for real money: designed; needs Play Billing + products in Play Console (not built).

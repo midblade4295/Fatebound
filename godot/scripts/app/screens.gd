@@ -198,7 +198,9 @@ static func home(app, root: VBoxContainer) -> void:
 		var fw := UI.card(root, Color(0.35, 0.22, 0.05, 0.85), UI.GOLD)
 		var fr := UI.row(fw, 10)
 		UI.icon(fr, "trophy", 28, UI.GOLD)
-		UI.grow(UI.label(fr, "First win of the day: +%d gold  +%d pass XP" % [Eco.FIRST_WIN.gold, Eco.FIRST_WIN.pass], 14, Color("#ffe4a8")))
+		UI.grow(UI.label(fr, "First win of the day: +%d gold  +%d pass XP  + a Silver Chest" % [Eco.FIRST_WIN.gold, Eco.FIRST_WIN.pass], 14, Color("#ffe4a8")))
+
+	chests_card(app, root)
 
 	# Siege Pass summary
 	var pc := UI.card(root)
@@ -227,6 +229,81 @@ static func home(app, root: VBoxContainer) -> void:
 	# Challenges
 	challenges_card(app, root, "daily")
 	challenges_card(app, root, "weekly")
+
+# ---------- chests (0.31.37) ----------
+static func chests_card(app, root: Node) -> void:
+	var p = app.profile
+	var c := UI.card(root)
+	var h := UI.row(c, 8)
+	UI.icon(h, "chest", 22, UI.GOLD)
+	UI.grow(UI.label(h, "CHESTS", 16, UI.GOLD, UI.TITLE_FONT, true))
+	UI.label(h, "%d/%d" % [p.chests().size(), Eco.CHEST_SLOTS], 12, UI.MUTED).autowrap_mode = TextServer.AUTOWRAP_OFF
+	var slots := UI.row(c, 8)
+	var busy: Dictionary = p.unlocking()
+	for i in Eco.CHEST_SLOTS:
+		var cell := UI.card(slots, Color(0.1, 0.09, 0.12, 0.9), Color(0.3, 0.27, 0.22))
+		cell.custom_minimum_size = Vector2(0, 118)
+		UI.grow(cell)
+		if i >= p.chests().size():
+			var e := UI.label(cell, "Win to earn chests", 10, UI.MUTED)
+			e.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			continue
+		var ch: Dictionary = p.chests()[i]
+		var def: Dictionary = Eco.CHESTS[str(ch.kind)]
+		var col := Color(str(def.color))
+		var ic := UI.icon(cell, "chest", 34, col)
+		ic.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		var nm := UI.label(cell, str(def.name).replace(" Chest", ""), 11, col, UI.HEAVY_FONT, true)
+		nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		var idx := i
+		if p.chest_ready(ch):
+			UI.button(cell, "OPEN", "claim", func(): open_chest(app, idx), "chest_open_%d" % i, 12)
+		elif int(ch.start) >= 0:
+			var t := UI.label(cell, UI.duration(p.chest_left(ch)), 11, UI.TEXT)
+			t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			UI.button(cell, "%d 💎" % Eco.skip_cost(p.chest_left(ch)), "secondary", func(): skip_chest(app, idx), "chest_skip_%d" % i, 11)
+		elif busy.is_empty():
+			UI.button(cell, "UNLOCK\n%s" % UI.duration(p.chest_left(ch)), "secondary", func():
+				p.start_unlock(idx)
+				app.sfx("tap")
+				app.rebuild(), "chest_unlock_%d" % i, 10)
+		else:
+			var w := UI.label(cell, UI.duration(p.chest_left(ch)), 10, UI.MUTED)
+			w.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			UI.button(cell, "%d 💎" % Eco.skip_cost(p.chest_left(ch)), "ghost", func(): skip_chest(app, idx), "chest_skip_%d" % i, 11)
+	var odds := UI.label(c, "One chest unlocks at a time. Tap a chest's gems to open it now. Chests are earned by playing -- never sold.", 10, UI.MUTED)
+	odds.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	UI.button(c, "WHAT'S INSIDE?", "ghost", func(): chest_odds(app), "chest_odds", 11)
+
+static func skip_chest(app, idx: int) -> void:
+	var r: Dictionary = app.profile.skip_chest(idx)
+	if bool(r.get("ok", false)):
+		app.sfx("tap")
+		open_chest(app, idx)
+	else:
+		app.sfx("error")
+		app.toast("Not enough gems (%d needed)" % int(r.get("cost", 0)), UI.RED)
+
+static func open_chest(app, idx: int) -> void:
+	var r: Dictionary = app.profile.open_chest(idx)
+	if not bool(r.get("ok", false)):
+		return
+	app.sfx("purchase")
+	var parts := ["+%d gold" % int(r.gold)]
+	if int(r.gems) > 0:
+		parts.append("+%d gems" % int(r.gems))
+	if str(r.item) != "":
+		parts.append(str(Eco.item(str(r.item)).get("name", "a cosmetic")) + " (%s)" % str(Eco.item(str(r.item)).get("rarity", "")))
+	if int(r.dupe_gold) > 0:
+		parts.append("duplicate -> +%d gold" % int(r.dupe_gold))
+	app.toast("%s: %s" % [str(Eco.CHESTS[str(r.kind)].name), "  ·  ".join(parts)], UI.GOLD)
+	app.rebuild()
+
+static func chest_odds(app) -> void:
+	var lines := []
+	for k in ["wooden", "silver", "gold", "royal"]:
+		lines.append("%s (%s): %s" % [str(Eco.CHESTS[k].name), UI.duration(int(Eco.CHESTS[k].unlock)), Eco.chest_odds(k)])
+	app.toast("\n".join(lines), UI.TEXT)
 
 static func challenges_card(app, root: Node, span: String) -> void:
 	var p = app.profile

@@ -727,6 +727,9 @@ func _event_sound(e: Dictionary) -> void:
 		"pickup", "drop", "rescue", "gate_broken", "outpost_captured", "outpost_lost":
 			_announce_event(e)
 		"multikill":                                    # 0.31.29: the Herald calls your multi-kills
+			if str(e.get("id", "")) == hud.player_id and sim.by_id.has(hud.player_id):
+				# (0.31.37: kept on my unit online too, where the sim's own count lives on the server -- a chest rule)
+				sim.by_id[hud.player_id]["best_multi"] = maxi(int(sim.by_id[hud.player_id].get("best_multi", 0)), int(e.n))
 			if str(e.get("id", "")) == hud.player_id:
 				_herald_say("mk_" + ["", "", "double", "triple", "quadra", "penta", "legendary"][mini(int(e.n), 6)])
 		"vanish":                                       # 0.31.32: the three upgrades' new abilities

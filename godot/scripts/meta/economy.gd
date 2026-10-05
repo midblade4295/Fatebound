@@ -16,8 +16,10 @@ static func level_xp(level: int) -> int:
 static func level_reward(level: int) -> Dictionary:
 	# Reward for reaching `level`.
 	var r := {"gold":100 + 10 * level}
-	if level % 5 == 0:
-		r["gems"] = 25
+	if level % 10 == 0:
+		r["chest"] = "royal"                 # 0.31.37: chests (was 25 gems every 5 levels)
+	elif level % 5 == 0:
+		r["chest"] = "gold"
 	return r
 
 # ---------------- Siege Pass ----------------
@@ -47,11 +49,17 @@ static func pass_reward(sid: int, tier: int, premium: bool) -> Dictionary:
 	if not premium:
 		if tier % 5 == 0:
 			return {"item": season_skins[tier / 5 - 1]}                       # tiers 5..30: 6 free
+		if tier == 12 or tier == 24:
+			return {"chest": "silver"}                                         # 0.31.37
 		if tier % 4 == 0:
 			return {"gems": 30}
 		return {"gold": 150 + 5 * tier}
 	if tier % 3 == 0:
 		return {"item": season_skins[PASS_FREE_ITEMS + tier / 3 - 1]}        # tiers 3..30: 10 premium
+	if tier == 8 or tier == 16:
+		return {"chest": "gold"}                                               # 0.31.37
+	if tier == 28:
+		return {"chest": "royal"}
 	if tier % 4 == 0:
 		return {"gems": 60}
 	return {"gold": 300 + 10 * tier}
@@ -315,3 +323,87 @@ static func legacy_conversion(old: Dictionary) -> Dictionary:
 	var gold := maxi(0, int(old.get("gold", 0))) + 250 * maxi(0, owned.size() - 1) + 150 * chests.size()
 	return {"gold":gold, "gems":maxi(0, int(old.get("tokens", 0))), "level":maxi(1, int(old.get("level", 1))),
 		"xp":maxi(0, int(old.get("xp", 0))), "weapons":maxi(0, owned.size() - 1), "chests":chests.size()}
+
+
+# ---------------- chests (0.31.37, Kevin: "a chest system"; "overtime") ----------------
+# Earned by playing, never sold (so they aren't paid loot boxes). CHEST_SLOTS hold chests; one unlocks at a time
+# over its timer; gems skip what's left (1 gem per 10 minutes). The contents are rolled when it's opened, from the
+# chest's id (so a reload can't re-roll), and the odds are shown in the game.
+const CHEST_SLOTS := 4
+const CHESTS := {
+	"wooden": {"name":"Wooden Chest", "unlock":1800, "gold":[60, 120], "gems_chance":0.10, "gems":[5, 5],
+		"item_chance":0.15, "rarity":{"common":0.6, "rare":0.4}, "color":"#a8794a"},
+	"silver": {"name":"Silver Chest", "unlock":3 * 3600, "gold":[150, 250], "gems_chance":1.0, "gems":[5, 10],
+		"item_chance":0.35, "rarity":{"rare":0.75, "epic":0.25}, "color":"#c9d3dc"},
+	"gold":   {"name":"Gold Chest", "unlock":8 * 3600, "gold":[400, 600], "gems_chance":1.0, "gems":[15, 25],
+		"item_chance":1.0, "rarity":{"rare":0.8, "epic":0.2}, "color":"#ffcf4a"},
+	"royal":  {"name":"Royal Chest", "unlock":12 * 3600, "gold":[1000, 1000], "gems_chance":1.0, "gems":[40, 60],
+		"item_chance":1.0, "rarity":{"epic":0.85, "legendary":0.15}, "color":"#c47bff"},
+}
+const CHEST_FULL_GOLD := {"wooden":50, "silver":120, "gold":300, "royal":700}   # slots full: the chest becomes gold
+const DUPE_GOLD := {"common":100, "rare":250, "epic":600, "legendary":1500}       # a cosmetic already owned
+const PITY_EPIC := 10              # Gold/Royal chests: an epic or better at the latest every 10th
+
+static func skip_cost(remaining_s: int) -> int:
+	return maxi(1, int(ceil(float(remaining_s) / 600.0)))
+
+static func chest_pool(rarity: String) -> Array:
+	# cosmetics that can drop: the shop's (the pass's own stay the pass's)
+	var ids := []
+	for id in CATALOG:
+		var it: Dictionary = CATALOG[id]
+		if str(it.get("source", "")) == "shop" and str(it.get("rarity", "")) == rarity and str(it.get("kind", "")) in ["skin", "weapon"]:
+			ids.append(id)
+	return ids
+
+static func roll_chest(kind: String, seed_value: int, owned: Array, pity: int) -> Dictionary:
+	# -> {gold, gems, item ("" if none), dupe_gold, pity (the new count)}
+	var c: Dictionary = CHESTS[kind]
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_value
+	var out := {"gold":rng.randi_range(int(c.gold[0]), int(c.gold[1])), "gems":0, "item":"", "dupe_gold":0, "pity":pity}
+	if rng.randf() < float(c.gems_chance):
+		out.gems = rng.randi_range(int(c.gems[0]), int(c.gems[1]))
+	if rng.randf() < float(c.item_chance):
+		var rar := ""
+		var roll := rng.randf()
+		var acc := 0.0
+		for r in c.rarity:
+			acc += float(c.rarity[r])
+			if roll <= acc:
+				rar = r
+				break
+		if rar == "":
+			rar = c.rarity.keys()[-1]
+		var big: bool = kind in ["gold", "royal"]
+		if big and pity + 1 >= PITY_EPIC and rar in ["common", "rare"]:
+			rar = "epic"                              # bad-luck protection
+		if big:
+			out.pity = 0 if rar in ["epic", "legendary"] else pity + 1
+		var pool := chest_pool(rar)
+		if pool.is_empty():
+			pool = chest_pool("rare")
+		if not pool.is_empty():
+			var id: String = pool[rng.randi_range(0, pool.size() - 1)]
+			if owned.has(id):
+				out.dupe_gold = int(DUPE_GOLD.get(rar, 250))
+			else:
+				out.item = id
+	return out
+
+static func chest_odds(kind: String) -> String:
+	# for the info panel: what's in it, plainly
+	var c: Dictionary = CHESTS[kind]
+	var parts := ["%d-%d gold" % [int(c.gold[0]), int(c.gold[1])]]
+	if float(c.gems_chance) >= 1.0:
+		parts.append("%d-%d gems" % [int(c.gems[0]), int(c.gems[1])])
+	else:
+		parts.append("%d%% chance of %d gems" % [int(round(float(c.gems_chance) * 100.0)), int(c.gems[0])])
+	var rs := []
+	for r in c.rarity:
+		rs.append("%s %d%%" % [str(r).capitalize(), int(round(float(c.rarity[r]) * 100.0))])
+	parts.append("%s: %s" % ["a cosmetic" if float(c.item_chance) >= 1.0 else "%d%% chance of a cosmetic" % int(round(float(c.item_chance) * 100.0)), ", ".join(rs)])
+	if kind in ["gold", "royal"]:
+		parts.append("an epic or better at least every %d" % PITY_EPIC)
+	parts.append("duplicates turn into gold")
+	return " · ".join(parts)
