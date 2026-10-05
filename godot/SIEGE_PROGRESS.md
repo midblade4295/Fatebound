@@ -1785,3 +1785,13 @@ K2/K3 notes (0.17.0)
   catapult (CATAPULT_AOE + 1.5) blast go up into the air again (6-11 m/s by distance) and tumble while the sim throws
   them outward; pieces broken by a catapult pop high like a bomb's (it's a recent blast). Chopping and mining keep the
   small pop and the confetti chips. blast_nodes_test covers the catapult. Quick suite: ALL PASSED (31).
+
+# 0.31.35 (Kevin: blasted logs and rocks were still doing the confetti pop -- they should fly away from the blast)
+- The pop was a view-only hop while the sim slid the piece along the ground, losing most of its speed to friction in
+  the first moments: up, down, a short skid. Now a piece a blast throws (broken out of a tree/boulder, or already lying
+  in it) is AIRBORNE in the sim: BLAST_VZ 7.5 m/s up (+-15 %), flying straight out at its full launch speed with no
+  friction, slope, river or shoves for 2 vz / ITEM_G (~0.9 s), walls still stopping it; it lands with 55 % of its speed and
+  slides/rolls on. Launch speeds up (bomb 9, meteor 7.5, catapult 7 m/s): pieces land ~5-9 m out. The view draws the
+  same arc (no easing in flight) and tumbles it. Chopping/mining keeps the small hop and the confetti chips.
+  Online clients (no flight data) use the view's stand-in pop.
+- Quick suite: ALL PASSED (31).

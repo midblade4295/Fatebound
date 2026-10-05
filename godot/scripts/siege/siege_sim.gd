@@ -2532,7 +2532,7 @@ func _step_world(dt: float) -> void:
 				_next_push = _push_from(sh.to, u.pos, 4.4, 3.6)
 				_damage({"team":int(sh.team), "id":"catapult"}, u, CATAPULT_DMG)
 		_blast_push(sh.to, CATAPULT_AOE + 1.5, 4.5)
-		_blast_nodes(sh.to, CATAPULT_AOE + 0.6, 6.0)     # 0.31.34 (Kevin): a catapult stone breaks trees and boulders too
+		_blast_nodes(sh.to, CATAPULT_AOE + 0.6, 7.0)     # 0.31.34 (Kevin): a catapult stone breaks trees and boulders too
 		_event("catapult_hit", {"team":int(sh.team), "pos":sh.to, "shell":sh.id})
 		shells.remove_at(i)
 	for n in nodes:
@@ -3481,8 +3481,15 @@ func _fell_node(n: Dictionary, from: Vector2, blast := 0.0) -> void:
 		p = _clamp_to_field(_push_out(p, LOG_R if is_log else ROCK_R))
 		items.append({"id":_next_item, "kind":"log" if is_log else "rock", "res":n.kind, "pos":p, "vel":vel, "ang":ang,
 			"spin":rng.randf_range(-4.0, 4.0) if blast > 0.0 else 0.0, "roll":0.0, "rax":angle_of(vel), "born":time, "val":ITEM_VALUE})
+		if blast > 0.0:
+			var vz := rng.randf_range(BLAST_VZ * 0.85, BLAST_VZ * 1.15)
+			items[items.size() - 1]["air_vz"] = vz
+			items[items.size() - 1]["air_end"] = time + 2.0 * vz / ITEM_G
 		_next_item += 1
 	_event("node_fell", {"node":n.id, "kind":n.kind, "pos":n.p, "blast":blast, "from":from})
+
+const BLAST_VZ := 7.5             # m/s up for a piece thrown by a blast (its flight: 2 vz / ITEM_G, about 0.9 s)
+const ITEM_G := 16.0               # the view's fall for logs and rocks matches this
 
 func _blast_nodes(at: Vector2, radius: float, speed: float) -> void:
 	# 0.31.33 (Kevin): an explosion fells the trees and shatters the boulders in its reach; the logs and rocks fly
@@ -3552,6 +3559,17 @@ func _step_items(dt: float) -> void:
 		var is_log: bool = it.kind == "log"
 		var r := LOG_R if is_log else ROCK_R
 		var vel: Vector2 = it.vel
+		if time < float(it.get("air_end", -1.0)):
+			# 0.31.35: thrown by a blast -- in the air, flying straight out at its launch speed (no ground friction,
+			# slopes, river or shoves until it lands; walls still stop it)
+			it.pos = _clamp_to_field(_push_out((it.pos as Vector2) + vel * dt, r))
+			it.roll = float(it.roll) + vel.length() * dt / r * 0.5
+			it["asleep"] = false
+			continue
+		if it.has("air_end"):
+			it.erase("air_end")
+			it.vel = vel * 0.55                         # it lands: some of the speed is lost, the rest slides/rolls on
+			vel = it.vel
 		# Resting and nobody near: nothing to do (0.31.8 perf: most logs lie still most of the time).
 		var near_unit := false
 		for u in units:
@@ -3944,7 +3962,7 @@ func _explode_bomb(b: Dictionary) -> void:
 			else:
 				_damage_gate(src, g, float(g.max_hp) * BOMB_GATE)
 	_blast_push(at, BOMB_R + 2.0, 7.0)
-	_blast_nodes(at, BOMB_R, 7.5)
+	_blast_nodes(at, BOMB_R, 9.0)
 	_event("bomb_boom", {"team":b.team, "pos":at, "killed":killed, "by":str(b.by)})
 	bombs[int(b.team)] = {}
 	bomb_next[int(b.team)] = time + BOMB_RESPAWN
@@ -4019,8 +4037,12 @@ func _blast_push(at: Vector2, radius: float, speed: float) -> void:
 		var d2: Vector2 = (it.pos as Vector2) - at
 		if d2.length() < radius:
 			var dir2 := d2.normalized() if d2.length() > 0.05 else dir_of(rng.randf() * TAU)
-			it.vel = (it.vel as Vector2) + dir2 * speed * 0.7 * (1.0 - 0.5 * d2.length() / radius)
+			var close := 1.0 - 0.5 * d2.length() / radius
+			it.vel = (it.vel as Vector2) + dir2 * speed * 0.9 * close
 			it["asleep"] = false
+			var vz := BLAST_VZ * (0.6 + 0.5 * close)       # 0.31.35: into the air too, flying out
+			it["air_vz"] = vz
+			it["air_end"] = time + 2.0 * vz / ITEM_G
 			if it.kind == "log":
 				it.spin = float(it.spin) + rng.randf_range(-3.0, 3.0)
 
@@ -4419,7 +4441,7 @@ func _step_meteors(dt: float) -> void:
 					_next_push = _push_from(m.at, o.pos, 4.6, 3.8)
 					_damage(owner if not owner.is_empty() else {"team":int(m.team), "id":""}, o, float(m.dmg) * (1.0 - 0.5 * d / METEOR_R), 0.4)
 			_blast_push(m.at, METEOR_R + 1.5, 5.0)
-			_blast_nodes(m.at, METEOR_R, 6.0)
+			_blast_nodes(m.at, METEOR_R, 7.5)
 			m.burn_until = time + METEOR_BURN
 			_event("meteor_hit", {"team":int(m.team), "pos":m.at, "burn":METEOR_BURN})
 			continue

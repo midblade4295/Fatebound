@@ -3481,12 +3481,27 @@ func _sync_items(dt: float) -> void:
 			for b in _recent_blasts:
 				if _time - float(b[1]) < 0.6 and (b[0] as Vector2).distance_to(p) < 12.0:
 					blasted = true
-			nd.set_meta("pop_vz", randf_range(9.0, 12.0) if blasted else randf_range(4.5, 6.5))
+			# (0.31.35: a piece the sim has in the air follows the sim's flight below; this pop is for a chopped tree or
+			# a mined boulder, or an online client that doesn't know the flight)
+			nd.set_meta("pop_vz", Sim.BLAST_VZ if blasted else randf_range(4.5, 6.5))
 			nd.set_meta("pop_h", 0.05)
 			nd.set_meta("pop_ax", Vector3(randf_range(-1, 1), randf_range(-0.3, 0.3), randf_range(-1, 1)).normalized())
 			nd.set_meta("pop_spin", randf_range(7.0, 13.0) * (1.6 if blasted else 1.0))
 			nd.set_meta("pop_rot", 0.0)
-		if nd.has_meta("pop_vz"):
+		var air_end := float(it.get("air_end", -1.0))
+		if air_end > sim.time:
+			# 0.31.35: flying away from a blast -- the same arc the sim gives it (straight out, up and down once)
+			var avz := float(it.get("air_vz", Sim.BLAST_VZ))
+			var tt: float = sim.time - (air_end - 2.0 * avz / Sim.ITEM_G)
+			target.y += maxf(0.0, avz * tt - 0.5 * Sim.ITEM_G * tt * tt)
+			if nd.has_meta("pop_vz"):
+				nd.remove_meta("pop_vz")
+			if not nd.has_meta("air_ax"):
+				nd.set_meta("air_ax", Vector3(randf_range(-1, 1), randf_range(-0.3, 0.3), randf_range(-1, 1)).normalized())
+				nd.set_meta("air_rot", 0.0)
+			nd.set_meta("air_rot", float(nd.get_meta("air_rot")) + 14.0 * dt)
+			nd.position = target                          # no easing in flight: it would lag the arc
+		elif nd.has_meta("pop_vz"):
 			var vz: float = nd.get_meta("pop_vz")
 			var ph: float = nd.get_meta("pop_h")
 			vz -= ITEM_POP_G * dt
@@ -3515,6 +3530,10 @@ func _sync_items(dt: float) -> void:
 			nd.basis = Basis(Vector3(sin(rax), 0.0, -cos(rax)), float(it.roll))
 		if nd.has_meta("pop_vz"):
 			nd.basis = Basis(nd.get_meta("pop_ax"), float(nd.get_meta("pop_rot"))) * nd.basis      # tumbling in the air
+		elif air_end > sim.time and nd.has_meta("air_ax"):
+			nd.basis = Basis(nd.get_meta("air_ax"), float(nd.get_meta("air_rot"))) * nd.basis
+		elif nd.has_meta("air_ax"):
+			nd.remove_meta("air_ax")
 	for id in item_nodes.keys():
 		if not seen.has(id):
 			(item_nodes[id] as Node3D).queue_free()
@@ -4494,8 +4513,12 @@ func _sync_chips(dt: float) -> void:
 
 func _launch_items(at2: Vector2, radius: float, power: float) -> void:
 	# 0.31.34 (Kevin: "make sure the materials get flung from explosion/catapult"): logs and rocks already lying in a
-	# blast go up into the air again, tumbling (the sim throws them outward along the ground at the same moment)
+	# blast go up into the air again, tumbling. (0.31.35: when the sim has them in flight -- offline, or the host -- the
+	# view follows that flight instead; this is the online client's stand-in.)
 	for id in item_nodes.keys():
+		var simit: Array = sim.items.filter(func(x): return int(x.id) == int(id))
+		if not simit.is_empty() and float(simit[0].get("air_end", -1.0)) > sim.time:
+			continue
 		var nd: Node3D = item_nodes[id]
 		var d := Vector2(nd.position.x - at2.x, nd.position.z - at2.y).length()
 		if d > radius:
