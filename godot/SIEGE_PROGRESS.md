@@ -2038,3 +2038,17 @@ K2/K3 notes (0.17.0)
   shake, water waves and debris stay). Meteor: heavy at 2.7 (replacing its glow sphere and sparks; its warning circle,
   falling rock, rings, burning ground and shake stay). Catapult stones: light at 2.0 (they had no explosion).
 - Checked on the treeblast shot. Quick suite: ALL PASSED (32).
+
+# 0.31.58 (Kevin: bomb explosion much larger, meteor a bit larger; a louder, more powerful bomb sound -- a bang that
+# lingers off; a quieter, less dramatic meteor; game audio up, announcer down)
+- Sizes: bomb's heavy explosion 3.6 -> 6.0 (its shockwave BOMB_R + 1.5 -> + 3.0), meteor's 2.7 -> 3.4.
+- assets/sounds/tm_bomb_blast.wav: ElevenLabs Sound Effects v2 (Kevin's workspace, 3 takes ~50 credits), "massive bomb
+  explosion outdoors: one huge sharp deep boom..., then a long rolling rumble that slowly fades away". Picked by
+  measurement: the take with the sharpest attack (peak at 0.10 s) and the longest tail (2.5 s to -30 dB); low shelf
+  +3 dB at 90 Hz, loudness-normalised (-12 LUFS, -0.8 dBTP), 0.7 s fade, 5 s mono 44.1 kHz. The bomb plays it alone
+  (was fireball + crumble) at 2.6x, heard out to 95 m.
+- native_audio: every gain above 1 was clamped to 1 (so the bomb's "1.6" never applied); now up to 3x, the product
+  capped at full scale, and the base 0.12 -> 0.2 (+4.4 dB for all sound effects).
+- Meteor: fireball 1.5 -> 0.55 (45 m), crumble 0.9 -> 0.3 (32 m). Herald: SiegeMode.HERALD_GAIN 0.5 (-6 dB) in matches,
+  the tutorial's Herald the same.
+- Quick suite: ALL PASSED (32).

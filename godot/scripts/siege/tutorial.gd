@@ -271,7 +271,7 @@ func _show_line() -> void:
 		muted = bool(mode.audio.get("muted"))
 	if muted or master <= 0.0:
 		return
-	voice.volume_db = linear_to_db(master)
+	voice.volume_db = linear_to_db(master * 0.5)          # 0.31.58: the Herald, as in matches (-6 dB)
 	for ext in [".ogg", ".wav", ".mp3"]:
 		var p: String = VO_DIR + id + ext
 		if id != "" and ResourceLoader.exists(p):

@@ -4269,8 +4269,8 @@ func _sync_shocks() -> void:
 
 func bomb_blast(at2: Vector2) -> void:
 	var at := Vector3(at2.x, Sim.height_at(at2) + 0.6, at2.y)
-	shockwave(Vector3(at.x, at.y - 0.2, at.z), Sim.BOMB_R + 1.5)           # 0.31.56
-	_pack_explosion("heavy", Vector3(at.x, at.y - 0.4, at.z), 3.6)      # 0.31.57: the EffectBlocks heavy explosion
+	shockwave(Vector3(at.x, at.y - 0.2, at.z), Sim.BOMB_R + 3.0)           # 0.31.56 (0.31.58: wider, with the bigger blast)
+	_pack_explosion("heavy", Vector3(at.x, at.y - 0.4, at.z), 6.0)      # 0.31.57: the EffectBlocks heavy explosion (0.31.58: much larger)
 	ring_at(Vector3(at.x, at.y - 0.5, at.z), Color(1.0, 0.55, 0.2), Sim.BOMB_R, 0.7)
 	ring_at(Vector3(at.x, at.y - 0.5, at.z), Color(1.0, 0.9, 0.6), Sim.BOMB_R * 0.6, 0.4)
 	# (its fire, sparks, smoke and burning debris replace the old glow sphere, sparks and smoke puffs)
@@ -4694,7 +4694,7 @@ func _meteor_warn(p2: Vector2, delay: float, team: int) -> void:
 func _meteor_hit(p2: Vector2, burn: float) -> void:
 	var at := Vector3(p2.x, Sim.height_at(p2) + 0.4, p2.y)
 	shockwave(at, Sim.METEOR_R + 1.2)                                          # 0.31.56
-	_pack_explosion("heavy", Vector3(at.x, at.y - 0.2, at.z), 2.7)      # 0.31.57
+	_pack_explosion("heavy", Vector3(at.x, at.y - 0.2, at.z), 3.4)      # 0.31.57 (0.31.58: a bit larger)
 	ring_at(at, Color(1.0, 0.5, 0.15), Sim.METEOR_R * 1.3, 0.6)
 	shake(0.5)
 	_blast_bodies(p2, Sim.METEOR_R + 1.5, 5.0)

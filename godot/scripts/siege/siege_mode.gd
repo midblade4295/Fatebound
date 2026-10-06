@@ -707,9 +707,8 @@ func _event_sound(e: Dictionary) -> void:
 			_cue("tm_sheath", 2, e.get("pos", Vector2.INF), 14.0)
 		"gate_hit":
 			_cue("tm_gate_hit", 2, _gate_pos(e.get("gate", "")), HEAR_R + 6.0)
-		"bomb_boom":                                    # 0.31.19: the bomb -- a fireball and a crumble together, heard far off
-			_cue("tm_fireball", 3, e.pos, 70.0, false, 1.6)
-			_cue("tm_crumble", 2, e.pos, 70.0, false, 1.3)
+		"bomb_boom":                                    # 0.31.58 (Kevin): a huge bang that rolls off into a long rumble
+			_cue("tm_bomb_blast", 1, e.pos, 95.0, false, 2.6)
 		"bomb_throw":
 			_cue("tm_firespray", 2, e.from, HEAR_R, false, 0.8)      # the fuse catching
 		"bomb_pick", "bomb_spawn":
@@ -736,9 +735,9 @@ func _event_sound(e: Dictionary) -> void:
 			_cue("tm_firespray", 2, _unit_pos(str(e.id)), 14.0, false, 0.35)
 		"meteor_warn":
 			_cue("tm_fireball", 3, e.pos, 40.0, false, 0.9)
-		"meteor_hit":
-			_cue("tm_fireball", 3, e.pos, 60.0, false, 1.5)
-			_cue("tm_crumble", 2, e.pos, 50.0, false, 0.9)
+		"meteor_hit":                                   # 0.31.58 (Kevin): quieter, less dramatic than the bomb
+			_cue("tm_fireball", 3, e.pos, 45.0, false, 0.55)
+			_cue("tm_crumble", 2, e.pos, 32.0, false, 0.3)
 		"pierce_hit":
 			_cue("tm_bow_hit", 3, e.pos, HEAR_R, false, 1.1)
 		"launch_count":                                 # 0.31.28: the launcher's lever
@@ -859,6 +858,8 @@ func _music_step(delta: float, muted: bool, lv: Dictionary) -> void:
 var _herald: AudioStreamPlayer = null
 var _herald_until := 0.0                    # when the line playing ends (by its length: the playing flag can stick)
 var _ann_clock := 0.0                       # frame time since the match opened (the announcer's clock)
+const HERALD_GAIN := 0.5      # 0.31.58 (Kevin: lower the announcer): -6 dB, under the louder game sounds
+
 func _herald_say(id: String) -> void:
 	var path := "res://assets/vo/herald/%s.ogg" % id
 	if not ResourceLoader.exists(path):
@@ -876,7 +877,7 @@ func _herald_say(id: String) -> void:
 		add_child(_herald)
 	_herald.stop()
 	_herald.stream = load(path)
-	_herald.volume_db = linear_to_db(master)
+	_herald.volume_db = linear_to_db(master * HERALD_GAIN)
 	_herald.play()
 	_herald_until = _ann_clock + _herald.stream.get_length()
 
