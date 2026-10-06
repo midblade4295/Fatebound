@@ -1964,3 +1964,8 @@ K2/K3 notes (0.17.0)
   The Priest's heal beam and the Necromancer's white heal to an ally are unchanged.
 - trailer5_shots: "plasma" check shot (a Necromancer draining a Knight) and a "drain" beat (the real attack action:
   the old "attack" beat bypassed the Priest's beam). Quick suite: ALL PASSED (32).
+
+# 0.31.51 (Kevin: reverse the beam so it flows back into the Necromancer)
+- The siphon's plasma material sets flow_dir -1: the cylinder's UV.y = 1 end is at the Necromancer, and +1 ran the
+  pattern toward UV.y = 0 (out to the victim). Measured on the render: cross-correlating the beam's greenness profile
+  between consecutive frames, 13 of 15 frame pairs move toward the Necromancer. Quick suite: ALL PASSED (32).

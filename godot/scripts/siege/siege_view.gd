@@ -1647,6 +1647,7 @@ static func _plasma_mat(kind: String) -> Material:
 			sm.set_shader_parameter("core", 1.0 if kind == "core" else 0.0)
 			sm.set_shader_parameter("intensity", 1.35 if kind == "core" else 1.1)
 			sm.set_shader_parameter("twist", 3.0)
+			sm.set_shader_parameter("flow_dir", -1.0)     # 0.31.51 (Kevin): flowing back INTO the Necromancer (it ran out)
 			_plasma_mats[kind] = sm
 	return _plasma_mats[kind]
 

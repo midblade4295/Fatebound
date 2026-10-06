@@ -10,7 +10,8 @@ uniform vec3 plasma_color : source_color = vec3(0.22, 0.95, 0.35);
 uniform vec3 deep_color : source_color = vec3(0.26, 0.02, 0.48);
 uniform vec3 hot_color : source_color = vec3(0.86, 1.0, 0.74);
 uniform float flow_speed = 1.0;
-uniform float flow_dir = 1.0;          // +1: the pulses run toward UV.y = 0 end, -1: toward 1
+uniform float flow_dir = 1.0;          // +1: the pulses run toward the UV.y = 0 end, -1: toward 1 (the siphon uses -1:
+                                       // the cylinder's UV.y = 1 end sits at the Necromancer)
 uniform float twist = 2.0;             // wave turns round the beam
 uniform float intensity = 1.5;
 uniform float softness = 1.4;          // how quickly the sides fade
