@@ -1892,3 +1892,14 @@ K2/K3 notes (0.17.0)
   (sword_E 0.75 -> 2.4 m, spears 0.8, bow_C 0.75, staff_D 0.85, halberd 0.85, hammer_D 0.9, sword_F 0.9) and shields
   slightly scaled (A 1.0, B 0.9, C 0.85, D 0.78); Bits bows a quarter turn, the Adventurers bow its half turn. Checked in
   close-up renders mid-swing against the pack weapons. 56 weapon thumbnails re-rendered. Quick suite: ALL PASSED.
+
+# 0.31.44 (Kevin's screenshots: crossbow not held right, hands through shields, brass knuckles backwards, axes upside
+# down)
+- View.WEAPON_ROT / _fit_weapon: crossbows (1H and 2H, pack) a quarter turn about X so they lie forward (they stood up
+  like bows); every shield moved out along the hand slot's Z (pack 0.15, Bits 0.14) so the fist sits behind the board
+  instead of poking through its face; fistweapon_C_left/right a half turn (the claws faced the wrist); bits/axe_D (the
+  Great Cleaver) a half turn so its single blade hangs forward in the two-handed grip (its edge pointed at the sky).
+  Checked in front-view renders like the screenshots.
+- barb_wpn_twinaxe "Twin Axes" (an axe in each hand under two-handed animations: the second stuck out of the left hand)
+  is now one double-bitted axe, "Twin-Bitted Axe".
+- 68 weapon thumbnails re-rendered. Quick suite: ALL PASSED (32).

@@ -144,7 +144,7 @@ const CATALOG := {
 	"knight_wpn_oath":     {"kind":"weapon", "class":"knight", "name":"Oathkeeper", "rarity":"legendary", "r":"bits/sword_G", "l":"bits/shield_C", "source":"pass"},
 	"knight_wpn_halberd":  {"kind":"weapon", "class":"knight", "name":"Halberd & Tower Shield", "rarity":"epic", "r":"bits/halberd", "l":"shield_square_color", "source":"pass"},
 	"barb_wpn_hammer":     {"kind":"weapon", "class":"barbarian", "name":"War Hammer", "rarity":"rare", "r":"bits/hammer_C", "l":"", "gold":1100, "source":"shop"},
-	"barb_wpn_twinaxe":    {"kind":"weapon", "class":"barbarian", "name":"Twin Axes", "rarity":"epic", "r":"bits/axe_B", "l":"bits/axe_B", "source":"pass"},
+	"barb_wpn_twinaxe":    {"kind":"weapon", "class":"barbarian", "name":"Twin-Bitted Axe", "rarity":"epic", "r":"bits/axe_B", "l":"", "source":"pass"},
 	"barb_wpn_cleaver":    {"kind":"weapon", "class":"barbarian", "name":"Great Cleaver", "rarity":"legendary", "r":"bits/axe_D", "l":"", "source":"pass"},
 	"rogue_wpn_fangs":     {"kind":"weapon", "class":"rogue", "name":"Fang Daggers", "rarity":"rare", "r":"bits/dagger_B", "l":"bits/dagger_B", "gold":1000, "source":"shop"},
 	"rogue_wpn_knuckles":  {"kind":"weapon", "class":"rogue", "name":"Brass Knuckles", "rarity":"epic", "r":"bits/fistweapon_C_right", "l":"bits/fistweapon_C_left", "source":"pass"},

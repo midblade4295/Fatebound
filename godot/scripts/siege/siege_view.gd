@@ -2396,10 +2396,22 @@ static func make_body(cls: String, cosmetic: Dictionary = {}) -> Dictionary:
 const WEAPON_SCALE := {"bits/sword_E":0.75, "bits/spear_A":0.8, "bits/spear_B":0.8, "bits/bow_C_withString":0.75, "bits/staff_D":0.85,
 	"bits/halberd":0.85, "bits/shield_D":0.78, "bits/shield_C":0.85, "bits/shield_B":0.9, "bits/shield_A":1.0, "bits/sword_F":0.9, "bits/hammer_D":0.9}
 
+# 0.31.44 (Kevin's screenshots): crossbows stood up like bows -- they lie forward (a quarter turn about X); shields sat
+# on the hand so the fist poked through the face -- they move out along the slot's Z so the hand is behind the board;
+# the clawed knuckles faced backwards (half turn); the single-bladed cleaver's edge pointed up in the two-handed grip
+# (half turn); the Twin Axes were two axes in a two-handed grip (now one double-bitted axe, in economy.gd).
+const WEAPON_ROT := {"crossbow_1handed":Vector3(90, 0, 0), "crossbow_2handed":Vector3(90, 0, 0),
+	"bits/fistweapon_C_left":Vector3(0, 180, 0), "bits/fistweapon_C_right":Vector3(0, 180, 0), "bits/axe_D":Vector3(0, 180, 0)}
+
 static func _fit_weapon(model: Node3D, file: String) -> void:
 	model.scale = Vector3.ONE * float(WEAPON_SCALE.get(file, 1.0))
 	if file.contains("bow") and not file.contains("crossbow"):
 		model.rotation.y = PI * 0.5 if file.begins_with("bits/") else PI
+	if WEAPON_ROT.has(file):
+		var r: Vector3 = WEAPON_ROT[file]
+		model.rotation = Vector3(deg_to_rad(r.x), deg_to_rad(r.y), deg_to_rad(r.z))
+	if file.contains("shield"):
+		model.position = Vector3(0.0, 0.0, 0.14 if file.begins_with("bits/") else 0.15)
 
 static func _apply_tint(body: Node3D, model: String, tint: Color) -> void:
 	# A skin = the model's own material with its albedo multiplied by the tint. Made once per
