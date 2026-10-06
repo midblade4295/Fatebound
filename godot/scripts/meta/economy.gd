@@ -11,8 +11,8 @@ const CLASSES := ["knight", "barbarian", "rogue", "ranger", "mage", "priest", "w
 const UP_CLASSES := ["crusader", "berserker", "necromancer", "assassin", "sniper", "archmage"]
 const UP_BASE := {"crusader":"knight", "berserker":"barbarian", "necromancer":"priest", "assassin":"rogue", "sniper":"ranger", "archmage":"mage"}
 const UP_LOOK := {"crusader":"crusader", "berserker":"berserker", "necromancer":"necromancer", "assassin":"assassin", "sniper":"sniper", "archmage":"archmage"}
-const CLASS_NAMES := {"knight":"Knight", "barbarian":"Barbarian", "rogue":"Rogue", "ranger":"Ranger", "mage":"Mage", "priest":"Priest", "worker":"Worker",
-	"crusader":"Crusader", "berserker":"Berserker", "necromancer":"Necromancer", "assassin":"Assassin", "sniper":"Sniper", "archmage":"Archmage"}
+const CLASS_NAMES := {"knight":"Knight", "barbarian":"Barbarian", "rogue":"Rogue", "ranger":"Archer", "mage":"Mage", "priest":"Priest", "worker":"Worker",
+	"crusader":"Crusader", "berserker":"Berserker", "necromancer":"Necromancer", "assassin":"Assassin", "sniper":"Ranger", "archmage":"Archmage"}     # 0.31.61: Ranger -> Archer, Sniper -> Ranger
 
 static func cosmetic_class(cls: String, up: bool) -> String:
 	# which equip slot dresses a unit: the upgraded one once he wears the upgraded hat

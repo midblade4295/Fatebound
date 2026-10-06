@@ -392,7 +392,7 @@ func _act(action: String, arg: Variant = null) -> void:
 					_pred_fx[str(e.k)] = Time.get_ticks_msec() / 1000.0
 					view.on_event(e)
 					_event_sound(e)
-		var msg_a := {"t":"in", "m":hud.move_vector(), "h":hud.attack_held(), "b":hud.ability_held(), "a":action, "arg":arg}
+		var msg_a := {"t":"in", "m":hud.move_vector(), "h":hud.attack_held(), "b":hud.ability_held(), "k":hud.block_held(), "a":action, "arg":arg}
 		if not me_a.is_empty():
 			msg_a["p"] = me_a.pos
 			msg_a["f"] = me_a.face
@@ -525,6 +525,8 @@ func _process(delta: float) -> void:
 		var me_b: Dictionary = sim.by_id.get(hud.player_id, {})
 		if hud.ability_held() and not me_b.is_empty() and sim.ability_of(me_b) == "block":
 			sim.act(hud.player_id, "ability")
+		if hud.block_held() and not me_b.is_empty():
+			sim.act(hud.player_id, "block")
 		if hud.attack_held():
 			var me: Dictionary = sim.by_id[hud.player_id]
 			if sim.can_act(me) and not me.carrying:

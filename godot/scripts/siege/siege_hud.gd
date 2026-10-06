@@ -37,6 +37,7 @@ var _stick_pos := Vector2.ZERO
 var _stick_active := false
 var _attack_held := false
 var _ability_held := false
+var _block_held := false            # 0.31.61: the Crusader's shield button
 var _pressed_at := {}
 var _toast := ""
 var _multi: Label = null                 # 0.31.29: DOUBLE KILL ... LEGENDARY
@@ -371,6 +372,8 @@ func _buttons() -> Array:
 	]
 	if ctx != "":
 		out.append({"id":"action", "c":br + Vector2(-172, -182), "r":36.0, "ctx":ctx})
+	if not me.is_empty() and me.cls == "knight" and bool(me.get("up", false)):
+		out.append({"id":"block", "c":br + Vector2(-262, -64), "r":30.0})     # the Crusader keeps his shield
 	return out
 
 func _modal_open() -> bool:
@@ -406,6 +409,8 @@ func _touch(index: int, pos: Vector2, pressed: bool) -> void:
 					_attack_held = true
 				elif b.id == "ability":
 					_ability_held = true
+				elif b.id == "block":
+					_block_held = true
 				action_pressed.emit(b.id)
 				get_viewport().set_input_as_handled()
 				return
@@ -424,6 +429,8 @@ func _touch(index: int, pos: Vector2, pressed: bool) -> void:
 			_attack_held = false
 		elif role == "ability":
 			_ability_held = false
+		elif role == "block":
+			_block_held = false
 		if role != "":
 			get_viewport().set_input_as_handled()
 
@@ -450,6 +457,9 @@ func move_vector() -> Vector2:
 		if Input.is_physical_key_pressed(KEY_S): v.y += 1
 		v = v.limit_length(1.0)
 	return v
+
+func block_held() -> bool:
+	return _block_held or (not _modal_open() and Input.is_physical_key_pressed(KEY_L))
 
 func ability_held() -> bool:
 	# Knights hold ABILITY to keep the shield up (K on a keyboard).
@@ -810,6 +820,11 @@ func _draw_button(b: Dictionary, me: Dictionary) -> void:
 			label = "ATTACK"
 			col = Color("#9a6414")
 			rim = Color("#fff1bf")
+			ready = not me.carrying
+		"block":
+			label = "BLOCK"
+			col = Color("#2c4a6e")
+			rim = Color("#bcd8ff")
 			ready = not me.carrying
 		"ability":
 			var ab := str(sim.ability_of(me))

@@ -2074,3 +2074,19 @@ K2/K3 notes (0.17.0)
   the Knight's animations); look_key: an upgraded Knight is now "crusader" (he used the plain Knight body before);
   the always-a-shield rule covers meshy:crusader; Eco.UP_LOOK.crusader -> "crusader" (menus and thumbnails).
   Thumbnails re-rendered. Quick suite: ALL PASSED (32).
+
+# 0.31.61 (Kevin: the Crusader's eyes black, not gold; the Crusader can also block; the Berserker and the Sniper get
+# models; rename Ranger -> Archer and Sniper -> Ranger)
+- Crusader eyes: the gold eye discs located by rendering his face with UV-coded passes (coarse + fract(uv*32)), the two
+  eye blobs mapped back to texels and painted near-black (only where the texture itself is gold).
+- Crusader block: new sim action "block" (Knight class, up or not) -> _block; a BLOCK button beside the hammer
+  (HUD "block", held like the Knight's ability; key L); offline the held button blocks every frame, online the input
+  message carries "k" and the server blocks while it's held; Net.ACTIONS gains "block", protocol 34 -> 35. Crusader
+  bots raise the shield like Knights and throw the hammer when not blocking.
+- Names only (ids unchanged): CLASSES.ranger.name "Archer", UPGRADE_NAME.ranger "Ranger", Eco.CLASS_NAMES ranger
+  "Archer" / sniper "Ranger", the stand upgrade "Ranger Hats", the locker tab "RANGER".
+- Berserker and Ranger (sniper) via Meshy (multi-image from their current bodies, retextured: a wolf-pelted,
+  war-painted berserker with a braided red beard; a hooded woodland marksman in green and leather; both asked for
+  black eyes), auto-rigged, 110 animations baked each (fit 2.00 / 1.90). LOOKS.berserker/sniper -> meshy bodies,
+  KK_FOR barbarian / ranger. ~135 credits this round (3,110 left). Thumbnails re-rendered (with the Crusader's).
+- Quick suite: ALL PASSED (32). NOTE: the online server must be redeployed for protocol 35.

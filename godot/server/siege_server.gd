@@ -196,6 +196,7 @@ func _handle(cid: int, msg: Dictionary) -> void:
 				c.move = (m as Vector2).limit_length(1.0)
 			c.hold = bool(msg.get("h", false))
 			c.bhold = bool(msg.get("b", false))
+			c.khold = bool(msg.get("k", false))                # 0.31.61: the Crusader's held block
 			var cp: Variant = msg.get("p", null)
 			if cp is Vector2 and is_finite(cp.x) and is_finite(cp.y):
 				c.cpos = cp
@@ -306,6 +307,8 @@ func _run_match(delta: float) -> void:
 					c.pos_rejected = int(c.get("pos_rejected", 0)) + 1
 			if bool(c.get("bhold", false)) and sim.ability_of(ub) == "block":
 				sim.act(c.unit, "ability")
+			if bool(c.get("khold", false)):
+				sim.act(c.unit, "block")
 			if c.hold:
 				var u: Dictionary = sim.by_id[c.unit]
 				if sim.can_act(u) and not u.carrying:

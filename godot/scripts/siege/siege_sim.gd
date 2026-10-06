@@ -110,7 +110,7 @@ const UPGRADES := {
 	"hat_knight":    {"name":"Crusader Hats", "max":1, "cost":[{"wood":12,"stone":12}], "desc":"The Knight stand makes Crusader hats: Hammer Throw"},
 	"hat_barbarian": {"name":"Berserker Hats", "max":1, "cost":[{"wood":12,"stone":12}], "desc":"The Barbarian stand makes Berserker hats"},
 	"hat_rogue":     {"name":"Assassin Hats", "max":1, "cost":[{"wood":12,"stone":12}], "desc":"The Rogue stand makes Assassin hats"},
-	"hat_ranger":    {"name":"Sniper Hats", "max":1, "cost":[{"wood":12,"stone":12}], "desc":"The Ranger stand makes Sniper hats"},
+	"hat_ranger":    {"name":"Ranger Hats", "max":1, "cost":[{"wood":12,"stone":12}], "desc":"The Archer stand makes Ranger hats"},
 	"hat_mage":      {"name":"Archmage Hats", "max":1, "cost":[{"wood":12,"stone":12}], "desc":"The Mage stand makes Archmage hats"},
 	"hat_priest":    {"name":"Necromancer Hats", "max":1, "cost":[{"wood":12,"stone":12}], "desc":"The Priest stand makes Necromancer hats: drain enemies, heal allies, raise the fallen"},
 	"catapult": {"name":"Catapults", "max":1, "cost":[{"wood":15,"stone":25}],
@@ -159,7 +159,7 @@ const TOWER_BOT_MAX := 2          # bots leave the other places for players
                                   # there. Bot attackers always respawn forward and scavenge (like
                                   # Fat Princess players choosing an outpost spawn).
 const BOT_HAT_SEARCH := 32.0      # villager bots scavenge dropped hats this far (14 m: most expired unused)
-const UPGRADE_NAME := {"knight":"Crusader","barbarian":"Berserker","rogue":"Assassin","ranger":"Sniper","mage":"Archmage","priest":"Necromancer"}
+const UPGRADE_NAME := {"knight":"Crusader","barbarian":"Berserker","rogue":"Assassin","ranger":"Ranger","mage":"Archmage","priest":"Necromancer"}
 const BEAM_HOLD := 0.22
 # Knight BLOCK (Round 11, Kevin): hold ABILITY -> shield up, walk forward slowly; the shield (a
 # segment in front of the knight) stops every hit whose path crosses it -- for the knight (from the
@@ -193,7 +193,7 @@ const CLASSES := {
 		"ranged":false,"ability":"spin","ab_cd":7.0,"carry":0.65,"gate":1.6},
 	"rogue": {"name":"Rogue","hp":85,"speed":6.2,"dmg":14,"range":1.4,"arc":0.5,"windup":0.13,"recover":0.22,
 		"ranged":false,"ability":"lunge","ab_cd":5.0,"carry":0.72,"gate":0.6},
-	"ranger": {"name":"Ranger","hp":80,"speed":5.4,"dmg":15,"range":11.0,"arc":0.0,"windup":0.3,"recover":0.45,
+	"ranger": {"name":"Archer","hp":80,"speed":5.4,"dmg":15,"range":11.0,"arc":0.0,"windup":0.3,"recover":0.45,
 		"ranged":true,"proj_speed":33.0,"aoe":0.0,"ability":"volley","ab_cd":7.0,"carry":0.65,"gate":0.35},
 	"mage": {"name":"Mage","hp":75,"speed":5.0,"dmg":20,"range":9.0,"arc":0.0,"windup":0.4,"recover":0.5,
 		"ranged":true,"proj_speed":24.0,"aoe":1.6,"ability":"nova","ab_cd":8.0,"carry":0.65,"gate":1.0},
@@ -862,6 +862,8 @@ func act(id: String, action: String, arg: Variant = null) -> bool:
 				"resurrect": return _resurrect(u)
 				"vanish": return _vanish(u)
 				_: return _start_attack(u, "ability")
+		"block":                                     # 0.31.61 (Kevin): the Crusader blocks too, on its own button
+			return _block(u) if u.cls == "knight" else false
 		"dodge": return _dodge(u)
 		"interact": return _interact(u)
 		"hat_swap": return _swap_hat(u)
@@ -2860,7 +2862,10 @@ func _think_priest(u: Dictionary) -> bool:
 
 func _think_shields(u: Dictionary) -> void:
 	if ability_of(u) == "hammer":
-		_think_hammer(u)
+		if not u.carrying:
+			_think_knight_shield(u)                  # 0.31.61: a Crusader bot raises his shield like a Knight...
+		if not blocking(u):
+			_think_hammer(u)                         # ...and throws the hammer when he isn't
 		return
 	# Knight bots raise the shield toward archers/mages in range, or toward anyone close when hurt;
 	# berserker bots whirl into a crowd. Movement (the goal) is decided by the rest of the brain.

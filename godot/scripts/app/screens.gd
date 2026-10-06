@@ -883,7 +883,7 @@ static func locker(app, root: VBoxContainer) -> void:
 		var uic := UI.icon(ub, str(Eco.UP_BASE[ucls]), 22, Color("#2e1d00") if usel else UI.GOLD)
 		uic.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
 		uic.position += Vector2(-11, 7)
-		var short := {"crusader":"CRUSADER", "berserker":"BERSERK", "necromancer":"NECRO", "assassin":"ASSASSIN", "sniper":"SNIPER", "archmage":"ARCHMAGE"}
+		var short := {"crusader":"CRUSADER", "berserker":"BERSERK", "necromancer":"NECRO", "assassin":"ASSASSIN", "sniper":"RANGER", "archmage":"ARCHMAGE"}
 		var ul := UI.label(ub, str(short[ucls]), 8, Color("#2e1d00") if usel else UI.TEXT, UI.HEAVY_FONT)
 		ul.autowrap_mode = TextServer.AUTOWRAP_OFF
 		ul.clip_text = true
