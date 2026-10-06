@@ -1,0 +1,2 @@
+EffectBlocks (Godot VFX & Effects collection) by PolyBlocks / BUKKBEEK -- bought on itch.io by Kevin (Vellicgames).
+Used: the shockwave effect (assets/other/shockwave.tscn: torus, size curve, timing) and its shader, adapted.

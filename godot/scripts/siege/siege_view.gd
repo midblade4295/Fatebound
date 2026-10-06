@@ -2755,6 +2755,7 @@ func sync(dt: float) -> void:
 	_sync_bombs(dt)
 	_sync_meteor_fx(dt)
 	_sync_chips(dt)
+	_sync_shocks()
 	_kick_debris()
 	_sync_launchers(dt)
 	_sync_ambience(dt)
@@ -4188,8 +4189,63 @@ func _kick_debris() -> void:
 	for a in actors.values():
 		a["kick_last"] = (a.root as Node3D).global_position
 
+# ---------- shockwave (0.31.56, Kevin: the EffectBlocks pack's shockwave on the bomb and meteor blasts) ----------
+# The pack's effect (assets/other/shockwave.tscn): one torus, inner 0.8 / outer 1.0, triangular section, growing from
+# nothing to its full size over 0.74 s on an ease-in curve, drawn with its screen-distortion shader (in
+# assets/vfx/effectblocks/shockwave.gdshader, adapted to bend round the ring's own centre; distortion 0.1, noise 0.273
+# as in its material). Here it's a plain
+# MeshInstance3D animated in _sync_shocks (one particle never needed a particle system), sized to each blast, and
+# skipped on low effects (the screen copy it reads costs a little on phones).
+const SHOCK_SHADER := preload("res://assets/vfx/effectblocks/shockwave.gdshader")
+const SHOCK_LIFE := 0.74
+static var _shock_mat: ShaderMaterial = null
+static var _shock_mesh: TorusMesh = null
+var _shocks: Array = []
+
+func shockwave(at: Vector3, radius: float, delay := 0.0) -> void:
+	if low_fx:
+		return
+	if _shock_mat == null:
+		_shock_mat = ShaderMaterial.new()
+		_shock_mat.shader = SHOCK_SHADER
+		_shock_mat.set_shader_parameter("distortion_intensity", 0.1)
+		_shock_mat.set_shader_parameter("noise_influence", 0.273)
+		_shock_mesh = TorusMesh.new()
+		_shock_mesh.inner_radius = 0.8
+		_shock_mesh.outer_radius = 1.0
+		_shock_mesh.rings = 40
+		_shock_mesh.ring_segments = 3
+	var mi := MeshInstance3D.new()
+	mi.mesh = _shock_mesh
+	mi.material_override = _shock_mat
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mi.position = at
+	mi.scale = Vector3.ONE * 0.001
+	mi.visible = false
+	add_child(mi)
+	_shocks.append({"node":mi, "t0":_time + delay, "r":radius})
+
+func _sync_shocks() -> void:
+	for i in range(_shocks.size() - 1, -1, -1):
+		var sh: Dictionary = _shocks[i]
+		var mi: MeshInstance3D = sh.node
+		var t: float = (_time - float(sh.t0)) / SHOCK_LIFE
+		if t >= 1.0 or not is_instance_valid(mi):
+			if is_instance_valid(mi):
+				mi.queue_free()
+			_shocks.remove_at(i)
+			continue
+		if t < 0.0:
+			continue
+		mi.visible = true
+		# the pack's scale curve: (0,0) leaving at slope 0.227, (1,1) arriving at 1.392 -- a cubic Hermite
+		var c := (2.0*t*t*t - 3.0*t*t + 1.0) * 0.0 + (t*t*t - 2.0*t*t + t) * 0.227 + (-2.0*t*t*t + 3.0*t*t) * 1.0 + (t*t*t - t*t) * 1.392
+		mi.scale = Vector3.ONE * maxf(0.001, float(sh.r) * c)
+		mi.set_instance_shader_parameter("fade", 1.0 - t * t)
+
 func bomb_blast(at2: Vector2) -> void:
 	var at := Vector3(at2.x, Sim.height_at(at2) + 0.6, at2.y)
+	shockwave(Vector3(at.x, at.y - 0.2, at.z), Sim.BOMB_R + 1.5)           # 0.31.56
 	var fl := MeshInstance3D.new()
 	var sm := SphereMesh.new()
 	sm.radius = 1.0
@@ -4650,6 +4706,7 @@ func _meteor_warn(p2: Vector2, delay: float, team: int) -> void:
 
 func _meteor_hit(p2: Vector2, burn: float) -> void:
 	var at := Vector3(p2.x, Sim.height_at(p2) + 0.4, p2.y)
+	shockwave(at, Sim.METEOR_R + 1.2)                                          # 0.31.56
 	var fl := MeshInstance3D.new()
 	var sm := SphereMesh.new()
 	sm.radius = 1.0

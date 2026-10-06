@@ -2014,3 +2014,14 @@ K2/K3 notes (0.17.0)
   crimson robe with gold trim and stars, tall crimson hat with a gold band) -> auto-rig (same 24 bones). ~45 credits.
 - assets/meshy/archmage/rigged.glb replaced; 110 animations re-baked (fit unchanged, 2.21). render_skin_icons frames the
   Archmage's bust and gear wider and higher for the tall hat. Quick suite: ALL PASSED (32).
+
+# 0.31.56 (Kevin: the EffectBlocks pack's shockwave on the meteor and bomb explosions)
+- The pack's shockwave (assets/other/shockwave.tscn): a single-particle GPUParticles3D drawing a torus (inner 0.8, outer
+  1.0, triangular section) that grows from nothing over 0.74 s on an ease-in curve, with a screen-distortion shader.
+  Rebuilt as a plain MeshInstance3D (View.shockwave / _sync_shocks) with the same torus, the same curve (cubic Hermite,
+  slopes 0.227 -> 1.392), the same timing and shader settings (distortion 0.1, noise 0.273), sized per blast: bomb
+  BOMB_R + 1.5, meteor METEOR_R + 1.2. Skipped on low effects (it reads a screen copy).
+- The pack's shader bends outward from the SCREEN's centre (right only for a blast mid-screen): our copy
+  (assets/vfx/effectblocks/shockwave.gdshader) bends outward from the ring's own centre on screen, strongest across the
+  band, fading as it grows. Checked alone over a checkerboard (a clean refracting ripple) and on the treeblast shot.
+- Quick suite: ALL PASSED (32).
