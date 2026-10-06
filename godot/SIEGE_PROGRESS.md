@@ -1928,3 +1928,12 @@ K2/K3 notes (0.17.0)
 - Knight halberd / Rogue scythe: (0, 180, 0) -- a half roll about the weapon's own long axis. Lying along the arm as in
   0.31.45 (the hold he called the right way), blade hanging down, but the head forward instead of behind him. Rendered
   side and front through View.make_body. 2 thumbnails re-rendered. Quick suite: ALL PASSED (32).
+
+# 0.31.48 (Kevin: turn the blades of the Oathkeeper, Great Cleaver and Axe & Ale 180; zoom in the detail window)
+- View.WEAPON_ROLL: a half roll about the weapon's own long axis for axe_1handed (the Worker's axe, Axe & Ale, Axe &
+  Buckler -- its edge faced back in the chop), bits/axe_D (Great Cleaver) and bits/sword_G (Oathkeeper). Checked idle
+  and mid-chop through View.make_body. 4 thumbnails re-rendered.
+- Showcase zoom (interactive only): two-finger pinch (tracked from the touch events), the OS magnify gesture, the mouse
+  wheel, and zoom_by() -- ZOOM_MIN 0.75 to ZOOM_MAX 2.6, eased; closer in, the eye drops toward the look point. The pass
+  detail sheet has + / - buttons on the stage and the hint reads "DRAG TO TURN · PINCH TO ZOOM". tools/app_shots:
+  SHOT_ZOOM. Quick suite: ALL PASSED (32).

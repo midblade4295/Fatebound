@@ -59,6 +59,10 @@ func _process(_d: float) -> bool:
 		if frames == base_f + 18 and tabs[i] == "pass" and OS.has_environment("SHOT_PASS_DETAIL"):
 			var pd: PackedStringArray = OS.get_environment("SHOT_PASS_DETAIL").split(",")
 			Screens.open_pass_item(app, int(app.profile.d.pass.season), int(pd[0]), pd[1] == "prem")
+		if frames == base_f + 21 and OS.has_environment("SHOT_ZOOM") and app.modal != null:
+			for c in app.modal.find_children("*", "Control", true, false):
+				if c.has_method("zoom_by"):
+					c.zoom_by(float(OS.get_environment("SHOT_ZOOM")))
 		if frames == base_f + 30: pending = tabs[i]
 		if scroll > 0 and frames == base_f + 34: app.content_scroll.scroll_vertical = scroll
 		if scroll > 0 and frames == base_f + 42: pending = tabs[i] + "_2"

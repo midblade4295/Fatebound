@@ -2410,6 +2410,10 @@ const WEAPON_ROT := {"bits/fistweapon_C_left":Vector3(0, 180, 0), "bits/fistweap
 # the weapon's own long axis instead of the half turn about Z (which also swung the head behind him).
 const WEAPON_ROT_FOR := {"Knight":{"bits/halberd":Vector3(0, 180, 0)}, "Rogue_Hooded":{"bits/scythe":Vector3(0, 180, 0)}, "Rogue":{"bits/scythe":Vector3(0, 180, 0)}}
 
+# 0.31.48 (Kevin: turn these blades 180): the one-handed axe (Worker, Axe & Ale, Axe & Buckler -- its edge faced back
+# in the chop), the Great Cleaver and the Oathkeeper: a half roll about the weapon's own long axis.
+const WEAPON_ROLL := {"axe_1handed":180.0, "bits/axe_D":180.0, "bits/sword_G":180.0}
+
 static func _fit_weapon(model: Node3D, file: String, body_model := "", hand := "r") -> void:
 	model.scale = Vector3.ONE * float(WEAPON_SCALE.get(file, 1.0))
 	if file.contains("crossbow"):
@@ -2423,6 +2427,8 @@ static func _fit_weapon(model: Node3D, file: String, body_model := "", hand := "
 	if per.has(file):
 		var pr: Vector3 = per[file]
 		model.rotation = Vector3(deg_to_rad(pr.x), deg_to_rad(pr.y), deg_to_rad(pr.z))
+	if WEAPON_ROLL.has(file):
+		model.rotate_object_local(Vector3.UP, deg_to_rad(float(WEAPON_ROLL[file])))
 	if file.contains("shield"):
 		model.position = Vector3(0.0, 0.0, 0.14 if file.begins_with("bits/") else 0.15)
 

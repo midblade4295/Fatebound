@@ -705,7 +705,19 @@ static func open_pass_item(app, sid: int, t: int, prem: bool) -> void:
 		sh.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 		stage.add_child(sh)
 		sh.show_look(str(it["class"]), {"r": str(it.get("r", "")), "l": str(it.get("l", ""))})
-		var hint := UI.label(stage, "⟲  DRAG TO TURN  ⟳", 11, Color(1, 1, 1, 0.8), UI.HEAVY_FONT)
+		var zc := VBoxContainer.new()                     # 0.31.48: zoom buttons
+		zc.add_theme_constant_override("separation", 8)
+		zc.set_anchors_and_offsets_preset(Control.PRESET_CENTER_RIGHT)
+		zc.offset_left = -58
+		zc.offset_right = -10
+		zc.offset_top = -52
+		zc.offset_bottom = 52
+		stage.add_child(zc)
+		for zb in [["+", 1.3, "pass_zoom_in"], ["−", 1.0 / 1.3, "pass_zoom_out"]]:
+			var zf: float = zb[1]
+			var b := UI.button(zc, str(zb[0]), "ghost", func(): sh.zoom_by(zf), str(zb[2]), 22, 14)
+			b.custom_minimum_size = Vector2(46, 46)
+		var hint := UI.label(stage, "DRAG TO TURN  ·  PINCH TO ZOOM", 11, Color(1, 1, 1, 0.8), UI.HEAVY_FONT)
 		hint.autowrap_mode = TextServer.AUTOWRAP_OFF
 		hint.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 		hint.offset_top = -28
