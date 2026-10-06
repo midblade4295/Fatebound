@@ -896,6 +896,8 @@ func _aim(u: Dictionary, reach: float) -> void:
 		u.face = angle_of(target.pos - u.pos)
 		u["aim_d"] = u.pos.distance_to(target.pos)
 
+const COMBO_GAP := 0.9
+
 func _start_attack(u: Dictionary, kind: String, aim := true) -> bool:
 	if not can_act(u) or u.carrying or u.offering or blocking(u) or whirling(u):
 		return false
@@ -922,7 +924,15 @@ func _start_attack(u: Dictionary, kind: String, aim := true) -> bool:
 	u.atk = kind
 	u.t = float(stat(u,"windup")) * (1.3 if kind == "ability" else 1.0)
 	u.lunge_hit = false
-	_event("attack", {"id":u.id,"kind":kind,"ability":CLASSES[u.cls].ability if kind == "ability" else ""})
+	# 0.31.62 (Kevin): melee swings run in a three-hit combo -- another attack within COMBO_GAP of the last one's end
+	# is the next swing; the view picks the animation from it. Damage is the same on every swing.
+	var combo := 0
+	if kind == "attack":
+		if time - float(u.get("combo_t", -99.0)) <= float(stat(u, "windup")) + float(stat(u, "recover")) + COMBO_GAP:
+			combo = (int(u.get("combo", -1)) + 1) % 3
+		u["combo"] = combo
+		u["combo_t"] = time
+	_event("attack", {"id":u.id,"kind":kind,"ability":CLASSES[u.cls].ability if kind == "ability" else "", "combo":combo})
 	return true
 
 # ---------- knight block / berserker whirlwind ----------

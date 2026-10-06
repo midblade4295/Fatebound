@@ -2090,3 +2090,14 @@ K2/K3 notes (0.17.0)
   black eyes), auto-rigged, 110 animations baked each (fit 2.00 / 1.90). LOOKS.berserker/sniper -> meshy bodies,
   KK_FOR barbarian / ranger. ~135 credits this round (3,110 left). Thumbnails re-rendered (with the Crusader's).
 - Quick suite: ALL PASSED (32). NOTE: the online server must be redeployed for protocol 35.
+
+# 0.31.62 (Kevin: more melee animations, not one swing over and over; damage unchanged)
+- Sim._start_attack: an attack within windup + recover + COMBO_GAP (0.9 s) of the last one's start is the next swing
+  of a three-hit combo (u.combo, u.combo_t); the "attack" event carries "combo" (events travel whole in snapshots,
+  so online clients see the server's swing). Damage, timing and reach are unchanged.
+- LOOKS.<cls>.combo -- Knight/Crusader: diagonal slice, horizontal slice, shield bash (Melee_Block_Attack);
+  Barbarian: 2H slice, chop, stab; Berserker: chop, slice, spin; Rogue/Assassin: dual stab, slice, chop; Worker:
+  chop, horizontal slice, stab; Villager: punch, punch, kick. View plays the combo's clip for an attack event.
+- A hit's flinch alternates Hit_A / Hit_B; a blocked hit plays Melee_Block_Hit on the blocker ("blocked" event).
+- tests/combo_test.gd (in the quick suite): held attacks give swings 0,1,2,0; a 2.5 s pause resets to 0; every melee
+  look has three swings. Quick suite: ALL PASSED (33).

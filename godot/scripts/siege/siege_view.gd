@@ -18,21 +18,21 @@ static var VULKAN_AMBIENT := 2.25
 # Model, weapons (right/left hand) and clips per class. Clip keys: g general, m melee, r ranged,
 # mb movement basic, ma movement advanced, t tools.
 const LOOKS := {
-	"villager": {"model":"Rogue","r":"","l":"","idle":"g/Idle_A","attack":"m/Melee_Unarmed_Attack_Punch_A","ability":"m/Melee_Unarmed_Attack_Kick"},
-	"worker": {"model":"Rogue","r":"axe_1handed","l":"","idle":"g/Idle_A","attack":"m/Melee_1H_Attack_Chop","ability":"m/Melee_1H_Attack_Chop"},
-	"knight": {"model":"Knight","r":"sword_1handed","l":"bits/shield_B","idle":"g/Idle_A","attack":"m/Melee_1H_Attack_Slice_Diagonal","ability":"m/Melee_Blocking"},
-	"crusader": {"model":"meshy:crusader","r":"sword_1handed","l":"bits/shield_B","idle":"g/Idle_A","attack":"m/Melee_1H_Attack_Slice_Diagonal","ability":"m/Melee_Blocking"},
+	"villager": {"model":"Rogue","r":"","l":"","idle":"g/Idle_A","attack":"m/Melee_Unarmed_Attack_Punch_A","ability":"m/Melee_Unarmed_Attack_Kick","combo":["m/Melee_Unarmed_Attack_Punch_A","m/Melee_Unarmed_Attack_Punch_A","m/Melee_Unarmed_Attack_Kick"]},
+	"worker": {"model":"Rogue","r":"axe_1handed","l":"","idle":"g/Idle_A","attack":"m/Melee_1H_Attack_Chop","ability":"m/Melee_1H_Attack_Chop","combo":["m/Melee_1H_Attack_Chop","m/Melee_1H_Attack_Slice_Horizontal","m/Melee_1H_Attack_Stab"]},
+	"knight": {"model":"Knight","r":"sword_1handed","l":"bits/shield_B","idle":"g/Idle_A","attack":"m/Melee_1H_Attack_Slice_Diagonal","ability":"m/Melee_Blocking","combo":["m/Melee_1H_Attack_Slice_Diagonal","m/Melee_1H_Attack_Slice_Horizontal","m/Melee_Block_Attack"]},
+	"crusader": {"model":"meshy:crusader","r":"sword_1handed","l":"bits/shield_B","idle":"g/Idle_A","attack":"m/Melee_1H_Attack_Slice_Diagonal","ability":"m/Melee_Blocking","combo":["m/Melee_1H_Attack_Slice_Diagonal","m/Melee_1H_Attack_Slice_Horizontal","m/Melee_Block_Attack"]},
 	# Upgraded barbarian (Round 11): two-handed greatsword, whirlwind.
-	"berserker": {"model":"meshy:berserker","r":"bits/sword_E","l":"","idle":"m/Melee_2H_Idle","attack":"m/Melee_2H_Attack_Chop","ability":"m/Melee_2H_Attack_Spinning"},
-	"barbarian": {"model":"Barbarian","r":"axe_2handed","l":"","idle":"m/Melee_2H_Idle","attack":"m/Melee_2H_Attack_Slice","ability":"m/Melee_2H_Attack_Spin"},
-	"rogue": {"model":"Rogue_Hooded","r":"dagger","l":"dagger","idle":"g/Idle_B","attack":"m/Melee_Dualwield_Attack_Stab","ability":"m/Melee_1H_Attack_Jump_Chop"},
+	"berserker": {"model":"meshy:berserker","r":"bits/sword_E","l":"","idle":"m/Melee_2H_Idle","attack":"m/Melee_2H_Attack_Chop","ability":"m/Melee_2H_Attack_Spinning","combo":["m/Melee_2H_Attack_Chop","m/Melee_2H_Attack_Slice","m/Melee_2H_Attack_Spin"]},
+	"barbarian": {"model":"Barbarian","r":"axe_2handed","l":"","idle":"m/Melee_2H_Idle","attack":"m/Melee_2H_Attack_Slice","ability":"m/Melee_2H_Attack_Spin","combo":["m/Melee_2H_Attack_Slice","m/Melee_2H_Attack_Chop","m/Melee_2H_Attack_Stab"]},
+	"rogue": {"model":"Rogue_Hooded","r":"dagger","l":"dagger","idle":"g/Idle_B","attack":"m/Melee_Dualwield_Attack_Stab","ability":"m/Melee_1H_Attack_Jump_Chop","combo":["m/Melee_Dualwield_Attack_Stab","m/Melee_Dualwield_Attack_Slice","m/Melee_Dualwield_Attack_Chop"]},
 	"ranger": {"model":"Ranger","r":"","l":"bow_withString","idle":"r/Ranged_Bow_Idle","attack":"r/Ranged_Bow_Release","ability":"r/Ranged_Bow_Release_Up"},
 	"mage": {"model":"Mage","r":"staff","l":"","idle":"g/Idle_B","attack":"r/Ranged_Magic_Shoot","ability":"r/Ranged_Magic_Spellcasting"},
 	# Healer: the Mage model in white-gold robes with a wand (tint set once, cached like skins).
 	"priest": {"model":"Mage","r":"wand","l":"","tint":"#fff1c8","idle":"g/Idle_B","attack":"r/Ranged_Magic_Spellcasting_Long","ability":"r/Ranged_Magic_Raise"},
 	# Upgraded priest (0.31.2, Kevin): the Necromancer from KayKit Skeletons (CC0, same Rig_Medium) with the skull staff.
 	# 0.31.32: the last three upgrades get their own looks
-	"assassin": {"model":"meshy:assassin","r":"dagger","l":"dagger","idle":"g/Idle_B","attack":"m/Melee_Dualwield_Attack_Stab","ability":"m/Melee_1H_Attack_Jump_Chop","tint":"#5b4f73"},
+	"assassin": {"model":"meshy:assassin","r":"dagger","l":"dagger","idle":"g/Idle_B","attack":"m/Melee_Dualwield_Attack_Stab","ability":"m/Melee_1H_Attack_Jump_Chop","tint":"#5b4f73","combo":["m/Melee_Dualwield_Attack_Stab","m/Melee_Dualwield_Attack_Slice","m/Melee_Dualwield_Attack_Chop"]},
 	"sniper": {"model":"meshy:sniper","r":"crossbow_2handed","l":"","idle":"r/Ranged_Bow_Idle","attack":"r/Ranged_Bow_Release","ability":"r/Ranged_Bow_Draw","tint":"#4f6b4a"},
 	"archmage": {"model":"meshy:archmage","r":"staff","l":"spellbook_open","idle":"g/Idle_B","attack":"r/Ranged_Magic_Shoot","ability":"r/Ranged_Magic_Summon","tint":"#a33d3d"},
 	"necromancer": {"model":"Necromancer","r":"Skeleton_Staff","l":"","idle":"g/Idle_B","attack":"r/Ranged_Magic_Spellcasting_Long","ability":"r/Ranged_Magic_Raise"},
@@ -3041,9 +3041,15 @@ func on_event(e: Dictionary) -> void:
 				return
 			var look: Dictionary = LOOKS.get(a.cls, LOOKS.villager)
 			var clip := str(look.ability if e.kind == "ability" else look.attack)
+			if e.kind == "attack" and look.has("combo"):                  # 0.31.62: the combo's swing
+				var cb: Array = look.combo
+				clip = str(cb[int(e.get("combo", 0)) % cb.size()])
 			_play(a, clip, 1.7, 0.55)
 			if e.ability == "spin":
 				ring_at(a.root.position, Color("#ffcf7a"), 2.8, 0.45)
+		"blocked":                                                        # 0.31.62: the shield takes it
+			if not a.is_empty():
+				_play(a, "m/Melee_Block_Hit", 1.6, 0.3)
 		"hit":
 			if a.is_empty():
 				return
@@ -3054,7 +3060,8 @@ func on_event(e: Dictionary) -> void:
 				blood_hit(hu.pos, src.pos if not src.is_empty() else (hu.pos as Vector2) - Vector2.from_angle(float(hu.face)), float(e.get("dmg", 20)))
 			number(a.root.position + Vector3(0, 2.2, 0), str(e.dmg), e.id == player_id)
 			if _time >= float(a.busy_until):
-				_play(a, "g/Hit_A", 1.4, 0.3)
+				a["hit_flip"] = not bool(a.get("hit_flip", false))      # 0.31.62: the two flinches take turns
+				_play(a, "g/Hit_B" if a.hit_flip else "g/Hit_A", 1.4, 0.3)
 		"death":
 			var du: Dictionary = sim.by_id.get(str(e.get("id", "")), {})
 			if not du.is_empty():

@@ -72,6 +72,7 @@ run announce_test        ANNOUNCE_PASS            120  --fixed-fps 60
 run upgrades_test        UPGRADES_PASS            60
 run blast_nodes_test     BLAST_NODES_PASS         60
 run chest_test           CHEST_PASS               60
+run combo_test           COMBO_PASS               60
 run net_load_test        NET_LOAD_PASS            120
 # The human soak must never stall the game thread.
 if ! grep -q 'stalls=0' /tmp/siege_test_siege_human_soak.log; then
