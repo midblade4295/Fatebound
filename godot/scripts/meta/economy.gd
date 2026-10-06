@@ -58,31 +58,40 @@ static func season_ends(sid: int) -> int:
 
 static func pass_reward(sid: int, tier: int, premium: bool) -> Dictionary:
 	# tier is 1..PASS_TIERS. Deterministic per season; cosmetic items rotate by season.
-	var season_skins: Array = pass_items(sid)
-	# Round 11: 6 free + 10 premium cosmetics per season (was 3 + 5).
+	# 0.31.42 (Kevin: less gear on the free side, the best-looking gear and more unlocks on the paid side): the free
+	# track has PASS_FREE_ITEMS (3) cosmetics at tiers 10/20/30, the lowest rarities of the season; the premium track has
+	# PASS_PREMIUM_ITEMS (13), every epic and legendary among them, the best at tier 30 and a strong one at tier 1.
+	var items: Array = pass_items(sid)
 	if not premium:
-		if tier % 5 == 0:
-			return {"item": season_skins[tier / 5 - 1]}                       # tiers 5..30: 6 free
+		var fi := FREE_ITEM_TIERS.find(tier)
+		if fi >= 0:
+			return {"item": items[fi]}
 		if tier == 12 or tier == 24:
-			return {"chest": "silver"}                                         # 0.31.37
+			return {"chest": "silver"}
 		if tier % 4 == 0:
 			return {"gems": 30}
 		return {"gold": 150 + 5 * tier}
-	if tier % 3 == 0:
-		return {"item": season_skins[PASS_FREE_ITEMS + tier / 3 - 1]}        # tiers 3..30: 10 premium
+	var pi := PREMIUM_ITEM_TIERS.find(tier)
+	if pi >= 0:
+		return {"item": items[PASS_FREE_ITEMS + pi]}
 	if tier == 8 or tier == 16:
-		return {"chest": "gold"}                                               # 0.31.37
-	if tier == 28:
+		return {"chest": "gold"}
+	if tier == 22:
 		return {"chest": "royal"}
 	if tier % 4 == 0:
 		return {"gems": 60}
 	return {"gold": 300 + 10 * tier}
 
-const PASS_FREE_ITEMS := 6
-const PASS_PREMIUM_ITEMS := 10
+const PASS_FREE_ITEMS := 3
+const PASS_PREMIUM_ITEMS := 13
+const FREE_ITEM_TIERS := [10, 20, 30]
+const PREMIUM_ITEM_TIERS := [1, 3, 5, 7, 9, 12, 15, 18, 21, 24, 26, 28, 30]
+const RARITY_RANK := {"common":0, "rare":1, "epic":2, "legendary":3}
 
 static func pass_items(sid: int) -> Array:
-	# 6 free + 10 premium cosmetics for season `sid`, chosen from the "pass" pool.
+	# PASS_FREE_ITEMS free + PASS_PREMIUM_ITEMS premium cosmetics for season `sid`, from the "pass" pool: shuffled per
+	# season, then ranked by rarity -- the free track takes the lowest, the premium track the rest in rising rarity
+	# (tier 1 gets the second-best of its rank band so the first premium unlock feels good; tier 30 the best).
 	var pool: Array = []
 	for id in CATALOG:
 		if CATALOG[id].get("source", "") == "pass":
@@ -90,14 +99,21 @@ static func pass_items(sid: int) -> Array:
 	pool.sort()
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash("pass-%d" % sid)
-	var out := []
+	var shuffled := []
 	var src := pool.duplicate()
+	while not src.is_empty():
+		shuffled.append(src.pop_at(rng.randi() % src.size()))
+	shuffled.sort_custom(func(a, b): return int(RARITY_RANK.get(str(CATALOG[a].rarity), 1)) < int(RARITY_RANK.get(str(CATALOG[b].rarity), 1)))
 	var want := PASS_FREE_ITEMS + PASS_PREMIUM_ITEMS
-	while out.size() < want and not src.is_empty():
-		out.append(src.pop_at(rng.randi() % src.size()))
-	while out.size() < want:
-		out.append(pool[out.size() % pool.size()])
-	return out
+	while shuffled.size() < want:
+		shuffled.push_front(shuffled[shuffled.size() % maxi(1, pool.size())])
+	var free := shuffled.slice(0, PASS_FREE_ITEMS)
+	var prem := shuffled.slice(shuffled.size() - PASS_PREMIUM_ITEMS)       # the best PASS_PREMIUM_ITEMS, rising rarity
+	if prem.size() >= 3:
+		var opener: String = prem[prem.size() - 2]                          # a strong one to open the premium track
+		prem.remove_at(prem.size() - 2)
+		prem.push_front(opener)
+	return free + prem
 
 # ---------------- cosmetics ----------------
 # kind "weapon": right/left hand models for a class (0.31.39: the only class cosmetic -- no skins/tints, so every

@@ -18,6 +18,13 @@ var _key := ""
 var cam_z := 7.4
 var cam_y := 1.45
 var look_y := 0.88
+# 0.31.42: turn it with a finger (the Siege Pass detail view). A drag spins the figure; let go and it coasts to a stop,
+# then turns slowly on its own.
+var interactive := false
+var _yaw := -0.12
+var _spin := 0.0
+var _dragging := false
+var _last_drag := -10.0
 
 static func backdrop(parent: Control) -> TextureRect:
 	var t := TextureRect.new()
@@ -30,7 +37,7 @@ static func backdrop(parent: Control) -> TextureRect:
 	return t
 
 func _ready() -> void:
-	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	mouse_filter = Control.MOUSE_FILTER_STOP if interactive else Control.MOUSE_FILTER_IGNORE
 	viewport = SubViewport.new()
 	viewport.own_world_3d = true
 	viewport.transparent_bg = true
@@ -170,6 +177,31 @@ func _rebuild() -> void:
 	if player.has_animation(idle):
 		player.play(idle)
 
-func _process(_delta: float) -> void:
-	if holder != null and is_visible_in_tree():
+func _gui_input(event: InputEvent) -> void:
+	if not interactive:
+		return
+	var now := Time.get_ticks_msec() / 1000.0
+	if event is InputEventScreenTouch or (event is InputEventMouseButton and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT):
+		_dragging = event.pressed
+		if _dragging:
+			_spin = 0.0
+		accept_event()
+	elif event is InputEventScreenDrag or (event is InputEventMouseMotion and ((event as InputEventMouseMotion).button_mask & MOUSE_BUTTON_MASK_LEFT) != 0):
+		var dx: float = event.relative.x
+		_yaw += dx * 0.012
+		_spin = lerpf(_spin, dx * 0.012 * 60.0, 0.5)            # rad/s at about 60 events a second
+		_last_drag = now
+		accept_event()
+
+func _process(delta: float) -> void:
+	if holder == null or not is_visible_in_tree():
+		return
+	if not interactive:
 		holder.rotation.y = sin(Time.get_ticks_msec() / 1000.0 * 0.4) * 0.32 - 0.12
+		return
+	if not _dragging:
+		_yaw += _spin * delta
+		_spin *= exp(-delta * 2.5)
+		if Time.get_ticks_msec() / 1000.0 - _last_drag > 2.5:
+			_yaw += 0.45 * delta                                # left alone: a slow turn
+	holder.rotation.y = _yaw

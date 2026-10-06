@@ -1866,3 +1866,19 @@ K2/K3 notes (0.17.0)
   (shield_square_color), Judgment Maul & Shield (shield_badge). View.make_body: a Knight body (the Knight and the
   Crusader) with nothing in the left hand gets its own shield_B, so no future item can leave it bare. meta_economy_test:
   every Knight/Crusader weapon has a shield. Thumbnails re-rendered. Quick suite: ALL PASSED (32).
+
+# 0.31.42 (Kevin: a much higher-quality Siege Pass screen; tap an item to expand it and turn it with a finger; less gear
+# on the free side, the best-looking gear and more unlocks on the paid side)
+- Economy: PASS_FREE_ITEMS 6 -> 3 at tiers 10/20/30 (the season's lowest rarities); PASS_PREMIUM_ITEMS 10 -> 13 at
+  PREMIUM_ITEM_TIERS [1,3,5,7,9,12,15,18,21,24,26,28,30] -- every epic and legendary of the season (season 1: 6
+  legendary), rising rarity to the best at tier 30 and a strong opener at tier 1 (pass_items ranks by RARITY_RANK after a
+  per-season shuffle). Premium chests at 8/16 (Gold) and 22 (Royal).
+- Screen: season banner (season chip, ends-in chip, season name, a round tier medallion, a thick XP bar); the premium
+  offer naming what it holds (13 cosmetics, N legendary, chests) or a PREMIUM ACTIVE strip; the season's best item turning
+  in 3D (tap for detail); CLAIM ALL; the track -- free left, premium right, a gold spine through the reached tiers with
+  numbered medals; reward cards with rarity-coloured borders and glows, green glow + CLAIM when ready, dimmed with a
+  lock (purple for premium) or a check when claimed.
+- Detail sheet (tap any reward): a big 3D stage -- the weapon in its class's hands, Showcase.interactive (drag to turn,
+  coasts, then turns slowly by itself) -- or the title / chest / gold / gems large; name, rarity and class chips, OWNED,
+  chest odds; CLAIM / UNLOCK PREMIUM / REACH TIER N / CLAIMED. tools/app_shots: SHOT_PASS_DETAIL.
+- meta_economy_test: premium has >3x the free items, all the top rarities, the best at tier 30. Quick suite: ALL PASSED.

@@ -1,4 +1,5 @@
 extends SceneTree
+const Screens = preload("res://scripts/app/screens.gd")
 # Dev tool: screenshots of the Siege app screens with a realistic mid-game test profile.
 #   Xvfb :98 -screen 0 480x1000x24 & DISPLAY=:98 SHOT_DIR=/tmp/shots \
 #   godot --rendering-method mobile --fixed-fps 30 --resolution 420x933 --path godot -s res://tools/app_shots.gd
@@ -36,7 +37,7 @@ func _process(_d: float) -> bool:
 	if frames == 3:
 		var p = app.profile
 		p.d.gems += 400
-		p.d.pass.xp = 3 * 1000 + 450
+		p.d.pass.xp = 7 * 2500 + 900
 		p.d.owned.append("knight_wpn_greatsword"); p.equip("knight_wpn_greatsword")
 		p.d.challenges.daily[0].progress = 99
 		# (0.31.37) chests: one opening ready, one unlocking, two waiting
@@ -55,6 +56,9 @@ func _process(_d: float) -> bool:
 			if tabs[i] == "locker" and OS.has_environment("SHOT_LOCKER"):
 				app.locker_class = OS.get_environment("SHOT_LOCKER")
 				app.rebuild()
+		if frames == base_f + 18 and tabs[i] == "pass" and OS.has_environment("SHOT_PASS_DETAIL"):
+			var pd: PackedStringArray = OS.get_environment("SHOT_PASS_DETAIL").split(",")
+			Screens.open_pass_item(app, int(app.profile.d.pass.season), int(pd[0]), pd[1] == "prem")
 		if frames == base_f + 30: pending = tabs[i]
 		if scroll > 0 and frames == base_f + 34: app.content_scroll.scroll_vertical = scroll
 		if scroll > 0 and frames == base_f + 42: pending = tabs[i] + "_2"

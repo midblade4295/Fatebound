@@ -357,106 +357,406 @@ static func challenges_card(app, root: Node, span: String) -> void:
 
 # ---------------- PASS ----------------
 static func pass_screen(app, root: VBoxContainer) -> void:
+	# 0.31.42 (Kevin): a richer Siege Pass -- season banner, a big tier medallion and XP bar, the premium offer with what
+	# it holds, the season's best item turning in 3D at the top, then the track: free on the left, premium on the right,
+	# a gold spine through the tiers. Tap any reward for the detail view (3D, turn it with a finger).
 	var p = app.profile
 	var d: Dictionary = p.d
 	var sid: int = int(d.pass.season)
-	var head := UI.card(root, Color(0.12, 0.08, 0.2, 0.95), UI.PURPLE)
-	UI.title(head, "SIEGE PASS", 26)
-	var sn := UI.label(head, "Season %d · %s · ends in %s" % [sid, Eco.season_name(sid), UI.duration(Eco.season_ends(sid) - p.now())], 12, UI.MUTED)
-	sn.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	var tier: int = p.pass_tier()
-	var tr := UI.row(head, 10)
-	var big := UI.label(tr, str(tier), 40, UI.GOLD, UI.TITLE_FONT, true)
-	big.autowrap_mode = TextServer.AUTOWRAP_OFF
-	var tv := VBoxContainer.new()
-	UI.grow(tv)
-	tr.add_child(tv)
-	UI.label(tv, "TIER %d of %d" % [tier, Eco.PASS_TIERS], 14, UI.TEXT)
+	var items: Array = Eco.pass_items(sid)
+
+	# --- banner
+	var ban := _panel(root, Color("#1d1233"), PASS_GOLD, 22, Color(0.55, 0.35, 0.95, 0.45), 16)
+	var bv := VBoxContainer.new()
+	bv.add_theme_constant_override("separation", 6)
+	ban.add_child(bv)
+	var top := UI.row(bv, 8)
+	_chip(top, "SEASON %d" % sid, PASS_GOLD, Color("#2e1d00"))
+	var sp := Control.new()
+	sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	top.add_child(sp)
+	_chip(top, "ENDS IN %s" % UI.duration(Eco.season_ends(sid) - p.now()).to_upper(), Color(1, 1, 1, 0.1), UI.TEXT)
+	var sn := UI.label(bv, str(Eco.season_name(sid)).to_upper(), 30, PASS_GOLD, UI.TITLE_FONT, true)
+	sn.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var sub := UI.label(bv, "SIEGE PASS", 13, Color("#c9b6ff"), UI.HEAVY_FONT)
+	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var tr := UI.row(bv, 12)
+	var med := _panel(tr, Color("#2b1a4a"), PASS_GOLD, 40, Color(1.0, 0.8, 0.3, 0.35), 0)
+	med.custom_minimum_size = Vector2(78, 78)
+	med.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var mc := CenterContainer.new()
+	med.add_child(mc)
+	var mv := VBoxContainer.new()
+	mv.add_theme_constant_override("separation", -6)
+	mc.add_child(mv)
+	var tl := UI.label(mv, "TIER", 10, Color("#c9b6ff"), UI.HEAVY_FONT)
+	tl.autowrap_mode = TextServer.AUTOWRAP_OFF
+	tl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var tn := UI.label(mv, str(tier), 34, PASS_GOLD, UI.TITLE_FONT, true)
+	tn.autowrap_mode = TextServer.AUTOWRAP_OFF
+	tn.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var xv := VBoxContainer.new()
+	xv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	xv.alignment = BoxContainer.ALIGNMENT_CENTER
+	tr.add_child(xv)
 	if tier < Eco.PASS_TIERS:
-		UI.progress(tv, int(d.pass.xp) - tier * Eco.TIER_XP, Eco.TIER_XP, UI.GOLD, 12)
-		UI.label(tv, "%d / %d XP to tier %d" % [int(d.pass.xp) - tier * Eco.TIER_XP, Eco.TIER_XP, tier + 1], 11, UI.MUTED)
-	if bool(d.pass.premium):
-		var pr := UI.row(head, 8)
-		UI.icon(pr, "crown", 22, UI.PURPLE)
-		UI.label(pr, "PREMIUM ACTIVE — every premium reward unlocked", 13, UI.PURPLE)
+		UI.label(xv, "NEXT: TIER %d" % (tier + 1), 13, UI.TEXT, UI.HEAVY_FONT)
+		UI.progress(xv, int(d.pass.xp) - tier * Eco.TIER_XP, Eco.TIER_XP, PASS_GOLD, 16)
+		UI.label(xv, "%d / %d XP" % [int(d.pass.xp) - tier * Eco.TIER_XP, Eco.TIER_XP], 11, UI.MUTED)
 	else:
-		var b := UI.button(head, "UNLOCK PREMIUM  ·  %d GEMS" % Eco.PREMIUM_COST, "premium", func():
-			app.confirm("UNLOCK PREMIUM?", "5 exclusive cosmetics, more gold and gems on every tier this season. Costs %d gems." % Eco.PREMIUM_COST, "UNLOCK", "premium", func():
-				var r: Dictionary = p.buy_premium()
-				if r.ok:
-					app.sfx("purchase")
-					app.toast("Premium pass unlocked!", UI.PURPLE)
-				else:
-					app.sfx("error")
-					app.toast(str(r.error), UI.RED)
-				app.rebuild()), "buy_premium", 15)
+		UI.label(xv, "PASS COMPLETE", 16, PASS_GOLD, UI.HEAVY_FONT)
+
+	# --- premium
+	var legendary := 0
+	for k in range(Eco.PASS_FREE_ITEMS, items.size()):
+		if str(Eco.CATALOG[items[k]].rarity) == "legendary":
+			legendary += 1
+	if bool(d.pass.premium):
+		var pa := _panel(root, Color("#2a1650"), PASS_PURPLE, 16, Color(0.7, 0.45, 1.0, 0.35), 10)
+		var pr := UI.row(pa, 10)
+		UI.icon(pr, "crown", 26, PASS_GOLD)
+		UI.grow(UI.label(pr, "PREMIUM ACTIVE -- all %d premium rewards are yours to claim" % Eco.PASS_TIERS, 13, Color("#e6d6ff"), UI.HEAVY_FONT))
+	else:
+		var pc := _panel(root, Color("#2a1650"), PASS_PURPLE, 20, Color(0.7, 0.45, 1.0, 0.5), 14)
+		var pv := VBoxContainer.new()
+		pv.add_theme_constant_override("separation", 8)
+		pc.add_child(pv)
+		var ph := UI.row(pv, 10)
+		UI.icon(ph, "crown", 30, PASS_GOLD)
+		var pt := VBoxContainer.new()
+		pt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		ph.add_child(pt)
+		UI.label(pt, "UNLOCK PREMIUM", 18, PASS_GOLD, UI.TITLE_FONT, true)
+		UI.label(pt, "%d exclusive cosmetics (%d legendary) · gold chests · a Royal chest · more gems on every tier" % [Eco.PASS_PREMIUM_ITEMS, legendary], 12, Color("#e6d6ff"))
+		var b := UI.button(pv, "UNLOCK  ·  %d GEMS" % Eco.PREMIUM_COST, "premium", func(): _buy_premium(app), "buy_premium", 16)
 		b.disabled = int(d.gems) < Eco.PREMIUM_COST
-		UI.label(head, "You have %d gems. Earn gems from the pass, weekly challenges and every 5 levels." % int(d.gems), 11, UI.MUTED).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		var gl := UI.label(pv, "You have %d gems" % int(d.gems), 11, UI.MUTED)
+		gl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+
+	# --- the season's best: premium tier 30, turning
+	var best: String = str(items[items.size() - 1])
+	var fc := _panel(root, Color("#120c22"), Color(Eco.RARITY_COLOR.get(str(Eco.CATALOG[best].rarity), "#ffffff")), 18, Color(1.0, 0.75, 0.3, 0.3), 0)
+	fc.custom_minimum_size = Vector2(0, 230)
+	var stage := Control.new()
+	stage.clip_contents = true
+	fc.add_child(stage)
+	if str(Eco.CATALOG[best].kind) == "weapon":
+		Showcase.backdrop(stage)
+		var sh := Showcase.new()
+		sh.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		stage.add_child(sh)
+		sh.show_look(str(Eco.CATALOG[best]["class"]), {"r": str(Eco.CATALOG[best].get("r", "")), "l": str(Eco.CATALOG[best].get("l", ""))})
+	var cap := VBoxContainer.new()
+	cap.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	cap.offset_top = -64
+	cap.offset_left = 14
+	cap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	stage.add_child(cap)
+	_chip(cap, "TIER 30 · PREMIUM · %s" % str(Eco.CATALOG[best].rarity).to_upper(), PASS_PURPLE, Color.WHITE)
+	UI.label(cap, str(Eco.CATALOG[best].name), 20, Color.WHITE, UI.TITLE_FONT, true)
+	var tap := Button.new()
+	tap.flat = true
+	tap.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	tap.pressed.connect(func(): open_pass_item(app, sid, Eco.PASS_TIERS, true))
+	stage.add_child(tap)
+
+	# --- claim all
 	var claimable := 0
 	for t in range(1, tier + 1):
 		for prem in [false, true]:
 			if p.can_claim(t, prem):
 				claimable += 1
 	if claimable > 0:
-		UI.button(root, "CLAIM ALL (%d)" % claimable, "claim", func():
+		UI.button(root, "CLAIM ALL  (%d)" % claimable, "claim", func():
 			var got: Array = p.claim_all()
 			app.sfx("coin")
 			app.toast("Claimed %d reward%s" % [got.size(), "" if got.size() == 1 else "s"], UI.GREEN)
 			app.rebuild(), "claim_all", 16)
-	var legend := UI.row(root, 8)
-	UI.grow(UI.label(legend, "FREE", 12, UI.MUTED)).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	UI.grow(UI.label(legend, "PREMIUM", 12, UI.PURPLE)).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	for t in range(1, Eco.PASS_TIERS + 1):
-		var row := UI.row(root, 6)
-		var badge := PanelContainer.new()
-		var bs := StyleBoxFlat.new()
-		bs.bg_color = UI.GOLD if t <= tier else Color(1, 1, 1, 0.08)
-		bs.set_corner_radius_all(14)
-		badge.add_theme_stylebox_override("panel", bs)
-		badge.custom_minimum_size = Vector2(34, 34)
-		row.add_child(badge)
-		var bl := UI.label(badge, str(t), 14, Color("#2e1d00") if t <= tier else UI.MUTED, UI.HEAVY_FONT)
-		bl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		for prem in [false, true]:
-			tier_cell(app, row, sid, t, prem)
 
-static func tier_cell(app, parent: Node, sid: int, t: int, prem: bool) -> void:
+	# --- the track
+	var head := UI.row(root, 0)
+	var hf := UI.label(head, "FREE", 13, UI.MUTED, UI.HEAVY_FONT)
+	hf.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hf.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var gap := Control.new()
+	gap.custom_minimum_size = Vector2(46, 0)
+	head.add_child(gap)
+	var hp := UI.label(head, "PREMIUM", 13, PASS_PURPLE, UI.HEAVY_FONT)
+	hp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hp.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	for t in range(1, Eco.PASS_TIERS + 1):
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 6)
+		root.add_child(row)
+		pass_cell(app, row, sid, t, false)
+		_spine(row, t, tier)
+		pass_cell(app, row, sid, t, true)
+
+const PASS_GOLD := Color("#ffcf5a")
+const PASS_PURPLE := Color("#b77cff")
+
+static func _panel(parent: Node, fill: Color, edge: Color, radius: int, glow: Color, pad: int) -> PanelContainer:
+	var pc := PanelContainer.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = fill
+	sb.border_color = edge
+	sb.set_border_width_all(2)
+	sb.set_corner_radius_all(radius)
+	sb.shadow_color = glow
+	sb.shadow_size = 10
+	for side in ["left", "right", "top", "bottom"]:
+		sb.set("content_margin_" + side, float(pad))
+	pc.add_theme_stylebox_override("panel", sb)
+	parent.add_child(pc)
+	return pc
+
+static func _chip(parent: Node, text: String, fill: Color, ink: Color) -> PanelContainer:
+	var pc := PanelContainer.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = fill
+	sb.set_corner_radius_all(10)
+	sb.content_margin_left = 8
+	sb.content_margin_right = 8
+	sb.content_margin_top = 2
+	sb.content_margin_bottom = 2
+	pc.add_theme_stylebox_override("panel", sb)
+	pc.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	pc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(pc)
+	var l := UI.label(pc, text, 10, ink, UI.HEAVY_FONT)
+	l.autowrap_mode = TextServer.AUTOWRAP_OFF
+	return pc
+
+static func _spine(row: Node, t: int, tier: int) -> void:
+	# the centre column: a gold line through the reached tiers, the tier number in a medal
+	var col := VBoxContainer.new()
+	col.custom_minimum_size = Vector2(46, 0)
+	col.add_theme_constant_override("separation", 0)
+	row.add_child(col)
+	var reached := t <= tier
+	for part in ["top", "medal", "bottom"]:
+		if part == "medal":
+			var m := PanelContainer.new()
+			var sb := StyleBoxFlat.new()
+			sb.bg_color = PASS_GOLD if reached else Color("#1b2236")
+			sb.border_color = PASS_GOLD if reached else Color(1, 1, 1, 0.18)
+			sb.set_border_width_all(2)
+			sb.set_corner_radius_all(20)
+			if reached:
+				sb.shadow_color = Color(1.0, 0.8, 0.3, 0.45)
+				sb.shadow_size = 6
+			m.add_theme_stylebox_override("panel", sb)
+			m.custom_minimum_size = Vector2(38, 38)
+			m.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+			col.add_child(m)
+			var l := UI.label(m, str(t), 15, Color("#2e1d00") if reached else UI.MUTED, UI.HEAVY_FONT)
+			l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		else:
+			var line := ColorRect.new()
+			var lit := reached if part == "top" else t < tier
+			line.color = PASS_GOLD if lit else Color(1, 1, 1, 0.1)
+			line.custom_minimum_size = Vector2(4, 0)
+			line.size_flags_vertical = Control.SIZE_EXPAND_FILL
+			line.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+			col.add_child(line)
+
+static func pass_cell(app, parent: Node, sid: int, t: int, prem: bool) -> void:
 	var p = app.profile
 	var r: Dictionary = Eco.pass_reward(sid, t, prem)
 	var rt: Array = reward_text(r)
-	var cell := PanelContainer.new()
-	var edge: Color = UI.PURPLE if prem else UI.CARD_HI
-	var fill := Color(0.14, 0.09, 0.22, 0.92) if prem else UI.CARD
-	if r.has("item"):
-		edge = rt[2]
-	var sb := UI.card_style(fill, 12, edge, false)
-	sb.content_margin_left = 8
-	sb.content_margin_right = 6
-	sb.content_margin_top = 6
-	sb.content_margin_bottom = 6
-	cell.add_theme_stylebox_override("panel", sb)
-	UI.grow(cell)
-	parent.add_child(cell)
-	var row := UI.row(cell, 6)
+	var it: Dictionary = Eco.item(str(r.get("item", "")))
+	var claimed: bool = (p.d.pass.prem if prem else p.d.pass.free).has(t)
+	var ready: bool = p.can_claim(t, prem)
+	var locked_prem: bool = prem and not bool(p.d.pass.premium)
+	var locked: bool = t > p.pass_tier()
+	var edge: Color = rt[2] if not it.is_empty() else (PASS_PURPLE if prem else Color(1, 1, 1, 0.16))
+	var fill := Color("#221640") if prem else Color("#131c2e")
+	var glow := Color(0, 0, 0, 0)
+	if ready:
+		edge = UI.GREEN
+		glow = Color(0.37, 0.86, 0.53, 0.5)
+	elif not it.is_empty() and str(it.rarity) in ["epic", "legendary"]:
+		glow = Color(edge.r, edge.g, edge.b, 0.35)
+	var cell := _panel(parent, fill, edge, 14, glow, 6)
+	cell.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	cell.custom_minimum_size = Vector2(0, 104 if ready else 92)
+	var stack := Control.new()
+	stack.custom_minimum_size = Vector2(0, 92 if ready else 80)
+	cell.add_child(stack)
+	var v := VBoxContainer.new()
+	v.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	if ready:
+		v.offset_bottom = -24                            # room for the CLAIM button under it
+	v.alignment = BoxContainer.ALIGNMENT_CENTER
+	v.add_theme_constant_override("separation", 2)
+	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	stack.add_child(v)
+	var ic := CenterContainer.new()
+	ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v.add_child(ic)
 	if str(rt[3]) != "":
-		UI.tex_icon(row, str(rt[3]), 42)
+		UI.tex_icon(ic, str(rt[3]), 48)
 	else:
-		UI.icon(row, str(rt[0]), 24, rt[2])
-	var l := UI.label(row, str(rt[1]), 11, UI.TEXT)
-	UI.grow(l)
+		UI.icon(ic, str(rt[0]), 30, rt[2])
+	var nm := UI.label(v, str(rt[1]), 10, UI.TEXT, UI.HEAVY_FONT)
+	nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	nm.autowrap_mode = TextServer.AUTOWRAP_OFF
+	nm.clip_text = true
+	nm.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	if not it.is_empty():
+		var rl := UI.label(v, str(it.rarity).to_upper(), 8, rt[2], UI.HEAVY_FONT)
+		rl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	if claimed or locked or locked_prem:
+		var dim := ColorRect.new()
+		dim.color = Color(0, 0, 0, 0.45)
+		dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		stack.add_child(dim)
+		var badge := CenterContainer.new()
+		badge.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+		badge.position += Vector2(-22, 2)
+		badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		stack.add_child(badge)
+		UI.icon(badge, "check" if claimed else "lock", 18, UI.GREEN if claimed else (PASS_PURPLE if locked_prem else UI.MUTED))
+	var tap := Button.new()
+	tap.flat = true
+	tap.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	tap.pressed.connect(func(): open_pass_item(app, sid, t, prem))
+	stack.add_child(tap)
+	if ready:
+		var gb := UI.button(stack, "CLAIM", "claim", func(): _claim_tier(app, t, prem), "claim_%s_%d" % ["prem" if prem else "free", t], 10, 10)
+		gb.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+		gb.offset_top = -22
+		gb.offset_left = 10
+		gb.offset_right = -10
+		gb.custom_minimum_size = Vector2(0, 20)
+
+static func _claim_tier(app, t: int, prem: bool) -> void:
+	var res: Dictionary = app.profile.claim_tier(t, prem)
+	if res.ok:
+		app.sfx("coin")
+		var got: Array = reward_text(res.reward)
+		app.toast("+ " + str(got[1]), UI.GREEN)
+	app.close_modal()
+	app.rebuild()
+
+static func _buy_premium(app) -> void:
+	var p = app.profile
+	app.confirm("UNLOCK PREMIUM?", "%d exclusive cosmetics, gold and Royal chests and more gems on every tier this season. Costs %d gems." % [Eco.PASS_PREMIUM_ITEMS, Eco.PREMIUM_COST], "UNLOCK", "premium", func():
+		var r: Dictionary = p.buy_premium()
+		if r.ok:
+			app.sfx("purchase")
+			app.toast("Premium pass unlocked!", UI.PURPLE)
+		else:
+			app.sfx("error")
+			app.toast(str(r.error), UI.RED)
+		app.rebuild())
+
+static func open_pass_item(app, sid: int, t: int, prem: bool) -> void:
+	# the detail view: the reward big -- a weapon in its class's hands, turning with your finger
+	var p = app.profile
+	var r: Dictionary = Eco.pass_reward(sid, t, prem)
+	var rt: Array = reward_text(r)
+	var it: Dictionary = Eco.item(str(r.get("item", "")))
+	app.sfx("tap")
+	app.close_modal()
+	var m := Control.new()
+	m.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	app.add_child(m)
+	app.modal = m
+	var dim := ColorRect.new()
+	dim.color = Color(0.02, 0.01, 0.05, 0.82)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	m.add_child(dim)
+	var margin := MarginContainer.new()
+	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	for side in ["left", "right"]:
+		margin.add_theme_constant_override("margin_" + side, 14)
+	margin.add_theme_constant_override("margin_top", 60)
+	margin.add_theme_constant_override("margin_bottom", 40)
+	m.add_child(margin)
+	var edge: Color = rt[2] if not it.is_empty() else (PASS_PURPLE if prem else PASS_GOLD)
+	var sheet := _panel(margin, Color("#140d26"), edge, 22, Color(edge.r, edge.g, edge.b, 0.45), 14)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 8)
+	sheet.add_child(v)
+	var hr := UI.row(v, 8)
+	_chip(hr, ("PREMIUM" if prem else "FREE") + "  ·  TIER %d" % t, PASS_PURPLE if prem else Color("#2b3a55"), Color.WHITE)
+	var sp := Control.new()
+	sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hr.add_child(sp)
+	UI.button(hr, "✕", "ghost", func():
+		app.sfx("menuClose")
+		app.close_modal(), "pass_detail_close", 16, 12)
+	var stage := Control.new()
+	stage.clip_contents = true
+	stage.custom_minimum_size = Vector2(0, 340)
+	stage.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	v.add_child(stage)
+	if str(it.get("kind", "")) == "weapon":
+		Showcase.backdrop(stage)
+		var sh := Showcase.new()
+		sh.interactive = true
+		sh.cam_z = 5.6
+		sh.cam_y = 1.35
+		sh.look_y = 0.95
+		sh.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		stage.add_child(sh)
+		sh.show_look(str(it["class"]), {"r": str(it.get("r", "")), "l": str(it.get("l", ""))})
+		var hint := UI.label(stage, "⟲  DRAG TO TURN  ⟳", 11, Color(1, 1, 1, 0.8), UI.HEAVY_FONT)
+		hint.autowrap_mode = TextServer.AUTOWRAP_OFF
+		hint.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+		hint.offset_top = -28
+		hint.offset_bottom = -8
+		hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	else:
+		Showcase.backdrop(stage)
+		var cc := CenterContainer.new()
+		cc.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		stage.add_child(cc)
+		var cv := VBoxContainer.new()
+		cc.add_child(cv)
+		if str(it.get("kind", "")) == "title":
+			var tt := UI.label(cv, "« %s »" % str(it.name), 30, PASS_GOLD, UI.TITLE_FONT, true)
+			tt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			UI.label(cv, "a title shown next to your name", 12, Color.WHITE).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		else:
+			var icc := CenterContainer.new()
+			cv.add_child(icc)
+			if str(rt[3]) != "":
+				UI.tex_icon(icc, str(rt[3]), 120)
+			else:
+				UI.icon(icc, str(rt[0]), 96, rt[2])
+	var nm := UI.label(v, str(rt[1]), 24, Color.WHITE, UI.TITLE_FONT, true)
+	nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	if not it.is_empty():
+		var ir := UI.row(v, 8)
+		ir.alignment = BoxContainer.ALIGNMENT_CENTER
+		_chip(ir, str(it.rarity).to_upper(), rt[2], Color("#120c22"))
+		if str(it.get("kind", "")) == "weapon":
+			_chip(ir, str(Eco.CLASS_NAMES.get(str(it["class"]), "")).to_upper() + " WEAPON", Color(1, 1, 1, 0.12), Color.WHITE)
+		if p.owns(str(r.item)):
+			_chip(ir, "OWNED", UI.GREEN, Color("#0c2014"))
+	elif r.has("chest"):
+		var cd := UI.label(v, Eco.chest_odds(str(r.chest)), 11, UI.MUTED)
+		cd.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	var claimed: bool = (p.d.pass.prem if prem else p.d.pass.free).has(t)
 	if claimed:
-		UI.icon(row, "check", 18, UI.GREEN)
+		UI.button(v, "CLAIMED ✓", "secondary", func(): pass, "pass_detail_claimed", 15).disabled = true
 	elif p.can_claim(t, prem):
-		UI.button(row, "GET", "claim", func():
-			var res: Dictionary = p.claim_tier(t, prem)
-			if res.ok:
-				app.sfx("coin")
-				var got: Array = reward_text(res.reward)
-				app.toast("+ " + str(got[1]), UI.GREEN)
-			app.rebuild(), "claim_%s_%d" % ["prem" if prem else "free", t], 11, 10)
-	elif t > p.pass_tier() or (prem and not bool(p.d.pass.premium)):
-		UI.icon(row, "lock", 16, UI.MUTED)
+		UI.button(v, "CLAIM", "claim", func(): _claim_tier(app, t, prem), "pass_detail_claim", 16)
+	elif prem and not bool(p.d.pass.premium):
+		UI.button(v, "UNLOCK PREMIUM  ·  %d GEMS" % Eco.PREMIUM_COST, "premium", func():
+			app.close_modal()
+			_buy_premium(app), "pass_detail_premium", 15)
+	else:
+		UI.button(v, "REACH TIER %d TO UNLOCK" % t, "secondary", func(): pass, "pass_detail_locked", 14).disabled = true
+
+static func tier_cell(app, parent: Node, sid: int, t: int, prem: bool) -> void:
+	pass_cell(app, parent, sid, t, prem)                 # (kept for anything still calling the old name)
 
 # ---------------- SHOP ----------------
 static func shop(app, root: VBoxContainer) -> void:

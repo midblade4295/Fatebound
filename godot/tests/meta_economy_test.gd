@@ -44,6 +44,17 @@ func _init() -> void:
 	for i in items: uniq[i] = true
 	var want := Eco.PASS_FREE_ITEMS + Eco.PASS_PREMIUM_ITEMS
 	check(items.size() == want and uniq.size() == want, "season pass has %d distinct cosmetics" % want)
+	# 0.31.42: the premium side has more unlocks and the best gear
+	var rank := func(id): return int(Eco.RARITY_RANK.get(str(Eco.CATALOG[id].rarity), 1))
+	var free_best := 0
+	for i in Eco.PASS_FREE_ITEMS: free_best = maxi(free_best, rank.call(items[i]))
+	var prem_low := 9
+	var prem_top := 0
+	for i in range(Eco.PASS_FREE_ITEMS, want):
+		prem_low = mini(prem_low, rank.call(items[i]))
+		prem_top = maxi(prem_top, rank.call(items[i]))
+	check(Eco.PASS_PREMIUM_ITEMS > Eco.PASS_FREE_ITEMS * 3 and free_best <= prem_low and prem_top == 3, "premium: %d items incl. legendary, free: %d of the lowest rarity" % [Eco.PASS_PREMIUM_ITEMS, Eco.PASS_FREE_ITEMS])
+	check(Eco.pass_reward(1, 30, true).get("item", "") == items[want - 1], "the season's best item is premium tier 30")
 	# Packs: price covers only what isn't owned; a fully owned pack can't be bought.
 	var pk: Dictionary = Eco.PACKS["pack_warlord"]
 	var full := Eco.pack_price("pack_warlord", [])
@@ -122,12 +133,12 @@ func _init() -> void:
 	check(not s.claim_tier(1, true).ok, "premium tier needs the premium pass")
 	check(not s.buy_premium().ok, "premium needs gems")
 	s.d.gems = Eco.PREMIUM_COST + 5
-	check(s.buy_premium().ok and s.d.gems == 5 and s.claim_tier(6, true).ok, "premium bought and premium tier 6 claimed")
-	check(s.owns(Eco.pass_items(1)[Eco.PASS_FREE_ITEMS + 1]), "premium tier 6 cosmetic owned")
+	check(s.buy_premium().ok and s.d.gems == 5 and s.claim_tier(3, true).ok, "premium bought and premium tier 3 claimed")
+	check(s.owns(Eco.pass_items(1)[Eco.PASS_FREE_ITEMS + 1]), "premium tier 3 cosmetic owned")
 	var s2 := Profile.new(s.path, s.legacy_path)
 	s2.now_override = s.now_override
 	s2.load_or_create()
-	check(not s2.claim_tier(1, false).ok and not s2.claim_tier(6, true).ok and s2.d.pass.premium, "claimed tiers and premium survive a reload (no double claim)")
+	check(not s2.claim_tier(1, false).ok and not s2.claim_tier(3, true).ok and s2.d.pass.premium, "claimed tiers and premium survive a reload (no double claim)")
 	var all := s.claim_all()
 	check(all.size() == 7 + 7 - 2, "claim all got the remaining %d rewards" % all.size())
 
