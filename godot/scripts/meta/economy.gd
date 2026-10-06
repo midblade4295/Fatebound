@@ -10,7 +10,7 @@ const CLASSES := ["knight", "barbarian", "rogue", "ranger", "mage", "priest", "w
 # the game builds for them (the Crusader is a Knight body)
 const UP_CLASSES := ["crusader", "berserker", "necromancer", "assassin", "sniper", "archmage"]
 const UP_BASE := {"crusader":"knight", "berserker":"barbarian", "necromancer":"priest", "assassin":"rogue", "sniper":"ranger", "archmage":"mage"}
-const UP_LOOK := {"crusader":"knight", "berserker":"berserker", "necromancer":"necromancer", "assassin":"assassin", "sniper":"sniper", "archmage":"archmage"}
+const UP_LOOK := {"crusader":"crusader", "berserker":"berserker", "necromancer":"necromancer", "assassin":"assassin", "sniper":"sniper", "archmage":"archmage"}
 const CLASS_NAMES := {"knight":"Knight", "barbarian":"Barbarian", "rogue":"Rogue", "ranger":"Ranger", "mage":"Mage", "priest":"Priest", "worker":"Worker",
 	"crusader":"Crusader", "berserker":"Berserker", "necromancer":"Necromancer", "assassin":"Assassin", "sniper":"Sniper", "archmage":"Archmage"}
 

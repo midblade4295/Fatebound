@@ -2064,3 +2064,13 @@ K2/K3 notes (0.17.0)
   own smoke emitter and its fireball cools to a thin fading grey (was an opaque near-black ball).
 - Checked on the treeblast shot (now 9.5 s): fireball -> fiery cloud -> grey-brown smoke that rises, drifts and still
   hangs in pale wisps 6.6 s on. Quick suite: ALL PASSED (32).
+
+# 0.31.60 (Kevin: the Crusader -- make him look like a badass)
+- First try painted a closed great helm and a red-cross tabard onto the Knight reference: Meshy made them flat slabs
+  (a box on the face, a red board on the chest). Second: the clean Knight views (front/side/back, unarmed T-pose) ->
+  multi-image-to-3D -> retexture as a grim veteran crusader (blackened steel plate with gold trim, white tabard with a
+  blood-red cross front and back, crimson cape, stern scarred bearded face) -> auto-rig. ~85 credits for both.
+- assets/meshy/crusader (fit 2.12 to the KayKit Knight), 110 animations baked. LOOKS.crusader (sword and shield,
+  the Knight's animations); look_key: an upgraded Knight is now "crusader" (he used the plain Knight body before);
+  the always-a-shield rule covers meshy:crusader; Eco.UP_LOOK.crusader -> "crusader" (menus and thumbnails).
+  Thumbnails re-rendered. Quick suite: ALL PASSED (32).

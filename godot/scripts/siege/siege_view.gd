@@ -21,6 +21,7 @@ const LOOKS := {
 	"villager": {"model":"Rogue","r":"","l":"","idle":"g/Idle_A","attack":"m/Melee_Unarmed_Attack_Punch_A","ability":"m/Melee_Unarmed_Attack_Kick"},
 	"worker": {"model":"Rogue","r":"axe_1handed","l":"","idle":"g/Idle_A","attack":"m/Melee_1H_Attack_Chop","ability":"m/Melee_1H_Attack_Chop"},
 	"knight": {"model":"Knight","r":"sword_1handed","l":"bits/shield_B","idle":"g/Idle_A","attack":"m/Melee_1H_Attack_Slice_Diagonal","ability":"m/Melee_Blocking"},
+	"crusader": {"model":"meshy:crusader","r":"sword_1handed","l":"bits/shield_B","idle":"g/Idle_A","attack":"m/Melee_1H_Attack_Slice_Diagonal","ability":"m/Melee_Blocking"},
 	# Upgraded barbarian (Round 11): two-handed greatsword, whirlwind.
 	"berserker": {"model":"Barbarian","r":"bits/sword_E","l":"","idle":"m/Melee_2H_Idle","attack":"m/Melee_2H_Attack_Chop","ability":"m/Melee_2H_Attack_Spinning"},
 	"barbarian": {"model":"Barbarian","r":"axe_2handed","l":"","idle":"m/Melee_2H_Idle","attack":"m/Melee_2H_Attack_Slice","ability":"m/Melee_2H_Attack_Spin"},
@@ -2448,6 +2449,8 @@ static func look_key(u: Dictionary) -> String:
 		return "berserker"
 	if u.cls == "priest" and u.up:
 		return "necromancer"
+	if u.cls == "knight" and u.up:
+		return "crusader"                     # 0.31.60: his own (Meshy) body
 	if u.up and u.cls in ["rogue", "ranger", "mage"]:
 		return {"rogue":"assassin", "ranger":"sniper", "mage":"archmage"}[u.cls]
 	return u.cls
@@ -2457,7 +2460,7 @@ static func look_key(u: Dictionary) -> String:
 # hand slots added) so weapons, hats and the rest of the view find what they expect; its animations are the game's
 # KayKit animations baked onto its own skeleton by tools/retarget_meshy.gd (anims_<library>.res, same names), and
 # rig.json carries the fit scale and the hand-slot rests the tool worked out.
-const MESHY := {"assassin": "res://assets/meshy/assassin/", "archmage": "res://assets/meshy/archmage/"}
+const MESHY := {"assassin": "res://assets/meshy/assassin/", "archmage": "res://assets/meshy/archmage/", "crusader": "res://assets/meshy/crusader/"}
 const MESHY_RENAME := {"Hips":"hips", "Spine02":"spine", "Spine":"chest", "Head":"head",
 	"LeftArm":"upperarm.l", "LeftForeArm":"lowerarm.l", "LeftHand":"wrist.l",
 	"RightArm":"upperarm.r", "RightForeArm":"lowerarm.r", "RightHand":"wrist.r",
@@ -2540,7 +2543,7 @@ static func make_body(cls: String, cosmetic: Dictionary = {}) -> Dictionary:
 	for hand in ["r", "l"]:
 		if cosmetic.has(hand):
 			look[hand] = cosmetic[hand]
-	if str(look.model) == "Knight" and str(look.l) == "":
+	if str(look.model) in ["Knight", "meshy:crusader"] and str(look.l) == "":
 		look.l = "bits/shield_B"            # 0.31.41 (Kevin): a Knight (and a Crusader) always carries a shield
 	var meshy := str(look.model).begins_with("meshy:")
 	var body: Node3D
