@@ -1923,3 +1923,8 @@ K2/K3 notes (0.17.0)
   right hand, +90 in the left, and both point forward in the bow idle and release.
 - View.WEAPON_ROT_FOR (body -> file -> rotation) replaces WEAPON_FLIP_FOR; _fit_weapon takes the hand. 6 thumbnails
   re-rendered. Quick suite: ALL PASSED (32).
+
+# 0.31.47 (Kevin: rotate both 90 degrees back and the blade 180)
+- Knight halberd / Rogue scythe: (0, 180, 0) -- a half roll about the weapon's own long axis. Lying along the arm as in
+  0.31.45 (the hold he called the right way), blade hanging down, but the head forward instead of behind him. Rendered
+  side and front through View.make_body. 2 thumbnails re-rendered. Quick suite: ALL PASSED (32).

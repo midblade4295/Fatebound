@@ -2405,7 +2405,10 @@ const WEAPON_ROT := {"bits/fistweapon_C_left":Vector3(0, 180, 0), "bits/fistweap
 # halberd lay flat; a quarter turn about Z stands it upright, head up. The Rogue's idle does the same to the scythe
 # (blade up, grim-reaper style). Crossbows lie forward with a quarter turn about X -- opposite signs for the two hands
 # (0.31.45's right-hand crossbows pointed backwards).
-const WEAPON_ROT_FOR := {"Knight":{"bits/halberd":Vector3(0, 0, 90)}, "Rogue_Hooded":{"bits/scythe":Vector3(0, 0, 90)}, "Rogue":{"bits/scythe":Vector3(0, 0, 90)}}
+# 0.31.47 (Kevin: back the 90 degrees, and the blade turned 180): the hold he called "right way but backwards" in
+# 0.31.45 -- lying along the arm, axe blade / scythe blade hanging down -- but with the head forward: a half roll about
+# the weapon's own long axis instead of the half turn about Z (which also swung the head behind him).
+const WEAPON_ROT_FOR := {"Knight":{"bits/halberd":Vector3(0, 180, 0)}, "Rogue_Hooded":{"bits/scythe":Vector3(0, 180, 0)}, "Rogue":{"bits/scythe":Vector3(0, 180, 0)}}
 
 static func _fit_weapon(model: Node3D, file: String, body_model := "", hand := "r") -> void:
 	model.scale = Vector3.ONE * float(WEAPON_SCALE.get(file, 1.0))
