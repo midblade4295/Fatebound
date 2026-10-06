@@ -33,7 +33,7 @@ const LOOKS := {
 	# 0.31.32: the last three upgrades get their own looks
 	"assassin": {"model":"meshy:assassin","r":"dagger","l":"dagger","idle":"g/Idle_B","attack":"m/Melee_Dualwield_Attack_Stab","ability":"m/Melee_1H_Attack_Jump_Chop","tint":"#5b4f73"},
 	"sniper": {"model":"Ranger","r":"crossbow_2handed","l":"","idle":"r/Ranged_Bow_Idle","attack":"r/Ranged_Bow_Release","ability":"r/Ranged_Bow_Draw","tint":"#4f6b4a"},
-	"archmage": {"model":"Mage","r":"staff","l":"spellbook_open","idle":"g/Idle_B","attack":"r/Ranged_Magic_Shoot","ability":"r/Ranged_Magic_Summon","tint":"#a33d3d"},
+	"archmage": {"model":"meshy:archmage","r":"staff","l":"spellbook_open","idle":"g/Idle_B","attack":"r/Ranged_Magic_Shoot","ability":"r/Ranged_Magic_Summon","tint":"#a33d3d"},
 	"necromancer": {"model":"Necromancer","r":"Skeleton_Staff","l":"","idle":"g/Idle_B","attack":"r/Ranged_Magic_Spellcasting_Long","ability":"r/Ranged_Magic_Raise"},
 }
 const LOOP_HINTS := ["Idle","Running","Walking","Hammering","Holding","Aiming","_Pose","Blocking","Chopping","Pickaxing"]
@@ -2457,7 +2457,7 @@ static func look_key(u: Dictionary) -> String:
 # hand slots added) so weapons, hats and the rest of the view find what they expect; its animations are the game's
 # KayKit animations baked onto its own skeleton by tools/retarget_meshy.gd (anims_<library>.res, same names), and
 # rig.json carries the fit scale and the hand-slot rests the tool worked out.
-const MESHY := {"assassin": "res://assets/meshy/assassin/"}
+const MESHY := {"assassin": "res://assets/meshy/assassin/", "archmage": "res://assets/meshy/archmage/"}
 const MESHY_RENAME := {"Hips":"hips", "Spine02":"spine", "Spine":"chest", "Head":"head",
 	"LeftArm":"upperarm.l", "LeftForeArm":"lowerarm.l", "LeftHand":"wrist.l",
 	"RightArm":"upperarm.r", "RightForeArm":"lowerarm.r", "RightHand":"wrist.r",

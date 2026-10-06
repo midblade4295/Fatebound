@@ -1,6 +1,6 @@
 extends SceneTree
 # Bakes ALL the game's KayKit animations onto a Meshy-rigged character (0.31.52, Kevin: a new Assassin from Meshy).
-#   godot --headless --path godot -s res://tools/retarget_meshy.gd        (NAME=assassin, the folder under assets/meshy)
+#   NAME=archmage godot --headless --path godot -s res://tools/retarget_meshy.gd    (NAME: the folder under assets/meshy)
 # 1. rig.json: "fit" scales the Meshy model to the KayKit body's height; "slot_r"/"slot_l" are hand-slot bone rests
 #    (children of the wrists) placed and turned like KayKit's handslot bones, so weapons sit as they do on KayKit hands.
 # 2. anims_<g|m|r|mb|ma|t>.res: each KayKit library re-baked frame by frame. For a mapped bone, its GLOBAL rotation
@@ -8,7 +8,7 @@ extends SceneTree
 #    carry their motion (scaled by the hip heights). Unmapped bones (Spine01, neck, shoulders) hold their rest.
 const View = preload("res://scripts/siege/siege_view.gd")
 const FPS := 30.0
-const KK_CLASS := "rogue"                  # a KayKit body of the same rig, for the source skeleton and the height
+const KK_FOR := {"assassin": "rogue", "archmage": "mage"}   # the KayKit body it replaces: source skeleton and height
 
 func _initialize() -> void:
 	_run()
@@ -29,7 +29,7 @@ func _run() -> void:
 	await process_frame
 	var name := OS.get_environment("NAME") if OS.has_environment("NAME") else "assassin"
 	var dir: String = View.MESHY[name]
-	var made: Dictionary = View.make_body(KK_CLASS, {"r": "", "l": ""})
+	var made: Dictionary = View.make_body(str(KK_FOR.get(name, "rogue")), {"r": "", "l": ""})
 	root.add_child(made.body)
 	var player: AnimationPlayer = made.player
 	var src: Skeleton3D = made.body.find_child("Skeleton3D", true, false)

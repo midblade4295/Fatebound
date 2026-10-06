@@ -1995,3 +1995,14 @@ K2/K3 notes (0.17.0)
 - _ragdoll no longer skips Meshy bodies: the renamed bones (hips, spine, chest, head, arms, legs) are what RAG_SPEC
   wants. trailer5_shots "asnrag": a Knight cuts the Assassin down -- he staggers, falls back, lies splayed, daggers and
   hat dropped. Quick suite: ALL PASSED (32).
+
+# 0.31.54 (Kevin: now the Archmage)
+- Same pipeline as the Assassin (~45 Meshy credits): the game's Archmage rendered unarmed in T-pose (front/side/back)
+  -> multi-image-to-3D -> retexture (deep crimson robe with gold trim and buttons, tall crimson hat with a wide gold
+  band, long black hair, pale skin, gold-buckled belt, black boots) -> auto-rig (same 24 bones). 10.2k triangles.
+- assets/meshy/archmage: rigged.glb, rig.json (fit 2.21 to the KayKit Mage's height, hat included), 110 baked
+  animations. MESHY["archmage"]; LOOKS.archmage.model = "meshy:archmage" (staff and spellbook in its hand slots;
+  metre rig, so it ragdolls). tools/retarget_meshy.gd: KK_FOR picks the KayKit body each Meshy model replaces
+  (assassin -> rogue, archmage -> mage). Checked: idle, run, shoot, summon, hit, death through make_body; the upcheck
+  match shot (size beside the Sniper and the new Assassin). Archmage thumbnails re-rendered (the wide hat is cropped
+  at the top of the bust). Quick suite: ALL PASSED (32).

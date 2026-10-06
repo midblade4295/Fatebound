@@ -2,16 +2,19 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://56hgejjhrs26"
-path="res://.godot/imported/arch_wpn_elder.png-cf679e8f6ddd2f6ed695ec29d829fea9.ctex"
+uid="uid://cmga7hyl1firh"
+path="res://.godot/imported/rigged_Image_0.jpg-576c69845a955614a2f24ea311f3df75.ctex"
 metadata={
 "vram_texture": false
+}
+generator_parameters={
+"md5": "a4b64aa5147b89acabfa85465d8981e6"
 }
 
 [deps]
 
-source_file="res://assets/ui/icons/arch_wpn_elder.png"
-dest_files=["res://.godot/imported/arch_wpn_elder.png-cf679e8f6ddd2f6ed695ec29d829fea9.ctex"]
+source_file="res://assets/meshy/archmage/rigged_Image_0.jpg"
+dest_files=["res://.godot/imported/rigged_Image_0.jpg-576c69845a955614a2f24ea311f3df75.ctex"]
 
 [params]
 
@@ -23,7 +26,7 @@ compress/rdo_quality_loss=0.0
 compress/hdr_compression=1
 compress/normal_map=0
 compress/channel_pack=0
-mipmaps/generate=false
+mipmaps/generate=true
 mipmaps/limit=-1
 roughness/mode=0
 roughness/src_normal=""
