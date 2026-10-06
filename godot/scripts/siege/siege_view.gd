@@ -2370,7 +2370,7 @@ static func make_body(cls: String, cosmetic: Dictionary = {}) -> Dictionary:
 			var weapon := Stage.scene(("res://assets/kaykit/bits/%s.gltf" % file.substr(5)) if bits else ("res://assets/kaykit/weapons/%s.gltf" % file))
 			if weapon != null:
 				var model: Node3D = weapon.instantiate()
-				_fit_weapon(model, file, str(look.model))
+				_fit_weapon(model, file, str(look.model), hand)
 				slot.add_child(model)
 	var player := AnimationPlayer.new()
 	body.add_child(player)
@@ -2400,22 +2400,26 @@ const WEAPON_SCALE := {"bits/sword_E":0.75, "bits/spear_A":0.8, "bits/spear_B":0
 # on the hand so the fist poked through the face -- they move out along the slot's Z so the hand is behind the board;
 # the clawed knuckles faced backwards (half turn); the single-bladed cleaver's edge pointed up in the two-handed grip
 # (half turn); the Twin Axes were two axes in a two-handed grip (now one double-bitted axe, in economy.gd).
-const WEAPON_ROT := {"crossbow_1handed":Vector3(90, 0, 0), "crossbow_2handed":Vector3(90, 0, 0),
-	"bits/fistweapon_C_left":Vector3(0, 180, 0), "bits/fistweapon_C_right":Vector3(0, 180, 0)}
-# 0.31.45: a Knight's one-handed idle rests the weapon point-down (right for a sword, upside down for a halberd), and a
-# Rogue's the same for the scythe -- those turn head-up for that body. Two-handed crossbows moved to the right hand so
-# the bow animations' extended left arm reads as the supporting hand (economy.gd / LOOKS).
-const WEAPON_FLIP_FOR := {"Knight":["bits/halberd"], "Rogue_Hooded":["bits/scythe"], "Rogue":["bits/scythe"]}
+const WEAPON_ROT := {"bits/fistweapon_C_left":Vector3(0, 180, 0), "bits/fistweapon_C_right":Vector3(0, 180, 0)}
+# 0.31.46 (side-view renders): in the Knight's one-handed idle the hand holds the weapon's long axis horizontal, so a
+# halberd lay flat; a quarter turn about Z stands it upright, head up. The Rogue's idle does the same to the scythe
+# (blade up, grim-reaper style). Crossbows lie forward with a quarter turn about X -- opposite signs for the two hands
+# (0.31.45's right-hand crossbows pointed backwards).
+const WEAPON_ROT_FOR := {"Knight":{"bits/halberd":Vector3(0, 0, 90)}, "Rogue_Hooded":{"bits/scythe":Vector3(0, 0, 90)}, "Rogue":{"bits/scythe":Vector3(0, 0, 90)}}
 
-static func _fit_weapon(model: Node3D, file: String, body_model := "") -> void:
+static func _fit_weapon(model: Node3D, file: String, body_model := "", hand := "r") -> void:
 	model.scale = Vector3.ONE * float(WEAPON_SCALE.get(file, 1.0))
-	if file.contains("bow") and not file.contains("crossbow"):
+	if file.contains("crossbow"):
+		model.rotation.x = deg_to_rad(-90.0 if hand == "r" else 90.0)
+	elif file.contains("bow"):
 		model.rotation.y = PI * 0.5 if file.begins_with("bits/") else PI
 	if WEAPON_ROT.has(file):
 		var r: Vector3 = WEAPON_ROT[file]
 		model.rotation = Vector3(deg_to_rad(r.x), deg_to_rad(r.y), deg_to_rad(r.z))
-	if (WEAPON_FLIP_FOR.get(body_model, []) as Array).has(file):
-		model.rotation.z += PI
+	var per: Dictionary = WEAPON_ROT_FOR.get(body_model, {})
+	if per.has(file):
+		var pr: Vector3 = per[file]
+		model.rotation = Vector3(deg_to_rad(pr.x), deg_to_rad(pr.y), deg_to_rad(pr.z))
 	if file.contains("shield"):
 		model.position = Vector3(0.0, 0.0, 0.14 if file.begins_with("bits/") else 0.15)
 

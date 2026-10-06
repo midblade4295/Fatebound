@@ -1914,3 +1914,12 @@ K2/K3 notes (0.17.0)
   (Berserker's halberd, Necromancer's scythe) already hold them head-up. The Great Cleaver goes back to the pack axes'
   blade direction (its 0.31.44 half-turn is undone). Front-view renders checked. 7 thumbnails re-rendered.
 - Quick suite: ALL PASSED (32).
+
+# 0.31.46 (Kevin: the adjusted weapons are the right way up but held backwards)
+- Side-view renders of the actual idle poses: the Knight's one-handed idle holds the weapon's long axis HORIZONTAL (a
+  half turn about Z only swapped forward for backward -- 0.31.45's halberd pointed behind him); a quarter turn about Z
+  stands it upright, head up. The Rogue's idle does the same to the scythe: a quarter turn, blade up. The right-hand
+  crossbows wanted the opposite quarter turn about X from the left-hand one (they pointed backwards): now -90 in the
+  right hand, +90 in the left, and both point forward in the bow idle and release.
+- View.WEAPON_ROT_FOR (body -> file -> rotation) replaces WEAPON_FLIP_FOR; _fit_weapon takes the hand. 6 thumbnails
+  re-rendered. Quick suite: ALL PASSED (32).
