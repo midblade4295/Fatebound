@@ -2006,3 +2006,11 @@ K2/K3 notes (0.17.0)
   (assassin -> rogue, archmage -> mage). Checked: idle, run, shoot, summon, hit, death through make_body; the upcheck
   match shot (size beside the Sniper and the new Assassin). Archmage thumbnails re-rendered (the wide hat is cropped
   at the top of the bust). Quick suite: ALL PASSED (32).
+
+# 0.31.55 (Kevin: the Archmage as an old man, a powerful wizard)
+- New reference: the KayKit Mage wearing the Barbarian's bearded head (same Rig_Medium, so the skin binds match), unarmed
+  in T-pose; then painted -- beard and brows whitened, a long flowing beard drawn down to the belt on the front and side
+  views. Meshy multi-image-to-3D -> retexture (ancient archmage: snow-white beard, bushy white brows, wrinkled wise face,
+  crimson robe with gold trim and stars, tall crimson hat with a gold band) -> auto-rig (same 24 bones). ~45 credits.
+- assets/meshy/archmage/rigged.glb replaced; 110 animations re-baked (fit unchanged, 2.21). render_skin_icons frames the
+  Archmage's bust and gear wider and higher for the tall hat. Quick suite: ALL PASSED (32).
