@@ -2101,3 +2101,13 @@ K2/K3 notes (0.17.0)
 - A hit's flinch alternates Hit_A / Hit_B; a blocked hit plays Melee_Block_Hit on the blocker ("blocked" event).
 - tests/combo_test.gd (in the quick suite): held attacks give swings 0,1,2,0; a 2.5 s pause resets to 0; every melee
   look has three swings. Quick suite: ALL PASSED (33).
+
+# 0.31.63 (Kevin: the Necromancer didn't look fully textured -> a Meshy model like the others)
+- He was fully textured: all seven KayKit parts use the colour-strip texture, but its white/pale-blue swatches (skin,
+  hair, bone crown) read as unpainted under the menu's bright light.
+- Meshy: multi-image from the KayKit Necromancer (front/side/back) -> retexture as a sinister undead sorcerer with
+  strong contrast (purple-black tattered robes, bone crown with a skull, grey-green skull face, glowing green eyes,
+  stringy white hair) -> auto-rig. ~45 credits (3,065 left). 110 animations baked (fit 2.03).
+- LOOKS.necromancer -> meshy:necromancer; LOOKS.necromancer_kaykit keeps the stock body for retarget_meshy (KK_FOR).
+  render_skin_icons frames the Necromancer wider like the Archmage (his crown). Thumbnails re-rendered.
+- All six upgraded classes now have Meshy bodies. Quick suite: ALL PASSED (33).

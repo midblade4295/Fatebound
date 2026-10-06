@@ -90,7 +90,7 @@ func _run() -> void:
 		var cam: Camera3D = cam3
 		var cpos := Vector3(0.0, 1.15, 4.4) if weapon_job else Vector3(0.0, 1.62, 3.0)       # whole figure for gear
 		var aim := Vector3(0, 0.95, 0) if weapon_job else Vector3(0, 1.42, 0)
-		if str(job[1]) == "archmage":                    # (0.31.55: the old wizard's tall, wide hat -- pull back and up)
+		if str(job[1]) in ["archmage", "necromancer"]:   # (0.31.55: the old wizard's tall, wide hat; 0.31.63: the Necromancer's crown -- pull back and up)
 			cpos = Vector3(0.0, 1.45, 5.6) if weapon_job else Vector3(0.0, 2.0, 3.9)
 			aim = Vector3(0, 1.2, 0) if weapon_job else Vector3(0, 1.72, 0)
 		cam.transform = Transform3D(Basis.looking_at(aim - cpos, Vector3.UP), cpos)

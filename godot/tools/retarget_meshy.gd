@@ -8,7 +8,7 @@ extends SceneTree
 #    carry their motion (scaled by the hip heights). Unmapped bones (Spine01, neck, shoulders) hold their rest.
 const View = preload("res://scripts/siege/siege_view.gd")
 const FPS := 30.0
-const KK_FOR := {"assassin": "rogue", "archmage": "mage", "crusader": "knight", "berserker": "barbarian", "sniper": "ranger"}   # the KayKit body it replaces: source skeleton and height
+const KK_FOR := {"assassin": "rogue", "archmage": "mage", "crusader": "knight", "berserker": "barbarian", "sniper": "ranger", "necromancer": "necromancer_kaykit"}   # the KayKit body it replaces: source skeleton and height
 
 func _initialize() -> void:
 	_run()

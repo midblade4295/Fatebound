@@ -2,16 +2,19 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cgo0xit8pjtrw"
-path="res://.godot/imported/default_necromancer.png-d019c0d3b9e0644b2b72ac025d06014e.ctex"
+uid="uid://l687xxy6bqm2"
+path="res://.godot/imported/rigged_Image_0.jpg-699b56736b529aee9f1fa7c7571de7b4.ctex"
 metadata={
 "vram_texture": false
+}
+generator_parameters={
+"md5": "48c58c2b09590984f54f6416d6415963"
 }
 
 [deps]
 
-source_file="res://assets/ui/skins/default_necromancer.png"
-dest_files=["res://.godot/imported/default_necromancer.png-d019c0d3b9e0644b2b72ac025d06014e.ctex"]
+source_file="res://assets/meshy/necromancer/rigged_Image_0.jpg"
+dest_files=["res://.godot/imported/rigged_Image_0.jpg-699b56736b529aee9f1fa7c7571de7b4.ctex"]
 
 [params]
 
@@ -23,7 +26,7 @@ compress/rdo_quality_loss=0.0
 compress/hdr_compression=1
 compress/normal_map=0
 compress/channel_pack=0
-mipmaps/generate=false
+mipmaps/generate=true
 mipmaps/limit=-1
 roughness/mode=0
 roughness/src_normal=""
