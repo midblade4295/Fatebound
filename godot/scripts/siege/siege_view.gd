@@ -2486,10 +2486,14 @@ static func meshy_body(name: String) -> Dictionary:
 	for i in sk.get_bone_count():
 		if MESHY_RENAME.has(sk.get_bone_name(i)):
 			sk.set_bone_name(i, MESHY_RENAME[sk.get_bone_name(i)])
+	var skins: Array = []
 	for mi in body.find_children("*", "MeshInstance3D", true, false):
-		var skin: Skin = (mi as MeshInstance3D).skin              # the skin binds bones by name: rename them too
+		var skin: Skin = (mi as MeshInstance3D).skin
 		if skin != null:
-			for b in skin.get_bind_count():
+			skin = skin.duplicate()                               # per body: we rename and rescale it
+			(mi as MeshInstance3D).skin = skin
+			skins.append(skin)
+			for b in skin.get_bind_count():                       # the skin binds bones by name: rename them too
 				if MESHY_RENAME.has(str(skin.get_bind_name(b))):
 					skin.set_bind_name(b, MESHY_RENAME[str(skin.get_bind_name(b))])
 	var rig: Dictionary = meshy_rig(name)
@@ -2500,22 +2504,26 @@ static func meshy_body(name: String) -> Dictionary:
 			sk.set_bone_parent(bi, sk.find_bone("wrist." + hand))
 			sk.set_bone_rest(bi, _xf(rig["slot_" + hand]))
 	sk.reset_bone_poses()
-	# the fit goes on the rig's own root (the Armature), not on the body: the view sets every body's scale itself
-	var fit := float(rig.get("fit", 1.0))
-	var arm := sk.get_parent() as Node3D
-	if arm != null and arm != body:
-		arm.scale *= fit
-	else:
-		sk.scale *= fit
-	body.set_meta("meshy", name)
-	# from the body root to the skeleton: fit x the rig's own scale (Meshy rigs are in centimetres: 0.01)
-	var chain := 1.0
+	# 0.31.53: put the rig in metres at scale 1 (Meshy rigs are centimetres under a 0.01 Armature; with the fit to the
+	# KayKit height on top) -- the ragdoll's physics bodies can't live under a scaled skeleton. Every bone rest's offset
+	# and every skin bind is scaled by the same factor, then the nodes' scales are reset: the mesh draws exactly as before.
+	var a := float(rig.get("fit", 1.0))
 	var n: Node = sk
 	while n != null and n != body:
 		if n is Node3D:
-			chain *= (n as Node3D).scale.x
+			a *= (n as Node3D).scale.x
+			(n as Node3D).scale = Vector3.ONE
 		n = n.get_parent()
-	return {"body":body, "skeleton":sk, "chain":chain}
+	for i in sk.get_bone_count():
+		var r := sk.get_bone_rest(i)
+		sk.set_bone_rest(i, Transform3D(r.basis, r.origin * a))
+	var S := Transform3D(Basis.from_scale(Vector3.ONE * a), Vector3.ZERO)
+	for skin in skins:
+		for b in (skin as Skin).get_bind_count():
+			(skin as Skin).set_bind_pose(b, S * (skin as Skin).get_bind_pose(b))
+	sk.reset_bone_poses()
+	body.set_meta("meshy", name)
+	return {"body":body, "skeleton":sk, "chain":1.0}
 
 static func meshy_libraries(name: String) -> Dictionary:
 	if not _meshy_libs.has(name):
@@ -4291,8 +4299,8 @@ func _ragdoll(a: Dictionary, push: Vector3) -> void:
 	if is_instance_valid(camera) and Vector2(root.global_position.x - camera.global_position.x, root.global_position.z - camera.global_position.z).length() > RAG_NEAR:
 		return
 	var skel: Skeleton3D = (a.body as Node3D).find_child("Skeleton3D", true, false)
-	if skel == null or (a.body as Node3D).has_meta("meshy"):
-		return                                              # (a Meshy rig is in centimetres: it plays its death instead)
+	if skel == null:
+		return
 	while _ragdolls.size() >= RAG_MAX:
 		_ragdoll_end(_ragdolls[0])
 	var sim3 := PhysicalBoneSimulator3D.new()

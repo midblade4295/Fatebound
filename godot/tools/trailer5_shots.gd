@@ -13,7 +13,7 @@ const Sim = preload("res://scripts/siege/siege_sim.gd")
 const Land = preload("res://scripts/siege/siege_land.gd")
 const Castle = preload("res://scripts/siege/siege_castle.gd")
 const SLOW := {"hook": [[0.95, 2.1, 0.18]], "necro": [[0.6, 2.6, 0.25]], "hammer": [[0.55, 1.75, 0.22]], "whirl": [[0.8, 2.4, 0.22]]}
-const LENGTH := {"plasma": 3.0, "treeblast": 5.5, "upcheck": 3.2, "launch": 10.0, "catcheck": 1.0, "waterbomb": 6.0, "bomb": 4.6, "hook": 2.6, "necro": 3.0, "hammer": 2.4, "dawn": 5.0, "clash": 4.5, "captive": 4.0, "heroes": 4.3, "lineup": 4.0, "gather": 4.0, "build": 7.0, "backstab": 4.0, "assault": 5.5,
+const LENGTH := {"asnrag": 3.2, "plasma": 3.0, "treeblast": 5.5, "upcheck": 3.2, "launch": 10.0, "catcheck": 1.0, "waterbomb": 6.0, "bomb": 4.6, "hook": 2.6, "necro": 3.0, "hammer": 2.4, "dawn": 5.0, "clash": 4.5, "captive": 4.0, "heroes": 4.3, "lineup": 4.0, "gather": 4.0, "build": 7.0, "backstab": 4.0, "assault": 5.5,
 	"rampart": 4.0, "whirl": 3.2, "feast": 4.0, "carry": 5.0, "throne": 4.0, "reveal": 9.0,
 	# Round 28 (Kevin + Derek Lieu's makeover advice: core action first, struggle, comedy, fewer cards)
 	"breakin": 10.6, "carry2": 7.9, "toofat": 5.5, "hatsteal": 5.0}
@@ -81,6 +81,31 @@ func _stage() -> void:
 		_revive(u)
 		u.bot = true
 	match shot:
+		"asnrag":
+			# (0.31.53 check) the Meshy Assassin cut down by a Knight: its ragdoll
+			var pc2 := Vector2(-6.0, 30.0)
+			var asn: Dictionary = s.units.filter(func(x): return x.team == 0 and x.id != me.id)[0]
+			var kn: Dictionary = s.units.filter(func(x): return x.team == 1)[0]
+			s._set_class(asn, "rogue", true)
+			s._set_class(kn, "knight", false)
+			for x in [asn, kn]:
+				x.bot = false
+				_revive(x)
+				x.move = Vector2.ZERO
+				x.tower = -1
+				x.carrying = false
+			asn.pos = pc2
+			kn.pos = pc2 + Vector2(1.6, -0.6)
+			asn.face = Sim.angle_of((kn.pos as Vector2) - (asn.pos as Vector2))
+			kn.face = Sim.angle_of((asn.pos as Vector2) - (kn.pos as Vector2))
+			for u in s.units:
+				if u.id != asn.id and u.id != kn.id:
+					u.bot = false
+					u.move = Vector2.ZERO
+					u.pos = Sim.spawn(u.team)
+			beats = [[0.5, kn.id, "smash"], [0.85, asn.id, "die"]]
+			cam_a = [_v(pc2 + Vector2(2.6, 4.8), 2.4), _v(pc2 + Vector2(0.6, -0.3), 0.8)]
+			cam_b = [_v(pc2 + Vector2(3.2, 4.4), 2.6), _v(pc2 + Vector2(0.4, -0.3), 0.6)]
 		"plasma":
 			# (0.31.50 check) a Necromancer siphoning a Knight with the plasma beam
 			var pc := Vector2(-6.0, 30.0)

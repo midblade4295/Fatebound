@@ -1985,3 +1985,13 @@ K2/K3 notes (0.17.0)
   Meshy body (it plays its death clip). LOOKS.assassin.model = "meshy:assassin". Vanish's see-through copies work as
   they are. Checked: idle, run, stab, jump chop, hit and death through make_body; the upcheck match shot (size next to
   the Sniper and Archmage, Vanish). Assassin thumbnails re-rendered. Quick suite: ALL PASSED (32).
+
+# 0.31.53 (Kevin: add the ragdoll to the new Assassin)
+- meshy_body now puts the rig in metres at scale 1: the Meshy rig is centimetres under a 0.01 Armature (with the KayKit
+  fit on top), and physics bodies can't live under a scaled skeleton. Every bone rest's offset and every skin bind pose
+  is scaled by the same factor (S * bind), the nodes' scales reset to 1; the skin is duplicated per body first. Draws
+  and animates exactly as before (six-pose render identical); weapon holders no longer need the counter-scale. The
+  110 animations re-baked for the metre rig (hips motion in metres).
+- _ragdoll no longer skips Meshy bodies: the renamed bones (hips, spine, chest, head, arms, legs) are what RAG_SPEC
+  wants. trailer5_shots "asnrag": a Knight cuts the Assassin down -- he staggers, falls back, lies splayed, daggers and
+  hat dropped. Quick suite: ALL PASSED (32).
