@@ -3225,6 +3225,7 @@ func on_event(e: Dictionary) -> void:
 				_fx.append({"node":stone, "at":_time, "life":float(e.flight), "kind":"shell",
 					"p0":Vector3(e.from.x, 4.2, e.from.y), "p1":Vector3(e.to.x, Sim.height_at(e.to) + 0.3, e.to.y)})
 		"catapult_hit":
+			_pack_explosion("light", Vector3(e.pos.x, Sim.height_at(e.pos) + 0.15, e.pos.y), 2.0)      # 0.31.57
 			_recent_blasts.append([e.pos, _time])                    # 0.31.34: the logs and rocks it breaks fly high
 			_launch_items(e.pos, Sim.CATAPULT_AOE + 1.5, 0.7)        # ...and those already lying round it go up again
 			water_blast(e.pos, 0.6)                                  # 0.31.21: a stone in the river makes waves too
@@ -4189,6 +4190,29 @@ func _kick_debris() -> void:
 	for a in actors.values():
 		a["kick_last"] = (a.root as Node3D).global_position
 
+# ---------- the EffectBlocks explosions (0.31.57, Kevin) ----------
+# The pack's heavy explosion (fireball, sparks, rolling smoke, burning debris with smoke trails) on the bomb and the
+# meteor, its light one (a small pop, sparks, puffs) on catapult stones. Copies in assets/vfx/effectblocks without the
+# pack's demo script and sound. Every emitter is switched to local coordinates so the node's scale sizes the whole
+# effect; half the particles on low effects; freed when the longest emitter is done.
+const PACK_EXPLOSIONS := {"heavy": preload("res://assets/vfx/effectblocks/explosion_heavy.tscn"),
+	"light": preload("res://assets/vfx/effectblocks/explosion_light.tscn")}
+
+func _pack_explosion(kind: String, at: Vector3, size: float) -> void:
+	var n: Node3D = (PACK_EXPLOSIONS[kind] as PackedScene).instantiate()
+	n.position = at
+	n.scale = Vector3.ONE * size
+	add_child(n)
+	var life := 0.5
+	for gp in n.find_children("*", "GPUParticles3D", true, false):
+		var p3 := gp as GPUParticles3D
+		p3.local_coords = true
+		if low_fx:
+			p3.amount_ratio = 0.5
+		life = maxf(life, p3.lifetime * 1.6)
+		p3.restart()
+	get_tree().create_timer(life + 0.5).timeout.connect(n.queue_free)
+
 # ---------- shockwave (0.31.56, Kevin: the EffectBlocks pack's shockwave on the bomb and meteor blasts) ----------
 # The pack's effect (assets/other/shockwave.tscn): one torus, inner 0.8 / outer 1.0, triangular section, growing from
 # nothing to its full size over 0.74 s on an ease-in curve, drawn with its screen-distortion shader (in
@@ -4246,47 +4270,10 @@ func _sync_shocks() -> void:
 func bomb_blast(at2: Vector2) -> void:
 	var at := Vector3(at2.x, Sim.height_at(at2) + 0.6, at2.y)
 	shockwave(Vector3(at.x, at.y - 0.2, at.z), Sim.BOMB_R + 1.5)           # 0.31.56
-	var fl := MeshInstance3D.new()
-	var sm := SphereMesh.new()
-	sm.radius = 1.0
-	sm.height = 2.0
-	sm.radial_segments = 16
-	sm.rings = 8
-	fl.mesh = sm
-	var fm := StandardMaterial3D.new()
-	fm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	fm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	fm.blend_mode = BaseMaterial3D.BLEND_MODE_ADD          # a glowing fireball rather than an orange dome
-	fm.albedo_color = Color(1.0, 0.55, 0.18, 0.85)
-	fl.material_override = fm
-	fl.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	fl.position = at
-	add_child(fl)
-	_booms.append({"node":fl, "kind":"flash", "t0":_time, "life":0.45})
+	_pack_explosion("heavy", Vector3(at.x, at.y - 0.4, at.z), 3.6)      # 0.31.57: the EffectBlocks heavy explosion
 	ring_at(Vector3(at.x, at.y - 0.5, at.z), Color(1.0, 0.55, 0.2), Sim.BOMB_R, 0.7)
 	ring_at(Vector3(at.x, at.y - 0.5, at.z), Color(1.0, 0.9, 0.6), Sim.BOMB_R * 0.6, 0.4)
-	for i in 46:
-		spark(at + Vector3(randf_range(-0.8, 0.8), randf_range(-0.3, 1.2), randf_range(-0.8, 0.8)),
-			[Color(1.0, 0.55, 0.15), Color(1.0, 0.85, 0.3), Color(1.0, 1.0, 0.85)][i % 3])
-	for i in 9:
-		var sp := MeshInstance3D.new()
-		var ssm := SphereMesh.new()
-		ssm.radius = 0.7
-		ssm.height = 1.4
-		ssm.radial_segments = 10
-		ssm.rings = 5
-		sp.mesh = ssm
-		var smat := StandardMaterial3D.new()
-		smat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		smat.albedo_color = Color(0.32, 0.3, 0.29, 0.55)
-		smat.roughness = 1.0
-		sp.material_override = smat
-		sp.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		var dir := Vector3(randf_range(-1, 1), 0.0, randf_range(-1, 1)).normalized()
-		sp.position = at + dir * randf_range(0.3, 1.6)
-		add_child(sp)
-		_booms.append({"node":sp, "kind":"smoke", "t0":_time, "life":randf_range(1.6, 2.4),
-			"vel":dir * randf_range(0.6, 1.4) + Vector3(0.0, randf_range(1.2, 2.2), 0.0)})
+	# (its fire, sparks, smoke and burning debris replace the old glow sphere, sparks and smoke puffs)
 	var sc := MeshInstance3D.new()
 	var cyl := CylinderMesh.new()
 	cyl.top_radius = Sim.BOMB_R * 0.65
@@ -4707,23 +4694,8 @@ func _meteor_warn(p2: Vector2, delay: float, team: int) -> void:
 func _meteor_hit(p2: Vector2, burn: float) -> void:
 	var at := Vector3(p2.x, Sim.height_at(p2) + 0.4, p2.y)
 	shockwave(at, Sim.METEOR_R + 1.2)                                          # 0.31.56
-	var fl := MeshInstance3D.new()
-	var sm := SphereMesh.new()
-	sm.radius = 1.0
-	sm.height = 2.0
-	fl.mesh = sm
-	var fm := StandardMaterial3D.new()
-	fm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	fm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	fm.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	fm.albedo_color = Color(1.0, 0.45, 0.12, 0.85)
-	fl.material_override = fm
-	fl.position = at
-	add_child(fl)
-	_booms.append({"node":fl, "kind":"flash", "t0":_time, "life":0.4})
+	_pack_explosion("heavy", Vector3(at.x, at.y - 0.2, at.z), 2.7)      # 0.31.57
 	ring_at(at, Color(1.0, 0.5, 0.15), Sim.METEOR_R * 1.3, 0.6)
-	for i in 30:
-		spark(at + Vector3(randf_range(-0.8, 0.8), randf_range(0.0, 1.2), randf_range(-0.8, 0.8)), [Color(1.0, 0.5, 0.15), Color(1.0, 0.85, 0.3)][i % 2])
 	shake(0.5)
 	_blast_bodies(p2, Sim.METEOR_R + 1.5, 5.0)
 	water_blast(p2, 0.7)

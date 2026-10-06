@@ -2025,3 +2025,16 @@ K2/K3 notes (0.17.0)
   (assets/vfx/effectblocks/shockwave.gdshader) bends outward from the ring's own centre on screen, strongest across the
   band, fading as it grows. Checked alone over a checkerboard (a clean refracting ripple) and on the treeblast shot.
 - Quick suite: ALL PASSED (32).
+
+# 0.31.57 (Kevin: better explosions from the EffectBlocks pack)
+- Previewed the pack's three explosions with their real GPU particles (--fixed-fps 60 renders them; the earlier stall
+  was the beam effects): heavy (fireball -> rolling smoke -> burning debris with smoke trails), light (small pop,
+  sparks, puffs), electric (white-cyan flash, sparks).
+- assets/vfx/effectblocks/explosion_heavy.tscn / explosion_light.tscn: copies without the pack's demo script (it
+  re-fired the effect on the ui_accept input -- Enter/Space) and the light one's sound. View._pack_explosion(kind, at,
+  size): every emitter to local coordinates (so the node's scale sizes the whole effect), half the particles on low
+  effects, freed after its longest emitter.
+- Bomb: heavy at 3.6 (replacing the glow sphere, 46 sparks and 9 smoke puffs; the reach rings, shockwave, scorch,
+  shake, water waves and debris stay). Meteor: heavy at 2.7 (replacing its glow sphere and sparks; its warning circle,
+  falling rock, rings, burning ground and shake stay). Catapult stones: light at 2.0 (they had no explosion).
+- Checked on the treeblast shot. Quick suite: ALL PASSED (32).
