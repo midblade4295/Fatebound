@@ -1572,6 +1572,10 @@ func _sync_beams() -> void:
 		for slot in [["beam", str(u.id), "drain" if necro else "heal"], ["beam2", str(u.id) + "#2", "white"]]:
 			var n: MeshInstance3D = beam_nodes.get(slot[1])
 			var to: Dictionary = sim.by_id.get(str(u.get(slot[0], "")), {})
+			if slot[2] == "drain" or plasma_nodes.has(slot[1]):
+				_sync_plasma(slot[1], u, to if slot[2] == "drain" and sim.alive(u) else {})
+				if slot[2] == "drain":
+					continue
 			if to.is_empty() or not sim.alive(u):
 				if n != null:
 					n.visible = false
@@ -1607,6 +1611,108 @@ func _sync_beams() -> void:
 			var fwd := side.cross(up)
 			var w := (1.25 if slot[2] == "drain" else 1.0) + 0.25 * sin(_time * 25.0 + float(hash(slot[1]) % 100))
 			n.transform = Transform3D(Basis(side * w, up * len, fwd * w), (p0 + p1) * 0.5)
+
+# ---------- the Necromancer's plasma siphon (0.31.50) ----------
+# Kevin: "a plasma beam" for the drain. Our own shader (plasma_beam.gdshader): a twisting plasma sheath round a hot core,
+# pulses running from the victim into the Necromancer, a soft glow at each end -- the victim's a darker, purple-green
+# wound, the Necromancer's a bright green bloom.
+var plasma_nodes: Dictionary = {}
+static var _plasma_mats := {}
+const PLASMA_SHADER := preload("res://scripts/siege/plasma_beam.gdshader")
+
+static func _plasma_mat(kind: String) -> Material:
+	if not _plasma_mats.has(kind):
+		if kind == "glow_src" or kind == "glow_dst":
+			var gt := GradientTexture2D.new()
+			gt.fill = GradientTexture2D.FILL_RADIAL
+			gt.fill_from = Vector2(0.5, 0.5)
+			gt.fill_to = Vector2(1.0, 0.5)
+			var gr := Gradient.new()
+			gr.set_color(0, Color(1, 1, 1, 1))
+			gr.set_color(1, Color(1, 1, 1, 0))
+			gr.add_point(0.35, Color(1, 1, 1, 0.55))
+			gt.gradient = gr
+			var m := StandardMaterial3D.new()
+			m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+			m.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+			m.no_depth_test = false
+			m.albedo_texture = gt
+			m.albedo_color = Color(0.3, 0.75, 0.35, 0.8) if kind == "glow_dst" else Color(0.45, 0.2, 0.75, 0.8)
+			_plasma_mats[kind] = m
+		else:
+			var sm := ShaderMaterial.new()
+			sm.shader = PLASMA_SHADER
+			sm.set_shader_parameter("core", 1.0 if kind == "core" else 0.0)
+			sm.set_shader_parameter("intensity", 1.35 if kind == "core" else 1.1)
+			sm.set_shader_parameter("twist", 3.0)
+			_plasma_mats[kind] = sm
+	return _plasma_mats[kind]
+
+func _make_plasma() -> Node3D:
+	var root := Node3D.new()
+	for part in [["sheath", 0.3, 18], ["core", 0.07, 8]]:
+		var mi := MeshInstance3D.new()
+		var cm := CylinderMesh.new()
+		cm.top_radius = float(part[1])
+		cm.bottom_radius = float(part[1])
+		cm.height = 1.0
+		cm.radial_segments = int(part[2])
+		cm.rings = 1
+		mi.mesh = cm
+		mi.material_override = _plasma_mat(str(part[0]))
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mi.name = str(part[0])
+		root.add_child(mi)
+	for g in [["glow_src", 0.9], ["glow_dst", 1.1]]:
+		var q := MeshInstance3D.new()
+		var qm := QuadMesh.new()
+		qm.size = Vector2.ONE * float(g[1])
+		q.mesh = qm
+		q.material_override = _plasma_mat(str(g[0]))
+		q.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		q.name = str(g[0])
+		root.add_child(q)
+	return root
+
+func _sync_plasma(key: String, u: Dictionary, to: Dictionary) -> void:
+	var pb: Node3D = plasma_nodes.get(key)
+	var a: Dictionary = actors.get(u.id, {})
+	var b: Dictionary = actors.get(to.get("id", ""), {}) if not to.is_empty() else {}
+	if to.is_empty() or a.is_empty() or b.is_empty():
+		if pb != null:
+			pb.visible = false
+		return
+	if pb == null:
+		pb = _make_plasma()
+		add_child(pb)
+		plasma_nodes[key] = pb
+	var p0: Vector3 = (a.root as Node3D).position + Vector3(0, 1.35, 0) + Vector3(sin(float(u.face)), 0, cos(float(u.face))) * 0.35
+	var p1: Vector3 = (b.root as Node3D).position + Vector3(0, 1.1, 0)
+	var len := p0.distance_to(p1)
+	if len < 0.05:
+		pb.visible = false
+		return
+	pb.visible = true
+	var up := (p1 - p0) / len
+	var side := up.cross(Vector3.FORWARD if absf(up.dot(Vector3.FORWARD)) < 0.95 else Vector3.RIGHT).normalized()
+	var fwd := side.cross(up)
+	var mid := (p0 + p1) * 0.5
+	var h := float(hash(key) % 100)
+	var wob := 1.0 + 0.14 * sin(_time * 13.0 + h) + 0.06 * sin(_time * 31.0 + h * 0.7)
+	var sheath := pb.get_node("sheath") as MeshInstance3D
+	var core := pb.get_node("core") as MeshInstance3D
+	sheath.transform = Transform3D(Basis(side * wob, up * len, fwd * wob), mid)
+	core.transform = Transform3D(Basis(side, up * len, fwd), mid)
+	sheath.set_instance_shader_parameter("beam_len", len)
+	core.set_instance_shader_parameter("beam_len", len)
+	var g_src := pb.get_node("glow_src") as Node3D        # on the victim: the wound the plasma is pulled from
+	var g_dst := pb.get_node("glow_dst") as Node3D        # at the Necromancer's hands
+	g_src.position = p1
+	g_dst.position = p0
+	g_src.scale = Vector3.ONE * (0.9 + 0.2 * sin(_time * 9.0 + h))
+	g_dst.scale = Vector3.ONE * (0.85 + 0.3 * pow(0.5 + 0.5 * sin(_time * 9.0 + h + 1.3), 3.0))
 
 func _sync_hats() -> void:
 	for st in sim.stands:

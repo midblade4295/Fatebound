@@ -13,7 +13,7 @@ const Sim = preload("res://scripts/siege/siege_sim.gd")
 const Land = preload("res://scripts/siege/siege_land.gd")
 const Castle = preload("res://scripts/siege/siege_castle.gd")
 const SLOW := {"hook": [[0.95, 2.1, 0.18]], "necro": [[0.6, 2.6, 0.25]], "hammer": [[0.55, 1.75, 0.22]], "whirl": [[0.8, 2.4, 0.22]]}
-const LENGTH := {"treeblast": 5.5, "upcheck": 3.2, "launch": 10.0, "catcheck": 1.0, "waterbomb": 6.0, "bomb": 4.6, "hook": 2.6, "necro": 3.0, "hammer": 2.4, "dawn": 5.0, "clash": 4.5, "captive": 4.0, "heroes": 4.3, "lineup": 4.0, "gather": 4.0, "build": 7.0, "backstab": 4.0, "assault": 5.5,
+const LENGTH := {"plasma": 3.0, "treeblast": 5.5, "upcheck": 3.2, "launch": 10.0, "catcheck": 1.0, "waterbomb": 6.0, "bomb": 4.6, "hook": 2.6, "necro": 3.0, "hammer": 2.4, "dawn": 5.0, "clash": 4.5, "captive": 4.0, "heroes": 4.3, "lineup": 4.0, "gather": 4.0, "build": 7.0, "backstab": 4.0, "assault": 5.5,
 	"rampart": 4.0, "whirl": 3.2, "feast": 4.0, "carry": 5.0, "throne": 4.0, "reveal": 9.0,
 	# Round 28 (Kevin + Derek Lieu's makeover advice: core action first, struggle, comedy, fewer cards)
 	"breakin": 10.6, "carry2": 7.9, "toofat": 5.5, "hatsteal": 5.0}
@@ -81,6 +81,35 @@ func _stage() -> void:
 		_revive(u)
 		u.bot = true
 	match shot:
+		"plasma":
+			# (0.31.50 check) a Necromancer siphoning a Knight with the plasma beam
+			var pc := Vector2(-6.0, 30.0)
+			var nec: Dictionary = s.units.filter(func(x): return x.team == 0 and x.id != me.id)[0]
+			var vic: Dictionary = s.units.filter(func(x): return x.team == 1)[0]
+			s._set_class(nec, "priest", true)
+			s._set_class(vic, "knight", false)
+			for x in [nec, vic]:
+				x.bot = false
+				_revive(x)
+				x.move = Vector2.ZERO
+				x.tower = -1                      # (a tower archer can't use a beam)
+				x.carrying = false
+			nec.pos = pc
+			vic.pos = pc + Vector2(4.5, -3.0)
+			nec.face = Sim.angle_of((vic.pos as Vector2) - (nec.pos as Vector2))
+			vic.face = Sim.angle_of((nec.pos as Vector2) - (vic.pos as Vector2))
+			vic.hp = 9999.0
+			vic.max_hp = 9999.0
+			beats = []
+			for bt in 12:
+				beats.append([0.15 + bt * 0.25, nec.id, "drain"])           # the drain is held on the attack button
+			for u in s.units:
+				if u.id != nec.id and u.id != vic.id:
+					u.bot = false
+					u.move = Vector2.ZERO
+					u.pos = Sim.spawn(u.team)
+			cam_a = [_v(pc + Vector2(2.2, 5.8), 2.6), _v(pc + Vector2(2.2, -1.5), 1.2)]
+			cam_b = [_v(pc + Vector2(3.4, 5.4), 2.9), _v(pc + Vector2(2.2, -1.5), 1.2)]
 		"treeblast":
 			# (0.31.33 check) a worker fells a tree (logs pop and chips fly), then a bomb goes off by the next trees
 			var tn: Array = s.nodes.filter(func(n): return str(n.kind) == "wood" and int(n.amount) > 0)
@@ -938,6 +967,8 @@ func _process(delta: float) -> bool:
 				s.act(bu.id, "interact")
 			elif str(b[2]) == "hammer":
 				s._throw_hammer(bu)
+			elif str(b[2]) == "drain":
+				s.act(bu.id, "attack")          # (a Priest's attack is the beam: the Necromancer's drain)
 			elif str(b[2]) == "attack":
 				bu.cd_attack = 0.0
 				s._start_attack(bu, "attack")

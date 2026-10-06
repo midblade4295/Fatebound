@@ -1951,3 +1951,16 @@ K2/K3 notes (0.17.0)
 - Quick suite: ALL PASSED (32).
 - (same version) The source models moved out of the Godot project to art_sources/gold_megakit: the export filter kept
   the source files out but not their imported textures (7.5 MB got into the first build). Only the four 320 px icons ship.
+
+# 0.31.50 (Kevin: a plasma beam for the Necromancer's siphon -- option 3, our own shader)
+- The EffectBlocks pack's plasma beam was removed by its author over copyright (an adaptation of someone else's shader),
+  so it isn't in Kevin's copy; this is an original shader, scripts/siege/plasma_beam.gdshader: two twisting wave trains
+  warped by each other plus scrolling value noise make the plasma; pulses run from the victim to the Necromancer; dark
+  violet troughs, green filaments with hot crests; soft view-facing sides, faded ends; beam_len as an instance uniform
+  so the waves keep their size at any length. blend_mix (an additive beam washed out to white over the sunlit grass
+  under the HQ glow).
+- View._sync_plasma / _make_plasma: a 0.3 m plasma sheath (ripples in width) round a 0.07 m core, a purple glow on the
+  victim and a green bloom at the Necromancer's hands (radial-gradient billboards); replaces the flat green cylinder.
+  The Priest's heal beam and the Necromancer's white heal to an ally are unchanged.
+- trailer5_shots: "plasma" check shot (a Necromancer draining a Knight) and a "drain" beat (the real attack action:
+  the old "attack" beat bypassed the Priest's beam). Quick suite: ALL PASSED (32).
