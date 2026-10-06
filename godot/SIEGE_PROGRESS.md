@@ -2052,3 +2052,15 @@ K2/K3 notes (0.17.0)
 - Meteor: fireball 1.5 -> 0.55 (45 m), crumble 0.9 -> 0.3 (32 m). Herald: SiegeMode.HERALD_GAIN 0.5 (-6 dB) in matches,
   the tutorial's Herald the same.
 - Quick suite: ALL PASSED (32).
+
+# 0.31.59 (Kevin: realistic, physics-based smoke from the explosions that lingers)
+- View.smoke_cloud(at, size, amount, life): a one-shot GPUParticles3D per blast -- puffs thrown out of a sphere, slowed
+  by air drag (damping 2.4-3.6 x size), lifted by buoyancy and pushed by a steady breeze (gravity (0.45, 0.55, 0.18)),
+  stirred by a turbulence field (strength 1.8, influence 0.05-0.16) so the cloud boils and curls; each puff swells
+  (scale curve 0.35 -> 1.45), turns slowly, starts dark and fire-warm, thins to pale grey and fades. Depth-sorted,
+  soft against the ground (proximity fade 1.4), no shadows, 40 % on low effects. Puff texture generated
+  (assets/vfx/smoke/smoke_puff.png: radial falloff broken up by fractal noise).
+- Bomb: 64 puffs, 9.5 s, size 1.7; meteor: 34 puffs, 7.5 s, size 1.05. With our smoke on, the pack explosion drops its
+  own smoke emitter and its fireball cools to a thin fading grey (was an opaque near-black ball).
+- Checked on the treeblast shot (now 9.5 s): fireball -> fiery cloud -> grey-brown smoke that rises, drifts and still
+  hangs in pale wisps 6.6 s on. Quick suite: ALL PASSED (32).

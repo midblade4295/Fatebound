@@ -4195,11 +4195,27 @@ func _kick_debris() -> void:
 # meteor, its light one (a small pop, sparks, puffs) on catapult stones. Copies in assets/vfx/effectblocks without the
 # pack's demo script and sound. Every emitter is switched to local coordinates so the node's scale sizes the whole
 # effect; half the particles on low effects; freed when the longest emitter is done.
+static var _fire_cool: ParticleProcessMaterial = null
 const PACK_EXPLOSIONS := {"heavy": preload("res://assets/vfx/effectblocks/explosion_heavy.tscn"),
 	"light": preload("res://assets/vfx/effectblocks/explosion_light.tscn")}
 
-func _pack_explosion(kind: String, at: Vector3, size: float) -> void:
+func _pack_explosion(kind: String, at: Vector3, size: float, own_smoke := false) -> void:
 	var n: Node3D = (PACK_EXPLOSIONS[kind] as PackedScene).instantiate()
+	if own_smoke and n.has_node("Smoke"):
+		n.get_node("Smoke").free()                    # 0.31.59: our physical smoke replaces the pack's smoke
+	if own_smoke and n.has_node("Fire"):
+		# the pack's fireball cools to an opaque near-black ball; ours cools to a thin grey and fades, handing over to
+		# the smoke cloud
+		var fire := n.get_node("Fire") as GPUParticles3D
+		if _fire_cool == null:
+			_fire_cool = (fire.process_material as ParticleProcessMaterial).duplicate()
+			var g := Gradient.new()
+			g.offsets = PackedFloat32Array([0.0, 0.16, 0.3, 0.55])
+			g.colors = PackedColorArray([Color(0.95, 0.5, 0.0, 1.0), Color(0.85, 0.27, 0.04, 1.0), Color(0.3, 0.26, 0.23, 0.5), Color(0.34, 0.33, 0.32, 0.0)])
+			var gt := GradientTexture1D.new()
+			gt.gradient = g
+			_fire_cool.color_ramp = gt
+		fire.process_material = _fire_cool
 	n.position = at
 	n.scale = Vector3.ONE * size
 	add_child(n)
@@ -4212,6 +4228,98 @@ func _pack_explosion(kind: String, at: Vector3, size: float) -> void:
 		life = maxf(life, p3.lifetime * 1.6)
 		p3.restart()
 	get_tree().create_timer(life + 0.5).timeout.connect(n.queue_free)
+
+# ---------- physical smoke (0.31.59, Kevin: realistic, physics-based smoke that lingers after explosions) ----------
+# A one-shot GPU particle cloud per blast: puffs (a generated, lumpy smoke texture) are thrown out of a sphere at the
+# blast, slowed hard by air drag (damping), lifted by buoyancy and pushed by a steady breeze (both as gravity), and
+# stirred by a turbulence noise field so the cloud boils and curls instead of moving in straight lines. Each puff swells
+# as it rises, turns slowly, starts dark and fire-warm, then thins to a pale grey and fades -- the cloud lingers for
+# 8-10 s. Depth-sorted, soft where it meets the ground (proximity fade), no shadows; 40 % of the puffs on low effects.
+const SMOKE_TEX := preload("res://assets/vfx/smoke/smoke_puff.png")
+const SMOKE_WIND := Vector3(0.45, 0.0, 0.18)
+static var _smoke_draw: StandardMaterial3D = null
+
+static func _smoke_draw_mat() -> StandardMaterial3D:
+	if _smoke_draw == null:
+		var m := StandardMaterial3D.new()
+		m.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+		m.billboard_keep_scale = true
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		m.vertex_color_use_as_albedo = true
+		m.albedo_texture = SMOKE_TEX
+		m.proximity_fade_enabled = true
+		m.proximity_fade_distance = 1.4
+		m.cull_mode = BaseMaterial3D.CULL_DISABLED
+		_smoke_draw = m
+	return _smoke_draw
+
+func smoke_cloud(at: Vector3, size: float, amount: int, life: float) -> void:
+	var pm := ParticleProcessMaterial.new()
+	pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
+	pm.emission_sphere_radius = 1.1 * size
+	pm.direction = Vector3(0, 1, 0)
+	pm.spread = 80.0
+	pm.initial_velocity_min = 2.6 * size
+	pm.initial_velocity_max = 6.5 * size
+	pm.damping_min = 2.4 * size                       # air drag: the blast's push dies within a second or so
+	pm.damping_max = 3.6 * size
+	pm.gravity = Vector3(0.0, 0.55, 0.0) + SMOKE_WIND  # buoyancy up, the breeze sideways
+	pm.turbulence_enabled = true
+	pm.turbulence_noise_strength = 1.8
+	pm.turbulence_noise_scale = 3.2 * size
+	pm.turbulence_noise_speed = Vector3(0.15, 0.3, 0.1)
+	pm.turbulence_noise_speed_random = 0.3
+	pm.turbulence_influence_min = 0.05
+	pm.turbulence_influence_max = 0.16
+	pm.lifetime_randomness = 0.35
+	pm.angle_min = -180.0
+	pm.angle_max = 180.0
+	pm.angular_velocity_min = -14.0
+	pm.angular_velocity_max = 14.0
+	pm.scale_min = 2.0 * size
+	pm.scale_max = 3.4 * size
+	var sc := Curve.new()
+	sc.add_point(Vector2(0.0, 0.35))
+	sc.add_point(Vector2(0.2, 0.85))
+	sc.add_point(Vector2(1.0, 1.45))
+	var sct := CurveTexture.new()
+	sct.curve = sc
+	pm.scale_curve = sct
+	var g := Gradient.new()
+	g.offsets = PackedFloat32Array([0.0, 0.04, 0.12, 0.45, 1.0])
+	g.colors = PackedColorArray([Color(0.55, 0.32, 0.16, 0.0), Color(0.42, 0.28, 0.2, 0.92), Color(0.24, 0.23, 0.22, 0.9),
+		Color(0.42, 0.41, 0.4, 0.62), Color(0.62, 0.62, 0.62, 0.0)])
+	var gt := GradientTexture1D.new()
+	gt.gradient = g
+	pm.color_ramp = gt
+	var gi := Gradient.new()                          # each puff a little lighter or darker than the next
+	gi.colors = PackedColorArray([Color(0.82, 0.82, 0.82), Color(1.12, 1.1, 1.08)])
+	var git := GradientTexture1D.new()
+	git.gradient = gi
+	pm.color_initial_ramp = git
+	var p := GPUParticles3D.new()
+	p.process_material = pm
+	var q := QuadMesh.new()
+	q.size = Vector2.ONE
+	q.material = _smoke_draw_mat()
+	p.draw_pass_1 = q
+	p.amount = amount
+	p.lifetime = life
+	p.one_shot = true
+	p.explosiveness = 0.85
+	p.randomness = 0.4
+	p.fixed_fps = 30
+	p.interpolate = true
+	p.draw_order = GPUParticles3D.DRAW_ORDER_VIEW_DEPTH
+	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	p.visibility_aabb = AABB(Vector3(-22, -4, -22) * size, Vector3(44, 34, 44) * size)
+	if low_fx:
+		p.amount_ratio = 0.4
+	p.position = at
+	add_child(p)
+	p.restart()
+	get_tree().create_timer(life * 1.4 + 1.0).timeout.connect(p.queue_free)
 
 # ---------- shockwave (0.31.56, Kevin: the EffectBlocks pack's shockwave on the bomb and meteor blasts) ----------
 # The pack's effect (assets/other/shockwave.tscn): one torus, inner 0.8 / outer 1.0, triangular section, growing from
@@ -4270,7 +4378,8 @@ func _sync_shocks() -> void:
 func bomb_blast(at2: Vector2) -> void:
 	var at := Vector3(at2.x, Sim.height_at(at2) + 0.6, at2.y)
 	shockwave(Vector3(at.x, at.y - 0.2, at.z), Sim.BOMB_R + 3.0)           # 0.31.56 (0.31.58: wider, with the bigger blast)
-	_pack_explosion("heavy", Vector3(at.x, at.y - 0.4, at.z), 6.0)      # 0.31.57: the EffectBlocks heavy explosion (0.31.58: much larger)
+	_pack_explosion("heavy", Vector3(at.x, at.y - 0.4, at.z), 6.0, true)      # 0.31.57: the EffectBlocks heavy explosion (0.31.58: much larger)
+	smoke_cloud(Vector3(at.x, at.y - 0.2, at.z), 1.7, 64, 9.5)              # 0.31.59: the cloud that hangs over it
 	ring_at(Vector3(at.x, at.y - 0.5, at.z), Color(1.0, 0.55, 0.2), Sim.BOMB_R, 0.7)
 	ring_at(Vector3(at.x, at.y - 0.5, at.z), Color(1.0, 0.9, 0.6), Sim.BOMB_R * 0.6, 0.4)
 	# (its fire, sparks, smoke and burning debris replace the old glow sphere, sparks and smoke puffs)
@@ -4694,7 +4803,8 @@ func _meteor_warn(p2: Vector2, delay: float, team: int) -> void:
 func _meteor_hit(p2: Vector2, burn: float) -> void:
 	var at := Vector3(p2.x, Sim.height_at(p2) + 0.4, p2.y)
 	shockwave(at, Sim.METEOR_R + 1.2)                                          # 0.31.56
-	_pack_explosion("heavy", Vector3(at.x, at.y - 0.2, at.z), 3.4)      # 0.31.57 (0.31.58: a bit larger)
+	_pack_explosion("heavy", Vector3(at.x, at.y - 0.2, at.z), 3.4, true)      # 0.31.57 (0.31.58: a bit larger)
+	smoke_cloud(at, 1.05, 34, 7.5)                                         # 0.31.59
 	ring_at(at, Color(1.0, 0.5, 0.15), Sim.METEOR_R * 1.3, 0.6)
 	shake(0.5)
 	_blast_bodies(p2, Sim.METEOR_R + 1.5, 5.0)

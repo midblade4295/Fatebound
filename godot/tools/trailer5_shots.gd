@@ -13,7 +13,7 @@ const Sim = preload("res://scripts/siege/siege_sim.gd")
 const Land = preload("res://scripts/siege/siege_land.gd")
 const Castle = preload("res://scripts/siege/siege_castle.gd")
 const SLOW := {"hook": [[0.95, 2.1, 0.18]], "necro": [[0.6, 2.6, 0.25]], "hammer": [[0.55, 1.75, 0.22]], "whirl": [[0.8, 2.4, 0.22]]}
-const LENGTH := {"asnrag": 3.2, "plasma": 3.0, "treeblast": 5.5, "upcheck": 3.2, "launch": 10.0, "catcheck": 1.0, "waterbomb": 6.0, "bomb": 4.6, "hook": 2.6, "necro": 3.0, "hammer": 2.4, "dawn": 5.0, "clash": 4.5, "captive": 4.0, "heroes": 4.3, "lineup": 4.0, "gather": 4.0, "build": 7.0, "backstab": 4.0, "assault": 5.5,
+const LENGTH := {"asnrag": 3.2, "plasma": 3.0, "treeblast": 9.5, "upcheck": 3.2, "launch": 10.0, "catcheck": 1.0, "waterbomb": 6.0, "bomb": 4.6, "hook": 2.6, "necro": 3.0, "hammer": 2.4, "dawn": 5.0, "clash": 4.5, "captive": 4.0, "heroes": 4.3, "lineup": 4.0, "gather": 4.0, "build": 7.0, "backstab": 4.0, "assault": 5.5,
 	"rampart": 4.0, "whirl": 3.2, "feast": 4.0, "carry": 5.0, "throne": 4.0, "reveal": 9.0,
 	# Round 28 (Kevin + Derek Lieu's makeover advice: core action first, struggle, comedy, fewer cards)
 	"breakin": 10.6, "carry2": 7.9, "toofat": 5.5, "hatsteal": 5.0}
