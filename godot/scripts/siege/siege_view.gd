@@ -31,7 +31,7 @@ const LOOKS := {
 	"priest": {"model":"Mage","r":"wand","l":"","tint":"#fff1c8","idle":"g/Idle_B","attack":"r/Ranged_Magic_Spellcasting_Long","ability":"r/Ranged_Magic_Raise"},
 	# Upgraded priest (0.31.2, Kevin): the Necromancer from KayKit Skeletons (CC0, same Rig_Medium) with the skull staff.
 	# 0.31.32: the last three upgrades get their own looks
-	"assassin": {"model":"Rogue_Hooded","r":"dagger","l":"dagger","idle":"g/Idle_B","attack":"m/Melee_Dualwield_Attack_Stab","ability":"m/Melee_1H_Attack_Jump_Chop","tint":"#5b4f73"},
+	"assassin": {"model":"meshy:assassin","r":"dagger","l":"dagger","idle":"g/Idle_B","attack":"m/Melee_Dualwield_Attack_Stab","ability":"m/Melee_1H_Attack_Jump_Chop","tint":"#5b4f73"},
 	"sniper": {"model":"Ranger","r":"crossbow_2handed","l":"","idle":"r/Ranged_Bow_Idle","attack":"r/Ranged_Bow_Release","ability":"r/Ranged_Bow_Draw","tint":"#4f6b4a"},
 	"archmage": {"model":"Mage","r":"staff","l":"spellbook_open","idle":"g/Idle_B","attack":"r/Ranged_Magic_Shoot","ability":"r/Ranged_Magic_Summon","tint":"#a33d3d"},
 	"necromancer": {"model":"Necromancer","r":"Skeleton_Staff","l":"","idle":"g/Idle_B","attack":"r/Ranged_Magic_Spellcasting_Long","ability":"r/Ranged_Magic_Raise"},
@@ -2452,6 +2452,81 @@ static func look_key(u: Dictionary) -> String:
 		return {"rogue":"assassin", "ranger":"sniper", "mage":"archmage"}[u.cls]
 	return u.cls
 
+# ---------- Meshy characters (0.31.52, Kevin: a new Assassin model from Meshy) ----------
+# A Meshy-generated, Meshy-rigged character stands in for a KayKit one. Its bones are renamed to the KayKit names (and
+# hand slots added) so weapons, hats and the rest of the view find what they expect; its animations are the game's
+# KayKit animations baked onto its own skeleton by tools/retarget_meshy.gd (anims_<library>.res, same names), and
+# rig.json carries the fit scale and the hand-slot rests the tool worked out.
+const MESHY := {"assassin": "res://assets/meshy/assassin/"}
+const MESHY_RENAME := {"Hips":"hips", "Spine02":"spine", "Spine":"chest", "Head":"head",
+	"LeftArm":"upperarm.l", "LeftForeArm":"lowerarm.l", "LeftHand":"wrist.l",
+	"RightArm":"upperarm.r", "RightForeArm":"lowerarm.r", "RightHand":"wrist.r",
+	"LeftUpLeg":"upperleg.l", "LeftLeg":"lowerleg.l", "LeftFoot":"foot.l", "LeftToeBase":"toes.l",
+	"RightUpLeg":"upperleg.r", "RightLeg":"lowerleg.r", "RightFoot":"foot.r", "RightToeBase":"toes.r"}
+static var _meshy_libs := {}
+static var _meshy_rig := {}
+
+static func meshy_rig(name: String) -> Dictionary:
+	if not _meshy_rig.has(name):
+		var f := FileAccess.open(str(MESHY[name]) + "rig.json", FileAccess.READ)
+		_meshy_rig[name] = JSON.parse_string(f.get_as_text()) if f != null else {}
+	return _meshy_rig[name]
+
+static func _xf(a: Array) -> Transform3D:
+	return Transform3D(Vector3(a[0], a[1], a[2]), Vector3(a[3], a[4], a[5]), Vector3(a[6], a[7], a[8]), Vector3(a[9], a[10], a[11]))
+
+static func meshy_body(name: String) -> Dictionary:
+	var packed := Stage.scene(str(MESHY[name]) + "rigged.glb")
+	if packed == null:
+		return {}
+	var body: Node3D = packed.instantiate()
+	for ap in body.find_children("*", "AnimationPlayer", true, false):
+		ap.free()                                   # Meshy's own sample player
+	var sk: Skeleton3D = body.find_child("Skeleton3D", true, false)
+	for i in sk.get_bone_count():
+		if MESHY_RENAME.has(sk.get_bone_name(i)):
+			sk.set_bone_name(i, MESHY_RENAME[sk.get_bone_name(i)])
+	for mi in body.find_children("*", "MeshInstance3D", true, false):
+		var skin: Skin = (mi as MeshInstance3D).skin              # the skin binds bones by name: rename them too
+		if skin != null:
+			for b in skin.get_bind_count():
+				if MESHY_RENAME.has(str(skin.get_bind_name(b))):
+					skin.set_bind_name(b, MESHY_RENAME[str(skin.get_bind_name(b))])
+	var rig: Dictionary = meshy_rig(name)
+	for hand in ["r", "l"]:
+		if rig.has("slot_" + hand) and sk.find_bone("handslot." + hand) < 0:
+			var bi := sk.get_bone_count()
+			sk.add_bone("handslot." + hand)
+			sk.set_bone_parent(bi, sk.find_bone("wrist." + hand))
+			sk.set_bone_rest(bi, _xf(rig["slot_" + hand]))
+	sk.reset_bone_poses()
+	# the fit goes on the rig's own root (the Armature), not on the body: the view sets every body's scale itself
+	var fit := float(rig.get("fit", 1.0))
+	var arm := sk.get_parent() as Node3D
+	if arm != null and arm != body:
+		arm.scale *= fit
+	else:
+		sk.scale *= fit
+	body.set_meta("meshy", name)
+	# from the body root to the skeleton: fit x the rig's own scale (Meshy rigs are in centimetres: 0.01)
+	var chain := 1.0
+	var n: Node = sk
+	while n != null and n != body:
+		if n is Node3D:
+			chain *= (n as Node3D).scale.x
+		n = n.get_parent()
+	return {"body":body, "skeleton":sk, "chain":chain}
+
+static func meshy_libraries(name: String) -> Dictionary:
+	if not _meshy_libs.has(name):
+		var libs := {}
+		for key in ["g", "m", "r", "mb", "ma", "t"]:
+			var path := str(MESHY[name]) + "anims_%s.res" % key
+			if ResourceLoader.exists(path):
+				libs[key] = load(path)
+		_meshy_libs[name] = libs
+	return _meshy_libs[name]
+
 static func make_body(cls: String, cosmetic: Dictionary = {}) -> Dictionary:
 	var look: Dictionary = (LOOKS.get(cls, LOOKS.villager) as Dictionary).duplicate()
 	for hand in ["r", "l"]:
@@ -2459,11 +2534,23 @@ static func make_body(cls: String, cosmetic: Dictionary = {}) -> Dictionary:
 			look[hand] = cosmetic[hand]
 	if str(look.model) == "Knight" and str(look.l) == "":
 		look.l = "bits/shield_B"            # 0.31.41 (Kevin): a Knight (and a Crusader) always carries a shield
-	var packed := Stage.scene("res://assets/kaykit/heroes/%s.glb" % look.model)
-	if packed == null:
-		return {}
-	var body: Node3D = packed.instantiate()
-	var skeleton: Skeleton3D = body.find_child("Skeleton3D", true, false)
+	var meshy := str(look.model).begins_with("meshy:")
+	var body: Node3D
+	var skeleton: Skeleton3D
+	var chain := 1.0
+	if meshy:
+		var mb := meshy_body(str(look.model).substr(6))
+		if mb.is_empty():
+			return {}
+		body = mb.body
+		skeleton = mb.skeleton
+		chain = float(mb.chain)
+	else:
+		var packed := Stage.scene("res://assets/kaykit/heroes/%s.glb" % look.model)
+		if packed == null:
+			return {}
+		body = packed.instantiate()
+		skeleton = body.find_child("Skeleton3D", true, false)
 	if skeleton != null:
 		for hand in ["r","l"]:
 			var file := str(look.get(hand, ""))
@@ -2478,18 +2565,25 @@ static func make_body(cls: String, cosmetic: Dictionary = {}) -> Dictionary:
 			if weapon != null:
 				var model: Node3D = weapon.instantiate()
 				_fit_weapon(model, file, str(look.model), hand)
-				slot.add_child(model)
+				if meshy:
+					var holder := Node3D.new()         # undo the rig's centimetre scale: weapons keep their size
+					holder.scale = Vector3.ONE / chain
+					holder.add_child(model)
+					slot.add_child(holder)
+				else:
+					slot.add_child(model)
 	var player := AnimationPlayer.new()
 	body.add_child(player)
 	player.root_node = NodePath("..")
-	for key in libraries():
-		player.add_animation_library(key, _libs[key])
+	var libs: Dictionary = meshy_libraries(str(look.model).substr(6)) if meshy else libraries()
+	for key in libs:
+		player.add_animation_library(key, libs[key])
 	for mi in body.find_children("*", "MeshInstance3D", true, false):
 		(mi as MeshInstance3D).cast_shadow = (GeometryInstance3D.SHADOW_CASTING_SETTING_ON if _cast_static else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
 	if not cosmetic.has("tint") and look.has("tint"):
 		cosmetic = cosmetic.duplicate()
 		cosmetic["tint"] = look.tint
-	if cosmetic.has("tint"):
+	if cosmetic.has("tint") and not meshy:                   # (a Meshy model is painted already)
 		_apply_tint(body, str(look.model), Color(str(cosmetic.tint)))
 	return {"body":body, "player":player}
 
@@ -4197,8 +4291,8 @@ func _ragdoll(a: Dictionary, push: Vector3) -> void:
 	if is_instance_valid(camera) and Vector2(root.global_position.x - camera.global_position.x, root.global_position.z - camera.global_position.z).length() > RAG_NEAR:
 		return
 	var skel: Skeleton3D = (a.body as Node3D).find_child("Skeleton3D", true, false)
-	if skel == null:
-		return
+	if skel == null or (a.body as Node3D).has_meta("meshy"):
+		return                                              # (a Meshy rig is in centimetres: it plays its death instead)
 	while _ragdolls.size() >= RAG_MAX:
 		_ragdoll_end(_ragdolls[0])
 	var sim3 := PhysicalBoneSimulator3D.new()

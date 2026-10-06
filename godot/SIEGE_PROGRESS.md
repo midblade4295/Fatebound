@@ -1969,3 +1969,19 @@ K2/K3 notes (0.17.0)
 - The siphon's plasma material sets flow_dir -1: the cylinder's UV.y = 1 end is at the Necromancer, and +1 ran the
   pattern toward UV.y = 0 (out to the victim). Measured on the render: cross-correlating the beam's greenness profile
   between consecutive frames, 13 of 15 frame pairs move toward the Necromancer. Quick suite: ALL PASSED (32).
+
+# 0.31.52 (Kevin: a new Assassin character model, made with Meshy; rigged)
+- Meshy (Kevin's account, ~75 credits in all): text-to-3D came out realistic (small head) -- dropped. Then
+  multi-image-to-3D from our own Assassin rendered unarmed in T-pose (front/side/back on white) for the chibi
+  proportions, retextured (violet hood and short cape, black mask, charcoal tunic, crossed straps, crimson sash, grey
+  boots), auto-rigged (24-bone humanoid, centimetre units). 10.3k triangles vs KayKit Rogue's 7.2k.
+- assets/meshy/assassin: rigged.glb, rig.json (fit 1.81 to the KayKit height; hand-slot rests), anims_<g|m|r|mb|ma|t>.res
+  -- all 110 KayKit animations baked onto the Meshy skeleton by tools/retarget_meshy.gd (each mapped bone's global
+  rotation relative to its KayKit rest applied to the Meshy bone's rest; hips motion scaled by hip heights; the hand
+  slots baked too, since KayKit turns its hand bones; clips that scale a bone to zero hold it still).
+- View: MESHY / meshy_body() renames the Meshy bones (and the skin's binds) to KayKit names, adds handslot.r/l, puts the
+  fit on the rig's own root (the view sets each body's scale), drops Meshy's sample player; make_body uses the baked
+  libraries, wraps weapons in a holder that undoes the centimetre scale, skips the tint (it's painted); _ragdoll skips a
+  Meshy body (it plays its death clip). LOOKS.assassin.model = "meshy:assassin". Vanish's see-through copies work as
+  they are. Checked: idle, run, stab, jump chop, hit and death through make_body; the upcheck match shot (size next to
+  the Sniper and Archmage, Vanish). Assassin thumbnails re-rendered. Quick suite: ALL PASSED (32).
