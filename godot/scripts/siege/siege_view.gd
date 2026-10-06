@@ -2370,11 +2370,7 @@ static func make_body(cls: String, cosmetic: Dictionary = {}) -> Dictionary:
 			var weapon := Stage.scene(("res://assets/kaykit/bits/%s.gltf" % file.substr(5)) if bits else ("res://assets/kaykit/weapons/%s.gltf" % file))
 			if weapon != null:
 				var model: Node3D = weapon.instantiate()
-				if bits:
-					# Shields bigger so it's obvious a knight carries one (Round 12, Kevin).
-					model.scale = Vector3.ONE * (0.9 if file.contains("shield") else 0.55)
-				if file.contains("bow"):
-					model.rotation.y = PI
+				_fit_weapon(model, file)
 				slot.add_child(model)
 	var player := AnimationPlayer.new()
 	body.add_child(player)
@@ -2389,6 +2385,21 @@ static func make_body(cls: String, cosmetic: Dictionary = {}) -> Dictionary:
 	if cosmetic.has("tint"):
 		_apply_tint(body, str(look.model), Color(str(cosmetic.tint)))
 	return {"body":body, "player":player}
+
+# 0.31.43 (Kevin: weapons upside down / wrongly sized -- "staffs shouldn't be super short"). Measured: the Bits pack uses
+# the SAME convention and scale as the Adventurers weapons (grip at the origin, business end along +Y: sword_A 1.77 m
+# vs sword_1handed 1.78, staff_A 2.15 vs staff 2.15), so the old flat 0.55 on every Bits model made them all small --
+# a staff came out 1.2 m. Bits models now keep their size, with a few of the giants brought down to the Adventurers'
+# two-handers (sword_E 3.25 -> 2.4; spears, the big bows, staff_D, the halberd), and shields a little larger than life
+# so a Knight's is obvious. Bows: the Adventurers bow lies along Z and wants a half turn; the Bits bows lie along X and
+# want a quarter turn the same way round.
+const WEAPON_SCALE := {"bits/sword_E":0.75, "bits/spear_A":0.8, "bits/spear_B":0.8, "bits/bow_C_withString":0.75, "bits/staff_D":0.85,
+	"bits/halberd":0.85, "bits/shield_D":0.78, "bits/shield_C":0.85, "bits/shield_B":0.9, "bits/shield_A":1.0, "bits/sword_F":0.9, "bits/hammer_D":0.9}
+
+static func _fit_weapon(model: Node3D, file: String) -> void:
+	model.scale = Vector3.ONE * float(WEAPON_SCALE.get(file, 1.0))
+	if file.contains("bow") and not file.contains("crossbow"):
+		model.rotation.y = PI * 0.5 if file.begins_with("bits/") else PI
 
 static func _apply_tint(body: Node3D, model: String, tint: Color) -> void:
 	# A skin = the model's own material with its albedo multiplied by the tint. Made once per

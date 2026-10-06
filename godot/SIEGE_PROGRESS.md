@@ -1882,3 +1882,13 @@ K2/K3 notes (0.17.0)
   coasts, then turns slowly by itself) -- or the title / chest / gold / gems large; name, rarity and class chips, OWNED,
   chest odds; CLAIM / UNLOCK PREMIUM / REACH TIER N / CLAIMED. tools/app_shots: SHOT_PASS_DETAIL.
 - meta_economy_test: premium has >3x the free items, all the top rarities, the best at tier 30. Quick suite: ALL PASSED.
+
+# 0.31.43 (Kevin: weapons upside down and wrongly sized -- "staffs shouldn't be super short")
+- Measured every weapon model with node transforms applied: the Bits pack uses the same convention and scale as the
+  Adventurers weapons (grip at the origin, business end along +Y; sword_A 1.77 m vs sword_1handed 1.78, staff_A 2.15 vs
+  staff 2.15). The old flat 0.55 on every Bits model was the fault: a staff came out 1.2 m, daggers 0.7 m. The Bits bows
+  lie along X (the Adventurers bow along Z) and were turned by a half turn like it -- horizontal in the hand.
+- View._fit_weapon + WEAPON_SCALE: Bits models at full size, with the giants brought to the Adventurers two-handers
+  (sword_E 0.75 -> 2.4 m, spears 0.8, bow_C 0.75, staff_D 0.85, halberd 0.85, hammer_D 0.9, sword_F 0.9) and shields
+  slightly scaled (A 1.0, B 0.9, C 0.85, D 0.78); Bits bows a quarter turn, the Adventurers bow its half turn. Checked in
+  close-up renders mid-swing against the pack weapons. 56 weapon thumbnails re-rendered. Quick suite: ALL PASSED.
