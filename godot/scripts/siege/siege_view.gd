@@ -32,7 +32,7 @@ const LOOKS := {
 	# Upgraded priest (0.31.2, Kevin): the Necromancer from KayKit Skeletons (CC0, same Rig_Medium) with the skull staff.
 	# 0.31.32: the last three upgrades get their own looks
 	"assassin": {"model":"Rogue_Hooded","r":"dagger","l":"dagger","idle":"g/Idle_B","attack":"m/Melee_Dualwield_Attack_Stab","ability":"m/Melee_1H_Attack_Jump_Chop","tint":"#5b4f73"},
-	"sniper": {"model":"Ranger","r":"","l":"crossbow_2handed","idle":"r/Ranged_Bow_Idle","attack":"r/Ranged_Bow_Release","ability":"r/Ranged_Bow_Draw","tint":"#4f6b4a"},
+	"sniper": {"model":"Ranger","r":"crossbow_2handed","l":"","idle":"r/Ranged_Bow_Idle","attack":"r/Ranged_Bow_Release","ability":"r/Ranged_Bow_Draw","tint":"#4f6b4a"},
 	"archmage": {"model":"Mage","r":"staff","l":"spellbook_open","idle":"g/Idle_B","attack":"r/Ranged_Magic_Shoot","ability":"r/Ranged_Magic_Summon","tint":"#a33d3d"},
 	"necromancer": {"model":"Necromancer","r":"Skeleton_Staff","l":"","idle":"g/Idle_B","attack":"r/Ranged_Magic_Spellcasting_Long","ability":"r/Ranged_Magic_Raise"},
 }
@@ -2370,7 +2370,7 @@ static func make_body(cls: String, cosmetic: Dictionary = {}) -> Dictionary:
 			var weapon := Stage.scene(("res://assets/kaykit/bits/%s.gltf" % file.substr(5)) if bits else ("res://assets/kaykit/weapons/%s.gltf" % file))
 			if weapon != null:
 				var model: Node3D = weapon.instantiate()
-				_fit_weapon(model, file)
+				_fit_weapon(model, file, str(look.model))
 				slot.add_child(model)
 	var player := AnimationPlayer.new()
 	body.add_child(player)
@@ -2401,15 +2401,21 @@ const WEAPON_SCALE := {"bits/sword_E":0.75, "bits/spear_A":0.8, "bits/spear_B":0
 # the clawed knuckles faced backwards (half turn); the single-bladed cleaver's edge pointed up in the two-handed grip
 # (half turn); the Twin Axes were two axes in a two-handed grip (now one double-bitted axe, in economy.gd).
 const WEAPON_ROT := {"crossbow_1handed":Vector3(90, 0, 0), "crossbow_2handed":Vector3(90, 0, 0),
-	"bits/fistweapon_C_left":Vector3(0, 180, 0), "bits/fistweapon_C_right":Vector3(0, 180, 0), "bits/axe_D":Vector3(0, 180, 0)}
+	"bits/fistweapon_C_left":Vector3(0, 180, 0), "bits/fistweapon_C_right":Vector3(0, 180, 0)}
+# 0.31.45: a Knight's one-handed idle rests the weapon point-down (right for a sword, upside down for a halberd), and a
+# Rogue's the same for the scythe -- those turn head-up for that body. Two-handed crossbows moved to the right hand so
+# the bow animations' extended left arm reads as the supporting hand (economy.gd / LOOKS).
+const WEAPON_FLIP_FOR := {"Knight":["bits/halberd"], "Rogue_Hooded":["bits/scythe"], "Rogue":["bits/scythe"]}
 
-static func _fit_weapon(model: Node3D, file: String) -> void:
+static func _fit_weapon(model: Node3D, file: String, body_model := "") -> void:
 	model.scale = Vector3.ONE * float(WEAPON_SCALE.get(file, 1.0))
 	if file.contains("bow") and not file.contains("crossbow"):
 		model.rotation.y = PI * 0.5 if file.begins_with("bits/") else PI
 	if WEAPON_ROT.has(file):
 		var r: Vector3 = WEAPON_ROT[file]
 		model.rotation = Vector3(deg_to_rad(r.x), deg_to_rad(r.y), deg_to_rad(r.z))
+	if (WEAPON_FLIP_FOR.get(body_model, []) as Array).has(file):
+		model.rotation.z += PI
 	if file.contains("shield"):
 		model.position = Vector3(0.0, 0.0, 0.14 if file.begins_with("bits/") else 0.15)
 

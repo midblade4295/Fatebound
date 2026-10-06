@@ -132,7 +132,7 @@ const CATALOG := {
 	"rogue_wpn_bomb":      {"kind":"weapon", "class":"rogue", "name":"Dagger & Smoke Bomb", "rarity":"rare", "r":"dagger", "l":"smokebomb", "gold":900, "source":"shop"},
 	"rogue_wpn_bolt":      {"kind":"weapon", "class":"rogue", "name":"Hand Crossbow", "rarity":"epic", "r":"dagger", "l":"crossbow_1handed", "gems":250, "source":"shop"},
 	# --- Ranger
-	"ranger_wpn_crossbow": {"kind":"weapon", "class":"ranger", "name":"Heavy Crossbow", "rarity":"epic", "r":"", "l":"crossbow_2handed", "source":"pass"},
+	"ranger_wpn_crossbow": {"kind":"weapon", "class":"ranger", "name":"Heavy Crossbow", "rarity":"epic", "r":"crossbow_2handed", "l":"", "source":"pass"},
 	"ranger_wpn_quiver":   {"kind":"weapon", "class":"ranger", "name":"Bow & Quiver", "rarity":"rare", "r":"quiver", "l":"bow_withString", "gold":900, "source":"shop"},
 	# --- Mage
 	"mage_wpn_tome":       {"kind":"weapon", "class":"mage", "name":"Wand & Tome", "rarity":"rare", "r":"wand", "l":"spellbook_open", "gold":1000, "source":"shop"},
@@ -199,7 +199,7 @@ const CATALOG := {
 	"bers_wpn_broad":      {"kind":"weapon", "class":"berserker", "name":"Broadblade", "rarity":"rare", "r":"bits/sword_D", "l":"", "gold":1200, "source":"shop"},
 	"necro_wpn_spear":     {"kind":"weapon", "class":"necromancer", "name":"Bone Spear", "rarity":"epic", "r":"bits/spear_B", "l":"", "gold":2400, "source":"shop"},
 	"assn_wpn_night":      {"kind":"weapon", "class":"assassin", "name":"Night Blades", "rarity":"epic", "r":"bits/dagger_C", "l":"bits/dagger_C", "gold":2400, "source":"shop"},
-	"snip_wpn_repeater":   {"kind":"weapon", "class":"sniper", "name":"Repeater", "rarity":"rare", "r":"", "l":"crossbow_1handed", "gold":1200, "source":"shop"},
+	"snip_wpn_repeater":   {"kind":"weapon", "class":"sniper", "name":"Repeater", "rarity":"rare", "r":"crossbow_1handed", "l":"", "gold":1200, "source":"shop"},
 	"arch_wpn_elder":      {"kind":"weapon", "class":"archmage", "name":"Elder Oak & Tome", "rarity":"rare", "r":"bits/staff_A", "l":"spellbook_open", "gold":1200, "source":"shop"},
 }
 

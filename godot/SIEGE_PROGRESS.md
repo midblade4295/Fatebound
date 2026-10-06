@@ -1903,3 +1903,14 @@ K2/K3 notes (0.17.0)
 - barb_wpn_twinaxe "Twin Axes" (an axe in each hand under two-handed animations: the second stuck out of the left hand)
   is now one double-bitted axe, "Twin-Bitted Axe".
 - 68 weapon thumbnails re-rendered. Quick suite: ALL PASSED (32).
+
+# 0.31.45 (Kevin's screenshots: crossbow held in both hands, right hand on the trigger; scythe upside down; axes still
+# upside down)
+- Two-handed crossbows (the Sniper's default, Heavy Crossbow, Repeater) now sit in the RIGHT hand, lying forward; with
+  the bow animations' extended left arm the hold reads as two-handed with the right hand at the trigger. The Rogue's
+  one-handed crossbow stays in the left hand beside the dagger.
+- WEAPON_FLIP_FOR: the Knight's one-handed idle rests the weapon point-down (right for a sword, wrong for a polearm), so
+  the halberd turns head-up on the Knight body; the Rogue's scythe (Reaper) turns blade-down the same way. Other bodies
+  (Berserker's halberd, Necromancer's scythe) already hold them head-up. The Great Cleaver goes back to the pack axes'
+  blade direction (its 0.31.44 half-turn is undone). Front-view renders checked. 7 thumbnails re-rendered.
+- Quick suite: ALL PASSED (32).
