@@ -13,6 +13,11 @@ func _draw() -> void:
 	var w := tint
 	match kind:
 		"coin":
+			# 0.31.49: the gold coin is the rendered MegaKit coin (assets/ui/currency/coin.png), like everywhere else
+			var ct: Texture2D = load("res://assets/ui/currency/coin.png")
+			if ct != null:
+				draw_texture_rect(ct, Rect2(-16, -16, 32, 32), false)
+				return
 			draw_circle(Vector2.ZERO, 14, Color("#8a5a0c"))
 			draw_circle(Vector2(0, -1), 13, Color("#ffcf4a"))
 			draw_arc(Vector2(0, -1), 9.5, 0, TAU, 32, Color("#e0a226"), 2.5, true)

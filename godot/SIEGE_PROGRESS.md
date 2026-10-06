@@ -1937,3 +1937,15 @@ K2/K3 notes (0.17.0)
   wheel, and zoom_by() -- ZOOM_MIN 0.75 to ZOOM_MAX 2.6, eased; closer in, the eye drops toward the look point. The pass
   detail sheet has + / - buttons on the stage and the hint reads "DRAG TO TURN · PINCH TO ZOOM". tools/app_shots:
   SHOT_ZOOM. Quick suite: ALL PASSED (32).
+
+# 0.31.49 (Kevin: a new model for the gold itself)
+- From the packs on Kevin's itch.io account (Vellicgames): Quaternius Fantasy Props MegaKit (CC0) -- Coin, Coin_Pile,
+  Coin_Pile_2 (and the pouch, tried and dropped: its pale leather read as a flour sack). Stored in assets/models/gold
+  (16 MB of trim textures, excluded from the APK export) with the licence.
+- tools/render_gold_icons.gd renders the four gold icons at 320 px: coin (one embossed coin, face on), coins_s (stacks),
+  coins_m (stacks and a spill), coins_l (a hoard). The coins' gold lives in their vertex colours ("MI_Trim_Metal_Vertex"),
+  which Godot's import leaves off -- the renderer turns them on (linear). Icon.gd's "coin" glyph draws the new coin too,
+  so the top bar, price buttons, rewards and the gem exchange all show it.
+- Also prepared but NOT shipped (git stash "0.31.49 candidate"): 11 bone weapons / Sledgehammer / Pick & Torch gold
+  cosmetics from KayKit Skeletons EXTRA and RPG Tools EXTRA on the same account.
+- Quick suite: ALL PASSED (32).
