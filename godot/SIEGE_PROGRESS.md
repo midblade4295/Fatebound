@@ -1949,3 +1949,5 @@ K2/K3 notes (0.17.0)
 - Also prepared but NOT shipped (git stash "0.31.49 candidate"): 11 bone weapons / Sledgehammer / Pick & Torch gold
   cosmetics from KayKit Skeletons EXTRA and RPG Tools EXTRA on the same account.
 - Quick suite: ALL PASSED (32).
+- (same version) The source models moved out of the Godot project to art_sources/gold_megakit: the export filter kept
+  the source files out but not their imported textures (7.5 MB got into the first build). Only the four 320 px icons ship.

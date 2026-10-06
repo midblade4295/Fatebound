@@ -1,6 +1,8 @@
 extends SceneTree
 # Renders the gold currency icons (assets/ui/currency/coin, coins_s, coins_m, coins_l) from the Quaternius
 # Fantasy Props MegaKit coin models (CC0) -- 0.31.49, Kevin: "a new model for the gold itself".
+# The source models (16 MB of trim textures) live OUTSIDE the Godot project, in art_sources/gold_megakit, so they never
+# reach the APK. To re-render: copy that folder to godot/assets/models/gold, import, run, then delete the copy:
 #   Xvfb :98 & DISPLAY=:98 godot --rendering-method mobile --path godot -s res://tools/render_gold_icons.gd
 const SIZE := 320
 const DIR := "res://assets/models/gold/"
