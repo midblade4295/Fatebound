@@ -89,7 +89,7 @@ const WORKSHOP := Vector2(13.5, 9.0)
 # where gameplay doesn't need the floor. y = the level they stand on; rot in degrees (blue space).
 const BUILDINGS := [
 	# Buildings against a wall TOUCH it (no squeeze slot behind them).
-	{"model": "building_blacksmith_%s", "p": Vector2(17.35, 9.0), "rot": -90.0, "scale": 2.8, "r": 1.7, "y": 0.0},   # the workshop
+	{"model": "meshy:workshop", "p": Vector2(16.95, 9.0), "rot": -90.0, "scale": 2.1, "r": 2.1, "y": 0.0},   # the workshop (0.31.68: Meshy, was the KayKit blacksmith at x 17.35)
 	# (The archery range and the church are the ranger's and priest's hat shops now: HAT_SHOPS.)
 ]
 # Small props (visual only), tucked against walls and terrace faces.
@@ -115,11 +115,11 @@ const HAT_SHOPS := [
 	# 0.31.67: the Knight's shop is a Meshy giant great helm ("meshy:" = assets/meshy/<name>/, siege_view MESHY_BUILDINGS).
 	# "flag" = where the upgrade flag stands, in the shop's own frame (metres, door = +z); default (0, 3.4, 0).
 	{"cls": "knight", "model": "meshy:knight_shop", "b": Vector2(-17.2, 5.8), "rot": 90.0, "scale": 2.2, "r": 1.8, "y": 0.0, "door": Vector2(-14.6, 5.8), "flag": Vector3(-0.85, 2.82, 0.25)},
-	{"cls": "barbarian", "model": "building_lumbermill_%s", "b": Vector2(-15.2, 26.0), "rot": 180.0, "scale": 2.4, "r": 1.8, "y": 3.6, "door": Vector2(-15.2, 23.6)},
+	{"cls": "barbarian", "model": "meshy:barbarian_shop", "b": Vector2(-15.2, 26.0), "rot": 180.0, "scale": 1.85, "r": 1.8, "y": 3.6, "door": Vector2(-15.2, 23.6), "flag": Vector3(-0.88, 1.75, -0.1)},
 	{"cls": "rogue", "model": "building_market_%s", "b": Vector2(-17.2, 11.65), "rot": 90.0, "scale": 2.4, "r": 1.8, "y": 0.0, "door": Vector2(-14.6, 11.65)},
-	{"cls": "ranger", "model": "building_archeryrange_%s", "b": Vector2(16.0, 19.6), "rot": 180.0, "scale": 2.4, "r": 1.9, "y": 1.8, "door": Vector2(16.0, 17.0)},
-	{"cls": "mage", "model": "building_tower_A_%s", "b": Vector2(-8.8, 26.3), "rot": 180.0, "scale": 2.2, "r": 1.5, "y": 3.6, "door": Vector2(-8.8, 24.2)},
-	{"cls": "priest", "model": "building_church_%s", "b": Vector2(14.5, 26.0), "rot": 180.0, "scale": 2.6, "r": 1.6, "y": 3.6, "door": Vector2(14.5, 23.8)},
+	{"cls": "ranger", "model": "meshy:archer_shop", "b": Vector2(16.0, 19.6), "rot": 180.0, "scale": 2.4, "r": 1.9, "y": 1.8, "door": Vector2(16.0, 17.0), "flag": Vector3(-1.38, 3.28, 0.78)},
+	{"cls": "mage", "model": "meshy:mage_shop", "b": Vector2(-8.8, 26.3), "rot": 180.0, "scale": 2.1, "r": 1.5, "y": 3.6, "door": Vector2(-8.8, 24.2), "flag": Vector3(1.52, 1.1, 0.52)},
+	{"cls": "priest", "model": "meshy:priest_shop", "b": Vector2(14.5, 26.0), "rot": 180.0, "scale": 1.75, "r": 1.6, "y": 3.6, "door": Vector2(14.5, 23.8), "flag": Vector3(0.0, 2.36, -0.7)},
 ]
 const HAT_STANDS := [Vector2(-14.6, 5.8), Vector2(-15.2, 23.6), Vector2(-14.6, 11.65), Vector2(16.0, 17.0), Vector2(-8.8, 24.2), Vector2(14.5, 23.8)]
 const HAT_HALL := Vector2(-13.0, 7.4)     # open floor by the knight machine (hints / tests)

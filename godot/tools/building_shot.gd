@@ -28,10 +28,18 @@ func _init() -> void:
 			print("SHOT ", shots[si]))
 
 func _cam(name: String) -> Array:
-	var shop: Dictionary = Castle.HAT_SHOPS[Sim.HAT_CLASSES.find(cls)]
 	var t := 1 if name.begins_with("red") else 0
-	var b: Vector2 = Sim._c(t, shop.b)
-	var door: Vector2 = Sim._c(t, shop.door)
+	var b: Vector2
+	var door: Vector2
+	if cls == "workshop":                               # CLS=workshop: the upgrade workshop (Castle.BUILDINGS[0])
+		var bd: Dictionary = Castle.BUILDINGS[0]
+		var fwd := Vector2(0.0, 1.0).rotated(-deg_to_rad(float(bd.rot)))
+		b = Sim._c(t, bd.p)
+		door = Sim._c(t, bd.p + fwd * 2.6)
+	else:
+		var shop: Dictionary = Castle.HAT_SHOPS[Sim.HAT_CLASSES.find(cls)]
+		b = Sim._c(t, shop.b)
+		door = Sim._c(t, shop.door)
 	var out := (door - b).normalized()                  # the way the door faces
 	var side := Vector2(-out.y, out.x)
 	var c := Vector3(b.x, Sim.height_at(b) + 1.8, b.y)

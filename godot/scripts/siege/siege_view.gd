@@ -299,8 +299,16 @@ func _sync_ambience(_dt: float) -> void:
 	for sg in _shop_glows:
 		var ph2: float = float(sg[2])
 		var k2 := 0.84 + 0.1 * sin(_time * 7.0 + ph2) + 0.06 * sin(_time * 19.0 + ph2 * 1.7)
-		(sg[0] as StandardMaterial3D).emission_energy_multiplier = 2.2 * k2
-		(sg[1] as OmniLight3D).light_energy = 1.1 * k2
+		(sg[0] as StandardMaterial3D).emission_energy_multiplier = float(sg[3]) * k2
+		if sg[1] != null:
+			(sg[1] as OmniLight3D).light_energy = 1.1 * k2
+	for cs in _shop_crystals:
+		# Slow orbit round the building, each crystal bobbing and spinning on its own beat (transforms only).
+		var a2: float = float(cs[3]) + _time * 0.45
+		var ph3: float = float(cs[4])
+		var n3 := cs[0] as Node3D
+		n3.position = Vector3(cs[1]) + Vector3(cos(a2) * float(cs[2]), 0.12 * sin(_time * 1.6 + ph3), sin(a2) * float(cs[2]))
+		n3.rotation = Vector3(0.0, _time * 1.3 + ph3, 0.25)
 
 # ---------- Water you can wade through, with simulated waves (Round 33) ----------
 # Kevin: "make the water look much more realistic, like actually simulated water ... realistic physics that create
@@ -1461,17 +1469,30 @@ func _build_hat_stands() -> void:
 		stand_nodes[st.id] = []
 
 # Meshy buildings (0.31.67, Kevin: the Knight's shop as a giant great helm -- Helm 3 of the concepts -- "add effects like
-# the smoke and glowing lights in the visor"). assets/meshy/<name>/: <name>.glb is the blue team's colours,
-# <name>_red.png the same texture with the blues turned red, <name>_glow.png the window texels to light up
-# (tools/meshy_building_tex.py). Numbers below are in the model's own units (it is scaled by HAT_SHOPS "scale"):
-# base = how far below its origin the model's foot is; vent = where the forge chimney stands on the dome (smoke
-# rises from its top); visor = where the warm light sits, just in front of the visor slits.
+# the smoke and glowing lights in the visor"; 0.31.68: the other hat shops and the workshop the same way).
+# assets/meshy/<name>/: <name>.glb is the blue team's colours, <name>_red.png the same texture with the blues turned
+# red, <name>_glow.png the texels to light up (tools/meshy_building_tex.py). Points are in the model's own units (the
+# model is scaled by HAT_SHOPS / BUILDINGS "scale"):
+#   base   how far below its origin the model's foot is (it is raised by this)
+#   glow   emission colour x the glow texture (the knight's mask is grey -> orange; the others carry their own colours)
+#   energy emission strength (flickers around it)
+#   pipe   an iron chimney pipe stood there, smoke from its top      smoke  smoke straight from these points
+#   lights warm omni lights (knight only -- every light in reach of a castle's merged mesh costs on the phone)
+#   crystals [centre, radius, count]: small glowing crystals bobbing round the building
 const MESHY_BUILDINGS := {
-	"knight_shop": {"base": 0.953, "vent": Vector3(-0.27, 0.16, -0.44), "visor": Vector3(0.0, -0.14, 0.8)},
+	"knight_shop": {"base": 0.953, "glow": Color(1.0, 0.64, 0.24), "energy": 2.2, "pipe": Vector3(-0.27, 0.16, -0.44),
+		"lights": [Vector3(0.0, -0.14, 0.8)]},
+	"barbarian_shop": {"base": 0.796, "glow": Color.WHITE, "energy": 1.7},
+	"archer_shop": {"base": 0.952, "glow": Color.WHITE, "energy": 1.7},
+	"mage_shop": {"base": 0.952, "glow": Color.WHITE, "energy": 1.7, "crystals": [Vector3(0.0, 0.05, 0.0), 0.72, 5]},
+	"priest_shop": {"base": 0.952, "glow": Color.WHITE, "energy": 1.6},
+	"workshop": {"base": 0.638, "glow": Color.WHITE, "energy": 1.5, "smoke": [Vector3(0.16, 0.66, -0.55)]},
 }
 const SHOP_GLOW := Color(1.0, 0.64, 0.24)
-var _shop_glows: Array = []            # [material, light, phase] -- flickered in _sync_ambience
+var _shop_glows: Array = []            # [material, light or null, phase, energy] -- flickered in _sync_ambience
+var _shop_crystals: Array = []         # [node, centre (root-local), radius, angle0, phase]
 static var _bld_mats: Dictionary = {}  # "<name>|<team>" -> StandardMaterial3D
+static var _crystal_mat: StandardMaterial3D = null
 
 func _meshy_building(bname: String, t: int, pos: Vector3, yaw: float, s: float) -> Node3D:
 	var spec: Dictionary = MESHY_BUILDINGS.get(bname, {})
@@ -1487,6 +1508,7 @@ func _meshy_building(bname: String, t: int, pos: Vector3, yaw: float, s: float) 
 	model.position.y = float(spec.base)
 	root.add_child(model)
 	var key := "%s|%d" % [bname, t]
+	var energy := float(spec.get("energy", 2.0))
 	var meshes := model.find_children("*", "MeshInstance3D", true, false)
 	if not _bld_mats.has(key) and not meshes.is_empty():
 		var src := (meshes[0] as MeshInstance3D).get_active_material(0) as BaseMaterial3D
@@ -1498,57 +1520,72 @@ func _meshy_building(bname: String, t: int, pos: Vector3, yaw: float, s: float) 
 		m.roughness = 0.75
 		m.metallic_specular = 0.45
 		m.emission_enabled = true
-		m.emission = SHOP_GLOW
+		m.emission = spec.get("glow", SHOP_GLOW)
 		m.emission_texture = load("res://assets/meshy/%s/%s_glow.png" % [bname, bname])
 		m.emission_operator = BaseMaterial3D.EMISSION_OP_MULTIPLY   # colour x mask (ADD would light every texel)
-		m.emission_energy_multiplier = 2.2
+		m.emission_energy_multiplier = energy
 		_bld_mats[key] = m
 	for mi in meshes:
 		(mi as MeshInstance3D).material_override = _bld_mats.get(key)
 		(mi as MeshInstance3D).cast_shadow = _cast()
 	var mat: StandardMaterial3D = _bld_mats.get(key)
-	# Forge chimney: a short iron pipe on the back of the dome, smoke drifting off with the breeze.
 	var lift := Vector3(0.0, float(spec.base), 0.0)       # spec points are in the model's frame; it was raised by base
-	var vent: Vector3 = Vector3(spec.vent) + lift
-	var pipe := MeshInstance3D.new()
-	var cyl := CylinderMesh.new()
-	cyl.top_radius = 0.05
-	cyl.bottom_radius = 0.065
-	cyl.height = 0.26
-	cyl.radial_segments = 10
-	cyl.rings = 1
-	var pm := StandardMaterial3D.new()
-	pm.albedo_color = Color("#3a3d44")
-	pm.roughness = 0.6
-	pm.metallic_specular = 0.6
-	cyl.material = pm
-	pipe.mesh = cyl
-	pipe.position = vent + Vector3(0.0, 0.13, 0.0)
-	pipe.cast_shadow = _cast()
-	root.add_child(pipe)
-	var cap := MeshInstance3D.new()
-	var cm := CylinderMesh.new()
-	cm.top_radius = 0.085
-	cm.bottom_radius = 0.085
-	cm.height = 0.035
-	cm.radial_segments = 10
-	cm.rings = 1
-	cm.material = pm
-	cap.mesh = cm
-	cap.position = vent + Vector3(0.0, 0.26, 0.0)
-	cap.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	root.add_child(cap)
-	_chimney_smoke(root.to_global(vent + Vector3(0.0, 0.3, 0.0)), s)
-	# Warm light in front of the visor, flickering with the emission like the dungeon torches.
-	var light := OmniLight3D.new()
-	light.light_color = SHOP_GLOW
-	light.light_energy = 1.1
-	light.omni_range = 3.6
-	light.omni_attenuation = 1.4
-	light.shadow_enabled = false
-	add_child(light)
-	light.global_position = root.to_global(Vector3(spec.visor) + lift)
-	_shop_glows.append([mat, light, randf() * 10.0])
+	if spec.has("pipe"):
+		# Forge chimney: a short iron pipe on the back of the knight's dome, smoke drifting off with the breeze.
+		var vent: Vector3 = Vector3(spec.pipe) + lift
+		var pm := StandardMaterial3D.new()
+		pm.albedo_color = Color("#3a3d44")
+		pm.roughness = 0.6
+		pm.metallic_specular = 0.6
+		for part in [[0.05, 0.065, 0.26, 0.13], [0.085, 0.085, 0.035, 0.26]]:   # pipe, then its cap
+			var cyl := CylinderMesh.new()
+			cyl.top_radius = part[0]
+			cyl.bottom_radius = part[1]
+			cyl.height = part[2]
+			cyl.radial_segments = 10
+			cyl.rings = 1
+			cyl.material = pm
+			var mi := MeshInstance3D.new()
+			mi.mesh = cyl
+			mi.position = vent + Vector3(0.0, part[3], 0.0)
+			mi.cast_shadow = _cast() if part[3] < 0.2 else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			root.add_child(mi)
+		_chimney_smoke(root.to_global(vent + Vector3(0.0, 0.3, 0.0)), s)
+	for sp in spec.get("smoke", []):
+		_chimney_smoke(root.to_global(Vector3(sp) + lift), s)
+	var light: OmniLight3D = null
+	for lp in spec.get("lights", []):
+		# Warm light in front of the windows, flickering with the emission like the dungeon torches.
+		light = OmniLight3D.new()
+		light.light_color = SHOP_GLOW
+		light.light_energy = 1.1
+		light.omni_range = 3.6
+		light.omni_attenuation = 1.4
+		light.shadow_enabled = false
+		add_child(light)
+		light.global_position = root.to_global(Vector3(lp) + lift)
+	_shop_glows.append([mat, light, randf() * 10.0, energy])
+	if spec.has("crystals"):
+		var cr: Array = spec.crystals
+		if _crystal_mat == null:
+			_crystal_mat = StandardMaterial3D.new()
+			_crystal_mat.albedo_color = Color("#b07cff")
+			_crystal_mat.emission_enabled = true
+			_crystal_mat.emission = Color("#a66bff")
+			_crystal_mat.emission_energy_multiplier = 2.4
+			_crystal_mat.roughness = 0.25
+		var gem := SphereMesh.new()                       # 4 sides, 1 ring: an elongated octahedron
+		gem.radius = 0.055
+		gem.height = 0.17
+		gem.radial_segments = 4
+		gem.rings = 1
+		gem.material = _crystal_mat
+		for i in int(cr[2]):
+			var c := MeshInstance3D.new()
+			c.mesh = gem
+			c.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			root.add_child(c)
+			_shop_crystals.append([c, Vector3(cr[0]) + lift, float(cr[1]), TAU * float(i) / float(cr[2]), randf() * 10.0])
 	return root
 
 func _chimney_smoke(at: Vector3, s: float) -> void:
@@ -2287,7 +2324,11 @@ func _build_castle_kit(t: int) -> void:
 	# Buildings (solid in the sim too) and props.
 	for bd in Castle.BUILDINGS:
 		var bp: Vector2 = Sim._c(t, bd.p)
-		_kit_nodes.append(_place(HEX + (str(bd.model) % col) + ".gltf", Vector3(bp.x, float(bd.y), bp.y), face + deg_to_rad(float(bd.rot)), float(bd.scale)))
+		var bm := str(bd.model)
+		if bm.begins_with("meshy:"):         # its own material and effects: not merged into the kit mesh
+			_meshy_building(bm.substr(6), t, Vector3(bp.x, float(bd.y), bp.y), face + deg_to_rad(float(bd.rot)), float(bd.scale))
+		else:
+			_kit_nodes.append(_place(HEX + (bm % col) + ".gltf", Vector3(bp.x, float(bd.y), bp.y), face + deg_to_rad(float(bd.rot)), float(bd.scale)))
 	# Banners on the corner towers, small trees in the courtyard's front corners (clear of the
 	# hat stands, workshop and gates).
 	for sx in [-Castle.HX, Castle.HX]:

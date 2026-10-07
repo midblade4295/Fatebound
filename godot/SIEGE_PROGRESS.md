@@ -2163,3 +2163,20 @@ K2/K3 notes (0.17.0)
   already smoking at the start).
 - tools/building_shot.gd: shop close-ups in a match (front, game camera, back, red; FLAGS=1 shows the upgrade flag).
   preload.json: knight_shop.glb in, barracks out. Quick suite: ALL PASSED (33).
+
+# 0.31.68 (Kevin: the rest of the buildings -- hat shops + workshop, one giant-item and one themed concept per shop;
+# picked A1 for Barbarian, Archer and Mage, B2 for Priest and Workshop; Rogue gets new concepts)
+- Concepts: ElevenLabs gpt-image-2, 2 per style per shop (24, ~4,430 credits) + 4 new Rogue concepts (hood / dagger
+  hideout, ~740). Meshy image-to-3D from each pick (5 x ~30 credits), ~20k triangles each, doors on +Z like the helm.
+- assets/meshy/<barbarian_shop|archer_shop|mage_shop|priest_shop|workshop>/ via tools/meshy_building_tex.py, which now
+  takes several --glow boxes each with its own colour rule, and --color-glow (the mask keeps the texture's colours:
+  yellow windows, the priest's sun window and cyan fountain). Workshop glow: its side window only (the bright orange
+  wood matched every looser rule).
+- MESHY_BUILDINGS generalised: base / glow / energy / pipe (knight) / smoke (workshop chimney, measured at the roof's
+  high point) / lights (knight only -- every omni light in reach of a castle's merged mesh is paid for across the whole
+  castle on the phone) / crystals (mage: 5 glowing purple crystals orbiting and bobbing round the hat, transforms only).
+- Fits: barbarian 1.85, archer 2.4, mage 2.1, priest 1.75 (base radii ~ the sims' r); upgrade flags placed on each
+  top surface (heights measured from the meshes). Workshop: Castle.BUILDINGS -> "meshy:workshop", scale 2.1, moved
+  x 17.35 -> 16.95 so its back meets the east wall, sim r 1.7 -> 2.1 (touches the wall: tests/siege_land_check flagged a 0.2 m squeeze trap at 1.85); built outside the merged kit mesh.
+- tools/building_shot.gd: CLS=workshop. preload.json: the five new GLBs in, the replaced KayKit buildings out.
+  Quick suite: ALL PASSED (33).

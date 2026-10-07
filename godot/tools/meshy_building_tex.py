@@ -6,7 +6,10 @@ Reads Meshy's GLB (one mesh, one 2K baseColor JPEG) and writes, into OUT_DIR:
   <name>_red.png    the 1K texture with the team blue turned red (plume, shields, banners)
   <name>_glow.png   1K emission mask: the bright-yellow window texels inside the glow box (model space)
 
-Usage: meshy_building_tex.py in.glb OUT_DIR name [--glow xmin,xmax,ymin,ymax,zmin,zmax]
+Usage: meshy_building_tex.py in.glb OUT_DIR name [--glow BOX[:RULE]]... [--color-glow]
+  BOX  = xmin,xmax,ymin,ymax,zmin,zmax (model units; a triangle counts if its centroid is inside)
+  RULE = hue_lo,hue_hi,min_value,min_saturation (default 36,62,0.78,0.62 = lit yellow windows)
+  --color-glow: the mask carries the texture's own colours (stained glass, water) -- use with a white emission colour.
 """
 import io
 import json
@@ -110,9 +113,12 @@ def write_glb(path, g, binc, jpeg):
 
 def main():
     src, out, name = sys.argv[1:4]
-    box = None
-    if "--glow" in sys.argv:
-        box = [float(x) for x in sys.argv[sys.argv.index("--glow") + 1].split(",")]
+    specs = []
+    for k, a in enumerate(sys.argv):
+        if a == "--glow":
+            box_s, _, rule_s = sys.argv[k + 1].partition(":")
+            specs.append(([float(x) for x in box_s.split(",")], [float(x) for x in (rule_s or "36,62,0.78,0.62").split(",")]))
+    color_glow = "--color-glow" in sys.argv
     g, binc = read_glb(src)
     im0 = g["images"][0]
     bv = g["bufferViews"][im0["bufferView"]]
@@ -130,25 +136,31 @@ def main():
     k = (np.asarray(soft).astype(np.float32) / 255.0)[..., None]
     red_rgb = rgb * (1 - k) + red_rgb * k
 
-    # Glow: bright, saturated yellow texels used by triangles whose centroid is inside the glow box.
+    # Glow: texels matching a colour rule, on triangles whose centroid lies inside that rule's box.
     glow = np.zeros((H, W), np.uint8)
-    if box is not None:
+    if specs:
         prim = g["meshes"][0]["primitives"][0]
         P = accessor(g, binc, prim["attributes"]["POSITION"])
         UV = accessor(g, binc, prim["attributes"]["TEXCOORD_0"])
         I = accessor(g, binc, prim["indices"]).reshape(-1, 3)
         cen = P[I].mean(1)
-        x0, x1, y0, y1, z0, z1 = box
-        sel = (cen[:, 0] >= x0) & (cen[:, 0] <= x1) & (cen[:, 1] >= y0) & (cen[:, 1] <= y1) & (cen[:, 2] >= z0) & (cen[:, 2] <= z1)
-        region = Image.new("L", (W, H), 0)
-        dr = ImageDraw.Draw(region)
-        for tri in I[sel]:
-            dr.polygon([(float(UV[v, 0]) * W, float(UV[v, 1]) * H) for v in tri], fill=255)
-        region = np.asarray(region.filter(ImageFilter.MaxFilter(5))) > 0
-        yel = (hue > 36) & (hue < 62) & (val > 0.78) & (sat > 0.62)
-        glow = (region & yel).astype(np.uint8) * 255
-        print("glow tris in box", int(sel.sum()), "glow texels", int((glow > 0).sum()))
+        for box, rule in specs:
+            x0, x1, y0, y1, z0, z1 = box
+            h0, h1, v0, s0 = rule
+            sel = (cen[:, 0] >= x0) & (cen[:, 0] <= x1) & (cen[:, 1] >= y0) & (cen[:, 1] <= y1) & (cen[:, 2] >= z0) & (cen[:, 2] <= z1)
+            region = Image.new("L", (W, H), 0)
+            dr = ImageDraw.Draw(region)
+            for tri in I[sel]:
+                dr.polygon([(float(UV[v, 0]) * W, float(UV[v, 1]) * H) for v in tri], fill=255)
+            region = np.asarray(region.filter(ImageFilter.MaxFilter(5))) > 0
+            col = (hue > h0) & (hue < h1) & (val > v0) & (sat > s0)
+            hit = region & col
+            glow[hit] = 255
+            print("glow box", box, "rule", rule, "tris", int(sel.sum()), "texels", int(hit.sum()))
     glow_img = Image.fromarray(glow).filter(ImageFilter.MaxFilter(3)).filter(ImageFilter.GaussianBlur(1.5))
+    if color_glow:
+        k = (np.asarray(glow_img).astype(np.float32) / 255.0)[..., None]
+        glow_img = Image.fromarray(np.clip(rgb * k * 255 + 0.5, 0, 255).astype(np.uint8))
 
     small = lambda a: Image.fromarray(np.clip(a * 255 + 0.5, 0, 255).astype(np.uint8)).resize((TEX, TEX), Image.LANCZOS)
     buf = io.BytesIO()
