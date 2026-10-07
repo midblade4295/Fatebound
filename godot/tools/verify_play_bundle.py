@@ -78,7 +78,12 @@ with zipfile.ZipFile(p) as z:
   assert not any('/'+script+'.' in n and '/assets/' in n for n in names),'Removed dice-era script shipped: '+script
  props=packed_settings(z.read(project_paths[0]))
  assert string_setting(props,'rendering/renderer/rendering_method')=='mobile','Play bundle must render with Vulkan mobile'
- assert not bool_setting(props,'rendering/rendering_device/fallback_to_opengl3'),'OpenGL fallback must be disabled'
+ # 0.31.72: Vulkan stays the default; Godot's own OpenGL fallback is ON for phones without usable Vulkan
+ # (Godot omits the key from project.binary when it equals the engine default, true: missing = on),
+ # and BootGuard's renderer switch is read from user://renderer.cfg (never shipped in the bundle).
+ fallback_key='rendering/rendering_device/fallback_to_opengl3'
+ assert fallback_key not in props or bool_setting(props,fallback_key),'OpenGL fallback must be enabled (0.31.72)'
+ assert string_setting(props,'application/config/project_settings_override')=='user://renderer.cfg','Renderer override must be user://renderer.cfg'
  for name in names:
   if not name.endswith('.so'):continue
   if '/lib/' in name:
@@ -96,7 +101,7 @@ with zipfile.ZipFile(p) as z:
  assert all_abis=={'armeabi-v7a','arm64-v8a','x86','x86_64'},('Missing Android ABI',sorted(all_abis))
  assert any('arm64-v8a' in x['path'] for x in libs)
  assert any('x86_64' in x['path'] for x in libs)
-report={'file':p.name,'bytes':p.stat().st_size,'sha256':hashlib.sha256(p.read_bytes()).hexdigest(),'upload_certificate_sha256':fp,'matches_expected_upload_certificate':True,'siege_runtime_present_dice_era_absent':True,'content_module':content_module,'project_asset_path':project_paths[0],'vulkan_mobile_no_gl_fallback':True,'test_server_and_signing_material_excluded':True,'android_abis':sorted(all_abis),'native_64bit_libraries':libs,'physical_phone_tested':False}
+report={'file':p.name,'bytes':p.stat().st_size,'sha256':hashlib.sha256(p.read_bytes()).hexdigest(),'upload_certificate_sha256':fp,'matches_expected_upload_certificate':True,'siege_runtime_present_dice_era_absent':True,'content_module':content_module,'project_asset_path':project_paths[0],'vulkan_mobile_default_with_gl_fallback':True,'renderer_override':'user://renderer.cfg','test_server_and_signing_material_excluded':True,'android_abis':sorted(all_abis),'native_64bit_libraries':libs,'physical_phone_tested':False}
 p.with_name('PLAY_BUNDLE_VERIFICATION.json').write_text(json.dumps(report,indent=2)+'\n')
 print(json.dumps(report,indent=2))
 
