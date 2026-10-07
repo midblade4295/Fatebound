@@ -705,25 +705,7 @@ static func open_pass_item(app, sid: int, t: int, prem: bool) -> void:
 		sh.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 		stage.add_child(sh)
 		sh.show_look(str(it["class"]), {"r": str(it.get("r", "")), "l": str(it.get("l", ""))})
-		var zc := VBoxContainer.new()                     # 0.31.48: zoom buttons
-		zc.add_theme_constant_override("separation", 8)
-		zc.set_anchors_and_offsets_preset(Control.PRESET_CENTER_RIGHT)
-		zc.offset_left = -58
-		zc.offset_right = -10
-		zc.offset_top = -52
-		zc.offset_bottom = 52
-		stage.add_child(zc)
-		for zb in [["+", 1.3, "pass_zoom_in"], ["−", 1.0 / 1.3, "pass_zoom_out"]]:
-			var zf: float = zb[1]
-			var b := UI.button(zc, str(zb[0]), "ghost", func(): sh.zoom_by(zf), str(zb[2]), 22, 14)
-			b.custom_minimum_size = Vector2(46, 46)
-		var hint := UI.label(stage, "DRAG TO TURN  ·  PINCH TO ZOOM", 11, Color(1, 1, 1, 0.8), UI.HEAVY_FONT)
-		hint.autowrap_mode = TextServer.AUTOWRAP_OFF
-		hint.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
-		hint.offset_top = -28
-		hint.offset_bottom = -8
-		hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		zoom_controls(stage, sh, "pass")
 	else:
 		Showcase.backdrop(stage)
 		var cc := CenterContainer.new()
@@ -918,9 +900,11 @@ static func locker(app, root: VBoxContainer) -> void:
 	hero.add_child(stage)
 	Showcase.backdrop(stage)
 	var show := Showcase.new()
+	show.interactive = true                                  # 0.31.64 (Kevin): turn and zoom the hero in the locker too
 	show.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	stage.add_child(show)
 	show.show_look(cls, p.look_for(cls))
+	zoom_controls(stage, show, "locker")
 	var nm := UI.title(root, str(Eco.CLASS_NAMES[cls]).to_upper(), 20, UI.TEXT)
 	for slot in ["weapon"]:                                 # 0.31.39: weapons are the only class cosmetic
 		section(root, "SKINS" if slot == "skin" else "WEAPONS", "", "skin" if slot == "skin" else "weapon")
@@ -938,6 +922,28 @@ static func locker(app, root: VBoxContainer) -> void:
 			var it: Dictionary = Eco.CATALOG[id]
 			if it.kind == slot and str(it["class"]) == cls:
 				locker_row(app, root, id)
+
+# + / − zoom buttons and the hint over an interactive showcase (the pass item view, 0.31.48; the locker, 0.31.64)
+static func zoom_controls(stage: Control, sh, prefix: String) -> void:
+	var zc := VBoxContainer.new()
+	zc.add_theme_constant_override("separation", 8)
+	zc.set_anchors_and_offsets_preset(Control.PRESET_CENTER_RIGHT)
+	zc.offset_left = -58
+	zc.offset_right = -10
+	zc.offset_top = -52
+	zc.offset_bottom = 52
+	stage.add_child(zc)
+	for zb in [["+", 1.3, prefix + "_zoom_in"], ["−", 1.0 / 1.3, prefix + "_zoom_out"]]:
+		var zf: float = zb[1]
+		var b := UI.button(zc, str(zb[0]), "ghost", func(): sh.zoom_by(zf), str(zb[2]), 22, 14)
+		b.custom_minimum_size = Vector2(46, 46)
+	var hint := UI.label(stage, "DRAG TO TURN  ·  PINCH TO ZOOM", 11, Color(1, 1, 1, 0.8), UI.HEAVY_FONT)
+	hint.autowrap_mode = TextServer.AUTOWRAP_OFF
+	hint.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	hint.offset_top = -28
+	hint.offset_bottom = -8
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 static func locker_row(app, root: Node, id: String) -> void:
 	var p = app.profile

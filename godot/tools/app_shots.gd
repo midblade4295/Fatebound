@@ -59,8 +59,9 @@ func _process(_d: float) -> bool:
 		if frames == base_f + 18 and tabs[i] == "pass" and OS.has_environment("SHOT_PASS_DETAIL"):
 			var pd: PackedStringArray = OS.get_environment("SHOT_PASS_DETAIL").split(",")
 			Screens.open_pass_item(app, int(app.profile.d.pass.season), int(pd[0]), pd[1] == "prem")
-		if frames == base_f + 21 and OS.has_environment("SHOT_ZOOM") and app.modal != null:
-			for c in app.modal.find_children("*", "Control", true, false):
+		if frames == base_f + 21 and OS.has_environment("SHOT_ZOOM"):
+			var zroot: Node = app.modal if app.modal != null else app          # (0.31.64: the locker's hero too)
+			for c in zroot.find_children("*", "Control", true, false):
 				if c.has_method("zoom_by"):
 					c.zoom_by(float(OS.get_environment("SHOT_ZOOM")))
 		if frames == base_f + 30: pending = tabs[i]

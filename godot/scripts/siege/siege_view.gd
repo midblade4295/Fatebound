@@ -2627,7 +2627,11 @@ const WEAPON_ROT_FOR := {"Knight":{"bits/halberd":Vector3(0, 180, 0)}, "Rogue_Ho
 
 # 0.31.48 (Kevin: turn these blades 180): the one-handed axe (Worker, Axe & Ale, Axe & Buckler -- its edge faced back
 # in the chop), the Great Cleaver and the Oathkeeper: a half roll about the weapon's own long axis.
-const WEAPON_ROLL := {"axe_1handed":180.0, "bits/axe_D":180.0, "bits/sword_G":180.0}
+static var WEAPON_ROLL_TEST := {}     # (tools only: try a roll without editing the table)
+# 0.31.64 (Kevin): the Necromancer's staff skull faces the floor (it faced the sky: worked out from the pose -- the
+# skull sits on the model's -X side, and a 195-degree roll points that straight down in the idle); the open
+# spellbook's pages face whoever holds it (cover outward).
+const WEAPON_ROLL := {"axe_1handed":180.0, "bits/axe_D":180.0, "bits/sword_G":180.0, "Skeleton_Staff":195.0, "spellbook_open":180.0}
 
 static func _fit_weapon(model: Node3D, file: String, body_model := "", hand := "r") -> void:
 	model.scale = Vector3.ONE * float(WEAPON_SCALE.get(file, 1.0))
@@ -2642,7 +2646,9 @@ static func _fit_weapon(model: Node3D, file: String, body_model := "", hand := "
 	if per.has(file):
 		var pr: Vector3 = per[file]
 		model.rotation = Vector3(deg_to_rad(pr.x), deg_to_rad(pr.y), deg_to_rad(pr.z))
-	if WEAPON_ROLL.has(file):
+	if WEAPON_ROLL_TEST.has(file):
+		model.rotate_object_local(Vector3.UP, deg_to_rad(float(WEAPON_ROLL_TEST[file])))
+	elif WEAPON_ROLL.has(file):
 		model.rotate_object_local(Vector3.UP, deg_to_rad(float(WEAPON_ROLL[file])))
 	if file.contains("shield"):
 		model.position = Vector3(0.0, 0.0, 0.14 if file.begins_with("bits/") else 0.15)

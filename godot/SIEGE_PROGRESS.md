@@ -2111,3 +2111,13 @@ K2/K3 notes (0.17.0)
 - LOOKS.necromancer -> meshy:necromancer; LOOKS.necromancer_kaykit keeps the stock body for retarget_meshy (KK_FOR).
   render_skin_icons frames the Necromancer wider like the Archmage (his crown). Thumbnails re-rendered.
 - All six upgraded classes now have Meshy bodies. Quick suite: ALL PASSED (33).
+
+# 0.31.64 (Kevin: the Necromancer's staff skull should face the floor; the Archmage's book pages should face him;
+# zoom on the locker's character)
+- WEAPON_ROLL: Skeleton_Staff 195 -- worked out, not eyeballed: the skull sits on the model's -X side (head verts span
+  x -0.46..0.14); a probe stepped the roll 0..345 in the Necromancer's idle and read where model -X points: 0 gave
+  (0.28, 0.96, 0) = the sky, 195 gives (0, -1, 0) = the floor. spellbook_open 180 (pages toward the holder, cover out).
+  (View.WEAPON_ROLL_TEST: a tools-only override for trying rolls.)
+- Locker: the hero showcase is interactive (drag to turn, pinch / wheel to zoom) with the same + / − buttons and
+  hint as the pass item view -- Screens.zoom_controls(stage, showcase, prefix), now shared by both. app_shots'
+  SHOT_ZOOM also reaches the locker. Quick suite: ALL PASSED (33).
