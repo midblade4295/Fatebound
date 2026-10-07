@@ -299,6 +299,12 @@ func _sync_ambience(_dt: float) -> void:
 	for sg in _shop_glows:
 		var ph2: float = float(sg[2])
 		var k2 := 0.84 + 0.1 * sin(_time * 7.0 + ph2) + 0.06 * sin(_time * 19.0 + ph2 * 1.7)
+		if bool(sg[4]):
+			# Blink: 0.13 s dark every 4.7 s, a quick double-blink every third time.
+			var bt := fmod(_time + ph2, 14.1)
+			var cyc := fmod(bt, 4.7)
+			if cyc < 0.13 or (bt > 9.4 and cyc > 0.3 and cyc < 0.43):
+				k2 = 0.06
 		(sg[0] as StandardMaterial3D).emission_energy_multiplier = float(sg[3]) * k2
 		if sg[1] != null:
 			(sg[1] as OmniLight3D).light_energy = 1.1 * k2
@@ -1479,6 +1485,7 @@ func _build_hat_stands() -> void:
 #   pipe   an iron chimney pipe stood there, smoke from its top      smoke  smoke straight from these points
 #   lights warm omni lights (knight only -- every light in reach of a castle's merged mesh costs on the phone)
 #   crystals [centre, radius, count]: small glowing crystals bobbing round the building
+#   blink  the glow (the rogue hood's eyes) snaps off for a moment every few seconds
 const MESHY_BUILDINGS := {
 	"knight_shop": {"base": 0.953, "glow": Color(1.0, 0.64, 0.24), "energy": 2.2, "pipe": Vector3(-0.27, 0.16, -0.44),
 		"lights": [Vector3(0.0, -0.14, 0.8)]},
@@ -1487,9 +1494,10 @@ const MESHY_BUILDINGS := {
 	"mage_shop": {"base": 0.952, "glow": Color.WHITE, "energy": 1.7, "crystals": [Vector3(0.0, 0.05, 0.0), 0.72, 5]},
 	"priest_shop": {"base": 0.952, "glow": Color.WHITE, "energy": 1.6},
 	"workshop": {"base": 0.638, "glow": Color.WHITE, "energy": 1.5, "smoke": [Vector3(0.16, 0.66, -0.55)]},
+	"rogue_shop": {"base": 0.743, "glow": Color.WHITE, "energy": 1.9, "blink": true},
 }
 const SHOP_GLOW := Color(1.0, 0.64, 0.24)
-var _shop_glows: Array = []            # [material, light or null, phase, energy] -- flickered in _sync_ambience
+var _shop_glows: Array = []            # [material, light or null, phase, energy, blink] -- flickered in _sync_ambience
 var _shop_crystals: Array = []         # [node, centre (root-local), radius, angle0, phase]
 static var _bld_mats: Dictionary = {}  # "<name>|<team>" -> StandardMaterial3D
 static var _crystal_mat: StandardMaterial3D = null
@@ -1564,7 +1572,7 @@ func _meshy_building(bname: String, t: int, pos: Vector3, yaw: float, s: float) 
 		light.shadow_enabled = false
 		add_child(light)
 		light.global_position = root.to_global(Vector3(lp) + lift)
-	_shop_glows.append([mat, light, randf() * 10.0, energy])
+	_shop_glows.append([mat, light, randf() * 10.0, energy, bool(spec.get("blink", false))])
 	if spec.has("crystals"):
 		var cr: Array = spec.crystals
 		if _crystal_mat == null:

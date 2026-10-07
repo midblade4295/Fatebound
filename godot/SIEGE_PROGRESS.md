@@ -2180,3 +2180,12 @@ K2/K3 notes (0.17.0)
   x 17.35 -> 16.95 so its back meets the east wall, sim r 1.7 -> 2.1 (touches the wall: tests/siege_land_check flagged a 0.2 m squeeze trap at 1.85); built outside the merged kit mesh.
 - tools/building_shot.gd: CLS=workshop. preload.json: the five new GLBs in, the replaced KayKit buildings out.
   Quick suite: ALL PASSED (33).
+
+# 0.31.69 (Kevin: the Rogue shop -- new concepts, picked C2: a giant dark hood with glowing eyes)
+- Concepts C (giant hood) / D (giant dagger through a crate hideout), 2 each (~740 ElevenLabs credits). C2 -> Meshy
+  image-to-3D (~30 credits): ~20k triangles, door on +Z. assets/meshy/rogue_shop/ via tools/meshy_building_tex.py
+  (--color-glow; glow boxes: the eyes inside the hood, the lantern on the left; the gold coins at the base stay unlit).
+- HAT_SHOPS.rogue: "meshy:rogue_shop", scale 1.9 (base radius ~1.8 = the sim's r), flag on the right shoulder.
+- MESHY_BUILDINGS.blink: the glow snaps off for 0.13 s every 4.7 s, with a quick double-blink every third time (the
+  hood blinks; the lantern dims with it). Every hat shop and the workshop are now Meshy models.
+- preload.json: rogue_shop.glb in, building_market out. Quick suite: ALL PASSED (33).

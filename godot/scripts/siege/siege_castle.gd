@@ -116,7 +116,7 @@ const HAT_SHOPS := [
 	# "flag" = where the upgrade flag stands, in the shop's own frame (metres, door = +z); default (0, 3.4, 0).
 	{"cls": "knight", "model": "meshy:knight_shop", "b": Vector2(-17.2, 5.8), "rot": 90.0, "scale": 2.2, "r": 1.8, "y": 0.0, "door": Vector2(-14.6, 5.8), "flag": Vector3(-0.85, 2.82, 0.25)},
 	{"cls": "barbarian", "model": "meshy:barbarian_shop", "b": Vector2(-15.2, 26.0), "rot": 180.0, "scale": 1.85, "r": 1.8, "y": 3.6, "door": Vector2(-15.2, 23.6), "flag": Vector3(-0.88, 1.75, -0.1)},
-	{"cls": "rogue", "model": "building_market_%s", "b": Vector2(-17.2, 11.65), "rot": 90.0, "scale": 2.4, "r": 1.8, "y": 0.0, "door": Vector2(-14.6, 11.65)},
+	{"cls": "rogue", "model": "meshy:rogue_shop", "b": Vector2(-17.2, 11.65), "rot": 90.0, "scale": 1.9, "r": 1.8, "y": 0.0, "door": Vector2(-14.6, 11.65), "flag": Vector3(0.85, 2.12, -0.19)},
 	{"cls": "ranger", "model": "meshy:archer_shop", "b": Vector2(16.0, 19.6), "rot": 180.0, "scale": 2.4, "r": 1.9, "y": 1.8, "door": Vector2(16.0, 17.0), "flag": Vector3(-1.38, 3.28, 0.78)},
 	{"cls": "mage", "model": "meshy:mage_shop", "b": Vector2(-8.8, 26.3), "rot": 180.0, "scale": 2.1, "r": 1.5, "y": 3.6, "door": Vector2(-8.8, 24.2), "flag": Vector3(1.52, 1.1, 0.52)},
 	{"cls": "priest", "model": "meshy:priest_shop", "b": Vector2(14.5, 26.0), "rot": 180.0, "scale": 1.75, "r": 1.6, "y": 3.6, "door": Vector2(14.5, 23.8), "flag": Vector3(0.0, 2.36, -0.7)},
