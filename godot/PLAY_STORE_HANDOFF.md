@@ -1,60 +1,104 @@
-# Fatebound Siege: Play Store handoff for Grokbot
+# Fatebound: Play Store handoff for Grokbot
 
-Updated 2026-09-29. This is the current release preparation guide; it takes precedence over historical Play/build notes in the other handoffs.
+Updated 2026-10-07 (replaces the 2026-09-29 version). This is the current release guide; it takes precedence over
+historical Play/build notes in the other handoffs.
 
-## Source and current deployment
+## What to upload
 
-- Repository: `https://github.com/midblade4295/Fatebound`
-- Start from `claude/siege-dev-r5`, sanitized R5 source commit `d05f5851f388ed2689298fd98298538770189323`, then include newer reviewed commits on that branch.
-- Preview source is 0.19.1. The supplied APK uses `com.fatebound.kaykitrebuild` and preview signing. It is not an update for the existing Play app.
-- R5's six dedicated server scripts were deployed and hash-verified on 2026-09-29. Service `fatebound-siege` is active; the public probe returned `PROBE_OK` with 3 snapshots. Recheck before a release.
-- Public WebSocket: `wss://136-113-125-3.sslip.io/fatebound/siege/ws`.
-- VM: `legionary-alpha`, Google Cloud project `shardfall-5f5de`, zone `us-central1-a`, SSH user `midblade4295`, public IP `136.113.125.3`.
-- Remote Desktop Commander device: `fd04eb44-4a0f-4902-b90e-a80b03ab9638`.
-- Runtime: `/opt/godot-4.7.2/godot`; live project: `/srv/fatebound-siege`; service port: `127.0.0.1:8082` behind existing Caddy.
-- New deployments must include `siege_sim.gd`, `siege_net.gd`, `siege_land.gd`, `siege_castle.gd`, `siege_server.gd`, and `siege_probe.gd`. The old installer omits land/castle dependencies; correct that before using it. Preserve backups and verify the public probe afterward.
+**One file: a signed release Android App Bundle (`.aab`)** exported with the Godot preset **Android Play Store**, for
+the existing app **Fatebound** (`com.fatebound.game`).
+
+Do **not** upload:
+- the itch.io / preview APKs (`Fatebound-0_31_*.apk`): package `com.fatebound.kaykitrebuild`, debug build, signed with
+  the *preview* key (`fatebound-siege-preview.jks`, cert `10:11:FC:79...`). They are not an update for the Play app and
+  Play would reject them;
+- anything built by `godot/tools/build_siege_preview.sh`, a debug export, or anything signed with the preview key.
+
+## Source
+
+- Repository `https://github.com/midblade4295/Fatebound`, branch `main` (= `claude/siege-dev-r6`), commit `3bbc982` or
+  newer reviewed commits. Game version 0.31.72 (preview versionCode 158; preview codes are unrelated to Play codes).
+- Change log: `godot/SIEGE_PROGRESS.md`.
+
+## Size (measured 2026-10-07)
+
+| What | Size |
+|---|---|
+| Game data (models, textures, sounds, scripts) | 134.2 MB compressed, measured in the 0.31.72 build |
+| Godot release engine, per ABI | ~23 MB compressed (4.7.2 release templates; arm64 22.9 + libc++ 0.4) |
+| **What a phone downloads from Play** (one ABI) | **~160 MB** (estimate: game data + one engine + ~3 MB other) |
+| The `.aab` file you upload (all 4 ABIs) | ~230 MB (estimate) |
+| Preview APK on itch (arm64 only, debug engine) | 162.6 MB |
+
+Google Play's limits for app bundles: 500 MB per module (compressed download), 4 GB for everything delivered at
+install (https://support.google.com/googleplay/android-developer/answer/9859372). The game is well inside them; no
+asset packs or on-demand delivery are needed. Godot's Gradle export puts the game data in an install-time asset pack
+(`assetPackInstallTime`), which the verifier accepts. Record the real AAB size and Play Console's reported download size.
 
 ## Release identity and version
 
-Use Godot preset **Android Play Store** in `godot/export_presets.cfg`:
+Preset **Android Play Store** in `godot/export_presets.cfg`:
 
-| Setting | Required value |
+| Setting | Value |
 | --- | --- |
 | Application ID | `com.fatebound.game` |
 | App name | `Fatebound` |
-| Output | Signed release `.aab` |
-| Engine/templates | Godot 4.7.2, matching Android templates |
-| Renderer | Vulkan mobile; OpenGL fallback disabled |
-| SDK settings currently in source | min SDK 24, target SDK 36; verify current Play requirements |
+| Output | Signed release `.aab` (Gradle build) |
+| ABIs | armeabi-v7a, arm64-v8a, x86, x86_64 |
+| Engine/templates | Godot 4.7.2 + matching Android build template |
+| Renderer | **Vulkan (mobile) by default, OpenGL fallback ON** -- see below. Do not turn the fallback off. |
+| SDK | min 24, target 36; verify against current Play requirements |
+| Export excludes | `tests/*, reports/*, tools/*, server/*, store-listing/*` (server and listing files are never shipped) |
 
-Check the existing app in Play Console, including all testing/production tracks and Latest releases and bundles. Select a new unused versionCode greater than the highest uploaded code. Do not infer the next Play code from preview code 40, the handoff's earlier code 24, the preset's current code 23, or workflow filenames containing vc22. Record the verified next code and user-facing versionName, and update the Play preset and validation expectations together.
+The preset still says versionCode 23 / versionName 1.1.1. In Play Console, check every track and *Latest releases and
+bundles*; choose a versionCode higher than anything ever uploaded and a versionName (e.g. `0.31.72`). Set both in the
+preset AND in `godot/tools/verify_play_bundle.py` (it still expects 24 / `1.2.0-siege-online`). Don't infer the code
+from preview codes (158), the old handoff's 24, or workflow file names.
+
+## Renderer: Vulkan with OpenGL fallback (Kevin, 2026-10-07)
+
+Testers on Mali-GPU phones (Pixel 7 Pro, vivo S30 mini, Redmi Note 15 Pro) froze on the splash on Vulkan. Kevin chose to
+keep Vulkan as the default and add fallbacks (0.31.72):
+- `rendering/rendering_device/fallback_to_opengl3` = true (Godot's own fallback for phones without usable Vulkan).
+  It equals the engine default, so Godot leaves it **out** of `project.binary`: missing = on.
+- `application/config/project_settings_override="user://renderer.cfg"` + the **BootGuard** autoload
+  (`scripts/app/boot_guard.gd`): after a Vulkan start that never reached the menu, the next start switches that phone
+  to OpenGL. Settings has a manual switch.
+`verify_play_bundle.py` now checks exactly this (fallback on, the override path, BootGuard present).
 
 ## Signing: private credentials only
 
-The signing-key file was removed from the entire R5 branch history. Older repository branches/history still contain previously exposed signing material. Never restore `android/keystore/upload.jks.b64`, retrieve a key from those old commits, or commit a private key/password/service-account JSON.
+Unchanged rules. The signing-key file was removed from the R5 branch history; older history still contains previously
+exposed signing material. Never restore `android/keystore/upload.jks.b64`, take a key from old commits, or commit a
+private key/password/service-account JSON.
 
-Use the upload key currently registered for **this app** in Play Console, supplied through private GitHub Actions secrets or an authorized private signing environment. If the exposed key is reset, use the replacement only after Play Console accepts it. Do not create a replacement key and assume Play will accept it.
+Use the upload key currently registered for **this app** in Play Console, supplied through private GitHub Actions
+secrets or an authorized private signing environment. If the exposed key was reset, use the replacement only once Play
+Console has accepted it. Do not create a new key and assume Play accepts it. Suggested secret names (not confirmed to
+exist): `PLAY_UPLOAD_KEYSTORE_B64`, `PLAY_UPLOAD_KEY_ALIAS`, `PLAY_UPLOAD_STORE_PASSWORD`, `PLAY_UPLOAD_KEY_PASSWORD`.
 
-Suggested private CI secrets (names to configure, not confirmed to exist):
-`PLAY_UPLOAD_KEYSTORE_B64`, `PLAY_UPLOAD_KEY_ALIAS`, `PLAY_UPLOAD_STORE_PASSWORD`, and `PLAY_UPLOAD_KEY_PASSWORD`.
-Decode the key into a restricted temporary file in CI, mask passwords, and exclude signing files from artifacts/logs. If separate store/key passwords are used, configure the signing tool correctly rather than assuming they are identical.
+Compare the signed AAB's certificate with the **current upload certificate** in Play Console (App integrity / App
+signing). `verify_play_bundle.py` hardcodes the historical SHA-256 `6971a912...84`; confirm it against the Console,
+especially after a key reset, and update it if the Console's upload certificate differs.
 
-Compare the signed AAB certificate with the **current upload certificate** under Play Console's App integrity / App signing settings. The verifier's historical SHA-256 `6971a9123d610b397f6e9122c6cb241dbbe9c9c5fdbeb5a8751d5e2e80839084` is provenance only; verify it against the current Console certificate, especially after any key reset. The upload certificate and Google Play app-signing certificate serve different purposes.
+## Build setup still to correct (not done here)
 
-## Required build setup corrections
+1. `.github/workflows/build-native-play.yml` names vc22 outputs and a historical branch; don't run it unchanged.
+2. `godot/tools/ci_restore_play_signing.py` replays the old signing stage that expects the removed repository key.
+   Replace it with private secrets.
+3. Set the verified versionCode/versionName in the preset and the verifier (above), and artifact names to match.
+   Editing workflow files needs GitHub auth with workflow permission; don't bypass that.
 
-Do not run `.github/workflows/build-native-play.yml` unchanged:
+Done on 2026-10-07: the Play preset excludes `server/*` and `store-listing/*`; the verifier's renderer checks match
+0.31.72 and it also rejects `store-listing` files.
 
-1. It still names vc22 outputs and targets a historical branch.
-2. `godot/tools/ci_restore_play_signing.py` replays the old build-aab signing stage, which expects the removed repository key and legacy plaintext configuration. Replace that mechanism with private secrets before a Play build.
-3. `godot/tools/verify_play_bundle.py` hardcodes Play code 24 / versionName `1.2.0-siege-online`, while the current preset is code 23 / `1.1.1`. Update expected values from the verified release settings; retain all substantive checks.
-4. Exclude `server/*` as well as `tests/*`, `reports/*`, and `tools/*` from the client export. Verify the archive itself excludes private files and server scripts.
-5. Set artifact names to the actual verified release code/version. Updating workflow files requires GitHub authentication with workflow-edit permission; the VM's existing OAuth token rejected workflow edits. Do not bypass that limitation.
+## Build
 
-Run `GODOT=/path/to/godot godot/tools/run_siege_tests.sh` on the exact release source. Use JDK 17+ and the configured Android SDK/build-tools. Import assets and install matching Android build templates. Once the Play preset, private signing, and verifier are corrected, export from the repository root:
+On the exact release source, run `GODOT=/path/to/godot godot/tools/run_siege_tests.sh` (34 tests). JDK 17+, Android
+SDK + build-tools 35, Godot 4.7.2 + Android build template. Then, from the repository root:
 
 ```bash
-# Supply these variables privately in the authorized build environment.
+# Supply these privately in the authorized build environment.
 export GODOT_ANDROID_KEYSTORE_RELEASE_PATH="$PLAY_UPLOAD_KEYSTORE_PATH"
 export GODOT_ANDROID_KEYSTORE_RELEASE_USER="$PLAY_UPLOAD_KEY_ALIAS"
 export GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD="$PLAY_UPLOAD_KEY_PASSWORD"
@@ -62,40 +106,59 @@ mkdir -p godot/build
 "$GODOT" --headless --editor --path godot --import
 "$GODOT" --headless --path godot --install-android-build-template \
   --export-release "Android Play Store" \
-  "$PWD/godot/build/Fatebound-Siege-Play-release.aab"
+  "$PWD/godot/build/Fatebound-Play-release.aab"
 ```
-
-This is a build recipe, not a claim that a Play-ready AAB already exists. Never substitute `build_siege_preview.sh`, a debug export, or the supplied preview keystore.
 
 ## Validate before upload
 
-- Run the corrected `verify_play_bundle.py`, Google bundletool validation/manifest inspection, and `jarsigner -verify`.
-- Verify the actual manifest: package, selected versionCode/versionName, release debuggable=false, Internet permission, min/target SDK, and required ABIs.
-- Retain checks for Siege-only runtime, Vulkan/no OpenGL fallback, installation-time game assets, 64-bit native library alignment, and no tests/server/signing material.
-- Record AAB SHA-256, upload certificate fingerprint, source commit, test results, and validation report. Do not describe headless tests as physical Android testing.
-- Recheck `systemctl is-active fatebound-siege` and the public player probe:
+- `python3 godot/tools/verify_play_bundle.py godot/build/Fatebound-Play-release.aab` (after setting the version
+  expectations), bundletool validation / manifest inspection, `jarsigner -verify`.
+- Manifest: package `com.fatebound.game`, the chosen versionCode/versionName, debuggable=false, INTERNET permission,
+  min/target SDK, the four ABIs, 64-bit library alignment.
+- Record the AAB SHA-256, size, upload-certificate fingerprint, source commit, test results and the verifier report.
+  Headless tests are not physical-phone testing.
+
+## Online server: must be redeployed first
+
+The client speaks **network protocol 35** (`Net.VERSION` in `scripts/siege/siege_net.gd`). Checked 2026-10-07: the
+live server rejects it -- the probe from commit `3bbc982` got `PROBE_FAIL ... connection closed (code 4001)`, which is
+`siege_server.gd`'s "version" rejection. Until the server is redeployed, online play from this build won't connect
+(vs-bots and the tutorial are offline and unaffected).
+
+- VM `legionary-alpha`, Google Cloud project `shardfall-5f5de`, zone `us-central1-a`, SSH user `midblade4295`,
+  public IP `136.113.125.3`; service `fatebound-siege`; runtime `/opt/godot-4.7.2/godot`; live project
+  `/srv/fatebound-siege`; port `127.0.0.1:8082` behind the existing Caddy. Public WebSocket
+  `wss://136-113-125-3.sslip.io/fatebound/siege/ws`.
+- Deploy exactly the files the server loads (checked 2026-10-07 by following its preloads):
+  `server/siege_server.gd`, `server/siege_probe.gd`, `scripts/siege/siege_sim.gd`, `siege_land.gd`, `siege_castle.gd`,
+  `siege_net.gd` -- from the same commit as the AAB. Back up first; `server/deploy/install_siege_server.sh` omitted
+  land/castle in the past, so check it.
+- Then: `systemctl is-active fatebound-siege` = active, and the probe prints `PROBE_OK` with snapshots:
 
 ```bash
 SIEGE_PROBE_URL=wss://136-113-125-3.sslip.io/fatebound/siege/ws \
-  /opt/godot-4.7.2/godot --headless --path /srv/fatebound-siege \
-  -s res://server/siege_probe.gd
+  /opt/godot-4.7.2/godot --headless --path /srv/fatebound-siege -s res://server/siege_probe.gd
 ```
 
-Healthy requires `active` plus `PROBE_OK` with snapshots. The libfontconfig warning alone is not a failure. Verify online play, tutorial, settings, and privacy URL on Android before claiming device QA.
+## Store listing
 
-## Store listing package
-
-Read [store-listing/README_FOR_AI.md](store-listing/README_FOR_AI.md) for the supplied en-US copy, eight ordered phone screenshots, feature graphic, fastlane metadata, and regeneration tools. These are listing assets, not an AAB; the package does not include the required app icon. Exclude `store-listing/*` from client exports. Do not infer Play publication approval from the request to store this package on GitHub.
+`store-listing/README_FOR_AI.md`: en-US copy, eight phone screenshots, feature graphic, fastlane metadata. Listing
+assets only (no app icon in the package). The screenshots predate 0.31.67's new shop buildings and 0.31.71's lighting;
+ask Kevin whether to regenerate them.
 
 ## Upload in Play Console
 
-Open the existing **Fatebound** app (`com.fatebound.game`), use the track Kevin has authorized, create/edit its release, and upload the validated signed AAB. Enter accurate release notes and resolve Console validation errors. Record acceptance, version code, track, and release status. Deliver the AAB and verification report to Kevin.
-
-Uploading an AAB, saving a draft, submitting for review, and rolling out to users are separate actions. This handoff-document request does not itself authorize a Play rollout; follow Kevin's release/track instructions when he requests that work. Do not invent Google Play API credentials, upload permissions, successful submission, or approval. If account access, current upload signing material, or version history is missing, state exactly what is missing.
+Open the existing app **Fatebound** (`com.fatebound.game`). **Internal testing first**: the Mali-phone start-up freeze
+is not yet confirmed fixed on a real phone (0.31.72 adds the OpenGL fallback). Use only the track Kevin authorizes;
+upload the validated AAB, write accurate release notes, resolve Console errors, and record acceptance, versionCode,
+track and status. Uploading, saving a draft, submitting for review and rolling out are separate actions -- this
+handoff authorizes none of them by itself. Don't invent credentials, upload permission, submission or approval; if
+account access, the upload key or version history is missing, say exactly what is missing.
 
 ## Official references
 
 - https://developer.android.com/studio/publish/upload-bundle
+- https://support.google.com/googleplay/android-developer/answer/9859372 (size limits)
 - https://support.google.com/googleplay/android-developer/answer/9859348
 - https://support.google.com/googleplay/android-developer/answer/9842756
 - https://support.google.com/googleplay/android-developer/answer/9859350

@@ -40,7 +40,7 @@ with zipfile.ZipFile(p) as z:
  names=z.namelist()
  assert 'BundleConfig.pb' in names and 'base/manifest/AndroidManifest.xml' in names
  assert 'base/dex/classes.dex' in names
- assert not any('/tests/' in n or '/reports/' in n or '/tools/' in n or '/server/' in n or n.endswith(('.keystore','.jks','.b64')) for n in names)
+ assert not any('/tests/' in n or '/reports/' in n or '/tools/' in n or '/server/' in n or '/store-listing/' in n or n.endswith(('.keystore','.jks','.b64')) for n in names)
  assert not any(n.endswith('/index.html') or n.endswith('/fatebound.html') for n in names)
  # Godot's Gradle AAB uses an install-time asset pack rather than the APK's direct base
  # assets. Locate the game's module from its packed project settings (every export has one).
@@ -55,7 +55,11 @@ with zipfile.ZipFile(p) as z:
   assert not any('/'+script+'.' in n and '/assets/' in n for n in names),'Removed dice-era script shipped: '+script
  props=packed_settings(z.read(project_paths[0]))
  assert string_setting(props,'rendering/renderer/rendering_method')=='mobile','Play bundle must render with Vulkan mobile'
- assert not bool_setting(props,'rendering/rendering_device/fallback_to_opengl3'),'OpenGL fallback must be disabled'
+ # 0.31.72 (Kevin, 2026-10-07): Vulkan by default WITH the OpenGL fallback. Godot leaves a setting that equals the
+ # engine default out of project.binary; fallback_to_opengl3 defaults to true, so missing = on.
+ assert 'rendering/rendering_device/fallback_to_opengl3' not in props or bool_setting(props,'rendering/rendering_device/fallback_to_opengl3'),'OpenGL fallback must be enabled'
+ assert string_setting(props,'application/config/project_settings_override')=='user://renderer.cfg','BootGuard renderer switch file missing'
+ assert any('/boot_guard.' in n and '/assets/' in n for n in names),'BootGuard autoload missing'
  for name in names:
   if not name.endswith('.so'):continue
   if '/lib/' in name:
@@ -73,7 +77,7 @@ with zipfile.ZipFile(p) as z:
  assert all_abis=={'armeabi-v7a','arm64-v8a','x86','x86_64'},('Missing Android ABI',sorted(all_abis))
  assert any('arm64-v8a' in x['path'] for x in libs)
  assert any('x86_64' in x['path'] for x in libs)
-report={'file':p.name,'bytes':p.stat().st_size,'sha256':hashlib.sha256(p.read_bytes()).hexdigest(),'upload_certificate_sha256':fp,'matches_existing_play_certificate':True,'siege_runtime_present_dice_era_absent':True,'content_module':content_module,'project_asset_path':project_paths[0],'vulkan_mobile_no_gl_fallback':True,'test_server_and_signing_material_excluded':True,'android_abis':sorted(all_abis),'native_64bit_libraries':libs,'physical_phone_tested':False}
+report={'file':p.name,'bytes':p.stat().st_size,'sha256':hashlib.sha256(p.read_bytes()).hexdigest(),'upload_certificate_sha256':fp,'matches_existing_play_certificate':True,'siege_runtime_present_dice_era_absent':True,'content_module':content_module,'project_asset_path':project_paths[0],'vulkan_mobile_with_gl_fallback':True,'test_server_and_signing_material_excluded':True,'android_abis':sorted(all_abis),'native_64bit_libraries':libs,'physical_phone_tested':False}
 p.with_name('PLAY_BUNDLE_VERIFICATION.json').write_text(json.dumps(report,indent=2)+'\n')
 print(json.dumps(report,indent=2))
 
