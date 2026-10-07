@@ -16,3 +16,4 @@ android/app/src/main/assets/index.html
 *.keystore
 *.jks
 godot/override.cfg
+__pycache__/
