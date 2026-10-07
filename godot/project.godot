@@ -20,6 +20,8 @@ window/handheld/orientation=1
 
 [rendering]
 textures/vram_compression/import_etc2_astc=true
+textures/webp_compression/compression_method=6
+textures/webp_compression/lossless_compression_factor=100.0
 renderer/rendering_method="mobile"
 renderer/rendering_method.mobile="mobile"
 rendering_device/fallback_to_opengl3=true

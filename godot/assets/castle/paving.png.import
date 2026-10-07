@@ -3,19 +3,21 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://cb65ym7g5drjp"
-path="res://.godot/imported/paving.png-ca7baa6fbf4694cef9b0d6f9bf969888.ctex"
+path.s3tc="res://.godot/imported/paving.png-ca7baa6fbf4694cef9b0d6f9bf969888.s3tc.ctex"
+path.etc2="res://.godot/imported/paving.png-ca7baa6fbf4694cef9b0d6f9bf969888.etc2.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/castle/paving.png"
-dest_files=["res://.godot/imported/paving.png-ca7baa6fbf4694cef9b0d6f9bf969888.ctex"]
+dest_files=["res://.godot/imported/paving.png-ca7baa6fbf4694cef9b0d6f9bf969888.s3tc.ctex", "res://.godot/imported/paving.png-ca7baa6fbf4694cef9b0d6f9bf969888.etc2.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0

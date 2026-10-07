@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://bcvpgb5s1tdxj"
-path="res://.godot/imported/king_blue_fattest_texture_0.png-85837ec9780006e05e649a3b293ec6b9.ctex"
+path.s3tc="res://.godot/imported/king_blue_fattest_texture_0.png-85837ec9780006e05e649a3b293ec6b9.s3tc.ctex"
+path.etc2="res://.godot/imported/king_blue_fattest_texture_0.png-85837ec9780006e05e649a3b293ec6b9.etc2.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "85a12b49c57c86a1eab1296be6a5f923"
@@ -14,11 +16,11 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/kings/king_blue_fattest_texture_0.png"
-dest_files=["res://.godot/imported/king_blue_fattest_texture_0.png-85837ec9780006e05e649a3b293ec6b9.ctex"]
+dest_files=["res://.godot/imported/king_blue_fattest_texture_0.png-85837ec9780006e05e649a3b293ec6b9.s3tc.ctex", "res://.godot/imported/king_blue_fattest_texture_0.png-85837ec9780006e05e649a3b293ec6b9.etc2.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0

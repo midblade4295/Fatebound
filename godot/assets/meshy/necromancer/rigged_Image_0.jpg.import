@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://l687xxy6bqm2"
-path="res://.godot/imported/rigged_Image_0.jpg-699b56736b529aee9f1fa7c7571de7b4.ctex"
+path.s3tc="res://.godot/imported/rigged_Image_0.jpg-699b56736b529aee9f1fa7c7571de7b4.s3tc.ctex"
+path.etc2="res://.godot/imported/rigged_Image_0.jpg-699b56736b529aee9f1fa7c7571de7b4.etc2.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "48c58c2b09590984f54f6416d6415963"
@@ -14,11 +16,11 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/meshy/necromancer/rigged_Image_0.jpg"
-dest_files=["res://.godot/imported/rigged_Image_0.jpg-699b56736b529aee9f1fa7c7571de7b4.ctex"]
+dest_files=["res://.godot/imported/rigged_Image_0.jpg-699b56736b529aee9f1fa7c7571de7b4.s3tc.ctex", "res://.godot/imported/rigged_Image_0.jpg-699b56736b529aee9f1fa7c7571de7b4.etc2.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0
