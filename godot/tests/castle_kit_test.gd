@@ -19,9 +19,30 @@ func _in_rect(p: Vector2, x0: float, x1: float, z0: float, z1: float, pad: float
 	return p.x > minf(x0, x1) - pad and p.x < maxf(x0, x1) + pad and p.y > minf(z0, z1) - pad and p.y < maxf(z0, z1) + pad
 
 func _init() -> void:
-	check(CastleKit.STYLE_OF_TEAM.size() == 2 and CastleKit.STYLE_OF_TEAM[0] != CastleKit.STYLE_OF_TEAM[1],
-		"each team its own castle (%s)" % [CastleKit.STYLE_OF_TEAM])
+	# Both teams build a described kit (0.31.75: both Royal, red in its own colours by team_swap).
+	check(CastleKit.STYLE_OF_TEAM.size() == 2 and CastleKit.STYLE_OF_TEAM.all(func(s): return CastleKit.KITS.has(s)),
+		"each team builds a known kit (%s)" % [CastleKit.STYLE_OF_TEAM])
+	for t in 2:
+		check(CastleKit.kit(t) == CastleKit.KITS[CastleKit.STYLE_OF_TEAM[t]], "kit(%d) is %s" % [t, CastleKit.STYLE_OF_TEAM[t]])
+	# Kits the teams don't build are left out of the APK (export_presets.cfg) -- only the used ones are checked here.
+	var used := {}
+	for s in CastleKit.STYLE_OF_TEAM:
+		used[s] = true
+	var presets := FileAccess.get_file_as_string("res://export_presets.cfg")
+	var filters := []
+	for line in presets.split("\n"):
+		if line.begins_with("exclude_filter="):
+			filters.append(line)
+	check(not filters.is_empty(), "export presets read (%d exclude filters)" % filters.size())
 	for style in CastleKit.KITS:
+		var pat := "assets/meshy/castle/%s_*" % style
+		var n := filters.filter(func(f): return pat in f).size()
+		if used.has(style):
+			check(n == 0, "%s kit is built, so it ships (no preset excludes %s)" % [style, pat])
+		else:
+			check(n == filters.size() and filters.all(func(f): return ("assets/meshy/castle/floors/%s_*" % style) in f),
+				"%s kit is unused, so every preset leaves its models and floors out of the APK" % style)
+	for style in used:
 		var kit: Dictionary = CastleKit.KITS[style]
 		var models := {}
 		for part in ["wall", "terrace", "gatehouse", "tower", "dungeon", "throne"]:

@@ -2298,3 +2298,13 @@ K2/K3 notes (0.17.0)
   tools/castle_shot.gd: both castles from the field, inside, gate, throne, courtyard and dungeon; tools/preload_list
   re-run (the outposts and castle pieces load in the background at start). The outpost and castle model files load on
   first use otherwise.
+
+# 0.31.75 (Kevin: "make both castles the same royal style")
+- Both teams build the Royal kit (castle_kit.gd STYLE_OF_TEAM = royal, royal). On the red castle team_swap turns the
+  kit's blue roofs, banners, canopy and stall cloth deep red; the stone, gold and floors are the same on both.
+- The War fortress kit stays described in castle_kit.gd and its files stay in the repo, but every export preset now
+  excludes assets/meshy/castle/war_* and assets/meshy/castle/floors/war_* (about 5 MB). To bring it back: name it in
+  STYLE_OF_TEAM and drop those two patterns. tests/castle_kit_test checks both ways (a kit a team builds is never
+  excluded; an unused one is excluded from every preset) and only checks the props of kits in use.
+- tools/preload_list re-run (the war pieces dropped from the background preload). tools/castle_shot.gd: both castles
+  from the field, inside, the throne and the courtyard. Quick suite: ALL PASSED (36).

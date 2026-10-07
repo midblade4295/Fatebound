@@ -11,7 +11,11 @@ extends RefCounted
 const Stage = preload("res://scripts/siege/asset_cache.gd")
 const DIR := "res://assets/meshy/castle/"
 const SWAP_SHADER := preload("res://scripts/siege/team_swap.gdshader")
-const STYLE_OF_TEAM := ["royal", "war"]            # blue: A2 Royal, red: B1 War fortress
+# 0.31.75, Kevin: "make both castles the same royal style" -- both teams build the Royal kit; on the red castle
+# team_swap turns its blue roofs, banners and canopy red. The War kit stays described (and its files in the repo) but
+# is left out of the APK (export_presets.cfg, exclude_filter "assets/meshy/castle/war_*" and ".../floors/war_*"):
+# to bring it back, name it here AND drop those two patterns from the presets.
+const STYLE_OF_TEAM := ["royal", "royal"]          # blue, red
 const FIRE_GLOW := Color(1.0, 0.55, 0.18)
 
 # Per kit (sizes in metres; "model units" = the Meshy model's own, centred on its bounds):
