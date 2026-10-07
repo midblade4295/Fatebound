@@ -2144,3 +2144,22 @@ K2/K3 notes (0.17.0)
   have no face and keep their old hold. Checked from the holder's chest with the body hidden: the skull's eyes, the
   orb's rim, the crystal's crescent and the ring all look back at it. The 11 staff thumbnails re-rendered.
   Quick suite: ALL PASSED (33).
+
+# 0.31.67 (Kevin: new building models with Meshy, the Knight's shop first -- "a different design that would make more
+# sense for knights"; picked the giant great helm, concept 3, "and add effects like the smoke and glowing lights in the
+# visor")
+- First try: Meshy multi-image from the KayKit barracks + retexture (40 credits) -- same shape, more detail; Kevin
+  wanted a new design. Concepts (ElevenLabs gpt-image-2, ~1,480 credits for 8): a giant great helm and an armory.
+- Helm 3 -> Meshy image-to-3D (30 credits): 20.3k triangles, one texture. tools/meshy_building_tex.py makes
+  assets/meshy/knight_shop/: knight_shop.glb (texture cut 2K -> 1K = the blue team), knight_shop_red.png (the blues
+  -- plume, shields, banner -- turned red, same saturation/brightness), knight_shop_glow.png (bright-yellow texels on
+  triangles inside the visor box = the window slits).
+- HAT_SHOPS.knight: model "meshy:knight_shop", scale 2.2 (base ring radius ~1.85 m, sim radius 1.8 unchanged; same spot,
+  door and take ring); "flag" puts the upgrade flag on the dome beside the plume (default stays (0, 3.4, 0)).
+- View._meshy_building (MESHY_BUILDINGS: base / vent / visor in model units): team texture; the glow mask as emission
+  (EMISSION_OP_MULTIPLY -- ADD lit the whole helm) flickering with a warm omni light in front of the visor, like the
+  dungeon torches (_sync_ambience); a short iron chimney on the back of the dome with a steady smoke trail
+  (_chimney_smoke: 16 puffs, 4.5 s, the blast smoke's texture and breeze; half on low effects; preprocessed so it is
+  already smoking at the start).
+- tools/building_shot.gd: shop close-ups in a match (front, game camera, back, red; FLAGS=1 shows the upgrade flag).
+  preload.json: knight_shop.glb in, barracks out. Quick suite: ALL PASSED (33).

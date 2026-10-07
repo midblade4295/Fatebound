@@ -112,7 +112,9 @@ const CATAPULT_X := 17.0
 # door. b = building centre, door = where you stand, rot = which way the door faces (0 = +z, 180 = -z,
 # 90 = +x, -90 = -x; blue space), y = the level it stands on. Buildings against a wall touch it.
 const HAT_SHOPS := [
-	{"cls": "knight", "model": "building_barracks_%s", "b": Vector2(-17.2, 5.8), "rot": 90.0, "scale": 2.4, "r": 1.8, "y": 0.0, "door": Vector2(-14.6, 5.8)},
+	# 0.31.67: the Knight's shop is a Meshy giant great helm ("meshy:" = assets/meshy/<name>/, siege_view MESHY_BUILDINGS).
+	# "flag" = where the upgrade flag stands, in the shop's own frame (metres, door = +z); default (0, 3.4, 0).
+	{"cls": "knight", "model": "meshy:knight_shop", "b": Vector2(-17.2, 5.8), "rot": 90.0, "scale": 2.2, "r": 1.8, "y": 0.0, "door": Vector2(-14.6, 5.8), "flag": Vector3(-0.85, 2.82, 0.25)},
 	{"cls": "barbarian", "model": "building_lumbermill_%s", "b": Vector2(-15.2, 26.0), "rot": 180.0, "scale": 2.4, "r": 1.8, "y": 3.6, "door": Vector2(-15.2, 23.6)},
 	{"cls": "rogue", "model": "building_market_%s", "b": Vector2(-17.2, 11.65), "rot": 90.0, "scale": 2.4, "r": 1.8, "y": 0.0, "door": Vector2(-14.6, 11.65)},
 	{"cls": "ranger", "model": "building_archeryrange_%s", "b": Vector2(16.0, 19.6), "rot": 180.0, "scale": 2.4, "r": 1.9, "y": 1.8, "door": Vector2(16.0, 17.0)},

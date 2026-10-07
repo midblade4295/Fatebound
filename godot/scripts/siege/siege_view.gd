@@ -296,6 +296,11 @@ func _sync_ambience(_dt: float) -> void:
 		var k := 0.82 + 0.1 * sin(_time * 9.0 + ph) + 0.08 * sin(_time * 23.0 + ph * 1.7)
 		(tr[0] as OmniLight3D).light_energy = float(tr[2]) * k
 		(tr[1] as Node3D).scale = Vector3.ONE * (0.9 + 0.12 * k)
+	for sg in _shop_glows:
+		var ph2: float = float(sg[2])
+		var k2 := 0.84 + 0.1 * sin(_time * 7.0 + ph2) + 0.06 * sin(_time * 19.0 + ph2 * 1.7)
+		(sg[0] as StandardMaterial3D).emission_energy_multiplier = 2.2 * k2
+		(sg[1] as OmniLight3D).light_energy = 1.1 * k2
 
 # ---------- Water you can wade through, with simulated waves (Round 33) ----------
 # Kevin: "make the water look much more realistic, like actually simulated water ... realistic physics that create
@@ -1436,16 +1441,170 @@ func _build_hat_stands() -> void:
 		var shop: Dictionary = Castle.HAT_SHOPS[Sim.HAT_CLASSES.find(cls)]
 		var bp: Vector2 = st.b
 		var face := 0.0 if t == 0 else PI
-		var node := _place(HEX + (str(shop.model) % col) + ".gltf", Vector3(bp.x, float(shop.y), bp.y), face + deg_to_rad(float(shop.rot)), float(shop.scale))
+		var yaw := face + deg_to_rad(float(shop.rot))
+		var at := Vector3(bp.x, float(shop.y), bp.y)
+		var model := str(shop.model)
+		var node: Node3D
+		if model.begins_with("meshy:"):
+			node = _meshy_building(model.substr(6), t, at, yaw, float(shop.scale))
+		else:
+			node = _place(HEX + (model % col) + ".gltf", at, yaw, float(shop.scale))
 		if node != null:
 			node.set_meta("perf", "hat_shop")
 		var gy := Sim.height_at(st.p)
 		_decal(Vector3(st.p.x, gy + 0.06, st.p.y), Sim.HAT_TAKE_R, HAT_COLOR[cls], 0.5)
-		var flag := _place(HEX + "flag_%s.gltf" % col, Vector3(bp.x, float(shop.y) + 3.4, bp.y), face, 2.2)
+		var flag_off: Vector3 = shop.get("flag", Vector3(0.0, 3.4, 0.0))
+		var flag := _place(HEX + "flag_%s.gltf" % col, at + Basis(Vector3.UP, yaw) * flag_off, face, 2.2)
 		if flag != null:
 			flag.visible = false
 		machine_up[st.id] = {"up": flag if flag != null else Node3D.new(), "glow": null, "state": false}
 		stand_nodes[st.id] = []
+
+# Meshy buildings (0.31.67, Kevin: the Knight's shop as a giant great helm -- Helm 3 of the concepts -- "add effects like
+# the smoke and glowing lights in the visor"). assets/meshy/<name>/: <name>.glb is the blue team's colours,
+# <name>_red.png the same texture with the blues turned red, <name>_glow.png the window texels to light up
+# (tools/meshy_building_tex.py). Numbers below are in the model's own units (it is scaled by HAT_SHOPS "scale"):
+# base = how far below its origin the model's foot is; vent = where the forge chimney stands on the dome (smoke
+# rises from its top); visor = where the warm light sits, just in front of the visor slits.
+const MESHY_BUILDINGS := {
+	"knight_shop": {"base": 0.953, "vent": Vector3(-0.27, 0.16, -0.44), "visor": Vector3(0.0, -0.14, 0.8)},
+}
+const SHOP_GLOW := Color(1.0, 0.64, 0.24)
+var _shop_glows: Array = []            # [material, light, phase] -- flickered in _sync_ambience
+static var _bld_mats: Dictionary = {}  # "<name>|<team>" -> StandardMaterial3D
+
+func _meshy_building(bname: String, t: int, pos: Vector3, yaw: float, s: float) -> Node3D:
+	var spec: Dictionary = MESHY_BUILDINGS.get(bname, {})
+	var packed := Stage.scene("res://assets/meshy/%s/%s.glb" % [bname, bname])
+	if packed == null or spec.is_empty():
+		return null
+	var root := Node3D.new()
+	root.position = pos
+	root.rotation.y = yaw
+	root.scale = Vector3.ONE * s
+	add_child(root)
+	var model: Node3D = packed.instantiate()
+	model.position.y = float(spec.base)
+	root.add_child(model)
+	var key := "%s|%d" % [bname, t]
+	var meshes := model.find_children("*", "MeshInstance3D", true, false)
+	if not _bld_mats.has(key) and not meshes.is_empty():
+		var src := (meshes[0] as MeshInstance3D).get_active_material(0) as BaseMaterial3D
+		var m := StandardMaterial3D.new()
+		if t == 1:
+			m.albedo_texture = load("res://assets/meshy/%s/%s_red.png" % [bname, bname])
+		elif src != null:
+			m.albedo_texture = src.albedo_texture
+		m.roughness = 0.75
+		m.metallic_specular = 0.45
+		m.emission_enabled = true
+		m.emission = SHOP_GLOW
+		m.emission_texture = load("res://assets/meshy/%s/%s_glow.png" % [bname, bname])
+		m.emission_operator = BaseMaterial3D.EMISSION_OP_MULTIPLY   # colour x mask (ADD would light every texel)
+		m.emission_energy_multiplier = 2.2
+		_bld_mats[key] = m
+	for mi in meshes:
+		(mi as MeshInstance3D).material_override = _bld_mats.get(key)
+		(mi as MeshInstance3D).cast_shadow = _cast()
+	var mat: StandardMaterial3D = _bld_mats.get(key)
+	# Forge chimney: a short iron pipe on the back of the dome, smoke drifting off with the breeze.
+	var lift := Vector3(0.0, float(spec.base), 0.0)       # spec points are in the model's frame; it was raised by base
+	var vent: Vector3 = Vector3(spec.vent) + lift
+	var pipe := MeshInstance3D.new()
+	var cyl := CylinderMesh.new()
+	cyl.top_radius = 0.05
+	cyl.bottom_radius = 0.065
+	cyl.height = 0.26
+	cyl.radial_segments = 10
+	cyl.rings = 1
+	var pm := StandardMaterial3D.new()
+	pm.albedo_color = Color("#3a3d44")
+	pm.roughness = 0.6
+	pm.metallic_specular = 0.6
+	cyl.material = pm
+	pipe.mesh = cyl
+	pipe.position = vent + Vector3(0.0, 0.13, 0.0)
+	pipe.cast_shadow = _cast()
+	root.add_child(pipe)
+	var cap := MeshInstance3D.new()
+	var cm := CylinderMesh.new()
+	cm.top_radius = 0.085
+	cm.bottom_radius = 0.085
+	cm.height = 0.035
+	cm.radial_segments = 10
+	cm.rings = 1
+	cm.material = pm
+	cap.mesh = cm
+	cap.position = vent + Vector3(0.0, 0.26, 0.0)
+	cap.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(cap)
+	_chimney_smoke(root.to_global(vent + Vector3(0.0, 0.3, 0.0)), s)
+	# Warm light in front of the visor, flickering with the emission like the dungeon torches.
+	var light := OmniLight3D.new()
+	light.light_color = SHOP_GLOW
+	light.light_energy = 1.1
+	light.omni_range = 3.6
+	light.omni_attenuation = 1.4
+	light.shadow_enabled = false
+	add_child(light)
+	light.global_position = root.to_global(Vector3(spec.visor) + lift)
+	_shop_glows.append([mat, light, randf() * 10.0])
+	return root
+
+func _chimney_smoke(at: Vector3, s: float) -> void:
+	# A thin, steady trail: few puffs, slow and buoyant, pushed by the same breeze as the blast smoke.
+	var pm := ParticleProcessMaterial.new()
+	pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
+	pm.emission_sphere_radius = 0.05 * s
+	pm.direction = Vector3(0, 1, 0)
+	pm.spread = 10.0
+	pm.initial_velocity_min = 0.45
+	pm.initial_velocity_max = 0.75
+	pm.damping_min = 0.15
+	pm.damping_max = 0.3
+	pm.gravity = Vector3(0.0, 0.18, 0.0) + SMOKE_WIND * 0.55
+	pm.turbulence_enabled = true
+	pm.turbulence_noise_strength = 0.6
+	pm.turbulence_noise_scale = 2.0
+	pm.turbulence_influence_min = 0.02
+	pm.turbulence_influence_max = 0.06
+	pm.angle_min = -180.0
+	pm.angle_max = 180.0
+	pm.angular_velocity_min = -10.0
+	pm.angular_velocity_max = 10.0
+	pm.scale_min = 0.38 * s
+	pm.scale_max = 0.55 * s
+	var sc := Curve.new()
+	sc.add_point(Vector2(0.0, 0.45))
+	sc.add_point(Vector2(1.0, 1.9))
+	var sct := CurveTexture.new()
+	sct.curve = sc
+	pm.scale_curve = sct
+	var g := Gradient.new()
+	g.offsets = PackedFloat32Array([0.0, 0.12, 0.55, 1.0])
+	g.colors = PackedColorArray([Color(0.3, 0.29, 0.28, 0.0), Color(0.36, 0.35, 0.34, 0.78), Color(0.55, 0.55, 0.55, 0.5),
+		Color(0.7, 0.7, 0.7, 0.0)])
+	var gt := GradientTexture1D.new()
+	gt.gradient = g
+	pm.color_ramp = gt
+	var p := GPUParticles3D.new()
+	p.process_material = pm
+	var q := QuadMesh.new()
+	q.size = Vector2.ONE
+	q.material = _smoke_draw_mat()
+	p.draw_pass_1 = q
+	p.amount = 16
+	p.lifetime = 4.5
+	p.preprocess = 4.5                    # already trailing when the match starts
+	p.fixed_fps = 30
+	p.interpolate = true
+	p.draw_order = GPUParticles3D.DRAW_ORDER_VIEW_DEPTH
+	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	p.visibility_aabb = AABB(Vector3(-4, -1, -4), Vector3(8, 9, 8))
+	if low_fx:
+		p.amount_ratio = 0.5
+	p.position = at
+	add_child(p)
 
 # Whirlwind FX (Round 12, Kevin: "spin visuals like World of Warcraft"): two translucent blade-trail
 # ribbons (partial rings fading along their arc) circling the berserker at different heights and
