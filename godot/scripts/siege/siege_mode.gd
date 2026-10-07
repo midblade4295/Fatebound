@@ -10,6 +10,9 @@ const Net = preload("res://scripts/siege/siege_net.gd")
 const VisualTheme = preload("res://scripts/ui/visual_theme.gd")
 
 signal exited
+# 0.31.73: the server refused our protocol. verdict "update" (server newer: this build is too old -> the app shows
+# the blocking Update screen) or "server_old" (server older: "Servers are updating"). See Net.version_verdict.
+signal version_mismatch(server_v: int, verdict: String)
 
 var team_size := 16
 var tutorial := false          # the Herald's walkthrough (scripts/siege/tutorial.gd)
@@ -45,6 +48,12 @@ var player_name := "Player"
 var ws: WebSocketPeer = null
 var net_state := ""                  # "connecting", "waiting", "playing", "closed"
 var net_match := -1
+var net_verdict := ""               # 0.31.73: "update" / "server_old" after a version refusal
+var net_server_version := -1        # the server's protocol from that refusal
+var _net_bye: Dictionary = {}
+var _net_closing_since := -1.0
+const MSG_UPDATE := "A new version of Fatebound is available. Update to keep playing."
+const MSG_SERVER_OLD := "Servers are updating, try again in a few minutes"
 var _net_started := 0.0
 var _snap_t := 0.0
 var _net_rt := -1.0                 # 0.31.23: the render clock (server seconds) remote units are drawn at
@@ -217,8 +226,35 @@ func _net_fail(why: String) -> void:
 	diag.write("NET closed: " + why)
 	hud.toast(why, VisualTheme.RED)
 	if sim == null:
-		# Nothing to show: go back home after the message is readable.
-		get_tree().create_timer(2.5).timeout.connect(func(): exited.emit())
+		# Nothing to show: go back home after the message is readable. (A method, not a lambda: the app may free
+		# this node first, e.g. for the Update screen, and a freed method target is simply not called.)
+		get_tree().create_timer(2.5).timeout.connect(_net_exit)
+
+func _net_exit() -> void:
+	if is_inside_tree():
+		exited.emit()
+
+func _net_version_refused(code: int, reason: String) -> bool:
+	# A version refusal, from the bye ("need") or the close (code 4001, reason "version:<n>"). Works for every
+	# future protocol bump: only Net.VERSION is compared.
+	var sv: int = Net.refused_version(_net_bye, code, reason)
+	if sv < 0:
+		return false
+	var verdict: String = Net.version_verdict(sv)
+	if verdict == "ok":
+		verdict = "server_old"         # refused although the numbers match: treat it as a server mid-update
+	net_verdict = verdict
+	net_server_version = sv
+	diag.write("NET version refused: server %d, client %d -> %s (code %d %s)" % [sv, Net.VERSION, verdict, code, reason])
+	version_mismatch.emit(sv, verdict)
+	_net_fail(MSG_UPDATE if verdict == "update" else MSG_SERVER_OLD)
+	return true
+
+func _net_read_packets() -> Array:
+	var out := []
+	while ws != null and ws.get_available_packet_count() > 0:
+		out.append(Net.decode(ws.get_packet()))
+	return out
 
 func _net_send(msg: Dictionary) -> void:
 	if ws != null and ws.get_ready_state() == WebSocketPeer.STATE_OPEN:
@@ -261,8 +297,25 @@ func _net_process(delta: float) -> void:
 			_net_fail("Server did not answer")
 		return
 	if st == WebSocketPeer.STATE_CLOSED or st == WebSocketPeer.STATE_CLOSING:
-		if net_state != "closed":
-			_net_fail("Disconnected from the server" if sim != null else "Could not connect to the server")
+		# A refusal's bye can arrive together with the close: read what is left before deciding (before 0.31.73
+		# the state was checked first, so a version refusal only ever said "Could not connect to the server").
+		for left in _net_read_packets():
+			if str(left.get("t", "")) == "bye":
+				_net_bye = left
+		if net_state == "closed":
+			return
+		if st == WebSocketPeer.STATE_CLOSING:
+			var now_c := Time.get_ticks_msec() / 1000.0
+			if _net_closing_since < 0.0:
+				_net_closing_since = now_c
+			if now_c - _net_closing_since < 2.0:
+				return                         # wait for the close code
+		if _net_version_refused(ws.get_close_code(), ws.get_close_reason()):
+			return
+		if str(_net_bye.get("why", "")) == "full" or ws.get_close_code() == Net.CLOSE_FULL:
+			_net_fail("Server is full")
+			return
+		_net_fail("Disconnected from the server" if sim != null else "Could not connect to the server")
 		return
 	if net_state == "connecting":
 		net_state = "waiting"
@@ -304,8 +357,12 @@ func _net_process(delta: float) -> void:
 				if sim != null and sim.by_id.has(hud.player_id):
 					sim.by_id[hud.player_id].task = msg.get("task", {})
 			"bye":
+				_net_bye = msg
+				if _net_version_refused(-1, ""):
+					return
 				var why := str(msg.get("why", ""))
-				_net_fail({"full":"Server is full", "version":"Update the game to play online"}.get(why, "Server closed the connection"))
+				_net_fail({"full":"Server is full"}.get(why, "Server closed the connection"))
+				return
 	if sim == null:
 		return
 	_snap_t += delta
