@@ -15,6 +15,8 @@ const FLOOR_TILE := 3.2            # the herringbone path texture's period (as o
 var bricks := SurfaceTool.new()      # step risers / sides (darker stone)
 var paving := SurfaceTool.new()      # floors (herringbone)
 var treads := SurfaceTool.new()      # step tops (light stone)
+var areas: Dictionary = {}           # floors by area (0.31.74: each castle area its own floor texture): court, walk,
+                                     # l1, l2, dungeon -> SurfaceTool
 
 func _init() -> void:
 	bricks.begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -64,8 +66,13 @@ func box(st: SurfaceTool, p0: Vector2, p1: Vector2, y0: float, y1: float, thick:
 	_quad(lid, Vector3(l[0].x, y1, l[0].y), Vector3(l[1].x, y1, l[1].y), Vector3(l[2].x, y1, l[2].y), Vector3(l[3].x, y1, l[3].y),
 		Vector2(l[0].x, l[0].y) / TILE, Vector2(l[1].x, l[1].y) / TILE, Vector2(l[2].x, l[2].y) / TILE, Vector2(l[3].x, l[3].y) / TILE)
 
-func floor_rect(x0: float, x1: float, z0: float, z1: float, y: float, to_world: Callable) -> void:
-	# A paved floor (castle-local rect -> world via to_world), world-scaled UVs.
+func floor_rect(x0: float, x1: float, z0: float, z1: float, y: float, to_world: Callable, area := "court") -> void:
+	# A paved floor (castle-local rect -> world via to_world), world-scaled UVs, in its area's surface.
+	if not areas.has(area):
+		var st := SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		areas[area] = st
+	var pave: SurfaceTool = areas[area]
 	var a: Vector2 = to_world.call(Vector2(x0, z0))
 	var b: Vector2 = to_world.call(Vector2(x1, z0))
 	var c: Vector2 = to_world.call(Vector2(x1, z1))
@@ -75,7 +82,7 @@ func floor_rect(x0: float, x1: float, z0: float, z1: float, y: float, to_world: 
 	var n := (Vector3(b.x, 0, b.y) - Vector3(a.x, 0, a.y)).cross(Vector3(d.x, 0, d.y) - Vector3(a.x, 0, a.y))
 	if n.y < 0.0:
 		pts = [a, d, c, b]
-	_quad(paving, Vector3(pts[0].x, y, pts[0].y), Vector3(pts[1].x, y, pts[1].y), Vector3(pts[2].x, y, pts[2].y), Vector3(pts[3].x, y, pts[3].y),
+	_quad(pave, Vector3(pts[0].x, y, pts[0].y), Vector3(pts[1].x, y, pts[1].y), Vector3(pts[2].x, y, pts[2].y), Vector3(pts[3].x, y, pts[3].y),
 		pts[0] / FLOOR_TILE, pts[1] / FLOOR_TILE, pts[2] / FLOOR_TILE, pts[3] / FLOOR_TILE)
 
 func tread_band(x0: float, x1: float, z0: float, z1: float, y: float, col: Color, to_world: Callable) -> void:
@@ -153,14 +160,15 @@ static func build(sim, team: int) -> Dictionary:
 				gaps.append([float(st.x0), float(st.x1)])
 				stair_end = maxf(stair_end, float(st.z1))
 		gaps.sort_custom(func(a, c): return a[0] < c[0])
-		b.floor_rect(-hx, hx, stair_end, z_end, h + 0.03, to_world)
+		var area := "l1" if absf(tz - Castle.L1_Z) < 0.01 else "l2"
+		b.floor_rect(-hx, hx, stair_end, z_end, h + 0.03, to_world, area)
 		var x := -hx
 		for g in gaps:
 			if g[0] - x > 0.05:
-				b.floor_rect(x, g[0], tz, stair_end, h + 0.03, to_world)
+				b.floor_rect(x, g[0], tz, stair_end, h + 0.03, to_world, area)
 			x = g[1]
 		if hx - x > 0.05:
-			b.floor_rect(x, hx, tz, stair_end, h + 0.03, to_world)
+			b.floor_rect(x, hx, tz, stair_end, h + 0.03, to_world, area)
 	for st in Castle.STAIRS:
 		var x0: float = st.x0
 		var x1: float = st.x1
@@ -196,9 +204,9 @@ static func build(sim, team: int) -> Dictionary:
 				b.tread_band(x0, x1, zf + dz * 0.38, zf + dz * 0.88, y, Color(0.64, 0.6, 0.53) * k2, to_world)
 				b.tread_band(x0, x1, zf + dz * 0.88, zb, y, Color(0.92, 0.88, 0.8), to_world)
 	# The rampart's walkway (Round 15), from just inside the front wall to its edge.
-	b.floor_rect(-Castle.WALK_X, Castle.WALK_X, Castle.FRONT_Z + 0.9, Castle.WALK_Z1, Castle.WALK_H + 0.03, to_world)
+	b.floor_rect(-Castle.WALK_X, Castle.WALK_X, Castle.FRONT_Z + 0.9, Castle.WALK_Z1, Castle.WALK_H + 0.03, to_world, "walk")
 	# The dungeon wing (Round 13): its sunken floor and the stairs down, which run along x.
-	b.floor_rect(Castle.ANNEX_X0, -hx, Castle.ANNEX_Z0, Castle.ANNEX_Z1, Castle.DUNGEON_H + 0.03, to_world)
+	b.floor_rect(Castle.ANNEX_X0, -hx, Castle.ANNEX_Z0, Castle.ANNEX_Z1, Castle.DUNGEON_H + 0.03, to_world, "dungeon")
 	var ds: Dictionary = Castle.DSTAIR
 	var dsteps := int(ds.steps)
 	var dz0: float = ds.z0
@@ -216,4 +224,7 @@ static func build(sim, team: int) -> Dictionary:
 		b.tread_band(xf, xf + dx * 0.12, dz0, dz1, y, Color(0.92, 0.88, 0.8), to_world)
 		b.tread_band(xf + dx * 0.12, xf + dx * 0.62, dz0, dz1, y, Color(0.64, 0.6, 0.53) * k, to_world)
 		b.tread_band(xf + dx * 0.62, xf + dx, dz0, dz1, y, Color(0.31, 0.28, 0.24) * k, to_world)
-	return {"steps":b.bricks.commit(), "floor":b.paving.commit(), "treads":b.treads.commit()}
+	var floors := {}
+	for k in b.areas:
+		floors[k] = (b.areas[k] as SurfaceTool).commit()
+	return {"steps":b.bricks.commit(), "floors":floors, "treads":b.treads.commit()}

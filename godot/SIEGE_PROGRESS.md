@@ -2268,3 +2268,33 @@ K2/K3 notes (0.17.0)
   radius, doors, the basket no-go spot (walking at the fire stops at its edge), the material and owner colours.
   tools/outpost_shot.gd: every outpost neutral / blue / red with rangers on the decks. Checked on Vulkan and OpenGL.
   Quick suite: ALL PASSED (35).
+
+# 0.31.74 (Kevin: new castles "in meshy", "insides done also so the castles don't look cookie cutter", picked "B1 for one team and A2 for other", "stairs shouldn't be between the two main gates" (outside), "make sure players can climb up on the front wall to shoot outside")
+- Two castle kits (scripts/siege/castle_kit.gd): blue gets A2 "Royal" (cream stone, blue cone roofs, gold), red gets
+  B1 "War fortress" (dark stone, timber galleries, iron). Only what is drawn changed: walls, gates, terraces, stairs,
+  rooms, the wall-walk and the dungeon are the sim's as before (siege_land_check unchanged and passing). The wall-walk
+  behind the front wall keeps its stair inside the courtyard; the front wall between the gates is solid outside.
+- Concepts: gpt-image-2 (ElevenLabs flows) from Kevin's picks, split into single-piece model sheets; 24 Meshy
+  image-to-3D models, then Meshy remesh to low poly (walls ~1.2k triangles, terrace walls ~1k, gatehouses ~5k, towers
+  ~3k, props ~1.6k; topiary and hedge box kept at ~3.8k, the remesh broke them). tools/meshy_building_tex.py: keeps
+  only the base colour of remeshed models (they carry normal/metal maps too), --tex 512 for small props, --dilate.
+- Pieces, each drawn with team_swap.gdshader (so a kit's blue cloth turns red on the red castle): curtain walls along
+  every sim wall line, terrace walls on every terrace edge, stair side, the rampart's edges and the dungeon pit
+  (decorated face to the lower side, found from the castle's heights), gatehouses round both gates (the KayKit gate's
+  door leaves stay, scaled to the arch; its wall piece dropped), corner towers, an archway over the doorway down to the
+  dungeon, the throne piece (Royal: a blue canopy on marble columns; War: a stone dais between two braziers, the
+  throne raised 0.16 m onto it), and props along the walls (Royal: lion wall fountain, market stall, topiaries, hedge
+  boxes, statues, banners; War: forge, weapon racks, training dummies, braziers, tents, supply piles). Walls and
+  terrace walls are merged per model (_merge_kit); the rest keep their LODs. Braziers, the forge and the dungeon gate's
+  torches burn (glow masks + small flames).
+- Floors per area and kit (castle_mesh.gd builds each area as its own mesh): Royal cream flagstones / garden paving /
+  white marble with gold inlay, War packed earth / planks / dark slate, darker in the dungeon; seamless textures from
+  gpt-image-2. Stair stone tinted per kit.
+- The KayKit castle is still there behind SiegeView.CASTLE_KITS = false (tools compare).
+- Cost (tools/castle_cost.gd, lavapipe, 960x540, four game-camera views): primitives 333k -> 412k (own castle) /
+  265k -> 346k (from the field), draw calls +5..+46, frame time +17..22 % (CPU rasteriser: relative only).
+- tests/castle_kit_test (new): every piece and floor present, each team its own kit, every prop on its level and out of
+  the way (stairs, wall-walk, gateways, hat shops, workshop, throne, the way to the dungeon) -- it moved five War props.
+  tools/castle_shot.gd: both castles from the field, inside, gate, throne, courtyard and dungeon; tools/preload_list
+  re-run (the outposts and castle pieces load in the background at start). The outpost and castle model files load on
+  first use otherwise.

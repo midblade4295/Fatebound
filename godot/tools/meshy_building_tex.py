@@ -12,6 +12,7 @@ Usage: meshy_building_tex.py in.glb OUT_DIR name [--glow BOX[:RULE]]... [--color
   --color-glow: the mask carries the texture's own colours (stained glass, water) -- use with a white emission colour.
   --dilate N: grow each glow box's triangles by N texels before the colour rule (default 5; the outposts use 3, as
     Meshy's small UV islands sit next to unrelated ones and a wider margin lights their texels too)
+  --tex N: the texture's size (default 1024; small props use 512)
   --no-red: skip <name>_red.png -- the outposts (0.31.73) recolour the one texture in a shader (team_swap.gdshader).
 """
 import io
@@ -66,15 +67,25 @@ def hsv_to_rgb(h, s, v):
     return out
 
 
+def base_color_image(g):
+    # The image the first material's base colour uses (Meshy's remeshed models carry normal and
+    # metallic-roughness maps too, in another order).
+    try:
+        tex = g["materials"][0]["pbrMetallicRoughness"]["baseColorTexture"]["index"]
+        return g["textures"][tex]["source"]
+    except (KeyError, IndexError):
+        return 0
+
+
 def write_glb(path, g, binc, jpeg):
-    # Replace image 0's bytes: rebuild the binary chunk with the new image appended, old view dropped.
-    img = g["images"][0]
-    old = img["bufferView"]
+    # Keep only the base colour texture, as the given JPEG: every image's old buffer view is dropped, the
+    # material keeps just its base colour (the shaders here use the colour texture only).
+    image_views = {im["bufferView"] for im in g["images"] if "bufferView" in im}
     views = g["bufferViews"]
     chunks, new_views, remap = [], [], {}
     pos = 0
     for k, v in enumerate(views):
-        if k == old:
+        if k in image_views:
             continue
         data = binc[v.get("byteOffset", 0):v.get("byteOffset", 0) + v["byteLength"]]
         pad = (-pos) % 4
@@ -96,14 +107,23 @@ def write_glb(path, g, binc, jpeg):
     pad = (-pos) % 4
     chunks.append(b"\0" * pad)
     pos += pad
-    for a in g["accessors"]:
-        if "bufferView" in a:
-            a["bufferView"] = remap[a["bufferView"]]
-    for im in g["images"]:
-        im["bufferView"] = len(new_views) - 1 if im is img else remap[im["bufferView"]]
-        im["mimeType"] = "image/jpeg" if im is img else im.get("mimeType")
+    for acc in g["accessors"]:
+        if "bufferView" in acc:
+            acc["bufferView"] = remap[acc["bufferView"]]
     g["bufferViews"] = new_views
     g["buffers"] = [{"byteLength": pos}]
+    g["images"] = [{"bufferView": len(new_views) - 1, "mimeType": "image/jpeg"}]
+    sampler = g["textures"][0].get("sampler") if g.get("textures") else None
+    g["textures"] = [{"source": 0} if sampler is None else {"source": 0, "sampler": sampler}]
+    mat = g["materials"][0]
+    pbr = dict(mat.get("pbrMetallicRoughness", {}))
+    pbr.pop("metallicRoughnessTexture", None)
+    pbr["baseColorTexture"] = {"index": 0}
+    mat["pbrMetallicRoughness"] = pbr
+    mat.pop("normalTexture", None)
+    mat.pop("occlusionTexture", None)
+    mat.pop("emissiveTexture", None)
+    g["materials"] = [mat]
     js = json.dumps(g, separators=(",", ":")).encode()
     js += b" " * ((-len(js)) % 4)
     body = b"".join(chunks)
@@ -123,8 +143,10 @@ def main():
             specs.append(([float(x) for x in box_s.split(",")], [float(x) for x in (rule_s or "36,62,0.78,0.62").split(",")]))
     color_glow = "--color-glow" in sys.argv
     dilate = int(sys.argv[sys.argv.index("--dilate") + 1]) if "--dilate" in sys.argv else 5
+    global TEX
+    TEX = int(sys.argv[sys.argv.index("--tex") + 1]) if "--tex" in sys.argv else TEX
     g, binc = read_glb(src)
-    im0 = g["images"][0]
+    im0 = g["images"][base_color_image(g)]
     bv = g["bufferViews"][im0["bufferView"]]
     tex = Image.open(io.BytesIO(binc[bv.get("byteOffset", 0):bv.get("byteOffset", 0) + bv["byteLength"]])).convert("RGB")
     W, H = tex.size

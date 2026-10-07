@@ -5,6 +5,8 @@ const Stage = preload("res://scripts/siege/asset_cache.gd")
 const Land = preload("res://scripts/siege/siege_land.gd")
 const Castle = preload("res://scripts/siege/siege_castle.gd")
 const CastleMesh = preload("res://scripts/siege/castle_mesh.gd")
+const CastleKit = preload("res://scripts/siege/castle_kit.gd")
+static var CASTLE_KITS := true      # 0.31.74 Meshy castle kits (castle_kit.gd); false = the KayKit castle (tools compare)
 const PATH_TEX := preload("res://assets/terrain/path.png")
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 
@@ -160,26 +162,33 @@ static func _clouds() -> NoiseTexture2D:
 		_cloud_tex.noise = fn
 	return _cloud_tex
 
-static func _cloud_floor_material(tex: Texture2D, tint_col: Color) -> ShaderMaterial:
+static var _cloud_floor_shader: Shader = null
+
+static func _cloud_floor_material(tex: Texture2D, tint_col: Color, uv_scale := 1.0) -> ShaderMaterial:
 	# The castle floor with the terrain's drifting cloud shadows, so they don't stop at the castle walls.
-	var sh := Shader.new()
-	sh.code = """
+	# uv_scale: the castle floors' UVs run one unit per CastleMesh.FLOOR_TILE metres; a texture whose tile covers
+	# T metres takes FLOOR_TILE / T (0.31.74: each castle area its own floor).
+	if _cloud_floor_shader == null:
+		_cloud_floor_shader = Shader.new()
+		_cloud_floor_shader.code = """
 shader_type spatial;
 render_mode specular_disabled;
 uniform sampler2D tex : source_color, filter_linear_mipmap, repeat_enable;
 uniform sampler2D cloud_tex : filter_linear_mipmap, repeat_enable;
 uniform vec4 tint_col : source_color;
 uniform float cloud_strength = 0.2;
+uniform float uv_scale = 1.0;
 varying vec3 wpos;
 void vertex() { wpos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz; }
 void fragment() {
 	float cl = smoothstep(0.46, 0.74, texture(cloud_tex, wpos.xz / 95.0 + vec2(TIME * 0.006, TIME * 0.0035)).r);
-	ALBEDO = texture(tex, UV).rgb * tint_col.rgb * (1.0 - cloud_strength * cl);
+	ALBEDO = texture(tex, UV * uv_scale).rgb * tint_col.rgb * (1.0 - cloud_strength * cl);
 	ROUGHNESS = 0.95;
 }
 """
 	var m := ShaderMaterial.new()
-	m.shader = sh
+	m.shader = _cloud_floor_shader
+	m.set_shader_parameter("uv_scale", uv_scale)
 	m.set_shader_parameter("tex", tex)
 	m.set_shader_parameter("tint_col", tint_col)
 	m.set_shader_parameter("cloud_tex", _clouds())
@@ -2389,39 +2398,57 @@ func _wall_run(a: Vector2, b: Vector2, path: String, y := 0.0, clip := true, ins
 			_kit_nodes.append(node)
 
 static var _castle_meshes: Dictionary = {}
-static var _castle_mats: Array = []
+static var _castle_mats: Dictionary = {}      # team -> {"floor:<area>": Material, "steps": .., "treads": ..}
 
 func _build_castle_mesh(t: int) -> void:
-	# Generated parts (castle_mesh.gd): herringbone floors (the map's path texture) and grey stone
-	# steps in the KayKit wall colour. Everything else is KayKit models (_build_castle_kit).
-	if _castle_mats.is_empty():
-		var floor_m: Material
-		if _cast_static:
-			floor_m = _cloud_floor_material(PATH_TEX, Color(0.86, 0.84, 0.8))
-		else:
-			var fm := StandardMaterial3D.new()
-			fm.albedo_texture = PATH_TEX
-			fm.albedo_color = Color(0.86, 0.84, 0.8)
-			fm.roughness = 0.95
-			fm.specular_mode = BaseMaterial3D.SPECULAR_DISABLED
-			floor_m = fm
+	# Generated parts (castle_mesh.gd): the floors and the stone steps. Everything else is models (_build_castle_kit).
+	# 0.31.74: each area's floor (courtyard, wall-walk, terraces, dungeon) and the steps' stone come from the team's
+	# castle kit (CastleKit); without one, the map's herringbone path texture and grey steps as before.
+	var kit: Dictionary = CastleKit.kit(t) if CASTLE_KITS else {}
+	if not _castle_mats.has(t):
+		var mats := {}
+		for area in ["court", "walk", "l1", "l2", "dungeon"]:
+			var tex: Texture2D = PATH_TEX
+			var tint := Color(0.86, 0.84, 0.8)
+			var uv := 1.0
+			if not kit.is_empty():
+				var f: Array = kit.floors[area]
+				tex = load(CastleKit.DIR + "floors/%s.jpg" % f[0])
+				tint = f[2]
+				uv = CastleMesh.FLOOR_TILE / float(f[1])
+			if _cast_static:
+				mats["floor:" + area] = _cloud_floor_material(tex, tint, uv)
+			else:
+				var fm := StandardMaterial3D.new()
+				fm.albedo_texture = tex
+				fm.albedo_color = tint
+				fm.uv1_scale = Vector3(uv, uv, 1.0)
+				fm.roughness = 0.95
+				fm.specular_mode = BaseMaterial3D.SPECULAR_DISABLED
+				mats["floor:" + area] = fm
 		var step_m := StandardMaterial3D.new()
-		step_m.albedo_color = Color("#80858e")         # risers: darker, so each step reads
+		step_m.albedo_color = kit.get("steps", Color("#80858e"))   # risers: darker, so each step reads
 		step_m.roughness = 0.9
 		step_m.specular_mode = BaseMaterial3D.SPECULAR_DISABLED
 		var tread_m := StandardMaterial3D.new()
 		tread_m.vertex_color_use_as_albedo = true       # treads: striped bands (castle_mesh.gd)
 		tread_m.vertex_color_is_srgb = true             # (read as linear, the dark bands came out pale grey)
+		tread_m.albedo_color = kit.get("tread", Color.WHITE)
 		tread_m.roughness = 0.9
 		tread_m.specular_mode = BaseMaterial3D.SPECULAR_DISABLED
-		_castle_mats = [floor_m, step_m, tread_m]
+		mats["steps"] = step_m
+		mats["treads"] = tread_m
+		_castle_mats[t] = mats
 	if not _castle_meshes.has(t):
 		_castle_meshes[t] = CastleMesh.build(sim, t)
 	var parts: Dictionary = _castle_meshes[t]
-	for k in ["floor", "steps", "treads"]:
+	var meshes := {"steps": parts.steps, "treads": parts.treads}
+	for area in parts.floors:
+		meshes["floor:" + area] = parts.floors[area]
+	for k in meshes:
 		var mi := MeshInstance3D.new()
-		mi.mesh = parts[k]
-		mi.material_override = _castle_mats[{"floor":0, "steps":1, "treads":2}[k]]
+		mi.mesh = meshes[k]
+		mi.material_override = _castle_mats[t][k]
 		mi.cast_shadow = _cast()
 		mi.set_meta("perf", "castle")
 		add_child(mi)
@@ -2445,6 +2472,128 @@ func _kit_run(a: Vector2, b: Vector2, y0: float, height: float, depth := 1.1) ->
 			_kit_nodes.append(node)
 
 var _kit_nodes: Array = []
+
+# ---------- Meshy castle kits (0.31.74, castle_kit.gd) ----------
+func _kit_piece(model: String, t: int, merge: bool) -> Node3D:
+	# One kit model (foot at its origin), added to the view. merge: baked into the castle's merged meshes with the
+	# other copies of it (_merge_kit; the many wall pieces); otherwise a node of its own (keeps its LODs).
+	var root := CastleKit.piece(model, t)
+	add_child(root)
+	if merge:
+		_kit_nodes.append(root)
+	else:
+		for mi in root.find_children("*", "MeshInstance3D", true, false):
+			(mi as MeshInstance3D).cast_shadow = _cast()
+			mi.set_meta("perf", "castle")
+	return root
+
+func _kit_wall_run(t: int, a: Vector2, b: Vector2, y: float, clip: bool, inside: Vector2) -> void:
+	# The kit's curtain wall along a sim wall line -- as _wall_run (same clipping, decorated face away from inside),
+	# in pieces of about the kit's length, stretched to fit.
+	var k: Dictionary = CastleKit.kit(t).wall
+	var aa := Vector2(clampf(a.x, -Sim.HALF_W, Sim.HALF_W), clampf(a.y, -Sim.HALF_L, Sim.HALF_L)) if clip else a
+	var bb := Vector2(clampf(b.x, -Sim.HALF_W, Sim.HALF_W), clampf(b.y, -Sim.HALF_L, Sim.HALF_L)) if clip else b
+	var length := aa.distance_to(bb)
+	if length < 0.5:
+		return
+	var n := maxi(1, int(round(length / float(k.len))))
+	var piece := length / float(n)
+	var rot := -atan2(bb.y - aa.y, bb.x - aa.x)
+	if inside != Vector2.INF:
+		var d := (bb - aa).normalized()
+		if Vector2(-d.y, d.x).dot((aa + bb) * 0.5 - inside) < 0.0:
+			rot += PI
+	for i in n:
+		var c := aa.lerp(bb, (float(i) + 0.5) / float(n))
+		var root := _kit_piece(str(k.m), t, true)
+		var size: Vector3 = root.get_meta("size")
+		root.position = Vector3(c.x, y, c.y)
+		root.rotation.y = rot
+		root.scale = Vector3(piece / size.x, float(k.h) / size.y, float(k.depth) / size.z)
+
+func _kit_terrace_run(t: int, a: Vector2, b: Vector2, y0: float, height: float, depth := -1.0) -> void:
+	# The kit's terrace wall along an edge (as _kit_run): its body spans y0 .. y0 + height (the walkway above), its
+	# balustrade / railing stands above as the parapet, its decorated face towards the lower side.
+	var k: Dictionary = CastleKit.kit(t).terrace
+	var length := a.distance_to(b)
+	if length < 0.3:
+		return
+	var n := maxi(1, int(round(length / float(k.len))))
+	var piece := length / float(n)
+	var rot := -atan2(b.y - a.y, b.x - a.x)
+	if CastleKit.lower_side_flip(a, b, Callable(Sim, "height_at")):
+		rot += PI
+	var dz := float(k.depth) if depth < 0.0 else depth
+	for i in n:
+		var c := a.lerp(b, (float(i) + 0.5) / float(n))
+		var root := _kit_piece(str(k.m), t, true)
+		var size: Vector3 = root.get_meta("size")
+		root.position = Vector3(c.x, y0, c.y)
+		root.rotation.y = rot
+		root.scale = Vector3(piece / size.x, height / (float(k.body) * size.y), dz / size.z)
+
+func _kit_fire(root: Node3D, model_pt: Vector3, _size: Vector3) -> void:
+	# A small flame at a point given in the model's own units (a brazier's bowl, the forge, a torch).
+	var at := root.to_global(model_pt + Vector3(root.get_meta("lift")))
+	var s := root.scale.x
+	var f := _beacon_fire(at)
+	f.scale = Vector3.ONE * clampf(s * 0.22, 0.22, 0.5)
+	((f.draw_pass_1 as QuadMesh).material as StandardMaterial3D).albedo_color = Color(1.5, 0.62, 0.18, 0.8)
+	f.amount = 14
+
+func _kit_place(t: int, model: String, spot: Vector2, y: float, turn_deg: float, height: float) -> Node3D:
+	# A kit prop at a castle-local spot (blue space): turn 0 = its front faces the castle's front; scaled to height.
+	var root := _kit_piece(model, t, false)
+	var size: Vector3 = root.get_meta("size")
+	var p: Vector2 = Sim._c(t, spot)
+	root.position = Vector3(p.x, y, p.y)
+	root.rotation.y = (0.0 if t == 0 else PI) + PI + deg_to_rad(turn_deg)
+	root.scale = Vector3.ONE * (height / size.y)
+	for fp in (CastleKit.kit(t).fires as Dictionary).get(model, []):
+		_kit_fire(root, Vector3(fp), size)
+	return root
+
+func _build_castle_meshy(t: int) -> void:
+	# The rest of a kit castle: terrace walls on every terrace edge and stair side (Castle.ledges, the same edges the
+	# sim walls off), the corner towers, the archway over the doorway down to the dungeon, and the props.
+	var kit: Dictionary = CastleKit.kit(t)
+	var face := 0.0 if t == 0 else PI
+	for seg in Castle.ledges():
+		var a: Vector2 = seg[0]
+		var c: Vector2 = seg[1]
+		var wa: Vector2 = Sim._c(t, a)
+		var wc: Vector2 = Sim._c(t, c)
+		if absf(a.y - c.y) < 0.01:
+			var lo := 0.0 if absf(a.y - Castle.L1_Z) < 0.01 else Castle.L1_H
+			var hi := Castle.L1_H if absf(a.y - Castle.L1_Z) < 0.01 else Castle.L2_H
+			if absf(a.y - Castle.WALK_Z1) < 0.01:
+				lo = 0.0                               # the rampart's front edge (Round 15)
+				hi = Castle.WALK_H
+			_kit_terrace_run(t, wa, wc, lo, hi - lo)
+		else:
+			var lo2 := 0.0 if a.y < Castle.L2_Z - 0.01 else Castle.L1_H
+			var hi2 := Castle.L1_H if a.y < Castle.L2_Z - 0.01 else Castle.L2_H
+			_kit_terrace_run(t, wa, wc, lo2, hi2 - lo2, 0.8)
+	var tk: Dictionary = kit.tower
+	for sx in [-Castle.HX, Castle.HX]:
+		for sz in [Castle.FRONT_Z, Castle.BACK]:
+			var tp: Vector2 = Sim._c(t, Vector2(sx, sz))
+			var tw := _kit_piece(str(tk.m), t, false)
+			tw.position = Vector3(tp.x, 0.0, tp.y)
+			tw.rotation.y = face + PI - PI * 0.25 * signf(sx) * (1.0 if sz < 10.0 else 3.0)   # pennant side outwards
+			tw.scale = Vector3.ONE * float(tk.s)
+	var dk: Dictionary = kit.dungeon
+	var dp: Vector2 = Sim._c(t, Vector2(-Castle.HX, (Castle.DOOR_Z0 + Castle.DOOR_Z1) * 0.5))
+	var arch := _kit_piece(str(dk.m), t, false)
+	var asize: Vector3 = arch.get_meta("size")
+	arch.position = Vector3(dp.x, Castle.L1_H, dp.y)
+	arch.rotation.y = face + PI * 0.5
+	arch.scale = Vector3(float(dk.s), float(dk.s), float(dk.depth) / asize.z)
+	for fp in (kit.fires as Dictionary).get(str(dk.m), []):
+		_kit_fire(arch, Vector3(fp), asize)
+	for pr in kit.props:
+		_kit_place(t, str(pr[0]), pr[1], float(pr[2]), float(pr[3]), float(pr[4]))
+
 
 func _merge_kit() -> void:
 	# All KayKit hex models share one atlas material: bake every static castle piece (walls,
@@ -2478,8 +2627,10 @@ func _merge_kit() -> void:
 func _build_castle_kit(t: int) -> void:
 	var col: String = COLOR[t]
 	var face := 0.0 if t == 0 else PI
+	if CASTLE_KITS:
+		_build_castle_meshy(t)
 	# Terrace faces and stair sides: KayKit wall pieces, walkway at the level above.
-	for seg in Castle.ledges():
+	for seg in (Castle.ledges() if not CASTLE_KITS else []):
 		var a: Vector2 = seg[0]
 		var c: Vector2 = seg[1]
 		var wa: Vector2 = Sim._c(t, a)
@@ -2503,15 +2654,21 @@ func _build_castle_kit(t: int) -> void:
 	var az1: float = Castle.ANNEX_Z1
 	for seg in [[Vector2(ax0, az0), Vector2(ax0, az1)], [Vector2(ax0, az0), Vector2(-Castle.HX, az0)],
 			[Vector2(ax0, az1), Vector2(-Castle.HX, az1)], [Vector2(-Castle.HX, az0), Vector2(-Castle.HX, az1)]]:
-		_kit_run(Sim._c(t, seg[0]), Sim._c(t, seg[1]), Castle.DUNGEON_H, -Castle.DUNGEON_H + 0.05, 2.0)
+		if CASTLE_KITS:
+			_kit_terrace_run(t, Sim._c(t, seg[0]), Sim._c(t, seg[1]), Castle.DUNGEON_H, -Castle.DUNGEON_H + 0.05, 2.0)
+		else:
+			_kit_run(Sim._c(t, seg[0]), Sim._c(t, seg[1]), Castle.DUNGEON_H, -Castle.DUNGEON_H + 0.05, 2.0)
 	for seg in Castle.dungeon_ledges():
-		_kit_run(Sim._c(t, seg[0]), Sim._c(t, seg[1]), Castle.DUNGEON_H, float(Castle.DSTAIR.h1) - Castle.DUNGEON_H, 0.8)
+		if CASTLE_KITS:
+			_kit_terrace_run(t, Sim._c(t, seg[0]), Sim._c(t, seg[1]), Castle.DUNGEON_H, float(Castle.DSTAIR.h1) - Castle.DUNGEON_H, 0.8)
+		else:
+			_kit_run(Sim._c(t, seg[0]), Sim._c(t, seg[1]), Castle.DUNGEON_H, float(Castle.DSTAIR.h1) - Castle.DUNGEON_H, 0.8)
 	# Towers: squat stone towers at the four corners, blue/red-roofed towers either side of the gates.
-	for sx in [-Castle.HX, Castle.HX]:
+	for sx in ([-Castle.HX, Castle.HX] if not CASTLE_KITS else []):
 		for sz in [Castle.FRONT_Z, Castle.BACK]:
 			var tp: Vector2 = Sim._c(t, Vector2(sx, sz))
 			_kit_nodes.append(_place(HEX + "building_tower_base_%s.gltf" % col, Vector3(tp.x, 0, tp.y), face, 3.2))
-	for gx in Castle.GATE_X:
+	for gx in (Castle.GATE_X if not CASTLE_KITS else []):
 		for side in [-1.0, 1.0]:
 			var gp: Vector2 = Sim._c(t, Vector2(float(gx) + side * Castle.GATE_PIECE, Castle.FRONT_Z))
 			_kit_nodes.append(_place(HEX + "building_tower_A_%s.gltf" % col, Vector3(gp.x, 0, gp.y), face, 2.1))
@@ -2523,6 +2680,8 @@ func _build_castle_kit(t: int) -> void:
 			_meshy_building(bm.substr(6), t, Vector3(bp.x, float(bd.y), bp.y), face + deg_to_rad(float(bd.rot)), float(bd.scale))
 		else:
 			_kit_nodes.append(_place(HEX + (bm % col) + ".gltf", Vector3(bp.x, float(bd.y), bp.y), face + deg_to_rad(float(bd.rot)), float(bd.scale)))
+	if CASTLE_KITS:
+		return                                         # the kit's own props instead of the banners, trees and props below
 	# Banners on the corner towers, small trees in the courtyard's front corners (clear of the
 	# hat stands, workshop and gates).
 	for sx in [-Castle.HX, Castle.HX]:
@@ -2557,9 +2716,15 @@ func _build_castle(t: int) -> void:
 				var ql: Vector2 = (mid if t == 0 else -mid) - Vector2(0.0, Sim.CASTLE_SHIFT)
 				var wing: bool = ql.x < -Castle.HX - 0.5
 				var inside: Vector2 = Sim._c(t, Vector2(-26.5, 16.0) if wing else Vector2(0.0, 16.0))
-				_wall_run(w.a, w.b, HEX + "wall_straight.gltf", 0.0, not wing, inside)
+				if CASTLE_KITS:
+					_kit_wall_run(t, w.a, w.b, 0.0, not wing, inside)
+				else:
+					_wall_run(w.a, w.b, HEX + "wall_straight.gltf", 0.0, not wing, inside)
 			"backwall":
-				_wall_run(w.a, w.b, HEX + "wall_straight.gltf", Castle.L2_H, false, Sim._c(t, Vector2(0.0, 16.0)))
+				if CASTLE_KITS:
+					_kit_wall_run(t, w.a, w.b, Castle.L2_H, false, Sim._c(t, Vector2(0.0, 16.0)))
+				else:
+					_wall_run(w.a, w.b, HEX + "wall_straight.gltf", Castle.L2_H, false, Sim._c(t, Vector2(0.0, 16.0)))
 			"bars":
 				_bars(w.a, w.b)
 			# "ledge" (terrace faces, stair sides) are KayKit wall runs in _build_castle_kit.
@@ -2577,6 +2742,19 @@ func _build_castle(t: int) -> void:
 			continue
 		# Stone face (local +Z) outwards, like the walls: face alone pointed it into the castle.
 		var node := _place(HEX + "wall_straight_gate.gltf", Vector3(g.c.x, 0, g.c.y), face + PI, Sim.WALL_SCALE)
+		if CASTLE_KITS:
+			# The kit's gatehouse round the gate (0.31.74); of the KayKit gate only its door leaves stay, sized to the arch.
+			var gk: Dictionary = CastleKit.kit(t).gatehouse
+			var outward := Sim._c(t, Vector2(0.0, Castle.FRONT_Z - 1.0)) - Sim._c(t, Vector2(0.0, Castle.FRONT_Z))
+			var gh := _kit_piece(str(gk.m), t, false)
+			var gp: Vector2 = g.c + outward.normalized() * float(gk.out)
+			gh.position = Vector3(gp.x, 0.0, gp.y)
+			gh.rotation.y = face + PI
+			gh.scale = Vector3.ONE * float(gk.s)
+			node.scale = Vector3.ONE * float(gk.door)
+			for mi in node.find_children("*", "MeshInstance3D", true, false):
+				if not str(mi.name).contains("door"):
+					(mi as MeshInstance3D).mesh = null      # its wall piece (the doors are its children: hiding it hid them)
 		var doors := []
 		for mi in node.find_children("*door*", "MeshInstance3D", true, false):
 			doors.append({"node":mi, "sign":1.0 if str(mi.name).contains("left") else -1.0})
@@ -2605,7 +2783,21 @@ func _build_castle(t: int) -> void:
 	# The throne (Round 14, Kevin's ask; the keep that stood here blocked it): a Blender model against
 	# the back wall, velvet in the castle's colour, facing the courtyard.
 	var tp: Vector2 = Sim._c(t, Castle.THRONE_SEAT)
-	var throne := _place("res://assets/props/throne.glb", Vector3(tp.x, Castle.L2_H, tp.y), PI if t == 0 else 0.0, 1.0)
+	var lift := 0.0
+	if CASTLE_KITS:
+		# The kit's throne piece (0.31.74): the Royal canopy behind it, the War dais under it (the throne raised onto it).
+		var tk: Dictionary = CastleKit.kit(t).throne
+		var tpiece := _kit_piece(str(tk.m), t, false)
+		var size: Vector3 = tpiece.get_meta("size")
+		var s3 := float(tk.s)
+		var bp: Vector2 = Sim._c(t, Vector2(0.0, Castle.BACK_WALL_Z - 1.0 - float(tk.back)))
+		tpiece.position = Vector3(bp.x, Castle.L2_H - float(tk.get("sink", 0.0)), bp.y)
+		tpiece.rotation.y = face + PI
+		tpiece.scale = Vector3(s3, s3 * float(tk.ys), s3)
+		lift = float(tk.lift)
+		for fp in (CastleKit.kit(t).fires as Dictionary).get(str(tk.m), []):
+			_kit_fire(tpiece, Vector3(fp), size)
+	var throne := _place("res://assets/props/throne.glb", Vector3(tp.x, Castle.L2_H + lift, tp.y), PI if t == 0 else 0.0, 1.0)
 	if throne != null:
 		var velvet := StandardMaterial3D.new()
 		velvet.albedo_color = Color("#2d58b8") if t == 0 else Color("#b3223a")
@@ -2616,14 +2808,15 @@ func _build_castle(t: int) -> void:
 				var sm := m.mesh.surface_get_material(si)
 				if sm != null and str(sm.resource_name) == "Velvet":
 					m.set_surface_override_material(si, velvet)
-	# Throne room: banners either side of the throne, a weapon rack.
+	# Throne room: banners either side of the throne, a weapon rack (the KayKit castle; the kits dress it themselves).
 	var th: Vector2 = Sim.throne(t)
-	for fx in [-1.6, 1.6]:
-		var fp: Vector2 = th + Sim._c(t, Vector2(fx, 1.2))
-		_place(HEX + "flag_%s.gltf" % col, Vector3(fp.x, Castle.L2_H, fp.y), face, 1.6)
+	if not CASTLE_KITS:
+		for fx in [-1.6, 1.6]:
+			var fp: Vector2 = th + Sim._c(t, Vector2(fx, 1.2))
+			_place(HEX + "flag_%s.gltf" % col, Vector3(fp.x, Castle.L2_H, fp.y), face, 1.6)
+		var wr: Vector2 = Sim._c(t, Vector2(12.0, 26.0))
+		_place(HEX + "weaponrack.gltf", Vector3(wr.x, Castle.L2_H, wr.y), face + PI * 0.5, 4.0)
 	_decal(Vector3(th.x, Castle.L2_H + 0.06, th.y), Sim.THRONE_RADIUS, TEAM_COLORS[t], 0.6)
-	var wr: Vector2 = Sim._c(t, Vector2(12.0, 26.0))
-	_place(HEX + "weaponrack.gltf", Vector3(wr.x, Castle.L2_H, wr.y), face + PI * 0.5, 4.0)
 	# Dungeon: the cell on the platform, a ladder against the back wall and barrels.
 	var cc: Vector2 = Sim._c(t, Sim.CELL_C)
 	# 0.31.11: on the cell's floor. (It was at the level-1 height from when the cell stood on the platform; since the cell
