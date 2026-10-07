@@ -7,7 +7,11 @@ extends Node
 #    which separates "stuck in game code" from "stuck in the renderer/driver".
 const PATH := "user://siege_diag.log"
 const PREV_PATH := "user://siege_diag_prev.log"
-const BUILD := "0.31.69-fatebound"
+# 0.31.70: the app start has its own log (testers' phones stuck on a black screen right after the Godot splash),
+# so a match's diagnostics never push a stuck start out of the files.
+const BOOT_PATH := "user://boot_diag.log"
+const BOOT_PREV_PATH := "user://boot_diag_prev.log"
+const BUILD := "0.31.70-fatebound"
 
 class ErrorCapture:
 	extends Logger
@@ -19,6 +23,8 @@ class ErrorCapture:
 			sink.call("STDERR " + message.strip_edges())
 
 var mode  # siege_mode, for match state
+var log_path := PATH          # set before add_child (the app start uses BOOT_PATH / BOOT_PREV_PATH)
+var prev_path := PREV_PATH
 var _file: FileAccess
 var _mutex := Mutex.new()
 var _logger: ErrorCapture
@@ -66,10 +72,10 @@ func _viewport_text() -> String:
 
 func _ready() -> void:
 	# Keep the previous session's log (the one that froze) before starting a new one.
-	if FileAccess.file_exists(PATH):
-		DirAccess.remove_absolute(ProjectSettings.globalize_path(PREV_PATH))
-		DirAccess.rename_absolute(ProjectSettings.globalize_path(PATH), ProjectSettings.globalize_path(PREV_PATH))
-	_file = FileAccess.open(PATH, FileAccess.WRITE)
+	if FileAccess.file_exists(log_path):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(prev_path))
+		DirAccess.rename_absolute(ProjectSettings.globalize_path(log_path), ProjectSettings.globalize_path(prev_path))
+	_file = FileAccess.open(log_path, FileAccess.WRITE)
 	write("SESSION %s | %s %s | %s | %s | GPU %s %s | renderer %s (%s)" % [Time.get_datetime_string_from_system(), OS.get_name(), OS.get_version(),
 		OS.get_model_name(), BUILD, RenderingServer.get_video_adapter_vendor(), RenderingServer.get_video_adapter_name(),
 		RenderingServer.get_current_rendering_method(), RenderingServer.get_video_adapter_api_version()])
@@ -234,20 +240,23 @@ static func filter_logcat(raw: String, keep_other := 120) -> String:
 	return "-- fatal (%d) --\n%s\n-- errors/warnings (last %d) --\n%s" % [fatal.size(), "\n".join(fatal), other.size(), "\n".join(other)]
 
 static func has_logs() -> bool:
-	return FileAccess.file_exists(PATH) or FileAccess.file_exists(PREV_PATH)
+	for p in [PATH, PREV_PATH, BOOT_PATH, BOOT_PREV_PATH]:
+		if FileAccess.file_exists(p):
+			return true
+	return false
 
 static func read_logs(tail := 120) -> String:
 	# Both sessions (older first), each trimmed to its session header, every STALL/ERROR line and
 	# the last `tail` lines, so it pastes into a chat in one piece.
 	var out := ""
-	for p in [PREV_PATH, PATH]:
+	for p in [BOOT_PREV_PATH, BOOT_PATH, PREV_PATH, PATH]:
 		if not FileAccess.file_exists(p):
 			continue
 		var lines := FileAccess.get_file_as_string(p).split("\n", false)
 		var keep := PackedStringArray()
 		for i in lines.size():
 			var l: String = lines[i]
-			if i == 0 or i >= lines.size() - tail or l.contains("STALL") or l.contains("ERROR") or l.contains("RECOVERED") or l.contains("SESSION"):
+			if i == 0 or i >= lines.size() - tail or l.contains("STALL") or l.contains("ERROR") or l.contains("RECOVERED") or l.contains("SESSION") or l.contains("BOOT"):
 				keep.append(l)
 		out += "==== %s (%d lines) ====\n%s\n" % [p.get_file(), lines.size(), "\n".join(keep)]
 	var lc := logcat_tail(120)

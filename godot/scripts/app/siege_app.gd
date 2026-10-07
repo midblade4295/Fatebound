@@ -9,6 +9,7 @@ const Showcase = preload("res://scripts/app/showcase.gd")
 const Siege = preload("res://scripts/siege/siege_mode.gd")
 const Audio = preload("res://scripts/native_audio.gd")
 const Assets = preload("res://scripts/siege/asset_cache.gd")
+const Diag = preload("res://scripts/siege/siege_diag.gd")
 
 const TABS := [["home", "HOME", "home"], ["pass", "PASS", "pass"], ["shop", "SHOP", "shop"], ["locker", "LOCKER", "locker"], ["settings", "SETTINGS", "gear"]]
 
@@ -43,18 +44,91 @@ var _toast: Label
 var _toast_box: PanelContainer
 var _toast_until := 0.0
 
+# ---------------- start-up diagnostics and safe start (0.31.70) ----------------
+# Testers (Pixel 7 Pro, vivo S30 mini; Android 16) got a black screen right after the Godot splash, i.e. inside this
+# start-up. It is now logged from its first line (user://boot_diag.log: phases, errors, the watchdog's STALL lines with
+# the phone's logcat). BOOT_STATE marks a start "pending" until the menu has drawn BOOT_OK_FRAMES frames. If the last
+# start never got there (stuck or killed), this one is a SAFE START: no background model loading and no live 3D hero
+# (the two heavy things before the first menu frame), and the home screen offers the diagnostics to copy. Safe start
+# stays on for this build; a new build tries the normal start again.
+const BOOT_STATE := "user://boot_state.json"
+const BOOT_OK_FRAMES := 30
+var safe_boot := false
+var _boot_diag = null
+var _boot_frames := 0
+var _boot_done := false
+var _boot_t0 := 0
+
+func _boot_tracking() -> bool:
+	return DisplayServer.get_name() != "headless"      # tests and tools start the app headless: never a safe start
+
+func _boot_begin() -> void:
+	_boot_t0 = Time.get_ticks_msec()
+	_boot_diag = Diag.new()
+	_boot_diag.log_path = Diag.BOOT_PATH
+	_boot_diag.prev_path = Diag.BOOT_PREV_PATH
+	add_child(_boot_diag)
+	if not _boot_tracking():
+		return
+	var st: Dictionary = {}
+	if FileAccess.file_exists(BOOT_STATE):
+		var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(BOOT_STATE))
+		if parsed is Dictionary:
+			st = parsed
+	var stuck := bool(st.get("pending", false))
+	safe_boot = stuck or str(st.get("safe_build", "")) == Diag.BUILD
+	_boot_diag.write("BOOT %s (last start %s)" % ["SAFE START" if safe_boot else "normal", "never reached the menu" if stuck else "ok"])
+	_save_boot_state(true)
+
+func _save_boot_state(pending: bool) -> void:
+	if not _boot_tracking():
+		return
+	var f := FileAccess.open(BOOT_STATE, FileAccess.WRITE)
+	if f != null:
+		f.store_string(JSON.stringify({"pending": pending, "build": Diag.BUILD, "safe_build": Diag.BUILD if safe_boot else ""}))
+		f.close()
+
+func _boot_mark(phase: String) -> void:
+	if _boot_diag != null:
+		_boot_diag.mark(phase)
+		_boot_diag.write("BOOT %s (%d ms)" % [phase, Time.get_ticks_msec() - _boot_t0])
+
+func _boot_tick() -> void:
+	# Called every frame until the menu has drawn BOOT_OK_FRAMES frames; then the start counts as good.
+	if _boot_done:
+		return
+	_boot_frames += 1
+	if _boot_frames == 1:
+		_boot_mark("first frame")
+	if _boot_frames >= BOOT_OK_FRAMES:
+		_boot_done = true
+		_save_boot_state(false)
+		_boot_mark("OK -- menu up%s" % (" (safe start)" if safe_boot else ""))
+		var d = _boot_diag
+		get_tree().create_timer(8.0).timeout.connect(func():        # a few seconds of menu stats, then stop logging
+			if is_instance_valid(d):
+				d.queue_free())
+
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	get_tree().auto_accept_quit = false
-	Assets.preload_async()                 # 0.31.8: load the match's models on a thread while the menus are up
+	_boot_begin()
+	if not safe_boot:
+		_boot_mark("preload models")
+		Assets.preload_async()                 # 0.31.8: load the match's models on a thread while the menus are up
+	_boot_mark("profile")
 	profile = Profile.new(profile_path, legacy_path)
 	profile.now_override = now_override
 	profile.load_or_create()
+	_boot_mark("audio")
 	audio = Audio.new()
 	add_child(audio)
 	_apply_audio()
+	_boot_mark("background")
 	_build_background()
+	_boot_mark("hero")
 	_build_hero()
+	_boot_mark("menus")
 	_build_chrome()
 	# Toast: a dark pill just above the tab bar, readable over anything.
 	_toast_box = PanelContainer.new()
@@ -81,6 +155,7 @@ func _ready() -> void:
 		call_deferred("toast", "Welcome to Fatebound! Your progress carried over: +%d gold, +%d gems" % [int(m.gold), int(m.gems)], UI.GOLD)
 	content_scroll.get_v_scroll_bar().value_changed.connect(_on_scroll)
 	show_tab("home")
+	_boot_mark("home shown, waiting for frames")
 
 func _apply_audio() -> void:
 	var st: Dictionary = profile.d.settings
@@ -170,14 +245,17 @@ func _build_hero() -> void:
 	hero_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(hero_layer)
 	Showcase.backdrop(hero_layer)
-	hero_node = Showcase.new()
-	# The home hero is taller than the Locker's box, so the camera sits further back to keep the
-	# helmet clear of the logo: character ~45% of the frame, feet at ~78% down.
-	hero_node.cam_z = 9.7
-	hero_node.cam_y = 1.6
-	hero_node.look_y = 1.24
-	hero_node.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	hero_layer.add_child(hero_node)
+	if safe_boot:
+		hero_node = null                      # safe start: the painted backdrop only, no live 3D character
+	else:
+		hero_node = Showcase.new()
+		# The home hero is taller than the Locker's box, so the camera sits further back to keep the
+		# helmet clear of the logo: character ~45% of the frame, feet at ~78% down.
+		hero_node.cam_z = 9.7
+		hero_node.cam_y = 1.6
+		hero_node.look_y = 1.24
+		hero_node.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		hero_layer.add_child(hero_node)
 	_band(hero_layer, Color(0.02, 0.03, 0.09, 0.78), Color(0.02, 0.03, 0.09, 0.0), true, 120.0)
 	_band(hero_layer, Color(FADE_COLOR, 0.0), Color(FADE_COLOR, 1.0), false, 210.0)
 	if not bool(profile.d.settings.get("reduce_motion", false)):
@@ -229,7 +307,8 @@ func _build_hero() -> void:
 const LOGO_FONT = preload("res://assets/fonts/LuckiestGuy-Regular.ttf")
 
 func hero_show(cls: String, look: Dictionary) -> void:
-	hero_node.show_look(cls, look)
+	if hero_node != null:
+		hero_node.show_look(cls, look)
 
 func _on_scroll(v: float) -> void:
 	hero_layer.position.y = -v * 0.55
@@ -557,6 +636,7 @@ func _cancel_press() -> void:
 	_cancelling = false
 
 func _process(_delta: float) -> void:
+	_boot_tick()
 	Assets.poll()
 	# Keep gliding after a flick, easing out.
 	if not _drag_down and absf(_fling) > 30.0 and _menu_scroll_live():

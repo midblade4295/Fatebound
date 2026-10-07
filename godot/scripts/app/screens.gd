@@ -153,7 +153,22 @@ static func home(app, root: VBoxContainer) -> void:
 	# The hero itself (backdrop, live 3D character, logo) is the app's full-bleed layer behind this
 	# scroll area; here is the space it shows through, then the class picker.
 	app.hero_show(app.home_class, p.look_for(app.home_class))
-	UI.spacer(root, 322.0)
+	if bool(app.get("safe_boot")):
+		# 0.31.70: the last start never reached the menu, so this one skipped the live hero and the background
+		# loading. Hand the tester the start-up log (phases, errors, logcat) to send.
+		UI.spacer(root, 96.0)
+		var sb := UI.card(root, Color(0.16, 0.05, 0.05, 0.94), UI.RED)
+		var st := UI.label(sb, "SAFE START", 14, UI.RED, UI.HEAVY_FONT, true)
+		st.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		var sx := UI.label(sb, "The game got stuck starting last time, so this start skipped the 3D hero. Please copy the diagnostics and send them to the developer.", 12, UI.TEXT)
+		sx.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		sx.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		UI.button(sb, "COPY DIAGNOSTICS", "primary", func():
+			DisplayServer.clipboard_set(Diag.read_logs())
+			app.toast("Diagnostics copied -- paste them to the developer", UI.CYAN), "copy_diag_boot", 13)
+		UI.spacer(root, 60.0)
+	else:
+		UI.spacer(root, 322.0)
 	var eq: Dictionary = d.equip[app.home_class]
 	var cn := UI.title(root, str(Eco.CLASS_NAMES[app.home_class]).to_upper(), 28, UI.TEXT)
 	cn.add_theme_constant_override("outline_size", 8)

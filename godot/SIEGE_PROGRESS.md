@@ -2189,3 +2189,20 @@ K2/K3 notes (0.17.0)
 - MESHY_BUILDINGS.blink: the glow snaps off for 0.13 s every 4.7 s, with a quick double-blink every third time (the
   hood blinks; the lantern dims with it). Every hat shop and the workshop are now Meshy models.
 - preload.json: rogue_shop.glb in, building_market out. Quick suite: ALL PASSED (33).
+
+# 0.31.70 (Kevin: testers on a Pixel 7 Pro and a vivo S30 mini, Android 16, get stuck on a black screen when starting
+# the game; the Godot splash shows on one of them -- so the engine and Vulkan come up and the hang is in our start-up)
+- No logs exist from those phones: diagnostics only started in a match, and COPY DIAGNOSTICS sits in Settings. Both
+  phones are likely ARM Mali GPUs (Tensor G2 Mali-G710; S30 Pro mini Dimensity 9300+); the game has only been checked
+  on Kevin's Adreno S21. Not guessed at -- this build collects the evidence and gets testers in.
+- Start-up log: SiegeApp creates a Diag first thing (user://boot_diag.log, previous start in boot_diag_prev.log;
+  Diag.log_path/prev_path, BOOT_PATH/BOOT_PREV_PATH): device, GPU and API version, every start-up step with its time,
+  engine/script errors, and the watchdog's STALL lines with the phone's logcat if frames stop for 2 s. It stops
+  logging 8 s after the menu is up. COPY DIAGNOSTICS includes the start-up logs.
+- Safe start: user://boot_state.json is "pending" from the first line until the menu has drawn 30 frames. If the last
+  start never got there, this start skips the two heavy steps before the first frame -- the ~78 background model loads
+  (Assets.preload_async) and the live 3D hero (its own 4x MSAA viewport, which blocks on the hero model's threaded
+  load) -- and the home screen shows a SAFE START card with COPY DIAGNOSTICS. Stays on for this build; a new build
+  tries the normal start again. Headless runs (tests, tools) never track or safe-start.
+- Measured here (lavapipe): normal start, first frame at 4.3 s of which 3.6 s is the hero step waiting on the threaded
+  loads; safe start, first frame at 0.3 s. Quick suite: ALL PASSED (33).
