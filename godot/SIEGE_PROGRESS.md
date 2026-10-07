@@ -2121,3 +2121,16 @@ K2/K3 notes (0.17.0)
 - Locker: the hero showcase is interactive (drag to turn, pinch / wheel to zoom) with the same + / − buttons and
   hint as the pass item view -- Screens.zoom_controls(stage, showcase, prefix), now shared by both. app_shots'
   SHOT_ZOOM also reaches the locker. Quick suite: ALL PASSED (33).
+
+# 0.31.65 (Kevin: any staff is held straight up and down)
+- View._stand_staff: a staff ("staff", "Skeleton_Staff", "bits/staff_*"; wands unchanged) is turned in the hand so it
+  stands vertical in the class's idle pose, head up, with its face (STAFF_FACE; the skull staff's is -X) toward the
+  front. Computed, not eyeballed: the idle animation's frame 0 is applied down the bone chain to the hand slot (each
+  bone's rest overridden by its position/rotation/scale tracks), and the turn mapping the staff's +Y to world up and
+  its face to the body's +Z is built in the slot's space; cached per body, idle and hand. It moves with the hand in
+  casts, attacks and runs. Covers the Mage, Archmage, Necromancer, and the Priest's staff cosmetics, in matches and
+  menus. Skeleton_Staff's 195-degree roll (0.31.64) is superseded: the skull now faces forward.
+- render_skin_icons: base classes get default-gear icons too; the 11 staff thumbnails re-rendered.
+- Environment rebuilt this session (container reset): clone from GitHub, Godot 4.7.2 + templates, Android build-tools
+  35, the preview key from the R5 handoff (cert SHA-256 10:11:FC:79...:B3:8B:87, unchanged), mesa-vulkan-drivers for
+  lavapipe renders. Quick suite: ALL PASSED (33).

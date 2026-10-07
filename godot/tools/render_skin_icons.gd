@@ -66,7 +66,7 @@ func _run() -> void:
 			jobs.append([id, str(it["class"]), str(it.tint)])
 		elif it.kind == "weapon" and (Eco.UP_CLASSES.has(str(it["class"])) or not FileAccess.file_exists("res://assets/ui/icons/%s.png" % id)):
 			jobs.append([id, str(it["class"]), "", str(it.get("r", "")), str(it.get("l", ""))])      # 0.31.38: weapon icons
-	for ucls in Eco.UP_CLASSES:
+	for ucls in Eco.CLASSES + Eco.UP_CLASSES:                # (0.31.65: base classes' default gear too)
 		jobs.append(["wdefault_" + ucls, ucls, "", "-", "-"])
 	for job in jobs:
 		if not only.is_empty() and not only.has(job[0]):
