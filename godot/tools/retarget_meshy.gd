@@ -8,7 +8,8 @@ extends SceneTree
 #    carry their motion (scaled by the hip heights). Unmapped bones (Spine01, neck, shoulders) hold their rest.
 const View = preload("res://scripts/siege/siege_view.gd")
 const FPS := 30.0
-const KK_FOR := {"assassin": "rogue", "archmage": "mage", "crusader": "knight", "berserker": "barbarian", "sniper": "ranger", "necromancer": "necromancer_kaykit"}   # the KayKit body it replaces: source skeleton and height
+const KK_FOR := {"assassin": "rogue", "archmage": "mage", "crusader": "knight", "berserker": "barbarian", "sniper": "ranger", "necromancer": "necromancer_kaykit",
+	"villager": "villager_kaykit", "worker": "villager_kaykit"}   # the KayKit body it replaces: source skeleton and height
 
 func _initialize() -> void:
 	_run()
@@ -50,6 +51,16 @@ func _run() -> void:
 		if n is Node3D:
 			unit *= (n as Node3D).scale.x
 		n = n.get_parent()
+	# 0.31.76: FIT=neck matches the height of the head bone (the neck) instead of the overall height -- for a model whose
+	# hat stands well above its head (the farmer's straw brim), where the overall fit would shrink the body under it.
+	var me_floor := INF
+	for mi in raw.find_children("*", "MeshInstance3D", true, false):
+		me_floor = minf(me_floor, (mi as MeshInstance3D).mesh.get_aabb().position.y)
+	var kk_neck: float = (src.global_transform * src.get_bone_global_rest(src.find_bone("head"))).origin.y - _box(made.body).position.y
+	var me_neck: float = rsk.get_bone_global_rest(rsk.find_bone("Head")).origin.y * unit - me_floor
+	print("fit by height ", fit, ", by neck ", kk_neck / me_neck, " (KayKit neck ", kk_neck, " m, Meshy ", me_neck, ")")
+	if OS.get_environment("FIT") == "neck":
+		fit = kk_neck / me_neck
 	var rig := {"fit": fit}
 	for hand in ["r", "l"]:
 		var kw: Transform3D = src.get_bone_global_rest(src.find_bone("wrist." + hand))

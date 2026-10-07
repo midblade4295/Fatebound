@@ -2308,3 +2308,25 @@ K2/K3 notes (0.17.0)
   excluded; an unused one is excluded from every preset) and only checks the props of kits in use.
 - tools/preload_list re-run (the war pieces dropped from the background preload). tools/castle_shot.gd: both castles
   from the field, inside, the throne and the courtyard. Quick suite: ALL PASSED (36).
+
+# 0.31.76 (Kevin: "Make concepts for the peasant and farmer", then picked "A2 both both")
+- Concepts (gpt-image-2, ElevenLabs flow, with a lineup of the game's class bodies as the style reference): two designs
+  x two takes each for the Peasant (the Villager) and the Farmer (the Worker); Kevin picked A2 for both -- a
+  bareheaded peasant in a patched linen tunic with a rope belt and pouch, foot wraps; a straw-hat farmer with a
+  moustache, red bandana, green overalls, leather gloves and a tool belt. Sheets and picks in reports/concepts/
+  (with character_style_ref.png and tpose_ref.png, the references the flow fetched from the repo).
+- Models: each pick redrawn as a T-pose turnaround (front / side / back, the KayKit Rogue's rest pose as the pose
+  reference), split into three square views -> Meshy multi-image-to-3D (latest model, t-pose, remeshed to ~10k
+  triangles, textured from the views) -> Meshy auto-rig (same 24 bones). 70 Meshy credits for both; ~5,950 ElevenLabs
+  credits for the concepts (8 images) and turnarounds (4).
+- assets/meshy/villager, assets/meshy/worker: rigged.glb, rig.json (fit 1.82 to the KayKit Rogue's height, like the
+  others), 110 animations baked each by tools/retarget_meshy.gd (KK_FOR villager/worker -> LOOKS.villager_kaykit, the
+  old Rogue body kept for it). The tool also prints a neck-height fit (FIT=neck uses it) -- for a hat that stands far
+  above the head; not needed here (the farmer's overall fit and neck fit differ by 5 %).
+- LOOKS.villager -> meshy:villager, LOOKS.worker -> meshy:worker (the Worker's axe, mug, mallet and felling axe in the
+  baked hand slots; same idles, combos and ragdoll as before). MESHY gains both.
+- Worker icons re-rendered (bust and the four weapon icons; render_skin_icons frames the straw hat, and re-renders a
+  base class's weapon icon when ONLY names it). tools/preload_list: the worker body is preloaded with the KayKit
+  heroes; re-run.
+- Checked: idle / punch / chop renders beside the Rogue, Knight, Crusader and Archmage; match views (castle_shot
+  red_court, blue_gate). Quick suite: ALL PASSED (36).

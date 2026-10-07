@@ -26,8 +26,10 @@ static var VULKAN_SATURATION := 0.96
 # Model, weapons (right/left hand) and clips per class. Clip keys: g general, m melee, r ranged,
 # mb movement basic, ma movement advanced, t tools.
 const LOOKS := {
-	"villager": {"model":"Rogue","r":"","l":"","idle":"g/Idle_A","attack":"m/Melee_Unarmed_Attack_Punch_A","ability":"m/Melee_Unarmed_Attack_Kick","combo":["m/Melee_Unarmed_Attack_Punch_A","m/Melee_Unarmed_Attack_Punch_A","m/Melee_Unarmed_Attack_Kick"]},
-	"worker": {"model":"Rogue","r":"axe_1handed","l":"","idle":"g/Idle_A","attack":"m/Melee_1H_Attack_Chop","ability":"m/Melee_1H_Attack_Chop","combo":["m/Melee_1H_Attack_Chop","m/Melee_1H_Attack_Slice_Horizontal","m/Melee_1H_Attack_Stab"]},
+	# 0.31.76 (Kevin picked concepts "A2 both"): the Villager is a Meshy peasant (bareheaded, patched linen tunic, rope
+	# belt), the Worker a Meshy straw-hat farmer (green overalls, red bandana, gloves); both were the KayKit Rogue.
+	"villager": {"model":"meshy:villager","r":"","l":"","idle":"g/Idle_A","attack":"m/Melee_Unarmed_Attack_Punch_A","ability":"m/Melee_Unarmed_Attack_Kick","combo":["m/Melee_Unarmed_Attack_Punch_A","m/Melee_Unarmed_Attack_Punch_A","m/Melee_Unarmed_Attack_Kick"]},
+	"worker": {"model":"meshy:worker","r":"axe_1handed","l":"","idle":"g/Idle_A","attack":"m/Melee_1H_Attack_Chop","ability":"m/Melee_1H_Attack_Chop","combo":["m/Melee_1H_Attack_Chop","m/Melee_1H_Attack_Slice_Horizontal","m/Melee_1H_Attack_Stab"]},
 	"knight": {"model":"Knight","r":"sword_1handed","l":"bits/shield_B","idle":"g/Idle_A","attack":"m/Melee_1H_Attack_Slice_Diagonal","ability":"m/Melee_Blocking","combo":["m/Melee_1H_Attack_Slice_Diagonal","m/Melee_1H_Attack_Slice_Horizontal","m/Melee_Block_Attack"]},
 	"crusader": {"model":"meshy:crusader","r":"sword_1handed","l":"bits/shield_B","idle":"g/Idle_A","attack":"m/Melee_1H_Attack_Slice_Diagonal","ability":"m/Melee_Blocking","combo":["m/Melee_1H_Attack_Slice_Diagonal","m/Melee_1H_Attack_Slice_Horizontal","m/Melee_Block_Attack"]},
 	# Upgraded barbarian (Round 11): two-handed greatsword, whirlwind.
@@ -45,6 +47,7 @@ const LOOKS := {
 	"archmage": {"model":"meshy:archmage","r":"staff","l":"spellbook_open","idle":"g/Idle_B","attack":"r/Ranged_Magic_Shoot","ability":"r/Ranged_Magic_Summon","tint":"#a33d3d"},
 	"necromancer": {"model":"meshy:necromancer","r":"Skeleton_Staff","l":"","idle":"g/Idle_B","attack":"r/Ranged_Magic_Spellcasting_Long","ability":"r/Ranged_Magic_Raise"},
 	"necromancer_kaykit": {"model":"Necromancer","r":"Skeleton_Staff","l":"","idle":"g/Idle_B","attack":"r/Ranged_Magic_Spellcasting_Long","ability":"r/Ranged_Magic_Raise"},          # 0.31.63: the stock body, kept for tools/retarget_meshy.gd
+	"villager_kaykit": {"model":"Rogue","r":"","l":"","idle":"g/Idle_A","attack":"m/Melee_Unarmed_Attack_Punch_A","ability":"m/Melee_Unarmed_Attack_Kick"},          # 0.31.76: the old body of both, kept for tools/retarget_meshy.gd
 }
 const LOOP_HINTS := ["Idle","Running","Walking","Hammering","Holding","Aiming","_Pose","Blocking","Chopping","Pickaxing"]
 
@@ -3050,7 +3053,7 @@ static func look_key(u: Dictionary) -> String:
 # rig.json carries the fit scale and the hand-slot rests the tool worked out.
 const MESHY := {"assassin": "res://assets/meshy/assassin/", "archmage": "res://assets/meshy/archmage/", "crusader": "res://assets/meshy/crusader/",
 	"berserker": "res://assets/meshy/berserker/", "sniper": "res://assets/meshy/sniper/",
-	"necromancer": "res://assets/meshy/necromancer/"}
+	"necromancer": "res://assets/meshy/necromancer/", "villager": "res://assets/meshy/villager/", "worker": "res://assets/meshy/worker/"}
 const MESHY_RENAME := {"Hips":"hips", "Spine02":"spine", "Spine":"chest", "Head":"head",
 	"LeftArm":"upperarm.l", "LeftForeArm":"lowerarm.l", "LeftHand":"wrist.l",
 	"RightArm":"upperarm.r", "RightForeArm":"lowerarm.r", "RightHand":"wrist.r",

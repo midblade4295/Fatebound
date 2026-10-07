@@ -64,7 +64,7 @@ func _run() -> void:
 		var it: Dictionary = Eco.CATALOG[id]
 		if it.kind == "skin":
 			jobs.append([id, str(it["class"]), str(it.tint)])
-		elif it.kind == "weapon" and (Eco.UP_CLASSES.has(str(it["class"])) or not FileAccess.file_exists("res://assets/ui/icons/%s.png" % id)):
+		elif it.kind == "weapon" and (Eco.UP_CLASSES.has(str(it["class"])) or only.has(id) or not FileAccess.file_exists("res://assets/ui/icons/%s.png" % id)):      # (0.31.76: or named in ONLY -- re-render a base class's)
 			jobs.append([id, str(it["class"]), "", str(it.get("r", "")), str(it.get("l", ""))])      # 0.31.38: weapon icons
 	for ucls in Eco.CLASSES + Eco.UP_CLASSES:                # (0.31.65: base classes' default gear too)
 		jobs.append(["wdefault_" + ucls, ucls, "", "-", "-"])
@@ -93,6 +93,9 @@ func _run() -> void:
 		if str(job[1]) in ["archmage", "necromancer"]:   # (0.31.55: the old wizard's tall, wide hat; 0.31.63: the Necromancer's crown -- pull back and up)
 			cpos = Vector3(0.0, 1.45, 5.6) if weapon_job else Vector3(0.0, 2.0, 3.9)
 			aim = Vector3(0, 1.2, 0) if weapon_job else Vector3(0, 1.72, 0)
+		elif str(job[1]) == "worker":                    # (0.31.76: the farmer's straw hat -- a little back and up)
+			cpos = Vector3(0.0, 1.3, 5.0) if weapon_job else Vector3(0.0, 1.85, 3.5)
+			aim = Vector3(0, 1.08, 0) if weapon_job else Vector3(0, 1.6, 0)
 		cam.transform = Transform3D(Basis.looking_at(aim - cpos, Vector3.UP), cpos)
 		if made.player.has_animation(idle):
 			made.player.play(idle)

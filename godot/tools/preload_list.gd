@@ -16,7 +16,8 @@ func _process(_d: float) -> bool:
 	var paths: Array = Cache._scene_cache.keys()
 	paths.append("res://assets/terrain/cache.res")
 	for extra in ["res://assets/kaykit/heroes/Necromancer.glb", "res://assets/kaykit/heroes/Knight.glb", "res://assets/kaykit/heroes/Barbarian.glb",
-			"res://assets/kaykit/heroes/Rogue.glb", "res://assets/kaykit/heroes/Rogue_Hooded.glb", "res://assets/kaykit/heroes/Ranger.glb", "res://assets/kaykit/heroes/Mage.glb"]:
+			"res://assets/kaykit/heroes/Rogue.glb", "res://assets/kaykit/heroes/Rogue_Hooded.glb", "res://assets/kaykit/heroes/Ranger.glb", "res://assets/kaykit/heroes/Mage.glb",
+			"res://assets/meshy/worker/rigged.glb"]:          # (0.31.76: the Worker's farmer body -- bots take tools early on)
 		if not paths.has(extra):
 			paths.append(extra)
 	var dir := DirAccess.open("res://assets/kaykit/anim")
