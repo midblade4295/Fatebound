@@ -12,8 +12,14 @@ const HEX := "res://assets/kaykit/hex/"
 const FOREST := "res://assets/kaykit/forest/"
 const TEAM_COLORS := [Color("#5fd2f0"), Color("#ff7b52")]
 const GOLD := Color("#ffd46a")
-static var VULKAN_EXPOSURE := 1.55
-static var VULKAN_AMBIENT := 2.25
+# Vulkan/Mobile vs Compatibility (OpenGL) look. 0.31.71 (Kevin, comparing the two renderers side by side: "OpenGL
+# looks better"): retuned so Vulkan matches the OpenGL render -- deeper shadows, brighter sunlit tops, the same
+# colour. Measured on the same shots (tools/building_shot.gd, FB_VK_* env), luminance p10/p50/p90 and saturation:
+# OpenGL .10/.40/.72 s.54; Vulkan before (1.55, 2.25, 1, 1) .29/.47/.69 s.46; now .18/.38/.74 s.56.
+static var VULKAN_EXPOSURE := 2.0     # was 1.55
+static var VULKAN_AMBIENT := 1.05     # was 2.25
+static var VULKAN_CONTRAST := 1.2     # Vulkan-only multipliers on the colour adjustments
+static var VULKAN_SATURATION := 0.96
 
 # Model, weapons (right/left hand) and clips per class. Clip keys: g general, m melee, r ranged,
 # mb movement basic, ma movement advanced, t tools.
@@ -759,8 +765,9 @@ func _apply_hq(env: Environment, sun: DirectionalLight3D) -> void:
 	env.glow_bloom = 0.04
 	env.glow_hdr_threshold = 0.95
 	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SOFTLIGHT
-	env.adjustment_saturation = 1.12
-	env.adjustment_contrast = 1.08
+	var vk := RenderingServer.get_current_rendering_method() != "gl_compatibility"
+	env.adjustment_saturation = 1.12 * (VULKAN_SATURATION if vk else 1.0)
+	env.adjustment_contrast = 1.08 * (VULKAN_CONTRAST if vk else 1.0)
 	env.tonemap_exposure *= 1.05                # the shade costs ~6 % mean brightness: give it back
 
 func _build_lighting() -> void:
@@ -795,8 +802,8 @@ func _build_lighting() -> void:
 	env.tonemap_white = 3.0
 	# More colourful, like the Fat Princess references (Kevin, Round 7b).
 	env.adjustment_enabled = true
-	env.adjustment_saturation = 1.08
-	env.adjustment_contrast = 1.04
+	env.adjustment_saturation = 1.08 * (VULKAN_SATURATION if vk else 1.0)
+	env.adjustment_contrast = 1.04 * (VULKAN_CONTRAST if vk else 1.0)
 	env.fog_enabled = true
 	env.fog_light_color = Color("#b3cfe1")      # the sky's horizon: distant hills fade into it
 	env.fog_mode = Environment.FOG_MODE_DEPTH

@@ -5,6 +5,7 @@ extends SceneTree
 const Mode = preload("res://scripts/siege/siege_mode.gd")
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 const Castle = preload("res://scripts/siege/siege_castle.gd")
+const View = preload("res://scripts/siege/siege_view.gd")
 var mode
 var frames := 0
 var shots := ["blue_front", "blue_game", "blue_back", "red_front"]
@@ -20,6 +21,15 @@ func _init() -> void:
 		cls = OS.get_environment("CLS")
 	if OS.has_environment("SHOTS"):
 		shots = Array(OS.get_environment("SHOTS").split(","))
+	# FB_VK_EXP / FB_VK_AMB: try other Vulkan exposure / ambient multipliers (matching the OpenGL look, 0.31.71).
+	if OS.has_environment("FB_VK_EXP"):
+		View.VULKAN_EXPOSURE = float(OS.get_environment("FB_VK_EXP"))
+	if OS.has_environment("FB_VK_AMB"):
+		View.VULKAN_AMBIENT = float(OS.get_environment("FB_VK_AMB"))
+	if OS.has_environment("FB_VK_CON"):
+		View.VULKAN_CONTRAST = float(OS.get_environment("FB_VK_CON"))
+	if OS.has_environment("FB_VK_SAT"):
+		View.VULKAN_SATURATION = float(OS.get_environment("FB_VK_SAT"))
 	mode = Mode.new()
 	root.add_child(mode)
 	RenderingServer.frame_post_draw.connect(func():

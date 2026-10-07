@@ -2206,3 +2206,14 @@ K2/K3 notes (0.17.0)
   tries the normal start again. Headless runs (tests, tools) never track or safe-start.
 - Measured here (lavapipe): normal start, first frame at 4.3 s of which 3.6 s is the hero step waiting on the threaded
   loads; safe start, first frame at 0.3 s. Quick suite: ALL PASSED (33).
+
+# 0.31.71 (Kevin, after seeing the same scenes on Vulkan and on the OpenGL test build: "OpenGL looks better")
+- Kept Vulkan (OpenGL froze on Kevin's S21) and retuned it to look like the OpenGL render. The renderer-specific
+  numbers: VULKAN_EXPOSURE 1.55 -> 2.0, VULKAN_AMBIENT 2.25 -> 1.05 (the strong ambient fill was what flattened the
+  shadows), and new Vulkan-only multipliers on the colour adjustments, VULKAN_CONTRAST 1.2 and VULKAN_SATURATION 0.96
+  -- applied in _apply_hq too, which used to overwrite the adjustments outright.
+- Picked by measurement, not by eye: knight and mage shops, front and game camera, full quality, Vulkan vs OpenGL
+  (tools/building_shot.gd FB_VK_EXP/AMB/CON/SAT). Luminance p10/p50/p90, saturation: OpenGL .10/.40/.72 s.54;
+  Vulkan before .29/.47/.69 s.46; now .18/.38/.74 s.56 (11 combinations tried). Low graphics moves the same way
+  (before .35/.53/.70 -> now .24/.42/.71; OpenGL .15/.36/.53). The menu hero shares exposure/ambient: a touch more
+  contrast, otherwise unchanged. Quick suite: ALL PASSED (33).
