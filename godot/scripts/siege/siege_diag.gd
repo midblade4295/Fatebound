@@ -11,7 +11,7 @@ const PREV_PATH := "user://siege_diag_prev.log"
 # so a match's diagnostics never push a stuck start out of the files.
 const BOOT_PATH := "user://boot_diag.log"
 const BOOT_PREV_PATH := "user://boot_diag_prev.log"
-const BUILD := "0.31.71-fatebound"
+const BUILD := "0.31.72-fatebound"
 
 class ErrorCapture:
 	extends Logger
@@ -70,7 +70,16 @@ func _viewport_text() -> String:
 	return "3d_draws=%d 3d_prims=%d hud_draws=%d" % [RenderingServer.viewport_get_render_info(v3, I, D),
 		RenderingServer.viewport_get_render_info(v3, I, P), RenderingServer.viewport_get_render_info(root, C, D)]
 
+var _started := false
+
 func _ready() -> void:
+	start_early()
+
+func start_early() -> void:
+	# Normally from _ready; BootGuard calls it from its _init, before the main scene loads (0.31.72).
+	if _started:
+		return
+	_started = true
 	# Keep the previous session's log (the one that froze) before starting a new one.
 	if FileAccess.file_exists(log_path):
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(prev_path))

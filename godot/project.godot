@@ -3,6 +3,11 @@ config/name="Fatebound"
 config/icon="res://assets/branding/icon.png"
 config/description="Fatebound native game client — Play testing build."
 run/main_scene="res://scenes/Main.tscn"
+config/project_settings_override="user://renderer.cfg"
+
+[autoload]
+
+BootGuard="*res://scripts/app/boot_guard.gd"
 
 [display]
 window/size/viewport_width=420
@@ -17,7 +22,7 @@ window/handheld/orientation=1
 textures/vram_compression/import_etc2_astc=true
 renderer/rendering_method="mobile"
 renderer/rendering_method.mobile="mobile"
-rendering_device/fallback_to_opengl3=false
+rendering_device/fallback_to_opengl3=true
 textures/default_filters/use_nearest_mipmap_filter=false
 
 [gui]

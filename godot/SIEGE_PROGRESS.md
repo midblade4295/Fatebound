@@ -2217,3 +2217,27 @@ K2/K3 notes (0.17.0)
   Vulkan before .29/.47/.69 s.46; now .18/.38/.74 s.56 (11 combinations tried). Low graphics moves the same way
   (before .35/.53/.70 -> now .24/.42/.71; OpenGL .15/.36/.53). The menu hero shares exposure/ambient: a touch more
   contrast, otherwise unchanged. Quick suite: ALL PASSED (33).
+
+# 0.31.72 (Kevin: "turn on the fallback to OpenGL for the older phones" -- after Mali testers froze on the splash)
+- Vulkan stays the default (Kevin's S21 is unaffected). Read from Godot 4.7.2's source before building on it:
+  Godot.kt getNativeRenderer -> GodotLib.getRendererInfo -> DisplayServerAndroid::check_vulkan_global_context (Vulkan
+  1.1 hardware version + a Vulkan context, before the first frame); main.cpp takes the renderer from
+  rendering/renderer/rendering_method(.mobile); ProjectSettings::setup loads application/config/project_settings_override
+  before that; restart_on_exit on Android = Main::cleanup -> create_instance -> GodotActivity rebirth.
+- Two fallbacks:
+  1. Godot's own: rendering_device/fallback_to_opengl3 = true. Phones with no usable Vulkan (older phones) start on
+     OpenGL before our code runs.
+  2. BootGuard (scripts/app/boot_guard.gd, an autoload: its _init runs before the main scene loads). Marks each start
+     pending until the menu has drawn 30 frames (moved here from SiegeApp, 0.31.70). If the last start was on Vulkan
+     and never got there, it writes user://renderer.cfg (rendering_method and rendering_method.mobile =
+     gl_compatibility; project.godot: application/config/project_settings_override="user://renderer.cfg") and restarts
+     the app, which then runs on OpenGL for good. Stuck on OpenGL: no further switching, a safe start. Only on Android
+     (FB_BOOT_GUARD=1 on desktop for testing); tools and tests never switch.
+- The start-up log now opens in BootGuard._init (Diag.start_early), so it covers the main scene's loading too.
+- Settings: "Graphics engine: Vulkan / OpenGL (compatibility)" with SWITCH TO OPENGL / VULKAN (confirm, restart);
+  if Godot itself found no usable Vulkan, it just says so.
+- OpenGL keeps the look Kevin picked (0.31.71 tuned Vulkan to match it).
+- build_siege_preview.sh now requires the fallback ON and the override path, and checks both in the APK.
+- Checked end to end on desktop (FB_BOOT_GUARD=1): clean start -> Vulkan, menu up; a pending Vulkan record -> writes
+  renderer.cfg and quits; next start -> OpenGL from the file, menu up. Settings rendered on both. tests/boot_guard_test
+  (decisions + the file's keys + project settings). Quick suite: ALL PASSED (34).

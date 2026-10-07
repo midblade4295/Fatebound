@@ -26,8 +26,10 @@ OUT="${1:-$HERE/build/Fatebound-Siege-${ver}.apk}"
 "$GODOT" --version >/dev/null 2>&1 || { echo "Set GODOT=/path/to/Godot_v4.7.2-stable_linux.x86_64" >&2; exit 2; }
 grep -qx 'renderer/rendering_method="mobile"' project.godot \
   || { echo 'ERROR: project.godot must set renderer/rendering_method="mobile"' >&2; exit 1; }
-grep -qx 'rendering_device/fallback_to_opengl3=false' project.godot \
-  || { echo 'ERROR: project.godot must disable the OpenGL fallback' >&2; exit 1; }
+grep -qx 'rendering_device/fallback_to_opengl3=true' project.godot \
+  || { echo 'ERROR: project.godot must enable the OpenGL fallback (0.31.72)' >&2; exit 1; }
+grep -qx 'config/project_settings_override="user://renderer.cfg"' project.godot \
+  || { echo 'ERROR: project.godot must read user://renderer.cfg (BootGuard OpenGL switch)' >&2; exit 1; }
 
 find_tool() {  # zipalign / apksigner: PATH first, then the newest Android build-tools
   if command -v "$1" >/dev/null 2>&1; then command -v "$1"; return; fi
@@ -58,7 +60,8 @@ echo "Exporting ${ver}..."
 rm -f "$OUT.idsig"
 "$APKSIGNER" verify "$OUT"
 
-# The Siege build must ship on Vulkan (Kevin's decision; the OpenGL build froze on his S21 Ultra).
+# The Siege build ships on Vulkan (Kevin's decision; the OpenGL build froze on his S21 Ultra), with an OpenGL fallback
+# for phones whose Vulkan fails (0.31.72, Kevin: Godot's own fallback + BootGuard's switch via user://renderer.cfg).
 # Decode Godot's binary project settings instead of relying on binutils `strings`, which is absent
 # on the deployment VM. Malformed or missing settings fail closed.
 python3 - "$OUT" <<'PY'
@@ -120,12 +123,14 @@ def bool_setting(key):
 try:
     renderer = string_setting("rendering/renderer/rendering_method")
     fallback = bool_setting("rendering/rendering_device/fallback_to_opengl3")
+    override = string_setting("application/config/project_settings_override")
 except (UnicodeDecodeError, ValueError) as exc:
     raise SystemExit(f"ERROR: APK renderer settings could not be verified: {exc}") from exc
-if renderer != "mobile" or fallback:
-    print(f"ERROR: APK renderer is {renderer!r}; expected Vulkan mobile", file=sys.stderr)
+if renderer != "mobile" or not fallback or override != "user://renderer.cfg":
+    print(f"ERROR: APK renderer {renderer!r}, fallback {fallback}, override {override!r}; expected Vulkan mobile + "
+          "OpenGL fallback + user://renderer.cfg", file=sys.stderr)
     raise SystemExit(1)
-print("Verified APK renderer: Vulkan mobile, OpenGL fallback disabled")
+print("Verified APK renderer: Vulkan mobile, OpenGL fallback on, renderer switch file user://renderer.cfg")
 PY
-echo "OK  $OUT  ($(du -h "$OUT" | cut -f1), Vulkan, signed with $KS_ALIAS)"
+echo "OK  $OUT  ($(du -h "$OUT" | cut -f1), Vulkan + OpenGL fallback, signed with $KS_ALIAS)"
 sha256sum "$OUT"

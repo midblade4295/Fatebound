@@ -74,6 +74,7 @@ run blast_nodes_test     BLAST_NODES_PASS         60
 run chest_test           CHEST_PASS               60
 run combo_test           COMBO_PASS               60
 run net_load_test        NET_LOAD_PASS            120
+run boot_guard_test      BOOT_GUARD_PASS          60
 # The human soak must never stall the game thread.
 if ! grep -q 'stalls=0' /tmp/siege_test_siege_human_soak.log; then
   echo "FAIL  siege_human_soak reported stalls"; fail=1

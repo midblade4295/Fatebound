@@ -1060,6 +1060,21 @@ static func settings(app, root: VBoxContainer) -> void:
 		d.settings.hq_graphics = on
 		p.save())
 	au.add_child(hq)
+	# 0.31.72: the graphics engine. Vulkan by default; OpenGL when Godot finds no usable Vulkan, after a start on Vulkan
+	# froze (BootGuard), or by choice here. Switching restarts the game.
+	var guard = app.get_node_or_null("/root/BootGuard")
+	if guard != null:
+		var on_gl := RenderingServer.get_current_rendering_method() == "gl_compatibility"
+		var by_file: bool = guard.on_opengl_by_choice()
+		var eng := UI.label(au, "Graphics engine: %s" % ("OpenGL (compatibility)" if on_gl else "Vulkan"), 13, UI.TEXT, UI.HEAVY_FONT)
+		eng.set_meta("action_key", "gfx_engine")
+		if on_gl and not by_file:
+			UI.label(au, "This phone can't run Vulkan, so it uses OpenGL.", 11, UI.MUTED)
+		else:
+			var to_gl := not on_gl
+			UI.button(au, "SWITCH TO %s" % ("OPENGL" if to_gl else "VULKAN"), "secondary", func():
+				app.confirm("SWITCH GRAPHICS", "The game restarts and runs on %s. Use OpenGL if the game freezes or crashes on this phone." % ("OpenGL" if to_gl else "Vulkan"),
+					"RESTART", "primary", func(): guard.set_opengl(to_gl)), "gfx_switch", 13)
 
 	# Old progress
 	var mig: Dictionary = d.migration
