@@ -2242,3 +2242,29 @@ K2/K3 notes (0.17.0)
 - Checked end to end on desktop (FB_BOOT_GUARD=1): clean start -> Vulkan, menu up; a pending Vulkan record -> writes
   renderer.cfg and quits; next start -> OpenGL from the file, menu up. Settings rendered on both. tests/boot_guard_test
   (decisions + the file's keys + project settings). Quick suite: ALL PASSED (34).
+
+# 0.31.73 (Kevin: "redo the outposts" with Meshy models, concepts first; "a different model for each outpost so it shows variety")
+- Five Meshy keeps from the concepts Kevin picked, one per outpost (Land.OUTPOST_LOOKS, by outpost id): blue highland
+  A1 watchtower (wall torches), red highland E1 log fort (palisade, shields), blue east rise D1 mossy ruin (rune
+  crystal), red east rise B1 rook (the tall one, lit windows), the island C2 fire beacon. Doors face their own side's
+  castle; the island's faces east, side-on to both. Replaces the KayKit tower bodies, plank deck and separate flags.
+- Owner colours from ONE texture per model (scripts/siege/team_swap.gdshader): the saturated blues stay blue, turn
+  deep red (the same rule as the shops' _red.png), or go plain grey-white cloth while nobody holds it; the bluish grey
+  stone and iron below that saturation stay as painted. One texture instead of three per model keeps size and memory
+  down. Glow masks (tools/meshy_building_tex.py --no-red --dilate 3): the watchtower's torches (plus little flames),
+  the rook's windows, the ruin's crystal and runes and the beacon's coals; the ruin and the beacon glow in the holder's
+  colour (faint grey when neutral).
+- The beacon burns in the holder's colour (flames + a light); neutral, it smoulders (embers, smoke). Units on its deck
+  keep out of the fire basket (Land.tower_block, applied in the sim's deck clamp and on climbing up).
+- Sizes, measured from the meshes (centre, foot, deck height, parapet's inside, foot radius per model in
+  siege_view.gd OUTPOST_MODELS): each scaled so its wall is about the solid radius (OUTPOST_TOWER_R 3.0, unchanged)
+  and its parapet's inside >= 2.2 m (units walk to TOWER_TOP_R 1.85, unchanged); the squat ones stretched 12-30 %
+  taller so decks sit ~2.7-3.0 m up (the rook 4.1 m). The deck height is per outpost now (Land.tower_floor): where
+  units up there are drawn and where their shots start (h0). Gameplay radii are the same on every outpost.
+- Bushes smaller and outside each keep's foot, the grass ring round the foot; the door side left clear.
+- Textures 1K, imported lossy with mipmaps: 0.8-1.5 MB per outpost, 6.9 MB for all five in the export. Preview APK
+  162.6 -> 169.2 MiB (177.5 MB).
+- tests/outpost_look_test (new): five different models, deck heights match the models, parapets clear the walk
+  radius, doors, the basket no-go spot (walking at the fire stops at its edge), the material and owner colours.
+  tools/outpost_shot.gd: every outpost neutral / blue / red with rangers on the decks. Checked on Vulkan and OpenGL.
+  Quick suite: ALL PASSED (35).

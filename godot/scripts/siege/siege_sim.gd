@@ -1738,7 +1738,7 @@ func _shoot(u: Dictionary, angle: float, dmg: float, aoe: float, speed: float, r
 		# Shot from a tower's deck (0.30.4, Kevin: "projectiles are firing from the base"): the view starts it up
 		# at the shooter and brings it down onto the aimed target (or over its full reach).
 		var pj: Dictionary = projectiles[projectiles.size() - 1]
-		pj["h0"] = Land.TOWER_FLOOR
+		pj["h0"] = Land.tower_floor(int(u.tower))      # each outpost's deck is at its own height (0.31.73)
 		pj["o"] = u.pos
 		var ad := float(u.get("aim_d", 0.0))
 		pj["dd"] = ad if ad > 0.5 else reach
@@ -3247,8 +3247,15 @@ func tower_range(u: Dictionary) -> float:
 
 func tower_deck_clamp(u: Dictionary) -> Vector2:
 	var c: Vector2 = (outposts[int(u.tower)] as Dictionary).p
-	var off: Vector2 = u.pos - c
-	return c + off.limit_length(Land.TOWER_TOP_R)
+	var off: Vector2 = (u.pos - c).limit_length(Land.TOWER_TOP_R)
+	var b := Land.tower_block(int(u.tower))
+	if b.z > 0.0:
+		# Not into the beacon's fire basket (0.31.73): pushed back out of it, still on the deck.
+		var bc := Vector2(b.x, b.y)
+		var d := off - bc
+		if d.length() < b.z:
+			off = (bc + (d.normalized() if d.length() > 0.01 else -bc.normalized()) * b.z).limit_length(Land.TOWER_TOP_R)
+	return c + off
 
 func tower_to_enter(u: Dictionary) -> Dictionary:
 	# The tower this unit could climb right now: archers and mages, at a tower their team holds.
@@ -3268,6 +3275,7 @@ func _enter_tower(u: Dictionary, op: Dictionary) -> bool:
 	u["tower_seen"] = time
 	var side: Vector2 = (u.pos - (op.p as Vector2))
 	u.pos = (op.p as Vector2) + (side.normalized() if side.length() > 0.01 else Vector2(1, 0)) * Land.TOWER_TOP_R * 0.7
+	u.pos = tower_deck_clamp(u)
 	_event("tower_up", {"id":u.id, "tower":op.id, "team":u.team})
 	return true
 

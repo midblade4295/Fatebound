@@ -23,24 +23,9 @@ func _init() -> void:
 	var rings := []
 	var caps := []
 	for p in [Vector2(-31.0, 25.0), Vector2(35.0, 18.5)]:
-		var t: Node3D = load(View.HEX + "building_tower_A_blue.gltf").instantiate()
-		t.position = Vector3(p.x, Land.ground_height(p, false) - 0.14, p.y)
-		t.scale = Land.TOWER_SCALE
-		for c in t.find_children("*", "Node3D", true, false):
-			if "_top_" in str(c.name):
-				c.visible = false
-		root3.add_child(t)
-		var deck := MeshInstance3D.new()
-		var dm := CylinderMesh.new()
-		dm.top_radius = 2.35
-		dm.bottom_radius = 2.35
-		dm.height = 0.12
-		deck.mesh = dm
-		deck.position = Vector3(p.x, Land.ground_height(p, false) + Land.TOWER_FLOOR - 0.06, p.y)
-		var wood := StandardMaterial3D.new()
-		wood.albedo_color = Color("#9c7a52")
-		deck.material_override = wood
-		root3.add_child(deck)
+		var t: Node3D = View.outpost_model(Land.outpost_positions().find(p))   # the Meshy keep (0.31.73)
+		if t != null:
+			root3.add_child(t)
 		posts.append(Vector4(p.x, p.y, Land.OUTPOST_R, 0.45))
 		rings.append(Vector4(0.37, 0.82, 0.94, 0.9))
 		caps.append(Vector4(1.0, 0.48, 0.32, 0.42 if p.x > 0.0 else 0.0))

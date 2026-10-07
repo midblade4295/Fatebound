@@ -237,10 +237,38 @@ static func scarp_rim(p: Vector2) -> Vector2:
 
 # ---------------- outposts (towers) ----------------
 const OUTPOST_R := 6.5           # capture radius (5 until 0.30.3; the towers are wider)
-const OUTPOST_TOWER_R := 3.0     # solid tower in the middle: the KayKit body (r 0.5) at x6 wide (0.30.3, Kevin: "widen")
-const TOWER_SCALE := Vector3(6.0, 4.0, 6.0)   # wide and squat: a lookout you can walk about on, roof removed
-const TOWER_FLOOR := 5.68        # its walkable top (a deck inside the body's rim at 1.42, x4 high)
-const TOWER_TOP_R := 1.85        # how far from the centre a unit up there can walk (deck radius 2.3 - a unit)
+const OUTPOST_TOWER_R := 3.0     # solid tower in the middle (0.30.3, Kevin: "widen"; the same for every model)
+const TOWER_TOP_R := 1.85        # how far from the centre a unit up there can walk (inside the parapet, ~2.2 m)
+# Each outpost its own Meshy keep (0.31.73, Kevin: "redo the outposts" with Meshy, "a different model for each outpost
+# so it shows variety"), by outpost id (outpost_positions order: 0 blue highland, 1 red highland, 2 blue east rise,
+# 3 red east rise, 4 the island). The models keep the proportions of the approved concepts, so their decks are at
+# different heights; the walkable radius and the solid radius above are the same everywhere (fair, and the sim's
+# rules don't change).
+#   model  assets/meshy/<model>/ (drawn by siege_view.gd, OUTPOST_MODELS: where its deck and foot are in the model)
+#   s      its scale: its wall about as wide as the solid radius, the inside of its parapet >= 2.2 m from the middle
+#   sy     how much taller than that (the squat keeps stretched a little, decks ~3 m up; the rook is tall already)
+#   yaw    its door faces its own side's castle (blue +z, red -z); the island's faces east, side-on to both
+#   floor  the deck's height above the ground: units up there stand on it, shots from it start there (visual only)
+#   block  [x, z, r] something standing on the deck that units keep out of (the beacon's fire basket): its middle,
+#          in metres from the tower's middle before yaw, and how close a unit's centre may come
+const OUTPOST_LOOKS := [
+	{"model": "outpost_watchtower", "s": 4.0, "sy": 1.3, "yaw": 0.0, "floor": 2.71},
+	{"model": "outpost_fort", "s": 3.5, "sy": 1.12, "yaw": PI, "floor": 2.98},
+	{"model": "outpost_ruin", "s": 3.55, "sy": 1.25, "yaw": 0.0, "floor": 2.91},
+	{"model": "outpost_rook", "s": 4.46, "sy": 1.0, "yaw": PI, "floor": 4.08},
+	{"model": "outpost_beacon", "s": 3.7, "sy": 1.12, "yaw": PI * 0.5, "floor": 2.95, "block": [0.08, -2.19, 1.08]},
+]
+
+static func tower_floor(id: int) -> float:
+	return float(OUTPOST_LOOKS[id].floor) if id >= 0 and id < OUTPOST_LOOKS.size() else 0.0
+
+static func tower_block(id: int) -> Vector3:
+	# The deck's no-go spot as (x, z, r) from the tower's middle in the world (after yaw); r = 0: none.
+	if id < 0 or id >= OUTPOST_LOOKS.size() or not OUTPOST_LOOKS[id].has("block"):
+		return Vector3.ZERO
+	var b: Array = OUTPOST_LOOKS[id].block
+	var o := Vector2(float(b[0]), float(b[1])).rotated(-float(OUTPOST_LOOKS[id].yaw))
+	return Vector3(o.x, o.y, float(b[2]))
 const OUTPOSTS_BLUE_HALF := [Vector2(-31.0, 25.0), Vector2(35.0, 18.5)]   # on the highland; on the east rise (Kevin's circle)
 const ISLAND_TOWER := Vector2.ZERO
 

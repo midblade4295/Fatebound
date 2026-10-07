@@ -79,7 +79,7 @@ func _init() -> void:
 	for i in 12:
 		s.step()
 	var tower_shot: Array = s.projectiles.filter(func(pj): return pj.has("h0"))
-	check(not tower_shot.is_empty() and float(tower_shot[0].h0) >= Land.TOWER_FLOOR - 0.01 and float(tower_shot[0].dd) > 10.0,
+	check(not tower_shot.is_empty() and absf(float(tower_shot[0].h0) - Land.tower_floor(0)) < 0.01 and float(tower_shot[0].dd) > 10.0,
 		"the arrow carries its launch height and comes down over the aimed distance (%s)" % ("none" if tower_shot.is_empty() else "%.1f m" % float(tower_shot[0].dd)))
 	for i in 40: s.step()
 	check(far.hp < 500.0, "and hits 13 m out (beyond 11 m on the ground)")

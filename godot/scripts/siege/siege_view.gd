@@ -314,6 +314,18 @@ func _sync_ambience(_dt: float) -> void:
 		(sg[0] as StandardMaterial3D).emission_energy_multiplier = float(sg[3]) * k2
 		if sg[1] != null:
 			(sg[1] as OmniLight3D).light_energy = 1.1 * k2
+	for fx in _outpost_fx:
+		# The outposts' glow, torch flames and the beacon's light flicker like the shops'.
+		var ph4: float = float(fx[2])
+		var k4 := 0.84 + 0.1 * sin(_time * 7.0 + ph4) + 0.06 * sin(_time * 19.0 + ph4 * 1.7)
+		match str(fx[0]):
+			"glow":
+				var r4 := fx[1] as Node3D
+				(r4.get_meta("mat") as ShaderMaterial).set_shader_parameter("glow_energy", float(r4.get_meta("energy")) * k4)
+			"flame":
+				(fx[1] as Node3D).scale = Vector3.ONE * (0.88 + 0.14 * k4)
+			"light":
+				(fx[1] as OmniLight3D).light_energy = 1.4 * k4
 	for cs in _shop_crystals:
 		# Slow orbit round the building, each crystal bobbing and spinning on its own beat (transforms only).
 		var a2: float = float(cs[3]) + _time * 0.45
@@ -1261,14 +1273,15 @@ func _plan_foliage() -> Dictionary:
 	# 2b. A ring of grass and a few flowers round each tower's foot (0.30.1, Kevin).
 	for op in sim.outposts:
 		var c: Vector2 = op.p
+		var fr := outpost_foot_r(int(op.id))           # round the keep's foot (0.31.73)
 		for k in 54:
 			var a := rng.randf() * TAU
-			var q := c + Vector2(cos(a), sin(a)) * (Land.OUTPOST_TOWER_R + rng.randf_range(-0.05, 1.0))
+			var q := c + Vector2(cos(a), sin(a)) * (fr + rng.randf_range(-0.05, 1.0))
 			if Land.shore(q) > 0.9 and Land.edge_dist(q) < -0.9:
 				out[TUFTS[rng.randi() % TUFTS.size()]].append(_foliage_xf(q, rng, 1.3, 1.9))
 		for k in 10:
 			var a := rng.randf() * TAU
-			var q := c + Vector2(cos(a), sin(a)) * (Land.OUTPOST_TOWER_R + rng.randf_range(0.3, 1.3))
+			var q := c + Vector2(cos(a), sin(a)) * (fr + rng.randf_range(0.3, 1.3))
 			if Land.shore(q) > 0.9 and Land.edge_dist(q) < -0.9:
 				out[FLOWERS[rng.randi() % FLOWERS.size()]].append(_foliage_xf(q, rng, 2.0, 2.6))
 	# 3. Clumps across the fields.
@@ -1603,7 +1616,7 @@ func _meshy_building(bname: String, t: int, pos: Vector3, yaw: float, s: float) 
 			_shop_crystals.append([c, Vector3(cr[0]) + lift, float(cr[1]), TAU * float(i) / float(cr[2]), randf() * 10.0])
 	return root
 
-func _chimney_smoke(at: Vector3, s: float) -> void:
+func _chimney_smoke(at: Vector3, s: float) -> GPUParticles3D:
 	# A thin, steady trail: few puffs, slow and buoyant, pushed by the same breeze as the blast smoke.
 	var pm := ParticleProcessMaterial.new()
 	pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
@@ -1657,6 +1670,7 @@ func _chimney_smoke(at: Vector3, s: float) -> void:
 		p.amount_ratio = 0.5
 	p.position = at
 	add_child(p)
+	return p
 
 # Whirlwind FX (Round 12, Kevin: "spin visuals like World of Warcraft"): two translucent blade-trail
 # ribbons (partial rings fading along their arc) circling the berserker at different heights and
@@ -1981,59 +1995,230 @@ func _sync_hats() -> void:
 
 var outpost_nodes: Dictionary = {}
 
+# Outposts (0.31.73, Kevin: "redo the outposts" with Meshy models, "a different model for each outpost so it shows
+# variety"): each outpost its own keep (Land.OUTPOST_LOOKS: which model, its scale, yaw and deck height). One texture
+# per model, recoloured for the owner in team_swap.gdshader (blue, red, grey-white while nobody holds it), so the
+# banners, shields and trim show who holds it. Per model, in its own units (tools/meshy_building_tex.py wrote the
+# 1K texture and the glow mask; the numbers were measured from the mesh):
+#   c      the middle of its deck (x, z) -- put on the outpost's spot
+#   foot   how far below its origin its foot is        deck  the deck's height above the foot
+#   sink   how much of the foot goes into the ground (the rook's rock plinth mostly)
+#   inner  the inside of its parapet (radius)           base  its foot's radius (the grass and bushes go round it)
+#   hue    the blues that are team colour (the ruin's runes are a greener blue); sat  from how saturated (the bluish
+#          grey stone and iron below that stay as they are)
+#   glow   emission colour x the mask (null: the owner's colour, dim grey when neutral); energy its strength
+#   torches  little flames on its wall torches          fire  the beacon's fire basket: a fire in the owner's colour
+const OUTPOST_MODELS := {
+	"outpost_watchtower": {"c": Vector2(0.015, -0.056), "foot": 0.592, "deck": 0.562, "sink": 0.04, "inner": 0.60,
+		"base": 0.96, "glow": Color(1.0, 0.6, 0.22), "energy": 2.4,
+		"torches": [Vector3(0.315, -0.10, 0.62), Vector3(-0.295, -0.11, 0.61)]},
+	"outpost_fort": {"c": Vector2(0.064, -0.047), "foot": 0.697, "deck": 0.781, "sink": 0.02, "inner": 0.681,
+		"base": 1.07, "energy": 0.0},
+	"outpost_ruin": {"c": Vector2(-0.013, 0.013), "foot": 0.599, "deck": 0.676, "sink": 0.02, "inner": 0.652,
+		"base": 0.92, "glow": null, "energy": 2.6, "hue": Vector2(170.0, 258.0), "sat": Vector2(0.3, 0.45)},
+	"outpost_rook": {"c": Vector2(-0.023, -0.037), "foot": 0.755, "deck": 1.005, "sink": 0.09, "inner": 0.493,
+		"base": 0.95, "glow": Color(1.0, 0.7, 0.3), "energy": 1.6},
+	"outpost_beacon": {"c": Vector2(0.013, -0.009), "foot": 0.562, "deck": 0.733, "sink": 0.02, "inner": 0.645,
+		"base": 0.96, "glow": null, "energy": 2.2, "fire": Vector3(0.035, 0.36, -0.60)},
+}
+const OUTPOST_SHADER := preload("res://scripts/siege/team_swap.gdshader")
+const OUTPOST_GLOW := [Color(0.3, 0.6, 1.0), Color(1.0, 0.3, 0.2), Color(0.8, 0.8, 0.75)]   # blue, red, neutral
+const BEACON_FIRE := [Color(0.35, 0.75, 2.4, 0.85), Color(2.4, 0.42, 0.18, 0.85)]          # flames, blue / red (HDR)
+var _outpost_fx: Array = []             # [kind, node or material, phase, base energy] -- flickered in _sync_ambience
+
+static func outpost_model(id: int) -> Node3D:
+	# The outpost's keep, placed and scaled at its spot (root at the ground, yaw applied), with its own material.
+	# The material is meta "mat" (ShaderMaterial; _set_outpost_owner sets its colours). Used by tools too.
+	var look: Dictionary = Land.OUTPOST_LOOKS[id]
+	var mname: String = look.model
+	var spec: Dictionary = OUTPOST_MODELS[mname]
+	var packed := Stage.scene("res://assets/meshy/%s/%s.glb" % [mname, mname])
+	if packed == null:
+		return null
+	var p: Vector2 = Land.outpost_positions()[id]
+	var root := Node3D.new()
+	root.position = Vector3(p.x, Sim.height_at(p), p.y)
+	root.rotation.y = float(look.yaw)
+	root.scale = Vector3(1.0, float(look.get("sy", 1.0)), 1.0) * float(look.s)
+	var model: Node3D = packed.instantiate()
+	var c: Vector2 = spec.c
+	model.position = Vector3(-c.x, float(spec.foot) - float(spec.sink), -c.y)
+	root.add_child(model)
+	var meshes := model.find_children("*", "MeshInstance3D", true, false)
+	var mat := ShaderMaterial.new()
+	mat.shader = OUTPOST_SHADER
+	if not meshes.is_empty():
+		var src := (meshes[0] as MeshInstance3D).get_active_material(0) as BaseMaterial3D
+		if src != null:
+			mat.set_shader_parameter("albedo_tex", src.albedo_texture)
+	mat.set_shader_parameter("glow_tex", load("res://assets/meshy/%s/%s_glow.png" % [mname, mname]))
+	mat.set_shader_parameter("hue_range", spec.get("hue", Vector2(195.0, 258.0)))
+	mat.set_shader_parameter("sat_range", spec.get("sat", Vector2(0.42, 0.58)))
+	for mi in meshes:
+		(mi as MeshInstance3D).material_override = mat
+	root.set_meta("mat", mat)
+	root.set_meta("spec", spec)
+	_set_outpost_owner(root, -1)
+	return root
+
+static func outpost_point(root: Node3D, model_pt: Vector3) -> Vector3:
+	# A point given in the model's own units (OUTPOST_MODELS) -> the outpost root's local space.
+	var spec: Dictionary = root.get_meta("spec")
+	var c: Vector2 = spec.c
+	return model_pt + Vector3(-c.x, float(spec.foot) - float(spec.sink), -c.y)
+
+static func _set_outpost_owner(root: Node3D, owner: int) -> void:
+	var mat: ShaderMaterial = root.get_meta("mat")
+	var spec: Dictionary = root.get_meta("spec")
+	mat.set_shader_parameter("team", owner)
+	var g = spec.get("glow", Color.WHITE)
+	var e := float(spec.get("energy", 0.0))
+	if g == null:                                  # the owner's colour; a faint grey glow while neutral
+		g = OUTPOST_GLOW[owner if owner >= 0 else 2]
+		e *= 1.0 if owner >= 0 else 0.3
+	mat.set_shader_parameter("glow_color", g)
+	mat.set_shader_parameter("glow_energy", e)
+	root.set_meta("energy", e)
+
 func _build_outposts() -> void:
 	for op in sim.outposts:
-		# 0.30.3 (Kevin: "remove the roofs ... so you can see players on them and widen their size so players can
-		# walk around on top"): the KayKit tower body only (its roof piece hidden), x6 wide and x4 tall, with a
-		# plank deck inside its rim; the owner's flag flies from the rim. Sunk a little, bushes and grass round
-		# the foot. The capture ring is painted on the ground by the terrain shader (_sync_outposts).
-		var p := Vector3(op.p.x, Sim.height_at(op.p) - 0.14, op.p.y)
-		var looks := {}
-		looks[-1] = _tower_body(HEX + "building_tower_base_blue.gltf", p)
-		looks[0] = _tower_body(HEX + "building_tower_A_blue.gltf", p)
-		looks[1] = _tower_body(HEX + "building_tower_A_red.gltf", p)
-		var deck := MeshInstance3D.new()
-		var dm := CylinderMesh.new()
-		dm.top_radius = 2.35
-		dm.bottom_radius = 2.35
-		dm.height = 0.12
-		dm.radial_segments = 24
-		deck.mesh = dm
-		var wood := StandardMaterial3D.new()
-		wood.albedo_color = Color("#9c7a52")
-		wood.roughness = 0.9
-		deck.material_override = wood
-		deck.position = Vector3(p.x, Sim.height_at(op.p) + Land.TOWER_FLOOR - 0.06, p.z)
-		add_child(deck)
-		var flags := {}
-		var top_y := Sim.height_at(op.p) + Land.TOWER_FLOOR
-		for t in 2:
-			flags[t] = _place(HEX + "flag_%s.gltf" % COLOR[t], Vector3(p.x + 1.75, top_y, p.z + 1.75), 0.0, 2.6)
-		_dress_tower_base(op.p, int(op.id))
-		outpost_nodes[op.id] = {"looks":looks, "flags":flags, "owner":-2}
+		var root := outpost_model(int(op.id))
+		if root == null:
+			continue
+		add_child(root)
+		for m in root.find_children("*", "MeshInstance3D", true, false):
+			(m as MeshInstance3D).cast_shadow = _cast()
+		var spec: Dictionary = root.get_meta("spec")
+		var on := {"root": root, "owner": -1, "fire": null, "light": null, "smoke": null}
+		if float(spec.get("energy", 0.0)) > 0.0:
+			_outpost_fx.append(["glow", root, randf() * 10.0])
+		for tp in spec.get("torches", []):
+			_outpost_fx.append(["flame", _torch_flame(root.to_global(outpost_point(root, Vector3(tp)))), randf() * 10.0])
+		if spec.has("fire"):
+			var at := root.to_global(outpost_point(root, Vector3(spec.fire)))
+			on.fire = _beacon_fire(at)
+			var light := OmniLight3D.new()
+			light.light_energy = 1.4
+			light.omni_range = 7.0
+			light.omni_attenuation = 1.3
+			light.shadow_enabled = false
+			add_child(light)
+			light.global_position = at + Vector3(0.0, 0.9, 0.0)
+			on.light = light
+			_outpost_fx.append(["light", light, randf() * 10.0])
+			on.smoke = _chimney_smoke(at + Vector3(0.0, 0.5, 0.0), 2.4)
+		_dress_tower_base(op.p, int(op.id), outpost_foot_r(int(op.id)))
+		outpost_nodes[op.id] = on
+		_outpost_owner(on, -1)
 
-func _tower_body(path: String, at: Vector3) -> Node3D:
-	var n := _place(path, at, 0.3, 1.0)
-	if n == null:
-		return null
-	n.scale = Land.TOWER_SCALE
-	for c in n.find_children("*", "Node3D", true, false):
-		if "_top_" in str(c.name):
-			(c as Node3D).visible = false              # the roof and its band of windows
-	return n
+func _outpost_owner(on: Dictionary, owner: int) -> void:
+	on.owner = owner
+	_set_outpost_owner(on.root, owner)
+	if on.fire != null:
+		# The beacon burns in the holder's colour; while nobody holds it, it smoulders: the embers glow and smoke rises.
+		var fire: GPUParticles3D = on.fire
+		fire.emitting = owner >= 0
+		if owner >= 0:
+			var col: Color = BEACON_FIRE[owner]
+			((fire.draw_pass_1 as QuadMesh).material as StandardMaterial3D).albedo_color = col
+			(on.light as OmniLight3D).light_color = OUTPOST_GLOW[owner]
+		(on.light as OmniLight3D).visible = owner >= 0
+		if on.smoke != null:
+			(on.smoke as GPUParticles3D).emitting = owner < 0
 
-func _dress_tower_base(c: Vector2, seed_id: int) -> void:
+func _torch_flame(at: Vector3) -> Node3D:
+	# A small flickering flame on a wall torch (no light: the glow mask lights the torch head).
+	var flame := MeshInstance3D.new()
+	var fq := QuadMesh.new()
+	fq.size = Vector2(0.45, 0.7)
+	var fmat := StandardMaterial3D.new()
+	fmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	fmat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	fmat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	fmat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+	fmat.albedo_texture = _soft_dot()
+	fmat.albedo_color = Color(2.4, 1.3, 0.45, 0.9)
+	fq.material = fmat
+	flame.mesh = fq
+	flame.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(flame)
+	flame.global_position = at + Vector3(0.0, 0.22, 0.0)
+	return flame
+
+func _beacon_fire(at: Vector3) -> GPUParticles3D:
+	# The island beacon's fire: soft additive flame puffs rising from the basket, shrinking as they go. Its draw
+	# material's colour is the holder's (_outpost_owner); the ramp only shapes brightness and fade.
+	var pm := ParticleProcessMaterial.new()
+	pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
+	pm.emission_sphere_radius = 0.45
+	pm.direction = Vector3(0, 1, 0)
+	pm.spread = 12.0
+	pm.initial_velocity_min = 1.3
+	pm.initial_velocity_max = 2.3
+	pm.gravity = Vector3(0.0, 1.2, 0.0) + SMOKE_WIND * 0.3
+	pm.damping_min = 0.6
+	pm.damping_max = 1.0
+	pm.scale_min = 0.7
+	pm.scale_max = 1.25
+	var sc := Curve.new()
+	sc.add_point(Vector2(0.0, 0.7))
+	sc.add_point(Vector2(0.25, 1.0))
+	sc.add_point(Vector2(1.0, 0.15))
+	var sct := CurveTexture.new()
+	sct.curve = sc
+	pm.scale_curve = sct
+	var g := Gradient.new()
+	g.offsets = PackedFloat32Array([0.0, 0.12, 0.55, 1.0])
+	g.colors = PackedColorArray([Color(1.25, 1.25, 1.25, 0.0), Color(1.2, 1.2, 1.2, 1.0), Color(0.9, 0.9, 0.9, 0.75),
+		Color(0.6, 0.6, 0.6, 0.0)])
+	var gt := GradientTexture1D.new()
+	gt.gradient = g
+	pm.color_ramp = gt
+	var q := QuadMesh.new()
+	q.size = Vector2(0.75, 1.05)
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA      # mixed, not added: added flames wash out to white
+	m.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	m.vertex_color_use_as_albedo = true
+	m.albedo_texture = _soft_dot()
+	q.material = m
+	var p := GPUParticles3D.new()
+	p.process_material = pm
+	p.draw_pass_1 = q
+	p.amount = 36
+	p.lifetime = 0.8
+	p.preprocess = 1.0
+	p.draw_order = GPUParticles3D.DRAW_ORDER_VIEW_DEPTH
+	p.fixed_fps = 30
+	p.interpolate = true
+	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	p.visibility_aabb = AABB(Vector3(-2, -1, -2), Vector3(4, 5, 4))
+	if low_fx:
+		p.amount_ratio = 0.6
+	add_child(p)
+	p.global_position = at
+	return p
+
+static func outpost_foot_r(id: int) -> float:
+	# How far the keep's foot reaches from the middle (grass and bushes go round it).
+	var look: Dictionary = Land.OUTPOST_LOOKS[id]
+	return maxf(Land.OUTPOST_TOWER_R, float(OUTPOST_MODELS[look.model].base) * float(look.s))
+
+func _dress_tower_base(c: Vector2, seed_id: int, foot_r: float) -> void:
+	# Bushes round the keep's foot (outside its plinth), a gap where its door is.
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 4400 + seed_id
-	var r: float = Land.OUTPOST_TOWER_R
+	var r: float = foot_r + 0.1
+	var door := PI * 0.5 - float(Land.OUTPOST_LOOKS[seed_id].yaw)      # the door's direction (atan2 of z, x)
 	for k in 7:
 		var a := TAU * k / 7.0 + rng.randf_range(-0.25, 0.25)
-		if absf(wrapf(a - PI * 0.25, -PI, PI)) < 0.45:
-			continue                                   # leave the flag's corner clear
+		if absf(wrapf(a - door, -PI, PI)) < 0.6:
+			continue                                   # leave the door clear
 		var q := c + Vector2(cos(a), sin(a)) * (r + rng.randf_range(0.0, 0.35))
 		var y := Land.ground_height(q, false) - 0.05
 		_place(FOREST + ["Bush_1_A_Color1", "Bush_2_A_Color1"][k % 2] + ".gltf", Vector3(q.x, y, q.y), rng.randf() * TAU,
-			rng.randf_range(4.5, 6.0) if k % 2 == 0 else rng.randf_range(2.3, 3.0))
+			rng.randf_range(2.4, 3.2) if k % 2 == 0 else rng.randf_range(1.4, 1.9))
 
 func _sync_outposts() -> void:
 	var posts := []
@@ -2045,13 +2230,7 @@ func _sync_outposts() -> void:
 			continue
 		var owner: int = op.owner
 		if owner != int(on.owner):
-			on.owner = owner
-			for k in on.looks:
-				if on.looks[k] != null:
-					(on.looks[k] as Node3D).visible = int(k) == owner
-			for t in on.flags:
-				if on.flags[t] != null:
-					(on.flags[t] as Node3D).visible = int(t) == owner
+			_outpost_owner(on, owner)
 		# Painted on the ground (0.30.3, Kevin: "make sure the capture rings paint on the ground"): the ring in the
 		# owner's colour (white when neutral), and while a capture is under way a fill growing from the middle in
 		# the capturing team's colour. Hills can't hide it: the terrain itself draws it.
@@ -3093,7 +3272,7 @@ func sync(dt: float) -> void:
 			continue
 		var root: Node3D = a.root
 		var tw := int(u.get("tower", -1))
-		var gy := Sim.height_at(u.pos) if tw < 0 or tw >= sim.outposts.size() else Sim.height_at(sim.outposts[tw].p) + Land.TOWER_FLOOR
+		var gy := Sim.height_at(u.pos) if tw < 0 or tw >= sim.outposts.size() else Sim.height_at(sim.outposts[tw].p) + Land.tower_floor(tw)
 		# On a ladder: up the rungs, over the wall, down the far side (Round 25).
 		var climb_d: float = sim.ladder_depth(u.pos, u.team) if not sim.ladders.is_empty() and u.state != "dead" else INF
 		a.climb = climb_d != INF and Sim.ladder_lift(climb_d, gy) > gy + 0.15

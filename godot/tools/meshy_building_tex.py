@@ -10,6 +10,9 @@ Usage: meshy_building_tex.py in.glb OUT_DIR name [--glow BOX[:RULE]]... [--color
   BOX  = xmin,xmax,ymin,ymax,zmin,zmax (model units; a triangle counts if its centroid is inside)
   RULE = hue_lo,hue_hi,min_value,min_saturation (default 36,62,0.78,0.62 = lit yellow windows)
   --color-glow: the mask carries the texture's own colours (stained glass, water) -- use with a white emission colour.
+  --dilate N: grow each glow box's triangles by N texels before the colour rule (default 5; the outposts use 3, as
+    Meshy's small UV islands sit next to unrelated ones and a wider margin lights their texels too)
+  --no-red: skip <name>_red.png -- the outposts (0.31.73) recolour the one texture in a shader (team_swap.gdshader).
 """
 import io
 import json
@@ -119,6 +122,7 @@ def main():
             box_s, _, rule_s = sys.argv[k + 1].partition(":")
             specs.append(([float(x) for x in box_s.split(",")], [float(x) for x in (rule_s or "36,62,0.78,0.62").split(",")]))
     color_glow = "--color-glow" in sys.argv
+    dilate = int(sys.argv[sys.argv.index("--dilate") + 1]) if "--dilate" in sys.argv else 5
     g, binc = read_glb(src)
     im0 = g["images"][0]
     bv = g["bufferViews"][im0["bufferView"]]
@@ -152,7 +156,7 @@ def main():
             dr = ImageDraw.Draw(region)
             for tri in I[sel]:
                 dr.polygon([(float(UV[v, 0]) * W, float(UV[v, 1]) * H) for v in tri], fill=255)
-            region = np.asarray(region.filter(ImageFilter.MaxFilter(5))) > 0
+            region = np.asarray(region.filter(ImageFilter.MaxFilter(dilate)) if dilate > 1 else region) > 0
             col = (hue > h0) & (hue < h1) & (val > v0) & (sat > s0)
             hit = region & col
             glow[hit] = 255
@@ -166,7 +170,8 @@ def main():
     buf = io.BytesIO()
     small(rgb).save(buf, "JPEG", quality=90)
     write_glb(f"{out}/{name}.glb", g, binc, buf.getvalue())
-    small(red_rgb).save(f"{out}/{name}_red.png")
+    if "--no-red" not in sys.argv:
+        small(red_rgb).save(f"{out}/{name}_red.png")
     glow_img.resize((TEX, TEX), Image.LANCZOS).save(f"{out}/{name}_glow.png")
     print("blue texels", int(blue.sum()), "->", out)
 
