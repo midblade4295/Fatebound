@@ -2237,7 +2237,8 @@ K2/K3 notes (0.17.0)
 - Settings: "Graphics engine: Vulkan / OpenGL (compatibility)" with SWITCH TO OPENGL / VULKAN (confirm, restart);
   if Godot itself found no usable Vulkan, it just says so.
 - OpenGL keeps the look Kevin picked (0.31.71 tuned Vulkan to match it).
-- build_siege_preview.sh now requires the fallback ON and the override path, and checks both in the APK.
+- build_siege_preview.sh now requires the fallback ON and the override path, and checks both in the APK (Godot leaves
+  fallback_to_opengl3 out of project.binary when it equals the engine default, true: missing = on).
 - Checked end to end on desktop (FB_BOOT_GUARD=1): clean start -> Vulkan, menu up; a pending Vulkan record -> writes
   renderer.cfg and quits; next start -> OpenGL from the file, menu up. Settings rendered on both. tests/boot_guard_test
   (decisions + the file's keys + project settings). Quick suite: ALL PASSED (34).

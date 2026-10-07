@@ -111,7 +111,10 @@ def string_setting(key):
         raise ValueError(f"{key} has malformed String data")
     return value[8:8 + size].decode("utf-8")
 
-def bool_setting(key):
+def bool_setting(key, default=None):
+    # Godot leaves settings that equal the engine default out of project.binary (fallback_to_opengl3 defaults to true).
+    if key not in props and default is not None:
+        return default
     value = props.get(key, b"")
     if len(value) != 8 or u32(value, 0) != 1:  # Godot Variant::BOOL
         raise ValueError(f"{key} is missing or is not a bool")
@@ -122,7 +125,7 @@ def bool_setting(key):
 
 try:
     renderer = string_setting("rendering/renderer/rendering_method")
-    fallback = bool_setting("rendering/rendering_device/fallback_to_opengl3")
+    fallback = bool_setting("rendering/rendering_device/fallback_to_opengl3", default=True)
     override = string_setting("application/config/project_settings_override")
 except (UnicodeDecodeError, ValueError) as exc:
     raise SystemExit(f"ERROR: APK renderer settings could not be verified: {exc}") from exc
