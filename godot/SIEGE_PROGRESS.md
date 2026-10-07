@@ -2134,3 +2134,13 @@ K2/K3 notes (0.17.0)
 - Environment rebuilt this session (container reset): clone from GitHub, Godot 4.7.2 + templates, Android build-tools
   35, the preview key from the R5 handoff (cert SHA-256 10:11:FC:79...:B3:8B:87, unchanged), mesa-vulkan-drivers for
   lavapipe renders. Quick suite: ALL PASSED (33).
+
+# 0.31.66 (Kevin: hold the staffs as before, just turn each staff's face toward the body -- the skull facing the
+# player model)
+- 0.31.65's upright staffs undone; the 0.31.64 hold is back. View._face_staff only rolls a staff about its own length:
+  in the idle's frame 0 (posed down the bone chain, as before) the roll that points its face at the holder's chest,
+  across the staff, is applied. Faces measured from the meshes' heads: Skeleton_Staff -X (the skull, centroid
+  x -0.24); staff, staff_B, staff_D +Z (flat heads, wide in X, thin in Z); staff_A (a thin rod) and staff_C (round)
+  have no face and keep their old hold. Checked from the holder's chest with the body hidden: the skull's eyes, the
+  orb's rim, the crystal's crescent and the ring all look back at it. The 11 staff thumbnails re-rendered.
+  Quick suite: ALL PASSED (33).

@@ -2596,7 +2596,7 @@ static func make_body(cls: String, cosmetic: Dictionary = {}) -> Dictionary:
 	for key in libs:
 		player.add_animation_library(key, libs[key])
 	for st in staffs:
-		_stand_staff(st[0], str(st[1]), str(st[2]), skeleton, body, libs, str(look.idle), str(look.model))
+		_face_staff(st[0], str(st[1]), str(st[2]), skeleton, libs, str(look.idle), str(look.model))
 	for mi in body.find_children("*", "MeshInstance3D", true, false):
 		(mi as MeshInstance3D).cast_shadow = (GeometryInstance3D.SHADOW_CASTING_SETTING_ON if _cast_static else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
 	if not cosmetic.has("tint") and look.has("tint"):
@@ -2606,18 +2606,22 @@ static func make_body(cls: String, cosmetic: Dictionary = {}) -> Dictionary:
 		_apply_tint(body, str(look.model), Color(str(cosmetic.tint)))
 	return {"body":body, "player":player}
 
-# ---------- staffs stand upright (0.31.65, Kevin: "any staff is held straight up and down") ----------
-# A staff is turned in the hand so that, in the class's idle pose, it stands vertical -- head up, foot toward the
-# ground -- with its face (STAFF_FACE: the side the ornament looks out of, in the model's own space) toward the
-# front. Worked out from the pose itself, not by eye: the idle animation's first frame is applied down the bone chain
-# to the hand slot (rest overridden by each bone's tracks), and the turn that maps the staff's +Y to world up and its
-# face to the body's forward (+Z) is computed in the slot's space. Cached per body, idle and hand. In attacks, runs
-# and casts the staff moves with the hand as before. Wands and every other weapon are unchanged.
-const STAFF_FACE := {"Skeleton_Staff": Vector3(-1, 0, 0)}     # the skull looks out along -X
-static var _staff_dirs := {}
+# ---------- staffs: the face turns toward the body (0.31.66, Kevin) ----------
+# 0.31.65 stood every staff upright; Kevin: "make the staffs held how it was before but just make the face of it face
+# towards the body -- the skull, for example, faces the player model". So the hold is the old one again, and the staff
+# is only turned about its own length until its face (STAFF_FACE, in the model's own space: the side the ornament
+# looks out of) points at the holder's chest. Measured from the meshes' heads: the skull bulges out along -X
+# (centroid x -0.24); the flat heads (staff, staff_B, staff_D) are wide in X and thin in Z, so they face +-Z; staff_A
+# (a thin knotted rod) and staff_C (round all the way round) have no face and are left alone. Worked out from the
+# pose, not by eye: the idle animation's frame 0 is applied down the bone chain to the hand slot and to the chest
+# (each bone's rest overridden by its tracks), and the roll about the staff's +Y that points the face at the chest,
+# across the staff, is computed per body, idle and hand. Wands and every other weapon are unchanged.
+const STAFF_FACE := {"Skeleton_Staff": Vector3(-1, 0, 0), "staff": Vector3(0, 0, 1), "bits/staff_B": Vector3(0, 0, 1),
+	"bits/staff_D": Vector3(0, 0, 1)}
+static var _staff_pose := {}
 
 static func is_staff(file: String) -> bool:
-	return file == "staff" or file == "Skeleton_Staff" or file.begins_with("bits/staff_")
+	return STAFF_FACE.has(file)
 
 static func _pose_tracks(anim: Animation) -> Dictionary:
 	# bone name -> {"p": track, "r": track, "s": track} for an animation's 3D transform tracks
@@ -2635,55 +2639,62 @@ static func _pose_tracks(anim: Animation) -> Dictionary:
 		out[bn] = e
 	return out
 
-static func _stand_staff(model: Node3D, file: String, hand: String, sk: Skeleton3D, body: Node3D, libs: Dictionary, idle: String, body_key: String) -> void:
+static func _posed_bone(sk: Skeleton3D, anim: Animation, tracks: Dictionary, bone: int) -> Transform3D:
+	# a bone's skeleton-space transform in the animation's frame 0
+	var bones: Array = []
+	while bone >= 0:
+		bones.push_front(bone)
+		bone = sk.get_bone_parent(bone)
+	var g := Transform3D.IDENTITY
+	for b in bones:
+		var rest := sk.get_bone_rest(b)
+		var pos := rest.origin
+		var rot := rest.basis.get_rotation_quaternion()
+		var scl := rest.basis.get_scale()
+		var tr: Dictionary = tracks.get(sk.get_bone_name(b), {})
+		if tr.has("p"):
+			pos = anim.position_track_interpolate(int(tr.p), 0.0)
+		if tr.has("r"):
+			rot = anim.rotation_track_interpolate(int(tr.r), 0.0)
+		if tr.has("s"):
+			scl = anim.scale_track_interpolate(int(tr.s), 0.0)
+		g = g * Transform3D(Basis(rot) * Basis.from_scale(scl), pos)
+	return g
+
+static func _face_staff(model: Node3D, file: String, hand: String, sk: Skeleton3D, libs: Dictionary, idle: String, body_key: String) -> void:
 	var key := "%s|%s|%s" % [body_key, idle, hand]
-	if not _staff_dirs.has(key):
+	if not _staff_pose.has(key):
 		var parts := idle.split("/")
 		var lib: AnimationLibrary = libs.get(parts[0]) if parts.size() == 2 else null
 		var anim: Animation = lib.get_animation(parts[1]) if lib != null and lib.has_animation(parts[1]) else null
-		var bi := sk.find_bone("handslot." + hand)
-		if anim == null or bi < 0:
-			_staff_dirs[key] = []
+		var si := sk.find_bone("handslot." + hand)
+		var ci := sk.find_bone("chest")
+		if ci < 0:
+			ci = sk.find_bone("hips")
+		if anim == null or si < 0 or ci < 0:
+			_staff_pose[key] = []
 		else:
 			var tracks := _pose_tracks(anim)
-			var bones: Array = []
-			while bi >= 0:
-				bones.push_front(bi)
-				bi = sk.get_bone_parent(bi)
-			var g := Transform3D.IDENTITY                       # the hand slot in skeleton space, idle frame 0
-			for b in bones:
-				var rest := sk.get_bone_rest(b)
-				var pos := rest.origin
-				var rot := rest.basis.get_rotation_quaternion()
-				var scl := rest.basis.get_scale()
-				var tr: Dictionary = tracks.get(sk.get_bone_name(b), {})
-				if tr.has("p"):
-					pos = anim.position_track_interpolate(int(tr.p), 0.0)
-				if tr.has("r"):
-					rot = anim.rotation_track_interpolate(int(tr.r), 0.0)
-				if tr.has("s"):
-					scl = anim.scale_track_interpolate(int(tr.s), 0.0)
-				g = g * Transform3D(Basis(rot) * Basis.from_scale(scl), pos)
-			var to_body := Transform3D.IDENTITY                 # the skeleton's own place in the body
-			var n: Node = sk
-			while n != null and n != body:
-				if n is Node3D:
-					to_body = (n as Node3D).transform * to_body
-				n = n.get_parent()
-			var sb := (to_body.basis * g.basis).orthonormalized()
-			_staff_dirs[key] = [(sb.inverse() * Vector3.UP).normalized(), (sb.inverse() * Vector3.BACK).normalized()]
-	var dirs: Array = _staff_dirs[key]
-	if dirs.is_empty():
+			_staff_pose[key] = [_posed_bone(sk, anim, tracks, si), _posed_bone(sk, anim, tracks, ci).origin]
+	var pose: Array = _staff_pose[key]
+	if pose.is_empty():
 		return
-	var up: Vector3 = dirs[0]
-	var fwd: Vector3 = dirs[1] - up * (dirs[1] as Vector3).dot(up)
-	if fwd.length() < 0.01:
+	var slot: Transform3D = pose[0]
+	var chest: Vector3 = pose[1]
+	var top := 0.0                                         # the head: the top of the staff along its +Y
+	for mi in model.find_children("*", "MeshInstance3D", true, false):
+		var m3 := mi as MeshInstance3D
+		top = maxf(top, (m3.transform * m3.get_aabb()).end.y)
+	var to_skel := slot.basis * model.basis                # model space -> skeleton space
+	var axis := (to_skel * Vector3.UP).normalized()
+	var head := slot.origin + to_skel * Vector3(0, top * 0.85, 0)
+	var d := chest - head
+	d -= axis * d.dot(axis)                                # across the staff only
+	if d.length() < 0.001:
 		return
-	fwd = fwd.normalized()
-	var face: Vector3 = STAFF_FACE.get(file, Vector3.BACK)
-	var have := Basis(Vector3.UP.cross(face), Vector3.UP, face)           # the model's own axes (columns)
-	var want := Basis(up.cross(fwd), up, fwd)
-	model.basis = (want * have.transposed()) * Basis.from_scale(model.scale)
+	var dm := to_skel.inverse() * d                        # in the model's own space
+	var face: Vector3 = STAFF_FACE[file]
+	model.rotate_object_local(Vector3.UP, atan2(dm.x, dm.z) - atan2(face.x, face.z))
 
 # 0.31.43 (Kevin: weapons upside down / wrongly sized -- "staffs shouldn't be super short"). Measured: the Bits pack uses
 # the SAME convention and scale as the Adventurers weapons (grip at the origin, business end along +Y: sword_A 1.77 m
@@ -2715,7 +2726,7 @@ static var WEAPON_ROLL_TEST := {}     # (tools only: try a roll without editing 
 # 0.31.64 (Kevin): the Necromancer's staff skull faces the floor (it faced the sky: worked out from the pose -- the
 # skull sits on the model's -X side, and a 195-degree roll points that straight down in the idle); the open
 # spellbook's pages face whoever holds it (cover outward).
-const WEAPON_ROLL := {"axe_1handed":180.0, "bits/axe_D":180.0, "bits/sword_G":180.0, "spellbook_open":180.0}       # (Skeleton_Staff's 195 is superseded by the upright staffs, 0.31.65)
+const WEAPON_ROLL := {"axe_1handed":180.0, "bits/axe_D":180.0, "bits/sword_G":180.0, "spellbook_open":180.0}       # (Skeleton_Staff: see _face_staff, 0.31.66)
 
 static func _fit_weapon(model: Node3D, file: String, body_model := "", hand := "r") -> void:
 	model.scale = Vector3.ONE * float(WEAPON_SCALE.get(file, 1.0))
