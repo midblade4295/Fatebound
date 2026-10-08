@@ -2444,3 +2444,19 @@ K2/K3 notes (0.17.0)
 - Tests: app_flow_test checks there's no mode choice and that PLAY goes online (rewards still checked on a local
   match); app_scroll_test finds PLAY by its action key instead of a fixed point. app_flow, app_scroll, tutorial,
   parse_all pass. No build.
+
+# 0.31.79 menus, step 1 (Kevin: "continue with new menu build" -- the concept boards in the game)
+- Art: assets/ui/v2 -- the painted Home battlements, the vault, the pass and market banners, seamless damask /
+  parchment / wood / stone, twelve 3D-style icons (ElevenLabs), the four Meshy chests baked by tools/chest_bake.gd
+  into split-lid scenes (1K VRAM textures; the source GLBs sit in chests/src, .gdignore'd, not exported).
+- Look: ui2.gd + skin.gd + ui_skin.gdshader -- every panel and button is one signed-distance skin (crisp on any
+  phone): gold rims, damask/parchment/wood fills, lipped glossy buttons that press in and grey out, Luckiest Guy text
+  with chunky outlines, ribbons, dividers, badges, sweeps, sunbursts.
+- Chrome: shield level badge, XP bar, gold/gem pills; a wooden tab bar with the 3D icons, the open tab raised.
+- Home: the battlements backdrop with drifting clouds and slow sun rays; all seven base classes in 3D on the dais in
+  their equipped weapons (roster.gd); PASS / ORDERS / FIRST WIN medallions; the ribbon; one big PLAY; the chests in 3D
+  over their slots (chest_row.gd); the orders on parchment; the pass summary. Opening a chest is a full-screen 3D
+  scene (chest_open.gd): it rattles, TAP TO OPEN, the lid flies open with a flash and a spray of coins, the rewards
+  rise in. Pass, Shop, Locker and Settings rebuilt in the same look (same buttons and keys underneath).
+- Pass chest rewards showed "0 gold" (reward_text had no chest case); they now show the chest.
+- app_flow, app_scroll, tutorial, chest, boot_guard, parse_all pass.

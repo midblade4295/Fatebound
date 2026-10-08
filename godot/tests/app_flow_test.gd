@@ -81,7 +81,7 @@ func _process(d: float) -> bool:
 				for prem in [false, true]:
 					if p.can_claim(tier, prem): all_done = false
 			check(all_done, "claim all took every reached tier")
-			check(str(app.tab_buttons["pass"].label.text) == "PASS", "PASS tab badge cleared")
+			check(not app.pass_badge.visible, "PASS tab badge cleared")
 		3:
 			p.d.challenges.daily[0].progress = int(Eco.CHALLENGES[p.d.challenges.daily[0].id].goal); p.save()
 			press("tab_home")
