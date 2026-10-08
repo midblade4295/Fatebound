@@ -2421,3 +2421,15 @@ K2/K3 notes (0.17.0)
 - export_presets.cfg "Android Play Store": architectures/x86=false (armeabi-v7a, arm64-v8a, x86_64 stay). Only that
   preset had it; the itch/preview presets were already arm64-v8a only. Intel Atom Android devices are long gone; the
   AAB's per-device split meant no player downloaded it anyway -- a smaller upload, nothing else. No build or upload.
+
+# Trailer 6: where the meteor comes from (Kevin: "it looks like he's the one that blew them up. Make it so viewers
+# know where explosion came from with camera following the meteor from arch mage")
+- The fall run opens on the red Archmage now: a close low shot as he raises his staff, a fireball gathers on its orb
+  and he hurls it; the camera chases it (slow motion) over his shoulder and down onto the hero's friends, with the
+  hero running in on the left; the blast shot starts a beat earlier so its fiery streak comes down into the frame.
+  The fireball (trailer only, tools/trailer6_shots.gd): a child of the staff while it gathers, then a curve to the
+  ground, landing on the sim tick its meteor goes off; its own light, flame trail and smoke; the game's falling rock is
+  hidden, its warning ring kept. Everything from the impact on is the old fall, 1.79 game s later; the hero is paced
+  to the spot he was knocked down from before (measured), so the shots after it frame as they did.
+- Cut and mix (tools/trailer6_edit.py): approach 1.0 s, "mage" 1.13 s, "chase" 1.87 s, the blast 6.5 s; the cast's
+  surge and crackle, the game's meteor-cast sound on the throw, its rush slowed with the picture. 87.4 s (was 84.4).
