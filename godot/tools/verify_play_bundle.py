@@ -99,7 +99,7 @@ with zipfile.ZipFile(p) as z:
    if struct.unpack_from(endian+'I',b,pos)[0]==1:
     value=struct.unpack_from(endian+'Q',b,pos+48)[0]; assert value>=16384,(name,value);align.append(value)
   libs.append({'path':name,'load_segment_alignment':align})
- assert all_abis=={'armeabi-v7a','arm64-v8a','x86','x86_64'},('Missing Android ABI',sorted(all_abis))
+ assert all_abis=={'armeabi-v7a','arm64-v8a','x86_64'},('Unexpected Android ABI set (want armeabi-v7a, arm64-v8a, x86_64; 32-bit x86 dropped)',sorted(all_abis))
  assert any('arm64-v8a' in x['path'] for x in libs)
  assert any('x86_64' in x['path'] for x in libs)
 report={'file':p.name,'bytes':p.stat().st_size,'sha256':hashlib.sha256(p.read_bytes()).hexdigest(),'upload_certificate_sha256':fp,'matches_expected_upload_certificate':True,'siege_runtime_present_dice_era_absent':True,'content_module':content_module,'project_asset_path':project_paths[0],'vulkan_mobile_default_with_gl_fallback':True,'renderer_override':'user://renderer.cfg','test_server_and_signing_material_excluded':True,'android_abis':sorted(all_abis),'native_64bit_libraries':libs,'physical_phone_tested':False}

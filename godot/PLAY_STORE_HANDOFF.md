@@ -44,7 +44,7 @@ Preset **Android Play Store** in `godot/export_presets.cfg`:
 | Application ID | `com.fatebound.game` |
 | App name | `Fatebound` |
 | Output | Signed release `.aab` (Gradle build) |
-| ABIs | armeabi-v7a, arm64-v8a, x86, x86_64 |
+| ABIs | armeabi-v7a, arm64-v8a, x86_64 (32-bit x86 dropped 2026-10-08, Kevin) |
 | Engine/templates | Godot 4.7.2 + matching Android build template |
 | Renderer | **Vulkan (mobile) by default, OpenGL fallback ON** -- see below. Do not turn the fallback off. |
 | SDK | min 24, target 36; verify against current Play requirements |

@@ -2456,3 +2456,8 @@ K2/K3 notes (0.17.0)
 - Menu check: VersionCheck (scripts/app/version_check.gd) at start-up and on resume (>60 s since the last), skipped
   headless. Against a server without the "ver" message it gets no answer (-1, unknown) and the connect path decides.
 - tests/version_gate_test.gd (real server + in-process fake newer/legacy servers + the real client and app).
+
+# Play preset: no 32-bit Intel (Kevin: "remove the 32bit Intel from game")
+- export_presets.cfg "Android Play Store": architectures/x86=false (armeabi-v7a, arm64-v8a, x86_64 stay). Only that
+  preset had it; the itch/preview presets were already arm64-v8a only. Intel Atom Android devices are long gone; the
+  AAB's per-device split meant no player downloaded it anyway -- a smaller upload, nothing else. No build or upload.
