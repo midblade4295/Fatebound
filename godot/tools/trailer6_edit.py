@@ -54,24 +54,25 @@ CUTS = [
 IMPACT = ("blast", 1.80)     # the meteor lands
 RELEASE = ("throw", 7.82)    # the bomb leaves his hand
 BOOM = ("boom", 12.00)       # the gate goes up
-LAND = ("title", 4.90)       # the title lands
+LAND = ("title", 4.90)       # the title lands (the flash; "FATEBOUND" is spoken on it)
 
 # Narrator (raw/l*.mp3, the takes picked) at (cut, recording time)
 LINES = [("l1_a", ("wide", 1.20)),       # Every army has its heroes...
          ("l2_a", ("shove", 8.35)),      # ...and everyone else.
-         ("l3_a", ("cower", 10.20)),     # No hat. No sword. No one expecting a thing.
-         ("l4_a", ("face", 17.70)),      # But courage doesn't need a helmet.
+         ("l3_a", ("cower", 10.20), 2.0),  # No hat. No sword. No one expecting a thing.
+         ("l4_a", ("face", 17.70), 1.5),  # But courage doesn't need a helmet.
          ("l5_a", ("down", 17.70)),      # Get up.
          ("l67_a", ("pov", 21.45)),      # Sometimes the one who changes everything is the one nobody saw coming.
-         ("l8_b", ("rally", 0.40)),      # One brave step, and the whole army follows.
-         ("l9_a", ("hat", 17.95)),       # Everyone makes a difference.
-         ("l10_a", ("title", 1.10)),     # Anyone can change fate.
-         ("l11_a", ("title", 4.80))]     # FATEBOUND
-VO_MEAN = -18.0           # each line brought to this mean level (dB) -- the takes vary by 10 dB; the VO bus is limited
+         ("l8_b", ("rally", 0.40), 2.0),  # One brave step, and the whole army follows.
+         ("l9_a", ("hat", 17.95), 3.0),  # Everyone makes a difference.          (+dB: over cue C, Kevin: "the end
+         ("l10_a", ("title", 1.10), 4.0),  # Anyone can change fate.             lines are too quiet to hear")
+         ("l11_a", ("title", 4.80), 5.0)]  # FATEBOUND
+DIP, DIP_C = 0.45, 0.25   # the music under a line: x0.45 (-7 dB), and x0.25 (-12 dB) under the loud cue C
+VO_MEAN = -16.5           # each line brought to this mean level (dB) -- the takes vary by 10 dB; the VO bus is limited
 
 # Music: (file, start, end, gain, fade in, fade out); start/end are cut anchors.
 MUSIC = [("musA_a", ("wide", 0.30), IMPACT, 0.80, 0.0, 0.12),
-         ("musB_b", IMPACT, RELEASE, 0.95, 0.0, 0.35),
+         ("musB_b", IMPACT, RELEASE, 0.95, 0.0, 0.12),    # (its tail goes on under water: SFX)
          ("musC_b", BOOM, None, 0.90, 0.0, 0.0)]
 
 # Sound design: (file, at, gain, filters, until (anchor, loops it) or None, fade in, fade out). Game sounds from
@@ -81,7 +82,7 @@ SFX = [
     ("raw/muffled_a.mp3", ("wide", 0.30), 0.55, "", ("out", 25.0), 0.8, 1.5),        # the battle beyond the walls
     ("tm_land_dirt.wav", ("shove", 6.02), 1.4, "", None, 0, 0),                        # shoved
     ("tm_land_dirt.wav", ("shove", 7.77), 1.4, "", None, 0, 0),
-    ("tm_bomb_blast.wav", ("cower", 11.50), 0.45, "lowpass=f=700", None, 0, 0),        # a far-off blast: they flinch
+    ("tm_bomb_blast.wav", ("cower", 11.50), 0.2, "lowpass=f=700", None, 0, 0),         # a far-off blast: they flinch
     ("land.wav", ("pickup", 21.45), 0.8, "", None, 0, 0),
     ("raw/battle_a.mp3", ("out", 24.30), 0.75, "", IMPACT, 1.0, 0.1),                  # out in it
     ("raw/arrows_a.mp3", ("track", 1.00), 0.9, "", None, 0, 0),
@@ -94,8 +95,8 @@ SFX = [
     ("raw/ring_a.mp3", ("blast", 2.10), 0.75, "", None, 0.4, 2.5),                     # ears ringing
     ("raw/muffled_b.mp3", ("blast", 2.60), 0.40, "lowpass=f=500", ("rise", 19.6), 3.0, 1.0),
     ("raw/battle_b.mp3", ("rise", 19.40), 0.40, "", RELEASE, 1.5, 0.3),               # the battle comes back
-    ("hammerThrow.wav", ("hammer", 2.40), 1.2, SLOW.format(k=0.6), None, 0, 0),
-    ("tm_sword_hit2.wav", ("hammer", 3.13), 1.3, SLOW.format(k=0.6), None, 0, 0),
+    ("hammerThrow.wav", ("hammer", 2.40), 0.9, SLOW.format(k=0.6), None, 0, 0),
+    ("tm_sword_hit2.wav", ("hammer", 3.13), 1.0, SLOW.format(k=0.6), None, 0, 0),
     ("tm_rock_hit1.wav", ("hammer", 3.13), 1.0, SLOW.format(k=0.5), None, 0, 0),
     ("tm_bow_shot1.wav", ("rogue", 4.82), 1.0, "", None, 0, 0),
     ("tm_bow_hit1.wav", ("rogue", 5.14), 1.1, "", None, 0, 0),
@@ -104,13 +105,22 @@ SFX = [
     ("shield.wav", ("shield", 6.87), 1.0, "", None, 0, 0),
     ("tm_bow_hit2.wav", ("shield", 7.00), 0.9, "", None, 0, 0),
     ("tm_rock_throw1.wav", RELEASE, 1.2, SLOW.format(k=0.6), None, 0, 0),
-    ("raw/heart_a.mp3", ("throw", 7.70), 1.3, "", BOOM, 0.2, 0.05),                  # silence but a heartbeat
+    # The throw (Kevin: "it cuts off too abruptly"): no hard stop -- cue B sinks under water (low-passed, echoing,
+    # fading by the boom), the battle goes on muffled, the fuse fizzes, the heartbeat, and a reversed boom swells
+    # into the real one.
+    ("raw/musB_b.mp3", RELEASE, 0.9, "lowpass=f=450,aecho=0.8:0.85:120|260:0.45|0.3", BOOM, 0.05, 2.8, (IMPACT, RELEASE)),
+    ("raw/battle_b.mp3", ("throw", 7.60), 0.8, "lowpass=f=380", BOOM, 0.5, 0.2, 3.0),
+    ("tm_firespray1.wav", RELEASE, 0.9, SLOW.format(k=0.6), None, 0, 0),             # the fuse catching
+    ("tm_firespray2.wav", ("flight", 9.90), 0.8, SLOW.format(k=0.6), None, 0, 0),
+    ("raw/heart_a.mp3", ("throw", 7.70), 1.5, "", BOOM, 0.2, 0.05),                  # a heartbeat
+    ("raw/slowboom_b.mp3", ("boom", 7.97), 0.75, "areverse,atrim=start=2.0,asetpts=PTS-STARTPTS,afade=t=in:d=3.2:curve=exp",
+     None, 0, 0),
+    ("land.wav", ("boom", 11.25), 0.8, "lowpass=f=900", None, 0, 0),                # it lands at the gate
     ("tm_bomb_blast.wav", BOOM, 1.6, SLOW.format(k=0.7), None, 0, 0),
     ("raw/slowboom_b.mp3", BOOM, 1.3, "", None, 0, 0),
     ("tm_crumble1.wav", ("boom", 12.15), 1.2, "", None, 0, 0),                         # the gate
-    ("raw/roar_a.mp3", ("boom", 13.60), 0.9, "", None, 0.3, 1.0),                      # the army goes in
+    ("raw/roar_a.mp3", ("boom", 13.60), 0.9, "", ("hat", 17.85), 0.3, 1.2),            # the army goes in
     ("equip.wav", ("hat", 18.87), 1.0, "", None, 0, 0),                                # the helmet on
-    ("raw/slowboom_a.mp3", LAND, 0.55, "lowpass=f=900", None, 0, 0),                   # under the title's landing
 ]
 
 
@@ -131,6 +141,14 @@ def levels(p):
     mean = float(r.split("mean_volume: ")[1].split(" dB")[0])
     peak = float(r.split("max_volume: ")[1].split(" dB")[0])
     return mean, peak
+
+
+def speech(p):
+    # seconds of the take up to its last sound above -40 dB (the takes have a little room tone after the words)
+    r = subprocess.run(["ffmpeg", "-v", "info", "-i", p, "-af", "areverse,silencedetect=n=-40dB:d=0.05", "-f", "null", "-"],
+                       capture_output=True, text=True).stderr
+    tail = float(r.split("silence_end: ")[1].split()[0]) if "silence_end: " in r else 0.0
+    return dur(p) - tail
 
 
 def vo_gain(p):
@@ -199,10 +217,14 @@ def final(out, audio_only=False, mix_only=False):
     j = 0 if mix_only else 1 if audio_only else len(rows)
     ms = 1000
 
-    def place(label, path, start, end, gain, flt, fin, fout, loop=False):
+    mute = os.environ.get("MIXMUTE", "")       # (checking the mix: silences parts -- "vo", "mus", "sfx", "bg" = both)
+
+    def place(label, path, start, end, gain, flt, fin, fout, loop=False, ss=0.0):
         nonlocal j
         if loop:
             inputs.extend(["-stream_loop", "-1"])
+        if ss > 0:
+            inputs.extend(["-ss", f"{ss:.3f}"])
         inputs.extend(["-i", path])
         chain = [flt] if flt else []
         chain += ["aresample=48000", "aformat=sample_fmts=fltp:channel_layouts=stereo"]
@@ -221,20 +243,36 @@ def final(out, audio_only=False, mix_only=False):
 
     mus = [place(f"m{i}", os.path.join(VO, "raw", f + ".mp3"), at(a, cuts), at(b, cuts), g, "", fi, fo)
            for i, (f, a, b, g, fi, fo) in enumerate(MUSIC)]
-    vos = [place(f"v{i}", os.path.join(VO, "raw", f + ".mp3"), at(a, cuts), None,
-                 round(vo_gain(os.path.join(VO, "raw", f + ".mp3")), 3), "", 0, 0) for i, (f, a) in enumerate(LINES)]
+    vos, dips = [], []
+    for i, (f, a, *extra) in enumerate(LINES):
+        path = os.path.join(VO, "raw", f + ".mp3")
+        g = vo_gain(path) * 10 ** ((extra[0] if extra else 0.0) / 20.0)
+        vos.append(place(f"v{i}", path, at(a, cuts), None, round(g, 3), "", 0, 0))
+        t0 = at(a, cuts)
+        dips.append((t0 - 0.12, t0 + speech(path) + 0.15, DIP_C if t0 >= at(BOOM, cuts) else DIP))
     sfx = []
-    for i, (f, a, g, flt, until, fi, fo) in enumerate(SFX):
+    for i, (f, a, g, flt, until, fi, fo, *src) in enumerate(SFX):
         path = os.path.join(VO, f) if f.startswith("raw/") else os.path.join(SND, f)
-        sfx.append(place(f"s{i}", path, at(a, cuts), at(until, cuts), g, flt, fi, fo, loop=until is not None))
+        ss = 0.0
+        if src:                                  # where in the file it starts: seconds, or the gap between two anchors
+            ss = src[0] if isinstance(src[0], (int, float)) else at(src[0][1], cuts) - at(src[0][0], cuts)
+        sfx.append(place(f"s{i}", path, at(a, cuts), at(until, cuts), g, flt, fi, fo, loop=until is not None and not src,
+                         ss=ss))
     pad = f"apad=whole_dur={total:.3f}"
-    fc.append(f"{''.join(mus)}amix=inputs={len(mus)}:normalize=0,{pad}[mus]")
+    # The music dips under each line (the sidechain alone left the last lines buried in cue C), ramped over 0.25 s.
+    def dip_expr(scale):
+        return "*".join(f"(1-{(1 - g) * scale:.2f}*min(clip((t-{a0:.2f})/0.25,0,1),clip(({b0:.2f}-t)/0.25,0,1)))"
+                        for a0, b0, g in dips)
+    fc.append(f"{''.join(mus)}amix=inputs={len(mus)}:normalize=0,{pad},volume='{dip_expr(1.0)}':eval=frame[mus]")
     fc.append(f"{''.join(vos)}amix=inputs={len(vos)}:normalize=0,acompressor=threshold=0.18:ratio=2.5:attack=5:release=120,"
               f"alimiter=limit=0.89:level=disabled,{pad}[vos]")      # (lines never overlap)
-    fc.append(f"{''.join(sfx)}amix=inputs={len(sfx)}:normalize=0,{pad}[sfx]")
+    fc.append(f"{''.join(sfx)}amix=inputs={len(sfx)}:normalize=0,{pad},volume='{dip_expr(1.0)}':eval=frame[sfx]")   # (beds too)
     fc.append("[vos]asplit=2[vosa][vosb]")
     fc.append("[mus][vosa]sidechaincompress=threshold=0.06:ratio=3:knee=6:attack=25:release=500[duck]")
-    fc.append(f"[duck][vosb][sfx]amix=inputs=3:normalize=0,alimiter=limit=0.9:level=disabled,atrim=0:{total:.3f}[mix]")
+    off = set(mute.replace("bg", "mus,sfx").split(","))
+    fc.append(f"[duck]volume={0 if 'mus' in off else 1}[duck2];[sfx]volume={0 if 'sfx' in off else 1}[sfx2];"
+              f"[vosb]volume={0 if 'vo' in off else 1}[vosc]")
+    fc.append(f"[duck2][vosc][sfx2]amix=inputs=3:normalize=0,alimiter=limit=0.9:level=disabled,atrim=0:{total:.3f}[mix]")
     # 1) the mix (and the concatenated picture) as an intermediate, 2) its loudness measured, 3) normalised and muxed
     mix = out if mix_only else out + ".mix.wav"
     cmd = ["ffmpeg", "-v", "error", "-y"] + inputs + ["-filter_complex", ";".join(fc), "-map", "[mix]", "-c:a", "pcm_f32le", mix]
@@ -262,7 +300,7 @@ def final(out, audio_only=False, mix_only=False):
                       "cuts": [[name, round(t0, 2)] for _, _, _, _, name, t0 in rows],
                       "impact": round(at(IMPACT, cuts), 2), "release": round(at(RELEASE, cuts), 2),
                       "boom": round(at(BOOM, cuts), 2), "title_lands": round(at(LAND, cuts), 2),
-                      "lines": [[f, round(at(a, cuts), 2)] for f, a in LINES]}))
+                      "lines": [[f, round(at(a, cuts), 2)] for f, a, *_ in LINES]}))
 
 
 if __name__ == "__main__":
@@ -279,7 +317,7 @@ if __name__ == "__main__":
             print(f"{t0:6.2f}  {name:9s} {shot:7s} {src:6.2f} +{d:.2f}")
         print("total", round(total, 2), "impact", round(at(IMPACT, cuts), 2), "release", round(at(RELEASE, cuts), 2),
               "boom", round(at(BOOM, cuts), 2), "title lands", round(at(LAND, cuts), 2))
-        for f, a2 in LINES:
+        for f, a2, *_ in LINES:
             print("  ", f, round(at(a2, cuts), 2))
     else:
         final(a.out, audio_only=a.stage == "audio", mix_only=a.stage == "mix")

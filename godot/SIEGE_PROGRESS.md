@@ -2366,4 +2366,10 @@ K2/K3 notes (0.17.0)
   ringing, heartbeat, the army's roar) come from ElevenLabs; hits and the bomb are the game's own sounds. Normalised
   to -14 LUFS.
 - tools/trailer4_title_fx.py: --tag / --tag2 for the tagline's text (defaults unchanged).
-- Fatebound-Trailer-6.mp4: 84 s, 1920x1080 at 30 fps, -13.7 LUFS, -0.9 dBFS peak, 128 MB.
+- Fatebound-Trailer-6.mp4: 84 s, 1920x1080 at 30 fps, -13.8 LUFS, -1.0 dBFS peak, 128 MB.
+- Remix (Kevin: the throw "cuts off too abruptly"; "the end lines are too quiet to hear the narrator"): cue B no longer
+  stops at the throw but sinks under water (low-passed, echoing, faded by the boom) over a muffled battle, the fuse's
+  fizz and the heartbeat, and a reversed boom swells into the real one. The music and the beds dip under every line
+  (-7 dB; -12 dB under cue C), the last three lines are 3-5 dB louder, the boom under "FATEBOUND" is gone and the
+  army's roar ends before "Everyone makes a difference". Narration now sits 7-20 dB over everything else
+  (MIXMUTE=vo / bg renders the parts separately to measure it).
