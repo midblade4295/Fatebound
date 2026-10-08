@@ -2461,3 +2461,11 @@ K2/K3 notes (0.17.0)
 - export_presets.cfg "Android Play Store": architectures/x86=false (armeabi-v7a, arm64-v8a, x86_64 stay). Only that
   preset had it; the itch/preview presets were already arm64-v8a only. Intel Atom Android devices are long gone; the
   AAB's per-device split meant no player downloaded it anyway -- a smaller upload, nothing else. No build or upload.
+
+# vc32 / 1.2.8-siege-0.31.78 rebuilt without x86 (same versionCode/versionName/key; game data unchanged)
+- Built on claude/siege-dev-r6-local 8fb85e8 merged into grok/siege-play-local-r9; verify_play_bundle.py now expects
+  exactly armeabi-v7a, arm64-v8a, x86_64.
+- AAB 193,648,329 -> 167,008,590 bytes (only base/lib/x86/* removed; asset pack, icons, ETC2 textures, forced-update
+  screen identical). SHA-256 7741f5bfdc2c41061b861717f5d88b945729f134a97ba5f51a85c26fd8fd8142.
+- Verifier + bundletool validate + jarsigner OK, upload cert 69:71:A9:...:83:90:84. Protocol 35 (no server change).
+  Quick suite: ALL PASSED (38).
