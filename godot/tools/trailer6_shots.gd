@@ -271,6 +271,18 @@ func _collect_props() -> void:
 	var keep := {}
 	for a in mode.view.actors.values():
 		keep[a.root] = true
+	# (never the gates: the bomb shot looks straight at one, and hid its doors as it came in to land)
+	for gv in mode.view.gate_nodes.values():
+		var parts: Array = (gv.get("doors", []) as Array).map(func(d): return d.node)
+		if gv.has("door"):
+			parts.append(gv.door)
+		if gv.has("rubble"):
+			parts.append(gv.rubble)
+		for part in parts:
+			var nd: Node = part
+			while nd != null and nd != mode.view:
+				keep[nd] = true
+				nd = nd.get_parent()
 	for c in mode.view.get_children():
 		if not (c is Node3D) or keep.has(c) or not (c as Node3D).visible:
 			continue
@@ -847,6 +859,26 @@ func _apply_cam() -> void:
 	if not props.is_empty():
 		_clear_view(eye, look, float(spec.get("clear_r", 1.1)))
 
+func _smooth_bomb(delta: float) -> void:
+	# Kevin: the bomb in the air was jittery. The sim moves it once a tick (1/30 s of game time), and in slow motion a
+	# tick comes only every few frames, so it (and the camera on it) went in steps. While it flies, put it where the
+	# sim's own flight curve has it at this frame's exact time -- the sim's time plus what the match loop has
+	# banked towards its next tick -- and the bomb's node there too (the view would only ease towards it).
+	if s == null or s.bombs.is_empty():
+		return
+	var b: Dictionary = s.bombs[0]
+	if b.is_empty() or str(b.state) != "flying":
+		return
+	var tc: float = float(s.time) + float(mode._accum) + delta
+	var k := clampf((tc - float(b.t0)) / Sim.BOMB_FLIGHT, 0.0, 1.0)
+	b.p = (b.from as Vector2).lerp(b.to, k)
+	b.h = lerpf(1.7, 0.0, k) + 3.0 * k * (1.0 - k)
+	var n = mode.view.bomb_nodes[0]
+	if n != null and is_instance_valid(n):
+		(n as Node3D).position = Vector3(b.p.x, Sim.height_at(b.p) + float(b.h) + 0.34, b.p.y)
+	if OS.has_environment("DEBUG"):
+		printerr("BOMBFLY f=%d k=%.4f p=(%.3f,%.3f) h=%.3f" % [frames, k, b.p.x, b.p.y, b.h])
+
 func throw_target() -> Vector2:
 	return get_meta("throw_at") if has_meta("throw_at") else Vector2.ZERO
 
@@ -862,6 +894,7 @@ func _process(delta: float) -> bool:
 	if still_at >= 0.0 and frames == 3:
 		t = still_at
 	Engine.time_scale = _slow(t)
+	_smooth_bomb(delta)
 	_apply_cam()
 	for b in beats.duplicate():
 		if t >= float(b[0]):

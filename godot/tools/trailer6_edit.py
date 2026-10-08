@@ -64,16 +64,21 @@ LINES = [("l1_a", ("wide", 1.20)),       # Every army has its heroes...
          ("l5_a", ("down", 17.70)),      # Get up.
          ("l67_a", ("pov", 21.45)),      # Sometimes the one who changes everything is the one nobody saw coming.
          ("l8_b", ("rally", 0.40), 2.0),  # One brave step, and the whole army follows.
-         ("l9_a", ("hat", 17.95), 3.0),  # Everyone makes a difference.          (+dB: over cue C, Kevin: "the end
-         ("l10_a", ("title", 1.10), 4.0),  # Anyone can change fate.             lines are too quiet to hear")
-         ("l11_a", ("title", 4.80), 5.0)]  # FATEBOUND
-DIP, DIP_C = 0.45, 0.25   # the music under a line: x0.45 (-7 dB), and x0.25 (-12 dB) under the loud cue C
+         ("l9_a", ("hat", 17.95), 7.0),  # Everyone makes a difference.          (+dB: over cue C, Kevin: "the end
+         ("l10_a", ("title", 1.10), 8.0),  # Anyone can change fate.             lines are too quiet to hear")
+         ("l11_a", ("title", 4.80), 6.0)]  # FATEBOUND
+# The music under a line (Kevin: a plain dip "is too noticeable at the end"): only its voice band (800-4000 Hz) dips
+# much (x0.4) and the whole of it a little (x0.85), over slow 0.6 s ramps, so the drums and the low end carry on
+# under the narrator -- about 3-4 dB in all. The last lines are louder instead. The beds dip x0.5.
+DIP_MID, DIP_MID_C = 0.4, 0.35
+DIP, DIP_C = 0.88, 0.88
+RAMP = 0.6
 VO_MEAN = -16.5           # each line brought to this mean level (dB) -- the takes vary by 10 dB; the VO bus is limited
 
 # Music: (file, start, end, gain, fade in, fade out); start/end are cut anchors.
 MUSIC = [("musA_a", ("wide", 0.30), IMPACT, 0.80, 0.0, 0.12),
          ("musB_b", IMPACT, RELEASE, 0.95, 0.0, 0.12),    # (its tail goes on under water: SFX)
-         ("musC_b", BOOM, None, 0.90, 0.0, 0.0)]
+         ("musC_b", BOOM, None, 0.68, 0.0, 0.0)]       # (a touch lower all through: room for the last lines)
 
 # Sound design: (file, at, gain, filters, until (anchor, loops it) or None, fade in, fade out). Game sounds from
 # assets/sounds; beds and stingers from trailer6_vo/raw.
@@ -93,8 +98,9 @@ SFX = [
     ("raw/slowboom_a.mp3", IMPACT, 1.5, "", None, 0, 0),                              # the meteor, slowed
     ("tm_bomb_blast.wav", IMPACT, 1.2, SLOW.format(k=0.45), None, 0, 0),
     ("raw/ring_a.mp3", ("blast", 2.10), 0.75, "", None, 0.4, 2.5),                     # ears ringing
-    ("raw/muffled_b.mp3", ("blast", 2.60), 0.40, "lowpass=f=500", ("rise", 19.6), 3.0, 1.0),
-    ("raw/battle_b.mp3", ("rise", 19.40), 0.40, "", RELEASE, 1.5, 0.3),               # the battle comes back
+    ("raw/muffled_b.mp3", ("blast", 2.60), 0.40, "lowpass=f=500", ("down", 17.60), 3.0, 1.5),   # (gone by "Get up")
+    ("raw/battle_a.mp3", ("rally", 0.00), 0.40, "", RELEASE, 1.5, 0.3, 12.0),        # the battle again, from the rally
+    #   (Kevin: no soldiers' sounds as he gets up -- nothing from "Get up" to the rally but the music)
     ("hammerThrow.wav", ("hammer", 2.40), 0.9, SLOW.format(k=0.6), None, 0, 0),
     ("tm_sword_hit2.wav", ("hammer", 3.13), 1.0, SLOW.format(k=0.6), None, 0, 0),
     ("tm_rock_hit1.wav", ("hammer", 3.13), 1.0, SLOW.format(k=0.5), None, 0, 0),
@@ -243,13 +249,16 @@ def final(out, audio_only=False, mix_only=False):
 
     mus = [place(f"m{i}", os.path.join(VO, "raw", f + ".mp3"), at(a, cuts), at(b, cuts), g, "", fi, fo)
            for i, (f, a, b, g, fi, fo) in enumerate(MUSIC)]
-    vos, dips = [], []
+    vos, dips, lifts = [], [], []
     for i, (f, a, *extra) in enumerate(LINES):
         path = os.path.join(VO, "raw", f + ".mp3")
-        g = vo_gain(path) * 10 ** ((extra[0] if extra else 0.0) / 20.0)
-        vos.append(place(f"v{i}", path, at(a, cuts), None, round(g, 3), "", 0, 0))
+        vos.append(place(f"v{i}", path, at(a, cuts), None, round(vo_gain(path), 3), "", 0, 0))
         t0 = at(a, cuts)
-        dips.append((t0 - 0.12, t0 + speech(path) + 0.15, DIP_C if t0 >= at(BOOM, cuts) else DIP))
+        if extra:                                # a line's own lift goes on after the VO bus's compressor
+            lifts.append((t0 - 0.1, t0 + speech(path) + 0.2, 10 ** (extra[0] / 20.0)))
+        late = t0 >= at(BOOM, cuts)
+        dips.append((t0 - 0.35, t0 + speech(path) + 0.3, DIP_C if late else DIP, DIP_MID_C if late else DIP_MID)
+                    if not os.environ.get("NODIP") else (t0, t0 + 0.1, 1.0, 1.0))      # (NODIP: to measure the dips)
     sfx = []
     for i, (f, a, g, flt, until, fi, fo, *src) in enumerate(SFX):
         path = os.path.join(VO, f) if f.startswith("raw/") else os.path.join(SND, f)
@@ -260,15 +269,20 @@ def final(out, audio_only=False, mix_only=False):
                          ss=ss))
     pad = f"apad=whole_dur={total:.3f}"
     # The music dips under each line (the sidechain alone left the last lines buried in cue C), ramped over 0.25 s.
-    def dip_expr(scale):
-        return "*".join(f"(1-{(1 - g) * scale:.2f}*min(clip((t-{a0:.2f})/0.25,0,1),clip(({b0:.2f}-t)/0.25,0,1)))"
-                        for a0, b0, g in dips)
-    fc.append(f"{''.join(mus)}amix=inputs={len(mus)}:normalize=0,{pad},volume='{dip_expr(1.0)}':eval=frame[mus]")
+    def dip_expr(k):
+        # product of ramped dips; k picks the gain from each dip tuple (2 = broadband, 3 = voice band, None = beds)
+        return "*".join(f"(1-{1 - (d[k] if k else 0.5):.2f}*min(clip((t-{d[0] - RAMP / 2:.2f})/{RAMP},0,1),"
+                        f"clip(({d[1] + RAMP / 2:.2f}-t)/{RAMP},0,1)))" for d in dips)
+    fc.append(f"{''.join(mus)}amix=inputs={len(mus)}:normalize=0,{pad},volume='{dip_expr(2)}':eval=frame,"
+              f"acrossover=split=800 4000[mlo][mmid][mhi]")
+    fc.append(f"[mmid]volume='{dip_expr(3)}':eval=frame[mmid2]")
+    fc.append("[mlo][mmid2][mhi]amix=inputs=3:normalize=0[mus]")
+    lift = "+".join(f"{g - 1:.3f}*between(t,{a0:.2f},{b0:.2f})" for a0, b0, g in lifts) or "0"
     fc.append(f"{''.join(vos)}amix=inputs={len(vos)}:normalize=0,acompressor=threshold=0.18:ratio=2.5:attack=5:release=120,"
-              f"alimiter=limit=0.89:level=disabled,{pad}[vos]")      # (lines never overlap)
-    fc.append(f"{''.join(sfx)}amix=inputs={len(sfx)}:normalize=0,{pad},volume='{dip_expr(1.0)}':eval=frame[sfx]")   # (beds too)
-    fc.append("[vos]asplit=2[vosa][vosb]")
-    fc.append("[mus][vosa]sidechaincompress=threshold=0.06:ratio=3:knee=6:attack=25:release=500[duck]")
+              f"{pad},volume='1+{lift}':eval=frame,alimiter=limit=0.89:level=disabled[vos]")      # (lines never overlap)
+    fc.append(f"{''.join(sfx)}amix=inputs={len(sfx)}:normalize=0,{pad},volume='{dip_expr(None)}':eval=frame[sfx]")   # (beds too)
+    fc.append("[vos]anull[vosb]")
+    fc.append("[mus]anull[duck]")             # (no sidechain any more: its fast pumping on every word was what showed)
     off = set(mute.replace("bg", "mus,sfx").split(","))
     fc.append(f"[duck]volume={0 if 'mus' in off else 1}[duck2];[sfx]volume={0 if 'sfx' in off else 1}[sfx2];"
               f"[vosb]volume={0 if 'vo' in off else 1}[vosc]")

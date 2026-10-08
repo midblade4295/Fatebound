@@ -2373,3 +2373,12 @@ K2/K3 notes (0.17.0)
   (-7 dB; -12 dB under cue C), the last three lines are 3-5 dB louder, the boom under "FATEBOUND" is gone and the
   army's roar ends before "Everyone makes a difference". Narration now sits 7-20 dB over everything else
   (MIXMUTE=vo / bg renders the parts separately to measure it).
+- Second pass (Kevin: the dip under the last lines "is too noticeable"; no soldiers' sounds after "Get up"; the bomb's
+  flight "jittery"): no sidechain any more (its fast pumping on each word was what showed). Under a line only the
+  music's voice band (800-4000 Hz) dips much, over slow 0.6 s ramps -- 1.3-2.6 dB overall -- while the last lines get
+  their own lift after the VO compressor and cue C sits a little lower throughout; the narration is still 7-15 dB
+  over everything else in the voice band. Nothing but the music from "Get up" to the rally (the battle bed comes
+  back with the rally, from another part of the battle recording). The flying bomb is placed each frame on the sim's
+  own flight curve at the frame's exact time (sim time + the match loop's banked tick time): in slow motion the sim
+  moved it only every few frames, and the camera following it stepped with it (now an even 8.7-9.9 cm a frame). The
+  gates' doors are kept out of the hidden props (the bomb shot, looking straight at the gate, hid them as it landed).
