@@ -102,9 +102,9 @@ func _process(d: float) -> bool:
 			check(app.tab == "home", "back button returns to Home")
 		5:
 			gold_before = p.d.gold
-			press("mode_bots")
-			press("play")
-			check(app.siege != null and not app.chrome.visible, "PLAY starts an offline match with the menu hidden")
+			check(btn("mode_bots") == null and btn("mode_online") == null, "no VS BOTS / ONLINE choice on Home (always the server)")
+			app.start_match(false)                     # a local match (as the tutorial runs) to check rewards without a server
+			check(app.siege != null and not app.chrome.visible, "a match starts with the menu hidden")
 			# The home hero owns a 4x-MSAA physical-resolution 3D viewport plus particles; it must not
 			# keep rendering behind the match (the menu's looping PLAY tweens should pause too).
 			check(not app.hero_layer.is_visible_in_tree() and app.hero_layer.process_mode == Node.PROCESS_MODE_DISABLED, "home hero (3D viewport + motes) is off during a match")
@@ -125,9 +125,8 @@ func _process(d: float) -> bool:
 		8:
 			check(app.siege == null and app.chrome.visible and app.tab == "home", "HOME from results returns to the menu")
 			check(app.hero_layer.is_visible_in_tree() and app.hero_layer.process_mode != Node.PROCESS_MODE_DISABLED and app.chrome.process_mode != Node.PROCESS_MODE_DISABLED, "hero and menu resume after the match")
-			press("mode_online")
 			press("play")
-			check(app.siege != null and app.siege.online, "online PLAY starts an online session")
+			check(app.siege != null and app.siege.online, "PLAY starts an online session")
 			wait_until = t + 5.0
 		9:
 			check(app.siege == null and app.chrome.visible, "unreachable server -> message, back to the menu")

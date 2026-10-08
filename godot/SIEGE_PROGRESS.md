@@ -2433,3 +2433,14 @@ K2/K3 notes (0.17.0)
   to the spot he was knocked down from before (measured), so the shots after it frame as they did.
 - Cut and mix (tools/trailer6_edit.py): approach 1.0 s, "mage" 1.13 s, "chase" 1.87 s, the blast 6.5 s; the cast's
   surge and crackle, the game's meteor-cast sound on the throw, its rush slowed with the picture. 87.4 s (was 84.4).
+
+# Home: one PLAY, always the server (Kevin: "remove the play with bots option from game. Only have the regular play
+# button so player is always playing on server plus they play with bots anyway when there aren't enough players")
+- screens.gd: the VS BOTS / ONLINE 16v16 row is gone; PLAY always starts the online match. The server already holds
+  every slot no human does with a bot (siege_server.gd), so a quiet server is still a full 16 v 16. Hint under PLAY:
+  "Live 16 vs 16 on the Siege server · bots fill any empty slots". siege_app.gd: play_online removed.
+- The local match stays for the tutorial (HOW TO PLAY / first-visit Herald) and the tests. With no signal PLAY shows
+  the existing "Could not connect to the server" and returns Home (no offline fallback any more).
+- Tests: app_flow_test checks there's no mode choice and that PLAY goes online (rewards still checked on a local
+  match); app_scroll_test finds PLAY by its action key instead of a fixed point. app_flow, app_scroll, tutorial,
+  parse_all pass. No build.

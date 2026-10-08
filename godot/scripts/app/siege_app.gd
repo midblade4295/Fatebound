@@ -20,7 +20,6 @@ var now_override := -1
 var profile
 var audio: Node
 var tab := "home"
-var play_online := false
 var home_class := "knight"
 var locker_class := "knight"
 var siege = null
