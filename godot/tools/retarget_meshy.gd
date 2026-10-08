@@ -69,6 +69,16 @@ func _run() -> void:
 		var off: Vector3 = (ks.origin - kw.origin) / (unit * fit)     # KayKit metres -> Meshy skeleton units
 		var slot_g := Transform3D(ks.basis.orthonormalized(), mw.origin + off)
 		rig["slot_" + hand] = _xa(mw.affine_inverse() * slot_g)
+	# 0.31.77: a hand posed round its weapon by tools/meshy_hand_pose.py keeps the slot where it put the handle.
+	var old_rig: Variant = JSON.parse_string(FileAccess.get_file_as_string(dir + "rig.json")) if FileAccess.file_exists(dir + "rig.json") else null
+	if old_rig is Dictionary:
+		for hand in ["r", "l"]:
+			if (old_rig as Dictionary).has("grip_" + hand):
+				var grip: Array = old_rig["grip_" + hand]
+				var sl: Array = rig["slot_" + hand]
+				for i in 3:
+					sl[9 + i] = float(grip[i])
+				rig["grip_" + hand] = grip
 	var f := FileAccess.open(dir + "rig.json", FileAccess.WRITE)
 	f.store_string(JSON.stringify(rig))
 	f.close()

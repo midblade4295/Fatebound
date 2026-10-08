@@ -2330,3 +2330,17 @@ K2/K3 notes (0.17.0)
   heroes; re-run.
 - Checked: idle / punch / chop renders beside the Rogue, Knight, Crusader and Archmage; match views (castle_shot
   red_court, blue_gate). Quick suite: ALL PASSED (36).
+
+# 0.31.77 (Kevin, on the new Worker in the locker: "The hand needs to close around the handle to properly grab it.
+# Also the fingers on other hand should be slightly bent so it looks more natural")
+- Meshy's rig has no finger bones and its hands were flat and open, so the hands are posed in the mesh (bind pose) by
+  the new tools/meshy_hand_pose.py: each finger bends at three joints (knuckle / middle / tip), normals and tangents
+  turned with it, skin weights unchanged (all 110 baked animations fit as they were; re-baking gives identical files).
+  Worker right hand: a fist (75 / 80 / 30 degrees, the knuckle bend eased over the first 12 mm; thumb in and down);
+  left hand: slightly bent (20 / 30 / 20). Knuckle lines measured from hand renders (0.120 / 0.105 m past the wrist).
+- The chunky fingers fold right against the palm (no hole to pass the handle through), so the handle goes where the
+  closed hand hides it best from the side (80 % covered), like the KayKit fists: rig.json slot_r moved ~1.3 cm (bone
+  space), turn unchanged, also kept as "grip_r" -- retarget_meshy.gd now keeps a grip_r / grip_l when it re-writes
+  rig.json. The tool runs on Meshy's original rigged GLB (in git history, before this commit).
+- Worker icons re-rendered. Checked: hand close-ups (outside, front, behind, along the handle), the locker zoomed
+  in. Quick suite: ALL PASSED (36).
