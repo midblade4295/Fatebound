@@ -65,6 +65,7 @@ func _bake_cache() -> void:
 	var v = View.new()
 	v.sim = sim
 	cache.foliage = v._plan_foliage()
+	cache.outer_trees = View._plan_outer_trees()
 	v.free()
 	for k in 4:
 		cache.blood.append(View._blood_image(71 + k * 13, false))
@@ -73,4 +74,7 @@ func _bake_cache() -> void:
 	var fol := 0
 	for kind in cache.foliage:
 		fol += (cache.foliage[kind] as Array).size()
-	print("BAKE_CACHE terrain %d meshes, outer %d, foliage %d instances, blood %d (err %d) in %d ms" % [cache.terrain.size(), cache.outer.size(), fol, cache.blood.size(), err, Time.get_ticks_msec() - tc])
+	var trees := 0
+	for k in cache.outer_trees:
+		trees += (cache.outer_trees[k] as Array).size()
+	print("BAKE_CACHE terrain %d meshes, outer %d, foliage %d instances, outer trees %d, blood %d (err %d) in %d ms" % [cache.terrain.size(), cache.outer.size(), fol, trees, cache.blood.size(), err, Time.get_ticks_msec() - tc])

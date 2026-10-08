@@ -249,6 +249,8 @@ var rng := RandomNumberGenerator.new()
 var nav: Array = []            # AStarGrid2D per team
 var nav_version := 0
 var _ai_clock := 0.0
+const AI_EVERY := 0.15            # seconds between a bot's decisions (_think; _unstick_check counts in these)
+const AI_SPREAD := 5              # the bots' first decisions fall on this many consecutive ticks (0.15 s = 4.5 ticks)
 var _cmd_clock := 0.0
 var _next_proj := 1
 
@@ -674,6 +676,7 @@ func setup(team_size: int, seed_value: int, player_team := 0) -> void:
 			var human := t == player_team and i == 0
 			var id := "you" if human else "%s%d" % ["b" if t == 0 else "r", i]
 			var u := _new_unit(id, t, not human, roles[i % roles.size()])
+			u.think_at = float(units.size() % AI_SPREAD) * TICK      # the bots' thinking spread over the ticks
 			units.append(u)
 			by_id[id] = u
 			_respawn(u, true)
@@ -724,7 +727,7 @@ func _new_unit(id: String, team: int, bot: bool, role: String) -> Dictionary:
 		"dodge_dir":Vector2.ZERO,"target":"","ai_goal":Vector2.ZERO,"lunge_hit":false,
 		"unstick":0.0,"unstick_dir":Vector2.ZERO,"stuck_t":0.0,"last_pos":Vector2.ZERO,
 		"lifting":-1, "tower":-1, "beam":"", "beam2":"", "drain_acc":0.0, "beam_until":0.0, "block_until":0.0, "whirl_until":0.0, "whirl_t":0.0, "load":{"kind":"", "n":0}, "task":{}, "workshop_open":false, "gathered":0, "repaired":0.0, "gate_dmg":0.0, "offering":false, "fed":0,
-		"path":PackedVector2Array(), "path_i":0, "path_goal":Vector2(INF, INF), "path_at":-10.0, "path_ver":-1}
+		"path":PackedVector2Array(), "path_i":0, "path_goal":Vector2(INF, INF), "path_at":-10.0, "path_ver":-1, "think_at":0.0}
 
 func armory_mult(team: int) -> float:
 	return 1.0 + 0.08 * float(levels[team].armory)        # +12 % a level until 0.31.4
@@ -1800,12 +1803,18 @@ func step(dt: float = TICK) -> void:
 	_ai_clock += dt
 	_cmd_clock += dt
 	var t0 := Time.get_ticks_usec() if profile else 0
-	if _ai_clock >= 0.15:
+	if _ai_clock >= AI_EVERY:
 		_ai_clock = 0.0
 		_update_rampart_alert()
-		for u in units:
-			if u.bot:
-				_think(u)
+	# Each bot thinks every AI_EVERY seconds, on its own schedule: 0.31.78 spread over the ticks (all 31 thought on the
+	# same tick before -- a 10-20 ms spike every 0.15 s, with the path searches, where the other ticks took 2 ms).
+	for u in units:
+		if u.bot and time >= float(u.think_at):
+			u.think_at = time + AI_EVERY
+			_think(u)
+		elif u.bot and u.cls == "knight" and not projectiles.is_empty() and not u.carrying and int(u.tower) < 0 \
+				and alive(u) and not blocking(u):
+			_shield_reflex(u)                        # (a Knight or a Crusader: the shield between decisions too)
 	if profile: t0 = _p("think", t0)
 	if _cmd_clock >= 2.0:
 		_cmd_clock = 0.0
@@ -2197,20 +2206,36 @@ func _clamp_to_field(p: Vector2) -> Vector2:
 	return Vector2(clampf(p.x, -HALF_W, HALF_W), clampf(p.y, -HALF_L, HALF_L))
 
 func _separate() -> void:
-	for i in units.size():
-		var a: Dictionary = units[i]
-		if not alive(a):
-			continue
-		for j in range(i+1, units.size()):
-			var b: Dictionary = units[j]
-			if not alive(b) or int(b.tower) != int(a.tower):
-				continue                           # the ground and a tower's deck don't touch
-			var off: Vector2 = b.pos - a.pos
+	# Pairs of living units pushed apart (0.31.78: on packed arrays -- the 496 pair checks of a 16 v 16 went through
+	# dictionary lookups each; same pushes, in the same order). The ground and a tower's deck don't touch.
+	var live: Array = []
+	for u in units:
+		if alive(u):
+			live.append(u)
+	var n := live.size()
+	var pos := PackedVector2Array()
+	var twr := PackedInt32Array()
+	pos.resize(n)
+	twr.resize(n)
+	for i in n:
+		pos[i] = live[i].pos
+		twr[i] = int(live[i].tower)
+	var r2 := UNIT_R * 2.0
+	for i in n:
+		var pa := pos[i]
+		var ta := twr[i]
+		for j in range(i + 1, n):
+			if twr[j] != ta:
+				continue
+			var off := pos[j] - pa
 			var d := off.length()
-			if d < UNIT_R*2.0 and d > 0.0001:
-				var push := off / d * (UNIT_R*2.0 - d) * 0.5
-				a.pos -= push
-				b.pos += push
+			if d < r2 and d > 0.0001:
+				var push := off / d * (r2 - d) * 0.5
+				pa -= push
+				pos[j] += push
+		pos[i] = pa
+	for i in n:
+		live[i].pos = pos[i]
 	for u in units:
 		if alive(u) and int(u.tower) >= 0:
 			u.pos = tower_deck_clamp(u)            # kept on the tower's deck
@@ -2677,9 +2702,9 @@ func _bot_hat_goal(u: Dictionary) -> Vector2:
 
 func _unstick_check(u: Dictionary) -> void:
 	# If a bot wanted to move but barely did, sidestep for a moment.
-	u.unstick = maxf(0.0, u.unstick - 0.15)
+	u.unstick = maxf(0.0, u.unstick - AI_EVERY)
 	if u.move.length() > 0.1 and u.task.is_empty() and u.pos.distance_to(u.last_pos) < 0.1:
-		u.stuck_t += 0.15
+		u.stuck_t += AI_EVERY
 		if u.stuck_t >= 0.75:
 			var side := 1.0 if rng.randf() < 0.5 else -1.0
 			u.unstick_dir = (Vector2(-u.move.y, u.move.x) * side - u.move * 0.3).normalized()
@@ -2898,8 +2923,24 @@ func _think_knight_shield(u: Dictionary) -> void:
 	#  - an enemy shot will pass within 1.3 m in the next 0.7 s (the shield covers allies behind it too),
 	#    unless an enemy is at arm's length and we're healthy (then swing);
 	#  - badly hurt with an enemy at arm's length: short guard bursts (1 s, at most every 2.6 s).
-	var arm := float(stat(u, "range")) + UNIT_R + 0.3
-	var adjacent := nearest_enemy(u, arm)
+	if _shield_reflex(u):
+		return
+	var adjacent := nearest_enemy(u, float(stat(u, "range")) + UNIT_R + 0.3)
+	if not adjacent.is_empty() and u.hp < u.max_hp * 0.35:
+		if time < float(u.get("guard_until", -1.0)):
+			u.face = angle_of(adjacent.pos - u.pos)
+			_block(u)
+		elif time >= float(u.get("guard_next", 0.0)) and rng.randf() < 0.5:
+			u.guard_until = time + 1.0
+			u.guard_next = time + 2.6
+			u.face = angle_of(adjacent.pos - u.pos)
+			_block(u)
+
+func _shield_reflex(u: Dictionary) -> bool:
+	# The shield up against an enemy shot that will pass within 1.3 m in the next 0.7 s (it covers allies behind too),
+	# unless an enemy is at arm's length and we're healthy (then swing). 0.31.78: checked every tick for shield-bearing
+	# bots (step), not only when they think: an arrow is in the air for 0.1-0.2 s, less than the 0.15 s between a bot's
+	# decisions, so whether one was blocked depended on where the bot's decisions fell between the archer's.
 	var incoming := Vector2.ZERO
 	var soonest := 0.7
 	for p in projectiles:
@@ -2915,19 +2956,13 @@ func _think_knight_shield(u: Dictionary) -> void:
 		if ((p.pos as Vector2) + v * t).distance_to(u.pos) < 1.3:
 			soonest = t
 			incoming = -v.normalized()
-	if incoming != Vector2.ZERO and (adjacent.is_empty() or u.hp < u.max_hp * 0.5):
-		u.face = angle_of(incoming)
-		_block(u)
-		return
-	if not adjacent.is_empty() and u.hp < u.max_hp * 0.35:
-		if time < float(u.get("guard_until", -1.0)):
-			u.face = angle_of(adjacent.pos - u.pos)
-			_block(u)
-		elif time >= float(u.get("guard_next", 0.0)) and rng.randf() < 0.5:
-			u.guard_until = time + 1.0
-			u.guard_next = time + 2.6
-			u.face = angle_of(adjacent.pos - u.pos)
-			_block(u)
+	if incoming == Vector2.ZERO:
+		return false
+	if u.hp >= u.max_hp * 0.5 and not nearest_enemy(u, float(stat(u, "range")) + UNIT_R + 0.3).is_empty():
+		return false
+	u.face = angle_of(incoming)
+	_block(u)
+	return true
 
 func _think_fighter(u: Dictionary) -> void:
 	# Shield / whirlwind first; the normal brain below still moves the unit (its attacks are

@@ -12,6 +12,10 @@
 
 "res://assets/kaykit/anim/Rig_Medium_Tools.glb",
 
+"res://assets/kaykit/bits/shield_B.gltf",
+
+"res://assets/kaykit/bits/sword_E.gltf",
+
 "res://assets/kaykit/forest/Bush_1_A_Color1.gltf",
 
 "res://assets/kaykit/forest/Bush_2_A_Color1.gltf",
@@ -38,11 +42,7 @@
 
 "res://assets/kaykit/heroes/Mage.glb",
 
-"res://assets/kaykit/heroes/Necromancer.glb",
-
 "res://assets/kaykit/heroes/Ranger.glb",
-
-"res://assets/kaykit/heroes/Rogue.glb",
 
 "res://assets/kaykit/heroes/Rogue_Hooded.glb",
 
@@ -80,7 +80,27 @@
 
 "res://assets/kaykit/tools/torch.gltf",
 
+"res://assets/kaykit/weapons/Skeleton_Staff.gltf",
+
 "res://assets/kaykit/weapons/arrow_bow.gltf",
+
+"res://assets/kaykit/weapons/axe_1handed.gltf",
+
+"res://assets/kaykit/weapons/axe_2handed.gltf",
+
+"res://assets/kaykit/weapons/bow_withString.gltf",
+
+"res://assets/kaykit/weapons/crossbow_2handed.gltf",
+
+"res://assets/kaykit/weapons/dagger.gltf",
+
+"res://assets/kaykit/weapons/spellbook_open.gltf",
+
+"res://assets/kaykit/weapons/staff.gltf",
+
+"res://assets/kaykit/weapons/sword_1handed.gltf",
+
+"res://assets/kaykit/weapons/wand.gltf",
 
 "res://assets/kings/king_blue_fat.glb",
 
@@ -96,7 +116,63 @@
 
 "res://assets/meshy/archer_shop/archer_shop.glb",
 
+"res://assets/meshy/archer_shop/archer_shop_glow.png",
+
+"res://assets/meshy/archer_shop/archer_shop_red.png",
+
+"res://assets/meshy/archmage/anims_g.res",
+
+"res://assets/meshy/archmage/anims_m.res",
+
+"res://assets/meshy/archmage/anims_ma.res",
+
+"res://assets/meshy/archmage/anims_mb.res",
+
+"res://assets/meshy/archmage/anims_r.res",
+
+"res://assets/meshy/archmage/anims_t.res",
+
+"res://assets/meshy/archmage/rigged.glb",
+
+"res://assets/meshy/assassin/anims_g.res",
+
+"res://assets/meshy/assassin/anims_m.res",
+
+"res://assets/meshy/assassin/anims_ma.res",
+
+"res://assets/meshy/assassin/anims_mb.res",
+
+"res://assets/meshy/assassin/anims_r.res",
+
+"res://assets/meshy/assassin/anims_t.res",
+
+"res://assets/meshy/assassin/rigged.glb",
+
 "res://assets/meshy/barbarian_shop/barbarian_shop.glb",
+
+"res://assets/meshy/barbarian_shop/barbarian_shop_glow.png",
+
+"res://assets/meshy/barbarian_shop/barbarian_shop_red.png",
+
+"res://assets/meshy/berserker/anims_g.res",
+
+"res://assets/meshy/berserker/anims_m.res",
+
+"res://assets/meshy/berserker/anims_ma.res",
+
+"res://assets/meshy/berserker/anims_mb.res",
+
+"res://assets/meshy/berserker/anims_r.res",
+
+"res://assets/meshy/berserker/anims_t.res",
+
+"res://assets/meshy/berserker/rigged.glb",
+
+"res://assets/meshy/castle/floors/royal_court.jpg",
+
+"res://assets/meshy/castle/floors/royal_garden.jpg",
+
+"res://assets/meshy/castle/floors/royal_marble.jpg",
 
 "res://assets/meshy/castle/royal_banner.glb",
 
@@ -122,29 +198,125 @@
 
 "res://assets/meshy/castle/royal_wall.glb",
 
+"res://assets/meshy/crusader/anims_g.res",
+
+"res://assets/meshy/crusader/anims_m.res",
+
+"res://assets/meshy/crusader/anims_ma.res",
+
+"res://assets/meshy/crusader/anims_mb.res",
+
+"res://assets/meshy/crusader/anims_r.res",
+
+"res://assets/meshy/crusader/anims_t.res",
+
+"res://assets/meshy/crusader/rigged.glb",
+
 "res://assets/meshy/knight_shop/knight_shop.glb",
+
+"res://assets/meshy/knight_shop/knight_shop_glow.png",
+
+"res://assets/meshy/knight_shop/knight_shop_red.png",
 
 "res://assets/meshy/mage_shop/mage_shop.glb",
 
+"res://assets/meshy/mage_shop/mage_shop_glow.png",
+
+"res://assets/meshy/mage_shop/mage_shop_red.png",
+
+"res://assets/meshy/necromancer/anims_g.res",
+
+"res://assets/meshy/necromancer/anims_m.res",
+
+"res://assets/meshy/necromancer/anims_ma.res",
+
+"res://assets/meshy/necromancer/anims_mb.res",
+
+"res://assets/meshy/necromancer/anims_r.res",
+
+"res://assets/meshy/necromancer/anims_t.res",
+
+"res://assets/meshy/necromancer/rigged.glb",
+
 "res://assets/meshy/outpost_beacon/outpost_beacon.glb",
+
+"res://assets/meshy/outpost_beacon/outpost_beacon_glow.png",
 
 "res://assets/meshy/outpost_fort/outpost_fort.glb",
 
+"res://assets/meshy/outpost_fort/outpost_fort_glow.png",
+
 "res://assets/meshy/outpost_rook/outpost_rook.glb",
+
+"res://assets/meshy/outpost_rook/outpost_rook_glow.png",
 
 "res://assets/meshy/outpost_ruin/outpost_ruin.glb",
 
+"res://assets/meshy/outpost_ruin/outpost_ruin_glow.png",
+
 "res://assets/meshy/outpost_watchtower/outpost_watchtower.glb",
+
+"res://assets/meshy/outpost_watchtower/outpost_watchtower_glow.png",
 
 "res://assets/meshy/priest_shop/priest_shop.glb",
 
+"res://assets/meshy/priest_shop/priest_shop_glow.png",
+
+"res://assets/meshy/priest_shop/priest_shop_red.png",
+
 "res://assets/meshy/rogue_shop/rogue_shop.glb",
 
+"res://assets/meshy/rogue_shop/rogue_shop_glow.png",
+
+"res://assets/meshy/rogue_shop/rogue_shop_red.png",
+
+"res://assets/meshy/sniper/anims_g.res",
+
+"res://assets/meshy/sniper/anims_m.res",
+
+"res://assets/meshy/sniper/anims_ma.res",
+
+"res://assets/meshy/sniper/anims_mb.res",
+
+"res://assets/meshy/sniper/anims_r.res",
+
+"res://assets/meshy/sniper/anims_t.res",
+
+"res://assets/meshy/sniper/rigged.glb",
+
+"res://assets/meshy/villager/anims_g.res",
+
+"res://assets/meshy/villager/anims_m.res",
+
+"res://assets/meshy/villager/anims_ma.res",
+
+"res://assets/meshy/villager/anims_mb.res",
+
+"res://assets/meshy/villager/anims_r.res",
+
+"res://assets/meshy/villager/anims_t.res",
+
 "res://assets/meshy/villager/rigged.glb",
+
+"res://assets/meshy/worker/anims_g.res",
+
+"res://assets/meshy/worker/anims_m.res",
+
+"res://assets/meshy/worker/anims_ma.res",
+
+"res://assets/meshy/worker/anims_mb.res",
+
+"res://assets/meshy/worker/anims_r.res",
+
+"res://assets/meshy/worker/anims_t.res",
 
 "res://assets/meshy/worker/rigged.glb",
 
 "res://assets/meshy/workshop/workshop.glb",
+
+"res://assets/meshy/workshop/workshop_glow.png",
+
+"res://assets/meshy/workshop/workshop_red.png",
 
 "res://assets/props/throne.glb",
 
@@ -158,5 +330,9 @@
 
 "res://assets/terrain/flower_white.glb",
 
-"res://assets/terrain/flower_yellow.glb"
+"res://assets/terrain/flower_yellow.glb",
+
+"res://assets/terrain/grass.png",
+
+"res://assets/terrain/rock.png"
 ]

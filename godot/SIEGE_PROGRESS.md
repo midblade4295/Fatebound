@@ -2382,3 +2382,37 @@ K2/K3 notes (0.17.0)
   own flight curve at the frame's exact time (sim time + the match loop's banked tick time): in slow motion the sim
   moved it only every few frames, and the camera following it stepped with it (now an even 8.7-9.9 cm a frame). The
   gates' doors are kept out of the hidden props (the bomb shot, looking straight at the gate, hid them as it landed).
+
+# 0.31.78 (Kevin: "go through the game and fix any issues like slow loading into battles, messy code, increase
+# performance (without affecting quality)")
+- Measured first (tests/start_bench.gd, headless here, after the app's background preload): pressing Play froze the
+  menu for 670-1,300 ms of building before the loading card appeared (view 450-700 ms: hat shops 200 (their red and
+  glow textures loaded on the spot), castles 200, outer-land trees 90, terrain 150; sim 50-70), then the first frame
+  made 32 bodies (126 ms). The first Crusader / Berserker / Assassin / Sniper / Archmage / Necromancer of a match loaded
+  its body and 110 animations right there: 1.3 s here (the phone several times that) -- the mid-match freezes. Every
+  texture was imported lossless, so each load decoded it on the CPU (a 2048 character texture: 120-160 ms) and it sat
+  uncompressed in video memory (21 MB each). In a 16 v 16 fight the CPU side was sim 2.4 ms/tick (all 31 bots thinking
+  on the same tick every 0.15 s: 10-20 ms spikes), view 3 ms, HUD 0.8 ms a frame (this box; the phone is 2-3x).
+- The start, staged (siege_mode.gd _start_staged): the FATEBOUND card goes up on the first frame after PLAY and the match
+  is built behind it in steps that fit a 20 ms budget a frame (the sim, then View.setup_steps: lighting, terrain, outer
+  land, foliage, each castle, props, scenery, oracles) -- the menu never freezes, the card's dots keep moving, the world
+  draws (and its pipelines start compiling) as it grows; the warm-up camera tour and the clock wait as before. Rematches
+  the same way. Tests and tools still build at once (FB_STAGED_START=1 for the staged path; tests/staged_start_test.gd).
+- Less to build: the background preload (asset_cache.gd, now any resource; tools/preload_list.gd) covers the textures
+  the hat shops, castle floors and outposts loaded on the spot, every class body with its animations (168 paths, was 80),
+  so nothing loads mid-match; the outer-land tree plan is baked into the start-up cache (cache-v2); a castle's merged
+  walls are kept for the next match. Mode._ready 670-1,300 -> 210 ms synchronous here (staged: 6 frames, longest
+  98 ms); a rematch 97 ms.
+- The 8 Meshy character textures (2048, lossless) are imported VRAM-compressed, high quality (ASTC 4x4 on Android, BC7
+  on desktop): loaded straight into video memory (3 ms, was 120-160), 5.6 MB each instead of 21. Compared renders
+  (tools/body_shot, castle_shot): the compression noise is a few levels, invisible; the APK grows ~14 MB. The 1K building
+  and castle textures stay lossless (ASTC there would add ~60 MB to the APK for little gain: they're preloaded).
+- Per frame: each bot thinks on its own 0.15 s schedule, spread over the ticks (sim p90 4.5 -> 3.4 ms, p99 8.2 -> 7.0,
+  no think spikes); a Knight's / Crusader's shield reflex to an incoming shot is checked every tick (an arrow flies for
+  less than the 0.15 s between decisions: whether it was blocked depended on the bots' phase -- knight_ai_test);
+  _separate on packed arrays (0.54 -> 0.34 ms/tick, same pushes); the view's actor check no longer formats a key
+  string per unit per frame; gates, trees, catapult arms and stockpiles are re-posed only when they change.
+- Code: dead tier_cell, ensure_fonts (never called) and the two DejaVu fallback fonts and assets/castle textures it
+  alone referenced (1.7 MB + 1 MB out of the APK); SiegeDiag's STAT line now splits sim= and view= times, and the
+  match logs "MATCH BUILT" with the step times. Benches: tests/start_bench.gd, tests/fight_bench.gd.
+- Quick suite: ALL PASSED (37, with staged_start_test).

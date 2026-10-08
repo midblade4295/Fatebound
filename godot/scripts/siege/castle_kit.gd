@@ -158,8 +158,8 @@ static func material(model: String, team: int, meshes: Array) -> ShaderMaterial:
 	var fiery := false
 	for k in KITS:
 		fiery = fiery or (KITS[k].fires as Dictionary).has(model)
-	if fiery and ResourceLoader.exists(glow_path):
-		mat.set_shader_parameter("glow_tex", load(glow_path))
+	if fiery and Stage.texture(glow_path) != null:
+		mat.set_shader_parameter("glow_tex", Stage.texture(glow_path))
 		mat.set_shader_parameter("glow_color", FIRE_GLOW)
 		mat.set_shader_parameter("glow_energy", 1.0)
 	_mats[key] = mat

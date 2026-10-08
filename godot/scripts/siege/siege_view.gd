@@ -114,26 +114,50 @@ static func _load_cache() -> void:
 	_terrain_meshes = c.terrain.duplicate()
 	_outer_meshes = c.outer.duplicate()
 	_foliage = c.foliage.duplicate()
+	_outer_trees = c.outer_trees.duplicate()
 	_blood_tex = []
 	for img in c.blood:
 		_blood_tex.append(ImageTexture.create_from_image(img))
 
 func setup(s) -> void:
+	# The whole world at once (tools, tests, online: the view is built when the server's welcome arrives).
+	for step in setup_steps(s):
+		step.call()
+
+func setup_steps(s) -> Array:
+	# The build as steps the match runs one per frame behind its loading card (0.31.78: pressing Play used to freeze the
+	# menu for the whole build before the card appeared). Each entry builds one part of the world and times itself
+	# (build_times); the parts are independent, in this order. The world draws, and its pipelines compile, as it grows.
 	sim = s
 	build_times = {}
+	var steps := []
+	for pair in [["cache+lighting+ambience", func():
+				_load_cache()
+				_build_lighting()
+				_build_ambience()
+				_build_blood()],
+			["terrain+water", _build_terrain],
+			["outer land", _build_outer_land],
+			["foliage", _build_foliage],
+			["castle 0", func():
+				_build_castle(0)
+				_merge_kit(0)],          # per castle, so the one off-screen is culled as a whole
+			["castle 1", func():
+				_build_castle(1)
+				_merge_kit(1)],
+			["props+nodes+stands", _build_props],
+			["edge scenery", _build_edge_scenery],
+			["oracles+warm", func():
+				for tm in 2:
+					oracle_nodes.append(_make_oracle(tm))
+				_warm_up()]]:
+		steps.append(_timed.bind(str(pair[0]), pair[1]))
+	return steps
+
+func _timed(label: String, f: Callable) -> void:
 	var t := Time.get_ticks_msec()
-	_load_cache()
-	build_times["cache"] = Time.get_ticks_msec() - t
-	t = Time.get_ticks_msec()
-	for step in ["_build_lighting", "_build_ambience", "_build_blood", "_build_terrain", "_build_props"]:
-		call(step)
-		var now := Time.get_ticks_msec()
-		build_times[step] = now - t
-		t = now
-	for tm in 2:
-		oracle_nodes.append(_make_oracle(tm))
-	_warm_up()
-	build_times["oracles+warm"] = Time.get_ticks_msec() - t
+	f.call()
+	build_times[label] = Time.get_ticks_msec() - t
 
 func _warm_up() -> void:
 	# Draw one of every effect/projectile type in view during the first frames, so their shader
@@ -885,9 +909,9 @@ static func _terrain_material() -> ShaderMaterial:
 	if _terrain_mat == null:
 		var m := ShaderMaterial.new()
 		m.shader = load("res://scripts/siege/terrain.gdshader")
-		m.set_shader_parameter("grass_tex", load("res://assets/terrain/grass.png"))
+		m.set_shader_parameter("grass_tex", Stage.texture("res://assets/terrain/grass.png"))
 		m.set_shader_parameter("path_tex", PATH_TEX)
-		m.set_shader_parameter("rock_tex", load("res://assets/terrain/rock.png"))
+		m.set_shader_parameter("rock_tex", Stage.texture("res://assets/terrain/rock.png"))
 		m.set_shader_parameter("path_mask", ImageTexture.create_from_image(load(Land.MASK_RES)))
 		var r := Land.bake_rect()
 		m.set_shader_parameter("mask_rect", Vector4(r.position.x, r.position.y, r.size.x, r.size.y))
@@ -994,13 +1018,16 @@ func _build_outer_land() -> void:
 		add_child(mi)
 	_build_outer_trees()
 
-func _build_outer_trees() -> void:
-	# Groves in the meadows and on the lower hills: batched per side and tree type (MultiMesh), so
-	# a side off-screen costs nothing. Not in the river, not on steep or high ground.
+static var _outer_trees: Dictionary = {}      # "side:type" -> Array[Transform3D]: planned once (or from the baked cache)
+
+static func _plan_outer_trees() -> Dictionary:
+	# Groves in the meadows and on the lower hills, batched per side and tree type. Not in the river, not on steep or
+	# high ground. Deterministic (seed 911), so tools/bake_land.gd bakes the plan into the start-up cache (0.31.78: the
+	# 9,000 tries cost ~90 ms of every match start).
 	var r := Land.bake_rect()
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 911
-	var per := {}                                     # "side:type" -> Array[Transform3D]
+	var per := {}
 	var placed := 0
 	var tries := 0
 	while placed < 420 and tries < 9000:             # 260 until 0.31.12: the valley's hills get their woods too
@@ -1036,7 +1063,13 @@ func _build_outer_trees() -> void:
 			per[key] = []
 		(per[key] as Array).append(xf)
 		placed += 1
-	for key in per:
+	return per
+
+func _build_outer_trees() -> void:
+	# One MultiMesh per side and tree type, so a side off-screen costs nothing.
+	if _outer_trees.is_empty():
+		_outer_trees = _plan_outer_trees()
+	for key in _outer_trees:
 		var t := int(str(key).split(":")[1])
 		var packed := Stage.scene(FOREST + OUTER_TREES[t] + ".gltf")
 		if packed == null:
@@ -1046,7 +1079,7 @@ func _build_outer_trees() -> void:
 		var mm := MultiMesh.new()
 		mm.transform_format = MultiMesh.TRANSFORM_3D
 		mm.mesh = src.mesh
-		var list: Array = per[key]
+		var list: Array = _outer_trees[key]
 		mm.instance_count = list.size()
 		for i in list.size():
 			mm.set_instance_transform(i, (list[i] as Transform3D) * src.transform)
@@ -1112,9 +1145,7 @@ func _build_terrain() -> void:
 		mi.set_meta("perf", "terrain")
 		add_child(mi)
 	_build_water()
-	_build_outer_land()
 	_build_bridges()
-	_build_foliage()
 
 func _build_water() -> void:
 	_water_mat = null                 # rebuilt per match: the High-quality setting may have changed
@@ -1554,14 +1585,14 @@ func _meshy_building(bname: String, t: int, pos: Vector3, yaw: float, s: float) 
 		var src := (meshes[0] as MeshInstance3D).get_active_material(0) as BaseMaterial3D
 		var m := StandardMaterial3D.new()
 		if t == 1:
-			m.albedo_texture = load("res://assets/meshy/%s/%s_red.png" % [bname, bname])
+			m.albedo_texture = Stage.texture("res://assets/meshy/%s/%s_red.png" % [bname, bname])
 		elif src != null:
 			m.albedo_texture = src.albedo_texture
 		m.roughness = 0.75
 		m.metallic_specular = 0.45
 		m.emission_enabled = true
 		m.emission = spec.get("glow", SHOP_GLOW)
-		m.emission_texture = load("res://assets/meshy/%s/%s_glow.png" % [bname, bname])
+		m.emission_texture = Stage.texture("res://assets/meshy/%s/%s_glow.png" % [bname, bname])
 		m.emission_operator = BaseMaterial3D.EMISSION_OP_MULTIPLY   # colour x mask (ADD would light every texel)
 		m.emission_energy_multiplier = energy
 		_bld_mats[key] = m
@@ -2063,7 +2094,7 @@ static func outpost_model(id: int) -> Node3D:
 		var src := (meshes[0] as MeshInstance3D).get_active_material(0) as BaseMaterial3D
 		if src != null:
 			mat.set_shader_parameter("albedo_tex", src.albedo_texture)
-	mat.set_shader_parameter("glow_tex", load("res://assets/meshy/%s/%s_glow.png" % [mname, mname]))
+	mat.set_shader_parameter("glow_tex", Stage.texture("res://assets/meshy/%s/%s_glow.png" % [mname, mname]))
 	mat.set_shader_parameter("hue_range", spec.get("hue", Vector2(195.0, 258.0)))
 	mat.set_shader_parameter("sat_range", spec.get("sat", Vector2(0.42, 0.58)))
 	for mi in meshes:
@@ -2274,16 +2305,7 @@ func _place(path: String, pos: Vector3, rot := 0.0, s := 1.0) -> Node3D:
 	return node
 
 func _build_props() -> void:
-	var rng := RandomNumberGenerator.new()
-	rng.seed = 21
-	var forest_trees := ["Tree_1_A_Color1","Tree_1_B_Color1","Tree_2_A_Color1","Tree_2_B_Color1","Tree_3_A_Color1"]
-	var tt := Time.get_ticks_msec()
-	for t in 2:
-		_build_castle(t)
-		_merge_kit()          # per castle, so the one off-screen is culled as a whole
-	build_times["  castles"] = Time.get_ticks_msec() - tt
-	tt = Time.get_ticks_msec()
-	# Midfield ruin and circular props from the sim.
+	# Midfield ruin and circular props from the sim, the resource nodes, the outposts and the hat shops.
 	for ob in sim.obstacles:
 		var p := Vector3(ob.p.x, 0, ob.p.y)
 		match str(ob.kind):
@@ -2296,10 +2318,13 @@ func _build_props() -> void:
 	_build_nodes()
 	_build_outposts()
 	_build_hat_stands()
-	build_times["  props+nodes+stands"] = Time.get_ticks_msec() - tt
-	tt = Time.get_ticks_msec()
+
+func _build_edge_scenery() -> void:
 	# Scenery beyond the field's edge (0.26.0): trees along the tops of the rock walls, none over
 	# the cliff side or in the river's gorge; a few wooded hills further out.
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 21
+	var forest_trees := ["Tree_1_A_Color1","Tree_1_B_Color1","Tree_2_A_Color1","Tree_2_B_Color1","Tree_3_A_Color1"]
 	var loop := Land.edge_loop()
 	for i in loop.size():
 		var a: Vector2 = loop[i]
@@ -2317,7 +2342,6 @@ func _build_props() -> void:
 	for p in [Vector3(-Sim.HALF_W - 8, 0.5, -40), Vector3(-Sim.HALF_W - 8, 0.5, 14), Vector3(-Sim.HALF_W - 8, 0.5, -10),
 			Vector3(Sim.HALF_W - 4, 0.5, 64), Vector3(Sim.HALF_W - 4, 0.5, -64), Vector3(0, 0.5, -Sim.HALF_L - 8), Vector3(0, 0.5, Sim.HALF_L + 8)]:
 		_place(HEX + "mountain_A_grass_trees.gltf", Vector3(p.x, Land.terrain_height(Vector2(p.x, p.z)) - 0.3, p.z), rng.randf()*TAU, 1.6)
-	build_times["  edge scenery"] = Time.get_ticks_msec() - tt
 
 const COLOR := ["blue", "red"]
 static var _floor_mats: Dictionary = {}
@@ -2416,7 +2440,7 @@ func _build_castle_mesh(t: int) -> void:
 			var uv := 1.0
 			if not kit.is_empty():
 				var f: Array = kit.floors[area]
-				tex = load(CastleKit.DIR + "floors/%s.jpg" % f[0])
+				tex = Stage.texture(CastleKit.DIR + "floors/%s.jpg" % f[0])
 				tint = f[2]
 				uv = CastleMesh.FLOOR_TILE / float(f[1])
 			if _cast_static:
@@ -2493,6 +2517,8 @@ func _kit_piece(model: String, t: int, merge: bool) -> Node3D:
 func _kit_wall_run(t: int, a: Vector2, b: Vector2, y: float, clip: bool, inside: Vector2) -> void:
 	# The kit's curtain wall along a sim wall line -- as _wall_run (same clipping, decorated face away from inside),
 	# in pieces of about the kit's length, stretched to fit.
+	if _kit_skip:
+		return
 	var k: Dictionary = CastleKit.kit(t).wall
 	var aa := Vector2(clampf(a.x, -Sim.HALF_W, Sim.HALF_W), clampf(a.y, -Sim.HALF_L, Sim.HALF_L)) if clip else a
 	var bb := Vector2(clampf(b.x, -Sim.HALF_W, Sim.HALF_W), clampf(b.y, -Sim.HALF_L, Sim.HALF_L)) if clip else b
@@ -2517,6 +2543,8 @@ func _kit_wall_run(t: int, a: Vector2, b: Vector2, y: float, clip: bool, inside:
 func _kit_terrace_run(t: int, a: Vector2, b: Vector2, y0: float, height: float, depth := -1.0) -> void:
 	# The kit's terrace wall along an edge (as _kit_run): its body spans y0 .. y0 + height (the walkway above), its
 	# balustrade / railing stands above as the parapet, its decorated face towards the lower side.
+	if _kit_skip:
+		return
 	var k: Dictionary = CastleKit.kit(t).terrace
 	var length := a.distance_to(b)
 	if length < 0.3:
@@ -2598,11 +2626,26 @@ func _build_castle_meshy(t: int) -> void:
 		_kit_place(t, str(pr[0]), pr[1], float(pr[2]), float(pr[3]), float(pr[4]))
 
 
-func _merge_kit() -> void:
+static var _kit_merged: Dictionary = {}      # team -> [[material, merged mesh], ...]: a castle's walls, kept for rematches
+var _kit_skip := false                      # building a castle whose merged walls are cached: the pieces aren't made
+
+func _merge_kit(team := -1) -> void:
 	# All KayKit hex models share one atlas material: bake every static castle piece (walls,
 	# terrace walls, towers, buildings, props, banners, trees) into ONE mesh per material instead
 	# of ~70 separate draw calls per castle. Animated pieces (gates, catapults) and the hat stands
-	# stay separate.
+	# stay separate. 0.31.78: the merged meshes of a kit castle are kept (per team) for the next match of the session,
+	# which then skips the ~40 wall pieces and the merge (~80 ms a castle here).
+	if team >= 0 and _kit_merged.has(team):
+		for pair in _kit_merged[team]:
+			var mi := MeshInstance3D.new()
+			mi.mesh = pair[1]
+			mi.material_override = pair[0]
+			mi.cast_shadow = _cast()
+			mi.set_meta("perf", "castle")
+			add_child(mi)
+		_kit_nodes.clear()
+		_kit_skip = false
+		return
 	var tools := {}
 	for n in _kit_nodes:
 		if n == null or not is_instance_valid(n):
@@ -2619,6 +2662,7 @@ func _merge_kit() -> void:
 				(tools[mat] as SurfaceTool).append_from(m3.mesh, si, xf)
 		(n as Node).queue_free()
 	_kit_nodes.clear()
+	var merged := []
 	for mat in tools:
 		var mi := MeshInstance3D.new()
 		mi.mesh = (tools[mat] as SurfaceTool).commit()
@@ -2626,6 +2670,10 @@ func _merge_kit() -> void:
 		mi.cast_shadow = _cast()
 		mi.set_meta("perf", "castle")
 		add_child(mi)
+		merged.append([mat, mi.mesh])
+	if team >= 0 and CASTLE_KITS:
+		_kit_merged[team] = merged
+	_kit_skip = false
 
 func _build_castle_kit(t: int) -> void:
 	var col: String = COLOR[t]
@@ -2702,6 +2750,7 @@ func _build_castle_kit(t: int) -> void:
 func _build_castle(t: int) -> void:
 	var col: String = COLOR[t]
 	var face := 0.0 if t == 0 else PI
+	_kit_skip = CASTLE_KITS and _kit_merged.has(t)
 	# Round 10 castle geometry (castle_mesh.gd): tall crenellated sandstone walls, round towers,
 	# gatehouse lintels, terraces with brick faces + parapets, walled grand stairs, paved floors.
 	_build_castle_mesh(t)
@@ -2928,11 +2977,15 @@ func _sync_castle(dt: float) -> void:
 		if gn.is_empty():
 			continue
 		var broken: bool = not sim.gate_blocks(g)
+		# (0.31.78: transforms and visibility are set only when they change -- a closed gate's doors were re-posed every
+		# frame, every tree re-scaled, every stockpile piece re-shown: each a transform update for the renderer)
 		if gn.has("jail"):
 			gn.broken = broken
 			(gn.door as Node3D).visible = not broken
-			gn.open = move_toward(float(gn.open), 1.0 if (g.open and not broken) else 0.0, dt * 2.2)
-			(gn.door as Node3D).position.y = float(gn.y0) - float(gn.open) * 2.35      # sinks into the floor (0.31.10, Kevin)
+			var was_j := float(gn.open)
+			gn.open = move_toward(was_j, 1.0 if (g.open and not broken) else 0.0, dt * 2.2)
+			if float(gn.open) != was_j:
+				(gn.door as Node3D).position.y = float(gn.y0) - float(gn.open) * 2.35      # sinks into the floor (0.31.10, Kevin)
 			continue
 		if broken != bool(gn.broken):
 			gn.broken = broken
@@ -2940,9 +2993,11 @@ func _sync_castle(dt: float) -> void:
 			for d in gn.doors:
 				(d.node as Node3D).visible = not broken
 		var want := 1.0 if (g.open and not broken) else 0.0
-		gn.open = move_toward(float(gn.open), want, dt * 2.5)
-		for d in gn.doors:
-			(d.node as Node3D).rotation.y = float(d.sign) * float(gn.open) * PI * 0.5
+		var was := float(gn.open)
+		gn.open = move_toward(was, want, dt * 2.5)
+		if float(gn.open) != was:
+			for d in gn.doors:
+				(d.node as Node3D).rotation.y = float(d.sign) * float(gn.open) * PI * 0.5
 	for n in sim.nodes:
 		var nn: Dictionary = node_nodes.get(n.id, {})
 		if nn.is_empty():
@@ -2954,19 +3009,23 @@ func _sync_castle(dt: float) -> void:
 				(nn.full as Node3D).visible = has
 			if nn.empty != null:
 				(nn.empty as Node3D).visible = not has
-		if has and nn.full != null:
+		if has and nn.full != null and int(n.amount) != int(nn.get("amount", -1)):
+			nn.amount = int(n.amount)
 			var k := 0.75 + 0.25 * float(n.amount) / float(n.max)
 			(nn.full as Node3D).scale = Vector3.ONE * (3.2 if n.kind == "wood" else 1.0) * k
 	for cn in catapult_nodes:
 		if cn.arm == null:
 			continue
 		var age: float = _time - float(cn.fired)
+		if age > 1.1 and bool(cn.get("at_rest", false)):
+			continue
 		# Throw: snap forward in 0.15 s, wind back over 0.9 s.
 		var swing := 0.0
 		if age < 0.15:
 			swing = age / 0.15
 		elif age < 1.05:
 			swing = 1.0 - (age - 0.15) / 0.9
+		cn.at_rest = swing == 0.0
 		(cn.arm as Node3D).rotation.x = float(cn.arm_rest) + swing * 1.4
 	for t in 2:
 		var o_node: Dictionary = oracle_nodes[t] if t < oracle_nodes.size() else {}
@@ -2991,8 +3050,10 @@ func _sync_castle(dt: float) -> void:
 		for kind in ["wood", "stone"]:
 			var pile: Node3D = stock_piles[t][kind]
 			var shown := clampi(int(ceil(float(sim.stock[t][kind]) / 5.0)), 0, pile.get_child_count())
-			for i in pile.get_child_count():
-				(pile.get_child(i) as Node3D).visible = i < shown
+			if shown != int(pile.get_meta("shown", -1)):
+				pile.set_meta("shown", shown)
+				for i in pile.get_child_count():
+					(pile.get_child(i) as Node3D).visible = i < shown
 
 func _unshaded(color: Color, additive := true) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
@@ -3126,8 +3187,9 @@ static func meshy_libraries(name: String) -> Dictionary:
 		var libs := {}
 		for key in ["g", "m", "r", "mb", "ma", "t"]:
 			var path := str(MESHY[name]) + "anims_%s.res" % key
-			if ResourceLoader.exists(path):
-				libs[key] = load(path)
+			var lib := Stage.res(path)
+			if lib != null:
+				libs[key] = lib
 		_meshy_libs[name] = libs
 	return _meshy_libs[name]
 
@@ -3368,11 +3430,12 @@ static func _apply_tint(body: Node3D, model: String, tint: Color) -> void:
 
 func _ensure_actor(u: Dictionary) -> Dictionary:
 	var a: Dictionary = actors.get(u.id, {})
+	# The usual case first, without building keys: the actor exists and wears this class (0.31.78: this ran for every
+	# unit every frame, formatting a string -- with the player's cosmetics dictionary in it -- 32 times a frame).
+	if not a.is_empty() and a.cls == u.cls and a.up == u.up and (u.id != player_id or a.cosmetic == player_looks.get(Eco.cosmetic_class(str(u.cls), bool(u.up)), {})):
+		return a
 	# 0.31.38: an upgraded class wears its own cosmetics (the Crusader's, the Berserker's...), not the base class's
 	var cosmetic: Dictionary = player_looks.get(Eco.cosmetic_class(str(u.cls), bool(u.up)), {}) if u.id == player_id else {}
-	var look_key := "%s:%s:%s" % [u.cls, u.up, str(cosmetic)]
-	if not a.is_empty() and a.look == look_key:
-		return a
 	if not a.is_empty() and u.state == "dead" and a.get("body") != null:
 		return a                                    # 0.31.20: the body stays as it fell until he respawns
 	var root: Node3D
@@ -3391,7 +3454,7 @@ func _ensure_actor(u: Dictionary) -> Dictionary:
 		root.add_child(ring)
 		# HP bars are drawn by the 2D HUD (as in the dice battle); no blob-shadow shader quads.
 		a = {"root":root, "ring":ring, "body":null, "player":null, "clip":"", "busy_until":0.0, "dead":false, "last":root.position,
-			"team":u.team}
+			"team":u.team, "cls":"", "up":false, "cosmetic":{}}
 		actors[u.id] = a
 	else:
 		root = a.root
@@ -3405,8 +3468,9 @@ func _ensure_actor(u: Dictionary) -> Dictionary:
 	a.body = made.body
 	a.player = made.player
 	_cape_setup(a)
-	a.look = look_key
 	a.cls = u.cls
+	a.up = u.up
+	a.cosmetic = cosmetic
 	a.clip = ""
 	a.busy_until = 0.0
 	_play(a, str(LOOKS.get(u.cls, LOOKS.villager).idle))

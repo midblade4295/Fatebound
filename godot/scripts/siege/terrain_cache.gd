@@ -7,4 +7,5 @@ class_name SiegeTerrainCache
 @export var terrain: Array = []          # ArrayMesh per 32 m band
 @export var outer: Array = []            # ArrayMesh per ring
 @export var foliage: Dictionary = {}     # kind -> Array[Transform3D]
+@export var outer_trees: Dictionary = {} # "side:type" -> Array[Transform3D] (0.31.78)
 @export var blood: Array = []            # 5 Images (4 splats, 1 pool)

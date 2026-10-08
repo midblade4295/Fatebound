@@ -78,6 +78,7 @@ func _ready() -> void:
 	diag = Diag.new()
 	diag.mode = self
 	add_child(diag)
+	ready_times["diag"] = Time.get_ticks_msec() - t_ready
 	# Cap Siege's frame rate: uncapped on a 120 Hz phone it ran flat out and thermal-throttled
 	# within ~70 s (field log, S21 Ultra). Restored when leaving.
 	_prev_max_fps = Engine.max_fps
@@ -153,36 +154,84 @@ func _ready() -> void:
 	hud.gate_bars_source = func() -> Array: return view.gate_bars() if view != null else []
 	hud.numbers_clock = func() -> float: return view._time if view != null else 0.0
 	resized.connect(_resize_viewport)
+	ready_times["viewport+hud"] = Time.get_ticks_msec() - t_ready - int(ready_times["diag"])
 	var t_start := Time.get_ticks_msec()
 	if online:
 		_start_online()
+	elif _staged():
+		_start_staged()
 	else:
 		_start()
 	ready_times["start"] = Time.get_ticks_msec() - t_start
 	_resize_viewport()
 	ready_times["_ready total"] = Time.get_ticks_msec() - t_ready
 
+func _staged() -> bool:
+	# The world built over frames behind the loading card (the app); all at once under a scripted main loop (tests and
+	# tools expect `sim` right after add_child) unless FB_STAGED_START asks for it.
+	return get_tree().get_script() == null or OS.has_environment("FB_STAGED_START")
+
 func _start() -> void:
-	sim = Sim.new()
-	if tutorial:
-		team_size = 2                      # a quiet castle: one ally, two enemies (one becomes the dummy)
-	var t_sim := Time.get_ticks_msec()
-	sim.setup(team_size, int(Time.get_unix_time_from_system()) & 0x7fffffff)
-	ready_times["sim.setup"] = Time.get_ticks_msec() - t_sim
-	view = View.new()
-	view.low_fx = low_fx
-	view.hq_gfx = hq_gfx
-	view.player_looks = _looks()
-	viewport.add_child(view)
-	view.setup(sim)
-	hud.sim = sim
-	_accum = 0.0
-	_result_shown = false
-	if tutorial:
-		tut = Tutorial.new()
-		add_child(tut)                     # after the HUD: drawn on top of it
-		tut.begin(self)
-	_lifts = 0
+	for step in _start_steps():
+		step.call()
+
+func _start_staged() -> void:
+	# 0.31.78 (Kevin: "slow loading into battles"): the loading card goes up on the first frame after PLAY and the match
+	# is built behind it, one step per frame (the sim, then the view's parts), so the menu never freezes and the card's
+	# dots keep moving. The warm-up camera tour follows as before, and the match clock starts when the card lifts.
+	_cover_show()
+	_build_queue = _start_steps()
+
+func _start_steps() -> Array:
+	# The match's start as steps (each one timed into ready_times / View.build_times).
+	var steps := []
+	steps.append(func():
+		var t_sim := Time.get_ticks_msec()
+		sim = Sim.new()
+		if tutorial:
+			team_size = 2                      # a quiet castle: one ally, two enemies (one becomes the dummy)
+		sim.setup(team_size, int(Time.get_unix_time_from_system()) & 0x7fffffff)
+		ready_times["sim.setup"] = Time.get_ticks_msec() - t_sim
+		view = View.new()
+		view.low_fx = low_fx
+		view.hq_gfx = hq_gfx
+		view.player_looks = _looks()
+		viewport.add_child(view)
+		_view_steps = view.setup_steps(sim))
+	# (the view's own steps run from _view_steps between these two: the array is filled by the first step)
+	steps.append(_run_view_steps)
+	steps.append(func():
+		hud.sim = sim
+		_accum = 0.0
+		_result_shown = false
+		if tutorial:
+			tut = Tutorial.new()
+			add_child(tut)                     # after the HUD: drawn on top of it
+			tut.begin(self)
+		_lifts = 0)
+	return steps
+
+var _build_queue: Array = []           # steps still to run, one per frame (staged start)
+var _view_steps: Array = []
+
+func _run_view_steps() -> void:
+	# All of them at once (synchronous start); staged, _process takes them one per frame instead.
+	for step in _view_steps:
+		step.call()
+	_view_steps = []
+
+const BUILD_BUDGET_MS := 20       # steps of the staged start run until a frame has spent this long on them
+
+func _build_step() -> void:
+	# Steps of the staged start, as many as fit the frame's budget (the view's steps have their own queue, run before
+	# the step after them): never a frozen frame, and no frame spent on a step that took a millisecond.
+	var t0 := Time.get_ticks_msec()
+	while not _build_queue.is_empty() and Time.get_ticks_msec() - t0 < BUILD_BUDGET_MS:
+		if _build_queue[0] == _run_view_steps and not _view_steps.is_empty():
+			(_view_steps.pop_front() as Callable).call()
+			if not _view_steps.is_empty():
+				continue
+		(_build_queue.pop_front() as Callable).call()
 
 func _looks() -> Dictionary:
 	var out := {}
@@ -350,7 +399,11 @@ func _restart() -> void:
 	if hud.result_panel != null:
 		hud.result_panel.queue_free()
 		hud.result_panel = null
-	_start()
+	if _staged():
+		_warm_done = false                 # the card again (briefly: the pipelines are compiled by now)
+		_start_staged()
+	else:
+		_start()
 
 func _resize_viewport() -> void:
 	# The canvas transform is 1.0 under canvas_items stretching, so it can't tell logical from
@@ -418,10 +471,13 @@ const WARM_STILL := 0.5
 const _LOGO_FONT = preload("res://assets/fonts/LuckiestGuy-Regular.ttf")
 var _warm: Dictionary = {}
 var _warm_done := false
+var _cover: ColorRect = null
+var _cover_sub: Label = null
+var _cover_t := 0.0
 
-func _warm_begin() -> void:
-	_warm_done = true
-	if get_tree().get_script() != null and not OS.has_environment("FB_FORCE_WARMUP"):
+func _cover_show() -> void:
+	# The FATEBOUND card over everything (the staged start builds the world behind it; the warm-up keeps it up).
+	if _cover != null:
 		return
 	var cover := ColorRect.new()
 	cover.color = Color("#120c07")
@@ -452,6 +508,22 @@ func _warm_begin() -> void:
 	sub.add_theme_color_override("font_color", Color("#f0e4c8"))
 	box.add_child(sub)
 	add_child(cover)
+	_cover = cover
+	_cover_sub = sub
+
+func _cover_tick(delta: float) -> void:
+	_cover_t += delta
+	if _cover_sub != null:
+		_cover_sub.text = "Preparing the battlefield" + ".".repeat(1 + int(_cover_t * 3.0) % 3)
+
+func _warm_begin() -> void:
+	_warm_done = true
+	if get_tree().get_script() != null and not OS.has_environment("FB_FORCE_WARMUP"):
+		if _cover != null:
+			_cover.queue_free()
+			_cover = null
+		return
+	_cover_show()
 	var spots := []
 	for t in 2:
 		for q in [Vector2(0.0, 6.0), Vector2(0.0, 20.0), Vector2(0.0, 27.0), Vector2(-26.5, 14.0), Vector2(0.0, -6.0)]:
@@ -459,7 +531,7 @@ func _warm_begin() -> void:
 	spots.append(Vector2.ZERO)
 	for op in sim.outposts:
 		spots.append(op.p)
-	_warm = {"cover": cover, "sub": sub, "t": 0.0, "last": -1, "still": 0.0, "spots": spots, "i": 0, "fade": -1.0}
+	_warm = {"cover": _cover, "t": 0.0, "last": -1, "still": 0.0, "spots": spots, "i": 0, "fade": -1.0}
 
 func _warm_step(delta: float) -> bool:
 	# True while the match should wait behind the cover.
@@ -486,7 +558,7 @@ func _warm_step(delta: float) -> bool:
 		w.still = 0.0
 	else:
 		w.still = float(w.still) + delta
-	(w.sub as Label).text = "Preparing the battlefield" + ".".repeat(1 + int(float(w.t) * 3.0) % 3)
+	_cover_tick(delta)
 	var cover: ColorRect = w.cover
 	if float(w.fade) < 0.0:
 		if (int(w.i) > spots.size() * 2 and float(w.t) >= WARM_MIN and float(w.still) >= WARM_STILL) or float(w.t) >= WARM_MAX:
@@ -497,11 +569,20 @@ func _warm_step(delta: float) -> bool:
 	cover.modulate.a = clampf(1.0 - float(w.fade) / 0.3, 0.0, 1.0)
 	if float(w.fade) >= 0.3:
 		cover.queue_free()
+		_cover = null
+		_cover_sub = null
 		_warm = {}
 		return false
 	return float(w.fade) < 0.15
 
 func _process(delta: float) -> void:
+	if not _build_queue.is_empty():
+		_cover_tick(delta)
+		_build_step()                      # the staged start: one step per frame behind the card
+		if not _build_queue.is_empty():
+			return
+		diag.mark("built")
+		diag.write("MATCH BUILT ready=%s build=%s" % [str(ready_times), str(View.build_times)])
 	_ann_clock += delta
 	_announce_tick()
 	if online:
@@ -533,9 +614,11 @@ func _process(delta: float) -> void:
 				sim.act(hud.player_id, "attack")
 		_accum += minf(delta, 0.1)
 		diag.mark("sim.step")
+		var t_sim := Time.get_ticks_usec()
 		while _accum >= Sim.TICK:
 			_accum -= Sim.TICK
 			sim.step(Sim.TICK)
+		diag.add_time("sim", Time.get_ticks_usec() - t_sim)
 		for e in sim.drain_events():
 			diag.mark("event " + str(e.k))
 			diag.event()
@@ -545,7 +628,9 @@ func _process(delta: float) -> void:
 			_event_sound(e)
 	diag.mark("view.sync")
 	view.proj_lead = 0.0 if online else _accum          # online, projectiles interpolate (Net)
+	var t_view := Time.get_ticks_usec()
 	view.sync(delta)
+	diag.add_time("view", Time.get_ticks_usec() - t_view)
 	diag.mark("process done")
 	_thermal_guard(delta)
 	diag.add_time("game", Time.get_ticks_usec() - t_start)

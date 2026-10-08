@@ -764,9 +764,6 @@ static func open_pass_item(app, sid: int, t: int, prem: bool) -> void:
 	else:
 		UI.button(v, "REACH TIER %d TO UNLOCK" % t, "secondary", func(): pass, "pass_detail_locked", 14).disabled = true
 
-static func tier_cell(app, parent: Node, sid: int, t: int, prem: bool) -> void:
-	pass_cell(app, parent, sid, t, prem)                 # (kept for anything still calling the old name)
-
 # ---------------- SHOP ----------------
 static func shop(app, root: VBoxContainer) -> void:
 	var p = app.profile

@@ -2,10 +2,7 @@ extends RefCounted
 # One visual language for the native menus and the match HUD.
 const BODY_FONT = preload("res://assets/fonts/DejaVuSans.ttf")
 const BOLD_FONT = preload("res://assets/fonts/Nunito-ExtraBold.woff2")
-const SANS_BOLD_FALLBACK = preload("res://assets/fonts/DejaVuSans-Bold.ttf")
-# Cinzel (OFL) for big titles; DejaVu fallbacks supply symbols such as ♛ ✦ ⛨ ◀ that the Latin subsets lack.
-const TITLE_FONT = preload("res://assets/fonts/Cinzel-Black.woff2")
-const DISPLAY_FONT = preload("res://assets/fonts/DejaVuSerif-Bold.ttf")
+const TITLE_FONT = preload("res://assets/fonts/Cinzel-Black.woff2")      # Cinzel (OFL) for big titles
 const INK := Color("#06131b")
 const SURFACE := Color("#091d27")
 const RAISED := Color("#102c37")
@@ -18,14 +15,6 @@ const Tactile = preload("res://scripts/ui/tactile_style.gd")
 const Brass = preload("res://scripts/ui/brass_style.gd")
 const BRASS_LIGHT := Color("#f0cf82")
 const BRASS_DARK := Color("#6f4f1e")
-
-static func ensure_fonts() -> void:
-    var bold: Font = BOLD_FONT
-    var title: Font = TITLE_FONT
-    if bold.fallbacks.is_empty():
-        bold.fallbacks = [SANS_BOLD_FALLBACK]
-    if title.fallbacks.is_empty():
-        title.fallbacks = [DISPLAY_FONT, SANS_BOLD_FALLBACK]
 
 static func panel(bg: Color = SURFACE, stroke: Color = GOLD_DARK, radius: int = 12, padding: int = 12) -> StyleBox:
     # Framed panels get the beveled brass rim; borderless fills (bars, tracks) stay flat.
