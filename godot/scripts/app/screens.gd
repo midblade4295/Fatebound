@@ -200,8 +200,11 @@ static func home(app, root: VBoxContainer) -> void:
 		app.sfx("tap")
 		app.rebuild(), "mode_bots", 14))
 	UI.grow(UI.button(modes, "ONLINE 16v16", "gold" if app.play_online else "ghost", func():
-		app.play_online = true
 		app.sfx("tap")
+		if bool(app.get("update_required")):
+			app.show_update_screen()       # 0.31.73: online is locked until the update is installed
+			return
+		app.play_online = true
 		app.rebuild(), "mode_online", 14))
 	if not bool(d.get("tutorial_done", false)):
 		# First visit: the Herald offers the walkthrough (0.19.0).
@@ -211,7 +214,12 @@ static func home(app, root: VBoxContainer) -> void:
 		UI.grow(UI.label(tr, "New here? The Royal Herald will show you the ropes. (+%d gold)" % app.TUTORIAL_GOLD, 14, Color("#ffe4a8")))
 		UI.button(tc, "PLAY TUTORIAL", "gold", func(): app.start_tutorial(), "tutorial_start", 15)
 	UI.play_button(root, "PLAY", func(): app.start_match(app.play_online), "play")
-	var hint := UI.label(root, "Join the live 16 vs 16 battle on the Siege server" if app.play_online else "You and 15 bots vs 16 bots · works offline", 12, UI.MUTED)
+	var hint_text := "Join the live 16 vs 16 battle on the Siege server" if app.play_online else "You and 15 bots vs 16 bots · works offline"
+	if bool(app.get("update_required")):
+		hint_text = "Update Fatebound to play online · VS BOTS works offline"
+	elif app.play_online and bool(app.get("server_updating")):
+		hint_text = "Servers are updating, try again in a few minutes"
+	var hint := UI.label(root, hint_text, 12, UI.MUTED)
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	UI.button(root, "HOW TO PLAY", "ghost", func(): app.start_tutorial(), "tutorial", 13)
 	if str(d.first_win_day) != Eco.day_key(p.now()):

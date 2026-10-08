@@ -1,6 +1,21 @@
-"""Fail-closed checks for the Siege Play AAB; never ship test, server or signing material."""
+"""Fail-closed checks for the Siege Play AAB; never ship test, server or signing material.
+
+Expected release identity comes from the environment (no hardcoded code/name/certificate):
+  EXPECTED_VERSION_CODE, EXPECTED_VERSION_NAME   e.g. 25 / 1.2.1-siege-r5
+  EXPECTED_UPLOAD_CERT_SHA256                    Play Console's current *upload* certificate SHA-256
+  BUNDLETOOL_JAR (optional)                      path to bundletool-all.jar
+"""
 from pathlib import Path
-import sys,zipfile,subprocess,re,hashlib,json,struct
+import sys,zipfile,subprocess,re,hashlib,json,struct,os
+
+def required_env(name):
+ value=os.environ.get(name,'').strip()
+ assert value,'Set '+name+' to the verified release value'
+ return value
+EXPECTED_CODE=required_env('EXPECTED_VERSION_CODE')
+EXPECTED_NAME=required_env('EXPECTED_VERSION_NAME')
+EXPECTED_CERT=required_env('EXPECTED_UPLOAD_CERT_SHA256').replace(':','').lower()
+assert re.fullmatch(r'[0-9a-f]{64}',EXPECTED_CERT),'EXPECTED_UPLOAD_CERT_SHA256 must be a SHA-256 fingerprint'
 
 def u32(data, offset):
  assert offset+4<=len(data),'Truncated Godot project setting'
@@ -32,7 +47,7 @@ def bool_setting(props,key):
 p=Path(sys.argv[1]); assert p.exists() and p.stat().st_size>1_000_000
 cert=subprocess.check_output(['keytool','-printcert','-jarfile',str(p)],text=True)
 fp=re.search(r'SHA256:\s*([0-9A-F:]+)',cert)[1].replace(':','').lower()
-assert fp=='6971a9123d610b397f6e9122c6cb241dbbe9c9c5fdbeb5a8751d5e2e80839084','Upload certificate does not match the existing Play bundle'
+assert fp==EXPECTED_CERT,('Upload certificate does not match EXPECTED_UPLOAD_CERT_SHA256',fp)
 libs=[]
 all_abis=set()
 with zipfile.ZipFile(p) as z:
@@ -40,8 +55,16 @@ with zipfile.ZipFile(p) as z:
  names=z.namelist()
  assert 'BundleConfig.pb' in names and 'base/manifest/AndroidManifest.xml' in names
  assert 'base/dex/classes.dex' in names
- assert not any('/tests/' in n or '/reports/' in n or '/tools/' in n or '/server/' in n or '/store-listing/' in n or n.endswith(('.keystore','.jks','.b64')) for n in names)
+ # Project-root dev folders (res://tests, reports, tools, server, store-listing) must not ship. Game assets
+ # may legitimately live in folders named "tools" (e.g. assets/kaykit/tools = the in-game axe/pickaxe models).
+ def res_path(n):
+  return n.split('/assets/',1)[1] if '/assets/' in n else ''
+ dev_roots=('tests/','reports/','tools/','server/','store-listing/')
+ leaked=[n for n in names if res_path(n).startswith(dev_roots) or '/tests/' in n or '/reports/' in n or '/server/' in n or '/store-listing/' in n or n.endswith(('.keystore','.jks','.b64','.p12'))]
+ assert not leaked,('Development/test/server/signing files shipped',leaked[:10])
  assert not any(n.endswith('/index.html') or n.endswith('/fatebound.html') for n in names)
+ # Render-only settings (godot/override.cfg, gitignored; FB_FORCE_HQ trailer renders) must never ship.
+ assert not any(n.endswith('override.cfg') for n in names),'override.cfg shipped'
  # Godot's Gradle AAB uses an install-time asset pack rather than the APK's direct base
  # assets. Locate the game's module from its packed project settings (every export has one).
  project_paths=[n for n in names if n.endswith('/assets/project.binary')]
@@ -55,10 +78,12 @@ with zipfile.ZipFile(p) as z:
   assert not any('/'+script+'.' in n and '/assets/' in n for n in names),'Removed dice-era script shipped: '+script
  props=packed_settings(z.read(project_paths[0]))
  assert string_setting(props,'rendering/renderer/rendering_method')=='mobile','Play bundle must render with Vulkan mobile'
- # 0.31.72 (Kevin, 2026-10-07): Vulkan by default WITH the OpenGL fallback. Godot leaves a setting that equals the
- # engine default out of project.binary; fallback_to_opengl3 defaults to true, so missing = on.
- assert 'rendering/rendering_device/fallback_to_opengl3' not in props or bool_setting(props,'rendering/rendering_device/fallback_to_opengl3'),'OpenGL fallback must be enabled'
- assert string_setting(props,'application/config/project_settings_override')=='user://renderer.cfg','BootGuard renderer switch file missing'
+ # 0.31.72: Vulkan stays the default; Godot's own OpenGL fallback is ON for phones without usable Vulkan
+ # (Godot omits the key from project.binary when it equals the engine default, true: missing = on),
+ # and BootGuard's renderer switch is read from user://renderer.cfg (never shipped in the bundle).
+ fallback_key='rendering/rendering_device/fallback_to_opengl3'
+ assert fallback_key not in props or bool_setting(props,fallback_key),'OpenGL fallback must be enabled (0.31.72)'
+ assert string_setting(props,'application/config/project_settings_override')=='user://renderer.cfg','Renderer override must be user://renderer.cfg'
  assert any('/boot_guard.' in n and '/assets/' in n for n in names),'BootGuard autoload missing'
  for name in names:
   if not name.endswith('.so'):continue
@@ -77,22 +102,22 @@ with zipfile.ZipFile(p) as z:
  assert all_abis=={'armeabi-v7a','arm64-v8a','x86','x86_64'},('Missing Android ABI',sorted(all_abis))
  assert any('arm64-v8a' in x['path'] for x in libs)
  assert any('x86_64' in x['path'] for x in libs)
-report={'file':p.name,'bytes':p.stat().st_size,'sha256':hashlib.sha256(p.read_bytes()).hexdigest(),'upload_certificate_sha256':fp,'matches_existing_play_certificate':True,'siege_runtime_present_dice_era_absent':True,'content_module':content_module,'project_asset_path':project_paths[0],'vulkan_mobile_with_gl_fallback':True,'test_server_and_signing_material_excluded':True,'android_abis':sorted(all_abis),'native_64bit_libraries':libs,'physical_phone_tested':False}
+report={'file':p.name,'bytes':p.stat().st_size,'sha256':hashlib.sha256(p.read_bytes()).hexdigest(),'upload_certificate_sha256':fp,'matches_expected_upload_certificate':True,'siege_runtime_present_dice_era_absent':True,'content_module':content_module,'project_asset_path':project_paths[0],'vulkan_mobile_default_with_gl_fallback':True,'renderer_override':'user://renderer.cfg','test_server_and_signing_material_excluded':True,'android_abis':sorted(all_abis),'native_64bit_libraries':libs,'physical_phone_tested':False}
 p.with_name('PLAY_BUNDLE_VERIFICATION.json').write_text(json.dumps(report,indent=2)+'\n')
 print(json.dumps(report,indent=2))
 
 # Use Google's validator and inspect the actual protobuf manifest, not merely
 # the intended export settings. Downloaded tool does not contain signing data.
 import urllib.request,xml.etree.ElementTree as ET
-jar=Path('/tmp/bundletool-all-1.18.3.jar')
+jar=Path(os.environ.get('BUNDLETOOL_JAR','/tmp/bundletool-all-1.18.3.jar'))
 if not jar.exists():
  urllib.request.urlretrieve('https://github.com/google/bundletool/releases/download/1.18.3/bundletool-all-1.18.3.jar',jar)
 subprocess.run(['java','-jar',str(jar),'validate','--bundle='+str(p)],check=True)
 manifest=subprocess.check_output(['java','-jar',str(jar),'dump','manifest','--bundle='+str(p),'--module=base'],text=True)
 root=ET.fromstring(manifest);android='{http://schemas.android.com/apk/res/android}'
 assert root.attrib['package']=='com.fatebound.game'
-assert root.attrib[android+'versionCode']=='24'
-assert root.attrib[android+'versionName']=='1.2.0-siege-online'
+assert root.attrib[android+'versionCode']==EXPECTED_CODE,('versionCode',root.attrib[android+'versionCode'])
+assert root.attrib[android+'versionName']==EXPECTED_NAME,('versionName',root.attrib[android+'versionName'])
 sdk=root.find('uses-sdk');assert sdk.attrib[android+'minSdkVersion']=='24' and sdk.attrib[android+'targetSdkVersion']=='36'
 application=root.find('application');assert application.attrib.get(android+'debuggable','false')=='false'
 permissions=[item.attrib.get(android+'name') for item in root.findall('uses-permission')]
@@ -100,6 +125,6 @@ assert 'android.permission.INTERNET' in permissions
 if content_module!='base':
  delivery=subprocess.check_output(['java','-jar',str(jar),'dump','manifest','--bundle='+str(p),'--module='+content_module],text=True)
  assert 'install-time' in delivery,('Game content not delivered at installation',delivery)
-report.update(bundletool_validation_passed=True,package='com.fatebound.game',version_code=24,version_name='1.2.0-siege-online',min_sdk=24,target_sdk=36,debuggable=False,game_assets_available_at_install=True)
+report.update(bundletool_validation_passed=True,package='com.fatebound.game',version_code=int(EXPECTED_CODE),version_name=EXPECTED_NAME,min_sdk=24,target_sdk=36,debuggable=False,game_assets_available_at_install=True)
 p.with_name('PLAY_BUNDLE_VERIFICATION.json').write_text(json.dumps(report,indent=2)+'\n')
 print('FINAL_VALIDATION',json.dumps(report,indent=2))

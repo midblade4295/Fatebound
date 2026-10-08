@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://dt2sypr05w0wc"
-path="res://.godot/imported/archer_shop_0.jpg-25a27a13a823d8ea8e983d14aed7b803.ctex"
+path.s3tc="res://.godot/imported/archer_shop_0.jpg-25a27a13a823d8ea8e983d14aed7b803.s3tc.ctex"
+path.etc2="res://.godot/imported/archer_shop_0.jpg-25a27a13a823d8ea8e983d14aed7b803.etc2.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "d555f9e41b43a53f56de280089138dd9"
@@ -14,11 +16,11 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/meshy/archer_shop/archer_shop_0.jpg"
-dest_files=["res://.godot/imported/archer_shop_0.jpg-25a27a13a823d8ea8e983d14aed7b803.ctex"]
+dest_files=["res://.godot/imported/archer_shop_0.jpg-25a27a13a823d8ea8e983d14aed7b803.s3tc.ctex", "res://.godot/imported/archer_shop_0.jpg-25a27a13a823d8ea8e983d14aed7b803.etc2.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0

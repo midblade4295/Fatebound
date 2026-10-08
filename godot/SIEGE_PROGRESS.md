@@ -2416,3 +2416,43 @@ K2/K3 notes (0.17.0)
   alone referenced (1.7 MB + 1 MB out of the APK); SiegeDiag's STAT line now splits sim= and view= times, and the
   match logs "MATCH BUILT" with the step times. Benches: tests/start_bench.gd, tests/fight_bench.gd.
 - Quick suite: ALL PASSED (37, with staged_start_test).
+
+# 0.31.72 Play bundle size (vc31 rebuilt, same versionCode/versionName/key; no gameplay or code change)
+- Why: the 220.8 MB vc31 AAB could not be uploaded from the box Chrome (its upload buffer tops out at 256 MiB, about
+  1.53x the file). The install-time pack grew 36 -> 114 MB with the 0.31.36-0.31.72 Meshy models, and every 3D texture
+  was imported Lossless (headless imports never run the editor's "used in 3D -> VRAM" detection).
+- No junk to remove: Godot exports only imported resources (no .blend/.psd/.glb originals in the pack), duplicate
+  entries total 0.09 MB, every Meshy file is loaded by siege_view.gd.
+- 31 3D albedo textures -> VRAM Compressed (ETC2 on Android, high_quality off = Godot's mobile default for 3D):
+  Meshy characters 6x2048 (-21.95 MB), Meshy shops blue 7x1024 (-10.36), shops red 7x1024 (-7.66), kings 6x512
+  (-2.57), terrain grass/path/rock + castle bricks/paving (-2.38). Normal maps, glow masks and all 2D/UI stay Lossless.
+  ETC2 vs source at mip 0: PSNR 37-41 dB characters, 38-46 terrain/castle, 29-34 shops, 27-30 kings; zoomed 3x crops
+  of the worst 128px blocks and in-match renders (building_shot knight/priest, body_shot crusader/berserker) show no
+  visible difference.
+- project.godot: WebP lossless effort for the remaining Lossless textures -> compression_method 6, factor 100
+  (-1.04 MB pack, -0.09 MB launcher icons). Every one of the 135 remaining textures and all 26 icon/splash WebPs decode
+  pixel-identical to the previous build.
+- AAB 220,756,335 -> 174,716,069 bytes (pack 114.4 -> 68.4 MB; base 105.8 MB unchanged: 4 ABIs x libgodot ~25 MB).
+  Still above the 170 MB ceiling; the remaining options all change something and were reported, not applied.
+  Quick suite: ALL PASSED (34).
+
+# 0.31.73 Forced update on a protocol mismatch (branch grok/siege-force-update; no versionCode bump, no protocol bump)
+- Kevin: "when server has newer version than players installed game it'll force them to update".
+- Found: the server's version refusal sent {"t":"bye","why":"version","need":N} and closed (4001) in the same frame;
+  the client never received the bye (only the close), and siege_mode checked the socket state before reading packets
+  anyway, so a too-old client only ever toasted "Could not connect to the server" and went home. The "Update the game
+  to play online" text was unreachable.
+- Server (backward compatible, protocol stays 35): refusals close REFUSE_CLOSE_DELAY (0.25 s) after the bye, so the
+  bye arrives; the close reason is "version:<server protocol>" (was "version"); new {"t":"ver"} query answered with
+  {"t":"ver","v":N} and closed (1000), no match joined. Old clients see the same bye/code (vc31 against this server:
+  "Update the game to play online" instead of "Could not connect"). Needs a server redeploy to take effect.
+- Client: Net.version_verdict / Net.refused_version (only Net.VERSION is compared, so every future bump works).
+  Server newer -> UpdateScreen (scripts/app/update_screen.gd): full screen, input-blocking, "UPDATE REQUIRED" /
+  "A new version of Fatebound is available. Update to keep playing.", big UPDATE -> market://details?id=com.fatebound.game
+  (Android), https://play.google.com/store/apps/details?id=com.fatebound.game fallback. "PLAY OFFLINE VS BOTS" closes it
+  but online stays locked (ONLINE / PLAY online re-show it; it comes back after each offline match). Back = quit.
+  Server older -> "Servers are updating, try again in a few minutes", nothing blocked. A legacy close-only refusal
+  (4001 "version", no number) can only come from a server older than this code -> "servers are updating".
+- Menu check: VersionCheck (scripts/app/version_check.gd) at start-up and on resume (>60 s since the last), skipped
+  headless. Against a server without the "ver" message it gets no answer (-1, unknown) and the connect path decides.
+- tests/version_gate_test.gd (real server + in-process fake newer/legacy servers + the real client and app).

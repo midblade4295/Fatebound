@@ -74,6 +74,8 @@ run blast_nodes_test     BLAST_NODES_PASS         60
 run chest_test           CHEST_PASS               60
 run combo_test           COMBO_PASS               60
 run net_load_test        NET_LOAD_PASS            120
+# Forced update: protocol mismatch -> Update screen / "Servers are updating" (real server on 8096, fake on 8097)
+run version_gate_test    VERSION_GATE_PASS        120
 run boot_guard_test      BOOT_GUARD_PASS          60
 run outpost_look_test    OUTPOST_LOOK_PASS        90
 run castle_kit_test      CASTLE_KIT_PASS          90

@@ -22,8 +22,8 @@ NO_SYSTEMD="${NO_SYSTEMD:-0}"
 SRC="$(cd "$(dirname "$0")/../.." && pwd)"                  # .../godot
 SERVICE_SRC="$SRC/server/deploy/fatebound-siege.service"
 
-for f in scripts/siege/siege_sim.gd scripts/siege/siege_net.gd server/siege_server.gd server/siege_probe.gd; do
-  [ -f "$SRC/$f" ] || { echo "Missing $SRC/$f — run this from the claude/kaykit-3d-rebuild checkout." >&2; exit 1; }
+for f in scripts/siege/siege_sim.gd scripts/siege/siege_net.gd scripts/siege/siege_land.gd scripts/siege/siege_castle.gd server/siege_server.gd server/siege_probe.gd; do
+  [ -f "$SRC/$f" ] || { echo "Missing $SRC/$f — run this from a checkout of the release source." >&2; exit 1; }
 done
 if [ "$NO_SYSTEMD" != "1" ] && [ "$(id -u)" -ne 0 ]; then
   echo "Run with sudo (installs to /opt, /srv and systemd)." >&2; exit 1
@@ -61,7 +61,7 @@ fi
 # ---- 3. Minimal server project ----
 STAGE="$(mktemp -d)"
 mkdir -p "$STAGE/scripts/siege" "$STAGE/server"
-cp "$SRC/scripts/siege/siege_sim.gd" "$SRC/scripts/siege/siege_net.gd" "$STAGE/scripts/siege/"
+cp "$SRC/scripts/siege/siege_sim.gd" "$SRC/scripts/siege/siege_net.gd" "$SRC/scripts/siege/siege_land.gd" "$SRC/scripts/siege/siege_castle.gd" "$STAGE/scripts/siege/"
 cp "$SRC/server/siege_server.gd" "$SRC/server/siege_probe.gd" "$STAGE/server/"
 cat > "$STAGE/project.godot" <<'PROJ'
 ; Fatebound Siege dedicated server: simulation + protocol only (no assets, no autoloads).

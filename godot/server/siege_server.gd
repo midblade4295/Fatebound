@@ -11,6 +11,7 @@ const Net = preload("res://scripts/siege/siege_net.gd")
 const RESTART_AFTER := 15.0          # seconds of results screen before the next match
 const IDLE_STOP := 30.0              # no players for this long -> stop simulating
 const HELLO_TIMEOUT := 10.0
+const REFUSE_CLOSE_DELAY := 0.25     # s between a "bye"/"ver" reply and closing the socket
 const MAX_MSGS_PER_SEC := 90         # per client; beyond this, messages are dropped
 const TICK := Sim.TICK
 
@@ -82,6 +83,15 @@ func _poll_clients() -> void:
 			if now - float(c.joined_at) > HELLO_TIMEOUT:
 				ws.close()
 				_drop(cid, "handshake timeout")
+			continue
+		if c.has("close_at"):
+			# A refusal ("bye" + close code) in progress: the bye goes out first, the close follows a moment later.
+			# Closing in the same frame as the send lost the bye on the client (it only ever saw code 4001).
+			while ws.get_available_packet_count() > 0:
+				ws.get_packet()
+			if now >= float(c.close_at):
+				ws.close(int(c.close_code), str(c.close_reason))
+				_drop(cid, str(c.close_reason))
 			continue
 		if not c.hello and now - float(c.joined_at) > HELLO_TIMEOUT:
 			ws.close(4000, "no hello")
@@ -170,17 +180,30 @@ func _human_count() -> int:
 # ---------------- messages ----------------
 func _handle(cid: int, msg: Dictionary) -> void:
 	var c: Dictionary = clients[cid]
+	if c.has("close_at"):
+		return
 	match str(msg.get("t", "")):
+		"ver":
+			# Version check (0.31.73, the "Update required" screen): the menu asks which protocol the server speaks
+			# without joining a match. Older servers ignore this message (and drop the socket after HELLO_TIMEOUT),
+			# so the client treats no answer as "unknown" and checks again on connect.
+			if c.hello:
+				return
+			_send(cid, {"t":"ver", "v":Net.VERSION})
+			_refuse(cid, 1000, "ver")
 		"hello":
 			if c.hello:
 				return
 			if int(msg.get("v", -1)) != Net.VERSION:
+				# "need" = the protocol this server speaks; the close reason carries it too ("version:35") in case
+				# the bye is lost. Old clients only look at why/the code, so both additions are backward compatible.
 				_send(cid, {"t":"bye", "why":"version", "need":Net.VERSION})
-				(c.ws as WebSocketPeer).close(4001, "version")
+				_refuse(cid, Net.CLOSE_VERSION, "version:%d" % Net.VERSION)
+				_log("refused %s: protocol %d, server %d" % [str(msg.get("name", "?")).left(20), int(msg.get("v", -1)), Net.VERSION])
 				return
 			if _human_count() >= max_players:
 				_send(cid, {"t":"bye", "why":"full"})
-				(c.ws as WebSocketPeer).close(4002, "full")
+				_refuse(cid, 4002, "full")
 				return
 			c.hello = true
 			c.name = str(msg.get("name", "Player")).left(20)
@@ -211,6 +234,13 @@ func _handle(cid: int, msg: Dictionary) -> void:
 				else:
 					arg = null
 				sim.act(c.unit, a, arg)
+
+func _refuse(cid: int, code: int, reason: String) -> void:
+	# Close a little after the last message so it reaches the client before the close frame.
+	var c: Dictionary = clients[cid]
+	c.close_at = Time.get_ticks_msec() / 1000.0 + REFUSE_CLOSE_DELAY
+	c.close_code = code
+	c.close_reason = reason
 
 func _seat(cid: int) -> void:
 	# Take over a bot on the team with fewer humans (blue on ties).

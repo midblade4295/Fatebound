@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://qef4qwefmw6k"
-path="res://.godot/imported/barbarian_shop_0.jpg-765877c0afdb7abf121175a4bf8ae951.ctex"
+path.s3tc="res://.godot/imported/barbarian_shop_0.jpg-765877c0afdb7abf121175a4bf8ae951.s3tc.ctex"
+path.etc2="res://.godot/imported/barbarian_shop_0.jpg-765877c0afdb7abf121175a4bf8ae951.etc2.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "99cd730bf79eb5ca5f5a92f2a5df34fa"
@@ -14,11 +16,11 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/meshy/barbarian_shop/barbarian_shop_0.jpg"
-dest_files=["res://.godot/imported/barbarian_shop_0.jpg-765877c0afdb7abf121175a4bf8ae951.ctex"]
+dest_files=["res://.godot/imported/barbarian_shop_0.jpg-765877c0afdb7abf121175a4bf8ae951.s3tc.ctex", "res://.godot/imported/barbarian_shop_0.jpg-765877c0afdb7abf121175a4bf8ae951.etc2.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0
