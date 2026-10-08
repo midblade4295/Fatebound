@@ -2344,3 +2344,26 @@ K2/K3 notes (0.17.0)
   rig.json. The tool runs on Meshy's original rigged GLB (in git history, before this commit).
 - Worker icons re-rendered. Checked: hand close-ups (outside, front, behind, along the handle), the locker zoomed
   in. Quick suite: ALL PASSED (36).
+
+# Trailer 6, "Anyone Can Change Fate" (tools only, no build; Kevin: an epic cinematic trailer following a villager as
+# the hero of a battle -- "everyone makes a difference")
+- Story (tools/trailer6_script.md): shoved aside while the others put on helmets, villagers cowering, he finds the
+  bomb and runs it across the battlefield. A wizard's meteor throws his friends in slow motion and knocks him down
+  (ears ringing). He gets up and sees their gate (snap zoom). His allies rally round him and clear his way. The throw
+  (a heartbeat), the gate goes up, a Knight tosses him a helmet, the army pours in, and the gold title appears with
+  "Anyone can change fate". The narrator speaks at the key moments (10 lines).
+- tools/trailer6_shots.gd: four staged runs (court 27.5 s, run 9.5, fall 16.5, charge 15.5) in a real match, recorded
+  by Movie Maker (tools/trailer6_render.sh <run> [W H]: a temporary override.cfg for the window size, removed
+  afterwards). Slow motion by Engine.time_scale windows. Cameras: world paths, follow offsets, a top-down shot framed
+  on the fallen hero's head and hips bones, an over-the-shoulder POV with an FOV snap zoom, and a bomb-follow shot.
+  Small props (trees, rocks) between a camera and its subject are hidden while they are. Every staged unit is topped
+  up each frame (the bots' Armory upgrades rescale hp to the stat, which once let the wall archers kill the hero).
+  The cowering villagers are posed bone by bone over a held crouch (arms round the head / hands to the mouth, head
+  ducked); no KayKit clip has it.
+- tools/trailer6_edit.py: the cut (26 shots) and the mix. Every sound sits on a shot (cut name + recording time).
+  Music by ElevenLabs in three cues: A stops dead on the meteor; B rises from near silence to the throw; C hits with
+  the gate. Narration lines are levelled to one loudness. Beds and stingers (muffled battle, arrows, slowed booms,
+  ringing, heartbeat, the army's roar) come from ElevenLabs; hits and the bomb are the game's own sounds. Normalised
+  to -14 LUFS.
+- tools/trailer4_title_fx.py: --tag / --tag2 for the tagline's text (defaults unchanged).
+- Fatebound-Trailer-6.mp4: 84 s, 1920x1080 at 30 fps, -13.7 LUFS, -0.9 dBFS peak, 128 MB.

@@ -2,7 +2,7 @@
 """Fatebound trailer 4 -- light over the finale (the 3D gold title is rendered in-engine by tools/trailer4_shots.gd).
 
     python3 tools/trailer4_title_fx.py --shot /tmp/trailer4/golden.avi --sun /tmp/trailer4/golden_sun.json \\
-        --out /tmp/trailer4/golden_fx.mp4 [--land 4.9] [--tag-at 7.0]
+        --out /tmp/trailer4/golden_fx.mp4 [--land 4.9] [--tag-at 7.0] [--tag "LINE ONE" --tag2 "line two"]
 
 Per frame: god rays -- the bright sky round the low sun zoom-blurred out from its screen position, so the letters in front
 of it cut shafts through the light -- ramping up as the title flies in; a horizontal lens streak through the sun; a soft
@@ -18,13 +18,17 @@ FONT = os.path.join(HERE, "..", "assets", "fonts", "LuckiestGuy-Regular.ttf")
 QW, QH = 480, 270
 
 
-def tag_layer():
+TAG1 = "THE ULTIMATE 16 VS 16 CASTLE SIEGE"
+TAG2 = "GRAB A HAT. STORM THE CASTLE. BRING YOUR KING HOME."
+
+
+def tag_layer(tag1=TAG1, tag2=TAG2):
     img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
     big = ImageFont.truetype(FONT, 64)
     small = ImageFont.truetype(FONT, 38)
-    for text, f, y, fill in [("THE ULTIMATE 16 VS 16 CASTLE SIEGE", big, 600, (255, 226, 150, 255)),
-                             ("GRAB A HAT. STORM THE CASTLE. BRING YOUR KING HOME.", small, 680, (255, 246, 228, 255))]:
+    lines = [(tag1, big, 600, (255, 226, 150, 255)), (tag2, small, 680, (255, 246, 228, 255))]
+    for text, f, y, fill in [ln for ln in lines if ln[0]]:
         bb = d.textbbox((0, 0), text, font=f, stroke_width=6)
         x = (W - (bb[2] - bb[0])) // 2 - bb[0]
         sh = Image.new("L", (W, H), 0)
@@ -56,9 +60,11 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--land", type=float, default=4.9)
     ap.add_argument("--tag-at", type=float, default=-1.0, help="seconds; -1 (default) = no tagline: only the title")
+    ap.add_argument("--tag", default=TAG1, help="the tagline's first (big) line")
+    ap.add_argument("--tag2", default=TAG2, help="its second (small) line; empty for none")
     a = ap.parse_args()
     sun = json.load(open(a.sun))
-    tag = tag_layer()
+    tag = tag_layer(a.tag, a.tag2)
     dec = subprocess.Popen(["ffmpeg", "-v", "error", "-i", a.shot, "-f", "rawvideo", "-pix_fmt", "rgb24", "-"], stdout=subprocess.PIPE)
     enc = subprocess.Popen(["ffmpeg", "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}", "-r", str(FPS),
                             "-i", "-", "-c:v", "libx264", "-crf", "15", "-preset", "medium", "-pix_fmt", "yuv420p", a.out], stdin=subprocess.PIPE)
