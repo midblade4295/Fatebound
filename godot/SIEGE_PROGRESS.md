@@ -2416,3 +2416,8 @@ K2/K3 notes (0.17.0)
   alone referenced (1.7 MB + 1 MB out of the APK); SiegeDiag's STAT line now splits sim= and view= times, and the
   match logs "MATCH BUILT" with the step times. Benches: tests/start_bench.gd, tests/fight_bench.gd.
 - Quick suite: ALL PASSED (37, with staged_start_test).
+
+# Play preset: no 32-bit Intel (Kevin: "remove the 32bit Intel from game")
+- export_presets.cfg "Android Play Store": architectures/x86=false (armeabi-v7a, arm64-v8a, x86_64 stay). Only that
+  preset had it; the itch/preview presets were already arm64-v8a only. Intel Atom Android devices are long gone; the
+  AAB's per-device split meant no player downloaded it anyway -- a smaller upload, nothing else. No build or upload.
