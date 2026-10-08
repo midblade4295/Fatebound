@@ -2460,3 +2460,11 @@ K2/K3 notes (0.17.0)
   rise in. Pass, Shop, Locker and Settings rebuilt in the same look (same buttons and keys underneath).
 - Pass chest rewards showed "0 gold" (reward_text had no chest case); they now show the chest.
 - app_flow, app_scroll, tutorial, chest, boot_guard, parse_all pass.
+- Step 2: the match panels in the same look (siege_hud.gd): PAUSED on a parchment sheet (how to win with the 3D icons,
+  the tricks, RESUME / RESOLUTION / LEAVE MATCH), the results under a VICTORY / DEFEAT / DRAW ribbon (a crown and a
+  sunburst on a win), the score in team colours, your KOs / downs / rescues, the spoils on parchment, the chests earned
+  with their pictures, HOME / PLAY AGAIN; the workshop uses the new panel and buttons. Panels drop open, and one taller
+  than the screen is shrunk to fit (wrapping labels are given a width before they're measured -- unmeasured, they made
+  the panel thousands of pixels tall).
+- Locker rail: round head portraits (assets/ui/skins/default_*), zoom buttons in the new style.
+- 0.31.79, version code 165. Quick suite: ALL 37 PASSED.

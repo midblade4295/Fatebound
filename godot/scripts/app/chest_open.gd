@@ -286,18 +286,24 @@ func _show_rewards() -> void:
 	UI2.plate(plate, panel, 22.0, rim, {"rim": 4.0})
 	var halo := UI2.rays(plate, 300.0, tint, 16.0, 0.5)
 	halo.position = Vector2(-45, -60)
-	var ic := UI2.img(card, icon, 140.0)
-	ic.position = Vector2(35, 14)
-	UI2.bob(ic, 6.0, 1.3)
-	var nl := UI2.text(card, title, 17, Color.WHITE, UI2.INK, 5)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 2)
+	v.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	v.offset_left = 8
+	v.offset_right = -8
+	v.offset_top = 12
+	v.offset_bottom = -10
+	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	card.add_child(v)
+	var ic := UI2.img(v, icon, 136.0)
+	ic.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	var nl := UI2.text(v, title, 17, Color.WHITE, UI2.INK, 5)
 	nl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	nl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	nl.position = Vector2(10, 158)
-	nl.size = Vector2(190, 44)
-	var tl := UI2.body(card, tag, 10, tint.lightened(0.2), false)
+	nl.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	var tl := UI2.body(v, tag, 10, tint.lightened(0.2), false)
 	tl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	tl.position = Vector2(6, 206)
-	tl.size = Vector2(198, 20)
+	tl.clip_text = true
 	if item != "":
 		var nb := PanelContainer.new()
 		var sb := StyleBoxFlat.new()
