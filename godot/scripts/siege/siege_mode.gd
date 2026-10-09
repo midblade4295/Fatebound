@@ -216,6 +216,8 @@ func _start_steps() -> Array:
 		view.low_fx = low_fx
 		view.hq_gfx = hq_gfx
 		view.player_looks = _looks()
+		view.my_name = player_name
+		view.my_title = my_title()
 		viewport.add_child(view)
 		_view_steps = view.setup_steps(sim))
 	# (the view's own steps run from _view_steps between these two: the array is filled by the first step)
@@ -387,6 +389,8 @@ func _build_online_match(msg: Dictionary) -> void:
 	view.player_looks = _looks()
 	view.player_names = net_names
 	view.player_titles = net_titles
+	view.my_name = player_name
+	view.my_title = my_title()
 	viewport.add_child(view)
 	view.setup(sim)
 	hud.sim = sim

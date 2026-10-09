@@ -2,6 +2,7 @@ extends SceneTree
 # 0.31.85 (Kevin: "When on the other team, it still thinks I'm on the other team and controls are inverted and health
 # bars are red for my team"): a match seated on each team through the online welcome path (_build_online_match) --
 # the stick moves you the way it points on screen, and your side is drawn blue (bars, rings, HUD) and the other red.
+# 0.31.88: and your own nameplate is over your bar.
 const Mode = preload("res://scripts/siege/siege_mode.gd")
 const View = preload("res://scripts/siege/siege_view.gd")
 const IDS := ["b0", "r0"]
@@ -19,6 +20,7 @@ func check(ok: bool, what: String) -> void:
 func _init() -> void:
 	mode = Mode.new()
 	mode.online = false
+	mode.player_name = "Midblade"
 	root.add_child(mode)
 
 func _seat(i: int) -> void:
@@ -66,6 +68,15 @@ func _verify(i: int) -> void:
 			else: foe_bad += 1
 	check(ally_ok > 5 and ally_bad == 0, "ally health bars blue (%d ok, %d not)" % [ally_ok, ally_bad])
 	check(foe_ok > 5 and foe_bad == 0, "enemy health bars red (%d ok, %d not)" % [foe_ok, foe_bad])
+	# 0.31.88 (Kevin: "Show the nameplate for the players own name also"): my plate from my profile, with no "pn" from
+	# a server; nobody else gets one without it.
+	var mine := 0
+	var others := 0
+	for b in view.bars():
+		if b.has("name"):
+			if str(b.name) == "Midblade" and b.name_color == Color("#ffd65a") and b.color == Color("#7dff8a"): mine += 1
+			else: others += 1
+	check(mine == 1 and others == 0 and mode.net_names.is_empty(), "my own nameplate, gold, with no names from a server (%d mine, %d others)" % [mine, others])
 	# The stick: pushed up the unit heads up the screen, pushed right it heads right.
 	var p0 := Vector3(me.pos.x, Sim_height(me.pos), me.pos.y)
 	var s0: Vector2 = view.screen_point(p0)

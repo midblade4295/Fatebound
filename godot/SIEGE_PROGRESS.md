@@ -2709,3 +2709,10 @@ K2/K3 notes (0.17.0)
 - tests/title_test.gd (in the suite); siege_net_smoke: a title through the server to the other player's bar and lobby.
 - Live server: needs the redeploy from this branch (titles over heads, healing counted online).
 - 0.31.87, version code 173. Quick suite: ALL 41 PASSED.
+
+## 0.31.88 — your own nameplate (Kevin: "Show the nameplate for the players own name also")
+- siege_view: my_name / my_title, set by siege_mode from the profile in both match setups (vs bots and online);
+  your bar always carries your name (gold) and worn title, so the plate shows against bots and without the
+  server's "pn". Other players' plates still come only from the server; bots have none.
+- side_view_test: my plate, gold, with no names from a server, on either team.
+- 0.31.88, version code 174. Quick suite: ALL 41 PASSED.

@@ -73,6 +73,8 @@ var player_id := "you"
 var my_side := 0
 var player_names := {}                     # unit id -> name: the live players online (0.31.86; the server's "pn")
 var player_titles := {}                    # unit id -> title id (0.31.87; the "pn" message's "tt")
+var my_name := ""                          # 0.31.88: your own name and title, from your profile -- your plate shows
+var my_title := ""                         # offline and online, whatever the server sends
 static var _kit_side := 0                  # the side the cached merged castle walls (_kit_merged) were tinted for
 
 func vt(t: int) -> int:
@@ -4375,7 +4377,13 @@ func bars() -> Array:
 			continue
 		var c: Color = Color("#7dff8a") if u.id == player_id else TEAM_COLORS[vt(int(u.team))]
 		var bar := {"pos": (a.root as Node3D).position + Vector3(0, 2.7, 0), "fill": clampf(u.hp / maxf(1.0, u.max_hp), 0.0, 1.0), "color": c}
-		if player_names.has(u.id):
+		if u.id == player_id and my_name != "":
+			# 0.31.88 (Kevin: "Show the nameplate for the players own name also"): yours from your profile, so it's there
+			# against bots too and doesn't wait on the server
+			bar["name"] = my_name
+			bar["title"] = my_title
+			bar["name_color"] = Color("#ffd65a")
+		elif player_names.has(u.id):
 			# 0.31.86 (Kevin: "shows the player names on the battlefield above their heads. Only live players will show
 			# names."): over the bar -- yours gold, your side's light blue, theirs light red; bots have none
 			bar["name"] = str(player_names[u.id])
