@@ -2494,3 +2494,25 @@ K2/K3 notes (0.17.0)
 - Home dais (roster.gd): the Knight a step forward (z 0.95), the Barbarian and the Mage turned so the axe and the
   staff's orb clear him.
 - 0.31.80, version code 166. Quick suite: ALL 37 PASSED.
+
+# 0.31.81 (Kevin: "redo the advanced classes in the same style"; picked B2 for all six)
+- Concepts (same ElevenLabs flow): per upgraded class one sheet with design A (its current look redone) and B (the new
+  base pick grown up), two takes each; references: the base class's concept pick (style) and the new base body beside
+  the current upgrade in the game (reports/concepts/ref_up_<cls>.png). Picks: the Knight as a champion (silver and gold
+  plate, crowned crimson plume, lion emblem, crimson cape); the Barbarian as a berserker (black bear pelt, braided
+  beard with beads, chain, bones); the Rogue as a master assassin (black hood lined crimson, crimson mask, tattered
+  black cape); the Archer as an elite ranger (green feathered hat, green cloak, studded leather, quiver); the Mage grown
+  old (grey beard, midnight-blue constellation robes and hat); the Priest fallen (grey skin, glowing green eyes, cracked
+  sun emblem, tattered black robes). Sheets and picks in reports/concepts.
+- Models: 2K T-pose turnarounds, Meshy multi-image-to-3D with image enhancement off and the views as the texture
+  references (faithful from the start), auto-rig. The view splitter now cuts where the sheet is emptiest near each
+  third (a hand reaching past a third's edge no longer leaves a sliver in the next view). ~3.9k ElevenLabs credits for
+  the turnarounds (+7.9k concepts), 210 Meshy credits.
+- assets/meshy/<crusader|berserker|assassin|sniper|archmage|necromancer>: replaced (rigged.glb, rig.json, the 110
+  baked animations), fit by the neck height like the base classes (the old ones were fit by overall height; the
+  necks land at 1.24 m either way). LOOKS unchanged (same weapons, idles, abilities; the upgrade's 1.14 scale).
+- Texture import: the twelve new character textures (0.31.80's six too) are VRAM-compressed, high quality, like the
+  0.31.78 ones -- 0.31.80 shipped its six base bodies lossless (decoded on the CPU, 21 MB each in video memory).
+- Icons: the six upgrade busts and their weapon icons re-rendered (render_skin_icons BUST_FRAME gains the upgrades; the
+  far framing stays for the Archmage's gear only -- the Necromancer has no crown now). tools/preload_list re-run.
+- 0.31.81, version code 167. Quick suite: ALL 37 PASSED.

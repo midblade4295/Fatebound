@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://bs0icig8yvlqf"
-path="res://.godot/imported/rigged_Image_0.jpg-c13f9fb3ca36fb1302285b14c8aebadb.ctex"
+path.bptc="res://.godot/imported/rigged_Image_0.jpg-c13f9fb3ca36fb1302285b14c8aebadb.bptc.ctex"
+path.astc="res://.godot/imported/rigged_Image_0.jpg-c13f9fb3ca36fb1302285b14c8aebadb.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "49bf021ce76840b0ad889466b8e4eaf4"
@@ -14,12 +16,12 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/meshy/rogue/rigged_Image_0.jpg"
-dest_files=["res://.godot/imported/rigged_Image_0.jpg-c13f9fb3ca36fb1302285b14c8aebadb.ctex"]
+dest_files=["res://.godot/imported/rigged_Image_0.jpg-c13f9fb3ca36fb1302285b14c8aebadb.bptc.ctex", "res://.godot/imported/rigged_Image_0.jpg-c13f9fb3ca36fb1302285b14c8aebadb.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0
