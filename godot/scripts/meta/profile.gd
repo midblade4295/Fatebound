@@ -28,7 +28,8 @@ static func defaults() -> Dictionary:
 		"pass":{"season":0, "xp":0, "premium":false, "free":[], "prem":[]},
 		"owned":[], "equip":equip, "title":"",
 		"challenges":{"day":"", "daily":[], "week":"", "weekly":[], "rerolled":false},
-		"stats":{"matches":0, "wins":0, "rescues":0, "kills":0, "gates":0, "gathered":0, "fed":0},
+		"stats":{"matches":0, "wins":0, "rescues":0, "kills":0, "gates":0, "gathered":0, "fed":0,
+			"lifts":0, "repaired":0, "healed":0, "best_multi":0, "streak":0, "best_streak":0},     # (0.31.87: for the titles)
 		"first_win_day":"", "history":[], "migration":{},
 		"chests":{"slots":[], "next":1, "pity":0},
 		"settings":{"master":0.8, "music":0.6, "sfx":0.8, "reduce_motion":false}}
@@ -41,6 +42,11 @@ func load_or_create() -> void:
 		if v is Dictionary:
 			d = _normalized(v)
 			refresh()
+			# 0.31.87: titles earned from the stats the profile already had (a veteran's first start with titles)
+			var got := check_titles()
+			if not got.is_empty():
+				d["title_note"] = got
+				save()
 			return
 		last_error = "Profile was unreadable; kept a copy as .corrupt and started fresh"
 		DirAccess.copy_absolute(ProjectSettings.globalize_path(path), ProjectSettings.globalize_path(path + ".corrupt"))
@@ -371,8 +377,9 @@ func apply_match(me: Dictionary, won: bool, draw: bool, online: bool) -> Diction
 		add_chest("silver", out)
 	_add_xp(int(r.xp), out)
 	_add_pass_xp(int(r.pass), out)
-	for key in ["matches", "wins", "rescues", "kills", "gates", "gathered", "fed"]:
+	for key in ["matches", "wins", "rescues", "kills", "gates", "gathered", "fed", "lifts", "repaired", "healed"]:
 		d.stats[key] = int(d.stats.get(key, 0)) + int(stats.get(key, 0))
+	_title_stats(stats, won)
 	for span in ["daily", "weekly"]:
 		for c in (d.challenges.daily if span == "daily" else d.challenges.weekly):
 			var def: Dictionary = Eco.CHALLENGES[c.id]
@@ -383,12 +390,39 @@ func apply_match(me: Dictionary, won: bool, draw: bool, online: bool) -> Diction
 			if int(c.progress) != before:
 				out.challenges.append({"id":c.id, "text":def.text, "progress":c.progress, "goal":def.goal,
 					"done":int(c.progress) >= int(def.goal), "span":span})
+	out["titles"] = check_titles()
 	d.history.push_front({"at":now(), "won":won, "draw":draw, "online":online, "gold":r.gold, "cls":str(me.get("cls", ""))})
 	if d.history.size() > 20:
 		d.history.resize(20)
 	save()
 	return out
 
+func _title_stats(stats: Dictionary, won: bool) -> void:
+	# 0.31.87: the lifetime numbers the titles read (Eco.TITLE_GOALS), from one match's stats
+	var main := str(stats.get("main", ""))
+	if main != "":
+		d.stats["main_" + main] = int(d.stats.get("main_" + main, 0)) + 1
+		if won:
+			d.stats["win_" + main] = int(d.stats.get("win_" + main, 0)) + 1
+	for key in stats:
+		if str(key).begins_with("kills_"):
+			d.stats[key] = int(d.stats.get(key, 0)) + int(stats[key])
+	d.stats.best_multi = maxi(int(d.stats.get("best_multi", 0)), int(stats.get("best_multi", 0)))
+	d.stats.streak = int(d.stats.get("streak", 0)) + 1 if won else 0          # (a draw or a loss ends the run)
+	d.stats.best_streak = maxi(int(d.stats.get("best_streak", 0)), int(d.stats.streak))
+
+func title_progress(id: String) -> int:
+	return Eco.title_progress(d.stats, id)
+
+func check_titles() -> Array:
+	# Titles whose goal is reached and that aren't owned yet: owned now. -> their ids (rarest first).
+	var got := []
+	for id in Eco.TITLE_GOALS:
+		if not d.owned.has(id) and title_progress(id) >= int(Eco.TITLE_GOALS[id].n):
+			d.owned.append(id)
+			got.append(id)
+	got.sort_custom(func(a, b): return Eco.TITLE_RARITY_ORDER.find(str(Eco.CATALOG[a].rarity)) > Eco.TITLE_RARITY_ORDER.find(str(Eco.CATALOG[b].rarity)))
+	return got
 
 # ---------------- chests (0.31.37) ----------------
 func chests() -> Array:

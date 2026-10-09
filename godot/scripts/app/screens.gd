@@ -8,6 +8,7 @@ const ChestOpen = preload("res://scripts/app/chest_open.gd")
 const Eco = preload("res://scripts/meta/economy.gd")
 const Showcase = preload("res://scripts/app/showcase.gd")
 const Diag = preload("res://scripts/siege/siege_diag.gd")
+const Net = preload("res://scripts/siege/siege_net.gd")
 
 const PRIVACY_URL := "https://136-113-125-3.sslip.io/fatebound/privacy.html"
 
@@ -218,6 +219,11 @@ static func home(app, root: VBoxContainer) -> void:
 	top.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(top)
 	var refs := {}
+	if d.has("title_note"):                               # 0.31.87: titles earned from the stats you already had
+		var tn: Array = d.title_note
+		app.toast("You've earned %d title%s for what you've already done -- see the Locker" % [tn.size(), "" if tn.size() == 1 else "s"], UI.GOLD)
+		d.erase("title_note")
+		p.save()
 	if d.has("refund_note"):                              # 0.31.39: skins removed -- tell them once what came back
 		var rn: Dictionary = d.refund_note
 		app.toast("Skins have been retired -- refunded %s" % ", ".join([("%d gold" % int(rn.gold)) if int(rn.gold) > 0 else "", ("%d gems" % int(rn.gems)) if int(rn.gems) > 0 else ""].filter(func(x): return x != "")), UI.GOLD)
@@ -728,10 +734,8 @@ static func pass_screen(app, root: VBoxContainer) -> void:
 	UI2.body(xv, "Earn pass XP from every match and order", 11, UI2.MUTED)
 
 	# --- premium
-	var legendary := 0
-	for k in range(Eco.PASS_FREE_ITEMS, items.size()):
-		if str(Eco.CATALOG[items[k]].rarity) == "legendary":
-			legendary += 1
+	var pcos := Eco.pass_cosmetics(sid)                  # (0.31.87: the title tiers give gems now)
+	var legendary: int = int(pcos.legendary)
 	if bool(d.pass.premium):
 		var pa := UI2.frame(root, "purple", 10, 16.0, "gold")
 		var pr := UI.row(pa, 10)
@@ -746,7 +750,7 @@ static func pass_screen(app, root: VBoxContainer) -> void:
 		pt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		ph.add_child(pt)
 		UI2.text(pt, "UNLOCK PREMIUM", 20, UI2.GOLD)
-		UI2.body(pt, "%d exclusive cosmetics (%d legendary) · gold chests · a Royal chest · more gems on every tier" % [Eco.PASS_PREMIUM_ITEMS, legendary], 12, Color("#efe2ff"))
+		UI2.body(pt, "%d exclusive cosmetics (%d legendary) · gold chests · a Royal chest · more gems on every tier" % [int(pcos.n), legendary], 12, Color("#efe2ff"))
 		var b := UI2.button(pc, "UNLOCK  %d" % Eco.PREMIUM_COST, "purple", func(): _buy_premium(app), "buy_premium", 20, 52.0, 16.0, "res://assets/ui/currency/gem.png")
 		b.disabled = int(d.gems) < Eco.PREMIUM_COST
 		UI2.sweep(b)
@@ -1009,7 +1013,7 @@ static func _claim_tier(app, t: int, prem: bool) -> void:
 
 static func _buy_premium(app) -> void:
 	var p = app.profile
-	app.confirm("UNLOCK PREMIUM?", "%d exclusive cosmetics, gold and Royal chests and more gems on every tier this season. Costs %d gems." % [Eco.PASS_PREMIUM_ITEMS, Eco.PREMIUM_COST], "UNLOCK", "premium", func():
+	app.confirm("UNLOCK PREMIUM?", "%d exclusive cosmetics, gold and Royal chests and more gems on every tier this season. Costs %d gems." % [int(Eco.pass_cosmetics(int(app.profile.d.pass.season)).n), Eco.PREMIUM_COST], "UNLOCK", "premium", func():
 		var r: Dictionary = p.buy_premium()
 		if r.ok:
 			app.sfx("purchase")
@@ -1410,8 +1414,20 @@ static func locker(app, root: VBoxContainer) -> void:
 			app.rebuild(), "equip_default_title", 13, 34.0, 11.0)
 		ne.disabled = str(p.d.title) == ""
 		ne.custom_minimum_size.x = 104
-		for id in Eco.CATALOG:
-			if Eco.CATALOG[id].kind == "title":
+		# 0.31.87: every title is earned -- for everyone first, then each class's three (upgrades count as their class)
+		for sec in [""] + Eco.CLASSES:
+			var ids := []
+			for id in Eco.TITLE_GOALS:
+				if str(Eco.TITLE_GOALS[id].cls) == sec:
+					ids.append(id)
+			ids.sort_custom(func(a, b): return Eco.TITLE_RARITY_ORDER.find(str(Eco.CATALOG[a].rarity)) < Eco.TITLE_RARITY_ORDER.find(str(Eco.CATALOG[b].rarity)))
+			var head := "FOR EVERYONE" if sec == "" else str(Eco.CLASS_NAMES[sec]).to_upper()
+			var up := ""
+			for u in Eco.UP_BASE:
+				if str(Eco.UP_BASE[u]) == sec:
+					up = str(Eco.CLASS_NAMES[u])
+			UI2.divider(root, head, 18, ("as %s or %s" % [Eco.CLASS_NAMES[sec], up]) if up != "" else ("" if sec == "" else "as %s" % Eco.CLASS_NAMES[sec]))
+			for id in ids:
 				locker_row(app, root, id)
 		return
 	var cls: String = app.locker_class
@@ -1575,30 +1591,60 @@ static func zoom_controls(stage: Control, sh, prefix: String) -> void:
 	hint.offset_bottom = -10
 
 static func locker_row(app, root: Node, id: String) -> void:
-	# (titles)
+	# A title card (0.31.87, Kevin picked the looks): the rarity's panel and rim, the name exactly as it shows over the
+	# head (punctuated, the title in its rarity's colour), what earns it and how far along it is; EQUIP once earned.
 	var p = app.profile
 	var it := Eco.item(id)
-	var c := UI2.frame(root, _rar_panel(str(it.rarity)), 10, 14.0, _rar_rim(str(it.rarity)))
+	var rar := str(it.rarity)
+	var goal: Dictionary = Eco.TITLE_GOALS.get(id, {})
+	var c := UI2.frame(root, _rar_panel(rar), 8, 16.0, _rar_rim(rar), {"pattern_mix": 0.0})
+	var pc := c.get_parent() as Control
+	if rar == "legendary":
+		UI2.sweep(pc, 2.6, 60.0, 0.3)
 	var r := UI.row(c, 10)
-	UI2.icon(r, "scroll", 40.0)
+	var ic := Control.new()
+	ic.custom_minimum_size = Vector2(48, 48)
+	ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	r.add_child(ic)
+	if rar in ["epic", "legendary"]:
+		var rays := UI2.rays(ic, 80.0, Color(1, 0.85, 0.45) if rar == "legendary" else Color(0.8, 0.6, 1.0), 14.0, 0.5)
+		rays.position = Vector2(24, 24) - Vector2(40, 40)
+	var icn := UI2.icon(ic, {"common": "scroll", "rare": "banner", "epic": "trophy", "legendary": "crown"}.get(rar, "scroll"), 46.0)
+	icn.position = Vector2(1, 1)
 	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 2)
 	UI.grow(v)
 	r.add_child(v)
-	UI2.text(v, "« %s »" % str(it.name), 16, Color.WHITE)
-	UI2.body(v, str(it.rarity).to_upper(), 10, _rar_tint(str(it.rarity)).lightened(0.3), false)
-	if p.owns(id):
+	var owned: bool = p.owns(id)
+	var top := UI.row(v, 6)
+	UI2.chip(top, rar.to_upper(), Color(str(Eco.RARITY_COLOR.get(rar, "#b8c4c9"))), Color("#120a02"))
+	UI2.body(top, "EARNED" if owned else "LOCKED", 10, Color("#8cf0a8") if owned else Color(1, 1, 1, 0.6), false)
+	var nm := HBoxContainer.new()
+	nm.add_theme_constant_override("separation", 0)
+	v.add_child(nm)
+	for part in Net.title_parts(str(p.d.name), id):
+		UI2.text(nm, str(part[0]), 17, _rar_tint(rar).lightened(0.25) if part[1] else Color.WHITE, Color("#120a02"), 5)
+	UI2.body(v, str(goal.get("task", "")), 11, Color(1, 1, 1, 0.82), false)
+	var n: int = int(goal.get("n", 1))
+	var have: int = n if owned else mini(n, p.title_progress(id))
+	var pr := UI.row(v, 6)
+	var gold := rar == "legendary"
+	UI2.bar(pr, float(have), float(n), Color("#fff3ad") if gold else Color("#b6f3ff"), Color("#f0a024") if gold else Color("#36b9ea"), 10.0)
+	UI2.body(pr, "%s / %s" % [_thousands(have), _thousands(n)], 11, Color.WHITE, false)
+	if owned:
 		var eq: bool = is_equipped(p, id)
-		var b := UI2.button(r, "EQUIPPED" if eq else "EQUIP", "gold" if eq else "blue", func(): equip(app, id), "equip_" + id, 13, 34.0, 11.0)
+		var b := UI2.button(r, "WORN" if eq else "EQUIP", "grey" if eq else "green", func(): equip(app, id), "equip_" + id, 13, 40.0, 12.0)
 		b.disabled = eq
-		b.custom_minimum_size.x = 104
-		return
-	var where := "Siege Pass reward"
-	if str(it.get("source", "")) == "shop":
-		var now: int = p.now()
-		where = "In the shop today" if (Eco.shop_daily(now).has(id) or Eco.shop_featured(now).has(id)) else "Rotates through the shop"
-	UI2.body(v, where, 11, UI2.MUTED, false)
-	UI.icon(r, "lock", 20, UI2.GOLD)
-	(c.get_parent() as Control).modulate.a = 0.8
+		b.custom_minimum_size.x = 74
+		b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+
+static func _thousands(n: int) -> String:
+	var s := str(absi(n))
+	var out := ""
+	while s.length() > 3:
+		out = "," + s.substr(s.length() - 3) + out
+		s = s.substr(0, s.length() - 3)
+	return ("-" if n < 0 else "") + s + out
 
 # ---------------- SETTINGS ----------------
 static func settings(app, root: VBoxContainer) -> void:

@@ -65,6 +65,8 @@ static func pass_reward(sid: int, tier: int, premium: bool) -> Dictionary:
 	if not premium:
 		var fi := FREE_ITEM_TIERS.find(tier)
 		if fi >= 0:
+			if str(CATALOG[items[fi]].kind) == "title":
+				return {"gems": 30}
 			return {"item": items[fi]}
 		if tier == 12 or tier == 24:
 			return {"chest": "silver"}
@@ -73,7 +75,10 @@ static func pass_reward(sid: int, tier: int, premium: bool) -> Dictionary:
 		return {"gold": 150 + 5 * tier}
 	var pi := PREMIUM_ITEM_TIERS.find(tier)
 	if pi >= 0:
-		return {"item": items[PASS_FREE_ITEMS + pi]}
+		var it: String = items[PASS_FREE_ITEMS + pi]
+		if str(CATALOG[it].kind) == "title":
+			return {"gems": PASS_TITLE_GEMS.get(str(CATALOG[it].rarity), 50)}     # (0.31.87: titles are earned now)
+		return {"item": it}
 	if tier == 8 or tier == 16:
 		return {"chest": "gold"}
 	if tier == 22:
@@ -88,11 +93,27 @@ const FREE_ITEM_TIERS := [10, 20, 30]
 const PREMIUM_ITEM_TIERS := [1, 3, 5, 7, 9, 12, 15, 18, 21, 24, 26, 28, 30]
 const RARITY_RANK := {"common":0, "rare":1, "epic":2, "legendary":3}
 
+# 0.31.87: the five titles the pass used to give stay in its draw (so every season's pass keeps the tiers it had), and
+# the tiers that drew one give gems instead.
+const PASS_LEGACY_TITLES := ["title_cake_baron", "title_lightbringer", "title_shieldwall", "title_siege_lord", "title_whirlwind"]
+const PASS_TITLE_GEMS := {"epic": 50, "legendary": 100}
+
+static func pass_cosmetics(sid: int) -> Dictionary:
+	# How many cosmetics the premium track really gives (the title tiers are gems now): {"n", "legendary"}
+	var items: Array = pass_items(sid)
+	var out := {"n": 0, "legendary": 0}
+	for k in range(PASS_FREE_ITEMS, items.size()):
+		if str(CATALOG[items[k]].kind) != "title":
+			out.n += 1
+			if str(CATALOG[items[k]].rarity) == "legendary":
+				out.legendary += 1
+	return out
+
 static func pass_items(sid: int) -> Array:
 	# PASS_FREE_ITEMS free + PASS_PREMIUM_ITEMS premium cosmetics for season `sid`, from the "pass" pool: shuffled per
 	# season, then ranked by rarity -- the free track takes the lowest, the premium track the rest in rising rarity
 	# (tier 1 gets the second-best of its rank band so the first premium unlock feels good; tier 30 the best).
-	var pool: Array = []
+	var pool: Array = PASS_LEGACY_TITLES.duplicate()
 	for id in CATALOG:
 		if CATALOG[id].get("source", "") == "pass":
 			pool.append(id)
@@ -158,14 +179,46 @@ const CATALOG := {
 	"priest_wpn_sun":      {"kind":"weapon", "class":"priest", "name":"Sun Staff", "rarity":"legendary", "r":"bits/staff_C", "l":"", "source":"pass"},
 	"priest_wpn_light":    {"kind":"weapon", "class":"priest", "name":"Lightwand", "rarity":"rare", "r":"bits/wand_B", "l":"", "gold":900, "source":"shop"},
 	"worker_wpn_mallet":   {"kind":"weapon", "class":"worker", "name":"War Mallet", "rarity":"rare", "r":"bits/hammer_A", "l":"", "source":"pass"},
-	"title_shieldwall":    {"kind":"title", "class":"", "name":"Shieldwall", "rarity":"epic", "source":"pass"},
-	"title_whirlwind":     {"kind":"title", "class":"", "name":"Whirlwind", "rarity":"epic", "source":"pass"},
-	"title_lightbringer":  {"kind":"title", "class":"", "name":"Lightbringer", "rarity":"legendary", "source":"pass"},
-	# --- Titles
-	"title_gatebreaker":   {"kind":"title", "class":"", "name":"Gatebreaker", "rarity":"rare", "gold":800, "source":"shop"},
-	"title_cake_baron":    {"kind":"title", "class":"", "name":"Fish Baron", "rarity":"epic", "source":"pass"},
-	"title_oracle_sworn":  {"kind":"title", "class":"", "name":"Kingsworn", "rarity":"legendary", "gems":300, "source":"shop"},
-	"title_siege_lord":    {"kind":"title", "class":"", "name":"Siege Lord", "rarity":"epic", "source":"pass"},
+	# --- Titles (0.31.87, Kevin: "players have to earn the titles instead by doing tasks in the game"): source "earn" --
+	# not sold, not in the pass or chests; how each is earned is TITLE_GOALS, its text/form/rarity siege_net.TITLES
+	# (the same name and rarity here). Owned ones from before (shop, pass, the Knight Arsenal) stay owned.
+	"title_squire":         {"kind":"title", "class":"", "name":"Squire", "rarity":"common", "source":"earn"},
+	"title_victor":         {"kind":"title", "class":"", "name":"the Victor", "rarity":"common", "source":"earn"},
+	"title_brawler":        {"kind":"title", "class":"", "name":"the Brawler", "rarity":"common", "source":"earn"},
+	"title_woodcutter":     {"kind":"title", "class":"", "name":"the Woodcutter", "rarity":"common", "source":"earn"},
+	"title_fishmonger":     {"kind":"title", "class":"", "name":"the Fishmonger", "rarity":"common", "source":"earn"},
+	"title_gatebreaker":    {"kind":"title", "class":"", "name":"the Gatebreaker", "rarity":"rare", "source":"earn"},
+	"title_kingbearer":     {"kind":"title", "class":"", "name":"Kingbearer", "rarity":"rare", "source":"earn"},
+	"title_many_hats":      {"kind":"title", "class":"", "name":"of Many Hats", "rarity":"rare", "source":"earn"},
+	"title_tempest":        {"kind":"title", "class":"", "name":"the Tempest", "rarity":"epic", "source":"earn"},
+	"title_relentless":     {"kind":"title", "class":"", "name":"the Relentless", "rarity":"epic", "source":"earn"},
+	"title_cake_baron":     {"kind":"title", "class":"", "name":"Fish Baron", "rarity":"epic", "source":"earn"},
+	"title_siege_lord":     {"kind":"title", "class":"", "name":"Siege Lord", "rarity":"epic", "source":"earn"},
+	"title_oracle_sworn":   {"kind":"title", "class":"", "name":"the Kingsworn", "rarity":"legendary", "source":"earn"},
+	"title_unstoppable":    {"kind":"title", "class":"", "name":"the Unstoppable", "rarity":"legendary", "source":"earn"},
+	"title_undefeated":     {"kind":"title", "class":"", "name":"the Undefeated", "rarity":"legendary", "source":"earn"},
+	"title_legend":         {"kind":"title", "class":"", "name":"the Legend", "rarity":"legendary", "source":"earn"},
+	"title_sir":            {"kind":"title", "class":"", "name":"Sir", "rarity":"rare", "source":"earn"},
+	"title_shieldwall":     {"kind":"title", "class":"", "name":"the Shieldwall", "rarity":"epic", "source":"earn"},
+	"title_hammer_realm":   {"kind":"title", "class":"", "name":"Hammer of the Realm", "rarity":"legendary", "source":"earn"},
+	"title_wild":           {"kind":"title", "class":"", "name":"the Wild", "rarity":"rare", "source":"earn"},
+	"title_whirlwind":      {"kind":"title", "class":"", "name":"the Whirlwind", "rarity":"epic", "source":"earn"},
+	"title_unchained":      {"kind":"title", "class":"", "name":"the Unchained", "rarity":"legendary", "source":"earn"},
+	"title_sly":            {"kind":"title", "class":"", "name":"the Sly", "rarity":"rare", "source":"earn"},
+	"title_shadows":        {"kind":"title", "class":"", "name":"of the Shadows", "rarity":"epic", "source":"earn"},
+	"title_knives":         {"kind":"title", "class":"", "name":"Master of Knives", "rarity":"legendary", "source":"earn"},
+	"title_keen_eyed":      {"kind":"title", "class":"", "name":"the Keen-Eyed", "rarity":"rare", "source":"earn"},
+	"title_deadeye":        {"kind":"title", "class":"", "name":"the Deadeye", "rarity":"epic", "source":"earn"},
+	"title_warden":         {"kind":"title", "class":"", "name":"Warden of the Wilds", "rarity":"legendary", "source":"earn"},
+	"title_apprentice":     {"kind":"title", "class":"", "name":"Apprentice", "rarity":"rare", "source":"earn"},
+	"title_stormcaller":    {"kind":"title", "class":"", "name":"the Stormcaller", "rarity":"epic", "source":"earn"},
+	"title_starborn":       {"kind":"title", "class":"", "name":"the Starborn", "rarity":"legendary", "source":"earn"},
+	"title_acolyte":        {"kind":"title", "class":"", "name":"Acolyte", "rarity":"rare", "source":"earn"},
+	"title_merciful":       {"kind":"title", "class":"", "name":"the Merciful", "rarity":"epic", "source":"earn"},
+	"title_lightbringer":   {"kind":"title", "class":"", "name":"the Lightbringer", "rarity":"legendary", "source":"earn"},
+	"title_foreman":        {"kind":"title", "class":"", "name":"Foreman", "rarity":"rare", "source":"earn"},
+	"title_mason":          {"kind":"title", "class":"", "name":"the Mason", "rarity":"epic", "source":"earn"},
+	"title_master_builder": {"kind":"title", "class":"", "name":"Master Builder", "rarity":"legendary", "source":"earn"},
 	# --- 0.31.38: the upgraded classes (0.31.39: weapons only)
 	"crus_wpn_mace":       {"kind":"weapon", "class":"crusader", "name":"Mace & Kite Shield", "rarity":"rare", "r":"bits/hammer_C", "l":"bits/shield_A", "gold":1200, "source":"shop"},
 	"crus_wpn_warhammer":  {"kind":"weapon", "class":"crusader", "name":"Warhammer & Bulwark", "rarity":"epic", "r":"bits/hammer_A", "l":"bits/shield_D", "gold":2400, "source":"shop"},
@@ -240,7 +293,7 @@ const REMOVED_SKIN_REFUND := {
 # items' value); a pack you fully own can't be bought.
 const PACKS := {
 	# 0.31.39: weapon bundles (each had a skin); priced at about 80 % of the items' value
-	"pack_crusader": {"name":"Knight Arsenal", "class":"knight", "rarity":"epic", "gems":330, "items":["knight_wpn_bastion", "knight_wpn_crest", "title_gatebreaker"]},
+	"pack_crusader": {"name":"Knight Arsenal", "class":"knight", "rarity":"epic", "gems":280, "items":["knight_wpn_bastion", "knight_wpn_crest"]},   # (0.31.87: the Gatebreaker title is earned now; 330 -> 280)
 	"pack_warlord":  {"name":"Warlord Arsenal", "class":"barbarian", "rarity":"epic", "gems":260, "items":["barb_wpn_spiked", "barb_wpn_hammer"]},
 	"pack_shadow":   {"name":"Shadow Arsenal", "class":"rogue", "rarity":"epic", "gems":250, "items":["rogue_wpn_bolt", "rogue_wpn_fangs"]},
 	"pack_hunter":   {"name":"Hunter Arsenal", "class":"ranger", "rarity":"rare", "gems":120, "items":["ranger_wpn_recurve", "ranger_wpn_quiver"]},
@@ -361,7 +414,75 @@ static func match_stats(me: Dictionary, won: bool, _draw: bool) -> Dictionary:
 		"gates":int(float(me.get("gate_dmg", 0.0)) / 100.0), "gathered":int(me.get("gathered", 0)), "fed":int(me.get("fed", 0)),
 		"lifts":int(me.get("lifts", 0))}
 	s["class_" + str(me.get("cls", "villager"))] = 1
+	# 0.31.87 (titles): what siege_mode gathered over the match -- the class played most (cls_main), knockouts by the
+	# class they were made as, gate health repaired, health healed, the biggest burst of knockouts
+	s["repaired"] = int(me.get("repaired", 0.0))
+	s["healed"] = int(me.get("healed", 0.0))
+	s["best_multi"] = int(me.get("best_multi", 0))
+	s["main"] = str(me.get("cls_main", ""))
+	var kc: Dictionary = me.get("kills_cls", {})
+	for c in kc:
+		s["kills_" + str(c)] = int(kc[c])
 	return s
+
+# ---------------- titles (0.31.87) ----------------
+# How each title is earned: a lifetime count (profile stats) reaching n. "cls": the class it belongs to ("" = anyone);
+# each upgrade counts as its class (the sim's unit class is the base class, up = upgraded). Stats: matches, wins,
+# kills, gathered, fed, gates (per 100 damage), rescues, lifts, repaired / healed (health), best_multi (most knockouts
+# in one burst), best_streak (wins in a row), classes (classes played as the main class of a match), win_<cls>
+# (wins with that as the main class), kills_<cls> (knockouts made as it).
+const TITLE_GOALS := {
+	"title_squire":         {"stat":"matches", "n":5, "task":"Play 5 matches", "cls":""},
+	"title_victor":         {"stat":"wins", "n":5, "task":"Win 5 matches", "cls":""},
+	"title_brawler":        {"stat":"kills", "n":50, "task":"Knock out 50 enemies", "cls":""},
+	"title_woodcutter":     {"stat":"gathered", "n":200, "task":"Gather 200 wood or stone", "cls":""},
+	"title_fishmonger":     {"stat":"fed", "n":10, "task":"Feed 10 fish to your King", "cls":""},
+	"title_gatebreaker":    {"stat":"gates", "n":100, "task":"Deal 10,000 gate damage", "cls":""},
+	"title_kingbearer":     {"stat":"lifts", "n":25, "task":"Help lift your King 25 times", "cls":""},
+	"title_many_hats":      {"stat":"classes", "n":7, "task":"Play a match as each of the 7 classes", "cls":""},
+	"title_tempest":        {"stat":"best_multi", "n":3, "task":"Knock out 3 enemies in one burst", "cls":""},
+	"title_relentless":     {"stat":"best_streak", "n":5, "task":"Win 5 matches in a row", "cls":""},
+	"title_cake_baron":     {"stat":"fed", "n":100, "task":"Feed 100 fish to your King", "cls":""},
+	"title_siege_lord":     {"stat":"wins", "n":50, "task":"Win 50 matches", "cls":""},
+	"title_oracle_sworn":   {"stat":"rescues", "n":50, "task":"Rescue your King 50 times", "cls":""},
+	"title_unstoppable":    {"stat":"best_multi", "n":5, "task":"Knock out 5 enemies in one burst", "cls":""},
+	"title_undefeated":     {"stat":"best_streak", "n":10, "task":"Win 10 matches in a row", "cls":""},
+	"title_legend":         {"stat":"wins", "n":250, "task":"Win 250 matches", "cls":""},
+	"title_sir":            {"stat":"win_knight", "n":10, "task":"Win 10 matches as Knight or Crusader", "cls":"knight"},
+	"title_shieldwall":     {"stat":"kills_knight", "n":250, "task":"Knock out 250 enemies as Knight or Crusader", "cls":"knight"},
+	"title_hammer_realm":   {"stat":"win_knight", "n":100, "task":"Win 100 matches as Knight or Crusader", "cls":"knight"},
+	"title_wild":           {"stat":"win_barbarian", "n":10, "task":"Win 10 matches as Barbarian or Berserker", "cls":"barbarian"},
+	"title_whirlwind":      {"stat":"kills_barbarian", "n":250, "task":"Knock out 250 enemies as Barbarian or Berserker", "cls":"barbarian"},
+	"title_unchained":      {"stat":"win_barbarian", "n":100, "task":"Win 100 matches as Barbarian or Berserker", "cls":"barbarian"},
+	"title_sly":            {"stat":"win_rogue", "n":10, "task":"Win 10 matches as Rogue or Assassin", "cls":"rogue"},
+	"title_shadows":        {"stat":"kills_rogue", "n":250, "task":"Knock out 250 enemies as Rogue or Assassin", "cls":"rogue"},
+	"title_knives":         {"stat":"win_rogue", "n":100, "task":"Win 100 matches as Rogue or Assassin", "cls":"rogue"},
+	"title_keen_eyed":      {"stat":"win_ranger", "n":10, "task":"Win 10 matches as Archer or Ranger", "cls":"ranger"},
+	"title_deadeye":        {"stat":"kills_ranger", "n":250, "task":"Knock out 250 enemies as Archer or Ranger", "cls":"ranger"},
+	"title_warden":         {"stat":"win_ranger", "n":100, "task":"Win 100 matches as Archer or Ranger", "cls":"ranger"},
+	"title_apprentice":     {"stat":"win_mage", "n":10, "task":"Win 10 matches as Mage or Archmage", "cls":"mage"},
+	"title_stormcaller":    {"stat":"kills_mage", "n":250, "task":"Knock out 250 enemies as Mage or Archmage", "cls":"mage"},
+	"title_starborn":       {"stat":"win_mage", "n":100, "task":"Win 100 matches as Mage or Archmage", "cls":"mage"},
+	"title_acolyte":        {"stat":"win_priest", "n":10, "task":"Win 10 matches as Priest or Necromancer", "cls":"priest"},
+	"title_merciful":       {"stat":"healed", "n":25000, "task":"Heal 25,000 health", "cls":"priest"},
+	"title_lightbringer":   {"stat":"win_priest", "n":100, "task":"Win 100 matches as Priest or Necromancer", "cls":"priest"},
+	"title_foreman":        {"stat":"win_worker", "n":10, "task":"Win 10 matches as Worker", "cls":"worker"},
+	"title_mason":          {"stat":"repaired", "n":20000, "task":"Repair 20,000 gate health", "cls":"worker"},
+	"title_master_builder": {"stat":"gathered", "n":5000, "task":"Gather 5,000 wood or stone", "cls":"worker"},
+}
+const TITLE_RARITY_ORDER := ["common", "rare", "epic", "legendary"]
+
+static func title_progress(stats: Dictionary, id: String) -> int:
+	var g: Dictionary = TITLE_GOALS.get(id, {})
+	if g.is_empty():
+		return 0
+	if str(g.stat) == "classes":
+		var n := 0
+		for c in CLASSES:
+			if int(stats.get("main_" + c, 0)) > 0:
+				n += 1
+		return n
+	return int(stats.get(str(g.stat), 0))
 
 static func match_rewards(stats: Dictionary, won: bool, draw: bool, online: bool, first_win: bool) -> Dictionary:
 	# Itemised so the results screen can show where every coin came from.

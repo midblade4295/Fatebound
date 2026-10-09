@@ -17,6 +17,11 @@ extends SceneTree
 # (UPDATE opens Google Play); vc31 and older show "Update the game to play online". A hello without a readable build
 # (the probe without SIEGE_PROBE_BUILD, tools) is let in, so nothing that worked before is locked out by accident.
 #
+# 0.31.87 (Kevin: "make it so their titles show"; titles are earned in the app): a hello may name the player's title
+# ("title": an id of Net.TITLES -- anything else is dropped, so nobody puts their own text over their head); "pn" carries
+# "tt":{unit id: title id} beside the names and the lobby "tt" beside its names; the app joins them with the right
+# punctuation. "st" {"heal"} tells each player the health they've healed (the Merciful title), at most once a second.
+#
 # 0.31.86 (Kevin: "shows the player names on the battlefield above their heads. Only live players will show names."):
 # {"t":"pn", "n":{unit id: name}} -- the seated players' names, sent to everyone in the match whenever a seat changes
 # (join, leave, a new match). Bots aren't in it. Additive: older apps ignore it, so the protocol stays.
@@ -37,7 +42,7 @@ const IDLE_STOP := 30.0              # no players for this long -> stop simulati
 const LOBBY_TIME := 20.0             # the join countdown (0.31.82)
 const HELLO_TIMEOUT := 10.0
 const REFUSE_CLOSE_DELAY := 0.25     # s between a "bye"/"ver" reply and closing the socket
-const SERVER_BUILD := "0.31.86"      # this server's game version; the probe says it by default (identifies as current)
+const SERVER_BUILD := "0.31.87"      # this server's game version; the probe says it by default (identifies as current)
 const MIN_BUILD_FILE := "/etc/fatebound-siege/min_build"
 const MIN_BUILD_RELOAD := 10.0       # s between re-reads of the min-build file
 const UPDATE_MSG := "A new version of Fatebound is out. Update now on Google Play to keep playing online."
@@ -330,6 +335,8 @@ func _handle(cid: int, msg: Dictionary) -> void:
 				return
 			c.hello = true
 			c.name = clean_name(str(msg.get("name", "Player")))
+			var tid := str(msg.get("title", ""))
+			c.title = tid if Net.TITLES.has(tid) else ""
 			c.pred = bool(msg.get("pred", false))         # the phone moves its own unit (0.18.4)
 			c.queued = true                                # 0.31.82: into the lobby; seated when the countdown ends
 			if wave_end < 0.0:
@@ -429,8 +436,17 @@ func player_names() -> Dictionary:
 			out[c.unit] = c.name
 	return out
 
+func player_titles() -> Dictionary:
+	var out := {}
+	for cid in clients:
+		var c: Dictionary = clients[cid]
+		if c.hello and not bool(c.get("queued", false)) and c.unit != "" and str(c.get("title", "")) != "" \
+				and sim != null and sim.by_id.has(c.unit):
+			out[c.unit] = str(c.title)
+	return out
+
 func _send_names() -> void:
-	var msg := {"t":"pn", "n":player_names()}
+	var msg := {"t":"pn", "n":player_names(), "tt":player_titles()}
 	for cid in clients:
 		var c: Dictionary = clients[cid]
 		if c.hello and not bool(c.get("queued", false)) and c.unit != "":
@@ -481,9 +497,11 @@ func _run_lobby(delta: float) -> void:
 
 func _send_lobby(waiting: Array) -> void:
 	var names := []
+	var titles := []
 	for cid in waiting:
 		names.append(clients[cid].name)
-	var msg := {"t":"lobby", "left":maxf(0.0, wave_end - _now()), "wait":lobby_time, "names":names,
+		titles.append(str(clients[cid].get("title", "")))
+	var msg := {"t":"lobby", "left":maxf(0.0, wave_end - _now()), "wait":lobby_time, "names":names, "tt":titles,
 		"in_match":_seated_count(), "online":_human_count(), "slots":Net.TEAM_SIZE * 2,
 		"running":sim != null and not sim.ended and _seated_count() > 0, "match":match_id}   # (running: they join it)
 	for i in waiting.size():
@@ -594,6 +612,12 @@ func _run_match(delta: float) -> void:
 				if int(c.get("task_hash", -1)) != th:
 					c.task_hash = th
 					_send(cid, {"t":"m", "task":me.task.duplicate(true)})
+				# 0.31.87: the health they've healed, for the Merciful title (at most once a second, when it changed)
+				var healed := int(me.get("healed", 0.0))
+				if healed != int(c.get("heal_sent", 0)) and _now() - float(c.get("heal_at", -10.0)) >= 1.0:
+					c.heal_sent = healed
+					c.heal_at = _now()
+					_send(cid, {"t":"st", "heal":healed})
 		_st_send += Time.get_ticks_usec() - t_send
 		_st_snaps += 1
 	_stats_tick(delta)

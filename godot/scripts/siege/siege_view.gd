@@ -72,6 +72,7 @@ var player_id := "you"
 # team to the colour it is drawn in. Positions and facing still use the real team.
 var my_side := 0
 var player_names := {}                     # unit id -> name: the live players online (0.31.86; the server's "pn")
+var player_titles := {}                    # unit id -> title id (0.31.87; the "pn" message's "tt")
 static var _kit_side := 0                  # the side the cached merged castle walls (_kit_merged) were tinted for
 
 func vt(t: int) -> int:
@@ -4378,6 +4379,7 @@ func bars() -> Array:
 			# 0.31.86 (Kevin: "shows the player names on the battlefield above their heads. Only live players will show
 			# names."): over the bar -- yours gold, your side's light blue, theirs light red; bots have none
 			bar["name"] = str(player_names[u.id])
+			bar["title"] = str(player_titles.get(u.id, ""))
 			bar["name_color"] = Color("#ffd65a") if u.id == player_id else (Color("#bfeeff") if vt(int(u.team)) == 0 else Color("#ffc4b4"))
 		out.append(bar)
 	return out

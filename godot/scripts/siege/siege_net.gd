@@ -52,6 +52,77 @@ const SCALE := [1.0, 1.0, 100.0, 100.0, 1000.0, 1.0, 1.0, 1.0, 100.0, 1.0,
 #   "ok"         same protocol
 #   "unknown"    no answer (offline, or a server too old to answer the version check)
 # Nothing here hard-codes a protocol number, so every future bump of VERSION works the same way.
+# ---------------- titles (0.31.87) ----------------
+# Kevin: "make it so their titles show (use correct punctuation when putting the titles on the name)" and "players have
+# to earn the titles". Every title the game has: id -> [text, form, rarity]. The form says how it joins a name:
+#   "the"    an epithet, no comma           Midblade the Gatebreaker   (as "Alexander the Great")
+#   "of"     an "of" phrase, no comma       Midblade of Many Hats
+#   "prefix" a rank in front, no comma      Squire Midblade            (as "Sir Lancelot")
+#   "office" an office after it, a comma    Midblade, Siege Lord       (as "Arthur, King of the Britons")
+# Here (not in the economy) because the server builds the over-head text from it too: a hello names a title id, never
+# free text. How each is earned: scripts/meta/economy.gd TITLE_GOALS.
+const TITLES := {
+	# --- for everyone
+	"title_squire":         ["Squire", "prefix", "common"],
+	"title_victor":         ["the Victor", "the", "common"],
+	"title_brawler":        ["the Brawler", "the", "common"],
+	"title_woodcutter":     ["the Woodcutter", "the", "common"],
+	"title_fishmonger":     ["the Fishmonger", "the", "common"],
+	"title_gatebreaker":    ["the Gatebreaker", "the", "rare"],
+	"title_kingbearer":     ["Kingbearer", "office", "rare"],
+	"title_many_hats":      ["of Many Hats", "of", "rare"],
+	"title_tempest":        ["the Tempest", "the", "epic"],
+	"title_relentless":     ["the Relentless", "the", "epic"],
+	"title_cake_baron":     ["Fish Baron", "office", "epic"],
+	"title_siege_lord":     ["Siege Lord", "office", "epic"],
+	"title_oracle_sworn":   ["the Kingsworn", "the", "legendary"],
+	"title_unstoppable":    ["the Unstoppable", "the", "legendary"],
+	"title_undefeated":     ["the Undefeated", "the", "legendary"],
+	"title_legend":         ["the Legend", "the", "legendary"],
+	# --- per class (each upgrade counts as its class)
+	"title_sir":            ["Sir", "prefix", "rare"],
+	"title_shieldwall":     ["the Shieldwall", "the", "epic"],
+	"title_hammer_realm":   ["Hammer of the Realm", "office", "legendary"],
+	"title_wild":           ["the Wild", "the", "rare"],
+	"title_whirlwind":      ["the Whirlwind", "the", "epic"],
+	"title_unchained":      ["the Unchained", "the", "legendary"],
+	"title_sly":            ["the Sly", "the", "rare"],
+	"title_shadows":        ["of the Shadows", "of", "epic"],
+	"title_knives":         ["Master of Knives", "office", "legendary"],
+	"title_keen_eyed":      ["the Keen-Eyed", "the", "rare"],
+	"title_deadeye":        ["the Deadeye", "the", "epic"],
+	"title_warden":         ["Warden of the Wilds", "office", "legendary"],
+	"title_apprentice":     ["Apprentice", "prefix", "rare"],
+	"title_stormcaller":    ["the Stormcaller", "the", "epic"],
+	"title_starborn":       ["the Starborn", "the", "legendary"],
+	"title_acolyte":        ["Acolyte", "prefix", "rare"],
+	"title_merciful":       ["the Merciful", "the", "epic"],
+	"title_lightbringer":   ["the Lightbringer", "the", "legendary"],
+	"title_foreman":        ["Foreman", "prefix", "rare"],
+	"title_mason":          ["the Mason", "the", "epic"],
+	"title_master_builder": ["Master Builder", "office", "legendary"],
+}
+
+static func title_parts(name: String, title_id: String) -> Array:
+	# The name with its title, in reading order: [[text, is_title], ...] (the punctuation is part of the name's side).
+	var t: Array = TITLES.get(title_id, [])
+	if t.is_empty():
+		return [[name, false]]
+	match str(t[1]):
+		"prefix": return [[str(t[0]), true], [" " + name, false]]
+		"office": return [[name + ",", false], [" " + str(t[0]), true]]     # (spaces lead a part: measured widths keep them)
+		_: return [[name, false], [" " + str(t[0]), true]]
+
+static func title_text(name: String, title_id: String) -> String:
+	var s := ""
+	for p in title_parts(name, title_id):
+		s += str(p[0])
+	return s
+
+static func title_rarity(title_id: String) -> String:
+	var t: Array = TITLES.get(title_id, [])
+	return str(t[2]) if not t.is_empty() else ""
+
 static func version_verdict(server_v: int, client_v: int = VERSION) -> String:
 	if server_v < 0:
 		return "unknown"

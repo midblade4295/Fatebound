@@ -40,6 +40,12 @@ var profile = null       # scripts/meta/profile.gd — rewards, challenges and c
 var rewards: Dictionary = {}
 var match_result: Dictionary = {}
 var _lifts := 0          # times the player joined a lift of their own Oracle this match
+# 0.31.87 (titles): what the match counts toward them, gathered here so offline and online count the same way
+var _cls_time := {}      # class -> seconds played as it (alive; the upgrade counts as its class)
+var _kills_cls := {}     # class -> knockouts made as it
+var _kills_seen := 0
+var _repaired := 0.0     # gate health repaired (the sim's "repair" events)
+var _best_multi := 0     # most knockouts in one burst ("multikill" events)
 
 # Online play (set before adding to the tree). The server runs the match; this client mirrors it.
 var online := false
@@ -71,6 +77,7 @@ var _sent_bhold := false
 var lobby: Control = null           # 0.31.82: the join countdown, from PLAY until the welcome
 var lobby_msgs := 0                 # "lobby" messages received (tests)
 var net_names := {}                 # unit id -> name of each live player in the match (0.31.86, the server's "pn")
+var net_titles := {}                # unit id -> their title id (0.31.87, the "pn" message's "tt")
 
 var sim
 var view
@@ -221,7 +228,8 @@ func _start_steps() -> Array:
 			tut = Tutorial.new()
 			add_child(tut)                     # after the HUD: drawn on top of it
 			tut.begin(self)
-		_lifts = 0)
+		_lifts = 0
+		_title_reset())
 	return steps
 
 var _build_queue: Array = []           # steps still to run, one per frame (staged start)
@@ -259,6 +267,48 @@ func _count(e: Dictionary) -> void:
 	if str(e.get("k", "")) == "lift_join" and str(e.get("id", "")) == hud.player_id and sim != null \
 			and sim.by_id.has(hud.player_id) and int(e.get("team", -1)) == int(sim.by_id[hud.player_id].team):
 		_lifts += 1
+	if str(e.get("id", "")) == hud.player_id:
+		match str(e.get("k", "")):
+			"repair": _repaired += Sim.REPAIR_HP
+			"multikill": _best_multi = maxi(_best_multi, int(e.get("n", 0)))
+
+func my_title() -> String:
+	# The title to wear online: the profile's, if it is one the game knows and the player owns.
+	if profile == null:
+		return ""
+	var t := str(profile.d.get("title", ""))
+	return t if Net.TITLES.has(t) and profile.owns(t) else ""
+
+func _title_reset() -> void:
+	_cls_time = {}
+	_kills_cls = {}
+	_kills_seen = 0
+	_repaired = 0.0
+	_best_multi = 0
+
+func _title_track(delta: float) -> void:
+	# Each frame of a match: time as the class you are, and any new knockouts credited to it.
+	var me: Dictionary = sim.by_id.get(hud.player_id, {}) if sim != null else {}
+	if me.is_empty() or sim.ended:
+		return
+	var cls := str(me.cls)
+	if me.state != "dead" and cls != "villager":
+		_cls_time[cls] = float(_cls_time.get(cls, 0.0)) + delta
+	var k := int(me.kills)
+	if k > _kills_seen:
+		if cls != "villager":
+			_kills_cls[cls] = int(_kills_cls.get(cls, 0)) + (k - _kills_seen)
+		_kills_seen = k
+
+func title_summary() -> Dictionary:
+	# The match's main class: the one played longest (at least a minute of it), else none.
+	var main := ""
+	var best := 60.0
+	for c in _cls_time:
+		if float(_cls_time[c]) >= best:
+			best = float(_cls_time[c])
+			main = str(c)
+	return {"cls_main": main, "kills_cls": _kills_cls.duplicate(), "repaired": _repaired, "best_multi": _best_multi}
 
 func _start_online() -> void:
 	ws = WebSocketPeer.new()
@@ -336,12 +386,14 @@ func _build_online_match(msg: Dictionary) -> void:
 	view.player_id = me_id
 	view.player_looks = _looks()
 	view.player_names = net_names
+	view.player_titles = net_titles
 	viewport.add_child(view)
 	view.setup(sim)
 	hud.sim = sim
 	net_match = int(msg.get("match", 0))
 	_result_shown = false
 	_lifts = 0
+	_title_reset()
 	net_state = "playing"
 	diag.write("NET welcome match=%d you=%s players=%d" % [net_match, me_id, int(msg.get("players", 1))])
 	hud.toast("Online: %d player%s" % [int(msg.get("players", 1)), "" if int(msg.get("players", 1)) == 1 else "s"], VisualTheme.GOLD)
@@ -383,7 +435,7 @@ func _net_process(delta: float) -> void:
 		return
 	if net_state == "connecting":
 		net_state = "waiting"
-		_net_send({"t":"hello", "v":Net.VERSION, "name":player_name, "build":Diag.BUILD, "pred":true})
+		_net_send({"t":"hello", "v":Net.VERSION, "name":player_name, "build":Diag.BUILD, "pred":true, "title":my_title()})
 	while ws.get_available_packet_count() > 0:
 		var msg := Net.decode(ws.get_packet())
 		match str(msg.get("t", "")):
@@ -426,8 +478,14 @@ func _net_process(delta: float) -> void:
 			"pn":                                             # 0.31.86: the live players' names, by unit
 				var pn: Variant = msg.get("n", {})
 				net_names = pn if pn is Dictionary else {}
+				var tt: Variant = msg.get("tt", {})
+				net_titles = tt if tt is Dictionary else {}
 				if is_instance_valid(view):
 					view.player_names = net_names
+					view.player_titles = net_titles
+			"st":                                             # 0.31.87: the health I've healed (the Merciful title)
+				if sim != null and sim.by_id.has(hud.player_id):
+					sim.by_id[hud.player_id]["healed"] = float(msg.get("heal", 0))
 			"m":                                              # 0.31.23: my task, sent on its own when it changes
 				if sim != null and sim.by_id.has(hud.player_id):
 					sim.by_id[hud.player_id].task = msg.get("task", {})
@@ -689,6 +747,7 @@ func _process(delta: float) -> void:
 		return
 	diag.mark("input")
 	_footsteps(delta)
+	_title_track(delta)
 	_ambience(delta)
 	var t_start := Time.get_ticks_usec()
 	if online:
@@ -731,6 +790,7 @@ func _process(delta: float) -> void:
 		diag.write("MATCH END winner=%d reason=%s score=%s" % [sim.winner, sim.end_reason, str(sim.score)])
 		var me: Dictionary = (sim.by_id[hud.player_id] as Dictionary).duplicate()
 		me["lifts"] = _lifts
+		me.merge(title_summary(), true)
 		var won: bool = sim.winner == int(me.team)
 		var draw: bool = sim.winner == -1
 		match_result = {}
@@ -738,6 +798,7 @@ func _process(delta: float) -> void:
 			match_result = profile.apply_match(me, won, draw, online)
 			rewards = match_result.rewards
 		diag.write("REWARDS %s" % str(match_result.get("rewards", {}).get("gold", 0)))
+		hud.player_name = player_name
 		hud.show_result(match_result)
 
 func finish_tutorial() -> void:

@@ -1084,7 +1084,14 @@ func _step_beam(u: Dictionary, dt: float) -> void:
 		_step_drain(u, t, dt)
 		return
 	var rate := float(CLASSES["priest"].heal) * (1.4 if u.up else 1.0)
-	t.hp = minf(t.max_hp, t.hp + rate * dt * _beam_share(t))
+	_heal(u, t, rate * dt * _beam_share(t))
+
+func _heal(by: Dictionary, t: Dictionary, amount: float) -> void:
+	# Heal t; what an ally gets (not yourself) counts toward the healer's "healed" (0.31.87: the Merciful title).
+	var before: float = t.hp
+	t.hp = minf(t.max_hp, t.hp + amount)
+	if by != t:
+		by["healed"] = float(by.get("healed", 0.0)) + (t.hp - before)
 
 func _dodge(u: Dictionary) -> bool:
 	if not alive(u) or u.stun > 0.0 or u.carrying or u.cd_dodge > 0.0 or u.state in ["wind","dodge"] or u.workshop_open \
@@ -1784,7 +1791,7 @@ func _resolve_attack(u: Dictionary) -> void:
 				if alive(a) and a.team == u.team and a.pos.distance_to(u.pos) <= SANCTUARY_R \
 						and time - float(a.get("sanct_t", -INF)) >= SANCT_ONCE:
 					a["sanct_t"] = time
-					a.hp = minf(a.max_hp, a.hp + amount)
+					_heal(u, a, amount)
 			_event("sanctuary", {"id":u.id, "team":u.team})
 
 # ---------- stepping ----------
@@ -3815,7 +3822,7 @@ func _step_drain(u: Dictionary, foe: Dictionary, dt: float) -> void:
 		_damage(u, foe, chunk)
 	var ally: Dictionary = by_id.get(str(u.get("beam2", "")), {})
 	if not ally.is_empty() and alive(ally) and u.pos.distance_to(ally.pos) <= float(CLASSES["priest"].range) + 1.0:
-		ally.hp = minf(ally.max_hp, ally.hp + NECRO_ALLY_HEAL * dt * _beam_share(ally))
+		_heal(u, ally, NECRO_ALLY_HEAL * dt * _beam_share(ally))
 	else:
 		u.beam2 = ""
 

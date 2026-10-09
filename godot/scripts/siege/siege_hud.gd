@@ -9,6 +9,7 @@ const UI2 = preload("res://scripts/app/ui2.gd")
 # The old brass kinds map onto the app's tactile styles so battle panels match the menus.
 const BUTTON_STYLE := {"primary":"orange", "secondary":"blue", "gold":"gold", "roll":"gold", "active":"green", "danger":"red"}   # 0.31.79: the menu skins
 const Sim = preload("res://scripts/siege/siege_sim.gd")
+const NetT = preload("res://scripts/siege/siege_net.gd")
 
 signal leave_requested
 signal replay_requested
@@ -25,6 +26,7 @@ var sim
 var diag
 var _bar_style: StyleBox
 var player_id := "you"
+var player_name := "Player"         # (0.31.87: the results panel shows an earned title on it)
 
 func vt(t: int) -> int:
 	# 0.31.85: your side drawn blue, the other red, whichever team you're on (as siege_view.vt)
@@ -404,6 +406,20 @@ func show_result(result: Dictionary = {}) -> void:
 			else:
 				UI2.text(cv, "%s EARNED!" % cn.to_upper(), 15, Color(str(Sim_Eco.CHESTS[kind].color)))
 				UI2.body(cv, "Unlock it from Home", 11, UI2.SOFT)
+		for tid in result.get("titles", []):                    # 0.31.87: a title earned this match
+			var trar := NetT.title_rarity(str(tid))
+			var tbox := UI2.frame(v, {"common": "night", "rare": "royal", "epic": "purple", "legendary": "ember"}.get(trar, "night"), 8, 14.0,
+				{"common": "silver", "rare": "blue", "epic": "purple", "legendary": "orange"}.get(trar, "gold"), {"pattern_mix": 0.0})
+			if trar == "legendary":
+				UI2.sweep(tbox.get_parent() as Control, 2.2, 60.0, 0.35)
+			UI2.center(UI2.text(tbox, "TITLE EARNED!", 15, UI2.GOLD))
+			var tl := HBoxContainer.new()
+			tl.alignment = BoxContainer.ALIGNMENT_CENTER
+			tl.add_theme_constant_override("separation", 0)
+			tbox.add_child(tl)
+			for part in NetT.title_parts(str(player_name), str(tid)):
+				UI2.text(tl, str(part[0]), 17, TAG_COL.get(trar, Color.WHITE) if part[1] else Color.WHITE, Color("#120a02"), 5)
+			UI2.center(UI2.body(tbox, "%s · wear it from the Locker" % trar.capitalize(), 11, Color(1, 1, 1, 0.8), false))
 		var tiers: Array = result.get("tiers", [])
 		if not tiers.is_empty():
 			UI2.center(UI2.body(v, "Siege Pass tier %s reached — claim it on the Pass screen" % (str(tiers[-1]) if tiers.size() == 1 else "%d–%d" % [tiers[0], tiers[-1]]), 12, Color("#ffcf7a")))
@@ -749,6 +765,7 @@ func _draw_hud() -> void:
 func _draw_bars() -> void:
 	if not bars_source.is_valid() or not project.is_valid():
 		return
+	var tags := []
 	for b in bars_source.call():
 		if on_screen.is_valid() and not on_screen.call(b.pos):
 			continue
@@ -759,7 +776,100 @@ func _draw_bars() -> void:
 		draw_rect(r.grow(1.0), Color(0, 0, 0, 0.7))
 		draw_rect(Rect2(r.position, Vector2(r.size.x * float(b.fill), r.size.y)), b.color)
 		if b.has("name"):                                 # 0.31.86: a live player's name over the bar
-			_text(p + Vector2(0, -7), str(b.name), 12, b.get("name_color", Color.WHITE))
+			tags.append([p, b])
+	_draw_name_tags(tags)
+
+# ---------------- names and titles over heads (0.31.86, 0.31.87) ----------------
+# Each live player's name on a dark plate over their bar, in their side's colour; a title joins it with its
+# punctuation (Net.title_parts), in its rarity's colour, and the plate shows the rarity: common plain, rare a blue rim,
+# epic a purple rim and a slow glow, legendary a gold rim, a glow, a light band sweeping the letters and two sparkles.
+const TAG_PX := 12
+const TAG_COL := {"common": Color("#cfd8e0"), "rare": Color("#6cc4ff"), "epic": Color("#d6a2ff"), "legendary": Color("#ffc23d")}
+const TAG_RIM := {"rare": [Color("#5fb6ff"), 1], "epic": [Color("#b86bff"), 2], "legendary": [Color("#ffc23d"), 2]}
+const TAG_GLOW := {"epic": Color(0.62, 0.25, 1.0, 0.55), "legendary": Color(1.0, 0.55, 0.1, 0.6)}
+var _tag_styles := {}
+
+func _tag_style(key: String) -> StyleBoxFlat:
+	if not _tag_styles.has(key):
+		var sb := StyleBoxFlat.new()
+		sb.anti_aliasing = true
+		if key.begins_with("glow"):
+			sb.set_corner_radius_all(9 + 2 * int(key.substr(4)))
+		else:
+			sb.bg_color = Color(0.03, 0.04, 0.09, 0.62)
+			sb.set_corner_radius_all(8)
+			if TAG_RIM.has(key):
+				sb.border_color = TAG_RIM[key][0]
+				sb.set_border_width_all(int(TAG_RIM[key][1]))
+		_tag_styles[key] = sb
+	return _tag_styles[key]
+
+func _draw_name_tags(tags: Array) -> void:
+	# The nearest (lowest on screen) keep their place; a plate that would cover one already placed steps up.
+	tags.sort_custom(func(a, b): return (a[0] as Vector2).y > (b[0] as Vector2).y)
+	var placed: Array = []
+	var t := Time.get_ticks_msec() / 1000.0
+	for tg in tags:
+		var p: Vector2 = tg[0]
+		var b: Dictionary = tg[1]
+		var parts := NetT.title_parts(str(b.name), str(b.get("title", "")))
+		var w := 0.0
+		for part in parts:
+			w += _bold.get_string_size(str(part[0]), HORIZONTAL_ALIGNMENT_LEFT, -1, TAG_PX).x
+		var plate := Rect2(p.x - w * 0.5 - 6.0, p.y - 7.0 - 13.0, w + 12.0, 17.0)
+		for _i in 4:
+			var hit := false
+			for r in placed:
+				if (r as Rect2).intersects(plate):
+					hit = true
+					break
+			if not hit:
+				break
+			plate.position.y -= 18.0
+		placed.append(plate)
+		_draw_tag(plate, parts, NetT.title_rarity(str(b.get("title", ""))), b.get("name_color", Color.WHITE), t)
+
+func _draw_tag(plate: Rect2, parts: Array, rarity: String, side_col: Color, t: float) -> void:
+	if TAG_GLOW.has(rarity):
+		var glow: Color = TAG_GLOW[rarity]
+		var pulse := 0.6 + 0.4 * sin(t * 3.0)
+		for g in 3:
+			var gs := _tag_style("glow%d" % g)
+			gs.bg_color = Color(glow, glow.a * pulse * (0.28 - 0.08 * g))
+			draw_style_box(gs, plate.grow(2.0 + 2.0 * g))
+	draw_style_box(_tag_style(rarity if TAG_RIM.has(rarity) else "plain"), plate)
+	if rarity == "legendary":
+		for sx in [plate.position.x, plate.end.x]:
+			_sparkle(Vector2(sx, plate.position.y + 1.0), 5.0, Color(1.0, 0.95, 0.6, 0.65 + 0.35 * sin(t * 5.0 + sx)))
+	var x := plate.position.x + 6.0
+	var y := plate.position.y + 13.0
+	var col: Color = TAG_COL.get(rarity, Color.WHITE)
+	for part in parts:
+		var s: String = part[0]
+		var is_title: bool = part[1]
+		var sw := _bold.get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, TAG_PX).x
+		if is_title and rarity == "legendary":
+			# letter by letter, so a light band can sweep across the gold
+			var cx := x
+			for i in s.length():
+				var ch := s.substr(i, 1)
+				draw_char_outline(_bold, Vector2(cx, y), ch, TAG_PX, 4, Color(0, 0, 0, 0.75))
+				cx += _bold.get_char_size(ch.unicode_at(0), TAG_PX).x
+			cx = x
+			for i in s.length():
+				var ch := s.substr(i, 1)
+				var band := fposmod((cx - x) / maxf(1.0, sw) - t * 0.6, 1.6)
+				var k := clampf(1.0 - absf(band - 0.3) / 0.2, 0.0, 1.0)
+				draw_char(_bold, Vector2(cx, y), ch, TAG_PX, col.lerp(Color("#fff8dc"), k))
+				cx += _bold.get_char_size(ch.unicode_at(0), TAG_PX).x
+		else:
+			draw_string_outline(_bold, Vector2(x, y), s, HORIZONTAL_ALIGNMENT_LEFT, -1, TAG_PX, 4, Color(0, 0, 0, 0.75))
+			draw_string(_bold, Vector2(x, y), s, HORIZONTAL_ALIGNMENT_LEFT, -1, TAG_PX, col if is_title else side_col)
+		x += sw
+
+func _sparkle(c: Vector2, s: float, col: Color) -> void:
+	draw_colored_polygon(PackedVector2Array([c + Vector2(0, -s), c + Vector2(s * 0.3, -s * 0.3), c + Vector2(s, 0), c + Vector2(s * 0.3, s * 0.3),
+		c + Vector2(0, s), c + Vector2(-s * 0.3, s * 0.3), c + Vector2(-s, 0), c + Vector2(-s * 0.3, -s * 0.3)]), col)
 
 func _draw_numbers() -> void:
 	# Damage numbers: projected from 3D and drawn on the HUD canvas (no Label3D mesh rebuilds).

@@ -111,7 +111,7 @@ func _process(delta: float) -> bool:
 				check(false, "client joined within 8 s (state=%s)" % mode.net_state); _finish()
 		"raw":
 			if raw.get_ready_state() == WebSocketPeer.STATE_OPEN and not raw_hello_sent:
-				raw.put_packet(Net.encode({"t":"hello", "v":Net.VERSION, "name":"TestB"}))
+				raw.put_packet(Net.encode({"t":"hello", "v":Net.VERSION, "name":"TestB", "title":"title_siege_lord"}))
 				raw_hello_sent = true
 			if raw_unit != "" and snaps_raw >= 3:
 				check(raw_unit.begins_with("r"), "second player seated on red (%s)" % raw_unit)
@@ -121,6 +121,13 @@ func _process(delta: float) -> bool:
 					"the lobby says a battle with 1 player is on, 2 online (%s)" % str(raw_lobby))
 				check(str(mode.net_names.get(raw_unit, "")) == "TestB" and mode.net_names.size() == 2, "the second player's name reached us (%s)" % str(mode.net_names))
 				check(mode.view.player_names.has(raw_unit), "the view has it (a bot never gets one)")
+				check(str(mode.net_titles.get(raw_unit, "")) == "title_siege_lord" and not mode.net_titles.has(mode.hud.player_id),
+					"their title came with it; we wear none (%s)" % str(mode.net_titles))
+				check(str(raw_lobby.get("tt", [])) == str(["title_siege_lord"]), "the lobby listed their title too (%s)" % str(raw_lobby.get("tt", [])))
+				var tagged := false
+				for b in mode.view.bars():
+					tagged = tagged or (str(b.get("name", "")) == "TestB" and str(b.get("title", "")) == "title_siege_lord")
+				check(tagged, "their bar carries the title for the over-head plate")
 				# Pick the farther courtyard station, then steer the real touch stick over the
 				# mirror's navigation path. A fixed direction is seed-dependent here: the spawn
 				# is randomized and walls/resources can sit directly in front of it.

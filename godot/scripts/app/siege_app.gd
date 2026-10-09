@@ -422,6 +422,7 @@ func _build_chrome() -> void:
 	bar.add_child(who)
 	name_label = UI2.body(who, "", 14, Color.WHITE, false)
 	name_label.clip_text = true
+	name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS      # (0.31.87: a long title ends in "...")
 	name_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.7))
 	name_label.add_theme_constant_override("outline_size", 4)
 	xp_holder = VBoxContainer.new()
@@ -614,10 +615,7 @@ func _style_tab(tb: Dictionary, on: bool) -> void:
 func refresh_top() -> void:
 	var d: Dictionary = profile.d
 	level_label.text = str(int(d.level))
-	var title := ""
-	if str(d.title) != "":
-		title = "  ·  " + str(Eco.item(str(d.title)).get("name", ""))
-	name_label.text = str(d.name) + title
+	name_label.text = Net.title_text(str(d.name), str(d.title))      # (0.31.87: the title as it joins the name)
 	for c in xp_holder.get_children():
 		c.queue_free()
 	UI2.bar(xp_holder, int(d.xp), Eco.level_xp(int(d.level)), Color("#b6f3ff"), Color("#36b9ea"), 10.0)

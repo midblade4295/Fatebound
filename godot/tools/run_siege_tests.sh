@@ -83,6 +83,8 @@ run outpost_look_test    OUTPOST_LOOK_PASS        90
 run castle_kit_test      CASTLE_KIT_PASS          90
 # Seated on either team (online): the stick follows the screen, your side drawn blue (0.31.85).
 run side_view_test       SIDE_VIEW_PASS           120 --fixed-fps 30
+# Earned titles (0.31.87): the table and its punctuation, earning, streaks, pass/shop/pack, healing counted.
+run title_test           TITLE_PASS               60
 # The app's staged match start (0.31.78): the card first, the world built behind it over frames.
 FB_STAGED_START=1 FB_FORCE_WARMUP=1 run staged_start_test STAGED_START_PASS 240 --fixed-fps 30
 # The human soak must never stall the game thread.

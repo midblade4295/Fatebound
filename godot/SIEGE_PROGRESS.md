@@ -2676,3 +2676,36 @@ K2/K3 notes (0.17.0)
 - siege_net_smoke: the names arrive for both players, show over our bar, and the leaver's goes when they leave.
 - Live server: needs the redeploy from this branch for the names (until then the app shows none).
 - 0.31.86, version code 172. Quick suite: ALL 40 PASSED (with the merged version_gate_test and min_build_test).
+
+# 0.31.87 (Kevin: "make it so their titles show (use correct punctuation when putting the titles on the name)"; "players
+# have to earn the titles instead by doing tasks in the game. Make ones that are easier and ones that are hard
+# (legendary rarity)"; "more titles for each class"; "remove the no death in a match title because players will just camp")
+- 37 titles, all earned (draft approved, rarity looks picked from reports in chat): 16 for everyone (5 common, 3 rare,
+  4 epic, 4 legendary) and a rare / epic / legendary for each of the 7 classes (each upgrade counts as its class).
+  siege_net.TITLES: id -> [text, form, rarity] -- here so the server builds the over-head text from ids, never free
+  text. Forms and punctuation: "the" epithet (Midblade the Gatebreaker), "of" (Midblade of Many Hats), "prefix" rank
+  (Squire Midblade, Sir Midblade), "office" after a comma (Midblade, Siege Lord). Net.title_parts / title_text.
+- How each is earned: economy TITLE_GOALS (lifetime count -> n, a task line, its class). Profile stats gain lifts,
+  repaired, healed, best_multi, streak / best_streak, main_<cls>, win_<cls>, kills_<cls>. A match's class is the one
+  played longest (at least a minute; hats come off on a knockout, so not the class it ends as); knockouts count for the
+  class they were made as. siege_mode gathers it the same way offline and online (class time and knockouts from the
+  player's unit, repairs and bursts from the sim's events); healing is the sim's new "healed" (what allies got, not
+  yourself: priest beam, Sanctuary, Necromancer's ally heal), sent online by the server ("st", once a second).
+  profile.check_titles() after every match (results: TITLE EARNED with the name as it shows) and on load (a veteran's
+  old stats earn theirs at once; Home toasts how many).
+- No win-without-dying title (Kevin: camping). Whirlwind, Shieldwall, Lightbringer and Mason became class titles; the
+  general triple knockout is the Tempest.
+- Owned titles stay owned (shop, pass, the Knight Arsenal). Gatebreaker and Kingsworn left the shop; the Knight Arsenal
+  dropped its title (330 -> 280 gems); the five old pass titles stay in the pass draw (every season keeps its tiers)
+  and their tiers give gems (epic 50, legendary 100; season 1: premium 5, 9, 21); the premium offer counts the real
+  cosmetics (10, 5 legendary in season 1). Today's shop rotation changes once (its pool lost the two titles).
+- Online: the hello names the worn title id (dropped unless in Net.TITLES); "pn" carries "tt" {unit: title id}, the
+  lobby "tt" beside its names (the panel lists titled names). SERVER_BUILD 0.31.87; additive, protocol 35.
+- Over the head (siege_hud): every live player's name on a dark plate; the title in its rarity's colour; common plain,
+  rare a blue rim, epic a purple rim and slow glow, legendary a gold rim, glow, a light band sweeping the letters and two
+  sparkles. Plates that would cover one already placed step up. The top bar reads the punctuated name.
+- Locker > TITLES: For Everyone, then each class (as Knight or Crusader ...), rarity order; each card the rarity's
+  panel, the name as it shows, the task, a progress bar, EQUIP once earned.
+- tests/title_test.gd (in the suite); siege_net_smoke: a title through the server to the other player's bar and lobby.
+- Live server: needs the redeploy from this branch (titles over heads, healing counted online).
+- 0.31.87, version code 173. Quick suite: ALL 41 PASSED.

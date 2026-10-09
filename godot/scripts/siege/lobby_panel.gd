@@ -5,6 +5,7 @@ extends Control
 # flip), how many players are on, and whether you'll go into a battle already running. The last five seconds tick.
 # LEAVE (or Back) goes home. A server without the lobby (before 0.31.82) welcomes at once, so this just disappears.
 const UI2 = preload("res://scripts/app/ui2.gd")
+const Net = preload("res://scripts/siege/siege_net.gd")
 
 signal leave
 
@@ -151,7 +152,12 @@ func update(msg: Dictionary) -> void:
 	else:
 		mode_lbl.text = "A new 16 vs 16 battle starts at zero"
 	sub_lbl.text = "bots fill the empty slots"
-	_set_names(msg.get("names", []) as Array, int(msg.get("me", -1)))
+	var names: Array = (msg.get("names", []) as Array).duplicate()
+	var tt: Array = msg.get("tt", []) if msg.get("tt", []) is Array else []
+	for i in names.size():                         # (0.31.87: with their titles, punctuated)
+		if i < tt.size() and str(tt[i]) != "":
+			names[i] = Net.title_text(str(names[i]), str(tt[i]))
+	_set_names(names, int(msg.get("me", -1)))
 	_first = false
 
 func fail(why: String) -> void:
