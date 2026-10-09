@@ -2619,3 +2619,11 @@ K2/K3 notes (0.17.0)
   and siege_net.gd, but the sim preloads siege_land.gd and siege_castle.gd, so the copied sim failed to compile and the
   probe failed. It now copies all four (the baked terrain files stay client-only). Dry run (NO_SYSTEMD=1): installs,
   the probe waits out the 20 s lobby, PROBE_OK.
+
+## vc33 build (grok/siege-play-local-r10, 2026-10-08 PT) -- OVER THE 175 MB UPLOAD LIMIT, not uploaded
+- Merge of claude/siege-dev-r6-local e749337 (0.31.84) onto r9: ETC2 imports kept (the six new base-class bodies set to
+  ETC2 like the rest), force-update + 0.31.82 lobby/status merged on the server (status close goes through _refuse),
+  Update screen's "Play offline vs bots" now starts the offline match itself (Home has no VS BOTS any more).
+- vc33 / 1.2.9-siege-0.31.84, 3 ABIs, signed with the upload key (cert SHA256 69:71:A9...:90:84), verifier/bundletool/
+  jarsigner OK, 38/38 quick tests pass. AAB 198.4 MB (vc32 167.0): +31 MB from 12 new Meshy bodies (textures, meshes,
+  anims) and the v2 menus/chests. Protocol still 35.
