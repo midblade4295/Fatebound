@@ -135,8 +135,10 @@ func sfx(cue: String) -> void:
 # ---------------- chrome ----------------
 func _build_background() -> void:
 	var grad := Gradient.new()
-	grad.set_color(0, UI.BG_TOP)
-	grad.set_color(1, UI.BG_BOTTOM)
+	# 0.31.83: plain royal blue (the tone the damask used to give it), lighter at the top
+	grad.set_color(0, Color("#243d96"))
+	grad.set_color(1, Color("#0a1750"))
+	grad.add_point(0.45, Color("#152a7c"))
 	var gt := GradientTexture2D.new()
 	gt.gradient = grad
 	gt.fill_from = Vector2(0.5, 0.0)
@@ -150,16 +152,8 @@ func _build_background() -> void:
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(bg)
-	# 0.31.79: the royal damask under every screen, faint
-	var dam := TextureRect.new()
-	dam.texture = UI2.tex(UI2.V2 + "tex_damask.webp")
-	dam.stretch_mode = TextureRect.STRETCH_TILE
-	dam.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	dam.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
-	dam.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	dam.modulate = Color(1.6, 1.7, 2.2, 0.32)
-	dam.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(dam)
+	# (0.31.83, Kevin: "I don't like the wallpaper looking pattern on background": the damask that 0.31.79 tiled under
+	# every screen is gone -- just the gradient and the glow)
 	# A soft warm glow behind the top of the screen.
 	var glow_g := Gradient.new()
 	glow_g.set_color(0, Color(1.0, 0.72, 0.3, 0.18))

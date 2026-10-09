@@ -42,19 +42,19 @@ static func rim_of(name: String) -> Array:
 		"blue": RIM_BLUE, "orange": RIM_ORANGE}.get(name, RIM_GOLD)
 
 static func panel_params(kind: String, rim := "gold") -> Dictionary:
-	var dam := tex(V2 + "tex_damask.webp")
+	var dam := tex(V2 + "tex_damask.webp")      # (0.31.83, Kevin: no "wallpaper" pattern -- pattern_mix 0: plain gradients)
 	var p := {}
 	match kind:
 		"royal":
-			p = {"fill_top": Color("#4f7ff0"), "fill_bottom": Color("#0e1a52"), "pattern": dam, "pattern_mix": 1.0, "pattern_gain": 8.3, "pattern_luma": 1.0}
+			p = {"fill_top": Color("#4f7ff0"), "fill_bottom": Color("#0e1a52"), "pattern": dam, "pattern_mix": 0.0, "pattern_gain": 8.3, "pattern_luma": 1.0}
 		"night":
-			p = {"fill_top": Color(0.16, 0.24, 0.6, 0.95), "fill_bottom": Color(0.05, 0.07, 0.2, 0.97), "pattern": dam, "pattern_mix": 1.0, "pattern_gain": 8.3, "pattern_luma": 1.0}
+			p = {"fill_top": Color(0.16, 0.24, 0.6, 0.95), "fill_bottom": Color(0.05, 0.07, 0.2, 0.97), "pattern": dam, "pattern_mix": 0.0, "pattern_gain": 8.3, "pattern_luma": 1.0}
 		"purple":
-			p = {"fill_top": Color("#a463f2"), "fill_bottom": Color("#25094d"), "pattern": dam, "pattern_mix": 1.0, "pattern_gain": 8.3, "pattern_luma": 1.0}
+			p = {"fill_top": Color("#a463f2"), "fill_bottom": Color("#25094d"), "pattern": dam, "pattern_mix": 0.0, "pattern_gain": 8.3, "pattern_luma": 1.0}
 		"ember":
-			p = {"fill_top": Color("#ff9a45"), "fill_bottom": Color("#3a1003"), "pattern": dam, "pattern_mix": 1.0, "pattern_gain": 8.3, "pattern_luma": 1.0}
+			p = {"fill_top": Color("#ff9a45"), "fill_bottom": Color("#3a1003"), "pattern": dam, "pattern_mix": 0.0, "pattern_gain": 8.3, "pattern_luma": 1.0}
 		"green":
-			p = {"fill_top": Color("#4fd27a"), "fill_bottom": Color("#0b3d22"), "pattern": dam, "pattern_mix": 1.0, "pattern_gain": 8.3, "pattern_luma": 1.0}
+			p = {"fill_top": Color("#4fd27a"), "fill_bottom": Color("#0b3d22"), "pattern": dam, "pattern_mix": 0.0, "pattern_gain": 8.3, "pattern_luma": 1.0}
 		"parch":
 			p = {"fill_top": Color("#fffaf0"), "fill_bottom": Color("#e9d2a2"), "pattern": tex(V2 + "tex_parchment.webp"), "pattern_mix": 1.0, "pattern_gain": 1.12, "pattern_px": 320.0}
 		"wood":

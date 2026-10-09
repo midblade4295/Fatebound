@@ -2543,4 +2543,11 @@ K2/K3 notes (0.17.0)
   running, counts), the panel closing on the welcome and a status answer; net_load_test uses a 1 s lobby.
 - Live server: needs `sudo bash godot/server/deploy/install_siege_server.sh` from this branch for the countdown and the
   count (until then the app connects as before).
-- 0.31.82, version code 168.
+- 0.31.82, version code 168. Quick suite: ALL 37 PASSED.
+
+# 0.31.83 (Kevin: "I don't like the wallpaper looking pattern on background")
+- The royal damask is gone: no longer tiled under every screen (siege_app._build_background -- the gradient is now the
+  royal blue the damask used to give it, #243d96 -> #152a7c -> #0a1750, with the warm glow at the top), and the damask
+  panel kinds (royal, night, purple, ember, green: the shop / pass / featured cards, the match HUD's panels) are plain
+  gradients (pattern_mix 0). Parchment, wood and stone panels unchanged.
+- 0.31.83, version code 169. Quick suite: ALL 37 PASSED.
