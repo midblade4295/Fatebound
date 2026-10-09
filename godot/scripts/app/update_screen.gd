@@ -69,7 +69,7 @@ func _ready() -> void:
 	col.add_theme_constant_override("separation", 14)
 	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	margin.add_child(col)
-	var icon := UI.tex_icon(col, "res://assets/branding/icon.png", 132)   # the launcher's laughing king (read only)
+	var icon := UI.tex_icon(col, "res://assets/branding/icon.png", 132)   # the launcher icon (read only)
 	icon.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	var title := UI.title(col, TITLE, 30, UI.GOLD)
 	title.add_theme_color_override("font_outline_color", Color("#2e1908"))

@@ -22,7 +22,7 @@ is a real render of game build **0.19.1-siege-tutorial (versionCode 40)**.
    true — if anything paid ever affects gameplay, remove that line and screenshot 7's caption.
 4. **Don't alter the screenshots** except by regenerating them with `tools/` (section 5). Play forbids
    misleading screenshots; these show the real game with its real HUD.
-5. If a step needs something that isn't here (the app icon, Kevin's Play account decisions), stop and
+5. If a step needs something that isn't here (Kevin's Play account decisions), stop and
    ask Kevin rather than guessing.
 
 ## 1. What's in the zip
@@ -50,7 +50,7 @@ SPIN. SHIELD. SMASH. · FEED THEIR ORACLE CAKE · LEARN FROM THE HERALD · SKINS
 1. Play Console → the app (**`com.fatebound.game`**) → **Grow users → Store presence → Main store listing**.
 2. **App details:** App name, Short description, Full description — paste from `listing/STORE_LISTING.md`.
 3. **Graphics:**
-   - App icon (512×512, 32-bit PNG) — **not in this package**; ask Kevin.
+   - App icon (512×512, 32-bit PNG) — `graphics/app_icon_512x512.png` (0.31.89, Kevin's pick "King Rescue").
    - Feature graphic — `graphics/feature_graphic_1024x500.png`.
    - Phone screenshots — `graphics/phone_screenshots/01_…` through `08_…`, in that order.
    - Tablet screenshots — none provided (optional; skip unless Kevin asks).
@@ -93,4 +93,4 @@ live in `SHOTS` in `tools/store_compose.py`.
 - **Privacy policy + Data safety:** online play connects to Kevin's Siege server (player name, match
   inputs) — Play requires a privacy-policy URL and the Data safety form.
 - **Content rating:** IARC questionnaire (cartoon fantasy violence).
-- **App icon:** 512×512 needed (not included).
+- **App icon:** `graphics/app_icon_512x512.png` (also `fastlane/metadata/android/en-US/images/icon.png` for supply).

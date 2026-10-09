@@ -2716,3 +2716,13 @@ K2/K3 notes (0.17.0)
   server's "pn". Other players' plates still come only from the server; bots have none.
 - side_view_test: my plate, gold, with no names from a server, on either team.
 - 0.31.88, version code 174. Quick suite: ALL 41 PASSED.
+
+## 0.31.89 — new launcher icon (Kevin picked concept B4, "King Rescue")
+- assets/branding: a blue knight sprinting home with the chubby King hoisted overhead (fish in hand, crown
+  slipping), the enemy castle behind. foreground.png = the knight and King cut out; background.png = the scene
+  with them painted out and reflected into the 18dp parallax margin, so a launcher's parallax never shows a
+  second copy; the art covers the 72dp viewport (296 px of 432). monochrome.png = a new tipped battlement crown
+  (themed icons; max radius 113 px). icon.png (192) = the 72dp viewport.
+- store-listing: the 512 Play icon (graphics/app_icon_512x512.png, fastlane images/icon.png); README updated.
+- Concepts A-F and the source art are on Kevin's ElevenLabs flow (tL2Uq8Khy94WZ0PV3s34).
+- 0.31.89, version code 175. Quick suite: ALL 41 PASSED.
