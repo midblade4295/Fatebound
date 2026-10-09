@@ -2572,3 +2572,8 @@ K2/K3 notes (0.17.0)
   and siege_net.gd, but the sim preloads siege_land.gd and siege_castle.gd, so the copied sim failed to compile and the
   probe failed. It now copies all four (the baked terrain files stay client-only). Dry run (NO_SYSTEMD=1): installs,
   the probe waits out the 20 s lobby, PROBE_OK.
+
+# Play preset: no 64-bit Intel either (Kevin: "Can we drop the 64bit Intel also")
+- export_presets.cfg "Android Play Store": architectures/x86_64=false; the AAB now carries armeabi-v7a and arm64-v8a
+  only (Play's 64-bit requirement is met by arm64-v8a). The itch/preview presets were already arm64-v8a only. Gone with
+  it: Intel/AMD Chromebooks, x86 emulators and Google Play Games on PC (those need an x86_64 build). No build or upload.
