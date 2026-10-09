@@ -99,6 +99,11 @@ func _process(delta: float) -> bool:
 				check(mode.sim.time > 0.3, "snapshots advance match time (%.2f s)" % mode.sim.time)    # (0.31.82: a fresh match after the lobby)
 				check(mode.lobby_msgs > 0, "the lobby countdown came before the welcome (%d messages)" % mode.lobby_msgs)
 				check(mode.lobby == null, "the lobby panel closed on the welcome")
+				check(mode.net_names == {me_id: "TestA"}, "the server named the live players: %s" % str(mode.net_names))
+				var named := false
+				for b in mode.view.bars():
+					named = named or str(b.get("name", "")) == "TestA"
+				check(named, "our name shows over our health bar")
 				raw = WebSocketPeer.new()
 				raw.connect_to_url("ws://127.0.0.1:%d/fatebound/siege/ws" % port)
 				phase = "raw"; t = 0.0
@@ -114,6 +119,8 @@ func _process(delta: float) -> bool:
 					"the second player waited in the lobby with its own name listed (%d messages, %s)" % [raw_lobby_n, str(raw_lobby.get("names", []))])
 				check(bool(raw_lobby.get("running", false)) and int(raw_lobby.get("in_match", 0)) == 1 and int(raw_lobby.get("online", 0)) == 2,
 					"the lobby says a battle with 1 player is on, 2 online (%s)" % str(raw_lobby))
+				check(str(mode.net_names.get(raw_unit, "")) == "TestB" and mode.net_names.size() == 2, "the second player's name reached us (%s)" % str(mode.net_names))
+				check(mode.view.player_names.has(raw_unit), "the view has it (a bot never gets one)")
 				# Pick the farther courtyard station, then steer the real touch stick over the
 				# mirror's navigation path. A fixed direction is seed-dependent here: the spawn
 				# is randomized and walls/resources can sit directly in front of it.
@@ -229,6 +236,7 @@ func _process(delta: float) -> bool:
 			if t > 2.0:
 				var ru: Dictionary = mode.sim.by_id[raw_unit]
 				check(ru.bot, "after the second player left, a bot took %s back" % raw_unit)
+				check(not mode.net_names.has(raw_unit) and mode.net_names.size() == 1, "their name went with them (%s)" % str(mode.net_names))
 				check(mode.sim.kills[0] + mode.sim.kills[1] >= 0, "match still running (t=%.0f s)" % mode.sim.time)
 				stat_ws = WebSocketPeer.new()
 				stat_ws.connect_to_url("ws://127.0.0.1:%d/fatebound/siege/ws" % port)

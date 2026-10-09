@@ -17,6 +17,10 @@ extends SceneTree
 # (UPDATE opens Google Play); vc31 and older show "Update the game to play online". A hello without a readable build
 # (the probe without SIEGE_PROBE_BUILD, tools) is let in, so nothing that worked before is locked out by accident.
 #
+# 0.31.86 (Kevin: "shows the player names on the battlefield above their heads. Only live players will show names."):
+# {"t":"pn", "n":{unit id: name}} -- the seated players' names, sent to everyone in the match whenever a seat changes
+# (join, leave, a new match). Bots aren't in it. Additive: older apps ignore it, so the protocol stays.
+#
 # 0.31.82 (Kevin: "when starting match have it countdown from 20 seconds and show players joining"; "players online
 # in main menu"): a player who says hello waits in the lobby -- the first one starts a LOBBY_TIME countdown, everyone
 # who arrives before it runs out joins with them, and the "lobby" message (every half second) tells the waiting
@@ -33,7 +37,7 @@ const IDLE_STOP := 30.0              # no players for this long -> stop simulati
 const LOBBY_TIME := 20.0             # the join countdown (0.31.82)
 const HELLO_TIMEOUT := 10.0
 const REFUSE_CLOSE_DELAY := 0.25     # s between a "bye"/"ver" reply and closing the socket
-const SERVER_BUILD := "0.31.84"      # this server's game version; the probe says it by default (identifies as current)
+const SERVER_BUILD := "0.31.86"      # this server's game version; the probe says it by default (identifies as current)
 const MIN_BUILD_FILE := "/etc/fatebound-siege/min_build"
 const MIN_BUILD_RELOAD := 10.0       # s between re-reads of the min-build file
 const UPDATE_MSG := "A new version of Fatebound is out. Update now on Google Play to keep playing online."
@@ -58,6 +62,7 @@ var log_on := true
 var lobby_time := LOBBY_TIME
 var wave_end := -1.0                 # when the waiting players are seated (-1: nobody waiting)
 var _lobby_clock := 0.0
+var _names_dirty := false            # a seat changed: send the players' names (0.31.86)
 var min_build := ""                  # "" = no minimum (see SIEGE_MIN_BUILD)
 var min_build_env := false           # true: fixed by SIEGE_MIN_BUILD, the file is not read
 var min_build_file := MIN_BUILD_FILE
@@ -159,6 +164,9 @@ func _process(delta: float) -> bool:
 		_reload_min_build()
 	_run_lobby(delta)
 	_run_match(delta)
+	if _names_dirty:
+		_names_dirty = false
+		_send_names()
 	return false
 
 # ---------------- connections ----------------
@@ -271,6 +279,7 @@ func _drop(cid: int, why: String) -> void:
 		u.bot = true                   # a bot takes the slot back over
 		u.move = Vector2.ZERO
 		u.net_driven = false
+		_names_dirty = true            # (their name goes off the battlefield)
 	if c.hello:
 		_log("leave %s (%s) unit=%s players=%d" % [c.name, why, c.unit, _human_count() - 1])
 	clients.erase(cid)
@@ -320,7 +329,7 @@ func _handle(cid: int, msg: Dictionary) -> void:
 				_refuse(cid, 4002, "full")
 				return
 			c.hello = true
-			c.name = str(msg.get("name", "Player")).left(20)
+			c.name = clean_name(str(msg.get("name", "Player")))
 			c.pred = bool(msg.get("pred", false))         # the phone moves its own unit (0.18.4)
 			c.queued = true                                # 0.31.82: into the lobby; seated when the countdown ends
 			if wave_end < 0.0:
@@ -391,6 +400,7 @@ func _seat(cid: int) -> void:
 		sim.by_id[seat].bot = false
 	_send(cid, {"t":"welcome", "v":Net.VERSION, "you":seat, "match":match_id, "seed":match_seed,
 		"team_size":Net.TEAM_SIZE, "players":_human_count()})
+	_names_dirty = true
 	# The first snapshot right away so the client can build its view.
 	_send(cid, Net.snapshot(sim, seat, []))
 	_log("join %s -> %s (match %d, players %d)" % [c.name, seat, match_id, _human_count()])
@@ -400,6 +410,31 @@ func _unit_taken(id: String) -> bool:
 		if clients[cid].unit == id:
 			return true
 	return false
+
+# ---------------- player names (0.31.86) ----------------
+static func clean_name(s: String) -> String:
+	# What the battlefield shows over a player: no control characters, at most 20 letters, never empty.
+	var out := ""
+	for ch in s:
+		if ch.unicode_at(0) >= 32 and ch.unicode_at(0) != 127:
+			out += ch
+	out = out.strip_edges().left(20)
+	return out if out != "" else "Player"
+
+func player_names() -> Dictionary:
+	var out := {}
+	for cid in clients:
+		var c: Dictionary = clients[cid]
+		if c.hello and not bool(c.get("queued", false)) and c.unit != "" and sim != null and sim.by_id.has(c.unit):
+			out[c.unit] = c.name
+	return out
+
+func _send_names() -> void:
+	var msg := {"t":"pn", "n":player_names()}
+	for cid in clients:
+		var c: Dictionary = clients[cid]
+		if c.hello and not bool(c.get("queued", false)) and c.unit != "":
+			_send(cid, msg)
 
 # ---------------- lobby (0.31.82) ----------------
 func _now() -> float:

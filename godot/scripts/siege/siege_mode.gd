@@ -70,6 +70,7 @@ var _sent_hold := false
 var _sent_bhold := false
 var lobby: Control = null           # 0.31.82: the join countdown, from PLAY until the welcome
 var lobby_msgs := 0                 # "lobby" messages received (tests)
+var net_names := {}                 # unit id -> name of each live player in the match (0.31.86, the server's "pn")
 
 var sim
 var view
@@ -334,6 +335,7 @@ func _build_online_match(msg: Dictionary) -> void:
 	view.hq_gfx = hq_gfx
 	view.player_id = me_id
 	view.player_looks = _looks()
+	view.player_names = net_names
 	viewport.add_child(view)
 	view.setup(sim)
 	hud.sim = sim
@@ -421,6 +423,11 @@ func _net_process(delta: float) -> void:
 					diag.write("NET lobby left=%.1f names=%d online=%d running=%s" % [float(msg.get("left", 0)), (msg.get("names", []) as Array).size(), int(msg.get("online", 0)), str(msg.get("running", false))])
 				if sim == null and is_instance_valid(lobby):
 					lobby.update(msg)
+			"pn":                                             # 0.31.86: the live players' names, by unit
+				var pn: Variant = msg.get("n", {})
+				net_names = pn if pn is Dictionary else {}
+				if is_instance_valid(view):
+					view.player_names = net_names
 			"m":                                              # 0.31.23: my task, sent on its own when it changes
 				if sim != null and sim.by_id.has(hud.player_id):
 					sim.by_id[hud.player_id].task = msg.get("task", {})

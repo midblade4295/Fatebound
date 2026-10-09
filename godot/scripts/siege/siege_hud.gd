@@ -758,6 +758,8 @@ func _draw_bars() -> void:
 		var r := Rect2(p - Vector2(17, 3), Vector2(34, 5))
 		draw_rect(r.grow(1.0), Color(0, 0, 0, 0.7))
 		draw_rect(Rect2(r.position, Vector2(r.size.x * float(b.fill), r.size.y)), b.color)
+		if b.has("name"):                                 # 0.31.86: a live player's name over the bar
+			_text(p + Vector2(0, -7), str(b.name), 12, b.get("name_color", Color.WHITE))
 
 func _draw_numbers() -> void:
 	# Damage numbers: projected from 3D and drawn on the HUD canvas (no Label3D mesh rebuilds).

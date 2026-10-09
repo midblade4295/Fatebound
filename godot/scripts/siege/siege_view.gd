@@ -71,6 +71,7 @@ var player_id := "you"
 # outposts, hat shops. `my_side` is the player's team (0 offline; online, whichever the server seated you on); vt() maps a
 # team to the colour it is drawn in. Positions and facing still use the real team.
 var my_side := 0
+var player_names := {}                     # unit id -> name: the live players online (0.31.86; the server's "pn")
 static var _kit_side := 0                  # the side the cached merged castle walls (_kit_merged) were tinted for
 
 func vt(t: int) -> int:
@@ -4372,7 +4373,13 @@ func bars() -> Array:
 		if a.is_empty() or not is_instance_valid(a.root):
 			continue
 		var c: Color = Color("#7dff8a") if u.id == player_id else TEAM_COLORS[vt(int(u.team))]
-		out.append({"pos": (a.root as Node3D).position + Vector3(0, 2.7, 0), "fill": clampf(u.hp / maxf(1.0, u.max_hp), 0.0, 1.0), "color": c})
+		var bar := {"pos": (a.root as Node3D).position + Vector3(0, 2.7, 0), "fill": clampf(u.hp / maxf(1.0, u.max_hp), 0.0, 1.0), "color": c}
+		if player_names.has(u.id):
+			# 0.31.86 (Kevin: "shows the player names on the battlefield above their heads. Only live players will show
+			# names."): over the bar -- yours gold, your side's light blue, theirs light red; bots have none
+			bar["name"] = str(player_names[u.id])
+			bar["name_color"] = Color("#ffd65a") if u.id == player_id else (Color("#bfeeff") if vt(int(u.team)) == 0 else Color("#ffc4b4"))
+		out.append(bar)
 	return out
 
 func gate_bars() -> Array:

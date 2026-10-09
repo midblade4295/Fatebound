@@ -2657,3 +2657,22 @@ K2/K3 notes (0.17.0)
   up / right on screen, ally bars blue, enemy bars red, the HUD's mapping.
 - No server change (the client draws and turns the stick).
 - 0.31.85, version code 171. Quick suite: ALL 38 PASSED.
+
+# Merge of grok/siege-server-min-build (91b7d66) into this branch
+- The live server was redeployed from that branch (server 0.31.84-minbuild: minimum app build from
+  /etc/fatebound-siege/min_build, the "ver" query, the client's Update screen; Play vc33 line). Merged here so the next
+  server deploy from this branch keeps it. Only this file conflicted. Its import changes (ETC2 textures) need a
+  `godot --headless --import` after checkout.
+
+# 0.31.86 (Kevin: "Can you add so it shows the player names on the battlefield above their heads. Only live players
+# will show names.")
+- Server: {"t":"pn", "n":{unit id: name}} to everyone in the match whenever a seat changes (a join, a leave, a new
+  match); only seated players are in it, never bots. Names are cleaned at the hello (no control characters, 20 letters,
+  "Player" if empty). Additive -- older apps ignore it; protocol stays 35. SERVER_BUILD 0.31.86 (min_build_test wants
+  it equal to the app's build).
+- App: siege_mode keeps the names (net_names) and hands them to the view; view.bars() adds the name to a live player's
+  bar and the HUD draws it just above: yours gold, your side's light blue, theirs light red. Dead players have no bar,
+  so no name. Offline (all bots) shows none.
+- siege_net_smoke: the names arrive for both players, show over our bar, and the leaver's goes when they leave.
+- Live server: needs the redeploy from this branch for the names (until then the app shows none).
+- 0.31.86, version code 172. Quick suite: ALL 40 PASSED (with the merged version_gate_test and min_build_test).
