@@ -2632,3 +2632,11 @@ K2/K3 notes (0.17.0)
 - export_presets.cfg "Android Play Store": architectures/x86_64=false; the AAB now carries armeabi-v7a and arm64-v8a
   only (Play's 64-bit requirement is met by arm64-v8a). The itch/preview presets were already arm64-v8a only. Gone with
   it: Intel/AMD Chromebooks, x86 emulators and Google Play Games on PC (those need an x86_64 build). No build or upload.
+
+## vc33 rebuilt with 2 ABIs (grok/siege-play-local-r10, 2026-10-09 PT) -- fits the 175 MB upload limit, not uploaded
+- Merged claude/siege-dev-r6-local 8827b74 (Kevin: drop x86_64): "Android Play Store" preset is armeabi-v7a + arm64-v8a
+  only; tools/verify_play_bundle.py now requires exactly those 2 ABIs (and no x86/x86_64 libs).
+- Same vc33 / 1.2.9-siege-0.31.84, ETC2, laughing-king icon (icon files byte-identical to the 3-ABI build), Vulkan with the
+  OpenGL fallback, forced-update screen. Signed with the upload key (cert SHA256 69:71:A9...:90:84); verifier, bundletool
+  and jarsigner OK; 38/38 quick tests pass. AAB 172,571,884 bytes (172.6 MB; was 198.4 MB with x86_64).
+  SHA256 9c3cc7c8b2bb20ee6aa1232dfb5ee3361a2394b2f4a8bc70b5d2fd8435a06a2e. Protocol still 35 (deploy-0.31.84 unchanged).
