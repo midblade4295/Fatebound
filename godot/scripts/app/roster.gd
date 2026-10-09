@@ -8,9 +8,9 @@ const Eco = preload("res://scripts/meta/economy.gd")
 
 # class, x, z (metres on the dais; +z is toward the camera), yaw (turned a little toward the middle)
 const SPOTS := [  # class, x, z, yaw, lift -- one arc across the dais, the Knight in front in the middle
-	["rogue", -2.85, -0.18, 0.34, 0.0], ["ranger", -1.9, 0.22, 0.23, 0.0], ["barbarian", -0.95, 0.47, 0.11, 0.0],
-	["knight", 0.0, 0.6, 0.0, 0.0],
-	["mage", 0.95, 0.47, -0.11, 0.0], ["priest", 1.9, 0.22, -0.23, 0.0], ["worker", 2.85, -0.18, -0.34, 0.0],
+	["rogue", -2.85, -0.18, 0.34, 0.0], ["ranger", -1.9, 0.22, 0.23, 0.0], ["barbarian", -1.0, 0.42, -0.35, 0.0],
+	["knight", 0.0, 0.95, 0.0, 0.0],
+	["mage", 1.0, 0.42, 0.35, 0.0], ["priest", 1.9, 0.22, -0.23, 0.0], ["worker", 2.85, -0.18, -0.34, 0.0],
 ]
 
 var cam_pos := Vector3(0.0, 3.45, 15.3)          # ~12.7 degrees up, like the painted dais' ellipse

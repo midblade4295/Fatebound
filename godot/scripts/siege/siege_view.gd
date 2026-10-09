@@ -30,16 +30,16 @@ const LOOKS := {
 	# belt), the Worker a Meshy straw-hat farmer (green overalls, red bandana, gloves); both were the KayKit Rogue.
 	"villager": {"model":"meshy:villager","r":"","l":"","idle":"g/Idle_A","attack":"m/Melee_Unarmed_Attack_Punch_A","ability":"m/Melee_Unarmed_Attack_Kick","combo":["m/Melee_Unarmed_Attack_Punch_A","m/Melee_Unarmed_Attack_Punch_A","m/Melee_Unarmed_Attack_Kick"]},
 	"worker": {"model":"meshy:worker","r":"axe_1handed","l":"","idle":"g/Idle_A","attack":"m/Melee_1H_Attack_Chop","ability":"m/Melee_1H_Attack_Chop","combo":["m/Melee_1H_Attack_Chop","m/Melee_1H_Attack_Slice_Horizontal","m/Melee_1H_Attack_Stab"]},
-	"knight": {"model":"Knight","r":"sword_1handed","l":"bits/shield_B","idle":"g/Idle_A","attack":"m/Melee_1H_Attack_Slice_Diagonal","ability":"m/Melee_Blocking","combo":["m/Melee_1H_Attack_Slice_Diagonal","m/Melee_1H_Attack_Slice_Horizontal","m/Melee_Block_Attack"]},
+	"knight": {"model":"meshy:knight","r":"sword_1handed","l":"bits/shield_B","idle":"g/Idle_A","attack":"m/Melee_1H_Attack_Slice_Diagonal","ability":"m/Melee_Blocking","combo":["m/Melee_1H_Attack_Slice_Diagonal","m/Melee_1H_Attack_Slice_Horizontal","m/Melee_Block_Attack"]},
 	"crusader": {"model":"meshy:crusader","r":"sword_1handed","l":"bits/shield_B","idle":"g/Idle_A","attack":"m/Melee_1H_Attack_Slice_Diagonal","ability":"m/Melee_Blocking","combo":["m/Melee_1H_Attack_Slice_Diagonal","m/Melee_1H_Attack_Slice_Horizontal","m/Melee_Block_Attack"]},
 	# Upgraded barbarian (Round 11): two-handed greatsword, whirlwind.
 	"berserker": {"model":"meshy:berserker","r":"bits/sword_E","l":"","idle":"m/Melee_2H_Idle","attack":"m/Melee_2H_Attack_Chop","ability":"m/Melee_2H_Attack_Spinning","combo":["m/Melee_2H_Attack_Chop","m/Melee_2H_Attack_Slice","m/Melee_2H_Attack_Spin"]},
-	"barbarian": {"model":"Barbarian","r":"axe_2handed","l":"","idle":"m/Melee_2H_Idle","attack":"m/Melee_2H_Attack_Slice","ability":"m/Melee_2H_Attack_Spin","combo":["m/Melee_2H_Attack_Slice","m/Melee_2H_Attack_Chop","m/Melee_2H_Attack_Stab"]},
-	"rogue": {"model":"Rogue_Hooded","r":"dagger","l":"dagger","idle":"g/Idle_B","attack":"m/Melee_Dualwield_Attack_Stab","ability":"m/Melee_1H_Attack_Jump_Chop","combo":["m/Melee_Dualwield_Attack_Stab","m/Melee_Dualwield_Attack_Slice","m/Melee_Dualwield_Attack_Chop"]},
-	"ranger": {"model":"Ranger","r":"","l":"bow_withString","idle":"r/Ranged_Bow_Idle","attack":"r/Ranged_Bow_Release","ability":"r/Ranged_Bow_Release_Up"},
-	"mage": {"model":"Mage","r":"staff","l":"","idle":"g/Idle_B","attack":"r/Ranged_Magic_Shoot","ability":"r/Ranged_Magic_Spellcasting"},
-	# Healer: the Mage model in white-gold robes with a wand (tint set once, cached like skins).
-	"priest": {"model":"Mage","r":"wand","l":"","tint":"#fff1c8","idle":"g/Idle_B","attack":"r/Ranged_Magic_Spellcasting_Long","ability":"r/Ranged_Magic_Raise"},
+	"barbarian": {"model":"meshy:barbarian","r":"axe_2handed","l":"","idle":"m/Melee_2H_Idle","attack":"m/Melee_2H_Attack_Slice","ability":"m/Melee_2H_Attack_Spin","combo":["m/Melee_2H_Attack_Slice","m/Melee_2H_Attack_Chop","m/Melee_2H_Attack_Stab"]},
+	"rogue": {"model":"meshy:rogue","r":"dagger","l":"dagger","idle":"g/Idle_B","attack":"m/Melee_Dualwield_Attack_Stab","ability":"m/Melee_1H_Attack_Jump_Chop","combo":["m/Melee_Dualwield_Attack_Stab","m/Melee_Dualwield_Attack_Slice","m/Melee_Dualwield_Attack_Chop"]},
+	"ranger": {"model":"meshy:ranger","r":"","l":"bow_withString","idle":"r/Ranged_Bow_Idle","attack":"r/Ranged_Bow_Release","ability":"r/Ranged_Bow_Release_Up"},
+	"mage": {"model":"meshy:mage","r":"staff","l":"","idle":"g/Idle_B","attack":"r/Ranged_Magic_Shoot","ability":"r/Ranged_Magic_Spellcasting"},
+	# Healer: a body of his own since 0.31.80 (white and gold robes, sun emblem, gold circlet), with a wand.
+	"priest": {"model":"meshy:priest","r":"wand","l":"","idle":"g/Idle_B","attack":"r/Ranged_Magic_Spellcasting_Long","ability":"r/Ranged_Magic_Raise"},
 	# Upgraded priest (0.31.2, Kevin): the Necromancer from KayKit Skeletons (CC0, same Rig_Medium) with the skull staff.
 	# 0.31.32: the last three upgrades get their own looks
 	"assassin": {"model":"meshy:assassin","r":"dagger","l":"dagger","idle":"g/Idle_B","attack":"m/Melee_Dualwield_Attack_Stab","ability":"m/Melee_1H_Attack_Jump_Chop","tint":"#5b4f73","combo":["m/Melee_Dualwield_Attack_Stab","m/Melee_Dualwield_Attack_Slice","m/Melee_Dualwield_Attack_Chop"]},
@@ -48,6 +48,13 @@ const LOOKS := {
 	"necromancer": {"model":"meshy:necromancer","r":"Skeleton_Staff","l":"","idle":"g/Idle_B","attack":"r/Ranged_Magic_Spellcasting_Long","ability":"r/Ranged_Magic_Raise"},
 	"necromancer_kaykit": {"model":"Necromancer","r":"Skeleton_Staff","l":"","idle":"g/Idle_B","attack":"r/Ranged_Magic_Spellcasting_Long","ability":"r/Ranged_Magic_Raise"},          # 0.31.63: the stock body, kept for tools/retarget_meshy.gd
 	"villager_kaykit": {"model":"Rogue","r":"","l":"","idle":"g/Idle_A","attack":"m/Melee_Unarmed_Attack_Punch_A","ability":"m/Melee_Unarmed_Attack_Kick"},          # 0.31.76: the old body of both, kept for tools/retarget_meshy.gd
+	# 0.31.80 (Kevin picked base-class concepts): the six base classes are Meshy bodies too; their stock KayKit bodies stay
+	# here for tools/retarget_meshy.gd (the skeleton and height each bake starts from) -- the Priest's was the Mage's.
+	"knight_kaykit": {"model":"Knight","r":"","l":"","idle":"g/Idle_A","attack":"m/Melee_1H_Attack_Slice_Diagonal","ability":"m/Melee_Blocking"},
+	"barbarian_kaykit": {"model":"Barbarian","r":"","l":"","idle":"m/Melee_2H_Idle","attack":"m/Melee_2H_Attack_Slice","ability":"m/Melee_2H_Attack_Spin"},
+	"rogue_kaykit": {"model":"Rogue_Hooded","r":"","l":"","idle":"g/Idle_B","attack":"m/Melee_Dualwield_Attack_Stab","ability":"m/Melee_1H_Attack_Jump_Chop"},
+	"ranger_kaykit": {"model":"Ranger","r":"","l":"","idle":"r/Ranged_Bow_Idle","attack":"r/Ranged_Bow_Release","ability":"r/Ranged_Bow_Release_Up"},
+	"mage_kaykit": {"model":"Mage","r":"","l":"","idle":"g/Idle_B","attack":"r/Ranged_Magic_Shoot","ability":"r/Ranged_Magic_Spellcasting"},
 }
 const LOOP_HINTS := ["Idle","Running","Walking","Hammering","Holding","Aiming","_Pose","Blocking","Chopping","Pickaxing"]
 
@@ -3114,7 +3121,9 @@ static func look_key(u: Dictionary) -> String:
 # rig.json carries the fit scale and the hand-slot rests the tool worked out.
 const MESHY := {"assassin": "res://assets/meshy/assassin/", "archmage": "res://assets/meshy/archmage/", "crusader": "res://assets/meshy/crusader/",
 	"berserker": "res://assets/meshy/berserker/", "sniper": "res://assets/meshy/sniper/",
-	"necromancer": "res://assets/meshy/necromancer/", "villager": "res://assets/meshy/villager/", "worker": "res://assets/meshy/worker/"}
+	"necromancer": "res://assets/meshy/necromancer/", "villager": "res://assets/meshy/villager/", "worker": "res://assets/meshy/worker/",
+	"knight": "res://assets/meshy/knight/", "barbarian": "res://assets/meshy/barbarian/", "rogue": "res://assets/meshy/rogue/",
+	"ranger": "res://assets/meshy/ranger/", "mage": "res://assets/meshy/mage/", "priest": "res://assets/meshy/priest/"}
 const MESHY_RENAME := {"Hips":"hips", "Spine02":"spine", "Spine":"chest", "Head":"head",
 	"LeftArm":"upperarm.l", "LeftForeArm":"lowerarm.l", "LeftHand":"wrist.l",
 	"RightArm":"upperarm.r", "RightForeArm":"lowerarm.r", "RightHand":"wrist.r",
@@ -3198,7 +3207,7 @@ static func make_body(cls: String, cosmetic: Dictionary = {}) -> Dictionary:
 	for hand in ["r", "l"]:
 		if cosmetic.has(hand):
 			look[hand] = cosmetic[hand]
-	if str(look.model) in ["Knight", "meshy:crusader"] and str(look.l) == "":
+	if str(look.model) in ["Knight", "meshy:knight", "meshy:crusader"] and str(look.l) == "":
 		look.l = "bits/shield_B"            # 0.31.41 (Kevin): a Knight (and a Crusader) always carries a shield
 	var meshy := str(look.model).begins_with("meshy:")
 	var body: Node3D
@@ -3370,7 +3379,8 @@ const WEAPON_ROT := {"bits/fistweapon_C_left":Vector3(0, 180, 0), "bits/fistweap
 # 0.31.47 (Kevin: back the 90 degrees, and the blade turned 180): the hold he called "right way but backwards" in
 # 0.31.45 -- lying along the arm, axe blade / scythe blade hanging down -- but with the head forward: a half roll about
 # the weapon's own long axis instead of the half turn about Z (which also swung the head behind him).
-const WEAPON_ROT_FOR := {"Knight":{"bits/halberd":Vector3(0, 180, 0)}, "Rogue_Hooded":{"bits/scythe":Vector3(0, 180, 0)}, "Rogue":{"bits/scythe":Vector3(0, 180, 0)}}
+const WEAPON_ROT_FOR := {"Knight":{"bits/halberd":Vector3(0, 180, 0)}, "Rogue_Hooded":{"bits/scythe":Vector3(0, 180, 0)}, "Rogue":{"bits/scythe":Vector3(0, 180, 0)},
+	"meshy:knight":{"bits/halberd":Vector3(0, 180, 0)}, "meshy:rogue":{"bits/scythe":Vector3(0, 180, 0)}}     # (0.31.80: same holds)
 
 # 0.31.48 (Kevin: turn these blades 180): the one-handed axe (Worker, Axe & Ale, Axe & Buckler -- its edge faced back
 # in the chop), the Great Cleaver and the Oathkeeper: a half roll about the weapon's own long axis.

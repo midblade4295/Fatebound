@@ -11,7 +11,7 @@ const PREV_PATH := "user://siege_diag_prev.log"
 # so a match's diagnostics never push a stuck start out of the files.
 const BOOT_PATH := "user://boot_diag.log"
 const BOOT_PREV_PATH := "user://boot_diag_prev.log"
-const BUILD := "0.31.79-fatebound"
+const BUILD := "0.31.80-fatebound"
 
 class ErrorCapture:
 	extends Logger

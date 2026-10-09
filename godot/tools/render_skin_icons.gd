@@ -6,6 +6,8 @@ extends SceneTree
 const View = preload("res://scripts/siege/siege_view.gd")
 const Eco = preload("res://scripts/meta/economy.gd")
 const SIZE := 320
+const BUST_FRAME := {"mage": [Vector3(0.0, 1.8, 3.45), Vector3(0, 1.6, 0)], "knight": [Vector3(0.0, 1.68, 3.1), Vector3(0, 1.48, 0)],
+	"barbarian": [Vector3(0.0, 1.72, 3.3), Vector3(0, 1.52, 0)]}
 
 var vp: SubViewport
 var cam3: Camera3D
@@ -93,6 +95,9 @@ func _run() -> void:
 		if str(job[1]) in ["archmage", "necromancer"]:   # (0.31.55: the old wizard's tall, wide hat; 0.31.63: the Necromancer's crown -- pull back and up)
 			cpos = Vector3(0.0, 1.45, 5.6) if weapon_job else Vector3(0.0, 2.0, 3.9)
 			aim = Vector3(0, 1.2, 0) if weapon_job else Vector3(0, 1.72, 0)
+		elif str(job[1]) in BUST_FRAME and not weapon_job:   # (0.31.80: the Mage's pointed hat, the Knight's plume, the bear head)
+			cpos = BUST_FRAME[str(job[1])][0]
+			aim = BUST_FRAME[str(job[1])][1]
 		elif str(job[1]) == "worker":                    # (0.31.76: the farmer's straw hat -- a little back and up)
 			cpos = Vector3(0.0, 1.3, 5.0) if weapon_job else Vector3(0.0, 1.85, 3.5)
 			aim = Vector3(0, 1.08, 0) if weapon_job else Vector3(0, 1.6, 0)

@@ -2468,3 +2468,29 @@ K2/K3 notes (0.17.0)
   the panel thousands of pixels tall).
 - Locker rail: round head portraits (assets/ui/skins/default_*), zoom buttons in the new style.
 - 0.31.79, version code 165. Quick suite: ALL 37 PASSED.
+
+# 0.31.80 (Kevin: "redo all the basic characters also since we did the advanced ones"; picked Knight A1, Barbarian
+# A1, Rogue A1, Archer B1, Mage B1, Priest A2)
+- Concepts (gpt-image-2, ElevenLabs flow "Fatebound base-class concepts"): per class one sheet with design A (close to
+  the old body) and B (a fresh take), two takes each, in the Farmer concept's clay style, each base class's old body
+  and its upgraded form as the reference (reports/concepts/ref_pair_<cls>.png). Sheets and picks in reports/concepts.
+  The Priest gets a body of his own (it was the Mage's with a cream tint). Mage B's round glasses were dropped
+  (too close to a famous boy wizard).
+- Models: each pick redrawn as a 2K T-pose turnaround (front / side / back, tpose_ref.png as the pose), cut into three
+  square views, Meshy multi-image-to-3D (latest, t-pose, ~10k triangles), Meshy auto-rig. The Knight's first model
+  lost its cape and turned Roman, the Rogue's lost his cape: both redone with image enhancement off and the views as
+  the texture references (texture_image_urls) -- faithful. ~12k ElevenLabs credits (12 concept images, 6 turnarounds),
+  ~275 Meshy credits.
+- assets/meshy/<knight|barbarian|rogue|ranger|mage|priest>: rigged.glb, rig.json, the 110 baked animations
+  (tools/retarget_meshy.gd). Fit by the neck height (FIT=neck): every new body's neck at the KayKit neck height
+  (1.24 m), as the other Meshy bodies have it -- the height fit would have made them ~20 % bigger (the KayKit heads
+  are half the body). KK_FOR now names stock *_kaykit bodies for every Meshy body (knight_kaykit ... mage_kaykit added
+  to LOOKS, tools only; the Priest's and the Archmage's source is mage_kaykit).
+- LOOKS: knight / barbarian / rogue / ranger / mage / priest -> meshy:<cls> (same weapons, idles, combos, ragdoll); the
+  Knight's always-a-shield rule and the halberd / scythe holds cover the Meshy Knight and Rogue. Priest tint dropped.
+- Icons: the six busts (locker coins) and every base-class weapon icon re-rendered (render_skin_icons: bust framing for
+  the Mage's hat, the Knight's plume and the bear head). tools/preload_list re-run (the KayKit hero GLBs leave the
+  list, the six Meshy bodies and their animations join it).
+- Home dais (roster.gd): the Knight a step forward (z 0.95), the Barbarian and the Mage turned so the axe and the
+  staff's orb clear him.
+- 0.31.80, version code 166. Quick suite: ALL 37 PASSED.
