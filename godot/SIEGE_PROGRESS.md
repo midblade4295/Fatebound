@@ -2564,3 +2564,11 @@ K2/K3 notes (0.17.0)
   own 30 and puts the 60 back when it ends. The real app only (tests and tools run the menus uncapped, FB_MENU_FPS to
   force it).
 - 0.31.84, version code 170. Quick suite: ALL 37 PASSED.
+
+# Server install fix (Kevin: "The 20 second timer isn't working")
+- The live server still runs a build from before 0.31.82 (probe: welcomed at once, no lobby messages, no status
+  answer) -- the countdown and the player count are the server's, so it needs the redeploy.
+- server/deploy/install_siege_server.sh could not have done that: its minimal server project copied only siege_sim.gd
+  and siege_net.gd, but the sim preloads siege_land.gd and siege_castle.gd, so the copied sim failed to compile and the
+  probe failed. It now copies all four (the baked terrain files stay client-only). Dry run (NO_SYSTEMD=1): installs,
+  the probe waits out the 20 s lobby, PROBE_OK.
