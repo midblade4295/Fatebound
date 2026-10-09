@@ -60,6 +60,9 @@ var safe_boot := false
 var online_status: Node = null         # 0.31.82: the server's player count for Home (the real app only, or FB_STATUS_POLL)
 var online_refs := {}                  # Home's "players online" pill: {main, sub}
 var _guard: Node = null
+# 0.31.84 (Kevin: "put a fps cap of 60 in the menus"): the menus ran uncapped (120 on a 120 Hz phone); a match sets its
+# own 30 and puts this back when it ends. The real app only (tests and tools run the menus as fast as they can).
+const MENU_FPS := 60
 
 func _boot_mark(phase: String) -> void:
 	if _guard != null:
@@ -73,6 +76,7 @@ func _ready() -> void:
 		set_process_input(false)
 		return
 	get_tree().auto_accept_quit = false
+	_menu_fps()
 	safe_boot = _guard != null and bool(_guard.safe_boot)
 	if not safe_boot:
 		_boot_mark("preload models")
@@ -153,7 +157,15 @@ func _build_background() -> void:
 	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(bg)
 	# (0.31.83, Kevin: "I don't like the wallpaper looking pattern on background": the damask that 0.31.79 tiled under
-	# every screen is gone -- just the gradient and the glow)
+	# every screen is gone.) 0.31.84 (Kevin picked concept C of reports/concepts/bg_concepts.png): royal blue with light
+	# rays from the top and drifting gold motes, painted (gpt-image-2, Topaz 2x), covering the screen behind every menu.
+	var art := TextureRect.new()
+	art.texture = UI2.tex(UI2.V2 + "bg_menu.webp")
+	art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	art.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(art)
 	# A soft warm glow behind the top of the screen.
 	var glow_g := Gradient.new()
 	glow_g.set_color(0, Color(1.0, 0.72, 0.3, 0.18))
@@ -817,10 +829,15 @@ func _set_menu_active(on: bool) -> void:
 	if not on:
 		hero_layer.visible = false          # coming back, show_tab decides (home only)
 
+func _menu_fps() -> void:
+	if get_tree().get_script() == null or OS.has_environment("FB_MENU_FPS"):
+		Engine.max_fps = MENU_FPS
+
 func _end_match() -> void:
 	if is_instance_valid(siege):
 		siege.queue_free()
 	siege = null
+	_menu_fps.call_deferred()                 # (after the match's _exit_tree puts back what it found)
 	_set_menu_active(true)
 	show_tab("home")
 

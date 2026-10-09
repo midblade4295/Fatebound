@@ -2551,3 +2551,16 @@ K2/K3 notes (0.17.0)
   panel kinds (royal, night, purple, ember, green: the shop / pass / featured cards, the match HUD's panels) are plain
   gradients (pattern_mix 0). Parchment, wood and stone panels unchanged.
 - 0.31.83, version code 169. Quick suite: ALL 37 PASSED.
+
+# 0.31.84 (Kevin: "I still want a sort of texture or design for background. Give me concepts to pick from" -> "C.
+# Also put a fps cap of 60 in the menus")
+- Seven background concepts (reports/concepts/bg_concepts.png): A castle stone, B twilight sky, C light rays, D battle
+  map, E painted canvas, F banner hall (gpt-image-2, 9:16, two takes each, ~2.2k ElevenLabs credits), G diagonal
+  stripes (drawn in code); each shown behind the real Shop. Kevin picked C: royal blue, soft light rays fanning from the
+  top, drifting gold motes. Upscaled 2x with Topaz (1440x2560, ~0.5k credits) -> assets/ui/v2/bg_menu.webp (VRAM
+  compressed, high quality, no mipmaps), covering the screen behind every menu over the gradient
+  (siege_app._build_background).
+- Menus capped at 60 fps (MENU_FPS): they ran uncapped, 120 on the S21 Ultra's 120 Hz screen. A match still sets its
+  own 30 and puts the 60 back when it ends. The real app only (tests and tools run the menus uncapped, FB_MENU_FPS to
+  force it).
+- 0.31.84, version code 170. Quick suite: ALL 37 PASSED.
