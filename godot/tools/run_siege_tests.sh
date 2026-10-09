@@ -76,6 +76,8 @@ run combo_test           COMBO_PASS               60
 run net_load_test        NET_LOAD_PASS            120
 # Forced update: protocol mismatch -> Update screen / "Servers are updating" (real server on 8096, fake on 8097)
 run version_gate_test    VERSION_GATE_PASS        120
+# Server minimum app build: an outdated build is refused as "update required" (real servers on 8098/8099)
+run min_build_test       MIN_BUILD_PASS           120
 run boot_guard_test      BOOT_GUARD_PASS          60
 run outpost_look_test    OUTPOST_LOOK_PASS        90
 run castle_kit_test      CASTLE_KIT_PASS          90

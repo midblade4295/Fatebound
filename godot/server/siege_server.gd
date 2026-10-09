@@ -5,7 +5,17 @@ extends SceneTree
 #   godot --headless --path <project> -s res://server/siege_server.gd
 # Env: SIEGE_HOST (default 127.0.0.1 — keep it on loopback behind Caddy), SIEGE_PORT (8082),
 #      SIEGE_MAX_PLAYERS (32), SIEGE_LOG (1 = log joins/leaves/match results to stdout),
-#      SIEGE_LOBBY (seconds of the join countdown, default 20).
+#      SIEGE_LOBBY (seconds of the join countdown, default 20),
+#      SIEGE_MIN_BUILD (oldest app build allowed online, e.g. 0.31.84; "off"/empty = no minimum). Without it the
+#      server reads SIEGE_MIN_BUILD_FILE (default /etc/fatebound-siege/min_build, one line, e.g. "0.31.84") and
+#      re-reads it every MIN_BUILD_RELOAD s (SIEGE_MIN_BUILD_RELOAD), so the minimum can be raised or lowered with no code change or restart.
+#
+# Minimum build (server 0.31.84-minbuild, Kevin: "Can you have the server put a update now message in game?"): an app
+# whose hello says build (Diag.BUILD, e.g. "0.31.78-fatebound") older than the minimum is refused exactly like a client
+# on an older protocol: bye {"why":"version","need":VERSION+1,...} + close 4001 "version:<VERSION+1>". The apps from
+# vc32 (0.31.78) on read need > their protocol as "the server is newer" and show the full-screen "Update required"
+# (UPDATE opens Google Play); vc31 and older show "Update the game to play online". A hello without a readable build
+# (the probe without SIEGE_PROBE_BUILD, tools) is let in, so nothing that worked before is locked out by accident.
 #
 # 0.31.82 (Kevin: "when starting match have it countdown from 20 seconds and show players joining"; "players online
 # in main menu"): a player who says hello waits in the lobby -- the first one starts a LOBBY_TIME countdown, everyone
@@ -23,6 +33,10 @@ const IDLE_STOP := 30.0              # no players for this long -> stop simulati
 const LOBBY_TIME := 20.0             # the join countdown (0.31.82)
 const HELLO_TIMEOUT := 10.0
 const REFUSE_CLOSE_DELAY := 0.25     # s between a "bye"/"ver" reply and closing the socket
+const SERVER_BUILD := "0.31.84"      # this server's game version; the probe says it by default (identifies as current)
+const MIN_BUILD_FILE := "/etc/fatebound-siege/min_build"
+const MIN_BUILD_RELOAD := 10.0       # s between re-reads of the min-build file
+const UPDATE_MSG := "A new version of Fatebound is out. Update now on Google Play to keep playing online."
 const MAX_MSGS_PER_SEC := 90         # per client; beyond this, messages are dropped
 const TICK := Sim.TICK
 
@@ -44,6 +58,11 @@ var log_on := true
 var lobby_time := LOBBY_TIME
 var wave_end := -1.0                 # when the waiting players are seated (-1: nobody waiting)
 var _lobby_clock := 0.0
+var min_build := ""                  # "" = no minimum (see SIEGE_MIN_BUILD)
+var min_build_env := false           # true: fixed by SIEGE_MIN_BUILD, the file is not read
+var min_build_file := MIN_BUILD_FILE
+var _min_build_clock := 0.0
+var min_build_reload := MIN_BUILD_RELOAD
 
 func _init() -> void:
 	host = OS.get_environment("SIEGE_HOST") if OS.has_environment("SIEGE_HOST") else host
@@ -54,13 +73,78 @@ func _init() -> void:
 	log_on = OS.get_environment("SIEGE_LOG") != "0"
 	if OS.has_environment("SIEGE_LOBBY"):
 		lobby_time = clampf(float(OS.get_environment("SIEGE_LOBBY")), 0.0, 120.0)
+	if OS.has_environment("SIEGE_MIN_BUILD"):
+		min_build_env = true
+		_set_min_build(OS.get_environment("SIEGE_MIN_BUILD"), "SIEGE_MIN_BUILD")
+	else:
+		if OS.has_environment("SIEGE_MIN_BUILD_FILE"):
+			min_build_file = OS.get_environment("SIEGE_MIN_BUILD_FILE")
+		if OS.has_environment("SIEGE_MIN_BUILD_RELOAD"):
+			min_build_reload = clampf(float(OS.get_environment("SIEGE_MIN_BUILD_RELOAD")), 0.5, 3600.0)
+		_reload_min_build()
 	Engine.max_fps = 60              # headless would otherwise spin a core
 	var err := tcp.listen(port, host)
 	if err != OK:
 		printerr("SIEGE_SERVER listen failed on %s:%d (%s)" % [host, port, error_string(err)])
 		quit(1)
 		return
-	_log("SIEGE_SERVER listening on %s:%d (protocol %d, max %d players)" % [host, port, Net.VERSION, max_players])
+	_log("SIEGE_SERVER listening on %s:%d (protocol %d, build %s, max %d players, min build %s)" % [host, port, Net.VERSION,
+		SERVER_BUILD, max_players, min_build if min_build != "" else "off"])
+
+# ---------------- minimum app build ----------------
+# "0.31.78-fatebound" -> [0, 31, 78]; anything without a leading dotted number -> [] (unknown).
+static func parse_build(b: String) -> Array:
+	var head := b.strip_edges().split("-", true, 1)[0] if b.strip_edges() != "" else ""
+	if head == "":
+		return []
+	var out := []
+	for part in head.split("."):
+		if not part.is_valid_int():
+			return []
+		out.append(part.to_int())
+	return out
+
+# -1 a < b, 0 equal, 1 a > b (missing parts count as 0: 0.31 == 0.31.0).
+static func compare_builds(a: Array, b: Array) -> int:
+	for i in maxi(a.size(), b.size()):
+		var x: int = a[i] if i < a.size() else 0
+		var y: int = b[i] if i < b.size() else 0
+		if x != y:
+			return -1 if x < y else 1
+	return 0
+
+# True only when both are readable and `build` is older than `minimum`. Unknown builds and "no minimum" pass.
+static func build_too_old(build: String, minimum: String) -> bool:
+	var m := parse_build(minimum)
+	var b := parse_build(build)
+	if m.is_empty() or b.is_empty():
+		return false
+	return compare_builds(b, m) < 0
+
+func _set_min_build(v: String, src: String) -> void:
+	v = v.strip_edges()
+	if v.to_lower() in ["off", "none", "0"]:
+		v = ""
+	if v != "" and parse_build(v).is_empty():
+		_log("min build: ignoring unreadable value '%s' from %s (kept %s)" % [v.left(40), src, min_build if min_build != "" else "off"])
+		return
+	if v == min_build:
+		return
+	min_build = v
+	_log("min build %s (from %s)" % [min_build if min_build != "" else "off", src])
+	if min_build != "" and build_too_old(SERVER_BUILD, min_build):
+		_log("WARNING: min build %s is newer than this server (%s)" % [min_build, SERVER_BUILD])
+
+func _reload_min_build() -> void:
+	if min_build_env:
+		return
+	if not FileAccess.file_exists(min_build_file):
+		_set_min_build("", min_build_file + " (missing)")
+		return
+	var f := FileAccess.open(min_build_file, FileAccess.READ)
+	if f == null:
+		return                       # unreadable right now: keep the last value
+	_set_min_build(f.get_line(), min_build_file)
 
 func _log(s: String) -> void:
 	if log_on:
@@ -69,6 +153,10 @@ func _log(s: String) -> void:
 func _process(delta: float) -> bool:
 	_accept()
 	_poll_clients()
+	_min_build_clock += delta
+	if _min_build_clock >= min_build_reload:
+		_min_build_clock = 0.0
+		_reload_min_build()
 	_run_lobby(delta)
 	_run_match(delta)
 	return false
@@ -206,7 +294,7 @@ func _handle(cid: int, msg: Dictionary) -> void:
 			# so the client treats no answer as "unknown" and checks again on connect.
 			if c.hello:
 				return
-			_send(cid, {"t":"ver", "v":Net.VERSION})
+			_send(cid, {"t":"ver", "v":Net.VERSION, "build":SERVER_BUILD, "min_build":min_build})
 			_refuse(cid, 1000, "ver")
 		"hello":
 			if c.hello:
@@ -217,6 +305,15 @@ func _handle(cid: int, msg: Dictionary) -> void:
 				_send(cid, {"t":"bye", "why":"version", "need":Net.VERSION})
 				_refuse(cid, Net.CLOSE_VERSION, "version:%d" % Net.VERSION)
 				_log("refused %s: protocol %d, server %d" % [str(msg.get("name", "?")).left(20), int(msg.get("v", -1)), Net.VERSION])
+				return
+			var build := str(msg.get("build", ""))
+			if build_too_old(build, min_build):
+				# Same protocol, but an app older than the minimum: refuse it as if the server were one protocol ahead,
+				# which is what makes the vc32+ app show its full-screen "Update required" (Net.version_verdict "update").
+				var need := Net.VERSION + 1
+				_send(cid, {"t":"bye", "why":"version", "need":need, "min_build":min_build, "msg":UPDATE_MSG})
+				_refuse(cid, Net.CLOSE_VERSION, "version:%d" % need)
+				_log("refused %s: build %s older than min build %s" % [str(msg.get("name", "?")).left(20), build.left(30), min_build])
 				return
 			if _human_count() >= max_players:
 				_send(cid, {"t":"bye", "why":"full"})
@@ -361,7 +458,7 @@ func _send_lobby(waiting: Array) -> void:
 func _status() -> Dictionary:
 	return {"t":"status", "v":Net.VERSION, "online":_human_count(), "in_match":_seated_count(), "waiting":_queued().size(),
 		"lobby":maxf(0.0, wave_end - _now()) if wave_end >= 0.0 else -1.0, "running":sim != null and not sim.ended,
-		"slots":Net.TEAM_SIZE * 2, "max":max_players}
+		"slots":Net.TEAM_SIZE * 2, "max":max_players, "build":SERVER_BUILD, "min_build":min_build}
 
 # ---------------- match loop ----------------
 func _new_match() -> void:
