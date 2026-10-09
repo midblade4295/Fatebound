@@ -2627,3 +2627,8 @@ K2/K3 notes (0.17.0)
 - vc33 / 1.2.9-siege-0.31.84, 3 ABIs, signed with the upload key (cert SHA256 69:71:A9...:90:84), verifier/bundletool/
   jarsigner OK, 38/38 quick tests pass. AAB 198.4 MB (vc32 167.0): +31 MB from 12 new Meshy bodies (textures, meshes,
   anims) and the v2 menus/chests. Protocol still 35.
+
+# Play preset: no 64-bit Intel either (Kevin: "Can we drop the 64bit Intel also")
+- export_presets.cfg "Android Play Store": architectures/x86_64=false; the AAB now carries armeabi-v7a and arm64-v8a
+  only (Play's 64-bit requirement is met by arm64-v8a). The itch/preview presets were already arm64-v8a only. Gone with
+  it: Intel/AMD Chromebooks, x86 emulators and Google Play Games on PC (those need an x86_64 build). No build or upload.
