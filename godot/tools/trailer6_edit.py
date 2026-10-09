@@ -33,12 +33,16 @@ CUTS = [
     ("court", 23.20, 4.25, "out"),        # out of the gate into the battle
     ("run", 0.20, 4.60, "track"),         # war-movie tracking under arrows
     ("run", 5.40, 3.60, "front"),         # (from the bridge on: one of our archers crosses the lens before)
-    ("fall", 0.30, 1.44, "approach"),     # the meteor coming (it lands at 1.80)
-    ("fall", 1.74, 6.00, "blast"),        # slow motion: his friends thrown, he goes down
-    ("fall", 15.00, 3.80, "down"),        # on his back, ears ringing
-    ("fall", 19.15, 2.40, "rise"),
-    ("fall", 21.55, 1.80, "pov"),         # their gate -- the snap zoom
-    ("fall", 23.35, 3.85, "again"),       # the bomb again
+    ("fall", 0.30, 1.00, "approach"),     # him running (the red Archmage far off on the right)
+    # (Kevin: "it looks like he's the one that blew them up" -- so where it comes from is shown: the Archmage, close,
+    #  raises his staff, a fireball gathers on it, he hurls it; the camera chases it down onto the hero's friends)
+    ("fall", 1.30, 1.133, "mage"),        # staff up (1.32), the fire gathering, the throw (2.40)
+    ("fall", 2.433, 1.867, "chase"),      # after it, down onto them (slow motion)
+    ("fall", 4.30, 6.50, "blast"),        # slower: it streaks down into the frame (lands 4.90); his friends thrown, he goes down
+    ("fall", 18.07, 3.80, "down"),        # on his back, ears ringing
+    ("fall", 22.22, 2.40, "rise"),
+    ("fall", 24.62, 1.80, "pov"),         # their gate -- the snap zoom
+    ("fall", 26.42, 3.85, "again"),       # the bomb again
     ("charge", 0.00, 2.25, "rally"),      # his allies fall in round him
     ("charge", 2.25, 2.45, "hammer"),     # slow motion: the Crusader's hammer
     ("charge", 4.72, 1.10, "rogue"),      # the Rogue's leap, the Archer's shot
@@ -51,7 +55,7 @@ CUTS = [
     ("charge", 20.07, 2.40, "crane"),     # everyone in through the gate
     ("golden", 0.00, 10.00, "title"),     # the title lands at 4.90
 ]
-IMPACT = ("blast", 1.80)     # the meteor lands
+IMPACT = ("blast", 4.90)     # the meteor lands
 RELEASE = ("throw", 7.82)    # the bomb leaves his hand
 BOOM = ("boom", 12.00)       # the gate goes up
 LAND = ("title", 4.90)       # the title lands (the flash; "FATEBOUND" is spoken on it)
@@ -61,8 +65,8 @@ LINES = [("l1_a", ("wide", 1.20)),       # Every army has its heroes...
          ("l2_a", ("shove", 8.35)),      # ...and everyone else.
          ("l3_a", ("cower", 10.20), 2.0),  # No hat. No sword. No one expecting a thing.
          ("l4_a", ("face", 17.70), 1.5),  # But courage doesn't need a helmet.
-         ("l5_a", ("down", 17.70)),      # Get up.
-         ("l67_a", ("pov", 21.45)),      # Sometimes the one who changes everything is the one nobody saw coming.
+         ("l5_a", ("down", 20.77)),      # Get up.
+         ("l67_a", ("pov", 24.52)),      # Sometimes the one who changes everything is the one nobody saw coming.
          ("l8_b", ("rally", 0.40), 2.0),  # One brave step, and the whole army follows.
          ("l9_a", ("hat", 17.95), 7.0),  # Everyone makes a difference.          (+dB: over cue C, Kevin: "the end
          ("l10_a", ("title", 1.10), 8.0),  # Anyone can change fate.             lines are too quiet to hear")
@@ -94,11 +98,17 @@ SFX = [
     ("tm_sword_hit1.wav", ("track", 2.40), 0.8, "", None, 0, 0),
     ("raw/arrows_b.mp3", ("front", 5.60), 0.8, "", None, 0, 0),
     ("tm_sword_hit3.wav", ("front", 6.30), 0.8, "", None, 0, 0),
-    ("meteor.wav", ("approach", 0.75), 1.1, "", None, 0, 0),
+    # The Archmage's fireball: power gathering on the staff, the crackle of it, the throw (the game's own meteor-cast
+    # sound), then its rush through the air, slowed with the picture.
+    ("surge.wav", ("mage", 1.62), 0.75, "", None, 0.15, 0.3),
+    ("tm_firespray1.wav", ("mage", 1.75), 0.55, "lowpass=f=3500", None, 0.3, 0.3),
+    ("tm_fireball1.wav", ("mage", 2.38), 1.2, "", None, 0, 0),
+    ("meteor.wav", ("chase", 2.45), 1.0, SLOW.format(k=0.6), None, 0, 0.3),
+    ("tm_firespray2.wav", ("chase", 2.50), 0.7, SLOW.format(k=0.55), None, 0.2, 0.4),
     ("raw/slowboom_a.mp3", IMPACT, 1.5, "", None, 0, 0),                              # the meteor, slowed
     ("tm_bomb_blast.wav", IMPACT, 1.2, SLOW.format(k=0.45), None, 0, 0),
-    ("raw/ring_a.mp3", ("blast", 2.10), 0.75, "", None, 0.4, 2.5),                     # ears ringing
-    ("raw/muffled_b.mp3", ("blast", 2.60), 0.40, "lowpass=f=500", ("down", 17.60), 3.0, 1.5),   # (gone by "Get up")
+    ("raw/ring_a.mp3", ("blast", 5.20), 0.75, "", None, 0.4, 2.5),                     # ears ringing
+    ("raw/muffled_b.mp3", ("blast", 5.70), 0.40, "lowpass=f=500", ("down", 20.67), 3.0, 1.5),   # (gone by "Get up")
     ("raw/battle_a.mp3", ("rally", 0.00), 0.40, "", RELEASE, 1.5, 0.3, 12.0),        # the battle again, from the rally
     #   (Kevin: no soldiers' sounds as he gets up -- nothing from "Get up" to the rally but the music)
     ("hammerThrow.wav", ("hammer", 2.40), 0.9, SLOW.format(k=0.6), None, 0, 0),

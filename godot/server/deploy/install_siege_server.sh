@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Installs or updates the Fatebound Siege online server on this machine (Linux + systemd).
-# Run from a checkout of branch claude/kaykit-3d-rebuild:
+# Run from a checkout of the Siege branch (claude/siege-dev-r6-local or later):
 #   sudo bash godot/server/deploy/install_siege_server.sh
 #
 # What it does (nothing else):
@@ -22,8 +22,11 @@ NO_SYSTEMD="${NO_SYSTEMD:-0}"
 SRC="$(cd "$(dirname "$0")/../.." && pwd)"                  # .../godot
 SERVICE_SRC="$SRC/server/deploy/fatebound-siege.service"
 
-for f in scripts/siege/siege_sim.gd scripts/siege/siege_net.gd scripts/siege/siege_land.gd scripts/siege/siege_castle.gd server/siege_server.gd server/siege_probe.gd; do
-  [ -f "$SRC/$f" ] || { echo "Missing $SRC/$f — run this from a checkout of the release source." >&2; exit 1; }
+# The sim preloads the land and the castle layout (siege_land.gd, siege_castle.gd -- 0.31.82: they were missing here,
+# so a fresh install could not compile the sim). Nothing else: the baked terrain files are only the client's.
+SERVER_SCRIPTS="scripts/siege/siege_sim.gd scripts/siege/siege_net.gd scripts/siege/siege_land.gd scripts/siege/siege_castle.gd"
+for f in $SERVER_SCRIPTS server/siege_server.gd server/siege_probe.gd; do
+  [ -f "$SRC/$f" ] || { echo "Missing $SRC/$f — run this from the Siege branch checkout." >&2; exit 1; }
 done
 if [ "$NO_SYSTEMD" != "1" ] && [ "$(id -u)" -ne 0 ]; then
   echo "Run with sudo (installs to /opt, /srv and systemd)." >&2; exit 1
@@ -61,7 +64,7 @@ fi
 # ---- 3. Minimal server project ----
 STAGE="$(mktemp -d)"
 mkdir -p "$STAGE/scripts/siege" "$STAGE/server"
-cp "$SRC/scripts/siege/siege_sim.gd" "$SRC/scripts/siege/siege_net.gd" "$SRC/scripts/siege/siege_land.gd" "$SRC/scripts/siege/siege_castle.gd" "$STAGE/scripts/siege/"
+for f in $SERVER_SCRIPTS; do cp "$SRC/$f" "$STAGE/scripts/siege/"; done
 cp "$SRC/server/siege_server.gd" "$SRC/server/siege_probe.gd" "$STAGE/server/"
 cat > "$STAGE/project.godot" <<'PROJ'
 ; Fatebound Siege dedicated server: simulation + protocol only (no assets, no autoloads).

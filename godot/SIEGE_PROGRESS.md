@@ -2469,3 +2469,153 @@ K2/K3 notes (0.17.0)
   screen identical). SHA-256 7741f5bfdc2c41061b861717f5d88b945729f134a97ba5f51a85c26fd8fd8142.
 - Verifier + bundletool validate + jarsigner OK, upload cert 69:71:A9:...:83:90:84. Protocol 35 (no server change).
   Quick suite: ALL PASSED (38).
+# Trailer 6: where the meteor comes from (Kevin: "it looks like he's the one that blew them up. Make it so viewers
+# know where explosion came from with camera following the meteor from arch mage")
+- The fall run opens on the red Archmage now: a close low shot as he raises his staff, a fireball gathers on its orb
+  and he hurls it; the camera chases it (slow motion) over his shoulder and down onto the hero's friends, with the
+  hero running in on the left; the blast shot starts a beat earlier so its fiery streak comes down into the frame.
+  The fireball (trailer only, tools/trailer6_shots.gd): a child of the staff while it gathers, then a curve to the
+  ground, landing on the sim tick its meteor goes off; its own light, flame trail and smoke; the game's falling rock is
+  hidden, its warning ring kept. Everything from the impact on is the old fall, 1.79 game s later; the hero is paced
+  to the spot he was knocked down from before (measured), so the shots after it frame as they did.
+- Cut and mix (tools/trailer6_edit.py): approach 1.0 s, "mage" 1.13 s, "chase" 1.87 s, the blast 6.5 s; the cast's
+  surge and crackle, the game's meteor-cast sound on the throw, its rush slowed with the picture. 87.4 s (was 84.4).
+
+# Home: one PLAY, always the server (Kevin: "remove the play with bots option from game. Only have the regular play
+# button so player is always playing on server plus they play with bots anyway when there aren't enough players")
+- screens.gd: the VS BOTS / ONLINE 16v16 row is gone; PLAY always starts the online match. The server already holds
+  every slot no human does with a bot (siege_server.gd), so a quiet server is still a full 16 v 16. Hint under PLAY:
+  "Live 16 vs 16 on the Siege server · bots fill any empty slots". siege_app.gd: play_online removed.
+- The local match stays for the tutorial (HOW TO PLAY / first-visit Herald) and the tests. With no signal PLAY shows
+  the existing "Could not connect to the server" and returns Home (no offline fallback any more).
+- Tests: app_flow_test checks there's no mode choice and that PLAY goes online (rewards still checked on a local
+  match); app_scroll_test finds PLAY by its action key instead of a fixed point. app_flow, app_scroll, tutorial,
+  parse_all pass. No build.
+
+# 0.31.79 menus, step 1 (Kevin: "continue with new menu build" -- the concept boards in the game)
+- Art: assets/ui/v2 -- the painted Home battlements, the vault, the pass and market banners, seamless damask /
+  parchment / wood / stone, twelve 3D-style icons (ElevenLabs), the four Meshy chests baked by tools/chest_bake.gd
+  into split-lid scenes (1K VRAM textures; the source GLBs sit in chests/src, .gdignore'd, not exported).
+- Look: ui2.gd + skin.gd + ui_skin.gdshader -- every panel and button is one signed-distance skin (crisp on any
+  phone): gold rims, damask/parchment/wood fills, lipped glossy buttons that press in and grey out, Luckiest Guy text
+  with chunky outlines, ribbons, dividers, badges, sweeps, sunbursts.
+- Chrome: shield level badge, XP bar, gold/gem pills; a wooden tab bar with the 3D icons, the open tab raised.
+- Home: the battlements backdrop with drifting clouds and slow sun rays; all seven base classes in 3D on the dais in
+  their equipped weapons (roster.gd); PASS / ORDERS / FIRST WIN medallions; the ribbon; one big PLAY; the chests in 3D
+  over their slots (chest_row.gd); the orders on parchment; the pass summary. Opening a chest is a full-screen 3D
+  scene (chest_open.gd): it rattles, TAP TO OPEN, the lid flies open with a flash and a spray of coins, the rewards
+  rise in. Pass, Shop, Locker and Settings rebuilt in the same look (same buttons and keys underneath).
+- Pass chest rewards showed "0 gold" (reward_text had no chest case); they now show the chest.
+- app_flow, app_scroll, tutorial, chest, boot_guard, parse_all pass.
+- Step 2: the match panels in the same look (siege_hud.gd): PAUSED on a parchment sheet (how to win with the 3D icons,
+  the tricks, RESUME / RESOLUTION / LEAVE MATCH), the results under a VICTORY / DEFEAT / DRAW ribbon (a crown and a
+  sunburst on a win), the score in team colours, your KOs / downs / rescues, the spoils on parchment, the chests earned
+  with their pictures, HOME / PLAY AGAIN; the workshop uses the new panel and buttons. Panels drop open, and one taller
+  than the screen is shrunk to fit (wrapping labels are given a width before they're measured -- unmeasured, they made
+  the panel thousands of pixels tall).
+- Locker rail: round head portraits (assets/ui/skins/default_*), zoom buttons in the new style.
+- 0.31.79, version code 165. Quick suite: ALL 37 PASSED.
+
+# 0.31.80 (Kevin: "redo all the basic characters also since we did the advanced ones"; picked Knight A1, Barbarian
+# A1, Rogue A1, Archer B1, Mage B1, Priest A2)
+- Concepts (gpt-image-2, ElevenLabs flow "Fatebound base-class concepts"): per class one sheet with design A (close to
+  the old body) and B (a fresh take), two takes each, in the Farmer concept's clay style, each base class's old body
+  and its upgraded form as the reference (reports/concepts/ref_pair_<cls>.png). Sheets and picks in reports/concepts.
+  The Priest gets a body of his own (it was the Mage's with a cream tint). Mage B's round glasses were dropped
+  (too close to a famous boy wizard).
+- Models: each pick redrawn as a 2K T-pose turnaround (front / side / back, tpose_ref.png as the pose), cut into three
+  square views, Meshy multi-image-to-3D (latest, t-pose, ~10k triangles), Meshy auto-rig. The Knight's first model
+  lost its cape and turned Roman, the Rogue's lost his cape: both redone with image enhancement off and the views as
+  the texture references (texture_image_urls) -- faithful. ~12k ElevenLabs credits (12 concept images, 6 turnarounds),
+  ~275 Meshy credits.
+- assets/meshy/<knight|barbarian|rogue|ranger|mage|priest>: rigged.glb, rig.json, the 110 baked animations
+  (tools/retarget_meshy.gd). Fit by the neck height (FIT=neck): every new body's neck at the KayKit neck height
+  (1.24 m), as the other Meshy bodies have it -- the height fit would have made them ~20 % bigger (the KayKit heads
+  are half the body). KK_FOR now names stock *_kaykit bodies for every Meshy body (knight_kaykit ... mage_kaykit added
+  to LOOKS, tools only; the Priest's and the Archmage's source is mage_kaykit).
+- LOOKS: knight / barbarian / rogue / ranger / mage / priest -> meshy:<cls> (same weapons, idles, combos, ragdoll); the
+  Knight's always-a-shield rule and the halberd / scythe holds cover the Meshy Knight and Rogue. Priest tint dropped.
+- Icons: the six busts (locker coins) and every base-class weapon icon re-rendered (render_skin_icons: bust framing for
+  the Mage's hat, the Knight's plume and the bear head). tools/preload_list re-run (the KayKit hero GLBs leave the
+  list, the six Meshy bodies and their animations join it).
+- Home dais (roster.gd): the Knight a step forward (z 0.95), the Barbarian and the Mage turned so the axe and the
+  staff's orb clear him.
+- 0.31.80, version code 166. Quick suite: ALL 37 PASSED.
+
+# 0.31.81 (Kevin: "redo the advanced classes in the same style"; picked B2 for all six)
+- Concepts (same ElevenLabs flow): per upgraded class one sheet with design A (its current look redone) and B (the new
+  base pick grown up), two takes each; references: the base class's concept pick (style) and the new base body beside
+  the current upgrade in the game (reports/concepts/ref_up_<cls>.png). Picks: the Knight as a champion (silver and gold
+  plate, crowned crimson plume, lion emblem, crimson cape); the Barbarian as a berserker (black bear pelt, braided
+  beard with beads, chain, bones); the Rogue as a master assassin (black hood lined crimson, crimson mask, tattered
+  black cape); the Archer as an elite ranger (green feathered hat, green cloak, studded leather, quiver); the Mage grown
+  old (grey beard, midnight-blue constellation robes and hat); the Priest fallen (grey skin, glowing green eyes, cracked
+  sun emblem, tattered black robes). Sheets and picks in reports/concepts.
+- Models: 2K T-pose turnarounds, Meshy multi-image-to-3D with image enhancement off and the views as the texture
+  references (faithful from the start), auto-rig. The view splitter now cuts where the sheet is emptiest near each
+  third (a hand reaching past a third's edge no longer leaves a sliver in the next view). ~3.9k ElevenLabs credits for
+  the turnarounds (+7.9k concepts), 210 Meshy credits.
+- assets/meshy/<crusader|berserker|assassin|sniper|archmage|necromancer>: replaced (rigged.glb, rig.json, the 110
+  baked animations), fit by the neck height like the base classes (the old ones were fit by overall height; the
+  necks land at 1.24 m either way). LOOKS unchanged (same weapons, idles, abilities; the upgrade's 1.14 scale).
+- Texture import: the twelve new character textures (0.31.80's six too) are VRAM-compressed, high quality, like the
+  0.31.78 ones -- 0.31.80 shipped its six base bodies lossless (decoded on the CPU, 21 MB each in video memory).
+- Icons: the six upgrade busts and their weapon icons re-rendered (render_skin_icons BUST_FRAME gains the upgrades; the
+  far framing stays for the Archmage's gear only -- the Necromancer has no crown now). tools/preload_list re-run.
+- 0.31.81, version code 167. Quick suite: ALL 37 PASSED.
+
+# 0.31.82 (Kevin: "Add a players online in main menu. Also when starting match have it countdown from 20 seconds and show players joining.")
+- Server (server/siege_server.gd): a hello no longer seats the player at once -- it joins the lobby. The first one in
+  starts a LOBBY_TIME (20 s; env SIEGE_LOBBY) countdown, everyone who arrives before zero goes in with them, and every
+  0.5 s each waiting player gets {"t":"lobby", left, wait, names, me, online, in_match, slots, running}. At zero the
+  wave is seated: a new match if none runs (or only bots are left in it), else into the running one; during a results
+  screen they wait for the next match with everyone. Waiting players get no snapshots. {"t":"status"} without a hello
+  answers {online, in_match, waiting, lobby, running, slots, max} (the asker closes; the server does after 2 s -- a
+  close right behind the answer can arrive in the same read and the WebSocket drops the answer). Protocol stays 35:
+  an older app ignores "lobby" and simply gets its welcome at zero; this app against an older server is welcomed at
+  once (no countdown) and gets no count.
+- Lobby panel (scripts/siege/lobby_panel.gd), up from PLAY until the welcome: FATEBOUND, "FINDING A BATTLE" with a
+  spinning ring while connecting, then "BATTLE STARTS IN" with the seconds inside a ring that empties (orange and a
+  tick each second in the last five), whether a battle is already on ("2 players fighting, you join it at zero") or a
+  new one starts, "N / 32 PLAYERS", and the players joining as name chips (yours marked YOU; newcomers pop in with a
+  flip; ten shown, then "+N more"). LEAVE / Back goes home; a failed connection shows "CAN'T JOIN" and the reason.
+  On the welcome the FATEBOUND card goes straight over it (the warm-up as before).
+- Home (screens.gd, scripts/app/online_status.gd): the line under PLAY is a pill -- "12 PLAYERS ONLINE" with a
+  breathing green dot and "N in battle" / "N in the lobby, join them!" / "bots fill the empty slots". Polled with a
+  status query every 15 s while Home shows (not during a match or in the background); "LIVE SIEGE SERVER" until an
+  answer or when the server can't say (the live server needs the redeploy). Only the real app polls (tests and tools
+  stay off the network unless FB_STATUS_POLL is set).
+- server/siege_probe.gd also asks the status and waits out the countdown (35 s timeout): the install script's probe.
+- Tests: siege_net_smoke runs the server with a 1.5 s lobby and checks the lobby messages before both welcomes (names,
+  running, counts), the panel closing on the welcome and a status answer; net_load_test uses a 1 s lobby.
+- Live server: needs `sudo bash godot/server/deploy/install_siege_server.sh` from this branch for the countdown and the
+  count (until then the app connects as before).
+- 0.31.82, version code 168. Quick suite: ALL 37 PASSED.
+
+# 0.31.83 (Kevin: "I don't like the wallpaper looking pattern on background")
+- The royal damask is gone: no longer tiled under every screen (siege_app._build_background -- the gradient is now the
+  royal blue the damask used to give it, #243d96 -> #152a7c -> #0a1750, with the warm glow at the top), and the damask
+  panel kinds (royal, night, purple, ember, green: the shop / pass / featured cards, the match HUD's panels) are plain
+  gradients (pattern_mix 0). Parchment, wood and stone panels unchanged.
+- 0.31.83, version code 169. Quick suite: ALL 37 PASSED.
+
+# 0.31.84 (Kevin: "I still want a sort of texture or design for background. Give me concepts to pick from" -> "C.
+# Also put a fps cap of 60 in the menus")
+- Seven background concepts (reports/concepts/bg_concepts.png): A castle stone, B twilight sky, C light rays, D battle
+  map, E painted canvas, F banner hall (gpt-image-2, 9:16, two takes each, ~2.2k ElevenLabs credits), G diagonal
+  stripes (drawn in code); each shown behind the real Shop. Kevin picked C: royal blue, soft light rays fanning from the
+  top, drifting gold motes. Upscaled 2x with Topaz (1440x2560, ~0.5k credits) -> assets/ui/v2/bg_menu.webp (VRAM
+  compressed, high quality, no mipmaps), covering the screen behind every menu over the gradient
+  (siege_app._build_background).
+- Menus capped at 60 fps (MENU_FPS): they ran uncapped, 120 on the S21 Ultra's 120 Hz screen. A match still sets its
+  own 30 and puts the 60 back when it ends. The real app only (tests and tools run the menus uncapped, FB_MENU_FPS to
+  force it).
+- 0.31.84, version code 170. Quick suite: ALL 37 PASSED.
+
+# Server install fix (Kevin: "The 20 second timer isn't working")
+- The live server still runs a build from before 0.31.82 (probe: welcomed at once, no lobby messages, no status
+  answer) -- the countdown and the player count are the server's, so it needs the redeploy.
+- server/deploy/install_siege_server.sh could not have done that: its minimal server project copied only siege_sim.gd
+  and siege_net.gd, but the sim preloads siege_land.gd and siege_castle.gd, so the copied sim failed to compile and the
+  probe failed. It now copies all four (the baked terrain files stay client-only). Dry run (NO_SYSTEMD=1): installs,
+  the probe waits out the 20 s lobby, PROBE_OK.

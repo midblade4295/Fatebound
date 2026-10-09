@@ -4,6 +4,8 @@ extends SceneTree
 # connects the real game client (SiegeMode online) plus a raw second client, and checks:
 # welcome + team seating, snapshots, the player's unit moving from real touch input, actions
 # (walk to a hat stand and become a class), events reaching the view/HUD, disconnect -> bot takes over.
+# 0.31.82: both players wait out the lobby countdown (SIEGE_LOBBY 1.5 s here) and get "lobby" messages first (the
+# game shows them on the lobby panel); a "status" query answers the player counts (Home's "players online").
 const Mode = preload("res://scripts/siege/siege_mode.gd")
 const Net = preload("res://scripts/siege/siege_net.gd")
 const Sim = preload("res://scripts/siege/siege_sim.gd")
@@ -29,6 +31,10 @@ var move_touch_pos := Vector2.ZERO
 var saw_authoritative_move := false
 var events_seen := 0
 var snaps_raw := 0
+var raw_lobby := {}                   # the raw client's last "lobby" message before its welcome
+var raw_lobby_n := 0
+var stat_ws: WebSocketPeer
+var stat_sent := false
 var fails: Array = []
 
 func check(ok: bool, what: String) -> void:
@@ -53,6 +59,7 @@ func _init() -> void:
 		port = int(OS.get_environment("NET_TEST_PORT"))
 	OS.set_environment("SIEGE_PORT", str(port))
 	OS.set_environment("SIEGE_HOST", "127.0.0.1")
+	OS.set_environment("SIEGE_LOBBY", "1.5")
 	pid = OS.create_process(OS.get_executable_path(), ["--headless", "--path", ProjectSettings.globalize_path("res://"), "-s", "res://server/siege_server.gd"])
 	check(pid > 0, "server process started (pid %d)" % pid)
 
@@ -72,6 +79,9 @@ func _process(delta: float) -> bool:
 			var m := Net.decode(raw.get_packet())
 			if m.get("t", "") == "welcome": raw_unit = str(m.you)
 			if m.get("t", "") == "s": snaps_raw += 1
+			if m.get("t", "") == "lobby" and raw_unit == "":
+				raw_lobby = m
+				raw_lobby_n += 1
 	match phase:
 		"boot":
 			if t > 1.5:
@@ -82,11 +92,13 @@ func _process(delta: float) -> bool:
 				root.add_child(mode)
 				phase = "join"; t = 0.0
 		"join":
-			if mode.net_state == "playing" and mode.sim != null and t > 1.0:
+			if mode.net_state == "playing" and mode.sim != null and mode.sim.time > 0.4:
 				var me_id: String = mode.hud.player_id
 				check(me_id.begins_with("b"), "first player seated on blue (%s)" % me_id)
 				check(not mode.sim.by_id[me_id].bot, "our unit is human-controlled on the mirror")
-				check(mode.sim.time > 0.3, "snapshots advance match time (%.2f s)" % mode.sim.time)
+				check(mode.sim.time > 0.3, "snapshots advance match time (%.2f s)" % mode.sim.time)    # (0.31.82: a fresh match after the lobby)
+				check(mode.lobby_msgs > 0, "the lobby countdown came before the welcome (%d messages)" % mode.lobby_msgs)
+				check(mode.lobby == null, "the lobby panel closed on the welcome")
 				raw = WebSocketPeer.new()
 				raw.connect_to_url("ws://127.0.0.1:%d/fatebound/siege/ws" % port)
 				phase = "raw"; t = 0.0
@@ -98,6 +110,10 @@ func _process(delta: float) -> bool:
 				raw_hello_sent = true
 			if raw_unit != "" and snaps_raw >= 3:
 				check(raw_unit.begins_with("r"), "second player seated on red (%s)" % raw_unit)
+				check(raw_lobby_n > 0 and str(raw_lobby.get("names", [])) == str(["TestB"]) and int(raw_lobby.get("me", -1)) == 0,
+					"the second player waited in the lobby with its own name listed (%d messages, %s)" % [raw_lobby_n, str(raw_lobby.get("names", []))])
+				check(bool(raw_lobby.get("running", false)) and int(raw_lobby.get("in_match", 0)) == 1 and int(raw_lobby.get("online", 0)) == 2,
+					"the lobby says a battle with 1 player is on, 2 online (%s)" % str(raw_lobby))
 				# Pick the farther courtyard station, then steer the real touch stick over the
 				# mirror's navigation path. A fixed direction is seed-dependent here: the spawn
 				# is randomized and walls/resources can sit directly in front of it.
@@ -214,5 +230,22 @@ func _process(delta: float) -> bool:
 				var ru: Dictionary = mode.sim.by_id[raw_unit]
 				check(ru.bot, "after the second player left, a bot took %s back" % raw_unit)
 				check(mode.sim.kills[0] + mode.sim.kills[1] >= 0, "match still running (t=%.0f s)" % mode.sim.time)
-				_finish()
+				stat_ws = WebSocketPeer.new()
+				stat_ws.connect_to_url("ws://127.0.0.1:%d/fatebound/siege/ws" % port)
+				phase = "status"; t = 0.0
+		"status":
+			# Home's "players online": a status query (no hello) answers the counts and closes
+			stat_ws.poll()
+			if stat_ws.get_ready_state() == WebSocketPeer.STATE_OPEN and not stat_sent:
+				stat_ws.put_packet(Net.encode({"t":"status"}))
+				stat_sent = true
+			while stat_ws.get_available_packet_count() > 0:
+				var sm := Net.decode(stat_ws.get_packet())
+				if sm.get("t", "") == "status":
+					check(int(sm.get("v", -1)) == Net.VERSION and int(sm.get("online", -1)) == 1 and int(sm.get("in_match", -1)) == 1 and int(sm.get("waiting", -1)) == 0,
+						"status answers the player counts (%s)" % str(sm))
+					_finish()
+					return false
+			if t > 4.0:
+				check(false, "status answered within 4 s (state %d)" % stat_ws.get_ready_state()); _finish()
 	return false

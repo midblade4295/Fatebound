@@ -231,11 +231,13 @@ func _process(delta: float) -> bool:
 			elif t > 8.0:
 				check(false, "Update screen shown within 8 s of start-up"); _finish()
 		"app_offline":
-			check(not is_instance_valid(app.update_screen) and not app.play_online, "Play offline closes the screen, online off")
-			_btn("mode_online", app).pressed.emit()
-			check(is_instance_valid(app.update_screen) and not app.play_online, "ONLINE re-shows the Update screen")
+			if UpdateScreen.ALLOW_OFFLINE:
+				check(not is_instance_valid(app.update_screen) and app.siege != null and not app.siege.online, "Play offline closes the screen and starts an offline match")
+				app._end_match()
+				check(is_instance_valid(app.update_screen), "the Update screen comes back after the offline match")
+			_btn("play", app).pressed.emit()
+			check(app.siege == null and is_instance_valid(app.update_screen), "PLAY (online) re-shows the Update screen")
 			app.hide_update_screen()
-			app.play_online = true
 			app.start_match(true)
 			check(app.siege == null and is_instance_valid(app.update_screen), "PLAY online is blocked by the Update screen")
 			app.hide_update_screen()
@@ -244,7 +246,6 @@ func _process(delta: float) -> bool:
 			app.server_version = -1
 			app.version_check_url = furl
 			OS.set_environment("SIEGE_URL", furl)
-			app.play_online = true
 			app.rebuild()
 			app.start_match(true)                  # siege_mode reads SIEGE_URL when it is created
 			phase = "app_connect"; t = 0.0

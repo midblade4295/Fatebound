@@ -1,7 +1,8 @@
 extends SceneTree
 # Fatebound trailer 6 -- "Anyone Can Change Fate" (Kevin: an epic cinematic trailer following a villager as the hero of a
 # battle; shoved aside while the others put on helmets, villagers cowering, he finds the bomb, musters the courage, runs it
-# across the battlefield like a war movie, is blown down by a wizard's meteor in slow motion, gets up, sees their gate,
+# across the battlefield like a war movie, is blown down in slow motion by the meteor an enemy Archmage hurls onto his
+# friends (the camera chases it from the Archmage's staff: it mustn't look like his own bomb), gets up, sees their gate,
 # and with his allies rallying round him -- clearing his way like blockers for a running back -- throws it; the gate
 # explodes, the army charges in, the title).
 #
@@ -14,10 +15,22 @@ const Mode = preload("res://scripts/siege/siege_mode.gd")
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 const Land = preload("res://scripts/siege/siege_land.gd")
 const Castle = preload("res://scripts/siege/siege_castle.gd")
+const View = preload("res://scripts/siege/siege_view.gd")
 const RUN_V := 5.16               # a bomb-carrying Villager's run (m/s)
-const LENGTH := {"court": 27.5, "run": 9.5, "fall": 16.5, "charge": 15.5}
+# The fall's opening (Kevin: "it looks like he's the one that blew them up" -- show where it came from): the red Archmage
+# raises his staff, a fireball gathers on it, he hurls it, and the camera chases it down onto the hero's friends. Game
+# seconds; the old fall (impact at 1.76) runs on from the impact, SHIFT later.
+const CAST_T := 1.32              # the staff goes up (Ranged_Magic_Raise)
+const GROW := [1.62, 2.25]        # the fireball gathering on its orb (once the staff is up)
+const THRUST_T := 2.26            # the thrust (Ranged_Magic_Shoot from its raised frame)
+const LAUNCH_T := 2.40            # it leaves the staff
+const FLIGHT := 1.15              # ...and lands
+const HIT_T := LAUNCH_T + FLIGHT
+const SHIFT := HIT_T - 1.76
+const LENGTH := {"court": 27.5, "run": 9.5, "fall": 16.5 + SHIFT, "charge": 15.5}
 # [from, to, time scale]
-const SLOW := {"fall": [[1.74, 4.1, 0.18]], "charge": [[2.30, 2.95, 0.3], [6.30, 7.62, 0.22], [7.62, 8.6, 0.4]]}
+const SLOW := {"fall": [[LAUNCH_T + 0.03, HIT_T - 0.10, 0.55], [HIT_T - 0.10, 4.1 + SHIFT, 0.18]],
+	"charge": [[2.30, 2.95, 0.3], [6.30, 7.62, 0.22], [7.62, 8.6, 0.4]]}
 var mode
 var run := "court"
 var frames := 0
@@ -32,11 +45,22 @@ var escorts := {}             # id -> [forward, right] offset round the hero (ch
 var flyers := {}              # id -> true: killed by a blast here (no respawning into the scene)
 var tumble: Array = []        # the dropped bomb sliding away: [t0, dur, from, to]
 var still_at := -1.0
+var until := -1.0             # (UNTIL=<t>: stop the run there -- a quick look at its start)
+var fb: Node3D                # the Archmage's fireball (fall): on his staff, then in flight
+var fb_u := 0.0               # how far along its flight (0..1)
+var fb_p0 := Vector3.ZERO     # its flight: a quadratic curve from the staff (p0) over c to the ground (p1)
+var fb_c := Vector3.ZERO
+var fb_p1 := Vector3.ZERO
+var fb_dir := Vector3.ZERO    # level, from the Archmage to where it lands
+var fb_right := Vector3.ZERO
+var cam_seg := -1
 
 func _init() -> void:
 	run = OS.get_environment("RUN") if OS.has_environment("RUN") else "court"
 	if OS.has_environment("STILL_AT"):
 		still_at = float(OS.get_environment("STILL_AT"))
+	if OS.has_environment("UNTIL"):
+		until = float(OS.get_environment("UNTIL"))
 	mode = Mode.new()
 	mode.hq_gfx = true
 	root.add_child(mode)
@@ -155,6 +179,201 @@ func _cover(id: String, p: Array) -> void:
 			var pg := sk.get_bone_global_pose(sk.get_bone_parent(i))
 			sk.set_bone_pose_rotation(i, (pg.basis.orthonormalized().inverse() * nb.orthonormalized()).get_rotation_quaternion())
 			sk.force_update_all_bone_transforms()
+
+func _anim_from(id: String, clip: String, from: float, speed: float, busy: float) -> void:
+	# A clip from part-way in (the thrust of Ranged_Magic_Shoot from its staff-up frame).
+	var a := _actor(id)
+	if a.is_empty() or not is_instance_valid(a.player):
+		return
+	var pl: AnimationPlayer = a.player
+	pl.play(clip, 0.12, speed)
+	pl.seek(from, true)
+	a.clip = clip
+	a.busy_until = float(mode.view._time) + busy
+
+# ---------- the Archmage's fireball (fall) ----------
+# Gathers on the orb of his staff (a child of the staff, so it moves with his hand exactly), then flies on a high curve
+# onto the hero's friends, landing as the sim's meteor goes off there; its own light, a flame trail and smoke.
+var frame_dt := 0.0
+
+func _fire_trail(smoke: bool) -> GPUParticles3D:
+	var pm := ParticleProcessMaterial.new()
+	pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
+	pm.emission_sphere_radius = 0.18 if smoke else 0.12
+	pm.direction = Vector3(0, 1, 0)
+	pm.spread = 180.0
+	pm.initial_velocity_min = 0.05
+	pm.initial_velocity_max = 0.3
+	pm.gravity = Vector3(0.0, 0.5 if smoke else 0.8, 0.0)
+	pm.damping_min = 0.5
+	pm.damping_max = 1.0
+	pm.scale_min = 0.8
+	pm.scale_max = 1.3
+	var sc := Curve.new()
+	if smoke:
+		sc.add_point(Vector2(0.0, 0.5))
+		sc.add_point(Vector2(0.4, 1.2))
+		sc.add_point(Vector2(1.0, 1.8))
+	else:
+		sc.add_point(Vector2(0.0, 1.0))
+		sc.add_point(Vector2(1.0, 0.15))
+	var sct := CurveTexture.new()
+	sct.curve = sc
+	pm.scale_curve = sct
+	var g := Gradient.new()
+	if smoke:
+		g.offsets = PackedFloat32Array([0.0, 0.15, 1.0])
+		g.colors = PackedColorArray([Color(0.25, 0.22, 0.2, 0.0), Color(0.28, 0.25, 0.22, 0.25), Color(0.42, 0.4, 0.37, 0.0)])
+	else:
+		g.offsets = PackedFloat32Array([0.0, 0.05, 0.3, 0.65, 1.0])
+		g.colors = PackedColorArray([Color(2.0, 1.1, 0.3, 0.0), Color(2.0, 1.05, 0.28, 0.95), Color(1.7, 0.55, 0.12, 0.85),
+			Color(0.7, 0.18, 0.04, 0.5), Color(0.2, 0.1, 0.06, 0.0)])
+	var gt := GradientTexture1D.new()
+	gt.gradient = g
+	pm.color_ramp = gt
+	var q := QuadMesh.new()
+	q.size = Vector2.ONE * (0.8 if smoke else 0.6)
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA          # (mixed: added flames wash out to white)
+	m.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	m.vertex_color_use_as_albedo = true
+	m.albedo_texture = View._soft_dot()
+	q.material = m
+	var p := GPUParticles3D.new()
+	p.process_material = pm
+	p.draw_pass_1 = q
+	p.amount = 50 if smoke else 160
+	p.lifetime = 0.6 if smoke else 0.36
+	p.local_coords = false                                  # (left behind in the air: the trail)
+	p.fixed_fps = 0
+	p.draw_order = GPUParticles3D.DRAW_ORDER_VIEW_DEPTH
+	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	p.visibility_aabb = AABB(Vector3(-40, -40, -40), Vector3(80, 80, 80))
+	return p
+
+func _fireball_make(mage_id: String) -> void:
+	var a := _actor(mage_id)
+	if a.is_empty():
+		return
+	var mis: Array = (a.root as Node).find_children("staff*", "MeshInstance3D", true, false)
+	if mis.is_empty():
+		return
+	var mi: MeshInstance3D = mis[0]
+	var box: AABB = mi.get_aabb()
+	var ax := 0
+	for i in 3:
+		if box.size[i] > box.size[ax]:
+			ax = i
+	var half := Vector3.ZERO
+	half[ax] = box.size[ax] * 0.5
+	var hand := _bone(mage_id, "wrist.r")
+	var top: Vector3 = box.get_center() + half                  # the end away from his hand: the orb
+	if (mi.global_transform * top).distance_to(hand) < (mi.global_transform * (box.get_center() - half)).distance_to(hand):
+		top = box.get_center() - half
+	var sc: Vector3 = mi.global_transform.basis.get_scale()
+	var holder := Node3D.new()
+	mi.add_child(holder)
+	holder.position = top + (top - box.get_center()).normalized() * (0.32 / maxf(sc[ax], 0.001))
+	fb = Node3D.new()
+	var ball := Node3D.new()
+	ball.name = "ball"
+	fb.add_child(ball)
+	var core := MeshInstance3D.new()
+	var sm := SphereMesh.new()
+	sm.radius = 0.3
+	sm.height = 0.6
+	core.mesh = sm
+	var cm := StandardMaterial3D.new()                         # (solid, not added: added light goes white on the sky)
+	cm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	cm.albedo_color = Color(1.9, 0.95, 0.25)
+	core.material_override = cm
+	core.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	ball.add_child(core)
+	for gl in [[1.1, Color(1.0, 0.45, 0.1, 0.55), true], [2.0, Color(1.0, 0.4, 0.08, 0.3), false]]:
+		var qi := MeshInstance3D.new()
+		var qm := QuadMesh.new()
+		qm.size = Vector2.ONE * float(gl[0])
+		var m := StandardMaterial3D.new()
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		if gl[2]:
+			m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		m.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+		m.billboard_keep_scale = true
+		m.albedo_texture = View._soft_dot()
+		m.albedo_color = gl[1]
+		qm.material = m
+		qi.mesh = qm
+		qi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		ball.add_child(qi)
+	var light := OmniLight3D.new()
+	light.name = "light"
+	light.light_color = Color(1.0, 0.55, 0.22)
+	light.light_energy = 3.0
+	light.omni_range = 7.0
+	ball.add_child(light)
+	for smoke in [true, false]:
+		var tr := _fire_trail(smoke)
+		tr.name = "smoke" if smoke else "flame"
+		tr.amount_ratio = 0.0
+		fb.add_child(tr)
+	holder.add_child(fb)
+	_fireball_grow(0.0)
+
+func _fireball_grow(g: float) -> void:
+	# On the staff: the holder's parent is scaled (the model's import), so undo that; the ball swells, flickering.
+	var hs: Vector3 = (fb.get_parent() as Node3D).global_transform.basis.get_scale()
+	fb.scale = Vector3(1.0 / maxf(hs.x, 0.001), 1.0 / maxf(hs.y, 0.001), 1.0 / maxf(hs.z, 0.001))
+	var fl := 1.0 + 0.07 * sin(t * 47.0) + 0.04 * sin(t * 83.0)
+	(fb.get_node("ball") as Node3D).scale = Vector3.ONE * maxf(0.02, g * fl)
+	(fb.get_node("ball/light") as OmniLight3D).light_energy = 3.0 * g
+	for n in ["flame", "smoke"]:
+		(fb.get_node(n) as GPUParticles3D).amount_ratio = clampf(g * 1.2, 0.0, 1.0) * (0.3 if n == "smoke" else 0.6)
+
+func _fireball_launch(to: Vector3) -> void:
+	if fb == null or not is_instance_valid(fb):
+		return
+	fb.reparent(mode.view, true)
+	fb.global_basis = Basis()
+	fb_p0 = fb.global_position
+	fb_p1 = to
+	var lv := Vector3(to.x - fb_p0.x, 0.0, to.z - fb_p0.z)
+	fb_dir = lv.normalized()
+	fb_right = fb_dir.cross(Vector3.UP).normalized()
+	fb_c = fb_p0.lerp(to, 0.3) + Vector3.UP * 6.0               # (up to ~5 m: the ground stays in the chase)
+	set_meta("fb_t0", float(s.time) + float(mode._accum) + frame_dt)
+	for i in 8:
+		mode.view.spark(fb_p0, [Color(1.0, 0.75, 0.3), Color(1.0, 0.5, 0.15)][i % 2])
+
+func _fb_point(u: float) -> Vector3:
+	var w := 1.0 - u
+	return fb_p0 * (w * w) + fb_c * (2.0 * u * w) + fb_p1 * (u * u)
+
+func _fireball_step() -> void:
+	if fb == null or not is_instance_valid(fb) or has_meta("fb_done"):
+		return
+	if not has_meta("fb_t0"):
+		_fireball_grow(_ease((t - float(GROW[0])) / (float(GROW[1]) - float(GROW[0]))))
+		return
+	for n in ["flame", "smoke"]:
+		(fb.get_node(n) as GPUParticles3D).amount_ratio = 1.0
+	var now := float(s.time) + float(mode._accum) + frame_dt
+	var k := clampf((now - float(get_meta("fb_t0"))) / FLIGHT, 0.0, 1.0)
+	fb_u = pow(k, 1.25)                                          # (slow off the staff, faster as it comes down)
+	fb.global_position = _fb_point(fb_u)
+	(fb.get_node("ball") as Node3D).scale = Vector3.ONE * lerpf(1.3, 1.8, fb_u) * (1.0 + 0.06 * sin(t * 47.0))
+	if randf() < 0.7:
+		mode.view.spark(fb.global_position, [Color(1.0, 0.75, 0.3), Color(1.0, 0.5, 0.15), Color(0.9, 0.3, 0.1)][randi() % 3])
+	# Gone when the sim's meteor goes off (the blast is drawn that frame; it lands with the ground's explosion).
+	for m in s.meteors:
+		if (m.at as Vector2) == (get_meta("meteor_c") as Vector2) and float(m.burn_until) >= 0.0:
+			set_meta("fb_done", true)
+			(fb.get_node("ball") as Node3D).visible = false
+			for n in ["flame", "smoke"]:
+				(fb.get_node(n) as GPUParticles3D).emitting = false
+			var dead := fb
+			_beat(t + 2.0, func(): dead.queue_free())
 
 func _anim_back(id: String, clip: String, speed: float, dur: float) -> void:
 	# The clip played backwards from its end (getting up = falling, reversed).
@@ -479,17 +698,23 @@ func _stage_run(blue: Array, red: Array) -> void:
 	_cam(4.8, 9.5, {"kind":"follow", "id":hero.id, "e0":_v(dir * 5.2 + side * 0.7, 1.75), "l0":_v(Vector2.ZERO, 1.2),     # (down the bridge's middle, over its posts)
 		"e1":_v(dir * 4.4 + side * 0.6, 1.65), "l1":_v(Vector2.ZERO, 1.25), "shake":0.07})
 
-# --- 3. the fall: the meteor, the ringing, getting up, their gate, the bomb again (16.5 s) ---
+# --- 3. the fall: the Archmage's meteor, the ringing, getting up, their gate, the bomb again (16.5 + SHIFT s) ---
 func _stage_fall(blue: Array, red: Array) -> void:
 	var h0 := Vector2(18.6, -10.8)
 	var gate_front: Vector2 = Sim.gate_front(s.gates.filter(func(g): return g.team == 1 and str(g.get("kind", "")) != "jail" and (g.c as Vector2).x > 0.0)[0])
 	var dir: Vector2 = (gate_front + Vector2(0.0, 9.0) - h0).normalized()
-	_put(hero, "villager", false, h0, h0 + dir)
-	s.bombs[0] = {"id":0, "team":0, "state":"carried", "p":h0, "h":1.9, "carrier":hero.id, "by":"",
+	var hit_hero: Vector2 = h0 + dir * 4.4 * 1.8                # where he is when it lands
+	# He comes off the bridge further back now (the cast and the flight come first), paced to be where he was in the
+	# first cut as it lands (1.09 m past hit_hero, measured: the blast and the shots after it are framed on that).
+	var mark: Vector2 = hit_hero + dir * 1.09
+	var start: Vector2 = mark - dir * RUN_V * HIT_T * 0.88
+	_put(hero, "villager", false, start, start + dir)
+	s.bombs[0] = {"id":0, "team":0, "state":"carried", "p":start, "h":1.9, "carrier":hero.id, "by":"",
 		"from":Vector2.ZERO, "to":Vector2.ZERO, "t0":0.0, "lit_at":-1.0}
 	hero["bomb_held"] = true
 	walkers[hero.id] = dir
-	var hit_hero: Vector2 = h0 + dir * 4.4 * 1.8                # where he is when it lands
+	set_meta("pace_to", mark)
+	set_meta("pace_dir", dir)
 	var side := Vector2(dir.y, -dir.x)
 	var c: Vector2 = hit_hero + dir * 3.4 + side * 1.8         # the meteor: ~4 m ahead of him, on his allies
 	var group := []
@@ -498,6 +723,7 @@ func _stage_fall(blue: Array, red: Array) -> void:
 		var a: Dictionary = blue[k]
 		var gp: Vector2 = c + Vector2(cos(k * 1.26), sin(k * 1.26)) * (0.6 + (k % 2) * 0.9)
 		_put(a, gcls[k], k == 0, gp, c + dir * 3.0)
+		_sturdy(a)                                              # (nobody falls before it lands: _kill still takes them)
 		group.append(a)
 	var foes := []
 	for k in 3:
@@ -506,23 +732,35 @@ func _stage_fall(blue: Array, red: Array) -> void:
 		_sturdy(e)
 		foes.append(e)
 	# They trade blows until it lands.
-	for k in 4:
+	for k in int((HIT_T - 0.2) / 0.45) + 1:
 		_beat(0.2 + k * 0.45, func():
 			for x in group + foes:
 				if s.alive(x) and x.cls != "ranger":
 					x.cd_attack = 0.0
 					s._start_attack(x, "attack", true))
 	var mage: Dictionary = red[3]
-	_put(mage, "mage", true, c + dir * 6.5 - side * 9.0, c, false)        # (well off the line to their gate: the POV)
+	var mp: Vector2 = c + dir * 6.5 - side * 9.0                  # (well off the line to their gate: the POV)
+	_put(mage, "mage", true, mp, c, false)
 	_sturdy(mage)
-	_beat(0.75, func():
-		_anim(mage.id, "r/Ranged_Magic_Summon", 1.0, 1.2)
-		s.meteors.append({"team":1, "owner":mage.id, "at":c, "t_hit":s.time + 1.0, "dmg":0.0, "burn_until":-1.0})
-		s._event("meteor_warn", {"id":mage.id, "team":1, "pos":c, "delay":1.0}))
+	# The cast: the staff goes up, the fire gathers on it, the thrust -- and it flies (_fireball_step).
+	_beat(CAST_T, func():
+		mage.face = Sim.angle_of(c - (mage.pos as Vector2))
+		_anim(mage.id, "r/Ranged_Magic_Raise", 1.0, 3.0))
+	_beat(GROW[0], func(): _fireball_make(mage.id))
+	_beat(THRUST_T, func(): _anim_from(mage.id, "r/Ranged_Magic_Shoot", 0.17, 0.8, 1.2))
+	_beat(LAUNCH_T, func():
+		_fireball_launch(_g(c, 0.35))
+		# (it goes off on the sim tick as the fireball reaches the ground: a tick early, as the ticks fall)
+		var t_hit: float = float(get_meta("fb_t0")) + FLIGHT - Sim.TICK
+		s.meteors.append({"team":1, "owner":mage.id, "at":c, "t_hit":t_hit, "dmg":0.0, "burn_until":-1.0})
+		mode.view._meteor_warn(c, FLIGHT, 1)                     # the warning ring (its falling rock is ours instead)
+		var w: Dictionary = mode.view._meteors_fx[mode.view._meteors_fx.size() - 1]
+		if w.has("rock") and is_instance_valid(w.rock):
+			(w.rock as Node3D).visible = false)
 	set_meta("meteor_c", c)
 	set_meta("meteor_group", group)
 	# The blast takes him off his feet: down on his back, the bomb rolling away.
-	_beat(1.76, func():
+	_beat(HIT_T, func():
 		walkers.erase(hero.id)
 		hero.move = Vector2.ZERO
 		var away: Vector2 = ((hero.pos as Vector2) - c).normalized()
@@ -535,24 +773,24 @@ func _stage_fall(blue: Array, red: Array) -> void:
 		for f in foes:                                       # their soldiers scatter: off to the sides, out of his view
 			var sg := 1.0 if side.dot((f.pos as Vector2) - c) >= 0.0 else -1.0
 			walkers[f.id] = (side * sg + dir * 0.25).normalized() * 0.9)
-	_beat(7.0, func():
+	_beat(7.0 + SHIFT, func():
 		for f in foes:
 			walkers.erase(f.id)
 			f.move = Vector2.ZERO)
 	# A long beat on the ground; then up, slowly.
-	_beat(8.4, func(): _anim_back(hero.id, "g/Death_A", 0.55, 2.4))
-	_beat(10.8, func():
+	_beat(8.4 + SHIFT, func(): _anim_back(hero.id, "g/Death_A", 0.55, 2.4))
+	_beat(10.8 + SHIFT, func():
 		hero.face = Sim.angle_of(gate_front - (hero.pos as Vector2))
 		_anim(hero.id, "g/Idle_B", 1.0, 0.0))
-	_beat(12.6, func():
+	_beat(12.6 + SHIFT, func():
 		var b := _bomb()
 		walkers[hero.id] = ((b.p as Vector2) - (hero.pos as Vector2)).normalized() * 0.5)
-	_beat(13.25, func():
+	_beat(13.25 + SHIFT, func():
 		walkers.erase(hero.id)
 		hero.move = Vector2.ZERO
 		_anim(hero.id, "g/PickUp", 1.0, 1.0))
-	_beat(13.8, func(): s.act(hero.id, "interact"))
-	_beat(14.5, func():
+	_beat(13.8 + SHIFT, func(): s.act(hero.id, "interact"))
+	_beat(14.5 + SHIFT, func():
 		hero.face = Sim.angle_of(gate_front - (hero.pos as Vector2))
 		walkers[hero.id] = (gate_front + Vector2(0.0, 9.0) - (hero.pos as Vector2)).normalized())
 	# Distant fighting in the background (towards their gate).
@@ -570,20 +808,26 @@ func _stage_fall(blue: Array, red: Array) -> void:
 			_sturdy(e)
 			ri += 1
 	set_meta("gate_front", gate_front)
-	# Cameras: tracking behind him; the blast from the side (slow motion); on the ground by his head; getting up; his
-	# view of their gate with a snap zoom; picking the bomb up.
-	_cam(0.0, 1.74, {"kind":"follow", "id":hero.id, "e0":_v(-dir * 3.6 - side * 1.6, 2.1), "l0":_v(dir * 4.0, 1.2),
+	# Cameras: tracking behind him; the Archmage close (the staff up, the fire gathering, the thrust); chasing the
+	# fireball down onto them (slow motion); the blast from the side (slower: it comes down into the frame); on the
+	# ground by his head; getting up; his view of their gate with a snap zoom; picking the bomb up.
+	_cam(0.0, 1.30, {"kind":"follow", "id":hero.id, "e0":_v(-dir * 3.6 - side * 1.6, 2.1), "l0":_v(dir * 4.0, 1.2),
 		"e1":_v(-dir * 3.2 - side * 1.8, 2.0), "l1":_v(dir * 4.5, 1.1), "shake":0.06})
+	var to_c: Vector2 = (c - mp).normalized()
+	var mr := Vector2(-to_c.y, to_c.x)
+	_cam(1.30, LAUNCH_T + 0.03, {"kind":"world", "e0":_g(mp + to_c * 4.4 + mr * 1.9, 0.9), "l0":_g(mp, 2.35),
+		"e1":_g(mp + to_c * 3.8 + mr * 1.6, 0.95), "l1":_g(mp, 2.55), "fov0":56.0})
+	_cam(LAUNCH_T + 0.03, HIT_T - 0.10, {"kind":"fireball", "clear_r":2.0})
 	var blast_eye: Vector2 = hit_hero - side * 6.5 - dir * 1.5
-	_cam(1.74, 4.1, {"kind":"world", "e0":_g(blast_eye, 2.3), "l0":_g(c - dir * 0.8, 1.4),
+	_cam(HIT_T - 0.10, 4.1 + SHIFT, {"kind":"world", "e0":_g(blast_eye, 2.3), "l0":_g(c - dir * 0.8, 1.4),
 		"e1":_g(blast_eye + side * 0.6, 2.1), "l1":_g(c - dir * 0.6, 1.6)})
 	set_meta("down_cam", true)
-	_cam(4.1, 8.4, {"kind":"down"})
-	_cam(8.4, 10.8, {"kind":"follow", "id":hero.id, "e0":_v(dir * 3.4 + side * 1.2, 0.5), "l0":_v(Vector2.ZERO, 1.0),
+	_cam(4.1 + SHIFT, 8.4 + SHIFT, {"kind":"down"})
+	_cam(8.4 + SHIFT, 10.8 + SHIFT, {"kind":"follow", "id":hero.id, "e0":_v(dir * 3.4 + side * 1.2, 0.5), "l0":_v(Vector2.ZERO, 1.0),
 		"e1":_v(dir * 3.0 + side * 1.0, 0.9), "l1":_v(Vector2.ZERO, 1.5)})
-	_cam(10.8, 12.6, {"kind":"pov", "target":_v(gate_front - Vector2(0.0, 2.0), 2.4),
+	_cam(10.8 + SHIFT, 12.6 + SHIFT, {"kind":"pov", "target":_v(gate_front - Vector2(0.0, 2.0), 2.4),
 		"fov":[[0.0, 52.0], [0.18, 52.0], [0.32, 13.0], [1.0, 12.0]], "clear_r":3.5})
-	_cam(12.6, 16.5, {"kind":"follow", "id":hero.id, "e0":_v(-side * 3.4 - dir * 1.0, 1.0), "l0":_v(dir * 0.5, 1.0),
+	_cam(12.6 + SHIFT, 16.5 + SHIFT, {"kind":"follow", "id":hero.id, "e0":_v(-side * 3.4 - dir * 1.0, 1.0), "l0":_v(dir * 0.5, 1.0),
 		"e1":_v(-side * 3.0 - dir * 2.0, 1.2), "l1":_v(dir * 2.0, 1.3), "shake":0.04})
 
 # --- 4. the charge: allies rally, clear his way, the throw, the gate, the breach, his hat (15.5 s) ---
@@ -800,6 +1044,9 @@ func _apply_cam() -> void:
 	if seg.is_empty():
 		seg = cams[cams.size() - 1]
 	var spec: Dictionary = seg[2]
+	if cams.find(seg) != cam_seg:
+		cam_seg = cams.find(seg)
+		printerr("CAMSEG %d %s frame %d t=%.3f" % [cam_seg, spec.kind, frames, t])     # (where the cuts fall in the recording)
 	var u := _ease((t - float(seg[0])) / maxf(0.001, float(seg[1]) - float(seg[0])))
 	var eye := Vector3.ZERO
 	var look := Vector3.ZERO
@@ -841,6 +1088,15 @@ func _apply_cam() -> void:
 				if ft >= float(keys[i][0]) and ft < float(keys[i + 1][0]):
 					var k := (ft - float(keys[i][0])) / (float(keys[i + 1][0]) - float(keys[i][0]))
 					fov = lerpf(float(keys[i][1]), float(keys[i + 1][1]), _ease(k))
+		"fireball":
+			# Chasing the Archmage's fireball: from over his right shoulder as it leaves the staff, then after it, up
+			# behind it and down as it comes down on them -- it stays ahead of the lens, the ground it falls on comes in.
+			var ue := maxf(0.0, fb_u - 0.15)
+			eye = _fb_point(ue) - fb_dir * 3.4 + Vector3.UP * lerpf(1.6, 2.3, _ease(fb_u * 1.6)) \
+				+ fb_right * 1.9                                    # (over his hat; clear of its smoke)
+			var ahead := _fb_point(minf(1.0, fb_u + 0.04))
+			look = ahead.lerp(fb_p1, 0.1 + 0.45 * fb_u * fb_u)
+			fov = 58.0
 		"bomb":
 			var b := _bomb()
 			if not b.is_empty():
@@ -891,10 +1147,17 @@ func _process(delta: float) -> bool:
 		return false
 	_quiet()
 	t += delta
+	frame_dt = delta
 	if still_at >= 0.0 and frames == 3:
 		t = still_at
 	Engine.time_scale = _slow(t)
 	_smooth_bomb(delta)
+	_fireball_step()
+	if has_meta("pace_to") and t < HIT_T and walkers.has(hero.id):
+		# (fall) paced to reach his mark as it lands: from further back now, at a touch under a full run
+		var pd: Vector2 = get_meta("pace_dir")
+		var need: float = ((get_meta("pace_to") as Vector2) - (hero.pos as Vector2)).dot(pd)
+		walkers[hero.id] = pd * clampf(need / maxf(HIT_T - t, 0.05) / RUN_V, 0.75, 1.0)
 	_apply_cam()
 	for b in beats.duplicate():
 		if t >= float(b[0]):
@@ -958,7 +1221,7 @@ func _process(delta: float) -> bool:
 		printerr("SHOT_DONE %s still" % run)
 		quit(0)
 		return false
-	if t >= float(LENGTH[run]):
+	if t >= float(LENGTH[run]) or (until > 0.0 and t >= until):
 		printerr("SHOT_DONE %s %d frames" % [run, frames])
 		quit(0)
 	return false
@@ -979,6 +1242,8 @@ func _run_specials() -> void:
 		for m in s.meteors:
 			if (m.at as Vector2) == c and s.time + 0.04 >= float(m.t_hit):
 				set_meta("meteor_done", true)
+				printerr("IMPACT frame %d t=%.3f hero %.2f m short of his mark" % [frames, t,
+					((get_meta("pace_to", hero.pos) as Vector2) - (hero.pos as Vector2)).dot(get_meta("pace_dir", Vector2.ZERO))])
 				for a in get_meta("meteor_group"):
 					_kill(a, c - Vector2(0.0, 0.0), 8.5 + randf() * 2.0, 7.0 + randf() * 2.5)
 	if run == "charge":

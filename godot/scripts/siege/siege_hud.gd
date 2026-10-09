@@ -5,8 +5,9 @@ const Sim_Eco = preload("res://scripts/meta/economy.gd")
 # phone you hold the stick while tapping ATTACK. Modal panels (workshop, pause, result) use Buttons.
 const VisualTheme = preload("res://scripts/ui/visual_theme.gd")
 const UI = preload("res://scripts/app/ui.gd")
+const UI2 = preload("res://scripts/app/ui2.gd")
 # The old brass kinds map onto the app's tactile styles so battle panels match the menus.
-const BUTTON_STYLE := {"primary":"primary", "secondary":"secondary", "gold":"gold", "roll":"gold", "active":"claim"}
+const BUTTON_STYLE := {"primary":"orange", "secondary":"blue", "gold":"gold", "roll":"gold", "active":"green", "danger":"red"}   # 0.31.79: the menu skins
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 
 signal leave_requested
@@ -70,16 +71,13 @@ func _ready() -> void:
 	_font = VisualTheme.BODY_FONT
 	_bold = VisualTheme.BOLD_FONT
 	_title = VisualTheme.TITLE_FONT
-	pause_btn = Button.new()
-	pause_btn.text = "II"
-	pause_btn.custom_minimum_size = Vector2(44, 40)
-	UI.style_button(pause_btn, "secondary", 16, 12)
-	pause_btn.pressed.connect(func():
+	pause_btn = UI2.button(self, "II", "blue", func():
 		if pause_panel == null:
 			_build_pause_panel()
 		pause_panel.visible = true
-		_center(pause_panel))
-	add_child(pause_btn)
+		_center(pause_panel, true), "", 16, 40.0, 12.0)
+	pause_btn.custom_minimum_size = Vector2(44, 40)
+	pause_btn.size = Vector2(44, 40)
 	# 0.31.8: the workshop and pause panels are built the first time they open (they cost ~370 ms at match start).
 	resized.connect(_layout)
 	_layout()
@@ -89,18 +87,30 @@ func _layout() -> void:
 	pause_btn.position = Vector2(size.x - 52, 78)
 
 # ---------- panels ----------
-func _panel(min_w: float) -> PanelContainer:
+func _panel(min_w: float, kind := "night") -> PanelContainer:
+	# 0.31.79: a gold-framed damask (or parchment) panel, like the menus
 	var p := PanelContainer.new()
-	var ps := UI.card_style(Color(0.07, 0.11, 0.19, 0.97), 22, UI.CARD_HI)
-	ps.content_margin_left = 18
-	ps.content_margin_right = 18
-	ps.content_margin_top = 16
-	ps.content_margin_bottom = 16
+	var ps := StyleBoxEmpty.new()
+	ps.content_margin_left = 20
+	ps.content_margin_right = 20
+	ps.content_margin_top = 18
+	ps.content_margin_bottom = 18
 	p.add_theme_stylebox_override("panel", ps)
 	p.custom_minimum_size = Vector2(min_w, 0)
 	p.visible = false
 	add_child(p)
+	UI2.plate(p, kind, 22.0, "brown" if kind == "parch" else "gold", {"rim": 4.0, "shadow_y": 10.0, "shadow_alpha": 0.7, "shadow_soft": 12.0})
 	return p
+
+func _unroll(p: Control) -> void:
+	# the panel drops open from the top
+	var fit := float(p.get_meta("fit", 1.0))
+	p.pivot_offset = Vector2(p.size.x * 0.5, 0)
+	p.scale = Vector2(fit, fit * 0.15)
+	p.modulate.a = 0.0
+	var tw := p.create_tween().set_parallel()
+	tw.tween_property(p, "scale", Vector2.ONE * fit, 0.32).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(p, "modulate:a", 1.0, 0.15)
 
 func _label(parent: Node, text: String, size_px: int, color: Color, font: Font = null) -> Label:
 	var l := Label.new()
@@ -116,27 +126,48 @@ func _label(parent: Node, text: String, size_px: int, color: Color, font: Font =
 	return l
 
 func _button(parent: Node, text: String, kind: String, cb: Callable) -> Button:
-	var b := Button.new()
-	b.text = text
-	b.custom_minimum_size = Vector2(0, 50)
+	var b := UI2.button(parent, text, str(BUTTON_STYLE.get(kind, "blue")), cb, "", 17, 50.0, 14.0)
 	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	UI.style_button(b, str(BUTTON_STYLE.get(kind, "secondary")), 15, 14)
-	UI.tighten(b, 8)
-	b.pressed.connect(cb)
-	parent.add_child(b)
+	b.clip_text = true
 	return b
 
-func _center(p: Control) -> void:
+func _center(p: Control, unroll := false) -> void:
+	# wrapping labels report no width until laid out, so give them one (else a panel measures them a letter wide)
+	for l in p.find_children("*", "Label", true, false):
+		if (l as Label).autowrap_mode != TextServer.AUTOWRAP_OFF and (l as Label).custom_minimum_size.x < 1.0:
+			(l as Label).custom_minimum_size.x = 200.0
+	# re-placed whenever its measured size settles (the labels learn their heights a frame or two later)
+	if not p.has_meta("placed"):
+		p.set_meta("placed", true)
+		p.minimum_size_changed.connect(func():
+			if is_instance_valid(p) and p.visible:
+				_place.call_deferred(p))
+	_place(p)
+	if unroll:
+		p.modulate.a = 0.0
+		if is_inside_tree():
+			var t := get_tree().create_timer(0.05)
+			t.timeout.connect(func():
+				if is_instance_valid(p):
+					_place(p)
+					_unroll(p))
+
+func _place(p: Control) -> void:
 	p.size = Vector2(minf(p.custom_minimum_size.x, size.x - 20), 0)
 	p.reset_size()
-	p.position = ((size - p.size) * 0.5).max(Vector2(10, 10))
+	# 0.31.79: a panel taller than the screen (a long results list) is shrunk to fit rather than cut off
+	var fit := minf(1.0, (size.y - 24.0) / maxf(1.0, p.size.y))
+	p.set_meta("fit", fit)
+	p.pivot_offset = Vector2(p.size.x * 0.5, 0)
+	p.scale = Vector2.ONE * fit
+	p.position = Vector2((size.x - p.size.x) * 0.5, maxf(12.0, (size.y - p.size.y * fit) * 0.5))
 
 func _build_workshop_panel() -> void:
 	workshop_panel = _panel(340)
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 9)
 	workshop_panel.add_child(v)
-	_label(v, "THE WORKSHOP", 22, VisualTheme.GOLD, _title)
+	UI2.center(UI2.text(v, "THE WORKSHOP", 26, UI2.GOLD))
 	workshop_stock = _label(v, "", 15, VisualTheme.TEXT, _bold)
 	workshop_tools_btn = _button(v, "TAKE TOOLS · BECOME A WORKER", "active", func(): workshop_tools.emit())
 	_label(v, "Workers chop trees and mine stone, carry it here, and repair gates with wood.", 11, Color("#d4cbbb"))
@@ -156,7 +187,7 @@ func show_pause() -> void:
 	if pause_panel == null:
 		_build_pause_panel()
 	pause_panel.visible = true
-	_center(pause_panel)
+	_center(pause_panel, true)
 
 func _refresh_workshop(me: Dictionary) -> void:
 	if not me.workshop_open:
@@ -194,71 +225,193 @@ func _refresh_workshop(me: Dictionary) -> void:
 		b.tooltip_text = str(up.desc)
 
 func _build_pause_panel() -> void:
-	pause_panel = _panel(300)
+	# 0.31.79: a parchment sheet -- how to win in three steps with the 3D icons, the tricks, then RESUME.
+	pause_panel = _panel(330, "parch")
+	var ink := Color("#3b2412")
 	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 10)
+	v.add_theme_constant_override("separation", 8)
 	pause_panel.add_child(v)
-	_label(v, "FATEBOUND", 22, VisualTheme.GOLD, _title)
-	_label(v, "Break into the enemy castle and carry your King from their dungeon to his throne room. First to %d rescues wins. Standing by him in their dungeon heals you. Catch fish from the river (ACTION on a bank) and feed them to THEIR King: each size needs another lifter (up to 6). Left on the ground, a King throws a tantrum that knocks everyone back. Workers gather, repair gates and fund upgrades." % Sim.WIN_RESCUES, 11, Color("#d4cbbb"))
-	_button(v, "RESUME", "gold", func(): pause_panel.visible = false)
-	var res_btn := _button(v, "RESOLUTION: 100%", "secondary", func(): pass)
+	UI2.center(UI2.text(v, "PAUSED", 38, UI2.GOLD, ink, 9))
+	var hw := UI.label(v, "HOW TO WIN", 11, Color("#8a6a44"), UI.HEAVY_FONT)
+	hw.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	for st in [["castle", "1 · BREAK IN", "Smash their gate or fly over the wall"], ["crown", "2 · CARRY YOUR KING HOME", "From their dungeon to your throne room"],
+			["trophy", "3 · FIRST TO %d RESCUES" % Sim.WIN_RESCUES, "wins the siege"]]:
+		var r := HBoxContainer.new()
+		r.add_theme_constant_override("separation", 10)
+		v.add_child(r)
+		var disc := Control.new()
+		disc.custom_minimum_size = Vector2(50, 50)
+		r.add_child(disc)
+		UI2.plate(disc, "parch", 25.0, "gold", {"rim": 3.0, "shadow_y": 3.0, "pattern_mix": 0.0, "fill_top": Color("#fff8e0"), "fill_bottom": Color("#e9cf94")})
+		var ic := UI2.icon(disc, str(st[0]), 40.0)
+		ic.position = Vector2(5, 3)
+		var tv := VBoxContainer.new()
+		tv.add_theme_constant_override("separation", 0)
+		tv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		r.add_child(tv)
+		UI2.text(tv, str(st[1]), 15, ink, ink, 0, false)
+		var sl := UI.label(tv, str(st[2]), 12, Color("#5d3a1c"), UI.HEAVY_FONT)
+		sl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	var tricks := UI.label(v, "Standing by your King in their dungeon heals you. Catch fish from the river (ACTION on a bank) and feed them to THEIR King: each size needs another lifter (up to 6). Left on the ground, a King throws a tantrum that knocks everyone back. Workers gather, repair gates and fund upgrades.", 11, Color("#5d3a1c"), UI.HEAVY_FONT)
+	tricks.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	tricks.custom_minimum_size = Vector2(290, 0)
+	var rb := _button(v, "RESUME", "active", func(): pause_panel.visible = false)
+	rb.custom_minimum_size.y = 58
+	rb.add_theme_font_size_override("font_size", 26)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	v.add_child(row)
+	var res_btn := _button(row, "RESOLUTION: 100%", "secondary", func(): pass)
+	res_btn.add_theme_font_size_override("font_size", 13)
 	res_btn.pressed.connect(func():
 		res_cycled.emit()
 		res_btn.text = "RESOLUTION: %d%%" % int(res_label_source.call() * 100.0) if res_label_source.is_valid() else "RESOLUTION")
 	pause_panel.visibility_changed.connect(func():
 		if res_label_source.is_valid(): res_btn.text = "RESOLUTION: %d%%" % int(res_label_source.call() * 100.0))
-	_button(v, "LEAVE MATCH", "secondary", func(): leave_requested.emit())
+	var lv := _button(row, "LEAVE MATCH", "danger", func(): leave_requested.emit())
+	lv.add_theme_font_size_override("font_size", 13)
 
 func show_result(result: Dictionary = {}) -> void:
+	# 0.31.79: a ribbon banner (VICTORY / DEFEAT / DRAW) with a crown and a sunburst behind a win, the score in team
+	# colours, your match, the spoils as a table, chests with their pictures, then PLAY AGAIN / HOME.
 	if result_panel != null:
 		return
 	var me: Dictionary = sim.by_id.get(player_id, {})
-	result_panel = _panel(320)
+	result_panel = _panel(340)
 	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 10)
+	v.add_theme_constant_override("separation", 8)
 	result_panel.add_child(v)
 	var won: bool = sim.winner == me.team
 	var draw: bool = sim.winner == -1
-	_label(v, "DRAW" if draw else ("VICTORY" if won else "DEFEAT"), 30, VisualTheme.GOLD if won or draw else VisualTheme.RED, _title)
-	_label(v, "Rescues  %d – %d" % [sim.score[me.team], sim.score[1 - me.team]], 17, VisualTheme.TEXT, _bold)
-	_label(v, "Kills  %d – %d" % [sim.kills[me.team], sim.kills[1 - me.team]], 14, Color("#d4cbbb"))
-	_label(v, "You: %d KOs · %d downs · %d rescues" % [me.kills, me.deaths, me.rescues], 14, Color("#d4cbbb"))
+	var head := Control.new()
+	head.custom_minimum_size = Vector2(300, 92)
+	v.add_child(head)
+	if won:
+		var ry := UI2.rays(head, 420.0, Color(1.0, 0.86, 0.45), 30.0, 0.45)
+		head.resized.connect(func(): ry.position = Vector2(head.size.x * 0.5 - 210.0, -160.0))
+		var cr := UI2.icon(head, "crown", 54.0)
+		head.resized.connect(func(): cr.position = Vector2(head.size.x * 0.5 - 27.0, -26.0))
+		UI2.bob(cr, 4.0, 1.0)
+	var title := "DRAW" if draw else ("VICTORY!" if won else "DEFEAT")
+	var cols: Array = [Color("#ff8a6a"), Color("#a8221a")] if won else ([Color("#5d89f0"), Color("#1b2d78")] if draw else [Color("#6b7486"), Color("#2a2f3c")])
+	var rib := UI2.ribbon(head, title, "", 300.0, 58.0, cols)
+	head.resized.connect(func(): rib.position = Vector2((head.size.x - 300.0) * 0.5, 30.0))
+	# score
+	var sc := HBoxContainer.new()
+	sc.add_theme_constant_override("separation", 0)
+	sc.custom_minimum_size = Vector2(0, 62)
+	v.add_child(sc)
+	for side in 3:
+		var cell := VBoxContainer.new()
+		cell.alignment = BoxContainer.ALIGNMENT_CENTER
+		cell.add_theme_constant_override("separation", 0)
+		cell.size_flags_horizontal = Control.SIZE_EXPAND_FILL if side != 1 else Control.SIZE_FILL
+		cell.custom_minimum_size = Vector2(92 if side == 1 else 0, 0)
+		sc.add_child(cell)
+		if side == 1:
+			UI2.center(UI2.body(cell, "RESCUES", 11, UI2.GOLD, false))
+			UI2.center(UI2.body(cell, "KOs %d–%d" % [sim.kills[me.team], sim.kills[1 - me.team]], 10, UI2.MUTED, false))
+			continue
+		var mine := side == 0
+		var t: int = me.team if mine else 1 - me.team
+		UI2.plate(cell, "royal", 14.0, "gold", {"rim": 0.0, "outline": 2.0, "pattern_mix": 0.0,
+			"fill_top": TEAM_COLORS[t].lightened(0.15), "fill_bottom": TEAM_COLORS[t].darkened(0.45), "shadow_y": 3.0})
+		UI2.center(UI2.body(cell, "YOU" if mine else "ENEMY", 10, Color.WHITE, false))
+		UI2.center(UI2.text(cell, str(sim.score[t]), 30, Color.WHITE, Color("#0a1238"), 7))
+	# you
+	var you := HBoxContainer.new()
+	you.alignment = BoxContainer.ALIGNMENT_CENTER
+	you.add_theme_constant_override("separation", 6)
+	v.add_child(you)
+	for ch in [["skull", "%d KOs" % me.kills], ["helmet", "%d downs" % me.deaths], ["crown", "%d rescue%s" % [me.rescues, "" if me.rescues == 1 else "s"]]]:
+		var c := UI2.chip(you, "", Color(0.01, 0.02, 0.08, 0.8), Color.WHITE, Color(UI2.GOLD, 0.4))
+		var cl: Label = c.get_child(0)
+		c.remove_child(cl)
+		cl.queue_free()
+		var r := HBoxContainer.new()
+		r.add_theme_constant_override("separation", 3)
+		c.add_child(r)
+		UI2.icon(r, str(ch[0]), 20.0)
+		UI2.body(r, str(ch[1]), 11, Color.WHITE, false)
 	if me.gathered > 0 or me.gate_dmg > 0.0:
-		_label(v, "Gathered %d · gate damage %d" % [int(me.gathered), int(me.gate_dmg)], 13, Color("#cfe8b8"))
+		UI2.center(UI2.body(v, "Gathered %d · gate damage %d" % [int(me.gathered), int(me.gate_dmg)], 12, Color("#cfe8b8"), false))
 	var rw: Dictionary = result.get("rewards", {})
 	if not rw.is_empty():
+		var tab := PanelContainer.new()
+		var ts := StyleBoxEmpty.new()
+		for side in ["left", "right", "top", "bottom"]:
+			ts.set("content_margin_" + side, 12.0)
+		tab.add_theme_stylebox_override("panel", ts)
+		v.add_child(tab)
+		UI2.plate(tab, "parch", 14.0, "brown", {"rim": 3.0})
 		var box := VBoxContainer.new()
-		box.add_theme_constant_override("separation", 2)
-		v.add_child(box)
+		box.add_theme_constant_override("separation", 1)
+		tab.add_child(box)
+		var ink := Color("#3b2412")
+		var hdr := HBoxContainer.new()
+		box.add_child(hdr)
+		var ht := UI2.text(hdr, "SPOILS OF WAR", 15, ink, ink, 0, false)
+		ht.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		for hh in ["GOLD", "PASS"]:
+			var hl := UI.label(hdr, hh, 9, Color("#7a5530"), UI.HEAVY_FONT)
+			hl.custom_minimum_size = Vector2(52, 0)
+			hl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		for ln in rw.lines:
 			var row := HBoxContainer.new()
 			box.add_child(row)
-			# _label() gives every label a 290 px minimum; two of those don't fit a phone row.
-			var name_l := _label(row, str(ln.label), 12, Color("#d4cbbb"))
-			name_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-			name_l.custom_minimum_size = Vector2(150, 0)
+			var name_l := UI.label(row, str(ln.label), 12, ink, UI.HEAVY_FONT)
 			name_l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			var val := _label(row, "+%d gold  +%d pass" % [int(ln.gold), int(ln.pass)], 12, VisualTheme.GOLD)
-			val.custom_minimum_size = Vector2(130, 0)
-			val.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-		_label(v, "+%d GOLD  ·  +%d XP  ·  +%d PASS" % [int(rw.gold), int(rw.xp), int(rw.pass)], 14, VisualTheme.GOLD, _bold)
+			for val in [["+%d" % int(ln.gold), Color("#8a5a0a")], ["+%d" % int(ln.pass), Color("#6a2bb8")]]:
+				var vl := UI.label(row, str(val[0]), 12, val[1], UI.HEAVY_FONT)
+				vl.custom_minimum_size = Vector2(52, 0)
+				vl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		var tot := HBoxContainer.new()
+		tot.alignment = BoxContainer.ALIGNMENT_CENTER
+		tot.add_theme_constant_override("separation", 10)
+		v.add_child(tot)
+		for tv in [["res://assets/ui/currency/coin.png", "+%d" % int(rw.gold), UI2.GOLD], ["", "+%d XP" % int(rw.xp), UI2.CYAN], ["", "+%d PASS" % int(rw.pass), UI2.PURPLE]]:
+			var tr := HBoxContainer.new()
+			tr.add_theme_constant_override("separation", 3)
+			tot.add_child(tr)
+			if str(tv[0]) != "":
+				UI2.img(tr, str(tv[0]), 26.0)
+			UI2.text(tr, str(tv[1]), 18, tv[2], UI2.INK, 5)
 		for lv in result.get("levels", []):
-			_label(v, "LEVEL UP! Level %d  ·  +%d gold%s" % [int(lv.level), int(lv.reward.get("gold", 0)), ("  ·  +%d gems" % int(lv.reward.gems)) if lv.reward.has("gems") else ""], 14, VisualTheme.CYAN, _bold)
+			UI2.center(UI2.text(v, "LEVEL UP!  LEVEL %d" % int(lv.level), 18, UI2.CYAN, Color("#06283a"), 5))
+			UI2.center(UI2.body(v, "+%d gold%s" % [int(lv.reward.get("gold", 0)), ("  ·  +%d gems" % int(lv.reward.gems)) if lv.reward.has("gems") else ""], 12, Color.WHITE, false))
 		for ch in result.get("chests", []):                     # 0.31.37
-			var cn := str(Sim_Eco.CHESTS[str(ch.kind)].name)
+			var kind := str(ch.kind)
+			var cn := str(Sim_Eco.CHESTS[kind].name)
+			var cr := HBoxContainer.new()
+			cr.add_theme_constant_override("separation", 8)
+			v.add_child(cr)
+			var ci := UI2.img(cr, UI2.V2 + "chests/%s_icon.png" % str({"wooden": "wood"}.get(kind, kind)), 52.0)
+			if not bool(ch.get("full", false)):
+				UI2.bob(ci, 3.0, 1.0)
+			var cv := VBoxContainer.new()
+			cv.add_theme_constant_override("separation", 0)
+			cv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			cr.add_child(cv)
 			if bool(ch.get("full", false)):
-				_label(v, "%s earned — chest slots full, turned into %d gold" % [cn, int(ch.gold)], 13, Color("#d4cbbb"))
+				UI2.text(cv, cn.to_upper(), 14, Color.WHITE)
+				UI2.body(cv, "Chest slots full -- turned into %d gold" % int(ch.gold), 11, UI2.SOFT)
 			else:
-				_label(v, "%s earned! Unlock it from the home screen" % cn, 14, Color(str(Sim_Eco.CHESTS[str(ch.kind)].color)), _bold)
+				UI2.text(cv, "%s EARNED!" % cn.to_upper(), 15, Color(str(Sim_Eco.CHESTS[kind].color)))
+				UI2.body(cv, "Unlock it from Home", 11, UI2.SOFT)
 		var tiers: Array = result.get("tiers", [])
 		if not tiers.is_empty():
-			_label(v, "Siege Pass tier %s reached — claim it on the Pass screen" % (str(tiers[-1]) if tiers.size() == 1 else "%d–%d" % [tiers[0], tiers[-1]]), 13, Color("#ffcf7a"))
+			UI2.center(UI2.body(v, "Siege Pass tier %s reached — claim it on the Pass screen" % (str(tiers[-1]) if tiers.size() == 1 else "%d–%d" % [tiers[0], tiers[-1]]), 12, Color("#ffcf7a")))
 		for c in (result.get("challenges", []) as Array).slice(0, 4):
-			_label(v, "%s  %s  %d/%d" % ["✔" if c.done else "•", str(c.text), int(c.progress), int(c.goal)], 12, VisualTheme.CYAN if c.done else Color("#b9c3c4"))
-	_button(v, "PLAY AGAIN", "primary", func(): replay_requested.emit())
-	_button(v, "HOME", "secondary", func(): leave_requested.emit())
+			UI2.center(UI2.body(v, "%s  %s  %d/%d" % ["✔" if c.done else "•", str(c.text), mini(int(c.progress), int(c.goal)), int(c.goal)], 11, UI2.GREEN if c.done else UI2.MUTED, false))
+	var br := HBoxContainer.new()
+	br.add_theme_constant_override("separation", 10)
+	v.add_child(br)
+	_button(br, "HOME", "secondary", func(): leave_requested.emit())
+	var pa := _button(br, "PLAY AGAIN", "primary", func(): replay_requested.emit())
+	pa.size_flags_stretch_ratio = 1.5
+	UI2.sweep(pa)
 	result_panel.visible = true
-	_center(result_panel)
+	_center(result_panel, true)
 	if pause_panel != null:
 		pause_panel.visible = false
 

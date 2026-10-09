@@ -8,6 +8,7 @@ const Hud = preload("res://scripts/siege/siege_hud.gd")
 const Diag = preload("res://scripts/siege/siege_diag.gd")
 const Net = preload("res://scripts/siege/siege_net.gd")
 const VisualTheme = preload("res://scripts/ui/visual_theme.gd")
+const Lobby = preload("res://scripts/siege/lobby_panel.gd")
 
 signal exited
 # 0.31.73: the server refused our protocol. verdict "update" (server newer: this build is too old -> the app shows
@@ -67,6 +68,8 @@ var _send_clock := 0.0
 var _sent_move := Vector2(INF, INF)
 var _sent_hold := false
 var _sent_bhold := false
+var lobby: Control = null           # 0.31.82: the join countdown, from PLAY until the welcome
+var lobby_msgs := 0                 # "lobby" messages received (tests)
 
 var sim
 var view
@@ -265,6 +268,10 @@ func _start_online() -> void:
 	_net_started = Time.get_ticks_msec() / 1000.0
 	diag.write("NET connect %s err=%d" % [net_url, err])
 	hud.toast("Connecting to the Siege server...", Color("#f2d18d"))
+	lobby = Lobby.new()
+	lobby.audio = audio
+	lobby.leave.connect(func(): exited.emit())
+	add_child(lobby)
 	if err != OK:
 		_net_fail("Could not reach the server")
 
@@ -274,6 +281,8 @@ func _net_fail(why: String) -> void:
 	net_state = "closed"
 	diag.write("NET closed: " + why)
 	hud.toast(why, VisualTheme.RED)
+	if is_instance_valid(lobby):
+		lobby.fail(why)
 	if sim == null:
 		# Nothing to show: go back home after the message is readable. (A method, not a lambda: the app may free
 		# this node first, e.g. for the Update screen, and a freed method target is simply not called.)
@@ -334,6 +343,10 @@ func _build_online_match(msg: Dictionary) -> void:
 	net_state = "playing"
 	diag.write("NET welcome match=%d you=%s players=%d" % [net_match, me_id, int(msg.get("players", 1))])
 	hud.toast("Online: %d player%s" % [int(msg.get("players", 1)), "" if int(msg.get("players", 1)) == 1 else "s"], VisualTheme.GOLD)
+	if is_instance_valid(lobby):
+		_cover_show()                      # the card straight over the lobby (the warm-up keeps it up; tests drop it)
+		lobby.queue_free()
+		lobby = null
 
 func _net_process(delta: float) -> void:
 	if ws == null:
@@ -402,6 +415,12 @@ func _net_process(delta: float) -> void:
 					view.on_event(e)
 					_event_sound(e)
 					hud.on_event(e)
+			"lobby":                                          # 0.31.82: waiting for the wave's countdown
+				lobby_msgs += 1
+				if lobby_msgs == 1:
+					diag.write("NET lobby left=%.1f names=%d online=%d running=%s" % [float(msg.get("left", 0)), (msg.get("names", []) as Array).size(), int(msg.get("online", 0)), str(msg.get("running", false))])
+				if sim == null and is_instance_valid(lobby):
+					lobby.update(msg)
 			"m":                                              # 0.31.23: my task, sent on its own when it changes
 				if sim != null and sim.by_id.has(hud.player_id):
 					sim.by_id[hud.player_id].task = msg.get("task", {})
@@ -750,7 +769,9 @@ func _exit_tree() -> void:
 
 func request_leave() -> void:
 	# Android back button: open the pause panel rather than quitting a match outright.
-	if hud.result_panel != null:
+	if sim == null:
+		exited.emit()                      # (0.31.82: still in the lobby -- nothing to pause)
+	elif hud.result_panel != null:
 		exited.emit()
 	else:
 		hud.show_pause()
