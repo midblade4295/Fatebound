@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://dc0ela33jrway"
-path="res://.godot/imported/knight_shop_0.jpg-c72a0612962b04cbcec6d9ee0459ccd3.ctex"
+path.s3tc="res://.godot/imported/knight_shop_0.jpg-c72a0612962b04cbcec6d9ee0459ccd3.s3tc.ctex"
+path.etc2="res://.godot/imported/knight_shop_0.jpg-c72a0612962b04cbcec6d9ee0459ccd3.etc2.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "b28b6fdcc2aee986c42ac1501d546e3d"
@@ -14,11 +16,11 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/meshy/knight_shop/knight_shop_0.jpg"
-dest_files=["res://.godot/imported/knight_shop_0.jpg-c72a0612962b04cbcec6d9ee0459ccd3.ctex"]
+dest_files=["res://.godot/imported/knight_shop_0.jpg-c72a0612962b04cbcec6d9ee0459ccd3.s3tc.ctex", "res://.godot/imported/knight_shop_0.jpg-c72a0612962b04cbcec6d9ee0459ccd3.etc2.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0

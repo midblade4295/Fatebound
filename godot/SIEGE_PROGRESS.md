@@ -2417,11 +2417,58 @@ K2/K3 notes (0.17.0)
   match logs "MATCH BUILT" with the step times. Benches: tests/start_bench.gd, tests/fight_bench.gd.
 - Quick suite: ALL PASSED (37, with staged_start_test).
 
+# 0.31.72 Play bundle size (vc31 rebuilt, same versionCode/versionName/key; no gameplay or code change)
+- Why: the 220.8 MB vc31 AAB could not be uploaded from the box Chrome (its upload buffer tops out at 256 MiB, about
+  1.53x the file). The install-time pack grew 36 -> 114 MB with the 0.31.36-0.31.72 Meshy models, and every 3D texture
+  was imported Lossless (headless imports never run the editor's "used in 3D -> VRAM" detection).
+- No junk to remove: Godot exports only imported resources (no .blend/.psd/.glb originals in the pack), duplicate
+  entries total 0.09 MB, every Meshy file is loaded by siege_view.gd.
+- 31 3D albedo textures -> VRAM Compressed (ETC2 on Android, high_quality off = Godot's mobile default for 3D):
+  Meshy characters 6x2048 (-21.95 MB), Meshy shops blue 7x1024 (-10.36), shops red 7x1024 (-7.66), kings 6x512
+  (-2.57), terrain grass/path/rock + castle bricks/paving (-2.38). Normal maps, glow masks and all 2D/UI stay Lossless.
+  ETC2 vs source at mip 0: PSNR 37-41 dB characters, 38-46 terrain/castle, 29-34 shops, 27-30 kings; zoomed 3x crops
+  of the worst 128px blocks and in-match renders (building_shot knight/priest, body_shot crusader/berserker) show no
+  visible difference.
+- project.godot: WebP lossless effort for the remaining Lossless textures -> compression_method 6, factor 100
+  (-1.04 MB pack, -0.09 MB launcher icons). Every one of the 135 remaining textures and all 26 icon/splash WebPs decode
+  pixel-identical to the previous build.
+- AAB 220,756,335 -> 174,716,069 bytes (pack 114.4 -> 68.4 MB; base 105.8 MB unchanged: 4 ABIs x libgodot ~25 MB).
+  Still above the 170 MB ceiling; the remaining options all change something and were reported, not applied.
+  Quick suite: ALL PASSED (34).
+
+# 0.31.73 Forced update on a protocol mismatch (branch grok/siege-force-update; no versionCode bump, no protocol bump)
+- Kevin: "when server has newer version than players installed game it'll force them to update".
+- Found: the server's version refusal sent {"t":"bye","why":"version","need":N} and closed (4001) in the same frame;
+  the client never received the bye (only the close), and siege_mode checked the socket state before reading packets
+  anyway, so a too-old client only ever toasted "Could not connect to the server" and went home. The "Update the game
+  to play online" text was unreachable.
+- Server (backward compatible, protocol stays 35): refusals close REFUSE_CLOSE_DELAY (0.25 s) after the bye, so the
+  bye arrives; the close reason is "version:<server protocol>" (was "version"); new {"t":"ver"} query answered with
+  {"t":"ver","v":N} and closed (1000), no match joined. Old clients see the same bye/code (vc31 against this server:
+  "Update the game to play online" instead of "Could not connect"). Needs a server redeploy to take effect.
+- Client: Net.version_verdict / Net.refused_version (only Net.VERSION is compared, so every future bump works).
+  Server newer -> UpdateScreen (scripts/app/update_screen.gd): full screen, input-blocking, "UPDATE REQUIRED" /
+  "A new version of Fatebound is available. Update to keep playing.", big UPDATE -> market://details?id=com.fatebound.game
+  (Android), https://play.google.com/store/apps/details?id=com.fatebound.game fallback. "PLAY OFFLINE VS BOTS" closes it
+  but online stays locked (ONLINE / PLAY online re-show it; it comes back after each offline match). Back = quit.
+  Server older -> "Servers are updating, try again in a few minutes", nothing blocked. A legacy close-only refusal
+  (4001 "version", no number) can only come from a server older than this code -> "servers are updating".
+- Menu check: VersionCheck (scripts/app/version_check.gd) at start-up and on resume (>60 s since the last), skipped
+  headless. Against a server without the "ver" message it gets no answer (-1, unknown) and the connect path decides.
+- tests/version_gate_test.gd (real server + in-process fake newer/legacy servers + the real client and app).
+
 # Play preset: no 32-bit Intel (Kevin: "remove the 32bit Intel from game")
 - export_presets.cfg "Android Play Store": architectures/x86=false (armeabi-v7a, arm64-v8a, x86_64 stay). Only that
   preset had it; the itch/preview presets were already arm64-v8a only. Intel Atom Android devices are long gone; the
   AAB's per-device split meant no player downloaded it anyway -- a smaller upload, nothing else. No build or upload.
 
+# vc32 / 1.2.8-siege-0.31.78 rebuilt without x86 (same versionCode/versionName/key; game data unchanged)
+- Built on claude/siege-dev-r6-local 8fb85e8 merged into grok/siege-play-local-r9; verify_play_bundle.py now expects
+  exactly armeabi-v7a, arm64-v8a, x86_64.
+- AAB 193,648,329 -> 167,008,590 bytes (only base/lib/x86/* removed; asset pack, icons, ETC2 textures, forced-update
+  screen identical). SHA-256 7741f5bfdc2c41061b861717f5d88b945729f134a97ba5f51a85c26fd8fd8142.
+- Verifier + bundletool validate + jarsigner OK, upload cert 69:71:A9:...:83:90:84. Protocol 35 (no server change).
+  Quick suite: ALL PASSED (38).
 # Trailer 6: where the meteor comes from (Kevin: "it looks like he's the one that blew them up. Make it so viewers
 # know where explosion came from with camera following the meteor from arch mage")
 - The fall run opens on the red Archmage now: a close low shot as he raises his staff, a fireball gathers on its orb
@@ -2573,10 +2620,26 @@ K2/K3 notes (0.17.0)
   probe failed. It now copies all four (the baked terrain files stay client-only). Dry run (NO_SYSTEMD=1): installs,
   the probe waits out the 20 s lobby, PROBE_OK.
 
+## vc33 build (grok/siege-play-local-r10, 2026-10-08 PT) -- OVER THE 175 MB UPLOAD LIMIT, not uploaded
+- Merge of claude/siege-dev-r6-local e749337 (0.31.84) onto r9: ETC2 imports kept (the six new base-class bodies set to
+  ETC2 like the rest), force-update + 0.31.82 lobby/status merged on the server (status close goes through _refuse),
+  Update screen's "Play offline vs bots" now starts the offline match itself (Home has no VS BOTS any more).
+- vc33 / 1.2.9-siege-0.31.84, 3 ABIs, signed with the upload key (cert SHA256 69:71:A9...:90:84), verifier/bundletool/
+  jarsigner OK, 38/38 quick tests pass. AAB 198.4 MB (vc32 167.0): +31 MB from 12 new Meshy bodies (textures, meshes,
+  anims) and the v2 menus/chests. Protocol still 35.
+
 # Play preset: no 64-bit Intel either (Kevin: "Can we drop the 64bit Intel also")
 - export_presets.cfg "Android Play Store": architectures/x86_64=false; the AAB now carries armeabi-v7a and arm64-v8a
   only (Play's 64-bit requirement is met by arm64-v8a). The itch/preview presets were already arm64-v8a only. Gone with
   it: Intel/AMD Chromebooks, x86 emulators and Google Play Games on PC (those need an x86_64 build). No build or upload.
+
+## vc33 rebuilt with 2 ABIs (grok/siege-play-local-r10, 2026-10-09 PT) -- fits the 175 MB upload limit, not uploaded
+- Merged claude/siege-dev-r6-local 8827b74 (Kevin: drop x86_64): "Android Play Store" preset is armeabi-v7a + arm64-v8a
+  only; tools/verify_play_bundle.py now requires exactly those 2 ABIs (and no x86/x86_64 libs).
+- Same vc33 / 1.2.9-siege-0.31.84, ETC2, laughing-king icon (icon files byte-identical to the 3-ABI build), Vulkan with the
+  OpenGL fallback, forced-update screen. Signed with the upload key (cert SHA256 69:71:A9...:90:84); verifier, bundletool
+  and jarsigner OK; 38/38 quick tests pass. AAB 172,571,884 bytes (172.6 MB; was 198.4 MB with x86_64).
+  SHA256 9c3cc7c8b2bb20ee6aa1232dfb5ee3361a2394b2f4a8bc70b5d2fd8435a06a2e. Protocol still 35 (deploy-0.31.84 unchanged).
 
 # 0.31.85 (Kevin: "When on the other team, it still thinks I'm on the other team and controls are inverted and health
 # bars are red for my team")

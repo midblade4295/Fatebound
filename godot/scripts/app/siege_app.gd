@@ -11,6 +11,9 @@ const Showcase = preload("res://scripts/app/showcase.gd")
 const Siege = preload("res://scripts/siege/siege_mode.gd")
 const Audio = preload("res://scripts/native_audio.gd")
 const Assets = preload("res://scripts/siege/asset_cache.gd")
+const Net = preload("res://scripts/siege/siege_net.gd")
+const UpdateScreen = preload("res://scripts/app/update_screen.gd")
+const VersionCheck = preload("res://scripts/app/version_check.gd")
 const OnlineStatus = preload("res://scripts/app/online_status.gd")
 
 const TABS := [["home", "HOME", "castle"], ["pass", "PASS", "banner"], ["shop", "SHOP", "stall"], ["locker", "LOCKER", "helmet"], ["settings", "SETTINGS", "gear"]]
@@ -26,6 +29,23 @@ var tab := "home"
 var home_class := "knight"
 var locker_class := "knight"
 var siege = null
+
+# ---------------- forced update (0.31.73) ----------------
+# Kevin: "when server has newer version than players installed game it'll force them to update". The menu asks the
+# server its protocol at start-up and on resume (VersionCheck); a refused connect reports it too (siege_mode
+# version_mismatch). Server newer -> the blocking Update screen (UpdateScreen) and online play stays locked.
+# Server older (a build published before the server deploy) -> "Servers are updating", nothing blocked.
+var update_required := false
+var server_updating := false
+var server_version := -1
+var update_screen: Control = null
+# Tests may set these before the node enters the tree. Headless (tests, tools) skips the start-up check unless asked.
+var version_check := DisplayServer.get_name() != "headless"
+var version_check_url := OS.get_environment("SIEGE_URL") if OS.has_environment("SIEGE_URL") else Net.DEFAULT_URL
+var open_url: Callable = func(u: String) -> int: return OS.shell_open(u)
+var _version_checker: Node = null
+var _version_checked_at := -1000.0
+const RECHECK_AFTER := 60.0          # s: on resume, ask again if the last check is older than this
 
 var chrome: Control
 var content_scroll: ScrollContainer
@@ -125,6 +145,8 @@ func _ready() -> void:
 	content_scroll.get_v_scroll_bar().value_changed.connect(_on_scroll)
 	show_tab("home")
 	_boot_mark("home shown, waiting for frames")
+	if version_check:
+		call_deferred("check_server_version")
 
 func _apply_audio() -> void:
 	var st: Dictionary = profile.d.settings
@@ -804,6 +826,9 @@ func start_tutorial() -> void:
 func start_match(online: bool, tutorial := false) -> void:
 	if siege != null:
 		return
+	if online and update_required:
+		show_update_screen()               # online stays locked until the update is installed
+		return
 	sfx("matchStart")
 	siege = Siege.new()
 	siege.online = online
@@ -814,6 +839,7 @@ func start_match(online: bool, tutorial := false) -> void:
 	siege.hq_gfx = bool(profile.d.settings.get("hq_graphics", true))
 	siege.player_name = str(profile.d.name)
 	siege.exited.connect(_end_match)
+	siege.version_mismatch.connect(_on_version_mismatch)
 	if online_status != null:
 		online_status.set_active(false)
 	_set_menu_active(false)
@@ -840,10 +866,90 @@ func _end_match() -> void:
 	_menu_fps.call_deferred()                 # (after the match's _exit_tree puts back what it found)
 	_set_menu_active(true)
 	show_tab("home")
+	if update_required:
+		show_update_screen()
+	elif server_updating:
+		toast(SERVER_UPDATING, UI.GOLD)
+
+# ---------------- forced update ----------------
+const SERVER_UPDATING := "Servers are updating, try again in a few minutes"
+
+func check_server_version() -> void:
+	# Ask the server which protocol it speaks (no match is joined). One at a time.
+	if is_instance_valid(_version_checker):
+		return
+	_version_checked_at = Time.get_ticks_msec() / 1000.0
+	_version_checker = VersionCheck.new()
+	_version_checker.url = version_check_url
+	_version_checker.done.connect(_on_server_version)
+	add_child(_version_checker)
+
+func _on_server_version(server_v: int) -> void:
+	_version_checker = null
+	apply_server_version(server_v)
+
+func apply_server_version(server_v: int) -> void:
+	var verdict: String = Net.version_verdict(server_v)
+	print("VERSION_CHECK server=%d client=%d -> %s" % [server_v, Net.VERSION, verdict])
+	match verdict:
+		"update":
+			server_version = server_v
+			update_required = true
+			server_updating = false
+			if siege == null:              # an offline match in progress gets it when it ends (_end_match)
+				show_update_screen()
+		"server_old":
+			server_version = server_v
+			server_updating = true
+		"ok":
+			# Same protocol (e.g. the server was rolled back): unlock.
+			server_version = server_v
+			server_updating = false
+			if update_required:
+				update_required = false
+				hide_update_screen()
+				if siege == null:
+					rebuild()
+		_:
+			pass                           # unknown: offline or an older server; the connect path still checks
+
+func _on_version_mismatch(server_v: int, verdict: String) -> void:
+	# A refused connect (siege_mode). "update": straight to the Update screen. "server_old": siege_mode shows the
+	# message and comes home by itself; Home repeats it (_end_match).
+	server_version = server_v
+	if verdict == "update":
+		update_required = true
+		server_updating = false
+		call_deferred("_end_match")
+	else:
+		server_updating = true
+
+func show_update_screen() -> void:
+	if is_instance_valid(update_screen):
+		move_child(update_screen, get_child_count() - 1)
+		update_screen.visible = true
+		return
+	update_screen = UpdateScreen.new()
+	update_screen.server_version = server_version
+	update_screen.open_url = open_url
+	update_screen.offline_requested.connect(func():
+		# 0.31.84 merge: Home has no VS BOTS mode any more (one PLAY, always online), so this starts the offline
+		# match itself; the Update screen comes back when it ends (_end_match).
+		hide_update_screen()
+		start_match(false)
+		toast("Offline vs bots. Update the game to play online.", UI.GOLD))
+	add_child(update_screen)              # last child: over the menus, the toast and any match
+
+func hide_update_screen() -> void:
+	if is_instance_valid(update_screen):
+		update_screen.queue_free()
+	update_screen = null
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_GO_BACK_REQUEST:
-		if is_instance_valid(modal):
+		if is_instance_valid(update_screen):
+			get_tree().quit()              # the Update screen can't be backed out of into the game
+		elif is_instance_valid(modal):
 			close_modal()
 		elif is_instance_valid(siege):
 			siege.request_leave()
@@ -856,5 +962,8 @@ func _notification(what: int) -> void:
 			audio.stop()
 		if online_status != null:
 			online_status.set_active(false)
-	elif what == NOTIFICATION_APPLICATION_RESUMED and online_status != null:
-		online_status.set_active(tab == "home" and siege == null)
+	elif what == NOTIFICATION_APPLICATION_RESUMED:
+		if online_status != null:
+			online_status.set_active(tab == "home" and siege == null)
+		if version_check and siege == null and Time.get_ticks_msec() / 1000.0 - _version_checked_at > RECHECK_AFTER:
+			check_server_version()             # back from the Play Store (or a long pause): ask again

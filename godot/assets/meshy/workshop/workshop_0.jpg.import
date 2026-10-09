@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://bcwoqnfxa4o3d"
-path="res://.godot/imported/workshop_0.jpg-6972707e32b6151c0fb5e2df77acef51.ctex"
+path.s3tc="res://.godot/imported/workshop_0.jpg-6972707e32b6151c0fb5e2df77acef51.s3tc.ctex"
+path.etc2="res://.godot/imported/workshop_0.jpg-6972707e32b6151c0fb5e2df77acef51.etc2.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "f6370b4a3aaf92c8dcb022d414fd6f0c"
@@ -14,11 +16,11 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/meshy/workshop/workshop_0.jpg"
-dest_files=["res://.godot/imported/workshop_0.jpg-6972707e32b6151c0fb5e2df77acef51.ctex"]
+dest_files=["res://.godot/imported/workshop_0.jpg-6972707e32b6151c0fb5e2df77acef51.s3tc.ctex", "res://.godot/imported/workshop_0.jpg-6972707e32b6151c0fb5e2df77acef51.etc2.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0

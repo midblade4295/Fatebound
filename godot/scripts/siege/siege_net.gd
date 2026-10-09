@@ -10,6 +10,11 @@ const Sim = preload("res://scripts/siege/siege_sim.gd")
 
 const VERSION := 35              # 35 = the "block" action (the Crusader's shield, 0.31.61); 34 = the Sniper's piercing shot (PROJ_KINDS); 33 = the player launcher (state "fly", "la"); 32 = one snapshot for all + "m" task messages, timed interpolation; 31 = the bomb (bm); 30 = smaller snapshots: packed projectiles/items/Kings, slow state only when it changes (0.31.8); 29 = no class caps; per-class stand stock/restock, no heal stacking, armory +8 %, worker 80 hp; 28 = class caps; 27 = the Necromancer (drain + heal beams, unit field 32); 26 = Resurrection, bigger nova/sanctuary; 25 = logs/rocks (it); 24 = the Crusader and its thrown hammer; 23 = tower shot heights, run off a deck; 22 = wide roofless towers; 21 = natural hills, every class climbs; 20 = bigger towers; 19 = the bigger natural map; 18 = no "water" in the dungeons (wading only in the river); 17 = rampart shots
 const DEFAULT_URL := "wss://136-113-125-3.sslip.io/fatebound/siege/ws"
+# Refusals: the server sends {"t":"bye", "why":..., "need":VERSION} and then closes with one of these codes.
+# Since 0.31.73 the version refusal's close reason is "version:<server protocol>" (older servers: just "version").
+const CLOSE_NO_HELLO := 4000
+const CLOSE_VERSION := 4001
+const CLOSE_FULL := 4002
 const DEFAULT_PORT := 8082
 const SNAP_HZ := 20.0            # 15 -> 20 (0.31.23); 10 -> 15 (0.18.4)
 const INTERP_DELAY := 1.5 / SNAP_HZ   # 0.31.23: remote units are drawn this far behind the newest snapshot (75 ms)
@@ -39,6 +44,34 @@ const F := 33
 const SCALE := [1.0, 1.0, 100.0, 100.0, 1000.0, 1.0, 1.0, 1.0, 100.0, 1.0,
 	1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 100.0, 100.0, 1.0, 1.0,
 	1.0, 1.0, 0.1, 1.0, 10.0, 1.0, 1.0, 1.0, 1.0, 1.0, 100.0, 1.0, 1.0]
+
+# ---------------- version mismatch (0.31.73: the "Update required" screen) ----------------
+# What the client should do about the server's protocol `server_v`, compared with ours (VERSION):
+#   "update"     the server is newer: this build is too old -> the blocking Update screen
+#   "server_old" the server is older: a new build went out before the server was redeployed -> "Servers are updating"
+#   "ok"         same protocol
+#   "unknown"    no answer (offline, or a server too old to answer the version check)
+# Nothing here hard-codes a protocol number, so every future bump of VERSION works the same way.
+static func version_verdict(server_v: int, client_v: int = VERSION) -> String:
+	if server_v < 0:
+		return "unknown"
+	if server_v > client_v:
+		return "update"
+	if server_v < client_v:
+		return "server_old"
+	return "ok"
+
+# The server's protocol from a refusal: the bye's "need" if it arrived, else the close reason "version:<n>".
+# -1 = not a version refusal. A version refusal (code 4001 / bye "version") without any number comes from a server
+# that predates 0.31.73 -- i.e. older than any build carrying this code -- so it maps to "server older" (0).
+static func refused_version(bye: Dictionary, close_code: int, close_reason: String) -> int:
+	if str(bye.get("why", "")) == "version" and bye.has("need"):
+		return maxi(0, int(bye.get("need", 0)))
+	if close_reason.begins_with("version:") and close_reason.substr(8).is_valid_int():
+		return maxi(0, close_reason.substr(8).to_int())
+	if close_code == CLOSE_VERSION or str(bye.get("why", "")) == "version" or close_reason == "version":
+		return 0
+	return -1
 
 # Wire format: 1 byte tag + payload. "R" = var_to_bytes, "Z" = zstd(var_to_bytes) with the raw
 # size in 4 bytes. Snapshots are compressed; small client messages go raw.
