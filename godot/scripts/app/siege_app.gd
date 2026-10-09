@@ -11,6 +11,7 @@ const Showcase = preload("res://scripts/app/showcase.gd")
 const Siege = preload("res://scripts/siege/siege_mode.gd")
 const Audio = preload("res://scripts/native_audio.gd")
 const Assets = preload("res://scripts/siege/asset_cache.gd")
+const OnlineStatus = preload("res://scripts/app/online_status.gd")
 
 const TABS := [["home", "HOME", "castle"], ["pass", "PASS", "banner"], ["shop", "SHOP", "stall"], ["locker", "LOCKER", "helmet"], ["settings", "SETTINGS", "gear"]]
 
@@ -56,6 +57,8 @@ var _toast_until := 0.0
 # is up" record, the switch to OpenGL after a stuck Vulkan start, and SAFE START (no background model loading and no
 # live 3D hero) after a stuck start. This scene only reads safe_boot and marks its steps in the log.
 var safe_boot := false
+var online_status: Node = null         # 0.31.82: the server's player count for Home (the real app only, or FB_STATUS_POLL)
+var online_refs := {}                  # Home's "players online" pill: {main, sub}
 var _guard: Node = null
 
 func _boot_mark(phase: String) -> void:
@@ -88,6 +91,10 @@ func _ready() -> void:
 	_build_hero()
 	_boot_mark("menus")
 	_build_chrome()
+	if get_tree().get_script() == null or OS.has_environment("FB_STATUS_POLL"):
+		online_status = OnlineStatus.new()
+		online_status.changed.connect(paint_online)
+		add_child(online_status)
 	# Toast: a dark pill just above the tab bar, readable over anything.
 	_toast_box = PanelContainer.new()
 	var tsb := UI.card_style(Color(0.02, 0.04, 0.08, 0.92), 18, UI.CARD_HI)
@@ -603,6 +610,8 @@ func show_tab(id: String) -> void:
 	for t in tab_buttons:
 		_style_tab(tab_buttons[t], t == id)
 	hero_layer.visible = id == "home"
+	if online_status != null:
+		online_status.set_active(id == "home" and siege == null)
 	hero_layer.position.y = 0.0
 	hero_layer.modulate.a = 1.0
 	content_scroll.scroll_vertical = 0
@@ -622,6 +631,29 @@ func rebuild() -> void:
 		"locker": Screens.locker(self, content)
 		"settings": Screens.settings(self, content)
 	refresh_top()
+
+# ---------------- players online (0.31.82) ----------------
+func paint_online() -> void:
+	# Home's pill from the last status answer: "12 PLAYERS ONLINE" (or the plain server line while unknown)
+	var main: Label = online_refs.get("main")
+	var sub: Label = online_refs.get("sub")
+	if not is_instance_valid(main) or not is_instance_valid(sub):
+		return
+	var info: Dictionary = online_status.info if online_status != null else {}
+	if info.is_empty():
+		main.text = "LIVE SIEGE SERVER"
+		sub.text = "16 vs 16  ·  bots fill any empty slots"
+		return
+	var n := int(info.get("online", 0))
+	main.text = "%d PLAYER%s ONLINE" % [n, "" if n == 1 else "S"]
+	var fighting := int(info.get("in_match", 0))
+	var waiting := int(info.get("waiting", 0))
+	if waiting > 0 and float(info.get("lobby", -1.0)) >= 0.0:
+		sub.text = "%d in the lobby  ·  join them!" % waiting
+	elif fighting > 0:
+		sub.text = "%d in battle  ·  bots fill the rest" % fighting
+	else:
+		sub.text = "bots fill the empty slots"
 
 # ---------------- feedback ----------------
 func toast(text: String, color := UI.TEXT) -> void:
@@ -776,6 +808,8 @@ func start_match(online: bool, tutorial := false) -> void:
 	siege.hq_gfx = bool(profile.d.settings.get("hq_graphics", true))
 	siege.player_name = str(profile.d.name)
 	siege.exited.connect(_end_match)
+	if online_status != null:
+		online_status.set_active(false)
 	_set_menu_active(false)
 	add_child(siege)
 
@@ -806,5 +840,10 @@ func _notification(what: int) -> void:
 			show_tab("home")
 		else:
 			get_tree().quit()
-	elif what == NOTIFICATION_APPLICATION_PAUSED and audio != null and audio.has_method("stop"):
-		audio.stop()
+	elif what == NOTIFICATION_APPLICATION_PAUSED:
+		if audio != null and audio.has_method("stop"):
+			audio.stop()
+		if online_status != null:
+			online_status.set_active(false)
+	elif what == NOTIFICATION_APPLICATION_RESUMED and online_status != null:
+		online_status.set_active(tab == "home" and siege == null)

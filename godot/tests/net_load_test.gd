@@ -28,6 +28,7 @@ func _init() -> void:
 	OS.set_environment("SIEGE_PORT", str(port))
 	OS.set_environment("SIEGE_HOST", "127.0.0.1")
 	OS.set_environment("SIEGE_MAX_PLAYERS", "32")
+	OS.set_environment("SIEGE_LOBBY", "1")                # (0.31.82: the join countdown, short here)
 	pid = OS.create_process(godot, ["--headless", "--path", proj, "-s", "res://server/siege_server.gd"])
 	print("server pid ", pid)
 	for i in N:

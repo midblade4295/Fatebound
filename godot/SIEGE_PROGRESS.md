@@ -2516,3 +2516,31 @@ K2/K3 notes (0.17.0)
 - Icons: the six upgrade busts and their weapon icons re-rendered (render_skin_icons BUST_FRAME gains the upgrades; the
   far framing stays for the Archmage's gear only -- the Necromancer has no crown now). tools/preload_list re-run.
 - 0.31.81, version code 167. Quick suite: ALL 37 PASSED.
+
+# 0.31.82 (Kevin: "Add a players online in main menu. Also when starting match have it countdown from 20 seconds and show players joining.")
+- Server (server/siege_server.gd): a hello no longer seats the player at once -- it joins the lobby. The first one in
+  starts a LOBBY_TIME (20 s; env SIEGE_LOBBY) countdown, everyone who arrives before zero goes in with them, and every
+  0.5 s each waiting player gets {"t":"lobby", left, wait, names, me, online, in_match, slots, running}. At zero the
+  wave is seated: a new match if none runs (or only bots are left in it), else into the running one; during a results
+  screen they wait for the next match with everyone. Waiting players get no snapshots. {"t":"status"} without a hello
+  answers {online, in_match, waiting, lobby, running, slots, max} (the asker closes; the server does after 2 s -- a
+  close right behind the answer can arrive in the same read and the WebSocket drops the answer). Protocol stays 35:
+  an older app ignores "lobby" and simply gets its welcome at zero; this app against an older server is welcomed at
+  once (no countdown) and gets no count.
+- Lobby panel (scripts/siege/lobby_panel.gd), up from PLAY until the welcome: FATEBOUND, "FINDING A BATTLE" with a
+  spinning ring while connecting, then "BATTLE STARTS IN" with the seconds inside a ring that empties (orange and a
+  tick each second in the last five), whether a battle is already on ("2 players fighting, you join it at zero") or a
+  new one starts, "N / 32 PLAYERS", and the players joining as name chips (yours marked YOU; newcomers pop in with a
+  flip; ten shown, then "+N more"). LEAVE / Back goes home; a failed connection shows "CAN'T JOIN" and the reason.
+  On the welcome the FATEBOUND card goes straight over it (the warm-up as before).
+- Home (screens.gd, scripts/app/online_status.gd): the line under PLAY is a pill -- "12 PLAYERS ONLINE" with a
+  breathing green dot and "N in battle" / "N in the lobby, join them!" / "bots fill the empty slots". Polled with a
+  status query every 15 s while Home shows (not during a match or in the background); "LIVE SIEGE SERVER" until an
+  answer or when the server can't say (the live server needs the redeploy). Only the real app polls (tests and tools
+  stay off the network unless FB_STATUS_POLL is set).
+- server/siege_probe.gd also asks the status and waits out the countdown (35 s timeout): the install script's probe.
+- Tests: siege_net_smoke runs the server with a 1.5 s lobby and checks the lobby messages before both welcomes (names,
+  running, counts), the panel closing on the welcome and a status answer; net_load_test uses a 1 s lobby.
+- Live server: needs `sudo bash godot/server/deploy/install_siege_server.sh` from this branch for the countdown and the
+  count (until then the app connects as before).
+- 0.31.82, version code 168.

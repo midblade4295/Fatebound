@@ -288,13 +288,30 @@ static func home(app, root: VBoxContainer) -> void:
 	pl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	UI2.sweep(play, 2.6, 80.0, 0.5)
 	UI2.pulse(play, 0.018, 1.1)
+	# --- players online (0.31.82, Kevin: "Add a players online in main menu"): a pill under PLAY, painted by
+	# app.paint_online() from the server's status answer (the plain server line until one comes)
+	var hc := CenterContainer.new()
+	hc.position = Vector2(0, 580)
+	hc.size = Vector2(w, 30)
+	hc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	top.add_child(hc)
+	var pill := PanelContainer.new()
+	var ps := StyleBoxFlat.new()
+	ps.bg_color = Color(0.02, 0.05, 0.12, 0.72)
+	ps.border_color = Color(0.37, 0.86, 0.53, 0.55)
+	ps.set_border_width_all(2)
+	ps.set_corner_radius_all(15)
+	ps.content_margin_left = 12
+	ps.content_margin_right = 14
+	ps.content_margin_top = 2
+	ps.content_margin_bottom = 3
+	pill.add_theme_stylebox_override("panel", ps)
+	pill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hc.add_child(pill)
 	var hint := HBoxContainer.new()
-	hint.add_theme_constant_override("separation", 6)
-	hint.alignment = BoxContainer.ALIGNMENT_CENTER
-	hint.position = Vector2(0, 578)
-	hint.size = Vector2(w, 18)
+	hint.add_theme_constant_override("separation", 7)
 	hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	top.add_child(hint)
+	pill.add_child(hint)
 	var dot := Panel.new()
 	var ds := StyleBoxFlat.new()
 	ds.bg_color = Color("#5fdc86")
@@ -306,7 +323,17 @@ static func home(app, root: VBoxContainer) -> void:
 	dot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hint.add_child(dot)
-	UI2.body(hint, "Live 16 vs 16 on the Siege server  ·  bots fill any empty slots", 11, Color("#c2cdea"), false)
+	UI2.when_ready(dot, func():                           # the live dot breathes
+		var tw := dot.create_tween().set_loops()
+		tw.tween_property(dot, "modulate:a", 0.3, 0.8).set_trans(Tween.TRANS_SINE)
+		tw.tween_property(dot, "modulate:a", 1.0, 0.8).set_trans(Tween.TRANS_SINE))
+	var om := UI2.text(hint, "LIVE SIEGE SERVER", 15, Color("#8cf0a8"), Color("#0b2a14"), 5)
+	om.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var osub := UI2.body(hint, "16 vs 16  ·  bots fill any empty slots", 11, Color("#c2cdea"), false)
+	osub.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	app.online_refs = {"main": om, "sub": osub}
+	if app.has_method("paint_online"):
+		app.paint_online()
 	# --- chests
 	chests_row(app, top, w, 640.0)
 	var odds := UI2.button(top, "WHAT'S INSIDE THE CHESTS?", "ghost", func(): chest_odds(app), "chest_odds", 12, 28.0, 10.0)

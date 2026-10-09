@@ -4,12 +4,23 @@ extends SceneTree
 #
 #   godot --headless --path <project> -s res://server/siege_server.gd
 # Env: SIEGE_HOST (default 127.0.0.1 — keep it on loopback behind Caddy), SIEGE_PORT (8082),
-#      SIEGE_MAX_PLAYERS (32), SIEGE_LOG (1 = log joins/leaves/match results to stdout).
+#      SIEGE_MAX_PLAYERS (32), SIEGE_LOG (1 = log joins/leaves/match results to stdout),
+#      SIEGE_LOBBY (seconds of the join countdown, default 20).
+#
+# 0.31.82 (Kevin: "when starting match have it countdown from 20 seconds and show players joining"; "players online
+# in main menu"): a player who says hello waits in the lobby -- the first one starts a LOBBY_TIME countdown, everyone
+# who arrives before it runs out joins with them, and the "lobby" message (every half second) tells the waiting
+# players who is coming and how long is left. At zero they're seated: a new match if none is running (or only bots are
+# left in it), else into the running one (in results, they go into the next one with everyone). A "status" message (no hello) is answered with
+# the player counts (the asker then closes) -- the menu's "players online". Both are additive: an older app ignores
+# "lobby" (it just waits for its welcome) and never asks for "status"; this app against an older server gets its
+# welcome at once and no count (so the protocol version stays).
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 const Net = preload("res://scripts/siege/siege_net.gd")
 
 const RESTART_AFTER := 15.0          # seconds of results screen before the next match
 const IDLE_STOP := 30.0              # no players for this long -> stop simulating
+const LOBBY_TIME := 20.0             # the join countdown (0.31.82)
 const HELLO_TIMEOUT := 10.0
 const MAX_MSGS_PER_SEC := 90         # per client; beyond this, messages are dropped
 const TICK := Sim.TICK
@@ -29,6 +40,9 @@ var host := "127.0.0.1"
 var port := Net.DEFAULT_PORT
 var max_players := 32
 var log_on := true
+var lobby_time := LOBBY_TIME
+var wave_end := -1.0                 # when the waiting players are seated (-1: nobody waiting)
+var _lobby_clock := 0.0
 
 func _init() -> void:
 	host = OS.get_environment("SIEGE_HOST") if OS.has_environment("SIEGE_HOST") else host
@@ -37,6 +51,8 @@ func _init() -> void:
 	if OS.has_environment("SIEGE_MAX_PLAYERS"):
 		max_players = clampi(int(OS.get_environment("SIEGE_MAX_PLAYERS")), 1, 32)
 	log_on = OS.get_environment("SIEGE_LOG") != "0"
+	if OS.has_environment("SIEGE_LOBBY"):
+		lobby_time = clampf(float(OS.get_environment("SIEGE_LOBBY")), 0.0, 120.0)
 	Engine.max_fps = 60              # headless would otherwise spin a core
 	var err := tcp.listen(port, host)
 	if err != OK:
@@ -52,6 +68,7 @@ func _log(s: String) -> void:
 func _process(delta: float) -> bool:
 	_accept()
 	_poll_clients()
+	_run_lobby(delta)
 	_run_match(delta)
 	return false
 
@@ -82,6 +99,10 @@ func _poll_clients() -> void:
 			if now - float(c.joined_at) > HELLO_TIMEOUT:
 				ws.close()
 				_drop(cid, "handshake timeout")
+			continue
+		if c.has("close_at") and now >= float(c.close_at):
+			c.erase("close_at")
+			ws.close(1000, "status")
 			continue
 		if not c.hello and now - float(c.joined_at) > HELLO_TIMEOUT:
 			ws.close(4000, "no hello")
@@ -185,9 +206,17 @@ func _handle(cid: int, msg: Dictionary) -> void:
 			c.hello = true
 			c.name = str(msg.get("name", "Player")).left(20)
 			c.pred = bool(msg.get("pred", false))         # the phone moves its own unit (0.18.4)
-			if sim == null:
-				_new_match()
-			_seat(cid)
+			c.queued = true                                # 0.31.82: into the lobby; seated when the countdown ends
+			if wave_end < 0.0:
+				wave_end = _now() + lobby_time
+			_log("queue %s (seated in %.0f s, players %d)" % [c.name, wave_end - _now(), _human_count()])
+			_lobby_clock = 1.0                             # tell everyone waiting at once
+		"status":
+			# 0.31.82: the menu's "players online" -- answered without a hello; the asker closes (or we do in 2 s: a
+			# close right behind the answer can reach the phone in the same read, and the WebSocket drops the answer)
+			if not c.hello:
+				_send(cid, _status())
+				c.close_at = _now() + 2.0
 		"in":
 			if not c.hello or sim == null or c.unit == "":
 				return
@@ -232,6 +261,7 @@ func _seat(cid: int) -> void:
 				seat = u.id
 				break
 	c.unit = seat
+	c.queued = false
 	c.move = Vector2.ZERO
 	if seat != "":
 		sim.by_id[seat].bot = false
@@ -246,6 +276,65 @@ func _unit_taken(id: String) -> bool:
 		if clients[cid].unit == id:
 			return true
 	return false
+
+# ---------------- lobby (0.31.82) ----------------
+func _now() -> float:
+	return Time.get_ticks_msec() / 1000.0
+
+func _queued() -> Array:
+	var out := []
+	for cid in clients:
+		if clients[cid].hello and bool(clients[cid].get("queued", false)):
+			out.append(cid)
+	return out
+
+func _seated_count() -> int:
+	var n := 0
+	for cid in clients:
+		var c: Dictionary = clients[cid]
+		if c.hello and not bool(c.get("queued", false)) and c.unit != "":
+			n += 1
+	return n
+
+func _run_lobby(delta: float) -> void:
+	if wave_end < 0.0:
+		return
+	var waiting := _queued()
+	if waiting.is_empty():
+		wave_end = -1.0                        # they all left (or the restart seated them)
+		return
+	var now := _now()
+	if sim != null and sim.ended:
+		# the results screen is up: they go into the next match with everyone (the restart seats them)
+		var restart := (_ended_at if _ended_at >= 0.0 else now) + RESTART_AFTER
+		wave_end = maxf(wave_end, restart)
+	elif now >= wave_end:
+		if sim == null or _seated_count() == 0:
+			_new_match()                       # (a bots-only match left running by players who quit: a fresh one)
+		for cid in waiting:
+			_seat(cid)
+		wave_end = -1.0
+		return
+	_lobby_clock += delta
+	if _lobby_clock >= 0.5:
+		_lobby_clock = 0.0
+		_send_lobby(waiting)
+
+func _send_lobby(waiting: Array) -> void:
+	var names := []
+	for cid in waiting:
+		names.append(clients[cid].name)
+	var msg := {"t":"lobby", "left":maxf(0.0, wave_end - _now()), "wait":lobby_time, "names":names,
+		"in_match":_seated_count(), "online":_human_count(), "slots":Net.TEAM_SIZE * 2,
+		"running":sim != null and not sim.ended and _seated_count() > 0, "match":match_id}   # (running: they join it)
+	for i in waiting.size():
+		msg["me"] = i
+		_send(waiting[i], msg)
+
+func _status() -> Dictionary:
+	return {"t":"status", "v":Net.VERSION, "online":_human_count(), "in_match":_seated_count(), "waiting":_queued().size(),
+		"lobby":maxf(0.0, wave_end - _now()) if wave_end >= 0.0 else -1.0, "running":sim != null and not sim.ended,
+		"slots":Net.TEAM_SIZE * 2, "max":max_players}
 
 # ---------------- match loop ----------------
 func _new_match() -> void:
@@ -336,8 +425,8 @@ func _run_match(delta: float) -> void:
 		var bytes := Net.encode(base, true)
 		for cid in clients:
 			var c: Dictionary = clients[cid]
-			if not c.hello:
-				continue
+			if not c.hello or bool(c.get("queued", false)):
+				continue                               # (still in the lobby: no match to show yet)
 			_send_raw(cid, bytes)
 			_st_bytes += bytes.size()
 			var me: Dictionary = sim.by_id.get(c.unit, {})
