@@ -2577,3 +2577,20 @@ K2/K3 notes (0.17.0)
 - export_presets.cfg "Android Play Store": architectures/x86_64=false; the AAB now carries armeabi-v7a and arm64-v8a
   only (Play's 64-bit requirement is met by arm64-v8a). The itch/preview presets were already arm64-v8a only. Gone with
   it: Intel/AMD Chromebooks, x86 emulators and Google Play Games on PC (those need an x86_64 build). No build or upload.
+
+# 0.31.85 (Kevin: "When on the other team, it still thinks I'm on the other team and controls are inverted and health
+# bars are red for my team")
+- Online, the server seats you on either team; everything was tested from the blue side (offline you are always blue,
+  online the first player is too). On red:
+  - Controls: the camera looks up the field from your own castle, so on red it is turned half way round -- but the
+    stick's screen directions went into the sim as blue's world directions. siege_mode._move_input() turns the stick
+    round for the red team (prediction, the inputs sent, offline).
+  - Colours: rings, health bars, castle roofs and banners, the throne, the King, outposts, hat shops, the workshop, the
+    HUD's YOUR SIDE / gates / outpost diamonds / station signs were drawn in the real team colour, so a red player's own
+    side was red. Now your side is always drawn blue and the other red (siege_view.vt() / siege_hud.vt(); my_side from
+    the player's unit at setup). Positions, facing and the camera still use the real team. The merged castle walls kept
+    for rematches are dropped when the side changes (their tint was for the other side).
+- tests/side_view_test.gd (in the suite): a match seated on b0 and on r0 through the welcome path; stick up / right move
+  up / right on screen, ally bars blue, enemy bars red, the HUD's mapping.
+- No server change (the client draws and turns the stick).
+- 0.31.85, version code 171. Quick suite: ALL 38 PASSED.

@@ -66,6 +66,15 @@ static var _rings: Dictionary = {}
 
 var sim
 var player_id := "you"
+# 0.31.85 (Kevin: "When on the other team, it still thinks I'm on the other team ... health bars are red for my team"):
+# your side is always drawn blue and the other red -- rings, health bars, castle roofs and banners, throne, King,
+# outposts, hat shops. `my_side` is the player's team (0 offline; online, whichever the server seated you on); vt() maps a
+# team to the colour it is drawn in. Positions and facing still use the real team.
+var my_side := 0
+static var _kit_side := 0                  # the side the cached merged castle walls (_kit_merged) were tinted for
+
+func vt(t: int) -> int:
+	return t if t < 0 or my_side == 0 else 1 - t
 var camera: Camera3D
 var actors: Dictionary = {}
 var oracle_nodes: Array = []
@@ -137,6 +146,10 @@ func setup_steps(s) -> Array:
 	# (build_times); the parts are independent, in this order. The world draws, and its pipelines compile, as it grows.
 	sim = s
 	build_times = {}
+	my_side = int(sim.by_id.get(player_id, {}).get("team", 0))
+	if my_side != _kit_side:
+		_kit_merged.clear()                 # (their tint was for the other side)
+		_kit_side = my_side
 	var steps := []
 	for pair in [["cache+lighting+ambience", func():
 				_load_cache()
@@ -1521,7 +1534,7 @@ func _build_hat_stands() -> void:
 	for st in sim.stands:
 		var cls := str(st.cls)
 		var t := int(st.team)
-		var col: String = COLOR[t]
+		var col: String = COLOR[vt(t)]
 		var shop: Dictionary = Castle.HAT_SHOPS[Sim.HAT_CLASSES.find(cls)]
 		var bp: Vector2 = st.b
 		var face := 0.0 if t == 0 else PI
@@ -1572,7 +1585,8 @@ var _shop_crystals: Array = []         # [node, centre (root-local), radius, ang
 static var _bld_mats: Dictionary = {}  # "<name>|<team>" -> StandardMaterial3D
 static var _crystal_mat: StandardMaterial3D = null
 
-func _meshy_building(bname: String, t: int, pos: Vector3, yaw: float, s: float) -> Node3D:
+func _meshy_building(bname: String, team: int, pos: Vector3, yaw: float, s: float) -> Node3D:
+	var t := vt(team)                            # (0.31.85: the colours of the side it's drawn as; t only picks colours)
 	var spec: Dictionary = MESHY_BUILDINGS.get(bname, {})
 	var packed := Stage.scene("res://assets/meshy/%s/%s.glb" % [bname, bname])
 	if packed == null or spec.is_empty():
@@ -2163,15 +2177,15 @@ func _build_outposts() -> void:
 
 func _outpost_owner(on: Dictionary, owner: int) -> void:
 	on.owner = owner
-	_set_outpost_owner(on.root, owner)
+	_set_outpost_owner(on.root, vt(owner))
 	if on.fire != null:
 		# The beacon burns in the holder's colour; while nobody holds it, it smoulders: the embers glow and smoke rises.
 		var fire: GPUParticles3D = on.fire
 		fire.emitting = owner >= 0
 		if owner >= 0:
-			var col: Color = BEACON_FIRE[owner]
+			var col: Color = BEACON_FIRE[vt(owner)]
 			((fire.draw_pass_1 as QuadMesh).material as StandardMaterial3D).albedo_color = col
-			(on.light as OmniLight3D).light_color = OUTPOST_GLOW[owner]
+			(on.light as OmniLight3D).light_color = OUTPOST_GLOW[vt(owner)]
 		(on.light as OmniLight3D).visible = owner >= 0
 		if on.smoke != null:
 			(on.smoke as GPUParticles3D).emitting = owner < 0
@@ -2285,8 +2299,8 @@ func _sync_outposts() -> void:
 		# owner's colour (white when neutral), and while a capture is under way a fill growing from the middle in
 		# the capturing team's colour. Hills can't hide it: the terrain itself draws it.
 		var pr: float = op.prog
-		var rc: Color = Color(1, 1, 1) if owner < 0 else TEAM_COLORS[owner]
-		var pc: Color = TEAM_COLORS[0] if pr > 0.0 else TEAM_COLORS[1]
+		var rc: Color = Color(1, 1, 1) if owner < 0 else TEAM_COLORS[vt(owner)]
+		var pc: Color = TEAM_COLORS[vt(0)] if pr > 0.0 else TEAM_COLORS[vt(1)]
 		var capturing := absf(pr) > 0.02 and absf(pr) < 0.999
 		posts.append(Vector4(op.p.x, op.p.y, Land.OUTPOST_R, absf(pr)))
 		rings.append(Vector4(rc.r, rc.g, rc.b, 0.9 if owner >= 0 else 0.75))
@@ -2321,7 +2335,7 @@ func _build_props() -> void:
 				if not ob.has("node"):
 					_place(HEX + ["rock_single_D.gltf", "rock_single_E.gltf"][int(absf(ob.p.x)) % 2], p, absf(ob.p.y) * 0.37, float(ob.r) * 3.4)
 			"workshop_building":
-				_place(HEX + "building_market_%s.gltf" % COLOR[ob.team], p, -PI * 0.5 if ob.team == 0 else PI * 0.5, 2.0)
+				_place(HEX + "building_market_%s.gltf" % COLOR[vt(int(ob.team))], p, -PI * 0.5 if ob.team == 0 else PI * 0.5, 2.0)
 	_build_nodes()
 	_build_outposts()
 	_build_hat_stands()
@@ -2511,7 +2525,7 @@ var _kit_nodes: Array = []
 func _kit_piece(model: String, t: int, merge: bool) -> Node3D:
 	# One kit model (foot at its origin), added to the view. merge: baked into the castle's merged meshes with the
 	# other copies of it (_merge_kit; the many wall pieces); otherwise a node of its own (keeps its LODs).
-	var root := CastleKit.piece(model, t)
+	var root := CastleKit.piece(model, vt(t))
 	add_child(root)
 	if merge:
 		_kit_nodes.append(root)
@@ -2683,7 +2697,7 @@ func _merge_kit(team := -1) -> void:
 	_kit_skip = false
 
 func _build_castle_kit(t: int) -> void:
-	var col: String = COLOR[t]
+	var col: String = COLOR[vt(t)]
 	var face := 0.0 if t == 0 else PI
 	if CASTLE_KITS:
 		_build_castle_meshy(t)
@@ -2755,14 +2769,14 @@ func _build_castle_kit(t: int) -> void:
 		_kit_nodes.append(_place(HEX + name + ".gltf", Vector3(pp.x, Sim.height_at(pp), pp.y), face + randf() * 0.6 - 0.3, float(pr[2])))
 
 func _build_castle(t: int) -> void:
-	var col: String = COLOR[t]
+	var col: String = COLOR[vt(t)]
 	var face := 0.0 if t == 0 else PI
 	_kit_skip = CASTLE_KITS and _kit_merged.has(t)
 	# Round 10 castle geometry (castle_mesh.gd): tall crenellated sandstone walls, round towers,
 	# gatehouse lintels, terraces with brick faces + parapets, walled grand stairs, paved floors.
 	_build_castle_mesh(t)
 	# Royal carpet up to the throne.
-	_floor(t, -1.3, 1.3, Castle.THRONE.y - 1.6, Castle.BACK - 0.2, Color("#2f5f8a") if t == 0 else Color("#8a3a2f"), Castle.L2_H + 0.02)
+	_floor(t, -1.3, 1.3, Castle.THRONE.y - 1.6, Castle.BACK - 0.2, Color("#2f5f8a") if vt(t) == 0 else Color("#8a3a2f"), Castle.L2_H + 0.02)
 	# Walls from the sim (so collision and visuals always agree).
 	for w in sim.walls:
 		if w.team != t:
@@ -2859,7 +2873,7 @@ func _build_castle(t: int) -> void:
 	var throne := _place("res://assets/props/throne.glb", Vector3(tp.x, Castle.L2_H + lift, tp.y), PI if t == 0 else 0.0, 1.0)
 	if throne != null:
 		var velvet := StandardMaterial3D.new()
-		velvet.albedo_color = Color("#2d58b8") if t == 0 else Color("#b3223a")
+		velvet.albedo_color = Color("#2d58b8") if vt(t) == 0 else Color("#b3223a")
 		velvet.roughness = 0.85
 		for mi in throne.find_children("*", "MeshInstance3D", true, false):
 			var m: MeshInstance3D = mi
@@ -2875,7 +2889,7 @@ func _build_castle(t: int) -> void:
 			_place(HEX + "flag_%s.gltf" % col, Vector3(fp.x, Castle.L2_H, fp.y), face, 1.6)
 		var wr: Vector2 = Sim._c(t, Vector2(12.0, 26.0))
 		_place(HEX + "weaponrack.gltf", Vector3(wr.x, Castle.L2_H, wr.y), face + PI * 0.5, 4.0)
-	_decal(Vector3(th.x, Castle.L2_H + 0.06, th.y), Sim.THRONE_RADIUS, TEAM_COLORS[t], 0.6)
+	_decal(Vector3(th.x, Castle.L2_H + 0.06, th.y), Sim.THRONE_RADIUS, TEAM_COLORS[vt(t)], 0.6)
 	# Dungeon: the cell on the platform, a ladder against the back wall and barrels.
 	var cc: Vector2 = Sim._c(t, Sim.CELL_C)
 	# 0.31.11: on the cell's floor. (It was at the level-1 height from when the cell stood on the platform; since the cell
@@ -3456,7 +3470,7 @@ func _ensure_actor(u: Dictionary) -> Dictionary:
 		var ring := MeshInstance3D.new()
 		ring.mesh = _ring_mesh(0.62 if u.id == player_id else 0.5, 0.12)
 		ring.scale = Vector3(1, 0.2, 1)
-		var col: Color = GOLD if u.id == player_id else TEAM_COLORS[u.team]
+		var col: Color = GOLD if u.id == player_id else TEAM_COLORS[vt(int(u.team))]
 		col.a = 0.9
 		ring.material_override = _unshaded(col)
 		ring.position.y = 0.05
@@ -3485,7 +3499,7 @@ func _ensure_actor(u: Dictionary) -> Dictionary:
 	a.busy_until = 0.0
 	_play(a, str(LOOKS.get(u.cls, LOOKS.villager).idle))
 	# Upgraded: bigger body + gold ring (no material overrides on skinned meshes).
-	var rc: Color = GOLD if (u.up or u.id == player_id) else TEAM_COLORS[u.team]
+	var rc: Color = GOLD if (u.up or u.id == player_id) else TEAM_COLORS[vt(int(u.team))]
 	rc.a = 0.9
 	(a.ring as MeshInstance3D).material_override = _fx_mat(rc)
 	(a.ring as MeshInstance3D).mesh = _ring_mesh(0.75 if u.up else (0.62 if u.id == player_id else 0.5), 0.14 if u.up else 0.12)
@@ -3841,7 +3855,7 @@ func on_event(e: Dictionary) -> void:
 		"spawn":
 			if not a.is_empty():
 				a.root.position = Vector3(sim.by_id[e.id].pos.x, 0, sim.by_id[e.id].pos.y)
-				ring_at(a.root.position, TEAM_COLORS[sim.by_id[e.id].team], 1.6, 0.6)
+				ring_at(a.root.position, TEAM_COLORS[vt(int(sim.by_id[e.id].team))], 1.6, 0.6)
 		"class":
 			if not a.is_empty():
 				ring_at(a.root.position, GOLD, 3.0 if e.up else 2.0, 0.8)
@@ -3942,7 +3956,7 @@ func on_event(e: Dictionary) -> void:
 				spark(Vector3(g2.c.x + randf_range(-2, 2), gy2 + 0.5 + randf() * 2.5, g2.c.y + randf_range(-1, 1)), Color("#c8b89a"))
 		"gate_rebuilt":
 			var g3: Dictionary = sim.gates[int(e.gate)]
-			ring_at(Vector3(g3.c.x, Sim.height_at(Vector2(g3.c.x, g3.c.y)) + 0.2, g3.c.y), TEAM_COLORS[int(e.team)], 3.0, 0.8)
+			ring_at(Vector3(g3.c.x, Sim.height_at(Vector2(g3.c.x, g3.c.y)) + 0.2, g3.c.y), TEAM_COLORS[vt(int(e.team))], 3.0, 0.8)
 		"repair":
 			var g4: Dictionary = sim.gates[int(e.gate)]
 			if randf() < 0.5:
@@ -4025,7 +4039,7 @@ func on_event(e: Dictionary) -> void:
 				ln.rotation.x = lean * 4.4
 				_raising.append({"node":ln, "t0":_time, "to":lean, "from":lean * 4.4})
 				ladder_nodes[int(e.ladder)] = ln
-			ring_at(Vector3(base.x, Sim.height_at(Vector2(base.x, base.y)) + 0.1, base.y), TEAM_COLORS[own], 1.8, 0.6)
+			ring_at(Vector3(base.x, Sim.height_at(Vector2(base.x, base.y)) + 0.1, base.y), TEAM_COLORS[vt(own)], 1.8, 0.6)
 		"ladder_hit":
 			var lh: Node3D = ladder_nodes.get(int(e.ladder))
 			if lh != null:
@@ -4039,7 +4053,7 @@ func on_event(e: Dictionary) -> void:
 				ladder_nodes.erase(int(e.ladder))
 		"pickup", "drop", "recaptured":
 			var o: Dictionary = sim.oracles[int(e.team)]
-			ring_at(Vector3(o.pos.x, Sim.height_at(Vector2(o.pos.x, o.pos.y)) + 0.1, o.pos.y), TEAM_COLORS[int(e.team)], 1.8, 0.6)
+			ring_at(Vector3(o.pos.x, Sim.height_at(Vector2(o.pos.x, o.pos.y)) + 0.1, o.pos.y), TEAM_COLORS[vt(int(e.team))], 1.8, 0.6)
 
 # ---------- Oracle ----------
 # The captive is each castle's KING (0.20.0; models 0.20.2, Kevin): three hand-made models per team,
@@ -4058,7 +4072,7 @@ func _make_oracle(team: int) -> Dictionary:
 	root.add_child(body)
 	var stages := []
 	for st in KING_STAGES:
-		var packed := Stage.scene("res://assets/kings/king_%s_%s.glb" % ["blue" if team == 0 else "red", st])
+		var packed := Stage.scene("res://assets/kings/king_%s_%s.glb" % ["blue" if vt(team) == 0 else "red", st])
 		var m: Node3D = packed.instantiate() if packed != null else Node3D.new()
 		m.scale = Vector3.ONE * (KING_HEIGHT / 1.9)          # the models are 1.9 tall, feet at 0
 		for mi in m.find_children("*", "MeshInstance3D", true, false):
@@ -4066,7 +4080,7 @@ func _make_oracle(team: int) -> Dictionary:
 		m.visible = st == "fat"
 		body.add_child(m)
 		stages.append(m)
-	var ground_ring := _decal(Vector3.ZERO, 1.0, TEAM_COLORS[team], 0.8)
+	var ground_ring := _decal(Vector3.ZERO, 1.0, TEAM_COLORS[vt(team)], 0.8)
 	ground_ring.reparent(root, false)
 	return {"root":root, "body":body, "player":null, "stages":stages, "stage":0, "puff":0.0,
 		"ground":ground_ring, "state":""}
@@ -4357,7 +4371,7 @@ func bars() -> Array:
 		var a: Dictionary = actors.get(u.id, {})
 		if a.is_empty() or not is_instance_valid(a.root):
 			continue
-		var c: Color = Color("#7dff8a") if u.id == player_id else TEAM_COLORS[u.team]
+		var c: Color = Color("#7dff8a") if u.id == player_id else TEAM_COLORS[vt(int(u.team))]
 		out.append({"pos": (a.root as Node3D).position + Vector3(0, 2.7, 0), "fill": clampf(u.hp / maxf(1.0, u.max_hp), 0.0, 1.0), "color": c})
 	return out
 
@@ -4367,7 +4381,7 @@ func gate_bars() -> Array:
 	for g in sim.gates:
 		if not sim.gate_blocks(g) or g.hp >= g.max_hp:
 			continue
-		out.append({"pos": Vector3(g.c.x, 4.2, g.c.y), "fill": g.hp / g.max_hp, "color": TEAM_COLORS[g.team]})
+		out.append({"pos": Vector3(g.c.x, 4.2, g.c.y), "fill": g.hp / g.max_hp, "color": TEAM_COLORS[vt(int(g.team))]})
 	return out
 
 func screen_point(world: Vector3) -> Vector2:

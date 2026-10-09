@@ -389,7 +389,7 @@ func _net_process(delta: float) -> void:
 		Net.interpolate_at(sim, _net_rt, hud.player_id)
 	# Inputs: movement and held attack at 20 Hz (or when they change); actions go immediately.
 	_send_clock += delta
-	var mv: Vector2 = hud.move_vector() if not hud.paused() else Vector2.ZERO
+	var mv: Vector2 = _move_input() if not hud.paused() else Vector2.ZERO
 	var hold: bool = hud.attack_held() and not hud.paused()
 	var bhold: bool = hud.ability_held() and not hud.paused()
 	# Client-side prediction: move our own unit now (same movement code as the server); the server
@@ -411,6 +411,15 @@ func _net_process(delta: float) -> void:
 			msg_in["p"] = me_p.pos
 			msg_in["f"] = me_p.face
 		_net_send(msg_in)
+
+func _move_input() -> Vector2:
+	# The stick in world terms. 0.31.85 (Kevin: "When on the other team ... controls are inverted"): the camera looks up
+	# the field from your own castle, so on the red team (online) it is turned half way round from blue's -- the
+	# stick's screen directions are the opposite world directions there.
+	var v: Vector2 = hud.move_vector()
+	if sim != null and int(sim.by_id.get(hud.player_id, {}).get("team", 0)) == 1:
+		v = -v
+	return v
 
 func _restart() -> void:
 	if is_instance_valid(view):
@@ -464,7 +473,7 @@ func _act(action: String, arg: Variant = null) -> void:
 					_pred_fx[str(e.k)] = Time.get_ticks_msec() / 1000.0
 					view.on_event(e)
 					_event_sound(e)
-		var msg_a := {"t":"in", "m":hud.move_vector(), "h":hud.attack_held(), "b":hud.ability_held(), "k":hud.block_held(), "a":action, "arg":arg}
+		var msg_a := {"t":"in", "m":_move_input(), "h":hud.attack_held(), "b":hud.ability_held(), "k":hud.block_held(), "a":action, "arg":arg}
 		if not me_a.is_empty():
 			msg_a["p"] = me_a.pos
 			msg_a["f"] = me_a.face
@@ -621,7 +630,7 @@ func _process(delta: float) -> void:
 	if online:
 		pass   # the server steps the match; _net_process applied the latest snapshot
 	elif not hud.paused() or sim.ended:
-		sim.set_move(hud.player_id, hud.move_vector())
+		sim.set_move(hud.player_id, _move_input())
 		var me_b: Dictionary = sim.by_id.get(hud.player_id, {})
 		if hud.ability_held() and not me_b.is_empty() and sim.ability_of(me_b) == "block":
 			sim.act(hud.player_id, "ability")

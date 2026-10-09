@@ -25,6 +25,12 @@ var sim
 var diag
 var _bar_style: StyleBox
 var player_id := "you"
+
+func vt(t: int) -> int:
+	# 0.31.85: your side drawn blue, the other red, whichever team you're on (as siege_view.vt)
+	if t < 0 or sim == null:
+		return t
+	return t if int(sim.by_id.get(player_id, {}).get("team", 0)) == 0 else 1 - t
 var project: Callable          # world Vector3 -> HUD Vector2
 var on_screen: Callable        # world Vector3 -> bool
 var numbers_source: Callable   # -> Array of {pos, text, mine, at} from the 3D view
@@ -315,7 +321,7 @@ func show_result(result: Dictionary = {}) -> void:
 		var mine := side == 0
 		var t: int = me.team if mine else 1 - me.team
 		UI2.plate(cell, "royal", 14.0, "gold", {"rim": 0.0, "outline": 2.0, "pattern_mix": 0.0,
-			"fill_top": TEAM_COLORS[t].lightened(0.15), "fill_bottom": TEAM_COLORS[t].darkened(0.45), "shadow_y": 3.0})
+			"fill_top": TEAM_COLORS[vt(t)].lightened(0.15), "fill_bottom": TEAM_COLORS[vt(t)].darkened(0.45), "shadow_y": 3.0})
 		UI2.center(UI2.body(cell, "YOU" if mine else "ENEMY", 10, Color.WHITE, false))
 		UI2.center(UI2.text(cell, str(sim.score[t]), 30, Color.WHITE, Color("#0a1238"), 7))
 	# you
@@ -694,9 +700,9 @@ func _draw_hud() -> void:
 		_bar_style = VisualTheme.panel(Color(0.035, 0.09, 0.12, 0.92), VisualTheme.GOLD_DARK, 12, 8)
 	draw_style_box(_bar_style, bar)
 	var t: int = me.team
-	_text(Vector2(24, 34), "YOUR SIDE", 12, TEAM_COLORS[t], _bold, HORIZONTAL_ALIGNMENT_LEFT, 120)
+	_text(Vector2(24, 34), "YOUR SIDE", 12, TEAM_COLORS[vt(t)], _bold, HORIZONTAL_ALIGNMENT_LEFT, 120)
 	_text(Vector2(24, 60), "%d ♛" % sim.score[t], 26, VisualTheme.GOLD, _title, HORIZONTAL_ALIGNMENT_LEFT, 120)
-	_text(Vector2(w - 144, 34), "ENEMY", 12, TEAM_COLORS[1 - t], _bold, HORIZONTAL_ALIGNMENT_RIGHT, 120)
+	_text(Vector2(w - 144, 34), "ENEMY", 12, TEAM_COLORS[vt(1 - t)], _bold, HORIZONTAL_ALIGNMENT_RIGHT, 120)
 	_text(Vector2(w - 144, 60), "%d ♛" % sim.score[1 - t], 26, VisualTheme.GOLD, _title, HORIZONTAL_ALIGNMENT_RIGHT, 120)
 	var left := maxf(0.0, Sim.MATCH_TIME - sim.time)
 	_text(Vector2(w * 0.5, 52), "%d:%02d" % [int(left) / 60, int(left) % 60], 32, Color("#e8eef2") if left > 60 else VisualTheme.RED, _title)
@@ -784,7 +790,7 @@ func _draw_castle_status(me: Dictionary) -> void:
 		_text(Vector2(x, 160), str(g.side).to_upper().left(1) + " GATE", 10, Color(1, 1, 1, 0.75), _bold, HORIZONTAL_ALIGNMENT_LEFT, 44)
 		draw_rect(r.grow(1), Color(0, 0, 0, 0.6))
 		if sim.gate_blocks(g):
-			draw_rect(Rect2(r.position, Vector2(r.size.x * g.hp / g.max_hp, r.size.y)), TEAM_COLORS[t])
+			draw_rect(Rect2(r.position, Vector2(r.size.x * g.hp / g.max_hp, r.size.y)), TEAM_COLORS[vt(t)])
 		else:
 			_text(r.position + Vector2(2, 7), "BROKEN", 9, VisualTheme.RED, _bold, HORIZONTAL_ALIGNMENT_LEFT, 60)
 		x += 112.0
@@ -806,12 +812,12 @@ func _draw_outpost_pips(t: int, x: float) -> void:
 		var owner: int = op.owner
 		draw_colored_polygon(pts, Color(0, 0, 0, 0.6))
 		var inner := PackedVector2Array([c + Vector2(0, -5), c + Vector2(5, 0), c + Vector2(0, 5), c + Vector2(-5, 0)])
-		var base: Color = Color(0.55, 0.58, 0.62) if owner < 0 else TEAM_COLORS[owner]
+		var base: Color = Color(0.55, 0.58, 0.62) if owner < 0 else TEAM_COLORS[vt(owner)]
 		draw_colored_polygon(inner, base)
 		var pr: float = op.prog
 		var capturing: bool = (owner < 0 and absf(pr) > 0.02) or (owner == 0 and pr < 0.999) or (owner == 1 and pr > -0.999)
 		if capturing:
-			var towards: Color = TEAM_COLORS[0] if pr > 0.0 else TEAM_COLORS[1]
+			var towards: Color = TEAM_COLORS[vt(0)] if pr > 0.0 else TEAM_COLORS[vt(1)]
 			var f := absf(pr) if owner < 0 else 1.0 - absf(pr)
 			draw_arc(c, 9.0, -PI / 2, -PI / 2 + TAU * clampf(f, 0.0, 1.0), 18, towards, 2.5, true)
 		cx += 20.0
@@ -913,7 +919,7 @@ func _draw_station_titles(me: Dictionary) -> void:
 		var x := clampf(s.x - w * 0.5, 6.0, size.x - w - 6.0)          # never cut off at the edge
 		var r := Rect2(x, s.y - h - 7.0, w, h)
 		var sb := _plate_style(int(sp.team), bool(sp.up))
-		var team_col: Color = TEAM_COLORS[int(sp.team)]
+		var team_col: Color = TEAM_COLORS[vt(int(sp.team))]
 		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 		var tip := Vector2(clampf(s.x, r.position.x + 8.0, r.end.x - 8.0), r.end.y + 5.0)
 		draw_colored_polygon(PackedVector2Array([tip, tip + Vector2(-5, -6), tip + Vector2(5, -6)]), Color(sb.border_color, fade))
@@ -953,7 +959,7 @@ func _draw_oracle_marker(me: Dictionary) -> void:
 	var center := size * 0.5
 	var dir := (p - center).normalized()
 	var edge := center + dir * minf(size.x * 0.42, size.y * 0.36)
-	var col: Color = VisualTheme.GOLD if not me.carrying else TEAM_COLORS[me.team]
+	var col: Color = VisualTheme.GOLD if not me.carrying else TEAM_COLORS[vt(int(me.team))]
 	var tip := edge + dir * 16
 	var side := Vector2(-dir.y, dir.x) * 11
 	draw_colored_polygon(PackedVector2Array([tip, edge - dir * 6 + side, edge - dir * 6 - side]), col)
