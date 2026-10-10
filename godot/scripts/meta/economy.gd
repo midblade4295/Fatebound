@@ -72,6 +72,8 @@ static func pass_reward(sid: int, tier: int, premium: bool) -> Dictionary:
 			return {"chest": "silver"}
 		if tier % 4 == 0:
 			return {"gems": 30}
+		if tier % 4 == 2:
+			return {"embers": PASS_EMBERS_FREE}        # 0.31.93: Embers for the Forge on both tracks
 		return {"gold": 150 + 5 * tier}
 	var pi := PREMIUM_ITEM_TIERS.find(tier)
 	if pi >= 0:
@@ -85,6 +87,8 @@ static func pass_reward(sid: int, tier: int, premium: bool) -> Dictionary:
 		return {"chest": "royal"}
 	if tier % 4 == 0:
 		return {"gems": 60}
+	if tier % 4 == 2:
+		return {"embers": PASS_EMBERS_PREMIUM}
 	return {"gold": 300 + 10 * tier}
 
 const PASS_FREE_ITEMS := 3
@@ -140,45 +144,52 @@ static func pass_items(sid: int) -> Array:
 # kind "weapon": right/left hand models for a class (0.31.39: the only class cosmetic -- no skins/tints, so every
 # class keeps its own readable look). kind "title": text on the profile.
 # kind "title": text shown on the profile. source "shop" (gold/gems), "pass", "level".
+# 0.31.93 Armory Reforged: each class's starting weapon has a name too (Kevin approved the roster, 2026-10-09); the
+# Knight's shipped first, every other class in 0.31.94.
+const STARTER_NAMES := {"knight": "Squire's Blade", "barbarian": "Woodsplitter", "rogue": "Cutpurse Daggers",
+	"ranger": "Ashwood Bow", "mage": "Apprentice Staff", "priest": "Acolyte's Wand", "worker": "Work Hatchet",
+	"crusader": "Templar's Sword", "berserker": "Ironhewer", "necromancer": "Bonecaller", "assassin": "Shade Daggers",
+	"sniper": "Marksman's Crossbow", "archmage": "Magister's Staff"}
+
 const CATALOG := {
 	# --- Knight
-	"knight_wpn_greatsword":{"kind":"weapon", "class":"knight", "name":"Greatsword & Kite Shield", "rarity":"rare", "r":"sword_2handed", "l":"bits/shield_A", "gold":900, "source":"shop"},
-	"knight_wpn_crest":    {"kind":"weapon", "class":"knight", "name":"Sword & Crest", "rarity":"rare", "r":"sword_1handed", "l":"shield_badge_color", "gold":1100, "source":"shop"},
-	"knight_wpn_tower":    {"kind":"weapon", "class":"knight", "name":"Sword & Tower Shield", "rarity":"epic", "r":"sword_1handed", "l":"shield_square_color", "gems":250, "source":"shop"},
-	"knight_wpn_crimson":  {"kind":"weapon", "class":"knight", "name":"Crimson Blade & Shield", "rarity":"epic", "r":"sword_2handed_color", "l":"shield_round_color", "source":"pass"},
+	"knight_wpn_greatsword":{"kind":"weapon", "class":"knight", "name":"Highguard", "rarity":"rare", "r":"mw/highguard_sword", "l":"mw/highguard_shield", "gold":900, "source":"shop"},
+	"knight_wpn_crest":    {"kind":"weapon", "class":"knight", "name":"Lionheart", "rarity":"rare", "r":"mw/lionheart_sword", "l":"mw/lionheart_shield", "gold":1100, "source":"shop"},
+	"knight_wpn_tower":    {"kind":"weapon", "class":"knight", "name":"Dawnwall", "rarity":"epic", "r":"mw/dawnwall_sword", "l":"mw/dawnwall_shield", "gems":250, "source":"shop"},
+	"knight_wpn_crimson":  {"kind":"weapon", "class":"knight", "name":"Bloodmoon", "rarity":"epic", "r":"mw/bloodmoon_sword", "l":"mw/bloodmoon_shield", "source":"pass"},
 	# --- Barbarian
-	"barb_wpn_raider":     {"kind":"weapon", "class":"barbarian", "name":"Axe & Buckler", "rarity":"rare", "r":"axe_1handed", "l":"shield_round_barbarian", "gold":1000, "source":"shop"},
-	"barb_wpn_spiked":     {"kind":"weapon", "class":"barbarian", "name":"Axe & Spiked Shield", "rarity":"epic", "r":"axe_1handed", "l":"shield_spikes_color", "gems":250, "source":"shop"},
+	"barb_wpn_raider":     {"kind":"weapon", "class":"barbarian", "name":"Raider's Bite", "rarity":"rare", "r":"mw/raider_axe", "l":"mw/raider_shield", "gold":1000, "source":"shop"},
+	"barb_wpn_spiked":     {"kind":"weapon", "class":"barbarian", "name":"Thornhide", "rarity":"epic", "r":"mw/thornhide_axe", "l":"mw/thornhide_shield", "gems":250, "source":"shop"},
 	# --- Rogue
-	"rogue_wpn_bomb":      {"kind":"weapon", "class":"rogue", "name":"Dagger & Smoke Bomb", "rarity":"rare", "r":"dagger", "l":"smokebomb", "gold":900, "source":"shop"},
-	"rogue_wpn_bolt":      {"kind":"weapon", "class":"rogue", "name":"Hand Crossbow", "rarity":"epic", "r":"dagger", "l":"crossbow_1handed", "gems":250, "source":"shop"},
+	"rogue_wpn_bomb":      {"kind":"weapon", "class":"rogue", "name":"Smokescreen", "rarity":"rare", "r":"mw/smokescreen_dagger", "l":"mw/smokescreen_bomb", "gold":900, "source":"shop"},
+	"rogue_wpn_bolt":      {"kind":"weapon", "class":"rogue", "name":"Whisperbolt", "rarity":"epic", "r":"mw/whisperbolt_dagger", "l":"mw/whisperbolt_crossbow", "gems":250, "source":"shop"},
 	# --- Ranger
-	"ranger_wpn_crossbow": {"kind":"weapon", "class":"ranger", "name":"Heavy Crossbow", "rarity":"epic", "r":"crossbow_2handed", "l":"", "source":"pass"},
-	"ranger_wpn_quiver":   {"kind":"weapon", "class":"ranger", "name":"Bow & Quiver", "rarity":"rare", "r":"quiver", "l":"bow_withString", "gold":900, "source":"shop"},
+	"ranger_wpn_crossbow": {"kind":"weapon", "class":"ranger", "name":"Ironjaw", "rarity":"epic", "r":"mw/ironjaw_crossbow", "l":"", "source":"pass"},
+	"ranger_wpn_quiver":   {"kind":"weapon", "class":"ranger", "name":"Trailblazer", "rarity":"rare", "r":"mw/trailblazer_quiver", "l":"mw/trailblazer_bow", "gold":900, "source":"shop"},
 	# --- Mage
-	"mage_wpn_tome":       {"kind":"weapon", "class":"mage", "name":"Wand & Tome", "rarity":"rare", "r":"wand", "l":"spellbook_open", "gold":1000, "source":"shop"},
-	"mage_wpn_wand":       {"kind":"weapon", "class":"mage", "name":"Wand", "rarity":"common", "r":"wand", "l":"", "gold":500, "source":"shop"},
+	"mage_wpn_tome":       {"kind":"weapon", "class":"mage", "name":"Spellwright", "rarity":"rare", "r":"mw/spellwright_wand", "l":"mw/spellwright_tome", "gold":1000, "source":"shop"},
+	"mage_wpn_wand":       {"kind":"weapon", "class":"mage", "name":"Sparkstick", "rarity":"common", "r":"mw/sparkstick_wand", "l":"", "gold":500, "source":"shop"},
 	# --- Worker
-	"worker_wpn_mug":      {"kind":"weapon", "class":"worker", "name":"Axe & Ale", "rarity":"rare", "r":"axe_1handed", "l":"mug_full", "source":"pass"},
+	"worker_wpn_mug":      {"kind":"weapon", "class":"worker", "name":"Tavern Brawler", "rarity":"rare", "r":"mw/brawler_axe", "l":"mw/brawler_mug", "source":"pass"},
 	# --- Round 11: KayKit Fantasy Weapons Bits ("bits/<model>") and the Priest
-	"knight_wpn_bastion":  {"kind":"weapon", "class":"knight", "name":"Bastion Guard", "rarity":"epic", "r":"bits/sword_B", "l":"bits/shield_D", "gems":280, "source":"shop"},
-	"knight_wpn_oath":     {"kind":"weapon", "class":"knight", "name":"Oathkeeper", "rarity":"legendary", "r":"bits/sword_G", "l":"bits/shield_C", "source":"pass"},
-	"knight_wpn_halberd":  {"kind":"weapon", "class":"knight", "name":"Halberd & Tower Shield", "rarity":"epic", "r":"bits/halberd", "l":"shield_square_color", "source":"pass"},
-	"barb_wpn_hammer":     {"kind":"weapon", "class":"barbarian", "name":"War Hammer", "rarity":"rare", "r":"bits/hammer_C", "l":"", "gold":1100, "source":"shop"},
-	"barb_wpn_twinaxe":    {"kind":"weapon", "class":"barbarian", "name":"Twin-Bitted Axe", "rarity":"epic", "r":"bits/axe_B", "l":"", "source":"pass"},
-	"barb_wpn_cleaver":    {"kind":"weapon", "class":"barbarian", "name":"Great Cleaver", "rarity":"legendary", "r":"bits/axe_D", "l":"", "source":"pass"},
-	"rogue_wpn_fangs":     {"kind":"weapon", "class":"rogue", "name":"Fang Daggers", "rarity":"rare", "r":"bits/dagger_B", "l":"bits/dagger_B", "gold":1000, "source":"shop"},
-	"rogue_wpn_knuckles":  {"kind":"weapon", "class":"rogue", "name":"Brass Knuckles", "rarity":"epic", "r":"bits/fistweapon_C_right", "l":"bits/fistweapon_C_left", "source":"pass"},
-	"rogue_wpn_reaper":    {"kind":"weapon", "class":"rogue", "name":"Reaper", "rarity":"legendary", "r":"bits/scythe", "l":"", "source":"pass"},
-	"ranger_wpn_recurve":  {"kind":"weapon", "class":"ranger", "name":"Recurve", "rarity":"rare", "r":"", "l":"bits/bow_B_withString", "gold":1000, "source":"shop"},
-	"ranger_wpn_longbow":  {"kind":"weapon", "class":"ranger", "name":"Longbow", "rarity":"epic", "r":"", "l":"bits/bow_C_withString", "source":"pass"},
-	"ranger_wpn_spear":    {"kind":"weapon", "class":"ranger", "name":"Hunter's Spear", "rarity":"rare", "r":"bits/spear_A", "l":"", "source":"pass"},
-	"mage_wpn_crystal":    {"kind":"weapon", "class":"mage", "name":"Crystal Staff", "rarity":"epic", "r":"bits/staff_B", "l":"", "gems":250, "source":"shop"},
-	"mage_wpn_elder":      {"kind":"weapon", "class":"mage", "name":"Elder Staff", "rarity":"legendary", "r":"bits/staff_D", "l":"", "source":"pass"},
-	"mage_wpn_twinwand":   {"kind":"weapon", "class":"mage", "name":"Twin Wands", "rarity":"rare", "r":"bits/wand_A", "l":"bits/wand_A", "source":"pass"},
-	"priest_wpn_sun":      {"kind":"weapon", "class":"priest", "name":"Sun Staff", "rarity":"legendary", "r":"bits/staff_C", "l":"", "source":"pass"},
-	"priest_wpn_light":    {"kind":"weapon", "class":"priest", "name":"Lightwand", "rarity":"rare", "r":"bits/wand_B", "l":"", "gold":900, "source":"shop"},
-	"worker_wpn_mallet":   {"kind":"weapon", "class":"worker", "name":"War Mallet", "rarity":"rare", "r":"bits/hammer_A", "l":"", "source":"pass"},
+	"knight_wpn_bastion":  {"kind":"weapon", "class":"knight", "name":"Stonewarden", "rarity":"epic", "r":"mw/stonewarden_sword", "l":"mw/stonewarden_shield", "gems":280, "source":"shop"},
+	"knight_wpn_oath":     {"kind":"weapon", "class":"knight", "name":"Kingsoath", "rarity":"legendary", "r":"mw/kingsoath_sword", "l":"mw/kingsoath_shield", "source":"pass"},
+	"knight_wpn_halberd":  {"kind":"weapon", "class":"knight", "name":"Thornspire", "rarity":"epic", "r":"mw/thornspire_halberd", "l":"mw/thornspire_shield", "source":"pass"},
+	"barb_wpn_hammer":     {"kind":"weapon", "class":"barbarian", "name":"Skullknocker", "rarity":"rare", "r":"mw/skullknocker_hammer", "l":"", "gold":1100, "source":"shop"},
+	"barb_wpn_twinaxe":    {"kind":"weapon", "class":"barbarian", "name":"Twin Fury", "rarity":"epic", "r":"mw/twinfury_axe", "l":"", "source":"pass"},
+	"barb_wpn_cleaver":    {"kind":"weapon", "class":"barbarian", "name":"Worldsplitter", "rarity":"legendary", "r":"mw/worldsplitter_axe", "l":"", "source":"pass"},
+	"rogue_wpn_fangs":     {"kind":"weapon", "class":"rogue", "name":"Viper Fangs", "rarity":"rare", "r":"mw/viper_fang", "l":"mw/viper_fang", "gold":1000, "source":"shop"},
+	"rogue_wpn_knuckles":  {"kind":"weapon", "class":"rogue", "name":"Ravenclaws", "rarity":"epic", "r":"mw/ravenclaw_r", "l":"mw/ravenclaw_l", "source":"pass"},
+	"rogue_wpn_reaper":    {"kind":"weapon", "class":"rogue", "name":"Grimgrin", "rarity":"legendary", "r":"mw/grimgrin_scythe", "l":"", "source":"pass"},
+	"ranger_wpn_recurve":  {"kind":"weapon", "class":"ranger", "name":"Hawkeye", "rarity":"rare", "r":"", "l":"mw/hawkeye_bow", "gold":1000, "source":"shop"},
+	"ranger_wpn_longbow":  {"kind":"weapon", "class":"ranger", "name":"Galeshot", "rarity":"epic", "r":"", "l":"mw/galeshot_bow", "source":"pass"},
+	"ranger_wpn_spear":    {"kind":"weapon", "class":"ranger", "name":"Boarsbane", "rarity":"rare", "r":"mw/boarsbane_spear", "l":"", "source":"pass"},
+	"mage_wpn_crystal":    {"kind":"weapon", "class":"mage", "name":"Starshard", "rarity":"epic", "r":"mw/starshard_staff", "l":"", "gems":250, "source":"shop"},
+	"mage_wpn_elder":      {"kind":"weapon", "class":"mage", "name":"Eye of the Archon", "rarity":"legendary", "r":"mw/archon_staff", "l":"", "source":"pass"},
+	"mage_wpn_twinwand":   {"kind":"weapon", "class":"mage", "name":"Twin Sparks", "rarity":"rare", "r":"mw/twinsparks_fire", "l":"mw/twinsparks_frost", "source":"pass"},
+	"priest_wpn_sun":      {"kind":"weapon", "class":"priest", "name":"Solaris", "rarity":"legendary", "r":"mw/solaris_staff", "l":"", "source":"pass"},
+	"priest_wpn_light":    {"kind":"weapon", "class":"priest", "name":"Candlewand", "rarity":"rare", "r":"mw/candle_wand", "l":"", "gold":900, "source":"shop"},
+	"worker_wpn_mallet":   {"kind":"weapon", "class":"worker", "name":"Brickbreaker", "rarity":"rare", "r":"mw/brickbreaker_mallet", "l":"", "source":"pass"},
 	# --- Titles (0.31.87, Kevin: "players have to earn the titles instead by doing tasks in the game"): source "earn" --
 	# not sold, not in the pass or chests; how each is earned is TITLE_GOALS, its text/form/rarity siege_net.TITLES
 	# (the same name and rarity here). Owned ones from before (shop, pass, the Knight Arsenal) stay owned.
@@ -220,40 +231,40 @@ const CATALOG := {
 	"title_mason":          {"kind":"title", "class":"", "name":"the Mason", "rarity":"epic", "source":"earn"},
 	"title_master_builder": {"kind":"title", "class":"", "name":"Master Builder", "rarity":"legendary", "source":"earn"},
 	# --- 0.31.38: the upgraded classes (0.31.39: weapons only)
-	"crus_wpn_mace":       {"kind":"weapon", "class":"crusader", "name":"Mace & Kite Shield", "rarity":"rare", "r":"bits/hammer_C", "l":"bits/shield_A", "gold":1200, "source":"shop"},
-	"crus_wpn_warhammer":  {"kind":"weapon", "class":"crusader", "name":"Warhammer & Bulwark", "rarity":"epic", "r":"bits/hammer_A", "l":"bits/shield_D", "gold":2400, "source":"shop"},
-	"bers_wpn_twinaxe":    {"kind":"weapon", "class":"berserker", "name":"Twin-Edged Axe", "rarity":"rare", "r":"axe_2handed", "l":"", "gold":1200, "source":"shop"},
-	"bers_wpn_halberd":    {"kind":"weapon", "class":"berserker", "name":"Great Halberd", "rarity":"epic", "r":"bits/halberd", "l":"", "gold":2400, "source":"shop"},
-	"necro_wpn_tome":      {"kind":"weapon", "class":"necromancer", "name":"Grim Tome", "rarity":"rare", "r":"Skeleton_Staff", "l":"spellbook_open", "gold":1200, "source":"shop"},
-	"necro_wpn_scythe":    {"kind":"weapon", "class":"necromancer", "name":"Reaper's Scythe", "rarity":"epic", "r":"bits/scythe", "l":"", "gold":2400, "source":"shop"},
-	"assn_wpn_fangs":      {"kind":"weapon", "class":"assassin", "name":"Serpent Fangs", "rarity":"rare", "r":"bits/dagger_B", "l":"bits/dagger_B", "gold":1200, "source":"shop"},
-	"assn_wpn_fists":      {"kind":"weapon", "class":"assassin", "name":"Shadow Claws", "rarity":"epic", "r":"bits/fistweapon_C_right", "l":"bits/fistweapon_C_left", "gold":2400, "source":"shop"},
-	"snip_wpn_recurve":    {"kind":"weapon", "class":"sniper", "name":"Recurve Longbow", "rarity":"rare", "r":"", "l":"bits/bow_B_withString", "gold":1200, "source":"shop"},
-	"snip_wpn_heartwood":  {"kind":"weapon", "class":"sniper", "name":"Heartwood Bow", "rarity":"epic", "r":"", "l":"bits/bow_C_withString", "gold":2400, "source":"shop"},
-	"arch_wpn_crystal":    {"kind":"weapon", "class":"archmage", "name":"Crystal Staff & Tome", "rarity":"rare", "r":"bits/staff_C", "l":"spellbook_open", "gold":1200, "source":"shop"},
-	"arch_wpn_rod":        {"kind":"weapon", "class":"archmage", "name":"Arcane Rod", "rarity":"epic", "r":"bits/staff_D", "l":"", "gold":2400, "source":"shop"},
+	"crus_wpn_mace":       {"kind":"weapon", "class":"crusader", "name":"Penitent", "rarity":"rare", "r":"mw/penitent_mace", "l":"mw/penitent_shield", "gold":1200, "source":"shop"},
+	"crus_wpn_warhammer":  {"kind":"weapon", "class":"crusader", "name":"Hallowed Bulwark", "rarity":"epic", "r":"mw/bulwark_hammer", "l":"mw/bulwark_shield", "gold":2400, "source":"shop"},
+	"bers_wpn_twinaxe":    {"kind":"weapon", "class":"berserker", "name":"Ragebiter", "rarity":"rare", "r":"mw/ragebiter_axe", "l":"", "gold":1200, "source":"shop"},
+	"bers_wpn_halberd":    {"kind":"weapon", "class":"berserker", "name":"Stormcleaver", "rarity":"epic", "r":"mw/stormcleaver_axe", "l":"", "gold":2400, "source":"shop"},
+	"necro_wpn_tome":      {"kind":"weapon", "class":"necromancer", "name":"Gravecaller's Tome", "rarity":"rare", "r":"mw/gravecaller_staff", "l":"mw/gravecaller_tome", "gold":1200, "source":"shop"},
+	"necro_wpn_scythe":    {"kind":"weapon", "class":"necromancer", "name":"Soulreaper", "rarity":"epic", "r":"mw/soulreaper_scythe", "l":"", "gold":2400, "source":"shop"},
+	"assn_wpn_fangs":      {"kind":"weapon", "class":"assassin", "name":"Asp & Adder", "rarity":"rare", "r":"mw/asp_dagger", "l":"mw/asp_dagger", "gold":1200, "source":"shop"},
+	"assn_wpn_fists":      {"kind":"weapon", "class":"assassin", "name":"Shadow Talons", "rarity":"epic", "r":"mw/shadow_talon_r", "l":"mw/shadow_talon_l", "gold":2400, "source":"shop"},
+	"snip_wpn_recurve":    {"kind":"weapon", "class":"sniper", "name":"Longshot", "rarity":"rare", "r":"", "l":"mw/longshot_bow", "gold":1200, "source":"shop"},
+	"snip_wpn_heartwood":  {"kind":"weapon", "class":"sniper", "name":"Heartseeker", "rarity":"epic", "r":"", "l":"mw/heartseeker_bow", "gold":2400, "source":"shop"},
+	"arch_wpn_crystal":    {"kind":"weapon", "class":"archmage", "name":"Prism Staff", "rarity":"rare", "r":"mw/prism_staff", "l":"mw/prism_tome", "gold":1200, "source":"shop"},
+	"arch_wpn_rod":        {"kind":"weapon", "class":"archmage", "name":"Voidrod", "rarity":"epic", "r":"mw/voidrod_staff", "l":"", "gold":2400, "source":"shop"},
 	# --- 0.31.40: the rest of the KayKit weapons, given to the classes they suit (one-handed swords/axes/maces with
 	# shields to the Knight and Crusader, big blades and axes to the Barbarian and Berserker, daggers and knuckles to the
 	# Rogue and Assassin, bows to the archers, staves to the casters) ---
-	"knight_wpn_arming":   {"kind":"weapon", "class":"knight", "name":"Arming Sword & Round Shield", "rarity":"rare", "r":"bits/sword_A", "l":"shield_round", "gold":1000, "source":"shop"},
-	"knight_wpn_longsword":{"kind":"weapon", "class":"knight", "name":"Longsword & Square Shield", "rarity":"epic", "r":"bits/sword_C", "l":"shield_square", "gold":2000, "source":"shop"},
-	"knight_wpn_spiked":   {"kind":"weapon", "class":"knight", "name":"Broadsword & Spiked Shield", "rarity":"epic", "r":"bits/sword_D", "l":"shield_spikes", "gold":2200, "source":"shop"},
-	"barb_wpn_bearded":    {"kind":"weapon", "class":"barbarian", "name":"Bearded Axe & Buckler", "rarity":"rare", "r":"bits/axe_A", "l":"shield_round_color", "gold":1000, "source":"shop"},
-	"barb_wpn_butcher":    {"kind":"weapon", "class":"barbarian", "name":"Butcher's Blade", "rarity":"epic", "r":"bits/sword_F", "l":"", "gold":2000, "source":"shop"},
-	"barb_wpn_gauntlets":  {"kind":"weapon", "class":"barbarian", "name":"Brawler's Gauntlets", "rarity":"epic", "r":"bits/fistweapon_B", "l":"bits/fistweapon_B", "gold":2200, "source":"shop"},
-	"rogue_wpn_stilettos": {"kind":"weapon", "class":"rogue", "name":"Twin Stilettos", "rarity":"rare", "r":"bits/dagger_A", "l":"bits/dagger_A", "gold":1000, "source":"shop"},
-	"rogue_wpn_brass":     {"kind":"weapon", "class":"rogue", "name":"Brass Knuckles", "rarity":"rare", "r":"bits/fistweapon_A", "l":"bits/fistweapon_A", "gold":900, "source":"shop"},
-	"ranger_wpn_hunting":  {"kind":"weapon", "class":"ranger", "name":"Hunting Bow", "rarity":"rare", "r":"", "l":"bits/bow_A_withString", "gold":1000, "source":"shop"},
-	"mage_wpn_ritual":     {"kind":"weapon", "class":"mage", "name":"Ritual Knife & Tome", "rarity":"rare", "r":"bits/dagger_C", "l":"spellbook_open", "gold":1000, "source":"shop"},
-	"priest_wpn_pilgrim":  {"kind":"weapon", "class":"priest", "name":"Pilgrim's Staff", "rarity":"rare", "r":"bits/staff_A", "l":"", "gold":1000, "source":"shop"},
-	"priest_wpn_mace":     {"kind":"weapon", "class":"priest", "name":"Mace & Holy Shield", "rarity":"epic", "r":"bits/hammer_B", "l":"shield_badge", "gold":2000, "source":"shop"},
-	"worker_wpn_felling":  {"kind":"weapon", "class":"worker", "name":"Felling Axe", "rarity":"rare", "r":"bits/axe_C", "l":"", "gold":900, "source":"shop"},
-	"crus_wpn_maul":       {"kind":"weapon", "class":"crusader", "name":"Judgment Maul & Shield", "rarity":"legendary", "r":"bits/hammer_D", "l":"shield_badge", "gold":3600, "source":"shop"},
-	"bers_wpn_broad":      {"kind":"weapon", "class":"berserker", "name":"Broadblade", "rarity":"rare", "r":"bits/sword_D", "l":"", "gold":1200, "source":"shop"},
-	"necro_wpn_spear":     {"kind":"weapon", "class":"necromancer", "name":"Bone Spear", "rarity":"epic", "r":"bits/spear_B", "l":"", "gold":2400, "source":"shop"},
-	"assn_wpn_night":      {"kind":"weapon", "class":"assassin", "name":"Night Blades", "rarity":"epic", "r":"bits/dagger_C", "l":"bits/dagger_C", "gold":2400, "source":"shop"},
-	"snip_wpn_repeater":   {"kind":"weapon", "class":"sniper", "name":"Repeater", "rarity":"rare", "r":"crossbow_1handed", "l":"", "gold":1200, "source":"shop"},
-	"arch_wpn_elder":      {"kind":"weapon", "class":"archmage", "name":"Elder Oak & Tome", "rarity":"rare", "r":"bits/staff_A", "l":"spellbook_open", "gold":1200, "source":"shop"},
+	"knight_wpn_arming":   {"kind":"weapon", "class":"knight", "name":"Steadfast", "rarity":"rare", "r":"mw/steadfast_sword", "l":"mw/steadfast_shield", "gold":1000, "source":"shop"},
+	"knight_wpn_longsword":{"kind":"weapon", "class":"knight", "name":"Frostward", "rarity":"epic", "r":"mw/frostward_sword", "l":"mw/frostward_shield", "gold":2000, "source":"shop"},
+	"knight_wpn_spiked":   {"kind":"weapon", "class":"knight", "name":"Ironbriar", "rarity":"epic", "r":"mw/ironbriar_sword", "l":"mw/ironbriar_shield", "gold":2200, "source":"shop"},
+	"barb_wpn_bearded":    {"kind":"weapon", "class":"barbarian", "name":"Frostbeard", "rarity":"rare", "r":"mw/frostbeard_axe", "l":"mw/frostbeard_shield", "gold":1000, "source":"shop"},
+	"barb_wpn_butcher":    {"kind":"weapon", "class":"barbarian", "name":"Bonecarver", "rarity":"epic", "r":"mw/bonecarver_cleaver", "l":"", "gold":2000, "source":"shop"},
+	"barb_wpn_gauntlets":  {"kind":"weapon", "class":"barbarian", "name":"Rockfists", "rarity":"epic", "r":"mw/rockfist_r", "l":"mw/rockfist_l", "gold":2200, "source":"shop"},
+	"rogue_wpn_stilettos": {"kind":"weapon", "class":"rogue", "name":"Needlepoint", "rarity":"rare", "r":"mw/needlepoint_stiletto", "l":"mw/needlepoint_stiletto", "gold":1000, "source":"shop"},
+	"rogue_wpn_brass":     {"kind":"weapon", "class":"rogue", "name":"Alley Knuckles", "rarity":"rare", "r":"mw/alley_knuckles", "l":"mw/alley_knuckles", "gold":900, "source":"shop"},
+	"ranger_wpn_hunting":  {"kind":"weapon", "class":"ranger", "name":"Stag Hunter", "rarity":"rare", "r":"", "l":"mw/staghunter_bow", "gold":1000, "source":"shop"},
+	"mage_wpn_ritual":     {"kind":"weapon", "class":"mage", "name":"Hexblade", "rarity":"rare", "r":"mw/hex_knife", "l":"mw/hex_tome", "gold":1000, "source":"shop"},
+	"priest_wpn_pilgrim":  {"kind":"weapon", "class":"priest", "name":"Wayfarer's Lantern", "rarity":"rare", "r":"mw/wayfarer_staff", "l":"", "gold":1000, "source":"shop"},
+	"priest_wpn_mace":     {"kind":"weapon", "class":"priest", "name":"Sunrise Mace", "rarity":"epic", "r":"mw/sunrise_mace", "l":"mw/sunrise_shield", "gold":2000, "source":"shop"},
+	"worker_wpn_felling":  {"kind":"weapon", "class":"worker", "name":"Timberfall", "rarity":"rare", "r":"mw/timberfall_axe", "l":"", "gold":900, "source":"shop"},
+	"crus_wpn_maul":       {"kind":"weapon", "class":"crusader", "name":"Final Verdict", "rarity":"legendary", "r":"mw/verdict_maul", "l":"mw/verdict_shield", "gold":3600, "source":"shop"},
+	"bers_wpn_broad":      {"kind":"weapon", "class":"berserker", "name":"Hidesplitter", "rarity":"rare", "r":"mw/hidesplitter_cleaver", "l":"", "gold":1200, "source":"shop"},
+	"necro_wpn_spear":     {"kind":"weapon", "class":"necromancer", "name":"Wraithspine", "rarity":"epic", "r":"mw/wraithspine_spear", "l":"", "gold":2400, "source":"shop"},
+	"assn_wpn_night":      {"kind":"weapon", "class":"assassin", "name":"Eclipse Blades", "rarity":"epic", "r":"mw/eclipse_dagger", "l":"mw/eclipse_dagger", "gold":2400, "source":"shop"},
+	"snip_wpn_repeater":   {"kind":"weapon", "class":"sniper", "name":"Rattlesnake", "rarity":"rare", "r":"mw/rattlesnake_crossbow", "l":"", "gold":1200, "source":"shop"},
+	"arch_wpn_elder":      {"kind":"weapon", "class":"archmage", "name":"Rootwise", "rarity":"rare", "r":"mw/rootwise_staff", "l":"mw/rootwise_tome", "gold":1200, "source":"shop"},
 }
 
 # 0.31.39 (Kevin: "only the weapons are cosmetics -- so it's easy to tell who's playing what class"): the skins (tints)
@@ -546,7 +557,7 @@ const CHESTS := {
 		"item_chance":1.0, "rarity":{"epic":0.85, "legendary":0.15}, "color":"#c47bff"},
 }
 const CHEST_FULL_GOLD := {"wooden":50, "silver":120, "gold":300, "royal":700}   # slots full: the chest becomes gold
-const DUPE_GOLD := {"common":100, "rare":250, "epic":600, "legendary":1500}       # a cosmetic already owned
+const DUPE_GOLD := {"common":100, "rare":250, "epic":600, "legendary":1500}       # (until 0.31.92: a cosmetic already owned; the starter pack's fallback)
 const PITY_EPIC := 10              # Gold/Royal chests: an epic or better at the latest every 10th
 
 static func skip_cost(remaining_s: int) -> int:
@@ -562,11 +573,11 @@ static func chest_pool(rarity: String) -> Array:
 	return ids
 
 static func roll_chest(kind: String, seed_value: int, owned: Array, pity: int) -> Dictionary:
-	# -> {gold, gems, item ("" if none), dupe_gold, pity (the new count)}
+	# -> {gold, gems, item ("" if none), dupe_embers, pity (the new count)}
 	var c: Dictionary = CHESTS[kind]
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_value
-	var out := {"gold":rng.randi_range(int(c.gold[0]), int(c.gold[1])), "gems":0, "item":"", "dupe_gold":0, "pity":pity}
+	var out := {"gold":rng.randi_range(int(c.gold[0]), int(c.gold[1])), "gems":0, "item":"", "dupe_embers":0, "pity":pity}
 	if rng.randf() < float(c.gems_chance):
 		out.gems = rng.randi_range(int(c.gems[0]), int(c.gems[1]))
 	if rng.randf() < float(c.item_chance):
@@ -591,7 +602,7 @@ static func roll_chest(kind: String, seed_value: int, owned: Array, pity: int) -
 		if not pool.is_empty():
 			var id: String = pool[rng.randi_range(0, pool.size() - 1)]
 			if owned.has(id):
-				out.dupe_gold = int(DUPE_GOLD.get(rar, 250))
+				out.dupe_embers = int(EMBERS_DUPE.get(rar, 25))      # 0.31.93: Embers for the Forge (was gold)
 			else:
 				out.item = id
 	return out
@@ -610,5 +621,55 @@ static func chest_odds(kind: String) -> String:
 	parts.append("%s: %s" % ["a cosmetic" if float(c.item_chance) >= 1.0 else "%d%% chance of a cosmetic" % int(round(float(c.item_chance) * 100.0)), ", ".join(rs)])
 	if kind in ["gold", "royal"]:
 		parts.append("an epic or better at least every %d" % PITY_EPIC)
-	parts.append("duplicates turn into gold")
+	parts.append("duplicates turn into Embers for the Forge")
 	return " · ".join(parts)
+
+
+# ---------------- the Forge (0.31.93, Armory Reforged; Kevin: "begin the weapon models and forge system") ----------------
+# Bring a weapon you own (a starter too) and raise it to three stars: the same weapon, more impressive each time. Looks
+# only, never damage. Paid in Embers (earned by playing, or bought with gems here) plus gold; the third star also needs
+# FORGE_WINS wins with that weapon equipped, and picks the aura's element.
+const FORGE_STARS := [
+	{"name":"Polished", "embers":40, "gold":500, "text":"Brighter metal and a sheen in its rarity's colour."},
+	{"name":"Runed", "embers":120, "gold":1500, "text":"Glowing runes that pulse along the weapon."},
+	{"name":"Ascended", "embers":300, "gold":4000, "text":"An aura and a swing trail in the element you pick."}]
+const FORGE_WINS := 25
+const EMBERS_DUPE := {"common":10, "rare":25, "epic":60, "legendary":150}      # a duplicate from a chest
+const EMBERS_MATCH := 2                 # every finished match ...
+const EMBERS_WIN := 5                   # ... or this for a win
+const EMBERS_DAILY := 15                # each daily challenge claimed
+const PASS_EMBERS_FREE := 20            # pass tiers 2, 6, 10 ... on the free track
+const PASS_EMBERS_PREMIUM := 40         # ... and on the premium track
+const EMBER_PACKS := [{"id":"embers_s", "gems":60, "embers":60}, {"id":"embers_m", "gems":150, "embers":170},
+	{"id":"embers_l", "gems":400, "embers":500}]
+const ELEMENTS := ["fire", "frost", "storm", "holy", "nature", "void"]
+const ELEMENT_COLOR := {"fire":"#ff7a2e", "frost":"#7fd8ff", "storm":"#b48cff", "holy":"#ffd76a", "nature":"#7dff8a", "void":"#c04dff"}
+const ELEMENT_NAME := {"fire":"Fire", "frost":"Frost", "storm":"Storm", "holy":"Holy", "nature":"Nature", "void":"Void"}
+
+static func forge_id(cls: String, item_id: String) -> String:
+	# what the Forge keys a weapon by: its catalog id, or "default_<cls>" for a class's starter
+	return item_id if item_id != "" else "default_" + cls
+
+static func forge_class(wid: String) -> String:
+	return wid.substr(8) if wid.begins_with("default_") else str(item(wid).get("class", ""))
+
+static func forge_rarity(wid: String) -> String:
+	return "common" if wid.begins_with("default_") else str(item(wid).get("rarity", "common"))
+
+static func forge_name(wid: String) -> String:
+	if wid.begins_with("default_"):
+		return str(STARTER_NAMES.get(wid.substr(8), "Default gear"))
+	return str(item(wid).get("name", ""))
+
+static func forge_cost(next_star: int) -> Dictionary:
+	# next_star 1..3 -> {"embers", "gold"}; {} past the third
+	if next_star < 1 or next_star > FORGE_STARS.size():
+		return {}
+	var f: Dictionary = FORGE_STARS[next_star - 1]
+	return {"embers":int(f.embers), "gold":int(f.gold)}
+
+static func ember_pack(id: String) -> Dictionary:
+	for p in EMBER_PACKS:
+		if str(p.id) == id:
+			return p
+	return {}

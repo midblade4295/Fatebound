@@ -97,7 +97,7 @@ func _init() -> void:
 	var body: Dictionary = View.make_body("necromancer")
 	var staff := false
 	for c in (body.get("root", body.get("body")) as Node).find_children("*", "", true, false):
-		if str(c.name).contains("Skeleton_Staff"):
+		if str(c.name).contains("Skeleton_Staff") or str(c.name).contains("bonecaller"):
 			staff = true
 	check(staff, "holding the skull staff")
 	nc.pos = base

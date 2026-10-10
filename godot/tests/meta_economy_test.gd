@@ -2,6 +2,7 @@ extends SceneTree
 # Economy + profile: migration, rewards, levels, pass, premium, shop, equip, challenges, rollover,
 # persistence, corrupt profile, catalog integrity.
 const Eco = preload("res://scripts/meta/economy.gd")
+const View = preload("res://scripts/siege/siege_view.gd")
 const Profile = preload("res://scripts/meta/profile.gd")
 
 var fails := []
@@ -31,8 +32,8 @@ func _init() -> void:
 		if it.kind == "weapon":
 			for hand in ["r", "l"]:
 				var m := str(it.get(hand, ""))
-				var mpath := ("res://assets/kaykit/bits/%s.gltf" % m.substr(5)) if m.begins_with("bits/") else ("res://assets/kaykit/weapons/%s.gltf" % m)
-				if m != "" and not FileAccess.file_exists(mpath):
+				var mpath := View.weapon_path(m)
+				if m != "" and (not FileAccess.file_exists(mpath) or (m.begins_with("mw/") and not View.MESHY_WEAPON_LIKE.has(m.substr(3)))):
 					models_ok = false; print("   missing model ", m, " for ", id)
 		if it.kind == "skin" and not Color.html_is_valid(str(it.tint)):
 			models_ok = false
@@ -180,7 +181,7 @@ func _init() -> void:
 	check(Eco.cosmetic_class("knight", true) == "crusader" and Eco.cosmetic_class("knight", false) == "knight" and Eco.cosmetic_class("worker", true) == "worker", "an upgraded Knight dresses from the Crusader slot")
 	up.d.owned.append("crus_wpn_warhammer")          # (buying depends on the day's rotation; tested above)
 	check(bool(up.equip("crus_wpn_warhammer").get("ok", false)), "a Crusader weapon owned and equipped")
-	check(str(up.look_for("crusader").get("r", "")) == "bits/hammer_A" and not up.look_for("knight").has("r"), "it arms the Crusader, not the plain Knight")
+	check(str(up.look_for("crusader").get("r", "")) == "mw/bulwark_hammer" and not up.look_for("knight").has("r"), "it arms the Crusader, not the plain Knight")
 	var upcount := 0
 	for cid in Eco.CATALOG:
 		if Eco.UP_CLASSES.has(str(Eco.CATALOG[cid].get("class", ""))):

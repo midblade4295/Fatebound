@@ -57,7 +57,7 @@ func _init():
 	check(worst < Eco.PITY_EPIC, "an epic at least every %d Gold chests (longest gap %d)" % [Eco.PITY_EPIC, worst])
 	var all_owned: Array = Eco.chest_pool("epic") + Eco.chest_pool("legendary") + Eco.chest_pool("rare") + Eco.chest_pool("common")
 	var dup := Eco.roll_chest("royal", 7, all_owned, 0)
-	check(str(dup.item) == "" and int(dup.dupe_gold) >= 600, "a cosmetic you own turns into gold (%d)" % int(dup.dupe_gold))
+	check(str(dup.item) == "" and int(dup.dupe_embers) >= Eco.EMBERS_DUPE.epic, "a cosmetic you own turns into Embers (%d)" % int(dup.dupe_embers))
 	check(Eco.chest_odds("silver").contains("75%") and Eco.chest_odds("gold").contains("every 10"), "the odds read out plainly")
 	check(Eco.level_reward(5).get("chest", "") == "gold" and Eco.level_reward(10).get("chest", "") == "royal", "levels 5 and 10 give Gold and Royal chests")
 	for f in DirAccess.get_files_at("user://"):

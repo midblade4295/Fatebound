@@ -29,23 +29,23 @@ const LOOKS := {
 	# 0.31.76 (Kevin picked concepts "A2 both"): the Villager is a Meshy peasant (bareheaded, patched linen tunic, rope
 	# belt), the Worker a Meshy straw-hat farmer (green overalls, red bandana, gloves); both were the KayKit Rogue.
 	"villager": {"model":"meshy:villager","r":"","l":"","idle":"g/Idle_A","attack":"m/Melee_Unarmed_Attack_Punch_A","ability":"m/Melee_Unarmed_Attack_Kick","combo":["m/Melee_Unarmed_Attack_Punch_A","m/Melee_Unarmed_Attack_Punch_A","m/Melee_Unarmed_Attack_Kick"]},
-	"worker": {"model":"meshy:worker","r":"axe_1handed","l":"","idle":"g/Idle_A","attack":"m/Melee_1H_Attack_Chop","ability":"m/Melee_1H_Attack_Chop","combo":["m/Melee_1H_Attack_Chop","m/Melee_1H_Attack_Slice_Horizontal","m/Melee_1H_Attack_Stab"]},
-	"knight": {"model":"meshy:knight","r":"sword_1handed","l":"bits/shield_B","idle":"g/Idle_A","attack":"m/Melee_1H_Attack_Slice_Diagonal","ability":"m/Melee_Blocking","combo":["m/Melee_1H_Attack_Slice_Diagonal","m/Melee_1H_Attack_Slice_Horizontal","m/Melee_Block_Attack"]},
-	"crusader": {"model":"meshy:crusader","r":"sword_1handed","l":"bits/shield_B","idle":"g/Idle_A","attack":"m/Melee_1H_Attack_Slice_Diagonal","ability":"m/Melee_Blocking","combo":["m/Melee_1H_Attack_Slice_Diagonal","m/Melee_1H_Attack_Slice_Horizontal","m/Melee_Block_Attack"]},
+	"worker": {"model":"meshy:worker","r":"mw/work_hatchet","l":"","idle":"g/Idle_A","attack":"m/Melee_1H_Attack_Chop","ability":"m/Melee_1H_Attack_Chop","combo":["m/Melee_1H_Attack_Chop","m/Melee_1H_Attack_Slice_Horizontal","m/Melee_1H_Attack_Stab"]},
+	"knight": {"model":"meshy:knight","r":"mw/squire_sword","l":"mw/squire_shield","idle":"g/Idle_A","attack":"m/Melee_1H_Attack_Slice_Diagonal","ability":"m/Melee_Blocking","combo":["m/Melee_1H_Attack_Slice_Diagonal","m/Melee_1H_Attack_Slice_Horizontal","m/Melee_Block_Attack"]},
+	"crusader": {"model":"meshy:crusader","r":"mw/templar_sword","l":"mw/templar_shield","idle":"g/Idle_A","attack":"m/Melee_1H_Attack_Slice_Diagonal","ability":"m/Melee_Blocking","combo":["m/Melee_1H_Attack_Slice_Diagonal","m/Melee_1H_Attack_Slice_Horizontal","m/Melee_Block_Attack"]},
 	# Upgraded barbarian (Round 11): two-handed greatsword, whirlwind.
-	"berserker": {"model":"meshy:berserker","r":"bits/sword_E","l":"","idle":"m/Melee_2H_Idle","attack":"m/Melee_2H_Attack_Chop","ability":"m/Melee_2H_Attack_Spinning","combo":["m/Melee_2H_Attack_Chop","m/Melee_2H_Attack_Slice","m/Melee_2H_Attack_Spin"]},
-	"barbarian": {"model":"meshy:barbarian","r":"axe_2handed","l":"","idle":"m/Melee_2H_Idle","attack":"m/Melee_2H_Attack_Slice","ability":"m/Melee_2H_Attack_Spin","combo":["m/Melee_2H_Attack_Slice","m/Melee_2H_Attack_Chop","m/Melee_2H_Attack_Stab"]},
-	"rogue": {"model":"meshy:rogue","r":"dagger","l":"dagger","idle":"g/Idle_B","attack":"m/Melee_Dualwield_Attack_Stab","ability":"m/Melee_1H_Attack_Jump_Chop","combo":["m/Melee_Dualwield_Attack_Stab","m/Melee_Dualwield_Attack_Slice","m/Melee_Dualwield_Attack_Chop"]},
-	"ranger": {"model":"meshy:ranger","r":"","l":"bow_withString","idle":"r/Ranged_Bow_Idle","attack":"r/Ranged_Bow_Release","ability":"r/Ranged_Bow_Release_Up"},
-	"mage": {"model":"meshy:mage","r":"staff","l":"","idle":"g/Idle_B","attack":"r/Ranged_Magic_Shoot","ability":"r/Ranged_Magic_Spellcasting"},
+	"berserker": {"model":"meshy:berserker","r":"mw/ironhewer_greatsword","l":"","idle":"m/Melee_2H_Idle","attack":"m/Melee_2H_Attack_Chop","ability":"m/Melee_2H_Attack_Spinning","combo":["m/Melee_2H_Attack_Chop","m/Melee_2H_Attack_Slice","m/Melee_2H_Attack_Spin"]},
+	"barbarian": {"model":"meshy:barbarian","r":"mw/woodsplitter_axe","l":"","idle":"m/Melee_2H_Idle","attack":"m/Melee_2H_Attack_Slice","ability":"m/Melee_2H_Attack_Spin","combo":["m/Melee_2H_Attack_Slice","m/Melee_2H_Attack_Chop","m/Melee_2H_Attack_Stab"]},
+	"rogue": {"model":"meshy:rogue","r":"mw/cutpurse_dagger","l":"mw/cutpurse_dagger","idle":"g/Idle_B","attack":"m/Melee_Dualwield_Attack_Stab","ability":"m/Melee_1H_Attack_Jump_Chop","combo":["m/Melee_Dualwield_Attack_Stab","m/Melee_Dualwield_Attack_Slice","m/Melee_Dualwield_Attack_Chop"]},
+	"ranger": {"model":"meshy:ranger","r":"","l":"mw/ashwood_bow","idle":"r/Ranged_Bow_Idle","attack":"r/Ranged_Bow_Release","ability":"r/Ranged_Bow_Release_Up"},
+	"mage": {"model":"meshy:mage","r":"mw/apprentice_staff","l":"","idle":"g/Idle_B","attack":"r/Ranged_Magic_Shoot","ability":"r/Ranged_Magic_Spellcasting"},
 	# Healer: a body of his own since 0.31.80 (white and gold robes, sun emblem, gold circlet), with a wand.
-	"priest": {"model":"meshy:priest","r":"wand","l":"","idle":"g/Idle_B","attack":"r/Ranged_Magic_Spellcasting_Long","ability":"r/Ranged_Magic_Raise"},
+	"priest": {"model":"meshy:priest","r":"mw/acolyte_wand","l":"","idle":"g/Idle_B","attack":"r/Ranged_Magic_Spellcasting_Long","ability":"r/Ranged_Magic_Raise"},
 	# Upgraded priest (0.31.2, Kevin): the Necromancer from KayKit Skeletons (CC0, same Rig_Medium) with the skull staff.
 	# 0.31.32: the last three upgrades get their own looks
-	"assassin": {"model":"meshy:assassin","r":"dagger","l":"dagger","idle":"g/Idle_B","attack":"m/Melee_Dualwield_Attack_Stab","ability":"m/Melee_1H_Attack_Jump_Chop","tint":"#5b4f73","combo":["m/Melee_Dualwield_Attack_Stab","m/Melee_Dualwield_Attack_Slice","m/Melee_Dualwield_Attack_Chop"]},
-	"sniper": {"model":"meshy:sniper","r":"crossbow_2handed","l":"","idle":"r/Ranged_Bow_Idle","attack":"r/Ranged_Bow_Release","ability":"r/Ranged_Bow_Draw","tint":"#4f6b4a"},
-	"archmage": {"model":"meshy:archmage","r":"staff","l":"spellbook_open","idle":"g/Idle_B","attack":"r/Ranged_Magic_Shoot","ability":"r/Ranged_Magic_Summon","tint":"#a33d3d"},
-	"necromancer": {"model":"meshy:necromancer","r":"Skeleton_Staff","l":"","idle":"g/Idle_B","attack":"r/Ranged_Magic_Spellcasting_Long","ability":"r/Ranged_Magic_Raise"},
+	"assassin": {"model":"meshy:assassin","r":"mw/shade_dagger","l":"mw/shade_dagger","idle":"g/Idle_B","attack":"m/Melee_Dualwield_Attack_Stab","ability":"m/Melee_1H_Attack_Jump_Chop","tint":"#5b4f73","combo":["m/Melee_Dualwield_Attack_Stab","m/Melee_Dualwield_Attack_Slice","m/Melee_Dualwield_Attack_Chop"]},
+	"sniper": {"model":"meshy:sniper","r":"mw/marksman_crossbow","l":"","idle":"r/Ranged_Bow_Idle","attack":"r/Ranged_Bow_Release","ability":"r/Ranged_Bow_Draw","tint":"#4f6b4a"},
+	"archmage": {"model":"meshy:archmage","r":"mw/magister_staff","l":"mw/magister_book","idle":"g/Idle_B","attack":"r/Ranged_Magic_Shoot","ability":"r/Ranged_Magic_Summon","tint":"#a33d3d"},
+	"necromancer": {"model":"meshy:necromancer","r":"mw/bonecaller_staff","l":"","idle":"g/Idle_B","attack":"r/Ranged_Magic_Spellcasting_Long","ability":"r/Ranged_Magic_Raise"},
 	"necromancer_kaykit": {"model":"Necromancer","r":"Skeleton_Staff","l":"","idle":"g/Idle_B","attack":"r/Ranged_Magic_Spellcasting_Long","ability":"r/Ranged_Magic_Raise"},          # 0.31.63: the stock body, kept for tools/retarget_meshy.gd
 	"villager_kaykit": {"model":"Rogue","r":"","l":"","idle":"g/Idle_A","attack":"m/Melee_Unarmed_Attack_Punch_A","ability":"m/Melee_Unarmed_Attack_Kick"},          # 0.31.76: the old body of both, kept for tools/retarget_meshy.gd
 	# 0.31.80 (Kevin picked base-class concepts): the six base classes are Meshy bodies too; their stock KayKit bodies stay
@@ -3243,6 +3243,7 @@ static func make_body(cls: String, cosmetic: Dictionary = {}) -> Dictionary:
 		body = packed.instantiate()
 		skeleton = body.find_child("Skeleton3D", true, false)
 	var staffs: Array = []
+	var hand_models: Array = []           # [model, hand, the KayKit file it is held like]
 	if skeleton != null:
 		for hand in ["r","l"]:
 			var file := str(look.get(hand, ""))
@@ -3252,13 +3253,16 @@ static func make_body(cls: String, cosmetic: Dictionary = {}) -> Dictionary:
 			slot.bone_name = "handslot.%s" % hand
 			skeleton.add_child(slot)
 			# "bits/<name>" = KayKit Fantasy Weapons Bits (Round 11): larger models, scaled down.
-			var bits := file.begins_with("bits/")
-			var weapon := Stage.scene(("res://assets/kaykit/bits/%s.gltf" % file.substr(5)) if bits else ("res://assets/kaykit/weapons/%s.gltf" % file))
+			# "mw/<name>" = an Armory Reforged Meshy weapon (0.31.93): placed in the space of the KayKit model it replaced,
+			# so it is held like that one (MESHY_WEAPON_LIKE).
+			var fit_as := weapon_template(file)
+			var weapon := Stage.scene(weapon_path(file))
 			if weapon != null:
 				var model: Node3D = weapon.instantiate()
-				_fit_weapon(model, file, str(look.model), hand)
-				if is_staff(file):
-					staffs.append([model, file, hand])
+				_fit_weapon(model, fit_as, str(look.model), hand)
+				hand_models.append([model, hand, fit_as])
+				if is_staff(fit_as):
+					staffs.append([model, fit_as, hand])
 				if meshy:
 					var holder := Node3D.new()         # undo the rig's centimetre scale: weapons keep their size
 					holder.scale = Vector3.ONE / chain
@@ -3274,6 +3278,10 @@ static func make_body(cls: String, cosmetic: Dictionary = {}) -> Dictionary:
 		player.add_animation_library(key, libs[key])
 	for st in staffs:
 		_face_staff(st[0], str(st[1]), str(st[2]), skeleton, libs, str(look.idle), str(look.model))
+	var fx: Dictionary = cosmetic.get("forge", {})               # 0.31.93: the Forge's stars on this weapon
+	if int(fx.get("stars", 0)) > 0:
+		for hm in hand_models:
+			apply_forge(hm[0], fx, str(hm[1]) == "r" or hand_models.size() == 1)
 	for mi in body.find_children("*", "MeshInstance3D", true, false):
 		(mi as MeshInstance3D).cast_shadow = (GeometryInstance3D.SHADOW_CASTING_SETTING_ON if _cast_static else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
 	if not cosmetic.has("tint") and look.has("tint"):
@@ -3405,6 +3413,231 @@ static var WEAPON_ROLL_TEST := {}     # (tools only: try a roll without editing 
 # skull sits on the model's -X side, and a 195-degree roll points that straight down in the idle); the open
 # spellbook's pages face whoever holds it (cover outward).
 const WEAPON_ROLL := {"axe_1handed":180.0, "bits/axe_D":180.0, "bits/sword_G":180.0, "spellbook_open":180.0}       # (Skeleton_Staff: see _face_staff, 0.31.66)
+
+# ---------- Armory Reforged (0.31.93, Kevin: "redo all the weapon models ... more unique and badass") ----------
+# Meshy models made from the approved concept sheets by tools/meshy_weapon.py: each piece is fitted offline into the
+# space of the KayKit model it replaces (same length / face area, grip and facing), so the hand slots, fits, rolls and
+# staff turns tuned for that model apply unchanged. id -> the KayKit file it stands in for. 0.31.94: every class (a
+# piece drawn upright is first turned onto the template's axes where that lies along Z or X -- bows, crossbows, claws;
+# a left-hand claw is the right one mirrored).
+const MESHY_WEAPON_LIKE := {
+	# Knight
+	"squire_sword": "sword_1handed", "squire_shield": "bits/shield_B",
+	"steadfast_sword": "bits/sword_A", "steadfast_shield": "shield_round",
+	"highguard_sword": "sword_2handed", "highguard_shield": "bits/shield_A",
+	"lionheart_sword": "sword_1handed", "lionheart_shield": "shield_badge_color",
+	"dawnwall_sword": "sword_1handed", "dawnwall_shield": "shield_square_color",
+	"bloodmoon_sword": "sword_1handed", "bloodmoon_shield": "shield_round_color",
+	"stonewarden_sword": "bits/sword_B", "stonewarden_shield": "bits/shield_D",
+	"thornspire_halberd": "bits/halberd", "thornspire_shield": "shield_square_color",
+	"frostward_sword": "bits/sword_C", "frostward_shield": "shield_square",
+	"ironbriar_sword": "bits/sword_D", "ironbriar_shield": "shield_spikes",
+	"kingsoath_sword": "bits/sword_G", "kingsoath_shield": "bits/shield_C",
+	# Barbarian
+	"woodsplitter_axe": "axe_2handed", "raider_axe": "axe_1handed", "raider_shield": "shield_round_barbarian",
+	"frostbeard_axe": "bits/axe_A", "frostbeard_shield": "shield_round_color", "skullknocker_hammer": "bits/hammer_C",
+	"thornhide_axe": "axe_1handed", "thornhide_shield": "shield_spikes_color", "twinfury_axe": "bits/axe_B",
+	"bonecarver_cleaver": "bits/sword_F", "rockfist_r": "bits/fistweapon_C_right",
+	"rockfist_l": "bits/fistweapon_C_left", "worldsplitter_axe": "bits/axe_D",
+	# Rogue
+	"cutpurse_dagger": "dagger", "smokescreen_dagger": "dagger", "smokescreen_bomb": "smokebomb",
+	"viper_fang": "bits/dagger_B", "needlepoint_stiletto": "bits/dagger_A", "alley_knuckles": "bits/fistweapon_A",
+	"whisperbolt_dagger": "dagger", "whisperbolt_crossbow": "crossbow_1handed",
+	"ravenclaw_r": "bits/fistweapon_C_right", "ravenclaw_l": "bits/fistweapon_C_left", "grimgrin_scythe": "bits/scythe",
+	# Archer
+	"ashwood_bow": "bow_withString", "trailblazer_bow": "bow_withString", "trailblazer_quiver": "quiver",
+	"hawkeye_bow": "bits/bow_B_withString", "staghunter_bow": "bits/bow_A_withString",
+	"boarsbane_spear": "bits/spear_A", "ironjaw_crossbow": "crossbow_2handed", "galeshot_bow": "bits/bow_C_withString",
+	# Mage
+	"apprentice_staff": "staff", "sparkstick_wand": "wand", "spellwright_wand": "wand",
+	"spellwright_tome": "spellbook_open", "twinsparks_fire": "bits/wand_A", "twinsparks_frost": "bits/wand_A",
+	"hex_knife": "bits/dagger_C", "hex_tome": "spellbook_open", "starshard_staff": "bits/staff_B",
+	"archon_staff": "bits/staff_D",
+	# Priest
+	"acolyte_wand": "wand", "candle_wand": "bits/wand_B", "wayfarer_staff": "bits/staff_A",
+	"sunrise_mace": "bits/hammer_B", "sunrise_shield": "shield_badge", "solaris_staff": "bits/staff_C",
+	# Worker
+	"work_hatchet": "axe_1handed", "brawler_axe": "axe_1handed", "brawler_mug": "mug_full",
+	"brickbreaker_mallet": "bits/hammer_A", "timberfall_axe": "bits/axe_C",
+	# Crusader
+	"templar_sword": "sword_1handed", "templar_shield": "bits/shield_B", "penitent_mace": "bits/hammer_C",
+	"penitent_shield": "bits/shield_A", "bulwark_hammer": "bits/hammer_A", "bulwark_shield": "bits/shield_D",
+	"verdict_maul": "bits/hammer_D", "verdict_shield": "shield_badge",
+	# Berserker
+	"ironhewer_greatsword": "bits/sword_E", "ragebiter_axe": "axe_2handed", "hidesplitter_cleaver": "bits/sword_D",
+	"stormcleaver_axe": "bits/halberd",
+	# Necromancer
+	"bonecaller_staff": "Skeleton_Staff", "gravecaller_staff": "Skeleton_Staff", "gravecaller_tome": "spellbook_open",
+	"soulreaper_scythe": "bits/scythe", "wraithspine_spear": "bits/spear_B",
+	# Assassin
+	"shade_dagger": "dagger", "asp_dagger": "bits/dagger_B", "shadow_talon_r": "bits/fistweapon_C_right",
+	"shadow_talon_l": "bits/fistweapon_C_left", "eclipse_dagger": "bits/dagger_C",
+	# Ranger (sniper)
+	"marksman_crossbow": "crossbow_2handed", "longshot_bow": "bits/bow_B_withString",
+	"rattlesnake_crossbow": "crossbow_1handed", "heartseeker_bow": "bits/bow_C_withString",
+	# Archmage
+	"magister_staff": "staff", "magister_book": "spellbook_open", "prism_staff": "bits/staff_C",
+	"prism_tome": "spellbook_open", "rootwise_staff": "bits/staff_A", "rootwise_tome": "spellbook_open",
+	"voidrod_staff": "bits/staff_D",
+}
+
+static func weapon_path(file: String) -> String:
+	if file.begins_with("mw/"):
+		return "res://assets/meshy/weapons/%s.glb" % file.substr(3)
+	if file.begins_with("bits/"):
+		return "res://assets/kaykit/bits/%s.gltf" % file.substr(5)
+	return "res://assets/kaykit/weapons/%s.gltf" % file
+
+static func weapon_template(file: String) -> String:
+	# the KayKit file whose hold a weapon file uses (itself, for a KayKit file)
+	return str(MESHY_WEAPON_LIKE.get(file.substr(3), file)) if file.begins_with("mw/") else file
+
+# ---------- the Forge's stars on a weapon (0.31.93) ----------
+# Stars 1-2: an additive pass (forge_glow.gdshader) over the weapon's own materials -- a sheen, then runes. Star 3: the
+# same brighter, in the element's colour, plus an aura of motes around the main weapon and a trail from its tip
+# (particles in world space, so a swing leaves a streak). Cosmetic only; materials and particle resources are cached.
+const FORGE_SHADER = preload("res://scripts/siege/forge_glow.gdshader")
+const FORGE_TINT := {"common":"#ffd9a0", "rare":"#6cc4ff", "epic":"#d6a2ff", "legendary":"#ffc23d"}
+static var _forge_glow := {}         # "stars|colour|span" -> ShaderMaterial
+static var _forge_base := {}         # base material id|glow key -> the base material with the glow as next_pass
+static var _forge_dot: Texture2D = null
+
+static func forge_color(fx: Dictionary) -> Color:
+	if int(fx.get("stars", 0)) >= Eco.FORGE_STARS.size() and Eco.ELEMENT_COLOR.has(str(fx.get("element", ""))):
+		return Color(str(Eco.ELEMENT_COLOR[str(fx.element)]))
+	return Color(str(FORGE_TINT.get(str(fx.get("rarity", "common")), "#ffd9a0")))
+
+static func _model_box(model: Node3D) -> AABB:
+	var box := AABB()
+	var first := true
+	for mi in model.find_children("*", "MeshInstance3D", true, false):
+		var m := mi as MeshInstance3D
+		var xf := Transform3D.IDENTITY
+		var n: Node = m
+		while n != null and n != model:
+			xf = (n as Node3D).transform * xf
+			n = n.get_parent()
+		var b: AABB = xf * m.get_aabb()
+		box = b if first else box.merge(b)
+		first = false
+	return box
+
+static func apply_forge(model: Node3D, fx: Dictionary, main := true) -> void:
+	var stars := clampi(int(fx.get("stars", 0)), 0, Eco.FORGE_STARS.size())
+	if stars <= 0:
+		return
+	var col := forge_color(fx)
+	var box := _model_box(model)
+	var span := snappedf(maxf(box.size.y, 0.2), 0.05)
+	var gk := "%d|%s|%.2f" % [stars, col.to_html(), span]
+	if not _forge_glow.has(gk):
+		var gm := ShaderMaterial.new()
+		gm.shader = FORGE_SHADER
+		gm.set_shader_parameter("tint", col)
+		gm.set_shader_parameter("sheen", [0.0, 0.8, 0.85, 1.0][stars])
+		gm.set_shader_parameter("runes", [0.0, 0.0, 1.0, 1.3][stars])
+		gm.set_shader_parameter("boost", [1.0, 1.0, 1.1, 1.3][stars])
+		gm.set_shader_parameter("span", span)
+		_forge_glow[gk] = gm
+	var glow: ShaderMaterial = _forge_glow[gk]
+	for mi in model.find_children("*", "MeshInstance3D", true, false):
+		var m := mi as MeshInstance3D
+		for surf in m.mesh.get_surface_count():
+			var base := m.get_active_material(surf)
+			if base == null:
+				continue
+			var bk := "%d|%s" % [base.get_instance_id(), gk]
+			if not _forge_base.has(bk):
+				var dup: Material = base.duplicate()
+				dup.next_pass = glow
+				_forge_base[bk] = dup
+			m.set_surface_override_material(surf, _forge_base[bk])
+	if stars >= Eco.FORGE_STARS.size() and main:
+		_forge_particles(model, box, col)
+
+static func _forge_dot_tex() -> Texture2D:
+	if _forge_dot == null:
+		var g := Gradient.new()
+		g.set_color(0, Color(1, 1, 1, 1))
+		g.set_color(1, Color(1, 1, 1, 0))
+		var gt := GradientTexture2D.new()
+		gt.gradient = g
+		gt.fill = GradientTexture2D.FILL_RADIAL
+		gt.fill_from = Vector2(0.5, 0.5)
+		gt.fill_to = Vector2(1.0, 0.5)
+		gt.width = 32
+		gt.height = 32
+		_forge_dot = gt
+	return _forge_dot
+
+static func _forge_mote_mesh(col: Color, px: float) -> QuadMesh:
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	mat.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	mat.vertex_color_use_as_albedo = true
+	mat.albedo_color = col
+	mat.albedo_texture = _forge_dot_tex()
+	var q := QuadMesh.new()
+	q.size = Vector2(px, px)
+	q.material = mat
+	return q
+
+static func _forge_particles(model: Node3D, box: AABB, col: Color) -> void:
+	# the aura: motes rising around the weapon
+	var aura := GPUParticles3D.new()
+	aura.name = "ForgeAura"
+	aura.amount = 22
+	aura.lifetime = 1.1
+	aura.local_coords = true
+	var pm := ParticleProcessMaterial.new()
+	pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+	pm.emission_box_extents = box.size * 0.5
+	pm.direction = Vector3(0, 1, 0)
+	pm.spread = 30.0
+	pm.initial_velocity_min = 0.05
+	pm.initial_velocity_max = 0.25
+	pm.gravity = Vector3(0, 0.25, 0)
+	pm.scale_min = 0.5
+	pm.scale_max = 1.2
+	var ramp := Gradient.new()
+	ramp.set_color(0, Color(col, 0.0))
+	ramp.add_point(0.2, Color(col, 0.9))
+	ramp.set_color(ramp.get_point_count() - 1, Color(col, 0.0))
+	var rt := GradientTexture1D.new()
+	rt.gradient = ramp
+	pm.color_ramp = rt
+	aura.process_material = pm
+	aura.draw_pass_1 = _forge_mote_mesh(col, 0.12)
+	aura.position = box.get_center()
+	aura.visibility_aabb = AABB(-box.size, box.size * 2.0)
+	model.add_child(aura)
+	# the trail: sparks shed from the tip in world space, so a swing draws a streak
+	var trail := GPUParticles3D.new()
+	trail.name = "ForgeTrail"
+	trail.amount = 36
+	trail.lifetime = 0.32
+	trail.local_coords = false
+	var tm := ParticleProcessMaterial.new()
+	tm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
+	tm.emission_sphere_radius = 0.04
+	tm.gravity = Vector3.ZERO
+	tm.initial_velocity_min = 0.0
+	tm.initial_velocity_max = 0.05
+	tm.scale_min = 0.7
+	tm.scale_max = 1.0
+	var tramp := Gradient.new()
+	tramp.set_color(0, Color(col.lightened(0.4), 0.95))
+	tramp.set_color(1, Color(col, 0.0))
+	var trt := GradientTexture1D.new()
+	trt.gradient = tramp
+	tm.color_ramp = trt
+	trail.process_material = tm
+	trail.draw_pass_1 = _forge_mote_mesh(col, 0.16)
+	trail.position = Vector3(box.get_center().x, box.position.y + box.size.y * 0.85, box.get_center().z)
+	trail.visibility_aabb = AABB(Vector3(-4, -4, -4), Vector3(8, 8, 8))
+	model.add_child(trail)
 
 static func _fit_weapon(model: Node3D, file: String, body_model := "", hand := "r") -> void:
 	model.scale = Vector3.ONE * float(WEAPON_SCALE.get(file, 1.0))

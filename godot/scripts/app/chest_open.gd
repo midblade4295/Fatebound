@@ -267,10 +267,10 @@ func _show_rewards() -> void:
 		title = str(it.get("name", "")).to_upper()
 		tag = "%s  ·  %s %s" % [rar.to_upper(), str(Eco.CLASS_NAMES.get(str(it.get("class", "")), "")).to_upper(), str(it.get("kind", "")).to_upper()]
 		icon = "res://assets/ui/icons/%s.png" % item
-	elif int(result.get("dupe_gold", 0)) > 0:
-		title = "+%d GOLD" % int(result.dupe_gold)
-		tag = "A WEAPON YOU OWN  ·  TURNED INTO GOLD"
-		icon = "res://assets/ui/currency/coins_l.png"
+	elif int(result.get("dupe_embers", 0)) > 0:          # 0.31.93: a duplicate feeds the Forge
+		title = "+%d EMBERS" % int(result.dupe_embers)
+		tag = "A WEAPON YOU OWN  ·  TURNED INTO EMBERS"
+		icon = "res://assets/ui/currency/embers.png"
 	else:
 		title = "+%d GOLD" % int(result.get("gold", 0))
 		tag = "NO WEAPON THIS TIME"
@@ -333,7 +333,7 @@ func _show_rewards() -> void:
 	chips.size = Vector2(size.x - 40, 60)
 	_reveal.add_child(chips)
 	var amounts := []
-	if item != "" or int(result.get("dupe_gold", 0)) > 0:
+	if item != "" or int(result.get("dupe_embers", 0)) > 0:
 		amounts.append(["coins_m", "+%s" % UI.compact(int(result.get("gold", 0))), UI2.GOLD, UI2.INK])
 	if int(result.get("gems", 0)) > 0:
 		amounts.append(["gems", "+%d" % int(result.gems), UI2.CYAN, Color("#06283a")])
