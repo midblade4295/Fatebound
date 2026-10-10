@@ -6,6 +6,7 @@ const UI2 = preload("res://scripts/app/ui2.gd")
 const Roster = preload("res://scripts/app/roster.gd")
 const Eco = preload("res://scripts/meta/economy.gd")
 const Profile = preload("res://scripts/meta/profile.gd")
+const Billing = preload("res://scripts/meta/billing.gd")
 const Screens = preload("res://scripts/app/screens.gd")
 const Showcase = preload("res://scripts/app/showcase.gd")
 const Siege = preload("res://scripts/siege/siege_mode.gd")
@@ -78,6 +79,7 @@ var _toast_until := 0.0
 # live 3D hero) after a stuck start. This scene only reads safe_boot and marks its steps in the log.
 var safe_boot := false
 var online_status: Node = null         # 0.31.82: the server's player count for Home (the real app only, or FB_STATUS_POLL)
+var billing: Node = null               # 0.31.90: Google Play purchases (scripts/meta/billing.gd); inactive off Play
 var online_refs := {}                  # Home's "players online" pill: {main, sub}
 var _guard: Node = null
 # 0.31.84 (Kevin: "put a fps cap of 60 in the menus"): the menus ran uncapped (120 on a 120 Hz phone); a match sets its
@@ -119,6 +121,14 @@ func _ready() -> void:
 		online_status = OnlineStatus.new()
 		online_status.changed.connect(paint_online)
 		add_child(online_status)
+	billing = Billing.new()
+	add_child(billing)
+	billing.setup(profile)
+	billing.note.connect(func(t: String, good: bool): toast(t, UI.GOLD if good else UI.RED))
+	billing.granted.connect(_on_iap_granted)
+	billing.changed.connect(func():
+		if tab == "shop" and not is_instance_valid(modal) and siege == null:
+			rebuild())
 	# Toast: a dark pill just above the tab bar, readable over anything.
 	_toast_box = PanelContainer.new()
 	var tsb := UI.card_style(Color(0.02, 0.04, 0.08, 0.92), 18, UI.CARD_HI)
@@ -943,6 +953,19 @@ func hide_update_screen() -> void:
 		update_screen.queue_free()
 	update_screen = null
 
+func _on_iap_granted(product: String, g: Dictionary) -> void:
+	# 0.31.90: a confirmed purchase landed in the profile
+	if bool(g.get("again", false)):
+		return
+	sfx("purchase")
+	var bits := ["+%s gems" % UI.compact(int(g.get("gems", 0)))]
+	if int(g.get("embers", 0)) > 0:
+		bits.append("+%d Embers" % int(g.embers))
+	if str(g.get("item", "")) != "":
+		bits.append(str(Eco.item(str(g.item)).get("name", "")))
+	toast("  ·  ".join(bits), UI.GOLD)
+	rebuild()
+
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_GO_BACK_REQUEST:
 		if is_instance_valid(update_screen):
@@ -961,6 +984,8 @@ func _notification(what: int) -> void:
 		if online_status != null:
 			online_status.set_active(false)
 	elif what == NOTIFICATION_APPLICATION_RESUMED:
+		if billing != null:
+			billing.resume()                   # a purchase finished while we were away (or a pending one cleared)
 		if online_status != null:
 			online_status.set_active(tab == "home" and siege == null)
 		if version_check and siege == null and Time.get_ticks_msec() / 1000.0 - _version_checked_at > RECHECK_AFTER:

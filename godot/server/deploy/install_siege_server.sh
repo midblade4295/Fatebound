@@ -25,7 +25,7 @@ SERVICE_SRC="$SRC/server/deploy/fatebound-siege.service"
 # The sim preloads the land and the castle layout (siege_land.gd, siege_castle.gd -- 0.31.82: they were missing here,
 # so a fresh install could not compile the sim). Nothing else: the baked terrain files are only the client's.
 SERVER_SCRIPTS="scripts/siege/siege_sim.gd scripts/siege/siege_net.gd scripts/siege/siege_land.gd scripts/siege/siege_castle.gd"
-for f in $SERVER_SCRIPTS server/siege_server.gd server/siege_probe.gd; do
+for f in $SERVER_SCRIPTS server/siege_server.gd server/siege_probe.gd server/iap_verify.gd; do
   [ -f "$SRC/$f" ] || { echo "Missing $SRC/$f — run this from the Siege branch checkout." >&2; exit 1; }
 done
 if [ "$NO_SYSTEMD" != "1" ] && [ "$(id -u)" -ne 0 ]; then
@@ -65,7 +65,7 @@ fi
 STAGE="$(mktemp -d)"
 mkdir -p "$STAGE/scripts/siege" "$STAGE/server"
 for f in $SERVER_SCRIPTS; do cp "$SRC/$f" "$STAGE/scripts/siege/"; done
-cp "$SRC/server/siege_server.gd" "$SRC/server/siege_probe.gd" "$STAGE/server/"
+cp "$SRC/server/siege_server.gd" "$SRC/server/siege_probe.gd" "$SRC/server/iap_verify.gd" "$STAGE/server/"
 cat > "$STAGE/project.godot" <<'PROJ'
 ; Fatebound Siege dedicated server: simulation + protocol only (no assets, no autoloads).
 config_version=5
@@ -98,6 +98,15 @@ if [ "$NO_SYSTEMD" = "1" ]; then
 else
   sed -e "s|/opt/godot-4.7.2/godot|$GODOT_BIN|" -e "s|/srv/fatebound-siege|$DEST|g" -e "s|SIEGE_PORT=8082|SIEGE_PORT=$PORT|" \
     "$SERVICE_SRC" > /etc/systemd/system/fatebound-siege.service
+  # 0.31.90: Google Play purchase checks. The service runs as a throwaway user that can't read a root-only key, so
+  # systemd hands the key over as a credential -- only when the file exists (a missing credential stops the unit).
+  PLAY_KEY="${PLAY_KEY:-/etc/fatebound-siege/play-service-account.json}"
+  if [ -f "$PLAY_KEY" ]; then
+    sed -i "s|^# LoadCredential=play-key:.*|LoadCredential=play-key:$PLAY_KEY|" /etc/systemd/system/fatebound-siege.service
+    echo "Purchase checks: key $PLAY_KEY handed to the service"
+  else
+    echo "Purchase checks: no key at $PLAY_KEY yet (purchases wait until it is there; see godot/PLAY_IAP_HANDOFF.md step 5)"
+  fi
   systemctl daemon-reload
   systemctl enable --quiet fatebound-siege
   systemctl restart fatebound-siege

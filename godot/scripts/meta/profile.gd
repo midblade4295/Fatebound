@@ -3,6 +3,7 @@ extends RefCounted
 # stats. Saved to user://siege_profile.json (atomic write). On first run it migrates once from the
 # dice-era save (user://fatebound-save.json), which is left untouched on disk.
 const Eco = preload("res://scripts/meta/economy.gd")
+const Net = preload("res://scripts/siege/siege_net.gd")
 
 const SCHEMA := 1
 var path := "user://siege_profile.json"
@@ -31,6 +32,8 @@ static func defaults() -> Dictionary:
 		"stats":{"matches":0, "wins":0, "rescues":0, "kills":0, "gates":0, "gathered":0, "fed":0,
 			"lifts":0, "repaired":0, "healed":0, "best_multi":0, "streak":0, "best_streak":0},     # (0.31.87: for the titles)
 		"first_win_day":"", "history":[], "migration":{},
+		"embers":0,                                                  # 0.31.90: the Forge's material (the Forge comes later)
+		"iap":{"done":[], "starter":false},                          # 0.31.90: purchase tokens already granted
 		"chests":{"slots":[], "next":1, "pity":0},
 		"settings":{"master":0.8, "music":0.6, "sfx":0.8, "reduce_motion":false}}
 
@@ -280,6 +283,44 @@ func buy_pack(pack_id: String) -> Dictionary:
 			d.owned.append(id)
 	save()
 	return {"ok":true, "gems":gems}
+
+# ---------------- in-app purchases (0.31.90) ----------------
+func iap_granted(token: String) -> bool:
+	for e in d.iap.done:
+		if str((e as Dictionary).get("t", "")) == token:
+			return true
+	return false
+
+func grant_iap(product: String, token: String) -> Dictionary:
+	# A purchase Google and the server have confirmed: add what it holds. Idempotent per token (a retry after a crash,
+	# or the same purchase seen again on the next start, grants nothing twice). -> {ok, gems, embers, item, again}
+	var pk: Dictionary = Net.IAP.get(product, {})
+	if pk.is_empty() or token == "":
+		return {"ok":false, "error":"Unknown purchase"}
+	if iap_granted(token):
+		return {"ok":true, "again":true, "gems":0, "embers":0, "item":""}
+	var out := {"ok":true, "again":false, "gems":int(pk.get("gems", 0)), "embers":int(pk.get("embers", 0)), "item":""}
+	d.gems = int(d.gems) + int(out.gems)
+	d.embers = int(d.get("embers", 0)) + int(out.embers)
+	if str(pk.get("weapon", "")) != "":
+		# a weapon of that rarity the player doesn't own yet (shop pool), picked from the token so a retry picks the same
+		var pool: Array = []
+		for id in Eco.chest_pool(str(pk.weapon)):
+			if not owns(id):
+				pool.append(id)
+		if not pool.is_empty():
+			out.item = str(pool[absi(hash(token)) % pool.size()])
+			d.owned.append(out.item)
+		else:
+			out.gems = int(out.gems) + int(Eco.DUPE_GOLD.get(str(pk.weapon), 250)) / 10     # owns them all: gems instead
+			d.gems = int(d.gems) + int(Eco.DUPE_GOLD.get(str(pk.weapon), 250)) / 10
+	if bool(pk.get("once", false)):
+		d.iap.starter = true
+	d.iap.done.append({"t":token, "p":product, "at":now()})
+	while d.iap.done.size() > 300:
+		d.iap.done.pop_front()
+	save()
+	return out
 
 func exchange(offer_id: String) -> Dictionary:
 	for off in Eco.EXCHANGE:

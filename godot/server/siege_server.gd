@@ -36,13 +36,15 @@ extends SceneTree
 # welcome at once and no count (so the protocol version stays).
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 const Net = preload("res://scripts/siege/siege_net.gd")
+const IapVerify = preload("res://server/iap_verify.gd")
 
 const RESTART_AFTER := 15.0          # seconds of results screen before the next match
 const IDLE_STOP := 30.0              # no players for this long -> stop simulating
 const LOBBY_TIME := 20.0             # the join countdown (0.31.82)
 const HELLO_TIMEOUT := 10.0
+const IAP_TIMEOUT := 40.0              # a purchase check may take a token request and an API call
 const REFUSE_CLOSE_DELAY := 0.25     # s between a "bye"/"ver" reply and closing the socket
-const SERVER_BUILD := "0.31.89"      # this server's game version; the probe says it by default (identifies as current)
+const SERVER_BUILD := "0.31.90"      # this server's game version; the probe says it by default (identifies as current)
 const MIN_BUILD_FILE := "/etc/fatebound-siege/min_build"
 const MIN_BUILD_RELOAD := 10.0       # s between re-reads of the min-build file
 const UPDATE_MSG := "A new version of Fatebound is out. Update now on Google Play to keep playing online."
@@ -68,6 +70,7 @@ var lobby_time := LOBBY_TIME
 var wave_end := -1.0                 # when the waiting players are seated (-1: nobody waiting)
 var _lobby_clock := 0.0
 var _names_dirty := false            # a seat changed: send the players' names (0.31.86)
+var iap = null                       # 0.31.90: Google Play purchase checks (server/iap_verify.gd)
 var min_build := ""                  # "" = no minimum (see SIEGE_MIN_BUILD)
 var min_build_env := false           # true: fixed by SIEGE_MIN_BUILD, the file is not read
 var min_build_file := MIN_BUILD_FILE
@@ -100,6 +103,10 @@ func _init() -> void:
 		return
 	_log("SIEGE_SERVER listening on %s:%d (protocol %d, build %s, max %d players, min build %s)" % [host, port, Net.VERSION,
 		SERVER_BUILD, max_players, min_build if min_build != "" else "off"])
+	iap = IapVerify.new()
+	iap.log_fn = _log
+	root.add_child.call_deferred(iap)
+	_log("purchase checks: %s" % iap.describe())
 
 # ---------------- minimum app build ----------------
 # "0.31.78-fatebound" -> [0, 31, 78]; anything without a leading dotted number -> [] (unknown).
@@ -211,7 +218,7 @@ func _poll_clients() -> void:
 				ws.close(int(c.close_code), str(c.close_reason))
 				_drop(cid, str(c.close_reason))
 			continue
-		if not c.hello and now - float(c.joined_at) > HELLO_TIMEOUT:
+		if not c.hello and now - float(c.joined_at) > (IAP_TIMEOUT if c.has("iap_busy") else HELLO_TIMEOUT):
 			ws.close(4000, "no hello")
 			_drop(cid, "no hello")
 			continue
@@ -350,6 +357,26 @@ func _handle(cid: int, msg: Dictionary) -> void:
 				_send(cid, _status())
 				_refuse(cid, 1000, "status")
 				c.close_at = _now() + 2.0         # (the refusal path closes it; 2 s rather than REFUSE_CLOSE_DELAY)
+		"iap":
+			# 0.31.90: a phone asks whether a Google Play purchase is real before it grants it. No hello (a purchase is
+			# not a player); one question per socket; the answer goes back and the socket closes.
+			if c.hello or c.has("iap_busy") or iap == null:
+				return
+			c.iap_busy = true
+			var product := str(msg.get("product", ""))
+			var token := str(msg.get("token", ""))
+			iap.verify(product, token, func(res: Dictionary):
+				if not clients.has(cid):
+					return
+				var out := res.duplicate()
+				out["t"] = "iap"
+				out["product"] = product
+				out["token"] = token
+				_send(cid, out)
+				_refuse(cid, 1000, "iap")
+				clients[cid].close_at = _now() + 2.0
+				_log("purchase %s: %s%s" % [product, "ok" if bool(res.get("ok", false)) else str(res.get("why", "")),
+					" (test)" if bool(res.get("test", false)) else ""]))
 		"in":
 			if not c.hello or sim == null or c.unit == "":
 				return

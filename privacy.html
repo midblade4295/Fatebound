@@ -34,6 +34,7 @@
 <li>A random player id (same format as Shardfall, kept on the device)</li>
 <li>An anonymous Firebase Auth id</li>
 <li>Game save data (gold, relics, map state, settings)</li>
+<li>For in-app purchases: the Google Play purchase token, product and order id</li>
 </ul>
 
 <h2>Internet use</h2>
@@ -41,11 +42,15 @@
 <ul>
 <li>Google Fonts (fonts.googleapis.com / fonts.gstatic.com)</li>
 <li>Google Firebase (Authentication and Cloud Firestore) in project shardfall-5f5de, also used by Shardfall / LEGIONARY</li>
+<li>Our Fatebound game server, for online matches and to check purchases with Google</li>
+<li>Google Play, for in-app purchases</li>
 </ul>
 <p>Google processes those requests under Google’s policies. We do not run an ad network in the current build.</p>
 
 <h2>How we use information</h2>
 <p>Save data is used to restore progress and to keep a cloud copy under your anonymous id. We do not sell data or build advertising profiles.</p>
+<h2>Purchases</h2>
+<p>Payment happens entirely inside Google Play; we never see card or bank details. When you buy gems, the game sends the purchase token to our game server, which asks Google whether the purchase is real before the gems are added. The server keeps a short record (product, Google order id, a hashed token, the time and the result) so a purchase is granted only once and refunds can be handled. Your save keeps the purchase token for the same reason.</p>
 
 <h2>Sharing</h2>
 <p>We do not sell personal information. Cloud saves live in our Firebase project. Google Play processes installs and purchases under Google’s policies.</p>

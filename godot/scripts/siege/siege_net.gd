@@ -61,6 +61,19 @@ const SCALE := [1.0, 1.0, 100.0, 100.0, 1000.0, 1.0, 1.0, 1.0, 100.0, 1.0,
 #   "office" an office after it, a comma    Midblade, Siege Lord       (as "Arthur, King of the Britons")
 # Here (not in the economy) because the server builds the over-head text from it too: a hello names a title id, never
 # free text. How each is earned: scripts/meta/economy.gd TITLE_GOALS.
+# 0.31.90 in-app purchases (Kevin: "I want to incorporate IAP"). Google Play only, in the Play app; the server checks
+# each purchase with Google before the phone grants it (server/iap_verify.gd). The IDs are permanent in Play Console
+# (godot/PLAY_IAP_HANDOFF.md): never rename one. "once": acknowledged, never consumed, so Google sells it once.
+const IAP_PACKAGE := "com.fatebound.game"
+const IAP := {
+	"gems_80":      {"gems":80,   "usd":"0.99"},
+	"gems_500":     {"gems":500,  "usd":"4.99"},
+	"gems_1100":    {"gems":1100, "usd":"9.99", "tag":"A SIEGE PASS"},
+	"gems_2400":    {"gems":2400, "usd":"19.99"},
+	"gems_6500":    {"gems":6500, "usd":"49.99", "tag":"BEST VALUE"},
+	"starter_pack": {"gems":300,  "embers":150, "weapon":"rare", "once":true, "usd":"2.99"},
+}
+
 const TITLES := {
 	# --- for everyone
 	"title_squire":         ["Squire", "prefix", "common"],

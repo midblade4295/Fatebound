@@ -96,9 +96,18 @@ fake a purchase.
    the Fatebound app only:
    - **View financial data, orders, and cancellation survey responses**
    - **Manage orders and subscriptions**
-4. Put the JSON key on the Siege server at **`/etc/fatebound-siege/play-service-account.json`**, owned by the user the
-   siege service runs as, mode `600`. That is the only copy outside Google. Don't commit it or paste it anywhere.
-5. New permissions can take up to a day before the API accepts the key.
+4. Put the JSON key on the Siege server at **`/etc/fatebound-siege/play-service-account.json`**, owned by root, mode
+   `600`. That is the only copy outside Google. Don't commit it or paste it anywhere.
+5. Re-run the installer from this branch: `sudo bash godot/server/deploy/install_siege_server.sh`. When the key file
+   exists it turns on `LoadCredential=play-key:` in the systemd unit (the service runs as a dynamic user that can't
+   read a root-only file directly). `journalctl -u fatebound-siege | grep "purchase checks"` should then show
+   `key /run/credentials/... (fatebound-purchases@...)` instead of `off (no service-account key)`.
+6. New permissions can take up to a day before the API accepts the key. Until then purchases stay pending on the
+   phone (nothing is lost; the game asks again on the next start).
+
+For an early internal test before the key works, the server can accept every purchase without asking Google:
+add `SIEGE_IAP_FAKE=1` to `/etc/fatebound-siege/fatebound-siege.env` and restart the service. Remove it before any
+build goes beyond internal testing.
 
 Record only the service account **email** in the Status table, never the key.
 
@@ -108,7 +117,7 @@ After step 3 and Claude's next Play build on Internal testing:
 
 - On Kevin's phone, install from the internal-testing link (not the itch APK).
 - Buy `gems_80`. Google's sheet should say it is a test purchase. Gems should arrive and the server log should show
-  the token verified. Buy it again (consumable). Then buy `starter_pack` and try to buy it again (Google should refuse).
+  `purchase gems_80: ok` (`journalctl -u fatebound-siege`). Buy it again (consumable). Then buy `starter_pack` and try to buy it again (Google should refuse).
 - Write the result in the Status table.
 
 ## 7. Policy forms
@@ -127,7 +136,7 @@ After step 3 and Claude's next Play build on Internal testing:
 
 | Step | Done? | Date | Notes (IDs, emails, results; no secrets) |
 |---|---|---|---|
-| Play Billing commit landed (Claude) | no | | |
+| Play Billing commit landed (Claude) | yes | 2026-10-09 | 0.31.90; Play preset packs GodotGooglePlayBilling 3.3.0 (Billing Library 9.1.0) |
 | 1 Payments profile | | | |
 | 2 Internal-testing build | | | versionCode: |
 | 3 Products created | | | |
