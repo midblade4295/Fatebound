@@ -137,10 +137,10 @@ After step 3 and Claude's next Play build on Internal testing:
 | Step | Done? | Date | Notes (IDs, emails, results; no secrets) |
 |---|---|---|---|
 | Play Billing commit landed (Claude) | yes | 2026-10-09 | 0.31.90; Play preset packs GodotGooglePlayBilling 3.3.0 (Billing Library 9.1.0) |
-| 1 Payments profile | | | |
+| 1 Payments profile | yes | 2026-10-09 | Payments profile created by Kevin (public name Vellic Games). Account group = Vellic Games only (no associated developer accounts), enrolled in the 15% service fee tier. Merchant gate cleared; One-time products page now only asks for a build with the BILLING permission (step 2). |
 | 2 Internal-testing build | | | versionCode: |
 | 3 Products created | | | |
-| 4 License testers | | | |
-| 5 Service account | | | email: |
+| 4 License testers | yes | 2026-10-09 | midblade4295@gmail.com (Kevin's S21 Ultra account), via the existing "Dev" email list (6 users) now ticked under License testing. Response: RESPOND_NORMALLY. |
+| 5 Service account | yes | 2026-10-09 | email: fatebound-purchases@fatebound-play.iam.gserviceaccount.com. GCP project fatebound-play (new, no billing), Google Play Android Developer API enabled. Play Console app-level access to Fatebound only: View financial data + Manage orders and subscriptions (Console also forces read-only View app information / app quality). JSON key installed at /etc/fatebound-siege/play-service-account.json (owner fatebound-siege, mode 600); no other copy kept. Permissions can take up to 24 h to start working. |
 | 6 Test purchase | | | |
-| 7 Policy forms | | | |
+| 7 Policy forms | yes | 2026-10-09 | Data safety: Financial info > Purchase history (collected, not shared, required, App functionality), encrypted in transit, no accounts, deletion URL = privacy.html. IARC redone with digital purchases = yes, loot boxes/real-money trading = no: ESRB Everyone, PEGI 3, USK all ages, ClassInd 14+, ACB General (In-Game Purchases). Both sent for review (managed publishing on, not published). Target audience: 18+ only. Privacy policy URL: https://cdn.jsdelivr.net/gh/midblade4295/Fatebound@main/privacy.html (its deletion contact is midblade4295@gmail.com; Kevin's preferred contact is vellicgames@gmail.com). |
