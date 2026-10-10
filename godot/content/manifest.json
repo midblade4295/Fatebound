@@ -1,0 +1,46 @@
+{
+ "format": 1,
+ "url": "https://raw.githubusercontent.com/midblade4295/Fatebound/content-packs/",
+ "packs": [
+  {
+   "name": "ui",
+   "file": "ui-c11c85b4b576.pck",
+   "size": 15459996,
+   "sha256": "ed8b9a3f6829af9817332d38c9f5234c4e3e30fe0b697d38d93663f12453a0f0",
+   "inputs": "c11c85b4b576ceef4b9ec4ebe99b41bb46013854c2c3ce80568b930dab7351e4",
+   "probe": "res://assets/ui/currency/coin.png"
+  },
+  {
+   "name": "world",
+   "file": "world-5e494d36bc3e.pck",
+   "size": 53886752,
+   "sha256": "720dd107d1e8705daf24ef472a85ec2ff0545a936c853d4afb57fd62568b2b5c",
+   "inputs": "5e494d36bc3ea4fbf6b67350f747a48851f548bde7f57b87ab42f788a03319f0",
+   "probe": "res://assets/kaykit/anim/Rig_Medium_CombatMelee.glb"
+  },
+  {
+   "name": "heroes",
+   "file": "heroes-732f2942034f.pck",
+   "size": 68462196,
+   "sha256": "89edb0d1d831b080868ba6b14e3bc897d0491039b406a8c0e277cf5250dab560",
+   "inputs": "732f2942034f97eeaa8a22fc6912b01acac807ebac404495b9caa1d8c519a5cf",
+   "probe": "res://assets/meshy/archmage/rigged.glb"
+  },
+  {
+   "name": "weapons",
+   "file": "weapons-b4d858f51f36.pck",
+   "size": 32717672,
+   "sha256": "18c8fd693dbfc5283a16bf894253f990c69bdbbcd1a326eeeed82c98e448e83c",
+   "inputs": "b4d858f51f363cd7379fda44272b01886cc85f8871661e00b30f8dc530b535da",
+   "probe": "res://assets/meshy/weapons/acolyte_wand.glb"
+  },
+  {
+   "name": "audio",
+   "file": "audio-8d9d638cc7fd.pck",
+   "size": 10637532,
+   "sha256": "eb97b7a447ba5837f6943fe2c780a2b596c2b4e236ad22facdf2724edf2f4e6b",
+   "inputs": "8d9d638cc7fde5ff91756d2e9ab55cf0c212ac98f3ae9ca593f13d567ba0fe8a",
+   "probe": "res://assets/music/match.ogg"
+  }
+ ]
+}

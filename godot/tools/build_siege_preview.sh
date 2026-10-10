@@ -19,7 +19,7 @@ KS_PASS="${KS_PASS:-fbpreview}"
 HERE="$(cd "$(dirname "$0")/.." && pwd)"          # .../godot
 cd "$HERE"
 
-ver=$(sed -n 's/^version\/name="\(.*\)"$/\1/p' export_presets.cfg | tail -1)
+ver=$(awk '/^name="/{p=($0=="name=\"Android KayKit Rebuild\"")} p && /^version\/name="/{gsub(/^version\/name="|"$/,""); print; exit}' export_presets.cfg)
 OUT="${1:-$HERE/build/Fatebound-Siege-${ver}.apk}"
 
 [ -f "$KEYSTORE" ] || { echo "Preview keystore not found: $KEYSTORE (set KEYSTORE=...)" >&2; exit 2; }
@@ -47,6 +47,10 @@ if [ ! -f "$SETTINGS" ] || ! grep -q 'export/android/android_sdk_path' "$SETTING
     "$JDK" "${ANDROID_HOME:?set ANDROID_HOME to your Android SDK}" > "$SETTINGS"
   echo "Wrote $SETTINGS"
 fi
+
+# 0.31.95: the game's art and sound are content packs on a GitHub release (tools/content_packs.py); the build holds the
+# rest and downloads them on first launch. The packs this build's manifest names must be on the release already.
+python3 tools/content_packs.py check || { echo "ERROR: content packs not ready: python3 tools/content_packs.py build && python3 tools/content_packs.py upload" >&2; exit 1; }
 
 mkdir -p build
 echo "Importing assets..."
@@ -147,5 +151,6 @@ if [ -n "$AAPT2" ]; then
 else
   echo "WARNING: aapt2 not found, the Vulkan requirement in the manifest was not checked" >&2
 fi
-echo "OK  $OUT  ($(du -h "$OUT" | cut -f1), Vulkan only, signed with $KS_ALIAS)"
+python3 tools/content_packs.py base "$OUT" || { echo "ERROR: the APK holds pack data, or its manifest/loader is wrong" >&2; exit 1; }
+echo "OK  $OUT  ($(du -h "$OUT" | cut -f1), Vulkan only, game data downloaded on first launch, signed with $KS_ALIAS)"
 sha256sum "$OUT"

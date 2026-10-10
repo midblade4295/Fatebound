@@ -2862,3 +2862,33 @@ K2/K3 notes (0.17.0)
   each phone one engine); the .aab loses ~26 MB (the 32-bit release engine, compressed). Reach: armeabi-v7a-only
   devices were ~1.3% of one app's Play installs (ZeusLN, 2026-09-07), fewer for a Vulkan, Android 10+ game. Play
   Console will report fewer supported devices on the next upload. The itch preview was already arm64 only.
+
+## 0.31.95 — a small install, then "UPDATING" downloads the art (Kevin: "the main game installs a small file from the Play store and itch, then when they launch the game after first install the game will say it's updating")
+- The build (Play and itch) holds the engine, every script and scene, the fonts, the launcher art and the loader. The
+  art and sound are 5 content packs (ui 15.5, world 53.9, heroes 68.5, weapons 32.7, audio 10.6 MB) on the repo's
+  content-packs branch, served by GitHub (raw.githubusercontent.com, byte ranges). Kevin picked GitHub, then the
+  branch when GitHub refused this session releases. content/manifest.json lists file, size, sha256 and a probe each.
+- tools/content_packs.py: build (export each pack with the "Content Pack" preset, only when its inputs -- the files,
+  their import settings, the engine -- changed; files named by that hash, reproducible), strip to data only (Godot puts
+  the project settings, the uid cache and the autoload script into every pack: removed; fails on any code), upload (a
+  plain commit to the branch, never a force-push; old files stay), check (inputs unchanged, every pack on the branch),
+  base (an APK/AAB holds no pack data, has this manifest, starts the loader), presets (the base presets' exclude
+  filters), coverage (every asset in exactly one pack or the base). tools/pck_tool.py lists/strips .pck files.
+- The loader (scenes/Boot.tscn, now the main scene; scripts/app/content_loader.gd): packs already in res:// (source,
+  tools, tests) need nothing; packs downloaded and checked before mount at once; the rest download with "UPDATING", a
+  progress bar, MB and MB/s -- 8 MB ranges appended to a .part file (resumes after a dropped connection or a closed
+  app), SHA-256 as it arrives, retries 2/4/8/15/30 s with RETRY NOW, "is the phone full?" on a write failure. Packs no
+  longer listed are deleted. Packs never replace the build's own files. BootGuard.hold(): a download isn't a frozen
+  start, and the OK count starts when the game loads.
+- content/preload.json (was assets/terrain/): the start-up list is code-side, so a new list doesn't re-download a pack.
+- Checked: tests/content_test.gd (in the suite); tools/content_e2e.sh (desktop-format packs, a project copy without
+  the packs' files, a local server that drops a connection: all 5 download, the retry happens, the menu loads and every
+  start-up model loads; second start downloads nothing; a half-downloaded pack resumes at 9.5 MB) -- PASS; and the real
+  packs downloaded from GitHub by Godot's HTTPRequest, checked and mounted.
+- The itch preset also stopped shipping store-listing/ (26 MB of Play listing art had been in the APK).
+- content/uids.json: the packs' resources' UIDs, registered after mounting (the build's uid cache only lists its own
+  files, else Godot warns and falls back to the path for every reference). 6 hero models' imports still name an older
+  UID for their texture -- also in the full project, harmless.
+- privacy.html: GitHub listed under Internet use (updated 10 October 2026). PLAY_STORE_HANDOFF.md: content packs.
+- 0.31.95, version code 181. APK 31,135,353 bytes (was 228 MB), sha256
+  a31aa9ca7c54017aafab8e38a0d7c56a6b43b09640d7af6b95d5ad4c5768467e. First launch downloads 181 MB.
