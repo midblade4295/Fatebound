@@ -11,7 +11,10 @@ const PREV_PATH := "user://siege_diag_prev.log"
 # so a match's diagnostics never push a stuck start out of the files.
 const BOOT_PATH := "user://boot_diag.log"
 const BOOT_PREV_PATH := "user://boot_diag_prev.log"
-const BUILD := "0.31.90-fatebound"
+# 0.31.91: the start that froze on Vulkan, kept when BootGuard switches to OpenGL (the two restarts after it used to
+# rotate it out of boot_diag_prev.log before anyone could copy it).
+const BOOT_STUCK_PATH := "user://boot_diag_stuck.log"
+const BUILD := "0.31.91-fatebound"
 
 class ErrorCapture:
 	extends Logger
@@ -249,7 +252,7 @@ static func filter_logcat(raw: String, keep_other := 120) -> String:
 	return "-- fatal (%d) --\n%s\n-- errors/warnings (last %d) --\n%s" % [fatal.size(), "\n".join(fatal), other.size(), "\n".join(other)]
 
 static func has_logs() -> bool:
-	for p in [PATH, PREV_PATH, BOOT_PATH, BOOT_PREV_PATH]:
+	for p in [PATH, PREV_PATH, BOOT_PATH, BOOT_PREV_PATH, BOOT_STUCK_PATH]:
 		if FileAccess.file_exists(p):
 			return true
 	return false
@@ -258,7 +261,7 @@ static func read_logs(tail := 120) -> String:
 	# Both sessions (older first), each trimmed to its session header, every STALL/ERROR line and
 	# the last `tail` lines, so it pastes into a chat in one piece.
 	var out := ""
-	for p in [BOOT_PREV_PATH, BOOT_PATH, PREV_PATH, PATH]:
+	for p in [BOOT_STUCK_PATH, BOOT_PREV_PATH, BOOT_PATH, PREV_PATH, PATH]:
 		if not FileAccess.file_exists(p):
 			continue
 		var lines := FileAccess.get_file_as_string(p).split("\n", false)

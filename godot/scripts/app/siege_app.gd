@@ -989,4 +989,6 @@ func _notification(what: int) -> void:
 		if online_status != null:
 			online_status.set_active(tab == "home" and siege == null)
 		if version_check and siege == null and Time.get_ticks_msec() / 1000.0 - _version_checked_at > RECHECK_AFTER:
-			check_server_version()             # back from the Play Store (or a long pause): ask again
+			# 0.31.91: deferred -- this notification is propagated through the tree, and add_child during it fails
+			# ("Parent node is busy setting up children" in Kevin's log), leaving a checker that blocked every later check.
+			check_server_version.call_deferred()   # back from the Play Store (or a long pause): ask again
