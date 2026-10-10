@@ -701,7 +701,7 @@ func toast(text: String, color := UI.TEXT) -> void:
 	_toast_until = Time.get_ticks_msec() / 1000.0 + 2.8
 	move_child(_toast_box, get_child_count() - 1)
 
-func confirm(title_text: String, body: String, yes_text: String, style: String, on_yes: Callable) -> void:
+func confirm(title_text: String, body: String, yes_text: String, style: String, on_yes: Callable, on_no := Callable()) -> void:
 	close_modal()
 	modal = Control.new()
 	modal.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -721,7 +721,9 @@ func confirm(title_text: String, body: String, yes_text: String, style: String, 
 	var r := UI.row(v, 10)
 	UI.grow(UI.button(r, "CANCEL", "secondary", func():
 		sfx("menuClose")
-		close_modal(), "modal_no"))
+		close_modal()
+		if on_no.is_valid():
+			on_no.call(), "modal_no"))
 	UI.grow(UI.button(r, yes_text, style, func():
 		close_modal()
 		on_yes.call(), "modal_yes"))

@@ -9,9 +9,14 @@ var viewport: SubViewport
 var holder: Node3D
 var _key := ""
 var _t := 0.0
+var interactive := false            # 0.31.96 (the shop preview): drag to turn it; left alone it keeps turning
+var _yaw := 0.0
+var _spin := 0.0
+var _dragging := false
+var _last_drag := -10.0
 
 func _ready() -> void:
-	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	mouse_filter = Control.MOUSE_FILTER_STOP if interactive else Control.MOUSE_FILTER_IGNORE
 	viewport = SubViewport.new()
 	viewport.own_world_3d = true
 	viewport.transparent_bg = true
@@ -76,6 +81,29 @@ func show_set(r_file: String, l_file: String, fx: Dictionary) -> void:
 		c.queue_free()
 	WeaponPose.compose(holder, r_file, l_file, fx)
 
+func _gui_input(event: InputEvent) -> void:
+	if not interactive:
+		return
+	if event is InputEventScreenTouch or (event is InputEventMouseButton and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT):
+		_dragging = event.pressed
+		if _dragging:
+			_spin = 0.0
+		accept_event()
+	elif event is InputEventScreenDrag or (event is InputEventMouseMotion and ((event as InputEventMouseMotion).button_mask & MOUSE_BUTTON_MASK_LEFT) != 0):
+		var dx: float = event.relative.x
+		_yaw += dx * 0.012
+		_spin = lerpf(_spin, dx * 0.012 * 60.0, 0.5)
+		_last_drag = Time.get_ticks_msec() / 1000.0
+		accept_event()
+
 func _process(delta: float) -> void:
 	_t += delta
-	holder.rotation.y = sin(_t * 0.6) * 0.45             # a slow turn to show the depth and the effects
+	if not interactive:
+		holder.rotation.y = sin(_t * 0.6) * 0.45             # a slow turn to show the depth and the effects
+		return
+	if not _dragging:
+		_yaw += _spin * delta
+		_spin *= exp(-delta * 2.5)
+		if Time.get_ticks_msec() / 1000.0 - _last_drag > 2.5:
+			_yaw += 0.5 * delta                               # left alone: all the way round, slowly
+	holder.rotation.y = _yaw

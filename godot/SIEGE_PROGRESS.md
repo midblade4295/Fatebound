@@ -2892,3 +2892,14 @@ K2/K3 notes (0.17.0)
 - privacy.html: GitHub listed under Internet use (updated 10 October 2026). PLAY_STORE_HANDOFF.md: content packs.
 - 0.31.95, version code 181. Quick suite: ALL 45 PASSED. APK 31,135,353 bytes (was 228 MB), sha256
   a31aa9ca7c54017aafab8e38a0d7c56a6b43b09640d7af6b95d5ad4c5768467e. First launch downloads 181 MB.
+
+## 0.31.96 — tap a shop item to preview it; every weapon and shield fitted to the grip (Kevin: "Make it so you can click the items in the store page and preview them. Also I want you to go through every weapon and shield to make sure and line them up correctly with the hands gripping them.")
+- Shop preview (scripts/app/screens.gd open_item): a tap on the featured weapon, a daily deal or an Arsenal opens a sheet
+  -- IN HAND (the class's hero holding it, drag to turn, pinch or +/- to zoom) or WEAPON (the weapon alone, drag to
+  turn, then it turns slowly by itself: forge_stage.gd `interactive`), its stars if forged, name, rarity, class, and
+  BUY / EQUIP right there (it stays open after buying; a gem confirm's CANCEL goes back to it). An Arsenal shows its
+  weapons one at a time (the icon row) with BUY ARSENAL. The card's own price button still buys straight away; a drag
+  on a card still scrolls the menu. app.confirm() takes an optional on_no.
+- tests/shop_preview_test.gd (suite): real taps on all 12 shop cards, then the toggle, gold buy, equip, gem
+  cancel/buy, an Arsenal's second weapon and buying it -- all through the preview's buttons. tools/app_shots.gd
+  SHOT_PREVIEW / SHOT_PREVIEW_MODE.
