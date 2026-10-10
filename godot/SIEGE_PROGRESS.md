@@ -2853,4 +2853,5 @@ K2/K3 notes (0.17.0)
 - Icons and the Forge preview (weapon_pose.gd): a piece is stood up first -- longest side up, broadest face to the
   camera; a staff shows its face, a closed tome its cover; a bow (or a quiver's bow) is the main weapon.
 - tools/app_shots.gd: SHOT_FORGE_CLS opens another class's Forge. Preload list regenerated (the new starters).
-- 0.31.94, version code 180. Quick suite: ALL 44 PASSED.
+- 0.31.94, version code 180. Quick suite: ALL 44 PASSED. APK 228,303,619 bytes (+25 MB for the 86 pieces), sha256
+  337db0d666b1812361ba68d61bead392f141865fea9736959009fefb083a10fd, on itch (vellicgames/fatebound:android).
