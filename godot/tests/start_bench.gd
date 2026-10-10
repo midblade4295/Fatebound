@@ -37,7 +37,7 @@ func _process(_delta: float) -> bool:
 	match phase:
 		"preload":
 			Assets.poll()
-			if Assets._pending.is_empty():
+			if Assets.pending() == 0:
 				print("START_BENCH preload done in %d ms, %d scenes cached" % [Time.get_ticks_msec() - t0, Assets._cache.size()])
 				phase = "start"
 		"start":

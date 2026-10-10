@@ -64,6 +64,7 @@ func _init() -> void:
 		_write_renderer_cfg(true)
 		_write_state({"pending": false, "renderer": renderer, "build": Diag.BUILD, "switched": Diag.BUILD})
 		diag.write("BOOT the last start on Vulkan never reached the menu -> this phone switches to OpenGL; restarting")
+		_keep_stuck_log()
 		restarting = true
 		return
 	safe_boot = bool(d.safe)
@@ -74,6 +75,12 @@ func _init() -> void:
 func _ready() -> void:
 	if restarting:
 		_restart()
+
+func _keep_stuck_log() -> void:
+	# The frozen start's log is boot_diag_prev.log right now; two more starts (this restart, then OpenGL) would push it
+	# out, so keep a copy for COPY DIAGNOSTICS (Diag.BOOT_STUCK_PATH).
+	if FileAccess.file_exists(Diag.BOOT_PREV_PATH):
+		DirAccess.copy_absolute(ProjectSettings.globalize_path(Diag.BOOT_PREV_PATH), ProjectSettings.globalize_path(Diag.BOOT_STUCK_PATH))
 
 func _restart() -> void:
 	# Android: Godot relaunches the app on exit (Main::cleanup -> OS::create_instance -> GodotActivity rebirth). If

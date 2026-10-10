@@ -86,6 +86,7 @@ run side_view_test       SIDE_VIEW_PASS           120 --fixed-fps 30
 # Earned titles (0.31.87): the table and its punctuation, earning, streaks, pass/shop/pack, healing counted.
 run title_test           TITLE_PASS               60
 run iap_test             IAP_PASS                 120
+run preload_queue_test   PRELOAD_QUEUE_PASS       240
 # The app's staged match start (0.31.78): the card first, the world built behind it over frames.
 FB_STAGED_START=1 FB_FORCE_WARMUP=1 run staged_start_test STAGED_START_PASS 240 --fixed-fps 30
 # The human soak must never stall the game thread.

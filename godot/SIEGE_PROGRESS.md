@@ -2757,3 +2757,26 @@ K2/K3 notes (0.17.0)
   fake Google (JWT signature, verdicts, one token request), and real servers in FAKE and no-key modes.
 - Live server: needs the redeploy from this branch for purchase checks.
 - 0.31.90, version code 176. Quick suite: ALL 42 PASSED.
+
+## 0.31.91 — first start froze on the Godot splash (Kevin's S21, fresh Play install, Vulkan)
+- Kevin's log: the first start (Vulkan) never reached the menu; BootGuard switched the phone to OpenGL and the next
+  start was fine. The frozen start's own log had been rotated out by the two restarts after it.
+- Reproduced on desktop Vulkan (Mobile renderer) by emptying user://shader_cache: the start hangs forever at "hero",
+  every thread asleep; with the cache warm it starts in ~5 s (0.31.90 code).
+- Cause (gdb on the hung process + Godot 4.7.2 source): ShaderData::is_valid() (scene_shader_forward_mobile.cpp) holds
+  SceneShaderForwardMobile::singleton_mutex while ShaderRD::version_is_valid() waits for the shader's compile tasks
+  (a WorkerThreadPool group). The background preload had ~200 threaded loads in flight (sub-threads on); each waiting
+  load lets the pool start another, so every pool thread ended up in a load blocked on that mutex and the compile
+  tasks never got a thread. A warm cache compiles nothing, which is why only fresh installs froze (likely the testers'
+  "frozen splash" phones too) and why the long-installed preview never did.
+- Fix (asset_cache.gd): the preload is a queue with ONE load on a pool thread at a time, no sub-threads; a queued path
+  needed now is loaded directly, the one loading is waited for. Empty shader cache: menu up, preload drains (39 s on
+  lavapipe), and a match started with 113 loads still queued builds and runs.
+- tools/cold_start_check.sh (needs a display): starts the app on Vulkan with the shader cache moved aside, PASS when
+  the menu is up. Fails on 0.31.90, passes now. tests/preload_queue_test.gd (in the suite): the queue's rules.
+- BootGuard keeps the frozen start's log as user://boot_diag_stuck.log when it switches to OpenGL; COPY DIAGNOSTICS
+  includes it.
+- Resume: the server version re-check was add_child'ed during NOTIFICATION_APPLICATION_RESUMED ("Parent node is busy
+  setting up children" in Kevin's log); the failed checker then blocked every later check. Now deferred.
+- Phones BootGuard already moved to OpenGL stay there: Settings -> Graphics engine -> SWITCH TO VULKAN.
+- 0.31.91, version code 177. Quick suite: ALL 43 PASSED.
