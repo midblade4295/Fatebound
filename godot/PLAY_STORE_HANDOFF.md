@@ -50,7 +50,7 @@ Preset **Android Play Store** in `godot/export_presets.cfg`:
 | ABIs | armeabi-v7a, arm64-v8a, x86_64 (32-bit x86 dropped 2026-10-08, Kevin) |
 | Engine/templates | Godot 4.7.2 + matching Android build template |
 | Renderer | **Vulkan (mobile) only, OpenGL fallback OFF** (0.31.92) -- see below. |
-| SDK | min 24, target 36; verify against current Play requirements |
+| SDK | min 29 (Android 10, Kevin 2026-10-09: Vulkan only), target 36; verify against current Play requirements |
 | Export excludes | `tests/*, reports/*, tools/*, server/*, store-listing/*` (server and listing files are never shipped) |
 
 The preset still says versionCode 23 / versionName 1.1.1. In Play Console, check every track and *Latest releases and
@@ -68,7 +68,8 @@ very likely the testers' freeze too. With Vulkan working, Kevin removed OpenGL (
 - No `application/config/project_settings_override` (the old `user://renderer.cfg` OpenGL switch); BootGuard deletes
   that file on phones that still have it and keeps only its start-up log and safe start.
 `verify_play_bundle.py` checks exactly this (fallback off, no override, the manifest requirement, BootGuard present).
-Godot's export also suggests min SDK 29 for Vulkan; the preset stays at 24 unless Kevin decides otherwise.
+Min SDK is 29 (Android 10), as Godot recommends for Vulkan: Kevin, 2026-10-09. Android 7-9 was ~8% of active devices
+(Google, Dec 2025), mostly phones with old Vulkan drivers or none.
 
 ## Signing: private credentials only
 

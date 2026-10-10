@@ -118,7 +118,7 @@ root=ET.fromstring(manifest);android='{http://schemas.android.com/apk/res/androi
 assert root.attrib['package']=='com.fatebound.game'
 assert root.attrib[android+'versionCode']==EXPECTED_CODE,('versionCode',root.attrib[android+'versionCode'])
 assert root.attrib[android+'versionName']==EXPECTED_NAME,('versionName',root.attrib[android+'versionName'])
-sdk=root.find('uses-sdk');assert sdk.attrib[android+'minSdkVersion']=='24' and sdk.attrib[android+'targetSdkVersion']=='36'
+sdk=root.find('uses-sdk');assert sdk.attrib[android+'minSdkVersion']=='29' and sdk.attrib[android+'targetSdkVersion']=='36'
 application=root.find('application');assert application.attrib.get(android+'debuggable','false')=='false'
 permissions=[item.attrib.get(android+'name') for item in root.findall('uses-permission')]
 vk=[f for f in root.findall('uses-feature') if f.attrib.get(android+'name')=='android.hardware.vulkan.version']
@@ -127,6 +127,6 @@ assert 'android.permission.INTERNET' in permissions
 if content_module!='base':
  delivery=subprocess.check_output(['java','-jar',str(jar),'dump','manifest','--bundle='+str(p),'--module='+content_module],text=True)
  assert 'install-time' in delivery,('Game content not delivered at installation',delivery)
-report.update(bundletool_validation_passed=True,package='com.fatebound.game',version_code=int(EXPECTED_CODE),version_name=EXPECTED_NAME,min_sdk=24,target_sdk=36,debuggable=False,game_assets_available_at_install=True)
+report.update(bundletool_validation_passed=True,package='com.fatebound.game',version_code=int(EXPECTED_CODE),version_name=EXPECTED_NAME,min_sdk=29,target_sdk=36,debuggable=False,game_assets_available_at_install=True)
 p.with_name('PLAY_BUNDLE_VERIFICATION.json').write_text(json.dumps(report,indent=2)+'\n')
 print('FINAL_VALIDATION',json.dumps(report,indent=2))

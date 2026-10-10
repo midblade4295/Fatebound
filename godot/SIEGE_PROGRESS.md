@@ -2797,3 +2797,10 @@ K2/K3 notes (0.17.0)
   Godot suggests min SDK 29 for Vulkan; the Play preset stays at 24 (Kevin's call).
 - 0.31.92, version code 178. Quick suite: ALL 43 PASSED. Preview APK: renderer settings and the manifest's Vulkan 1.1
   requirement verified by build_siege_preview.sh.
+
+## Play preset: min SDK 29 (Kevin: "Do it", 2026-10-09; no new build)
+- Vulkan only since 0.31.92, so the Play preset now requires Android 10 (gradle_build/min_sdk 24 -> 29), Godot's
+  recommendation for Vulkan. Android 7-9 was ~8% of active devices in Google's Dec 2025 numbers, mostly old Vulkan
+  drivers (or none, already filtered by the Vulkan 1.1 requirement).
+- verify_play_bundle.py expects minSdkVersion 29; PLAY_STORE_HANDOFF updated. The itch preview APK doesn't use Gradle,
+  so it keeps the template's min SDK (24).
