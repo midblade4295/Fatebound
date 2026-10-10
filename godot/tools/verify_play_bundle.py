@@ -122,9 +122,12 @@ sdk=root.find('uses-sdk');assert sdk.attrib[android+'minSdkVersion']=='24' and s
 application=root.find('application');assert application.attrib.get(android+'debuggable','false')=='false'
 permissions=[item.attrib.get(android+'name') for item in root.findall('uses-permission')]
 assert 'android.permission.INTERNET' in permissions
+# 0.31.90: Google Play Billing (GodotGooglePlayBilling 3.3.0 + Billing Library 9.1.0) must be merged in.
+assert 'com.android.vending.BILLING' in permissions,('BILLING permission missing',permissions)
+assert 'com.android.billingclient' in manifest,'Play Billing library components missing from manifest'
 if content_module!='base':
  delivery=subprocess.check_output(['java','-jar',str(jar),'dump','manifest','--bundle='+str(p),'--module='+content_module],text=True)
  assert 'install-time' in delivery,('Game content not delivered at installation',delivery)
-report.update(bundletool_validation_passed=True,package='com.fatebound.game',version_code=int(EXPECTED_CODE),version_name=EXPECTED_NAME,min_sdk=24,target_sdk=36,debuggable=False,game_assets_available_at_install=True)
+report.update(bundletool_validation_passed=True,package='com.fatebound.game',version_code=int(EXPECTED_CODE),version_name=EXPECTED_NAME,min_sdk=24,target_sdk=36,debuggable=False,game_assets_available_at_install=True,play_billing_permission=True)
 p.with_name('PLAY_BUNDLE_VERIFICATION.json').write_text(json.dumps(report,indent=2)+'\n')
 print('FINAL_VALIDATION',json.dumps(report,indent=2))
