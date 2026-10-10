@@ -29,14 +29,34 @@ Do **not** upload:
 |---|---|
 | Game data (models, textures, sounds, scripts) | 134.2 MB compressed, measured in the 0.31.72 build |
 | Godot release engine, per ABI | ~23 MB compressed (4.7.2 release templates; arm64 22.9 + libc++ 0.4) |
-| **What a phone downloads from Play** (one ABI) | **~160 MB** (estimate: game data + one engine + ~3 MB other) |
-| The `.aab` file you upload (all 4 ABIs) | ~230 MB (estimate) |
+| **What a phone downloads from Play** (one ABI) | **~35 MB** since 0.31.95 (engine, code, fonts), then ~181 MB of content packs from GitHub on first launch |
+| The `.aab` file you upload (arm64 only since 2026-10-10) | ~35 MB since 0.31.95 (the art and sound are content packs) |
 | Preview APK on itch (arm64 only, debug engine) | 162.6 MB |
 
 Google Play's limits for app bundles: 500 MB per module (compressed download), 4 GB for everything delivered at
 install (https://support.google.com/googleplay/android-developer/answer/9859372). The game is well inside them; no
 asset packs or on-demand delivery are needed. Godot's Gradle export puts the game data in an install-time asset pack
 (`assetPackInstallTime`), which the verifier accepts. Record the real AAB size and Play Console's reported download size.
+
+## Content packs: the game's art and sound are downloaded on first launch (0.31.95)
+
+Kevin (2026-10-10): "the main game installs a small file from the Play store and itch, then when they launch the
+game after first install the game will say it's updating". The AAB now holds the engine, the scripts and scenes, the
+fonts and the launcher art (~35 MB). The art and sound are 5 content packs (.pck, ~181 MB) on the repo's
+`content-packs` branch, served by GitHub at `https://raw.githubusercontent.com/midblade4295/Fatebound/content-packs/`.
+`godot/content/manifest.json` (in the build) lists each pack's file, size and SHA-256. On launch the loader
+(`scenes/Boot.tscn`, `scripts/app/content_loader.gd`) shows "UPDATING", downloads what's missing (resumes, checks
+the SHA-256), mounts the packs and starts the game. A code-only update downloads nothing.
+
+- **Play policy**: the packs hold data only -- models, textures, sounds. No scripts or settings (the pack tool strips
+  them and fails if any code is left); the downloaded files never replace the build's own. All code ships in the AAB.
+- **Before building the AAB**: `python3 godot/tools/content_packs.py check` must print `CONTENT OK` (the packs this
+  commit's manifest lists are on the branch, and the art hasn't changed since they were built). If it says a pack's
+  files changed: `python3 godot/tools/content_packs.py build && python3 godot/tools/content_packs.py upload`, commit
+  `godot/content/manifest.json`. `verify_play_bundle.py` runs `check` and `base` (no pack data in the bundle).
+- **Data safety / privacy**: the app now downloads files from GitHub (no account, no data sent). privacy.html lists it
+  (updated 10 October 2026); redeploy privacy.html with the build.
+- The `content-packs` branch only grows (no force-push); old pack files stay for builds still installed.
 
 ## Release identity and version
 
@@ -47,11 +67,11 @@ Preset **Android Play Store** in `godot/export_presets.cfg`:
 | Application ID | `com.fatebound.game` |
 | App name | `Fatebound` |
 | Output | Signed release `.aab` (Gradle build) |
-| ABIs | armeabi-v7a, arm64-v8a, x86_64 (32-bit x86 dropped 2026-10-08, Kevin) |
+| ABIs | arm64-v8a only (32-bit ARM dropped 2026-10-10, Kevin: "Ok drop the 32bit"; x86 and x86_64 before) |
 | Engine/templates | Godot 4.7.2 + matching Android build template |
 | Renderer | **Vulkan (mobile) only, OpenGL fallback OFF** (0.31.92) -- see below. |
 | SDK | min 29 (Android 10, Kevin 2026-10-09: Vulkan only), target 36; verify against current Play requirements |
-| Export excludes | `tests/*, reports/*, tools/*, server/*, store-listing/*` (server and listing files are never shipped) |
+| Export excludes | `tests/*, reports/*, tools/*, server/*, store-listing/*` (never shipped) and every content pack's folders (`tools/content_packs.py presets` writes them) |
 
 The preset still says versionCode 23 / versionName 1.1.1. In Play Console, check every track and *Latest releases and
 bundles*; choose a versionCode higher than anything ever uploaded and a versionName (e.g. `0.31.72`). Set both in the
@@ -119,7 +139,7 @@ mkdir -p godot/build
 - `python3 godot/tools/verify_play_bundle.py godot/build/Fatebound-Play-release.aab` (after setting the version
   expectations), bundletool validation / manifest inspection, `jarsigner -verify`.
 - Manifest: package `com.fatebound.game`, the chosen versionCode/versionName, debuggable=false, INTERNET permission,
-  min/target SDK, the four ABIs, 64-bit library alignment.
+  min/target SDK, arm64-v8a only, 64-bit library alignment.
 - Record the AAB SHA-256, size, upload-certificate fingerprint, source commit, test results and the verifier report.
   Headless tests are not physical-phone testing.
 

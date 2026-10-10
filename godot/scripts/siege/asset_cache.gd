@@ -33,7 +33,7 @@ static func has(path: String) -> bool:
 # pool thread, but the ~200 parallel loads (each waiting load lets another start) filled every pool thread with loads
 # blocked on that same mutex. With a warm shader cache nothing compiles, so it only hit first starts (and would hit
 # after a shader change). With one load in flight the pool always has a free thread for the compile.
-const PRELOAD_LIST := "res://assets/terrain/preload.json"   # (.txt files are not exported; JSON is)
+const PRELOAD_LIST := "res://content/preload.json"   # (.txt files are not exported; JSON is. 0.31.95: in the base build, not a pack)
 static var _queue: Array = []            # paths not requested yet, in list order
 static var _loading := ""                # the one path loading on a pool thread, or ""
 

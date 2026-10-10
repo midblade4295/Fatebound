@@ -22,6 +22,7 @@ var diag = null
 var _t0 := 0
 var _frames := 0
 var _done := false
+var _held := false
 
 static func decide(prev: Dictionary, build: String) -> Dictionary:
 	# What this start does, from the last start's record. Pure (tests/boot_guard_test.gd).
@@ -63,9 +64,18 @@ func mark(phase: String) -> void:
 		diag.mark(phase)
 		diag.write("BOOT %s (%d ms)" % [phase, Time.get_ticks_msec() - _t0])
 
+func hold(on: bool) -> void:
+	# 0.31.95: while the content loader downloads the game's packs nothing counts -- the start is not pending (closing
+	# the app mid-download is not a frozen start), and the frame count starts again when the game loads.
+	_held = on
+	_frames = 0
+	if tracking and not _done:
+		_write_state({"pending": not on, "build": Diag.BUILD, "safe_build": Diag.BUILD if safe_boot else ""})
+	mark("content download %s" % ("started" if on else "done"))
+
 func _process(_delta: float) -> void:
 	# Frames drawn with the menu up; at OK_FRAMES the start counts as good.
-	if _done:
+	if _done or _held:
 		return
 	_frames += 1
 	if _frames == 1:
@@ -76,6 +86,8 @@ func _process(_delta: float) -> void:
 		if tracking:
 			_write_state({"pending": false, "build": Diag.BUILD, "safe_build": Diag.BUILD if safe_boot else ""})
 		mark("OK -- menu up%s" % (" (safe start)" if safe_boot else ""))
+		if OS.has_environment("FB_QUIT_WHEN_UP"):          # (tools/content_e2e.sh: quit once the menu's models are in)
+			_quit_when_loaded()
 		var d = diag
 		get_tree().create_timer(8.0).timeout.connect(func():         # a few seconds of menu stats, then stop logging
 			if is_instance_valid(d):
@@ -93,3 +105,11 @@ func _write_state(st: Dictionary) -> void:
 	if f != null:
 		f.store_string(JSON.stringify(st))
 		f.close()
+
+func _quit_when_loaded() -> void:
+	var cache = load("res://scripts/siege/asset_cache.gd")
+	while cache.pending() > 0:
+		await get_tree().create_timer(0.5).timeout
+	mark("all preloaded")
+	print("BOOT all preloaded")
+	get_tree().quit()

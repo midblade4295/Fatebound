@@ -2,7 +2,7 @@
 config/name="Fatebound"
 config/icon="res://assets/branding/icon.png"
 config/description="Fatebound native game client — Play testing build."
-run/main_scene="res://scenes/Main.tscn"
+run/main_scene="res://scenes/Boot.tscn"
 
 [autoload]
 

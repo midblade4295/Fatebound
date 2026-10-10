@@ -85,6 +85,11 @@ with zipfile.ZipFile(p) as z:
  assert fallback_key in props and not bool_setting(props,fallback_key),'OpenGL fallback must be off (0.31.92)'
  assert 'application/config/project_settings_override' not in props,'No settings override file (OpenGL switch removed 0.31.92)'
  assert any('/boot_guard.' in n and '/assets/' in n for n in names),'BootGuard autoload missing'
+ # 0.31.95: the art and sound are content packs downloaded on first launch (tools/content_packs.py): none of their
+ # files in the bundle, the loader is the main scene, the manifest is this commit's and its packs are on the release.
+ content=str(Path(__file__).with_name('content_packs.py'))
+ assert subprocess.run([sys.executable,content,'base',str(p)]).returncode==0,'Bundle holds content-pack data or the wrong manifest'
+ assert subprocess.run([sys.executable,content,'check']).returncode==0,'Content packs are not all on the GitHub release'
  for name in names:
   if not name.endswith('.so'):continue
   if '/lib/' in name:
@@ -99,7 +104,7 @@ with zipfile.ZipFile(p) as z:
    if struct.unpack_from(endian+'I',b,pos)[0]==1:
     value=struct.unpack_from(endian+'Q',b,pos+48)[0]; assert value>=16384,(name,value);align.append(value)
   libs.append({'path':name,'load_segment_alignment':align})
- assert all_abis=={'armeabi-v7a','arm64-v8a'},('Unexpected Android ABI set (want exactly armeabi-v7a, arm64-v8a; x86 and x86_64 dropped)',sorted(all_abis))
+ assert all_abis=={'arm64-v8a'},('Unexpected Android ABI set (want exactly arm64-v8a; 32-bit ARM dropped 2026-10-10, x86 and x86_64 before)',sorted(all_abis))
  assert any('arm64-v8a' in x['path'] for x in libs)
  assert not any('/lib/x86' in x['path'] for x in libs),'x86/x86_64 native libraries must not be in the Play bundle'
 report={'file':p.name,'bytes':p.stat().st_size,'sha256':hashlib.sha256(p.read_bytes()).hexdigest(),'upload_certificate_sha256':fp,'matches_expected_upload_certificate':True,'siege_runtime_present_dice_era_absent':True,'content_module':content_module,'project_asset_path':project_paths[0],'vulkan_mobile_default_with_gl_fallback':True,'renderer_override':'user://renderer.cfg','test_server_and_signing_material_excluded':True,'android_abis':sorted(all_abis),'native_64bit_libraries':libs,'physical_phone_tested':False}

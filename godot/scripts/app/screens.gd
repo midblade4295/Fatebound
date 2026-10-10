@@ -6,6 +6,7 @@ const UI2 = preload("res://scripts/app/ui2.gd")
 const ChestRow = preload("res://scripts/app/chest_row.gd")
 const ChestOpen = preload("res://scripts/app/chest_open.gd")
 const Eco = preload("res://scripts/meta/economy.gd")
+const View = preload("res://scripts/siege/siege_view.gd")
 const Showcase = preload("res://scripts/app/showcase.gd")
 const Diag = preload("res://scripts/siege/siege_diag.gd")
 const Net = preload("res://scripts/siege/siege_net.gd")
@@ -73,6 +74,8 @@ static func item_swatch(parent: Node, id: String, px := 56) -> void:
 static func chest_icon(kind: String) -> String:
 	return UI2.V2 + "chests/%s_icon.png" % str({"wooden": "wood"}.get(kind, kind))
 
+const EMBER_COLOR := Color("#ff9a3c")
+
 static func reward_text(r: Dictionary) -> Array:
 	# -> [glyph kind, text, colour, texture path or ""]
 	if r.has("chest"):                                   # (0.31.79: chests used to read "0 gold" here)
@@ -83,6 +86,8 @@ static func reward_text(r: Dictionary) -> Array:
 		return [item_icon(it), str(it.get("name", "?")), rarity(it), item_texture_path(str(r.item))]
 	if r.has("gems"):
 		return ["gem", "%d gems" % int(r.gems), UI.CYAN, "res://assets/ui/currency/gem.png"]
+	if r.has("embers"):                                  # 0.31.93: the Forge's material
+		return ["star", "%d Embers" % int(r.embers), EMBER_COLOR, "res://assets/ui/currency/embers.png"]
 	var g := int(r.get("gold", 0))
 	return ["coin", "%d gold" % g, UI.GOLD, "res://assets/ui/currency/%s.png" % ("coins_s" if g >= 300 else "coin")]
 
@@ -247,6 +252,15 @@ static func home(app, root: VBoxContainer) -> void:
 		app.sfx("tap")
 		if refs.has("orders"):
 			app.content_scroll.ensure_control_visible(refs.orders), "side_orders", orders_ready)
+	# 0.31.93: the Forge, under FIRST WIN (a badge when an equipped weapon's next star can be forged)
+	var fready := forge_ready(p)
+	var fgb := _medallion(top, Vector2(w - 62, 176), "anvil", "FORGE", func():
+		app.sfx("tap")
+		app.forge_cls = app.locker_class if (Eco.CLASSES + Eco.UP_CLASSES).has(str(app.locker_class)) else "knight"
+		app.forge_pick = ""
+		app.show_tab("forge"), "side_forge", fready, "silver")
+	if fready > 0:
+		UI2.wiggle(fgb.get_meta("icon"))
 	var fw_open := str(d.first_win_day) != Eco.day_key(p.now())
 	var fwb := _medallion(top, Vector2(w - 62, 58), "trophy", "FIRST WIN", func():
 		app.sfx("tap")
@@ -1585,13 +1599,20 @@ static func locker(app, root: VBoxContainer) -> void:
 			if p.owns(id):
 				owned += 1
 	UI2.divider(root, "WEAPONS", 22, "%d of %d owned  ·  looks only, every weapon plays the same" % [owned, total])
+	var fl := UI2.button(root, "FORGE YOUR %s WEAPONS" % str(Eco.CLASS_NAMES[cls]).to_upper(), "orange", func():
+		app.forge_cls = cls
+		app.forge_pick = ""
+		app.sfx("tap")
+		app.show_tab("forge"), "locker_forge", 14, 40.0, 12.0, UI2.icon_path("anvil"))
+	fl.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	fl.custom_minimum_size.x = 280
 	var grid := GridContainer.new()
 	grid.columns = 2
 	grid.add_theme_constant_override("h_separation", 10)
 	grid.add_theme_constant_override("v_separation", 12)
 	root.add_child(grid)
 	var is_def: bool = str(p.d.equip[cls]["weapon"]) == ""
-	_gear_card(app, grid, "", cls, "res://assets/ui/icons/default_%s.png" % cls, "DEFAULT GEAR", "common", true, is_def)
+	_gear_card(app, grid, "", cls, "res://assets/ui/icons/default_%s.png" % cls, str(Eco.STARTER_NAMES.get(cls, "Default gear")).to_upper(), "common", true, is_def)
 	for id in Eco.CATALOG:
 		var it: Dictionary = Eco.CATALOG[id]
 		if it.kind == "weapon" and str(it["class"]) == cls:
@@ -1627,6 +1648,9 @@ static func _gear_card(app, grid: Node, id: String, cls: String, icon: String, n
 	nl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	var rl := UI2.body(v, rar.to_upper(), 9, _rar_tint(rar).lightened(0.35), false)
 	rl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var fstars: int = p.forge_stars(Eco.forge_id(cls, id)) if owned else 0      # 0.31.93: the Forge's stars
+	if fstars > 0:
+		stars_row(v, fstars, 14).alignment = BoxContainer.ALIGNMENT_CENTER
 	var b: Button = null
 	if owned:
 		if id == "":
@@ -1932,3 +1956,289 @@ static func settings(app, root: VBoxContainer) -> void:
 	UI.grow(UI2.button(help, "PRIVACY POLICY", "blue", func(): OS.shell_open(PRIVACY_URL), "privacy", 13, 40.0))
 	var ver := UI2.body(root, "Fatebound %s" % Diag.BUILD, 11, UI2.MUTED)
 	ver.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+
+# ---------------- THE FORGE (0.31.93, Armory Reforged) ----------------
+const ForgeStage = preload("res://scripts/app/forge_stage.gd")
+
+static func stars_row(parent: Node, n: int, px := 18, of := 3) -> HBoxContainer:
+	# n gold stars of `of` (the rest dim)
+	var r := HBoxContainer.new()
+	r.add_theme_constant_override("separation", 1)
+	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(r)
+	for i in of:
+		UI.icon(r, "star", px, Color("#ffd24a") if i < n else Color(1, 1, 1, 0.22))
+	return r
+
+static func forge_weapons(p, cls: String) -> Array:
+	# the class's weapons you own, starter first, as Forge ids
+	var out := [Eco.forge_id(cls, "")]
+	for id in Eco.CATALOG:
+		var it: Dictionary = Eco.CATALOG[id]
+		if str(it.get("kind", "")) == "weapon" and str(it["class"]) == cls and p.owns(id):
+			out.append(str(id))
+	return out
+
+static func forge_ready(p) -> int:
+	# equipped weapons of the classes you play whose next star could be forged now (the Home badge)
+	var n := 0
+	for cls in Eco.CLASSES + Eco.UP_CLASSES:
+		if int(p.d.stats.get("main_" + cls, 0)) <= 0:
+			continue
+		var wid := Eco.forge_id(cls, str(p.d.equip[cls].weapon))
+		var c: Dictionary = p.can_forge(wid, Eco.ELEMENTS[0])
+		if bool(c.ok):
+			n += 1
+	return n
+
+static func _forge_hands(wid: String) -> Array:
+	if wid.begins_with("default_"):
+		var look: Dictionary = View.LOOKS.get(wid.substr(8), {})
+		return [str(look.get("r", "")), str(look.get("l", ""))]
+	var it := Eco.item(wid)
+	return [str(it.get("r", "")), str(it.get("l", ""))]
+
+static func forge(app, root: VBoxContainer) -> void:
+	var p = app.profile
+	var d: Dictionary = p.d
+	# the sign
+	var sign := Control.new()
+	sign.custom_minimum_size = Vector2(0, 66)
+	root.add_child(sign)
+	var board := HBoxContainer.new()
+	board.alignment = BoxContainer.ALIGNMENT_CENTER
+	board.add_theme_constant_override("separation", 10)
+	board.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	sign.add_child(board)
+	sign.resized.connect(func():
+		board.size = Vector2(250, 60)
+		board.position = Vector2((sign.size.x - 250.0) * 0.5, 2))
+	UI2.plate(board, "wood", 14.0, "gold", {"rim": 4.0})
+	var anvil := UI2.icon(board, "anvil", 46.0)
+	anvil.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	UI2.text(board, "THE FORGE", 28, UI2.GOLD).size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var back := UI2.button(sign, "", "ghost", func():
+		app.sfx("tap")
+		app.show_tab("home"), "forge_back", 14, 40.0, 12.0)
+	back.position = Vector2(0, 12)
+	back.size = Vector2(46, 40)
+	UI.icon(back, "home", 22, Color.WHITE).position = Vector2(12, 7)
+	UI2.center(UI2.body(root, "Raise a weapon you own to three stars. It only changes the look -- every weapon still plays the same.", 12, UI2.SOFT))
+	# Embers
+	var eb := UI2.frame(root, "ember", 10, 16.0, "orange")
+	var er := UI.row(eb, 8)
+	UI2.img(er, "res://assets/ui/currency/embers.png", 40.0).size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var ev := VBoxContainer.new()
+	ev.add_theme_constant_override("separation", 0)
+	UI.grow(ev)
+	er.add_child(ev)
+	UI2.text(ev, "%s EMBERS" % UI.compact(int(d.get("embers", 0))), 20, Color("#ffd9a0"), Color("#3d1602"), 5)
+	UI2.body(ev, "+%d a match, +%d a win, +%d a daily order, duplicates from chests, the Siege Pass" % [Eco.EMBERS_MATCH, Eco.EMBERS_WIN, Eco.EMBERS_DAILY], 10, Color("#ffe7c8"))
+	var shop_open: bool = app.forge_shop
+	var gb := UI2.button(er, "GET" if not shop_open else "CLOSE", "orange", func():
+		app.forge_shop = not app.forge_shop
+		app.sfx("tap")
+		app.rebuild(), "forge_get_embers", 13, 38.0, 11.0)
+	gb.custom_minimum_size.x = 76
+	gb.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	if shop_open:
+		var pr := HBoxContainer.new()
+		pr.add_theme_constant_override("separation", 8)
+		eb.add_child(pr)
+		for pk in Eco.EMBER_PACKS:
+			var pid := str(pk.id)
+			var cell := UI2.frame(pr, "night", 6, 12.0, "orange")
+			(cell.get_parent() as Control).size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			UI2.img(cell, "res://assets/ui/currency/embers.png", 34.0).size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+			UI2.center(UI2.text(cell, "%d" % int(pk.embers), 16, Color("#ffd9a0")))
+			var bb := UI2.button(cell, "%d" % int(pk.gems), "blue", func():
+				var res: Dictionary = p.buy_embers(pid)
+				if bool(res.get("ok", false)):
+					app.sfx("purchase")
+					app.toast("+%d Embers" % int(res.embers), EMBER_COLOR)
+					app.refresh_top()
+					app.rebuild()
+				else:
+					app.toast("Not enough gems", UI.RED), "forge_buy_" + pid, 13, 32.0, 10.0, "res://assets/ui/currency/gem.png")
+			bb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	# class picker (base classes, then the upgrades)
+	var cls: String = app.forge_cls
+	var rail := UI2.frame(root, "glass", 8, 18.0)
+	for row_classes in [Eco.CLASSES, Eco.UP_CLASSES]:
+		var rr := HBoxContainer.new()
+		rr.alignment = BoxContainer.ALIGNMENT_CENTER
+		rr.add_theme_constant_override("separation", 4)
+		rail.add_child(rr)
+		for c0 in row_classes:
+			var c: String = c0
+			_class_coin(rr, c, cls == c, "forge_" + c, func():
+				app.forge_cls = c
+				app.forge_pick = ""
+				app.forge_element = ""
+				app.sfx("tap")
+				app.rebuild(), "", 38.0)
+	var weapons := forge_weapons(p, cls)
+	var wid: String = app.forge_pick
+	if not weapons.has(wid):
+		wid = Eco.forge_id(cls, str(d.equip[cls].weapon))
+		if not weapons.has(wid):
+			wid = weapons[0]
+	# the anvil: the chosen weapon, turning, with its stars
+	var stars: int = p.forge_stars(wid)
+	var maxed := stars >= Eco.FORGE_STARS.size()
+	var stage_box := Control.new()
+	stage_box.custom_minimum_size = Vector2(0, 250)
+	root.add_child(stage_box)
+	UI2.plate(stage_box, "night", 22.0, _rar_rim(Eco.forge_rarity(wid)), {"rim": 4.0})
+	var g := UI2.glow(stage_box, Rect2(0, 0, 10, 10), Color(1.0, 0.55, 0.2, 0.35))
+	stage_box.resized.connect(func():
+		g.size = Vector2(260, 200)
+		g.position = Vector2(stage_box.size.x * 0.5 - 130, 30))
+	var st := ForgeStage.new()
+	st.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	st.offset_top = 8
+	st.offset_bottom = -8
+	stage_box.add_child(st)
+	var hands := _forge_hands(wid)
+	var el: String = p.forge_element(wid) if maxed else app.forge_element
+	var fx := {"stars": stars, "rarity": Eco.forge_rarity(wid), "element": el}
+	if not maxed and stars + 1 == Eco.FORGE_STARS.size() and Eco.ELEMENTS.has(el):
+		fx = {"stars": stars + 1, "rarity": fx.rarity, "element": el}     # preview the Ascended look in the colour picked
+	UI2.when_ready(st, func(): st.show_set(hands[0], hands[1], fx))
+	var info := UI2.frame(root, "royal", 10, 16.0, "gold")
+	var nr := UI.row(info, 6)
+	var nv := VBoxContainer.new()
+	nv.add_theme_constant_override("separation", 0)
+	UI.grow(nv)
+	nr.add_child(nv)
+	UI2.text(nv, Eco.forge_name(wid).to_upper(), 20, Color.WHITE, UI2.INK, 5)
+	UI2.body(nv, "%s  ·  %s" % [Eco.forge_rarity(wid).to_upper(), str(Eco.CLASS_NAMES.get(cls, "")).to_upper()], 10, _rar_tint(Eco.forge_rarity(wid)).lightened(0.35), false)
+	stars_row(nr, stars, 24).size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	if maxed:
+		UI2.center(UI2.text(info, "ASCENDED", 18, UI2.GOLD))
+		UI2.center(UI2.body(info, "Fully forged. Change the aura's element any time, free.", 11, UI2.SOFT))
+		_element_row(app, info, wid, p.forge_element(wid), true)
+		return
+	var next := stars + 1
+	var fs: Dictionary = Eco.FORGE_STARS[next - 1]
+	var cost := Eco.forge_cost(next)
+	UI2.text(info, "NEXT STAR: %s" % str(fs.name).to_upper(), 15, UI2.GOLD)
+	UI2.body(info, str(fs.text), 12, Color.WHITE)
+	if next == Eco.FORGE_STARS.size():
+		var wins: int = p.forge_wins(wid)
+		var wl := UI.row(info, 6)
+		UI.grow(UI2.body(wl, "Wins with this weapon equipped", 11, UI2.SOFT, false))
+		UI2.text(wl, "%d / %d" % [mini(wins, Eco.FORGE_WINS), Eco.FORGE_WINS], 13, UI2.GREEN if wins >= Eco.FORGE_WINS else Color.WHITE)
+		var bar := ProgressBar.new()
+		bar.max_value = Eco.FORGE_WINS
+		bar.value = mini(wins, Eco.FORGE_WINS)
+		bar.show_percentage = false
+		bar.custom_minimum_size = Vector2(0, 10)
+		info.add_child(bar)
+		UI2.body(info, "Pick the element of its aura:", 11, UI2.SOFT)
+		_element_row(app, info, wid, el, false)
+	var cr := HBoxContainer.new()
+	cr.alignment = BoxContainer.ALIGNMENT_CENTER
+	cr.add_theme_constant_override("separation", 14)
+	info.add_child(cr)
+	for cc in [["res://assets/ui/currency/embers.png", int(cost.embers), int(d.get("embers", 0)) >= int(cost.embers), EMBER_COLOR],
+			["res://assets/ui/currency/coin.png", int(cost.gold), int(d.gold) >= int(cost.gold), UI2.GOLD]]:
+		var ch := HBoxContainer.new()
+		ch.add_theme_constant_override("separation", 4)
+		cr.add_child(ch)
+		UI2.img(ch, str(cc[0]), 26.0)
+		UI2.text(ch, UI.compact(int(cc[1])), 17, cc[3] if bool(cc[2]) else UI.RED, UI2.INK, 4)
+	var check: Dictionary = p.can_forge(wid, el)
+	var why := {"owned": "YOU DON'T OWN IT", "embers": "NEED MORE EMBERS", "gold": "NEED MORE GOLD", "wins": "%d MORE WINS" % maxi(0, Eco.FORGE_WINS - p.forge_wins(wid)), "element": "PICK AN ELEMENT"}
+	var label := "FORGE  %s" % str(fs.name).to_upper() if bool(check.ok) else str(why.get(str(check.why), "CAN'T FORGE"))
+	var fb := UI2.button(info, label, "orange" if bool(check.ok) else "grey", func():
+		var res: Dictionary = p.forge(wid, el)
+		if bool(res.get("ok", false)):
+			app.sfx("purchase")
+			app.toast("%s is now %s!" % [Eco.forge_name(wid), str(Eco.FORGE_STARS[int(res.stars) - 1].name)], UI2.GOLD)
+			app.forge_element = ""
+			app.refresh_top()
+			app.hero_show()
+			app.rebuild(), "forge_go", 18, 52.0, 14.0, UI2.icon_path("anvil"))
+	fb.disabled = not bool(check.ok)
+	# the class's weapons
+	UI2.divider(root, "YOUR %s WEAPONS" % str(Eco.CLASS_NAMES.get(cls, "")).to_upper(), 18, "%d owned" % weapons.size())
+	var grid := GridContainer.new()
+	grid.columns = 3
+	grid.add_theme_constant_override("h_separation", 8)
+	grid.add_theme_constant_override("v_separation", 8)
+	root.add_child(grid)
+	for w0 in weapons:
+		var w: String = w0
+		var sel := w == wid
+		var card := Button.new()
+		card.flat = true
+		card.focus_mode = Control.FOCUS_NONE
+		for st_name in ["normal", "hover", "pressed", "focus"]:
+			card.add_theme_stylebox_override(st_name, StyleBoxEmpty.new())
+		card.custom_minimum_size = Vector2(0, 132)
+		UI.grow(card)
+		card.set_meta("action_key", "forge_pick_" + w)
+		card.pressed.connect(func():
+			app.forge_pick = w
+			app.forge_element = ""
+			app.sfx("tap")
+			app.rebuild())
+		grid.add_child(card)
+		var rar := Eco.forge_rarity(w)
+		UI2.plate(card, _rar_panel(rar), 14.0, "gold" if sel else _rar_rim(rar), {"rim": 4.0 if sel else 2.0})
+		var cv := VBoxContainer.new()
+		cv.add_theme_constant_override("separation", 0)
+		cv.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		cv.offset_left = 4
+		cv.offset_right = -4
+		cv.offset_top = 4
+		cv.offset_bottom = -4
+		cv.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		card.add_child(cv)
+		var icon_path := "res://assets/ui/icons/%s.png" % w
+		UI2.img(cv, icon_path, 70.0).size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		var nl := UI2.text(cv, Eco.forge_name(w).to_upper(), 10, Color.WHITE, UI2.INK, 3)
+		nl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		nl.clip_text = true
+		var sr := stars_row(cv, p.forge_stars(w), 14)
+		sr.alignment = BoxContainer.ALIGNMENT_CENTER
+
+static func _element_row(app, parent: Node, wid: String, current: String, free_change: bool) -> void:
+	var p = app.profile
+	var er := HBoxContainer.new()
+	er.alignment = BoxContainer.ALIGNMENT_CENTER
+	er.add_theme_constant_override("separation", 6)
+	parent.add_child(er)
+	for e0 in Eco.ELEMENTS:
+		var e: String = e0
+		var on := e == current
+		var b := Button.new()
+		b.flat = true
+		b.focus_mode = Control.FOCUS_NONE
+		for st_name in ["normal", "hover", "pressed", "focus"]:
+			b.add_theme_stylebox_override(st_name, StyleBoxEmpty.new())
+		b.custom_minimum_size = Vector2(46, 52)
+		b.set_meta("action_key", "forge_element_" + e)
+		b.pressed.connect(func():
+			app.sfx("tap")
+			if free_change:
+				p.set_forge_element(wid, e)
+				app.hero_show()
+			else:
+				app.forge_element = e
+			app.rebuild())
+		er.add_child(b)
+		var col := Color(str(Eco.ELEMENT_COLOR[e]))
+		var disc := Control.new()
+		disc.size = Vector2(34, 34)
+		disc.position = Vector2(6, 0)
+		disc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		b.add_child(disc)
+		UI2.skin(disc, {"radius": 17.0, "outline": 2.5, "outline_color": Color.WHITE if on else UI2.INK, "rim": 0.0,
+			"fill_top": col.lightened(0.35), "fill_bottom": col.darkened(0.25), "gloss": 1.0, "bevel": 0.2,
+			"shadow_y": 3.0, "shadow_alpha": 0.5, "shadow_soft": 3.0, "glow": 8.0 if on else 0.0, "glow_color": col})
+		var l := UI2.text(b, str(Eco.ELEMENT_NAME[e]).to_upper(), 8, Color.WHITE if on else UI2.SOFT, UI2.INK, 3, false)
+		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		l.position = Vector2(-4, 36)
+		l.size = Vector2(54, 12)

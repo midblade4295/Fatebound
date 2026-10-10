@@ -1,5 +1,5 @@
 extends SceneTree
-# Writes assets/terrain/preload.json: everything a match loads through the asset cache (models, textures, the Meshy
+# Writes content/preload.json (0.31.95: was assets/terrain/, now in the base build): everything a match loads through the asset cache (models, textures, the Meshy
 # bodies' baked animations), every class body a match can call for (0.31.78: so the first Crusader, Berserker, Assassin,
 # Sniper, Archmage or Necromancer of a match doesn't load its body and 110 animations on the spot), the KayKit animation
 # libraries and the start-up cache -- so the app can load it all in the background while the menus are up.
@@ -35,7 +35,7 @@ func _process(_d: float) -> bool:
 	for p in paths:
 		if not uniq.has(p):
 			uniq.append(p)
-	var fa := FileAccess.open("res://assets/terrain/preload.json", FileAccess.WRITE)
+	var fa := FileAccess.open("res://content/preload.json", FileAccess.WRITE)
 	fa.store_string(JSON.stringify(uniq, "\n"))
 	fa.close()
 	print("PRELOAD_LIST %d paths" % uniq.size())

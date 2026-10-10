@@ -29,6 +29,10 @@ var audio: Node
 var tab := "home"
 var home_class := "knight"
 var locker_class := "knight"
+var forge_cls := "knight"              # 0.31.93: the Forge's class, weapon (Eco.forge_id) and the element picked for star 3
+var forge_pick := ""
+var forge_element := ""
+var forge_shop := false                # the Embers packs open
 var siege = null
 
 # ---------------- forced update (0.31.73) ----------------
@@ -662,6 +666,7 @@ func rebuild() -> void:
 		"shop": Screens.shop(self, content)
 		"locker": Screens.locker(self, content)
 		"settings": Screens.settings(self, content)
+		"forge": Screens.forge(self, content)
 	refresh_top()
 
 # ---------------- players online (0.31.82) ----------------

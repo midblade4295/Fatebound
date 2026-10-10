@@ -2804,3 +2804,91 @@ K2/K3 notes (0.17.0)
   drivers (or none, already filtered by the Vulkan 1.1 requirement).
 - verify_play_bundle.py expects minSdkVersion 29; PLAY_STORE_HANDOFF updated. The itch preview APK doesn't use Gradle,
   so it keeps the template's min SDK (24).
+
+## 0.31.93 — Armory Reforged: the Knight's weapons, and the Forge (Kevin: "begin the weapon models and forge system")
+- Pipeline (tools/meshy_weapon.py, tools/gltf_bounds.py): the approved concept sheet (art-refs branch,
+  weapon-concepts/) -> a parts sheet with every piece drawn on its own, front view (ElevenLabs gpt-image-2 with the
+  sheet as reference, ~600 credits a sheet) -> crop (swords turned hilt-down) -> Meshy image-to-3D -> fit: the piece is
+  placed in the space of the KayKit model it replaces (same length for blades and poles, same face area for shields,
+  facing +Z), baked into the vertices (Godot drops a glTF's single root transform), texture 512 (VRAM-compressed).
+  siege_view: "mw/<id>" files, MESHY_WEAPON_LIKE (id -> the KayKit file whose hand slot, fit and roll it uses), so every
+  hold Kevin tuned carries over. Checked in hand: same transform as the old piece, idle/attack/block renders.
+- Meshy: meshy-6-lite (15 credits, 3k tris) for blades, meshy-7.1 (30, 4k) for shields and the legendary (lite's
+  shields had a split rim from the side). Knight: 22 pieces, ~495 credits; 575 left.
+- Knight weapons renamed (Kevin's roster): Squire's Blade (starter, Eco.STARTER_NAMES), Steadfast, Highguard,
+  Lionheart, Dawnwall, Bloodmoon, Stonewarden, Thornspire, Frostward, Ironbriar, Kingsoath. Bloodmoon's blade is held
+  like the one-handed sword (the two-handed template made it huge).
+- Icons: tools/render_weapon_icons.gd -- the weapon itself posed like the concept sheets (shield behind, blade diagonal;
+  scripts/app/weapon_pose.gd), for every mw/ weapon and starter. Replaces the tiny figure with an edge-on shield.
+- The Forge: Home medallion (anvil) under FIRST WIN (badge: an equipped weapon of a class you play can be forged), the
+  Locker's "FORGE YOUR <CLASS> WEAPONS", Screens.forge: Embers bar (+ packs 60/150/400 gems -> 60/170/500), class
+  picker, the weapon turning in its own world (forge_stage.gd) with its effects, stars, next star and cost, the third
+  star's wins (25 with it equipped) and element (fire/frost/storm/holy/nature/void, changeable free once Ascended),
+  the class's weapons with their stars. Stars also on the Locker cards.
+- Stars: Polished 40 Embers + 500 gold, Runed 120 + 1,500, Ascended 300 + 4,000. Looks only. forge_glow.gdshader as a
+  next_pass on the weapon's materials (sheen sweep + rim; rune bands; brighter in the element's colour) and, at three
+  stars, an aura of motes and a world-space trail from the tip. Applied in make_body from the profile's look
+  (look_for -> "forge"), so the match, Home's line-up, the Locker vault and the Forge show the same. Local player only.
+- Embers: +2 a match / +5 a win, +15 a daily order, a chest duplicate (10/25/60/150 by rarity, was gold), pass tiers
+  2, 6, 14 ... (20 free / 40 premium), the starter pack's 150, packs for gems. Results screen shows them.
+- New icons: anvil (Forge), Embers (ElevenLabs, cut out). tests/forge_test.gd (in the suite).
+- 0.31.93, version code 179. Quick suite: ALL 44 PASSED.
+
+## 0.31.94 — Armory Reforged: every other class's weapons (Kevin: "I've topped up meshy")
+- Parts sheets for the 8 remaining concept sheets (BA, RO, AR, MA, PW, CB, NA, RA; art-refs weapon-parts/), 91 pieces
+  through Meshy (~1,815 credits; 1,760 left): meshy-7.1 for shields, bows, crossbows, claws and the legendaries,
+  meshy-6-lite for the rest. 86 are in the game; the 8 quest weapons' raw models are kept on art-refs
+  (quest-weapons/, with the template each would use) for when quests come.
+- meshy_weapon.py fit: --axes turns (or mirrors) a piece onto its template's axes first -- a bow lies along Z (or X
+  for the Bits bows), a crossbow along Z, a claw along X; "auto" picks the turn that lays the piece over the template
+  best (surface samples, nearest-point distance both ways; "autoy" only about the length, "automirror" for a left-hand
+  claw made from the right one). Kind "box": longest side matched, centred. Normals are turned with the piece; a
+  mirrored piece's triangles are reversed. Checked against the templates from three sides, then in hand.
+- Choices: closed tomes face their cover out of the hand (the open book's pages face the holder); the Necromancer's
+  skull staffs face -X like the KayKit skull (so the face-the-chest turn of 0.31.66 still applies); the cleaver and
+  the Eye of the Archon are 0.75 of their template's length (the length match made them huge).
+- Renamed to Kevin's roster, every class: starters in Eco.STARTER_NAMES (Woodsplitter, Cutpurse Daggers, Ashwood Bow,
+  Apprentice Staff, Acolyte's Wand, Work Hatchet, Templar's Sword, Ironhewer, Bonecaller, Shade Daggers, Marksman's
+  Crossbow, Magister's Staff) and LOOKS; catalog weapons (Raider's Bite ... Voidrod) point at their mw/ pieces.
+- Icons and the Forge preview (weapon_pose.gd): a piece is stood up first -- longest side up, broadest face to the
+  camera; a staff shows its face, a closed tome its cover; a bow (or a quiver's bow) is the main weapon.
+- tools/app_shots.gd: SHOT_FORGE_CLS opens another class's Forge. Preload list regenerated (the new starters).
+- 0.31.94, version code 180. Quick suite: ALL 44 PASSED. APK 228,303,619 bytes (+25 MB for the 86 pieces), sha256
+  337db0d666b1812361ba68d61bead392f141865fea9736959009fefb083a10fd, on itch (vellicgames/fatebound:android).
+
+## Play preset: 32-bit ARM dropped (Kevin: "Ok drop the 32bit", 2026-10-10; no new build)
+- export_presets.cfg "Android Play Store": armeabi-v7a off -- the bundle is arm64-v8a only. verify_play_bundle.py
+  now wants exactly arm64-v8a. PLAY_STORE_HANDOFF.md updated. A phone's Play download is unchanged (Play already sent
+  each phone one engine); the .aab loses ~26 MB (the 32-bit release engine, compressed). Reach: armeabi-v7a-only
+  devices were ~1.3% of one app's Play installs (ZeusLN, 2026-09-07), fewer for a Vulkan, Android 10+ game. Play
+  Console will report fewer supported devices on the next upload. The itch preview was already arm64 only.
+
+## 0.31.95 — a small install, then "UPDATING" downloads the art (Kevin: "the main game installs a small file from the Play store and itch, then when they launch the game after first install the game will say it's updating")
+- The build (Play and itch) holds the engine, every script and scene, the fonts, the launcher art and the loader. The
+  art and sound are 5 content packs (ui 15.5, world 53.9, heroes 68.5, weapons 32.7, audio 10.6 MB) on the repo's
+  content-packs branch, served by GitHub (raw.githubusercontent.com, byte ranges). Kevin picked GitHub, then the
+  branch when GitHub refused this session releases. content/manifest.json lists file, size, sha256 and a probe each.
+- tools/content_packs.py: build (export each pack with the "Content Pack" preset, only when its inputs -- the files,
+  their import settings, the engine -- changed; files named by that hash, reproducible), strip to data only (Godot puts
+  the project settings, the uid cache and the autoload script into every pack: removed; fails on any code), upload (a
+  plain commit to the branch, never a force-push; old files stay), check (inputs unchanged, every pack on the branch),
+  base (an APK/AAB holds no pack data, has this manifest, starts the loader), presets (the base presets' exclude
+  filters), coverage (every asset in exactly one pack or the base). tools/pck_tool.py lists/strips .pck files.
+- The loader (scenes/Boot.tscn, now the main scene; scripts/app/content_loader.gd): packs already in res:// (source,
+  tools, tests) need nothing; packs downloaded and checked before mount at once; the rest download with "UPDATING", a
+  progress bar, MB and MB/s -- 8 MB ranges appended to a .part file (resumes after a dropped connection or a closed
+  app), SHA-256 as it arrives, retries 2/4/8/15/30 s with RETRY NOW, "is the phone full?" on a write failure. Packs no
+  longer listed are deleted. Packs never replace the build's own files. BootGuard.hold(): a download isn't a frozen
+  start, and the OK count starts when the game loads.
+- content/preload.json (was assets/terrain/): the start-up list is code-side, so a new list doesn't re-download a pack.
+- Checked: tests/content_test.gd (in the suite); tools/content_e2e.sh (desktop-format packs, a project copy without
+  the packs' files, a local server that drops a connection: all 5 download, the retry happens, the menu loads and every
+  start-up model loads; second start downloads nothing; a half-downloaded pack resumes at 9.5 MB) -- PASS; and the real
+  packs downloaded from GitHub by Godot's HTTPRequest, checked and mounted.
+- The itch preset also stopped shipping store-listing/ (26 MB of Play listing art had been in the APK).
+- content/uids.json: the packs' resources' UIDs, registered after mounting (the build's uid cache only lists its own
+  files, else Godot warns and falls back to the path for every reference). 6 hero models' imports still name an older
+  UID for their texture -- also in the full project, harmless.
+- privacy.html: GitHub listed under Internet use (updated 10 October 2026). PLAY_STORE_HANDOFF.md: content packs.
+- 0.31.95, version code 181. Quick suite: ALL 45 PASSED. APK 31,135,353 bytes (was 228 MB), sha256
+  a31aa9ca7c54017aafab8e38a0d7c56a6b43b09640d7af6b95d5ad4c5768467e. First launch downloads 181 MB.
