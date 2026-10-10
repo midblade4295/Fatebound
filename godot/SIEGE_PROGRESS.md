@@ -2726,3 +2726,12 @@ K2/K3 notes (0.17.0)
 - store-listing: the 512 Play icon (graphics/app_icon_512x512.png, fastlane images/icon.png); README updated.
 - Concepts A-F and the source art are on Kevin's ElevenLabs flow (tL2Uq8Khy94WZ0PV3s34).
 - 0.31.89, version code 175. Quick suite: ALL 41 PASSED.
+
+## IAP plan (2026-10-09, no build)
+- Kevin: weapons overhaul ("Armory Reforged": every weapon its own Meshy model and a new name, 7 quest-only legendaries,
+  a Forge with Embers and three cosmetic stars) plus in-app purchases. Real money buys gems only; chests stay
+  earn-only; quest weapons are never sold; nothing sold changes damage.
+- godot/PLAY_IAP_HANDOFF.md: the Play Console side for Grokbot (payments profile, internal-testing billing build,
+  products gems_80 / gems_500 / gems_1100 / gems_2400 / gems_6500 / starter_pack, license testers, the purchase-check
+  service account at /etc/fatebound-siege/play-service-account.json, Data safety and rating). PLAY_STORE_HANDOFF.md
+  points to it.
