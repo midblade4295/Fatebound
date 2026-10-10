@@ -49,7 +49,7 @@ Preset **Android Play Store** in `godot/export_presets.cfg`:
 | Output | Signed release `.aab` (Gradle build) |
 | ABIs | armeabi-v7a, arm64-v8a, x86_64 (32-bit x86 dropped 2026-10-08, Kevin) |
 | Engine/templates | Godot 4.7.2 + matching Android build template |
-| Renderer | **Vulkan (mobile) by default, OpenGL fallback ON** -- see below. Do not turn the fallback off. |
+| Renderer | **Vulkan (mobile) only, OpenGL fallback OFF** (0.31.92) -- see below. |
 | SDK | min 24, target 36; verify against current Play requirements |
 | Export excludes | `tests/*, reports/*, tools/*, server/*, store-listing/*` (server and listing files are never shipped) |
 
@@ -58,16 +58,17 @@ bundles*; choose a versionCode higher than anything ever uploaded and a versionN
 preset AND in `godot/tools/verify_play_bundle.py` (it still expects 24 / `1.2.0-siege-online`). Don't infer the code
 from preview codes (158), the old handoff's 24, or workflow file names.
 
-## Renderer: Vulkan with OpenGL fallback (Kevin, 2026-10-07)
+## Renderer: Vulkan only (Kevin, 2026-10-09)
 
-Testers on Mali-GPU phones (Pixel 7 Pro, vivo S30 mini, Redmi Note 15 Pro) froze on the splash on Vulkan. Kevin chose to
-keep Vulkan as the default and add fallbacks (0.31.72):
-- `rendering/rendering_device/fallback_to_opengl3` = true (Godot's own fallback for phones without usable Vulkan).
-  It equals the engine default, so Godot leaves it **out** of `project.binary`: missing = on.
-- `application/config/project_settings_override="user://renderer.cfg"` + the **BootGuard** autoload
-  (`scripts/app/boot_guard.gd`): after a Vulkan start that never reached the menu, the next start switches that phone
-  to OpenGL. Settings has a manual switch.
-`verify_play_bundle.py` now checks exactly this (fallback on, the override path, BootGuard present).
+0.31.72 added an OpenGL fallback after testers' phones froze on the splash. Kevin's S21 then froze the same way on a
+fresh Play install: a start-up deadlock in the game's background loading with an empty shader cache (fixed in 0.31.91),
+very likely the testers' freeze too. With Vulkan working, Kevin removed OpenGL (0.31.92):
+- `rendering/rendering_device/fallback_to_opengl3=false`. Godot then marks `android.hardware.vulkan.version` (1.1) as
+  **required** in the manifest, so Play doesn't offer the game to phones without Vulkan 1.1.
+- No `application/config/project_settings_override` (the old `user://renderer.cfg` OpenGL switch); BootGuard deletes
+  that file on phones that still have it and keeps only its start-up log and safe start.
+`verify_play_bundle.py` checks exactly this (fallback off, no override, the manifest requirement, BootGuard present).
+Godot's export also suggests min SDK 29 for Vulkan; the preset stays at 24 unless Kevin decides otherwise.
 
 ## Signing: private credentials only
 
@@ -152,7 +153,7 @@ ask Kevin whether to regenerate them.
 ## Upload in Play Console
 
 Open the existing app **Fatebound** (`com.fatebound.game`). **Internal testing first**: the Mali-phone start-up freeze
-is not yet confirmed fixed on a real phone (0.31.72 adds the OpenGL fallback). Use only the track Kevin authorizes;
+is most likely the fresh-install deadlock fixed in 0.31.91; confirm on a tester's phone. Use only the track Kevin authorizes;
 upload the validated AAB, write accurate release notes, resolve Console errors, and record acceptance, versionCode,
 track and status. Uploading, saving a draft, submitting for review and rolling out are separate actions -- this
 handoff authorizes none of them by itself. Don't invent credentials, upload permission, submission or approval; if

@@ -1,36 +1,24 @@
 extends SceneTree
-# BootGuard's decision (0.31.72): when a start switches the phone to OpenGL, when it is a safe start, and that the
-# renderer file it writes is a settings override Godot reads (both the base key and the Android ".mobile" one).
+# BootGuard's decision (0.31.72; Vulkan only since 0.31.92): when a start is a safe start and keeps the frozen start's
+# log, and that the project is Vulkan with no OpenGL fallback and no renderer switch file.
 const BootGuard = preload("res://scripts/app/boot_guard.gd")
-const B := "0.31.72-fatebound"
+const B := "0.31.92-fatebound"
 
 func _init() -> void:
-	var VK := "mobile"
-	var GL := "gl_compatibility"
-	# First start ever, and a normal start after a good one: run, not safe.
-	assert(BootGuard.decide({}, VK, false, B) == {"action": "run", "safe": false})
-	assert(BootGuard.decide({"pending": false, "renderer": VK, "build": B}, VK, false, B).action == "run")
-	# The last start on Vulkan never reached the menu: switch to OpenGL (and restart).
-	assert(BootGuard.decide({"pending": true, "renderer": VK, "build": B}, VK, false, B).action == "switch_gl")
-	# ... also when that record came from 0.31.70/71, which didn't store the renderer (they were Vulkan-only).
-	assert(BootGuard.decide({"pending": true, "build": "0.31.71-fatebound"}, VK, false, B).action == "switch_gl")
-	# Stuck on OpenGL: never switch again (no loop); a safe start instead.
-	assert(BootGuard.decide({"pending": true, "renderer": GL, "build": B}, GL, true, B) == {"action": "run", "safe": true})
-	# The renderer file exists but this start is still Vulkan (file not applied): don't restart forever.
-	assert(BootGuard.decide({"pending": true, "renderer": VK, "build": B}, VK, true, B) == {"action": "run", "safe": true})
+	# First start ever, and a normal start after a good one: not stuck, not safe.
+	assert(BootGuard.decide({}, B) == {"stuck": false, "safe": false})
+	assert(BootGuard.decide({"pending": false, "build": B}, B) == {"stuck": false, "safe": false})
+	# The last start never reached the menu: a safe start that keeps that start's log.
+	assert(BootGuard.decide({"pending": true, "build": B}, B) == {"stuck": true, "safe": true})
+	# ... also from a 0.31.72-0.31.91 record (it stored the renderer; the renderer no longer matters).
+	assert(BootGuard.decide({"pending": true, "renderer": "gl_compatibility", "build": "0.31.91-fatebound"}, B) == {"stuck": true, "safe": true})
 	# Safe start sticks for the build it happened in, not the next build.
-	assert(BootGuard.decide({"pending": false, "renderer": GL, "safe_build": B}, GL, true, B).safe == true)
-	assert(BootGuard.decide({"pending": false, "renderer": GL, "safe_build": "0.31.71-fatebound"}, GL, true, B).safe == false)
-	# The renderer file parses as project settings with both keys.
-	for gl in [true, false]:
-		var cf := ConfigFile.new()
-		assert(cf.parse(BootGuard.renderer_cfg_text(gl)) == OK)
-		var want := GL if gl else VK
-		assert(str(cf.get_value("rendering", "renderer/rendering_method")) == want)
-		assert(str(cf.get_value("rendering", "renderer/rendering_method.mobile")) == want)
-	# project.godot points Godot at that file, keeps Vulkan as the default and Godot's own fallback on.
-	assert(str(ProjectSettings.get_setting("application/config/project_settings_override")) == BootGuard.RENDERER_CFG)
-	assert(bool(ProjectSettings.get_setting("rendering/rendering_device/fallback_to_opengl3")))
-	assert(str(ProjectSettings.get_setting("rendering/renderer/rendering_method.mobile")) == VK or FileAccess.file_exists(BootGuard.RENDERER_CFG))
+	assert(BootGuard.decide({"pending": false, "safe_build": B}, B).safe == true)
+	assert(BootGuard.decide({"pending": false, "safe_build": "0.31.91-fatebound"}, B).safe == false)
+	# Vulkan (Mobile) only: Godot's OpenGL fallback off, no settings override file read at start-up.
+	assert(str(ProjectSettings.get_setting("rendering/renderer/rendering_method")) == "mobile")
+	assert(str(ProjectSettings.get_setting("rendering/renderer/rendering_method.mobile")) == "mobile")
+	assert(not bool(ProjectSettings.get_setting("rendering/rendering_device/fallback_to_opengl3")))
+	assert(str(ProjectSettings.get_setting("application/config/project_settings_override")) == "")
 	print("BOOT_GUARD_PASS")
 	quit(0)
