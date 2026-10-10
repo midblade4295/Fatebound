@@ -181,7 +181,7 @@ func _init() -> void:
 	check(Eco.cosmetic_class("knight", true) == "crusader" and Eco.cosmetic_class("knight", false) == "knight" and Eco.cosmetic_class("worker", true) == "worker", "an upgraded Knight dresses from the Crusader slot")
 	up.d.owned.append("crus_wpn_warhammer")          # (buying depends on the day's rotation; tested above)
 	check(bool(up.equip("crus_wpn_warhammer").get("ok", false)), "a Crusader weapon owned and equipped")
-	check(str(up.look_for("crusader").get("r", "")) == "bits/hammer_A" and not up.look_for("knight").has("r"), "it arms the Crusader, not the plain Knight")
+	check(str(up.look_for("crusader").get("r", "")) == "mw/bulwark_hammer" and not up.look_for("knight").has("r"), "it arms the Crusader, not the plain Knight")
 	var upcount := 0
 	for cid in Eco.CATALOG:
 		if Eco.UP_CLASSES.has(str(Eco.CATALOG[cid].get("class", ""))):

@@ -34,6 +34,24 @@ def points(path):
     sc=g['scenes'][g.get('scene',0)]
     for r in sc['nodes']: walk(r,np.eye(4))
     return np.vstack(out)
+def surface(path, n=5000, seed=1):
+    # n points spread evenly over the model's triangles (by area): a fair shape sample whatever the mesh density
+    g,bins=load(path); tris=[]
+    def walk(ni,M):
+        nd=g['nodes'][ni]; M2=M@mat(nd)
+        if 'mesh' in nd:
+            for p in g['meshes'][nd['mesh']]['primitives']:
+                v=acc(g,bins,p['attributes']['POSITION']).astype(np.float64)
+                v=(M2[:3,:3]@v.T).T+M2[:3,3]
+                idx=acc(g,bins,p['indices']).astype(np.int64).reshape(-1,3) if 'indices' in p else np.arange(len(v)).reshape(-1,3)
+                tris.append(v[idx])
+        for c in nd.get('children',[]): walk(c,M2)
+    sc=g['scenes'][g.get('scene',0)]
+    for r in sc['nodes']: walk(r,np.eye(4))
+    T=np.vstack(tris); a=np.linalg.norm(np.cross(T[:,1]-T[:,0],T[:,2]-T[:,0]),axis=1)*0.5
+    rng=np.random.default_rng(seed); k=rng.choice(len(T),n,p=a/a.sum())
+    u=rng.random((n,2)); m=u.sum(1)>1; u[m]=1-u[m]
+    t=T[k]; return t[:,0]+u[:,:1]*(t[:,1]-t[:,0])+u[:,1:]*(t[:,2]-t[:,0])
 if __name__=='__main__':
     for p in sys.argv[1:]:
         v=points(p); lo=v.min(0); hi=v.max(0)

@@ -13,8 +13,11 @@ Pipeline per piece (a sword, a shield, a staff ...):
   crop  SHEET OUTDIR name1 name2 ...      pieces in reading order (rows top to bottom, left to right)
   model PNG NAME WORKDIR [--ai meshy-6-lite|meshy-6|meshy-7.1] [--poly N]
   wait  WORKDIR NAME                      poll until done, download NAME.glb + NAME_thumb.png
-  fit   IN.glb TEMPLATE OUT.glb KIND [--len F] [--tex N]
-        KIND sword|blade|shield|pole|bow|handheld; TEMPLATE a KayKit .gltf; --len scales the length vs the template
+  fit   IN.glb TEMPLATE OUT.glb KIND [--len F] [--tex N] [--axes X,Y,Z]
+        KIND sword|blade|pole (length on +Y, grip at the template's) | shield|handheld (face area, face +Z) |
+        box (longest side, centred); TEMPLATE a KayKit .gltf; --len scales the size vs the template;
+        --axes turns the piece onto the template's axes first ("-X,Y,Z" mirrors: a left-hand claw from a right one);
+        auto / autoy / automirror: the turn that lays it over the template best (all 24 / about +Y only / mirrored)
 Key from MESHY_KEY (never written to disk).
 """
 import base64
@@ -153,16 +156,81 @@ def _points(path):
     return points(path)
 
 
-def fit(src, template, out, kind, length=1.0, tex=512):
-    """Place the Meshy piece in the template's space with a root-node transform; shrink the texture."""
+def axes_matrix(spec):
+    """'X,Y,Z' style: out.x = in.<first>, out.y = in.<second>, out.z = in.<third>, each optionally negated ('-Y')."""
+    M = np.zeros((3, 3))
+    for row, s in enumerate(spec.split(",")):
+        s = s.strip().upper()
+        sign = -1.0 if s.startswith("-") else 1.0
+        M[row, "XYZ".index(s.lstrip("+-"))] = sign
+    if abs(abs(np.linalg.det(M)) - 1) > 1e-6 or (np.abs(M).sum(0) != 1).any():
+        raise SystemExit("bad --axes " + spec)
+    return M
+
+
+def _rotations(mode="auto"):
+    """auto: the 24 turns; autoy: the 4 turns about the length (+Y stays +Y); automirror: the 24 turns of the
+    mirrored piece (the other hand's claw)."""
+    out = []
+    import itertools
+    for perm in itertools.permutations(range(3)):
+        for signs in itertools.product((1, -1), repeat=3):
+            M = np.zeros((3, 3))
+            for r in range(3):
+                M[r, perm[r]] = signs[r]
+            d = np.linalg.det(M)
+            if mode == "automirror" and d < 0 or mode != "automirror" and d > 0:
+                if mode != "autoy" or (M[1] == [0, 1, 0]).all():
+                    out.append(M)
+    return out
+
+
+def _spec(M):
+    return ",".join(("-" if M[r].sum() < 0 else "") + "XYZ"[int(np.abs(M[r]).argmax())] for r in range(3))
+
+
+def auto_axes(src, template, show=3, mode="auto"):
+    """The turn (of the 24) that lays the piece over the template best: surface samples of both, each centred on its
+    box and scaled to a longest side of 1, scored by the mean nearest-point distance both ways."""
+    from scipy.spatial import cKDTree
+    import gltf_bounds as gb
+
+    def norm(p):
+        lo, hi = p.min(0), p.max(0)
+        return (p - (lo + hi) / 2) / (hi - lo).max()
+    T = norm(gb.surface(template))
+    tt = cKDTree(T)
+    P0 = gb.surface(src)
+    res = []
+    for M in _rotations(mode):
+        P = norm((M @ P0.T).T)
+        res.append((tt.query(P)[0].mean() + cKDTree(P).query(T)[0].mean(), _spec(M)))
+    res.sort()
+    for sc, sp in res[:show]:
+        print("   axes %-8s %.4f" % (sp, sc))
+    return res[0][1]
+
+
+def fit(src, template, out, kind, length=1.0, tex=512, axes="X,Y,Z"):
+    """Place the Meshy piece in the template's space, baked into the vertices; shrink the texture.
+
+    axes: turn (or mirror) the piece first -- Meshy builds a piece facing +Z, upright as drawn; a bow or crossbow
+    template lies along Z or X, so the drawn piece is turned onto the template's axes before it is measured.
+    KIND box: the longest side matched to the template's longest side (x --len), centred on the template."""
     g, binc = mbt.read_glb(src)
-    v = _points(src)
+    if axes.startswith("auto"):
+        axes = auto_axes(src, template, mode=axes)
+    R = axes_matrix(axes)
+    v = (R @ _points(src).T).T
     lo, hi = v.min(0), v.max(0)
     size = hi - lo
     T = _points(template)
     tlo, thi = T.min(0), T.max(0)
     tsize = thi - tlo
-    if kind in ("shield", "handheld"):
+    if kind == "box":
+        s = tsize.max() / size.max() * length
+        off = (tlo + thi) / 2 - (lo + hi) / 2 * s
+    elif kind in ("shield", "handheld"):
         # the same face area as the template (a kite shield replacing a round one keeps its own outline), no side more
         # than 25 % past the template's; face toward +Z like the template; centred like the template
         s = (tsize[0] * tsize[1] / (size[0] * size[1])) ** 0.5
@@ -179,6 +247,15 @@ def fit(src, template, out, kind, length=1.0, tex=512):
     binc = bytearray(binc)
     import gltf_bounds as gb
     done = set()
+    mirror = np.linalg.det(R) < 0
+
+    def vec3(ai):
+        a = g["accessors"][ai]
+        bv = g["bufferViews"][a["bufferView"]]
+        if bv.get("byteStride", 12) != 12 or a.get("componentType") != 5126:
+            raise SystemExit("only packed float vec3 is handled")
+        o = bv.get("byteOffset", 0) + a.get("byteOffset", 0)
+        return a, o, np.frombuffer(bytes(binc[o:o + a["count"] * 12]), np.float32).reshape(-1, 3).astype(np.float64)
 
     def bake(ni, parent):
         node = g["nodes"][ni]
@@ -189,17 +266,28 @@ def fit(src, template, out, kind, length=1.0, tex=512):
                 if ai in done:
                     continue
                 done.add(ai)
-                a = g["accessors"][ai]
-                bv = g["bufferViews"][a["bufferView"]]
-                if bv.get("byteStride", 12) != 12:
-                    raise SystemExit("strided positions are not handled")
-                o = bv.get("byteOffset", 0) + a.get("byteOffset", 0)
-                pts = np.frombuffer(bytes(binc[o:o + a["count"] * 12]), np.float32).reshape(-1, 3).astype(np.float64)
+                a, o, pts = vec3(ai)
                 pts = (world[:3, :3] @ pts.T).T + world[:3, 3]
-                pts = pts * s + off
+                pts = (R @ pts.T).T * s + off
                 binc[o:o + a["count"] * 12] = pts.astype(np.float32).tobytes()
                 a["min"] = [float(x) for x in pts.min(0)]
                 a["max"] = [float(x) for x in pts.max(0)]
+                if "NORMAL" in p["attributes"]:
+                    na, no, nrm = vec3(p["attributes"]["NORMAL"])
+                    nrm = (R @ np.linalg.inv(world[:3, :3]).T @ nrm.T).T
+                    nrm /= np.maximum(np.linalg.norm(nrm, axis=1, keepdims=True), 1e-9)
+                    binc[no:no + na["count"] * 12] = nrm.astype(np.float32).tobytes()
+                    na["min"] = [float(x) for x in nrm.min(0)]
+                    na["max"] = [float(x) for x in nrm.max(0)]
+                if mirror and "indices" in p:
+                    # a mirrored piece (the other hand's claw): reverse each triangle so its front stays outside
+                    ia = g["accessors"][p["indices"]]
+                    ibv = g["bufferViews"][ia["bufferView"]]
+                    dt = {5121: np.uint8, 5123: np.uint16, 5125: np.uint32}[ia["componentType"]]
+                    io_ = ibv.get("byteOffset", 0) + ia.get("byteOffset", 0)
+                    n = ia["count"] * np.dtype(dt).itemsize
+                    idx = np.frombuffer(bytes(binc[io_:io_ + n]), dt).reshape(-1, 3)[:, ::-1].copy()
+                    binc[io_:io_ + n] = idx.tobytes()
         for k in ("matrix", "translation", "rotation", "scale"):
             node.pop(k, None)
         for c in node.get("children", []):
@@ -214,7 +302,7 @@ def fit(src, template, out, kind, length=1.0, tex=512):
     buf = io.BytesIO()
     img.save(buf, "JPEG", quality=90)
     mbt.write_glb(out, g, binc, buf.getvalue())
-    print("fit", os.path.basename(src), "->", os.path.basename(out), "scale %.4f" % s, "tris",
+    print("fit", os.path.basename(src), "->", os.path.basename(out), "axes", axes, "scale %.4f" % s, "tris",
           sum(g["accessors"][p["indices"]]["count"] // 3 for m in g["meshes"] for p in m["primitives"] if "indices" in p))
 
 
@@ -237,7 +325,7 @@ def main():
     elif cmd == "wait":
         wait(pos[0], pos[1])
     elif cmd == "fit":
-        fit(pos[0], pos[1], pos[2], pos[3], float(opt.get("len", 1.0)), int(opt.get("tex", 512)))
+        fit(pos[0], pos[1], pos[2], pos[3], float(opt.get("len", 1.0)), int(opt.get("tex", 512)), opt.get("axes", "X,Y,Z"))
     else:
         raise SystemExit(__doc__)
 

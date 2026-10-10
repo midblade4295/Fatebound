@@ -2833,3 +2833,24 @@ K2/K3 notes (0.17.0)
   2, 6, 14 ... (20 free / 40 premium), the starter pack's 150, packs for gems. Results screen shows them.
 - New icons: anvil (Forge), Embers (ElevenLabs, cut out). tests/forge_test.gd (in the suite).
 - 0.31.93, version code 179. Quick suite: ALL 44 PASSED.
+
+## 0.31.94 — Armory Reforged: every other class's weapons (Kevin: "I've topped up meshy")
+- Parts sheets for the 8 remaining concept sheets (BA, RO, AR, MA, PW, CB, NA, RA; art-refs weapon-parts/), 91 pieces
+  through Meshy (~1,815 credits; 1,760 left): meshy-7.1 for shields, bows, crossbows, claws and the legendaries,
+  meshy-6-lite for the rest. 86 are in the game; the 8 quest weapons' raw models are kept on art-refs
+  (quest-weapons/, with the template each would use) for when quests come.
+- meshy_weapon.py fit: --axes turns (or mirrors) a piece onto its template's axes first -- a bow lies along Z (or X
+  for the Bits bows), a crossbow along Z, a claw along X; "auto" picks the turn that lays the piece over the template
+  best (surface samples, nearest-point distance both ways; "autoy" only about the length, "automirror" for a left-hand
+  claw made from the right one). Kind "box": longest side matched, centred. Normals are turned with the piece; a
+  mirrored piece's triangles are reversed. Checked against the templates from three sides, then in hand.
+- Choices: closed tomes face their cover out of the hand (the open book's pages face the holder); the Necromancer's
+  skull staffs face -X like the KayKit skull (so the face-the-chest turn of 0.31.66 still applies); the cleaver and
+  the Eye of the Archon are 0.75 of their template's length (the length match made them huge).
+- Renamed to Kevin's roster, every class: starters in Eco.STARTER_NAMES (Woodsplitter, Cutpurse Daggers, Ashwood Bow,
+  Apprentice Staff, Acolyte's Wand, Work Hatchet, Templar's Sword, Ironhewer, Bonecaller, Shade Daggers, Marksman's
+  Crossbow, Magister's Staff) and LOOKS; catalog weapons (Raider's Bite ... Voidrod) point at their mw/ pieces.
+- Icons and the Forge preview (weapon_pose.gd): a piece is stood up first -- longest side up, broadest face to the
+  camera; a staff shows its face, a closed tome its cover; a bow (or a quiver's bow) is the main weapon.
+- tools/app_shots.gd: SHOT_FORGE_CLS opens another class's Forge. Preload list regenerated (the new starters).
+- 0.31.94, version code 180. Quick suite: ALL 44 PASSED.

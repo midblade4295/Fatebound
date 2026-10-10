@@ -114,7 +114,7 @@ func _init() -> void:
 	var names := []
 	for id in Eco.pass_items(1):
 		names.append(str(Eco.CATALOG[id].name))
-	check(names.slice(0, 5) == ["Axe & Ale", "Twin Wands", "War Mallet", "Sun Staff", "Brass Knuckles"] and names[15] == "Reaper",
+	check(names.slice(0, 5) == ["Tavern Brawler", "Twin Sparks", "Brickbreaker", "Solaris", "Ravenclaws"] and names[15] == "Grimgrin",
 		"the rest of season 1's pass is unchanged %s" % str(names))
 	check(int(Eco.pass_cosmetics(1).n) == 10 and int(Eco.pass_cosmetics(1).legendary) == 5, "the premium offer counts 10 cosmetics, 5 legendary (%s)" % str(Eco.pass_cosmetics(1)))
 	var shop_titles := []

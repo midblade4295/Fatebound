@@ -29,23 +29,23 @@ const LOOKS := {
 	# 0.31.76 (Kevin picked concepts "A2 both"): the Villager is a Meshy peasant (bareheaded, patched linen tunic, rope
 	# belt), the Worker a Meshy straw-hat farmer (green overalls, red bandana, gloves); both were the KayKit Rogue.
 	"villager": {"model":"meshy:villager","r":"","l":"","idle":"g/Idle_A","attack":"m/Melee_Unarmed_Attack_Punch_A","ability":"m/Melee_Unarmed_Attack_Kick","combo":["m/Melee_Unarmed_Attack_Punch_A","m/Melee_Unarmed_Attack_Punch_A","m/Melee_Unarmed_Attack_Kick"]},
-	"worker": {"model":"meshy:worker","r":"axe_1handed","l":"","idle":"g/Idle_A","attack":"m/Melee_1H_Attack_Chop","ability":"m/Melee_1H_Attack_Chop","combo":["m/Melee_1H_Attack_Chop","m/Melee_1H_Attack_Slice_Horizontal","m/Melee_1H_Attack_Stab"]},
+	"worker": {"model":"meshy:worker","r":"mw/work_hatchet","l":"","idle":"g/Idle_A","attack":"m/Melee_1H_Attack_Chop","ability":"m/Melee_1H_Attack_Chop","combo":["m/Melee_1H_Attack_Chop","m/Melee_1H_Attack_Slice_Horizontal","m/Melee_1H_Attack_Stab"]},
 	"knight": {"model":"meshy:knight","r":"mw/squire_sword","l":"mw/squire_shield","idle":"g/Idle_A","attack":"m/Melee_1H_Attack_Slice_Diagonal","ability":"m/Melee_Blocking","combo":["m/Melee_1H_Attack_Slice_Diagonal","m/Melee_1H_Attack_Slice_Horizontal","m/Melee_Block_Attack"]},
-	"crusader": {"model":"meshy:crusader","r":"sword_1handed","l":"bits/shield_B","idle":"g/Idle_A","attack":"m/Melee_1H_Attack_Slice_Diagonal","ability":"m/Melee_Blocking","combo":["m/Melee_1H_Attack_Slice_Diagonal","m/Melee_1H_Attack_Slice_Horizontal","m/Melee_Block_Attack"]},
+	"crusader": {"model":"meshy:crusader","r":"mw/templar_sword","l":"mw/templar_shield","idle":"g/Idle_A","attack":"m/Melee_1H_Attack_Slice_Diagonal","ability":"m/Melee_Blocking","combo":["m/Melee_1H_Attack_Slice_Diagonal","m/Melee_1H_Attack_Slice_Horizontal","m/Melee_Block_Attack"]},
 	# Upgraded barbarian (Round 11): two-handed greatsword, whirlwind.
-	"berserker": {"model":"meshy:berserker","r":"bits/sword_E","l":"","idle":"m/Melee_2H_Idle","attack":"m/Melee_2H_Attack_Chop","ability":"m/Melee_2H_Attack_Spinning","combo":["m/Melee_2H_Attack_Chop","m/Melee_2H_Attack_Slice","m/Melee_2H_Attack_Spin"]},
-	"barbarian": {"model":"meshy:barbarian","r":"axe_2handed","l":"","idle":"m/Melee_2H_Idle","attack":"m/Melee_2H_Attack_Slice","ability":"m/Melee_2H_Attack_Spin","combo":["m/Melee_2H_Attack_Slice","m/Melee_2H_Attack_Chop","m/Melee_2H_Attack_Stab"]},
-	"rogue": {"model":"meshy:rogue","r":"dagger","l":"dagger","idle":"g/Idle_B","attack":"m/Melee_Dualwield_Attack_Stab","ability":"m/Melee_1H_Attack_Jump_Chop","combo":["m/Melee_Dualwield_Attack_Stab","m/Melee_Dualwield_Attack_Slice","m/Melee_Dualwield_Attack_Chop"]},
-	"ranger": {"model":"meshy:ranger","r":"","l":"bow_withString","idle":"r/Ranged_Bow_Idle","attack":"r/Ranged_Bow_Release","ability":"r/Ranged_Bow_Release_Up"},
-	"mage": {"model":"meshy:mage","r":"staff","l":"","idle":"g/Idle_B","attack":"r/Ranged_Magic_Shoot","ability":"r/Ranged_Magic_Spellcasting"},
+	"berserker": {"model":"meshy:berserker","r":"mw/ironhewer_greatsword","l":"","idle":"m/Melee_2H_Idle","attack":"m/Melee_2H_Attack_Chop","ability":"m/Melee_2H_Attack_Spinning","combo":["m/Melee_2H_Attack_Chop","m/Melee_2H_Attack_Slice","m/Melee_2H_Attack_Spin"]},
+	"barbarian": {"model":"meshy:barbarian","r":"mw/woodsplitter_axe","l":"","idle":"m/Melee_2H_Idle","attack":"m/Melee_2H_Attack_Slice","ability":"m/Melee_2H_Attack_Spin","combo":["m/Melee_2H_Attack_Slice","m/Melee_2H_Attack_Chop","m/Melee_2H_Attack_Stab"]},
+	"rogue": {"model":"meshy:rogue","r":"mw/cutpurse_dagger","l":"mw/cutpurse_dagger","idle":"g/Idle_B","attack":"m/Melee_Dualwield_Attack_Stab","ability":"m/Melee_1H_Attack_Jump_Chop","combo":["m/Melee_Dualwield_Attack_Stab","m/Melee_Dualwield_Attack_Slice","m/Melee_Dualwield_Attack_Chop"]},
+	"ranger": {"model":"meshy:ranger","r":"","l":"mw/ashwood_bow","idle":"r/Ranged_Bow_Idle","attack":"r/Ranged_Bow_Release","ability":"r/Ranged_Bow_Release_Up"},
+	"mage": {"model":"meshy:mage","r":"mw/apprentice_staff","l":"","idle":"g/Idle_B","attack":"r/Ranged_Magic_Shoot","ability":"r/Ranged_Magic_Spellcasting"},
 	# Healer: a body of his own since 0.31.80 (white and gold robes, sun emblem, gold circlet), with a wand.
-	"priest": {"model":"meshy:priest","r":"wand","l":"","idle":"g/Idle_B","attack":"r/Ranged_Magic_Spellcasting_Long","ability":"r/Ranged_Magic_Raise"},
+	"priest": {"model":"meshy:priest","r":"mw/acolyte_wand","l":"","idle":"g/Idle_B","attack":"r/Ranged_Magic_Spellcasting_Long","ability":"r/Ranged_Magic_Raise"},
 	# Upgraded priest (0.31.2, Kevin): the Necromancer from KayKit Skeletons (CC0, same Rig_Medium) with the skull staff.
 	# 0.31.32: the last three upgrades get their own looks
-	"assassin": {"model":"meshy:assassin","r":"dagger","l":"dagger","idle":"g/Idle_B","attack":"m/Melee_Dualwield_Attack_Stab","ability":"m/Melee_1H_Attack_Jump_Chop","tint":"#5b4f73","combo":["m/Melee_Dualwield_Attack_Stab","m/Melee_Dualwield_Attack_Slice","m/Melee_Dualwield_Attack_Chop"]},
-	"sniper": {"model":"meshy:sniper","r":"crossbow_2handed","l":"","idle":"r/Ranged_Bow_Idle","attack":"r/Ranged_Bow_Release","ability":"r/Ranged_Bow_Draw","tint":"#4f6b4a"},
-	"archmage": {"model":"meshy:archmage","r":"staff","l":"spellbook_open","idle":"g/Idle_B","attack":"r/Ranged_Magic_Shoot","ability":"r/Ranged_Magic_Summon","tint":"#a33d3d"},
-	"necromancer": {"model":"meshy:necromancer","r":"Skeleton_Staff","l":"","idle":"g/Idle_B","attack":"r/Ranged_Magic_Spellcasting_Long","ability":"r/Ranged_Magic_Raise"},
+	"assassin": {"model":"meshy:assassin","r":"mw/shade_dagger","l":"mw/shade_dagger","idle":"g/Idle_B","attack":"m/Melee_Dualwield_Attack_Stab","ability":"m/Melee_1H_Attack_Jump_Chop","tint":"#5b4f73","combo":["m/Melee_Dualwield_Attack_Stab","m/Melee_Dualwield_Attack_Slice","m/Melee_Dualwield_Attack_Chop"]},
+	"sniper": {"model":"meshy:sniper","r":"mw/marksman_crossbow","l":"","idle":"r/Ranged_Bow_Idle","attack":"r/Ranged_Bow_Release","ability":"r/Ranged_Bow_Draw","tint":"#4f6b4a"},
+	"archmage": {"model":"meshy:archmage","r":"mw/magister_staff","l":"mw/magister_book","idle":"g/Idle_B","attack":"r/Ranged_Magic_Shoot","ability":"r/Ranged_Magic_Summon","tint":"#a33d3d"},
+	"necromancer": {"model":"meshy:necromancer","r":"mw/bonecaller_staff","l":"","idle":"g/Idle_B","attack":"r/Ranged_Magic_Spellcasting_Long","ability":"r/Ranged_Magic_Raise"},
 	"necromancer_kaykit": {"model":"Necromancer","r":"Skeleton_Staff","l":"","idle":"g/Idle_B","attack":"r/Ranged_Magic_Spellcasting_Long","ability":"r/Ranged_Magic_Raise"},          # 0.31.63: the stock body, kept for tools/retarget_meshy.gd
 	"villager_kaykit": {"model":"Rogue","r":"","l":"","idle":"g/Idle_A","attack":"m/Melee_Unarmed_Attack_Punch_A","ability":"m/Melee_Unarmed_Attack_Kick"},          # 0.31.76: the old body of both, kept for tools/retarget_meshy.gd
 	# 0.31.80 (Kevin picked base-class concepts): the six base classes are Meshy bodies too; their stock KayKit bodies stay
@@ -3417,7 +3417,9 @@ const WEAPON_ROLL := {"axe_1handed":180.0, "bits/axe_D":180.0, "bits/sword_G":18
 # ---------- Armory Reforged (0.31.93, Kevin: "redo all the weapon models ... more unique and badass") ----------
 # Meshy models made from the approved concept sheets by tools/meshy_weapon.py: each piece is fitted offline into the
 # space of the KayKit model it replaces (same length / face area, grip and facing), so the hand slots, fits, rolls and
-# staff turns tuned for that model apply unchanged. id -> the KayKit file it stands in for.
+# staff turns tuned for that model apply unchanged. id -> the KayKit file it stands in for. 0.31.94: every class (a
+# piece drawn upright is first turned onto the template's axes where that lies along Z or X -- bows, crossbows, claws;
+# a left-hand claw is the right one mirrored).
 const MESHY_WEAPON_LIKE := {
 	# Knight
 	"squire_sword": "sword_1handed", "squire_shield": "bits/shield_B",
@@ -3431,6 +3433,52 @@ const MESHY_WEAPON_LIKE := {
 	"frostward_sword": "bits/sword_C", "frostward_shield": "shield_square",
 	"ironbriar_sword": "bits/sword_D", "ironbriar_shield": "shield_spikes",
 	"kingsoath_sword": "bits/sword_G", "kingsoath_shield": "bits/shield_C",
+	# Barbarian
+	"woodsplitter_axe": "axe_2handed", "raider_axe": "axe_1handed", "raider_shield": "shield_round_barbarian",
+	"frostbeard_axe": "bits/axe_A", "frostbeard_shield": "shield_round_color", "skullknocker_hammer": "bits/hammer_C",
+	"thornhide_axe": "axe_1handed", "thornhide_shield": "shield_spikes_color", "twinfury_axe": "bits/axe_B",
+	"bonecarver_cleaver": "bits/sword_F", "rockfist_r": "bits/fistweapon_C_right",
+	"rockfist_l": "bits/fistweapon_C_left", "worldsplitter_axe": "bits/axe_D",
+	# Rogue
+	"cutpurse_dagger": "dagger", "smokescreen_dagger": "dagger", "smokescreen_bomb": "smokebomb",
+	"viper_fang": "bits/dagger_B", "needlepoint_stiletto": "bits/dagger_A", "alley_knuckles": "bits/fistweapon_A",
+	"whisperbolt_dagger": "dagger", "whisperbolt_crossbow": "crossbow_1handed",
+	"ravenclaw_r": "bits/fistweapon_C_right", "ravenclaw_l": "bits/fistweapon_C_left", "grimgrin_scythe": "bits/scythe",
+	# Archer
+	"ashwood_bow": "bow_withString", "trailblazer_bow": "bow_withString", "trailblazer_quiver": "quiver",
+	"hawkeye_bow": "bits/bow_B_withString", "staghunter_bow": "bits/bow_A_withString",
+	"boarsbane_spear": "bits/spear_A", "ironjaw_crossbow": "crossbow_2handed", "galeshot_bow": "bits/bow_C_withString",
+	# Mage
+	"apprentice_staff": "staff", "sparkstick_wand": "wand", "spellwright_wand": "wand",
+	"spellwright_tome": "spellbook_open", "twinsparks_fire": "bits/wand_A", "twinsparks_frost": "bits/wand_A",
+	"hex_knife": "bits/dagger_C", "hex_tome": "spellbook_open", "starshard_staff": "bits/staff_B",
+	"archon_staff": "bits/staff_D",
+	# Priest
+	"acolyte_wand": "wand", "candle_wand": "bits/wand_B", "wayfarer_staff": "bits/staff_A",
+	"sunrise_mace": "bits/hammer_B", "sunrise_shield": "shield_badge", "solaris_staff": "bits/staff_C",
+	# Worker
+	"work_hatchet": "axe_1handed", "brawler_axe": "axe_1handed", "brawler_mug": "mug_full",
+	"brickbreaker_mallet": "bits/hammer_A", "timberfall_axe": "bits/axe_C",
+	# Crusader
+	"templar_sword": "sword_1handed", "templar_shield": "bits/shield_B", "penitent_mace": "bits/hammer_C",
+	"penitent_shield": "bits/shield_A", "bulwark_hammer": "bits/hammer_A", "bulwark_shield": "bits/shield_D",
+	"verdict_maul": "bits/hammer_D", "verdict_shield": "shield_badge",
+	# Berserker
+	"ironhewer_greatsword": "bits/sword_E", "ragebiter_axe": "axe_2handed", "hidesplitter_cleaver": "bits/sword_D",
+	"stormcleaver_axe": "bits/halberd",
+	# Necromancer
+	"bonecaller_staff": "Skeleton_Staff", "gravecaller_staff": "Skeleton_Staff", "gravecaller_tome": "spellbook_open",
+	"soulreaper_scythe": "bits/scythe", "wraithspine_spear": "bits/spear_B",
+	# Assassin
+	"shade_dagger": "dagger", "asp_dagger": "bits/dagger_B", "shadow_talon_r": "bits/fistweapon_C_right",
+	"shadow_talon_l": "bits/fistweapon_C_left", "eclipse_dagger": "bits/dagger_C",
+	# Ranger (sniper)
+	"marksman_crossbow": "crossbow_2handed", "longshot_bow": "bits/bow_B_withString",
+	"rattlesnake_crossbow": "crossbow_1handed", "heartseeker_bow": "bits/bow_C_withString",
+	# Archmage
+	"magister_staff": "staff", "magister_book": "spellbook_open", "prism_staff": "bits/staff_C",
+	"prism_tome": "spellbook_open", "rootwise_staff": "bits/staff_A", "rootwise_tome": "spellbook_open",
+	"voidrod_staff": "bits/staff_D",
 }
 
 static func weapon_path(file: String) -> String:

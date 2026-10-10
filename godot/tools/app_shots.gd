@@ -6,6 +6,7 @@ const Screens = preload("res://scripts/app/screens.gd")
 # Env: SHOT_DIR (default /tmp/shots), SHOT_TABS (comma list, default all), SHOT_SCROLL (px to
 # scroll each screen down for a second shot named <tab>_2).
 const App = preload("res://scripts/app/siege_app.gd")
+const Eco = preload("res://scripts/meta/economy.gd")
 var app
 var frames := 0
 var tabs: Array = ["home", "pass", "shop", "locker", "settings"]
@@ -48,6 +49,11 @@ func _process(_d: float) -> bool:
 			p.d.forge.stars["knight_wpn_oath"] = 3
 			p.d.forge.element["knight_wpn_oath"] = "holy"
 			app.forge_element = OS.get_environment("SHOT_FORGE")
+			if OS.has_environment("SHOT_FORGE_CLS"):        # 0.31.94: another class's Forge (its weapons all owned)
+				app.forge_cls = OS.get_environment("SHOT_FORGE_CLS")
+				for id in Eco.CATALOG:
+					if str(Eco.CATALOG[id].get("class", "")) == app.forge_cls and not p.d.owned.has(id):
+						p.d.owned.append(id)
 		p.d.challenges.daily[0].progress = 99
 		# (0.31.37) chests: one opening ready, one unlocking, two waiting
 		for k in ["silver", "gold", "wooden", "royal"]:

@@ -12,10 +12,6 @@
 
 "res://assets/kaykit/anim/Rig_Medium_Tools.glb",
 
-"res://assets/kaykit/bits/shield_B.gltf",
-
-"res://assets/kaykit/bits/sword_E.gltf",
-
 "res://assets/kaykit/forest/Bush_1_A_Color1.gltf",
 
 "res://assets/kaykit/forest/Bush_2_A_Color1.gltf",
@@ -70,27 +66,7 @@
 
 "res://assets/kaykit/tools/torch.gltf",
 
-"res://assets/kaykit/weapons/Skeleton_Staff.gltf",
-
 "res://assets/kaykit/weapons/arrow_bow.gltf",
-
-"res://assets/kaykit/weapons/axe_1handed.gltf",
-
-"res://assets/kaykit/weapons/axe_2handed.gltf",
-
-"res://assets/kaykit/weapons/bow_withString.gltf",
-
-"res://assets/kaykit/weapons/crossbow_2handed.gltf",
-
-"res://assets/kaykit/weapons/dagger.gltf",
-
-"res://assets/kaykit/weapons/spellbook_open.gltf",
-
-"res://assets/kaykit/weapons/staff.gltf",
-
-"res://assets/kaykit/weapons/sword_1handed.gltf",
-
-"res://assets/kaykit/weapons/wand.gltf",
 
 "res://assets/kings/king_blue_fat.glb",
 
@@ -372,9 +348,37 @@
 
 "res://assets/meshy/villager/rigged.glb",
 
+"res://assets/meshy/weapons/acolyte_wand.glb",
+
+"res://assets/meshy/weapons/apprentice_staff.glb",
+
+"res://assets/meshy/weapons/ashwood_bow.glb",
+
+"res://assets/meshy/weapons/bonecaller_staff.glb",
+
+"res://assets/meshy/weapons/cutpurse_dagger.glb",
+
+"res://assets/meshy/weapons/ironhewer_greatsword.glb",
+
+"res://assets/meshy/weapons/magister_book.glb",
+
+"res://assets/meshy/weapons/magister_staff.glb",
+
+"res://assets/meshy/weapons/marksman_crossbow.glb",
+
+"res://assets/meshy/weapons/shade_dagger.glb",
+
 "res://assets/meshy/weapons/squire_shield.glb",
 
 "res://assets/meshy/weapons/squire_sword.glb",
+
+"res://assets/meshy/weapons/templar_shield.glb",
+
+"res://assets/meshy/weapons/templar_sword.glb",
+
+"res://assets/meshy/weapons/woodsplitter_axe.glb",
+
+"res://assets/meshy/weapons/work_hatchet.glb",
 
 "res://assets/meshy/worker/anims_g.res",
 
