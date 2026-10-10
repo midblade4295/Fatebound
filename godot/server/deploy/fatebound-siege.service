@@ -12,6 +12,8 @@ Environment=SIEGE_HOST=127.0.0.1
 Environment=SIEGE_PORT=8082
 Environment=SIEGE_MAX_PLAYERS=32
 EnvironmentFile=-/etc/fatebound-siege.env
+# 0.31.90: the Google Play service-account key for purchase checks; the installer turns this on when the file exists.
+# LoadCredential=play-key:/etc/fatebound-siege/play-service-account.json
 ExecStart=/opt/godot-4.7.2/godot --headless --path /srv/fatebound-siege -s res://server/siege_server.gd
 StateDirectory=fatebound-siege
 StateDirectoryMode=0700

@@ -1164,6 +1164,7 @@ static func shop(app, root: VBoxContainer) -> void:
 	item_grid(app, root, Eco.shop_daily(now), false)
 	UI2.divider(root, "ARSENALS", 22, "bundles for one class")
 	pack_list(app, root)
+	gem_packs(app, root)
 	UI2.divider(root, "GEMS  →  GOLD", 22, "trade gems for gold any time")
 	var ex := HBoxContainer.new()
 	ex.add_theme_constant_override("separation", 10)
@@ -1214,6 +1215,103 @@ static func shop(app, root: VBoxContainer) -> void:
 		n += 1
 	var fn := UI2.body(root, "Chests are earned by playing  ·  never sold", 11, Color("#cdb79a"))
 	fn.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+
+static func gem_packs(app, root: Node) -> void:
+	# 0.31.90 (Kevin: in-app purchases): gems for real money, Google Play only. The starter pack first while it can still
+	# be bought, then the five packs, priced in the player's currency once Google has answered.
+	var bl = app.billing
+	var live: bool = bl != null and bl.active()
+	UI2.divider(root, "GEM PACKS", 22, "Google Play  ·  gems never change damage" if live else "in the Google Play version")
+	var p = app.profile
+	if not bool(p.d.iap.starter):
+		var sc := Control.new()
+		sc.custom_minimum_size = Vector2(0, 132)
+		root.add_child(sc)
+		UI2.plate(sc, "ember", 18.0, "orange")
+		var ry := UI2.rays(sc, 200.0, Color(1.0, 0.8, 0.4), 26.0, 0.35)
+		ry.position = Vector2(-40, -40)
+		var gi := UI2.img(sc, "res://assets/ui/currency/gems.png", 92.0)
+		gi.position = Vector2(14, 18)
+		var v := VBoxContainer.new()
+		v.add_theme_constant_override("separation", 2)
+		v.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		v.offset_left = 120
+		v.offset_right = -12
+		v.offset_top = 10
+		v.offset_bottom = -52
+		v.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		sc.add_child(v)
+		UI2.text(v, "STARTER PACK", 20, UI2.GOLD, UI2.INK, 5)
+		var sp: Dictionary = Net.IAP.starter_pack
+		UI2.body(v, "%d gems  ·  %d Embers  ·  a rare weapon  ·  once per player" % [int(sp.gems), int(sp.embers)], 12, Color("#ffe9c7"))
+		var sb := _iap_button(app, sc, "starter_pack", Vector2.ZERO, Vector2.ZERO)
+		sb.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+		sb.offset_left = 120
+		sb.offset_right = -12
+		sb.offset_top = -48
+		sb.offset_bottom = -10
+	var grids := []
+	for cols in [3, 2]:
+		var grid := GridContainer.new()
+		grid.columns = cols
+		grid.add_theme_constant_override("h_separation", 8)
+		grid.add_theme_constant_override("v_separation", 10)
+		root.add_child(grid)
+		grids.append(grid)
+	var size_ix := 0
+	for pid in Net.IAP:
+		var pk: Dictionary = Net.IAP[pid]
+		if bool(pk.get("once", false)):
+			continue
+		var grid: GridContainer = grids[0 if size_ix < 3 else 1]
+		var c := Control.new()
+		c.custom_minimum_size = Vector2(0, 156)
+		UI.grow(c)
+		grid.add_child(c)
+		var big := size_ix >= 3
+		UI2.plate(c, "purple" if big else "royal", 18.0, "gold" if big else "blue")
+		var px := 58.0 + 8.0 * size_ix
+		var gi := UI2.img(c, "res://assets/ui/currency/%s.png" % ("gems" if size_ix >= 1 else "gem"), px)
+		c.resized.connect(func(): gi.position = Vector2((c.size.x - px) * 0.5, 8.0 + (90.0 - px) * 0.5))
+		var gl := UI2.text(c, UI.compact(int(pk.gems)), 19, Color.WHITE, UI2.INK, 5)
+		gl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		gl.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+		gl.offset_top = 94
+		gl.offset_bottom = 116
+		var b := _iap_button(app, c, pid, Vector2.ZERO, Vector2.ZERO)
+		b.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+		b.offset_left = 6
+		b.offset_right = -6
+		b.offset_top = -40
+		b.offset_bottom = -6
+		if str(pk.get("tag", "")) != "":
+			var tg := UI2.chip(c, str(pk.tag), Color("#e8443a") if str(pk.tag) == "BEST VALUE" else Color("#2f7de1"), Color.WHITE, Color("#170a05"))
+			tg.anchor_left = 0.5
+			tg.anchor_right = 0.5
+			tg.offset_left = -46
+			tg.offset_right = 46
+			tg.offset_top = -10
+			tg.offset_bottom = 8
+		size_ix += 1
+
+static func _iap_button(app, parent: Control, pid: String, at: Vector2, sz: Vector2) -> Button:
+	var bl = app.billing
+	var live: bool = bl != null and bl.active()
+	var label := "PLAY STORE"
+	if live:
+		label = "…" if str(bl.busy) == pid else str(bl.price(pid))
+	var b := UI2.button(parent, label, "green" if live else "grey", func():
+		app.sfx("tap")
+		if bl != null:
+			bl.buy(pid)
+		else:
+			app.toast("Gem packs are sold in the Google Play version of Fatebound", UI.RED), "iap_" + pid, 15, 34.0, 11.0)
+	if sz != Vector2.ZERO:
+		b.position = at
+		b.size = sz
+	if live:
+		b.disabled = not bl.can_buy(pid)
+	return b
 
 static func featured_card(app, root: Node, id: String) -> void:
 	var p = app.profile

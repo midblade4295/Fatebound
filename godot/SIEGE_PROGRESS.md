@@ -2726,3 +2726,34 @@ K2/K3 notes (0.17.0)
 - store-listing: the 512 Play icon (graphics/app_icon_512x512.png, fastlane images/icon.png); README updated.
 - Concepts A-F and the source art are on Kevin's ElevenLabs flow (tL2Uq8Khy94WZ0PV3s34).
 - 0.31.89, version code 175. Quick suite: ALL 41 PASSED.
+
+## IAP plan (2026-10-09, no build)
+- Kevin: weapons overhaul ("Armory Reforged": every weapon its own Meshy model and a new name, 7 quest-only legendaries,
+  a Forge with Embers and three cosmetic stars) plus in-app purchases. Real money buys gems only; chests stay
+  earn-only; quest weapons are never sold; nothing sold changes damage.
+- godot/PLAY_IAP_HANDOFF.md: the Play Console side for Grokbot (payments profile, internal-testing billing build,
+  products gems_80 / gems_500 / gems_1100 / gems_2400 / gems_6500 / starter_pack, license testers, the purchase-check
+  service account at /etc/fatebound-siege/play-service-account.json, Data safety and rating). PLAY_STORE_HANDOFF.md
+  points to it.
+
+## 0.31.90 — Google Play Billing and the gem shop
+- addons/GodotGooglePlayBilling: the official plugin 3.3.0 (Billing Library 9.1.0), built from source
+  (godot-sdk-integrations e494f37; GitHub release downloads are blocked here). export_plugin.gd patched so the AAR and
+  its dependencies go only into Gradle presets: the Play preset gets billing, the preview APK is unchanged.
+  Checked with a throwaway-key Play export: the AAB has the plugin, the billing classes and the BILLING permission.
+- siege_net.IAP: the product table from PLAY_IAP_HANDOFF.md (gems_80 .. gems_6500, starter_pack = 300 gems + 150 Embers
+  + an unowned rare weapon, once). Profile: embers, iap {done, starter}; grant_iap is once per purchase token.
+- scripts/meta/billing.gd: connect, local prices, buy, then the Siege server checks the token with Google before the
+  grant; gem packs consumed, starter pack acknowledged. Pending, cancelled, unreachable and app-killed purchases are
+  finished later from query_purchases (start, resume, ITEM_ALREADY_OWNED). Nothing is consumed before it is granted.
+- server/iap_verify.gd + siege_server "iap": RS256 service-account JWT -> access token -> androidpublisher
+  purchases.products.get; verdicts ok / pending / used / bad / unconfigured / unreachable; ledger iap_ledger.jsonl
+  (hashed tokens). Key via systemd LoadCredential (the installer enables it when
+  /etc/fatebound-siege/play-service-account.json exists). SIEGE_IAP_FAKE=1 accepts all (internal testing only).
+- Shop: GEM PACKS above GEMS → GOLD; starter pack card until bought; packs in a 3 + 2 grid. Preview builds show grey
+  PLAY STORE buttons; the Play build shows Google's local prices.
+- privacy.html: purchases section. PLAY_IAP_HANDOFF: installer re-run in step 5, SIEGE_IAP_FAKE, Status updated.
+- tests/iap_test.gd (in the suite): product table vs the handoff, grants, a fake BillingClient through every path, a
+  fake Google (JWT signature, verdicts, one token request), and real servers in FAKE and no-key modes.
+- Live server: needs the redeploy from this branch for purchase checks.
+- 0.31.90, version code 176. Quick suite: ALL 42 PASSED.

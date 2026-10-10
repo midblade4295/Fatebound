@@ -3,6 +3,9 @@
 Updated 2026-10-07 (replaces the 2026-09-29 version). This is the current release guide; it takes precedence over
 historical Play/build notes in the other handoffs.
 
+**In-app purchases (2026-10-09):** the merchant account, products, license testers and the purchase-check service
+account are in `godot/PLAY_IAP_HANDOFF.md`.
+
 ## What to upload
 
 **One file: a signed release Android App Bundle (`.aab`)** exported with the Godot preset **Android Play Store**, for
