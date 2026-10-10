@@ -78,12 +78,12 @@ with zipfile.ZipFile(p) as z:
   assert not any('/'+script+'.' in n and '/assets/' in n for n in names),'Removed dice-era script shipped: '+script
  props=packed_settings(z.read(project_paths[0]))
  assert string_setting(props,'rendering/renderer/rendering_method')=='mobile','Play bundle must render with Vulkan mobile'
- # 0.31.72: Vulkan stays the default; Godot's own OpenGL fallback is ON for phones without usable Vulkan
- # (Godot omits the key from project.binary when it equals the engine default, true: missing = on),
- # and BootGuard's renderer switch is read from user://renderer.cfg (never shipped in the bundle).
+ # 0.31.92 (Kevin: "remove the OpenGL version"): Vulkan only. Godot's OpenGL fallback is OFF (the key is
+ # written because it differs from the engine default, true) and no settings override file is read (the old
+ # user://renderer.cfg switch). The manifest check below requires Vulkan 1.1.
  fallback_key='rendering/rendering_device/fallback_to_opengl3'
- assert fallback_key not in props or bool_setting(props,fallback_key),'OpenGL fallback must be enabled (0.31.72)'
- assert string_setting(props,'application/config/project_settings_override')=='user://renderer.cfg','Renderer override must be user://renderer.cfg'
+ assert fallback_key in props and not bool_setting(props,fallback_key),'OpenGL fallback must be off (0.31.92)'
+ assert 'application/config/project_settings_override' not in props,'No settings override file (OpenGL switch removed 0.31.92)'
  assert any('/boot_guard.' in n and '/assets/' in n for n in names),'BootGuard autoload missing'
  for name in names:
   if not name.endswith('.so'):continue
@@ -118,9 +118,11 @@ root=ET.fromstring(manifest);android='{http://schemas.android.com/apk/res/androi
 assert root.attrib['package']=='com.fatebound.game'
 assert root.attrib[android+'versionCode']==EXPECTED_CODE,('versionCode',root.attrib[android+'versionCode'])
 assert root.attrib[android+'versionName']==EXPECTED_NAME,('versionName',root.attrib[android+'versionName'])
-sdk=root.find('uses-sdk');assert sdk.attrib[android+'minSdkVersion']=='24' and sdk.attrib[android+'targetSdkVersion']=='36'
+sdk=root.find('uses-sdk');assert sdk.attrib[android+'minSdkVersion']=='29' and sdk.attrib[android+'targetSdkVersion']=='36'
 application=root.find('application');assert application.attrib.get(android+'debuggable','false')=='false'
 permissions=[item.attrib.get(android+'name') for item in root.findall('uses-permission')]
+vk=[f for f in root.findall('uses-feature') if f.attrib.get(android+'name')=='android.hardware.vulkan.version']
+assert vk and vk[0].attrib.get(android+'required','true')=='true','Manifest must require Vulkan 1.1 (android.hardware.vulkan.version)'
 assert 'android.permission.INTERNET' in permissions
 # 0.31.90: Google Play Billing (GodotGooglePlayBilling 3.3.0 + Billing Library 9.1.0) must be merged in.
 assert 'com.android.vending.BILLING' in permissions,('BILLING permission missing',permissions)
@@ -128,6 +130,6 @@ assert 'com.android.billingclient' in manifest,'Play Billing library components 
 if content_module!='base':
  delivery=subprocess.check_output(['java','-jar',str(jar),'dump','manifest','--bundle='+str(p),'--module='+content_module],text=True)
  assert 'install-time' in delivery,('Game content not delivered at installation',delivery)
-report.update(bundletool_validation_passed=True,package='com.fatebound.game',version_code=int(EXPECTED_CODE),version_name=EXPECTED_NAME,min_sdk=24,target_sdk=36,debuggable=False,game_assets_available_at_install=True,play_billing_permission=True)
+report.update(bundletool_validation_passed=True,package='com.fatebound.game',version_code=int(EXPECTED_CODE),version_name=EXPECTED_NAME,min_sdk=29,target_sdk=36,debuggable=False,game_assets_available_at_install=True,play_billing_permission=True)
 p.with_name('PLAY_BUNDLE_VERIFICATION.json').write_text(json.dumps(report,indent=2)+'\n')
 print('FINAL_VALIDATION',json.dumps(report,indent=2))

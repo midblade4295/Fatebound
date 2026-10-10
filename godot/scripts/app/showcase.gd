@@ -87,11 +87,10 @@ func _build_scene() -> void:
 	env.background_mode = Environment.BG_CLEAR_COLOR
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = Color("#d8cfe6")
-	var vk := RenderingServer.get_current_rendering_method() != "gl_compatibility"
 	# Same measured Vulkan compensation as the battle view.
-	env.ambient_light_energy = 0.55 * (View.VULKAN_AMBIENT if vk else 1.0)
+	env.ambient_light_energy = 0.55 * View.VULKAN_AMBIENT
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	env.tonemap_exposure = 0.85 * (View.VULKAN_EXPOSURE if vk else 1.0)
+	env.tonemap_exposure = 0.85 * View.VULKAN_EXPOSURE
 	env.tonemap_white = 3.0
 	var we := WorldEnvironment.new()
 	we.environment = env

@@ -75,8 +75,8 @@ var _toast_until := 0.0
 
 # ---------------- start-up diagnostics and safe start (0.31.70; 0.31.72: moved into the BootGuard autoload) ----------------
 # BootGuard (scripts/app/boot_guard.gd) runs before this scene loads: the start-up log, the "pending until the menu
-# is up" record, the switch to OpenGL after a stuck Vulkan start, and SAFE START (no background model loading and no
-# live 3D hero) after a stuck start. This scene only reads safe_boot and marks its steps in the log.
+# is up" record and SAFE START (no background model loading and no live 3D hero) after a stuck start. This scene
+# only reads safe_boot and marks its steps in the log.
 var safe_boot := false
 var online_status: Node = null         # 0.31.82: the server's player count for Home (the real app only, or FB_STATUS_POLL)
 var billing: Node = null               # 0.31.90: Google Play purchases (scripts/meta/billing.gd); inactive off Play
@@ -93,10 +93,6 @@ func _boot_mark(phase: String) -> void:
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_guard = get_node_or_null("/root/BootGuard")
-	if _guard != null and bool(_guard.restarting):
-		set_process(false)                    # switching renderer: the app restarts before anything is built
-		set_process_input(false)
-		return
 	get_tree().auto_accept_quit = false
 	_menu_fps()
 	safe_boot = _guard != null and bool(_guard.safe_boot)

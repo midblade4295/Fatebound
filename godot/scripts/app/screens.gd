@@ -1889,22 +1889,6 @@ static func settings(app, root: VBoxContainer) -> void:
 	UI2.toggle(gx, "Reduce effects", "Smoother on older phones", bool(d.settings.get("reduce_motion", false)), "reduce_motion", func(on: bool):
 		d.settings.reduce_motion = on
 		p.save())
-	# 0.31.72: the graphics engine. Vulkan by default; OpenGL when Godot finds no usable Vulkan, after a start on Vulkan
-	# froze (BootGuard), or by choice here. Switching restarts the game.
-	var guard = app.get_node_or_null("/root/BootGuard")
-	if guard != null:
-		var on_gl := RenderingServer.get_current_rendering_method() == "gl_compatibility"
-		var by_file: bool = guard.on_opengl_by_choice()
-		var eng := UI2.body(gx, "Graphics engine: %s" % ("OpenGL (compatibility)" if on_gl else "Vulkan"), 13, Color.WHITE)
-		eng.set_meta("action_key", "gfx_engine")
-		if on_gl and not by_file:
-			UI2.body(gx, "This phone can't run Vulkan, so it uses OpenGL.", 11, UI2.MUTED)
-		else:
-			var to_gl := not on_gl
-			UI2.button(gx, "SWITCH TO %s" % ("OPENGL" if to_gl else "VULKAN"), "blue", func():
-				app.confirm("SWITCH GRAPHICS", "The game restarts and runs on %s. Use OpenGL if the game freezes or crashes on this phone." % ("OpenGL" if to_gl else "Vulkan"),
-					"RESTART", "primary", func(): guard.set_opengl(to_gl)), "gfx_switch", 16, 44.0)
-			UI2.body(gx, "Pick OpenGL if the game freezes on this phone. Switching restarts the game.", 11, UI2.MUTED)
 	# Old progress
 	var mig: Dictionary = d.migration
 	var old := UI2.frame(root, "parch", 12, 16.0, "brown")

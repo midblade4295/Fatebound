@@ -128,9 +128,9 @@ back at 29) and placed with `Sim._c(team, p)`; world-space things (resources, pl
 - **No per-frame GPU buffer churn** in Siege: no `Label3D` (damage numbers/HP bars are 2D HUD),
   no per-frame material/shader-param writes, shared cached materials. These were suspects in a
   field freeze (section 8).
-- **Renderer:** `project.godot` must keep both renderer methods on `mobile` (Vulkan) and
-  `rendering_device/fallback_to_opengl3=false`.
-  `build_siege_preview.sh` refuses to finish if the APK is gl_compatibility.
+- **Renderer:** Vulkan only (0.31.92). `project.godot` keeps both renderer methods on `mobile`,
+  `rendering_device/fallback_to_opengl3=false` and no `project_settings_override`.
+  `build_siege_preview.sh` refuses to finish otherwise, and checks the manifest requires Vulkan 1.1.
 - **Brightness is measured, not eyeballed:** `VULKAN_*` constants in `siege_view.gd`
   (exposure 1.55, ambient 2.25) match Vulkan to Compatibility mean luminance; the home
   showcase reuses them (exposure x0.8).

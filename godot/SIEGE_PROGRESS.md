@@ -2780,3 +2780,27 @@ K2/K3 notes (0.17.0)
   setting up children" in Kevin's log); the failed checker then blocked every later check. Now deferred.
 - Phones BootGuard already moved to OpenGL stay there: Settings -> Graphics engine -> SWITCH TO VULKAN.
 - 0.31.91, version code 177. Quick suite: ALL 43 PASSED.
+
+## 0.31.92 — Vulkan only (Kevin: "Ok vulkan now works. I'd like to remove the opengl version now")
+- project.godot: rendering_device/fallback_to_opengl3=false (Godot then marks android.hardware.vulkan.version 1.1
+  required in the manifest: Play won't offer the game to phones without it; an itch APK on such a phone shows Godot's
+  "no Vulkan" message); application/config/project_settings_override removed, so user://renderer.cfg is never read.
+- BootGuard: no renderer switch, no restart. Keeps the start-up log, pending-until-menu record, SAFE START after a stuck
+  start and boot_diag_stuck.log (now for any stuck start). Deletes a leftover user://renderer.cfg. Checked on desktop
+  Vulkan with an OpenGL renderer.cfg and a stuck record: Vulkan, file removed, SAFE START, stuck log kept, menu up.
+- Settings: the "Graphics engine / SWITCH TO OPENGL|VULKAN" block is gone (High-quality graphics and Reduce effects
+  stay). SiegeApp's restart hook removed.
+- Lighting: the VULKAN_* multipliers always apply (siege_view, roster, showcase, render_skin_icons); same look on
+  Vulkan, the OpenGL branches are gone.
+- build_siege_preview.sh: requires fallback off and no override in project.godot and the APK, and the manifest's Vulkan
+  requirement (aapt2). verify_play_bundle.py: the same for the Play AAB. PLAY_STORE_HANDOFF / SIEGE_HANDOFF updated.
+  Godot suggests min SDK 29 for Vulkan; the Play preset stays at 24 (Kevin's call).
+- 0.31.92, version code 178. Quick suite: ALL 43 PASSED. Preview APK: renderer settings and the manifest's Vulkan 1.1
+  requirement verified by build_siege_preview.sh.
+
+## Play preset: min SDK 29 (Kevin: "Do it", 2026-10-09; no new build)
+- Vulkan only since 0.31.92, so the Play preset now requires Android 10 (gradle_build/min_sdk 24 -> 29), Godot's
+  recommendation for Vulkan. Android 7-9 was ~8% of active devices in Google's Dec 2025 numbers, mostly old Vulkan
+  drivers (or none, already filtered by the Vulkan 1.1 requirement).
+- verify_play_bundle.py expects minSdkVersion 29; PLAY_STORE_HANDOFF updated. The itch preview APK doesn't use Gradle,
+  so it keeps the template's min SDK (24).
