@@ -2855,3 +2855,10 @@ K2/K3 notes (0.17.0)
 - tools/app_shots.gd: SHOT_FORGE_CLS opens another class's Forge. Preload list regenerated (the new starters).
 - 0.31.94, version code 180. Quick suite: ALL 44 PASSED. APK 228,303,619 bytes (+25 MB for the 86 pieces), sha256
   337db0d666b1812361ba68d61bead392f141865fea9736959009fefb083a10fd, on itch (vellicgames/fatebound:android).
+
+## Play preset: 32-bit ARM dropped (Kevin: "Ok drop the 32bit", 2026-10-10; no new build)
+- export_presets.cfg "Android Play Store": armeabi-v7a off -- the bundle is arm64-v8a only. verify_play_bundle.py
+  now wants exactly arm64-v8a. PLAY_STORE_HANDOFF.md updated. A phone's Play download is unchanged (Play already sent
+  each phone one engine); the .aab loses ~26 MB (the 32-bit release engine, compressed). Reach: armeabi-v7a-only
+  devices were ~1.3% of one app's Play installs (ZeusLN, 2026-09-07), fewer for a Vulkan, Android 10+ game. Play
+  Console will report fewer supported devices on the next upload. The itch preview was already arm64 only.

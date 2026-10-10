@@ -30,7 +30,7 @@ Do **not** upload:
 | Game data (models, textures, sounds, scripts) | 134.2 MB compressed, measured in the 0.31.72 build |
 | Godot release engine, per ABI | ~23 MB compressed (4.7.2 release templates; arm64 22.9 + libc++ 0.4) |
 | **What a phone downloads from Play** (one ABI) | **~160 MB** (estimate: game data + one engine + ~3 MB other) |
-| The `.aab` file you upload (all 4 ABIs) | ~230 MB (estimate) |
+| The `.aab` file you upload (arm64 only since 2026-10-10) | ~205 MB (estimate; 32-bit ARM's engine was ~26 MB of it) |
 | Preview APK on itch (arm64 only, debug engine) | 162.6 MB |
 
 Google Play's limits for app bundles: 500 MB per module (compressed download), 4 GB for everything delivered at
@@ -47,7 +47,7 @@ Preset **Android Play Store** in `godot/export_presets.cfg`:
 | Application ID | `com.fatebound.game` |
 | App name | `Fatebound` |
 | Output | Signed release `.aab` (Gradle build) |
-| ABIs | armeabi-v7a, arm64-v8a, x86_64 (32-bit x86 dropped 2026-10-08, Kevin) |
+| ABIs | arm64-v8a only (32-bit ARM dropped 2026-10-10, Kevin: "Ok drop the 32bit"; x86 and x86_64 before) |
 | Engine/templates | Godot 4.7.2 + matching Android build template |
 | Renderer | **Vulkan (mobile) only, OpenGL fallback OFF** (0.31.92) -- see below. |
 | SDK | min 29 (Android 10, Kevin 2026-10-09: Vulkan only), target 36; verify against current Play requirements |
@@ -119,7 +119,7 @@ mkdir -p godot/build
 - `python3 godot/tools/verify_play_bundle.py godot/build/Fatebound-Play-release.aab` (after setting the version
   expectations), bundletool validation / manifest inspection, `jarsigner -verify`.
 - Manifest: package `com.fatebound.game`, the chosen versionCode/versionName, debuggable=false, INTERNET permission,
-  min/target SDK, the four ABIs, 64-bit library alignment.
+  min/target SDK, arm64-v8a only, 64-bit library alignment.
 - Record the AAB SHA-256, size, upload-certificate fingerprint, source commit, test results and the verifier report.
   Headless tests are not physical-phone testing.
 
