@@ -2890,5 +2890,5 @@ K2/K3 notes (0.17.0)
   files, else Godot warns and falls back to the path for every reference). 6 hero models' imports still name an older
   UID for their texture -- also in the full project, harmless.
 - privacy.html: GitHub listed under Internet use (updated 10 October 2026). PLAY_STORE_HANDOFF.md: content packs.
-- 0.31.95, version code 181. APK 31,135,353 bytes (was 228 MB), sha256
+- 0.31.95, version code 181. Quick suite: ALL 45 PASSED. APK 31,135,353 bytes (was 228 MB), sha256
   a31aa9ca7c54017aafab8e38a0d7c56a6b43b09640d7af6b95d5ad4c5768467e. First launch downloads 181 MB.
