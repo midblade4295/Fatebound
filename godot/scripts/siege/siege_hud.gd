@@ -377,13 +377,18 @@ func show_result(result: Dictionary = {}) -> void:
 		tot.alignment = BoxContainer.ALIGNMENT_CENTER
 		tot.add_theme_constant_override("separation", 10)
 		v.add_child(tot)
-		for tv in [["res://assets/ui/currency/coin.png", "+%d" % int(rw.gold), UI2.GOLD], ["", "+%d XP" % int(rw.xp), UI2.CYAN], ["", "+%d PASS" % int(rw.pass), UI2.PURPLE]]:
+		var totals := [["res://assets/ui/currency/coin.png", "+%d" % int(rw.gold), UI2.GOLD], ["", "+%d XP" % int(rw.xp), UI2.CYAN], ["", "+%d PASS" % int(rw.pass), UI2.PURPLE]]
+		if int(result.get("embers", 0)) > 0:                    # 0.31.93: Embers for the Forge
+			totals.append(["res://assets/ui/currency/embers.png", "+%d" % int(result.embers), Color("#ff9a3c")])
+		if totals.size() > 3:
+			tot.add_theme_constant_override("separation", 6)       # (four totals fit a narrow phone)
+		for tv in totals:
 			var tr := HBoxContainer.new()
 			tr.add_theme_constant_override("separation", 3)
 			tot.add_child(tr)
 			if str(tv[0]) != "":
-				UI2.img(tr, str(tv[0]), 26.0)
-			UI2.text(tr, str(tv[1]), 18, tv[2], UI2.INK, 5)
+				UI2.img(tr, str(tv[0]), 24.0 if totals.size() > 3 else 26.0)
+			UI2.text(tr, str(tv[1]), 16 if totals.size() > 3 else 18, tv[2], UI2.INK, 5)
 		for lv in result.get("levels", []):
 			UI2.center(UI2.text(v, "LEVEL UP!  LEVEL %d" % int(lv.level), 18, UI2.CYAN, Color("#06283a"), 5))
 			UI2.center(UI2.body(v, "+%d gold%s" % [int(lv.reward.get("gold", 0)), ("  ·  +%d gems" % int(lv.reward.gems)) if lv.reward.has("gems") else ""], 12, Color.WHITE, false))

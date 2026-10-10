@@ -32,7 +32,8 @@ static func defaults() -> Dictionary:
 		"stats":{"matches":0, "wins":0, "rescues":0, "kills":0, "gates":0, "gathered":0, "fed":0,
 			"lifts":0, "repaired":0, "healed":0, "best_multi":0, "streak":0, "best_streak":0},     # (0.31.87: for the titles)
 		"first_win_day":"", "history":[], "migration":{},
-		"embers":0,                                                  # 0.31.90: the Forge's material (the Forge comes later)
+		"embers":0,                                                  # 0.31.90: the Forge's material
+		"forge":{"stars":{}, "wins":{}, "element":{}},              # 0.31.93: per weapon (Eco.forge_id): stars 0-3, wins, aura element
 		"iap":{"done":[], "starter":false},                          # 0.31.90: purchase tokens already granted
 		"chests":{"slots":[], "next":1, "pity":0},
 		"settings":{"master":0.8, "music":0.6, "sfx":0.8, "reduce_motion":false}}
@@ -103,6 +104,15 @@ func _normalized(v: Dictionary) -> Dictionary:
 	for span in ["daily", "weekly"]:
 		for c in out.challenges[span]:
 			c.progress = int(c.get("progress", 0))
+	# 0.31.93: the Forge -- ints again, nothing out of range
+	out.embers = maxi(0, int(out.get("embers", 0)))
+	for part in ["stars", "wins", "element"]:
+		if not (out.forge.get(part) is Dictionary):
+			out.forge[part] = {}
+	for wid in out.forge.stars.keys():
+		out.forge.stars[wid] = clampi(int(out.forge.stars[wid]), 0, Eco.FORGE_STARS.size())
+	for wid in out.forge.wins.keys():
+		out.forge.wins[wid] = maxi(0, int(out.forge.wins[wid]))
 	return out
 
 static func _is_num(v: Variant) -> bool:
@@ -239,6 +249,7 @@ func buy_premium() -> Dictionary:
 func _grant(r: Dictionary) -> void:
 	d.gold += int(r.get("gold", 0))
 	d.gems += int(r.get("gems", 0))
+	d.embers = int(d.get("embers", 0)) + int(r.get("embers", 0))
 	if r.has("chest"):
 		add_chest(str(r.chest), {})
 	var id := str(r.get("item", ""))
@@ -361,6 +372,9 @@ func look_for(cls: String) -> Dictionary:
 	if not wpn.is_empty():
 		out["r"] = str(wpn.r)
 		out["l"] = str(wpn.l)
+	var fx := forge_fx(cls)                                    # 0.31.93: the Forge's stars
+	if not fx.is_empty():
+		out["forge"] = fx
 	return out
 
 # ---------------- challenges ----------------
@@ -392,11 +406,13 @@ func claim_challenge(span: String, index: int) -> Dictionary:
 	_add_pass_xp(int(def.get("pass", 0)), out)
 	d.gold += int(def.get("gold", 0))
 	d.gems += int(def.get("gems", 0))
+	var embers := Eco.EMBERS_DAILY if span == "daily" else 0      # 0.31.93
+	d.embers = int(d.get("embers", 0)) + embers
 	# 0.31.37: the whole day's challenges done -> a Silver chest; the whole week's -> a Gold chest
 	if list.all(func(x): return bool(x.claimed)):
 		add_chest("silver" if span == "daily" else "gold", out)
 	save()
-	return {"ok":true, "tiers":out.tiers, "chests":out.chests}
+	return {"ok":true, "tiers":out.tiers, "chests":out.chests, "embers":embers}
 
 # ---------------- matches ----------------
 func apply_match(me: Dictionary, won: bool, draw: bool, online: bool) -> Dictionary:
@@ -411,6 +427,14 @@ func apply_match(me: Dictionary, won: bool, draw: bool, online: bool) -> Diction
 	var r := Eco.match_rewards(stats, won, draw, online, first_win)
 	var out := {"rewards":r, "levels":[], "tiers":[], "challenges":[], "first_win":first_win, "chests":[]}
 	d.gold += int(r.gold)
+	# 0.31.93: Embers for the Forge, and a win counts toward the equipped weapon's third star
+	var embers := Eco.EMBERS_WIN if won else Eco.EMBERS_MATCH
+	d.embers = int(d.get("embers", 0)) + embers
+	out["embers"] = embers
+	var main := str(stats.get("main", ""))
+	if won and main != "" and d.equip.has(main):
+		var wid := Eco.forge_id(main, str(d.equip[main].weapon))
+		d.forge.wins[wid] = int(d.forge.wins.get(wid, 0)) + 1
 	# 0.31.37: chests -- every win a Wooden one (Silver for a rescue or a multi-kill); the first win of the day a Silver
 	if won:
 		add_chest("silver" if int(stats.get("rescues", 0)) > 0 or int(me.get("best_multi", 0)) >= 2 else "wooden", out)
@@ -464,6 +488,81 @@ func check_titles() -> Array:
 			got.append(id)
 	got.sort_custom(func(a, b): return Eco.TITLE_RARITY_ORDER.find(str(Eco.CATALOG[a].rarity)) > Eco.TITLE_RARITY_ORDER.find(str(Eco.CATALOG[b].rarity)))
 	return got
+
+# ---------------- the Forge (0.31.93) ----------------
+func forge_stars(wid: String) -> int:
+	return clampi(int(d.forge.stars.get(wid, 0)), 0, Eco.FORGE_STARS.size())
+
+func forge_wins(wid: String) -> int:
+	return int(d.forge.wins.get(wid, 0))
+
+func forge_element(wid: String) -> String:
+	var e := str(d.forge.element.get(wid, ""))
+	return e if Eco.ELEMENTS.has(e) else ""
+
+func forge_owns(wid: String) -> bool:
+	# a starter is always yours; a catalog weapon once owned
+	return wid.begins_with("default_") and (Eco.CLASSES + Eco.UP_CLASSES).has(wid.substr(8)) or owns(wid)
+
+func can_forge(wid: String, element := "") -> Dictionary:
+	# -> {"ok": bool, "why": what's missing ("owned" | "maxed" | "embers" | "gold" | "wins" | "element")}
+	if not forge_owns(wid):
+		return {"ok":false, "why":"owned"}
+	var next := forge_stars(wid) + 1
+	var cost := Eco.forge_cost(next)
+	if cost.is_empty():
+		return {"ok":false, "why":"maxed"}
+	if next == Eco.FORGE_STARS.size():
+		if forge_wins(wid) < Eco.FORGE_WINS:
+			return {"ok":false, "why":"wins"}
+		if not Eco.ELEMENTS.has(element):
+			return {"ok":false, "why":"element"}
+	if int(d.get("embers", 0)) < int(cost.embers):
+		return {"ok":false, "why":"embers"}
+	if int(d.gold) < int(cost.gold):
+		return {"ok":false, "why":"gold"}
+	return {"ok":true, "why":""}
+
+func forge(wid: String, element := "") -> Dictionary:
+	var c := can_forge(wid, element)
+	if not bool(c.ok):
+		return c
+	var next := forge_stars(wid) + 1
+	var cost := Eco.forge_cost(next)
+	d.embers = int(d.embers) - int(cost.embers)
+	d.gold -= int(cost.gold)
+	d.forge.stars[wid] = next
+	if next == Eco.FORGE_STARS.size():
+		d.forge.element[wid] = element
+	save()
+	return {"ok":true, "stars":next}
+
+func set_forge_element(wid: String, element: String) -> bool:
+	# an Ascended weapon's aura colour can be changed for free
+	if forge_stars(wid) < Eco.FORGE_STARS.size() or not Eco.ELEMENTS.has(element):
+		return false
+	d.forge.element[wid] = element
+	save()
+	return true
+
+func buy_embers(pack_id: String) -> Dictionary:
+	var pk := Eco.ember_pack(pack_id)
+	if pk.is_empty() or int(d.gems) < int(pk.gems):
+		return {"ok":false}
+	d.gems -= int(pk.gems)
+	d.embers = int(d.get("embers", 0)) + int(pk.embers)
+	save()
+	return {"ok":true, "embers":int(pk.embers)}
+
+func forge_fx(cls: String) -> Dictionary:
+	# the equipped weapon's Forge look for the battle view: {} when it has no stars
+	if not d.equip.has(cls):
+		return {}
+	var wid := Eco.forge_id(cls, str(d.equip[cls].weapon))
+	var n := forge_stars(wid)
+	if n <= 0:
+		return {}
+	return {"stars":n, "rarity":Eco.forge_rarity(wid), "element":forge_element(wid)}
 
 # ---------------- chests (0.31.37) ----------------
 func chests() -> Array:
@@ -529,7 +628,8 @@ func open_chest(index: int) -> Dictionary:
 		return {"ok":false}
 	var roll := Eco.roll_chest(str(c.kind), hash([str(d.get("name", "")), int(c.id), int(c.got)]), d.owned, int(d.chests.pity))
 	d.chests.pity = int(roll.pity)
-	d.gold += int(roll.gold) + int(roll.dupe_gold)
+	d.gold += int(roll.gold)
+	d.embers = int(d.get("embers", 0)) + int(roll.get("dupe_embers", 0))
 	d.gems += int(roll.gems)
 	if str(roll.item) != "" and not d.owned.has(roll.item):
 		d.owned.append(roll.item)

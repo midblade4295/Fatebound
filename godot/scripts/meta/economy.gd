@@ -72,6 +72,8 @@ static func pass_reward(sid: int, tier: int, premium: bool) -> Dictionary:
 			return {"chest": "silver"}
 		if tier % 4 == 0:
 			return {"gems": 30}
+		if tier % 4 == 2:
+			return {"embers": PASS_EMBERS_FREE}        # 0.31.93: Embers for the Forge on both tracks
 		return {"gold": 150 + 5 * tier}
 	var pi := PREMIUM_ITEM_TIERS.find(tier)
 	if pi >= 0:
@@ -85,6 +87,8 @@ static func pass_reward(sid: int, tier: int, premium: bool) -> Dictionary:
 		return {"chest": "royal"}
 	if tier % 4 == 0:
 		return {"gems": 60}
+	if tier % 4 == 2:
+		return {"embers": PASS_EMBERS_PREMIUM}
 	return {"gold": 300 + 10 * tier}
 
 const PASS_FREE_ITEMS := 3
@@ -140,12 +144,16 @@ static func pass_items(sid: int) -> Array:
 # kind "weapon": right/left hand models for a class (0.31.39: the only class cosmetic -- no skins/tints, so every
 # class keeps its own readable look). kind "title": text on the profile.
 # kind "title": text shown on the profile. source "shop" (gold/gems), "pass", "level".
+# 0.31.93 Armory Reforged: each class's starting weapon has a name too (Kevin approved the roster, 2026-10-09). Only the
+# classes whose new models are in (shipped class by class) are listed; the others still show "Default gear".
+const STARTER_NAMES := {"knight": "Squire's Blade"}
+
 const CATALOG := {
 	# --- Knight
-	"knight_wpn_greatsword":{"kind":"weapon", "class":"knight", "name":"Greatsword & Kite Shield", "rarity":"rare", "r":"sword_2handed", "l":"bits/shield_A", "gold":900, "source":"shop"},
-	"knight_wpn_crest":    {"kind":"weapon", "class":"knight", "name":"Sword & Crest", "rarity":"rare", "r":"sword_1handed", "l":"shield_badge_color", "gold":1100, "source":"shop"},
-	"knight_wpn_tower":    {"kind":"weapon", "class":"knight", "name":"Sword & Tower Shield", "rarity":"epic", "r":"sword_1handed", "l":"shield_square_color", "gems":250, "source":"shop"},
-	"knight_wpn_crimson":  {"kind":"weapon", "class":"knight", "name":"Crimson Blade & Shield", "rarity":"epic", "r":"sword_2handed_color", "l":"shield_round_color", "source":"pass"},
+	"knight_wpn_greatsword":{"kind":"weapon", "class":"knight", "name":"Highguard", "rarity":"rare", "r":"mw/highguard_sword", "l":"mw/highguard_shield", "gold":900, "source":"shop"},
+	"knight_wpn_crest":    {"kind":"weapon", "class":"knight", "name":"Lionheart", "rarity":"rare", "r":"mw/lionheart_sword", "l":"mw/lionheart_shield", "gold":1100, "source":"shop"},
+	"knight_wpn_tower":    {"kind":"weapon", "class":"knight", "name":"Dawnwall", "rarity":"epic", "r":"mw/dawnwall_sword", "l":"mw/dawnwall_shield", "gems":250, "source":"shop"},
+	"knight_wpn_crimson":  {"kind":"weapon", "class":"knight", "name":"Bloodmoon", "rarity":"epic", "r":"mw/bloodmoon_sword", "l":"mw/bloodmoon_shield", "source":"pass"},
 	# --- Barbarian
 	"barb_wpn_raider":     {"kind":"weapon", "class":"barbarian", "name":"Axe & Buckler", "rarity":"rare", "r":"axe_1handed", "l":"shield_round_barbarian", "gold":1000, "source":"shop"},
 	"barb_wpn_spiked":     {"kind":"weapon", "class":"barbarian", "name":"Axe & Spiked Shield", "rarity":"epic", "r":"axe_1handed", "l":"shield_spikes_color", "gems":250, "source":"shop"},
@@ -161,9 +169,9 @@ const CATALOG := {
 	# --- Worker
 	"worker_wpn_mug":      {"kind":"weapon", "class":"worker", "name":"Axe & Ale", "rarity":"rare", "r":"axe_1handed", "l":"mug_full", "source":"pass"},
 	# --- Round 11: KayKit Fantasy Weapons Bits ("bits/<model>") and the Priest
-	"knight_wpn_bastion":  {"kind":"weapon", "class":"knight", "name":"Bastion Guard", "rarity":"epic", "r":"bits/sword_B", "l":"bits/shield_D", "gems":280, "source":"shop"},
-	"knight_wpn_oath":     {"kind":"weapon", "class":"knight", "name":"Oathkeeper", "rarity":"legendary", "r":"bits/sword_G", "l":"bits/shield_C", "source":"pass"},
-	"knight_wpn_halberd":  {"kind":"weapon", "class":"knight", "name":"Halberd & Tower Shield", "rarity":"epic", "r":"bits/halberd", "l":"shield_square_color", "source":"pass"},
+	"knight_wpn_bastion":  {"kind":"weapon", "class":"knight", "name":"Stonewarden", "rarity":"epic", "r":"mw/stonewarden_sword", "l":"mw/stonewarden_shield", "gems":280, "source":"shop"},
+	"knight_wpn_oath":     {"kind":"weapon", "class":"knight", "name":"Kingsoath", "rarity":"legendary", "r":"mw/kingsoath_sword", "l":"mw/kingsoath_shield", "source":"pass"},
+	"knight_wpn_halberd":  {"kind":"weapon", "class":"knight", "name":"Thornspire", "rarity":"epic", "r":"mw/thornspire_halberd", "l":"mw/thornspire_shield", "source":"pass"},
 	"barb_wpn_hammer":     {"kind":"weapon", "class":"barbarian", "name":"War Hammer", "rarity":"rare", "r":"bits/hammer_C", "l":"", "gold":1100, "source":"shop"},
 	"barb_wpn_twinaxe":    {"kind":"weapon", "class":"barbarian", "name":"Twin-Bitted Axe", "rarity":"epic", "r":"bits/axe_B", "l":"", "source":"pass"},
 	"barb_wpn_cleaver":    {"kind":"weapon", "class":"barbarian", "name":"Great Cleaver", "rarity":"legendary", "r":"bits/axe_D", "l":"", "source":"pass"},
@@ -235,9 +243,9 @@ const CATALOG := {
 	# --- 0.31.40: the rest of the KayKit weapons, given to the classes they suit (one-handed swords/axes/maces with
 	# shields to the Knight and Crusader, big blades and axes to the Barbarian and Berserker, daggers and knuckles to the
 	# Rogue and Assassin, bows to the archers, staves to the casters) ---
-	"knight_wpn_arming":   {"kind":"weapon", "class":"knight", "name":"Arming Sword & Round Shield", "rarity":"rare", "r":"bits/sword_A", "l":"shield_round", "gold":1000, "source":"shop"},
-	"knight_wpn_longsword":{"kind":"weapon", "class":"knight", "name":"Longsword & Square Shield", "rarity":"epic", "r":"bits/sword_C", "l":"shield_square", "gold":2000, "source":"shop"},
-	"knight_wpn_spiked":   {"kind":"weapon", "class":"knight", "name":"Broadsword & Spiked Shield", "rarity":"epic", "r":"bits/sword_D", "l":"shield_spikes", "gold":2200, "source":"shop"},
+	"knight_wpn_arming":   {"kind":"weapon", "class":"knight", "name":"Steadfast", "rarity":"rare", "r":"mw/steadfast_sword", "l":"mw/steadfast_shield", "gold":1000, "source":"shop"},
+	"knight_wpn_longsword":{"kind":"weapon", "class":"knight", "name":"Frostward", "rarity":"epic", "r":"mw/frostward_sword", "l":"mw/frostward_shield", "gold":2000, "source":"shop"},
+	"knight_wpn_spiked":   {"kind":"weapon", "class":"knight", "name":"Ironbriar", "rarity":"epic", "r":"mw/ironbriar_sword", "l":"mw/ironbriar_shield", "gold":2200, "source":"shop"},
 	"barb_wpn_bearded":    {"kind":"weapon", "class":"barbarian", "name":"Bearded Axe & Buckler", "rarity":"rare", "r":"bits/axe_A", "l":"shield_round_color", "gold":1000, "source":"shop"},
 	"barb_wpn_butcher":    {"kind":"weapon", "class":"barbarian", "name":"Butcher's Blade", "rarity":"epic", "r":"bits/sword_F", "l":"", "gold":2000, "source":"shop"},
 	"barb_wpn_gauntlets":  {"kind":"weapon", "class":"barbarian", "name":"Brawler's Gauntlets", "rarity":"epic", "r":"bits/fistweapon_B", "l":"bits/fistweapon_B", "gold":2200, "source":"shop"},
@@ -546,7 +554,7 @@ const CHESTS := {
 		"item_chance":1.0, "rarity":{"epic":0.85, "legendary":0.15}, "color":"#c47bff"},
 }
 const CHEST_FULL_GOLD := {"wooden":50, "silver":120, "gold":300, "royal":700}   # slots full: the chest becomes gold
-const DUPE_GOLD := {"common":100, "rare":250, "epic":600, "legendary":1500}       # a cosmetic already owned
+const DUPE_GOLD := {"common":100, "rare":250, "epic":600, "legendary":1500}       # (until 0.31.92: a cosmetic already owned; the starter pack's fallback)
 const PITY_EPIC := 10              # Gold/Royal chests: an epic or better at the latest every 10th
 
 static func skip_cost(remaining_s: int) -> int:
@@ -562,11 +570,11 @@ static func chest_pool(rarity: String) -> Array:
 	return ids
 
 static func roll_chest(kind: String, seed_value: int, owned: Array, pity: int) -> Dictionary:
-	# -> {gold, gems, item ("" if none), dupe_gold, pity (the new count)}
+	# -> {gold, gems, item ("" if none), dupe_embers, pity (the new count)}
 	var c: Dictionary = CHESTS[kind]
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_value
-	var out := {"gold":rng.randi_range(int(c.gold[0]), int(c.gold[1])), "gems":0, "item":"", "dupe_gold":0, "pity":pity}
+	var out := {"gold":rng.randi_range(int(c.gold[0]), int(c.gold[1])), "gems":0, "item":"", "dupe_embers":0, "pity":pity}
 	if rng.randf() < float(c.gems_chance):
 		out.gems = rng.randi_range(int(c.gems[0]), int(c.gems[1]))
 	if rng.randf() < float(c.item_chance):
@@ -591,7 +599,7 @@ static func roll_chest(kind: String, seed_value: int, owned: Array, pity: int) -
 		if not pool.is_empty():
 			var id: String = pool[rng.randi_range(0, pool.size() - 1)]
 			if owned.has(id):
-				out.dupe_gold = int(DUPE_GOLD.get(rar, 250))
+				out.dupe_embers = int(EMBERS_DUPE.get(rar, 25))      # 0.31.93: Embers for the Forge (was gold)
 			else:
 				out.item = id
 	return out
@@ -610,5 +618,55 @@ static func chest_odds(kind: String) -> String:
 	parts.append("%s: %s" % ["a cosmetic" if float(c.item_chance) >= 1.0 else "%d%% chance of a cosmetic" % int(round(float(c.item_chance) * 100.0)), ", ".join(rs)])
 	if kind in ["gold", "royal"]:
 		parts.append("an epic or better at least every %d" % PITY_EPIC)
-	parts.append("duplicates turn into gold")
+	parts.append("duplicates turn into Embers for the Forge")
 	return " · ".join(parts)
+
+
+# ---------------- the Forge (0.31.93, Armory Reforged; Kevin: "begin the weapon models and forge system") ----------------
+# Bring a weapon you own (a starter too) and raise it to three stars: the same weapon, more impressive each time. Looks
+# only, never damage. Paid in Embers (earned by playing, or bought with gems here) plus gold; the third star also needs
+# FORGE_WINS wins with that weapon equipped, and picks the aura's element.
+const FORGE_STARS := [
+	{"name":"Polished", "embers":40, "gold":500, "text":"Brighter metal and a sheen in its rarity's colour."},
+	{"name":"Runed", "embers":120, "gold":1500, "text":"Glowing runes that pulse along the weapon."},
+	{"name":"Ascended", "embers":300, "gold":4000, "text":"An aura and a swing trail in the element you pick."}]
+const FORGE_WINS := 25
+const EMBERS_DUPE := {"common":10, "rare":25, "epic":60, "legendary":150}      # a duplicate from a chest
+const EMBERS_MATCH := 2                 # every finished match ...
+const EMBERS_WIN := 5                   # ... or this for a win
+const EMBERS_DAILY := 15                # each daily challenge claimed
+const PASS_EMBERS_FREE := 20            # pass tiers 2, 6, 10 ... on the free track
+const PASS_EMBERS_PREMIUM := 40         # ... and on the premium track
+const EMBER_PACKS := [{"id":"embers_s", "gems":60, "embers":60}, {"id":"embers_m", "gems":150, "embers":170},
+	{"id":"embers_l", "gems":400, "embers":500}]
+const ELEMENTS := ["fire", "frost", "storm", "holy", "nature", "void"]
+const ELEMENT_COLOR := {"fire":"#ff7a2e", "frost":"#7fd8ff", "storm":"#b48cff", "holy":"#ffd76a", "nature":"#7dff8a", "void":"#c04dff"}
+const ELEMENT_NAME := {"fire":"Fire", "frost":"Frost", "storm":"Storm", "holy":"Holy", "nature":"Nature", "void":"Void"}
+
+static func forge_id(cls: String, item_id: String) -> String:
+	# what the Forge keys a weapon by: its catalog id, or "default_<cls>" for a class's starter
+	return item_id if item_id != "" else "default_" + cls
+
+static func forge_class(wid: String) -> String:
+	return wid.substr(8) if wid.begins_with("default_") else str(item(wid).get("class", ""))
+
+static func forge_rarity(wid: String) -> String:
+	return "common" if wid.begins_with("default_") else str(item(wid).get("rarity", "common"))
+
+static func forge_name(wid: String) -> String:
+	if wid.begins_with("default_"):
+		return str(STARTER_NAMES.get(wid.substr(8), "Default gear"))
+	return str(item(wid).get("name", ""))
+
+static func forge_cost(next_star: int) -> Dictionary:
+	# next_star 1..3 -> {"embers", "gold"}; {} past the third
+	if next_star < 1 or next_star > FORGE_STARS.size():
+		return {}
+	var f: Dictionary = FORGE_STARS[next_star - 1]
+	return {"embers":int(f.embers), "gold":int(f.gold)}
+
+static func ember_pack(id: String) -> Dictionary:
+	for p in EMBER_PACKS:
+		if str(p.id) == id:
+			return p
+	return {}

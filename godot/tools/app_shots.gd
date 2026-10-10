@@ -39,6 +39,15 @@ func _process(_d: float) -> bool:
 		p.d.gems += 400
 		p.d.pass.xp = 7 * 2500 + 900
 		p.d.owned.append("knight_wpn_greatsword"); p.equip("knight_wpn_greatsword")
+		if OS.has_environment("SHOT_FORGE"):            # 0.31.93: a profile mid-way through the Forge
+			p.d.embers = 520
+			p.d.gold += 6000
+			p.d.forge.stars["knight_wpn_greatsword"] = 2
+			p.d.forge.wins["knight_wpn_greatsword"] = 27
+			p.d.owned.append("knight_wpn_oath")
+			p.d.forge.stars["knight_wpn_oath"] = 3
+			p.d.forge.element["knight_wpn_oath"] = "holy"
+			app.forge_element = OS.get_environment("SHOT_FORGE")
 		p.d.challenges.daily[0].progress = 99
 		# (0.31.37) chests: one opening ready, one unlocking, two waiting
 		for k in ["silver", "gold", "wooden", "royal"]:

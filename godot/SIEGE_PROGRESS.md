@@ -2804,3 +2804,32 @@ K2/K3 notes (0.17.0)
   drivers (or none, already filtered by the Vulkan 1.1 requirement).
 - verify_play_bundle.py expects minSdkVersion 29; PLAY_STORE_HANDOFF updated. The itch preview APK doesn't use Gradle,
   so it keeps the template's min SDK (24).
+
+## 0.31.93 — Armory Reforged: the Knight's weapons, and the Forge (Kevin: "begin the weapon models and forge system")
+- Pipeline (tools/meshy_weapon.py, tools/gltf_bounds.py): the approved concept sheet (art-refs branch,
+  weapon-concepts/) -> a parts sheet with every piece drawn on its own, front view (ElevenLabs gpt-image-2 with the
+  sheet as reference, ~600 credits a sheet) -> crop (swords turned hilt-down) -> Meshy image-to-3D -> fit: the piece is
+  placed in the space of the KayKit model it replaces (same length for blades and poles, same face area for shields,
+  facing +Z), baked into the vertices (Godot drops a glTF's single root transform), texture 512 (VRAM-compressed).
+  siege_view: "mw/<id>" files, MESHY_WEAPON_LIKE (id -> the KayKit file whose hand slot, fit and roll it uses), so every
+  hold Kevin tuned carries over. Checked in hand: same transform as the old piece, idle/attack/block renders.
+- Meshy: meshy-6-lite (15 credits, 3k tris) for blades, meshy-7.1 (30, 4k) for shields and the legendary (lite's
+  shields had a split rim from the side). Knight: 22 pieces, ~495 credits; 575 left.
+- Knight weapons renamed (Kevin's roster): Squire's Blade (starter, Eco.STARTER_NAMES), Steadfast, Highguard,
+  Lionheart, Dawnwall, Bloodmoon, Stonewarden, Thornspire, Frostward, Ironbriar, Kingsoath. Bloodmoon's blade is held
+  like the one-handed sword (the two-handed template made it huge).
+- Icons: tools/render_weapon_icons.gd -- the weapon itself posed like the concept sheets (shield behind, blade diagonal;
+  scripts/app/weapon_pose.gd), for every mw/ weapon and starter. Replaces the tiny figure with an edge-on shield.
+- The Forge: Home medallion (anvil) under FIRST WIN (badge: an equipped weapon of a class you play can be forged), the
+  Locker's "FORGE YOUR <CLASS> WEAPONS", Screens.forge: Embers bar (+ packs 60/150/400 gems -> 60/170/500), class
+  picker, the weapon turning in its own world (forge_stage.gd) with its effects, stars, next star and cost, the third
+  star's wins (25 with it equipped) and element (fire/frost/storm/holy/nature/void, changeable free once Ascended),
+  the class's weapons with their stars. Stars also on the Locker cards.
+- Stars: Polished 40 Embers + 500 gold, Runed 120 + 1,500, Ascended 300 + 4,000. Looks only. forge_glow.gdshader as a
+  next_pass on the weapon's materials (sheen sweep + rim; rune bands; brighter in the element's colour) and, at three
+  stars, an aura of motes and a world-space trail from the tip. Applied in make_body from the profile's look
+  (look_for -> "forge"), so the match, Home's line-up, the Locker vault and the Forge show the same. Local player only.
+- Embers: +2 a match / +5 a win, +15 a daily order, a chest duplicate (10/25/60/150 by rarity, was gold), pass tiers
+  2, 6, 14 ... (20 free / 40 premium), the starter pack's 150, packs for gems. Results screen shows them.
+- New icons: anvil (Forge), Embers (ElevenLabs, cut out). tests/forge_test.gd (in the suite).
+- 0.31.93, version code 179. Quick suite: ALL 44 PASSED.
