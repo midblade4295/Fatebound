@@ -2921,3 +2921,6 @@ K2/K3 notes (0.17.0)
     (Prism, Rootwise, Hex, Gravecaller, Magister's book); the back cover now sits where the spellbook's does.
   - Bows (riser on the hand), crossbows, claws, knuckles, the mug and the bomb were already held right.
   56 pieces moved (31 by under 3 mm left as they were).
+- Content packs: ui (dagger icons) and weapons rebuilt and on the content-packs branch; an installed 0.31.95 downloads
+  only those two (48 MB) on its next launch. 0.31.96, version code 182. Quick suite: ALL 46 PASSED. APK 31,143,545
+  bytes, sha256 a7a7ae0f6c0b122cf26878a19b3c54a27f748394968dc390edb752d910a0576d; on itch (android channel).
