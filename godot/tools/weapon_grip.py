@@ -20,8 +20,16 @@ next to the haft. This finds the handle and moves the piece onto the hand:
   book:   a tome's back cover where the open spellbook's cover is at the spine (the hand rests on it): the closed
          tomes are three times as thick and were fitted by their front, so the hand vanished inside them.
 
+  0.31.104 (Kevin, with screenshots of Brickbreaker, Twin Sparks and the Eye of the Archon: "A lot of the weapons are
+  still not gripped correctly"): Y on a one-handed hammer, mace, axe or wand (END templates) -- the hand at the END of
+  the handle, END_UP above its last plain stretch, not halfway up it: a piece with a longer handle than its template
+  kept the template's grip height, so the fist closed just under the head with the rest of the handle sticking out
+  behind it. (A staff whose head is long kept its template's grip too, up against the head: the Archon and the
+  Lich-Crown were slid down their shafts by hand, `slide`.)
+
   weapon_grip.py measure PIECE.glb TEMPLATE KIND        print the move
   weapon_grip.py apply PIECE.glb TEMPLATE KIND OUT.glb  write the moved piece (the vertices shift; nothing else changes)
+  weapon_grip.py slide PIECE.glb DY OUT.glb             move the piece DY along its length (+ = the hand lower on it)
 """
 import json
 import os
@@ -41,6 +49,10 @@ MAX_DY = 0.08
 N = 60000       # surface samples
 GAP = 0.07      # a shield board's back in front of the fist's centre (slot units): the knuckles just touch it
 VIEW = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts", "siege", "siege_view.gd")
+# one-handed pieces held at the end of the handle (0.31.104)
+END = ("wand", "wand_A", "wand_B", "axe_1handed", "axe_A", "axe_C", "hammer_A", "hammer_B", "hammer_C", "hammer_D")
+END_UP = 0.12   # the hand's centre this far above the end of the handle's plain stretch ...
+END_SLACK = 0.06  # ... when it is more than END_UP + END_SLACK up it
 
 
 def _template_name(path):
@@ -134,6 +146,51 @@ def _pole(P, guard):
                                                 hand_width=float(win[i0]) if np.isfinite(win[i0]) else None)
 
 
+def _end_dy(P):
+    """a one-handed piece already centred on the hand: the move along Y that puts the hand END_UP above the bottom of
+    the plain handle through it (0 when it is near there already). The handle = the run of 1 cm slices, through the
+    hand, whose part round the shaft is thin (rings and wraps under 4.5 cm don't break it)."""
+    y = P[:, 1]
+    ys = np.arange(y.min() + S / 2, y.max(), S)
+    W = np.full(len(ys), np.nan)
+    for i, yc in enumerate(ys):
+        cs = _clusters(P[np.abs(y - yc) <= S / 2][:, [0, 2]])
+        if not cs:
+            continue
+        d = [np.min(np.linalg.norm(c, axis=1)) for c in cs]
+        j = int(np.argmin(d))
+        if d[j] <= 0.08:
+            W[i] = (cs[j].max(0) - cs[j].min(0)).max()
+    w = W[np.isfinite(W)]
+    if not len(w):
+        return 0.0, None
+    wmin = np.percentile(w, 15)
+    thin = np.isfinite(W) & (W <= max(1.9 * wmin, wmin + 0.035))
+    runs, cur = [], []
+    for i, t in enumerate(thin):
+        if t:
+            cur.append(i)
+        elif cur:
+            runs.append(cur)
+            cur = []
+    if cur:
+        runs.append(cur)
+    merged = []
+    for r in runs:
+        if merged and ys[r[0]] - ys[merged[-1][-1]] <= 0.045:
+            merged[-1] = merged[-1] + r
+        else:
+            merged.append(r)
+    i0 = int(np.argmin(np.abs(ys)))
+    run = [r for r in merged if r[0] <= i0 <= r[-1]]
+    if not run:
+        return 0.0, None
+    a, b = ys[run[0][0]] - S / 2, ys[run[0][-1]] + S / 2
+    if b - a < 0.2 or -a <= END_UP + END_SLACK:
+        return 0.0, (a, b)
+    return float(-(a + END_UP)), (a, b)
+
+
 def _back(P, r=0.12):
     """a shield's back where the fist is (over the slot: x = y = 0)"""
     m = np.hypot(P[:, 0], P[:, 1]) <= r
@@ -143,8 +200,13 @@ def _back(P, r=0.12):
 def measure(piece, template, kind):
     P = gb.surface(piece, N)
     if kind == "pole":
-        tname = os.path.basename(template)
-        return _pole(P, guard=("sword" in tname or "dagger" in tname))
+        tname = os.path.splitext(os.path.basename(template))[0]
+        off, info = _pole(P, guard=("sword" in tname or "dagger" in tname))
+        if tname in END:
+            dy, run = _end_dy(P + [off[0], 0.0, off[2]])
+            off = off + [0.0, dy, 0.0]
+            info.update(end_dy=dy, handle=run)
+        return off, info
     if kind == "shield":
         name = _template_name(template)
         sc = _weapon_scale(name)
@@ -194,6 +256,10 @@ def translate_glb(src, out, off):
 
 def main():
     cmd, a = sys.argv[1], sys.argv[2:]
+    if cmd == "slide":
+        translate_glb(a[0], a[2], np.array([0.0, float(a[1]), 0.0]))
+        print(os.path.basename(a[0]), "slid %+.3f" % float(a[1]))
+        return
     off, info = measure(a[0], a[1], a[2])
     print(os.path.basename(a[0]), "move %+.3f %+.3f %+.3f" % tuple(off), info)
     if cmd == "apply":

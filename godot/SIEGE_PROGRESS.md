@@ -3068,3 +3068,29 @@ K2/K3 notes (0.17.0)
 - Content pack weapons rebuilt (weapons-cd8cb0f18e24.pck) and on the content-packs branch.
 - tests/weapon_fx_test.gd: the spin parts exist in the model, turn on a body (each its own way), stay put on an icon.
 - 0.31.103, version code 189. Quick suite: ALL 51 PASSED (a first run missed staged_start_test's 200 ms _ready budget by 8 ms under load; alone it runs 107-126 ms). CONTENT OK. No itch build.
+
+## 0.31.104 — weapon grips (Kevin, with screenshots of Brickbreaker, Ravenclaws, Twin Sparks, Bloodmoon, Hawkeye, Eye of the Archon: "A lot of the weapons are still not gripped correctly")
+- Audit: every catalog weapon and starter rendered in its class's idle from the front and both sides, plus hand
+  close-ups against the KayKit piece each one is fitted to, plus handle profiles (1 cm slices along each piece).
+- Bows: the five on Bits templates (Hawkeye, Stag Hunter, Galeshot, Longshot, Heartseeker) had the string on the far
+  side, away from the archer -- the Bits bows' quarter turn in siege_view._fit_weapon went the same way as the
+  Adventurers bow's half turn. Now the other way: every bow's string faces the archer (the Galeshot, which looked like an
+  arch lying forward, is the same fix -- its deep curve was facing away).
+- One-handed hammers, maces, axes and wands: a piece with a longer handle than its template kept the template's grip
+  height, so the fist closed partway up the handle under the head with the rest sticking out behind (Brickbreaker,
+  Twin Sparks). tools/weapon_grip.py END (now part of `fit` too): the hand END_UP (0.12) above the end of the handle's
+  plain stretch. 18 slid: acolyte, sparkstick, spellwright and candle wands, both Twin Sparks, brawler / thornhide /
+  timberfall axes, work hatchet, frostbeard axe, Brickbreaker, Bulwark, Oathbound, Golden Sledge, Verdict maul,
+  Sunrise and Penitent maces (+0.07 to +0.35). Raider axe and Skullknocker were already there.
+- Staffs: the Eye of the Archon (its rings, eye and ornate neck are two thirds of it) and the Lich-Crown (the fist was on
+  its winged neck) slid down onto the plain shaft (`weapon_grip.py slide`, +0.32 / +0.33). The other staffs, swords,
+  daggers, shields, claws and two-handers were checked and left as they were (Bloodmoon: the hand is on the handle
+  under the guard; its crescent guard curls back over the fist by design. Ravenclaws: blades out of the knuckles,
+  feathers back over the hand, as drawn).
+- Icons, the Forge and the WEAPON tab centre each piece on its own box: unchanged. Effects are placed by fractions of the
+  box: unchanged.
+- tests/weapon_grip_test.gd in the suite: every bow's string on the archer's side (8 bows); every one-handed hammer,
+  mace, axe and wand held in the bottom 28% of its length (20); the Archon / Lich-Crown with most of the staff ahead of
+  the hand.
+- Content pack weapons rebuilt (weapons-5a80f010ba2b.pck) and on the content-packs branch.
+- 0.31.104, version code 190. Quick suite: ALL 52 PASSED. CONTENT OK.
