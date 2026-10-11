@@ -119,11 +119,11 @@ Write down what happened in the Status table: which steps worked, and any toast 
 | Step | Done? | Date | Notes (IDs, results; no secrets) |
 |---|---|---|---|
 | Play Games code landed (Claude) | yes | 2026-10-11 | 0.31.102; plugin 3.4.0 built for Godot 4.7.2; throwaway-key Play export checked: with a test ID the AAB has the plugin, APP_ID meta-data and the ID resource; without one, none of it |
-| 1 Play Games project | | | |
-| 2 Properties (Saved games ON) | | | |
-| 3 Credentials (consent screen, Android client, SHA-1) | | | |
-| 4 Testers | | | |
-| 5 Game ID in the build | | | |
+| 1 Play Games project | yes | 2026-10-10 | Game ID **1022979193240**. Created via "Create new PGS project" linked to existing Cloud project `fatebound-play` (Console offered no "already uses Google APIs" wording). Configuration still Draft, nothing published |
+| 2 Properties (Saved games ON) | yes | 2026-10-10 | Display name Fatebound, default language English (US), Saved games ON |
+| 3 Credentials (consent screen, Android client, SHA-1) | yes | 2026-10-10 | Consent screen: External, Testing, app name Fatebound, support email midblade4295@gmail.com (vellicgames@gmail.com not selectable as support email; used as developer contact), privacy URL jsDelivr @main privacy.html (authorized domain jsdelivr.net), no extra scopes, test user midblade4295@gmail.com. Android clients for com.fatebound.game: app signing SHA-1 3C:CB:9B:82:35:F7:3E:19:71:57:60:40:FF:FC:BD:DE:50:26:8E:0A (client 1022979193240-pd1669236o3u69t4inrns2020glgurud…), upload SHA-1 1D:BC:1C:0A:BD:67:EF:CF:A8:62:66:AE:B3:D2:C9:43:C4:01:1C:AB (client 1022979193240-hbvf6iend48sbnf1e4q012uo1h1196fr…). No web/server client |
+| 4 Testers | yes | 2026-10-10 | PGS testers: midblade4295@gmail.com |
+| 5 Game ID in the build | yes | 2026-10-10 | `godot_play_game_services/game_id="1022979193240"` in the Android Play Store preset on grok/siege-play-local-r19 (f1643ae). vc184 export log: `[GodotPlayGameServices] Game ID 1022979193240 in res/values/play_games_ids.xml`; verify_play_bundle.py (PLAY_GAMES_APP_ID set): `"play_games": true`, BASE OK, CONTENT OK |
 | 6 Internal-testing build | | | |
 | 7 Test on Kevin's phone | | | |
-| 8 Policy forms | | | |
+| 8 Policy forms | partly | 2026-10-10 | Privacy: privacy.html ("Google Play Games" section, updated 11 October 2026) on main as 1592da3 (only that file) and redeployed to https://136-113-125-3.sslip.io/fatebound/privacy.html (backup on server /tmp/privacy.html.bak-20261011T060217Z). Old dice-arena/Firebase sections unchanged (Kevin to decide on a rewrite). Data safety: still pending |

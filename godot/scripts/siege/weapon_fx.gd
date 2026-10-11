@@ -62,7 +62,9 @@ const STAR_GLOW := [[0.0, 0.0, 0.0, 1.0], [0.35, 0.9, 0.0, 1.0], [0.45, 1.0, 0.4
 
 # Each legendary piece (by its mw/ model): col, its glow (rim, sweep), key [hue deg, +- deg, min saturation, min
 # brightness] and key_amt for the parts of its texture that light up, trail (a swing's ribbon), solo (a pair of the
-# same piece: the particles on the main hand only), fx (presets, with overrides; col defaults to the piece's).
+# same piece: the particles on the main hand only), fx (presets, with overrides; col defaults to the piece's), spin
+# (0.31.103: parts of the model cut into their own nodes by tools/weapon_spin_parts.py, turned about their own +Y at
+# speed rad/s and rocked +-wobble degrees about their X at wobble_speed).
 const LEGENDARY := {
 	"kingsoath_sword":        {"col":"#ffd36b", "rim":0.35, "sweep":1.0, "trail":"#ffe08a",
 		"fx":[{"p":"sparkle", "col":"#fff2c4"}, {"p":"motes"}, {"p":"twinkle", "col":"#ffe7a3"}]},
@@ -107,7 +109,8 @@ const LEGENDARY := {
 	"hawksjudgment_crossbow": {"col":"#ffd36b", "rim":0.35, "sweep":0.9,
 		"fx":[{"p":"feathers", "n":4, "col":"#ffd77a", "size":0.1, "alpha":0.8, "at":[0.0, 1.0], "w":1.0}, {"p":"sparkle", "n":5, "col":"#fff2c4", "at":[0.0, 1.0], "w":0.9}]},
 	"astral_staff":           {"col":"#b06bff", "rim":0.35, "sweep":0.5, "key":[268, 22, 0.4, 0.45], "key_amt":2.0,
-		"fx":[{"p":"orbit", "n":4, "col":"#e6d0ff"}, {"p":"twinkle", "col":"#c9a6ff"}, {"p":"vortex", "col":"#7a4cff", "alpha":0.35}]},
+		"fx":[{"p":"orbit", "n":4, "col":"#e6d0ff"}, {"p":"twinkle", "col":"#c9a6ff"}, {"p":"vortex", "col":"#7a4cff", "alpha":0.35}],
+		"spin":[{"node":"Rings", "speed":0.6, "wobble":8.0, "wobble_speed":0.7}, {"node":"Crystal", "speed":-0.5}]},
 	"astral_book":            {"col":"#6f7bff", "rim":0.35, "sweep":0.5,
 		"fx":[{"p":"sigil", "col":"#8a7dff", "at":0.5, "size":1.0, "alpha":0.35}, {"p":"motes", "n":10, "col":"#a99cff", "at":[0.0, 1.0], "w":1.0}]},
 }
@@ -235,11 +238,13 @@ static func apply(model: Node3D, file: String, fx: Dictionary, main := true, tem
 			trail = Color(str(leg.trail))
 		elif stars >= 2:
 			trail = Color(star_col, 0.45 if stars == 2 else 1.0)
-	if specs.is_empty() and trail.a <= 0.0:
+	var spins: Array = leg.get("spin", [])
+	if specs.is_empty() and trail.a <= 0.0 and spins.is_empty():
 		return
 	var root := Root.new()
 	root.name = "WeaponFx"
 	root.box = box
 	root.specs = specs
 	root.trail = trail
+	root.spins = spins
 	model.add_child(root)
