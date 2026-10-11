@@ -746,9 +746,9 @@ static func chest_odds(kind: String) -> String:
 # only, never damage. Paid in Embers (earned by playing, or bought with gems here) plus gold; the third star also needs
 # FORGE_WINS wins with that weapon equipped, and picks the aura's element.
 const FORGE_STARS := [
-	{"name":"Polished", "embers":40, "gold":500, "text":"Brighter metal and a sheen in its rarity's colour."},
-	{"name":"Runed", "embers":120, "gold":1500, "text":"Glowing runes that pulse along the weapon."},
-	{"name":"Ascended", "embers":300, "gold":4000, "text":"An aura and a swing trail in the element you pick."}]
+	{"name":"Polished", "embers":40, "gold":500, "text":"A glint runs up the metal and it sparkles, in its rarity's colour."},
+	{"name":"Runed", "embers":120, "gold":1500, "text":"Glowing veins pulse through it, runes drift around it, a trail when you swing."},
+	{"name":"Ascended", "embers":300, "gold":4000, "text":"Flames, frost, lightning, holy light, leaves or a void vortex -- the element you pick."}]
 const FORGE_WINS := 25
 const EMBERS_DUPE := {"common":10, "rare":25, "epic":60, "legendary":150}      # a duplicate from a chest
 const EMBERS_MATCH := 2                 # every finished match ...

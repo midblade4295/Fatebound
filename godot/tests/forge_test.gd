@@ -103,14 +103,19 @@ func _init() -> void:
 	var made: Dictionary = View.make_body("knight", {"r": "mw/kingsoath_sword", "l": "mw/kingsoath_shield", "forge": {"stars": 3, "rarity": "legendary", "element": "holy"}})
 	var body: Node3D = made.body
 	var glowing := 0
-	var particles := body.find_children("ForgeAura", "GPUParticles3D", true, false).size() + body.find_children("ForgeTrail", "GPUParticles3D", true, false).size()
+	var particles := body.find_children("WeaponFx", "", true, false).size()      # 0.31.100: built in the tree (weapon_fx_test)
 	for mi in body.find_children("*", "MeshInstance3D", true, false):
 		var m := mi as MeshInstance3D
 		if m.get_surface_override_material_count() > 0 and m.get_surface_override_material(0) != null and m.get_surface_override_material(0).next_pass is ShaderMaterial:
 			glowing += 1
-	check(glowing >= 2 and particles == 2, "three stars: both pieces glow (%d), the sword has an aura and a trail (%d)" % [glowing, particles])
-	var plain: Dictionary = View.make_body("knight", {"r": "mw/kingsoath_sword", "l": "mw/kingsoath_shield"})
-	check((plain.body as Node3D).find_children("ForgeAura", "", true, false).is_empty(), "no stars, no effects")
+	check(glowing >= 2 and particles == 1, "three stars: both pieces glow (%d), the sword has its effects (%d)" % [glowing, particles])
+	var plain: Dictionary = View.make_body("knight", {"r": "mw/highguard_sword", "l": "mw/highguard_shield"})
+	var plain_glow := 0
+	for mi in (plain.body as Node3D).find_children("*", "MeshInstance3D", true, false):
+		var pm := mi as MeshInstance3D
+		if pm.get_surface_override_material_count() > 0 and pm.get_surface_override_material(0) != null and pm.get_surface_override_material(0).next_pass != null:
+			plain_glow += 1
+	check((plain.body as Node3D).find_children("WeaponFx", "", true, false).is_empty() and plain_glow == 0, "no stars (and not a legendary), no effects")
 	body.free()
 	(plain.body as Node3D).free()
 	print("FORGE_PASS" if fails.is_empty() else "FORGE_FAIL %s" % str(fails))

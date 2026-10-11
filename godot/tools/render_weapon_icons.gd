@@ -75,7 +75,7 @@ func _run() -> void:
 			c.queue_free()
 		var shown := Node3D.new()
 		holder.add_child(shown)
-		WeaponPose.compose(shown, str(job[1]), str(job[2]))
+		WeaponPose.compose(shown, str(job[1]), str(job[2]), {}, false)      # (no effects on a still icon)
 		cam.size = 2.2
 		cam.transform = Transform3D(Basis.IDENTITY, Vector3(0, 0, 6))
 		for i in 4:

@@ -63,6 +63,11 @@ func _process(_d: float) -> bool:
 			p.d.quests["worker"] = 3
 			p.d.owned.append("worker_wpn_sledge")
 			app.quest_cls = OS.get_environment("SHOT_QUESTS")
+		if OS.has_environment("SHOT_EQUIP"):             # 0.31.100: wear these (owned for the shot), e.g. a legendary's effects
+			for id in OS.get_environment("SHOT_EQUIP").split(","):
+				if not p.d.owned.has(id):
+					p.d.owned.append(id)
+				p.equip(id)
 		p.d.challenges.daily[0].progress = 99
 		# (0.31.37) chests: one opening ready, one unlocking, two waiting
 		for k in ["silver", "gold", "wooden", "royal"]:

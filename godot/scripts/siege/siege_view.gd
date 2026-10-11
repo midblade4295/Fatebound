@@ -9,6 +9,7 @@ const CastleKit = preload("res://scripts/siege/castle_kit.gd")
 static var CASTLE_KITS := true      # 0.31.74 Meshy castle kits (castle_kit.gd); false = the KayKit castle (tools compare)
 const PATH_TEX := preload("res://assets/terrain/path.png")
 const Sim = preload("res://scripts/siege/siege_sim.gd")
+const WeaponFx = preload("res://scripts/siege/weapon_fx.gd")
 
 const HEX := "res://assets/kaykit/hex/"
 const FOREST := "res://assets/kaykit/forest/"
@@ -3279,9 +3280,10 @@ static func make_body(cls: String, cosmetic: Dictionary = {}) -> Dictionary:
 	for st in staffs:
 		_face_staff(st[0], str(st[1]), str(st[2]), skeleton, libs, str(look.idle), str(look.model))
 	var fx: Dictionary = cosmetic.get("forge", {})               # 0.31.93: the Forge's stars on this weapon
-	if int(fx.get("stars", 0)) > 0:
-		for hm in hand_models:
-			apply_forge(hm[0], fx, str(hm[1]) == "r" or hand_models.size() == 1)
+	for hm in hand_models:                                       # 0.31.100: and a legendary's own effects
+		var hf := str(look.get(str(hm[1]), ""))
+		if WeaponFx.wants(hf, fx):
+			WeaponFx.apply(hm[0], hf, fx, str(hm[1]) == "r" or hand_models.size() == 1, str(hm[2]))
 	for mi in body.find_children("*", "MeshInstance3D", true, false):
 		(mi as MeshInstance3D).cast_shadow = (GeometryInstance3D.SHADOW_CASTING_SETTING_ON if _cast_static else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
 	if not cosmetic.has("tint") and look.has("tint"):
@@ -3498,152 +3500,15 @@ static func weapon_template(file: String) -> String:
 	# the KayKit file whose hold a weapon file uses (itself, for a KayKit file)
 	return str(MESHY_WEAPON_LIKE.get(file.substr(3), file)) if file.begins_with("mw/") else file
 
-# ---------- the Forge's stars on a weapon (0.31.93) ----------
-# Stars 1-2: an additive pass (forge_glow.gdshader) over the weapon's own materials -- a sheen, then runes. Star 3: the
-# same brighter, in the element's colour, plus an aura of motes around the main weapon and a trail from its tip
-# (particles in world space, so a swing leaves a streak). Cosmetic only; materials and particle resources are cached.
-const FORGE_SHADER = preload("res://scripts/siege/forge_glow.gdshader")
-const FORGE_TINT := {"common":"#ffd9a0", "rare":"#6cc4ff", "epic":"#d6a2ff", "legendary":"#ffc23d"}
-static var _forge_glow := {}         # "stars|colour|span" -> ShaderMaterial
-static var _forge_base := {}         # base material id|glow key -> the base material with the glow as next_pass
-static var _forge_dot: Texture2D = null
-
+# ---------- the Forge's stars on a weapon (0.31.93; redone with the legendaries' effects in weapon_fx.gd, 0.31.100) ----------
 static func forge_color(fx: Dictionary) -> Color:
-	if int(fx.get("stars", 0)) >= Eco.FORGE_STARS.size() and Eco.ELEMENT_COLOR.has(str(fx.get("element", ""))):
-		return Color(str(Eco.ELEMENT_COLOR[str(fx.element)]))
-	return Color(str(FORGE_TINT.get(str(fx.get("rarity", "common")), "#ffd9a0")))
+	return WeaponFx.color(fx)
 
 static func _model_box(model: Node3D) -> AABB:
-	var box := AABB()
-	var first := true
-	for mi in model.find_children("*", "MeshInstance3D", true, false):
-		var m := mi as MeshInstance3D
-		var xf := Transform3D.IDENTITY
-		var n: Node = m
-		while n != null and n != model:
-			xf = (n as Node3D).transform * xf
-			n = n.get_parent()
-		var b: AABB = xf * m.get_aabb()
-		box = b if first else box.merge(b)
-		first = false
-	return box
+	return WeaponFx.box_of(model)
 
-static func apply_forge(model: Node3D, fx: Dictionary, main := true) -> void:
-	var stars := clampi(int(fx.get("stars", 0)), 0, Eco.FORGE_STARS.size())
-	if stars <= 0:
-		return
-	var col := forge_color(fx)
-	var box := _model_box(model)
-	var span := snappedf(maxf(box.size.y, 0.2), 0.05)
-	var gk := "%d|%s|%.2f" % [stars, col.to_html(), span]
-	if not _forge_glow.has(gk):
-		var gm := ShaderMaterial.new()
-		gm.shader = FORGE_SHADER
-		gm.set_shader_parameter("tint", col)
-		gm.set_shader_parameter("sheen", [0.0, 0.8, 0.85, 1.0][stars])
-		gm.set_shader_parameter("runes", [0.0, 0.0, 1.0, 1.3][stars])
-		gm.set_shader_parameter("boost", [1.0, 1.0, 1.1, 1.3][stars])
-		gm.set_shader_parameter("span", span)
-		_forge_glow[gk] = gm
-	var glow: ShaderMaterial = _forge_glow[gk]
-	for mi in model.find_children("*", "MeshInstance3D", true, false):
-		var m := mi as MeshInstance3D
-		for surf in m.mesh.get_surface_count():
-			var base := m.get_active_material(surf)
-			if base == null:
-				continue
-			var bk := "%d|%s" % [base.get_instance_id(), gk]
-			if not _forge_base.has(bk):
-				var dup: Material = base.duplicate()
-				dup.next_pass = glow
-				_forge_base[bk] = dup
-			m.set_surface_override_material(surf, _forge_base[bk])
-	if stars >= Eco.FORGE_STARS.size() and main:
-		_forge_particles(model, box, col)
-
-static func _forge_dot_tex() -> Texture2D:
-	if _forge_dot == null:
-		var g := Gradient.new()
-		g.set_color(0, Color(1, 1, 1, 1))
-		g.set_color(1, Color(1, 1, 1, 0))
-		var gt := GradientTexture2D.new()
-		gt.gradient = g
-		gt.fill = GradientTexture2D.FILL_RADIAL
-		gt.fill_from = Vector2(0.5, 0.5)
-		gt.fill_to = Vector2(1.0, 0.5)
-		gt.width = 32
-		gt.height = 32
-		_forge_dot = gt
-	return _forge_dot
-
-static func _forge_mote_mesh(col: Color, px: float) -> QuadMesh:
-	var mat := StandardMaterial3D.new()
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	mat.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	mat.vertex_color_use_as_albedo = true
-	mat.albedo_color = col
-	mat.albedo_texture = _forge_dot_tex()
-	var q := QuadMesh.new()
-	q.size = Vector2(px, px)
-	q.material = mat
-	return q
-
-static func _forge_particles(model: Node3D, box: AABB, col: Color) -> void:
-	# the aura: motes rising around the weapon
-	var aura := GPUParticles3D.new()
-	aura.name = "ForgeAura"
-	aura.amount = 22
-	aura.lifetime = 1.1
-	aura.local_coords = true
-	var pm := ParticleProcessMaterial.new()
-	pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
-	pm.emission_box_extents = box.size * 0.5
-	pm.direction = Vector3(0, 1, 0)
-	pm.spread = 30.0
-	pm.initial_velocity_min = 0.05
-	pm.initial_velocity_max = 0.25
-	pm.gravity = Vector3(0, 0.25, 0)
-	pm.scale_min = 0.5
-	pm.scale_max = 1.2
-	var ramp := Gradient.new()
-	ramp.set_color(0, Color(col, 0.0))
-	ramp.add_point(0.2, Color(col, 0.9))
-	ramp.set_color(ramp.get_point_count() - 1, Color(col, 0.0))
-	var rt := GradientTexture1D.new()
-	rt.gradient = ramp
-	pm.color_ramp = rt
-	aura.process_material = pm
-	aura.draw_pass_1 = _forge_mote_mesh(col, 0.12)
-	aura.position = box.get_center()
-	aura.visibility_aabb = AABB(-box.size, box.size * 2.0)
-	model.add_child(aura)
-	# the trail: sparks shed from the tip in world space, so a swing draws a streak
-	var trail := GPUParticles3D.new()
-	trail.name = "ForgeTrail"
-	trail.amount = 36
-	trail.lifetime = 0.32
-	trail.local_coords = false
-	var tm := ParticleProcessMaterial.new()
-	tm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
-	tm.emission_sphere_radius = 0.04
-	tm.gravity = Vector3.ZERO
-	tm.initial_velocity_min = 0.0
-	tm.initial_velocity_max = 0.05
-	tm.scale_min = 0.7
-	tm.scale_max = 1.0
-	var tramp := Gradient.new()
-	tramp.set_color(0, Color(col.lightened(0.4), 0.95))
-	tramp.set_color(1, Color(col, 0.0))
-	var trt := GradientTexture1D.new()
-	trt.gradient = tramp
-	tm.color_ramp = trt
-	trail.process_material = tm
-	trail.draw_pass_1 = _forge_mote_mesh(col, 0.16)
-	trail.position = Vector3(box.get_center().x, box.position.y + box.size.y * 0.85, box.get_center().z)
-	trail.visibility_aabb = AABB(Vector3(-4, -4, -4), Vector3(8, 8, 8))
-	model.add_child(trail)
+static func apply_forge(model: Node3D, fx: Dictionary, main := true, file := "") -> void:
+	WeaponFx.apply(model, file, fx, main)
 
 static func _fit_weapon(model: Node3D, file: String, body_model := "", hand := "r") -> void:
 	model.scale = Vector3.ONE * float(WEAPON_SCALE.get(file, 1.0))

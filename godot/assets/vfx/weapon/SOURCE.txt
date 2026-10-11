@@ -1,0 +1,4 @@
+Weapon effect sprites (0.31.100): generated with ElevenLabs (gpt-image-2, flow tL2Uq8Khy94WZ0PV3s34, node
+xrAv77R820zkUXIkIDuI) as four 4x4 sheets of white glowing VFX sprites on black, cut by tools/cut_vfx_sheet.py into
+128 px grayscale textures (brightness = the sprite; tinted and added in fx_sprite.gdshader). runes.png holds the four
+sheets' rune glyphs in a 2x2 atlas. dot.png is procedural.

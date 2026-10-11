@@ -2970,3 +2970,36 @@ K2/K3 notes (0.17.0)
   version reached, so the app was no longer "outdated" there).
 - Content packs ui and weapons rebuilt and on the branch. 0.31.99, version code 185. Quick suite: ALL 48 PASSED. APK
   31159929 bytes, sha256 754316445f9aae2684aedf87907198d251bde94c6fcec612dc9c0553e688d29b; on itch (android channel).
+
+## 0.31.100 — better Forge effects, and every legendary has its own (Kevin: "I want the effects to look better for the forge weapons. I also want to add effects for all the legendary weapons")
+- Sprites: 15 painted VFX sprites (sparkle, flame, smoke, lightning, rays, snowflake, ice shard, leaf, feather, four
+  runes, sigil, crescent, soul wisp, vortex, star cluster, ring) generated with ElevenLabs gpt-image-2 as white-on-black
+  sheets (4 takes, best of each kept; flow tL2Uq8Khy94WZ0PV3s34), cut by tools/cut_vfx_sheet.py into 128 px grayscale
+  textures in assets/vfx/weapon (base APK, lossless + mipmaps; SOURCE.txt). fx_sprite.gdshader draws them added in the
+  particle's colour with a white-hot core, billboarded or laid flat (a halo).
+- scripts/siege/weapon_fx.gd (replaces siege_view's forge code): a glow pass over the weapon's own materials
+  (forge_glow.gdshader rewritten: fresnel rim, a narrow glint running up the piece, glowing veins from a 3D cell pattern
+  with a pulse flowing up them, and a colour key that lights a legendary's lava / eye / gems from its own texture), plus
+  particles, pinned sprites (rays behind a staff's head, a halo, a turning sigil or vortex, sparks orbiting) and a swing
+  ribbon (fx_trail.gdshader: a crescent along the tip's path, only while the blade moves fast; a jump clears it; never on
+  bows, staffs, books or shields). weapon_fx_root.gd builds them on the first frame in the tree in world units measured
+  from the piece, since Godot draws a particle at its own size whatever the emitter's scale.
+- Forge stars: 1 Polished = glint + sparkles; 2 Runed = + veins, runes drifting along it, a faint ribbon; 3 Ascended =
+  all in the element's colour + fire flames and embers / frost snow and mist / storm lightning and sparks / holy rays and
+  motes / nature leaves / void wisps and vortex, and a bright ribbon. Star texts updated.
+- Legendaries (LEGENDARY, by model, whether or not forged; with stars they add up): Kingsoath sparkles and motes,
+  Worldsplitter glowing lava with embers and flames, Grimgrin purple wisps, Eye of the Archon lit eye with a sigil and
+  orbiting sparks, Solaris rays from its sun, Final Verdict golden runes, Kingsguard royal sparkles, Skyrender
+  lightning, Moonfang drifting crescents, Dawnpiercer leaves, Emberheart phoenix flames and fire feathers, Seraph's Grace
+  a halo and falling feathers, The Golden Sledge sparks, Oathbound sun rays, Bloodroar red embers and smoke, Lichcrown
+  green soulfire, Last Breath violet smoke, Hawk's Judgment golden feathers, Astral Codex orbiting stars, a vortex and
+  a sigil behind the book. Each has its own swing ribbon colour where it swings.
+- Shown on a body (Locker, Home, Quests, shop "in hand", my unit in a match) and in the Forge / shop "weapon" view; the
+  still icons stay plain (WeaponPose.compose effects=false). Sprites write their strength into alpha so the transparent
+  showcase viewports get no black squares.
+- tests/weapon_fx_test.gd (every legendary piece has effects, presets and sprites exist, stars 1/2/3, Seraph's halo,
+  sizes follow the piece's world scale, icons plain, the ribbon only in a fast swing) in the suite; forge_test updated.
+  tools/app_shots.gd: SHOT_EQUIP=id,... wears items for a shot.
+- 0.31.100, version code 186. Quick suite: ALL 49 PASSED. Content packs unchanged (CONTENT OK; the sprites are base).
+  APK 31323653 bytes, sha256 3ad510dafe0bf710b10f0963cb9822ca46ee617b58bf09d301b6920dbb4ef539; on itch (android
+  channel).
