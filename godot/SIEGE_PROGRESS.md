@@ -2903,3 +2903,21 @@ K2/K3 notes (0.17.0)
 - tests/shop_preview_test.gd (suite): real taps on all 12 shop cards, then the toggle, gold buy, equip, gem
   cancel/buy, an Arsenal's second weapon and buying it -- all through the preview's buttons. tools/app_shots.gd
   SHOT_PREVIEW / SHOT_PREVIEW_MODE.
+- Grips (tools/weapon_grip.py, now the last step of meshy_weapon.py fit). Checked every Armory Reforged piece (108) in its
+  template's space with the grip marked, then in the hand, posed, before and after:
+  - Long weapons: the fit had centred each piece's whole box, so a head hanging to one side put the haft off the hand.
+    The shaft is now found (the column of the piece that runs through the whole grip band -- an axe blade, a
+    scythe's blade, a lantern or feathers fill only part of it) and put through the fist: Soulreaper and Grimgrin
+    scythes 0.25, Stormcleaver 0.27, Worldsplitter 0.22, Wayfarer's staff 0.19 (the hand was on the lantern), Raider
+    axe 0.17, Boarsbane spear 0.16, Bonecarver 0.11, Timberfall, Work Hatchet, the other axes and a few daggers less.
+    Swords whose guard sat on the hand moved up onto the grip (Dawnwall, Kingsoath, Templar).
+  - Three daggers had been fitted upside down -- the hand held the blade: Shade (the Assassin's starter), Asp, Eclipse.
+    Refitted blade-up (their icons re-rendered).
+  - Shields: the KayKit shields have a handle the fist closes on; a Meshy board has none and was fitted by its front
+    face, so thin boards floated a hand's width off the fist (Bloodmoon 0.18, Ironbriar 0.28, Kingsoath, Thornhide,
+    Stonewarden, the Barbarian's round shields) and thick ones swallowed it (Lionheart, Highguard, Bulwark, Sunrise:
+    the gauntlet came out through the face). Every board's back now sits just in front of the knuckles.
+  - Tomes: closed tomes are three times as thick as the open spellbook they replace and the hand was inside them
+    (Prism, Rootwise, Hex, Gravecaller, Magister's book); the back cover now sits where the spellbook's does.
+  - Bows (riser on the hand), crossbows, claws, knuckles, the mug and the bomb were already held right.
+  56 pieces moved (31 by under 3 mm left as they were).
