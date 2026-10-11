@@ -2955,3 +2955,9 @@ K2/K3 notes (0.17.0)
 - 0.31.97, version code 183. Quick suite: ALL 48 PASSED (meta_economy_test now counts the 6 upgraded-class quest
   legendaries apart). Content packs ui (16.1 MB) and weapons (37.8 MB) rebuilt and on the branch. APK 31,159,929 bytes,
   sha256 9ea15725ce9c782164af1515b6aaf5ec982c0fdb1ff5d511acc0e7c920c34f60; on itch (android channel).
+
+## 0.31.98 — the Rogue's Whisperbolt is two daggers (Kevin: "He shouldn't have a crossbow at all. Just give him the daggers")
+- The Rogue is melee and stabs with both hands, so Whisperbolt's off-hand crossbow was swung like a dagger. Whisperbolt
+  is now the Whisperbolt dagger in both hands; the crossbow model is gone (and its hold), the icon re-rendered.
+- Content packs ui and weapons rebuilt and on the branch. 0.31.98, version code 184. Quick suite: ALL 48 PASSED. APK
+  31159929 bytes, sha256 65dcab5a605de93fb2572aa96affd449aaddf04493c86822c7c3e5ac37669b1b; on itch (android channel).

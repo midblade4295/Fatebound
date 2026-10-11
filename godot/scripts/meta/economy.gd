@@ -162,7 +162,7 @@ const CATALOG := {
 	"barb_wpn_spiked":     {"kind":"weapon", "class":"barbarian", "name":"Thornhide", "rarity":"epic", "r":"mw/thornhide_axe", "l":"mw/thornhide_shield", "gems":250, "source":"shop"},
 	# --- Rogue
 	"rogue_wpn_bomb":      {"kind":"weapon", "class":"rogue", "name":"Smokescreen", "rarity":"rare", "r":"mw/smokescreen_dagger", "l":"mw/smokescreen_bomb", "gold":900, "source":"shop"},
-	"rogue_wpn_bolt":      {"kind":"weapon", "class":"rogue", "name":"Whisperbolt", "rarity":"epic", "r":"mw/whisperbolt_dagger", "l":"mw/whisperbolt_crossbow", "gems":250, "source":"shop"},
+	"rogue_wpn_bolt":      {"kind":"weapon", "class":"rogue", "name":"Whisperbolt", "rarity":"epic", "r":"mw/whisperbolt_dagger", "l":"mw/whisperbolt_dagger", "gems":250, "source":"shop"},   # (0.31.98, Kevin: no crossbow for the Rogue -- the daggers)
 	# --- Ranger
 	"ranger_wpn_crossbow": {"kind":"weapon", "class":"ranger", "name":"Ironjaw", "rarity":"epic", "r":"mw/ironjaw_crossbow", "l":"", "source":"pass"},
 	"ranger_wpn_quiver":   {"kind":"weapon", "class":"ranger", "name":"Trailblazer", "rarity":"rare", "r":"mw/trailblazer_quiver", "l":"mw/trailblazer_bow", "gold":900, "source":"shop"},

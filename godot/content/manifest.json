@@ -4,10 +4,10 @@
  "packs": [
   {
    "name": "ui",
-   "file": "ui-67c725c220b8.pck",
-   "size": 16076044,
-   "sha256": "57f5c33cf0ae615186b9b05223f23eb0312172d2d52fcd6b80952d110dc887ae",
-   "inputs": "67c725c220b8867f4b0740362cf5fc25ecff22f8f8af76047f50977c039a7822",
+   "file": "ui-cef0640041d7.pck",
+   "size": 16067996,
+   "sha256": "17fc378b59a7de78810401df1e0f427e1a1af822f2b9f155e830538cc131bd8e",
+   "inputs": "cef0640041d72961ee3aea44aa5897e28e5c828c40ac851f42e524d582cd7bbe",
    "probe": "res://assets/ui/currency/coin.png"
   },
   {
@@ -28,10 +28,10 @@
   },
   {
    "name": "weapons",
-   "file": "weapons-1b61c534ee16.pck",
-   "size": 37752344,
-   "sha256": "dda3607d88ba679d5ca8f61285ba961125bb28b36530280fe952996ef6534713",
-   "inputs": "1b61c534ee167f6ad0de17cabdc710991edcdb9ecf3b59d522da3cbcbe709ecb",
+   "file": "weapons-9964677f7f0e.pck",
+   "size": 37432436,
+   "sha256": "181d212389715a70f16564762931cf5cf36f72525215560ebf9d9ec643b03417",
+   "inputs": "9964677f7f0e901472614dd396bafd4d49bee015725e9846c0012f28fc63cebc",
    "probe": "res://assets/meshy/weapons/acolyte_wand.glb"
   },
   {

@@ -3442,7 +3442,7 @@ const MESHY_WEAPON_LIKE := {
 	# Rogue
 	"cutpurse_dagger": "dagger", "smokescreen_dagger": "dagger", "smokescreen_bomb": "smokebomb",
 	"viper_fang": "bits/dagger_B", "needlepoint_stiletto": "bits/dagger_A", "alley_knuckles": "bits/fistweapon_A",
-	"whisperbolt_dagger": "dagger", "whisperbolt_crossbow": "crossbow_1handed",
+	"whisperbolt_dagger": "dagger",
 	"ravenclaw_r": "bits/fistweapon_C_right", "ravenclaw_l": "bits/fistweapon_C_left", "grimgrin_scythe": "bits/scythe",
 	# Archer
 	"ashwood_bow": "bow_withString", "trailblazer_bow": "bow_withString", "trailblazer_quiver": "quiver",
