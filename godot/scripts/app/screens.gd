@@ -107,6 +107,8 @@ static func pack_list(app, root: Node) -> void:
 		c.custom_minimum_size = Vector2(0, 232)
 		UI.grow(c)
 		grid.add_child(c)
+		var ppid := str(pid)
+		_tap_area(c, "preview_" + ppid, func(): open_item(app, "", ppid, 0))
 		var clip := Control.new()
 		clip.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 		clip.offset_left = 4
@@ -169,7 +171,7 @@ static func _rar_rim(rar: String) -> String:
 static func _rar_tint(rar: String) -> Color:
 	return {"common": Color(0.85, 0.88, 1.0), "rare": Color(0.55, 0.78, 1.0), "epic": Color(0.85, 0.6, 1.0), "legendary": Color(1.0, 0.78, 0.35)}.get(rar, Color(1, 0.9, 0.6))
 
-static func buy_pack(app, pid: String) -> void:
+static func buy_pack(app, pid: String, then := Callable()) -> void:
 	var pk: Dictionary = Eco.PACKS[pid]
 	var gems := Eco.pack_price(pid, app.profile.d.owned)
 	app.confirm("BUY %s?" % str(pk.name).to_upper(), "%d items for %d gems." % [pk.items.size(), gems], "BUY", "premium", func():
@@ -180,7 +182,9 @@ static func buy_pack(app, pid: String) -> void:
 		else:
 			app.sfx("error")
 			app.toast(str(r.error), UI.RED)
-		app.rebuild())
+		app.rebuild()
+		if r.ok and then.is_valid():
+			then.call(), then)   # (0.31.96: CANCEL goes back to the shop preview it came from)
 
 static func price_button(parent: Node, app, id: String, size := 15, h := 34.0) -> Button:
 	var price := Eco.item_price(id)
@@ -191,7 +195,7 @@ static func price_button(parent: Node, app, id: String, size := 15, h := 34.0) -
 	b.disabled = not app.profile.can_afford(price)
 	return b
 
-static func buy(app, id: String) -> void:
+static func buy(app, id: String, then := Callable()) -> void:
 	var it := Eco.item(id)
 	var price := Eco.item_price(id)
 	var do_buy := func():
@@ -203,8 +207,10 @@ static func buy(app, id: String) -> void:
 			app.sfx("error")
 			app.toast(str(r.error), UI.RED)
 		app.rebuild()
+		if r.ok and then.is_valid():
+			then.call()
 	if price.has("gems"):
-		app.confirm("BUY %s?" % str(it.name).to_upper(), "%s for %d gems." % [item_kind_text(it), int(price.gems)], "BUY", "premium", do_buy)
+		app.confirm("BUY %s?" % str(it.name).to_upper(), "%s for %d gems." % [item_kind_text(it), int(price.gems)], "BUY", "premium", do_buy, then)
 	else:
 		do_buy.call()
 
@@ -1230,6 +1236,175 @@ static func shop(app, root: VBoxContainer) -> void:
 	var fn := UI2.body(root, "Chests are earned by playing  ·  never sold", 11, Color("#cdb79a"))
 	fn.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
+# ---------------- shop preview (0.31.96, Kevin: "make it so you can click the items in the store page and preview them") ----------------
+# Tapping a featured weapon, a daily deal or an Arsenal opens this: the weapon in its class's hands (drag to turn, pinch
+# or +/- to zoom) or the weapon on its own, turning, with its stars; its name, rarity and class; and buy or equip right
+# there. An Arsenal shows its weapons one at a time (the row of icons under the stage) with the Arsenal's price.
+static func _tap_area(parent: Control, key: String, on_press: Callable) -> Button:
+	# an invisible full-card button under the card's own buttons (the menu still scrolls when the finger moves)
+	var tb := Button.new()
+	tb.flat = true
+	tb.focus_mode = Control.FOCUS_NONE
+	for st_name in ["normal", "hover", "pressed", "focus", "disabled"]:
+		tb.add_theme_stylebox_override(st_name, StyleBoxEmpty.new())
+	tb.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	tb.set_meta("action_key", key)
+	tb.pressed.connect(on_press)
+	parent.add_child(tb)
+	parent.move_child(tb, 0)
+	return tb
+
+static func open_item(app, id: String, pack := "", pick := 0) -> void:
+	var p = app.profile
+	var ids: Array = [id] if pack == "" else Array(Eco.PACKS[pack].items)
+	pick = clampi(pick, 0, ids.size() - 1)
+	var sid := str(ids[pick])
+	var it := Eco.item(sid)
+	if it.is_empty():
+		return
+	var rar := str(it.get("rarity", "rare"))
+	var tint := _rar_tint(rar if pack == "" else str(Eco.PACKS[pack].get("rarity", rar)))
+	var weapon := str(it.get("kind", "")) == "weapon"
+	var mode := str(app.get_meta("shop_preview_mode", "hand"))
+	app.sfx("tap")
+	app.close_modal()
+	var m := Control.new()
+	m.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	app.add_child(m)
+	app.modal = m
+	var dim := ColorRect.new()
+	dim.color = Color(0.02, 0.01, 0.05, 0.84)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	m.add_child(dim)
+	var margin := MarginContainer.new()
+	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	for side in ["left", "right"]:
+		margin.add_theme_constant_override("margin_" + side, 14)
+	margin.add_theme_constant_override("margin_top", 54)
+	margin.add_theme_constant_override("margin_bottom", 34)
+	m.add_child(margin)
+	var sheet := _panel(margin, Color("#140d26"), tint, 22, Color(tint.r, tint.g, tint.b, 0.45), 14)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 8)
+	sheet.add_child(v)
+	var hr := UI.row(v, 8)
+	_chip(hr, ("ARSENAL  ·  " + str(Eco.PACKS[pack].name).to_upper()) if pack != "" else "MARKET", Color("#2b3a55"), Color.WHITE)
+	var sp := Control.new()
+	sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hr.add_child(sp)
+	UI.button(hr, "✕", "ghost", func():
+		app.sfx("menuClose")
+		app.close_modal(), "shop_preview_close", 16, 12)
+	if weapon:
+		var tg := UI.row(v, 8)
+		tg.alignment = BoxContainer.ALIGNMENT_CENTER
+		for t in [["hand", "IN HAND"], ["weapon", "WEAPON"]]:
+			var key: String = t[0]
+			var on := mode == key
+			var b := UI2.button(tg, str(t[1]), "gold" if on else "grey", func():
+				app.set_meta("shop_preview_mode", key)
+				open_item(app, id, pack, pick), "shop_preview_" + key, 14, 36.0, 11.0)
+			b.custom_minimum_size = Vector2(130, 36)
+	var stage := Control.new()
+	stage.clip_contents = true
+	stage.custom_minimum_size = Vector2(0, 330)
+	stage.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	v.add_child(stage)
+	Showcase.backdrop(stage)
+	var fx: Dictionary = p.forge_fx(Eco.forge_id(str(it.get("class", "")), sid)) if p.has_method("forge_fx") else {}
+	if weapon and mode == "weapon":
+		var st := ForgeStage.new()
+		st.interactive = true
+		st.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		stage.add_child(st)
+		st.show_set(str(it.get("r", "")), str(it.get("l", "")), fx)
+		var hint := UI2.chip(stage, "DRAG TO TURN", Color(0.02, 0.03, 0.1, 0.75), Color(1, 1, 1, 0.85), Color(UI2.GOLD, 0.5))
+		hint.anchor_left = 0.5
+		hint.anchor_right = 0.5
+		hint.anchor_top = 1.0
+		hint.anchor_bottom = 1.0
+		hint.offset_left = -60
+		hint.offset_right = 60
+		hint.offset_top = -30
+		hint.offset_bottom = -10
+	elif weapon:
+		var sh := Showcase.new()
+		sh.interactive = true
+		sh.cam_z = 6.6
+		sh.cam_y = 1.4
+		sh.look_y = 0.9
+		sh.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		stage.add_child(sh)
+		var look := {"r": str(it.get("r", "")), "l": str(it.get("l", ""))}
+		if int(fx.get("stars", 0)) > 0:
+			look["forge"] = fx
+		sh.show_look(str(it["class"]), look)
+		zoom_controls(stage, sh, "shop_preview")
+	else:
+		var cc := CenterContainer.new()
+		cc.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		stage.add_child(cc)
+		var tt := UI.label(cc, "« %s »" % str(it.name), 30, PASS_GOLD, UI.TITLE_FONT, true)
+		tt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	if ids.size() > 1:
+		var thumbs := HBoxContainer.new()
+		thumbs.alignment = BoxContainer.ALIGNMENT_CENTER
+		thumbs.add_theme_constant_override("separation", 10)
+		v.add_child(thumbs)
+		for i in ids.size():
+			var tid := str(ids[i])
+			var tb := Button.new()
+			tb.flat = true
+			tb.focus_mode = Control.FOCUS_NONE
+			for st_name in ["normal", "hover", "pressed", "focus"]:
+				tb.add_theme_stylebox_override(st_name, StyleBoxEmpty.new())
+			tb.custom_minimum_size = Vector2(62, 62)
+			tb.set_meta("action_key", "shop_preview_item_%d" % i)
+			var ii := i
+			tb.pressed.connect(func(): open_item(app, id, pack, ii))
+			thumbs.add_child(tb)
+			if i == pick:
+				UI2.skin(tb, UI2.button_params("gold", 14.0, 3.0))
+			else:
+				UI2.plate(tb, _rar_panel(str(Eco.item(tid).rarity)), 14.0, _rar_rim(str(Eco.item(tid).rarity)), {"rim": 2.0, "dim": 0.25})
+			var ti := UI2.img(tb, item_texture_path(tid), 50.0)
+			ti.position = Vector2(6, 5)
+	var nm := UI.label(v, str(it.name), 24, Color.WHITE, UI.TITLE_FONT, true)
+	nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var ir := UI.row(v, 8)
+	ir.alignment = BoxContainer.ALIGNMENT_CENTER
+	_chip(ir, rar.to_upper(), tint, Color("#120c22"))
+	if weapon:
+		_chip(ir, str(Eco.CLASS_NAMES.get(str(it["class"]), "")).to_upper() + " WEAPON", Color(1, 1, 1, 0.12), Color.WHITE)
+	if p.owns(sid):
+		_chip(ir, "OWNED", UI.GREEN, Color("#0c2014"))
+	if int(fx.get("stars", 0)) > 0:
+		_chip(ir, "%s  %s" % ["★".repeat(int(fx.stars)), str(Eco.FORGE_STARS[int(fx.stars) - 1].get("name", "")).to_upper()], Color("#3a2410"), Color("#ffd27a"))
+	var note := UI.label(v, "Changes your look only. Every weapon plays the same." if weapon else "A title shown next to your name.", 12, UI.MUTED)
+	note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var reopen := func(): open_item(app, id, pack, pick)
+	if pack != "":
+		var gems := Eco.pack_price(pack, p.d.owned)
+		if gems <= 0:
+			UI.button(v, "ARSENAL OWNED ✓", "secondary", func(): pass, "shop_preview_owned", 15).disabled = true
+		else:
+			var bb := UI2.button(v, "BUY ARSENAL  ·  %s" % UI.compact(gems), "purple", func(): buy_pack(app, pack, reopen),
+				"shop_preview_buy_pack", 17, 48.0, 12.0, "res://assets/ui/currency/gem.png")
+			bb.disabled = not p.can_afford({"gems": gems})
+	elif p.owns(sid):
+		var eq: bool = is_equipped(p, sid)
+		var eb := UI2.button(v, "EQUIPPED" if eq else "EQUIP", "grey" if eq else "green", func():
+			equip(app, sid)
+			reopen.call(), "shop_preview_equip", 17, 48.0)
+		eb.disabled = eq
+	else:
+		var price := Eco.item_price(sid)
+		var gems2: bool = price.has("gems")
+		var amount: int = int(price.get("gems", price.get("gold", 0)))
+		var pb := UI2.button(v, "BUY  ·  %s" % UI.compact(amount), "purple" if gems2 else "gold", func(): buy(app, sid, reopen),
+			"shop_preview_buy", 17, 48.0, 12.0, "res://assets/ui/currency/%s.png" % ("gem" if gems2 else "coin"))
+		pb.disabled = not p.can_afford(price)
+
 static func gem_packs(app, root: Node) -> void:
 	# 0.31.90 (Kevin: in-app purchases): gems for real money, Google Play only. The starter pack first while it can still
 	# be bought, then the five packs, priced in the player's currency once Google has answered.
@@ -1345,12 +1520,16 @@ static func featured_card(app, root: Node, id: String) -> void:
 	UI2.plate(fc, _rar_panel(rar), 22.0, _rar_rim(rar), {"rim": 4.0})
 	var sr := UI2.rays(stage, 440.0, _rar_tint(rar), 30.0, 0.5)
 	stage.resized.connect(func(): sr.position = Vector2(stage.size.x * 0.3 - 220.0, stage.size.y * 0.5 - 220.0))
+	_tap_area(stage, "preview_" + id, func(): open_item(app, id))
 	if str(it.get("kind", "")) == "weapon":
 		var sh := Showcase.new()
 		sh.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 		sh.anchor_right = 0.6
+		sh.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		stage.add_child(sh)
 		sh.show_look(str(it["class"]), {"r": str(it.get("r", "")), "l": str(it.get("l", ""))})
+		var tap := UI2.chip(stage, "TAP TO PREVIEW", Color(0.02, 0.03, 0.1, 0.7), Color(1, 1, 1, 0.85), Color(UI2.GOLD, 0.5))
+		tap.position = Vector2(10, 8)
 	var cap := VBoxContainer.new()
 	cap.add_theme_constant_override("separation", 6)
 	cap.anchor_left = 0.56
@@ -1391,6 +1570,8 @@ static func item_grid(app, root: Node, ids: Array, big: bool) -> void:
 		UI.grow(c)
 		grid.add_child(c)
 		UI2.plate(c, _rar_panel(rar), 18.0, _rar_rim(rar))
+		var did := str(id)
+		_tap_area(c, "preview_" + did, func(): open_item(app, did))
 		var g := UI2.glow(c, Rect2(0, 0, 10, 10), Color(_rar_tint(rar), 0.6))
 		c.resized.connect(func():
 			g.position = Vector2(c.size.x * 0.5 - 60, -2)

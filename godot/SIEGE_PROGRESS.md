@@ -2892,3 +2892,35 @@ K2/K3 notes (0.17.0)
 - privacy.html: GitHub listed under Internet use (updated 10 October 2026). PLAY_STORE_HANDOFF.md: content packs.
 - 0.31.95, version code 181. Quick suite: ALL 45 PASSED. APK 31,135,353 bytes (was 228 MB), sha256
   a31aa9ca7c54017aafab8e38a0d7c56a6b43b09640d7af6b95d5ad4c5768467e. First launch downloads 181 MB.
+
+## 0.31.96 — tap a shop item to preview it; every weapon and shield fitted to the grip (Kevin: "Make it so you can click the items in the store page and preview them. Also I want you to go through every weapon and shield to make sure and line them up correctly with the hands gripping them.")
+- Shop preview (scripts/app/screens.gd open_item): a tap on the featured weapon, a daily deal or an Arsenal opens a sheet
+  -- IN HAND (the class's hero holding it, drag to turn, pinch or +/- to zoom) or WEAPON (the weapon alone, drag to
+  turn, then it turns slowly by itself: forge_stage.gd `interactive`), its stars if forged, name, rarity, class, and
+  BUY / EQUIP right there (it stays open after buying; a gem confirm's CANCEL goes back to it). An Arsenal shows its
+  weapons one at a time (the icon row) with BUY ARSENAL. The card's own price button still buys straight away; a drag
+  on a card still scrolls the menu. app.confirm() takes an optional on_no.
+- tests/shop_preview_test.gd (suite): real taps on all 12 shop cards, then the toggle, gold buy, equip, gem
+  cancel/buy, an Arsenal's second weapon and buying it -- all through the preview's buttons. tools/app_shots.gd
+  SHOT_PREVIEW / SHOT_PREVIEW_MODE.
+- Grips (tools/weapon_grip.py, now the last step of meshy_weapon.py fit). Checked every Armory Reforged piece (108) in its
+  template's space with the grip marked, then in the hand, posed, before and after:
+  - Long weapons: the fit had centred each piece's whole box, so a head hanging to one side put the haft off the hand.
+    The shaft is now found (the column of the piece that runs through the whole grip band -- an axe blade, a
+    scythe's blade, a lantern or feathers fill only part of it) and put through the fist: Soulreaper and Grimgrin
+    scythes 0.25, Stormcleaver 0.27, Worldsplitter 0.22, Wayfarer's staff 0.19 (the hand was on the lantern), Raider
+    axe 0.17, Boarsbane spear 0.16, Bonecarver 0.11, Timberfall, Work Hatchet, the other axes and a few daggers less.
+    Swords whose guard sat on the hand moved up onto the grip (Dawnwall, Kingsoath, Templar).
+  - Three daggers had been fitted upside down -- the hand held the blade: Shade (the Assassin's starter), Asp, Eclipse.
+    Refitted blade-up (their icons re-rendered).
+  - Shields: the KayKit shields have a handle the fist closes on; a Meshy board has none and was fitted by its front
+    face, so thin boards floated a hand's width off the fist (Bloodmoon 0.18, Ironbriar 0.28, Kingsoath, Thornhide,
+    Stonewarden, the Barbarian's round shields) and thick ones swallowed it (Lionheart, Highguard, Bulwark, Sunrise:
+    the gauntlet came out through the face). Every board's back now sits just in front of the knuckles.
+  - Tomes: closed tomes are three times as thick as the open spellbook they replace and the hand was inside them
+    (Prism, Rootwise, Hex, Gravecaller, Magister's book); the back cover now sits where the spellbook's does.
+  - Bows (riser on the hand), crossbows, claws, knuckles, the mug and the bomb were already held right.
+  56 pieces moved (31 by under 3 mm left as they were).
+- Content packs: ui (dagger icons) and weapons rebuilt and on the content-packs branch; an installed 0.31.95 downloads
+  only those two (48 MB) on its next launch. 0.31.96, version code 182. Quick suite: ALL 46 PASSED. APK 31,143,545
+  bytes, sha256 a7a7ae0f6c0b122cf26878a19b3c54a27f748394968dc390edb752d910a0576d; on itch (android channel).

@@ -16,8 +16,11 @@ Pipeline per piece (a sword, a shield, a staff ...):
   fit   IN.glb TEMPLATE OUT.glb KIND [--len F] [--tex N] [--axes X,Y,Z]
         KIND sword|blade|pole (length on +Y, grip at the template's) | shield|handheld (face area, face +Z) |
         box (longest side, centred); TEMPLATE a KayKit .gltf; --len scales the size vs the template;
-        --axes turns the piece onto the template's axes first ("-X,Y,Z" mirrors: a left-hand claw from a right one);
-        auto / autoy / automirror: the turn that lays it over the template best (all 24 / about +Y only / mirrored)
+        --axes turns the piece onto the template's axes first ("-X,Y,Z" mirrors: a left-hand claw from a right one;
+        "-X,-Y,Z" stands up a piece drawn blade-down); auto / autoy / automirror: the turn that lays it over the
+        template best (all 24 / about +Y only / mirrored). 0.31.96: then the handle onto the hand -- a long weapon's
+        shaft through the grip, a shield's back at the knuckles, a tome's back cover at the palm (tools/weapon_grip.py;
+        --grip 0 skips it)
 Key from MESHY_KEY (never written to disk).
 """
 import base64
@@ -211,7 +214,7 @@ def auto_axes(src, template, show=3, mode="auto"):
     return res[0][1]
 
 
-def fit(src, template, out, kind, length=1.0, tex=512, axes="X,Y,Z"):
+def fit(src, template, out, kind, length=1.0, tex=512, axes="X,Y,Z", grip=True):
     """Place the Meshy piece in the template's space, baked into the vertices; shrink the texture.
 
     axes: turn (or mirror) the piece first -- Meshy builds a piece facing +Z, upright as drawn; a bow or crossbow
@@ -304,6 +307,14 @@ def fit(src, template, out, kind, length=1.0, tex=512, axes="X,Y,Z"):
     mbt.write_glb(out, g, binc, buf.getvalue())
     print("fit", os.path.basename(src), "->", os.path.basename(out), "axes", axes, "scale %.4f" % s, "tris",
           sum(g["accessors"][p["indices"]]["count"] // 3 for m in g["meshes"] for p in m["primitives"] if "indices" in p))
+    gk = {"pole": "pole", "sword": "pole", "blade": "pole", "shield": "shield"}.get(kind)
+    if kind == "handheld" and "spellbook" in os.path.basename(template):
+        gk = "book"
+    if gk and grip:
+        import weapon_grip
+        move, _info = weapon_grip.measure(out, template, gk)
+        weapon_grip.translate_glb(out, out, move)
+        print("grip", gk, "move %+.3f %+.3f %+.3f" % tuple(move))
 
 
 def main():
@@ -325,7 +336,8 @@ def main():
     elif cmd == "wait":
         wait(pos[0], pos[1])
     elif cmd == "fit":
-        fit(pos[0], pos[1], pos[2], pos[3], float(opt.get("len", 1.0)), int(opt.get("tex", 512)), opt.get("axes", "X,Y,Z"))
+        fit(pos[0], pos[1], pos[2], pos[3], float(opt.get("len", 1.0)), int(opt.get("tex", 512)), opt.get("axes", "X,Y,Z"),
+            opt.get("grip", "1") != "0")
     else:
         raise SystemExit(__doc__)
 

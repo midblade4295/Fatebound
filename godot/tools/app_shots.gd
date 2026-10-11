@@ -74,6 +74,15 @@ func _process(_d: float) -> bool:
 		if frames == base_f + 18 and tabs[i] == "pass" and OS.has_environment("SHOT_PASS_DETAIL"):
 			var pd: PackedStringArray = OS.get_environment("SHOT_PASS_DETAIL").split(",")
 			Screens.open_pass_item(app, int(app.profile.d.pass.season), int(pd[0]), pd[1] == "prem")
+		if frames == base_f + 12 and tabs[i] == "shop" and OS.has_environment("SHOT_PREVIEW"):
+			# 0.31.96: the shop's tap-to-preview; "item_id" or "@pack_id,n"; SHOT_PREVIEW_MODE hand|weapon
+			app.set_meta("shop_preview_mode", OS.get_environment("SHOT_PREVIEW_MODE") if OS.has_environment("SHOT_PREVIEW_MODE") else "hand")
+			var pv := OS.get_environment("SHOT_PREVIEW")
+			if pv.begins_with("@"):
+				var pp := pv.substr(1).split(",")
+				Screens.open_item(app, "", pp[0], int(pp[1]) if pp.size() > 1 else 0)
+			else:
+				Screens.open_item(app, pv)
 		if frames == base_f + 21 and OS.has_environment("SHOT_ZOOM"):
 			var zroot: Node = app.modal if app.modal != null else app          # (0.31.64: the locker's hero too)
 			for c in zroot.find_children("*", "Control", true, false):
