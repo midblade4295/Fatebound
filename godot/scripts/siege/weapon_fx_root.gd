@@ -11,6 +11,7 @@ const TRAIL_SUB := 3                 # points between two frames' samples (a smo
 var box := AABB()                    # the piece, in its own space
 var specs: Array = []
 var trail := Color(0, 0, 0, 0)
+var spins: Array = []                # 0.31.103: [{node, speed, wobble, wobble_speed}] -- the model's own moving parts
 
 static var _mats := {}
 var _built := false
@@ -18,6 +19,8 @@ var _ps := 1.0
 var _len := 1.0                      # the piece's length in the world
 var _axis := 1
 var _spinners: Array = []            # [node, axis, rad/s]
+var _parts: Array = []               # [node, its rest basis, spin spec]
+var _t := 0.0
 var _ribbon: MeshInstance3D = null
 var _im: ImmediateMesh = null
 var _samples: Array = []             # [base, tip, time], newest first
@@ -32,6 +35,13 @@ func _process(delta: float) -> void:
 	for s in _spinners:
 		if is_instance_valid(s[0]):
 			(s[0] as Node3D).rotate_object_local(s[1], float(s[2]) * delta)
+	_t += delta
+	for p in _parts:
+		# from the rest pose each frame (no drift): rocked about X, turned about Y
+		if is_instance_valid(p[0]):
+			var sp: Dictionary = p[2]
+			var wob := deg_to_rad(float(sp.get("wobble", 0.0))) * sin(_t * float(sp.get("wobble_speed", 0.6)))
+			(p[0] as Node3D).basis = (p[1] as Basis) * Basis(Vector3.RIGHT, wob) * Basis(Vector3.UP, _t * float(sp.get("speed", 0.5)))
 	if _ribbon != null:
 		_update_ribbon(delta)
 
@@ -53,6 +63,10 @@ func _build() -> void:
 	if box.size.z > box.size[_axis] * 1.15:
 		_axis = 2
 	_len = maxf(box.size[_axis], 0.05) * _ps
+	for sp in spins:
+		var n := model.find_child(str(sp.get("node", "")), true, false) as Node3D
+		if n != null:
+			_parts.append([n, n.basis, sp])
 	for s in specs:
 		match str(s.get("kind", "p")):
 			"p":

@@ -3053,3 +3053,18 @@ K2/K3 notes (0.17.0)
   phone in step, both changed with both answers, unreadable / newer copies untouched, no answer -> TRY AGAIN, off Play,
   the Settings card and the question through their buttons) in the suite.
 - 0.31.102, version code 188 (preview numbering; Play codes are Grok's). Quick suite: ALL 51 PASSED. CONTENT OK. No itch build.
+
+## 0.31.103 — the Astral Codex's rings turn (Kevin: "Can we make the top of this weapon animate. Like have the rings spins and rotate")
+- The staff was one Meshy mesh. tools/weapon_spin_parts.py cuts a weapon's connected components into their own nodes,
+  each placed at a pivot with its vertices re-expressed about it, so at rest the weapon looks and is held exactly as
+  before. astral_staff.glb: Body (shaft and claw), Rings (the beaded ring with its orbs and the gold band -- they
+  touch, so they move as one cage), Crystal; Rings and Crystal pivot on the crystal's centre.
+  (`--part Rings:0,3:2 --part Crystal:2`.) Splitting the rings from each other was tried (circle fits): they are
+  fused where they cross, so turning them apart would tear them.
+- weapon_fx.gd LEGENDARY "spin": parts by node name, turned about their own +Y (rad/s) and rocked +-wobble degrees
+  about X; weapon_fx_root.gd sets each from its rest pose every frame (no drift). Astral: the cage turns 0.6 rad/s
+  around the crystal, rocking 8 degrees; the crystal turns -0.5 rad/s. Wherever its effects show (bodies, the Forge,
+  the shop / quest showcases); the still icons keep the modelled pose.
+- Content pack weapons rebuilt (weapons-cd8cb0f18e24.pck) and on the content-packs branch.
+- tests/weapon_fx_test.gd: the spin parts exist in the model, turn on a body (each its own way), stay put on an icon.
+- 0.31.103, version code 189. Quick suite: ALL 51 PASSED (a first run missed staged_start_test's 200 ms _ready budget by 8 ms under load; alone it runs 107-126 ms). CONTENT OK. No itch build.

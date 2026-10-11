@@ -3,7 +3,7 @@ extends SceneTree
 # for all the legendary weapons"): every legendary's pieces have their own effects, with real presets and sprites;
 # the Forge's stars build glints, then runes, then the element's set; particles are sized to the piece in the world
 # whatever it is scaled by; the swing ribbon draws only on a blade that moves fast, never on a staff; the still icons
-# and plain weapons get nothing.
+# and plain weapons get nothing. 0.31.103: the Astral Codex's rings and crystal turn.
 #   godot --headless --fixed-fps 30 --path godot -s res://tests/weapon_fx_test.gd
 const Eco = preload("res://scripts/meta/economy.gd")
 const View = preload("res://scripts/siege/siege_view.gd")
@@ -56,6 +56,18 @@ func _init() -> void:
 		if pr.is_empty() or not ResourceLoader.exists("res://assets/vfx/weapon/%s.png" % str(pr.get("tex", ""))):
 			bad_p.append(name)
 	check(bad_p.is_empty(), "every preset used exists, with its sprite %s" % str(bad_p))
+	# 0.31.103: the moving parts a legendary turns are nodes of its model (tools/weapon_spin_parts.py)
+	var no_part := []
+	for k in WeaponFx.LEGENDARY:
+		var sp: Array = WeaponFx.LEGENDARY[k].get("spin", [])
+		if sp.is_empty():
+			continue
+		var inst: Node = (load(View.weapon_path("mw/" + k)) as PackedScene).instantiate()
+		for e in sp:
+			if inst.find_child(str(e.node), true, false) == null:
+				no_part.append("%s/%s" % [k, e.node])
+		inst.free()
+	check(no_part.is_empty() and not (WeaponFx.LEGENDARY.astral_staff.get("spin", []) as Array).is_empty(), "the Astral Codex's rings and crystal are parts of its model %s" % str(no_part))
 	var no_el := []
 	for el in Eco.ELEMENTS:
 		if not WeaponFx.ELEMENT_FX.has(el):
@@ -70,6 +82,7 @@ func _init() -> void:
 	_body("plain", "knight", {"r": "mw/highguard_sword", "l": "mw/highguard_shield"})
 	_body("seraph", "priest", {"r": "mw/seraph_staff"})
 	_body("small", "barbarian", {"r": "mw/worldsplitter_axe"})
+	_body("astral", "archmage", {"r": "mw/astral_staff", "l": "mw/astral_book"})
 	var big := Node3D.new()
 	big.scale = Vector3.ONE * 3.0
 	stage.add_child(big)
@@ -77,6 +90,7 @@ func _init() -> void:
 	still = Node3D.new()
 	stage.add_child(still)
 	WeaponPose.compose(still, "mw/archon_staff", "", {}, false)
+	WeaponPose.compose(still, "mw/astral_staff", "", {}, false)
 	forge = Node3D.new()
 	stage.add_child(forge)
 	WeaponPose.compose(forge, "mw/archon_staff", "", {})
@@ -114,6 +128,13 @@ func _process(_d: float) -> bool:
 			"a still icon has none; the Forge's piece has its sigil")
 		var r3 := _ribbon(k3)
 		check(r3 != null and (r3.mesh as ImmediateMesh).get_surface_count() == 0, "a blade at rest draws no ribbon")
+		# the Astral Codex: its rings and crystal turn on a body; on a still icon they stay as modelled
+		var rings := (made.astral as Node).find_child("Rings", true, false) as Node3D
+		var crystal := (made.astral as Node).find_child("Crystal", true, false) as Node3D
+		var still_rings := still.find_child("Rings", true, false) as Node3D
+		check(rings != null and crystal != null and not rings.basis.is_equal_approx(Basis.IDENTITY) and not crystal.basis.is_equal_approx(Basis.IDENTITY)
+			and absf(rings.basis.get_euler().y - crystal.basis.get_euler().y) > 0.01, "the Astral Codex's rings and crystal turn (each its own way)")
+		check(still_rings != null and still_rings.basis.is_equal_approx(Basis.IDENTITY), "on a still icon they stay as modelled")
 		spin_from = frames
 	if spin_from > 0 and frames > spin_from and frames <= spin_from + 6:
 		(made.k3 as Node3D).rotate_y(0.6)          # a fast turn: the blade sweeps

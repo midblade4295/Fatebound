@@ -28,10 +28,10 @@
   },
   {
    "name": "weapons",
-   "file": "weapons-d8b1d14f000a.pck",
-   "size": 37145584,
-   "sha256": "4dfca2b92264a75bf5d4cd963856467a6ec3e15b1d3df31b995a548fa770ad4a",
-   "inputs": "d8b1d14f000a01db1f3a11080d24c3629a8ac18edeaaeb98fbc8098ff23e72ca",
+   "file": "weapons-cd8cb0f18e24.pck",
+   "size": 37141936,
+   "sha256": "257d3c0855feae3e3871351b7a2997e35a49e236260bb3e7af742fa89a99fdd0",
+   "inputs": "cd8cb0f18e24941955fd802de9bc1f8de21e6f633b46426b76ad4cb7aa8e514b",
    "probe": "res://assets/meshy/weapons/acolyte_wand.glb"
   },
   {
