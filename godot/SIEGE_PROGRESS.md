@@ -2952,3 +2952,6 @@ K2/K3 notes (0.17.0)
 - Fixed: the Priest's equipped weapon never showed in a match (the class was missing from the match's looks list).
 - tests/quest_test.gd (the table, counting, claiming in order, save/load, the screens through their buttons) and
   tests/quest_track_test.gd (in-match crediting per class worn), both in the suite.
+- 0.31.97, version code 183. Quick suite: ALL 48 PASSED (meta_economy_test now counts the 6 upgraded-class quest
+  legendaries apart). Content packs ui (16.1 MB) and weapons (37.8 MB) rebuilt and on the branch. APK 31,159,929 bytes,
+  sha256 9ea15725ce9c782164af1515b6aaf5ec982c0fdb1ff5d511acc0e7c920c34f60; on itch (android channel).
