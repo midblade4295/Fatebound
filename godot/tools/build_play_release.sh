@@ -9,7 +9,9 @@
 #   PLAY_UPLOAD_KEYSTORE_PATH    PKCS12/JKS upload keystore (outside the repo)
 #   PLAY_UPLOAD_KEY_ALIAS        key alias
 #   PLAY_UPLOAD_KEY_PASSWORD     key password (Godot uses one password for store + key; PKCS12 has one)
-# Optional: EXPECTED_UPLOAD_CERT_SHA256 (defaults to the keystore's own certificate),
+# Optional: PLAY_GAMES_APP_ID (the Play Games Services Game ID, digits; or set godot_play_game_services/game_id on the
+#           preset -- without either the bundle has no Google Play Games, see godot/PLAY_GAMES_HANDOFF.md),
+#           EXPECTED_UPLOAD_CERT_SHA256 (defaults to the keystore's own certificate),
 #           BUNDLETOOL_JAR, OUT (default godot/build/Fatebound-Siege-Play-vc$VERSION_CODE-release.aab)
 set -euo pipefail
 : "${GODOT:?}" "${VERSION_CODE:?}" "${VERSION_NAME:?}" "${PLAY_UPLOAD_KEYSTORE_PATH:?}" "${PLAY_UPLOAD_KEY_ALIAS:?}" "${PLAY_UPLOAD_KEY_PASSWORD:?}"

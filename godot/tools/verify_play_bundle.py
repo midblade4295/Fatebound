@@ -4,6 +4,7 @@ Expected release identity comes from the environment (no hardcoded code/name/cer
   EXPECTED_VERSION_CODE, EXPECTED_VERSION_NAME   e.g. 25 / 1.2.1-siege-r5
   EXPECTED_UPLOAD_CERT_SHA256                    Play Console's current *upload* certificate SHA-256
   BUNDLETOOL_JAR (optional)                      path to bundletool-all.jar
+  PLAY_GAMES_APP_ID (optional)                   when set, Google Play Games (with its APP_ID) must be in the bundle
 """
 from pathlib import Path
 import sys,zipfile,subprocess,re,hashlib,json,struct,os
@@ -132,9 +133,16 @@ assert 'android.permission.INTERNET' in permissions
 # 0.31.90: Google Play Billing (GodotGooglePlayBilling 3.3.0 + Billing Library 9.1.0) must be merged in.
 assert 'com.android.vending.BILLING' in permissions,('BILLING permission missing',permissions)
 assert 'com.android.billingclient' in manifest,'Play Billing library components missing from manifest'
+# 0.31.102: Google Play Games ships only with its Game ID (the Play Games SDK stops the app at start without it), and
+# when PLAY_GAMES_APP_ID was given for this build, it must have shipped.
+metas={m.attrib.get(android+'name'):m.attrib.get(android+'value') for m in application.findall('meta-data')}
+play_games='org.godotengine.plugin.v2.GodotPlayGameServices' in metas
+assert play_games==('com.google.android.gms.games.APP_ID' in metas),('Play Games plugin without its APP_ID (or the reverse)',play_games)
+if os.environ.get('PLAY_GAMES_APP_ID','').strip():
+ assert play_games,'PLAY_GAMES_APP_ID was set but the bundle has no Google Play Games'
 if content_module!='base':
  delivery=subprocess.check_output(['java','-jar',str(jar),'dump','manifest','--bundle='+str(p),'--module='+content_module],text=True)
  assert 'install-time' in delivery,('Game content not delivered at installation',delivery)
-report.update(bundletool_validation_passed=True,package='com.fatebound.game',version_code=int(EXPECTED_CODE),version_name=EXPECTED_NAME,min_sdk=29,target_sdk=36,debuggable=False,game_assets_available_at_install=True,play_billing_permission=True)
+report.update(play_games=play_games,bundletool_validation_passed=True,package='com.fatebound.game',version_code=int(EXPECTED_CODE),version_name=EXPECTED_NAME,min_sdk=29,target_sdk=36,debuggable=False,game_assets_available_at_install=True,play_billing_permission=True)
 p.with_name('PLAY_BUNDLE_VERIFICATION.json').write_text(json.dumps(report,indent=2)+'\n')
 print('FINAL_VALIDATION',json.dumps(report,indent=2))

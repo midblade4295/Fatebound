@@ -11,6 +11,7 @@ var legacy_path := "user://fatebound-save.json"
 var d: Dictionary = {}
 var now_override := -1          # tests: fixed clock (unix seconds)
 var last_error := ""
+var saves := 0                  # 0.31.102: saves this run (play_games.gd: did it change while an upload was out?)
 
 signal changed
 
@@ -37,6 +38,7 @@ static func defaults() -> Dictionary:
 		"iap":{"done":[], "starter":false},                          # 0.31.90: purchase tokens already granted
 		"chests":{"slots":[], "next":1, "pity":0},
 		"quests":{},                                                  # 0.31.97: class -> quest steps claimed (0-3)
+		"cloud":{"stamp":"", "dirty":false, "at":0},                  # 0.31.102: the Google Play save this is in step with
 		"settings":{"master":0.8, "music":0.6, "sfx":0.8, "reduce_motion":false}}
 
 # ---------------- load / save ----------------
@@ -136,8 +138,13 @@ static func _merge_missing(target: Dictionary, base: Dictionary) -> void:
 		elif bv is Dictionary:
 			_merge_missing(target[k], bv)
 
-func save() -> bool:
+func save(changed_here := true) -> bool:
 	# Write to a temp file then rename, so a crash mid-write can't corrupt the profile.
+	# 0.31.102: every save but the cloud sync's own marks the profile as changed since the Google Play copy
+	# (play_games.gd uploads it); kept in the file, so a change made just before the app is killed still goes up.
+	if changed_here:
+		d.cloud.dirty = true
+		saves += 1
 	var tmp := path + ".tmp"
 	var f := FileAccess.open(tmp, FileAccess.WRITE)
 	if f == null:
@@ -151,6 +158,35 @@ func save() -> bool:
 		return false
 	changed.emit()
 	return true
+
+# ---------------- the Google Play copy (0.31.102, scripts/meta/play_games.gd) ----------------
+const CLOUD_VERSION := 1
+
+func summary() -> Dictionary:
+	# what the "which progress to keep?" choice shows of each side
+	return {"level":int(d.level), "wins":int(d.stats.wins), "matches":int(d.stats.matches), "gold":int(d.gold),
+		"gems":int(d.gems), "items":(d.owned as Array).size(), "name":str(d.name)}
+
+func is_fresh() -> bool:
+	# a new install: nothing played, bought or earned -- Google Play's copy simply replaces it
+	return int(d.stats.matches) == 0 and (d.owned as Array).is_empty() and (d.iap.done as Array).is_empty() \
+		and int(d.level) <= 1 and int(d.xp) == 0 and int(d.pass.xp) == 0
+
+func cloud_payload(stamp: String, device := "") -> Dictionary:
+	var prof := d.duplicate(true)
+	prof.erase("cloud")
+	return {"v":CLOUD_VERSION, "stamp":stamp, "at":now(), "device":device, "sum":summary(), "profile":prof}
+
+func restore_cloud(prof: Variant, stamp: String) -> bool:
+	# Google Play's copy replaces this phone's progress; this phone's sound and graphics settings stay
+	if not (prof is Dictionary) or not (prof as Dictionary).has("stats"):
+		return false
+	var keep: Dictionary = d.settings.duplicate(true)
+	d = _normalized(prof)
+	d.settings = keep
+	d.cloud = {"stamp":stamp, "dirty":false, "at":now()}
+	refresh()
+	return save(false)
 
 func _migrate_legacy() -> void:
 	if not FileAccess.file_exists(legacy_path):
@@ -371,17 +407,26 @@ func unequip(cls: String, slot: String) -> void:
 	save()
 
 func look_for(cls: String) -> Dictionary:
-	# What the battle view should show for this class: {"tint": Color or null, "r": model, "l": model}.
-	var out := {}
+	# What the battle view should show for this class: {"r": model, "l": model, "forge": its stars} (0.31.39: weapons
+	# only -- no skins; 0.31.93: the Forge's stars). 0.31.101: built by Eco.look_of, as the other players' looks are.
 	if not d.equip.has(cls):
-		return out
-	var wpn := Eco.item(str(d.equip[cls].weapon))           # (0.31.39: weapons only -- no skins)
-	if not wpn.is_empty():
-		out["r"] = str(wpn.r)
-		out["l"] = str(wpn.l)
-	var fx := forge_fx(cls)                                    # 0.31.93: the Forge's stars
-	if not fx.is_empty():
-		out["forge"] = fx
+		return {}
+	var w := str(d.equip[cls].weapon)
+	var wid := Eco.forge_id(cls, w)
+	return Eco.look_of(cls, w, forge_stars(wid), forge_element(wid))
+
+func wire_looks() -> Dictionary:
+	# 0.31.101: what I wear, for my hello ("lk"), so the other players see it: {class: "weapon id|stars|element"} for
+	# each class with a weapon equipped or forged (the rest wear their starters anyway)
+	var out := {}
+	for cls in Eco.CLASSES + Eco.UP_CLASSES:
+		if not d.equip.has(cls):
+			continue
+		var w := str(d.equip[cls].weapon)
+		var wid := Eco.forge_id(cls, w)
+		var n := forge_stars(wid)
+		if w != "" or n > 0:
+			out[cls] = "%s|%d|%s" % [w, n, forge_element(wid) if n >= Eco.FORGE_STARS.size() else ""]
 	return out
 
 # ---------------- challenges ----------------

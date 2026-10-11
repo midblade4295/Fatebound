@@ -53,7 +53,8 @@ static func _stand(holder: Node3D, piece: Node3D, file: String, height: float) -
 	tilt.scale = Vector3.ONE * (height / maxf(stood.size.y, 0.01))
 	return tilt
 
-static func compose(holder: Node3D, r_file: String, l_file: String, fx := {}) -> void:
+static func compose(holder: Node3D, r_file: String, l_file: String, fx := {}, effects := true) -> void:
+	# effects: the Forge's stars (fx) and a legendary's own effects (0.31.100); off for the still icons
 	var main := _piece(r_file)
 	var off := _piece(l_file)
 	var main_file := r_file
@@ -75,17 +76,17 @@ static func compose(holder: Node3D, r_file: String, l_file: String, fx := {}) ->
 		sb.scale = Vector3.ONE * (1.55 / maxf(b.size.y, b.size.x))
 		sb.rotation_degrees = Vector3(0, 14, 0)
 		sb.position = Vector3(0.28, -0.05, -0.4)
-		if int(fx.get("stars", 0)) > 0:
-			View.apply_forge(off, fx, false)
+		if effects and View.WeaponFx.wants(l_file, fx):
+			View.WeaponFx.apply(off, l_file, fx, false)
 	if main != null:
 		var mb := _stand(holder, main, main_file, 2.1)
 		mb.rotation_degrees = Vector3(0, -12, -38)
 		mb.position = Vector3(-0.12 if off != null else 0.0, 0.0, 0.3)
-		if int(fx.get("stars", 0)) > 0:
-			View.apply_forge(main, fx, true)
+		if effects and View.WeaponFx.wants(main_file, fx):
+			View.WeaponFx.apply(main, main_file, fx, true)
 	if off != null and not off_shield:
 		var ob := _stand(holder, off, l_file, 1.25 if off_book else 1.6)
 		ob.rotation_degrees = Vector3(0, 12, 38) if not off_book else Vector3(0, -10, 12)
 		ob.position = Vector3(0.25, 0.0, 0.1) if not off_book else Vector3(0.4, -0.15, -0.3)
-		if int(fx.get("stars", 0)) > 0:
-			View.apply_forge(off, fx, false)
+		if effects and View.WeaponFx.wants(l_file, fx):
+			View.WeaponFx.apply(off, l_file, fx, false)

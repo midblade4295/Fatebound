@@ -7,6 +7,7 @@ const Roster = preload("res://scripts/app/roster.gd")
 const Eco = preload("res://scripts/meta/economy.gd")
 const Profile = preload("res://scripts/meta/profile.gd")
 const Billing = preload("res://scripts/meta/billing.gd")
+const PlayGames = preload("res://scripts/meta/play_games.gd")
 const Screens = preload("res://scripts/app/screens.gd")
 const Showcase = preload("res://scripts/app/showcase.gd")
 const Siege = preload("res://scripts/siege/siege_mode.gd")
@@ -85,6 +86,7 @@ var _toast_until := 0.0
 var safe_boot := false
 var online_status: Node = null         # 0.31.82: the server's player count for Home (the real app only, or FB_STATUS_POLL)
 var billing: Node = null               # 0.31.90: Google Play purchases (scripts/meta/billing.gd); inactive off Play
+var play_games: Node = null            # 0.31.102: Google Play Games sign-in and the progress kept there (play_games.gd)
 var online_refs := {}                  # Home's "players online" pill: {main, sub}
 var _guard: Node = null
 # 0.31.84 (Kevin: "put a fps cap of 60 in the menus"): the menus ran uncapped (120 on a 120 Hz phone); a match sets its
@@ -130,6 +132,17 @@ func _ready() -> void:
 	billing.changed.connect(func():
 		if tab == "shop" and not is_instance_valid(modal) and siege == null:
 			rebuild())
+	play_games = PlayGames.new()
+	add_child(play_games)
+	play_games.note.connect(func(t: String, good: bool): toast(t, UI.GOLD if good else UI.RED))
+	play_games.changed.connect(func():
+		if tab == "settings" and not is_instance_valid(modal) and siege == null:
+			rebuild())
+	play_games.ask.connect(func(_here: Dictionary, _cloud: Dictionary):
+		if siege == null:
+			ask_cloud())                         # (in a match: asked when it ends, _end_match)
+	play_games.restored.connect(_on_cloud_restored)
+	play_games.setup(profile)
 	# Toast: a dark pill just above the tab bar, readable over anything.
 	_toast_box = PanelContainer.new()
 	var tsb := UI.card_style(Color(0.02, 0.04, 0.08, 0.92), 18, UI.CARD_HI)
@@ -879,10 +892,62 @@ func _end_match() -> void:
 	_menu_fps.call_deferred()                 # (after the match's _exit_tree puts back what it found)
 	_set_menu_active(true)
 	show_tab("home")
+	if play_games != null and play_games.state == "ask":
+		ask_cloud()                              # 0.31.102: Google Play's question waited for the match to end
 	if update_required:
 		show_update_screen()
 	elif server_updating:
 		toast(SERVER_UPDATING, UI.GOLD)
+
+# ---------------- Google Play's copy of the progress (0.31.102) ----------------
+func ask_cloud() -> void:
+	# Both this phone and Google Play have progress: the player picks. Nothing is replaced without this choice.
+	var q: Dictionary = play_games.pending_choice() if play_games != null else {}
+	if q.is_empty():
+		return
+	var here: Dictionary = q.here
+	var cloud: Dictionary = q.cloud
+	var when := ""
+	if int(cloud.get("at", 0)) > 0:
+		var dt := Time.get_datetime_dict_from_unix_time(int(cloud.at))
+		when = " (%s %d)" % [["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][int(dt.month)], int(dt.day)]
+	var from := str(cloud.get("device", ""))
+	var body := "Google Play has saved progress%s%s:\n%s\n\nThis phone:\n%s\n\nThe one you don't keep is replaced." % [
+		(" from " + from) if from != "" else "", when, _cloud_line(cloud), _cloud_line(here)]
+	close_modal()
+	modal = Control.new()
+	modal.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(modal)
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.6)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	modal.add_child(dim)
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	modal.add_child(center)
+	var v := UI.card(center)
+	(v.get_parent() as Control).custom_minimum_size = Vector2(minf(360, size.x - 32), 0)
+	UI.title(v, "WHICH PROGRESS?", 20)
+	var b := UI.label(v, body, 14, UI.MUTED)
+	b.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	UI.button(v, "USE GOOGLE PLAY'S", "primary", func():
+		close_modal()
+		play_games.choose(true), "cloud_use")
+	UI.button(v, "KEEP THIS PHONE'S", "secondary", func():
+		close_modal()
+		play_games.choose(false), "cloud_keep")
+
+static func _cloud_line(s: Dictionary) -> String:
+	var n := int(s.get("items", 0))
+	return "Level %d · %d wins · %d gold · %d gems · %d item%s" % [int(s.get("level", 1)), int(s.get("wins", 0)),
+		int(s.get("gold", 0)), int(s.get("gems", 0)), n, "" if n == 1 else "s"]
+
+func _on_cloud_restored() -> void:
+	# the profile was replaced: everything shown from it is redrawn
+	_apply_audio()
+	hero_show()
+	if siege == null:
+		rebuild()
 
 # ---------------- forced update ----------------
 const SERVER_UPDATING := "Servers are updating, try again in a few minutes"
@@ -986,11 +1051,15 @@ func _notification(what: int) -> void:
 	elif what == NOTIFICATION_APPLICATION_PAUSED:
 		if audio != null and audio.has_method("stop"):
 			audio.stop()
+		if play_games != null:
+			play_games.on_pause()                  # 0.31.102: the latest progress up to Google Play
 		if online_status != null:
 			online_status.set_active(false)
 	elif what == NOTIFICATION_APPLICATION_RESUMED:
 		if billing != null:
 			billing.resume()                   # a purchase finished while we were away (or a pending one cleared)
+		if play_games != null:
+			play_games.on_resume()
 		if online_status != null:
 			online_status.set_active(tab == "home" and siege == null)
 		if version_check and siege == null and Time.get_ticks_msec() / 1000.0 - _version_checked_at > RECHECK_AFTER:

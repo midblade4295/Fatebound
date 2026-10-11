@@ -1,7 +1,8 @@
 extends SceneTree
 # Minimum app build on the server (server 0.31.84-minbuild, Kevin: "Can you have the server put a update now message in
 # game?"). REAL time (WebSockets), two real servers:
-#   A :8098  SIEGE_MIN_BUILD=0.31.99 (newer than this app's Diag.BUILD, so THIS app plays an outdated vc32-style build)
+#   A :8098  SIEGE_MIN_BUILD = this app's Diag.BUILD + 1 (so THIS app plays an outdated vc32-style build; 0.31.99: was a
+#            fixed "0.31.99", which this app reached)
 #   B :8099  SIEGE_MIN_BUILD_FILE=<tmp file> "0.31.84", re-read every 0.5 s
 #  1. parse_build / compare_builds / build_too_old (unknown builds and "no minimum" always pass).
 #  2. B over raw sockets: hello build 0.31.78 (vc32) and 0.31.72 (vc31) -> bye why=version need=VERSION+1 (+ msg,
@@ -54,7 +55,8 @@ func _write_cfg(v: String) -> void:
 func _init() -> void:
 	cfg_path = ProjectSettings.globalize_path("user://min_build_test-%d.cfg" % Time.get_ticks_usec())
 	_write_cfg("0.31.84")
-	_start_server(port_a, {"SIEGE_MIN_BUILD":"0.31.99"})
+	var mine := Server.parse_build(Diag.BUILD)
+	_start_server(port_a, {"SIEGE_MIN_BUILD":"%d.%d.%d" % [mine[0], mine[1], mine[2] + 1]})
 	_start_server(port_b, {"SIEGE_MIN_BUILD_FILE":cfg_path, "SIEGE_MIN_BUILD_RELOAD":"0.5"})
 	for k in ["SIEGE_MIN_BUILD", "SIEGE_MIN_BUILD_FILE", "SIEGE_MIN_BUILD_RELOAD", "SIEGE_LOBBY"]:
 		OS.unset_environment(k)

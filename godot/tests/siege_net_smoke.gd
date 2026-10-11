@@ -4,6 +4,7 @@ extends SceneTree
 # connects the real game client (SiegeMode online) plus a raw second client, and checks:
 # welcome + team seating, snapshots, the player's unit moving from real touch input, actions
 # (walk to a hat stand and become a class), events reaching the view/HUD, disconnect -> bot takes over.
+# 0.31.101: the second player's hello says what they wear; it comes back to us in "pn" and dresses their unit.
 # 0.31.82: both players wait out the lobby countdown (SIEGE_LOBBY 1.5 s here) and get "lobby" messages first (the
 # game shows them on the lobby panel); a "status" query answers the player counts (Home's "players online").
 const Mode = preload("res://scripts/siege/siege_mode.gd")
@@ -111,7 +112,8 @@ func _process(delta: float) -> bool:
 				check(false, "client joined within 8 s (state=%s)" % mode.net_state); _finish()
 		"raw":
 			if raw.get_ready_state() == WebSocketPeer.STATE_OPEN and not raw_hello_sent:
-				raw.put_packet(Net.encode({"t":"hello", "v":Net.VERSION, "name":"TestB", "title":"title_siege_lord"}))
+				raw.put_packet(Net.encode({"t":"hello", "v":Net.VERSION, "name":"TestB", "title":"title_siege_lord",
+					"lk":{"knight":"knight_wpn_oath|3|holy", "nobody":"x|1|", "rogue":"Bad Id|1|"}}))     # 0.31.101
 				raw_hello_sent = true
 			if raw_unit != "" and snaps_raw >= 3:
 				check(raw_unit.begins_with("r"), "second player seated on red (%s)" % raw_unit)
@@ -124,6 +126,11 @@ func _process(delta: float) -> bool:
 				check(str(mode.net_titles.get(raw_unit, "")) == "title_siege_lord" and not mode.net_titles.has(mode.hud.player_id),
 					"their title came with it; we wear none (%s)" % str(mode.net_titles))
 				check(str(raw_lobby.get("tt", [])) == str(["title_siege_lord"]), "the lobby listed their title too (%s)" % str(raw_lobby.get("tt", [])))
+				# 0.31.101: what they wear came too (the server kept the good entry), and our view dresses their unit with it
+				check(mode.net_looks.get(raw_unit, {}) == {"knight":"knight_wpn_oath|3|holy"} and not mode.net_looks.has(mode.hud.player_id),
+					"their looks reached us, cleaned; we (no profile) wear none (%s)" % str(mode.net_looks))
+				check(str(mode.view.unit_cosmetic({"id":raw_unit, "cls":"knight", "up":false}).get("r", "")) == "mw/kingsoath_sword",
+					"as a Knight they'd carry Kingsoath on our screen")
 				var tagged := false
 				for b in mode.view.bars():
 					tagged = tagged or (str(b.get("name", "")) == "TestB" and str(b.get("title", "")) == "title_siege_lord")
@@ -244,6 +251,7 @@ func _process(delta: float) -> bool:
 				var ru: Dictionary = mode.sim.by_id[raw_unit]
 				check(ru.bot, "after the second player left, a bot took %s back" % raw_unit)
 				check(not mode.net_names.has(raw_unit) and mode.net_names.size() == 1, "their name went with them (%s)" % str(mode.net_names))
+				check(not mode.net_looks.has(raw_unit) and not mode.view.unit_looks.has(raw_unit), "and their looks: the bot wears the defaults")
 				check(mode.sim.kills[0] + mode.sim.kills[1] >= 0, "match still running (t=%.0f s)" % mode.sim.time)
 				stat_ws = WebSocketPeer.new()
 				stat_ws.connect_to_url("ws://127.0.0.1:%d/fatebound/siege/ws" % port)

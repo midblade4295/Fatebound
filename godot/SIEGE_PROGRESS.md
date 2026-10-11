@@ -2955,3 +2955,101 @@ K2/K3 notes (0.17.0)
 - 0.31.97, version code 183. Quick suite: ALL 48 PASSED (meta_economy_test now counts the 6 upgraded-class quest
   legendaries apart). Content packs ui (16.1 MB) and weapons (37.8 MB) rebuilt and on the branch. APK 31,159,929 bytes,
   sha256 9ea15725ce9c782164af1515b6aaf5ec982c0fdb1ff5d511acc0e7c920c34f60; on itch (android channel).
+
+## 0.31.98 — the Rogue's Whisperbolt is two daggers (Kevin: "He shouldn't have a crossbow at all. Just give him the daggers")
+- The Rogue is melee and stabs with both hands, so Whisperbolt's off-hand crossbow was swung like a dagger. Whisperbolt
+  is now the Whisperbolt dagger in both hands; the crossbow model is gone (and its hold), the icon re-rendered.
+- Content packs ui and weapons rebuilt and on the branch. 0.31.98, version code 184. Quick suite: ALL 48 PASSED. APK
+  31159929 bytes, sha256 65dcab5a605de93fb2572aa96affd449aaddf04493c86822c7c3e5ac37669b1b; on itch (android channel).
+
+## 0.31.99 — Whisperblades, and no smoke bomb (Kevin: "Yeah rename and also remove smoke bomb")
+- Whisperbolt is renamed Whisperblades (it's two daggers since 0.31.98). Smokescreen is its dagger in both hands; the
+  smoke bomb model and its hold are gone, the icon re-rendered. The Rogue now holds only blades, knuckles or claws (and
+  the Grimgrin scythe).
+- tests/min_build_test.gd: server A's minimum is now this app's build + 1 (it was a fixed "0.31.99", which this
+  version reached, so the app was no longer "outdated" there).
+- Content packs ui and weapons rebuilt and on the branch. 0.31.99, version code 185. Quick suite: ALL 48 PASSED. APK
+  31159929 bytes, sha256 754316445f9aae2684aedf87907198d251bde94c6fcec612dc9c0553e688d29b; on itch (android channel).
+
+## 0.31.100 — better Forge effects, and every legendary has its own (Kevin: "I want the effects to look better for the forge weapons. I also want to add effects for all the legendary weapons")
+- Sprites: 15 painted VFX sprites (sparkle, flame, smoke, lightning, rays, snowflake, ice shard, leaf, feather, four
+  runes, sigil, crescent, soul wisp, vortex, star cluster, ring) generated with ElevenLabs gpt-image-2 as white-on-black
+  sheets (4 takes, best of each kept; flow tL2Uq8Khy94WZ0PV3s34), cut by tools/cut_vfx_sheet.py into 128 px grayscale
+  textures in assets/vfx/weapon (base APK, lossless + mipmaps; SOURCE.txt). fx_sprite.gdshader draws them added in the
+  particle's colour with a white-hot core, billboarded or laid flat (a halo).
+- scripts/siege/weapon_fx.gd (replaces siege_view's forge code): a glow pass over the weapon's own materials
+  (forge_glow.gdshader rewritten: fresnel rim, a narrow glint running up the piece, glowing veins from a 3D cell pattern
+  with a pulse flowing up them, and a colour key that lights a legendary's lava / eye / gems from its own texture), plus
+  particles, pinned sprites (rays behind a staff's head, a halo, a turning sigil or vortex, sparks orbiting) and a swing
+  ribbon (fx_trail.gdshader: a crescent along the tip's path, only while the blade moves fast; a jump clears it; never on
+  bows, staffs, books or shields). weapon_fx_root.gd builds them on the first frame in the tree in world units measured
+  from the piece, since Godot draws a particle at its own size whatever the emitter's scale.
+- Forge stars: 1 Polished = glint + sparkles; 2 Runed = + veins, runes drifting along it, a faint ribbon; 3 Ascended =
+  all in the element's colour + fire flames and embers / frost snow and mist / storm lightning and sparks / holy rays and
+  motes / nature leaves / void wisps and vortex, and a bright ribbon. Star texts updated.
+- Legendaries (LEGENDARY, by model, whether or not forged; with stars they add up): Kingsoath sparkles and motes,
+  Worldsplitter glowing lava with embers and flames, Grimgrin purple wisps, Eye of the Archon lit eye with a sigil and
+  orbiting sparks, Solaris rays from its sun, Final Verdict golden runes, Kingsguard royal sparkles, Skyrender
+  lightning, Moonfang drifting crescents, Dawnpiercer leaves, Emberheart phoenix flames and fire feathers, Seraph's Grace
+  a halo and falling feathers, The Golden Sledge sparks, Oathbound sun rays, Bloodroar red embers and smoke, Lichcrown
+  green soulfire, Last Breath violet smoke, Hawk's Judgment golden feathers, Astral Codex orbiting stars, a vortex and
+  a sigil behind the book. Each has its own swing ribbon colour where it swings.
+- Shown on a body (Locker, Home, Quests, shop "in hand", my unit in a match) and in the Forge / shop "weapon" view; the
+  still icons stay plain (WeaponPose.compose effects=false). Sprites write their strength into alpha so the transparent
+  showcase viewports get no black squares.
+- tests/weapon_fx_test.gd (every legendary piece has effects, presets and sprites exist, stars 1/2/3, Seraph's halo,
+  sizes follow the piece's world scale, icons plain, the ribbon only in a fast swing) in the suite; forge_test updated.
+  tools/app_shots.gd: SHOT_EQUIP=id,... wears items for a shot.
+- 0.31.100, version code 186. Quick suite: ALL 49 PASSED. Content packs unchanged (CONTENT OK; the sprites are base).
+  APK 31323653 bytes, sha256 3ad510dafe0bf710b10f0963cb9822ca46ee617b58bf09d301b6920dbb4ef539; on itch (android
+  channel).
+
+## 0.31.101 — everyone sees what everyone wears (Kevin: "I want players to see everything the other players are wearing")
+- Until now a match dressed only my own unit; every other player showed the defaults. Now each player's equipped weapon
+  and its Forge stars / element, for every class, reach everyone in the match (titles and names already did).
+- Wire (additive, protocol stays 35): the hello carries "lk": {class: "weapon id|stars|element"} (Profile.wire_looks,
+  only dressed classes). The server keeps only well-formed entries (Net.clean_looks: one of the 13 classes, an id of
+  a-z 0-9 _ up to 40, stars clamped 0-3, an element word) and adds "lk": {unit id: entries} to "pn" (sent to the match
+  whenever a seat changes, like the names). It doesn't check ids against the catalog -- the server carries no economy,
+  and a newer app may know newer items; each app builds the look from its own catalog (Eco.looks_from_wire /
+  Eco.look_of, which Profile.look_for now uses too, so the others see exactly what I see), the starter for an id it
+  doesn't know or of another class. Older apps / an older server ignore "lk".
+- The battle view dresses a unit from unit_cosmetic(): mine from the profile, a live player's from the server, a bot's
+  the defaults (a player leaving hands the bot the defaults back). Their legendary and Forge effects show too; with
+  fewer effects on (Settings' reduce motion), the other players' weapons keep their glow but no particles.
+- Ownership isn't verified (cosmetics are local, there are no accounts): a modded app could show items it doesn't own,
+  to others; it changes nothing in play.
+- Live server: reports 0.31.92 (status). Needs the redeploy from this branch (install_siege_server.sh) for "lk";
+  until then everything works as before (no looks relayed).
+- tests/shared_looks_test.gd (the wire rules, cleaning, my looks out and back equal look_for, unknown ids, the view
+  dressing another player, the lighter version) in the suite; siege_net_smoke: a second player's looks come back
+  cleaned through the real server, and leave with them. Quick suite: ALL 50 PASSED.
+
+## 0.31.102 — Google Play Games sign-in and cloud save (Kevin: "Google play account linking to the game")
+- Split like purchases: Claude the game code, Grokbot the Play Console side (godot/PLAY_GAMES_HANDOFF.md: the Play Games
+  project, Saved Games on, the OAuth consent screen and the Android client with the app-signing SHA-1, testers, the Game
+  ID into the build, the internal-testing test, Data safety). Kevin: itch uploads stopped (no itch build from here on).
+- addons/GodotPlayGameServices: godot-play-game-services 3.4.0 (Play Games Services v2 21.0.0) built from source
+  against Godot 4.7.2 (tag v3.4.0, e38b618). Own export plugin: no autoload and none of its GDScript wrappers, Gradle
+  presets only, and nothing packed until the Game ID is set (preset option godot_play_game_services/game_id or
+  PLAY_GAMES_APP_ID) -- the Play Games SDK stops an app that has the plugin but no APP_ID. verify_play_bundle.py fails
+  a bundle with one and not the other. Checked with throwaway-key Play exports: with a test ID the AAB carries the
+  plugin, the APP_ID meta-data and the ID resource (billing still there); without one, none of it.
+- scripts/meta/play_games.gd: sign-in (automatic at start, or SIGN IN), the player's Play Games name, and one Saved Game
+  ("fatebound-profile": the profile gzipped + base64 with a stamp, time, phone and summary). Reads before it ever
+  writes: no copy -> the first link uploads; in step -> uploads changes (every 2 min while changing, on going to the
+  background, BACK UP NOW); another phone moved ahead and this one hasn't changed, or a never-linked new install ->
+  restores silently (keeping this phone's sound/graphics settings); both changed -> WHICH PROGRESS? (USE GOOGLE PLAY'S
+  / KEEP THIS PHONE'S; asked after a match if it comes up during one). Never overwrites a copy it can't read or one a
+  newer version wrote; Google not answering in 30 s -> an error and TRY AGAIN (which reads again first).
+- Profile: cloud {stamp, dirty, at}; every save marks it (save(false) for the sync's own); summary(), is_fresh(),
+  cloud_payload(), restore_cloud().
+- Settings: a GOOGLE PLAY card under the name: off Play "Available in the Google Play version", SIGN IN WITH GOOGLE
+  PLAY, "Signed in as <name>... backed up (n min ago)" + BACK UP NOW, CHOOSE, TRY AGAIN. tools/app_shots.gd
+  SHOT_PLAY=out|synced|ask.
+- privacy.html: a Google Play Games section (optional; name read; the save kept in the player's Google account, not on
+  our server). Note for Kevin: its opening still describes the dice-era game and Firebase.
+- tests/play_games_test.gd (a fake of the plugin: first link, later uploads, a save during an upload, new install,
+  phone in step, both changed with both answers, unreadable / newer copies untouched, no answer -> TRY AGAIN, off Play,
+  the Settings card and the question through their buttons) in the suite.
+- 0.31.102, version code 188 (preview numbering; Play codes are Grok's). Quick suite: ALL 51 PASSED. CONTENT OK. No itch build.

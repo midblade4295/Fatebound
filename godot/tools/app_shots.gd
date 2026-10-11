@@ -7,6 +7,25 @@ const Screens = preload("res://scripts/app/screens.gd")
 # scroll each screen down for a second shot named <tab>_2).
 const App = preload("res://scripts/app/siege_app.gd")
 const Eco = preload("res://scripts/meta/economy.gd")
+const Profile = preload("res://scripts/meta/profile.gd")
+const PlayGames = preload("res://scripts/meta/play_games.gd")
+
+class ShotPlay extends Node:                     # a stand-in for the Play Games plugin (SHOT_PLAY)
+	signal userAuthenticated(ok: bool)
+	signal currentPlayerLoaded(json: String)
+	signal gameLoaded(json: String)
+	signal gameSaved(ok: bool, name: String, desc: String)
+	signal conflictEmitted(json: String)
+	var signed := true
+	var bytes := PackedByteArray()
+	func initialize() -> void: pass
+	func isAuthenticated() -> void: userAuthenticated.emit(signed)
+	func signIn() -> void: userAuthenticated.emit(true)
+	func loadCurrentPlayer(_f: bool) -> void: currentPlayerLoaded.emit(JSON.stringify({"displayName":"Midblade"}))
+	func loadGame(_n: String, _c: bool) -> void: gameLoaded.emit("null" if bytes.is_empty() else JSON.stringify({"content":Array(bytes)}))
+	func saveGame(n: String, d: String, b: PackedByteArray, _t: int, _p: int) -> void:
+		bytes = b
+		gameSaved.emit(true, n, d)
 var app
 var frames := 0
 var tabs: Array = ["home", "pass", "shop", "locker", "settings"]
@@ -63,6 +82,26 @@ func _process(_d: float) -> bool:
 			p.d.quests["worker"] = 3
 			p.d.owned.append("worker_wpn_sledge")
 			app.quest_cls = OS.get_environment("SHOT_QUESTS")
+		if OS.has_environment("SHOT_EQUIP"):             # 0.31.100: wear these (owned for the shot), e.g. a legendary's effects
+			for id in OS.get_environment("SHOT_EQUIP").split(","):
+				if not p.d.owned.has(id):
+					p.d.owned.append(id)
+				p.equip(id)
+		if OS.has_environment("SHOT_PLAY"):              # 0.31.102: Settings' Google Play card: out | synced | ask
+			var fp := ShotPlay.new()
+			fp.signed = OS.get_environment("SHOT_PLAY") != "out"
+			if OS.get_environment("SHOT_PLAY") == "ask":
+				var other := Profile.new("user://shot_other_%d.json" % Time.get_ticks_usec(), "user://none.json")
+				other.load_or_create()
+				other.d.gold = 4321
+				other.d.gems = 260
+				other.d.level = 23
+				other.d.stats.wins = 140
+				other.d.stats.matches = 260
+				fp.bytes = PlayGames.encode(other.cloud_payload("other-1", "SM-G998U"))
+				p.d.cloud.stamp = "mine-1"
+			root.add_child(fp)
+			app.play_games.setup(p, fp)
 		p.d.challenges.daily[0].progress = 99
 		# (0.31.37) chests: one opening ready, one unlocking, two waiting
 		for k in ["silver", "gold", "wooden", "royal"]:
