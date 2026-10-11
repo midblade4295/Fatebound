@@ -363,7 +363,8 @@ static func item_price(id: String) -> Dictionary:
 # ---------------- shop rotation ----------------
 const DAILY_SLOTS := 6              # 0.31.38: 4 -> 6 (gold items in rotation went 19 -> 43 with the upgraded classes)
 const FEATURED_SLOTS := 3           # 2 -> 3 (gem items 9 -> 15)
-const EXCHANGE := [{"id":"gold_s", "gems":50, "gold":600}, {"id":"gold_m", "gems":120, "gold":1600}, {"id":"gold_l", "gems":300, "gold":4500}]
+const EXCHANGE := [{"id":"gold_s", "gems":50, "gold":600}, {"id":"gold_m", "gems":120, "gold":1600}, {"id":"gold_l", "gems":300, "gold":4500},
+	{"id":"gold_xl", "gems":700, "gold":12000}, {"id":"gold_xxl", "gems":1600, "gold":30000}]     # 0.31.106 (Kevin: "maybe add some higher gold packs")
 
 static func day_key(unix: int) -> String:
 	var d := Time.get_date_dict_from_unix_time(unix)

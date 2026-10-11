@@ -1194,34 +1194,38 @@ static func shop(app, root: VBoxContainer) -> void:
 	pack_list(app, root)
 	gem_packs(app, root)
 	UI2.divider(root, "GEMS  →  GOLD", 22, "trade gems for gold any time")
-	var ex := HBoxContainer.new()
-	ex.add_theme_constant_override("separation", 10)
-	root.add_child(ex)
+	var ex_grids := []
+	for cols in [3, 2]:                              # (0.31.106: two bigger offers under the first three)
+		var eg := GridContainer.new()
+		eg.columns = cols
+		eg.add_theme_constant_override("h_separation", 10)
+		eg.add_theme_constant_override("v_separation", 12)
+		root.add_child(eg)
+		ex_grids.append(eg)
 	var n := 0
 	for off in Eco.EXCHANGE:
 		var best: bool = n == Eco.EXCHANGE.size() - 1
+		var big: bool = n >= 3
 		var c := Control.new()
-		c.custom_minimum_size = Vector2(0, 168)
 		UI.grow(c)
-		ex.add_child(c)
+		(ex_grids[0 if n < 3 else 1] as GridContainer).add_child(c)
 		if best:
 			UI2.glow(c, Rect2(-16, -16, 10, 10), Color(1.0, 0.85, 0.4, 0.5))
 			var gw := c.get_child(c.get_child_count() - 1) as Control
 			c.resized.connect(func(): gw.size = c.size + Vector2(32, 32))
-		UI2.plate(c, "royal" if best else "night", 18.0, "gold")
-		var pile := UI2.img(c, "res://assets/ui/currency/coins_%s.png" % str(off.id).substr(5), 80.0)
-		c.resized.connect(func(): pile.position = Vector2((c.size.x - 80.0) * 0.5, 8))
-		var gl := UI2.text(c, "+" + UI.compact(int(off.gold)), 20, UI2.GOLD, UI2.INK, 5)
+		UI2.plate(c, "royal" if big else "night", 18.0, "gold")
+		var art_px := pack_art(c, "res://assets/ui/packs/gold_pack_%d.png" % mini(n + 1, 5), n + 1, big, Color(1.0, 0.82, 0.4))
+		var gl := UI2.text(c, "+" + UI.grouped(int(off.gold)), 22 if big else 20, UI2.GOLD, UI2.INK, 5)
 		gl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		gl.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-		gl.offset_top = 90
-		gl.offset_bottom = 114
+		gl.offset_top = art_px + 8.0
+		gl.offset_bottom = art_px + 32.0
 		var oid: String = off.id
 		var b := UI2.button(c, str(int(off.gems)), "purple", func():
 			var r: Dictionary = p.exchange(oid)
 			if r.ok:
 				app.sfx("coin")
-				app.toast("+%s gold" % UI.compact(int(off.gold)), UI.GOLD)
+				app.toast("+%s gold" % UI.grouped(int(off.gold)), UI.GOLD)
 			else:
 				app.sfx("error")
 				app.toast(str(r.error), UI.RED)
@@ -1429,8 +1433,8 @@ static func gem_packs(app, root: Node) -> void:
 		UI2.plate(sc, "ember", 18.0, "orange")
 		var ry := UI2.rays(sc, 200.0, Color(1.0, 0.8, 0.4), 26.0, 0.35)
 		ry.position = Vector2(-40, -40)
-		var gi := UI2.img(sc, "res://assets/ui/currency/gems.png", 92.0)
-		gi.position = Vector2(14, 18)
+		var gi := UI2.img(sc, "res://assets/ui/packs/gem_pack_2.png", 96.0)
+		gi.position = Vector2(12, 16)
 		var v := VBoxContainer.new()
 		v.add_theme_constant_override("separation", 2)
 		v.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -1464,19 +1468,17 @@ static func gem_packs(app, root: Node) -> void:
 			continue
 		var grid: GridContainer = grids[0 if size_ix < 3 else 1]
 		var c := Control.new()
-		c.custom_minimum_size = Vector2(0, 156)
+		var big := size_ix >= 3
 		UI.grow(c)
 		grid.add_child(c)
-		var big := size_ix >= 3
 		UI2.plate(c, "purple" if big else "royal", 18.0, "gold" if big else "blue")
-		var px := 58.0 + 8.0 * size_ix
-		var gi := UI2.img(c, "res://assets/ui/currency/%s.png" % ("gems" if size_ix >= 1 else "gem"), px)
-		c.resized.connect(func(): gi.position = Vector2((c.size.x - px) * 0.5, 8.0 + (90.0 - px) * 0.5))
-		var gl := UI2.text(c, UI.compact(int(pk.gems)), 19, Color.WHITE, UI2.INK, 5)
+		var art_px := pack_art(c, "res://assets/ui/packs/gem_pack_%d.png" % mini(size_ix + 1, 5), size_ix + 1, big,
+			Color(0.55, 0.85, 1.0))
+		var gl := UI2.text(c, UI.compact(int(pk.gems)), 21 if big else 19, Color.WHITE, UI2.INK, 5)
 		gl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		gl.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-		gl.offset_top = 94
-		gl.offset_bottom = 116
+		gl.offset_top = art_px + 8.0
+		gl.offset_bottom = art_px + 32.0
 		var b := _iap_button(app, c, pid, Vector2.ZERO, Vector2.ZERO)
 		b.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 		b.offset_left = 6
@@ -1492,6 +1494,30 @@ static func gem_packs(app, root: Node) -> void:
 			tg.offset_top = -10
 			tg.offset_bottom = 8
 		size_ix += 1
+
+static func pack_art(c: Control, path: String, tier: int, big: bool, shine: Color) -> float:
+	# 0.31.106 (Kevin: "Make new art for the higher tier packs so it shows more the higher the pack is. Add fun things
+	# to art for higher packs"): each tier its own picture, bigger as it goes (a gem, a heap, a pouch, a chest, a royal
+	# hoard with a crown and a baby dragon; a stack ... a barrel, a mine cart with a grinning mimic). The top two shine
+	# (a soft glow); the top one also has turning rays and bobs. Sets the tile's height; returns the art's size.
+	var px := 104.0 if not big else 132.0
+	c.custom_minimum_size = Vector2(0, px + 84.0)
+	if tier >= 4:
+		var gw := UI2.glow(c, Rect2(0, 0, 10, 10), Color(shine, 0.5 if tier == 5 else 0.32))
+		c.resized.connect(func():
+			gw.size = Vector2(px, px) * 1.25
+			gw.position = Vector2((c.size.x - gw.size.x) * 0.5, 6.0 + (px - gw.size.y) * 0.5))
+	if tier >= 5:
+		var ry := UI2.rays(c, px * 1.6, Color(shine.lerp(Color.WHITE, 0.4)), 22.0, 0.42)
+		c.resized.connect(func(): ry.position = Vector2((c.size.x - ry.size.x) * 0.5, 6.0 + (px - ry.size.y) * 0.5))
+	var gi := UI2.img(c, path, px)
+	c.resized.connect(func(): gi.position = Vector2((c.size.x - px) * 0.5, 6.0))
+	if tier >= 5:
+		UI2.when_ready(gi, func():
+			var tw := gi.create_tween().set_loops()
+			tw.tween_property(gi, "position:y", 1.0, 1.3).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+			tw.tween_property(gi, "position:y", 9.0, 1.3).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT))
+	return px
 
 static func _iap_button(app, parent: Control, pid: String, at: Vector2, sz: Vector2) -> Button:
 	var bl = app.billing

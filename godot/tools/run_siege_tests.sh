@@ -100,6 +100,8 @@ run shared_looks_test    SHARED_LOOKS_PASS        90
 run weapon_grip_test     WEAPON_GRIP_PASS         120
 # Currency flies into the top bar's counters (0.31.105), and the Ember counter.
 run reward_fly_test      REWARD_FLY_PASS          120 --fixed-fps 30 --resolution 420x933
+# The shop's tiered pack art and the five gold offers (0.31.106).
+run shop_packs_test      SHOP_PACKS_PASS          120 --resolution 420x933
 run play_games_test      PLAY_GAMES_PASS          120 --resolution 420x933
 # The app's staged match start (0.31.78): the card first, the world built behind it over frames.
 FB_STAGED_START=1 FB_FORCE_WARMUP=1 run staged_start_test STAGED_START_PASS 240 --fixed-fps 30

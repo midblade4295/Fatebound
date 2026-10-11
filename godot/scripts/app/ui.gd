@@ -248,6 +248,15 @@ static func compact(n: int) -> String:
 		return "%.1fK" % (n / 1000.0)
 	return str(n)
 
+static func grouped(n: int) -> String:
+	# 12000 -> "12,000" (0.31.106: the shop's gold offers)
+	var s := str(absi(n))
+	var out := ""
+	while s.length() > 3:
+		out = "," + s.substr(s.length() - 3) + out
+		s = s.substr(0, s.length() - 3)
+	return ("-" if n < 0 else "") + s + out
+
 static func duration(seconds: int) -> String:
 	var s := maxi(0, seconds)
 	if s >= 86400:

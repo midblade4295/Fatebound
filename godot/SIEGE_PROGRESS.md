@@ -3116,3 +3116,20 @@ K2/K3 notes (0.17.0)
 - tests/reward_fly_test.gd in the suite.
 - Content pack ui rebuilt (ui-4d2ee4b95bd9.pck) and on the content-packs branch.
 - 0.31.105, version code 191. Quick suite: ALL 53 PASSED. CONTENT OK.
+
+## 0.31.106 — pack art that grows with the pack; two bigger gold offers (Kevin: "Make new art for the higher tier packs so it shows more the higher the pack is. Add fun things to art for higher packs. Also maybe add some higher gold packs?")
+- Ten pictures, assets/ui/packs/{gem,gold}_pack_1..5.png (448 px, transparent), made with Meshy's image-to-image
+  (gpt-image-2.5, background removed; tools/meshy_image.py -- ElevenLabs' credits had run out), each steered by the
+  concept art of the game's own diamond and crown coin (Kevin's picks) so they match the currency:
+  gems 80 a diamond, 500 a heap, 1100 a leather pouch spilling them, 2400 an open treasure chest overflowing, 6500 a
+  royal golden chest under a mountain of diamonds with a jeweled crown, a golden goblet and a chubby baby dragon hugging
+  a giant diamond; gold 600 a stack, 1600 a stack and a heap, 4500 a mound with stacks, 12,000 a barrel pouring coins,
+  30,000 a mine cart heaped with coins and gold bars, a pickaxe, a lantern and a grinning chest mimic on top.
+- Shop: the pictures bigger (104 px; the two big tiles 132); tiers 4-5 sit in a soft glow, the top one also turns rays
+  and bobs. The starter pack shows the heap. Gold offers in a 3 + 2 grid like the gem packs, shown in full ("+12,000",
+  UI.grouped).
+- Eco.EXCHANGE: + gold_xl 700 gems -> 12,000 gold and gold_xxl 1600 gems -> 30,000 (gold per gem 12 / 13.3 / 15 / 17.1
+  / 18.8, the biggest BEST VALUE). Items' gem value still at the old 4500 = 300 rate.
+- tests/shop_packs_test.gd in the suite.
+- Content pack ui rebuilt (ui-f69d90ec6748.pck) and on the content-packs branch.
+- 0.31.106, version code 192. Quick suite: ALL 54 PASSED. CONTENT OK.
