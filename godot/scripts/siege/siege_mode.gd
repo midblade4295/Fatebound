@@ -7,6 +7,7 @@ const View = preload("res://scripts/siege/siege_view.gd")
 const Hud = preload("res://scripts/siege/siege_hud.gd")
 const Diag = preload("res://scripts/siege/siege_diag.gd")
 const Net = preload("res://scripts/siege/siege_net.gd")
+const Eco = preload("res://scripts/meta/economy.gd")
 const VisualTheme = preload("res://scripts/ui/visual_theme.gd")
 const Lobby = preload("res://scripts/siege/lobby_panel.gd")
 
@@ -46,6 +47,11 @@ var _kills_cls := {}     # class -> knockouts made as it
 var _kills_seen := 0
 var _repaired := 0.0     # gate health repaired (the sim's "repair" events)
 var _best_multi := 0     # most knockouts in one burst ("multikill" events)
+# 0.31.97 (class quests): the same, per class as worn -- a Crusader apart from a Knight (Eco.cosmetic_class)
+const Q_UNIT := {"kills":"kills", "rescues":"rescues", "gate_dmg":"gate_dmg", "gathered":"gathered", "fed":"fed", "healed":"healed"}
+var _q := {}             # worn class -> {"t": seconds, "kills", "rescues", "gate_dmg", "gathered", "fed", "healed", "repaired", "lifts", "best_multi"}
+var _q_seen := {}        # my unit's running totals already credited
+var _q_cls := ""         # the class I wear right now ("" = none)
 
 # Online play (set before adding to the tree). The server runs the match; this client mirrors it.
 var online := false
@@ -259,7 +265,7 @@ func _build_step() -> void:
 func _looks() -> Dictionary:
 	var out := {}
 	if profile != null:
-		for cls in ["knight", "barbarian", "rogue", "ranger", "mage", "worker", "crusader", "berserker", "necromancer", "assassin", "sniper", "archmage"]:
+		for cls in Eco.CLASSES + Eco.UP_CLASSES:      # (0.31.97: the Priest was missing -- his weapon never showed in a match)
 			var l: Dictionary = profile.look_for(cls)
 			if not l.is_empty():
 				out[cls] = l
@@ -269,10 +275,17 @@ func _count(e: Dictionary) -> void:
 	if str(e.get("k", "")) == "lift_join" and str(e.get("id", "")) == hud.player_id and sim != null \
 			and sim.by_id.has(hud.player_id) and int(e.get("team", -1)) == int(sim.by_id[hud.player_id].team):
 		_lifts += 1
+		_q_add("lifts", 1.0)
 	if str(e.get("id", "")) == hud.player_id:
 		match str(e.get("k", "")):
-			"repair": _repaired += Sim.REPAIR_HP
-			"multikill": _best_multi = maxi(_best_multi, int(e.get("n", 0)))
+			"repair":
+				_repaired += Sim.REPAIR_HP
+				_q_add("repaired", Sim.REPAIR_HP)
+			"multikill":
+				_best_multi = maxi(_best_multi, int(e.get("n", 0)))
+				if _q_cls != "":
+					var qe: Dictionary = _q_entry(_q_cls)
+					qe["best_multi"] = maxi(int(qe.get("best_multi", 0)), int(e.get("n", 0)))
 
 func my_title() -> String:
 	# The title to wear online: the profile's, if it is one the game knows and the player owns.
@@ -287,6 +300,9 @@ func _title_reset() -> void:
 	_kills_seen = 0
 	_repaired = 0.0
 	_best_multi = 0
+	_q = {}
+	_q_seen = {}
+	_q_cls = ""
 
 func _title_track(delta: float) -> void:
 	# Each frame of a match: time as the class you are, and any new knockouts credited to it.
@@ -301,6 +317,17 @@ func _title_track(delta: float) -> void:
 		if cls != "villager":
 			_kills_cls[cls] = int(_kills_cls.get(cls, 0)) + (k - _kills_seen)
 		_kills_seen = k
+	# 0.31.97: quests -- time as the class worn, and whatever my unit's totals grew by, credited to it
+	_q_cls = "" if cls == "villager" else Eco.cosmetic_class(cls, bool(me.get("up", false)))
+	if _q_cls != "" and me.state != "dead":
+		var qe: Dictionary = _q_entry(_q_cls)
+		qe["t"] = float(qe.get("t", 0.0)) + delta
+	for f in Q_UNIT:
+		var v := float(me.get(f, 0.0))
+		var dv := v - float(_q_seen.get(f, 0.0))
+		if dv > 0.0:
+			_q_add(str(Q_UNIT[f]), dv)
+		_q_seen[f] = v
 
 func title_summary() -> Dictionary:
 	# The match's main class: the one played longest (at least a minute of it), else none.
@@ -310,7 +337,26 @@ func title_summary() -> Dictionary:
 		if float(_cls_time[c]) >= best:
 			best = float(_cls_time[c])
 			main = str(c)
-	return {"cls_main": main, "kills_cls": _kills_cls.duplicate(), "repaired": _repaired, "best_multi": _best_multi}
+	var q := {}
+	for c in _q:
+		var e: Dictionary = _q[c]
+		q[c] = {"t": float(e.get("t", 0.0)), "kills": int(e.get("kills", 0.0)), "rescues": int(e.get("rescues", 0.0)),
+			"gates": int(float(e.get("gate_dmg", 0.0)) / 100.0), "gathered": int(e.get("gathered", 0.0)), "fed": int(e.get("fed", 0.0)),
+			"healed": int(e.get("healed", 0.0)), "repaired": int(e.get("repaired", 0.0)), "lifts": int(e.get("lifts", 0.0)),
+			"best_multi": int(e.get("best_multi", 0))}
+	return {"cls_main": main, "kills_cls": _kills_cls.duplicate(), "repaired": _repaired, "best_multi": _best_multi, "q": q}
+
+func _q_entry(c: String) -> Dictionary:
+	if not _q.has(c):
+		_q[c] = {}
+	return _q[c]
+
+func _q_add(stat: String, n: float) -> void:
+	# credit n of a stat to the class I'm wearing (nothing while I'm a villager)
+	if _q_cls == "":
+		return
+	var qe := _q_entry(_q_cls)
+	qe[stat] = float(qe.get(stat, 0.0)) + n
 
 func _start_online() -> void:
 	ws = WebSocketPeer.new()

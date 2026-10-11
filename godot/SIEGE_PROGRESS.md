@@ -2924,3 +2924,31 @@ K2/K3 notes (0.17.0)
 - Content packs: ui (dagger icons) and weapons rebuilt and on the content-packs branch; an installed 0.31.95 downloads
   only those two (48 MB) on its next launch. 0.31.96, version code 182. Quick suite: ALL 46 PASSED. APK 31,143,545
   bytes, sha256 a7a7ae0f6c0b122cf26878a19b3c54a27f748394968dc390edb752d910a0576d; on itch (android channel).
+
+## 0.31.97 — a quest for every class (Kevin: "Build the quest system and I want quests for each class")
+- Eco.QUESTS: one quest per class (13), three steps claimed in order. Step 1 pays 400 gold + 30 Embers, step 2 50 gems
+  + a Gold chest, step 3 the class's legendary (source "quest": never in the shop, the pass or a chest; forgeable once
+  owned). Steps per class are its own kind of work: Knight wins / King rescues / knockouts; Barbarian knockouts / gate
+  damage / wins; Rogue knockouts / a 3-knockout burst / knockouts; Archer knockouts / wins / knockouts; Mage knockouts /
+  King lifts / wins; Priest healing / rescues / wins; Worker gathering / gate repairs / wins; and the six upgrades the
+  same at smaller numbers (they're only worn once the team buys the hat).
+- Counting (profile stats "q_<class>_<stat>", from 0.31.97 on): siege_mode credits what my unit does -- seconds played,
+  knockouts, rescues, gate damage, gathering, fish, healing, repairs, King lifts, the best burst -- to the class I'm
+  wearing (a Crusader apart from a Knight; nothing as a villager), online and offline alike. A base class's quest counts
+  its upgrade too (as the titles do); an upgrade's quest only the upgrade. A match counts as played / won as a class
+  after a minute as it.
+- Legendaries: the 7 drawn with the Armory Reforged sheets (Dawnpiercer, Hawk's Judgment, The Golden Sledge, Bloodroar,
+  Lichcrown, Last Breath, Astral Codex) fitted at last, and 6 new ones for the classes that had none -- concept sheet
+  (4 takes sent to Kevin), parts sheet, Meshy 7.1: Kingsguard (Knight, crown-guard sword and winged crown shield),
+  Skyrender (Barbarian, eagle-winged great axe), Moonfang (Rogue, crescent daggers), Emberheart (Mage, phoenix staff),
+  Seraph's Grace (Priest, winged halo staff), Oathbound (Crusader, winged-sun warhammer and chained cross shield). All 16
+  pieces fitted with the grip step; icons rendered.
+- Screens: Home's QUESTS button (left, under ORDERS; a badge per step ready). The Quests screen (sign and HOME like the
+  Forge): the 13 classes (a badge where a step is ready, a tick where done), the hero holding the legendary (turn, zoom),
+  its name, the three steps with progress, rewards and CLAIM; claiming the last shows the legendary with EQUIP. The
+  Locker shows each class's quest under its nameplate (OPEN / CLAIM), and the legendary's card says "Quest reward".
+  The match results show the quest steps that moved and a banner when one is ready. New icon (quest map) in the game's
+  icon style.
+- Fixed: the Priest's equipped weapon never showed in a match (the class was missing from the match's looks list).
+- tests/quest_test.gd (the table, counting, claiming in order, save/load, the screens through their buttons) and
+  tests/quest_track_test.gd (in-match crediting per class worn), both in the suite.

@@ -91,6 +91,9 @@ run forge_test           FORGE_PASS               120
 run content_test         CONTENT_PASS             120
 # The shop's tap-to-preview (0.31.96): real taps on every card, then buy / cancel / equip / an Arsenal from the preview.
 run shop_preview_test    SHOP_PREVIEW_PASS        150 --resolution 420x933
+# Class quests (0.31.97): the table, counting per class worn, claiming in order, the screens; and the in-match tracking.
+run quest_test           QUEST_PASS               150 --resolution 420x933
+run quest_track_test     QUEST_TRACK_PASS         120 --fixed-fps 30
 # The app's staged match start (0.31.78): the card first, the world built behind it over frames.
 FB_STAGED_START=1 FB_FORCE_WARMUP=1 run staged_start_test STAGED_START_PASS 240 --fixed-fps 30
 # The human soak must never stall the game thread.

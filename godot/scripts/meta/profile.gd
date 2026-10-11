@@ -36,6 +36,7 @@ static func defaults() -> Dictionary:
 		"forge":{"stars":{}, "wins":{}, "element":{}},              # 0.31.93: per weapon (Eco.forge_id): stars 0-3, wins, aura element
 		"iap":{"done":[], "starter":false},                          # 0.31.90: purchase tokens already granted
 		"chests":{"slots":[], "next":1, "pity":0},
+		"quests":{},                                                  # 0.31.97: class -> quest steps claimed (0-3)
 		"settings":{"master":0.8, "music":0.6, "sfx":0.8, "reduce_motion":false}}
 
 # ---------------- load / save ----------------
@@ -113,6 +114,12 @@ func _normalized(v: Dictionary) -> Dictionary:
 		out.forge.stars[wid] = clampi(int(out.forge.stars[wid]), 0, Eco.FORGE_STARS.size())
 	for wid in out.forge.wins.keys():
 		out.forge.wins[wid] = maxi(0, int(out.forge.wins[wid]))
+	# 0.31.97: quest steps claimed -- known classes, 0..3
+	var qs := {}
+	for c in out.quests.keys():
+		if Eco.QUESTS.has(str(c)):
+			qs[str(c)] = clampi(int(out.quests[c]), 0, Eco.QUESTS[str(c)].steps.size())
+	out.quests = qs
 	return out
 
 static func _is_num(v: Variant) -> bool:
@@ -445,6 +452,7 @@ func apply_match(me: Dictionary, won: bool, draw: bool, online: bool) -> Diction
 	for key in ["matches", "wins", "rescues", "kills", "gates", "gathered", "fed", "lifts", "repaired", "healed"]:
 		d.stats[key] = int(d.stats.get(key, 0)) + int(stats.get(key, 0))
 	_title_stats(stats, won)
+	out["quests"] = _quest_stats(stats, won)
 	for span in ["daily", "weekly"]:
 		for c in (d.challenges.daily if span == "daily" else d.challenges.weekly):
 			var def: Dictionary = Eco.CHALLENGES[c.id]
@@ -475,6 +483,91 @@ func _title_stats(stats: Dictionary, won: bool) -> void:
 	d.stats.best_multi = maxi(int(d.stats.get("best_multi", 0)), int(stats.get("best_multi", 0)))
 	d.stats.streak = int(d.stats.get("streak", 0)) + 1 if won else 0          # (a draw or a loss ends the run)
 	d.stats.best_streak = maxi(int(d.stats.get("best_streak", 0)), int(d.stats.streak))
+
+# ---------------- class quests (0.31.97) ----------------
+func _quest_stats(stats: Dictionary, won: bool) -> Array:
+	# Add one match to every class quest's counters (Eco.QUESTS: a base class counts its upgrade too). -> the lines the
+	# results screen shows: each quest whose current step moved, with whether it is now ready to claim.
+	var q: Dictionary = stats.get("q", {})
+	var before := {}
+	for cls in Eco.QUESTS:
+		before[cls] = quest_have(cls)
+	for cls in Eco.QUESTS:
+		var t := 0.0
+		var add := {}
+		var multi := 0
+		for c in Eco.quest_family(cls):
+			var e: Variant = q.get(c, {})
+			if not (e is Dictionary):
+				continue
+			t += float(e.get("t", 0.0))
+			for st in Eco.QUEST_COUNTS:
+				add[st] = int(add.get(st, 0)) + int(e.get(st, 0))
+			multi = maxi(multi, int(e.get("best_multi", 0)))
+		if t >= Eco.QUEST_MIN_TIME:
+			add["matches"] = 1
+			if won:
+				add["wins"] = 1
+		for st in add:
+			if int(add[st]) > 0:
+				var k := Eco.quest_key(cls, str(st))
+				d.stats[k] = int(d.stats.get(k, 0)) + int(add[st])
+		var mk := Eco.quest_key(cls, "best_multi")
+		if multi > int(d.stats.get(mk, 0)):
+			d.stats[mk] = multi
+	var lines := []
+	for cls in Eco.QUESTS:
+		var step := quest_step(cls)
+		if step >= Eco.QUESTS[cls].steps.size():
+			continue
+		var have := quest_have(cls)
+		if have != int(before[cls]):
+			var s: Dictionary = Eco.QUESTS[cls].steps[step]
+			lines.append({"cls":cls, "step":step, "text":str(s.task), "progress":mini(have, int(s.n)), "goal":int(s.n),
+				"done":have >= int(s.n)})
+	return lines
+
+func quest_step(cls: String) -> int:
+	# the steps of cls's quest already claimed (= the index of the one being worked on)
+	return int(d.quests.get(cls, 0))
+
+func quest_have(cls: String) -> int:
+	# progress on cls's current step (its stat's lifetime count)
+	return Eco.quest_progress(d.stats, cls, quest_step(cls))
+
+func quest_ready(cls: String) -> bool:
+	var q: Dictionary = Eco.QUESTS.get(cls, {})
+	var step := quest_step(cls)
+	return not q.is_empty() and step < q.steps.size() and quest_have(cls) >= int(q.steps[step].n)
+
+func quests_ready() -> int:
+	var n := 0
+	for cls in Eco.QUESTS:
+		if quest_ready(cls):
+			n += 1
+	return n
+
+func quest_done(cls: String) -> bool:
+	return Eco.QUESTS.has(cls) and quest_step(cls) >= Eco.QUESTS[cls].steps.size()
+
+func claim_quest(cls: String) -> Dictionary:
+	# Claim cls's current step: its reward (gold / Embers / gems / a chest, or the legendary on the last step).
+	# -> {ok, step (the one claimed, 0-based), reward, chests, item}
+	if not quest_ready(cls):
+		return {"ok":false}
+	var step := quest_step(cls)
+	var r := Eco.quest_reward(cls, step)
+	var out := {"ok":true, "step":step, "reward":r, "chests":[], "item":str(r.get("item", ""))}
+	d.gold = int(d.gold) + int(r.get("gold", 0))
+	d.gems = int(d.gems) + int(r.get("gems", 0))
+	d.embers = int(d.get("embers", 0)) + int(r.get("embers", 0))
+	if r.has("chest"):
+		add_chest(str(r.chest), out)
+	if out.item != "" and not d.owned.has(out.item):
+		d.owned.append(out.item)
+	d.quests[cls] = step + 1
+	save()
+	return out
 
 func title_progress(id: String) -> int:
 	return Eco.title_progress(d.stats, id)

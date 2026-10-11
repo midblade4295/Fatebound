@@ -3479,6 +3479,12 @@ const MESHY_WEAPON_LIKE := {
 	"magister_staff": "staff", "magister_book": "spellbook_open", "prism_staff": "bits/staff_C",
 	"prism_tome": "spellbook_open", "rootwise_staff": "bits/staff_A", "rootwise_tome": "spellbook_open",
 	"voidrod_staff": "bits/staff_D",
+	# 0.31.97: the class quests' legendaries (Eco.QUESTS)
+	"kingsguard_sword": "sword_1handed", "kingsguard_shield": "shield_badge_color", "skyrender_axe": "axe_2handed",
+	"moonfang_dagger": "dagger", "dawnpiercer_bow": "bow_withString", "emberheart_staff": "staff", "seraph_staff": "bits/staff_C",
+	"goldensledge_hammer": "bits/hammer_D", "oathbound_hammer": "bits/hammer_A", "oathbound_shield": "shield_badge",
+	"bloodroar_demon": "bits/sword_E", "lichcrown_staff": "Skeleton_Staff", "lastbreath_dagger": "bits/dagger_C",
+	"hawksjudgment_crossbow": "crossbow_2handed", "astral_staff": "bits/staff_D", "astral_book": "spellbook_open",
 }
 
 static func weapon_path(file: String) -> String:
