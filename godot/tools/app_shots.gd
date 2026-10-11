@@ -54,6 +54,15 @@ func _process(_d: float) -> bool:
 				for id in Eco.CATALOG:
 					if str(Eco.CATALOG[id].get("class", "")) == app.forge_cls and not p.d.owned.has(id):
 						p.d.owned.append(id)
+		if OS.has_environment("SHOT_QUESTS"):            # 0.31.97: some class quests under way, one step ready
+			p.d.stats["q_knight_wins"] = 3
+			p.d.stats["q_knight_rescues"] = 4
+			p.d.stats["q_knight_kills"] = 61
+			p.d.quests["ranger"] = 2
+			p.d.stats["q_ranger_kills"] = 420
+			p.d.quests["worker"] = 3
+			p.d.owned.append("worker_wpn_sledge")
+			app.quest_cls = OS.get_environment("SHOT_QUESTS")
 		p.d.challenges.daily[0].progress = 99
 		# (0.31.37) chests: one opening ready, one unlocking, two waiting
 		for k in ["silver", "gold", "wooden", "royal"]:

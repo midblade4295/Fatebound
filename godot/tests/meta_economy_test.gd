@@ -183,10 +183,14 @@ func _init() -> void:
 	check(bool(up.equip("crus_wpn_warhammer").get("ok", false)), "a Crusader weapon owned and equipped")
 	check(str(up.look_for("crusader").get("r", "")) == "mw/bulwark_hammer" and not up.look_for("knight").has("r"), "it arms the Crusader, not the plain Knight")
 	var upcount := 0
+	var upquest := 0
 	for cid in Eco.CATALOG:
 		if Eco.UP_CLASSES.has(str(Eco.CATALOG[cid].get("class", ""))):
-			upcount += 1
-	check(upcount == 18, "18 upgraded-class weapons (3 for each of 6 classes, 0.31.40): %d" % upcount)
+			if str(Eco.CATALOG[cid].get("source", "")) == "quest":
+				upquest += 1                                   # (0.31.97: each class's quest legendary)
+			else:
+				upcount += 1
+	check(upcount == 18 and upquest == 6, "18 upgraded-class weapons (3 for each of 6 classes, 0.31.40) and their 6 quest legendaries: %d + %d" % [upcount, upquest])
 	# ---- 0.31.39: weapons only -- no skins; bought skins refunded once ----
 	var skins := 0
 	for cid in Eco.CATALOG:

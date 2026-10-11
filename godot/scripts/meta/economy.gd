@@ -265,6 +265,21 @@ const CATALOG := {
 	"assn_wpn_night":      {"kind":"weapon", "class":"assassin", "name":"Eclipse Blades", "rarity":"epic", "r":"mw/eclipse_dagger", "l":"mw/eclipse_dagger", "gold":2400, "source":"shop"},
 	"snip_wpn_repeater":   {"kind":"weapon", "class":"sniper", "name":"Rattlesnake", "rarity":"rare", "r":"mw/rattlesnake_crossbow", "l":"", "gold":1200, "source":"shop"},
 	"arch_wpn_elder":      {"kind":"weapon", "class":"archmage", "name":"Rootwise", "rarity":"rare", "r":"mw/rootwise_staff", "l":"mw/rootwise_tome", "gold":1200, "source":"shop"},
+	# --- 0.31.97 (Kevin: "Build the quest system and I want quests for each class"): each class's legendary, earned by
+	# its quest (QUESTS) -- never sold, not in the pass or chests
+	"knight_wpn_kingsguard":  {"kind":"weapon", "class":"knight", "name":"Kingsguard", "rarity":"legendary", "r":"mw/kingsguard_sword", "l":"mw/kingsguard_shield", "source":"quest"},
+	"barb_wpn_skyrender":     {"kind":"weapon", "class":"barbarian", "name":"Skyrender", "rarity":"legendary", "r":"mw/skyrender_axe", "l":"", "source":"quest"},
+	"rogue_wpn_moonfang":     {"kind":"weapon", "class":"rogue", "name":"Moonfang", "rarity":"legendary", "r":"mw/moonfang_dagger", "l":"mw/moonfang_dagger", "source":"quest"},
+	"ranger_wpn_dawnpiercer": {"kind":"weapon", "class":"ranger", "name":"Dawnpiercer", "rarity":"legendary", "r":"", "l":"mw/dawnpiercer_bow", "source":"quest"},
+	"mage_wpn_emberheart":    {"kind":"weapon", "class":"mage", "name":"Emberheart", "rarity":"legendary", "r":"mw/emberheart_staff", "l":"", "source":"quest"},
+	"priest_wpn_seraph":      {"kind":"weapon", "class":"priest", "name":"Seraph's Grace", "rarity":"legendary", "r":"mw/seraph_staff", "l":"", "source":"quest"},
+	"worker_wpn_sledge":      {"kind":"weapon", "class":"worker", "name":"The Golden Sledge", "rarity":"legendary", "r":"mw/goldensledge_hammer", "l":"", "source":"quest"},
+	"crus_wpn_oathbound":     {"kind":"weapon", "class":"crusader", "name":"Oathbound", "rarity":"legendary", "r":"mw/oathbound_hammer", "l":"mw/oathbound_shield", "source":"quest"},
+	"bers_wpn_bloodroar":     {"kind":"weapon", "class":"berserker", "name":"Bloodroar", "rarity":"legendary", "r":"mw/bloodroar_demon", "l":"", "source":"quest"},
+	"necro_wpn_lichcrown":    {"kind":"weapon", "class":"necromancer", "name":"Lichcrown", "rarity":"legendary", "r":"mw/lichcrown_staff", "l":"", "source":"quest"},
+	"assn_wpn_lastbreath":    {"kind":"weapon", "class":"assassin", "name":"Last Breath", "rarity":"legendary", "r":"mw/lastbreath_dagger", "l":"mw/lastbreath_dagger", "source":"quest"},
+	"snip_wpn_hawk":          {"kind":"weapon", "class":"sniper", "name":"Hawk's Judgment", "rarity":"legendary", "r":"mw/hawksjudgment_crossbow", "l":"", "source":"quest"},
+	"arch_wpn_astral":        {"kind":"weapon", "class":"archmage", "name":"Astral Codex", "rarity":"legendary", "r":"mw/astral_staff", "l":"mw/astral_book", "source":"quest"},
 }
 
 # 0.31.39 (Kevin: "only the weapons are cosmetics -- so it's easy to tell who's playing what class"): the skins (tints)
@@ -434,6 +449,9 @@ static func match_stats(me: Dictionary, won: bool, _draw: bool) -> Dictionary:
 	var kc: Dictionary = me.get("kills_cls", {})
 	for c in kc:
 		s["kills_" + str(c)] = int(kc[c])
+	# 0.31.97 (quests): per class as worn (Knight / Crusader apart): seconds played and what was done as it
+	var q: Variant = me.get("q", {})
+	s["q"] = (q as Dictionary).duplicate(true) if q is Dictionary else {}
 	return s
 
 # ---------------- titles (0.31.87) ----------------
@@ -482,6 +500,104 @@ const TITLE_GOALS := {
 	"title_master_builder": {"stat":"gathered", "n":5000, "task":"Gather 5,000 wood or stone", "cls":"worker"},
 }
 const TITLE_RARITY_ORDER := ["common", "rare", "epic", "legendary"]
+
+# ---------------- class quests (0.31.97, Kevin: "Build the quest system and I want quests for each class") ----------------
+# Every class has one quest: three steps, claimed in order; the first two pay out (QUEST_REWARDS), the third gives the
+# class's legendary weapon (source "quest": never sold, not in the pass or chests). Progress is a lifetime count in the
+# profile's stats, "q_<class>_<stat>", kept from 0.31.97 on and credited to the class you were when you did it: a base
+# class counts its upgrade too (a Crusader's knockouts are a Knight's), an upgraded class only while in its hat. A match
+# counts as played (and won) as a class after QUEST_MIN_TIME seconds as it. Stats: matches, wins, kills, rescues, gates
+# (per 100 gate damage), gathered, fed, repaired / healed (health), lifts (King lifts joined), best_multi (the most
+# knockouts in one burst -- a best, not a sum).
+const QUEST_MIN_TIME := 60.0
+const QUEST_COUNTS := ["kills", "rescues", "gates", "gathered", "fed", "repaired", "healed", "lifts"]
+const QUEST_REWARDS := [{"gold":400, "embers":30}, {"gems":50, "chest":"gold"}]      # steps 1 and 2; step 3 is the weapon
+const QUESTS := {
+	"knight":      {"item":"knight_wpn_kingsguard", "steps":[
+		{"stat":"wins", "n":3, "task":"Win 3 matches as a Knight"},
+		{"stat":"rescues", "n":10, "task":"Rescue your King 10 times as a Knight"},
+		{"stat":"kills", "n":500, "task":"Knock out 500 enemies as a Knight"}]},
+	"barbarian":   {"item":"barb_wpn_skyrender", "steps":[
+		{"stat":"kills", "n":40, "task":"Knock out 40 enemies as a Barbarian"},
+		{"stat":"gates", "n":100, "task":"Deal 10,000 gate damage as a Barbarian"},
+		{"stat":"wins", "n":60, "task":"Win 60 matches as a Barbarian"}]},
+	"rogue":       {"item":"rogue_wpn_moonfang", "steps":[
+		{"stat":"kills", "n":40, "task":"Knock out 40 enemies as a Rogue"},
+		{"stat":"best_multi", "n":3, "task":"Knock out 3 enemies in one burst as a Rogue"},
+		{"stat":"kills", "n":750, "task":"Knock out 750 enemies as a Rogue"}]},
+	"ranger":      {"item":"ranger_wpn_dawnpiercer", "steps":[
+		{"stat":"kills", "n":40, "task":"Knock out 40 enemies as an Archer"},
+		{"stat":"wins", "n":25, "task":"Win 25 matches as an Archer"},
+		{"stat":"kills", "n":750, "task":"Knock out 750 enemies as an Archer"}]},
+	"mage":        {"item":"mage_wpn_emberheart", "steps":[
+		{"stat":"kills", "n":40, "task":"Knock out 40 enemies as a Mage"},
+		{"stat":"lifts", "n":15, "task":"Help lift your King 15 times as a Mage"},
+		{"stat":"wins", "n":60, "task":"Win 60 matches as a Mage"}]},
+	"priest":      {"item":"priest_wpn_seraph", "steps":[
+		{"stat":"healed", "n":2000, "task":"Heal 2,000 health as a Priest"},
+		{"stat":"rescues", "n":10, "task":"Rescue your King 10 times as a Priest"},
+		{"stat":"wins", "n":60, "task":"Win 60 matches as a Priest"}]},
+	"worker":      {"item":"worker_wpn_sledge", "steps":[
+		{"stat":"gathered", "n":300, "task":"Gather 300 wood or stone"},
+		{"stat":"repaired", "n":10000, "task":"Repair 10,000 gate health"},
+		{"stat":"wins", "n":60, "task":"Win 60 matches as a Worker"}]},
+	"crusader":    {"item":"crus_wpn_oathbound", "steps":[
+		{"stat":"kills", "n":25, "task":"Knock out 25 enemies as a Crusader"},
+		{"stat":"rescues", "n":8, "task":"Rescue your King 8 times as a Crusader"},
+		{"stat":"wins", "n":30, "task":"Win 30 matches as a Crusader"}]},
+	"berserker":   {"item":"bers_wpn_bloodroar", "steps":[
+		{"stat":"kills", "n":25, "task":"Knock out 25 enemies as a Berserker"},
+		{"stat":"gates", "n":80, "task":"Deal 8,000 gate damage as a Berserker"},
+		{"stat":"wins", "n":30, "task":"Win 30 matches as a Berserker"}]},
+	"necromancer": {"item":"necro_wpn_lichcrown", "steps":[
+		{"stat":"kills", "n":25, "task":"Knock out 25 enemies as a Necromancer"},
+		{"stat":"healed", "n":3000, "task":"Heal 3,000 health as a Necromancer"},
+		{"stat":"wins", "n":30, "task":"Win 30 matches as a Necromancer"}]},
+	"assassin":    {"item":"assn_wpn_lastbreath", "steps":[
+		{"stat":"kills", "n":25, "task":"Knock out 25 enemies as an Assassin"},
+		{"stat":"best_multi", "n":3, "task":"Knock out 3 enemies in one burst as an Assassin"},
+		{"stat":"kills", "n":400, "task":"Knock out 400 enemies as an Assassin"}]},
+	"sniper":      {"item":"snip_wpn_hawk", "steps":[
+		{"stat":"kills", "n":25, "task":"Knock out 25 enemies as a Ranger"},
+		{"stat":"wins", "n":20, "task":"Win 20 matches as a Ranger"},
+		{"stat":"kills", "n":400, "task":"Knock out 400 enemies as a Ranger"}]},
+	"archmage":    {"item":"arch_wpn_astral", "steps":[
+		{"stat":"kills", "n":25, "task":"Knock out 25 enemies as an Archmage"},
+		{"stat":"lifts", "n":10, "task":"Help lift your King 10 times as an Archmage"},
+		{"stat":"wins", "n":30, "task":"Win 30 matches as an Archmage"}]},
+}
+
+static func quest_family(cls: String) -> Array:
+	# the classes whose play counts toward cls's quest: a base class and its upgrade, or an upgrade alone
+	var out := [cls]
+	for u in UP_BASE:
+		if str(UP_BASE[u]) == cls:
+			out.append(u)
+	return out
+
+static func quest_key(cls: String, stat: String) -> String:
+	return "q_%s_%s" % [cls, stat]
+
+static func quest_progress(stats: Dictionary, cls: String, step: int) -> int:
+	var q: Dictionary = QUESTS.get(cls, {})
+	if q.is_empty() or step < 0 or step >= q.steps.size():
+		return 0
+	return int(stats.get(quest_key(cls, str(q.steps[step].stat)), 0))
+
+static func quest_reward(cls: String, step: int) -> Dictionary:
+	# what claiming step (0-based) gives: QUEST_REWARDS, or the class's legendary for the last
+	if step < QUEST_REWARDS.size():
+		return QUEST_REWARDS[step]
+	return {"item": str(QUESTS[cls].item)}
+
+static func quest_note(cls: String) -> String:
+	# who counts: "Crusader play counts too" for a base class with an upgrade
+	var fam := quest_family(cls)
+	if fam.size() > 1:
+		return "%s play counts too" % str(CLASS_NAMES[fam[1]])
+	if UP_BASE.has(cls):
+		return "Counts while you wear the %s hat" % str(CLASS_NAMES[cls])
+	return ""
 
 static func title_progress(stats: Dictionary, id: String) -> int:
 	var g: Dictionary = TITLE_GOALS.get(id, {})

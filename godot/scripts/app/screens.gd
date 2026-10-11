@@ -252,6 +252,14 @@ static func home(app, root: VBoxContainer) -> void:
 			if not bool(ch.claimed) and int(ch.progress) >= int(Eco.CHALLENGES[ch.id].goal):
 				orders_ready += 1
 	var sp := _medallion(top, Vector2(-2, 58), "banner", "PASS", func(): app.show_tab("pass"), "side_pass", claimable)
+	# 0.31.97: the class quests, under ORDERS (a badge for every quest step ready to claim)
+	var qready: int = p.quests_ready()
+	var qb := _medallion(top, Vector2(-2, 242), quest_icon_name(), "QUESTS", func():
+		app.sfx("tap")
+		app.quest_cls = quest_first(p)
+		app.show_tab("quests"), "side_quests", qready)
+	if qready > 0:
+		UI2.wiggle(qb.get_meta("icon"))
 	if claimable > 0:
 		UI2.wiggle(sp.get_meta("icon"))
 	_medallion(top, Vector2(-2, 150), "scroll", "ORDERS", func():
@@ -1397,6 +1405,8 @@ static func open_item(app, id: String, pack := "", pick := 0) -> void:
 			equip(app, sid)
 			reopen.call(), "shop_preview_equip", 17, 48.0)
 		eb.disabled = eq
+	elif str(it.get("source", "")) == "quest":
+		UI.button(v, "EARNED BY ITS CLASS QUEST", "secondary", func(): pass, "shop_preview_quest", 15).disabled = true
 	else:
 		var price := Eco.item_price(sid)
 		var gems2: bool = price.has("gems")
@@ -1770,6 +1780,7 @@ static func locker(app, root: VBoxContainer) -> void:
 				up = str(Eco.CLASS_NAMES[u])
 		sub = ("Grab its hat at the %s stand  ·  upgrade: %s" % [str(Eco.CLASS_NAMES[cls]), up]) if up != "" else "Gathers wood and stone, repairs gates, pays for upgrades"
 	UI2.center(UI2.body(np, sub, 11, Color("#ffe39a")))
+	quest_card(app, root, cls)                               # 0.31.97: the class's quest and its legendary
 	# weapons
 	var owned := 1
 	var total := 1
@@ -1845,7 +1856,9 @@ static func _gear_card(app, grid: Node, id: String, cls: String, icon: String, n
 	else:
 		var it := Eco.item(id)
 		var where := "Siege Pass reward"
-		if str(it.get("source", "")) == "shop":
+		if str(it.get("source", "")) == "quest":
+			where = "Quest reward"
+		elif str(it.get("source", "")) == "shop":
 			var now: int = p.now()
 			where = "In the shop today" if (Eco.shop_daily(now).has(id) or Eco.shop_featured(now).has(id)) else "Rotates through the shop"
 		var wl := UI2.body(c, where, 10, UI2.SOFT, false)
@@ -2423,3 +2436,250 @@ static func _element_row(app, parent: Node, wid: String, current: String, free_c
 		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		l.position = Vector2(-4, 36)
 		l.size = Vector2(54, 12)
+
+# ---------------- QUESTS (0.31.97, Kevin: "Build the quest system and I want quests for each class") ----------------
+# Every class has one quest (Eco.QUESTS): three steps claimed in order, the last one its legendary weapon. The class
+# picker shows a badge where a step is ready and a tick where the quest is done; the hero holds the legendary (turn and
+# zoom it); each step shows its task, how far along it is, what it pays and CLAIM when it can be claimed.
+const QUEST_ICON := "res://assets/ui/v2/icons/quest.png"
+
+static func quest_icon_name() -> String:
+	return "quest" if ResourceLoader.exists(QUEST_ICON) else "crown"
+
+static func _reward_chips(parent: Node, r: Dictionary, ink := Color.WHITE) -> HBoxContainer:
+	# the reward of a quest step as small pictures with their amounts
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(row)
+	var parts := []
+	for k in ["gold", "embers", "gems", "chest", "item"]:
+		if r.has(k):
+			parts.append({k: r[k]})
+	for part in parts:
+		var rt := reward_text(part)
+		var cell := HBoxContainer.new()
+		cell.add_theme_constant_override("separation", 3)
+		row.add_child(cell)
+		if str(rt[3]) != "":
+			UI2.img(cell, str(rt[3]), 22.0).size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		var t := str(rt[1])
+		if part.has("gold") or part.has("gems") or part.has("embers"):
+			t = "+%d" % int(part.values()[0])
+		UI2.body(cell, t, 11, rt[2] if ink == Color.WHITE else ink, false).size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	return row
+
+static func quest_first(p) -> String:
+	# the class to open the Quests screen on: one with a step ready, else the one played most, else the Knight
+	for cls in Eco.QUESTS:
+		if p.quest_ready(cls):
+			return str(cls)
+	var best := "knight"
+	var most := 0
+	for cls in Eco.QUESTS:
+		var n := int(p.d.stats.get(Eco.quest_key(cls, "matches"), 0))
+		if n > most:
+			most = n
+			best = str(cls)
+	return best
+
+static func claim_quest(app, cls: String) -> void:
+	var p = app.profile
+	var res: Dictionary = p.claim_quest(cls)
+	if not bool(res.get("ok", false)):
+		return
+	app.sfx("purchase")
+	app.refresh_top()
+	if str(res.item) != "":
+		# the legendary: show it off, with EQUIP right there
+		app.toast("%s earned! Quest complete" % str(Eco.item(str(res.item)).name), UI.GOLD)
+		app.rebuild()
+		open_item(app, str(res.item))
+		return
+	var bits := []
+	for k in ["gold", "embers", "gems"]:
+		if int(res.reward.get(k, 0)) > 0:
+			bits.append("+%d %s" % [int(res.reward[k]), {"gold": "gold", "embers": "Embers", "gems": "gems"}[k]])
+	if res.reward.has("chest"):
+		bits.append("a %s" % str(Eco.CHESTS[str(res.reward.chest)].name))
+	app.toast("Quest step %d done: %s" % [int(res.step) + 1, ", ".join(bits)], UI.GOLD)
+	app.rebuild()
+
+static func quests(app, root: VBoxContainer) -> void:
+	var p = app.profile
+	# the sign
+	var sign := Control.new()
+	sign.custom_minimum_size = Vector2(0, 66)
+	root.add_child(sign)
+	var board := HBoxContainer.new()
+	board.alignment = BoxContainer.ALIGNMENT_CENTER
+	board.add_theme_constant_override("separation", 10)
+	board.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	sign.add_child(board)
+	sign.resized.connect(func():
+		board.size = Vector2(230, 60)
+		board.position = Vector2((sign.size.x - 230.0) * 0.5, 2))
+	UI2.plate(board, "wood", 14.0, "gold", {"rim": 4.0})
+	UI2.icon(board, quest_icon_name(), 46.0).size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	UI2.text(board, "QUESTS", 28, UI2.GOLD).size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var back := UI2.button(sign, "", "ghost", func():
+		app.sfx("tap")
+		app.show_tab("home"), "quests_back", 14, 40.0, 12.0)
+	back.position = Vector2(0, 12)
+	back.size = Vector2(46, 40)
+	UI.icon(back, "home", 22, Color.WHITE).position = Vector2(12, 7)
+	UI2.center(UI2.body(root, "Every class has a quest. Finish its three steps to earn its legendary weapon -- never sold.", 12, UI2.SOFT))
+	# class picker: a badge where a step is ready, a tick where the quest is done
+	var cls: String = app.quest_cls if Eco.QUESTS.has(str(app.quest_cls)) else quest_first(p)
+	app.quest_cls = cls
+	var rail := UI2.frame(root, "glass", 8, 18.0)
+	for row_classes in [Eco.CLASSES, Eco.UP_CLASSES]:
+		var rr := HBoxContainer.new()
+		rr.alignment = BoxContainer.ALIGNMENT_CENTER
+		rr.add_theme_constant_override("separation", 4)
+		rail.add_child(rr)
+		for c0 in row_classes:
+			var c: String = c0
+			var cb := _class_coin(rr, c, cls == c, "quest_" + c, func():
+				app.quest_cls = c
+				app.sfx("tap")
+				app.rebuild(), "", 38.0)
+			if p.quest_ready(c):
+				UI2.badge(cb, "!", Vector2(2, -4))
+			elif p.quest_done(c):
+				var tick := UI2.chip(cb, "✔", Color("#2f9e55"), Color.WHITE, Color(1, 1, 1, 0.6))
+				tick.position = Vector2(16, -4)
+				tick.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var q: Dictionary = Eco.QUESTS[cls]
+	var wid := str(q.item)
+	var it := Eco.item(wid)
+	var step: int = p.quest_step(cls)
+	var done: bool = p.quest_done(cls)
+	# the hero holding the reward
+	var hero := Control.new()
+	hero.custom_minimum_size = Vector2(0, 300)
+	root.add_child(hero)
+	var stage := Control.new()
+	stage.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	stage.offset_left = 5
+	stage.offset_top = 5
+	stage.offset_right = -5
+	stage.offset_bottom = -5
+	stage.clip_contents = true
+	hero.add_child(stage)
+	UI2.plate(hero, "ember", 22.0, "orange", {"rim": 4.0})
+	Showcase.backdrop(stage)
+	var ry := UI2.rays(stage, 420.0, Color(1.0, 0.8, 0.4), 22.0, 0.25)
+	stage.resized.connect(func(): ry.position = Vector2(stage.size.x * 0.5 - 210.0, -60.0))
+	var sh := Showcase.new()
+	sh.interactive = true
+	sh.cam_z = 6.6
+	sh.cam_y = 1.4
+	sh.look_y = 0.9
+	sh.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	stage.add_child(sh)
+	sh.show_look(cls, {"r": str(it.get("r", "")), "l": str(it.get("l", ""))})
+	zoom_controls(stage, sh, "quests")
+	var tag := UI2.chip(stage, "OWNED" if p.owns(wid) else "LEGENDARY REWARD", Color("#2f9e55") if p.owns(wid) else Color("#3a2410"),
+		Color.WHITE if p.owns(wid) else Color("#ffd27a"), Color(UI2.GOLD, 0.6))
+	tag.position = Vector2(10, 8)
+	tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# the nameplate
+	var np := UI2.frame(root, "ember", 8, 16.0, "orange")
+	var nm := UI2.text(np, str(it.name).to_upper(), 26, Color("#ffd27a"), Color("#3d1602"), 6)
+	nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	UI2.sweep(np.get_parent() as Control, 2.6, 60.0, 0.3)
+	var sub := "%s  ·  LEGENDARY  ·  QUEST %s" % [str(Eco.CLASS_NAMES[cls]).to_upper(), "COMPLETE" if done else "STEP %d OF %d" % [step + 1, q.steps.size()]]
+	UI2.center(UI2.body(np, sub, 11, Color("#ffe7c8"), false))
+	var note := Eco.quest_note(cls)
+	if note != "":
+		UI2.center(UI2.body(np, note, 10, Color(1, 1, 1, 0.7), false))
+	# the steps
+	for i in q.steps.size():
+		quest_step_card(app, root, cls, i)
+	if done and p.owns(wid):
+		var eq: bool = is_equipped(p, wid)
+		var eb := UI2.button(root, "EQUIPPED" if eq else "EQUIP %s" % str(it.name).to_upper(), "grey" if eq else "green", func():
+			equip(app, wid), "quest_equip_" + cls, 16, 46.0, 12.0)
+		eb.disabled = eq
+
+static func quest_step_card(app, root: Node, cls: String, i: int) -> void:
+	var p = app.profile
+	var q: Dictionary = Eco.QUESTS[cls]
+	var s: Dictionary = q.steps[i]
+	var step: int = p.quest_step(cls)
+	var claimed := i < step
+	var current := i == step
+	var n := int(s.n)
+	var have: int = n if claimed else mini(n, Eco.quest_progress(p.d.stats, cls, i))
+	var ready: bool = current and have >= n
+	var last: bool = i == q.steps.size() - 1
+	var c := UI2.frame(root, "royal" if ready else ("ember" if last and not claimed else "night"), 8, 16.0,
+		"gold" if ready else ("orange" if last else "silver"), {"pattern_mix": 0.0, "dim": 0.3 if claimed else 0.0})
+	if ready:
+		UI2.sweep(c.get_parent() as Control, 2.2, 60.0, 0.35)
+	var r := UI.row(c, 10)
+	# the step's number (a tick once claimed)
+	var disc := Control.new()
+	disc.custom_minimum_size = Vector2(40, 40)
+	disc.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	r.add_child(disc)
+	UI2.plate(disc, "royal" if not claimed else "night", 20.0, "gold" if (current or claimed) else "silver", {"rim": 2.0})
+	var dl := UI2.text(disc, "✔" if claimed else str(i + 1), 18, UI2.GOLD if current else Color.WHITE, UI2.INK, 4)
+	dl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	dl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	dl.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 3)
+	UI.grow(v)
+	r.add_child(v)
+	UI2.text(v, str(s.task), 14, Color.WHITE if not claimed else Color(1, 1, 1, 0.65), UI2.INK, 4).autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	var pr := UI.row(v, 6)
+	var gold: bool = last
+	UI2.bar(pr, float(have), float(n), Color("#fff3ad") if gold else Color("#b6f3ff"), Color("#f0a024") if gold else Color("#36b9ea"), 10.0)
+	UI2.body(pr, "%s / %s" % [_thousands(have), _thousands(n)], 11, Color.WHITE, false)
+	var rw := UI.row(v, 6)
+	UI2.body(rw, "CLAIMED" if claimed else ("REWARD" if not last else "LEGENDARY"), 9, Color("#8cf0a8") if claimed else Color(1, 1, 1, 0.6), false)
+	_reward_chips(rw, Eco.quest_reward(cls, i))
+	if ready:
+		var b := UI2.button(r, "CLAIM", "gold", func(): claim_quest(app, cls), "quest_claim_" + cls, 14, 42.0, 12.0)
+		b.custom_minimum_size.x = 80
+		b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		UI2.pulse(b, 0.03, 1.0)
+	elif i > step:
+		UI2.body(r, "after step %d" % (i), 10, Color(1, 1, 1, 0.5), false).size_flags_vertical = Control.SIZE_SHRINK_CENTER
+
+static func quest_card(app, root: Node, cls: String) -> void:
+	# the Locker's line for a class's quest: its legendary, the step being worked on and how far, OPEN QUESTS
+	var p = app.profile
+	if not Eco.QUESTS.has(cls):
+		return
+	var q: Dictionary = Eco.QUESTS[cls]
+	var it := Eco.item(str(q.item))
+	var done: bool = p.quest_done(cls)
+	var ready: bool = p.quest_ready(cls)
+	var c := UI2.frame(root, "ember", 8, 16.0, "gold" if ready else "orange", {"pattern_mix": 0.0})
+	var r := UI.row(c, 10)
+	var ic := UI2.img(r, item_texture_path(str(q.item)), 56.0)
+	ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 2)
+	UI.grow(v)
+	r.add_child(v)
+	UI2.text(v, "QUEST  ·  %s" % str(it.name).to_upper(), 14, Color("#ffd27a"), Color("#3d1602"), 4)
+	if done:
+		UI2.body(v, "Complete -- the legendary is yours", 11, Color("#8cf0a8"), false)
+	else:
+		var step: int = p.quest_step(cls)
+		var s: Dictionary = q.steps[step]
+		UI2.body(v, "Step %d of %d: %s" % [step + 1, q.steps.size(), str(s.task)], 11, Color.WHITE, false).autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		var pr := UI.row(v, 6)
+		var have: int = mini(int(s.n), p.quest_have(cls))
+		UI2.bar(pr, float(have), float(s.n), Color("#fff3ad"), Color("#f0a024"), 8.0)
+		UI2.body(pr, "%s / %s" % [_thousands(have), _thousands(int(s.n))], 10, Color.WHITE, false)
+	var b := UI2.button(r, "CLAIM" if ready else "OPEN", "gold" if ready else "orange", func():
+		app.quest_cls = cls
+		app.sfx("tap")
+		app.show_tab("quests"), "locker_quest_" + cls, 13, 40.0, 12.0)
+	b.custom_minimum_size.x = 70
+	b.size_flags_vertical = Control.SIZE_SHRINK_CENTER

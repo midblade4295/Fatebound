@@ -430,6 +430,18 @@ func show_result(result: Dictionary = {}) -> void:
 			UI2.center(UI2.body(v, "Siege Pass tier %s reached — claim it on the Pass screen" % (str(tiers[-1]) if tiers.size() == 1 else "%d–%d" % [tiers[0], tiers[-1]]), 12, Color("#ffcf7a")))
 		for c in (result.get("challenges", []) as Array).slice(0, 4):
 			UI2.center(UI2.body(v, "%s  %s  %d/%d" % ["✔" if c.done else "•", str(c.text), mini(int(c.progress), int(c.goal)), int(c.goal)], 11, UI2.GREEN if c.done else UI2.MUTED, false))
+		# 0.31.97: class quests -- the steps this match moved, and a banner when one is ready to claim
+		var qlines: Array = result.get("quests", [])
+		var qready := qlines.filter(func(x): return bool(x.done))
+		if not qready.is_empty():
+			var qb := UI2.frame(v, "ember", 8, 14.0, "orange", {"pattern_mix": 0.0})
+			UI2.sweep(qb.get_parent() as Control, 2.2, 60.0, 0.35)
+			UI2.center(UI2.text(qb, "QUEST STEP DONE!", 15, Color("#ffd27a")))
+			for ql in qready.slice(0, 2):
+				UI2.center(UI2.body(qb, "%s: %s" % [str(Sim_Eco.CLASS_NAMES.get(str(ql.cls), "")), str(ql.text)], 11, Color.WHITE, false))
+			UI2.center(UI2.body(qb, "Claim it in Quests from Home", 10, Color(1, 1, 1, 0.75), false))
+		for ql in qlines.filter(func(x): return not bool(x.done)).slice(0, 2):
+			UI2.center(UI2.body(v, "⚔  %s quest  %s  %d/%d" % [str(Sim_Eco.CLASS_NAMES.get(str(ql.cls), "")), str(ql.text), int(ql.progress), int(ql.goal)], 11, Color("#ffcf7a"), false))
 	var br := HBoxContainer.new()
 	br.add_theme_constant_override("separation", 10)
 	v.add_child(br)
