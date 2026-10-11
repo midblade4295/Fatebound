@@ -3094,3 +3094,25 @@ K2/K3 notes (0.17.0)
   the hand.
 - Content pack weapons rebuilt (weapons-5a80f010ba2b.pck) and on the content-packs branch.
 - 0.31.104, version code 190. Quick suite: ALL 52 PASSED. CONTENT OK.
+
+## 0.31.105 — new gold, diamonds and Embers; they fly into the counters (Kevin: "Make new meshy models for gold, diamonds and ember. Also when a play obtains them it'll play a animation where they fly to the players total amount at top of screen" -- picks: gold C, diamonds B, embers B; "Yes put an ember counter at top also")
+- Concepts: 4 sheets each (gpt-image-2.5, ElevenLabs flow 5ZFwy4wQvTF2WkdBftDK); Kevin's picks cropped (meshy_weapon.py
+  crop); the ember's flame edited out first (a flame doesn't model -- it is an effect in the game instead). Meshy
+  image-to-3D, meshy-7.1, 4000 tris: a chunky crown coin, a brilliant-cut diamond, a cracked volcanic ember.
+- The models (textures 1024) are in art_sources/currency, OUTSIDE the project (never in the APK);
+  tools/render_currency_icons.gd reads them at run time and renders assets/ui/currency: coin, coins_s/m/l (stack, stack
+  and pile, hoard), gem, gems, ember (new: the counter's), embers, and coin/gem/ember_spin.png (16 frames turning).
+  The ember: rock darkened, its molten cracks an unlit additive pass (an emission texture rendered plain white), then
+  tools/currency_glow.py blooms the cracks and adds an orange halo. Every screen using the currency icons (shop,
+  chests, Forge, pass, quests) shows the new ones. render_gold_icons.gd (the MegaKit coins) superseded.
+- Top bar: a third counter, Embers (orange edge; tapping it opens the Forge, where Embers are bought); the three
+  counters made a little narrower so the name still shows at 420 wide.
+- scripts/app/reward_fly.gd on a CanvasLayer above everything: a rise in gold / gems / Embers (siege_app._counter, from
+  refresh_top) bursts 3-12 turning pieces (by amount) out of the tap that claimed it (CLAIM, COLLECT, BUY ...; else the
+  middle of the screen), each curving up into its counter with a glow and a trail (sparkles; the ember a flickering
+  flame and rising sparks); the counter keeps its number until they land, counts up as each does (a clink, the icon
+  punches) and ends on the profile's amount. Spending shows at once. A restored Google Play save doesn't fly; during a
+  match the counters wait and the match's rewards fly on the way back to the menus.
+- tests/reward_fly_test.gd in the suite.
+- Content pack ui rebuilt (ui-4d2ee4b95bd9.pck) and on the content-packs branch.
+- 0.31.105, version code 191. Quick suite: ALL 53 PASSED. CONTENT OK.

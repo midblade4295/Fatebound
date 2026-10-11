@@ -98,6 +98,8 @@ run weapon_fx_test       WEAPON_FX_PASS           120 --fixed-fps 30
 run shared_looks_test    SHARED_LOOKS_PASS        90
 # Weapon grips (0.31.104): bow strings on the archer's side, one-handers held at the end of the handle.
 run weapon_grip_test     WEAPON_GRIP_PASS         120
+# Currency flies into the top bar's counters (0.31.105), and the Ember counter.
+run reward_fly_test      REWARD_FLY_PASS          120 --fixed-fps 30 --resolution 420x933
 run play_games_test      PLAY_GAMES_PASS          120 --resolution 420x933
 # The app's staged match start (0.31.78): the card first, the world built behind it over frames.
 FB_STAGED_START=1 FB_FORCE_WARMUP=1 run staged_start_test STAGED_START_PASS 240 --fixed-fps 30
