@@ -6,6 +6,9 @@ historical Play/build notes in the other handoffs.
 **In-app purchases (2026-10-09):** the merchant account, products, license testers and the purchase-check service
 account are in `godot/PLAY_IAP_HANDOFF.md`.
 
+**Google Play Games sign-in and cloud save (2026-10-11):** the Play Games project, credentials, testers and the Game
+ID that the build needs are in `godot/PLAY_GAMES_HANDOFF.md`.
+
 ## What to upload
 
 **One file: a signed release Android App Bundle (`.aab`)** exported with the Godot preset **Android Play Store**, for

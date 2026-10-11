@@ -14,7 +14,7 @@ const BOOT_PREV_PATH := "user://boot_diag_prev.log"
 # 0.31.91: the start that froze on Vulkan, kept when BootGuard switches to OpenGL (the two restarts after it used to
 # rotate it out of boot_diag_prev.log before anyone could copy it).
 const BOOT_STUCK_PATH := "user://boot_diag_stuck.log"
-const BUILD := "0.31.101-fatebound"
+const BUILD := "0.31.102-fatebound"
 
 class ErrorCapture:
 	extends Logger

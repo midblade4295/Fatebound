@@ -1963,6 +1963,58 @@ static func _thousands(n: int) -> String:
 	return ("-" if n < 0 else "") + s + out
 
 # ---------------- SETTINGS ----------------
+static func play_games_card(app, root: VBoxContainer) -> void:
+	var gp := UI2.frame(root, "night", 12, 18.0, "gold")
+	UI2.divider(gp, "GOOGLE PLAY", 20)
+	var pg = app.play_games
+	var st := str(pg.state) if pg != null else "off"
+	var line := ""
+	match st:
+		"off":
+			line = "Sign in with Google Play to keep your progress in your Google account and take it to a new phone. Available in the Google Play version of Fatebound."
+		"out":
+			line = "Not signed in. Sign in to keep your progress in your Google account and take it to a new phone."
+		"signing":
+			line = "Signing in to Google Play..."
+		"checking":
+			line = "Checking your Google Play save..."
+		"synced":
+			var who := str(pg.player)
+			line = "Signed in%s. Your progress is backed up to your Google account%s." % [(" as " + who) if who != "" else "", _ago(app, int(pg.last_backup()))]
+		"ask":
+			line = "Google Play has different progress from this phone. Choose which one to keep."
+		"error":
+			line = (str(pg.why) if str(pg.why) != "" else "Couldn't reach Google Play saves") + ". Your progress on this phone is safe."
+	UI2.body(gp, line, 12, UI2.SOFT)
+	match st:
+		"out":
+			UI2.button(gp, "SIGN IN WITH GOOGLE PLAY", "blue", func():
+				app.sfx("confirm")
+				pg.sign_in(), "play_sign_in", 15, 44.0)
+		"synced":
+			UI2.button(gp, "BACK UP NOW", "green", func():
+				app.sfx("confirm")
+				pg.back_up_now(), "play_backup", 15, 44.0)
+		"ask":
+			UI2.button(gp, "CHOOSE", "gold", func():
+				app.ask_cloud(), "play_choose", 15, 44.0)
+		"error":
+			UI2.button(gp, "TRY AGAIN", "blue", func():
+				app.sfx("confirm")
+				pg.back_up_now(), "play_retry", 15, 44.0)
+
+static func _ago(app, at: int) -> String:
+	if at <= 0:
+		return ""
+	var s: int = maxi(0, int(app.profile.now()) - at)
+	if s < 60:
+		return " (just now)"
+	if s < 3600:
+		return " (%d min ago)" % (s / 60)
+	if s < 86400:
+		return " (%d h ago)" % (s / 3600)
+	return " (%d days ago)" % (s / 86400)
+
 static func settings(app, root: VBoxContainer) -> void:
 	# 0.31.79: a wooden sign with a turning gear, the profile on parchment, the career in tiles with the 3D icons, then
 	# sound, graphics, the old game's progress and help.
@@ -2043,6 +2095,8 @@ static func settings(app, root: VBoxContainer) -> void:
 	UI2.bar(xr, int(d.xp), Eco.level_xp(int(d.level)), Color("#b6f3ff"), Color("#2b8fd6"), 12.0)
 	var xv := UI.label(xr, "%d / %d XP" % [int(d.xp), Eco.level_xp(int(d.level))], 11, ink, UI.HEAVY_FONT)
 	xv.autowrap_mode = TextServer.AUTOWRAP_OFF
+	# Google Play (0.31.102, Kevin: "Google play account linking to the game"): sign in, and the progress kept there
+	play_games_card(app, root)
 	# Career
 	var car := UI2.frame(root, "royal", 12, 18.0, "gold")
 	UI2.divider(car, "CAREER", 20)

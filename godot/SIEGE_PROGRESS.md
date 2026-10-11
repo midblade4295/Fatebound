@@ -3024,3 +3024,32 @@ K2/K3 notes (0.17.0)
 - tests/shared_looks_test.gd (the wire rules, cleaning, my looks out and back equal look_for, unknown ids, the view
   dressing another player, the lighter version) in the suite; siege_net_smoke: a second player's looks come back
   cleaned through the real server, and leave with them. Quick suite: ALL 50 PASSED.
+
+## 0.31.102 — Google Play Games sign-in and cloud save (Kevin: "Google play account linking to the game")
+- Split like purchases: Claude the game code, Grokbot the Play Console side (godot/PLAY_GAMES_HANDOFF.md: the Play Games
+  project, Saved Games on, the OAuth consent screen and the Android client with the app-signing SHA-1, testers, the Game
+  ID into the build, the internal-testing test, Data safety). Kevin: itch uploads stopped (no itch build from here on).
+- addons/GodotPlayGameServices: godot-play-game-services 3.4.0 (Play Games Services v2 21.0.0) built from source
+  against Godot 4.7.2 (tag v3.4.0, e38b618). Own export plugin: no autoload and none of its GDScript wrappers, Gradle
+  presets only, and nothing packed until the Game ID is set (preset option godot_play_game_services/game_id or
+  PLAY_GAMES_APP_ID) -- the Play Games SDK stops an app that has the plugin but no APP_ID. verify_play_bundle.py fails
+  a bundle with one and not the other. Checked with throwaway-key Play exports: with a test ID the AAB carries the
+  plugin, the APP_ID meta-data and the ID resource (billing still there); without one, none of it.
+- scripts/meta/play_games.gd: sign-in (automatic at start, or SIGN IN), the player's Play Games name, and one Saved Game
+  ("fatebound-profile": the profile gzipped + base64 with a stamp, time, phone and summary). Reads before it ever
+  writes: no copy -> the first link uploads; in step -> uploads changes (every 2 min while changing, on going to the
+  background, BACK UP NOW); another phone moved ahead and this one hasn't changed, or a never-linked new install ->
+  restores silently (keeping this phone's sound/graphics settings); both changed -> WHICH PROGRESS? (USE GOOGLE PLAY'S
+  / KEEP THIS PHONE'S; asked after a match if it comes up during one). Never overwrites a copy it can't read or one a
+  newer version wrote; Google not answering in 30 s -> an error and TRY AGAIN (which reads again first).
+- Profile: cloud {stamp, dirty, at}; every save marks it (save(false) for the sync's own); summary(), is_fresh(),
+  cloud_payload(), restore_cloud().
+- Settings: a GOOGLE PLAY card under the name: off Play "Available in the Google Play version", SIGN IN WITH GOOGLE
+  PLAY, "Signed in as <name>... backed up (n min ago)" + BACK UP NOW, CHOOSE, TRY AGAIN. tools/app_shots.gd
+  SHOT_PLAY=out|synced|ask.
+- privacy.html: a Google Play Games section (optional; name read; the save kept in the player's Google account, not on
+  our server). Note for Kevin: its opening still describes the dice-era game and Firebase.
+- tests/play_games_test.gd (a fake of the plugin: first link, later uploads, a save during an upload, new install,
+  phone in step, both changed with both answers, unreadable / newer copies untouched, no answer -> TRY AGAIN, off Play,
+  the Settings card and the question through their buttons) in the suite.
+- 0.31.102, version code 188 (preview numbering; Play codes are Grok's). Quick suite: ALL 51 PASSED. CONTENT OK. No itch build.
