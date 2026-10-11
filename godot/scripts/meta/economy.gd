@@ -161,8 +161,8 @@ const CATALOG := {
 	"barb_wpn_raider":     {"kind":"weapon", "class":"barbarian", "name":"Raider's Bite", "rarity":"rare", "r":"mw/raider_axe", "l":"mw/raider_shield", "gold":1000, "source":"shop"},
 	"barb_wpn_spiked":     {"kind":"weapon", "class":"barbarian", "name":"Thornhide", "rarity":"epic", "r":"mw/thornhide_axe", "l":"mw/thornhide_shield", "gems":250, "source":"shop"},
 	# --- Rogue
-	"rogue_wpn_bomb":      {"kind":"weapon", "class":"rogue", "name":"Smokescreen", "rarity":"rare", "r":"mw/smokescreen_dagger", "l":"mw/smokescreen_bomb", "gold":900, "source":"shop"},
-	"rogue_wpn_bolt":      {"kind":"weapon", "class":"rogue", "name":"Whisperbolt", "rarity":"epic", "r":"mw/whisperbolt_dagger", "l":"mw/whisperbolt_dagger", "gems":250, "source":"shop"},   # (0.31.98, Kevin: no crossbow for the Rogue -- the daggers)
+	"rogue_wpn_bomb":      {"kind":"weapon", "class":"rogue", "name":"Smokescreen", "rarity":"rare", "r":"mw/smokescreen_dagger", "l":"mw/smokescreen_dagger", "gold":900, "source":"shop"},   # (0.31.99, Kevin: no smoke bomb -- the daggers)
+	"rogue_wpn_bolt":      {"kind":"weapon", "class":"rogue", "name":"Whisperblades", "rarity":"epic", "r":"mw/whisperbolt_dagger", "l":"mw/whisperbolt_dagger", "gems":250, "source":"shop"},   # (0.31.98, Kevin: no crossbow for the Rogue -- the daggers; 0.31.99 renamed from Whisperbolt)
 	# --- Ranger
 	"ranger_wpn_crossbow": {"kind":"weapon", "class":"ranger", "name":"Ironjaw", "rarity":"epic", "r":"mw/ironjaw_crossbow", "l":"", "source":"pass"},
 	"ranger_wpn_quiver":   {"kind":"weapon", "class":"ranger", "name":"Trailblazer", "rarity":"rare", "r":"mw/trailblazer_quiver", "l":"mw/trailblazer_bow", "gold":900, "source":"shop"},

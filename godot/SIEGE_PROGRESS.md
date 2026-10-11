@@ -2961,3 +2961,12 @@ K2/K3 notes (0.17.0)
   is now the Whisperbolt dagger in both hands; the crossbow model is gone (and its hold), the icon re-rendered.
 - Content packs ui and weapons rebuilt and on the branch. 0.31.98, version code 184. Quick suite: ALL 48 PASSED. APK
   31159929 bytes, sha256 65dcab5a605de93fb2572aa96affd449aaddf04493c86822c7c3e5ac37669b1b; on itch (android channel).
+
+## 0.31.99 — Whisperblades, and no smoke bomb (Kevin: "Yeah rename and also remove smoke bomb")
+- Whisperbolt is renamed Whisperblades (it's two daggers since 0.31.98). Smokescreen is its dagger in both hands; the
+  smoke bomb model and its hold are gone, the icon re-rendered. The Rogue now holds only blades, knuckles or claws (and
+  the Grimgrin scythe).
+- tests/min_build_test.gd: server A's minimum is now this app's build + 1 (it was a fixed "0.31.99", which this
+  version reached, so the app was no longer "outdated" there).
+- Content packs ui and weapons rebuilt and on the branch. 0.31.99, version code 185. Quick suite: ALL 48 PASSED. APK
+  31159929 bytes, sha256 754316445f9aae2684aedf87907198d251bde94c6fcec612dc9c0553e688d29b; on itch (android channel).

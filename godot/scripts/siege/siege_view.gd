@@ -3440,7 +3440,7 @@ const MESHY_WEAPON_LIKE := {
 	"bonecarver_cleaver": "bits/sword_F", "rockfist_r": "bits/fistweapon_C_right",
 	"rockfist_l": "bits/fistweapon_C_left", "worldsplitter_axe": "bits/axe_D",
 	# Rogue
-	"cutpurse_dagger": "dagger", "smokescreen_dagger": "dagger", "smokescreen_bomb": "smokebomb",
+	"cutpurse_dagger": "dagger", "smokescreen_dagger": "dagger",
 	"viper_fang": "bits/dagger_B", "needlepoint_stiletto": "bits/dagger_A", "alley_knuckles": "bits/fistweapon_A",
 	"whisperbolt_dagger": "dagger",
 	"ravenclaw_r": "bits/fistweapon_C_right", "ravenclaw_l": "bits/fistweapon_C_left", "grimgrin_scythe": "bits/scythe",
