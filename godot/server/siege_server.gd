@@ -22,6 +22,10 @@ extends SceneTree
 # "tt":{unit id: title id} beside the names and the lobby "tt" beside its names; the app joins them with the right
 # punctuation. "st" {"heal"} tells each player the health they've healed (the Merciful title), at most once a second.
 #
+# 0.31.101 (Kevin: "I want players to see everything the other players are wearing"): a hello may carry "lk", the
+# player's weapons and Forge stars per class (Net.clean_looks keeps only well-formed entries); "pn" carries
+# "lk":{unit id: {class: entry}} beside the names and titles, and each app dresses those units from its own catalog.
+#
 # 0.31.86 (Kevin: "shows the player names on the battlefield above their heads. Only live players will show names."):
 # {"t":"pn", "n":{unit id: name}} -- the seated players' names, sent to everyone in the match whenever a seat changes
 # (join, leave, a new match). Bots aren't in it. Additive: older apps ignore it, so the protocol stays.
@@ -44,7 +48,7 @@ const LOBBY_TIME := 20.0             # the join countdown (0.31.82)
 const HELLO_TIMEOUT := 10.0
 const IAP_TIMEOUT := 40.0              # a purchase check may take a token request and an API call
 const REFUSE_CLOSE_DELAY := 0.25     # s between a "bye"/"ver" reply and closing the socket
-const SERVER_BUILD := "0.31.100"      # this server's game version; the probe says it by default (identifies as current)
+const SERVER_BUILD := "0.31.101"      # this server's game version; the probe says it by default (identifies as current)
 const MIN_BUILD_FILE := "/etc/fatebound-siege/min_build"
 const MIN_BUILD_RELOAD := 10.0       # s between re-reads of the min-build file
 const UPDATE_MSG := "A new version of Fatebound is out. Update now on Google Play to keep playing online."
@@ -344,6 +348,7 @@ func _handle(cid: int, msg: Dictionary) -> void:
 			c.name = clean_name(str(msg.get("name", "Player")))
 			var tid := str(msg.get("title", ""))
 			c.title = tid if Net.TITLES.has(tid) else ""
+			c.looks = Net.clean_looks(msg.get("lk", {}))  # 0.31.101: what they wear, for everyone to see
 			c.pred = bool(msg.get("pred", false))         # the phone moves its own unit (0.18.4)
 			c.queued = true                                # 0.31.82: into the lobby; seated when the countdown ends
 			if wave_end < 0.0:
@@ -472,8 +477,18 @@ func player_titles() -> Dictionary:
 			out[c.unit] = str(c.title)
 	return out
 
+func player_looks() -> Dictionary:
+	# 0.31.101: unit id -> {class: "weapon id|stars|element"} for each seated player who wears something
+	var out := {}
+	for cid in clients:
+		var c: Dictionary = clients[cid]
+		if c.hello and not bool(c.get("queued", false)) and c.unit != "" and not (c.get("looks", {}) as Dictionary).is_empty() \
+				and sim != null and sim.by_id.has(c.unit):
+			out[c.unit] = c.looks
+	return out
+
 func _send_names() -> void:
-	var msg := {"t":"pn", "n":player_names(), "tt":player_titles()}
+	var msg := {"t":"pn", "n":player_names(), "tt":player_titles(), "lk":player_looks()}
 	for cid in clients:
 		var c: Dictionary = clients[cid]
 		if c.hello and not bool(c.get("queued", false)) and c.unit != "":

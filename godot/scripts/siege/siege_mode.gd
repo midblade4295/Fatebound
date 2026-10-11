@@ -84,6 +84,7 @@ var lobby: Control = null           # 0.31.82: the join countdown, from PLAY unt
 var lobby_msgs := 0                 # "lobby" messages received (tests)
 var net_names := {}                 # unit id -> name of each live player in the match (0.31.86, the server's "pn")
 var net_titles := {}                # unit id -> their title id (0.31.87, the "pn" message's "tt")
+var net_looks := {}                 # unit id -> {class: "weapon id|stars|element"}: what they wear (0.31.101, "pn" "lk")
 
 var sim
 var view
@@ -435,6 +436,7 @@ func _build_online_match(msg: Dictionary) -> void:
 	view.player_looks = _looks()
 	view.player_names = net_names
 	view.player_titles = net_titles
+	view.set_unit_looks(net_looks)
 	view.my_name = player_name
 	view.my_title = my_title()
 	viewport.add_child(view)
@@ -485,7 +487,8 @@ func _net_process(delta: float) -> void:
 		return
 	if net_state == "connecting":
 		net_state = "waiting"
-		_net_send({"t":"hello", "v":Net.VERSION, "name":player_name, "build":Diag.BUILD, "pred":true, "title":my_title()})
+		_net_send({"t":"hello", "v":Net.VERSION, "name":player_name, "build":Diag.BUILD, "pred":true, "title":my_title(),
+			"lk":profile.wire_looks() if profile != null else {}})          # 0.31.101: what I wear, for the others
 	while ws.get_available_packet_count() > 0:
 		var msg := Net.decode(ws.get_packet())
 		match str(msg.get("t", "")):
@@ -530,9 +533,12 @@ func _net_process(delta: float) -> void:
 				net_names = pn if pn is Dictionary else {}
 				var tt: Variant = msg.get("tt", {})
 				net_titles = tt if tt is Dictionary else {}
+				var lk: Variant = msg.get("lk", {})           # 0.31.101: what each of them wears
+				net_looks = lk if lk is Dictionary else {}
 				if is_instance_valid(view):
 					view.player_names = net_names
 					view.player_titles = net_titles
+					view.set_unit_looks(net_looks)
 			"st":                                             # 0.31.87: the health I've healed (the Merciful title)
 				if sim != null and sim.by_id.has(hud.player_id):
 					sim.by_id[hud.player_id]["healed"] = float(msg.get("heal", 0))

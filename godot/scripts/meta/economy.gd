@@ -762,6 +762,43 @@ const ELEMENTS := ["fire", "frost", "storm", "holy", "nature", "void"]
 const ELEMENT_COLOR := {"fire":"#ff7a2e", "frost":"#7fd8ff", "storm":"#b48cff", "holy":"#ffd76a", "nature":"#7dff8a", "void":"#c04dff"}
 const ELEMENT_NAME := {"fire":"Fire", "frost":"Frost", "storm":"Storm", "holy":"Holy", "nature":"Nature", "void":"Void"}
 
+# ---------------- what a class wears in battle (0.31.101) ----------------
+# Kevin: "I want players to see everything the other players are wearing". One look from three things -- the class's
+# equipped weapon (a catalog id, "" = the starter) and that weapon's Forge stars and element -- used for my own units
+# (Profile.look_for) and for the other players' (their hello's "lk" entries, "weapon id|stars|element", relayed by the
+# server; siege_net.gd clean_looks). An id this catalog doesn't know, or of another class, is the starter.
+static func look_of(cls: String, weapon_id: String, stars: int, element: String) -> Dictionary:
+	# {"r": model, "l": model, "forge": {"stars", "rarity", "element"}} -- the battle view's cosmetic for the class
+	var out := {}
+	var wpn := item(weapon_id)
+	if not wpn.is_empty() and str(wpn.get("kind", "")) == "weapon" and str(wpn.get("class", "")) == cls:
+		out["r"] = str(wpn.get("r", ""))
+		out["l"] = str(wpn.get("l", ""))
+	else:
+		weapon_id = ""
+	var n := clampi(stars, 0, FORGE_STARS.size())
+	if n > 0:
+		out["forge"] = {"stars":n, "rarity":forge_rarity(forge_id(cls, weapon_id)),
+			"element":element if n >= FORGE_STARS.size() and ELEMENTS.has(element) else ""}
+	return out
+
+static func looks_from_wire(entries: Variant) -> Dictionary:
+	# a player's "lk" ({class: "weapon id|stars|element"}) -> {class: look}; anything malformed is left out
+	var out := {}
+	if not (entries is Dictionary):
+		return out
+	for k in entries:
+		var cls := str(k)
+		if not (CLASSES + UP_CLASSES).has(cls) or not (entries[k] is String):
+			continue
+		var p: PackedStringArray = str(entries[k]).split("|")
+		if p.size() != 3 or not p[1].is_valid_int():
+			continue
+		var look := look_of(cls, p[0], p[1].to_int(), p[2])
+		if not look.is_empty():
+			out[cls] = look
+	return out
+
 static func forge_id(cls: String, item_id: String) -> String:
 	# what the Forge keys a weapon by: its catalog id, or "default_<cls>" for a class's starter
 	return item_id if item_id != "" else "default_" + cls

@@ -371,17 +371,26 @@ func unequip(cls: String, slot: String) -> void:
 	save()
 
 func look_for(cls: String) -> Dictionary:
-	# What the battle view should show for this class: {"tint": Color or null, "r": model, "l": model}.
-	var out := {}
+	# What the battle view should show for this class: {"r": model, "l": model, "forge": its stars} (0.31.39: weapons
+	# only -- no skins; 0.31.93: the Forge's stars). 0.31.101: built by Eco.look_of, as the other players' looks are.
 	if not d.equip.has(cls):
-		return out
-	var wpn := Eco.item(str(d.equip[cls].weapon))           # (0.31.39: weapons only -- no skins)
-	if not wpn.is_empty():
-		out["r"] = str(wpn.r)
-		out["l"] = str(wpn.l)
-	var fx := forge_fx(cls)                                    # 0.31.93: the Forge's stars
-	if not fx.is_empty():
-		out["forge"] = fx
+		return {}
+	var w := str(d.equip[cls].weapon)
+	var wid := Eco.forge_id(cls, w)
+	return Eco.look_of(cls, w, forge_stars(wid), forge_element(wid))
+
+func wire_looks() -> Dictionary:
+	# 0.31.101: what I wear, for my hello ("lk"), so the other players see it: {class: "weapon id|stars|element"} for
+	# each class with a weapon equipped or forged (the rest wear their starters anyway)
+	var out := {}
+	for cls in Eco.CLASSES + Eco.UP_CLASSES:
+		if not d.equip.has(cls):
+			continue
+		var w := str(d.equip[cls].weapon)
+		var wid := Eco.forge_id(cls, w)
+		var n := forge_stars(wid)
+		if w != "" or n > 0:
+			out[cls] = "%s|%d|%s" % [w, n, forge_element(wid) if n >= Eco.FORGE_STARS.size() else ""]
 	return out
 
 # ---------------- challenges ----------------

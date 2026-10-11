@@ -95,6 +95,7 @@ run shop_preview_test    SHOP_PREVIEW_PASS        150 --resolution 420x933
 run quest_test           QUEST_PASS               150 --resolution 420x933
 run quest_track_test     QUEST_TRACK_PASS         120 --fixed-fps 30
 run weapon_fx_test       WEAPON_FX_PASS           120 --fixed-fps 30
+run shared_looks_test    SHARED_LOOKS_PASS        90
 # The app's staged match start (0.31.78): the card first, the world built behind it over frames.
 FB_STAGED_START=1 FB_FORCE_WARMUP=1 run staged_start_test STAGED_START_PASS 240 --fixed-fps 30
 # The human soak must never stall the game thread.

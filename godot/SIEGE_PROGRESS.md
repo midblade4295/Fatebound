@@ -3003,3 +3003,24 @@ K2/K3 notes (0.17.0)
 - 0.31.100, version code 186. Quick suite: ALL 49 PASSED. Content packs unchanged (CONTENT OK; the sprites are base).
   APK 31323653 bytes, sha256 3ad510dafe0bf710b10f0963cb9822ca46ee617b58bf09d301b6920dbb4ef539; on itch (android
   channel).
+
+## 0.31.101 — everyone sees what everyone wears (Kevin: "I want players to see everything the other players are wearing")
+- Until now a match dressed only my own unit; every other player showed the defaults. Now each player's equipped weapon
+  and its Forge stars / element, for every class, reach everyone in the match (titles and names already did).
+- Wire (additive, protocol stays 35): the hello carries "lk": {class: "weapon id|stars|element"} (Profile.wire_looks,
+  only dressed classes). The server keeps only well-formed entries (Net.clean_looks: one of the 13 classes, an id of
+  a-z 0-9 _ up to 40, stars clamped 0-3, an element word) and adds "lk": {unit id: entries} to "pn" (sent to the match
+  whenever a seat changes, like the names). It doesn't check ids against the catalog -- the server carries no economy,
+  and a newer app may know newer items; each app builds the look from its own catalog (Eco.looks_from_wire /
+  Eco.look_of, which Profile.look_for now uses too, so the others see exactly what I see), the starter for an id it
+  doesn't know or of another class. Older apps / an older server ignore "lk".
+- The battle view dresses a unit from unit_cosmetic(): mine from the profile, a live player's from the server, a bot's
+  the defaults (a player leaving hands the bot the defaults back). Their legendary and Forge effects show too; with
+  fewer effects on (Settings' reduce motion), the other players' weapons keep their glow but no particles.
+- Ownership isn't verified (cosmetics are local, there are no accounts): a modded app could show items it doesn't own,
+  to others; it changes nothing in play.
+- Live server: reports 0.31.92 (status). Needs the redeploy from this branch (install_siege_server.sh) for "lk";
+  until then everything works as before (no looks relayed).
+- tests/shared_looks_test.gd (the wire rules, cleaning, my looks out and back equal look_for, unknown ids, the view
+  dressing another player, the lighter version) in the suite; siege_net_smoke: a second player's looks come back
+  cleaned through the real server, and leave with them. Quick suite: ALL 50 PASSED.

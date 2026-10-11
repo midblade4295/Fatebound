@@ -10,7 +10,7 @@ extends RefCounted
 # 3 Ascended, all in the element's colour, + fire's flames and embers, frost's snow and mist, storm's lightning and
 # sparks, holy rays and motes, nature's leaves, void's wisps and a vortex, and a bright ribbon.
 # Every legendary has its own signature (LEGENDARY), whether or not it has stars; with stars the two add up.
-# Cosmetic only. A match shows only the local player's cosmetics, so this is one unit in battle; the rest is menus.
+# Cosmetic only. Since 0.31.101 a match shows every live player's (with fewer effects on, theirs glow without particles).
 # Particle sizes in Godot ignore the emitter's scale, so the particles are built by weapon_fx_root.gd on its first frame
 # in the tree, in world units measured from the piece (everything below is in units of the piece's length).
 const Eco = preload("res://scripts/meta/economy.gd")
@@ -166,9 +166,10 @@ static func spec(entry, col: Color, mul := 1.0) -> Dictionary:
 		out["n"] = maxi(1, int(round(float(out.n) * mul)))
 	return out
 
-static func apply(model: Node3D, file: String, fx: Dictionary, main := true, template := "") -> void:
+static func apply(model: Node3D, file: String, fx: Dictionary, main := true, template := "", lite := false) -> void:
 	# the glow on this piece, and its particles / ribbon (built on its first frame in the tree, weapon_fx_root.gd).
 	# template: the KayKit file the piece is held like (a body's weapon); "" for a piece on show (no ribbon).
+	# lite: the glow only (another player's weapon with fewer effects on, 0.31.101)
 	var stars := clampi(int(fx.get("stars", 0)), 0, Eco.FORGE_STARS.size())
 	var leg := legendary(file)
 	if stars <= 0 and leg.is_empty():
@@ -214,6 +215,8 @@ static func apply(model: Node3D, file: String, fx: Dictionary, main := true, tem
 				_base[bk] = dup
 			m.set_surface_override_material(surf, _base[bk])
 	# ---- particles, pinned sprites, the ribbon
+	if lite:
+		return
 	var specs: Array = []
 	if main and stars > 0:
 		for e in STAR_FX[stars]:

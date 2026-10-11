@@ -325,8 +325,8 @@ Based on live `447b97a`. Preview **0.12.0-siege-app, version code 21** (APK 38 M
 - **Migration:** first launch converts the old save once (gold 1:1, tokens -> gems, old weapons
   250 gold each, chests 150 each, level kept); `user://fatebound-save.json` is never modified.
   Settings can import pasted old progress once if there was no local save.
-- **Cosmetics in battle:** only the local player's look is applied (skin tint = cached static
-  material; weapons swapped). Other players online see defaults (needs a protocol change).
+- **Cosmetics in battle:** every live player's weapons and Forge stars show to everyone online since 0.31.101 (hello
+  "lk" -> server -> "pn" "lk", additive, protocol unchanged; needs the server redeploy). Bots wear the defaults.
 - **Removed:** the whole dice-era app (reachability scan; see SIEGE_PROGRESS E4). The repo-root
   web game and its servers are untouched.
 - **Play branch merge (codex/siege-play-vc24):** `tools/verify_play_bundle.py` on this branch is

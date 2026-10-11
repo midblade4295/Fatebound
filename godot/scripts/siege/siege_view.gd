@@ -3115,9 +3115,35 @@ func _decal(pos: Vector3, radius: float, color: Color, alpha: float) -> MeshInst
 	return mi
 
 # ---------- actors ----------
-# Equipped cosmetics for the local player, per class: {"tint": "#rrggbb", "r": model, "l": model}.
-# Set by the mode from the profile. Only the local player's unit uses them.
+# Equipped cosmetics for the local player, per class: {"r": model, "l": model, "forge": stars}. Set by the mode from
+# the profile. 0.31.101 (Kevin: "I want players to see everything the other players are wearing"): the other live
+# players' too, from the server's "pn" (set_unit_looks); bots wear the defaults.
 var player_looks: Dictionary = {}
+var unit_looks: Dictionary = {}              # unit id -> {cosmetic class: look}, the other players online (0.31.101)
+const NO_LOOK := {}
+
+func set_unit_looks(wire: Dictionary) -> void:
+	# the server's {unit id: {class: "weapon id|stars|element"}} -> looks from this app's catalog; with fewer effects
+	# (low_fx) the other players' weapons keep their glow but not their particles
+	var out := {}
+	for uid in wire:
+		if str(uid) == player_id:
+			continue
+		var l: Dictionary = Eco.looks_from_wire(wire[uid])
+		if low_fx:
+			for cls in l:
+				l[cls]["lite"] = true
+		if not l.is_empty():
+			out[str(uid)] = l
+	unit_looks = out
+
+func unit_cosmetic(u: Dictionary) -> Dictionary:
+	# what this unit wears for the class it has on: mine from the profile, another player's from the server
+	var key := Eco.cosmetic_class(str(u.cls), bool(u.up))
+	if str(u.id) == player_id:
+		return player_looks.get(key, NO_LOOK)
+	var l: Dictionary = unit_looks.get(str(u.id), NO_LOOK)
+	return l.get(key, NO_LOOK) if not l.is_empty() else NO_LOOK
 static var _tint_mats: Dictionary = {}
 
 static func look_key(u: Dictionary) -> String:
@@ -3283,7 +3309,7 @@ static func make_body(cls: String, cosmetic: Dictionary = {}) -> Dictionary:
 	for hm in hand_models:                                       # 0.31.100: and a legendary's own effects
 		var hf := str(look.get(str(hm[1]), ""))
 		if WeaponFx.wants(hf, fx):
-			WeaponFx.apply(hm[0], hf, fx, str(hm[1]) == "r" or hand_models.size() == 1, str(hm[2]))
+			WeaponFx.apply(hm[0], hf, fx, str(hm[1]) == "r" or hand_models.size() == 1, str(hm[2]), bool(cosmetic.get("lite", false)))
 	for mi in body.find_children("*", "MeshInstance3D", true, false):
 		(mi as MeshInstance3D).cast_shadow = (GeometryInstance3D.SHADOW_CASTING_SETTING_ON if _cast_static else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
 	if not cosmetic.has("tint") and look.has("tint"):
@@ -3562,10 +3588,12 @@ func _ensure_actor(u: Dictionary) -> Dictionary:
 	var a: Dictionary = actors.get(u.id, {})
 	# The usual case first, without building keys: the actor exists and wears this class (0.31.78: this ran for every
 	# unit every frame, formatting a string -- with the player's cosmetics dictionary in it -- 32 times a frame).
-	if not a.is_empty() and a.cls == u.cls and a.up == u.up and (u.id != player_id or a.cosmetic == player_looks.get(Eco.cosmetic_class(str(u.cls), bool(u.up)), {})):
+	if not a.is_empty() and a.cls == u.cls and a.up == u.up and ((u.id != player_id and a.cosmetic.is_empty() and not unit_looks.has(u.id))
+			or a.cosmetic == unit_cosmetic(u)):
 		return a
-	# 0.31.38: an upgraded class wears its own cosmetics (the Crusader's, the Berserker's...), not the base class's
-	var cosmetic: Dictionary = player_looks.get(Eco.cosmetic_class(str(u.cls), bool(u.up)), {}) if u.id == player_id else {}
+	# 0.31.38: an upgraded class wears its own cosmetics (the Crusader's, the Berserker's...), not the base class's.
+	# 0.31.101: every live player's, not only mine (unit_cosmetic)
+	var cosmetic: Dictionary = unit_cosmetic(u)
 	if not a.is_empty() and u.state == "dead" and a.get("body") != null:
 		return a                                    # 0.31.20: the body stays as it fell until he respawns
 	var root: Node3D
