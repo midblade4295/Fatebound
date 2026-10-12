@@ -64,8 +64,9 @@ static func purchase_dict(product: String, token: String, state := 1, acked := f
 
 func _init() -> void:
 	# ---- 1. the table and the profile
-	var want := ["gems_80", "gems_500", "gems_1100", "gems_2400", "gems_6500", "starter_pack"]
-	check(Net.IAP.keys() == want, "the six product IDs of PLAY_IAP_HANDOFF.md, in shop order %s" % str(Net.IAP.keys()))
+	var want := ["gems_80", "gems_500", "gems_1100", "gems_2400", "gems_6500", "gems_14000", "starter_pack"]
+	check(Net.IAP.keys() == want, "the seven product IDs of PLAY_IAP_HANDOFF.md, in shop order %s" % str(Net.IAP.keys()))
+	check(bool(Net.IAP.gems_14000.get("play_only", false)), "the 99.99 pack shows only once Google Play knows it (0.31.108)")
 	var doc := FileAccess.get_file_as_string("res://PLAY_IAP_HANDOFF.md")
 	var all_in_doc := true
 	for id in want:
@@ -79,18 +80,18 @@ func _init() -> void:
 	r = p.grant_iap("gems_500", "tok-aaaaaaaaaaaa")
 	check(r.ok and bool(r.again) and int(p.d.gems) == g0 + 500, "the same token never grants twice")
 	r = p.grant_iap("starter_pack", "tok-starter-123456")
-	check(r.ok and int(p.d.embers) == 150 and str(r.item) != "" and p.owns(str(r.item)) and str(Eco.item(str(r.item)).rarity) == "rare"
-		and bool(p.d.iap.starter), "the starter pack: 300 gems, 150 Embers and a rare weapon not owned yet (%s)" % str(r.item))
+	check(r.ok and int(p.d.embers) == 300 and int(r.gems) == 500 and str(r.item) != "" and p.owns(str(r.item)) and str(Eco.item(str(r.item)).rarity) == "epic"
+		and bool(p.d.iap.starter), "the starter pack (0.31.108): 500 gems, 300 Embers and an epic weapon not owned yet (%s)" % str(r.item))
 	check(not p.grant_iap("chest_royal", "tok-zzzzzzzzzzzz").ok, "an unknown product grants nothing")
 	var p2 = fresh("allrares")
-	for id in Eco.chest_pool("rare"):
+	for id in Eco.chest_pool("epic"):
 		p2.d.owned.append(id)
 	var g2 := int(p2.d.gems)
 	r = p2.grant_iap("starter_pack", "tok-starter-999999")
-	check(str(r.item) == "" and int(p2.d.gems) == g2 + 300 + Eco.DUPE_GOLD.rare / 10, "owning every rare: gems instead of the weapon")
+	check(str(r.item) == "" and int(p2.d.gems) == g2 + 500 + Eco.DUPE_GOLD.epic / 10, "owning every epic: gems instead of the weapon")
 	var p3 = Profile.new(p.path, "user://none.json")
 	p3.load_or_create()
-	check(p3.iap_granted("tok-aaaaaaaaaaaa") and int(p3.d.embers) == 150, "granted tokens and Embers are saved")
+	check(p3.iap_granted("tok-aaaaaaaaaaaa") and int(p3.d.embers) == 300, "granted tokens and Embers are saved")
 
 	# ---- 2. billing against a stand-in plugin
 	var bp = fresh("billing")
@@ -109,7 +110,7 @@ func _init() -> void:
 func _billing() -> void:
 	var fc = bill.client
 	var bp = bill.profile
-	check(bill.ready_ and fc.calls.has("details 6") and fc.calls.has("query"), "connected: asks Google for the six prices and unfinished purchases")
+	check(bill.ready_ and fc.calls.has("details 7") and fc.calls.has("query"), "connected: asks Google for the seven prices and unfinished purchases")
 	fc.query_product_details_response.emit({"response_code":0, "product_details":[
 		{"product_id":"gems_80", "one_time_purchase_offer_details_list":[{"formatted_price":"1,09 €"}]}]})
 	check(bill.price("gems_80") == "1,09 €" and bill.price("gems_500") == "$4.99", "Google's local price when known, else the US price")

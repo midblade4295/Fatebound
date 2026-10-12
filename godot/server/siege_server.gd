@@ -38,9 +38,19 @@ extends SceneTree
 # the player counts (the asker then closes) -- the menu's "players online". Both are additive: an older app ignores
 # "lobby" (it just waits for its welcome) and never asks for "status"; this app against an older server gets its
 # welcome at once and no count (so the protocol version stays).
+#
+# 0.31.108 (Kevin: "make sure everything is verified by server so players can't edit gems ect"): the server keeps every
+# player's account (server/eco_accounts.gd). "eco" (no hello, one per socket, like "iap"): a phone's ops replayed on
+# its account, a VS BOTS ticket, the account back. "iap" with "acct"/"key": the confirmed purchase granted to that
+# account here. A hello with "acct"/"key": the player's name, title and looks come from the account (nobody shows a
+# weapon or title they don't own), and when the match ends the result is paid to the account from THIS server's count
+# (server/match_ledger.gd), never the phone's. "ver" and "status" answer "eco":1 so the app knows. All additive: an
+# older app keeps its own local economy until the minimum build is raised past it.
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 const Net = preload("res://scripts/siege/siege_net.gd")
 const IapVerify = preload("res://server/iap_verify.gd")
+const EcoAccounts = preload("res://server/eco_accounts.gd")
+const MatchLedger = preload("res://server/match_ledger.gd")
 
 const RESTART_AFTER := 15.0          # seconds of results screen before the next match
 const IDLE_STOP := 30.0              # no players for this long -> stop simulating
@@ -48,7 +58,7 @@ const LOBBY_TIME := 20.0             # the join countdown (0.31.82)
 const HELLO_TIMEOUT := 10.0
 const IAP_TIMEOUT := 40.0              # a purchase check may take a token request and an API call
 const REFUSE_CLOSE_DELAY := 0.25     # s between a "bye"/"ver" reply and closing the socket
-const SERVER_BUILD := "0.31.107"      # this server's game version; the probe says it by default (identifies as current)
+const SERVER_BUILD := "0.31.108"      # this server's game version; the probe says it by default (identifies as current)
 const MIN_BUILD_FILE := "/etc/fatebound-siege/min_build"
 const MIN_BUILD_RELOAD := 10.0       # s between re-reads of the min-build file
 const UPDATE_MSG := "A new version of Fatebound is out. Update now on Google Play to keep playing online."
@@ -75,6 +85,9 @@ var wave_end := -1.0                 # when the waiting players are seated (-1: 
 var _lobby_clock := 0.0
 var _names_dirty := false            # a seat changed: send the players' names (0.31.86)
 var iap = null                       # 0.31.90: Google Play purchase checks (server/iap_verify.gd)
+var eco = null                       # 0.31.108: the accounts (server/eco_accounts.gd)
+var test_match_s := 0.0              # tests only (SIEGE_TEST_MATCH_S): a match ends after this many seconds
+var _paid_match := -1                # the match whose results went to the accounts
 var min_build := ""                  # "" = no minimum (see SIEGE_MIN_BUILD)
 var min_build_env := false           # true: fixed by SIEGE_MIN_BUILD, the file is not read
 var min_build_file := MIN_BUILD_FILE
@@ -90,6 +103,8 @@ func _init() -> void:
 	log_on = OS.get_environment("SIEGE_LOG") != "0"
 	if OS.has_environment("SIEGE_LOBBY"):
 		lobby_time = clampf(float(OS.get_environment("SIEGE_LOBBY")), 0.0, 120.0)
+	if OS.has_environment("SIEGE_TEST_MATCH_S"):
+		test_match_s = float(OS.get_environment("SIEGE_TEST_MATCH_S"))
 	if OS.has_environment("SIEGE_MIN_BUILD"):
 		min_build_env = true
 		_set_min_build(OS.get_environment("SIEGE_MIN_BUILD"), "SIEGE_MIN_BUILD")
@@ -111,6 +126,9 @@ func _init() -> void:
 	iap.log_fn = _log
 	root.add_child.call_deferred(iap)
 	_log("purchase checks: %s" % iap.describe())
+	eco = EcoAccounts.new()
+	eco.log_fn = _log
+	_log("accounts: %d in %s" % [eco.count(), eco.dir])
 
 # ---------------- minimum app build ----------------
 # "0.31.78-fatebound" -> [0, 31, 78]; anything without a leading dotted number -> [] (unknown).
@@ -237,7 +255,7 @@ func _poll_clients() -> void:
 			_handle(cid, Net.decode(pkt))
 
 func _send(cid: int, msg: Dictionary) -> void:
-	_send_raw(cid, Net.encode(msg, msg.get("t", "") == "s"))
+	_send_raw(cid, Net.encode(msg, msg.get("t", "") in ["s", "eco", "iap"]))      # (0.31.108: an account travels compressed)
 
 func _send_raw(cid: int, bytes: PackedByteArray) -> void:
 	var c: Dictionary = clients.get(cid, {})
@@ -319,7 +337,7 @@ func _handle(cid: int, msg: Dictionary) -> void:
 			# so the client treats no answer as "unknown" and checks again on connect.
 			if c.hello:
 				return
-			_send(cid, {"t":"ver", "v":Net.VERSION, "build":SERVER_BUILD, "min_build":min_build})
+			_send(cid, {"t":"ver", "v":Net.VERSION, "build":SERVER_BUILD, "min_build":min_build, "eco":1})
 			_refuse(cid, 1000, "ver")
 		"hello":
 			if c.hello:
@@ -349,6 +367,14 @@ func _handle(cid: int, msg: Dictionary) -> void:
 			var tid := str(msg.get("title", ""))
 			c.title = tid if Net.TITLES.has(tid) else ""
 			c.looks = Net.clean_looks(msg.get("lk", {}))  # 0.31.101: what they wear, for everyone to see
+			if msg.has("acct") and eco != null:
+				# 0.31.108: an account -- its own name, title and looks (owned only), and the match is paid to it
+				var w: Dictionary = eco.wear(str(msg.get("acct", "")), str(msg.get("key", "")))
+				if not w.is_empty():
+					c.acct = str(msg.acct)
+					c.name = clean_name(str(w.name))
+					c.title = str(w.title)
+					c.looks = w.looks
 			c.pred = bool(msg.get("pred", false))         # the phone moves its own unit (0.18.4)
 			c.queued = true                                # 0.31.82: into the lobby; seated when the countdown ends
 			if wave_end < 0.0:
@@ -362,6 +388,20 @@ func _handle(cid: int, msg: Dictionary) -> void:
 				_send(cid, _status())
 				_refuse(cid, 1000, "status")
 				c.close_at = _now() + 2.0         # (the refusal path closes it; 2 s rather than REFUSE_CLOSE_DELAY)
+		"eco":
+			# 0.31.108: a phone's account -- its ops, a ticket, the account as it stands. One per socket, no hello.
+			if c.hello or c.has("eco_done") or eco == null:
+				return
+			c.eco_done = true
+			var t0 := Time.get_ticks_usec()
+			var out: Dictionary = eco.handle(msg)
+			_send(cid, out)
+			_refuse(cid, 1000, "eco")
+			c.close_at = _now() + 2.0
+			if not bool(out.get("ok", false)) or bool(msg.get("new", false)) or not (out.get("results", []) as Array).is_empty() or out.has("ticket"):
+				_log("eco %s: %s%d ops%s (%.1f ms)" % [str(out.get("acct", "?")), "NEW " if bool(msg.get("new", false)) else "",
+					(out.get("results", []) as Array).size(), "" if bool(out.get("ok", false)) else " " + str(out.get("why", "")),
+					(Time.get_ticks_usec() - t0) / 1000.0])
 		"iap":
 			# 0.31.90: a phone asks whether a Google Play purchase is real before it grants it. No hello (a purchase is
 			# not a player); one question per socket; the answer goes back and the socket closes.
@@ -370,6 +410,8 @@ func _handle(cid: int, msg: Dictionary) -> void:
 			c.iap_busy = true
 			var product := str(msg.get("product", ""))
 			var token := str(msg.get("token", ""))
+			var acct := str(msg.get("acct", ""))
+			var akey := str(msg.get("key", ""))
 			iap.verify(product, token, func(res: Dictionary):
 				if not clients.has(cid):
 					return
@@ -377,6 +419,16 @@ func _handle(cid: int, msg: Dictionary) -> void:
 				out["t"] = "iap"
 				out["product"] = product
 				out["token"] = token
+				if eco != null and (bool(res.get("ok", false)) or str(res.get("why", "")) == "used"):
+					if acct != "":
+						# 0.31.108: granted here, to the account (once per token, whichever account asks)
+						var g: Dictionary = eco.grant_purchase(acct, akey, product, token, str(res.get("why", "")) == "used")
+						out["granted"] = g
+						if bool(res.get("ok", false)) and not bool(g.get("ok", false)):
+							out["ok"] = false
+							out["why"] = str(g.get("why", "bad"))
+					elif bool(res.get("ok", false)):
+						eco.note_verified(token)          # (an older app grants it itself)
 				_send(cid, out)
 				_refuse(cid, 1000, "iap")
 				clients[cid].close_at = _now() + 2.0
@@ -437,6 +489,9 @@ func _seat(cid: int) -> void:
 	c.move = Vector2.ZERO
 	if seat != "":
 		sim.by_id[seat].bot = false
+		if c.has("acct"):
+			c.ledger = MatchLedger.new()          # 0.31.108: counted from here (a bot held the seat before)
+			c.ledger.start(sim.by_id[seat])
 	_send(cid, {"t":"welcome", "v":Net.VERSION, "you":seat, "match":match_id, "seed":match_seed,
 		"team_size":Net.TEAM_SIZE, "players":_human_count()})
 	_names_dirty = true
@@ -553,7 +608,40 @@ func _send_lobby(waiting: Array) -> void:
 func _status() -> Dictionary:
 	return {"t":"status", "v":Net.VERSION, "online":_human_count(), "in_match":_seated_count(), "waiting":_queued().size(),
 		"lobby":maxf(0.0, wave_end - _now()) if wave_end >= 0.0 else -1.0, "running":sim != null and not sim.ended,
-		"slots":Net.TEAM_SIZE * 2, "max":max_players, "build":SERVER_BUILD, "min_build":min_build}
+		"slots":Net.TEAM_SIZE * 2, "max":max_players, "build":SERVER_BUILD, "min_build":min_build, "eco":1}
+
+# ---------------- paying a match (0.31.108) ----------------
+func _ledger_events(evs: Array) -> void:
+	for cid in clients:
+		var c: Dictionary = clients[cid]
+		if c.has("ledger"):
+			for e in evs:
+				c.ledger.on_event(e)
+
+func _ledger_track(delta: float) -> void:
+	if sim == null or sim.ended:
+		return
+	for cid in clients:
+		var c: Dictionary = clients[cid]
+		if c.has("ledger") and c.unit != "" and sim.by_id.has(c.unit) and str(c.ledger.uid) == c.unit:
+			c.ledger.track(sim.by_id[c.unit], delta)
+
+func _pay_match() -> void:
+	# the match is over: every seated account gets its result, from this server's own count
+	if eco == null or _paid_match == match_id:
+		return
+	_paid_match = match_id
+	for cid in clients:
+		var c: Dictionary = clients[cid]
+		if not c.has("acct") or not c.has("ledger") or c.unit == "" or not sim.by_id.has(c.unit) or str(c.ledger.uid) != c.unit:
+			continue
+		var u: Dictionary = sim.by_id[c.unit]
+		var me: Dictionary = c.ledger.me(u)
+		var won: bool = sim.winner == int(u.team)
+		var draw: bool = sim.winner == -1
+		var res: Dictionary = eco.apply_online(str(c.acct), me, won, draw)
+		c.erase("ledger")
+		_log("paid %s (%s): %s, %d gold" % [str(c.acct), c.name, "win" if won else ("draw" if draw else "loss"), int(res.get("rewards", {}).get("gold", 0))])
 
 # ---------------- match loop ----------------
 func _new_match() -> void:
@@ -584,6 +672,7 @@ func _run_match(delta: float) -> void:
 		if _ended_at < 0.0:
 			_ended_at = Time.get_ticks_msec() / 1000.0
 			_log("match %d end winner=%d reason=%s score=%s" % [match_id, sim.winner, sim.end_reason, str(sim.score)])
+			_pay_match()
 		elif Time.get_ticks_msec() / 1000.0 - _ended_at > RESTART_AFTER:
 			_new_match()
 			for cid in clients:
@@ -626,10 +715,18 @@ func _run_match(delta: float) -> void:
 	while _accum >= TICK and not sim.ended:
 		_accum -= TICK
 		sim.step(TICK)
-		_pending_events.append_array(sim.drain_events())
+		var evs: Array = sim.drain_events()
+		_ledger_events(evs)
+		_pending_events.append_array(evs)
+		_ledger_track(TICK)
+		if test_match_s > 0.0 and sim.time >= test_match_s and not sim.ended:
+			sim._finish("time")
 	_st_step += Time.get_ticks_usec() - t_step
 	if sim.ended:
-		_pending_events.append_array(sim.drain_events())
+		var evs2: Array = sim.drain_events()
+		_ledger_events(evs2)
+		_pending_events.append_array(evs2)
+		_pay_match()
 	_snap_accum += delta
 	if _snap_accum >= 1.0 / Net.SNAP_HZ:
 		_snap_accum = minf(_snap_accum - 1.0 / Net.SNAP_HZ, 1.0 / Net.SNAP_HZ)

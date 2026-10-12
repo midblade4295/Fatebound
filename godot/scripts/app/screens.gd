@@ -187,7 +187,7 @@ static func buy_pack(app, pid: String, then := Callable()) -> void:
 			then.call(), then)   # (0.31.96: CANCEL goes back to the shop preview it came from)
 
 static func price_button(parent: Node, app, id: String, size := 15, h := 34.0) -> Button:
-	var price := Eco.item_price(id)
+	var price := Eco.item_price(id, app.profile.now())
 	var gems: bool = price.has("gems")
 	var amount: int = int(price.get("gems", price.get("gold", 0)))
 	var b := UI2.button(parent, UI.compact(amount), "purple" if gems else "gold", func(): buy(app, id), "buy_" + id, size, h, 11.0,
@@ -197,7 +197,7 @@ static func price_button(parent: Node, app, id: String, size := 15, h := 34.0) -
 
 static func buy(app, id: String, then := Callable()) -> void:
 	var it := Eco.item(id)
-	var price := Eco.item_price(id)
+	var price := Eco.item_price(id, app.profile.now())
 	var do_buy := func():
 		var r: Dictionary = app.profile.buy(id)
 		if r.ok:
@@ -457,6 +457,11 @@ static func chests_row(app, parent: Control, w: float, y: float) -> void:
 			UI2.glow(plate, Rect2(-14, -40, sw + 28, sh + 40), Color(0.55, 1.0, 0.6, 0.55))
 		UI2.plate(plate, "green" if ready else "night", 14.0, rim)
 		slots.append({"kind": k, "mode": "tease" if ready else "idle", "x": x + sw * 0.5})
+	var waiting: int = p.chests_waiting()
+	if waiting > 0:                                     # 0.31.108: reward chests waiting for a free slot
+		var wc := UI2.chip(parent, "+%d WAITING" % waiting, Color(0.03, 0.02, 0.1, 0.88), UI2.GOLD, Color(UI2.GOLD, 0.7))
+		wc.position = Vector2(w - 104, y - 24)
+		wc.set_meta("action_key", "chests_waiting")
 	var row := ChestRow.new()                           # the chests themselves, in 3D
 	row.slots = slots
 	row.position = Vector2(0, y - 46)
@@ -800,7 +805,8 @@ static func pass_screen(app, root: VBoxContainer) -> void:
 		pt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		ph.add_child(pt)
 		UI2.text(pt, "UNLOCK PREMIUM", 20, UI2.GOLD)
-		UI2.body(pt, "%d exclusive cosmetics (%d legendary) · gold chests · a Royal chest · more gems on every tier" % [int(pcos.n), legendary], 12, Color("#efe2ff"))
+		UI2.body(pt, "%d exclusive cosmetics (%d legendary) · gold chests · a Royal chest · %s" % [int(pcos.n), legendary,
+			"more gems on every tier" if sid < 2 else "Embers and gold on every tier"], 12, Color("#efe2ff"))     # (0.31.108: Embers from season 2)
 		var b := UI2.button(pc, "UNLOCK  %d" % Eco.PREMIUM_COST, "purple", func(): _buy_premium(app), "buy_premium", 20, 52.0, 16.0, "res://assets/ui/currency/gem.png")
 		b.disabled = int(d.gems) < Eco.PREMIUM_COST
 		UI2.sweep(b)
@@ -968,7 +974,7 @@ static func _spine(row: Node, t: int, tier: int) -> void:
 
 static func pass_cell(app, parent: Node, sid: int, t: int, prem: bool) -> void:
 	var p = app.profile
-	var r: Dictionary = Eco.pass_reward(sid, t, prem)
+	var r: Dictionary = p.pass_reward_for(t, prem)          # (0.31.108: an item already owned shows what replaces it)
 	var rt: Array = reward_text(r)
 	var it: Dictionary = Eco.item(str(r.get("item", "")))
 	var claimed: bool = (p.d.pass.prem if prem else p.d.pass.free).has(t)
@@ -1077,7 +1083,9 @@ static func _skip_tiers(app) -> void:
 
 static func _buy_premium(app) -> void:
 	var p = app.profile
-	app.confirm("UNLOCK PREMIUM?", "%d exclusive cosmetics, gold and Royal chests and more gems on every tier this season. Costs %d gems." % [int(Eco.pass_cosmetics(int(app.profile.d.pass.season)).n), Eco.PREMIUM_COST], "UNLOCK", "premium", func():
+	var psid := int(app.profile.d.pass.season)
+	app.confirm("UNLOCK PREMIUM?", "%d exclusive cosmetics, gold and Royal chests and %s on every tier this season. Costs %d gems." % [int(Eco.pass_cosmetics(psid).n),
+		"more gems" if psid < 2 else "Embers and gold", Eco.PREMIUM_COST], "UNLOCK", "premium", func():
 		var r: Dictionary = p.buy_premium()
 		if r.ok:
 			app.sfx("purchase")
@@ -1090,7 +1098,7 @@ static func _buy_premium(app) -> void:
 static func open_pass_item(app, sid: int, t: int, prem: bool) -> void:
 	# the detail view: the reward big -- a weapon in its class's hands, turning with your finger
 	var p = app.profile
-	var r: Dictionary = Eco.pass_reward(sid, t, prem)
+	var r: Dictionary = p.pass_reward_for(t, prem)
 	var rt: Array = reward_text(r)
 	var it: Dictionary = Eco.item(str(r.get("item", "")))
 	app.sfx("tap")
@@ -1170,6 +1178,11 @@ static func open_pass_item(app, sid: int, t: int, prem: bool) -> void:
 	elif r.has("chest"):
 		var cd := UI.label(v, Eco.chest_odds(str(r.chest)), 11, UI.MUTED)
 		cd.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	if r.has("swap"):
+		# 0.31.108: this tier's item was one the player already had
+		var sw := UI.label(v, "In place of %s, which you already own" % str(Eco.item(str(r.swap)).get("name", "")), 11, UI.MUTED)
+		sw.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		sw.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	var claimed: bool = (p.d.pass.prem if prem else p.d.pass.free).has(t)
 	if claimed:
 		UI.button(v, "CLAIMED ✓", "secondary", func(): pass, "pass_detail_claimed", 15).disabled = true
@@ -1447,8 +1460,10 @@ static func open_item(app, id: String, pack := "", pick := 0) -> void:
 		eb.disabled = eq
 	elif str(it.get("source", "")) == "quest":
 		UI.button(v, "EARNED BY ITS CLASS QUEST", "secondary", func(): pass, "shop_preview_quest", 15).disabled = true
+	elif Eco.item_price(sid, p.now()).is_empty():
+		UI.button(v, "A SIEGE PASS REWARD", "secondary", func(): pass, "shop_preview_pass", 15).disabled = true
 	else:
-		var price := Eco.item_price(sid)
+		var price := Eco.item_price(sid, p.now())
 		var gems2: bool = price.has("gems")
 		var amount: int = int(price.get("gems", price.get("gold", 0)))
 		var pb := UI2.button(v, "BUY  ·  %s" % UI.compact(amount), "purple" if gems2 else "gold", func(): buy(app, sid, reopen),
@@ -1482,15 +1497,25 @@ static func gem_packs(app, root: Node) -> void:
 		sc.add_child(v)
 		UI2.text(v, "STARTER PACK", 20, UI2.GOLD, UI2.INK, 5)
 		var sp: Dictionary = Net.IAP.starter_pack
-		UI2.body(v, "%d gems  ·  %d Embers  ·  a rare weapon  ·  once per player" % [int(sp.gems), int(sp.embers)], 12, Color("#ffe9c7"))
+		UI2.body(v, "%d gems  ·  %d Embers  ·  %s %s weapon  ·  once per player" % [int(sp.gems), int(sp.embers),
+			"an" if str(sp.get("weapon", "rare")) == "epic" else "a", str(sp.get("weapon", "rare"))], 12, Color("#ffe9c7"))
 		var sb := _iap_button(app, sc, "starter_pack", Vector2.ZERO, Vector2.ZERO)
 		sb.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 		sb.offset_left = 120
 		sb.offset_right = -12
 		sb.offset_top = -48
 		sb.offset_bottom = -10
+	# 0.31.108: a "play_only" pack (gems_14000) shows once Google Play knows its price; then it is the best value
+	var shown := []
+	for pid in Net.IAP:
+		var pk0: Dictionary = Net.IAP[pid]
+		if bool(pk0.get("once", false)):
+			continue
+		if bool(pk0.get("play_only", false)) and not (app.billing != null and app.billing.prices.has(pid)):
+			continue
+		shown.append(pid)
 	var grids := []
-	for cols in [3, 2]:
+	for cols in [3, maxi(2, shown.size() - 3)]:
 		var grid := GridContainer.new()
 		grid.columns = cols
 		grid.add_theme_constant_override("h_separation", 8)
@@ -1498,17 +1523,15 @@ static func gem_packs(app, root: Node) -> void:
 		root.add_child(grid)
 		grids.append(grid)
 	var size_ix := 0
-	for pid in Net.IAP:
+	for pid in shown:
 		var pk: Dictionary = Net.IAP[pid]
-		if bool(pk.get("once", false)):
-			continue
 		var grid: GridContainer = grids[0 if size_ix < 3 else 1]
 		var c := Control.new()
 		var big := size_ix >= 3
 		UI.grow(c)
 		grid.add_child(c)
 		UI2.plate(c, "purple" if big else "royal", 18.0, "gold" if big else "blue")
-		var art_px := pack_art(c, "res://assets/ui/packs/gem_pack_%d.png" % mini(size_ix + 1, 5), size_ix + 1, big,
+		var art_px := pack_art(c, "res://assets/ui/packs/gem_pack_%d.png" % mini(size_ix + 1, 6), mini(size_ix + 1, 5), big,
 			Color(0.55, 0.85, 1.0))
 		var gl := UI2.text(c, UI.compact(int(pk.gems)), 21 if big else 19, Color.WHITE, UI2.INK, 5)
 		gl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -1521,8 +1544,11 @@ static func gem_packs(app, root: Node) -> void:
 		b.offset_right = -6
 		b.offset_top = -40
 		b.offset_bottom = -6
-		if str(pk.get("tag", "")) != "":
-			var tg := UI2.chip(c, str(pk.tag), Color("#e8443a") if str(pk.tag) == "BEST VALUE" else Color("#2f7de1"), Color.WHITE, Color("#170a05"))
+		var tag := str(pk.get("tag", ""))
+		if tag == "BEST VALUE" and pid != shown[shown.size() - 1]:
+			tag = ""                                    # (a bigger pack is the best value)
+		if tag != "":
+			var tg := UI2.chip(c, tag, Color("#e8443a") if tag == "BEST VALUE" else Color("#2f7de1"), Color.WHITE, Color("#170a05"))
 			tg.anchor_left = 0.5
 			tg.anchor_right = 0.5
 			tg.offset_left = -46
@@ -1920,7 +1946,7 @@ static func _gear_card(app, grid: Node, id: String, cls: String, icon: String, n
 		var where := "Siege Pass reward"
 		if str(it.get("source", "")) == "quest":
 			where = "Quest reward"
-		elif str(it.get("source", "")) == "shop":
+		elif str(it.get("source", "")) == "shop" or Eco.vaulted(id, p.now()):
 			var now: int = p.now()
 			where = "In the shop today" if (Eco.shop_daily(now).has(id) or Eco.shop_featured(now).has(id)) else "Rotates through the shop"
 		var wl := UI2.body(c, where, 10, UI2.SOFT, false)
@@ -2145,8 +2171,7 @@ static func settings(app, root: VBoxContainer) -> void:
 		var nm := name_edit.text.strip_edges().left(16)
 		if nm == "":
 			nm = "Player"
-		d.name = nm
-		p.save()
+		p.set_name(nm)                             # (0.31.108: an op, so the server has it too)
 		app.sfx("confirm")
 		app.toast("Name saved", UI.CYAN)
 		app.refresh_top(), "save_name", 16, 40.0, 11.0)

@@ -487,8 +487,12 @@ func _net_process(delta: float) -> void:
 		return
 	if net_state == "connecting":
 		net_state = "waiting"
-		_net_send({"t":"hello", "v":Net.VERSION, "name":player_name, "build":Diag.BUILD, "pred":true, "title":my_title(),
-			"lk":profile.wire_looks() if profile != null else {}})          # 0.31.101: what I wear, for the others
+		var hi := {"t":"hello", "v":Net.VERSION, "name":player_name, "build":Diag.BUILD, "pred":true, "title":my_title(),
+			"lk":profile.wire_looks() if profile != null else {}}          # 0.31.101: what I wear, for the others
+		if profile != null and bool(profile.server_mode):
+			hi["acct"] = str(profile.d.account.id)       # 0.31.108: the server pays this match to the account
+			hi["key"] = str(profile.d.account.key)
+		_net_send(hi)
 	while ws.get_available_packet_count() > 0:
 		var msg := Net.decode(ws.get_packet())
 		match str(msg.get("t", "")):
@@ -860,10 +864,7 @@ func _process(delta: float) -> void:
 func finish_tutorial() -> void:
 	# The Herald's last line: mark it done, pay the recruit, back to the menu.
 	if profile != null:
-		if not bool(profile.d.get("tutorial_done", false)):
-			profile.d.gold = int(profile.d.gold) + TUTORIAL_GOLD
-		profile.d["tutorial_done"] = true
-		profile.save()
+		profile.finish_tutorial()                  # (0.31.108: the pay, once -- the server pays it too)
 	exited.emit()
 
 func _thermal_guard(delta: float) -> void:

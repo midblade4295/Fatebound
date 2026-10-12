@@ -80,7 +80,7 @@ static func pass_reward(sid: int, tier: int, premium: bool) -> Dictionary:
 		if tier % 4 == 2:
 			return {"embers": PASS_EMBERS_FREE}        # 0.31.93: Embers for the Forge on both tracks
 		return {"gold": 150 + 5 * tier}
-	var pi := PREMIUM_ITEM_TIERS.find(tier)
+	var pi := premium_item_tiers(sid).find(tier)
 	if pi >= 0:
 		var it: String = items[PASS_FREE_ITEMS + pi]
 		if str(CATALOG[it].kind) == "title":
@@ -91,7 +91,7 @@ static func pass_reward(sid: int, tier: int, premium: bool) -> Dictionary:
 	if tier == 22:
 		return {"chest": "royal"}
 	if tier % 4 == 0:
-		return {"gems": 60}
+		return {"embers": PASS_EMBERS_GEM_TIER} if sid >= 2 else {"gems": 60}     # 0.31.108: Embers from season 2
 	if tier % 4 == 2:
 		return {"embers": PASS_EMBERS_PREMIUM}
 	return {"gold": 300 + 10 * tier}
@@ -106,6 +106,61 @@ const RARITY_RANK := {"common":0, "rare":1, "epic":2, "legendary":3}
 # the tiers that drew one give gems instead.
 const PASS_LEGACY_TITLES := ["title_cake_baron", "title_lightbringer", "title_shieldwall", "title_siege_lord", "title_whirlwind"]
 const PASS_TITLE_GEMS := {"epic": 50, "legendary": 100}
+
+# 0.31.108 (Kevin: "fix everything" -- the economy review): every season draws from the same pass weapons, so from
+# season 2 a premium buyer got 8 of 13 items he already had, and a repeat gave nothing. Now:
+#  - a season can have its own pass-exclusive weapons (PASS_SEASON_ITEMS, CATALOG "season": n): they are its premium
+#    track, at SEASON_ITEM_TIERS spread over 1..30 (the best at 30, a strong one at 1); the free track keeps three of
+#    the older pass weapons; a season with none of its own falls back to the old draw from everything before it;
+#  - a pass item the player already owns is swapped when claimed (Profile.pass_reward_for): another pass weapon of the
+#    same rarity he doesn't own and this season doesn't give, else Embers (EMBERS_DUPE, like a chest duplicate);
+#  - from season 2 the premium track's gem tiers give Embers (PASS_EMBERS_GEM_TIER) -- with the Silver chest change a
+#    premium pass no longer pays for the next one;
+#  - an earlier season's pass weapons are "vaulted": sold in the Featured shop for gems (VAULT_GEMS), and the vaulted
+#    legendaries join the Royal chest's legendary roll.
+const PASS_SEASON_ITEMS := {}           # sid -> its own weapons (season 2's await Kevin's picks of the concepts)
+const PASS_EMBERS_GEM_TIER := 60
+const VAULT_GEMS := {"common": 100, "rare": 150, "epic": 300, "legendary": 450}
+
+static func item_season(id: String) -> int:
+	return int(CATALOG.get(id, {}).get("season", 1))
+
+static func premium_item_tiers(sid: int) -> Array:
+	# the premium tiers that hold an item: the old 13 for a season without its own weapons, else n spread over 1..30
+	var own: Array = PASS_SEASON_ITEMS.get(sid, [])
+	if own.size() < 2:
+		return PREMIUM_ITEM_TIERS
+	var out := []
+	for i in own.size():
+		out.append(1 + int(round(float(i) * float(PASS_TIERS - 1) / float(own.size() - 1))))
+	return out
+
+static func vaulted(id: String, unix: int) -> bool:
+	# an earlier season's pass weapon: sold for gems in the Featured shop from the next season on
+	var it := item(id)
+	return str(it.get("source", "")) == "pass" and str(it.get("kind", "")) == "weapon" and item_season(id) < season_id(unix)
+
+static func pass_pool_weapons(max_season: int) -> Array:
+	# every pass weapon of seasons up to max_season, sorted (the swap's candidates)
+	var out := []
+	for id in CATALOG:
+		var it: Dictionary = CATALOG[id]
+		if str(it.get("source", "")) == "pass" and str(it.get("kind", "")) == "weapon" and item_season(id) <= max_season:
+			out.append(id)
+	out.sort()
+	return out
+
+static func pass_swap(sid: int, tier: int, premium: bool, id: String, owned: Array) -> Dictionary:
+	# what a pass item the player already owns turns into (deterministic, so the phone and the server agree)
+	var rar := str(item(id).get("rarity", "rare"))
+	var season_items: Array = pass_items(sid)
+	var cands := []
+	for c in pass_pool_weapons(sid):
+		if str(CATALOG[c].rarity) == rar and not owned.has(c) and not season_items.has(c):
+			cands.append(c)
+	if not cands.is_empty():
+		return {"item": cands[absi(hash("swap-%d-%d-%d" % [sid, tier, int(premium)])) % cands.size()], "swap": id}
+	return {"embers": int(EMBERS_DUPE.get(rar, 25)), "swap": id}
 
 static func pass_cosmetics(sid: int) -> Dictionary:
 	# How many cosmetics the premium track really gives (the title tiers are gems now): {"n", "legendary"}
@@ -123,8 +178,9 @@ static func pass_items(sid: int) -> Array:
 	# season, then ranked by rarity -- the free track takes the lowest, the premium track the rest in rising rarity
 	# (tier 1 gets the second-best of its rank band so the first premium unlock feels good; tier 30 the best).
 	var pool: Array = PASS_LEGACY_TITLES.duplicate()
+	var upto := maxi(1, sid - 1) if sid > 1 else 1               # (0.31.108: the weapons of the seasons before)
 	for id in CATALOG:
-		if CATALOG[id].get("source", "") == "pass":
+		if CATALOG[id].get("source", "") == "pass" and str(CATALOG[id].kind) == "weapon" and item_season(id) <= upto:
 			pool.append(id)
 	pool.sort()
 	var rng := RandomNumberGenerator.new()
@@ -138,6 +194,18 @@ static func pass_items(sid: int) -> Array:
 	while shuffled.size() < want:
 		shuffled.push_front(shuffled[shuffled.size() % maxi(1, pool.size())])
 	var free := shuffled.slice(0, PASS_FREE_ITEMS)
+	if (PASS_SEASON_ITEMS.get(sid, []) as Array).size() >= 2:
+		# 0.31.108: the season's own weapons are its premium track, rising rarity (ties by name), a strong one first
+		var own: Array = (PASS_SEASON_ITEMS[sid] as Array).duplicate()
+		own.sort_custom(func(a, b):
+			var ra := int(RARITY_RANK.get(str(CATALOG[a].rarity), 1))
+			var rb := int(RARITY_RANK.get(str(CATALOG[b].rarity), 1))
+			return ra < rb if ra != rb else str(a) < str(b))
+		if own.size() >= 3:
+			var op: String = own[own.size() - 2]
+			own.remove_at(own.size() - 2)
+			own.push_front(op)
+		return free + own
 	var prem := shuffled.slice(shuffled.size() - PASS_PREMIUM_ITEMS)       # the best PASS_PREMIUM_ITEMS, rising rarity
 	if prem.size() >= 3:
 		var opener: String = prem[prem.size() - 2]                          # a strong one to open the premium track
@@ -327,16 +395,16 @@ const PACKS := {
 	"pack_crusader": {"name":"Knight Arsenal", "class":"knight", "rarity":"epic", "gems":280, "items":["knight_wpn_bastion", "knight_wpn_crest"]},   # (0.31.87: the Gatebreaker title is earned now; 330 -> 280)
 	"pack_warlord":  {"name":"Warlord Arsenal", "class":"barbarian", "rarity":"epic", "gems":260, "items":["barb_wpn_spiked", "barb_wpn_hammer"]},
 	"pack_shadow":   {"name":"Shadow Arsenal", "class":"rogue", "rarity":"epic", "gems":250, "items":["rogue_wpn_bolt", "rogue_wpn_fangs"]},
-	"pack_hunter":   {"name":"Hunter Arsenal", "class":"ranger", "rarity":"rare", "gems":120, "items":["ranger_wpn_recurve", "ranger_wpn_quiver"]},
+	"pack_hunter":   {"name":"Hunter Arsenal", "class":"ranger", "rarity":"rare", "gems":80, "items":["ranger_wpn_recurve", "ranger_wpn_quiver"]},   # (0.31.108: 120 -> 80, the two weapons' gold at the 30,000 offer's rate, 80 %)
 	"pack_arcane":   {"name":"Arcane Arsenal", "class":"mage", "rarity":"epic", "gems":250, "items":["mage_wpn_crystal", "mage_wpn_tome"]},
 }
 
 static func item_value_gems(id: String) -> float:
-	# Rough value of an item in gems (gold at the exchange's best rate, 4500 gold = 300 gems).
+	# Rough value of an item in gems (gold at the exchange's best rate: 0.31.108, 30,000 gold = 1,600 gems; was 4500 = 300).
 	var pr := item_price(id)
 	if pr.has("gems"):
 		return float(pr.gems)
-	return float(pr.get("gold", 0)) * 300.0 / 4500.0
+	return float(pr.get("gold", 0)) * 1600.0 / 30000.0
 
 static func pack_price(pack_id: String, owned: Array) -> int:
 	# Gems for the part of the pack not owned yet; 0 when everything is owned.
@@ -357,8 +425,11 @@ static func pack_price(pack_id: String, owned: Array) -> int:
 static func item(id: String) -> Dictionary:
 	return CATALOG.get(id, {})
 
-static func item_price(id: String) -> Dictionary:
+static func item_price(id: String, unix := 0) -> Dictionary:
+	# unix: the time asked about -- a pass weapon has a price only once vaulted (0.31.108)
 	var it := item(id)
+	if str(it.get("source", "")) == "pass":
+		return {"gems": int(VAULT_GEMS.get(str(it.get("rarity", "")), 300))} if unix > 0 and vaulted(id, unix) else {}
 	if it.has("gems"):
 		return {"gems": int(it.gems)}
 	if it.has("gold"):
@@ -367,7 +438,7 @@ static func item_price(id: String) -> Dictionary:
 
 # ---------------- shop rotation ----------------
 const DAILY_SLOTS := 6              # 0.31.38: 4 -> 6 (gold items in rotation went 19 -> 43 with the upgraded classes)
-const FEATURED_SLOTS := 3           # 2 -> 3 (gem items 9 -> 15)
+const FEATURED_SLOTS := 4           # 2 -> 3 (gem items 9 -> 15); 0.31.108: 4 (the vaulted pass weapons join)
 const EXCHANGE := [{"id":"gold_s", "gems":50, "gold":600}, {"id":"gold_m", "gems":120, "gold":1600}, {"id":"gold_l", "gems":300, "gold":4500},
 	{"id":"gold_xl", "gems":700, "gold":12000}, {"id":"gold_xxl", "gems":1600, "gold":30000}]     # 0.31.106 (Kevin: "maybe add some higher gold packs")
 
@@ -385,14 +456,16 @@ static func shop_daily(unix: int) -> Array:
 	return _rotation("daily-" + day_key(unix), "gold", DAILY_SLOTS)
 
 static func shop_featured(unix: int) -> Array:
-	return _rotation("featured-" + week_key(unix), "gems", FEATURED_SLOTS)
+	return _rotation("featured-" + week_key(unix), "gems", FEATURED_SLOTS, unix)
 
-static func _rotation(key: String, currency: String, n: int) -> Array:
+static func _rotation(key: String, currency: String, n: int, unix := 0) -> Array:
 	var pool: Array = []
 	for id in CATALOG:
 		var it: Dictionary = CATALOG[id]
 		if it.get("source", "") == "shop" and it.has(currency):
 			pool.append(id)
+		elif currency == "gems" and unix > 0 and vaulted(str(id), unix):
+			pool.append(id)                          # 0.31.108: an earlier season's pass weapon
 	pool.sort()
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash(key)
@@ -668,10 +741,12 @@ static func legacy_conversion(old: Dictionary) -> Dictionary:
 # over its timer; gems skip what's left (1 gem per 10 minutes). The contents are rolled when it's opened, from the
 # chest's id (so a reload can't re-roll), and the odds are shown in the game.
 const CHEST_SLOTS := 4
+const TUTORIAL_GOLD := 250         # the tutorial's pay, once (0.31.108: Profile.finish_tutorial; was siege_mode's)
 const CHESTS := {
 	"wooden": {"name":"Wooden Chest", "unlock":1800, "gold":[60, 120], "gems_chance":0.10, "gems":[5, 5],
-		"item_chance":0.15, "rarity":{"common":0.6, "rare":0.4}, "color":"#a8794a"},
-	"silver": {"name":"Silver Chest", "unlock":3 * 3600, "gold":[150, 250], "gems_chance":1.0, "gems":[5, 10],
+		"item_chance":0.15, "rarity":{"rare":1.0}, "color":"#a8794a"},                  # (0.31.108: the only common was Sparkstick)
+	# 0.31.108: Silver gems 5-10 every time -> a 30% chance of 5 (they were about half of all free gems)
+	"silver": {"name":"Silver Chest", "unlock":3 * 3600, "gold":[150, 250], "gems_chance":0.3, "gems":[5, 5],
 		"item_chance":0.35, "rarity":{"rare":0.75, "epic":0.25}, "color":"#c9d3dc"},
 	"gold":   {"name":"Gold Chest", "unlock":8 * 3600, "gold":[400, 600], "gems_chance":1.0, "gems":[15, 25],
 		"item_chance":1.0, "rarity":{"rare":0.8, "epic":0.2}, "color":"#ffcf4a"},
@@ -681,20 +756,24 @@ const CHESTS := {
 const CHEST_FULL_GOLD := {"wooden":50, "silver":120, "gold":300, "royal":700}   # slots full: the chest becomes gold
 const DUPE_GOLD := {"common":100, "rare":250, "epic":600, "legendary":1500}       # (until 0.31.92: a cosmetic already owned; the starter pack's fallback)
 const PITY_EPIC := 10              # Gold/Royal chests: an epic or better at the latest every 10th
+const CHEST_QUEUE_MAX := 12        # 0.31.108: reward chests waiting for a slot (beyond this they turn into gold)
 
 static func skip_cost(remaining_s: int) -> int:
 	return maxi(1, int(ceil(float(remaining_s) / 600.0)))
 
-static func chest_pool(rarity: String) -> Array:
-	# cosmetics that can drop: the shop's (the pass's own stay the pass's)
+static func chest_pool(rarity: String, sid := 1) -> Array:
+	# cosmetics that can drop: the shop's (the pass's own stay the pass's); 0.31.108: plus, for a legendary, the
+	# legendaries of the passes before season sid (the Royal chest's legendary was only ever Final Verdict)
 	var ids := []
 	for id in CATALOG:
 		var it: Dictionary = CATALOG[id]
-		if str(it.get("source", "")) == "shop" and str(it.get("rarity", "")) == rarity and str(it.get("kind", "")) == "weapon":
+		if str(it.get("rarity", "")) != rarity or str(it.get("kind", "")) != "weapon":
+			continue
+		if str(it.get("source", "")) == "shop" or (rarity == "legendary" and str(it.get("source", "")) == "pass" and item_season(str(id)) < sid):
 			ids.append(id)
 	return ids
 
-static func roll_chest(kind: String, seed_value: int, owned: Array, pity: int) -> Dictionary:
+static func roll_chest(kind: String, seed_value: int, owned: Array, pity: int, sid := 1) -> Dictionary:
 	# -> {gold, gems, item ("" if none), dupe_embers, pity (the new count)}
 	var c: Dictionary = CHESTS[kind]
 	var rng := RandomNumberGenerator.new()
@@ -718,7 +797,7 @@ static func roll_chest(kind: String, seed_value: int, owned: Array, pity: int) -
 			rar = "epic"                              # bad-luck protection
 		if big:
 			out.pity = 0 if rar in ["epic", "legendary"] else pity + 1
-		var pool := chest_pool(rar)
+		var pool := chest_pool(rar, sid)
 		if pool.is_empty():
 			pool = chest_pool("rare")
 		if not pool.is_empty():
@@ -752,10 +831,12 @@ static func chest_odds(kind: String) -> String:
 # only, never damage. Paid in Embers (earned by playing, or bought with gems here) plus gold; the third star also needs
 # FORGE_WINS wins with that weapon equipped, and picks the aura's element.
 const FORGE_STARS := [
-	{"name":"Polished", "embers":40, "gold":500, "text":"A glint runs up the metal and it sparkles, in its rarity's colour."},
-	{"name":"Runed", "embers":120, "gold":1500, "text":"Glowing veins pulse through it, runes drift around it, a trail when you swing."},
-	{"name":"Ascended", "embers":300, "gold":4000, "text":"Flames, frost, lightning, holy light, leaves or a void vortex -- the element you pick."}]
+	{"name":"Polished", "embers":40, "gold":1000, "text":"A glint runs up the metal and it sparkles, in its rarity's colour."},
+	{"name":"Runed", "embers":120, "gold":3000, "text":"Glowing veins pulse through it, runes drift around it, a trail when you swing."},
+	{"name":"Ascended", "embers":300, "gold":8000, "text":"Flames, frost, lightning, holy light, leaves or a void vortex -- the element you pick."}]
 const FORGE_WINS := 25
+# 0.31.108: the gold doubled (500 / 1,500 / 4,000 -> 1,000 / 3,000 / 8,000) -- gold piled up once the shop was bought
+# out; now a player's Embers and gold run out at about the same pace.
 const EMBERS_DUPE := {"common":10, "rare":25, "epic":60, "legendary":150}      # a duplicate from a chest
 const EMBERS_MATCH := 2                 # every finished match ...
 const EMBERS_WIN := 5                   # ... or this for a win

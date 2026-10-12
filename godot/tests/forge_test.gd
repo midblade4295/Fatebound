@@ -22,7 +22,7 @@ func fresh(tag: String) -> Profile:
 
 func _init() -> void:
 	# ---- the table
-	check(Eco.forge_cost(1) == {"embers":40, "gold":500} and Eco.forge_cost(3) == {"embers":300, "gold":4000} and Eco.forge_cost(4).is_empty(), "star costs: 40/500, 120/1500, 300/4000")
+	check(Eco.forge_cost(1) == {"embers":40, "gold":1000} and Eco.forge_cost(2) == {"embers":120, "gold":3000} and Eco.forge_cost(3) == {"embers":300, "gold":8000} and Eco.forge_cost(4).is_empty(), "star costs (0.31.108): 40/1,000, 120/3,000, 300/8,000")
 	check(Eco.forge_id("knight", "") == "default_knight" and Eco.forge_name("default_knight") == "Squire's Blade" and Eco.forge_rarity("default_knight") == "common", "a starter is forged as default_<class>, by its name")
 	check(Eco.forge_name("knight_wpn_oath") == "Kingsoath" and Eco.forge_class("knight_wpn_oath") == "knight", "the Knight's weapons have their new names")
 	# ---- forging
@@ -31,8 +31,8 @@ func _init() -> void:
 	check(p.forge_owns(wid) and not p.forge_owns("knight_wpn_oath"), "a starter is always yours, a catalog weapon once owned")
 	check(str(p.can_forge(wid).why) == "embers", "no Embers: can't forge")
 	p.d.embers = 1000
-	p.d.gold = 10000
-	check(bool(p.forge(wid).ok) and p.forge_stars(wid) == 1 and int(p.d.embers) == 960 and int(p.d.gold) == 9500, "star 1 costs 40 Embers and 500 gold")
+	p.d.gold = 20000
+	check(bool(p.forge(wid).ok) and p.forge_stars(wid) == 1 and int(p.d.embers) == 960 and int(p.d.gold) == 19000, "star 1 costs 40 Embers and 1,000 gold")
 	check(bool(p.forge(wid).ok) and p.forge_stars(wid) == 2 and int(p.d.embers) == 840, "star 2: 120 Embers")
 	check(str(p.can_forge(wid, "fire").why) == "wins", "star 3 needs %d wins with the weapon" % Eco.FORGE_WINS)
 	p.d.forge.wins[wid] = Eco.FORGE_WINS

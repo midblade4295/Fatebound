@@ -8,6 +8,7 @@ const Eco = preload("res://scripts/meta/economy.gd")
 const Profile = preload("res://scripts/meta/profile.gd")
 const Billing = preload("res://scripts/meta/billing.gd")
 const PlayGames = preload("res://scripts/meta/play_games.gd")
+const EcoSync = preload("res://scripts/meta/eco_sync.gd")
 const Screens = preload("res://scripts/app/screens.gd")
 const Showcase = preload("res://scripts/app/showcase.gd")
 const Siege = preload("res://scripts/siege/siege_mode.gd")
@@ -97,6 +98,11 @@ var safe_boot := false
 var online_status: Node = null         # 0.31.82: the server's player count for Home (the real app only, or FB_STATUS_POLL)
 var billing: Node = null               # 0.31.90: Google Play purchases (scripts/meta/billing.gd); inactive off Play
 var play_games: Node = null            # 0.31.102: Google Play Games sign-in and the progress kept there (play_games.gd)
+# 0.31.108: the account on the server (eco_sync.gd) -- the server's copy of the profile is the one that counts.
+# Headless (tests, tools) it doesn't reach the real server unless asked (eco_url / FB_ECO=1).
+var eco_sync: Node = null
+var eco_autostart := DisplayServer.get_name() != "headless" or OS.has_environment("FB_ECO")
+var eco_url := OS.get_environment("SIEGE_URL") if OS.has_environment("SIEGE_URL") else Net.DEFAULT_URL
 var online_refs := {}                  # Home's "players online" pill: {main, sub}
 var _guard: Node = null
 # 0.31.84 (Kevin: "put a fps cap of 60 in the menus"): the menus ran uncapped (120 on a 120 Hz phone); a match sets its
@@ -139,8 +145,17 @@ func _ready() -> void:
 		online_status = OnlineStatus.new()
 		online_status.changed.connect(paint_online)
 		add_child(online_status)
+	eco_sync = EcoSync.new()
+	eco_sync.url = eco_url
+	eco_sync.auto_start = eco_autostart
+	eco_sync.setup(profile)
+	add_child(eco_sync)
+	eco_sync.synced.connect(_on_eco_synced)
+	eco_sync.rejected.connect(func(op: String, err: String):
+		print("ECO rejected %s: %s" % [op, err]))
 	billing = Billing.new()
 	add_child(billing)
+	billing.on_server_grant = func(g: Dictionary): eco_sync.adopt(g.get("profile", {}), int(profile.d.account.get("seq", 0)))
 	billing.setup(profile)
 	billing.note.connect(func(t: String, good: bool): toast(t, UI.GOLD if good else UI.RED))
 	billing.granted.connect(_on_iap_granted)
@@ -912,7 +927,17 @@ func _process(_delta: float) -> void:
 			_toast_box.visible = false
 
 # ---------------- matches ----------------
-const TUTORIAL_GOLD := 250
+const TUTORIAL_GOLD := Eco.TUTORIAL_GOLD
+var _ticket_wait := false              # 0.31.108: asking the server for a VS BOTS ticket
+var _ticket_ok := false
+
+func _on_eco_synced(differs: bool) -> void:
+	# 0.31.108: the profile is the server's again; redraw only if something shown changed (and not mid-match)
+	if not differs or siege != null:
+		return
+	refresh_top()
+	if not is_instance_valid(modal):
+		rebuild()
 
 func start_tutorial() -> void:
 	# The Herald's walkthrough: a small offline match (siege_mode.gd tutorial = true).
@@ -923,6 +948,22 @@ func start_match(online: bool, tutorial := false) -> void:
 		return
 	if online and update_required:
 		show_update_screen()               # online stays locked until the update is installed
+		return
+	if not online and not tutorial and eco_sync != null and eco_sync.enabled and not _ticket_ok:
+		# 0.31.108 (Kevin: "Always online"): a VS BOTS match pays only against a ticket the server gives now
+		if _ticket_wait:
+			return
+		_ticket_wait = true
+		toast("Connecting to the server...", UI.GOLD)
+		eco_sync.request_ticket(func(tk: String):
+			_ticket_wait = false
+			if tk == "":
+				sfx("error")
+				toast("VS BOTS needs a connection to the server", UI.RED)
+				return
+			_ticket_ok = true
+			start_match(false, false)
+			_ticket_ok = false)
 		return
 	sfx("matchStart")
 	siege = Siege.new()
@@ -958,6 +999,8 @@ func _end_match() -> void:
 	if is_instance_valid(siege):
 		siege.queue_free()
 	siege = null
+	if eco_sync != null and eco_sync.enabled:
+		eco_sync.pull()                          # 0.31.108: the server's count of the match (online), or ours sent up
 	_menu_fps.call_deferred()                 # (after the match's _exit_tree puts back what it found)
 	_set_menu_active(true)
 	show_tab("home")
@@ -1013,6 +1056,8 @@ static func _cloud_line(s: Dictionary) -> String:
 
 func _on_cloud_restored() -> void:
 	# the profile was replaced: everything shown from it is redrawn (the counters just change: nothing was earned)
+	if eco_sync != null:
+		eco_sync.account_switched()              # 0.31.108: (and with it, maybe, the account on the server)
 	_apply_audio()
 	hero_show()
 	if siege == null:
@@ -1127,6 +1172,8 @@ func _notification(what: int) -> void:
 		if online_status != null:
 			online_status.set_active(false)
 	elif what == NOTIFICATION_APPLICATION_RESUMED:
+		if eco_sync != null and eco_sync.auto_start:
+			eco_sync.start()                   # 0.31.108: the account as the server has it
 		if billing != null:
 			billing.resume()                   # a purchase finished while we were away (or a pending one cleared)
 		if play_games != null:

@@ -71,7 +71,11 @@ const IAP := {
 	"gems_1100":    {"gems":1100, "usd":"9.99", "tag":"A SIEGE PASS"},
 	"gems_2400":    {"gems":2400, "usd":"19.99"},
 	"gems_6500":    {"gems":6500, "usd":"49.99", "tag":"BEST VALUE"},
-	"starter_pack": {"gems":300,  "embers":150, "weapon":"rare", "once":true, "usd":"2.99"},
+	# 0.31.108 (the economy review): a $99.99 pack. "play_only": shown only once Google Play returns its price (the
+	# product has to be created in Play Console first, PLAY_IAP_HANDOFF.md); it then takes BEST VALUE from gems_6500.
+	"gems_14000":   {"gems":14000, "usd":"99.99", "tag":"BEST VALUE", "play_only":true},
+	# 0.31.108: 300 gems + 150 Embers + a rare -> 500 + 300 + an epic (about 2.6x its price; was 1.5x)
+	"starter_pack": {"gems":500,  "embers":300, "weapon":"epic", "once":true, "usd":"2.99"},
 }
 
 const TITLES := {
