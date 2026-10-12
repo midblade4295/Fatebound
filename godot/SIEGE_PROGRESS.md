@@ -3155,3 +3155,43 @@ K2/K3 notes (0.17.0)
   pass / quest chests turn to gold when the 4 slots are full (the level-10 Royal included); the starter pack is ~1.5x.
 - Candidate tested (not shipped): Silver chest 30% chance of 5 gems -> free gems a season light 300, casual 510, regular
   540, grinder 710.
+
+## 0.31.108 — the economy review's fixes, and the server keeps the accounts (Kevin: "I want you to fix everything. I also want to make sure everything is verified by server so players can't edit gems ect"; VS BOTS: "Always online")
+- Pass: a pass item already owned is swapped when claimed (Eco.pass_swap: another pass weapon of its rarity the player
+  doesn't own and this season doesn't give, else Embers 25/60/150 by rarity); the tier remembers what it gave
+  (d.pass.swaps) and the pass screen shows it ("In place of X, which you already own"). From season 2 the premium
+  track's 60-gem tiers give 60 Embers (season 1 unchanged). A season can have its own pass-exclusive weapons
+  (Eco.PASS_SEASON_ITEMS, CATALOG "season": n) spread over SEASON tiers 1..30; season 2's await Kevin's picks of the
+  concept board (6 weapons). Earlier seasons' pass weapons are vaulted: sold in the Featured shop for gems (rare 150,
+  epic 300, legendary 450; Featured 3 -> 4 slots) and their legendaries join the Royal chest's legendary roll.
+- Chests: Silver gems 5-10 always -> a 30% chance of 5. Wooden items rares only (the only common was Sparkstick).
+  Reward chests (levels, pass, quests, a whole day's / week's orders) wait for a slot (d.chests.queue, up to 12;
+  Home shows "+N WAITING") instead of turning into gold; a match's chest still turns into gold when full. Rolls are
+  seeded by the account's salt + the chest's id and kind (the phone and the server roll the same).
+- Forge gold doubled (1,000 / 3,000 / 8,000). Hunter Arsenal 120 -> 80 gems; Arsenal values at the 30,000-gold offer's
+  rate. Starter pack 500 gems + 300 Embers + an epic (was 300 / 150 / a rare). gems_14000 ($99.99) added, shown only
+  once Google Play returns its price (PLAY_IAP_HANDOFF: create it, update the starter pack's description); its art
+  assets/ui/packs/gem_pack_6.png (Meshy i2i: a mountain of diamonds over two royal chests, a sceptre, a sleeping
+  purple baby dragon); it takes BEST VALUE when shown.
+- Server-kept accounts (server/eco_accounts.gd, server/match_ledger.gd, scripts/meta/eco_sync.gd; SIEGE_HANDOFF 19):
+  every change in the app is an op (Profile.OPS, recorded by Profile._rec) replayed on the server with the same
+  profile.gd / economy.gd and its own clock; numbered (a resent op is done once); the answer replaces the phone's copy
+  with the unsent ops re-applied. VS BOTS needs a server ticket to start; its result counts 150 s+ after the ticket,
+  once, clamped (EcoAccounts.clamp_me). Online matches are paid by the server from its own count. Purchases are
+  granted to the account by the server, one account per token (purchase_tokens.json; the old ledger's confirmed tokens
+  count once in an import). Online name / title / looks come from the account. New accounts import the phone's progress
+  once, held to what that many matches could earn (+ confirmed purchases), until 2026-12-01; 240 new accounts an hour
+  at most. The tutorial's pay (Profile.finish_tutorial) and the name (set_name) are ops; the dice-era import is off.
+  The installer ships the meta scripts and backs up the accounts before each update.
+- tools/economy_sim.gd: the model behind the review (bot-match samples + 84 days on the real code).
+- tests/eco_server_test.gd (accounts alone + end to end against the real server on 8093) and economy_fix_test.gd in
+  the suite; iap_test / forge_test updated for the new numbers.
+- Home: "+N WAITING" over the chest row when reward chests wait (app_shots SHOT_QUEUE=1). Pass premium copy says
+  "Embers and gold on every tier" from season 2.
+- Content pack ui rebuilt (ui-4e65a88f514e.pck, gem_pack_6) and on the content-packs branch. Server: SERVER_BUILD
+  0.31.108 -- needs the redeploy (SIEGE_HANDOFF 19); until then the app keeps its own local economy as before.
+- tools/economy_sim.gd after the fixes, free gems a season: light 340, casual 550, regular 620, grinder 800 (were 370,
+  770, 960, 1,120); with premium 500 / 860 / 890 / 1,100 (were 550 / 1,160 / 1,320 / 1,490); no Gold/Royal chest lost
+  to full slots (were up to 10 a season).
+- 0.31.108, version code 194. Quick suite: ALL 57 PASSED. CONTENT OK. APK 31,373,497 bytes,
+  sha256 5068951500e9e1f3fcf7c0cf4efe96622b20a41fcdb6efe7189dda683d5a7664.

@@ -457,11 +457,6 @@ static func chests_row(app, parent: Control, w: float, y: float) -> void:
 			UI2.glow(plate, Rect2(-14, -40, sw + 28, sh + 40), Color(0.55, 1.0, 0.6, 0.55))
 		UI2.plate(plate, "green" if ready else "night", 14.0, rim)
 		slots.append({"kind": k, "mode": "tease" if ready else "idle", "x": x + sw * 0.5})
-	var waiting: int = p.chests_waiting()
-	if waiting > 0:                                     # 0.31.108: reward chests waiting for a free slot
-		var wc := UI2.chip(parent, "+%d WAITING" % waiting, Color(0.03, 0.02, 0.1, 0.88), UI2.GOLD, Color(UI2.GOLD, 0.7))
-		wc.position = Vector2(w - 104, y - 24)
-		wc.set_meta("action_key", "chests_waiting")
 	var row := ChestRow.new()                           # the chests themselves, in 3D
 	row.slots = slots
 	row.position = Vector2(0, y - 46)
@@ -469,6 +464,11 @@ static func chests_row(app, parent: Control, w: float, y: float) -> void:
 	row.chest_px = minf(80.0, sw - 6.0)
 	row.base_y = 0.66
 	parent.add_child(row)
+	var waiting: int = p.chests_waiting()
+	if waiting > 0:                                     # 0.31.108: reward chests waiting for a free slot (over the row)
+		var wc := UI2.chip(parent, "+%d WAITING" % waiting, Color(0.03, 0.02, 0.1, 0.92), UI2.GOLD, Color(UI2.GOLD, 0.8))
+		wc.position = Vector2(w - 108, y - 40)
+		wc.set_meta("action_key", "chests_waiting")
 	for i in Eco.CHEST_SLOTS:                           # and what's on each slot (over the chests)
 		var x := i * (sw + gap)
 		var cell := Control.new()

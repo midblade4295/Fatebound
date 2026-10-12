@@ -108,6 +108,8 @@ func _process(_d: float) -> bool:
 			p.add_chest(k, {})
 		p.d.chests.slots[0].start = p.now() - 99999
 		p.d.chests.slots[1].start = p.now() - 3600
+		if OS.has_environment("SHOT_QUEUE"):             # 0.31.108: reward chests waiting for a slot
+			p.d.chests.queue = ["royal", "gold"]
 		p.save()
 		app.rebuild()
 	# 40 frames per tab: switch at +5, shot at +30 (lets the 3D showcase and animations settle),
