@@ -107,6 +107,10 @@ func _process(_d: float) -> bool:
 				p.d.cloud.stamp = "mine-1"
 			root.add_child(fp)
 			app.play_games.setup(p, fp)
+		if OS.has_environment("SHOT_NO_LOGO"):           # (0.31.112: logo concepts are laid over a shot without the logo)
+			for l in app.find_children("*", "Label", true, false):
+				if (l as Label).text in ["FATEBOUND", "ANYONE  CAN  CHANGE  FATE"]:
+					(l as Label).visible = false
 		if OS.has_environment("SHOT_TUTORIAL"):          # 0.31.112: Home before / after the tutorial (todo | done)
 			p.d.tutorial_done = OS.get_environment("SHOT_TUTORIAL") == "done"
 		p.d.challenges.daily[0].progress = 99
