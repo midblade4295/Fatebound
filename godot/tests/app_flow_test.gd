@@ -94,7 +94,6 @@ func _process(d: float) -> bool:
 				var l: Dictionary = Screens.home_layout(h)
 				check(float(l.needed) <= h + 1.0 and float(l.play) >= Screens.HOME_FEET and float(l.under) >= float(l.play) + 80.0 \
 					and float(l.chests) >= float(l.under) + 36.0 + Screens.CHEST_ART - 0.5, "Home fits %.0f px without scrolling: %s" % [h, str(l)])
-			check(bool(Screens.home_layout(723.0).ribbon), "a 20:9 phone keeps the ribbon: %s" % str(Screens.home_layout(723.0)))
 			press("side_orders")
 			check(app.modal != null and app.modal.has_method("refresh"), "ORDERS opens the orders window")
 			var xp0: int = p.d.pass.xp

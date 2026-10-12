@@ -3303,3 +3303,19 @@ K2/K3 notes (0.17.0)
   7°, the knot never moves, the swinging King clears the medallions at 420 wide, still with Reduce Motion).
 - ui pack rebuilt and uploaded (ui-80b7ee56e390.pck). Full suite: ALL SIEGE TESTS PASSED (61). 0.31.113, version code
   199. APK 31432155 bytes, sha256 b20a2069da753dec18ffdac079fa2b40f0028392631d9dc933d48d63b88e2f60.
+
+## 0.31.114 — a cleaner Home: the heroes in two rows with room between them (Kevin: "The characters on main screen are too hudled together and clipping into each other. Is there a way you can redesign the home screen so it's cleaner")
+- `roster.gd`: the seven heroes stand in two staggered rows instead of one tight arc (0.95 m apart, weapons through
+  each other): the Barbarian, the Knight and the Mage in front (2.25 m apart), the Rogue, the Ranger, the Priest and
+  the Worker behind them in the gaps (the outer two beside the dais). 1.2x (was 1.12x), camera 22 degrees up (was 12.7)
+  so the back row stands visibly behind. `SPOTS`, `HERO_SCALE`.
+- `screens.gd`: the side medallions tucked up under the top bar (`MED_Y` 0 / 82 / 164, was 58 / 150 / 242 left and
+  58 / 176 / 270 right) so they end above the heroes; FIRST WIN's "+300" is a badge on its corner. The "16 v 16
+  SIEGE" ribbon is gone (it sat on the heroes' feet; the line under PLAY already says 16 vs 16); a party now always
+  shows under PLAY. `home_layout` has no ribbon key.
+- Tests: home_heroes_test (no hero's body or weapons within 6 cm of another, from the weapons' actual vertices; at
+  420 x 933 every hero clear of the medallions and standing above PLAY, the front three side by side; no ribbon).
+  The 0.31.113 line-up fails it (rogue/ranger, ranger/barbarian, barbarian/knight, ...). app_flow_test drops its
+  ribbon check. reports/concepts/home_heroes_before_after.png.
+- Full suite: ALL SIEGE TESTS PASSED (62). No content pack change. 0.31.114, version code 200. APK 31432155 bytes,
+  sha256 9d86bef25c87accf7e4808fb0873959549d6b265004b7396a3f2dea9912baa59.

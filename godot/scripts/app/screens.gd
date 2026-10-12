@@ -224,15 +224,20 @@ static func buy(app, id: String, then := Callable()) -> void:
 # screen and doesn't scroll -- the medallions, the ribbon, PLAY, under it the tutorial (until it's done) or the players
 # online, and the chests on the bottom edge. The orders and the pass summary open from ORDERS (orders_panel.gd). A
 # screen too short for all that (under ~19:9) drops the ribbon; shorter still, Home scrolls the little that's left.
+
+# 0.31.114 (Kevin: "The characters on main screen are too hudled together and clipping into each other. Is there a way
+# you can redesign the home screen so it's cleaner"): the heroes stand in two staggered rows on the dais (roster.gd) and
+# the ribbon is gone -- it sat on their feet, and the line under PLAY already says 16 vs 16. A party shows under PLAY.
+const MED_Y := [0.0, 82.0, 164.0]   # 0.31.114: the side medallions, tucked up under the top bar (clear of the heroes)
 const HOME_FEET := 396.0      # (content y where the heroes' feet are: nothing of the layout goes above it)
 const CHEST_H := 84.0         # a chest plate
 const CHEST_ART := 44.0       # the 3D chests (and their timer tags) stand this far above their plates
 
 static func home_layout(h: float) -> Dictionary:
-	# the natural layout under the heroes (ribbon, PLAY, the row under it) with the chests on the bottom edge; on a
-	# shorter screen it packs up from the chests, and the ribbon goes when it would cover the heroes
+	# PLAY and the row under it under the heroes, the chests on the bottom edge; on a shorter screen it packs up from
+	# the chests (no higher than the heroes' feet)
 	var chest_y := h - CHEST_H - 4.0
-	var out := {"ribbon": true, "play": 486.0, "under": 574.0, "chests": chest_y}
+	var out := {"play": 486.0, "under": 574.0, "chests": chest_y}
 	if 574.0 + 36.0 + CHEST_ART > chest_y:
 		var under := chest_y - CHEST_ART - 36.0
 		var play := under - 8.0 - 80.0
@@ -240,7 +245,7 @@ static func home_layout(h: float) -> Dictionary:
 			play = HOME_FEET                           # (too short even so: the chests go below and Home scrolls a little)
 			under = play + 88.0
 			chest_y = under + 36.0 + CHEST_ART
-		out = {"ribbon": play - 66.0 >= HOME_FEET, "play": play, "under": under, "chests": chest_y}
+		out = {"play": play, "under": under, "chests": chest_y}
 	out["needed"] = float(out.chests) + CHEST_H + 4.0
 	return out
 
@@ -277,12 +282,12 @@ static func home(app, root: VBoxContainer) -> void:
 		for ch in (d.challenges.daily if span == "daily" else d.challenges.weekly):
 			if not bool(ch.claimed) and int(ch.progress) >= int(Eco.CHALLENGES[ch.id].goal):
 				orders_ready += 1
-	var sp := _medallion(top, Vector2(-2, 58), "banner", "PASS", func():
+	var sp := _medallion(top, Vector2(-2, MED_Y[0]), "banner", "PASS", func():
 		app.sfx("tab")
 		app.show_tab("pass"), "side_pass", claimable)
 	# 0.31.97: the class quests, under ORDERS (a badge for every quest step ready to claim)
 	var qready: int = p.quests_ready()
-	var qb := _medallion(top, Vector2(-2, 242), quest_icon_name(), "QUESTS", func():
+	var qb := _medallion(top, Vector2(-2, MED_Y[2]), quest_icon_name(), "QUESTS", func():
 		app.sfx("tab")
 		app.quest_cls = quest_first(p)
 		app.show_tab("quests"), "side_quests", qready)
@@ -290,14 +295,14 @@ static func home(app, root: VBoxContainer) -> void:
 		UI2.wiggle(qb.get_meta("icon"))
 	if claimable > 0:
 		UI2.wiggle(sp.get_meta("icon"))
-	var ob := _medallion(top, Vector2(-2, 150), "scroll", "ORDERS", func():
+	var ob := _medallion(top, Vector2(-2, MED_Y[1]), "scroll", "ORDERS", func():
 		app.sfx("menuOpen")
 		app.open_orders(), "side_orders", orders_ready)
 	if orders_ready > 0:
 		UI2.wiggle(ob.get_meta("icon"))
 	# 0.31.93: the Forge, under FIRST WIN (a badge when an equipped weapon's next star can be forged)
 	var fready := forge_ready(p)
-	var fgb := _medallion(top, Vector2(w - 62, 176), "anvil", "FORGE", func():
+	var fgb := _medallion(top, Vector2(w - 62, MED_Y[1]), "anvil", "FORGE", func():
 		app.sfx("tab")
 		app.forge_cls = app.locker_class if (Eco.CLASSES + Eco.UP_CLASSES).has(str(app.locker_class)) else "knight"
 		app.forge_pick = ""
@@ -308,13 +313,13 @@ static func home(app, root: VBoxContainer) -> void:
 	# friend requests and party invites waiting)
 	var soc = app.get("social")
 	var att: int = soc.attention() if soc != null and soc.online() else 0
-	var frb := _medallion(top, Vector2(w - 62, 270), "friends", "FRIENDS", func():
+	var frb := _medallion(top, Vector2(w - 62, MED_Y[2]), "friends", "FRIENDS", func():
 		app.sfx("menuOpen")
 		app.open_friends(), "side_friends", att, "silver")
 	if att > 0:
 		UI2.wiggle(frb.get_meta("icon"))
 	var fw_open := str(d.first_win_day) != Eco.day_key(p.now())
-	var fwb := _medallion(top, Vector2(w - 62, 58), "trophy", "FIRST WIN", func():
+	var fwb := _medallion(top, Vector2(w - 62, MED_Y[0]), "trophy", "FIRST WIN", func():
 		app.sfx("tap")
 		if fw_open:
 			app.toast("First win of the day: +%d gold, +%d pass XP and a Silver Chest" % [Eco.FIRST_WIN.gold, Eco.FIRST_WIN.pass], UI.GOLD)
@@ -322,53 +327,24 @@ static func home(app, root: VBoxContainer) -> void:
 			app.toast("First win done today -- back tomorrow", UI.MUTED), "side_first_win", 0, "silver")
 	if fw_open:
 		UI2.bob(fwb.get_meta("icon"), 4.0, 1.4)
-		var chip := PanelContainer.new()
+		var chip := PanelContainer.new()            # "+300" on the medallion's corner, like a badge
 		var cs := StyleBoxFlat.new()
 		cs.bg_color = Color("#ffc94d")
 		cs.border_color = Color("#3a1c02")
 		cs.set_border_width_all(2)
 		cs.set_corner_radius_all(9)
-		cs.content_margin_left = 6
-		cs.content_margin_right = 6
+		cs.content_margin_left = 5
+		cs.content_margin_right = 5
 		chip.add_theme_stylebox_override("panel", cs)
 		chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		chip.position = Vector2(w - 58, 58 + 90)
-		chip.custom_minimum_size = Vector2(56, 18)
-		top.add_child(chip)
+		chip.position = Vector2(26, -4)
+		chip.custom_minimum_size = Vector2(40, 18)
+		fwb.add_child(chip)
 		var cl := UI.label(chip, "+%d" % Eco.FIRST_WIN.gold, 11, Color("#3a1c02"), UI.HEAVY_FONT)
 		cl.autowrap_mode = TextServer.AUTOWRAP_OFF
 		cl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	else:
 		fwb.modulate = Color(0.75, 0.75, 0.8, 0.85)
-	# --- the roster ribbon
-	var rib: Control = null
-	if not bool(lay.ribbon):
-		pass                                        # (a short screen: PLAY goes straight under the heroes)
-	elif soc != null and soc.online() and soc.in_party():
-		# in a party: the ribbon says who's in it (the leader first, with a crown) and who starts
-		var names := []
-		for m in soc.party.get("members", []):
-			names.append(("♛ " if str(m.pid) == str(soc.party.leader) else "") + str(m.n))
-		var sub := "  ·  ".join(names)
-		if (soc.party.get("pending", []) as Array).size() > 0:
-			sub += "  ·  %d invited" % (soc.party.pending as Array).size()
-		rib = UI2.ribbon(top, "YOUR PARTY  %d/%d" % [soc.party_size(), int(soc.party.get("max", 4))], sub, 330.0, 52.0,
-			[Color("#3fb86a"), Color("#13512b")])
-		var hit := Button.new()
-		hit.flat = true
-		hit.focus_mode = Control.FOCUS_NONE
-		for st_name in ["normal", "hover", "pressed", "focus", "hover_pressed"]:
-			hit.add_theme_stylebox_override(st_name, StyleBoxEmpty.new())
-		hit.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		hit.set_meta("action_key", "party_ribbon")
-		hit.pressed.connect(func():
-			app.sfx("menuOpen")
-			app.open_friends())
-		rib.add_child(hit)
-	else:
-		rib = UI2.ribbon(top, "16 v 16 SIEGE", "7 classes  ·  grab a hat in battle to become one", 330.0, 52.0)
-	if rib != null:
-		rib.position = Vector2((w - 330.0) * 0.5, float(lay.play) - 66.0)
 	# --- PLAY: always the Siege server (0.31.79); the bots fill any empty slots
 	var py: float = lay.play
 	UI2.glow(top, Rect2(-30, py - 16, w + 60, 130), Color(1.0, 0.55, 0.15, 0.55))
@@ -402,8 +378,8 @@ static func home(app, root: VBoxContainer) -> void:
 		UI2.pulse(tb, 0.06, 0.8)
 		UI2.sweep(tb, 2.0, 50.0)
 		app.online_refs = {}
-	elif rib == null and soc != null and soc.online() and soc.in_party():
-		# no room for the ribbon: the party goes under PLAY instead of the players online
+	elif soc != null and soc.online() and soc.in_party():
+		# in a party: who's in it (the leader first, with a crown), under PLAY instead of the players online
 		var names := []
 		for m in soc.party.get("members", []):
 			names.append(("♛ " if str(m.pid) == str(soc.party.leader) else "") + str(m.n))

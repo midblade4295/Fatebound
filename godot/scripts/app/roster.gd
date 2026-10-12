@@ -6,16 +6,21 @@ extends Control
 const View = preload("res://scripts/siege/siege_view.gd")
 const Eco = preload("res://scripts/meta/economy.gd")
 
-# class, x, z (metres on the dais; +z is toward the camera), yaw (turned a little toward the middle)
-const SPOTS := [  # class, x, z, yaw, lift -- one arc across the dais, the Knight in front in the middle
-	["rogue", -2.85, -0.18, 0.34, 0.0], ["ranger", -1.9, 0.22, 0.23, 0.0], ["barbarian", -1.0, 0.42, -0.35, 0.0],
-	["knight", 0.0, 0.95, 0.0, 0.0],
-	["mage", 1.0, 0.42, 0.35, 0.0], ["priest", 1.9, 0.22, -0.23, 0.0], ["worker", 2.85, -0.18, -0.34, 0.0],
+# 0.31.114 (Kevin: "The characters on main screen are too hudled together and clipping into each other. Is there a way
+# you can redesign the home screen so it's cleaner"): two staggered rows instead of one tight arc -- the Barbarian, the
+# Knight and the Mage in front, the Rogue, the Ranger, the Priest and the Worker behind them in the gaps (the outer two
+# beside the dais). Bigger, from a little higher (22 degrees), with room between every one of them; the side medallions
+# moved up out of their way (screens.gd).
+# class, x, z (metres; +z is toward the camera), yaw (turned a little toward the middle), lift
+const SPOTS := [
+	["rogue", -3.6, -1.4, 0.3, 0.0], ["ranger", -1.1, -1.6, 0.1, 0.0], ["priest", 1.1, -1.6, -0.1, 0.0], ["worker", 3.6, -1.4, -0.3, 0.0],
+	["barbarian", -2.25, 1.8, 0.22, 0.0], ["knight", 0.0, 2.1, 0.0, 0.0], ["mage", 2.25, 1.8, -0.22, 0.0],
 ]
+const HERO_SCALE := 1.2
 
-var cam_pos := Vector3(0.0, 3.45, 15.3)          # ~12.7 degrees up, like the painted dais' ellipse
+var cam_pos := Vector3(0.0, 6.9, 14.3)           # ~22 degrees up (0.31.79-0.31.113: 12.7, like the painted dais)
 var look_at_pt := Vector3(0.0, 0.9, 0.0)
-const FEET_Y := 226.0                           # where a hero standing at the dais' centre has his feet (control px)
+const FEET_Y := 226.0                           # the painted dais' centre is this far down the layer (control px; places it)
 var fov := 27.0
 var viewport: SubViewport
 var world: Node3D
@@ -139,7 +144,7 @@ func _rebuild() -> void:
 		var made: Dictionary = View.make_body(cls, look)
 		if not made.is_empty():
 			var body: Node3D = made.body
-			body.scale = Vector3.ONE * 1.12
+			body.scale = Vector3.ONE * HERO_SCALE
 			slot.add_child(body)
 			var player: AnimationPlayer = made.player
 			var idle: String = str(View.LOOKS.get(cls, View.LOOKS.knight).idle)
