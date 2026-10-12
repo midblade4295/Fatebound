@@ -218,18 +218,49 @@ static func buy(app, id: String, then := Callable()) -> void:
 # 0.31.79 (Kevin: the concepts, "build it"): the painted battlements with every class on the dais (the app's hero layer),
 # PASS / ORDERS / FIRST WIN medallions, the roster ribbon, one big PLAY (always the server), the chests in 3D, then
 # the orders and the pass under it. The top is laid out by hand in content pixels (the hero layer lines up with it).
-const HOME_TOP := 776.0
+
+# 0.31.112 (Kevin: "for home screen I don't want it to scroll down, just have the chests at bottom and move the orders and
+# stuff to its own popup menu. Put the play tutorial right under the play button and make it pulse"): Home fills the
+# screen and doesn't scroll -- the medallions, the ribbon, PLAY, under it the tutorial (until it's done) or the players
+# online, and the chests on the bottom edge. The orders and the pass summary open from ORDERS (orders_panel.gd). A
+# screen too short for all that (under ~19:9) drops the ribbon; shorter still, Home scrolls the little that's left.
+
+# 0.31.114 (Kevin: "The characters on main screen are too hudled together and clipping into each other. Is there a way
+# you can redesign the home screen so it's cleaner"): the heroes stand in two staggered rows on the dais (roster.gd) and
+# the ribbon is gone -- it sat on their feet, and the line under PLAY already says 16 vs 16. A party shows under PLAY.
+const MED_Y := [0.0, 82.0, 164.0]   # 0.31.114: the side medallions, tucked up under the top bar (clear of the heroes)
+const HOME_FEET := 396.0      # (content y where the heroes' feet are: nothing of the layout goes above it)
+const CHEST_H := 84.0         # a chest plate
+const CHEST_ART := 44.0       # the 3D chests (and their timer tags) stand this far above their plates
+
+static func home_layout(h: float) -> Dictionary:
+	# PLAY and the row under it under the heroes, the chests on the bottom edge; on a shorter screen it packs up from
+	# the chests (no higher than the heroes' feet)
+	var chest_y := h - CHEST_H - 4.0
+	var out := {"play": 486.0, "under": 574.0, "chests": chest_y}
+	if 574.0 + 36.0 + CHEST_ART > chest_y:
+		var under := chest_y - CHEST_ART - 36.0
+		var play := under - 8.0 - 80.0
+		if play < HOME_FEET:
+			play = HOME_FEET                           # (too short even so: the chests go below and Home scrolls a little)
+			under = play + 88.0
+			chest_y = under + 36.0 + CHEST_ART
+		out = {"play": play, "under": under, "chests": chest_y}
+	out["needed"] = float(out.chests) + CHEST_H + 4.0
+	return out
 
 static func home(app, root: VBoxContainer) -> void:
 	var p = app.profile
 	var d: Dictionary = p.d
 	app.hero_show()
 	var w: float = maxf(300.0, app.size.x - 24.0)
+	var avail: float = app.home_height()
+	var lay := home_layout(avail)
+	app.home_fixed = float(lay.needed) <= avail + 1.0
 	var top := Control.new()
-	top.custom_minimum_size = Vector2(0, HOME_TOP)
+	top.custom_minimum_size = Vector2(0, maxf(avail, float(lay.needed)))
 	top.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(top)
-	var refs := {}
 	if d.has("title_note"):                               # 0.31.87: titles earned from the stats you already had
 		var tn: Array = d.title_note
 		app.toast("You've earned %d title%s for what you've already done -- see the Locker" % [tn.size(), "" if tn.size() == 1 else "s"], UI.GOLD)
@@ -251,32 +282,44 @@ static func home(app, root: VBoxContainer) -> void:
 		for ch in (d.challenges.daily if span == "daily" else d.challenges.weekly):
 			if not bool(ch.claimed) and int(ch.progress) >= int(Eco.CHALLENGES[ch.id].goal):
 				orders_ready += 1
-	var sp := _medallion(top, Vector2(-2, 58), "banner", "PASS", func(): app.show_tab("pass"), "side_pass", claimable)
+	var sp := _medallion(top, Vector2(-2, MED_Y[0]), "banner", "PASS", func():
+		app.sfx("tab")
+		app.show_tab("pass"), "side_pass", claimable)
 	# 0.31.97: the class quests, under ORDERS (a badge for every quest step ready to claim)
 	var qready: int = p.quests_ready()
-	var qb := _medallion(top, Vector2(-2, 242), quest_icon_name(), "QUESTS", func():
-		app.sfx("tap")
+	var qb := _medallion(top, Vector2(-2, MED_Y[2]), quest_icon_name(), "QUESTS", func():
+		app.sfx("tab")
 		app.quest_cls = quest_first(p)
 		app.show_tab("quests"), "side_quests", qready)
 	if qready > 0:
 		UI2.wiggle(qb.get_meta("icon"))
 	if claimable > 0:
 		UI2.wiggle(sp.get_meta("icon"))
-	_medallion(top, Vector2(-2, 150), "scroll", "ORDERS", func():
-		app.sfx("tap")
-		if refs.has("orders"):
-			app.content_scroll.ensure_control_visible(refs.orders), "side_orders", orders_ready)
+	var ob := _medallion(top, Vector2(-2, MED_Y[1]), "scroll", "ORDERS", func():
+		app.sfx("menuOpen")
+		app.open_orders(), "side_orders", orders_ready)
+	if orders_ready > 0:
+		UI2.wiggle(ob.get_meta("icon"))
 	# 0.31.93: the Forge, under FIRST WIN (a badge when an equipped weapon's next star can be forged)
 	var fready := forge_ready(p)
-	var fgb := _medallion(top, Vector2(w - 62, 176), "anvil", "FORGE", func():
-		app.sfx("tap")
+	var fgb := _medallion(top, Vector2(w - 62, MED_Y[1]), "anvil", "FORGE", func():
+		app.sfx("tab")
 		app.forge_cls = app.locker_class if (Eco.CLASSES + Eco.UP_CLASSES).has(str(app.locker_class)) else "knight"
 		app.forge_pick = ""
 		app.show_tab("forge"), "side_forge", fready, "silver")
 	if fready > 0:
 		UI2.wiggle(fgb.get_meta("icon"))
+	# 0.31.111 (Kevin: "add friend to a friends list ... group up and form a party"): Friends, under the Forge (a badge for
+	# friend requests and party invites waiting)
+	var soc = app.get("social")
+	var att: int = soc.attention() if soc != null and soc.online() else 0
+	var frb := _medallion(top, Vector2(w - 62, MED_Y[2]), "friends", "FRIENDS", func():
+		app.sfx("menuOpen")
+		app.open_friends(), "side_friends", att, "silver")
+	if att > 0:
+		UI2.wiggle(frb.get_meta("icon"))
 	var fw_open := str(d.first_win_day) != Eco.day_key(p.now())
-	var fwb := _medallion(top, Vector2(w - 62, 58), "trophy", "FIRST WIN", func():
+	var fwb := _medallion(top, Vector2(w - 62, MED_Y[0]), "trophy", "FIRST WIN", func():
 		app.sfx("tap")
 		if fw_open:
 			app.toast("First win of the day: +%d gold, +%d pass XP and a Silver Chest" % [Eco.FIRST_WIN.gold, Eco.FIRST_WIN.pass], UI.GOLD)
@@ -284,32 +327,30 @@ static func home(app, root: VBoxContainer) -> void:
 			app.toast("First win done today -- back tomorrow", UI.MUTED), "side_first_win", 0, "silver")
 	if fw_open:
 		UI2.bob(fwb.get_meta("icon"), 4.0, 1.4)
-		var chip := PanelContainer.new()
+		var chip := PanelContainer.new()            # "+300" on the medallion's corner, like a badge
 		var cs := StyleBoxFlat.new()
 		cs.bg_color = Color("#ffc94d")
 		cs.border_color = Color("#3a1c02")
 		cs.set_border_width_all(2)
 		cs.set_corner_radius_all(9)
-		cs.content_margin_left = 6
-		cs.content_margin_right = 6
+		cs.content_margin_left = 5
+		cs.content_margin_right = 5
 		chip.add_theme_stylebox_override("panel", cs)
 		chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		chip.position = Vector2(w - 58, 58 + 90)
-		chip.custom_minimum_size = Vector2(56, 18)
-		top.add_child(chip)
+		chip.position = Vector2(26, -4)
+		chip.custom_minimum_size = Vector2(40, 18)
+		fwb.add_child(chip)
 		var cl := UI.label(chip, "+%d" % Eco.FIRST_WIN.gold, 11, Color("#3a1c02"), UI.HEAVY_FONT)
 		cl.autowrap_mode = TextServer.AUTOWRAP_OFF
 		cl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	else:
 		fwb.modulate = Color(0.75, 0.75, 0.8, 0.85)
-	# --- the roster ribbon
-	var rib := UI2.ribbon(top, "16 v 16 SIEGE", "7 classes  ·  grab a hat in battle to become one", 330.0, 52.0)
-	rib.position = Vector2((w - 330.0) * 0.5, 420)
 	# --- PLAY: always the Siege server (0.31.79); the bots fill any empty slots
-	UI2.glow(top, Rect2(-30, 470, w + 60, 130), Color(1.0, 0.55, 0.15, 0.55))
-	var play := UI2.button(top, "", "orange", func(): app.start_match(true), "play", 20, 84.0, 22.0)
-	play.position = Vector2(0, 486)
-	play.size = Vector2(w, 84)
+	var py: float = lay.play
+	UI2.glow(top, Rect2(-30, py - 16, w + 60, 130), Color(1.0, 0.55, 0.15, 0.55))
+	var play := UI2.button(top, "", "orange", func(): app.start_match(true), "play", 20, 80.0, 22.0)
+	play.position = Vector2(0, py)
+	play.size = Vector2(w, 80)
 	var pr := HBoxContainer.new()
 	pr.add_theme_constant_override("separation", 12)
 	pr.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -318,14 +359,51 @@ static func home(app, root: VBoxContainer) -> void:
 	pr.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	play.add_child(pr)
 	UI2.icon(pr, "swords", 58.0).size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	var pl := UI2.text(pr, "PLAY", 54, Color.WHITE, Color("#5a2205"), 11)
+	var waiting: bool = soc != null and soc.online() and soc.in_party() and not soc.is_leader()
+	var pl := UI2.text(pr, "PLAY" if not waiting else "READY", 54, Color.WHITE, Color("#5a2205"), 11)
 	pl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	if soc != null and soc.online() and soc.in_party() and soc.is_leader() and soc.party_size() > 1:
+		pl.text = "PLAY ×%d" % soc.party_size()
 	UI2.sweep(play, 2.6, 80.0, 0.5)
 	UI2.pulse(play, 0.018, 1.1)
+	var uy: float = lay.under
+	if not bool(d.get("tutorial_done", false)):
+		# 0.31.112: the tutorial right under PLAY, pulsing, until it's been played through
+		var tb := UI2.button(top, "PLAY TUTORIAL  (+%d GOLD)" % app.TUTORIAL_GOLD, "gold", func():
+			app.sfx("confirm")
+			app.start_tutorial(), "tutorial_start", 17, 38.0, 14.0)
+		tb.position = Vector2((w - 260.0) * 0.5, uy - 1.0)
+		tb.size = Vector2(260, 38)
+		tb.pivot_offset = Vector2(130, 19)
+		UI2.pulse(tb, 0.06, 0.8)
+		UI2.sweep(tb, 2.0, 50.0)
+		app.online_refs = {}
+	elif soc != null and soc.online() and soc.in_party():
+		# in a party: who's in it (the leader first, with a crown), under PLAY instead of the players online
+		var names := []
+		for m in soc.party.get("members", []):
+			names.append(("♛ " if str(m.pid) == str(soc.party.leader) else "") + str(m.n))
+		var pb := UI2.button(top, "YOUR PARTY %d/%d  ·  %s" % [soc.party_size(), int(soc.party.get("max", 4)), "  ·  ".join(names)], "green", func():
+			app.sfx("menuOpen")
+			app.open_friends(), "party_pill", 13, 34.0, 17.0)
+		pb.position = Vector2(20, uy)
+		pb.size = Vector2(w - 40, 34)
+		pb.clip_text = true
+		app.online_refs = {}
+	else:
+		_online_pill(app, top, w, uy)
+	# --- chests, on the bottom edge
+	chests_row(app, top, w, float(lay.chests))
+	if bool(app.get("safe_boot")) and not bool(app.get_meta("safe_note", false)):
+		# 0.31.70: the last start never reached the menu, so this one skipped the live hero and the background loading
+		app.set_meta("safe_note", true)
+		app.toast("The game got stuck starting last time -- please send the developer Settings > COPY DIAGNOSTICS", UI.GOLD)
+
+static func _online_pill(app, top: Control, w: float, y: float) -> void:
 	# --- players online (0.31.82, Kevin: "Add a players online in main menu"): a pill under PLAY, painted by
 	# app.paint_online() from the server's status answer (the plain server line until one comes)
 	var hc := CenterContainer.new()
-	hc.position = Vector2(0, 580)
+	hc.position = Vector2(0, y)
 	hc.size = Vector2(w, 30)
 	hc.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	top.add_child(hc)
@@ -368,35 +446,6 @@ static func home(app, root: VBoxContainer) -> void:
 	app.online_refs = {"main": om, "sub": osub}
 	if app.has_method("paint_online"):
 		app.paint_online()
-	# --- chests
-	chests_row(app, top, w, 640.0)
-	var odds := UI2.button(top, "WHAT'S INSIDE THE CHESTS?", "ghost", func(): chest_odds(app), "chest_odds", 12, 28.0, 10.0)
-	odds.position = Vector2((w - 230.0) * 0.5, 740)
-	odds.size = Vector2(230, 28)
-	if bool(app.get("safe_boot")):
-		# 0.31.70: the last start never reached the menu, so this one skipped the live hero and the background
-		# loading. Hand the tester the start-up log (phases, errors, logcat) to send.
-		var sb := UI2.frame(root, "ember", 12, 16.0, "orange")
-		UI2.center(UI2.text(sb, "SAFE START", 18, Color.WHITE))
-		UI2.center(UI2.body(sb, "The game got stuck starting last time, so this start skipped the 3D heroes. Please copy the diagnostics and send them to the developer.", 12, Color.WHITE))
-		UI2.button(sb, "COPY DIAGNOSTICS", "blue", func():
-			DisplayServer.clipboard_set(Diag.read_logs())
-			app.toast("Diagnostics copied -- paste them to the developer", UI.CYAN), "copy_diag_boot", 15, 44.0)
-	if not bool(d.get("tutorial_done", false)):
-		# First visit: the Herald offers the walkthrough (0.19.0).
-		var tc := UI2.frame(root, "parch", 12, 16.0, "brown")
-		var tr := UI.row(tc, 10)
-		UI2.icon(tr, "crown", 44.0)
-		var tl := UI2.body(tr, "New here? The Royal Herald will show you the ropes. (+%d gold)" % app.TUTORIAL_GOLD, 14, Color("#3b2412"))
-		tl.remove_theme_color_override("font_shadow_color")
-		UI.grow(tl)
-		UI2.button(tc, "PLAY TUTORIAL", "gold", func(): app.start_tutorial(), "tutorial_start", 18, 46.0)
-	var how := UI2.button(root, "HOW TO PLAY", "ghost", func(): app.start_tutorial(), "tutorial", 14, 36.0, 12.0)
-	how.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	how.custom_minimum_size = Vector2(170, 36)
-	refs["orders"] = challenges_card(app, root, "daily")
-	challenges_card(app, root, "weekly")
-	pass_card(app, root)
 
 static func _medallion(parent: Control, at: Vector2, icon: String, label: String, on_press: Callable, key: String, badge := 0, rim := "gold") -> Button:
 	# A round gold-rimmed medallion with a 3D icon in it and a label under it (Home's side buttons).
@@ -436,7 +485,7 @@ static func chests_row(app, parent: Control, w: float, y: float) -> void:
 	var busy: Dictionary = p.unlocking()
 	var gap := 8.0
 	var sw := (w - gap * 3.0) / 4.0
-	var sh := 88.0
+	var sh := CHEST_H
 	var slots := []
 	var cells := []
 	for i in Eco.CHEST_SLOTS:                           # the slot plates (under the chests)
@@ -504,7 +553,7 @@ static func chests_row(app, parent: Control, w: float, y: float) -> void:
 			_slot_tag(cell, UI.duration(p.chest_left(ch)), Color.WHITE)
 			var ub := UI2.button(cell, "UNLOCK", "blue", func():
 				p.start_unlock(idx)
-				app.sfx("tap")
+				app.sfx("unlock")                  # 0.31.110: a key turns, ka-chunk
 				app.rebuild(), "chest_unlock_%d" % i, 13, 28.0, 9.0)
 			ub.position = Vector2(8, sh - 36)
 			ub.size = Vector2(sw - 16, 28)
@@ -537,8 +586,7 @@ static func _slot_tag(cell: Control, s: String, col: Color) -> void:
 static func skip_chest(app, idx: int) -> void:
 	var r: Dictionary = app.profile.skip_chest(idx)
 	if bool(r.get("ok", false)):
-		app.sfx("tap")
-		open_chest(app, idx)
+		open_chest(app, idx)                   # (its sound: the chest's window opening)
 	else:
 		app.sfx("error")
 		app.toast("Not enough gems (%d needed)" % int(r.get("cost", 0)), UI.RED)
@@ -548,7 +596,7 @@ static func open_chest(app, idx: int) -> void:
 	var chs: Array = app.profile.chests()
 	if idx < 0 or idx >= chs.size() or not app.profile.chest_ready(chs[idx]):
 		return
-	app.sfx("tap")
+	app.sfx("menuOpen")
 	app.close_modal()
 	var m := ChestOpen.new()
 	m.app = app
@@ -605,7 +653,7 @@ static func challenges_card(app, root: Node, span: String) -> Control:
 			var cb := UI2.button(row, "CLAIM", "green", func():
 				var r: Dictionary = p.claim_challenge(span, i)
 				if r.ok:
-					app.sfx("coin")
+					app.sfx("claim")
 					app.toast("Order complete!" + (" Pass tier %d reached" % int(r.tiers[-1]) if not r.tiers.is_empty() else ""), UI.GREEN)
 				app.rebuild(), "claim_%s_%d" % [span, i], 15, 38.0, 10.0)
 			cb.custom_minimum_size.x = 84
@@ -870,7 +918,7 @@ static func pass_screen(app, root: VBoxContainer) -> void:
 	if claimable > 0:
 		var ca := UI2.button(root, "CLAIM ALL  (%d)" % claimable, "green", func():
 			var got: Array = p.claim_all()
-			app.sfx("coin")
+			app.sfx("claim")
 			app.toast("Claimed %d reward%s" % [got.size(), "" if got.size() == 1 else "s"], UI.GREEN)
 			app.rebuild(), "claim_all", 24, 58.0, 18.0)
 		UI2.sweep(ca)
@@ -1061,7 +1109,7 @@ static func pass_cell(app, parent: Node, sid: int, t: int, prem: bool) -> void:
 static func _claim_tier(app, t: int, prem: bool) -> void:
 	var res: Dictionary = app.profile.claim_tier(t, prem)
 	if res.ok:
-		app.sfx("coin")
+		app.sfx("claim")
 		var got: Array = reward_text(res.reward)
 		app.toast("+ " + str(got[1]), UI.GREEN)
 	app.close_modal()
@@ -1074,7 +1122,7 @@ static func _skip_tiers(app) -> void:
 	app.confirm("SKIP %d TIERS?" % int(so.tiers), "Jump straight to tier %d of the Siege Pass. Costs %d gems." % [to, int(so.gems)], "SKIP", "premium", func():
 		var r: Dictionary = p.skip_tiers()
 		if r.ok:
-			app.sfx("purchase")
+			app.sfx("tierUp")                  # 0.31.110: a bright rising chime
 			app.toast("Tier %d reached! Claim your rewards" % p.pass_tier(), UI.GOLD)
 		else:
 			app.sfx("error")
@@ -1088,7 +1136,7 @@ static func _buy_premium(app) -> void:
 		"more gems" if psid < 2 else "Embers and gold", Eco.PREMIUM_COST], "UNLOCK", "premium", func():
 		var r: Dictionary = p.buy_premium()
 		if r.ok:
-			app.sfx("purchase")
+			app.sfx("premium")                 # 0.31.110: a rich golden chord
 			app.toast("Premium pass unlocked!", UI.PURPLE)
 		else:
 			app.sfx("error")
@@ -1101,7 +1149,7 @@ static func open_pass_item(app, sid: int, t: int, prem: bool) -> void:
 	var r: Dictionary = p.pass_reward_for(t, prem)
 	var rt: Array = reward_text(r)
 	var it: Dictionary = Eco.item(str(r.get("item", "")))
-	app.sfx("tap")
+	app.sfx("menuOpen")
 	app.close_modal()
 	var m := Control.new()
 	m.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -1273,7 +1321,7 @@ static func shop(app, root: VBoxContainer) -> void:
 		var b := UI2.button(c, str(int(off.gems)), "purple", func():
 			var r: Dictionary = p.exchange(oid)
 			if r.ok:
-				app.sfx("coin")
+				app.sfx("purchase")
 				app.toast("+%s gold" % UI.grouped(int(off.gold)), UI.GOLD)
 			else:
 				app.sfx("error")
@@ -1327,7 +1375,7 @@ static func open_item(app, id: String, pack := "", pick := 0) -> void:
 	var tint := _rar_tint(rar if pack == "" else str(Eco.PACKS[pack].get("rarity", rar)))
 	var weapon := str(it.get("kind", "")) == "weapon"
 	var mode := str(app.get_meta("shop_preview_mode", "hand"))
-	app.sfx("tap")
+	app.sfx("menuOpen")
 	app.close_modal()
 	var m := Control.new()
 	m.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -1882,7 +1930,7 @@ static func locker(app, root: VBoxContainer) -> void:
 	var fl := UI2.button(root, "FORGE YOUR %s WEAPONS" % str(Eco.CLASS_NAMES[cls]).to_upper(), "orange", func():
 		app.forge_cls = cls
 		app.forge_pick = ""
-		app.sfx("tap")
+		app.sfx("tab")
 		app.show_tab("forge"), "locker_forge", 14, 40.0, 12.0, UI2.icon_path("anvil"))
 	fl.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	fl.custom_minimum_size.x = 280
@@ -2225,7 +2273,7 @@ static func settings(app, root: VBoxContainer) -> void:
 		sl.min_value = 0.0
 		sl.max_value = 1.0
 		sl.step = 0.05
-		sl.value = float(d.settings.get(key, 0.6 if key == "music" else 0.8))
+		sl.value = float(d.settings.get(key, 1.0))       # 0.31.110 (Kevin): every slider at 100% by default
 		sl.set_meta("action_key", "slider_" + key)
 		sl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		UI2.style_slider(sl)
@@ -2238,14 +2286,37 @@ static func settings(app, root: VBoxContainer) -> void:
 			pv.text = "%d%%" % int(round(v * 100))
 			d.settings[key] = v
 			p.save()
-			app._apply_audio())
+			app._apply_audio()
+			app.sfx("slider"))                 # 0.31.110: a tiny tick a step, at the new level
+	# Social (0.31.111)
+	var sx := UI2.frame(root, "night", 12, 18.0, "gold")
+	UI2.divider(sx, "SOCIAL", 20)
+	UI2.toggle(sx, "Global chat", "Everyone online; friends and party chat stay on", bool(d.settings.get("chat_global", true)), "chat_global", func(on: bool):
+		app.sfx("toggle")
+		d.settings.chat_global = on
+		p.save()
+		if app.social != null:
+			app.social.set_show_global(on))
+	var soc2 = app.get("social")
+	if soc2 != null and soc2.online():
+		var fc := UI.row(sx, 8)
+		var fcl := UI2.body(fc, "Your friend code: %s" % soc2.code_of(str(soc2.me.get("pid", ""))), 13, UI2.SOFT, false)
+		fcl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		fcl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		var fb := UI2.button(fc, "FRIENDS", "blue", func():
+			app.sfx("menuOpen")
+			app.open_friends(), "settings_friends", 13, 36.0, 11.0)
+		fb.custom_minimum_size.x = 100
+	UI2.body(sx, "Tap a name in the chat to add a friend, block or report them.", 11, UI2.MUTED)
 	# Graphics
 	var gx := UI2.frame(root, "night", 12, 18.0, "gold")
 	UI2.divider(gx, "GRAPHICS", 20)
 	UI2.toggle(gx, "High-quality graphics", "Shadows, glow, smooth edges", bool(d.settings.get("hq_graphics", true)), "hq_graphics", func(on: bool):
+		app.sfx("toggle")
 		d.settings.hq_graphics = on
 		p.save())
 	UI2.toggle(gx, "Reduce effects", "Smoother on older phones", bool(d.settings.get("reduce_motion", false)), "reduce_motion", func(on: bool):
+		app.sfx("toggle")
 		d.settings.reduce_motion = on
 		p.save())
 	# Old progress
@@ -2289,6 +2360,10 @@ static func settings(app, root: VBoxContainer) -> void:
 			DisplayServer.clipboard_set(Diag.read_logs())
 			app.toast("Diagnostics copied", UI.CYAN), "copy_diag", 13, 40.0))
 	UI.grow(UI2.button(help, "PRIVACY POLICY", "blue", func(): OS.shell_open(PRIVACY_URL), "privacy", 13, 40.0))
+	# 0.31.112: the tutorial again any time (Home shows it only until it's been played)
+	UI2.button(root, "HOW TO PLAY (TUTORIAL)", "blue", func():
+		app.sfx("confirm")
+		app.start_tutorial(), "tutorial", 14, 40.0)
 	var ver := UI2.body(root, "Fatebound %s" % Diag.BUILD, 11, UI2.MUTED)
 	ver.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
@@ -2353,7 +2428,7 @@ static func forge(app, root: VBoxContainer) -> void:
 	anvil.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	UI2.text(board, "THE FORGE", 28, UI2.GOLD).size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	var back := UI2.button(sign, "", "ghost", func():
-		app.sfx("tap")
+		app.sfx("menuClose")
 		app.show_tab("home"), "forge_back", 14, 40.0, 12.0)
 	back.position = Vector2(0, 12)
 	back.size = Vector2(46, 40)
@@ -2372,7 +2447,7 @@ static func forge(app, root: VBoxContainer) -> void:
 	var shop_open: bool = app.forge_shop
 	var gb := UI2.button(er, "GET" if not shop_open else "CLOSE", "orange", func():
 		app.forge_shop = not app.forge_shop
-		app.sfx("tap")
+		app.sfx("menuOpen" if app.forge_shop else "menuClose")
 		app.rebuild(), "forge_get_embers", 13, 38.0, 11.0)
 	gb.custom_minimum_size.x = 76
 	gb.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -2489,7 +2564,7 @@ static func forge(app, root: VBoxContainer) -> void:
 	var fb := UI2.button(info, label, "orange" if bool(check.ok) else "grey", func():
 		var res: Dictionary = p.forge(wid, el)
 		if bool(res.get("ok", false)):
-			app.sfx("purchase")
+			app.sfx("forge")
 			app.toast("%s is now %s!" % [Eco.forge_name(wid), str(Eco.FORGE_STARS[int(res.stars) - 1].name)], UI2.GOLD)
 			app.forge_element = ""
 			app.refresh_top()
@@ -2629,7 +2704,7 @@ static func claim_quest(app, cls: String) -> void:
 	var res: Dictionary = p.claim_quest(cls)
 	if not bool(res.get("ok", false)):
 		return
-	app.sfx("purchase")
+	app.sfx("revealLegendary" if str(res.item) != "" else "claim")      # 0.31.110: the quest's legendary gets the golden choir
 	app.refresh_top()
 	if str(res.item) != "":
 		# the legendary: show it off, with EQUIP right there
@@ -2664,7 +2739,7 @@ static func quests(app, root: VBoxContainer) -> void:
 	UI2.icon(board, quest_icon_name(), 46.0).size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	UI2.text(board, "QUESTS", 28, UI2.GOLD).size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	var back := UI2.button(sign, "", "ghost", func():
-		app.sfx("tap")
+		app.sfx("menuClose")
 		app.show_tab("home"), "quests_back", 14, 40.0, 12.0)
 	back.position = Vector2(0, 12)
 	back.size = Vector2(46, 40)
@@ -2820,7 +2895,7 @@ static func quest_card(app, root: Node, cls: String) -> void:
 		UI2.body(pr, "%s / %s" % [_thousands(have), _thousands(int(s.n))], 10, Color.WHITE, false)
 	var b := UI2.button(r, "CLAIM" if ready else "OPEN", "gold" if ready else "orange", func():
 		app.quest_cls = cls
-		app.sfx("tap")
+		app.sfx("tab")
 		app.show_tab("quests"), "locker_quest_" + cls, 13, 40.0, 12.0)
 	b.custom_minimum_size.x = 70
 	b.size_flags_vertical = Control.SIZE_SHRINK_CENTER

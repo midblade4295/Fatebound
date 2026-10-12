@@ -3039,6 +3039,14 @@ func _think_fighter(u: Dictionary) -> void:
 		goal = jail_outside(u.team) + side * (float(absi(hash(u.id)) % 5) - 2.0) * 0.8
 	else:
 		goal = mine.pos
+	# 0.31.111: a player's "Need help!" / "Follow me!" (call_bots) -- go to them for a while; a carrier still comes first
+	var call: Dictionary = u.get("call", {})
+	if u.bot and not call.is_empty():
+		var caller: Dictionary = by_id.get(str(call.get("id", "")), {})
+		if time > float(call.get("until", 0.0)) or caller.is_empty() or not alive(caller) or int(caller.team) != int(u.team):
+			u.erase("call")
+		elif enemy_carrier.is_empty() and our_returner.is_empty():
+			goal = (caller.pos as Vector2) + dir_of(float(absi(hash(u.id)) % 628) / 100.0) * 2.2
 	var aggro := {"raid":3.5,"escort":6.5,"defend":8.0}.get(u.role, 5.0) as float
 	if u.bot and u.role == "raid" and time < float(_assault[u.team].until) and not in_castle(u.pos, 1 - u.team):
 		aggro = 2.0                                  # 0.31.25: pushing in, don't get drawn into the field brawl
@@ -4264,6 +4272,32 @@ func _think_bomb(u: Dictionary) -> bool:
 # enemies within its role's aggro (3.5 m for a raider), so an archer at 10 m could pick off a waiting raid untouched.
 const ANSWER_FOR := 3.0
 const ANSWER_R := 22.0
+# 0.31.111 (Kevin: "add the quick chat pings"): "Need help!" / "Follow me!" -- the CALL_BOTS nearest bots of the caller's
+# side within CALL_R m (fighters free to move: not carrying, lifting, fishing, on a rampart post or in a tower) head
+# to them for CALL_FOR s, fighting whatever they meet; a carrier to stop still comes first. Returns how many came.
+const CALL_BOTS := 3
+const CALL_R := 35.0
+const CALL_FOR := 15.0
+
+func call_bots(uid: String) -> int:
+	var who: Dictionary = by_id.get(uid, {})
+	if who.is_empty() or not alive(who):
+		return 0
+	var cands := []
+	for o in units:
+		if not o.bot or o.id == uid or int(o.team) != int(who.team) or not alive(o) or o.carrying or o.offering:
+			continue
+		if o.cls in ["worker", "villager"] or int(o.tower) >= 0 or o.has("post") or is_fish_runner(o):
+			continue
+		var d: float = (o.pos as Vector2).distance_to(who.pos)
+		if d <= CALL_R:
+			cands.append([d, o])
+	cands.sort_custom(func(a, b): return a[0] < b[0] or (a[0] == b[0] and str(a[1].id) < str(b[1].id)))
+	var n := mini(CALL_BOTS, cands.size())
+	for i in n:
+		cands[i][1]["call"] = {"id":uid, "until":time + CALL_FOR}
+	return n
+
 const ANSWER_FRIEND := 9.0
 
 func _attacker_to_answer(u: Dictionary) -> Dictionary:

@@ -4,7 +4,8 @@ const Screens = preload("res://scripts/app/screens.gd")
 #   Xvfb :98 -screen 0 480x1000x24 & DISPLAY=:98 SHOT_DIR=/tmp/shots \
 #   godot --rendering-method mobile --fixed-fps 30 --resolution 420x933 --path godot -s res://tools/app_shots.gd
 # Env: SHOT_DIR (default /tmp/shots), SHOT_TABS (comma list, default all), SHOT_SCROLL (px to
-# scroll each screen down for a second shot named <tab>_2).
+# scroll each screen down for a second shot named <tab>_2), SHOT_SWING (0.31.113: with SHOT_TABS=home and --fixed-fps 30,
+# this many frames of the title's swinging King after the Home shot, one every 2nd frame: home_swing_NN).
 const App = preload("res://scripts/app/siege_app.gd")
 const Eco = preload("res://scripts/meta/economy.gd")
 const Profile = preload("res://scripts/meta/profile.gd")
@@ -32,17 +33,24 @@ var tabs: Array = ["home", "pass", "shop", "locker", "settings"]
 var dir := "/tmp/shots"
 var scroll := 0
 var pending := ""
+var swing := 0
 
 func _init() -> void:
 	if OS.has_environment("SHOT_DIR"): dir = OS.get_environment("SHOT_DIR")
 	if OS.has_environment("SHOT_TABS"): tabs = OS.get_environment("SHOT_TABS").split(",")
 	if OS.has_environment("SHOT_SCROLL"): scroll = int(OS.get_environment("SHOT_SCROLL"))
+	if OS.has_environment("SHOT_SWING"): swing = int(OS.get_environment("SHOT_SWING"))
 	DirAccess.make_dir_recursive_absolute(dir)
 	var base := "user://appshot-%d" % Time.get_ticks_usec()
 	var f := FileAccess.open(base + "-legacy.json", FileAccess.WRITE)
 	f.store_string(JSON.stringify({"gold":820, "tokens":60, "owned":[0, 3], "chests":[{}], "level":7, "xp":10}))
 	f.close()
 	app = App.new()
+	# 0.31.112: never the live server -- with a display the app would make an account there (eco_sync) and replace this
+	# profile with it, and open a social socket
+	app.eco_autostart = false
+	app.social_autostart = false
+	app.version_check = false
 	app.profile_path = base + "-profile.json"
 	app.legacy_path = base + "-legacy.json"
 	app.now_override = 1791000000
@@ -102,6 +110,10 @@ func _process(_d: float) -> bool:
 				p.d.cloud.stamp = "mine-1"
 			root.add_child(fp)
 			app.play_games.setup(p, fp)
+		if OS.has_environment("SHOT_NO_LOGO"):           # (0.31.112: logo concepts are laid over a shot without the logo)
+			app.title_logo.visible = false
+		if OS.has_environment("SHOT_TUTORIAL"):          # 0.31.112: Home before / after the tutorial (todo | done)
+			p.d.tutorial_done = OS.get_environment("SHOT_TUTORIAL") == "done"
 		p.d.challenges.daily[0].progress = 99
 		# (0.31.37) chests: one opening ready, one unlocking, two waiting
 		for k in ["silver", "gold", "wooden", "royal"]:
@@ -133,6 +145,8 @@ func _process(_d: float) -> bool:
 				Screens.open_item(app, "", pp[0], int(pp[1]) if pp.size() > 1 else 0)
 			else:
 				Screens.open_item(app, pv)
+		if frames == base_f + 12 and tabs[i] == "home" and OS.has_environment("SHOT_ORDERS"):
+			app.open_orders()                            # 0.31.112: the ORDERS window
 		if frames == base_f + 21 and OS.has_environment("SHOT_ZOOM"):
 			var zroot: Node = app.modal if app.modal != null else app          # (0.31.64: the locker's hero too)
 			for c in zroot.find_children("*", "Control", true, false):
@@ -141,5 +155,7 @@ func _process(_d: float) -> bool:
 		if frames == base_f + 30: pending = tabs[i]
 		if scroll > 0 and frames == base_f + 34: app.content_scroll.scroll_vertical = scroll
 		if scroll > 0 and frames == base_f + 42: pending = tabs[i] + "_2"
-	if frames > 10 + tabs.size() * 45 + 5: quit(0)
+	if swing > 0 and frames > 41 and frames <= 41 + swing * 2 and (frames - 41) % 2 == 0:
+		pending = "home_swing_%02d" % ((frames - 41) / 2 - 1)
+	if frames > maxi(10 + tabs.size() * 45 + 5, 41 + swing * 2 + 5): quit(0)
 	return false

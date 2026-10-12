@@ -85,12 +85,30 @@ func _process(d: float) -> bool:
 		3:
 			p.d.challenges.daily[0].progress = int(Eco.CHALLENGES[p.d.challenges.daily[0].id].goal); p.save()
 			press("tab_home")
+			# 0.31.112: Home fits the screen (no scrolling); the orders open from the ORDERS medallion
+			var hh: float = app.home_height()
+			var Screens = load("res://scripts/app/screens.gd")
+			check(app.home_fixed == (float(Screens.home_layout(hh).needed) <= hh + 1.0) and (app._scroll_target() == null) == app.home_fixed \
+				and btn("tutorial_start") != null, "Home scrolls only when the screen is too short (%.0f px here); the tutorial sits under PLAY" % hh)
+			for h in [723.0, 700.0, 680.0]:
+				var l: Dictionary = Screens.home_layout(h)
+				check(float(l.needed) <= h + 1.0 and float(l.play) >= Screens.HOME_FEET and float(l.under) >= float(l.play) + 80.0 \
+					and float(l.chests) >= float(l.under) + 36.0 + Screens.CHEST_ART - 0.5, "Home fits %.0f px without scrolling: %s" % [h, str(l)])
+			press("side_orders")
+			check(app.modal != null and app.modal.has_method("refresh"), "ORDERS opens the orders window")
 			var xp0: int = p.d.pass.xp
 			press("claim_daily_0")
-			check(bool(p.d.challenges.daily[0].claimed) and int(p.d.pass.xp) > xp0, "claimed a daily challenge from Home")
+			check(bool(p.d.challenges.daily[0].claimed) and int(p.d.pass.xp) > xp0, "claimed a daily challenge from the orders window")
 			var id1: String = p.d.challenges.daily[1].id
 			press("reroll_1")
-			check(p.d.challenges.daily[1].id != id1 and btn("reroll_2") == null, "one reroll, then reroll buttons disappear")
+			check(p.d.challenges.daily[1].id != id1 and btn("reroll_2") == null, "one reroll, then reroll buttons disappear (the window redraws)")
+			press("go_pass")
+			check(app.tab == "pass" and app.modal == null, "the pass summary in the window goes to the PASS tab")
+			check(app.tab_buttons.keys() == ["shop", "pass", "home", "locker", "settings"], "the tab bar: SHOP on the left, HOME in the middle")
+			p.d.tutorial_done = true
+			p.save()
+			press("tab_home")
+			check(btn("tutorial_start") == null, "once played, the tutorial button is gone from Home")
 		4:
 			press("tab_settings")
 			var edit: LineEdit = null

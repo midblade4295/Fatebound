@@ -109,6 +109,17 @@ run play_games_test      PLAY_GAMES_PASS          120 --resolution 420x933
 run eco_server_test      ECO_SERVER_PASS          120
 # The economy review's fixes (0.31.108): pass swaps, Silver gems, vault, waiting reward chests, prices, op replay.
 run economy_fix_test     ECONOMY_FIX_PASS         60
+# The menu sounds and the sliders at 100% by default (0.31.110).
+run menu_sound_test      MENU_SOUND_PASS          60
+# Home's "All Tied Up" title, the King swinging from the knot (0.31.113).
+run title_logo_test      TITLE_LOGO_PASS          90
+# Home's heroes in two rows, nobody reaching into anybody, clear of the medallions and PLAY; no ribbon (0.31.114).
+run home_heroes_test     HOME_HEROES_PASS         90
+# Floating menu icons move smoothly: no snapping to whole canvas pixels, and they float with their layout (0.31.116).
+run menu_float_test      MENU_FLOAT_PASS          60
+# Chat, friends, parties and quick chat (0.31.111): server/social.gd alone, then two phones against the real server.
+run social_test          SOCIAL_PASS              150
+run social_ui_test       SOCIAL_UI_PASS           200
 # The app's staged match start (0.31.78): the card first, the world built behind it over frames.
 FB_STAGED_START=1 FB_FORCE_WARMUP=1 run staged_start_test STAGED_START_PASS 240 --fixed-fps 30
 # The human soak must never stall the game thread.

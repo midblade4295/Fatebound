@@ -129,7 +129,7 @@ static func defaults() -> Dictionary:
 		"quests":{},                                                  # 0.31.97: class -> quest steps claimed (0-3)
 		"cloud":{"stamp":"", "dirty":false, "at":0},                  # 0.31.102: the Google Play save this is in step with
 		"account":{"id":"", "key":""},                                # 0.31.108: the phone's key to its account on the server
-		"settings":{"master":0.8, "music":0.6, "sfx":0.8, "reduce_motion":false}}
+		"settings":{"master":1.0, "music":1.0, "sfx":1.0, "reduce_motion":false, "audio_max":true}}      # (0.31.110: 100% by default)
 
 # ---------------- load / save ----------------
 func load_or_create() -> void:
@@ -206,6 +206,16 @@ func _normalized(v: Dictionary) -> Dictionary:
 		out.forge.stars[wid] = clampi(int(out.forge.stars[wid]), 0, Eco.FORGE_STARS.size())
 	for wid in out.forge.wins.keys():
 		out.forge.wins[wid] = maxi(0, int(out.forge.wins[wid]))
+	# 0.31.110 (Kevin: "make it so the audio sliders are max by default"): once, each slider still on its old default
+	# (master 80%, effects 80%, music 60%) goes to 100%; one someone moved stays where they put it
+	# (asked of the saved settings: the defaults merged in above carry the mark)
+	var st: Dictionary = out.settings
+	var saved_st: Variant = v.get("settings")
+	if not (saved_st is Dictionary and bool(saved_st.get("audio_max", false))):
+		for k in ["master", "sfx", "music"]:
+			if is_equal_approx(float(st.get(k, 1.0)), 0.6 if k == "music" else 0.8):
+				st[k] = 1.0
+		st["audio_max"] = true
 	# 0.31.97: quest steps claimed -- known classes, 0..3
 	var qs := {}
 	for c in out.quests.keys():

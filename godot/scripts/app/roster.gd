@@ -6,16 +6,23 @@ extends Control
 const View = preload("res://scripts/siege/siege_view.gd")
 const Eco = preload("res://scripts/meta/economy.gd")
 
-# class, x, z (metres on the dais; +z is toward the camera), yaw (turned a little toward the middle)
-const SPOTS := [  # class, x, z, yaw, lift -- one arc across the dais, the Knight in front in the middle
-	["rogue", -2.85, -0.18, 0.34, 0.0], ["ranger", -1.9, 0.22, 0.23, 0.0], ["barbarian", -1.0, 0.42, -0.35, 0.0],
-	["knight", 0.0, 0.95, 0.0, 0.0],
-	["mage", 1.0, 0.42, 0.35, 0.0], ["priest", 1.9, 0.22, -0.23, 0.0], ["worker", 2.85, -0.18, -0.34, 0.0],
+# 0.31.114 (Kevin: "The characters on main screen are too hudled together and clipping into each other. Is there a way
+# you can redesign the home screen so it's cleaner"): two staggered rows instead of one tight arc -- the Barbarian, the
+# Knight and the Mage in front, the Rogue, the Ranger, the Priest and the Worker behind them in the gaps -- with room
+# between every one of them; the side medallions moved up out of their way (screens.gd).
+# 0.31.115 (Kevin: "Some of the characters are looking like they are floating now because the background art. Maybe
+# needs a redesign"): the backdrop's stage is now one big round floor across the whole width (bg_home.webp), so the
+# outer two stand on it too, and the camera came down to 16 degrees to sit closer to the painting's view of it.
+# class, x, z (metres; +z is toward the camera), yaw (turned a little toward the middle), lift
+const SPOTS := [
+	["rogue", -4.0, -1.9, 0.3, 0.0], ["ranger", -1.1, -2.2, 0.1, 0.0], ["priest", 1.1, -2.2, -0.1, 0.0], ["worker", 4.0, -1.9, -0.3, 0.0],
+	["barbarian", -2.2, 2.3, 0.22, 0.0], ["knight", 0.0, 2.6, 0.0, 0.0], ["mage", 2.2, 2.3, -0.22, 0.0],
 ]
+const HERO_SCALE := 1.15
 
-var cam_pos := Vector3(0.0, 3.45, 15.3)          # ~12.7 degrees up, like the painted dais' ellipse
+var cam_pos := Vector3(0.0, 5.17, 14.9)          # 16 degrees down on the stage (0.31.79-0.31.113: 12.7; 0.31.114: 22)
 var look_at_pt := Vector3(0.0, 0.9, 0.0)
-const FEET_Y := 226.0                           # where a hero standing at the dais' centre has his feet (control px)
+const FEET_Y := 226.0                           # the painted dais' centre is this far down the layer (control px; places it)
 var fov := 27.0
 var viewport: SubViewport
 var world: Node3D
@@ -139,7 +146,7 @@ func _rebuild() -> void:
 		var made: Dictionary = View.make_body(cls, look)
 		if not made.is_empty():
 			var body: Node3D = made.body
-			body.scale = Vector3.ONE * 1.12
+			body.scale = Vector3.ONE * HERO_SCALE
 			slot.add_child(body)
 			var player: AnimationPlayer = made.player
 			var idle: String = str(View.LOOKS.get(cls, View.LOOKS.knight).idle)

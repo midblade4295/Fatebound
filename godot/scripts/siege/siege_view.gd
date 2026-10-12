@@ -4533,6 +4533,13 @@ func gate_bars() -> Array:
 		out.append({"pos": Vector3(g.c.x, 4.2, g.c.y), "fill": g.hp / g.max_hp, "color": TEAM_COLORS[vt(int(g.team))]})
 	return out
 
+func unit_world(id: String) -> Vector3:
+	# 0.31.111: where a unit is drawn (the HUD pins quick chat bubbles over it); INF when there's no such unit
+	var a: Dictionary = actors.get(id, {})
+	if a.is_empty() or not is_instance_valid(a.root):
+		return Vector3.INF
+	return (a.root as Node3D).position
+
 func screen_point(world: Vector3) -> Vector2:
 	return camera.unproject_position(world)
 

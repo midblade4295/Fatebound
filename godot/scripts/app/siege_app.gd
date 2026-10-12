@@ -19,8 +19,16 @@ const UpdateScreen = preload("res://scripts/app/update_screen.gd")
 const VersionCheck = preload("res://scripts/app/version_check.gd")
 const OnlineStatus = preload("res://scripts/app/online_status.gd")
 const RewardFly = preload("res://scripts/app/reward_fly.gd")
+const Social = preload("res://scripts/meta/social.gd")
+const ChatPanel = preload("res://scripts/app/chat_panel.gd")
+const FriendsPanel = preload("res://scripts/app/friends_panel.gd")
+const ChatTicker = preload("res://scripts/app/chat_ticker.gd")
+const InviteBanner = preload("res://scripts/app/invite_banner.gd")
+const OrdersPanel = preload("res://scripts/app/orders_panel.gd")
+const TitleLogo = preload("res://scripts/app/title_logo.gd")
 
-const TABS := [["home", "HOME", "castle"], ["pass", "PASS", "banner"], ["shop", "SHOP", "stall"], ["locker", "LOCKER", "helmet"], ["settings", "SETTINGS", "gear"]]
+# 0.31.112 (Kevin: "move it [Home] to the center button. Move the shop button to far left")
+const TABS := [["shop", "SHOP", "stall"], ["pass", "PASS", "banner"], ["home", "HOME", "castle"], ["locker", "LOCKER", "helmet"], ["settings", "SETTINGS", "gear"]]
 
 # Tests may point these elsewhere before the node enters the tree.
 var profile_path := "user://siege_profile.json"
@@ -38,6 +46,7 @@ var quest_cls := ""                   # 0.31.97: the class shown on the Quests s
 var forge_element := ""
 var forge_shop := false                # the Embers packs open
 var siege = null
+var home_fixed := false                # 0.31.112: Home fits the screen and doesn't scroll (Screens.home sets it)
 
 # ---------------- forced update (0.31.73) ----------------
 # Kevin: "when server has newer version than players installed game it'll force them to update". The menu asks the
@@ -76,6 +85,7 @@ var _last_press := Vector2(-1, -1)
 var _last_press_ms := -100000
 var modal: Control = null
 var hero_layer: Control
+var title_logo: Control                  # Home's title, the King swinging from the knot (title_logo.gd)
 var hero_node: Control                 # the Home line-up (roster.gd); null on a safe start
 var safe_top := 0.0
 var xp_holder: Control
@@ -104,6 +114,15 @@ var eco_sync: Node = null
 var eco_autostart := DisplayServer.get_name() != "headless" or OS.has_environment("FB_ECO")
 var eco_url := OS.get_environment("SIEGE_URL") if OS.has_environment("SIEGE_URL") else Net.DEFAULT_URL
 var online_refs := {}                  # Home's "players online" pill: {main, sub}
+# 0.31.111 (Kevin: "Build a global chat and players can click a name and have option to add friend to a friends list.
+# They can then group up and form a party"): the social side (scripts/meta/social.gd) -- chat, friends, the party.
+# Headless (tests, tools) it doesn't reach the real server unless asked (FB_SOCIAL=1).
+var social: Node = null
+var social_autostart := DisplayServer.get_name() != "headless" or OS.has_environment("FB_SOCIAL")
+var chat_ticker: Control = null
+var _invite_banner: Control = null
+var _social_name := ""
+var _social_sig := ""                  # what Home shows of it (requests, invites, the party): redraw when it changes
 var _guard: Node = null
 # 0.31.84 (Kevin: "put a fps cap of 60 in the menus"): the menus ran uncapped (120 on a 120 Hz phone); a match sets its
 # own 30 and puts this back when it ends. The real app only (tests and tools run the menus as fast as they can).
@@ -157,6 +176,19 @@ func _ready() -> void:
 			toast("That match couldn't be counted by the server", UI.RED)
 		else:
 			toast("The server didn't accept that change, so it was undone", UI.RED))
+	social = Social.new()
+	social.url = eco_url
+	social.setup(profile)
+	social.show_global = bool(profile.d.settings.get("chat_global", true))
+	add_child(social)
+	social.note.connect(_on_social_note)
+	social.request.connect(_on_friend_request)
+	social.invited.connect(_on_party_invite)
+	social.go.connect(_on_party_go)
+	social.changed.connect(_on_social_changed)
+	chat_ticker.setup(self)
+	if social_autostart:
+		social.set_active(true)
 	billing = Billing.new()
 	add_child(billing)
 	billing.on_server_grant = func(g: Dictionary): eco_sync.adopt(g.get("profile", {}), int(profile.d.account.get("seq", 0)))
@@ -209,8 +241,9 @@ func _ready() -> void:
 func _apply_audio() -> void:
 	var st: Dictionary = profile.d.settings
 	if audio.has_method("set_levels"):
-		audio.set_levels({"master":float(st.get("master", 0.8)), "combat":float(st.get("sfx", 0.8)), "ui":float(st.get("sfx", 0.8)),
-			"music":float(st.get("music", 0.6))})
+		# 0.31.110 (Kevin: "make it so the audio sliders are max by default"): 100% when unset
+		audio.set_levels({"master":float(st.get("master", 1.0)), "combat":float(st.get("sfx", 1.0)), "ui":float(st.get("sfx", 1.0)),
+			"music":float(st.get("music", 1.0))})
 
 func sfx(cue: String) -> void:
 	if audio != null and audio.has_method("play"):
@@ -390,23 +423,17 @@ func _build_hero() -> void:
 		ramp.add_point(0.75, Color(1, 1, 1, 0.6))
 		motes.color_ramp = ramp
 		hero_layer.add_child(motes)
-	# The game is just "Fatebound" (Kevin): the logo in Luckiest Guy, like the trailer and store art.
-	var logo := UI2.text(hero_layer, "FATEBOUND", 50, UI2.GOLD, UI2.INK, 13)
-	logo.add_theme_color_override("font_shadow_color", Color(0.1, 0.05, 0.0, 0.85))
-	logo.add_theme_constant_override("shadow_offset_y", 6)
-	logo.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	logo.anchor_right = 1.0
-	logo.offset_top = 66 + safe_top
-	logo.offset_bottom = 122 + safe_top
-	var tag := UI.label(hero_layer, "ANYONE  CAN  CHANGE  FATE", 11, UI2.CREAM, UI.HEAVY_FONT)
-	tag.autowrap_mode = TextServer.AUTOWRAP_OFF
-	tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	tag.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.75))
-	tag.add_theme_constant_override("outline_size", 4)
-	tag.anchor_right = 1.0
-	tag.offset_top = 122 + safe_top
-	tag.offset_bottom = 138 + safe_top
-	tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# The game is just "Fatebound" (Kevin). 0.31.113: the "All Tied Up" title (Kevin: "I like the all tied up one. Can you
+	# also make it so the king swings back and forth from the rope"), between the side medallions under the top bar.
+	title_logo = TitleLogo.new(calm)
+	hero_layer.add_child(title_logo)
+	var place := func():
+		var w := hero_layer.size.x
+		var lw := minf(w - 150.0, 300.0)
+		title_logo.size = Vector2(lw, lw * TitleLogo.aspect())
+		title_logo.position = Vector2((w - lw) * 0.5, 60.0 + safe_top)
+	hero_layer.resized.connect(place)
+	place.call()
 
 const LOGO_FONT = preload("res://assets/fonts/LuckiestGuy-Regular.ttf")
 
@@ -508,6 +535,9 @@ func _build_chrome() -> void:
 	content.add_theme_constant_override("separation", 14)
 	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	margin.add_child(content)
+	# --- the chat line over the tab bar, Home only (0.31.111; set up once the social side exists)
+	chat_ticker = ChatTicker.new()
+	chrome.add_child(chat_ticker)
 	# --- tab bar: dark wood with a gold edge; the open tab is a raised gold-framed tile (0.31.79)
 	var tb := Control.new()
 	tb.custom_minimum_size = Vector2(0, TAB_H)
@@ -601,7 +631,7 @@ func _pill(parent: Node, kind: String) -> Label:
 		hit.add_theme_stylebox_override(st_name, StyleBoxEmpty.new())
 	hit.set_meta("action_key", "pill_" + kind)
 	hit.pressed.connect(func():
-		sfx("tap")
+		sfx("tab")
 		show_tab("forge" if kind == "ember" else "shop"))      # (Embers are bought in the Forge)
 	p.add_child(hit)
 	return l
@@ -615,7 +645,7 @@ func _tab_button(parent: Node, id: String, text: String, icon_name: String) -> D
 	b.set_meta("action_key", "tab_" + id)
 	UI.grow(b)
 	b.pressed.connect(func():
-		sfx("tap")
+		sfx("tab")                             # 0.31.110: its own sound, a soft rustle into a click
 		show_tab(id))
 	parent.add_child(b)
 	var plate := Control.new()                    # the raised tile of the open tab
@@ -737,20 +767,32 @@ func _punch(kind: String) -> void:
 	var now := Time.get_ticks_msec()
 	if now - int(_punch_ms.get(kind, 0)) > 70:            # a quick run of clinks, not a roar
 		_punch_ms[kind] = now
-		sfx("coin")
+		sfx(kind)                                           # 0.31.109: coin / gem / ember, each its own
+
+func home_height() -> float:
+	# the height Home has to fill: the screen less the top bar, the chat line, the tab bar and the list's margins
+	var vh := get_viewport_rect().size.y
+	var ticker := float(ChatTicker.H) if chat_ticker != null else 0.0
+	return vh - (6.0 + safe_top + TOP_H) - ticker - TAB_H - 30.0
 
 func show_tab(id: String) -> void:
+	if is_instance_valid(modal):
+		close_modal()                          # (a window's button that goes to another tab, e.g. the pass summary)
 	tab = id
 	profile.refresh()
 	for t in tab_buttons:
 		_style_tab(tab_buttons[t], t == id)
 	hero_layer.visible = id == "home"
+	if chat_ticker != null:
+		chat_ticker.visible = id == "home"
 	if online_status != null:
 		online_status.set_active(id == "home" and siege == null)
 	hero_layer.position.y = 0.0
 	hero_layer.modulate.a = 1.0
 	content_scroll.scroll_vertical = 0
 	rebuild()
+	content_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER if (id == "home" and home_fixed) \
+		else ScrollContainer.SCROLL_MODE_AUTO
 	content.modulate.a = 0.0
 	create_tween().tween_property(content, "modulate:a", 1.0, 0.18)
 
@@ -759,6 +801,10 @@ func rebuild() -> void:
 	for c in content.get_children():
 		content.remove_child(c)
 		c.queue_free()
+	if tab == "home" and social != null:
+		_social_sig = social_sig()             # (what Home is about to show of the social side)
+	if is_instance_valid(modal) and modal.has_method("refresh"):
+		modal.refresh()                        # 0.31.112: a window showing the profile (ORDERS) follows it
 	match tab:
 		"home": Screens.home(self, content)
 		"pass": Screens.pass_screen(self, content)
@@ -802,6 +848,7 @@ func toast(text: String, color := UI.TEXT) -> void:
 	move_child(_toast_box, get_child_count() - 1)
 
 func confirm(title_text: String, body: String, yes_text: String, style: String, on_yes: Callable, on_no := Callable()) -> void:
+	sfx("menuOpen")
 	close_modal()
 	modal = Control.new()
 	modal.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -832,6 +879,8 @@ func close_modal() -> void:
 	if is_instance_valid(modal):
 		modal.queue_free()
 	modal = null
+	if social != null:
+		_social_home.call_deferred()
 
 # ---------------- menu drag-scroll (0.18.3, Kevin: "the main menu can't scroll up and down") ----------------
 # Every screen is cards and buttons, and those stop input, so the ScrollContainer's own touch drag
@@ -846,9 +895,25 @@ var _drag_scroll0 := 0.0
 var _fling := 0.0
 var _cancelling := false
 var _swallow_up := false
+var _drag_sc: ScrollContainer = null
 
 func _menu_scroll_live() -> bool:
-	return siege == null and modal == null and is_instance_valid(content_scroll) and content_scroll.is_visible_in_tree()
+	return _scroll_target() != null
+
+func _scroll_target() -> ScrollContainer:
+	# the menu's own list -- or, with a window open that has one (0.31.111: the chat, Friends), that window's list
+	if siege != null:
+		return null
+	if is_instance_valid(modal):
+		var ms: Variant = modal.get_meta("drag_scroll", null)
+		if ms is ScrollContainer and is_instance_valid(ms) and (ms as ScrollContainer).is_visible_in_tree():
+			return ms
+		return null
+	if tab == "home" and home_fixed:
+		return null                            # 0.31.112: Home doesn't scroll
+	if is_instance_valid(content_scroll) and content_scroll.is_visible_in_tree():
+		return content_scroll
+	return null
 
 func _input(event: InputEvent) -> void:
 	if (event is InputEventScreenTouch or (event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT)) and event.pressed:
@@ -875,11 +940,13 @@ func _input(event: InputEvent) -> void:
 	if press:
 		if event.pressed:
 			_swallow_up = false
-			if content_scroll.get_global_rect().has_point(event.position):
+			var sc := _scroll_target()
+			if sc.get_global_rect().has_point(event.position):
+				_drag_sc = sc
 				_drag_down = true
 				_dragging = false
 				_drag_from = event.position
-				_drag_scroll0 = content_scroll.scroll_vertical
+				_drag_scroll0 = sc.scroll_vertical
 				_fling = 0.0
 		else:
 			if _dragging:
@@ -892,8 +959,8 @@ func _input(event: InputEvent) -> void:
 		if not _dragging and absf(dy) > DRAG_START:
 			_dragging = true
 			_cancel_press()
-		if _dragging:
-			content_scroll.scroll_vertical = int(_drag_scroll0 - dy)
+		if _dragging and is_instance_valid(_drag_sc):
+			_drag_sc.scroll_vertical = int(_drag_scroll0 - dy)
 			var vy: float = event.velocity.y if "velocity" in event else event.relative.y * 60.0
 			_fling = clampf(-vy, -4000.0, 4000.0)
 			get_viewport().set_input_as_handled()
@@ -919,8 +986,8 @@ func _cancel_press() -> void:
 func _process(_delta: float) -> void:
 	Assets.poll()
 	# Keep gliding after a flick, easing out.
-	if not _drag_down and absf(_fling) > 30.0 and _menu_scroll_live():
-		content_scroll.scroll_vertical = int(content_scroll.scroll_vertical + _fling * _delta)
+	if not _drag_down and absf(_fling) > 30.0 and _menu_scroll_live() and _scroll_target() == _drag_sc:
+		_drag_sc.scroll_vertical = int(_drag_sc.scroll_vertical + _fling * _delta)
 		_fling *= pow(0.04, _delta)
 	elif not _drag_down:
 		_fling = 0.0
@@ -937,6 +1004,9 @@ var _ticket_ok := false
 
 func _on_eco_synced(differs: bool) -> void:
 	# 0.31.108: the profile is the server's again; redraw only if something shown changed (and not mid-match)
+	if social != null and social.online() and str(profile.d.name) != _social_name:
+		_social_name = str(profile.d.name)
+		social.refresh()                          # 0.31.111: a new name -- the chat and friends lists show it
 	if not differs or siege != null:
 		return
 	refresh_top()
@@ -947,12 +1017,22 @@ func start_tutorial() -> void:
 	# The Herald's walkthrough: a small offline match (siege_mode.gd tutorial = true).
 	start_match(false, true)
 
-func start_match(online: bool, tutorial := false) -> void:
+func start_match(online: bool, tutorial := false, follow := false) -> void:
 	if siege != null:
 		return
 	if online and update_required:
 		show_update_screen()               # online stays locked until the update is installed
 		return
+	if online and not tutorial and social != null and social.online() and social.in_party():
+		# 0.31.111: a party plays together -- the leader's PLAY takes everyone in the menu along (social "play" ->
+		# "go"); a member waits for the leader (follow: the leader's "go" arrived)
+		if social.is_leader():
+			social.play()
+		elif not follow:
+			sfx("error")
+			var lead := str(social.card_of(str(social.party.get("leader", ""))).get("n", "your leader"))
+			toast("%s starts your party's match -- or leave the party to play alone" % lead, UI.MUTED)
+			return
 	if not online and not tutorial and eco_sync != null and eco_sync.enabled and not _ticket_ok:
 		# 0.31.108 (Kevin: "Always online"): a VS BOTS match pays only against a ticket the server gives now
 		if _ticket_wait:
@@ -1147,7 +1227,7 @@ func _on_iap_granted(product: String, g: Dictionary) -> void:
 	# 0.31.90: a confirmed purchase landed in the profile
 	if bool(g.get("again", false)):
 		return
-	sfx("purchase")
+	sfx("gemPack" if int(g.get("gems", 0)) > 0 else "purchase")       # 0.31.110: gems pouring out
 	var bits := ["+%s gems" % UI.compact(int(g.get("gems", 0)))]
 	if int(g.get("embers", 0)) > 0:
 		bits.append("+%d Embers" % int(g.embers))
@@ -1171,6 +1251,8 @@ func _notification(what: int) -> void:
 	elif what == NOTIFICATION_APPLICATION_PAUSED:
 		if audio != null and audio.has_method("stop"):
 			audio.stop()
+		if social != null:
+			social.set_active(false)               # 0.31.111: back when the app is
 		if play_games != null:
 			play_games.on_pause()                  # 0.31.102: the latest progress up to Google Play
 		if online_status != null:
@@ -1178,6 +1260,8 @@ func _notification(what: int) -> void:
 	elif what == NOTIFICATION_APPLICATION_RESUMED:
 		if eco_sync != null and eco_sync.auto_start:
 			eco_sync.start()                   # 0.31.108: the account as the server has it
+		if social != null and social_autostart:
+			social.set_active(true)
 		if billing != null:
 			billing.resume()                   # a purchase finished while we were away (or a pending one cleared)
 		if play_games != null:
@@ -1188,3 +1272,82 @@ func _notification(what: int) -> void:
 			# 0.31.91: deferred -- this notification is propagated through the tree, and add_child during it fails
 			# ("Parent node is busy setting up children" in Kevin's log), leaving a checker that blocked every later check.
 			check_server_version.call_deferred()   # back from the Play Store (or a long pause): ask again
+
+# ---------------- chat, friends, the party (0.31.111) ----------------
+func open_chat(ch := "global") -> void:
+	if social == null:
+		return
+	close_modal()
+	var m := ChatPanel.new()
+	add_child(m)
+	modal = m
+	m.open(self, ch)
+
+func open_orders() -> void:
+	close_modal()
+	var m := OrdersPanel.new()
+	add_child(m)
+	modal = m
+	m.open(self)
+
+func open_friends() -> void:
+	if social == null:
+		return
+	close_modal()
+	var m := FriendsPanel.new()
+	add_child(m)
+	modal = m
+	m.open(self)
+
+func _on_social_note(t: String, bad: bool, pop: bool) -> void:
+	if siege != null:
+		return
+	if pop:
+		sfx("chatPop")
+	toast(t, UI.RED if bad else UI.GOLD)
+
+func _on_friend_request(card: Dictionary) -> void:
+	if siege != null:
+		return
+	sfx("chatPop")
+	toast("%s wants to be friends -- see Friends" % str(card.get("n", "Someone")), UI.CYAN)
+
+func _on_party_invite(pa: String, card: Dictionary) -> void:
+	if siege != null:
+		return                               # (it waits in Friends)
+	sfx("chatPop")
+	if is_instance_valid(_invite_banner):
+		_invite_banner.queue_free()
+	_invite_banner = InviteBanner.new()
+	add_child(_invite_banner)
+	_invite_banner.show_invite(self, pa, card, safe_top + TOP_H + 14.0)
+
+func _on_party_go(_pa: String, by: String) -> void:
+	# the party leader pressed PLAY: everyone in the menu follows
+	if siege != null or update_required or is_instance_valid(update_screen):
+		return
+	close_modal()
+	toast("%s is heading into battle -- your party follows!" % by, UI.GOLD)
+	start_match(true, false, true)
+
+func social_sig() -> String:
+	if social == null or not social.online():
+		return "off"
+	var names := []
+	for m in social.party.get("members", []):
+		names.append(str(m.pid) + str(m.n))
+	return "%d|%s|%s" % [social.attention(), str(social.party.get("leader", "")), ",".join(names)]
+
+func _on_social_changed(what: String) -> void:
+	if what == "me":
+		_social_name = str(profile.d.name)
+	if siege != null or not what in ["friends", "party", "state"]:
+		return
+	_social_home()
+
+func _social_home() -> void:
+	# Home shows the Friends badge and the party: redraw it when they change (not under a window: when it closes)
+	var sig := social_sig()
+	if sig != _social_sig and tab == "home" and not is_instance_valid(modal) and siege == null:
+		_social_sig = sig
+		rebuild()

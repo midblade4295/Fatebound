@@ -3199,3 +3199,154 @@ K2/K3 notes (0.17.0)
   yet"). The concept board is kept at reports/concepts/s2_pass_weapons.jpg (Ashguard, Magmamaw, Cinderfangs, Ashwind,
   Pyreforge, Cinderlich; A/B each). Eco.PASS_SEASON_ITEMS stays empty: season 2 uses the old draw, with owned items
   swapped (Embers or an unowned pass weapon).
+
+## 0.31.109 — new menu sounds (Kevin: "make all new high quality sound effects for the menu. I don't want these to be cheap 8bit sounds. I want them to be sounds you'd hear in AAA game")
+- 15 menu cues from ElevenLabs sound effects (eleven_text_to_sound_v2; 76 generations, four takes per prompt, ~1,270
+  credits), the best take picked from its waveform and spectrogram (onset, length, partials, noise), then cut, layered,
+  high-passed for phone speakers, levelled to each other and soft-limited by tools/build_menu_sfx.py (sources kept in
+  art_sources/menu_sfx/; the script rebuilds assets/sounds/<cue>.wav, 44.1 kHz 16-bit stereo).
+  Replaced: tap (polished-wood tap), menuClose (whoosh into a cloth thud), confirm (crystal bell), equip (blade slides
+  home and clanks), coin (a gold coin rings), purchase (coins into a pouch + a sparkle), error (two dull wooden
+  knocks), flip (a card), countdown (a deep clock tick), matchStart (war drum + horn).
+  New: gem (a crystal clink) and ember (a fire puff) for their counters (the reward flight played the coin for all
+  three), claim (a brass-and-chimes fanfare: pass tiers, CLAIM ALL, orders, quests -- were the coin / purchase),
+  chestOpen (the lid creaks, magic swells into the burst at 0.45 s, a sparkle after -- was the purchase sound plus a
+  coin at the burst), forge (a hammer rings on the anvil + a shimmer -- was the purchase).
+- native_audio: the new cues count as UI sounds (the sfx volume). cue-catalog.json notes the replaced cues.
+- Audition page (artifact "Fatebound Menu Sounds"): every new cue next to the old one.
+- Content pack audio rebuilt (audio-d94b1cd17740.pck) and on the content-packs branch. 0.31.109, version code 195.
+  Sound tests (match_audio, reward_fly, chest, app_flow, forge, quest, tier_skip, content) pass. APK 31373497 bytes,
+  sha256 a7281bed81486b5dfd4a033ae7bd9fe97b057065639667cc0992072c140c5e2d.
+
+## 0.31.110 — more menu sounds, sliders at 100% (Kevin: "I want more menu sound effects. Also make it so the audio sliders are max by default")
+- 14 more menu cues, made the 0.31.109 way (ElevenLabs eleven_text_to_sound_v2, four takes a prompt, ~930 credits; the
+  best take picked from waveform + spectrogram, cut/layered/levelled by tools/build_menu_sfx.py, sources in
+  art_sources/menu_sfx/):
+  tab (rustle into a wooden click: the tab bar, the coin pills, PASS / FORGE / QUESTS medallions, the Locker's Forge
+  and quest buttons), menuOpen (replaced: an airy whoosh with a soft tone -- confirms, the chest window, a pass reward,
+  the shop preview, the Forge's Embers shop), toggle (switch click + latch: the graphics switches), slider (a tiny
+  ratchet tick a step, at the new level), unlock (a key turns, ka-chunk: chest UNLOCK), premium (golden two-note
+  chord + sparkle: the premium pass), tierUp (rising chime: tiers skipped, a tier reached in a match),
+  revealRare / revealEpic / revealLegendary (the chest card by rarity; a quest's legendary gets the legendary one),
+  gemPack (gems pouring: a Play Store gem pack), levelUp (ascending arpeggio), resultWin (brass and drums) and
+  resultLose (low strings + horn; softly for a draw) on the results screen -- the stinger at once, a level up's
+  arpeggio (else a pass tier's chime) 1.6 s later. The Forge / Quests home buttons play menuClose; a chest skipped
+  plays only the window opening (it played the tap twice). A gold-only chest card plays the coin, a duplicate Embers.
+- Sliders: Master, Effects and Music default to 100% (Profile.defaults, the settings fallback, native_audio's start
+  levels, _apply_audio's and the match's fallbacks). Once (settings.audio_max), each slider still on its old default
+  (80 / 80 / 60) goes to 100%; one someone moved stays where it was. New profiles carry the mark, so a new install's
+  slider set to 80% stays 80%.
+- tests/menu_sound_test.gd (in the suite): every sfx cue in scripts/app has its WAV and plays on the Effects slider,
+  the new cues' lengths, 100% defaults, the one-time move and its edge cases. Full suite: ALL SIEGE TESTS PASSED (58).
+- Content pack audio rebuilt (audio-686aa32b16bd.pck) and on the content-packs branch. 0.31.110, version code 196.
+  APK 31369401 bytes, sha256 333b0712cd9b76ee42a54cdac9e43f377422fe1a136a20a623d60298e5f33ca9.
+- Audition page (artifact "Fatebound Menu Sounds") now lists the 0.31.110 cues above the 0.31.109 ones.
+
+## 0.31.111 — chat, friends, parties, quick chat (Kevin: "Build a global chat and players can click a name and have option to add friend to a friends list. They can then group up and form a party. Also add the quick chat pings")
+- Server `server/social.gd` + `siege_server.gd`: persistent social sockets tied to the accounts (0.31.108), global and
+  party chat (filter, links masked, rate limits, repeats, last lines in memory), friends / requests / blocks /
+  reports (reports.jsonl) / muted.txt, parties of 4 with invites, the leader's PLAY ("go"), a party seated on one
+  team; "qc" quick chat to the speaker's side (gg to all, 2 s apart), "status"/"ver" say "social":1. `social.json`
+  in the state dir (backed up by the installer with the accounts).
+- Sim `call_bots`: "Need help!" / "Follow me!" bring the 3 nearest free bots of that side for 15 s.
+- App: `scripts/meta/social.gd`, `chat_panel.gd`, `friends_panel.gd`, `social_ui.gd` (name card: add / invite /
+  remove / block / report), `chat_ticker.gd` (Home's chat line), `invite_banner.gd`; FRIENDS medallion, party ribbon,
+  PLAY ×N / READY, Settings > SOCIAL; windows with a list drag-scroll like the menus (`_scroll_target`). HUD: the horn,
+  the 8-line wheel, bubbles (edge arrows), the feed. New icons chat / friends / horn (generated to match the set,
+  background removed) and sounds ping / chatPop (ElevenLabs, build_menu_sfx.py).
+- Fix: UI2.bob no longer errors when Home is redrawn twice in one frame.
+- privacy.html: "Game server account" and "Chat, friends and parties" sections (to redeploy). SIEGE_HANDOFF.md §20:
+  deploy, moderation, the Play forms to update.
+- Tests: social_test (server alone + two phones against the real server, party seated together, quick chat and its
+  gap, bot calls), social_ui_test (the app's real buttons end to end: chat line, chat window, name card, Friends,
+  invite, party ribbon, PLAY ×2 -> "go", one side, quick chat both ways). 0.31.111, version code 197.
+- Content packs ui-4890b4aaf16a.pck and audio-bcc08ca599d8.pck on the content-packs branch. Full suite: ALL SIEGE TESTS
+  PASSED (60). APK 31423633 bytes, sha256 c0cfec618579c88968577bc325882d563e7e78530d36c486c5b91e41b1277c28.
+
+## 0.31.112 — Home in the middle, a Home that doesn't scroll (Kevin: "For the home screen, move it to the center button. Move the shop button to far left. Also for home screen I don't want it to scroll down, just have the chests at bottom and move the orders and stuff to its own popup menu. Put the play tutorial right under the play button and make it pulse. Once player completes it then it'll go away")
+- Tab bar: SHOP · PASS · HOME · LOCKER · SETTINGS.
+- Home fills the screen and doesn't scroll (`Screens.home_layout`): the chests sit on the bottom edge; the ribbon,
+  PLAY and the row under it stay under the heroes when there's room, else they pack up from the chests (the ribbon goes
+  when it would cover the heroes; a party then shows under PLAY instead of the players online). Only a screen
+  shorter than ~16:9 still scrolls the little that doesn't fit. App: `home_height()`, `home_fixed`; `_scroll_target`
+  returns nothing on a fixed Home.
+- ORDERS opens a window (`orders_panel.gd`): daily and weekly orders (CLAIM, reroll), the Siege Pass summary and
+  what's inside each chest (the "WHAT'S INSIDE THE CHESTS?" button and the bottom of Home). `rebuild()` refreshes an
+  open window that has `refresh()`; `show_tab` closes any window first. The ORDERS medallion wiggles when one is ready.
+- PLAY TUTORIAL (+250 gold) sits right under PLAY, pulsing, until the tutorial has been played through (it then
+  shows the players online); HOW TO PLAY moved to Settings. A safe start says so in a toast (Settings has COPY
+  DIAGNOSTICS).
+- tools/app_shots.gd no longer reaches the live server (eco_sync / social / version check off): since 0.31.108 a
+  screenshot run with a display made an account on the live server and replaced the shot's profile with it. Eight
+  such accounts were made there (see the reply to Kevin for their ids). SHOT_TUTORIAL=todo|done, SHOT_ORDERS=1.
+- Tests: app_flow_test (the orders window, the tab order, the tutorial button going away, the layout at 723 / 700 /
+  680 px), app_scroll_test (drags tried on the SHOP tab; PLAY still fires on a tap). 0.31.112, version code 198.
+- Full suite: ALL SIEGE TESTS PASSED (60). No content pack change. APK 31427896 bytes, sha256
+  46ea0bf87c32c57a55019ef423a829e721f1aee48032dd53d7cd90cecf6e6eed.
+
+## 0.31.113 — the "All Tied Up" title, the King swinging from the rope (Kevin: "I like the all tied up one. Can you also make it so the king swings back and forth from the rope")
+- Home's text logo ("FATEBOUND" + "ANYONE CAN CHANGE FATE") is now the All Tied Up title: FATEBOUND bound in rope over
+  the "STEAL THEIR KING. SAVE YOURS." scroll, with the captured King hanging from the knot under the D.
+- `tools/build_title_logo.py` cuts the one painting (`art_sources/title_logo/fatebound_tied_up.png`, white page) into
+  two layers in assets/ui/v2: `logo_base.webp` (the King painted out: the D's outline and face carried on behind him,
+  the page left clear where he hung over it) and `logo_king.webp` (the King with his two rope ends, from just under the
+  knot; the rope ends fade in over 8px so the join at the knot doesn't show). His outline is the white page around him
+  plus hand-traced rope ends and crown where he hangs in front of the D, refined with GrabCut. Imported lossy 0.92 with
+  mipmaps (drawn linear-with-mipmaps).
+- `scripts/app/title_logo.gd`: the two layers sized by width; the King turns about the knot, ±7° on a 2.8 s sine.
+  Still with Reduce Motion; stops with the rest of Home in a match (hero layer's processing). Without the ui pack's art
+  it falls back to the text logo with the new line. Placed between the side medallions under the top bar
+  (`min(w - 150, 300)` wide, 60 px under the safe area).
+- tools/app_shots.gd: SHOT_NO_LOGO hides the title; SHOT_SWING=n saves n frames of the swing (home_swing_NN).
+  reports/concepts/home_title_logo.png, title_swing.gif.
+- Tests: title_logo_test (layers load and match the sizes in title_logo.gd, text logo gone, swings both ways within
+  7°, the knot never moves, the swinging King clears the medallions at 420 wide, still with Reduce Motion).
+- ui pack rebuilt and uploaded (ui-80b7ee56e390.pck). Full suite: ALL SIEGE TESTS PASSED (61). 0.31.113, version code
+  199. APK 31432155 bytes, sha256 b20a2069da753dec18ffdac079fa2b40f0028392631d9dc933d48d63b88e2f60.
+
+## 0.31.114 — a cleaner Home: the heroes in two rows with room between them (Kevin: "The characters on main screen are too hudled together and clipping into each other. Is there a way you can redesign the home screen so it's cleaner")
+- `roster.gd`: the seven heroes stand in two staggered rows instead of one tight arc (0.95 m apart, weapons through
+  each other): the Barbarian, the Knight and the Mage in front (2.25 m apart), the Rogue, the Ranger, the Priest and
+  the Worker behind them in the gaps (the outer two beside the dais). 1.2x (was 1.12x), camera 22 degrees up (was 12.7)
+  so the back row stands visibly behind. `SPOTS`, `HERO_SCALE`.
+- `screens.gd`: the side medallions tucked up under the top bar (`MED_Y` 0 / 82 / 164, was 58 / 150 / 242 left and
+  58 / 176 / 270 right) so they end above the heroes; FIRST WIN's "+300" is a badge on its corner. The "16 v 16
+  SIEGE" ribbon is gone (it sat on the heroes' feet; the line under PLAY already says 16 vs 16); a party now always
+  shows under PLAY. `home_layout` has no ribbon key.
+- Tests: home_heroes_test (no hero's body or weapons within 6 cm of another, from the weapons' actual vertices; at
+  420 x 933 every hero clear of the medallions and standing above PLAY, the front three side by side; no ribbon).
+  The 0.31.113 line-up fails it (rogue/ranger, ranger/barbarian, barbarian/knight, ...). app_flow_test drops its
+  ribbon check. reports/concepts/home_heroes_before_after.png.
+- Full suite: ALL SIEGE TESTS PASSED (62). No content pack change. 0.31.114, version code 200. APK 31432155 bytes,
+  sha256 9d86bef25c87accf7e4808fb0873959549d6b265004b7396a3f2dea9912baa59.
+
+## 0.31.115 — a new stage under the heroes (Kevin: "Some of the characters are looking like they are floating now because the background art. Maybe needs a redesign")
+- 0.31.114's line-up stood the outer two beside the small painted dais (on the battlements' painted wall), and its
+  22-degree camera looked down on the heroes more steeply than the painting looks at its dais.
+- New Home backdrop (`assets/ui/v2/bg_home.webp`; source `art_sources/home_bg/bg_home_stage.png`): the old painting
+  edited (ElevenLabs gpt-image-2.5-sunburst, 4 variations, 1,731 credits; flow "Fatebound Home stage") so the bottom is
+  one big round flagstone stage with a gold rim across the whole width -- sky, castle, valley, banners and towers kept.
+  Its floor runs from its far rim (77% down the painting at the sides) to its near rim (94%), behind PLAY.
+- `roster.gd`: camera down to 16 degrees ((0, 5.17, 14.9)), the rows deeper (front z 2.3 / Knight 2.6, back -2.2 /
+  outer -1.9), the outer two at ±4.0 on the floor, 1.15x.
+- home_heroes_test: + every hero's feet land on the painted floor (at 420 x 933). ui pack rebuilt and uploaded
+  (ui-ab92acbcbfe5.pck). reports/concepts/home_stage_before_after.png.
+- Full suite: ALL SIEGE TESTS PASSED (62). 0.31.115, version code 201. APK 31432155 bytes, sha256
+  23ccddd3195480e9e5b9f2c75efe5dfba41e7617c98b4566e44a6e77c3b1f2dc.
+
+## 0.31.116 — floating menu icons move smoothly (Kevin: "The icons in the menus that float up and down are not smooth")
+- Cause: Godot rounds every control's position to a whole canvas pixel (gui/common/snap_controls_to_pixels, on by
+  default). With canvas_items stretch a canvas pixel is ~3.4 screen pixels on the S21 Ultra (1440 / 420), so a 3-5 px
+  float (UI2.bob: FIRST WIN's trophy, claimable pass rewards, the equipped weapon, Career tiles, result chests; the
+  selected tab's icon) moved in 3-4-pixel jumps a few times a second. Measured at 2x: the trophy held still, then
+  jumped 2 px, in exact 2 px steps; after, a smooth sine in fractions of a pixel. Scale pulses (PLAY, the tutorial
+  button) were rounded the same way.
+- project.godot: gui/common/snap_controls_to_pixels=false (text is MSDF, and at 3.4x a whole canvas pixel never lined
+  up with a screen pixel anyway; no visible change to text in the 2x shots).
+- UI2.bob: an icon in a container floats inside a holder of its own size that the container lays out, so it follows
+  layout changes (before, it stayed pinned where it started).
+- Tests: menu_float_test (the setting off in project and viewport; in a box laid out again every frame the icon moves
+  < 2 px a frame, floats the full 6 px, and floats 30 px lower when the line above grows 30 px; without the holder it
+  stays pinned).
+- Full suite: ALL SIEGE TESTS PASSED (63). No content pack change. 0.31.116, version code 202. APK 31432155 bytes,
+  sha256 2ccc631af0d34766e874ed5f673206eedacf59728e6d49cd252bda56a294210f.

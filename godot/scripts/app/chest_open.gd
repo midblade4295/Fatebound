@@ -173,7 +173,7 @@ func open() -> void:
 	if not bool(result.get("ok", false)):
 		app.close_modal()
 		return
-	app.sfx("purchase")
+	app.sfx("chestOpen")                   # 0.31.109: the lid, the magic swelling into the burst at 0.45 s, the sparkle
 	_open_t = 0.0
 	var tw := create_tween()
 	tw.tween_property(_prompt, "modulate:a", 0.0, 0.2)
@@ -200,7 +200,7 @@ func _process(delta: float) -> void:
 		_show_rewards()
 
 func _burst() -> void:
-	app.sfx("coin")
+	# (its sound is the end of chestOpen's swell)
 	var cs: Array = COLORS.get(kind, COLORS.wooden)
 	_flash = ColorRect.new()
 	_flash.color = Color(1, 0.98, 0.9, 0.0)
@@ -325,6 +325,12 @@ func _show_rewards() -> void:
 	var tw := create_tween().set_parallel()
 	tw.tween_property(card, "scale", Vector2.ONE, 0.5).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	tw.tween_property(card, "modulate:a", 1.0, 0.25)
+	# 0.31.110: the card's sound by what it holds -- a rare's crystal bells, an epic's swell, a legendary's golden choir;
+	# a duplicate's Embers, plain gold's coin
+	if item != "":
+		app.sfx({"epic": "revealEpic", "legendary": "revealLegendary"}.get(rar, "revealRare"))
+	else:
+		app.sfx("ember" if int(result.get("dupe_embers", 0)) > 0 else "coin")
 	# gold and gems
 	var chips := HBoxContainer.new()
 	chips.add_theme_constant_override("separation", 12)
