@@ -416,3 +416,13 @@ func wear(id: String, key: String) -> Dictionary:
 	var t := str(p.d.get("title", ""))
 	return {"name":str(p.d.get("name", "Player")), "title":t if p.owns(t) and Net.TITLES.has(t) else "",
 		"looks":Net.clean_looks(p.wire_looks())}
+
+func public_of(id: String) -> Dictionary:
+	# 0.31.111: what other players see of an account in chat and friends lists -- its name and title (owned only).
+	# No key: the social socket checked it when it opened.
+	var e := _load(id)
+	if e.is_empty():
+		return {}
+	var p = e.p
+	var t := str(p.d.get("title", ""))
+	return {"name":str(p.d.get("name", "Player")), "title":t if p.owns(t) and Net.TITLES.has(t) else ""}

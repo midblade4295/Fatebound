@@ -27,7 +27,7 @@ SERVICE_SRC="$SRC/server/deploy/fatebound-siege.service"
 SERVER_SCRIPTS="scripts/siege/siege_sim.gd scripts/siege/siege_net.gd scripts/siege/siege_land.gd scripts/siege/siege_castle.gd"
 # 0.31.108: the accounts -- the server replays every player's changes with the game's own economy and profile code
 META_SCRIPTS="scripts/meta/economy.gd scripts/meta/profile.gd"
-SERVER_FILES="server/siege_server.gd server/siege_probe.gd server/iap_verify.gd server/eco_accounts.gd server/match_ledger.gd"
+SERVER_FILES="server/siege_server.gd server/siege_probe.gd server/iap_verify.gd server/eco_accounts.gd server/match_ledger.gd server/social.gd"
 for f in $SERVER_SCRIPTS $META_SCRIPTS $SERVER_FILES; do
   [ -f "$SRC/$f" ] || { echo "Missing $SRC/$f — run this from the Siege branch checkout." >&2; exit 1; }
 done
@@ -118,7 +118,7 @@ else
   if [ -d "$ACCT_DIR" ]; then
     mkdir -p /var/backups/fatebound-siege
     tar -czf "/var/backups/fatebound-siege/accounts-$(date -u +%Y%m%dT%H%M%SZ).tgz" -C "$(dirname "$ACCT_DIR")" \
-      accounts $(cd "$(dirname "$ACCT_DIR")" && ls purchase_tokens.json iap_ledger.jsonl 2>/dev/null)
+      accounts $(cd "$(dirname "$ACCT_DIR")" && ls purchase_tokens.json iap_ledger.jsonl social.json reports.jsonl muted.txt 2>/dev/null)
     chmod 600 /var/backups/fatebound-siege/*.tgz
     echo "Accounts backed up to /var/backups/fatebound-siege/"
   fi

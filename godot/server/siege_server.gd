@@ -46,11 +46,19 @@ extends SceneTree
 # weapon or title they don't own), and when the match ends the result is paid to the account from THIS server's count
 # (server/match_ledger.gd), never the phone's. "ver" and "status" answer "eco":1 so the app knows. All additive: an
 # older app keeps its own local economy until the minimum build is raised past it.
+#
+# 0.31.111 (Kevin: "Build a global chat and players can click a name and have option to add friend to a friends list.
+# They can then group up and form a party. Also add the quick chat pings"): a socket whose first message is
+# {"t":"so", "k":"hi", "acct", "key"} is a phone's social side (server/social.gd: chat, friends, parties) and stays
+# open without a hello (it never counts as a player). A hello from an account in a party is seated on its party's team.
+# {"t":"qc", "i"} in a match: a quick chat line (Net.QUICK_CHAT) to the player's side (or everyone), at most one every
+# Net.QC_GAP s; "Need help!" / "Follow me!" call the nearest bots (sim.call_bots). "ver"/"status" answer "social":1.
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 const Net = preload("res://scripts/siege/siege_net.gd")
 const IapVerify = preload("res://server/iap_verify.gd")
 const EcoAccounts = preload("res://server/eco_accounts.gd")
 const MatchLedger = preload("res://server/match_ledger.gd")
+const Social = preload("res://server/social.gd")
 
 const RESTART_AFTER := 15.0          # seconds of results screen before the next match
 const IDLE_STOP := 30.0              # no players for this long -> stop simulating
@@ -86,6 +94,7 @@ var _lobby_clock := 0.0
 var _names_dirty := false            # a seat changed: send the players' names (0.31.86)
 var iap = null                       # 0.31.90: Google Play purchase checks (server/iap_verify.gd)
 var eco = null                       # 0.31.108: the accounts (server/eco_accounts.gd)
+var social = null                    # 0.31.111: chat, friends, parties (server/social.gd)
 var test_match_s := 0.0              # tests only (SIEGE_TEST_MATCH_S): a match ends after this many seconds
 var _paid_match := -1                # the match whose results went to the accounts
 var min_build := ""                  # "" = no minimum (see SIEGE_MIN_BUILD)
@@ -129,6 +138,20 @@ func _init() -> void:
 	eco = EcoAccounts.new()
 	eco.log_fn = _log
 	_log("accounts: %d in %s" % [eco.count(), eco.dir])
+	social = Social.new("", eco)
+	social.log_fn = _log
+	social.send_fn = func(cid: int, msg: Dictionary): _send(cid, msg)
+	social.close_fn = func(cid: int):
+		if clients.has(cid) and not clients[cid].has("close_at"):
+			_send(cid, {"t":"so", "k":"bye", "why":"replaced"})
+			_refuse(cid, 4003, "replaced")
+	social.in_match_fn = func(acct: String) -> bool:
+		for cid in clients:
+			var c: Dictionary = clients[cid]
+			if c.hello and str(c.get("acct", "")) == acct:
+				return true
+		return false
+	_log("social: %d players known" % social.users.size())
 
 # ---------------- minimum app build ----------------
 # "0.31.78-fatebound" -> [0, 31, 78]; anything without a leading dotted number -> [] (unknown).
@@ -198,6 +221,8 @@ func _process(delta: float) -> bool:
 		_reload_min_build()
 	_run_lobby(delta)
 	_run_match(delta)
+	if social != null:
+		social.tick(delta)
 	if _names_dirty:
 		_names_dirty = false
 		_send_names()
@@ -240,7 +265,7 @@ func _poll_clients() -> void:
 				ws.close(int(c.close_code), str(c.close_reason))
 				_drop(cid, str(c.close_reason))
 			continue
-		if not c.hello and now - float(c.joined_at) > (IAP_TIMEOUT if c.has("iap_busy") else HELLO_TIMEOUT):
+		if not c.hello and not c.has("social") and now - float(c.joined_at) > (IAP_TIMEOUT if c.has("iap_busy") else HELLO_TIMEOUT):
 			ws.close(4000, "no hello")
 			_drop(cid, "no hello")
 			continue
@@ -317,6 +342,11 @@ func _drop(cid: int, why: String) -> void:
 	if c.hello:
 		_log("leave %s (%s) unit=%s players=%d" % [c.name, why, c.unit, _human_count() - 1])
 	clients.erase(cid)
+	if social != null:
+		if c.has("social"):
+			social.drop(cid)
+		if c.hello and c.has("acct"):
+			social.acct_changed(str(c.acct))      # (their friends see them leave the match)
 
 func _human_count() -> int:
 	var n := 0
@@ -337,10 +367,10 @@ func _handle(cid: int, msg: Dictionary) -> void:
 			# so the client treats no answer as "unknown" and checks again on connect.
 			if c.hello:
 				return
-			_send(cid, {"t":"ver", "v":Net.VERSION, "build":SERVER_BUILD, "min_build":min_build, "eco":1})
+			_send(cid, {"t":"ver", "v":Net.VERSION, "build":SERVER_BUILD, "min_build":min_build, "eco":1, "social":1})
 			_refuse(cid, 1000, "ver")
 		"hello":
-			if c.hello:
+			if c.hello or c.has("social"):
 				return
 			if int(msg.get("v", -1)) != Net.VERSION:
 				# "need" = the protocol this server speaks; the close reason carries it too ("version:35") in case
@@ -375,6 +405,9 @@ func _handle(cid: int, msg: Dictionary) -> void:
 					c.name = clean_name(str(w.name))
 					c.title = str(w.title)
 					c.looks = w.looks
+					if social != null:
+						c.party = social.party_for(c.acct)    # 0.31.111: seated with their party
+						social.acct_changed(c.acct)
 			c.pred = bool(msg.get("pred", false))         # the phone moves its own unit (0.18.4)
 			c.queued = true                                # 0.31.82: into the lobby; seated when the countdown ends
 			if wave_end < 0.0:
@@ -388,9 +421,38 @@ func _handle(cid: int, msg: Dictionary) -> void:
 				_send(cid, _status())
 				_refuse(cid, 1000, "status")
 				c.close_at = _now() + 2.0         # (the refusal path closes it; 2 s rather than REFUSE_CLOSE_DELAY)
+		"so":
+			# 0.31.111: a phone's social side (server/social.gd) -- "hi" first, then chat, friends and parties
+			if c.hello or social == null:
+				return
+			if c.has("social"):
+				social.handle(cid, msg)
+			elif str(msg.get("k", "")) == "hi":
+				if social.hello(cid, msg):
+					c.social = true
+				else:
+					_refuse(cid, 4004, "social")
+		"qc":
+			# 0.31.111: a quick chat line in a match, to the player's side ("Good game!" to everyone)
+			if not c.hello or sim == null or sim.ended or c.unit == "" or not sim.by_id.has(c.unit) or bool(c.get("queued", false)):
+				return
+			var qi := int(msg.get("i", -1))
+			if qi < 0 or qi >= Net.QUICK_CHAT.size() or _now() - float(c.get("qc_at", -99.0)) < Net.QC_GAP:
+				return
+			c.qc_at = _now()
+			var q: Dictionary = Net.QUICK_CHAT[qi]
+			var qteam := int(sim.by_id[c.unit].team)
+			if bool(q.get("call", false)):
+				sim.call_bots(c.unit)
+			var qmsg := {"t":"qc", "u":c.unit, "i":qi}
+			for ocid in clients:
+				var o: Dictionary = clients[ocid]
+				if o.hello and not bool(o.get("queued", false)) and o.unit != "" and sim.by_id.has(o.unit) \
+						and (bool(q.get("all", false)) or int(sim.by_id[o.unit].team) == qteam):
+					_send(ocid, qmsg)
 		"eco":
 			# 0.31.108: a phone's account -- its ops, a ticket, the account as it stands. One per socket, no hello.
-			if c.hello or c.has("eco_done") or eco == null:
+			if c.hello or c.has("eco_done") or c.has("social") or eco == null:
 				return
 			c.eco_done = true
 			var t0 := Time.get_ticks_usec()
@@ -474,6 +536,16 @@ func _seat(cid: int) -> void:
 		if other != cid and oc.hello and oc.unit != "" and sim.by_id.has(oc.unit):
 			humans[sim.by_id[oc.unit].team] += 1
 	var team := 0 if humans[0] <= humans[1] else 1
+	var pa := str(c.get("party", ""))
+	if pa != "":
+		# 0.31.111: a party plays on one side -- the side a member already holds a seat on (while it has room)
+		for other in clients:
+			var oc: Dictionary = clients[other]
+			if other != cid and oc.hello and str(oc.get("party", "")) == pa and oc.unit != "" and sim.by_id.has(oc.unit):
+				var pt := int(sim.by_id[oc.unit].team)
+				if humans[pt] < Net.TEAM_SIZE:
+					team = pt
+				break
 	var seat := ""
 	for u in sim.units:
 		if u.team == team and u.bot and not _unit_taken(u.id):
@@ -608,7 +680,8 @@ func _send_lobby(waiting: Array) -> void:
 func _status() -> Dictionary:
 	return {"t":"status", "v":Net.VERSION, "online":_human_count(), "in_match":_seated_count(), "waiting":_queued().size(),
 		"lobby":maxf(0.0, wave_end - _now()) if wave_end >= 0.0 else -1.0, "running":sim != null and not sim.ended,
-		"slots":Net.TEAM_SIZE * 2, "max":max_players, "build":SERVER_BUILD, "min_build":min_build, "eco":1}
+		"slots":Net.TEAM_SIZE * 2, "max":max_players, "build":SERVER_BUILD, "min_build":min_build, "eco":1, "social":1,
+		"chatting":social.online.size() if social != null else 0}
 
 # ---------------- paying a match (0.31.108) ----------------
 func _ledger_events(evs: Array) -> void:

@@ -27,6 +27,20 @@ const PREDICT_SNAP := 2.5        # m: a predicting phone snaps to the server bey
 const PREDICT_SOFT := 0.7        # m: beyond this it is eased back toward the server's position (0.31.24)
 const MAX_PACKET := 64 * 1024            # client -> server; anything larger is dropped
 const TEAM_SIZE := 16
+# 0.31.111 (Kevin: "add the quick chat pings"): the in-match quick chat. {"t":"qc", "i": index} from a player; the
+# server sends {"t":"qc", "u": unit, "i"} to their side ("all": to both sides). "call": the nearest bots of their side
+# come to them for a while (siege_sim.call_bots). Additive: an older server ignores it, an older app never sends it.
+const QUICK_CHAT := [
+	{"x":"Attack!", "c":"#ff8a5c"},
+	{"x":"Defend the gate!", "c":"#7ec8ff"},
+	{"x":"Get our King!", "c":"#ffd65a"},
+	{"x":"Stop the carrier!", "c":"#ff6a6a"},
+	{"x":"Need help!", "c":"#ff6a6a", "call":true},
+	{"x":"Follow me!", "c":"#9dff8a", "call":true},
+	{"x":"Thanks!", "c":"#e6e6e6"},
+	{"x":"Good game!", "c":"#e6c2ff", "all":true},
+]
+const QC_GAP := 2.0              # s between one player's quick chats
 
 const STATES := ["idle", "move", "wind", "recover", "dodge", "dead", "lift", "gather", "repair", "build_ladder", "fish", "fly"]
 const CLASSES := ["villager", "worker", "knight", "barbarian", "rogue", "ranger", "mage", "priest"]
