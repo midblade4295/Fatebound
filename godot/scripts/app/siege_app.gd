@@ -25,6 +25,7 @@ const FriendsPanel = preload("res://scripts/app/friends_panel.gd")
 const ChatTicker = preload("res://scripts/app/chat_ticker.gd")
 const InviteBanner = preload("res://scripts/app/invite_banner.gd")
 const OrdersPanel = preload("res://scripts/app/orders_panel.gd")
+const TitleLogo = preload("res://scripts/app/title_logo.gd")
 
 # 0.31.112 (Kevin: "move it [Home] to the center button. Move the shop button to far left")
 const TABS := [["shop", "SHOP", "stall"], ["pass", "PASS", "banner"], ["home", "HOME", "castle"], ["locker", "LOCKER", "helmet"], ["settings", "SETTINGS", "gear"]]
@@ -84,6 +85,7 @@ var _last_press := Vector2(-1, -1)
 var _last_press_ms := -100000
 var modal: Control = null
 var hero_layer: Control
+var title_logo: Control                  # Home's title, the King swinging from the knot (title_logo.gd)
 var hero_node: Control                 # the Home line-up (roster.gd); null on a safe start
 var safe_top := 0.0
 var xp_holder: Control
@@ -421,23 +423,17 @@ func _build_hero() -> void:
 		ramp.add_point(0.75, Color(1, 1, 1, 0.6))
 		motes.color_ramp = ramp
 		hero_layer.add_child(motes)
-	# The game is just "Fatebound" (Kevin): the logo in Luckiest Guy, like the trailer and store art.
-	var logo := UI2.text(hero_layer, "FATEBOUND", 50, UI2.GOLD, UI2.INK, 13)
-	logo.add_theme_color_override("font_shadow_color", Color(0.1, 0.05, 0.0, 0.85))
-	logo.add_theme_constant_override("shadow_offset_y", 6)
-	logo.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	logo.anchor_right = 1.0
-	logo.offset_top = 66 + safe_top
-	logo.offset_bottom = 122 + safe_top
-	var tag := UI.label(hero_layer, "ANYONE  CAN  CHANGE  FATE", 11, UI2.CREAM, UI.HEAVY_FONT)
-	tag.autowrap_mode = TextServer.AUTOWRAP_OFF
-	tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	tag.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.75))
-	tag.add_theme_constant_override("outline_size", 4)
-	tag.anchor_right = 1.0
-	tag.offset_top = 122 + safe_top
-	tag.offset_bottom = 138 + safe_top
-	tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# The game is just "Fatebound" (Kevin). 0.31.113: the "All Tied Up" title (Kevin: "I like the all tied up one. Can you
+	# also make it so the king swings back and forth from the rope"), between the side medallions under the top bar.
+	title_logo = TitleLogo.new(calm)
+	hero_layer.add_child(title_logo)
+	var place := func():
+		var w := hero_layer.size.x
+		var lw := minf(w - 150.0, 300.0)
+		title_logo.size = Vector2(lw, lw * TitleLogo.aspect())
+		title_logo.position = Vector2((w - lw) * 0.5, 60.0 + safe_top)
+	hero_layer.resized.connect(place)
+	place.call()
 
 const LOGO_FONT = preload("res://assets/fonts/LuckiestGuy-Regular.ttf")
 

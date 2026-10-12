@@ -3283,3 +3283,23 @@ K2/K3 notes (0.17.0)
   680 px), app_scroll_test (drags tried on the SHOP tab; PLAY still fires on a tap). 0.31.112, version code 198.
 - Full suite: ALL SIEGE TESTS PASSED (60). No content pack change. APK 31427896 bytes, sha256
   46ea0bf87c32c57a55019ef423a829e721f1aee48032dd53d7cd90cecf6e6eed.
+
+## 0.31.113 — the "All Tied Up" title, the King swinging from the rope (Kevin: "I like the all tied up one. Can you also make it so the king swings back and forth from the rope")
+- Home's text logo ("FATEBOUND" + "ANYONE CAN CHANGE FATE") is now the All Tied Up title: FATEBOUND bound in rope over
+  the "STEAL THEIR KING. SAVE YOURS." scroll, with the captured King hanging from the knot under the D.
+- `tools/build_title_logo.py` cuts the one painting (`art_sources/title_logo/fatebound_tied_up.png`, white page) into
+  two layers in assets/ui/v2: `logo_base.webp` (the King painted out: the D's outline and face carried on behind him,
+  the page left clear where he hung over it) and `logo_king.webp` (the King with his two rope ends, from just under the
+  knot; the rope ends fade in over 8px so the join at the knot doesn't show). His outline is the white page around him
+  plus hand-traced rope ends and crown where he hangs in front of the D, refined with GrabCut. Imported lossy 0.92 with
+  mipmaps (drawn linear-with-mipmaps).
+- `scripts/app/title_logo.gd`: the two layers sized by width; the King turns about the knot, ±7° on a 2.8 s sine.
+  Still with Reduce Motion; stops with the rest of Home in a match (hero layer's processing). Without the ui pack's art
+  it falls back to the text logo with the new line. Placed between the side medallions under the top bar
+  (`min(w - 150, 300)` wide, 60 px under the safe area).
+- tools/app_shots.gd: SHOT_NO_LOGO hides the title; SHOT_SWING=n saves n frames of the swing (home_swing_NN).
+  reports/concepts/home_title_logo.png, title_swing.gif.
+- Tests: title_logo_test (layers load and match the sizes in title_logo.gd, text logo gone, swings both ways within
+  7°, the knot never moves, the swinging King clears the medallions at 420 wide, still with Reduce Motion).
+- ui pack rebuilt and uploaded (ui-80b7ee56e390.pck). Full suite: ALL SIEGE TESTS PASSED (61). 0.31.113, version code
+  199. APK 31432155 bytes, sha256 b20a2069da753dec18ffdac079fa2b40f0028392631d9dc933d48d63b88e2f60.

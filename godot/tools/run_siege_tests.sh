@@ -111,6 +111,8 @@ run eco_server_test      ECO_SERVER_PASS          120
 run economy_fix_test     ECONOMY_FIX_PASS         60
 # The menu sounds and the sliders at 100% by default (0.31.110).
 run menu_sound_test      MENU_SOUND_PASS          60
+# Home's "All Tied Up" title, the King swinging from the knot (0.31.113).
+run title_logo_test      TITLE_LOGO_PASS          90
 # Chat, friends, parties and quick chat (0.31.111): server/social.gd alone, then two phones against the real server.
 run social_test          SOCIAL_PASS              150
 run social_ui_test       SOCIAL_UI_PASS           200
