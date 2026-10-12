@@ -279,6 +279,26 @@ func claim_all() -> Array:
 		save()
 	return got
 
+func skip_offer() -> Dictionary:
+	# the pass's tier skip as it stands: {tiers, gems} (tiers 0 when the pass is complete)
+	var n := mini(Eco.TIER_SKIP, Eco.PASS_TIERS - pass_tier())
+	return {"tiers": maxi(n, 0), "gems": maxi(n, 0) * Eco.TIER_SKIP_GEMS}
+
+func skip_tiers() -> Dictionary:
+	# 0.31.107: buy the next (up to) 10 tiers -- the pass XP for them, the progress into the current tier kept; their
+	# rewards wait to be claimed like any others
+	var o := skip_offer()
+	if int(o.tiers) <= 0:
+		return {"ok":false, "error":"The pass is already complete"}
+	if int(d.gems) < int(o.gems):
+		return {"ok":false, "error":"Not enough gems"}
+	d.gems -= int(o.gems)
+	var out := {"tiers": []}
+	_add_pass_xp(int(o.tiers) * Eco.TIER_XP, out)
+	d.pass["skipped"] = int(d.pass.get("skipped", 0)) + int(o.tiers)
+	save()
+	return {"ok":true, "tiers":out.tiers, "gems":int(o.gems)}
+
 func buy_premium() -> Dictionary:
 	if bool(d.pass.premium):
 		return {"ok":false, "error":"You already own this season's premium pass"}

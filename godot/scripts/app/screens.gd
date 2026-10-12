@@ -761,6 +761,28 @@ static func pass_screen(app, root: VBoxContainer) -> void:
 		UI2.text(xv, "PASS COMPLETE", 18, UI2.GOLD)
 	UI2.body(xv, "Earn pass XP from every match and order", 11, UI2.MUTED)
 
+	# --- tier skip (0.31.107)
+	var so: Dictionary = p.skip_offer()
+	if int(so.tiers) > 0:
+		var kc := UI2.frame(root, "night", 10, 16.0, "gold")
+		var kr := UI.row(kc, 10)
+		var ki := UI2.img(kr, "res://assets/ui/v2/shield_pass.svg", 46.0)
+		var kn := UI2.text(ki, "+%d" % int(so.tiers), 16, Color.WHITE, Color("#1e0a45"), 5)
+		kn.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		kn.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		kn.offset_top = 9
+		UI2.wiggle(ki, 4.0)
+		var kv := VBoxContainer.new()
+		kv.add_theme_constant_override("separation", 1)
+		UI.grow(kv)
+		kr.add_child(kv)
+		UI2.text(kv, "SKIP %d TIER%s" % [int(so.tiers), "" if int(so.tiers) == 1 else "S"], 18, UI2.GOLD)
+		UI2.body(kv, "Jump to tier %d  ·  claim every reward on the way" % (tier + int(so.tiers)), 11, Color("#dfe6ff"))
+		var kb := UI2.button(kr, str(int(so.gems)), "purple", func(): _skip_tiers(app), "skip_tiers", 17, 44.0, 12.0, "res://assets/ui/currency/gem.png")
+		kb.custom_minimum_size.x = 112
+		kb.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		kb.disabled = int(d.gems) < int(so.gems)
+
 	# --- premium
 	var pcos := Eco.pass_cosmetics(sid)                  # (0.31.87: the title tiers give gems now)
 	var legendary: int = int(pcos.legendary)
@@ -1038,6 +1060,20 @@ static func _claim_tier(app, t: int, prem: bool) -> void:
 		app.toast("+ " + str(got[1]), UI.GREEN)
 	app.close_modal()
 	app.rebuild()
+
+static func _skip_tiers(app) -> void:
+	var p = app.profile
+	var so: Dictionary = p.skip_offer()
+	var to: int = p.pass_tier() + int(so.tiers)
+	app.confirm("SKIP %d TIERS?" % int(so.tiers), "Jump straight to tier %d of the Siege Pass. Costs %d gems." % [to, int(so.gems)], "SKIP", "premium", func():
+		var r: Dictionary = p.skip_tiers()
+		if r.ok:
+			app.sfx("purchase")
+			app.toast("Tier %d reached! Claim your rewards" % p.pass_tier(), UI.GOLD)
+		else:
+			app.sfx("error")
+			app.toast(str(r.error), UI.RED)
+		app.rebuild())
 
 static func _buy_premium(app) -> void:
 	var p = app.profile

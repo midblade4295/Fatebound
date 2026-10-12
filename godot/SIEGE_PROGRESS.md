@@ -3133,3 +3133,13 @@ K2/K3 notes (0.17.0)
 - tests/shop_packs_test.gd in the suite.
 - Content pack ui rebuilt (ui-f69d90ec6748.pck) and on the content-packs branch.
 - 0.31.106, version code 192. Quick suite: ALL 54 PASSED. CONTENT OK.
+
+## 0.31.107 — Siege Pass tier skips (Kevin: "Can you put tier skips for the battlepass. Players can buy 10 tiers for gems")
+- Eco.TIER_SKIP 10, TIER_SKIP_GEMS 100 a tier: 10 tiers for 1000 gems (near the end only what's left: at tier 26 the
+  last 4 for 400). Profile.skip_offer / skip_tiers: the pass XP for those tiers, the progress into the current tier
+  kept, their rewards then waiting to be claimed like any others (CLAIM ALL); counted in d.pass.skipped. None when the
+  pass is complete. Any 10 tiers give back at most ~270 gems over both tracks (seasons 1-6), so a skip never makes gems.
+- Pass screen: a SKIP 10 TIERS card under the tier card (a +10 pass shield, "Jump to tier N · claim every reward on the
+  way", the gem price), greyed without the gems; it asks first (SKIP 10 TIERS? ... Costs 1000 gems.).
+- tests/tier_skip_test.gd in the suite.
+- 0.31.107, version code 193. Quick suite: ALL 55 PASSED. CONTENT OK.

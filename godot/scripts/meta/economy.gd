@@ -45,6 +45,11 @@ const PASS_TIERS := 30
 # ~23 at 2 a day, ~16 at 5 a day -- inside the 28 days for a regular player, a goal for a casual one.
 const TIER_XP := 2500
 const PREMIUM_COST := 950                # gems
+# 0.31.107 (Kevin: "put tier skips for the battlepass. Players can buy 10 tiers for gems"): 10 tiers at a time, 100 gems
+# a tier (fewer near the end: only what's left). Any 10 tiers give back at most ~270 gems over both tracks, so a skip is
+# never a way to make gems.
+const TIER_SKIP := 10
+const TIER_SKIP_GEMS := 100              # per tier
 const SEASON_NAMES := ["The King's Keep", "Ashen Ramparts", "Frost Siege", "The Fish Wars", "Iron Tide", "Summer of Stones"]
 
 static func season_id(unix: int) -> int:
