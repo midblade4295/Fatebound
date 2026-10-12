@@ -502,3 +502,36 @@ as `<id>.ogg` (list: `assets/vo/tutorial/SCRIPT.md`; regenerate it after editing
 **0.21.0 (dungeon wing):** Castle.ANNEX_*/DSTAIR/JAIL_*/CELL_C, Castle.in_annex/dungeon_ledges,
 Land.in_dungeon_pit (re-run tools/bake_land.gd after changing the wing), jail = gate kind "jail"
 (Sim._reset_jail). Protocol v8: redeploy the server.
+
+## 19. Accounts on the server (0.31.108, Kevin: "make sure everything is verified by server so players can't edit gems ect")
+
+**What changed:** the Siege server keeps every player's profile and is the only copy that counts.
+- `server/eco_accounts.gd`: accounts in the service's state directory (`/var/lib/private/fatebound-siege/accounts`
+  under systemd's DynamicUser; `<id>.json` the profile, `<id>.meta.json` the key's SHA-256, the last op, tickets),
+  `purchase_tokens.json` (purchase token hash -> account). The phone's key is never stored, only its hash.
+- The phone (`scripts/meta/eco_sync.gd`): every change is an op (Profile.OPS: buy, claim_tier, open_chest ...) sent up
+  in numbered batches ("eco" message, one per socket like "iap"); the server replays it with the same `profile.gd` /
+  `economy.gd` and its own clock and answers with the account; the phone takes it and re-applies what's still unsent.
+  An edited save is replaced by the next answer.
+- VS BOTS (Kevin: "Always online"): a match only starts with a ticket from the server; its result counts at least
+  150 s after the ticket, once, clamped to what a match that long can hold. Online matches are paid by the server
+  from its own count (`server/match_ledger.gd`), never the phone's. Purchases are granted to the account by the server
+  (one account per purchase token). Online names, titles and weapons shown to others come from the account.
+- First contact: a new account takes in the phone's existing progress once, held to what that many matches could
+  earn plus Google-confirmed purchases (`EcoAccounts._import`); this import closes 2026-12-01 (`IMPORT_UNTIL`).
+
+**Deploy (needed for any of this to work; the app keeps its own local economy against an older server):**
+```bash
+cd ~/Fatebound && git fetch && git checkout claude/siege-dev-r6-local && git pull
+sudo bash godot/server/deploy/install_siege_server.sh
+```
+The installer now also ships `scripts/meta/economy.gd`, `profile.gd`, `server/eco_accounts.gd`, `match_ledger.gd`, and
+backs up the accounts to `/var/backups/fatebound-siege/accounts-<time>.tgz` before each update. Logs: `eco <id>: ...`,
+`account <id> created (imported: ...)`, `paid <id> (...): win, N gold`.
+
+**After the new app is on Play and players have updated:** raise the minimum build so older apps (which still keep
+their own economy) can't play online: `echo 0.31.108 | sudo tee /etc/fatebound-siege/min_build`.
+
+**Back up** `/var/lib/private/fatebound-siege/` (accounts, purchase_tokens.json, iap_ledger.jsonl): it is now the
+players' progress. Losing it means players start over (the app would make new accounts from what their phones show,
+within the import limits, until 2026-12-01).

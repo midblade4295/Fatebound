@@ -152,7 +152,11 @@ func _ready() -> void:
 	add_child(eco_sync)
 	eco_sync.synced.connect(_on_eco_synced)
 	eco_sync.rejected.connect(func(op: String, err: String):
-		print("ECO rejected %s: %s" % [op, err]))
+		print("ECO rejected %s: %s" % [op, err])
+		if op == "match":
+			toast("That match couldn't be counted by the server", UI.RED)
+		else:
+			toast("The server didn't accept that change, so it was undone", UI.RED))
 	billing = Billing.new()
 	add_child(billing)
 	billing.on_server_grant = func(g: Dictionary): eco_sync.adopt(g.get("profile", {}), int(profile.d.account.get("seq", 0)))
