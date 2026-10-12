@@ -737,7 +737,7 @@ func _punch(kind: String) -> void:
 	var now := Time.get_ticks_msec()
 	if now - int(_punch_ms.get(kind, 0)) > 70:            # a quick run of clinks, not a roar
 		_punch_ms[kind] = now
-		sfx("coin")
+		sfx(kind)                                           # 0.31.109: coin / gem / ember, each its own
 
 func show_tab(id: String) -> void:
 	tab = id

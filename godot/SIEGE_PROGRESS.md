@@ -3199,3 +3199,21 @@ K2/K3 notes (0.17.0)
   yet"). The concept board is kept at reports/concepts/s2_pass_weapons.jpg (Ashguard, Magmamaw, Cinderfangs, Ashwind,
   Pyreforge, Cinderlich; A/B each). Eco.PASS_SEASON_ITEMS stays empty: season 2 uses the old draw, with owned items
   swapped (Embers or an unowned pass weapon).
+
+## 0.31.109 — new menu sounds (Kevin: "make all new high quality sound effects for the menu. I don't want these to be cheap 8bit sounds. I want them to be sounds you'd hear in AAA game")
+- 15 menu cues from ElevenLabs sound effects (eleven_text_to_sound_v2; 76 generations, four takes per prompt, ~1,270
+  credits), the best take picked from its waveform and spectrogram (onset, length, partials, noise), then cut, layered,
+  high-passed for phone speakers, levelled to each other and soft-limited by tools/build_menu_sfx.py (sources kept in
+  art_sources/menu_sfx/; the script rebuilds assets/sounds/<cue>.wav, 44.1 kHz 16-bit stereo).
+  Replaced: tap (polished-wood tap), menuClose (whoosh into a cloth thud), confirm (crystal bell), equip (blade slides
+  home and clanks), coin (a gold coin rings), purchase (coins into a pouch + a sparkle), error (two dull wooden
+  knocks), flip (a card), countdown (a deep clock tick), matchStart (war drum + horn).
+  New: gem (a crystal clink) and ember (a fire puff) for their counters (the reward flight played the coin for all
+  three), claim (a brass-and-chimes fanfare: pass tiers, CLAIM ALL, orders, quests -- were the coin / purchase),
+  chestOpen (the lid creaks, magic swells into the burst at 0.45 s, a sparkle after -- was the purchase sound plus a
+  coin at the burst), forge (a hammer rings on the anvil + a shimmer -- was the purchase).
+- native_audio: the new cues count as UI sounds (the sfx volume). cue-catalog.json notes the replaced cues.
+- Audition page (artifact "Fatebound Menu Sounds"): every new cue next to the old one.
+- Content pack audio rebuilt (audio-d94b1cd17740.pck) and on the content-packs branch. 0.31.109, version code 195.
+  Sound tests (match_audio, reward_fly, chest, app_flow, forge, quest, tier_skip, content) pass. APK 31373497 bytes,
+  sha256 a7281bed81486b5dfd4a033ae7bd9fe97b057065639667cc0992072c140c5e2d.

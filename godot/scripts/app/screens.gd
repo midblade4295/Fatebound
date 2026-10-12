@@ -605,7 +605,7 @@ static func challenges_card(app, root: Node, span: String) -> Control:
 			var cb := UI2.button(row, "CLAIM", "green", func():
 				var r: Dictionary = p.claim_challenge(span, i)
 				if r.ok:
-					app.sfx("coin")
+					app.sfx("claim")
 					app.toast("Order complete!" + (" Pass tier %d reached" % int(r.tiers[-1]) if not r.tiers.is_empty() else ""), UI.GREEN)
 				app.rebuild(), "claim_%s_%d" % [span, i], 15, 38.0, 10.0)
 			cb.custom_minimum_size.x = 84
@@ -870,7 +870,7 @@ static func pass_screen(app, root: VBoxContainer) -> void:
 	if claimable > 0:
 		var ca := UI2.button(root, "CLAIM ALL  (%d)" % claimable, "green", func():
 			var got: Array = p.claim_all()
-			app.sfx("coin")
+			app.sfx("claim")
 			app.toast("Claimed %d reward%s" % [got.size(), "" if got.size() == 1 else "s"], UI.GREEN)
 			app.rebuild(), "claim_all", 24, 58.0, 18.0)
 		UI2.sweep(ca)
@@ -1061,7 +1061,7 @@ static func pass_cell(app, parent: Node, sid: int, t: int, prem: bool) -> void:
 static func _claim_tier(app, t: int, prem: bool) -> void:
 	var res: Dictionary = app.profile.claim_tier(t, prem)
 	if res.ok:
-		app.sfx("coin")
+		app.sfx("claim")
 		var got: Array = reward_text(res.reward)
 		app.toast("+ " + str(got[1]), UI.GREEN)
 	app.close_modal()
@@ -1273,7 +1273,7 @@ static func shop(app, root: VBoxContainer) -> void:
 		var b := UI2.button(c, str(int(off.gems)), "purple", func():
 			var r: Dictionary = p.exchange(oid)
 			if r.ok:
-				app.sfx("coin")
+				app.sfx("purchase")
 				app.toast("+%s gold" % UI.grouped(int(off.gold)), UI.GOLD)
 			else:
 				app.sfx("error")
@@ -2489,7 +2489,7 @@ static func forge(app, root: VBoxContainer) -> void:
 	var fb := UI2.button(info, label, "orange" if bool(check.ok) else "grey", func():
 		var res: Dictionary = p.forge(wid, el)
 		if bool(res.get("ok", false)):
-			app.sfx("purchase")
+			app.sfx("forge")
 			app.toast("%s is now %s!" % [Eco.forge_name(wid), str(Eco.FORGE_STARS[int(res.stars) - 1].name)], UI2.GOLD)
 			app.forge_element = ""
 			app.refresh_top()
@@ -2629,7 +2629,7 @@ static func claim_quest(app, cls: String) -> void:
 	var res: Dictionary = p.claim_quest(cls)
 	if not bool(res.get("ok", false)):
 		return
-	app.sfx("purchase")
+	app.sfx("claim")
 	app.refresh_top()
 	if str(res.item) != "":
 		# the legendary: show it off, with EQUIP right there

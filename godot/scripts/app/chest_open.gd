@@ -173,7 +173,7 @@ func open() -> void:
 	if not bool(result.get("ok", false)):
 		app.close_modal()
 		return
-	app.sfx("purchase")
+	app.sfx("chestOpen")                   # 0.31.109: the lid, the magic swelling into the burst at 0.45 s, the sparkle
 	_open_t = 0.0
 	var tw := create_tween()
 	tw.tween_property(_prompt, "modulate:a", 0.0, 0.2)
@@ -200,7 +200,7 @@ func _process(delta: float) -> void:
 		_show_rewards()
 
 func _burst() -> void:
-	app.sfx("coin")
+	# (its sound is the end of chestOpen's swell)
 	var cs: Array = COLORS.get(kind, COLORS.wooden)
 	_flash = ColorRect.new()
 	_flash.color = Color(1, 0.98, 0.9, 0.0)
