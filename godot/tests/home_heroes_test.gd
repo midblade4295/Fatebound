@@ -5,6 +5,9 @@ extends SceneTree
 #  - at phone size (420 x 933) the heroes stand clear of the side medallions and above PLAY, and the front row's three
 #    don't cover each other;
 #  - the "16 v 16 SIEGE" ribbon is gone (it sat on their feet) and the line under PLAY still says 16 vs 16.
+#  - 0.31.115 (Kevin: "Some of the characters are looking like they are floating now because the background art"):
+#    every hero's feet land on the painted stage's floor (bg_home.webp: from its far gold rim, 77% down the painting at
+#    the sides, to its near rim, 94% down; measured on art_sources/home_bg/bg_home_stage.png).
 #   godot --headless --path godot -s res://tests/home_heroes_test.gd
 const App = preload("res://scripts/app/siege_app.gd")
 const Roster = preload("res://scripts/app/roster.gd")
@@ -66,11 +69,14 @@ func _box(slot: Node3D, weapons := true) -> AABB:
 		first = false
 	return box
 
+func _dais_y(w: float) -> float:
+	# where Home lines the hero layer up with the backdrop (siege_app._build_hero's lay)
+	return -0.405 * w + 0.858 * w * App.BG_ASPECT
+
 func _screen(r, box: AABB) -> Rect2:
 	# the box's corners on the phone's screen (the layer's control px, then where Home places the layer at 420 wide)
 	var w := 420.0
-	var h := w * App.BG_ASPECT
-	var dais := -0.405 * w + 0.858 * h
+	var dais := _dais_y(w)
 	var rect := Rect2()
 	for i in 8:
 		var p: Vector2 = r.cam.unproject_position(box.get_endpoint(i)) * (r.size.x / float(r.viewport.size.x))
@@ -125,6 +131,18 @@ func _process(d: float) -> bool:
 	for c in feet_r:
 		feet = maxf(feet, (feet_r[c] as Rect2).end.y)
 	check(feet < play_y, "the heroes stand above PLAY (feet %.0f, PLAY %.0f)" % [feet, play_y])
+	var w := 420.0
+	var bh := w * App.BG_ASPECT
+	var floor_top := -0.405 * w + 0.773 * bh
+	var floor_bottom := -0.405 * w + 0.94 * bh
+	var off_floor := ""
+	for c in bodies:
+		var b: AABB = bodies[c]
+		var foot: Vector2 = phone.cam.unproject_position(b.position + Vector3(b.size.x * 0.5, 0.0, b.size.z * 0.5)) * (phone.size.x / float(phone.viewport.size.x))
+		foot.y += _dais_y(w) - Roster.FEET_Y
+		if foot.y < floor_top or foot.y > floor_bottom or foot.x < 0.0 or foot.x > w:
+			off_floor += " %s %s" % [c, str(foot.round())]
+	check(off_floor == "", "every hero's feet on the stage's floor (y %.0f to %.0f)%s" % [floor_top, floor_bottom, off_floor])
 	var fr: Array = [feet_r.barbarian, feet_r.knight, feet_r.mage]
 	check(fr[0].end.x <= fr[1].position.x + 2.0 and fr[1].end.x <= fr[2].position.x + 2.0,
 		"the front row's three stand side by side, not in front of each other: %s" % str(fr))

@@ -3319,3 +3319,17 @@ K2/K3 notes (0.17.0)
   ribbon check. reports/concepts/home_heroes_before_after.png.
 - Full suite: ALL SIEGE TESTS PASSED (62). No content pack change. 0.31.114, version code 200. APK 31432155 bytes,
   sha256 9d86bef25c87accf7e4808fb0873959549d6b265004b7396a3f2dea9912baa59.
+
+## 0.31.115 — a new stage under the heroes (Kevin: "Some of the characters are looking like they are floating now because the background art. Maybe needs a redesign")
+- 0.31.114's line-up stood the outer two beside the small painted dais (on the battlements' painted wall), and its
+  22-degree camera looked down on the heroes more steeply than the painting looks at its dais.
+- New Home backdrop (`assets/ui/v2/bg_home.webp`; source `art_sources/home_bg/bg_home_stage.png`): the old painting
+  edited (ElevenLabs gpt-image-2.5-sunburst, 4 variations, 1,731 credits; flow "Fatebound Home stage") so the bottom is
+  one big round flagstone stage with a gold rim across the whole width -- sky, castle, valley, banners and towers kept.
+  Its floor runs from its far rim (77% down the painting at the sides) to its near rim (94%), behind PLAY.
+- `roster.gd`: camera down to 16 degrees ((0, 5.17, 14.9)), the rows deeper (front z 2.3 / Knight 2.6, back -2.2 /
+  outer -1.9), the outer two at ±4.0 on the floor, 1.15x.
+- home_heroes_test: + every hero's feet land on the painted floor (at 420 x 933). ui pack rebuilt and uploaded
+  (ui-ab92acbcbfe5.pck). reports/concepts/home_stage_before_after.png.
+- Full suite: ALL SIEGE TESTS PASSED (62). 0.31.115, version code 201. APK 31432155 bytes, sha256
+  23ccddd3195480e9e5b9f2c75efe5dfba41e7617c98b4566e44a6e77c3b1f2dc.
