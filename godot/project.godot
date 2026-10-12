@@ -27,6 +27,7 @@ rendering_device/fallback_to_opengl3=false
 textures/default_filters/use_nearest_mipmap_filter=false
 
 [gui]
+common/snap_controls_to_pixels=false
 theme/default_font_multichannel_signed_distance_field=true
 
 [physics]

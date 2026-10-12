@@ -238,6 +238,31 @@ static func pulse(c: Control, amount := 0.03, secs := 1.1) -> void:
 	when_ready(c, go)
 
 static func bob(c: Control, px := 5.0, secs := 1.3, delay := 0.0) -> void:
+	# 0.31.116 (Kevin: "The icons in the menus that float up and down are not smooth"): a container lays its children out
+	# again whenever anything in it changes, which put a floating icon back to rest for a frame; so an icon in a container
+	# floats inside a holder of its own size, and the container lays out the holder. (The other half of the fix is
+	# project.godot's gui/common/snap_controls_to_pixels=false: controls were rounded to whole canvas pixels, so on a phone
+	# a 3-5 px float moved in 3-4 screen-pixel steps.)
+	var p := c.get_parent()
+	if p is Container:
+		var holder := Control.new()
+		holder.name = "BobHolder"
+		holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		holder.custom_minimum_size = c.get_combined_minimum_size()
+		holder.size_flags_horizontal = c.size_flags_horizontal
+		holder.size_flags_vertical = c.size_flags_vertical
+		holder.size_flags_stretch_ratio = c.size_flags_stretch_ratio
+		var at := c.get_index()
+		p.remove_child(c)
+		p.add_child(holder)
+		p.move_child(holder, at)
+		holder.add_child(c)
+		c.position = Vector2.ZERO
+		c.size = holder.custom_minimum_size
+		holder.resized.connect(func():
+			if is_instance_valid(c):
+				c.position.x = 0.0
+				c.size = holder.size)
 	var go := func():
 		if not is_instance_valid(c):
 			return                               # (redrawn before the next frame: the node is gone)

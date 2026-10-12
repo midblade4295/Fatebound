@@ -115,6 +115,8 @@ run menu_sound_test      MENU_SOUND_PASS          60
 run title_logo_test      TITLE_LOGO_PASS          90
 # Home's heroes in two rows, nobody reaching into anybody, clear of the medallions and PLAY; no ribbon (0.31.114).
 run home_heroes_test     HOME_HEROES_PASS         90
+# Floating menu icons move smoothly: no snapping to whole canvas pixels, and they float with their layout (0.31.116).
+run menu_float_test      MENU_FLOAT_PASS          60
 # Chat, friends, parties and quick chat (0.31.111): server/social.gd alone, then two phones against the real server.
 run social_test          SOCIAL_PASS              150
 run social_ui_test       SOCIAL_UI_PASS           200

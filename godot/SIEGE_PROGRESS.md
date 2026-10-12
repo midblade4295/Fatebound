@@ -3333,3 +3333,20 @@ K2/K3 notes (0.17.0)
   (ui-ab92acbcbfe5.pck). reports/concepts/home_stage_before_after.png.
 - Full suite: ALL SIEGE TESTS PASSED (62). 0.31.115, version code 201. APK 31432155 bytes, sha256
   23ccddd3195480e9e5b9f2c75efe5dfba41e7617c98b4566e44a6e77c3b1f2dc.
+
+## 0.31.116 — floating menu icons move smoothly (Kevin: "The icons in the menus that float up and down are not smooth")
+- Cause: Godot rounds every control's position to a whole canvas pixel (gui/common/snap_controls_to_pixels, on by
+  default). With canvas_items stretch a canvas pixel is ~3.4 screen pixels on the S21 Ultra (1440 / 420), so a 3-5 px
+  float (UI2.bob: FIRST WIN's trophy, claimable pass rewards, the equipped weapon, Career tiles, result chests; the
+  selected tab's icon) moved in 3-4-pixel jumps a few times a second. Measured at 2x: the trophy held still, then
+  jumped 2 px, in exact 2 px steps; after, a smooth sine in fractions of a pixel. Scale pulses (PLAY, the tutorial
+  button) were rounded the same way.
+- project.godot: gui/common/snap_controls_to_pixels=false (text is MSDF, and at 3.4x a whole canvas pixel never lined
+  up with a screen pixel anyway; no visible change to text in the 2x shots).
+- UI2.bob: an icon in a container floats inside a holder of its own size that the container lays out, so it follows
+  layout changes (before, it stayed pinned where it started).
+- Tests: menu_float_test (the setting off in project and viewport; in a box laid out again every frame the icon moves
+  < 2 px a frame, floats the full 6 px, and floats 30 px lower when the line above grows 30 px; without the holder it
+  stays pinned).
+- Full suite: ALL SIEGE TESTS PASSED (63). No content pack change. 0.31.116, version code 202. APK 31432155 bytes,
+  sha256 2ccc631af0d34766e874ed5f673206eedacf59728e6d49cd252bda56a294210f.
