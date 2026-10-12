@@ -1,4 +1,5 @@
 extends SceneTree
+# (Superseded in 0.31.105 by tools/render_currency_icons.gd: the Meshy coin, diamond and ember. Kept for the record.)
 # Renders the gold currency icons (assets/ui/currency/coin, coins_s, coins_m, coins_l) from the Quaternius
 # Fantasy Props MegaKit coin models (CC0) -- 0.31.49, Kevin: "a new model for the gold itself".
 # The source models (16 MB of trim textures) live OUTSIDE the Godot project, in art_sources/gold_megakit, so they never

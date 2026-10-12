@@ -3068,3 +3068,134 @@ K2/K3 notes (0.17.0)
 - Content pack weapons rebuilt (weapons-cd8cb0f18e24.pck) and on the content-packs branch.
 - tests/weapon_fx_test.gd: the spin parts exist in the model, turn on a body (each its own way), stay put on an icon.
 - 0.31.103, version code 189. Quick suite: ALL 51 PASSED (a first run missed staged_start_test's 200 ms _ready budget by 8 ms under load; alone it runs 107-126 ms). CONTENT OK. No itch build.
+
+## 0.31.104 — weapon grips (Kevin, with screenshots of Brickbreaker, Ravenclaws, Twin Sparks, Bloodmoon, Hawkeye, Eye of the Archon: "A lot of the weapons are still not gripped correctly")
+- Audit: every catalog weapon and starter rendered in its class's idle from the front and both sides, plus hand
+  close-ups against the KayKit piece each one is fitted to, plus handle profiles (1 cm slices along each piece).
+- Bows: the five on Bits templates (Hawkeye, Stag Hunter, Galeshot, Longshot, Heartseeker) had the string on the far
+  side, away from the archer -- the Bits bows' quarter turn in siege_view._fit_weapon went the same way as the
+  Adventurers bow's half turn. Now the other way: every bow's string faces the archer (the Galeshot, which looked like an
+  arch lying forward, is the same fix -- its deep curve was facing away).
+- One-handed hammers, maces, axes and wands: a piece with a longer handle than its template kept the template's grip
+  height, so the fist closed partway up the handle under the head with the rest sticking out behind (Brickbreaker,
+  Twin Sparks). tools/weapon_grip.py END (now part of `fit` too): the hand END_UP (0.12) above the end of the handle's
+  plain stretch. 18 slid: acolyte, sparkstick, spellwright and candle wands, both Twin Sparks, brawler / thornhide /
+  timberfall axes, work hatchet, frostbeard axe, Brickbreaker, Bulwark, Oathbound, Golden Sledge, Verdict maul,
+  Sunrise and Penitent maces (+0.07 to +0.35). Raider axe and Skullknocker were already there.
+- Staffs: the Eye of the Archon (its rings, eye and ornate neck are two thirds of it) and the Lich-Crown (the fist was on
+  its winged neck) slid down onto the plain shaft (`weapon_grip.py slide`, +0.32 / +0.33). The other staffs, swords,
+  daggers, shields, claws and two-handers were checked and left as they were (Bloodmoon: the hand is on the handle
+  under the guard; its crescent guard curls back over the fist by design. Ravenclaws: blades out of the knuckles,
+  feathers back over the hand, as drawn).
+- Icons, the Forge and the WEAPON tab centre each piece on its own box: unchanged. Effects are placed by fractions of the
+  box: unchanged.
+- tests/weapon_grip_test.gd in the suite: every bow's string on the archer's side (8 bows); every one-handed hammer,
+  mace, axe and wand held in the bottom 28% of its length (20); the Archon / Lich-Crown with most of the staff ahead of
+  the hand.
+- Content pack weapons rebuilt (weapons-5a80f010ba2b.pck) and on the content-packs branch.
+- 0.31.104, version code 190. Quick suite: ALL 52 PASSED. CONTENT OK.
+
+## 0.31.105 — new gold, diamonds and Embers; they fly into the counters (Kevin: "Make new meshy models for gold, diamonds and ember. Also when a play obtains them it'll play a animation where they fly to the players total amount at top of screen" -- picks: gold C, diamonds B, embers B; "Yes put an ember counter at top also")
+- Concepts: 4 sheets each (gpt-image-2.5, ElevenLabs flow 5ZFwy4wQvTF2WkdBftDK); Kevin's picks cropped (meshy_weapon.py
+  crop); the ember's flame edited out first (a flame doesn't model -- it is an effect in the game instead). Meshy
+  image-to-3D, meshy-7.1, 4000 tris: a chunky crown coin, a brilliant-cut diamond, a cracked volcanic ember.
+- The models (textures 1024) are in art_sources/currency, OUTSIDE the project (never in the APK);
+  tools/render_currency_icons.gd reads them at run time and renders assets/ui/currency: coin, coins_s/m/l (stack, stack
+  and pile, hoard), gem, gems, ember (new: the counter's), embers, and coin/gem/ember_spin.png (16 frames turning).
+  The ember: rock darkened, its molten cracks an unlit additive pass (an emission texture rendered plain white), then
+  tools/currency_glow.py blooms the cracks and adds an orange halo. Every screen using the currency icons (shop,
+  chests, Forge, pass, quests) shows the new ones. render_gold_icons.gd (the MegaKit coins) superseded.
+- Top bar: a third counter, Embers (orange edge; tapping it opens the Forge, where Embers are bought); the three
+  counters made a little narrower so the name still shows at 420 wide.
+- scripts/app/reward_fly.gd on a CanvasLayer above everything: a rise in gold / gems / Embers (siege_app._counter, from
+  refresh_top) bursts 3-12 turning pieces (by amount) out of the tap that claimed it (CLAIM, COLLECT, BUY ...; else the
+  middle of the screen), each curving up into its counter with a glow and a trail (sparkles; the ember a flickering
+  flame and rising sparks); the counter keeps its number until they land, counts up as each does (a clink, the icon
+  punches) and ends on the profile's amount. Spending shows at once. A restored Google Play save doesn't fly; during a
+  match the counters wait and the match's rewards fly on the way back to the menus.
+- tests/reward_fly_test.gd in the suite.
+- Content pack ui rebuilt (ui-4d2ee4b95bd9.pck) and on the content-packs branch.
+- 0.31.105, version code 191. Quick suite: ALL 53 PASSED. CONTENT OK.
+
+## 0.31.106 — pack art that grows with the pack; two bigger gold offers (Kevin: "Make new art for the higher tier packs so it shows more the higher the pack is. Add fun things to art for higher packs. Also maybe add some higher gold packs?")
+- Ten pictures, assets/ui/packs/{gem,gold}_pack_1..5.png (448 px, transparent), made with Meshy's image-to-image
+  (gpt-image-2.5, background removed; tools/meshy_image.py -- ElevenLabs' credits had run out), each steered by the
+  concept art of the game's own diamond and crown coin (Kevin's picks) so they match the currency:
+  gems 80 a diamond, 500 a heap, 1100 a leather pouch spilling them, 2400 an open treasure chest overflowing, 6500 a
+  royal golden chest under a mountain of diamonds with a jeweled crown, a golden goblet and a chubby baby dragon hugging
+  a giant diamond; gold 600 a stack, 1600 a stack and a heap, 4500 a mound with stacks, 12,000 a barrel pouring coins,
+  30,000 a mine cart heaped with coins and gold bars, a pickaxe, a lantern and a grinning chest mimic on top.
+- Shop: the pictures bigger (104 px; the two big tiles 132); tiers 4-5 sit in a soft glow, the top one also turns rays
+  and bobs. The starter pack shows the heap. Gold offers in a 3 + 2 grid like the gem packs, shown in full ("+12,000",
+  UI.grouped).
+- Eco.EXCHANGE: + gold_xl 700 gems -> 12,000 gold and gold_xxl 1600 gems -> 30,000 (gold per gem 12 / 13.3 / 15 / 17.1
+  / 18.8, the biggest BEST VALUE). Items' gem value still at the old 4500 = 300 rate.
+- tests/shop_packs_test.gd in the suite.
+- Content pack ui rebuilt (ui-f69d90ec6748.pck) and on the content-packs branch.
+- 0.31.106, version code 192. Quick suite: ALL 54 PASSED. CONTENT OK.
+
+## 0.31.107 — Siege Pass tier skips (Kevin: "Can you put tier skips for the battlepass. Players can buy 10 tiers for gems")
+- Eco.TIER_SKIP 10, TIER_SKIP_GEMS 100 a tier: 10 tiers for 1000 gems (near the end only what's left: at tier 26 the
+  last 4 for 400). Profile.skip_offer / skip_tiers: the pass XP for those tiers, the progress into the current tier
+  kept, their rewards then waiting to be claimed like any others (CLAIM ALL); counted in d.pass.skipped. None when the
+  pass is complete. Any 10 tiers give back at most ~270 gems over both tracks (seasons 1-6), so a skip never makes gems.
+- Pass screen: a SKIP 10 TIERS card under the tier card (a +10 pass shield, "Jump to tier N · claim every reward on the
+  way", the gem price), greyed without the gems; it asks first (SKIP 10 TIERS? ... Costs 1000 gems.).
+- tests/tier_skip_test.gd in the suite.
+- 0.31.107, version code 193. Quick suite: ALL 55 PASSED. CONTENT OK.
+
+## Economy review (Kevin: "Go through and check economy balance for entire game. Go through everything like forge, gems, embers, $ cost of everything ect") -- no game change yet
+- tools/economy_sim.gd: MODE=samples runs full 16v16 bot matches and saves every unit's end-of-match numbers; MODE=season
+  plays four styles (light 2 a day 5 days a week, casual 3, regular 5, grinder 12; 50% wins) for 84 days on the real
+  Profile / Economy code, books gold / gems / Embers by source per season, the day the pass is finished, and the pass
+  items a player already owned at the season's start. 12 seeds = 384 samples.
+- Findings (the review doc for Kevin): season 2's premium track is 8 of 13 repeats for a season-1 buyer (10 of 13 in
+  season 3; a repeat gives nothing); Silver chests' 5-10 gems are about half of all free gems; a free regular earns ~960
+  gems a season (premium is 950) and a premium casual ~1,160; the gold shop (62,100) is bought out in ~4-6 weeks; level /
+  pass / quest chests turn to gold when the 4 slots are full (the level-10 Royal included); the starter pack is ~1.5x.
+- Candidate tested (not shipped): Silver chest 30% chance of 5 gems -> free gems a season light 300, casual 510, regular
+  540, grinder 710.
+
+## 0.31.108 — the economy review's fixes, and the server keeps the accounts (Kevin: "I want you to fix everything. I also want to make sure everything is verified by server so players can't edit gems ect"; VS BOTS: "Always online")
+- Pass: a pass item already owned is swapped when claimed (Eco.pass_swap: another pass weapon of its rarity the player
+  doesn't own and this season doesn't give, else Embers 25/60/150 by rarity); the tier remembers what it gave
+  (d.pass.swaps) and the pass screen shows it ("In place of X, which you already own"). From season 2 the premium
+  track's 60-gem tiers give 60 Embers (season 1 unchanged). A season can have its own pass-exclusive weapons
+  (Eco.PASS_SEASON_ITEMS, CATALOG "season": n) spread over SEASON tiers 1..30; season 2's await Kevin's picks of the
+  concept board (6 weapons). Earlier seasons' pass weapons are vaulted: sold in the Featured shop for gems (rare 150,
+  epic 300, legendary 450; Featured 3 -> 4 slots) and their legendaries join the Royal chest's legendary roll.
+- Chests: Silver gems 5-10 always -> a 30% chance of 5. Wooden items rares only (the only common was Sparkstick).
+  Reward chests (levels, pass, quests, a whole day's / week's orders) wait for a slot (d.chests.queue, up to 12;
+  Home shows "+N WAITING") instead of turning into gold; a match's chest still turns into gold when full. Rolls are
+  seeded by the account's salt + the chest's id and kind (the phone and the server roll the same).
+- Forge gold doubled (1,000 / 3,000 / 8,000). Hunter Arsenal 120 -> 80 gems; Arsenal values at the 30,000-gold offer's
+  rate. Starter pack 500 gems + 300 Embers + an epic (was 300 / 150 / a rare). gems_14000 ($99.99) added, shown only
+  once Google Play returns its price (PLAY_IAP_HANDOFF: create it, update the starter pack's description); its art
+  assets/ui/packs/gem_pack_6.png (Meshy i2i: a mountain of diamonds over two royal chests, a sceptre, a sleeping
+  purple baby dragon); it takes BEST VALUE when shown.
+- Server-kept accounts (server/eco_accounts.gd, server/match_ledger.gd, scripts/meta/eco_sync.gd; SIEGE_HANDOFF 19):
+  every change in the app is an op (Profile.OPS, recorded by Profile._rec) replayed on the server with the same
+  profile.gd / economy.gd and its own clock; numbered (a resent op is done once); the answer replaces the phone's copy
+  with the unsent ops re-applied. VS BOTS needs a server ticket to start; its result counts 150 s+ after the ticket,
+  once, clamped (EcoAccounts.clamp_me). Online matches are paid by the server from its own count. Purchases are
+  granted to the account by the server, one account per token (purchase_tokens.json; the old ledger's confirmed tokens
+  count once in an import). Online name / title / looks come from the account. New accounts import the phone's progress
+  once, held to what that many matches could earn (+ confirmed purchases), until 2026-12-01; 240 new accounts an hour
+  at most. The tutorial's pay (Profile.finish_tutorial) and the name (set_name) are ops; the dice-era import is off.
+  The installer ships the meta scripts and backs up the accounts before each update.
+- tools/economy_sim.gd: the model behind the review (bot-match samples + 84 days on the real code).
+- tests/eco_server_test.gd (accounts alone + end to end against the real server on 8093) and economy_fix_test.gd in
+  the suite; iap_test / forge_test updated for the new numbers.
+- Home: "+N WAITING" over the chest row when reward chests wait (app_shots SHOT_QUEUE=1). Pass premium copy says
+  "Embers and gold on every tier" from season 2.
+- Content pack ui rebuilt (ui-4e65a88f514e.pck, gem_pack_6) and on the content-packs branch. Server: SERVER_BUILD
+  0.31.108 -- needs the redeploy (SIEGE_HANDOFF 19); until then the app keeps its own local economy as before.
+- tools/economy_sim.gd after the fixes, free gems a season: light 340, casual 550, regular 620, grinder 800 (were 370,
+  770, 960, 1,120); with premium 500 / 860 / 890 / 1,100 (were 550 / 1,160 / 1,320 / 1,490); no Gold/Royal chest lost
+  to full slots (were up to 10 a season).
+- 0.31.108, version code 194. Quick suite: ALL 57 PASSED. CONTENT OK. APK 31,373,497 bytes,
+  sha256 5068951500e9e1f3fcf7c0cf4efe96622b20a41fcdb6efe7189dda683d5a7664.
+- Season 2's own pass weapons: ON HOLD (Kevin: "Hold off on new season 2 weapons since the games not really out
+  yet"). The concept board is kept at reports/concepts/s2_pass_weapons.jpg (Ashguard, Magmamaw, Cinderfangs, Ashwind,
+  Pyreforge, Cinderlich; A/B each). Eco.PASS_SEASON_ITEMS stays empty: season 2 uses the old draw, with owned items
+  swapped (Embers or an unowned pass weapon).

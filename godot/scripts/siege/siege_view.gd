@@ -3415,7 +3415,9 @@ static func _face_staff(model: Node3D, file: String, hand: String, sk: Skeleton3
 # a staff came out 1.2 m. Bits models now keep their size, with a few of the giants brought down to the Adventurers'
 # two-handers (sword_E 3.25 -> 2.4; spears, the big bows, staff_D, the halberd), and shields a little larger than life
 # so a Knight's is obvious. Bows: the Adventurers bow lies along Z and wants a half turn; the Bits bows lie along X and
-# want a quarter turn the same way round.
+# want a quarter turn -- 0.31.104 (Kevin's Hawkeye screenshot: "A lot of the weapons are still not gripped correctly"):
+# the OTHER way round. The quarter turn the same way as the half turn left every Bits bow's string on the far side, away
+# from the archer (Hawkeye, Stag Hunter, Galeshot, Longshot, Heartseeker); tests/weapon_grip_test.gd measures it.
 const WEAPON_SCALE := {"bits/sword_E":0.75, "bits/spear_A":0.8, "bits/spear_B":0.8, "bits/bow_C_withString":0.75, "bits/staff_D":0.85,
 	"bits/halberd":0.85, "bits/shield_D":0.78, "bits/shield_C":0.85, "bits/shield_B":0.9, "bits/shield_A":1.0, "bits/sword_F":0.9, "bits/hammer_D":0.9}
 
@@ -3541,7 +3543,7 @@ static func _fit_weapon(model: Node3D, file: String, body_model := "", hand := "
 	if file.contains("crossbow"):
 		model.rotation.x = deg_to_rad(-90.0 if hand == "r" else 90.0)
 	elif file.contains("bow"):
-		model.rotation.y = PI * 0.5 if file.begins_with("bits/") else PI
+		model.rotation.y = -PI * 0.5 if file.begins_with("bits/") else PI
 	if WEAPON_ROT.has(file):
 		var r: Vector3 = WEAPON_ROT[file]
 		model.rotation = Vector3(deg_to_rad(r.x), deg_to_rad(r.y), deg_to_rad(r.z))

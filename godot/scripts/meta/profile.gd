@@ -13,6 +13,94 @@ var now_override := -1          # tests: fixed clock (unix seconds)
 var last_error := ""
 var saves := 0                  # 0.31.102: saves this run (play_games.gd: did it change while an upload was out?)
 
+# ---------------- 0.31.108: the server owns the economy (Kevin: "make sure everything is verified by server so players
+# can't edit gems ect") ----------------
+# The Siege server keeps every player's profile (server/eco_accounts.gd) and is the only one whose copy counts. Every
+# change a player makes is an "op" -- the method's name and its arguments -- that the server replays with this same
+# code on its own copy (apply_op), with its own clock; what it answers replaces the phone's copy (the app's
+# eco_sync.gd), the phone's unsent ops re-applied on top. So the phone shows a change at once, and an edited save file
+# changes nothing: the next answer from the server puts it back. What only the server may do (grant a purchase, take a
+# match's result) is not an op the phone can send.
+var on_op: Callable             # the app's EcoSync: (op, args) after each change made here
+var replaying := false          # applying ops (on the server, or the phone re-applying its unsent ones): not recorded
+var server_side := false        # the server's own copy
+var server_mode := false        # the phone, with the server's economy on: things only a local save allowed are off
+var clock_offset := 0           # the phone: server time - phone time (so a chest's timer agrees with the server's)
+var ready_grace := 0            # the server: a chest counts as unlocked this many seconds early (clocks differ a little)
+const OPS := {
+	# op -> argument types (JSON numbers arrive as floats; ints are converted)
+	"claim_tier": [TYPE_INT, TYPE_BOOL], "claim_all": [], "skip_tiers": [], "buy_premium": [],
+	"buy": [TYPE_STRING], "buy_pack": [TYPE_STRING], "exchange": [TYPE_STRING],
+	"equip": [TYPE_STRING], "unequip": [TYPE_STRING, TYPE_STRING],
+	"reroll_daily": [TYPE_INT], "claim_challenge": [TYPE_STRING, TYPE_INT],
+	"claim_quest": [TYPE_STRING], "forge": [TYPE_STRING, TYPE_STRING], "set_forge_element": [TYPE_STRING, TYPE_STRING],
+	"buy_embers": [TYPE_STRING], "start_unlock": [TYPE_INT], "skip_chest": [TYPE_INT], "open_chest": [TYPE_INT],
+	"set_name": [TYPE_STRING], "finish_tutorial": [],
+}
+
+func _rec(op: String, args: Array) -> void:
+	if not replaying and on_op.is_valid():
+		on_op.call(op, args)
+
+func apply_op(op: String, args: Variant) -> Dictionary:
+	# Replay one op (the server's copy, or the phone's unsent ones over the server's answer). Chest ops carry the
+	# chest's id, not its slot. -> the method's own result ({"ok": false, "error"} for an unknown or malformed op).
+	if not OPS.has(op) or not (args is Array):
+		return {"ok":false, "error":"unknown op"}
+	var types: Array = OPS[op]
+	var a: Array = args
+	if a.size() != types.size():
+		return {"ok":false, "error":"bad args"}
+	var v := []
+	for i in types.size():
+		var x: Variant = a[i]
+		match int(types[i]):
+			TYPE_INT:
+				if not (x is int or x is float) or not is_finite(float(x)):
+					return {"ok":false, "error":"bad args"}
+				v.append(int(x))
+			TYPE_BOOL:
+				if not (x is bool):
+					return {"ok":false, "error":"bad args"}
+				v.append(x)
+			_:
+				if not (x is String) or (x as String).length() > 64:
+					return {"ok":false, "error":"bad args"}
+				v.append(x)
+	var was := replaying
+	replaying = true
+	var out: Variant = null
+	match op:
+		"start_unlock", "skip_chest", "open_chest":
+			var ix := chest_index(int(v[0]))
+			if ix < 0:
+				out = {"ok":false, "error":"no such chest"}
+			elif op == "start_unlock":
+				out = {"ok":start_unlock(ix)}
+			elif op == "skip_chest":
+				out = skip_chest(ix)
+			else:
+				out = open_chest(ix)
+		"claim_all":
+			out = {"ok":true, "got":claim_all()}
+		"reroll_daily":
+			out = {"ok":reroll_daily(int(v[0]))}
+		"unequip":
+			unequip(str(v[0]), str(v[1]))
+			out = {"ok":true}
+		"set_forge_element":
+			out = {"ok":set_forge_element(str(v[0]), str(v[1]))}
+		_:
+			out = callv(op, v)
+	replaying = was
+	return out if out is Dictionary else {"ok":bool(out)}
+
+func chest_index(id: int) -> int:
+	for i in (d.chests.slots as Array).size():
+		if int(d.chests.slots[i].id) == id:
+			return i
+	return -1
+
 signal changed
 
 func _init(save_path := "user://siege_profile.json", legacy := "user://fatebound-save.json") -> void:
@@ -20,25 +108,27 @@ func _init(save_path := "user://siege_profile.json", legacy := "user://fatebound
 	legacy_path = legacy
 
 func now() -> int:
-	return now_override if now_override >= 0 else int(Time.get_unix_time_from_system())
+	return now_override if now_override >= 0 else int(Time.get_unix_time_from_system()) + clock_offset
 
 static func defaults() -> Dictionary:
 	var equip := {}
 	for c in Eco.CLASSES + Eco.UP_CLASSES:
 		equip[c] = {"skin":"", "weapon":""}
 	return {"schema":SCHEMA, "name":"Player", "gold":0, "gems":0, "level":1, "xp":0,
-		"pass":{"season":0, "xp":0, "premium":false, "free":[], "prem":[]},
+		"pass":{"season":0, "xp":0, "premium":false, "free":[], "prem":[], "swaps":{}},
 		"owned":[], "equip":equip, "title":"",
 		"challenges":{"day":"", "daily":[], "week":"", "weekly":[], "rerolled":false},
 		"stats":{"matches":0, "wins":0, "rescues":0, "kills":0, "gates":0, "gathered":0, "fed":0,
 			"lifts":0, "repaired":0, "healed":0, "best_multi":0, "streak":0, "best_streak":0},     # (0.31.87: for the titles)
+		"tutorial_done":false,
 		"first_win_day":"", "history":[], "migration":{},
 		"embers":0,                                                  # 0.31.90: the Forge's material
 		"forge":{"stars":{}, "wins":{}, "element":{}},              # 0.31.93: per weapon (Eco.forge_id): stars 0-3, wins, aura element
 		"iap":{"done":[], "starter":false},                          # 0.31.90: purchase tokens already granted
-		"chests":{"slots":[], "next":1, "pity":0},
+		"chests":{"slots":[], "next":1, "pity":0, "queue":[], "salt":0},   # 0.31.108: queue (reward chests waiting), salt (the rolls' seed)
 		"quests":{},                                                  # 0.31.97: class -> quest steps claimed (0-3)
 		"cloud":{"stamp":"", "dirty":false, "at":0},                  # 0.31.102: the Google Play save this is in step with
+		"account":{"id":"", "key":""},                                # 0.31.108: the phone's key to its account on the server
 		"settings":{"master":0.8, "music":0.6, "sfx":0.8, "reduce_motion":false}}
 
 # ---------------- load / save ----------------
@@ -202,6 +292,8 @@ func import_legacy(old: Dictionary) -> Dictionary:
 	# One-time conversion of a dice-era save; also used by Settings > Import old progress.
 	if not d.migration.is_empty() and str(d.migration.get("from", "")) == "legacy":
 		return {"ok":false, "error":"Old progress was already imported"}
+	if server_mode or server_side:
+		return {"ok":false, "error":"Old progress can't be imported any more"}     # (0.31.108: unverifiable)
 	var conv := Eco.legacy_conversion(old)
 	d.gold += int(conv.gold)
 	d.gems += int(conv.gems)
@@ -216,7 +308,7 @@ func refresh() -> void:
 	var t := now()
 	var sid := Eco.season_id(t)
 	if int(d.pass.season) != sid:
-		d.pass = {"season":sid, "xp":0, "premium":false, "free":[], "prem":[]}
+		d.pass = {"season":sid, "xp":0, "premium":false, "free":[], "prem":[], "swaps":{}}
 	var day := Eco.day_key(t)
 	var week := Eco.week_key(t)
 	var ch: Dictionary = d.challenges
@@ -241,7 +333,7 @@ func _add_xp(amount: int, out: Dictionary) -> void:
 		d.gold += int(r.get("gold", 0))
 		d.gems += int(r.get("gems", 0))
 		if r.has("chest"):
-			add_chest(str(r.chest), out)
+			add_chest(str(r.chest), out, true)
 		out.levels.append({"level":d.level, "reward":r})
 
 func _add_pass_xp(amount: int, out: Dictionary) -> void:
@@ -257,13 +349,35 @@ func can_claim(tier: int, premium: bool) -> bool:
 		return false
 	return not (d.pass.prem if premium else d.pass.free).has(tier)
 
+func pass_reward_for(tier: int, premium: bool) -> Dictionary:
+	# 0.31.108: what this tier gives this player -- the season's reward, or, for an item already owned, its swap (a
+	# claimed tier: what it gave)
+	var key := ("p%d" if premium else "f%d") % tier
+	var sw: Dictionary = d.pass.get("swaps", {})
+	if sw.has(key) and (d.pass.prem if premium else d.pass.free).has(tier):
+		return sw[key]
+	var r := Eco.pass_reward(int(d.pass.season), tier, premium)
+	var id := str(r.get("item", ""))
+	if id != "" and owns(id):
+		return Eco.pass_swap(int(d.pass.season), tier, premium, id, d.owned)
+	return r
+
+func _claim(tier: int, premium: bool) -> Dictionary:
+	var r := pass_reward_for(tier, premium)
+	if r.has("swap"):
+		if not d.pass.has("swaps"):
+			d.pass["swaps"] = {}
+		d.pass.swaps[("p%d" if premium else "f%d") % tier] = r
+	_grant(r)
+	(d.pass.prem if premium else d.pass.free).append(tier)
+	return r
+
 func claim_tier(tier: int, premium: bool) -> Dictionary:
 	if not can_claim(tier, premium):
 		return {"ok":false}
-	var r := Eco.pass_reward(int(d.pass.season), tier, premium)
-	_grant(r)
-	(d.pass.prem if premium else d.pass.free).append(tier)
+	var r := _claim(tier, premium)
 	save()
+	_rec("claim_tier", [tier, premium])
 	return {"ok":true, "reward":r}
 
 func claim_all() -> Array:
@@ -271,13 +385,32 @@ func claim_all() -> Array:
 	for tier in range(1, pass_tier() + 1):
 		for prem in [false, true]:
 			if can_claim(tier, prem):
-				var r := Eco.pass_reward(int(d.pass.season), tier, prem)
-				_grant(r)
-				(d.pass.prem if prem else d.pass.free).append(tier)
-				got.append(r)
+				got.append(_claim(tier, prem))
 	if not got.is_empty():
 		save()
+		_rec("claim_all", [])
 	return got
+
+func skip_offer() -> Dictionary:
+	# the pass's tier skip as it stands: {tiers, gems} (tiers 0 when the pass is complete)
+	var n := mini(Eco.TIER_SKIP, Eco.PASS_TIERS - pass_tier())
+	return {"tiers": maxi(n, 0), "gems": maxi(n, 0) * Eco.TIER_SKIP_GEMS}
+
+func skip_tiers() -> Dictionary:
+	# 0.31.107: buy the next (up to) 10 tiers -- the pass XP for them, the progress into the current tier kept; their
+	# rewards wait to be claimed like any others
+	var o := skip_offer()
+	if int(o.tiers) <= 0:
+		return {"ok":false, "error":"The pass is already complete"}
+	if int(d.gems) < int(o.gems):
+		return {"ok":false, "error":"Not enough gems"}
+	d.gems -= int(o.gems)
+	var out := {"tiers": []}
+	_add_pass_xp(int(o.tiers) * Eco.TIER_XP, out)
+	d.pass["skipped"] = int(d.pass.get("skipped", 0)) + int(o.tiers)
+	save()
+	_rec("skip_tiers", [])
+	return {"ok":true, "tiers":out.tiers, "gems":int(o.gems)}
 
 func buy_premium() -> Dictionary:
 	if bool(d.pass.premium):
@@ -287,6 +420,7 @@ func buy_premium() -> Dictionary:
 	d.gems -= Eco.PREMIUM_COST
 	d.pass.premium = true
 	save()
+	_rec("buy_premium", [])
 	return {"ok":true}
 
 func _grant(r: Dictionary) -> void:
@@ -294,7 +428,7 @@ func _grant(r: Dictionary) -> void:
 	d.gems += int(r.get("gems", 0))
 	d.embers = int(d.get("embers", 0)) + int(r.get("embers", 0))
 	if r.has("chest"):
-		add_chest(str(r.chest), {})
+		add_chest(str(r.chest), {}, true)
 	var id := str(r.get("item", ""))
 	if id != "" and not d.owned.has(id):
 		d.owned.append(id)
@@ -307,7 +441,7 @@ func can_afford(price: Dictionary) -> bool:
 	return int(d.gold) >= int(price.get("gold", 0)) and int(d.gems) >= int(price.get("gems", 0))
 
 func buy(id: String) -> Dictionary:
-	var price := Eco.item_price(id)
+	var price := Eco.item_price(id, now())
 	if price.is_empty():
 		return {"ok":false, "error":"Not for sale"}
 	if owns(id):
@@ -320,6 +454,7 @@ func buy(id: String) -> Dictionary:
 	d.gems -= int(price.get("gems", 0))
 	d.owned.append(id)
 	save()
+	_rec("buy", [id])
 	return {"ok":true}
 
 func buy_pack(pack_id: String) -> Dictionary:
@@ -336,6 +471,7 @@ func buy_pack(pack_id: String) -> Dictionary:
 		if not d.owned.has(id):
 			d.owned.append(id)
 	save()
+	_rec("buy_pack", [pack_id])
 	return {"ok":true, "gems":gems}
 
 # ---------------- in-app purchases (0.31.90) ----------------
@@ -351,6 +487,8 @@ func grant_iap(product: String, token: String) -> Dictionary:
 	var pk: Dictionary = Net.IAP.get(product, {})
 	if pk.is_empty() or token == "":
 		return {"ok":false, "error":"Unknown purchase"}
+	if server_mode:
+		return {"ok":false, "error":"The server grants purchases"}       # (0.31.108: eco_accounts.gd does)
 	if iap_granted(token):
 		return {"ok":true, "again":true, "gems":0, "embers":0, "item":""}
 	var out := {"ok":true, "again":false, "gems":int(pk.get("gems", 0)), "embers":int(pk.get("embers", 0)), "item":""}
@@ -359,7 +497,7 @@ func grant_iap(product: String, token: String) -> Dictionary:
 	if str(pk.get("weapon", "")) != "":
 		# a weapon of that rarity the player doesn't own yet (shop pool), picked from the token so a retry picks the same
 		var pool: Array = []
-		for id in Eco.chest_pool(str(pk.weapon)):
+		for id in Eco.chest_pool(str(pk.weapon), Eco.season_id(now())):
 			if not owns(id):
 				pool.append(id)
 		if not pool.is_empty():
@@ -384,6 +522,7 @@ func exchange(offer_id: String) -> Dictionary:
 			d.gems -= int(off.gems)
 			d.gold += int(off.gold)
 			save()
+			_rec("exchange", [offer_id])
 			return {"ok":true}
 	return {"ok":false, "error":"Unknown offer"}
 
@@ -397,14 +536,18 @@ func equip(id: String) -> Dictionary:
 	else:
 		d.equip[it["class"]][it.kind] = id
 	save()
+	_rec("equip", [id])
 	return {"ok":true}
 
 func unequip(cls: String, slot: String) -> void:
 	if slot == "title":
 		d.title = ""
-	elif d.equip.has(cls):
+	elif d.equip.has(cls) and slot in ["skin", "weapon"]:
 		d.equip[cls][slot] = ""
+	else:
+		return
 	save()
+	_rec("unequip", [cls, slot])
 
 func look_for(cls: String) -> Dictionary:
 	# What the battle view should show for this class: {"r": model, "l": model, "forge": its stars} (0.31.39: weapons
@@ -443,9 +586,12 @@ func reroll_daily(index: int) -> bool:
 	ch.daily[index] = fresh[0]
 	ch.rerolled = true
 	save()
+	_rec("reroll_daily", [index])
 	return true
 
 func claim_challenge(span: String, index: int) -> Dictionary:
+	if not span in ["daily", "weekly"]:
+		return {"ok":false}
 	var list: Array = d.challenges.daily if span == "daily" else d.challenges.weekly
 	if index < 0 or index >= list.size():
 		return {"ok":false}
@@ -462,8 +608,9 @@ func claim_challenge(span: String, index: int) -> Dictionary:
 	d.embers = int(d.get("embers", 0)) + embers
 	# 0.31.37: the whole day's challenges done -> a Silver chest; the whole week's -> a Gold chest
 	if list.all(func(x): return bool(x.claimed)):
-		add_chest("silver" if span == "daily" else "gold", out)
+		add_chest("silver" if span == "daily" else "gold", out, true)
 	save()
+	_rec("claim_challenge", [span, index])
 	return {"ok":true, "tiers":out.tiers, "chests":out.chests, "embers":embers}
 
 # ---------------- matches ----------------
@@ -513,6 +660,18 @@ func apply_match(me: Dictionary, won: bool, draw: bool, online: bool) -> Diction
 	if d.history.size() > 20:
 		d.history.resize(20)
 	save()
+	if not online:
+		_rec("match", [slim_me(me), won, draw])     # 0.31.108: (an online match's result the server takes from its own match)
+	return out
+
+static func slim_me(me: Dictionary) -> Dictionary:
+	# what a match's result needs of the unit (the op that carries it goes to the server; the unit has much more)
+	var out := {}
+	for k in ["kills", "rescues", "gate_dmg", "gathered", "fed", "lifts", "repaired", "healed", "best_multi", "cls", "cls_main",
+			"kills_cls", "q"]:
+		if me.has(k):
+			var v: Variant = me[k]
+			out[k] = (v as Dictionary).duplicate(true) if v is Dictionary else v
 	return out
 
 func _title_stats(stats: Dictionary, won: bool) -> void:
@@ -528,6 +687,32 @@ func _title_stats(stats: Dictionary, won: bool) -> void:
 	d.stats.best_multi = maxi(int(d.stats.get("best_multi", 0)), int(stats.get("best_multi", 0)))
 	d.stats.streak = int(d.stats.get("streak", 0)) + 1 if won else 0          # (a draw or a loss ends the run)
 	d.stats.best_streak = maxi(int(d.stats.get("best_streak", 0)), int(d.stats.streak))
+
+func finish_tutorial() -> Dictionary:
+	# the Herald's last line: the recruit's pay, once (0.31.108: here, so the server pays it too)
+	if bool(d.get("tutorial_done", false)):
+		return {"ok":false}
+	d.gold = int(d.gold) + Eco.TUTORIAL_GOLD
+	d["tutorial_done"] = true
+	save()
+	_rec("finish_tutorial", [])
+	return {"ok":true}
+
+static func clean_name(s: String) -> String:
+	var out := ""
+	for ch in s:
+		if ch.unicode_at(0) >= 32 and ch.unicode_at(0) != 127:
+			out += ch
+	return out.strip_edges().left(20)
+
+func set_name(nm: String) -> Dictionary:
+	var n := clean_name(nm)
+	if n == "" or n == str(d.name):
+		return {"ok":false}
+	d.name = n
+	save()
+	_rec("set_name", [n])
+	return {"ok":true}
 
 # ---------------- class quests (0.31.97) ----------------
 func _quest_stats(stats: Dictionary, won: bool) -> Array:
@@ -607,11 +792,12 @@ func claim_quest(cls: String) -> Dictionary:
 	d.gems = int(d.gems) + int(r.get("gems", 0))
 	d.embers = int(d.get("embers", 0)) + int(r.get("embers", 0))
 	if r.has("chest"):
-		add_chest(str(r.chest), out)
+		add_chest(str(r.chest), out, true)
 	if out.item != "" and not d.owned.has(out.item):
 		d.owned.append(out.item)
 	d.quests[cls] = step + 1
 	save()
+	_rec("claim_quest", [cls])
 	return out
 
 func title_progress(id: String) -> int:
@@ -673,6 +859,7 @@ func forge(wid: String, element := "") -> Dictionary:
 	if next == Eco.FORGE_STARS.size():
 		d.forge.element[wid] = element
 	save()
+	_rec("forge", [wid, element])
 	return {"ok":true, "stars":next}
 
 func set_forge_element(wid: String, element: String) -> bool:
@@ -681,6 +868,7 @@ func set_forge_element(wid: String, element: String) -> bool:
 		return false
 	d.forge.element[wid] = element
 	save()
+	_rec("set_forge_element", [wid, element])
 	return true
 
 func buy_embers(pack_id: String) -> Dictionary:
@@ -690,6 +878,7 @@ func buy_embers(pack_id: String) -> Dictionary:
 	d.gems -= int(pk.gems)
 	d.embers = int(d.get("embers", 0)) + int(pk.embers)
 	save()
+	_rec("buy_embers", [pack_id])
 	return {"ok":true, "embers":int(pk.embers)}
 
 func forge_fx(cls: String) -> Dictionary:
@@ -706,19 +895,35 @@ func forge_fx(cls: String) -> Dictionary:
 func chests() -> Array:
 	return d.chests.slots
 
-func add_chest(kind: String, out: Dictionary) -> void:
-	# a new chest takes a free slot; with all CHEST_SLOTS full it's turned into gold at once
+func add_chest(kind: String, out: Dictionary, reward := false) -> void:
+	# a new chest takes a free slot; with all CHEST_SLOTS full a match's chest is turned into gold at once, while a
+	# reward chest (a level, the pass, a quest, a whole day's / week's orders -- 0.31.108) waits for a slot
 	if not out.has("chests"):
 		out["chests"] = []
 	if d.chests.slots.size() >= Eco.CHEST_SLOTS:
+		if reward and (d.chests.queue as Array).size() < Eco.CHEST_QUEUE_MAX:
+			d.chests.queue.append(kind)
+			out.chests.append({"kind":kind, "full":false, "queued":true})
+			return
 		var g: int = int(Eco.CHEST_FULL_GOLD[kind])
 		d.gold += g
 		out.chests.append({"kind":kind, "full":true, "gold":g})
 		return
+	_new_chest(kind)
+	out.chests.append({"kind":kind, "full":false})
+
+func _new_chest(kind: String) -> void:
 	var c := {"id":int(d.chests.next), "kind":kind, "got":now(), "start":-1}
 	d.chests.next = int(d.chests.next) + 1
 	d.chests.slots.append(c)
-	out.chests.append({"kind":kind, "full":false})
+
+func _fill_slots() -> void:
+	# the waiting reward chests move into the slots that are free
+	while d.chests.slots.size() < Eco.CHEST_SLOTS and not (d.chests.queue as Array).is_empty():
+		_new_chest(str(d.chests.queue.pop_front()))
+
+func chests_waiting() -> int:
+	return (d.chests.get("queue", []) as Array).size()
 
 func chest_left(c: Dictionary) -> int:
 	# seconds until it's unlocked (its full time if not started)
@@ -728,7 +933,7 @@ func chest_left(c: Dictionary) -> int:
 	return maxi(0, int(c.start) + t - now())
 
 func chest_ready(c: Dictionary) -> bool:
-	return int(c.start) >= 0 and chest_left(c) <= 0
+	return int(c.start) >= 0 and chest_left(c) <= ready_grace
 
 func unlocking() -> Dictionary:
 	for c in d.chests.slots:
@@ -744,6 +949,7 @@ func start_unlock(index: int) -> bool:
 		return false
 	c.start = now()
 	save()
+	_rec("start_unlock", [int(c.id)])
 	return true
 
 func skip_chest(index: int) -> Dictionary:
@@ -756,6 +962,7 @@ func skip_chest(index: int) -> Dictionary:
 	d.gems = int(d.gems) - cost
 	c.start = now() - int(Eco.CHESTS[c.kind].unlock)
 	save()
+	_rec("skip_chest", [int(c.id)])
 	return {"ok":true, "cost":cost}
 
 func open_chest(index: int) -> Dictionary:
@@ -764,7 +971,10 @@ func open_chest(index: int) -> Dictionary:
 	var c: Dictionary = d.chests.slots[index]
 	if not chest_ready(c):
 		return {"ok":false}
-	var roll := Eco.roll_chest(str(c.kind), hash([str(d.get("name", "")), int(c.id), int(c.got)]), d.owned, int(d.chests.pity))
+	# 0.31.108: the roll's seed is the account's salt and the chest's id and kind -- the phone and the server roll the
+	# same (it was the name and the time it was got, which the two may not agree on)
+	var roll := Eco.roll_chest(str(c.kind), hash([int(d.chests.get("salt", 0)), int(c.id), str(c.kind)]), d.owned, int(d.chests.pity),
+		Eco.season_id(now()))
 	d.chests.pity = int(roll.pity)
 	d.gold += int(roll.gold)
 	d.embers = int(d.get("embers", 0)) + int(roll.get("dupe_embers", 0))
@@ -772,7 +982,9 @@ func open_chest(index: int) -> Dictionary:
 	if str(roll.item) != "" and not d.owned.has(roll.item):
 		d.owned.append(roll.item)
 	d.chests.slots.remove_at(index)
+	_fill_slots()
 	save()
+	_rec("open_chest", [int(c.id)])
 	roll["ok"] = true
 	roll["kind"] = c.kind
 	return roll

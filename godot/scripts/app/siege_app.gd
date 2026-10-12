@@ -8,6 +8,7 @@ const Eco = preload("res://scripts/meta/economy.gd")
 const Profile = preload("res://scripts/meta/profile.gd")
 const Billing = preload("res://scripts/meta/billing.gd")
 const PlayGames = preload("res://scripts/meta/play_games.gd")
+const EcoSync = preload("res://scripts/meta/eco_sync.gd")
 const Screens = preload("res://scripts/app/screens.gd")
 const Showcase = preload("res://scripts/app/showcase.gd")
 const Siege = preload("res://scripts/siege/siege_mode.gd")
@@ -17,6 +18,7 @@ const Net = preload("res://scripts/siege/siege_net.gd")
 const UpdateScreen = preload("res://scripts/app/update_screen.gd")
 const VersionCheck = preload("res://scripts/app/version_check.gd")
 const OnlineStatus = preload("res://scripts/app/online_status.gd")
+const RewardFly = preload("res://scripts/app/reward_fly.gd")
 
 const TABS := [["home", "HOME", "castle"], ["pass", "PASS", "banner"], ["shop", "SHOP", "stall"], ["locker", "LOCKER", "helmet"], ["settings", "SETTINGS", "gear"]]
 
@@ -63,6 +65,15 @@ var name_label: Label
 var xp_bar: ProgressBar
 var gold_label: Label
 var gems_label: Label
+var embers_label: Label                # 0.31.105 (Kevin: "Yes put an ember counter at top also")
+# 0.31.105: gains fly into the counters (reward_fly.gd). kind (coin / gem / ember) -> {target: the profile's amount,
+# shown: what the counter says (it catches up as the pieces land), flying: bursts in the air}
+var reward_fly: Node2D
+var quiet_top := false                 # (a restored save: the counters just change)
+var _cur := {}
+var _pill_icon := {}
+var _last_press := Vector2(-1, -1)
+var _last_press_ms := -100000
 var modal: Control = null
 var hero_layer: Control
 var hero_node: Control                 # the Home line-up (roster.gd); null on a safe start
@@ -87,6 +98,11 @@ var safe_boot := false
 var online_status: Node = null         # 0.31.82: the server's player count for Home (the real app only, or FB_STATUS_POLL)
 var billing: Node = null               # 0.31.90: Google Play purchases (scripts/meta/billing.gd); inactive off Play
 var play_games: Node = null            # 0.31.102: Google Play Games sign-in and the progress kept there (play_games.gd)
+# 0.31.108: the account on the server (eco_sync.gd) -- the server's copy of the profile is the one that counts.
+# Headless (tests, tools) it doesn't reach the real server unless asked (eco_url / FB_ECO=1).
+var eco_sync: Node = null
+var eco_autostart := DisplayServer.get_name() != "headless" or OS.has_environment("FB_ECO")
+var eco_url := OS.get_environment("SIEGE_URL") if OS.has_environment("SIEGE_URL") else Net.DEFAULT_URL
 var online_refs := {}                  # Home's "players online" pill: {main, sub}
 var _guard: Node = null
 # 0.31.84 (Kevin: "put a fps cap of 60 in the menus"): the menus ran uncapped (120 on a 120 Hz phone); a match sets its
@@ -120,12 +136,30 @@ func _ready() -> void:
 	_build_hero()
 	_boot_mark("menus")
 	_build_chrome()
+	var fly_layer := CanvasLayer.new()               # 0.31.105: above the menus and their modals
+	fly_layer.layer = 60
+	add_child(fly_layer)
+	reward_fly = RewardFly.new()
+	fly_layer.add_child(reward_fly)
 	if get_tree().get_script() == null or OS.has_environment("FB_STATUS_POLL"):
 		online_status = OnlineStatus.new()
 		online_status.changed.connect(paint_online)
 		add_child(online_status)
+	eco_sync = EcoSync.new()
+	eco_sync.url = eco_url
+	eco_sync.auto_start = eco_autostart
+	eco_sync.setup(profile)
+	add_child(eco_sync)
+	eco_sync.synced.connect(_on_eco_synced)
+	eco_sync.rejected.connect(func(op: String, err: String):
+		print("ECO rejected %s: %s" % [op, err])
+		if op == "match":
+			toast("That match couldn't be counted by the server", UI.RED)
+		else:
+			toast("The server didn't accept that change, so it was undone", UI.RED))
 	billing = Billing.new()
 	add_child(billing)
+	billing.on_server_grant = func(g: Dictionary): eco_sync.adopt(g.get("profile", {}), int(profile.d.account.get("seq", 0)))
 	billing.setup(profile)
 	billing.note.connect(func(t: String, good: bool): toast(t, UI.GOLD if good else UI.RED))
 	billing.granted.connect(_on_iap_granted)
@@ -454,6 +488,7 @@ func _build_chrome() -> void:
 	who.add_child(xp_holder)
 	gold_label = _pill(bar, "coin")
 	gems_label = _pill(bar, "gem")
+	embers_label = _pill(bar, "ember")
 	# --- screen area ---
 	content_scroll = ScrollContainer.new()
 	content_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -518,33 +553,35 @@ func _pill(parent: Node, kind: String) -> Label:
 	# A dark pill with the currency coming out of its left end and a green "+". Tapping it opens the shop.
 	var p := PanelContainer.new()
 	var sb := StyleBoxEmpty.new()
-	sb.content_margin_left = 16
-	sb.content_margin_right = 4
+	sb.content_margin_left = 15
+	sb.content_margin_right = 3
 	sb.content_margin_top = 3
 	sb.content_margin_bottom = 3
 	p.add_theme_stylebox_override("panel", sb)
 	p.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	parent.add_child(p)
-	UI2.skin(p, {"radius": 15.0, "outline": 2.0, "outline_color": Color("#e9b648") if kind == "coin" else Color("#5fd2f0"),
+	var edge := {"coin": Color("#e9b648"), "gem": Color("#5fd2f0"), "ember": Color("#ff8a3d")}
+	UI2.skin(p, {"radius": 15.0, "outline": 2.0, "outline_color": edge.get(kind, Color("#5fd2f0")),
 		"rim": 0.0, "fill_top": Color(0.06, 0.09, 0.24, 0.94), "fill_bottom": Color(0.01, 0.02, 0.08, 0.94), "shadow_y": 3.0, "shadow_alpha": 0.5, "bevel": 0.1})
 	var r := HBoxContainer.new()
 	r.add_theme_constant_override("separation", 3)
 	p.add_child(r)
 	var l := UI2.body(r, "0", 14, Color.WHITE, false)
-	l.custom_minimum_size = Vector2(40, 0)
+	l.custom_minimum_size = Vector2(33, 0)
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	var plus := Panel.new()
-	plus.custom_minimum_size = Vector2(22, 22)
+	plus.custom_minimum_size = Vector2(19, 19)
 	plus.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	r.add_child(plus)
 	UI2.skin(plus, UI2.button_params("green", 7.0, 3.0))
-	var pl := UI.label(plus, "+", 16, Color.WHITE, UI.HEAVY_FONT)
+	var pl := UI.label(plus, "+", 14, Color.WHITE, UI.HEAVY_FONT)
 	pl.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	pl.offset_top = -3
 	pl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	pl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var coin := TextureRect.new()
-	coin.texture = UI2.tex("res://assets/ui/currency/%s.png" % ("coin" if kind == "coin" else "gem"))
+	coin.texture = UI2.tex("res://assets/ui/currency/%s.png" % kind)
+	_pill_icon[kind] = coin
 	coin.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	coin.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	coin.size = Vector2(32, 32)
@@ -565,7 +602,7 @@ func _pill(parent: Node, kind: String) -> Label:
 	hit.set_meta("action_key", "pill_" + kind)
 	hit.pressed.connect(func():
 		sfx("tap")
-		show_tab("shop"))
+		show_tab("forge" if kind == "ember" else "shop"))      # (Embers are bought in the Forge)
 	p.add_child(hit)
 	return l
 
@@ -643,8 +680,9 @@ func refresh_top() -> void:
 	for c in xp_holder.get_children():
 		c.queue_free()
 	UI2.bar(xp_holder, int(d.xp), Eco.level_xp(int(d.level)), Color("#b6f3ff"), Color("#36b9ea"), 10.0)
-	gold_label.text = UI.compact(int(d.gold))
-	gems_label.text = UI.compact(int(d.gems))
+	_counter("coin", gold_label, int(d.gold))
+	_counter("gem", gems_label, int(d.gems))
+	_counter("ember", embers_label, int(d.get("embers", 0)))
 	# Badge on the PASS tab when rewards are waiting.
 	var claimable := 0
 	for tier in range(1, profile.pass_tier() + 1):
@@ -653,6 +691,53 @@ func refresh_top() -> void:
 				claimable += 1
 	pass_badge.visible = claimable > 0
 	(pass_badge.get_child(0) as Label).text = str(claimable)
+
+# ---------------- the currency counters (0.31.105) ----------------
+func _counter(kind: String, lbl: Label, value: int) -> void:
+	# A rise flies in from where the reward came from (reward_fly.gd) and the counter counts up as the pieces land; a
+	# fall (spending) shows at once. While a match runs the counters wait: the menus catch up (and fly) on the way back.
+	var c: Dictionary = _cur.get(kind, {})
+	if c.is_empty() or quiet_top or reward_fly == null:
+		_cur[kind] = {"target": value, "shown": value, "flying": 0}
+		lbl.text = UI.compact(value)
+		return
+	if siege != null or not chrome.is_visible_in_tree():
+		return
+	var delta := value - int(c.target)
+	c.target = value
+	if delta < 0:
+		c.shown = maxi(int(c.shown) + delta, 0)
+		lbl.text = UI.compact(int(c.shown))
+	elif delta > 0:
+		c.flying = int(c.flying) + 1
+		reward_fly.burst(kind, delta, fly_origin(), _pill_icon.get(kind), func(share: int):
+			c.shown = mini(int(c.shown) + share, int(c.target))
+			lbl.text = UI.compact(int(c.shown))
+			_punch(kind), func():
+			c.flying = int(c.flying) - 1
+			if int(c.flying) <= 0:
+				c.shown = c.target
+				lbl.text = UI.compact(int(c.target)))
+
+func fly_origin() -> Vector2:
+	# where a reward came from: the tap that claimed it (CLAIM, COLLECT, BUY ...), else the middle of the screen
+	if _last_press.x >= 0.0 and Time.get_ticks_msec() - _last_press_ms < 2500:
+		return _last_press
+	return get_viewport_rect().size * Vector2(0.5, 0.45)
+
+var _punch_ms := {}
+func _punch(kind: String) -> void:
+	var ic: Control = _pill_icon.get(kind)
+	if not is_instance_valid(ic):
+		return
+	ic.pivot_offset = ic.size * 0.5
+	ic.scale = Vector2.ONE * 1.32
+	var tw := ic.create_tween()
+	tw.tween_property(ic, "scale", Vector2.ONE, 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	var now := Time.get_ticks_msec()
+	if now - int(_punch_ms.get(kind, 0)) > 70:            # a quick run of clinks, not a roar
+		_punch_ms[kind] = now
+		sfx("coin")
 
 func show_tab(id: String) -> void:
 	tab = id
@@ -766,6 +851,9 @@ func _menu_scroll_live() -> bool:
 	return siege == null and modal == null and is_instance_valid(content_scroll) and content_scroll.is_visible_in_tree()
 
 func _input(event: InputEvent) -> void:
+	if (event is InputEventScreenTouch or (event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT)) and event.pressed:
+		_last_press = event.position             # (0.31.105: where a claimed reward flies from)
+		_last_press_ms = Time.get_ticks_msec()
 	if _cancelling or not _menu_scroll_live():
 		return
 	# Touch (the phone) or a real mouse (desktop). Mouse events emulated from touch are ignored
@@ -843,7 +931,17 @@ func _process(_delta: float) -> void:
 			_toast_box.visible = false
 
 # ---------------- matches ----------------
-const TUTORIAL_GOLD := 250
+const TUTORIAL_GOLD := Eco.TUTORIAL_GOLD
+var _ticket_wait := false              # 0.31.108: asking the server for a VS BOTS ticket
+var _ticket_ok := false
+
+func _on_eco_synced(differs: bool) -> void:
+	# 0.31.108: the profile is the server's again; redraw only if something shown changed (and not mid-match)
+	if not differs or siege != null:
+		return
+	refresh_top()
+	if not is_instance_valid(modal):
+		rebuild()
 
 func start_tutorial() -> void:
 	# The Herald's walkthrough: a small offline match (siege_mode.gd tutorial = true).
@@ -854,6 +952,22 @@ func start_match(online: bool, tutorial := false) -> void:
 		return
 	if online and update_required:
 		show_update_screen()               # online stays locked until the update is installed
+		return
+	if not online and not tutorial and eco_sync != null and eco_sync.enabled and not _ticket_ok:
+		# 0.31.108 (Kevin: "Always online"): a VS BOTS match pays only against a ticket the server gives now
+		if _ticket_wait:
+			return
+		_ticket_wait = true
+		toast("Connecting to the server...", UI.GOLD)
+		eco_sync.request_ticket(func(tk: String):
+			_ticket_wait = false
+			if tk == "":
+				sfx("error")
+				toast("VS BOTS needs a connection to the server", UI.RED)
+				return
+			_ticket_ok = true
+			start_match(false, false)
+			_ticket_ok = false)
 		return
 	sfx("matchStart")
 	siege = Siege.new()
@@ -889,6 +1003,8 @@ func _end_match() -> void:
 	if is_instance_valid(siege):
 		siege.queue_free()
 	siege = null
+	if eco_sync != null and eco_sync.enabled:
+		eco_sync.pull()                          # 0.31.108: the server's count of the match (online), or ours sent up
 	_menu_fps.call_deferred()                 # (after the match's _exit_tree puts back what it found)
 	_set_menu_active(true)
 	show_tab("home")
@@ -943,11 +1059,15 @@ static func _cloud_line(s: Dictionary) -> String:
 		int(s.get("gold", 0)), int(s.get("gems", 0)), n, "" if n == 1 else "s"]
 
 func _on_cloud_restored() -> void:
-	# the profile was replaced: everything shown from it is redrawn
+	# the profile was replaced: everything shown from it is redrawn (the counters just change: nothing was earned)
+	if eco_sync != null:
+		eco_sync.account_switched()              # 0.31.108: (and with it, maybe, the account on the server)
 	_apply_audio()
 	hero_show()
 	if siege == null:
+		quiet_top = true
 		rebuild()
+		quiet_top = false
 
 # ---------------- forced update ----------------
 const SERVER_UPDATING := "Servers are updating, try again in a few minutes"
@@ -1056,6 +1176,8 @@ func _notification(what: int) -> void:
 		if online_status != null:
 			online_status.set_active(false)
 	elif what == NOTIFICATION_APPLICATION_RESUMED:
+		if eco_sync != null and eco_sync.auto_start:
+			eco_sync.start()                   # 0.31.108: the account as the server has it
 		if billing != null:
 			billing.resume()                   # a purchase finished while we were away (or a pending one cleared)
 		if play_games != null:

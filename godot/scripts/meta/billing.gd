@@ -23,6 +23,7 @@ signal granted(product: String, result: Dictionary)
 signal note(text: String, good: bool)
 
 var profile                           # Profile
+var on_server_grant: Callable          # 0.31.108: (granted dict with "profile") -- the app's EcoSync takes the account
 var client = null                     # the plugin's BillingClient, or a test double with the same calls and signals
 var verify_fn: Callable               # (product, token, order, cb(res)) -> void; default: ask the Siege server
 var url := OS.get_environment("SIEGE_URL") if OS.has_environment("SIEGE_URL") else Net.DEFAULT_URL
@@ -151,6 +152,23 @@ func _handle(pu: Dictionary) -> void:
 
 func _verified(product: String, token: String, pu: Dictionary, v: Dictionary) -> void:
 	_checking.erase(token)
+	if v.get("granted", null) is Dictionary:
+		# 0.31.108: the server granted it to the account itself (or had already): take the account, then finish it
+		var sg: Dictionary = v.granted
+		if bool(sg.get("ok", false)):
+			if not profile.iap_granted(token):
+				profile.d.iap.done.append({"t":token, "p":product, "at":profile.now()})
+			if bool(Net.IAP.get(product, {}).get("once", false)):
+				profile.d.iap.starter = true
+			if on_server_grant.is_valid():
+				on_server_grant.call(sg)
+			profile.save()
+			granted.emit(product, sg)
+			_finish(product, token, bool(pu.get("is_acknowledged", false)))
+			return
+		if str(sg.get("why", "")) == "used":
+			_finish(product, token, true)                 # granted to an account before: nothing more to do
+			return
 	if bool(v.get("ok", false)):
 		var g: Dictionary = profile.grant_iap(product, token)
 		if bool(g.get("ok", false)):
@@ -188,11 +206,15 @@ static func _error_text(code: int) -> String:
 # ---------------- the server's check ----------------
 func _verify_server(product: String, token: String, order: String, cb: Callable) -> void:
 	var ws := WebSocketPeer.new()
+	ws.inbound_buffer_size = 1 << 21                       # (0.31.108: the answer can carry the account)
 	if ws.connect_to_url(url) != OK:
 		cb.call({"ok":false, "why":"unreachable"})
 		return
-	_reqs.append({"ws":ws, "sent":false, "cb":cb, "t0":Time.get_ticks_msec() / 1000.0,
-		"msg":{"t":"iap", "v":Net.VERSION, "product":product, "token":token, "order":order, "pkg":Net.IAP_PACKAGE}})
+	var msg := {"t":"iap", "v":Net.VERSION, "product":product, "token":token, "order":order, "pkg":Net.IAP_PACKAGE}
+	if profile != null and bool(profile.server_mode):
+		msg["acct"] = str(profile.d.account.id)             # 0.31.108: the server grants it to this account
+		msg["key"] = str(profile.d.account.key)
+	_reqs.append({"ws":ws, "sent":false, "cb":cb, "t0":Time.get_ticks_msec() / 1000.0, "msg":msg})
 
 func _process(_dt: float) -> void:
 	for r in _reqs.duplicate():

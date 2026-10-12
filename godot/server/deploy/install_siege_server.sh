@@ -25,7 +25,10 @@ SERVICE_SRC="$SRC/server/deploy/fatebound-siege.service"
 # The sim preloads the land and the castle layout (siege_land.gd, siege_castle.gd -- 0.31.82: they were missing here,
 # so a fresh install could not compile the sim). Nothing else: the baked terrain files are only the client's.
 SERVER_SCRIPTS="scripts/siege/siege_sim.gd scripts/siege/siege_net.gd scripts/siege/siege_land.gd scripts/siege/siege_castle.gd"
-for f in $SERVER_SCRIPTS server/siege_server.gd server/siege_probe.gd server/iap_verify.gd; do
+# 0.31.108: the accounts -- the server replays every player's changes with the game's own economy and profile code
+META_SCRIPTS="scripts/meta/economy.gd scripts/meta/profile.gd"
+SERVER_FILES="server/siege_server.gd server/siege_probe.gd server/iap_verify.gd server/eco_accounts.gd server/match_ledger.gd"
+for f in $SERVER_SCRIPTS $META_SCRIPTS $SERVER_FILES; do
   [ -f "$SRC/$f" ] || { echo "Missing $SRC/$f — run this from the Siege branch checkout." >&2; exit 1; }
 done
 if [ "$NO_SYSTEMD" != "1" ] && [ "$(id -u)" -ne 0 ]; then
@@ -63,9 +66,10 @@ fi
 
 # ---- 3. Minimal server project ----
 STAGE="$(mktemp -d)"
-mkdir -p "$STAGE/scripts/siege" "$STAGE/server"
+mkdir -p "$STAGE/scripts/siege" "$STAGE/scripts/meta" "$STAGE/server"
 for f in $SERVER_SCRIPTS; do cp "$SRC/$f" "$STAGE/scripts/siege/"; done
-cp "$SRC/server/siege_server.gd" "$SRC/server/siege_probe.gd" "$SRC/server/iap_verify.gd" "$STAGE/server/"
+for f in $META_SCRIPTS; do cp "$SRC/$f" "$STAGE/scripts/meta/"; done
+for f in $SERVER_FILES; do cp "$SRC/$f" "$STAGE/server/"; done
 cat > "$STAGE/project.godot" <<'PROJ'
 ; Fatebound Siege dedicated server: simulation + protocol only (no assets, no autoloads).
 config_version=5
@@ -108,6 +112,16 @@ else
     echo "Purchase checks: no key at $PLAY_KEY yet (purchases wait until it is there; see godot/PLAY_IAP_HANDOFF.md step 5)"
   fi
   systemctl daemon-reload
+  # 0.31.108: the players' accounts live in the service's state directory -- a copy before every update
+  ACCT_DIR=/var/lib/private/fatebound-siege/accounts
+  [ -d "$ACCT_DIR" ] || ACCT_DIR=/var/lib/fatebound-siege/accounts
+  if [ -d "$ACCT_DIR" ]; then
+    mkdir -p /var/backups/fatebound-siege
+    tar -czf "/var/backups/fatebound-siege/accounts-$(date -u +%Y%m%dT%H%M%SZ).tgz" -C "$(dirname "$ACCT_DIR")" \
+      accounts $(cd "$(dirname "$ACCT_DIR")" && ls purchase_tokens.json iap_ledger.jsonl 2>/dev/null)
+    chmod 600 /var/backups/fatebound-siege/*.tgz
+    echo "Accounts backed up to /var/backups/fatebound-siege/"
+  fi
   systemctl enable --quiet fatebound-siege
   systemctl restart fatebound-siege
 fi
