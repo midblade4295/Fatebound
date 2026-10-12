@@ -3143,3 +3143,15 @@ K2/K3 notes (0.17.0)
   way", the gem price), greyed without the gems; it asks first (SKIP 10 TIERS? ... Costs 1000 gems.).
 - tests/tier_skip_test.gd in the suite.
 - 0.31.107, version code 193. Quick suite: ALL 55 PASSED. CONTENT OK.
+
+## Economy review (Kevin: "Go through and check economy balance for entire game. Go through everything like forge, gems, embers, $ cost of everything ect") -- no game change yet
+- tools/economy_sim.gd: MODE=samples runs full 16v16 bot matches and saves every unit's end-of-match numbers; MODE=season
+  plays four styles (light 2 a day 5 days a week, casual 3, regular 5, grinder 12; 50% wins) for 84 days on the real
+  Profile / Economy code, books gold / gems / Embers by source per season, the day the pass is finished, and the pass
+  items a player already owned at the season's start. 12 seeds = 384 samples.
+- Findings (the review doc for Kevin): season 2's premium track is 8 of 13 repeats for a season-1 buyer (10 of 13 in
+  season 3; a repeat gives nothing); Silver chests' 5-10 gems are about half of all free gems; a free regular earns ~960
+  gems a season (premium is 950) and a premium casual ~1,160; the gold shop (62,100) is bought out in ~4-6 weeks; level /
+  pass / quest chests turn to gold when the 4 slots are full (the level-10 Royal included); the starter pack is ~1.5x.
+- Candidate tested (not shipped): Silver chest 30% chance of 5 gems -> free gems a season light 300, casual 510, regular
+  540, grinder 710.
