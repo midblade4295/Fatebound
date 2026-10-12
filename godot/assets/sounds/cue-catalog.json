@@ -12,9 +12,10 @@
     },
     {
       "cue": "menuOpen",
-      "seconds": 0.3,
-      "peak": 0.56,
-      "rms": 0.11546630992404278
+      "seconds": 1.18,
+      "peak": 0.42,
+      "rms": 0.0436,
+      "source": "0.31.110: ElevenLabs sound effects, cut/layered/levelled by tools/build_menu_sfx.py (sources in art_sources/menu_sfx)"
     },
     {
       "cue": "menuClose",
@@ -300,6 +301,97 @@
       "peak": 0.53,
       "rms": 0.0997,
       "source": "0.31.109: ElevenLabs sound effects, cut/layered/levelled by tools/build_menu_sfx.py (sources in art_sources/menu_sfx)"
+    },
+    {
+      "cue": "tab",
+      "seconds": 0.25,
+      "peak": 0.93,
+      "rms": 0.0907,
+      "source": "0.31.110: ElevenLabs sound effects, cut/layered/levelled by tools/build_menu_sfx.py (sources in art_sources/menu_sfx)"
+    },
+    {
+      "cue": "toggle",
+      "seconds": 0.14,
+      "peak": 0.94,
+      "rms": 0.1157,
+      "source": "0.31.110: ElevenLabs sound effects, cut/layered/levelled by tools/build_menu_sfx.py (sources in art_sources/menu_sfx)"
+    },
+    {
+      "cue": "slider",
+      "seconds": 0.04,
+      "peak": 0.86,
+      "rms": 0.0837,
+      "source": "0.31.110: ElevenLabs sound effects, cut/layered/levelled by tools/build_menu_sfx.py (sources in art_sources/menu_sfx)"
+    },
+    {
+      "cue": "unlock",
+      "seconds": 0.75,
+      "peak": 0.89,
+      "rms": 0.0651,
+      "source": "0.31.110: ElevenLabs sound effects, cut/layered/levelled by tools/build_menu_sfx.py (sources in art_sources/menu_sfx)"
+    },
+    {
+      "cue": "premium",
+      "seconds": 0.83,
+      "peak": 0.64,
+      "rms": 0.1046,
+      "source": "0.31.110: ElevenLabs sound effects, cut/layered/levelled by tools/build_menu_sfx.py (sources in art_sources/menu_sfx)"
+    },
+    {
+      "cue": "tierUp",
+      "seconds": 0.78,
+      "peak": 0.45,
+      "rms": 0.0861,
+      "source": "0.31.110: ElevenLabs sound effects, cut/layered/levelled by tools/build_menu_sfx.py (sources in art_sources/menu_sfx)"
+    },
+    {
+      "cue": "revealRare",
+      "seconds": 1.31,
+      "peak": 0.54,
+      "rms": 0.0728,
+      "source": "0.31.110: ElevenLabs sound effects, cut/layered/levelled by tools/build_menu_sfx.py (sources in art_sources/menu_sfx)"
+    },
+    {
+      "cue": "revealEpic",
+      "seconds": 0.83,
+      "peak": 0.63,
+      "rms": 0.0711,
+      "source": "0.31.110: ElevenLabs sound effects, cut/layered/levelled by tools/build_menu_sfx.py (sources in art_sources/menu_sfx)"
+    },
+    {
+      "cue": "revealLegendary",
+      "seconds": 1.43,
+      "peak": 0.55,
+      "rms": 0.0965,
+      "source": "0.31.110: ElevenLabs sound effects, cut/layered/levelled by tools/build_menu_sfx.py (sources in art_sources/menu_sfx)"
+    },
+    {
+      "cue": "gemPack",
+      "seconds": 1.46,
+      "peak": 0.63,
+      "rms": 0.084,
+      "source": "0.31.110: ElevenLabs sound effects, cut/layered/levelled by tools/build_menu_sfx.py (sources in art_sources/menu_sfx)"
+    },
+    {
+      "cue": "levelUp",
+      "seconds": 1.38,
+      "peak": 0.5,
+      "rms": 0.0948,
+      "source": "0.31.110: ElevenLabs sound effects, cut/layered/levelled by tools/build_menu_sfx.py (sources in art_sources/menu_sfx)"
+    },
+    {
+      "cue": "resultWin",
+      "seconds": 1.63,
+      "peak": 0.52,
+      "rms": 0.099,
+      "source": "0.31.110: ElevenLabs sound effects, cut/layered/levelled by tools/build_menu_sfx.py (sources in art_sources/menu_sfx)"
+    },
+    {
+      "cue": "resultLose",
+      "seconds": 1.35,
+      "peak": 0.48,
+      "rms": 0.0667,
+      "source": "0.31.110: ElevenLabs sound effects, cut/layered/levelled by tools/build_menu_sfx.py (sources in art_sources/menu_sfx)"
     }
   ],
   "demo_timeline": [

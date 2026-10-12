@@ -325,6 +325,12 @@ func _show_rewards() -> void:
 	var tw := create_tween().set_parallel()
 	tw.tween_property(card, "scale", Vector2.ONE, 0.5).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	tw.tween_property(card, "modulate:a", 1.0, 0.25)
+	# 0.31.110: the card's sound by what it holds -- a rare's crystal bells, an epic's swell, a legendary's golden choir;
+	# a duplicate's Embers, plain gold's coin
+	if item != "":
+		app.sfx({"epic": "revealEpic", "legendary": "revealLegendary"}.get(rar, "revealRare"))
+	else:
+		app.sfx("ember" if int(result.get("dupe_embers", 0)) > 0 else "coin")
 	# gold and gems
 	var chips := HBoxContainer.new()
 	chips.add_theme_constant_override("separation", 12)

@@ -251,11 +251,13 @@ static func home(app, root: VBoxContainer) -> void:
 		for ch in (d.challenges.daily if span == "daily" else d.challenges.weekly):
 			if not bool(ch.claimed) and int(ch.progress) >= int(Eco.CHALLENGES[ch.id].goal):
 				orders_ready += 1
-	var sp := _medallion(top, Vector2(-2, 58), "banner", "PASS", func(): app.show_tab("pass"), "side_pass", claimable)
+	var sp := _medallion(top, Vector2(-2, 58), "banner", "PASS", func():
+		app.sfx("tab")
+		app.show_tab("pass"), "side_pass", claimable)
 	# 0.31.97: the class quests, under ORDERS (a badge for every quest step ready to claim)
 	var qready: int = p.quests_ready()
 	var qb := _medallion(top, Vector2(-2, 242), quest_icon_name(), "QUESTS", func():
-		app.sfx("tap")
+		app.sfx("tab")
 		app.quest_cls = quest_first(p)
 		app.show_tab("quests"), "side_quests", qready)
 	if qready > 0:
@@ -269,7 +271,7 @@ static func home(app, root: VBoxContainer) -> void:
 	# 0.31.93: the Forge, under FIRST WIN (a badge when an equipped weapon's next star can be forged)
 	var fready := forge_ready(p)
 	var fgb := _medallion(top, Vector2(w - 62, 176), "anvil", "FORGE", func():
-		app.sfx("tap")
+		app.sfx("tab")
 		app.forge_cls = app.locker_class if (Eco.CLASSES + Eco.UP_CLASSES).has(str(app.locker_class)) else "knight"
 		app.forge_pick = ""
 		app.show_tab("forge"), "side_forge", fready, "silver")
@@ -504,7 +506,7 @@ static func chests_row(app, parent: Control, w: float, y: float) -> void:
 			_slot_tag(cell, UI.duration(p.chest_left(ch)), Color.WHITE)
 			var ub := UI2.button(cell, "UNLOCK", "blue", func():
 				p.start_unlock(idx)
-				app.sfx("tap")
+				app.sfx("unlock")                  # 0.31.110: a key turns, ka-chunk
 				app.rebuild(), "chest_unlock_%d" % i, 13, 28.0, 9.0)
 			ub.position = Vector2(8, sh - 36)
 			ub.size = Vector2(sw - 16, 28)
@@ -537,8 +539,7 @@ static func _slot_tag(cell: Control, s: String, col: Color) -> void:
 static func skip_chest(app, idx: int) -> void:
 	var r: Dictionary = app.profile.skip_chest(idx)
 	if bool(r.get("ok", false)):
-		app.sfx("tap")
-		open_chest(app, idx)
+		open_chest(app, idx)                   # (its sound: the chest's window opening)
 	else:
 		app.sfx("error")
 		app.toast("Not enough gems (%d needed)" % int(r.get("cost", 0)), UI.RED)
@@ -548,7 +549,7 @@ static func open_chest(app, idx: int) -> void:
 	var chs: Array = app.profile.chests()
 	if idx < 0 or idx >= chs.size() or not app.profile.chest_ready(chs[idx]):
 		return
-	app.sfx("tap")
+	app.sfx("menuOpen")
 	app.close_modal()
 	var m := ChestOpen.new()
 	m.app = app
@@ -1074,7 +1075,7 @@ static func _skip_tiers(app) -> void:
 	app.confirm("SKIP %d TIERS?" % int(so.tiers), "Jump straight to tier %d of the Siege Pass. Costs %d gems." % [to, int(so.gems)], "SKIP", "premium", func():
 		var r: Dictionary = p.skip_tiers()
 		if r.ok:
-			app.sfx("purchase")
+			app.sfx("tierUp")                  # 0.31.110: a bright rising chime
 			app.toast("Tier %d reached! Claim your rewards" % p.pass_tier(), UI.GOLD)
 		else:
 			app.sfx("error")
@@ -1088,7 +1089,7 @@ static func _buy_premium(app) -> void:
 		"more gems" if psid < 2 else "Embers and gold", Eco.PREMIUM_COST], "UNLOCK", "premium", func():
 		var r: Dictionary = p.buy_premium()
 		if r.ok:
-			app.sfx("purchase")
+			app.sfx("premium")                 # 0.31.110: a rich golden chord
 			app.toast("Premium pass unlocked!", UI.PURPLE)
 		else:
 			app.sfx("error")
@@ -1101,7 +1102,7 @@ static func open_pass_item(app, sid: int, t: int, prem: bool) -> void:
 	var r: Dictionary = p.pass_reward_for(t, prem)
 	var rt: Array = reward_text(r)
 	var it: Dictionary = Eco.item(str(r.get("item", "")))
-	app.sfx("tap")
+	app.sfx("menuOpen")
 	app.close_modal()
 	var m := Control.new()
 	m.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -1327,7 +1328,7 @@ static func open_item(app, id: String, pack := "", pick := 0) -> void:
 	var tint := _rar_tint(rar if pack == "" else str(Eco.PACKS[pack].get("rarity", rar)))
 	var weapon := str(it.get("kind", "")) == "weapon"
 	var mode := str(app.get_meta("shop_preview_mode", "hand"))
-	app.sfx("tap")
+	app.sfx("menuOpen")
 	app.close_modal()
 	var m := Control.new()
 	m.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -1882,7 +1883,7 @@ static func locker(app, root: VBoxContainer) -> void:
 	var fl := UI2.button(root, "FORGE YOUR %s WEAPONS" % str(Eco.CLASS_NAMES[cls]).to_upper(), "orange", func():
 		app.forge_cls = cls
 		app.forge_pick = ""
-		app.sfx("tap")
+		app.sfx("tab")
 		app.show_tab("forge"), "locker_forge", 14, 40.0, 12.0, UI2.icon_path("anvil"))
 	fl.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	fl.custom_minimum_size.x = 280
@@ -2225,7 +2226,7 @@ static func settings(app, root: VBoxContainer) -> void:
 		sl.min_value = 0.0
 		sl.max_value = 1.0
 		sl.step = 0.05
-		sl.value = float(d.settings.get(key, 0.6 if key == "music" else 0.8))
+		sl.value = float(d.settings.get(key, 1.0))       # 0.31.110 (Kevin): every slider at 100% by default
 		sl.set_meta("action_key", "slider_" + key)
 		sl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		UI2.style_slider(sl)
@@ -2238,14 +2239,17 @@ static func settings(app, root: VBoxContainer) -> void:
 			pv.text = "%d%%" % int(round(v * 100))
 			d.settings[key] = v
 			p.save()
-			app._apply_audio())
+			app._apply_audio()
+			app.sfx("slider"))                 # 0.31.110: a tiny tick a step, at the new level
 	# Graphics
 	var gx := UI2.frame(root, "night", 12, 18.0, "gold")
 	UI2.divider(gx, "GRAPHICS", 20)
 	UI2.toggle(gx, "High-quality graphics", "Shadows, glow, smooth edges", bool(d.settings.get("hq_graphics", true)), "hq_graphics", func(on: bool):
+		app.sfx("toggle")
 		d.settings.hq_graphics = on
 		p.save())
 	UI2.toggle(gx, "Reduce effects", "Smoother on older phones", bool(d.settings.get("reduce_motion", false)), "reduce_motion", func(on: bool):
+		app.sfx("toggle")
 		d.settings.reduce_motion = on
 		p.save())
 	# Old progress
@@ -2353,7 +2357,7 @@ static func forge(app, root: VBoxContainer) -> void:
 	anvil.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	UI2.text(board, "THE FORGE", 28, UI2.GOLD).size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	var back := UI2.button(sign, "", "ghost", func():
-		app.sfx("tap")
+		app.sfx("menuClose")
 		app.show_tab("home"), "forge_back", 14, 40.0, 12.0)
 	back.position = Vector2(0, 12)
 	back.size = Vector2(46, 40)
@@ -2372,7 +2376,7 @@ static func forge(app, root: VBoxContainer) -> void:
 	var shop_open: bool = app.forge_shop
 	var gb := UI2.button(er, "GET" if not shop_open else "CLOSE", "orange", func():
 		app.forge_shop = not app.forge_shop
-		app.sfx("tap")
+		app.sfx("menuOpen" if app.forge_shop else "menuClose")
 		app.rebuild(), "forge_get_embers", 13, 38.0, 11.0)
 	gb.custom_minimum_size.x = 76
 	gb.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -2629,7 +2633,7 @@ static func claim_quest(app, cls: String) -> void:
 	var res: Dictionary = p.claim_quest(cls)
 	if not bool(res.get("ok", false)):
 		return
-	app.sfx("claim")
+	app.sfx("revealLegendary" if str(res.item) != "" else "claim")      # 0.31.110: the quest's legendary gets the golden choir
 	app.refresh_top()
 	if str(res.item) != "":
 		# the legendary: show it off, with EQUIP right there
@@ -2664,7 +2668,7 @@ static func quests(app, root: VBoxContainer) -> void:
 	UI2.icon(board, quest_icon_name(), 46.0).size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	UI2.text(board, "QUESTS", 28, UI2.GOLD).size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	var back := UI2.button(sign, "", "ghost", func():
-		app.sfx("tap")
+		app.sfx("menuClose")
 		app.show_tab("home"), "quests_back", 14, 40.0, 12.0)
 	back.position = Vector2(0, 12)
 	back.size = Vector2(46, 40)
@@ -2820,7 +2824,7 @@ static func quest_card(app, root: Node, cls: String) -> void:
 		UI2.body(pr, "%s / %s" % [_thousands(have), _thousands(int(s.n))], 10, Color.WHITE, false)
 	var b := UI2.button(r, "CLAIM" if ready else "OPEN", "gold" if ready else "orange", func():
 		app.quest_cls = cls
-		app.sfx("tap")
+		app.sfx("tab")
 		app.show_tab("quests"), "locker_quest_" + cls, 13, 40.0, 12.0)
 	b.custom_minimum_size.x = 70
 	b.size_flags_vertical = Control.SIZE_SHRINK_CENTER

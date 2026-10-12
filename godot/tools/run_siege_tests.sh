@@ -109,6 +109,8 @@ run play_games_test      PLAY_GAMES_PASS          120 --resolution 420x933
 run eco_server_test      ECO_SERVER_PASS          120
 # The economy review's fixes (0.31.108): pass swaps, Silver gems, vault, waiting reward chests, prices, op replay.
 run economy_fix_test     ECONOMY_FIX_PASS         60
+# The menu sounds and the sliders at 100% by default (0.31.110).
+run menu_sound_test      MENU_SOUND_PASS          60
 # The app's staged match start (0.31.78): the card first, the world built behind it over frames.
 FB_STAGED_START=1 FB_FORCE_WARMUP=1 run staged_start_test STAGED_START_PASS 240 --fixed-fps 30
 # The human soak must never stall the game thread.

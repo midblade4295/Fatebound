@@ -860,6 +860,26 @@ func _process(delta: float) -> void:
 		diag.write("REWARDS %s" % str(match_result.get("rewards", {}).get("gold", 0)))
 		hud.player_name = player_name
 		hud.show_result(match_result)
+		if not tutorial:
+			_result_sounds(won, draw)
+
+func _result_sounds(won: bool, draw: bool) -> void:
+	# 0.31.110 (Kevin: "more menu sound effects"): the results' stinger -- brass and drums for a win, low strings and a
+	# horn for a loss (softly for a draw) -- then, once it's played out, a level up's arpeggio or a pass tier's chime
+	if audio == null or not audio.has_method("play"):
+		return
+	audio.play("resultWin" if won else "resultLose", draw and not won)
+	var next := ""
+	if not (match_result.get("levels", []) as Array).is_empty():
+		next = "levelUp"
+	elif not (match_result.get("tiers", []) as Array).is_empty():
+		next = "tierUp"
+	if next != "":
+		get_tree().create_timer(1.6).timeout.connect(_late_cue.bind(next))
+
+func _late_cue(cue: String) -> void:
+	if audio != null and audio.has_method("play"):
+		audio.play(cue)
 
 func finish_tutorial() -> void:
 	# The Herald's last line: mark it done, pay the recruit, back to the menu.
@@ -1118,8 +1138,8 @@ func _ambience(delta: float) -> void:
 			pl.play(randf() * 50.0)
 			_amb[k] = pl
 	var muted: bool = audio == null or bool(audio.get("muted")) or not get_window().has_focus()
-	var lv: Dictionary = audio.get("levels") if audio != null and audio.get("levels") != null else {"master":0.75, "combat":0.8}
-	var base := 0.0 if muted else float(lv.get("master", 0.75)) * float(lv.get("combat", 0.8))
+	var lv: Dictionary = audio.get("levels") if audio != null and audio.get("levels") != null else {"master":1.0, "combat":1.0}
+	var base := 0.0 if muted else float(lv.get("master", 1.0)) * float(lv.get("combat", 1.0))
 	var at := _listener()
 	var want := {
 		"forest_day": 0.22,
@@ -1147,7 +1167,7 @@ func _music_step(delta: float, muted: bool, lv: Dictionary) -> void:
 		_music.volume_db = -80.0
 		add_child(_music)
 		_music.play()
-	var target := 0.0 if muted else MUSIC_GAIN * float(lv.get("master", 0.75)) * float(lv.get("music", 0.6))
+	var target := 0.0 if muted else MUSIC_GAIN * float(lv.get("master", 1.0)) * float(lv.get("music", 1.0))
 	var cur := db_to_linear(_music.volume_db)
 	_music.volume_db = linear_to_db(maxf(lerpf(cur, target, minf(1.0, delta * 2.0)), 0.00001))   # eases only on mute / slider
 
@@ -1166,7 +1186,7 @@ func _herald_say(id: String) -> void:
 	var master := 1.0
 	var muted := false
 	if audio != null:
-		master = float(audio.levels.get("master", 0.8))
+		master = float(audio.levels.get("master", 1.0))
 		muted = bool(audio.get("muted"))
 	if muted or master <= 0.0:
 		return

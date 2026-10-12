@@ -62,6 +62,38 @@ CUES = {
                                            ("sparkle_1", 0.0, 0.80, 0.08, -8, 1500, 0.45)]},
     # a short brass-and-chimes fanfare (a reward claimed: pass tiers, orders, quests)
     "claim":      {"rms": 0.15, "layers": [("fanfare_4", 0.0, 1.25, 0.0, 0, 150, 0.60)]},
+    # ---- 0.31.110 (Kevin: "I want more menu sound effects")
+    # a soft rustle into a wooden click (the tab bar)
+    "tab":        {"rms": 0.12, "layers": [("tab_1", 0.54, 0.82, 0.0, 0, 160, 0.16)]},
+    # an airy whoosh with a soft tone after (a panel or a detail opens)
+    "menuOpen":   {"rms": 0.10, "layers": [("menuOpen_7", 0.22, 1.60, 0.0, 0, 200, 0.60)]},
+    # a solid switch click and its latch (settings toggles)
+    "toggle":     {"rms": 0.12, "layers": [("toggle_4", 0.245, 0.42, 0.0, 0, 300, 0.10)]},
+    # one tiny ratchet tick (a volume slider moves)
+    "slider":     {"rms": 0.08, "layers": [("slider_1", 0.028, 0.068, 0.0, 0, 400, 0.02)]},
+    # a key turns: ka-chunk, metal ringing (a chest starts unlocking)
+    "unlock":     {"rms": 0.14, "layers": [("unlock_4", 1.15, 2.00, 0.0, 0, 150, 0.45)]},
+    # a rich two-note golden chord, a sparkle over it (the premium pass bought)
+    "premium":    {"rms": 0.16, "layers": [("premium_3", 0.0, 0.85, 0.0, 0, 150, 0.40),
+                                           ("sparkle_2", 0.0, 0.85, 0.06, -8, 1500, 0.45)]},
+    # a bright rising chime (pass tiers skipped)
+    "tierUp":     {"rms": 0.15, "layers": [("tierUp_1", 0.0, 0.88, 0.0, 0, 200, 0.45)]},
+    # crystal bells (a rare item revealed)
+    "revealRare": {"rms": 0.12, "layers": [("revealRare_3", 0.0, 1.40, 0.0, 0, 250, 0.60)]},
+    # a magic swell with a shimmer (an epic item revealed)
+    "revealEpic": {"rms": 0.15, "layers": [("revealEpic_3", 0.0, 0.95, 0.0, 0, 150, 0.45),
+                                           ("revealEpic_2", 0.0, 0.95, 0.0, -7, 1200, 0.45)]},
+    # a golden swell and bells (a legendary item revealed)
+    "revealLegendary": {"rms": 0.17, "layers": [("revealLegendary_2", 0.0, 1.60, 0.0, 0, 120, 0.70),
+                                                ("revealLegendary_3", 0.0, 0.85, 0.0, -5, 600, 0.45)]},
+    # gems pour out, glassy and bright (a gem pack bought)
+    "gemPack":    {"rms": 0.14, "layers": [("gemPack_4", 0.0, 1.55, 0.0, 0, 300, 0.70)]},
+    # an ascending chime arpeggio (account level up)
+    "levelUp":    {"rms": 0.15, "layers": [("levelUp_2", 0.0, 1.50, 0.0, 0, 200, 0.70)]},
+    # brass and drums, da-DAA (results: won)
+    "resultWin":  {"rms": 0.18, "layers": [("resultWin_3", 0.0, 1.80, 0.0, 0, 90, 0.80)]},
+    # low strings and a soft horn (results: lost)
+    "resultLose": {"rms": 0.15, "layers": [("resultLose_3", 0.0, 1.55, 0.0, 0, 80, 0.75)]},
 }
 
 

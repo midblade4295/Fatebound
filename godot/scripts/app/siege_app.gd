@@ -209,8 +209,9 @@ func _ready() -> void:
 func _apply_audio() -> void:
 	var st: Dictionary = profile.d.settings
 	if audio.has_method("set_levels"):
-		audio.set_levels({"master":float(st.get("master", 0.8)), "combat":float(st.get("sfx", 0.8)), "ui":float(st.get("sfx", 0.8)),
-			"music":float(st.get("music", 0.6))})
+		# 0.31.110 (Kevin: "make it so the audio sliders are max by default"): 100% when unset
+		audio.set_levels({"master":float(st.get("master", 1.0)), "combat":float(st.get("sfx", 1.0)), "ui":float(st.get("sfx", 1.0)),
+			"music":float(st.get("music", 1.0))})
 
 func sfx(cue: String) -> void:
 	if audio != null and audio.has_method("play"):
@@ -601,7 +602,7 @@ func _pill(parent: Node, kind: String) -> Label:
 		hit.add_theme_stylebox_override(st_name, StyleBoxEmpty.new())
 	hit.set_meta("action_key", "pill_" + kind)
 	hit.pressed.connect(func():
-		sfx("tap")
+		sfx("tab")
 		show_tab("forge" if kind == "ember" else "shop"))      # (Embers are bought in the Forge)
 	p.add_child(hit)
 	return l
@@ -615,7 +616,7 @@ func _tab_button(parent: Node, id: String, text: String, icon_name: String) -> D
 	b.set_meta("action_key", "tab_" + id)
 	UI.grow(b)
 	b.pressed.connect(func():
-		sfx("tap")
+		sfx("tab")                             # 0.31.110: its own sound, a soft rustle into a click
 		show_tab(id))
 	parent.add_child(b)
 	var plate := Control.new()                    # the raised tile of the open tab
@@ -802,6 +803,7 @@ func toast(text: String, color := UI.TEXT) -> void:
 	move_child(_toast_box, get_child_count() - 1)
 
 func confirm(title_text: String, body: String, yes_text: String, style: String, on_yes: Callable, on_no := Callable()) -> void:
+	sfx("menuOpen")
 	close_modal()
 	modal = Control.new()
 	modal.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -1147,7 +1149,7 @@ func _on_iap_granted(product: String, g: Dictionary) -> void:
 	# 0.31.90: a confirmed purchase landed in the profile
 	if bool(g.get("again", false)):
 		return
-	sfx("purchase")
+	sfx("gemPack" if int(g.get("gems", 0)) > 0 else "purchase")       # 0.31.110: gems pouring out
 	var bits := ["+%s gems" % UI.compact(int(g.get("gems", 0)))]
 	if int(g.get("embers", 0)) > 0:
 		bits.append("+%d Embers" % int(g.embers))

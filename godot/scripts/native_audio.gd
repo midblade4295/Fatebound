@@ -44,7 +44,9 @@ func play(cue: String, quiet := false, vol := 1.0) -> void:
         if not player.playing:
             player.stream = cache[cue]
             var ui_cue:bool=cue in ["tap","menuOpen","menuClose","equip","purchase","coin","confirm","error","chest","level","energy",
-                "gem","ember","claim","chestOpen","forge","flip","countdown","matchStart"]   # (0.31.109: the new menu sounds)
+                "gem","ember","claim","chestOpen","forge","flip","countdown","matchStart",   # (0.31.109: the new menu sounds)
+                "tab","toggle","slider","unlock","premium","tierUp","revealRare","revealEpic","revealLegendary","gemPack",
+                "levelUp","resultWin","resultLose"]   # (0.31.110)
             # 0.31.58 (Kevin: game audio louder): base 0.12 -> 0.2, and a cue may ask for up to 3x (the bomb) -- vol was
             # clamped to 1, so every "louder" gain above 1 did nothing
             var gain:float=minf(1.0, 0.2*float(levels.master)*float(levels.ui if ui_cue else levels.combat)*(0.40 if quiet else 1.0)*clampf(vol,0.0,3.0))
@@ -53,7 +55,7 @@ func play(cue: String, quiet := false, vol := 1.0) -> void:
             player.play()
             return
 
-var levels:Dictionary={"master":0.75,"combat":0.8,"ui":0.75,"music":0.6}
+var levels:Dictionary={"master":1.0,"combat":1.0,"ui":1.0,"music":1.0}   # 0.31.110: every slider at 100% by default
 func set_levels(value:Dictionary)->void:
     for key in levels:
         if value.get(key) is float or value.get(key) is int:levels[key]=clampf(float(value[key]),0,1)

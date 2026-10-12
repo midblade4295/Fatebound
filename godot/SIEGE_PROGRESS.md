@@ -3217,3 +3217,27 @@ K2/K3 notes (0.17.0)
 - Content pack audio rebuilt (audio-d94b1cd17740.pck) and on the content-packs branch. 0.31.109, version code 195.
   Sound tests (match_audio, reward_fly, chest, app_flow, forge, quest, tier_skip, content) pass. APK 31373497 bytes,
   sha256 a7281bed81486b5dfd4a033ae7bd9fe97b057065639667cc0992072c140c5e2d.
+
+## 0.31.110 — more menu sounds, sliders at 100% (Kevin: "I want more menu sound effects. Also make it so the audio sliders are max by default")
+- 14 more menu cues, made the 0.31.109 way (ElevenLabs eleven_text_to_sound_v2, four takes a prompt, ~930 credits; the
+  best take picked from waveform + spectrogram, cut/layered/levelled by tools/build_menu_sfx.py, sources in
+  art_sources/menu_sfx/):
+  tab (rustle into a wooden click: the tab bar, the coin pills, PASS / FORGE / QUESTS medallions, the Locker's Forge
+  and quest buttons), menuOpen (replaced: an airy whoosh with a soft tone -- confirms, the chest window, a pass reward,
+  the shop preview, the Forge's Embers shop), toggle (switch click + latch: the graphics switches), slider (a tiny
+  ratchet tick a step, at the new level), unlock (a key turns, ka-chunk: chest UNLOCK), premium (golden two-note
+  chord + sparkle: the premium pass), tierUp (rising chime: tiers skipped, a tier reached in a match),
+  revealRare / revealEpic / revealLegendary (the chest card by rarity; a quest's legendary gets the legendary one),
+  gemPack (gems pouring: a Play Store gem pack), levelUp (ascending arpeggio), resultWin (brass and drums) and
+  resultLose (low strings + horn; softly for a draw) on the results screen -- the stinger at once, a level up's
+  arpeggio (else a pass tier's chime) 1.6 s later. The Forge / Quests home buttons play menuClose; a chest skipped
+  plays only the window opening (it played the tap twice). A gold-only chest card plays the coin, a duplicate Embers.
+- Sliders: Master, Effects and Music default to 100% (Profile.defaults, the settings fallback, native_audio's start
+  levels, _apply_audio's and the match's fallbacks). Once (settings.audio_max), each slider still on its old default
+  (80 / 80 / 60) goes to 100%; one someone moved stays where it was. New profiles carry the mark, so a new install's
+  slider set to 80% stays 80%.
+- tests/menu_sound_test.gd (in the suite): every sfx cue in scripts/app has its WAV and plays on the Effects slider,
+  the new cues' lengths, 100% defaults, the one-time move and its edge cases. Full suite: ALL SIEGE TESTS PASSED (58).
+- Content pack audio rebuilt (audio-686aa32b16bd.pck) and on the content-packs branch. 0.31.110, version code 196.
+  APK 31369401 bytes, sha256 333b0712cd9b76ee42a54cdac9e43f377422fe1a136a20a623d60298e5f33ca9.
+- Audition page (artifact "Fatebound Menu Sounds") now lists the 0.31.110 cues above the 0.31.109 ones.

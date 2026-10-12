@@ -267,7 +267,7 @@ func _show_line() -> void:
 	var master := 1.0
 	var muted := false
 	if mode != null and mode.audio != null:
-		master = float(mode.audio.levels.get("master", 0.8))
+		master = float(mode.audio.levels.get("master", 1.0))
 		muted = bool(mode.audio.get("muted"))
 	if muted or master <= 0.0:
 		return
