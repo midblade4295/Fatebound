@@ -3350,3 +3350,20 @@ K2/K3 notes (0.17.0)
   stays pinned).
 - Full suite: ALL SIEGE TESTS PASSED (63). No content pack change. 0.31.116, version code 202. APK 31432155 bytes,
   sha256 2ccc631af0d34766e874ed5f673206eedacf59728e6d49cd252bda56a294210f.
+
+## Store art (after 0.31.116) — new Play Store screenshots and feature graphic (Kevin: "Give me new playstore screenshots and banner. I want a mix of cinematic action screenshots along with gameplay screenshots along with some menu stuff like forge ect. Put captions on them and make it all eye catching")
+- 8 phone screenshots (1080x1920) + the feature graphic (1024x500), all real renders of 0.31.116, in
+  `store-listing/graphics/` and the fastlane folder (the 0.19 set removed; renders kept as `raw_renders/*.webp`):
+  01 CALL DOWN THE METEOR (cinematic) · 02 16 VS 16 CASTLE SIEGES (gameplay + close-up bubble) · 03 STEAL THEIR KING.
+  SAVE YOURS. (gameplay + the King on the Crusader's shoulders) · 04 ANYONE CAN CHANGE FATE (cinematic) · 05 BLOW THEIR
+  GATE SKY-HIGH (cinematic) · 06 FORGE LEGENDARY WEAPONS · 07 WIN CHESTS, CLAIM LOOT · 08 SQUAD UP WITH FRIENDS. Feature
+  graphic: the All Tied Up title over the Villager running the bomb with his Knights. Captions checked against the
+  code (WIN_RESCUES 3, the Archmage's meteor, bombs, every win a chest, the Forge's stars/elements, looks only).
+- Tools: `tools/store3_shots.gd` (trailer 6's staged runs played to one moment and saved at any size, portrait camera
+  presets; nothing drawn until just before it, so a still is a minute or two), `tools/store3_match.gd` (the 0.19
+  in-match staging on the current game, + CLOSE=1 close-ups), `tools/store3_app.gd` (Forge / Royal Chest reveal /
+  Friends in a party, sample names, never the live server), `tools/store3_compose.py` (gold Luckiest Guy headlines,
+  colour pills, phones over a blurred battle, magnifier bubbles, the feature graphic). The tools end their own
+  process once written (Godot can hang on exit after these runs). `store-listing/graphics` and `fastlane` carry a
+  `.gdignore` (no imports of listing art). The listing text still says "Oracle" in places.
+- No game change; no ElevenLabs credits.

@@ -3,7 +3,9 @@
 Owner: **Kevin** (solo developer, GitHub `midblade4295`). Game repo: `github.com/midblade4295/Fatebound`,
 branch `claude/siege-dev-r5` (sanitized R5 source `d05f585`; this package is now included under
 `godot/store-listing/`). Read `godot/PLAY_STORE_HANDOFF.md` for current release build/signing instructions. Every image in this package
-is a real render of game build **0.19.1-siege-tutorial (versionCode 40)**.
+is a real render of the game. The screenshots and feature graphic are from **0.31.116 (versionCode 202)**,
+branch `claude/siege-dev-r6-local` (Kevin, 0.31.116: "new playstore screenshots and banner ... a mix of cinematic action
+screenshots along with gameplay screenshots along with some menu stuff like forge"); the text below is older.
 
 > Run the fastlane command from the repository root. Screenshot commands run from `godot/`.
 > Archive store-listing tools/assets are development material: exclude `store-listing/*` from Android game exports.
@@ -30,12 +32,13 @@ is a real render of game build **0.19.1-siege-tutorial (versionCode 40)**.
 |---|---|
 | `listing/STORE_LISTING.md` | Human-readable listing: name, short + full description, checklist |
 | `listing/listing.json` | Same, machine-readable: text, lengths, screenshot order + captions, facts sheet |
-| `graphics/phone_screenshots/01_battle.png … 08_home.png` | 8 captioned phone screenshots, upload in this order |
-| `graphics/feature_graphic_1024x500.png` | Feature graphic (required) |
-| `graphics/raw_renders/store_*.png` | Uncaptioned 1080×1920 renders (+ 1600×782 `store_feature.png`) the images were made from |
+| `graphics/phone_screenshots/01_meteor.png … 08_friends.png` | 8 captioned phone screenshots, upload in this order |
+| `graphics/feature_graphic_1024x500.png` | Feature graphic (required): the All Tied Up title over a Villager running the bomb |
+| `graphics/raw_renders/*.webp` | The uncaptioned renders they were composed from (cine_*, play_*, menu_*, feature) |
 | `fastlane/metadata/android/en-US/…` | The same text + images in fastlane `supply` layout |
-| `tools/store_shots_match.gd`, `tools/store_shots_app.gd` | Godot scripts that render the raw screenshots |
-| `tools/store_compose.py` | Adds captions/frames and builds the feature graphic (reproduces these files pixel for pixel) |
+| `godot/tools/store3_shots.gd`, `store3_match.gd`, `store3_app.gd` | Godot scripts that render the raw screenshots (cinematic, gameplay, menus) |
+| `godot/tools/store3_compose.py` | Adds captions, phones, close-up bubbles and builds the feature graphic (from `raw_renders/`) |
+| `tools/store_*` (here) | The 0.19 set's tools, kept for reference |
 | `tools/fonts/` | The game's fonts as TTF (Cinzel Black, Nunito ExtraBold) + their SIL OFL licenses |
 
 ## 2. The listing (en-US)
@@ -43,8 +46,10 @@ is a real render of game build **0.19.1-siege-tutorial (versionCode 40)**.
 - **Short description** (≤80): 73 chars — see `listing/STORE_LISTING.md`
 - **Full description** (≤4000): 1,878 chars — see `listing/STORE_LISTING.md`
 
-Screenshot captions, in order: STORM THE CASTLE · RESCUE YOUR ORACLE · THE HAT MAKES THE HERO ·
-SPIN. SHIELD. SMASH. · FEED THEIR ORACLE CAKE · LEARN FROM THE HERALD · SKINS, WEAPONS & PACKS · SEVEN CLASSES
+Screenshot captions, in order (0.31.116): CALL DOWN THE METEOR · 16 VS 16 CASTLE SIEGES · STEAL THEIR KING.
+SAVE YOURS. · ANYONE CAN CHANGE FATE · BLOW THEIR GATE SKY-HIGH · FORGE LEGENDARY WEAPONS · WIN CHESTS, CLAIM LOOT ·
+SQUAD UP WITH FRIENDS (each with a subline; `listing/listing.json` → `phone_screenshots`). The listing text still says
+"Oracle" in places -- the game now calls her the King; update the text before publishing.
 
 ## 3. Fill it in — Play Console (manual)
 1. Play Console → the app (**`com.fatebound.game`**) → **Grow users → Store presence → Main store listing**.
@@ -52,7 +57,7 @@ SPIN. SHIELD. SMASH. · FEED THEIR ORACLE CAKE · LEARN FROM THE HERALD · SKINS
 3. **Graphics:**
    - App icon (512×512, 32-bit PNG) — `graphics/app_icon_512x512.png` (0.31.89, Kevin's pick "King Rescue").
    - Feature graphic — `graphics/feature_graphic_1024x500.png`.
-   - Phone screenshots — `graphics/phone_screenshots/01_…` through `08_…`, in that order.
+   - Phone screenshots — `graphics/phone_screenshots/01_meteor.png` through `08_friends.png`, in that order.
    - Tablet screenshots — none provided (optional; skip unless Kevin asks).
 4. **Save** the draft. Do **not** send for review / publish (rule 1).
 
@@ -67,24 +72,27 @@ fastlane supply --package_name com.fatebound.game \
 The service-account key and Play access are Kevin's; don't create or request credentials yourself.
 
 ## 5. Regenerate the images (after the game changes)
-Needs: Godot 4.7.2 (Linux), Xvfb, Python 3 with Pillow (+ `fonttools brotli` only if the TTFs are
-missing), the repo at `claude/siege-dev-r5`. From the repo's `godot/` folder:
+Needs Godot 4.7.2 (Linux), Xvfb, Python 3 with Pillow. From the repo's `godot/` folder (each tool's header has the
+details; renders take minutes each on a software renderer):
 ```bash
-Xvfb :95 -screen 0 1700x2000x24 & sleep 2
-# in-match scenes (battle, rescue, hats, abilities, feed) -> /tmp/store_<name>.png
-DISPLAY=:95 godot --rendering-method mobile --resolution 1080x1920 --path . -s res://store-listing/tools/store_shots_match.gd
-# feature scene (wide, no HUD) -> /tmp/store_feature.png
-DISPLAY=:95 SCENES=feature godot --rendering-method mobile --resolution 1600x782 --path . -s res://store-listing/tools/store_shots_match.gd
-# home + shop -> /tmp/store_home.png, /tmp/store_shop.png ; tutorial -> /tmp/store_tutorial.png
-DISPLAY=:95 godot --rendering-method mobile --resolution 1080x1920 --path . -s res://store-listing/tools/store_shots_app.gd
-DISPLAY=:95 PART=tutorial godot --rendering-method mobile --resolution 1080x1920 --path . -s res://store-listing/tools/store_shots_app.gd
-# captions, frames, feature graphic
-python3 store-listing/tools/store_compose.py --raw /tmp --out store_out --fonts store-listing/tools/fonts
+Xvfb :98 -screen 0 1280x1024x24 &
+G="$HOME/godot/Godot_v4.7.2-stable_linux.x86_64 --rendering-method mobile --fixed-fps 30 --path ."
+# cinematic stills (trailer 6's staged runs, portrait cameras) -> cine_*.png, and the feature picture
+RUN=fall PRESET=meteor AT=3.95 ROCK=1 EYE_Y=2.8 LOOK_Y=4.4 NOHATS=1 WARM=0.15 OUT=raw/cine_meteor.png FB_FORCE_HQ=1 DISPLAY=:98 $G --resolution 1080x1920 -s res://tools/store3_shots.gd
+RUN=charge PRESET=rally AT=1.9 NOHATS=1 OUT=raw/cine_rally.png FB_FORCE_HQ=1 DISPLAY=:98 $G --resolution 1080x1920 -s res://tools/store3_shots.gd
+RUN=charge PRESET=gate_blast AT=7.62 BACK=6.8 EYE_Y=3.2 LOOK_Y=3.3 NOHATS=1 WARM=0.2 OUT=raw/cine_gate_blast.png FB_FORCE_HQ=1 DISPLAY=:98 $G --resolution 1080x1920 -s res://tools/store3_shots.gd
+RUN=charge PRESET=rally AT=1.9 NOHATS=1 PAN=-2.2 FOV=44 OUT=raw/feature.png FB_FORCE_HQ=1 DISPLAY=:98 $G --resolution 2048x1000 -s res://tools/store3_shots.gd
+# matches with the real HUD (+ close-ups for the bubbles) -> store3_battle(_close).png, store3_rescue(_close).png
+CLOSE=1 SCENES=battle,rescue OUT_DIR=raw FB_FORCE_HQ=1 DISPLAY=:98 $G --resolution 1080x2400 -s res://tools/store3_match.gd
+#   (rename them play_battle.png, play_battle_close.png, play_rescue.png, play_rescue_close.png)
+# menus -> menu_forge.png, menu_chest.png, menu_friends.png
+for P in forge chest friends; do PART=$P OUT_DIR=raw SIEGE_URL=ws://127.0.0.1:1 DISPLAY=:98 $G --resolution 1080x2400 -s res://tools/store3_app.gd; done
+# captions, phones, bubbles, feature graphic
+python3 tools/store3_compose.py --raw raw --out out
 ```
-Notes: the scripts hide the dev fps line and switch off the game's heat guard (software rendering
-looks like a hot phone and would show a "30 FPS mode" toast / lower the 3D resolution). Bot scenes are
-seeded from the clock, so each render differs slightly — look at every image before using it. Captions
-live in `SHOTS` in `tools/store_compose.py`.
+Notes: each tool ends its own process once its files are written (Godot can hang on exit after these runs); blasts are seeded (SEED) so a still repeats; the menu
+shots never reach the live server (sample names on the Friends window). Look at every image before using it.
+Captions live in `SHOTS` in `tools/store3_compose.py` -- each checked against the game's code.
 
 ## 6. Before Kevin publishes (checklist — his decisions, don't answer them yourself)
 - **In-app purchases:** the text mentions no prices. If gems / the premium Siege Pass are sold for real
