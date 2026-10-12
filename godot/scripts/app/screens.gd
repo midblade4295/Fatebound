@@ -218,18 +218,44 @@ static func buy(app, id: String, then := Callable()) -> void:
 # 0.31.79 (Kevin: the concepts, "build it"): the painted battlements with every class on the dais (the app's hero layer),
 # PASS / ORDERS / FIRST WIN medallions, the roster ribbon, one big PLAY (always the server), the chests in 3D, then
 # the orders and the pass under it. The top is laid out by hand in content pixels (the hero layer lines up with it).
-const HOME_TOP := 776.0
+
+# 0.31.112 (Kevin: "for home screen I don't want it to scroll down, just have the chests at bottom and move the orders and
+# stuff to its own popup menu. Put the play tutorial right under the play button and make it pulse"): Home fills the
+# screen and doesn't scroll -- the medallions, the ribbon, PLAY, under it the tutorial (until it's done) or the players
+# online, and the chests on the bottom edge. The orders and the pass summary open from ORDERS (orders_panel.gd). A
+# screen too short for all that (under ~19:9) drops the ribbon; shorter still, Home scrolls the little that's left.
+const HOME_FEET := 396.0      # (content y where the heroes' feet are: nothing of the layout goes above it)
+const CHEST_H := 84.0         # a chest plate
+const CHEST_ART := 44.0       # the 3D chests (and their timer tags) stand this far above their plates
+
+static func home_layout(h: float) -> Dictionary:
+	# the natural layout under the heroes (ribbon, PLAY, the row under it) with the chests on the bottom edge; on a
+	# shorter screen it packs up from the chests, and the ribbon goes when it would cover the heroes
+	var chest_y := h - CHEST_H - 4.0
+	var out := {"ribbon": true, "play": 486.0, "under": 574.0, "chests": chest_y}
+	if 574.0 + 36.0 + CHEST_ART > chest_y:
+		var under := chest_y - CHEST_ART - 36.0
+		var play := under - 8.0 - 80.0
+		if play < HOME_FEET:
+			play = HOME_FEET                           # (too short even so: the chests go below and Home scrolls a little)
+			under = play + 88.0
+			chest_y = under + 36.0 + CHEST_ART
+		out = {"ribbon": play - 66.0 >= HOME_FEET, "play": play, "under": under, "chests": chest_y}
+	out["needed"] = float(out.chests) + CHEST_H + 4.0
+	return out
 
 static func home(app, root: VBoxContainer) -> void:
 	var p = app.profile
 	var d: Dictionary = p.d
 	app.hero_show()
 	var w: float = maxf(300.0, app.size.x - 24.0)
+	var avail: float = app.home_height()
+	var lay := home_layout(avail)
+	app.home_fixed = float(lay.needed) <= avail + 1.0
 	var top := Control.new()
-	top.custom_minimum_size = Vector2(0, HOME_TOP)
+	top.custom_minimum_size = Vector2(0, maxf(avail, float(lay.needed)))
 	top.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(top)
-	var refs := {}
 	if d.has("title_note"):                               # 0.31.87: titles earned from the stats you already had
 		var tn: Array = d.title_note
 		app.toast("You've earned %d title%s for what you've already done -- see the Locker" % [tn.size(), "" if tn.size() == 1 else "s"], UI.GOLD)
@@ -264,10 +290,11 @@ static func home(app, root: VBoxContainer) -> void:
 		UI2.wiggle(qb.get_meta("icon"))
 	if claimable > 0:
 		UI2.wiggle(sp.get_meta("icon"))
-	_medallion(top, Vector2(-2, 150), "scroll", "ORDERS", func():
-		app.sfx("tap")
-		if refs.has("orders"):
-			app.content_scroll.ensure_control_visible(refs.orders), "side_orders", orders_ready)
+	var ob := _medallion(top, Vector2(-2, 150), "scroll", "ORDERS", func():
+		app.sfx("menuOpen")
+		app.open_orders(), "side_orders", orders_ready)
+	if orders_ready > 0:
+		UI2.wiggle(ob.get_meta("icon"))
 	# 0.31.93: the Forge, under FIRST WIN (a badge when an equipped weapon's next star can be forged)
 	var fready := forge_ready(p)
 	var fgb := _medallion(top, Vector2(w - 62, 176), "anvil", "FORGE", func():
@@ -314,8 +341,10 @@ static func home(app, root: VBoxContainer) -> void:
 	else:
 		fwb.modulate = Color(0.75, 0.75, 0.8, 0.85)
 	# --- the roster ribbon
-	var rib: Control
-	if soc != null and soc.online() and soc.in_party():
+	var rib: Control = null
+	if not bool(lay.ribbon):
+		pass                                        # (a short screen: PLAY goes straight under the heroes)
+	elif soc != null and soc.online() and soc.in_party():
 		# in a party: the ribbon says who's in it (the leader first, with a crown) and who starts
 		var names := []
 		for m in soc.party.get("members", []):
@@ -338,12 +367,14 @@ static func home(app, root: VBoxContainer) -> void:
 		rib.add_child(hit)
 	else:
 		rib = UI2.ribbon(top, "16 v 16 SIEGE", "7 classes  ·  grab a hat in battle to become one", 330.0, 52.0)
-	rib.position = Vector2((w - 330.0) * 0.5, 420)
+	if rib != null:
+		rib.position = Vector2((w - 330.0) * 0.5, float(lay.play) - 66.0)
 	# --- PLAY: always the Siege server (0.31.79); the bots fill any empty slots
-	UI2.glow(top, Rect2(-30, 470, w + 60, 130), Color(1.0, 0.55, 0.15, 0.55))
-	var play := UI2.button(top, "", "orange", func(): app.start_match(true), "play", 20, 84.0, 22.0)
-	play.position = Vector2(0, 486)
-	play.size = Vector2(w, 84)
+	var py: float = lay.play
+	UI2.glow(top, Rect2(-30, py - 16, w + 60, 130), Color(1.0, 0.55, 0.15, 0.55))
+	var play := UI2.button(top, "", "orange", func(): app.start_match(true), "play", 20, 80.0, 22.0)
+	play.position = Vector2(0, py)
+	play.size = Vector2(w, 80)
 	var pr := HBoxContainer.new()
 	pr.add_theme_constant_override("separation", 12)
 	pr.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -359,10 +390,44 @@ static func home(app, root: VBoxContainer) -> void:
 		pl.text = "PLAY ×%d" % soc.party_size()
 	UI2.sweep(play, 2.6, 80.0, 0.5)
 	UI2.pulse(play, 0.018, 1.1)
+	var uy: float = lay.under
+	if not bool(d.get("tutorial_done", false)):
+		# 0.31.112: the tutorial right under PLAY, pulsing, until it's been played through
+		var tb := UI2.button(top, "PLAY TUTORIAL  (+%d GOLD)" % app.TUTORIAL_GOLD, "gold", func():
+			app.sfx("confirm")
+			app.start_tutorial(), "tutorial_start", 17, 38.0, 14.0)
+		tb.position = Vector2((w - 260.0) * 0.5, uy - 1.0)
+		tb.size = Vector2(260, 38)
+		tb.pivot_offset = Vector2(130, 19)
+		UI2.pulse(tb, 0.06, 0.8)
+		UI2.sweep(tb, 2.0, 50.0)
+		app.online_refs = {}
+	elif rib == null and soc != null and soc.online() and soc.in_party():
+		# no room for the ribbon: the party goes under PLAY instead of the players online
+		var names := []
+		for m in soc.party.get("members", []):
+			names.append(("♛ " if str(m.pid) == str(soc.party.leader) else "") + str(m.n))
+		var pb := UI2.button(top, "YOUR PARTY %d/%d  ·  %s" % [soc.party_size(), int(soc.party.get("max", 4)), "  ·  ".join(names)], "green", func():
+			app.sfx("menuOpen")
+			app.open_friends(), "party_pill", 13, 34.0, 17.0)
+		pb.position = Vector2(20, uy)
+		pb.size = Vector2(w - 40, 34)
+		pb.clip_text = true
+		app.online_refs = {}
+	else:
+		_online_pill(app, top, w, uy)
+	# --- chests, on the bottom edge
+	chests_row(app, top, w, float(lay.chests))
+	if bool(app.get("safe_boot")) and not bool(app.get_meta("safe_note", false)):
+		# 0.31.70: the last start never reached the menu, so this one skipped the live hero and the background loading
+		app.set_meta("safe_note", true)
+		app.toast("The game got stuck starting last time -- please send the developer Settings > COPY DIAGNOSTICS", UI.GOLD)
+
+static func _online_pill(app, top: Control, w: float, y: float) -> void:
 	# --- players online (0.31.82, Kevin: "Add a players online in main menu"): a pill under PLAY, painted by
 	# app.paint_online() from the server's status answer (the plain server line until one comes)
 	var hc := CenterContainer.new()
-	hc.position = Vector2(0, 580)
+	hc.position = Vector2(0, y)
 	hc.size = Vector2(w, 30)
 	hc.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	top.add_child(hc)
@@ -405,35 +470,6 @@ static func home(app, root: VBoxContainer) -> void:
 	app.online_refs = {"main": om, "sub": osub}
 	if app.has_method("paint_online"):
 		app.paint_online()
-	# --- chests
-	chests_row(app, top, w, 640.0)
-	var odds := UI2.button(top, "WHAT'S INSIDE THE CHESTS?", "ghost", func(): chest_odds(app), "chest_odds", 12, 28.0, 10.0)
-	odds.position = Vector2((w - 230.0) * 0.5, 740)
-	odds.size = Vector2(230, 28)
-	if bool(app.get("safe_boot")):
-		# 0.31.70: the last start never reached the menu, so this one skipped the live hero and the background
-		# loading. Hand the tester the start-up log (phases, errors, logcat) to send.
-		var sb := UI2.frame(root, "ember", 12, 16.0, "orange")
-		UI2.center(UI2.text(sb, "SAFE START", 18, Color.WHITE))
-		UI2.center(UI2.body(sb, "The game got stuck starting last time, so this start skipped the 3D heroes. Please copy the diagnostics and send them to the developer.", 12, Color.WHITE))
-		UI2.button(sb, "COPY DIAGNOSTICS", "blue", func():
-			DisplayServer.clipboard_set(Diag.read_logs())
-			app.toast("Diagnostics copied -- paste them to the developer", UI.CYAN), "copy_diag_boot", 15, 44.0)
-	if not bool(d.get("tutorial_done", false)):
-		# First visit: the Herald offers the walkthrough (0.19.0).
-		var tc := UI2.frame(root, "parch", 12, 16.0, "brown")
-		var tr := UI.row(tc, 10)
-		UI2.icon(tr, "crown", 44.0)
-		var tl := UI2.body(tr, "New here? The Royal Herald will show you the ropes. (+%d gold)" % app.TUTORIAL_GOLD, 14, Color("#3b2412"))
-		tl.remove_theme_color_override("font_shadow_color")
-		UI.grow(tl)
-		UI2.button(tc, "PLAY TUTORIAL", "gold", func(): app.start_tutorial(), "tutorial_start", 18, 46.0)
-	var how := UI2.button(root, "HOW TO PLAY", "ghost", func(): app.start_tutorial(), "tutorial", 14, 36.0, 12.0)
-	how.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	how.custom_minimum_size = Vector2(170, 36)
-	refs["orders"] = challenges_card(app, root, "daily")
-	challenges_card(app, root, "weekly")
-	pass_card(app, root)
 
 static func _medallion(parent: Control, at: Vector2, icon: String, label: String, on_press: Callable, key: String, badge := 0, rim := "gold") -> Button:
 	# A round gold-rimmed medallion with a 3D icon in it and a label under it (Home's side buttons).
@@ -473,7 +509,7 @@ static func chests_row(app, parent: Control, w: float, y: float) -> void:
 	var busy: Dictionary = p.unlocking()
 	var gap := 8.0
 	var sw := (w - gap * 3.0) / 4.0
-	var sh := 88.0
+	var sh := CHEST_H
 	var slots := []
 	var cells := []
 	for i in Eco.CHEST_SLOTS:                           # the slot plates (under the chests)
@@ -2348,6 +2384,10 @@ static func settings(app, root: VBoxContainer) -> void:
 			DisplayServer.clipboard_set(Diag.read_logs())
 			app.toast("Diagnostics copied", UI.CYAN), "copy_diag", 13, 40.0))
 	UI.grow(UI2.button(help, "PRIVACY POLICY", "blue", func(): OS.shell_open(PRIVACY_URL), "privacy", 13, 40.0))
+	# 0.31.112: the tutorial again any time (Home shows it only until it's been played)
+	UI2.button(root, "HOW TO PLAY (TUTORIAL)", "blue", func():
+		app.sfx("confirm")
+		app.start_tutorial(), "tutorial", 14, 40.0)
 	var ver := UI2.body(root, "Fatebound %s" % Diag.BUILD, 11, UI2.MUTED)
 	ver.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 

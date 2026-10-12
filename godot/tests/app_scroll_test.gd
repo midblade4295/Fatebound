@@ -1,4 +1,6 @@
-# Main-menu drag scrolling (0.18.3, Kevin: "the main menu can't scroll up and down").
+# Main-menu drag scrolling (0.18.3, Kevin: "the main menu can't scroll up and down"). 0.31.112: Home fits the screen and
+# doesn't scroll (on a phone-shaped screen), so the drags are tried on the SHOP tab, starting on one of its buttons;
+# PLAY on Home must still fire on a plain tap.
 # Simulates a phone: every touch is followed by the mouse event Godot emulates from it (device -1),
 # pushed in viewport coordinates.
 extends SceneTree
@@ -47,10 +49,16 @@ var after_drag := 0
 func _process(d: float) -> bool:
 	frames += 1
 	var sc: ScrollContainer = app.content_scroll
+	if frames == 18:
+		app.show_tab("shop")
 	if frames == 20:
-		play_btn = _btn_key("play")
+		# a button in the middle of the shop: a drag that starts on it scrolls and doesn't press it
+		for c in sc.find_children("*", "Button", true, false):
+			var r: Rect2 = (c as Control).get_global_rect()
+			if (c as Control).is_visible_in_tree() and r.get_center().y > 330 and r.get_center().y < 520 and r.size.x > 40:
+				play_btn = c
+				break
 		pp = play_btn.get_global_rect().get_center()
-		# Don't really start a match if PLAY fires: count it instead.
 		for con in play_btn.pressed.get_connections(): play_btn.pressed.disconnect(con.callable)
 		play_btn.pressed.connect(func(): fired += 1)
 		_touch(pp, true)
@@ -60,19 +68,25 @@ func _process(d: float) -> bool:
 	if frames == 31:
 		_touch(pp - Vector2(0, 320), false)
 	if frames == 33:
-		results.append(["drag starting on PLAY scrolls the menu (%d px) and doesn't press PLAY (%d)" % [sc.scroll_vertical, fired], sc.scroll_vertical > 150 and fired == 0])
+		results.append(["drag starting on a shop button scrolls the menu (%d px) and doesn't press it (%d)" % [sc.scroll_vertical, fired], sc.scroll_vertical > 150 and fired == 0])
 		after_drag = sc.scroll_vertical
 	if frames == 60:
 		results.append(["a flick keeps gliding after release (%d -> %d)" % [after_drag, sc.scroll_vertical], sc.scroll_vertical > after_drag + 30])
-		sc.scroll_vertical = 0
+		app.show_tab("home")
 		fired = 0
+	if frames == 62:
+		play_btn = _btn_key("play")
+		pp = play_btn.get_global_rect().get_center()
+		# Don't really start a match if PLAY fires: count it instead.
+		for con in play_btn.pressed.get_connections(): play_btn.pressed.disconnect(con.callable)
+		play_btn.pressed.connect(func(): fired += 1)
 	if frames == 64:
 		_touch(pp, true)
 	if frames == 66:
 		_touch(pp, false)
 	if frames == 70:
 		results.append(["a plain tap still presses PLAY (%d)" % fired, fired == 1])
-		sc.scroll_vertical = 0
+		app.show_tab("shop")
 	if frames == 72:
 		_touch(Vector2(210, 300), true)
 	if frames >= 73 and frames <= 80:
@@ -80,7 +94,7 @@ func _process(d: float) -> bool:
 	if frames == 81:
 		_touch(Vector2(210, 100), false)
 	if frames == 83:
-		results.append(["drag starting on the hero area scrolls (%d px)" % sc.scroll_vertical, sc.scroll_vertical > 100])
+		results.append(["drag starting on the shop's banner scrolls (%d px)" % sc.scroll_vertical, sc.scroll_vertical > 100])
 		var ok := true
 		for r in results:
 			print(("ok   " if r[1] else "FAIL ") + str(r[0]))

@@ -3262,3 +3262,24 @@ K2/K3 notes (0.17.0)
   invite, party ribbon, PLAY ×2 -> "go", one side, quick chat both ways). 0.31.111, version code 197.
 - Content packs ui-4890b4aaf16a.pck and audio-bcc08ca599d8.pck on the content-packs branch. Full suite: ALL SIEGE TESTS
   PASSED (60). APK 31423633 bytes, sha256 c0cfec618579c88968577bc325882d563e7e78530d36c486c5b91e41b1277c28.
+
+## 0.31.112 — Home in the middle, a Home that doesn't scroll (Kevin: "For the home screen, move it to the center button. Move the shop button to far left. Also for home screen I don't want it to scroll down, just have the chests at bottom and move the orders and stuff to its own popup menu. Put the play tutorial right under the play button and make it pulse. Once player completes it then it'll go away")
+- Tab bar: SHOP · PASS · HOME · LOCKER · SETTINGS.
+- Home fills the screen and doesn't scroll (`Screens.home_layout`): the chests sit on the bottom edge; the ribbon,
+  PLAY and the row under it stay under the heroes when there's room, else they pack up from the chests (the ribbon goes
+  when it would cover the heroes; a party then shows under PLAY instead of the players online). Only a screen
+  shorter than ~16:9 still scrolls the little that doesn't fit. App: `home_height()`, `home_fixed`; `_scroll_target`
+  returns nothing on a fixed Home.
+- ORDERS opens a window (`orders_panel.gd`): daily and weekly orders (CLAIM, reroll), the Siege Pass summary and
+  what's inside each chest (the "WHAT'S INSIDE THE CHESTS?" button and the bottom of Home). `rebuild()` refreshes an
+  open window that has `refresh()`; `show_tab` closes any window first. The ORDERS medallion wiggles when one is ready.
+- PLAY TUTORIAL (+250 gold) sits right under PLAY, pulsing, until the tutorial has been played through (it then
+  shows the players online); HOW TO PLAY moved to Settings. A safe start says so in a toast (Settings has COPY
+  DIAGNOSTICS).
+- tools/app_shots.gd no longer reaches the live server (eco_sync / social / version check off): since 0.31.108 a
+  screenshot run with a display made an account on the live server and replaced the shot's profile with it. Eight
+  such accounts were made there (see the reply to Kevin for their ids). SHOT_TUTORIAL=todo|done, SHOT_ORDERS=1.
+- Tests: app_flow_test (the orders window, the tab order, the tutorial button going away, the layout at 723 / 700 /
+  680 px), app_scroll_test (drags tried on the SHOP tab; PLAY still fires on a tap). 0.31.112, version code 198.
+- Full suite: ALL SIEGE TESTS PASSED (60). No content pack change. APK 31427896 bytes, sha256
+  46ea0bf87c32c57a55019ef423a829e721f1aee48032dd53d7cd90cecf6e6eed.

@@ -24,8 +24,10 @@ const ChatPanel = preload("res://scripts/app/chat_panel.gd")
 const FriendsPanel = preload("res://scripts/app/friends_panel.gd")
 const ChatTicker = preload("res://scripts/app/chat_ticker.gd")
 const InviteBanner = preload("res://scripts/app/invite_banner.gd")
+const OrdersPanel = preload("res://scripts/app/orders_panel.gd")
 
-const TABS := [["home", "HOME", "castle"], ["pass", "PASS", "banner"], ["shop", "SHOP", "stall"], ["locker", "LOCKER", "helmet"], ["settings", "SETTINGS", "gear"]]
+# 0.31.112 (Kevin: "move it [Home] to the center button. Move the shop button to far left")
+const TABS := [["shop", "SHOP", "stall"], ["pass", "PASS", "banner"], ["home", "HOME", "castle"], ["locker", "LOCKER", "helmet"], ["settings", "SETTINGS", "gear"]]
 
 # Tests may point these elsewhere before the node enters the tree.
 var profile_path := "user://siege_profile.json"
@@ -43,6 +45,7 @@ var quest_cls := ""                   # 0.31.97: the class shown on the Quests s
 var forge_element := ""
 var forge_shop := false                # the Embers packs open
 var siege = null
+var home_fixed := false                # 0.31.112: Home fits the screen and doesn't scroll (Screens.home sets it)
 
 # ---------------- forced update (0.31.73) ----------------
 # Kevin: "when server has newer version than players installed game it'll force them to update". The menu asks the
@@ -770,7 +773,15 @@ func _punch(kind: String) -> void:
 		_punch_ms[kind] = now
 		sfx(kind)                                           # 0.31.109: coin / gem / ember, each its own
 
+func home_height() -> float:
+	# the height Home has to fill: the screen less the top bar, the chat line, the tab bar and the list's margins
+	var vh := get_viewport_rect().size.y
+	var ticker := float(ChatTicker.H) if chat_ticker != null else 0.0
+	return vh - (6.0 + safe_top + TOP_H) - ticker - TAB_H - 30.0
+
 func show_tab(id: String) -> void:
+	if is_instance_valid(modal):
+		close_modal()                          # (a window's button that goes to another tab, e.g. the pass summary)
 	tab = id
 	profile.refresh()
 	for t in tab_buttons:
@@ -784,6 +795,8 @@ func show_tab(id: String) -> void:
 	hero_layer.modulate.a = 1.0
 	content_scroll.scroll_vertical = 0
 	rebuild()
+	content_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER if (id == "home" and home_fixed) \
+		else ScrollContainer.SCROLL_MODE_AUTO
 	content.modulate.a = 0.0
 	create_tween().tween_property(content, "modulate:a", 1.0, 0.18)
 
@@ -794,6 +807,8 @@ func rebuild() -> void:
 		c.queue_free()
 	if tab == "home" and social != null:
 		_social_sig = social_sig()             # (what Home is about to show of the social side)
+	if is_instance_valid(modal) and modal.has_method("refresh"):
+		modal.refresh()                        # 0.31.112: a window showing the profile (ORDERS) follows it
 	match tab:
 		"home": Screens.home(self, content)
 		"pass": Screens.pass_screen(self, content)
@@ -898,6 +913,8 @@ func _scroll_target() -> ScrollContainer:
 		if ms is ScrollContainer and is_instance_valid(ms) and (ms as ScrollContainer).is_visible_in_tree():
 			return ms
 		return null
+	if tab == "home" and home_fixed:
+		return null                            # 0.31.112: Home doesn't scroll
 	if is_instance_valid(content_scroll) and content_scroll.is_visible_in_tree():
 		return content_scroll
 	return null
@@ -1269,6 +1286,13 @@ func open_chat(ch := "global") -> void:
 	add_child(m)
 	modal = m
 	m.open(self, ch)
+
+func open_orders() -> void:
+	close_modal()
+	var m := OrdersPanel.new()
+	add_child(m)
+	modal = m
+	m.open(self)
 
 func open_friends() -> void:
 	if social == null:

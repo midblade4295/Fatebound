@@ -222,7 +222,7 @@ func _process(delta: float) -> bool:
 				_go("home_party")
 		"home_party":
 			if t_phase > 0.5:
-				check(has_text(app.content, "YOUR PARTY  2/4") and has_text(app.content, "PLAY ×2"), "Home shows the party and PLAY ×2")
+				check((has_text(app.content, "YOUR PARTY  2/4") or has_text(app.content, "YOUR PARTY 2/4")) and has_text(app.content, "PLAY ×2"), "Home shows the party and PLAY ×2")
 				_shot("social_home_party")
 				_go("press_play")
 		"press_play":
