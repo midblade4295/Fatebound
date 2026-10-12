@@ -14,6 +14,7 @@ const NetT = preload("res://scripts/siege/siege_net.gd")
 signal leave_requested
 signal replay_requested
 signal action_pressed(kind: String)
+signal quick_chat(i: int)              # 0.31.111: a line from the quick chat wheel (NetT.QUICK_CHAT index)
 signal res_cycled
 var res_label_source: Callable   # -> float render scale
 signal workshop_tools
@@ -68,6 +69,15 @@ var gate_bars_source: Callable   # -> Array of {pos, fill, color, broken}
 var pause_panel: PanelContainer
 var result_panel: PanelContainer
 var pause_btn: Button
+# 0.31.111 (Kevin: "add the quick chat pings"): the horn beside the pause button opens the quick chat; a line said shows
+# as a bubble over the speaker (pinned to the screen edge, with an arrow, when they're off it) and in a short feed.
+var qc_btn: Button
+var qc_panel: PanelContainer
+var unit_world: Callable              # unit id -> its world position (Vector3.INF when unknown)
+var _pings: Array = []                # {"u", "i", "at"}
+var _feed: Array = []                 # {"n", "i", "at", "col"}
+const PING_LIFE := 4.0
+const FEED_LIFE := 6.0
 
 static var ready_times := {}
 
@@ -86,6 +96,10 @@ func _ready() -> void:
 		_center(pause_panel, true), "", 16, 40.0, 12.0)
 	pause_btn.custom_minimum_size = Vector2(44, 40)
 	pause_btn.size = Vector2(44, 40)
+	qc_btn = UI2.button(self, "", "purple", func(): _toggle_qc(), "quick_chat", 14, 46.0, 14.0, UI2.icon_path("horn"))
+	qc_btn.custom_minimum_size = Vector2(46, 46)
+	qc_btn.size = Vector2(46, 46)
+	qc_btn.add_theme_constant_override("icon_max_width", 34)
 	# 0.31.8: the workshop and pause panels are built the first time they open (they cost ~370 ms at match start).
 	resized.connect(_layout)
 	_layout()
@@ -93,6 +107,117 @@ func _ready() -> void:
 
 func _layout() -> void:
 	pause_btn.position = Vector2(size.x - 52, 78)
+	qc_btn.position = Vector2(size.x - 104, 75)            # (left of the pause button, clear of the gate and post pips)
+	if qc_panel != null:
+		qc_panel.position = Vector2(size.x - qc_panel.size.x - 10, 126)
+
+# ---------------- quick chat (0.31.111) ----------------
+func _toggle_qc() -> void:
+	if qc_panel == null:
+		qc_panel = PanelContainer.new()
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.03, 0.05, 0.14, 0.92)
+		sb.border_color = Color("#c47bff")
+		sb.set_border_width_all(2)
+		sb.set_corner_radius_all(16)
+		sb.content_margin_left = 8
+		sb.content_margin_right = 8
+		sb.content_margin_top = 8
+		sb.content_margin_bottom = 8
+		qc_panel.add_theme_stylebox_override("panel", sb)
+		add_child(qc_panel)
+		var g := GridContainer.new()
+		g.columns = 2
+		g.add_theme_constant_override("h_separation", 6)
+		g.add_theme_constant_override("v_separation", 6)
+		qc_panel.add_child(g)
+		for i in NetT.QUICK_CHAT.size():
+			var q: Dictionary = NetT.QUICK_CHAT[i]
+			var ii := i
+			var b := UI2.button(g, str(q.x).to_upper(), "red" if str(q.x) == "Need help!" else ("purple" if bool(q.get("all", false)) else "blue"), func():
+				qc_panel.visible = false
+				quick_chat.emit(ii), "qc_%d" % i, 13, 40.0, 12.0)
+			b.custom_minimum_size.x = 132
+		qc_panel.visible = false
+	qc_panel.visible = not qc_panel.visible
+	qc_panel.reset_size()
+	_layout()
+
+func add_ping(unit: String, i: int, name: String) -> void:
+	# a quick chat line from `unit` (name "" for an unnamed bot -- only players speak, so it's always someone)
+	if i < 0 or i >= NetT.QUICK_CHAT.size():
+		return
+	_pings = _pings.filter(func(p): return str(p.u) != unit)
+	_pings.append({"u":unit, "i":i, "at":_time})
+	var u: Dictionary = sim.by_id.get(unit, {}) if sim != null else {}
+	var me: Dictionary = sim.by_id.get(player_id, {}) if sim != null else {}
+	var col: Color = Color("#ffd65a") if unit == player_id else (TEAM_COLORS[vt(int(u.team))] if not u.is_empty() else Color.WHITE)
+	_feed.append({"n":name if name != "" else "Ally", "i":i, "at":_time, "col":col, "enemy":not u.is_empty() and not me.is_empty() and int(u.team) != int(me.team)})
+	while _feed.size() > 3:
+		_feed.pop_front()
+
+func _draw_pings() -> void:
+	_pings = _pings.filter(func(p): return _time - float(p.at) < PING_LIFE)
+	_feed = _feed.filter(func(f): return _time - float(f.at) < FEED_LIFE)
+	var vp := Rect2(Vector2(10, 150), size - Vector2(20, 300))
+	for p in _pings:
+		if not unit_world.is_valid() or not project.is_valid():
+			break
+		var w3: Vector3 = unit_world.call(str(p.u))
+		if w3 == Vector3.INF:
+			continue
+		var q: Dictionary = NetT.QUICK_CHAT[int(p.i)]
+		var age := _time - float(p.at)
+		var a := clampf(minf(age * 6.0, (PING_LIFE - age) * 2.0), 0.0, 1.0)
+		var anchor: Vector3 = w3 + Vector3(0, 2.7, 0)
+		var inside: bool = on_screen.is_valid() and on_screen.call(anchor)
+		var sp: Vector2 = project.call(anchor) if inside else Vector2.ZERO
+		var txt := str(q.x)
+		var tw := _bold.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x
+		var box := Vector2(tw + 22.0, 28.0)
+		var col := Color(str(q.c))
+		var pos: Vector2
+		var arrow := Vector2.ZERO
+		if inside:
+			pos = sp + Vector2(-box.x * 0.5, -box.y - 46.0 - (1.0 - minf(age * 5.0, 1.0)) * 10.0)
+			pos.x = clampf(pos.x, 6.0, size.x - box.x - 6.0)          # (someone at the edge: the bubble stays on the screen)
+		else:
+			# off the screen: on its edge, toward them, with an arrow
+			var me3: Vector3 = unit_world.call(player_id)
+			var dir := Vector2(w3.x - me3.x, w3.z - me3.z) if me3 != Vector3.INF else Vector2(0, -1)
+			dir = dir.normalized() if dir.length() > 0.01 else Vector2(0, -1)
+			var c := vp.get_center()
+			var k := minf(absf(vp.size.x * 0.5 / maxf(absf(dir.x), 0.001)), absf(vp.size.y * 0.5 / maxf(absf(dir.y), 0.001)))
+			var edge := c + dir * k
+			pos = Vector2(clampf(edge.x - box.x * 0.5, vp.position.x, vp.end.x - box.x), clampf(edge.y - box.y * 0.5, vp.position.y, vp.end.y - box.y))
+			arrow = dir
+		var r := Rect2(pos, box)
+		var bg := StyleBoxFlat.new()
+		bg.bg_color = Color(0.03, 0.04, 0.1, 0.88 * a)
+		bg.border_color = Color(col, a)
+		bg.set_border_width_all(2)
+		bg.set_corner_radius_all(12)
+		draw_style_box(bg, r)
+		if inside:
+			var tip := Vector2(clampf(sp.x, r.position.x + 12.0, r.end.x - 12.0), r.end.y)
+			draw_colored_polygon(PackedVector2Array([tip + Vector2(-7, -1), tip + Vector2(7, -1), tip + Vector2(0, 9)]), Color(col, a))
+		else:
+			var tip2 := r.get_center() + arrow * (maxf(box.x, box.y) * 0.5 + 10.0)
+			var side := Vector2(-arrow.y, arrow.x) * 7.0
+			draw_colored_polygon(PackedVector2Array([tip2, tip2 - arrow * 11.0 + side, tip2 - arrow * 11.0 - side]), Color(col, a))
+		draw_string_outline(_bold, r.position + Vector2(11, 20), txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, 4, Color(0, 0, 0, 0.7 * a))
+		draw_string(_bold, r.position + Vector2(11, 20), txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color(col.lightened(0.25), a))
+	var y := 210.0                                          # (under the gate / post row and the toast)
+	for f in _feed:
+		var a2 := clampf((FEED_LIFE - (_time - float(f.at))) * 1.5, 0.0, 1.0)
+		var q2: Dictionary = NetT.QUICK_CHAT[int(f.i)]
+		var nm := str(f.n) + ": "
+		var nw := _bold.get_string_size(nm, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x
+		draw_string_outline(_bold, Vector2(14, y), nm, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, 4, Color(0, 0, 0, 0.7 * a2))
+		draw_string(_bold, Vector2(14, y), nm, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(f.col, a2))
+		draw_string_outline(_bold, Vector2(14 + nw, y), str(q2.x), HORIZONTAL_ALIGNMENT_LEFT, -1, 13, 4, Color(0, 0, 0, 0.7 * a2))
+		draw_string(_bold, Vector2(14 + nw, y), str(q2.x), HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(Color(str(q2.c)).lightened(0.3), a2))
+		y += 18.0
 
 # ---------- panels ----------
 func _panel(min_w: float, kind := "night") -> PanelContainer:
@@ -591,8 +716,13 @@ func _input(event: InputEvent) -> void:
 
 func _touch(index: int, pos: Vector2, pressed: bool) -> void:
 	if pressed:
-		if _modal_open() or pause_btn.get_global_rect().has_point(pos + global_position):
+		if _modal_open() or pause_btn.get_global_rect().has_point(pos + global_position) \
+				or (qc_btn.visible and qc_btn.get_global_rect().has_point(pos + global_position)):
 			return
+		if qc_panel != null and qc_panel.visible:
+			if qc_panel.get_global_rect().has_point(pos + global_position):
+				return                             # (the wheel's own buttons take it)
+			qc_panel.visible = false
 		for b in _buttons():
 			if pos.distance_to(b.c) <= b.r + 12.0:
 				_touches[index] = b.id
@@ -755,6 +885,7 @@ func _draw_hud() -> void:
 		c.a = clampf(2.6 - age, 0.0, 1.0)
 		_text(Vector2(w * 0.5, 176), _toast, 18, c, _bold)
 	_draw_bars()
+	_draw_pings()
 	_draw_gate_bars()
 	_draw_oracle_marker(me)
 	_draw_numbers()

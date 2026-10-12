@@ -113,6 +113,7 @@ run economy_fix_test     ECONOMY_FIX_PASS         60
 run menu_sound_test      MENU_SOUND_PASS          60
 # Chat, friends, parties and quick chat (0.31.111): server/social.gd alone, then two phones against the real server.
 run social_test          SOCIAL_PASS              150
+run social_ui_test       SOCIAL_UI_PASS           200
 # The app's staged match start (0.31.78): the card first, the world built behind it over frames.
 FB_STAGED_START=1 FB_FORCE_WARMUP=1 run staged_start_test STAGED_START_PASS 240 --fixed-fps 30
 # The human soak must never stall the game thread.

@@ -66,7 +66,7 @@ const LOBBY_TIME := 20.0             # the join countdown (0.31.82)
 const HELLO_TIMEOUT := 10.0
 const IAP_TIMEOUT := 40.0              # a purchase check may take a token request and an API call
 const REFUSE_CLOSE_DELAY := 0.25     # s between a "bye"/"ver" reply and closing the socket
-const SERVER_BUILD := "0.31.110"      # this server's game version; the probe says it by default (identifies as current)
+const SERVER_BUILD := "0.31.111"      # this server's game version; the probe says it by default (identifies as current)
 const MIN_BUILD_FILE := "/etc/fatebound-siege/min_build"
 const MIN_BUILD_RELOAD := 10.0       # s between re-reads of the min-build file
 const UPDATE_MSG := "A new version of Fatebound is out. Update now on Google Play to keep playing online."
@@ -434,7 +434,7 @@ func _handle(cid: int, msg: Dictionary) -> void:
 					_refuse(cid, 4004, "social")
 		"qc":
 			# 0.31.111: a quick chat line in a match, to the player's side ("Good game!" to everyone)
-			if not c.hello or sim == null or sim.ended or c.unit == "" or not sim.by_id.has(c.unit) or bool(c.get("queued", false)):
+			if not c.hello or sim == null or c.unit == "" or not sim.by_id.has(c.unit) or bool(c.get("queued", false)):
 				return
 			var qi := int(msg.get("i", -1))
 			if qi < 0 or qi >= Net.QUICK_CHAT.size() or _now() - float(c.get("qc_at", -99.0)) < Net.QC_GAP:
@@ -442,7 +442,7 @@ func _handle(cid: int, msg: Dictionary) -> void:
 			c.qc_at = _now()
 			var q: Dictionary = Net.QUICK_CHAT[qi]
 			var qteam := int(sim.by_id[c.unit].team)
-			if bool(q.get("call", false)):
+			if bool(q.get("call", false)) and not sim.ended:
 				sim.call_bots(c.unit)
 			var qmsg := {"t":"qc", "u":c.unit, "i":qi}
 			for ocid in clients:

@@ -277,6 +277,15 @@ static func home(app, root: VBoxContainer) -> void:
 		app.show_tab("forge"), "side_forge", fready, "silver")
 	if fready > 0:
 		UI2.wiggle(fgb.get_meta("icon"))
+	# 0.31.111 (Kevin: "add friend to a friends list ... group up and form a party"): Friends, under the Forge (a badge for
+	# friend requests and party invites waiting)
+	var soc = app.get("social")
+	var att: int = soc.attention() if soc != null and soc.online() else 0
+	var frb := _medallion(top, Vector2(w - 62, 270), "friends", "FRIENDS", func():
+		app.sfx("menuOpen")
+		app.open_friends(), "side_friends", att, "silver")
+	if att > 0:
+		UI2.wiggle(frb.get_meta("icon"))
 	var fw_open := str(d.first_win_day) != Eco.day_key(p.now())
 	var fwb := _medallion(top, Vector2(w - 62, 58), "trophy", "FIRST WIN", func():
 		app.sfx("tap")
@@ -305,7 +314,30 @@ static func home(app, root: VBoxContainer) -> void:
 	else:
 		fwb.modulate = Color(0.75, 0.75, 0.8, 0.85)
 	# --- the roster ribbon
-	var rib := UI2.ribbon(top, "16 v 16 SIEGE", "7 classes  ·  grab a hat in battle to become one", 330.0, 52.0)
+	var rib: Control
+	if soc != null and soc.online() and soc.in_party():
+		# in a party: the ribbon says who's in it (the leader first, with a crown) and who starts
+		var names := []
+		for m in soc.party.get("members", []):
+			names.append(("♛ " if str(m.pid) == str(soc.party.leader) else "") + str(m.n))
+		var sub := "  ·  ".join(names)
+		if (soc.party.get("pending", []) as Array).size() > 0:
+			sub += "  ·  %d invited" % (soc.party.pending as Array).size()
+		rib = UI2.ribbon(top, "YOUR PARTY  %d/%d" % [soc.party_size(), int(soc.party.get("max", 4))], sub, 330.0, 52.0,
+			[Color("#3fb86a"), Color("#13512b")])
+		var hit := Button.new()
+		hit.flat = true
+		hit.focus_mode = Control.FOCUS_NONE
+		for st_name in ["normal", "hover", "pressed", "focus", "hover_pressed"]:
+			hit.add_theme_stylebox_override(st_name, StyleBoxEmpty.new())
+		hit.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		hit.set_meta("action_key", "party_ribbon")
+		hit.pressed.connect(func():
+			app.sfx("menuOpen")
+			app.open_friends())
+		rib.add_child(hit)
+	else:
+		rib = UI2.ribbon(top, "16 v 16 SIEGE", "7 classes  ·  grab a hat in battle to become one", 330.0, 52.0)
 	rib.position = Vector2((w - 330.0) * 0.5, 420)
 	# --- PLAY: always the Siege server (0.31.79); the bots fill any empty slots
 	UI2.glow(top, Rect2(-30, 470, w + 60, 130), Color(1.0, 0.55, 0.15, 0.55))
@@ -320,8 +352,11 @@ static func home(app, root: VBoxContainer) -> void:
 	pr.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	play.add_child(pr)
 	UI2.icon(pr, "swords", 58.0).size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	var pl := UI2.text(pr, "PLAY", 54, Color.WHITE, Color("#5a2205"), 11)
+	var waiting: bool = soc != null and soc.online() and soc.in_party() and not soc.is_leader()
+	var pl := UI2.text(pr, "PLAY" if not waiting else "READY", 54, Color.WHITE, Color("#5a2205"), 11)
 	pl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	if soc != null and soc.online() and soc.in_party() and soc.is_leader() and soc.party_size() > 1:
+		pl.text = "PLAY ×%d" % soc.party_size()
 	UI2.sweep(play, 2.6, 80.0, 0.5)
 	UI2.pulse(play, 0.018, 1.1)
 	# --- players online (0.31.82, Kevin: "Add a players online in main menu"): a pill under PLAY, painted by
@@ -2241,6 +2276,26 @@ static func settings(app, root: VBoxContainer) -> void:
 			p.save()
 			app._apply_audio()
 			app.sfx("slider"))                 # 0.31.110: a tiny tick a step, at the new level
+	# Social (0.31.111)
+	var sx := UI2.frame(root, "night", 12, 18.0, "gold")
+	UI2.divider(sx, "SOCIAL", 20)
+	UI2.toggle(sx, "Global chat", "Everyone online; friends and party chat stay on", bool(d.settings.get("chat_global", true)), "chat_global", func(on: bool):
+		app.sfx("toggle")
+		d.settings.chat_global = on
+		p.save()
+		if app.social != null:
+			app.social.set_show_global(on))
+	var soc2 = app.get("social")
+	if soc2 != null and soc2.online():
+		var fc := UI.row(sx, 8)
+		var fcl := UI2.body(fc, "Your friend code: %s" % soc2.code_of(str(soc2.me.get("pid", ""))), 13, UI2.SOFT, false)
+		fcl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		fcl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		var fb := UI2.button(fc, "FRIENDS", "blue", func():
+			app.sfx("menuOpen")
+			app.open_friends(), "settings_friends", 13, 36.0, 11.0)
+		fb.custom_minimum_size.x = 100
+	UI2.body(sx, "Tap a name in the chat to add a friend, block or report them.", 11, UI2.MUTED)
 	# Graphics
 	var gx := UI2.frame(root, "night", 12, 18.0, "gold")
 	UI2.divider(gx, "GRAPHICS", 20)

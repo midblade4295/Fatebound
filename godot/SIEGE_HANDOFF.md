@@ -535,3 +535,39 @@ their own economy) can't play online: `echo 0.31.108 | sudo tee /etc/fatebound-s
 **Back up** `/var/lib/private/fatebound-siege/` (accounts, purchase_tokens.json, iap_ledger.jsonl): it is now the
 players' progress. Losing it means players start over (the app would make new accounts from what their phones show,
 within the import limits, until 2026-12-01).
+
+## 20. Chat, friends, parties, quick chat (0.31.111, Kevin: "Build a global chat and players can click a name and have option to add friend to a friends list. They can then group up and form a party. Also add the quick chat pings")
+**What's there:**
+- **Server** `server/social.gd` (wired in `siege_server.gd`): a phone with an account keeps one social WebSocket open
+  (`{"t":"so","k":"hi","acct","key"}`, never counts as a player). Global and party chat (120 chars, word filter +
+  links masked, 1 line / 1.2 s and 6 / 20 s, no repeats; last 50 global / 30 party lines in memory only), friends
+  (requests, accept, decline, unfriend; 100 max), blocks (their chat never reaches you; their requests to you vanish),
+  reports, parties of 4 (invites to online friends, 60 s; leave / kick; the leader's PLAY sends "go"; a member away
+  3 min leaves). An account in a party is seated on its party's team (`_seat`). Players are known by a public code =
+  first 10 hex of SHA-256(account id) (the friend code), never the account id.
+- **Quick chat** (`Net.QUICK_CHAT`, 8 lines): the horn beside the pause button; `{"t":"qc","i"}` goes to the
+  speaker's side ("Good game!" to everyone), one per 2 s; "Need help!" / "Follow me!" make the 3 nearest free bots
+  of that side come to the speaker for 15 s (`sim.call_bots`, VS BOTS too). Bubbles over the speaker (edge arrow when
+  off screen) and a 3-line feed.
+- **App**: `scripts/meta/social.gd` (the connection), Home's chat line over the tab bar, CHAT window
+  (`chat_panel.gd`: GLOBAL / PARTY, tap a name -> card: ADD FRIEND / INVITE / REMOVE / BLOCK / REPORT), FRIENDS medallion
+  + window (`friends_panel.gd`: friend code + add by code, party, invites, requests, friends with INVITE, sent,
+  blocked), invite banner, party ribbon + PLAY ×N on Home (a member's PLAY says READY and waits), Settings > SOCIAL
+  (global chat on/off). Sounds: `ping`, `chatPop`.
+
+**Deploy:** same as section 19 (`sudo bash godot/server/deploy/install_siege_server.sh`): it now ships
+`server/social.gd` and backs up `social.json`, `reports.jsonl` and `muted.txt` with the accounts. Logs: `social: N
+players known`, `REPORT <name> about <name> (<why>): <code>`, `party <id> plays (N with the leader)`.
+
+**Moderation (the developer's job now that players can type to each other):**
+- Reports: `sudo cat /var/lib/private/fatebound-siege/reports.jsonl` (one JSON line each: who, about whom
+  (`about` = their code, `about_acct` = their account), why, their last lines).
+- Mute a player: add their code (lower case, one per line) to `/var/lib/private/fatebound-siege/muted.txt`; the server
+  re-reads it every 10 s. They can still play, not chat.
+- The word list is `BAD_WORDS` / `BAD_ROOTS` in `server/social.gd` (redeploy after changing it).
+
+**Google Play (Grokbot / Kevin, not done here):** the app now has user-to-user chat. Update the IARC content rating
+questionnaire ("Users can interact" / shares user-generated content), the Data safety form (chat messages, in-game
+name, friends list handled by the developer's server), and redeploy `privacy.html` (new "Game server account" and
+"Chat, friends and parties" sections, updated 12 October 2026). Play's UGC policy wants in-app reporting and blocking:
+both are on every name's card.

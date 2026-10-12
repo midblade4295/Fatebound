@@ -19,6 +19,11 @@ const UpdateScreen = preload("res://scripts/app/update_screen.gd")
 const VersionCheck = preload("res://scripts/app/version_check.gd")
 const OnlineStatus = preload("res://scripts/app/online_status.gd")
 const RewardFly = preload("res://scripts/app/reward_fly.gd")
+const Social = preload("res://scripts/meta/social.gd")
+const ChatPanel = preload("res://scripts/app/chat_panel.gd")
+const FriendsPanel = preload("res://scripts/app/friends_panel.gd")
+const ChatTicker = preload("res://scripts/app/chat_ticker.gd")
+const InviteBanner = preload("res://scripts/app/invite_banner.gd")
 
 const TABS := [["home", "HOME", "castle"], ["pass", "PASS", "banner"], ["shop", "SHOP", "stall"], ["locker", "LOCKER", "helmet"], ["settings", "SETTINGS", "gear"]]
 
@@ -104,6 +109,15 @@ var eco_sync: Node = null
 var eco_autostart := DisplayServer.get_name() != "headless" or OS.has_environment("FB_ECO")
 var eco_url := OS.get_environment("SIEGE_URL") if OS.has_environment("SIEGE_URL") else Net.DEFAULT_URL
 var online_refs := {}                  # Home's "players online" pill: {main, sub}
+# 0.31.111 (Kevin: "Build a global chat and players can click a name and have option to add friend to a friends list.
+# They can then group up and form a party"): the social side (scripts/meta/social.gd) -- chat, friends, the party.
+# Headless (tests, tools) it doesn't reach the real server unless asked (FB_SOCIAL=1).
+var social: Node = null
+var social_autostart := DisplayServer.get_name() != "headless" or OS.has_environment("FB_SOCIAL")
+var chat_ticker: Control = null
+var _invite_banner: Control = null
+var _social_name := ""
+var _social_sig := ""                  # what Home shows of it (requests, invites, the party): redraw when it changes
 var _guard: Node = null
 # 0.31.84 (Kevin: "put a fps cap of 60 in the menus"): the menus ran uncapped (120 on a 120 Hz phone); a match sets its
 # own 30 and puts this back when it ends. The real app only (tests and tools run the menus as fast as they can).
@@ -157,6 +171,19 @@ func _ready() -> void:
 			toast("That match couldn't be counted by the server", UI.RED)
 		else:
 			toast("The server didn't accept that change, so it was undone", UI.RED))
+	social = Social.new()
+	social.url = eco_url
+	social.setup(profile)
+	social.show_global = bool(profile.d.settings.get("chat_global", true))
+	add_child(social)
+	social.note.connect(_on_social_note)
+	social.request.connect(_on_friend_request)
+	social.invited.connect(_on_party_invite)
+	social.go.connect(_on_party_go)
+	social.changed.connect(_on_social_changed)
+	chat_ticker.setup(self)
+	if social_autostart:
+		social.set_active(true)
 	billing = Billing.new()
 	add_child(billing)
 	billing.on_server_grant = func(g: Dictionary): eco_sync.adopt(g.get("profile", {}), int(profile.d.account.get("seq", 0)))
@@ -509,6 +536,9 @@ func _build_chrome() -> void:
 	content.add_theme_constant_override("separation", 14)
 	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	margin.add_child(content)
+	# --- the chat line over the tab bar, Home only (0.31.111; set up once the social side exists)
+	chat_ticker = ChatTicker.new()
+	chrome.add_child(chat_ticker)
 	# --- tab bar: dark wood with a gold edge; the open tab is a raised gold-framed tile (0.31.79)
 	var tb := Control.new()
 	tb.custom_minimum_size = Vector2(0, TAB_H)
@@ -746,6 +776,8 @@ func show_tab(id: String) -> void:
 	for t in tab_buttons:
 		_style_tab(tab_buttons[t], t == id)
 	hero_layer.visible = id == "home"
+	if chat_ticker != null:
+		chat_ticker.visible = id == "home"
 	if online_status != null:
 		online_status.set_active(id == "home" and siege == null)
 	hero_layer.position.y = 0.0
@@ -760,6 +792,8 @@ func rebuild() -> void:
 	for c in content.get_children():
 		content.remove_child(c)
 		c.queue_free()
+	if tab == "home" and social != null:
+		_social_sig = social_sig()             # (what Home is about to show of the social side)
 	match tab:
 		"home": Screens.home(self, content)
 		"pass": Screens.pass_screen(self, content)
@@ -834,6 +868,8 @@ func close_modal() -> void:
 	if is_instance_valid(modal):
 		modal.queue_free()
 	modal = null
+	if social != null:
+		_social_home.call_deferred()
 
 # ---------------- menu drag-scroll (0.18.3, Kevin: "the main menu can't scroll up and down") ----------------
 # Every screen is cards and buttons, and those stop input, so the ScrollContainer's own touch drag
@@ -848,9 +884,23 @@ var _drag_scroll0 := 0.0
 var _fling := 0.0
 var _cancelling := false
 var _swallow_up := false
+var _drag_sc: ScrollContainer = null
 
 func _menu_scroll_live() -> bool:
-	return siege == null and modal == null and is_instance_valid(content_scroll) and content_scroll.is_visible_in_tree()
+	return _scroll_target() != null
+
+func _scroll_target() -> ScrollContainer:
+	# the menu's own list -- or, with a window open that has one (0.31.111: the chat, Friends), that window's list
+	if siege != null:
+		return null
+	if is_instance_valid(modal):
+		var ms: Variant = modal.get_meta("drag_scroll", null)
+		if ms is ScrollContainer and is_instance_valid(ms) and (ms as ScrollContainer).is_visible_in_tree():
+			return ms
+		return null
+	if is_instance_valid(content_scroll) and content_scroll.is_visible_in_tree():
+		return content_scroll
+	return null
 
 func _input(event: InputEvent) -> void:
 	if (event is InputEventScreenTouch or (event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT)) and event.pressed:
@@ -877,11 +927,13 @@ func _input(event: InputEvent) -> void:
 	if press:
 		if event.pressed:
 			_swallow_up = false
-			if content_scroll.get_global_rect().has_point(event.position):
+			var sc := _scroll_target()
+			if sc.get_global_rect().has_point(event.position):
+				_drag_sc = sc
 				_drag_down = true
 				_dragging = false
 				_drag_from = event.position
-				_drag_scroll0 = content_scroll.scroll_vertical
+				_drag_scroll0 = sc.scroll_vertical
 				_fling = 0.0
 		else:
 			if _dragging:
@@ -894,8 +946,8 @@ func _input(event: InputEvent) -> void:
 		if not _dragging and absf(dy) > DRAG_START:
 			_dragging = true
 			_cancel_press()
-		if _dragging:
-			content_scroll.scroll_vertical = int(_drag_scroll0 - dy)
+		if _dragging and is_instance_valid(_drag_sc):
+			_drag_sc.scroll_vertical = int(_drag_scroll0 - dy)
 			var vy: float = event.velocity.y if "velocity" in event else event.relative.y * 60.0
 			_fling = clampf(-vy, -4000.0, 4000.0)
 			get_viewport().set_input_as_handled()
@@ -921,8 +973,8 @@ func _cancel_press() -> void:
 func _process(_delta: float) -> void:
 	Assets.poll()
 	# Keep gliding after a flick, easing out.
-	if not _drag_down and absf(_fling) > 30.0 and _menu_scroll_live():
-		content_scroll.scroll_vertical = int(content_scroll.scroll_vertical + _fling * _delta)
+	if not _drag_down and absf(_fling) > 30.0 and _menu_scroll_live() and _scroll_target() == _drag_sc:
+		_drag_sc.scroll_vertical = int(_drag_sc.scroll_vertical + _fling * _delta)
 		_fling *= pow(0.04, _delta)
 	elif not _drag_down:
 		_fling = 0.0
@@ -939,6 +991,9 @@ var _ticket_ok := false
 
 func _on_eco_synced(differs: bool) -> void:
 	# 0.31.108: the profile is the server's again; redraw only if something shown changed (and not mid-match)
+	if social != null and social.online() and str(profile.d.name) != _social_name:
+		_social_name = str(profile.d.name)
+		social.refresh()                          # 0.31.111: a new name -- the chat and friends lists show it
 	if not differs or siege != null:
 		return
 	refresh_top()
@@ -949,12 +1004,22 @@ func start_tutorial() -> void:
 	# The Herald's walkthrough: a small offline match (siege_mode.gd tutorial = true).
 	start_match(false, true)
 
-func start_match(online: bool, tutorial := false) -> void:
+func start_match(online: bool, tutorial := false, follow := false) -> void:
 	if siege != null:
 		return
 	if online and update_required:
 		show_update_screen()               # online stays locked until the update is installed
 		return
+	if online and not tutorial and social != null and social.online() and social.in_party():
+		# 0.31.111: a party plays together -- the leader's PLAY takes everyone in the menu along (social "play" ->
+		# "go"); a member waits for the leader (follow: the leader's "go" arrived)
+		if social.is_leader():
+			social.play()
+		elif not follow:
+			sfx("error")
+			var lead := str(social.card_of(str(social.party.get("leader", ""))).get("n", "your leader"))
+			toast("%s starts your party's match -- or leave the party to play alone" % lead, UI.MUTED)
+			return
 	if not online and not tutorial and eco_sync != null and eco_sync.enabled and not _ticket_ok:
 		# 0.31.108 (Kevin: "Always online"): a VS BOTS match pays only against a ticket the server gives now
 		if _ticket_wait:
@@ -1173,6 +1238,8 @@ func _notification(what: int) -> void:
 	elif what == NOTIFICATION_APPLICATION_PAUSED:
 		if audio != null and audio.has_method("stop"):
 			audio.stop()
+		if social != null:
+			social.set_active(false)               # 0.31.111: back when the app is
 		if play_games != null:
 			play_games.on_pause()                  # 0.31.102: the latest progress up to Google Play
 		if online_status != null:
@@ -1180,6 +1247,8 @@ func _notification(what: int) -> void:
 	elif what == NOTIFICATION_APPLICATION_RESUMED:
 		if eco_sync != null and eco_sync.auto_start:
 			eco_sync.start()                   # 0.31.108: the account as the server has it
+		if social != null and social_autostart:
+			social.set_active(true)
 		if billing != null:
 			billing.resume()                   # a purchase finished while we were away (or a pending one cleared)
 		if play_games != null:
@@ -1190,3 +1259,75 @@ func _notification(what: int) -> void:
 			# 0.31.91: deferred -- this notification is propagated through the tree, and add_child during it fails
 			# ("Parent node is busy setting up children" in Kevin's log), leaving a checker that blocked every later check.
 			check_server_version.call_deferred()   # back from the Play Store (or a long pause): ask again
+
+# ---------------- chat, friends, the party (0.31.111) ----------------
+func open_chat(ch := "global") -> void:
+	if social == null:
+		return
+	close_modal()
+	var m := ChatPanel.new()
+	add_child(m)
+	modal = m
+	m.open(self, ch)
+
+func open_friends() -> void:
+	if social == null:
+		return
+	close_modal()
+	var m := FriendsPanel.new()
+	add_child(m)
+	modal = m
+	m.open(self)
+
+func _on_social_note(t: String, bad: bool, pop: bool) -> void:
+	if siege != null:
+		return
+	if pop:
+		sfx("chatPop")
+	toast(t, UI.RED if bad else UI.GOLD)
+
+func _on_friend_request(card: Dictionary) -> void:
+	if siege != null:
+		return
+	sfx("chatPop")
+	toast("%s wants to be friends -- see Friends" % str(card.get("n", "Someone")), UI.CYAN)
+
+func _on_party_invite(pa: String, card: Dictionary) -> void:
+	if siege != null:
+		return                               # (it waits in Friends)
+	sfx("chatPop")
+	if is_instance_valid(_invite_banner):
+		_invite_banner.queue_free()
+	_invite_banner = InviteBanner.new()
+	add_child(_invite_banner)
+	_invite_banner.show_invite(self, pa, card, safe_top + TOP_H + 14.0)
+
+func _on_party_go(_pa: String, by: String) -> void:
+	# the party leader pressed PLAY: everyone in the menu follows
+	if siege != null or update_required or is_instance_valid(update_screen):
+		return
+	close_modal()
+	toast("%s is heading into battle -- your party follows!" % by, UI.GOLD)
+	start_match(true, false, true)
+
+func social_sig() -> String:
+	if social == null or not social.online():
+		return "off"
+	var names := []
+	for m in social.party.get("members", []):
+		names.append(str(m.pid) + str(m.n))
+	return "%d|%s|%s" % [social.attention(), str(social.party.get("leader", "")), ",".join(names)]
+
+func _on_social_changed(what: String) -> void:
+	if what == "me":
+		_social_name = str(profile.d.name)
+	if siege != null or not what in ["friends", "party", "state"]:
+		return
+	_social_home()
+
+func _social_home() -> void:
+	# Home shows the Friends badge and the party: redraw it when they change (not under a window: when it closes)
+	var sig := social_sig()
+	if sig != _social_sig and tab == "home" and not is_instance_valid(modal) and siege == null:
+		_social_sig = sig
+		rebuild()

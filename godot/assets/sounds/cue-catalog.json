@@ -392,6 +392,20 @@
       "peak": 0.48,
       "rms": 0.0667,
       "source": "0.31.110: ElevenLabs sound effects, cut/layered/levelled by tools/build_menu_sfx.py (sources in art_sources/menu_sfx)"
+    },
+    {
+      "cue": "ping",
+      "seconds": 0.55,
+      "peak": 0.69,
+      "rms": 0.0643,
+      "source": "0.31.111: ElevenLabs sound effects, cut/layered/levelled by tools/build_menu_sfx.py (sources in art_sources/menu_sfx)"
+    },
+    {
+      "cue": "chatPop",
+      "seconds": 0.46,
+      "peak": 0.54,
+      "rms": 0.052,
+      "source": "0.31.111: ElevenLabs sound effects, cut/layered/levelled by tools/build_menu_sfx.py (sources in art_sources/menu_sfx)"
     }
   ],
   "demo_timeline": [

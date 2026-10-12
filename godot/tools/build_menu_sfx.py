@@ -94,6 +94,11 @@ CUES = {
     "resultWin":  {"rms": 0.18, "layers": [("resultWin_3", 0.0, 1.80, 0.0, 0, 90, 0.80)]},
     # low strings and a soft horn (results: lost)
     "resultLose": {"rms": 0.15, "layers": [("resultLose_3", 0.0, 1.55, 0.0, 0, 80, 0.75)]},
+    # ---- 0.31.111 (Kevin: "Build a global chat ... Also add the quick chat pings")
+    # a bright metal pluck that rings (a teammate's quick-chat ping)
+    "ping":       {"rms": 0.12, "layers": [("ping_1", 0.0, 0.60, 0.0, 0, 300, 0.35)]},
+    # a soft pop with a little bell shimmer (a chat message, a friend request, a party invite)
+    "chatPop":    {"rms": 0.09, "layers": [("chatPop_3", 0.0, 0.50, 0.0, 0, 300, 0.30)]},
 }
 
 

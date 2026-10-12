@@ -3241,3 +3241,24 @@ K2/K3 notes (0.17.0)
 - Content pack audio rebuilt (audio-686aa32b16bd.pck) and on the content-packs branch. 0.31.110, version code 196.
   APK 31369401 bytes, sha256 333b0712cd9b76ee42a54cdac9e43f377422fe1a136a20a623d60298e5f33ca9.
 - Audition page (artifact "Fatebound Menu Sounds") now lists the 0.31.110 cues above the 0.31.109 ones.
+
+## 0.31.111 — chat, friends, parties, quick chat (Kevin: "Build a global chat and players can click a name and have option to add friend to a friends list. They can then group up and form a party. Also add the quick chat pings")
+- Server `server/social.gd` + `siege_server.gd`: persistent social sockets tied to the accounts (0.31.108), global and
+  party chat (filter, links masked, rate limits, repeats, last lines in memory), friends / requests / blocks /
+  reports (reports.jsonl) / muted.txt, parties of 4 with invites, the leader's PLAY ("go"), a party seated on one
+  team; "qc" quick chat to the speaker's side (gg to all, 2 s apart), "status"/"ver" say "social":1. `social.json`
+  in the state dir (backed up by the installer with the accounts).
+- Sim `call_bots`: "Need help!" / "Follow me!" bring the 3 nearest free bots of that side for 15 s.
+- App: `scripts/meta/social.gd`, `chat_panel.gd`, `friends_panel.gd`, `social_ui.gd` (name card: add / invite /
+  remove / block / report), `chat_ticker.gd` (Home's chat line), `invite_banner.gd`; FRIENDS medallion, party ribbon,
+  PLAY ×N / READY, Settings > SOCIAL; windows with a list drag-scroll like the menus (`_scroll_target`). HUD: the horn,
+  the 8-line wheel, bubbles (edge arrows), the feed. New icons chat / friends / horn (generated to match the set,
+  background removed) and sounds ping / chatPop (ElevenLabs, build_menu_sfx.py).
+- Fix: UI2.bob no longer errors when Home is redrawn twice in one frame.
+- privacy.html: "Game server account" and "Chat, friends and parties" sections (to redeploy). SIEGE_HANDOFF.md §20:
+  deploy, moderation, the Play forms to update.
+- Tests: social_test (server alone + two phones against the real server, party seated together, quick chat and its
+  gap, bot calls), social_ui_test (the app's real buttons end to end: chat line, chat window, name card, Friends,
+  invite, party ribbon, PLAY ×2 -> "go", one side, quick chat both ways). 0.31.111, version code 197.
+- Content packs ui-4890b4aaf16a.pck and audio-bcc08ca599d8.pck on the content-packs branch. Full suite: ALL SIEGE TESTS
+  PASSED (60). APK 31423633 bytes, sha256 c0cfec618579c88968577bc325882d563e7e78530d36c486c5b91e41b1277c28.

@@ -174,6 +174,9 @@ func _ready() -> void:
 	hud.workshop_buy.connect(func(id): _act("buy", id))
 	hud.workshop_leave.connect(func(): _act("workshop_leave"))
 	hud.action_pressed.connect(_on_action)
+	hud.quick_chat.connect(_on_quick_chat)                 # 0.31.111
+	hud.unit_world = func(id: String) -> Vector3: return view.unit_world(id) if view != null else Vector3.INF
+	hud.qc_btn.visible = not tutorial
 	hud.project = func(world: Vector3) -> Vector2: return _to_hud(view.screen_point(world))
 	hud.on_screen = func(world: Vector3) -> bool: return view.is_on_screen(world)
 	hud.numbers_source = func() -> Array: return view.numbers if view != null else []
@@ -543,6 +546,11 @@ func _net_process(delta: float) -> void:
 					view.player_names = net_names
 					view.player_titles = net_titles
 					view.set_unit_looks(net_looks)
+			"qc":                                             # 0.31.111: a quick chat line from a player of my side (or anyone's gg)
+				var qu := str(msg.get("u", ""))
+				if qu != hud.player_id and sim != null:      # (mine showed when I said it)
+					hud.add_ping(qu, int(msg.get("i", -1)), str(net_names.get(qu, "")))
+					_ping_sound()
 			"st":                                             # 0.31.87: the health I've healed (the Merciful title)
 				if sim != null and sim.by_id.has(hud.player_id):
 					sim.by_id[hud.player_id]["healed"] = float(msg.get("heal", 0))
@@ -1303,3 +1311,28 @@ func _announce_event(e: Dictionary) -> void:
 				_announce("our_jail" if jail else "our_gate")
 			else:
 				_announce("their_jail" if jail else "their_gate")
+
+
+# ---------- quick chat (0.31.111, Kevin: "add the quick chat pings") ----------
+var _qc_at := -100.0
+
+func _on_quick_chat(i: int) -> void:
+	if sim == null or i < 0 or i >= Net.QUICK_CHAT.size():
+		return
+	var now := Time.get_ticks_msec() / 1000.0
+	if now - _qc_at < Net.QC_GAP:
+		hud.toast("One quick chat every %d seconds" % int(Net.QC_GAP), Color("#c2cdea"))
+		return
+	_qc_at = now
+	hud.add_ping(hud.player_id, i, player_name)            # shown at once; the server tells the others
+	_ping_sound()
+	if online:
+		_net_send({"t":"qc", "i":i})
+	elif bool(Net.QUICK_CHAT[i].get("call", false)) and not sim.ended:
+		var n: int = sim.call_bots(hud.player_id)           # VS BOTS: the nearest bots of my side come
+		if n > 0:
+			hud.toast("%d all%s on the way" % [n, "y" if n == 1 else "ies"], Color("#9dff8a"))
+
+func _ping_sound() -> void:
+	if audio != null and audio.has_method("play"):
+		audio.play("ping")

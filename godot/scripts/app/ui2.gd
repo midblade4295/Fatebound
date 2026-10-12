@@ -239,6 +239,8 @@ static func pulse(c: Control, amount := 0.03, secs := 1.1) -> void:
 
 static func bob(c: Control, px := 5.0, secs := 1.3, delay := 0.0) -> void:
 	var go := func():
+		if not is_instance_valid(c):
+			return                               # (redrawn before the next frame: the node is gone)
 		var y0 := c.position.y
 		var tw := c.create_tween().set_loops()
 		tw.tween_interval(delay)
