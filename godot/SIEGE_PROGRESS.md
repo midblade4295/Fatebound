@@ -3195,3 +3195,7 @@ K2/K3 notes (0.17.0)
   to full slots (were up to 10 a season).
 - 0.31.108, version code 194. Quick suite: ALL 57 PASSED. CONTENT OK. APK 31,373,497 bytes,
   sha256 5068951500e9e1f3fcf7c0cf4efe96622b20a41fcdb6efe7189dda683d5a7664.
+- Season 2's own pass weapons: ON HOLD (Kevin: "Hold off on new season 2 weapons since the games not really out
+  yet"). The concept board is kept at reports/concepts/s2_pass_weapons.jpg (Ashguard, Magmamaw, Cinderfangs, Ashwind,
+  Pyreforge, Cinderlich; A/B each). Eco.PASS_SEASON_ITEMS stays empty: season 2 uses the old draw, with owned items
+  swapped (Embers or an unowned pass weapon).
