@@ -303,7 +303,7 @@ func _migrate_legacy() -> void:
 	import_legacy(v)
 
 func import_legacy(old: Dictionary) -> Dictionary:
-	# One-time conversion of a dice-era save; also used by Settings > Import old progress.
+	# One-time conversion of a dice-era save (at first launch; 0.31.123: Settings no longer has a paste-in import).
 	if not d.migration.is_empty() and str(d.migration.get("from", "")) == "legacy":
 		return {"ok":false, "error":"Old progress was already imported"}
 	if server_mode or server_side:

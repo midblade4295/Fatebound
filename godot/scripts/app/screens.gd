@@ -2382,38 +2382,9 @@ static func settings(app, root: VBoxContainer) -> void:
 		app.sfx("toggle")
 		d.settings.reduce_motion = on
 		p.save())
-	# Old progress
-	var mig: Dictionary = d.migration
-	var old := UI2.frame(root, "parch", 12, 16.0, "brown")
-	var oh := UI.row(old, 8)
-	UI2.icon(oh, "scroll", 36.0)
-	UI.grow(UI2.text(oh, "PROGRESS FROM THE OLD VERSION", 14, ink, ink, 0, false))
-	if str(mig.get("from", "")) == "legacy":
-		var w := int(mig.weapons)
-		var c := int(mig.chests)
-		var tl := UI.label(old, "Carried over: +%d gold, +%d gems, level %d (includes %d weapon%s and %d chest%s turned into gold)." % [int(mig.gold), int(mig.gems), int(mig.level), w, "" if w == 1 else "s", c, "" if c == 1 else "s"], 12, ink, UI.HEAVY_FONT)
-		tl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	else:
-		UI.label(old, "Played the previous Fatebound? Paste your exported progress to carry over gold, tokens (as gems) and your level. This works once.", 12, ink, UI.HEAVY_FONT)
-		var te := TextEdit.new()
-		te.custom_minimum_size = Vector2(0, 80)
-		te.placeholder_text = "Paste exported progress here"
-		te.set_meta("action_key", "import_text")
-		old.add_child(te)
-		UI2.button(old, "IMPORT", "blue", func():
-			var v: Variant = JSON.parse_string(te.text.strip_edges())
-			if not (v is Dictionary) or not (v as Dictionary).has("gold"):
-				app.sfx("error")
-				app.toast("That doesn't look like exported Fatebound progress", UI.RED)
-				return
-			var r: Dictionary = p.import_legacy(v)
-			if r.ok:
-				p.save()
-				app.sfx("purchase")
-				app.toast("Imported: +%d gold, +%d gems" % [int(r.summary.gold), int(r.summary.gems)], UI.GOLD)
-			else:
-				app.toast(str(r.error), UI.RED)
-			app.rebuild(), "import_legacy", 16, 44.0)
+	# (0.31.123, Kevin: "Remove the progress from old version in the settings since Google play saves progress now":
+	# the old version's paste-in import card is gone; a legacy save on the phone is still carried over by itself, once --
+	# Profile.import_legacy at first launch)
 	# Help
 	# 0.31.120 (Kevin: SEND TO DEVELOPER): the log straight to the developer's server, asked every time
 	UI2.button(root, "SEND TO DEVELOPER", "orange", func(): app.open_send_diag(), "send_diag", 15, 44.0)

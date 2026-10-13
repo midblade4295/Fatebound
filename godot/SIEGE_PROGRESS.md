@@ -3609,3 +3609,11 @@ K2/K3 notes (0.17.0)
   sign (checked: pivot (0,0) before, (21,21) now, its centre fixed while it turns). wiggle() had the same gap; both set
   the pivot at once and when they start.
 - Version 0.31.122, versionCode 208.
+
+## 0.31.123 — Settings: the old version's progress import removed
+- Kevin: "Remove the progress from old version in the settings since Google play saves progress now". The parchment
+  card (PROGRESS FROM THE OLD VERSION: paste exported progress + IMPORT, or "Carried over: ...") is gone from Settings.
+  Profile.import_legacy stays for the one automatic carry-over at first launch (a dice-era save on the phone,
+  `_migrate_legacy`) and meta_economy_test. Settings now ends GRAPHICS, SEND TO DEVELOPER, COPY DIAGNOSTICS / PRIVACY
+  POLICY, HOW TO PLAY. Settings tests (app_flow, app_scroll, diag_send, notify, analytics_client, kill_feed, play_games,
+  meta_economy) pass. Version 0.31.123, versionCode 209.
