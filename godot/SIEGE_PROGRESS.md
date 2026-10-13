@@ -3492,3 +3492,7 @@ K2/K3 notes (0.17.0)
   Settings > GOOGLE PLAY > ACHIEVEMENTS opens Google's screen. Icons for Play Console (512x512, bronze/silver/gold
   rims): `store-listing/achievements/`. Steps for Grokbot/Kevin: `godot/PLAY_ACHIEVEMENTS_HANDOFF.md`.
   tests/achievements_test.gd (a fake of the plugin).
+- Also: privacy.html (leaderboard names/points, achievements to Google Play Games, local chest notifications, daily
+  rewards in the usage statistics), SIEGE_HANDOFF section 22. Full suite: ALL SIEGE TESTS PASSED (74). 0.31.119,
+  version code 204 -> 205. APK 31486950 bytes, sha256 b7fcd798843c064ae20ce2c43beac216b644f4c74adb49bdbe5c64a072652e27.
+  No content pack change. Needs the server redeployed (rooms, idle, leaderboard).

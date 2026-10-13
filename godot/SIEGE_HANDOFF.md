@@ -588,3 +588,15 @@ Our own replacement for Firebase Analytics: no SDK, no third party. Full notes: 
   `scripts/meta/analytics_events.gd` there too.
 - Google Play (Grokbot / Kevin): Data safety changes are in the spec's section 10; redeploy `privacy.html` (new "Usage
   statistics" section).
+
+## 22. 0.31.119: rooms, idle takeover, scoreboard, leaderboards, notifications, daily reward, achievements (Kevin: "Do all besides #7")
+- **Server** (`siege_server.gd`): matches run in `Room`s (SIEGE_MAX_PLAYERS humans each, SIEGE_MAX_ROOMS rooms, default 4;
+  parties kept together, "full" only when every room is). Idle players: a bot after 45 s without input, removed at 180 s
+  (bye "idle", 4006). `server/leaderboard.gd`: weekly points from paid online matches, {"t":"lb"} answers the board.
+  New files to deploy: `server/leaderboard.gd` (the installer copies it and backs up leaderboard.json).
+- **App**: results MVP strip + SCORES board (`siege_hud.gd`); RANKS medallion -> `leaderboard_panel.gd` (FIRST WIN is a
+  tag on PLAY now); DAILY REWARD card (`daily_reward.gd`, `claim_login` op replayed by the server); chest-ready
+  notifications (`scripts/meta/notify.gd` + our Android plugin `addons/FateboundNotify`, source in
+  `godot/android_plugins/fatebound_notify` -- Gradle/Play builds only); Play Games achievements
+  (`scripts/meta/achievements.gd`, ids in `play_achievement_ids.gd`, Play Console steps in `PLAY_ACHIEVEMENTS_HANDOFF.md`).
+- Protocol unchanged (35); every server addition is additive.
