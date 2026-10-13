@@ -3627,3 +3627,12 @@ K2/K3 notes (0.17.0)
   the player then actually joins (that would need a Discord bot and sign-in), so opening the invite is what's rewarded.
 - privacy.html: "Links to Discord". tests/discord_test.gd (the op, the server paying once, the Settings card).
   Version 0.31.124, versionCode 210.
+
+## 0.31.125 — JOIN OUR DISCORD on Home until it's claimed
+- Kevin: "Put a discord button on front page that goes away after they claim it then leave the other discord button in
+  settings". Home has JOIN OUR DISCORD (Discord blue, a gentle bob, a "+100" gem tag on its corner) under the logo
+  between the medallion columns (Screens.DISCORD_Y), shown only while the profile's `discord` is false. Home's and
+  Settings' buttons share `Screens.discord_press`: open the invite, and the first time claim the 100 gems and rebuild --
+  Home's button goes, Settings' stays as plain JOIN OUR DISCORD. tests/discord_test.gd covers both; Home tests (app_flow,
+  app_scroll, tutorial, daily_reward, menu_sound, home_heroes, menu_float, lb_prizes, social_ui) pass. Version 0.31.125,
+  versionCode 211.

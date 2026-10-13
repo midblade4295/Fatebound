@@ -233,6 +233,21 @@ const HOME_FEET := 396.0      # (content y where the heroes' feet are: nothing o
 const CHEST_H := 84.0         # a chest plate
 const CHEST_ART := 44.0       # the 3D chests (and their timer tags) stand this far above their plates
 
+const DISCORD_Y := 132.0      # 0.31.125: Home's JOIN OUR DISCORD, under the logo between the medallion columns
+
+static func discord_press(app) -> void:
+	# 0.31.124/125: Settings' and Home's JOIN OUR DISCORD -- open the invite; the first time, the gift (once per account)
+	app.open_url.call(Eco.DISCORD_URL)              # (the app's link opener; tests put their own)
+	if bool(app.profile.d.get("discord", false)):
+		app.sfx("tap")
+		return
+	var r: Dictionary = app.profile.claim_discord()
+	if bool(r.get("ok", false)):
+		app.sfx("purchase")
+		app.toast("Thanks for joining! +%d gems" % Eco.DISCORD_GEMS, UI.GOLD)
+		app.refresh_top()
+		app.rebuild()                                # (Home's button goes; Settings' loses its +100)
+
 static func home_layout(h: float) -> Dictionary:
 	# PLAY and the row under it under the heroes, the chests on the bottom edge; on a shorter screen it packs up from
 	# the chests (no higher than the heroes' feet)
@@ -325,6 +340,43 @@ static func home(app, root: VBoxContainer) -> void:
 		app.sfx("menuOpen")
 		app.open_leaderboard(), "side_ranks", 0, "silver")
 	UI2.bob(rkb.get_meta("icon"), 3.0, 1.6)
+	# 0.31.125 (Kevin: "Put a discord button on front page that goes away after they claim it then leave the other discord
+	# button in settings"): under the logo between the medallion columns, with its gift as a tag, until it's claimed
+	if not bool(d.get("discord", false)):
+		var dw := minf(210.0, w - 150.0)
+		var db := UI2.button(top, "JOIN OUR DISCORD", "discord", func(): discord_press(app), "home_discord", 14, 40.0, 20.0)
+		db.name = "HomeDiscord"
+		db.position = Vector2((w - dw) * 0.5, DISCORD_Y)
+		db.size = Vector2(dw, 40)
+		UI2.bob(db, 2.0, 1.8)
+		var gt := PanelContainer.new()
+		gt.name = "DiscordGift"
+		var gs := StyleBoxFlat.new()
+		gs.bg_color = Color("#ffc94d")
+		gs.border_color = Color("#3a1c02")
+		gs.set_border_width_all(2)
+		gs.set_corner_radius_all(10)
+		gs.content_margin_left = 6
+		gs.content_margin_right = 8
+		gs.shadow_color = Color(0, 0, 0, 0.35)
+		gs.shadow_size = 4
+		gt.add_theme_stylebox_override("panel", gs)
+		gt.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		db.add_child(gt)
+		var gr := HBoxContainer.new()
+		gr.add_theme_constant_override("separation", 3)
+		gr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		gt.add_child(gr)
+		UI2.img(gr, "res://assets/ui/currency/gem.png", 16.0).size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		var gl := Label.new()                          # (a plain Label: a wrapping one sizes the tag a letter wide)
+		gl.text = "+%d" % Eco.DISCORD_GEMS
+		gl.add_theme_font_override("font", UI.HEAVY_FONT)
+		gl.add_theme_font_size_override("font_size", 12)
+		gl.add_theme_color_override("font_color", Color("#3a1c02"))
+		gl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		gr.add_child(gl)
+		gt.reset_size()
+		gt.position = Vector2(dw - gt.get_combined_minimum_size().x + 10.0, -12.0)
 	# --- PLAY: always the Siege server (0.31.79); the bots fill any empty slots
 	var py: float = lay.play
 	UI2.glow(top, Rect2(-30, py - 16, w + 60, 130), Color(1.0, 0.55, 0.15, 0.55))
@@ -2353,17 +2405,7 @@ static func settings(app, root: VBoxContainer) -> void:
 	UI2.body(cx, "Join the Fatebound Discord: news, updates, events and other players to team up with." +
 		("" if claimed else " Joining gives you %d gems, once." % Eco.DISCORD_GEMS), 12, UI2.SOFT)
 	var dlabel := "JOIN OUR DISCORD" if claimed else "JOIN OUR DISCORD  ·  +%d GEMS" % Eco.DISCORD_GEMS
-	UI2.button(cx, dlabel, "discord", func():
-		app.open_url.call(Eco.DISCORD_URL)          # (the app's link opener; tests put their own)
-		if not bool(d.get("discord", false)):
-			var r: Dictionary = p.claim_discord()
-			if bool(r.get("ok", false)):
-				app.sfx("purchase")
-				app.toast("Thanks for joining! +%d gems" % Eco.DISCORD_GEMS, UI.GOLD)
-				app.refresh_top()
-				app.rebuild()
-		else:
-			app.sfx("tap"), "discord", 15, 46.0)
+	UI2.button(cx, dlabel, "discord", func(): discord_press(app), "discord", 15, 46.0)
 	# 0.31.118 (Kevin's analytics spec): usage statistics to our own server, on by default, off here
 	var px := UI2.frame(root, "night", 12, 18.0, "gold")
 	UI2.divider(px, "PRIVACY", 20)
