@@ -88,6 +88,8 @@ run scoreboard_test      SCOREBOARD_PASS          60
 run leaderboard_test     LEADERBOARD_PASS         150
 run lb_prizes_test       LB_PRIZES_PASS           90
 run referral_test        REFERRAL_PASS            150
+# Player profile card (0.31.120): stats_of, the real server (8108), RANKS > a row > the card
+run profile_card_test    PROFILE_CARD_PASS        150
 # Daily login reward (0.31.119): the calendar, the server's replay, the card on Home and in ORDERS
 run daily_reward_test    DAILY_REWARD_PASS        90
 # Chest-ready notifications (0.31.119): notify.gd with a fake of the Android plugin, the app's ask and Settings

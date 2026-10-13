@@ -38,6 +38,8 @@ const MUTE_RELOAD := 10.0
 const MAX_CONN_PER_PLAYER := 2
 const MAX_CONNS := 4000
 const REPORTS_PER_HOUR := 10
+const PROF_BURST := 12        # 0.31.120: profile cards a player may ask for in PROF_WINDOW seconds
+const PROF_WINDOW := 10.0
 const REPORT_REASONS := ["language", "spam", "cheating", "name", "other"]
 
 var state := ""
@@ -64,6 +66,8 @@ var close_fn: Callable = func(_cid): pass
 var in_match_fn: Callable = func(_acct) -> bool: return false
 var log_fn: Callable = func(_s): pass
 var event_fn: Callable = func(_acct, _ev, _p): pass   # 0.31.118: usage statistics (server/analytics.gd) -- never the text
+var rank_fn: Callable = func(_acct) -> int: return 0   # 0.31.120: this week's leaderboard rank (0: not on it)
+var prof_at := {}          # 0.31.120: pid -> clocks of its recent profile-card asks
 var _dirty_at := -1.0
 var _mute_clock := 0.0
 
@@ -378,12 +382,36 @@ func handle(cid: int, msg: Dictionary) -> void:
 		"leave": _leave(pid)
 		"kick": _kick(pid, who)
 		"play": _play(pid)
+		"prof": _prof(cid, pid, who)
 		"refresh":
 			_read_name(pid)
 			_mark()
 			send_fn.call(cid, {"t":"so", "k":"me", "pid":pid, "n":str(users[pid].name), "tt":str(users[pid].get("title", "")), "max":CHAT_MAX})
 			send_fn.call(cid, _friends_msg(pid))
 			_presence(pid)
+
+func _prof(cid: int, pid: String, who: String) -> void:
+	# 0.31.120 (Kevin: player profile card): someone tapped a name -- its card's numbers (eco_accounts.stats_of), to that
+	# socket only. Not for a player who blocked the asker; at most PROF_BURST in PROF_WINDOW seconds ("busy" after that).
+	var times: Array = (prof_at.get(pid, []) as Array).filter(func(t): return clock - float(t) < PROF_WINDOW)
+	var out := {"t":"so", "k":"prof", "pid":who, "ok":false}
+	if times.size() >= PROF_BURST:
+		prof_at[pid] = times
+		out["why"] = "busy"
+		send_fn.call(cid, out)
+		return
+	times.append(clock)
+	prof_at[pid] = times
+	var u: Dictionary = users.get(who, {})
+	if not u.is_empty() and not (u.get("blocked", []) as Array).has(pid) and eco != null and eco.has_method("stats_of"):
+		var s: Dictionary = eco.stats_of(str(u.acct))
+		if not s.is_empty():
+			out.merge(s)
+			out.ok = true
+			out.n = str(u.get("name", "Player"))
+			out.tt = str(u.get("title", ""))
+			out.rank = int(rank_fn.call(str(u.acct)))
+	send_fn.call(cid, out)
 
 func _chat(pid: String, msg: Dictionary) -> void:
 	var ch := str(msg.get("ch", "global"))

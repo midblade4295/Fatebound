@@ -3539,3 +3539,12 @@ K2/K3 notes (0.17.0)
   REF_CHEST). Installer copies referrals.gd and backs up referrals.json. tests/referral_test.gd (the rules with real
   accounts; then the real server on 8107 + the real app: REDEEM, a restart with the player at level 5, the chest and
   the popup, the friend's chest).
+- **Player profile card** (Kevin: tap a name -- level, title, wins, favourite class and weapon). The card a name opens
+  (chat, Friends, and now a row of RANKS -- leaderboard rows carry the public friend code "pid") asks the server over the
+  social socket ({"t":"so", "k":"prof", "pid"}) and fills in when the answer comes ("Loading..." until then; kept a
+  minute): the class played most (stats.main_<cls>) with its portrait, its matches and wins, the weapon won most with
+  (forge.wins, else that class's weapon) with rarity colour and Forge stars, then LEVEL / WINS / WIN RATE / RESCUES /
+  KNOCKOUTS / BEST STREAK and "#N this week · M matches · since <month>". eco_accounts.stats_of gives only those fields
+  (no ids, gold, gems or purchases); a player who blocked you shows nothing; 12 asks per 10 s, then "busy". A friend in
+  a match: the card's button is JOIN THEIR MATCH. tests/profile_card_test.gd (stats_of; the real server on 8108 with
+  accounts and the week's board written first; RANKS > Alice's row > her card; a blocked card; the wire's fields; busy).

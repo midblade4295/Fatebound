@@ -7,7 +7,7 @@ extends Node
 # what the screens show: the chat lines, friends, requests, the party and invites. Every change emits `changed`.
 const Net = preload("res://scripts/siege/siege_net.gd")
 
-signal changed(what: String)            # "state", "me", "chat", "friends", "party"
+signal changed(what: String)            # "state", "me", "chat", "friends", "party", "prof" (0.31.120)
 signal note(text: String, bad: bool, pop: bool)
 signal request(card: Dictionary)        # someone wants to be friends
 signal invited(party: String, card: Dictionary)
@@ -35,6 +35,7 @@ var blocked: Array = []
 var party: Dictionary = {}              # {} or {"id", "leader", "members", "pending", "max"}
 var invites: Dictionary = {}            # party id -> {"from": card, "at": clock}
 var party_play := ""                    # the party a "go" was for (siege_app passes it into the match)
+var profiles := {}                      # 0.31.120: pid -> its profile card's numbers ({"t":"so", "k":"prof", ...}, "_at": clock)
 var _ws: WebSocketPeer = null
 var _clock := 0.0
 var _next_try := 0.0
@@ -195,6 +196,13 @@ func _on(m: Dictionary) -> void:
 			go.emit(party_play, str(m.get("by", "")))
 		"note":
 			note.emit(str(m.get("x", "")), bool(m.get("bad", false)), bool(m.get("pop", false)))
+		"prof":
+			var pp := str(m.get("pid", ""))
+			if pp != "":
+				var pr := m.duplicate()
+				pr["_at"] = _clock
+				profiles[pp] = pr
+				changed.emit("prof")
 
 # ---------------- what the player does ----------------
 func say(ch: String, text: String) -> bool:
@@ -245,6 +253,16 @@ func play() -> bool:
 
 func refresh() -> bool:
 	return _send({"k":"refresh"})
+
+func ask_profile(pid: String) -> bool:
+	# 0.31.120 (Kevin: player profile card): the numbers on a player's card; kept a minute
+	var pr: Dictionary = profiles.get(pid, {})
+	if not pr.is_empty() and str(pr.get("why", "")) != "busy" and _clock - float(pr.get("_at", -999.0)) < 60.0:
+		return true
+	return _send({"k":"prof", "pid":pid})
+
+func profile_of(pid: String) -> Dictionary:
+	return profiles.get(pid, {})
 
 func mark_read(ch: String) -> void:
 	if int(unread.get(ch, 0)) != 0:

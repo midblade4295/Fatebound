@@ -243,6 +243,7 @@ func _init() -> void:
 			_log("prize week %s: #%d %s (%d gems, %s chest, %s)" % [week, rank, acct, int(prize.get("gems", 0)), str(prize.get("chest", "")), str(prize.get("title", "-"))])
 		return ok
 	leaderboard.start()
+	social.rank_fn = func(acct: String) -> int: return leaderboard.rank_of(acct)       # 0.31.120: the profile card
 	referrals = Referrals.new()
 	referrals.log_fn = _log
 	_log("leaderboard: week of %s, %d players" % [leaderboard.week, leaderboard.rows.size()])

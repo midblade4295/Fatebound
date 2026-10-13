@@ -182,6 +182,18 @@ func _row(parent: Node, r: Dictionary) -> void:
 		l.autowrap_mode = TextServer.AUTOWRAP_OFF
 		l.custom_minimum_size.x = float(v[1])
 		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	# 0.31.120 (Kevin: player profile card): tap a player's row for their card (add them as a friend from it)
+	var pid := str(r.get("pid", ""))
+	if pid != "" and not mine and app.social != null and app.social.online():
+		var tap := Button.new()
+		tap.flat = true
+		tap.focus_mode = Control.FOCUS_NONE
+		for st_name in ["normal", "hover", "pressed", "focus", "hover_pressed"]:
+			tap.add_theme_stylebox_override(st_name, StyleBoxEmpty.new())
+		tap.set_meta("action_key", "lb_card_%d" % rank)
+		var card := {"pid":pid, "n":str(r.get("name", "Player")), "tt":str(r.get("title", ""))}
+		tap.pressed.connect(func(): SocialUI.name_card(app, self, card))
+		box.add_child(tap)
 
 func _prizes(parent: Node) -> void:
 	# 0.31.120: what the week's best win (paid by the server when the week ends)

@@ -10,7 +10,8 @@ extends RefCounted
 # A phone asks on its own socket ({"t":"lb", "acct", "key"}, no hello, like "eco") and gets
 #   {"t":"lb", "week": "YYYY-MM-DD" (its Monday), "ends": unix, "top": [row x TOP_N], "me": row or {}, "friends": [row],
 #    "players": how many are on the board, "last": [last week's top 3]}
-#   row = {"rank", "name", "title", "pts", "w", "m", "r", "k", "you": true on your own}
+#   row = {"rank", "name", "title", "pts", "w", "m", "r", "k", "you": true on your own, "pid" (0.31.120: the public friend
+#   code, as in chat -- a row opens the player's card)}
 # Names and titles are the accounts' own (what everyone already sees over their heads). No account ids go out.
 #
 # 0.31.120 (Kevin: prizes): players with Eco.LB_MIN_MATCHES matches that week rank first (only they can win a prize); a
@@ -104,10 +105,18 @@ func ranked() -> Array:
 		return int(ra.get("at", 0)) < int(rb.get("at", 0)))
 	return ids
 
+func rank_of(acct: String) -> int:
+	# 0.31.120: the account's place this week (0: no match yet) -- the profile card
+	_roll()
+	if not rows.has(acct):
+		return 0
+	return ranked().find(acct) + 1
+
 func _row(acct: String, rank: int, mine: bool) -> Dictionary:
 	var r: Dictionary = rows[acct]
 	var out := {"rank":rank, "name":str(r.get("name", "Player")), "title":str(r.get("title", "")), "pts":int(r.pts),
-		"w":int(r.w), "m":int(r.m), "r":int(r.r), "k":int(r.k), "q":qualified(r)}
+		"w":int(r.w), "m":int(r.m), "r":int(r.r), "k":int(r.k), "q":qualified(r),
+		"pid":acct.sha256_text().left(10)}             # 0.31.120: the public friend code (tap a row: the player's card)
 	if mine:
 		out["you"] = true
 	return out
