@@ -7,7 +7,8 @@ const Castle = preload("res://scripts/siege/siege_castle.gd")
 const CastleMesh = preload("res://scripts/siege/castle_mesh.gd")
 const CastleKit = preload("res://scripts/siege/castle_kit.gd")
 static var CASTLE_KITS := true      # 0.31.74 Meshy castle kits (castle_kit.gd); false = the KayKit castle (tools compare)
-const PATH_TEX := preload("res://assets/terrain/path.png")
+const PATH_TEX := preload("res://assets/terrain/path.png")       # (the castle floors' herringbone when there's no kit)
+const DIRT_TEX := preload("res://assets/terrain/dirt.png")       # 0.31.126: the map's dirt paths (tools/make_dirt_texture.py)
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 const WeaponFx = preload("res://scripts/siege/weapon_fx.gd")
 
@@ -933,7 +934,7 @@ static func _terrain_material() -> ShaderMaterial:
 		var m := ShaderMaterial.new()
 		m.shader = load("res://scripts/siege/terrain.gdshader")
 		m.set_shader_parameter("grass_tex", Stage.texture("res://assets/terrain/grass.png"))
-		m.set_shader_parameter("path_tex", PATH_TEX)
+		m.set_shader_parameter("path_tex", DIRT_TEX)
 		m.set_shader_parameter("rock_tex", Stage.texture("res://assets/terrain/rock.png"))
 		m.set_shader_parameter("path_mask", ImageTexture.create_from_image(load(Land.MASK_RES)))
 		var r := Land.bake_rect()
@@ -1281,8 +1282,8 @@ static func _foliage_ok(p: Vector2, mask: Image, obstacles: Array, allow_slope :
 	var px := Vector2i(clampi(int((p.x - r.position.x) * Land.MASK_PPM), 0, mask.get_width() - 1),
 		clampi(int((p.y - r.position.y) * Land.MASK_PPM), 0, mask.get_height() - 1))
 	var mk := mask.get_pixelv(px)
-	if mk.r > 0.12:
-		return false                          # on a brick path
+	if mk.r > 0.46:
+		return false                          # on a dirt path (0.31.126: R is 0.5 at the track's edge)
 	if not allow_slope and mk.g > 0.3:
 		return false                          # on a ledge rim / cliff band
 	for ob in obstacles:
@@ -1306,20 +1307,26 @@ func _plan_foliage() -> Dictionary:
 	var tuft := func(p: Vector2, allow_slope := false):
 		if _foliage_ok(p, mask, obs, allow_slope):
 			out[TUFTS[rng.randi() % TUFTS.size()]].append(_foliage_xf(p, rng, 1.2, 1.7))
-	# 1. Both edges of every brick path (the grassy borders of the references).
+	# 1. Both edges of every path (the grassy borders of the references). 0.31.126: the dirt track's edge wanders
+	# (Land.path_wobble), so a tuft goes where the mask says the grass starts: R just under the edge's 0.5.
+	var edge_r := func(p: Vector2) -> float:
+		var r := Land.bake_rect()
+		var px := Vector2i(clampi(int((p.x - r.position.x) * Land.MASK_PPM), 0, mask.get_width() - 1),
+			clampi(int((p.y - r.position.y) * Land.MASK_PPM), 0, mask.get_height() - 1))
+		return mask.get_pixelv(px).r
 	for pl in Land.paths():
-		for i in range(pl.size() - 1):
+		for i in range(pl.size() - 1):                  # (the smoothed paths have a point every PATH_STEP m)
 			var a: Vector2 = pl[i]
 			var b: Vector2 = pl[i + 1]
 			var d := (b - a).normalized()
 			var n := Vector2(-d.y, d.x)
-			var L := a.distance_to(b)
-			var t := 0.0
-			while t < L:
-				for side in [-1.0, 1.0]:
-					if rng.randf() < 0.6:
-						tuft.call(a + d * (t + rng.randf_range(-0.3, 0.3)) + n * side * (Land.PATH_HALF_W + rng.randf_range(0.05, 0.45)))
-				t += 0.9
+			for side in [-1.0, 1.0]:
+				if rng.randf() < 0.55:
+					var base := a + d * rng.randf_range(0.0, a.distance_to(b))
+					var off := Land.PATH_HALF_W - 0.6
+					while off < Land.PATH_HALF_W + 1.4 and float(edge_r.call(base + n * side * off)) > 0.44:
+						off += 0.1                         # out to where the grass starts
+					tuft.call(base + n * side * (off + rng.randf_range(0.0, 0.35)))
 	# 2. Along the top of every scarp (natural hills, 0.30.2).
 	for half in [1.0, -1.0]:
 		for sc in Land.SCARPS:

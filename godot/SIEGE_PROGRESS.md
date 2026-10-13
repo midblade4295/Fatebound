@@ -3636,3 +3636,22 @@ K2/K3 notes (0.17.0)
   Home's button goes, Settings' stays as plain JOIN OUR DISCORD. tests/discord_test.gd covers both; Home tests (app_flow,
   app_scroll, tutorial, daily_reward, menu_sound, home_heroes, menu_float, lb_prizes, social_ui) pass. Version 0.31.125,
   versionCode 211.
+
+## 0.31.126 — dirt paths instead of herringbone brick
+- Kevin: "Make the paths on the map more natural looking like it's a dirt path ect". Before: straight runs of
+  herringbone brick, one width, a crisp 0.6 m edge. Now:
+  - **Shape** (siege_land.gd): PATHS_BLUE_HALF are control points; `paths()` curves a Catmull-Rom line through them
+    every 0.75 m (it passes through each point, so the spurs still meet their paths). `path_wobble(p)` makes the track
+    swell and narrow along the way (+-0.32 m) and fray at the edge (+-0.4 m more); even in p, so both halves match.
+  - **Mask** (tools/bake_land.gd, re-baked pathmask.res and cache.res): R is now `Land.path_r` -- 1 on the track's
+    middle, 0.5 at its (wobbling) edge 2.1 m out, 0 a little into the grass -- instead of a brick path's on/off edge.
+    The segments are bucketed in 4 m squares, so the bake still takes ~6 s.
+  - **Look** (terrain.gdshader): `assets/terrain/dirt.png` (new, made by tools/make_dirt_texture.py: soft trodden-earth
+    cells, warm/cool patches, pebbles lit from the top left, tiles seamlessly; imported like grass/rock) at 7 m a tile,
+    broken up by a big-patch noise; the edge frays with the grass cells and a mid-scale noise; damp, darker earth by the
+    grass and a lighter, dustier middle; clumps of grass holding on near the edges; the grass right at the edge a little
+    trodden. path.png stays for the castle floors' no-kit fallback.
+  - Grass tufts now hug the frayed edge (they step out until the mask says grass); foliage keeps off the dirt (R > 0.46).
+    Footsteps on a path sound of dirt, not stone (only the castles are stone now).
+  - The baked land changed, so the "world" content pack is rebuilt and uploaded (players download it once, ~54 MB).
+- Version 0.31.126, versionCode 212.

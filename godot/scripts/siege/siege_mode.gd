@@ -1348,8 +1348,8 @@ func _footsteps(delta: float) -> void:
 		surf = "water"
 	elif int(me.get("tower", -1)) >= 0 or Land.on_bridge(p, 0.2):
 		surf = "wood"
-	elif (absf(p.x) <= Sim.CASTLE_HX + 1.0 and absf(p.y) >= Sim.CASTLE_SHIFT + Sim.FRONT_Z - 0.5) or Land.dist_to_paths(p) < Land.PATH_HALF_W:
-		surf = "stone"
+	elif absf(p.x) <= Sim.CASTLE_HX + 1.0 and absf(p.y) >= Sim.CASTLE_SHIFT + Sim.FRONT_Z - 0.5:
+		surf = "stone"                        # (0.31.126: the paths are dirt now, so only the castles sound of stone)
 	var chain := "_chain" if me.cls == "knight" else ""
 	audio.play("tm_step_%s%s%d" % [surf, chain, 1 + _snd_rng.randi() % 5], false, 1.0)
 
