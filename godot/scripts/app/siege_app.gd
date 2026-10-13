@@ -27,6 +27,7 @@ const InviteBanner = preload("res://scripts/app/invite_banner.gd")
 const OrdersPanel = preload("res://scripts/app/orders_panel.gd")
 const LeaderboardPanel = preload("res://scripts/app/leaderboard_panel.gd")
 const DailyReward = preload("res://scripts/app/daily_reward.gd")
+const LbFetch = preload("res://scripts/meta/lb_fetch.gd")
 const Notify = preload("res://scripts/meta/notify.gd")
 const Analytics = preload("res://scripts/meta/analytics.gd")
 const Diag = preload("res://scripts/siege/siege_diag.gd")
@@ -1061,6 +1062,8 @@ func _on_eco_synced(differs: bool) -> void:
 		social.refresh()                          # 0.31.111: a new name -- the chat and friends lists show it
 	if analytics != null:
 		analytics.note_level(int(profile.d.level))
+	if siege == null and tab == "home":
+		offer_referral.call_deferred()            # 0.31.120: a referral chest that came with this answer (it checks)
 	if not differs or siege != null:
 		return
 	refresh_top()
@@ -1439,8 +1442,67 @@ func offer_prize() -> bool:
 	notice("LEADERBOARD PRIZE", "You finished #%d on last week's leaderboard! You got %s." % [int(x.get("rank", 0)), ", ".join(bits)])
 	return true
 
+func offer_referral() -> bool:
+	# 0.31.120: Gold chests from a referral (server/referrals.gd) since we last said so
+	if not daily_auto or siege != null or update_required or tab != "home" or is_instance_valid(modal):
+		return false
+	var seen := int(profile.d.settings.get("ref_seen", 0))
+	var fresh: Array = (profile.d.get("referral", {}).get("notes", []) as Array).filter(func(n): return int(n.get("at", 0)) > seen)
+	if fresh.is_empty():
+		return false
+	profile.d.settings["ref_seen"] = int(fresh[0].get("at", 0))
+	profile.save()
+	sfx("confirm")
+	notice("FRIEND REWARD", referral_text(fresh))
+	return true
+
+static func referral_text(fresh: Array) -> String:
+	var lines := []
+	for n in fresh:
+		if str(n.get("kind", "")) == "joined":
+			lines.append("You reached level %d with %s's code: a Gold Chest for you!" % [Eco.REF_LEVEL, str(n.get("name", "a friend"))])
+		else:
+			lines.append("%s reached level %d with your code: a Gold Chest for you!" % [str(n.get("name", "A friend")), Eco.REF_LEVEL])
+	if lines.size() > 3:
+		return "%d friend rewards: %d Gold Chests! Open them from your chest slots." % [lines.size(), lines.size()]
+	return "\n".join(lines) + "\nOpen it from your chest slots."
+
+func redeem_code(code: String, cb := Callable()) -> void:
+	# 0.31.120 (Kevin: referral codes): a new player enters the code of the friend who invited them -- the server checks
+	# it (server/referrals.gd) and answers {"t":"ref", "ok", "why", "name"}
+	var acct := str(profile.d.account.get("id", ""))
+	var key := str(profile.d.account.get("key", ""))
+	if acct == "" or key == "":
+		sfx("error")
+		toast("Play one online match first, then enter the code", UI.MUTED)
+		return
+	LbFetch.ask(self, str(eco_url), {"t":"ref", "acct":acct, "key":key, "code":code}, func(r: Dictionary):
+		if r.is_empty():
+			sfx("error")
+			toast("Not connected to the server right now", UI.RED)
+		elif bool(r.get("ok", false)):
+			sfx("confirm")
+			profile.d.referral["by"] = str(r.get("name", "a friend"))
+			profile.save()
+			if eco_sync != null:
+				eco_sync.pull()
+			toast("Code accepted! Reach level %d and you both get a Gold Chest" % Eco.REF_LEVEL, UI.CYAN)
+		else:
+			sfx("error")
+			var why := str(r.get("why", ""))
+			if why == "late":
+				profile.d.settings["ref_late"] = true
+				profile.save()
+			toast({"code":"No player has that code", "self":"That's your own code", "done":"You've already entered a friend's code",
+				"loop":"That friend joined with your code", "late":"Codes are for new players (first %d days, under level %d)" % [Eco.REF_DAYS, Eco.REF_LEVEL],
+				"auth":"Play one online match first, then enter the code"}.get(why, "The server didn't take that code"), UI.RED)
+		if is_instance_valid(modal) and modal.has_method("ref_changed"):
+			modal.ref_changed()
+		if cb.is_valid():
+			cb.call(r))
+
 func offer_daily() -> void:
-	if offer_prize():
+	if offer_prize() or offer_referral():
 		return
 	if not daily_auto or siege != null or update_required or tab != "home" or is_instance_valid(modal):
 		return

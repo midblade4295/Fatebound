@@ -3526,3 +3526,16 @@ K2/K3 notes (0.17.0)
   for a week = never paid twice (also after a restart). The window shows THIS WEEK'S PRIZES; Home says "LEADERBOARD
   PRIZE -- You finished #3 ..." once (settings.prize_seen); the Locker has a LEADERBOARD titles section. Profile
   `prizes` (last 12). tests/lb_prizes_test.gd.
+- **Referral codes** (Kevin: "both get a Gold chest when the new player reaches level 5, server-checked"). The code is the
+  friend code you already have. Friends has INVITE FRIENDS: what it gives, how many friends reached level 5 with your
+  code, and -- for a player under level 5 who hasn't entered one -- "Invited? Their code" + REDEEM. That asks the server on
+  its own socket ({"t":"ref", "acct", "key", "code"}, like "lb"; `lb_fetch.ask`); server/referrals.gd refuses a wrong
+  key, an unknown code, your own, a second one, a loop (they entered yours) and "late" (account older than 7 days or
+  already level 5 -- the field then hides), else records who and sets the account's `referral.by`. When the new player's
+  account reaches level 5 (checked after every paid online match and every eco exchange) the server gives both a Gold
+  chest (eco_accounts.grant_referral -> Profile.grant_referral, never a phone op) with a note; a friend is rewarded for at
+  most 20 players; referrals.json keeps by / paid / count. Home says FRIEND REWARD once per note (settings.ref_seen),
+  also right after the sync that brought it. "ver" says "ref":1. Constants in Eco (REF_DAYS / REF_LEVEL / REF_MAX /
+  REF_CHEST). Installer copies referrals.gd and backs up referrals.json. tests/referral_test.gd (the rules with real
+  accounts; then the real server on 8107 + the real app: REDEEM, a restart with the player at level 5, the chest and
+  the popup, the friend's chest).

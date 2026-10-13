@@ -533,6 +533,13 @@ const PRIZE_TITLES := {
 	"title_top_ten": {"task":"Finish in the top 10 of a weekly leaderboard", "n":1, "cls":""},
 }
 
+# 0.31.120 (Kevin: referral codes): a new player enters a friend's code within REF_DAYS of making their account and
+# before level REF_LEVEL; at level REF_LEVEL both get a REF_CHEST (server/referrals.gd), a friend for at most REF_MAX.
+const REF_DAYS := 7
+const REF_LEVEL := 5
+const REF_MAX := 20
+const REF_CHEST := "gold"
+
 static func lb_prize(rank: int) -> Dictionary:
 	for t in LB_PRIZES:
 		if rank >= int(t.from) and rank <= int(t.to):

@@ -401,6 +401,20 @@ func grant_prize(id: String, week: String, rank: int, prize: Dictionary) -> bool
 	_save_meta(e)
 	return true
 
+func grant_referral(id: String, kind: String, name: String) -> bool:
+	# 0.31.120: a referral's Gold chest (server/referrals.gd)
+	var e := _load(id)
+	if e.is_empty():
+		return false
+	var p = e.p
+	p.refresh()
+	p.replaying = true
+	p.grant_referral(kind, name)
+	p.replaying = false
+	e.meta.rev = int(e.meta.get("rev", 0)) + 1
+	_save_meta(e)
+	return true
+
 func grant_purchase(id: String, key: String, product: String, token: String, consumed := false) -> Dictionary:
 	# a purchase Google confirmed: granted to this account once; a token granted to another account never again.
 	# consumed: Google says the gem pack was used up already -- only "already yours" if this account got it

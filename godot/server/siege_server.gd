@@ -103,6 +103,7 @@ const MatchLedger = preload("res://server/match_ledger.gd")
 const Social = preload("res://server/social.gd")
 const Analytics = preload("res://server/analytics.gd")
 const Leaderboard = preload("res://server/leaderboard.gd")
+const Referrals = preload("res://server/referrals.gd")
 
 const RESTART_AFTER := 15.0          # seconds of results screen before the next match
 const IDLE_STOP := 30.0              # no players for this long -> stop simulating (and the room closes)
@@ -162,6 +163,7 @@ var eco = null                       # 0.31.108: the accounts (server/eco_accoun
 var social = null                    # 0.31.111: chat, friends, parties (server/social.gd)
 var analytics = null                 # 0.31.118: usage statistics (server/analytics.gd)
 var leaderboard = null               # 0.31.119: the week's best players (server/leaderboard.gd)
+var referrals = null                 # 0.31.120: friend codes entered by new players (server/referrals.gd)
 var boot_time := int(Time.get_unix_time_from_system())   # (with the match id: a match's id across restarts)
 var test_match_s := 0.0              # tests only (SIEGE_TEST_MATCH_S): a match ends after this many seconds
 var min_build := ""                  # "" = no minimum (see SIEGE_MIN_BUILD)
@@ -241,6 +243,8 @@ func _init() -> void:
 			_log("prize week %s: #%d %s (%d gems, %s chest, %s)" % [week, rank, acct, int(prize.get("gems", 0)), str(prize.get("chest", "")), str(prize.get("title", "-"))])
 		return ok
 	leaderboard.start()
+	referrals = Referrals.new()
+	referrals.log_fn = _log
 	_log("leaderboard: week of %s, %d players" % [leaderboard.week, leaderboard.rows.size()])
 
 # ---------------- minimum app build ----------------
@@ -548,7 +552,7 @@ func _handle(cid: int, msg: Dictionary) -> void:
 			# so the client treats no answer as "unknown" and checks again on connect.
 			if c.hello:
 				return
-			_send(cid, {"t":"ver", "v":Net.VERSION, "build":SERVER_BUILD, "min_build":min_build, "eco":1, "social":1, "an":1, "lb":1})
+			_send(cid, {"t":"ver", "v":Net.VERSION, "build":SERVER_BUILD, "min_build":min_build, "eco":1, "social":1, "an":1, "lb":1, "ref":1})
 			_refuse(cid, 1000, "ver")
 		"hello":
 			if c.hello or c.has("social"):
@@ -694,6 +698,8 @@ func _handle(cid: int, msg: Dictionary) -> void:
 			c.eco_done = true
 			var t0 := Time.get_ticks_usec()
 			var out: Dictionary = eco.handle(msg)
+			if referrals != null and bool(out.get("ok", false)) and referrals.check(str(out.get("acct", "")), eco) > 0:
+				out = eco.handle({"t":"eco", "acct":str(out.acct), "key":str(msg.get("key", "")), "ops":[]})    # (with the chest in it)
 			_send(cid, out)
 			_refuse(cid, 1000, "eco")
 			c.close_at = _now() + 2.0
@@ -724,6 +730,14 @@ func _handle(cid: int, msg: Dictionary) -> void:
 				return
 			_send(cid, leaderboard.answer(lacct, social.friend_accts(lacct) if social != null else []))
 			_refuse(cid, 1000, "lb")
+			c.close_at = _now() + 2.0
+		"ref":
+			# 0.31.120: a new player enters a friend's code (server/referrals.gd). One per socket, no hello.
+			if c.hello or c.has("ref_done") or c.has("social") or referrals == null or eco == null:
+				return
+			c.ref_done = true
+			_send(cid, referrals.claim(str(msg.get("acct", "")), str(msg.get("key", "")), str(msg.get("code", "")), eco, social))
+			_refuse(cid, 1000, "ref")
 			c.close_at = _now() + 2.0
 		"iap":
 			# 0.31.90: a phone asks whether a Google Play purchase is real before it grants it. No hello (a purchase is
@@ -990,7 +1004,7 @@ func _status() -> Dictionary:
 			running = true
 	return {"t":"status", "v":Net.VERSION, "online":_human_count(), "in_match":in_match, "waiting":waiting,
 		"lobby":lobby, "running":running, "slots":Net.TEAM_SIZE * 2, "max":max_players * max_rooms, "rooms":rooms.size(),
-		"build":SERVER_BUILD, "min_build":min_build, "eco":1, "social":1, "an":1, "lb":1,
+		"build":SERVER_BUILD, "min_build":min_build, "eco":1, "social":1, "an":1, "lb":1, "ref":1,
 		"chatting":social.online.size() if social != null else 0}
 
 # ---------------- statistics (0.31.118) ----------------
@@ -1046,6 +1060,8 @@ func _pay_match(r: Room) -> void:
 		c.erase("ledger")
 		if leaderboard != null:
 			leaderboard.add_match(str(c.acct), str(c.name), str(c.get("title", "")), me, won)     # 0.31.119
+		if referrals != null:
+			referrals.check(str(c.acct), eco)                 # 0.31.120: level 5 with a friend's code
 		if analytics != null:
 			analytics.server_event(str(c.acct), "match_finish", {"match":str(c.get("match_key", match_key(r))), "mode":"online",
 				"dur_s":int(_now() - float(c.get("seated_at", _now()))), "result":"win" if won else ("draw" if draw else "loss"),
