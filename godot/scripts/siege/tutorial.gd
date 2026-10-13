@@ -221,6 +221,8 @@ func _next_step() -> void:
 		return
 	if str(STEPS[step].id) == "grab":
 		_shortcut()
+	if mode != null and mode.get("analytics") != null:
+		mode.analytics.log_ev("tutorial_step", {"step":step, "id":str(STEPS[step].id)})      # 0.31.118
 	_show_line()
 
 func _shortcut() -> void:

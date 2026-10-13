@@ -3387,3 +3387,41 @@ K2/K3 notes (0.17.0)
   a dim chest in each empty slot, the online line. Heroes still on the painted floor.
 - ui pack rebuilt and uploaded (ui-03795105ed77.pck). Full suite: ALL SIEGE TESTS PASSED (63). 0.31.117, version
   code 203. APK 31432155 bytes, sha256 0bb3124c8d6fac17015e4e6113e3b4341a47a362b88caea10a270780feb2be50.
+
+## 0.31.118 — Self-hosted usage statistics (Kevin's spec `ANALYTICS_SPEC_FOR_CLAUDE.md`: "Replaces what Firebase Analytics would do, with no SDK and no third party")
+- Notes for whoever runs it: `godot/ANALYTICS.md` (and SIEGE_HANDOFF section 21).
+- Events and the props each may carry: `scripts/meta/analytics_events.gd`, shared by the phone and the server (anything
+  else is dropped). Numbers, true/false and short words made by the game; never a name, chat text, token or order id.
+- Phone `scripts/meta/analytics.gd` (a child of SiegeApp): a queue on disk (500 events / 256 KB; the oldest go and
+  are reported as q_dropped), batches of 100 on an `an` socket (compressed, like eco) once `ver`/`status` said `"an":1`
+  and the phone has an account; the `ok` list lets those go; no answer = keep and retry (eco_sync's backoff).
+  Sessions are times in the foreground (session_start once the version check answered, with online/offline;
+  session_end with its length on pause/quit; a session that never ended is closed "lost" at the next start;
+  clean_session at the next cold start), level_up, error boot_stuck (safe start) and script_error (a count a session).
+  Hooks: tutorial start/step/complete/skip, VS BOTS match start/finish/quit, match_join, forge, chest_open, shop_view,
+  update_screen. Settings > PRIVACY > "Share anonymous usage stats" (on by default): off clears the queue, sends one
+  opt_out, logs nothing more; the match and social hellos then carry `an_off`.
+- Server `server/analytics.gd`: the account's key must open it (else 4005 "an", nothing written); allow-lists; ts
+  clamped to -30 d / +1 d (ts_bad); 100 a batch, 2,000 an account a day; ids deduped for today and yesterday (read back
+  from the files at start); `analytics/YYYY-MM-DD.jsonl` by the UTC day it arrived, flushed every second, folder 0700,
+  files 0600; gzip after 2 days, deleted after 90 (at start and hourly). The server writes its own events:
+  session_online (a hello with an account), online match_start / match_finish (result, team_n humans on the side,
+  length, start and final class) / match_quit (left mid-match), purchase_verified (product, test), chat_send (kind),
+  friend_add / friend_accept, party_create / party_invite / party_join, quick_chat (index), update_screen (a min_build
+  refusal). Nothing for an opted-out account. Never an IP address. Protocol stays 35.
+- Deploy: the installer ships both new scripts; the accounts backup takes the last 7 days of `analytics/` and
+  `opt_out.json`. The probe sends `an` when the status says `an:1` (with SIEGE_PROBE_ACCT/KEY a real batch, build
+  `-probe`; without, a made-up key must be refused). Checked with the installer's test mode (PROBE_OK) and a 0.31.116
+  build still playing against the new server with min_build 0.31.116 (and 0.31.115 refused).
+- Report `tools/analytics_report.py` (stdlib): total unique players and 30-day daily actives (UTC and Pacific) first,
+  then WAU/MAU, new players, D1/D7/D30, tutorial funnel, match completion/length (online/bots), win rate by class,
+  session length, purchase conversion without test purchases, social use, update screens by build, crash-free, opt-outs,
+  dropped. `--json`, `--tz`, `--exclude-file`; `-probe` builds left out.
+- privacy.html: "Usage statistics" section (+ mentions in collect/use/sharing/retention), still dated 12 October 2026.
+- Tests: analytics_client_test, analytics_server_test (+ a fake older server that never answers), analytics_events_test
+  (real server: probe, phone batch, social, an early quit and a full online match in a party, quick chat, a fake
+  purchase, min_build refusals, the opted-out account writing nothing, a grep for IPs/names/chat/tokens/keys),
+  tools/test_analytics_report.py. Full suite: ALL SIEGE TESTS PASSED (67). 0.31.118, version code 204. APK 31448879
+  bytes, sha256 26441e6950d78dc1057e2b14160d69c891faae3ce4f98a154e8fa0e7d92be10a. No content pack change.
+- Not done here: the server redeploy (Kevin), privacy.html on main + sslip (after merge), Play Data safety form
+  (Grokbot/Kevin, spec section 10). `remote_deploy.sh` isn't in this repo.

@@ -26,8 +26,9 @@ SERVICE_SRC="$SRC/server/deploy/fatebound-siege.service"
 # so a fresh install could not compile the sim). Nothing else: the baked terrain files are only the client's.
 SERVER_SCRIPTS="scripts/siege/siege_sim.gd scripts/siege/siege_net.gd scripts/siege/siege_land.gd scripts/siege/siege_castle.gd"
 # 0.31.108: the accounts -- the server replays every player's changes with the game's own economy and profile code
-META_SCRIPTS="scripts/meta/economy.gd scripts/meta/profile.gd"
-SERVER_FILES="server/siege_server.gd server/siege_probe.gd server/iap_verify.gd server/eco_accounts.gd server/match_ledger.gd server/social.gd"
+# 0.31.118: the analytics allow-list (events and their props), shared by the phone and the server
+META_SCRIPTS="scripts/meta/economy.gd scripts/meta/profile.gd scripts/meta/analytics_events.gd"
+SERVER_FILES="server/siege_server.gd server/siege_probe.gd server/iap_verify.gd server/eco_accounts.gd server/match_ledger.gd server/social.gd server/analytics.gd"
 for f in $SERVER_SCRIPTS $META_SCRIPTS $SERVER_FILES; do
   [ -f "$SRC/$f" ] || { echo "Missing $SRC/$f — run this from the Siege branch checkout." >&2; exit 1; }
 done
@@ -117,10 +118,19 @@ else
   [ -d "$ACCT_DIR" ] || ACCT_DIR=/var/lib/fatebound-siege/accounts
   if [ -d "$ACCT_DIR" ]; then
     mkdir -p /var/backups/fatebound-siege
+    # 0.31.118: plus the usage statistics of the last 7 days (and who opted out) -- older days stay only on the server
+    AN_FILES=""
+    for i in 0 1 2 3 4 5 6; do
+      d="$(date -u -d "-$i day" +%F)"
+      for f in "analytics/$d.jsonl" "analytics/$d.jsonl.gz"; do
+        if [ -f "$(dirname "$ACCT_DIR")/$f" ]; then AN_FILES="$AN_FILES $f"; fi
+      done
+    done
+    if [ -f "$(dirname "$ACCT_DIR")/analytics/opt_out.json" ]; then AN_FILES="$AN_FILES analytics/opt_out.json"; fi
     tar -czf "/var/backups/fatebound-siege/accounts-$(date -u +%Y%m%dT%H%M%SZ).tgz" -C "$(dirname "$ACCT_DIR")" \
-      accounts $(cd "$(dirname "$ACCT_DIR")" && ls purchase_tokens.json iap_ledger.jsonl social.json reports.jsonl muted.txt 2>/dev/null)
+      accounts $(cd "$(dirname "$ACCT_DIR")" && ls purchase_tokens.json iap_ledger.jsonl social.json reports.jsonl muted.txt 2>/dev/null) $AN_FILES
     chmod 600 /var/backups/fatebound-siege/*.tgz
-    echo "Accounts backed up to /var/backups/fatebound-siege/"
+    echo "Accounts backed up to /var/backups/fatebound-siege/ (analytics files:${AN_FILES:- none yet})"
   fi
   systemctl enable --quiet fatebound-siege
   systemctl restart fatebound-siege

@@ -35,6 +35,7 @@
 <li>An anonymous Firebase Auth id</li>
 <li>Game save data (gold, relics, map state, settings)</li>
 <li>For in-app purchases: the Google Play purchase token, product and order id</li>
+<li>Anonymous usage statistics, unless you turn them off (see "Usage statistics" below)</li>
 </ul>
 
 <h2>Internet use</h2>
@@ -50,7 +51,7 @@
 <p>Google and GitHub process those requests under their own policies. We do not run an ad network in the current build.</p>
 
 <h2>How we use information</h2>
-<p>Save data is used to restore progress and to keep a cloud copy under your anonymous id. We do not sell data or build advertising profiles.</p>
+<p>Save data is used to restore progress and to keep a cloud copy under your anonymous id. Usage statistics are used to improve the game and fix problems. We do not sell data or build advertising profiles.</p>
 <h2>Purchases</h2>
 <p>Payment happens entirely inside Google Play; we never see card or bank details. When you buy gems, the game sends the purchase token to our game server, which asks Google whether the purchase is real before the gems are added. The server keeps a short record (product, Google order id, a hashed token, the time and the result) so a purchase is granted only once and refunds can be handled. Your save keeps the purchase token for the same reason.</p>
 
@@ -67,17 +68,27 @@
 </ul>
 <p>You can turn global chat off in Settings, block any player (you won't see their messages and they can't send you requests or invites), and report them from their name in the chat. Don't share personal information in chat.</p>
 
+<h2>Usage statistics</h2>
+<p>To see how the game is played and to find problems, the game sends our own game server anonymous usage events. Only our server receives them: there is no analytics SDK, advertising network or other third party involved.</p>
+<ul>
+<li>What is sent: when a session starts and ends and how long it lasted; tutorial progress; matches played, their mode, result and length, and the hero you played; level-ups; use of the forge, chests and shop; purchases the server verified (the product only); use of chat, friends and parties (counts only, never the text of a message); update screens; and start-up problems (for example the game failing to start, with no file paths or other device data).</li>
+<li>It is tied only to your random game account id. We do not store your IP address, device id or advertising id with it, nor your name, chat text, purchase token or order id.</li>
+<li>It is not shared with anyone or sold. It is kept for 90 days and then deleted. It is used only to improve the game and fix problems.</li>
+<li>Turn it off at any time in Settings &rarr; "Share anonymous usage stats". The game then deletes the events still waiting on your device, tells the server once that you opted out, and sends nothing more; the server stops recording anything for your account.</li>
+<li>To have the statistics for your account deleted sooner, email us with your player id (see "Retention and deletion").</li>
+</ul>
+
 <h2>Google Play Games</h2>
 <p>Signing in with Google Play Games is optional. When you are signed in, the game reads your Play Games display name to show it in Settings, and keeps a copy of your game progress (the same save data that is on your device: level, currencies, items, statistics and settings) as a Saved Game in your Google account, so you can restore it on another phone. Google stores that copy under Google’s policies; it is not sent to our game server. You can delete it from the Google Play Games settings on your phone.</p>
 
 <h2>Sharing</h2>
-<p>We do not sell personal information. Cloud saves live in our Firebase project. Google Play processes installs and purchases under Google’s policies.</p>
+<p>We do not sell personal information. Usage statistics stay on our own game server and are not shared. Cloud saves live in our Firebase project. Google Play processes installs and purchases under Google’s policies.</p>
 
 <h2>Children</h2>
 <p>Fatebound is general-audience fantasy combat. We do not knowingly collect a child’s real-world identity. There is no email sign-up.</p>
 
 <h2>Retention and deletion</h2>
-<p>There is no email-and-password Fatebound account. To delete local data, clear the app storage or uninstall. To ask us to delete a cloud save, your game server account, or your friends list and any reports about you, email <a href="mailto:midblade4295@gmail.com">midblade4295@gmail.com</a> with the player id shown by the game if you have it (it looks like SF-XXXX-XXXX).</p>
+<p>There is no email-and-password Fatebound account. To delete local data, clear the app storage or uninstall. Usage statistics are deleted automatically after 90 days. To ask us to delete a cloud save, your game server account, its usage statistics, or your friends list and any reports about you, email <a href="mailto:midblade4295@gmail.com">midblade4295@gmail.com</a> with the player id shown by the game if you have it (it looks like SF-XXXX-XXXX).</p>
 
 <h2>Security</h2>
 <p>Cloud writes require an anonymous Firebase session. Protect the device with a lock screen.</p>

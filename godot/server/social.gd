@@ -63,6 +63,7 @@ var send_fn: Callable = func(_cid, _msg): pass
 var close_fn: Callable = func(_cid): pass
 var in_match_fn: Callable = func(_acct) -> bool: return false
 var log_fn: Callable = func(_s): pass
+var event_fn: Callable = func(_acct, _ev, _p): pass   # 0.31.118: usage statistics (server/analytics.gd) -- never the text
 var _dirty_at := -1.0
 var _mute_clock := 0.0
 
@@ -403,6 +404,7 @@ func _chat(pid: String, msg: Dictionary) -> void:
 	r.text = text.to_lower()
 	rates[pid] = r
 	var u: Dictionary = users[pid]
+	event_fn.call(str(u.get("acct", "")), "chat_send", {"kind":ch})
 	var m := {"id":next_msg, "ch":ch, "pid":pid, "n":str(u.name), "tt":str(u.get("title", "")), "x":text, "at":unix()}
 	next_msg += 1
 	if ch == "global":
@@ -468,6 +470,7 @@ func _add(pid: String, target: String) -> void:
 		t.rout.erase(pid)
 		u.friends.append(target)
 		t.friends.append(pid)
+		event_fn.call(str(u.get("acct", "")), "friend_accept", {})
 		_mark()
 		_refresh(pid)
 		_refresh(target)
@@ -481,6 +484,7 @@ func _add(pid: String, target: String) -> void:
 		_note(pid, "Too many requests waiting for an answer", true)
 		return
 	u.rout.append(target)
+	event_fn.call(str(u.get("acct", "")), "friend_add", {})
 	if not (t.blocked as Array).has(pid):                 # (blocked: it looks sent, and never arrives)
 		t.rin.append(pid)
 		while (t.rin as Array).size() > MAX_REQ_IN:
@@ -636,10 +640,12 @@ func _invite(pid: String, target: String) -> void:
 		return
 	if pa == "":
 		pa = _new_party(pid)
+		event_fn.call(str(users[pid].get("acct", "")), "party_create", {})
 	var mine: Dictionary = invites.get(target, {})
 	mine[pa] = {"from":pid, "at":clock}
 	invites[target] = mine
 	_send(target, {"t":"so", "k":"inv", "party":pa, "from":_card(pid)})
+	event_fn.call(str(users[pid].get("acct", "")), "party_invite", {})
 	_send_party(pa)
 	_note(pid, "Invited %s to your party" % _name(target))
 
@@ -662,6 +668,7 @@ func _join(pid: String, pa: String) -> void:
 		return
 	parties[pa].members.append(pid)
 	party_of[pid] = pa
+	event_fn.call(str(users[pid].get("acct", "")), "party_join", {"n":(parties[pa].members as Array).size()})
 	_sys(pa, "%s joined the party" % _name(pid))
 	_send_party(pa)
 	_send(pid, {"t":"so", "k":"hist", "ch":"party", "list":_visible(pid, hist.get("p:" + pa, []))})

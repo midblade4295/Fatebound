@@ -571,3 +571,20 @@ questionnaire ("Users can interact" / shares user-generated content), the Data s
 name, friends list handled by the developer's server), and redeploy `privacy.html` (new "Game server account" and
 "Chat, friends and parties" sections, updated 12 October 2026). Play's UGC policy wants in-app reporting and blocking:
 both are on every name's card.
+
+## 21. Usage statistics, self-hosted (0.31.118, Kevin's `ANALYTICS_SPEC_FOR_CLAUDE.md`)
+Our own replacement for Firebase Analytics: no SDK, no third party. Full notes: **`godot/ANALYTICS.md`**.
+- Phone `scripts/meta/analytics.gd` queues events (500 / 256 KB cap) and sends batches of 100 on an `an` socket once
+  `ver`/`status` said `"an":1`; Settings > PRIVACY > "Share anonymous usage stats" turns it off (one `opt_out`, then
+  nothing; hellos carry `an_off`). Allow-list of events and props: `scripts/meta/analytics_events.gd`.
+- Server `server/analytics.gd`: key-checked, allow-listed, deduped, capped; `analytics/YYYY-MM-DD.jsonl` in the state
+  directory (0700/0600), gzip after 2 days, deleted after 90. Online matches, purchases, social, quick chat, min_build
+  refusals and `session_online` are written by the server itself. No IP, name, chat text, token or order id.
+- Report: `sudo python3 godot/tools/analytics_report.py --dir /var/lib/private/fatebound-siege` (total unique players
+  and 30-day daily actives first).
+- Protocol stays 35 (an older app never sends `an`; an older server ignores it and the phone keeps its queue).
+- Deploy: the installer ships both scripts and backs up the last 7 days of `analytics/`. `remote_deploy.sh` (named in
+  the spec) is not in this repo; if Kevin's copy lists SERVER_FILES, add `server/analytics.gd` and
+  `scripts/meta/analytics_events.gd` there too.
+- Google Play (Grokbot / Kevin): Data safety changes are in the spec's section 10; redeploy `privacy.html` (new "Usage
+  statistics" section).

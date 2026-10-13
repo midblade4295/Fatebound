@@ -25,6 +25,8 @@ const FriendsPanel = preload("res://scripts/app/friends_panel.gd")
 const ChatTicker = preload("res://scripts/app/chat_ticker.gd")
 const InviteBanner = preload("res://scripts/app/invite_banner.gd")
 const OrdersPanel = preload("res://scripts/app/orders_panel.gd")
+const Analytics = preload("res://scripts/meta/analytics.gd")
+const Diag = preload("res://scripts/siege/siege_diag.gd")
 const TitleLogo = preload("res://scripts/app/title_logo.gd")
 
 # 0.31.112 (Kevin: "move it [Home] to the center button. Move the shop button to far left")
@@ -113,6 +115,7 @@ var play_games: Node = null            # 0.31.102: Google Play Games sign-in and
 # 0.31.108: the account on the server (eco_sync.gd) -- the server's copy of the profile is the one that counts.
 # Headless (tests, tools) it doesn't reach the real server unless asked (eco_url / FB_ECO=1).
 var eco_sync: Node = null
+var analytics: Node = null              # 0.31.118: usage statistics to our own server (scripts/meta/analytics.gd)
 var eco_autostart := DisplayServer.get_name() != "headless" or OS.has_environment("FB_ECO")
 var eco_url := OS.get_environment("SIEGE_URL") if OS.has_environment("SIEGE_URL") else Net.DEFAULT_URL
 var online_refs := {}                  # Home's "players online" pill: {main, sub}
@@ -172,6 +175,18 @@ func _ready() -> void:
 	eco_sync.setup(profile)
 	add_child(eco_sync)
 	eco_sync.synced.connect(_on_eco_synced)
+	analytics = Analytics.new()
+	analytics.url = eco_url
+	analytics.auto_start = eco_autostart
+	analytics.setup(profile)
+	add_child(analytics)
+	analytics.watch_errors()
+	analytics.begin_session(true, safe_boot)
+	analytics.note_level(int(profile.d.level))
+	if online_status != null:
+		online_status.changed.connect(func():
+			if int(online_status.info.get("an", 0)) == 1:
+				analytics.server_ok = true)
 	eco_sync.rejected.connect(func(op: String, err: String):
 		print("ECO rejected %s: %s" % [op, err])
 		if op == "match":
@@ -782,6 +797,8 @@ func home_height() -> float:
 func show_tab(id: String) -> void:
 	if is_instance_valid(modal):
 		close_modal()                          # (a window's button that goes to another tab, e.g. the pass summary)
+	if analytics != null and id in ["shop", "pass"] and (tab != id or siege != null):
+		analytics.log_ev("shop_view", {"tab":id})
 	tab = id
 	profile.refresh()
 	for t in tab_buttons:
@@ -1012,6 +1029,8 @@ func _on_eco_synced(differs: bool) -> void:
 	if social != null and social.online() and str(profile.d.name) != _social_name:
 		_social_name = str(profile.d.name)
 		social.refresh()                          # 0.31.111: a new name -- the chat and friends lists show it
+	if analytics != null:
+		analytics.note_level(int(profile.d.level))
 	if not differs or siege != null:
 		return
 	refresh_top()
@@ -1055,6 +1074,9 @@ func start_match(online: bool, tutorial := false, follow := false) -> void:
 			_ticket_ok = false)
 		return
 	sfx("matchStart")
+	if analytics != null and not tutorial:
+		analytics.log_ev("match_join", {"mode":"online" if online else "bots",
+			"party_n":social.party_size() if social != null and social.online() and social.in_party() else 1})
 	siege = Siege.new()
 	siege.online = online
 	siege.tutorial = tutorial
@@ -1063,6 +1085,7 @@ func start_match(online: bool, tutorial := false, follow := false) -> void:
 	siege.low_fx = bool(profile.d.settings.get("reduce_motion", false))
 	siege.hq_gfx = bool(profile.d.settings.get("hq_graphics", true))
 	siege.player_name = str(profile.d.name)
+	siege.analytics = analytics
 	siege.exited.connect(_end_match)
 	siege.version_mismatch.connect(_on_version_mismatch)
 	if online_status != null:
@@ -1086,10 +1109,13 @@ func _menu_fps() -> void:
 
 func _end_match() -> void:
 	if is_instance_valid(siege):
+		siege.note_leaving()                     # 0.31.118: a VS BOTS match or the tutorial left before its end
 		siege.queue_free()
 	siege = null
 	if eco_sync != null and eco_sync.enabled:
 		eco_sync.pull()                          # 0.31.108: the server's count of the match (online), or ours sent up
+	if analytics != null:
+		analytics.note_level(int(profile.d.level))
 	_menu_fps.call_deferred()                 # (after the match's _exit_tree puts back what it found)
 	_set_menu_active(true)
 	show_tab("home")
@@ -1165,10 +1191,15 @@ func check_server_version() -> void:
 	_version_checker = VersionCheck.new()
 	_version_checker.url = version_check_url
 	_version_checker.done.connect(_on_server_version)
+	_version_checker.answered.connect(func(m: Dictionary):
+		if analytics != null:
+			analytics.server_ok = int(m.get("an", 0)) == 1)
 	add_child(_version_checker)
 
 func _on_server_version(server_v: int) -> void:
 	_version_checker = null
+	if analytics != null:
+		analytics.set_net(server_v >= 0)
 	apply_server_version(server_v)
 
 func apply_server_version(server_v: int) -> void:
@@ -1214,6 +1245,8 @@ func show_update_screen() -> void:
 		return
 	update_screen = UpdateScreen.new()
 	update_screen.server_version = server_version
+	if analytics != null:
+		analytics.log_ev("update_screen", {"from_build":Diag.BUILD, "need":server_version})
 	update_screen.open_url = open_url
 	update_screen.offline_requested.connect(func():
 		# 0.31.84 merge: Home has no VS BOTS mode any more (one PLAY, always online), so this starts the offline
@@ -1252,8 +1285,16 @@ func _notification(what: int) -> void:
 		elif tab != "home":
 			show_tab("home")
 		else:
+			if analytics != null:
+				analytics.end_session()
 			get_tree().quit()
+	elif what == NOTIFICATION_WM_CLOSE_REQUEST:
+		if analytics != null:
+			analytics.end_session()                # (desktop: the window closed)
+		get_tree().quit()
 	elif what == NOTIFICATION_APPLICATION_PAUSED:
+		if analytics != null:
+			analytics.end_session()                # 0.31.118: a session is a time in the foreground
 		if audio != null and audio.has_method("stop"):
 			audio.stop()
 		if social != null:
@@ -1263,6 +1304,8 @@ func _notification(what: int) -> void:
 		if online_status != null:
 			online_status.set_active(false)
 	elif what == NOTIFICATION_APPLICATION_RESUMED:
+		if analytics != null:
+			analytics.begin_session(false, false, str(analytics.meta.get("net", "")))
 		if eco_sync != null and eco_sync.auto_start:
 			eco_sync.start()                   # 0.31.108: the account as the server has it
 		if social != null and social_autostart:

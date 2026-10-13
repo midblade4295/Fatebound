@@ -73,7 +73,10 @@ func _process(delta: float) -> void:
 	if st == WebSocketPeer.STATE_OPEN and not _hi_sent:
 		_hi_sent = true
 		_t0 = _clock
-		_ws.put_packet(Net.encode({"t":"so", "k":"hi", "v":Net.VERSION, "acct":str(profile.d.account.id), "key":str(profile.d.account.key)}))
+		var hi := {"t":"so", "k":"hi", "v":Net.VERSION, "acct":str(profile.d.account.id), "key":str(profile.d.account.key)}
+		if not bool(profile.d.settings.get("analytics", true)):
+			hi["an_off"] = 1                         # 0.31.118: usage statistics off -- the server writes nothing for us
+		_ws.put_packet(Net.encode(hi))
 	while _ws != null and _ws.get_available_packet_count() > 0:
 		_on(Net.decode(_ws.get_packet()))
 	if _ws == null:

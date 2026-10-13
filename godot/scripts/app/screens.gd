@@ -2317,6 +2317,16 @@ static func settings(app, root: VBoxContainer) -> void:
 			app.open_friends(), "settings_friends", 13, 36.0, 11.0)
 		fb.custom_minimum_size.x = 100
 	UI2.body(sx, "Tap a name in the chat to add a friend, block or report them.", 11, UI2.MUTED)
+	# 0.31.118 (Kevin's analytics spec): usage statistics to our own server, on by default, off here
+	var px := UI2.frame(root, "night", 12, 18.0, "gold")
+	UI2.divider(px, "PRIVACY", 20)
+	UI2.toggle(px, "Share anonymous usage stats", "Sessions, matches and menu use -- never your name or chat", bool(d.settings.get("analytics", true)), "analytics", func(on: bool):
+		app.sfx("toggle")
+		d.settings.analytics = on
+		p.save()
+		if app.get("analytics") != null:
+			app.analytics.set_enabled(on))
+	UI2.body(px, "Only to Fatebound's own server, tied to your game account's random id. Kept 90 days, never sold or shared.", 11, UI2.MUTED)
 	# Graphics
 	var gx := UI2.frame(root, "night", 12, 18.0, "gold")
 	UI2.divider(gx, "GRAPHICS", 20)
@@ -2573,6 +2583,8 @@ static func forge(app, root: VBoxContainer) -> void:
 	var fb := UI2.button(info, label, "orange" if bool(check.ok) else "grey", func():
 		var res: Dictionary = p.forge(wid, el)
 		if bool(res.get("ok", false)):
+			if app.get("analytics") != null:
+				app.analytics.log_ev("forge", {"item":wid, "stars":int(res.stars)})      # 0.31.118
 			app.sfx("forge")
 			app.toast("%s is now %s!" % [Eco.forge_name(wid), str(Eco.FORGE_STARS[int(res.stars) - 1].name)], UI2.GOLD)
 			app.forge_element = ""

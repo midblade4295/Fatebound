@@ -18,8 +18,14 @@ signal version_mismatch(server_v: int, verdict: String)
 
 var team_size := 16
 var tutorial := false          # the Herald's walkthrough (scripts/siege/tutorial.gd)
+var analytics = null          # 0.31.118: usage statistics (scripts/meta/analytics.gd): VS BOTS matches and the tutorial
+var _an_match := ""           #   (the server counts online matches itself)
+var _an_class0 := ""
+var _tut_t0 := 0
+var _tut_done := false
 var tut: Control = null
 const Tutorial = preload("res://scripts/siege/tutorial.gd")
+const Analytics = preload("res://scripts/meta/analytics.gd")
 const TUTORIAL_GOLD := 250
 # 3D resolution as a fraction of the PHYSICAL screen (window pixels, not logical UI units).
 var render_scale := 1.0
@@ -240,6 +246,13 @@ func _start_steps() -> Array:
 			tut = Tutorial.new()
 			add_child(tut)                     # after the HUD: drawn on top of it
 			tut.begin(self)
+			_tut_t0 = int(Time.get_unix_time_from_system())
+			if analytics != null:
+				analytics.log_ev("tutorial_start", {})
+		elif analytics != null and not online:
+			_an_match = Analytics.hex(4)
+			_an_class0 = class_of(sim.by_id.get(hud.player_id, {}))
+			analytics.log_ev("match_start", {"match":_an_match, "mode":"bots", "class":_an_class0})
 		_lifts = 0
 		_title_reset())
 	return steps
@@ -495,6 +508,7 @@ func _net_process(delta: float) -> void:
 		if profile != null and bool(profile.server_mode):
 			hi["acct"] = str(profile.d.account.id)       # 0.31.108: the server pays this match to the account
 			hi["key"] = str(profile.d.account.key)
+		hi.merge(Analytics.hello_flags(profile))         # 0.31.118: "an_off" when usage statistics are off
 		_net_send(hi)
 	while ws.get_available_packet_count() > 0:
 		var msg := Net.decode(ws.get_packet())
@@ -870,6 +884,9 @@ func _process(delta: float) -> void:
 		hud.show_result(match_result)
 		if not tutorial:
 			_result_sounds(won, draw)
+		if analytics != null and not online and not tutorial and _an_match != "":
+			analytics.log_ev("match_finish", {"match":_an_match, "mode":"bots", "dur_s":int(sim.time),
+				"result":"win" if won else ("draw" if draw else "loss"), "team_n":1, "class":class_of(me), "class0":_an_class0})
 
 func _result_sounds(won: bool, draw: bool) -> void:
 	# 0.31.110 (Kevin: "more menu sound effects"): the results' stinger -- brass and drums for a win, low strings and a
@@ -893,7 +910,26 @@ func finish_tutorial() -> void:
 	# The Herald's last line: mark it done, pay the recruit, back to the menu.
 	if profile != null:
 		profile.finish_tutorial()                  # (0.31.108: the pay, once -- the server pays it too)
+	_tut_done = true
+	if analytics != null:
+		analytics.log_ev("tutorial_complete", {"dur_s":int(Time.get_unix_time_from_system()) - _tut_t0})
 	exited.emit()
+
+static func class_of(u: Dictionary) -> String:
+	# 0.31.118: the class a unit plays, its upgrade marked ("knight", "knight+") -- as the server writes it
+	return str(u.get("cls", "")) + ("+" if bool(u.get("up", false)) else "")
+
+func note_leaving() -> void:
+	# 0.31.118: the app is taking us down -- a VS BOTS match left before its end, or the tutorial before its last line
+	if analytics == null:
+		return
+	if tutorial:
+		if not _tut_done and tut != null:
+			analytics.log_ev("tutorial_skip", {"dur_s":int(Time.get_unix_time_from_system()) - _tut_t0, "step":int(tut.get("step")),
+				"id":str(Tutorial.STEPS[int(tut.get("step"))].id)})
+	elif not online and _an_match != "" and sim != null and not sim.ended:
+		analytics.log_ev("match_quit", {"match":_an_match, "mode":"bots", "quit_at_s":int(sim.time),
+			"class":class_of(sim.by_id.get(hud.player_id, {})), "class0":_an_class0})
 
 func _thermal_guard(delta: float) -> void:
 	_guard_clock += delta
