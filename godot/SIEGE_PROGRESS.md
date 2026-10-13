@@ -3664,3 +3664,17 @@ K2/K3 notes (0.17.0)
   smooth minimum of the path's and the patch's (Land.ground_dist, APRON_BLEND 2.2 m), so there's no seam. Baked into
   pathmask.res (tools/bake_land.gd); the shader draws it like the paths. A few grass tufts sit round the patch's edge
   (sparse -- a full ring read as a hedge). World content pack rebuilt. Version 0.31.127, versionCode 213.
+
+## 0.31.128 — vibration only for knockouts; one body size; the Knight's idle for (nearly) everyone
+- Kevin: "I only want phone to vibrate when player makes a kill". `siege_mode._haptic`: one buzz (70 ms) for each
+  enemy the player knocks out; nothing for being hit, falling, a multi-knockout's banner, the King, rescues or gates.
+  Settings' line: "A buzz each time you knock out an enemy". kill_feed_test updated.
+- Kevin: "make the base class models the same size as the advanced class". Every body is drawn at 1.14 (View.BODY_SCALE;
+  the base classes were 1.0, the upgraded 1.14). An upgraded class still shows by its own model and its gold ring.
+- Kevin: "make their idle animations the same as knight so the others aren't bouncing up and down so much". Measured
+  the clips' hip motion: g/Idle_A (the Knight's) 1.5 cm, g/Idle_B 10.2 cm (Rogue, Mage, Priest, Assassin, Archmage,
+  Necromancer), m/Melee_2H_Idle 3.6 cm (Barbarian, Berserker), r/Ranged_Bow_Idle 0 cm (Archer, Ranger). Every class now
+  stands in g/Idle_A except the two archers: in g/Idle_A the bow hand is the Knight's shield hand and all eight bows'
+  strings turned away from the archer (weapon_grip_test), and their own idle doesn't bob at all. Home's heroes use the
+  same idles.
+- Version 0.31.128, versionCode 214.

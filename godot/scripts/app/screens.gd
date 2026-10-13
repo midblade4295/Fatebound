@@ -2371,7 +2371,7 @@ static func settings(app, root: VBoxContainer) -> void:
 			app._apply_audio()
 			app.sfx("slider"))                 # 0.31.110: a tiny tick a step, at the new level
 	# 0.31.120 (Kevin: phone vibration): a buzz when you're hit, knock someone out, fall, or a King is rescued
-	UI2.toggle(au, "Vibration", "Buzz when you're hit, score a knockout or a King is rescued", bool(d.settings.get("vibrate", true)), "vibrate", func(on: bool):
+	UI2.toggle(au, "Vibration", "A buzz each time you knock out an enemy", bool(d.settings.get("vibrate", true)), "vibrate", func(on: bool):
 		app.sfx("toggle")
 		d.settings["vibrate"] = on
 		p.save()
