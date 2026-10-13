@@ -3425,3 +3425,14 @@ K2/K3 notes (0.17.0)
   bytes, sha256 26441e6950d78dc1057e2b14160d69c891faae3ce4f98a154e8fa0e7d92be10a. No content pack change.
 - Not done here: the server redeploy (Kevin), privacy.html on main + sslip (after merge), Play Data safety form
   (Grokbot/Kevin, spec section 10). `remote_deploy.sh` isn't in this repo.
+
+## 0.31.119 — match rooms, idle takeover, scoreboard, leaderboards, chest notifications, daily reward, achievements (Kevin: "Do all besides #7")
+- **Match rooms** (server only). The server ran one match: the 33rd player was turned away "full". Now each room is
+  its own match, lobby countdown and results screen (the old single-match code, per room: `Room` in
+  siege_server.gd). SIEGE_MAX_PLAYERS stays the humans in one match (32); SIEGE_MAX_ROOMS (default 4) matches at once.
+  A hello goes to its party's room while it has space, else the busiest room with space, else a new room; "full" only
+  when every room is full. Empty rooms close after IDLE_STOP. Match ids unique across rooms. "status" counts all
+  rooms (+ "rooms"); lobby "in_match"/"running" are the room's own. Protocol unchanged (35).
+  Load (this machine, NET_TEST_N=128, 4 full rooms): ~330 ms of work a second, 1.45 MB/s out, 60 frames/s, worst
+  frame 17 ms (one room: ~90 ms/s, 350 kB/s). tests/match_rooms_test.gd (rooms of 3, 2 rooms: overflow, party first,
+  full only when all are full, status, names per room, rooms closing); every server test passes on the new code.
