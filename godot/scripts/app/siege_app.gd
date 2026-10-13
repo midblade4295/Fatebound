@@ -25,6 +25,9 @@ const FriendsPanel = preload("res://scripts/app/friends_panel.gd")
 const ChatTicker = preload("res://scripts/app/chat_ticker.gd")
 const InviteBanner = preload("res://scripts/app/invite_banner.gd")
 const OrdersPanel = preload("res://scripts/app/orders_panel.gd")
+const LeaderboardPanel = preload("res://scripts/app/leaderboard_panel.gd")
+const DailyReward = preload("res://scripts/app/daily_reward.gd")
+const Notify = preload("res://scripts/meta/notify.gd")
 const Analytics = preload("res://scripts/meta/analytics.gd")
 const Diag = preload("res://scripts/siege/siege_diag.gd")
 const TitleLogo = preload("res://scripts/app/title_logo.gd")
@@ -116,6 +119,7 @@ var play_games: Node = null            # 0.31.102: Google Play Games sign-in and
 # Headless (tests, tools) it doesn't reach the real server unless asked (eco_url / FB_ECO=1).
 var eco_sync: Node = null
 var analytics: Node = null              # 0.31.118: usage statistics to our own server (scripts/meta/analytics.gd)
+var notify = Notify.new()                # 0.31.119: "your chest is ready" notifications (the Play build's plugin)
 var eco_autostart := DisplayServer.get_name() != "headless" or OS.has_environment("FB_ECO")
 var eco_url := OS.get_environment("SIEGE_URL") if OS.has_environment("SIEGE_URL") else Net.DEFAULT_URL
 var online_refs := {}                  # Home's "players online" pill: {main, sub}
@@ -816,6 +820,8 @@ func show_tab(id: String) -> void:
 		else ScrollContainer.SCROLL_MODE_AUTO
 	content.modulate.a = 0.0
 	create_tween().tween_property(content, "modulate:a", 1.0, 0.18)
+	if id == "home":
+		offer_daily.call_deferred()
 
 func rebuild() -> void:
 	# Screens are rebuilt from the profile after every change; they're small and static.
@@ -896,6 +902,30 @@ func confirm(title_text: String, body: String, yes_text: String, style: String, 
 	UI.grow(UI.button(r, yes_text, style, func():
 		close_modal()
 		on_yes.call(), "modal_yes"))
+
+func notice(title_text: String, body: String) -> void:
+	# 0.31.119: a message with one OK (why a match ended, ...)
+	sfx("menuOpen")
+	close_modal()
+	modal = Control.new()
+	modal.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(modal)
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.6)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	modal.add_child(dim)
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	modal.add_child(center)
+	var v := UI.card(center)
+	(v.get_parent() as Control).custom_minimum_size = Vector2(minf(360, size.x - 32), 0)
+	UI.title(v, title_text, 20)
+	var b := UI.label(v, body, 14, UI.MUTED)
+	b.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	UI.grow(UI.button(UI.row(v, 10), "OK", "primary", func():
+		sfx("menuClose")
+		close_modal(), "modal_ok"))
 
 func close_modal() -> void:
 	if is_instance_valid(modal):
@@ -1108,7 +1138,9 @@ func _menu_fps() -> void:
 		Engine.max_fps = MENU_FPS
 
 func _end_match() -> void:
+	var note := ""
 	if is_instance_valid(siege):
+		note = str(siege.exit_note)
 		siege.note_leaving()                     # 0.31.118: a VS BOTS match or the tutorial left before its end
 		siege.queue_free()
 	siege = null
@@ -1125,6 +1157,8 @@ func _end_match() -> void:
 		show_update_screen()
 	elif server_updating:
 		toast(SERVER_UPDATING, UI.GOLD)
+	elif note == "idle":
+		notice("REMOVED FOR BEING IDLE", "You didn't move or attack for 3 minutes, so a bot took your place. Nothing was paid for that match.")
 
 # ---------------- Google Play's copy of the progress (0.31.102) ----------------
 func ask_cloud() -> void:
@@ -1295,6 +1329,8 @@ func _notification(what: int) -> void:
 	elif what == NOTIFICATION_APPLICATION_PAUSED:
 		if analytics != null:
 			analytics.end_session()                # 0.31.118: a session is a time in the foreground
+		if notify != null and profile != null:
+			notify.on_background(profile)          # 0.31.119: a chest that finishes while we're away says so
 		if audio != null and audio.has_method("stop"):
 			audio.stop()
 		if social != null:
@@ -1304,6 +1340,8 @@ func _notification(what: int) -> void:
 		if online_status != null:
 			online_status.set_active(false)
 	elif what == NOTIFICATION_APPLICATION_RESUMED:
+		if notify != null:
+			notify.on_foreground()                 # 0.31.119: back in the game -- the chests show themselves
 		if analytics != null:
 			analytics.begin_session(false, false, str(analytics.meta.get("net", "")))
 		if eco_sync != null and eco_sync.auto_start:
@@ -1334,6 +1372,52 @@ func open_chat(ch := "global") -> void:
 func open_orders() -> void:
 	close_modal()
 	var m := OrdersPanel.new()
+	add_child(m)
+	modal = m
+	m.open(self)
+
+func chest_started() -> void:
+	# 0.31.119: a chest started unlocking -- the first time, ask whether they'd like a notification when it's ready
+	# (our question first; Android's own dialog only on YES, so a NO here doesn't use up Android's two asks)
+	if notify == null or not notify.should_ask(profile):
+		return
+	profile.d.settings["notify_asked"] = true
+	profile.save()
+	confirm("CHEST NOTIFICATIONS", "Want a notification when your chest is ready to open? You can change this in Settings.",
+		"YES", "primary", func():
+			notify.request_permission(),
+		func():
+			profile.d.settings["notify"] = false
+			profile.save())
+
+func open_daily() -> void:
+	# 0.31.119: the DAILY REWARD card
+	close_modal()
+	var m := DailyReward.new()
+	add_child(m)
+	modal = m
+	m.open(self)
+
+# 0.31.119: the daily reward opens by itself on Home the first time each day a claim waits (not in tests or screenshot
+# tools, which set daily_auto when they want it)
+var daily_auto := DisplayServer.get_name() != "headless" and not OS.has_environment("SHOT_DIR")
+var _daily_offered := ""
+
+func offer_daily() -> void:
+	if not daily_auto or siege != null or update_required or tab != "home" or is_instance_valid(modal):
+		return
+	if not bool(profile.d.get("tutorial_done", false)) or not profile.login_ready():
+		return
+	var today := Eco.day_key(profile.now())
+	if _daily_offered == today:
+		return
+	_daily_offered = today
+	open_daily()
+
+func open_leaderboard() -> void:
+	# 0.31.119: the week's leaderboard (RANKS on Home)
+	close_modal()
+	var m := LeaderboardPanel.new()
 	add_child(m)
 	modal = m
 	m.open(self)

@@ -19,6 +19,7 @@ extends Node
 # Then ours goes up at most every UPLOAD_EVERY s while it changes, when the app goes to the background, and on BACK UP
 # NOW. A copy written by a newer version of the game (v > CLOUD_VERSION) is never overwritten or read.
 const Profile = preload("res://scripts/meta/profile.gd")
+const Achievements = preload("res://scripts/meta/achievements.gd")
 const PLUGIN := "GodotPlayGameServices"
 const SLOT := "fatebound-profile"
 const MAGIC := "FB1:"
@@ -43,6 +44,9 @@ var _since := 0.0                     # s since the last upload started
 var _up_stamp := ""                   # the stamp of the upload in flight
 var _up_saves := 0                    # profile.saves when it started
 var _manual := false                  # the player pressed SIGN IN / BACK UP NOW (say how it went)
+var achievements = Achievements.new()  # 0.31.119: Play Games achievements, sent while signed in
+var _ach_clock := 0.0
+const ACH_EVERY := 5.0                 # s between looks at the achievements (only what changed is sent)
 
 static func supported() -> bool:
 	return Engine.has_singleton(PLUGIN)
@@ -115,9 +119,22 @@ func on_resume() -> void:
 	if state == "error" and _wait == "":
 		_check()
 
+func signed_in() -> bool:
+	return plugin != null and state in ["checking", "synced", "ask"]
+
+func show_achievements() -> void:
+	# 0.31.119: Google's own achievements screen
+	if signed_in():
+		plugin.showAchievements()
+
 func _process(delta: float) -> void:
 	if plugin == null:
 		return
+	_ach_clock += delta
+	if _ach_clock >= ACH_EVERY:
+		_ach_clock = 0.0
+		if signed_in():
+			achievements.sync(profile, plugin)
 	_since += delta
 	if _wait != "":
 		_wait_t += delta

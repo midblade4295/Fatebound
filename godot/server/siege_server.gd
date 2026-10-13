@@ -4,7 +4,8 @@ extends SceneTree
 #
 #   godot --headless --path <project> -s res://server/siege_server.gd
 # Env: SIEGE_HOST (default 127.0.0.1 — keep it on loopback behind Caddy), SIEGE_PORT (8082),
-#      SIEGE_MAX_PLAYERS (32), SIEGE_LOG (1 = log joins/leaves/match results to stdout),
+#      SIEGE_MAX_PLAYERS (32: humans in one match room), SIEGE_MAX_ROOMS (4: matches at once, 0.31.119),
+#      SIEGE_LOG (1 = log joins/leaves/match results to stdout),
 #      SIEGE_LOBBY (seconds of the join countdown, default 20),
 #      SIEGE_MIN_BUILD (oldest app build allowed online, e.g. 0.31.84; "off"/empty = no minimum). Without it the
 #      server reads SIEGE_MIN_BUILD_FILE (default /etc/fatebound-siege/min_build, one line, e.g. "0.31.84") and
@@ -62,6 +63,26 @@ extends SceneTree
 # chat/friends/parties (never the text), quick chat and the update screen -- none of them for an account that opted
 # out ("an_off" in its hello or social "hi", or its opt_out event). "ver"/"status" answer "an":1, and only then does the
 # phone send "an": the protocol stays 35 (an older server ignores "an", the phone keeps its queue).
+#
+# 0.31.119 (Kevin: "Do all" -- more than one match at a time): the server runs ROOMS, each its own match, lobby
+# countdown and results screen, exactly as the one match ran before. SIEGE_MAX_PLAYERS is now the humans in ONE room
+# (32 = 16v16, as before); SIEGE_MAX_ROOMS (default 4) how many rooms may run at once. A hello goes to its party's room
+# when it has space, else the busiest room with space (players together rather than spread thin), else a new room;
+# only when every room is full is it "full". A room with nobody in it for IDLE_STOP s closes. Match ids are unique
+# across rooms ("match" in the welcome). "status" counts every room (+ "rooms"); the lobby message's "in_match" and
+# "running" are its own room's, "online" the whole server's. Additive: the protocol stays 35, and an app sees no
+# difference except that it isn't turned away.
+#
+# 0.31.119 (idle players): a seated player who gives no input (no movement, no attack/ability/block, no action, no quick
+# chat) for IDLE_BOT s of live match time -- time dead, in the lobby, on the results screen or building the match on the
+# phone (up to LOAD_GRACE s, until its first input message) doesn't count -- is played
+# by a bot: their unit's bot flag goes on (every app sees it in the snapshots) and they get {"t":"idle", "on":true,
+# "kick_in":s}. Any input hands the unit straight back ({"t":"idle", "on":false}). At IDLE_KICK s they're removed:
+# bye {"why":"idle"} + close 4006 "idle"; the seat stays with the bot and the match pays them nothing.
+#
+# 0.31.119 (leaderboards): every paid online match adds to the account's week (server/leaderboard.gd). A socket whose
+# first message is {"t":"lb", "acct", "key"} (no hello, like "eco") gets the week's board, the account's own row and its
+# friends' rows; a key that doesn't open the account: 4007 "lb". "ver"/"status" answer "lb":1.
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 const Net = preload("res://scripts/siege/siege_net.gd")
 const IapVerify = preload("res://server/iap_verify.gd")
@@ -69,46 +90,64 @@ const EcoAccounts = preload("res://server/eco_accounts.gd")
 const MatchLedger = preload("res://server/match_ledger.gd")
 const Social = preload("res://server/social.gd")
 const Analytics = preload("res://server/analytics.gd")
+const Leaderboard = preload("res://server/leaderboard.gd")
 
 const RESTART_AFTER := 15.0          # seconds of results screen before the next match
-const IDLE_STOP := 30.0              # no players for this long -> stop simulating
+const IDLE_STOP := 30.0              # no players for this long -> stop simulating (and the room closes)
 const LOBBY_TIME := 20.0             # the join countdown (0.31.82)
 const HELLO_TIMEOUT := 10.0
 const IAP_TIMEOUT := 40.0              # a purchase check may take a token request and an API call
 const REFUSE_CLOSE_DELAY := 0.25     # s between a "bye"/"ver" reply and closing the socket
-const SERVER_BUILD := "0.31.118"      # this server's game version; the probe says it by default (identifies as current)
+const SERVER_BUILD := "0.31.119"      # this server's game version; the probe says it by default (identifies as current)
 const MIN_BUILD_FILE := "/etc/fatebound-siege/min_build"
 const MIN_BUILD_RELOAD := 10.0       # s between re-reads of the min-build file
 const UPDATE_MSG := "A new version of Fatebound is out. Update now on Google Play to keep playing online."
 const MAX_MSGS_PER_SEC := 90         # per client; beyond this, messages are dropped
+const MAX_ROOMS := 4                 # 0.31.119: matches at once (SIEGE_MAX_ROOMS)
+const IDLE_BOT := 45.0               # 0.31.119: s without input before a bot plays for them (SIEGE_IDLE_BOT)
+const IDLE_KICK := 180.0             # ...and before they're removed (SIEGE_IDLE_KICK)
+const CLOSE_IDLE := 4006
+const LOAD_GRACE := 20.0             # s a phone may take to build the match before its idle time counts (until its first input)
 const TICK := Sim.TICK
 
+class Room:
+	# 0.31.119: one match and its lobby (everything the server used to keep once)
+	var id := 0
+	var sim = null
+	var match_id := 0
+	var match_seed := 0
+	var accum := 0.0
+	var snap_accum := 0.0
+	var ended_at := -1.0
+	var empty_since := -1.0
+	var pending_events: Array = []
+	var wave_end := -1.0              # when the waiting players are seated (-1: nobody waiting)
+	var lobby_clock := 0.0
+	var names_dirty := false          # a seat changed: send the players' names (0.31.86)
+	var paid_match := -1              # the match whose results went to the accounts
+
 var tcp := TCPServer.new()
-var clients := {}                    # cid -> {ws, unit, name, hello, move, hold, joined_at, msgs, msg_clock}
+var clients := {}                    # cid -> {ws, unit, name, hello, room, move, hold, joined_at, msgs, msg_clock}
 var next_cid := 1
-var sim = null
-var match_id := 0
-var match_seed := 0
-var _accum := 0.0
-var _snap_accum := 0.0
-var _ended_at := -1.0
-var _empty_since := -1.0
-var _pending_events: Array = []
+var rooms := {}                      # 0.31.119: room id -> Room
+var next_room := 1
+var match_counter := 0               # match ids, unique across rooms
+var max_rooms := MAX_ROOMS
 var host := "127.0.0.1"
 var port := Net.DEFAULT_PORT
-var max_players := 32
+var max_players := 32                # humans in one room
 var log_on := true
 var lobby_time := LOBBY_TIME
-var wave_end := -1.0                 # when the waiting players are seated (-1: nobody waiting)
-var _lobby_clock := 0.0
-var _names_dirty := false            # a seat changed: send the players' names (0.31.86)
+var idle_stop := IDLE_STOP           # (tests: SIEGE_IDLE_STOP)
+var idle_bot := IDLE_BOT
+var idle_kick := IDLE_KICK
 var iap = null                       # 0.31.90: Google Play purchase checks (server/iap_verify.gd)
 var eco = null                       # 0.31.108: the accounts (server/eco_accounts.gd)
 var social = null                    # 0.31.111: chat, friends, parties (server/social.gd)
 var analytics = null                 # 0.31.118: usage statistics (server/analytics.gd)
-var boot_time := int(Time.get_unix_time_from_system())   # (with match_id: a match's id across restarts)
+var leaderboard = null               # 0.31.119: the week's best players (server/leaderboard.gd)
+var boot_time := int(Time.get_unix_time_from_system())   # (with the match id: a match's id across restarts)
 var test_match_s := 0.0              # tests only (SIEGE_TEST_MATCH_S): a match ends after this many seconds
-var _paid_match := -1                # the match whose results went to the accounts
 var min_build := ""                  # "" = no minimum (see SIEGE_MIN_BUILD)
 var min_build_env := false           # true: fixed by SIEGE_MIN_BUILD, the file is not read
 var min_build_file := MIN_BUILD_FILE
@@ -121,9 +160,17 @@ func _init() -> void:
 		port = int(OS.get_environment("SIEGE_PORT"))
 	if OS.has_environment("SIEGE_MAX_PLAYERS"):
 		max_players = clampi(int(OS.get_environment("SIEGE_MAX_PLAYERS")), 1, 32)
+	if OS.has_environment("SIEGE_MAX_ROOMS"):
+		max_rooms = clampi(int(OS.get_environment("SIEGE_MAX_ROOMS")), 1, 64)
 	log_on = OS.get_environment("SIEGE_LOG") != "0"
 	if OS.has_environment("SIEGE_LOBBY"):
 		lobby_time = clampf(float(OS.get_environment("SIEGE_LOBBY")), 0.0, 120.0)
+	if OS.has_environment("SIEGE_IDLE_STOP"):
+		idle_stop = clampf(float(OS.get_environment("SIEGE_IDLE_STOP")), 0.5, 600.0)
+	if OS.has_environment("SIEGE_IDLE_BOT"):
+		idle_bot = clampf(float(OS.get_environment("SIEGE_IDLE_BOT")), 1.0, 3600.0)
+	if OS.has_environment("SIEGE_IDLE_KICK"):
+		idle_kick = clampf(float(OS.get_environment("SIEGE_IDLE_KICK")), idle_bot + 1.0, 7200.0)
 	if OS.has_environment("SIEGE_TEST_MATCH_S"):
 		test_match_s = float(OS.get_environment("SIEGE_TEST_MATCH_S"))
 	if OS.has_environment("SIEGE_MIN_BUILD"):
@@ -141,8 +188,8 @@ func _init() -> void:
 		printerr("SIEGE_SERVER listen failed on %s:%d (%s)" % [host, port, error_string(err)])
 		quit(1)
 		return
-	_log("SIEGE_SERVER listening on %s:%d (protocol %d, build %s, max %d players, min build %s)" % [host, port, Net.VERSION,
-		SERVER_BUILD, max_players, min_build if min_build != "" else "off"])
+	_log("SIEGE_SERVER listening on %s:%d (protocol %d, build %s, %d rooms of %d players, min build %s)" % [host, port, Net.VERSION,
+		SERVER_BUILD, max_rooms, max_players, min_build if min_build != "" else "off"])
 	iap = IapVerify.new()
 	iap.log_fn = _log
 	root.add_child.call_deferred(iap)
@@ -168,6 +215,9 @@ func _init() -> void:
 	analytics.log_fn = _log
 	social.event_fn = func(acct: String, ev: String, p: Dictionary): analytics.server_event(acct, ev, p)
 	_log("analytics: %s (%d accounts opted out)" % [analytics.dir, analytics.opted.size()])
+	leaderboard = Leaderboard.new()
+	leaderboard.log_fn = _log
+	_log("leaderboard: week of %s, %d players" % [leaderboard.week, leaderboard.rows.size()])
 
 # ---------------- minimum app build ----------------
 # "0.31.78-fatebound" -> [0, 31, 78]; anything without a leading dotted number -> [] (unknown).
@@ -235,15 +285,26 @@ func _process(delta: float) -> bool:
 	if _min_build_clock >= min_build_reload:
 		_min_build_clock = 0.0
 		_reload_min_build()
-	_run_lobby(delta)
-	_run_match(delta)
+	var ran := false
+	for rid in rooms.keys():
+		var r: Room = rooms[rid]
+		_run_lobby(r, delta)
+		if _run_match(r, delta):
+			ran = true
+		if r.names_dirty:
+			r.names_dirty = false
+			_send_names(r)
+		if r.sim == null and _room_humans(r) == 0:
+			rooms.erase(rid)                         # 0.31.119: nobody left and nothing running: the room closes
+			_log("room %d closed (%d open)" % [rid, rooms.size()])
+	if ran:
+		_stats_tick(delta)
 	if social != null:
 		social.tick(delta)
 	if analytics != null:
 		analytics.tick(delta)
-	if _names_dirty:
-		_names_dirty = false
-		_send_names()
+	if leaderboard != null:
+		leaderboard.tick(delta)
 	return false
 
 # ---------------- connections ----------------
@@ -255,7 +316,7 @@ func _accept() -> void:
 		ws.outbound_buffer_size = 1 << 20
 		if ws.accept_stream(conn) != OK:
 			continue
-		clients[next_cid] = {"ws":ws, "unit":"", "name":"", "hello":false, "move":Vector2.ZERO, "hold":false,
+		clients[next_cid] = {"ws":ws, "unit":"", "name":"", "hello":false, "room":0, "move":Vector2.ZERO, "hold":false,
 			"joined_at":Time.get_ticks_msec() / 1000.0, "msgs":0, "msg_clock":0.0}
 		next_cid += 1
 
@@ -298,7 +359,7 @@ func _poll_clients() -> void:
 			_handle(cid, Net.decode(pkt))
 
 func _send(cid: int, msg: Dictionary) -> void:
-	_send_raw(cid, Net.encode(msg, msg.get("t", "") in ["s", "eco", "iap", "an"]))      # (0.31.108: an account travels compressed; 0.31.118: and usage acks)
+	_send_raw(cid, Net.encode(msg, msg.get("t", "") in ["s", "eco", "iap", "an", "lb"]))      # (0.31.108: an account travels compressed; 0.31.118: and usage acks)
 
 func _send_raw(cid: int, bytes: PackedByteArray) -> void:
 	var c: Dictionary = clients.get(cid, {})
@@ -309,7 +370,7 @@ func _send_raw(cid: int, bytes: PackedByteArray) -> void:
 		ws.put_packet(bytes)
 
 # Load stats (0.31.23): every STATS_EVERY s, how long the sim steps, the snapshot build and the sends took per second,
-# and the bytes sent -- logged with SIEGE_STATS=1 (the net load test reads them).
+# and the bytes sent -- logged with SIEGE_STATS=1 (the net load test reads them). 0.31.119: all rooms together.
 const STATS_EVERY := 5.0
 var _st_step := 0
 var _st_snap := 0
@@ -327,8 +388,12 @@ func _stats_tick(delta: float) -> void:
 		return
 	if OS.has_environment("SIEGE_STATS"):
 		var n := _human_count()
-		var line := "SIEGE_STATS players=%d bots=%d step=%.1fms/s snapshot=%.1fms/s send=%.1fms/s kB/s=%.1f snaps/s=%.1f frames/s=%.1f worst_frame=%.0fms" % [
-			n, sim.units.size() - n if sim != null else 0, _st_step / 1000.0 / _st_clock, _st_snap / 1000.0 / _st_clock, _st_send / 1000.0 / _st_clock,
+		var units := 0
+		for r in rooms.values():
+			if r.sim != null:
+				units += r.sim.units.size()
+		var line := "SIEGE_STATS players=%d bots=%d rooms=%d step=%.1fms/s snapshot=%.1fms/s send=%.1fms/s kB/s=%.1f snaps/s=%.1f frames/s=%.1f worst_frame=%.0fms" % [
+			n, maxi(0, units - n), rooms.size(), _st_step / 1000.0 / _st_clock, _st_snap / 1000.0 / _st_clock, _st_send / 1000.0 / _st_clock,
 			_st_bytes / 1024.0 / _st_clock, _st_snaps / _st_clock, _st_frames / _st_clock, _st_frame_max * 1000.0]
 		print(line)
 		if OS.has_environment("SIEGE_STATS_FILE"):          # flushed per line (the load test reads it while we run)
@@ -351,12 +416,14 @@ func _drop(cid: int, why: String) -> void:
 	var c: Dictionary = clients.get(cid, {})
 	if c.is_empty():
 		return
+	var r := _room_of(c)
+	var sim = r.sim if r != null else null
 	if sim != null and c.unit != "" and sim.by_id.has(c.unit):
 		var u: Dictionary = sim.by_id[c.unit]
 		u.bot = true                   # a bot takes the slot back over
 		u.move = Vector2.ZERO
 		u.net_driven = false
-		_names_dirty = true            # (their name goes off the battlefield)
+		r.names_dirty = true           # (their name goes off the battlefield)
 	if c.hello and c.has("acct") and analytics != null and sim != null and not sim.ended and c.unit != "" \
 			and not bool(c.get("queued", false)) and sim.by_id.has(c.unit) and c.has("seated_at"):
 		# 0.31.118: left a match before it ended
@@ -364,7 +431,7 @@ func _drop(cid: int, why: String) -> void:
 			"quit_at_s":int(_now() - float(c.seated_at)), "class":class_of(sim.by_id[c.unit]), "class0":str(c.get("class0", ""))},
 			str(c.get("build", "")))
 	if c.hello:
-		_log("leave %s (%s) unit=%s players=%d" % [c.name, why, c.unit, _human_count() - 1])
+		_log("leave %s (%s) unit=%s room=%d players=%d" % [c.name, why, c.unit, int(c.get("room", 0)), _human_count() - 1])
 	clients.erase(cid)
 	if social != null:
 		if c.has("social"):
@@ -379,6 +446,49 @@ func _human_count() -> int:
 			n += 1
 	return n
 
+# ---------------- rooms (0.31.119) ----------------
+func _room_of(c: Dictionary) -> Room:
+	return rooms.get(int(c.get("room", 0)), null)
+
+func _members(r: Room) -> Array:
+	# the room's players (seated or waiting)
+	var out := []
+	for cid in clients:
+		var c: Dictionary = clients[cid]
+		if c.hello and int(c.get("room", 0)) == r.id:
+			out.append(cid)
+	return out
+
+func _room_humans(r: Room) -> int:
+	return _members(r).size()
+
+func _pick_room(party: String) -> Room:
+	# the party's room (while it has space), else the busiest room with space, else a new one; null = every room is full
+	if party != "":
+		for cid in clients:
+			var o: Dictionary = clients[cid]
+			if o.hello and str(o.get("party", "")) == party:
+				var pr := _room_of(o)
+				if pr != null and _room_humans(pr) < max_players:
+					return pr
+	var best: Room = null
+	var best_n := -1
+	for r in rooms.values():
+		var n := _room_humans(r)
+		if n < max_players and n > best_n:
+			best = r
+			best_n = n
+	if best != null:
+		return best
+	if rooms.size() >= max_rooms:
+		return null
+	var nr := Room.new()
+	nr.id = next_room
+	next_room += 1
+	rooms[nr.id] = nr
+	_log("room %d opened (%d open)" % [nr.id, rooms.size()])
+	return nr
+
 # ---------------- messages ----------------
 func _handle(cid: int, msg: Dictionary) -> void:
 	var c: Dictionary = clients[cid]
@@ -391,7 +501,7 @@ func _handle(cid: int, msg: Dictionary) -> void:
 			# so the client treats no answer as "unknown" and checks again on connect.
 			if c.hello:
 				return
-			_send(cid, {"t":"ver", "v":Net.VERSION, "build":SERVER_BUILD, "min_build":min_build, "eco":1, "social":1, "an":1})
+			_send(cid, {"t":"ver", "v":Net.VERSION, "build":SERVER_BUILD, "min_build":min_build, "eco":1, "social":1, "an":1, "lb":1})
 			_refuse(cid, 1000, "ver")
 		"hello":
 			if c.hello or c.has("social"):
@@ -415,26 +525,38 @@ func _handle(cid: int, msg: Dictionary) -> void:
 					analytics.server_event(str(msg.acct), "update_screen", {"from_build":build, "need":min_build}, build)
 				_log("refused %s: build %s older than min build %s" % [str(msg.get("name", "?")).left(20), build.left(30), min_build])
 				return
-			if _human_count() >= max_players:
-				_send(cid, {"t":"bye", "why":"full"})
-				_refuse(cid, 4002, "full")
-				return
-			c.hello = true
-			c.name = clean_name(str(msg.get("name", "Player")))
+			var name := clean_name(str(msg.get("name", "Player")))
 			var tid := str(msg.get("title", ""))
-			c.title = tid if Net.TITLES.has(tid) else ""
-			c.looks = Net.clean_looks(msg.get("lk", {}))  # 0.31.101: what they wear, for everyone to see
+			var title := tid if Net.TITLES.has(tid) else ""
+			var looks: Dictionary = Net.clean_looks(msg.get("lk", {}))  # 0.31.101: what they wear, for everyone to see
+			var acct := ""
+			var party := ""
 			if msg.has("acct") and eco != null:
 				# 0.31.108: an account -- its own name, title and looks (owned only), and the match is paid to it
 				var w: Dictionary = eco.wear(str(msg.get("acct", "")), str(msg.get("key", "")))
 				if not w.is_empty():
-					c.acct = str(msg.acct)
-					c.name = clean_name(str(w.name))
-					c.title = str(w.title)
-					c.looks = w.looks
+					acct = str(msg.acct)
+					name = clean_name(str(w.name))
+					title = str(w.title)
+					looks = w.looks
 					if social != null:
-						c.party = social.party_for(c.acct)    # 0.31.111: seated with their party
-						social.acct_changed(c.acct)
+						party = social.party_for(acct)    # 0.31.111: seated with their party
+			var r := _pick_room(party)
+			if r == null:
+				_send(cid, {"t":"bye", "why":"full"})
+				_refuse(cid, 4002, "full")
+				_log("refused %s: every room is full (%d rooms, %d players)" % [name, rooms.size(), _human_count()])
+				return
+			c.hello = true
+			c.room = r.id
+			c.name = name
+			c.title = title
+			c.looks = looks
+			if acct != "":
+				c.acct = acct
+				c.party = party
+				if social != null:
+					social.acct_changed(acct)
 			c.build = build.left(40)
 			if c.has("acct") and analytics != null:
 				# 0.31.118: a player on the server today (unless they opted out of usage statistics)
@@ -442,10 +564,10 @@ func _handle(cid: int, msg: Dictionary) -> void:
 				analytics.server_event(c.acct, "session_online", {}, c.build)
 			c.pred = bool(msg.get("pred", false))         # the phone moves its own unit (0.18.4)
 			c.queued = true                                # 0.31.82: into the lobby; seated when the countdown ends
-			if wave_end < 0.0:
-				wave_end = _now() + lobby_time
-			_log("queue %s (seated in %.0f s, players %d)" % [c.name, wave_end - _now(), _human_count()])
-			_lobby_clock = 1.0                             # tell everyone waiting at once
+			if r.wave_end < 0.0:
+				r.wave_end = _now() + lobby_time
+			_log("queue %s (room %d, seated in %.0f s, players %d)" % [c.name, r.id, r.wave_end - _now(), _human_count()])
+			r.lobby_clock = 1.0                            # tell everyone waiting at once
 		"status":
 			# 0.31.82: the menu's "players online" -- answered without a hello; the asker closes (or we do in 2 s: a
 			# close right behind the answer can reach the phone in the same read, and the WebSocket drops the answer)
@@ -468,23 +590,25 @@ func _handle(cid: int, msg: Dictionary) -> void:
 					_refuse(cid, 4004, "social")
 		"qc":
 			# 0.31.111: a quick chat line in a match, to the player's side ("Good game!" to everyone)
-			if not c.hello or sim == null or c.unit == "" or not sim.by_id.has(c.unit) or bool(c.get("queued", false)):
+			var r := _room_of(c)
+			if not c.hello or r == null or r.sim == null or c.unit == "" or not r.sim.by_id.has(c.unit) or bool(c.get("queued", false)):
 				return
 			var qi := int(msg.get("i", -1))
 			if qi < 0 or qi >= Net.QUICK_CHAT.size() or _now() - float(c.get("qc_at", -99.0)) < Net.QC_GAP:
 				return
 			c.qc_at = _now()
+			_active(r, cid)
 			var q: Dictionary = Net.QUICK_CHAT[qi]
-			var qteam := int(sim.by_id[c.unit].team)
-			if bool(q.get("call", false)) and not sim.ended:
-				sim.call_bots(c.unit)
+			var qteam := int(r.sim.by_id[c.unit].team)
+			if bool(q.get("call", false)) and not r.sim.ended:
+				r.sim.call_bots(c.unit)
 			if c.has("acct") and analytics != null:
 				analytics.server_event(c.acct, "quick_chat", {"i":qi}, str(c.get("build", "")))
 			var qmsg := {"t":"qc", "u":c.unit, "i":qi}
-			for ocid in clients:
+			for ocid in _members(r):
 				var o: Dictionary = clients[ocid]
-				if o.hello and not bool(o.get("queued", false)) and o.unit != "" and sim.by_id.has(o.unit) \
-						and (bool(q.get("all", false)) or int(sim.by_id[o.unit].team) == qteam):
+				if not bool(o.get("queued", false)) and o.unit != "" and r.sim.by_id.has(o.unit) \
+						and (bool(q.get("all", false)) or int(r.sim.by_id[o.unit].team) == qteam):
 					_send(ocid, qmsg)
 		"eco":
 			# 0.31.108: a phone's account -- its ops, a ticket, the account as it stands. One per socket, no hello.
@@ -511,6 +635,18 @@ func _handle(cid: int, msg: Dictionary) -> void:
 				return
 			_send(cid, aout)
 			_refuse(cid, 1000, "an")
+			c.close_at = _now() + 2.0
+		"lb":
+			# 0.31.119: the week's leaderboard for an account (its row and its friends'). One per socket, no hello.
+			if c.hello or c.has("lb_done") or c.has("social") or leaderboard == null or eco == null:
+				return
+			c.lb_done = true
+			var lacct := str(msg.get("acct", ""))
+			if lacct == "" or eco.open(lacct, str(msg.get("key", ""))).is_empty():
+				_refuse(cid, 4007, "lb")
+				return
+			_send(cid, leaderboard.answer(lacct, social.friend_accts(lacct) if social != null else []))
+			_refuse(cid, 1000, "lb")
 			c.close_at = _now() + 2.0
 		"iap":
 			# 0.31.90: a phone asks whether a Google Play purchase is real before it grants it. No hello (a purchase is
@@ -547,7 +683,8 @@ func _handle(cid: int, msg: Dictionary) -> void:
 				_log("purchase %s: %s%s" % [product, "ok" if bool(res.get("ok", false)) else str(res.get("why", "")),
 					" (test)" if bool(res.get("test", false)) else ""]))
 		"in":
-			if not c.hello or sim == null or c.unit == "":
+			var r := _room_of(c)
+			if not c.hello or r == null or r.sim == null or c.unit == "":
 				return
 			var m: Variant = msg.get("m", Vector2.ZERO)
 			if m is Vector2 and is_finite(m.x) and is_finite(m.y):
@@ -562,13 +699,20 @@ func _handle(cid: int, msg: Dictionary) -> void:
 				c.cpos_new = true
 				c.cpos_rx = Time.get_ticks_msec() / 1000.0
 			var a: String = str(msg.get("a", ""))
+			if not bool(c.get("got_in", false)):
+				c.got_in = true                                # the phone has the match up: idle time counts from here
+				c.idle_s = maxf(float(c.get("idle_s", 0.0)), 0.0)
+			if (c.move as Vector2).length() > 0.15 or c.hold or c.bhold or c.khold or a != "":
+				_active(r, cid)                                # 0.31.119: a real input (not just the phone's position)
+			if bool(c.get("idle", false)):
+				return                                         # (a bot plays for them until they do something)
 			if a != "" and a in Net.ACTIONS:
 				var arg: Variant = msg.get("arg", null)
 				if a == "buy":
 					arg = str(arg) if str(arg) in Sim.UPGRADES else ""
 				else:
 					arg = null
-				sim.act(c.unit, a, arg)
+				r.sim.act(c.unit, a, arg)
 
 func _refuse(cid: int, code: int, reason: String) -> void:
 	# Close a little after the last message so it reaches the client before the close frame.
@@ -577,38 +721,42 @@ func _refuse(cid: int, code: int, reason: String) -> void:
 	c.close_code = code
 	c.close_reason = reason
 
-func _seat(cid: int) -> void:
+func _seat(r: Room, cid: int) -> void:
 	# Take over a bot on the team with fewer humans (blue on ties).
+	var sim = r.sim
 	var c: Dictionary = clients[cid]
 	var humans := [0, 0]
-	for other in clients:
+	for other in _members(r):
 		var oc: Dictionary = clients[other]
-		if other != cid and oc.hello and oc.unit != "" and sim.by_id.has(oc.unit):
+		if other != cid and oc.unit != "" and sim.by_id.has(oc.unit):
 			humans[sim.by_id[oc.unit].team] += 1
 	var team := 0 if humans[0] <= humans[1] else 1
 	var pa := str(c.get("party", ""))
 	if pa != "":
 		# 0.31.111: a party plays on one side -- the side a member already holds a seat on (while it has room)
-		for other in clients:
+		for other in _members(r):
 			var oc: Dictionary = clients[other]
-			if other != cid and oc.hello and str(oc.get("party", "")) == pa and oc.unit != "" and sim.by_id.has(oc.unit):
+			if other != cid and str(oc.get("party", "")) == pa and oc.unit != "" and sim.by_id.has(oc.unit):
 				var pt := int(sim.by_id[oc.unit].team)
 				if humans[pt] < Net.TEAM_SIZE:
 					team = pt
 				break
 	var seat := ""
 	for u in sim.units:
-		if u.team == team and u.bot and not _unit_taken(u.id):
+		if u.team == team and u.bot and not _unit_taken(r, u.id):
 			seat = u.id
 			break
 	if seat == "":
 		for u in sim.units:
-			if u.bot and not _unit_taken(u.id):
+			if u.bot and not _unit_taken(r, u.id):
 				seat = u.id
 				break
 	c.unit = seat
 	c.queued = false
 	c.move = Vector2.ZERO
+	c.idle = false
+	c.idle_s = -LOAD_GRACE                 # (counts from the phone's first input message, or after the grace)
+	c.got_in = false
 	if seat != "":
 		sim.by_id[seat].bot = false
 		if c.has("acct"):
@@ -616,18 +764,18 @@ func _seat(cid: int) -> void:
 			c.ledger.start(sim.by_id[seat])
 			c.seated_at = _now()                  # 0.31.118: the match as the player had it, for the statistics
 			c.class0 = class_of(sim.by_id[seat])
-			c.match_key = match_key()
+			c.match_key = match_key(r)
 			if analytics != null:
 				analytics.server_event(c.acct, "match_start", {"match":c.match_key, "mode":"online", "class":c.class0}, str(c.get("build", "")))
-	_send(cid, {"t":"welcome", "v":Net.VERSION, "you":seat, "match":match_id, "seed":match_seed,
-		"team_size":Net.TEAM_SIZE, "players":_human_count()})
-	_names_dirty = true
+	_send(cid, {"t":"welcome", "v":Net.VERSION, "you":seat, "match":r.match_id, "seed":r.match_seed,
+		"team_size":Net.TEAM_SIZE, "players":_room_humans(r)})
+	r.names_dirty = true
 	# The first snapshot right away so the client can build its view.
 	_send(cid, Net.snapshot(sim, seat, []))
-	_log("join %s -> %s (match %d, players %d)" % [c.name, seat, match_id, _human_count()])
+	_log("join %s -> %s (room %d, match %d, players %d)" % [c.name, seat, r.id, r.match_id, _room_humans(r)])
 
-func _unit_taken(id: String) -> bool:
-	for cid in clients:
+func _unit_taken(r: Room, id: String) -> bool:
+	for cid in _members(r):
 		if clients[cid].unit == id:
 			return true
 	return false
@@ -642,141 +790,157 @@ static func clean_name(s: String) -> String:
 	out = out.strip_edges().left(20)
 	return out if out != "" else "Player"
 
-func player_names() -> Dictionary:
-	var out := {}
-	for cid in clients:
+func _seated(r: Room) -> Array:
+	# the room's players holding a seat in its match
+	var out := []
+	if r.sim == null:
+		return out
+	for cid in _members(r):
 		var c: Dictionary = clients[cid]
-		if c.hello and not bool(c.get("queued", false)) and c.unit != "" and sim != null and sim.by_id.has(c.unit):
-			out[c.unit] = c.name
+		if not bool(c.get("queued", false)) and c.unit != "" and r.sim.by_id.has(c.unit):
+			out.append(cid)
 	return out
 
-func player_titles() -> Dictionary:
+func player_names(r: Room) -> Dictionary:
 	var out := {}
-	for cid in clients:
-		var c: Dictionary = clients[cid]
-		if c.hello and not bool(c.get("queued", false)) and c.unit != "" and str(c.get("title", "")) != "" \
-				and sim != null and sim.by_id.has(c.unit):
-			out[c.unit] = str(c.title)
+	for cid in _seated(r):
+		out[clients[cid].unit] = clients[cid].name
 	return out
 
-func player_looks() -> Dictionary:
+func player_titles(r: Room) -> Dictionary:
+	var out := {}
+	for cid in _seated(r):
+		if str(clients[cid].get("title", "")) != "":
+			out[clients[cid].unit] = str(clients[cid].title)
+	return out
+
+func player_looks(r: Room) -> Dictionary:
 	# 0.31.101: unit id -> {class: "weapon id|stars|element"} for each seated player who wears something
 	var out := {}
-	for cid in clients:
-		var c: Dictionary = clients[cid]
-		if c.hello and not bool(c.get("queued", false)) and c.unit != "" and not (c.get("looks", {}) as Dictionary).is_empty() \
-				and sim != null and sim.by_id.has(c.unit):
-			out[c.unit] = c.looks
+	for cid in _seated(r):
+		if not (clients[cid].get("looks", {}) as Dictionary).is_empty():
+			out[clients[cid].unit] = clients[cid].looks
 	return out
 
-func _send_names() -> void:
-	var msg := {"t":"pn", "n":player_names(), "tt":player_titles(), "lk":player_looks()}
-	for cid in clients:
+func _send_names(r: Room) -> void:
+	var msg := {"t":"pn", "n":player_names(r), "tt":player_titles(r), "lk":player_looks(r)}
+	for cid in _members(r):
 		var c: Dictionary = clients[cid]
-		if c.hello and not bool(c.get("queued", false)) and c.unit != "":
+		if not bool(c.get("queued", false)) and c.unit != "":
 			_send(cid, msg)
 
 # ---------------- lobby (0.31.82) ----------------
 func _now() -> float:
 	return Time.get_ticks_msec() / 1000.0
 
-func _queued() -> Array:
+func _queued(r: Room) -> Array:
 	var out := []
-	for cid in clients:
-		if clients[cid].hello and bool(clients[cid].get("queued", false)):
+	for cid in _members(r):
+		if bool(clients[cid].get("queued", false)):
 			out.append(cid)
 	return out
 
-func _seated_count() -> int:
+func _seated_count(r: Room) -> int:
 	var n := 0
-	for cid in clients:
+	for cid in _members(r):
 		var c: Dictionary = clients[cid]
-		if c.hello and not bool(c.get("queued", false)) and c.unit != "":
+		if not bool(c.get("queued", false)) and c.unit != "":
 			n += 1
 	return n
 
-func _run_lobby(delta: float) -> void:
-	if wave_end < 0.0:
+func _run_lobby(r: Room, delta: float) -> void:
+	if r.wave_end < 0.0:
 		return
-	var waiting := _queued()
+	var waiting := _queued(r)
 	if waiting.is_empty():
-		wave_end = -1.0                        # they all left (or the restart seated them)
+		r.wave_end = -1.0                      # they all left (or the restart seated them)
 		return
 	var now := _now()
-	if sim != null and sim.ended:
+	if r.sim != null and r.sim.ended:
 		# the results screen is up: they go into the next match with everyone (the restart seats them)
-		var restart := (_ended_at if _ended_at >= 0.0 else now) + RESTART_AFTER
-		wave_end = maxf(wave_end, restart)
-	elif now >= wave_end:
-		if sim == null or _seated_count() == 0:
-			_new_match()                       # (a bots-only match left running by players who quit: a fresh one)
+		var restart := (r.ended_at if r.ended_at >= 0.0 else now) + RESTART_AFTER
+		r.wave_end = maxf(r.wave_end, restart)
+	elif now >= r.wave_end:
+		if r.sim == null or _seated_count(r) == 0:
+			_new_match(r)                      # (a bots-only match left running by players who quit: a fresh one)
 		for cid in waiting:
-			_seat(cid)
-		wave_end = -1.0
+			_seat(r, cid)
+		r.wave_end = -1.0
 		return
-	_lobby_clock += delta
-	if _lobby_clock >= 0.5:
-		_lobby_clock = 0.0
-		_send_lobby(waiting)
+	r.lobby_clock += delta
+	if r.lobby_clock >= 0.5:
+		r.lobby_clock = 0.0
+		_send_lobby(r, waiting)
 
-func _send_lobby(waiting: Array) -> void:
+func _send_lobby(r: Room, waiting: Array) -> void:
 	var names := []
 	var titles := []
 	for cid in waiting:
 		names.append(clients[cid].name)
 		titles.append(str(clients[cid].get("title", "")))
-	var msg := {"t":"lobby", "left":maxf(0.0, wave_end - _now()), "wait":lobby_time, "names":names, "tt":titles,
-		"in_match":_seated_count(), "online":_human_count(), "slots":Net.TEAM_SIZE * 2,
-		"running":sim != null and not sim.ended and _seated_count() > 0, "match":match_id}   # (running: they join it)
+	var msg := {"t":"lobby", "left":maxf(0.0, r.wave_end - _now()), "wait":lobby_time, "names":names, "tt":titles,
+		"in_match":_seated_count(r), "online":_human_count(), "slots":Net.TEAM_SIZE * 2,
+		"running":r.sim != null and not r.sim.ended and _seated_count(r) > 0, "match":r.match_id}   # (running: they join it)
 	for i in waiting.size():
 		msg["me"] = i
 		_send(waiting[i], msg)
 
 func _status() -> Dictionary:
-	return {"t":"status", "v":Net.VERSION, "online":_human_count(), "in_match":_seated_count(), "waiting":_queued().size(),
-		"lobby":maxf(0.0, wave_end - _now()) if wave_end >= 0.0 else -1.0, "running":sim != null and not sim.ended,
-		"slots":Net.TEAM_SIZE * 2, "max":max_players, "build":SERVER_BUILD, "min_build":min_build, "eco":1, "social":1, "an":1,
+	var in_match := 0
+	var waiting := 0
+	var lobby := -1.0
+	var running := false
+	for r in rooms.values():
+		in_match += _seated_count(r)
+		waiting += _queued(r).size()
+		if r.wave_end >= 0.0:
+			var left := maxf(0.0, r.wave_end - _now())
+			lobby = left if lobby < 0.0 else minf(lobby, left)
+		if r.sim != null and not r.sim.ended:
+			running = true
+	return {"t":"status", "v":Net.VERSION, "online":_human_count(), "in_match":in_match, "waiting":waiting,
+		"lobby":lobby, "running":running, "slots":Net.TEAM_SIZE * 2, "max":max_players * max_rooms, "rooms":rooms.size(),
+		"build":SERVER_BUILD, "min_build":min_build, "eco":1, "social":1, "an":1, "lb":1,
 		"chatting":social.online.size() if social != null else 0}
 
 # ---------------- statistics (0.31.118) ----------------
-func match_key() -> String:
-	return "%d-%d" % [boot_time, match_id]
+func match_key(r: Room) -> String:
+	return "%d-%d" % [boot_time, r.match_id]
 
 static func class_of(u: Dictionary) -> String:
 	# the class a unit plays, its upgrade marked ("knight", "knight+")
 	return str(u.get("cls", "")) + ("+" if bool(u.get("up", false)) else "")
 
-func _team_humans(team: int) -> int:
+func _team_humans(r: Room, team: int) -> int:
 	var n := 0
-	for cid in clients:
-		var o: Dictionary = clients[cid]
-		if o.hello and not bool(o.get("queued", false)) and o.unit != "" and sim != null and sim.by_id.has(o.unit) \
-				and int(sim.by_id[o.unit].team) == team:
+	for cid in _seated(r):
+		if int(r.sim.by_id[clients[cid].unit].team) == team:
 			n += 1
 	return n
 
 # ---------------- paying a match (0.31.108) ----------------
-func _ledger_events(evs: Array) -> void:
-	for cid in clients:
+func _ledger_events(r: Room, evs: Array) -> void:
+	for cid in _members(r):
 		var c: Dictionary = clients[cid]
 		if c.has("ledger"):
 			for e in evs:
 				c.ledger.on_event(e)
 
-func _ledger_track(delta: float) -> void:
-	if sim == null or sim.ended:
+func _ledger_track(r: Room, delta: float) -> void:
+	if r.sim == null or r.sim.ended:
 		return
-	for cid in clients:
+	for cid in _members(r):
 		var c: Dictionary = clients[cid]
-		if c.has("ledger") and c.unit != "" and sim.by_id.has(c.unit) and str(c.ledger.uid) == c.unit:
-			c.ledger.track(sim.by_id[c.unit], delta)
+		if c.has("ledger") and c.unit != "" and r.sim.by_id.has(c.unit) and str(c.ledger.uid) == c.unit:
+			c.ledger.track(r.sim.by_id[c.unit], delta)
 
-func _pay_match() -> void:
+func _pay_match(r: Room) -> void:
 	# the match is over: every seated account gets its result, from this server's own count
-	if eco == null or _paid_match == match_id:
+	if eco == null or r.paid_match == r.match_id:
 		return
-	_paid_match = match_id
-	for cid in clients:
+	r.paid_match = r.match_id
+	var sim = r.sim
+	for cid in _members(r):
 		var c: Dictionary = clients[cid]
 		if not c.has("acct") or not c.has("ledger") or c.unit == "" or not sim.by_id.has(c.unit) or str(c.ledger.uid) != c.unit:
 			continue
@@ -786,55 +950,97 @@ func _pay_match() -> void:
 		var draw: bool = sim.winner == -1
 		var res: Dictionary = eco.apply_online(str(c.acct), me, won, draw)
 		c.erase("ledger")
+		if leaderboard != null:
+			leaderboard.add_match(str(c.acct), str(c.name), str(c.get("title", "")), me, won)     # 0.31.119
 		if analytics != null:
-			analytics.server_event(str(c.acct), "match_finish", {"match":str(c.get("match_key", match_key())), "mode":"online",
+			analytics.server_event(str(c.acct), "match_finish", {"match":str(c.get("match_key", match_key(r))), "mode":"online",
 				"dur_s":int(_now() - float(c.get("seated_at", _now()))), "result":"win" if won else ("draw" if draw else "loss"),
-				"team_n":_team_humans(int(u.team)), "class":class_of(u), "class0":str(c.get("class0", ""))}, str(c.get("build", "")))
+				"team_n":_team_humans(r, int(u.team)), "class":class_of(u), "class0":str(c.get("class0", ""))}, str(c.get("build", "")))
 		_log("paid %s (%s): %s, %d gold" % [str(c.acct), c.name, "win" if won else ("draw" if draw else "loss"), int(res.get("rewards", {}).get("gold", 0))])
 
-# ---------------- match loop ----------------
-func _new_match() -> void:
-	match_id += 1
-	match_seed = randi() & 0x7fffffff
-	sim = Sim.new()
-	sim.setup(Net.TEAM_SIZE, match_seed, -1)      # no local human; every unit starts as a bot
-	_accum = 0.0
-	_snap_accum = 0.0
-	_ended_at = -1.0
-	_pending_events.clear()
-	_log("match %d start (seed %d)" % [match_id, match_seed])
+# ---------------- idle players (0.31.119) ----------------
+func _active(r: Room, cid: int) -> void:
+	var c: Dictionary = clients[cid]
+	c.idle_s = 0.0
+	if bool(c.get("idle", false)):
+		c.idle = false
+		if r.sim != null and c.unit != "" and r.sim.by_id.has(c.unit):
+			r.sim.by_id[c.unit].bot = false                # theirs again
+		_send(cid, {"t":"idle", "on":false})
+		_log("back %s (room %d)" % [c.name, r.id])
 
-func _run_match(delta: float) -> void:
-	var humans := _human_count()
-	if humans == 0:
-		if sim != null:
-			if _empty_since < 0.0:
-				_empty_since = Time.get_ticks_msec() / 1000.0
-			elif Time.get_ticks_msec() / 1000.0 - _empty_since > IDLE_STOP:
-				_log("match %d stopped (no players)" % match_id)
-				sim = null
+func _idle_tick(r: Room, delta: float) -> void:
+	# live match time without input: a bot at idle_bot s, removed at idle_kick s
+	var sim = r.sim
+	if sim == null or sim.ended:
 		return
-	_empty_since = -1.0
-	if sim == null:
-		return
-	if sim.ended:
-		if _ended_at < 0.0:
-			_ended_at = Time.get_ticks_msec() / 1000.0
-			_log("match %d end winner=%d reason=%s score=%s" % [match_id, sim.winner, sim.end_reason, str(sim.score)])
-			_pay_match()
-		elif Time.get_ticks_msec() / 1000.0 - _ended_at > RESTART_AFTER:
-			_new_match()
-			for cid in clients:
-				if clients[cid].hello:
-					clients[cid].unit = ""
-			for cid in clients:
-				if clients[cid].hello:
-					_seat(cid)
-			return
-	# Apply held inputs, then step at a fixed 30 Hz.
-	for cid in clients:
+	for cid in _members(r):
 		var c: Dictionary = clients[cid]
-		if c.hello and c.unit != "" and sim.by_id.has(c.unit):
+		if bool(c.get("queued", false)) or c.unit == "" or not sim.by_id.has(c.unit) or c.has("close_at"):
+			continue
+		var u: Dictionary = sim.by_id[c.unit]
+		if u.state == "dead":
+			continue                                     # (waiting to respawn isn't idling)
+		c.idle_s = float(c.get("idle_s", 0.0)) + delta
+		if c.idle_s >= idle_kick:
+			_send(cid, {"t":"bye", "why":"idle", "msg":"You were removed for being idle."})
+			_refuse(cid, CLOSE_IDLE, "idle")
+			c.erase("ledger")                            # (nothing paid for this match)
+			_log("removed %s for being idle (room %d)" % [c.name, r.id])
+		elif c.idle_s >= idle_bot and not bool(c.get("idle", false)):
+			c.idle = true
+			u.bot = true
+			u.move = Vector2.ZERO
+			u.net_driven = false
+			_send(cid, {"t":"idle", "on":true, "kick_in":idle_kick - c.idle_s})
+			_log("idle %s: a bot plays for them (room %d)" % [c.name, r.id])
+
+# ---------------- match loop ----------------
+func _new_match(r: Room) -> void:
+	match_counter += 1
+	r.match_id = match_counter
+	r.match_seed = randi() & 0x7fffffff
+	r.sim = Sim.new()
+	r.sim.setup(Net.TEAM_SIZE, r.match_seed, -1)      # no local human; every unit starts as a bot
+	r.accum = 0.0
+	r.snap_accum = 0.0
+	r.ended_at = -1.0
+	r.pending_events.clear()
+	_log("match %d start (room %d, seed %d)" % [r.match_id, r.id, r.match_seed])
+
+func _run_match(r: Room, delta: float) -> bool:
+	# -> true when the room's match ran this frame
+	var humans := _room_humans(r)
+	if humans == 0:
+		if r.sim != null:
+			if r.empty_since < 0.0:
+				r.empty_since = Time.get_ticks_msec() / 1000.0
+			elif Time.get_ticks_msec() / 1000.0 - r.empty_since > idle_stop:
+				_log("match %d stopped (room %d, no players)" % [r.match_id, r.id])
+				r.sim = null
+		return false
+	r.empty_since = -1.0
+	if r.sim == null:
+		return false
+	var sim = r.sim
+	if sim.ended:
+		if r.ended_at < 0.0:
+			r.ended_at = Time.get_ticks_msec() / 1000.0
+			_log("match %d end (room %d) winner=%d reason=%s score=%s" % [r.match_id, r.id, sim.winner, sim.end_reason, str(sim.score)])
+			_pay_match(r)
+		elif Time.get_ticks_msec() / 1000.0 - r.ended_at > RESTART_AFTER:
+			_new_match(r)
+			var mem := _members(r)
+			for cid in mem:
+				clients[cid].unit = ""
+			for cid in mem:
+				_seat(r, cid)
+			return true
+	_idle_tick(r, delta)
+	# Apply held inputs, then step at a fixed 30 Hz.
+	for cid in _members(r):
+		var c: Dictionary = clients[cid]
+		if c.unit != "" and sim.by_id.has(c.unit) and not bool(c.get("idle", false)) and not c.has("close_at"):
 			sim.set_move(c.unit, c.move)
 			var ub: Dictionary = sim.by_id[c.unit]
 			# Client-side prediction: take the phone's position when it's plausible (speed x time
@@ -859,28 +1065,28 @@ func _run_match(delta: float) -> void:
 				var u: Dictionary = sim.by_id[c.unit]
 				if sim.can_act(u) and not u.carrying:
 					sim.act(c.unit, "attack")
-	_accum = minf(_accum + delta, TICK * 6)
+	r.accum = minf(r.accum + delta, TICK * 6)
 	var t_step := Time.get_ticks_usec()
-	while _accum >= TICK and not sim.ended:
-		_accum -= TICK
+	while r.accum >= TICK and not sim.ended:
+		r.accum -= TICK
 		sim.step(TICK)
 		var evs: Array = sim.drain_events()
-		_ledger_events(evs)
-		_pending_events.append_array(evs)
-		_ledger_track(TICK)
+		_ledger_events(r, evs)
+		r.pending_events.append_array(evs)
+		_ledger_track(r, TICK)
 		if test_match_s > 0.0 and sim.time >= test_match_s and not sim.ended:
 			sim._finish("time")
 	_st_step += Time.get_ticks_usec() - t_step
 	if sim.ended:
 		var evs2: Array = sim.drain_events()
-		_ledger_events(evs2)
-		_pending_events.append_array(evs2)
-		_pay_match()
-	_snap_accum += delta
-	if _snap_accum >= 1.0 / Net.SNAP_HZ:
-		_snap_accum = minf(_snap_accum - 1.0 / Net.SNAP_HZ, 1.0 / Net.SNAP_HZ)
-		var events := _pending_events
-		_pending_events = []
+		_ledger_events(r, evs2)
+		r.pending_events.append_array(evs2)
+		_pay_match(r)
+	r.snap_accum += delta
+	if r.snap_accum >= 1.0 / Net.SNAP_HZ:
+		r.snap_accum = minf(r.snap_accum - 1.0 / Net.SNAP_HZ, 1.0 / Net.SNAP_HZ)
+		var events := r.pending_events
+		r.pending_events = []
 		var t_snap := Time.get_ticks_usec()
 		var base := Net.snapshot(sim, "", events)      # built once, shared by every player
 		_st_snap += Time.get_ticks_usec() - t_snap
@@ -888,9 +1094,9 @@ func _run_match(delta: float) -> void:
 		# 0.31.23: encoded and compressed ONCE and sent to everyone; each player's private bit (their task) goes in its
 		# own small "m" message, only when it changes. Before, every player's copy was encoded and compressed separately.
 		var bytes := Net.encode(base, true)
-		for cid in clients:
+		for cid in _members(r):
 			var c: Dictionary = clients[cid]
-			if not c.hello or bool(c.get("queued", false)):
+			if bool(c.get("queued", false)):
 				continue                               # (still in the lobby: no match to show yet)
 			_send_raw(cid, bytes)
 			_st_bytes += bytes.size()
@@ -908,4 +1114,4 @@ func _run_match(delta: float) -> void:
 					_send(cid, {"t":"st", "heal":healed})
 		_st_send += Time.get_ticks_usec() - t_send
 		_st_snaps += 1
-	_stats_tick(delta)
+	return true

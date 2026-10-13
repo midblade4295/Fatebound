@@ -71,6 +71,8 @@ var net_verdict := ""               # 0.31.73: "update" / "server_old" after a v
 var net_server_version := -1        # the server's protocol from that refusal
 var _net_bye: Dictionary = {}
 var _net_closing_since := -1.0
+var _me_bot := false                # 0.31.119: the server says a bot plays my unit (I was idle): no prediction
+var exit_note := ""                 # 0.31.119: why the match ended for me, for Home to say (removed for being idle)
 const MSG_UPDATE := "A new version of Fatebound is available. Update to keep playing."
 const MSG_SERVER_OLD := "Servers are updating, try again in a few minutes"
 var _net_started := 0.0
@@ -166,6 +168,9 @@ func _ready() -> void:
 			if hud.result_panel != null:
 				hud.result_panel.queue_free()
 				hud.result_panel = null
+				if hud.score_panel != null and is_instance_valid(hud.score_panel):   # 0.31.119
+					hud.score_panel.queue_free()
+				hud.score_panel = null
 			hud.toast("Next match starts shortly...", Color("#f2d18d"))
 		else:
 			_restart())
@@ -441,6 +446,9 @@ func _build_online_match(msg: Dictionary) -> void:
 	if hud.result_panel != null:
 		hud.result_panel.queue_free()
 		hud.result_panel = null
+		if hud.score_panel != null and is_instance_valid(hud.score_panel):   # 0.31.119
+			hud.score_panel.queue_free()
+		hud.score_panel = null
 	sim = Sim.new()
 	sim.setup(int(msg.get("team_size", Net.TEAM_SIZE)), int(msg.get("seed", 1)), -1)
 	var me_id := str(msg.get("you", ""))
@@ -519,7 +527,11 @@ func _net_process(delta: float) -> void:
 			"s":
 				if sim == null:
 					continue
-				Net.apply(sim, msg, hud.player_id, true)
+				Net.apply(sim, msg, hud.player_id, not _me_bot)
+				var was_bot := _me_bot
+				_me_bot = bool(sim.by_id.get(hud.player_id, {}).get("bot", false))
+				if was_bot and not _me_bot:
+					hud.idle_kick_at = -1.0                # (mine again)
 				_snap_dt = lerpf(_snap_dt, maxf(0.03, _snap_t), 0.2) if _snap_t > 0.0 else _snap_dt
 				_snap_t = 0.0
 				_net_latest = float(msg.get("tm", _net_latest))
@@ -556,6 +568,7 @@ func _net_process(delta: float) -> void:
 				net_titles = tt if tt is Dictionary else {}
 				var lk: Variant = msg.get("lk", {})           # 0.31.101: what each of them wears
 				net_looks = lk if lk is Dictionary else {}
+				hud.net_names = net_names                     # 0.31.119: the scoreboard names the players
 				if is_instance_valid(view):
 					view.player_names = net_names
 					view.player_titles = net_titles
@@ -571,12 +584,22 @@ func _net_process(delta: float) -> void:
 			"m":                                              # 0.31.23: my task, sent on its own when it changes
 				if sim != null and sim.by_id.has(hud.player_id):
 					sim.by_id[hud.player_id].task = msg.get("task", {})
+			"idle":                                           # 0.31.119: a bot plays for me until I move (or I'm removed)
+				if bool(msg.get("on", false)):
+					hud.idle_kick_at = Time.get_ticks_msec() / 1000.0 + float(msg.get("kick_in", 120.0))
+				else:
+					hud.idle_kick_at = -1.0
 			"bye":
 				_net_bye = msg
 				if _net_version_refused(-1, ""):
 					return
 				var why := str(msg.get("why", ""))
-				_net_fail({"full":"Server is full"}.get(why, "Server closed the connection"))
+				if why == "idle":
+					exit_note = "idle"
+					_net_fail("Removed for being idle")
+					get_tree().create_timer(2.5).timeout.connect(_net_exit)     # (back to Home, which says why)
+					return
+				_net_fail({"full":"Every match is full -- try again in a minute"}.get(why, "Server closed the connection"))
 				return
 	if sim == null:
 		return
@@ -590,7 +613,7 @@ func _net_process(delta: float) -> void:
 			_net_rt = want
 		else:
 			_net_rt += err * minf(1.0, delta * 3.0)
-		Net.interpolate_at(sim, _net_rt, hud.player_id)
+		Net.interpolate_at(sim, _net_rt, "" if _me_bot else hud.player_id)     # (a bot playing me: drawn like the others)
 	# Inputs: movement and held attack at 20 Hz (or when they change); actions go immediately.
 	_send_clock += delta
 	var mv: Vector2 = _move_input() if not hud.paused() else Vector2.ZERO
@@ -599,7 +622,7 @@ func _net_process(delta: float) -> void:
 	# Client-side prediction: move our own unit now (same movement code as the server); the server
 	# validates the position we send. Snapshots only correct us when we've drifted > 2.5 m.
 	var me_p: Dictionary = sim.by_id.get(hud.player_id, {})
-	if not me_p.is_empty() and sim.client_drivable(me_p):
+	if not me_p.is_empty() and not _me_bot and sim.client_drivable(me_p):
 		sim.predict_step(me_p, mv, delta)
 		# Held ATTACK: the server swings every time it can; start the same swings locally.
 		if hold and me_p.cls != "priest" and sim.can_act(me_p) and not me_p.carrying:
@@ -611,7 +634,7 @@ func _net_process(delta: float) -> void:
 		_sent_hold = hold
 		_sent_bhold = bhold
 		var msg_in := {"t":"in", "m":mv, "h":hold, "b":bhold}
-		if not me_p.is_empty():
+		if not me_p.is_empty() and not _me_bot:
 			msg_in["p"] = me_p.pos
 			msg_in["f"] = me_p.face
 		_net_send(msg_in)
@@ -631,6 +654,9 @@ func _restart() -> void:
 	if hud.result_panel != null:
 		hud.result_panel.queue_free()
 		hud.result_panel = null
+		if hud.score_panel != null and is_instance_valid(hud.score_panel):   # 0.31.119
+			hud.score_panel.queue_free()
+		hud.score_panel = null
 	if _staged():
 		_warm_done = false                 # the card again (briefly: the pipelines are compiled by now)
 		_start_staged()

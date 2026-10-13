@@ -4,7 +4,7 @@ extends SceneTree
 # for sim steps, snapshot build and sends; kB/s out; worst frame) and the bytes each client received.
 # Run in REAL time (the server is its own process on the wall clock).
 const Net = preload("res://scripts/siege/siege_net.gd")
-const N := 32
+var N := 32                                     # 0.31.119: NET_TEST_N=128 fills 4 rooms (a manual check, not the suite)
 var port := 8095
 var pid := 0
 var peers: Array = []
@@ -16,6 +16,8 @@ var send_clock := 0.0
 var stats_path := "/tmp/net_load_stats.txt"
 
 func _init() -> void:
+	if OS.has_environment("NET_TEST_N"):
+		N = clampi(int(OS.get_environment("NET_TEST_N")), 1, 256)
 	if OS.has_environment("NET_TEST_PORT"):
 		port = int(OS.get_environment("NET_TEST_PORT"))
 	var godot := OS.get_executable_path()

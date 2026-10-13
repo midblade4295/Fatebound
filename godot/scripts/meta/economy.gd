@@ -513,6 +513,19 @@ static func roll_challenges(span: String, key: String, count: int, exclude: Arra
 # ---------------- match rewards ----------------
 const FIRST_WIN := {"gold":300, "pass":500}
 
+# 0.31.119 (Kevin: "Do all" -- a daily login reward): a 7-day calendar, one claim a day (UTC days, like the orders and
+# the first win), round and round; a missed day doesn't reset it. Gems only on day 7 (20 a week -- the economy review
+# found Silver chests were already half of all free gems). Chests are reward chests: with the slots full they wait.
+const LOGIN_REWARDS := [
+	{"gold":150},
+	{"embers":25},
+	{"chest":"silver"},
+	{"gold":250},
+	{"embers":50},
+	{"gold":400},
+	{"chest":"gold", "gems":20},
+]
+
 static func match_stats(me: Dictionary, won: bool, _draw: bool) -> Dictionary:
 	# Contribution numbers from the player's unit at the end of a match (offline or online).
 	var s := {"matches":1, "wins":1 if won else 0, "rescues":int(me.get("rescues", 0)), "kills":int(me.get("kills", 0)),

@@ -36,6 +36,7 @@ const OPS := {
 	"claim_quest": [TYPE_STRING], "forge": [TYPE_STRING, TYPE_STRING], "set_forge_element": [TYPE_STRING, TYPE_STRING],
 	"buy_embers": [TYPE_STRING], "start_unlock": [TYPE_INT], "skip_chest": [TYPE_INT], "open_chest": [TYPE_INT],
 	"set_name": [TYPE_STRING], "finish_tutorial": [],
+	"claim_login": [],                                           # 0.31.119: the daily login reward
 }
 
 func _rec(op: String, args: Array) -> void:
@@ -122,6 +123,7 @@ static func defaults() -> Dictionary:
 			"lifts":0, "repaired":0, "healed":0, "best_multi":0, "streak":0, "best_streak":0},     # (0.31.87: for the titles)
 		"tutorial_done":false,
 		"first_win_day":"", "history":[], "migration":{},
+		"login":{"day":"", "n":0},                                   # 0.31.119: the last day claimed, claims so far
 		"embers":0,                                                  # 0.31.90: the Forge's material
 		"forge":{"stars":{}, "wins":{}, "element":{}},              # 0.31.93: per weapon (Eco.forge_id): stars 0-3, wins, aura element
 		"iap":{"done":[], "starter":false},                          # 0.31.90: purchase tokens already granted
@@ -622,6 +624,32 @@ func claim_challenge(span: String, index: int) -> Dictionary:
 	save()
 	_rec("claim_challenge", [span, index])
 	return {"ok":true, "tiers":out.tiers, "chests":out.chests, "embers":embers}
+
+# ---------------- the daily login reward (0.31.119) ----------------
+func login_ready() -> bool:
+	return str(d.login.get("day", "")) != Eco.day_key(now())
+
+func login_next() -> int:
+	# the calendar day (0-6) the next claim gives
+	return posmod(int(d.login.get("n", 0)), Eco.LOGIN_REWARDS.size())
+
+func claim_login() -> Dictionary:
+	# one a day: the calendar's next reward (the server replays this with its own clock)
+	if not login_ready():
+		return {"ok":false, "error":"claimed today"}
+	var i := login_next()
+	var rw: Dictionary = Eco.LOGIN_REWARDS[i]
+	var out := {"chests":[]}
+	d.gold = int(d.gold) + int(rw.get("gold", 0))
+	d.gems = int(d.gems) + int(rw.get("gems", 0))
+	d.embers = int(d.get("embers", 0)) + int(rw.get("embers", 0))
+	if rw.has("chest"):
+		add_chest(str(rw.chest), out, true)
+	d.login.day = Eco.day_key(now())
+	d.login.n = int(d.login.get("n", 0)) + 1
+	save()
+	_rec("claim_login", [])
+	return {"ok":true, "day":i + 1, "reward":rw, "chests":out.chests}
 
 # ---------------- matches ----------------
 func apply_match(me: Dictionary, won: bool, draw: bool, online: bool) -> Dictionary:

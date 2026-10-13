@@ -76,6 +76,17 @@ func _init(state_dir := "", eco_ref = null) -> void:
 	_load()
 	_reload_muted()
 
+func friend_accts(acct: String) -> Array:
+	# 0.31.119: the account ids of an account's friends (the leaderboard's friends tab)
+	var out := []
+	var pid: String = by_acct.get(acct, "")
+	if pid == "" or not users.has(pid):
+		return out
+	for f in users[pid].get("friends", []):
+		if users.has(f):
+			out.append(str(users[f].acct))
+	return out
+
 static func pid_of(acct: String) -> String:
 	return acct.sha256_text().left(10)
 

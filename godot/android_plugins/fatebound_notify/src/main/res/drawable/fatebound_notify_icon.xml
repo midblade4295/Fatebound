@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- the status-bar icon: a treasure chest, white on transparent (Android tints it) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M4,9 C4,5.7 6.7,3 10,3 L14,3 C17.3,3 20,5.7 20,9 L20,10 L4,10 Z M3,11 L21,11 L21,20 C21,20.6 20.6,21 20,21 L4,21 C3.4,21 3,20.6 3,20 Z M10.5,12.5 L10.5,15.5 L13.5,15.5 L13.5,12.5 Z" />
+</vector>

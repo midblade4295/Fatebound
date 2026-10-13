@@ -3425,3 +3425,74 @@ K2/K3 notes (0.17.0)
   bytes, sha256 26441e6950d78dc1057e2b14160d69c891faae3ce4f98a154e8fa0e7d92be10a. No content pack change.
 - Not done here: the server redeploy (Kevin), privacy.html on main + sslip (after merge), Play Data safety form
   (Grokbot/Kevin, spec section 10). `remote_deploy.sh` isn't in this repo.
+
+## 0.31.119 — match rooms, idle takeover, scoreboard, leaderboards, chest notifications, daily reward, achievements (Kevin: "Do all besides #7")
+- **Match rooms** (server only). The server ran one match: the 33rd player was turned away "full". Now each room is
+  its own match, lobby countdown and results screen (the old single-match code, per room: `Room` in
+  siege_server.gd). SIEGE_MAX_PLAYERS stays the humans in one match (32); SIEGE_MAX_ROOMS (default 4) matches at once.
+  A hello goes to its party's room while it has space, else the busiest room with space, else a new room; "full" only
+  when every room is full. Empty rooms close after IDLE_STOP. Match ids unique across rooms. "status" counts all
+  rooms (+ "rooms"); lobby "in_match"/"running" are the room's own. Protocol unchanged (35).
+  Load (this machine, NET_TEST_N=128, 4 full rooms): ~330 ms of work a second, 1.45 MB/s out, 60 frames/s, worst
+  frame 17 ms (one room: ~90 ms/s, 350 kB/s). tests/match_rooms_test.gd (rooms of 3, 2 rooms: overflow, party first,
+  full only when all are full, status, names per room, rooms closing); every server test passes on the new code.
+- **Idle players.** A seated player with no input (no movement, attack/ability/block, action or quick chat -- the
+  phone's own position reports don't count) for 45 s of live match time is played by a bot; time dead, in the lobby, on
+  the results screen or building the match on the phone (until its first input, up to 20 s) doesn't count. The server
+  turns the unit's bot flag on (every app sees it), ignores that phone's positions and tells it {"t":"idle", "on",
+  "kick_in"}; any input gives the unit straight back. At 180 s: bye "idle" + close 4006, nothing paid, the seat stays
+  with the bot. Phone: stops predicting its unit while a bot has it (draws it where the server has it), HUD banner "A BOT
+  IS PLAYING FOR YOU · Move or attack to take over · removed in m:ss"; when removed it goes back to Home, which says
+  why (new `notice()` modal). "full" now reads "Every match is full -- try again in a minute". Env for tests:
+  SIEGE_IDLE_BOT / SIEGE_IDLE_KICK. tests/idle_test.gd (real server + the real client).
+- **End-of-match MVP and scoreboard.** The results showed only your own KOs/downs/rescues. Every unit's knockouts,
+  downs, rescues, gathering, gate damage and fish fed already come with the snapshots, so the board is the server's own
+  count. Points: rescue 300, KO 20, fish fed 30, gathering 2, gate damage 1 per 10. The results panel gets an MVP strip
+  (the best of everyone -- a bot that outplayed everybody is named "Bot · <class>"; "YOU ARE THE MVP!" when it's you,
+  with a shine) and a SCORES button: both sides' top 6 best first, players by name (the server's "pn"), you marked and
+  always listed on your side. tests/scoreboard_test.gd.
+- **Leaderboards.** `server/leaderboard.gd`: every paid online match (the server's own ledger) adds to the account's
+  week -- points (the scoreboard's, + 100 for a win), wins, matches, rescues, KOs. Weeks start Monday 00:00 UTC; the
+  finished week's top 3 are kept as last week's champions. leaderboard.json in the state directory (backed up with
+  the accounts). A socket whose first message is {"t":"lb", "acct", "key"} gets the top 50, the account's own row and
+  its friends' rows (names and titles only, never account ids); a wrong key: 4007. "ver"/"status" say "lb":1.
+  App: Home's top-right medallion is now RANKS (trophy) -> the LEADERBOARD window (`leaderboard_panel.gd`, fetched by
+  `scripts/meta/lb_fetch.gd`): THIS WEEK / FRIENDS tabs, the week's end, your row pinned under the top 50 when you're
+  further down, last week's champions, how points are earned. The first win of the day (was the FIRST WIN medallion)
+  is a gold "FIRST WIN +300" tag on PLAY's corner while it's open. tests/leaderboard_test.gd (the board, the real
+  server, the window).
+- **Daily login reward.** A 7-day calendar (`Eco.LOGIN_REWARDS`): 150 gold, 25 Embers, a Silver chest, 250 gold, 50
+  Embers, 400 gold, a Gold chest + 20 gems -- a week is 800 gold, 75 Embers, 20 gems and two chests (gems only on day
+  7: the economy review found Silver chests were already half of all free gems). One claim a UTC day (like the orders
+  and the first win), round and round; a missed day doesn't reset it; chests are reward chests (they wait when the
+  slots are full). `claim_login` is a profile op: the server replays it with its own clock, so a phone that moves its
+  clock gets nothing more (profile `login` {day, n}). App: the DAILY REWARD card (`daily_reward.gd`, 7 tiles, today's
+  pulsing, CLAIM, then "Day N in 21h 2m") opens by itself on Home the first time each day a claim waits (not in tests or
+  screenshot tools: `daily_auto`); it's also first in ORDERS, and counts on the ORDERS badge. Analytics: a
+  `daily_reward` {day} event (allow-listed). tests/daily_reward_test.gd.
+- **"Your chest is ready" notifications.** A small Android plugin of our own, FateboundNotify
+  (`godot/android_plugins/fatebound_notify`, Java, built with the cached Gradle 8.14.5 / AGP 8.13.2 against
+  org.godotengine:godot:4.7.2.stable; AARs in `addons/FateboundNotify/bin`): `hasPermission`, `requestPermission`
+  (Android 13+ POST_NOTIFICATIONS), `schedule(id, title, body, delay)` (AlarmManager.setAndAllowWhileIdle -- inexact, no
+  exact-alarm permission; a BroadcastReceiver posts it on a "Chests" channel with a chest status icon; a tap opens the
+  game), `cancelAll`. Like billing and Play Games it goes into Gradle exports only (the Play Store preset): the preview
+  APK has no notifications. `scripts/meta/notify.gd`: going to the background schedules one per unlocking chest at
+  the moment it's ready ("Your Silver Chest is ready!"), coming back cancels them. The first UNLOCK asks in the game's
+  own words ("CHEST NOTIFICATIONS -- want a notification when your chest is ready?"); only YES brings up Android's
+  dialog (asked once; NO turns the setting off). Settings > NOTIFICATIONS > "Chest ready" (greyed out without the
+  plugin). Nothing leaves the phone. Checked: a Gradle export of a minimal project with the plugin merges the
+  permission, the v2 plugin entry, the receiver, the classes and the icon (aapt2/dexdump); not run on a phone (no
+  emulator here). tests/notify_test.gd (a fake plugin).
+- **Google Play Games achievements.** 18 achievements (`scripts/meta/achievements.gd`): Welcome to the Siege, First
+  Blood, First Victory, Long Live the King, Many Hats, Fattening Season, Lumberjack, Gatecrasher, Heavy Lifting,
+  Centurion, Relentless, Unstoppable, Royal Bodyguard, Master Smith, Seasoned (level 20), Siege Lord (50 wins), Slayer
+  of Thousands (1,000 KOs), Legend of the Siege (250 wins) -- 570 points. Read from the account the server keeps;
+  sent by play_games.gd while signed in (every 5 s, only what changed: incremental ones as their steps, standard ones
+  unlocked once met). The ids come from Play Console: `scripts/meta/play_achievement_ids.gd` (empty = skipped).
+  Settings > GOOGLE PLAY > ACHIEVEMENTS opens Google's screen. Icons for Play Console (512x512, bronze/silver/gold
+  rims): `store-listing/achievements/`. Steps for Grokbot/Kevin: `godot/PLAY_ACHIEVEMENTS_HANDOFF.md`.
+  tests/achievements_test.gd (a fake of the plugin).
+- Also: privacy.html (leaderboard names/points, achievements to Google Play Games, local chest notifications, daily
+  rewards in the usage statistics), SIEGE_HANDOFF section 22. Full suite: ALL SIEGE TESTS PASSED (74). 0.31.119,
+  version code 204 -> 205. APK 31486950 bytes, sha256 b7fcd798843c064ae20ce2c43beac216b644f4c74adb49bdbe5c64a072652e27.
+  No content pack change. Needs the server redeployed (rooms, idle, leaderboard).
