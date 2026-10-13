@@ -3436,3 +3436,12 @@ K2/K3 notes (0.17.0)
   Load (this machine, NET_TEST_N=128, 4 full rooms): ~330 ms of work a second, 1.45 MB/s out, 60 frames/s, worst
   frame 17 ms (one room: ~90 ms/s, 350 kB/s). tests/match_rooms_test.gd (rooms of 3, 2 rooms: overflow, party first,
   full only when all are full, status, names per room, rooms closing); every server test passes on the new code.
+- **Idle players.** A seated player with no input (no movement, attack/ability/block, action or quick chat -- the
+  phone's own position reports don't count) for 45 s of live match time is played by a bot; time dead, in the lobby, on
+  the results screen or building the match on the phone (until its first input, up to 20 s) doesn't count. The server
+  turns the unit's bot flag on (every app sees it), ignores that phone's positions and tells it {"t":"idle", "on",
+  "kick_in"}; any input gives the unit straight back. At 180 s: bye "idle" + close 4006, nothing paid, the seat stays
+  with the bot. Phone: stops predicting its unit while a bot has it (draws it where the server has it), HUD banner "A BOT
+  IS PLAYING FOR YOU · Move or attack to take over · removed in m:ss"; when removed it goes back to Home, which says
+  why (new `notice()` modal). "full" now reads "Every match is full -- try again in a minute". Env for tests:
+  SIEGE_IDLE_BOT / SIEGE_IDLE_KICK. tests/idle_test.gd (real server + the real client).

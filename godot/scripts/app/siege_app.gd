@@ -897,6 +897,30 @@ func confirm(title_text: String, body: String, yes_text: String, style: String, 
 		close_modal()
 		on_yes.call(), "modal_yes"))
 
+func notice(title_text: String, body: String) -> void:
+	# 0.31.119: a message with one OK (why a match ended, ...)
+	sfx("menuOpen")
+	close_modal()
+	modal = Control.new()
+	modal.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(modal)
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.6)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	modal.add_child(dim)
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	modal.add_child(center)
+	var v := UI.card(center)
+	(v.get_parent() as Control).custom_minimum_size = Vector2(minf(360, size.x - 32), 0)
+	UI.title(v, title_text, 20)
+	var b := UI.label(v, body, 14, UI.MUTED)
+	b.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	UI.grow(UI.button(UI.row(v, 10), "OK", "primary", func():
+		sfx("menuClose")
+		close_modal(), "modal_ok"))
+
 func close_modal() -> void:
 	if is_instance_valid(modal):
 		modal.queue_free()
@@ -1108,7 +1132,9 @@ func _menu_fps() -> void:
 		Engine.max_fps = MENU_FPS
 
 func _end_match() -> void:
+	var note := ""
 	if is_instance_valid(siege):
+		note = str(siege.exit_note)
 		siege.note_leaving()                     # 0.31.118: a VS BOTS match or the tutorial left before its end
 		siege.queue_free()
 	siege = null
@@ -1125,6 +1151,8 @@ func _end_match() -> void:
 		show_update_screen()
 	elif server_updating:
 		toast(SERVER_UPDATING, UI.GOLD)
+	elif note == "idle":
+		notice("REMOVED FOR BEING IDLE", "You didn't move or attack for 3 minutes, so a bot took your place. Nothing was paid for that match.")
 
 # ---------------- Google Play's copy of the progress (0.31.102) ----------------
 func ask_cloud() -> void:

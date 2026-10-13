@@ -72,6 +72,13 @@ extends SceneTree
 # across rooms ("match" in the welcome). "status" counts every room (+ "rooms"); the lobby message's "in_match" and
 # "running" are its own room's, "online" the whole server's. Additive: the protocol stays 35, and an app sees no
 # difference except that it isn't turned away.
+#
+# 0.31.119 (idle players): a seated player who gives no input (no movement, no attack/ability/block, no action, no quick
+# chat) for IDLE_BOT s of live match time -- time dead, in the lobby, on the results screen or building the match on the
+# phone (up to LOAD_GRACE s, until its first input message) doesn't count -- is played
+# by a bot: their unit's bot flag goes on (every app sees it in the snapshots) and they get {"t":"idle", "on":true,
+# "kick_in":s}. Any input hands the unit straight back ({"t":"idle", "on":false}). At IDLE_KICK s they're removed:
+# bye {"why":"idle"} + close 4006 "idle"; the seat stays with the bot and the match pays them nothing.
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 const Net = preload("res://scripts/siege/siege_net.gd")
 const IapVerify = preload("res://server/iap_verify.gd")
@@ -92,6 +99,10 @@ const MIN_BUILD_RELOAD := 10.0       # s between re-reads of the min-build file
 const UPDATE_MSG := "A new version of Fatebound is out. Update now on Google Play to keep playing online."
 const MAX_MSGS_PER_SEC := 90         # per client; beyond this, messages are dropped
 const MAX_ROOMS := 4                 # 0.31.119: matches at once (SIEGE_MAX_ROOMS)
+const IDLE_BOT := 45.0               # 0.31.119: s without input before a bot plays for them (SIEGE_IDLE_BOT)
+const IDLE_KICK := 180.0             # ...and before they're removed (SIEGE_IDLE_KICK)
+const CLOSE_IDLE := 4006
+const LOAD_GRACE := 20.0             # s a phone may take to build the match before its idle time counts (until its first input)
 const TICK := Sim.TICK
 
 class Room:
@@ -123,6 +134,8 @@ var max_players := 32                # humans in one room
 var log_on := true
 var lobby_time := LOBBY_TIME
 var idle_stop := IDLE_STOP           # (tests: SIEGE_IDLE_STOP)
+var idle_bot := IDLE_BOT
+var idle_kick := IDLE_KICK
 var iap = null                       # 0.31.90: Google Play purchase checks (server/iap_verify.gd)
 var eco = null                       # 0.31.108: the accounts (server/eco_accounts.gd)
 var social = null                    # 0.31.111: chat, friends, parties (server/social.gd)
@@ -148,6 +161,10 @@ func _init() -> void:
 		lobby_time = clampf(float(OS.get_environment("SIEGE_LOBBY")), 0.0, 120.0)
 	if OS.has_environment("SIEGE_IDLE_STOP"):
 		idle_stop = clampf(float(OS.get_environment("SIEGE_IDLE_STOP")), 0.5, 600.0)
+	if OS.has_environment("SIEGE_IDLE_BOT"):
+		idle_bot = clampf(float(OS.get_environment("SIEGE_IDLE_BOT")), 1.0, 3600.0)
+	if OS.has_environment("SIEGE_IDLE_KICK"):
+		idle_kick = clampf(float(OS.get_environment("SIEGE_IDLE_KICK")), idle_bot + 1.0, 7200.0)
 	if OS.has_environment("SIEGE_TEST_MATCH_S"):
 		test_match_s = float(OS.get_environment("SIEGE_TEST_MATCH_S"))
 	if OS.has_environment("SIEGE_MIN_BUILD"):
@@ -569,6 +586,7 @@ func _handle(cid: int, msg: Dictionary) -> void:
 			if qi < 0 or qi >= Net.QUICK_CHAT.size() or _now() - float(c.get("qc_at", -99.0)) < Net.QC_GAP:
 				return
 			c.qc_at = _now()
+			_active(r, cid)
 			var q: Dictionary = Net.QUICK_CHAT[qi]
 			var qteam := int(r.sim.by_id[c.unit].team)
 			if bool(q.get("call", false)) and not r.sim.ended:
@@ -658,6 +676,13 @@ func _handle(cid: int, msg: Dictionary) -> void:
 				c.cpos_new = true
 				c.cpos_rx = Time.get_ticks_msec() / 1000.0
 			var a: String = str(msg.get("a", ""))
+			if not bool(c.get("got_in", false)):
+				c.got_in = true                                # the phone has the match up: idle time counts from here
+				c.idle_s = maxf(float(c.get("idle_s", 0.0)), 0.0)
+			if (c.move as Vector2).length() > 0.15 or c.hold or c.bhold or c.khold or a != "":
+				_active(r, cid)                                # 0.31.119: a real input (not just the phone's position)
+			if bool(c.get("idle", false)):
+				return                                         # (a bot plays for them until they do something)
 			if a != "" and a in Net.ACTIONS:
 				var arg: Variant = msg.get("arg", null)
 				if a == "buy":
@@ -706,6 +731,9 @@ func _seat(r: Room, cid: int) -> void:
 	c.unit = seat
 	c.queued = false
 	c.move = Vector2.ZERO
+	c.idle = false
+	c.idle_s = -LOAD_GRACE                 # (counts from the phone's first input message, or after the grace)
+	c.got_in = false
 	if seat != "":
 		sim.by_id[seat].bot = false
 		if c.has("acct"):
@@ -905,6 +933,43 @@ func _pay_match(r: Room) -> void:
 				"team_n":_team_humans(r, int(u.team)), "class":class_of(u), "class0":str(c.get("class0", ""))}, str(c.get("build", "")))
 		_log("paid %s (%s): %s, %d gold" % [str(c.acct), c.name, "win" if won else ("draw" if draw else "loss"), int(res.get("rewards", {}).get("gold", 0))])
 
+# ---------------- idle players (0.31.119) ----------------
+func _active(r: Room, cid: int) -> void:
+	var c: Dictionary = clients[cid]
+	c.idle_s = 0.0
+	if bool(c.get("idle", false)):
+		c.idle = false
+		if r.sim != null and c.unit != "" and r.sim.by_id.has(c.unit):
+			r.sim.by_id[c.unit].bot = false                # theirs again
+		_send(cid, {"t":"idle", "on":false})
+		_log("back %s (room %d)" % [c.name, r.id])
+
+func _idle_tick(r: Room, delta: float) -> void:
+	# live match time without input: a bot at idle_bot s, removed at idle_kick s
+	var sim = r.sim
+	if sim == null or sim.ended:
+		return
+	for cid in _members(r):
+		var c: Dictionary = clients[cid]
+		if bool(c.get("queued", false)) or c.unit == "" or not sim.by_id.has(c.unit) or c.has("close_at"):
+			continue
+		var u: Dictionary = sim.by_id[c.unit]
+		if u.state == "dead":
+			continue                                     # (waiting to respawn isn't idling)
+		c.idle_s = float(c.get("idle_s", 0.0)) + delta
+		if c.idle_s >= idle_kick:
+			_send(cid, {"t":"bye", "why":"idle", "msg":"You were removed for being idle."})
+			_refuse(cid, CLOSE_IDLE, "idle")
+			c.erase("ledger")                            # (nothing paid for this match)
+			_log("removed %s for being idle (room %d)" % [c.name, r.id])
+		elif c.idle_s >= idle_bot and not bool(c.get("idle", false)):
+			c.idle = true
+			u.bot = true
+			u.move = Vector2.ZERO
+			u.net_driven = false
+			_send(cid, {"t":"idle", "on":true, "kick_in":idle_kick - c.idle_s})
+			_log("idle %s: a bot plays for them (room %d)" % [c.name, r.id])
+
 # ---------------- match loop ----------------
 func _new_match(r: Room) -> void:
 	match_counter += 1
@@ -946,10 +1011,11 @@ func _run_match(r: Room, delta: float) -> bool:
 			for cid in mem:
 				_seat(r, cid)
 			return true
+	_idle_tick(r, delta)
 	# Apply held inputs, then step at a fixed 30 Hz.
 	for cid in _members(r):
 		var c: Dictionary = clients[cid]
-		if c.unit != "" and sim.by_id.has(c.unit):
+		if c.unit != "" and sim.by_id.has(c.unit) and not bool(c.get("idle", false)) and not c.has("close_at"):
 			sim.set_move(c.unit, c.move)
 			var ub: Dictionary = sim.by_id[c.unit]
 			# Client-side prediction: take the phone's position when it's plausible (speed x time

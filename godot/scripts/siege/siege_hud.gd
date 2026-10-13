@@ -54,6 +54,7 @@ var _multi: Label = null                 # 0.31.29: DOUBLE KILL ... LEGENDARY
 var _multi_at := -10.0
 const MULTI_COLORS := [Color.WHITE, Color.WHITE, Color("#ffe08a"), Color("#ffb04a"), Color("#ff6a3d"), Color("#ff3d6e"), Color("#c77dff")]
 var _toast_at := -10.0
+var idle_kick_at := -1.0            # 0.31.119: online, a bot plays for me (I was idle); when I'll be removed (s, ticks clock)
 var _toast_color := Color.WHITE
 var _time := 0.0
 var _font: Font
@@ -884,6 +885,7 @@ func _draw_hud() -> void:
 		var c := _toast_color
 		c.a = clampf(2.6 - age, 0.0, 1.0)
 		_text(Vector2(w * 0.5, 176), _toast, 18, c, _bold)
+	_draw_idle(me)
 	_draw_bars()
 	_draw_pings()
 	_draw_gate_bars()
@@ -909,6 +911,22 @@ func _draw_hud() -> void:
 	# Combat buttons.
 	for b in _buttons():
 		_draw_button(b, me)
+
+func _draw_idle(me: Dictionary) -> void:
+	# 0.31.119: "A BOT IS PLAYING FOR YOU" while the server's bot holds my unit (I gave no input for a while)
+	if idle_kick_at < 0.0 or not bool(me.get("bot", false)):
+		return
+	var w := size.x
+	var left := maxf(0.0, idle_kick_at - Time.get_ticks_msec() / 1000.0)
+	var r := Rect2(w * 0.5 - minf(180.0, w * 0.45), size.y * 0.3, minf(360.0, w * 0.9), 74)
+	if _idle_style == null:
+		_idle_style = VisualTheme.panel(Color(0.06, 0.04, 0.02, 0.9), VisualTheme.GOLD, 12, 8)
+	draw_style_box(_idle_style, r)
+	var pulse := 0.75 + 0.25 * sin(_time * 4.0)
+	_text(Vector2(w * 0.5, r.position.y + 30), "A BOT IS PLAYING FOR YOU", 20, Color(VisualTheme.GOLD, pulse), _title)
+	_text(Vector2(w * 0.5, r.position.y + 56), "Move or attack to take over · removed in %d:%02d" % [int(left) / 60, int(left) % 60], 13, VisualTheme.TEXT, _bold)
+
+var _idle_style: StyleBox = null
 
 func _draw_bars() -> void:
 	if not bars_source.is_valid() or not project.is_valid():
