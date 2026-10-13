@@ -56,6 +56,7 @@ const MULTI_COLORS := [Color.WHITE, Color.WHITE, Color("#ffe08a"), Color("#ffb04
 var _toast_at := -10.0
 var net_names := {}                 # 0.31.119: online, unit id -> player name (the server's "pn"), for the scoreboard
 var score_panel: PanelContainer = null
+var rejoin_until := -1.0            # 0.31.120: reconnecting after a dropped connection, until (ticks clock)
 var idle_kick_at := -1.0            # 0.31.119: online, a bot plays for me (I was idle); when I'll be removed (s, ticks clock)
 var _toast_color := Color.WHITE
 var _time := 0.0
@@ -1037,6 +1038,7 @@ func _draw_hud() -> void:
 		c.a = clampf(2.6 - age, 0.0, 1.0)
 		_text(Vector2(w * 0.5, 176), _toast, 18, c, _bold)
 	_draw_idle(me)
+	_draw_rejoin()
 	_draw_bars()
 	_draw_pings()
 	_draw_gate_bars()
@@ -1078,6 +1080,22 @@ func _draw_idle(me: Dictionary) -> void:
 	_text(Vector2(w * 0.5, r.position.y + 56), "Move or attack to take over · removed in %d:%02d" % [int(left) / 60, int(left) % 60], 13, VisualTheme.TEXT, _bold)
 
 var _idle_style: StyleBox = null
+
+func _draw_rejoin() -> void:
+	# 0.31.120: "RECONNECTING..." while the game gets back onto my seat
+	if rejoin_until < 0.0:
+		return
+	var w := size.x
+	var left := maxf(0.0, rejoin_until - Time.get_ticks_msec() / 1000.0)
+	var r := Rect2(w * 0.5 - minf(170.0, w * 0.42), size.y * 0.42, minf(340.0, w * 0.84), 70)
+	if _rejoin_style == null:
+		_rejoin_style = VisualTheme.panel(Color(0.02, 0.05, 0.12, 0.92), Color("#5fb6ff"), 12, 8)
+	draw_style_box(_rejoin_style, r)
+	var dots := ".".repeat(1 + int(_time * 2.0) % 3)
+	_text(Vector2(w * 0.5, r.position.y + 30), "RECONNECTING" + dots, 20, Color("#bfe3ff"), _title)
+	_text(Vector2(w * 0.5, r.position.y + 54), "Your seat is held for you · %d s" % int(ceil(left)), 13, VisualTheme.TEXT, _bold)
+
+var _rejoin_style: StyleBox = null
 
 func _draw_bars() -> void:
 	if not bars_source.is_valid() or not project.is_valid():

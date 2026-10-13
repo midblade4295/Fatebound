@@ -3496,3 +3496,19 @@ K2/K3 notes (0.17.0)
   rewards in the usage statistics), SIEGE_HANDOFF section 22. Full suite: ALL SIEGE TESTS PASSED (74). 0.31.119,
   version code 204 -> 205. APK 31486950 bytes, sha256 b7fcd798843c064ae20ce2c43beac216b644f4c74adb49bdbe5c64a072652e27.
   No content pack change. Needs the server redeployed (rooms, idle, leaderboard).
+
+## 0.31.120 — rejoin, join a friend's match, leaderboard prizes, referral codes, profile card, diagnostics upload, kill feed, vibration (Kevin: "1 and 2 I want added"; then "Do 1, 3, 6, 8, 10, 9 (but make so it's a join match option)")
+- **Rejoin after a dropped connection.** Before, a phone that lost its connection mid-match saw "Disconnected from the
+  server", the server gave the seat to a bot and the match's record (the ledger) went with the socket -- nothing paid.
+  Now every welcome carries "rj", a secret token for the seat. A seated player whose socket drops mid-match (no close
+  frame; or silent for 8 s after it started sending input -- SILENT_DROP) has the seat HELD for 60 s: a bot plays it,
+  nobody else is seated on it, the ledger is kept, the match still pays it if it ends meanwhile, and it counts toward the
+  room's size. A clean close (the app's 1000 "leave" -- now sent with {"t":"leave"} and polled out by a small
+  SocketCloser node so it isn't lost when the match node is freed; any code 1000) holds nothing. A hello with "rj" (and
+  the same account) goes straight back onto the unit in the same match: welcome {"rejoin":true}, no lobby. A hello with
+  the token of a socket the server still thinks is open (a phone that changed networks) takes the seat over and closes
+  the old one ("rejoined"). A held seat nobody returns for is let go (match_quit logged then). The game: on a drop it
+  keeps the match on screen with a "RECONNECTING... Your seat is held for you · 52 s" banner and reconnects every 2 s for
+  up to 55 s; then "Disconnected from the server" as before. The probe leaves cleanly. Older apps never send "rj"
+  (their drops are held and simply run out). tests/rejoin_test.gd (real server + the real client: drop and rejoin,
+  can't get back, a network switch takes over, a clean leave holds nothing, a hold that runs out, a held seat paid).

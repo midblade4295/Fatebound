@@ -55,7 +55,15 @@ func _done(ok: bool, why: String) -> void:
 			lobby_n, str(status) if not status.is_empty() else "none (a server before 0.31.82)", an_note])
 	else:
 		print("PROBE_FAIL %s: %s" % [url, why])
-	ws.close()
+	# 0.31.120: leave cleanly (a dropped connection would have its seat held for a minute)
+	if ws.get_ready_state() == WebSocketPeer.STATE_OPEN:
+		ws.put_packet(Net.encode({"t":"leave"}))
+	ws.close(1000, "leave")
+	for i in 20:
+		ws.poll()
+		if ws.get_ready_state() == WebSocketPeer.STATE_CLOSED:
+			break
+		OS.delay_msec(25)
 	quit(0 if ok else 1)
 
 func _process(d: float) -> bool:

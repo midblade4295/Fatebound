@@ -72,6 +72,18 @@ var net_server_version := -1        # the server's protocol from that refusal
 var _net_bye: Dictionary = {}
 var _net_closing_since := -1.0
 var _me_bot := false                # 0.31.119: the server says a bot plays my unit (I was idle): no prediction
+# 0.31.120 (Kevin: rejoin after a dropped connection): the server's token for my seat ("rj" in the welcome). When the
+# connection drops mid-match the game keeps the match on screen and reconnects quietly every REJOIN_EVERY s for up to
+# REJOIN_FOR s with a hello carrying the token; the server puts me straight back on my unit (welcome "rejoin").
+const REJOIN_FOR := 55.0
+const REJOIN_EVERY := 2.0
+var rejoin_for := REJOIN_FOR        # (tests shorten it)
+var _rj := ""
+var _rejoin_until := -1.0
+var _rejoin_at := 0.0
+var _rejoin_sent := false
+var rejoins := 0                    # (tests, diag)
+var party_join := ""                # 0.31.120: a friend's public id: their match is the one to join (Friends > JOIN)
 var exit_note := ""                 # 0.31.119: why the match ended for me, for Home to say (removed for being idle)
 const MSG_UPDATE := "A new version of Fatebound is available. Update to keep playing."
 const MSG_SERVER_OLD := "Servers are updating, try again in a few minutes"
@@ -439,6 +451,49 @@ func _net_send(msg: Dictionary) -> void:
 	if ws != null and ws.get_ready_state() == WebSocketPeer.STATE_OPEN:
 		ws.put_packet(Net.encode(msg))
 
+func _hello() -> Dictionary:
+	var hi := {"t":"hello", "v":Net.VERSION, "name":player_name, "build":Diag.BUILD, "pred":true, "title":my_title(),
+		"lk":profile.wire_looks() if profile != null else {}}          # 0.31.101: what I wear, for the others
+	if profile != null and bool(profile.server_mode):
+		hi["acct"] = str(profile.d.account.id)       # 0.31.108: the server pays this match to the account
+		hi["key"] = str(profile.d.account.key)
+	hi.merge(Analytics.hello_flags(profile))         # 0.31.118: "an_off" when usage statistics are off
+	if party_join != "":
+		hi["join"] = party_join                      # 0.31.120: into this friend's match (Friends > JOIN)
+	return hi
+
+func _begin_rejoin() -> void:
+	# 0.31.120: the connection dropped mid-match -- keep the match on screen and try to get back onto my seat
+	net_state = "rejoining"
+	_rejoin_until = Time.get_ticks_msec() / 1000.0 + rejoin_for
+	_rejoin_at = Time.get_ticks_msec() / 1000.0 + 0.5
+	_rejoin_sent = false
+	_net_bye = {}
+	hud.rejoin_until = _rejoin_until
+	diag.write("NET dropped mid-match: reconnecting (token %s...)" % _rj.left(4))
+
+func _rejoin_tick() -> bool:
+	# -> true while a new connection is being made (nothing else to read yet)
+	var now := Time.get_ticks_msec() / 1000.0
+	if now > _rejoin_until:
+		hud.rejoin_until = -1.0
+		_net_fail("Disconnected from the server")
+		return true
+	var st := ws.get_ready_state() if ws != null else WebSocketPeer.STATE_CLOSED
+	if st == WebSocketPeer.STATE_CLOSED and now >= _rejoin_at:
+		_rejoin_at = now + REJOIN_EVERY
+		_rejoin_sent = false
+		ws = WebSocketPeer.new()
+		ws.inbound_buffer_size = 1 << 20
+		ws.outbound_buffer_size = 1 << 16
+		ws.connect_to_url(net_url)
+		_net_started = now
+		return true
+	if st == WebSocketPeer.STATE_CONNECTING and now - _net_started > 6.0:
+		ws.close()
+		return true
+	return st != WebSocketPeer.STATE_OPEN
+
 func _build_online_match(msg: Dictionary) -> void:
 	# A new match (or the first one): rebuild the mirror sim and the 3D view.
 	if is_instance_valid(view):
@@ -467,6 +522,7 @@ func _build_online_match(msg: Dictionary) -> void:
 	view.setup(sim)
 	hud.sim = sim
 	net_match = int(msg.get("match", 0))
+	hud.rejoin_until = -1.0
 	_result_shown = false
 	_lifts = 0
 	_title_reset()
@@ -483,6 +539,10 @@ func _net_process(delta: float) -> void:
 		return
 	ws.poll()
 	var st := ws.get_ready_state()
+	if net_state == "rejoining":
+		if _rejoin_tick():
+			return
+		st = ws.get_ready_state()
 	if st == WebSocketPeer.STATE_CONNECTING:
 		if Time.get_ticks_msec() / 1000.0 - _net_started > 10.0:
 			ws.close()
@@ -507,22 +567,33 @@ func _net_process(delta: float) -> void:
 		if str(_net_bye.get("why", "")) == "full" or ws.get_close_code() == Net.CLOSE_FULL:
 			_net_fail("Server is full")
 			return
+		if sim != null and not sim.ended and _rj != "" and net_state == "playing" and _net_bye.is_empty() and ws.get_close_code() != 4006:
+			_begin_rejoin()                              # 0.31.120: the connection dropped -- try to get back in
+			return
 		_net_fail("Disconnected from the server" if sim != null else "Could not connect to the server")
 		return
 	if net_state == "connecting":
 		net_state = "waiting"
-		var hi := {"t":"hello", "v":Net.VERSION, "name":player_name, "build":Diag.BUILD, "pred":true, "title":my_title(),
-			"lk":profile.wire_looks() if profile != null else {}}          # 0.31.101: what I wear, for the others
-		if profile != null and bool(profile.server_mode):
-			hi["acct"] = str(profile.d.account.id)       # 0.31.108: the server pays this match to the account
-			hi["key"] = str(profile.d.account.key)
-		hi.merge(Analytics.hello_flags(profile))         # 0.31.118: "an_off" when usage statistics are off
-		_net_send(hi)
+		_net_send(_hello())
+	if net_state == "rejoining" and not _rejoin_sent:
+		_rejoin_sent = true
+		var hr := _hello()
+		hr["rj"] = _rj                                   # 0.31.120: back onto my seat
+		_net_send(hr)
 	while ws.get_available_packet_count() > 0:
 		var msg := Net.decode(ws.get_packet())
 		match str(msg.get("t", "")):
 			"welcome":
-				if int(msg.get("match", -1)) != net_match:
+				_rj = str(msg.get("rj", _rj))                   # 0.31.120: my seat's token, for a rejoin
+				if bool(msg.get("rejoin", false)) and int(msg.get("match", -1)) == net_match and sim != null:
+					net_state = "playing"
+					rejoins += 1
+					hud.rejoin_until = -1.0
+					_net_rt = -1.0                              # (the render clock starts again from the next snapshot)
+					_net_rx_last = 0.0
+					hud.toast("Back in the match!", Color("#8fe3a2"))
+					diag.write("NET rejoined match %d as %s" % [net_match, str(msg.get("you", ""))])
+				elif int(msg.get("match", -1)) != net_match:
 					_build_online_match(msg)
 			"s":
 				if sim == null:
@@ -989,7 +1060,22 @@ func set_fps_cap(v: int) -> void:
 func _exit_tree() -> void:
 	Engine.max_fps = _prev_max_fps
 	if ws != null:
+		_net_send({"t":"leave"})            # 0.31.120: quitting on purpose -- the server doesn't hold the seat
 		ws.close(1000, "leave")
+		var closer := SocketCloser.new()   # (polled until the close is out: this node is about to go)
+		closer.ws = ws
+		if is_inside_tree():
+			get_tree().root.add_child.call_deferred(closer)
+
+class SocketCloser extends Node:
+	# 0.31.120: keeps polling a closing socket for a moment so its "leave" and close frame reach the server
+	var ws: WebSocketPeer
+	var t := 0.0
+	func _process(delta: float) -> void:
+		t += delta
+		ws.poll()
+		if ws.get_ready_state() == WebSocketPeer.STATE_CLOSED or t > 3.0:
+			queue_free()
 
 func request_leave() -> void:
 	# Android back button: open the pause panel rather than quitting a match outright.
