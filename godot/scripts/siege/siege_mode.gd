@@ -168,6 +168,9 @@ func _ready() -> void:
 			if hud.result_panel != null:
 				hud.result_panel.queue_free()
 				hud.result_panel = null
+				if hud.score_panel != null and is_instance_valid(hud.score_panel):   # 0.31.119
+					hud.score_panel.queue_free()
+				hud.score_panel = null
 			hud.toast("Next match starts shortly...", Color("#f2d18d"))
 		else:
 			_restart())
@@ -443,6 +446,9 @@ func _build_online_match(msg: Dictionary) -> void:
 	if hud.result_panel != null:
 		hud.result_panel.queue_free()
 		hud.result_panel = null
+		if hud.score_panel != null and is_instance_valid(hud.score_panel):   # 0.31.119
+			hud.score_panel.queue_free()
+		hud.score_panel = null
 	sim = Sim.new()
 	sim.setup(int(msg.get("team_size", Net.TEAM_SIZE)), int(msg.get("seed", 1)), -1)
 	var me_id := str(msg.get("you", ""))
@@ -562,6 +568,7 @@ func _net_process(delta: float) -> void:
 				net_titles = tt if tt is Dictionary else {}
 				var lk: Variant = msg.get("lk", {})           # 0.31.101: what each of them wears
 				net_looks = lk if lk is Dictionary else {}
+				hud.net_names = net_names                     # 0.31.119: the scoreboard names the players
 				if is_instance_valid(view):
 					view.player_names = net_names
 					view.player_titles = net_titles
@@ -647,6 +654,9 @@ func _restart() -> void:
 	if hud.result_panel != null:
 		hud.result_panel.queue_free()
 		hud.result_panel = null
+		if hud.score_panel != null and is_instance_valid(hud.score_panel):   # 0.31.119
+			hud.score_panel.queue_free()
+		hud.score_panel = null
 	if _staged():
 		_warm_done = false                 # the card again (briefly: the pipelines are compiled by now)
 		_start_staged()

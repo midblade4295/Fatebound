@@ -3445,3 +3445,9 @@ K2/K3 notes (0.17.0)
   IS PLAYING FOR YOU · Move or attack to take over · removed in m:ss"; when removed it goes back to Home, which says
   why (new `notice()` modal). "full" now reads "Every match is full -- try again in a minute". Env for tests:
   SIEGE_IDLE_BOT / SIEGE_IDLE_KICK. tests/idle_test.gd (real server + the real client).
+- **End-of-match MVP and scoreboard.** The results showed only your own KOs/downs/rescues. Every unit's knockouts,
+  downs, rescues, gathering, gate damage and fish fed already come with the snapshots, so the board is the server's own
+  count. Points: rescue 300, KO 20, fish fed 30, gathering 2, gate damage 1 per 10. The results panel gets an MVP strip
+  (the best of everyone -- a bot that outplayed everybody is named "Bot · <class>"; "YOU ARE THE MVP!" when it's you,
+  with a shine) and a SCORES button: both sides' top 6 best first, players by name (the server's "pn"), you marked and
+  always listed on your side. tests/scoreboard_test.gd.

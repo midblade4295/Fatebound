@@ -78,6 +78,8 @@ run net_load_test        NET_LOAD_PASS            120
 run match_rooms_test     MATCH_ROOMS_PASS         120
 # Idle players (0.31.119): a bot takes over, input gives it back, removal (real server on 8103 + the real client)
 run idle_test            IDLE_PASS                120
+# End-of-match MVP strip and scoreboard (0.31.119)
+run scoreboard_test      SCOREBOARD_PASS          60
 # Forced update: protocol mismatch -> Update screen / "Servers are updating" (real server on 8096, fake on 8097)
 run version_gate_test    VERSION_GATE_PASS        120
 # Server minimum app build: an outdated build is refused as "update required" (real servers on 8098/8099)

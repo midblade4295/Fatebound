@@ -54,6 +54,8 @@ var _multi: Label = null                 # 0.31.29: DOUBLE KILL ... LEGENDARY
 var _multi_at := -10.0
 const MULTI_COLORS := [Color.WHITE, Color.WHITE, Color("#ffe08a"), Color("#ffb04a"), Color("#ff6a3d"), Color("#ff3d6e"), Color("#c77dff")]
 var _toast_at := -10.0
+var net_names := {}                 # 0.31.119: online, unit id -> player name (the server's "pn"), for the scoreboard
+var score_panel: PanelContainer = null
 var idle_kick_at := -1.0            # 0.31.119: online, a bot plays for me (I was idle); when I'll be removed (s, ticks clock)
 var _toast_color := Color.WHITE
 var _time := 0.0
@@ -469,6 +471,7 @@ func show_result(result: Dictionary = {}) -> void:
 		UI2.body(r, str(ch[1]), 11, Color.WHITE, false)
 	if me.gathered > 0 or me.gate_dmg > 0.0:
 		UI2.center(UI2.body(v, "Gathered %d · gate damage %d" % [int(me.gathered), int(me.gate_dmg)], 12, Color("#cfe8b8"), false))
+	_mvp_strip(v)
 	var rw: Dictionary = result.get("rewards", {})
 	if not rw.is_empty():
 		var tab := PanelContainer.new()
@@ -572,6 +575,8 @@ func show_result(result: Dictionary = {}) -> void:
 	br.add_theme_constant_override("separation", 10)
 	v.add_child(br)
 	_button(br, "HOME", "secondary", func(): leave_requested.emit())
+	var sb := _button(br, "SCORES", "gold", func(): show_scoreboard())         # 0.31.119
+	sb.set_meta("key", "scoreboard")
 	var pa := _button(br, "PLAY AGAIN", "primary", func(): replay_requested.emit())
 	pa.size_flags_stretch_ratio = 1.5
 	UI2.sweep(pa)
@@ -579,6 +584,151 @@ func show_result(result: Dictionary = {}) -> void:
 	_center(result_panel, true)
 	if pause_panel != null:
 		pause_panel.visible = false
+
+# ---------- scoreboard and MVP (0.31.119, Kevin: "Do all" -- a proper end-of-match screen) ----------
+# Every unit's knockouts, downs, rescues, gathering, gate damage and fish fed come with the snapshots (and are the sim's
+# own offline), so the board is the match as the server counted it. Points: a rescue 300, a knockout 20, a fish fed
+# to their King 30, gathering 2 a load, gate damage 1 per 10. Bots are on the board too (as "Bot · <class>"): most
+# matches are mostly bots, and an honest board says when one outplayed everybody.
+const MVP_RESCUE := 300
+const MVP_KO := 20
+const MVP_FED := 30
+const MVP_GATHER := 2
+const MVP_GATE := 0.1
+
+static func points(u: Dictionary) -> int:
+	return int(u.get("rescues", 0)) * MVP_RESCUE + int(u.get("kills", 0)) * MVP_KO + int(u.get("fed", 0)) * MVP_FED \
+		+ int(u.get("gathered", 0)) * MVP_GATHER + int(float(u.get("gate_dmg", 0.0)) * MVP_GATE)
+
+func display_name(u: Dictionary) -> String:
+	if str(u.id) == player_id:
+		return player_name
+	if net_names.has(str(u.id)):
+		return str(net_names[str(u.id)])
+	return "Bot · %s" % sim.class_label(u)
+
+func is_player(u: Dictionary) -> bool:
+	return str(u.id) == player_id or net_names.has(str(u.id))
+
+func ranking(team := -1) -> Array:
+	# units by points (then knockouts, then fewer downs); team -1 = everyone
+	var out: Array = sim.units.filter(func(u): return team < 0 or int(u.team) == team)
+	out.sort_custom(func(a, b):
+		var pa := points(a)
+		var pb := points(b)
+		if pa != pb:
+			return pa > pb
+		if int(a.kills) != int(b.kills):
+			return int(a.kills) > int(b.kills)
+		if int(a.deaths) != int(b.deaths):
+			return int(a.deaths) < int(b.deaths)
+		return is_player(a) and not is_player(b))
+	return out
+
+func mvp() -> Dictionary:
+	var r := ranking()
+	return r[0] if not r.is_empty() and points(r[0]) > 0 else {}
+
+func _mvp_strip(v: VBoxContainer) -> void:
+	var m := mvp()
+	if m.is_empty():
+		return
+	var mine := str(m.id) == player_id
+	var box := UI2.frame(v, "ember" if mine else "royal", 6, 14.0, "orange" if mine else "gold", {"pattern_mix": 0.0})
+	box.name = "MvpStrip"
+	if mine:
+		UI2.sweep(box.get_parent() as Control, 2.2, 60.0, 0.4)
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 8)
+	box.add_child(row)
+	UI2.icon(row, "crown", 30.0)
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 0)
+	row.add_child(col)
+	var head := UI2.text(col, "YOU ARE THE MVP!" if mine else "MVP  ·  %s" % display_name(m), 16 if mine else 15,
+		UI2.GOLD if mine else Color.WHITE, Color("#1a0c02"), 5)
+	head.name = "MvpName"
+	var bits := []
+	if int(m.rescues) > 0:
+		bits.append("%d rescue%s" % [int(m.rescues), "" if int(m.rescues) == 1 else "s"])
+	bits.append("%d KOs" % int(m.kills))
+	bits.append("%d pts" % points(m))
+	UI2.body(col, " · ".join(bits), 11, Color(1, 1, 1, 0.85), false)
+
+func show_scoreboard() -> void:
+	# both sides, best first: the top 6 of each (and you, wherever you placed)
+	if score_panel != null:
+		score_panel.queue_free()
+	score_panel = _panel(360)
+	score_panel.name = "Scoreboard"
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 6)
+	score_panel.add_child(v)
+	UI2.center(UI2.text(v, "SCOREBOARD", 24, UI2.GOLD, Color("#1a0c02"), 6))
+	var me: Dictionary = sim.by_id.get(player_id, {})
+	var my_team := int(me.get("team", 0))
+	for side in [my_team, 1 - my_team]:
+		var hdr := HBoxContainer.new()
+		hdr.add_theme_constant_override("separation", 4)
+		v.add_child(hdr)
+		var hl := UI2.text(hdr, "YOUR SIDE" if side == my_team else "ENEMY", 14, TEAM_COLORS[vt(side)], Color("#0a1238"), 4)
+		hl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		for hh in [["KO", 34], ["♛", 26], ["PTS", 46]]:
+			var hc := UI.label(hdr, str(hh[0]), 10, UI2.MUTED, UI.HEAVY_FONT)
+			hc.autowrap_mode = TextServer.AUTOWRAP_OFF
+			hc.custom_minimum_size = Vector2(float(hh[1]), 0)
+			hc.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		var rows := ranking(side)
+		var shown := rows.slice(0, 6)
+		var my_rank := rows.find(me)
+		if side == my_team and my_rank >= 6:
+			shown.append(me)
+		for u in shown:
+			_score_row(v, u, rows.find(u) + 1, str(u.id) == player_id, side)
+	UI2.center(UI2.body(v, "Points: rescue %d · KO %d · fish %d · gathering %d · gate dmg ÷%d" % [MVP_RESCUE, MVP_KO, MVP_FED, MVP_GATHER, int(1.0 / MVP_GATE)], 10, UI2.MUTED, true))
+	var back := _button(v, "BACK", "secondary", func():
+		score_panel.visible = false                  # (hidden, not freed: its opening animation may still be running)
+		if result_panel != null:
+			result_panel.visible = true
+			_center(result_panel))
+	back.set_meta("key", "scoreboard_back")
+	if result_panel != null:
+		result_panel.visible = false
+	score_panel.visible = true
+	_center(score_panel, true)
+
+func _score_row(v: VBoxContainer, u: Dictionary, rank: int, mine: bool, side: int) -> void:
+	var row := PanelContainer.new()
+	var st := StyleBoxFlat.new()
+	st.bg_color = Color(UI2.GOLD, 0.22) if mine else Color(TEAM_COLORS[vt(side)], 0.08)
+	st.set_corner_radius_all(8)
+	st.content_margin_left = 6
+	st.content_margin_right = 6
+	st.content_margin_top = 3
+	st.content_margin_bottom = 3
+	if mine:
+		st.border_color = UI2.GOLD
+		st.set_border_width_all(1)
+	row.add_theme_stylebox_override("panel", st)
+	v.add_child(row)
+	var h := HBoxContainer.new()
+	h.add_theme_constant_override("separation", 4)
+	row.add_child(h)
+	var rl := UI.label(h, "%d" % rank, 12, UI2.GOLD if rank == 1 else UI2.MUTED, UI.HEAVY_FONT)
+	rl.autowrap_mode = TextServer.AUTOWRAP_OFF
+	rl.custom_minimum_size = Vector2(18, 0)
+	var name_col := Color.WHITE if is_player(u) else Color(1, 1, 1, 0.62)
+	var nl := UI.label(h, display_name(u), 13, UI2.GOLD if mine else name_col, UI.HEAVY_FONT)
+	nl.autowrap_mode = TextServer.AUTOWRAP_OFF
+	nl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	nl.clip_text = true
+	nl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	for val in [[str(int(u.kills)), 34], [str(int(u.rescues)), 26], [str(points(u)), 46]]:
+		var vl := UI.label(h, str(val[0]), 13, Color.WHITE, UI.HEAVY_FONT)
+		vl.autowrap_mode = TextServer.AUTOWRAP_OFF
+		vl.custom_minimum_size = Vector2(float(val[1]), 0)
+		vl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 
 func toast(text: String, color := Color.WHITE) -> void:
 	_toast = text
@@ -695,7 +845,8 @@ func _buttons() -> Array:
 	return out
 
 func _modal_open() -> bool:
-	return (workshop_panel != null and workshop_panel.visible) or paused() or (result_panel != null and result_panel.visible)
+	return (workshop_panel != null and workshop_panel.visible) or paused() or (result_panel != null and result_panel.visible) \
+		or (score_panel != null and is_instance_valid(score_panel) and score_panel.visible)
 
 func _input(event: InputEvent) -> void:
 	if sim == null:
