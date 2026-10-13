@@ -3470,3 +3470,16 @@ K2/K3 notes (0.17.0)
   pulsing, CLAIM, then "Day N in 21h 2m") opens by itself on Home the first time each day a claim waits (not in tests or
   screenshot tools: `daily_auto`); it's also first in ORDERS, and counts on the ORDERS badge. Analytics: a
   `daily_reward` {day} event (allow-listed). tests/daily_reward_test.gd.
+- **"Your chest is ready" notifications.** A small Android plugin of our own, FateboundNotify
+  (`godot/android_plugins/fatebound_notify`, Java, built with the cached Gradle 8.14.5 / AGP 8.13.2 against
+  org.godotengine:godot:4.7.2.stable; AARs in `addons/FateboundNotify/bin`): `hasPermission`, `requestPermission`
+  (Android 13+ POST_NOTIFICATIONS), `schedule(id, title, body, delay)` (AlarmManager.setAndAllowWhileIdle -- inexact, no
+  exact-alarm permission; a BroadcastReceiver posts it on a "Chests" channel with a chest status icon; a tap opens the
+  game), `cancelAll`. Like billing and Play Games it goes into Gradle exports only (the Play Store preset): the preview
+  APK has no notifications. `scripts/meta/notify.gd`: going to the background schedules one per unlocking chest at
+  the moment it's ready ("Your Silver Chest is ready!"), coming back cancels them. The first UNLOCK asks in the game's
+  own words ("CHEST NOTIFICATIONS -- want a notification when your chest is ready?"); only YES brings up Android's
+  dialog (asked once; NO turns the setting off). Settings > NOTIFICATIONS > "Chest ready" (greyed out without the
+  plugin). Nothing leaves the phone. Checked: a Gradle export of a minimal project with the plugin merges the
+  permission, the v2 plugin entry, the receiver, the classes and the icon (aapt2/dexdump); not run on a phone (no
+  emulator here). tests/notify_test.gd (a fake plugin).

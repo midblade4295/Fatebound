@@ -84,6 +84,8 @@ run scoreboard_test      SCOREBOARD_PASS          60
 run leaderboard_test     LEADERBOARD_PASS         150
 # Daily login reward (0.31.119): the calendar, the server's replay, the card on Home and in ORDERS
 run daily_reward_test    DAILY_REWARD_PASS        90
+# Chest-ready notifications (0.31.119): notify.gd with a fake of the Android plugin, the app's ask and Settings
+run notify_test          NOTIFY_PASS              90
 # Forced update: protocol mismatch -> Update screen / "Servers are updating" (real server on 8096, fake on 8097)
 run version_gate_test    VERSION_GATE_PASS        120
 # Server minimum app build: an outdated build is refused as "update required" (real servers on 8098/8099)

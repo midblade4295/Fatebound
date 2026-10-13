@@ -575,7 +575,9 @@ static func chests_row(app, parent: Control, w: float, y: float) -> void:
 			var ub := UI2.button(cell, "UNLOCK", "blue", func():
 				p.start_unlock(idx)
 				app.sfx("unlock")                  # 0.31.110: a key turns, ka-chunk
-				app.rebuild(), "chest_unlock_%d" % i, 13, 28.0, 9.0)
+				app.rebuild()
+				if app.has_method("chest_started"):
+					app.chest_started(), "chest_unlock_%d" % i, 13, 28.0, 9.0)
 			ub.position = Vector2(8, sh - 36)
 			ub.size = Vector2(sw - 16, 28)
 		else:
@@ -2339,6 +2341,22 @@ static func settings(app, root: VBoxContainer) -> void:
 		if app.get("analytics") != null:
 			app.analytics.set_enabled(on))
 	UI2.body(px, "Only to Fatebound's own server, tied to your game account's random id. Kept 90 days, never sold or shared.", 11, UI2.MUTED)
+	# 0.31.119: notifications (the Play build's plugin; the preview APK has none)
+	var nx := UI2.frame(root, "night", 12, 18.0, "gold")
+	UI2.divider(nx, "NOTIFICATIONS", 20)
+	var nt: Variant = app.get("notify")
+	var can_notify: bool = nt != null and nt.available()
+	var ntb := UI2.toggle(nx, "Chest ready", "A notification when a chest has finished unlocking" if can_notify else "Not in this version of the app",
+		bool(d.settings.get("notify", true)) and can_notify, "notify", func(on: bool):
+		app.sfx("toggle")
+		d.settings.notify = on
+		d.settings.notify_asked = true
+		p.save()
+		if on and nt != null and not nt.has_permission():
+			nt.request_permission())
+	ntb.disabled = not can_notify
+	if not can_notify:
+		ntb.modulate = Color(1, 1, 1, 0.45)
 	# Graphics
 	var gx := UI2.frame(root, "night", 12, 18.0, "gold")
 	UI2.divider(gx, "GRAPHICS", 20)

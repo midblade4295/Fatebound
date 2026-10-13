@@ -27,6 +27,7 @@ const InviteBanner = preload("res://scripts/app/invite_banner.gd")
 const OrdersPanel = preload("res://scripts/app/orders_panel.gd")
 const LeaderboardPanel = preload("res://scripts/app/leaderboard_panel.gd")
 const DailyReward = preload("res://scripts/app/daily_reward.gd")
+const Notify = preload("res://scripts/meta/notify.gd")
 const Analytics = preload("res://scripts/meta/analytics.gd")
 const Diag = preload("res://scripts/siege/siege_diag.gd")
 const TitleLogo = preload("res://scripts/app/title_logo.gd")
@@ -118,6 +119,7 @@ var play_games: Node = null            # 0.31.102: Google Play Games sign-in and
 # Headless (tests, tools) it doesn't reach the real server unless asked (eco_url / FB_ECO=1).
 var eco_sync: Node = null
 var analytics: Node = null              # 0.31.118: usage statistics to our own server (scripts/meta/analytics.gd)
+var notify = Notify.new()                # 0.31.119: "your chest is ready" notifications (the Play build's plugin)
 var eco_autostart := DisplayServer.get_name() != "headless" or OS.has_environment("FB_ECO")
 var eco_url := OS.get_environment("SIEGE_URL") if OS.has_environment("SIEGE_URL") else Net.DEFAULT_URL
 var online_refs := {}                  # Home's "players online" pill: {main, sub}
@@ -1327,6 +1329,8 @@ func _notification(what: int) -> void:
 	elif what == NOTIFICATION_APPLICATION_PAUSED:
 		if analytics != null:
 			analytics.end_session()                # 0.31.118: a session is a time in the foreground
+		if notify != null and profile != null:
+			notify.on_background(profile)          # 0.31.119: a chest that finishes while we're away says so
 		if audio != null and audio.has_method("stop"):
 			audio.stop()
 		if social != null:
@@ -1336,6 +1340,8 @@ func _notification(what: int) -> void:
 		if online_status != null:
 			online_status.set_active(false)
 	elif what == NOTIFICATION_APPLICATION_RESUMED:
+		if notify != null:
+			notify.on_foreground()                 # 0.31.119: back in the game -- the chests show themselves
 		if analytics != null:
 			analytics.begin_session(false, false, str(analytics.meta.get("net", "")))
 		if eco_sync != null and eco_sync.auto_start:
@@ -1369,6 +1375,20 @@ func open_orders() -> void:
 	add_child(m)
 	modal = m
 	m.open(self)
+
+func chest_started() -> void:
+	# 0.31.119: a chest started unlocking -- the first time, ask whether they'd like a notification when it's ready
+	# (our question first; Android's own dialog only on YES, so a NO here doesn't use up Android's two asks)
+	if notify == null or not notify.should_ask(profile):
+		return
+	profile.d.settings["notify_asked"] = true
+	profile.save()
+	confirm("CHEST NOTIFICATIONS", "Want a notification when your chest is ready to open? You can change this in Settings.",
+		"YES", "primary", func():
+			notify.request_permission(),
+		func():
+			profile.d.settings["notify"] = false
+			profile.save())
 
 func open_daily() -> void:
 	# 0.31.119: the DAILY REWARD card

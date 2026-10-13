@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Android 13+: asked for at run time, the first time a chest starts unlocking (and only then) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <application>
+        <meta-data
+            android:name="org.godotengine.plugin.v2.FateboundNotify"
+            android:value="org.fatebound.notify.FateboundNotify" />
+        <receiver
+            android:name="org.fatebound.notify.NotifyReceiver"
+            android:exported="false" />
+    </application>
+</manifest>
