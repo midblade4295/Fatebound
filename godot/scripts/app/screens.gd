@@ -318,33 +318,13 @@ static func home(app, root: VBoxContainer) -> void:
 		app.open_friends(), "side_friends", att, "silver")
 	if att > 0:
 		UI2.wiggle(frb.get_meta("icon"))
+	# 0.31.119 (Kevin: "Do all" -- leaderboards): RANKS takes the top-right medallion (the week's leaderboard); the first
+	# win of the day moved onto PLAY as a tag
 	var fw_open := str(d.first_win_day) != Eco.day_key(p.now())
-	var fwb := _medallion(top, Vector2(w - 62, MED_Y[0]), "trophy", "FIRST WIN", func():
-		app.sfx("tap")
-		if fw_open:
-			app.toast("First win of the day: +%d gold, +%d pass XP and a Silver Chest" % [Eco.FIRST_WIN.gold, Eco.FIRST_WIN.pass], UI.GOLD)
-		else:
-			app.toast("First win done today -- back tomorrow", UI.MUTED), "side_first_win", 0, "silver")
-	if fw_open:
-		UI2.bob(fwb.get_meta("icon"), 4.0, 1.4)
-		var chip := PanelContainer.new()            # "+300" on the medallion's corner, like a badge
-		var cs := StyleBoxFlat.new()
-		cs.bg_color = Color("#ffc94d")
-		cs.border_color = Color("#3a1c02")
-		cs.set_border_width_all(2)
-		cs.set_corner_radius_all(9)
-		cs.content_margin_left = 5
-		cs.content_margin_right = 5
-		chip.add_theme_stylebox_override("panel", cs)
-		chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		chip.position = Vector2(26, -4)
-		chip.custom_minimum_size = Vector2(40, 18)
-		fwb.add_child(chip)
-		var cl := UI.label(chip, "+%d" % Eco.FIRST_WIN.gold, 11, Color("#3a1c02"), UI.HEAVY_FONT)
-		cl.autowrap_mode = TextServer.AUTOWRAP_OFF
-		cl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	else:
-		fwb.modulate = Color(0.75, 0.75, 0.8, 0.85)
+	var rkb := _medallion(top, Vector2(w - 62, MED_Y[0]), "trophy", "RANKS", func():
+		app.sfx("menuOpen")
+		app.open_leaderboard(), "side_ranks", 0, "silver")
+	UI2.bob(rkb.get_meta("icon"), 3.0, 1.6)
 	# --- PLAY: always the Siege server (0.31.79); the bots fill any empty slots
 	var py: float = lay.play
 	UI2.glow(top, Rect2(-30, py - 16, w + 60, 130), Color(1.0, 0.55, 0.15, 0.55))
@@ -366,6 +346,38 @@ static func home(app, root: VBoxContainer) -> void:
 		pl.text = "PLAY ×%d" % soc.party_size()
 	UI2.sweep(play, 2.6, 80.0, 0.5)
 	UI2.pulse(play, 0.018, 1.1)
+	if fw_open:
+		# 0.31.119: the first win of the day, as a tag on PLAY's corner (it was the FIRST WIN medallion)
+		var tag := PanelContainer.new()
+		tag.name = "FirstWinTag"
+		var ts := StyleBoxFlat.new()
+		ts.bg_color = Color("#ffc94d")
+		ts.border_color = Color("#3a1c02")
+		ts.set_border_width_all(2)
+		ts.set_corner_radius_all(10)
+		ts.content_margin_left = 8
+		ts.content_margin_right = 8
+		ts.content_margin_top = 1
+		ts.content_margin_bottom = 1
+		ts.shadow_color = Color(0, 0, 0, 0.35)
+		ts.shadow_size = 4
+		tag.add_theme_stylebox_override("panel", ts)
+		tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		top.add_child(tag)
+		var tl := Label.new()                          # (not UI.label: a wrapping label sizes the tag a letter wide first)
+		tl.text = "FIRST WIN +%d" % Eco.FIRST_WIN.gold
+		tl.add_theme_font_override("font", UI.HEAVY_FONT)
+		tl.add_theme_font_size_override("font_size", 12)
+		tl.add_theme_color_override("font_color", Color("#3a1c02"))
+		tl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		tl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		tag.add_child(tl)
+		var tw := (UI.HEAVY_FONT as Font).get_string_size(tl.text, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x + 22.0
+		tag.custom_minimum_size = Vector2(tw, 22)
+		tag.size = tag.custom_minimum_size
+		tag.position = Vector2(w - tw - 6.0, py - 12.0)
+		tag.rotation = deg_to_rad(4.0)
+		UI2.bob(tag, 2.0, 1.4)
 	var uy: float = lay.under
 	if not bool(d.get("tutorial_done", false)):
 		# 0.31.112: the tutorial right under PLAY, pulsing, until it's been played through

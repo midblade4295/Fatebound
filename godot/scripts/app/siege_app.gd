@@ -25,6 +25,7 @@ const FriendsPanel = preload("res://scripts/app/friends_panel.gd")
 const ChatTicker = preload("res://scripts/app/chat_ticker.gd")
 const InviteBanner = preload("res://scripts/app/invite_banner.gd")
 const OrdersPanel = preload("res://scripts/app/orders_panel.gd")
+const LeaderboardPanel = preload("res://scripts/app/leaderboard_panel.gd")
 const Analytics = preload("res://scripts/meta/analytics.gd")
 const Diag = preload("res://scripts/siege/siege_diag.gd")
 const TitleLogo = preload("res://scripts/app/title_logo.gd")
@@ -1362,6 +1363,14 @@ func open_chat(ch := "global") -> void:
 func open_orders() -> void:
 	close_modal()
 	var m := OrdersPanel.new()
+	add_child(m)
+	modal = m
+	m.open(self)
+
+func open_leaderboard() -> void:
+	# 0.31.119: the week's leaderboard (RANKS on Home)
+	close_modal()
+	var m := LeaderboardPanel.new()
 	add_child(m)
 	modal = m
 	m.open(self)

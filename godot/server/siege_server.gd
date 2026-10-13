@@ -79,6 +79,10 @@ extends SceneTree
 # by a bot: their unit's bot flag goes on (every app sees it in the snapshots) and they get {"t":"idle", "on":true,
 # "kick_in":s}. Any input hands the unit straight back ({"t":"idle", "on":false}). At IDLE_KICK s they're removed:
 # bye {"why":"idle"} + close 4006 "idle"; the seat stays with the bot and the match pays them nothing.
+#
+# 0.31.119 (leaderboards): every paid online match adds to the account's week (server/leaderboard.gd). A socket whose
+# first message is {"t":"lb", "acct", "key"} (no hello, like "eco") gets the week's board, the account's own row and its
+# friends' rows; a key that doesn't open the account: 4007 "lb". "ver"/"status" answer "lb":1.
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 const Net = preload("res://scripts/siege/siege_net.gd")
 const IapVerify = preload("res://server/iap_verify.gd")
@@ -86,6 +90,7 @@ const EcoAccounts = preload("res://server/eco_accounts.gd")
 const MatchLedger = preload("res://server/match_ledger.gd")
 const Social = preload("res://server/social.gd")
 const Analytics = preload("res://server/analytics.gd")
+const Leaderboard = preload("res://server/leaderboard.gd")
 
 const RESTART_AFTER := 15.0          # seconds of results screen before the next match
 const IDLE_STOP := 30.0              # no players for this long -> stop simulating (and the room closes)
@@ -140,6 +145,7 @@ var iap = null                       # 0.31.90: Google Play purchase checks (ser
 var eco = null                       # 0.31.108: the accounts (server/eco_accounts.gd)
 var social = null                    # 0.31.111: chat, friends, parties (server/social.gd)
 var analytics = null                 # 0.31.118: usage statistics (server/analytics.gd)
+var leaderboard = null               # 0.31.119: the week's best players (server/leaderboard.gd)
 var boot_time := int(Time.get_unix_time_from_system())   # (with the match id: a match's id across restarts)
 var test_match_s := 0.0              # tests only (SIEGE_TEST_MATCH_S): a match ends after this many seconds
 var min_build := ""                  # "" = no minimum (see SIEGE_MIN_BUILD)
@@ -209,6 +215,9 @@ func _init() -> void:
 	analytics.log_fn = _log
 	social.event_fn = func(acct: String, ev: String, p: Dictionary): analytics.server_event(acct, ev, p)
 	_log("analytics: %s (%d accounts opted out)" % [analytics.dir, analytics.opted.size()])
+	leaderboard = Leaderboard.new()
+	leaderboard.log_fn = _log
+	_log("leaderboard: week of %s, %d players" % [leaderboard.week, leaderboard.rows.size()])
 
 # ---------------- minimum app build ----------------
 # "0.31.78-fatebound" -> [0, 31, 78]; anything without a leading dotted number -> [] (unknown).
@@ -294,6 +303,8 @@ func _process(delta: float) -> bool:
 		social.tick(delta)
 	if analytics != null:
 		analytics.tick(delta)
+	if leaderboard != null:
+		leaderboard.tick(delta)
 	return false
 
 # ---------------- connections ----------------
@@ -348,7 +359,7 @@ func _poll_clients() -> void:
 			_handle(cid, Net.decode(pkt))
 
 func _send(cid: int, msg: Dictionary) -> void:
-	_send_raw(cid, Net.encode(msg, msg.get("t", "") in ["s", "eco", "iap", "an"]))      # (0.31.108: an account travels compressed; 0.31.118: and usage acks)
+	_send_raw(cid, Net.encode(msg, msg.get("t", "") in ["s", "eco", "iap", "an", "lb"]))      # (0.31.108: an account travels compressed; 0.31.118: and usage acks)
 
 func _send_raw(cid: int, bytes: PackedByteArray) -> void:
 	var c: Dictionary = clients.get(cid, {})
@@ -490,7 +501,7 @@ func _handle(cid: int, msg: Dictionary) -> void:
 			# so the client treats no answer as "unknown" and checks again on connect.
 			if c.hello:
 				return
-			_send(cid, {"t":"ver", "v":Net.VERSION, "build":SERVER_BUILD, "min_build":min_build, "eco":1, "social":1, "an":1})
+			_send(cid, {"t":"ver", "v":Net.VERSION, "build":SERVER_BUILD, "min_build":min_build, "eco":1, "social":1, "an":1, "lb":1})
 			_refuse(cid, 1000, "ver")
 		"hello":
 			if c.hello or c.has("social"):
@@ -624,6 +635,18 @@ func _handle(cid: int, msg: Dictionary) -> void:
 				return
 			_send(cid, aout)
 			_refuse(cid, 1000, "an")
+			c.close_at = _now() + 2.0
+		"lb":
+			# 0.31.119: the week's leaderboard for an account (its row and its friends'). One per socket, no hello.
+			if c.hello or c.has("lb_done") or c.has("social") or leaderboard == null or eco == null:
+				return
+			c.lb_done = true
+			var lacct := str(msg.get("acct", ""))
+			if lacct == "" or eco.open(lacct, str(msg.get("key", ""))).is_empty():
+				_refuse(cid, 4007, "lb")
+				return
+			_send(cid, leaderboard.answer(lacct, social.friend_accts(lacct) if social != null else []))
+			_refuse(cid, 1000, "lb")
 			c.close_at = _now() + 2.0
 		"iap":
 			# 0.31.90: a phone asks whether a Google Play purchase is real before it grants it. No hello (a purchase is
@@ -877,7 +900,7 @@ func _status() -> Dictionary:
 			running = true
 	return {"t":"status", "v":Net.VERSION, "online":_human_count(), "in_match":in_match, "waiting":waiting,
 		"lobby":lobby, "running":running, "slots":Net.TEAM_SIZE * 2, "max":max_players * max_rooms, "rooms":rooms.size(),
-		"build":SERVER_BUILD, "min_build":min_build, "eco":1, "social":1, "an":1,
+		"build":SERVER_BUILD, "min_build":min_build, "eco":1, "social":1, "an":1, "lb":1,
 		"chatting":social.online.size() if social != null else 0}
 
 # ---------------- statistics (0.31.118) ----------------
@@ -927,6 +950,8 @@ func _pay_match(r: Room) -> void:
 		var draw: bool = sim.winner == -1
 		var res: Dictionary = eco.apply_online(str(c.acct), me, won, draw)
 		c.erase("ledger")
+		if leaderboard != null:
+			leaderboard.add_match(str(c.acct), str(c.name), str(c.get("title", "")), me, won)     # 0.31.119
 		if analytics != null:
 			analytics.server_event(str(c.acct), "match_finish", {"match":str(c.get("match_key", match_key(r))), "mode":"online",
 				"dur_s":int(_now() - float(c.get("seated_at", _now()))), "result":"win" if won else ("draw" if draw else "loss"),

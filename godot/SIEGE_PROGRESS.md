@@ -3451,3 +3451,13 @@ K2/K3 notes (0.17.0)
   (the best of everyone -- a bot that outplayed everybody is named "Bot · <class>"; "YOU ARE THE MVP!" when it's you,
   with a shine) and a SCORES button: both sides' top 6 best first, players by name (the server's "pn"), you marked and
   always listed on your side. tests/scoreboard_test.gd.
+- **Leaderboards.** `server/leaderboard.gd`: every paid online match (the server's own ledger) adds to the account's
+  week -- points (the scoreboard's, + 100 for a win), wins, matches, rescues, KOs. Weeks start Monday 00:00 UTC; the
+  finished week's top 3 are kept as last week's champions. leaderboard.json in the state directory (backed up with
+  the accounts). A socket whose first message is {"t":"lb", "acct", "key"} gets the top 50, the account's own row and
+  its friends' rows (names and titles only, never account ids); a wrong key: 4007. "ver"/"status" say "lb":1.
+  App: Home's top-right medallion is now RANKS (trophy) -> the LEADERBOARD window (`leaderboard_panel.gd`, fetched by
+  `scripts/meta/lb_fetch.gd`): THIS WEEK / FRIENDS tabs, the week's end, your row pinned under the top 50 when you're
+  further down, last week's champions, how points are earned. The first win of the day (was the FIRST WIN medallion)
+  is a gold "FIRST WIN +300" tag on PLAY's corner while it's open. tests/leaderboard_test.gd (the board, the real
+  server, the window).
