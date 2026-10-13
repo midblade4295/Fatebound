@@ -409,7 +409,7 @@ static func home(app, root: VBoxContainer) -> void:
 	if bool(app.get("safe_boot")) and not bool(app.get_meta("safe_note", false)):
 		# 0.31.70: the last start never reached the menu, so this one skipped the live hero and the background loading
 		app.set_meta("safe_note", true)
-		app.toast("The game got stuck starting last time -- please send the developer Settings > COPY DIAGNOSTICS", UI.GOLD)
+		app.toast("The game got stuck starting last time -- please tap Settings > SEND TO DEVELOPER", UI.GOLD)
 
 static func _online_pill(app, top: Control, w: float, y: float) -> void:
 	# --- players online (0.31.82, Kevin: "Add a players online in main menu"): a pill under PLAY, painted by
@@ -2408,6 +2408,8 @@ static func settings(app, root: VBoxContainer) -> void:
 				app.toast(str(r.error), UI.RED)
 			app.rebuild(), "import_legacy", 16, 44.0)
 	# Help
+	# 0.31.120 (Kevin: SEND TO DEVELOPER): the log straight to the developer's server, asked every time
+	UI2.button(root, "SEND TO DEVELOPER", "orange", func(): app.open_send_diag(), "send_diag", 15, 44.0)
 	var help := HBoxContainer.new()
 	help.add_theme_constant_override("separation", 10)
 	root.add_child(help)

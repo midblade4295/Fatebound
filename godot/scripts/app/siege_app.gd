@@ -27,6 +27,7 @@ const InviteBanner = preload("res://scripts/app/invite_banner.gd")
 const OrdersPanel = preload("res://scripts/app/orders_panel.gd")
 const LeaderboardPanel = preload("res://scripts/app/leaderboard_panel.gd")
 const DailyReward = preload("res://scripts/app/daily_reward.gd")
+const SocialUI = preload("res://scripts/app/social_ui.gd")
 const LbFetch = preload("res://scripts/meta/lb_fetch.gd")
 const Notify = preload("res://scripts/meta/notify.gd")
 const Analytics = preload("res://scripts/meta/analytics.gd")
@@ -1500,6 +1501,82 @@ func redeem_code(code: String, cb := Callable()) -> void:
 			modal.ref_changed()
 		if cb.is_valid():
 			cb.call(r))
+
+# ---------------- SEND TO DEVELOPER (0.31.120) ----------------
+static func diag_message(note: String, log_text: String, p) -> Dictionary:
+	# the report (server/diag_reports.gd), fitted under one packet once compressed: the log's first lines (the session
+	# header) and as much of its end as fits
+	var msg := {"t":"diag", "name":str(p.d.get("name", "")), "build":Diag.BUILD, "note":note.strip_edges().left(500),
+		"dev":{"model":OS.get_model_name(), "os":"%s %s" % [OS.get_name(), OS.get_version()], "gpu":RenderingServer.get_video_adapter_name()},
+		"log":log_text}
+	var acct := str(p.d.account.get("id", ""))
+	if acct != "":
+		msg["acct"] = acct
+		msg["key"] = str(p.d.account.get("key", ""))
+	var keep := mini(log_text.length(), 390000)
+	if keep < log_text.length():
+		msg.log = log_text.left(3000) + "\n[... %d characters left out ...]\n" % (log_text.length() - keep) + log_text.right(keep - 3000)
+	while Net.encode(msg, true).size() > Net.MAX_PACKET - 2048 and keep > 4000:
+		keep = int(keep * 0.7)
+		msg.log = log_text.left(3000) + "\n[... %d characters left out ...]\n" % (log_text.length() - keep) + log_text.right(keep - 3000)
+	return msg
+
+func send_diagnostics(note: String, cb: Callable) -> void:
+	# cb({"ok", "id"} / {"ok": false, "why"} / {} with no answer)
+	LbFetch.ask(self, str(eco_url), diag_message(note, Diag.read_logs(200), profile), cb, true)
+
+func open_send_diag() -> void:
+	# Settings > SEND TO DEVELOPER: what's sent, a line about the problem, SEND -- asked every time
+	sfx("menuOpen")
+	close_modal()
+	modal = Control.new()
+	modal.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(modal)
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.6)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	modal.add_child(dim)
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	modal.add_child(center)
+	var v := UI2.frame(center, "royal", 14, 20.0, "gold")
+	(v.get_parent() as Control).custom_minimum_size = Vector2(minf(360, size.x - 32), 0)
+	v.add_theme_constant_override("separation", 10)
+	UI2.center(UI2.text(v, "SEND TO DEVELOPER", 22, UI2.GOLD))
+	UI2.body(v, "Sends this phone's game log to the developer to fix a problem: what the game was doing, its errors, your " +
+		"phone model and the game's version, with your player name. No chats, purchases or other apps.", 13, UI2.SOFT)
+	var note := SocialUI.field(v, "What went wrong? (optional)", 300)
+	note.name = "DiagNote"
+	var r := UI.row(v, 10)
+	UI.grow(UI2.button(r, "CANCEL", "ghost", func():
+		sfx("menuClose")
+		close_modal(), "diag_cancel", 15, 44.0))
+	var send := UI2.button(r, "SEND", "orange", func(): pass, "diag_send", 17, 44.0)
+	UI.grow(send)
+	var m := modal
+	send.pressed.connect(func():
+		if send.has_meta("busy"):
+			return
+		send.set_meta("busy", true)
+		send.text = "SENDING..."
+		UI2.dim_button(send, true)
+		sfx("tap")
+		send_diagnostics(note.text, func(res: Dictionary):
+			if bool(res.get("ok", false)):
+				sfx("confirm")
+				if modal == m:
+					close_modal()
+				toast("Sent -- report #%s. Thank you!" % str(res.get("id", "")), UI.CYAN)
+				return
+			sfx("error")
+			if str(res.get("why", "")) == "busy":
+				toast("You've sent a few already -- try again in an hour", UI.MUTED)
+			else:
+				toast("Couldn't reach the server -- try again, or use COPY DIAGNOSTICS", UI.RED)
+			if is_instance_valid(send):
+				send.remove_meta("busy")
+				send.text = "SEND"
+				UI2.dim_button(send, false)))
 
 func offer_daily() -> void:
 	if offer_prize() or offer_referral():

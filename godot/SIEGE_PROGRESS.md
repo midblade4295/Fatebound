@@ -3548,3 +3548,16 @@ K2/K3 notes (0.17.0)
   (no ids, gold, gems or purchases); a player who blocked you shows nothing; 12 asks per 10 s, then "busy". A friend in
   a match: the card's button is JOIN THEIR MATCH. tests/profile_card_test.gd (stats_of; the real server on 8108 with
   accounts and the week's board written first; RANKS > Alice's row > her card; a blocked card; the wire's fields; busy).
+- **SEND TO DEVELOPER.** Settings has an orange SEND TO DEVELOPER (above COPY DIAGNOSTICS, which stays). It asks every
+  time -- what's sent (the game's log: what it was doing, errors, phone model, game version, player name; no chats or
+  purchases), an optional "What went wrong?" -- then SEND sends it on its own socket, zstd-compressed
+  ({"t":"diag", ...}; `lb_fetch.ask(..., zstd)`; a long log keeps its first 3,000 characters and as much of its end as
+  fits one 64 KB packet). server/diag_reports.gd keeps it as diag/YYYYMMDD-HHMMSS-<ID>.txt (a JSON header line, then the
+  log, control characters out) and answers the ID: "Sent -- report #7F3A9C. Thank you!". The account is kept only when
+  its key opens it (otherwise anonymous, so a phone stuck at start can still send); 4 an hour per account or address,
+  300 a day, the newest 1,000 / 80 MB kept. tools/diag_reports.py lists them (newest first, --since/--build/--all) and
+  shows one (show ID [--errors]). The stuck-start toast now points at SEND TO DEVELOPER. "ver" says "diag":1. Installer
+  copies diag_reports.gd. Also fixed: the Privacy toggle's long subtitle (0.31.118) didn't wrap and pushed the whole
+  Settings page wider than a 420-wide screen (toggles cut off at the right) -- toggle subtitles wrap now.
+  tests/diag_send_test.gd (the server's rules; fitting an 864 KB log; the real server on 8109 + Settings > SEND; the
+  report on disk; diag_reports.py list and show).

@@ -104,6 +104,7 @@ const Social = preload("res://server/social.gd")
 const Analytics = preload("res://server/analytics.gd")
 const Leaderboard = preload("res://server/leaderboard.gd")
 const Referrals = preload("res://server/referrals.gd")
+const DiagReports = preload("res://server/diag_reports.gd")
 
 const RESTART_AFTER := 15.0          # seconds of results screen before the next match
 const IDLE_STOP := 30.0              # no players for this long -> stop simulating (and the room closes)
@@ -164,6 +165,7 @@ var social = null                    # 0.31.111: chat, friends, parties (server/
 var analytics = null                 # 0.31.118: usage statistics (server/analytics.gd)
 var leaderboard = null               # 0.31.119: the week's best players (server/leaderboard.gd)
 var referrals = null                 # 0.31.120: friend codes entered by new players (server/referrals.gd)
+var diag_reports = null              # 0.31.120: SEND TO DEVELOPER (server/diag_reports.gd)
 var boot_time := int(Time.get_unix_time_from_system())   # (with the match id: a match's id across restarts)
 var test_match_s := 0.0              # tests only (SIEGE_TEST_MATCH_S): a match ends after this many seconds
 var min_build := ""                  # "" = no minimum (see SIEGE_MIN_BUILD)
@@ -246,6 +248,8 @@ func _init() -> void:
 	social.rank_fn = func(acct: String) -> int: return leaderboard.rank_of(acct)       # 0.31.120: the profile card
 	referrals = Referrals.new()
 	referrals.log_fn = _log
+	diag_reports = DiagReports.new()
+	diag_reports.log_fn = _log
 	_log("leaderboard: week of %s, %d players" % [leaderboard.week, leaderboard.rows.size()])
 
 # ---------------- minimum app build ----------------
@@ -553,7 +557,7 @@ func _handle(cid: int, msg: Dictionary) -> void:
 			# so the client treats no answer as "unknown" and checks again on connect.
 			if c.hello:
 				return
-			_send(cid, {"t":"ver", "v":Net.VERSION, "build":SERVER_BUILD, "min_build":min_build, "eco":1, "social":1, "an":1, "lb":1, "ref":1})
+			_send(cid, {"t":"ver", "v":Net.VERSION, "build":SERVER_BUILD, "min_build":min_build, "eco":1, "social":1, "an":1, "lb":1, "ref":1, "diag":1})
 			_refuse(cid, 1000, "ver")
 		"hello":
 			if c.hello or c.has("social"):
@@ -739,6 +743,14 @@ func _handle(cid: int, msg: Dictionary) -> void:
 			c.ref_done = true
 			_send(cid, referrals.claim(str(msg.get("acct", "")), str(msg.get("key", "")), str(msg.get("code", "")), eco, social))
 			_refuse(cid, 1000, "ref")
+			c.close_at = _now() + 2.0
+		"diag":
+			# 0.31.120: SEND TO DEVELOPER -- the player sends the game's log (server/diag_reports.gd). One per socket, no hello.
+			if c.hello or c.has("diag_done") or c.has("social") or diag_reports == null:
+				return
+			c.diag_done = true
+			_send(cid, diag_reports.handle(msg, eco, (c.ws as WebSocketPeer).get_connected_host()))
+			_refuse(cid, 1000, "diag")
 			c.close_at = _now() + 2.0
 		"iap":
 			# 0.31.90: a phone asks whether a Google Play purchase is real before it grants it. No hello (a purchase is
@@ -1005,7 +1017,7 @@ func _status() -> Dictionary:
 			running = true
 	return {"t":"status", "v":Net.VERSION, "online":_human_count(), "in_match":in_match, "waiting":waiting,
 		"lobby":lobby, "running":running, "slots":Net.TEAM_SIZE * 2, "max":max_players * max_rooms, "rooms":rooms.size(),
-		"build":SERVER_BUILD, "min_build":min_build, "eco":1, "social":1, "an":1, "lb":1, "ref":1,
+		"build":SERVER_BUILD, "min_build":min_build, "eco":1, "social":1, "an":1, "lb":1, "ref":1, "diag":1,
 		"chatting":social.online.size() if social != null else 0}
 
 # ---------------- statistics (0.31.118) ----------------

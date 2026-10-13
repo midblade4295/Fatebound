@@ -28,7 +28,7 @@ SERVER_SCRIPTS="scripts/siege/siege_sim.gd scripts/siege/siege_net.gd scripts/si
 # 0.31.108: the accounts -- the server replays every player's changes with the game's own economy and profile code
 # 0.31.118: the analytics allow-list (events and their props), shared by the phone and the server
 META_SCRIPTS="scripts/meta/economy.gd scripts/meta/profile.gd scripts/meta/analytics_events.gd"
-SERVER_FILES="server/siege_server.gd server/siege_probe.gd server/iap_verify.gd server/eco_accounts.gd server/match_ledger.gd server/social.gd server/analytics.gd server/leaderboard.gd server/referrals.gd"
+SERVER_FILES="server/siege_server.gd server/siege_probe.gd server/iap_verify.gd server/eco_accounts.gd server/match_ledger.gd server/social.gd server/analytics.gd server/leaderboard.gd server/referrals.gd server/diag_reports.gd"
 for f in $SERVER_SCRIPTS $META_SCRIPTS $SERVER_FILES; do
   [ -f "$SRC/$f" ] || { echo "Missing $SRC/$f — run this from the Siege branch checkout." >&2; exit 1; }
 done
