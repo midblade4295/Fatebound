@@ -1419,7 +1419,29 @@ func open_daily() -> void:
 var daily_auto := DisplayServer.get_name() != "headless" and not OS.has_environment("SHOT_DIR")
 var _daily_offered := ""
 
+func offer_prize() -> bool:
+	# 0.31.120: a weekly leaderboard prize the server paid since we last said so -- once
+	if not daily_auto or siege != null or update_required or tab != "home" or is_instance_valid(modal):
+		return false
+	var pz: Array = profile.d.get("prizes", [])
+	if pz.is_empty() or str(pz[0].get("week", "")) == str(profile.d.settings.get("prize_seen", "")):
+		return false
+	var x: Dictionary = pz[0]
+	profile.d.settings["prize_seen"] = str(x.week)
+	profile.save()
+	var bits := ["%d gems" % int(x.get("gems", 0))]
+	if str(x.get("chest", "")) != "":
+		bits.append("a %s" % str(Eco.CHESTS[str(x.chest)].name))
+	var t := str(x.get("title", ""))
+	if t != "" and Net.TITLES.has(t):
+		bits.append("the title \"%s\" (wear it from the Locker)" % str(Net.TITLES[t][0]))
+	sfx("confirm")
+	notice("LEADERBOARD PRIZE", "You finished #%d on last week's leaderboard! You got %s." % [int(x.get("rank", 0)), ", ".join(bits)])
+	return true
+
 func offer_daily() -> void:
+	if offer_prize():
+		return
 	if not daily_auto or siege != null or update_required or tab != "home" or is_instance_valid(modal):
 		return
 	if not bool(profile.d.get("tutorial_done", false)) or not profile.login_ready():

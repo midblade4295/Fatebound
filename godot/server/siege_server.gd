@@ -235,6 +235,12 @@ func _init() -> void:
 	_log("analytics: %s (%d accounts opted out)" % [analytics.dir, analytics.opted.size()])
 	leaderboard = Leaderboard.new()
 	leaderboard.log_fn = _log
+	leaderboard.pay_fn = func(acct: String, week: String, rank: int, prize: Dictionary) -> bool:
+		var ok: bool = eco.grant_prize(acct, week, rank, prize)
+		if ok:
+			_log("prize week %s: #%d %s (%d gems, %s chest, %s)" % [week, rank, acct, int(prize.get("gems", 0)), str(prize.get("chest", "")), str(prize.get("title", "-"))])
+		return ok
+	leaderboard.start()
 	_log("leaderboard: week of %s, %d players" % [leaderboard.week, leaderboard.rows.size()])
 
 # ---------------- minimum app build ----------------

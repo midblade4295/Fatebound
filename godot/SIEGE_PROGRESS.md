@@ -3518,3 +3518,11 @@ K2/K3 notes (0.17.0)
   is busier. When the friend's match is full (or they've left / aren't friends) the usual room is picked and
   {"t":"joinr", "why":"full"|"gone"} says so (a toast and a line on the lobby card). In a party of 2+ it says to leave
   the party first. tests/join_friend_test.gd (real server + the real app).
+- **Weekly leaderboard prizes.** `Eco.LB_PRIZES`, paid by the server when a week ends (leaderboard.gd `pay_fn` ->
+  `eco_accounts.grant_prize` -> `Profile.grant_prize`, never a phone op): #1 300 gems + Royal chest + "Champion" (new
+  legendary prefix title), #2-3 200 gems + Gold chest + "the Contender" (epic), #4-10 100 gems + Gold chest + "of the
+  Ten" (rare), #11-100 30 gems + Silver chest. Only players with 3+ online matches that week can win (they rank first;
+  a row says "N more matches for a prize" until then). "paid" in leaderboard.json + a profile refusing a second prize
+  for a week = never paid twice (also after a restart). The window shows THIS WEEK'S PRIZES; Home says "LEADERBOARD
+  PRIZE -- You finished #3 ..." once (settings.prize_seen); the Locker has a LEADERBOARD titles section. Profile
+  `prizes` (last 12). tests/lb_prizes_test.gd.

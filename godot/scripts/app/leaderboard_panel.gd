@@ -8,6 +8,7 @@ const UI2 = preload("res://scripts/app/ui2.gd")
 const SocialUI = preload("res://scripts/app/social_ui.gd")
 const LbFetch = preload("res://scripts/meta/lb_fetch.gd")
 const NetT = preload("res://scripts/siege/siege_net.gd")
+const Eco = preload("res://scripts/meta/economy.gd")
 
 const MEDAL := [Color("#ffc23d"), Color("#d8e2ea"), Color("#e09056")]       # gold, silver, bronze
 const TITLE_COL := {"common": Color("#cfd8e0"), "rare": Color("#6cc4ff"), "epic": Color("#d6a2ff"), "legendary": Color("#ffc23d")}
@@ -99,6 +100,8 @@ func _render() -> void:
 			app.open_friends(), "lb_friends", 15, 42.0, 12.0)
 		fb.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		fb.custom_minimum_size.x = 160
+	if tab == "week":
+		_prizes(_list)
 	# last week's champions
 	var last: Array = data.get("last", [])
 	if not last.is_empty():
@@ -170,11 +173,35 @@ func _row(parent: Node, r: Dictionary) -> void:
 	if tid != "" and NetT.TITLES.has(tid):
 		var tl := UI.label(col, str(NetT.TITLES[tid][0]), 10, TITLE_COL.get(NetT.title_rarity(tid), Color.WHITE), UI.HEAVY_FONT)
 		tl.autowrap_mode = TextServer.AUTOWRAP_OFF
+	if r.has("q") and not bool(r.q):
+		# 0.31.120: not in the running for a prize yet
+		var ql := UI.label(col, "%d more match%s for a prize" % [Eco.LB_MIN_MATCHES - int(r.get("m", 0)), "" if Eco.LB_MIN_MATCHES - int(r.get("m", 0)) == 1 else "es"], 10, UI2.MUTED, UI.HEAVY_FONT)
+		ql.autowrap_mode = TextServer.AUTOWRAP_OFF
 	for v in [[str(int(r.get("w", 0))), 40], [str(int(r.get("r", 0))), 28], [str(int(r.get("pts", 0))), 56]]:
 		var l := UI.label(h, str(v[0]), 14, Color.WHITE, UI.HEAVY_FONT)
 		l.autowrap_mode = TextServer.AUTOWRAP_OFF
 		l.custom_minimum_size.x = float(v[1])
 		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+
+func _prizes(parent: Node) -> void:
+	# 0.31.120: what the week's best win (paid by the server when the week ends)
+	var f := UI2.frame(parent, "ember", 10, 14.0, "orange", {"pattern_mix": 0.0})
+	f.name = "PrizeCard"
+	UI2.center(UI2.text(f, "THIS WEEK'S PRIZES", 15, Color("#ffd27a")))
+	for t in Eco.LB_PRIZES:
+		var r := UI.row(f, 6)
+		var place := "#%d" % int(t.from) if int(t.from) == int(t.to) else "#%d-%d" % [int(t.from), int(t.to)]
+		var pl := UI.label(r, place, 13, MEDAL[0] if int(t.from) == 1 else Color.WHITE, UI.HEAVY_FONT)
+		pl.autowrap_mode = TextServer.AUTOWRAP_OFF
+		pl.custom_minimum_size.x = 64
+		var bits := ["%d gems" % int(t.gems)]
+		if str(t.get("chest", "")) != "":
+			bits.append(str(Eco.CHESTS[str(t.chest)].name))
+		if str(t.get("title", "")) != "":
+			bits.append("title \"%s\"" % str(NetT.TITLES[str(t.title)][0]))
+		var bl := UI.label(r, " + ".join(bits), 12, Color.WHITE, UI.HEAVY_FONT)
+		bl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	UI2.center(UI2.body(f, "Play %d or more online matches in the week to be in the running." % Eco.LB_MIN_MATCHES, 11, Color(1, 1, 1, 0.8)))
 
 static func _date(iso: String) -> String:
 	# "2026-10-12" -> "OCT 12"
