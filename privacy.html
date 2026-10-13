@@ -36,6 +36,7 @@
 <li>Game save data (gold, relics, map state, settings)</li>
 <li>For in-app purchases: the Google Play purchase token, product and order id</li>
 <li>Anonymous usage statistics, unless you turn them off (see "Usage statistics" below)</li>
+<li>Diagnostics reports, only when you choose to send one (see "Sending a problem report" below)</li>
 </ul>
 
 <h2>Internet use</h2>
@@ -66,7 +67,9 @@
 <li>Your friends list, friend requests, the players you block, and when you were last online (shown to your friends).</li>
 <li>Reports: if a player reports another, the server records who reported whom, the reason, and the reported player's last few chat lines, so the developer can review it and mute or remove abusive players.</li>
 </ul>
-<p>Leaderboards: the weekly leaderboard shows the in-game name and title of players who played online matches that week, with their points, wins and rescues from those matches. Your friends see where you placed among them.</p>
+<p>Leaderboards: the weekly leaderboard shows the in-game name, title and public player code of players who played online matches that week, with their points, wins and rescues from those matches. Your friends see where you placed among them. The top players each week get in-game prizes, given by the server.</p>
+<p>Player cards: when another player taps your name (in the chat, their friends list or the leaderboard) they see your player card: your in-game name, title and player code, your level, your lifetime matches, wins, rescues, knockouts and best win streak, the class you play most and the weapon you win most with, your place on this week's leaderboard and the month you started. It shows nothing about purchases or currencies. Players you have blocked can't see it. Your friends also see when you are in a match, and can join it.</p>
+<p>Invite codes: if a new player enters your player code as the friend who invited them, the server records that link between the two accounts so it can give each of you a reward when they reach level 5. Each of you sees the other's in-game name in the game's message about it.</p>
 <p>You can turn global chat off in Settings, block any player (you won't see their messages and they can't send you requests or invites), and report them from their name in the chat. Don't share personal information in chat.</p>
 
 <h2>Usage statistics</h2>
@@ -78,6 +81,9 @@
 <li>Turn it off at any time in Settings &rarr; "Share anonymous usage stats". The game then deletes the events still waiting on your device, tells the server once that you opted out, and sends nothing more; the server stops recording anything for your account.</li>
 <li>To have the statistics for your account deleted sooner, email us with your player id (see "Retention and deletion").</li>
 </ul>
+
+<h2>Sending a problem report</h2>
+<p>Settings &rarr; "Send to developer" sends a problem report to our own game server, only when you tap Send (the game shows what it sends first). The report contains the game's own log from this phone (what the game was doing, its errors and warnings, frame times and memory use), the app version, your phone model, Android version and graphics chip, your in-game name, your game account id if you have one, and anything you type about the problem. It does not contain chat messages, purchase details, your contacts, files or anything from other apps. Your IP address is used only for a moment, in memory, to limit how many reports can be sent, and is not stored. Reports are read only by the developer to fix problems, are not shared or sold, and the server keeps only the most recent ones (older reports are deleted automatically). To have a report deleted sooner, email us with the report number the game showed you. "Copy diagnostics" in Settings copies the same log to your clipboard instead, without sending anything.</p>
 
 <h2>Google Play Games</h2>
 <p>Signing in with Google Play Games is optional. When you are signed in, the game reads your Play Games display name to show it in Settings, and keeps a copy of your game progress (the same save data that is on your device: level, currencies, items, statistics and settings) as a Saved Game in your Google account, so you can restore it on another phone. Google stores that copy under Google’s policies; it is not sent to our game server. You can delete it from the Google Play Games settings on your phone. While you are signed in, the game also reports your achievements (such as matches won or enemies knocked out) to Google Play Games, which shows them in your Google Play Games profile.</p>
@@ -92,7 +98,7 @@
 <p>Fatebound is general-audience fantasy combat. We do not knowingly collect a child’s real-world identity. There is no email sign-up.</p>
 
 <h2>Retention and deletion</h2>
-<p>There is no email-and-password Fatebound account. To delete local data, clear the app storage or uninstall. Usage statistics are deleted automatically after 90 days. To ask us to delete a cloud save, your game server account, its usage statistics, or your friends list and any reports about you, email <a href="mailto:midblade4295@gmail.com">midblade4295@gmail.com</a> with the player id shown by the game if you have it (it looks like SF-XXXX-XXXX).</p>
+<p>There is no email-and-password Fatebound account. To delete local data, clear the app storage or uninstall. Usage statistics are deleted automatically after 90 days. To ask us to delete a cloud save, your game server account, its usage statistics, a problem report you sent, or your friends list and any reports about you, email <a href="mailto:midblade4295@gmail.com">midblade4295@gmail.com</a> with the player id shown by the game if you have it (it looks like SF-XXXX-XXXX).</p>
 
 <h2>Security</h2>
 <p>Cloud writes require an anonymous Firebase session. Protect the device with a lock screen.</p>
