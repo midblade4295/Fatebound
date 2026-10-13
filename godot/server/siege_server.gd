@@ -91,6 +91,10 @@ extends SceneTree
 # account) within that time goes straight back onto the same unit in the same match: welcome {"rejoin":true}, no lobby.
 # A hello with the token of a socket the server still thinks is open (a phone that switched networks) takes that seat
 # over and the old socket is closed. Additive: an older app never sends "rj" (its drop is held and simply runs out).
+#
+# 0.31.120 (Kevin: a friend in a match -- "make so it's a join match option"): a hello with "join": a friend's public id
+# (social.gd's pid) goes into that friend's room -- their match, on their side while it has room -- when the two are
+# friends and the room has space; otherwise the usual room, and {"t":"joinr", "ok":false, "why":"full"|"gone"} says why.
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 const Net = preload("res://scripts/siege/siege_net.gd")
 const IapVerify = preload("res://server/iap_verify.gd")
@@ -580,7 +584,29 @@ func _handle(cid: int, msg: Dictionary) -> void:
 					looks = w.looks
 					if social != null:
 						party = social.party_for(acct)    # 0.31.111: seated with their party
-			var r := _pick_room(party)
+			var r: Room = null
+			var join_acct := ""
+			var jp := str(msg.get("join", ""))
+			if jp != "" and acct != "" and social != null:
+				# 0.31.120: into a friend's match (Friends > JOIN)
+				var why := "gone"
+				var me_pid := Social.pid_of(acct)
+				if social.users.has(jp) and social.users.has(me_pid) and (social.users[me_pid].get("friends", []) as Array).has(jp):
+					var ta := str(social.users[jp].acct)
+					for ocid in clients:
+						var o: Dictionary = clients[ocid]
+						if o.hello and str(o.get("acct", "")) == ta:
+							var tr := _room_of(o)
+							if tr != null and _room_humans(tr) + tr.held.size() < max_players:
+								r = tr
+								join_acct = ta
+							elif tr != null:
+								why = "full"
+							break
+				if r == null:
+					_send(cid, {"t":"joinr", "ok":false, "why":why})
+			if r == null:
+				r = _pick_room(party)
 			if r == null:
 				_send(cid, {"t":"bye", "why":"full"})
 				_refuse(cid, 4002, "full")
@@ -592,6 +618,8 @@ func _handle(cid: int, msg: Dictionary) -> void:
 			c.name = name
 			c.title = title
 			c.looks = looks
+			if join_acct != "":
+				c.join_acct = join_acct                       # (seated on their side when it has room)
 			if acct != "":
 				c.acct = acct
 				c.party = party
@@ -783,6 +811,16 @@ func _seat(r: Room, cid: int) -> void:
 				var pt := int(sim.by_id[oc.unit].team)
 				if humans[pt] < Net.TEAM_SIZE:
 					team = pt
+				break
+	var ja := str(c.get("join_acct", ""))
+	if ja != "":
+		# 0.31.120: joined a friend's match -- their side, while it has room
+		for other in _members(r):
+			var oc: Dictionary = clients[other]
+			if other != cid and str(oc.get("acct", "")) == ja and oc.unit != "" and sim.by_id.has(oc.unit):
+				var jt := int(sim.by_id[oc.unit].team)
+				if humans[jt] < Net.TEAM_SIZE:
+					team = jt
 				break
 	var seat := ""
 	for u in sim.units:

@@ -151,7 +151,7 @@ func update(msg: Dictionary) -> void:
 		mode_lbl.text = "A battle is on -- %d player%s fighting. You join it at zero." % [n, "" if n == 1 else "s"]
 	else:
 		mode_lbl.text = "A new 16 vs 16 battle starts at zero"
-	sub_lbl.text = "bots fill the empty slots"
+	sub_lbl.text = note_text if note_text != "" else "bots fill the empty slots"
 	var names: Array = (msg.get("names", []) as Array).duplicate()
 	var tt: Array = msg.get("tt", []) if msg.get("tt", []) is Array else []
 	for i in names.size():                         # (0.31.87: with their titles, punctuated)
@@ -159,6 +159,13 @@ func update(msg: Dictionary) -> void:
 			names[i] = Net.title_text(str(names[i]), str(tt[i]))
 	_set_names(names, int(msg.get("me", -1)))
 	_first = false
+
+var note_text := ""                    # 0.31.120: e.g. "Their match is full" (Friends > JOIN)
+
+func note(t: String) -> void:
+	note_text = t
+	if sub_lbl != null:
+		sub_lbl.text = t
 
 func fail(why: String) -> void:
 	state = "failed"

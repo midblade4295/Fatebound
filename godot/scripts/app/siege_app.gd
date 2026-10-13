@@ -1071,6 +1071,20 @@ func start_tutorial() -> void:
 	# The Herald's walkthrough: a small offline match (siege_mode.gd tutorial = true).
 	start_match(false, true)
 
+var pending_join := ""                   # 0.31.120: a friend's public id whose match the next PLAY joins
+
+func join_friend(pid: String) -> void:
+	# 0.31.120 (Kevin: "make so it's a join match option"): Friends > JOIN on a friend who's in a match
+	if social != null and social.in_party() and social.party_size() > 1:
+		sfx("error")
+		toast("Leave your party to join a friend's match", UI.MUTED)
+		return
+	close_modal()
+	pending_join = pid
+	start_match(true)
+	if siege == null:
+		pending_join = ""
+
 func start_match(online: bool, tutorial := false, follow := false) -> void:
 	if siege != null:
 		return
@@ -1116,6 +1130,8 @@ func start_match(online: bool, tutorial := false, follow := false) -> void:
 	siege.hq_gfx = bool(profile.d.settings.get("hq_graphics", true))
 	siege.player_name = str(profile.d.name)
 	siege.analytics = analytics
+	siege.party_join = pending_join                 # 0.31.120: Friends > JOIN (their match)
+	pending_join = ""
 	siege.exited.connect(_end_match)
 	siege.version_mismatch.connect(_on_version_mismatch)
 	if online_status != null:

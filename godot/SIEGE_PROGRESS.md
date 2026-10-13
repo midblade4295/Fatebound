@@ -3512,3 +3512,9 @@ K2/K3 notes (0.17.0)
   up to 55 s; then "Disconnected from the server" as before. The probe leaves cleanly. Older apps never send "rj"
   (their drops are held and simply run out). tests/rejoin_test.gd (real server + the real client: drop and rejoin,
   can't get back, a network switch takes over, a clean leave holds nothing, a hold that runs out, a held seat paid).
+- **Join a friend's match** (Kevin: "make so it's a join match option"). Friends: a friend who's in a match has JOIN
+  (green). It starts a match whose hello carries "join": the friend's public id; the server checks the two are friends
+  and puts the player in that friend's room -- their match, on their side while it has room -- even when another room
+  is busier. When the friend's match is full (or they've left / aren't friends) the usual room is picked and
+  {"t":"joinr", "why":"full"|"gone"} says so (a toast and a line on the lobby card). In a party of 2+ it says to leave
+  the party first. tests/join_friend_test.gd (real server + the real app).

@@ -655,6 +655,11 @@ func _net_process(delta: float) -> void:
 			"m":                                              # 0.31.23: my task, sent on its own when it changes
 				if sim != null and sim.by_id.has(hud.player_id):
 					sim.by_id[hud.player_id].task = msg.get("task", {})
+			"joinr":                                          # 0.31.120: the friend's match couldn't take me
+				var jw := str(msg.get("why", ""))
+				hud.toast("Their match is full -- you're in another one" if jw == "full" else "They've left that match -- you're in another one", Color("#f2d18d"))
+				if is_instance_valid(lobby) and lobby.has_method("note"):
+					lobby.note("Their match is full" if jw == "full" else "They've left that match")
 			"idle":                                           # 0.31.119: a bot plays for me until I move (or I'm removed)
 				if bool(msg.get("on", false)):
 					hud.idle_kick_at = Time.get_ticks_msec() / 1000.0 + float(msg.get("kick_in", 120.0))

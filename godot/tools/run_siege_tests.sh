@@ -80,6 +80,8 @@ run match_rooms_test     MATCH_ROOMS_PASS         120
 run idle_test            IDLE_PASS                120
 # Rejoin after a dropped connection (0.31.120): real server on 8105 + the real client
 run rejoin_test          REJOIN_PASS              120
+# Join a friend's match from Friends (0.31.120): real server on 8106 + the real app
+run join_friend_test     JOIN_FRIEND_PASS         150
 # End-of-match MVP strip and scoreboard (0.31.119)
 run scoreboard_test      SCOREBOARD_PASS          60
 # Weekly leaderboard (0.31.119): the board, the server (8104), the RANKS window

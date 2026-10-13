@@ -217,6 +217,10 @@ func _render() -> void:
 				app.sfx("confirm")
 				if not social.invite(cp):
 					_fail(), 80.0)
+		elif str(c.st) == "match":
+			_small(r, "JOIN", "green", "friend_join_" + cp, func():      # 0.31.120: into their match
+				app.sfx("confirm")
+				app.join_friend(cp), 80.0)
 	# ---- sent, blocked
 	if not social.rout.is_empty():
 		var sf := _section("REQUESTS SENT", str(social.rout.size()))
