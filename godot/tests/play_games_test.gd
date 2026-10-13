@@ -48,6 +48,15 @@ class FakePlay extends Node:
 		saves += 1
 		store["bytes"] = bytes
 		gameSaved.emit(true, name, desc)
+	# 0.31.119/121: the achievement calls (scripts/meta/achievements.gd), recorded -- with the real ids filled in the app
+	# sends them while signed in
+	var ach: Array = []
+	func setAchievementSteps(id: String, n: int) -> void:
+		ach.append(["steps", id, n])
+	func unlockAchievement(id: String) -> void:
+		ach.append(["unlock", id])
+	func showAchievements() -> void:
+		pass
 
 func check(ok: bool, what: String) -> void:
 	print(("ok   " if ok else "FAIL ") + what)
@@ -241,6 +250,11 @@ func _process(_d: float) -> bool:
 			btn("cloud_use").pressed.emit()
 		5:
 			check(int(app.profile.d.gold) == 4321 and app.play_games.state == "synced", "USE GOOGLE PLAY'S from the screen: restored")
+			app.play_games._ach_clock = 999.0
+			app.play_games._process(0.0)
+			var seasoned := str(load("res://scripts/meta/play_achievement_ids.gd").IDS.seasoned)
+			check(seasoned != "" and (fake_app.ach as Array).any(func(c): return c[0] == "steps" and str(c[1]) == seasoned),
+				"signed in: the achievements go to Play Games with their Play Console ids (%d calls)" % (fake_app.ach as Array).size())
 			print("PLAY_GAMES_PASS" if fails.is_empty() else "PLAY_GAMES_FAIL %s" % str(fails))
 			quit(0 if fails.is_empty() else 1)
 	step += 1

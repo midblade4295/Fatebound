@@ -3579,3 +3579,14 @@ K2/K3 notes (0.17.0)
   VIBRATE), sha256 cb7dad8acccc6f367d543b1b9d103edf5cd9b8454b245700a87dbb03fd3cd244. Needs the server redeployed
   (rejoin, join, prizes, referrals, player cards, reports all live on it; the app works against the old server
   without them).
+
+## 0.31.121 — Play Games achievement ids (Kevin: "Play Games achievements are created (Game ID 1022979193240)")
+- `scripts/meta/play_achievement_ids.gd`: all 18 ids from Play Console. Checked: each id's prefix carries Game ID
+  1022979193240 and their numbers run 2..19 in the handoff table's order (achievements_test checks both).
+- Gatecrasher confirmed: "gates" is counted 1 per 100 gate damage (Eco.match_stats: int(gate_dmg / 100) per match, so
+  a match's leftover under 100 doesn't carry over), 100 steps = 10,000 damage -- the same count as the Gatebreaker title.
+- `godot_play_game_services/game_id="1022979193240"` on the "Android Play Store" preset here too (the export plugin
+  only uses it in Gradle/Play builds; the preview APK still has no Play Games).
+- play_games_test's fake plugin had no achievement calls (with empty ids none were made); it records them now and checks
+  that a signed-in phone sends them with the real ids.
+- Version 0.31.121, versionCode 207.

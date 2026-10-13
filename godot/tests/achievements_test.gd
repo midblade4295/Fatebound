@@ -10,6 +10,7 @@ extends SceneTree
 #   godot --headless --path godot -s res://tests/achievements_test.gd
 const Achievements = preload("res://scripts/meta/achievements.gd")
 const Ids = preload("res://scripts/meta/play_achievement_ids.gd")
+const Eco = preload("res://scripts/meta/economy.gd")
 const Profile = preload("res://scripts/meta/profile.gd")
 const PlayGames = preload("res://scripts/meta/play_games.gd")
 
@@ -58,6 +59,23 @@ func _init() -> void:
 		ok_list = ok_list and Ids.IDS.has(a.key) and str(a.name).length() <= 100 and str(a.desc).length() <= 500 \
 			and (not bool(a.inc) or (int(a.n) >= 2 and int(a.n) <= 10000))
 	check(ok_list and keys.size() == Achievements.LIST.size() and Ids.IDS.size() == keys.size(), "%d achievements, each with an id slot, within Play's limits" % keys.size())
+	# 0.31.121: the ids from Play Console -- every one filled, all different, all of this game (the prefix carries the
+	# Play Games Game ID 1022979193240), in the table's order (Play numbers them as they were made)
+	var vals := Ids.IDS.values().map(func(x): return str(x))
+	var uniq := {}
+	for v in vals:
+		uniq[v] = true
+	var in_order := true
+	for i in Achievements.LIST.size():
+		var raw := Marshalls.base64_to_raw(str(Ids.IDS[Achievements.LIST[i].key]).replace("-", "+").replace("_", "/") + "==")
+		in_order = in_order and raw.size() > 0 and int(raw[raw.size() - 1]) == i + 2
+	check(Achievements.configured() == Achievements.LIST.size() and uniq.size() == vals.size()
+		and vals.all(func(v): return v.begins_with("CgkImPO-8uIdEAIQ")) and in_order,
+		"all %d Play Console ids filled in, different, of game 1022979193240, in the table's order" % Achievements.configured())
+	var gc: Array = Achievements.LIST.filter(func(a): return a.key == "gatecrasher")
+	check(gc.size() == 1 and str(gc[0].stat) == "gates" and int(gc[0].n) == 100 and bool(gc[0].inc)
+		and int(Eco.match_stats({"gate_dmg":10000.0}, false, false).gates) == 100 and int(Eco.match_stats({"gate_dmg":250.0}, false, false).gates) == 2,
+		"Gatecrasher: 100 steps of the profile's gates stat, one step per 100 gate damage (10,000 = 100)")
 	var p = Profile.new("user://achtest-%d.json" % Time.get_ticks_usec(), "user://none.json")
 	p.load_or_create()
 	p.d.tutorial_done = true
