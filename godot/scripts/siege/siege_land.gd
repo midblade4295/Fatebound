@@ -338,6 +338,28 @@ static func path_wobble(p: Vector2) -> float:
 	var rag := 0.20 * cos(1.3 * p.x + 0.9 * p.y) + 0.13 * cos(2.3 * p.x - 1.9 * p.y) + 0.08 * sin(3.7 * p.x) * sin(4.1 * p.y)
 	return slow + rag
 
+# 0.31.127 (Kevin: "Make it so the paths blend better into the towers so it doesn't look like an unnatural cutoff"): a
+# patch of trodden earth round every tower (its edge about APRON_IN + 2.1 = 5.4 m from the centre, wobbling like the paths';
+# the tower's wall is 3 m out, the capture ring 6.5 m), and a path that reaches one widens into it -- the two distances
+# are joined with a smooth minimum (APRON_BLEND m), so there's no seam where a track stops.
+const APRON_IN := 3.3
+const APRON_BLEND := 2.2
+
+static func smooth_min(a: float, b: float, k: float) -> float:
+	if a == INF:
+		return b
+	if b == INF:
+		return a
+	var h := clampf(0.5 + 0.5 * (b - a) / k, 0.0, 1.0)
+	return lerpf(b, a, h) - k * h * (1.0 - h)
+
+static func ground_dist(p: Vector2, d_path: float) -> float:
+	# the distance path_r measures: to the nearest path, or into a tower's patch of earth, blended where they meet
+	var best := d_path
+	for c in outpost_positions():
+		best = smooth_min(best, maxf(0.0, p.distance_to(c) - APRON_IN), APRON_BLEND)
+	return best
+
 static func path_r(d: float, p: Vector2) -> float:
 	# the mask's R for a point d metres from the nearest centre line: 1 on the track's middle, 0.5 at its edge
 	# (PATH_CORE + PATH_FADE / 2 = 2.1 m out, the old brick path's half width, plus the wobble), 0 a little way into the grass
@@ -414,7 +436,7 @@ static func bake_key() -> String:
 	# Changes whenever the land's shape data changes: the baked cache (tools/bake_land.gd) is only trusted when it matches.
 	var parts := [HALF_W, HALF_L, RIVER_AMP, RIVER_K, RIVER_HW, LAKE_EXTRA, LAKE_SIGMA, ISLAND_RX, ISLAND_RZ, SIDE_BRIDGE_X, LANE_HALF,
 		EDGE_BLUE, HILLS, SCARPS, OUTPOSTS_BLUE_HALF, PATHS_BLUE_HALF, BAKE_MARGIN, BAKE_STEP, "cache-v2", "dirt-paths-v1", PATH_STEP,
-		PATH_FADE, PATH_CORE]
+		PATH_FADE, PATH_CORE, APRON_IN, APRON_BLEND]
 	return str(hash(str(parts)))
 
 # ---------------- baked terrain (visual) ----------------

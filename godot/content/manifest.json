@@ -12,10 +12,10 @@
   },
   {
    "name": "world",
-   "file": "world-52daddc1a3d3.pck",
-   "size": 54423652,
-   "sha256": "2af036a19c21d01dfbc51388c574ee58bafdc9cf34a8640f4f2202c9a895189e",
-   "inputs": "52daddc1a3d39bf21d82b0c51c96bf7df976fd0cafd0a432744e8713850791fb",
+   "file": "world-84a70f1ea366.pck",
+   "size": 54421220,
+   "sha256": "dbd96b846c470c384c50988b879db9727ed9f7fb6007bacde04a6fc49c9385b2",
+   "inputs": "84a70f1ea366f53276cdc06f1d6e1c5d4947ac18b579b596fcad198ca89ac62e",
    "probe": "res://assets/kaykit/anim/Rig_Medium_CombatMelee.glb"
   },
   {

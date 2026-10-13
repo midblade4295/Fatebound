@@ -1327,6 +1327,17 @@ func _plan_foliage() -> Dictionary:
 					while off < Land.PATH_HALF_W + 1.4 and float(edge_r.call(base + n * side * off)) > 0.44:
 						off += 0.1                         # out to where the grass starts
 					tuft.call(base + n * side * (off + rng.randf_range(0.0, 0.35)))
+	# 1b. 0.31.127: round the edge of each tower's patch of trodden earth, the same way.
+	for c in Land.outpost_positions():
+		var a := 0.0
+		while a < TAU:
+			if rng.randf() < 0.35:                         # (sparse: a full ring of tufts reads as a hedge)
+				var dir := Vector2.from_angle(a + rng.randf_range(-0.08, 0.08))
+				var off := Land.APRON_IN + 1.2
+				while off < Land.APRON_IN + 3.6 and float(edge_r.call(c + dir * off)) > 0.44:
+					off += 0.1
+				tuft.call(c + dir * (off + rng.randf_range(0.0, 0.35)))
+			a += 0.2
 	# 2. Along the top of every scarp (natural hills, 0.30.2).
 	for half in [1.0, -1.0]:
 		for sc in Land.SCARPS:

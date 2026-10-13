@@ -51,7 +51,8 @@ func _init() -> void:
 				var t := clampf((p - a).dot(ab) / maxf(ab.length_squared(), 0.0001), 0.0, 1.0)
 				best = minf(best, p.distance_to(a + ab * t))
 			var k := (j * mw + i) * 4
-			md[k] = int(255.0 * Land.path_r(best, p)) if best < INF else 0
+			var gd := Land.ground_dist(p, best)                    # (0.31.127: and the towers' patches of earth)
+			md[k] = int(255.0 * Land.path_r(gd, p)) if gd < INF else 0
 			var rs := Land.ledge_rim(p)
 			md[k + 1] = int(255.0 * rs.x)
 			md[k + 2] = int(255.0 * rs.y)

@@ -3655,3 +3655,12 @@ K2/K3 notes (0.17.0)
     Footsteps on a path sound of dirt, not stone (only the castles are stone now).
   - The baked land changed, so the "world" content pack is rebuilt and uploaded (players download it once, ~54 MB).
 - Version 0.31.126, versionCode 212.
+
+## 0.31.127 — the paths run into a patch of trodden earth round each tower
+- Kevin: "Make it so the paths blend better into the towers so it doesn't look like an unnatural cutoff". The spurs
+  stopped at a tower's capture ring with a rounded end in the grass. Now every tower (the four on the plateaus and the
+  island's) stands in a patch of trodden earth -- its edge about 5.4 m from the centre (Land.APRON_IN 3.3 + the paths'
+  2.1), fraying and wobbling like the paths -- and a path that reaches one widens into it: the mask's distance is the
+  smooth minimum of the path's and the patch's (Land.ground_dist, APRON_BLEND 2.2 m), so there's no seam. Baked into
+  pathmask.res (tools/bake_land.gd); the shader draws it like the paths. A few grass tufts sit round the patch's edge
+  (sparse -- a full ring read as a hedge). World content pack rebuilt. Version 0.31.127, versionCode 213.
