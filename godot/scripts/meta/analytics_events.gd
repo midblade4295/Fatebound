@@ -24,6 +24,7 @@ const CLIENT := {
 	"forge": ["item", "stars"],
 	"chest_open": ["rarity", "src"],
 	"shop_view": ["tab"],
+	"daily_reward": ["day"],                         # 0.31.119: the daily login reward claimed (day 1-7)
 	"update_screen": ["from_build", "need"],
 	"error": ["kind", "n"],
 	"opt_out": [],

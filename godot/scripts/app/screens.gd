@@ -277,7 +277,7 @@ static func home(app, root: VBoxContainer) -> void:
 		for prem in [false, true]:
 			if p.can_claim(t, prem):
 				claimable += 1
-	var orders_ready := 0
+	var orders_ready := 1 if p.login_ready() else 0          # 0.31.119: the daily login reward is in ORDERS too
 	for span in ["daily", "weekly"]:
 		for ch in (d.challenges.daily if span == "daily" else d.challenges.weekly):
 			if not bool(ch.claimed) and int(ch.progress) >= int(Eco.CHALLENGES[ch.id].goal):

@@ -3461,3 +3461,12 @@ K2/K3 notes (0.17.0)
   further down, last week's champions, how points are earned. The first win of the day (was the FIRST WIN medallion)
   is a gold "FIRST WIN +300" tag on PLAY's corner while it's open. tests/leaderboard_test.gd (the board, the real
   server, the window).
+- **Daily login reward.** A 7-day calendar (`Eco.LOGIN_REWARDS`): 150 gold, 25 Embers, a Silver chest, 250 gold, 50
+  Embers, 400 gold, a Gold chest + 20 gems -- a week is 800 gold, 75 Embers, 20 gems and two chests (gems only on day
+  7: the economy review found Silver chests were already half of all free gems). One claim a UTC day (like the orders
+  and the first win), round and round; a missed day doesn't reset it; chests are reward chests (they wait when the
+  slots are full). `claim_login` is a profile op: the server replays it with its own clock, so a phone that moves its
+  clock gets nothing more (profile `login` {day, n}). App: the DAILY REWARD card (`daily_reward.gd`, 7 tiles, today's
+  pulsing, CLAIM, then "Day N in 21h 2m") opens by itself on Home the first time each day a claim waits (not in tests or
+  screenshot tools: `daily_auto`); it's also first in ORDERS, and counts on the ORDERS badge. Analytics: a
+  `daily_reward` {day} event (allow-listed). tests/daily_reward_test.gd.

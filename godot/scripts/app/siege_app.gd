@@ -26,6 +26,7 @@ const ChatTicker = preload("res://scripts/app/chat_ticker.gd")
 const InviteBanner = preload("res://scripts/app/invite_banner.gd")
 const OrdersPanel = preload("res://scripts/app/orders_panel.gd")
 const LeaderboardPanel = preload("res://scripts/app/leaderboard_panel.gd")
+const DailyReward = preload("res://scripts/app/daily_reward.gd")
 const Analytics = preload("res://scripts/meta/analytics.gd")
 const Diag = preload("res://scripts/siege/siege_diag.gd")
 const TitleLogo = preload("res://scripts/app/title_logo.gd")
@@ -817,6 +818,8 @@ func show_tab(id: String) -> void:
 		else ScrollContainer.SCROLL_MODE_AUTO
 	content.modulate.a = 0.0
 	create_tween().tween_property(content, "modulate:a", 1.0, 0.18)
+	if id == "home":
+		offer_daily.call_deferred()
 
 func rebuild() -> void:
 	# Screens are rebuilt from the profile after every change; they're small and static.
@@ -1366,6 +1369,30 @@ func open_orders() -> void:
 	add_child(m)
 	modal = m
 	m.open(self)
+
+func open_daily() -> void:
+	# 0.31.119: the DAILY REWARD card
+	close_modal()
+	var m := DailyReward.new()
+	add_child(m)
+	modal = m
+	m.open(self)
+
+# 0.31.119: the daily reward opens by itself on Home the first time each day a claim waits (not in tests or screenshot
+# tools, which set daily_auto when they want it)
+var daily_auto := DisplayServer.get_name() != "headless" and not OS.has_environment("SHOT_DIR")
+var _daily_offered := ""
+
+func offer_daily() -> void:
+	if not daily_auto or siege != null or update_required or tab != "home" or is_instance_valid(modal):
+		return
+	if not bool(profile.d.get("tutorial_done", false)) or not profile.login_ready():
+		return
+	var today := Eco.day_key(profile.now())
+	if _daily_offered == today:
+		return
+	_daily_offered = today
+	open_daily()
 
 func open_leaderboard() -> void:
 	# 0.31.119: the week's leaderboard (RANKS on Home)
