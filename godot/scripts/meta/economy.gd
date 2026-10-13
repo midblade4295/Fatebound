@@ -788,6 +788,11 @@ static func legacy_conversion(old: Dictionary) -> Dictionary:
 # chest's id (so a reload can't re-roll), and the odds are shown in the game.
 const CHEST_SLOTS := 4
 const TUTORIAL_GOLD := 250         # the tutorial's pay, once (0.31.108: Profile.finish_tutorial; was siege_mode's)
+# 0.31.124 (Kevin: "Add the discord link to the game" / "Also give a reward for joining the discord"): Settings >
+# COMMUNITY opens the invite; the first time pays DISCORD_GEMS once per account (Profile.claim_discord, replayed by the
+# server). The game can't see whether the player then joins -- opening the invite is what's rewarded.
+const DISCORD_URL := "https://discord.gg/H8eKXH8TmM"
+const DISCORD_GEMS := 100
 const CHESTS := {
 	"wooden": {"name":"Wooden Chest", "unlock":1800, "gold":[60, 120], "gems_chance":0.10, "gems":[5, 5],
 		"item_chance":0.15, "rarity":{"rare":1.0}, "color":"#a8794a"},                  # (0.31.108: the only common was Sparkstick)

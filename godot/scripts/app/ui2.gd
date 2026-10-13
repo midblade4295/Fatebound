@@ -79,6 +79,7 @@ const BTN := {
 	"blue": [Color("#a9c6ff"), Color("#2a4cae"), Color("#182c74"), Color("#0a1238")],
 	"red": [Color("#ffb6a6"), Color("#d6372b"), Color("#8c1d15"), Color("#3a0805")],
 	"grey": [Color("#d9dfe8"), Color("#6b778a"), Color("#4a5466"), Color("#1c2230")],
+	"discord": [Color("#c3c8ff"), Color("#5865f2"), Color("#3a43b5"), Color("#141852")],      # 0.31.124: Discord's blue
 	"ghost": [Color(1, 1, 1, 0.12), Color(1, 1, 1, 0.05), Color(0, 0, 0, 0.25), Color(0, 0, 0, 0.6)],
 }
 

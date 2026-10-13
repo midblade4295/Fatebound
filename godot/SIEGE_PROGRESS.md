@@ -3617,3 +3617,13 @@ K2/K3 notes (0.17.0)
   `_migrate_legacy`) and meta_economy_test. Settings now ends GRAPHICS, SEND TO DEVELOPER, COPY DIAGNOSTICS / PRIVACY
   POLICY, HOW TO PLAY. Settings tests (app_flow, app_scroll, diag_send, notify, analytics_client, kill_feed, play_games,
   meta_economy) pass. Version 0.31.123, versionCode 209.
+
+## 0.31.124 — the Discord link, with a one-time gem gift
+- Kevin: "Add the discord link to the game" (https://discord.gg/H8eKXH8TmM) and "Also give a reward for joining the
+  discord". Settings has a COMMUNITY card under SOCIAL: a line about the Discord and JOIN OUR DISCORD (Discord's blue,
+  UI2 "discord") that opens the invite through the app's link opener (`open_url`). Until claimed it says
+  "+100 GEMS"; the first press pays Eco.DISCORD_GEMS (100) through a new op, `claim_discord` -- once per account,
+  replayed by the server on its own copy (profile `discord`), so a phone can't take it twice. The game can't see whether
+  the player then actually joins (that would need a Discord bot and sign-in), so opening the invite is what's rewarded.
+- privacy.html: "Links to Discord". tests/discord_test.gd (the op, the server paying once, the Settings card).
+  Version 0.31.124, versionCode 210.

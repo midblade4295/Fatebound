@@ -2345,6 +2345,25 @@ static func settings(app, root: VBoxContainer) -> void:
 			app.open_friends(), "settings_friends", 13, 36.0, 11.0)
 		fb.custom_minimum_size.x = 100
 	UI2.body(sx, "Tap a name in the chat to add a friend, block or report them.", 11, UI2.MUTED)
+	# 0.31.124 (Kevin: "Add the discord link to the game" + "give a reward for joining the discord")
+	var cx := UI2.frame(root, "night", 12, 18.0, "gold")
+	cx.name = "CommunityCard"
+	UI2.divider(cx, "COMMUNITY", 20)
+	var claimed := bool(d.get("discord", false))
+	UI2.body(cx, "Join the Fatebound Discord: news, updates, events and other players to team up with." +
+		("" if claimed else " Joining gives you %d gems, once." % Eco.DISCORD_GEMS), 12, UI2.SOFT)
+	var dlabel := "JOIN OUR DISCORD" if claimed else "JOIN OUR DISCORD  ·  +%d GEMS" % Eco.DISCORD_GEMS
+	UI2.button(cx, dlabel, "discord", func():
+		app.open_url.call(Eco.DISCORD_URL)          # (the app's link opener; tests put their own)
+		if not bool(d.get("discord", false)):
+			var r: Dictionary = p.claim_discord()
+			if bool(r.get("ok", false)):
+				app.sfx("purchase")
+				app.toast("Thanks for joining! +%d gems" % Eco.DISCORD_GEMS, UI.GOLD)
+				app.refresh_top()
+				app.rebuild()
+		else:
+			app.sfx("tap"), "discord", 15, 46.0)
 	# 0.31.118 (Kevin's analytics spec): usage statistics to our own server, on by default, off here
 	var px := UI2.frame(root, "night", 12, 18.0, "gold")
 	UI2.divider(px, "PRIVACY", 20)

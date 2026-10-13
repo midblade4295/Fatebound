@@ -37,6 +37,7 @@ const OPS := {
 	"buy_embers": [TYPE_STRING], "start_unlock": [TYPE_INT], "skip_chest": [TYPE_INT], "open_chest": [TYPE_INT],
 	"set_name": [TYPE_STRING], "finish_tutorial": [],
 	"claim_login": [],                                           # 0.31.119: the daily login reward
+	"claim_discord": [],                                         # 0.31.124: JOIN OUR DISCORD, once
 }
 
 func _rec(op: String, args: Array) -> void:
@@ -124,6 +125,7 @@ static func defaults() -> Dictionary:
 		"tutorial_done":false,
 		"first_win_day":"", "history":[], "migration":{},
 		"login":{"day":"", "n":0},                                   # 0.31.119: the last day claimed, claims so far
+		"discord":false,                                             # 0.31.124: the Discord reward claimed
 		"prizes":[],                                                 # 0.31.120: weekly leaderboard prizes paid (newest first)
 		"referral":{"by":"", "notes":[]},                            # 0.31.120: whose code was entered; friend rewards (newest first)
 		"embers":0,                                                  # 0.31.90: the Forge's material
@@ -758,6 +760,17 @@ func _title_stats(stats: Dictionary, won: bool) -> void:
 	d.stats.best_multi = maxi(int(d.stats.get("best_multi", 0)), int(stats.get("best_multi", 0)))
 	d.stats.streak = int(d.stats.get("streak", 0)) + 1 if won else 0          # (a draw or a loss ends the run)
 	d.stats.best_streak = maxi(int(d.stats.get("best_streak", 0)), int(d.stats.streak))
+
+func claim_discord() -> Dictionary:
+	# 0.31.124: the gift for opening the Discord invite (Settings > COMMUNITY) -- once per account; the server replays it
+	# on its own copy, so a phone can't take it twice
+	if bool(d.get("discord", false)):
+		return {"ok":false, "error":"claimed"}
+	d["discord"] = true
+	d.gems = int(d.gems) + Eco.DISCORD_GEMS
+	save()
+	_rec("claim_discord", [])
+	return {"ok":true, "gems":Eco.DISCORD_GEMS}
 
 func finish_tutorial() -> Dictionary:
 	# the Herald's last line: the recruit's pay, once (0.31.108: here, so the server pays it too)
