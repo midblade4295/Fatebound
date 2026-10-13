@@ -6,12 +6,15 @@ extends Control
 const UI = preload("res://scripts/app/ui.gd")
 const UI2 = preload("res://scripts/app/ui2.gd")
 const SocialUI = preload("res://scripts/app/social_ui.gd")
+const Eco = preload("res://scripts/meta/economy.gd")
 
 var app
 var social
 var _list: VBoxContainer
 var _scroll: ScrollContainer
 var _code: LineEdit
+var _ref: LineEdit                 # 0.31.120: the code of the friend who invited you
+var _ref_busy := false
 var _dirty := false
 
 func open(a) -> void:
@@ -34,6 +37,11 @@ func open(a) -> void:
 	social.changed.connect(_on_changed)
 	_render()
 
+func ref_changed() -> void:
+	# (siege_app.redeem_code: the server answered)
+	_ref_busy = false
+	_dirty = true
+
 func _on_changed(what: String) -> void:
 	if what in ["friends", "party", "state", "me"]:
 		_dirty = true
@@ -43,9 +51,12 @@ func _process(_delta: float) -> void:
 		_dirty = false
 		var keep := _scroll.scroll_vertical
 		var typed := _code.text if is_instance_valid(_code) else ""
+		var typed_ref := _ref.text if is_instance_valid(_ref) else ""
 		_render()
 		if is_instance_valid(_code):
 			_code.text = typed
+		if is_instance_valid(_ref):
+			_ref.text = typed_ref
 		_scroll.set_deferred("scroll_vertical", keep)
 
 func _section(title: String, sub := "") -> VBoxContainer:
@@ -138,6 +149,7 @@ func _render() -> void:
 	_code = SocialUI.field(ar, "A friend's code", 12)
 	_code.text_submitted.connect(func(_t): _add_code())
 	_small(ar, "ADD", "green", "friend_code_add", func(): _add_code())
+	_invite_section()
 	# ---- the party
 	if social.in_party():
 		var p: Dictionary = social.party
@@ -217,6 +229,10 @@ func _render() -> void:
 				app.sfx("confirm")
 				if not social.invite(cp):
 					_fail(), 80.0)
+		elif str(c.st) == "match":
+			_small(r, "JOIN", "green", "friend_join_" + cp, func():      # 0.31.120: into their match
+				app.sfx("confirm")
+				app.join_friend(cp), 80.0)
 	# ---- sent, blocked
 	if not social.rout.is_empty():
 		var sf := _section("REQUESTS SENT", str(social.rout.size()))
@@ -252,3 +268,42 @@ func _add_code() -> void:
 		_code.text = ""
 	else:
 		_fail()
+
+# ---------------- invite friends (0.31.120, Kevin: referral codes) ----------------
+func _invite_section() -> void:
+	var p: Dictionary = app.profile.d
+	var ref: Dictionary = p.get("referral", {})
+	var f := _section("INVITE FRIENDS")
+	UI2.body(f, "A new player who enters your friend code gets a Gold Chest at level %d -- and so do you." % Eco.REF_LEVEL, 13, UI2.SOFT)
+	var mine := (ref.get("notes", []) as Array).filter(func(n): return str(n.get("kind", "")) == "friend").size()
+	if mine > 0:
+		var l := UI.label(f, "Friends who reached level %d with your code: %d" % [Eco.REF_LEVEL, mine], 12, UI2.GOLD, UI.HEAVY_FONT)
+		l.autowrap_mode = TextServer.AUTOWRAP_OFF
+	var by := str(ref.get("by", ""))
+	if by != "":
+		var got := (ref.get("notes", []) as Array).any(func(n): return str(n.get("kind", "")) == "joined")
+		UI2.body(f, ("You joined with %s's code." % by) + ("" if got else " Reach level %d for your Gold Chest!" % Eco.REF_LEVEL), 13, UI2.GOLD)
+	elif int(p.get("level", 1)) < Eco.REF_LEVEL and not bool(p.get("settings", {}).get("ref_late", false)):
+		var rr := UI.row(f, 8)
+		_ref = SocialUI.field(rr, "Invited? Their code", 12)
+		_ref.text_submitted.connect(func(_t): _redeem())
+		var b := _small(rr, "REDEEM", "orange", "ref_redeem", func(): _redeem(), 96.0)
+		if _ref_busy:
+			UI2.dim_button(b, true)
+
+func _redeem() -> void:
+	if _ref_busy or not is_instance_valid(_ref):
+		return
+	var t := _ref.text.strip_edges().replace("#", "").replace(" ", "").to_lower()
+	if t.length() != 10 or not t.is_valid_hex_number():
+		app.sfx("error")
+		app.toast("A friend code is 10 letters and numbers (like 3FA21C9B0D)", UI.RED)
+		return
+	if t == str(social.me.get("pid", "")):
+		app.sfx("error")
+		app.toast("That's your own code", UI.MUTED)
+		return
+	_ref_busy = true
+	app.sfx("tap")
+	app.redeem_code(t)
+	_dirty = true

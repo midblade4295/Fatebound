@@ -53,8 +53,15 @@ func open(name: String) -> void:
 	inbox[name] = []
 	sent.erase(name)
 
+var closing: Array = []
+
 func shut(name: String) -> void:
-	(socks[name] as WebSocketPeer).close()
+	# a clean leave, like the app's (0.31.120: no seat held): "leave", then a close polled until it's out
+	var ws: WebSocketPeer = socks[name]
+	if ws.get_ready_state() == WebSocketPeer.STATE_OPEN:
+		ws.put_packet(Net.encode({"t":"leave"}))
+	ws.close(1000, "leave")
+	closing.append(ws)
 	socks.erase(name)
 
 func send_once(name: String, msg: Dictionary) -> bool:
@@ -86,6 +93,8 @@ func hello(name: String, who := "") -> Dictionary:
 
 func _process(delta: float) -> bool:
 	t_phase += delta
+	for ws in closing:
+		ws.poll()
 	for n in socks:
 		var ws: WebSocketPeer = socks[n]
 		ws.poll()

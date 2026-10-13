@@ -10,8 +10,15 @@ extends RefCounted
 # A phone asks on its own socket ({"t":"lb", "acct", "key"}, no hello, like "eco") and gets
 #   {"t":"lb", "week": "YYYY-MM-DD" (its Monday), "ends": unix, "top": [row x TOP_N], "me": row or {}, "friends": [row],
 #    "players": how many are on the board, "last": [last week's top 3]}
-#   row = {"rank", "name", "title", "pts", "w", "m", "r", "k", "you": true on your own}
+#   row = {"rank", "name", "title", "pts", "w", "m", "r", "k", "you": true on your own, "pid" (0.31.120: the public friend
+#   code, as in chat -- a row opens the player's card)}
 # Names and titles are the accounts' own (what everyone already sees over their heads). No account ids go out.
+#
+# 0.31.120 (Kevin: prizes): players with Eco.LB_MIN_MATCHES matches that week rank first (only they can win a prize); a
+# row says "q": false until then. When a week ends, pay_fn(acct, week, rank, prize) pays Eco.LB_PRIZES (the server:
+# eco_accounts.grant_prize -- gems, a reward chest, the prize titles); "paid" in the file keeps a week from being paid
+# twice, and a profile refuses a second prize for the same week anyway.
+const Eco = preload("res://scripts/meta/economy.gd")
 const WIN_BONUS := 100
 const TOP_N := 50
 const SAVE_DELAY := 3.0
@@ -25,6 +32,8 @@ var path := ""
 var week := ""
 var rows := {}                     # acct -> {"name", "title", "pts", "w", "m", "r", "k", "at"}
 var last := []                     # last week's top 3: [{"name", "title", "pts"}]
+var paid := ""                     # 0.31.120: the last week whose prizes were paid
+var pay_fn: Callable = func(_acct, _week, _rank, _prize): return false
 var now_override := -1
 var log_fn: Callable = func(_s): pass
 var _dirty_at := -1.0
@@ -37,6 +46,9 @@ func _init(state_dir := "", now_at := -1) -> void:
 	path = state.path_join("leaderboard.json")
 	now_override = now_at
 	_load()
+
+func start() -> void:
+	# (after pay_fn is set: a week that ended while the server was down is paid now)
 	_roll()
 
 func now() -> int:
@@ -72,12 +84,18 @@ func add_match(acct: String, name: String, title: String, me: Dictionary, won: b
 	rows[acct] = r
 	_mark()
 
+static func qualified(r: Dictionary) -> bool:
+	return int(r.get("m", 0)) >= Eco.LB_MIN_MATCHES
+
 func ranked() -> Array:
-	# accounts best first: points, then wins, then fewer matches, then who got there first
+	# accounts best first: those with enough matches for a prize, then points, then wins, then fewer matches, then
+	# who got there first
 	var ids := rows.keys()
 	ids.sort_custom(func(a, b):
 		var ra: Dictionary = rows[a]
 		var rb: Dictionary = rows[b]
+		if qualified(ra) != qualified(rb):
+			return qualified(ra)
 		if int(ra.pts) != int(rb.pts):
 			return int(ra.pts) > int(rb.pts)
 		if int(ra.w) != int(rb.w):
@@ -87,10 +105,18 @@ func ranked() -> Array:
 		return int(ra.get("at", 0)) < int(rb.get("at", 0)))
 	return ids
 
+func rank_of(acct: String) -> int:
+	# 0.31.120: the account's place this week (0: no match yet) -- the profile card
+	_roll()
+	if not rows.has(acct):
+		return 0
+	return ranked().find(acct) + 1
+
 func _row(acct: String, rank: int, mine: bool) -> Dictionary:
 	var r: Dictionary = rows[acct]
 	var out := {"rank":rank, "name":str(r.get("name", "Player")), "title":str(r.get("title", "")), "pts":int(r.pts),
-		"w":int(r.w), "m":int(r.m), "r":int(r.r), "k":int(r.k)}
+		"w":int(r.w), "m":int(r.m), "r":int(r.r), "k":int(r.k), "q":qualified(r),
+		"pid":acct.sha256_text().left(10)}             # 0.31.120: the public friend code (tap a row: the player's card)
 	if mine:
 		out["you"] = true
 	return out
@@ -123,6 +149,17 @@ func _roll() -> void:
 		return
 	if week != "" and not rows.is_empty():
 		var order := ranked()
+		if paid != week:
+			# 0.31.120: the week's prizes
+			var n_paid := 0
+			for i in order.size():
+				var pr: Dictionary = Eco.lb_prize(i + 1)
+				if pr.is_empty() or not qualified(rows[order[i]]):
+					break
+				if bool(pay_fn.call(order[i], week, i + 1, pr)):
+					n_paid += 1
+			paid = week
+			log_fn.call("leaderboard: week %s prizes paid to %d players" % [week, n_paid])
 		last = []
 		for i in mini(3, order.size()):
 			var r: Dictionary = rows[order[i]]
@@ -131,7 +168,7 @@ func _roll() -> void:
 			int(last[0].pts) if not last.is_empty() else 0])
 	week = w
 	rows = {}
-	_mark()
+	save_now()
 
 # ---------------- the file ----------------
 func _load() -> void:
@@ -142,6 +179,7 @@ func _load() -> void:
 		week = str(v.get("week", ""))
 		rows = v.get("rows", {}) if v.get("rows", {}) is Dictionary else {}
 		last = v.get("last", []) if v.get("last", []) is Array else []
+		paid = str(v.get("paid", ""))
 
 func _mark() -> void:
 	if _dirty_at < 0.0:
@@ -160,5 +198,5 @@ func save_now() -> void:
 	if f == null:
 		log_fn.call("leaderboard: can't write %s" % path)
 		return
-	f.store_string(JSON.stringify({"week":week, "rows":rows, "last":last}))
+	f.store_string(JSON.stringify({"week":week, "rows":rows, "last":last, "paid":paid}))
 	f.close()

@@ -303,6 +303,10 @@ const CATALOG := {
 	"title_foreman":        {"kind":"title", "class":"", "name":"Foreman", "rarity":"rare", "source":"earn"},
 	"title_mason":          {"kind":"title", "class":"", "name":"the Mason", "rarity":"epic", "source":"earn"},
 	"title_master_builder": {"kind":"title", "class":"", "name":"Master Builder", "rarity":"legendary", "source":"earn"},
+	# --- 0.31.120: only from the weekly leaderboard (LB_PRIZES)
+	"title_champion":       {"kind":"title", "class":"", "name":"Champion", "rarity":"legendary", "source":"prize"},
+	"title_contender":      {"kind":"title", "class":"", "name":"the Contender", "rarity":"epic", "source":"prize"},
+	"title_top_ten":        {"kind":"title", "class":"", "name":"of the Ten", "rarity":"rare", "source":"prize"},
 	# --- 0.31.38: the upgraded classes (0.31.39: weapons only)
 	"crus_wpn_mace":       {"kind":"weapon", "class":"crusader", "name":"Penitent", "rarity":"rare", "r":"mw/penitent_mace", "l":"mw/penitent_shield", "gold":1200, "source":"shop"},
 	"crus_wpn_warhammer":  {"kind":"weapon", "class":"crusader", "name":"Hallowed Bulwark", "rarity":"epic", "r":"mw/bulwark_hammer", "l":"mw/bulwark_shield", "gold":2400, "source":"shop"},
@@ -512,6 +516,35 @@ static func roll_challenges(span: String, key: String, count: int, exclude: Arra
 
 # ---------------- match rewards ----------------
 const FIRST_WIN := {"gold":300, "pass":500}
+
+# 0.31.120 (Kevin: prizes for the weekly leaderboard): paid by the server to the accounts when a week ends
+# (server/leaderboard.gd), among players with at least LB_MIN_MATCHES online matches that week. The titles exist only
+# here. Chests are reward chests (they wait when the slots are full).
+const LB_MIN_MATCHES := 3
+const LB_PRIZES := [
+	{"from":1, "to":1, "gems":300, "chest":"royal", "title":"title_champion"},
+	{"from":2, "to":3, "gems":200, "chest":"gold", "title":"title_contender"},
+	{"from":4, "to":10, "gems":100, "chest":"gold", "title":"title_top_ten"},
+	{"from":11, "to":100, "gems":30, "chest":"silver"},
+]
+const PRIZE_TITLES := {
+	"title_champion": {"task":"Finish #1 on a weekly leaderboard", "n":1, "cls":""},
+	"title_contender": {"task":"Finish 2nd or 3rd on a weekly leaderboard", "n":1, "cls":""},
+	"title_top_ten": {"task":"Finish in the top 10 of a weekly leaderboard", "n":1, "cls":""},
+}
+
+# 0.31.120 (Kevin: referral codes): a new player enters a friend's code within REF_DAYS of making their account and
+# before level REF_LEVEL; at level REF_LEVEL both get a REF_CHEST (server/referrals.gd), a friend for at most REF_MAX.
+const REF_DAYS := 7
+const REF_LEVEL := 5
+const REF_MAX := 20
+const REF_CHEST := "gold"
+
+static func lb_prize(rank: int) -> Dictionary:
+	for t in LB_PRIZES:
+		if rank >= int(t.from) and rank <= int(t.to):
+			return t
+	return {}
 
 # 0.31.119 (Kevin: "Do all" -- a daily login reward): a 7-day calendar, one claim a day (UTC days, like the orders and
 # the first win), round and round; a missed day doesn't reset it. Gems only on day 7 (20 a week -- the economy review

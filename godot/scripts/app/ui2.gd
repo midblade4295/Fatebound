@@ -558,7 +558,7 @@ static func toggle(parent: Node, label: String, sub: String, on: bool, key: Stri
 	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(v)
 	text(v, label.to_upper(), 14, Color.WHITE)
-	body(v, sub, 11, MUTED, false)
+	body(v, sub, 11, MUTED, true)        # (0.31.120: wraps -- a long one pushed Settings past a narrow screen)
 	var b := Button.new()
 	b.toggle_mode = true
 	b.button_pressed = on

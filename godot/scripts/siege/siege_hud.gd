@@ -56,6 +56,7 @@ const MULTI_COLORS := [Color.WHITE, Color.WHITE, Color("#ffe08a"), Color("#ffb04
 var _toast_at := -10.0
 var net_names := {}                 # 0.31.119: online, unit id -> player name (the server's "pn"), for the scoreboard
 var score_panel: PanelContainer = null
+var rejoin_until := -1.0            # 0.31.120: reconnecting after a dropped connection, until (ticks clock)
 var idle_kick_at := -1.0            # 0.31.119: online, a bot plays for me (I was idle); when I'll be removed (s, ticks clock)
 var _toast_color := Color.WHITE
 var _time := 0.0
@@ -739,6 +740,7 @@ func on_event(e: Dictionary) -> void:
 	var me: Dictionary = sim.by_id.get(player_id, {})
 	if me.is_empty():
 		return
+	_kf_event(e, me)
 	var mine: bool = e.get("team", -1) == me.team
 	if str(e.k) == "class_full" and str(e.get("id", "")) == str(player_id):
 		toast("%s full · %d/%d" % [str(Sim.CLASSES.get(str(e.cls), {"name":str(e.cls).capitalize()}).get("name", str(e.cls).capitalize())) + ("s" if str(e.cls) != "worker" else "s"), int(e.n), int(e.cap)], VisualTheme.GOLD)
@@ -1036,7 +1038,9 @@ func _draw_hud() -> void:
 		var c := _toast_color
 		c.a = clampf(2.6 - age, 0.0, 1.0)
 		_text(Vector2(w * 0.5, 176), _toast, 18, c, _bold)
+	_draw_kill_feed()
 	_draw_idle(me)
+	_draw_rejoin()
 	_draw_bars()
 	_draw_pings()
 	_draw_gate_bars()
@@ -1078,6 +1082,125 @@ func _draw_idle(me: Dictionary) -> void:
 	_text(Vector2(w * 0.5, r.position.y + 56), "Move or attack to take over · removed in %d:%02d" % [int(left) / 60, int(left) % 60], 13, VisualTheme.TEXT, _bold)
 
 var _idle_style: StyleBox = null
+
+# ---------------- kill feed (0.31.120, Kevin: "kill feed") ----------------
+# On the right under the toast line: who knocked out whom, kings grabbed and rescued, gates broken --
+# newest on top, KF_MAX lines, each KF_LIFE seconds then fading. Players by name (you: "You", on a gold plate),
+# bots by class, in their side's colour; a knockout with no one behind it (a fall, the moat) shows a skull.
+const KF_MAX := 4
+const KF_LIFE := 6.0
+const KF_PX := 12
+const KF_TOP := 202.0                 # (under the toast; the quick-chat lines are on the left at the same height)
+const KF_STEP := 19.0
+var kill_feed: Array = []                  # newest first: {"parts": [[text, colour], ...], "at": _time, "me": I'm in it}
+var kill_feed_on := true                   # (a match can turn it off: the tutorial)
+
+func kf_name(id: String) -> Array:
+	# [text, colour] for a unit in the feed
+	var u: Dictionary = sim.by_id.get(id, {})
+	if u.is_empty():
+		return ["?", VisualTheme.TEXT]
+	var col: Color = TEAM_COLORS[vt(int(u.team))].lightened(0.15)
+	if id == player_id:
+		return ["You", VisualTheme.GOLD]
+	if net_names.has(id):
+		return [str(net_names[id]).left(16), col]
+	return [sim.class_label(u), col]
+
+func _kf_add(parts: Array, mine: bool) -> void:
+	kill_feed.push_front({"parts":parts, "at":_time, "me":mine})
+	if kill_feed.size() > KF_MAX:
+		kill_feed.resize(KF_MAX)
+	queue_redraw()
+
+func _kf_event(e: Dictionary, me: Dictionary) -> void:
+	if not kill_feed_on:
+		return
+	var grey := Color("#c9d1dc")
+	match str(e.k):
+		"death":
+			var victim := str(e.get("id", ""))
+			var by := str(e.get("by", ""))
+			if not sim.by_id.has(victim):
+				return
+			if by == "" or by == victim or not sim.by_id.has(by):
+				_kf_add([["☠", grey], [" ", grey], kf_name(victim)], victim == player_id)
+			else:
+				_kf_add([kf_name(by), ["  ⚔  ", Color(1, 1, 1, 0.85)], kf_name(victim)], victim == player_id or by == player_id)
+		"rescue":
+			var lead := str(e.get("id", ""))
+			var ours := int(e.get("team", -1)) == int(me.team)
+			if sim.by_id.has(lead):
+				_kf_add([kf_name(lead), [" rescued %s King!" % ("our" if ours else "their"), VisualTheme.GOLD]], lead == player_id)
+			else:
+				_kf_add([["%s King was rescued!" % ("Our" if ours else "Their"), VisualTheme.GOLD]], false)
+		"pickup":
+			var carrier := str(e.get("id", ""))
+			if sim.by_id.has(carrier):
+				var ours2 := int(e.get("team", -1)) == int(me.team)
+				_kf_add([kf_name(carrier), [" grabbed %s King" % ("our" if ours2 else "their"), grey]], carrier == player_id)
+		"gate_broken":
+			var gi := int(e.get("gate", -1))
+			if gi < 0 or gi >= sim.gates.size():
+				return
+			var g: Dictionary = sim.gates[gi]
+			var ours3 := int(g.team) == int(me.team)
+			var what := "the jail" if str(g.get("kind", "")) == "jail" or str(g.get("side", "")) == "jail" else "the %s gate" % str(g.get("side", "")).to_lower()
+			var by2 := str(e.get("by", ""))
+			var tail := [" broke %s %s" % [("our" if ours3 else "their"), what.trim_prefix("the ")], VisualTheme.RED if ours3 else VisualTheme.GOLD]
+			if by2 != "" and sim.by_id.has(by2):
+				_kf_add([kf_name(by2), tail], by2 == player_id)
+			else:
+				_kf_add([["%s %s fell" % ["Our" if ours3 else "Their", what.trim_prefix("the ")], VisualTheme.RED if ours3 else VisualTheme.GOLD]], false)
+
+func _draw_kill_feed() -> void:
+	if kill_feed.is_empty():
+		return
+	var right := size.x - 10.0
+	var y := KF_TOP
+	var keep := []
+	for it in kill_feed:
+		var age: float = _time - float(it.at)
+		if age > KF_LIFE:
+			continue
+		keep.append(it)
+		var a := clampf((KF_LIFE - age) / 0.6, 0.0, 1.0) * clampf(age / 0.15, 0.0, 1.0)
+		var w := 0.0
+		for part in it.parts:
+			w += _bold.get_string_size(str(part[0]), HORIZONTAL_ALIGNMENT_LEFT, -1, KF_PX).x
+		w = minf(w, size.x * 0.56)
+		var plate := Rect2(right - w - 12.0, y - 14.0, w + 12.0, 18.0)
+		draw_rect(plate, Color(0.03, 0.05, 0.1, 0.55 * a))
+		if bool(it.me):
+			draw_rect(plate, Color(VisualTheme.GOLD, 0.8 * a), false, 1.0)
+		var x := plate.position.x + 6.0
+		for part in it.parts:
+			var t := str(part[0])
+			var c: Color = part[1]
+			c.a *= a
+			var tw := _bold.get_string_size(t, HORIZONTAL_ALIGNMENT_LEFT, -1, KF_PX).x
+			draw_string_outline(_bold, Vector2(x, y), t, HORIZONTAL_ALIGNMENT_LEFT, -1, KF_PX, 4, Color(0, 0, 0, 0.55 * a))
+			draw_string(_bold, Vector2(x, y), t, HORIZONTAL_ALIGNMENT_LEFT, -1, KF_PX, c)
+			x += tw
+		y += KF_STEP
+	if keep.size() != kill_feed.size():
+		kill_feed = keep
+
+func _draw_rejoin() -> void:
+	# 0.31.120: "RECONNECTING..." while the game gets back onto my seat
+	if rejoin_until < 0.0:
+		return
+	var w := size.x
+	var left := maxf(0.0, rejoin_until - Time.get_ticks_msec() / 1000.0)
+	var r := Rect2(w * 0.5 - minf(170.0, w * 0.42), size.y * 0.42, minf(340.0, w * 0.84), 70)
+	if _rejoin_style == null:
+		_rejoin_style = VisualTheme.panel(Color(0.02, 0.05, 0.12, 0.92), Color("#5fb6ff"), 12, 8)
+	draw_style_box(_rejoin_style, r)
+	var dots := ".".repeat(1 + int(_time * 2.0) % 3)
+	_text(Vector2(w * 0.5, r.position.y + 30), "RECONNECTING" + dots, 20, Color("#bfe3ff"), _title)
+	_text(Vector2(w * 0.5, r.position.y + 54), "Your seat is held for you · %d s" % int(ceil(left)), 13, VisualTheme.TEXT, _bold)
+
+var _rejoin_style: StyleBox = null
 
 func _draw_bars() -> void:
 	if not bars_source.is_valid() or not project.is_valid():

@@ -27,6 +27,8 @@ const InviteBanner = preload("res://scripts/app/invite_banner.gd")
 const OrdersPanel = preload("res://scripts/app/orders_panel.gd")
 const LeaderboardPanel = preload("res://scripts/app/leaderboard_panel.gd")
 const DailyReward = preload("res://scripts/app/daily_reward.gd")
+const SocialUI = preload("res://scripts/app/social_ui.gd")
+const LbFetch = preload("res://scripts/meta/lb_fetch.gd")
 const Notify = preload("res://scripts/meta/notify.gd")
 const Analytics = preload("res://scripts/meta/analytics.gd")
 const Diag = preload("res://scripts/siege/siege_diag.gd")
@@ -1061,6 +1063,8 @@ func _on_eco_synced(differs: bool) -> void:
 		social.refresh()                          # 0.31.111: a new name -- the chat and friends lists show it
 	if analytics != null:
 		analytics.note_level(int(profile.d.level))
+	if siege == null and tab == "home":
+		offer_referral.call_deferred()            # 0.31.120: a referral chest that came with this answer (it checks)
 	if not differs or siege != null:
 		return
 	refresh_top()
@@ -1070,6 +1074,20 @@ func _on_eco_synced(differs: bool) -> void:
 func start_tutorial() -> void:
 	# The Herald's walkthrough: a small offline match (siege_mode.gd tutorial = true).
 	start_match(false, true)
+
+var pending_join := ""                   # 0.31.120: a friend's public id whose match the next PLAY joins
+
+func join_friend(pid: String) -> void:
+	# 0.31.120 (Kevin: "make so it's a join match option"): Friends > JOIN on a friend who's in a match
+	if social != null and social.in_party() and social.party_size() > 1:
+		sfx("error")
+		toast("Leave your party to join a friend's match", UI.MUTED)
+		return
+	close_modal()
+	pending_join = pid
+	start_match(true)
+	if siege == null:
+		pending_join = ""
 
 func start_match(online: bool, tutorial := false, follow := false) -> void:
 	if siege != null:
@@ -1114,8 +1132,11 @@ func start_match(online: bool, tutorial := false, follow := false) -> void:
 	siege.audio = audio
 	siege.low_fx = bool(profile.d.settings.get("reduce_motion", false))
 	siege.hq_gfx = bool(profile.d.settings.get("hq_graphics", true))
+	siege.vibrate = bool(profile.d.settings.get("vibrate", true))          # 0.31.120
 	siege.player_name = str(profile.d.name)
 	siege.analytics = analytics
+	siege.party_join = pending_join                 # 0.31.120: Friends > JOIN (their match)
+	pending_join = ""
 	siege.exited.connect(_end_match)
 	siege.version_mismatch.connect(_on_version_mismatch)
 	if online_status != null:
@@ -1403,7 +1424,164 @@ func open_daily() -> void:
 var daily_auto := DisplayServer.get_name() != "headless" and not OS.has_environment("SHOT_DIR")
 var _daily_offered := ""
 
+func offer_prize() -> bool:
+	# 0.31.120: a weekly leaderboard prize the server paid since we last said so -- once
+	if not daily_auto or siege != null or update_required or tab != "home" or is_instance_valid(modal):
+		return false
+	var pz: Array = profile.d.get("prizes", [])
+	if pz.is_empty() or str(pz[0].get("week", "")) == str(profile.d.settings.get("prize_seen", "")):
+		return false
+	var x: Dictionary = pz[0]
+	profile.d.settings["prize_seen"] = str(x.week)
+	profile.save()
+	var bits := ["%d gems" % int(x.get("gems", 0))]
+	if str(x.get("chest", "")) != "":
+		bits.append("a %s" % str(Eco.CHESTS[str(x.chest)].name))
+	var t := str(x.get("title", ""))
+	if t != "" and Net.TITLES.has(t):
+		bits.append("the title \"%s\" (wear it from the Locker)" % str(Net.TITLES[t][0]))
+	sfx("confirm")
+	notice("LEADERBOARD PRIZE", "You finished #%d on last week's leaderboard! You got %s." % [int(x.get("rank", 0)), ", ".join(bits)])
+	return true
+
+func offer_referral() -> bool:
+	# 0.31.120: Gold chests from a referral (server/referrals.gd) since we last said so
+	if not daily_auto or siege != null or update_required or tab != "home" or is_instance_valid(modal):
+		return false
+	var seen := int(profile.d.settings.get("ref_seen", 0))
+	var fresh: Array = (profile.d.get("referral", {}).get("notes", []) as Array).filter(func(n): return int(n.get("at", 0)) > seen)
+	if fresh.is_empty():
+		return false
+	profile.d.settings["ref_seen"] = int(fresh[0].get("at", 0))
+	profile.save()
+	sfx("confirm")
+	notice("FRIEND REWARD", referral_text(fresh))
+	return true
+
+static func referral_text(fresh: Array) -> String:
+	var lines := []
+	for n in fresh:
+		if str(n.get("kind", "")) == "joined":
+			lines.append("You reached level %d with %s's code: a Gold Chest for you!" % [Eco.REF_LEVEL, str(n.get("name", "a friend"))])
+		else:
+			lines.append("%s reached level %d with your code: a Gold Chest for you!" % [str(n.get("name", "A friend")), Eco.REF_LEVEL])
+	if lines.size() > 3:
+		return "%d friend rewards: %d Gold Chests! Open them from your chest slots." % [lines.size(), lines.size()]
+	return "\n".join(lines) + "\nOpen it from your chest slots."
+
+func redeem_code(code: String, cb := Callable()) -> void:
+	# 0.31.120 (Kevin: referral codes): a new player enters the code of the friend who invited them -- the server checks
+	# it (server/referrals.gd) and answers {"t":"ref", "ok", "why", "name"}
+	var acct := str(profile.d.account.get("id", ""))
+	var key := str(profile.d.account.get("key", ""))
+	if acct == "" or key == "":
+		sfx("error")
+		toast("Play one online match first, then enter the code", UI.MUTED)
+		return
+	LbFetch.ask(self, str(eco_url), {"t":"ref", "acct":acct, "key":key, "code":code}, func(r: Dictionary):
+		if r.is_empty():
+			sfx("error")
+			toast("Not connected to the server right now", UI.RED)
+		elif bool(r.get("ok", false)):
+			sfx("confirm")
+			profile.d.referral["by"] = str(r.get("name", "a friend"))
+			profile.save()
+			if eco_sync != null:
+				eco_sync.pull()
+			toast("Code accepted! Reach level %d and you both get a Gold Chest" % Eco.REF_LEVEL, UI.CYAN)
+		else:
+			sfx("error")
+			var why := str(r.get("why", ""))
+			if why == "late":
+				profile.d.settings["ref_late"] = true
+				profile.save()
+			toast({"code":"No player has that code", "self":"That's your own code", "done":"You've already entered a friend's code",
+				"loop":"That friend joined with your code", "late":"Codes are for new players (first %d days, under level %d)" % [Eco.REF_DAYS, Eco.REF_LEVEL],
+				"auth":"Play one online match first, then enter the code"}.get(why, "The server didn't take that code"), UI.RED)
+		if is_instance_valid(modal) and modal.has_method("ref_changed"):
+			modal.ref_changed()
+		if cb.is_valid():
+			cb.call(r))
+
+# ---------------- SEND TO DEVELOPER (0.31.120) ----------------
+static func diag_message(note: String, log_text: String, p) -> Dictionary:
+	# the report (server/diag_reports.gd), fitted under one packet once compressed: the log's first lines (the session
+	# header) and as much of its end as fits
+	var msg := {"t":"diag", "name":str(p.d.get("name", "")), "build":Diag.BUILD, "note":note.strip_edges().left(500),
+		"dev":{"model":OS.get_model_name(), "os":"%s %s" % [OS.get_name(), OS.get_version()], "gpu":RenderingServer.get_video_adapter_name()},
+		"log":log_text}
+	var acct := str(p.d.account.get("id", ""))
+	if acct != "":
+		msg["acct"] = acct
+		msg["key"] = str(p.d.account.get("key", ""))
+	var keep := mini(log_text.length(), 390000)
+	if keep < log_text.length():
+		msg.log = log_text.left(3000) + "\n[... %d characters left out ...]\n" % (log_text.length() - keep) + log_text.right(keep - 3000)
+	while Net.encode(msg, true).size() > Net.MAX_PACKET - 2048 and keep > 4000:
+		keep = int(keep * 0.7)
+		msg.log = log_text.left(3000) + "\n[... %d characters left out ...]\n" % (log_text.length() - keep) + log_text.right(keep - 3000)
+	return msg
+
+func send_diagnostics(note: String, cb: Callable) -> void:
+	# cb({"ok", "id"} / {"ok": false, "why"} / {} with no answer)
+	LbFetch.ask(self, str(eco_url), diag_message(note, Diag.read_logs(200), profile), cb, true)
+
+func open_send_diag() -> void:
+	# Settings > SEND TO DEVELOPER: what's sent, a line about the problem, SEND -- asked every time
+	sfx("menuOpen")
+	close_modal()
+	modal = Control.new()
+	modal.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(modal)
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.6)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	modal.add_child(dim)
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	modal.add_child(center)
+	var v := UI2.frame(center, "royal", 14, 20.0, "gold")
+	(v.get_parent() as Control).custom_minimum_size = Vector2(minf(360, size.x - 32), 0)
+	v.add_theme_constant_override("separation", 10)
+	UI2.center(UI2.text(v, "SEND TO DEVELOPER", 22, UI2.GOLD))
+	UI2.body(v, "Sends this phone's game log to the developer to fix a problem: what the game was doing, its errors, your " +
+		"phone model and the game's version, with your player name. No chats, purchases or other apps.", 13, UI2.SOFT)
+	var note := SocialUI.field(v, "What went wrong? (optional)", 300)
+	note.name = "DiagNote"
+	var r := UI.row(v, 10)
+	UI.grow(UI2.button(r, "CANCEL", "ghost", func():
+		sfx("menuClose")
+		close_modal(), "diag_cancel", 15, 44.0))
+	var send := UI2.button(r, "SEND", "orange", func(): pass, "diag_send", 17, 44.0)
+	UI.grow(send)
+	var m := modal
+	send.pressed.connect(func():
+		if send.has_meta("busy"):
+			return
+		send.set_meta("busy", true)
+		send.text = "SENDING..."
+		UI2.dim_button(send, true)
+		sfx("tap")
+		send_diagnostics(note.text, func(res: Dictionary):
+			if bool(res.get("ok", false)):
+				sfx("confirm")
+				if modal == m:
+					close_modal()
+				toast("Sent -- report #%s. Thank you!" % str(res.get("id", "")), UI.CYAN)
+				return
+			sfx("error")
+			if str(res.get("why", "")) == "busy":
+				toast("You've sent a few already -- try again in an hour", UI.MUTED)
+			else:
+				toast("Couldn't reach the server -- try again, or use COPY DIAGNOSTICS", UI.RED)
+			if is_instance_valid(send):
+				send.remove_meta("busy")
+				send.text = "SEND"
+				UI2.dim_button(send, false)))
+
 func offer_daily() -> void:
+	if offer_prize() or offer_referral():
+		return
 	if not daily_auto or siege != null or update_required or tab != "home" or is_instance_valid(modal):
 		return
 	if not bool(profile.d.get("tutorial_done", false)) or not profile.login_ready():

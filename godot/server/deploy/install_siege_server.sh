@@ -28,7 +28,7 @@ SERVER_SCRIPTS="scripts/siege/siege_sim.gd scripts/siege/siege_net.gd scripts/si
 # 0.31.108: the accounts -- the server replays every player's changes with the game's own economy and profile code
 # 0.31.118: the analytics allow-list (events and their props), shared by the phone and the server
 META_SCRIPTS="scripts/meta/economy.gd scripts/meta/profile.gd scripts/meta/analytics_events.gd"
-SERVER_FILES="server/siege_server.gd server/siege_probe.gd server/iap_verify.gd server/eco_accounts.gd server/match_ledger.gd server/social.gd server/analytics.gd server/leaderboard.gd"
+SERVER_FILES="server/siege_server.gd server/siege_probe.gd server/iap_verify.gd server/eco_accounts.gd server/match_ledger.gd server/social.gd server/analytics.gd server/leaderboard.gd server/referrals.gd server/diag_reports.gd"
 for f in $SERVER_SCRIPTS $META_SCRIPTS $SERVER_FILES; do
   [ -f "$SRC/$f" ] || { echo "Missing $SRC/$f — run this from the Siege branch checkout." >&2; exit 1; }
 done
@@ -128,7 +128,7 @@ else
     done
     if [ -f "$(dirname "$ACCT_DIR")/analytics/opt_out.json" ]; then AN_FILES="$AN_FILES analytics/opt_out.json"; fi
     tar -czf "/var/backups/fatebound-siege/accounts-$(date -u +%Y%m%dT%H%M%SZ).tgz" -C "$(dirname "$ACCT_DIR")" \
-      accounts $(cd "$(dirname "$ACCT_DIR")" && ls purchase_tokens.json iap_ledger.jsonl social.json reports.jsonl muted.txt leaderboard.json 2>/dev/null) $AN_FILES
+      accounts $(cd "$(dirname "$ACCT_DIR")" && ls purchase_tokens.json iap_ledger.jsonl social.json reports.jsonl muted.txt leaderboard.json referrals.json 2>/dev/null) $AN_FILES
     chmod 600 /var/backups/fatebound-siege/*.tgz
     echo "Accounts backed up to /var/backups/fatebound-siege/ (analytics files:${AN_FILES:- none yet})"
   fi

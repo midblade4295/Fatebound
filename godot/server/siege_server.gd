@@ -83,6 +83,18 @@ extends SceneTree
 # 0.31.119 (leaderboards): every paid online match adds to the account's week (server/leaderboard.gd). A socket whose
 # first message is {"t":"lb", "acct", "key"} (no hello, like "eco") gets the week's board, the account's own row and its
 # friends' rows; a key that doesn't open the account: 4007 "lb". "ver"/"status" answer "lb":1.
+#
+# 0.31.120 (Kevin: rejoin after a dropped connection): every welcome carries "rj", a secret token for that player's
+# seat. When a seated player's socket drops mid-match (not a refusal, an idle removal, {"t":"leave"} or a clean close
+# -- the app closes with 1000 "leave" when the player quits), the seat is HELD for REJOIN_HOLD s: a bot plays it, nobody else is seated on it, its
+# match record (the ledger) is kept, and the match still pays it if it ends meanwhile. A hello with "rj" (and the same
+# account) within that time goes straight back onto the same unit in the same match: welcome {"rejoin":true}, no lobby.
+# A hello with the token of a socket the server still thinks is open (a phone that switched networks) takes that seat
+# over and the old socket is closed. Additive: an older app never sends "rj" (its drop is held and simply runs out).
+#
+# 0.31.120 (Kevin: a friend in a match -- "make so it's a join match option"): a hello with "join": a friend's public id
+# (social.gd's pid) goes into that friend's room -- their match, on their side while it has room -- when the two are
+# friends and the room has space; otherwise the usual room, and {"t":"joinr", "ok":false, "why":"full"|"gone"} says why.
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 const Net = preload("res://scripts/siege/siege_net.gd")
 const IapVerify = preload("res://server/iap_verify.gd")
@@ -91,6 +103,8 @@ const MatchLedger = preload("res://server/match_ledger.gd")
 const Social = preload("res://server/social.gd")
 const Analytics = preload("res://server/analytics.gd")
 const Leaderboard = preload("res://server/leaderboard.gd")
+const Referrals = preload("res://server/referrals.gd")
+const DiagReports = preload("res://server/diag_reports.gd")
 
 const RESTART_AFTER := 15.0          # seconds of results screen before the next match
 const IDLE_STOP := 30.0              # no players for this long -> stop simulating (and the room closes)
@@ -98,7 +112,7 @@ const LOBBY_TIME := 20.0             # the join countdown (0.31.82)
 const HELLO_TIMEOUT := 10.0
 const IAP_TIMEOUT := 40.0              # a purchase check may take a token request and an API call
 const REFUSE_CLOSE_DELAY := 0.25     # s between a "bye"/"ver" reply and closing the socket
-const SERVER_BUILD := "0.31.119"      # this server's game version; the probe says it by default (identifies as current)
+const SERVER_BUILD := "0.31.121"      # this server's game version; the probe says it by default (identifies as current)
 const MIN_BUILD_FILE := "/etc/fatebound-siege/min_build"
 const MIN_BUILD_RELOAD := 10.0       # s between re-reads of the min-build file
 const UPDATE_MSG := "A new version of Fatebound is out. Update now on Google Play to keep playing online."
@@ -107,6 +121,8 @@ const MAX_ROOMS := 4                 # 0.31.119: matches at once (SIEGE_MAX_ROOM
 const IDLE_BOT := 45.0               # 0.31.119: s without input before a bot plays for them (SIEGE_IDLE_BOT)
 const IDLE_KICK := 180.0             # ...and before they're removed (SIEGE_IDLE_KICK)
 const CLOSE_IDLE := 4006
+const REJOIN_HOLD := 60.0            # 0.31.120: s a dropped player's seat waits for them
+const SILENT_DROP := 8.0             # 0.31.120: a seated phone that has sent nothing for this long is gone (its seat is held)
 const LOAD_GRACE := 20.0             # s a phone may take to build the match before its idle time counts (until its first input)
 const TICK := Sim.TICK
 
@@ -125,6 +141,7 @@ class Room:
 	var lobby_clock := 0.0
 	var names_dirty := false          # a seat changed: send the players' names (0.31.86)
 	var paid_match := -1              # the match whose results went to the accounts
+	var held := {}                    # 0.31.120: rejoin token -> a dropped player's seat ({"c": their client, "until", "drop_at"})
 
 var tcp := TCPServer.new()
 var clients := {}                    # cid -> {ws, unit, name, hello, room, move, hold, joined_at, msgs, msg_clock}
@@ -139,6 +156,7 @@ var max_players := 32                # humans in one room
 var log_on := true
 var lobby_time := LOBBY_TIME
 var idle_stop := IDLE_STOP           # (tests: SIEGE_IDLE_STOP)
+var rejoin_hold := REJOIN_HOLD       # (tests: SIEGE_REJOIN_HOLD)
 var idle_bot := IDLE_BOT
 var idle_kick := IDLE_KICK
 var iap = null                       # 0.31.90: Google Play purchase checks (server/iap_verify.gd)
@@ -146,6 +164,8 @@ var eco = null                       # 0.31.108: the accounts (server/eco_accoun
 var social = null                    # 0.31.111: chat, friends, parties (server/social.gd)
 var analytics = null                 # 0.31.118: usage statistics (server/analytics.gd)
 var leaderboard = null               # 0.31.119: the week's best players (server/leaderboard.gd)
+var referrals = null                 # 0.31.120: friend codes entered by new players (server/referrals.gd)
+var diag_reports = null              # 0.31.120: SEND TO DEVELOPER (server/diag_reports.gd)
 var boot_time := int(Time.get_unix_time_from_system())   # (with the match id: a match's id across restarts)
 var test_match_s := 0.0              # tests only (SIEGE_TEST_MATCH_S): a match ends after this many seconds
 var min_build := ""                  # "" = no minimum (see SIEGE_MIN_BUILD)
@@ -167,6 +187,8 @@ func _init() -> void:
 		lobby_time = clampf(float(OS.get_environment("SIEGE_LOBBY")), 0.0, 120.0)
 	if OS.has_environment("SIEGE_IDLE_STOP"):
 		idle_stop = clampf(float(OS.get_environment("SIEGE_IDLE_STOP")), 0.5, 600.0)
+	if OS.has_environment("SIEGE_REJOIN_HOLD"):
+		rejoin_hold = clampf(float(OS.get_environment("SIEGE_REJOIN_HOLD")), 1.0, 600.0)
 	if OS.has_environment("SIEGE_IDLE_BOT"):
 		idle_bot = clampf(float(OS.get_environment("SIEGE_IDLE_BOT")), 1.0, 3600.0)
 	if OS.has_environment("SIEGE_IDLE_KICK"):
@@ -217,6 +239,17 @@ func _init() -> void:
 	_log("analytics: %s (%d accounts opted out)" % [analytics.dir, analytics.opted.size()])
 	leaderboard = Leaderboard.new()
 	leaderboard.log_fn = _log
+	leaderboard.pay_fn = func(acct: String, week: String, rank: int, prize: Dictionary) -> bool:
+		var ok: bool = eco.grant_prize(acct, week, rank, prize)
+		if ok:
+			_log("prize week %s: #%d %s (%d gems, %s chest, %s)" % [week, rank, acct, int(prize.get("gems", 0)), str(prize.get("chest", "")), str(prize.get("title", "-"))])
+		return ok
+	leaderboard.start()
+	social.rank_fn = func(acct: String) -> int: return leaderboard.rank_of(acct)       # 0.31.120: the profile card
+	referrals = Referrals.new()
+	referrals.log_fn = _log
+	diag_reports = DiagReports.new()
+	diag_reports.log_fn = _log
 	_log("leaderboard: week of %s, %d players" % [leaderboard.week, leaderboard.rows.size()])
 
 # ---------------- minimum app build ----------------
@@ -294,6 +327,7 @@ func _process(delta: float) -> bool:
 		if r.names_dirty:
 			r.names_dirty = false
 			_send_names(r)
+		_expire_holds(r)
 		if r.sim == null and _room_humans(r) == 0:
 			rooms.erase(rid)                         # 0.31.119: nobody left and nothing running: the room closes
 			_log("room %d closed (%d open)" % [rid, rooms.size()])
@@ -323,12 +357,19 @@ func _accept() -> void:
 func _poll_clients() -> void:
 	var now := Time.get_ticks_msec() / 1000.0
 	for cid in clients.keys():
+		if not clients.has(cid):
+			continue                                   # (a rejoin took this one's seat this frame)
 		var c: Dictionary = clients[cid]
 		var ws: WebSocketPeer = c.ws
 		ws.poll()
 		var st := ws.get_ready_state()
 		if st == WebSocketPeer.STATE_CLOSED:
-			_drop(cid, "closed")
+			while ws.get_available_packet_count() > 0:      # (a "leave" can arrive together with the close)
+				if str(Net.decode(ws.get_packet()).get("t", "")) == "leave":
+					c.left = true
+			# (a clean close -- the app's "leave" when the player quits, or any code 1000 -- holds nothing; a lost connection
+			# has no close frame, 1006)
+			_drop(cid, "left" if ws.get_close_reason() == "leave" or ws.get_close_code() == 1000 else "closed")
 			continue
 		if st != WebSocketPeer.STATE_OPEN:
 			if now - float(c.joined_at) > HELLO_TIMEOUT:
@@ -351,8 +392,15 @@ func _poll_clients() -> void:
 		if now - float(c.msg_clock) >= 1.0:
 			c.msg_clock = now
 			c.msgs = 0
+		if c.hello and bool(c.get("got_in", false)) and not bool(c.get("queued", false)) and now - float(c.get("last_rx", now)) > SILENT_DROP:
+			# 0.31.120: a phone that went quiet mid-match (lost its connection, or the app went to the background without a
+			# close the server ever saw): close it and hold the seat, so it can come back
+			ws.close(4008, "silent")
+			_drop(cid, "silent")
+			continue
 		while ws.get_available_packet_count() > 0:
 			var pkt := ws.get_packet()
+			c.last_rx = now
 			c.msgs += 1
 			if c.msgs > MAX_MSGS_PER_SEC or pkt.size() > Net.MAX_PACKET:
 				continue
@@ -424,7 +472,15 @@ func _drop(cid: int, why: String) -> void:
 		u.move = Vector2.ZERO
 		u.net_driven = false
 		r.names_dirty = true           # (their name goes off the battlefield)
-	if c.hello and c.has("acct") and analytics != null and sim != null and not sim.ended and c.unit != "" \
+	var hold: bool = r != null and sim != null and not sim.ended and c.hello and not bool(c.get("queued", false)) and c.unit != "" \
+		and sim.by_id.has(c.unit) and str(c.get("rj", "")) != "" and not bool(c.get("left", false)) and why in ["closed", "handshake timeout", "silent"]
+	if hold:
+		# 0.31.120: the seat waits for them (a bot plays it meanwhile); match_quit only if they don't come back
+		var keep := c.duplicate()
+		keep.erase("ws")
+		r.held[str(c.rj)] = {"c":keep, "until":_now() + rejoin_hold, "drop_at":_now()}
+		_log("hold %s's seat %s for %.0f s (room %d)" % [c.name, c.unit, rejoin_hold, r.id])
+	elif c.hello and c.has("acct") and analytics != null and sim != null and not sim.ended and c.unit != "" \
 			and not bool(c.get("queued", false)) and sim.by_id.has(c.unit) and c.has("seated_at"):
 		# 0.31.118: left a match before it ended
 		analytics.server_event(str(c.acct), "match_quit", {"match":str(c.get("match_key", "")), "mode":"online",
@@ -469,12 +525,12 @@ func _pick_room(party: String) -> Room:
 			var o: Dictionary = clients[cid]
 			if o.hello and str(o.get("party", "")) == party:
 				var pr := _room_of(o)
-				if pr != null and _room_humans(pr) < max_players:
+				if pr != null and _room_humans(pr) + pr.held.size() < max_players:
 					return pr
 	var best: Room = null
 	var best_n := -1
 	for r in rooms.values():
-		var n := _room_humans(r)
+		var n: int = _room_humans(r) + r.held.size()
 		if n < max_players and n > best_n:
 			best = r
 			best_n = n
@@ -501,7 +557,7 @@ func _handle(cid: int, msg: Dictionary) -> void:
 			# so the client treats no answer as "unknown" and checks again on connect.
 			if c.hello:
 				return
-			_send(cid, {"t":"ver", "v":Net.VERSION, "build":SERVER_BUILD, "min_build":min_build, "eco":1, "social":1, "an":1, "lb":1})
+			_send(cid, {"t":"ver", "v":Net.VERSION, "build":SERVER_BUILD, "min_build":min_build, "eco":1, "social":1, "an":1, "lb":1, "ref":1, "diag":1})
 			_refuse(cid, 1000, "ver")
 		"hello":
 			if c.hello or c.has("social"):
@@ -525,6 +581,8 @@ func _handle(cid: int, msg: Dictionary) -> void:
 					analytics.server_event(str(msg.acct), "update_screen", {"from_build":build, "need":min_build}, build)
 				_log("refused %s: build %s older than min build %s" % [str(msg.get("name", "?")).left(20), build.left(30), min_build])
 				return
+			if str(msg.get("rj", "")) != "" and _rejoin(cid, msg):
+				return                                         # 0.31.120: back on their seat
 			var name := clean_name(str(msg.get("name", "Player")))
 			var tid := str(msg.get("title", ""))
 			var title := tid if Net.TITLES.has(tid) else ""
@@ -541,7 +599,29 @@ func _handle(cid: int, msg: Dictionary) -> void:
 					looks = w.looks
 					if social != null:
 						party = social.party_for(acct)    # 0.31.111: seated with their party
-			var r := _pick_room(party)
+			var r: Room = null
+			var join_acct := ""
+			var jp := str(msg.get("join", ""))
+			if jp != "" and acct != "" and social != null:
+				# 0.31.120: into a friend's match (Friends > JOIN)
+				var why := "gone"
+				var me_pid := Social.pid_of(acct)
+				if social.users.has(jp) and social.users.has(me_pid) and (social.users[me_pid].get("friends", []) as Array).has(jp):
+					var ta := str(social.users[jp].acct)
+					for ocid in clients:
+						var o: Dictionary = clients[ocid]
+						if o.hello and str(o.get("acct", "")) == ta:
+							var tr := _room_of(o)
+							if tr != null and _room_humans(tr) + tr.held.size() < max_players:
+								r = tr
+								join_acct = ta
+							elif tr != null:
+								why = "full"
+							break
+				if r == null:
+					_send(cid, {"t":"joinr", "ok":false, "why":why})
+			if r == null:
+				r = _pick_room(party)
 			if r == null:
 				_send(cid, {"t":"bye", "why":"full"})
 				_refuse(cid, 4002, "full")
@@ -549,9 +629,12 @@ func _handle(cid: int, msg: Dictionary) -> void:
 				return
 			c.hello = true
 			c.room = r.id
+			c.rj = Crypto.new().generate_random_bytes(8).hex_encode()   # 0.31.120: this player's rejoin token
 			c.name = name
 			c.title = title
 			c.looks = looks
+			if join_acct != "":
+				c.join_acct = join_acct                       # (seated on their side when it has room)
 			if acct != "":
 				c.acct = acct
 				c.party = party
@@ -568,6 +651,9 @@ func _handle(cid: int, msg: Dictionary) -> void:
 				r.wave_end = _now() + lobby_time
 			_log("queue %s (room %d, seated in %.0f s, players %d)" % [c.name, r.id, r.wave_end - _now(), _human_count()])
 			r.lobby_clock = 1.0                            # tell everyone waiting at once
+		"leave":
+			# 0.31.120: the player quit the match on purpose -- don't hold the seat when the socket closes
+			c.left = true
 		"status":
 			# 0.31.82: the menu's "players online" -- answered without a hello; the asker closes (or we do in 2 s: a
 			# close right behind the answer can reach the phone in the same read, and the WebSocket drops the answer)
@@ -617,6 +703,8 @@ func _handle(cid: int, msg: Dictionary) -> void:
 			c.eco_done = true
 			var t0 := Time.get_ticks_usec()
 			var out: Dictionary = eco.handle(msg)
+			if referrals != null and bool(out.get("ok", false)) and referrals.check(str(out.get("acct", "")), eco) > 0:
+				out = eco.handle({"t":"eco", "acct":str(out.acct), "key":str(msg.get("key", "")), "ops":[]})    # (with the chest in it)
 			_send(cid, out)
 			_refuse(cid, 1000, "eco")
 			c.close_at = _now() + 2.0
@@ -647,6 +735,22 @@ func _handle(cid: int, msg: Dictionary) -> void:
 				return
 			_send(cid, leaderboard.answer(lacct, social.friend_accts(lacct) if social != null else []))
 			_refuse(cid, 1000, "lb")
+			c.close_at = _now() + 2.0
+		"ref":
+			# 0.31.120: a new player enters a friend's code (server/referrals.gd). One per socket, no hello.
+			if c.hello or c.has("ref_done") or c.has("social") or referrals == null or eco == null:
+				return
+			c.ref_done = true
+			_send(cid, referrals.claim(str(msg.get("acct", "")), str(msg.get("key", "")), str(msg.get("code", "")), eco, social))
+			_refuse(cid, 1000, "ref")
+			c.close_at = _now() + 2.0
+		"diag":
+			# 0.31.120: SEND TO DEVELOPER -- the player sends the game's log (server/diag_reports.gd). One per socket, no hello.
+			if c.hello or c.has("diag_done") or c.has("social") or diag_reports == null:
+				return
+			c.diag_done = true
+			_send(cid, diag_reports.handle(msg, eco, (c.ws as WebSocketPeer).get_connected_host()))
+			_refuse(cid, 1000, "diag")
 			c.close_at = _now() + 2.0
 		"iap":
 			# 0.31.90: a phone asks whether a Google Play purchase is real before it grants it. No hello (a purchase is
@@ -741,6 +845,16 @@ func _seat(r: Room, cid: int) -> void:
 				if humans[pt] < Net.TEAM_SIZE:
 					team = pt
 				break
+	var ja := str(c.get("join_acct", ""))
+	if ja != "":
+		# 0.31.120: joined a friend's match -- their side, while it has room
+		for other in _members(r):
+			var oc: Dictionary = clients[other]
+			if other != cid and str(oc.get("acct", "")) == ja and oc.unit != "" and sim.by_id.has(oc.unit):
+				var jt := int(sim.by_id[oc.unit].team)
+				if humans[jt] < Net.TEAM_SIZE:
+					team = jt
+				break
 	var seat := ""
 	for u in sim.units:
 		if u.team == team and u.bot and not _unit_taken(r, u.id):
@@ -768,7 +882,7 @@ func _seat(r: Room, cid: int) -> void:
 			if analytics != null:
 				analytics.server_event(c.acct, "match_start", {"match":c.match_key, "mode":"online", "class":c.class0}, str(c.get("build", "")))
 	_send(cid, {"t":"welcome", "v":Net.VERSION, "you":seat, "match":r.match_id, "seed":r.match_seed,
-		"team_size":Net.TEAM_SIZE, "players":_room_humans(r)})
+		"team_size":Net.TEAM_SIZE, "players":_room_humans(r), "rj":str(c.get("rj", ""))})
 	r.names_dirty = true
 	# The first snapshot right away so the client can build its view.
 	_send(cid, Net.snapshot(sim, seat, []))
@@ -777,6 +891,9 @@ func _seat(r: Room, cid: int) -> void:
 func _unit_taken(r: Room, id: String) -> bool:
 	for cid in _members(r):
 		if clients[cid].unit == id:
+			return true
+	for k in r.held:                                   # 0.31.120: a held seat waits for its player
+		if str(r.held[k].c.get("unit", "")) == id:
 			return true
 	return false
 
@@ -900,7 +1017,7 @@ func _status() -> Dictionary:
 			running = true
 	return {"t":"status", "v":Net.VERSION, "online":_human_count(), "in_match":in_match, "waiting":waiting,
 		"lobby":lobby, "running":running, "slots":Net.TEAM_SIZE * 2, "max":max_players * max_rooms, "rooms":rooms.size(),
-		"build":SERVER_BUILD, "min_build":min_build, "eco":1, "social":1, "an":1, "lb":1,
+		"build":SERVER_BUILD, "min_build":min_build, "eco":1, "social":1, "an":1, "lb":1, "ref":1, "diag":1,
 		"chatting":social.online.size() if social != null else 0}
 
 # ---------------- statistics (0.31.118) ----------------
@@ -940,8 +1057,12 @@ func _pay_match(r: Room) -> void:
 		return
 	r.paid_match = r.match_id
 	var sim = r.sim
+	var payees := []
 	for cid in _members(r):
-		var c: Dictionary = clients[cid]
+		payees.append(clients[cid])
+	for k in r.held:
+		payees.append(r.held[k].c)                     # 0.31.120: dropped a moment ago: still paid for the match
+	for c in payees:
 		if not c.has("acct") or not c.has("ledger") or c.unit == "" or not sim.by_id.has(c.unit) or str(c.ledger.uid) != c.unit:
 			continue
 		var u: Dictionary = sim.by_id[c.unit]
@@ -952,11 +1073,80 @@ func _pay_match(r: Room) -> void:
 		c.erase("ledger")
 		if leaderboard != null:
 			leaderboard.add_match(str(c.acct), str(c.name), str(c.get("title", "")), me, won)     # 0.31.119
+		if referrals != null:
+			referrals.check(str(c.acct), eco)                 # 0.31.120: level 5 with a friend's code
 		if analytics != null:
 			analytics.server_event(str(c.acct), "match_finish", {"match":str(c.get("match_key", match_key(r))), "mode":"online",
 				"dur_s":int(_now() - float(c.get("seated_at", _now()))), "result":"win" if won else ("draw" if draw else "loss"),
 				"team_n":_team_humans(r, int(u.team)), "class":class_of(u), "class0":str(c.get("class0", ""))}, str(c.get("build", "")))
 		_log("paid %s (%s): %s, %d gold" % [str(c.acct), c.name, "win" if won else ("draw" if draw else "loss"), int(res.get("rewards", {}).get("gold", 0))])
+
+# ---------------- rejoin (0.31.120) ----------------
+func _rejoin(cid: int, msg: Dictionary) -> bool:
+	# a hello with a rejoin token: back onto the held seat (or take over a seat whose old socket hasn't closed yet)
+	var rj := str(msg.get("rj", ""))
+	var found: Dictionary = {}
+	var room: Room = null
+	for ocid in clients.keys():                       # the old socket still looks open (the phone changed networks)
+		var o: Dictionary = clients[ocid]
+		if ocid != cid and o.hello and str(o.get("rj", "")) == rj and not bool(o.get("queued", false)):
+			var orr := _room_of(o)
+			if orr != null and orr.sim != null and not orr.sim.ended and o.unit != "" and orr.sim.by_id.has(o.unit):
+				var keep := o.duplicate()
+				keep.erase("ws")
+				found = keep
+				room = orr
+				clients.erase(ocid)                   # (silently: no hold, no quit -- it's the same player)
+				(o.ws as WebSocketPeer).close(1000, "rejoined")
+			break
+	if found.is_empty():
+		for rr in rooms.values():
+			if rr.held.has(rj):
+				if rr.sim != null and not rr.sim.ended and float(rr.held[rj].until) >= _now():
+					found = rr.held[rj].c
+					room = rr
+				rr.held.erase(rj)
+				break
+	if found.is_empty():
+		return false
+	if found.has("acct") and str(msg.get("acct", "")) != str(found.acct):
+		return false                                  # (a token with someone else's account: not theirs)
+	var c: Dictionary = clients[cid]
+	for k in found:
+		if not k in ["ws", "joined_at", "msgs", "msg_clock", "last_rx", "close_at", "close_code", "close_reason"]:
+			c[k] = found[k]
+	c.hello = true
+	c.queued = false
+	c.left = false
+	c.move = Vector2.ZERO
+	c.idle = false
+	c.idle_s = -LOAD_GRACE
+	c.got_in = false
+	c.erase("close_at")
+	c.erase("task_hash")
+	var u: Dictionary = room.sim.by_id[c.unit]
+	u.bot = false
+	room.names_dirty = true
+	_send(cid, {"t":"welcome", "v":Net.VERSION, "you":c.unit, "match":room.match_id, "seed":room.match_seed,
+		"team_size":Net.TEAM_SIZE, "players":_room_humans(room), "rj":rj, "rejoin":true})
+	_send(cid, Net.snapshot(room.sim, c.unit, []))
+	if social != null and c.has("acct"):
+		social.acct_changed(str(c.acct))
+	_log("rejoin %s -> %s (room %d, match %d)" % [c.name, c.unit, room.id, room.match_id])
+	return true
+
+func _expire_holds(r: Room) -> void:
+	for k in r.held.keys():
+		var h: Dictionary = r.held[k]
+		if float(h.until) >= _now() and r.sim != null and not r.sim.ended:
+			continue
+		r.held.erase(k)
+		var c: Dictionary = h.c
+		if r.sim != null and not r.sim.ended and c.has("acct") and analytics != null and c.has("seated_at") and r.sim.by_id.has(c.unit):
+			analytics.server_event(str(c.acct), "match_quit", {"match":str(c.get("match_key", "")), "mode":"online",
+				"quit_at_s":int(float(h.drop_at) - float(c.seated_at)), "class":class_of(r.sim.by_id[c.unit]), "class0":str(c.get("class0", ""))},
+				str(c.get("build", "")))
+		_log("seat %s of %s let go (room %d)" % [str(c.get("unit", "")), str(c.get("name", "")), r.id])
 
 # ---------------- idle players (0.31.119) ----------------
 func _active(r: Room, cid: int) -> void:
@@ -1006,11 +1196,12 @@ func _new_match(r: Room) -> void:
 	r.snap_accum = 0.0
 	r.ended_at = -1.0
 	r.pending_events.clear()
+	r.held.clear()                                    # (a seat in the last match is no seat in this one)
 	_log("match %d start (room %d, seed %d)" % [r.match_id, r.id, r.match_seed])
 
 func _run_match(r: Room, delta: float) -> bool:
 	# -> true when the room's match ran this frame
-	var humans := _room_humans(r)
+	var humans: int = _room_humans(r) + r.held.size()        # (a held seat keeps the match going for its player)
 	if humans == 0:
 		if r.sim != null:
 			if r.empty_since < 0.0:

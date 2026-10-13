@@ -48,3 +48,11 @@ All icons side by side: `store-listing/achievements/_all.png` (bronze rims = fir
   sending the total again is harmless), a standard one `unlockAchievement(id)` once its goal is met.
 - Settings > GOOGLE PLAY > ACHIEVEMENTS opens Google's own achievements screen.
 - The preview APK has no Play Games plugin: nothing there.
+
+## Status
+- 2026-10-13 (0.31.121): all 18 created in Play Console (Game ID 1022979193240) and their ids filled in
+  `scripts/meta/play_achievement_ids.gd`; tests/achievements_test.gd checks every id is there, different, of this game
+  and in the table's order. Gatecrasher: the profile's `gates` stat is 1 per 100 gate damage (Eco.match_stats, whole
+  hundreds per match), so its 100 steps = 10,000 damage. The Game ID is also set on the "Android Play Store" preset on
+  this branch (as Grokbot did on grok/siege-play-local-r19). Left: publish the achievements, build the AAB, try them
+  on a tester account.

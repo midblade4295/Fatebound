@@ -61,6 +61,16 @@ the SHA-256), mounts the packs and starts the game. A code-only update downloads
   (updated 10 October 2026); redeploy privacy.html with the build.
 - The `content-packs` branch only grows (no force-push); old pack files stay for builds still installed.
 
+## 0.31.120: what changes for the Play listing (for whoever does the Play Console)
+
+- **New permission**: `android.permission.VIBRATE` (Settings > VIBRATION; a normal permission, no prompt).
+- **Data safety**: SEND TO DEVELOPER (Settings) sends a problem report to our own server only when the player taps
+  SEND: the game's log (errors, what it was doing), app version, phone model / Android version / GPU, the in-game
+  name, the game account id and an optional typed note. That is "App info and performance > Diagnostics" (and the
+  log's errors arguably "Crash logs"): collected, optional (user-initiated), not shared, purpose app functionality
+  (fixing problems); deletion on request. Nothing else new leaves the phone (player cards and invite codes use data
+  the server already keeps). privacy.html is updated -- redeploy it with the build.
+
 ## Release identity and version
 
 Preset **Android Play Store** in `godot/export_presets.cfg`:

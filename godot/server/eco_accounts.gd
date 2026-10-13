@@ -385,6 +385,36 @@ func apply_online(id: String, me: Dictionary, won: bool, draw: bool) -> Dictiona
 	_save_meta(e)
 	return res
 
+func grant_prize(id: String, week: String, rank: int, prize: Dictionary) -> bool:
+	# 0.31.120: a weekly leaderboard prize (server/leaderboard.gd when the week ends) -- once per week per account
+	var e := _load(id)
+	if e.is_empty():
+		return false
+	var p = e.p
+	p.refresh()
+	p.replaying = true
+	var r: Dictionary = p.grant_prize(week, rank, prize)
+	p.replaying = false
+	if not bool(r.get("ok", false)):
+		return false
+	e.meta.rev = int(e.meta.get("rev", 0)) + 1
+	_save_meta(e)
+	return true
+
+func grant_referral(id: String, kind: String, name: String) -> bool:
+	# 0.31.120: a referral's Gold chest (server/referrals.gd)
+	var e := _load(id)
+	if e.is_empty():
+		return false
+	var p = e.p
+	p.refresh()
+	p.replaying = true
+	p.grant_referral(kind, name)
+	p.replaying = false
+	e.meta.rev = int(e.meta.get("rev", 0)) + 1
+	_save_meta(e)
+	return true
+
 func grant_purchase(id: String, key: String, product: String, token: String, consumed := false) -> Dictionary:
 	# a purchase Google confirmed: granted to this account once; a token granted to another account never again.
 	# consumed: Google says the gem pack was used up already -- only "already yours" if this account got it
@@ -416,6 +446,41 @@ func wear(id: String, key: String) -> Dictionary:
 	var t := str(p.d.get("title", ""))
 	return {"name":str(p.d.get("name", "Player")), "title":t if p.owns(t) and Net.TITLES.has(t) else "",
 		"looks":Net.clean_looks(p.wire_looks())}
+
+func stats_of(id: String) -> Dictionary:
+	# 0.31.120 (Kevin: player profile card): what anyone may see of an account when they tap its name -- its level and
+	# lifetime numbers, the class it plays most (stats.main_<cls>: matches with it as the match's main class) and the
+	# weapon it wins most with (forge.wins) or else that class's weapon. No ids, currencies or purchases.
+	var e := _load(id)
+	if e.is_empty():
+		return {}
+	var d: Dictionary = e.p.d
+	var st: Dictionary = d.get("stats", {})
+	var fav := ""
+	var fav_n := 0
+	for k in st:
+		if str(k).begins_with("main_") and int(st[k]) > fav_n:
+			fav = str(k).substr(5)
+			fav_n = int(st[k])
+	var out := {"lv":int(d.get("level", 1)), "m":int(st.get("matches", 0)), "w":int(st.get("wins", 0)), "r":int(st.get("rescues", 0)),
+		"ko":int(st.get("kills", 0)), "bs":int(st.get("best_streak", 0)), "since":int(e.meta.get("created", 0)),
+		"cls":fav, "cm":fav_n, "cw":int(st.get("win_" + fav, 0)) if fav != "" else 0}
+	var wid := ""
+	var best := 0
+	var fw: Dictionary = d.get("forge", {}).get("wins", {})
+	for w in fw:
+		if int(fw[w]) > best:
+			wid = str(w)
+			best = int(fw[w])
+	if wid == "" and fav != "" and d.get("equip", {}).has(fav):
+		wid = Eco.forge_id(fav, str(d.equip[fav].get("weapon", "")))
+	if wid != "" and Eco.forge_name(wid) != "":
+		out["wpn"] = Eco.forge_name(wid)
+		out["wr"] = Eco.forge_rarity(wid)
+		out["ws"] = int(d.get("forge", {}).get("stars", {}).get(wid, 0))
+		out["wc"] = Eco.forge_class(wid)
+		out["ww"] = best
+	return out
 
 func public_of(id: String) -> Dictionary:
 	# 0.31.111: what other players see of an account in chat and friends lists -- its name and title (owned only).

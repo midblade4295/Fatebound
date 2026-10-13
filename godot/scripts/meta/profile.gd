@@ -124,6 +124,8 @@ static func defaults() -> Dictionary:
 		"tutorial_done":false,
 		"first_win_day":"", "history":[], "migration":{},
 		"login":{"day":"", "n":0},                                   # 0.31.119: the last day claimed, claims so far
+		"prizes":[],                                                 # 0.31.120: weekly leaderboard prizes paid (newest first)
+		"referral":{"by":"", "notes":[]},                            # 0.31.120: whose code was entered; friend rewards (newest first)
 		"embers":0,                                                  # 0.31.90: the Forge's material
 		"forge":{"stars":{}, "wins":{}, "element":{}},              # 0.31.93: per weapon (Eco.forge_id): stars 0-3, wins, aura element
 		"iap":{"done":[], "starter":false},                          # 0.31.90: purchase tokens already granted
@@ -624,6 +626,37 @@ func claim_challenge(span: String, index: int) -> Dictionary:
 	save()
 	_rec("claim_challenge", [span, index])
 	return {"ok":true, "tiers":out.tiers, "chests":out.chests, "embers":embers}
+
+# ---------------- weekly leaderboard prizes (0.31.120) ----------------
+func grant_prize(week: String, rank: int, prize: Dictionary) -> Dictionary:
+	# the server only (server/eco_accounts.gd, when a week ends): never an op a phone can send
+	for x in d.prizes:
+		if str(x.get("week", "")) == week:
+			return {"ok":false, "error":"paid"}
+	var out := {"chests":[]}
+	d.gems = int(d.gems) + int(prize.get("gems", 0))
+	if str(prize.get("chest", "")) != "":
+		add_chest(str(prize.chest), out, true)
+	var t := str(prize.get("title", ""))
+	if t != "" and not (d.owned as Array).has(t):
+		d.owned.append(t)
+	d.prizes.push_front({"week":week, "rank":rank, "gems":int(prize.get("gems", 0)), "chest":str(prize.get("chest", "")), "title":t})
+	if (d.prizes as Array).size() > 12:
+		d.prizes.resize(12)
+	save()
+	return {"ok":true, "chests":out.chests}
+
+# ---------------- referrals (0.31.120) ----------------
+func grant_referral(kind: String, name: String) -> Dictionary:
+	# the server only (server/referrals.gd): a Gold chest -- "joined" (you reached level 5 with a friend's code) or
+	# "friend" (a player who entered your code did)
+	var out := {"chests":[]}
+	add_chest(Eco.REF_CHEST, out, true)
+	d.referral.notes.push_front({"kind":kind, "name":name.left(24), "at":now()})
+	if (d.referral.notes as Array).size() > 20:
+		d.referral.notes.resize(20)
+	save()
+	return {"ok":true, "chests":out.chests}
 
 # ---------------- the daily login reward (0.31.119) ----------------
 func login_ready() -> bool:

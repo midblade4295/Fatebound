@@ -132,6 +132,10 @@ const TITLES := {
 	"title_foreman":        ["Foreman", "prefix", "rare"],
 	"title_mason":          ["the Mason", "the", "epic"],
 	"title_master_builder": ["Master Builder", "office", "legendary"],
+	# --- 0.31.120: the weekly leaderboard's
+	"title_champion":       ["Champion", "prefix", "legendary"],
+	"title_contender":      ["the Contender", "the", "epic"],
+	"title_top_ten":        ["of the Ten", "of", "rare"],
 }
 
 static func title_parts(name: String, title_id: String) -> Array:

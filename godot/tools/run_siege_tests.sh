@@ -78,10 +78,22 @@ run net_load_test        NET_LOAD_PASS            120
 run match_rooms_test     MATCH_ROOMS_PASS         120
 # Idle players (0.31.119): a bot takes over, input gives it back, removal (real server on 8103 + the real client)
 run idle_test            IDLE_PASS                120
+# Rejoin after a dropped connection (0.31.120): real server on 8105 + the real client
+run rejoin_test          REJOIN_PASS              120
+# Join a friend's match from Friends (0.31.120): real server on 8106 + the real app
+run join_friend_test     JOIN_FRIEND_PASS         150
 # End-of-match MVP strip and scoreboard (0.31.119)
 run scoreboard_test      SCOREBOARD_PASS          60
 # Weekly leaderboard (0.31.119): the board, the server (8104), the RANKS window
 run leaderboard_test     LEADERBOARD_PASS         150
+run lb_prizes_test       LB_PRIZES_PASS           90
+run referral_test        REFERRAL_PASS            150
+# Player profile card (0.31.120): stats_of, the real server (8108), RANKS > a row > the card
+run profile_card_test    PROFILE_CARD_PASS        150
+# SEND TO DEVELOPER (0.31.120): diag_reports.gd, fitting the log, the real server (8109) + Settings, diag_reports.py
+run diag_send_test       DIAG_SEND_PASS           120
+# Kill feed and vibration (0.31.120): the HUD feed, siege_mode haptics, Settings > VIBRATION
+run kill_feed_test       KILL_FEED_PASS           90
 # Daily login reward (0.31.119): the calendar, the server's replay, the card on Home and in ORDERS
 run daily_reward_test    DAILY_REWARD_PASS        90
 # Chest-ready notifications (0.31.119): notify.gd with a fake of the Android plugin, the app's ask and Settings

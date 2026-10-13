@@ -3496,3 +3496,97 @@ K2/K3 notes (0.17.0)
   rewards in the usage statistics), SIEGE_HANDOFF section 22. Full suite: ALL SIEGE TESTS PASSED (74). 0.31.119,
   version code 204 -> 205. APK 31486950 bytes, sha256 b7fcd798843c064ae20ce2c43beac216b644f4c74adb49bdbe5c64a072652e27.
   No content pack change. Needs the server redeployed (rooms, idle, leaderboard).
+
+## 0.31.120 — rejoin, join a friend's match, leaderboard prizes, referral codes, profile card, diagnostics upload, kill feed, vibration (Kevin: "1 and 2 I want added"; then "Do 1, 3, 6, 8, 10, 9 (but make so it's a join match option)")
+- **Rejoin after a dropped connection.** Before, a phone that lost its connection mid-match saw "Disconnected from the
+  server", the server gave the seat to a bot and the match's record (the ledger) went with the socket -- nothing paid.
+  Now every welcome carries "rj", a secret token for the seat. A seated player whose socket drops mid-match (no close
+  frame; or silent for 8 s after it started sending input -- SILENT_DROP) has the seat HELD for 60 s: a bot plays it,
+  nobody else is seated on it, the ledger is kept, the match still pays it if it ends meanwhile, and it counts toward the
+  room's size. A clean close (the app's 1000 "leave" -- now sent with {"t":"leave"} and polled out by a small
+  SocketCloser node so it isn't lost when the match node is freed; any code 1000) holds nothing. A hello with "rj" (and
+  the same account) goes straight back onto the unit in the same match: welcome {"rejoin":true}, no lobby. A hello with
+  the token of a socket the server still thinks is open (a phone that changed networks) takes the seat over and closes
+  the old one ("rejoined"). A held seat nobody returns for is let go (match_quit logged then). The game: on a drop it
+  keeps the match on screen with a "RECONNECTING... Your seat is held for you · 52 s" banner and reconnects every 2 s for
+  up to 55 s; then "Disconnected from the server" as before. The probe leaves cleanly. Older apps never send "rj"
+  (their drops are held and simply run out). tests/rejoin_test.gd (real server + the real client: drop and rejoin,
+  can't get back, a network switch takes over, a clean leave holds nothing, a hold that runs out, a held seat paid).
+- **Join a friend's match** (Kevin: "make so it's a join match option"). Friends: a friend who's in a match has JOIN
+  (green). It starts a match whose hello carries "join": the friend's public id; the server checks the two are friends
+  and puts the player in that friend's room -- their match, on their side while it has room -- even when another room
+  is busier. When the friend's match is full (or they've left / aren't friends) the usual room is picked and
+  {"t":"joinr", "why":"full"|"gone"} says so (a toast and a line on the lobby card). In a party of 2+ it says to leave
+  the party first. tests/join_friend_test.gd (real server + the real app).
+- **Weekly leaderboard prizes.** `Eco.LB_PRIZES`, paid by the server when a week ends (leaderboard.gd `pay_fn` ->
+  `eco_accounts.grant_prize` -> `Profile.grant_prize`, never a phone op): #1 300 gems + Royal chest + "Champion" (new
+  legendary prefix title), #2-3 200 gems + Gold chest + "the Contender" (epic), #4-10 100 gems + Gold chest + "of the
+  Ten" (rare), #11-100 30 gems + Silver chest. Only players with 3+ online matches that week can win (they rank first;
+  a row says "N more matches for a prize" until then). "paid" in leaderboard.json + a profile refusing a second prize
+  for a week = never paid twice (also after a restart). The window shows THIS WEEK'S PRIZES; Home says "LEADERBOARD
+  PRIZE -- You finished #3 ..." once (settings.prize_seen); the Locker has a LEADERBOARD titles section. Profile
+  `prizes` (last 12). tests/lb_prizes_test.gd.
+- **Referral codes** (Kevin: "both get a Gold chest when the new player reaches level 5, server-checked"). The code is the
+  friend code you already have. Friends has INVITE FRIENDS: what it gives, how many friends reached level 5 with your
+  code, and -- for a player under level 5 who hasn't entered one -- "Invited? Their code" + REDEEM. That asks the server on
+  its own socket ({"t":"ref", "acct", "key", "code"}, like "lb"; `lb_fetch.ask`); server/referrals.gd refuses a wrong
+  key, an unknown code, your own, a second one, a loop (they entered yours) and "late" (account older than 7 days or
+  already level 5 -- the field then hides), else records who and sets the account's `referral.by`. When the new player's
+  account reaches level 5 (checked after every paid online match and every eco exchange) the server gives both a Gold
+  chest (eco_accounts.grant_referral -> Profile.grant_referral, never a phone op) with a note; a friend is rewarded for at
+  most 20 players; referrals.json keeps by / paid / count. Home says FRIEND REWARD once per note (settings.ref_seen),
+  also right after the sync that brought it. "ver" says "ref":1. Constants in Eco (REF_DAYS / REF_LEVEL / REF_MAX /
+  REF_CHEST). Installer copies referrals.gd and backs up referrals.json. tests/referral_test.gd (the rules with real
+  accounts; then the real server on 8107 + the real app: REDEEM, a restart with the player at level 5, the chest and
+  the popup, the friend's chest).
+- **Player profile card** (Kevin: tap a name -- level, title, wins, favourite class and weapon). The card a name opens
+  (chat, Friends, and now a row of RANKS -- leaderboard rows carry the public friend code "pid") asks the server over the
+  social socket ({"t":"so", "k":"prof", "pid"}) and fills in when the answer comes ("Loading..." until then; kept a
+  minute): the class played most (stats.main_<cls>) with its portrait, its matches and wins, the weapon won most with
+  (forge.wins, else that class's weapon) with rarity colour and Forge stars, then LEVEL / WINS / WIN RATE / RESCUES /
+  KNOCKOUTS / BEST STREAK and "#N this week · M matches · since <month>". eco_accounts.stats_of gives only those fields
+  (no ids, gold, gems or purchases); a player who blocked you shows nothing; 12 asks per 10 s, then "busy". A friend in
+  a match: the card's button is JOIN THEIR MATCH. tests/profile_card_test.gd (stats_of; the real server on 8108 with
+  accounts and the week's board written first; RANKS > Alice's row > her card; a blocked card; the wire's fields; busy).
+- **SEND TO DEVELOPER.** Settings has an orange SEND TO DEVELOPER (above COPY DIAGNOSTICS, which stays). It asks every
+  time -- what's sent (the game's log: what it was doing, errors, phone model, game version, player name; no chats or
+  purchases), an optional "What went wrong?" -- then SEND sends it on its own socket, zstd-compressed
+  ({"t":"diag", ...}; `lb_fetch.ask(..., zstd)`; a long log keeps its first 3,000 characters and as much of its end as
+  fits one 64 KB packet). server/diag_reports.gd keeps it as diag/YYYYMMDD-HHMMSS-<ID>.txt (a JSON header line, then the
+  log, control characters out) and answers the ID: "Sent -- report #7F3A9C. Thank you!". The account is kept only when
+  its key opens it (otherwise anonymous, so a phone stuck at start can still send); 4 an hour per account or address,
+  300 a day, the newest 1,000 / 80 MB kept. tools/diag_reports.py lists them (newest first, --since/--build/--all) and
+  shows one (show ID [--errors]). The stuck-start toast now points at SEND TO DEVELOPER. "ver" says "diag":1. Installer
+  copies diag_reports.gd. Also fixed: the Privacy toggle's long subtitle (0.31.118) didn't wrap and pushed the whole
+  Settings page wider than a 420-wide screen (toggles cut off at the right) -- toggle subtitles wrap now.
+  tests/diag_send_test.gd (the server's rules; fitting an 864 KB log; the real server on 8109 + Settings > SEND; the
+  report on disk; diag_reports.py list and show).
+- **Kill feed.** On the right under the toast line (the quick-chat lines stay on the left): "<who>  ⚔  <whom>" for
+  every knockout (players by name, bots by class, in their side's colour; you are "You" in gold on a gold-edged plate;
+  a fall with nobody behind it shows a skull), "<who> grabbed their King", "<who> rescued our King!", "<who> broke our
+  west gate" (red when it's ours) -- newest on top, 4 at most, 6 s each, then fading. From the events every phone
+  already gets (offline: the sim's; online: the snapshots'), so no server change. Off in the tutorial.
+- **Vibration.** Settings > SOUND has VIBRATION (on by default; turning it on gives a sample buzz). In a match: a short
+  buzz when you're hit (one per 0.25 s however many land), firmer for your knockout, a multi-knockout and grabbing the
+  King, a long one when you fall, a King rescued (ours long, theirs shorter) or our gate falling. Android needs the
+  VIBRATE permission: added to the "Android Play Store" and "Android KayKit Rebuild" presets (a normal permission, no
+  prompt). tests/kill_feed_test.gd (the feed's lines, limit and life; each buzz and the hit gap; Settings; a match gets
+  the setting).
+- **Build 0.31.120 (versionCode 206).** Full suite (--quick): 81 tests; the first run caught title_test still counting
+  37 titles (the 3 leaderboard prize titles are "prize", not earned) -- fixed, passes. privacy.html: player cards,
+  invite codes, problem reports. SIEGE_HANDOFF section 23; PLAY_STORE_HANDOFF: the VIBRATE permission and the Data
+  safety line for problem reports. APK build/Fatebound-Siege-0.31.120-fatebound.apk (31 MB, Vulkan only, INTERNET +
+  VIBRATE), sha256 cb7dad8acccc6f367d543b1b9d103edf5cd9b8454b245700a87dbb03fd3cd244. Needs the server redeployed
+  (rejoin, join, prizes, referrals, player cards, reports all live on it; the app works against the old server
+  without them).
+
+## 0.31.121 — Play Games achievement ids (Kevin: "Play Games achievements are created (Game ID 1022979193240)")
+- `scripts/meta/play_achievement_ids.gd`: all 18 ids from Play Console. Checked: each id's prefix carries Game ID
+  1022979193240 and their numbers run 2..19 in the handoff table's order (achievements_test checks both).
+- Gatecrasher confirmed: "gates" is counted 1 per 100 gate damage (Eco.match_stats: int(gate_dmg / 100) per match, so
+  a match's leftover under 100 doesn't carry over), 100 steps = 10,000 damage -- the same count as the Gatebreaker title.
+- `godot_play_game_services/game_id="1022979193240"` on the "Android Play Store" preset here too (the export plugin
+  only uses it in Gradle/Play builds; the preview APK still has no Play Games).
+- play_games_test's fake plugin had no achievement calls (with empty ids none were made); it records them now and checks
+  that a signed-in phone sends them with the real ids.
+- Version 0.31.121, versionCode 207.

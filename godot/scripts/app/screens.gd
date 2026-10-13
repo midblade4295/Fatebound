@@ -409,7 +409,7 @@ static func home(app, root: VBoxContainer) -> void:
 	if bool(app.get("safe_boot")) and not bool(app.get_meta("safe_note", false)):
 		# 0.31.70: the last start never reached the menu, so this one skipped the live hero and the background loading
 		app.set_meta("safe_note", true)
-		app.toast("The game got stuck starting last time -- please send the developer Settings > COPY DIAGNOSTICS", UI.GOLD)
+		app.toast("The game got stuck starting last time -- please tap Settings > SEND TO DEVELOPER", UI.GOLD)
 
 static func _online_pill(app, top: Control, w: float, y: float) -> void:
 	# --- players online (0.31.82, Kevin: "Add a players online in main menu"): a pill under PLAY, painted by
@@ -1891,6 +1891,10 @@ static func locker(app, root: VBoxContainer) -> void:
 			UI2.divider(root, head, 18, ("as %s or %s" % [Eco.CLASS_NAMES[sec], up]) if up != "" else ("" if sec == "" else "as %s" % Eco.CLASS_NAMES[sec]))
 			for id in ids:
 				locker_row(app, root, id)
+		# 0.31.120: the weekly leaderboard's own titles
+		UI2.divider(root, "LEADERBOARD", 18, "from the weekly leaderboard's prizes")
+		for id in Eco.PRIZE_TITLES:
+			locker_row(app, root, id)
 		return
 	var cls: String = app.locker_class
 	# the vault
@@ -2071,7 +2075,7 @@ static func locker_row(app, root: Node, id: String) -> void:
 	var p = app.profile
 	var it := Eco.item(id)
 	var rar := str(it.rarity)
-	var goal: Dictionary = Eco.TITLE_GOALS.get(id, {})
+	var goal: Dictionary = Eco.TITLE_GOALS.get(id, Eco.PRIZE_TITLES.get(id, {}))     # (0.31.120: the leaderboard's titles)
 	var c := UI2.frame(root, _rar_panel(rar), 8, 16.0, _rar_rim(rar), {"pattern_mix": 0.0})
 	var pc := c.get_parent() as Control
 	if rar == "legendary":
@@ -2101,7 +2105,7 @@ static func locker_row(app, root: Node, id: String) -> void:
 		UI2.text(nm, str(part[0]), 17, _rar_tint(rar).lightened(0.25) if part[1] else Color.WHITE, Color("#120a02"), 5)
 	UI2.body(v, str(goal.get("task", "")), 11, Color(1, 1, 1, 0.82), false)
 	var n: int = int(goal.get("n", 1))
-	var have: int = n if owned else mini(n, p.title_progress(id))
+	var have: int = n if owned else (0 if Eco.PRIZE_TITLES.has(id) else mini(n, p.title_progress(id)))
 	var pr := UI.row(v, 6)
 	var gold := rar == "legendary"
 	UI2.bar(pr, float(have), float(n), Color("#fff3ad") if gold else Color("#b6f3ff"), Color("#f0a024") if gold else Color("#36b9ea"), 10.0)
@@ -2314,6 +2318,13 @@ static func settings(app, root: VBoxContainer) -> void:
 			p.save()
 			app._apply_audio()
 			app.sfx("slider"))                 # 0.31.110: a tiny tick a step, at the new level
+	# 0.31.120 (Kevin: phone vibration): a buzz when you're hit, knock someone out, fall, or a King is rescued
+	UI2.toggle(au, "Vibration", "Buzz when you're hit, score a knockout or a King is rescued", bool(d.settings.get("vibrate", true)), "vibrate", func(on: bool):
+		app.sfx("toggle")
+		d.settings["vibrate"] = on
+		p.save()
+		if on:
+			Input.vibrate_handheld(60, 0.7))
 	# Social (0.31.111)
 	var sx := UI2.frame(root, "night", 12, 18.0, "gold")
 	UI2.divider(sx, "SOCIAL", 20)
@@ -2404,6 +2415,8 @@ static func settings(app, root: VBoxContainer) -> void:
 				app.toast(str(r.error), UI.RED)
 			app.rebuild(), "import_legacy", 16, 44.0)
 	# Help
+	# 0.31.120 (Kevin: SEND TO DEVELOPER): the log straight to the developer's server, asked every time
+	UI2.button(root, "SEND TO DEVELOPER", "orange", func(): app.open_send_diag(), "send_diag", 15, 44.0)
 	var help := HBoxContainer.new()
 	help.add_theme_constant_override("separation", 10)
 	root.add_child(help)
