@@ -2154,6 +2154,9 @@ static func play_games_card(app, root: VBoxContainer) -> void:
 			UI2.button(gp, "BACK UP NOW", "green", func():
 				app.sfx("confirm")
 				pg.back_up_now(), "play_backup", 15, 44.0)
+			UI2.button(gp, "ACHIEVEMENTS", "gold", func():                # 0.31.119: Google Play Games' own screen
+				app.sfx("menuOpen")
+				pg.show_achievements(), "play_achievements", 15, 44.0)
 		"ask":
 			UI2.button(gp, "CHOOSE", "gold", func():
 				app.ask_cloud(), "play_choose", 15, 44.0)

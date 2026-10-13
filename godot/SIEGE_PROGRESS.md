@@ -3483,3 +3483,12 @@ K2/K3 notes (0.17.0)
   plugin). Nothing leaves the phone. Checked: a Gradle export of a minimal project with the plugin merges the
   permission, the v2 plugin entry, the receiver, the classes and the icon (aapt2/dexdump); not run on a phone (no
   emulator here). tests/notify_test.gd (a fake plugin).
+- **Google Play Games achievements.** 18 achievements (`scripts/meta/achievements.gd`): Welcome to the Siege, First
+  Blood, First Victory, Long Live the King, Many Hats, Fattening Season, Lumberjack, Gatecrasher, Heavy Lifting,
+  Centurion, Relentless, Unstoppable, Royal Bodyguard, Master Smith, Seasoned (level 20), Siege Lord (50 wins), Slayer
+  of Thousands (1,000 KOs), Legend of the Siege (250 wins) -- 570 points. Read from the account the server keeps;
+  sent by play_games.gd while signed in (every 5 s, only what changed: incremental ones as their steps, standard ones
+  unlocked once met). The ids come from Play Console: `scripts/meta/play_achievement_ids.gd` (empty = skipped).
+  Settings > GOOGLE PLAY > ACHIEVEMENTS opens Google's screen. Icons for Play Console (512x512, bronze/silver/gold
+  rims): `store-listing/achievements/`. Steps for Grokbot/Kevin: `godot/PLAY_ACHIEVEMENTS_HANDOFF.md`.
+  tests/achievements_test.gd (a fake of the plugin).
