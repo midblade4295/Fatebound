@@ -4,7 +4,11 @@ extends Control
 const UI = preload("res://scripts/app/ui.gd")
 const UI2 = preload("res://scripts/app/ui2.gd")
 
-const H := 46.0
+const BAR := 46.0
+# 0.31.122 (Kevin: "The icons at bottom block chat"): the open tab's raised tile and its bobbing icon stand up to ~18 px
+# over the tab bar, so the chat line sits GAP above the bar instead of on it (the gap shows Home behind it)
+const GAP := 22.0
+const H := BAR + GAP
 var app
 var _name: Label
 var _text: Label
@@ -18,13 +22,16 @@ func setup(a) -> void:
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(0.02, 0.04, 0.12, 0.9)
 	sb.border_color = Color("#b9761b")
-	sb.border_width_top = 2
-	sb.corner_radius_top_left = 14
-	sb.corner_radius_top_right = 14
+	sb.set_border_width_all(2)                 # (0.31.122: a whole rounded bar now it stands clear of the tab bar)
+	sb.set_corner_radius_all(14)
+	sb.shadow_color = Color(0, 0, 0, 0.35)
+	sb.shadow_size = 4
+	sb.shadow_offset = Vector2(0, 2)
 	bg.add_theme_stylebox_override("panel", sb)
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	bg.offset_left = 6
 	bg.offset_right = -6
+	bg.offset_bottom = -GAP
 	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(bg)
 	var r := HBoxContainer.new()
@@ -33,6 +40,7 @@ func setup(a) -> void:
 	r.offset_left = 14
 	r.offset_right = -14
 	r.offset_top = 3
+	r.offset_bottom = -GAP
 	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(r)
 	UI2.icon(r, "chat", 34.0).size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -69,6 +77,7 @@ func setup(a) -> void:
 	for st_name in ["normal", "hover", "pressed", "focus", "hover_pressed"]:
 		hit.add_theme_stylebox_override(st_name, StyleBoxEmpty.new())
 	hit.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	hit.offset_bottom = -GAP
 	hit.set_meta("action_key", "chat_ticker")
 	hit.pressed.connect(func():
 		app.sfx("menuOpen")

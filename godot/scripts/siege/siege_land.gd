@@ -280,9 +280,12 @@ static func outpost_positions() -> Array:
 	out.append(ISLAND_TOWER)       # its own mirror
 	return out
 
-# ---------------- brick paths (visual) ----------------
+# ---------------- dirt paths (visual) ----------------
 # Blue-half polylines: gates (x = +-7, z = 44) to the bridges and the island lane, with spurs up
 # the plateau ramps to the towers.
+# 0.31.126 (Kevin: "Make the paths on the map more natural looking like it's a dirt path"): these are the control points;
+# paths() curves through them (Catmull-Rom every PATH_STEP m) and path_wobble() makes the track swell, narrow and fray
+# along the way -- baked into the mask's R as a distance (path_r), which terrain.gdshader draws as trodden dirt.
 const PATHS_BLUE_HALF := [
 	[Vector2(-7.0, 44.0), Vector2(-9.5, 39.0), Vector2(-13.5, 34.5), Vector2(-15.5, 29.0), Vector2(-15.8, 22.0),
 		Vector2(-18.0, 14.5), Vector2(-22.0, 9.5), Vector2(-24.0, 6.6)],
@@ -295,16 +298,72 @@ const PATHS_BLUE_HALF := [
 	[Vector2(19.0, 28.5), Vector2(27.0, 31.5), Vector2(34.5, 30.5), Vector2(35.5, 25.5)],
 ]
 const PATH_HALF_W := 2.1
+const PATH_STEP := 0.75            # 0.31.126: metres between the smoothed paths' points
+const PATH_FADE := 3.2             # path_r falls from 1 to 0 over this many metres (0.5 at the track's edge)
+const PATH_CORE := 0.5             # path_r is 1 within this of the (wobbled) centre line
+static var _paths: Array = []
 
 static func paths() -> Array:
+	# the smoothed polylines, both halves (the red half point-mirrored)
+	if not _paths.is_empty():
+		return _paths
 	var out := []
 	for pl in PATHS_BLUE_HALF:
-		out.append(pl)
+		var sm := smooth_line(pl)
+		out.append(sm)
 		var m := []
-		for q in pl:
+		for q in sm:
 			m.append(-q)
 		out.append(m)
+	_paths = out
 	return out
+
+static func smooth_line(pl: Array) -> Array:
+	# a Catmull-Rom curve through the control points (it passes through each, so spurs still meet their paths)
+	var out: Array = [pl[0]]
+	for i in range(pl.size() - 1):
+		var p0: Vector2 = pl[maxi(i - 1, 0)]
+		var p1: Vector2 = pl[i]
+		var p2: Vector2 = pl[i + 1]
+		var p3: Vector2 = pl[mini(i + 2, pl.size() - 1)]
+		var n := maxi(1, int(ceil(p1.distance_to(p2) / PATH_STEP)))
+		for k in range(1, n + 1):
+			out.append(p1.cubic_interpolate(p2, p0, p3, float(k) / n))
+	return out
+
+static func path_wobble(p: Vector2) -> float:
+	# 0.31.126: how much wider (+) or narrower (-) the track is here, in metres -- a slow swell along the way and a
+	# trodden, fraying edge. Even in p (cos of a linear form; sin * sin), so both halves match.
+	var slow := 0.32 * cos(0.21 * p.x + 0.17 * p.y) * cos(0.13 * p.x - 0.19 * p.y)
+	var rag := 0.20 * cos(1.3 * p.x + 0.9 * p.y) + 0.13 * cos(2.3 * p.x - 1.9 * p.y) + 0.08 * sin(3.7 * p.x) * sin(4.1 * p.y)
+	return slow + rag
+
+# 0.31.127 (Kevin: "Make it so the paths blend better into the towers so it doesn't look like an unnatural cutoff"): a
+# patch of trodden earth round every tower (its edge about APRON_IN + 2.1 = 5.4 m from the centre, wobbling like the paths';
+# the tower's wall is 3 m out, the capture ring 6.5 m), and a path that reaches one widens into it -- the two distances
+# are joined with a smooth minimum (APRON_BLEND m), so there's no seam where a track stops.
+const APRON_IN := 3.3
+const APRON_BLEND := 2.2
+
+static func smooth_min(a: float, b: float, k: float) -> float:
+	if a == INF:
+		return b
+	if b == INF:
+		return a
+	var h := clampf(0.5 + 0.5 * (b - a) / k, 0.0, 1.0)
+	return lerpf(b, a, h) - k * h * (1.0 - h)
+
+static func ground_dist(p: Vector2, d_path: float) -> float:
+	# the distance path_r measures: to the nearest path, or into a tower's patch of earth, blended where they meet
+	var best := d_path
+	for c in outpost_positions():
+		best = smooth_min(best, maxf(0.0, p.distance_to(c) - APRON_IN), APRON_BLEND)
+	return best
+
+static func path_r(d: float, p: Vector2) -> float:
+	# the mask's R for a point d metres from the nearest centre line: 1 on the track's middle, 0.5 at its edge
+	# (PATH_CORE + PATH_FADE / 2 = 2.1 m out, the old brick path's half width, plus the wobble), 0 a little way into the grass
+	return 1.0 - clampf((d - path_wobble(p) - PATH_CORE) / PATH_FADE, 0.0, 1.0)
 
 static func dist_to_paths(p: Vector2) -> float:
 	var best := INF
@@ -376,7 +435,8 @@ static func ledge_rim(p: Vector2) -> Vector2:
 static func bake_key() -> String:
 	# Changes whenever the land's shape data changes: the baked cache (tools/bake_land.gd) is only trusted when it matches.
 	var parts := [HALF_W, HALF_L, RIVER_AMP, RIVER_K, RIVER_HW, LAKE_EXTRA, LAKE_SIGMA, ISLAND_RX, ISLAND_RZ, SIDE_BRIDGE_X, LANE_HALF,
-		EDGE_BLUE, HILLS, SCARPS, OUTPOSTS_BLUE_HALF, PATHS_BLUE_HALF, BAKE_MARGIN, BAKE_STEP, "cache-v2"]
+		EDGE_BLUE, HILLS, SCARPS, OUTPOSTS_BLUE_HALF, PATHS_BLUE_HALF, BAKE_MARGIN, BAKE_STEP, "cache-v2", "dirt-paths-v1", PATH_STEP,
+		PATH_FADE, PATH_CORE, APRON_IN, APRON_BLEND]
 	return str(hash(str(parts)))
 
 # ---------------- baked terrain (visual) ----------------

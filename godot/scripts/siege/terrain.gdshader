@@ -1,5 +1,5 @@
 shader_type spatial;
-// Fatebound terrain (Round 7): lush grass, herringbone brick paths from the baked mask, rock on
+// Fatebound terrain (Round 7): lush grass, dirt paths from the baked mask (0.31.126; herringbone brick before), rock on
 // steep faces and ledge rims. Optimised in 0.14.2 (Kevin: fps dropped): a plain grass pixel
 // reads 2 textures (grass + mask; was 7), the brick/rock textures are read only where the mask
 // or the slope needs them, large-scale variation is arithmetic, no anisotropic filtering.
@@ -12,7 +12,7 @@ uniform sampler2D rock_tex : source_color, filter_linear_mipmap, repeat_enable;
 uniform sampler2D path_mask : filter_linear, repeat_disable;
 uniform vec4 mask_rect;            // x0, z0, width, depth of the mask in world metres
 uniform float grass_scale = 16.0;  // metres per grass tile (painted cells ~1.6 m)
-uniform float path_scale = 3.2;    // metres per herringbone period (4 bricks -> 0.8 m bricks)
+uniform float path_scale = 7.0;    // metres per dirt tile (0.31.126: assets/terrain/dirt.png)
 uniform float rock_scale = 4.0;
 uniform vec3 tint = vec3(1.0);     // brightness balance vs. the Vulkan exposure compensation
 uniform float grass_sat = 1.0;     // saturation of the grass only
@@ -44,12 +44,22 @@ void fragment() {
 	float gl = dot(g, vec3(0.299, 0.587, 0.114));
 	g = mix(vec3(gl), g, grass_sat);
 	vec3 col = g;
-	// Brick path (only where the mask has one).
+	// Dirt path (only where the mask has one). 0.31.126 (Kevin: "more natural looking like it's a dirt path"): R is how far
+	// in from the track's (already wobbling) edge, 0.5 at the edge. The edge frays with the grass cells and a mid-scale
+	// noise; inside, the earth is darker and damper near the grass, lighter and dustier where feet wear the middle, with
+	// the odd tuft of grass holding on; the grass right at the edge is a little trodden and darker.
 	if (mk.r > 0.02) {
+		float n1 = texture(macro_tex, wpos.xz / 6.0).r;
+		float n2 = texture(macro_tex, wpos.xz / 2.3 + vec2(0.37, 0.71)).r;
 		vec3 p = texture(path_tex, wpos.xz / path_scale).rgb;
-		float edge = mk.r + (g.g - 0.55) * 0.9;           // ragged grassy border
-		col = mix(g, p, smoothstep(0.42, 0.58, edge));
-		col *= 1.0 - 0.18 * (smoothstep(0.25, 0.5, mk.r) * (1.0 - smoothstep(0.5, 0.75, mk.r)));
+		p *= 0.92 + 0.16 * n1;                            // big patches, so the tile never shows
+		float edge = mk.r + (g.g - 0.55) * 0.25 + (n2 - 0.5) * 0.34;
+		float dirt = smoothstep(0.47, 0.53, edge);
+		float inner = smoothstep(0.5, 0.9, mk.r);         // 0 at the edge .. 1 in the middle
+		p *= mix(0.88, 1.06, inner);                       // damp, darker earth by the grass; dusty middle
+		float tuft = smoothstep(0.70, 0.72, n2 + n1 * 0.35) * step(inner, 0.45);
+		p = mix(p, g * 0.94, tuft);                        // clumps of grass holding on near the edges
+		col = mix(g * (1.0 - 0.14 * smoothstep(0.25, 0.47, edge)), p, dirt);
 	}
 	// Rock (0.30.1, Kevin: "look more natural like actual stone, and blend"): grey layered stone, sampled
 	// triplanar so angled faces don't stretch, a ragged noisy edge against the grass, faint strata, and moss

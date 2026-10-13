@@ -3590,3 +3590,77 @@ K2/K3 notes (0.17.0)
 - play_games_test's fake plugin had no achievement calls (with empty ids none were made); it records them now and checks
   that a signed-in phone sends them with the real ids.
 - Version 0.31.121, versionCode 207.
+
+## 0.31.122 — the next match only after PLAY AGAIN; chat line clear of the tab bar; the Settings gear turns in place
+- **No automatic next match** (Kevin: "make it so the game doesn't automatically put player back in a new game because
+  they could be looking at score card or something"). Before, 15 s after a match ended the server put everyone into the
+  next one, which threw the results / SCORES away. Now the game's hello says "ask_next": the server keeps it on its
+  results (no seat, no snapshots of the next match) until PLAY AGAIN sends {"t":"again"} -- pressed while the results
+  are up it goes into the next match when that starts; pressed later it's seated in the running match at once. If
+  nobody in the room wants another match, none starts until someone does. Left on the results 10 minutes
+  (SIEGE_RESULTS_KEEP): "bye done", the game goes back to Home. Older apps (no ask_next) and players waiting in the
+  lobby go in as before. SIEGE_RESTART sets the 15 s for tests. tests/next_match_test.gd (real server on 8110 + the
+  real client).
+- **Chat line** (Kevin: "The icons at bottom block chat"): the open tab's raised tile and its bobbing icon stand ~18 px
+  over the tab bar and covered the middle of Home's chat line. The line now sits 22 px above the bar (ChatTicker.GAP;
+  Home's height accounts for it) as a whole rounded bar.
+- **Settings gear** (Kevin: "needs its animation to just rotate in place"): UI2.spin set the pivot only on "resized",
+  which never fired for an icon already at its size, so the gear turned about its top-left corner and swung around the
+  sign (checked: pivot (0,0) before, (21,21) now, its centre fixed while it turns). wiggle() had the same gap; both set
+  the pivot at once and when they start.
+- Version 0.31.122, versionCode 208.
+
+## 0.31.123 — Settings: the old version's progress import removed
+- Kevin: "Remove the progress from old version in the settings since Google play saves progress now". The parchment
+  card (PROGRESS FROM THE OLD VERSION: paste exported progress + IMPORT, or "Carried over: ...") is gone from Settings.
+  Profile.import_legacy stays for the one automatic carry-over at first launch (a dice-era save on the phone,
+  `_migrate_legacy`) and meta_economy_test. Settings now ends GRAPHICS, SEND TO DEVELOPER, COPY DIAGNOSTICS / PRIVACY
+  POLICY, HOW TO PLAY. Settings tests (app_flow, app_scroll, diag_send, notify, analytics_client, kill_feed, play_games,
+  meta_economy) pass. Version 0.31.123, versionCode 209.
+
+## 0.31.124 — the Discord link, with a one-time gem gift
+- Kevin: "Add the discord link to the game" (https://discord.gg/H8eKXH8TmM) and "Also give a reward for joining the
+  discord". Settings has a COMMUNITY card under SOCIAL: a line about the Discord and JOIN OUR DISCORD (Discord's blue,
+  UI2 "discord") that opens the invite through the app's link opener (`open_url`). Until claimed it says
+  "+100 GEMS"; the first press pays Eco.DISCORD_GEMS (100) through a new op, `claim_discord` -- once per account,
+  replayed by the server on its own copy (profile `discord`), so a phone can't take it twice. The game can't see whether
+  the player then actually joins (that would need a Discord bot and sign-in), so opening the invite is what's rewarded.
+- privacy.html: "Links to Discord". tests/discord_test.gd (the op, the server paying once, the Settings card).
+  Version 0.31.124, versionCode 210.
+
+## 0.31.125 — JOIN OUR DISCORD on Home until it's claimed
+- Kevin: "Put a discord button on front page that goes away after they claim it then leave the other discord button in
+  settings". Home has JOIN OUR DISCORD (Discord blue, a gentle bob, a "+100" gem tag on its corner) under the logo
+  between the medallion columns (Screens.DISCORD_Y), shown only while the profile's `discord` is false. Home's and
+  Settings' buttons share `Screens.discord_press`: open the invite, and the first time claim the 100 gems and rebuild --
+  Home's button goes, Settings' stays as plain JOIN OUR DISCORD. tests/discord_test.gd covers both; Home tests (app_flow,
+  app_scroll, tutorial, daily_reward, menu_sound, home_heroes, menu_float, lb_prizes, social_ui) pass. Version 0.31.125,
+  versionCode 211.
+
+## 0.31.126 — dirt paths instead of herringbone brick
+- Kevin: "Make the paths on the map more natural looking like it's a dirt path ect". Before: straight runs of
+  herringbone brick, one width, a crisp 0.6 m edge. Now:
+  - **Shape** (siege_land.gd): PATHS_BLUE_HALF are control points; `paths()` curves a Catmull-Rom line through them
+    every 0.75 m (it passes through each point, so the spurs still meet their paths). `path_wobble(p)` makes the track
+    swell and narrow along the way (+-0.32 m) and fray at the edge (+-0.4 m more); even in p, so both halves match.
+  - **Mask** (tools/bake_land.gd, re-baked pathmask.res and cache.res): R is now `Land.path_r` -- 1 on the track's
+    middle, 0.5 at its (wobbling) edge 2.1 m out, 0 a little into the grass -- instead of a brick path's on/off edge.
+    The segments are bucketed in 4 m squares, so the bake still takes ~6 s.
+  - **Look** (terrain.gdshader): `assets/terrain/dirt.png` (new, made by tools/make_dirt_texture.py: soft trodden-earth
+    cells, warm/cool patches, pebbles lit from the top left, tiles seamlessly; imported like grass/rock) at 7 m a tile,
+    broken up by a big-patch noise; the edge frays with the grass cells and a mid-scale noise; damp, darker earth by the
+    grass and a lighter, dustier middle; clumps of grass holding on near the edges; the grass right at the edge a little
+    trodden. path.png stays for the castle floors' no-kit fallback.
+  - Grass tufts now hug the frayed edge (they step out until the mask says grass); foliage keeps off the dirt (R > 0.46).
+    Footsteps on a path sound of dirt, not stone (only the castles are stone now).
+  - The baked land changed, so the "world" content pack is rebuilt and uploaded (players download it once, ~54 MB).
+- Version 0.31.126, versionCode 212.
+
+## 0.31.127 — the paths run into a patch of trodden earth round each tower
+- Kevin: "Make it so the paths blend better into the towers so it doesn't look like an unnatural cutoff". The spurs
+  stopped at a tower's capture ring with a rounded end in the grass. Now every tower (the four on the plateaus and the
+  island's) stands in a patch of trodden earth -- its edge about 5.4 m from the centre (Land.APRON_IN 3.3 + the paths'
+  2.1), fraying and wobbling like the paths -- and a path that reaches one widens into it: the mask's distance is the
+  smooth minimum of the path's and the patch's (Land.ground_dist, APRON_BLEND 2.2 m), so there's no seam. Baked into
+  pathmask.res (tools/bake_land.gd); the shader draws it like the paths. A few grass tufts sit round the patch's edge
+  (sparse -- a full ring read as a hedge). World content pack rebuilt. Version 0.31.127, versionCode 213.

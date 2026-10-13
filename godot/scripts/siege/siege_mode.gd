@@ -83,6 +83,7 @@ var _rejoin_until := -1.0
 var _rejoin_at := 0.0
 var _rejoin_sent := false
 var rejoins := 0                    # (tests, diag)
+var again_sent := 0                 # 0.31.122: PLAY AGAIN presses sent to the server (tests)
 var party_join := ""                # 0.31.120: a friend's public id: their match is the one to join (Friends > JOIN)
 var exit_note := ""                 # 0.31.119: why the match ended for me, for Home to say (removed for being idle)
 const MSG_UPDATE := "A new version of Fatebound is available. Update to keep playing."
@@ -176,7 +177,11 @@ func _ready() -> void:
 	hud.leave_requested.connect(func(): exited.emit())
 	hud.replay_requested.connect(func():
 		if online:
-			# The server starts the next match on its own; just clear the results screen.
+			# 0.31.122 (Kevin: "make it so the game doesn't automatically put player back in a new game because they could be
+			# looking at score card"): the server puts us in the next match only now -- when it starts, or at once if it
+			# already has (an older server still starts it for everyone on its own). Clear the results screen meanwhile.
+			_net_send({"t":"again"})
+			again_sent += 1
 			if hud.result_panel != null:
 				hud.result_panel.queue_free()
 				hud.result_panel = null
@@ -516,6 +521,7 @@ func _hello() -> Dictionary:
 	hi.merge(Analytics.hello_flags(profile))         # 0.31.118: "an_off" when usage statistics are off
 	if party_join != "":
 		hi["join"] = party_join                      # 0.31.120: into this friend's match (Friends > JOIN)
+	hi["ask_next"] = true                            # 0.31.122: the next match only after PLAY AGAIN (older servers ignore it)
 	return hi
 
 func _begin_rejoin() -> void:
@@ -624,6 +630,9 @@ func _net_process(delta: float) -> void:
 		if str(_net_bye.get("why", "")) == "full" or ws.get_close_code() == Net.CLOSE_FULL:
 			_net_fail("Server is full")
 			return
+		if str(_net_bye.get("why", "")) == "done":
+			_net_exit()                                  # 0.31.122: (the bye and the close arrived together)
+			return
 		if sim != null and not sim.ended and _rj != "" and net_state == "playing" and _net_bye.is_empty() and ws.get_close_code() != 4006:
 			_begin_rejoin()                              # 0.31.120: the connection dropped -- try to get back in
 			return
@@ -727,6 +736,9 @@ func _net_process(delta: float) -> void:
 				if _net_version_refused(-1, ""):
 					return
 				var why := str(msg.get("why", ""))
+				if why == "done":
+					_net_exit()                             # 0.31.122: left on the results a long while -- back to Home
+					return
 				if why == "idle":
 					exit_note = "idle"
 					_net_fail("Removed for being idle")
@@ -1336,8 +1348,8 @@ func _footsteps(delta: float) -> void:
 		surf = "water"
 	elif int(me.get("tower", -1)) >= 0 or Land.on_bridge(p, 0.2):
 		surf = "wood"
-	elif (absf(p.x) <= Sim.CASTLE_HX + 1.0 and absf(p.y) >= Sim.CASTLE_SHIFT + Sim.FRONT_Z - 0.5) or Land.dist_to_paths(p) < Land.PATH_HALF_W:
-		surf = "stone"
+	elif absf(p.x) <= Sim.CASTLE_HX + 1.0 and absf(p.y) >= Sim.CASTLE_SHIFT + Sim.FRONT_Z - 0.5:
+		surf = "stone"                        # (0.31.126: the paths are dirt now, so only the castles sound of stone)
 	var chain := "_chain" if me.cls == "knight" else ""
 	audio.play("tm_step_%s%s%d" % [surf, chain, 1 + _snd_rng.randi() % 5], false, 1.0)
 

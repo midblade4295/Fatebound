@@ -79,6 +79,7 @@ const BTN := {
 	"blue": [Color("#a9c6ff"), Color("#2a4cae"), Color("#182c74"), Color("#0a1238")],
 	"red": [Color("#ffb6a6"), Color("#d6372b"), Color("#8c1d15"), Color("#3a0805")],
 	"grey": [Color("#d9dfe8"), Color("#6b778a"), Color("#4a5466"), Color("#1c2230")],
+	"discord": [Color("#c3c8ff"), Color("#5865f2"), Color("#3a43b5"), Color("#141852")],      # 0.31.124: Discord's blue
 	"ghost": [Color(1, 1, 1, 0.12), Color(1, 1, 1, 0.05), Color(0, 0, 0, 0.25), Color(0, 0, 0, 0.6)],
 }
 
@@ -274,15 +275,22 @@ static func bob(c: Control, px := 5.0, secs := 1.3, delay := 0.0) -> void:
 	when_ready(c, func(): c.get_tree().process_frame.connect(go, CONNECT_ONE_SHOT))
 
 static func spin(c: Control, secs := 12.0) -> void:
+	# 0.31.122 (Kevin: "The gear cog next to settings needs its animation to just rotate in place"): the pivot is set now
+	# and whenever the size changes -- before, it was set only on "resized", which never came for an icon already at its
+	# size (img() sizes it), so it turned about its top-left corner and swung around the sign
+	c.pivot_offset = c.size * 0.5
 	c.resized.connect(func(): c.pivot_offset = c.size * 0.5)
 	var go := func():
+		c.pivot_offset = c.size * 0.5
 		var tw := c.create_tween().set_loops()
 		tw.tween_property(c, "rotation", TAU, secs).from(0.0)
 	when_ready(c, go)
 
 static func wiggle(c: Control, every := 2.8) -> void:
+	c.pivot_offset = c.size * 0.5                  # (0.31.122: as spin -- set now too, not only on "resized")
 	c.resized.connect(func(): c.pivot_offset = c.size * 0.5)
 	var go := func():
+		c.pivot_offset = c.size * 0.5
 		var tw := c.create_tween().set_loops()
 		tw.tween_interval(every)
 		for a in [-10.0, 9.0, -6.0, 3.0, 0.0]:

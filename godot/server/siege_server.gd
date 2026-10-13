@@ -107,12 +107,13 @@ const Referrals = preload("res://server/referrals.gd")
 const DiagReports = preload("res://server/diag_reports.gd")
 
 const RESTART_AFTER := 15.0          # seconds of results screen before the next match
+const RESULTS_KEEP := 600.0          # 0.31.122: a player who stays on the results (PLAY AGAIN not pressed) is let go after this
 const IDLE_STOP := 30.0              # no players for this long -> stop simulating (and the room closes)
 const LOBBY_TIME := 20.0             # the join countdown (0.31.82)
 const HELLO_TIMEOUT := 10.0
 const IAP_TIMEOUT := 40.0              # a purchase check may take a token request and an API call
 const REFUSE_CLOSE_DELAY := 0.25     # s between a "bye"/"ver" reply and closing the socket
-const SERVER_BUILD := "0.31.121"      # this server's game version; the probe says it by default (identifies as current)
+const SERVER_BUILD := "0.31.127"      # this server's game version; the probe says it by default (identifies as current)
 const MIN_BUILD_FILE := "/etc/fatebound-siege/min_build"
 const MIN_BUILD_RELOAD := 10.0       # s between re-reads of the min-build file
 const UPDATE_MSG := "A new version of Fatebound is out. Update now on Google Play to keep playing online."
@@ -157,6 +158,8 @@ var log_on := true
 var lobby_time := LOBBY_TIME
 var idle_stop := IDLE_STOP           # (tests: SIEGE_IDLE_STOP)
 var rejoin_hold := REJOIN_HOLD       # (tests: SIEGE_REJOIN_HOLD)
+var restart_after := RESTART_AFTER   # (tests: SIEGE_RESTART)
+var results_keep := RESULTS_KEEP     # (tests: SIEGE_RESULTS_KEEP)
 var idle_bot := IDLE_BOT
 var idle_kick := IDLE_KICK
 var iap = null                       # 0.31.90: Google Play purchase checks (server/iap_verify.gd)
@@ -189,6 +192,10 @@ func _init() -> void:
 		idle_stop = clampf(float(OS.get_environment("SIEGE_IDLE_STOP")), 0.5, 600.0)
 	if OS.has_environment("SIEGE_REJOIN_HOLD"):
 		rejoin_hold = clampf(float(OS.get_environment("SIEGE_REJOIN_HOLD")), 1.0, 600.0)
+	if OS.has_environment("SIEGE_RESTART"):
+		restart_after = clampf(float(OS.get_environment("SIEGE_RESTART")), 0.5, 600.0)
+	if OS.has_environment("SIEGE_RESULTS_KEEP"):
+		results_keep = clampf(float(OS.get_environment("SIEGE_RESULTS_KEEP")), 1.0, 3600.0)
 	if OS.has_environment("SIEGE_IDLE_BOT"):
 		idle_bot = clampf(float(OS.get_environment("SIEGE_IDLE_BOT")), 1.0, 3600.0)
 	if OS.has_environment("SIEGE_IDLE_KICK"):
@@ -646,6 +653,7 @@ func _handle(cid: int, msg: Dictionary) -> void:
 				analytics.set_opt_out(c.acct, bool(msg.get("an_off", false)))
 				analytics.server_event(c.acct, "session_online", {}, c.build)
 			c.pred = bool(msg.get("pred", false))         # the phone moves its own unit (0.18.4)
+			c.ask_next = bool(msg.get("ask_next", false))  # 0.31.122: the phone says when it wants the next match (PLAY AGAIN)
 			c.queued = true                                # 0.31.82: into the lobby; seated when the countdown ends
 			if r.wave_end < 0.0:
 				r.wave_end = _now() + lobby_time
@@ -654,6 +662,24 @@ func _handle(cid: int, msg: Dictionary) -> void:
 		"leave":
 			# 0.31.120: the player quit the match on purpose -- don't hold the seat when the socket closes
 			c.left = true
+		"again":
+			# 0.31.122 (Kevin: "make it so the game doesn't automatically put player back in a new game because they could be
+			# looking at score card"): PLAY AGAIN on the results. While the results are up: into the next match when it
+			# starts; once it's running (they stayed on the scores): seated in it now.
+			var ra := _room_of(c)
+			if not c.hello or ra == null or bool(c.get("queued", false)) or c.has("close_at"):
+				return
+			c.erase("results_at")
+			if ra.sim != null and ra.sim.ended:
+				c.again = true
+			elif not bool(c.get("after", false)) and c.unit != "" and ra.sim != null and ra.sim.by_id.has(c.unit):
+				return                                     # (already playing)
+			else:
+				c.after = false
+				c.erase("again")
+				if ra.sim == null:
+					_new_match(ra)
+				_seat(ra, cid)
 		"status":
 			# 0.31.82: the menu's "players online" -- answered without a hello; the asker closes (or we do in 2 s: a
 			# close right behind the answer can reach the phone in the same read, and the WebSocket drops the answer)
@@ -975,7 +1001,7 @@ func _run_lobby(r: Room, delta: float) -> void:
 	var now := _now()
 	if r.sim != null and r.sim.ended:
 		# the results screen is up: they go into the next match with everyone (the restart seats them)
-		var restart := (r.ended_at if r.ended_at >= 0.0 else now) + RESTART_AFTER
+		var restart := (r.ended_at if r.ended_at >= 0.0 else now) + restart_after
 		r.wave_end = maxf(r.wave_end, restart)
 	elif now >= r.wave_end:
 		if r.sim == null or _seated_count(r) == 0:
@@ -1199,9 +1225,22 @@ func _new_match(r: Room) -> void:
 	r.held.clear()                                    # (a seat in the last match is no seat in this one)
 	_log("match %d start (room %d, seed %d)" % [r.match_id, r.id, r.match_seed])
 
+func _results_tick(r: Room) -> void:
+	# 0.31.122: a player left on the results (PLAY AGAIN never pressed) for results_keep seconds goes back to the menu
+	var now := _now()
+	for cid in _members(r):
+		var c: Dictionary = clients[cid]
+		if c.has("results_at") and not c.has("close_at") and now - float(c.results_at) > results_keep:
+			c.erase("results_at")
+			_send(cid, {"t":"bye", "why":"done"})
+			_refuse(cid, 1000, "done")
+			_log("%s left on the results for %.0f s: let go (room %d)" % [c.name, results_keep, r.id])
+
 func _run_match(r: Room, delta: float) -> bool:
 	# -> true when the room's match ran this frame
-	var humans: int = _room_humans(r) + r.held.size()        # (a held seat keeps the match going for its player)
+	_results_tick(r)
+	var humans: int = _members(r).filter(func(cid): return not bool(clients[cid].get("after", false))).size() + r.held.size()
+	# (a held seat keeps the match going for its player; one still on the last match's results doesn't -- 0.31.122)
 	if humans == 0:
 		if r.sim != null:
 			if r.empty_since < 0.0:
@@ -1219,14 +1258,27 @@ func _run_match(r: Room, delta: float) -> bool:
 			r.ended_at = Time.get_ticks_msec() / 1000.0
 			_log("match %d end (room %d) winner=%d reason=%s score=%s" % [r.match_id, r.id, sim.winner, sim.end_reason, str(sim.score)])
 			_pay_match(r)
-		elif Time.get_ticks_msec() / 1000.0 - r.ended_at > RESTART_AFTER:
-			_new_match(r)
+			for cid in _members(r):                       # 0.31.122: their results are up until they say otherwise
+				if bool(clients[cid].get("ask_next", false)) and not bool(clients[cid].get("queued", false)):
+					clients[cid].results_at = r.ended_at
+		elif Time.get_ticks_msec() / 1000.0 - r.ended_at > restart_after:
+			# The next match. 0.31.122: an app that asks for it (ask_next) goes in only once its player pressed PLAY AGAIN;
+			# the others stay on their results. Older apps and players waiting in the lobby go in as before. Nobody wants
+			# it yet: no new match until somebody does.
 			var mem := _members(r)
-			for cid in mem:
-				clients[cid].unit = ""
-			for cid in mem:
-				_seat(r, cid)
-			return true
+			var go := mem.filter(func(cid): return not bool(clients[cid].get("ask_next", false)) or bool(clients[cid].get("again", false)) \
+				or bool(clients[cid].get("queued", false)))
+			if not go.is_empty():
+				_new_match(r)
+				for cid in mem:
+					clients[cid].unit = ""
+					if not go.has(cid):
+						clients[cid].after = true             # (on the results: no snapshots of the new match)
+				for cid in go:
+					clients[cid].erase("again")
+					clients[cid].after = false
+					_seat(r, cid)
+				return true
 	_idle_tick(r, delta)
 	# Apply held inputs, then step at a fixed 30 Hz.
 	for cid in _members(r):
@@ -1287,8 +1339,8 @@ func _run_match(r: Room, delta: float) -> bool:
 		var bytes := Net.encode(base, true)
 		for cid in _members(r):
 			var c: Dictionary = clients[cid]
-			if bool(c.get("queued", false)):
-				continue                               # (still in the lobby: no match to show yet)
+			if bool(c.get("queued", false)) or bool(c.get("after", false)):
+				continue                               # (still in the lobby: no match to show yet; 0.31.122: or still on the last one's results)
 			_send_raw(cid, bytes)
 			_st_bytes += bytes.size()
 			var me: Dictionary = sim.by_id.get(c.unit, {})
