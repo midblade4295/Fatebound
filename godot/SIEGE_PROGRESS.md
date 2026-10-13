@@ -3561,3 +3561,14 @@ K2/K3 notes (0.17.0)
   Settings page wider than a 420-wide screen (toggles cut off at the right) -- toggle subtitles wrap now.
   tests/diag_send_test.gd (the server's rules; fitting an 864 KB log; the real server on 8109 + Settings > SEND; the
   report on disk; diag_reports.py list and show).
+- **Kill feed.** On the right under the toast line (the quick-chat lines stay on the left): "<who>  ⚔  <whom>" for
+  every knockout (players by name, bots by class, in their side's colour; you are "You" in gold on a gold-edged plate;
+  a fall with nobody behind it shows a skull), "<who> grabbed their King", "<who> rescued our King!", "<who> broke our
+  west gate" (red when it's ours) -- newest on top, 4 at most, 6 s each, then fading. From the events every phone
+  already gets (offline: the sim's; online: the snapshots'), so no server change. Off in the tutorial.
+- **Vibration.** Settings > SOUND has VIBRATION (on by default; turning it on gives a sample buzz). In a match: a short
+  buzz when you're hit (one per 0.25 s however many land), firmer for your knockout, a multi-knockout and grabbing the
+  King, a long one when you fall, a King rescued (ours long, theirs shorter) or our gate falling. Android needs the
+  VIBRATE permission: added to the "Android Play Store" and "Android KayKit Rebuild" presets (a normal permission, no
+  prompt). tests/kill_feed_test.gd (the feed's lines, limit and life; each buzz and the hit gap; Settings; a match gets
+  the setting).

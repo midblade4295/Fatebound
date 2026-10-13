@@ -1132,6 +1132,7 @@ func start_match(online: bool, tutorial := false, follow := false) -> void:
 	siege.audio = audio
 	siege.low_fx = bool(profile.d.settings.get("reduce_motion", false))
 	siege.hq_gfx = bool(profile.d.settings.get("hq_graphics", true))
+	siege.vibrate = bool(profile.d.settings.get("vibrate", true))          # 0.31.120
 	siege.player_name = str(profile.d.name)
 	siege.analytics = analytics
 	siege.party_join = pending_join                 # 0.31.120: Friends > JOIN (their match)

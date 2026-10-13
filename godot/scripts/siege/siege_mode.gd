@@ -257,6 +257,8 @@ func _start_steps() -> Array:
 	steps.append(_run_view_steps)
 	steps.append(func():
 		hud.sim = sim
+		hud.kill_feed_on = not tutorial               # 0.31.120: (the tutorial's lessons don't need a kill feed)
+		hud.kill_feed = []
 		_accum = 0.0
 		_result_shown = false
 		if tutorial:
@@ -305,7 +307,61 @@ func _looks() -> Dictionary:
 				out[cls] = l
 	return out
 
+# ---------- vibration (0.31.120, Kevin: "phone vibration") ----------
+# A short buzz when I'm hit (one per HIT_GAP, however many land), a firmer one when I knock someone out or make a
+# multi-knockout, a long one when I fall, grab the King, a King is rescued or our gate falls. Settings > VIBRATION.
+var vibrate := false        # (the app sets it from Settings; off in tests and tools)
+var buzzes := 0             # (tests: how many so far, and the last [ms, strength])
+var last_buzz: Array = []
+var _buzz_at := -10.0        # (the last hit's buzz)
+const HIT_GAP := 0.25
+const BUZZ := {"hit": [30, 0.45], "ko": [70, 0.75], "multi": [130, 0.9], "down": [240, 1.0], "king": [90, 0.7],
+	"rescue_us": [320, 1.0], "rescue_them": [150, 0.6], "gate_us": [170, 0.8]}
+
+func _haptic(e: Dictionary) -> void:
+	if not vibrate or sim == null:
+		return
+	var me := str(hud.player_id)
+	var mine: Dictionary = sim.by_id.get(me, {})
+	if mine.is_empty():
+		return
+	var kind := ""
+	match str(e.get("k", "")):
+		"hit":
+			if str(e.get("id", "")) == me and int(e.get("dmg", 1)) > 0:
+				kind = "hit"
+		"death":
+			if str(e.get("id", "")) == me:
+				kind = "down"
+			elif str(e.get("by", "")) == me:
+				kind = "ko"
+		"multikill":
+			if str(e.get("id", "")) == me:
+				kind = "multi"
+		"pickup":
+			if str(e.get("id", "")) == me:
+				kind = "king"
+		"rescue":
+			kind = "rescue_us" if int(e.get("team", -1)) == int(mine.team) else "rescue_them"
+		"gate_broken":
+			if int(e.get("team", -1)) == int(mine.team):
+				kind = "gate_us"
+	if kind == "":
+		return
+	if kind == "hit":
+		var now := Time.get_ticks_msec() / 1000.0
+		if now - _buzz_at < HIT_GAP:
+			return
+		_buzz_at = now
+	buzz(int(BUZZ[kind][0]), float(BUZZ[kind][1]))
+
+func buzz(ms: int, strength: float) -> void:
+	buzzes += 1
+	last_buzz = [ms, strength]
+	Input.vibrate_handheld(ms, strength)
+
 func _count(e: Dictionary) -> void:
+	_haptic(e)
 	if str(e.get("k", "")) == "lift_join" and str(e.get("id", "")) == hud.player_id and sim != null \
 			and sim.by_id.has(hud.player_id) and int(e.get("team", -1)) == int(sim.by_id[hud.player_id].team):
 		_lifts += 1
@@ -521,6 +577,7 @@ func _build_online_match(msg: Dictionary) -> void:
 	viewport.add_child(view)
 	view.setup(sim)
 	hud.sim = sim
+	hud.kill_feed = []
 	net_match = int(msg.get("match", 0))
 	hud.rejoin_until = -1.0
 	_result_shown = false
