@@ -496,7 +496,10 @@ static func chests_row(app, parent: Control, w: float, y: float) -> void:
 		plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		parent.add_child(plate)
 		if i >= p.chests().size():
-			UI2.plate(plate, "glass", 14.0)
+			# 0.31.117 (Kevin: "The screen space under the play button is very empty looking"): see-through, over the
+			# painted treasure hall, with a dim chest waiting in it
+			UI2.plate(plate, "glass", 14.0, "gold", {"fill_top": Color(0.03, 0.05, 0.16, 0.42), "fill_bottom": Color(0.02, 0.03, 0.1, 0.62),
+				"outline_color": Color(1.0, 0.84, 0.35, 0.55)})
 			continue
 		var ch: Dictionary = p.chests()[i]
 		var k := str(ch.kind)
@@ -526,10 +529,16 @@ static func chests_row(app, parent: Control, w: float, y: float) -> void:
 		cell.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		parent.add_child(cell)
 		if i >= p.chests().size():
-			var e := UI2.body(cell, "Win to earn\na chest", 10, UI2.MUTED)
+			var ghost := UI2.img(cell, UI2.V2 + "chests/wood_icon.png", 52.0)
+			ghost.position = Vector2((sw - 52.0) * 0.5, 6.0)
+			ghost.modulate = Color(0.72, 0.78, 1.0, 0.6)           # (a dim, cool silhouette of the chest to come)
+			ghost.set_meta("empty_slot", true)
+			var first_empty: bool = i == p.chests().size()
+			var e := UI2.text(cell, "WIN TO EARN" if first_empty else "EMPTY", 11, Color(0.86, 0.9, 1.0, 0.8) if first_empty else Color(0.7, 0.76, 0.95, 0.55), Color("#0b1230"), 3)
 			e.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			e.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-			e.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+			e.position = Vector2(0, sh - 24)
+			e.size = Vector2(sw, 16)
+			e.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			continue
 		var ch: Dictionary = p.chests()[i]
 		var k := str(ch.kind)

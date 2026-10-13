@@ -4,10 +4,10 @@
  "packs": [
   {
    "name": "ui",
-   "file": "ui-ab92acbcbfe5.pck",
-   "size": 19204768,
-   "sha256": "ba3feb3ddc1118a5e3b5b584add5a424c4c8f071611244ca16d9514aa3863908",
-   "inputs": "ab92acbcbfe5c34954a1b89ca4d1292ac8eb10b1613a01d2db96a48590ea15d5",
+   "file": "ui-03795105ed77.pck",
+   "size": 19420944,
+   "sha256": "a2fc95b5f366384e52df8346dd00ea2b98971697fdd30a60c33cdbb9efc21550",
+   "inputs": "03795105ed77d57749f7f7e2e89affb7f0b9db360ec4fa04ff30ebcc94b0d069",
    "probe": "res://assets/ui/currency/coin.png"
   },
   {

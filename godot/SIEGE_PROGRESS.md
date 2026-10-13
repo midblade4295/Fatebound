@@ -3367,3 +3367,23 @@ K2/K3 notes (0.17.0)
   process once written (Godot can hang on exit after these runs). `store-listing/graphics` and `fastlane` carry a
   `.gdignore` (no imports of listing art). The listing text still says "Oracle" in places.
 - No game change; no ElevenLabs credits.
+
+## 0.31.117 — Home's painting down the whole screen, empty chest slots, the online line (Kevin: "The screen space under the play button is very empty looking. And you maybe make a new home screen backdrop or redesign it")
+- The painting stopped just under PLAY (the hero layer was 650 + safe area tall), so on a 20:9 phone the rest of Home
+  was plain navy with four hollow "Win to earn a chest" boxes.
+- New `bg_home.webp` (1024x2816; source `art_sources/home_bg/bg_home_full.png`): the 0.31.115 painting extended down
+  -- the stage's stone base, a flight of steps down into a torch-lit treasure hall (braziers, royal banners, chests and
+  gold heaped at the sides, open flagstones in the middle where the chests sit), fading to navy at the bottom. Made by
+  ElevenLabs gpt-image-2.5-sunburst from `bg_home_extend_input.png` (the old painting over a blank lower part; 4
+  variations, 1,767 credits, flow "Fatebound Home stage"); the old painting's own pixels kept above the stage's base
+  and the new part blended in under it (aligned to 1 px at the seam), so the stage, the sun and the heroes' placement
+  are unchanged. `BG_ASPECT` is the whole painting; `BG_STAGE` (1280/720) the part the stage, sun and clouds are
+  measured on. The hero layer is now as tall as the app.
+- Empty chest slots: see-through glass over the painted floor with a dim chest in each, "WIN TO EARN" on the first,
+  "EMPTY" on the rest.
+- The line under PLAY gives a count only once someone else is on ("LIVE SIEGE SERVER" instead of "0 PLAYERS ONLINE").
+- tools/app_shots.gd: SHOT_NO_CHESTS=1 (a new player's empty slots). reports/concepts/home_backdrop_before_after.png.
+- home_heroes_test: + the tall painting, it reaching the bottom of 20:9 and 21:9 screens, the layer as tall as the app,
+  a dim chest in each empty slot, the online line. Heroes still on the painted floor.
+- ui pack rebuilt and uploaded (ui-03795105ed77.pck). Full suite: ALL SIEGE TESTS PASSED (63). 0.31.117, version
+  code 203. APK 31432155 bytes, sha256 0bb3124c8d6fac17015e4e6113e3b4341a47a362b88caea10a270780feb2be50.

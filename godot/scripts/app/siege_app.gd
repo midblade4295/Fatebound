@@ -91,10 +91,12 @@ var safe_top := 0.0
 var xp_holder: Control
 var pass_badge: Control
 var _tab_tweens := {}
-const HERO_H := 650.0                  # the home backdrop layer (plus the safe area)
 const TOP_H := 56.0                    # the top bar
 const TAB_H := 72.0                    # the tab bar
-const BG_ASPECT := 1280.0 / 720.0      # the painted home backdrop
+const BG_ASPECT := 2816.0 / 1024.0     # the painted home backdrop (0.31.117: down the whole screen, the treasure hall
+                                       # under the stage; until then 1280 / 720 and it ended under PLAY)
+const BG_STAGE := 1280.0 / 720.0       # its top part, the old painting at the same width: where the sun, the clouds and the
+                                       # stage are measured (fractions of this height)
 const FADE_COLOR := Color("#0d1627")
 var _toast: Label
 var _toast_box: PanelContainer
@@ -336,7 +338,8 @@ func _build_hero() -> void:
 	safe_top = _safe_top()
 	hero_layer = Control.new()
 	hero_layer.anchor_right = 1.0
-	hero_layer.offset_bottom = HERO_H + safe_top
+	hero_layer.anchor_bottom = 1.0             # 0.31.117: the whole screen (was 650 + safe_top: the painting stopped under
+	                                           # PLAY and the rest of Home was plain navy -- Kevin: "very empty")
 	hero_layer.clip_contents = true
 	hero_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(hero_layer)
@@ -368,16 +371,17 @@ func _build_hero() -> void:
 	var lay := func():
 		var w := hero_layer.size.x
 		var h := w * BG_ASPECT
+		var hs := w * BG_STAGE                             # (the stage part's height: the measurements below)
 		var top := -0.405 * w + safe_top
 		bgt.position = Vector2(0, top)
 		bgt.size = Vector2(w, h)
-		var sp := Vector2(0.615 * w, top + 0.574 * h)
+		var sp := Vector2(0.615 * w, top + 0.574 * hs)
 		sun.position = sp - sun.size * 0.5
 		sun_glow.position = sp - sun_glow.size * 0.5
 		for cl in clouds:
-			(cl[0] as Control).position.y = top + float(cl[1][0]) * h
+			(cl[0] as Control).position.y = top + float(cl[1][0]) * hs
 		if hero_node != null:
-			var dais := top + 0.858 * h                     # the painted dais' centre
+			var dais := top + 0.858 * hs                    # the painted dais' centre
 			hero_node.position = Vector2(0, dais - Roster.FEET_Y)
 			hero_node.size = Vector2(w, 340.0)
 	hero_layer.resized.connect(lay)
@@ -828,7 +832,8 @@ func paint_online() -> void:
 		sub.text = "16 vs 16  ·  bots fill any empty slots"
 		return
 	var n := int(info.get("online", 0))
-	main.text = "%d PLAYER%s ONLINE" % [n, "" if n == 1 else "S"]
+	# 0.31.117 (Kevin's Home said "0 PLAYERS ONLINE" with him on it): a count only once someone else is on
+	main.text = "%d PLAYERS ONLINE" % n if n >= 2 else "LIVE SIEGE SERVER"
 	var fighting := int(info.get("in_match", 0))
 	var waiting := int(info.get("waiting", 0))
 	if waiting > 0 and float(info.get("lobby", -1.0)) >= 0.0:
