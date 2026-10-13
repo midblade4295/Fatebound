@@ -600,3 +600,19 @@ Our own replacement for Firebase Analytics: no SDK, no third party. Full notes: 
   `godot/android_plugins/fatebound_notify` -- Gradle/Play builds only); Play Games achievements
   (`scripts/meta/achievements.gd`, ids in `play_achievement_ids.gd`, Play Console steps in `PLAY_ACHIEVEMENTS_HANDOFF.md`).
 - Protocol unchanged (35); every server addition is additive.
+
+## 23. 0.31.120: rejoin, join a friend, leaderboard prizes, referral codes, profile card, SEND TO DEVELOPER, kill feed, vibration (Kevin: "1 and 2 I want added"; "Do 1, 3, 6, 8, 10, 9 (but make so it's a join match option)")
+- **Server** (`siege_server.gd`, protocol still 35, all additive): a dropped player's seat is held 60 s (`Room.held`,
+  rejoin token "rj" in the welcome; SIEGE_REJOIN_HOLD); hello "join": a friend's public id -> their room and side;
+  `server/leaderboard.gd` pays the week's prizes (`Eco.LB_PRIZES` via `eco_accounts.grant_prize`, "paid" in
+  leaderboard.json); `server/referrals.gd` ({"t":"ref"} on its own socket; referrals.json; a Gold chest each at level 5
+  via `eco_accounts.grant_referral`); `social.gd` "prof" (a player's card from `eco_accounts.stats_of`, 12 per 10 s;
+  leaderboard rows carry the public "pid"); `server/diag_reports.gd` ({"t":"diag"}, zstd; files in <state>/diag/).
+  New files to deploy: `server/referrals.gd`, `server/diag_reports.gd` (the installer copies them and backs up
+  referrals.json). Reports: `sudo python3 godot/tools/diag_reports.py --dir /var/lib/private/fatebound-siege [show ID]`.
+- **App**: RECONNECTING banner + automatic rejoin (siege_mode); Friends > JOIN and the card's JOIN THEIR MATCH; the
+  leaderboard window's prizes, Home's LEADERBOARD PRIZE and FRIEND REWARD notices, the Locker's prize titles; Friends >
+  INVITE FRIENDS (code entry); the name card's numbers (`social_ui._stats_block`); Settings > SEND TO DEVELOPER and
+  VIBRATION; the in-match kill feed (`siege_hud.gd` kill_feed). Android presets "Android Play Store" and "Android
+  KayKit Rebuild" now ask for VIBRATE (a normal permission).
+- Tests: rejoin, join_friend, lb_prizes, referral, profile_card, diag_send, kill_feed.

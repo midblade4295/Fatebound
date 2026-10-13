@@ -28,12 +28,18 @@ func me(extra: Dictionary) -> Dictionary:
 
 func _init() -> void:
 	# ---- the table
-	check(Net.TITLES.size() == 37, "37 titles (%d)" % Net.TITLES.size())
+	check(Net.TITLES.size() == 40, "40 titles: 37 earned + 3 weekly leaderboard prizes (%d)" % Net.TITLES.size())
 	var by_cls := {}
 	var bad := []
 	for id in Net.TITLES:
 		var t: Array = Net.TITLES[id]
 		var it: Dictionary = Eco.CATALOG.get(id, {})
+		if Eco.PRIZE_TITLES.has(id):
+			# 0.31.120: given by the server for a weekly leaderboard place, never earned on the phone
+			if it.is_empty() or str(it.kind) != "title" or str(it.name) != str(t[0]) or str(it.rarity) != str(t[2]) \
+					or str(it.source) != "prize" or Eco.TITLE_GOALS.has(id):
+				bad.append(id)
+			continue
 		var g: Dictionary = Eco.TITLE_GOALS.get(id, {})
 		if it.is_empty() or g.is_empty() or str(it.kind) != "title" or str(it.name) != str(t[0]) or str(it.rarity) != str(t[2]) \
 				or str(it.source) != "earn" or not (str(t[1]) in ["the", "of", "prefix", "office"]):
@@ -51,7 +57,7 @@ func _init() -> void:
 	for id in Eco.CATALOG:
 		if str(Eco.CATALOG[id].kind) == "title":
 			catalog_titles += 1
-	check(catalog_titles == 37, "no title in the catalog outside the table (%d)" % catalog_titles)
+	check(catalog_titles == 40, "no title in the catalog outside the table (%d)" % catalog_titles)
 	check(not Net.TITLES.has("title_unbroken"), "no win-without-dying title (Kevin: players would just camp)")
 	# ---- punctuation
 	check(Net.title_text("Midblade", "title_gatebreaker") == "Midblade the Gatebreaker", "epithet: no comma (%s)" % Net.title_text("Midblade", "title_gatebreaker"))

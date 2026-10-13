@@ -3572,3 +3572,10 @@ K2/K3 notes (0.17.0)
   VIBRATE permission: added to the "Android Play Store" and "Android KayKit Rebuild" presets (a normal permission, no
   prompt). tests/kill_feed_test.gd (the feed's lines, limit and life; each buzz and the hit gap; Settings; a match gets
   the setting).
+- **Build 0.31.120 (versionCode 206).** Full suite (--quick): 81 tests; the first run caught title_test still counting
+  37 titles (the 3 leaderboard prize titles are "prize", not earned) -- fixed, passes. privacy.html: player cards,
+  invite codes, problem reports. SIEGE_HANDOFF section 23; PLAY_STORE_HANDOFF: the VIBRATE permission and the Data
+  safety line for problem reports. APK build/Fatebound-Siege-0.31.120-fatebound.apk (31 MB, Vulkan only, INTERNET +
+  VIBRATE), sha256 cb7dad8acccc6f367d543b1b9d103edf5cd9b8454b245700a87dbb03fd3cd244. Needs the server redeployed
+  (rejoin, join, prizes, referrals, player cards, reports all live on it; the app works against the old server
+  without them).
