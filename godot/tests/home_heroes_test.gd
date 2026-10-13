@@ -8,6 +8,11 @@ extends SceneTree
 #  - 0.31.115 (Kevin: "Some of the characters are looking like they are floating now because the background art"):
 #    every hero's feet land on the painted stage's floor (bg_home.webp: from its far gold rim, 77% down the painting at
 #    the sides, to its near rim, 94% down; measured on art_sources/home_bg/bg_home_stage.png).
+#  - 0.31.117 (Kevin: "The screen space under the play button is very empty looking. And you maybe make a new home
+#    screen backdrop"): the painting runs down the whole screen (the treasure hall under the stage) on phones up to 21:9,
+#    the hero layer is as tall as the app, the stage measurements (BG_STAGE) still put the heroes on the floor; empty
+#    chest slots show a dim chest each ("WIN TO EARN" on the first) instead of "Win to earn a chest" four times; the
+#    line under PLAY gives a player count only once someone else is on ("0 PLAYERS ONLINE" before).
 #   godot --headless --path godot -s res://tests/home_heroes_test.gd
 const App = preload("res://scripts/app/siege_app.gd")
 const Roster = preload("res://scripts/app/roster.gd")
@@ -71,7 +76,7 @@ func _box(slot: Node3D, weapons := true) -> AABB:
 
 func _dais_y(w: float) -> float:
 	# where Home lines the hero layer up with the backdrop (siege_app._build_hero's lay)
-	return -0.405 * w + 0.858 * w * App.BG_ASPECT
+	return -0.405 * w + 0.858 * w * App.BG_STAGE
 
 func _screen(r, box: AABB) -> Rect2:
 	# the box's corners on the phone's screen (the layer's control px, then where Home places the layer at 420 wide)
@@ -132,7 +137,7 @@ func _process(d: float) -> bool:
 		feet = maxf(feet, (feet_r[c] as Rect2).end.y)
 	check(feet < play_y, "the heroes stand above PLAY (feet %.0f, PLAY %.0f)" % [feet, play_y])
 	var w := 420.0
-	var bh := w * App.BG_ASPECT
+	var bh := w * App.BG_STAGE
 	var floor_top := -0.405 * w + 0.773 * bh
 	var floor_bottom := -0.405 * w + 0.94 * bh
 	var off_floor := ""
@@ -148,6 +153,38 @@ func _process(d: float) -> bool:
 		"the front row's three stand side by side, not in front of each other: %s" % str(fr))
 	# ---- the ribbon
 	check(not has_text(app.content, "16 v 16 SIEGE") and has_text(app.content, "16 vs 16"), "no ribbon on Home; the line under PLAY says 16 vs 16")
+	# ---- 0.31.117: the backdrop down the whole screen
+	var tex: Texture2D = (app.hero_layer.get_child(0) as TextureRect).texture
+	check(tex != null and absf(float(tex.get_height()) / float(tex.get_width()) - App.BG_ASPECT) < 0.01, "bg_home.webp is the tall painting (%s)" % (str(tex.get_size()) if tex != null else "none"))
+	var short := ""
+	for sh in [933.0, 980.0]:                                # 20:9 (the S21 Ultra) and 21:9
+		var bottom := -0.405 * 420.0 + 420.0 * App.BG_ASPECT
+		if bottom < sh:
+			short += " %.0f (painting ends at %.0f)" % [sh, bottom]
+	check(short == "", "at 420 wide the painting reaches the bottom of the screen on 20:9 and 21:9 phones%s" % short)
+	var bgt := app.hero_layer.get_child(0) as TextureRect
+	check(absf(app.hero_layer.size.y - app.size.y) < 1.0 and bgt.position.y + bgt.size.y >= app.hero_layer.size.y - 1.0,
+		"the hero layer is as tall as the app (%.0f / %.0f) and the painting covers it (to %.0f)" % [app.hero_layer.size.y, app.size.y, bgt.position.y + bgt.size.y])
+	# ---- empty chest slots
+	var ghosts: Array = app.content.find_children("*", "TextureRect", true, false).filter(func(n): return n.has_meta("empty_slot") and n.is_visible_in_tree())
+	var empty_n: int = 4 - app.profile.chests().size()
+	check(empty_n > 0 and ghosts.size() == empty_n and not has_text(app.content, "Win to earn\na chest") and has_text(app.content, "WIN TO EARN"),
+		"each empty chest slot shows a dim chest (%d of %d), the first says WIN TO EARN" % [ghosts.size(), empty_n])
+	# ---- the online line
+	var os_node := Node.new()
+	os_node.set_script(load("res://scripts/app/online_status.gd"))
+	app.online_status = os_node
+	var main: Label = app.online_refs.get("main")
+	os_node.info = {"online": 0, "in_match": 0}
+	app.paint_online()
+	var alone := main.text
+	os_node.info = {"online": 1, "in_match": 0}
+	app.paint_online()
+	var me_only := main.text
+	os_node.info = {"online": 7, "in_match": 3}
+	app.paint_online()
+	check(alone == "LIVE SIEGE SERVER" and me_only == "LIVE SIEGE SERVER" and main.text == "7 PLAYERS ONLINE",
+		"the line under PLAY: no count until someone else is on (%s / %s / %s)" % [alone, me_only, main.text])
 	print("HOME_HEROES_PASS" if fails.is_empty() else "HOME_HEROES_FAIL %s" % str(fails))
 	quit(0 if fails.is_empty() else 1)
 	return true

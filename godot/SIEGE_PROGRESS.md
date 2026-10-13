@@ -3350,3 +3350,78 @@ K2/K3 notes (0.17.0)
   stays pinned).
 - Full suite: ALL SIEGE TESTS PASSED (63). No content pack change. 0.31.116, version code 202. APK 31432155 bytes,
   sha256 2ccc631af0d34766e874ed5f673206eedacf59728e6d49cd252bda56a294210f.
+
+## Store art (after 0.31.116) — new Play Store screenshots and feature graphic (Kevin: "Give me new playstore screenshots and banner. I want a mix of cinematic action screenshots along with gameplay screenshots along with some menu stuff like forge ect. Put captions on them and make it all eye catching")
+- 8 phone screenshots (1080x1920) + the feature graphic (1024x500), all real renders of 0.31.116, in
+  `store-listing/graphics/` and the fastlane folder (the 0.19 set removed; renders kept as `raw_renders/*.webp`):
+  01 CALL DOWN THE METEOR (cinematic) · 02 16 VS 16 CASTLE SIEGES (gameplay + close-up bubble) · 03 STEAL THEIR KING.
+  SAVE YOURS. (gameplay + the King on the Crusader's shoulders) · 04 ANYONE CAN CHANGE FATE (cinematic) · 05 BLOW THEIR
+  GATE SKY-HIGH (cinematic) · 06 FORGE LEGENDARY WEAPONS · 07 WIN CHESTS, CLAIM LOOT · 08 SQUAD UP WITH FRIENDS. Feature
+  graphic: the All Tied Up title over the Villager running the bomb with his Knights. Captions checked against the
+  code (WIN_RESCUES 3, the Archmage's meteor, bombs, every win a chest, the Forge's stars/elements, looks only).
+- Tools: `tools/store3_shots.gd` (trailer 6's staged runs played to one moment and saved at any size, portrait camera
+  presets; nothing drawn until just before it, so a still is a minute or two), `tools/store3_match.gd` (the 0.19
+  in-match staging on the current game, + CLOSE=1 close-ups), `tools/store3_app.gd` (Forge / Royal Chest reveal /
+  Friends in a party, sample names, never the live server), `tools/store3_compose.py` (gold Luckiest Guy headlines,
+  colour pills, phones over a blurred battle, magnifier bubbles, the feature graphic). The tools end their own
+  process once written (Godot can hang on exit after these runs). `store-listing/graphics` and `fastlane` carry a
+  `.gdignore` (no imports of listing art). The listing text still says "Oracle" in places.
+- No game change; no ElevenLabs credits.
+
+## 0.31.117 — Home's painting down the whole screen, empty chest slots, the online line (Kevin: "The screen space under the play button is very empty looking. And you maybe make a new home screen backdrop or redesign it")
+- The painting stopped just under PLAY (the hero layer was 650 + safe area tall), so on a 20:9 phone the rest of Home
+  was plain navy with four hollow "Win to earn a chest" boxes.
+- New `bg_home.webp` (1024x2816; source `art_sources/home_bg/bg_home_full.png`): the 0.31.115 painting extended down
+  -- the stage's stone base, a flight of steps down into a torch-lit treasure hall (braziers, royal banners, chests and
+  gold heaped at the sides, open flagstones in the middle where the chests sit), fading to navy at the bottom. Made by
+  ElevenLabs gpt-image-2.5-sunburst from `bg_home_extend_input.png` (the old painting over a blank lower part; 4
+  variations, 1,767 credits, flow "Fatebound Home stage"); the old painting's own pixels kept above the stage's base
+  and the new part blended in under it (aligned to 1 px at the seam), so the stage, the sun and the heroes' placement
+  are unchanged. `BG_ASPECT` is the whole painting; `BG_STAGE` (1280/720) the part the stage, sun and clouds are
+  measured on. The hero layer is now as tall as the app.
+- Empty chest slots: see-through glass over the painted floor with a dim chest in each, "WIN TO EARN" on the first,
+  "EMPTY" on the rest.
+- The line under PLAY gives a count only once someone else is on ("LIVE SIEGE SERVER" instead of "0 PLAYERS ONLINE").
+- tools/app_shots.gd: SHOT_NO_CHESTS=1 (a new player's empty slots). reports/concepts/home_backdrop_before_after.png.
+- home_heroes_test: + the tall painting, it reaching the bottom of 20:9 and 21:9 screens, the layer as tall as the app,
+  a dim chest in each empty slot, the online line. Heroes still on the painted floor.
+- ui pack rebuilt and uploaded (ui-03795105ed77.pck). Full suite: ALL SIEGE TESTS PASSED (63). 0.31.117, version
+  code 203. APK 31432155 bytes, sha256 0bb3124c8d6fac17015e4e6113e3b4341a47a362b88caea10a270780feb2be50.
+
+## 0.31.118 — Self-hosted usage statistics (Kevin's spec `ANALYTICS_SPEC_FOR_CLAUDE.md`: "Replaces what Firebase Analytics would do, with no SDK and no third party")
+- Notes for whoever runs it: `godot/ANALYTICS.md` (and SIEGE_HANDOFF section 21).
+- Events and the props each may carry: `scripts/meta/analytics_events.gd`, shared by the phone and the server (anything
+  else is dropped). Numbers, true/false and short words made by the game; never a name, chat text, token or order id.
+- Phone `scripts/meta/analytics.gd` (a child of SiegeApp): a queue on disk (500 events / 256 KB; the oldest go and
+  are reported as q_dropped), batches of 100 on an `an` socket (compressed, like eco) once `ver`/`status` said `"an":1`
+  and the phone has an account; the `ok` list lets those go; no answer = keep and retry (eco_sync's backoff).
+  Sessions are times in the foreground (session_start once the version check answered, with online/offline;
+  session_end with its length on pause/quit; a session that never ended is closed "lost" at the next start;
+  clean_session at the next cold start), level_up, error boot_stuck (safe start) and script_error (a count a session).
+  Hooks: tutorial start/step/complete/skip, VS BOTS match start/finish/quit, match_join, forge, chest_open, shop_view,
+  update_screen. Settings > PRIVACY > "Share anonymous usage stats" (on by default): off clears the queue, sends one
+  opt_out, logs nothing more; the match and social hellos then carry `an_off`.
+- Server `server/analytics.gd`: the account's key must open it (else 4005 "an", nothing written); allow-lists; ts
+  clamped to -30 d / +1 d (ts_bad); 100 a batch, 2,000 an account a day; ids deduped for today and yesterday (read back
+  from the files at start); `analytics/YYYY-MM-DD.jsonl` by the UTC day it arrived, flushed every second, folder 0700,
+  files 0600; gzip after 2 days, deleted after 90 (at start and hourly). The server writes its own events:
+  session_online (a hello with an account), online match_start / match_finish (result, team_n humans on the side,
+  length, start and final class) / match_quit (left mid-match), purchase_verified (product, test), chat_send (kind),
+  friend_add / friend_accept, party_create / party_invite / party_join, quick_chat (index), update_screen (a min_build
+  refusal). Nothing for an opted-out account. Never an IP address. Protocol stays 35.
+- Deploy: the installer ships both new scripts; the accounts backup takes the last 7 days of `analytics/` and
+  `opt_out.json`. The probe sends `an` when the status says `an:1` (with SIEGE_PROBE_ACCT/KEY a real batch, build
+  `-probe`; without, a made-up key must be refused). Checked with the installer's test mode (PROBE_OK) and a 0.31.116
+  build still playing against the new server with min_build 0.31.116 (and 0.31.115 refused).
+- Report `tools/analytics_report.py` (stdlib): total unique players and 30-day daily actives (UTC and Pacific) first,
+  then WAU/MAU, new players, D1/D7/D30, tutorial funnel, match completion/length (online/bots), win rate by class,
+  session length, purchase conversion without test purchases, social use, update screens by build, crash-free, opt-outs,
+  dropped. `--json`, `--tz`, `--exclude-file`; `-probe` builds left out.
+- privacy.html: "Usage statistics" section (+ mentions in collect/use/sharing/retention), still dated 12 October 2026.
+- Tests: analytics_client_test, analytics_server_test (+ a fake older server that never answers), analytics_events_test
+  (real server: probe, phone batch, social, an early quit and a full online match in a party, quick chat, a fake
+  purchase, min_build refusals, the opted-out account writing nothing, a grep for IPs/names/chat/tokens/keys),
+  tools/test_analytics_report.py. Full suite: ALL SIEGE TESTS PASSED (67). 0.31.118, version code 204. APK 31448879
+  bytes, sha256 26441e6950d78dc1057e2b14160d69c891faae3ce4f98a154e8fa0e7d92be10a. No content pack change.
+- Not done here: the server redeploy (Kevin), privacy.html on main + sslip (after merge), Play Data safety form
+  (Grokbot/Kevin, spec section 10). `remote_deploy.sh` isn't in this repo.

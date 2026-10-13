@@ -496,7 +496,10 @@ static func chests_row(app, parent: Control, w: float, y: float) -> void:
 		plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		parent.add_child(plate)
 		if i >= p.chests().size():
-			UI2.plate(plate, "glass", 14.0)
+			# 0.31.117 (Kevin: "The screen space under the play button is very empty looking"): see-through, over the
+			# painted treasure hall, with a dim chest waiting in it
+			UI2.plate(plate, "glass", 14.0, "gold", {"fill_top": Color(0.03, 0.05, 0.16, 0.42), "fill_bottom": Color(0.02, 0.03, 0.1, 0.62),
+				"outline_color": Color(1.0, 0.84, 0.35, 0.55)})
 			continue
 		var ch: Dictionary = p.chests()[i]
 		var k := str(ch.kind)
@@ -526,10 +529,16 @@ static func chests_row(app, parent: Control, w: float, y: float) -> void:
 		cell.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		parent.add_child(cell)
 		if i >= p.chests().size():
-			var e := UI2.body(cell, "Win to earn\na chest", 10, UI2.MUTED)
+			var ghost := UI2.img(cell, UI2.V2 + "chests/wood_icon.png", 52.0)
+			ghost.position = Vector2((sw - 52.0) * 0.5, 6.0)
+			ghost.modulate = Color(0.72, 0.78, 1.0, 0.6)           # (a dim, cool silhouette of the chest to come)
+			ghost.set_meta("empty_slot", true)
+			var first_empty: bool = i == p.chests().size()
+			var e := UI2.text(cell, "WIN TO EARN" if first_empty else "EMPTY", 11, Color(0.86, 0.9, 1.0, 0.8) if first_empty else Color(0.7, 0.76, 0.95, 0.55), Color("#0b1230"), 3)
 			e.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			e.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-			e.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+			e.position = Vector2(0, sh - 24)
+			e.size = Vector2(sw, 16)
+			e.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			continue
 		var ch: Dictionary = p.chests()[i]
 		var k := str(ch.kind)
@@ -2308,6 +2317,16 @@ static func settings(app, root: VBoxContainer) -> void:
 			app.open_friends(), "settings_friends", 13, 36.0, 11.0)
 		fb.custom_minimum_size.x = 100
 	UI2.body(sx, "Tap a name in the chat to add a friend, block or report them.", 11, UI2.MUTED)
+	# 0.31.118 (Kevin's analytics spec): usage statistics to our own server, on by default, off here
+	var px := UI2.frame(root, "night", 12, 18.0, "gold")
+	UI2.divider(px, "PRIVACY", 20)
+	UI2.toggle(px, "Share anonymous usage stats", "Sessions, matches and menu use -- never your name or chat", bool(d.settings.get("analytics", true)), "analytics", func(on: bool):
+		app.sfx("toggle")
+		d.settings.analytics = on
+		p.save()
+		if app.get("analytics") != null:
+			app.analytics.set_enabled(on))
+	UI2.body(px, "Only to Fatebound's own server, tied to your game account's random id. Kept 90 days, never sold or shared.", 11, UI2.MUTED)
 	# Graphics
 	var gx := UI2.frame(root, "night", 12, 18.0, "gold")
 	UI2.divider(gx, "GRAPHICS", 20)
@@ -2564,6 +2583,8 @@ static func forge(app, root: VBoxContainer) -> void:
 	var fb := UI2.button(info, label, "orange" if bool(check.ok) else "grey", func():
 		var res: Dictionary = p.forge(wid, el)
 		if bool(res.get("ok", false)):
+			if app.get("analytics") != null:
+				app.analytics.log_ev("forge", {"item":wid, "stars":int(res.stars)})      # 0.31.118
 			app.sfx("forge")
 			app.toast("%s is now %s!" % [Eco.forge_name(wid), str(Eco.FORGE_STARS[int(res.stars) - 1].name)], UI2.GOLD)
 			app.forge_element = ""

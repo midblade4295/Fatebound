@@ -173,6 +173,9 @@ func open() -> void:
 	if not bool(result.get("ok", false)):
 		app.close_modal()
 		return
+	if app.get("analytics") != null:          # 0.31.118: what came out (its rarity), and which chest
+		var it := str(result.get("item", ""))
+		app.analytics.log_ev("chest_open", {"rarity":str(Eco.item(it).get("rarity", "none")) if it != "" else "none", "src":kind})
 	app.sfx("chestOpen")                   # 0.31.109: the lid, the magic swelling into the burst at 0.45 s, the sparkle
 	_open_t = 0.0
 	var tw := create_tween()

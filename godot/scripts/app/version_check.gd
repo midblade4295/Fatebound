@@ -8,6 +8,7 @@ extends Node
 const Net = preload("res://scripts/siege/siege_net.gd")
 
 signal done(server_v: int)
+signal answered(msg: Dictionary)          # 0.31.118: the whole "ver" answer (what the server can do: "an":1 ...)
 
 var url := Net.DEFAULT_URL
 var timeout := 6.0
@@ -37,6 +38,7 @@ func _process(delta: float) -> void:
 		var m := Net.decode(ws.get_packet())
 		match str(m.get("t", "")):
 			"ver":
+				answered.emit(m)
 				_finish(int(m.get("v", -1)))
 				return
 			"bye":

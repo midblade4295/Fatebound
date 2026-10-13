@@ -25,6 +25,8 @@ const FriendsPanel = preload("res://scripts/app/friends_panel.gd")
 const ChatTicker = preload("res://scripts/app/chat_ticker.gd")
 const InviteBanner = preload("res://scripts/app/invite_banner.gd")
 const OrdersPanel = preload("res://scripts/app/orders_panel.gd")
+const Analytics = preload("res://scripts/meta/analytics.gd")
+const Diag = preload("res://scripts/siege/siege_diag.gd")
 const TitleLogo = preload("res://scripts/app/title_logo.gd")
 
 # 0.31.112 (Kevin: "move it [Home] to the center button. Move the shop button to far left")
@@ -91,10 +93,12 @@ var safe_top := 0.0
 var xp_holder: Control
 var pass_badge: Control
 var _tab_tweens := {}
-const HERO_H := 650.0                  # the home backdrop layer (plus the safe area)
 const TOP_H := 56.0                    # the top bar
 const TAB_H := 72.0                    # the tab bar
-const BG_ASPECT := 1280.0 / 720.0      # the painted home backdrop
+const BG_ASPECT := 2816.0 / 1024.0     # the painted home backdrop (0.31.117: down the whole screen, the treasure hall
+                                       # under the stage; until then 1280 / 720 and it ended under PLAY)
+const BG_STAGE := 1280.0 / 720.0       # its top part, the old painting at the same width: where the sun, the clouds and the
+                                       # stage are measured (fractions of this height)
 const FADE_COLOR := Color("#0d1627")
 var _toast: Label
 var _toast_box: PanelContainer
@@ -111,6 +115,7 @@ var play_games: Node = null            # 0.31.102: Google Play Games sign-in and
 # 0.31.108: the account on the server (eco_sync.gd) -- the server's copy of the profile is the one that counts.
 # Headless (tests, tools) it doesn't reach the real server unless asked (eco_url / FB_ECO=1).
 var eco_sync: Node = null
+var analytics: Node = null              # 0.31.118: usage statistics to our own server (scripts/meta/analytics.gd)
 var eco_autostart := DisplayServer.get_name() != "headless" or OS.has_environment("FB_ECO")
 var eco_url := OS.get_environment("SIEGE_URL") if OS.has_environment("SIEGE_URL") else Net.DEFAULT_URL
 var online_refs := {}                  # Home's "players online" pill: {main, sub}
@@ -170,6 +175,18 @@ func _ready() -> void:
 	eco_sync.setup(profile)
 	add_child(eco_sync)
 	eco_sync.synced.connect(_on_eco_synced)
+	analytics = Analytics.new()
+	analytics.url = eco_url
+	analytics.auto_start = eco_autostart
+	analytics.setup(profile)
+	add_child(analytics)
+	analytics.watch_errors()
+	analytics.begin_session(true, safe_boot)
+	analytics.note_level(int(profile.d.level))
+	if online_status != null:
+		online_status.changed.connect(func():
+			if int(online_status.info.get("an", 0)) == 1:
+				analytics.server_ok = true)
 	eco_sync.rejected.connect(func(op: String, err: String):
 		print("ECO rejected %s: %s" % [op, err])
 		if op == "match":
@@ -336,7 +353,8 @@ func _build_hero() -> void:
 	safe_top = _safe_top()
 	hero_layer = Control.new()
 	hero_layer.anchor_right = 1.0
-	hero_layer.offset_bottom = HERO_H + safe_top
+	hero_layer.anchor_bottom = 1.0             # 0.31.117: the whole screen (was 650 + safe_top: the painting stopped under
+	                                           # PLAY and the rest of Home was plain navy -- Kevin: "very empty")
 	hero_layer.clip_contents = true
 	hero_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(hero_layer)
@@ -368,16 +386,17 @@ func _build_hero() -> void:
 	var lay := func():
 		var w := hero_layer.size.x
 		var h := w * BG_ASPECT
+		var hs := w * BG_STAGE                             # (the stage part's height: the measurements below)
 		var top := -0.405 * w + safe_top
 		bgt.position = Vector2(0, top)
 		bgt.size = Vector2(w, h)
-		var sp := Vector2(0.615 * w, top + 0.574 * h)
+		var sp := Vector2(0.615 * w, top + 0.574 * hs)
 		sun.position = sp - sun.size * 0.5
 		sun_glow.position = sp - sun_glow.size * 0.5
 		for cl in clouds:
-			(cl[0] as Control).position.y = top + float(cl[1][0]) * h
+			(cl[0] as Control).position.y = top + float(cl[1][0]) * hs
 		if hero_node != null:
-			var dais := top + 0.858 * h                     # the painted dais' centre
+			var dais := top + 0.858 * hs                    # the painted dais' centre
 			hero_node.position = Vector2(0, dais - Roster.FEET_Y)
 			hero_node.size = Vector2(w, 340.0)
 	hero_layer.resized.connect(lay)
@@ -778,6 +797,8 @@ func home_height() -> float:
 func show_tab(id: String) -> void:
 	if is_instance_valid(modal):
 		close_modal()                          # (a window's button that goes to another tab, e.g. the pass summary)
+	if analytics != null and id in ["shop", "pass"] and (tab != id or siege != null):
+		analytics.log_ev("shop_view", {"tab":id})
 	tab = id
 	profile.refresh()
 	for t in tab_buttons:
@@ -828,7 +849,8 @@ func paint_online() -> void:
 		sub.text = "16 vs 16  ·  bots fill any empty slots"
 		return
 	var n := int(info.get("online", 0))
-	main.text = "%d PLAYER%s ONLINE" % [n, "" if n == 1 else "S"]
+	# 0.31.117 (Kevin's Home said "0 PLAYERS ONLINE" with him on it): a count only once someone else is on
+	main.text = "%d PLAYERS ONLINE" % n if n >= 2 else "LIVE SIEGE SERVER"
 	var fighting := int(info.get("in_match", 0))
 	var waiting := int(info.get("waiting", 0))
 	if waiting > 0 and float(info.get("lobby", -1.0)) >= 0.0:
@@ -1007,6 +1029,8 @@ func _on_eco_synced(differs: bool) -> void:
 	if social != null and social.online() and str(profile.d.name) != _social_name:
 		_social_name = str(profile.d.name)
 		social.refresh()                          # 0.31.111: a new name -- the chat and friends lists show it
+	if analytics != null:
+		analytics.note_level(int(profile.d.level))
 	if not differs or siege != null:
 		return
 	refresh_top()
@@ -1050,6 +1074,9 @@ func start_match(online: bool, tutorial := false, follow := false) -> void:
 			_ticket_ok = false)
 		return
 	sfx("matchStart")
+	if analytics != null and not tutorial:
+		analytics.log_ev("match_join", {"mode":"online" if online else "bots",
+			"party_n":social.party_size() if social != null and social.online() and social.in_party() else 1})
 	siege = Siege.new()
 	siege.online = online
 	siege.tutorial = tutorial
@@ -1058,6 +1085,7 @@ func start_match(online: bool, tutorial := false, follow := false) -> void:
 	siege.low_fx = bool(profile.d.settings.get("reduce_motion", false))
 	siege.hq_gfx = bool(profile.d.settings.get("hq_graphics", true))
 	siege.player_name = str(profile.d.name)
+	siege.analytics = analytics
 	siege.exited.connect(_end_match)
 	siege.version_mismatch.connect(_on_version_mismatch)
 	if online_status != null:
@@ -1081,10 +1109,13 @@ func _menu_fps() -> void:
 
 func _end_match() -> void:
 	if is_instance_valid(siege):
+		siege.note_leaving()                     # 0.31.118: a VS BOTS match or the tutorial left before its end
 		siege.queue_free()
 	siege = null
 	if eco_sync != null and eco_sync.enabled:
 		eco_sync.pull()                          # 0.31.108: the server's count of the match (online), or ours sent up
+	if analytics != null:
+		analytics.note_level(int(profile.d.level))
 	_menu_fps.call_deferred()                 # (after the match's _exit_tree puts back what it found)
 	_set_menu_active(true)
 	show_tab("home")
@@ -1160,10 +1191,15 @@ func check_server_version() -> void:
 	_version_checker = VersionCheck.new()
 	_version_checker.url = version_check_url
 	_version_checker.done.connect(_on_server_version)
+	_version_checker.answered.connect(func(m: Dictionary):
+		if analytics != null:
+			analytics.server_ok = int(m.get("an", 0)) == 1)
 	add_child(_version_checker)
 
 func _on_server_version(server_v: int) -> void:
 	_version_checker = null
+	if analytics != null:
+		analytics.set_net(server_v >= 0)
 	apply_server_version(server_v)
 
 func apply_server_version(server_v: int) -> void:
@@ -1209,6 +1245,8 @@ func show_update_screen() -> void:
 		return
 	update_screen = UpdateScreen.new()
 	update_screen.server_version = server_version
+	if analytics != null:
+		analytics.log_ev("update_screen", {"from_build":Diag.BUILD, "need":server_version})
 	update_screen.open_url = open_url
 	update_screen.offline_requested.connect(func():
 		# 0.31.84 merge: Home has no VS BOTS mode any more (one PLAY, always online), so this starts the offline
@@ -1247,8 +1285,16 @@ func _notification(what: int) -> void:
 		elif tab != "home":
 			show_tab("home")
 		else:
+			if analytics != null:
+				analytics.end_session()
 			get_tree().quit()
+	elif what == NOTIFICATION_WM_CLOSE_REQUEST:
+		if analytics != null:
+			analytics.end_session()                # (desktop: the window closed)
+		get_tree().quit()
 	elif what == NOTIFICATION_APPLICATION_PAUSED:
+		if analytics != null:
+			analytics.end_session()                # 0.31.118: a session is a time in the foreground
 		if audio != null and audio.has_method("stop"):
 			audio.stop()
 		if social != null:
@@ -1258,6 +1304,8 @@ func _notification(what: int) -> void:
 		if online_status != null:
 			online_status.set_active(false)
 	elif what == NOTIFICATION_APPLICATION_RESUMED:
+		if analytics != null:
+			analytics.begin_session(false, false, str(analytics.meta.get("net", "")))
 		if eco_sync != null and eco_sync.auto_start:
 			eco_sync.start()                   # 0.31.108: the account as the server has it
 		if social != null and social_autostart:

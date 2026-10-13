@@ -116,10 +116,11 @@ func _process(_d: float) -> bool:
 			p.d.tutorial_done = OS.get_environment("SHOT_TUTORIAL") == "done"
 		p.d.challenges.daily[0].progress = 99
 		# (0.31.37) chests: one opening ready, one unlocking, two waiting
-		for k in ["silver", "gold", "wooden", "royal"]:
-			p.add_chest(k, {})
-		p.d.chests.slots[0].start = p.now() - 99999
-		p.d.chests.slots[1].start = p.now() - 3600
+		if not OS.has_environment("SHOT_NO_CHESTS"):     # 0.31.117: SHOT_NO_CHESTS=1 -- a new player's empty slots
+			for k in ["silver", "gold", "wooden", "royal"]:
+				p.add_chest(k, {})
+			p.d.chests.slots[0].start = p.now() - 99999
+			p.d.chests.slots[1].start = p.now() - 3600
 		if OS.has_environment("SHOT_QUEUE"):             # 0.31.108: reward chests waiting for a slot
 			p.d.chests.queue = ["royal", "gold"]
 		p.save()

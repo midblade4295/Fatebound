@@ -120,6 +120,19 @@ run menu_float_test      MENU_FLOAT_PASS          60
 # Chat, friends, parties and quick chat (0.31.111): server/social.gd alone, then two phones against the real server.
 run social_test          SOCIAL_PASS              150
 run social_ui_test       SOCIAL_UI_PASS           200
+# Usage statistics (0.31.118): the phone's queue, the server's files (and an older server on 8101), end to end against
+# the real server on 8100 (the probe included), then the report on a fixture.
+run analytics_client_test ANALYTICS_CLIENT_PASS   60
+run analytics_server_test ANALYTICS_SERVER_PASS   90
+run analytics_events_test ANALYTICS_EVENTS_PASS   150
+t0=$SECONDS
+if timeout 120 python3 tools/test_analytics_report.py > /tmp/siege_test_analytics_report.log 2>&1 && grep -q ANALYTICS_REPORT_PASS /tmp/siege_test_analytics_report.log; then
+  printf "PASS  %-22s %4ds\n" "analytics_report (py)" $((SECONDS - t0))
+else
+  printf "FAIL  %-22s %4ds  (log: %s)\n" "analytics_report (py)" $((SECONDS - t0)) /tmp/siege_test_analytics_report.log
+  grep -m5 '^FAIL\|Error' /tmp/siege_test_analytics_report.log | sed 's/^/      /'
+  fail=1
+fi
 # The app's staged match start (0.31.78): the card first, the world built behind it over frames.
 FB_STAGED_START=1 FB_FORCE_WARMUP=1 run staged_start_test STAGED_START_PASS 240 --fixed-fps 30
 # The human soak must never stall the game thread.

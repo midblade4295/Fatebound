@@ -53,12 +53,22 @@ extends SceneTree
 # open without a hello (it never counts as a player). A hello from an account in a party is seated on its party's team.
 # {"t":"qc", "i"} in a match: a quick chat line (Net.QUICK_CHAT) to the player's side (or everyone), at most one every
 # Net.QC_GAP s; "Need help!" / "Follow me!" call the nearest bots (sim.call_bots). "ver"/"status" answer "social":1.
+#
+# 0.31.118 (Kevin's spec, ANALYTICS_SPEC_FOR_CLAUDE.md -- self-hosted analytics, no SDK, no third party): a socket whose
+# first message is {"t":"an", "acct", "key", "ev":[...]} hands over a batch of the phone's usage events
+# (server/analytics.gd: checked against the account, kept in analytics/YYYY-MM-DD.jsonl in the state directory, answered
+# {"t":"an", "ok":[ids]}; a key that doesn't open the account: 4005 "an", nothing written). The server writes what it
+# knows itself: a hello with an account (session_online), the online match (start, finish, quit), verified purchases,
+# chat/friends/parties (never the text), quick chat and the update screen -- none of them for an account that opted
+# out ("an_off" in its hello or social "hi", or its opt_out event). "ver"/"status" answer "an":1, and only then does the
+# phone send "an": the protocol stays 35 (an older server ignores "an", the phone keeps its queue).
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 const Net = preload("res://scripts/siege/siege_net.gd")
 const IapVerify = preload("res://server/iap_verify.gd")
 const EcoAccounts = preload("res://server/eco_accounts.gd")
 const MatchLedger = preload("res://server/match_ledger.gd")
 const Social = preload("res://server/social.gd")
+const Analytics = preload("res://server/analytics.gd")
 
 const RESTART_AFTER := 15.0          # seconds of results screen before the next match
 const IDLE_STOP := 30.0              # no players for this long -> stop simulating
@@ -66,7 +76,7 @@ const LOBBY_TIME := 20.0             # the join countdown (0.31.82)
 const HELLO_TIMEOUT := 10.0
 const IAP_TIMEOUT := 40.0              # a purchase check may take a token request and an API call
 const REFUSE_CLOSE_DELAY := 0.25     # s between a "bye"/"ver" reply and closing the socket
-const SERVER_BUILD := "0.31.116"      # this server's game version; the probe says it by default (identifies as current)
+const SERVER_BUILD := "0.31.118"      # this server's game version; the probe says it by default (identifies as current)
 const MIN_BUILD_FILE := "/etc/fatebound-siege/min_build"
 const MIN_BUILD_RELOAD := 10.0       # s between re-reads of the min-build file
 const UPDATE_MSG := "A new version of Fatebound is out. Update now on Google Play to keep playing online."
@@ -95,6 +105,8 @@ var _names_dirty := false            # a seat changed: send the players' names (
 var iap = null                       # 0.31.90: Google Play purchase checks (server/iap_verify.gd)
 var eco = null                       # 0.31.108: the accounts (server/eco_accounts.gd)
 var social = null                    # 0.31.111: chat, friends, parties (server/social.gd)
+var analytics = null                 # 0.31.118: usage statistics (server/analytics.gd)
+var boot_time := int(Time.get_unix_time_from_system())   # (with match_id: a match's id across restarts)
 var test_match_s := 0.0              # tests only (SIEGE_TEST_MATCH_S): a match ends after this many seconds
 var _paid_match := -1                # the match whose results went to the accounts
 var min_build := ""                  # "" = no minimum (see SIEGE_MIN_BUILD)
@@ -152,6 +164,10 @@ func _init() -> void:
 				return true
 		return false
 	_log("social: %d players known" % social.users.size())
+	analytics = Analytics.new()
+	analytics.log_fn = _log
+	social.event_fn = func(acct: String, ev: String, p: Dictionary): analytics.server_event(acct, ev, p)
+	_log("analytics: %s (%d accounts opted out)" % [analytics.dir, analytics.opted.size()])
 
 # ---------------- minimum app build ----------------
 # "0.31.78-fatebound" -> [0, 31, 78]; anything without a leading dotted number -> [] (unknown).
@@ -223,6 +239,8 @@ func _process(delta: float) -> bool:
 	_run_match(delta)
 	if social != null:
 		social.tick(delta)
+	if analytics != null:
+		analytics.tick(delta)
 	if _names_dirty:
 		_names_dirty = false
 		_send_names()
@@ -280,7 +298,7 @@ func _poll_clients() -> void:
 			_handle(cid, Net.decode(pkt))
 
 func _send(cid: int, msg: Dictionary) -> void:
-	_send_raw(cid, Net.encode(msg, msg.get("t", "") in ["s", "eco", "iap"]))      # (0.31.108: an account travels compressed)
+	_send_raw(cid, Net.encode(msg, msg.get("t", "") in ["s", "eco", "iap", "an"]))      # (0.31.108: an account travels compressed; 0.31.118: and usage acks)
 
 func _send_raw(cid: int, bytes: PackedByteArray) -> void:
 	var c: Dictionary = clients.get(cid, {})
@@ -339,6 +357,12 @@ func _drop(cid: int, why: String) -> void:
 		u.move = Vector2.ZERO
 		u.net_driven = false
 		_names_dirty = true            # (their name goes off the battlefield)
+	if c.hello and c.has("acct") and analytics != null and sim != null and not sim.ended and c.unit != "" \
+			and not bool(c.get("queued", false)) and sim.by_id.has(c.unit) and c.has("seated_at"):
+		# 0.31.118: left a match before it ended
+		analytics.server_event(str(c.acct), "match_quit", {"match":str(c.get("match_key", "")), "mode":"online",
+			"quit_at_s":int(_now() - float(c.seated_at)), "class":class_of(sim.by_id[c.unit]), "class0":str(c.get("class0", ""))},
+			str(c.get("build", "")))
 	if c.hello:
 		_log("leave %s (%s) unit=%s players=%d" % [c.name, why, c.unit, _human_count() - 1])
 	clients.erase(cid)
@@ -367,7 +391,7 @@ func _handle(cid: int, msg: Dictionary) -> void:
 			# so the client treats no answer as "unknown" and checks again on connect.
 			if c.hello:
 				return
-			_send(cid, {"t":"ver", "v":Net.VERSION, "build":SERVER_BUILD, "min_build":min_build, "eco":1, "social":1})
+			_send(cid, {"t":"ver", "v":Net.VERSION, "build":SERVER_BUILD, "min_build":min_build, "eco":1, "social":1, "an":1})
 			_refuse(cid, 1000, "ver")
 		"hello":
 			if c.hello or c.has("social"):
@@ -386,6 +410,9 @@ func _handle(cid: int, msg: Dictionary) -> void:
 				var need := Net.VERSION + 1
 				_send(cid, {"t":"bye", "why":"version", "need":need, "min_build":min_build, "msg":UPDATE_MSG})
 				_refuse(cid, Net.CLOSE_VERSION, "version:%d" % need)
+				if analytics != null and eco != null and msg.has("acct") and not bool(msg.get("an_off", false)) \
+						and not eco.open(str(msg.get("acct", "")), str(msg.get("key", ""))).is_empty():
+					analytics.server_event(str(msg.acct), "update_screen", {"from_build":build, "need":min_build}, build)
 				_log("refused %s: build %s older than min build %s" % [str(msg.get("name", "?")).left(20), build.left(30), min_build])
 				return
 			if _human_count() >= max_players:
@@ -408,6 +435,11 @@ func _handle(cid: int, msg: Dictionary) -> void:
 					if social != null:
 						c.party = social.party_for(c.acct)    # 0.31.111: seated with their party
 						social.acct_changed(c.acct)
+			c.build = build.left(40)
+			if c.has("acct") and analytics != null:
+				# 0.31.118: a player on the server today (unless they opted out of usage statistics)
+				analytics.set_opt_out(c.acct, bool(msg.get("an_off", false)))
+				analytics.server_event(c.acct, "session_online", {}, c.build)
 			c.pred = bool(msg.get("pred", false))         # the phone moves its own unit (0.18.4)
 			c.queued = true                                # 0.31.82: into the lobby; seated when the countdown ends
 			if wave_end < 0.0:
@@ -430,6 +462,8 @@ func _handle(cid: int, msg: Dictionary) -> void:
 			elif str(msg.get("k", "")) == "hi":
 				if social.hello(cid, msg):
 					c.social = true
+					if analytics != null:
+						analytics.set_opt_out(str(msg.get("acct", "")), bool(msg.get("an_off", false)))
 				else:
 					_refuse(cid, 4004, "social")
 		"qc":
@@ -444,6 +478,8 @@ func _handle(cid: int, msg: Dictionary) -> void:
 			var qteam := int(sim.by_id[c.unit].team)
 			if bool(q.get("call", false)) and not sim.ended:
 				sim.call_bots(c.unit)
+			if c.has("acct") and analytics != null:
+				analytics.server_event(c.acct, "quick_chat", {"i":qi}, str(c.get("build", "")))
 			var qmsg := {"t":"qc", "u":c.unit, "i":qi}
 			for ocid in clients:
 				var o: Dictionary = clients[ocid]
@@ -464,6 +500,18 @@ func _handle(cid: int, msg: Dictionary) -> void:
 				_log("eco %s: %s%d ops%s (%.1f ms)" % [str(out.get("acct", "?")), "NEW " if bool(msg.get("new", false)) else "",
 					(out.get("results", []) as Array).size(), "" if bool(out.get("ok", false)) else " " + str(out.get("why", "")),
 					(Time.get_ticks_usec() - t0) / 1000.0])
+		"an":
+			# 0.31.118: a batch of the phone's usage events (server/analytics.gd). One per socket, no hello.
+			if c.hello or c.has("an_done") or c.has("social") or analytics == null:
+				return
+			c.an_done = true
+			var aout: Dictionary = analytics.handle(msg, eco)
+			if aout.is_empty():
+				_refuse(cid, 4005, "an")                       # (the key doesn't open the account: nothing written)
+				return
+			_send(cid, aout)
+			_refuse(cid, 1000, "an")
+			c.close_at = _now() + 2.0
 		"iap":
 			# 0.31.90: a phone asks whether a Google Play purchase is real before it grants it. No hello (a purchase is
 			# not a player); one question per socket; the answer goes back and the socket closes.
@@ -486,6 +534,8 @@ func _handle(cid: int, msg: Dictionary) -> void:
 						# 0.31.108: granted here, to the account (once per token, whichever account asks)
 						var g: Dictionary = eco.grant_purchase(acct, akey, product, token, str(res.get("why", "")) == "used")
 						out["granted"] = g
+						if bool(g.get("ok", false)) and not bool(g.get("again", false)) and analytics != null:
+							analytics.server_event(acct, "purchase_verified", {"product":product, "test":bool(res.get("test", false))})
 						if bool(res.get("ok", false)) and not bool(g.get("ok", false)):
 							out["ok"] = false
 							out["why"] = str(g.get("why", "bad"))
@@ -564,6 +614,11 @@ func _seat(cid: int) -> void:
 		if c.has("acct"):
 			c.ledger = MatchLedger.new()          # 0.31.108: counted from here (a bot held the seat before)
 			c.ledger.start(sim.by_id[seat])
+			c.seated_at = _now()                  # 0.31.118: the match as the player had it, for the statistics
+			c.class0 = class_of(sim.by_id[seat])
+			c.match_key = match_key()
+			if analytics != null:
+				analytics.server_event(c.acct, "match_start", {"match":c.match_key, "mode":"online", "class":c.class0}, str(c.get("build", "")))
 	_send(cid, {"t":"welcome", "v":Net.VERSION, "you":seat, "match":match_id, "seed":match_seed,
 		"team_size":Net.TEAM_SIZE, "players":_human_count()})
 	_names_dirty = true
@@ -680,8 +735,25 @@ func _send_lobby(waiting: Array) -> void:
 func _status() -> Dictionary:
 	return {"t":"status", "v":Net.VERSION, "online":_human_count(), "in_match":_seated_count(), "waiting":_queued().size(),
 		"lobby":maxf(0.0, wave_end - _now()) if wave_end >= 0.0 else -1.0, "running":sim != null and not sim.ended,
-		"slots":Net.TEAM_SIZE * 2, "max":max_players, "build":SERVER_BUILD, "min_build":min_build, "eco":1, "social":1,
+		"slots":Net.TEAM_SIZE * 2, "max":max_players, "build":SERVER_BUILD, "min_build":min_build, "eco":1, "social":1, "an":1,
 		"chatting":social.online.size() if social != null else 0}
+
+# ---------------- statistics (0.31.118) ----------------
+func match_key() -> String:
+	return "%d-%d" % [boot_time, match_id]
+
+static func class_of(u: Dictionary) -> String:
+	# the class a unit plays, its upgrade marked ("knight", "knight+")
+	return str(u.get("cls", "")) + ("+" if bool(u.get("up", false)) else "")
+
+func _team_humans(team: int) -> int:
+	var n := 0
+	for cid in clients:
+		var o: Dictionary = clients[cid]
+		if o.hello and not bool(o.get("queued", false)) and o.unit != "" and sim != null and sim.by_id.has(o.unit) \
+				and int(sim.by_id[o.unit].team) == team:
+			n += 1
+	return n
 
 # ---------------- paying a match (0.31.108) ----------------
 func _ledger_events(evs: Array) -> void:
@@ -714,6 +786,10 @@ func _pay_match() -> void:
 		var draw: bool = sim.winner == -1
 		var res: Dictionary = eco.apply_online(str(c.acct), me, won, draw)
 		c.erase("ledger")
+		if analytics != null:
+			analytics.server_event(str(c.acct), "match_finish", {"match":str(c.get("match_key", match_key())), "mode":"online",
+				"dur_s":int(_now() - float(c.get("seated_at", _now()))), "result":"win" if won else ("draw" if draw else "loss"),
+				"team_n":_team_humans(int(u.team)), "class":class_of(u), "class0":str(c.get("class0", ""))}, str(c.get("build", "")))
 		_log("paid %s (%s): %s, %d gold" % [str(c.acct), c.name, "win" if won else ("draw" if draw else "loss"), int(res.get("rewards", {}).get("gold", 0))])
 
 # ---------------- match loop ----------------
