@@ -27,6 +27,11 @@ static var VULKAN_SATURATION := 0.96
 
 # Model, weapons (right/left hand) and clips per class. Clip keys: g general, m melee, r ranged,
 # mb movement basic, ma movement advanced, t tools.
+# 0.31.128 (Kevin: "make their idle animations the same as knight so the others aren't bouncing up and down so much"):
+# every class stands in the Knight's g/Idle_A (its hips move 1.5 cm; g/Idle_B's 10 cm, Melee_2H_Idle's 3.6 cm) -- but
+# the two archers, whose r/Ranged_Bow_Idle doesn't bob at all (0 cm) and holds the bow up with its string toward them:
+# in g/Idle_A the bow hand is the Knight's shield hand and every bow's string turned away (tests/weapon_grip_test.gd).
+# The *_kaykit entries below keep theirs (tools/retarget_meshy.gd's reference bodies only).
 const LOOKS := {
 	# 0.31.76 (Kevin picked concepts "A2 both"): the Villager is a Meshy peasant (bareheaded, patched linen tunic, rope
 	# belt), the Worker a Meshy straw-hat farmer (green overalls, red bandana, gloves); both were the KayKit Rogue.
@@ -35,19 +40,19 @@ const LOOKS := {
 	"knight": {"model":"meshy:knight","r":"mw/squire_sword","l":"mw/squire_shield","idle":"g/Idle_A","attack":"m/Melee_1H_Attack_Slice_Diagonal","ability":"m/Melee_Blocking","combo":["m/Melee_1H_Attack_Slice_Diagonal","m/Melee_1H_Attack_Slice_Horizontal","m/Melee_Block_Attack"]},
 	"crusader": {"model":"meshy:crusader","r":"mw/templar_sword","l":"mw/templar_shield","idle":"g/Idle_A","attack":"m/Melee_1H_Attack_Slice_Diagonal","ability":"m/Melee_Blocking","combo":["m/Melee_1H_Attack_Slice_Diagonal","m/Melee_1H_Attack_Slice_Horizontal","m/Melee_Block_Attack"]},
 	# Upgraded barbarian (Round 11): two-handed greatsword, whirlwind.
-	"berserker": {"model":"meshy:berserker","r":"mw/ironhewer_greatsword","l":"","idle":"m/Melee_2H_Idle","attack":"m/Melee_2H_Attack_Chop","ability":"m/Melee_2H_Attack_Spinning","combo":["m/Melee_2H_Attack_Chop","m/Melee_2H_Attack_Slice","m/Melee_2H_Attack_Spin"]},
-	"barbarian": {"model":"meshy:barbarian","r":"mw/woodsplitter_axe","l":"","idle":"m/Melee_2H_Idle","attack":"m/Melee_2H_Attack_Slice","ability":"m/Melee_2H_Attack_Spin","combo":["m/Melee_2H_Attack_Slice","m/Melee_2H_Attack_Chop","m/Melee_2H_Attack_Stab"]},
-	"rogue": {"model":"meshy:rogue","r":"mw/cutpurse_dagger","l":"mw/cutpurse_dagger","idle":"g/Idle_B","attack":"m/Melee_Dualwield_Attack_Stab","ability":"m/Melee_1H_Attack_Jump_Chop","combo":["m/Melee_Dualwield_Attack_Stab","m/Melee_Dualwield_Attack_Slice","m/Melee_Dualwield_Attack_Chop"]},
+	"berserker": {"model":"meshy:berserker","r":"mw/ironhewer_greatsword","l":"","idle":"g/Idle_A","attack":"m/Melee_2H_Attack_Chop","ability":"m/Melee_2H_Attack_Spinning","combo":["m/Melee_2H_Attack_Chop","m/Melee_2H_Attack_Slice","m/Melee_2H_Attack_Spin"]},
+	"barbarian": {"model":"meshy:barbarian","r":"mw/woodsplitter_axe","l":"","idle":"g/Idle_A","attack":"m/Melee_2H_Attack_Slice","ability":"m/Melee_2H_Attack_Spin","combo":["m/Melee_2H_Attack_Slice","m/Melee_2H_Attack_Chop","m/Melee_2H_Attack_Stab"]},
+	"rogue": {"model":"meshy:rogue","r":"mw/cutpurse_dagger","l":"mw/cutpurse_dagger","idle":"g/Idle_A","attack":"m/Melee_Dualwield_Attack_Stab","ability":"m/Melee_1H_Attack_Jump_Chop","combo":["m/Melee_Dualwield_Attack_Stab","m/Melee_Dualwield_Attack_Slice","m/Melee_Dualwield_Attack_Chop"]},
 	"ranger": {"model":"meshy:ranger","r":"","l":"mw/ashwood_bow","idle":"r/Ranged_Bow_Idle","attack":"r/Ranged_Bow_Release","ability":"r/Ranged_Bow_Release_Up"},
-	"mage": {"model":"meshy:mage","r":"mw/apprentice_staff","l":"","idle":"g/Idle_B","attack":"r/Ranged_Magic_Shoot","ability":"r/Ranged_Magic_Spellcasting"},
+	"mage": {"model":"meshy:mage","r":"mw/apprentice_staff","l":"","idle":"g/Idle_A","attack":"r/Ranged_Magic_Shoot","ability":"r/Ranged_Magic_Spellcasting"},
 	# Healer: a body of his own since 0.31.80 (white and gold robes, sun emblem, gold circlet), with a wand.
-	"priest": {"model":"meshy:priest","r":"mw/acolyte_wand","l":"","idle":"g/Idle_B","attack":"r/Ranged_Magic_Spellcasting_Long","ability":"r/Ranged_Magic_Raise"},
+	"priest": {"model":"meshy:priest","r":"mw/acolyte_wand","l":"","idle":"g/Idle_A","attack":"r/Ranged_Magic_Spellcasting_Long","ability":"r/Ranged_Magic_Raise"},
 	# Upgraded priest (0.31.2, Kevin): the Necromancer from KayKit Skeletons (CC0, same Rig_Medium) with the skull staff.
 	# 0.31.32: the last three upgrades get their own looks
-	"assassin": {"model":"meshy:assassin","r":"mw/shade_dagger","l":"mw/shade_dagger","idle":"g/Idle_B","attack":"m/Melee_Dualwield_Attack_Stab","ability":"m/Melee_1H_Attack_Jump_Chop","tint":"#5b4f73","combo":["m/Melee_Dualwield_Attack_Stab","m/Melee_Dualwield_Attack_Slice","m/Melee_Dualwield_Attack_Chop"]},
+	"assassin": {"model":"meshy:assassin","r":"mw/shade_dagger","l":"mw/shade_dagger","idle":"g/Idle_A","attack":"m/Melee_Dualwield_Attack_Stab","ability":"m/Melee_1H_Attack_Jump_Chop","tint":"#5b4f73","combo":["m/Melee_Dualwield_Attack_Stab","m/Melee_Dualwield_Attack_Slice","m/Melee_Dualwield_Attack_Chop"]},
 	"sniper": {"model":"meshy:sniper","r":"mw/marksman_crossbow","l":"","idle":"r/Ranged_Bow_Idle","attack":"r/Ranged_Bow_Release","ability":"r/Ranged_Bow_Draw","tint":"#4f6b4a"},
-	"archmage": {"model":"meshy:archmage","r":"mw/magister_staff","l":"mw/magister_book","idle":"g/Idle_B","attack":"r/Ranged_Magic_Shoot","ability":"r/Ranged_Magic_Summon","tint":"#a33d3d"},
-	"necromancer": {"model":"meshy:necromancer","r":"mw/bonecaller_staff","l":"","idle":"g/Idle_B","attack":"r/Ranged_Magic_Spellcasting_Long","ability":"r/Ranged_Magic_Raise"},
+	"archmage": {"model":"meshy:archmage","r":"mw/magister_staff","l":"mw/magister_book","idle":"g/Idle_A","attack":"r/Ranged_Magic_Shoot","ability":"r/Ranged_Magic_Summon","tint":"#a33d3d"},
+	"necromancer": {"model":"meshy:necromancer","r":"mw/bonecaller_staff","l":"","idle":"g/Idle_A","attack":"r/Ranged_Magic_Spellcasting_Long","ability":"r/Ranged_Magic_Raise"},
 	"necromancer_kaykit": {"model":"Necromancer","r":"Skeleton_Staff","l":"","idle":"g/Idle_B","attack":"r/Ranged_Magic_Spellcasting_Long","ability":"r/Ranged_Magic_Raise"},          # 0.31.63: the stock body, kept for tools/retarget_meshy.gd
 	"villager_kaykit": {"model":"Rogue","r":"","l":"","idle":"g/Idle_A","attack":"m/Melee_Unarmed_Attack_Punch_A","ability":"m/Melee_Unarmed_Attack_Kick"},          # 0.31.76: the old body of both, kept for tools/retarget_meshy.gd
 	# 0.31.80 (Kevin picked base-class concepts): the six base classes are Meshy bodies too; their stock KayKit bodies stay
@@ -3604,6 +3609,10 @@ static func _apply_tint(body: Node3D, model: String, tint: Color) -> void:
 				_tint_mats[key] = m2
 			m3.set_surface_override_material(surf, _tint_mats[key])
 
+# 0.31.128 (Kevin: "make the base class models the same size as the advanced class"): every body at the upgraded
+# classes' 1.14 (the base classes were 1.0); an upgraded one still shows by its own model and its gold ring.
+const BODY_SCALE := 1.14
+
 func _ensure_actor(u: Dictionary) -> Dictionary:
 	var a: Dictionary = actors.get(u.id, {})
 	# The usual case first, without building keys: the actor exists and wears this class (0.31.78: this ran for every
@@ -3642,7 +3651,7 @@ func _ensure_actor(u: Dictionary) -> Dictionary:
 	if made.is_empty():
 		return a
 	root.add_child(made.body)
-	made.body.scale = Vector3.ONE * (1.14 if u.up else 1.0)
+	made.body.scale = Vector3.ONE * BODY_SCALE           # 0.31.128 (Kevin): every class the upgraded size (base was 1.0)
 	a.body = made.body
 	a.player = made.player
 	_cape_setup(a)
@@ -3652,7 +3661,7 @@ func _ensure_actor(u: Dictionary) -> Dictionary:
 	a.clip = ""
 	a.busy_until = 0.0
 	_play(a, str(LOOKS.get(u.cls, LOOKS.villager).idle))
-	# Upgraded: bigger body + gold ring (no material overrides on skinned meshes).
+	# Upgraded: a gold ring (no material overrides on skinned meshes; 0.31.128: no longer a bigger body too).
 	var rc: Color = GOLD if (u.up or u.id == player_id) else TEAM_COLORS[vt(int(u.team))]
 	rc.a = 0.9
 	(a.ring as MeshInstance3D).material_override = _fx_mat(rc)
