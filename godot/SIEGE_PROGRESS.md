@@ -3590,3 +3590,22 @@ K2/K3 notes (0.17.0)
 - play_games_test's fake plugin had no achievement calls (with empty ids none were made); it records them now and checks
   that a signed-in phone sends them with the real ids.
 - Version 0.31.121, versionCode 207.
+
+## 0.31.122 — the next match only after PLAY AGAIN; chat line clear of the tab bar; the Settings gear turns in place
+- **No automatic next match** (Kevin: "make it so the game doesn't automatically put player back in a new game because
+  they could be looking at score card or something"). Before, 15 s after a match ended the server put everyone into the
+  next one, which threw the results / SCORES away. Now the game's hello says "ask_next": the server keeps it on its
+  results (no seat, no snapshots of the next match) until PLAY AGAIN sends {"t":"again"} -- pressed while the results
+  are up it goes into the next match when that starts; pressed later it's seated in the running match at once. If
+  nobody in the room wants another match, none starts until someone does. Left on the results 10 minutes
+  (SIEGE_RESULTS_KEEP): "bye done", the game goes back to Home. Older apps (no ask_next) and players waiting in the
+  lobby go in as before. SIEGE_RESTART sets the 15 s for tests. tests/next_match_test.gd (real server on 8110 + the
+  real client).
+- **Chat line** (Kevin: "The icons at bottom block chat"): the open tab's raised tile and its bobbing icon stand ~18 px
+  over the tab bar and covered the middle of Home's chat line. The line now sits 22 px above the bar (ChatTicker.GAP;
+  Home's height accounts for it) as a whole rounded bar.
+- **Settings gear** (Kevin: "needs its animation to just rotate in place"): UI2.spin set the pivot only on "resized",
+  which never fired for an icon already at its size, so the gear turned about its top-left corner and swung around the
+  sign (checked: pivot (0,0) before, (21,21) now, its centre fixed while it turns). wiggle() had the same gap; both set
+  the pivot at once and when they start.
+- Version 0.31.122, versionCode 208.

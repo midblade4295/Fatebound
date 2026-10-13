@@ -94,6 +94,8 @@ run profile_card_test    PROFILE_CARD_PASS        150
 run diag_send_test       DIAG_SEND_PASS           120
 # Kill feed and vibration (0.31.120): the HUD feed, siege_mode haptics, Settings > VIBRATION
 run kill_feed_test       KILL_FEED_PASS           90
+# The next match only after PLAY AGAIN (0.31.122): real server (8110) + the real client; older apps as before
+run next_match_test      NEXT_MATCH_PASS          150
 # Daily login reward (0.31.119): the calendar, the server's replay, the card on Home and in ORDERS
 run daily_reward_test    DAILY_REWARD_PASS        90
 # Chest-ready notifications (0.31.119): notify.gd with a fake of the Android plugin, the app's ask and Settings
