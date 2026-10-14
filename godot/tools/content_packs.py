@@ -52,6 +52,7 @@ BODIES = ["archmage", "assassin", "barbarian", "berserker", "crusader", "knight"
 PACKS = [
     ("ui", ["assets/ui/*"]),
     ("world", ["assets/meshy/castle/*", "assets/meshy/*_shop/*", "assets/meshy/workshop/*", "assets/meshy/outpost_*/*",
+               "assets/meshy/war/*",                                    # 0.31.136: the war table's miniatures
                "assets/kaykit/*", "assets/kings/*", "assets/terrain/*", "assets/props/*"]),
     ("heroes", ["assets/meshy/%s/*" % b for b in BODIES]),
     ("weapons", ["assets/meshy/weapons/*"]),
