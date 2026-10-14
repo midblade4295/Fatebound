@@ -4050,3 +4050,5 @@ Kevin: "I don't like how static the map looks. I want it to look like a real nat
   (8.8 MB; uploaded to content-packs 055492c). The world pack is unchanged.
 - war_ui_test: the holders' tints, the miniatures in the land, the region under a point, a pinch and a drag (24 checks).
 - Version 0.31.137, versionCode 223 (server code unchanged; SERVER_BUILD follows the app's version).
+- Quick suite: all 91 passed. The Play AAB built from this commit (throwaway key, presets untouched by the build):
+  BASE OK (238 files, no pack data), CONTENT OK (6 packs on the branch), play_games true, bundletool valid.
