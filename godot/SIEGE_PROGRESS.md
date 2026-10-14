@@ -3710,3 +3710,12 @@ K2/K3 notes (0.17.0)
 - ElevenLabs (estimated and reported first): music, three cues x 4 takes, 5,039 credits; sound effects (rope creak,
   title slam, time-freeze breath) x 4 takes, ~660 credits. The takes used are in tools/trailer7_vo/raw.
 - Fatebound-Trailer-7.mp4: 75 s, 1920x1080 at 30 fps, -13.7 LUFS, -1.4 dBFS peak, 112 MB (and a 720p phone copy, 23 MB).
+
+## 0.31.129 — the title logo's white gaps cleared
+- Kevin (on Trailer 7's title): "There is white showing on the title". The painting's white page showed through in
+  three pockets shut in between the letters and the tagline scroll (under "FATE" and under "BOU"): the cut-out only
+  cleared the white connected to the painting's border. tools/build_title_logo.py now clears enclosed pockets of
+  white page too (at least POCKET_MIN 150 px, left of the King -- his beard and fur are white and stay). Same layout
+  (BASE / KING_AT / KING_SIZE / PIVOT unchanged), logo_king.webp unchanged; Home's logo and the trailer's title both
+  use the fixed logo_base.webp. ui content pack rebuilt (ui-26af4d5a8e1a). Trailer 7's title stretch re-rendered.
+- Version 0.31.129, versionCode 215.

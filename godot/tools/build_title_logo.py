@@ -38,11 +38,21 @@ CROWN = [(1060, 393), (1062, 370), (1071, 357), (1077, 350), (1078, 341), (1083,
 BODY_SEED = (1060, 500)        # a pixel of the ropes round his middle
 
 
+POCKET_MIN = 150               # enclosed bits of white page at least this big are page too
+POCKET_X1 = 1000               # (left of the King: his beard and fur are white and stay)
+
+
 def page_alpha(im):
-    """The white page around the logo becomes clear (flood fill of near-white from the border, 3px soft edge)."""
+    """The white page around the logo becomes clear (flood fill of near-white from the border, 3px soft edge) -- and so
+    do the pockets of page shut in between the letters and the scroll (0.31.129, Kevin: "There is white showing on the
+    title"), which the flood from the border can't reach."""
     mn = im.min(axis=2)
-    lab, _ = nd.label(mn > 238)
+    lab, n = nd.label(mn > 238)
     border = set(np.unique(np.concatenate([lab[0], lab[-1], lab[:, 0], lab[:, -1]]))) - {0}
+    sizes = nd.sum(np.ones_like(mn), lab, range(1, n + 1))
+    for i, sl in enumerate(nd.find_objects(lab)):
+        if sl is not None and sizes[i] >= POCKET_MIN and sl[1].stop <= POCKET_X1:
+            border.add(i + 1)
     bg = np.isin(lab, list(border))
     band = nd.binary_dilation(bg, iterations=3) & ~bg
     a = np.ones(mn.shape)
