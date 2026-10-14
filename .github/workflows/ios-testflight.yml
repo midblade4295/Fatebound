@@ -65,11 +65,13 @@ jobs:
         with:
           ref: ${{ inputs.ref }}
 
-      - name: Xcode
+      - name: Xcode 26 (Godot 4.7.2's iOS template is built with the iOS 26 SDK; the App Store wants it too)
         run: |
           set -euo pipefail
-          latest="$(ls -d /Applications/Xcode_16*.app 2>/dev/null | sort -V | tail -1 || true)"
-          if [ -n "$latest" ]; then sudo xcode-select -s "$latest"; fi
+          ls -d /Applications/Xcode*.app
+          pick="$(ls -d /Applications/Xcode_2[6-9]*.app 2>/dev/null | grep -vi beta | sort -V | tail -1 || true)"
+          [ -n "$pick" ] || { echo "no Xcode 26 or later on this runner image"; exit 1; }
+          sudo xcode-select -s "$pick"
           xcodebuild -version
           xcrun --sdk iphoneos --show-sdk-version
 
