@@ -106,6 +106,8 @@ var lobby_msgs := 0                 # "lobby" messages received (tests)
 var net_names := {}                 # unit id -> name of each live player in the match (0.31.86, the server's "pn")
 var net_titles := {}                # unit id -> their title id (0.31.87, the "pn" message's "tt")
 var net_looks := {}                 # unit id -> {class: "weapon id|stars|element"}: what they wear (0.31.101, "pn" "lk")
+var net_tags := {}                  # unit id -> clan tag (0.31.134, "pn" "ct")
+var clan_tag := ""                  # 0.31.134: the player's own clan tag (set by the app; shown on your plate)
 
 var sim
 var view
@@ -256,6 +258,7 @@ func _start_steps() -> Array:
 		view.player_looks = _looks()
 		view.my_name = player_name
 		view.my_title = my_title()
+		view.my_tag = clan_tag
 		viewport.add_child(view)
 		_view_steps = view.setup_steps(sim))
 	# (the view's own steps run from _view_steps between these two: the array is filled by the first step)
@@ -544,9 +547,11 @@ func _build_online_match(msg: Dictionary) -> void:
 	view.player_looks = _looks()
 	view.player_names = net_names
 	view.player_titles = net_titles
+	view.player_tags = net_tags
 	view.set_unit_looks(net_looks)
 	view.my_name = player_name
 	view.my_title = my_title()
+	view.my_tag = clan_tag
 	viewport.add_child(view)
 	view.setup(sim)
 	hud.sim = sim
@@ -672,10 +677,13 @@ func _net_process(delta: float) -> void:
 				net_titles = tt if tt is Dictionary else {}
 				var lk: Variant = msg.get("lk", {})           # 0.31.101: what each of them wears
 				net_looks = lk if lk is Dictionary else {}
+				var ct: Variant = msg.get("ct", {})           # 0.31.134: their clan tags
+				net_tags = ct if ct is Dictionary else {}
 				hud.net_names = net_names                     # 0.31.119: the scoreboard names the players
 				if is_instance_valid(view):
 					view.player_names = net_names
 					view.player_titles = net_titles
+					view.player_tags = net_tags
 					view.set_unit_looks(net_looks)
 			"qc":                                             # 0.31.111: a quick chat line from a player of my side (or anyone's gg)
 				var qu := str(msg.get("u", ""))

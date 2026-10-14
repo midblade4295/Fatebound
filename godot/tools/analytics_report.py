@@ -326,7 +326,8 @@ def build(events, accounts, now, days, tz, tz_name, info):
 
     # ---- social: share of the day's active players who used it (averaged over days with players) and of the period
     groups = {"chat": ("chat_send",), "friends": ("friend_add", "friend_accept"),
-              "party": ("party_create", "party_join", "party_invite"), "quick_chat": ("quick_chat",)}
+              "party": ("party_create", "party_join", "party_invite"), "quick_chat": ("quick_chat",),
+              "clans": ("clan_create", "clan_join", "clan_request", "clan_invite")}   # 0.31.134
     soc = {}
     for g, evs in groups.items():
         per_day = {}

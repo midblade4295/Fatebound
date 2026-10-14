@@ -427,6 +427,23 @@ func grant_prize(id: String, week: String, rank: int, prize: Dictionary) -> bool
 	_save_meta(e)
 	return true
 
+func pay_gold(id: String, amount: int, why: String) -> bool:
+	# 0.31.134: gold the server takes from an account (server/clans.gd: starting a clan costs Clans.COST_GOLD)
+	var e := _load(id)
+	if e.is_empty():
+		return false
+	var p = e.p
+	p.refresh()
+	p.replaying = true
+	var r: Dictionary = p.pay_gold(amount, why)
+	p.replaying = false
+	if not bool(r.get("ok", false)):
+		return false
+	e.meta.rev = int(e.meta.get("rev", 0)) + 1
+	_save_meta(e)
+	log_fn.call("account %s paid %d gold (%s)" % [id, amount, why])
+	return true
+
 func grant_referral(id: String, kind: String, name: String) -> bool:
 	# 0.31.120: a referral's Gold chest (server/referrals.gd)
 	var e := _load(id)

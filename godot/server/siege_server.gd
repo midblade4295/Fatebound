@@ -54,6 +54,8 @@ extends SceneTree
 # open without a hello (it never counts as a player). A hello from an account in a party is seated on its party's team.
 # {"t":"qc", "i"} in a match: a quick chat line (Net.QUICK_CHAT) to the player's side (or everyone), at most one every
 # Net.QC_GAP s; "Need help!" / "Follow me!" call the nearest bots (sim.call_bots). "ver"/"status" answer "social":1.
+# 0.31.134 (Crown War step 1): clans (server/clans.gd) on the same social socket; "pn" carries "ct":{unit id: clan tag}
+# and the lobby "ct" beside its names, so the tag shows before a player's name; "ver"/"status" answer "clans":1.
 #
 # 0.31.118 (Kevin's spec, ANALYTICS_SPEC_FOR_CLAUDE.md -- self-hosted analytics, no SDK, no third party): a socket whose
 # first message is {"t":"an", "acct", "key", "ev":[...]} hands over a batch of the phone's usage events
@@ -102,6 +104,7 @@ const IapVerifyApple = preload("res://server/iap_verify_apple.gd")     # 0.31.13
 const EcoAccounts = preload("res://server/eco_accounts.gd")
 const MatchLedger = preload("res://server/match_ledger.gd")
 const Social = preload("res://server/social.gd")
+const Clans = preload("res://server/clans.gd")          # 0.31.134: Crown War step 1
 const Analytics = preload("res://server/analytics.gd")
 const Leaderboard = preload("res://server/leaderboard.gd")
 const Referrals = preload("res://server/referrals.gd")
@@ -114,7 +117,7 @@ const LOBBY_TIME := 20.0             # the join countdown (0.31.82)
 const HELLO_TIMEOUT := 10.0
 const IAP_TIMEOUT := 40.0              # a purchase check may take a token request and an API call
 const REFUSE_CLOSE_DELAY := 0.25     # s between a "bye"/"ver" reply and closing the socket
-const SERVER_BUILD := "0.31.133"      # this server's game version; the probe says it by default (identifies as current)
+const SERVER_BUILD := "0.31.134"      # this server's game version; the probe says it by default (identifies as current)
 const MIN_BUILD_FILE := "/etc/fatebound-siege/min_build"
 const MIN_BUILD_RELOAD := 10.0       # s between re-reads of the min-build file
 const UPDATE_MSG := "A new version of Fatebound is out. Update now on Google Play to keep playing online."
@@ -245,7 +248,8 @@ func _init() -> void:
 			if c.hello and str(c.get("acct", "")) == acct:
 				return true
 		return false
-	_log("social: %d players known" % social.users.size())
+	social.clans = Clans.new(social.state, social)          # 0.31.134: clans ride the social socket
+	_log("social: %d players known, %d clans" % [social.users.size(), social.clans.clans.size()])
 	analytics = Analytics.new()
 	analytics.log_fn = _log
 	social.event_fn = func(acct: String, ev: String, p: Dictionary): analytics.server_event(acct, ev, p)
@@ -257,6 +261,7 @@ func _init() -> void:
 		if ok:
 			_log("prize week %s: #%d %s (%d gems, %s chest, %s)" % [week, rank, acct, int(prize.get("gems", 0)), str(prize.get("chest", "")), str(prize.get("title", "-"))])
 		return ok
+	leaderboard.tag_fn = func(acct: String) -> String: return social.clans.tag_of_acct(acct)   # 0.31.134
 	leaderboard.start()
 	social.rank_fn = func(acct: String) -> int: return leaderboard.rank_of(acct)       # 0.31.120: the profile card
 	referrals = Referrals.new()
@@ -570,7 +575,7 @@ func _handle(cid: int, msg: Dictionary) -> void:
 			# so the client treats no answer as "unknown" and checks again on connect.
 			if c.hello:
 				return
-			_send(cid, {"t":"ver", "v":Net.VERSION, "build":SERVER_BUILD, "min_build":min_build, "eco":1, "social":1, "an":1, "lb":1, "ref":1, "diag":1, "move":1})
+			_send(cid, {"t":"ver", "v":Net.VERSION, "build":SERVER_BUILD, "min_build":min_build, "eco":1, "social":1, "an":1, "lb":1, "ref":1, "diag":1, "move":1, "clans":1})
 			_refuse(cid, 1000, "ver")
 		"hello":
 			if c.hello or c.has("social"):
@@ -1045,6 +1050,17 @@ func player_titles(r: Room) -> Dictionary:
 			out[clients[cid].unit] = str(clients[cid].title)
 	return out
 
+func player_tags(r: Room) -> Dictionary:
+	# 0.31.134: unit id -> clan tag for each seated player in a clan
+	var out := {}
+	if social == null or social.clans == null:
+		return out
+	for cid in _seated(r):
+		var ct: String = social.clans.tag_of_acct(str(clients[cid].get("acct", "")))
+		if ct != "":
+			out[clients[cid].unit] = ct
+	return out
+
 func player_looks(r: Room) -> Dictionary:
 	# 0.31.101: unit id -> {class: "weapon id|stars|element"} for each seated player who wears something
 	var out := {}
@@ -1054,7 +1070,7 @@ func player_looks(r: Room) -> Dictionary:
 	return out
 
 func _send_names(r: Room) -> void:
-	var msg := {"t":"pn", "n":player_names(r), "tt":player_titles(r), "lk":player_looks(r)}
+	var msg := {"t":"pn", "n":player_names(r), "tt":player_titles(r), "lk":player_looks(r), "ct":player_tags(r)}
 	for cid in _members(r):
 		var c: Dictionary = clients[cid]
 		if not bool(c.get("queued", false)) and c.unit != "":
@@ -1106,10 +1122,12 @@ func _run_lobby(r: Room, delta: float) -> void:
 func _send_lobby(r: Room, waiting: Array) -> void:
 	var names := []
 	var titles := []
+	var tags := []
 	for cid in waiting:
 		names.append(clients[cid].name)
 		titles.append(str(clients[cid].get("title", "")))
-	var msg := {"t":"lobby", "left":maxf(0.0, r.wave_end - _now()), "wait":lobby_time, "names":names, "tt":titles,
+		tags.append(social.clans.tag_of_acct(str(clients[cid].get("acct", ""))) if social != null and social.clans != null else "")
+	var msg := {"t":"lobby", "left":maxf(0.0, r.wave_end - _now()), "wait":lobby_time, "names":names, "tt":titles, "ct":tags,
 		"in_match":_seated_count(r), "online":_human_count(), "slots":Net.TEAM_SIZE * 2,
 		"running":r.sim != null and not r.sim.ended and _seated_count(r) > 0, "match":r.match_id}   # (running: they join it)
 	for i in waiting.size():
@@ -1131,7 +1149,7 @@ func _status() -> Dictionary:
 			running = true
 	return {"t":"status", "v":Net.VERSION, "online":_human_count(), "in_match":in_match, "waiting":waiting,
 		"lobby":lobby, "running":running, "slots":Net.TEAM_SIZE * 2, "max":max_players * max_rooms, "rooms":rooms.size(),
-		"build":SERVER_BUILD, "min_build":min_build, "eco":1, "social":1, "an":1, "lb":1, "ref":1, "diag":1,
+		"build":SERVER_BUILD, "min_build":min_build, "eco":1, "social":1, "an":1, "lb":1, "ref":1, "diag":1, "clans":1,
 		"chatting":social.online.size() if social != null else 0}
 
 # ---------------- statistics (0.31.118) ----------------

@@ -20,9 +20,13 @@ extends RefCounted
 #            join the online match with "party" in the hello, and siege_server seats a party on one team. A party is
 #            gone when one member is left with no invite out; a member away from the app for 3 minutes leaves it.
 # Kept in social.json in the state directory (names, friends, requests, blocks), written 3 s after a change.
+# 0.31.134 (Crown War step 1): clans (server/clans.gd, set as `clans` by siege_server.gd) ride this socket too: the
+# "clan_*" messages go there, "clan" is a third chat channel (the clan's members), and cards and chat lines carry the
+# player's clan tag ("ct"). "me" says "clans":1 when the server has them.
 const CHAT_MAX := 120
 const HIST_GLOBAL := 50
 const HIST_PARTY := 30
+const HIST_CLAN := 50      # 0.31.134 (server/clans.gd keeps the same number)
 const CHAT_GAP := 1.2
 const CHAT_BURST := 6
 const CHAT_WINDOW := 20.0
@@ -68,6 +72,7 @@ var log_fn: Callable = func(_s): pass
 var event_fn: Callable = func(_acct, _ev, _p): pass   # 0.31.118: usage statistics (server/analytics.gd) -- never the text
 var rank_fn: Callable = func(_acct) -> int: return 0   # 0.31.120: this week's leaderboard rank (0: not on it)
 var prof_at := {}          # 0.31.120: pid -> clocks of its recent profile-card asks
+var clans = null           # 0.31.134: server/clans.gd (null: no clans -- the tests of this file alone)
 var _dirty_at := -1.0
 var _mute_clock := 0.0
 
@@ -218,6 +223,8 @@ func tick(delta: float) -> void:
 	if _mute_clock >= MUTE_RELOAD:
 		_mute_clock = 0.0
 		_reload_muted()
+	if clans != null:
+		clans.tick(delta)
 	for pid in invites.keys():
 		var mine: Dictionary = invites[pid]
 		for pa in mine.keys():
@@ -278,7 +285,7 @@ func hello(cid: int, msg: Dictionary) -> bool:
 	online[pid] = list
 	conns[cid] = pid
 	away.erase(pid)
-	send_fn.call(cid, {"t":"so", "k":"me", "pid":pid, "n":str(u.name), "tt":str(u.get("title", "")), "max":CHAT_MAX})
+	send_fn.call(cid, _me_msg(pid))
 	send_fn.call(cid, _friends_msg(pid))
 	send_fn.call(cid, {"t":"so", "k":"hist", "ch":"global", "list":_visible(pid, hist.global)})
 	var pa: String = party_of.get(pid, "")
@@ -288,6 +295,9 @@ func hello(cid: int, msg: Dictionary) -> bool:
 	for ipa in invites.get(pid, {}):
 		if parties.has(ipa):
 			send_fn.call(cid, {"t":"so", "k":"inv", "party":ipa, "from":_card(str(invites[pid][ipa].from))})
+	if clans != null:
+		for m in clans.hello(pid):                       # 0.31.134: their clan and its chat
+			send_fn.call(cid, m)
 	if list.size() == 1:
 		_presence(pid)
 	return true
@@ -328,6 +338,8 @@ func forget(acct: String) -> void:
 		return
 	if party_of.has(pid):
 		_leave(pid)
+	if clans != null:
+		clans.forget(pid)
 	for cid in conns.keys():
 		if str(conns[cid]) == pid:
 			close_fn.call(cid)
@@ -356,7 +368,22 @@ func _read_name(pid: String) -> void:
 
 func _card(pid: String) -> Dictionary:
 	var u: Dictionary = users.get(pid, {})
-	return {"pid":pid, "n":str(u.get("name", "Player")), "tt":str(u.get("title", "")), "st":status_of(pid), "seen":int(u.get("seen", 0))}
+	var c := {"pid":pid, "n":str(u.get("name", "Player")), "tt":str(u.get("title", "")), "st":status_of(pid), "seen":int(u.get("seen", 0))}
+	var ct := tag_of(pid)
+	if ct != "":
+		c["ct"] = ct                                     # 0.31.134: their clan's tag
+	return c
+
+func tag_of(pid: String) -> String:
+	return clans.tag_of(pid) if clans != null else ""
+
+func _me_msg(pid: String) -> Dictionary:
+	var u: Dictionary = users[pid]
+	var m := {"t":"so", "k":"me", "pid":pid, "n":str(u.name), "tt":str(u.get("title", "")), "max":CHAT_MAX}
+	if clans != null:
+		m["clans"] = 1
+		m["ct"] = tag_of(pid)
+	return m
 
 func _friends_msg(pid: String) -> Dictionary:
 	var u: Dictionary = users[pid]
@@ -393,7 +420,12 @@ func handle(cid: int, msg: Dictionary) -> void:
 	if pid == "" or not users.has(pid):
 		return
 	var who := str(msg.get("pid", "")).to_lower().strip_edges()
-	match str(msg.get("k", "")):
+	var k := str(msg.get("k", ""))
+	if k.begins_with("clan_"):
+		if clans != null:
+			clans.handle(pid, msg)                       # 0.31.134
+		return
+	match k:
 		"chat": _chat(pid, msg)
 		"add": _add(pid, who)
 		"decline": _decline(pid, who)
@@ -411,7 +443,7 @@ func handle(cid: int, msg: Dictionary) -> void:
 		"refresh":
 			_read_name(pid)
 			_mark()
-			send_fn.call(cid, {"t":"so", "k":"me", "pid":pid, "n":str(users[pid].name), "tt":str(users[pid].get("title", "")), "max":CHAT_MAX})
+			send_fn.call(cid, _me_msg(pid))
 			send_fn.call(cid, _friends_msg(pid))
 			_presence(pid)
 
@@ -435,12 +467,13 @@ func _prof(cid: int, pid: String, who: String) -> void:
 			out.ok = true
 			out.n = str(u.get("name", "Player"))
 			out.tt = str(u.get("title", ""))
+			out.ct = tag_of(who)                          # 0.31.134: their clan's tag
 			out.rank = int(rank_fn.call(str(u.acct)))
 	send_fn.call(cid, out)
 
 func _chat(pid: String, msg: Dictionary) -> void:
 	var ch := str(msg.get("ch", "global"))
-	if not ch in ["global", "party"]:
+	if not ch in ["global", "party", "clan"]:
 		return
 	if muted.has(pid):
 		_note(pid, "You can't chat right now", true)
@@ -463,6 +496,10 @@ func _chat(pid: String, msg: Dictionary) -> void:
 	if ch == "party" and pa == "":
 		_note(pid, "You're not in a party", true)
 		return
+	var clan := str(clans.clan_of(pid)) if clans != null else ""
+	if ch == "clan" and clan == "":
+		_note(pid, "You're not in a clan", true)
+		return
 	r.last = clock
 	(r.times as Array).append(clock)
 	r.text = text.to_lower()
@@ -470,8 +507,16 @@ func _chat(pid: String, msg: Dictionary) -> void:
 	var u: Dictionary = users[pid]
 	event_fn.call(str(u.get("acct", "")), "chat_send", {"kind":ch})
 	var m := {"id":next_msg, "ch":ch, "pid":pid, "n":str(u.name), "tt":str(u.get("title", "")), "x":text, "at":unix()}
+	var ct := tag_of(pid)
+	if ct != "":
+		m["ct"] = ct
 	next_msg += 1
-	if ch == "global":
+	if ch == "clan":
+		_hist_add("c:" + clan, m, HIST_CLAN)
+		for mp in clans.members_of(clan):
+			if not (users.get(str(mp), {}).get("blocked", []) as Array).has(pid):
+				_send(str(mp), {"t":"so", "k":"chat", "m":m})
+	elif ch == "global":
 		_hist_add("global", m, HIST_GLOBAL)
 		var out := {"t":"so", "k":"chat", "m":m}
 		for other in online:
@@ -591,6 +636,8 @@ func _block(pid: String, target: String) -> void:
 		while (u.blocked as Array).size() > MAX_BLOCKED:
 			u.blocked.pop_front()
 	_unfriend(pid, target)
+	if clans != null:
+		clans.blocked(pid, target)                       # 0.31.134: their clan invites to you go too
 	for pair in [[pid, target], [target, pid]]:            # no invites between them
 		var mine: Dictionary = invites.get(pair[0], {})
 		for pa in mine.keys():
@@ -616,7 +663,8 @@ func _report(pid: String, target: String, why: String) -> void:
 	reports[pid] = mine
 	var lines := []
 	var pa: String = party_of.get(pid, "")
-	for key in ["global", "p:" + pa]:
+	var my_clan := str(clans.clan_of(pid)) if clans != null else ""
+	for key in ["global", "p:" + pa, "c:" + my_clan]:
 		for m in hist.get(key, []):
 			if str(m.get("pid", "")) == target:
 				lines.append(str(m.x))

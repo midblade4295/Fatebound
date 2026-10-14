@@ -154,9 +154,12 @@ func update(msg: Dictionary) -> void:
 	sub_lbl.text = note_text if note_text != "" else "bots fill the empty slots"
 	var names: Array = (msg.get("names", []) as Array).duplicate()
 	var tt: Array = msg.get("tt", []) if msg.get("tt", []) is Array else []
+	var ct: Array = msg.get("ct", []) if msg.get("ct", []) is Array else []
 	for i in names.size():                         # (0.31.87: with their titles, punctuated)
 		if i < tt.size() and str(tt[i]) != "":
 			names[i] = Net.title_text(str(names[i]), str(tt[i]))
+		if i < ct.size() and str(ct[i]) != "":
+			names[i] = "[%s] %s" % [str(ct[i]), str(names[i])]   # 0.31.134: their clan's tag
 	_set_names(names, int(msg.get("me", -1)))
 	_first = false
 

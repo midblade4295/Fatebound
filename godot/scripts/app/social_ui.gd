@@ -13,6 +13,54 @@ const RARITY_COL := {"common": Color("#cfd8e0"), "rare": Color("#6cc4ff"), "epic
 const NAME_ME := Color("#ffd65a")
 const NAME_OTHER := Color("#9fd8ff")
 const REPORTS := [["language", "Offensive language"], ["spam", "Spam"], ["cheating", "Cheating"], ["name", "Offensive name"], ["other", "Something else"]]
+# 0.31.134 (Crown War step 1): the three houses a clan fights for
+const HOUSES := ["lions", "stags", "ravens"]
+const HOUSE_NAME := {"lions": "Lions", "stags": "Stags", "ravens": "Ravens"}
+const HOUSE_COL := {"lions": Color("#ffc23d"), "stags": Color("#6be07c"), "ravens": Color("#c99bff")}
+const HOUSE_RIM := {"lions": "orange", "stags": "green", "ravens": "purple"}
+const HOUSE_BTN := {"lions": "gold", "stags": "green", "ravens": "purple"}
+
+static func house_name(h: String) -> String:
+	return str(HOUSE_NAME.get(h, "?"))
+
+static func house_color(h: String) -> Color:
+	return HOUSE_COL.get(h, UI2.MUTED)
+
+static func house_rim(h: String) -> String:
+	return str(HOUSE_RIM.get(h, "gold"))
+
+static func house_button(h: String) -> String:
+	return str(HOUSE_BTN.get(h, "grey"))
+
+static func house_chip(parent: Node, h: String, px := 14.0) -> Panel:
+	# a small round chip in the house's colour
+	var d := Panel.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = house_color(h)
+	sb.border_color = house_color(h).darkened(0.55)
+	sb.set_border_width_all(2)
+	sb.set_corner_radius_all(int(px))
+	d.add_theme_stylebox_override("panel", sb)
+	d.custom_minimum_size = Vector2(px, px)
+	d.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	d.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(d)
+	return d
+
+static func social_tabs(parent: Node, app, on: String) -> void:
+	# FRIENDS | CLAN at the top of both windows (a badge count on the other one)
+	var tr := UI.row(parent, 8)
+	var social = app.social
+	for t in [["friends", "FRIENDS"], ["clan", "CLAN"]]:
+		var id: String = t[0]
+		var n := 0
+		if social != null and social.online():
+			n = (social.rin.size() + social.invites.size()) if id == "friends" else (social.clan_inv.size() + (social.clan_requests() if social.is_clan_officer() else 0))
+		var b := UI2.button(tr, str(t[1]) + ("  (%d)" % n if n > 0 and id != on else ""), "gold" if id == on else "blue", func():
+			if id != on:
+				app.sfx("tab")
+				app.open_social(id), "social_tab_" + id, 15, 38.0, 12.0)
+		UI.grow(b)
 
 static func ago(secs: int) -> String:
 	if secs < 90:
@@ -164,8 +212,13 @@ static func _fill_card(app, ov: Control, v: VBoxContainer, c0: Dictionary) -> vo
 	if c.is_empty():
 		c = c0
 	var rel: String = social.relation(pid)
+	var pr0: Dictionary = social.profile_of(pid)
+	var ct := str(c.get("ct", pr0.get("ct", "")))      # 0.31.134: their clan's tag
 	var nl := UI2.text(v, str(c.get("n", "Player")), 24, Color.WHITE)
 	nl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	if ct != "":
+		var cl := UI2.text(v, "[%s]" % ct, 15, UI2.GOLD)
+		cl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	var tr := HBoxContainer.new()
 	tr.alignment = BoxContainer.ALIGNMENT_CENTER
 	tr.add_theme_constant_override("separation", 8)
@@ -243,6 +296,11 @@ static func _fill_card(app, ov: Control, v: VBoxContainer, c0: Dictionary) -> vo
 			UI2.button(v, "UNBLOCK", "blue", func():
 				app.sfx("tap")
 				act.call(social.unblock(pid)), "card_unblock", 16, 44.0)
+	if rel != "blocked" and social.has_clans and social.is_clan_officer() and ct == "" and not social.in_my_clan(pid):
+		# 0.31.134: officers invite players who aren't in a clan
+		UI2.button(v, "INVITE TO CLAN", "purple", func():
+			app.sfx("confirm")
+			act.call(social.clan_invite(pid)), "card_clan_invite", 15, 42.0)
 	var r2 := UI.row(v, 8)
 	if rel != "blocked":
 		var bb := UI2.button(r2, "BLOCK", "red", func(): pass, "card_block", 14, 40.0)
@@ -394,3 +452,116 @@ static func _stats_block(v: VBoxContainer, pr: Dictionary, online: bool) -> void
 	var foot := UI.label(f, "  ·  ".join(bits), 11, UI2.MUTED, UI.HEAVY_FONT)
 	foot.autowrap_mode = TextServer.AUTOWRAP_OFF
 	foot.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+
+# ---------------- a clan's card (0.31.134) ----------------
+static func clan_card(app, host: Control, c0: Dictionary) -> void:
+	var social = app.social
+	var id := str(c0.get("id", ""))
+	if social == null or id == "":
+		return
+	app.sfx("menuOpen")
+	for o in host.get_children():
+		if o.has_meta("clan_card"):
+			o.queue_free()
+	var ov := Control.new()
+	ov.set_meta("clan_card", true)
+	ov.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	host.add_child(ov)
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.55)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dim.gui_input.connect(func(ev: InputEvent):
+		if (ev is InputEventMouseButton or ev is InputEventScreenTouch) and not ev.pressed:
+			app.sfx("menuClose")
+			ov.queue_free())
+	ov.add_child(dim)
+	var cc := CenterContainer.new()
+	cc.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	cc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ov.add_child(cc)
+	var v := UI2.frame(cc, "night", 14, 20.0, house_rim(str(c0.get("house", ""))))
+	(v.get_parent() as Control).custom_minimum_size = Vector2(minf(340.0, host.size.x - 32.0), 0)
+	v.add_theme_constant_override("separation", 8)
+	_fill_clan_card(app, ov, v, c0)
+	social.clan_info(id)
+	var on_ch := func(what: String) -> void:
+		if what in ["clan_info", "clan"] and is_instance_valid(ov) and is_instance_valid(v) and ov.is_inside_tree():
+			_fill_clan_card(app, ov, v, c0)
+	social.changed.connect(on_ch)
+	ov.tree_exiting.connect(func():
+		if social.changed.is_connected(on_ch):
+			social.changed.disconnect(on_ch))
+
+static func _fill_clan_card(app, ov: Control, v: VBoxContainer, c0: Dictionary) -> void:
+	for ch in v.get_children():
+		ch.queue_free()
+	var social = app.social
+	var id := str(c0.get("id", ""))
+	var info: Dictionary = social.clan_infos.get(id, {})
+	var c: Dictionary = c0.duplicate()
+	c.merge(info, true)
+	var house := str(c.get("house", ""))
+	var nl := UI2.text(v, str(c.get("name", "")), 22, Color.WHITE)
+	nl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var hl := UI2.text(v, "[%s]  ·  HOUSE %s" % [str(c.get("tag", "")), house_name(house).to_upper()], 14, house_color(house))
+	hl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var bits := ["%d / %d members" % [int(c.get("n", 0)), int(c.get("max", 30))],
+		{"open":"Open to all", "request":"Join by request", "invite":"Invite only"}.get(str(c.get("join", "")), "")]
+	if int(c.get("min_lv", 1)) > 1:
+		bits.append("Lv %d+" % int(c.min_lv))
+	var bl := UI.label(v, "  ·  ".join(bits), 12, UI2.SOFT, UI.HEAVY_FONT)
+	bl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	bl.autowrap_mode = TextServer.AUTOWRAP_OFF
+	var f := UI2.frame(v, "glass", 10, 14.0)
+	f.add_theme_constant_override("separation", 4)
+	var members: Array = info.get("members", [])
+	if info.is_empty():
+		UI2.body(f, "Loading..." if social.online() else "Not connected", 12, UI2.MUTED)
+	elif members.is_empty():
+		UI2.body(f, "That clan is gone", 12, UI2.MUTED)
+	for m in members.slice(0, 12):
+		var r := UI.row(f, 6)
+		if str(m.get("role", "")) == "leader":
+			UI2.icon(r, "crown", 16.0).size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		var ml := UI2.text(r, str(m.get("n", "Player")), 14, Color.WHITE)
+		ml.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		ml.clip_text = true
+		if str(m.get("role", "")) == "officer":
+			var ol := UI.label(r, "OFFICER", 10, UI2.CYAN, UI.HEAVY_FONT)
+			ol.autowrap_mode = TextServer.AUTOWRAP_OFF
+			ol.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	if members.size() > 12:
+		UI2.body(f, "and %d more" % (members.size() - 12), 12, UI2.MUTED)
+	var done := func(ok: bool) -> void:
+		if not ok:
+			app.sfx("error")
+			app.toast("Not connected to the server right now", UI.RED)
+		elif is_instance_valid(ov):
+			ov.queue_free()
+	if not social.in_clan():
+		var invited: bool = social.clan_inv.any(func(x): return str(x.get("id", "")) == id) or bool(c.get("invited", false))
+		var asked: bool = social.clan_asked.has(id) or bool(c.get("asked", false))
+		var full := int(c.get("n", 0)) >= int(c.get("max", 30))
+		var cool: bool = social.clan_cool_left() > 0
+		if asked:
+			UI2.button(v, "TAKE BACK MY REQUEST", "ghost", func():
+				app.sfx("tap")
+				done.call(social.clan_unreq(id)), "clan_card_unreq", 14, 40.0)
+		elif full and not invited:
+			UI2.dim_button(UI2.button(v, "FULL", "grey", func(): pass, "clan_card_full", 15, 44.0), true)
+		elif invited or str(c.get("join", "")) == "open":
+			var jb := UI2.button(v, "JOIN", "green", func():
+				app.sfx("confirm")
+				done.call(social.clan_join(id)), "clan_card_join", 17, 46.0)
+			UI2.dim_button(jb, cool)
+		elif str(c.get("join", "")) == "request":
+			var ab := UI2.button(v, "ASK TO JOIN", "orange", func():
+				app.sfx("confirm")
+				done.call(social.clan_join(id)), "clan_card_ask", 17, 46.0)
+			UI2.dim_button(ab, cool)
+		else:
+			UI2.dim_button(UI2.button(v, "INVITE ONLY", "grey", func(): pass, "clan_card_inviteonly", 15, 44.0), true)
+	UI2.button(v, "CLOSE", "ghost", func():
+		app.sfx("menuClose")
+		if is_instance_valid(ov):
+			ov.queue_free(), "clan_card_close", 14, 36.0)

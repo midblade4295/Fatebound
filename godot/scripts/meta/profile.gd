@@ -127,6 +127,7 @@ static func defaults() -> Dictionary:
 		"login":{"day":"", "n":0},                                   # 0.31.119: the last day claimed, claims so far
 		"discord":false,                                             # 0.31.124: the Discord reward claimed
 		"prizes":[],                                                 # 0.31.120: weekly leaderboard prizes paid (newest first)
+		"paid":[],                                                   # 0.31.134: gold the server took (a clan), newest first
 		"referral":{"by":"", "notes":[]},                            # 0.31.120: whose code was entered; friend rewards (newest first)
 		"embers":0,                                                  # 0.31.90: the Forge's material
 		"forge":{"stars":{}, "wins":{}, "element":{}},              # 0.31.93: per weapon (Eco.forge_id): stars 0-3, wins, aura element
@@ -647,6 +648,21 @@ func grant_prize(week: String, rank: int, prize: Dictionary) -> Dictionary:
 		d.prizes.resize(12)
 	save()
 	return {"ok":true, "chests":out.chests}
+
+# ---------------- gold the server takes (0.31.134) ----------------
+func pay_gold(amount: int, why: String) -> Dictionary:
+	# the server only (server/clans.gd: starting a clan): gold taken from the account, never below zero; the phone sees
+	# it with its next answer from the server (eco_sync pull)
+	if amount <= 0 or int(d.gold) < amount:
+		return {"ok":false, "error":"gold"}
+	d.gold = int(d.gold) - amount
+	if not (d.get("paid", null) is Array):
+		d["paid"] = []
+	d.paid.push_front({"at":now(), "gold":amount, "why":why.left(16)})
+	if (d.paid as Array).size() > 12:
+		d.paid.resize(12)
+	save()
+	return {"ok":true}
 
 # ---------------- referrals (0.31.120) ----------------
 func grant_referral(kind: String, name: String) -> Dictionary:

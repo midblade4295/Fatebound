@@ -34,6 +34,7 @@ var rows := {}                     # acct -> {"name", "title", "pts", "w", "m", 
 var last := []                     # last week's top 3: [{"name", "title", "pts"}]
 var paid := ""                     # 0.31.120: the last week whose prizes were paid
 var pay_fn: Callable = func(_acct, _week, _rank, _prize): return false
+var tag_fn: Callable = func(_acct) -> String: return ""   # 0.31.134: the player's clan tag (server/clans.gd)
 var now_override := -1
 var log_fn: Callable = func(_s): pass
 var _dirty_at := -1.0
@@ -117,6 +118,9 @@ func _row(acct: String, rank: int, mine: bool) -> Dictionary:
 	var out := {"rank":rank, "name":str(r.get("name", "Player")), "title":str(r.get("title", "")), "pts":int(r.pts),
 		"w":int(r.w), "m":int(r.m), "r":int(r.r), "k":int(r.k), "q":qualified(r),
 		"pid":acct.sha256_text().left(10)}             # 0.31.120: the public friend code (tap a row: the player's card)
+	var ct := str(tag_fn.call(acct))
+	if ct != "":
+		out["ct"] = ct                                 # 0.31.134: their clan's tag
 	if mine:
 		out["you"] = true
 	return out

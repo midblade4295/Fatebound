@@ -165,7 +165,10 @@ func _row(parent: Node, r: Dictionary) -> void:
 	col.add_theme_constant_override("separation", -2)
 	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	h.add_child(col)
-	var nl := UI.label(col, str(r.get("name", "Player")) + ("  (you)" if mine else ""), 14, UI2.GOLD if mine else Color.WHITE, UI.HEAVY_FONT)
+	var nm := str(r.get("name", "Player"))
+	if str(r.get("ct", "")) != "":
+		nm = "[%s] %s" % [str(r.ct), nm]                # 0.31.134: their clan's tag
+	var nl := UI.label(col, nm + ("  (you)" if mine else ""), 14, UI2.GOLD if mine else Color.WHITE, UI.HEAVY_FONT)
 	nl.autowrap_mode = TextServer.AUTOWRAP_OFF
 	nl.clip_text = true
 	nl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
@@ -191,7 +194,7 @@ func _row(parent: Node, r: Dictionary) -> void:
 		for st_name in ["normal", "hover", "pressed", "focus", "hover_pressed"]:
 			tap.add_theme_stylebox_override(st_name, StyleBoxEmpty.new())
 		tap.set_meta("action_key", "lb_card_%d" % rank)
-		var card := {"pid":pid, "n":str(r.get("name", "Player")), "tt":str(r.get("title", ""))}
+		var card := {"pid":pid, "n":str(r.get("name", "Player")), "tt":str(r.get("title", "")), "ct":str(r.get("ct", ""))}
 		tap.pressed.connect(func(): SocialUI.name_card(app, self, card))
 		box.add_child(tap)
 

@@ -330,9 +330,10 @@ static func home(app, root: VBoxContainer) -> void:
 	# friend requests and party invites waiting)
 	var soc = app.get("social")
 	var att: int = soc.attention() if soc != null and soc.online() else 0
-	var frb := _medallion(top, Vector2(w - 62, MED_Y[2]), "friends", "FRIENDS", func():
+	# 0.31.134 (Crown War step 1): SOCIAL -- the window has FRIENDS and CLAN tabs (no room on Home for another medallion)
+	var frb := _medallion(top, Vector2(w - 62, MED_Y[2]), "friends", "SOCIAL", func():
 		app.sfx("menuOpen")
-		app.open_friends(), "side_friends", att, "silver")
+		app.open_social(), "side_friends", att, "silver")
 	if att > 0:
 		UI2.wiggle(frb.get_meta("icon"))
 	# 0.31.119 (Kevin: "Do all" -- leaderboards): RANKS takes the top-right medallion (the week's leaderboard); the first

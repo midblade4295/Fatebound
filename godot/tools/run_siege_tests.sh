@@ -159,6 +159,10 @@ run menu_float_test      MENU_FLOAT_PASS          60
 # Chat, friends, parties and quick chat (0.31.111): server/social.gd alone, then two phones against the real server.
 run social_test          SOCIAL_PASS              150
 run social_ui_test       SOCIAL_UI_PASS           200
+# Clans (0.31.134, Crown War step 1): server/clans.gd through social.gd, then the app's CLAN window against the real
+# server (8118) with a second phone: start a clan (gold taken), find, request, accept, clan chat, MANAGE, tags in the match.
+run clans_test           CLANS_PASS               90
+run clans_ui_test        CLANS_UI_PASS            240
 # Usage statistics (0.31.118): the phone's queue, the server's files (and an older server on 8101), end to end against
 # the real server on 8100 (the probe included), then the report on a fixture.
 run analytics_client_test ANALYTICS_CLIENT_PASS   60

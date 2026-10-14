@@ -3904,3 +3904,45 @@ K2/K3 notes (0.17.0)
   key check). One commit for the Android build, the server and the iOS TestFlight build.
 - Quick suite: all 86 passed (85 Godot tests + the report check). The Play AAB built from this commit (throwaway key,
   preset.0 untouched): BASE OK (228 files), CONTENT OK, play_games true, bundletool valid.
+
+## 0.31.134 — Crown War step 1: clans
+Kevin's Crown War design (houses, clans, a weekly war over a live map) starts with clans. Decisions (Kevin, 2026-10-14):
+30 members, a clan's house never changes, 10,000 gold to start one, houses Lions / Stags / Ravens, map battles for clans
+only (later steps).
+- server/clans.gd (new, clans.json in the state directory): a clan has a name (3-20 letters, digits, spaces, ' and -;
+  the chat's word filter; unique ignoring case, spaces and punctuation), a tag (3-4 of A-Z 0-9, unique, filtered), a
+  house, who may join (open / by request / invite only), the lowest level, a leader, officers and members (30 at most).
+  Officers and the leader answer requests, invite (by friend code or a name card; an invite lets a player past the
+  level and the mode; a player who blocked the officer never gets it, and blocking takes an invite away), and remove
+  members; the leader also names officers, hands the clan over, removes officers and disbands. Leaving or being removed
+  means 24 hours before joining or starting another clan (disbanding, or the last one out, doesn't). A leader not seen
+  for 14 days hands the clan to the officer seen last (else the member seen last). Invites and requests last 7 days.
+  At most 20 clan messages a player per 10 s; asking to join again pops up for the officers once an hour.
+- Starting a clan: every rule checked first, then eco_accounts.pay_gold (Profile.pay_gold, server only, never below
+  zero, noted in profile "paid") takes 10,000 gold, then the clan is made and written to disk at once. The phone pulls
+  its account and shows the new gold.
+- It rides the social socket (server/social.gd): "clan_*" messages; "clan" is a third chat channel (members only, 50
+  lines, sys lines for joins, leaves, roles); cards, chat lines, profile cards and leaderboard rows carry "ct" (the
+  tag); "pn" carries "ct" per unit and the lobby a "ct" list (siege_server.gd); "me", "ver" and "status" say
+  "clans":1. Account deletion leaves the clan. Usage statistics: clan_create / clan_join / clan_request / clan_invite /
+  clan_leave (server events), and a "clans" line in the report's social section.
+- The phone: Home's FRIENDS medallion is SOCIAL (no room for another medallion beside the heroes); its window has
+  FRIENDS and CLAN tabs (counts on the other tab). CLAN (scripts/app/clan_panel.gd): not in a clan -- invites, FIND A
+  CLAN (search, house filters, JOIN / ASK / ASKED / FULL / INVITE ONLY, a clan's card with its members), START A CLAN
+  (name, tag in capitals, house, who may join, lowest level, the cost against your gold); in a clan -- the banner in
+  the house's colours, CLAN CHAT, requests (officers), INVITE A PLAYER (officers), members (crown, OFFICER, MANAGE:
+  make officer / member / leader, remove), settings (officers), LEAVE / DISBAND (two taps). The chat has a CLAN tab;
+  a name card shows the tag and INVITE TO CLAN (officers, players not in a clan). The tag shows before names in chat,
+  friends, ranks, the lobby and over heads in a match ("[WOLF] Alice").
+- Tests: clans_test (73 checks: server/clans.gd through social.gd) and clans_ui_test (26 checks: the app's buttons
+  against the real server on 8118 with a second phone, gold taken and shown, request/accept, clan chat, MANAGE, the
+  tag over her head in a match). A separate review of the server code found no serious defects; its four smaller
+  findings (the clan written at once after the gold is taken, a rate limit and one pop-up an hour, no wait for the
+  last one out, blocking removes an invite) are fixed and tested.
+- server/deploy/install_siege_server.sh copies server/clans.gd (checked: the installer's minimal project, built the same
+  way, starts and says "social: 0 players known, 0 clans").
+- Version 0.31.134, versionCode 220. Server 0.31.134 must be deployed for clans (older servers: the CLAN tab says clans
+  arrive with the next server update).
+- Quick suite: all 88 passed (87 Godot tests + the report check; profile_card_test's list of card fields now allows
+  "ct"). The Play AAB built from this commit (throwaway key, preset.0 untouched): BASE OK (230 files), CONTENT OK,
+  play_games true, bundletool valid.

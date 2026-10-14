@@ -23,6 +23,7 @@ const RewardFly = preload("res://scripts/app/reward_fly.gd")
 const Social = preload("res://scripts/meta/social.gd")
 const ChatPanel = preload("res://scripts/app/chat_panel.gd")
 const FriendsPanel = preload("res://scripts/app/friends_panel.gd")
+const ClanPanel = preload("res://scripts/app/clan_panel.gd")             # 0.31.134: Crown War step 1
 const ChatTicker = preload("res://scripts/app/chat_ticker.gd")
 const InviteBanner = preload("res://scripts/app/invite_banner.gd")
 const OrdersPanel = preload("res://scripts/app/orders_panel.gd")
@@ -137,6 +138,7 @@ var social: Node = null
 var social_autostart := DisplayServer.get_name() != "headless" or OS.has_environment("FB_SOCIAL")
 var chat_ticker: Control = null
 var _invite_banner: Control = null
+var social_tab := "friends"            # 0.31.134: FRIENDS or CLAN, the one the social window opened on last
 var _social_name := ""
 var _social_sig := ""                  # what Home shows of it (requests, invites, the party): redraw when it changes
 var _guard: Node = null
@@ -214,6 +216,7 @@ func _ready() -> void:
 	social.invited.connect(_on_party_invite)
 	social.go.connect(_on_party_go)
 	social.changed.connect(_on_social_changed)
+	social.clan_invited.connect(_on_clan_invited)
 	chat_ticker.setup(self)
 	if social_autostart:
 		social.set_active(true)
@@ -1152,6 +1155,7 @@ func start_match(online: bool, tutorial := false, follow := false) -> void:
 	siege.hq_gfx = bool(profile.d.settings.get("hq_graphics", true))
 	siege.vibrate = bool(profile.d.settings.get("vibrate", true))          # 0.31.120
 	siege.player_name = str(profile.d.name)
+	siege.clan_tag = social.my_tag() if social != null else ""        # 0.31.134: on your own plate
 	siege.analytics = analytics
 	siege.party_join = pending_join                 # 0.31.120: Friends > JOIN (their match)
 	pending_join = ""
@@ -1757,10 +1761,45 @@ func open_friends() -> void:
 	if social == null:
 		return
 	close_modal()
+	social_tab = "friends"
 	var m := FriendsPanel.new()
 	add_child(m)
 	modal = m
 	m.open(self)
+
+func open_clan() -> void:
+	# 0.31.134 (Crown War step 1): the CLAN window, beside FRIENDS
+	if social == null:
+		return
+	close_modal()
+	social_tab = "clan"
+	var m := ClanPanel.new()
+	add_child(m)
+	modal = m
+	m.open(self)
+
+func open_social(which := "") -> void:
+	# Home's SOCIAL medallion and the tabs: FRIENDS or CLAN (the last one open, unless something waits in the other)
+	if which == "" and social != null and social.online():
+		var fr: int = social.rin.size() + social.invites.size()
+		var cl: int = social.clan_inv.size() + (social.clan_requests() if social.is_clan_officer() else 0)
+		which = "friends" if fr > 0 and cl == 0 else ("clan" if cl > 0 and fr == 0 else social_tab)
+	if which == "clan":
+		open_clan()
+	else:
+		open_friends()
+
+func clan_founded() -> void:
+	# the server took the clan's gold: fetch the account as it stands now
+	if eco_sync != null:
+		eco_sync.pull()
+	toast("Your clan is founded!", UI.GOLD)
+
+func _on_clan_invited(c: Dictionary, by: Dictionary) -> void:
+	if siege != null:
+		return                               # (it waits in CLAN)
+	sfx("chatPop")
+	toast("%s invited you to [%s] %s -- see SOCIAL" % [str(by.get("n", "Someone")), str(c.get("tag", "")), str(c.get("name", ""))], UI.CYAN)
 
 func _on_social_note(t: String, bad: bool, pop: bool) -> void:
 	if siege != null:
@@ -1804,7 +1843,7 @@ func social_sig() -> String:
 func _on_social_changed(what: String) -> void:
 	if what == "me":
 		_social_name = str(profile.d.name)
-	if siege != null or not what in ["friends", "party", "state"]:
+	if siege != null or not what in ["friends", "party", "state", "clan"]:
 		return
 	_social_home()
 

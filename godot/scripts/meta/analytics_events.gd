@@ -46,6 +46,11 @@ const SERVER := {
 	"party_invite": [],
 	"quick_chat": ["i"],
 	"update_screen": ["from_build", "need"],
+	"clan_create": ["house", "join"],               # 0.31.134: clans (server/clans.gd)
+	"clan_join": ["n"],
+	"clan_request": [],
+	"clan_invite": [],
+	"clan_leave": [],
 }
 
 static func clean_props(allowed: Array, p: Variant) -> Dictionary:

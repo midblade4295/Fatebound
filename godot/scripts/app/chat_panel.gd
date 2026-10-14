@@ -24,7 +24,7 @@ var _stick := true                    # follow new lines (the list is at its bot
 func open(a, start_ch := "global") -> void:
 	app = a
 	social = a.social
-	ch = start_ch if start_ch == "party" and social.in_party() else ("global" if social.show_global else "party")
+	ch = start_ch if (start_ch == "party" and social.in_party()) or (start_ch == "clan" and social.in_clan()) else ("global" if social.show_global else "party")
 	_build()
 	social.changed.connect(_on_changed)
 	social.viewing = ch
@@ -42,7 +42,7 @@ func _build() -> void:
 	_margin = w.margin
 	var body: VBoxContainer = w.body
 	var tr := UI.row(body, 8)
-	for t in [["global", "GLOBAL"], ["party", "PARTY"]]:
+	for t in [["global", "GLOBAL"], ["party", "PARTY"], ["clan", "CLAN"]]:       # (0.31.134: CLAN)
 		var id: String = t[0]
 		var b := UI2.button(tr, t[1], "gold", func(): _switch(id), "chat_tab_" + id, 15, 38.0, 12.0)
 		UI.grow(b)
@@ -75,6 +75,10 @@ func _switch(id: String) -> void:
 		app.sfx("error")
 		app.toast("Invite a friend to a party first -- tap their name, or open Friends", UI.MUTED)
 		return
+	if id == "clan" and not social.in_clan():
+		app.sfx("error")
+		app.toast("Join a clan first -- FRIENDS on Home, then CLAN", UI.MUTED)
+		return
 	if id == "global" and not social.show_global:
 		app.sfx("error")
 		app.toast("Global chat is off -- turn it on in Settings", UI.MUTED)
@@ -99,11 +103,11 @@ func _send() -> void:
 		app.toast("Not connected to chat right now", UI.RED)
 
 func _on_changed(what: String) -> void:
-	if what == "party" and ch == "party" and not social.in_party():
+	if (what == "party" and ch == "party" and not social.in_party()) or (what == "clan" and ch == "clan" and not social.in_clan()):
 		ch = "global"
 		social.viewing = ch
 		_shown = 0
-	if what in ["chat", "party", "state", "me"]:
+	if what in ["chat", "party", "state", "me", "clan"]:
 		if social.viewing == ch:
 			social.unread[ch] = 0
 		_render()
@@ -114,11 +118,13 @@ func _render() -> void:
 		var b: Button = _tabs[id]
 		var on: bool = id == ch
 		var n := int(social.unread.get(id, 0))
-		var label := "GLOBAL" if id == "global" else "PARTY"
+		var label: String = {"global":"GLOBAL", "party":"PARTY", "clan":"CLAN"}[id]
 		if id == "party" and social.in_party():
 			label = "PARTY %d/%d" % [social.party_size(), int(social.party.get("max", 4))]
 		b.text = label + ("  (%d)" % n if n > 0 and not on else "")
 		b.modulate = Color.WHITE if on else Color(0.72, 0.76, 0.86, 0.9)
+		if id == "clan":
+			b.modulate.a = 1.0 if social.in_clan() else 0.45
 		if id == "party":
 			b.visible = true
 			b.modulate.a = 1.0 if social.in_party() else 0.45
@@ -138,7 +144,7 @@ func _render() -> void:
 		_shown = 0
 		_shown_first = first
 	if lines.is_empty() and _list.get_child_count() == 0:
-		var e := UI2.body(_list, "Nobody's said anything yet -- say hi!" if ch == "global" else "Talk to your party here.", 13, UI2.MUTED)
+		var e := UI2.body(_list, {"global":"Nobody's said anything yet -- say hi!", "party":"Talk to your party here.", "clan":"Talk to your clan here."}[ch], 13, UI2.MUTED)
 		e.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		e.set_meta("empty", true)
 	for i in range(_shown, lines.size()):
@@ -181,6 +187,8 @@ func _row(l: Dictionary) -> void:
 	nb.flat = true
 	nb.focus_mode = Control.FOCUS_NONE
 	nb.text = str(l.get("n", "Player"))
+	if str(l.get("ct", "")) != "":
+		nb.text = "[%s] %s" % [str(l.ct), nb.text]          # 0.31.134: their clan's tag
 	nb.add_theme_font_override("font", UI.HEAVY_FONT)
 	nb.add_theme_font_size_override("font_size", 14)
 	var col: Color = SocialUI.NAME_ME if mine else SocialUI.NAME_OTHER
@@ -194,7 +202,7 @@ func _row(l: Dictionary) -> void:
 		e.content_margin_right = 4
 		nb.add_theme_stylebox_override(st_name, e)
 	nb.set_meta("action_key", "chat_name")
-	var card := {"pid":str(l.get("pid", "")), "n":str(l.get("n", "")), "tt":str(l.get("tt", ""))}
+	var card := {"pid":str(l.get("pid", "")), "n":str(l.get("n", "")), "tt":str(l.get("tt", "")), "ct":str(l.get("ct", ""))}
 	nb.pressed.connect(func(): SocialUI.name_card(app, self, card))
 	head.add_child(nb)
 	SocialUI.title_label(head, str(l.get("tt", "")), 11)

@@ -24,6 +24,7 @@ func open(a) -> void:
 		app.sfx("menuClose")
 		app.close_modal(), 56.0 + float(app.safe_top), 24.0)
 	var body: VBoxContainer = w.body
+	SocialUI.social_tabs(body, app, "friends")              # 0.31.134: FRIENDS | CLAN
 	_scroll = ScrollContainer.new()
 	_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -43,7 +44,7 @@ func ref_changed() -> void:
 	_dirty = true
 
 func _on_changed(what: String) -> void:
-	if what in ["friends", "party", "state", "me"]:
+	if what in ["friends", "party", "state", "me", "clan"]:
 		_dirty = true
 
 func _process(_delta: float) -> void:
@@ -98,6 +99,8 @@ func _person(parent: Node, c: Dictionary, crown := false) -> HBoxContainer:
 	if crown:
 		UI2.icon(top, "crown", 18.0).size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	UI2.text(top, str(c.get("n", "Player")), 15, Color.WHITE)
+	if str(c.get("ct", "")) != "":
+		UI.label(top, "[%s]" % str(c.ct), 12, UI2.GOLD, UI.HEAVY_FONT).size_flags_vertical = Control.SIZE_SHRINK_CENTER   # 0.31.134
 	SocialUI.title_label(top, str(c.get("tt", "")), 11)
 	var sl := UI.label(v, SocialUI.status_text(c), 11, SocialUI.ST_COL.get(str(c.get("st", "offline")), UI2.MUTED).lightened(0.25), UI.HEAVY_FONT)
 	sl.autowrap_mode = TextServer.AUTOWRAP_OFF
