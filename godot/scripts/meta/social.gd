@@ -62,6 +62,7 @@ var clan_infos := {}                    # clan id -> its card (clan_info), "_at"
 var has_war := false                    # the server has the war map ("me" said so)
 var war: Dictionary = {}                # the last map: {"week", "ends", "terr": {id: {...}}, "house", "att", "max", "counts", "tally", ...}
 var war_watching := false               # the map is open (the server pushes changes)
+var _war_eyes := {}                     # 0.31.138: who has it on screen ("map": the war map, "home": Home's war table)
 var _ws: WebSocketPeer = null
 var _clock := 0.0
 var _next_try := 0.0
@@ -414,13 +415,20 @@ func clan_cool_left() -> int:
 	return maxi(0, clan_cool - int(Time.get_unix_time_from_system()))
 
 # ---------------- the war map (0.31.135) ----------------
-func war_open() -> bool:
+func war_open(who := "map") -> bool:
+	# 0.31.138: the war map and Home's war table (home_scene.gd) both watch it: the server pushes while either is up
+	_war_eyes[who] = true
 	war_watching = true
 	return _send({"k":"war_open"})
 
-func war_close() -> void:
-	war_watching = false
-	_send({"k":"war_close"})
+func war_close(who := "map") -> void:
+	_war_eyes.erase(who)
+	if _war_eyes.is_empty() and war_watching:
+		war_watching = false
+		_send({"k":"war_close"})
+
+func war_eyes(who: String) -> bool:
+	return _war_eyes.has(who)
 
 func war_go(tid: String, call := true) -> bool:
 	return _send({"k":"war_go", "tid":tid, "call":call})

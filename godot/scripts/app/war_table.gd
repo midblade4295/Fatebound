@@ -14,14 +14,9 @@ const SocialUI = preload("res://scripts/app/social_ui.gd")
 const Map = preload("res://scripts/meta/war_map.gd")
 const Stage = preload("res://scripts/siege/asset_cache.gd")
 const LandData = preload("res://scripts/app/war_land_data.gd")   # (tools/war_land.py: the grid, each place's spot)
-const LandShader = preload("res://scripts/app/war_land.gdshader")
-const SeaShader = preload("res://scripts/app/war_sea.gdshader")
-const LAND := "res://assets/war_land/"
-const PIECES := "res://assets/meshy/war/"   # each place's Meshy miniature (0.31.136, tools/meshy_war_piece.py)
+const LandView = preload("res://scripts/app/war_land_view.gd")   # (0.31.138: the land, sea, trees and miniatures)
 const CAM_DIR := Vector3(0.0, 15.0, 11.0)   # where the camera looks from (how far: _fit_camera)
 const CAM_FOV := 32.0
-const TREE_TINT := Color(0.62, 0.8, 0.5)
-const RAISE := 0.14                          # the place picked lifts its miniature a little
 
 var app
 var social
@@ -35,6 +30,7 @@ var _cam: Camera3D
 var _overlay: Control
 var _sheet: VBoxContainer
 var _stats: HBoxContainer
+var _land: Node3D                      # the land (war_land_view.gd)
 var _tiles := {}                       # id -> {"pos": Vector3 (its ground), "node": Node3D (its miniature, or null), "swords": Sprite3D}
 var _land_mat: ShaderMaterial
 var _region_img: Image                 # (picking: which place's land a tap is on)
@@ -128,21 +124,7 @@ func _on_went(ans: Dictionary) -> void:
 
 # ---------------- the map (3D) ----------------
 static func tile_pos(id: String) -> Vector3:
-	# a place's spot on the land (x right, z toward you; the Lions near, the Stags far, the Ravens east)
-	var e: Dictionary = LandData.PLACES.get(id, {})
-	return Vector3(float(e.get("x", 0.0)), float(e.get("y", 0.0)), float(e.get("z", 0.0)))
-
-static func _noise_tex(freq: float, seed: int, size := 256) -> NoiseTexture2D:
-	var n := FastNoiseLite.new()
-	n.seed = seed
-	n.frequency = freq
-	n.fractal_octaves = 4
-	var t := NoiseTexture2D.new()
-	t.width = size
-	t.height = size
-	t.seamless = true
-	t.noise = n
-	return t
+	return LandView.tile_pos(id)
 
 func _build_table() -> void:
 	var root := Node3D.new()
@@ -167,69 +149,13 @@ func _build_table() -> void:
 	sun.shadow_enabled = true
 	sun.directional_shadow_max_distance = 45.0
 	root.add_child(sun)
-	var regions: Texture2D = Stage.texture(LAND + "land_regions.png")
-	var clouds := _noise_tex(0.006, 7)
-	# the land
-	var land_scene: PackedScene = Stage.scene(LAND + "land.glb")
-	if land_scene != null:
-		var land := land_scene.instantiate() as Node3D
-		root.add_child(land)
-		_land_mat = ShaderMaterial.new()
-		_land_mat.shader = LandShader
-		_land_mat.set_shader_parameter("color_tex", Stage.texture(LAND + "land_color.jpg"))
-		_land_mat.set_shader_parameter("region_id", regions)
-		_land_mat.set_shader_parameter("region_lin", regions)
-		_land_mat.set_shader_parameter("cloud_tex", clouds)
-		for mi in land.find_children("*", "MeshInstance3D", true, false):
-			(mi as MeshInstance3D).material_override = _land_mat
-	if regions != null:
-		_region_img = regions.get_image()
-		if _region_img != null and _region_img.is_compressed():
-			_region_img.decompress()
-	# the sea (and the lake, the river, the pools): one sheet at sea level
-	var sea := MeshInstance3D.new()
-	var pm := PlaneMesh.new()
-	pm.size = Vector2(80.0, 80.0)
-	sea.mesh = pm
-	var sm := ShaderMaterial.new()
-	sm.shader = SeaShader
-	sm.set_shader_parameter("region_lin", regions)
-	sm.set_shader_parameter("wave_tex", _noise_tex(0.02, 3))
-	sm.set_shader_parameter("cloud_tex", clouds)
-	sm.set_shader_parameter("map_rect", Vector4(LandData.X0, LandData.Z0, LandData.X1 - LandData.X0, LandData.Z1 - LandData.Z0))
-	sm.set_shader_parameter("h_min", LandData.H_MIN)
-	sm.set_shader_parameter("h_max", LandData.H_MAX)
-	sea.material_override = sm
-	sea.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	root.add_child(sea)
-	# the forests' trees (KayKit's, many at once)
-	_plant_trees(root)
-	# the places: each miniature standing in its land (sunk so its base hides under the ground), crossed swords
-	# over a battle
-	var swords_tex: Texture2D = Stage.texture(UI2.icon_path("swords"))
-	for id in Map.T:
-		var pos := tile_pos(id)
-		var e2: Dictionary = LandData.PLACES.get(id, {})
-		var node: Node3D = null
-		var piece: String = PIECES + str(e2.get("piece", "")) + ".glb"
-		if str(e2.get("piece", "")) != "" and ResourceLoader.exists(piece):
-			node = Node3D.new()
-			node.position = pos
-			root.add_child(node)
-			var m := (Stage.scene(piece) as PackedScene).instantiate() as Node3D
-			m.scale = Vector3.ONE * float(e2.get("scale", 0.5))
-			m.position.y = float(e2.get("sink", 0.0))
-			m.rotation.y = deg_to_rad(float(e2.get("yaw", 0.0)))
-			node.add_child(m)
-		var sw := Sprite3D.new()
-		sw.texture = swords_tex
-		sw.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-		sw.pixel_size = 0.0045
-		sw.no_depth_test = true
-		sw.position = pos + Vector3(0.0, 1.35, 0.0)
-		sw.visible = false
-		root.add_child(sw)
-		_tiles[id] = {"pos":pos, "node":node, "swords":sw}
+	# the land, the sea, the trees, the miniatures and the swords (war_land_view.gd, 0.31.138: Home's table has it too)
+	_land = LandView.new()
+	root.add_child(_land)
+	_land.build()
+	_land_mat = _land.land_mat
+	_region_img = _land.region_img
+	_tiles = _land.tiles
 	_cam = Camera3D.new()
 	_cam.fov = CAM_FOV
 	_cam.keep_aspect = Camera3D.KEEP_HEIGHT       # (_fit_camera moves it so the land fills whatever room it has)
@@ -270,43 +196,6 @@ func _build_table() -> void:
 		_overlay.add_child(lp)
 		_labels[id] = lp
 
-func _plant_trees(root: Node3D) -> void:
-	var kinds := ["tree_single_A", "tree_single_B"]
-	for k in kinds.size():
-		var ps: PackedScene = Stage.scene("res://assets/kaykit/hex/%s.gltf" % kinds[k])
-		if ps == null:
-			continue
-		var inst := ps.instantiate()
-		var mis := inst.find_children("*", "MeshInstance3D", true, false)
-		if mis.is_empty():
-			inst.free()
-			continue
-		var mi := mis[0] as MeshInstance3D
-		var mesh: Mesh = mi.mesh
-		var base := mi.transform
-		inst.free()
-		var list := []
-		for t in LandData.TREES:
-			if int(t[4]) == k:
-				list.append(t)
-		var mm := MultiMesh.new()
-		mm.transform_format = MultiMesh.TRANSFORM_3D
-		mm.mesh = mesh
-		mm.instance_count = list.size()
-		for i in list.size():
-			var t: Array = list[i]
-			var sc := float(t[3])
-			var b := Basis(Vector3.UP, fmod(float(t[0]) * 12.7 + float(t[2]) * 7.3, TAU)).scaled(Vector3.ONE * sc)
-			mm.set_instance_transform(i, Transform3D(b, Vector3(float(t[0]), float(t[1]) - 0.02, float(t[2]))) * base)
-		var mmi := MultiMeshInstance3D.new()
-		mmi.multimesh = mm
-		var src := mesh.surface_get_material(0) as StandardMaterial3D
-		if src != null:
-			var tm := src.duplicate() as StandardMaterial3D
-			tm.albedo_color = src.albedo_color * TREE_TINT                # (KayKit's teal leaves: a deeper green)
-			mmi.material_override = tm
-		root.add_child(mmi)
-
 func region_at(at: Vector2) -> String:
 	# which place's land is under a point of the map's rectangle ("" for the sea)
 	if _region_img == null or _cam == null:
@@ -316,14 +205,7 @@ func region_at(at: Vector2) -> String:
 	var d := _cam.project_ray_normal(sp)
 	if absf(d.y) < 0.0001:
 		return ""
-	var hit := o + d * ((0.15 - o.y) / d.y)
-	var u := (hit.x - LandData.X0) / (LandData.X1 - LandData.X0)
-	var v := (hit.z - LandData.Z0) / (LandData.Z1 - LandData.Z0)
-	if u < 0.0 or v < 0.0 or u >= 1.0 or v >= 1.0:
-		return ""
-	var px := _region_img.get_pixel(int(u * _region_img.get_width()), int(v * _region_img.get_height()))
-	var idx := int(round(px.r * 255.0))
-	return str(LandData.IDS[idx]) if idx < LandData.IDS.size() else ""
+	return _land.region_of(o + d * ((0.15 - o.y) / d.y))
 
 # ---------------- input ----------------
 func _on_table_input(ev: InputEvent) -> void:
@@ -509,15 +391,7 @@ func _process(delta: float) -> void:
 		var lp: PanelContainer = _labels[id]
 		var p := _screen(_tiles[id].pos + Vector3(0, 0, 0.55))
 		lp.position = (p - Vector2(lp.size.x * 0.5, 0.0)).round()
-	for id in _tiles:
-		var t: Dictionary = _tiles[id]
-		if t.node != null:
-			var n: Node3D = t.node
-			var want: float = (t.pos as Vector3).y + (RAISE if id == sel else 0.0)
-			n.position.y = lerpf(n.position.y, want, minf(1.0, delta * 10.0))
-		var sw: Sprite3D = t.swords
-		if sw.visible:
-			sw.position.y = (t.pos as Vector3).y + 1.35 + 0.08 * sin(_clock * 3.0)
+	_land.step(delta, sel)
 
 # ---------------- the state ----------------
 func _terr(id: String) -> Dictionary:
@@ -525,20 +399,12 @@ func _terr(id: String) -> Dictionary:
 
 func _render() -> void:
 	var w: Dictionary = social.war
-	# the table: holders, banners, battles
-	var holders := PackedColorArray()
-	var battles := PackedFloat32Array()
-	holders.resize(LandData.IDS.size())
-	battles.resize(LandData.IDS.size())
+	# the table: holders, battles, the place picked (war_land_view.gd); the labels
+	_land.paint(w, sel)
 	for id in _tiles:
 		var t := _terr(id)
 		var h := str(t.get("h", ""))
 		var col: Color = SocialUI.house_color(h) if h != "" else Color(0.85, 0.85, 0.8)
-		var k := LandData.IDS.find(id)
-		if k >= 0:
-			holders[k] = Color(col.r, col.g, col.b, 1.0 if h != "" else 0.0)
-			battles[k] = 1.0 if t.has("b") else 0.0
-		(_tiles[id].swords as Sprite3D).visible = t.has("b")
 		var lp: PanelContainer = _labels[id]
 		var sub: Label = lp.get_meta("sub")
 		var tag := ""
@@ -554,10 +420,6 @@ func _render() -> void:
 		var sb := lp.get_theme_stylebox("panel") as StyleBoxFlat
 		sb.border_color = Color.WHITE if id == sel else Color(0, 0, 0, 0)
 		sb.set_border_width_all(2 if id == sel else 0)
-	if _land_mat != null:
-		_land_mat.set_shader_parameter("holder", holders)
-		_land_mat.set_shader_parameter("battle", battles)
-		_land_mat.set_shader_parameter("picked", LandData.IDS.find(sel))
 	# the strip over the map
 	for c in _stats.get_children():
 		c.queue_free()

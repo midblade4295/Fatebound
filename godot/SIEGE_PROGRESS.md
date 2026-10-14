@@ -4052,3 +4052,36 @@ Kevin: "I don't like how static the map looks. I want it to look like a real nat
 - Version 0.31.137, versionCode 223 (server code unchanged; SERVER_BUILD follows the app's version).
 - Quick suite: all 91 passed. The Play AAB built from this commit (throwaway key, presets untouched by the build):
   BASE OK (238 files, no pack data), CONTENT OK (6 packs on the branch), play_games true, bundletool valid.
+
+## 0.31.138 — Home is the war room
+Kevin (the clan-centred redesign: "Design a home screen that shows the camera overlooking the live map and then you can
+see the castles/land in the background. You'll see some heroes standing next to the map table looking at it"), picked
+the war room concept with the dusk view, then: "Make sure to bring the scene to life with candles emitting light glow
+along with the glow effect of sun. Also maybe glimmer of the water and birds flying in sky ect ect".
+- The painting (ElevenLabs gpt-image-2.5-sunburst on the approved concept, its table, heroes and UI taken out; 1152 x
+  2560 for 20:9 phones; art_sources/home_war_room/room.png): the tower's war room at dusk, the great arched window open
+  on the sea, the river and the two rival castles, candle stands and candles on the sill, a round rug. tools/
+  home_war_room.py writes assets/ui/v2/bg_war_room.webp and a quarter-size mask (the window's opening traced from the
+  painting; the river, the lake and the sea in the view). bg_home.webp and roster.gd (the old line-up) are gone.
+- scripts/app/home_scene.gd lays it out (the painting's row 1418 at PLAY's top: at 420 x 933 it fills the screen from
+  the top) and makes it live: the setting sun's glow and slow rays, cloud wisps and twinkling stars, small flocks of
+  birds flapping and gliding across, all drawn between the painting and the room again with the window cut out
+  (home_room.gdshader), so they're only seen through the window; the water shimmering and glinting, most in the sun's
+  path on the sea; every painted candle's flame flickering and swaying, its halo and the warm pool on the wall
+  breathing; dust motes. Reduce motion holds it all still (no birds or clouds); a safe start draws the painting only.
+- scripts/app/war_room.gd: the war table in 3D on the rug (fitted to the painting: 268.6 px a metre, 32 degrees down):
+  an oval oak table (longer away from you, so the land fills it) with a raised lip, gilt bands and iron plates, the
+  live war map in it -- scripts/app/war_land_view.gd, the war map's own land, sea, trees, miniatures and battle swords
+  (moved out of war_table.gd, which now uses it too; the shaders take a map space, an oval cut, a glow, finer waves and
+  stronger house colours for the table) -- two candle clusters on the rim whose light flickers on the map, and the
+  concept's four heroes in the player's equipped looks round it: the Barbarian and the Mage beyond it, the Knight and
+  the Ranger at its near corners. Drawn every 2nd frame (the menus run at 60), shadows from the heroes and table only.
+- Home watches the war while it's up (not under a match): social.war_open/close take who's watching ("home", "map"),
+  so closing the war map doesn't stop Home's table; the map pushed by the server paints the table's holders and battles.
+- The title is smaller and higher (226 wide) so the castles show under it.
+- home_heroes_test rewritten for the war room (the art, the four heroes in their looks, clear of each other and of the
+  medallions, the table on the rug and over PLAY, the war painted on it, Home and the map both watching, the candles,
+  sun, water and birds alive, reduce motion, safe start; the chest slots and the online line kept); title_logo_test
+  follows the title's new size. tools/home_scene_shot.gd shoots the scene alone (WAR=1: a war on the table).
+- The ui content pack rebuilt (19.5 MB; uploaded to content-packs 23ec83f); the others unchanged.
+- Version 0.31.138, versionCode 224 (server code unchanged; SERVER_BUILD follows the app's version).

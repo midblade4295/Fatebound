@@ -14,19 +14,28 @@ uniform vec3 shallow : source_color = vec3(0.3, 0.72, 0.74);
 uniform vec3 deep : source_color = vec3(0.06, 0.22, 0.42);
 uniform vec3 far : source_color = vec3(0.05, 0.14, 0.3);
 uniform vec2 wind = vec2(0.012, 0.006);
+uniform mat4 to_map = mat4(1.0);                    // 0.31.138: as the land's (war_land.gdshader)
+uniform vec2 disc = vec2(0.0);                     // (x and z radii)
+uniform float glow = 0.0;
+uniform float wave_scale = 1.0;                      // (Home's table: finer waves, a softer sheen)
+uniform float spec = 0.55;
+uniform float rough = 0.18;
 varying vec3 world;
 
 void vertex() {
-	world = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+	world = (to_map * MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 }
 
 void fragment() {
+	if (disc.x > 0.0 && length(world.xz / disc) > 1.0) {
+		discard;
+	}
 	vec2 muv = (world.xz - map_rect.xy) / map_rect.zw;
 	float inside = step(0.0, muv.x) * step(0.0, muv.y) * step(muv.x, 1.0) * step(muv.y, 1.0);
 	float ground = mix(h_min, texture(region_lin, clamp(muv, 0.0, 1.0)).a * (h_max - h_min) + h_min, inside);
 	float depth = max(0.0, -ground);
 	float t = TIME;
-	vec2 p = world.xz;
+	vec2 p = world.xz * wave_scale;
 	float w1 = texture(wave_tex, p * 0.22 + vec2(t * 0.025, t * 0.011)).r;
 	float w2 = texture(wave_tex, p * 0.37 - vec2(t * 0.018, -t * 0.021)).r;
 	float waves = w1 + w2;
@@ -41,11 +50,12 @@ void fragment() {
 	float breathe = 0.6 + 0.4 * sin(t * 1.6 + (w1 * 6.0));
 	float foam = shore * smoothstep(0.45, 0.75, w2 * breathe + shore * 0.35) * inside;
 	col = mix(col, vec3(0.94, 0.98, 1.0), foam * 0.85);
-	float c = texture(cloud_tex, p * 0.045 + t * wind).r;
+	float c = texture(cloud_tex, world.xz * 0.045 + t * wind).r;
 	col *= 1.0 - 0.22 * smoothstep(0.52, 0.78, c);
 	ALBEDO = col;
-	ROUGHNESS = 0.18;
-	SPECULAR = 0.55;
+	EMISSION = col * glow;
+	ROUGHNESS = rough;
+	SPECULAR = spec;
 	ALPHA = mix(0.72, 1.0, smoothstep(0.0, 0.2, depth));
 	// gentle normals from the waves
 	NORMAL_MAP = normalize(vec3(w1 - 0.5, w2 - 0.5, 2.5)) * 0.5 + 0.5;

@@ -3,7 +3,7 @@ extends Control
 # (top bar + tab bar), the five screens (scripts/app/screens.gd) and launching matches.
 const UI = preload("res://scripts/app/ui.gd")
 const UI2 = preload("res://scripts/app/ui2.gd")
-const Roster = preload("res://scripts/app/roster.gd")
+const HomeScene = preload("res://scripts/app/home_scene.gd")
 const Eco = preload("res://scripts/meta/economy.gd")
 const Profile = preload("res://scripts/meta/profile.gd")
 const StoreBilling = preload("res://scripts/meta/store_billing.gd")     # 0.31.130: billing.gd (Play) or billing_ios.gd
@@ -96,17 +96,14 @@ var _last_press_ms := -100000
 var modal: Control = null
 var hero_layer: Control
 var title_logo: Control                  # Home's title, the King swinging from the knot (title_logo.gd)
-var hero_node: Control                 # the Home line-up (roster.gd); null on a safe start
+var hero_node: Control                 # Home's heroes (0.31.138: the war room's, war_room.gd); null on a safe start
+var home_scene: Control                # Home's war room (home_scene.gd)
 var safe_top := 0.0
 var xp_holder: Control
 var pass_badge: Control
 var _tab_tweens := {}
 const TOP_H := 56.0                    # the top bar
 const TAB_H := 72.0                    # the tab bar
-const BG_ASPECT := 2816.0 / 1024.0     # the painted home backdrop (0.31.117: down the whole screen, the treasure hall
-                                       # under the stage; until then 1280 / 720 and it ended under PLAY)
-const BG_STAGE := 1280.0 / 720.0       # its top part, the old painting at the same width: where the sun, the clouds and the
-                                       # stage are measured (fractions of this height)
 const FADE_COLOR := Color("#0d1627")
 var _toast: Label
 var _toast_box: PanelContainer
@@ -377,9 +374,10 @@ func _band(parent: Control, c0: Color, c1: Color, top: bool, px: float) -> void:
 	parent.add_child(r)
 
 func _build_hero() -> void:
-	# 0.31.79: Home's painted backdrop (castle battlements at golden hour, the rival castle beyond, a gold-rimmed dais),
-	# drifting cloud wisps, slow sun rays, the seven heroes in 3D on the dais (roster.gd), gold motes and the logo.
-	# Scrolls away with a parallax as the menu is scrolled.
+	# 0.31.79: Home's painted backdrop and the heroes in 3D. 0.31.138 (Kevin picked the war room concept): the war room
+	# at dusk (home_scene.gd) -- the live war table and four heroes round it in 3D (war_room.gd), the sun, the water,
+	# the birds and the candles alive -- laid out so the table stands just over PLAY. Scrolls away with a parallax as
+	# the menu is scrolled.
 	safe_top = _safe_top()
 	hero_layer = Control.new()
 	hero_layer.anchor_right = 1.0
@@ -388,116 +386,44 @@ func _build_hero() -> void:
 	hero_layer.clip_contents = true
 	hero_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(hero_layer)
-	var bgt := TextureRect.new()
-	bgt.texture = UI2.tex(UI2.V2 + "bg_home.webp")
-	bgt.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	bgt.stretch_mode = TextureRect.STRETCH_SCALE
-	bgt.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hero_layer.add_child(bgt)
 	var calm := bool(profile.d.settings.get("reduce_motion", false))
-	var clouds: Array = []
-	for cd in [[0.36, 260.0, 46.0, 0.42, 75.0], [0.47, 200.0, 34.0, 0.36, 60.0], [0.27, 170.0, 30.0, 0.3, 95.0]]:
-		var c := TextureRect.new()
-		c.texture = UI2.glow_tex()
-		c.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		c.stretch_mode = TextureRect.STRETCH_SCALE
-		c.size = Vector2(cd[1], cd[2])
-		c.modulate = Color(1, 0.97, 0.92, cd[3])
-		c.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		hero_layer.add_child(c)
-		clouds.append([c, cd])
-	var sun := UI2.rays(hero_layer, 620.0, Color(1.0, 0.9, 0.62), 90.0, 0.32)
-	var sun_glow := UI2.glow(hero_layer, Rect2(0, 0, 170, 170), Color(1.0, 0.93, 0.7, 0.7))
-	if safe_boot:
-		hero_node = null                      # safe start: the painted backdrop only, no live 3D heroes
-	else:
-		hero_node = Roster.new()
-		hero_layer.add_child(hero_node)
+	var under := ColorRect.new()                 # (under the painting's foot on a phone taller than 9:20)
+	under.color = Color("#120d14")
+	under.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	under.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hero_layer.add_child(under)
+	home_scene = HomeScene.new(calm, safe_boot)
+	home_scene.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	hero_layer.add_child(home_scene)
+	hero_node = home_scene.room                 # (null on a safe start: the painting only, no live 3D)
 	var lay := func():
-		var w := hero_layer.size.x
-		var h := w * BG_ASPECT
-		var hs := w * BG_STAGE                             # (the stage part's height: the measurements below)
-		var top := -0.405 * w + safe_top
-		bgt.position = Vector2(0, top)
-		bgt.size = Vector2(w, h)
-		var sp := Vector2(0.615 * w, top + 0.574 * hs)
-		sun.position = sp - sun.size * 0.5
-		sun_glow.position = sp - sun_glow.size * 0.5
-		for cl in clouds:
-			(cl[0] as Control).position.y = top + float(cl[1][0]) * hs
-		if hero_node != null:
-			var dais := top + 0.858 * hs                    # the painted dais' centre
-			hero_node.position = Vector2(0, dais - Roster.FEET_Y)
-			hero_node.size = Vector2(w, 340.0)
+		home_scene.place(home_play_top())
 	hero_layer.resized.connect(lay)
 	lay.call()
-	if not calm:
-		for cl in clouds:
-			var c: Control = cl[0]
-			var secs: float = cl[1][4]
-			c.position.x = randf_range(-80.0, 300.0)
-			UI2.when_ready(c, func(): _drift(c, secs, true))
 	_band(hero_layer, Color(0.02, 0.03, 0.09, 0.72), Color(0.02, 0.03, 0.09, 0.0), true, 110.0 + safe_top)
 	_band(hero_layer, Color(FADE_COLOR, 0.0), Color(FADE_COLOR, 1.0), false, 150.0)
-	if not calm:
-		var glow := Gradient.new()
-		glow.set_color(0, Color(1, 0.85, 0.5, 1.0))
-		glow.set_color(1, Color(1, 0.85, 0.5, 0.0))
-		var gt := GradientTexture2D.new()
-		gt.gradient = glow
-		gt.fill = GradientTexture2D.FILL_RADIAL
-		gt.fill_from = Vector2(0.5, 0.5)
-		gt.fill_to = Vector2(1.0, 0.5)
-		gt.width = 24
-		gt.height = 24
-		var motes := CPUParticles2D.new()
-		motes.texture = gt
-		motes.amount = 22
-		motes.lifetime = 7.0
-		motes.preprocess = 7.0
-		motes.position = Vector2(210, 470 + safe_top)
-		motes.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
-		motes.emission_rect_extents = Vector2(200, 30)
-		motes.direction = Vector2(0.2, -1.0)
-		motes.spread = 18.0
-		motes.gravity = Vector2.ZERO
-		motes.initial_velocity_min = 14.0
-		motes.initial_velocity_max = 34.0
-		motes.scale_amount_min = 0.25
-		motes.scale_amount_max = 0.6
-		var ramp := Gradient.new()
-		ramp.set_color(0, Color(1, 1, 1, 0.0))
-		ramp.set_color(1, Color(1, 1, 1, 0.0))
-		ramp.add_point(0.25, Color(1, 1, 1, 0.9))
-		ramp.add_point(0.75, Color(1, 1, 1, 0.6))
-		motes.color_ramp = ramp
-		hero_layer.add_child(motes)
 	# The game is just "Fatebound" (Kevin). 0.31.113: the "All Tied Up" title (Kevin: "I like the all tied up one. Can you
 	# also make it so the king swings back and forth from the rope"), between the side medallions under the top bar.
 	title_logo = TitleLogo.new(calm)
 	hero_layer.add_child(title_logo)
+	# 0.31.138: smaller and higher, in the war room's sky, so the castles and the land show under it
 	var place := func():
 		var w := hero_layer.size.x
-		var lw := minf(w - 150.0, 300.0)
+		var lw := minf(w - 190.0, 226.0)
 		title_logo.size = Vector2(lw, lw * TitleLogo.aspect())
-		title_logo.position = Vector2((w - lw) * 0.5, 60.0 + safe_top)
+		title_logo.position = Vector2((w - lw) * 0.5, 54.0 + safe_top)
 	hero_layer.resized.connect(place)
 	place.call()
 
 const LOGO_FONT = preload("res://assets/fonts/LuckiestGuy-Regular.ttf")
 
-func _drift(c: Control, secs: float, first: bool) -> void:
-	# a cloud wisp crosses the sky left to right, then starts again off the left edge
-	var w := hero_layer.size.x
-	if not first:
-		c.position.x = -c.size.x - 20.0
-	var dist := w + 40.0 - c.position.x
-	var tw := c.create_tween()
-	tw.tween_property(c, "position:x", w + 40.0, secs * dist / (w + c.size.x + 60.0))
-	tw.tween_callback(func(): _drift(c, secs, false))
-
 func hero_show(_cls := "", _look := {}) -> void:
-	# Home's line-up wears what's equipped (rebuilt only for a class whose look changed).
+	# Home's heroes wear what's equipped (rebuilt only for a class whose look changed). (Home builds call this: the war
+	# room is laid out again too, now that the chat line and the tab bar are there to measure from.)
+	if home_scene != null:
+		home_scene.place(home_play_top())
+		if social != null:
+			home_scene.paint_war(social.war)
 	if hero_node != null:
 		var looks := {}
 		for c in Eco.CLASSES:
@@ -818,6 +744,10 @@ func _punch(kind: String) -> void:
 		_punch_ms[kind] = now
 		sfx(kind)                                           # 0.31.109: coin / gem / ember, each its own
 
+func home_play_top() -> float:
+	# where PLAY's top is on the screen (the home scene stands the war table just over it)
+	return 6.0 + safe_top + TOP_H + 4.0 + float(Screens.home_layout(home_height()).play)
+
 func home_height() -> float:
 	# the height Home has to fill: the screen less the top bar, the chat line, the tab bar and the list's margins
 	var vh := get_viewport_rect().size.y
@@ -838,6 +768,7 @@ func show_tab(id: String) -> void:
 		chat_ticker.visible = id == "home"
 	if online_status != null:
 		online_status.set_active(id == "home" and siege == null)
+	_home_war_watch()
 	hero_layer.position.y = 0.0
 	hero_layer.modulate.a = 1.0
 	content_scroll.scroll_vertical = 0
@@ -1220,6 +1151,7 @@ func _set_menu_active(on: bool) -> void:
 	hero_layer.process_mode = Node.PROCESS_MODE_INHERIT if on else Node.PROCESS_MODE_DISABLED
 	if not on:
 		hero_layer.visible = false          # coming back, show_tab decides (home only)
+	_home_war_watch()
 
 func _menu_fps() -> void:
 	if get_tree().get_script() == null or OS.has_environment("FB_MENU_FPS"):
@@ -1895,9 +1827,23 @@ func social_sig() -> String:
 func _on_social_changed(what: String) -> void:
 	if what == "me":
 		_social_name = str(profile.d.name)
+	if what in ["me", "state"]:
+		_home_war_watch()
+	if what == "war" and home_scene != null:
+		home_scene.paint_war(social.war)                 # 0.31.138: Home's table shows the war as it stands
 	if siege != null or not what in ["friends", "party", "state", "clan"]:
 		return
 	_social_home()
+
+func _home_war_watch() -> void:
+	# 0.31.138: Home's war table is live while Home is up (not under a match): the server pushes the map's changes
+	if social == null:
+		return
+	var want: bool = tab == "home" and siege == null and social.has_war and social.online()
+	if want and not social.war_eyes("home"):
+		social.war_open("home")
+	elif not want and social.war_eyes("home"):
+		social.war_close("home")
 
 func _social_home() -> void:
 	# Home shows the Friends badge and the party: redraw it when they change (not under a window: when it closes)

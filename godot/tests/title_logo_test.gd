@@ -63,7 +63,7 @@ func _process(d: float) -> bool:
 		check(absf(tl.position.x + tl.size.x * 0.5 - w * 0.5) < 1.0 and tl.size.x <= 300.0, "centred, at most 300 wide")
 		# at phone width (420): the King's corners at full swing stay clear of the right-hand medallions (w - 62)
 		var pw := 420.0
-		var lw := minf(pw - 150.0, 300.0)
+		var lw := minf(pw - 190.0, 226.0)                      # (0.31.138: smaller, in the war room's sky -- siege_app)
 		var s := lw / TitleLogo.BASE.x
 		var left := (pw - lw) * 0.5
 		var piv := TitleLogo.PIVOT * s
