@@ -119,6 +119,9 @@ run side_view_test       SIDE_VIEW_PASS           120 --fixed-fps 30
 # Earned titles (0.31.87): the table and its punctuation, earning, streaks, pass/shop/pack, healing counted.
 run title_test           TITLE_PASS               60
 run iap_test             IAP_PASS                 120
+# App Store purchase checks (0.31.131): a stand-in Apple signs, the real helper checks, a fake App Store Server API
+# answers; then the real server (8113) grants to accounts once (fake API on 8114)
+run apple_iap_test       APPLE_IAP_PASS           150
 run preload_queue_test   PRELOAD_QUEUE_PASS       240
 run forge_test           FORGE_PASS               120
 run content_test         CONTENT_PASS             120

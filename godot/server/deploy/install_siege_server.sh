@@ -27,8 +27,10 @@ SERVICE_SRC="$SRC/server/deploy/fatebound-siege.service"
 SERVER_SCRIPTS="scripts/siege/siege_sim.gd scripts/siege/siege_net.gd scripts/siege/siege_land.gd scripts/siege/siege_castle.gd"
 # 0.31.108: the accounts -- the server replays every player's changes with the game's own economy and profile code
 # 0.31.118: the analytics allow-list (events and their props), shared by the phone and the server
-META_SCRIPTS="scripts/meta/economy.gd scripts/meta/profile.gd scripts/meta/analytics_events.gd"
-SERVER_FILES="server/siege_server.gd server/siege_probe.gd server/iap_verify.gd server/eco_accounts.gd server/match_ledger.gd server/social.gd server/analytics.gd server/leaderboard.gd server/referrals.gd server/diag_reports.gd"
+# 0.31.131: the App Store account token (UUIDv5 of the account id), shared by the phone and the purchase check
+META_SCRIPTS="scripts/meta/economy.gd scripts/meta/profile.gd scripts/meta/analytics_events.gd scripts/meta/apple_token.gd"
+# 0.31.131: App Store purchase checks -- the verifier, its helper (python3 + the openssl command) and Apple's public root
+SERVER_FILES="server/siege_server.gd server/siege_probe.gd server/iap_verify.gd server/iap_verify_apple.gd server/apple_jws.py server/certs/AppleRootCA-G3.cer server/eco_accounts.gd server/match_ledger.gd server/social.gd server/analytics.gd server/leaderboard.gd server/referrals.gd server/diag_reports.gd"
 for f in $SERVER_SCRIPTS $META_SCRIPTS $SERVER_FILES; do
   [ -f "$SRC/$f" ] || { echo "Missing $SRC/$f — run this from the Siege branch checkout." >&2; exit 1; }
 done
@@ -57,6 +59,10 @@ if [ ! -x "$GODOT_BIN" ] || ! "$GODOT_BIN" --version 2>/dev/null | grep -q "^$GO
   rm -rf "$TMPD"
 fi
 "$GODOT_BIN" --version
+# 0.31.131: App Store purchase checks run server/apple_jws.py (Python's standard library + the openssl command)
+for tool in python3 openssl; do
+  command -v "$tool" >/dev/null 2>&1 || echo "WARNING: $tool not found -- App Store purchases can't be checked until it is installed" >&2
+done
 
 # ---- 2. Port must be free or ours ----
 if command -v ss >/dev/null 2>&1 && ss -ltnH "sport = :$PORT" | grep -q .; then
@@ -70,7 +76,8 @@ STAGE="$(mktemp -d)"
 mkdir -p "$STAGE/scripts/siege" "$STAGE/scripts/meta" "$STAGE/server"
 for f in $SERVER_SCRIPTS; do cp "$SRC/$f" "$STAGE/scripts/siege/"; done
 for f in $META_SCRIPTS; do cp "$SRC/$f" "$STAGE/scripts/meta/"; done
-for f in $SERVER_FILES; do cp "$SRC/$f" "$STAGE/server/"; done
+mkdir -p "$STAGE/server/certs"
+for f in $SERVER_FILES; do cp "$SRC/$f" "$STAGE/$f"; done
 cat > "$STAGE/project.godot" <<'PROJ'
 ; Fatebound Siege dedicated server: simulation + protocol only (no assets, no autoloads).
 config_version=5
@@ -111,6 +118,14 @@ else
     echo "Purchase checks: key $PLAY_KEY handed to the service"
   else
     echo "Purchase checks: no key at $PLAY_KEY yet (purchases wait until it is there; see godot/PLAY_IAP_HANDOFF.md step 5)"
+  fi
+  # 0.31.131: App Store purchase checks -- the In-App Purchase key, handed over the same way (only when it exists)
+  APPSTORE_KEY="${APPSTORE_KEY:-/etc/fatebound-siege/appstore-key.p8}"
+  if [ -f "$APPSTORE_KEY" ]; then
+    sed -i "s|^# LoadCredential=appstore-key:.*|LoadCredential=appstore-key:$APPSTORE_KEY|" /etc/systemd/system/fatebound-siege.service
+    echo "App Store purchase checks: key $APPSTORE_KEY handed to the service (SIEGE_APPSTORE_ISSUER / SIEGE_APPSTORE_KEY_ID from /etc/fatebound-siege.env)"
+  else
+    echo "App Store purchase checks: no key at $APPSTORE_KEY yet (iPhone purchases wait until it is there; see godot/IOS_HANDOFF.md)"
   fi
   systemctl daemon-reload
   # 0.31.108: the players' accounts live in the service's state directory -- a copy before every update

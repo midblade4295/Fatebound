@@ -37,7 +37,7 @@ const SERVER := {
 	"match_start": ["match", "mode", "class"],
 	"match_finish": ["match", "mode", "dur_s", "result", "team_n", "class", "class0"],
 	"match_quit": ["match", "mode", "quit_at_s", "class", "class0"],
-	"purchase_verified": ["product", "test"],
+	"purchase_verified": ["product", "test", "store"],     # 0.31.131: store "google" | "apple"
 	"chat_send": ["kind"],
 	"friend_add": [],
 	"friend_accept": [],

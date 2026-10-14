@@ -3788,3 +3788,30 @@ K2/K3 notes (0.17.0)
 - scripts/meta/notify.gd: on iOS it takes FateboundNotifyIOS; everything else (our question before iOS's dialog,
   Settings > NOTIFICATIONS > Chest ready, scheduling per unlocking chest, cancel on return) is the same code.
 - ios_port_test: notify.gd on iOS, and the iOS class registers the name and the four calls the Android plugin has.
+
+## 0.31.131 — the iOS port, step 4: App Store purchases checked by the server
+- server/iap_verify_apple.gd (iap_verify.gd, Google's, untouched): an "iap" message with "store":"apple" carries Apple's
+  signed transaction (JWS). server/apple_jws.py checks it in its own process (the game loop never waits): the x5c
+  chain to Apple Root CA - G3 (server/certs/AppleRootCA-G3.cer, public, SHA-256 pinned) at the transaction's signedDate,
+  Apple's receipt-signing marks on the leaf and the intermediate, the ES256 signature; then Apple's App Store Server
+  API is asked for the same transaction (production or sandbox by its environment, an ES256 JWT from the In-App
+  Purchase key) and its copy checked the same way. Python's standard library and the openssl command only (nothing to
+  pip-install on the server). The game's rules on top: bundle id, product (and in Net.IAP), not refunded (Apple's
+  current copy), appAccountToken = UUIDv5 of the account asking (when the purchase carries one).
+- Granted with the same eco.grant_purchase as Google's, ledger tokens "apple:<transactionId>" (gem packs) and
+  "apple:<originalTransactionId>" (the starter pack): once per token, never to another account, and they can't collide
+  with Google's. Ledger lines get "store":"apple"; analytics purchase_verified gets a "store" prop (google | apple).
+  A message without "store" is Google's, exactly as before. No key -> "unconfigured" (the phone keeps the purchase
+  unfinished and asks again later), like Google's.
+- Key: $CREDENTIALS_DIRECTORY/appstore-key (LoadCredential, like play-key; the installer turns it on when
+  /etc/fatebound-siege/appstore-key.p8 exists), SIEGE_APPSTORE_ISSUER and SIEGE_APPSTORE_KEY_ID in
+  /etc/fatebound-siege.env. The installer ships the verifier, the helper, the root and apple_token.gd, and warns when
+  python3 or openssl is missing. Refund notifications (App Store Server Notifications V2): not built (Google's flow has
+  no revocation either) -- the API check already refuses a refunded transaction.
+- tests/apple_iap_test.gd (in the quick suite): a stand-in Apple (tools/apple_test_certs.py) and a fake App Store
+  Server API: a valid sandbox purchase ok; refused: wrong bundle, another product, another root, a tampered payload,
+  refunded, bought for another account, unknown to Apple, a product not on sale; a refused key -> unconfigured; the
+  starter pack's token; the API's JWT checked (ES256, kid, issuer, aud, bundle). Then the real server process: two
+  accounts, billing_ios.gd's own message, granted once, the same transaction again "already yours", another account
+  refused (its token is A's) or "used" (a copy without the token). analytics_events_test knows the store prop.
+- Version 0.31.131, versionCode 217. Quick suite: ALL 86 PASSED (85 Godot tests + the report check). Kevin: redeploy the server for App Store purchases.

@@ -14,6 +14,9 @@ Environment=SIEGE_MAX_PLAYERS=32
 EnvironmentFile=-/etc/fatebound-siege.env
 # 0.31.90: the Google Play service-account key for purchase checks; the installer turns this on when the file exists.
 # LoadCredential=play-key:/etc/fatebound-siege/play-service-account.json
+# 0.31.131: the App Store In-App Purchase key (.p8) for App Store purchase checks; the installer turns this on when the
+# file exists. Its issuer id and key id go in /etc/fatebound-siege.env (SIEGE_APPSTORE_ISSUER, SIEGE_APPSTORE_KEY_ID).
+# LoadCredential=appstore-key:/etc/fatebound-siege/appstore-key.p8
 ExecStart=/opt/godot-4.7.2/godot --headless --path /srv/fatebound-siege -s res://server/siege_server.gd
 StateDirectory=fatebound-siege
 StateDirectoryMode=0700

@@ -315,7 +315,9 @@ func _check_file() -> void:
 		"the full match: match_finish with result, team_n 2 (B on A's side), length, classes: %s" % str(f0))
 	check(of.call("quick_chat", "s").size() == 1 and int(of.call("quick_chat", "s")[0].p.i) == 0, "quick chat: one event, its index")
 	var pv: Array = of.call("purchase_verified", "s")
-	check(pv.size() == 1 and str(pv[0].p.product) == "gems_80" and (pv[0].p as Dictionary).keys().size() == 2, "the purchase: product and test only: %s" % str(pv.map(func(l): return l.p)))
+	# (0.31.131: and which store -- "google" here, "apple" for the App Store)
+	check(pv.size() == 1 and str(pv[0].p.product) == "gems_80" and str(pv[0].p.get("store", "")) == "google" and (pv[0].p as Dictionary).keys().size() == 3,
+		"the purchase: product, test and store only: %s" % str(pv.map(func(l): return l.p)))
 	check(of.call("chat_send", "s").size() == 1 and str(of.call("chat_send", "s")[0].p.kind) == "global" and of.call("friend_add", "s").size() == 1
 		and of.call("party_create", "s").size() == 1 and of.call("party_invite", "s").size() == 1 and of.call("friend_accept", "s").is_empty(),
 		"social: A's chat line, request and invite -- one event each")

@@ -98,6 +98,7 @@ extends SceneTree
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 const Net = preload("res://scripts/siege/siege_net.gd")
 const IapVerify = preload("res://server/iap_verify.gd")
+const IapVerifyApple = preload("res://server/iap_verify_apple.gd")     # 0.31.131: App Store purchases (the iOS port)
 const EcoAccounts = preload("res://server/eco_accounts.gd")
 const MatchLedger = preload("res://server/match_ledger.gd")
 const Social = preload("res://server/social.gd")
@@ -113,7 +114,7 @@ const LOBBY_TIME := 20.0             # the join countdown (0.31.82)
 const HELLO_TIMEOUT := 10.0
 const IAP_TIMEOUT := 40.0              # a purchase check may take a token request and an API call
 const REFUSE_CLOSE_DELAY := 0.25     # s between a "bye"/"ver" reply and closing the socket
-const SERVER_BUILD := "0.31.130"      # this server's game version; the probe says it by default (identifies as current)
+const SERVER_BUILD := "0.31.131"      # this server's game version; the probe says it by default (identifies as current)
 const MIN_BUILD_FILE := "/etc/fatebound-siege/min_build"
 const MIN_BUILD_RELOAD := 10.0       # s between re-reads of the min-build file
 const UPDATE_MSG := "A new version of Fatebound is out. Update now on Google Play to keep playing online."
@@ -163,6 +164,7 @@ var results_keep := RESULTS_KEEP     # (tests: SIEGE_RESULTS_KEEP)
 var idle_bot := IDLE_BOT
 var idle_kick := IDLE_KICK
 var iap = null                       # 0.31.90: Google Play purchase checks (server/iap_verify.gd)
+var iap_apple = null                 # 0.31.131: App Store purchase checks (server/iap_verify_apple.gd)
 var eco = null                       # 0.31.108: the accounts (server/eco_accounts.gd)
 var social = null                    # 0.31.111: chat, friends, parties (server/social.gd)
 var analytics = null                 # 0.31.118: usage statistics (server/analytics.gd)
@@ -223,6 +225,10 @@ func _init() -> void:
 	iap.log_fn = _log
 	root.add_child.call_deferred(iap)
 	_log("purchase checks: %s" % iap.describe())
+	iap_apple = IapVerifyApple.new()
+	iap_apple.log_fn = _log
+	root.add_child.call_deferred(iap_apple)
+	_log("purchase checks: %s" % iap_apple.describe())
 	eco = EcoAccounts.new()
 	eco.log_fn = _log
 	_log("accounts: %d in %s" % [eco.count(), eco.dir])
@@ -788,6 +794,9 @@ func _handle(cid: int, msg: Dictionary) -> void:
 			var token := str(msg.get("token", ""))
 			var acct := str(msg.get("acct", ""))
 			var akey := str(msg.get("key", ""))
+			if str(msg.get("store", "google")) == "apple":
+				_iap_apple(cid, product, str(msg.get("jws", "")), acct, akey)   # 0.31.131 (no "store": Google, as before)
+				return
 			iap.verify(product, token, func(res: Dictionary):
 				if not clients.has(cid):
 					return
@@ -801,7 +810,7 @@ func _handle(cid: int, msg: Dictionary) -> void:
 						var g: Dictionary = eco.grant_purchase(acct, akey, product, token, str(res.get("why", "")) == "used")
 						out["granted"] = g
 						if bool(g.get("ok", false)) and not bool(g.get("again", false)) and analytics != null:
-							analytics.server_event(acct, "purchase_verified", {"product":product, "test":bool(res.get("test", false))})
+							analytics.server_event(acct, "purchase_verified", {"product":product, "test":bool(res.get("test", false)), "store":"google"})
 						if bool(res.get("ok", false)) and not bool(g.get("ok", false)):
 							out["ok"] = false
 							out["why"] = str(g.get("why", "bad"))
@@ -843,6 +852,37 @@ func _handle(cid: int, msg: Dictionary) -> void:
 				else:
 					arg = null
 				r.sim.act(c.unit, a, arg)
+
+func _iap_apple(cid: int, product: String, jws: String, acct: String, akey: String) -> void:
+	# 0.31.131 (the iOS port): an App Store purchase -- Apple's signed transaction checked (server/iap_verify_apple.gd),
+	# then granted to the account exactly like a Google one: once per ledger token ("apple:<transaction>"), never to
+	# another account. The answer goes back and the socket closes, as for Google.
+	if iap_apple == null:
+		return
+	iap_apple.verify(product, jws, acct, func(res: Dictionary):
+		if not clients.has(cid):
+			return
+		var out := res.duplicate()
+		out["t"] = "iap"
+		out["product"] = product
+		out["store"] = "apple"
+		var token := str(res.get("token", ""))
+		if eco != null and bool(res.get("ok", false)) and token != "":
+			if acct != "":
+				var g: Dictionary = eco.grant_purchase(acct, akey, product, token, false)
+				out["granted"] = g
+				if bool(g.get("ok", false)) and not bool(g.get("again", false)) and analytics != null:
+					analytics.server_event(acct, "purchase_verified", {"product":product, "test":bool(res.get("test", false)), "store":"apple"})
+				if not bool(g.get("ok", false)):
+					out["ok"] = false
+					out["why"] = str(g.get("why", "bad"))
+			else:
+				eco.note_verified(token)
+		_send(cid, out)
+		_refuse(cid, 1000, "iap")
+		clients[cid].close_at = _now() + 2.0
+		_log("purchase %s (Apple): %s%s" % [product, "ok" if bool(out.get("ok", false)) else str(out.get("why", "")),
+			" (test)" if bool(res.get("test", false)) else ""]))
 
 func _refuse(cid: int, code: int, reason: String) -> void:
 	# Close a little after the last message so it reaches the client before the close frame.
