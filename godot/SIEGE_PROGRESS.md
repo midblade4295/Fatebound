@@ -4000,3 +4000,6 @@ day, +50 a crown, -100 a loss, 1,000 to take held land, 500 for free land; defen
 - server/deploy/install_siege_server.sh copies server/world.gd and scripts/meta/war_map.gd (checked: the installer's
   minimal project, built the same way, starts and says "war map week 2026-10-12, 0 held").
 - Version 0.31.135, versionCode 221. Server 0.31.135 must be deployed for the war map (older servers: no CROWN WAR).
+- Quick suite: all 91 passed (90 Godot tests + the report check; apple_iap_test failed once while another server test
+  ran beside it and passed alone). The Play AAB built from this commit (throwaway key, preset.0 untouched): BASE OK
+  (234 files), CONTENT OK, play_games true, bundletool valid.
