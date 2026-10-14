@@ -629,6 +629,10 @@ func _fill_war() -> void:
 		UI2.center(UI2.text(f, "BATTLE FOR %s" % place, 15, Color("#ffd27a")))
 		UI2.center(UI2.body(f, "You fought for your house (no attempt spent: no points)", 11, Color.WHITE, false))
 		return
+	if bool(m.get("late", false)):
+		UI2.center(UI2.text(f, "BATTLE FOR %s" % place, 15, Color("#ffd27a")))
+		UI2.center(UI2.body(f, "The week ended before the battle did -- it doesn't count on the new map", 11, Color.WHITE, false))
+		return
 	var crowns := []
 	if bool(m.get("gate", false)):
 		crowns.append("gate")

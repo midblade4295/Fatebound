@@ -11,10 +11,12 @@ extends RefCounted
 #                          {"k":"war_alarm"} (DEFEND).
 # The battle itself is an ordinary 16-a-side Siege match in a room of its own (siege_server.gd: room_fn makes it):
 # the attackers' house on one side, the holders' house on the other (nobody defends a territory nobody holds -- bots
-# do), bots in every empty seat. A member of the attacking clan with an attempt left spends it when seated
-# (seated()); at the end (battle_over()) each such member adds Map.points(crowns, won) to the clan's bar on that
-# territory -- a crown each for a gate broken, the King rescued and the match won; a loss takes PTS_LOSS off; one who
-# quit counts as a loss. The first clan whose bar reaches NEED_NEUTRAL (nobody holds it) or NEED_OWNED takes it for its
+# do), bots in every empty seat. Starting a battle spends the starter's attempt (one battle on at a time for a player,
+# MAX_CLAN_BATTLES for a clan -- each holds a room); any other member of the attacking clan with an attempt left spends
+# one when seated (seated()). At the end (battle_over()) each of them adds Map.points(crowns, won) to the clan's bar on
+# that territory -- a crown each for a gate broken, the King rescued and the match won; a loss takes PTS_LOSS off; one
+# who quit (or never came) counts as a loss, and a battle every player left is lost (battle_gone()). A battle the week
+# ended under counts for nothing ("late"). The first clan whose bar reaches NEED_NEUTRAL (nobody holds it) or NEED_OWNED takes it for its
 # house; every bar on it starts again.
 # Weeks run Monday 00:00 UTC to Monday (the leaderboard's): when one ends, the house holding the most territory wins it
 # (tally) and every territory is free again (the land rush). Attempts are per UTC day.
@@ -26,6 +28,7 @@ const SAVE_DELAY := 3.0
 const PUSH_GAP := 0.5              # s between map pushes to the phones that have it open
 const ROLL_EVERY := 10.0           # s between looks at the clock for a new week
 const LOG_MAX := 30
+const MAX_CLAN_BATTLES := 2        # battles a clan may have on at once (each holds a room on the server)
 
 var soc                            # server/social.gd (users, sockets, clans)
 var path := ""
@@ -67,12 +70,31 @@ func _load() -> void:
 	if not (v is Dictionary):
 		return
 	week = str(v.get("week", ""))
-	for k in ["owners", "bars", "attempts", "tally", "last"]:
-		if v.get(k, null) is Dictionary:
-			set(k, v[k])
+	# (only entries that make sense: a hand-edited or damaged file can't stop the saves or skew the week's count)
+	var terr := Map.territories()
+	for tid in _dict(v.get("owners")):
+		if terr.has(str(tid)) and v.owners[tid] is Dictionary and Map.HOUSES.has(str(v.owners[tid].get("h", ""))):
+			owners[str(tid)] = v.owners[tid]
+	for tid in _dict(v.get("bars")):
+		if terr.has(str(tid)) and v.bars[tid] is Dictionary:
+			var tb := {}
+			for cid in v.bars[tid]:
+				if v.bars[tid][cid] is float or v.bars[tid][cid] is int:
+					tb[str(cid)] = maxi(0, int(v.bars[tid][cid]))
+			bars[str(tid)] = tb
+	for pid in _dict(v.get("attempts")):
+		if v.attempts[pid] is Dictionary:
+			attempts[str(pid)] = {"d":str(v.attempts[pid].get("d", "")), "n":int(v.attempts[pid].get("n", 0)) if (v.attempts[pid].get("n", 0) is float or v.attempts[pid].get("n", 0) is int) else 0}
+	for h in _dict(v.get("tally")):
+		if Map.HOUSES.has(str(h)) and (v.tally[h] is float or v.tally[h] is int):
+			tally[str(h)] = int(v.tally[h])
+	last = _dict(v.get("last"))
 	if v.get("captures", null) is Array:
-		captures = v.captures
-	next_bid = maxi(1, int(v.get("next_bid", 1)))
+		captures = (v.captures as Array).filter(func(x): return x is Dictionary).slice(0, LOG_MAX)
+	next_bid = maxi(1, int(v.get("next_bid", 1)) if (v.get("next_bid", 1) is float or v.get("next_bid", 1) is int) else 1)
+
+static func _dict(x: Variant) -> Dictionary:
+	return x if x is Dictionary else {}
 
 func save_now() -> void:
 	var today := day_of(unix())
@@ -214,7 +236,8 @@ func handle(pid: String, msg: Dictionary) -> void:
 		"war_close":
 			watchers.erase(pid)
 		"war_go":
-			_go(pid, str(msg.get("tid", "")), bool(msg.get("call", true)))
+			var cv: Variant = msg.get("call", true)
+			_go(pid, str(msg.get("tid", "")), cv if cv is bool else true)
 
 func unwatch(pid: String) -> void:
 	watchers.erase(pid)
@@ -244,19 +267,35 @@ func _go(pid: String, tid: String, call: bool) -> void:
 	if attempts_left(pid) <= 0:
 		_refuse(pid, tid, "No battles left today -- join your clan's battles to help, or come back tomorrow")
 		return
+	# (a battle holds one of the server's rooms: one at a time for a player, MAX_CLAN_BATTLES for a clan)
+	var mine := 0
+	var clan_n := 0
+	for ob in battles.values():
+		if str(ob.state) != "over":
+			mine += int(str(ob.by) == pid)
+			clan_n += int(str(ob.ac) == cid)
+	if mine > 0:
+		_refuse(pid, tid, "You have a battle on already -- fight that one first")
+		return
+	if clan_n >= MAX_CLAN_BATTLES:
+		_refuse(pid, tid, "Your clan has %d battles on already -- join one of them" % clan_n)
+		return
 	var own: Dictionary = owners.get(tid, {})
 	var bid := "b%d%s" % [next_bid, Crypto.new().generate_random_bytes(2).hex_encode()]
 	next_bid += 1
 	var b := {"bid":bid, "tid":tid, "ah":house, "ac":cid, "act":str(c.tag), "acn":str(c.name), "dh":str(own.get("h", "")),
-		"dc":str(own.get("c", "")), "dct":str(own.get("ct", "")), "by":pid, "at":unix(), "room":0, "state":"lobby", "scorers":{}}
+		"dc":str(own.get("c", "")), "dct":str(own.get("ct", "")), "by":pid, "at":unix(), "room":0, "state":"lobby", "scorers":{},
+		"week":week}
 	var room := int(room_fn.call(b))
 	if room <= 0:
 		_refuse(pid, tid, "Every battlefield is busy -- try again in a few minutes")
 		return
 	b.room = room
 	battles[bid] = b
-	_mark()
 	var name: String = soc._name(pid)
+	_spend(pid)                                        # (starting a battle spends the starter's attempt: it's theirs)
+	b.scorers[pid] = {"acct":str(soc.users[pid].acct), "name":name}
+	_mark()
 	soc.log_fn.call("war: %s [%s] attacks %s (battle %s, room %d)" % [name, str(c.tag), tid, bid, room])
 	event_fn.call(str(soc.users[pid].acct), "war_start", {"tid":tid, "held":own.has("h")})
 	soc._send(pid, {"t":"so", "k":"war_go", "ok":true, "bid":bid, "tid":tid, "side":"att"})
@@ -283,12 +322,15 @@ func seated(bid: String, pid: String, acct: String, name: String) -> bool:
 		return true                                    # (back on their seat: counted once)
 	if attempts_left(pid) <= 0:
 		return false
-	var today := day_of(unix())
-	var a: Dictionary = attempts.get(pid, {})
-	attempts[pid] = {"d":today, "n":(int(a.get("n", 0)) if str(a.get("d", "")) == today else 0) + 1}
+	_spend(pid)
 	b.scorers[pid] = {"acct":acct, "name":name}
 	_mark()
 	return true
+
+func _spend(pid: String) -> void:
+	var today := day_of(unix())
+	var a: Dictionary = attempts.get(pid, {})
+	attempts[pid] = {"d":today, "n":(int(a.get("n", 0)) if str(a.get("d", "")) == today else 0) + 1}
 
 func started(bid: String) -> void:
 	if battles.has(bid) and str(battles[bid].state) == "lobby":
@@ -296,8 +338,12 @@ func started(bid: String) -> void:
 		_mark()
 
 func battle_gone(bid: String) -> void:
-	# its room closed (nobody came, or everyone left after it ended)
+	# its room closed: nobody came (the starter's attempt stays spent), everyone left after it ended, or every player
+	# left while it ran -- then it's lost: each attacker who spent an attempt on it quit (-PTS_LOSS each)
 	if battles.has(bid):
+		var b: Dictionary = battles[bid]
+		if str(b.state) == "on" and not (b.scorers as Dictionary).is_empty():
+			battle_over(bid, {"won":false, "present":[]})
 		battles.erase(bid)
 		_mark()
 
@@ -313,17 +359,18 @@ func battle_over(bid: String, res: Dictionary) -> Dictionary:
 	var won := bool(res.get("won", false))
 	var crowns := int(bool(res.get("gate", false))) + int(bool(res.get("king", false))) + int(won)
 	var present: Array = res.get("present", [])
+	var late := str(b.get("week", week)) != week       # (the week ended while it ran: the map is a new one -- no points)
 	var total := 0
 	var per := {}
 	for pid in b.scorers:
-		var p := Map.points(crowns, won) if present.has(pid) else -Map.PTS_LOSS
+		var p := 0 if late else (Map.points(crowns, won) if present.has(pid) else -Map.PTS_LOSS)
 		per[pid] = p
 		total += p
 	var tb: Dictionary = bars.get(tid, {})
 	var need := need_for(tid)
 	var bar := maxi(0, int(tb.get(ac, 0)) + total)
 	var took := false
-	if soc.clans != null and soc.clans.clans.has(ac) and holder(tid) != str(b.ah):
+	if not late and soc.clans != null and soc.clans.clans.has(ac) and holder(tid) != str(b.ah):
 		tb[ac] = bar
 		bars[tid] = tb
 		if bar >= need:
@@ -333,11 +380,15 @@ func battle_over(bid: String, res: Dictionary) -> Dictionary:
 	var out := {}
 	for pid in per:
 		out[pid] = {"tid":tid, "name":Map.name_of(tid), "pts":int(per[pid]), "crowns":crowns, "gate":bool(res.get("gate", false)),
-			"king":bool(res.get("king", false)), "won":won, "bar":mini(bar, need), "need":need, "took":took, "quit":not present.has(pid)}
+			"king":bool(res.get("king", false)), "won":won, "bar":mini(bar, need), "need":need, "took":took, "quit":not present.has(pid),
+			"late":late}
 	var cl = soc.clans
 	if cl != null and cl.clans.has(ac) and not per.is_empty():
-		cl._sys(ac, "The battle for %s: %s, %d crown%s, %+d (%d/%d)%s" % [Map.name_of(tid), "won" if won else "lost", crowns,
-			"" if crowns == 1 else "s", total, mini(bar, need), need, " -- it's ours!" if took else ""])
+		if late:
+			cl._sys(ac, "The battle for %s ended after the week did -- it doesn't count on the new map" % Map.name_of(tid))
+		else:
+			cl._sys(ac, "The battle for %s: %s, %d crown%s, %+d (%d/%d)%s" % [Map.name_of(tid), "won" if won else "lost", crowns,
+				"" if crowns == 1 else "s", total, mini(bar, need), need, " -- it's ours!" if took else ""])
 	soc.log_fn.call("war: battle %s for %s over: %s, crowns %d, %d scorers, %+d -> %d/%d%s" % [bid, tid, "won" if won else "lost",
 		crowns, per.size(), total, bar, need, " TAKEN" if took else ""])
 	return out

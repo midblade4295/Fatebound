@@ -60,10 +60,12 @@ extends SceneTree
 # of its own (_war_room): never offered to ordinary matchmaking, waiting WAR_WAIT s for its first player, a WAR_LOBBY s
 # countdown for the clan to gather, one match and no next one. A hello with "war": <battle id> is seated by house --
 # the attackers' house on team 1, the holders' house on team 0 (world.side_for); anyone else is refused (bye "war_side",
-# "war_gone", "war_full"). An attacker of the attacking clan spends an attempt when seated (world.seated). At the end
+# "war_gone", "war_full", "war_over", "war_twice": that account has a seat there already). Starting a battle spent the
+# starter's attempt; another attacker of the attacking clan spends one when seated (world.seated). At the end
 # world.battle_over gets the attackers' crowns (a defender's gate broken -- not the jail door --, a rescue, the win)
 # and who of them is still there; each player gets {"t":"war", ...} with what the battle did. PLAY AGAIN after a
-# battle: bye "war_over". Tests: SIEGE_WAR_LOBBY, SIEGE_WAR_WAIT, SIEGE_TEST_SCORE ("blue:red", set when
+# battle: bye "war_over"; everyone on its results is let go after WAR_RESULTS_KEEP s, so the room closes. Battles
+# never take the server's last room (matchmaking keeps it). Tests: SIEGE_WAR_LOBBY, SIEGE_WAR_WAIT, SIEGE_TEST_SCORE ("blue:red", set when
 # SIEGE_TEST_MATCH_S ends a match).
 #
 # 0.31.118 (Kevin's spec, ANALYTICS_SPEC_FOR_CLAUDE.md -- self-hosted analytics, no SDK, no third party): a socket whose
@@ -122,6 +124,7 @@ const Referrals = preload("res://server/referrals.gd")
 const DiagReports = preload("res://server/diag_reports.gd")
 
 const RESTART_AFTER := 15.0          # seconds of results screen before the next match
+const WAR_RESULTS_KEEP := 180.0      # 0.31.135: ... in a battle's room (there's no next match there)
 const RESULTS_KEEP := 600.0          # 0.31.122: a player who stays on the results (PLAY AGAIN not pressed) is let go after this
 const IDLE_STOP := 30.0              # no players for this long -> stop simulating (and the room closes)
 const LOBBY_TIME := 20.0             # the join countdown (0.31.82)
@@ -669,14 +672,16 @@ func _handle(cid: int, msg: Dictionary) -> void:
 					why = "war_side"
 				elif wr != null:
 					var side: String = world.side_for(Social.pid_of(acct), war_bid)
-					if side == "":
+					if wr.war_done or (wr.sim == null and wr.match_id != 0) or str(world.battles.get(war_bid, {}).get("state", "over")) == "over":
+						why = "war_over"
+					elif side == "":
 						why = "war_side"
+					elif _war_has_acct(wr, acct):
+						why = "war_twice"                     # (one seat an account: a second phone or socket can't fill the side)
 					else:
 						var wt := int(wr.war.att_team) if side == "att" else int(wr.war.def_team)
 						if _war_side_n(wr, wt) >= Net.TEAM_SIZE:
 							why = "war_full"
-						elif wr.war_done or (wr.sim == null and wr.match_id != 0):
-							why = "war_over"
 						else:
 							r = wr
 							war_team = wt
@@ -1427,8 +1432,11 @@ func _new_match(r: Room) -> void:
 
 # ---------------- the war map's battles (0.31.135) ----------------
 func _war_room(b: Dictionary) -> int:
-	# world.gd: a room for a battle (0: every room is busy)
-	if rooms.size() >= max_rooms:
+	# world.gd: a room for a battle (0: every room is busy). Battles never take the last room: matchmaking keeps one.
+	var war_n := 0
+	for r in rooms.values():
+		war_n += int(not (r as Room).war.is_empty())
+	if rooms.size() >= max_rooms or war_n >= maxi(1, max_rooms - 1):
 		return 0
 	var nr := Room.new()
 	nr.id = next_room
@@ -1444,6 +1452,15 @@ func _war_room_of(bid: String) -> Room:
 		if str((r as Room).war.get("bid", "")) == bid:
 			return r
 	return null
+
+func _war_has_acct(r: Room, acct: String) -> bool:
+	for cid in _members(r):
+		if str(clients[cid].get("acct", "")) == acct:
+			return true
+	for k in r.held:
+		if str(r.held[k].c.get("acct", "")) == acct:
+			return true
+	return false
 
 func _war_side_n(r: Room, team: int) -> int:
 	var n := 0
@@ -1480,7 +1497,7 @@ func _war_over(r: Room) -> void:
 			present.append(Social.pid_of(str(c.acct)))
 	var tid := str(r.war.tid)
 	var res: Dictionary = world.battle_over(str(r.war.bid), {"won":sim.winner == att, "gate":r.war_gate, "king":int(sim.score[att]) > 0, "present":present})
-	var held: bool = world.holder(tid) == str(r.war.dh)
+	var held: bool = not res.values().any(func(x): return bool(x.get("took", false)))
 	for cid in _members(r):
 		var c: Dictionary = clients[cid]
 		if not c.has("acct"):
@@ -1498,13 +1515,14 @@ func _war_over(r: Room) -> void:
 func _results_tick(r: Room) -> void:
 	# 0.31.122: a player left on the results (PLAY AGAIN never pressed) for results_keep seconds goes back to the menu
 	var now := _now()
+	var keep := results_keep if r.war.is_empty() else minf(results_keep, WAR_RESULTS_KEEP)
 	for cid in _members(r):
 		var c: Dictionary = clients[cid]
-		if c.has("results_at") and not c.has("close_at") and now - float(c.results_at) > results_keep:
+		if c.has("results_at") and not c.has("close_at") and now - float(c.results_at) > keep:
 			c.erase("results_at")
 			_send(cid, {"t":"bye", "why":"done"})
 			_refuse(cid, 1000, "done")
-			_log("%s left on the results for %.0f s: let go (room %d)" % [c.name, results_keep, r.id])
+			_log("%s left on the results for %.0f s: let go (room %d)" % [c.name, keep, r.id])
 
 func _run_match(r: Room, delta: float) -> bool:
 	# -> true when the room's match ran this frame
@@ -1530,7 +1548,8 @@ func _run_match(r: Room, delta: float) -> bool:
 			_pay_match(r)
 			_war_over(r)
 			for cid in _members(r):                       # 0.31.122: their results are up until they say otherwise
-				if bool(clients[cid].get("ask_next", false)) and not bool(clients[cid].get("queued", false)):
+				# (0.31.135: in a battle's room everyone's are -- there's no next match, and the room must close)
+				if (bool(clients[cid].get("ask_next", false)) or not r.war.is_empty()) and not bool(clients[cid].get("queued", false)):
 					clients[cid].results_at = r.ended_at
 		elif r.war.is_empty() and Time.get_ticks_msec() / 1000.0 - r.ended_at > restart_after:
 			# The next match. 0.31.122: an app that asks for it (ask_next) goes in only once its player pressed PLAY AGAIN;

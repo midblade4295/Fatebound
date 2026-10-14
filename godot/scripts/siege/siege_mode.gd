@@ -613,7 +613,7 @@ func _net_process(delta: float) -> void:
 			return
 		if str(_net_bye.get("why", "")).begins_with("war_"):
 			_net_fail({"war_side":"Only the two houses at war can join this battle", "war_gone":"That battle is over",
-				"war_over":"That battle is over", "war_full":"Your side of this battle is full"}.get(str(_net_bye.why), "Can't join that battle"))
+				"war_over":"That battle is over", "war_full":"Your side of this battle is full", "war_twice":"You're in this battle already"}.get(str(_net_bye.why), "Can't join that battle"))
 			return
 		if sim != null and not sim.ended and _rj != "" and net_state == "playing" and _net_bye.is_empty() and ws.get_close_code() != 4006:
 			_begin_rejoin()                              # 0.31.120: the connection dropped -- try to get back in
@@ -732,7 +732,7 @@ func _net_process(delta: float) -> void:
 				if why.begins_with("war_"):
 					# 0.31.135: a battle this player can't join (another house's, over, or its side full)
 					_net_fail({"war_side":"Only the two houses at war can join this battle", "war_gone":"That battle is over",
-						"war_over":"That battle is over", "war_full":"Your side of this battle is full"}.get(why, "Can't join that battle"))
+						"war_over":"That battle is over", "war_full":"Your side of this battle is full", "war_twice":"You're in this battle already"}.get(why, "Can't join that battle"))
 					return
 				if why == "idle":
 					exit_note = "idle"

@@ -3,9 +3,11 @@ extends SceneTree
 # for the accounts). The shared map (18 places, the links, every territory reachable, homes never attackable); who may
 # attack what (linked to the house's land or home); starting a battle (a room from siege_server, or "busy"; one battle a
 # territory; the same house joins it; the clan called; the holders alarmed); sides (attackers, holders, nobody else;
-# no defenders for land nobody holds); attempts (5 a day, spent when seated, a new day starts again); the points
-# (crowns x 50, a loss -100, a quitter -100) and taking a territory (500 when nobody holds it, 1000 when a house does);
-# the map each phone gets; a week ending (the house with the most land wins it, the map is free again); world.json.
+# no defenders for land nobody holds); attempts (5 a day, the starter's spent at once, the others' when seated, a new
+# day starts again); one battle on at a time for a player, two for a clan; the points (crowns x 50, a loss -100, a
+# quitter -100, a battle every player left is lost) and taking a territory (500 when nobody holds it, 1000 when a house
+# does); the map each phone gets; a week ending (the house with the most land wins it, the map is free again; a battle
+# still on then counts for nothing); world.json (a damaged one doesn't stop the saves); a malformed "call".
 #   godot --headless --path godot -s res://tests/world_test.gd
 const Social = preload("res://server/social.gd")
 const Clans = preload("res://server/clans.gd")
@@ -71,7 +73,7 @@ func _init() -> void:
 	var dir := OS.get_user_data_dir().path_join("worldtest-%d" % Time.get_ticks_usec())
 	DirAccess.make_dir_recursive_absolute(dir)
 	var eco := FakeEco.new()
-	var who := [["Alice", 20000], ["Bob", 0], ["Sam", 20000], ["Rae", 20000], ["Lena", 20000], ["Tom", 0]]
+	var who := [["Alice", 20000], ["Bob", 0], ["Sam", 20000], ["Rae", 20000], ["Lena", 20000], ["Tom", 0], ["Cara", 0]]
 	var ids := []
 	for i in who.size():
 		var id := "%020x" % (i + 1)
@@ -99,12 +101,14 @@ func _init() -> void:
 	var R: String = P[3]
 	var L: String = P[4]
 	var TM: String = P[5]
+	var CR: String = P[6]
 	check(int(last(1, "me").get("war", 0)) == 1, "hello says the server has the war map")
 	s.handle(1, {"k":"clan_new", "name":"Lion Hearts", "tag":"LION", "house":"lions"})
 	s.handle(2, {"k":"clan_join", "id":s.clans.clan_of(A)})
 	s.handle(3, {"k":"clan_new", "name":"Stag Party", "tag":"STAG", "house":"stags"})
 	s.handle(4, {"k":"clan_new", "name":"Raven Claw", "tag":"RAVN", "house":"ravens"})
 	s.handle(5, {"k":"clan_new", "name":"Second Lions", "tag":"LNX", "house":"lions"})
+	s.handle(7, {"k":"clan_join", "id":s.clans.clan_of(A)})
 	var CA: String = s.clans.clan_of(A)
 	var CS: String = s.clans.clan_of(S)
 	check(CA != "" and s.clans.clan_of(B) == CA and CS != "" and s.clans.clan_of(R) != "" and s.clans.clan_of(L) != "", "four clans in three houses")
@@ -137,12 +141,16 @@ func _init() -> void:
 	var go: Dictionary = last(1, "war_go")
 	var bid := str(go.get("bid", ""))
 	check(bool(go.get("ok", false)) and bid != "" and str(go.side) == "att" and int(w.battles[bid].room) == 7, "Alice attacks the Mill: a battle in room 7")
+	check(w.attempts_left(A) == 4 and (w.battles[bid].scorers as Dictionary).has(A), "starting it spent her attempt (4 left): it counts for her")
 	check(str(last(2, "war_call").get("bid", "")) == bid and str(last(2, "war_call").get("by", "")) == "Alice" and got(1, "war_call").is_empty(),
 		"her clanmate Bob is called to it (she isn't)")
 	check(got(3, "war_alarm").is_empty(), "nobody holds the Mill: no alarm")
 	clear()
 	s.handle(2, {"k":"war_go", "tid":"mill"})
 	check(str(last(2, "war_go").get("bid", "")) == bid and bool(last(2, "war_go").get("joined", false)) and w.battles.size() == 1, "Bob asking for the Mill joins her battle")
+	s.handle(1, {"k":"war_go", "tid":"quarry"})
+	check(str(last(1, "war_go").get("why", "")).contains("battle on already") and w.battles.size() == 1 and w.attempts_left(A) == 4,
+		"Alice can't start a second battle while hers is on")
 	check(w.side_for(A, bid) == "att" and w.side_for(L, bid) == "att" and w.side_for(S, bid) == "" and w.side_for(TM, bid) == "",
 		"sides: Lions attack (any Lions clan); Stags, Ravens and the clanless can't join; nobody defends free land")
 	check(w.seated(bid, A, ids[0], "Alice") and w.seated(bid, B, ids[1], "Bob") and not w.seated(bid, L, ids[4], "Lena") and w.attempts_left(A) == 4,
@@ -199,7 +207,11 @@ func _init() -> void:
 	var live := func() -> int: return w.battles.values().filter(func(b): return str(b.state) != "over").size()
 	check(bR != "" and live.call() == 2, "Ravens attack the Fen meanwhile (one battle a territory, many at once)")
 	w.battle_gone(bR)
-	check(live.call() == 1 and not w.battles.has(bR), "a battle nobody came to is dropped")
+	check(live.call() == 1 and not w.battles.has(bR) and w.attempts_left(R) == 4, "a battle nobody came to is dropped (the starter's attempt stays spent)")
+	clear()
+	s.handle(7, {"k":"war_go", "tid":"ford"})
+	var bF := str(last(7, "war_go").get("bid", ""))
+	check(bF != "" and live.call() == 2, "Cara (Lions) attacks the Ford: her clan has two battles on")
 
 	# ---------------- the map's bars ----------------
 	w.bars["quarry"] = {CA: 300}
@@ -226,6 +238,14 @@ func _init() -> void:
 	# ---------------- a new day, a new week ----------------
 	s.now_override = T0 + 86400
 	check(w.attempts_left(A) == 5, "a new day: 5 attempts again")
+	clear()
+	s.handle(1, {"k":"war_go", "tid":"quarry", "call":"yes"})
+	check(str(last(1, "war_go").get("why", "")).contains("2 battles on already") and live.call() == 2,
+		"a third battle for the clan: refused (and a malformed \"call\" still gets its answer)")
+	w.bars["ford"] = {CA: 300}
+	w.started(bF)
+	w.battle_gone(bF)
+	check(int(w.bars.ford[CA]) == 200 and not w.battles.has(bF), "every player left the Ford's battle while it ran: lost, Cara -100 (300 -> 200)")
 	w.owners["quarry"] = {"h":"lions", "c":CA, "ct":"LION", "cn":"Lion Hearts", "at":T0}
 	w.save_now()
 	var again = World.new(dir, s)
@@ -235,7 +255,23 @@ func _init() -> void:
 	w._roll()
 	check(str(w.last.get("won", "")) == "lions" and int(w.tally.get("lions", 0)) == 1 and int(w.last.counts.lions) == 2 and w.owners.is_empty()
 		and w.bars.is_empty() and str(w.week) == "2026-10-19", "Monday: the Lions (2 territories) win the week; the map is free again")
+	var rl: Dictionary = w.battle_over(b4, {"won":true, "gate":true, "king":true, "present":[B]})
+	check(bool(rl[B].late) and int(rl[B].pts) == 0 and not bool(rl[B].took) and w.owners.is_empty() and w.bars.is_empty(),
+		"Bob's battle for the Tower, still on when the week ended: it counts for nothing on the new map")
 	w.save_now()
+	# a damaged world.json: the odd entries are left out, and saving still works
+	var wf := FileAccess.open(dir.path_join("world.json"), FileAccess.WRITE)
+	wf.store_string(JSON.stringify({"v":1, "week":"2026-10-19", "owners":{"atlantis":{"h":"lions"}, "mill":{"h":"lions", "c":CA}, "lake":"x"},
+		"bars":{"mill":{CA:"lots", "x":40}, "nowhere":{CA:5}}, "attempts":{A:"five", B:{"d":"2026-10-19", "n":2}}, "tally":{"lions":2, "goblins":9},
+		"captures":[1, {"tid":"mill"}], "next_bid":"x"}))
+	wf.close()
+	var odd = World.new(dir, s)
+	check(odd.owners.size() == 1 and odd.owners.has("mill") and (odd.bars.mill as Dictionary).size() == 1 and int(odd.bars.mill.x) == 40
+		and not odd.bars.has("nowhere") and not odd.attempts.has(A) and odd.attempts.has(B) and odd.tally.size() == 1 and odd.captures.size() == 1,
+		"a damaged world.json: only the entries that make sense are kept")
+	odd.save_now()
+	var back: Variant = JSON.parse_string(FileAccess.get_file_as_string(dir.path_join("world.json")))
+	check(back is Dictionary and (back.owners as Dictionary).size() == 1, "... and it saves again")
 	for f in ["world.json", "clans.json", "social.json"]:
 		DirAccess.remove_absolute(dir.path_join(f))
 	DirAccess.remove_absolute(dir)

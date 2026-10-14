@@ -6,6 +6,10 @@ extends SceneTree
 # on team 1 (red), Sam defends on team 0 (blue); Rae (no clan) is refused. The battle starts after its countdown, ends
 # 1-0: Alice and Bob each spent an attempt and each earn 100 (the rescue and the win), the Lions' bar on the Tower is
 # 200/1000; Sam hears the Tower held. PLAY AGAIN after it: "war_over". The map shows the bar and 4 attempts left.
+# The server has 2 rooms (SIEGE_MAX_ROOMS): battles never take the last one, so Sam's attack on the Mill meanwhile is
+# "busy". A second socket of Bob's account is turned away (war_twice). Bob's phone never asks for the next match, yet
+# he's let go after the results (SIEGE_RESULTS_KEEP 3 s); joining the battle after it: war_over. Once everyone's gone
+# the room closes and Sam's attack goes through.
 #   godot --headless --path godot -s res://tests/war_battle_test.gd
 const ClientSocial = preload("res://scripts/meta/social.gd")
 const Profile = preload("res://scripts/meta/profile.gd")
@@ -24,6 +28,7 @@ var raw := {}
 var accts := {}
 var socs := {}
 var bid := ""
+var retry_at := -10.0
 
 func check(ok: bool, what: String) -> void:
 	print(("ok   " if ok else "FAIL ") + what)
@@ -61,6 +66,8 @@ func _init() -> void:
 	OS.set_environment("SIEGE_TEST_MATCH_S", "6")
 	OS.set_environment("SIEGE_TEST_SCORE", "0:1")
 	OS.set_environment("SIEGE_IDLE_STOP", "2")
+	OS.set_environment("SIEGE_MAX_ROOMS", "2")
+	OS.set_environment("SIEGE_RESULTS_KEEP", "3")
 	OS.set_environment("STATE_DIRECTORY", sd)
 	OS.set_environment("SIEGE_MIN_BUILD", "off")
 	server_pid = OS.create_process(OS.get_executable_path(), ["--headless", "--path", ProjectSettings.globalize_path("res://"), "-s", "res://server/siege_server.gd"])
@@ -77,9 +84,9 @@ func _ws(name: String, first: Dictionary) -> void:
 	ws.connect_to_url("ws://127.0.0.1:%d" % port)
 	raw[name] = {"ws":ws, "sent":false, "first":first, "msgs":[]}
 
-func _hello(n: String) -> void:
-	_ws("m_" + n, {"t":"hello", "v":Net.VERSION, "name":n, "build":"0.31.135-fatebound", "pred":false, "ask_next":true,
-		"acct":accts[n][0], "key":accts[n][1], "war":bid})
+func _hello(n: String, as_name := "", ask_next := true) -> void:
+	_ws("m_" + (as_name if as_name != "" else n), {"t":"hello", "v":Net.VERSION, "name":n, "build":"0.31.135-fatebound", "pred":false,
+		"ask_next":ask_next, "acct":accts[n][0], "key":accts[n][1], "war":bid})
 
 func _poll_raw() -> void:
 	for n in raw:
@@ -139,13 +146,20 @@ func _process(delta: float) -> bool:
 				check(bool(g.get("ok", false)), "Alice attacks the Old Tower: %s" % str(g))
 				bid = str(g.get("bid", ""))
 				_hello("Alice")
+				socs.Sam.war_go("mill", false)
+				_go("busy")
+		"busy":
+			var sg := _last_so(socs.Sam, "war_go")
+			if not sg.is_empty():
+				check(not bool(sg.get("ok", true)) and str(sg.get("why", "")).contains("busy"), "2 rooms, one a battle: Sam's attack on the Mill is busy (matchmaking keeps the last room)")
+				socs.Sam.set_meta("seen_war_go", {})
 				_go("calls")
 		"calls":
 			var call := _last_so(socs.Bob, "war_call")
 			var alarm := _last_so(socs.Sam, "war_alarm")
 			if not call.is_empty() and not alarm.is_empty():
 				check(str(call.bid) == bid and str(call.by) == "Alice" and str(alarm.bid) == bid and str(alarm.ct) == "LION", "Bob is called to it, Sam is alarmed")
-				_hello("Bob")
+				_hello("Bob", "", false)
 				_hello("Sam")
 				_ws("m_Rae", {"t":"hello", "v":Net.VERSION, "name":"Rae", "build":"0.31.135-fatebound", "pred":false,
 					"acct":accts.Rae[0], "key":accts.Rae[1], "war":bid})
@@ -159,6 +173,7 @@ func _process(delta: float) -> bool:
 					"attackers on red (Alice %s, Bob %s), the defender on blue (Sam %s)" % [str(wa[0].you), str(wb[0].you), str(ws[0].you)])
 				var bye := _got("m_Rae", "bye")
 				check(not bye.is_empty() and str(bye[0].why) == "war_side", "Rae (no clan) is refused")
+				_hello("Bob", "Bob2")
 				var lob := _got("m_Alice", "lobby")
 				check(not lob.is_empty() and float(lob[0].get("wait", 0)) >= 3.9, "the battle's countdown is the war lobby's (%s s)" % str(lob[0].get("wait", "?") if not lob.is_empty() else "?"))
 				_go("result")
@@ -171,6 +186,8 @@ func _process(delta: float) -> bool:
 					"Alice: won with the rescue: +%d, %d crowns, the bar %d/%d" % [int(a.pts), int(a.crowns), int(a.bar), int(a.need)])
 				var rb := _got("m_Bob", "war")
 				check(not rb.is_empty() and int(rb[0].pts) == int(a.pts), "Bob's battle counts too")
+				var b2 := _got("m_Bob2", "bye")
+				check(not b2.is_empty() and str(b2[0].why) == "war_twice", "a second socket of Bob's account: refused (war_twice)")
 				check(bool(rs[0].get("def", false)) and bool(rs[0].get("held", false)), "Sam: the Tower held")
 				(raw.m_Alice.ws as WebSocketPeer).put_packet(Net.encode({"t":"again"}))
 				_go("again")
@@ -185,7 +202,28 @@ func _process(delta: float) -> bool:
 				check(not mw.terr.tower.has("b") or str(mw.terr.tower.b.state) == "over", "no live battle at the Tower now")
 				var lines: Array = socs.Bob.lines.get("clan", [])
 				check(lines.any(func(l): return str(l.get("x", "")).contains("The battle for Old Tower")), "the clan chat sums the battle up")
+				_hello("Sam", "Sam2")
+				_go("letgo")
+		"letgo":
+			var bb := _got("m_Bob", "bye")
+			var s2 := _got("m_Sam2", "bye")
+			if not bb.is_empty() and not s2.is_empty():
+				check(str(bb[0].why) == "done", "Bob (never asks for the next match) is let go after the battle's results")
+				check(str(s2[0].why) == "war_over", "joining the battle after it: war_over")
+				_go("closed")
+		"closed":
+			# (the room closes once its finished match is let go -- SIEGE_IDLE_STOP -- so "busy" until then: ask again)
+			var sg2 := _last_so(socs.Sam, "war_go")
+			if not sg2.is_empty() and bool(sg2.get("ok", false)):
+				check(true, "everyone gone: the room closed, and Sam's attack on the Mill goes through")
 				_go("end")
+			elif t_phase > 10.0:
+				check(false, "everyone gone: the room closed, and Sam's attack on the Mill goes through (%s)" % str(sg2))
+				_go("end")
+			elif t_phase - retry_at > 1.0:
+				retry_at = t_phase
+				socs.Sam.set_meta("seen_war_go", {})
+				socs.Sam.war_go("mill", false)
 		"end":
 			if t_phase > 0.3:
 				return _finish()
