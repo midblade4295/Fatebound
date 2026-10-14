@@ -18,10 +18,16 @@ MIN_IOS="17.0"
 TARGET="template_release"
 
 [ "$(uname -s)" = "Darwin" ] || { echo "build_ios.sh needs macOS with Xcode" >&2; exit 1; }
-command -v scons >/dev/null || python3 -m pip install --quiet scons
 
 rm -rf "$WORK"
 mkdir -p "$WORK"
+# SCons in its own virtual environment (Homebrew's Python refuses system-wide pip installs, PEP 668)
+SCONS="$(command -v scons || true)"
+if [ -z "$SCONS" ]; then
+  python3 -m venv "$WORK/venv"
+  "$WORK/venv/bin/python" -m pip install --quiet scons
+  SCONS="$WORK/venv/bin/scons"
+fi
 git clone --quiet --depth 1 --branch "$GODOT_CPP_TAG" https://github.com/godotengine/godot-cpp "$WORK/godot-cpp"
 got="$(git -C "$WORK/godot-cpp" rev-parse HEAD)"
 [ "$got" = "$GODOT_CPP_COMMIT" ] || { echo "godot-cpp $GODOT_CPP_TAG is $got, expected $GODOT_CPP_COMMIT" >&2; exit 1; }
@@ -31,8 +37,8 @@ cp -R "$HERE/src" "$HERE/SConstruct" "$HERE/build_profile.json" "$WORK/ext/"
 cd "$WORK/ext"
 export GODOT_CPP="$WORK/godot-cpp"
 common=(platform=ios target="$TARGET" ios_min_version="$MIN_IOS" build_profile="$WORK/ext/build_profile.json" -j"$JOBS")
-scons arch=arm64 "${common[@]}"
-scons arch=universal ios_simulator=yes "${common[@]}"
+"$SCONS" arch=arm64 "${common[@]}"
+"$SCONS" arch=universal ios_simulator=yes "${common[@]}"
 
 rm -rf "$OUT"
 mkdir -p "$OUT/bin"
