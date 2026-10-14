@@ -28,6 +28,7 @@ const UpdateScreen = preload("res://scripts/app/update_screen.gd")
 const Profile = preload("res://scripts/meta/profile.gd")
 const Net = preload("res://scripts/siege/siege_net.gd")
 const App = preload("res://scripts/app/siege_app.gd")
+const Notify = preload("res://scripts/meta/notify.gd")
 
 var fails: Array = []
 var frames := 0
@@ -139,6 +140,7 @@ func _init() -> void:
 	_token()
 	_billing()
 	_game_center()
+	_notify()
 	# ---- 6. the real app as an iPhone
 	Platform.forced = "ios"
 	var base := "user://ios_ui-%d" % Time.get_ticks_usec()
@@ -394,6 +396,22 @@ func _game_center() -> void:
 	root.add_child(off)
 	off.setup(fresh("gcoff"))
 	check(not off.active() and off.state == "off", "without Game Center's classes: off")
+
+func _notify() -> void:
+	# chest-ready notifications: on iOS notify.gd takes FateboundNotifyIOS (ios_plugins/fatebound_notify), whose four
+	# calls are named exactly like the Android plugin's, so the rest of notify.gd is the same code on both phones
+	Platform.forced = "ios"
+	var n = Notify.new()
+	check(not n.available(), "iOS without the extension (here): no notifications claimed")
+	Platform.forced = ""
+	var reg := FileAccess.get_file_as_string("res://ios_plugins/fatebound_notify/src/register_types.cpp")
+	var java := FileAccess.get_file_as_string("res://android_plugins/fatebound_notify/src/main/java/org/fatebound/notify/FateboundNotify.java")
+	var same := reg.contains("GDREGISTER_CLASS(%s)" % Notify.IOS_CLASS)
+	for m in ["hasPermission", "requestPermission", "schedule", "cancelAll"]:
+		same = same and reg.contains("D_METHOD(\"%s\"" % m) and java.contains("public %s %s(" % ["boolean" if m == "hasPermission" else "void", m])
+	check(same, "FateboundNotifyIOS registers the class notify.gd asks for, with the Android plugin's four calls")
+	check(FileAccess.file_exists("res://ios_plugins/.gdignore") and FileAccess.file_exists("res://android_plugins/.gdignore"),
+		"the native sources are hidden from Godot (.gdignore): never exported")
 
 # ---------------- 6. the screens ----------------
 func _live(n: Node) -> bool:

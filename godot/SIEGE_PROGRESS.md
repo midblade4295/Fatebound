@@ -3769,3 +3769,22 @@ K2/K3 notes (0.17.0)
 - Checked on Linux (Godot writes the Xcode project and stops, as it does off a Mac): bundle id, team, deployment
   target 17.0, device family 1,2, version placeholders, the Game Center entitlement, export_options (app-store,
   YBKRZRW845), Info.plist / PrivacyInfo / entitlements all parse; the icons RGB; a 2.4 MB base Fatebound.pck.
+
+## iOS port steps 3, 5, 7 — the native side: StoreKit 2, Game Center, notifications
+- tools/ios_plugins.sh puts the iOS build's native plugins into godot/addons/ just before an iOS export (the TestFlight
+  workflow runs it): GodotApplePlugins v1.11 (release build-a6d667dd..., zip SHA-256 checked) -- only its StoreKit,
+  GameCenter and Swift runtime addons -- and FateboundNotifyIOS built from source. Nothing of it is committed
+  (.gitignore), so Android and desktop builds never carry or load it; --remove takes it out again.
+- The iOS preset alone also leaves the plugins' bin/ folders out of the pck (content_packs.py PRESET_EXTRA): Godot
+  copies their xcframeworks into the Xcode project itself, and their Swift module JSON (~80 MB) had landed in the pck.
+  The Android presets' filters are unchanged. Checked on Linux: the Xcode project carries StoreKit, GameCenter and
+  SwiftGodotRuntime xcframeworks with their entry symbols registered; the pck is 2.4 MB with the two .gdextension files.
+- godot/ios_plugins/fatebound_notify (hidden from Godot by .gdignore): FateboundNotifyIOS, an Objective-C++ GDExtension
+  on godot-cpp (godot-4.5-stable, pinned commit) using UNUserNotificationCenter, with the Android plugin's own four calls
+  -- hasPermission (iOS's answer, cached), requestPermission (iOS's dialog), schedule(id, title, body, delay),
+  cancelAll (pending and shown). build_ios.sh (macOS + Xcode) makes static xcframeworks (iPhone + Simulator) for it and
+  godot-cpp and writes the .gdextension into addons/FateboundNotifyIOS/. Off Apple platforms the same class builds with
+  a stand-in that records the calls: built and loaded in Godot 4.7.2 on Linux -- the class, permission, the calls.
+- scripts/meta/notify.gd: on iOS it takes FateboundNotifyIOS; everything else (our question before iOS's dialog,
+  Settings > NOTIFICATIONS > Chest ready, scheduling per unlocking chest, cancel on return) is the same code.
+- ios_port_test: notify.gd on iOS, and the iOS class registers the name and the four calls the Android plugin has.

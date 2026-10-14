@@ -8,17 +8,24 @@ extends RefCounted
 #   - Android 13+ asks for permission: the first time a chest starts unlocking the game asks first in its own words
 #     ("Want a notification when your chest is ready?") and only on YES shows Android's dialog (settings.notify_asked)
 # Nothing leaves the phone: the notifications are scheduled on it.
+# 0.31.131 (the iOS port, IOS_PORT_SPEC_FOR_CLAUDE.md §6): on iOS the same four calls come from FateboundNotifyIOS
+# (godot/ios_plugins/fatebound_notify, UNUserNotificationCenter; a GDExtension in the iOS build only), so everything
+# here -- the question, the toggle, the scheduling -- is the same on both phones.
 const Eco = preload("res://scripts/meta/economy.gd")
+const Platform = preload("res://scripts/meta/platform.gd")
 const SINGLETON := "FateboundNotify"
+const IOS_CLASS := "FateboundNotifyIOS"
 const ID_BASE := 1000
 
-var plugin = null                  # the Android singleton, or a test's fake
+var plugin = null                  # the Android singleton, the iOS extension's object, or a test's fake
 
 func _init(fake = null) -> void:
 	if fake != null:
 		plugin = fake
 	elif Engine.has_singleton(SINGLETON):
 		plugin = Engine.get_singleton(SINGLETON)
+	elif Platform.is_ios() and Platform.has_class(IOS_CLASS):
+		plugin = ClassDB.instantiate(IOS_CLASS)
 
 func available() -> bool:
 	return plugin != null

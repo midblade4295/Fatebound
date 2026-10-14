@@ -60,6 +60,10 @@ PACKS = [
 BASE_ASSETS = ["assets/branding/*", "assets/fonts/*", "assets/vfx/*"]       # what the loader (and the update screen) use
 NEVER = ["tests/*", "reports/*", "tools/*", "server/*", "store-listing/*", "assets/meshy/castle/war_*",
          "assets/meshy/castle/floors/war_*"]                                # not exported at all
+# iOS port step 3: the iOS preset also leaves out the Apple plugins' binaries (tools/ios_plugins.sh puts them in
+# addons/ before an iOS export): the export copies their xcframeworks into the Xcode project itself, and their Swift
+# module JSON (~80 MB) would otherwise land in the pck. Only the .gdextension files go in.
+PRESET_EXTRA = {"iOS App Store": ["addons/GodotApplePlugins*/bin/*", "addons/FateboundNotifyIOS/bin/*"]}
 KEEP_IN_PACK = ("assets/", ".godot/imported/", ".godot/exported/")           # a pack holds data only: no code, no settings
 SKIP_FILES = (".txt", ".md", ".py", ".blend", ".blend1")                     # never exported (not resources)
 
@@ -403,7 +407,7 @@ def presets():
     cfg = open(cfg_path).read()
     pats = NEVER + [p for _, ps in PACKS for p in ps]
     for name in BASE_PRESETS:
-        cfg = _set_preset(cfg, name, "exclude_filter", '"%s"' % ",".join(pats))
+        cfg = _set_preset(cfg, name, "exclude_filter", '"%s"' % ",".join(pats + PRESET_EXTRA.get(name, [])))
     open(cfg_path, "w").write(cfg)
     print("base presets exclude %d patterns" % len(pats))
 

@@ -17,3 +17,8 @@ android/app/src/main/assets/index.html
 *.jks
 godot/override.cfg
 __pycache__/
+# The iOS build's native plugins: fetched / built by godot/tools/ios_plugins.sh just before an iOS export, never
+# committed (Android and desktop builds must not carry or load them)
+godot/addons/GodotApplePlugins*/
+godot/addons/FateboundNotifyIOS/
+godot/ios_plugins/fatebound_notify/bin/

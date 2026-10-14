@@ -1,0 +1,32 @@
+#!/usr/bin/env python
+# FateboundNotifyIOS (see src/fatebound_notify_ios.h). Built with godot-cpp's SConstruct (GODOT_CPP = its checkout):
+#   iOS (macOS + Xcode): scons platform=ios arch=arm64 target=template_release        -> bin/libfatebound_notify.ios.template_release.a
+#                        scons platform=ios arch=universal ios_simulator=yes ...       -> ...simulator.a
+#   Linux check:         scons platform=linux target=template_debug                   -> bin/libfatebound_notify.linux.*.so
+# build_ios.sh does the iOS builds and makes the xcframeworks and the .gdextension.
+import os
+
+godot_cpp = os.environ.get("GODOT_CPP", "godot-cpp")
+env = SConscript(os.path.join(godot_cpp, "SConstruct"))
+env.Append(CPPPATH=["src/"])
+
+def obj(e, path):
+    # a static library on iOS, a shared one elsewhere
+    return e.Object(path) if env["platform"] == "ios" else e.SharedObject(path)
+
+sources = [obj(env, "src/register_types.cpp")]
+if env["platform"] in ("ios", "macos"):
+    objc = env.Clone()
+    objc.Append(CCFLAGS=["-fobjc-arc", "-fmodules", "-fcxx-modules"])
+    sources.append(obj(objc, "src/fatebound_notify_ios.mm"))
+else:
+    sources.append(obj(env, "src/stand_in.cpp"))
+
+if env["platform"] == "ios":
+    name = "bin/libfatebound_notify.ios.{}{}.a".format(env["target"], ".simulator" if env["ios_simulator"] else "")
+    library = env.StaticLibrary(name, source=sources)
+else:
+    library = env.SharedLibrary("bin/libfatebound_notify{}{}".format(env["suffix"], env["SHLIBSUFFIX"]), source=sources)
+
+env.NoCache(library)
+Default(library)
