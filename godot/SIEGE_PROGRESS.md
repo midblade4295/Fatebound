@@ -3678,3 +3678,35 @@ K2/K3 notes (0.17.0)
   strings turned away from the archer (weapon_grip_test), and their own idle doesn't bob at all. Home's heroes use the
   same idles.
 - Version 0.31.128, versionCode 214.
+
+# Trailer 7, "Bring Him Home" (tools only, no build; Kevin: "Make a new game trailer. I want it very cinematic. Have
+# epic music, action sequences, slow motion ect. Also climactic end scene leading to the game title and use the new
+# title graphic with the swinging tied up king")
+- Plan in tools/trailer7_script.md. No narrator: the score carries it, with four title cards in Cinzel (the game's
+  serif): TWO KINGDOMS / ONE STOLEN KING / BRING HIM HOME / 16 VS 16. The shape: a dark, slow opening over the kingdom
+  at golden hour; our King behind bars in their dungeon at dusk, torchlit; our army in a long rank, the gates swinging
+  open, out they pour; both armies charging (four angles); the music cut dead and time all but frozen as the front
+  ranks' blows land -- then the battle score crashes in as time starts again and their front rank is thrown back; an
+  action montage on the beat (Crusader's hammer, Berserker's whirlwind, Archmage's meteor, a volley, the Necromancer's
+  drain, the Sniper's piercing shot, the Assassin's leap, a Knight's shield, their gate blown in from inside their
+  courtyard); the score's quiet bars as their cell door is smashed in, from inside the cell over the King's shoulder;
+  our King carried out, over the east crossing into the low sun, an ambush stopped by the hammer, our gates; up into
+  the throne room in slow motion; the hit, a white flash -- and Home's logo slamming in over the battle far below,
+  the tied-up King swinging hard from the impact and settling into the logo's own swing, the rope creaking.
+- tools/trailer7_shots.gd: 19 short staged runs in a real match (one per process, Movie Maker at 1920x1080 30 fps:
+  tools/trailer7_render.sh <run> [W H]). Slow motion is keyed (SCALE: [time, scale] pairs, ramped between them), so
+  speeds ramp in and out. The clash is triggered by distance (the front ranks within 2.6 m), not a clock; the three
+  charge runs share one seed so their cuts match. New camera kinds: "group" (follows the middle of a rank), "orbit",
+  and "track" (a fixed eye panning with someone). Camera moves run on recording time, so they glide through the slow
+  motion. The dungeon at dusk: a cold dim sun, a flickering torch inside the cell, a dim one outside.
+- tools/trailer7_edit.py: the cut (29 shots, 75 s) timed to the music's own landmarks (cue A's booms and its peak, B's
+  first beat, bars at 139.7 BPM and its quiet bars, C's hit), and the mix -- every sound placed on its shot; the game's
+  own sounds slowed with the picture; trailer 6's beds. -14 LUFS.
+- tools/trailer7_finish.py: the finishing pass over the cut picture: a filmic grade (S-curve, cool shadows, warm
+  highlights, vignette), 2.39:1 letterbox, the cards (fading in while they grow; the 16 VS 16 card snaps on the beat),
+  the flash on the final hit, and the title: logo_base.webp + logo_king.webp laid out with title_logo.gd's own
+  constants (read from the script: KING_AT, PIVOT, SWING_DEG, PERIOD), the King's swing 7 + 19 e^(-t/1.5) degrees,
+  a slam with a bounce and shake, a glint across the gold, embers, a soft shadow.
+- ElevenLabs (estimated and reported first): music, three cues x 4 takes, 5,039 credits; sound effects (rope creak,
+  title slam, time-freeze breath) x 4 takes, ~660 credits. The takes used are in tools/trailer7_vo/raw.
+- Fatebound-Trailer-7.mp4: 75 s, 1920x1080 at 30 fps, -13.7 LUFS, -1.4 dBFS peak, 112 MB (and a 720p phone copy, 23 MB).
