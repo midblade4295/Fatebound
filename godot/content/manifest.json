@@ -35,6 +35,14 @@
    "probe": "res://assets/meshy/weapons/acolyte_wand.glb"
   },
   {
+   "name": "war",
+   "file": "war-3f86ca05bf6b.pck",
+   "size": 9341140,
+   "sha256": "76be76b353b1079ba15caebcfee8303ad3d258a39e36dcf1dc90e60f19fbc949",
+   "inputs": "3f86ca05bf6b06b9553ce1d5af5ca17e23e157dd7789487d4f55ca2ad8e40dba",
+   "probe": "res://assets/meshy/war/abbey.glb"
+  },
+  {
    "name": "audio",
    "file": "audio-bcc08ca599d8.pck",
    "size": 11449520,

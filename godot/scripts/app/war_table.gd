@@ -15,9 +15,9 @@ const HEX := "res://assets/kaykit/hex/"
 const PIECES := "res://assets/meshy/war/"   # 0.31.136: each place's Meshy miniature (tools/meshy_war_piece.py), <id>.glb
 const S := 2.0                         # map units -> table units
 const NEUTRAL := Color("#6f6a60")
-const CAM_POS := Vector3(0.0, 17.0, 7.4)
-const CAM_AT := Vector3(0.0, -0.6, 0.55)
-const CAM_FOV := 33.0
+const CAM_POS := Vector3(0.0, 15.0, 12.5)   # (0.31.136: lower, so the miniatures show their sides)
+const CAM_AT := Vector3(0.0, -0.5, -0.4)
+const CAM_FOV := 32.0
 const PLINTH_YAW := PI / 6.0                 # (corners on +-X, sides facing the neighbours -- like the pieces)
 const GROUND_TINT := Color(0.72, 0.9, 0.62)   # KayKit's grass is a yellow-green: a deeper green on the table
 # what stands on each kind of place: [base tile, [model, scale, offset x, offset z, yaw]...]
@@ -52,7 +52,10 @@ var _cam: Camera3D
 var _overlay: Control
 var _sheet: VBoxContainer
 var _stats: HBoxContainer
-var _tiles := {}                       # id -> {"pos": Vector3, "node": Node3D, "plinth": MeshInstance3D, "flag": Node3D, "ring": MeshInstance3D}
+var _tiles := {}                       # id -> {"pos": Vector3, "node": Node3D, "plinth": MeshInstance3D, "tile": Node3D, "ring": MeshInstance3D}
+var _names_btn: Button
+var _fit_size := Vector2i.ZERO
+var names := false                     # every place's name on the table (NAMES); else the one picked and battles only
 var _labels := {}                      # id -> PanelContainer over the table
 var _mats := {}
 var _clock := 0.0
@@ -84,6 +87,7 @@ func open(a, first := "") -> void:
 	_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_vpc.add_child(_overlay)
+	_names_button()
 	var sf := UI2.frame(body, "glass", 10, 16.0)
 	sf.add_theme_constant_override("separation", 6)
 	sf.custom_minimum_size.y = 150          # (the table doesn't jump about as the sheet changes)
@@ -93,6 +97,21 @@ func open(a, first := "") -> void:
 	social.war_went.connect(_on_went)
 	social.war_open()
 	_render()
+
+func _names_button() -> void:
+	# NAMES, in the table's corner: every place's name on the table, or (off) only the one picked and the battles
+	if is_instance_valid(_names_btn):
+		_names_btn.queue_free()
+	_names_btn = UI2.button(_overlay, "NAMES", "blue" if names else "grey", func():
+		app.sfx("tab")
+		names = not names
+		_names_button()
+		_dirty = true, "war_names", 11, 28.0, 9.0)
+	_names_btn.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	_names_btn.offset_left = -70
+	_names_btn.offset_right = -6
+	_names_btn.offset_top = 6
+	_names_btn.offset_bottom = 34
 
 func _exit_tree() -> void:
 	if social != null:
@@ -169,13 +188,13 @@ func _build_table() -> void:
 	e.background_color = Color("#0b1024")
 	e.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	e.ambient_light_color = Color("#c8d4ff")
-	e.ambient_light_energy = 0.32
+	e.ambient_light_energy = 0.6
 	e.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	env.environment = e
 	root.add_child(env)
 	var sun := DirectionalLight3D.new()
 	sun.rotation = Vector3(deg_to_rad(-58.0), deg_to_rad(-32.0), 0.0)
-	sun.light_energy = 0.8
+	sun.light_energy = 1.2
 	sun.light_color = Color("#fff1d8")
 	sun.shadow_enabled = true
 	sun.directional_shadow_max_distance = 40.0
@@ -249,10 +268,10 @@ func _build_table() -> void:
 		ring.material_override = _mat("battle", Color("#ff8a2a"), 2.0)
 		ring.visible = false
 		t.add_child(ring)
-		_tiles[id] = {"pos":pos, "node":t, "plinth":plinth, "tile":tile, "flag":null, "ring":ring}
+		_tiles[id] = {"pos":pos, "node":t, "plinth":plinth, "tile":tile, "ring":ring}
 	_cam = Camera3D.new()
 	_cam.fov = CAM_FOV
-	_cam.keep_aspect = Camera3D.KEEP_WIDTH
+	_cam.keep_aspect = Camera3D.KEEP_HEIGHT       # (_fit_camera moves it so the map fills whatever room it has)
 	_cam.transform = Transform3D(Basis.looking_at(CAM_AT - CAM_POS, Vector3.UP), CAM_POS)   # (not in the tree yet)
 	root.add_child(_cam)
 	_cam.current = true
@@ -288,36 +307,6 @@ func _build_table() -> void:
 		lp.set_meta("name", nl)
 		_overlay.add_child(lp)
 		_labels[id] = lp
-
-func _flag(id: String, col: Color, big: bool) -> void:
-	# the holder's banner on a place (or none)
-	var t: Dictionary = _tiles[id]
-	if t.flag != null:
-		(t.flag as Node3D).queue_free()
-		t.flag = null
-	if col == Color.TRANSPARENT:
-		return
-	var f := Node3D.new()
-	f.position = Vector3(0.62, 0.0, 0.5) if not big else Vector3(0.75, 0.0, 0.62)
-	var h := 1.5 if not big else 2.3
-	var pole := MeshInstance3D.new()
-	var pm := CylinderMesh.new()
-	pm.top_radius = 0.035
-	pm.bottom_radius = 0.045
-	pm.height = h
-	pole.mesh = pm
-	pole.position = Vector3(0, h * 0.5, 0)
-	pole.material_override = _mat("pole", Color("#3b2a1a"))
-	f.add_child(pole)
-	var cloth := MeshInstance3D.new()
-	var cm := BoxMesh.new()
-	cm.size = Vector3(0.62 if not big else 0.9, 0.42 if not big else 0.6, 0.04)
-	cloth.mesh = cm
-	cloth.position = Vector3(cm.size.x * 0.5 + 0.03, h - cm.size.y * 0.5 - 0.04, 0)
-	cloth.material_override = _mat("flag_" + col.to_html(), col, 0.25)
-	f.add_child(cloth)
-	(t.node as Node3D).add_child(f)
-	t.flag = f
 
 # ---------------- input ----------------
 func _on_table_input(ev: InputEvent) -> void:
@@ -366,8 +355,58 @@ func select(id: String) -> void:
 	_dirty = true
 
 # ---------------- every frame ----------------
+func _fit_camera() -> void:
+	# the camera looks at the table from CAM_POS's angle; how far back, and how high it aims, are set so every place
+	# (its base and what stands on it) fills the table's rectangle, under the NAMES button -- tall phone or short
+	var sz := Vector2(_vp.size)
+	_fit_size = _vp.size
+	if sz.x < 8.0 or sz.y < 8.0:
+		return
+	var dir := (CAM_POS - CAM_AT).normalized()
+	var pts: Array[Vector3] = []
+	for id in _tiles:
+		var p: Vector3 = _tiles[id].pos
+		for c in [Vector3(-1.2, -0.3, 0.0), Vector3(1.2, -0.3, 0.0), Vector3(0.0, -0.3, 1.1), Vector3(0.0, -0.3, -1.1), Vector3(0.0, 2.3, 0.0)]:
+			pts.append(p + c)
+	var at := CAM_AT
+	var top := 42.0
+	for pass_n in 3:
+		var lo := 4.0
+		var hi := 80.0
+		for i in 22:
+			var d := (lo + hi) * 0.5
+			_cam.transform = Transform3D(Basis.looking_at(-dir, Vector3.UP), at + dir * d)
+			if _fits(pts, sz, top):
+				hi = d
+			else:
+				lo = d
+		_cam.transform = Transform3D(Basis.looking_at(-dir, Vector3.UP), at + dir * hi)
+		if pass_n == 2:
+			break
+		# centre it in the room left under the button
+		var ymin := INF
+		var ymax := -INF
+		for q in pts:
+			var sp := _cam.unproject_position(q)
+			ymin = minf(ymin, sp.y)
+			ymax = maxf(ymax, sp.y)
+		var off_px := (ymin + ymax) * 0.5 - (top + sz.y - 8.0) * 0.5
+		var per_px := 2.0 * hi * tan(deg_to_rad(_cam.fov) * 0.5) / sz.y
+		at -= _cam.transform.basis.y * off_px * per_px
+
+func _fits(pts: Array[Vector3], sz: Vector2, top: float) -> bool:
+	for q in pts:
+		if _cam.is_position_behind(q):
+			return false
+		var sp := _cam.unproject_position(q)
+		if sp.x < 6.0 or sp.y < top or sp.x > sz.x - 6.0 or sp.y > sz.y - 6.0:
+			return false
+	return true
+
 func _process(delta: float) -> void:
 	_clock += delta
+	if _vp.size != _fit_size:
+		_fit_camera()
 	if _dirty:
 		_dirty = false
 		_render()
@@ -398,7 +437,6 @@ func _render() -> void:
 		var h := str(t.get("h", ""))
 		var col: Color = SocialUI.house_color(h) if h != "" else NEUTRAL
 		(_tiles[id].plinth as MeshInstance3D).material_override = _mat("plinth_" + h, col.darkened(0.15)) if h != "" else _mat("neutral", NEUTRAL)
-		_flag(id, SocialUI.house_color(h) if h != "" else Color.TRANSPARENT, Map.is_home(id))
 		(_tiles[id].ring as MeshInstance3D).visible = t.has("b")
 		var lp: PanelContainer = _labels[id]
 		var sub: Label = lp.get_meta("sub")
@@ -411,6 +449,7 @@ func _render() -> void:
 			sub.add_theme_color_override("font_color", col.lightened(0.3))
 		sub.text = tag
 		sub.visible = tag != ""
+		lp.visible = names or id == sel or t.has("b")
 		var sb := lp.get_theme_stylebox("panel") as StyleBoxFlat
 		sb.border_color = Color.WHITE if id == sel else Color(0, 0, 0, 0)
 		sb.set_border_width_all(2 if id == sel else 0)
@@ -436,6 +475,7 @@ func _render() -> void:
 			SocialUI.house_chip(_stats, h, 12.0)
 			var cl := UI.label(_stats, str(int(counts.get(h, 0))), 13, SocialUI.house_color(h), UI.HEAVY_FONT)
 			cl.autowrap_mode = TextServer.AUTOWRAP_OFF
+
 	_render_sheet()
 
 func _render_sheet() -> void:

@@ -28,15 +28,15 @@ func _init() -> void:
 		if not ResourceLoader.exists(str(p.probe)):
 			sound = false
 			print("   probe missing ", p.probe)
-	check(names == ["ui", "world", "heroes", "weapons", "audio"] and sound, "5 packs, each named by its hash, sized, with a sha256 and a probe in the project (%s)" % str(names))
+	check(names == ["ui", "world", "heroes", "weapons", "war", "audio"] and sound, "6 packs, each named by its hash, sized, with a sha256 and a probe in the project (%s)" % str(names))
 	# the plan
 	var all := Loader.plan(m, {}, func(_p): return true)
 	check((all.mount as Array).is_empty() and (all.fetch as Array).is_empty() and (all.keep as Array).is_empty(), "running from source (every probe there): nothing to do")
 	var fresh := Loader.plan(m, {}, func(_p): return false)
-	check((fresh.fetch as Array).size() == 5 and (fresh.keep as Array).size() == 5, "a fresh install downloads all 5")
+	check((fresh.fetch as Array).size() == 6 and (fresh.keep as Array).size() == 6, "a fresh install downloads all 6")
 	var have := {str(packs[0].file): str(packs[0].sha256), str(packs[2].file): str(packs[2].sha256), str(packs[3].file): "0bad"}
 	var some := Loader.plan(m, have, func(_p): return false)
-	check((some.mount as Array).size() == 2 and (some.fetch as Array).size() == 3 and str(some.fetch[1].name) == "weapons",
+	check((some.mount as Array).size() == 2 and (some.fetch as Array).size() == 4 and str(some.fetch[1].name) == "weapons",
 		"two checked packs mount, a pack whose check doesn't match downloads again")
 	check(Loader.range_header(0, 20000000) == "Range: bytes=0-%d" % (Loader.CHUNK - 1) and
 		Loader.range_header(2 * Loader.CHUNK, 20000000) == "Range: bytes=%d-19999999" % (2 * Loader.CHUNK), "byte ranges of 8 MB, the last one short")
@@ -57,7 +57,7 @@ func _init() -> void:
 	for block in cfg.split("[preset."):
 		if block.contains('name="Android Play Store"') or block.contains('name="Android KayKit Rebuild"'):
 			var ex := block.substr(block.find("exclude_filter=")).get_slice("\n", 0)
-			for pat in ["assets/ui/*", "assets/meshy/weapons/*", "assets/meshy/knight/*", "assets/kaykit/*", "assets/music/*"]:
+			for pat in ["assets/ui/*", "assets/meshy/weapons/*", "assets/meshy/knight/*", "assets/kaykit/*", "assets/music/*", "assets/meshy/war/*"]:
 				if not ex.contains(pat):
 					presets_ok = false
 					print("   a base preset ships ", pat)

@@ -4003,3 +4003,23 @@ day, +50 a crown, -100 a loss, 1,000 to take held land, 500 for free land; defen
 - Quick suite: all 91 passed (90 Godot tests + the report check; apple_iap_test failed once while another server test
   ran beside it and passed alone). The Play AAB built from this commit (throwaway key, preset.0 untouched): BASE OK
   (234 files), CONTENT OK, play_games true, bundletool valid.
+
+## 0.31.136 — the war table's places made with ElevenLabs and Meshy
+Kevin: "I want the war map to be made by you, utilize Meshy and Eleven" -- the 18 places (picked over the table, its
+standards or sounds).
+- Concepts: ElevenLabs gpt-image-2, three sheets of six tabletop miniatures on hex bases (the keeps in their houses'
+  colours, the territories in stone, wood, grass and water), two takes each, 2K, 2,050 credits (flow "Fatebound war
+  table"). Kevin picked A2 + B2 + C1 (every base a true hex).
+- Meshy: each place cropped from its sheet (tools/meshy_weapon.py crop) -> image-to-3D, meshy-7.1, 8k triangles,
+  30 credits each (540; 614 left) -> tools/meshy_war_piece.py fit (new): the base's tightest hex found and turned so
+  its sides face the neighbours (corners on +-X), scaled to an apothem of 1.04, centred, its bottom on the ledge;
+  texture 512 (VRAM-compressed). assets/meshy/war/<place>.glb.
+- war_table.gd: each place is its miniature (the KayKit tile only when one is missing); the coloured ledges under them
+  turned to line up and a little wider (who holds it); the holders' flags gone (the ledges say it); lighting raised for
+  the painted models; the camera lower (the miniatures show their sides) and fitted to the room it has on any screen
+  (_fit_camera: how far back and where it aims, so every place fills the table's rectangle under NAMES). A clean
+  table: names only on the place picked and on battles; NAMES (the table's corner) shows them all.
+- Content packs: a new "war" pack (assets/meshy/war, 9.3 MB) so the world pack doesn't change (players download only
+  the new 9 MB); base presets exclude it; uploaded to content-packs (6a15026). content_test expects 6 packs.
+- war_ui_test: a clean table, NAMES, the places are the miniatures (22 checks).
+- Version 0.31.136, versionCode 222 (server code unchanged; SERVER_BUILD follows the app's version).

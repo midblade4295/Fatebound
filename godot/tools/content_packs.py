@@ -52,10 +52,10 @@ BODIES = ["archmage", "assassin", "barbarian", "berserker", "crusader", "knight"
 PACKS = [
     ("ui", ["assets/ui/*"]),
     ("world", ["assets/meshy/castle/*", "assets/meshy/*_shop/*", "assets/meshy/workshop/*", "assets/meshy/outpost_*/*",
-               "assets/meshy/war/*",                                    # 0.31.136: the war table's miniatures
                "assets/kaykit/*", "assets/kings/*", "assets/terrain/*", "assets/props/*"]),
     ("heroes", ["assets/meshy/%s/*" % b for b in BODIES]),
     ("weapons", ["assets/meshy/weapons/*"]),
+    ("war", ["assets/meshy/war/*"]),          # 0.31.136: the war table's miniatures (their own pack: world stays put)
     ("audio", ["assets/music/*", "assets/sounds/*", "assets/vo/*"]),
 ]
 BASE_ASSETS = ["assets/branding/*", "assets/fonts/*", "assets/vfx/*"]       # what the loader (and the update screen) use

@@ -173,9 +173,11 @@ func _process(delta: float) -> bool:
 			if tb != null and not app.social.war.is_empty() and t_phase > (2.5 if shots != "" else 0.6):
 				check(has_text(tb, "ATTEMPTS 5/5") and has_text(tb, "WEEK ENDS IN") and has_text(tb, "THE WAR TABLE"),
 					"the war table: the week's end, 5 attempts, how it works")
-				check(has_text(tb, "[STAG]") and has_text(tb, "[LION]") and has_text(tb, "Old Tower") and has_text(tb, "Saltport"),
-					"each place is named on the table, the holders' tags under theirs")
+				check(not has_text(tb, "Saltport") and not has_text(tb, "[STAG]"), "a clean table: no names until a place is picked")
+				press("war_names")
 				check((tb._tiles.tower.plinth as MeshInstance3D).material_override == tb._mats.get("plinth_stags"), "the Tower's plinth in Stags green")
+				check(tb._tiles.tower.tile.scene_file_path.ends_with("war/tower.glb") and tb._tiles.home_lions.tile.scene_file_path.ends_with("war/home_lions.glb"),
+					"the places are the Meshy miniatures (assets/meshy/war)")
 				_shot("war_table")
 				# tap the High Pass where the table draws it
 				var at: Vector2 = tb.screen_of("pass")
@@ -184,6 +186,11 @@ func _process(delta: float) -> bool:
 		"pass":
 			if t_phase > 0.5:
 				var tb = _table()
+				check(has_text(tb, "[STAG]") and has_text(tb, "[LION]") and has_text(tb, "Old Tower") and has_text(tb, "Saltport"),
+					"NAMES: each place is named on the table, the holders' tags under theirs")
+				if phase == "pass" and shots != "":
+					_shot("war_names")
+				press("war_names")
 				var ab := btn("war_attack")
 				check(has_text(tb, "HIGH PASS") and ab != null and ab.disabled and has_text(tb, "isn't linked"),
 					"the High Pass: ATTACK off -- it isn't linked to Lions land")
