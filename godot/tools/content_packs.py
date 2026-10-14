@@ -45,7 +45,7 @@ MANIFEST = os.environ.get("CONTENT_MANIFEST", os.path.join(ROOT, "content", "man
 UIDS = os.path.join(ROOT, "content", "uids.json")    # the packs' resources' UIDs, for the loader to register
 OUT = os.environ.get("CONTENT_OUT", os.path.join(ROOT, "build", "packs"))
 PACK_PRESET = os.environ.get("CONTENT_PACK_PRESET", "Content Pack")   # (tools/content_e2e.sh: the desktop one)
-BASE_PRESETS = ["Android Play Store", "Android KayKit Rebuild"]
+BASE_PRESETS = ["Android Play Store", "Android KayKit Rebuild", "iOS App Store"]   # (iOS port step 2: the same base)
 BODIES = ["archmage", "assassin", "barbarian", "berserker", "crusader", "knight", "mage", "necromancer", "priest",
           "ranger", "rogue", "sniper", "villager", "worker"]
 # name -> the folders (Godot filter patterns, relative to res://) whose files the pack carries, in download order

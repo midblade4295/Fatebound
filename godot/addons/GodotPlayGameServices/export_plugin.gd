@@ -36,6 +36,8 @@ class AndroidExportPlugin extends EditorExportPlugin:
 		return bool(get_option("gradle_build/use_gradle_build")) and _game_id() != ""
 
 	func _export_begin(features: PackedStringArray, is_debug: bool, path: String, flags: int) -> void:
+		if not features.has("android"):
+			return                                  # (iOS port step 2: iOS exports call this too; their presets have no Gradle option)
 		if not bool(get_option("gradle_build/use_gradle_build")):
 			return
 		if _game_id() == "":

@@ -3748,3 +3748,24 @@ K2/K3 notes (0.17.0)
   verify_play_bundle BASE OK, CONTENT OK, play_games true, bundletool valid; the only differences are the changed
   scripts and the seven new ones (dormant on Android). Quick suite: ALL 84 PASSED.
 - Version 0.31.130, versionCode 216.
+
+## iOS port step 2 — the "iOS App Store" export preset (no game change; still 0.31.130)
+- export_presets.cfg preset.5 "iOS App Store": bundle com.fatebound.game, team YBKRZRW845, App Store export (release
+  method 0, "Apple Distribution", the profile from the CI), arm64, minimum iOS 17.0 (GodotApplePlugins), iPhone and
+  iPad, portrait (project setting), Game Center entitlement; Metal is Godot 4.7's default driver on iOS (nothing set,
+  project.godot untouched, MoltenVK unused). The mobile renderer makes Godot require an A12 (same floor as iOS 17).
+  short_version 1.2.25 / version 214 are placeholders: the TestFlight workflow writes Play's versionName number and
+  versionCode in. Godot's own Info.plist already has ITSAppUsesNonExemptEncryption = false and the display name.
+- Privacy manifest (Godot writes PrivacyInfo.xcprivacy from the preset): no tracking; Godot's required-reason APIs
+  (file timestamp DDA9.1 + C617.1, boot time 35F9.1, disk space E174.1 + 85F4.1) plus UserDefaults CA92.1; collected,
+  linked to the account, never tracking: other user content, user id, purchase history (app functionality), product
+  interaction (analytics), crash data (both), other diagnostic data (app functionality).
+- The App Store icon: store-listing/ios/app_icon_1024.png = the King Rescue (B4) painting at 1024, no alpha (the exact
+  source of the Play 512 icon); kept in store-listing so the Android bundle doesn't carry it. Godot makes every size.
+- tools/content_packs.py: BASE_PRESETS gains "iOS App Store" -- the same exclude filter as the Play base (the Android
+  presets' filters came out unchanged).
+- addons/GodotPlayGameServices/export_plugin.gd: its export hook returns for non-Android exports (it errored on the
+  iOS preset, which has no Gradle option); Android unchanged.
+- Checked on Linux (Godot writes the Xcode project and stops, as it does off a Mac): bundle id, team, deployment
+  target 17.0, device family 1,2, version placeholders, the Game Center entitlement, export_options (app-store,
+  YBKRZRW845), Info.plist / PrivacyInfo / entitlements all parse; the icons RGB; a 2.4 MB base Fatebound.pck.

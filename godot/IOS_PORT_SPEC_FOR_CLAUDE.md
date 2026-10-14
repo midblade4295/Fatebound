@@ -229,7 +229,7 @@ Free-tier note: macOS minutes count 10x on private repos; keep the workflow manu
 | # | Step | Done | Date | Notes |
 |---|---|---|---|---|
 | 1 | Platform abstraction, Android unchanged (tests + verify_play_bundle) | yes | 2026-10-13 | 0.31.130. `platform.gd`, `store_billing.gd`/`game_services.gd` (factories handing back one of two scripts with the same face), `billing_ios.gd`, `game_center.gd`, `apple_token.gd`, `gc_achievement_ids.gd`; achievements.gd counts once, each service sends its own way. billing.gd / play_games.gd / iap_verify.gd untouched. Play AAB from HEAD and from this change (throwaway key, preset.0 untouched): both BASE OK, CONTENT OK, play_games true, bundletool valid; only script files differ. Quick suite 84/84 (new `ios_port_test`). **Deviation (Kevin approved): GodotApplePlugins, so minimum iOS 17, not 15.** |
-| 2 | iOS export preset (bundle id, team, iOS 15, Metal, icons) | | | |
+| 2 | iOS export preset (bundle id, team, iOS 15, Metal, icons) | yes | 2026-10-13 | preset.5 "iOS App Store"; **iOS 17.0** (plugin); Metal = Godot's iOS default (project.godot untouched); A12 floor (Godot adds it for the mobile renderer). Icon `store-listing/ios/app_icon_1024.png` (B4 source at 1024, RGB) instead of `assets/branding/` so the Android bundle doesn't grow. Privacy manifest from the preset (§7 list + Godot's reasons + CA92.1). `short_version`/`version` placeholders; the workflow writes Play's values. Xcode project export checked on Linux. |
 | 3 | StoreKit 2 plugin + billing_ios.gd (full Net.IAP catalog incl. gems_14000) | | | |
 | 4 | Server Apple verification (JWS + App Store Server API) + tests | | | |
 | 5 | Game Center sign-in + 18 achievements mapping (gc_achievement_ids.gd) | | | |
