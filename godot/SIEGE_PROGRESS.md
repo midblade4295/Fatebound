@@ -4023,3 +4023,5 @@ standards or sounds).
   the new 9 MB); base presets exclude it; uploaded to content-packs (6a15026). content_test expects 6 packs.
 - war_ui_test: a clean table, NAMES, the places are the miniatures (22 checks).
 - Version 0.31.136, versionCode 222 (server code unchanged; SERVER_BUILD follows the app's version).
+- Quick suite: all 91 passed. The Play AAB built from this commit (throwaway key, presets untouched by the build):
+  BASE OK (234 files, no pack data), CONTENT OK (6 packs on the branch), play_games true, bundletool valid.
