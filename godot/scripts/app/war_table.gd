@@ -12,12 +12,13 @@ const SocialUI = preload("res://scripts/app/social_ui.gd")
 const Map = preload("res://scripts/meta/war_map.gd")
 const Stage = preload("res://scripts/siege/asset_cache.gd")
 const HEX := "res://assets/kaykit/hex/"
+const PIECES := "res://assets/meshy/war/"   # 0.31.136: each place's Meshy miniature (tools/meshy_war_piece.py), <id>.glb
 const S := 2.0                         # map units -> table units
 const NEUTRAL := Color("#6f6a60")
 const CAM_POS := Vector3(0.0, 17.0, 7.4)
 const CAM_AT := Vector3(0.0, -0.6, 0.55)
 const CAM_FOV := 33.0
-const PLINTH_YAW := 0.0
+const PLINTH_YAW := PI / 6.0                 # (corners on +-X, sides facing the neighbours -- like the pieces)
 const GROUND_TINT := Color(0.72, 0.9, 0.62)   # KayKit's grass is a yellow-green: a deeper green on the table
 # what stands on each kind of place: [base tile, [model, scale, offset x, offset z, yaw]...]
 const LOOKS := {
@@ -217,19 +218,26 @@ func _build_table() -> void:
 		var plinth := MeshInstance3D.new()
 		var pm := CylinderMesh.new()
 		pm.radial_segments = 6
-		pm.top_radius = 1.3
-		pm.bottom_radius = 1.36
+		pm.top_radius = 1.375
+		pm.bottom_radius = 1.4
 		pm.height = 0.9
 		plinth.mesh = pm
 		plinth.position = Vector3(0, -0.72, 0)                # (its top a ledge just under the tile's -- and the water's -- in the holder's colour)
 		plinth.rotation.y = PLINTH_YAW
 		plinth.material_override = _mat("neutral", NEUTRAL)
 		t.add_child(plinth)
-		var look: Array = LOOKS.get(str(Map.T[id].look), LOOKS.lake)
-		var tile := _model(t, str(look[0]), Vector3.ZERO, 1.0, PI * 0.5)
-		_tint(tile, GROUND_TINT)
-		for d in look[1]:
-			_model(t, str(d[0]), Vector3(float(d[2]), 0.0, float(d[3])), float(d[1]), float(d[4]))
+		var tile: Node3D = null
+		var piece: String = PIECES + str(id) + ".glb"
+		if ResourceLoader.exists(piece):
+			tile = (Stage.scene(piece) as PackedScene).instantiate() as Node3D   # the place's own miniature
+			t.add_child(tile)
+		else:
+			# (no miniature for it: a KayKit tile and what stands on it)
+			var look: Array = LOOKS.get(str(Map.T[id].look), LOOKS.lake)
+			tile = _model(t, str(look[0]), Vector3.ZERO, 1.0, PI * 0.5)
+			_tint(tile, GROUND_TINT)
+			for d in look[1]:
+				_model(t, str(d[0]), Vector3(float(d[2]), 0.0, float(d[3])), float(d[1]), float(d[4]))
 		var ring := MeshInstance3D.new()
 		var rm := TorusMesh.new()
 		rm.inner_radius = 1.2
