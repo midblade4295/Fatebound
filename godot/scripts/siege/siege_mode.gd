@@ -85,6 +85,9 @@ var _rejoin_sent := false
 var rejoins := 0                    # (tests, diag)
 var again_sent := 0                 # 0.31.122: PLAY AGAIN presses sent to the server (tests)
 var party_join := ""                # 0.31.120: a friend's public id: their match is the one to join (Friends > JOIN)
+var war_bid := ""                   # 0.31.135: a battle on the war map (server/world.gd): its room, on my house's side
+var war_result := {}                # 0.31.135: what the battle did ({"t":"war", ...} from the server)
+var war_info := {}                  # 0.31.135: the battle (the lobby's "war": {"tid", "name", "ah", "dh"})
 var exit_note := ""                 # 0.31.119: why the match ended for me, for Home to say (removed for being idle)
 const MSG_UPDATE := "A new version of Fatebound is available. Update to keep playing."
 const MSG_SERVER_OLD := "Servers are updating, try again in a few minutes"
@@ -177,6 +180,7 @@ func _ready() -> void:
 	add_child(hud)
 	ready_times["hud"] = Time.get_ticks_msec() - t_hud
 	hud.leave_requested.connect(func(): exited.emit())
+	hud.war_battle = war_bid != ""                   # 0.31.135
 	hud.replay_requested.connect(func():
 		if online:
 			# 0.31.122 (Kevin: "make it so the game doesn't automatically put player back in a new game because they could be
@@ -491,6 +495,8 @@ func _hello() -> Dictionary:
 	hi.merge(Analytics.hello_flags(profile))         # 0.31.118: "an_off" when usage statistics are off
 	if party_join != "":
 		hi["join"] = party_join                      # 0.31.120: into this friend's match (Friends > JOIN)
+	if war_bid != "":
+		hi["war"] = war_bid                          # 0.31.135: a battle on the war map
 	hi["ask_next"] = true                            # 0.31.122: the next match only after PLAY AGAIN (older servers ignore it)
 	return hi
 
@@ -602,8 +608,12 @@ func _net_process(delta: float) -> void:
 		if str(_net_bye.get("why", "")) == "full" or ws.get_close_code() == Net.CLOSE_FULL:
 			_net_fail("Server is full")
 			return
-		if str(_net_bye.get("why", "")) == "done":
+		if str(_net_bye.get("why", "")) == "done" or (str(_net_bye.get("why", "")) == "war_over" and sim != null):
 			_net_exit()                                  # 0.31.122: (the bye and the close arrived together)
+			return
+		if str(_net_bye.get("why", "")).begins_with("war_"):
+			_net_fail({"war_side":"Only the two houses at war can join this battle", "war_gone":"That battle is over",
+				"war_over":"That battle is over", "war_full":"Your side of this battle is full"}.get(str(_net_bye.why), "Can't join that battle"))
 			return
 		if sim != null and not sim.ended and _rj != "" and net_state == "playing" and _net_bye.is_empty() and ws.get_close_code() != 4006:
 			_begin_rejoin()                              # 0.31.120: the connection dropped -- try to get back in
@@ -668,6 +678,8 @@ func _net_process(delta: float) -> void:
 				lobby_msgs += 1
 				if lobby_msgs == 1:
 					diag.write("NET lobby left=%.1f names=%d online=%d running=%s" % [float(msg.get("left", 0)), (msg.get("names", []) as Array).size(), int(msg.get("online", 0)), str(msg.get("running", false))])
+				if msg.get("war", null) is Dictionary:
+					war_info = msg.war                        # 0.31.135: the battle this lobby is for
 				if sim == null and is_instance_valid(lobby):
 					lobby.update(msg)
 			"pn":                                             # 0.31.86: the live players' names, by unit
@@ -685,6 +697,9 @@ func _net_process(delta: float) -> void:
 					view.player_titles = net_titles
 					view.player_tags = net_tags
 					view.set_unit_looks(net_looks)
+			"war":                                            # 0.31.135: what the battle did for my clan
+				war_result = msg
+				hud.show_war(msg)
 			"qc":                                             # 0.31.111: a quick chat line from a player of my side (or anyone's gg)
 				var qu := str(msg.get("u", ""))
 				if qu != hud.player_id and sim != null:      # (mine showed when I said it)
@@ -711,8 +726,13 @@ func _net_process(delta: float) -> void:
 				if _net_version_refused(-1, ""):
 					return
 				var why := str(msg.get("why", ""))
-				if why == "done":
+				if why == "done" or why == "war_over" and sim != null:
 					_net_exit()                             # 0.31.122: left on the results a long while -- back to Home
+					return
+				if why.begins_with("war_"):
+					# 0.31.135: a battle this player can't join (another house's, over, or its side full)
+					_net_fail({"war_side":"Only the two houses at war can join this battle", "war_gone":"That battle is over",
+						"war_over":"That battle is over", "war_full":"Your side of this battle is full"}.get(why, "Can't join that battle"))
 					return
 				if why == "idle":
 					exit_note = "idle"

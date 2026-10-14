@@ -72,6 +72,10 @@ var _workshop_key := ""
 var gate_bars_source: Callable   # -> Array of {pos, fill, color, broken}
 var pause_panel: PanelContainer
 var result_panel: PanelContainer
+var war_battle := false                 # 0.31.135: a battle on the war map: no PLAY AGAIN, WAR MAP instead
+var war_line := {}                      # 0.31.135: what the battle did ({"t":"war", ...}); shown on the results
+var exit_to := ""                       # 0.31.135: "war": the app opens the war map after this match
+var _war_box: VBoxContainer = null
 var pause_btn: Button
 # 0.31.111 (Kevin: "add the quick chat pings"): the horn beside the pause button opens the quick chat; a line said shows
 # as a bubble over the speaker (pinned to the screen edge, with an arrow, when they're off it) and in a short feed.
@@ -572,19 +576,71 @@ func show_result(result: Dictionary = {}) -> void:
 			UI2.center(UI2.body(qb, "Claim it in Quests from Home", 10, Color(1, 1, 1, 0.75), false))
 		for ql in qlines.filter(func(x): return not bool(x.done)).slice(0, 2):
 			UI2.center(UI2.body(v, "⚔  %s quest  %s  %d/%d" % [str(Sim_Eco.CLASS_NAMES.get(str(ql.cls), "")), str(ql.text), int(ql.progress), int(ql.goal)], 11, Color("#ffcf7a"), false))
+	if war_battle:
+		_war_box = VBoxContainer.new()                      # 0.31.135: what the battle did (now, or when it arrives)
+		_war_box.add_theme_constant_override("separation", 2)
+		v.add_child(_war_box)
+		v.move_child(_war_box, 2)
+		_fill_war()
 	var br := HBoxContainer.new()
 	br.add_theme_constant_override("separation", 10)
 	v.add_child(br)
 	_button(br, "HOME", "secondary", func(): leave_requested.emit())
 	var sb := _button(br, "SCORES", "gold", func(): show_scoreboard())         # 0.31.119
 	sb.set_meta("key", "scoreboard")
-	var pa := _button(br, "PLAY AGAIN", "primary", func(): replay_requested.emit())
-	pa.size_flags_stretch_ratio = 1.5
-	UI2.sweep(pa)
+	if war_battle:
+		var wm := _button(br, "WAR MAP", "primary", func():
+			exit_to = "war"
+			leave_requested.emit())
+		wm.size_flags_stretch_ratio = 1.5
+		wm.set_meta("key", "war_map")
+		UI2.sweep(wm)
+	else:
+		var pa := _button(br, "PLAY AGAIN", "primary", func(): replay_requested.emit())
+		pa.size_flags_stretch_ratio = 1.5
+		UI2.sweep(pa)
 	result_panel.visible = true
 	_center(result_panel, true)
 	if pause_panel != null:
 		pause_panel.visible = false
+
+# ---------- the war map's battle (0.31.135) ----------
+func show_war(m: Dictionary) -> void:
+	war_line = m
+	_fill_war()
+
+func _fill_war() -> void:
+	# a gold frame on the results: the territory, the crowns, the points and the clan's bar (or, defending, if it held)
+	if not is_instance_valid(_war_box):
+		return
+	for c in _war_box.get_children():
+		c.queue_free()
+	var m := war_line
+	var f := UI2.frame(_war_box, "ember", 8, 14.0, "orange", {"pattern_mix": 0.0})
+	var place := str(m.get("name", "the territory")).to_upper()
+	if m.is_empty():
+		UI2.center(UI2.body(f, "Counting the battle...", 12, UI2.MUTED, false))
+		return
+	if bool(m.get("def", false)):
+		UI2.center(UI2.text(f, ("%s HELD!" if bool(m.get("held", false)) else "%s LOST") % place, 16, Color("#ffd27a")))
+		UI2.center(UI2.body(f, "You defended it for your house" if bool(m.get("held", false)) else "The attackers took it", 11, Color.WHITE, false))
+		return
+	if bool(m.get("helped", false)):
+		UI2.center(UI2.text(f, "BATTLE FOR %s" % place, 15, Color("#ffd27a")))
+		UI2.center(UI2.body(f, "You fought for your house (no attempt spent: no points)", 11, Color.WHITE, false))
+		return
+	var crowns := []
+	if bool(m.get("gate", false)):
+		crowns.append("gate")
+	if bool(m.get("king", false)):
+		crowns.append("rescue")
+	if bool(m.get("won", false)):
+		crowns.append("win")
+	UI2.center(UI2.text(f, ("%s IS YOURS!" % place) if bool(m.get("took", false)) else "BATTLE FOR %s" % place, 16, Color("#ffd27a")))
+	UI2.center(UI2.body(f, "%s  %s   %+d points" % ["♛".repeat(int(m.get("crowns", 0))) if int(m.get("crowns", 0)) > 0 else "no crowns",
+		("(" + ", ".join(crowns) + ")") if not crowns.is_empty() else "", int(m.get("pts", 0))], 13, Color.WHITE, false))
+	if not bool(m.get("took", false)):
+		UI2.center(UI2.body(f, "Your clan: %d / %d to take it" % [int(m.get("bar", 0)), int(m.get("need", 0))], 11, Color(1, 1, 1, 0.8), false))
 
 # ---------- scoreboard and MVP (0.31.119, Kevin: "Do all" -- a proper end-of-match screen) ----------
 # Every unit's knockouts, downs, rescues, gathering, gate damage and fish fed come with the snapshots (and are the sim's

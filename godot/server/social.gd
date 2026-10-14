@@ -73,6 +73,7 @@ var event_fn: Callable = func(_acct, _ev, _p): pass   # 0.31.118: usage statisti
 var rank_fn: Callable = func(_acct) -> int: return 0   # 0.31.120: this week's leaderboard rank (0: not on it)
 var prof_at := {}          # 0.31.120: pid -> clocks of its recent profile-card asks
 var clans = null           # 0.31.134: server/clans.gd (null: no clans -- the tests of this file alone)
+var world = null           # 0.31.135: server/world.gd, the war map (Crown War step 2)
 var _dirty_at := -1.0
 var _mute_clock := 0.0
 
@@ -225,6 +226,8 @@ func tick(delta: float) -> void:
 		_reload_muted()
 	if clans != null:
 		clans.tick(delta)
+	if world != null:
+		world.tick(delta)
 	for pid in invites.keys():
 		var mine: Dictionary = invites[pid]
 		for pa in mine.keys():
@@ -312,6 +315,8 @@ func drop(cid: int) -> void:
 	if not list.is_empty():
 		return
 	online.erase(pid)
+	if world != null:
+		world.unwatch(pid)
 	if users.has(pid):
 		users[pid].seen = unix()
 		_mark()
@@ -340,6 +345,8 @@ func forget(acct: String) -> void:
 		_leave(pid)
 	if clans != null:
 		clans.forget(pid)
+	if world != null:
+		world.forget(pid)
 	for cid in conns.keys():
 		if str(conns[cid]) == pid:
 			close_fn.call(cid)
@@ -383,6 +390,8 @@ func _me_msg(pid: String) -> Dictionary:
 	if clans != null:
 		m["clans"] = 1
 		m["ct"] = tag_of(pid)
+	if world != null:
+		m["war"] = 1                                     # 0.31.135: the war map is on this server
 	return m
 
 func _friends_msg(pid: String) -> Dictionary:
@@ -424,6 +433,10 @@ func handle(cid: int, msg: Dictionary) -> void:
 	if k.begins_with("clan_"):
 		if clans != null:
 			clans.handle(pid, msg)                       # 0.31.134
+		return
+	if k.begins_with("war_"):
+		if world != null and clans != null:
+			world.handle(pid, msg)                       # 0.31.135
 		return
 	match k:
 		"chat": _chat(pid, msg)

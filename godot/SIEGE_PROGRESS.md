@@ -3946,3 +3946,46 @@ only (later steps).
 - Quick suite: all 88 passed (87 Godot tests + the report check; profile_card_test's list of card fields now allows
   "ct"). The Play AAB built from this commit (throwaway key, preset.0 untouched): BASE OK (230 files), CONTENT OK,
   play_games true, bundletool valid.
+
+## 0.31.135 — Crown War step 2: the map and battles
+The second step of Kevin's Crown War (the "Crown War" design doc): the war map, its battles and the war table on the
+phone. Kevin's decisions used here: map battles for clans only, a 3D war-table map, the starting numbers (5 attempts a
+day, +50 a crown, -100 a loss, 1,000 to take held land, 500 for free land; defending is free; bots defend).
+- scripts/meta/war_map.gd (new, shared by phone and server): three homes (Lions' Keep, Stags' Keep, Ravens' Keep --
+  never lost; King's Day attacks them in a later step) and fifteen territories (The Mill, Old Tower, The Abbey, High
+  Pass, The Quarry, The Ford, Silver Lake, King's Bridge, Deep Mine, The Marsh, Kingswood, The Forge, Grey Cliffs,
+  Raven Fen, Saltport), 30 links between them, and the numbers.
+- server/world.gd (new, world.json in the state directory): who holds each territory (house, clan, tag), each clan's
+  bar on each territory, the battles on, each player's attempts today (UTC days), the weeks won, recent captures. A
+  house attacks along a link from land it holds (its home counts), one battle a territory at a time (asking for one
+  your house already started joins it; another house's is refused). A clan member's battle counts when seated with an
+  attempt left: crowns x 50 (a gate broken, the King rescued, the match won), -100 for a loss (or quitting); bars never
+  go below 0; the first clan to fill its bar takes the territory for its house and every bar there starts again (the
+  clans' chats hear it: "We took X for House Y!" / "We lost X to [TAG]"). Weeks run Monday to Monday (UTC): the house
+  holding the most land wins the week and the map is free again. It rides the social socket: war_open / war_close (the
+  map pushed while it's open, at most every 0.5 s), war_go {tid, call} -> the battle's id; "call" sends war_call to
+  the clan's members online, and the holders' members get war_alarm; the clan chats get a line each way and a summary
+  after the battle ("The battle for X: won, 2 crowns, +100 (200/1000)"). Usage statistics: war_start, war_capture.
+- server/siege_server.gd: a war battle is a 16-a-side match in a room of its own (never picked by matchmaking or a
+  friend's JOIN): attackers on red, the holders' house on blue (nobody defends free land), bots in every empty seat; a
+  player of neither house (or no clan) is turned away (bye war_side), as is one for a battle that's over (war_over) or
+  full (war_full). Its countdown is 30 s (SIEGE_WAR_LOBBY); an empty war room waits 90 s for its players
+  (SIEGE_WAR_WAIT). After the match each player gets {"t":"war"}: the territory, crowns, points, the bar (attackers),
+  held or lost (defenders), or "helped" (no attempt left: fought, no points). PLAY AGAIN there says war_over.
+- The phone: Home shows CROWN WAR · HOUSE X under PLAY for clan members (where the players-online pill was; a party's
+  pill still comes first); the CLAN window has WAR MAP (and SEE THE WAR MAP before joining a clan). The war table
+  (scripts/app/war_table.gd): the map as KayKit hex tiles on a wooden table, each on a ledge in the colour of the house
+  that holds it, with its banner, names and holders' tags over the tiles, a battle's ring glowing; over it the week's
+  end, your attempts and each house's land; tap a place for who holds it, the clans' bars, and ATTACK (with CALL CLAN)
+  or why not, JOIN THE BATTLE / DEFEND IT when one is on. The battle's countdown says "BATTLE FOR X · House A attack
+  House B"; its results add what it did (crowns, points, the clan's bar, or held / lost) and WAR MAP instead of PLAY
+  AGAIN, which reopens the table on that territory. A clan mate's call drops a JOIN banner (green), an attack on your
+  clan's land a DEFEND banner (red), both straight into the battle (not during a match).
+- Tests: world_test (43 checks: server/world.gd alone -- reach, homes, attempts and the day, joining a battle, points,
+  bars, captures, the week's roll), war_battle_test (15 checks: a battle end to end against the real server on 8120 --
+  called, alarmed, seated by side, refused without a clan, scored 1-0, war_over after), war_ui_test (20 checks: the
+  app's buttons against the real server on 8121 -- Home's CROWN WAR, a tap on the table picks the place drawn there,
+  ATTACK, the battle, the results, WAR MAP back with the bar and 4 attempts, a clan mate's JOIN banner).
+- server/deploy/install_siege_server.sh copies server/world.gd and scripts/meta/war_map.gd (checked: the installer's
+  minimal project, built the same way, starts and says "war map week 2026-10-12, 0 held").
+- Version 0.31.135, versionCode 221. Server 0.31.135 must be deployed for the war map (older servers: no CROWN WAR).

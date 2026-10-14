@@ -28,9 +28,10 @@ SERVER_SCRIPTS="scripts/siege/siege_sim.gd scripts/siege/siege_net.gd scripts/si
 # 0.31.108: the accounts -- the server replays every player's changes with the game's own economy and profile code
 # 0.31.118: the analytics allow-list (events and their props), shared by the phone and the server
 # 0.31.131: the App Store account token (UUIDv5 of the account id), shared by the phone and the purchase check
-META_SCRIPTS="scripts/meta/economy.gd scripts/meta/profile.gd scripts/meta/analytics_events.gd scripts/meta/apple_token.gd"
+# 0.31.135: the war map (territories, links, the numbers), shared by the phone and server/world.gd
+META_SCRIPTS="scripts/meta/economy.gd scripts/meta/profile.gd scripts/meta/analytics_events.gd scripts/meta/apple_token.gd scripts/meta/war_map.gd"
 # 0.31.131: App Store purchase checks -- the verifier, its helper (python3 + the openssl command) and Apple's public root
-SERVER_FILES="server/siege_server.gd server/siege_probe.gd server/clans.gd server/iap_verify.gd server/iap_verify_apple.gd server/apple_jws.py server/certs/AppleRootCA-G3.cer server/eco_accounts.gd server/match_ledger.gd server/social.gd server/analytics.gd server/leaderboard.gd server/referrals.gd server/diag_reports.gd"
+SERVER_FILES="server/siege_server.gd server/siege_probe.gd server/clans.gd server/world.gd server/iap_verify.gd server/iap_verify_apple.gd server/apple_jws.py server/certs/AppleRootCA-G3.cer server/eco_accounts.gd server/match_ledger.gd server/social.gd server/analytics.gd server/leaderboard.gd server/referrals.gd server/diag_reports.gd"
 for f in $SERVER_SCRIPTS $META_SCRIPTS $SERVER_FILES; do
   [ -f "$SRC/$f" ] || { echo "Missing $SRC/$f — run this from the Siege branch checkout." >&2; exit 1; }
 done

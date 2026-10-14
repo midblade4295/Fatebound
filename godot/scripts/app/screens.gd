@@ -12,6 +12,7 @@ const Diag = preload("res://scripts/siege/siege_diag.gd")
 const Net = preload("res://scripts/siege/siege_net.gd")
 const Platform = preload("res://scripts/meta/platform.gd")          # 0.31.130: Google Play or the App Store
 const StoreBilling = preload("res://scripts/meta/store_billing.gd")
+const Map = preload("res://scripts/meta/war_map.gd")                # 0.31.135: Crown War's houses
 
 const PRIVACY_URL := "https://136-113-125-3.sslip.io/fatebound/privacy.html"
 
@@ -456,6 +457,15 @@ static func home(app, root: VBoxContainer) -> void:
 		pb.position = Vector2(20, uy)
 		pb.size = Vector2(w - 40, 34)
 		pb.clip_text = true
+		app.online_refs = {}
+	elif soc != null and soc.online() and soc.has_war and soc.in_clan():
+		# 0.31.135 (Crown War step 2): in a clan, the war map under PLAY instead of the players online
+		var house := str(soc.clan.get("house", ""))
+		var wb := UI2.button(top, "CROWN WAR  ·  HOUSE %s" % Map.HOUSE_NAMES.get(house, "?").to_upper(), "red", func():
+			app.sfx("menuOpen")
+			app.open_war(), "home_war", 15, 36.0, 18.0, UI2.icon_path("swords"))
+		wb.position = Vector2(40, uy - 1.0)
+		wb.size = Vector2(w - 80, 36)
 		app.online_refs = {}
 	else:
 		_online_pill(app, top, w, uy)

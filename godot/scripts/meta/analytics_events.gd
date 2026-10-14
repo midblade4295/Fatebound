@@ -51,6 +51,8 @@ const SERVER := {
 	"clan_request": [],
 	"clan_invite": [],
 	"clan_leave": [],
+	"war_start": ["tid", "held"],                   # 0.31.135: the war map (server/world.gd)
+	"war_capture": ["tid", "held"],
 }
 
 static func clean_props(allowed: Array, p: Variant) -> Dictionary:

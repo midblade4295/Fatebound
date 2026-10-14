@@ -146,7 +146,13 @@ func update(msg: Dictionary) -> void:
 	var slots := int(msg.get("slots", 32))
 	var online := int(msg.get("online", 1))
 	count_lbl.text = "%d / %d PLAYERS" % [mini(online, slots), slots]
-	if bool(msg.get("running", false)):
+	if msg.get("war", null) is Dictionary:
+		# 0.31.135: a battle on the war map
+		var wr: Dictionary = msg.war
+		var hn := {"lions":"Lions", "stags":"Stags", "ravens":"Ravens"}
+		mode_lbl.text = "BATTLE FOR %s  ·  House %s attack%s" % [str(wr.get("name", "")).to_upper(), str(hn.get(str(wr.get("ah", "")), "?")),
+			(" House %s" % str(hn.get(str(wr.get("dh", "")), ""))) if str(wr.get("dh", "")) != "" else " (nobody holds it)"]
+	elif bool(msg.get("running", false)):
 		var n := int(msg.get("in_match", 0))
 		mode_lbl.text = "A battle is on -- %d player%s fighting. You join it at zero." % [n, "" if n == 1 else "s"]
 	else:

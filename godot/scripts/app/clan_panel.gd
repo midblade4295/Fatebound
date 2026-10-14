@@ -190,6 +190,11 @@ func _render_free() -> void:
 		UI2.body(intro, "You left a clan recently. You can join or start one again in %s." % _hours(cool), 13, UI2.GOLD)
 	else:
 		UI2.body(intro, "You're not in a clan yet. Join one below, or start your own. Every clan fights for one of the three houses.", 13, UI2.SOFT)
+	if social.has_war:
+		# 0.31.135: the war map is there to look at before joining (who holds what)
+		UI2.button(intro, "SEE THE WAR MAP", "red", func():
+			app.sfx("menuOpen")
+			app.open_war(), "clan_war_map", 15, 40.0)
 	# ---- invites
 	if not social.clan_inv.is_empty():
 		var inf := _section("CLAN INVITES", str(social.clan_inv.size()))
@@ -393,7 +398,12 @@ func _render_mine() -> void:
 	UI.grow(UI2.button(cr, "CLAN CHAT" + ("  (%d)" % n if n > 0 else ""), "orange", func():
 		app.sfx("menuOpen")
 		app.open_chat("clan"), "clan_chat", 16, 44.0))
-	var you := UI.label(cr, {"leader":"YOU LEAD", "officer":"OFFICER", "member":"MEMBER"}.get(role, ""), 12, UI2.GOLD, UI.HEAVY_FONT)
+	if social.has_war:
+		# 0.31.135 (Crown War step 2): the war map, from the clan's own window
+		UI.grow(UI2.button(cr, "WAR MAP", "red", func():
+			app.sfx("menuOpen")
+			app.open_war(), "clan_war_map", 16, 44.0))
+	var you := UI.label(cr,{"leader":"YOU LEAD", "officer":"OFFICER", "member":"MEMBER"}.get(role, ""), 12, UI2.GOLD, UI.HEAVY_FONT)
 	you.autowrap_mode = TextServer.AUTOWRAP_OFF
 	you.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	# ---- requests (officers)

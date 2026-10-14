@@ -24,6 +24,7 @@ const Social = preload("res://scripts/meta/social.gd")
 const ChatPanel = preload("res://scripts/app/chat_panel.gd")
 const FriendsPanel = preload("res://scripts/app/friends_panel.gd")
 const ClanPanel = preload("res://scripts/app/clan_panel.gd")             # 0.31.134: Crown War step 1
+const WarTable = preload("res://scripts/app/war_table.gd")               # 0.31.135: Crown War step 2, the map
 const ChatTicker = preload("res://scripts/app/chat_ticker.gd")
 const InviteBanner = preload("res://scripts/app/invite_banner.gd")
 const OrdersPanel = preload("res://scripts/app/orders_panel.gd")
@@ -217,6 +218,8 @@ func _ready() -> void:
 	social.go.connect(_on_party_go)
 	social.changed.connect(_on_social_changed)
 	social.clan_invited.connect(_on_clan_invited)
+	social.war_called.connect(_on_war_call.bind(false))     # 0.31.135: a clan mate calls the clan to a battle
+	social.war_alarmed.connect(_on_war_call.bind(true))     # ... or someone attacks the clan's land
 	chat_ticker.setup(self)
 	if social_autostart:
 		social.set_active(true)
@@ -1097,6 +1100,7 @@ func start_tutorial() -> void:
 	start_match(false, true)
 
 var pending_join := ""                   # 0.31.120: a friend's public id whose match the next PLAY joins
+var pending_war := ""                    # 0.31.135: a battle on the war map the next match is for
 
 func join_friend(pid: String) -> void:
 	# 0.31.120 (Kevin: "make so it's a join match option"): Friends > JOIN on a friend who's in a match
@@ -1110,13 +1114,52 @@ func join_friend(pid: String) -> void:
 	if siege == null:
 		pending_join = ""
 
+func open_war(first := "") -> void:
+	# 0.31.135 (Crown War step 2): the war table -- Home's CROWN WAR, the CLAN window's WAR MAP, a battle's WAR MAP
+	if social == null:
+		return
+	close_modal()
+	var m := WarTable.new()
+	add_child(m)
+	modal = m
+	m.open(self, first)
+
+func start_war(bid: String) -> void:
+	# into a battle on the war map: its own room on the server (siege_server.gd "war"), seated on your house's side
+	if bid == "" or siege != null:
+		return
+	if update_required:
+		show_update_screen()
+		return
+	close_modal()
+	if is_instance_valid(_invite_banner):
+		_invite_banner.queue_free()
+	pending_war = bid
+	start_match(true)
+	if siege == null:
+		pending_war = ""
+
+func _on_war_call(m: Dictionary, defend: bool) -> void:
+	if siege != null or str(m.get("bid", "")) == "":
+		return
+	var place := str(m.get("name", "a territory"))
+	var title := ("DEFEND %s!" % place.to_upper()) if defend else ("BATTLE FOR %s" % place.to_upper())
+	var sub := ("[%s] of House %s is attacking it" % [str(m.get("ct", "")), str(WarTable.Map.HOUSE_NAMES.get(str(m.get("h", "")), "?"))]) \
+		if defend else ("%s calls the clan to fight" % str(m.get("by", "A clan mate")))
+	sfx("chatPop")
+	if is_instance_valid(_invite_banner):
+		_invite_banner.queue_free()
+	_invite_banner = InviteBanner.new()
+	add_child(_invite_banner)
+	_invite_banner.show_war(self, str(m.bid), title, sub, defend, safe_top + TOP_H + 14.0)
+
 func start_match(online: bool, tutorial := false, follow := false) -> void:
 	if siege != null:
 		return
 	if online and update_required:
 		show_update_screen()               # online stays locked until the update is installed
 		return
-	if online and not tutorial and social != null and social.online() and social.in_party():
+	if online and not tutorial and pending_war == "" and social != null and social.online() and social.in_party():
 		# 0.31.111: a party plays together -- the leader's PLAY takes everyone in the menu along (social "play" ->
 		# "go"); a member waits for the leader (follow: the leader's "go" arrived)
 		if social.is_leader():
@@ -1159,6 +1202,8 @@ func start_match(online: bool, tutorial := false, follow := false) -> void:
 	siege.analytics = analytics
 	siege.party_join = pending_join                 # 0.31.120: Friends > JOIN (their match)
 	pending_join = ""
+	siege.war_bid = pending_war                     # 0.31.135: a battle on the war map
+	pending_war = ""
 	siege.exited.connect(_end_match)
 	siege.version_mismatch.connect(_on_version_mismatch)
 	if online_status != null:
@@ -1182,8 +1227,12 @@ func _menu_fps() -> void:
 
 func _end_match() -> void:
 	var note := ""
+	var to_war := false
+	var war_tid := ""
 	if is_instance_valid(siege):
 		note = str(siege.exit_note)
+		to_war = str(siege.war_bid) != "" and siege.hud != null and str(siege.hud.exit_to) == "war"   # 0.31.135: WAR MAP
+		war_tid = str(siege.war_info.get("tid", siege.war_result.get("tid", "")))                       # (open on it)
 		siege.note_leaving()                     # 0.31.118: a VS BOTS match or the tutorial left before its end
 		siege.queue_free()
 	siege = null
@@ -1204,6 +1253,8 @@ func _end_match() -> void:
 		toast(SERVER_UPDATING, UI.GOLD)
 	elif note == "idle":
 		notice("REMOVED FOR BEING IDLE", "You didn't move or attack for 3 minutes, so a bot took your place. Nothing was paid for that match.")
+	elif to_war:
+		open_war(war_tid)
 
 # ---------------- Google Play's copy of the progress (0.31.102) ----------------
 func ask_cloud() -> void:
@@ -1838,7 +1889,8 @@ func social_sig() -> String:
 	var names := []
 	for m in social.party.get("members", []):
 		names.append(str(m.pid) + str(m.n))
-	return "%d|%s|%s" % [social.attention(), str(social.party.get("leader", "")), ",".join(names)]
+	return "%d|%s|%s|%s%s" % [social.attention(), str(social.party.get("leader", "")), ",".join(names), social.my_tag(),
+		"w" if social.has_war else ""]                    # 0.31.135: Home's CROWN WAR comes with a clan
 
 func _on_social_changed(what: String) -> void:
 	if what == "me":
