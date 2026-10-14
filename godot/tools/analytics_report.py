@@ -150,9 +150,12 @@ def build(events, accounts, now, days, tz, tz_name, info):
     active_utc = {}          # day -> set(acct)
     active_tz = {}
     first_event = {}
+    plat_day = {}            # (day, acct) -> "android" | "ios" | ... (0.31.132: session_start's "plat"; none = Android)
     for e in events:
         d = day_utc(e["t"])
         active_utc.setdefault(d, set()).add(e["acct"])
+        if e["ev"] == "session_start" and e["p"].get("plat"):
+            plat_day[(d, e["acct"])] = str(e["p"]["plat"])
         active_tz.setdefault(dt.datetime.fromtimestamp(e["t"], tz).date(), set()).add(e["acct"])
         first_event.setdefault(e["acct"], e["t"])
 
@@ -169,6 +172,14 @@ def build(events, accounts, now, days, tz, tz_name, info):
         "seen_only_in_analytics": len(set(first_event) - set(accounts)),
     }
     out["dau"] = [{"day": d.isoformat(), "players": len(active_utc.get(d, ()))} for d in period]
+    out["dau_plat"] = []     # 0.31.132 (the iOS port): players a day by phone
+    for d in period:
+        n = {}
+        for a in active_utc.get(d, ()):
+            k = plat_day.get((d, a), "android")
+            n[k] = n.get(k, 0) + 1
+        out["dau_plat"].append({"day": d.isoformat(), "android": n.pop("android", 0), "ios": n.pop("ios", 0),
+                                "other": sum(n.values())})
     out["dau_tz"] = [{"day": d.isoformat(), "players": len(active_tz.get(d, ()))}
                      for d in [today_tz - dt.timedelta(days=i) for i in range(days)]]
 
@@ -431,6 +442,9 @@ def text(r):
     for a, b in zip(r["dau"], r["dau_tz"]):
         L.append("  %s  %5d   |  %s  %5d" % (a["day"], a["players"], b["day"], b["players"]))
     L.append("  DAU JSON (UTC, today first): " + json.dumps([x["players"] for x in r["dau"]]))
+    if r.get("dau_plat"):
+        L.append("  DAU by phone (UTC, today first): android %s  ios %s" % (json.dumps([x["android"] for x in r["dau_plat"]]),
+                                                                     json.dumps([x["ios"] for x in r["dau_plat"]])))
     L.append("  DAU JSON (%s, today first): %s" % (r["tz"], json.dumps([x["players"] for x in r["dau_tz"]])))
     L.append("")
     L.append("Generated %s; data %s .. %s; period: the last %d days (UTC)" % (r["generated"], r["data_from"] or "-", r["data_to"] or "-", r["days"]))

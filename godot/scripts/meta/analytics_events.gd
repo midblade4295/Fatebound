@@ -9,7 +9,7 @@ const MAX_STR := 40
 
 # sent by the phone ({"t":"an"} batches)
 const CLIENT := {
-	"session_start": ["cold", "safe_boot", "net"],
+	"session_start": ["cold", "safe_boot", "net", "plat"],     # 0.31.132: plat "android" | "ios" (| "desktop")
 	"session_end": ["dur_s", "lost"],              # lost: the session never said it ended (sent at the next start)
 	"clean_session": ["prev_sid"],                  # the last session ended without a crash or a stuck start
 	"tutorial_start": [],

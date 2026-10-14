@@ -4,6 +4,12 @@
 server/iap_verify_apple.gd runs this once per purchase, as its own process (never blocking the game loop):
   python3 apple_jws.py --jws FILE --out FILE --root AppleRootCA-G3.cer
                        [--key P8 --issuer ID --key-id KID --bundle com.fatebound.game] [--api URL]
+and once per Game Center account link (0.31.132, section 4):
+  python3 apple_jws.py --gc FILE --out FILE [--bundle com.fatebound.game]
+     FILE: {"id": teamPlayerID, "url": publicKeyURL, "sig": base64, "salt": base64, "ts": ms} from the phone's
+     GKLocalPlayer.fetchItems(forIdentityVerificationSignature:). The key's certificate is fetched from Apple over
+     HTTPS (an apple.com host only), must be in date, and its key must verify the RSA-SHA256 signature over
+     teamPlayerID + bundle id + timestamp (8 bytes, big-endian) + salt.
 
 1. The signed transaction (JWS, ES256) the phone sent: its x5c chain (leaf, intermediate) must chain to Apple Root CA - G3
    (the bundled public root, SHA-256 pinned below) at the transaction's signedDate, the leaf and intermediate must carry
@@ -29,6 +35,7 @@ import sys
 import tempfile
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
 ROOT_SHA256 = "63343abfb89a6a03ebb57e9b3f5fa7be7c4f5c756f3017b3a8c488c3653e9179"   # Apple Root CA - G3
@@ -211,11 +218,56 @@ def check(args):
         return out
 
 
+def check_gc(args):
+    with open(args.gc) as f:
+        g = json.load(f)
+    try:
+        team = str(g["id"])
+        url = str(g["url"])
+        sig = base64.b64decode(str(g["sig"]))
+        salt = base64.b64decode(str(g["salt"]))
+        ts = int(g["ts"])
+    except (KeyError, ValueError, TypeError):
+        return {"ok": False, "why": "format"}
+    u = urllib.parse.urlparse(url)
+    host = u.hostname or ""
+    if not ((u.scheme == "https" and (host == "apple.com" or host.endswith(".apple.com")))
+            or (args.gc_allow_http and u.scheme == "http" and host == "127.0.0.1")):
+        return {"ok": False, "why": "url"}
+    try:
+        with urllib.request.urlopen(urllib.request.Request(url), timeout=10) as r:
+            cert = r.read(65536)
+    except (urllib.error.URLError, OSError, ValueError):
+        return {"ok": False, "why": "unreachable"}
+    with tempfile.TemporaryDirectory(prefix="fb-gc-") as work:
+        cp = os.path.join(work, "gc.pem")
+        with open(cp, "w") as f:
+            f.write(cert.decode() if cert.startswith(b"-----BEGIN") else pem(cert))
+        code, _, _ = openssl(["x509", "-in", cp, "-checkend", "0", "-noout"])
+        if code != 0:
+            return {"ok": False, "why": "certificate"}
+        code, pub, _ = openssl(["x509", "-in", cp, "-pubkey", "-noout"])
+        if code != 0:
+            return {"ok": False, "why": "certificate"}
+        paths = {"pub": os.path.join(work, "pub.pem"), "sig": os.path.join(work, "sig.bin")}
+        with open(paths["pub"], "wb") as f:
+            f.write(pub)
+        with open(paths["sig"], "wb") as f:
+            f.write(sig)
+        data = team.encode() + args.bundle.encode() + ts.to_bytes(8, "big") + salt
+        code, out, _ = openssl(["dgst", "-sha256", "-verify", paths["pub"], "-signature", paths["sig"]], data)
+        if code != 0 or b"Verified OK" not in out:
+            return {"ok": False, "why": "signature"}
+    return {"ok": True}
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--jws", required=True)
+    ap.add_argument("--jws", default="")
+    ap.add_argument("--gc", default="")
+    ap.add_argument("--gc-allow-http", action="store_true")   # tests: a local stand-in for Apple's key server
     ap.add_argument("--out", required=True)
-    ap.add_argument("--root", required=True)
+    ap.add_argument("--root", default="")
     ap.add_argument("--root-sha256", default="")      # tests: their own root
     ap.add_argument("--key", default="")
     ap.add_argument("--issuer", default="")
@@ -224,7 +276,7 @@ def main():
     ap.add_argument("--api", default="")              # tests: a fake App Store Server API
     args = ap.parse_args()
     try:
-        res = check(args)
+        res = check_gc(args) if args.gc else check(args)
     except Exception as e:                              # (never a traceback with paths in it: the reason only)
         res = {"ok": False, "why": "helper " + type(e).__name__}
     tmp = args.out + ".part"

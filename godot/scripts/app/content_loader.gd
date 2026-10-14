@@ -13,8 +13,9 @@ extends Control
 # Packs never replace the build's own files (load_resource_pack(..., false)) and hold data only (no scripts).
 const MANIFEST := "res://content/manifest.json"
 const UIDS := "res://content/uids.json"        # the packs' resources' UIDs (the build's uid cache only has its own)
-const DIR := "user://packs"
+const DIR := "user://packs"                    # Android and the desktop
 const VERIFIED := "user://packs/verified.json"
+const Platform = preload("res://scripts/meta/platform.gd")
 const MAIN := "res://scenes/Main.tscn"
 const CHUNK := 8 * 1024 * 1024
 const RETRY := [2.0, 4.0, 8.0, 15.0, 30.0]
@@ -48,6 +49,19 @@ var title: Label
 var line: Label
 var note: Label
 var retry_btn: Button
+
+# 0.31.132 (the iOS port, IOS_PORT_SPEC_FOR_CLAUDE.md §5): where the packs live. On iOS user:// is backed up to iCloud,
+# and Apple's storage rules keep re-downloadable data out of backups: there they live in Library/Caches (never backed
+# up). iOS may empty Caches when the phone is short of space; the packs are then simply downloaded again.
+var dir := DIR
+var verified_path := VERIFIED
+
+static func packs_dir() -> String:
+	if Platform.is_ios():
+		var c := OS.get_cache_dir()
+		if c != "":
+			return c.path_join("fatebound_packs")
+	return DIR
 
 # ---------- pure parts (tests/content_test.gd) ----------
 static func plan(m: Dictionary, have: Dictionary, present: Callable) -> Dictionary:
@@ -84,11 +98,13 @@ func _ready() -> void:
 		return
 	manifest = parsed
 	base_url = OS.get_environment("FB_CONTENT_URL") if OS.has_environment("FB_CONTENT_URL") else str(manifest.get("url", ""))
-	DirAccess.make_dir_recursive_absolute(DIR)
+	dir = packs_dir()
+	verified_path = dir.path_join("verified.json")
+	DirAccess.make_dir_recursive_absolute(dir)
 	verified = _read_verified()
 	var have := {}
 	for f in verified:
-		if FileAccess.file_exists(DIR.path_join(f)):
+		if FileAccess.file_exists(dir.path_join(f)):
 			have[f] = verified[f]
 	var pl := plan(manifest, have, func(probe: String) -> bool: return ResourceLoader.exists(probe))
 	ready_packs = pl.mount
@@ -153,7 +169,7 @@ func _next_pack() -> void:
 	_request()
 
 func _part(p: Dictionary) -> String:
-	return DIR.path_join(str(p.file) + ".part")
+	return dir.path_join(str(p.file) + ".part")
 
 func _request() -> void:
 	var p: Dictionary = todo[cur]
@@ -215,7 +231,7 @@ func _finish_pack() -> void:
 			return
 		_request()
 		return
-	var final := DIR.path_join(str(p.file))
+	var final := dir.path_join(str(p.file))
 	if FileAccess.file_exists(final):
 		DirAccess.remove_absolute(final)
 	DirAccess.rename_absolute(part, final)
@@ -265,7 +281,7 @@ func _process(delta: float) -> void:
 func _mount_and_start() -> void:
 	finished = true
 	for p in ready_packs:
-		var path := DIR.path_join(str(p.file))
+		var path := dir.path_join(str(p.file))
 		if not ProjectSettings.load_resource_pack(path, false):
 			_log("CONTENT %s would not mount: downloading it again" % p.name)
 			verified.erase(str(p.file))
@@ -299,7 +315,7 @@ func _start_game() -> void:
 	get_tree().change_scene_to_file(MAIN)
 
 func _cleanup(keep: Array) -> void:
-	var d := DirAccess.open(DIR)
+	var d := DirAccess.open(dir)
 	if d == null:
 		return
 	var gone := false
@@ -316,14 +332,14 @@ func _cleanup(keep: Array) -> void:
 		_write_verified()
 
 func _read_verified() -> Dictionary:
-	if FileAccess.file_exists(VERIFIED):
-		var v: Variant = JSON.parse_string(FileAccess.get_file_as_string(VERIFIED))
+	if FileAccess.file_exists(verified_path):
+		var v: Variant = JSON.parse_string(FileAccess.get_file_as_string(verified_path))
 		if v is Dictionary:
 			return v
 	return {}
 
 func _write_verified() -> void:
-	var f := FileAccess.open(VERIFIED, FileAccess.WRITE)
+	var f := FileAccess.open(verified_path, FileAccess.WRITE)
 	if f != null:
 		f.store_string(JSON.stringify(verified))
 		f.close()

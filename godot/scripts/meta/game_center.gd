@@ -79,7 +79,8 @@ class Native extends RefCounted:
 		# Apple's identity signature (cb(data: Dictionary {url, data, salt, timestamp}, error)): the server checks it
 		var lp := _local()
 		if lp != null:
-			lp.call("fetch_items_for_identity_verification_signature", cb)
+			# (GameKit may answer off the main thread: the game hears it on the main one)
+			lp.call("fetch_items_for_identity_verification_signature", func(d, e): cb.call_deferred(d, e))
 
 static func supported() -> bool:
 	return Platform.has_class(Platform.GAMECENTER_CLASS)

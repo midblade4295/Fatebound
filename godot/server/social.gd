@@ -320,6 +320,31 @@ func acct_changed(acct: String) -> void:
 		away.erase(pid)
 	_presence(pid)
 
+func forget(acct: String) -> void:
+	# 0.31.132: the account was deleted from the app -- its name, friends, requests and blocks go, and it leaves every
+	# other player's lists; its sockets close. (Reports about it stay in reports.jsonl for the developer.)
+	var pid: String = by_acct.get(acct, "")
+	if pid == "":
+		return
+	if party_of.has(pid):
+		_leave(pid)
+	for cid in conns.keys():
+		if str(conns[cid]) == pid:
+			close_fn.call(cid)
+			conns.erase(cid)
+	online.erase(pid)
+	by_acct.erase(acct)
+	users.erase(pid)
+	for other in users:
+		for k in ["friends", "rin", "rout", "blocked"]:
+			(users[other][k] as Array).erase(pid)
+	invites.erase(pid)
+	rates.erase(pid)
+	away.erase(pid)
+	prof_at.erase(pid)
+	_mark()
+	log_fn.call("social: %s forgotten (account deleted)" % pid)
+
 func party_for(acct: String) -> String:
 	return party_of.get(by_acct.get(acct, ""), "")
 

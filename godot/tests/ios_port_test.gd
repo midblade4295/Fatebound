@@ -29,6 +29,7 @@ const Profile = preload("res://scripts/meta/profile.gd")
 const Net = preload("res://scripts/siege/siege_net.gd")
 const App = preload("res://scripts/app/siege_app.gd")
 const Notify = preload("res://scripts/meta/notify.gd")
+const Loader = preload("res://scripts/app/content_loader.gd")
 
 var fails: Array = []
 var frames := 0
@@ -412,6 +413,14 @@ func _notify() -> void:
 	check(same, "FateboundNotifyIOS registers the class notify.gd asks for, with the Android plugin's four calls")
 	check(FileAccess.file_exists("res://ios_plugins/.gdignore") and FileAccess.file_exists("res://android_plugins/.gdignore"),
 		"the native sources are hidden from Godot (.gdignore): never exported")
+	# content packs: Library/Caches on iOS (never backed up to iCloud), user://packs elsewhere as before
+	Platform.forced = "ios"
+	var ios_dir := Loader.packs_dir()
+	Platform.forced = "android"
+	var and_dir := Loader.packs_dir()
+	Platform.forced = ""
+	check(and_dir == "user://packs" and ios_dir.ends_with("/fatebound_packs") and ios_dir.begins_with(OS.get_cache_dir()),
+		"content packs: Caches on iOS (%s), user://packs on Android" % ios_dir)
 
 # ---------------- 6. the screens ----------------
 func _live(n: Node) -> bool:
@@ -456,6 +465,9 @@ func _process(_d: float) -> bool:
 		2:
 			check(texts().contains("GAME CENTER") and texts().contains("signed in as Midblade") and btn("gc_achievements") != null
 				and btn("play_sign_in") == null and not texts().contains("GOOGLE PLAY"), "Settings on iOS: GAME CENTER, signed in, ACHIEVEMENTS")
+			# 0.31.132: the ACCOUNT card, the same on both phones (no account on this desktop run: MOVE/DELETE greyed)
+			check(texts().contains("ACCOUNT") and btn("move_new") != null and btn("move_enter") != null and btn("account_delete") != null
+				and app.get("account_link") != null, "Settings: ACCOUNT -- MOVE TO ANOTHER PHONE, ENTER A CODE, DELETE ACCOUNT")
 			app.play_games.state = "out"
 			app.rebuild()
 		3:
@@ -473,7 +485,8 @@ func _process(_d: float) -> bool:
 				"Android's shop words unchanged: PLAY STORE, in the Google Play version, no RESTORE")
 			app.show_tab("settings")
 		6:
-			check(texts().contains("GOOGLE PLAY") and not texts().contains("GAME CENTER"), "Android's Settings: GOOGLE PLAY as before")
+			check(texts().contains("GOOGLE PLAY") and not texts().contains("GAME CENTER") and btn("move_enter") != null,
+				"Android's Settings: GOOGLE PLAY as before, and the same ACCOUNT card")
 			Platform.forced = ""
 			print("IOS_PORT_PASS" if fails.is_empty() else "IOS_PORT_FAIL %s" % str(fails))
 			quit(0 if fails.is_empty() else 1)

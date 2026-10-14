@@ -86,6 +86,12 @@ static func has_achievements() -> bool:
 		return has_class(GAMECENTER_CLASS)
 	return Engine.has_singleton(PLAY_GAMES)
 
+static func plat() -> String:
+	# 0.31.132: usage statistics' session_start "plat" (the reports split players by phone)
+	if is_ios():
+		return "ios"
+	return "android" if is_android() else "desktop"
+
 static func tracks_boot() -> bool:
 	# BootGuard's crash tracking (a phone, not the desktop)
 	return is_android() or is_ios()

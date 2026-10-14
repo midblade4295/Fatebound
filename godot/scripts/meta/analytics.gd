@@ -18,6 +18,7 @@ extends Node
 # opt_out event (nothing else) and logs nothing more; the match and social hellos then carry "an_off" so the server
 # writes nothing for this account either. No device id, ad id, IP, name, chat text or Play Games id is ever logged.
 const Net = preload("res://scripts/siege/siege_net.gd")
+const Platform = preload("res://scripts/meta/platform.gd")       # 0.31.132: session_start's "plat"
 const Diag = preload("res://scripts/siege/siege_diag.gd")
 const Events = preload("res://scripts/meta/analytics_events.gd")
 
@@ -132,7 +133,7 @@ func set_net(online: bool) -> void:
 	if not _pending_start.is_empty():
 		var ps := _pending_start
 		_pending_start = {}
-		log_ev("session_start", {"cold":bool(ps.cold), "safe_boot":bool(ps.safe_boot), "net":meta.net})
+		log_ev("session_start", {"cold":bool(ps.cold), "safe_boot":bool(ps.safe_boot), "net":meta.net, "plat":Platform.plat()})
 
 func end_session() -> void:
 	if not _pending_start.is_empty():

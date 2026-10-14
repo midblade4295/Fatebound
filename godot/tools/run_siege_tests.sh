@@ -122,6 +122,9 @@ run iap_test             IAP_PASS                 120
 # App Store purchase checks (0.31.131): a stand-in Apple signs, the real helper checks, a fake App Store Server API
 # answers; then the real server (8113) grants to accounts once (fake API on 8114)
 run apple_iap_test       APPLE_IAP_PASS           150
+# The account between phones (0.31.132): transfer codes, the Game Center link (a stand-in key server on 8117), deleting an
+# account; server/eco_accounts.gd alone, then two phones against the real server (8116)
+run account_move_test    ACCOUNT_MOVE_PASS        150
 run preload_queue_test   PRELOAD_QUEUE_PASS       240
 run forge_test           FORGE_PASS               120
 run content_test         CONTENT_PASS             120

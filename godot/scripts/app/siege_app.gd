@@ -9,6 +9,7 @@ const Profile = preload("res://scripts/meta/profile.gd")
 const StoreBilling = preload("res://scripts/meta/store_billing.gd")     # 0.31.130: billing.gd (Play) or billing_ios.gd
 const GameServices = preload("res://scripts/meta/game_services.gd")     # 0.31.130: play_games.gd or game_center.gd
 const EcoSync = preload("res://scripts/meta/eco_sync.gd")
+const AccountLink = preload("res://scripts/meta/account_link.gd")     # 0.31.132: the account between phones
 const Screens = preload("res://scripts/app/screens.gd")
 const Showcase = preload("res://scripts/app/showcase.gd")
 const Siege = preload("res://scripts/siege/siege_mode.gd")
@@ -122,6 +123,8 @@ var play_games: Node = null            # 0.31.102: Google Play Games sign-in and
 # 0.31.108: the account on the server (eco_sync.gd) -- the server's copy of the profile is the one that counts.
 # Headless (tests, tools) it doesn't reach the real server unless asked (eco_url / FB_ECO=1).
 var eco_sync: Node = null
+var account_link: Node = null          # 0.31.132: transfer code, Game Center link, account deletion (account_link.gd)
+var _gc_tries := 0
 var analytics: Node = null              # 0.31.118: usage statistics to our own server (scripts/meta/analytics.gd)
 var notify = Notify.new()                # 0.31.119: "your chest is ready" notifications (the Play build's plugin)
 var eco_autostart := DisplayServer.get_name() != "headless" or OS.has_environment("FB_ECO")
@@ -234,6 +237,19 @@ func _ready() -> void:
 			ask_cloud())                         # (in a match: asked when it ends, _end_match)
 	play_games.restored.connect(_on_cloud_restored)
 	play_games.setup(profile)
+	# 0.31.132 (the iOS port): the account between phones -- the same on Android and iPhone
+	account_link = AccountLink.new()
+	account_link.url = eco_url
+	add_child(account_link)
+	account_link.setup(profile)
+	account_link.switched.connect(_on_account_switched)
+	account_link.note.connect(func(t: String, good: bool): toast(t, UI.GOLD if good else UI.RED))
+	account_link.ask_gc.connect(func(_other: Dictionary):
+		if siege == null:
+			ask_gc())                              # (in a match: asked when it ends)
+	if play_games.has_signal("signed"):
+		play_games.signed.connect(func(_team: String): _gc_link())
+	eco_sync.state_changed.connect(_gc_link)
 	# Toast: a dark pill just above the tab bar, readable over anything.
 	_toast_box = PanelContainer.new()
 	var tsb := UI.card_style(Color(0.02, 0.04, 0.08, 0.92), 18, UI.CARD_HI)
@@ -1176,6 +1192,8 @@ func _end_match() -> void:
 	show_tab("home")
 	if play_games != null and play_games.state == "ask":
 		ask_cloud()                              # 0.31.102: Google Play's question waited for the match to end
+	elif account_link != null and not account_link.pending_gc().is_empty():
+		ask_gc()                                 # 0.31.132: Game Center's question too
 	if update_required:
 		show_update_screen()
 	elif server_updating:
@@ -1225,6 +1243,139 @@ static func _cloud_line(s: Dictionary) -> String:
 	var n := int(s.get("items", 0))
 	return "Level %d · %d wins · %d gold · %d gems · %d item%s" % [int(s.get("level", 1)), int(s.get("wins", 0)),
 		int(s.get("gold", 0)), int(s.get("gems", 0)), n, "" if n == 1 else "s"]
+
+# ---------------- the account between phones (0.31.132, the iOS port) ----------------
+func _on_account_switched() -> void:
+	# a transfer code, Game Center or a deletion changed the account: chat reconnects, the server's copy comes in
+	if social != null and social.has_method("account_switched"):
+		social.account_switched()
+	_on_cloud_restored()
+
+func _gc_link() -> void:
+	# iOS: the Game Center player linked to the account, so a reinstall gets it back (a few tries a run)
+	if account_link == null or play_games == null or not play_games.has_method("identity") or not play_games.signed_in():
+		return
+	if not account_link.has_account() or account_link.busy != "" or _gc_tries >= 3 or siege != null:
+		return
+	var team := str(play_games.get("team_id"))
+	if team == "" or account_link.gc_done == team or not account_link.pending_gc().is_empty():
+		return
+	_gc_tries += 1
+	play_games.identity(func(d, e):
+		if e == null and d is Dictionary:
+			account_link.game_center(team, d))
+
+func _modal_card(title_text: String) -> VBoxContainer:
+	close_modal()
+	modal = Control.new()
+	modal.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(modal)
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.6)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	modal.add_child(dim)
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	modal.add_child(center)
+	var v := UI.card(center)
+	(v.get_parent() as Control).custom_minimum_size = Vector2(minf(360, size.x - 32), 0)
+	UI.title(v, title_text, 20)
+	return v
+
+func _modal_text(v: Node, text: String) -> Label:
+	var b := UI.label(v, text, 14, UI.MUTED)
+	b.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	return b
+
+func ask_gc() -> void:
+	# Game Center's player has another account and this phone has progress of its own: the player picks
+	var o: Dictionary = account_link.pending_gc() if account_link != null else {}
+	if o.is_empty():
+		return
+	sfx("menuOpen")
+	var v := _modal_card("WHICH PROGRESS?")
+	_modal_text(v, "Your Game Center player already has a Fatebound account:\n%s\n\nThis phone:\n%s\n\nUse that account here, or keep this phone's (Game Center then goes with it)." % [
+		_cloud_line(o.get("sum", {})), _cloud_line(profile.summary())])
+	UI.button(v, "USE THAT ACCOUNT", "primary", func():
+		close_modal()
+		account_link.choose_gc(true), "gc_use")
+	UI.button(v, "KEEP THIS PHONE'S", "secondary", func():
+		close_modal()
+		var team := str(play_games.get("team_id")) if play_games != null else ""
+		account_link.choose_gc(false)
+		if play_games != null and play_games.has_method("identity"):
+			play_games.identity(func(d, e):
+				if e == null and d is Dictionary:
+					account_link.game_center_relink(team, d)), "gc_keep")
+
+static func _link_why(a: Dictionary) -> String:
+	match str(a.get("why", "")):
+		"code":
+			return "That code isn't right, or it has run out. Make a new one on the other phone"
+		"busy":
+			return "Too many tries. Wait a few minutes and try again"
+		"old":
+			return "The server needs an update for this. Try again later"
+		"auth":
+			return "Your account isn't ready yet. Try again in a moment"
+	return "Couldn't reach the server. Check your connection"
+
+func show_move_code() -> void:
+	# Settings > MOVE TO ANOTHER PHONE: a one-time code for the other phone (Android or iPhone)
+	if account_link == null or account_link.busy != "":
+		return
+	account_link.new_code(func(a: Dictionary):
+		if not bool(a.get("ok", false)):
+			toast(_link_why(a), UI.RED)
+			return
+		var code := str(a.code)
+		sfx("menuOpen")
+		var v := _modal_card("MOVE TO ANOTHER PHONE")
+		var cl := UI.label(v, code.left(4) + " " + code.substr(4), 34, UI2.GOLD, UI.TITLE_FONT)
+		cl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		cl.set_meta("action_key", "move_code_text")
+		_modal_text(v, "On your other phone (Android or iPhone), open Settings > ACCOUNT > ENTER A CODE and type this within %d minutes. That phone then plays as this account, with all your progress and gems. The code works once." % int(int(a.get("ttl", 600)) / 60))
+		var r := UI.row(v, 10)
+		UI.grow(UI.button(r, "COPY", "secondary", func():
+			DisplayServer.clipboard_set(code)
+			toast("Code copied", UI.GOLD), "move_copy"))
+		UI.grow(UI.button(r, "OK", "primary", func():
+			sfx("menuClose")
+			close_modal(), "modal_ok")))
+
+func enter_move_code() -> void:
+	# Settings > ENTER A CODE: this phone takes the account another phone made a code for
+	sfx("menuOpen")
+	var v := _modal_card("ENTER A CODE")
+	_modal_text(v, "Type the code from your other phone (Settings > ACCOUNT > MOVE TO ANOTHER PHONE). This phone's progress is replaced by that account's.")
+	var f := SocialUI.field(v, "8-character code", 9)
+	f.set_meta("action_key", "move_code_field")
+	var r := UI.row(v, 10)
+	UI.grow(UI.button(r, "CANCEL", "secondary", func():
+		sfx("menuClose")
+		close_modal(), "modal_no"))
+	var go := func():
+		var typed := f.text
+		close_modal()
+		account_link.use_code(typed, func(a: Dictionary):
+			if bool(a.get("ok", false)):
+				toast("This phone now plays as your account", UI.GOLD)
+			else:
+				toast(_link_why(a), UI.RED))
+	f.text_submitted.connect(func(_t): go.call())
+	UI.grow(UI.button(r, "USE CODE", "primary", go, "move_use"))
+
+func ask_delete_account() -> void:
+	# Settings > DELETE ACCOUNT (App Store 5.1.1(v); Google Play's data deletion): twice asked, then gone for good
+	confirm("DELETE ACCOUNT?", "Your Fatebound account is deleted from our server for good: level, gold, gems, items, purchases, friends and leaderboard place. This phone starts again from the beginning.",
+		"DELETE", "danger", func():
+			confirm("ARE YOU SURE?", "This can't be undone. Gems and purchases on this account can't be brought back.", "DELETE FOREVER", "danger", func():
+				account_link.delete_account(func(a: Dictionary):
+					if bool(a.get("ok", false)):
+						notice("ACCOUNT DELETED", "Your account was deleted from our server. The game starts fresh on this phone.")
+					else:
+						toast(_link_why(a), UI.RED))))
 
 func _on_cloud_restored() -> void:
 	# the profile was replaced: everything shown from it is redrawn (the counters just change: nothing was earned)

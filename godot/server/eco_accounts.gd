@@ -12,6 +12,10 @@ extends RefCounted
 # Files (STATE_DIRECTORY, /var/lib/fatebound-siege under systemd): accounts/<id>.json (the profile, Profile's own atomic
 # save), accounts/<id>.meta.json (the key's hash, the last op applied, tickets), purchase_tokens.json (token hash ->
 # account). The key itself is never stored, only its SHA-256.
+# 0.31.132 (the iOS port, IOS_PORT_SPEC_FOR_CLAUDE.md §4, §6): the account between phones -- a transfer code
+# (link_new / link_use: 8 characters, 10 minutes, once), the Game Center player linked to an account (gc_links.json:
+# a hash of the teamPlayerID, never the id itself), extra keys for an account's other phones (meta.keys, hashes), and
+# deleting an account (delete_account) from the app.
 const Profile = preload("res://scripts/meta/profile.gd")
 const Eco = preload("res://scripts/meta/economy.gd")
 const Net = preload("res://scripts/siege/siege_net.gd")
@@ -34,6 +38,21 @@ var tokens := {}                     # purchase token hash (16 hex) -> account i
 var tokens_path := ""
 var log_fn: Callable = func(_s): pass
 var now_override := -1               # tests
+# 0.31.132: the account between phones
+const LINK_LIFE := 600               # a transfer code lasts 10 minutes
+const LINK_CHARS := "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"   # 32: no 0/O, 1/I (256 % 32 == 0: every one as likely)
+const LINK_LEN := 8
+const LINK_PER_HOUR := 5             # codes one account makes in an hour
+const LINK_TRIES := 10               # wrong codes one address may try in LINK_TRY_WINDOW
+const LINK_TRIES_ALL := 60           # ... and the whole server (behind the proxy every address looks the same)
+const LINK_TRY_WINDOW := 600
+const MAX_KEYS := 8                  # other phones' keys an account keeps (the oldest goes)
+var links := {}                      # code -> {"id", "until"} (memory only: a restart drops the codes)
+var link_made := {}                  # id -> [unix] (codes made)
+var link_tries := {}                 # address -> [unix] (wrong codes)
+var link_tries_all: Array = []
+var gc_links := {}                   # gc_hash(teamPlayerID) -> account id
+var gc_path := ""
 var _made: Array = []                # when the last new accounts were made (the hourly limit)
 
 func _init(state_dir := "") -> void:
@@ -44,6 +63,10 @@ func _init(state_dir := "") -> void:
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(dir))
 	tokens_path = state.path_join("purchase_tokens.json")
 	_load_tokens()
+	gc_path = state.path_join("gc_links.json")
+	if FileAccess.file_exists(gc_path):
+		var g: Variant = JSON.parse_string(FileAccess.get_file_as_string(gc_path))
+		gc_links = g if g is Dictionary else {}
 
 func now() -> int:
 	return now_override if now_override >= 0 else int(Time.get_unix_time_from_system())
@@ -153,7 +176,10 @@ func open(id: String, key: String) -> Dictionary:
 	if key.length() != 64:
 		return {}
 	var e := _load(id)
-	if e.is_empty() or str(e.meta.get("key", "")) != key.sha256_text():
+	if e.is_empty():
+		return {}
+	var h := key.sha256_text()
+	if str(e.meta.get("key", "")) != h and not (e.meta.get("keys", []) as Array).has(h):    # (0.31.132: another phone's key)
 		return {}
 	return e
 
@@ -491,3 +517,134 @@ func public_of(id: String) -> Dictionary:
 	var p = e.p
 	var t := str(p.d.get("title", ""))
 	return {"name":str(p.d.get("name", "Player")), "title":t if p.owns(t) and Net.TITLES.has(t) else ""}
+
+# ---------------- 0.31.132: the account between phones (the iOS port) ----------------
+func add_key(e: Dictionary) -> String:
+	# a key for another phone of this account (its hash kept; the oldest dropped past MAX_KEYS); the first key stays
+	var key := Crypto.new().generate_random_bytes(32).hex_encode()
+	var ks: Array = (e.meta.get("keys", []) as Array).duplicate()
+	ks.append(key.sha256_text())
+	while ks.size() > MAX_KEYS:
+		ks.pop_front()
+	e.meta["keys"] = ks
+	_save_meta(e)
+	return key
+
+static func clean_code(s: String) -> String:
+	var out := ""
+	for ch in s.to_upper():
+		if LINK_CHARS.contains(ch):
+			out += ch
+	return out
+
+func _link_sweep(t: int) -> void:
+	for c in links.keys():
+		if int(links[c].until) <= t:
+			links.erase(c)
+
+func link_new(id: String, key: String) -> Dictionary:
+	# Settings > MOVE TO ANOTHER PHONE: a code the other phone enters (Android and iPhone alike)
+	var e := open(id, key)
+	if e.is_empty():
+		return {"t":"eco", "ok":false, "op":"link_new", "why":"auth"}
+	var t := now()
+	_link_sweep(t)
+	var made: Array = (link_made.get(id, []) as Array).filter(func(x): return t - int(x) < 3600)
+	if made.size() >= LINK_PER_HOUR:
+		return {"t":"eco", "ok":false, "op":"link_new", "why":"busy"}
+	for c in links.keys():
+		if str(links[c].id) == id:
+			links.erase(c)                           # one live code per account
+	var cr := Crypto.new()
+	var code := ""
+	while code == "" or links.has(code):
+		code = ""
+		var b := cr.generate_random_bytes(LINK_LEN)
+		for i in LINK_LEN:
+			code += LINK_CHARS[b[i] % LINK_CHARS.length()]
+	links[code] = {"id":id, "until":t + LINK_LIFE}
+	made.append(t)
+	link_made[id] = made
+	log_fn.call("account %s: a transfer code made" % id)
+	return {"t":"eco", "ok":true, "op":"link_new", "code":code, "ttl":LINK_LIFE}
+
+func link_use(code: String, addr: String) -> Dictionary:
+	# the other phone's ENTER A CODE: the account, with a key of its own for that phone (the first phone keeps its own)
+	var t := now()
+	_link_sweep(t)
+	link_tries_all = link_tries_all.filter(func(x): return t - int(x) < LINK_TRY_WINDOW)
+	var mine: Array = (link_tries.get(addr, []) as Array).filter(func(x): return t - int(x) < LINK_TRY_WINDOW)
+	if mine.size() >= LINK_TRIES or link_tries_all.size() >= LINK_TRIES_ALL:
+		return {"t":"eco", "ok":false, "op":"link_use", "why":"busy"}
+	var c := clean_code(code)
+	var e := {}
+	if links.has(c):
+		e = _load(str(links[c].id))
+		links.erase(c)                               # once
+	if e.is_empty():
+		mine.append(t)
+		link_tries[addr] = mine
+		link_tries_all.append(t)
+		return {"t":"eco", "ok":false, "op":"link_use", "why":"code"}
+	var key := add_key(e)
+	log_fn.call("account %s: taken to another phone with a transfer code" % str(e.id))
+	return {"t":"eco", "ok":true, "op":"link_use", "acct":str(e.id), "key":key, "seq":int(e.meta.get("seq", 0)),
+		"now":now(), "profile":public_profile(e.p.d)}
+
+static func gc_hash(team_player_id: String) -> String:
+	return ("fatebound-gc:" + team_player_id).sha256_text()
+
+func _save_gc() -> void:
+	_write(gc_path, JSON.stringify(gc_links))
+
+func gc_link(id: String, key: String, team_player_id: String, relink := false) -> Dictionary:
+	# a Game Center player (its identity already checked with Apple's signature): linked to this phone's account, or --
+	# when it belongs to another account -- that account, with a key for this phone, for the player to choose (a fresh
+	# install simply takes it, like Google Play's copy). relink: the player kept this phone's account.
+	if team_player_id == "":
+		return {"t":"eco", "ok":false, "op":"gc", "why":"bad"}
+	var h := gc_hash(team_player_id)
+	var owner := str(gc_links.get(h, ""))
+	if owner != "" and _load(owner).is_empty():
+		owner = ""                                   # (that account was deleted)
+	var e := open(id, key) if id != "" else {}
+	if not e.is_empty() and (owner == "" or owner == id or relink):
+		var was := owner
+		gc_links[h] = id
+		_save_gc()
+		if was != id:
+			log_fn.call("account %s: Game Center player linked%s" % [id, " (moved from %s)" % was if was != "" else ""])
+		return {"t":"eco", "ok":true, "op":"gc", "gc":"same" if was == id else "linked"}
+	if owner == "":
+		return {"t":"eco", "ok":true, "op":"gc", "gc":"none"}
+	var o := _load(owner)
+	var key2 := add_key(o)
+	log_fn.call("account %s: found again through Game Center%s" % [owner, " (asked by %s)" % id if id != "" else ""])
+	return {"t":"eco", "ok":true, "op":"gc", "gc":"other", "acct":owner, "key":key2, "seq":int(o.meta.get("seq", 0)),
+		"sum":o.p.summary(), "now":now(), "profile":public_profile(o.p.d)}
+
+func delete_account(id: String, key: String) -> Dictionary:
+	# Settings > DELETE ACCOUNT (App Store rule 5.1.1(v); Google Play's data deletion too): the account's files, its
+	# Game Center link and its codes go. Purchase tokens keep pointing at the (now empty) id, so a purchase can't be
+	# granted again to anyone.
+	var e := open(id, key)
+	if e.is_empty():
+		return {"t":"eco", "ok":false, "op":"delete", "why":"auth"}
+	cache.erase(id)
+	for f in [id + ".json", id + ".meta.json", id + ".json.tmp", id + ".meta.json.tmp"]:
+		var path := dir.path_join(f)
+		if FileAccess.file_exists(path):
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+	var gone := false
+	for h in gc_links.keys():
+		if str(gc_links[h]) == id:
+			gc_links.erase(h)
+			gone = true
+	if gone:
+		_save_gc()
+	for c in links.keys():
+		if str(links[c].id) == id:
+			links.erase(c)
+	link_made.erase(id)
+	log_fn.call("account %s deleted by its player" % id)
+	return {"t":"eco", "ok":true, "op":"delete"}

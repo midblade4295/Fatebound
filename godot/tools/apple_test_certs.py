@@ -6,6 +6,8 @@ style API key -- and transactions signed like Apple's. Nothing here is Apple's; 
   python3 tools/apple_test_certs.py sign DIR PAYLOAD    -> prints a JWS (ES256, x5c = leaf, intermediate, root)
       PAYLOAD: a JSON object, or @file; "--other-root" signs with a second, unrelated root (a bad chain)
   python3 tools/apple_test_certs.py verify-jwt DIR JWT  -> exit 0 if JWT is ES256-signed by DIR/api.p8 (the fake API's check)
+  python3 tools/apple_test_certs.py gc-sign DIR TEAM BUNDLE TS SALT_B64  -> prints a Game Center identity signature
+      (base64, RSA-SHA256 by DIR/gc.key, whose certificate is DIR/gc.cer -- a stand-in for Apple's key server)
 Standard library plus the openssl command.
 """
 import base64
@@ -76,6 +78,8 @@ def make(d):
     run(["ecparam", "-name", "prime256v1", "-genkey", "-noout", "-out", j("api.ec")])
     run(["pkcs8", "-topk8", "-nocrypt", "-in", j("api.ec"), "-out", j("api.p8")])
     run(["ec", "-in", j("api.ec"), "-pubout", "-out", j("api.pub")])
+    run(["req", "-new", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", j("gc.key"), "-subj", "/CN=Test Game Center key/O=Fatebound tests",
+         "-days", "30", "-outform", "DER", "-out", j("gc.cer")])
     print("TEST_APPLE_OK")
 
 
@@ -102,6 +106,12 @@ def verify_jwt(d, jwt):
     return r.returncode == 0
 
 
+def gc_sign(d, team, bundle, ts, salt_b64):
+    data = team.encode() + bundle.encode() + int(ts).to_bytes(8, "big") + base64.b64decode(salt_b64)
+    sig = run(["dgst", "-sha256", "-sign", os.path.join(d, "gc.key")], data)
+    return base64.b64encode(sig).decode()
+
+
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else ""
     if cmd == "make":
@@ -110,6 +120,8 @@ if __name__ == "__main__":
         raw = sys.argv[3]
         p = json.load(open(raw[1:])) if raw.startswith("@") else json.loads(raw)
         print(sign(sys.argv[2], p, "--other-root" in sys.argv))
+    elif cmd == "gc-sign":
+        print(gc_sign(sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5], sys.argv[6]))
     elif cmd == "verify-jwt":
         sys.exit(0 if verify_jwt(sys.argv[2], sys.argv[3]) else 1)
     else:

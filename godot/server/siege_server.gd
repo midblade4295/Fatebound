@@ -114,7 +114,7 @@ const LOBBY_TIME := 20.0             # the join countdown (0.31.82)
 const HELLO_TIMEOUT := 10.0
 const IAP_TIMEOUT := 40.0              # a purchase check may take a token request and an API call
 const REFUSE_CLOSE_DELAY := 0.25     # s between a "bye"/"ver" reply and closing the socket
-const SERVER_BUILD := "0.31.131"      # this server's game version; the probe says it by default (identifies as current)
+const SERVER_BUILD := "0.31.132"      # this server's game version; the probe says it by default (identifies as current)
 const MIN_BUILD_FILE := "/etc/fatebound-siege/min_build"
 const MIN_BUILD_RELOAD := 10.0       # s between re-reads of the min-build file
 const UPDATE_MSG := "A new version of Fatebound is out. Update now on Google Play to keep playing online."
@@ -570,7 +570,7 @@ func _handle(cid: int, msg: Dictionary) -> void:
 			# so the client treats no answer as "unknown" and checks again on connect.
 			if c.hello:
 				return
-			_send(cid, {"t":"ver", "v":Net.VERSION, "build":SERVER_BUILD, "min_build":min_build, "eco":1, "social":1, "an":1, "lb":1, "ref":1, "diag":1})
+			_send(cid, {"t":"ver", "v":Net.VERSION, "build":SERVER_BUILD, "min_build":min_build, "eco":1, "social":1, "an":1, "lb":1, "ref":1, "diag":1, "move":1})
 			_refuse(cid, 1000, "ver")
 		"hello":
 			if c.hello or c.has("social"):
@@ -733,6 +733,10 @@ func _handle(cid: int, msg: Dictionary) -> void:
 			if c.hello or c.has("eco_done") or c.has("social") or eco == null:
 				return
 			c.eco_done = true
+			var eop := str(msg.get("op", ""))
+			if eop in ["link_new", "link_use", "delete", "gc"]:
+				_eco_op(cid, eop, msg)                 # 0.31.132: the account between phones (the iOS port)
+				return
 			var t0 := Time.get_ticks_usec()
 			var out: Dictionary = eco.handle(msg)
 			if referrals != null and bool(out.get("ok", false)) and referrals.check(str(out.get("acct", "")), eco) > 0:
@@ -852,6 +856,50 @@ func _handle(cid: int, msg: Dictionary) -> void:
 				else:
 					arg = null
 				r.sim.act(c.unit, a, arg)
+
+func _eco_op(cid: int, op: String, msg: Dictionary) -> void:
+	# 0.31.132 (the iOS port, IOS_PORT_SPEC_FOR_CLAUDE.md §4, §6), one per socket like any "eco":
+	#   link_new  {acct, key}        -> {code, ttl}: Settings > MOVE TO ANOTHER PHONE
+	#   link_use  {code}             -> {acct, key, seq, profile}: the other phone's ENTER A CODE (Android <-> iPhone)
+	#   gc        {acct?, key?, gc:{id, url, sig, salt, ts}, relink?} -> Game Center player linked / found ("other")
+	#   delete    {acct, key}        -> the account deleted (and forgotten by chat, friends and the leaderboard)
+	var acct := str(msg.get("acct", ""))
+	var akey := str(msg.get("key", ""))
+	var finish := func(out: Dictionary) -> void:
+		if not clients.has(cid):
+			return
+		_send(cid, out)
+		_refuse(cid, 1000, "eco")
+		clients[cid].close_at = _now() + 2.0
+		_log("eco %s: %s %s" % [acct if acct != "" else str(out.get("acct", "-")), op,
+			"ok" + (" " + str(out.get("gc", "")) if out.has("gc") else "") if bool(out.get("ok", false)) else str(out.get("why", ""))])
+	match op:
+		"link_new":
+			finish.call(eco.link_new(acct, akey))
+		"link_use":
+			var addr := (clients[cid].ws as WebSocketPeer).get_connected_host()
+			finish.call(eco.link_use(str(msg.get("code", "")), addr))
+		"delete":
+			var out: Dictionary = eco.delete_account(acct, akey)
+			if bool(out.get("ok", false)):
+				if social != null:
+					social.forget(acct)
+				if leaderboard != null:
+					leaderboard.forget(acct)
+				if analytics != null:
+					analytics.set_opt_out(acct, true)    # (nothing more is recorded; what is there ages out in 90 days)
+			finish.call(out)
+		"gc":
+			if iap_apple == null:
+				finish.call({"t":"eco", "ok":false, "op":"gc", "why":"off"})
+				return
+			var g: Variant = msg.get("gc", {})
+			var relink := bool(msg.get("relink", false))
+			iap_apple.verify_gc(g, func(ok: bool, why: String):
+				if not ok:
+					finish.call({"t":"eco", "ok":false, "op":"gc", "why":why})
+					return
+				finish.call(eco.gc_link(acct, akey, str((g as Dictionary).get("id", "")), relink)))
 
 func _iap_apple(cid: int, product: String, jws: String, acct: String, akey: String) -> void:
 	# 0.31.131 (the iOS port): an App Store purchase -- Apple's signed transaction checked (server/iap_verify_apple.gd),

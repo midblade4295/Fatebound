@@ -35,6 +35,11 @@ var ledger_path := ""
 var run_fn: Callable                 # (jws, cb(helper result)) -- default: the helper process; tests may swap it
 var _jobs: Array = []                # [{pid, out, jws_file, t0, cb}]
 var _seq := 0
+# 0.31.132: Game Center identity (the account link, IOS_PORT_SPEC_FOR_CLAUDE.md §4)
+const GC_FRESH_MS := 600000          # an identity signature older (or newer) than 10 minutes is refused
+var gc_salts := {}                   # salt -> unix ms: a signature is used once (cleared as they age out)
+var test_mode := false               # (SIEGE_APPLE_TEST_ROOT: a local stand-in for Apple's key server is allowed)
+var now_ms_override := -1
 
 func _init() -> void:
 	fake = OS.get_environment("SIEGE_IAP_FAKE") == "1"
@@ -48,6 +53,7 @@ func _init() -> void:
 	if OS.has_environment("SIEGE_APPLE_TEST_ROOT"):
 		root_path = OS.get_environment("SIEGE_APPLE_TEST_ROOT")
 		root_sha256 = FileAccess.get_file_as_string(root_path.get_basename() + ".sha256").strip_edges()
+		test_mode = true
 	api_base = OS.get_environment("SIEGE_APPSTORE_API").strip_edges() if OS.has_environment("SIEGE_APPSTORE_API") else ""
 	var state := OS.get_environment("STATE_DIRECTORY") if OS.has_environment("STATE_DIRECTORY") else "user://"
 	ledger_path = state.path_join("iap_ledger.jsonl")
@@ -162,27 +168,70 @@ func _ledger(product: String, token: String, p: Dictionary, verdict: String) -> 
 		"order":str(p.get("transactionId", "")), "v":verdict, "store":"apple", "env":str(p.get("environment", ""))}))
 	f.close()
 
+# ---------------- Game Center identity (0.31.132) ----------------
+func now_ms() -> int:
+	return now_ms_override if now_ms_override >= 0 else int(Time.get_unix_time_from_system() * 1000.0)
+
+func verify_gc(g: Variant, cb: Callable) -> void:
+	# the phone's GKLocalPlayer identity signature: cb(ok: bool, why: String). Fresh (10 minutes), used once, then
+	# Apple's key (fetched from its apple.com URL) must verify it (server/apple_jws.py --gc).
+	if not (g is Dictionary):
+		cb.call(false, "bad")
+		return
+	var d: Dictionary = g
+	var team := str(d.get("id", ""))
+	var url := str(d.get("url", ""))
+	var salt := str(d.get("salt", ""))
+	var ts := int(d.get("ts", 0))
+	if team == "" or team.length() > 128 or url.length() > 512 or str(d.get("sig", "")).length() > 4096 or salt == "" or salt.length() > 256:
+		cb.call(false, "bad")
+		return
+	var t := now_ms()
+	for k in gc_salts.keys():
+		if absi(t - int(gc_salts[k])) > GC_FRESH_MS * 2:
+			gc_salts.erase(k)
+	if absi(t - ts) > GC_FRESH_MS:
+		cb.call(false, "stale")
+		return
+	if gc_salts.has(salt):
+		cb.call(false, "replayed")
+		return
+	gc_salts[salt] = t
+	var payload := JSON.stringify({"id":team, "url":url, "sig":str(d.get("sig", "")), "salt":salt, "ts":ts})
+	var extra := PackedStringArray(["--gc-allow-http"]) if test_mode else PackedStringArray()
+	_spawn("--gc", payload, extra, func(res: Dictionary):
+		var ok := bool(res.get("ok", false))
+		var why := str(res.get("why", ""))
+		if not ok:
+			log_fn.call("Game Center identity refused (%s)" % why)
+		cb.call(ok, "unreachable" if why == "unreachable" or why.begins_with("helper") or why == "timeout" else why))
+
 # ---------------- the helper process ----------------
 func _run_helper(jws: String, cb: Callable) -> void:
+	var extra := PackedStringArray(["--root", root_path])
+	if root_sha256 != "":
+		extra.append_array(["--root-sha256", root_sha256])
+	if key_path != "" and issuer != "" and key_id != "":
+		extra.append_array(["--key", key_path, "--issuer", issuer, "--key-id", key_id])
+	if api_base != "":
+		extra.append_array(["--api", api_base])
+	_spawn("--jws", jws, extra, cb)
+
+func _spawn(kind: String, input: String, extra: PackedStringArray, cb: Callable) -> void:
+	# one helper process: its input in a file in the state directory, its answer in another (both removed after)
 	var state := ledger_path.get_base_dir()
 	_seq += 1
 	var base := "%s/apple_check_%d_%d" % [state, OS.get_process_id(), _seq]
-	var jws_file := ProjectSettings.globalize_path(base + ".jws")
+	var jws_file := ProjectSettings.globalize_path(base + ".in")
 	var out := ProjectSettings.globalize_path(base + ".json")
 	var f := FileAccess.open(jws_file, FileAccess.WRITE)
 	if f == null:
 		cb.call({"ok":false, "why":"helper write"})
 		return
-	f.store_string(jws)
+	f.store_string(input)
 	f.close()
-	var args := PackedStringArray([ProjectSettings.globalize_path(HELPER), "--jws", jws_file, "--out", out, "--root", root_path,
-		"--bundle", Net.IAP_PACKAGE])
-	if root_sha256 != "":
-		args.append_array(["--root-sha256", root_sha256])
-	if key_path != "" and issuer != "" and key_id != "":
-		args.append_array(["--key", key_path, "--issuer", issuer, "--key-id", key_id])
-	if api_base != "":
-		args.append_array(["--api", api_base])
+	var args := PackedStringArray([ProjectSettings.globalize_path(HELPER), kind, jws_file, "--out", out, "--bundle", Net.IAP_PACKAGE])
+	args.append_array(extra)
 	var pid := OS.create_process(python, args)
 	if pid <= 0:
 		DirAccess.remove_absolute(jws_file)

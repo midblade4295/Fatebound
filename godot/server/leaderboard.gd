@@ -181,6 +181,12 @@ func _load() -> void:
 		last = v.get("last", []) if v.get("last", []) is Array else []
 		paid = str(v.get("paid", ""))
 
+func forget(acct: String) -> void:
+	# 0.31.132: the account was deleted from the app: off this week's board
+	if rows.has(acct):
+		rows.erase(acct)
+		_mark()
+
 func _mark() -> void:
 	if _dirty_at < 0.0:
 		_dirty_at = _clock

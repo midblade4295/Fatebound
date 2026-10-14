@@ -112,6 +112,13 @@ func _lost() -> void:
 	_next_try = _clock + float(RETRY[mini(_fails - 1, RETRY.size() - 1)])
 	changed.emit("state")
 
+func account_switched() -> void:
+	# 0.31.132: this phone plays as another account now (a transfer code, Game Center, or a deleted account): the
+	# connection starts again with it
+	_close()
+	_fails = 0
+	_next_try = _clock
+
 func _close() -> void:
 	if _ws != null:
 		_ws.close()

@@ -2257,6 +2257,28 @@ static func game_center_card(app, root: VBoxContainer) -> void:
 			app.sfx("menuOpen")
 			pg.show_achievements(), "gc_achievements", 15, 44.0)
 
+static func account_card(app, root: VBoxContainer) -> void:
+	# 0.31.132 (the iOS port, IOS_PORT_SPEC_FOR_CLAUDE.md §4, §6): the Fatebound account -- the progress itself -- moved
+	# between phones with a one-time code (Android and iPhone alike), and deleted from here (App Store 5.1.1(v)).
+	var al = app.get("account_link")
+	if al == null:
+		return
+	var ac := UI2.frame(root, "night", 12, 18.0, "gold")
+	UI2.divider(ac, "ACCOUNT", 20)
+	var has: bool = al.has_account()
+	UI2.body(ac, ("Your progress is kept in your Fatebound account on our server. Take it to another phone, Android or "
+		+ "iPhone, with a one-time code.") if has else "Your account is made the first time the game reaches our server.", 12, UI2.SOFT)
+	var mv := UI2.button(ac, "MOVE TO ANOTHER PHONE", "blue", func():
+		app.sfx("confirm")
+		app.show_move_code(), "move_new", 15, 44.0)
+	mv.disabled = not has
+	UI2.button(ac, "ENTER A CODE", "green", func():
+		app.sfx("confirm")
+		app.enter_move_code(), "move_enter", 15, 44.0)
+	var dl := UI2.button(ac, "DELETE ACCOUNT", "red", func():
+		app.ask_delete_account(), "account_delete", 13, 38.0)
+	dl.disabled = not has
+
 static func _ago(app, at: int) -> String:
 	if at <= 0:
 		return ""
@@ -2350,6 +2372,7 @@ static func settings(app, root: VBoxContainer) -> void:
 	xv.autowrap_mode = TextServer.AUTOWRAP_OFF
 	# Google Play (0.31.102, Kevin: "Google play account linking to the game"): sign in, and the progress kept there
 	play_games_card(app, root)
+	account_card(app, root)                               # 0.31.132: the account between phones
 	# Career
 	var car := UI2.frame(root, "royal", 12, 18.0, "gold")
 	UI2.divider(car, "CAREER", 20)

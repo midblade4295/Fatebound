@@ -3814,4 +3814,59 @@ K2/K3 notes (0.17.0)
   starter pack's token; the API's JWT checked (ES256, kid, issuer, aud, bundle). Then the real server process: two
   accounts, billing_ios.gd's own message, granted once, the same transaction again "already yours", another account
   refused (its token is A's) or "used" (a copy without the token). analytics_events_test knows the store prop.
-- Version 0.31.131, versionCode 217. Quick suite: ALL 86 PASSED (85 Godot tests + the report check). Kevin: redeploy the server for App Store purchases.
+- Version 0.31.131, versionCode 217. Quick suite: all 85 passed (84 Godot tests + the report check; analytics_events_test re-run after its fix). Kevin: redeploy the server for App Store purchases.
+
+## 0.31.132 — the iOS port, steps 6 and 9: the account between phones, deleting it, privacy
+- Settings > ACCOUNT (Android and iPhone alike): MOVE TO ANOTHER PHONE asks the server for a one-time code (8
+  characters from 2-9 and A-Z without I/O, 10 minutes, once, kept only in the server's memory; at most 5 an hour per
+  account); ENTER A CODE on the other phone (Android <-> iPhone, both ways) gives that phone its own key to the same
+  account (the account keeps up to 8 extra key hashes, meta.keys; the first phone's key still works) and the
+  server's copy replaces the phone's. Wrong codes: 10 per address and 60 per server in 10 minutes, then "busy".
+- Game Center link: signed in, the phone sends Apple's identity signature (GKLocalPlayer fetchItems: public-key URL,
+  signature, salt, timestamp); server/apple_jws.py --gc fetches the key's certificate from Apple (https, apple.com
+  hosts only), checks it is in date and that it verifies the RSA-SHA256 signature over teamPlayerID + bundle id +
+  timestamp + salt; the server refuses one older than 10 minutes or seen before. Then gc_links.json maps
+  sha256("fatebound-gc:" + teamPlayerID) -> account (never the id itself). Another account found for the player: a
+  fresh phone takes it silently ("Progress restored from Game Center", like Google Play's copy), a phone with progress
+  asks (USE THAT ACCOUNT / KEEP THIS PHONE'S -- keeping relinks the player to this phone's account).
+- DELETE ACCOUNT (App Store 5.1.1(v); Google Play's data deletion too), asked twice: the server deletes the account's
+  files, its Game Center link and codes, forgets its name, friends and blocks (social) and its leaderboard row, and
+  records nothing more for it in usage statistics; purchase tokens keep pointing at the empty id so nothing is granted
+  twice. The phone starts afresh (sound and graphics settings kept; Google Play's copy is overwritten at the next
+  upload, never read back).
+- UGC (App Store 1.2): server/social.gd already has report, block, a word filter with links masked, and the muted
+  list -- nothing to add. The privacy manifest came with step 2.
+- scripts/meta/account_link.gd (the phone's side), server/eco_accounts.gd (link_new / link_use / gc_link /
+  delete_account / extra keys), siege_server "eco" with an "op" (link_new, link_use, gc, delete; "ver" says move:1),
+  social.forget, leaderboard.forget; social.gd (the phone) reconnects after a switch. Usage statistics:
+  session_start carries plat ("android" | "ios"); tools/analytics_report.py splits daily players by phone.
+- privacy.html: the App Store and its purchase check, Game Center (achievements, the hashed player id for account
+  restore), moving to another phone, deleting the account, notifications on iPhone too, "Android or iOS version".
+- tests/account_move_test.gd (in the quick suite): the accounts alone (codes, limits, keys, Game Center link, relink,
+  deletion), then three phones against the real server (a code moves A to B; a wrong code; Game Center with a
+  stand-in key server: A links, a fresh C gets A's account, the same signature again and one signed for another
+  player refused; DELETE ACCOUNT, after which A's first key no longer opens it). ios_port_test checks the ACCOUNT card
+  on both phones; analytics tests know plat.
+
+## iOS port steps 8 and 10 — content packs on iOS, the TestFlight workflow (also 0.31.132)
+- The same packs serve both phones: tools/ios_pack_check.py exports every pack with an iOS pack preset (added only
+  while it runs) exactly as content_packs.py builds Android's: all five (ui, world, heroes, weapons, audio) came out
+  byte-identical to the manifest's (same sha256). Godot gives iOS the same texture formats (etc2 + astc) as Android.
+  So one manifest, one content-packs branch, no per-platform entries.
+- The loader keeps packs in Library/Caches on iOS (OS.get_cache_dir()/fatebound_packs): user:// is backed up to
+  iCloud there, and Apple's storage rules keep re-downloadable data out of backups. iOS may empty Caches when short
+  of space; the packs are simply downloaded again. Android keeps user://packs.
+- content_packs.py base takes an .ipa (Payload/<app>.app/<name>.pck) or a .pck too, and fails if the iOS plugins'
+  binaries got into the pck. Checked on the Linux-exported iOS pck: BASE OK, 227 files.
+- .github/workflows/ios-testflight.yml (manual only; to main, the only file there, as Kevin chose): macos-15, Godot
+  4.7.2 editor + iOS template (SHA-512 from Godot's SHA512-SUMS), tools/ios_plugins.sh, the version from the inputs,
+  export of the Xcode project, checks (base pck, plists, bundle id, version, deployment target, Game Center
+  entitlement, the three plugins' entry symbols), then either an unsigned Simulator build (simulator-check) or a
+  throwaway keychain with the distribution .p12 and the profile from secrets, archive, export (app-store-connect,
+  manual signing), the .ipa checked again, altool validate + upload to TestFlight (never review), artifacts (the .ipa
+  or Simulator app and logs), and the keychain and keys deleted in an always() step.
+- godot/IOS_HANDOFF.md: what Kevin and Grok Bot do next (certificate and profile with openssl, no Mac; App Store
+  Connect app, keys, the seven products, the 18 achievements as fatebound.<key>, App Privacy, TestFlight testers; the
+  GitHub secrets; the server's In-App Purchase key; privacy.html to main; one shared min_build).
+- Version 0.31.132, versionCode 218. Quick suite: all 86 passed (85 Godot tests + the report check). Kevin: redeploy the
+  server (App Store checks from 0.31.131, the account moves and deletion from 0.31.132 -- Android uses them too).

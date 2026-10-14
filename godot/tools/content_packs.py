@@ -380,9 +380,53 @@ def base_problems(res_paths, manifest_bytes):
     return problems
 
 
+def _pck_files(pck):
+    # (res paths, {path: bytes} of the few files the check reads) of a Godot .pck
+    names = []
+    want = {}
+    with open(pck, "rb") as f:
+        for path, size, at in pck_tool.entries(pck):
+            names.append(path)
+            if path in ("project.binary", "content/manifest.json"):
+                f.seek(at)
+                want[path] = f.read(size)
+    return names, want
+
+
 def check_base(archive):
     # an APK or AAB: the game's files sit under <module>/assets/ beside project.binary
+    # (iOS port step 8) an .ipa (Payload/<app>.app/<name>.pck) or a .pck itself (the exported Xcode project's)
+    import tempfile
     import zipfile
+    tmp = None
+    if archive.endswith(".ipa"):
+        with zipfile.ZipFile(archive) as z:
+            pcks = [n for n in z.namelist() if re.match(r"Payload/[^/]+\.app/[^/]+\.pck$", n)]
+            if len(pcks) != 1:
+                raise SystemExit("%s: %d .pck files in the app" % (archive, len(pcks)))
+            fd, tmp = tempfile.mkstemp(suffix=".pck")
+            with os.fdopen(fd, "wb") as f:
+                f.write(z.read(pcks[0]))
+    if archive.endswith(".pck") or tmp:
+        try:
+            res, got = _pck_files(tmp or archive)
+        finally:
+            if tmp:
+                os.remove(tmp)
+        if "project.binary" not in got:
+            raise SystemExit("%s: no project.binary" % archive)
+        man = got.get("content/manifest.json")
+        main = got["project.binary"]
+        problems = base_problems(res, man)
+        # the iOS plugins' binaries belong in the Xcode project, never in the pck (PRESET_EXTRA)
+        problems += [p for p in res if re.match(r"addons/(GodotApplePlugins[^/]*|FateboundNotifyIOS)/bin/", p)][:5]
+        if b"res://scenes/Boot.tscn" not in main:
+            problems.append("the main scene is not res://scenes/Boot.tscn (the content loader)")
+        for p in problems[:20]:
+            print("BASE:", p)
+        print("BASE OK: %d files, no pack data, the loader starts first" % len(res) if not problems else
+              "BASE NOT OK (%d problems)" % len(problems))
+        return not problems
     with zipfile.ZipFile(archive) as z:
         names = z.namelist()
         proj = [n for n in names if n == "assets/project.binary" or n.endswith("/assets/project.binary")]
