@@ -73,9 +73,10 @@ chat. Game Center achievements can't be deleted once live: Kevin approves before
    main. Actions > **iOS TestFlight** > Run workflow: `ref` = the branch, `version_name` = the Play versionName's
    number (e.g. `1.2.26`), `version_code` = the Play versionCode (e.g. `216`; App Store build numbers must only go
    up), `mode` = `testflight` (or `build-check`: an unsigned iPhone build, no secrets, to prove it compiles and links).
-   It fetches Godot 4.7.2 (SHA-512 checked), the pinned GodotApplePlugins (SHA-256 checked), builds the notification
-   plugin, exports, checks (base pck, privacy manifest, bundle id, version, plugins), signs, uploads to TestFlight —
-   and never submits for review. Public repository: macOS minutes are free; keep it manual anyway.
+   It picks Xcode 26 (Godot 4.7.2's iOS template needs the iOS 26 SDK), fetches Godot 4.7.2 (SHA-512 checked), the
+   pinned GodotApplePlugins (SHA-256 checked), builds the notification plugin, exports, checks (base pck, privacy manifest, bundle id, version, plugins), signs, uploads to TestFlight —
+   and never submits for review. Public repository: macOS minutes are free; keep it manual anyway. A `build-check`
+   run on 2026-10-14 (run 38520870076) built the whole app unsigned for iPhone: everything up to signing works.
 
 ## 4. The server (Kevin: `sudo bash godot/server/deploy/install_siege_server.sh` after these)
 1. Copy the In-App Purchase `.p8` (step 2.3) to `/etc/fatebound-siege/appstore-key.p8` (`chmod 600`, root). The

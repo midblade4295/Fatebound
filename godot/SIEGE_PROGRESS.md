@@ -3870,3 +3870,12 @@ K2/K3 notes (0.17.0)
   GitHub secrets; the server's In-App Purchase key; privacy.html to main; one shared min_build).
 - Version 0.31.132, versionCode 218. Quick suite: all 86 passed (85 Godot tests + the report check). Kevin: redeploy the
   server (App Store checks from 0.31.131, the account moves and deletion from 0.31.132 -- Android uses them too).
+- The workflow checked on GitHub's Mac (build-check, unsigned, no secrets) -- four runs, each fix pushed:
+  SCons now in its own venv (Homebrew Python refuses pip, PEP 668); the check mode builds for iPhone (Godot's
+  Simulator library is x86_64 only); Xcode 26 picked (Godot 4.7.2's iOS template links iOS 26 SDK symbols:
+  CADynamicRange*, MTLTensorDomain); the notification plugin compiled with the selected Xcode's toolchain (godot-cpp
+  defaults to /Applications/Xcode.app, another Xcode, and the mix broke the system modules). Run 38520870076: Godot,
+  GodotApplePlugins, FateboundNotifyIOS, export, every check and the unsigned iPhone build (Xcode 26.3, iOS 26.2 SDK)
+  -- BUILD SUCCEEDED; the x86_64 Simulator build too. Only signing and the upload wait for Kevin's secrets.
+- Android, last check: the Play AAB built from 0.31.132 (throwaway key, preset.0 untouched): BASE OK, CONTENT OK,
+  play_games true, bundletool valid.
