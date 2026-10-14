@@ -17,12 +17,12 @@
 <body>
 <main>
 <h1>Fatebound Privacy Policy</h1>
-<p class="meta">Effective 22 September 2026, updated 12 October 2026<br>Developer: midblade4295<br>App: Fatebound (package com.fatebound.game)</p>
+<p class="meta">Effective 22 September 2026, updated 13 October 2026<br>Developer: midblade4295<br>App: Fatebound (package com.fatebound.game)</p>
 
-<p>This page is the privacy policy for the Fatebound mobile game published by midblade4295 on Google Play.</p>
+<p>This page is the privacy policy for the Fatebound mobile game published by midblade4295 on Google Play and the Apple App Store.</p>
 
 <h2>Who we are</h2>
-<p>Fatebound is made and published by midblade4295. Questions: <a href="mailto:midblade4295@gmail.com">midblade4295@gmail.com</a>.</p>
+<p>Fatebound is made and published by midblade4295. Questions: <a href="mailto:vellicgames@gmail.com">vellicgames@gmail.com</a>.</p>
 
 <h2>What the app does</h2>
 <p>Fatebound is a dice arena game. Progress is stored on your device and, when the device is online, may also sync to the same LEGIONARY / Shardfall Firebase project so your games share one player id.</p>
@@ -34,7 +34,8 @@
 <li>A random player id (same format as Shardfall, kept on the device)</li>
 <li>An anonymous Firebase Auth id</li>
 <li>Game save data (gold, relics, map state, settings)</li>
-<li>For in-app purchases: the Google Play purchase token, product and order id</li>
+<li>For in-app purchases: the Google Play purchase token, product and order id; on iPhone, Apple's signed transaction (product, transaction id and a random token that ties the purchase to your game account)</li>
+<li>If you use Game Center on iPhone: a one-way hash of your Game Center player id, kept with your game account so it can be restored (see "Game Center")</li>
 <li>Anonymous usage statistics, unless you turn them off (see "Usage statistics" below)</li>
 <li>Diagnostics reports, only when you choose to send one (see "Sending a problem report" below)</li>
 </ul>
@@ -45,7 +46,9 @@
 <li>Google Fonts (fonts.googleapis.com / fonts.gstatic.com)</li>
 <li>Google Firebase (Authentication and Cloud Firestore) in project shardfall-5f5de, also used by Shardfall / LEGIONARY</li>
 <li>Our Fatebound game server, for online matches and to check purchases with Google</li>
-<li>Google Play, for in-app purchases</li>
+<li>Google Play, for in-app purchases (Android)</li>
+<li>Apple's App Store, for in-app purchases (iPhone); our game server also asks Apple's App Store Server API whether a purchase is real</li>
+<li>Apple Game Center, if you are signed in to it on your iPhone (achievements, and to restore your account)</li>
 <li>Google Play Games, if you sign in with it, to keep a copy of your progress in your Google account</li>
 <li>GitHub (raw.githubusercontent.com), to download the game’s art and sound on first launch and when they are updated. These are plain file downloads: no account and no game data is sent; like any web request, GitHub sees your IP address.</li>
 </ul>
@@ -55,6 +58,7 @@
 <p>Save data is used to restore progress and to keep a cloud copy under your anonymous id. Usage statistics are used to improve the game and fix problems. We do not sell data or build advertising profiles.</p>
 <h2>Purchases</h2>
 <p>Payment happens entirely inside Google Play; we never see card or bank details. When you buy gems, the game sends the purchase token to our game server, which asks Google whether the purchase is real before the gems are added. The server keeps a short record (product, Google order id, a hashed token, the time and the result) so a purchase is granted only once and refunds can be handled. Your save keeps the purchase token for the same reason.</p>
+<p>On iPhone, payment happens entirely inside Apple's App Store; we never see card or bank details. When you buy gems, the game sends Apple's signed record of the purchase to our game server, which checks Apple's signature and asks Apple's App Store Server API about the same purchase before the gems are added. The purchase carries a random token made from your game account id, so it is added to that account only. The server keeps the same short record as for Google Play (product, Apple transaction id, a hashed token, the time and the result). "Restore purchases" in the shop asks Apple for purchases made with your Apple ID.</p>
 
 <h2>Game server account</h2>
 <p>When the app reaches our game server it gets a game account there: a random account id and a secret key (the server keeps only a hash of the key). The server keeps your game progress (level, currencies, items, statistics and the in-game name you choose) so purchases and rewards can be checked and can't be edited on the device.</p>
@@ -75,7 +79,7 @@
 <h2>Usage statistics</h2>
 <p>To see how the game is played and to find problems, the game sends our own game server anonymous usage events. Only our server receives them: there is no analytics SDK, advertising network or other third party involved.</p>
 <ul>
-<li>What is sent: when a session starts and ends and how long it lasted; tutorial progress; matches played, their mode, result and length, and the hero you played; level-ups; use of the forge, chests and shop; daily rewards claimed; purchases the server verified (the product only); use of chat, friends and parties (counts only, never the text of a message); update screens; and start-up problems (for example the game failing to start, with no file paths or other device data).</li>
+<li>What is sent: when a session starts and ends and how long it lasted; tutorial progress; matches played, their mode, result and length, and the hero you played; level-ups; use of the forge, chests and shop; daily rewards claimed; purchases the server verified (the product only); use of chat, friends and parties (counts only, never the text of a message); update screens; whether the phone is Android or iPhone; and start-up problems (for example the game failing to start, with no file paths or other device data).</li>
 <li>It is tied only to your random game account id. We do not store your IP address, device id or advertising id with it, nor your name, chat text, purchase token or order id.</li>
 <li>It is not shared with anyone or sold. It is kept for 90 days and then deleted. It is used only to improve the game and fix problems.</li>
 <li>Turn it off at any time in Settings &rarr; "Share anonymous usage stats". The game then deletes the events still waiting on your device, tells the server once that you opted out, and sends nothing more; the server stops recording anything for your account.</li>
@@ -83,13 +87,19 @@
 </ul>
 
 <h2>Sending a problem report</h2>
-<p>Settings &rarr; "Send to developer" sends a problem report to our own game server, only when you tap Send (the game shows what it sends first). The report contains the game's own log from this phone (what the game was doing, its errors and warnings, frame times and memory use), the app version, your phone model, Android version and graphics chip, your in-game name, your game account id if you have one, and anything you type about the problem. It does not contain chat messages, purchase details, your contacts, files or anything from other apps. Your IP address is used only for a moment, in memory, to limit how many reports can be sent, and is not stored. Reports are read only by the developer to fix problems, are not shared or sold, and the server keeps only the most recent ones (older reports are deleted automatically). To have a report deleted sooner, email us with the report number the game showed you. "Copy diagnostics" in Settings copies the same log to your clipboard instead, without sending anything.</p>
+<p>Settings &rarr; "Send to developer" sends a problem report to our own game server, only when you tap Send (the game shows what it sends first). The report contains the game's own log from this phone (what the game was doing, its errors and warnings, frame times and memory use), the app version, your phone model, Android or iOS version and graphics chip, your in-game name, your game account id if you have one, and anything you type about the problem. It does not contain chat messages, purchase details, your contacts, files or anything from other apps. Your IP address is used only for a moment, in memory, to limit how many reports can be sent, and is not stored. Reports are read only by the developer to fix problems, are not shared or sold, and the server keeps only the most recent ones (older reports are deleted automatically). To have a report deleted sooner, email us with the report number the game showed you. "Copy diagnostics" in Settings copies the same log to your clipboard instead, without sending anything.</p>
 
 <h2>Google Play Games</h2>
 <p>Signing in with Google Play Games is optional. When you are signed in, the game reads your Play Games display name to show it in Settings, and keeps a copy of your game progress (the same save data that is on your device: level, currencies, items, statistics and settings) as a Saved Game in your Google account, so you can restore it on another phone. Google stores that copy under Google’s policies; it is not sent to our game server. You can delete it from the Google Play Games settings on your phone. While you are signed in, the game also reports your achievements (such as matches won or enemies knocked out) to Google Play Games, which shows them in your Google Play Games profile.</p>
 
+<h2>Game Center (iPhone)</h2>
+<p>On iPhone, the game uses Apple's Game Center if you are signed in to it in iOS Settings. The game shows your Game Center name in Settings and reports your achievements (such as matches won or enemies knocked out) to Game Center, which shows them in your Game Center profile under Apple's policies. To let a reinstalled game or a new iPhone signed in to the same Game Center player get your progress back, our game server stores a one-way hash of your Game Center player id with your game account, after checking Apple's identity signature for it. The player id itself is not stored, and it is never part of usage statistics. If the same Game Center player already has another Fatebound account, the game asks which progress to keep.</p>
+
+<h2>Moving your progress to another phone</h2>
+<p>Settings &rarr; Account &rarr; "Move to another phone" asks our game server for a one-time code (8 characters, valid for 10 minutes, kept only in the server's memory). Entering it on another phone (Android or iPhone) gives that phone its own key to the same game account. Nothing else is shared.</p>
+
 <h2>Notifications</h2>
-<p>The Google Play version of the game can show a notification when a chest has finished unlocking. It asks first (and Android asks for permission). The notification is scheduled on your phone; nothing is sent to us or anyone else for it. Turn it off in Settings &rarr; Notifications, or in Android's settings.</p>
+<p>The game can show a notification when a chest has finished unlocking (on Android and iPhone). It asks first (and Android or iOS asks for permission). The notification is scheduled on your phone; nothing is sent to us or anyone else for it. Turn it off in Settings &rarr; Notifications, or in your phone's settings.</p>
 
 <h2>Links to Discord</h2>
 <p>Settings &rarr; "Join our Discord" opens our community's invite link in your browser or the Discord app, and gives a one-time gift of gems in the game for it (recorded on your game server account so it is given only once). The game sends nothing to Discord; what you share there is covered by Discord's own privacy policy.</p>
@@ -101,13 +111,13 @@
 <p>Fatebound is general-audience fantasy combat. We do not knowingly collect a child’s real-world identity. There is no email sign-up.</p>
 
 <h2>Retention and deletion</h2>
-<p>There is no email-and-password Fatebound account. To delete local data, clear the app storage or uninstall. Usage statistics are deleted automatically after 90 days. To ask us to delete a cloud save, your game server account, its usage statistics, a problem report you sent, or your friends list and any reports about you, email <a href="mailto:midblade4295@gmail.com">midblade4295@gmail.com</a> with the player id shown by the game if you have it (it looks like SF-XXXX-XXXX).</p>
+<p>There is no email-and-password Fatebound account. Settings &rarr; Account &rarr; "Delete account" deletes your game server account (progress, currencies, items, purchases recorded on it, your Game Center link, your name, friends and blocks, and your leaderboard place) right away; nothing more is recorded for it, and its usage statistics are deleted with the rest after 90 days. The short purchase record (a hashed token, product, time and result) is kept so a purchase can't be added twice. To delete local data, clear the app storage or uninstall. Usage statistics are deleted automatically after 90 days. To ask us to delete a cloud save, your game server account, its usage statistics, a problem report you sent, or your friends list and any reports about you, email <a href="mailto:vellicgames@gmail.com">vellicgames@gmail.com</a> with the player id shown by the game if you have it (it looks like SF-XXXX-XXXX).</p>
 
 <h2>Security</h2>
 <p>Cloud writes require an anonymous Firebase session. Protect the device with a lock screen.</p>
 
 <h2>Contact</h2>
-<p>midblade4295<br><a href="mailto:midblade4295@gmail.com">midblade4295@gmail.com</a><br>App: Fatebound</p>
+<p>midblade4295<br><a href="mailto:vellicgames@gmail.com">vellicgames@gmail.com</a><br>App: Fatebound</p>
 </main>
 </body>
 </html>
