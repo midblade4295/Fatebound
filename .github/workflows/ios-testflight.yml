@@ -5,7 +5,8 @@ name: iOS TestFlight
 # GitHub's Mac and, in "testflight" mode, uploads the .ipa to App Store Connect for TestFlight. It never submits
 # anything for App Store review and never releases: Kevin decides that in App Store Connect.
 #   testflight        Godot export -> signed archive -> .ipa -> checks -> TestFlight upload (needs the secrets below)
-#   simulator-check   the same project built for the iOS Simulator, unsigned: proves it compiles and links (no secrets)
+#   build-check       the same project built unsigned for iPhone (arm64): proves it compiles and links, no secrets;
+#                     plus a best-effort iOS Simulator build (x86_64: Godot's Simulator library has only that slice)
 # Secrets (names only; the values live in GitHub > Settings > Secrets and never in git, logs or chat):
 #   IOS_DIST_CERT_P12_BASE64, IOS_DIST_CERT_PASSWORD   the Apple Distribution certificate + its private key (.p12)
 #   IOS_PROVISIONING_PROFILE_BASE64                   the App Store provisioning profile for com.fatebound.game
@@ -26,9 +27,9 @@ on:
         description: "Build number (CFBundleVersion): the Play versionCode, e.g. 216 -- must only go up"
         required: true
       mode:
-        description: "testflight = sign and upload; simulator-check = build for the Simulator only (no secrets)"
+        description: "testflight = sign and upload; build-check = unsigned build only (no secrets)"
         type: choice
-        options: [testflight, simulator-check]
+        options: [testflight, build-check]
         default: testflight
 
 permissions:
@@ -155,14 +156,26 @@ jobs:
             grep -rq "$sym" "$OUT/Fatebound" || { echo "missing $sym"; exit 1; }
           done
 
-      - name: Build for the iOS Simulator (unsigned)
-        if: inputs.mode == 'simulator-check'
+      - name: Build for iPhone, unsigned (compiles and links everything; no secrets)
+        if: inputs.mode == 'build-check'
         run: |
           set -euo pipefail
           xcodebuild -project "$OUT/Fatebound.xcodeproj" -scheme Fatebound -configuration Release \
-            -sdk iphonesimulator -destination "generic/platform=iOS Simulator" -derivedDataPath "$RUNNER_TEMP/dd" \
-            CODE_SIGNING_ALLOWED=NO build | tail -40
-          app="$(ls -d "$RUNNER_TEMP"/dd/Build/Products/Release-iphonesimulator/*.app | head -1)"
+            -sdk iphoneos -destination "generic/platform=iOS" -derivedDataPath "$RUNNER_TEMP/dd" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build | tail -40
+          app="$(ls -d "$RUNNER_TEMP"/dd/Build/Products/Release-iphoneos/*.app | head -1)"
+          ls -la "$app" | head -30
+          test -f "$app/Fatebound.pck"
+
+      - name: Build for the iOS Simulator (best effort; x86_64, runs under Rosetta)
+        if: inputs.mode == 'build-check'
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          xcodebuild -project "$OUT/Fatebound.xcodeproj" -scheme Fatebound -configuration Release \
+            -sdk iphonesimulator -destination "generic/platform=iOS Simulator" -derivedDataPath "$RUNNER_TEMP/ddsim" \
+            ARCHS=x86_64 ONLY_ACTIVE_ARCH=NO CODE_SIGNING_ALLOWED=NO build | tail -40
+          app="$(ls -d "$RUNNER_TEMP"/ddsim/Build/Products/Release-iphonesimulator/*.app | head -1)"
           ditto -c -k --keepParent "$app" "$OUT/Fatebound-simulator.app.zip"
 
       - name: Signing (a throwaway keychain; the certificate and profile from secrets)

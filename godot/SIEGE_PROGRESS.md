@@ -3861,7 +3861,7 @@ K2/K3 notes (0.17.0)
 - .github/workflows/ios-testflight.yml (manual only; to main, the only file there, as Kevin chose): macos-15, Godot
   4.7.2 editor + iOS template (SHA-512 from Godot's SHA512-SUMS), tools/ios_plugins.sh, the version from the inputs,
   export of the Xcode project, checks (base pck, plists, bundle id, version, deployment target, Game Center
-  entitlement, the three plugins' entry symbols), then either an unsigned Simulator build (simulator-check) or a
+  entitlement, the three plugins' entry symbols), then either an unsigned iPhone build (build-check) or a
   throwaway keychain with the distribution .p12 and the profile from secrets, archive, export (app-store-connect,
   manual signing), the .ipa checked again, altool validate + upload to TestFlight (never review), artifacts (the .ipa
   or Simulator app and logs), and the keychain and keys deleted in an always() step.
