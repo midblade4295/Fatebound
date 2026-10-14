@@ -1,44 +1,27 @@
 extends Control
-# 0.31.135 (Kevin, Crown War step 2: "3D table map"): the war map as a war table. Each place of scripts/meta/war_map.gd
-# is a KayKit hex tile on a wooden table (the model of what stands there: a mill, a church, a mine, a castle for the
-# homes), on a plinth in the colour of the house that holds it, with that house's banner; links run between them. A
-# battle on now pulses in orange. Under the table: the place tapped -- who holds it, the clans' capture bars, the
-# battle on it (JOIN for your house, DEFEND for the holders) and ATTACK (with CALL MY CLAN), or why not. Above it:
-# the week's end, your attempts today, and each house's land. The state is the server's (server/world.gd), pushed to
+# 0.31.135 (Kevin, Crown War step 2): the war map. 0.31.137 (Kevin: "I don't like how static the map looks. I want it
+# to look like a real natural land mass but in map form"): one continent in a living sea (tools/war_land.py makes it:
+# coast, mountains, the river through Silver Lake, marsh and fen, farmland, forests, roads along the links, a ridge on
+# every border without one), each place's land tinted with the colour of the house that holds it and outlined, its
+# Meshy miniature (0.31.136) standing in it, the sea's waves and foam moving, cloud shadows drifting over it all.
+# Tap a place's land to pick it. Under the map: the place picked -- who holds it, the clans' capture bars, the battle
+# on it (JOIN for your house, DEFEND for the holders) and ATTACK (with CALL CLAN), or why not. Above it: the week's
+# end, your attempts today, and each house's land. The state is the server's (server/world.gd), pushed to
 # scripts/meta/social.gd while this is open.
 const UI = preload("res://scripts/app/ui.gd")
 const UI2 = preload("res://scripts/app/ui2.gd")
 const SocialUI = preload("res://scripts/app/social_ui.gd")
 const Map = preload("res://scripts/meta/war_map.gd")
 const Stage = preload("res://scripts/siege/asset_cache.gd")
-const HEX := "res://assets/kaykit/hex/"
-const PIECES := "res://assets/meshy/war/"   # 0.31.136: each place's Meshy miniature (tools/meshy_war_piece.py), <id>.glb
-const S := 2.0                         # map units -> table units
-const NEUTRAL := Color("#6f6a60")
-const CAM_POS := Vector3(0.0, 15.0, 12.5)   # (0.31.136: lower, so the miniatures show their sides)
-const CAM_AT := Vector3(0.0, -0.5, -0.4)
+const LandData = preload("res://scripts/app/war_land_data.gd")   # (tools/war_land.py: the grid, each place's spot)
+const LandShader = preload("res://scripts/app/war_land.gdshader")
+const SeaShader = preload("res://scripts/app/war_sea.gdshader")
+const LAND := "res://assets/war_land/"
+const PIECES := "res://assets/meshy/war/"   # each place's Meshy miniature (0.31.136, tools/meshy_war_piece.py)
+const CAM_DIR := Vector3(0.0, 15.0, 11.0)   # where the camera looks from (how far: _fit_camera)
 const CAM_FOV := 32.0
-const PLINTH_YAW := PI / 6.0                 # (corners on +-X, sides facing the neighbours -- like the pieces)
-const GROUND_TINT := Color(0.72, 0.9, 0.62)   # KayKit's grass is a yellow-green: a deeper green on the table
-# what stands on each kind of place: [base tile, [model, scale, offset x, offset z, yaw]...]
-const LOOKS := {
-	"castle": ["hex_grass", [["building_castle_blue", 0.62, 0.0, 0.0, 0.0]]],
-	"mill":   ["hex_grass", [["building_lumbermill_blue", 0.85, -0.1, 0.0, 0.6], ["tree_single_A", 1.6, 0.6, 0.45, 0.0]]],
-	"tower":  ["hex_grass", [["building_tower_A_blue", 0.85, 0.0, 0.0, 0.0], ["tree_single_B", 1.4, -0.6, 0.4, 0.0]]],
-	"abbey":  ["hex_grass", [["building_church_blue", 0.95, 0.0, 0.0, 0.3]]],
-	"pass":   ["hex_grass", [["mountain_A_grass_trees", 0.78, 0.0, 0.0, 0.0]]],
-	"quarry": ["hex_grass", [["rock_single_A", 2.6, -0.35, -0.2, 0.0], ["rock_single_C", 2.4, 0.35, 0.25, 1.0], ["resource_stone", 1.2, 0.1, -0.5, 0.0]]],
-	"ford":   ["hex_road_A", [["tree_single_A", 1.5, 0.55, -0.45, 0.0], ["tree_single_B", 1.3, -0.55, 0.45, 0.0]]],
-	"lake":   ["hex_water", []],
-	"bridge": ["hex_road_B", [["building_tower_base_blue", 0.55, 0.0, 0.0, 0.0]]],
-	"mine":   ["hex_grass", [["building_mine_blue", 0.8, 0.0, 0.0, 0.0]]],
-	"marsh":  ["hex_grass", [["hills_C_trees", 0.85, 0.0, 0.0, 0.0]]],
-	"woods":  ["hex_grass", [["trees_A_large", 0.95, 0.0, 0.0, 0.0]]],
-	"forge":  ["hex_grass", [["building_blacksmith_blue", 0.95, 0.0, 0.0, 0.2]]],
-	"cliffs": ["hex_grass", [["mountain_B_grass_trees", 0.72, 0.0, 0.0, 0.0]]],
-	"fen":    ["hex_water", [["tree_single_B", 1.4, 0.3, 0.2, 0.0]]],
-	"port":   ["hex_grass", [["building_market_blue", 0.85, 0.0, 0.0, -0.4], ["barrel", 1.6, 0.6, 0.5, 0.0]]],
-}
+const TREE_TINT := Color(0.62, 0.8, 0.5)
+const RAISE := 0.14                          # the place picked lifts its miniature a little
 
 var app
 var social
@@ -52,14 +35,22 @@ var _cam: Camera3D
 var _overlay: Control
 var _sheet: VBoxContainer
 var _stats: HBoxContainer
-var _tiles := {}                       # id -> {"pos": Vector3, "node": Node3D, "plinth": MeshInstance3D, "tile": Node3D, "ring": MeshInstance3D}
+var _tiles := {}                       # id -> {"pos": Vector3 (its ground), "node": Node3D (its miniature, or null), "swords": Sprite3D}
+var _land_mat: ShaderMaterial
+var _region_img: Image                 # (picking: which place's land a tap is on)
 var _names_btn: Button
 var _fit_size := Vector2i.ZERO
 var names := false                     # every place's name on the table (NAMES); else the one picked and battles only
 var _labels := {}                      # id -> PanelContainer over the table
-var _mats := {}
 var _clock := 0.0
 var _press_at := Vector2.INF
+var _touch := {}                       # finger index -> where it is
+var _dragged := false
+var _mouse_down := false
+var _cam_at := Vector3.ZERO            # (_fit_camera: where the camera aims and how far back, at zoom 1)
+var _cam_dist := 20.0
+var _zoom := 1.0
+var _pan := Vector2.ZERO
 
 func open(a, first := "") -> void:
 	app = a
@@ -135,49 +126,23 @@ func _on_went(ans: Dictionary) -> void:
 		app.toast(str(ans.get("why", "Can't attack there")), UI.RED)
 		_dirty = true
 
-# ---------------- the table (3D) ----------------
+# ---------------- the map (3D) ----------------
 static func tile_pos(id: String) -> Vector3:
-	# the map lies on its side so it fits a phone held upright: map y across, map x away from you (Lions near)
-	var p: Vector2 = Map.T[id].p
-	return Vector3((p.y - 2.65) * S, 0.0, (3.8 - p.x) * S)
+	# a place's spot on the land (x right, z toward you; the Lions near, the Stags far, the Ravens east)
+	var e: Dictionary = LandData.PLACES.get(id, {})
+	return Vector3(float(e.get("x", 0.0)), float(e.get("y", 0.0)), float(e.get("z", 0.0)))
 
-func _mat(key: String, col: Color, emit := 0.0) -> StandardMaterial3D:
-	if not _mats.has(key):
-		var m := StandardMaterial3D.new()
-		m.albedo_color = col
-		m.roughness = 0.85
-		if emit > 0.0:
-			m.emission_enabled = true
-			m.emission = col
-			m.emission_energy_multiplier = emit
-		_mats[key] = m
-	return _mats[key]
-
-func _model(parent: Node3D, name: String, at: Vector3, scale: float, yaw := 0.0) -> Node3D:
-	var ps: PackedScene = Stage.scene(HEX + name + ".gltf")
-	if ps == null:
-		return null
-	var n := ps.instantiate() as Node3D
-	n.position = at
-	n.scale = Vector3.ONE * scale
-	n.rotation.y = yaw
-	parent.add_child(n)
-	return n
-
-func _tint(n: Node, col: Color) -> void:
-	# the base tile only (the models share one atlas material): a tinted copy of it, kept for the whole table
-	if n == null:
-		return
-	for mi in n.find_children("*", "MeshInstance3D", true, false):
-		var m := (mi as MeshInstance3D).get_active_material(0) as StandardMaterial3D
-		if m == null:
-			continue
-		var key := "tint_%d" % m.get_instance_id()
-		if not _mats.has(key):
-			var d := m.duplicate() as StandardMaterial3D
-			d.albedo_color = m.albedo_color * col
-			_mats[key] = d
-		(mi as MeshInstance3D).material_override = _mats[key]
+static func _noise_tex(freq: float, seed: int, size := 256) -> NoiseTexture2D:
+	var n := FastNoiseLite.new()
+	n.seed = seed
+	n.frequency = freq
+	n.fractal_octaves = 4
+	var t := NoiseTexture2D.new()
+	t.width = size
+	t.height = size
+	t.seamless = true
+	t.noise = n
+	return t
 
 func _build_table() -> void:
 	var root := Node3D.new()
@@ -185,94 +150,91 @@ func _build_table() -> void:
 	var env := WorldEnvironment.new()
 	var e := Environment.new()
 	e.background_mode = Environment.BG_COLOR
-	e.background_color = Color("#0b1024")
+	e.background_color = Color("#0a1a33")
 	e.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	e.ambient_light_color = Color("#c8d4ff")
-	e.ambient_light_energy = 0.6
+	e.ambient_light_color = Color("#cfdcff")
+	e.ambient_light_energy = 0.62
 	e.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	e.fog_enabled = true
+	e.fog_light_color = Color("#0d2140")
+	e.fog_density = 0.005
 	env.environment = e
 	root.add_child(env)
 	var sun := DirectionalLight3D.new()
-	sun.rotation = Vector3(deg_to_rad(-58.0), deg_to_rad(-32.0), 0.0)
-	sun.light_energy = 1.2
-	sun.light_color = Color("#fff1d8")
+	sun.rotation = Vector3(deg_to_rad(-52.0), deg_to_rad(-38.0), 0.0)
+	sun.light_energy = 1.25
+	sun.light_color = Color("#fff3dc")
 	sun.shadow_enabled = true
-	sun.directional_shadow_max_distance = 40.0
+	sun.directional_shadow_max_distance = 45.0
 	root.add_child(sun)
-	# the table and its cloth
-	var table := MeshInstance3D.new()
-	var tb := BoxMesh.new()
-	tb.size = Vector3(10.6, 0.5, 16.0)
-	table.mesh = tb
-	table.position = Vector3(0, -1.32, 0)
-	table.material_override = _mat("wood", Color("#5a3a22"))
-	root.add_child(table)
-	var cloth := MeshInstance3D.new()
-	var cm := BoxMesh.new()
-	cm.size = Vector3(9.6, 0.04, 15.0)
-	cloth.mesh = cm
-	cloth.position = Vector3(0, -1.06, 0)
-	cloth.material_override = _mat("cloth", Color("#c9b48a"))
-	root.add_child(cloth)
-	# links: planks between the places (seen in the gaps between the tiles)
-	for l in Map.LINKS:
-		var a := tile_pos(str(l[0]))
-		var b := tile_pos(str(l[1]))
-		var mid := (a + b) * 0.5
-		var d := b - a
-		var lk := MeshInstance3D.new()
-		var lb := BoxMesh.new()
-		lb.size = Vector3(0.3, 0.1, d.length())
-		lk.mesh = lb
-		lk.position = Vector3(mid.x, -0.33, mid.z)
-		lk.rotation.y = atan2(d.x, d.z)
-		lk.material_override = _mat("link", Color("#b08a52"))
-		root.add_child(lk)
-	# the places
+	var regions: Texture2D = Stage.texture(LAND + "land_regions.png")
+	var clouds := _noise_tex(0.006, 7)
+	# the land
+	var land_scene: PackedScene = Stage.scene(LAND + "land.glb")
+	if land_scene != null:
+		var land := land_scene.instantiate() as Node3D
+		root.add_child(land)
+		_land_mat = ShaderMaterial.new()
+		_land_mat.shader = LandShader
+		_land_mat.set_shader_parameter("color_tex", Stage.texture(LAND + "land_color.jpg"))
+		_land_mat.set_shader_parameter("region_id", regions)
+		_land_mat.set_shader_parameter("region_lin", regions)
+		_land_mat.set_shader_parameter("cloud_tex", clouds)
+		for mi in land.find_children("*", "MeshInstance3D", true, false):
+			(mi as MeshInstance3D).material_override = _land_mat
+	if regions != null:
+		_region_img = regions.get_image()
+		if _region_img != null and _region_img.is_compressed():
+			_region_img.decompress()
+	# the sea (and the lake, the river, the pools): one sheet at sea level
+	var sea := MeshInstance3D.new()
+	var pm := PlaneMesh.new()
+	pm.size = Vector2(80.0, 80.0)
+	sea.mesh = pm
+	var sm := ShaderMaterial.new()
+	sm.shader = SeaShader
+	sm.set_shader_parameter("region_lin", regions)
+	sm.set_shader_parameter("wave_tex", _noise_tex(0.02, 3))
+	sm.set_shader_parameter("cloud_tex", clouds)
+	sm.set_shader_parameter("map_rect", Vector4(LandData.X0, LandData.Z0, LandData.X1 - LandData.X0, LandData.Z1 - LandData.Z0))
+	sm.set_shader_parameter("h_min", LandData.H_MIN)
+	sm.set_shader_parameter("h_max", LandData.H_MAX)
+	sea.material_override = sm
+	sea.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(sea)
+	# the forests' trees (KayKit's, many at once)
+	_plant_trees(root)
+	# the places: each miniature standing in its land (sunk so its base hides under the ground), crossed swords
+	# over a battle
+	var swords_tex: Texture2D = Stage.texture(UI2.icon_path("swords"))
 	for id in Map.T:
 		var pos := tile_pos(id)
-		var t := Node3D.new()
-		t.position = pos
-		root.add_child(t)
-		var plinth := MeshInstance3D.new()
-		var pm := CylinderMesh.new()
-		pm.radial_segments = 6
-		pm.top_radius = 1.375
-		pm.bottom_radius = 1.4
-		pm.height = 0.9
-		plinth.mesh = pm
-		plinth.position = Vector3(0, -0.72, 0)                # (its top a ledge just under the tile's -- and the water's -- in the holder's colour)
-		plinth.rotation.y = PLINTH_YAW
-		plinth.material_override = _mat("neutral", NEUTRAL)
-		t.add_child(plinth)
-		var tile: Node3D = null
-		var piece: String = PIECES + str(id) + ".glb"
-		if ResourceLoader.exists(piece):
-			tile = (Stage.scene(piece) as PackedScene).instantiate() as Node3D   # the place's own miniature
-			t.add_child(tile)
-		else:
-			# (no miniature for it: a KayKit tile and what stands on it)
-			var look: Array = LOOKS.get(str(Map.T[id].look), LOOKS.lake)
-			tile = _model(t, str(look[0]), Vector3.ZERO, 1.0, PI * 0.5)
-			_tint(tile, GROUND_TINT)
-			for d in look[1]:
-				_model(t, str(d[0]), Vector3(float(d[2]), 0.0, float(d[3])), float(d[1]), float(d[4]))
-		var ring := MeshInstance3D.new()
-		var rm := TorusMesh.new()
-		rm.inner_radius = 1.2
-		rm.outer_radius = 1.42
-		rm.rings = 24
-		rm.ring_segments = 6
-		ring.mesh = rm
-		ring.position = Vector3(0, 0.08, 0)
-		ring.material_override = _mat("battle", Color("#ff8a2a"), 2.0)
-		ring.visible = false
-		t.add_child(ring)
-		_tiles[id] = {"pos":pos, "node":t, "plinth":plinth, "tile":tile, "ring":ring}
+		var e2: Dictionary = LandData.PLACES.get(id, {})
+		var node: Node3D = null
+		var piece: String = PIECES + str(e2.get("piece", "")) + ".glb"
+		if str(e2.get("piece", "")) != "" and ResourceLoader.exists(piece):
+			node = Node3D.new()
+			node.position = pos
+			root.add_child(node)
+			var m := (Stage.scene(piece) as PackedScene).instantiate() as Node3D
+			m.scale = Vector3.ONE * float(e2.get("scale", 0.5))
+			m.position.y = float(e2.get("sink", 0.0))
+			m.rotation.y = deg_to_rad(float(e2.get("yaw", 0.0)))
+			node.add_child(m)
+		var sw := Sprite3D.new()
+		sw.texture = swords_tex
+		sw.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		sw.pixel_size = 0.0045
+		sw.no_depth_test = true
+		sw.position = pos + Vector3(0.0, 1.35, 0.0)
+		sw.visible = false
+		root.add_child(sw)
+		_tiles[id] = {"pos":pos, "node":node, "swords":sw}
 	_cam = Camera3D.new()
 	_cam.fov = CAM_FOV
-	_cam.keep_aspect = Camera3D.KEEP_HEIGHT       # (_fit_camera moves it so the map fills whatever room it has)
-	_cam.transform = Transform3D(Basis.looking_at(CAM_AT - CAM_POS, Vector3.UP), CAM_POS)   # (not in the tree yet)
+	_cam.keep_aspect = Camera3D.KEEP_HEIGHT       # (_fit_camera moves it so the land fills whatever room it has)
+	_cam.transform = Transform3D(Basis.looking_at(-CAM_DIR, Vector3.UP), CAM_DIR)   # (not in the tree yet)
+	_cam.far = 120.0
 	root.add_child(_cam)
 	_cam.current = true
 	for id in Map.T:
@@ -308,24 +270,151 @@ func _build_table() -> void:
 		_overlay.add_child(lp)
 		_labels[id] = lp
 
+func _plant_trees(root: Node3D) -> void:
+	var kinds := ["tree_single_A", "tree_single_B"]
+	for k in kinds.size():
+		var ps: PackedScene = Stage.scene("res://assets/kaykit/hex/%s.gltf" % kinds[k])
+		if ps == null:
+			continue
+		var inst := ps.instantiate()
+		var mis := inst.find_children("*", "MeshInstance3D", true, false)
+		if mis.is_empty():
+			inst.free()
+			continue
+		var mi := mis[0] as MeshInstance3D
+		var mesh: Mesh = mi.mesh
+		var base := mi.transform
+		inst.free()
+		var list := []
+		for t in LandData.TREES:
+			if int(t[4]) == k:
+				list.append(t)
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.mesh = mesh
+		mm.instance_count = list.size()
+		for i in list.size():
+			var t: Array = list[i]
+			var sc := float(t[3])
+			var b := Basis(Vector3.UP, fmod(float(t[0]) * 12.7 + float(t[2]) * 7.3, TAU)).scaled(Vector3.ONE * sc)
+			mm.set_instance_transform(i, Transform3D(b, Vector3(float(t[0]), float(t[1]) - 0.02, float(t[2]))) * base)
+		var mmi := MultiMeshInstance3D.new()
+		mmi.multimesh = mm
+		var src := mesh.surface_get_material(0) as StandardMaterial3D
+		if src != null:
+			var tm := src.duplicate() as StandardMaterial3D
+			tm.albedo_color = src.albedo_color * TREE_TINT                # (KayKit's teal leaves: a deeper green)
+			mmi.material_override = tm
+		root.add_child(mmi)
+
+func region_at(at: Vector2) -> String:
+	# which place's land is under a point of the map's rectangle ("" for the sea)
+	if _region_img == null or _cam == null:
+		return ""
+	var sp := at * (Vector2(_vp.size) / _vpc.size) if _vpc.size.x > 0 else at
+	var o := _cam.project_ray_origin(sp)
+	var d := _cam.project_ray_normal(sp)
+	if absf(d.y) < 0.0001:
+		return ""
+	var hit := o + d * ((0.15 - o.y) / d.y)
+	var u := (hit.x - LandData.X0) / (LandData.X1 - LandData.X0)
+	var v := (hit.z - LandData.Z0) / (LandData.Z1 - LandData.Z0)
+	if u < 0.0 or v < 0.0 or u >= 1.0 or v >= 1.0:
+		return ""
+	var px := _region_img.get_pixel(int(u * _region_img.get_width()), int(v * _region_img.get_height()))
+	var idx := int(round(px.r * 255.0))
+	return str(LandData.IDS[idx]) if idx < LandData.IDS.size() else ""
+
 # ---------------- input ----------------
 func _on_table_input(ev: InputEvent) -> void:
-	var at := Vector2.INF
-	var down := false
-	if ev is InputEventMouseButton and (ev as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
-		at = (ev as InputEventMouseButton).position
-		down = ev.pressed
-	elif ev is InputEventScreenTouch:
-		at = (ev as InputEventScreenTouch).position
-		down = ev.pressed
-	if at == Vector2.INF:
+	# a tap picks the place under it; one finger (or the mouse) drags the map, two pinch it closer (or the wheel)
+	if ev is InputEventMouse and (ev as InputEventMouse).device == InputEvent.DEVICE_ID_EMULATION:
+		return                                   # (the phone's touches arrive as touches; skip their mouse copies)
+	if ev is InputEventScreenTouch:
+		var st := ev as InputEventScreenTouch
+		if st.pressed:
+			_touch[st.index] = st.position
+			if _touch.size() == 1:
+				_press_at = st.position
+				_dragged = false
+		else:
+			_touch.erase(st.index)
+			if _touch.is_empty():
+				if not _dragged and _press_at != Vector2.INF and st.position.distance_to(_press_at) < 24.0:
+					pick_at(st.position)
+				_press_at = Vector2.INF
 		return
-	if down:
-		_press_at = at
+	if ev is InputEventScreenDrag:
+		var sd := ev as InputEventScreenDrag
+		var before: Vector2 = _touch.get(sd.index, sd.position - sd.relative)
+		_touch[sd.index] = sd.position
+		if _touch.size() >= 2:
+			var keys := _touch.keys()
+			var other: Vector2 = _touch[keys[0] if keys[0] != sd.index else keys[1]]
+			var d0 := before.distance_to(other)
+			var d1 := sd.position.distance_to(other)
+			if d0 > 4.0:
+				_zoom *= d1 / d0
+			_dragged = true
+		else:
+			if _press_at != Vector2.INF and sd.position.distance_to(_press_at) > 24.0:
+				_dragged = true
+			if _dragged:
+				_pan_by(sd.relative)
+		_apply_cam()
 		return
-	if _press_at != Vector2.INF and at.distance_to(_press_at) < 24.0:
-		pick_at(at)
-	_press_at = Vector2.INF
+	if ev is InputEventMouseButton:
+		var mb := ev as InputEventMouseButton
+		if mb.pressed and mb.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]:
+			_zoom *= 1.12 if mb.button_index == MOUSE_BUTTON_WHEEL_UP else 1.0 / 1.12
+			_apply_cam()
+			return
+		if mb.button_index != MOUSE_BUTTON_LEFT:
+			return
+		if mb.pressed:
+			_press_at = mb.position
+			_dragged = false
+			_mouse_down = true
+		else:
+			if _mouse_down and not _dragged and _press_at != Vector2.INF and mb.position.distance_to(_press_at) < 24.0:
+				pick_at(mb.position)
+			_mouse_down = false
+			_press_at = Vector2.INF
+		return
+	if ev is InputEventMouseMotion and _mouse_down:
+		var mm := ev as InputEventMouseMotion
+		if _press_at != Vector2.INF and mm.position.distance_to(_press_at) > 24.0:
+			_dragged = true
+		if _dragged:
+			_pan_by(mm.relative)
+			_apply_cam()
+		return
+	if ev is InputEventMagnifyGesture:
+		_zoom *= (ev as InputEventMagnifyGesture).factor
+		_apply_cam()
+	elif ev is InputEventPanGesture:
+		_pan_by(-(ev as InputEventPanGesture).delta * 12.0)
+		_apply_cam()
+
+func _pan_by(rel: Vector2) -> void:
+	# the land follows the finger: a pixel is so much ground at the camera's distance
+	if _cam == null or _vp.size.y <= 0:
+		return
+	var rel_vp := rel * (Vector2(_vp.size) / _vpc.size) if _vpc.size.x > 0 else rel
+	var wpp := 2.0 * (_cam_dist / _zoom) * tan(deg_to_rad(CAM_FOV) * 0.5) / float(_vp.size.y)
+	var elev := atan2(CAM_DIR.y, Vector2(CAM_DIR.x, CAM_DIR.z).length())
+	_pan.x -= rel_vp.x * wpp
+	_pan.y -= rel_vp.y * wpp / maxf(0.3, sin(elev))
+
+func _apply_cam() -> void:
+	# the camera: where _fit_camera put it, closer by the zoom, moved by the pan (kept over the land)
+	_zoom = clampf(_zoom, 1.0, 3.2)
+	var k := 1.0 - 1.0 / _zoom
+	_pan.x = clampf(_pan.x, -4.0 * k, 4.0 * k)
+	_pan.y = clampf(_pan.y, -7.0 * k, 7.0 * k)
+	var dir := CAM_DIR.normalized()
+	var at := _cam_at + Vector3(_pan.x, 0.0, _pan.y)
+	_cam.transform = Transform3D(Basis.looking_at(-dir, Vector3.UP), at + dir * (_cam_dist / _zoom))
 
 func screen_of(id: String) -> Vector2:
 	# where a place's centre is on the table, in this window's table rectangle
@@ -336,13 +425,15 @@ func _screen(p: Vector3) -> Vector2:
 	return sp * (_vpc.size / Vector2(_vp.size)) if _vp.size.x > 0 else sp
 
 func pick_at(at: Vector2) -> String:
-	var best := ""
-	var best_d := 70.0
-	for id in _tiles:
-		var d := screen_of(id).distance_to(at)
-		if d < best_d:
-			best = id
-			best_d = d
+	# the place whose land is under the tap (or, on the sea, the nearest place's spot within reach)
+	var best := region_at(at)
+	if best == "":
+		var best_d := 60.0
+		for id in _tiles:
+			var d := screen_of(id).distance_to(at)
+			if d < best_d:
+				best = id
+				best_d = d
 	if best != "":
 		select(best)
 	return best
@@ -356,19 +447,19 @@ func select(id: String) -> void:
 
 # ---------------- every frame ----------------
 func _fit_camera() -> void:
-	# the camera looks at the table from CAM_POS's angle; how far back, and how high it aims, are set so every place
-	# (its base and what stands on it) fills the table's rectangle, under the NAMES button -- tall phone or short
+	# the camera looks at the land from CAM_DIR; how far back, and where it aims, are set so the whole land fills the
+	# map's rectangle, under the NAMES button -- tall phone or short
 	var sz := Vector2(_vp.size)
 	_fit_size = _vp.size
 	if sz.x < 8.0 or sz.y < 8.0:
 		return
-	var dir := (CAM_POS - CAM_AT).normalized()
+	var dir := CAM_DIR.normalized()
 	var pts: Array[Vector3] = []
 	for id in _tiles:
 		var p: Vector3 = _tiles[id].pos
-		for c in [Vector3(-1.2, -0.3, 0.0), Vector3(1.2, -0.3, 0.0), Vector3(0.0, -0.3, 1.1), Vector3(0.0, -0.3, -1.1), Vector3(0.0, 2.3, 0.0)]:
-			pts.append(p + c)
-	var at := CAM_AT
+		for c in [Vector3(-1.5, 0.0, 0.0), Vector3(1.5, 0.0, 0.0), Vector3(0.0, 0.0, 1.4), Vector3(0.0, 0.0, -1.4), Vector3(0.0, 1.2, 0.0)]:
+			pts.append(Vector3(p.x, 0.0, p.z) + c)
+	var at := Vector3.ZERO
 	var top := 42.0
 	for pass_n in 3:
 		var lo := 4.0
@@ -381,6 +472,8 @@ func _fit_camera() -> void:
 			else:
 				lo = d
 		_cam.transform = Transform3D(Basis.looking_at(-dir, Vector3.UP), at + dir * hi)
+		_cam_at = at
+		_cam_dist = hi
 		if pass_n == 2:
 			break
 		# centre it in the room left under the button
@@ -393,6 +486,7 @@ func _fit_camera() -> void:
 		var off_px := (ymin + ymax) * 0.5 - (top + sz.y - 8.0) * 0.5
 		var per_px := 2.0 * hi * tan(deg_to_rad(_cam.fov) * 0.5) / sz.y
 		at -= _cam.transform.basis.y * off_px * per_px
+	_apply_cam()
 
 func _fits(pts: Array[Vector3], sz: Vector2, top: float) -> bool:
 	for q in pts:
@@ -410,20 +504,20 @@ func _process(delta: float) -> void:
 	if _dirty:
 		_dirty = false
 		_render()
-	# labels follow their places; the battle rings pulse; the place picked stands up a little
+	# labels follow their places; the place picked lifts its miniature; crossed swords bob over a battle
 	for id in _labels:
 		var lp: PanelContainer = _labels[id]
-		var p := _screen(_tiles[id].pos + Vector3(0, 0, 0.7))     # (on the tile's near edge, clear of what stands on it)
+		var p := _screen(_tiles[id].pos + Vector3(0, 0, 0.55))
 		lp.position = (p - Vector2(lp.size.x * 0.5, 0.0)).round()
 	for id in _tiles:
 		var t: Dictionary = _tiles[id]
-		var n: Node3D = t.node
-		var want := 0.28 if id == sel else 0.0
-		n.position.y = lerpf(n.position.y, want, minf(1.0, delta * 10.0))
-		var r: MeshInstance3D = t.ring
-		if r.visible:
-			var k := 0.5 + 0.5 * sin(_clock * 5.0)
-			r.scale = Vector3.ONE * (1.0 + 0.06 * k)
+		if t.node != null:
+			var n: Node3D = t.node
+			var want: float = (t.pos as Vector3).y + (RAISE if id == sel else 0.0)
+			n.position.y = lerpf(n.position.y, want, minf(1.0, delta * 10.0))
+		var sw: Sprite3D = t.swords
+		if sw.visible:
+			sw.position.y = (t.pos as Vector3).y + 1.35 + 0.08 * sin(_clock * 3.0)
 
 # ---------------- the state ----------------
 func _terr(id: String) -> Dictionary:
@@ -432,12 +526,19 @@ func _terr(id: String) -> Dictionary:
 func _render() -> void:
 	var w: Dictionary = social.war
 	# the table: holders, banners, battles
+	var holders := PackedColorArray()
+	var battles := PackedFloat32Array()
+	holders.resize(LandData.IDS.size())
+	battles.resize(LandData.IDS.size())
 	for id in _tiles:
 		var t := _terr(id)
 		var h := str(t.get("h", ""))
-		var col: Color = SocialUI.house_color(h) if h != "" else NEUTRAL
-		(_tiles[id].plinth as MeshInstance3D).material_override = _mat("plinth_" + h, col.darkened(0.15)) if h != "" else _mat("neutral", NEUTRAL)
-		(_tiles[id].ring as MeshInstance3D).visible = t.has("b")
+		var col: Color = SocialUI.house_color(h) if h != "" else Color(0.85, 0.85, 0.8)
+		var k := LandData.IDS.find(id)
+		if k >= 0:
+			holders[k] = Color(col.r, col.g, col.b, 1.0 if h != "" else 0.0)
+			battles[k] = 1.0 if t.has("b") else 0.0
+		(_tiles[id].swords as Sprite3D).visible = t.has("b")
 		var lp: PanelContainer = _labels[id]
 		var sub: Label = lp.get_meta("sub")
 		var tag := ""
@@ -453,7 +554,11 @@ func _render() -> void:
 		var sb := lp.get_theme_stylebox("panel") as StyleBoxFlat
 		sb.border_color = Color.WHITE if id == sel else Color(0, 0, 0, 0)
 		sb.set_border_width_all(2 if id == sel else 0)
-	# the strip over the table
+	if _land_mat != null:
+		_land_mat.set_shader_parameter("holder", holders)
+		_land_mat.set_shader_parameter("battle", battles)
+		_land_mat.set_shader_parameter("picked", LandData.IDS.find(sel))
+	# the strip over the map
 	for c in _stats.get_children():
 		c.queue_free()
 	if w.is_empty():

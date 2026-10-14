@@ -4025,3 +4025,28 @@ standards or sounds).
 - Version 0.31.136, versionCode 222 (server code unchanged; SERVER_BUILD follows the app's version).
 - Quick suite: all 91 passed. The Play AAB built from this commit (throwaway key, presets untouched by the build):
   BASE OK (234 files, no pack data), CONTENT OK (6 packs on the branch), play_games true, bundletool valid.
+
+## 0.31.137 — the war map becomes a land
+Kevin: "I don't like how static the map looks. I want it to look like a real natural land mass but in map form."
+- tools/war_land.py (new) grows one continent in the sea around the places of scripts/meta/war_map.gd, everything
+  from one height field (so mesh, colours and regions line up): a coast with bays and a few islets, mountain ranges in
+  the north and round the High Pass, Deep Mine and Grey Cliffs, gentle hills, a river from the northern mountains past
+  the mine, under King's Bridge, through Silver Lake, across the Ford to the south coast, marsh and fen pools in the
+  south-east, a harbour at Saltport; painted colours (grass, a patchwork of fields with hedges round the Lions and the
+  Mill, forest canopy, reed beds, rock and snow, beaches, dirt roads along the links, the slopes shaded); and a rocky
+  ridge on every border two places share without a link (all 30 links are borders; the 8 borders without one are
+  ridges), so the land says where an attack can go. Writes assets/war_land/ (land.glb 53k triangles, land_color.jpg,
+  land_regions.png: place index, distance to a border, ridge, height) and scripts/app/war_land_data.gd (the grid,
+  each place's spot and ground height, its miniature's scale and sink, 428 trees).
+- war_table.gd: the land with scripts/app/war_land.gdshader (each place's land tinted with the colour of the house
+  holding it, a white border with the holder's colour along its inside, none where a ridge stands, the place picked
+  lit and outlined, a battle's land pulsing orange, cloud shadows drifting); the sea with war_sea.gdshader (turquoise
+  shallows, deep blue, drifting waves and glints, foam breathing along every shore -- the lake and river too); the
+  Meshy miniatures standing in their land (tools/meshy_war_piece.py trim takes off each one's hex base and ground; the
+  lake and the ford are the water itself); KayKit trees over the painted forests (MultiMesh); crossed swords bobbing
+  over a battle. Tap a place's land to pick it (a ray to the land, the region map says whose); one finger drags the
+  map, two pinch it closer (to 3.2x; the mouse wheel too), the camera fitted to the land at any size.
+- The "war" content pack carries assets/meshy/war (the trimmed miniatures; lake and ford dropped) and assets/war_land
+  (8.8 MB; uploaded to content-packs 055492c). The world pack is unchanged.
+- war_ui_test: the holders' tints, the miniatures in the land, the region under a point, a pinch and a drag (24 checks).
+- Version 0.31.137, versionCode 223 (server code unchanged; SERVER_BUILD follows the app's version).

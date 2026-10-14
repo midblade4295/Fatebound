@@ -12,6 +12,9 @@ image-to-3D) -> fit (here) -> assets/meshy/war/<place>.glb, which scripts/app/wa
       that hex's apothem is A (default 1.04: the table's places are 2.4 apart, their coloured ledges 1.19), centred on
       the base, its bottom at Y (default -0.27, the ledge's top). Baked into the vertices (Godot drops a glTF's single
       root transform); the texture shrunk to N (default 1024).
+  trim IN.glb OUT.glb [CUT]
+      0.31.137 (the war map became a land): the miniature without its hex base and ground -- every triangle lying
+      wholly below CUT (default: its ground, the commonest low height inside it, + 0.07) goes; what stands on it stays.
 Key from MESHY_KEY for the Meshy steps (never written to disk).
 """
 import io
@@ -127,8 +130,53 @@ def fit(src, out, apothem=1.04, bottom=-0.27, tex=1024):
         Q[:, 2].min(), Q[:, 2].max(), tris))
 
 
+def ground_of(path):
+    """the miniature's ground: the commonest height among the lower half of its inner vertices"""
+    P = gb.points(path)
+    hd = np.max([P[:, 0] * math.sin(f) + P[:, 2] * math.cos(f) for f in FLATS], axis=0)
+    ys = P[hd < 0.85 * hd.max(), 1]
+    lo, hi = ys.min(), ys.max()
+    hist, edges = np.histogram(ys[ys < lo + 0.5 * (hi - lo)], bins=60)
+    return float(edges[np.argmax(hist)] + (edges[1] - edges[0]) / 2)
+
+
+def trim(src, out, cut):
+    """0.31.137 (the war map became a land): the miniature without its hex base and ground -- every triangle lying
+    wholly below `cut` goes (the base, the grass, its water); what stands on it stays, its feet in the land"""
+    g, binc = mbt.read_glb(src)
+    binc = bytearray(binc)
+    kept = gone = 0
+    for m in g["meshes"]:
+        for p in m["primitives"]:
+            pa = g["accessors"][p["attributes"]["POSITION"]]
+            pbv = g["bufferViews"][pa["bufferView"]]
+            po = pbv.get("byteOffset", 0) + pa.get("byteOffset", 0)
+            pos = np.frombuffer(bytes(binc[po:po + pa["count"] * 12]), np.float32).reshape(-1, 3)
+            ia = g["accessors"][p["indices"]]
+            ibv = g["bufferViews"][ia["bufferView"]]
+            dt = {5121: np.uint8, 5123: np.uint16, 5125: np.uint32}[ia["componentType"]]
+            io_ = ibv.get("byteOffset", 0) + ia.get("byteOffset", 0)
+            idx = np.frombuffer(bytes(binc[io_:io_ + ia["count"] * np.dtype(dt).itemsize]), dt).reshape(-1, 3)
+            keep = pos[idx, 1].max(1) >= cut
+            new = idx[keep].reshape(-1).astype(dt)
+            binc[io_:io_ + new.nbytes] = new.tobytes()
+            ia["count"] = int(new.size)
+            kept += int(keep.sum())
+            gone += int((~keep).sum())
+    binc = bytes(binc)
+    bv = g["bufferViews"][g["images"][mbt.base_color_image(g)]["bufferView"]]
+    jpeg = binc[bv.get("byteOffset", 0):bv.get("byteOffset", 0) + bv["byteLength"]]
+    mbt.write_glb(out, g, binc, jpeg)
+    print("%s: cut at %.3f, %d triangles kept, %d gone" % (os.path.basename(out), cut, kept, gone))
+
+
 def main():
     a = sys.argv[1:]
+    if len(a) >= 3 and a[0] == "trim":
+        # trim IN.glb OUT.glb [CUT]: CUT defaults to the ground + 0.07; prints the ground
+        cut = float(a[3]) if len(a) > 3 else ground_of(a[1]) + 0.07
+        trim(a[1], a[2], cut)
+        return
     if len(a) < 3 or a[0] != "fit":
         raise SystemExit(__doc__)
     opt = {"--apothem": 1.04, "--bottom": -0.27, "--tex": 1024}

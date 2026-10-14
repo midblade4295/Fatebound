@@ -55,7 +55,7 @@ PACKS = [
                "assets/kaykit/*", "assets/kings/*", "assets/terrain/*", "assets/props/*"]),
     ("heroes", ["assets/meshy/%s/*" % b for b in BODIES]),
     ("weapons", ["assets/meshy/weapons/*"]),
-    ("war", ["assets/meshy/war/*"]),          # 0.31.136: the war table's miniatures (their own pack: world stays put)
+    ("war", ["assets/meshy/war/*", "assets/war_land/*"]),   # 0.31.136-137: the war map (its own pack: world stays put)
     ("audio", ["assets/music/*", "assets/sounds/*", "assets/vo/*"]),
 ]
 BASE_ASSETS = ["assets/branding/*", "assets/fonts/*", "assets/vfx/*"]       # what the loader (and the update screen) use

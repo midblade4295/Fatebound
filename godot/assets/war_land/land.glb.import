@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://cwul2b7wn4ead"
-path="res://.godot/imported/ford.glb-a8fce37a746aefa68f38f495cd7f6580.scn"
+uid="uid://e6fhhpxcotcx"
+path="res://.godot/imported/land.glb-63d269194dd060495d81cd7a6d90c83a.scn"
 
 [deps]
 
-source_file="res://assets/meshy/war/ford.glb"
-dest_files=["res://.godot/imported/ford.glb-a8fce37a746aefa68f38f495cd7f6580.scn"]
+source_file="res://assets/war_land/land.glb"
+dest_files=["res://.godot/imported/land.glb-63d269194dd060495d81cd7a6d90c83a.scn"]
 
 [params]
 

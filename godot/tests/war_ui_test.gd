@@ -13,6 +13,7 @@ const App = preload("res://scripts/app/siege_app.gd")
 const Profile = preload("res://scripts/meta/profile.gd")
 const ClientSocial = preload("res://scripts/meta/social.gd")
 const WarTable = preload("res://scripts/app/war_table.gd")
+const SocialUIRef = preload("res://scripts/app/social_ui.gd")
 const EcoAccounts = preload("res://server/eco_accounts.gd")
 const Social = preload("res://server/social.gd")
 const Leaderboard = preload("res://server/leaderboard.gd")
@@ -175,9 +176,14 @@ func _process(delta: float) -> bool:
 					"the war table: the week's end, 5 attempts, how it works")
 				check(not has_text(tb, "Saltport") and not has_text(tb, "[STAG]"), "a clean table: no names until a place is picked")
 				press("war_names")
-				check((tb._tiles.tower.plinth as MeshInstance3D).material_override == tb._mats.get("plinth_stags"), "the Tower's plinth in Stags green")
-				check(tb._tiles.tower.tile.scene_file_path.ends_with("war/tower.glb") and tb._tiles.home_lions.tile.scene_file_path.ends_with("war/home_lions.glb"),
-					"the places are the Meshy miniatures (assets/meshy/war)")
+				var hold: PackedColorArray = tb._land_mat.get_shader_parameter("holder")
+				var ti: int = tb.LandData.IDS.find("tower")
+				check(hold.size() == 18 and hold[ti].a > 0.5 and hold[ti].is_equal_approx(Color(SocialUIRef.house_color("stags"), 1.0))
+					and hold[tb.LandData.IDS.find("pass")].a < 0.5, "the Tower's land in Stags green (the High Pass nobody's)")
+				check((tb._tiles.tower.node as Node3D).get_child(0).scene_file_path.ends_with("war/tower.glb")
+					and (tb._tiles.home_lions.node as Node3D).get_child(0).scene_file_path.ends_with("war/home_lions.glb")
+					and tb._tiles.lake.node == null, "the miniatures stand in the land (Silver Lake is the water itself)")
+				check(tb.region_at(tb.screen_of("woods")) == "woods" and tb.region_at(Vector2(4, 50)) == "", "a point on Kingswood's land is Kingswood; the sea is nobody's")
 				_shot("war_table")
 				# tap the High Pass where the table draws it
 				var at: Vector2 = tb.screen_of("pass")
@@ -260,8 +266,23 @@ func _process(delta: float) -> bool:
 		"ford":
 			if t_phase > 0.6:
 				var tb = _table()
-				check((tb._tiles.ford.ring as MeshInstance3D).visible and btn("war_join") != null and has_text(tb, "BATTLE ON"),
-					"the table: the Ford's ring is lit, JOIN THE BATTLE")
+				var bat: PackedFloat32Array = tb._land_mat.get_shader_parameter("battle")
+				check(bat[tb.LandData.IDS.find("ford")] > 0.5 and (tb._tiles.ford.swords as Sprite3D).visible and btn("war_join") != null and has_text(tb, "BATTLE ON"),
+					"the map: the Ford's land pulses, crossed swords over it, JOIN THE BATTLE")
+				# a pinch brings the map closer, then a drag moves it (no pick)
+				var c: Vector2 = tb._vpc.size * 0.5
+				var was: String = tb.sel
+				tb._on_table_input(_touch_ev(0, c - Vector2(40, 0), true))
+				tb._on_table_input(_touch_ev(1, c + Vector2(40, 0), true))
+				tb._on_table_input(_drag_ev(1, c + Vector2(120, 0), Vector2(80, 0)))
+				tb._on_table_input(_touch_ev(1, c + Vector2(120, 0), false))
+				tb._on_table_input(_touch_ev(0, c - Vector2(40, 0), false))
+				var zoomed: float = tb._zoom
+				tb._on_table_input(_touch_ev(0, c, true))
+				tb._on_table_input(_drag_ev(0, c + Vector2(30, 40), Vector2(30, 40)))
+				tb._on_table_input(_drag_ev(0, c + Vector2(60, 80), Vector2(30, 40)))
+				tb._on_table_input(_touch_ev(0, c + Vector2(60, 80), false))
+				check(tb.sel == was and zoomed > 1.3 and tb._pan.length() > 0.0, "a pinch zooms in (%.2f), a drag moves the map without picking (pan %s)" % [zoomed, str(tb._pan)])
 				_shot("war_banner")
 				press("war_banner_no")
 				_go("end")
@@ -270,6 +291,20 @@ func _process(delta: float) -> bool:
 				check(btn("war_banner_go") == null, "✕ dismisses the banner")
 				return _finish()
 	return false
+
+func _touch_ev(i: int, at: Vector2, down: bool) -> InputEventScreenTouch:
+	var e := InputEventScreenTouch.new()
+	e.index = i
+	e.position = at
+	e.pressed = down
+	return e
+
+func _drag_ev(i: int, at: Vector2, rel: Vector2) -> InputEventScreenDrag:
+	var e := InputEventScreenDrag.new()
+	e.index = i
+	e.position = at
+	e.relative = rel
+	return e
 
 func _finish() -> bool:
 	if server_pid > 0:

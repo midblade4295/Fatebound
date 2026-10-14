@@ -36,10 +36,10 @@
   },
   {
    "name": "war",
-   "file": "war-3f86ca05bf6b.pck",
-   "size": 9341140,
-   "sha256": "76be76b353b1079ba15caebcfee8303ad3d258a39e36dcf1dc90e60f19fbc949",
-   "inputs": "3f86ca05bf6b06b9553ce1d5af5ca17e23e157dd7789487d4f55ca2ad8e40dba",
+   "file": "war-397af6e0c831.pck",
+   "size": 8837728,
+   "sha256": "19219adfa469c2a0e57f58c42928914110be1c330d809dcb4fe767aa28422ee8",
+   "inputs": "397af6e0c831ab51190e0efc36d1ce90a2c6e69a189e3cf4b1b04ee0afa6b02a",
    "probe": "res://assets/meshy/war/abbey.glb"
   },
   {

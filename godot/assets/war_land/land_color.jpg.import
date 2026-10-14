@@ -2,21 +2,18 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://yo774ac4si6t"
-path.s3tc="res://.godot/imported/lake_0.jpg-093631d10ef9400f0b335f5c0e48fe4a.s3tc.ctex"
-path.etc2="res://.godot/imported/lake_0.jpg-093631d10ef9400f0b335f5c0e48fe4a.etc2.ctex"
+uid="uid://c3o1ec26qthe1"
+path.s3tc="res://.godot/imported/land_color.jpg-f166ea00aa719856d945abebdef7509b.s3tc.ctex"
+path.etc2="res://.godot/imported/land_color.jpg-f166ea00aa719856d945abebdef7509b.etc2.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
-generator_parameters={
-"md5": "619973e07052bce22880d456f14e4e29"
-}
 
 [deps]
 
-source_file="res://assets/meshy/war/lake_0.jpg"
-dest_files=["res://.godot/imported/lake_0.jpg-093631d10ef9400f0b335f5c0e48fe4a.s3tc.ctex", "res://.godot/imported/lake_0.jpg-093631d10ef9400f0b335f5c0e48fe4a.etc2.ctex"]
+source_file="res://assets/war_land/land_color.jpg"
+dest_files=["res://.godot/imported/land_color.jpg-f166ea00aa719856d945abebdef7509b.s3tc.ctex", "res://.godot/imported/land_color.jpg-f166ea00aa719856d945abebdef7509b.etc2.ctex"]
 
 [params]
 
@@ -42,4 +39,4 @@ process/normal_map_invert_y=false
 process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
 process/size_limit=0
-detect_3d/compress_to=1
+detect_3d/compress_to=0
