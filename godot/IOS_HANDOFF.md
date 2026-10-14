@@ -6,6 +6,9 @@ what each step did. What is left needs Apple accounts, keys and Kevin's approval
 for App Store review or release without Kevin; secrets only in GitHub secrets or on the server, never in git, logs or
 chat. Game Center achievements can't be deleted once live: Kevin approves before they go live.
 
+Apple account: **midblade4295@hotmail.com** (Individual, Kevin Petrie), Team ID **YBKRZRW845**. App Store app:
+**Fatebound Siege** (Apple ID 6822556363, bundle `com.fatebound.game`; the name on the home screen stays "Fatebound").
+
 ## 1. Apple Developer: the app id, the certificate, the profile (no Mac needed)
 1. developer.apple.com > Certificates, Identifiers & Profiles > **Identifiers** > App IDs > `com.fatebound.game`
    (team YBKRZRW845): capabilities **Game Center** and **In-App Purchase** on (push notifications not needed: the
@@ -13,7 +16,7 @@ chat. Game Center achievements can't be deleted once live: Kevin approves before
 2. **Certificate** (Apple Distribution), from any computer with openssl:
    ```
    openssl genrsa -out fatebound_dist.key 2048
-   openssl req -new -key fatebound_dist.key -out fatebound_dist.csr -subj "/emailAddress=midblade4295@gmail.com/CN=Kevin Petrie/C=US"
+   openssl req -new -key fatebound_dist.key -out fatebound_dist.csr -subj "/emailAddress=midblade4295@hotmail.com/CN=Kevin Petrie/C=US"
    ```
    Certificates > + > **Apple Distribution** > upload `fatebound_dist.csr` > download `distribution.cer`, then:
    ```
@@ -26,8 +29,8 @@ chat. Game Center achievements can't be deleted once live: Kevin approves before
    above > name it e.g. `Fatebound App Store` > download `.mobileprovision`.
 
 ## 2. App Store Connect: the app record, keys, products, achievements, privacy
-1. Apps > + > New App: iOS, name **Fatebound**, bundle id `com.fatebound.game`, SKU e.g. `fatebound-ios`. Note the
-   app's **Apple ID** (App Information, a number) and put it in `godot/scripts/meta/platform.gd` `APPLE_APP_ID`
+1. Apps > + > New App: iOS, name **Fatebound Siege**, bundle id `com.fatebound.game`, SKU e.g. `fatebound-ios`. Done:
+   the app's **Apple ID** is 6822556363, set in `godot/scripts/meta/platform.gd` `APPLE_APP_ID` (0.31.133)
    (the update screen's App Store link; until then it opens an App Store search for Fatebound).
 2. Users and Access > Integrations > **App Store Connect API**: a Team key with the **App Manager** role (for the
    TestFlight upload). Download the `.p8` once; note its Key ID and the Issuer ID.
@@ -82,9 +85,17 @@ chat. Game Center achievements can't be deleted once live: Kevin approves before
 1. Copy the In-App Purchase `.p8` (step 2.3) to `/etc/fatebound-siege/appstore-key.p8` (`chmod 600`, root). The
    installer hands it to the service with LoadCredential, like the Play key.
 2. In `/etc/fatebound-siege.env`: `SIEGE_APPSTORE_ISSUER=<issuer id>` and `SIEGE_APPSTORE_KEY_ID=<that key's id>`.
-3. The server needs `python3` and `openssl` (the installer warns if either is missing). Then redeploy. The log says
+3. The server needs `python3` and `openssl` (the installer warns if either is missing). Then redeploy (the installer
+   only adds the key's LoadCredential line when the file is there, so redeploy after copying it). The log says
    `purchase checks: Apple: key <id> (issuer ...)`. Without the key an iPhone purchase waits ("unconfigured") and is
    finished later, never lost.
+   Check the key against Apple without a purchase (0.31.133):
+   ```
+   sudo bash -c 'set -a; . /etc/fatebound-siege.env; python3 /srv/fatebound-siege/server/apple_jws.py --api-check \
+       --key /etc/fatebound-siege/appstore-key.p8 --issuer "$SIEGE_APPSTORE_ISSUER" --key-id "$SIEGE_APPSTORE_KEY_ID"'
+   ```
+   Both lines (production, sandbox) must say "key accepted -- Apple answered 404 ..." (or 400); 401 means the key id, the
+   issuer id or the key type is wrong (it must be an **In-App Purchase** key, not an App Store Connect API key).
 4. 0.31.132's account features (MOVE TO ANOTHER PHONE / ENTER A CODE, DELETE ACCOUNT, the Game Center link) need
    this redeploy too, on Android as well.
 

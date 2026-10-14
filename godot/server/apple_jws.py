@@ -4,6 +4,11 @@
 server/iap_verify_apple.gd runs this once per purchase, as its own process (never blocking the game loop):
   python3 apple_jws.py --jws FILE --out FILE --root AppleRootCA-G3.cer
                        [--key P8 --issuer ID --key-id KID --bundle com.fatebound.game] [--api URL]
+to check the server's In-App Purchase key against Apple without a purchase (0.31.133; run it on the server):
+  sudo bash -c 'set -a; . /etc/fatebound-siege.env; python3 /srv/fatebound-siege/server/apple_jws.py --api-check \
+      --key /etc/fatebound-siege/appstore-key.p8 --issuer "$SIEGE_APPSTORE_ISSUER" --key-id "$SIEGE_APPSTORE_KEY_ID"'
+     asks Apple (production and sandbox) for a made-up transaction: 404 (or 400) = the key is accepted (Apple only
+     judged the transaction id), 401 = Apple refused the key. Prints one line per environment; exit 0 when both accept it.
 and once per Game Center account link (0.31.132, section 4):
   python3 apple_jws.py --gc FILE --out FILE [--bundle com.fatebound.game]
      FILE: {"id": teamPlayerID, "url": publicKeyURL, "sig": base64, "salt": base64, "ts": ms} from the phone's
@@ -218,6 +223,46 @@ def check(args):
         return out
 
 
+def api_check(args):
+    if not (args.key and args.issuer and args.key_id):
+        print("api-check needs --key, --issuer and --key-id")
+        return 2
+    try:
+        jwt = api_jwt(args.key, args.issuer, args.key_id, args.bundle, int(time.time()))
+    except Bad:
+        print("the key file can't sign (is it the .p8 from App Store Connect?)")
+        return 1
+    ok = True
+    for name, base in (("production", args.api or API_PRODUCTION), ("sandbox", args.api or API_SANDBOX)):
+        req = urllib.request.Request("%s/inApps/v1/transactions/%s" % (base.rstrip("/"), "1000000000000001"),
+                                     headers={"Authorization": "Bearer " + jwt, "Accept": "application/json"})
+        try:
+            with urllib.request.urlopen(req, timeout=15) as r:
+                code, body = r.status, r.read(2048).decode(errors="replace")
+        except urllib.error.HTTPError as e:
+            code, body = e.code, e.read(2048).decode(errors="replace")
+        except (urllib.error.URLError, OSError) as e:
+            code, body = 0, str(e)
+        try:
+            err = json.loads(body) if body.strip().startswith("{") else {}
+        except ValueError:
+            err = {}
+        detail = " (%s %s)" % (err.get("errorCode", ""), err.get("errorMessage", "")) if err.get("errorCode") else ""
+        if code in (400, 404):                          # past the key check: Apple only judged the made-up id
+            verdict = "key accepted -- Apple answered %d for a made-up transaction%s" % (code, detail)
+        elif code in (401, 403):
+            verdict = "key REFUSED (%d): check the key id, the issuer id and that it is an In-App Purchase key" % code
+            ok = False
+        elif code == 0:
+            verdict = "Apple not reached: " + body
+            ok = False
+        else:
+            verdict = "unexpected answer %d%s" % (code, detail)
+            ok = False
+        print("%-10s %s  (key %s, bundle %s)" % (name, verdict, args.key_id, args.bundle))
+    return 0 if ok else 1
+
+
 def check_gc(args):
     with open(args.gc) as f:
         g = json.load(f)
@@ -266,7 +311,8 @@ def main():
     ap.add_argument("--jws", default="")
     ap.add_argument("--gc", default="")
     ap.add_argument("--gc-allow-http", action="store_true")   # tests: a local stand-in for Apple's key server
-    ap.add_argument("--out", required=True)
+    ap.add_argument("--out", default="")
+    ap.add_argument("--api-check", action="store_true")
     ap.add_argument("--root", default="")
     ap.add_argument("--root-sha256", default="")      # tests: their own root
     ap.add_argument("--key", default="")
@@ -275,6 +321,10 @@ def main():
     ap.add_argument("--bundle", default="com.fatebound.game")
     ap.add_argument("--api", default="")              # tests: a fake App Store Server API
     args = ap.parse_args()
+    if args.api_check:
+        return api_check(args)
+    if not args.out:
+        ap.error("--out is required")
     try:
         res = check_gc(args) if args.gc else check(args)
     except Exception as e:                              # (never a traceback with paths in it: the reason only)

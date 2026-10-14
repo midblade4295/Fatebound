@@ -3879,3 +3879,28 @@ K2/K3 notes (0.17.0)
   -- BUILD SUCCEEDED; the x86_64 Simulator build too. Only signing and the upload wait for Kevin's secrets.
 - Android, last check: the Play AAB built from 0.31.132 (throwaway key, preset.0 untouched): BASE OK, CONTENT OK,
   play_games true, bundletool valid.
+
+## 0.31.133 — iOS launch prep: the App Store app's id, the handoff's account, the key check
+- `platform.gd` `APPLE_APP_ID = "6822556363"`: the App Store app **Fatebound Siege** (bundle com.fatebound.game). The
+  update screen's UPDATE on an iPhone now opens https://apps.apple.com/app/id6822556363 instead of an App Store search
+  (ios_port_test checks the exact URL). Android's links are unchanged.
+- IOS_HANDOFF.md: the Apple account is midblade4295@hotmail.com (Individual, Kevin Petrie, team YBKRZRW845; the CSR
+  line uses it), the App Store app is "Fatebound Siege" with Apple ID 6822556363 (the home-screen name stays
+  "Fatebound"). privacy.html untouched (bc8898f's contact email stays).
+- The server's App Store purchase checks, reviewed end to end for launch: the phone sends the StoreKit 2 signed
+  transaction; the server checks its x5c chain to Apple Root CA G3 (bundled, SHA-256 pinned) and the ES256 signature,
+  then asks the App Store Server API (GET /inApps/v1/transactions/{id}, production or sandbox by the transaction's
+  environment -- TestFlight purchases are Sandbox) with an ES256 JWT from the In-App Purchase key
+  ($CREDENTIALS_DIRECTORY/appstore-key via LoadCredential, SIEGE_APPSTORE_ISSUER, SIEGE_APPSTORE_KEY_ID). Kevin has
+  put key 2X23RCW3YT at /etc/fatebound-siege/appstore-key.p8 with both env lines; the installer only adds its
+  LoadCredential line when the file exists, so the server must be redeployed after it (the log then says
+  `purchase checks: Apple: key 2X23RCW3YT (issuer <first 8>...)`; `Apple: off (no App Store key)` means it wasn't loaded).
+- New: `server/apple_jws.py --api-check` checks the key against Apple without a purchase (asks production and
+  sandbox for a made-up transaction: 404/400 = key accepted, 401 = refused; exit 0 only when both accept). Command in
+  IOS_HANDOFF.md §4.3. Checked here: a local stand-in API (404 and 400 -> accepted, exit 0; wrong key -> refused,
+  exit 1) and Apple's real endpoints with a throwaway key (both reached, 401 REFUSED, exit 1) -- the live server and
+  the real key are Kevin's.
+- Version 0.31.133, versionCode 219 (server 0.31.133 = 0.31.132's Apple purchase checks and account features + the
+  key check). One commit for the Android build, the server and the iOS TestFlight build.
+- Quick suite: all 86 passed (85 Godot tests + the report check). The Play AAB built from this commit (throwaway key,
+  preset.0 untouched): BASE OK (228 files), CONTENT OK, play_games true, bundletool valid.

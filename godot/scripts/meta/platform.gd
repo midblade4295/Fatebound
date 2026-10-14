@@ -11,8 +11,8 @@ extends RefCounted
 const PACKAGE := "com.fatebound.game"                 # Play package and iOS bundle id (the same string)
 const PLAY_MARKET_URL := "market://details?id=" + PACKAGE
 const PLAY_WEB_URL := "https://play.google.com/store/apps/details?id=" + PACKAGE
-# The App Store's numeric Apple ID of the app (App Store Connect > App Information), once the app record exists.
-const APPLE_APP_ID := ""
+# The App Store's numeric Apple ID of the app (App Store Connect > App Information): "Fatebound Siege" (0.31.133)
+const APPLE_APP_ID := "6822556363"
 const APP_STORE_SEARCH_URL := "https://apps.apple.com/us/search?term=Fatebound"
 
 const PLAY_BILLING := "GodotGooglePlayBilling"        # Engine singletons of the Android plugins

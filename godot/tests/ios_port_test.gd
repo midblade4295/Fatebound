@@ -169,8 +169,8 @@ func _platform() -> void:
 	UpdateScreen.open_store(func(_u): return OK, tried3)
 	check(Platform.is_ios() and Platform.store() == "appstore" and Platform.store_name() == "the App Store" and Platform.store_button() == "APP STORE"
 		and tried3 == [Platform.app_store_url()] and Platform.tracks_boot() and not Platform.has_cloud_save(), "iOS: the App Store, its page for UPDATE (%s), BootGuard tracks" % str(tried3))
-	check(Platform.app_store_url() == (Platform.APP_STORE_SEARCH_URL if Platform.APPLE_APP_ID == "" else "https://apps.apple.com/app/id" + Platform.APPLE_APP_ID),
-		"the App Store page: apps.apple.com/app/id<Apple ID> once known")
+	check(Platform.app_store_url() == "https://apps.apple.com/app/id6822556363",
+		"the App Store page: apps.apple.com/app/id6822556363 (Fatebound Siege, 0.31.133)")
 	check(not Platform.has_iap() and not Platform.has_achievements(), "iOS without GodotApplePlugins' classes (here): no store claimed")
 	Platform.forced = ""
 	var tried4: Array = []
