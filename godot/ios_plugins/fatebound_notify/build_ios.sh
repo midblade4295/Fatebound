@@ -36,7 +36,11 @@ mkdir -p "$WORK/ext"
 cp -R "$HERE/src" "$HERE/SConstruct" "$HERE/build_profile.json" "$WORK/ext/"
 cd "$WORK/ext"
 export GODOT_CPP="$WORK/godot-cpp"
-common=(platform=ios target="$TARGET" ios_min_version="$MIN_IOS" build_profile="$WORK/ext/build_profile.json" -j"$JOBS")
+# the selected Xcode's own compiler (godot-cpp defaults to /Applications/Xcode.app's, which can be another Xcode than the
+# SDK xcrun picks -- mixing them breaks the system modules)
+TOOLCHAIN="$(xcode-select -p)/Toolchains/XcodeDefault.xctoolchain"
+common=(platform=ios target="$TARGET" ios_min_version="$MIN_IOS" build_profile="$WORK/ext/build_profile.json"
+  IOS_TOOLCHAIN_PATH="$TOOLCHAIN" -j"$JOBS")
 "$SCONS" arch=arm64 "${common[@]}"
 "$SCONS" arch=universal ios_simulator=yes "${common[@]}"
 
