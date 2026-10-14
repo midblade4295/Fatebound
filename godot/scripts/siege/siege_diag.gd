@@ -14,7 +14,8 @@ const BOOT_PREV_PATH := "user://boot_diag_prev.log"
 # 0.31.91: the start that froze on Vulkan, kept when BootGuard switches to OpenGL (the two restarts after it used to
 # rotate it out of boot_diag_prev.log before anyone could copy it).
 const BOOT_STUCK_PATH := "user://boot_diag_stuck.log"
-const BUILD := "0.31.129-fatebound"
+const Platform = preload("res://scripts/meta/platform.gd")
+const BUILD := "0.31.130-fatebound"
 
 class ErrorCapture:
 	extends Logger
@@ -217,7 +218,7 @@ static func _logcat_run(buffers: Array) -> Array:
 	return [err, str(out[0]) if not out.is_empty() else ""]
 
 static func logcat_tail(keep_other := 120) -> String:
-	if OS.get_name() != "Android":
+	if not Platform.is_android():
 		return ""
 	var r := _logcat_run(["main", "system", "crash"])
 	if int(r[0]) != OK or str(r[1]).strip_edges() == "" or str(r[1]).contains("Unable to open"):

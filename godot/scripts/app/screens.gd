@@ -10,6 +10,8 @@ const View = preload("res://scripts/siege/siege_view.gd")
 const Showcase = preload("res://scripts/app/showcase.gd")
 const Diag = preload("res://scripts/siege/siege_diag.gd")
 const Net = preload("res://scripts/siege/siege_net.gd")
+const Platform = preload("res://scripts/meta/platform.gd")          # 0.31.130: Google Play or the App Store
+const StoreBilling = preload("res://scripts/meta/store_billing.gd")
 
 const PRIVACY_URL := "https://136-113-125-3.sslip.io/fatebound/privacy.html"
 
@@ -1598,7 +1600,8 @@ static func gem_packs(app, root: Node) -> void:
 	# be bought, then the five packs, priced in the player's currency once Google has answered.
 	var bl = app.billing
 	var live: bool = bl != null and bl.active()
-	UI2.divider(root, "GEM PACKS", 22, "Google Play  ·  gems never change damage" if live else "in the Google Play version")
+	# (0.31.130: the App Store on iOS; the same words otherwise)
+	UI2.divider(root, "GEM PACKS", 22, ("%s  ·  gems never change damage" if live else "in the %s version") % Platform.store_short())
 	var p = app.profile
 	if not bool(p.d.iap.starter):
 		var sc := Control.new()
@@ -1679,6 +1682,12 @@ static func gem_packs(app, root: Node) -> void:
 			tg.offset_top = -10
 			tg.offset_bottom = 8
 		size_ix += 1
+	if StoreBilling.can_restore(bl):
+		# 0.31.130: the App Store requires a way to get a bought-once item (the starter pack) back on a new phone
+		var rb := UI2.button(root, "…" if bool(bl.restoring) else "RESTORE PURCHASES", "grey", func():
+			app.sfx("tap")
+			bl.restore(), "iap_restore", 14, 38.0)
+		rb.disabled = bool(bl.restoring) or str(bl.busy) != ""
 
 static func pack_art(c: Control, path: String, tier: int, big: bool, shine: Color) -> float:
 	# 0.31.106 (Kevin: "Make new art for the higher tier packs so it shows more the higher the pack is. Add fun things
@@ -1707,7 +1716,7 @@ static func pack_art(c: Control, path: String, tier: int, big: bool, shine: Colo
 static func _iap_button(app, parent: Control, pid: String, at: Vector2, sz: Vector2) -> Button:
 	var bl = app.billing
 	var live: bool = bl != null and bl.active()
-	var label := "PLAY STORE"
+	var label := Platform.store_button()                # "PLAY STORE" (0.31.130: "APP STORE" on iOS)
 	if live:
 		label = "…" if str(bl.busy) == pid else str(bl.price(pid))
 	var b := UI2.button(parent, label, "green" if live else "grey", func():
@@ -1715,7 +1724,7 @@ static func _iap_button(app, parent: Control, pid: String, at: Vector2, sz: Vect
 		if bl != null:
 			bl.buy(pid)
 		else:
-			app.toast("Gem packs are sold in the Google Play version of Fatebound", UI.RED), "iap_" + pid, 15, 34.0, 11.0)
+			app.toast("Gem packs are sold in the %s version of Fatebound" % Platform.store_short(), UI.RED), "iap_" + pid, 15, 34.0, 11.0)
 	if sz != Vector2.ZERO:
 		b.position = at
 		b.size = sz
@@ -2179,6 +2188,9 @@ static func _thousands(n: int) -> String:
 
 # ---------------- SETTINGS ----------------
 static func play_games_card(app, root: VBoxContainer) -> void:
+	if Platform.is_ios():
+		game_center_card(app, root)                       # 0.31.130
+		return
 	var gp := UI2.frame(root, "night", 12, 18.0, "gold")
 	UI2.divider(gp, "GOOGLE PLAY", 20)
 	var pg = app.play_games
@@ -2220,6 +2232,30 @@ static func play_games_card(app, root: VBoxContainer) -> void:
 			UI2.button(gp, "TRY AGAIN", "blue", func():
 				app.sfx("confirm")
 				pg.back_up_now(), "play_retry", 15, 44.0)
+
+static func game_center_card(app, root: VBoxContainer) -> void:
+	# 0.31.130 (the iOS port): Game Center -- signed in (achievements) or where to sign in. Apple allows no in-app sign-in
+	# once a player has declined, so it points to iOS Settings. The progress itself is the Fatebound account's.
+	var gp := UI2.frame(root, "night", 12, 18.0, "gold")
+	UI2.divider(gp, "GAME CENTER", 20)
+	var pg = app.play_games
+	var st := str(pg.state) if pg != null else "off"
+	var line := ""
+	match st:
+		"off":
+			line = "Game Center isn't available in this build."
+		"signing":
+			line = "Signing in to Game Center..."
+		"synced":
+			var who := str(pg.player)
+			line = "Game Center: signed in%s. Achievements are kept in Game Center." % ((" as " + who) if who != "" else "")
+		_:
+			line = "Not signed in. Sign in from iOS Settings > Game Center to earn achievements."
+	UI2.body(gp, line, 12, UI2.SOFT)
+	if st == "synced":
+		UI2.button(gp, "ACHIEVEMENTS", "gold", func():                    # Apple's own screen
+			app.sfx("menuOpen")
+			pg.show_achievements(), "gc_achievements", 15, 44.0)
 
 static func _ago(app, at: int) -> String:
 	if at <= 0:

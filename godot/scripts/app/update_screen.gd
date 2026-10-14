@@ -6,10 +6,11 @@ extends Control
 const UI = preload("res://scripts/app/ui.gd")
 const Net = preload("res://scripts/siege/siege_net.gd")
 const Diag = preload("res://scripts/siege/siege_diag.gd")
+const Platform = preload("res://scripts/meta/platform.gd")
 
-const PACKAGE := "com.fatebound.game"
-const MARKET_URL := "market://details?id=" + PACKAGE
-const WEB_URL := "https://play.google.com/store/apps/details?id=" + PACKAGE
+const PACKAGE := Platform.PACKAGE
+const MARKET_URL := Platform.PLAY_MARKET_URL
+const WEB_URL := Platform.PLAY_WEB_URL
 const ALLOW_OFFLINE := true      # false = a hard wall (no offline matches either)
 const TITLE := "UPDATE REQUIRED"
 const BODY := "A new version of Fatebound is available. Update to keep playing."
@@ -22,13 +23,13 @@ var open_url: Callable = func(u: String) -> int: return OS.shell_open(u)
 var opened: Array = []           # URLs tried, in order (diagnostics / tests)
 
 static func open_store(opener: Callable, tried: Array = []) -> void:
-	# The Play Store app first (market://), the web page if that can't be opened (no Play Store, desktop).
-	if OS.get_name() == "Android":
-		tried.append(MARKET_URL)
-		if int(opener.call(MARKET_URL)) == OK:
+	# Android: the Play Store app first (market://), the web page if that can't be opened (no Play Store). iOS: the App
+	# Store page (0.31.130). Desktop: Google Play's web page.
+	var urls: Array = Platform.store_urls()
+	for i in urls.size():
+		tried.append(urls[i])
+		if int(opener.call(urls[i])) == OK:
 			return
-	tried.append(WEB_URL)
-	opener.call(WEB_URL)
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -82,7 +83,7 @@ func _ready() -> void:
 	var up := UI.button(col, "UPDATE", "primary", _on_update, "update_now", 30, 22)
 	up.add_theme_font_override("font", UI.TITLE_FONT)
 	up.custom_minimum_size = Vector2(0, 86)
-	var sub := UI.label(col, "Opens Fatebound on Google Play", 12, UI.MUTED)
+	var sub := UI.label(col, "Opens Fatebound on %s" % Platform.store_name(), 12, UI.MUTED)   # (0.31.130: "the App Store" on iOS)
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	if ALLOW_OFFLINE:
 		UI.spacer(col, 18.0)

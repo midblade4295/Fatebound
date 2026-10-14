@@ -3719,3 +3719,32 @@ K2/K3 notes (0.17.0)
   (BASE / KING_AT / KING_SIZE / PIVOT unchanged), logo_king.webp unchanged; Home's logo and the trailer's title both
   use the fixed logo_base.webp. ui content pack rebuilt (ui-26af4d5a8e1a). Trailer 7's title stretch re-rendered.
 - Version 0.31.129, versionCode 215.
+
+## 0.31.130 — the iOS port, step 1: one face for both stores (Android unchanged)
+- Kevin's IOS_PORT_SPEC_FOR_CLAUDE.md (in godot/): the same game on iPhone through TestFlight, then the App Store, with
+  Android unchanged in behaviour. Kevin's choices: GodotApplePlugins (migueldeicaza, MIT, a SwiftGodot GDExtension) for
+  StoreKit 2 and Game Center, so the minimum is iOS 17 (the spec said 15); only the TestFlight workflow file goes to main.
+- scripts/meta/platform.gd: which phone and which store -- is_android / is_ios / store() ("play" | "appstore" | "none"),
+  the store's page (Play's market:// then web; the App Store's apps.apple.com/app/id<APPLE_APP_ID>, a search link
+  until the app record exists), has_iap / has_cloud_save / has_achievements, the store's words. Tests pretend with
+  Platform.forced. The three OS.get_name() == "Android" checks now ask it (update screen, BootGuard -- tracking on iOS
+  too -- and the logcat tail), answering exactly as before on Android.
+- scripts/meta/store_billing.gd / game_services.gd: pick billing.gd + play_games.gd (Android and the desktop,
+  unchanged) or billing_ios.gd + game_center.gd (iOS). Both pairs have one face, so the app and the shop never ask which.
+- billing_ios.gd: App Store purchases with Play's flow: Apple's sheet (appAccountToken = UUIDv5 of the account id,
+  apple_token.gd) -> the signed transaction to the server ("iap" with "store":"apple" and the JWS) -> granted to the
+  account -> only then finished. Unfinished transactions come back from StoreKit on start and resume. Ledger tokens
+  "apple:<transactionId>" (gem packs) and "apple:<originalTransactionId>" (the starter pack). RESTORE PURCHASES.
+  Refunded transactions are finished, never granted.
+- game_center.gd: signed in by Apple at start; the 18 achievements as percentages with Apple's ids (gc_achievement_ids.gd,
+  "fatebound.<key>") -- achievements.gd now counts once and each service sends its own way (Play's calls unchanged);
+  Apple's achievements screen; a `signed(teamPlayerID)` signal for the account link (step 6). No cloud copy on iOS v1.
+- Screens: the shop says App Store / APP STORE on iOS (Google Play / PLAY STORE otherwise, unchanged) and has RESTORE
+  PURCHASES; Settings shows GAME CENTER ("signed in as <alias>" + ACHIEVEMENTS, or "Sign in from iOS Settings > Game
+  Center") instead of GOOGLE PLAY. The update screen names the App Store on iOS.
+- tests/ios_port_test.gd (in the quick suite): the platform answers, the facades, UUIDv5 against Python's, billing_ios
+  and game_center against doubles of the plugin's classes, the real app as an iPhone and as Android.
+- Android check: the Play AAB built from HEAD and from this change (a throwaway key in /tmp, preset.0 untouched): both
+  verify_play_bundle BASE OK, CONTENT OK, play_games true, bundletool valid; the only differences are the changed
+  scripts and the seven new ones (dormant on Android). Quick suite: ALL 84 PASSED.
+- Version 0.31.130, versionCode 216.

@@ -6,8 +6,8 @@ const UI2 = preload("res://scripts/app/ui2.gd")
 const Roster = preload("res://scripts/app/roster.gd")
 const Eco = preload("res://scripts/meta/economy.gd")
 const Profile = preload("res://scripts/meta/profile.gd")
-const Billing = preload("res://scripts/meta/billing.gd")
-const PlayGames = preload("res://scripts/meta/play_games.gd")
+const StoreBilling = preload("res://scripts/meta/store_billing.gd")     # 0.31.130: billing.gd (Play) or billing_ios.gd
+const GameServices = preload("res://scripts/meta/game_services.gd")     # 0.31.130: play_games.gd or game_center.gd
 const EcoSync = preload("res://scripts/meta/eco_sync.gd")
 const Screens = preload("res://scripts/app/screens.gd")
 const Showcase = preload("res://scripts/app/showcase.gd")
@@ -116,7 +116,9 @@ var _toast_until := 0.0
 var safe_boot := false
 var online_status: Node = null         # 0.31.82: the server's player count for Home (the real app only, or FB_STATUS_POLL)
 var billing: Node = null               # 0.31.90: Google Play purchases (scripts/meta/billing.gd); inactive off Play
+                                       # (0.31.130: the App Store's on iOS, billing_ios.gd -- store_billing.gd picks)
 var play_games: Node = null            # 0.31.102: Google Play Games sign-in and the progress kept there (play_games.gd)
+                                       # (0.31.130: Game Center on iOS, game_center.gd -- game_services.gd picks)
 # 0.31.108: the account on the server (eco_sync.gd) -- the server's copy of the profile is the one that counts.
 # Headless (tests, tools) it doesn't reach the real server unless asked (eco_url / FB_ECO=1).
 var eco_sync: Node = null
@@ -212,7 +214,7 @@ func _ready() -> void:
 	chat_ticker.setup(self)
 	if social_autostart:
 		social.set_active(true)
-	billing = Billing.new()
+	billing = StoreBilling.make()
 	add_child(billing)
 	billing.on_server_grant = func(g: Dictionary): eco_sync.adopt(g.get("profile", {}), int(profile.d.account.get("seq", 0)))
 	billing.setup(profile)
@@ -221,7 +223,7 @@ func _ready() -> void:
 	billing.changed.connect(func():
 		if tab == "shop" and not is_instance_valid(modal) and siege == null:
 			rebuild())
-	play_games = PlayGames.new()
+	play_games = GameServices.make()
 	add_child(play_games)
 	play_games.note.connect(func(t: String, good: bool): toast(t, UI.GOLD if good else UI.RED))
 	play_games.changed.connect(func():

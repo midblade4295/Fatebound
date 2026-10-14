@@ -12,6 +12,7 @@ extends Node
 # _init runs before the main scene loads: the start-up log (user://boot_diag.log, Diag) covers the main scene's
 # loading too. Only tracks on Android (or with the FB_BOOT_GUARD env var, for testing on desktop).
 const Diag = preload("res://scripts/siege/siege_diag.gd")
+const Platform = preload("res://scripts/meta/platform.gd")
 const STATE := "user://boot_state.json"
 const OLD_RENDERER_CFG := "user://renderer.cfg"   # 0.31.72-0.31.91's OpenGL switch; deleted, no longer read
 const OK_FRAMES := 30
@@ -32,7 +33,7 @@ static func decide(prev: Dictionary, build: String) -> Dictionary:
 func _init() -> void:
 	name = "BootGuard"
 	_t0 = Time.get_ticks_msec()
-	tracking = OS.get_name() == "Android" or OS.has_environment("FB_BOOT_GUARD")
+	tracking = Platform.tracks_boot() or OS.has_environment("FB_BOOT_GUARD")     # (0.31.130: iOS too)
 	diag = Diag.new()
 	diag.log_path = Diag.BOOT_PATH
 	diag.prev_path = Diag.BOOT_PREV_PATH

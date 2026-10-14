@@ -5,6 +5,8 @@ extends RefCounted
 # steps (setAchievementSteps: never goes back, so sending the total again is harmless), a standard one unlocked once
 # its goal is met. Only what changed since the last send goes out. The ids are Play Console's
 # (scripts/meta/play_achievement_ids.gd, empty until they're made there -- see godot/PLAY_ACHIEVEMENTS_HANDOFF.md).
+# 0.31.130 (the iOS port): the same list goes to Game Center (scripts/meta/game_center.gd) with Apple's ids
+# (gc_achievement_ids.gd) as percentages -- sync_percent; what is counted and when it is sent is the same code.
 const Eco = preload("res://scripts/meta/economy.gd")
 const Ids = preload("res://scripts/meta/play_achievement_ids.gd")
 
@@ -57,9 +59,26 @@ func id_of(key: String) -> String:
 	return str(ids.get(key, ""))
 
 func sync(profile, plugin) -> int:
-	# -> calls made. Standard: unlocked once its goal is met. Incremental: its steps (capped at the goal) when they grew.
+	# -> calls made. Google Play Games: standard ones unlocked once their goal is met, incremental ones as their steps
+	# (capped at the goal) when they grew.
 	if profile == null or plugin == null:
 		return 0
+	return _each_change(profile, func(id: String, v: int, _n: int, inc: bool) -> void:
+		if inc:
+			plugin.setAchievementSteps(id, v)
+		else:
+			plugin.unlockAchievement(id))
+
+func sync_percent(profile, report: Callable) -> int:
+	# 0.31.130 (the iOS port): Game Center has no incremental kind -- each one is reported as its percent done
+	# (100 * steps / goal, the same steps as Play), a standard one as 100 once met. report(id, percent).
+	if profile == null or not report.is_valid():
+		return 0
+	return _each_change(profile, func(id: String, v: int, n: int, inc: bool) -> void:
+		report.call(id, 100.0 * v / n if inc else 100.0))
+
+func _each_change(profile, send: Callable) -> int:
+	# what changed since the last send (this run), the same for every service: send(id, steps, goal, incremental)
 	var calls := 0
 	for a in LIST:
 		var id := id_of(str(a.key))
@@ -69,14 +88,10 @@ func sync(profile, plugin) -> int:
 		var v := mini(value(profile, str(a.stat)), n)
 		if v <= int(sent.get(a.key, 0)):
 			continue
-		if bool(a.inc):
-			plugin.setAchievementSteps(id, v)
-			calls += 1
-		elif v >= n:
-			plugin.unlockAchievement(id)
-			calls += 1
-		else:
+		if not bool(a.inc) and v < n:
 			continue
+		send.call(id, v, n, bool(a.inc))
+		calls += 1
 		sent[a.key] = v
 	return calls
 

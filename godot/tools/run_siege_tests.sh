@@ -104,6 +104,9 @@ run daily_reward_test    DAILY_REWARD_PASS        90
 run notify_test          NOTIFY_PASS              90
 # Google Play Games achievements (0.31.119): the list, what's sent and when (a fake of the plugin)
 run achievements_test    ACHIEVEMENTS_PASS        60
+# The iOS port (0.31.130): Platform, the store facades, billing_ios.gd / game_center.gd against doubles of
+# GodotApplePlugins' StoreKit and Game Center, the app as an iPhone (and Android's words unchanged)
+run ios_port_test        IOS_PORT_PASS            150
 # Forced update: protocol mismatch -> Update screen / "Servers are updating" (real server on 8096, fake on 8097)
 run version_gate_test    VERSION_GATE_PASS        120
 # Server minimum app build: an outdated build is refused as "update required" (real servers on 8098/8099)
