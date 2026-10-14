@@ -4085,3 +4085,5 @@ along with the glow effect of sun. Also maybe glimmer of the water and birds fly
   follows the title's new size. tools/home_scene_shot.gd shoots the scene alone (WAR=1: a war on the table).
 - The ui content pack rebuilt (19.5 MB; uploaded to content-packs 23ec83f); the others unchanged.
 - Version 0.31.138, versionCode 224 (server code unchanged; SERVER_BUILD follows the app's version).
+- Quick suite: all 91 passed. The Play AAB built from this commit (throwaway key, presets untouched by the build):
+  BASE OK (244 files, no pack data), CONTENT OK (6 packs on the branch), play_games true, bundletool valid.
