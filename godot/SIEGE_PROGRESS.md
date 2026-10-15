@@ -4280,3 +4280,4 @@ Kevin: "Go ahead with adjust" (the cleanups after 0.31.143's start-up fix)
   version_gate_test passed alone; social_ui_test fixed as above (passes twice alone). tools/cold_start_check.sh: PASS.
   The Play AAB built from this commit (throwaway key, presets untouched by the build): BASE OK (253 files), CONTENT OK
   (no pack changed), play_games true, bundletool valid.
+- Kevin on 0.31.144 (2026-10-15): "Ok works good".
