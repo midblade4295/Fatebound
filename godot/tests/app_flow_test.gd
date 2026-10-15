@@ -147,7 +147,12 @@ func _process(d: float) -> bool:
 			check(app.siege == null and app.chrome.visible and app.tab == "home", "HOME from results returns to the menu")
 			check(app.hero_layer.is_visible_in_tree() and app.hero_layer.process_mode != Node.PROCESS_MODE_DISABLED and app.chrome.process_mode != Node.PROCESS_MODE_DISABLED, "hero and menu resume after the match")
 			press("play")
-			check(app.siege != null and app.siege.online, "PLAY starts an online session")
+			# 0.31.146 (Kevin: "I want the play button to always bring players into map"): not connected too -- the map says
+			# so, and its QUICK BATTLE starts the session
+			check(app.siege == null and app.modal != null and str(app.modal.get_script().resource_path).ends_with("war_table.gd")
+				and btn("war_quick") != null, "PLAY opens the war map (not connected: QUICK BATTLE there)")
+			press("war_quick")
+			check(app.siege != null and app.siege.online and app.modal == null, "QUICK BATTLE starts an online session")
 			wait_until = t + 5.0
 		9:
 			check(app.siege == null and app.chrome.visible, "unreachable server -> message, back to the menu")

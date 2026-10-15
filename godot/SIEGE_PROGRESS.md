@@ -4307,3 +4307,17 @@ Kevin (Crown War's next steps, asked one at a time): "Play open war map"
   alone (staged_start_test twice: 195 / 172 ms). tools/cold_start_check.sh: PASS. The Play AAB built from this commit
   (throwaway key, presets untouched by the build): BASE OK (253 files), CONTENT OK (no pack changed), play_games true,
   bundletool valid.
+
+## 0.31.146 — PLAY always opens the war map
+Kevin: "I want the play button to always bring players into map"
+- siege_app.play: Home's PLAY opens the war map every time -- in a party, not connected, and on a server from before
+  the war map too (0.31.145 went straight into a match for those). Only an update needed still shows the update screen.
+- The map says why it's empty: "Not connected to the server" (QUICK BATTLE then tries the server, as PLAY did) or "The
+  war map comes with the next server update"; "Loading the war map..." while the server's map is on its way.
+- QUICK BATTLE in a party: the leader's reads QUICK BATTLE · PARTY ×N and takes everyone (start_match's party path, as
+  PLAY ×N did); a member's reads LEADER STARTS and says the leader starts it (the map stays open); the leader's start
+  still pulls the members in from wherever they are (the map closes). It follows the party as it changes.
+- Unchanged: the results' PLAY AGAIN and the party window's PLAY TOGETHER still go straight into a match.
+- Tests: app_flow_test (not connected: PLAY opens the map, QUICK BATTLE starts the session), social_ui_test (a party's
+  PLAY opens the map, QUICK BATTLE · PARTY ×2 takes the party in), war_ui_test, clans_ui_test, version_gate_test.
+- Version 0.31.146, versionCode 232 (server code unchanged; SERVER_BUILD follows the app's version).

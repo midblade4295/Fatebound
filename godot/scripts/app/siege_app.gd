@@ -1254,25 +1254,28 @@ func join_friend(pid: String) -> void:
 
 func play() -> void:
 	# 0.31.145 (Kevin: "Play open war map"): Home's PLAY opens the war map -- a territory to attack, or QUICK BATTLE (the
-	# match PLAY started until now) at its foot. Straight into that match as before when the map can't be shown (not
-	# connected, a server without the war map), and for a party (its leader's PLAY takes everyone into one match; a
-	# battle on the map doesn't take a party along).
+	# match PLAY started until now) at its foot. 0.31.146 (Kevin: "I want the play button to always bring players into
+	# map"): always -- in a party, not connected, or on a server without the war map too (the map says so; QUICK BATTLE
+	# is there for all of them).
 	if update_required:
 		show_update_screen()
 		return
-	if war_ready() and not social.in_party():
-		sfx("menuOpen")
-		open_war()
-	else:
+	if social == null:                             # (tests without the social side only: the app always has it)
 		start_match(true)
-
-func war_ready() -> bool:
-	return social != null and social.online() and social.has_war
+		return
+	sfx("menuOpen")
+	open_war()
 
 func quick_battle() -> void:
-	# the war map's QUICK BATTLE: a match from matchmaking (16 vs 16, bots in the empty seats), any house or none
-	close_modal()
+	# the war map's QUICK BATTLE: a match from matchmaking (16 vs 16, bots in the empty seats), any house or none. In a
+	# party the leader's takes everyone (start_match: social "play"); a member's says the leader starts it, the map stays.
+	if update_required:
+		close_modal()
+		show_update_screen()
+		return
 	start_match(true)
+	if siege != null:
+		close_modal()
 
 func open_war(first := "") -> void:
 	# 0.31.135 (Crown War step 2): the war table -- Home's CROWN WAR, the CLAN window's WAR MAP, a battle's WAR MAP

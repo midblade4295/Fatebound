@@ -233,6 +233,11 @@ func _process(delta: float) -> bool:
 		"press_play":
 			if t_phase > 0.6:
 				press("play")
+				# 0.31.146 (Kevin: "I want the play button to always bring players into map"): a party's PLAY too; the
+				# leader's QUICK BATTLE takes the party
+				var qb := btn("war_quick")
+				check(app.siege == null and qb != null and qb.text.contains("PARTY ×2"), "PLAY opens the war map in a party too: QUICK BATTLE · PARTY ×2 (%s)" % (qb.text if qb != null else "none"))
+				press("war_quick")
 				_go("go")
 		"go":
 			if bob.party_play != "":

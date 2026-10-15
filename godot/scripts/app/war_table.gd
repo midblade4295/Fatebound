@@ -47,6 +47,7 @@ var _cam_at := Vector3.ZERO            # (_fit_camera: where the camera aims and
 var _cam_dist := 20.0
 var _zoom := 1.0
 var _pan := Vector2.ZERO
+var _quick: Button                     # 0.31.145: QUICK BATTLE (the match from matchmaking)
 var _held_room: Node = null            # 0.31.145: Home's 3D, held still behind the window
 var _held_mode := Node.PROCESS_MODE_INHERIT
 
@@ -83,10 +84,10 @@ func open(a, first := "") -> void:
 	_sheet = sf
 	# 0.31.145 (Kevin: "Play open war map"): Home's PLAY opens this map; the match PLAY started until now is at its foot --
 	# matchmaking, 16 vs 16, for any house or none (bots in the empty seats)
-	var qb := UI2.button(body, "QUICK BATTLE  ·  16 VS 16", "green", func():
+	_quick = UI2.button(body, "QUICK BATTLE  ·  16 VS 16", "green", func():
 		app.sfx("confirm")
 		app.quick_battle(), "war_quick", 18, 50.0, 14.0, UI2.icon_path("swords"))
-	qb.name = "QuickBattle"
+	_quick.name = "QuickBattle"
 	# Home's war table and heroes (war_room.gd) are behind this window: held on their last frame while it's open
 	var room = app.get("hero_node")
 	if is_instance_valid(room) and room.process_mode != Node.PROCESS_MODE_DISABLED:
@@ -126,7 +127,7 @@ func _exit_tree() -> void:
 			social.war_went.disconnect(_on_went)
 
 func _on_changed(what: String) -> void:
-	if what in ["war", "state", "clan", "me"]:
+	if what in ["war", "state", "clan", "me", "party"]:
 		_dirty = true
 
 func _on_went(ans: Dictionary) -> void:
@@ -440,8 +441,20 @@ func _render() -> void:
 	# the strip over the map
 	for c in _stats.get_children():
 		c.queue_free()
+	# 0.31.146: QUICK BATTLE says what it does in a party (the leader's takes everyone; a member waits for the leader)
+	var in_party: bool = social.online() and social.in_party()
+	if in_party and social.is_leader() and social.party_size() > 1:
+		_quick.text = "QUICK BATTLE  ·  PARTY ×%d" % social.party_size()
+	elif in_party and not social.is_leader():
+		_quick.text = "QUICK BATTLE  ·  LEADER STARTS"
+	else:
+		_quick.text = "QUICK BATTLE  ·  16 VS 16"
 	if w.is_empty():
-		var l := UI.label(_stats, "Loading the war map..." if social.online() else "Not connected to the server", 12, UI2.MUTED, UI.HEAVY_FONT)
+		# 0.31.146: PLAY always opens the map -- not connected, or a server from before the war map: say so
+		var msg := "Not connected to the server"
+		if social.online():
+			msg = "Loading the war map..." if social.has_war else "The war map comes with the next server update"
+		var l := UI.label(_stats, msg, 12, UI2.MUTED, UI.HEAVY_FONT)
 		l.autowrap_mode = TextServer.AUTOWRAP_OFF
 	else:
 		var left := maxi(0, int(w.get("ends", 0)) - int(Time.get_unix_time_from_system()))
