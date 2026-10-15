@@ -285,6 +285,26 @@ func _process(delta: float) -> bool:
 				check(str(tb.sel) == "tower" and tb._zoom > 1.5 and btn("war_fight_att") != null and btn("war_fight_def") != null
 					and btn("war_fight_def").text == "DEFEND FOR STAGS", "a tap on the row: the camera on the Tower, its sheet -- JOIN LIONS or DEFEND FOR STAGS")
 				_shot("hot_pick")
+				# 0.31.151: King's Day -- a keep on an ordinary day, then on a Sunday
+				app.social.war["kd_at"] = int(Time.get_unix_time_from_system()) + 2 * 86400 + 3 * 3600
+				tb.select("home_stags")
+				_go("keep")
+		"keep":
+			if t_phase > 0.4:
+				var tb = _table()
+				check(has_text(tb, "STAGS' KEEP") and has_text(tb, "Keeps can only be stormed on King's Day") and has_text(tb, "the next one in 2d 3h")
+					and btn("war_attack") == null, "a keep on an ordinary day: stormed only on King's Day, the next one in 2d 3h")
+				app.social.war["kd"] = true
+				app.social.war.terr.home_stags["need"] = Map.NEED_HOME
+				app.social.war.terr.home_stags["bars"] = []
+				tb._dirty = true
+				_go("keep_kd")
+		"keep_kd":
+			if t_phase > 0.4:
+				var tb = _table()
+				check(has_text(tb, "KING'S DAY · ENDS IN") and has_text(tb, "keeps can be stormed today") and has_text(tb, "2,000 points take one"),
+					"King's Day: the strip says so; the keep can be stormed (2,000 points)")
+				_shot("kings_day")
 				app.close_modal()
 				app.profile.d.settings["reduce_motion"] = true
 				_go("calm")

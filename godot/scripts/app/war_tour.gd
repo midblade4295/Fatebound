@@ -47,7 +47,7 @@ static func make_steps(war: Dictionary, in_clan: bool, house: String, tag: Strin
 		{"id":"tour_intro", "target":"map", "cam":["overview"], "pick":"",
 			"text":"Ah, the war table! Every land in the realm is on it, and three great houses want all of it: the Lions, the Stags and the Ravens."},
 		{"id":"tour_homes", "target":"map", "cam":["focus", home, 2.3], "pick":"",
-			"text":"Each house has a keep. Keeps can never be taken. People have tried. People have regretted it. Everything else is up for grabs."},
+			"text":"Each house has a keep. Most days, keeps can't be touched. But every Sunday is King's Day, and keeps can be stormed. A fallen keep counts as three lands. Guard yours."},
 		{"id":"tour_land", "target":"sheet", "cam":["focus", ex, 1.9], "pick":ex,
 			"text":"A land's colour shows which house holds it. Tap a land to see who holds it, and how close each clan is to taking it."},
 		{"id":"tour_bars", "target":"sheet", "cam":["focus", ex, 1.9], "pick":ex,

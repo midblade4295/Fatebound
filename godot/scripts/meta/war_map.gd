@@ -1,6 +1,6 @@
 extends RefCounted
 # 0.31.135 (Kevin, Crown War step 2 -- the "Crown War" design doc): the war map both sides share. Three houses, each
-# with a home that can never be taken (King's Day, a later step, attacks homes), and fifteen territories between them,
+# with a home (0.31.151: stormed only on King's Day, every Sunday -- below), and fifteen territories between them,
 # joined by links: a house attacks only along a link from land it holds (its home counts). The server (server/world.gd)
 # keeps who holds what; the phone (scripts/app/war_table.gd) draws it as a 3D war table from these positions.
 # Positions are map units (x right, y down); the table lays a hex tile at each, 2.4 units apart.
@@ -45,6 +45,26 @@ const PTS_CROWN := 50               # each crown a battle earns: a gate broken, 
 const PTS_LOSS := 100               # a lost battle takes this off
 const NEED_OWNED := 1000            # points to take a territory another house holds
 const NEED_NEUTRAL := 500           # ... one nobody holds (every Monday's land rush)
+# 0.31.151 -- King's Day (Kevin: "Do them all"; the design doc's later step): every Sunday (UTC, the week's last day)
+# the keeps can be stormed -- by a house holding land linked to one, or by its own house taking it back. A keep takes
+# NEED_HOME points; a fallen keep counts HOME_WORTH lands for its captor in the week's count (and no longer counts as
+# its own house's land to attack from) until Monday gives every keep back.
+const KINGS_DAY := 0                # Time's weekday (0 = Sunday, UTC)
+const NEED_HOME := 2000
+const HOME_WORTH := 3
+
+static func is_kings_day(t: int) -> bool:
+	return int(Time.get_datetime_dict_from_unix_time(t).weekday) == KINGS_DAY
+
+static func kings_day_next(t: int) -> int:
+	# when the next King's Day starts (today's start when it's King's Day now)
+	var day0 := t - posmod(t, 86400)
+	var wd := int(Time.get_datetime_dict_from_unix_time(t).weekday)
+	return day0 + posmod(KINGS_DAY - wd, 7) * 86400
+
+static func worth(id: String) -> int:
+	# what holding it counts for in the week's count (a fallen keep: HOME_WORTH)
+	return HOME_WORTH if is_home(id) else 1
 
 static func territories() -> Array:
 	# the fifteen that can be taken (not the homes), in a fixed order

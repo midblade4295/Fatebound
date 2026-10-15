@@ -531,6 +531,7 @@ const LB_PRIZES := [
 # (Profile.grant_war: "war_rewards"), and the phone says so the next time Home is up.
 const WAR_TAKE := {"gold":200, "chest":"silver"}     # each of the clan's fighters in the battle that takes a land
 const WAR_WEEK := {"gems":50, "chest":"gold"}        # everyone in a clan of the house that wins the week
+const WAR_KEEP := {"gold":300, "chest":"gold"}       # each of the clan's fighters in the battle that storms a keep (King's Day)
 
 const PRIZE_TITLES := {
 	"title_champion": {"task":"Finish #1 on a weekly leaderboard", "n":1, "cls":""},

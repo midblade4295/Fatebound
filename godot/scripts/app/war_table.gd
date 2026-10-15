@@ -97,6 +97,7 @@ func open(a, first := "", swoop := true) -> void:
 	_overlay = Control.new()
 	_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_overlay.clip_contents = true             # (0.31.151: a place's label off the map's edge isn't drawn over the strip)
 	_vpc.add_child(_overlay)
 	_names_button()
 	_help_button()
@@ -525,8 +526,11 @@ func _render() -> void:
 		l.autowrap_mode = TextServer.AUTOWRAP_OFF
 	else:
 		var left := maxi(0, int(w.get("ends", 0)) - int(Time.get_unix_time_from_system()))
-		var el := UI.label(_stats, "WEEK ENDS IN %dd %dh" % [left / 86400, (left % 86400) / 3600], 12, UI2.SOFT, UI.HEAVY_FONT)
+		var kd := bool(w.get("kd", false))
+		var el := UI.label(_stats, ("👑 KING'S DAY · ENDS IN %s" % _dh(left)) if kd else ("WEEK ENDS IN %dd %dh" % [left / 86400, (left % 86400) / 3600]),
+			12, UI2.GOLD if kd else UI2.SOFT, UI.HEAVY_FONT)
 		el.autowrap_mode = TextServer.AUTOWRAP_OFF
+		el.set_meta("action_key", "war_kings_day" if kd else "war_week")
 		# (0.31.135-0.31.149: ATTEMPTS n/5 here. 0.31.150, Kevin: "Remove the 5 battle daily" -- every battle counts)
 		var sp := Control.new()
 		sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -551,6 +555,8 @@ func _render_sheet() -> void:
 			lines.append("Join a clan to fight for a house: each clan's battles move its bars, and the first clan to fill a bar takes the territory.")
 		else:
 			lines.append("You fight for House %s. Attack along the links from land your house holds." % SocialUI.house_name(house))
+		if bool(w.get("kd", false)):
+			lines.append("Today is King's Day: the keeps can be stormed!")
 		var last: Dictionary = w.get("last", {})
 		if str(last.get("won", "")) != "":
 			lines.append("Last week: House %s won." % SocialUI.house_name(str(last.won)))
@@ -567,8 +573,15 @@ func _render_sheet() -> void:
 		SocialUI.house_chip(hr, h, 16.0)
 	UI.grow(UI2.text(hr, Map.name_of(sel).to_upper(), 18, Color.WHITE))
 	if Map.is_home(sel):
-		UI2.body(_sheet, "House %s's home -- it can never be lost. Homes come under attack on King's Day (coming later)." % SocialUI.house_name(h), 12, UI2.SOFT)
-		return
+		# 0.31.151: King's Day -- keeps are stormed on Sundays (UTC); the rest of the week, just whose it is and when
+		var own_house := str(Map.T[sel].home)
+		if h != own_house:
+			UI2.body(_sheet, "Stormed by House %s on King's Day -- it counts as %d lands for them until Monday, when every keep goes home." % [SocialUI.house_name(h), Map.HOME_WORTH], 12, SocialUI.house_color(h))
+		if not bool(w.get("kd", false)):
+			var left := maxi(0, int(w.get("kd_at", 0)) - int(Time.get_unix_time_from_system()))
+			UI2.body(_sheet, "House %s's keep. Keeps can only be stormed on King's Day, every Sunday (UTC) -- the next one in %s. A fallen keep counts as %d lands for its captor." % [SocialUI.house_name(own_house), _dh(left), Map.HOME_WORTH], 12, UI2.SOFT)
+			return
+		UI2.body(_sheet, "👑 KING'S DAY: keeps can be stormed today! %s points take one; it counts as %d lands until Monday." % [_num(Map.NEED_HOME), Map.HOME_WORTH], 12, UI2.GOLD)
 	var held := "Free -- nobody holds it" if h == "" else "Held by House %s%s" % [SocialUI.house_name(h),
 		("  ·  [%s] %s" % [str(t.get("ct", "")), str(t.get("cn", ""))]) if str(t.get("ct", "")) != "" else ""]
 	var hl := UI.label(_sheet, held, 12, SocialUI.house_color(h) if h != "" else UI2.SOFT, UI.HEAVY_FONT)
@@ -813,6 +826,9 @@ func _attack() -> void:
 	app.sfx("tap")
 	_going = true
 	_dirty = true
+
+static func _dh(secs: int) -> String:
+	return "%dd %dh" % [secs / 86400, (secs % 86400) / 3600] if secs >= 86400 else "%dh %dm" % [secs / 3600, (secs % 3600) / 60]
 
 static func _num(n: int) -> String:
 	var s := str(n)

@@ -140,7 +140,7 @@ func _init() -> void:
 	s.handle(1, {"k":"war_go", "tid":"lake"})
 	check(not bool(last(1, "war_go").get("ok", true)) and str(last(1, "war_go").why).contains("linked"), "not linked: refused")
 	s.handle(1, {"k":"war_go", "tid":"home_stags"})
-	check(str(last(1, "war_go").get("why", "")).contains("Homes"), "a home: refused (King's Day comes later)")
+	check(str(last(1, "war_go").get("why", "")).contains("King's Day"), "a keep on a Monday: refused (only on King's Day)")
 	rooms[0] = 0
 	s.handle(1, {"k":"war_go", "tid":"mill"})
 	check(str(last(1, "war_go").get("why", "")).contains("busy") and w.battles.is_empty(), "every room busy: refused, no battle")
@@ -286,6 +286,54 @@ func _init() -> void:
 	var rl: Dictionary = w.battle_over(b4, {"won":true, "gate":true, "king":true, "present":[B]})
 	check(bool(rl[B].late) and int(rl[B].pts) == 0 and not bool(rl[B].took) and w.owners.is_empty() and w.bars.is_empty(),
 		"Bob's battle for the Tower, still on when the week ended: it counts for nothing on the new map")
+
+	# ---------------- King's Day (0.31.151): the keeps stormed on Sundays ----------------
+	s.tick(Clans.MSG_WINDOW + 1.0)
+	w.owners["pass"] = {"h":"lions", "c":CA, "ct":"LHRT", "cn":"Lion Hearts", "at":T0}   # (the Lions next to the Stags' Keep)
+	s.now_override = T0 + 7 * 86400 + 3600              # Monday
+	clear()
+	s.handle(1, {"k":"war_go", "tid":"home_stags"})
+	check(str(last(1, "war_go").get("why", "")).contains("King's Day") and not Map.is_kings_day(int(s.now_override)), "Monday: the Stags' Keep can't be stormed")
+	s.handle(1, {"k":"war_open"})
+	var mk: Dictionary = last(1, "war")
+	check(not bool(mk.get("kd", true)) and int(mk.kd_at) == T0 - 3600 + 13 * 86400 and not (mk.terr.home_stags as Dictionary).has("need"),
+		"the map: not King's Day; the next one Sunday (%d); a keep shows only whose it is" % int(mk.get("kd_at", 0)))
+	s.handle(1, {"k":"war_close"})
+	s.now_override = T0 + 13 * 86400 + 3600             # Sunday: King's Day
+	clear()
+	s.handle(1, {"k":"war_go", "tid":"home_stags", "call":false})
+	var kgo: Dictionary = last(1, "war_go")
+	var kb := str(kgo.get("bid", ""))
+	check(Map.is_kings_day(int(s.now_override)) and bool(kgo.get("ok", false)) and str(w.battles[kb].dh) == "stags" and w.side_for(S, kb) == "def"
+		and str(last(3, "war_alarm").get("bid", "")) == kb, "King's Day: the Lions storm the Stags' Keep; the Stags defend and are alarmed")
+	check(w.need_for("home_stags") == Map.NEED_HOME and w.reach("ravens", "home_stags").contains("linked"), "a keep takes %d points; the Ravens (not next to it) can't" % Map.NEED_HOME)
+	w.bars["home_stags"] = {CA: Map.NEED_HOME - 100}
+	w.seated(kb, A, ids[0], "Alice")
+	var kr: Dictionary = w.battle_over(kb, {"won":true, "gate":true, "king":true, "present":[A]})
+	check(bool(kr[A].took) and w.holder("home_stags") == "lions" and int(w.counts().lions) == 1 + Map.HOME_WORTH and (kr[A] as Dictionary).get("reward", {}) == Eco.WAR_KEEP,
+		"the keep falls: the Lions hold it (it counts as %d: Lions %d), Alice gets %s" % [Map.HOME_WORTH, int(w.counts().lions), str(Eco.WAR_KEEP)])
+	check(w.reach("stags", "mine").contains("linked") and w.reach("stags", "home_stags") == "", "the Stags can't attack from their fallen keep, but may storm it back")
+	s.tick(Clans.MSG_WINDOW + 1.0)
+	clear()
+	s.handle(3, {"k":"war_go", "tid":"home_stags", "call":false})
+	var kb2 := str(last(3, "war_go").get("bid", ""))
+	w.bars["home_stags"] = {CS: Map.NEED_HOME - 100}
+	w.seated(kb2, S, ids[2], "Sam")
+	var kr2: Dictionary = w.battle_over(kb2, {"won":true, "gate":true, "king":true, "present":[S]})
+	check(bool(kr2[S].took) and w.holder("home_stags") == "stags" and not w.owners.has("home_stags") and int(w.counts().lions) == 1,
+		"the Stags storm it back: their own again (not counted as land)")
+	w.bars["home_stags"] = {CA: Map.NEED_HOME - 100}
+	s.handle(1, {"k":"war_go", "tid":"home_stags", "call":false})
+	var kb3 := str(last(1, "war_go").get("bid", ""))
+	w.seated(kb3, A, ids[0], "Alice")
+	w.battle_over(kb3, {"won":true, "gate":true, "king":true, "present":[A]})
+	w.save_now()
+	var kagain = World.new(dir, s)
+	check(kagain.holder("home_stags") == "lions", "world.json keeps a stormed keep")
+	s.now_override = T0 + 14 * 86400                    # the next Monday (01:00): every keep goes home
+	w._roll()
+	check(w.holder("home_stags") == "stags" and w.owners.is_empty(), "Monday: every keep goes home")
+	s.now_override = T0 + 7 * 86400                     # (back to the week the damaged world.json below is from)
 	w.save_now()
 	# a damaged world.json: the odd entries are left out, and saving still works
 	var wf := FileAccess.open(dir.path_join("world.json"), FileAccess.WRITE)

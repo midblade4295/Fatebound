@@ -85,10 +85,11 @@ func _load() -> void:
 	# (only entries that make sense: a hand-edited or damaged file can't stop the saves or skew the week's count)
 	var terr := Map.territories()
 	for tid in _dict(v.get("owners")):
-		if terr.has(str(tid)) and v.owners[tid] is Dictionary and Map.HOUSES.has(str(v.owners[tid].get("h", ""))):
+		# (0.31.151: a keep stormed on King's Day is held too, until Monday)
+		if (terr.has(str(tid)) or Map.is_home(str(tid))) and v.owners[tid] is Dictionary and Map.HOUSES.has(str(v.owners[tid].get("h", ""))):
 			owners[str(tid)] = v.owners[tid]
 	for tid in _dict(v.get("bars")):
-		if terr.has(str(tid)) and v.bars[tid] is Dictionary:
+		if (terr.has(str(tid)) or Map.is_home(str(tid))) and v.bars[tid] is Dictionary:
 			var tb := {}
 			for cid in v.bars[tid]:
 				if v.bars[tid][cid] is float or v.bars[tid][cid] is int:
@@ -150,7 +151,7 @@ func counts() -> Dictionary:
 	for tid in owners:
 		var h := str(owners[tid].get("h", ""))
 		if out.has(h):
-			out[h] = int(out[h]) + 1
+			out[h] = int(out[h]) + Map.worth(str(tid))   # (0.31.151: a stormed keep counts HOME_WORTH)
 	return out
 
 func _roll() -> void:
@@ -218,20 +219,26 @@ func house_of_pid(pid: String) -> String:
 
 func holder(tid: String) -> String:
 	if Map.is_home(tid):
-		return str(Map.T[tid].home)
+		return str(owners.get(tid, {}).get("h", Map.T[tid].home))   # (0.31.151: stormed on King's Day: its captor's)
 	return str(owners.get(tid, {}).get("h", ""))
 
 func need_for(tid: String) -> int:
+	if Map.is_home(tid):
+		return Map.NEED_HOME                        # 0.31.151: a keep
 	return Map.NEED_OWNED if owners.has(tid) else Map.NEED_NEUTRAL
 
 func reach(house: String, tid: String) -> String:
 	# "" when the house can attack the territory, else why not
 	if not Map.T.has(tid):
 		return "There's no such place"
-	if Map.is_home(tid):
-		return "Homes can't be attacked yet"
 	if holder(tid) == house:
 		return "Your house holds it"
+	if Map.is_home(tid):
+		# 0.31.151: King's Day -- keeps only on Sundays; its own house may always storm it back
+		if not Map.is_kings_day(unix()):
+			return "Keeps can only be stormed on King's Day (Sundays)"
+		if str(Map.T[tid].home) == house:
+			return ""
 	for n in Map.neighbours(tid):
 		if holder(str(n)) == house:
 			return ""
@@ -310,7 +317,7 @@ func _go(pid: String, tid: String, call: bool) -> void:
 	var own: Dictionary = owners.get(tid, {})
 	var bid := "b%d%s" % [next_bid, Crypto.new().generate_random_bytes(2).hex_encode()]
 	next_bid += 1
-	var b := {"bid":bid, "tid":tid, "ah":house, "ac":cid, "act":str(c.tag), "acn":str(c.name), "dh":str(own.get("h", "")),
+	var b := {"bid":bid, "tid":tid, "ah":house, "ac":cid, "act":str(c.tag), "acn":str(c.name), "dh":holder(tid),
 		"dc":str(own.get("c", "")), "dct":str(own.get("ct", "")), "by":pid, "at":unix(), "room":0, "state":"lobby", "scorers":{},
 		"week":week}
 	var room := int(room_fn.call(b))
@@ -331,12 +338,20 @@ func _go(pid: String, tid: String, call: bool) -> void:
 			if str(m) != pid and soc.online.has(str(m)):
 				soc._send(str(m), {"t":"so", "k":"war_call", "bid":bid, "tid":tid, "name":tname, "by":name, "ct":str(c.tag), "h":house})
 		clans._sys(cid, "%s is attacking %s -- join the battle!" % [name, tname])
+	var dcs := []
 	var dc := str(own.get("c", ""))
 	if dc != "" and clans.clans.has(dc):
-		for m in clans.members_of(dc):
+		dcs.append(dc)
+	if Map.is_home(tid) and not owners.has(tid):
+		# 0.31.151: King's Day -- a keep stormed: every clan of its house hears it
+		for oc in clans.clans:
+			if str(clans.clans[oc].house) == str(b.dh) and not dcs.has(str(oc)):
+				dcs.append(str(oc))
+	for d in dcs:
+		for m in clans.members_of(str(d)):
 			if soc.online.has(str(m)):
 				soc._send(str(m), {"t":"so", "k":"war_alarm", "bid":bid, "tid":tid, "name":tname, "ct":str(c.tag), "h":house})
-		clans._sys(dc, "[%s] is attacking %s -- defend it!" % [str(c.tag), tname])
+		clans._sys(str(d), "[%s] is attacking %s -- defend it!" % [str(c.tag), tname])
 
 # ---------------- the battle (siege_server.gd) ----------------
 func seated(bid: String, pid: String, acct: String, name: String) -> bool:
@@ -402,11 +417,13 @@ func battle_over(bid: String, res: Dictionary) -> Dictionary:
 			"king":bool(res.get("king", false)), "won":won, "bar":mini(bar, need), "need":need, "took":took, "quit":not present.has(pid),
 			"late":late}
 		if took and present.has(pid):
-			# 0.31.151: the land taken -- each of the clan's fighters in this battle gets Eco.WAR_TAKE
+			# 0.31.151: the land taken -- each of the clan's fighters in this battle gets Eco.WAR_TAKE (a keep stormed on
+			# King's Day: Eco.WAR_KEEP)
 			var hn := str(Map.HOUSE_NAMES.get(str(b.ah), b.ah))
-			if _grant(str((b.scorers[pid] as Dictionary).get("acct", "")), "take:%s:%s" % [tid, bid], "take", Eco.WAR_TAKE,
-					"You took %s for House %s!" % [Map.name_of(tid), hn]):
-				out[pid]["reward"] = Eco.WAR_TAKE
+			var rw: Dictionary = Eco.WAR_KEEP if Map.is_home(tid) else Eco.WAR_TAKE
+			if _grant(str((b.scorers[pid] as Dictionary).get("acct", "")), "take:%s:%s" % [tid, bid], "take", rw,
+					("You stormed %s for House %s!" if Map.is_home(tid) else "You took %s for House %s!") % [Map.name_of(tid), hn]):
+				out[pid]["reward"] = rw
 	var cl = soc.clans
 	if cl != null and cl.clans.has(ac) and not per.is_empty():
 		if late:
@@ -423,6 +440,8 @@ func _capture(tid: String, cid: String) -> void:
 	var c: Dictionary = cl.clans[cid]
 	var prev: Dictionary = owners.get(tid, {})
 	owners[tid] = {"h":str(c.house), "c":cid, "ct":str(c.tag), "cn":str(c.name), "at":unix()}
+	if Map.is_home(tid) and str(Map.T[tid].home) == str(c.house):
+		owners.erase(tid)                              # (0.31.151: a keep stormed back by its own house: its own again)
 	bars[tid] = {}
 	captures.push_front({"at":unix(), "tid":tid, "h":str(c.house), "ct":str(c.tag), "from":str(prev.get("h", ""))})
 	while captures.size() > LOG_MAX:
@@ -446,8 +465,9 @@ func map_msg(pid: String) -> Dictionary:
 	var terr := {}
 	for tid in Map.T:
 		var t := {"h":holder(tid)}
-		if Map.is_home(tid):
-			terr[tid] = t
+		if Map.is_home(tid) and not Map.is_kings_day(unix()) and not owners.has(tid) and not (bars.get(tid, {}) as Dictionary).size() > 0 \
+				and battle_on(tid).is_empty():
+			terr[tid] = t                               # (a keep on an ordinary day: just whose it is)
 			continue
 		var own: Dictionary = owners.get(tid, {})
 		if not own.is_empty():
@@ -475,4 +495,5 @@ func map_msg(pid: String) -> Dictionary:
 			t["why"] = reach(house, tid)
 		terr[tid] = t
 	return {"t":"so", "k":"war", "week":week, "ends":week_end(), "terr":terr, "tally":tally, "last":last, "counts":counts(),
-		"house":house, "clan":my_clan, "att":Map.ATTEMPTS, "max":Map.ATTEMPTS, "caps":captures.slice(0, 8)}
+		"house":house, "clan":my_clan, "att":Map.ATTEMPTS, "max":Map.ATTEMPTS, "caps":captures.slice(0, 8),
+		"kd":Map.is_kings_day(unix()), "kd_at":Map.kings_day_next(unix())}   # 0.31.151: King's Day now / when it starts
