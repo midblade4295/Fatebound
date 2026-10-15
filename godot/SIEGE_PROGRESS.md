@@ -4321,3 +4321,6 @@ Kevin: "I want the play button to always bring players into map"
 - Tests: app_flow_test (not connected: PLAY opens the map, QUICK BATTLE starts the session), social_ui_test (a party's
   PLAY opens the map, QUICK BATTLE · PARTY ×2 takes the party in), war_ui_test, clans_ui_test, version_gate_test.
 - Version 0.31.146, versionCode 232 (server code unchanged; SERVER_BUILD follows the app's version).
+- Quick suite: all 92 passed (the redialing server tests too). tools/cold_start_check.sh: PASS. The Play AAB built from
+  this commit (throwaway key, presets untouched by the build): BASE OK (253 files), CONTENT OK (no pack changed),
+  play_games true, bundletool valid.
