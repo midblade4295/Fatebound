@@ -212,7 +212,7 @@ func _process(delta: float) -> bool:
 					check(str(last.id) == "tour_clan" and btn("war_tour_join") != null and btn("war_tour_later") != null and btn("war_tour_next") == null,
 						"the last step (no clan): JOIN A CLAN or LATER")
 					var ids: Array = tour.steps.map(func(s): return str(s.id))
-					check(ids.has("tour_bars") and ids.has("tour_take") and ids.has("tour_links") and ids.has("tour_attempts") and ids.has("tour_week") and ids.has("tour_hot") and not ids.has("tour_quick"),
+					check(ids.has("tour_bars") and ids.has("tour_take") and ids.has("tour_links") and ids.has("tour_battles") and ids.has("tour_week") and ids.has("tour_hot") and not ids.has("tour_quick"),
 						"the tour covers the bars, taking land, the roads, the day's battles, the week, BATTLES NOW (%s)" % str(ids))
 					check(steps_seen > 0, "the spotlight on BATTLES NOW on its step")
 					_shot("tour_last")

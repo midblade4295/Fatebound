@@ -629,7 +629,8 @@ func _fill_war() -> void:
 		return
 	if bool(m.get("helped", false)):
 		UI2.center(UI2.text(f, "BATTLE FOR %s" % place, 15, Color("#ffd27a")))
-		UI2.center(UI2.body(f, "You fought for your house (no attempt spent: no points)", 11, Color.WHITE, false))
+		# (0.31.150: no daily attempts -- "helped" is one of another clan of the attackers' house: its bar moved, not yours)
+		UI2.center(UI2.body(f, "You fought for your house beside another clan (its bar moves, not your clan's)", 11, Color.WHITE, false))
 		return
 	if bool(m.get("late", false)):
 		UI2.center(UI2.text(f, "BATTLE FOR %s" % place, 15, Color("#ffd27a")))

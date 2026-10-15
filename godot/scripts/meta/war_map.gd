@@ -39,7 +39,8 @@ const LINKS := [
 ]
 
 # ---- the numbers (the design doc's "Starting numbers"; Kevin approved them)
-const ATTEMPTS := 5                 # battles a clan member scores in a day (UTC)
+const ATTEMPTS := 5                 # (0.31.135-0.31.149: battles a clan member scored in a day. 0.31.150, Kevin: "Remove the
+                                    # 5 battle daily" -- no limit; the server still sends it as "att"/"max" for older phones)
 const PTS_CROWN := 50               # each crown a battle earns: a gate broken, the King rescued, the match won
 const PTS_LOSS := 100               # a lost battle takes this off
 const NEED_OWNED := 1000            # points to take a territory another house holds

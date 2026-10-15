@@ -6,7 +6,7 @@ extends Control
 # Meshy miniature (0.31.136) standing in it, the sea's waves and foam moving, cloud shadows drifting over it all.
 # Tap a place's land to pick it. Under the map: the place picked -- who holds it, the clans' capture bars, the battle
 # on it (JOIN for your house, DEFEND for the holders) and ATTACK (with CALL CLAN), or why not. Above it: the week's
-# end, your attempts today, and each house's land. The state is the server's (server/world.gd), pushed to
+# end and each house's land (0.31.135-0.31.149: your attempts today too). The state is the server's (server/world.gd), pushed to
 # scripts/meta/social.gd while this is open.
 const UI = preload("res://scripts/app/ui.gd")
 const UI2 = preload("res://scripts/app/ui2.gd")
@@ -527,10 +527,7 @@ func _render() -> void:
 		var left := maxi(0, int(w.get("ends", 0)) - int(Time.get_unix_time_from_system()))
 		var el := UI.label(_stats, "WEEK ENDS IN %dd %dh" % [left / 86400, (left % 86400) / 3600], 12, UI2.SOFT, UI.HEAVY_FONT)
 		el.autowrap_mode = TextServer.AUTOWRAP_OFF
-		if str(w.get("house", "")) != "":
-			var al := UI.label(_stats, "ATTEMPTS %d/%d" % [int(w.get("att", 0)), int(w.get("max", 5))], 12, UI2.GOLD, UI.HEAVY_FONT)
-			al.autowrap_mode = TextServer.AUTOWRAP_OFF
-			al.set_meta("action_key", "war_attempts")
+		# (0.31.135-0.31.149: ATTEMPTS n/5 here. 0.31.150, Kevin: "Remove the 5 battle daily" -- every battle counts)
 		var sp := Control.new()
 		sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		_stats.add_child(sp)
@@ -613,8 +610,6 @@ func _render_sheet() -> void:
 			app.open_clan("join"), "war_find_clan", 15, 40.0)
 		return
 	var why := str(t.get("why", ""))
-	# (0.31.149: with no battles left today that count, ATTACK still starts one -- it just doesn't move the bar)
-	var spent: bool = why == "" and int(w.get("att", 0)) <= 0
 	var ar := UI.row(_sheet, 8)
 	var ab := UI2.button(ar, "WAITING..." if _going else "ATTACK", "orange", func(): _attack(), "war_attack", 17, 46.0)
 	UI.grow(ab)
@@ -626,8 +621,6 @@ func _render_sheet() -> void:
 	cb.custom_minimum_size.x = 128
 	if why != "":
 		UI2.body(_sheet, why, 12, Color("#ffb0a0"))
-	elif spent:
-		UI2.body(_sheet, "Your %d battles that count are used today: this one won't move your clan's bar (the match still pays)." % int(w.get("max", 5)), 12, UI2.GOLD)
 
 # ---------------- BATTLES NOW: the hot zones (0.31.149) ----------------
 func hot_list() -> Array:

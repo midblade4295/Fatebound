@@ -4424,3 +4424,20 @@ actively fighting and players can jump right into that battle"
   ATTACK, Bob into her battle), social_ui_test (Bob's battle under Alice's map, JOIN LIONS puts her in The Lion Guard
   and the battle, the party follows her in, one side), app_flow_test (not connected: the map says so).
 - Version 0.31.149, versionCode 235 (server code changed: SERVER_BUILD 0.31.149).
+- (0.31.149's checks were stopped part way -- 0.31.150 came straight after; its checks are 0.31.150's below.)
+
+## 0.31.150 — no daily limit on battles
+Kevin: "Remove the 5 battle daily"
+- server/world.gd: no attempts any more -- every battle counts, as many as anyone likes: its starter and every member of
+  the attacking clan seated in it score (seated(); another clan of the same house still fights beside them and
+  "helps", its points going to nobody's bar). world.json no longer keeps "attempts" (an old one is ignored and dropped on
+  the next save). The map still sends "att"/"max" as Map.ATTEMPTS (5) for phones before 0.31.150, whose ATTACK wanted an
+  attempt left.
+- The phone: ATTEMPTS n/5 is gone from the strip over the map, and so is 0.31.149's "your battles that count are used
+  today" note. The match results' "helped" line: "You fought for your house beside another clan (its bar moves, not your
+  clan's)". The Herald's tour: "tour_battles" -- "Fight as often as you like. Every battle your clan wins moves its bar,
+  started or joined. Defending your house's land holds it, and costs you nothing but sweat." -- replaces tour_attempts.
+- Needs the server redeployed (sudo bash godot/server/deploy/install_siege_server.sh).
+- Tests: world_test (the starter and seated clan members score; a sixth battle in a day starts and counts; the damaged
+  world.json without attempts), war_battle_test, war_ui_test (no ATTEMPTS), war_tour_test (tour_battles).
+- Version 0.31.150, versionCode 236 (server code changed: SERVER_BUILD 0.31.150).

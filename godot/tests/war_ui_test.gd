@@ -5,7 +5,7 @@ extends SceneTree
 # the war table; tapping the Old Tower (where it is drawn) shows it held by the Stags with ATTACK; the High Pass isn't
 # linked to Lions land, so no ATTACK there. ATTACK (calling the clan) takes Alice's app into the battle -- Bob is
 # called, Sam is alarmed -- a 6-second battle the attackers win (SIEGE_TEST_SCORE); the results show what it did to the
-# clan's bar and WAR MAP takes her back to the table, on the Tower, with the bar and 4 attempts. Then Bob attacks the
+# clan's bar and WAR MAP takes her back to the table, on the Tower, with the bar. Then Bob attacks the
 # Ford and calls the clan: a JOIN banner drops on Alice's screen and the table shows the battle with JOIN THE BATTLE.
 # With a display and SHOT_DIR set, screenshots go there.
 #   godot --headless --path godot -s res://tests/war_ui_test.gd
@@ -188,8 +188,8 @@ func _process(delta: float) -> bool:
 		"table":
 			var tb = _table()
 			if tb != null and not app.social.war.is_empty() and t_phase > (2.5 if shots != "" else 0.6):
-				check(has_text(tb, "ATTEMPTS 5/5") and has_text(tb, "WEEK ENDS IN") and has_text(tb, "THE WAR TABLE"),
-					"the war table: the week's end, 5 attempts, how it works")
+				check(not has_text(tb, "ATTEMPTS") and has_text(tb, "WEEK ENDS IN") and has_text(tb, "THE WAR TABLE"),
+					"the war table: the week's end, how it works (0.31.150: no daily attempts)")
 				check(not has_text(tb, "Saltport") and not has_text(tb, "[STAG]"), "a clean table: no names until a place is picked")
 				press("war_names")
 				var hold: PackedColorArray = tb._land_mat.get_shader_parameter("holder")
@@ -266,7 +266,7 @@ func _process(delta: float) -> bool:
 		"back":
 			var tb = _table()
 			if app.siege == null and tb != null and t_phase > (1.5 if shots != "" else 0.6):
-				check(str(tb.sel) == "tower" and has_text(tb, "ATTEMPTS 4/5"), "WAR MAP: back at the table, on the Tower, 4 attempts left")
+				check(str(tb.sel) == "tower" and not has_text(tb, "ATTEMPTS"), "WAR MAP: back at the table, on the Tower")
 				check(has_text(tb, "[LION]") and (tb._sheet as Node).find_children("*", "ProgressBar", true, false).size() >= 1,
 					"the Lions' bar on the Tower")
 				_shot("war_back")

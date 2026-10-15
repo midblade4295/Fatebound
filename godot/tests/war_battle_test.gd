@@ -4,8 +4,8 @@ extends SceneTree
 # holds the Mill, the Stags clan [STAG] (Sam) holds the Old Tower (clans.json and world.json written for it). Alice
 # opens the map and attacks the Tower, calling her clan: Bob is called, Sam (a holder) is alarmed. Bob and Alice join
 # on team 1 (red), Sam defends on team 0 (blue); Rae (no clan) is refused. The battle starts after its countdown, ends
-# 1-0: Alice and Bob each spent an attempt and each earn 100 (the rescue and the win), the Lions' bar on the Tower is
-# 200/1000; Sam hears the Tower held. PLAY AGAIN after it: "war_over". The map shows the bar and 4 attempts left.
+# 1-0: Alice and Bob each earn 100 (the rescue and the win), the Lions' bar on the Tower is
+# 200/1000; Sam hears the Tower held. PLAY AGAIN after it: "war_over". The map shows the bar.
 # The server has 2 rooms (SIEGE_MAX_ROOMS): battles never take the last one, so Sam's attack on the Mill meanwhile is
 # "busy". A second socket of Bob's account is turned away (war_twice). Bob's phone never asks for the next match, yet
 # he's let go after the results (SIEGE_RESULTS_KEEP 3 s); joining the battle after it: war_over. Once everyone's gone
@@ -145,7 +145,7 @@ func _process(delta: float) -> bool:
 			var last_war := _last_so(socs.Alice, "war")
 			if not last_war.is_empty():
 				check(str(last_war.terr.mill.h) == "lions" and str(last_war.terr.tower.ct) == "STAG" and str(last_war.terr.tower.why) == "" and int(last_war.att) == 5,
-					"the map: the Mill is the Lions', the Tower the Stags' -- the Lions may attack it; 5 attempts")
+					"the map: the Mill is the Lions', the Tower the Stags' -- the Lions may attack it")
 				socs.Alice.war_go("tower", true)
 				_go("go")
 		"go":
@@ -212,11 +212,11 @@ func _process(delta: float) -> bool:
 		"again":
 			var bye := _got("m_Alice", "bye")
 			var mw := _last_so(socs.Alice, "war")
-			if not bye.is_empty() and not mw.is_empty() and int(mw.att) == 4:
+			if not bye.is_empty() and not mw.is_empty() and not (mw.terr.tower.get("bars", []) as Array).is_empty():
 				check(str(bye[0].why) == "war_over", "PLAY AGAIN after a battle: war_over")
 				var bars: Array = mw.terr.tower.get("bars", [])
-				check(not bars.is_empty() and str(bars[0].ct) == "LION" and int(bars[0].p) >= 200 and int(mw.att) == 4,
-					"the map: the Lions' bar on the Tower, 4 attempts left")
+				check(not bars.is_empty() and str(bars[0].ct) == "LION" and int(bars[0].p) >= 200,
+					"the map: the Lions' bar on the Tower")
 				check(not mw.terr.tower.has("b") or str(mw.terr.tower.b.state) == "over", "no live battle at the Tower now")
 				var lines: Array = socs.Bob.lines.get("clan", [])
 				check(lines.any(func(l): return str(l.get("x", "")).contains("The battle for Old Tower")), "the clan chat sums the battle up")

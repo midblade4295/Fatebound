@@ -3,8 +3,9 @@ extends SceneTree
 # for the accounts). The shared map (18 places, the links, every territory reachable, homes never attackable); who may
 # attack what (linked to the house's land or home); starting a battle (a room from siege_server, or "busy"; one battle a
 # territory; the same house joins it; the clan called; the holders alarmed); sides (attackers, holders, nobody else;
-# no defenders for land nobody holds); attempts (5 a day, the starter's spent at once, the others' when seated, a new
-# day starts again); one battle on at a time for a player, two for a clan; the points (crowns x 50, a loss -100, a
+# no defenders for land nobody holds); who scores (0.31.150, Kevin: "Remove the 5 battle daily" -- no daily attempts: the
+# starter and every member of the attacking clan seated, as many battles as they like); one battle on at a time for a
+# player, two for a clan; the points (crowns x 50, a loss -100, a
 # quitter -100, a battle every player left is lost) and taking a territory (500 when nobody holds it, 1000 when a house
 # does); the map each phone gets; a week ending (the house with the most land wins it, the map is free again; a battle
 # still on then counts for nothing); world.json (a damaged one doesn't stop the saves); a malformed "call".
@@ -119,7 +120,7 @@ func _init() -> void:
 	s.handle(1, {"k":"war_open"})
 	var m: Dictionary = last(1, "war")
 	check(not m.is_empty() and (m.terr as Dictionary).size() == 18 and str(m.house) == "lions" and int(m.att) == 5 and int(m.max) == 5,
-		"WAR: 18 places, her house, 5 attempts")
+		"WAR: 18 places, her house (att/max still 5, for phones before 0.31.150)")
 	check(str(m.terr.home_stags.h) == "stags" and str(m.terr.mill.h) == "" and int(m.terr.mill.need) == 500, "homes held by their houses; the Mill free (500 to take)")
 	check(str(m.terr.mill.why) == "" and str(m.terr.quarry.why) == "" and str(m.terr.lake.why).contains("linked") and str(m.terr.pass.why).contains("linked"),
 		"Lions may attack the Mill and the Quarry (by their home), not the Lake or the Pass")
@@ -142,7 +143,7 @@ func _init() -> void:
 	var go: Dictionary = last(1, "war_go")
 	var bid := str(go.get("bid", ""))
 	check(bool(go.get("ok", false)) and bid != "" and str(go.side) == "att" and int(w.battles[bid].room) == 7, "Alice attacks the Mill: a battle in room 7")
-	check(w.attempts_left(A) == 4 and (w.battles[bid].scorers as Dictionary).has(A), "starting it spent her attempt (4 left): it counts for her")
+	check((w.battles[bid].scorers as Dictionary).has(A), "starting it: it counts for her")
 	check(str(last(2, "war_call").get("bid", "")) == bid and str(last(2, "war_call").get("by", "")) == "Alice" and got(1, "war_call").is_empty(),
 		"her clanmate Bob is called to it (she isn't)")
 	check(got(3, "war_alarm").is_empty(), "nobody holds the Mill: no alarm")
@@ -150,13 +151,13 @@ func _init() -> void:
 	s.handle(2, {"k":"war_go", "tid":"mill"})
 	check(str(last(2, "war_go").get("bid", "")) == bid and bool(last(2, "war_go").get("joined", false)) and w.battles.size() == 1, "Bob asking for the Mill joins her battle")
 	s.handle(1, {"k":"war_go", "tid":"quarry"})
-	check(str(last(1, "war_go").get("why", "")).contains("battle on already") and w.battles.size() == 1 and w.attempts_left(A) == 4,
+	check(str(last(1, "war_go").get("why", "")).contains("battle on already") and w.battles.size() == 1,
 		"Alice can't start a second battle while hers is on")
 	check(w.side_for(A, bid) == "att" and w.side_for(L, bid) == "att" and w.side_for(S, bid) == "" and w.side_for(TM, bid) == "",
 		"sides: Lions attack (any Lions clan); Stags, Ravens and the clanless can't join; nobody defends free land")
-	check(w.seated(bid, A, ids[0], "Alice") and w.seated(bid, B, ids[1], "Bob") and not w.seated(bid, L, ids[4], "Lena") and w.attempts_left(A) == 4,
-		"seated: Alice and Bob spend an attempt (Alice 4 left); Lena (another Lions clan) helps without one")
-	check(w.seated(bid, A, ids[0], "Alice") and w.attempts_left(A) == 4, "back on her seat: not counted twice")
+	check(w.seated(bid, A, ids[0], "Alice") and w.seated(bid, B, ids[1], "Bob") and not w.seated(bid, L, ids[4], "Lena"),
+		"seated: Alice and Bob score; Lena (another Lions clan) helps (no points)")
+	check(w.seated(bid, A, ids[0], "Alice") and (w.battles[bid].scorers as Dictionary).size() == 2, "back on her seat: not counted twice")
 	w.started(bid)
 	var res: Dictionary = w.battle_over(bid, {"won":true, "gate":true, "king":true, "present":[A]})
 	check(int(res[A].pts) == 150 and int(res[A].crowns) == 3 and int(res[B].pts) == -100 and bool(res[B].quit) and int(res[A].bar) == 50
@@ -179,7 +180,6 @@ func _init() -> void:
 		"enough wins: the Lions take the Mill (the bars start again)")
 	check(str(w.captures[0].tid) == "mill" and str((s.hist.get("c:" + CA, []) as Array).back().get("x", "")).contains("took The Mill") or
 		(s.hist.get("c:" + CA, []) as Array).any(func(l): return str(l.get("x", "")).contains("We took The Mill")), "the capture is logged and the clan told")
-	check(w.attempts_left(A) == 1 and w.attempts_left(B) == 1, "attempts: Alice and Bob have 1 left each")
 	clear()
 	s.handle(1, {"k":"war_go", "tid":"mill"})
 	check(str(last(1, "war_go").get("why", "")).contains("holds"), "their own land: refused")
@@ -187,14 +187,12 @@ func _init() -> void:
 	var b3 := str(last(1, "war_go").get("bid", ""))
 	w.seated(b3, A, ids[0], "Alice")
 	w.battle_over(b3, {"won":false, "gate":false, "king":false, "present":[A]})
-	check(w.attempts_left(A) == 0 and int(w.bars.get("tower", {}).get(CA, 0)) == 0, "a lost battle: -100 (never below 0); Alice is out of attempts")
+	check(int(w.bars.get("tower", {}).get(CA, 0)) == 0, "a lost battle: -100 (never below 0)")
 	clear()
 	s.handle(1, {"k":"war_go", "tid":"tower"})
-	# 0.31.149 (Kevin: "Remove the quick play so the player needs to choose where to fight"): every match is a battle now --
-	# with no attempts left one still starts, it just counts for nothing for her
+	# 0.31.150 (Kevin: "Remove the 5 battle daily"): her sixth battle today starts, and counts like the first
 	var b0 := last(1, "war_go")
-	check(bool(b0.get("ok", false)) and not bool(b0.get("counts", true)) and w.attempts_left(A) == 0
-		and (w.battles[str(b0.bid)].scorers as Dictionary).is_empty(), "no attempts left: the battle still starts -- it doesn't count for her")
+	check(bool(b0.get("ok", false)) and (w.battles[str(b0.bid)].scorers as Dictionary).has(A), "no daily limit: her sixth battle today starts and counts")
 	w.battle_gone(str(b0.bid))                         # (nobody came: dropped)
 
 	# ---------------- defending ----------------
@@ -213,7 +211,7 @@ func _init() -> void:
 	var live := func() -> int: return w.battles.values().filter(func(b): return str(b.state) != "over").size()
 	check(bR != "" and live.call() == 2, "Ravens attack the Fen meanwhile (one battle a territory, many at once)")
 	w.battle_gone(bR)
-	check(live.call() == 1 and not w.battles.has(bR) and w.attempts_left(R) == 4, "a battle nobody came to is dropped (the starter's attempt stays spent)")
+	check(live.call() == 1 and not w.battles.has(bR), "a battle nobody came to is dropped")
 	clear()
 	s.handle(7, {"k":"war_go", "tid":"ford"})
 	var bF := str(last(7, "war_go").get("bid", ""))
@@ -231,7 +229,7 @@ func _init() -> void:
 	w.count_fn = func(_b: String) -> Array: return [0, 0]
 	var qb: Array = m2.terr.quarry.bars
 	check(qb.size() == 2 and str(qb[0].ct) == "LHRT" and int(qb[0].p) == 300 and str(m2.terr.mill.ct) == "LHRT" and str(m2.terr.mill.h) == "lions"
-		and str(m2.terr.tower.b.bid) == b4 and str(m2.terr.tower.b.act) == "LHRT" and int(m2.att) == 0, "the map: bars, holders, the battle at the Tower, her attempts")
+		and str(m2.terr.tower.b.bid) == b4 and str(m2.terr.tower.b.act) == "LHRT", "the map: bars, holders, the battle at the Tower")
 	check(int(m2.counts.lions) == 1 and int(m2.counts.stags) == 1, "territories per house")
 	clear()
 	w.owners["fen"] = {"h":"ravens", "c":s.clans.clan_of(R), "ct":"RVCL", "cn":"Raven Claw", "at":T0}
@@ -246,7 +244,6 @@ func _init() -> void:
 
 	# ---------------- a new day, a new week ----------------
 	s.now_override = T0 + 86400
-	check(w.attempts_left(A) == 5, "a new day: 5 attempts again")
 	clear()
 	s.handle(1, {"k":"war_go", "tid":"quarry", "call":"yes"})
 	check(str(last(1, "war_go").get("why", "")).contains("2 battles on already") and live.call() == 2,
@@ -276,7 +273,7 @@ func _init() -> void:
 	wf.close()
 	var odd = World.new(dir, s)
 	check(odd.owners.size() == 1 and odd.owners.has("mill") and (odd.bars.mill as Dictionary).size() == 1 and int(odd.bars.mill.x) == 40
-		and not odd.bars.has("nowhere") and not odd.attempts.has(A) and odd.attempts.has(B) and odd.tally.size() == 1 and odd.captures.size() == 1,
+		and not odd.bars.has("nowhere") and odd.tally.size() == 1 and odd.captures.size() == 1,
 		"a damaged world.json: only the entries that make sense are kept")
 	odd.save_now()
 	var back: Variant = JSON.parse_string(FileAccess.get_file_as_string(dir.path_join("world.json")))
