@@ -4149,3 +4149,6 @@ currently online. Also make it so the chat messages don't get deleted, only dele
   party's, ids carry on, a newcomer gets all 50; the phone's merge, the 50 cap, blocked lines, a clan's emptying);
   home_heroes_test (no hero cut off at the feet; the online line counts the social connections).
 - Version 0.31.140, versionCode 226 (server code changed: SERVER_BUILD 0.31.140).
+- Quick suite: all 91 passed. The Play AAB built from this commit (throwaway key, presets untouched by the build):
+  BASE OK (251 files, no pack data), CONTENT OK (no pack changed: ui-504c03c158f7 and audio-ab91387f1397 as in
+  0.31.139), play_games true, bundletool valid.
