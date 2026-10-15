@@ -194,6 +194,59 @@ func _part1() -> void:
 	s.save_now()
 	var s2 = Social.new(dir, eco)
 	check((s2.users[A].friends as Array).has(B) and (s2.users[C].blocked as Array).has(A) and s2.by_acct.get(ids[0], "") == A, "friends and blocks are kept in social.json")
+	_chat_kept(s, dir, eco)
+
+func _chat_kept(s, dir: String, eco) -> void:
+	# 0.31.140 (Kevin: "make it so the chat messages don't get deleted, only delete after 50 messages"): the global
+	# (and clan) chat outlasts a server restart, the last 50 lines of it; the phone keeps its lines when the server's
+	# come again, and drops only the oldest past 50
+	s.save_now()
+	s.tick(30.0)
+	clear()
+	s.handle(1, {"k":"chat", "ch":"global", "x":"first of many"})
+	check(s._dirty_at >= 0.0, "a global line marks the chat to be written")
+	s.tick(Social.SAVE_DELAY + 0.5)
+	check(FileAccess.file_exists(dir.path_join("chat.json")), "...and %.0f s later it's in chat.json" % Social.SAVE_DELAY)
+	for i in 60:
+		s.tick(4.0)
+		s.handle(1, {"k":"chat", "ch":"global", "x":"many %d" % i})
+	s.hist["c:testclan"] = [{"id":5, "at":1791000000, "pid":"x", "n":"Clanmate", "x":"clan line", "ch":"clan"}]
+	s.hist["p:77"] = [{"id":6, "at":1791000000, "pid":"x", "n":"Partier", "x":"party line", "ch":"party"}]
+	var top := int((s.hist.global as Array).back().id)
+	s.save_now()
+	var s3 = Social.new(dir, eco)
+	var gl: Array = s3.hist.get("global", [])
+	check(gl.size() == Social.HIST_GLOBAL and str(gl.back().get("x", "")) == "many 59" and str(gl[0].get("x", "")) == "many %d" % (60 - Social.HIST_GLOBAL),
+		"after a restart the global chat is all there: its last %d lines (%d, from \"%s\")" % [Social.HIST_GLOBAL, gl.size(), str(gl[0].get("x", "")) if not gl.is_empty() else ""])
+	check(gl.back().id is int and int(gl.back().id) == top and s3.next_msg == top + 1, "line ids carry on from where they were (next %d)" % s3.next_msg)
+	check(str((s3.hist.get("c:testclan", [{}]) as Array)[0].get("x", "")) == "clan line" and not s3.hist.has("p:77"),
+		"a clan's chat is kept too; a party's isn't")
+	s3.now_override = 1791000000
+	s3.send_fn = s.send_fn
+	s3.hello(4, {"k":"hi", "acct":"%020x" % 2, "key":"k".repeat(64)})
+	var hs: Array = got(4, "hist").filter(func(m): return str(m.get("ch", "")) == "global")
+	check(not hs.is_empty() and (hs.back().get("list", []) as Array).size() == Social.HIST_GLOBAL, "a player coming in gets them all")
+	# the phone: lines it has + the server's again = each once, oldest first, the last 50; a blocked player's go
+	var cs = ClientSocial.new()
+	var mine := [{"id":1, "at":100, "pid":"a", "x":"one"}, {"id":2, "at":101, "pid":"b", "x":"two"}]
+	var theirs := [{"id":2, "at":101, "pid":"b", "x":"two"}, {"id":3, "at":102, "pid":"a", "x":"three"}]
+	check(cs.merge_lines(mine, theirs).map(func(l): return l.x) == ["one", "two", "three"], "the phone's lines and the server's merge, each once")
+	check(cs.merge_lines(mine, []).size() == 2, "a server with nothing (restarted, old) no longer empties the chat")
+	var lots := []
+	for i in 70:
+		lots.append({"id":i + 10, "at":200 + i, "pid":"a", "x":"l%d" % i})
+	var kept: Array = cs.merge_lines(mine, lots)
+	check(kept.size() == ClientSocial.KEEP and ClientSocial.KEEP == 50 and str(kept.back().x) == "l69" and str(kept[0].x) == "l20",
+		"past 50 lines the oldest go (%d kept, from %s)" % [kept.size(), str(kept[0].x)])
+	cs.blocked = [{"pid":"b"}]
+	check(not cs.merge_lines(mine, theirs).map(func(l): return l.pid).has("b"), "...and a blocked player's lines stay out")
+	cs._on({"t":"so", "k":"hist", "ch":"global", "list":theirs})
+	cs._on({"t":"so", "k":"hist", "ch":"global", "list":[]})
+	check((cs.lines.global as Array).size() == 1, "the global history coming again keeps what's there")
+	cs._on({"t":"so", "k":"hist", "ch":"clan", "list":theirs})
+	cs._on({"t":"so", "k":"hist", "ch":"clan", "list":[]})
+	check((cs.lines.clan as Array).is_empty(), "leaving a clan still empties its chat")
+	cs.free()
 
 func _pids(msg: Dictionary, k: String) -> Array:
 	return (msg.get(k, []) as Array).map(func(c): return str(c.pid))

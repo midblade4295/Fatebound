@@ -4125,3 +4125,27 @@ location so you can move the map table lower to bottom of screen so the window t
   rerun). The Play AAB built from this commit (throwaway key, presets untouched by the build): BASE OK (251 files, no
   pack data), CONTENT OK (6 packs on the branch: ui and audio uploaded, content-packs 982860d), play_games true,
   bundletool valid.
+
+## 0.31.140 — Home's heroes whole to their feet; players online; chat kept to 50 lines
+Kevin (with a photo of Home on the S21 Ultra): "The screen is cutoff where feet are. Also make sure it shows players
+currently online. Also make it so the chat messages don't get deleted, only delete after 50 messages"
+- The feet: Home's 3D frame (war_room.gd FRAME) reaches 300 px of painting further down, behind the chests, and the
+  camera moves down its own up (Camera3D.v_offset, WarRoom.v_shift) so the table still sits where it did; the near
+  heroes' legs and feet and the table's foot are drawn whole (row_of/near_row do the same sums, so the table still
+  lands at PLAY).
+- Players online: the line at the top of Home counts everyone with the game open -- the server's social connections
+  ("chatting": Home, menus and matches alike, you included; the server has sent it since 0.31.111) -- not only those
+  in a match ("online"); with nobody else it says 1 PLAYER ONLINE (you), and with no server LIVE SIEGE SERVER.
+- Chat kept: the server writes the global and clan chats to chat.json beside social.json (with it, 3 s after a line),
+  and reads them back on start, so a restart or update no longer empties them; each keeps its last 50 lines (the
+  oldest going as a new one comes), the line ids carrying on. A disbanded clan's chat goes from it. The phone keeps
+  50 lines a channel (was 100, as the server keeps 50) and merges the server's global lines with the ones it has
+  (each once, in order; a blocked player's left out), so a server that comes back with fewer no longer wipes the
+  chat; a party's or clan's history still replaces (leaving a clan empties its chat). The chat panel redraws when
+  lines are merged in before the ones on screen. The server's start log says how many global lines it kept.
+- Needs the server redeployed for the kept chat (sudo bash godot/server/deploy/install_siege_server.sh); the
+  players-online count works with the server as it is.
+- Tests: social_test (chat.json written after a line, a restart keeps the last 50 global lines and a clan's, not a
+  party's, ids carry on, a newcomer gets all 50; the phone's merge, the 50 cap, blocked lines, a clan's emptying);
+  home_heroes_test (no hero cut off at the feet; the online line counts the social connections).
+- Version 0.31.140, versionCode 226 (server code changed: SERVER_BUILD 0.31.140).

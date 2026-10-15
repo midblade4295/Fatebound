@@ -16,7 +16,9 @@ extends SceneTree
 #    (closing one doesn't stop the other's);
 #  - alive: birds fly, every candle flickers (the 12 painted and the 6 on the table), the sun's rays turn, the water
 #    shader moves; reduce motion holds it all still; a safe start draws the painting alone;
-#  - (kept) each empty chest slot shows a dim chest, the line under PLAY.
+#  - 0.31.140 (Kevin: "The screen is cutoff where feet are"): the 3D reaches down past every hero's feet;
+#  - (kept) each empty chest slot shows a dim chest; the server line (0.31.140, Kevin: "make sure it shows players
+#    currently online": everyone with the game open, from the server's social connections, you included).
 #   godot --headless --path godot -s res://tests/home_heroes_test.gd
 const App = preload("res://scripts/app/siege_app.gd")
 const HomeScene = preload("res://scripts/app/home_scene.gd")
@@ -111,6 +113,19 @@ func _top_on_screen(s, slot: Node3D) -> float:
 				top = q.y
 				at = q
 	return _on_screen(s, at + Vector3(0.0, 0.4, 0.0)).y
+
+func _feet_on_screen(s, slot: Node3D) -> float:
+	# the bottom of a hero as drawn: his lowest bone, and 0.1 m under it for the soles
+	var low := INF
+	var at := Vector3.ZERO
+	for sk in slot.find_children("*", "Skeleton3D", true, false):
+		var skel := sk as Skeleton3D
+		for i in skel.get_bone_count():
+			var q: Vector3 = skel.global_transform * skel.get_bone_global_pose(i).origin
+			if q.y < low:
+				low = q.y
+				at = q
+	return _on_screen(s, at - Vector3(0.0, 0.1, 0.0)).y
 
 func _on_screen(s, p: Vector3) -> Vector2:
 	var r = s.room
@@ -219,6 +234,14 @@ func _checks_scene() -> void:
 	for c in ["mage", "barbarian"]:
 		heads = minf(heads, _top_on_screen(phone, built[c].node))
 	check(heads > castles, "the window shows: the castles stand clear above the heroes beyond the table (their heads at %.0f, the castles end at %.0f)" % [heads, castles])
+	# 0.31.140 (Kevin: "The screen is cutoff where feet are"): the 3D runs down past every hero's feet
+	var frame_end: float = room.position.y + room.size.y
+	var cut := ""
+	for c in built:
+		var f := _feet_on_screen(phone, built[c].node)
+		if f > frame_end - 4.0:
+			cut += " %s %.0f" % [c, f]
+	check(cut == "", "no hero is cut off at the feet: the 3D ends at %.0f, under all of them%s" % [frame_end, cut])
 	var foot := _on_screen(phone, Vector3.ZERO)
 	var rug: Vector2 = phone.origin + Vector2(573, 1352) * phone.k
 	var off: Vector2 = (foot - rug) / (Vector2(507, 256) * float(phone.k))                  # (the rug: 507 x 256 px half-axes, painted)
@@ -296,11 +319,14 @@ func _checks_app() -> void:
 	var main: Label = app.online_refs.get("main")
 	os_node.info = {"online": 0, "in_match": 0}
 	app.paint_online()
-	var alone := main.text
-	os_node.info = {"online": 1, "in_match": 0}
+	var nobody := main.text
+	os_node.info = {"online": 0, "in_match": 0, "chatting": 1}
 	app.paint_online()
 	var me_only := main.text
+	os_node.info = {"online": 7, "in_match": 3, "chatting": 12}
+	app.paint_online()
+	var many := main.text
 	os_node.info = {"online": 7, "in_match": 3}
 	app.paint_online()
-	check(alone == "LIVE SIEGE SERVER" and me_only == "LIVE SIEGE SERVER" and main.text == "7 PLAYERS ONLINE",
-		"the line under PLAY: no count until someone else is on (%s / %s / %s)" % [alone, me_only, main.text])
+	check(nobody == "LIVE SIEGE SERVER" and me_only == "1 PLAYER ONLINE" and many == "12 PLAYERS ONLINE" and main.text == "7 PLAYERS ONLINE",
+		"0.31.140: the players online -- everyone with the game open, you too (%s / %s / %s; an older server: %s)" % [nobody, me_only, many, main.text])

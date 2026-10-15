@@ -23,7 +23,7 @@ extends RefCounted
 # Whoever leaves or is removed waits COOLDOWN (24 h) before joining or making another clan. A leader not seen for
 # LEADER_AWAY (14 days) hands the clan to the officer seen last (or, with no officer seen since, the member seen last).
 # Each member's state comes as {"k":"clan", "clan":{...} or {}, "inv":[invites], "cool":unix} on hello and on every
-# change; clan chat is social.gd's "clan" channel (history "c:<id>", in memory like global's). The tag shows before
+# change; clan chat is social.gd's "clan" channel (history "c:<id>", kept like global's in chat.json since 0.31.140). The tag shows before
 # names: social cards and chat lines carry "ct", the match's "pn" and lobby carry it per player (siege_server.gd), and
 # leaderboard rows too.
 # Kept in clans.json in the state directory (clans, invites, cooldowns), written SAVE_DELAY s after a change.
@@ -671,6 +671,7 @@ func _remove(id: String, pid: String) -> void:
 func _end(id: String) -> void:
 	clans.erase(id)
 	soc.hist.erase("c:" + id)
+	soc._mark()                                        # (0.31.140: out of chat.json too)
 	for pid in invites.keys():
 		(invites[pid] as Dictionary).erase(id)
 		if (invites[pid] as Dictionary).is_empty():

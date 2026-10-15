@@ -917,9 +917,13 @@ func paint_online() -> void:
 		main.text = "LIVE SIEGE SERVER"
 		sub.text = "16 vs 16"
 		return
-	var n := int(info.get("online", 0))
-	# 0.31.117 (Kevin's Home said "0 PLAYERS ONLINE" with him on it): a count only once someone else is on
-	main.text = "%d PLAYERS ONLINE" % n if n >= 2 else "LIVE SIEGE SERVER"
+	# 0.31.140 (Kevin: "make sure it shows players currently online"): everyone with the game open -- the server's
+	# "chatting" (its social connections: Home, the menus and matches alike; you're one of them), not "online" (only the
+	# players in a match room, which said 0 with Kevin on Home in 0.31.117). An older server without it: "online".
+	var n := maxi(int(info.get("chatting", 0)), int(info.get("online", 0)))
+	if n < 1 and social != null and social.online():
+		n = 1                                       # (you are)
+	main.text = ("%d PLAYER%s ONLINE" % [n, "" if n == 1 else "S"]) if n >= 1 else "LIVE SIEGE SERVER"
 	var fighting := int(info.get("in_match", 0))
 	var waiting := int(info.get("waiting", 0))
 	if waiting > 0 and float(info.get("lobby", -1.0)) >= 0.0:

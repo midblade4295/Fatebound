@@ -20,6 +20,9 @@ extends RefCounted
 #            join the online match with "party" in the hello, and siege_server seats a party on one team. A party is
 #            gone when one member is left with no invite out; a member away from the app for 3 minutes leaves it.
 # Kept in social.json in the state directory (names, friends, requests, blocks), written 3 s after a change.
+# 0.31.140 (Kevin: "make it so the chat messages don't get deleted, only delete after 50 messages"): the global and
+# clan chats are kept too, in chat.json beside it (written with it), so a server restart or update no longer empties
+# them; each keeps its last 50 lines, the oldest going as a new one comes. (Party chat ends with its party.)
 # 0.31.134 (Crown War step 1): clans (server/clans.gd, set as `clans` by siege_server.gd) ride this socket too: the
 # "clan_*" messages go there, "clan" is a third chat channel (the clan's members), and cards and chat lines carry the
 # player's clan tag ("ct"). "me" says "clans":1 when the server has them.
@@ -61,6 +64,7 @@ var reports := {}          # pid -> [clock] (the last hour)
 var muted := {}
 var away := {}             # pid -> clock when they left the app while in a party
 var next_msg := 1
+var chat_path := ""        # 0.31.140: chat.json, the global and clan chats
 var next_party := 1
 var clock := 0.0           # seconds, from tick()
 var now_override := -1     # tests: the unix time
@@ -82,8 +86,10 @@ func _init(state_dir := "", eco_ref = null) -> void:
 	if state == "":
 		state = OS.get_environment("STATE_DIRECTORY") if OS.has_environment("STATE_DIRECTORY") else "user://"
 	path = state.path_join("social.json")
+	chat_path = state.path_join("chat.json")
 	eco = eco_ref
 	_load()
+	_load_chat()
 	_reload_muted()
 
 func friend_accts(acct: String) -> Array:
@@ -193,14 +199,42 @@ func _load() -> void:
 		by_acct[str(u.acct)] = str(pid)
 
 func save_now() -> void:
-	var tmp := path + ".tmp"
+	_write(path, {"v":1, "users":users})
+	var kept := {}
+	for key in hist:
+		if str(key) == "global" or str(key).begins_with("c:"):
+			kept[key] = hist[key]
+	_write(chat_path, {"v":1, "next":next_msg, "hist":kept})
+	_dirty_at = -1.0
+
+func _write(to: String, v: Dictionary) -> void:
+	var tmp := to + ".tmp"
 	var f := FileAccess.open(tmp, FileAccess.WRITE)
 	if f == null:
 		return
-	f.store_string(JSON.stringify({"v":1, "users":users}))
+	f.store_string(JSON.stringify(v))
 	f.close()
-	DirAccess.rename_absolute(ProjectSettings.globalize_path(tmp), ProjectSettings.globalize_path(path))
-	_dirty_at = -1.0
+	DirAccess.rename_absolute(ProjectSettings.globalize_path(tmp), ProjectSettings.globalize_path(to))
+
+func _load_chat() -> void:
+	# 0.31.140: the global and clan chats as they were (the last HIST_GLOBAL / HIST_CLAN lines of each)
+	if chat_path == "" or not FileAccess.file_exists(chat_path):
+		return
+	var v: Variant = JSON.parse_string(FileAccess.get_file_as_string(chat_path))
+	if not (v is Dictionary) or not (v.get("hist", null) is Dictionary):
+		return
+	var top := 0
+	for key in v.hist:
+		var k := str(key)
+		if not (k == "global" or k.begins_with("c:")) or not (v.hist[key] is Array):
+			continue
+		var l: Array = (v.hist[key] as Array).filter(func(m): return m is Dictionary and str(m.get("x", "")) != "")
+		for m in l:
+			m["id"] = int(m.get("id", 0))                  # (JSON gives numbers back as floats)
+			m["at"] = int(m.get("at", 0))
+			top = maxi(top, int(m.id))
+		hist[k] = l.slice(maxi(0, l.size() - (HIST_GLOBAL if k == "global" else HIST_CLAN)))
+	next_msg = maxi(next_msg, maxi(int(v.get("next", 1)), top + 1))
 
 func _mark() -> void:
 	if _dirty_at < 0.0:
@@ -547,6 +581,8 @@ func _hist_add(key: String, m: Dictionary, keep: int) -> void:
 	while l.size() > keep:
 		l.pop_front()
 	hist[key] = l
+	if key == "global" or key.begins_with("c:"):
+		_mark()                                        # (0.31.140: kept in chat.json)
 
 func _sys(pa: String, text: String) -> void:
 	# a line from the game itself in a party's chat ("Kevin joined the party")

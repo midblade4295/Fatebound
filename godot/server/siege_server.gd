@@ -131,7 +131,7 @@ const LOBBY_TIME := 20.0             # the join countdown (0.31.82)
 const HELLO_TIMEOUT := 10.0
 const IAP_TIMEOUT := 40.0              # a purchase check may take a token request and an API call
 const REFUSE_CLOSE_DELAY := 0.25     # s between a "bye"/"ver" reply and closing the socket
-const SERVER_BUILD := "0.31.139"      # this server's game version; the probe says it by default (identifies as current)
+const SERVER_BUILD := "0.31.140"      # this server's game version; the probe says it by default (identifies as current)
 const MIN_BUILD_FILE := "/etc/fatebound-siege/min_build"
 const MIN_BUILD_RELOAD := 10.0       # s between re-reads of the min-build file
 const UPDATE_MSG := "A new version of Fatebound is out. Update now on Google Play to keep playing online."
@@ -284,7 +284,8 @@ func _init() -> void:
 	world = World.new(social.state, social)                 # 0.31.135: the war map, on the social socket too
 	world.room_fn = _war_room
 	social.world = world
-	_log("social: %d players known, %d clans; war map week %s, %d held" % [social.users.size(), social.clans.clans.size(), world.week, world.owners.size()])
+	_log("social: %d players known, %d clans, %d global chat lines kept; war map week %s, %d held" % [social.users.size(), social.clans.clans.size(),
+		(social.hist.get("global", []) as Array).size(), world.week, world.owners.size()])
 	analytics = Analytics.new()
 	analytics.log_fn = _log
 	social.event_fn = func(acct: String, ev: String, p: Dictionary): analytics.server_event(acct, ev, p)

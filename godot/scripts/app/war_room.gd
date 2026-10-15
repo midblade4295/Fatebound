@@ -20,7 +20,11 @@ const LandView = preload("res://scripts/app/war_land_view.gd")
 const WoodShader = preload("res://scripts/app/war_room_wood.gdshader")
 
 const PAINT_W := 1152.0
-const FRAME := Rect2(0.0, 430.0, 1152.0, 1200.0)
+# 0.31.140 (Kevin: "The screen is cutoff where feet are"): the frame reaches 300 px further down (the near heroes'
+# feet and the table's foot, behind the chests), the camera moved down to match (V_SHIFT) so the table still sits 600
+# px down it
+const FRAME := Rect2(0.0, 430.0, 1152.0, 1500.0)
+const TABLE_ROW := 600.0               # the table top's centre, down the frame
 const PX_PER_M := 268.6
 const CAM_ELEV := 32.0
 const CAM_FOV := 30.0                  # across the painting (KEEP_WIDTH)
@@ -64,13 +68,18 @@ static func on_oval(deg: float, d := 0.0) -> Vector3:
 static func cam_dist() -> float:
 	return (PAINT_W * 0.5) / (PX_PER_M * tan(deg_to_rad(CAM_FOV) * 0.5))
 
+static func v_shift() -> float:
+	# the camera's move along its own up (Camera3D.v_offset) that puts the table top's centre TABLE_ROW down the frame
+	return -(FRAME.size.y * 0.5 - TABLE_ROW) / PX_PER_M
+
 static func row_of(p: Vector3) -> float:
 	# where a point of the room lands down this control's frame (painting px from its top), by the camera's own sums
 	var e := deg_to_rad(CAM_ELEV)
 	var dir := Vector3(0.0, sin(e), cos(e))
-	var v := p - (Vector3(0.0, TOP_Y, 0.0) + dir * cam_dist())
+	var cam_up := Vector3(0.0, cos(e), -sin(e))
+	var v := p - (Vector3(0.0, TOP_Y, 0.0) + dir * cam_dist() + cam_up * v_shift())
 	var depth := v.dot(-dir)
-	var up := v.dot(Vector3(0.0, cos(e), -sin(e)))
+	var up := v.dot(cam_up)
 	return FRAME.size.y * 0.5 - up / depth * (PAINT_W * 0.5) / tan(deg_to_rad(CAM_FOV) * 0.5)
 
 static func near_row() -> float:
@@ -155,6 +164,7 @@ func _build_scene() -> void:
 	var dir := Vector3(0.0, sin(deg_to_rad(CAM_ELEV)), cos(deg_to_rad(CAM_ELEV)))
 	var at := Vector3(0.0, TOP_Y, 0.0)
 	cam.transform = Transform3D(Basis.looking_at(-dir, Vector3.UP), at + dir * cam_dist())
+	cam.v_offset = v_shift()
 	world.add_child(cam)
 	cam.current = true
 

@@ -27,7 +27,7 @@ signal war_alarmed(m: Dictionary)                    # 0.31.135: your clan's lan
 const RETRY := [2.0, 5.0, 10.0, 20.0, 40.0, 60.0]
 const OLD_SERVER_RETRY := 600.0         # s before asking a server that never answered "hi" again
 const HI_TIMEOUT := 8.0
-const KEEP := 100                       # lines kept a channel
+const KEEP := 50                        # lines kept a channel (0.31.140: as the server keeps; was 100)
 const INVITE_LIFE := 60.0
 
 var url := OS.get_environment("SIEGE_URL") if OS.has_environment("SIEGE_URL") else Net.DEFAULT_URL
@@ -194,7 +194,10 @@ func _on(m: Dictionary) -> void:
 			if ch == "global" and not show_global:
 				return
 			var l: Array = m.get("list", [])
-			lines[ch] = l.slice(maxi(0, l.size() - KEEP))
+			# 0.31.140 (Kevin: "make it so the chat messages don't get deleted, only delete after 50 messages"): the
+			# server's global lines join the ones already here (a server that restarted, or an older one that kept
+			# none, no longer wipes them); a party's and a clan's chat are theirs alone (a new clan, or none: replaced)
+			lines[ch] = merge_lines(lines.get(ch, []), l) if ch == "global" else l.slice(maxi(0, l.size() - KEEP))
 			changed.emit("chat")
 		"chat":
 			var line: Dictionary = m.get("m", {})
@@ -436,6 +439,25 @@ func war_go(tid: String, call := true) -> bool:
 static func tagged(name: String, ct: String) -> String:
 	# "[WOLF] Kevin" -- a player's name with their clan tag before it
 	return ("[%s] %s" % [ct, name]) if ct != "" else name
+
+func merge_lines(have: Array, got: Array) -> Array:
+	# both lists as one, each line once (its id, time, sender and words), oldest first, the last KEEP; none from a
+	# player blocked since
+	var seen := {}
+	var out := []
+	var gone := {}
+	for b in blocked:
+		gone[str((b as Dictionary).get("pid", "")) if b is Dictionary else str(b)] = true
+	for line in have + got:
+		if not (line is Dictionary):
+			continue
+		var key := "%s|%s|%s|%s" % [str(int(line.get("id", 0))), str(int(line.get("at", 0))), str(line.get("pid", "")), str(line.get("x", ""))]
+		if seen.has(key) or gone.has(str(line.get("pid", ""))):
+			continue
+		seen[key] = true
+		out.append(line)
+	out.sort_custom(func(a, b): return int(a.get("at", 0)) < int(b.get("at", 0)) or (int(a.get("at", 0)) == int(b.get("at", 0)) and int(a.get("id", 0)) < int(b.get("id", 0))))
+	return out.slice(maxi(0, out.size() - KEEP))
 
 func mark_read(ch: String) -> void:
 	if int(unread.get(ch, 0)) != 0:

@@ -17,7 +17,9 @@ var _input: LineEdit
 var _tabs := {}
 var _status: Label
 var _shown := 0                       # lines of `ch` on screen
-var _shown_first := -1                # the id of the first line on screen (history replaced -> redraw)
+var _shown_first := {}                # the first line on screen (history replaced -> redraw)
+var _shown_last := {}                 # 0.31.140: the last line on screen (lines merged in before it -> redraw)
+var _shown_ch := ""                   # the channel on screen
 var _bottom := 24.0
 var _stick := true                    # follow new lines (the list is at its bottom)
 
@@ -137,12 +139,14 @@ func _render() -> void:
 		_: _status.text = "Chat connects once you're online with the game's server." if not social.has_account() else "Not connected -- trying again shortly..."
 	_status.visible = _status.text != ""
 	var lines: Array = social.lines.get(ch, [])
-	var first := int(lines[0].get("id", -1)) if not lines.is_empty() else -1
-	if _shown > lines.size() or first != _shown_first:
+	var first: Dictionary = lines[0] if not lines.is_empty() else {}
+	var at_end: Dictionary = lines[_shown - 1] if _shown > 0 and _shown <= lines.size() else {}
+	if ch != _shown_ch or _shown > lines.size() or first != _shown_first or at_end != _shown_last:
 		for c in _list.get_children():
 			c.queue_free()
 		_shown = 0
 		_shown_first = first
+		_shown_ch = ch
 	if lines.is_empty() and _list.get_child_count() == 0:
 		var e := UI2.body(_list, {"global":"Nobody's said anything yet -- say hi!", "party":"Talk to your party here.", "clan":"Talk to your clan here."}[ch], 13, UI2.MUTED)
 		e.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -153,6 +157,7 @@ func _render() -> void:
 				c.queue_free()
 		_row(lines[i])
 	_shown = lines.size()
+	_shown_last = lines[_shown - 1] if _shown > 0 else {}
 	if _stick:
 		_to_bottom.call_deferred()
 
