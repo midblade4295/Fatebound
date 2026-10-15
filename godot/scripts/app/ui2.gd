@@ -260,18 +260,25 @@ static func bob(c: Control, px := 5.0, secs := 1.3, delay := 0.0) -> void:
 		holder.add_child(c)
 		c.position = Vector2.ZERO
 		c.size = holder.custom_minimum_size
-		holder.resized.connect(func():
-			if is_instance_valid(c):
-				c.position.x = 0.0
-				c.size = holder.size)
+	# 0.31.144: the icon held weakly -- a menu redrawn before the next frame frees it, and a lambda still holding a freed
+	# node logs "Lambda capture at index 0 was freed" (in every start-up log on Kevin's phone, and in matches)
+	var cref: WeakRef = weakref(c)
+	if p is Container:
+		var hold: Control = c.get_parent()
+		hold.resized.connect(func():
+			var cc := cref.get_ref() as Control
+			if cc != null:
+				cc.position.x = 0.0
+				cc.size = hold.size)
 	var go := func():
-		if not is_instance_valid(c):
+		var cc := cref.get_ref() as Control
+		if cc == null:
 			return                               # (redrawn before the next frame: the node is gone)
-		var y0 := c.position.y
-		var tw := c.create_tween().set_loops()
+		var y0 := cc.position.y
+		var tw := cc.create_tween().set_loops()
 		tw.tween_interval(delay)
-		tw.tween_property(c, "position:y", y0 - px, secs).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-		tw.tween_property(c, "position:y", y0, secs).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		tw.tween_property(cc, "position:y", y0 - px, secs).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		tw.tween_property(cc, "position:y", y0, secs).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	when_ready(c, func(): c.get_tree().process_frame.connect(go, CONNECT_ONE_SHOT))
 
 static func spin(c: Control, secs := 12.0) -> void:

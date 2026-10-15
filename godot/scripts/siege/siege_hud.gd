@@ -288,10 +288,12 @@ func _center(p: Control, unroll := false) -> void:
 		p.modulate.a = 0.0
 		if is_inside_tree():
 			var t := get_tree().create_timer(0.05)
+			var pref: WeakRef = weakref(p)       # (0.31.144: held weakly -- a freed panel in a lambda logs an error)
 			t.timeout.connect(func():
-				if is_instance_valid(p):
-					_place(p)
-					_unroll(p))
+				var pp := pref.get_ref() as Control
+				if pp != null:
+					_place(pp)
+					_unroll(pp))
 
 func _place(p: Control) -> void:
 	p.size = Vector2(minf(p.custom_minimum_size.x, size.x - 20), 0)

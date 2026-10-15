@@ -79,7 +79,7 @@ func _ready() -> void:
 	_vp = SubViewport.new()
 	_vp.own_world_3d = true
 	_vp.transparent_bg = true
-	_vp.msaa_3d = Viewport.MSAA_4X
+	_vp.msaa_3d = Viewport.MSAA_DISABLED       # 0.31.144: drawn at the screen's own pixel density; MSAA's pipelines weren't pre-compiled (a hitch the first time it opened)
 	_vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	_stage.add_child(_vp)
 	var vt := TextureRect.new()

@@ -4254,3 +4254,29 @@ Kevin (his S21's log of 0.31.142): "It freezes while loading for a few seconds"
   loaded at boot. The title up 0.5-0.66 s after the boot guard, the game loaded 1.5 s later, Home built and drawn by
   3.0 s, the slam 3.3-3.7 s, TAP TO START at 3.9-4.3 s (0.31.141: 9.4 s; 0.31.142: 12.9 s). The longest frame of the
   build 0.48-0.64 s (was 7.3 s without a frame); the show smooth on the second start (fps 34, worst 52 ms).
+
+## 0.31.144 — the other 3D views without MSAA; the "Lambda capture was freed" error found and gone
+Kevin: "Go ahead with adjust" (the cleanups after 0.31.143's start-up fix)
+- MSAA off in the chest opening (chest_open.gd), the Forge (forge_stage.gd) and the hero showcase (showcase.gd): all
+  three draw at the screen's own pixel density, so like Home they look the same without it (Locker shots at 2x
+  before/after), and they no longer compile MSAA pipelines the first time each opens. Left on: the war map
+  (war_table.gd, drawn at the logical size through a stretched SubViewportContainer: without MSAA it would show jaggies)
+  and the match (MSAA 2x only at a lowered render scale). With the pipeline cache now kept (0.31.143), their
+  compiles happen once per install, not every time.
+- "Lambda capture at index 0 was freed. Passed "null" instead." -- in Kevin's start-up logs and his match logs, and 3-6
+  times in clans_ui_test / war_ui_test. Found by tagging every multi-line lambda with a print for one run: UI2.bob (the
+  floating menu icons) waits a frame (process_frame, one shot) before starting the float, and a menu redrawn in
+  between (Home's online line, the clan/war status) had freed the icon its lambda held. bob now holds the icon weakly
+  (WeakRef); siege_hud's panel-unroll timer likewise. Both tests: 0 now.
+- Not done: the "invalid UID" warnings on six Meshy hero models (archmage, assassin, berserker, crusader, necromancer,
+  sniper): their imported scenes name their texture by a UID from before the texture was reimported; Godot finds it
+  by path, so it's harmless. Fixing it means reimporting the models, which changes the 65 MB heroes pack and makes
+  every phone download it again -- to do the next time that pack changes for a real reason.
+- Version 0.31.144, versionCode 230 (server code unchanged; SERVER_BUILD follows the app's version).
+- social_ui_test: its two raw sockets (Alice's and Bob's account creation) dialed the server 1.5 s after starting it
+  and never again; on a slow machine the server wasn't listening yet, the sockets closed and the test timed out in
+  "accounts". They now dial again (every 0.5 s) until the server answers.
+- Quick suite: 88 of 92 in one run on a slow machine (about 1.5x slower than usual); net_load_test, referral_test and
+  version_gate_test passed alone; social_ui_test fixed as above (passes twice alone). tools/cold_start_check.sh: PASS.
+  The Play AAB built from this commit (throwaway key, presets untouched by the build): BASE OK (253 files), CONTENT OK
+  (no pack changed), play_games true, bundletool valid.
