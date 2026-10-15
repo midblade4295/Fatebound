@@ -286,6 +286,12 @@ func _poll_raw() -> void:
 		var r: Dictionary = raw[n]
 		var ws: WebSocketPeer = r.ws
 		ws.poll()
+		var now_s := Time.get_ticks_msec() / 1000.0
+		if ws.get_ready_state() == WebSocketPeer.STATE_CLOSED and not bool(r.sent) and now_s - float(r.get("dialed", 0.0)) > 0.5:
+			# 0.31.145: the server (its own process) may not be listening yet on a slow machine -- dial again
+			r.dialed = now_s
+			ws.connect_to_url("ws://127.0.0.1:%d" % port)
+			continue
 		if ws.get_ready_state() == WebSocketPeer.STATE_OPEN and not bool(r.sent):
 			ws.put_packet(Net.encode(r.first))
 			r.sent = true
