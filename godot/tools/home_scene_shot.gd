@@ -2,7 +2,7 @@ extends SceneTree
 # Dev tool (0.31.138): Home's war room alone (home_scene.gd, no menus over it), for looking at the scene itself.
 #   Xvfb :98 & DISPLAY=:98 OUT=/tmp/home.png godot --rendering-method mobile --resolution 420x933 --path godot \
 #     -s res://tools/home_scene_shot.gd
-# Env: OUT (the png), FRAMES (frames to wait, default 40), PLAY_TOP (PLAY's top, default 517), CALM=1 (reduce motion),
+# Env: OUT (the png), FRAMES (frames to wait, default 40), PLAY_TOP (PLAY's top, default 557), CALM=1 (reduce motion),
 # WAR=1 (a war on the table: the houses' land and two battles), SEQ=n (n shots, one every 4th frame: OUT_NN.png).
 const HomeScene = preload("res://scripts/app/home_scene.gd")
 const Eco = preload("res://scripts/meta/economy.gd")
@@ -26,7 +26,7 @@ func _init() -> void:
 func _process(_d: float) -> bool:
 	n += 1
 	if n == 2:
-		scene.place(float(OS.get_environment("PLAY_TOP")) if OS.has_environment("PLAY_TOP") else 517.0)
+		scene.place(float(OS.get_environment("PLAY_TOP")) if OS.has_environment("PLAY_TOP") else 557.0)
 		var looks := {}
 		for c in Eco.CLASSES:
 			looks[c] = {}

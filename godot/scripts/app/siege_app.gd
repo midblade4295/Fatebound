@@ -35,10 +35,13 @@ const LbFetch = preload("res://scripts/meta/lb_fetch.gd")
 const Notify = preload("res://scripts/meta/notify.gd")
 const Analytics = preload("res://scripts/meta/analytics.gd")
 const Diag = preload("res://scripts/siege/siege_diag.gd")
-const TitleLogo = preload("res://scripts/app/title_logo.gd")
+const TitleScreen = preload("res://scripts/app/title_screen.gd")
 
 # 0.31.112 (Kevin: "move it [Home] to the center button. Move the shop button to far left")
-const TABS := [["shop", "SHOP", "stall"], ["pass", "PASS", "banner"], ["home", "HOME", "castle"], ["locker", "LOCKER", "helmet"], ["settings", "SETTINGS", "gear"]]
+# 0.31.139 (Kevin: "Move the settings cog into a menu that players can press on their level icon on top left. then move
+# the social to where the settings was and rename that Alliance"): ALLIANCE (friends and clan) in SETTINGS' place;
+# Settings is under the level shield (open_player_menu). The settings screen is still the tab "settings".
+const TABS := [["shop", "SHOP", "stall"], ["pass", "PASS", "banner"], ["home", "HOME", "castle"], ["locker", "LOCKER", "helmet"], ["alliance", "ALLIANCE", "friends"]]
 
 # Tests may point these elsewhere before the node enters the tree.
 var profile_path := "user://siege_profile.json"
@@ -95,12 +98,14 @@ var _last_press := Vector2(-1, -1)
 var _last_press_ms := -100000
 var modal: Control = null
 var hero_layer: Control
-var title_logo: Control                  # Home's title, the King swinging from the knot (title_logo.gd)
+var title_screen: Control = null        # 0.31.139: the title screen the app opens on (title_screen.gd); null once gone
+var player_menu: Control = null         # 0.31.139: the menu under the level shield (SETTINGS, DISCORD)
 var hero_node: Control                 # Home's heroes (0.31.138: the war room's, war_room.gd); null on a safe start
 var home_scene: Control                # Home's war room (home_scene.gd)
 var safe_top := 0.0
 var xp_holder: Control
 var pass_badge: Control
+var alliance_badge: Control
 var _tab_tweens := {}
 const TOP_H := 56.0                    # the top bar
 const TAB_H := 72.0                    # the tab bar
@@ -279,6 +284,8 @@ func _ready() -> void:
 	content_scroll.get_v_scroll_bar().value_changed.connect(_on_scroll)
 	show_tab("home")
 	_boot_mark("home shown, waiting for frames")
+	if get_tree().get_script() == null or OS.has_environment("FB_TITLE"):
+		show_title()                           # 0.31.139: the title screen over Home (not under tests and tools)
 	if version_check:
 		call_deferred("check_server_version")
 
@@ -402,18 +409,9 @@ func _build_hero() -> void:
 	lay.call()
 	_band(hero_layer, Color(0.02, 0.03, 0.09, 0.72), Color(0.02, 0.03, 0.09, 0.0), true, 110.0 + safe_top)
 	_band(hero_layer, Color(FADE_COLOR, 0.0), Color(FADE_COLOR, 1.0), false, 150.0)
-	# The game is just "Fatebound" (Kevin). 0.31.113: the "All Tied Up" title (Kevin: "I like the all tied up one. Can you
-	# also make it so the king swings back and forth from the rope"), between the side medallions under the top bar.
-	title_logo = TitleLogo.new(calm)
-	hero_layer.add_child(title_logo)
-	# 0.31.138: smaller and higher, in the war room's sky, so the castles and the land show under it
-	var place := func():
-		var w := hero_layer.size.x
-		var lw := minf(w - 190.0, 226.0)
-		title_logo.size = Vector2(lw, lw * TitleLogo.aspect())
-		title_logo.position = Vector2((w - lw) * 0.5, 54.0 + safe_top)
-	hero_layer.resized.connect(place)
-	place.call()
+	# (0.31.113-0.31.138: the "All Tied Up" title stood here. 0.31.139, Kevin: "Seems very busy now. Maybe remove the
+	# fatebound title and instead put that in a startup screen and any loading screens": the title screen
+	# (title_screen.gd), the first-start download screen and the match's warm-up cover have it now.)
 
 const LOGO_FONT = preload("res://assets/fonts/LuckiestGuy-Regular.ttf")
 
@@ -475,6 +473,28 @@ func _build_chrome() -> void:
 	level_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	level_label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	level_label.offset_bottom = -6
+	# 0.31.139: the shield opens the player's menu (SETTINGS lives there now) -- a little cog on its corner says so
+	var cog := TextureRect.new()
+	cog.texture = UI2.tex(UI2.icon_path("gear"))
+	cog.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	cog.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	cog.size = Vector2(22, 22)
+	cog.position = Vector2(28, 30)
+	cog.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	sh.add_child(cog)
+	var shb := Button.new()
+	shb.flat = true
+	shb.focus_mode = Control.FOCUS_NONE
+	for st_name in ["normal", "hover", "pressed", "focus", "hover_pressed"]:
+		shb.add_theme_stylebox_override(st_name, StyleBoxEmpty.new())
+	shb.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	shb.offset_right = 6
+	shb.offset_bottom = 4
+	shb.set_meta("action_key", "top_level")
+	shb.pressed.connect(func():
+		sfx("menuOpen")
+		open_player_menu())
+	sh.add_child(shb)
 	var who := VBoxContainer.new()
 	who.add_theme_constant_override("separation", 4)
 	who.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -553,6 +573,8 @@ func _build_chrome() -> void:
 		tab_buttons[t[0]] = _tab_button(trow, t[0], t[1], t[2])
 	pass_badge = UI2.badge(tab_buttons["pass"].button, "0", Vector2(-10, 4))
 	tab_buttons["pass"]["badge"] = pass_badge
+	alliance_badge = UI2.badge(tab_buttons["alliance"].button, "0", Vector2(-10, 4))   # (friend requests, invites)
+	alliance_badge.visible = false
 
 func _pill(parent: Node, kind: String) -> Label:
 	# A dark pill with the currency coming out of its left end and a green "+". Tapping it opens the shop.
@@ -620,6 +642,10 @@ func _tab_button(parent: Node, id: String, text: String, icon_name: String) -> D
 	b.set_meta("action_key", "tab_" + id)
 	UI.grow(b)
 	b.pressed.connect(func():
+		if id == "alliance":
+			sfx("menuOpen")                    # (0.31.139: the friends and clan window, over the screen you're on)
+			open_social()
+			return
 		sfx("tab")                             # 0.31.110: its own sound, a soft rustle into a click
 		show_tab(id))
 	parent.add_child(b)
@@ -744,6 +770,85 @@ func _punch(kind: String) -> void:
 		_punch_ms[kind] = now
 		sfx(kind)                                           # 0.31.109: coin / gem / ember, each its own
 
+func show_title() -> void:
+	# 0.31.139: the title screen (title_screen.gd) on its own layer over everything; a tap lifts it off Home
+	var layer := CanvasLayer.new()
+	layer.layer = 90
+	add_child(layer)
+	title_screen = TitleScreen.new(self, bool(profile.d.settings.get("reduce_motion", false)))
+	layer.add_child(title_screen)
+	title_screen.done.connect(func():
+		title_screen = null
+		layer.queue_free())
+
+func open_player_menu() -> void:
+	# 0.31.139 (Kevin: "Move the settings cog into a menu that players can press on their level icon on top left"): a
+	# small panel under the shield -- who you are (level, XP), SETTINGS and DISCORD. A tap outside closes it.
+	close_modal()
+	var m := Control.new()
+	m.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	m.set_meta("player_menu", true)
+	add_child(m)
+	modal = m
+	player_menu = m
+	var catcher := Button.new()
+	catcher.flat = true
+	catcher.focus_mode = Control.FOCUS_NONE
+	for st_name in ["normal", "hover", "pressed", "focus", "hover_pressed"]:
+		catcher.add_theme_stylebox_override(st_name, StyleBoxEmpty.new())
+	catcher.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	catcher.set_meta("action_key", "player_menu_close")
+	catcher.pressed.connect(func():
+		sfx("menuClose")
+		close_modal())
+	m.add_child(catcher)
+	var dim := ColorRect.new()
+	dim.color = Color(0.0, 0.01, 0.04, 0.35)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	m.add_child(dim)
+	var holder := Control.new()
+	holder.position = Vector2(8, 6.0 + safe_top + TOP_H - 2.0)
+	holder.size = Vector2(minf(250.0, size.x - 16.0), 10)
+	m.add_child(holder)
+	var v := UI2.frame(holder, "night", 10, 16.0, "gold")
+	(v.get_parent() as Control).custom_minimum_size = Vector2(holder.size.x, 0)
+	v.add_theme_constant_override("separation", 8)
+	var d: Dictionary = profile.d
+	var who := UI.row(v, 8)
+	var nm := UI2.text(who, str(d.name), 18, Color.WHITE, UI2.INK, 5)
+	nm.clip_text = true
+	nm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var lv := UI2.text(who, "LV %d" % int(d.level), 18, UI2.GOLD, UI2.INK, 5)
+	lv.size_flags_horizontal = Control.SIZE_SHRINK_END
+	var sb := UI2.button(v, "SETTINGS", "blue", func():
+		sfx("tab")
+		close_modal()
+		show_tab("settings"), "menu_settings", 18, 46.0, 14.0, UI2.icon_path("gear"))
+	sb.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	var claimed := bool(d.get("discord", false))
+	var db := UI2.button(v, "DISCORD" if claimed else "JOIN OUR DISCORD  +%d" % Eco.DISCORD_GEMS, "discord", func():
+		close_modal()
+		Screens.discord_press(self), "menu_discord", 15, 42.0, 14.0)
+	db.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	(v.get_parent() as Control).reset_size()
+	var panel := v.get_parent() as Control
+	panel.scale = Vector2(0.92, 0.92)
+	panel.modulate.a = 0.0
+	var tw := panel.create_tween().set_parallel()
+	tw.tween_property(panel, "scale", Vector2.ONE, 0.14).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(panel, "modulate:a", 1.0, 0.1)
+
+func paint_alliance() -> void:
+	# 0.31.139: the ALLIANCE tab's badge: friend requests, party and clan invites, clan join requests (as SOCIAL had)
+	if alliance_badge == null:
+		return
+	var n: int = social.attention() if social != null and social.online() else 0
+	alliance_badge.visible = n > 0
+	var bl := alliance_badge.find_children("*", "Label", true, false)
+	if not bl.is_empty():
+		(bl[0] as Label).text = str(n)
+
 func home_play_top() -> float:
 	# where PLAY's top is on the screen (the home scene stands the war table just over it)
 	return 6.0 + safe_top + TOP_H + 4.0 + float(Screens.home_layout(home_height()).play)
@@ -807,9 +912,10 @@ func paint_online() -> void:
 	if not is_instance_valid(main) or not is_instance_valid(sub):
 		return
 	var info: Dictionary = online_status.info if online_status != null else {}
+	# (0.31.139: a short line -- the pill sits between the medallion columns at the top now)
 	if info.is_empty():
 		main.text = "LIVE SIEGE SERVER"
-		sub.text = "16 vs 16  ·  bots fill any empty slots"
+		sub.text = "16 vs 16"
 		return
 	var n := int(info.get("online", 0))
 	# 0.31.117 (Kevin's Home said "0 PLAYERS ONLINE" with him on it): a count only once someone else is on
@@ -817,11 +923,11 @@ func paint_online() -> void:
 	var fighting := int(info.get("in_match", 0))
 	var waiting := int(info.get("waiting", 0))
 	if waiting > 0 and float(info.get("lobby", -1.0)) >= 0.0:
-		sub.text = "%d in the lobby  ·  join them!" % waiting
+		sub.text = "%d in the lobby" % waiting
 	elif fighting > 0:
-		sub.text = "%d in battle  ·  bots fill the rest" % fighting
+		sub.text = "%d in battle" % fighting
 	else:
-		sub.text = "bots fill the empty slots"
+		sub.text = "16 vs 16"
 
 # ---------------- feedback ----------------
 func toast(text: String, color := UI.TEXT) -> void:
@@ -1762,7 +1868,8 @@ func open_clan() -> void:
 	m.open(self)
 
 func open_social(which := "") -> void:
-	# Home's SOCIAL medallion and the tabs: FRIENDS or CLAN (the last one open, unless something waits in the other)
+	# the ALLIANCE tab (0.31.134-0.31.138: Home's SOCIAL medallion): FRIENDS or CLAN (the last one open, unless something
+	# waits in the other)
 	if which == "" and social != null and social.online():
 		var fr: int = social.rin.size() + social.invites.size()
 		var cl: int = social.clan_inv.size() + (social.clan_requests() if social.is_clan_officer() else 0)
@@ -1782,7 +1889,7 @@ func _on_clan_invited(c: Dictionary, by: Dictionary) -> void:
 	if siege != null:
 		return                               # (it waits in CLAN)
 	sfx("chatPop")
-	toast("%s invited you to [%s] %s -- see SOCIAL" % [str(by.get("n", "Someone")), str(c.get("tag", "")), str(c.get("name", ""))], UI.CYAN)
+	toast("%s invited you to [%s] %s -- see ALLIANCE" % [str(by.get("n", "Someone")), str(c.get("tag", "")), str(c.get("name", ""))], UI.CYAN)
 
 func _on_social_note(t: String, bad: bool, pop: bool) -> void:
 	if siege != null:
@@ -1829,6 +1936,7 @@ func _on_social_changed(what: String) -> void:
 		_social_name = str(profile.d.name)
 	if what in ["me", "state"]:
 		_home_war_watch()
+	paint_alliance()
 	if what == "war" and home_scene != null:
 		home_scene.paint_war(social.war)                 # 0.31.138: Home's table shows the war as it stands
 	if siege != null or not what in ["friends", "party", "state", "clan"]:

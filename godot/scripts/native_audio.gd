@@ -47,7 +47,8 @@ func play(cue: String, quiet := false, vol := 1.0) -> void:
                 "gem","ember","claim","chestOpen","forge","flip","countdown","matchStart",   # (0.31.109: the new menu sounds)
                 "tab","toggle","slider","unlock","premium","tierUp","revealRare","revealEpic","revealLegendary","gemPack",
                 "levelUp","resultWin","resultLose",   # (0.31.110)
-                "ping","chatPop"]   # (0.31.111)
+                "ping","chatPop",   # (0.31.111)
+                "titleSlam"]   # (0.31.139: the title screen)
             # 0.31.58 (Kevin: game audio louder): base 0.12 -> 0.2, and a cue may ask for up to 3x (the bomb) -- vol was
             # clamped to 1, so every "louder" gain above 1 did nothing
             var gain:float=minf(1.0, 0.2*float(levels.master)*float(levels.ui if ui_cue else levels.combat)*(0.40 if quiet else 1.0)*clampf(vol,0.0,3.0))

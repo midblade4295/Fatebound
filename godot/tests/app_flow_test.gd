@@ -89,11 +89,11 @@ func _process(d: float) -> bool:
 			var hh: float = app.home_height()
 			var Screens = load("res://scripts/app/screens.gd")
 			check(app.home_fixed == (float(Screens.home_layout(hh).needed) <= hh + 1.0) and (app._scroll_target() == null) == app.home_fixed \
-				and btn("tutorial_start") != null, "Home scrolls only when the screen is too short (%.0f px here); the tutorial sits under PLAY" % hh)
+				and btn("tutorial_start") != null, "Home scrolls only when the screen is too short (%.0f px here); the tutorial is on Home" % hh)
 			for h in [723.0, 700.0, 680.0]:
 				var l: Dictionary = Screens.home_layout(h)
-				check(float(l.needed) <= h + 1.0 and float(l.play) >= Screens.HOME_FEET and float(l.under) >= float(l.play) + 80.0 \
-					and float(l.chests) >= float(l.under) + 36.0 + Screens.CHEST_ART - 0.5, "Home fits %.0f px without scrolling: %s" % [h, str(l)])
+				check(float(l.needed) <= h + 1.0 and float(l.play) >= Screens.PLAY_MIN \
+					and float(l.chests) >= float(l.play) + Screens.PLAQUE_H + Screens.CHEST_ART - 0.5, "Home fits %.0f px without scrolling: %s" % [h, str(l)])
 			press("side_orders")
 			check(app.modal != null and app.modal.has_method("refresh"), "ORDERS opens the orders window")
 			var xp0: int = p.d.pass.xp
@@ -104,13 +104,16 @@ func _process(d: float) -> bool:
 			check(p.d.challenges.daily[1].id != id1 and btn("reroll_2") == null, "one reroll, then reroll buttons disappear (the window redraws)")
 			press("go_pass")
 			check(app.tab == "pass" and app.modal == null, "the pass summary in the window goes to the PASS tab")
-			check(app.tab_buttons.keys() == ["shop", "pass", "home", "locker", "settings"], "the tab bar: SHOP on the left, HOME in the middle")
+			check(app.tab_buttons.keys() == ["shop", "pass", "home", "locker", "alliance"], "the tab bar: SHOP on the left, HOME in the middle, ALLIANCE on the right")
 			p.d.tutorial_done = true
 			p.save()
 			press("tab_home")
 			check(btn("tutorial_start") == null, "once played, the tutorial button is gone from Home")
 		4:
-			press("tab_settings")
+			press("top_level")                         # 0.31.139: Settings is in the level shield's menu
+			check(app.modal != null and app.modal.has_meta("player_menu") and btn("menu_settings") != null, "the level shield opens the player's menu")
+			press("menu_settings")
+			check(app.tab == "settings" and not is_instance_valid(app.modal), "SETTINGS in it opens Settings")
 			var edit: LineEdit = null
 			for n in app.find_children("*", "LineEdit", true, false): edit = n
 			edit.text = "  Sir Kevin the Magnificent  "

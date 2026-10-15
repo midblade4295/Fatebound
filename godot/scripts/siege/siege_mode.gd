@@ -867,6 +867,8 @@ const WARM_MIN := 0.6
 const WARM_MAX := 10.0
 const WARM_STILL := 0.5
 const _LOGO_FONT = preload("res://assets/fonts/LuckiestGuy-Regular.ttf")
+const _TitleLogo = preload("res://scripts/app/title_logo.gd")
+const _COVER_WALL := "res://assets/ui/v2/bg_title_wall.webp"
 var _warm: Dictionary = {}
 var _warm_done := false
 var _cover: ColorRect = null
@@ -882,6 +884,16 @@ func _cover_show() -> void:
 	cover.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	cover.mouse_filter = Control.MOUSE_FILTER_STOP
 	cover.z_index = 100
+	# 0.31.139 (Kevin: the title "in a startup screen and any loading screens"): the title screen's castle wall behind it,
+	# and the title itself, the King swinging (title_logo.gd; text if the ui pack's art isn't there)
+	if ResourceLoader.exists(_COVER_WALL):
+		var wall := TextureRect.new()
+		wall.texture = load(_COVER_WALL)
+		wall.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		wall.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+		wall.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		wall.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		cover.add_child(wall)
 	var box := VBoxContainer.new()
 	box.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 	box.grow_horizontal = Control.GROW_DIRECTION_BOTH
@@ -889,14 +901,10 @@ func _cover_show() -> void:
 	box.alignment = BoxContainer.ALIGNMENT_CENTER
 	box.add_theme_constant_override("separation", 14)
 	cover.add_child(box)
-	var title := Label.new()
-	title.text = "FATEBOUND"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_override("font", _LOGO_FONT)
-	title.add_theme_font_size_override("font_size", 52)
-	title.add_theme_color_override("font_color", Color("#ffd257"))
-	title.add_theme_color_override("font_outline_color", Color("#2e1908"))
-	title.add_theme_constant_override("outline_size", 12)
+	var lw := 340.0
+	var title := _TitleLogo.new()
+	title.custom_minimum_size = Vector2(lw, lw * _TitleLogo.aspect())
+	title.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	box.add_child(title)
 	var sub := Label.new()
 	sub.text = "Preparing the battlefield"
@@ -904,6 +912,8 @@ func _cover_show() -> void:
 	sub.add_theme_font_override("font", VisualTheme.BOLD_FONT)
 	sub.add_theme_font_size_override("font_size", 18)
 	sub.add_theme_color_override("font_color", Color("#f0e4c8"))
+	sub.add_theme_color_override("font_outline_color", Color(0.05, 0.02, 0.0, 0.9))   # (0.31.139: over the wall)
+	sub.add_theme_constant_override("outline_size", 6)
 	box.add_child(sub)
 	add_child(cover)
 	_cover = cover

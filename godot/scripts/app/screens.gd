@@ -232,11 +232,21 @@ static func buy(app, id: String, then := Callable()) -> void:
 # you can redesign the home screen so it's cleaner"): the heroes stand in two staggered rows on the dais (roster.gd) and
 # the ribbon is gone -- it sat on their feet, and the line under PLAY already says 16 vs 16. A party shows under PLAY.
 const MED_Y := [0.0, 82.0, 164.0]   # 0.31.114: the side medallions, tucked up under the top bar (clear of the heroes)
-const HOME_FEET := 396.0      # (content y where the heroes' feet are: nothing of the layout goes above it)
+# 0.31.139 (Kevin: "Change play button and tutorial button design and location so you can move the map table lower to
+# bottom of screen so the window to outside is more viewable"): PLAY is a gold-framed plaque (play_plaque.webp, crossed
+# swords behind it) standing just over the chests, the war table behind it; the tutorial a medallion in the right
+# column (where SOCIAL was -- it's the ALLIANCE tab now); the server line / CROWN WAR / your party at the top.
+const PLAQUE := "res://assets/ui/v2/play_plaque.webp"
+const PLAQUE_W := 260.0
+const PLAQUE_H := 104.0        # (760 x 305 art: its crown and its swords included)
+const PLAQUE_FACE := Rect2(0.125, 0.31, 0.75, 0.46)   # the enamel face, as fractions of the plaque
+const PLAY_MIN := 330.0        # (on a short screen PLAY goes no higher: Home scrolls a little instead)
+const STATUS_Y := 2.0          # the server line / CROWN WAR / the party, between the medallion columns
 const CHEST_H := 84.0         # a chest plate
 const CHEST_ART := 44.0       # the 3D chests (and their timer tags) stand this far above their plates
 
-const DISCORD_Y := 132.0      # 0.31.125: Home's JOIN OUR DISCORD, under the logo between the medallion columns
+const DISCORD_Y := 44.0       # 0.31.125: Home's JOIN OUR DISCORD, between the medallion columns (0.31.139: under the
+                               # server line; the title it was under is on the title screen now)
 
 static func discord_press(app) -> void:
 	# 0.31.124/125: Settings' and Home's JOIN OUR DISCORD -- open the invite; the first time, the gift (once per account)
@@ -252,20 +262,14 @@ static func discord_press(app) -> void:
 		app.rebuild()                                # (Home's button goes; Settings' loses its +100)
 
 static func home_layout(h: float) -> Dictionary:
-	# PLAY and the row under it under the heroes, the chests on the bottom edge; on a shorter screen it packs up from
-	# the chests (no higher than the heroes' feet)
+	# 0.31.139: the chests on the bottom edge, the PLAY plaque just over them (home_scene.gd stands the war table behind
+	# it); on a short screen PLAY goes no higher than PLAY_MIN and Home scrolls a little
 	var chest_y := h - CHEST_H - 4.0
-	var out := {"play": 486.0, "under": 574.0, "chests": chest_y}
-	if 574.0 + 36.0 + CHEST_ART > chest_y:
-		var under := chest_y - CHEST_ART - 36.0
-		var play := under - 8.0 - 80.0
-		if play < HOME_FEET:
-			play = HOME_FEET                           # (too short even so: the chests go below and Home scrolls a little)
-			under = play + 88.0
-			chest_y = under + 36.0 + CHEST_ART
-		out = {"play": play, "under": under, "chests": chest_y}
-	out["needed"] = float(out.chests) + CHEST_H + 4.0
-	return out
+	var play := chest_y - CHEST_ART - 2.0 - PLAQUE_H
+	if play < PLAY_MIN:
+		play = PLAY_MIN
+		chest_y = play + PLAQUE_H + 2.0 + CHEST_ART
+	return {"play": play, "chests": chest_y, "needed": chest_y + CHEST_H + 4.0}
 
 static func home(app, root: VBoxContainer) -> void:
 	var p = app.profile
@@ -327,16 +331,19 @@ static func home(app, root: VBoxContainer) -> void:
 		app.show_tab("forge"), "side_forge", fready, "silver")
 	if fready > 0:
 		UI2.wiggle(fgb.get_meta("icon"))
-	# 0.31.111 (Kevin: "add friend to a friends list ... group up and form a party"): Friends, under the Forge (a badge for
-	# friend requests and party invites waiting)
+	# (0.31.111-0.31.138: SOCIAL stood under the Forge; 0.31.139 it's the ALLIANCE tab.) The tutorial takes its place
+	# until it's been played through, with its gold as a tag.
 	var soc = app.get("social")
-	var att: int = soc.attention() if soc != null and soc.online() else 0
-	# 0.31.134 (Crown War step 1): SOCIAL -- the window has FRIENDS and CLAN tabs (no room on Home for another medallion)
-	var frb := _medallion(top, Vector2(w - 62, MED_Y[2]), "friends", "SOCIAL", func():
-		app.sfx("menuOpen")
-		app.open_social(), "side_friends", att, "silver")
-	if att > 0:
-		UI2.wiggle(frb.get_meta("icon"))
+	if not bool(d.get("tutorial_done", false)):
+		var tb := _medallion(top, Vector2(w - 62, MED_Y[2]), "horn", "TUTORIAL", func():
+			app.sfx("confirm")
+			app.start_tutorial(), "tutorial_start", 0, "gold")
+		UI2.glow(tb, Rect2(-14, -14, 94, 94), Color(1.0, 0.85, 0.4, 0.5))
+		UI2.wiggle(tb.get_meta("icon"), 1.6)
+		var gold_tag := _tag(tb, "+%d" % app.TUTORIAL_GOLD, 12)
+		gold_tag.name = "TutorialGold"
+		gold_tag.position = Vector2(-10, -8)
+		gold_tag.rotation = deg_to_rad(-8.0)
 	# 0.31.119 (Kevin: "Do all" -- leaderboards): RANKS takes the top-right medallion (the week's leaderboard); the first
 	# win of the day moved onto PLAY as a tag
 	var fw_open := str(d.first_win_day) != Eco.day_key(p.now())
@@ -381,100 +388,114 @@ static func home(app, root: VBoxContainer) -> void:
 		gr.add_child(gl)
 		gt.reset_size()
 		gt.position = Vector2(dw - gt.get_combined_minimum_size().x + 10.0, -12.0)
-	# --- PLAY: always the Siege server (0.31.79); the bots fill any empty slots
-	var py: float = lay.play
-	UI2.glow(top, Rect2(-30, py - 16, w + 60, 130), Color(1.0, 0.55, 0.15, 0.55))
-	var play := UI2.button(top, "", "orange", func(): app.start_match(true), "play", 20, 80.0, 22.0)
-	play.position = Vector2(0, py)
-	play.size = Vector2(w, 80)
-	var pr := HBoxContainer.new()
-	pr.add_theme_constant_override("separation", 12)
-	pr.alignment = BoxContainer.ALIGNMENT_CENTER
-	pr.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	pr.offset_bottom = -8
-	pr.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	play.add_child(pr)
-	UI2.icon(pr, "swords", 58.0).size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	var waiting: bool = soc != null and soc.online() and soc.in_party() and not soc.is_leader()
-	var pl := UI2.text(pr, "PLAY" if not waiting else "READY", 54, Color.WHITE, Color("#5a2205"), 11)
-	pl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	if soc != null and soc.online() and soc.in_party() and soc.is_leader() and soc.party_size() > 1:
-		pl.text = "PLAY ×%d" % soc.party_size()
-	UI2.sweep(play, 2.6, 80.0, 0.5)
-	UI2.pulse(play, 0.018, 1.1)
-	if fw_open:
-		# 0.31.119: the first win of the day, as a tag on PLAY's corner (it was the FIRST WIN medallion)
-		var tag := PanelContainer.new()
-		tag.name = "FirstWinTag"
-		var ts := StyleBoxFlat.new()
-		ts.bg_color = Color("#ffc94d")
-		ts.border_color = Color("#3a1c02")
-		ts.set_border_width_all(2)
-		ts.set_corner_radius_all(10)
-		ts.content_margin_left = 8
-		ts.content_margin_right = 8
-		ts.content_margin_top = 1
-		ts.content_margin_bottom = 1
-		ts.shadow_color = Color(0, 0, 0, 0.35)
-		ts.shadow_size = 4
-		tag.add_theme_stylebox_override("panel", ts)
-		tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		top.add_child(tag)
-		var tl := Label.new()                          # (not UI.label: a wrapping label sizes the tag a letter wide first)
-		tl.text = "FIRST WIN +%d" % Eco.FIRST_WIN.gold
-		tl.add_theme_font_override("font", UI.HEAVY_FONT)
-		tl.add_theme_font_size_override("font_size", 12)
-		tl.add_theme_color_override("font_color", Color("#3a1c02"))
-		tl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		tl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		tag.add_child(tl)
-		var tw := (UI.HEAVY_FONT as Font).get_string_size(tl.text, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x + 22.0
-		tag.custom_minimum_size = Vector2(tw, 22)
-		tag.size = tag.custom_minimum_size
-		tag.position = Vector2(w - tw - 6.0, py - 12.0)
-		tag.rotation = deg_to_rad(4.0)
-		UI2.bob(tag, 2.0, 1.4)
-	var uy: float = lay.under
-	if not bool(d.get("tutorial_done", false)):
-		# 0.31.112: the tutorial right under PLAY, pulsing, until it's been played through
-		var tb := UI2.button(top, "PLAY TUTORIAL  (+%d GOLD)" % app.TUTORIAL_GOLD, "gold", func():
-			app.sfx("confirm")
-			app.start_tutorial(), "tutorial_start", 17, 38.0, 14.0)
-		tb.position = Vector2((w - 260.0) * 0.5, uy - 1.0)
-		tb.size = Vector2(260, 38)
-		tb.pivot_offset = Vector2(130, 19)
-		UI2.pulse(tb, 0.06, 0.8)
-		UI2.sweep(tb, 2.0, 50.0)
-		app.online_refs = {}
-	elif soc != null and soc.online() and soc.in_party():
-		# in a party: who's in it (the leader first, with a crown), under PLAY instead of the players online
+	# --- the line at the top, between the medallion columns: your party, CROWN WAR (in a clan), or the server
+	var sw := w - 2.0 * 70.0
+	if soc != null and soc.online() and soc.in_party():
+		# in a party: who's in it (the leader first, with a crown)
 		var names := []
 		for m in soc.party.get("members", []):
 			names.append(("♛ " if str(m.pid) == str(soc.party.leader) else "") + str(m.n))
-		var pb := UI2.button(top, "YOUR PARTY %d/%d  ·  %s" % [soc.party_size(), int(soc.party.get("max", 4)), "  ·  ".join(names)], "green", func():
+		var pb := UI2.button(top, "PARTY %d/%d  ·  %s" % [soc.party_size(), int(soc.party.get("max", 4)), "  ·  ".join(names)], "green", func():
 			app.sfx("menuOpen")
-			app.open_friends(), "party_pill", 13, 34.0, 17.0)
-		pb.position = Vector2(20, uy)
-		pb.size = Vector2(w - 40, 34)
+			app.open_friends(), "party_pill", 12, 34.0, 17.0)
+		pb.position = Vector2((w - sw) * 0.5, STATUS_Y)
+		pb.size = Vector2(sw, 34)
 		pb.clip_text = true
 		app.online_refs = {}
 	elif soc != null and soc.online() and soc.has_war and soc.in_clan():
-		# 0.31.135 (Crown War step 2): in a clan, the war map under PLAY instead of the players online
+		# 0.31.135 (Crown War step 2): in a clan, the war map instead of the players online
 		var house := str(soc.clan.get("house", ""))
-		var wb := UI2.button(top, "CROWN WAR  ·  HOUSE %s" % Map.HOUSE_NAMES.get(house, "?").to_upper(), "red", func():
+		var wb := UI2.button(top, "CROWN WAR · HOUSE %s" % Map.HOUSE_NAMES.get(house, "?").to_upper(), "red", func():
 			app.sfx("menuOpen")
-			app.open_war(), "home_war", 15, 36.0, 18.0, UI2.icon_path("swords"))
-		wb.position = Vector2(40, uy - 1.0)
-		wb.size = Vector2(w - 80, 36)
+			app.open_war(), "home_war", 13, 34.0, 17.0, UI2.icon_path("swords"))
+		wb.position = Vector2((w - sw) * 0.5, STATUS_Y)
+		wb.size = Vector2(sw, 34)
+		wb.clip_text = true
 		app.online_refs = {}
 	else:
-		_online_pill(app, top, w, uy)
+		_online_pill(app, top, w, STATUS_Y)
+	# --- PLAY: always the Siege server (0.31.79); the bots fill any empty slots. 0.31.139: the plaque over the chests.
+	var py: float = lay.play
+	var px := (w - PLAQUE_W) * 0.5
+	UI2.glow(top, Rect2(px - 40, py - 10, PLAQUE_W + 80, PLAQUE_H + 26), Color(1.0, 0.55, 0.15, 0.5))
+	var play := Button.new()
+	play.flat = true
+	play.focus_mode = Control.FOCUS_NONE
+	for st_name in ["normal", "hover", "pressed", "focus", "hover_pressed", "disabled"]:
+		play.add_theme_stylebox_override(st_name, StyleBoxEmpty.new())
+	play.position = Vector2(px, py)
+	play.size = Vector2(PLAQUE_W, PLAQUE_H)
+	play.set_meta("action_key", "play")
+	play.pressed.connect(func(): app.start_match(true))
+	top.add_child(play)
+	var art := TextureRect.new()
+	art.name = "Plaque"
+	art.texture = UI2.tex(PLAQUE)
+	art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	art.stretch_mode = TextureRect.STRETCH_SCALE
+	art.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	art.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	play.add_child(art)
+	if art.texture == null:                         # (without the ui pack's art: the old orange button's colours)
+		UI2.plate(art, "orange", 18.0, "gold")
+	var waiting: bool = soc != null and soc.online() and soc.in_party() and not soc.is_leader()
+	var word := "PLAY" if not waiting else "READY"
+	if soc != null and soc.online() and soc.in_party() and soc.is_leader() and soc.party_size() > 1:
+		word = "PLAY ×%d" % soc.party_size()
+	var face := Rect2(PLAQUE_FACE.position * play.size, PLAQUE_FACE.size * play.size)
+	var pl := UI2.text(play, word, 40 if word.length() <= 5 else 32, Color.WHITE, Color("#6a1a04"), 10)
+	pl.name = "PlayWord"
+	pl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	pl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	pl.position = face.position + Vector2(0, -3)
+	pl.size = face.size
+	pl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	UI2.pulse(play, 0.022, 1.1)
+	if fw_open:
+		# 0.31.119: the first win of the day, as a tag on PLAY's corner (it was the FIRST WIN medallion)
+		var tag := _tag(top, "FIRST WIN +%d" % Eco.FIRST_WIN.gold, 12)
+		tag.name = "FirstWinTag"
+		tag.position = Vector2(px + PLAQUE_W - tag.size.x + 10.0, py + 6.0)
+		tag.rotation = deg_to_rad(5.0)
+		UI2.bob(tag, 2.0, 1.4)
 	# --- chests, on the bottom edge
 	chests_row(app, top, w, float(lay.chests))
 	if bool(app.get("safe_boot")) and not bool(app.get_meta("safe_note", false)):
 		# 0.31.70: the last start never reached the menu, so this one skipped the live hero and the background loading
 		app.set_meta("safe_note", true)
 		app.toast("The game got stuck starting last time -- please tap Settings > SEND TO DEVELOPER", UI.GOLD)
+
+static func _tag(parent: Control, text: String, font := 12) -> PanelContainer:
+	# a gold tag with dark text (FIRST WIN on PLAY, the tutorial's gold)
+	var tag := PanelContainer.new()
+	var ts := StyleBoxFlat.new()
+	ts.bg_color = Color("#ffc94d")
+	ts.border_color = Color("#3a1c02")
+	ts.set_border_width_all(2)
+	ts.set_corner_radius_all(10)
+	ts.content_margin_left = 8
+	ts.content_margin_right = 8
+	ts.content_margin_top = 1
+	ts.content_margin_bottom = 1
+	ts.shadow_color = Color(0, 0, 0, 0.35)
+	ts.shadow_size = 4
+	tag.add_theme_stylebox_override("panel", ts)
+	tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(tag)
+	var tl := Label.new()                          # (not UI.label: a wrapping label sizes the tag a letter wide first)
+	tl.text = text
+	tl.add_theme_font_override("font", UI.HEAVY_FONT)
+	tl.add_theme_font_size_override("font_size", font)
+	tl.add_theme_color_override("font_color", Color("#3a1c02"))
+	tl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	tl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	tl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tag.add_child(tl)
+	var tw := (UI.HEAVY_FONT as Font).get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, font).x + 22.0
+	tag.custom_minimum_size = Vector2(tw, 22)
+	tag.size = tag.custom_minimum_size
+	return tag
 
 static func _online_pill(app, top: Control, w: float, y: float) -> void:
 	# --- players online (0.31.82, Kevin: "Add a players online in main menu"): a pill under PLAY, painted by
@@ -516,9 +537,9 @@ static func _online_pill(app, top: Control, w: float, y: float) -> void:
 		var tw := dot.create_tween().set_loops()
 		tw.tween_property(dot, "modulate:a", 0.3, 0.8).set_trans(Tween.TRANS_SINE)
 		tw.tween_property(dot, "modulate:a", 1.0, 0.8).set_trans(Tween.TRANS_SINE))
-	var om := UI2.text(hint, "LIVE SIEGE SERVER", 15, Color("#8cf0a8"), Color("#0b2a14"), 5)
+	var om := UI2.text(hint, "LIVE SIEGE SERVER", 13, Color("#8cf0a8"), Color("#0b2a14"), 5)
 	om.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	var osub := UI2.body(hint, "16 vs 16  ·  bots fill any empty slots", 11, Color("#c2cdea"), false)
+	var osub := UI2.body(hint, "16 vs 16", 11, Color("#c2cdea"), false)     # (0.31.139: at the top, shorter)
 	osub.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	app.online_refs = {"main": om, "sub": osub}
 	if app.has_method("paint_online"):

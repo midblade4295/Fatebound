@@ -4087,3 +4087,37 @@ along with the glow effect of sun. Also maybe glimmer of the water and birds fly
 - Version 0.31.138, versionCode 224 (server code unchanged; SERVER_BUILD follows the app's version).
 - Quick suite: all 91 passed. The Play AAB built from this commit (throwaway key, presets untouched by the build):
   BASE OK (244 files, no pack data), CONTENT OK (6 packs on the branch), play_games true, bundletool valid.
+
+## 0.31.139 — a title screen; Settings under the level shield, ALLIANCE in the tab bar; PLAY on the table
+Kevin: "Seems very busy now. Maybe remove the fatebound title and instead put that in a startup screen and any loading
+screens. Give the starting title screen a little jingle tune and have title animate in there like slamming onto the
+wall or something. Move the settings cog into a menu that players can press on their level icon on top left. then
+move the social to where the settings was and rename that Alliance. Change play button and tutorial button design and
+location so you can move the map table lower to bottom of screen so the window to outside is more viewable."
+- The title screen (scripts/app/title_screen.gd), what the app opens on (not under tests and tools; FB_TITLE=1 shows
+  it there): a castle wall at dusk, its two torches flickering and throwing up embers; the jingle starts and the title
+  flies in from the viewer, big and tilted, and slams onto the wall at 0.5 s -- the thud, a flash, the screen shakes,
+  dust bursts from behind it, rubble drops, cracks run out into the stones, the title squashes and settles, the King
+  swings; then TAP TO START (a tap anywhere lifts it off Home; a tap during the flight lands it). Reduce Motion: it
+  fades in and holds still. tools/title_shot.gd shoots the sequence.
+- Art and sound by ElevenLabs (flow "Fatebound title screen"; tools/build_title_art.py, sources in
+  art_sources/title_screen): the wall (gpt-image-2.5-sunburst with the war room as its style), the jingle
+  (eleven_music v2.5, 3 takes, the first used: 5 s, trimmed and levelled; the others kept to swap), the slam (sound
+  effects v2, two takes layered), the PLAY plaque (gpt-image-2 on green, keyed out). About 2,700 credits in all.
+- The title is gone from Home; the loading screens have it: the first-start download screen (the wall and the title,
+  new base-build files assets/branding/splash.png and title_logo.webp), the match's warm-up cover (the wall and the
+  swinging title), and the boot splash is the wall (project.godot application/boot_splash, covering the screen).
+- The level shield (a little cog on its corner) opens the player's menu: name and level, SETTINGS, DISCORD. The tab bar
+  is SHOP, PASS, HOME, LOCKER, ALLIANCE: ALLIANCE opens the friends and clan window over the screen you're on, with a
+  badge for requests and invites (SOCIAL's medallion is gone).
+- Home: PLAY is a gold-framed plaque with crossed swords behind it (play_plaque.webp), the FIRST WIN tag on its corner,
+  standing just over the chests; the tutorial a pulsing medallion in the right column (where SOCIAL was) with its gold
+  as a tag; the server line (or CROWN WAR, or your party) a short pill at the top between the medallion columns, JOIN
+  OUR DISCORD under it. The war room painting now covers the screen from its top, and the war table stands down at
+  PLAY (the map's near shore just under the plaque's top), so the whole window shows: the sun, the castles and the
+  river above the heroes.
+- Tests: title_logo_test is the title screen's now (the flight, the slam, TAP TO START, the King, Reduce Motion, the
+  tap, the loading screens and the boot splash); home_heroes_test (the table at PLAY, the castles above the heroes);
+  app_flow_test (the tab bar, Settings through the shield's menu, Home's layout); clans_ui_test and social_ui_test open
+  the window from ALLIANCE.
+- Version 0.31.139, versionCode 225 (server code unchanged; SERVER_BUILD follows the app's version).

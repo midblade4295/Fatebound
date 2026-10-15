@@ -5,7 +5,8 @@ const Screens = preload("res://scripts/app/screens.gd")
 #   godot --rendering-method mobile --fixed-fps 30 --resolution 420x933 --path godot -s res://tools/app_shots.gd
 # Env: SHOT_DIR (default /tmp/shots), SHOT_TABS (comma list, default all), SHOT_SCROLL (px to
 # scroll each screen down for a second shot named <tab>_2), SHOT_SWING (0.31.113: with SHOT_TABS=home and --fixed-fps 30,
-# this many frames of the title's swinging King after the Home shot, one every 2nd frame: home_swing_NN).
+# this many frames of Home after its shot, one every 2nd frame: home_swing_NN), SHOT_MENU=1 (0.31.139: Home with the
+# level shield's menu open).
 const App = preload("res://scripts/app/siege_app.gd")
 const Eco = preload("res://scripts/meta/economy.gd")
 const Profile = preload("res://scripts/meta/profile.gd")
@@ -110,8 +111,6 @@ func _process(_d: float) -> bool:
 				p.d.cloud.stamp = "mine-1"
 			root.add_child(fp)
 			app.play_games.setup(p, fp)
-		if OS.has_environment("SHOT_NO_LOGO"):           # (0.31.112: logo concepts are laid over a shot without the logo)
-			app.title_logo.visible = false
 		if OS.has_environment("SHOT_TUTORIAL"):          # 0.31.112: Home before / after the tutorial (todo | done)
 			p.d.tutorial_done = OS.get_environment("SHOT_TUTORIAL") == "done"
 		p.d.challenges.daily[0].progress = 99
@@ -134,6 +133,8 @@ func _process(_d: float) -> bool:
 			if tabs[i] == "locker" and OS.has_environment("SHOT_LOCKER"):
 				app.locker_class = OS.get_environment("SHOT_LOCKER")
 				app.rebuild()
+		if frames == base_f + 12 and tabs[i] == "home" and OS.has_environment("SHOT_MENU"):
+			app.open_player_menu()                       # 0.31.139: the menu under the level shield
 		if frames == base_f + 18 and tabs[i] == "pass" and OS.has_environment("SHOT_PASS_DETAIL"):
 			var pd: PackedStringArray = OS.get_environment("SHOT_PASS_DETAIL").split(",")
 			Screens.open_pass_item(app, int(app.profile.d.pass.season), int(pd[0]), pd[1] == "prem")

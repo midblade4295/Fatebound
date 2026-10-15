@@ -64,6 +64,19 @@ static func on_oval(deg: float, d := 0.0) -> Vector3:
 static func cam_dist() -> float:
 	return (PAINT_W * 0.5) / (PX_PER_M * tan(deg_to_rad(CAM_FOV) * 0.5))
 
+static func row_of(p: Vector3) -> float:
+	# where a point of the room lands down this control's frame (painting px from its top), by the camera's own sums
+	var e := deg_to_rad(CAM_ELEV)
+	var dir := Vector3(0.0, sin(e), cos(e))
+	var v := p - (Vector3(0.0, TOP_Y, 0.0) + dir * cam_dist())
+	var depth := v.dot(-dir)
+	var up := v.dot(Vector3(0.0, cos(e), -sin(e)))
+	return FRAME.size.y * 0.5 - up / depth * (PAINT_W * 0.5) / tan(deg_to_rad(CAM_FOV) * 0.5)
+
+static func near_row() -> float:
+	# the map's near shore (the table's lip nearest you)
+	return row_of(Vector3(0.0, TOP_Y, oval().y))
+
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	viewport = SubViewport.new()

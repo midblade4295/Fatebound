@@ -165,7 +165,7 @@ func _process(delta: float) -> bool:
 		"home":
 			if t_phase > 0.6:
 				var hb := btn("home_war")
-				check(hb != null and hb.text.contains("HOUSE LIONS"), "Home: CROWN WAR · HOUSE LIONS under PLAY (in a clan)")
+				check(hb != null and hb.text.contains("HOUSE LIONS"), "Home: CROWN WAR · HOUSE LIONS at the top (in a clan)")
 				_shot("war_home")
 				press("home_war")
 				_go("table")

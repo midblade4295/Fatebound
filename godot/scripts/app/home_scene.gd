@@ -9,8 +9,9 @@ extends Control
 #   - every candle (the painted ones on the stands and the sill, and those on the table's rim) flickering, its warm
 #     halo breathing; motes of dust drifting in the light.
 # The painting (tools/home_war_room.py: art_sources/home_war_room/room.png) is 1152 x 2560; everything here is laid
-# out in its pixels, scaled to the screen by `place` so that its row ANCHOR_Y (just under the table's near edge) sits
-# at PLAY's top. Reduce motion (`calm`) keeps the light and the water still and lets no birds or clouds go by; a safe
+# out in its pixels, scaled by `place` to cover the screen from its top (0.31.139: the whole window shows; until then
+# the painting was pinned to PLAY), and the war table stood on the rug so the map's near shore is just under the PLAY
+# plaque's crown. Reduce motion (`calm`) keeps the light and the water still and lets no birds or clouds go by; a safe
 # start (`lite`) draws the painting alone, no 3D.
 const UI2 = preload("res://scripts/app/ui2.gd")
 const WarRoom = preload("res://scripts/app/war_room.gd")
@@ -19,7 +20,8 @@ const LandView = preload("res://scripts/app/war_land_view.gd")
 const ART := "res://assets/ui/v2/bg_war_room.webp"
 const MASK := "res://assets/ui/v2/bg_war_room_mask.png"
 const PAINT := Vector2(1152.0, 2560.0)
-const ANCHOR_Y := 1418.0               # this row of the painting sits at PLAY's top (at 420 x 933 it then fills the width from the top)
+const TABLE_UNDER := 26.0              # the map's near shore this far (screen px) under PLAY's top
+const FRAME_Y := Vector2(380.0, 760.0)  # how high and how low the table may stand in the painting (on the rug, under the sill)
 const SUN := Vector2(247.0, 469.0)
 const WINDOW := Rect2(190.0, 37.0, 760.0, 775.0)   # the window's opening (its arch inside this; the mask is exact)
 const HORIZON := 468.0
@@ -34,6 +36,7 @@ var calm := false
 var lite := false
 var room: Control = null                # the 3D war table and heroes (war_room.gd); null on a safe start
 var k := 1.0                            # painting px -> screen px
+var frame_y := WarRoom.FRAME.position.y   # where the table's frame starts down the painting (place)
 var origin := Vector2.ZERO              # the painting's top left on the screen
 var paint_layer: Control                # (the painting, the sky, the room's light: in painting px, scaled)
 var top_layer: Control                  # (the table's candle flames and the motes: over the 3D)
@@ -270,15 +273,18 @@ func _motes() -> void:
 
 # ---------------- layout ----------------
 func place(play_top: float) -> void:
-	# the painting covers the screen's width, its row ANCHOR_Y at PLAY's top (and no gap above it: taller, it grows)
+	# the painting covers the screen from its top (a phone taller than 9:20: a little wider, its sides cut); the table
+	# stands so the map's near shore is TABLE_UNDER under PLAY's top
 	var w := size.x
-	k = maxf(w / PAINT.x, play_top / ANCHOR_Y)
-	origin = Vector2((w - PAINT.x * k) * 0.5, play_top - ANCHOR_Y * k)
+	var h := size.y
+	k = maxf(w / PAINT.x, h / PAINT.y)
+	origin = Vector2((w - PAINT.x * k) * 0.5, 0.0)
 	for l in [paint_layer, top_layer]:
 		(l as Control).position = origin
 		(l as Control).scale = Vector2(k, k)
+	frame_y = clampf((play_top + TABLE_UNDER - origin.y) / k - WarRoom.near_row(), FRAME_Y.x, FRAME_Y.y)
 	if room != null:
-		room.position = origin + WarRoom.FRAME.position * k
+		room.position = origin + Vector2(0.0, frame_y) * k
 		room.size = WarRoom.FRAME.size * k
 
 func painting_bottom() -> float:
@@ -308,7 +314,7 @@ func _process(delta: float) -> void:
 		if ti >= 0:
 			if ti >= pts.size():
 				continue
-			var at: Vector2 = WarRoom.FRAME.position + (pts[ti] as Vector2) / k
+			var at: Vector2 = Vector2(0.0, frame_y) + (pts[ti] as Vector2) / k
 			core.position = at - core.pivot_offset
 			halo.position = at - halo.size * 0.5
 			if heart != null:

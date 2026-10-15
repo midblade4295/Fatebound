@@ -153,9 +153,9 @@ func _process(delta: float) -> bool:
 		"online":
 			if app.social.online() and bob.online() and t_phase > 1.0:
 				check(app.social.has_clans and bob.has_clans, "the server has clans")
-				check(has_text(app.content, "SOCIAL"), "Home's medallion reads SOCIAL")
-				press("side_friends")
-				check(app.modal is FriendsPanel and btn("social_tab_clan") != null and btn("social_tab_friends") != null, "SOCIAL opens FRIENDS, with FRIENDS and CLAN tabs")
+				check(btn("tab_alliance") != null and btn("side_friends") == null, "ALLIANCE is in the tab bar (0.31.139: SOCIAL's medallion is gone)")
+				press("tab_alliance")
+				check(app.modal is FriendsPanel and btn("social_tab_clan") != null and btn("social_tab_friends") != null, "ALLIANCE opens FRIENDS, with FRIENDS and CLAN tabs")
 				_go("to_clan")
 		"to_clan":
 			if t_phase > 0.3:

@@ -8,7 +8,10 @@ extends SceneTree
 #  - the backdrop is the war room (bg_war_room.webp and its window/water mask), covering 20:9 and 21:9 phones;
 #  - the war table and the concept's four heroes in 3D (the Mage, the Barbarian, the Knight, the Ranger) in their
 #    equipped looks; no hero reaches into another; the two beyond the table stand clear of the side medallions; the
-#    table fits the screen's width and its near edge is above PLAY;
+#    table fits the screen's width;
+#  - 0.31.139 (Kevin: "Change play button and tutorial button design and location so you can move the map table lower
+#    to bottom of screen so the window to outside is more viewable"): the table stands down at the PLAY plaque (the
+#    map's near shore just under its top) and the castles in the window show above the heroes;
 #  - the live map on the table: the war's holders and battles are painted on it; Home and the war map both watch the war
 #    (closing one doesn't stop the other's);
 #  - alive: birds fly, every candle flickers (the 12 painted and the 6 on the table), the sun's rays turn, the water
@@ -94,6 +97,20 @@ func _box(slot: Node3D, weapons := true) -> AABB:
 		box = b if first else box.merge(b)
 		first = false
 	return box
+
+func _top_on_screen(s, slot: Node3D) -> float:
+	# the top of a hero as drawn: his highest bone (a skinned mesh's own box is its bind pose, not what's drawn), and
+	# 0.4 m over it for the head and the hat
+	var top := -INF
+	var at := Vector3.ZERO
+	for sk in slot.find_children("*", "Skeleton3D", true, false):
+		var skel := sk as Skeleton3D
+		for i in skel.get_bone_count():
+			var q: Vector3 = skel.global_transform * skel.get_bone_global_pose(i).origin
+			if q.y > top:
+				top = q.y
+				at = q
+	return _on_screen(s, at + Vector3(0.0, 0.4, 0.0)).y
 
 func _on_screen(s, p: Vector3) -> Vector2:
 	var r = s.room
@@ -190,12 +207,18 @@ func _checks_scene() -> void:
 	check(why == "", "the two beyond the table stand clear of the side medallions (they end at y %.0f)%s" % [med_bottom, why])
 	# ---- the table
 	var o: Vector2 = WarRoom.oval(WarRoom.RIM)
-	var near := _on_screen(phone, Vector3(0.0, WarRoom.TOP_Y + 0.085, o.y - 0.12))  # (the rim's top; its apron goes behind PLAY)
+	var shore := _on_screen(phone, Vector3(0.0, WarRoom.TOP_Y, WarRoom.oval().y))
 	var left := _on_screen(phone, Vector3(-o.x, WarRoom.TOP_Y, 0.0))
 	var right := _on_screen(phone, Vector3(o.x, WarRoom.TOP_Y, 0.0))
 	var far := _on_screen(phone, Vector3(0.0, WarRoom.TOP_Y, -o.y))
-	check(near.y < _play_top(933.0) and left.x >= 0.0 and right.x <= 420.0 and far.y > med_bottom - 40.0,
-		"the table fits the width (%.0f..%.0f), its far edge under the medallions' rows (%.0f), its near rim over PLAY (%.0f < %.0f)" % [left.x, right.x, far.y, near.y, _play_top(933.0)])
+	var pt := _play_top(933.0)
+	check(left.x >= 0.0 and right.x <= 420.0 and absf(shore.y - (pt + HomeScene.TABLE_UNDER)) < 3.0 and far.y > med_bottom,
+		"0.31.139: the table down at PLAY -- the map's near shore just under the plaque's top (%.0f, PLAY %.0f), its far edge under the medallions (%.0f), the width fitted (%.0f..%.0f)" % [shore.y, pt, far.y, left.x, right.x])
+	var castles: float = phone.origin.y + 560.0 * float(phone.k)            # (the painted castles' foot in the window)
+	var heads := INF
+	for c in ["mage", "barbarian"]:
+		heads = minf(heads, _top_on_screen(phone, built[c].node))
+	check(heads > castles, "the window shows: the castles stand clear above the heroes beyond the table (their heads at %.0f, the castles end at %.0f)" % [heads, castles])
 	var foot := _on_screen(phone, Vector3.ZERO)
 	var rug: Vector2 = phone.origin + Vector2(573, 1352) * phone.k
 	var off: Vector2 = (foot - rug) / (Vector2(507, 256) * float(phone.k))                  # (the rug: 507 x 256 px half-axes, painted)

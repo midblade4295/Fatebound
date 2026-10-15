@@ -352,14 +352,16 @@ func _log(s: String) -> void:
 # ---------- the screen ----------
 func _build_ui() -> void:
 	visible = false                          # shown only when something has to be downloaded
+	# 0.31.139 (Kevin: put the title "in a startup screen and any loading screens"): the title screen's castle wall and
+	# the title itself (both in the base build: no pack is here yet -- tools/build_title_art.py)
 	var bg := TextureRect.new()
-	bg.texture = load("res://assets/branding/background.png")
+	bg.texture = load("res://assets/branding/splash.png")
 	bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	bg.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(bg)
 	var shade := ColorRect.new()
-	shade.color = Color(0.02, 0.05, 0.12, 0.45)
+	shade.color = Color(0.03, 0.02, 0.05, 0.35)
 	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(shade)
 	var col := VBoxContainer.new()
@@ -370,12 +372,14 @@ func _build_ui() -> void:
 	col.add_theme_constant_override("separation", 14)
 	add_child(col)
 	var hero := TextureRect.new()
-	hero.texture = load("res://assets/branding/foreground.png")
+	hero.texture = load("res://assets/branding/title_logo.webp")
 	hero.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	hero.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	hero.custom_minimum_size = Vector2(0, 300)
+	hero.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	hero.custom_minimum_size = Vector2(0, 190)
 	col.add_child(hero)
-	title = _label("FATEBOUND", TITLE_FONT, 54, Color.WHITE, 12)
+	title = _label("", TITLE_FONT, 10, Color.WHITE, 2)      # (the title is the picture above now)
+	title.visible = false
 	col.add_child(title)
 	col.add_child(_label("UPDATING", TITLE_FONT, 30, GOLD, 8))
 	var gap := Control.new()
