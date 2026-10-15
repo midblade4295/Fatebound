@@ -157,6 +157,16 @@ var _guard: Node = null
 const MENU_FPS := 60
 
 var _background := false
+var _building := false                 # 0.31.142: Home being built a piece a frame behind the boot title (_stage)
+
+func _stage(boot_title: Control, done: float) -> void:
+	# a piece of Home built: the boot title's LOADING bar moves on, and it gets a frame before the next piece
+	if not is_instance_valid(boot_title):
+		return
+	if boot_title.has_method("set_progress"):
+		boot_title.set_progress(done)
+	if _building:
+		await get_tree().process_frame
 
 func _start_background() -> void:
 	if _background or safe_boot:
@@ -179,6 +189,12 @@ func _ready() -> void:
 	get_tree().auto_accept_quit = false
 	_menu_fps()
 	safe_boot = _guard != null and bool(_guard.safe_boot)
+	# 0.31.142 (Kevin: "It freezes while loading for a few seconds"): with the boot screen's title up in front, Home is
+	# built a piece a frame (_stage), the title's LOADING bar moving on between the pieces, instead of in one go that
+	# stopped the screen for 2.4 s on his S21. (Tests and tools, with no title in front, build it in one go as before.)
+	var up0 := get_tree().get_nodes_in_group(TitleScreen.GROUP)
+	var boot_title: Control = up0[0] if not up0.is_empty() else null
+	_building = boot_title != null
 	_boot_mark("profile")
 	profile = Profile.new(profile_path, legacy_path)
 	profile.now_override = now_override
@@ -189,10 +205,16 @@ func _ready() -> void:
 	_apply_audio()
 	_boot_mark("background")
 	_build_background()
+	await _stage(boot_title, 0.66)
 	_boot_mark("hero")
 	_build_hero()
+	await _stage(boot_title, 0.72)
+	_boot_mark("hero 3D")
+	_build_room()
+	await _stage(boot_title, 0.8)
 	_boot_mark("menus")
 	_build_chrome()
+	await _stage(boot_title, 0.86)
 	var fly_layer := CanvasLayer.new()               # 0.31.105: above the menus and their modals
 	fly_layer.layer = 60
 	add_child(fly_layer)
@@ -299,7 +321,10 @@ func _ready() -> void:
 		var m: Dictionary = profile.d.migration
 		call_deferred("toast", "Welcome to Fatebound! Your progress carried over: +%d gold, +%d gems" % [int(m.gold), int(m.gems)], UI.GOLD)
 	content_scroll.get_v_scroll_bar().value_changed.connect(_on_scroll)
+	await _stage(boot_title, 0.9)
 	show_tab("home")
+	_building = false
+	_stage(boot_title, 0.95)
 	_boot_mark("home shown, waiting for frames")
 	var up := get_tree().get_nodes_in_group(TitleScreen.GROUP)
 	if not up.is_empty():
@@ -427,6 +452,7 @@ func _build_hero() -> void:
 	under.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hero_layer.add_child(under)
 	home_scene = HomeScene.new(calm, safe_boot)
+	home_scene.defer_room = _building            # 0.31.142: staged behind the boot title -- the 3D a frame later
 	home_scene.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	hero_layer.add_child(home_scene)
 	hero_node = home_scene.room                 # (null on a safe start: the painting only, no live 3D)
@@ -439,6 +465,13 @@ func _build_hero() -> void:
 	# (0.31.113-0.31.138: the "All Tied Up" title stood here. 0.31.139, Kevin: "Seems very busy now. Maybe remove the
 	# fatebound title and instead put that in a startup screen and any loading screens": the title screen
 	# (title_screen.gd), the first-start download screen and the match's warm-up cover have it now.)
+
+func _build_room() -> void:
+	# 0.31.142: Home's 3D (the war table and heroes), when the build is staged a frame after the painting
+	if home_scene != null and home_scene.room == null and not safe_boot:
+		home_scene.add_room()
+		hero_node = home_scene.room
+		home_scene.place(home_play_top())
 
 const LOGO_FONT = preload("res://assets/fonts/LuckiestGuy-Regular.ttf")
 
@@ -1095,6 +1128,8 @@ func _scroll_target() -> ScrollContainer:
 	return null
 
 func _input(event: InputEvent) -> void:
+	if _building:
+		return
 	if (event is InputEventScreenTouch or (event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT)) and event.pressed:
 		_last_press = event.position             # (0.31.105: where a claimed reward flies from)
 		_last_press_ms = Time.get_ticks_msec()
@@ -1163,6 +1198,8 @@ func _cancel_press() -> void:
 	_cancelling = false
 
 func _process(_delta: float) -> void:
+	if _building:
+		return                                 # (0.31.142: Home still being built behind the boot title)
 	Assets.poll()
 	# Keep gliding after a flick, easing out.
 	if not _drag_down and absf(_fling) > 30.0 and _menu_scroll_live() and _scroll_target() == _drag_sc:

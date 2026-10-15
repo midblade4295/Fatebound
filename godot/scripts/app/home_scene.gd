@@ -34,6 +34,7 @@ const FLAME := Color(1.0, 0.62, 0.26)
 
 var calm := false
 var lite := false
+var defer_room := false                 # 0.31.142: the 3D added later (add_room): the boot title's staged build
 var room: Control = null                # the 3D war table and heroes (war_room.gd); null on a safe start
 var k := 1.0                            # painting px -> screen px
 var frame_y := WarRoom.FRAME.position.y   # where the table's frame starts down the painting (place)
@@ -122,17 +123,23 @@ func _ready() -> void:
 	# the room again, over the sky (the window's opening cut out)
 	_painting(art, mask, noise, true)
 	_build_room_light()
-	if not lite:
-		room = WarRoom.new()
-		room.calm = calm
-		add_child(room)
 	top_layer = _layer()
-	if room != null:
-		for i in WarRoom.CANDLE_SPOTS.size() * WarRoom.CANDLES.size():
-			_flame(top_layer, Vector2.ZERO, 1.0, i)
+	if not defer_room:
+		add_room()
 	if not calm:
 		_motes()
 	back.set_meta("home_art", true)
+
+func add_room() -> void:
+	# the 3D war table and heroes, between the painting and the top layer (the table's candle flames, the motes)
+	if room != null or lite:
+		return
+	room = WarRoom.new()
+	room.calm = calm
+	add_child(room)
+	move_child(room, top_layer.get_index())
+	for i in WarRoom.CANDLE_SPOTS.size() * WarRoom.CANDLES.size():
+		_flame(top_layer, Vector2.ZERO, 1.0, i)
 
 func _layer() -> Control:
 	var c := Control.new()

@@ -4226,3 +4226,27 @@ Kevin (with COPY DIAGNOSTICS from his S21, two starts of 0.31.141): "Getting fre
   passed alone three times each. tools/cold_start_check.sh: PASS. The Play AAB built from this commit (throwaway key,
   presets untouched by the build): BASE OK (253 files), CONTENT OK (no pack changed), play_games true, bundletool
   valid.
+
+## 0.31.143 — the LOADING wait: the pipeline cache kept, Home built a piece a frame, a progress bar
+Kevin (his S21's log of 0.31.142): "It freezes while loading for a few seconds"
+- The log: the game loaded behind the title in 3.4 s (smooth), then no frame for 7.3 s: Home's build 2.4 s (hero
+  1.7, menus 0.8) and its first frame 4.8 s -- with no "draw" pipeline compiles left (0.31.142), but the same 45 or
+  so pipelines compiled again (canvas 11, mesh 10, surface 11, specialization 13).
+- Why every start: Godot keeps compiled pipelines in user://vulkan/pipelines.<renderer>.<gpu>.cache but writes it
+  only when it has grown by rendering/rendering_device/pipeline_cache/save_chunk_size_mb (3 MB) or when the app
+  quits (rendering_device.cpp update_pipeline_cache) -- and a phone's app is killed, not quit, so the cache was never
+  written and each start compiled Home's pipelines from scratch (hidden under the boot splash before 0.31.141).
+  project.godot: save_chunk_size_mb 0.1, so it is written within the first start. The start-up log's second line
+  now says what pipeline cache there is ("none yet" or its file and size) -- the next log shows if it took.
+- Home built a piece a frame behind the boot title (siege_app._stage): background | the painting | the 3D war room
+  (home_scene.defer_room / add_room, siege_app._build_room) | the menus | the services and Home's page -- a frame
+  drawn between each, the title's new LOADING bar stepping on (0.6 when the game has loaded, then 0.66, 0.72, 0.8,
+  0.86, 0.9, 0.95; it creeps on by itself while the game loads on its thread). The app's _process and _input wait
+  for the build (_building). Without a title in front (tests, tools) it builds in one go as before.
+- Tests: boot_title_test (Home built over several frames, the bar stepping on: [0.6, 0.72, 0.8, 0.86, 0.9, 0.95]).
+- Desktop (lavapipe): the longest frame of the build is the one that first draws the 3D (its pipelines: lavapipe
+  keeps no pipeline cache, so it can't show the saved-cache start; the phone's log will).
+- Version 0.31.143, versionCode 229 (server code unchanged; SERVER_BUILD follows the app's version).
+- Quick suite: all 92 passed. tools/cold_start_check.sh: PASS. The Play AAB built from this commit (throwaway key,
+  presets untouched by the build): BASE OK (253 files), CONTENT OK (no pack changed), play_games true, bundletool
+  valid.

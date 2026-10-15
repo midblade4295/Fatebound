@@ -40,6 +40,7 @@ func _init() -> void:
 	diag.start_early()
 	add_child(diag)
 	diag.write("BOOT guard up: renderer %s" % RenderingServer.get_current_rendering_method())
+	diag.write("BOOT %s" % pipeline_cache_note())
 	if not tracking:
 		return
 	if FileAccess.file_exists(OLD_RENDERER_CFG):
@@ -53,6 +54,19 @@ func _init() -> void:
 	_write_state({"pending": true, "build": Diag.BUILD, "safe_build": Diag.BUILD if safe_boot else ""})
 	diag.write("BOOT %s (last start %s)" % ["SAFE START" if safe_boot else "normal",
 		"never reached the menu" if bool(d.stuck) else "ok"])
+
+static func pipeline_cache_note() -> String:
+	# 0.31.142: the graphics driver's compiled pipelines, kept by Godot in user://vulkan. Godot wrote them only every
+	# 3 MB of new pipelines or when the app quits -- and a phone's app is killed, not quit -- so every start compiled
+	# Home's ~45 pipelines again (its first frame: 4.5-4.8 s on Kevin's S21). project.godot now saves every 0.1 MB.
+	var d := DirAccess.open("user://vulkan")
+	if d == null:
+		return "pipeline cache: none yet"
+	var parts := []
+	for f in d.get_files():
+		var fa := FileAccess.open("user://vulkan".path_join(f), FileAccess.READ)
+		parts.append("%s %.2f MB" % [f, (fa.get_length() if fa != null else 0) / 1048576.0])
+	return "pipeline cache: " + (", ".join(parts) if not parts.is_empty() else "none yet")
 
 func _keep_stuck_log() -> void:
 	# The frozen start's log is boot_diag_prev.log right now; the next start would push it out, so keep a copy for

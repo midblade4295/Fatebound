@@ -76,6 +76,8 @@ var _hold_t := 0.0
 var _launch := -1.0                    # when the flight set off (-1: not yet)
 var _shown := false
 var _drift: CPUParticles2D
+var bar: ProgressBar                   # 0.31.142: the LOADING bar (set_progress)
+var _progress_to := 0.0
 var k := 1.0
 var origin := Vector2.ZERO
 var paint: Control                     # the wall and its torches, in the painting's pixels
@@ -248,6 +250,8 @@ func _ready() -> void:
 	tap.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	tap.modulate.a = 0.0
 	tap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	bar = _loading_bar()
+	add_child(bar)
 	var ver := UI.label(self, "v" + Diag.BUILD.replace("-fatebound", ""), 11, Color(1, 1, 1, 0.45), UI.HEAVY_FONT)
 	ver.name = "Version"
 	ver.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -306,8 +310,34 @@ func _lay() -> void:
 	tap.size = Vector2(w, 44)
 	tap.position = Vector2(0, h * 0.8)
 	tap.pivot_offset = tap.size * 0.5
+	bar.size = Vector2(minf(w * 0.56, 240.0), 12.0)
+	bar.position = Vector2((w - bar.size.x) * 0.5, h * 0.8 + 50.0)
 
 # ---------------- the parts ----------------
+func _loading_bar() -> ProgressBar:
+	# 0.31.142: a gold bar under LOADING..., as the first-start download screen has (content_loader.gd)
+	var b := ProgressBar.new()
+	b.show_percentage = false
+	b.min_value = 0.0
+	b.max_value = 1.0
+	b.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var back := StyleBoxFlat.new()
+	back.bg_color = Color(0.03, 0.02, 0.05, 0.75)
+	back.set_corner_radius_all(6)
+	back.border_color = Color(1.0, 0.85, 0.5, 0.35)
+	back.set_border_width_all(1)
+	var fill := StyleBoxFlat.new()
+	fill.bg_color = UI2.GOLD
+	fill.set_corner_radius_all(6)
+	b.add_theme_stylebox_override("background", back)
+	b.add_theme_stylebox_override("fill", fill)
+	b.modulate.a = 0.0
+	return b
+
+func set_progress(f: float) -> void:
+	# how far the game behind has got (the boot screen and the game say, 0..1); the bar never goes back
+	_progress_to = maxf(_progress_to, clampf(f, 0.0, 1.0))
+
 static func _white() -> Texture2D:
 	var img := Image.create(4, 4, false, Image.FORMAT_RGBA8)
 	img.fill(Color.WHITE)
@@ -598,6 +628,7 @@ func home_ready() -> void:
 		return
 	home_is_ready = true
 	holding = false
+	set_progress(1.0)
 	_mark("title: the game is ready behind it")
 	if want_leave:
 		leave()
@@ -609,6 +640,7 @@ func hold_for_game() -> void:
 		return
 	holding = true
 	_hold_t = t
+	set_progress(0.6)
 
 func can_swap() -> bool:
 	# the boot screen may now put the game in behind
@@ -746,6 +778,12 @@ func _process(delta: float) -> void:
 			tap.modulate.a = 0.6 if holding or want_leave else clampf((t - LOADING_AT) / 0.4, 0.0, 1.0) * (0.45 + 0.2 * sin(t * 5.0))
 		else:
 			tap.modulate.a = maxf(0.0, tap.modulate.a - delta * 4.0)
+	# the LOADING bar: creeping on by itself while the game loads on its thread, then a step for each piece of Home
+	if not home_is_ready and not holding:
+		_progress_to = maxf(_progress_to, 0.55 * (1.0 - exp(-t / 2.2)))
+	bar.value = _progress_to if holding or home_is_ready else lerpf(bar.value, _progress_to, minf(1.0, delta * 6.0))
+	var loading_shown := tap.text == "LOADING..." and not leaving and not landed
+	bar.modulate.a = clampf(tap.modulate.a / 0.6, 0.0, 1.0) if loading_shown and (not home_is_ready) else maxf(0.0, bar.modulate.a - delta * 4.0)
 	# the torches
 	if calm:
 		return

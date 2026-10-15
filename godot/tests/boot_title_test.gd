@@ -7,6 +7,8 @@ extends SceneTree
 #  - 0.31.142 (Kevin: "Getting freezes during it now"): the game goes in behind a STILL title (held for it: LOADING...,
 #    before the show -- building and first drawing Home stop the drawing for a moment), and the show (the flight, the
 #    slam) plays only once Home is ready; the game's background loading starts after the show;
+#  - 0.31.142 (Kevin: "It freezes while loading for a few seconds"): Home is built a piece a frame behind the title,
+#    its LOADING bar stepping on between the pieces;
 #  - the match's script and the windows opened later are not compiled with the game (siege_app.gd has no preload of
 #    them): they load first in the background queue (asset_cache.gd), or there and then.
 #   godot --headless --path godot -s res://tests/boot_title_test.gd
@@ -24,6 +26,8 @@ var swap_at := -1.0
 var swap_landed := false
 var swap_settled := 0.0
 var gone := false
+var build_frames := 0
+var bars: Array = []
 
 func check(ok: bool, what: String) -> void:
 	print(("ok   " if ok else "FAIL ") + what)
@@ -79,6 +83,19 @@ func _process(d: float) -> bool:
 			check(is_instance_valid(title) and not swap_landed and float(title._launch) < 0.0 and bool(title.holding)
 				and swap_settled >= title.SETTLE - 0.01 and title.tap.text == "LOADING...",
 				"the game goes in behind a still LOADING..., before the show (held %.2f s)" % swap_settled)
+			bars.append(float(title.bar.value))
+			step = 21
+		21:
+			# Home built a piece a frame: the title gets frames, its bar steps on
+			build_frames += 1
+			if bars.is_empty() or float(title.bar.value) > float(bars.back()) + 0.001:
+				bars.append(float(title.bar.value))
+			if app.title_screen != title:
+				if t - swap_at > 30.0:
+					check(false, "the game takes the title over")
+					return _finish()
+				return false
+			check(build_frames >= 4 and bars.size() >= 4, "Home is built a piece a frame behind the title (%d frames), the LOADING bar stepping on %s" % [build_frames, str(bars.map(func(b): return snappedf(b, 0.01)))])
 			check(app.title_screen == title and title.app == app and get_nodes_in_group(TITLE_GROUP).size() == 1,
 				"the game takes that title over (one title screen)")
 			var consts: Dictionary = app.get_script().get_script_constant_map()
