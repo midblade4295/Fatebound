@@ -149,6 +149,7 @@ func _process(delta: float) -> bool:
 				p.d.level = 10
 				p.d.account = {"id":accts.Alice[0], "key":accts.Alice[1], "seq":0}
 				p.d.tutorial_done = true
+				p.d.settings["war_tour"] = true          # (0.31.147: the Herald's tour has its own test, war_tour_test)
 				p.save()
 				app = App.new()
 				app.profile_path = base + "-profile.json"
@@ -168,12 +169,19 @@ func _process(delta: float) -> bool:
 				check(btn("home_war") == null and (has_text(app.content, "ONLINE") or has_text(app.content, "LIVE SIEGE SERVER")) and not app.online_refs.is_empty(),
 					"Home: the players-online line at the top (no CROWN WAR pill: PLAY opens the map)")
 				_shot("war_home")
-				var room = app.hero_node
 				press("play")
-				check(_table() != null and app.siege == null, "PLAY opens the war map")
+				_go("home_map")
+		"home_map":
+			# (0.31.147: after Home's push into the table)
+			if _table() != null:
+				var room = app.hero_node
+				check(app.siege == null, "PLAY opens the war map")
 				check(btn("war_quick") != null and btn("war_quick").text.begins_with("QUICK BATTLE"), "...with QUICK BATTLE at its foot")
 				check(room == null or room.process_mode == Node.PROCESS_MODE_DISABLED, "Home's 3D held still behind it")
 				_go("table")
+			elif t_phase > 5.0:
+				check(false, "PLAY opens the war map")
+				return _finish()
 		"table":
 			var tb = _table()
 			if tb != null and not app.social.war.is_empty() and t_phase > (2.5 if shots != "" else 0.6):

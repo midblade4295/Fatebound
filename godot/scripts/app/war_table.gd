@@ -17,6 +17,13 @@ const LandData = preload("res://scripts/app/war_land_data.gd")   # (tools/war_la
 const LandView = preload("res://scripts/app/war_land_view.gd")   # (0.31.138: the land, sea, trees and miniatures)
 const CAM_DIR := Vector3(0.0, 15.0, 11.0)   # where the camera looks from (how far: _fit_camera)
 const CAM_FOV := 32.0
+const Tour = preload("res://scripts/app/war_tour.gd")   # 0.31.147: the Herald's tour of the map
+# 0.31.147 (Kevin: "then the map opens up have camera zoom to it as animation"): the window fades in while the camera
+# dives from high and far onto the land, settling where _fit_camera put it (reduce motion: none of it)
+const INTRO_SECS := 1.0
+const INTRO_FADE := 0.3
+const INTRO_FAR := 1.75                    # how much farther away it starts
+const INTRO_RISE := 14.0                   # how much higher (CAM_DIR's height): it starts looking down on the land
 
 var app
 var social
@@ -50,11 +57,21 @@ var _pan := Vector2.ZERO
 var _quick: Button                     # 0.31.145: QUICK BATTLE (the match from matchmaking)
 var _held_room: Node = null            # 0.31.145: Home's 3D, held still behind the window
 var _held_mode := Node.PROCESS_MODE_INHERIT
+var calm := false                      # reduce motion: no swoop, no glides
+var _intro_on := false                 # 0.31.147: the opening swoop running
+var _intro_t := 0.0
+var _intro_frames := 0
+var _cam_tw: Tween = null              # the tour's camera glides
+var _tour: Control = null              # 0.31.147: the Herald's tour (war_tour.gd), while it runs
+var _tour_checked := false             # (the first-time tour: looked at once the map has the war on it)
+var _touched := false                  # the player has tapped or moved the map (the first-time tour then waits)
+var _help_btn: Button
 
-func open(a, first := "") -> void:
+func open(a, first := "", swoop := true) -> void:
 	app = a
 	social = a.social
 	sel = first
+	calm = bool(a.profile.d.settings.get("reduce_motion", false)) if a.get("profile") != null else false
 	var w := SocialUI.window(self, "CROWN WAR", "swords", func():
 		app.sfx("menuClose")
 		app.close_modal(), 56.0 + float(app.safe_top), 24.0)
@@ -78,6 +95,7 @@ func open(a, first := "") -> void:
 	_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_vpc.add_child(_overlay)
 	_names_button()
+	_help_button()
 	var sf := UI2.frame(body, "glass", 10, 16.0)
 	sf.add_theme_constant_override("separation", 6)
 	sf.custom_minimum_size.y = 150          # (the table doesn't jump about as the sheet changes)
@@ -99,6 +117,20 @@ func open(a, first := "") -> void:
 	social.war_went.connect(_on_went)
 	social.war_open()
 	_render()
+	_intro_on = swoop and not calm
+	if _intro_on:
+		modulate.a = 0.0
+
+func _help_button() -> void:
+	# 0.31.147: "?" beside NAMES -- the Herald's tour again
+	_help_btn = UI2.button(_overlay, "?", "grey", func():
+		app.sfx("menuOpen")
+		start_tour(), "war_help", 14, 28.0, 9.0)
+	_help_btn.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	_help_btn.offset_left = -112
+	_help_btn.offset_right = -76
+	_help_btn.offset_top = 6
+	_help_btn.offset_bottom = 34
 
 func _names_button() -> void:
 	# NAMES, in the table's corner: every place's name on the table, or (off) only the one picked and the battles
@@ -230,6 +262,13 @@ func _on_table_input(ev: InputEvent) -> void:
 	# a tap picks the place under it; one finger (or the mouse) drags the map, two pinch it closer (or the wheel)
 	if ev is InputEventMouse and (ev as InputEventMouse).device == InputEvent.DEVICE_ID_EMULATION:
 		return                                   # (the phone's touches arrive as touches; skip their mouse copies)
+	if ev is InputEventScreenTouch or ev is InputEventScreenDrag or ev is InputEventMouseButton or ev is InputEventMagnifyGesture \
+			or ev is InputEventPanGesture or (ev is InputEventMouseMotion and _mouse_down):
+		_touched = true                          # (the player's hands on the map: the swoop and any glide give way)
+		if _intro_on:
+			_end_intro()
+		if _cam_tw != null and _cam_tw.is_valid():
+			_cam_tw.kill()
 	if ev is InputEventScreenTouch:
 		var st := ev as InputEventScreenTouch
 		if st.pressed:
@@ -312,9 +351,23 @@ func _apply_cam() -> void:
 	var k := 1.0 - 1.0 / _zoom
 	_pan.x = clampf(_pan.x, -4.0 * k, 4.0 * k)
 	_pan.y = clampf(_pan.y, -7.0 * k, 7.0 * k)
-	var dir := CAM_DIR.normalized()
+	var e := _intro_ease()
+	var dir := (CAM_DIR + Vector3(0.0, INTRO_RISE * (1.0 - e), 0.0)).normalized()
 	var at := _cam_at + Vector3(_pan.x, 0.0, _pan.y)
-	_cam.transform = Transform3D(Basis.looking_at(-dir, Vector3.UP), at + dir * (_cam_dist / _zoom))
+	_cam.transform = Transform3D(Basis.looking_at(-dir, Vector3.UP), at + dir * (_cam_dist / _zoom) * lerpf(INTRO_FAR, 1.0, e))
+
+func _intro_ease() -> float:
+	# the opening swoop's progress, eased out (1: done)
+	if not _intro_on:
+		return 1.0
+	var f := clampf(_intro_t / INTRO_SECS, 0.0, 1.0)
+	return 1.0 - pow(1.0 - f, 3.0)
+
+func _end_intro() -> void:
+	_intro_on = false
+	modulate.a = 1.0
+	if _cam != null:
+		_apply_cam()
 
 func screen_of(id: String) -> Vector2:
 	# where a place's centre is on the table, in this window's table rectangle
@@ -401,6 +454,18 @@ func _process(delta: float) -> void:
 	_clock += delta
 	if _vp.size != _fit_size:
 		_fit_camera()
+	if _intro_on:
+		if _intro_frames < 2:
+			_intro_frames += 1                   # (the window's first frames are its slowest: the swoop starts after them)
+		else:
+			_intro_t += delta
+		modulate.a = clampf(_intro_t / INTRO_FADE, 0.0, 1.0)
+		if _intro_t >= INTRO_SECS:
+			_end_intro()
+		else:
+			_apply_cam()
+	elif not _tour_checked:
+		_first_tour()
 	if _dirty:
 		_dirty = false
 		_render()
@@ -492,9 +557,9 @@ func _render_sheet() -> void:
 			lines.append("Last week: House %s won." % SocialUI.house_name(str(last.won)))
 		UI2.body(_sheet, " ".join(lines), 12, UI2.SOFT)
 		if house == "":
-			UI2.button(_sheet, "FIND A CLAN", "purple", func():
+			UI2.button(_sheet, "JOIN A CLAN", "purple", func():
 				app.sfx("menuOpen")
-				app.open_clan(), "war_find_clan", 15, 40.0)
+				app.open_clan("join"), "war_find_clan", 15, 40.0)
 		return
 	var t := _terr(sel)
 	var h := str(t.get("h", ""))
@@ -534,7 +599,7 @@ func _render_sheet() -> void:
 	if mine_house == "":
 		UI2.button(_sheet, "JOIN A CLAN TO FIGHT", "purple", func():
 			app.sfx("menuOpen")
-			app.open_clan(), "war_find_clan", 15, 40.0)
+			app.open_clan("join"), "war_find_clan", 15, 40.0)
 		return
 	var why := str(t.get("why", ""))
 	if why == "" and int(w.get("att", 0)) <= 0:
@@ -598,3 +663,78 @@ static func _num(n: int) -> String:
 		out = "," + s.right(3) + out
 		s = s.left(s.length() - 3)
 	return s + out
+
+# ---------------- the Herald's tour (0.31.147, war_tour.gd) ----------------
+func _first_tour() -> void:
+	# the first time this phone's map has the war on it (and the player hasn't started using it): the tour, by itself
+	if social.war.is_empty():
+		return
+	_tour_checked = true
+	if not _touched and app.has_method("war_tour_due") and app.war_tour_due():
+		start_tour()
+
+func start_tour() -> void:
+	if is_instance_valid(_tour):
+		return
+	_tour_checked = true
+	if _intro_on:
+		_end_intro()
+	_tour = Tour.new()
+	add_child(_tour)
+	_tour.finished.connect(_on_tour_finished)
+	_tour.begin(self, app)
+
+func touring() -> bool:
+	return is_instance_valid(_tour)
+
+func _on_tour_finished(how: String) -> void:
+	if app.has_method("war_tour_seen"):
+		app.war_tour_seen()
+	if is_instance_valid(_tour):
+		_tour.queue_free()
+	_tour = null
+	tour_camera(["overview"], "")
+	if how == "join":
+		app.open_clan("join")
+
+func tour_camera(cmd: Array, pick: String) -> void:
+	# the tour's camera: the whole land (["overview"]), or close on a place (["focus", id, zoom]); `pick` is picked
+	if pick != sel:
+		sel = pick
+		_dirty = true
+	var z := 1.0
+	var pan := Vector2.ZERO
+	if cmd.size() >= 2 and str(cmd[0]) == "focus" and _tiles.has(str(cmd[1])):
+		z = float(cmd[2]) if cmd.size() >= 3 else 2.0
+		var p: Vector3 = _tiles[str(cmd[1])].pos
+		pan = Vector2(p.x - _cam_at.x, p.z - _cam_at.z)
+	_glide(z, pan)
+
+func _glide(z: float, pan: Vector2, secs := 0.9) -> void:
+	if _cam_tw != null and _cam_tw.is_valid():
+		_cam_tw.kill()
+	if calm:
+		_zoom = z
+		_pan = pan
+		_apply_cam()
+		return
+	var z0 := _zoom
+	var p0 := _pan
+	_cam_tw = create_tween()
+	_cam_tw.tween_method(func(f: float):
+		_zoom = lerpf(z0, z, f)
+		_pan = p0.lerp(pan, f)
+		_apply_cam(), 0.0, 1.0, secs).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+
+func tour_rect(what: String) -> Rect2:
+	# where a part of this window is on the screen (the tour's spotlight)
+	match what:
+		"map":
+			return _vpc.get_global_rect()
+		"sheet":
+			return (_sheet.get_parent() as Control).get_global_rect()
+		"stats":
+			return _stats.get_global_rect()
+		"quick":
+			return _quick.get_global_rect()
+	return Rect2()

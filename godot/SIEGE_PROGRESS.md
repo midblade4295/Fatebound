@@ -4324,3 +4324,35 @@ Kevin: "I want the play button to always bring players into map"
 - Quick suite: all 92 passed (the redialing server tests too). tools/cold_start_check.sh: PASS. The Play AAB built from
   this commit (throwaway key, presets untouched by the build): BASE OK (253 files), CONTENT OK (no pack changed),
   play_games true, bundletool valid.
+
+## 0.31.147 — the Herald's tour of the war map; JOIN A CLAN opens on the clans; PLAY zooms into the map
+Kevin: "Create a tutorial for everyone that walks them through how the map works and joining a clan. When they click
+join clan it put the list of available clans or they have option to start clan. Also then the map opens up have camera
+zoom to it as animation"
+- The tour (scripts/app/war_tour.gd, new), told by the Royal Herald as in the match tutorial: it runs by itself the
+  first time a phone's war map has the war on it (settings.war_tour, kept on the phone; existing players get it once
+  too) unless the player has already started using the map, and again from the map's new "?" (beside NAMES). Ten
+  steps, each with the Herald's line typing out (NEXT finishes it first; a tap on the dimmed screen = NEXT), a gold
+  spotlight on what it's about and the map's camera gliding there: the three houses (the whole land); the keeps, never
+  lost (close on your house's keep, the Lions' without a house); a land's colour and tapping one (close on a held place,
+  picked, its sheet lit: one another house holds next to your land, else any held one); the clans' bars (+50 a crown,
+  -100 a loss); taking land (1,000 held / 500 free); the roads and ridges; 5 battles a day, started or joined, defending
+  free; the week (Monday, the most land wins, the map wiped); QUICK BATTLE (its button lit). The numbers come from
+  war_map.gd. Last step: not in a clan -- JOIN A CLAN or LATER; in a clan -- "You fight for House X with [TAG]",
+  FINISH. SKIP on every step but the last; the map goes back to the whole land when it ends. Voice lines can be
+  dropped in as assets/vo/war_tour/<id>.ogg (tour_intro ... tour_clan), like the match tutorial's.
+- JOIN A CLAN (the tour's, the map's sheet's JOIN A CLAN / JOIN A CLAN TO FIGHT) opens the CLAN window on joining
+  (clan_panel.gd focus "join"): JOIN A CLAN at the top, the clans to join right under it (FIND A CLAN: every clan,
+  JOIN / ASK / FULL, the house filters), START MY OWN CLAN scrolling down to the form. The CLAN window opened from
+  ALLIANCE has START MY OWN CLAN too.
+- The zoom: PLAY pushes Home's view into the war table (the painting and the 3D scaled together onto the map's middle,
+  war_room.table_center, x2.1 in 0.45 s, easing in; Home's buttons fade; nothing else pressable meanwhile), then the
+  war map opens over it, fading in while its camera dives from high and far (1.75x, looking down) onto the land,
+  settling in 1 s (war_table.gd INTRO_*: the dive waits out the window's first two frames, the slow ones). Opening the
+  map from anywhere else (the CLAN window, a battle's WAR MAP) has the dive too. A touch on the map ends the dive.
+  Home eases back out when the map closes (at once if a match starts). Reduce Motion: no push, no dive, no glides.
+- Tests: war_tour_test (new, 27 checks: the push, the dive, the tour by itself, typing and NEXT, the keep, the place
+  and its sheet in the spotlight, QUICK BATTLE lit, JOIN A CLAN -> the CLAN window on joining, seen once, "?" again,
+  SKIP, the in-clan ending, reduce motion); clans_ui_test (the join view: the clans, START MY OWN CLAN scrolling, no
+  SEE THE WAR MAP); war_ui_test, social_ui_test, app_flow_test wait for the map after PLAY's push.
+- Version 0.31.147, versionCode 233 (server code unchanged; SERVER_BUILD follows the app's version).

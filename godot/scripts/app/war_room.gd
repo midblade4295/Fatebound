@@ -414,6 +414,13 @@ func _rebuild() -> void:
 		i += 1
 
 # ---------------- the war ----------------
+func table_center() -> Vector2:
+	# 0.31.147: the map's middle on the screen (Home's PLAY pushes the view in on it: siege_app._zoom_into_table)
+	if cam != null and cam.is_inside_tree() and viewport.size.x > 0:
+		var p := cam.unproject_position(Vector3(0.0, TOP_Y, 0.0)) * (size / Vector2(viewport.size))
+		return get_global_transform() * p
+	return get_global_transform() * Vector2(size.x * 0.5, size.y * TABLE_ROW / FRAME.size.y)
+
 func paint(war: Dictionary) -> void:
 	if land != null:
 		land.paint(war)

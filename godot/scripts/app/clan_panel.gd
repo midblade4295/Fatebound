@@ -25,10 +25,13 @@ var _set_join := ""                   # the settings being edited (officers)
 var _set_lv := 0
 var _fields := {}                     # name -> LineEdit (what's typed survives a redraw)
 var _typed := {}
+var focus := ""                       # 0.31.147: "join" -- opened to join one (the war map's JOIN A CLAN, the Herald's tour)
+var _start_box: Control = null        # START A CLAN's section (START MY OWN CLAN scrolls to it)
 
-func open(a) -> void:
+func open(a, f := "") -> void:
 	app = a
 	social = a.social
+	focus = f
 	var w := SocialUI.window(self, "CLAN", "castle", func():
 		app.sfx("menuClose")
 		app.close_modal(), 56.0 + float(app.safe_top), 24.0)
@@ -185,12 +188,19 @@ func _render() -> void:
 # ---------------- not in a clan ----------------
 func _render_free() -> void:
 	var cool: int = social.clan_cool_left()
-	var intro := _section("YOUR CLAN")
+	var intro := _section("JOIN A CLAN" if focus == "join" else "YOUR CLAN")
 	if cool > 0:
 		UI2.body(intro, "You left a clan recently. You can join or start one again in %s." % _hours(cool), 13, UI2.GOLD)
+	elif focus == "join":
+		UI2.body(intro, "Pick a clan below and fight for its house on the war map -- or start your own and choose the house.", 13, UI2.SOFT)
 	else:
 		UI2.body(intro, "You're not in a clan yet. Join one below, or start your own. Every clan fights for one of the three houses.", 13, UI2.SOFT)
-	if social.has_war:
+	# 0.31.147 (Kevin: "When they click join clan it put the list of available clans or they have option to start clan"):
+	# the list is right under this; START MY OWN CLAN goes down to the form
+	UI2.button(intro, "START MY OWN CLAN", "gold", func():
+		app.sfx("tab")
+		_to_start(), "clan_to_start", 14, 38.0)
+	if social.has_war and focus != "join":
 		# 0.31.135: the war map is there to look at before joining (who holds what)
 		UI2.button(intro, "SEE THE WAR MAP", "red", func():
 			app.sfx("menuOpen")
@@ -269,8 +279,15 @@ func _search() -> void:
 	if not social.clan_find(t, _fhouse):
 		_fail()
 
+func _to_start() -> void:
+	# scroll the window down to START A CLAN
+	if is_instance_valid(_start_box):
+		var pc := _start_box.get_parent() as Control
+		_scroll.scroll_vertical = int(pc.position.y) if pc != null else int(_start_box.position.y)
+
 func _render_new(cool: int) -> void:
 	var nf := _section("START A CLAN")
+	_start_box = nf
 	var gold := int(app.profile.d.get("gold", 0))
 	var cost: int = social.clan_cost
 	UI2.body(nf, "Costs %s gold (you have %s). Your clan's house can never change." % [_thousands(cost), _thousands(gold)], 13,

@@ -159,6 +159,28 @@ func _process(delta: float) -> bool:
 		"online":
 			if app.social.online() and bob.online() and t_phase > 1.0:
 				check(app.social.has_clans and bob.has_clans, "the server has clans")
+				# 0.31.147 (Kevin: "When they click join clan it put the list of available clans or they have option to
+				# start clan"): the war map's JOIN A CLAN / the Herald's tour open the CLAN window on joining
+				app.open_clan("join")
+				_go("join_view")
+		"join_view":
+			if t_phase > 0.8:
+				check(app.modal is ClanPanel and has_text(app.modal, "JOIN A CLAN") and has_text(app.modal, "FIND A CLAN") and has_text(app.modal, "be the first")
+					and btn("clan_to_start") != null and btn("clan_war_map") == null,
+					"JOIN A CLAN: the clans to join (none yet: be the first), START MY OWN CLAN; no SEE THE WAR MAP (from the map)")
+				_shot("clan_join_view")
+				press("clan_to_start")
+				_go("join_scrolled")
+		"join_scrolled":
+			if t_phase > 0.3:
+				var sc: ScrollContainer = app.modal._scroll
+				check(sc.scroll_vertical > 50 or sc.get_v_scroll_bar().max_value <= sc.size.y + 1.0,
+					"START MY OWN CLAN goes down to START A CLAN (%d)" % sc.scroll_vertical)
+				app.close_modal()
+				app.social_tab = "friends"               # (ALLIANCE opens on the tab last open: FRIENDS, as a fresh app)
+				_go("online2")
+		"online2":
+			if t_phase > 0.3:
 				check(btn("tab_alliance") != null and btn("side_friends") == null, "ALLIANCE is in the tab bar (0.31.139: SOCIAL's medallion is gone)")
 				press("tab_alliance")
 				check(app.modal is FriendsPanel and btn("social_tab_clan") != null and btn("social_tab_friends") != null, "ALLIANCE opens FRIENDS, with FRIENDS and CLAN tabs")
@@ -284,9 +306,12 @@ func _process(delta: float) -> bool:
 		"play":
 			if t_phase > 0.5:
 				press("play")
-				# 0.31.145: PLAY opens the war map; its QUICK BATTLE is the match from matchmaking
-				check(app.modal != null and str(app.modal.get_script().resource_path).ends_with("war_table.gd") and app.siege == null,
-					"PLAY opens the war map (in a clan, not in a party)")
+				_go("play_map")
+		"play_map":
+			# 0.31.145: PLAY opens the war map (0.31.147: after Home's push into the table); its QUICK BATTLE is the match
+			# from matchmaking
+			if app.modal != null and str(app.modal.get_script().resource_path).ends_with("war_table.gd"):
+				check(app.siege == null, "PLAY opens the war map (in a clan)")
 				press("war_quick")
 				check(app.siege != null and app.modal == null, "...its QUICK BATTLE starts a match")
 				_ws("match_bob", {"t":"hello", "v":Net.VERSION, "name":"bob", "build":"0.31.134-fatebound", "pred":false,

@@ -967,7 +967,8 @@ func show_tab(id: String) -> void:
 	if online_status != null:
 		online_status.set_active(id == "home" and siege == null)
 	_home_war_watch()
-	hero_layer.position.y = 0.0
+	hero_layer.position = Vector2.ZERO
+	hero_layer.scale = Vector2.ONE                 # (0.31.147: out of PLAY's push into the table)
 	hero_layer.modulate.a = 1.0
 	content_scroll.scroll_vertical = 0
 	rebuild()
@@ -1087,12 +1088,14 @@ func notice(title_text: String, body: String) -> void:
 		sfx("menuClose")
 		close_modal(), "modal_ok"))
 
-func close_modal() -> void:
+func close_modal(keep_zoom := false) -> void:
 	if is_instance_valid(modal):
 		modal.queue_free()
 	modal = null
 	if social != null:
 		_social_home.call_deferred()
+	if not keep_zoom:
+		_unzoom()                              # 0.31.147: Home back from its push into the war table
 
 # ---------------- menu drag-scroll (0.18.3, Kevin: "the main menu can't scroll up and down") ----------------
 # Every screen is cards and buttons, and those stop input, so the ScrollContainer's own touch drag
@@ -1263,8 +1266,81 @@ func play() -> void:
 	if social == null:                             # (tests without the social side only: the app always has it)
 		start_match(true)
 		return
+	if _zooming:
+		return
 	sfx("menuOpen")
-	open_war()
+	if hero_node == null or not is_instance_valid(hero_node) or not hero_node.has_method("table_center") or tab != "home" \
+			or siege != null or bool(profile.d.settings.get("reduce_motion", false)) or not hero_layer.is_visible_in_tree():
+		open_war()
+		return
+	_zoom_into_table()
+
+# 0.31.147 (Kevin: "then the map opens up have camera zoom to it as animation"): PLAY pushes Home's view into the war
+# table (the painting and the 3D together, Home's buttons fading), then the war map opens over it and its own camera
+# dives onto the land (war_table.gd INTRO_*); Home comes back out when the map closes (close_modal -> _unzoom).
+const HOME_ZOOM := 2.1
+const HOME_ZOOM_SECS := 0.45
+var _zooming := false
+var _zoom_tw: Tween = null
+
+func _zoom_into_table() -> void:
+	_zooming = true
+	hero_layer.scale = Vector2.ONE
+	var c: Vector2 = hero_node.table_center() - hero_layer.global_position   # (in hero_layer's own pixels)
+	var aim := Vector2(size.x * 0.5, (safe_top + size.y - 130.0) * 0.5)    # where the war map's land will be
+	var block := Control.new()                     # (no other button during the push)
+	block.name = "ZoomBlock"
+	block.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	block.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(block)
+	if _zoom_tw != null and _zoom_tw.is_valid():
+		_zoom_tw.kill()
+	hero_layer.pivot_offset = c
+	_zoom_tw = create_tween().set_parallel(true)
+	_zoom_tw.tween_property(hero_layer, "scale", Vector2.ONE * HOME_ZOOM, HOME_ZOOM_SECS).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
+	_zoom_tw.tween_property(hero_layer, "position", aim - c, HOME_ZOOM_SECS).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
+	_zoom_tw.tween_property(content, "modulate:a", 0.0, HOME_ZOOM_SECS * 0.6)
+	_zoom_tw.chain().tween_callback(func():
+		block.queue_free()
+		_zooming = false
+		if siege == null and not update_required:
+			open_war()
+			# (the push carries on a little under the map as it fades in)
+			_zoom_tw = create_tween()
+			_zoom_tw.tween_property(hero_layer, "scale", Vector2.ONE * HOME_ZOOM * 1.25, 0.5).set_ease(Tween.EASE_OUT)
+		else:
+			_unzoom())
+
+func _unzoom() -> void:
+	# Home out of its push into the table: eased back on Home, at once anywhere else (a match, another tab)
+	if hero_layer == null or content == null:
+		return
+	if _zoom_tw != null and _zoom_tw.is_valid():
+		_zoom_tw.kill()
+	_zooming = false
+	for b in get_children():
+		if b.name == "ZoomBlock":
+			b.queue_free()
+	if hero_layer.scale.is_equal_approx(Vector2.ONE) and is_equal_approx(content.modulate.a, 1.0):
+		return
+	if siege != null or tab != "home" or not is_inside_tree() or bool(profile.d.settings.get("reduce_motion", false)):
+		hero_layer.scale = Vector2.ONE
+		hero_layer.position = Vector2.ZERO
+		content.modulate.a = 1.0
+		return
+	_zoom_tw = create_tween().set_parallel(true)
+	_zoom_tw.tween_property(hero_layer, "scale", Vector2.ONE, 0.35).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	_zoom_tw.tween_property(hero_layer, "position", Vector2.ZERO, 0.35).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	_zoom_tw.tween_property(content, "modulate:a", 1.0, 0.3)
+
+func war_tour_due() -> bool:
+	# 0.31.147: the Herald's tour of the war map runs by itself once a phone (settings stay on the phone)
+	return not bool(profile.d.settings.get("war_tour", false))
+
+func war_tour_seen() -> void:
+	if not bool(profile.d.settings.get("war_tour", false)):
+		profile.d.settings["war_tour"] = true
+		profile.save()
 
 func quick_battle() -> void:
 	# the war map's QUICK BATTLE: a match from matchmaking (16 vs 16, bots in the empty seats), any house or none. In a
@@ -1278,10 +1354,10 @@ func quick_battle() -> void:
 		close_modal()
 
 func open_war(first := "") -> void:
-	# 0.31.135 (Crown War step 2): the war table -- Home's CROWN WAR, the CLAN window's WAR MAP, a battle's WAR MAP
+	# 0.31.135 (Crown War step 2): the war table -- Home's PLAY (0.31.145), the CLAN window's WAR MAP, a battle's WAR MAP
 	if social == null:
 		return
-	close_modal()
+	close_modal(true)                          # (Home stays pushed into the table under it: PLAY's zoom)
 	var m = _later(WAR_TABLE).new()
 	add_child(m)
 	modal = m
@@ -1985,8 +2061,9 @@ func open_friends() -> void:
 	modal = m
 	m.open(self)
 
-func open_clan() -> void:
-	# 0.31.134 (Crown War step 1): the CLAN window, beside FRIENDS
+func open_clan(focus := "") -> void:
+	# 0.31.134 (Crown War step 1): the CLAN window, beside FRIENDS. 0.31.147: focus "join" (the war map's JOIN A CLAN and
+	# the Herald's tour): not in a clan, it opens on joining -- the clans to join, START MY OWN CLAN
 	if social == null:
 		return
 	close_modal()
@@ -1994,7 +2071,7 @@ func open_clan() -> void:
 	var m = _later(CLAN_PANEL).new()
 	add_child(m)
 	modal = m
-	m.open(self)
+	m.open(self, focus)
 
 func open_social(which := "") -> void:
 	# the ALLIANCE tab (0.31.134-0.31.138: Home's SOCIAL medallion): FRIENDS or CLAN (the last one open, unless something
