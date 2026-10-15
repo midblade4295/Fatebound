@@ -5,7 +5,9 @@ extends SceneTree
 # invites (past the level and the mode; blocked players never get them); clan chat to members only, with the tag on
 # every card and line; roles (officers, kicks, the leader's powers); leaving and its 24-hour wait; a leader leaving or
 # away 14 days handing the clan on; disbanding; a full clan; an account deleted; clans.json read back; the
-# leaderboard's tag.
+# leaderboard's tag. 0.31.148 (Kevin: "Make it cost 5000 gold and make a default clan for each faction"): 5,000 gold; the
+# house clans (there from the start, free and open, nobody leading them, moving out of them by joining or starting a
+# players' clan, no wait on leaving them, never ended, kept in clans.json, a players' clan's tag left alone).
 #   godot --headless --path godot -s res://tests/clans_test.gd
 const Social = preload("res://server/social.gd")
 const Clans = preload("res://server/clans.gd")
@@ -55,6 +57,10 @@ func clear() -> void:
 func pids(list: Array) -> Array:
 	return list.map(func(c): return str(c.get("pid", "")))
 
+func players_clans(cl) -> Array:
+	# the players' clans (0.31.148: the house clans are always there too)
+	return cl.clans.keys().filter(func(id): return not bool(cl.clans[id].get("hc", false)))
+
 func _init() -> void:
 	var dir := OS.get_user_data_dir().path_join("clantest-%d" % Time.get_ticks_usec())
 	DirAccess.make_dir_recursive_absolute(dir)
@@ -89,12 +95,18 @@ func _init() -> void:
 	var G: String = P[6]
 	check(int(last(1, "me").get("clans", 0)) == 1 and not last(1, "clan").is_empty() and clan(1).is_empty(),
 		"hello says the server has clans, and sends the (empty) clan state")
-	check(int(last(1, "clan").get("cost", 0)) == Clans.COST_GOLD and Clans.COST_GOLD == 10000 and Clans.MAX_MEMBERS == 30, "a clan costs 10,000 gold, 30 members")
+	check(int(last(1, "clan").get("cost", 0)) == Clans.COST_GOLD and Clans.COST_GOLD == 5000 and Clans.MAX_MEMBERS == 30, "a clan costs 5,000 gold, 30 members")
+	var hcs: Array = last(1, "clan").get("hcs", [])
+	var hc_ok := hcs.size() == 3
+	for h in hcs:
+		hc_ok = hc_ok and bool(h.get("hc", false)) and str(h.join) == "open" and int(h.min_lv) == 1 and int(h.n) == 0 and int(h.max) == Clans.HOUSE_CLAN_MAX
+	check(hc_ok and hcs.map(func(h): return str(h.tag)) == ["LION", "STAG", "RAVN"] and str(hcs[0].name) == "The Lion Guard" and str(hcs[0].house) == "lions",
+		"the three house clans are there from the start, in every clan state: %s" % str(hcs.map(func(h): return str(h.name))))
 
 	# ---------------- starting a clan ----------------
 	clear()
 	s.handle(2, {"k":"clan_new", "name":"Poor Pals", "tag":"POOR", "house":"lions"})
-	check(not bool(last(2, "clan_made").get("ok", true)) and str(last(2, "clan_made").why) == "gold" and cl.clans.is_empty() and int(eco.accts[ids[1]].gold) == 500,
+	check(not bool(last(2, "clan_made").get("ok", true)) and str(last(2, "clan_made").why) == "gold" and players_clans(cl).is_empty() and int(eco.accts[ids[1]].gold) == 500,
 		"500 gold isn't enough: refused, nothing taken")
 	var bad := [[{"name":"Fuck Squad", "tag":"FSQ", "house":"lions"}, "name"], [{"name":"Ok Name", "tag":"AB", "house":"lions"}, "tag"],
 		[{"name":"Ok Name", "tag":"FUK", "house":"lions"}, "tag"], [{"name":"Ok Name", "tag":"OKN", "house":"dragons"}, "house"],
@@ -105,7 +117,7 @@ func _init() -> void:
 		var m: Dictionary = b[0].duplicate()
 		m["k"] = "clan_new"
 		s.handle(1, m)
-		check(str(last(1, "clan_made").get("why", "")) == str(b[1]) and cl.clans.is_empty(), "refused (%s): %s" % [b[1], str(b[0])])
+		check(str(last(1, "clan_made").get("why", "")) == str(b[1]) and players_clans(cl).is_empty(), "refused (%s): %s" % [b[1], str(b[0])])
 	check(int(eco.accts[ids[0]].gold) == 12000, "refusals take no gold")
 	clear()
 	s.handle(1, {"k":"clan_new", "name":"  Iron   Wolves ", "tag":"wolf", "house":"stags", "join":"open", "min_lv":1})
@@ -113,7 +125,7 @@ func _init() -> void:
 	check(bool(last(1, "clan_made").get("ok", false)) and str(mine.get("name", "")) == "Iron Wolves" and str(mine.get("tag", "")) == "WOLF"
 		and str(mine.get("house", "")) == "stags" and str(mine.get("role", "")) == "leader" and int(mine.get("n", 0)) == 1,
 		"Alice starts [WOLF] Iron Wolves of House Stags and leads it: %s" % str(mine))
-	check(int(eco.accts[ids[0]].gold) == 2000, "10,000 gold taken from her account (12,000 -> %d)" % int(eco.accts[ids[0]].gold))
+	check(int(eco.accts[ids[0]].gold) == 7000, "5,000 gold taken from her account (12,000 -> %d)" % int(eco.accts[ids[0]].gold))
 	var hist: Array = last(1, "hist").get("list", [])
 	check(str(last(1, "hist").get("ch", "")) == "clan" and not hist.is_empty() and str(hist[0].get("x", "")).contains("founded"), "the clan chat opens with a founding line")
 	check(str(last(1, "me").get("ct", "x")) == "" or s.tag_of(A) == "WOLF", "her tag is WOLF")
@@ -135,7 +147,8 @@ func _init() -> void:
 	var found: Array = last(2, "clans").get("list", [])
 	check(found.size() == 1 and str(found[0].tag) == "WOLF" and int(found[0].n) == 1 and str(found[0].lead) == "Alice", "finding \"wol\": the Wolves, 1 member, led by Alice")
 	s.handle(2, {"k":"clan_find", "q":"", "house":"lions"})
-	check((last(2, "clans").get("list", []) as Array).is_empty(), "no clans of House Lions yet")
+	var lions_found: Array = last(2, "clans").get("list", [])
+	check(lions_found.size() == 1 and bool(lions_found[0].get("hc", false)), "no players' clans of House Lions yet (its house clan only)")
 	clear()
 	s.handle(2, {"k":"clan_info", "id":wolves})
 	var info: Dictionary = last(2, "clan_info").get("c", {})
@@ -257,7 +270,7 @@ func _init() -> void:
 	clear()
 	s.handle(3, {"k":"clan_new", "name":"Night Owls", "tag":"OWL", "house":"ravens", "join":"open"})
 	var owls: String = cl.clan_of(C)
-	check(owls != "" and int(eco.accts[ids[2]].gold) == 10000, "Cara starts [OWL] Night Owls (House Ravens)")
+	check(owls != "" and int(eco.accts[ids[2]].gold) == 15000, "Cara starts [OWL] Night Owls (House Ravens)")
 	s.handle(6, {"k":"clan_join", "id":owls})
 	s.handle(7, {"k":"clan_join", "id":owls})
 	s.handle(3, {"k":"clan_role", "pid":F, "role":"officer"})
@@ -308,7 +321,7 @@ func _init() -> void:
 	s.tick(Clans.MSG_WINDOW + 1.0)
 	s.handle(200, {"k":"clan_new", "name":"Solo Act", "tag":"SOLO", "house":"lions"})
 	s.handle(200, {"k":"clan_leave"})
-	check(cl.clans.size() == 1 and not cl.cool.has(H) and int(eco.accts["%020x" % 200].gold) == 20000, "the last one out ends the clan with no wait (like disbanding)")
+	check(players_clans(cl).size() == 1 and not cl.cool.has(H) and int(eco.accts["%020x" % 200].gold) == 25000, "the last one out ends the clan with no wait (like disbanding)")
 	s.handle(200, {"k":"clan_new", "name":"Second Act", "tag":"SEC", "house":"lions", "join":"request"})
 	var sec: String = cl.clan_of(H)
 	check(sec != "" and FileAccess.file_exists(dir.path_join("clans.json")) and FileAccess.get_file_as_string(dir.path_join("clans.json")).contains("Second Act"),
@@ -335,16 +348,77 @@ func _init() -> void:
 	s.handle(200, {"k":"clan_disband"})
 	s.tick(Clans.MSG_WINDOW + 1.0)
 
+	# ---------------- the house clans (0.31.148) ----------------
+	var hl: String = Clans.HOUSE_CLANS.lions.id
+	var hs: String = Clans.HOUSE_CLANS.stags.id
+	clear()
+	s.handle(201, {"k":"clan_join", "id":hl})
+	check(cl.clan_of(I) == hl and str(clan(201).get("role", "")) == "member" and bool(clan(201).get("hc", false)) and notes(201).contains("Welcome")
+		and s.tag_of(I) == "LION", "Ivo (no gold) joins The Lion Guard for free: a member, tagged [LION]")
+	check(not s.hist.has("c:" + hl) or (s.hist["c:" + hl] as Array).is_empty(), "no join line in a house clan's chat")
+	clear()
+	s.handle(201, {"k":"clan_join", "id":hs})
+	check(cl.clan_of(I) == hs and not (cl.clans[hl].members as Dictionary).has(I) and cl.clans.has(hl), "joining another house's clan moves him (the Lion Guard stays, empty)")
+	clear()
+	s.handle(201, {"k":"clan_leave"})
+	check(cl.clan_of(I) == "" and not cl.cool.has(I) and not last(201, "clan").has("cool"), "leaving a house clan: no wait")
+	s.handle(201, {"k":"clan_join", "id":hl})
+	clear()
+	s.handle(201, {"k":"clan_kick", "pid":I})
+	s.handle(201, {"k":"clan_set", "join":"invite"})
+	s.handle(201, {"k":"clan_disband"})
+	check(cl.clan_of(I) == hl and str(cl.clans[hl].join) == "open" and cl.clans.has(hl) and cl.role_of(I) == "member", "nobody runs a house clan: no settings, no disbanding")
+	s.tick(Clans.MSG_WINDOW + 1.0)
+	clear()
+	s.handle(200, {"k":"clan_new", "name":"Hana Gang", "tag":"HANA", "house":"stags", "join":"open"})
+	var hana: String = cl.clan_of(H)
+	clear()
+	s.handle(201, {"k":"clan_join", "id":hana})
+	check(cl.clan_of(I) == hana and not (cl.clans[hl].members as Dictionary).has(I) and not cl.cool.has(I), "joining a players' clan moves him out of the house clan (no wait)")
+	s.handle(201, {"k":"clan_leave"})
+	check(int(cl.cool.get(I, 0)) > 0, "(leaving a players' clan still means the wait)")
+	clear()
+	s.handle(201, {"k":"clan_join", "id":hl})
+	check(cl.clan_of(I) == hl, "...but the wait doesn't keep him out of his house's clan")
+	s.handle(200, {"k":"clan_leave"})
+	s.handle(200, {"k":"clan_join", "id":hs})
+	check(cl.clan_of(H) == hs, "Hana joins The Stag Guard")
+	s.tick(Clans.MSG_WINDOW + 1.0)
+	clear()
+	s.now_override = int(s.now_override) + Clans.COOLDOWN + 5
+	cl.sweep()
+	s.handle(200, {"k":"clan_new", "name":"Hana Again", "tag":"HNA", "house":"stags", "join":"open"})
+	var hana2: String = cl.clan_of(H)
+	check(hana2 != "" and hana2 != hs and not (cl.clans[hs].members as Dictionary).has(H) and int(eco.accts["%020x" % 200].gold) == 10000,
+		"starting a clan moves her out of the house clan (5,000 gold: 15,000 -> %d)" % int(eco.accts["%020x" % 200].gold))
+	cl.sweep()                                         # (no leader ever seen: a players' clan would be handed on here)
+	check(str(cl.clans[hl].leader) == "" and cl.role_of(I) == "member", "a house clan is never handed to anyone")
+	s.handle(200, {"k":"clan_disband"})
+	s.tick(Clans.MSG_WINDOW + 1.0)
+
 	# ---------------- clans.json ----------------
 	s.hello(3, {"k":"hi", "acct":ids[2], "key":"k".repeat(64)})   # (Cara is back, an officer: an invite to keep)
 	s.handle(3, {"k":"clan_invite", "pid":A})
 	s.handle(100, {"k":"clan_leave"})                         # (and a cooldown to keep)
 	cl.save_now()
 	var again = Clans.new(dir, s)
-	check(again.clans.size() == 1 and again.clan_of(F) == owls and again.role_of(F) == "leader" and again.tag_of(C) == "OWL"
+	check(players_clans(again).size() == 1 and again.clan_of(F) == owls and again.role_of(F) == "leader" and again.tag_of(C) == "OWL"
 		and (again.clans[owls].members as Dictionary).size() == (cl.clans[owls].members as Dictionary).size()
 		and (again.invites.get(A, {}) as Dictionary).has(owls) and int(again.cool.get(str(extra[0]), 0)) == int(s.now_override) + Clans.COOLDOWN,
 		"clans.json read back: clans, leaders, members, invites, cooldowns")
+	check(again.is_house(Clans.HOUSE_CLANS.lions.id) and again.clan_of(I) == Clans.HOUSE_CLANS.lions.id and again.is_house(Clans.HOUSE_CLANS.ravens.id)
+		and (again.clans[Clans.HOUSE_CLANS.ravens.id].members as Dictionary).is_empty(), "...the house clans too (an empty one kept)")
+	# a server whose players took [LION] before the house clans came: the Lion Guard takes the next tag
+	var dir2 := OS.get_user_data_dir().path_join("clantest2-%d" % Time.get_ticks_usec())
+	DirAccess.make_dir_recursive_absolute(dir2)
+	var f := FileAccess.open(dir2.path_join("clans.json"), FileAccess.WRITE)
+	f.store_string(JSON.stringify({"v":1, "clans":{"cx": {"id":"cx", "name":"Lion Hearts", "tag":"LION", "house":"lions", "join":"open", "min_lv":1,
+		"leader":A, "officers":[], "members":{A: T0}, "req":{}, "created":T0}}, "inv":{}, "cool":{}}))
+	f.close()
+	var older = Clans.new(dir2, s)
+	check(str(older.clans.cx.tag) == "LION" and str(older.clans[Clans.HOUSE_CLANS.lions.id].tag) == "LNG", "a players' [LION] kept: the Lion Guard is [LNG]")
+	DirAccess.remove_absolute(dir2.path_join("clans.json"))
+	DirAccess.remove_absolute(dir2)
 
 	DirAccess.remove_absolute(dir.path_join("clans.json"))
 	DirAccess.remove_absolute(dir.path_join("social.json"))

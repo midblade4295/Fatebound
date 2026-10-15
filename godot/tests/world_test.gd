@@ -103,10 +103,11 @@ func _init() -> void:
 	var TM: String = P[5]
 	var CR: String = P[6]
 	check(int(last(1, "me").get("war", 0)) == 1, "hello says the server has the war map")
-	s.handle(1, {"k":"clan_new", "name":"Lion Hearts", "tag":"LION", "house":"lions"})
+	# (0.31.148: the house clans hold [LION], [STAG] and [RAVN]; the players' clans here take other tags)
+	s.handle(1, {"k":"clan_new", "name":"Lion Hearts", "tag":"LHRT", "house":"lions"})
 	s.handle(2, {"k":"clan_join", "id":s.clans.clan_of(A)})
-	s.handle(3, {"k":"clan_new", "name":"Stag Party", "tag":"STAG", "house":"stags"})
-	s.handle(4, {"k":"clan_new", "name":"Raven Claw", "tag":"RAVN", "house":"ravens"})
+	s.handle(3, {"k":"clan_new", "name":"Stag Party", "tag":"STGP", "house":"stags"})
+	s.handle(4, {"k":"clan_new", "name":"Raven Claw", "tag":"RVCL", "house":"ravens"})
 	s.handle(5, {"k":"clan_new", "name":"Second Lions", "tag":"LNX", "house":"lions"})
 	s.handle(7, {"k":"clan_join", "id":s.clans.clan_of(A)})
 	var CA: String = s.clans.clan_of(A)
@@ -174,7 +175,7 @@ func _init() -> void:
 		took = bool(r2[A].took)
 		if took:
 			break
-	check(took and str(w.owners.mill.h) == "lions" and str(w.owners.mill.ct) == "LION" and (w.bars.mill as Dictionary).is_empty(),
+	check(took and str(w.owners.mill.h) == "lions" and str(w.owners.mill.ct) == "LHRT" and (w.bars.mill as Dictionary).is_empty(),
 		"enough wins: the Lions take the Mill (the bars start again)")
 	check(str(w.captures[0].tid) == "mill" and str((s.hist.get("c:" + CA, []) as Array).back().get("x", "")).contains("took The Mill") or
 		(s.hist.get("c:" + CA, []) as Array).any(func(l): return str(l.get("x", "")).contains("We took The Mill")), "the capture is logged and the clan told")
@@ -192,11 +193,11 @@ func _init() -> void:
 	check(str(last(1, "war_go").get("why", "")).contains("No battles left"), "no attempts: can't start one")
 
 	# ---------------- defending ----------------
-	w.owners["tower"] = {"h":"stags", "c":CS, "ct":"STAG", "cn":"Stag Party", "at":T0}
+	w.owners["tower"] = {"h":"stags", "c":CS, "ct":"STGP", "cn":"Stag Party", "at":T0}
 	clear()
 	s.handle(2, {"k":"war_go", "tid":"tower", "call":false})
 	var b4 := str(last(2, "war_go").get("bid", ""))
-	check(b4 != "" and got(1, "war_call").is_empty() and str(last(3, "war_alarm").get("bid", "")) == b4 and str(last(3, "war_alarm").get("ct", "")) == "LION",
+	check(b4 != "" and got(1, "war_call").is_empty() and str(last(3, "war_alarm").get("bid", "")) == b4 and str(last(3, "war_alarm").get("ct", "")) == "LHRT",
 		"Bob attacks the Stags' Tower without calling the clan: the Stags are alarmed")
 	check(w.side_for(S, b4) == "def" and w.side_for(R, b4) == "" and w.need_for("tower") == 1000, "Stags defend; Ravens can't join; 1000 to take held land")
 	clear()
@@ -221,11 +222,11 @@ func _init() -> void:
 	s.handle(1, {"k":"war_open"})
 	var m2: Dictionary = last(1, "war")
 	var qb: Array = m2.terr.quarry.bars
-	check(qb.size() == 2 and str(qb[0].ct) == "LION" and int(qb[0].p) == 300 and str(m2.terr.mill.ct) == "LION" and str(m2.terr.mill.h) == "lions"
-		and str(m2.terr.tower.b.bid) == b4 and str(m2.terr.tower.b.act) == "LION" and int(m2.att) == 0, "the map: bars, holders, the battle at the Tower, her attempts")
+	check(qb.size() == 2 and str(qb[0].ct) == "LHRT" and int(qb[0].p) == 300 and str(m2.terr.mill.ct) == "LHRT" and str(m2.terr.mill.h) == "lions"
+		and str(m2.terr.tower.b.bid) == b4 and str(m2.terr.tower.b.act) == "LHRT" and int(m2.att) == 0, "the map: bars, holders, the battle at the Tower, her attempts")
 	check(int(m2.counts.lions) == 1 and int(m2.counts.stags) == 1, "territories per house")
 	clear()
-	w.owners["fen"] = {"h":"ravens", "c":s.clans.clan_of(R), "ct":"RAVN", "cn":"Raven Claw", "at":T0}
+	w.owners["fen"] = {"h":"ravens", "c":s.clans.clan_of(R), "ct":"RVCL", "cn":"Raven Claw", "at":T0}
 	w._mark()
 	w.tick(1.0)
 	check(not got(1, "war").is_empty(), "a change reaches the phones with the map open")
@@ -246,10 +247,10 @@ func _init() -> void:
 	w.started(bF)
 	w.battle_gone(bF)
 	check(int(w.bars.ford[CA]) == 200 and not w.battles.has(bF), "every player left the Ford's battle while it ran: lost, Cara -100 (300 -> 200)")
-	w.owners["quarry"] = {"h":"lions", "c":CA, "ct":"LION", "cn":"Lion Hearts", "at":T0}
+	w.owners["quarry"] = {"h":"lions", "c":CA, "ct":"LHRT", "cn":"Lion Hearts", "at":T0}
 	w.save_now()
 	var again = World.new(dir, s)
-	check(again.owners.size() == 4 and str(again.owners.mill.ct) == "LION" and int(again.bars.quarry[CA]) == 300 and str(again.week) == "2026-10-12",
+	check(again.owners.size() == 4 and str(again.owners.mill.ct) == "LHRT" and int(again.bars.quarry[CA]) == 300 and str(again.week) == "2026-10-12",
 		"world.json read back")
 	s.now_override = T0 + 7 * 86400
 	w._roll()

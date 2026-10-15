@@ -27,11 +27,18 @@ extends RefCounted
 # names: social cards and chat lines carry "ct", the match's "pn" and lobby carry it per player (siege_server.gd), and
 # leaderboard rows too.
 # Kept in clans.json in the state directory (clans, invites, cooldowns), written SAVE_DELAY s after a change.
+# 0.31.148 (Kevin: "Make it cost 5000 gold and make a default clan for each faction that the new players can choose since
+# there are no clans in game yet"): COST_GOLD 5,000 (was 10,000); and a HOUSE CLAN for each house (HOUSE_CLANS), made
+# when the server starts and never gone: free, open to all, level 1, up to HOUSE_CLAN_MAX members, no leader or officers
+# (nobody runs it: no invites, requests, removals, settings or disbanding; never handed on), "hc" in its summary. Its
+# members leave it without the 24-hour wait, a cooldown doesn't keep anyone out of it, and joining or starting a
+# players' clan moves a member out of it by itself. Its card shows HOUSE_LIST_MAX members (online first), and its chat
+# gets no join / leave lines.
 const HOUSES := ["lions", "stags", "ravens"]
 const HOUSE_NAMES := {"lions": "Lions", "stags": "Stags", "ravens": "Ravens"}
 const JOIN_MODES := ["open", "request", "invite"]
 const MAX_MEMBERS := 30
-const COST_GOLD := 10000
+const COST_GOLD := 5000             # 0.31.148 (Kevin): was 10,000
 const NAME_MIN := 3
 const NAME_MAX := 20
 const TAG_MIN := 3
@@ -51,6 +58,14 @@ const ROLES := ["leader", "officer", "member"]
 const MSG_BURST := 20              # clan_* messages one player may send in MSG_WINDOW s (beyond: "slow down")
 const MSG_WINDOW := 10.0
 const ASK_POP_GAP := 3600          # s before the same player's request to the same clan pops up for its officers again
+# 0.31.148: the house clans -- id, name, and the tags to try in turn (a players' clan may hold one already)
+const HOUSE_CLANS := {
+	"lions": {"id":"h_lions", "name":"The Lion Guard", "tags":["LION", "LNG", "LEO", "PRDE"]},
+	"stags": {"id":"h_stags", "name":"The Stag Guard", "tags":["STAG", "STG", "HART", "ANTL"]},
+	"ravens": {"id":"h_ravens", "name":"The Raven Guard", "tags":["RAVN", "RVG", "CROW", "WING"]},
+}
+const HOUSE_CLAN_MAX := 1000
+const HOUSE_LIST_MAX := 40         # members on a house clan's card (online first, then the ones seen last)
 
 var soc                            # server/social.gd (users, sockets, notes, the clock)
 var path := ""
@@ -67,6 +82,7 @@ func _init(state_dir: String, social) -> void:
 	soc = social
 	path = state_dir.path_join("clans.json")
 	_load()
+	ensure_house_clans()
 
 func unix() -> int:
 	return soc.unix()
@@ -86,7 +102,8 @@ func _load() -> void:
 	if cs is Dictionary:
 		for id in cs:
 			var c: Variant = cs[id]
-			if not (c is Dictionary) or not (c.get("members", null) is Dictionary) or (c.members as Dictionary).is_empty():
+			if not (c is Dictionary) or not (c.get("members", null) is Dictionary) \
+					or ((c.members as Dictionary).is_empty() and not bool(c.get("hc", false))):
 				continue
 			if not (c.get("officers", null) is Array):
 				c["officers"] = []
@@ -105,6 +122,45 @@ func _load() -> void:
 	if cl is Dictionary:
 		for pid in cl:
 			cool[str(pid)] = int(cl[pid])
+
+func ensure_house_clans() -> void:
+	# 0.31.148: each house's clan, made if it's missing (and kept as one: open, level 1, nobody leading it)
+	for h in HOUSES:
+		var spec: Dictionary = HOUSE_CLANS[h]
+		var id := str(spec.id)
+		if clans.has(id):
+			var c: Dictionary = clans[id]
+			c["hc"] = true
+			c["house"] = h
+			c["join"] = "open"
+			c["min_lv"] = 1
+			c["leader"] = ""
+			c["officers"] = []
+			c["req"] = {}
+			continue
+		var tag := ""
+		for t in spec.tags:
+			if not clans.values().any(func(o): return str(o.tag) == str(t)):
+				tag = str(t)
+				break
+		if tag == "":
+			tag = h.left(3).to_upper() + "0"
+		clans[id] = {"id":id, "name":str(spec.name), "tag":tag, "house":h, "join":"open", "min_lv":1, "leader":"",
+			"officers":[], "members":{}, "req":{}, "created":unix(), "hc":true}
+		soc.log_fn.call("clan %s [%s] %s: House %s's clan" % [id, tag, str(spec.name), HOUSE_NAMES[h]])
+		_mark()
+
+func is_house(id: String) -> bool:
+	return clans.has(id) and bool(clans[id].get("hc", false))
+
+func max_of(c: Dictionary) -> int:
+	return HOUSE_CLAN_MAX if bool(c.get("hc", false)) else MAX_MEMBERS
+
+func _out_of_house(pid: String) -> void:
+	# joining or starting a players' clan (or another house's clan): out of the house clan first, no wait, no line
+	var id: String = member_of.get(pid, "")
+	if id != "" and is_house(id):
+		_remove(id, pid)
 
 func save_now() -> void:
 	var tmp := path + ".tmp"
@@ -149,7 +205,7 @@ func sweep() -> void:
 			if t - int(c.req[pid]) > REQ_LIFE:
 				c.req.erase(pid)
 				_mark()
-		if t - _seen(str(c.leader)) > LEADER_AWAY:
+		if not bool(c.get("hc", false)) and t - _seen(str(c.leader)) > LEADER_AWAY:
 			var next := _successor(c, str(c.leader), true)
 			if next != "":
 				var old := str(c.leader)
@@ -228,8 +284,12 @@ func _level(pid: String) -> int:
 
 # ---------------- what goes to the phones ----------------
 func summary(c: Dictionary) -> Dictionary:
-	return {"id":str(c.id), "name":str(c.name), "tag":str(c.tag), "house":str(c.house), "join":str(c.join),
-		"min_lv":int(c.min_lv), "n":(c.members as Dictionary).size(), "max":MAX_MEMBERS, "lead":_name(str(c.leader))}
+	var s := {"id":str(c.id), "name":str(c.name), "tag":str(c.tag), "house":str(c.house), "join":str(c.join),
+		"min_lv":int(c.min_lv), "n":(c.members as Dictionary).size(), "max":max_of(c), "lead":_name(str(c.leader))}
+	if bool(c.get("hc", false)):
+		s["hc"] = true
+		s["lead"] = ""
+	return s
 
 func _member_card(c: Dictionary, pid: String, full: bool) -> Dictionary:
 	var card: Dictionary = soc._card(pid) if full else {"pid":pid, "n":_name(pid), "tt":str(soc.users.get(pid, {}).get("title", ""))}
@@ -238,10 +298,18 @@ func _member_card(c: Dictionary, pid: String, full: bool) -> Dictionary:
 	card["ct"] = str(c.tag)
 	return card
 
-func _members_list(c: Dictionary, full: bool) -> Array:
+func _members_list(c: Dictionary, full: bool, me := "") -> Array:
 	var order := {"leader":0, "officer":1, "member":2}
 	var out := []
-	for pid in c.members:
+	var pids: Array = (c.members as Dictionary).keys()
+	if bool(c.get("hc", false)) and pids.size() > HOUSE_LIST_MAX:
+		# a house clan's card: HOUSE_LIST_MAX of them, the online ones first, then those seen last (and you)
+		pids.sort_custom(func(a, b): return _seen(str(a)) > _seen(str(b)))
+		var keep := pids.slice(0, HOUSE_LIST_MAX)
+		if me != "" and (c.members as Dictionary).has(me) and not keep.has(me):
+			keep.append(me)
+		pids = keep
+	for pid in pids:
 		if soc.users.has(str(pid)):
 			out.append(_member_card(c, str(pid), full))
 	out.sort_custom(func(a, b):
@@ -251,12 +319,12 @@ func _members_list(c: Dictionary, full: bool) -> Array:
 	return out
 
 func state_msg(pid: String) -> Dictionary:
-	var out := {"t":"so", "k":"clan", "clan":{}, "inv":[], "cost":COST_GOLD, "max":MAX_MEMBERS}
+	var out := {"t":"so", "k":"clan", "clan":{}, "inv":[], "cost":COST_GOLD, "max":MAX_MEMBERS, "hcs":house_summaries()}
 	var id: String = member_of.get(pid, "")
 	if id != "" and clans.has(id):
 		var c: Dictionary = clans[id]
 		var mine := summary(c)
-		mine["members"] = _members_list(c, true)
+		mine["members"] = _members_list(c, true, pid)
 		mine["role"] = role_of(pid)
 		mine["created"] = int(c.get("created", 0))
 		if _is_officer(pid):
@@ -282,6 +350,15 @@ func state_msg(pid: String) -> Dictionary:
 		out["asked"] = asked
 	if int(cool.get(pid, 0)) > unix():
 		out["cool"] = int(cool[pid])
+	return out
+
+func house_summaries() -> Array:
+	# 0.31.148: the three house clans (every clan state carries them: the CLAN window offers them first)
+	var out := []
+	for h in HOUSES:
+		var id := str(HOUSE_CLANS[h].id)
+		if clans.has(id):
+			out.append(summary(clans[id]))
 	return out
 
 func _refresh(pid: String) -> void:
@@ -374,7 +451,7 @@ func _made(pid: String, ok: bool, why: String, text: String) -> void:
 		soc._note(pid, text, not ok)
 
 func _new(pid: String, msg: Dictionary) -> void:
-	if member_of.has(pid):
+	if member_of.has(pid) and not is_house(str(member_of[pid])):
 		_made(pid, false, "in_clan", "Leave your clan first")
 		return
 	if _cool_left(pid) > 0:
@@ -414,6 +491,7 @@ func _new(pid: String, msg: Dictionary) -> void:
 	if eco == null or not eco.has_method("pay_gold") or not bool(eco.pay_gold(acct, COST_GOLD, "clan")):
 		_made(pid, false, "gold", "Starting a clan costs %s gold" % _thousands(COST_GOLD))
 		return
+	_out_of_house(pid)                                 # (0.31.148: a house clan's member moves to theirs)
 	var id := "c" + Crypto.new().generate_random_bytes(5).hex_encode()
 	while clans.has(id):
 		id = "c" + Crypto.new().generate_random_bytes(5).hex_encode()
@@ -498,17 +576,22 @@ func _join(pid: String, id: String) -> void:
 		soc._note(pid, "That clan is gone", true)
 		_refresh(pid)
 		return
-	if member_of.has(pid):
+	if member_of.get(pid, "") == id:
+		soc._note(pid, "You're in that clan already")
+		return
+	if member_of.has(pid) and not is_house(str(member_of[pid])):
 		soc._note(pid, "You're in a clan already", true)
 		return
-	if _cool_left(pid) > 0:
+	var c: Dictionary = clans[id]
+	var house_clan := bool(c.get("hc", false))
+	if _cool_left(pid) > 0 and not house_clan:
 		soc._note(pid, "You can join a clan again in %s" % hours_text(_cool_left(pid)), true)
 		return
-	var c: Dictionary = clans[id]
-	if (c.members as Dictionary).size() >= MAX_MEMBERS:
-		soc._note(pid, "%s is full (%d)" % [str(c.name), MAX_MEMBERS], true)
+	if (c.members as Dictionary).size() >= max_of(c):
+		soc._note(pid, "%s is full (%d)" % [str(c.name), max_of(c)], true)
 		return
 	if invites.get(pid, {}).has(id):
+		_out_of_house(pid)
 		_add_member(id, pid, "")
 		return
 	if _level(pid) < int(c.min_lv):
@@ -516,6 +599,7 @@ func _join(pid: String, id: String) -> void:
 		return
 	match str(c.join):
 		"open":
+			_out_of_house(pid)
 			_add_member(id, pid, "")
 		"request":
 			if (c.req as Dictionary).has(pid):
@@ -554,8 +638,11 @@ func _add_member(id: String, pid: String, by: String) -> void:
 	_drop_pending(pid)
 	_mark()
 	soc.event_fn.call(str(soc.users[pid].acct), "clan_join", {"n":(c.members as Dictionary).size()})
-	_sys(id, ("%s joined the clan" % _name(pid)) if by == "" else ("%s let %s in" % [_name(by), _name(pid)]))
-	_refresh_all(id)
+	if bool(c.get("hc", false)):
+		_refresh(pid)                                  # (a house clan: no line, and only the newcomer's state)
+	else:
+		_sys(id, ("%s joined the clan" % _name(pid)) if by == "" else ("%s let %s in" % [_name(by), _name(pid)]))
+		_refresh_all(id)
 	soc._send(pid, {"t":"so", "k":"hist", "ch":"clan", "list":soc._visible(pid, soc.hist.get("c:" + id, []))})
 	soc._send(pid, {"t":"so", "k":"note", "x":"Welcome to [%s] %s!" % [str(c.tag), str(c.name)], "pop":true})
 	_presence_tag(pid)
@@ -586,7 +673,7 @@ func _accept(pid: String, target: String) -> void:
 	if not (c.req as Dictionary).has(target):
 		_refresh(pid)
 		return
-	if member_of.has(target) or not soc.users.has(target):
+	if (member_of.has(target) and not is_house(str(member_of[target]))) or not soc.users.has(target):
 		c.req.erase(target)
 		_mark()
 		soc._note(pid, "%s is in another clan now" % _name(target), true)
@@ -598,6 +685,7 @@ func _accept(pid: String, target: String) -> void:
 	if _cool_left(target) > 0:
 		soc._note(pid, "%s can't join a clan for another %s" % [_name(target), hours_text(_cool_left(target))], true)
 		return
+	_out_of_house(target)
 	_add_member(id, target, pid)
 
 func _reject(pid: String, target: String) -> void:
@@ -624,7 +712,7 @@ func _invite(pid: String, target: String) -> void:
 	if member_of.get(target, "") == id:
 		soc._note(pid, "%s is in the clan already" % _name(target))
 		return
-	if member_of.has(target):
+	if member_of.has(target) and not is_house(str(member_of[target])):
 		soc._note(pid, "%s is in another clan" % _name(target), true)
 		return
 	if (c.members as Dictionary).size() >= MAX_MEMBERS:
@@ -659,6 +747,8 @@ func _remove(id: String, pid: String) -> void:
 	(c.officers as Array).erase(pid)
 	member_of.erase(pid)
 	_mark()
+	if bool(c.get("hc", false)):
+		return                                         # (0.31.148: a house clan stays, empty or not; nobody leads it)
 	if (c.members as Dictionary).is_empty():
 		_end(id)
 		return
@@ -684,15 +774,17 @@ func _leave(pid: String) -> void:
 	if id == "":
 		_refresh(pid)
 		return
-	_sys(id, "%s left the clan" % _name(pid))
+	var house_clan := is_house(id)
+	if not house_clan:
+		_sys(id, "%s left the clan" % _name(pid))
 	_remove(id, pid)
-	if clans.has(id):
-		cool[pid] = unix() + COOLDOWN                  # (the last one out ended the clan: like disbanding, no wait)
+	if clans.has(id) and not house_clan:
+		cool[pid] = unix() + COOLDOWN                  # (the last one out ended the clan: like disbanding, no wait; a house clan: none)
 	_mark()
 	soc.event_fn.call(str(soc.users.get(pid, {}).get("acct", "")), "clan_leave", {})
 	_refresh(pid)
 	soc._send(pid, {"t":"so", "k":"hist", "ch":"clan", "list":[]})
-	if clans.has(id):
+	if clans.has(id) and not house_clan:
 		_refresh_all(id)
 	_presence_tag(pid)
 
@@ -803,9 +895,11 @@ func forget(pid: String) -> void:
 	# the account was deleted (social.gd forget): out of its clan, its invites, requests and cooldown gone
 	var id: String = member_of.get(pid, "")
 	if id != "":
-		_sys(id, "%s left the clan" % _name(pid))
+		var house_clan := is_house(id)
+		if not house_clan:
+			_sys(id, "%s left the clan" % _name(pid))
 		_remove(id, pid)
-		if clans.has(id):
+		if clans.has(id) and not house_clan:
 			_refresh_all(id)
 	invites.erase(pid)
 	cool.erase(pid)

@@ -53,7 +53,8 @@ var clan: Dictionary = {}               # {} or {"id", "name", "tag", "house", "
 var clan_inv: Array = []                # invites: clan summaries with "by" (who invited)
 var clan_asked: Array = []              # clan ids this player asked to join
 var clan_cool := 0                      # unix: no joining a clan before then (0: free)
-var clan_cost := 10000
+var clan_cost := 5000                   # (the server says: 0.31.148, 5,000; was 10,000)
+var house_clans: Array = []             # 0.31.148: the three house clans (free, open to all): summaries with "hc"
 var clan_max := 30
 var clan_list: Array = []               # the last search's clans
 var clan_query := ""
@@ -251,6 +252,8 @@ func _on(m: Dictionary) -> void:
 			clan_asked = m.get("asked", []) if m.get("asked", []) is Array else []
 			clan_cool = int(m.get("cool", 0))
 			clan_cost = int(m.get("cost", clan_cost))
+			if m.get("hcs", null) is Array:
+				house_clans = m.hcs
 			clan_max = int(m.get("max", clan_max))
 			me["ct"] = str(clan.get("tag", ""))
 			if str(clan.get("id", "")) != was:
@@ -401,6 +404,10 @@ func clan_disband() -> bool:
 
 func in_clan() -> bool:
 	return not clan.is_empty()
+
+func in_house_clan() -> bool:
+	# 0.31.148: in one of the house clans (joining or starting a players' clan moves you out of it)
+	return bool(clan.get("hc", false))
 
 func clan_role_of_me() -> String:
 	return str(clan.get("role", ""))

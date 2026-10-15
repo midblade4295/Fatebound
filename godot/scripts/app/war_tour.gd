@@ -66,7 +66,7 @@ static func make_steps(war: Dictionary, in_clan: bool, house: String, tag: Strin
 			"text":"You fight for House %s with [%s]. Go take some land. And do try to keep your own." % [str(Map.HOUSE_NAMES.get(house, "?")), tag]})
 	else:
 		out.append({"id":"tour_clan", "target":"none", "cam":["overview"], "pick":"", "end":"free",
-			"text":"To fight for land, you need a clan. Join one, or start your own and pick its house. The realm won't conquer itself!"})
+			"text":"To fight for land, you need a clan. Every house has its own, free and open to all. Or join a players' clan, or start your own. The realm won't conquer itself!"})
 	return out
 
 static func example_place(war: Dictionary, house: String) -> String:

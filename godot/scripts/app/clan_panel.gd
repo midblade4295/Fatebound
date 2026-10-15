@@ -5,6 +5,10 @@ extends Control
 # In a clan: its banner (house colours), CLAN CHAT, requests waiting (officers), INVITE A PLAYER by friend code
 # (officers), the members (the leader's crown, OFFICER, each one's MANAGE for those you may manage), the settings
 # (officers) and LEAVE / DISBAND. Everything goes through scripts/meta/social.gd; the server (server/clans.gd) decides.
+# 0.31.148 (Kevin: "Make it cost 5000 gold and make a default clan for each faction that the new players can choose since
+# there are no clans in game yet"): YOUR HOUSE'S CLAN first when not in a clan -- the three house clans (free, open to
+# all; nobody runs them), JOIN on each; FIND A CLAN lists the players' clans under it. In a house clan: its banner,
+# chat, members (the ones online first), and the players' clans to move to or START A CLAN (moving needs no leaving).
 const UI = preload("res://scripts/app/ui.gd")
 const UI2 = preload("res://scripts/app/ui2.gd")
 const SocialUI = preload("res://scripts/app/social_ui.gd")
@@ -27,6 +31,8 @@ var _fields := {}                     # name -> LineEdit (what's typed survives 
 var _typed := {}
 var focus := ""                       # 0.31.147: "join" -- opened to join one (the war map's JOIN A CLAN, the Herald's tour)
 var _start_box: Control = null        # START A CLAN's section (START MY OWN CLAN scrolls to it)
+var _shown_clan := ""                 # the clan the window was drawn for (a change: back to the top)
+var _asked_list := false              # (0.31.148: in a house clan, the players' clans asked for once)
 
 func open(a, f := "") -> void:
 	app = a
@@ -51,6 +57,7 @@ func open(a, f := "") -> void:
 	social.clan_made.connect(_on_made)
 	if social.online() and not social.in_clan():
 		social.clan_find("", "")
+	_shown_clan = str(social.clan.get("id", ""))
 	_render()
 
 func _exit_tree() -> void:
@@ -77,6 +84,10 @@ func _process(_delta: float) -> void:
 	if _dirty:
 		_dirty = false
 		var keep := _scroll.scroll_vertical
+		var now_in := str(social.clan.get("id", ""))
+		if now_in != _shown_clan:
+			keep = 0                               # (joined, left or moved clans: the window from its top)
+			_shown_clan = now_in
 		for k in _fields:
 			if is_instance_valid(_fields[k]):
 				_typed[k] = (_fields[k] as LineEdit).text
@@ -154,6 +165,8 @@ func _clan_line(parent: Node, c: Dictionary) -> HBoxContainer:
 	nl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var bits := ["%s" % SocialUI.house_name(str(c.get("house", ""))), "%d/%d" % [int(c.get("n", 0)), int(c.get("max", 30))],
 		str(JOIN_TEXT.get(str(c.get("join", "")), ""))]
+	if bool(c.get("hc", false)):
+		bits = ["House clan", "%d member%s" % [int(c.get("n", 0)), "" if int(c.get("n", 0)) == 1 else "s"], "free, open to all"]
 	if int(c.get("min_lv", 1)) > 1:
 		bits.append("Lv %d+" % int(c.min_lv))
 	var sl := UI.label(v, "  ·  ".join(bits), 11, UI2.MUTED, UI.HEAVY_FONT)
@@ -190,11 +203,11 @@ func _render_free() -> void:
 	var cool: int = social.clan_cool_left()
 	var intro := _section("JOIN A CLAN" if focus == "join" else "YOUR CLAN")
 	if cool > 0:
-		UI2.body(intro, "You left a clan recently. You can join or start one again in %s." % _hours(cool), 13, UI2.GOLD)
+		UI2.body(intro, "You left a clan recently. You can join a players' clan or start one again in %s -- your house's clan is open to you now." % _hours(cool), 13, UI2.GOLD)
 	elif focus == "join":
-		UI2.body(intro, "Pick a clan below and fight for its house on the war map -- or start your own and choose the house.", 13, UI2.SOFT)
+		UI2.body(intro, "Pick your house's clan -- free, open to all -- or a players' clan, and fight for its house on the war map. Or start your own and choose the house.", 13, UI2.SOFT)
 	else:
-		UI2.body(intro, "You're not in a clan yet. Join one below, or start your own. Every clan fights for one of the three houses.", 13, UI2.SOFT)
+		UI2.body(intro, "You're not in a clan yet. Join your house's clan or a players' clan below, or start your own. Every clan fights for one of the three houses.", 13, UI2.SOFT)
 	# 0.31.147 (Kevin: "When they click join clan it put the list of available clans or they have option to start clan"):
 	# the list is right under this; START MY OWN CLAN goes down to the form
 	UI2.button(intro, "START MY OWN CLAN", "gold", func():
@@ -224,8 +237,33 @@ func _render_free() -> void:
 				app.sfx("tap")
 				social.clan_noinv(cid), 120.0)
 			nb.custom_minimum_size.y = 40
-	# ---- find
-	var ff := _section("FIND A CLAN")
+	# ---- 0.31.148: the house clans
+	_house_section()
+	_find_section(cool)
+	# ---- start one
+	_render_new(cool)
+
+func _house_section() -> void:
+	# 0.31.148: the three house clans, each with JOIN (free, open to all; the 24-hour wait doesn't apply)
+	if social.house_clans.is_empty():
+		return
+	var hf := _section("YOUR HOUSE'S CLAN", "FREE")
+	UI2.body(hf, "Every house has its own clan, open to all. Join one to fight for that house on the war map.", 12, UI2.MUTED)
+	for c in social.house_clans:
+		var r := _clan_line(hf, c)
+		var cid := str(c.get("id", ""))
+		if str(social.clan.get("id", "")) == cid:
+			var y := UI.label(r, "YOURS", 12, UI2.GOLD, UI.HEAVY_FONT)
+			y.autowrap_mode = TextServer.AUTOWRAP_OFF
+			y.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			continue
+		_small(r, "JOIN", "green", "clan_house_join_" + str(c.get("house", "")), func():
+			app.sfx("confirm")
+			if not social.clan_join(cid):
+				_fail(), 76.0)
+
+func _find_section(cool: int) -> void:
+	var ff := _section("FIND A CLAN" if not social.in_house_clan() else "MOVE TO A PLAYERS' CLAN")
 	var sr := UI.row(ff, 8)
 	var q := _field(sr, "find", "Clan name or tag", 20)
 	q.text_submitted.connect(func(_t): _search())
@@ -238,9 +276,9 @@ func _render_free() -> void:
 			_fhouse = hid
 			_search(), "clan_fhouse_" + (hid if hid != "" else "all"), 12, 32.0, 10.0)
 		UI.grow(hb)
-	var list: Array = social.clan_list
+	var list: Array = social.clan_list.filter(func(c): return not bool(c.get("hc", false)))   # (the house clans: above)
 	if list.is_empty():
-		UI2.body(ff, "No clans found yet -- be the first to start one!" if social.clan_query == "" and _fhouse == "" else "No clans match that.", 13, UI2.MUTED)
+		UI2.body(ff, "No players' clans yet -- be the first to start one!" if social.clan_query == "" and _fhouse == "" else "No clans match that.", 13, UI2.MUTED)
 	for c in list:
 		var r := _clan_line(ff, c)
 		var cid := str(c.get("id", ""))
@@ -269,8 +307,6 @@ func _render_free() -> void:
 		else:
 			UI2.dim_button(_small(r, "INVITE", "grey", "clan_inviteonly_" + cid, func():
 				app.toast("This clan is invite only", UI.MUTED), 76.0), true)
-	# ---- start one
-	_render_new(cool)
 
 func _search() -> void:
 	var t := ""
@@ -405,7 +441,10 @@ func _render_mine() -> void:
 	nl.clip_text = true
 	var hl := UI2.text(tv, "[%s]  ·  HOUSE %s" % [str(c.get("tag", "")), SocialUI.house_name(house).to_upper()], 14, SocialUI.house_color(house))
 	hl.clip_text = true
+	var hc := bool(c.get("hc", false))
 	var bits := ["%d / %d members" % [int(c.get("n", 0)), int(c.get("max", 30))], str(JOIN_TEXT.get(str(c.get("join", "")), ""))]
+	if hc:
+		bits = ["The %s' own clan" % SocialUI.house_name(house), "%d member%s" % [int(c.get("n", 0)), "" if int(c.get("n", 0)) == 1 else "s"]]
 	if int(c.get("min_lv", 1)) > 1:
 		bits.append("Lv %d+" % int(c.min_lv))
 	var il := UI.label(bf, "  ·  ".join(bits), 12, UI2.SOFT, UI.HEAVY_FONT)
@@ -449,7 +488,9 @@ func _render_mine() -> void:
 		_small(vr, "INVITE", "green", "clan_invite_code", func(): _invite_code(), 90.0)
 		UI2.body(vf, "Or tap a player's name anywhere (chat, friends, ranks) and choose INVITE TO CLAN.", 12, UI2.MUTED)
 	# ---- members
-	var mf := _section("MEMBERS", "%d / %d" % [int(c.get("n", 0)), int(c.get("max", 30))])
+	var shown: int = (c.get("members", []) as Array).size()
+	var mf := _section("MEMBERS", ("%d / %d" % [int(c.get("n", 0)), int(c.get("max", 30))]) if not hc
+		else ("%d" % int(c.get("n", 0)) if shown >= int(c.get("n", 0)) else "%d SHOWN OF %d" % [shown, int(c.get("n", 0))]))
 	for m in c.get("members", []):
 		var mrole := str(m.get("role", "member"))
 		var r := _member_row(mf, m, mrole)
@@ -486,6 +527,18 @@ func _render_mine() -> void:
 			else:
 				_fail(), "clan_set_save", 15, 42.0)
 		UI2.dim_button(sb, not changed)
+	if hc:
+		# 0.31.148: a house clan -- the players' clans to move to, or start one (no leaving first, no wait)
+		var nf := _section("A CLAN OF YOUR OWN?")
+		UI2.body(nf, "Join a players' clan or start your own any time: you move over from %s by itself." % str(c.get("name", "")), 12, UI2.MUTED)
+		UI2.button(nf, "START MY OWN CLAN", "gold", func():
+			app.sfx("tab")
+			_to_start(), "clan_to_start", 14, 38.0)
+		if not _asked_list:
+			_asked_list = true
+			social.clan_find("", "")
+		_find_section(social.clan_cool_left())
+		_render_new(social.clan_cool_left())
 	# ---- leave / disband
 	var lf := _section("")
 	var lr := UI.row(lf, 8)
@@ -503,6 +556,8 @@ func _render_mine() -> void:
 			if not social.clan_disband():
 				_fail())
 	var note := "Leaving means waiting 24 hours before joining another clan."
+	if hc:
+		note = "Leaving your house's clan has no wait."
 	if role == "leader":
 		note += " If you leave, an officer takes over."
 	UI2.body(lf, note, 12, UI2.MUTED)

@@ -2,7 +2,7 @@ extends SceneTree
 # 0.31.134 (Crown War step 1): clans through the app's real buttons, against the real server (its own process, port
 # 8118), in REAL time. Alice is the app (an account with 25,000 gold); Bob is a second phone (scripts/meta/social.gd +
 # a raw match socket). Home's SOCIAL opens FRIENDS with a CLAN tab; Alice starts [WOLF] Iron Wolves of House Stags
-# (the server takes 10,000 gold and her app shows it); Bob finds and joins it; Bob's clan line reaches Alice's CLAN
+# (the server takes 5,000 gold -- 0.31.148 -- and her app shows it); Bob finds and joins it; Bob's clan line reaches Alice's CLAN
 # chat with his tag; she makes him an officer from MANAGE; his tag is on her chat and on his name card, and the match's
 # lobby and "pn" carry it for everyone in the match; he leaves and waits 24 hours.
 # With a display and SHOT_DIR set, screenshots of each window go there.
@@ -167,7 +167,11 @@ func _process(delta: float) -> bool:
 			if t_phase > 0.8:
 				check(app.modal is ClanPanel and has_text(app.modal, "JOIN A CLAN") and has_text(app.modal, "FIND A CLAN") and has_text(app.modal, "be the first")
 					and btn("clan_to_start") != null and btn("clan_war_map") == null,
-					"JOIN A CLAN: the clans to join (none yet: be the first), START MY OWN CLAN; no SEE THE WAR MAP (from the map)")
+					"JOIN A CLAN: the clans to join (no players' clans yet: be the first), START MY OWN CLAN; no SEE THE WAR MAP (from the map)")
+				# 0.31.148 (Kevin: "make a default clan for each faction that the new players can choose"): the house clans first
+				check(has_text(app.modal, "YOUR HOUSE'S CLAN") and has_text(app.modal, "The Lion Guard") and has_text(app.modal, "The Stag Guard")
+					and has_text(app.modal, "The Raven Guard") and btn("clan_house_join_lions") != null and btn("clan_house_join_stags") != null
+					and btn("clan_house_join_ravens") != null and app.social.house_clans.size() == 3, "YOUR HOUSE'S CLAN: the Lion, Stag and Raven Guards, JOIN on each")
 				_shot("clan_join_view")
 				press("clan_to_start")
 				_go("join_scrolled")
@@ -176,6 +180,25 @@ func _process(delta: float) -> bool:
 				var sc: ScrollContainer = app.modal._scroll
 				check(sc.scroll_vertical > 50 or sc.get_v_scroll_bar().max_value <= sc.size.y + 1.0,
 					"START MY OWN CLAN goes down to START A CLAN (%d)" % sc.scroll_vertical)
+				press("clan_house_join_lions")
+				_go("in_house")
+		"in_house":
+			if app.social.in_house_clan() and t_phase > 0.6:
+				check(str(app.social.clan.get("name", "")) == "The Lion Guard" and str(app.social.my_tag()) != "" and str(app.social.clan.get("role", "")) == "member",
+					"JOIN: Alice is in The Lion Guard (free), a member")
+				check(has_text(app.modal, "own clan") and has_text(app.modal, "A CLAN OF YOUR OWN?") and has_text(app.modal, "MOVE TO A PLAYERS' CLAN")
+					and btn("clan_start") != null and btn("clan_invite_code") == null and btn("clan_disband") == null and has_text(app.modal, "no wait"),
+					"a house clan's window: the clan, the players' clans to move to, START A CLAN; no invites or disbanding; leaving has no wait")
+				_shot("clan_house")
+				press("clan_leave")
+				press("clan_leave")
+				_go("left_house")
+			elif t_phase > 8.0:
+				check(false, "Alice joins The Lion Guard")
+				_go("left_house")
+		"left_house":
+			if not app.social.in_clan() and t_phase > 0.5:
+				check(app.social.clan_cool_left() == 0, "she leaves it with no wait")
 				app.close_modal()
 				app.social_tab = "friends"               # (ALLIANCE opens on the tab last open: FRIENDS, as a fresh app)
 				_go("online2")
@@ -192,8 +215,8 @@ func _process(delta: float) -> bool:
 				_go("clan_none")
 		"clan_none":
 			if t_phase > 0.8:
-				check(has_text(app.modal, "START A CLAN") and has_text(app.modal, "FIND A CLAN") and has_text(app.modal, "10,000"),
-					"not in a clan: FIND A CLAN and START A CLAN (10,000 gold)")
+				check(has_text(app.modal, "START A CLAN") and has_text(app.modal, "FIND A CLAN") and has_text(app.modal, "5,000"),
+					"not in a clan: FIND A CLAN and START A CLAN (0.31.148: 5,000 gold)")
 				check(btn("clan_start") != null and btn("clan_house_lions") != null and btn("clan_house_stags") != null and btn("clan_house_ravens") != null,
 					"the three houses to pick from")
 				_shot("clan_none")
@@ -225,11 +248,11 @@ func _process(delta: float) -> bool:
 				clan_id = str(c.id)
 				_go("gold")
 		"gold":
-			if int(app.profile.d.gold) == 15000:
-				check(true, "the server took 10,000 gold and her app shows 15,000")
+			if int(app.profile.d.gold) == 20000:
+				check(true, "the server took 5,000 gold and her app shows 20,000")
 				_go("mine")
 			elif t_phase > 8.0:
-				check(false, "her gold is 15,000 after the clan (it's %d)" % int(app.profile.d.gold))
+				check(false, "her gold is 20,000 after the clan (it's %d)" % int(app.profile.d.gold))
 				_go("mine")
 		"mine":
 			if t_phase > 0.6:

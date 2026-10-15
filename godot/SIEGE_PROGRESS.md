@@ -4356,3 +4356,32 @@ zoom to it as animation"
   SKIP, the in-clan ending, reduce motion); clans_ui_test (the join view: the clans, START MY OWN CLAN scrolling, no
   SEE THE WAR MAP); war_ui_test, social_ui_test, app_flow_test wait for the map after PLAY's push.
 - Version 0.31.147, versionCode 233 (server code unchanged; SERVER_BUILD follows the app's version).
+- (0.31.147's suite was stopped part way -- 0.31.148 came straight after; its checks are 0.31.148's below.)
+
+## 0.31.148 — clans cost 5,000 gold; a house clan for each house
+Kevin: "Make it cost 5000 gold and make a default clan for each faction that the new players can choose since there are
+no clans in game yet"
+- server/clans.gd: COST_GOLD 5,000 (was 10,000; the phone shows what the server says). The house clans
+  (HOUSE_CLANS): The Lion Guard [LION], The Stag Guard [STAG], The Raven Guard [RAVN] (ids h_lions / h_stags /
+  h_ravens), made when the server starts (ensure_house_clans) and never gone: free, open to all, level 1, up to 1,000
+  members, no leader or officers -- nobody invites, answers requests, removes anyone, changes the settings or disbands
+  it, and it's never handed to anyone. A tag a players' clan already holds is left alone: the house clan takes the next
+  of its list ([LNG], [STG], [RVG]...). Its members leave it without the 24-hour wait, the wait from leaving a players'
+  clan doesn't keep anyone out of it, and joining (or being let into) a players' clan or starting one moves a member out
+  of it by itself (another house's clan too). No join / leave lines in its chat; a join refreshes only the newcomer; its
+  card shows 40 members (online first, then those seen last, and you). Every clan state carries the three ("hcs").
+  They fight on the war map like any clan (bars, battles, attempts).
+- The CLAN window, not in a clan: YOUR HOUSE'S CLAN (FREE) under the intro -- the three, members, JOIN on each -- then
+  FIND A CLAN (the players' clans: "No players' clans yet -- be the first to start one!"), then START A CLAN. In a house
+  clan: its banner ("The Lions' own clan", members), CLAN CHAT, WAR MAP, its members, A CLAN OF YOUR OWN? (START MY OWN
+  CLAN), MOVE TO A PLAYERS' CLAN (the players' clans, JOIN / ASK), START A CLAN, and LEAVE ("no wait"). The window goes
+  back to its top when you join, leave or move clans.
+- The Herald's last line (not in a clan): "Every house has its own, free and open to all. Or join a players' clan, or
+  start your own."
+- Needs the server redeployed (sudo bash godot/server/deploy/install_siege_server.sh): the 5,000 and the house clans
+  are the server's. Until then the old server still asks 10,000 and has no house clans.
+- Tests: clans_test (5,000; the house clans from the start in every state; joining free, moving between them, out of
+  one by joining or starting a players' clan, no wait leaving, the wait not keeping you out, nobody running them, never
+  handed on, kept in clans.json, a players' [LION] kept and the Lion Guard on [LNG]); clans_ui_test (YOUR HOUSE'S CLAN,
+  JOIN, the house clan's window, leaving with no wait; 5,000 taken); world_test's clans take other tags.
+- Version 0.31.148, versionCode 234 (server code changed: SERVER_BUILD 0.31.148).
