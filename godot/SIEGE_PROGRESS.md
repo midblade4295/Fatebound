@@ -4504,3 +4504,6 @@ Kevin: "Go" (the tour's voice-over, estimated at 0.31.151).
   is loaded when the tour starts.
 - The audio content pack rebuilt (audio-3b550a027262.pck, 12.8 MB; uploaded to content-packs 11e363f).
 - Version 0.31.152, versionCode 238 (server code unchanged; SERVER_BUILD follows the app's version).
+- Quick suite: all 94 passed (first try). tools/cold_start_check.sh: PASS. The Play AAB built from this commit (throwaway
+  key, presets untouched by the build): BASE OK (255 files), CONTENT OK (audio-3b550a027262 on the branch), play_games
+  true, bundletool valid. Preview APK: build/Fatebound-Siege-0.31.152-fatebound.apk (preview key).
