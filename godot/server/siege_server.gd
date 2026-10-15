@@ -65,7 +65,7 @@ extends SceneTree
 # world.battle_over gets the attackers' crowns (a defender's gate broken -- not the jail door --, a rescue, the win)
 # and who of them is still there; each player gets {"t":"war", ...} with what the battle did. PLAY AGAIN after a
 # battle: bye "war_over"; everyone on its results is let go after WAR_RESULTS_KEEP s, so the room closes. Battles
-# never take the server's last room (matchmaking keeps it). Tests: SIEGE_WAR_LOBBY, SIEGE_WAR_WAIT, SIEGE_TEST_SCORE ("blue:red", set when
+# take any free room (0.31.151; they kept the last one for matchmaking until then). Tests: SIEGE_WAR_LOBBY, SIEGE_WAR_WAIT, SIEGE_TEST_SCORE ("blue:red", set when
 # SIEGE_TEST_MATCH_S ends a match).
 #
 # 0.31.118 (Kevin's spec, ANALYTICS_SPEC_FOR_CLAUDE.md -- self-hosted analytics, no SDK, no third party): a socket whose
@@ -136,7 +136,8 @@ const MIN_BUILD_FILE := "/etc/fatebound-siege/min_build"
 const MIN_BUILD_RELOAD := 10.0       # s between re-reads of the min-build file
 const UPDATE_MSG := "A new version of Fatebound is out. Update now on Google Play to keep playing online."
 const MAX_MSGS_PER_SEC := 90         # per client; beyond this, messages are dropped
-const MAX_ROOMS := 4                 # 0.31.119: matches at once (SIEGE_MAX_ROOMS)
+const MAX_ROOMS := 6                 # 0.31.119: matches at once (SIEGE_MAX_ROOMS). 0.31.151: 6 (was 4) -- every match is a
+                                     # battle on the war map now; a full room is ~9% of a CPU core and ~350 kB/s out
 const IDLE_BOT := 45.0               # 0.31.119: s without input before a bot plays for them (SIEGE_IDLE_BOT)
 const IDLE_KICK := 180.0             # ...and before they're removed (SIEGE_IDLE_KICK)
 const CLOSE_IDLE := 4006
@@ -274,6 +275,9 @@ func _init() -> void:
 		if clients.has(cid) and not clients[cid].has("close_at"):
 			_send(cid, {"t":"so", "k":"bye", "why":"replaced"})
 			_refuse(cid, 4003, "replaced")
+	social.war_of_fn = func(acct: String) -> Dictionary:    # 0.31.151: a friend's battle (Friends > JOIN goes into it)
+		var r := _room_of_acct(acct)
+		return {"bid":str(r.war.bid), "tid":str(r.war.tid)} if r != null and not r.war.is_empty() else {}
 	social.in_match_fn = func(acct: String) -> bool:
 		for cid in clients:
 			var c: Dictionary = clients[cid]
@@ -570,6 +574,16 @@ func _human_count() -> int:
 func _room_of(c: Dictionary) -> Room:
 	return rooms.get(int(c.get("room", 0)), null)
 
+func _room_of_acct(acct: String) -> Room:
+	# the room a player (by account) is in now, or null
+	if acct == "":
+		return null
+	for cid in clients:
+		var c: Dictionary = clients[cid]
+		if c.hello and str(c.get("acct", "")) == acct:
+			return _room_of(c)
+	return null
+
 func _members(r: Room) -> Array:
 	# the room's players (seated or waiting)
 	var out := []
@@ -670,6 +684,12 @@ func _handle(cid: int, msg: Dictionary) -> void:
 			var jp := str(msg.get("join", ""))
 			var war_bid := str(msg.get("war", ""))
 			var war_team := -1
+			if jp != "" and war_bid == "" and acct != "" and social != null:
+				# 0.31.151: a friend in a battle on the war map -- JOIN goes into that battle (on their side when it's your
+				# house's; otherwise the battle's own refusal says why). Phones from 0.31.151 ask for it by its id already.
+				var fr := _room_of_acct(str(social.users.get(jp, {}).get("acct", "")))
+				if fr != null and not fr.war.is_empty():
+					war_bid = str(fr.war.bid)
 			if war_bid != "":
 				# 0.31.135: a battle on the war map -- its own room, on the side of the player's house
 				var why := "war_gone"
@@ -1438,11 +1458,9 @@ func _new_match(r: Room) -> void:
 
 # ---------------- the war map's battles (0.31.135) ----------------
 func _war_room(b: Dictionary) -> int:
-	# world.gd: a room for a battle (0: every room is busy). Battles never take the last room: matchmaking keeps one.
-	var war_n := 0
-	for r in rooms.values():
-		war_n += int(not (r as Room).war.is_empty())
-	if rooms.size() >= max_rooms or war_n >= maxi(1, max_rooms - 1):
+	# world.gd: a room for a battle (0: every room is busy). 0.31.151: battles may take every room (0.31.135-0.31.150
+	# kept the last one for matchmaking -- every match is a battle now; matchmaking is for phones before 0.31.149)
+	if rooms.size() >= max_rooms:
 		return 0
 	var nr := Room.new()
 	nr.id = next_room

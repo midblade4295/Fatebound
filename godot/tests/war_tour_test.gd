@@ -18,6 +18,7 @@ const WarTable = preload("res://scripts/app/war_table.gd")
 const Tour = preload("res://scripts/app/war_tour.gd")
 const ClanPanel = preload("res://scripts/app/clan_panel.gd")
 const Map = preload("res://scripts/meta/war_map.gd")
+const SocialUIRef = preload("res://scripts/app/social_ui.gd")
 
 var fails: Array = []
 var phase := "boot"
@@ -293,6 +294,12 @@ func _process(delta: float) -> bool:
 				var tb = _table()
 				check(tb != null and not tb._intro_on and tb.modulate.a > 0.99 and app.hero_layer.scale.x < 1.01,
 					"reduce motion: the map opens at once, no push, no dive")
+				# 0.31.151: Friends > JOIN on a friend in a battle goes into that battle
+				app.close_modal()
+				app.social.friends = [{"pid":"f00000000a", "n":"Bob", "st":"match", "wb":"b1aa", "wt":"tower"}]
+				check(SocialUIRef.status_text(app.social.friends[0]) == "Fighting at Old Tower", "a friend in a battle: \"Fighting at Old Tower\"")
+				app.join_friend("f00000000a")
+				check(app.siege != null and str(app.siege.war_bid) == "b1aa", "JOIN on him: into his battle (b1aa)")
 				return _finish()
 	return false
 

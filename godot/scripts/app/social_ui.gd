@@ -6,6 +6,7 @@ extends RefCounted
 const UI = preload("res://scripts/app/ui.gd")
 const UI2 = preload("res://scripts/app/ui2.gd")
 const Net = preload("res://scripts/siege/siege_net.gd")
+const Map = preload("res://scripts/meta/war_map.gd")       # 0.31.151: where a friend is fighting
 const Eco = preload("res://scripts/meta/economy.gd")
 
 const ST_COL := {"online": Color("#5fdc86"), "match": Color("#ffb13d"), "offline": Color("#6b778a")}
@@ -74,7 +75,9 @@ static func ago(secs: int) -> String:
 static func status_text(c: Dictionary) -> String:
 	match str(c.get("st", "offline")):
 		"online": return "Online"
-		"match": return "In a match"
+		"match":
+			# 0.31.151: a friend in a battle on the war map says where
+			return ("Fighting at %s" % Map.name_of(str(c.wt))) if str(c.get("wt", "")) != "" and Map.T.has(str(c.wt)) else "In a match"
 	var seen := int(c.get("seen", 0))
 	return "Last seen " + ago(int(Time.get_unix_time_from_system()) - seen) if seen > 0 else "Offline"
 

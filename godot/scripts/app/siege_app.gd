@@ -1245,6 +1245,10 @@ var pending_war := ""                    # 0.31.135: a battle on the war map the
 
 func join_friend(pid: String) -> void:
 	# 0.31.120 (Kevin: "make so it's a join match option"): Friends > JOIN on a friend who's in a match
+	var wb := str(social.card_of(pid).get("wb", "")) if social != null else ""
+	if wb != "":
+		start_war(wb)                          # 0.31.151: their battle on the war map (your house's side; a party follows you)
+		return
 	if social != null and social.in_party() and social.party_size() > 1:
 		sfx("error")
 		toast("Leave your party to join a friend's match", UI.MUTED)

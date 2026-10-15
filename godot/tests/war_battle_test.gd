@@ -6,8 +6,8 @@ extends SceneTree
 # on team 1 (red), Sam defends on team 0 (blue); Rae (no clan) is refused. The battle starts after its countdown, ends
 # 1-0: Alice and Bob each earn 100 (the rescue and the win), the Lions' bar on the Tower is
 # 200/1000; Sam hears the Tower held. PLAY AGAIN after it: "war_over". The map shows the bar.
-# The server has 2 rooms (SIEGE_MAX_ROOMS): battles never take the last one, so Sam's attack on the Mill meanwhile is
-# "busy". A second socket of Bob's account is turned away (war_twice). Bob's phone never asks for the next match, yet
+# The server has 1 room (SIEGE_MAX_ROOMS; 0.31.151: battles may take every room): Alice's battle takes it, so Sam's
+# attack on the Mill meanwhile is "busy". A second socket of Bob's account is turned away (war_twice). Bob's phone never asks for the next match, yet
 # he's let go after the results (SIEGE_RESULTS_KEEP 3 s); joining the battle after it: war_over. Once everyone's gone
 # the room closes and Sam's attack goes through.
 #   godot --headless --path godot -s res://tests/war_battle_test.gd
@@ -66,7 +66,7 @@ func _init() -> void:
 	OS.set_environment("SIEGE_TEST_MATCH_S", "6")
 	OS.set_environment("SIEGE_TEST_SCORE", "0:1")
 	OS.set_environment("SIEGE_IDLE_STOP", "2")
-	OS.set_environment("SIEGE_MAX_ROOMS", "2")
+	OS.set_environment("SIEGE_MAX_ROOMS", "1")
 	OS.set_environment("SIEGE_RESULTS_KEEP", "3")
 	OS.set_environment("STATE_DIRECTORY", sd)
 	OS.set_environment("SIEGE_MIN_BUILD", "off")
@@ -159,7 +159,7 @@ func _process(delta: float) -> bool:
 		"busy":
 			var sg := _last_so(socs.Sam, "war_go")
 			if not sg.is_empty():
-				check(not bool(sg.get("ok", true)) and str(sg.get("why", "")).contains("busy"), "2 rooms, one a battle: Sam's attack on the Mill is busy (matchmaking keeps the last room)")
+				check(not bool(sg.get("ok", true)) and str(sg.get("why", "")).contains("busy"), "1 room, Alice's battle in it: Sam's attack on the Mill is busy")
 				socs.Sam.set_meta("seen_war_go", {})
 				_go("calls")
 		"calls":

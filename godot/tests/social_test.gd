@@ -126,6 +126,13 @@ func _part1() -> void:
 	matching[ids[1]] = true
 	s.acct_changed(ids[1])
 	check(str(last(1, "pres").get("c", {}).get("st", "")) == "match", "a friend in a match shows in a match")
+	# 0.31.151: in a battle on the war map, the card says which (Friends > JOIN goes into it) and where
+	s.war_of_fn = func(acct) -> Dictionary: return {"bid":"b9zz", "tid":"tower"} if acct == ids[1] else {}
+	clear()
+	s.acct_changed(ids[1])
+	var wc: Dictionary = last(1, "pres").get("c", {})
+	check(str(wc.get("wb", "")) == "b9zz" and str(wc.get("wt", "")) == "tower", "a friend in a battle: the card names it (b9zz at the Tower)")
+	s.war_of_fn = func(_acct) -> Dictionary: return {}
 	matching.erase(ids[1])
 	s.acct_changed(ids[1])
 	s.handle(1, {"k":"add", "pid":C})

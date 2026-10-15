@@ -72,6 +72,7 @@ var eco = null             # eco_accounts.gd
 var send_fn: Callable = func(_cid, _msg): pass
 var close_fn: Callable = func(_cid): pass
 var in_match_fn: Callable = func(_acct) -> bool: return false
+var war_of_fn: Callable = func(_acct) -> Dictionary: return {}   # 0.31.151: siege_server -- the battle a player is in ({bid, tid})
 var log_fn: Callable = func(_s): pass
 var event_fn: Callable = func(_acct, _ev, _p): pass   # 0.31.118: usage statistics (server/analytics.gd) -- never the text
 var rank_fn: Callable = func(_acct) -> int: return 0   # 0.31.120: this week's leaderboard rank (0: not on it)
@@ -410,6 +411,12 @@ func _read_name(pid: String) -> void:
 func _card(pid: String) -> Dictionary:
 	var u: Dictionary = users.get(pid, {})
 	var c := {"pid":pid, "n":str(u.get("name", "Player")), "tt":str(u.get("title", "")), "st":status_of(pid), "seen":int(u.get("seen", 0))}
+	if str(c.st) == "match":
+		# 0.31.151: in a battle on the war map -- which one (a friend's JOIN goes into it) and where
+		var wb: Dictionary = war_of_fn.call(str(u.get("acct", "")))
+		if not wb.is_empty():
+			c["wb"] = str(wb.get("bid", ""))
+			c["wt"] = str(wb.get("tid", ""))
 	var ct := tag_of(pid)
 	if ct != "":
 		c["ct"] = ct                                     # 0.31.134: their clan's tag
