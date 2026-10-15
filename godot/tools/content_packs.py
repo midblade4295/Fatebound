@@ -66,6 +66,10 @@ NEVER = ["tests/*", "reports/*", "tools/*", "server/*", "store-listing/*", "asse
 # module JSON (~80 MB) would otherwise land in the pck. Only the .gdextension files go in.
 PRESET_EXTRA = {"iOS App Store": ["addons/GodotApplePlugins*/bin/*", "addons/FateboundNotifyIOS/bin/*"]}
 KEEP_IN_PACK = ("assets/", ".godot/imported/", ".godot/exported/")           # a pack holds data only: no code, no settings
+# A pack rebuilt for a reason its inputs don't show (its file name is the inputs' hash, so without this the old file
+# would be kept). 0.31.151: heroes -- six Meshy models' imported scenes named their texture by a stale UID (the build
+# machine's import cache predated the textures' current .import files); reimported, the warnings are gone.
+PACK_REV = {"heroes": 2}
 SKIP_FILES = (".txt", ".md", ".py", ".blend", ".blend1")                     # never exported (not resources)
 
 
@@ -108,6 +112,8 @@ def inputs_hash(name, pats):
     # every file the pack is made from (the asset and its .import settings) and the engine that imports it
     h = hashlib.sha256()
     h.update(("%s|%s|%s|%s\n" % (name, GODOT_VERSION, ",".join(pats), ",".join(KEEP_IN_PACK))).encode())
+    if PACK_REV.get(name):
+        h.update(("rev %d\n" % PACK_REV[name]).encode())
     for rel in asset_files():
         if name in pack_of(rel):
             for p in (rel, rel + ".import"):

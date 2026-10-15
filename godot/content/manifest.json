@@ -20,10 +20,10 @@
   },
   {
    "name": "heroes",
-   "file": "heroes-732f2942034f.pck",
+   "file": "heroes-98bd68ca9e0c.pck",
    "size": 68462196,
-   "sha256": "89edb0d1d831b080868ba6b14e3bc897d0491039b406a8c0e277cf5250dab560",
-   "inputs": "732f2942034f97eeaa8a22fc6912b01acac807ebac404495b9caa1d8c519a5cf",
+   "sha256": "b85089097c9b90f09ee460621e5af6f3a9d9f6338a776ba8f68f1aec7803091c",
+   "inputs": "98bd68ca9e0c3617f69f9e5e4866a6ce1a322e9b6bd4ea1962f50f31d56ec9c0",
    "probe": "res://assets/meshy/archmage/rigged.glb"
   },
   {
