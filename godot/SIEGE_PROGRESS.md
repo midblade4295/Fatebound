@@ -4488,3 +4488,19 @@ VO, Meshy UID reimport; then "Do them all".
 - Quick suite: all 94 passed (first try). tools/cold_start_check.sh: PASS. The Play AAB built from this commit (throwaway
   key, presets untouched by the build): BASE OK (255 files), CONTENT OK (heroes-98bd68ca9e0c on the branch), play_games
   true, bundletool valid. Preview APK: build/Fatebound-Siege-0.31.151-fatebound.apk (32 MB, preview key).
+
+## 0.31.152 — the Herald's war map tour, voiced
+Kevin: "Go" (the tour's voice-over, estimated at 0.31.151).
+- assets/vo/war_tour/<id>.ogg for the ten fixed lines (tour_intro, tour_homes, tour_land, tour_bars, tour_take,
+  tour_links, tour_battles, tour_week, tour_hot, tour_clan): ElevenLabs, voice "Edward - British" (the Herald),
+  eleven_v4, one take each, 1,410 credits in all. Each levelled to -16 LUFS (gain, limiter -1.5 dB), 10/60 ms fades,
+  mono 44.1 kHz OGG Vorbis q5 (as the tutorial's). Checked by speech recognition (PocketSphinx) against its own line.
+  The tour already played <id>.ogg with each line (war_tour._play_line; the master volume at half, nothing when muted;
+  NEXT cuts it off).
+- Not voiced: tour_ready (the last line for a player already in a clan: it names their house and tag).
+- assets/vo/war_tour/SCRIPT.md: what was read. Four lines say numbers from the code (tour_bars, tour_take, tour_week,
+  tour_homes); war_tour_test now checks every fixed line has its file and that SCRIPT.md's text is still the text the
+  tour shows, so a changed number fails the suite until the line is re-recorded. It also checks the first line's voice
+  is loaded when the tour starts.
+- The audio content pack rebuilt (audio-3b550a027262.pck, 12.8 MB; uploaded to content-packs 11e363f).
+- Version 0.31.152, versionCode 238 (server code unchanged: SERVER_BUILD stays 0.31.151).

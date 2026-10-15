@@ -167,6 +167,10 @@ func _process(delta: float) -> bool:
 			check(tour.step == 0 and has_text(tour, "THE ROYAL HERALD") and has_text(tour, "1 / %d" % tour.steps.size()) and str(tour.steps[0].target) == "map",
 				"the first time, the Herald's tour starts by itself: step 1 of %d, the spotlight on the map" % tour.steps.size())
 			check(not has_text(tour, "JOIN A CLAN") and btn("war_tour_skip") != null and btn("war_tour_next") != null, "SKIP and NEXT")
+			# 0.31.152: the Herald says it (assets/vo/war_tour)
+			var muted: bool = app.audio != null and bool(app.audio.get("muted"))
+			check(muted or (tour.voice.stream != null and tour.voice.stream.resource_path.ends_with("war_tour/tour_intro.ogg")),
+				"the Herald says the first line (tour_intro.ogg)")
 			_go("typing")
 		"typing":
 			var tour = _tour()
@@ -261,6 +265,7 @@ func _process(delta: float) -> bool:
 				check(str(st[-1].id) == "tour_ready" and str(st[-1].text).contains("House Lions") and str(st[-1].text).contains("[LION]") and str(st[-1].end) == "clan"
 					and str(st[1].cam[1]) == "home_lions", "in a clan: the last step is your house and tag, FINISH; the keep shown is your house's")
 				check(Tour.example_place(war_fixture(), "lions") == "tower", "the place shown to a Lion: the Stags' Tower")
+				_check_vo()
 				_go("hot")
 		"hot":
 			# 0.31.149 (Kevin: "Remove the quick play so the player needs to choose where to fight. Maybe show hot zones where
@@ -322,6 +327,27 @@ func _process(delta: float) -> bool:
 				check(app.siege != null and str(app.siege.war_bid) == "b1aa", "JOIN on him: into his battle (b1aa)")
 				return _finish()
 	return false
+
+func _check_vo() -> void:
+	# 0.31.152: every fixed line has its voice, read from the text the tour shows now (assets/vo/war_tour/SCRIPT.md
+	# holds what was read; a line whose text or numbers changed must be re-recorded). tour_ready names the player's
+	# house and tag: no voice.
+	var read := {}
+	var f := FileAccess.open("res://assets/vo/war_tour/SCRIPT.md", FileAccess.READ)
+	if f != null:
+		var rx := RegEx.create_from_string("^\\| `([a-z_]+)` \\| (.+) \\|\\s*$")
+		for line in f.get_as_text().split("\n"):
+			var m := rx.search(line)
+			if m != null:
+				read[m.get_string(1)] = m.get_string(2)
+	var bad := []
+	for st in Tour.make_steps(war_fixture(), false, "lions", "") + [Tour.make_steps(war_fixture(), true, "lions", "LION")[-1]]:
+		var id := str(st.id)
+		if id == "tour_ready":
+			continue
+		if not ResourceLoader.exists(Tour.VO_DIR + id + ".ogg") or str(read.get(id, "")) != str(st.text):
+			bad.append(id)
+	check(read.size() == 10 and bad.is_empty(), "every fixed line has its voice, read from today's text (%d read; off: %s)" % [read.size(), str(bad)])
 
 func HOME_SECS() -> float:
 	return float(App.HOME_ZOOM_SECS)
