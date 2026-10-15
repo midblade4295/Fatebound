@@ -648,6 +648,19 @@ func _fill_war() -> void:
 		("(" + ", ".join(crowns) + ")") if not crowns.is_empty() else "", int(m.get("pts", 0))], 13, Color.WHITE, false))
 	if not bool(m.get("took", false)):
 		UI2.center(UI2.body(f, "Your clan: %d / %d to take it" % [int(m.get("bar", 0)), int(m.get("need", 0))], 11, Color(1, 1, 1, 0.8), false))
+	elif m.get("reward", null) is Dictionary:
+		# 0.31.151: the land taken -- the fighters' reward (already in the account)
+		var rw: Dictionary = m.reward
+		var bits := []
+		if int(rw.get("gold", 0)) > 0:
+			bits.append("+%d gold" % int(rw.gold))
+		if int(rw.get("gems", 0)) > 0:
+			bits.append("+%d gems" % int(rw.gems))
+		if str(rw.get("chest", "")) != "":
+			bits.append("a %s" % str(Sim_Eco.CHESTS.get(str(rw.chest), {}).get("name", "chest")))
+		var rl := UI2.body(f, "Your reward: " + "  ·  ".join(bits), 12, Color("#ffd27a"), false)
+		rl.name = "WarReward"
+		UI2.center(rl)
 
 # ---------- scoreboard and MVP (0.31.119, Kevin: "Do all" -- a proper end-of-match screen) ----------
 # Every unit's knockouts, downs, rescues, gathering, gate damage and fish fed come with the snapshots (and are the sim's

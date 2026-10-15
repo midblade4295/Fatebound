@@ -15,6 +15,7 @@ const UI = preload("res://scripts/app/ui.gd")
 const UI2 = preload("res://scripts/app/ui2.gd")
 const SocialUI = preload("res://scripts/app/social_ui.gd")
 const Map = preload("res://scripts/meta/war_map.gd")
+const Eco = preload("res://scripts/meta/economy.gd")             # 0.31.151: the war's rewards
 const VO_DIR := "res://assets/vo/war_tour/"
 const TYPE_CPS := 52.0
 const DIM := Color(0.0, 0.01, 0.04, 0.6)
@@ -58,7 +59,7 @@ static func make_steps(war: Dictionary, in_clan: bool, house: String, tag: Strin
 		{"id":"tour_battles", "target":"map", "cam":["overview"], "pick":"",
 			"text":"Fight as often as you like. Every battle your clan wins moves its bar, started or joined. Defending your house's land holds it, and costs you nothing but sweat."},
 		{"id":"tour_week", "target":"stats", "cam":["overview"], "pick":"",
-			"text":"Every Monday the war ends. The house holding the most land wins the week, and the map is wiped clean for the next one."},
+			"text":"Every Monday the war ends. The house holding the most land wins the week: everyone in its clans gets a Gold Chest and %d gems. Then the map is wiped clean for the next one." % int(Eco.WAR_WEEK.gems)},
 		{"id":"tour_hot", "target":"hot", "cam":["overview"], "pick":"",
 			"text":"Where's the fighting? Battles burning right now glow on the map and line up under it. Tap JOIN and you're in. No waiting, no paperwork."},
 	]

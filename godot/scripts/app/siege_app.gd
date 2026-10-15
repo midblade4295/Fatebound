@@ -1230,6 +1230,7 @@ func _on_eco_synced(differs: bool) -> void:
 		analytics.note_level(int(profile.d.level))
 	if siege == null and tab == "home":
 		offer_referral.call_deferred()            # 0.31.120: a referral chest that came with this answer (it checks)
+		offer_war_reward.call_deferred()          # 0.31.151: a war reward that came with it (a land taken, a week won)
 	if not differs or siege != null:
 		return
 	refresh_top()
@@ -1902,6 +1903,30 @@ func offer_prize() -> bool:
 	notice("LEADERBOARD PRIZE", "You finished #%d on last week's leaderboard! You got %s." % [int(x.get("rank", 0)), ", ".join(bits)])
 	return true
 
+func offer_war_reward() -> bool:
+	# 0.31.151: a war reward the server paid (a land taken, a week won) we haven't shown -- once, the newest
+	if not daily_auto or siege != null or update_required or tab != "home" or is_instance_valid(modal):
+		return false
+	var wr: Array = profile.d.get("war_rewards", [])
+	if wr.is_empty() or str(wr[0].get("id", "")) == str(profile.d.settings.get("war_seen", "")):
+		return false
+	var x: Dictionary = wr[0]
+	profile.d.settings["war_seen"] = str(x.id)
+	profile.save()
+	notice("CROWN WAR", "%s You got %s." % [str(x.get("text", "")), war_reward_text(x)])
+	sfx("confirm")
+	return true
+
+static func war_reward_text(x: Dictionary) -> String:
+	var bits := []
+	if int(x.get("gold", 0)) > 0:
+		bits.append("%d gold" % int(x.gold))
+	if int(x.get("gems", 0)) > 0:
+		bits.append("%d gems" % int(x.gems))
+	if str(x.get("chest", "")) != "":
+		bits.append("a %s" % str(Eco.CHESTS.get(str(x.chest), {}).get("name", "chest")))
+	return " and ".join(bits) if bits.size() <= 2 else ", ".join(bits.slice(0, bits.size() - 1)) + " and " + str(bits[-1])
+
 func offer_referral() -> bool:
 	# 0.31.120: Gold chests from a referral (server/referrals.gd) since we last said so
 	if not daily_auto or siege != null or update_required or tab != "home" or is_instance_valid(modal):
@@ -2038,7 +2063,7 @@ func open_send_diag() -> void:
 				UI2.dim_button(send, false)))
 
 func offer_daily() -> void:
-	if offer_prize() or offer_referral():
+	if offer_prize() or offer_war_reward() or offer_referral():
 		return
 	if not daily_auto or siege != null or update_required or tab != "home" or is_instance_valid(modal):
 		return

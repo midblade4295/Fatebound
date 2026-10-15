@@ -427,6 +427,23 @@ func grant_prize(id: String, week: String, rank: int, prize: Dictionary) -> bool
 	_save_meta(e)
 	return true
 
+func grant_war(id: String, rid: String, kind: String, reward: Dictionary, text: String) -> bool:
+	# 0.31.151: the war's rewards (server/world.gd: a land taken, a week won) -- once per reward id per account
+	var e := _load(id)
+	if e.is_empty():
+		return false
+	var p = e.p
+	p.refresh()
+	p.replaying = true
+	var r: Dictionary = p.grant_war(rid, kind, reward, text)
+	p.replaying = false
+	if not bool(r.get("ok", false)):
+		return false
+	e.meta.rev = int(e.meta.get("rev", 0)) + 1
+	_save_meta(e)
+	log_fn.call("account %s: war reward %s (%s)" % [id, rid, kind])
+	return true
+
 func pay_gold(id: String, amount: int, why: String) -> bool:
 	# 0.31.134: gold the server takes from an account (server/clans.gd: starting a clan costs Clans.COST_GOLD)
 	var e := _load(id)

@@ -29,8 +29,12 @@ extends RefCounted
 # 0.31.150 (Kevin: "Remove the 5 battle daily"): no daily attempts any more -- every battle counts, for everyone of the
 # attacking clan in it, as many as they like. (The map still says "att"/"max" Map.ATTEMPTS for phones before 0.31.150,
 # whose ATTACK wanted an attempt left; world.json's old "attempts" is dropped on the next save.)
+# 0.31.151 (Kevin: "Do them all" -- rewards for the war): the clan's fighters in the battle that takes a land get
+# Eco.WAR_TAKE each (in their battle's result, "reward"); when a week ends, everyone in a clan of the winning house gets
+# Eco.WAR_WEEK (and those online hear it). Paid into their accounts (eco_accounts.grant_war), each once.
 const Map = preload("res://scripts/meta/war_map.gd")
 const Leaderboard = preload("res://server/leaderboard.gd")
+const Eco = preload("res://scripts/meta/economy.gd")
 
 const SAVE_DELAY := 3.0
 const PUSH_GAP := 0.5              # s between map pushes to the phones that have it open
@@ -168,12 +172,39 @@ func _roll() -> void:
 		var won := best if not tie else ""
 		if won != "":
 			tally[won] = int(tally.get(won, 0)) + 1
+			_reward_week(won, week)
 		last = {"week":week, "won":won, "counts":cn}
 		soc.log_fn.call("war: week %s over -- %s (%s); the map is free again" % [week, ("House " + won + " won") if won != "" else "no winner", str(cn)])
 	week = w
 	owners = {}
 	bars = {}
 	_mark()
+
+func _grant(acct: String, rid: String, kind: String, reward: Dictionary, text: String) -> bool:
+	# 0.31.151: a war reward into an account (once per rid)
+	var eco = soc.eco
+	if acct == "" or eco == null or not eco.has_method("grant_war"):
+		return false
+	return bool(eco.grant_war(acct, rid, kind, reward, text))
+
+func _reward_week(house: String, wk: String) -> void:
+	# 0.31.151: the week won -- everyone in a clan of that house gets Eco.WAR_WEEK; those online hear it now
+	var cl = soc.clans
+	if cl == null:
+		return
+	var hn := str(Map.HOUSE_NAMES.get(house, house))
+	var text := "House %s won the war this week!" % hn
+	var n := 0
+	for cid in cl.clans:
+		if str(cl.clans[cid].house) != house:
+			continue
+		for pid in cl.members_of(str(cid)):
+			var acct := str(soc.users.get(str(pid), {}).get("acct", ""))
+			if _grant(acct, "week:%s" % wk, "week", Eco.WAR_WEEK, text):
+				n += 1
+				if soc.online.has(str(pid)):
+					soc._send(str(pid), {"t":"so", "k":"note", "x":"%s A Gold Chest and %d gems are yours." % [text, int(Eco.WAR_WEEK.gems)], "pop":true})
+	soc.log_fn.call("war: week %s won by %s -- %d rewarded" % [wk, house, n])
 
 func week_end() -> int:
 	return Leaderboard.week_end(unix())
@@ -370,6 +401,12 @@ func battle_over(bid: String, res: Dictionary) -> Dictionary:
 		out[pid] = {"tid":tid, "name":Map.name_of(tid), "pts":int(per[pid]), "crowns":crowns, "gate":bool(res.get("gate", false)),
 			"king":bool(res.get("king", false)), "won":won, "bar":mini(bar, need), "need":need, "took":took, "quit":not present.has(pid),
 			"late":late}
+		if took and present.has(pid):
+			# 0.31.151: the land taken -- each of the clan's fighters in this battle gets Eco.WAR_TAKE
+			var hn := str(Map.HOUSE_NAMES.get(str(b.ah), b.ah))
+			if _grant(str((b.scorers[pid] as Dictionary).get("acct", "")), "take:%s:%s" % [tid, bid], "take", Eco.WAR_TAKE,
+					"You took %s for House %s!" % [Map.name_of(tid), hn]):
+				out[pid]["reward"] = Eco.WAR_TAKE
 	var cl = soc.clans
 	if cl != null and cl.clans.has(ac) and not per.is_empty():
 		if late:

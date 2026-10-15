@@ -127,6 +127,7 @@ static func defaults() -> Dictionary:
 		"login":{"day":"", "n":0},                                   # 0.31.119: the last day claimed, claims so far
 		"discord":false,                                             # 0.31.124: the Discord reward claimed
 		"prizes":[],                                                 # 0.31.120: weekly leaderboard prizes paid (newest first)
+		"war_rewards":[],                                            # 0.31.151: the war's rewards paid (newest first)
 		"paid":[],                                                   # 0.31.134: gold the server took (a clan), newest first
 		"referral":{"by":"", "notes":[]},                            # 0.31.120: whose code was entered; friend rewards (newest first)
 		"embers":0,                                                  # 0.31.90: the Forge's material
@@ -646,6 +647,26 @@ func grant_prize(week: String, rank: int, prize: Dictionary) -> Dictionary:
 	d.prizes.push_front({"week":week, "rank":rank, "gems":int(prize.get("gems", 0)), "chest":str(prize.get("chest", "")), "title":t})
 	if (d.prizes as Array).size() > 12:
 		d.prizes.resize(12)
+	save()
+	return {"ok":true, "chests":out.chests}
+
+# ---------------- the war's rewards (0.31.151) ----------------
+func grant_war(id: String, kind: String, reward: Dictionary, text: String) -> Dictionary:
+	# the server only (server/world.gd: a land taken, a week won): never an op a phone can send. Once per id.
+	if not (d.get("war_rewards", null) is Array):
+		d["war_rewards"] = []
+	for x in d.war_rewards:
+		if str(x.get("id", "")) == id:
+			return {"ok":false, "error":"paid"}
+	var out := {"chests":[]}
+	d.gold = int(d.gold) + int(reward.get("gold", 0))
+	d.gems = int(d.gems) + int(reward.get("gems", 0))
+	if str(reward.get("chest", "")) != "":
+		add_chest(str(reward.chest), out, true)
+	d.war_rewards.push_front({"id":id, "kind":kind, "gold":int(reward.get("gold", 0)), "gems":int(reward.get("gems", 0)),
+		"chest":str(reward.get("chest", "")), "text":text, "at":now()})
+	if (d.war_rewards as Array).size() > 12:
+		d.war_rewards.resize(12)
 	save()
 	return {"ok":true, "chests":out.chests}
 

@@ -14,6 +14,7 @@ const Social = preload("res://server/social.gd")
 const Clans = preload("res://server/clans.gd")
 const World = preload("res://server/world.gd")
 const Map = preload("res://scripts/meta/war_map.gd")
+const Eco = preload("res://scripts/meta/economy.gd")
 
 var fails: Array = []
 
@@ -36,6 +37,14 @@ class FakeEco:
 		if not accts.has(id) or int(accts[id].gold) < amount:
 			return false
 		accts[id].gold = int(accts[id].gold) - amount
+		return true
+	var war := {}                        # 0.31.151: account -> [reward ids] (grant_war, once each)
+	func grant_war(id: String, rid: String, _kind: String, _reward: Dictionary, _text: String) -> bool:
+		var l: Array = war.get(id, [])
+		if not accts.has(id) or l.has(rid):
+			return false
+		l.append(rid)
+		war[id] = l
 		return true
 
 var inbox := {}
@@ -167,6 +176,7 @@ func _init() -> void:
 	check(str(hist.back().get("x", "")).contains("+50 (50/500)"), "the clan chat sums it up: %s" % str(hist.back().get("x", "")))
 	# --- more battles until the Mill is taken
 	var took := false
+	var took_res := {}
 	for i in 3:
 		s.handle(1, {"k":"war_go", "tid":"mill"})
 		var b2 := str(last(1, "war_go").get("bid", ""))
@@ -175,11 +185,16 @@ func _init() -> void:
 		var r2: Dictionary = w.battle_over(b2, {"won":true, "gate":false, "king":true, "present":[A, B]})
 		took = bool(r2[A].took)
 		if took:
+			took_res = r2
 			break
 	check(took and str(w.owners.mill.h) == "lions" and str(w.owners.mill.ct) == "LHRT" and (w.bars.mill as Dictionary).is_empty(),
 		"enough wins: the Lions take the Mill (the bars start again)")
 	check(str(w.captures[0].tid) == "mill" and str((s.hist.get("c:" + CA, []) as Array).back().get("x", "")).contains("took The Mill") or
 		(s.hist.get("c:" + CA, []) as Array).any(func(l): return str(l.get("x", "")).contains("We took The Mill")), "the capture is logged and the clan told")
+	# 0.31.151: the clan's fighters in the battle that took it are rewarded (Eco.WAR_TAKE, once)
+	check(took_res.has(A) and (took_res[A] as Dictionary).get("reward", {}) == Eco.WAR_TAKE and (took_res[B] as Dictionary).get("reward", {}) == Eco.WAR_TAKE
+		and (eco.war.get(ids[0], []) as Array).size() == 1 and str(eco.war[ids[0]][0]).begins_with("take:mill:") and not eco.war.has(ids[4]),
+		"taking the Mill: Alice and Bob each get %s (Lena, of another clan, nothing)" % str(Eco.WAR_TAKE))
 	clear()
 	s.handle(1, {"k":"war_go", "tid":"mill"})
 	check(str(last(1, "war_go").get("why", "")).contains("holds"), "their own land: refused")
@@ -261,6 +276,13 @@ func _init() -> void:
 	w._roll()
 	check(str(w.last.get("won", "")) == "lions" and int(w.tally.get("lions", 0)) == 1 and int(w.last.counts.lions) == 2 and w.owners.is_empty()
 		and w.bars.is_empty() and str(w.week) == "2026-10-19", "Monday: the Lions (2 territories) win the week; the map is free again")
+	# 0.31.151: everyone in a clan of the Lions (both Lions clans) gets Eco.WAR_WEEK, once; the Stags and Ravens nothing
+	var weekly := func(acct: String) -> bool: return (eco.war.get(acct, []) as Array).has("week:2026-10-12")
+	check(weekly.call(ids[0]) and weekly.call(ids[1]) and weekly.call(ids[4]) and not weekly.call(ids[2]) and not weekly.call(ids[3]) and not weekly.call(ids[5]),
+		"the week won: every Lion in a clan is rewarded (Alice, Bob, Lena), not the Stags, the Ravens or the clanless")
+	var before := (eco.war.get(ids[0], []) as Array).size()
+	w._reward_week("lions", "2026-10-12")
+	check((eco.war.get(ids[0], []) as Array).size() == before, "...once")
 	var rl: Dictionary = w.battle_over(b4, {"won":true, "gate":true, "king":true, "present":[B]})
 	check(bool(rl[B].late) and int(rl[B].pts) == 0 and not bool(rl[B].took) and w.owners.is_empty() and w.bars.is_empty(),
 		"Bob's battle for the Tower, still on when the week ended: it counts for nothing on the new map")

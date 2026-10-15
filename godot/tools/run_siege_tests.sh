@@ -176,6 +176,8 @@ run war_ui_test          WAR_UI_PASS              240
 # 0.31.147: PLAY's push into the war table, the map's dive, the Herald's tour of the map (by itself the first time; "?";
 # SKIP), JOIN A CLAN opening the CLAN window on joining; reduce motion (no server: the map put in place)
 run war_tour_test        WAR_TOUR_PASS            120
+# 0.31.151: the war's rewards -- the profile, the account (once), Home saying so
+run war_rewards_test     WAR_REWARDS_PASS         90
 # Usage statistics (0.31.118): the phone's queue, the server's files (and an older server on 8101), end to end against
 # the real server on 8100 (the probe included), then the report on a fixture.
 run analytics_client_test ANALYTICS_CLIENT_PASS   60
