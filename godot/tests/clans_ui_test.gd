@@ -15,6 +15,7 @@ const ClanPanel = preload("res://scripts/app/clan_panel.gd")
 const ChatPanel = preload("res://scripts/app/chat_panel.gd")
 const EcoAccounts = preload("res://server/eco_accounts.gd")
 const Net = preload("res://scripts/siege/siege_net.gd")
+const WarMap = preload("res://scripts/meta/war_map.gd")
 
 var port := 8118
 var server_pid := -1
@@ -78,6 +79,7 @@ func _init() -> void:
 	OS.set_environment("SIEGE_PORT", str(port))
 	OS.set_environment("SIEGE_HOST", "127.0.0.1")
 	OS.set_environment("SIEGE_LOBBY", "1.0")
+	OS.set_environment("SIEGE_WAR_LOBBY", "2.0")           # (0.31.149: the match is a battle on the war map)
 	OS.set_environment("STATE_DIRECTORY", sd)
 	OS.set_environment("SIEGE_MIN_BUILD", "off")
 	OS.set_environment("SIEGE_URL", "ws://127.0.0.1:%d" % port)
@@ -141,6 +143,7 @@ func _process(delta: float) -> bool:
 				p.d.level = 8
 				p.d.account = {"id":accts.alice[0], "key":accts.alice[1], "seq":0}
 				p.d.tutorial_done = true
+				p.d.settings["war_tour"] = true          # (0.31.147: the Herald's tour has its own test)
 				p.save()
 				app = App.new()
 				app.profile_path = base + "-profile.json"
@@ -331,15 +334,31 @@ func _process(delta: float) -> bool:
 				press("play")
 				_go("play_map")
 		"play_map":
-			# 0.31.145: PLAY opens the war map (0.31.147: after Home's push into the table); its QUICK BATTLE is the match
-			# from matchmaking
-			if app.modal != null and str(app.modal.get_script().resource_path).ends_with("war_table.gd"):
-				check(app.siege == null, "PLAY opens the war map (in a clan)")
-				press("war_quick")
-				check(app.siege != null and app.modal == null, "...its QUICK BATTLE starts a match")
-				_ws("match_bob", {"t":"hello", "v":Net.VERSION, "name":"bob", "build":"0.31.134-fatebound", "pred":false,
-					"acct":accts.bob[0], "key":accts.bob[1]})
+			# 0.31.145: PLAY opens the war map (0.31.147: after Home's push into the table). 0.31.149 (Kevin: "Remove the
+			# quick play so the player needs to choose where to fight"): no QUICK BATTLE -- Alice ATTACKs a land her house
+			# (the Stags) can reach, and Bob comes into that battle
+			if app.modal != null and str(app.modal.get_script().resource_path).ends_with("war_table.gd") \
+					and str(app.social.war.get("house", "")) == "stags" and t_phase > 0.5:
+				check(app.siege == null and btn("war_quick") == null, "PLAY opens the war map (in a clan), no QUICK BATTLE")
+				var tid := ""
+				for id in WarMap.T:
+					if tid == "" and not WarMap.is_home(id) and WarMap.neighbours(id).has("home_stags"):
+						tid = id
+				app.modal.select(tid)
+				_go("attack")
+		"attack":
+			if t_phase > 0.4:
+				press("war_attack")
+				_go("attacked")
+		"attacked":
+			if app.siege != null and str(app.siege.war_bid) != "":
+				check(app.modal == null, "ATTACK takes Alice into her battle (%s)" % str(app.siege.war_bid))
+				_ws("match_bob", {"t":"hello", "v":Net.VERSION, "name":"bob", "build":"0.31.149-fatebound", "pred":false,
+					"acct":accts.bob[0], "key":accts.bob[1], "war":str(app.siege.war_bid)})
 				_go("in_match")
+			elif t_phase > 10.0:
+				check(false, "ATTACK takes Alice into a battle")
+				return _finish()
 		"in_match":
 			if app.siege != null and app.siege.sim != null and app.siege.hud != null and str(app.siege.hud.player_id) != "" and is_instance_valid(app.siege.view):
 				if t_phase > (3.0 if shots != "" else 0.2):

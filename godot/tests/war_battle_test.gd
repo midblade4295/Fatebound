@@ -135,7 +135,9 @@ func _process(delta: float) -> bool:
 					socs[n] = so
 				_go("online")
 		"online":
-			if socs.Alice.online() and socs.Bob.online() and socs.Sam.online() and t_phase > 0.5:
+			# (the clan state follows "online" a moment later on a slow machine: wait for the tags too)
+			if socs.Alice.online() and socs.Bob.online() and socs.Sam.online() and t_phase > 0.5 \
+					and ((socs.Alice.my_tag() != "" and socs.Sam.my_tag() != "") or t_phase > 8.0):
 				check(socs.Alice.my_tag() == "LION" and socs.Sam.my_tag() == "STAG", "the clans are there (LION, STAG)")
 				socs.Alice.war_open()
 				_go("map")
@@ -182,6 +184,16 @@ func _process(delta: float) -> bool:
 				_hello("Bob", "Bob2")
 				var lob := _got("m_Alice", "lobby")
 				check(not lob.is_empty() and float(lob[0].get("wait", 0)) >= 3.9, "the battle's countdown is the war lobby's (%s s)" % str(lob[0].get("wait", "?") if not lob.is_empty() else "?"))
+				_go("counts")
+		"counts":
+			# 0.31.149: the open map hears who's in the battle (the hot zones): Alice and Bob attacking, Sam defending
+			var lw := _last_so(socs.Alice, "war")
+			var tb: Dictionary = lw.get("terr", {}).get("tower", {}).get("b", {})
+			if int(tb.get("na", 0)) == 2 and int(tb.get("nd", 0)) == 1:
+				check(true, "the map says who's in the battle: 2 attacking, 1 defending")
+				_go("result")
+			elif t_phase > 6.0 or not _got("m_Alice", "war").is_empty():
+				check(false, "the map says who's in the battle (%s)" % str(tb))
 				_go("result")
 		"result":
 			var ra := _got("m_Alice", "war")

@@ -54,7 +54,11 @@ var _cam_at := Vector3.ZERO            # (_fit_camera: where the camera aims and
 var _cam_dist := 20.0
 var _zoom := 1.0
 var _pan := Vector2.ZERO
-var _quick: Button                     # 0.31.145: QUICK BATTLE (the match from matchmaking)
+var _hot: VBoxContainer                # 0.31.149: BATTLES NOW, the hot zones (QUICK BATTLE's place, 0.31.145-0.31.148)
+var _join_after := ""                  # 0.31.149: a battle to go into once the house clan has taken us in
+var _join_house := ""
+var _join_at := 0.0
+const HOT_ROWS := 2                    # battles listed under the map (the rest glow on it)
 var _held_room: Node = null            # 0.31.145: Home's 3D, held still behind the window
 var _held_mode := Node.PROCESS_MODE_INHERIT
 var calm := false                      # reduce motion: no swoop, no glides
@@ -100,12 +104,13 @@ func open(a, first := "", swoop := true) -> void:
 	sf.add_theme_constant_override("separation", 6)
 	sf.custom_minimum_size.y = 150          # (the table doesn't jump about as the sheet changes)
 	_sheet = sf
-	# 0.31.145 (Kevin: "Play open war map"): Home's PLAY opens this map; the match PLAY started until now is at its foot --
-	# matchmaking, 16 vs 16, for any house or none (bots in the empty seats)
-	_quick = UI2.button(body, "QUICK BATTLE  ·  16 VS 16", "green", func():
-		app.sfx("confirm")
-		app.quick_battle(), "war_quick", 18, 50.0, 14.0, UI2.icon_path("swords"))
-	_quick.name = "QuickBattle"
+	# 0.31.149 (Kevin: "Remove the quick play so the player needs to choose where to fight. Maybe show hot zones where
+	# players are actively fighting and players can jump right into that battle"): QUICK BATTLE (0.31.145) is gone; at
+	# the map's foot, BATTLES NOW -- the battles on the map, the ones you can fight in first, each with JOIN / DEFEND (not
+	# in a clan: JOIN <its house>, which puts you in that house's clan and into the battle in one tap)
+	_hot = UI2.frame(body, "night", 8, 14.0, "orange")
+	_hot.add_theme_constant_override("separation", 4)
+	(_hot.get_parent() as Control).name = "HotZones"
 	# Home's war table and heroes (war_room.gd) are behind this window: held on their last frame while it's open
 	var room = app.get("hero_node")
 	if is_instance_valid(room) and room.process_mode != Node.PROCESS_MODE_DISABLED:
@@ -161,6 +166,8 @@ func _exit_tree() -> void:
 func _on_changed(what: String) -> void:
 	if what in ["war", "state", "clan", "me", "party"]:
 		_dirty = true
+	if what == "clan" and str(social.clan.get("house", "")) != str(social.war.get("house", "")):
+		social.war_open()                      # (0.31.149: joined or left a clan -- the map again, for your house now)
 
 func _on_went(ans: Dictionary) -> void:
 	_going = false
@@ -466,6 +473,7 @@ func _process(delta: float) -> void:
 			_apply_cam()
 	elif not _tour_checked:
 		_first_tour()
+	_join_tick()
 	if _dirty:
 		_dirty = false
 		_render()
@@ -492,7 +500,8 @@ func _render() -> void:
 		var sub: Label = lp.get_meta("sub")
 		var tag := ""
 		if t.has("b"):
-			tag = "⚔ BATTLE"
+			var fighting := int(t.b.get("na", 0)) + int(t.b.get("nd", 0))
+			tag = ("⚔ %d FIGHTING" % fighting) if fighting > 0 else "⚔ BATTLE"
 			sub.add_theme_color_override("font_color", Color("#ffb066"))
 		elif str(t.get("ct", "")) != "":
 			tag = "[%s]" % str(t.ct)
@@ -506,14 +515,7 @@ func _render() -> void:
 	# the strip over the map
 	for c in _stats.get_children():
 		c.queue_free()
-	# 0.31.146: QUICK BATTLE says what it does in a party (the leader's takes everyone; a member waits for the leader)
-	var in_party: bool = social.online() and social.in_party()
-	if in_party and social.is_leader() and social.party_size() > 1:
-		_quick.text = "QUICK BATTLE  ·  PARTY ×%d" % social.party_size()
-	elif in_party and not social.is_leader():
-		_quick.text = "QUICK BATTLE  ·  LEADER STARTS"
-	else:
-		_quick.text = "QUICK BATTLE  ·  16 VS 16"
+	_render_hot()
 	if w.is_empty():
 		# 0.31.146: PLAY always opens the map -- not connected, or a server from before the war map: say so
 		var msg := "Not connected to the server"
@@ -595,6 +597,15 @@ func _render_sheet() -> void:
 			UI2.button(_sheet, "DEFEND IT", "red", func():
 				app.sfx("confirm")
 				app.start_war(bid), "war_defend", 16, 44.0)
+		elif mine_house == "" and not social.in_clan():
+			# 0.31.149: not in a clan -- either side's house clan and into the battle
+			var jr := UI.row(_sheet, 8)
+			var ah := str(on.get("ah", ""))
+			UI.grow(UI2.button(jr, "JOIN %s" % SocialUI.house_name(ah).to_upper(), SocialUI.house_button(ah), func():
+				_fight_for(ah, bid), "war_fight_att", 15, 44.0))
+			if h != "":
+				UI.grow(UI2.button(jr, "DEFEND FOR %s" % SocialUI.house_name(h).to_upper(), SocialUI.house_button(h), func():
+					_fight_for(h, bid), "war_fight_def", 15, 44.0))
 		return
 	if mine_house == "":
 		UI2.button(_sheet, "JOIN A CLAN TO FIGHT", "purple", func():
@@ -602,8 +613,8 @@ func _render_sheet() -> void:
 			app.open_clan("join"), "war_find_clan", 15, 40.0)
 		return
 	var why := str(t.get("why", ""))
-	if why == "" and int(w.get("att", 0)) <= 0:
-		why = "No battles left today -- join your clan's battles to help"
+	# (0.31.149: with no battles left today that count, ATTACK still starts one -- it just doesn't move the bar)
+	var spent: bool = why == "" and int(w.get("att", 0)) <= 0
 	var ar := UI.row(_sheet, 8)
 	var ab := UI2.button(ar, "WAITING..." if _going else "ATTACK", "orange", func(): _attack(), "war_attack", 17, 46.0)
 	UI.grow(ab)
@@ -615,6 +626,160 @@ func _render_sheet() -> void:
 	cb.custom_minimum_size.x = 128
 	if why != "":
 		UI2.body(_sheet, why, 12, Color("#ffb0a0"))
+	elif spent:
+		UI2.body(_sheet, "Your %d battles that count are used today: this one won't move your clan's bar (the match still pays)." % int(w.get("max", 5)), 12, UI2.GOLD)
+
+# ---------------- BATTLES NOW: the hot zones (0.31.149) ----------------
+func hot_list() -> Array:
+	# the battles on the map now -- {tid, b, h (who holds it), n (players in it), can: "att" / "def" / "free" (not in a
+	# clan: either side) / "" (two other houses' war)} -- the ones you can fight in first, then the busiest
+	var out := []
+	var mine := str(social.war.get("house", ""))
+	var free: bool = mine == "" and not social.in_clan()
+	for id in Map.T:
+		var t := _terr(id)
+		if not t.has("b"):
+			continue
+		var b: Dictionary = t.b
+		var h := str(t.get("h", ""))
+		var can := ""
+		if free:
+			can = "free"
+		elif mine != "" and mine == str(b.get("ah", "")):
+			can = "att"
+		elif mine != "" and h != "" and mine == h:
+			can = "def"
+		out.append({"tid":id, "b":b, "h":h, "n":int(b.get("na", 0)) + int(b.get("nd", 0)), "can":can})
+	out.sort_custom(func(x, y):
+		if (str(x.can) != "") != (str(y.can) != ""):
+			return str(x.can) != ""
+		return int(x.n) > int(y.n))
+	return out
+
+func _render_hot() -> void:
+	for c in _hot.get_children():
+		_hot.remove_child(c)
+		c.queue_free()
+	var hot := hot_list()
+	var hr := UI.row(_hot, 6)
+	var tl := UI2.text(hr, "🔥 BATTLES NOW", 14, Color("#ffb066"))
+	tl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	if not hot.is_empty():
+		var nl := UI.label(hr, "%d ON" % hot.size(), 12, UI2.MUTED, UI.HEAVY_FONT)
+		nl.autowrap_mode = TextServer.AUTOWRAP_OFF
+	if social.war.is_empty():
+		if social.online() and not social.has_war:
+			# a server from before the war map: nowhere to pick -- a match from matchmaking until it's updated
+			UI2.button(_hot, "PLAY A MATCH", "green", func():
+				app.sfx("confirm")
+				app.quick_battle(), "war_old_play", 15, 42.0)
+		else:
+			UI2.body(_hot, "Not connected to the server" if not social.online() else "Loading the war map...", 12, UI2.MUTED)
+		return
+	if hot.is_empty():
+		var tip := "No battles right now. Tap a land and ATTACK to start one."
+		if str(social.war.get("house", "")) == "" and not social.in_clan():
+			tip = "No battles right now. Join a clan, then tap a land and ATTACK to start one."
+		UI2.body(_hot, tip, 12, UI2.SOFT)
+		return
+	for i in mini(HOT_ROWS, hot.size()):
+		_hot_row(hot[i])
+	if hot.size() > HOT_ROWS:
+		UI2.body(_hot, "+%d more glowing on the map" % (hot.size() - HOT_ROWS), 11, UI2.MUTED)
+
+func _hot_row(z: Dictionary) -> void:
+	var tid := str(z.tid)
+	var b: Dictionary = z.b
+	var bid := str(b.get("bid", ""))
+	var ah := str(b.get("ah", ""))
+	var h := str(z.h)
+	var r := UI.row(_hot, 8)
+	var ic := UI2.icon(r, "swords", 30.0)
+	ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	ic.modulate = Color("#ffb066")
+	# the place and who's fighting: a tap shows it on the map
+	var nb := Button.new()
+	nb.flat = true
+	nb.focus_mode = Control.FOCUS_NONE
+	nb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	nb.clip_text = true
+	nb.custom_minimum_size = Vector2(0, 42)
+	for st_name in ["normal", "hover", "pressed", "focus", "hover_pressed"]:
+		nb.add_theme_stylebox_override(st_name, StyleBoxEmpty.new())
+	nb.set_meta("action_key", "war_hot_" + tid)
+	nb.pressed.connect(func():
+		app.sfx("tab")
+		_touched = true
+		tour_camera(["focus", tid, 1.8], tid))
+	r.add_child(nb)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", -3)
+	v.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	v.alignment = BoxContainer.ALIGNMENT_CENTER
+	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	nb.add_child(v)
+	var name_l := UI2.text(v, Map.name_of(tid).to_upper(), 15, Color.WHITE)
+	name_l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	name_l.clip_text = true
+	var who := "%s attack %s" % [SocialUI.house_name(ah), SocialUI.house_name(h) if h != "" else "free land"]
+	var n := int(z.n)
+	var state := ("%d fighting" % n) if n > 0 else ("starting" if str(b.get("state", "")) == "lobby" else "bots only")
+	var sl := UI.label(v, "%s  ·  %s" % [who, state], 11, Color("#ffcf9a"), UI.HEAVY_FONT)
+	sl.autowrap_mode = TextServer.AUTOWRAP_OFF
+	sl.clip_text = true
+	sl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var go: Button
+	match str(z.can):
+		"att":
+			go = UI2.button(r, "JOIN", "green", func():
+				app.sfx("confirm")
+				app.start_war(bid), "war_hot_join_" + tid, 15, 40.0, 12.0)
+		"def":
+			go = UI2.button(r, "DEFEND", "red", func():
+				app.sfx("confirm")
+				app.start_war(bid), "war_hot_defend_" + tid, 15, 40.0, 12.0)
+		"free":
+			go = UI2.button(r, "JOIN %s" % SocialUI.house_name(ah).to_upper(), SocialUI.house_button(ah), func():
+				_fight_for(ah, bid), "war_hot_fight_" + tid, 13, 40.0, 12.0)
+		_:
+			var ol := UI.label(r, "NOT YOUR\nHOUSE", 10, UI2.MUTED, UI.HEAVY_FONT)
+			ol.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			ol.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	if go != null:
+		go.custom_minimum_size.x = 96
+		go.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+
+func _fight_for(house: String, bid: String) -> void:
+	# 0.31.149: not in a clan -- into that house's own clan (free, open to all), then into the battle
+	var hc := {}
+	for c in social.house_clans:
+		if str(c.get("house", "")) == house:
+			hc = c
+	if hc.is_empty():
+		app.sfx("menuOpen")
+		app.open_clan("join")
+		return
+	if not social.clan_join(str(hc.get("id", ""))):
+		app.sfx("error")
+		app.toast("Not connected to the server right now", UI.RED)
+		return
+	app.sfx("confirm")
+	app.toast("Joining %s..." % str(hc.get("name", "the house's clan")), UI.GOLD)
+	_join_after = bid
+	_join_house = house
+	_join_at = _clock
+
+func _join_tick() -> void:
+	# into the battle once the house clan has us (or give up after a while)
+	if _join_after == "":
+		return
+	if social.in_clan() and str(social.clan.get("house", "")) == _join_house:
+		var b := _join_after
+		_join_after = ""
+		app.start_war(b)
+	elif _clock - _join_at > 8.0:
+		_join_after = ""
+		app.toast("Couldn't join right now -- try again", UI.RED)
 
 func _bar(parent: Node, b: Dictionary, need: int) -> void:
 	var r := UI.row(parent, 6)
@@ -735,6 +900,6 @@ func tour_rect(what: String) -> Rect2:
 			return (_sheet.get_parent() as Control).get_global_rect()
 		"stats":
 			return _stats.get_global_rect()
-		"quick":
-			return _quick.get_global_rect()
+		"hot":
+			return (_hot.get_parent() as Control).get_global_rect()
 	return Rect2()

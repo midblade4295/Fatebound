@@ -92,6 +92,11 @@ static func war_fixture() -> Dictionary:
 			terr[id]["bars"] = []
 	terr.tower = {"h":"stags", "ct":"STAG", "cn":"Stag Party", "need":Map.NEED_OWNED, "bars":[{"c":"clion", "ct":"LION", "h":"lions", "p":350}]}
 	terr.mill = {"h":"lions", "ct":"LION", "cn":"Lion Hearts", "need":Map.NEED_OWNED, "bars":[]}
+	# 0.31.149: three battles on (the hot zones): the Lions at the Stags' Tower (5 + 2 players), the Ravens on the free
+	# Ford (starting), the Stags at the Mill (1)
+	terr.tower["b"] = {"bid":"b1aa", "ah":"lions", "act":"LION", "state":"on", "na":5, "nd":2}
+	terr.ford["b"] = {"bid":"b2bb", "ah":"ravens", "act":"RVN", "state":"lobby", "na":0, "nd":0}
+	terr.mill["b"] = {"bid":"b3cc", "ah":"stags", "act":"STAG", "state":"on", "na":1, "nd":0}
 	return {"week":"2026-10-12", "ends":int(Time.get_unix_time_from_system()) + 3 * 86400, "terr":terr, "tally":{}, "last":{},
 		"counts":{"lions":1, "stags":1, "ravens":0}, "house":"", "clan":"", "att":Map.ATTEMPTS, "max":Map.ATTEMPTS, "caps":[]}
 
@@ -207,19 +212,19 @@ func _process(delta: float) -> bool:
 					check(str(last.id) == "tour_clan" and btn("war_tour_join") != null and btn("war_tour_later") != null and btn("war_tour_next") == null,
 						"the last step (no clan): JOIN A CLAN or LATER")
 					var ids: Array = tour.steps.map(func(s): return str(s.id))
-					check(ids.has("tour_bars") and ids.has("tour_take") and ids.has("tour_links") and ids.has("tour_attempts") and ids.has("tour_week") and ids.has("tour_quick"),
-						"the tour covers the bars, taking land, the roads, the day's battles, the week, QUICK BATTLE (%s)" % str(ids))
-					check(steps_seen > 0, "the spotlight on QUICK BATTLE on its step")
+					check(ids.has("tour_bars") and ids.has("tour_take") and ids.has("tour_links") and ids.has("tour_attempts") and ids.has("tour_week") and ids.has("tour_hot") and not ids.has("tour_quick"),
+						"the tour covers the bars, taking land, the roads, the day's battles, the week, BATTLES NOW (%s)" % str(ids))
+					check(steps_seen > 0, "the spotlight on BATTLES NOW on its step")
 					_shot("tour_last")
 					press("war_tour_join")
 					_go("joined")
 					return false
-				if str(tour.steps[tour.step].id) == "tour_quick":
+				if str(tour.steps[tour.step].id) == "tour_hot":
 					var hole: Rect2 = tour._target
-					var q: Rect2 = Rect2(tour.table.tour_rect("quick").position - tour.global_position, tour.table.tour_rect("quick").size)
-					if hole.encloses(q):
+					var q: Rect2 = Rect2(tour.table.tour_rect("hot").position - tour.global_position, tour.table.tour_rect("hot").size)
+					if hole.encloses(q) and q.size.y > 20.0:
 						steps_seen += 1
-					_shot("tour_quick")
+					_shot("tour_hot")
 				tour.shown = 9999.0
 				press("war_tour_next")
 		"joined":
@@ -255,6 +260,30 @@ func _process(delta: float) -> bool:
 				check(str(st[-1].id) == "tour_ready" and str(st[-1].text).contains("House Lions") and str(st[-1].text).contains("[LION]") and str(st[-1].end) == "clan"
 					and str(st[1].cam[1]) == "home_lions", "in a clan: the last step is your house and tag, FINISH; the keep shown is your house's")
 				check(Tour.example_place(war_fixture(), "lions") == "tower", "the place shown to a Lion: the Stags' Tower")
+				_go("hot")
+		"hot":
+			# 0.31.149 (Kevin: "Remove the quick play so the player needs to choose where to fight. Maybe show hot zones where
+			# players are actively fighting and players can jump right into that battle")
+			if t_phase > 0.3:
+				var tb = _table()
+				check(btn("war_quick") == null and not has_text(tb, "QUICK BATTLE"), "no QUICK BATTLE")
+				var hot: Array = tb.hot_list()
+				check(hot.size() == 3 and str(hot[0].tid) == "tower" and int(hot[0].n) == 7 and str(hot[0].can) == "free",
+					"BATTLES NOW: the three battles, the busiest first (the Tower, 7 fighting), each open to a player with no clan")
+				check(has_text(tb, "BATTLES NOW") and has_text(tb, "3 ON") and has_text(tb, "OLD TOWER") and has_text(tb, "Lions attack Stags  ·  7 fighting")
+					and has_text(tb, "+1 more") and btn("war_hot_fight_tower") != null and btn("war_hot_fight_tower").text == "JOIN LIONS",
+					"two rows (the Tower: Lions attack Stags, 7 fighting; JOIN LIONS), +1 more on the map")
+				var tl: PanelContainer = tb._labels.tower
+				check(tl.visible and str((tl.get_meta("sub") as Label).text) == "⚔ 7 FIGHTING", "the map: the Tower's label, ⚔ 7 FIGHTING")
+				_shot("hot_zones")
+				press("war_hot_tower")
+				_go("hot_pick")
+		"hot_pick":
+			if t_phase > 1.2:
+				var tb = _table()
+				check(str(tb.sel) == "tower" and tb._zoom > 1.5 and btn("war_fight_att") != null and btn("war_fight_def") != null
+					and btn("war_fight_def").text == "DEFEND FOR STAGS", "a tap on the row: the camera on the Tower, its sheet -- JOIN LIONS or DEFEND FOR STAGS")
+				_shot("hot_pick")
 				app.close_modal()
 				app.profile.d.settings["reduce_motion"] = true
 				_go("calm")

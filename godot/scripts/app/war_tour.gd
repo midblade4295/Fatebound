@@ -4,7 +4,8 @@ extends Control
 # of the war map, over the war table (war_table.gd). It runs by itself the first time a player's map has the war on it
 # (once a phone: settings.war_tour), and again from the map's "?" corner button.
 # Each step: the Herald's line (typewriter; NEXT finishes it, then moves on; a tap on the dimmed screen does the same),
-# a spotlight on the part of the window it's about (the map, the place's sheet, the strip over the map, QUICK BATTLE),
+# a spotlight on the part of the window it's about (the map, the place's sheet, the strip over the map, BATTLES NOW --
+# 0.31.149: QUICK BATTLE's place),
 # and the map's camera taking you there (war_table.tour_camera: the whole land, or close on a place, picking it).
 # The last step: not in a clan -- JOIN A CLAN (the CLAN window on its list of clans, with START MY OWN CLAN) or LATER;
 # in a clan -- your house and tag, FINISH.
@@ -55,11 +56,11 @@ static func make_steps(war: Dictionary, in_clan: bool, house: String, tag: Strin
 		{"id":"tour_links", "target":"map", "cam":["overview"], "pick":"",
 			"text":"You can only attack along the roads, from land your house already holds. A mountain ridge means no road. Plan accordingly."},
 		{"id":"tour_attempts", "target":"stats", "cam":["overview"], "pick":"",
-			"text":"You get %d battles a day that count for your clan, started or joined. After that you can still fight beside your clan to help. Defending is always free." % Map.ATTEMPTS},
+			"text":"You get %d battles a day that count for your clan, started or joined. After that you can keep fighting, it just won't move the bars. Defending is always free." % Map.ATTEMPTS},
 		{"id":"tour_week", "target":"stats", "cam":["overview"], "pick":"",
 			"text":"Every Monday the war ends. The house holding the most land wins the week, and the map is wiped clean for the next one."},
-		{"id":"tour_quick", "target":"quick", "cam":["overview"], "pick":"",
-			"text":"Just want a scrap? QUICK BATTLE throws you straight into a 16 vs 16 match. No clan needed. No paperwork either."},
+		{"id":"tour_hot", "target":"hot", "cam":["overview"], "pick":"",
+			"text":"Where's the fighting? Battles burning right now glow on the map and line up under it. Tap JOIN and you're in. No waiting, no paperwork."},
 	]
 	if in_clan:
 		out.append({"id":"tour_ready", "target":"none", "cam":["focus", home, 1.6], "pick":"", "end":"clan",

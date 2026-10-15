@@ -176,7 +176,10 @@ func _process(delta: float) -> bool:
 			if _table() != null:
 				var room = app.hero_node
 				check(app.siege == null, "PLAY opens the war map")
-				check(btn("war_quick") != null and btn("war_quick").text.begins_with("QUICK BATTLE"), "...with QUICK BATTLE at its foot")
+				# 0.31.149 (Kevin: "Remove the quick play so the player needs to choose where to fight. Maybe show hot zones
+				# where players are actively fighting"): no QUICK BATTLE; BATTLES NOW at its foot (none yet)
+				check(btn("war_quick") == null and has_text(_table(), "BATTLES NOW") and has_text(_table(), "No battles right now"),
+					"...no QUICK BATTLE: BATTLES NOW at its foot (no battles yet)")
 				check(room == null or room.process_mode == Node.PROCESS_MODE_DISABLED, "Home's 3D held still behind it")
 				_go("table")
 			elif t_phase > 5.0:
@@ -283,6 +286,10 @@ func _process(delta: float) -> bool:
 				var bat: PackedFloat32Array = tb._land_mat.get_shader_parameter("battle")
 				check(bat[tb.LandData.IDS.find("ford")] > 0.5 and (tb._tiles.ford.swords as Sprite3D).visible and btn("war_join") != null and has_text(tb, "BATTLE ON"),
 					"the map: the Ford's land pulses, crossed swords over it, JOIN THE BATTLE")
+				# 0.31.149: the hot zones -- Bob's battle under the map, JOIN for a Lion (nobody seated yet: starting)
+				var hot: Array = tb.hot_list()
+				check(hot.size() == 1 and str(hot[0].tid) == "ford" and str(hot[0].can) == "att" and btn("war_hot_join_ford") != null
+					and has_text(tb, "Lions attack free land  ·  starting"), "BATTLES NOW: the Ford (Lions attack free land, starting) with JOIN")
 				# a pinch brings the map closer, then a drag moves it (no pick)
 				var c: Vector2 = tb._vpc.size * 0.5
 				var was: String = tb.sel

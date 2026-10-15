@@ -485,7 +485,7 @@ func handle(cid: int, msg: Dictionary) -> void:
 		"nojoin": _decline_invite(pid, str(msg.get("party", "")))
 		"leave": _leave(pid)
 		"kick": _kick(pid, who)
-		"play": _play(pid)
+		"play": _play(pid, str(msg.get("war", "")).left(40))
 		"prof": _prof(cid, pid, who)
 		"refresh":
 			_read_name(pid)
@@ -870,15 +870,19 @@ func _kick(pid: String, target: String) -> void:
 	_leave(target)
 	_note(target, "You were removed from the party", true)
 
-func _play(pid: String) -> void:
-	# the leader starts: everyone in the menu goes into the online match with them
+func _play(pid: String, war := "") -> void:
+	# the leader starts: everyone in the menu goes into the online match with them. 0.31.149: or into the leader's battle
+	# on the war map ("war": its id -- every match is a battle there now; a member of another house is turned away there)
 	var pa: String = party_of.get(pid, "")
 	if pa == "" or str(parties[pa].leader) != pid:
 		return
 	var n := 0
 	for m in parties[pa].members:
 		if str(m) != pid and online.has(str(m)) and status_of(str(m)) == "online":
-			_send(str(m), {"t":"so", "k":"go", "party":pa, "by":_name(pid)})
+			var go := {"t":"so", "k":"go", "party":pa, "by":_name(pid)}
+			if war != "":
+				go["war"] = war
+			_send(str(m), go)
 			n += 1
 	_sys(pa, "%s is heading into battle%s" % [_name(pid), " -- the party follows!" if n > 0 else ""])
 	log_fn.call("party %s plays (%d with the leader)" % [pa, n + 1])

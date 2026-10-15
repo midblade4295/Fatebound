@@ -2,8 +2,12 @@ extends SceneTree
 # 0.31.111: the chat, Friends, the party and quick chat through the app's real buttons, against the real server (its
 # own process, port 8095), in REAL time. Alice is the app; Bob is a second phone (scripts/meta/social.gd + a raw match
 # socket). Bob's line shows on Home's chat line; Alice opens the chat, sends a line, taps Bob's name and adds him; he
-# accepts; she opens Friends from Home and invites him; he joins; Home shows the party and PLAY ×2; PLAY takes Bob
-# along ("go"); both are seated on one side; Alice's quick chat reaches Bob and Bob's shows over his head on her HUD.
+# accepts; she opens Friends from Home and invites him; he joins; Home shows the party and PLAY ×2; 0.31.149 (Kevin:
+# "Remove the quick play so the player needs to choose where to fight. Maybe show hot zones where players are actively
+# fighting and players can jump right into that battle"): Bob joins The Lion Guard and starts a battle; it shows under
+# Alice's war map (BATTLES NOW); she has no clan, so JOIN LIONS puts her in The Lion Guard and into the battle, and as the
+# party's leader she takes Bob along ("go" with the battle); both are seated on one side; Alice's quick chat reaches Bob
+# and Bob's shows over his head on her HUD.
 # With a display and SHOT_DIR set, screenshots of each window go there.
 #   godot --headless --path godot -s res://tests/social_ui_test.gd
 const App = preload("res://scripts/app/siege_app.gd")
@@ -12,6 +16,7 @@ const ClientSocial = preload("res://scripts/meta/social.gd")
 const ChatPanel = preload("res://scripts/app/chat_panel.gd")
 const FriendsPanel = preload("res://scripts/app/friends_panel.gd")
 const Net = preload("res://scripts/siege/siege_net.gd")
+const WarMap = preload("res://scripts/meta/war_map.gd")
 
 var port := 8095
 var server_pid := -1
@@ -24,6 +29,8 @@ var accts := {}
 var app
 var bob
 var bob_unit := ""
+var lion_tid := ""
+var bid := ""
 var shots := ""
 
 func check(ok: bool, what: String) -> void:
@@ -65,6 +72,7 @@ func _init() -> void:
 	OS.set_environment("SIEGE_PORT", str(port))
 	OS.set_environment("SIEGE_HOST", "127.0.0.1")
 	OS.set_environment("SIEGE_LOBBY", "1.0")
+	OS.set_environment("SIEGE_WAR_LOBBY", "2.0")           # (0.31.149: the party's match is a battle on the war map)
 	OS.set_environment("STATE_DIRECTORY", sd)
 	OS.set_environment("SIEGE_MIN_BUILD", "off")
 	OS.set_environment("SIEGE_URL", "ws://127.0.0.1:%d" % port)
@@ -137,6 +145,7 @@ func _process(delta: float) -> bool:
 				p.d.name = "Alice"
 				p.d.account = {"id":accts.alice[0], "key":accts.alice[1], "seq":0}
 				p.d.tutorial_done = true
+				p.d.settings["war_tour"] = true          # (0.31.147: the Herald's tour has its own test)
 				p.save()
 				app = App.new()
 				app.profile_path = base + "-profile.json"
@@ -150,6 +159,7 @@ func _process(delta: float) -> bool:
 				bob.url = "ws://127.0.0.1:%d" % port
 				bob.setup(bp)
 				root.add_child(bob)
+				bob.war_went.connect(func(m): bob.set_meta("seen_war_go", m))
 				bob.set_active(true)
 				_go("online")
 		"online":
@@ -232,22 +242,48 @@ func _process(delta: float) -> bool:
 				_go("press_play")
 		"press_play":
 			if t_phase > 0.6:
+				bob.clan_join("h_lions")                 # (0.31.148: the Lions' own clan)
+				_go("bob_clan")
+		"bob_clan":
+			if bob.in_clan():
+				for id in WarMap.T:
+					if lion_tid == "" and not WarMap.is_home(id) and WarMap.neighbours(id).has("home_lions"):
+						lion_tid = id
+				bob.war_go(lion_tid, false)
+				_go("bob_battle")
+		"bob_battle":
+			var gone: Dictionary = bob.get_meta("seen_war_go", {})
+			if bool(gone.get("ok", false)):
+				bid = str(gone.bid)
+				check(bob.in_house_clan() and bid != "", "Bob joins The Lion Guard and starts a battle for %s" % WarMap.name_of(lion_tid))
 				press("play")
 				_go("party_map")
+			elif not gone.is_empty():
+				check(false, "Bob's battle starts (%s)" % str(gone.get("why", "")))
+				return _finish()
 		"party_map":
-			# 0.31.146 (Kevin: "I want the play button to always bring players into map"): a party's PLAY too (0.31.147:
-			# after Home's push into the table); the leader's QUICK BATTLE takes the party
-			var qb := btn("war_quick")
-			if qb != null:
-				check(app.siege == null and qb.text.contains("PARTY ×2"), "PLAY opens the war map in a party too: QUICK BATTLE · PARTY ×2 (%s)" % qb.text)
-				press("war_quick")
+			# 0.31.146: a party's PLAY opens the war map too (0.31.147: after Home's push into the table)
+			var tb = app.modal if is_instance_valid(app.modal) and str(app.modal.get_script().resource_path).ends_with("war_table.gd") else null
+			if tb != null and not tb._intro_on and not app.social.war.is_empty() and btn("war_hot_fight_" + lion_tid) != null and t_phase > 0.5:
+				check(btn("war_quick") == null and has_text(tb, "BATTLES NOW") and has_text(tb, WarMap.name_of(lion_tid).to_upper())
+					and btn("war_hot_fight_" + lion_tid).text == "JOIN LIONS", "no QUICK BATTLE; BATTLES NOW shows Bob's battle with JOIN LIONS (Alice has no clan)")
+				_shot("social_hot_zone")
+				press("war_hot_fight_" + lion_tid)
 				_go("go")
+			elif t_phase > 15.0:
+				check(false, "Bob's battle shows under Alice's war map")
+				return _finish()
 		"go":
-			if bob.party_play != "":
-				check(app.siege != null, "PLAY takes Alice into the match and tells Bob to follow")
-				_ws("match_bob", {"t":"hello", "v":Net.VERSION, "name":"bob", "build":"0.31.111-fatebound", "pred":false,
-					"acct":accts.bob[0], "key":accts.bob[1]})
+			if bob.party_play != "" and bob.party_war != "":
+				check(app.siege != null and str(app.siege.war_bid) == bid and str(bob.party_war) == bid and app.social.in_house_clan()
+					and str(app.social.clan.get("house", "")) == "lions",
+					"JOIN LIONS: Alice into The Lion Guard and the battle -- the party's leader, she takes Bob along (\"go\" with the battle)")
+				_ws("match_bob", {"t":"hello", "v":Net.VERSION, "name":"bob", "build":"0.31.149-fatebound", "pred":false,
+					"acct":accts.bob[0], "key":accts.bob[1], "war":bid})
 				_go("seated")
+			elif t_phase > 15.0:
+				check(false, "Alice goes into the battle and Bob is told to follow")
+				return _finish()
 		"seated":
 			var w := _raw_got("match_bob", "welcome")
 			if not w.is_empty() and app.siege != null and app.siege.sim != null and app.siege.hud != null and str(app.siege.hud.player_id) != "":

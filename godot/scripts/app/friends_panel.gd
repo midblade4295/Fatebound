@@ -171,11 +171,14 @@ func _render() -> void:
 		for m in p.get("pending", []):
 			var r2 := _person(pf, m)
 			_tag(r2, "INVITED", UI2.MUTED)
+		UI2.body(pf, "The leader picks a battle on the war map -- the party follows them in (fighting for the same house).", 12, UI2.MUTED)
 		var br := UI.row(pf, 8)
 		if social.is_leader():
+			# 0.31.149 (Kevin: "Remove the quick play so the player needs to choose where to fight"): the war map -- the
+			# battle the leader picks (or joins) takes the party in
 			UI.grow(UI2.button(br, "PLAY TOGETHER", "orange", func():
 				app.close_modal()
-				app.start_match(true), "party_play", 17, 46.0))
+				app.play(), "party_play", 17, 46.0))
 		else:
 			var wait := UI2.button(br, "LEADER STARTS", "grey", func(): pass, "party_wait", 15, 46.0)
 			UI.grow(wait)

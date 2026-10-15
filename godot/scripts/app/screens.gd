@@ -430,8 +430,7 @@ static func home(app, root: VBoxContainer) -> void:
 	play.add_child(art)
 	if art.texture == null:                         # (without the ui pack's art: the old orange button's colours)
 		UI2.plate(art, "orange", 18.0, "gold")
-	var waiting: bool = soc != null and soc.online() and soc.in_party() and not soc.is_leader()
-	var word := "PLAY" if not waiting else "READY"
+	var word := "PLAY"                            # (0.31.149: a party member's PLAY opens the map too -- not READY)
 	if soc != null and soc.online() and soc.in_party() and soc.is_leader() and soc.party_size() > 1:
 		word = "PLAY ×%d" % soc.party_size()
 	var face := Rect2(PLAQUE_FACE.position * play.size, PLAQUE_FACE.size * play.size)

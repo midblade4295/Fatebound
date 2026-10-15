@@ -4390,3 +4390,37 @@ no clans in game yet"
 - Quick suite: 92 of 93 in one run (war_tour_test new); version_gate_test (the race above) passed alone three times.
   tools/cold_start_check.sh: PASS. The Play AAB built from this commit (throwaway key, presets untouched by the build):
   BASE OK (255 files: war_tour.gd and its uid), CONTENT OK (no pack changed), play_games true, bundletool valid.
+
+## 0.31.149 — no QUICK BATTLE: every match is a battle picked on the map; BATTLES NOW (the hot zones)
+Kevin: "Remove the quick play so the player needs to choose where to fight. Maybe show hot zones where players are
+actively fighting and players can jump right into that battle"
+- war_table.gd: QUICK BATTLE is gone. At the map's foot, BATTLES NOW: the battles on the map (hot_list), the ones you
+  can fight in first, then the busiest -- two rows (the rest "+N more glowing on the map"), each the place, "Lions attack
+  Stags · 7 fighting" (or "starting" / "bots only"), and JOIN (your house attacking) / DEFEND (your house holds it);
+  another two houses' war: NOT YOUR HOUSE. A tap on a row takes the camera to it and picks it. Not in a clan: JOIN <its
+  house> -- into that house's own clan (0.31.148, free) and straight into the battle in one tap (the place's sheet has
+  JOIN <attackers> and DEFEND FOR <holders>). None on: "No battles right now. Tap a land and ATTACK to start one." The
+  map's label on a battle: "⚔ 7 FIGHTING". A clan joined or left with the map open: the map asked for again (your house).
+- Every match being a battle, ATTACK works with no battles left today that count: the battle starts and counts for
+  nothing for you (no points, no loss; "Your 5 battles that count are used today: this one won't move your clan's bar
+  (the match still pays)"). The house clans aren't held to 2 battles at once (the server's rooms are their limit).
+- Parties: the leader's battle takes the party (social "play" with the battle: the members' apps go into it; one of
+  another house is turned away there). Home's PLAY ×N (the leader) and the party window's PLAY TOGETHER open the map;
+  a member's plaque says PLAY (not READY). The leader's JOIN / DEFEND in BATTLES NOW takes the party too.
+- server: world.gd -- war_go with no attempts left starts the battle ("counts": false, no scorer); the house clans past
+  MAX_CLAN_BATTLES; each battle on the map carries "na"/"nd" (players on each side, count_fn); siege_server.gd counts
+  them (_war_counts) and pokes the open maps when they change (every 1 s at most); social.gd -- the party "play"
+  carries the battle ("go" with "war"). Matchmaking keeps its one room (old phones, a party's match on an old server).
+- A server from before the war map: BATTLES NOW offers PLAY A MATCH (matchmaking) so the app isn't stuck.
+- The Herald's tour: "tour_hot" (BATTLES NOW lit: "Battles burning right now glow on the map and line up under it.
+  Tap JOIN and you're in.") replaces QUICK BATTLE's step; the attempts line: "After that you can keep fighting, it just
+  won't move the bars."
+- Needs the server redeployed (sudo bash godot/server/deploy/install_siege_server.sh) for the counts, battles past 5
+  a day and the party following its leader into a battle.
+- Tests: world_test (a battle with no attempts left starts and counts for nothing; the counts on the map),
+  war_battle_test (the open map hears 2 attacking, 1 defending; waits for the clan tags), war_ui_test (no QUICK
+  BATTLE; BATTLES NOW empty, then Bob's Ford with JOIN), war_tour_test (three battles: the busiest first, two rows,
+  JOIN LIONS for a player with no clan, the label, a tap on a row; tour_hot), clans_ui_test (the match is Alice's
+  ATTACK, Bob into her battle), social_ui_test (Bob's battle under Alice's map, JOIN LIONS puts her in The Lion Guard
+  and the battle, the party follows her in, one side), app_flow_test (not connected: the map says so).
+- Version 0.31.149, versionCode 235 (server code changed: SERVER_BUILD 0.31.149).

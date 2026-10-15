@@ -24,6 +24,14 @@ func btn(key: String, node: Node = null) -> Button:
 		if r != null: return r
 	return null
 
+func has_text(node: Node, s: String) -> bool:
+	if (node is Label and (node as Label).text.contains(s)) or (node is Button and (node as Button).text.contains(s)):
+		return node.is_visible_in_tree()
+	for c in node.get_children():
+		if has_text(c, s):
+			return true
+	return false
+
 func press(key: String) -> bool:
 	var b := btn(key)
 	if b == null or b.disabled:
@@ -150,11 +158,12 @@ func _process(d: float) -> bool:
 			wait_until = t + 1.0                    # (0.31.147: Home's push into the war table first)
 		9:
 			# 0.31.146 (Kevin: "I want the play button to always bring players into map"): not connected too -- the map says
-			# so, and its QUICK BATTLE starts the session
+			# so. 0.31.149: no QUICK BATTLE (every match is a battle chosen on the map); the online session's own path
+			# (a party's match, the old-server fallback) still meets the unreachable server the same way
 			check(app.siege == null and app.modal != null and str(app.modal.get_script().resource_path).ends_with("war_table.gd")
-				and btn("war_quick") != null, "PLAY opens the war map (not connected: QUICK BATTLE there)")
-			press("war_quick")
-			check(app.siege != null and app.siege.online and app.modal == null, "QUICK BATTLE starts an online session")
+				and btn("war_quick") == null and has_text(app.modal, "Not connected"), "PLAY opens the war map (not connected: it says so; no QUICK BATTLE)")
+			app.quick_battle()
+			check(app.siege != null and app.siege.online and app.modal == null, "an online session starts")
 			wait_until = t + 5.0
 		10:
 			check(app.siege == null and app.chrome.visible, "unreachable server -> message, back to the menu")

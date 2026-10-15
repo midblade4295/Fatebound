@@ -131,7 +131,7 @@ const LOBBY_TIME := 20.0             # the join countdown (0.31.82)
 const HELLO_TIMEOUT := 10.0
 const IAP_TIMEOUT := 40.0              # a purchase check may take a token request and an API call
 const REFUSE_CLOSE_DELAY := 0.25     # s between a "bye"/"ver" reply and closing the socket
-const SERVER_BUILD := "0.31.148"      # this server's game version; the probe says it by default (identifies as current)
+const SERVER_BUILD := "0.31.149"      # this server's game version; the probe says it by default (identifies as current)
 const MIN_BUILD_FILE := "/etc/fatebound-siege/min_build"
 const MIN_BUILD_RELOAD := 10.0       # s between re-reads of the min-build file
 const UPDATE_MSG := "A new version of Fatebound is out. Update now on Google Play to keep playing online."
@@ -283,6 +283,7 @@ func _init() -> void:
 	social.clans = Clans.new(social.state, social)          # 0.31.134: clans ride the social socket
 	world = World.new(social.state, social)                 # 0.31.135: the war map, on the social socket too
 	world.room_fn = _war_room
+	world.count_fn = _war_counts                            # 0.31.149: the players in each battle (the map's hot zones)
 	social.world = world
 	_log("social: %d players known, %d clans, %d global chat lines kept; war map week %s, %d held" % [social.users.size(), social.clans.clans.size(),
 		(social.hist.get("global", []) as Array).size(), world.week, world.owners.size()])
@@ -392,6 +393,10 @@ func _process(delta: float) -> bool:
 				world.battle_gone(str(r.war.bid))
 	if ran:
 		_stats_tick(delta)
+	_war_count_clock += delta
+	if _war_count_clock >= WAR_COUNT_GAP:
+		_war_count_clock = 0.0
+		_war_counts_tick()                       # 0.31.149: the battles' players to the open maps
 	if social != null:
 		social.tick(delta)
 	if analytics != null:
@@ -1447,6 +1452,30 @@ func _war_room(b: Dictionary) -> int:
 	rooms[nr.id] = nr
 	_log("room %d opened for battle %s (%s attacks %s, held by %s)" % [nr.id, str(b.bid), str(b.ah), str(b.tid), str(b.dh) if str(b.dh) != "" else "nobody"])
 	return nr.id
+
+func _war_counts(bid: String) -> Array:
+	# 0.31.149: [attackers, defenders] seated in a battle's room now (world.gd map_msg: the hot zones)
+	var r := _war_room_of(bid)
+	if r == null:
+		return [0, 0]
+	return [_war_side_n(r, int(r.war.att_team)), _war_side_n(r, int(r.war.def_team))]
+
+var _war_sig := ""
+var _war_count_clock := 0.0
+const WAR_COUNT_GAP := 1.0
+func _war_counts_tick() -> void:
+	# 0.31.149: the players in the battles changed -- the open maps hear it (at most every WAR_COUNT_GAP s)
+	if world == null:
+		return
+	var parts := []
+	for r in rooms.values():
+		if not (r as Room).war.is_empty():
+			var n := _war_counts(str(r.war.bid))
+			parts.append("%s:%d:%d" % [str(r.war.bid), int(n[0]), int(n[1])])
+	var sig := ",".join(parts)
+	if sig != _war_sig:
+		_war_sig = sig
+		world.touch()
 
 func _war_room_of(bid: String) -> Room:
 	for r in rooms.values():

@@ -46,6 +46,7 @@ var blocked: Array = []
 var party: Dictionary = {}              # {} or {"id", "leader", "members", "pending", "max"}
 var invites: Dictionary = {}            # party id -> {"from": card, "at": clock}
 var party_play := ""                    # the party a "go" was for (siege_app passes it into the match)
+var party_war := ""                     # 0.31.149: the battle on the war map the leader went into (the "go"'s "war")
 var profiles := {}                      # 0.31.120: pid -> its profile card's numbers ({"t":"so", "k":"prof", ...}, "_at": clock)
 # 0.31.134: clans
 var has_clans := false                  # the server has clans ("me" said so)
@@ -241,6 +242,7 @@ func _on(m: Dictionary) -> void:
 			changed.emit("party")
 		"go":
 			party_play = str(m.get("party", ""))
+			party_war = str(m.get("war", ""))                # 0.31.149: the leader's battle on the war map
 			go.emit(party_play, str(m.get("by", "")))
 		"note":
 			note.emit(str(m.get("x", "")), bool(m.get("bad", false)), bool(m.get("pop", false)))
@@ -338,8 +340,9 @@ func leave() -> bool:
 func kick(pid: String) -> bool:
 	return _send({"k":"kick", "pid":pid})
 
-func play() -> bool:
-	return _send({"k":"play"})
+func play(war := "") -> bool:
+	# the party leader starts: the members follow (0.31.149: into the leader's battle on the war map, with its id)
+	return _send({"k":"play", "war":war} if war != "" else {"k":"play"})
 
 func refresh() -> bool:
 	return _send({"k":"refresh"})

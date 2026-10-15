@@ -190,7 +190,12 @@ func _init() -> void:
 	check(w.attempts_left(A) == 0 and int(w.bars.get("tower", {}).get(CA, 0)) == 0, "a lost battle: -100 (never below 0); Alice is out of attempts")
 	clear()
 	s.handle(1, {"k":"war_go", "tid":"tower"})
-	check(str(last(1, "war_go").get("why", "")).contains("No battles left"), "no attempts: can't start one")
+	# 0.31.149 (Kevin: "Remove the quick play so the player needs to choose where to fight"): every match is a battle now --
+	# with no attempts left one still starts, it just counts for nothing for her
+	var b0 := last(1, "war_go")
+	check(bool(b0.get("ok", false)) and not bool(b0.get("counts", true)) and w.attempts_left(A) == 0
+		and (w.battles[str(b0.bid)].scorers as Dictionary).is_empty(), "no attempts left: the battle still starts -- it doesn't count for her")
+	w.battle_gone(str(b0.bid))                         # (nobody came: dropped)
 
 	# ---------------- defending ----------------
 	w.owners["tower"] = {"h":"stags", "c":CS, "ct":"STGP", "cn":"Stag Party", "at":T0}
@@ -219,8 +224,11 @@ func _init() -> void:
 	var lx: String = s.clans.clan_of(L)
 	w.bars.quarry[lx] = 100
 	clear()
+	w.count_fn = func(bid0: String) -> Array: return [3, 1] if bid0 == b4 else [0, 0]   # (0.31.149: siege_server's count)
 	s.handle(1, {"k":"war_open"})
 	var m2: Dictionary = last(1, "war")
+	check(int(m2.terr.tower.b.na) == 3 and int(m2.terr.tower.b.nd) == 1, "a battle on the map says who's in it (3 attacking, 1 defending): the hot zones")
+	w.count_fn = func(_b: String) -> Array: return [0, 0]
 	var qb: Array = m2.terr.quarry.bars
 	check(qb.size() == 2 and str(qb[0].ct) == "LHRT" and int(qb[0].p) == 300 and str(m2.terr.mill.ct) == "LHRT" and str(m2.terr.mill.h) == "lions"
 		and str(m2.terr.tower.b.bid) == b4 and str(m2.terr.tower.b.act) == "LHRT" and int(m2.att) == 0, "the map: bars, holders, the battle at the Tower, her attempts")

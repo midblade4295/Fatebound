@@ -1374,6 +1374,9 @@ func start_war(bid: String) -> void:
 	if is_instance_valid(_invite_banner):
 		_invite_banner.queue_free()
 	pending_war = bid
+	# 0.31.149: a party's leader takes the party into the battle (its members of the same house are seated with them)
+	if social != null and social.online() and social.in_party() and social.is_leader() and social.party_size() > 1:
+		social.play(bid)
 	start_match(true)
 	if siege == null:
 		pending_war = ""
@@ -2126,7 +2129,11 @@ func _on_party_go(_pa: String, by: String) -> void:
 		return
 	close_modal()
 	toast("%s is heading into battle -- your party follows!" % by, UI.GOLD)
-	start_match(true, false, true)
+	var wb := str(social.party_war) if social != null else ""
+	if wb != "":
+		start_war(wb)                          # 0.31.149: the leader's battle on the war map
+	else:
+		start_match(true, false, true)
 
 func social_sig() -> String:
 	if social == null or not social.online():

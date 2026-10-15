@@ -21,6 +21,12 @@ extends RefCounted
 # Weeks run Monday 00:00 UTC to Monday (the leaderboard's): when one ends, the house holding the most territory wins it
 # (tally) and every territory is free again (the land rush). Attempts are per UTC day.
 # Kept in world.json in the state directory (holders, bars, today's attempts, the weeks won, recent captures).
+# 0.31.149 (Kevin: "Remove the quick play so the player needs to choose where to fight. Maybe show hot zones where players
+# are actively fighting and players can jump right into that battle"): every match is a battle on the map now, so a
+# player with no attempts left can still start one -- it just counts for nothing for them (no points, no loss; "counts":
+# false in war_go's answer); the house clans (clans.gd) aren't held to MAX_CLAN_BATTLES (the server's rooms are their
+# limit); and each battle on the map says how many players are in it on each side ("na", "nd": count_fn, siege_server
+# pokes the map when they change), for the phones' hot zones.
 const Map = preload("res://scripts/meta/war_map.gd")
 const Leaderboard = preload("res://server/leaderboard.gd")
 
@@ -42,6 +48,7 @@ var captures: Array = []           # newest first: {"at", "tid", "h", "ct", "fro
 var battles := {}                  # bid -> {"bid", "tid", "ah", "ac", "act", "acn", "dh", "dc", "dct", "by", "at", "room", "state", "scorers"}
 var watchers := {}                 # pid -> true: the map is open on their phone
 var room_fn: Callable = func(_b: Dictionary) -> int: return 0   # siege_server: a room for a battle (0: every room busy)
+var count_fn: Callable = func(_bid: String) -> Array: return [0, 0]   # 0.31.149: siege_server: [attackers, defenders] in a battle now
 var event_fn: Callable = func(_acct, _ev, _p): pass               # usage statistics
 var now_override := -1
 var next_bid := 1
@@ -114,6 +121,10 @@ func save_now() -> void:
 func _mark() -> void:
 	if _dirty_at < 0.0:
 		_dirty_at = soc.clock
+	_push_due = true
+
+func touch() -> void:
+	# 0.31.149: something on the map changed that isn't saved (the players in a battle): push it to the open maps
 	_push_due = true
 
 func tick(delta: float) -> void:
@@ -264,9 +275,7 @@ func _go(pid: String, tid: String, call: bool) -> void:
 		else:
 			_refuse(pid, tid, "House %s is attacking it right now" % str(Map.HOUSE_NAMES.get(str(on.ah), on.ah)))
 		return
-	if attempts_left(pid) <= 0:
-		_refuse(pid, tid, "No battles left today -- join your clan's battles to help, or come back tomorrow")
-		return
+	var counts := attempts_left(pid) > 0              # (0.31.149: none left -- the battle still starts, it just doesn't count)
 	# (a battle holds one of the server's rooms: one at a time for a player, MAX_CLAN_BATTLES for a clan)
 	var mine := 0
 	var clan_n := 0
@@ -277,7 +286,7 @@ func _go(pid: String, tid: String, call: bool) -> void:
 	if mine > 0:
 		_refuse(pid, tid, "You have a battle on already -- fight that one first")
 		return
-	if clan_n >= MAX_CLAN_BATTLES:
+	if clan_n >= MAX_CLAN_BATTLES and not clans.is_house(cid):
 		_refuse(pid, tid, "Your clan has %d battles on already -- join one of them" % clan_n)
 		return
 	var own: Dictionary = owners.get(tid, {})
@@ -293,12 +302,13 @@ func _go(pid: String, tid: String, call: bool) -> void:
 	b.room = room
 	battles[bid] = b
 	var name: String = soc._name(pid)
-	_spend(pid)                                        # (starting a battle spends the starter's attempt: it's theirs)
-	b.scorers[pid] = {"acct":str(soc.users[pid].acct), "name":name}
+	if counts:
+		_spend(pid)                                    # (starting a battle spends the starter's attempt: it's theirs)
+		b.scorers[pid] = {"acct":str(soc.users[pid].acct), "name":name}
 	_mark()
 	soc.log_fn.call("war: %s [%s] attacks %s (battle %s, room %d)" % [name, str(c.tag), tid, bid, room])
 	event_fn.call(str(soc.users[pid].acct), "war_start", {"tid":tid, "held":own.has("h")})
-	soc._send(pid, {"t":"so", "k":"war_go", "ok":true, "bid":bid, "tid":tid, "side":"att"})
+	soc._send(pid, {"t":"so", "k":"war_go", "ok":true, "bid":bid, "tid":tid, "side":"att", "counts":counts})
 	var tname := Map.name_of(tid)
 	if call:
 		for m in clans.members_of(cid):
@@ -444,7 +454,9 @@ func map_msg(pid: String) -> Dictionary:
 		t["bars"] = top
 		var on := battle_on(tid)
 		if not on.is_empty():
-			t["b"] = {"bid":str(on.bid), "ah":str(on.ah), "act":str(on.act), "state":str(on.state)}
+			var n: Array = count_fn.call(str(on.bid))
+			t["b"] = {"bid":str(on.bid), "ah":str(on.ah), "act":str(on.act), "state":str(on.state),
+				"na":int(n[0]) if n.size() > 0 else 0, "nd":int(n[1]) if n.size() > 1 else 0}
 		if house != "":
 			t["why"] = reach(house, tid)
 		terr[tid] = t
