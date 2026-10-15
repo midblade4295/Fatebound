@@ -4441,3 +4441,6 @@ Kevin: "Remove the 5 battle daily"
 - Tests: world_test (the starter and seated clan members score; a sixth battle in a day starts and counts; the damaged
   world.json without attempts), war_battle_test, war_ui_test (no ATTEMPTS), war_tour_test (tour_battles).
 - Version 0.31.150, versionCode 236 (server code changed: SERVER_BUILD 0.31.150).
+- Quick suite: all 93 passed (first try). tools/cold_start_check.sh: PASS. The Play AAB built from this commit (throwaway
+  key, presets untouched by the build): BASE OK (255 files), CONTENT OK (no pack changed), play_games true, bundletool
+  valid.
