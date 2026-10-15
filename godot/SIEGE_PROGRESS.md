@@ -4485,3 +4485,6 @@ VO, Meshy UID reimport; then "Do them all".
   day refused, Sunday stormed, counts 3, its house storms it back, the alarm), war_tour_test (keep sheet off / on King's
   Day; JOIN into a friend's battle), social_test (the card's battle), war_battle_test (one room), content_test.
 - Version 0.31.151, versionCode 237 (server code changed: SERVER_BUILD 0.31.151).
+- Quick suite: all 94 passed (first try). tools/cold_start_check.sh: PASS. The Play AAB built from this commit (throwaway
+  key, presets untouched by the build): BASE OK (255 files), CONTENT OK (heroes-98bd68ca9e0c on the branch), play_games
+  true, bundletool valid. Preview APK: build/Fatebound-Siege-0.31.151-fatebound.apk (32 MB, preview key).
