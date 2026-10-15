@@ -3,8 +3,10 @@ extends SceneTree
 # app's first scene (Boot.tscn, content_loader.gd) as the phone runs it:
 #  - the title screen is up as soon as the packs are mounted, BEFORE the game (Main.tscn) has loaded, and the game is
 #    loading on a thread behind it;
-#  - the game goes in behind the title only once the slam has settled (title_screen.can_swap), and takes that same
-#    title over (no second one); Home ready -> TAP TO START; a tap lifts it off Home;
+#  - the game takes that same title over (no second one); Home ready -> TAP TO START; a tap lifts it off Home;
+#  - 0.31.142 (Kevin: "Getting freezes during it now"): the game goes in behind a STILL title (held for it: LOADING...,
+#    before the show -- building and first drawing Home stop the drawing for a moment), and the show (the flight, the
+#    slam) plays only once Home is ready; the game's background loading starts after the show;
 #  - the match's script and the windows opened later are not compiled with the game (siege_app.gd has no preload of
 #    them): they load first in the background queue (asset_cache.gd), or there and then.
 #   godot --headless --path godot -s res://tests/boot_title_test.gd
@@ -73,17 +75,16 @@ func _process(d: float) -> bool:
 			app = current_scene
 			swap_at = t
 			swap_landed = bool(title.landed)
-			swap_settled = float(title.t) - float(title._land_t)
-			check(is_instance_valid(title) and swap_landed and swap_settled >= 0.4,
-				"the game goes in behind the title after the slam (%.2f s after it)" % swap_settled)
+			swap_settled = float(title.t) - float(title._hold_t)
+			check(is_instance_valid(title) and not swap_landed and float(title._launch) < 0.0 and bool(title.holding)
+				and swap_settled >= title.SETTLE - 0.01 and title.tap.text == "LOADING...",
+				"the game goes in behind a still LOADING..., before the show (held %.2f s)" % swap_settled)
 			check(app.title_screen == title and title.app == app and get_nodes_in_group(TITLE_GROUP).size() == 1,
 				"the game takes that title over (one title screen)")
 			var consts: Dictionary = app.get_script().get_script_constant_map()
 			check(not consts.has("Siege") and consts.has("SIEGE_MODE") and not consts.has("ChatPanel") and not consts.has("ClanPanel"),
 				"the match's script and the later windows aren't compiled with the game")
-			var Assets = load("res://scripts/siege/asset_cache.gd")
-			check(Assets._loading == app.SIEGE_MODE or Assets.has(app.SIEGE_MODE),
-				"...the match's script loads first in the background queue (%s)" % str(Assets._loading))
+			check(not app._background, "...and the background loading waits for the show")
 			step = 3
 		3:
 			if not title.home_is_ready:
@@ -91,10 +92,17 @@ func _process(d: float) -> bool:
 					check(false, "Home ready behind the title")
 					return _finish()
 				return false
-			if float(title.t) < title.TAP_AT + 0.5:
+			if not title.landed or float(title.t) - float(title._land_t) < title.TAP_AFTER + 0.5:
+				if t - swap_at > 30.0:
+					check(false, "the show plays once Home is ready")
+					return _finish()
 				return false
-			check(title.tap.text == "TAP TO START" and title.tap.modulate.a > 0.3 and app.tab == "home",
-				"Home ready behind it: TAP TO START")
+			check(float(title._launch) >= 0.0 and title.landed and not title.holding, "Home ready behind it: the show plays")
+			check(title.tap.text == "TAP TO START" and title.tap.modulate.a > 0.3 and app.tab == "home", "...then TAP TO START")
+			check(not app.visible, "Home isn't drawn under the title while it covers it (the show has the phone to itself)")
+			var Assets = load("res://scripts/siege/asset_cache.gd")
+			check(app._background and (Assets._loading == app.SIEGE_MODE or Assets.has(app.SIEGE_MODE)),
+				"the show over, the background loading starts -- the match's script first (%s)" % str(Assets._loading))
 			title.done.connect(func(): gone = true)
 			var ev := InputEventMouseButton.new()
 			ev.button_index = MOUSE_BUTTON_LEFT
@@ -107,6 +115,7 @@ func _process(d: float) -> bool:
 				return false
 			check(gone and app.title_screen == null and get_nodes_in_group(TITLE_GROUP).is_empty() and app.tab == "home",
 				"a tap lifts the title off Home")
+			check(app.visible, "...and Home is drawn again")
 			check(root.get_children().filter(func(n): return n is CanvasLayer and n.name == "TitleLayer").is_empty(),
 				"(its layer is gone with it)")
 			var siege_script = app._later(app.SIEGE_MODE)

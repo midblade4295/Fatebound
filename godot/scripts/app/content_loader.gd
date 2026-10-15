@@ -330,6 +330,8 @@ func _start_game() -> void:
 	# (tools/cold_start_check.sh froze that way on a 2-core box; the 0.31.91 lesson, asset_cache.gd). Once loaded, and
 	# the title's slam has settled (title_screen.can_swap), the game goes in behind the title, which stays up on its
 	# own layer until Home is built and the player taps.
+	# 0.31.142: the game goes in as soon as it has loaded, behind a still LOADING... (title_screen.hold_for_game), and the
+	# title's show plays once Home is ready -- so building and first drawing Home no longer stop the show halfway.
 	if OS.has_environment("FB_NO_TITLE"):
 		get_tree().change_scene_to_file(MAIN)
 		return
@@ -375,8 +377,10 @@ func _poll_game() -> void:
 		_log("CONTENT the game didn't load on its thread: loading it directly")
 		get_tree().change_scene_to_file(MAIN)
 		return
-	if is_instance_valid(title_screen) and not title_screen.can_swap():
-		return
+	if is_instance_valid(title_screen):
+		title_screen.hold_for_game()                   # 0.31.142: a still LOADING... before the game goes in behind it
+		if not title_screen.can_swap():
+			return
 	_swapped = true
 	_finish_thread()
 	_log("CONTENT the game loaded behind the title (%d ms after it went up)" % (Time.get_ticks_msec() - _title_ms))

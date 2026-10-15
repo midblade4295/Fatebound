@@ -91,7 +91,11 @@ func _ready() -> void:
 	viewport = SubViewport.new()
 	viewport.own_world_3d = true
 	viewport.transparent_bg = true
-	viewport.msaa_3d = Viewport.MSAA_4X
+	# 0.31.142 (Kevin: "Getting freezes during it now", the title screen): no MSAA. A transparent SubViewport with MSAA
+	# needs pipelines Godot's pre-compilation doesn't make, so its first frame compiled them on the spot, every start
+	# (8 "draw" compiles here; on Kevin's S21 Home's first frame took 4.5 s). The room is drawn at the screen's own
+	# pixel density (_resize), where the edges hold up without it; FXAA greyed the transparent edges.
+	viewport.msaa_3d = Viewport.MSAA_DISABLED
 	viewport.render_target_update_mode = SubViewport.UPDATE_ONCE   # (then every 2nd frame while seen: _process)
 	add_child(viewport)
 	var tex := TextureRect.new()

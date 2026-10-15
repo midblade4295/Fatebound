@@ -156,6 +156,15 @@ var _guard: Node = null
 # own 30 and puts this back when it ends. The real app only (tests and tools run the menus as fast as they can).
 const MENU_FPS := 60
 
+var _background := false
+
+func _start_background() -> void:
+	if _background or safe_boot:
+		return
+	_background = true
+	_boot_mark("preload models")
+	Assets.preload_async(LATER)
+
 static func _later(path: String) -> GDScript:
 	# 0.31.141: a script not compiled at start-up (LATER): from the background queue, or loaded there and then
 	return Assets.res(path) as GDScript
@@ -170,9 +179,6 @@ func _ready() -> void:
 	get_tree().auto_accept_quit = false
 	_menu_fps()
 	safe_boot = _guard != null and bool(_guard.safe_boot)
-	if not safe_boot:
-		_boot_mark("preload models")
-		Assets.preload_async(LATER)     # 0.31.8: load the match's models on a thread while the menus are up
 	_boot_mark("profile")
 	profile = Profile.new(profile_path, legacy_path)
 	profile.now_override = now_override
@@ -300,6 +306,13 @@ func _ready() -> void:
 		adopt_title(up[0])                     # 0.31.141: the boot screen put it up first, the game loading behind it
 	elif get_tree().get_script() == null or OS.has_environment("FB_TITLE"):
 		show_title()                           # 0.31.139: the title screen over Home (not under tests and tools)
+	# 0.31.8: the match's models (0.31.141: and its script, and the windows opened later) load on a thread while the
+	# menus are up. 0.31.142: with the title up, once its show is over (TAP TO START), so they don't jolt it.
+	if is_instance_valid(title_screen) and title_screen.has_signal("shown"):
+		title_screen.shown.connect(_start_background, CONNECT_ONE_SHOT)
+		title_screen.done.connect(_start_background, CONNECT_ONE_SHOT)
+	else:
+		_start_background()
 	if version_check:
 		call_deferred("check_server_version")
 
@@ -814,7 +827,19 @@ func _title_when_drawn() -> void:
 		await get_tree().process_frame
 	if is_instance_valid(title_screen) and title_screen.has_method("home_ready"):
 		title_screen.home_ready()
-	_boot_mark("title: home ready behind it")
+		# 0.31.142: Home has been drawn (its 3D compiled); while the title covers it, don't draw it at all, so the title's
+		# show has the phone to itself -- back as the title starts to lift off it
+		if title_screen.has_signal("lifting") and not title_screen.leaving:
+			visible = false
+			title_screen.lifting.connect(func(): visible = true, CONNECT_ONE_SHOT)
+			title_screen.tree_exiting.connect(func(): visible = true, CONNECT_ONE_SHOT)
+	# (0.31.142: how many pipelines the start compiled, and how many of those stopped a frame to do it ("draw"))
+	_boot_mark("title: home ready behind it (pipelines: draw %d, canvas %d, mesh %d, surface %d, specialization %d)" % [
+		RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_PIPELINE_COMPILATIONS_DRAW),
+		RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_PIPELINE_COMPILATIONS_CANVAS),
+		RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_PIPELINE_COMPILATIONS_MESH),
+		RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_PIPELINE_COMPILATIONS_SURFACE),
+		RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_PIPELINE_COMPILATIONS_SPECIALIZATION)])
 
 func open_player_menu() -> void:
 	# 0.31.139 (Kevin: "Move the settings cog into a menu that players can press on their level icon on top left"): a
@@ -1059,7 +1084,7 @@ func _scroll_target() -> ScrollContainer:
 	if siege != null:
 		return null
 	if is_instance_valid(modal):
-		var ms: Variant = modal.get_meta("drag_scroll", null)
+		var ms: Variant = modal.get_meta("drag_scroll") if modal.has_meta("drag_scroll") else null   # (a null default still errors)
 		if ms is ScrollContainer and is_instance_valid(ms) and (ms as ScrollContainer).is_visible_in_tree():
 			return ms
 		return null

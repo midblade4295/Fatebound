@@ -4192,3 +4192,37 @@ Kevin: "Make the intro splash screen more exciting and also load faster"
   pool-thread version froze; 0.31.140 passes). The Play AAB built from this commit (throwaway key, presets untouched
   by the build): BASE OK (253 files: the two title shaders), CONTENT OK (no pack changed), play_games true, bundletool
   valid.
+
+## 0.31.142 — no freezes in the title's show; Home's first frame no longer compiles pipelines
+Kevin (with COPY DIAGNOSTICS from his S21, two starts of 0.31.141): "Getting freezes during it now"
+- His log: the title up 0.85 s in, the slam 0.6 s later, the game loaded 2.3 s after the title went up -- and then
+  6.4 s without a frame, with the show stopped halfway: building Home 1.9 s (hero 1.3, menus 0.5) and Home's first
+  frame 4.5 s (STAT worst=6415/7007 ms). Before 0.31.141 the same wait was there, but under the still boot splash.
+- Home's first frame: the war room and the chest row drew through transparent SubViewports with MSAA 4x, whose
+  pipelines Godot's pre-compilation doesn't make, so they were compiled on the spot every start (here: 8 "draw"
+  compiles, 7.1-7.4 s of first frame on lavapipe against 3.5 s without). MSAA is off in both (war_room.gd,
+  chest_row.gd): no draw compiles left (tools/boot_probe.gd; the start-up log now says how many pipelines the start
+  compiled and how many stopped a frame). The room is drawn at the screen's own pixel density; FXAA was tried and
+  greyed the transparent edges. (The other MSAA views -- chest opening, Forge, showcase, war map, the match at a
+  lowered render scale -- still compile theirs the first time they open.)
+- The show waits for the game: the wall and the torches open (the pre-roll) while the game loads on its thread; when
+  it has loaded the screen settles to a still LOADING... (hold_for_game: the drifting embers fade, the torches hold
+  steady, 0.25 s) and only then does the game go in behind it -- so building Home and drawing it the first time stop
+  a still loading screen, not the show. Once Home is drawn the show plays (flight, slam, TAP TO START 0.6 s after
+  the hit). A tap while loading is kept and goes straight in when Home is ready (no show).
+- While the title covers Home, Home isn't drawn at all (siege_app hidden from home_ready until the title starts to
+  lift: the show has the phone to itself), and the background loading (the match's script, the windows, the
+  models) starts once the show is over (title_screen.shown), so it doesn't jolt the show.
+- Desktop (lavapipe) start: the title 0.9 s, the game loaded 3.2 s, still LOADING... until Home's first frame at
+  6.5 s, the show 7.1 s, the slam 7.5 s (real time now), TAP TO START 8.1 s.
+- Also from his log: Home's drag-to-scroll asked a window for "drag_scroll" with a null default, which Godot treats
+  as no default (an error on every drag with the chat or Friends open): has_meta first.
+- Tests: title_logo_test (the show waits for the game; the hold: still, then can_swap; a tap while loading goes
+  straight in; the background loading starts after the show), boot_title_test (the game goes in behind a still
+  LOADING..., before the show; the show once Home is ready; Home not drawn under the title, drawn again as it lifts).
+  tools/title_shot.gd: HOLD_AT / READY_AT. tools/boot_probe.gd (new).
+- Version 0.31.142, versionCode 228 (server code unchanged; SERVER_BUILD follows the app's version).
+- Quick suite: 90 of 92 in the run; siege_net_smoke and social_ui_test (real-time networking) missed under load and
+  passed alone three times each. tools/cold_start_check.sh: PASS. The Play AAB built from this commit (throwaway key,
+  presets untouched by the build): BASE OK (253 files), CONTENT OK (no pack changed), play_games true, bundletool
+  valid.

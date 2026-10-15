@@ -20,6 +20,14 @@ extends Control
 #    light rays turn slowly behind the title, a gold glint sweeps across the letters every few seconds, and embers
 #    drift up the screen. The game's own sounds (tm_fireball1, tm_sword_swing2, tm_crumble1), no new files.
 #    Reduce motion: no flight, shake, zoom, rays turning, glint or drifting embers.
+# 0.31.142 (Kevin: "Getting freezes during it now"; his log: the game going in behind the title stopped the screen
+# for 6.4 s mid-show -- Home's build 1.9 s, then its first frame 4.5 s): the show now waits for the game. The wall and
+# its torches open (the PRE-ROLL) while the game loads on its thread; once loaded, the screen settles to a still
+# LOADING... (the drifting embers fade, the torches hold steady: hold_for_game, SETTLE) and the game goes in behind it
+# (can_swap), so the pause in drawing is a still loading screen, not a show stopping mid-swing; when Home is built and
+# drawn (home_ready) the embers come back and the SHOW plays -- the flight, the slam, TAP TO START just after. A tap
+# while loading is kept: in the moment Home is ready, straight in (no show). (And Home's first frame is shorter:
+# war_room.gd / chest_row.gd no longer use MSAA.)
 const UI = preload("res://scripts/app/ui.gd")
 const UI2 = preload("res://scripts/app/ui2.gd")
 const TitleLogo = preload("res://scripts/app/title_logo.gd")
@@ -42,11 +50,12 @@ const TORCHES := [Vector2(121, 832), Vector2(1028, 830)]   # the painted torches
 const LOGO_AT := 0.22                  # the title's middle, this far down the screen (over the torches)
 const LOGO_W := 330.0                  # at most this wide (screen px)
 const IGNITE := [0.05, 0.16]           # the torches flare alight
-const START := 0.22                    # the title sets off...
-const HIT := 0.58                      # ...and hits the wall
+const START := 0.22                    # the title sets off no sooner than this (and not before the game is ready)...
+const FLIGHT := 0.36                   # ...and hits the wall this long after
 const JINGLE_LEAD := 0.13              # the jingle's first note comes this long into it: started so it lands on the hit
-const SWAP_AFTER := 0.45               # after the hit, the game may be put in behind (its building pauses the screen)
-const TAP_AT := 1.4                    # TAP TO START shows (once Home is ready)
+const SETTLE := 0.25                   # the screen settles this long before the game goes in behind it
+const LOADING_AT := 0.9                # LOADING... in the pre-roll, if the game still isn't ready
+const TAP_AFTER := 0.6                 # TAP TO START, this long after the hit
 const GLINT_AT := 0.8                  # the first glint, after the hit...
 const GLINT_EVERY := 4.5               # ...then every this often
 const GLINT_TIME := 0.75
@@ -55,11 +64,18 @@ const KICK_DEG := 32.0                 # the King's swing after the hit (dies do
 const MAX_STEP := 1.0 / 20.0           # a longer frame slows the show instead of skipping it
 
 signal done
+signal shown                           # the show is over (TAP TO START is up): the game may get on with its loading
+signal lifting                         # the screen starts to fade off what's behind it
 
 var app = null
 var calm := false
 var home_is_ready := false             # the game's Home is built and drawn behind: TAP TO START
 var want_leave := false                # tapped while Home was still loading: lift as soon as it's ready
+var holding := false                   # settled, still, for the game going in behind (hold_for_game)
+var _hold_t := 0.0
+var _launch := -1.0                    # when the flight set off (-1: not yet)
+var _shown := false
+var _drift: CPUParticles2D
 var k := 1.0
 var origin := Vector2.ZERO
 var paint: Control                     # the wall and its torches, in the painting's pixels
@@ -226,7 +242,8 @@ func _ready() -> void:
 	ring.material = add
 	paint.add_child(ring)
 	if not calm:
-		paint.add_child(_drift())
+		_drift = _drift_embers()
+		paint.add_child(_drift)
 	tap = UI2.text(self, "TAP TO START", 30, UI2.GOLD, Color("#2a1205"), 9)
 	tap.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	tap.modulate.a = 0.0
@@ -344,7 +361,7 @@ func _torch(at: Vector2) -> void:
 	var halo := _glow(paint, at, Vector2(190, 210), Color(1.0, 0.6, 0.25, 0.45))
 	var core := _glow(paint, at + Vector2(0, -6), Vector2(46, 92), Color(1.0, 0.82, 0.45, 0.85))
 	core.pivot_offset = Vector2(23, 80)
-	var f := {"pool": pool, "halo": halo, "core": core, "phase": randf() * TAU, "boost": 0.0, "burst": null}
+	var f := {"pool": pool, "halo": halo, "core": core, "phase": randf() * TAU, "boost": 0.0, "burst": null, "embers": null}
 	_flames.append(f)
 	if calm:
 		return
@@ -365,6 +382,7 @@ func _torch(at: Vector2) -> void:
 	embers.scale_amount_max = 0.16
 	embers.color_ramp = _fire_ramp()
 	paint.add_child(_additive(embers))
+	f.embers = embers
 	# 0.31.141: the flare as it catches -- a burst of sparks up out of the torch
 	var burst := CPUParticles2D.new()
 	burst.texture = UI2.glow_tex()
@@ -473,7 +491,7 @@ func _sparks() -> CPUParticles2D:
 	s.color_ramp = ramp
 	return _additive(s)
 
-func _drift() -> CPUParticles2D:
+func _drift_embers() -> CPUParticles2D:
 	# 0.31.141: embers drifting up the screen the whole time
 	var e := CPUParticles2D.new()
 	e.texture = UI2.glow_tex()
@@ -537,6 +555,8 @@ func _sound(n: String) -> void:
 		p.play()
 
 func _mark(s: String) -> void:
+	if not is_inside_tree():
+		return
 	var g := get_node_or_null("/root/BootGuard")
 	if g != null and g.has_method("mark"):
 		g.mark(s)
@@ -573,23 +593,33 @@ func land() -> void:
 		(b as CPUParticles2D).emitting = true
 
 func home_ready() -> void:
-	# the game behind is built and drawn: TAP TO START (or, tapped already, straight in)
+	# the game behind is built and drawn: the show (or, tapped already, straight in)
 	if home_is_ready:
 		return
 	home_is_ready = true
+	holding = false
 	_mark("title: the game is ready behind it")
-	if want_leave and landed:
+	if want_leave:
 		leave()
 
+func hold_for_game() -> void:
+	# 0.31.142: the game has loaded and is about to go in behind (building Home and drawing it the first time stop the
+	# drawing for a moment): settle to a still LOADING... first
+	if holding or home_is_ready:
+		return
+	holding = true
+	_hold_t = t
+
 func can_swap() -> bool:
-	# the boot screen may now put the game in behind (building Home pauses this screen a moment: after the slam)
-	return landed and (t - _land_t >= SWAP_AFTER or want_leave)
+	# the boot screen may now put the game in behind
+	return holding and (t - _hold_t >= SETTLE or want_leave)
 
 func leave() -> void:
 	if leaving:
 		return
 	leaving = true
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	lifting.emit()
 	if app != null:
 		app.sfx("tap")
 	var tw := create_tween()
@@ -608,13 +638,12 @@ func _gui_input(ev: InputEvent) -> void:
 	if not press:
 		return
 	accept_event()
-	if not landed:
+	if not home_is_ready:
+		want_leave = true                        # (in the moment Home is ready: straight in)
+	elif not landed:
 		land()
 	elif t - _land_t > 0.35:
-		if home_is_ready:
-			leave()
-		else:
-			want_leave = true                    # (in the moment Home is ready)
+		leave()
 
 func _process(delta: float) -> void:
 	if _first:
@@ -635,16 +664,24 @@ func _process(delta: float) -> void:
 					(_flames[i].burst as CPUParticles2D).emitting = true
 			if i == 0:
 				_sound("ignite")
-	if not _whooshed and t >= START - 0.05:
+	# the show waits for the game behind (the pre-roll), then sets off
+	if _launch < 0.0 and home_is_ready and not leaving and t >= START:
+		_launch = t
+		_mark("title: the show")
+	var since := t - _launch if _launch >= 0.0 else -1.0
+	if not _whooshed and since >= 0.0:
 		_whooshed = true
 		if not calm:
 			_sound("whoosh")
-	if jingle != null and not jingle.playing and not landed and t >= HIT - JINGLE_LEAD:
+	if jingle != null and not jingle.playing and not landed and since >= FLIGHT - JINGLE_LEAD:
 		jingle.play()
+	# the pre-roll's embers fade while it holds still for the game, and come back for the show
+	if _drift != null:
+		_drift.modulate.a = clampf(1.0 - (t - _hold_t) / SETTLE, 0.0, 1.0) if holding else minf(1.0, _drift.modulate.a + delta * 2.5)
 	# the title's flight: from big and tilted at the viewer, faster and faster, onto the wall, afterimages trailing
 	if not landed:
-		if t >= START:
-			var p := clampf((t - START) / (HIT - START), 0.0, 1.0)
+		if since >= 0.0:
+			var p := clampf(since / FLIGHT, 0.0, 1.0)
 			if calm:
 				logo.modulate.a = maxf(0.01, p)
 			else:
@@ -657,9 +694,9 @@ func _process(delta: float) -> void:
 					var pg := clampf(p - 0.09 * (i + 1), 0.0, 1.0)
 					g.scale = Vector2.ONE * lerpf(3.6, 1.0, pg * pg)
 					g.rotation = lerpf(-0.26, 0.0, pg * pg)
-					g.modulate.a = (0.34 / (i + 1)) * clampf(p * 3.0, 0.0, 1.0) * clampf((t - START) / 0.06, 0.0, 1.0)
-		if t >= HIT:
-			land()
+					g.modulate.a = (0.34 / (i + 1)) * clampf(p * 3.0, 0.0, 1.0) * clampf(since / 0.06, 0.0, 1.0)
+			if since >= FLIGHT:
+				land()
 	else:
 		var s := t - _land_t
 		if not calm:
@@ -690,20 +727,25 @@ func _process(delta: float) -> void:
 			glint_mat.set_shader_parameter("sweep", sweep)
 		else:
 			rays_mat.set_shader_parameter("power", 0.4 * smoothstep(0.0, 0.5, s))
-	# TAP TO START (LOADING... while the game is still getting ready behind)
-	if t >= TAP_AT and not leaving:
-		var a := clampf((t - TAP_AT) / 0.4, 0.0, 1.0)
-		if home_is_ready:
+	# LOADING... while the game gets ready behind (still while holding), TAP TO START just after the slam
+	if not leaving:
+		if home_is_ready and landed and t - _land_t >= TAP_AFTER:
+			var a := clampf((t - _land_t - TAP_AFTER) / 0.4, 0.0, 1.0)
 			if tap.text != "TAP TO START":
 				tap.text = "TAP TO START"
 				_mark("title: TAP TO START")
 			tap.modulate.a = a * (0.75 + 0.25 * sin(t * 4.0))
 			if not calm:
 				tap.scale = Vector2.ONE * (1.0 + 0.04 * sin(t * 4.0))
-		else:
+			if not _shown:
+				_shown = true
+				shown.emit()
+		elif not home_is_ready and (t >= LOADING_AT or want_leave or holding):
 			tap.text = "LOADING..."
-			tap.modulate.a = a * (0.45 + 0.2 * sin(t * 5.0))
 			tap.scale = Vector2.ONE
+			tap.modulate.a = 0.6 if holding or want_leave else clampf((t - LOADING_AT) / 0.4, 0.0, 1.0) * (0.45 + 0.2 * sin(t * 5.0))
+		else:
+			tap.modulate.a = maxf(0.0, tap.modulate.a - delta * 4.0)
 	# the torches
 	if calm:
 		return
@@ -712,6 +754,10 @@ func _process(delta: float) -> void:
 		f.boost = maxf(0.0, float(f.boost) - delta * 1.8)
 		var b: float = f.boost
 		var fl := 0.5 + 0.22 * sin(t * 9.3 + ph) + 0.16 * sin(t * 15.7 + ph * 1.7) + 0.12 * sin(t * 3.1 + ph * 0.6)
+		if holding:
+			fl = lerpf(fl, 0.5, clampf((t - _hold_t) / SETTLE, 0.0, 1.0))     # (steady while the game goes in)
+		if f.embers != null:
+			(f.embers as CanvasItem).modulate.a = _drift.modulate.a if _drift != null else 1.0
 		(f.core as Control).scale = Vector2(0.9 + 0.12 * fl, 0.82 + 0.32 * fl) * (1.0 + 0.7 * b)
 		(f.core as Control).rotation = 0.08 * sin(t * 2.4 + ph)
 		(f.halo as Control).modulate.a = 0.32 + 0.22 * fl + 0.55 * b

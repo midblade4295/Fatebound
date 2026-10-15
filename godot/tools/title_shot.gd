@@ -3,7 +3,8 @@ extends SceneTree
 # START.   Xvfb :98 & DISPLAY=:98 OUT=/tmp/title godot --rendering-method mobile --fixed-fps 30 --resolution 420x933 \
 #            --path godot -s res://tools/title_shot.gd
 # Env: OUT (a folder: title_NN.png), AT (comma list of frames to shoot, default 3,8,14,15,17,20,30,60), CALM=1,
-# LOADING=1 (0.31.141: no game behind it, so LOADING... instead of TAP TO START).
+# LOADING=1 (0.31.141: no game behind it, so LOADING... instead of TAP TO START); 0.31.142: HOLD_AT / READY_AT, the
+# frames at which the game behind "has loaded" (hold_for_game) and "is ready" (home_ready; default: at once).
 const TitleScreen = preload("res://scripts/app/title_screen.gd")
 var ts
 var n := 0
@@ -16,11 +17,15 @@ func _init() -> void:
 	DirAccess.make_dir_recursive_absolute(out)
 	ts = TitleScreen.new(null, OS.get_environment("CALM") == "1")
 	root.add_child(ts)
-	if OS.get_environment("LOADING") != "1":
+	if OS.get_environment("LOADING") != "1" and not OS.has_environment("READY_AT"):
 		ts.home_ready()
 
 func _process(_d: float) -> bool:
 	n += 1
+	if OS.has_environment("HOLD_AT") and n == int(OS.get_environment("HOLD_AT")):
+		ts.hold_for_game()
+	if OS.has_environment("READY_AT") and n == int(OS.get_environment("READY_AT")):
+		ts.home_ready()
 	if n in at:
 		root.get_texture().get_image().save_png("%s/title_%02d.png" % [out, n])
 	return n >= int(at.max()) + 1
