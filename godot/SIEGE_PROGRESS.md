@@ -4503,4 +4503,4 @@ Kevin: "Go" (the tour's voice-over, estimated at 0.31.151).
   tour shows, so a changed number fails the suite until the line is re-recorded. It also checks the first line's voice
   is loaded when the tour starts.
 - The audio content pack rebuilt (audio-3b550a027262.pck, 12.8 MB; uploaded to content-packs 11e363f).
-- Version 0.31.152, versionCode 238 (server code unchanged: SERVER_BUILD stays 0.31.151).
+- Version 0.31.152, versionCode 238 (server code unchanged; SERVER_BUILD follows the app's version).
