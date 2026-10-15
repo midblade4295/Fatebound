@@ -4300,3 +4300,10 @@ Kevin (Crown War's next steps, asked one at a time): "Play open war map"
   and let go), clans_ui_test (PLAY opens the map in a clan; QUICK BATTLE starts the match). social_ui_test's party
   PLAY still goes straight in.
 - Version 0.31.145, versionCode 231 (server code unchanged; SERVER_BUILD follows the app's version).
+- The same slow-machine race as social_ui_test (0.31.144) in clans_ui_test, leaderboard_test, social_test and
+  war_battle_test: their raw sockets dial the test server again until it listens.
+- Quick suite: 90 of 92 in one run on the slow machine; social_test (the race above, before its fix) and
+  staged_start_test ("_ready itself is quick": 223 ms against 200, a timing check; the match code is unchanged) passed
+  alone (staged_start_test twice: 195 / 172 ms). tools/cold_start_check.sh: PASS. The Play AAB built from this commit
+  (throwaway key, presets untouched by the build): BASE OK (253 files), CONTENT OK (no pack changed), play_games true,
+  bundletool valid.
