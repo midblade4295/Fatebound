@@ -37,13 +37,14 @@ const PRELOAD_LIST := "res://content/preload.json"   # (.txt files are not expor
 static var _queue: Array = []            # paths not requested yet, in list order
 static var _loading := ""                # the one path loading on a pool thread, or ""
 
-static func preload_async() -> void:
+static func preload_async(first: Array = []) -> void:
+	# first: paths loaded before the list (0.31.141: the match's own script, no longer compiled at start-up)
 	if not _queue.is_empty() or _loading != "" or not FileAccess.file_exists(PRELOAD_LIST):
 		return
 	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(PRELOAD_LIST))
 	if not parsed is Array:
 		return
-	for line in parsed:
+	for line in first + parsed:
 		var path := str(line).strip_edges()
 		if path == "" or _cache.has(path) or _queue.has(path) or not ResourceLoader.exists(path):
 			continue
@@ -69,6 +70,15 @@ static func poll() -> void:
 		elif st == ResourceLoader.THREAD_LOAD_FAILED or st == ResourceLoader.THREAD_LOAD_INVALID_RESOURCE:
 			_loading = ""
 	_next()
+
+static func drain() -> void:
+	# 0.31.141: the app is closing: finish the one load in flight and drop the rest (the queue now holds scripts too, and
+	# a script half-compiled on a thread while the engine shuts down can't resolve what it uses)
+	_queue.clear()
+	if _loading != "":
+		var p := _loading
+		_loading = ""
+		_cache[p] = ResourceLoader.load_threaded_get(p)
 
 static func pending() -> int:
 	return _queue.size() + (1 if _loading != "" else 0)

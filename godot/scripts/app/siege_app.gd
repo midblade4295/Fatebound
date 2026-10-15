@@ -12,24 +12,31 @@ const EcoSync = preload("res://scripts/meta/eco_sync.gd")
 const AccountLink = preload("res://scripts/meta/account_link.gd")     # 0.31.132: the account between phones
 const Screens = preload("res://scripts/app/screens.gd")
 const Showcase = preload("res://scripts/app/showcase.gd")
-const Siege = preload("res://scripts/siege/siege_mode.gd")
+# 0.31.141 (Kevin: "...also load faster"): the match (siege_mode.gd and what only it needs) is no longer compiled with
+# the app at start-up (~0.4 s): it loads first in the background queue once Home is up (Assets.preload_async), or
+# right there when a match starts before that (a safe start)
+const SIEGE_MODE := "res://scripts/siege/siege_mode.gd"
+# ...and so are the windows opened later (~0.3 s more), loaded in the background right after it (_later: there and then
+# if opened first)
+const CHAT_PANEL := "res://scripts/app/chat_panel.gd"
+const FRIENDS_PANEL := "res://scripts/app/friends_panel.gd"
+const CLAN_PANEL := "res://scripts/app/clan_panel.gd"                # 0.31.134: Crown War step 1
+const WAR_TABLE := "res://scripts/app/war_table.gd"                  # 0.31.135: Crown War step 2, the map
+const ORDERS_PANEL := "res://scripts/app/orders_panel.gd"
+const LEADERBOARD_PANEL := "res://scripts/app/leaderboard_panel.gd"
+const DAILY_REWARD := "res://scripts/app/daily_reward.gd"
+const UPDATE_SCREEN := "res://scripts/app/update_screen.gd"
+const LATER := [SIEGE_MODE, WAR_TABLE, CLAN_PANEL, CHAT_PANEL, FRIENDS_PANEL, ORDERS_PANEL, DAILY_REWARD, LEADERBOARD_PANEL, UPDATE_SCREEN]
+const WarMap = preload("res://scripts/meta/war_map.gd")
 const Audio = preload("res://scripts/native_audio.gd")
 const Assets = preload("res://scripts/siege/asset_cache.gd")
 const Net = preload("res://scripts/siege/siege_net.gd")
-const UpdateScreen = preload("res://scripts/app/update_screen.gd")
 const VersionCheck = preload("res://scripts/app/version_check.gd")
 const OnlineStatus = preload("res://scripts/app/online_status.gd")
 const RewardFly = preload("res://scripts/app/reward_fly.gd")
 const Social = preload("res://scripts/meta/social.gd")
-const ChatPanel = preload("res://scripts/app/chat_panel.gd")
-const FriendsPanel = preload("res://scripts/app/friends_panel.gd")
-const ClanPanel = preload("res://scripts/app/clan_panel.gd")             # 0.31.134: Crown War step 1
-const WarTable = preload("res://scripts/app/war_table.gd")               # 0.31.135: Crown War step 2, the map
 const ChatTicker = preload("res://scripts/app/chat_ticker.gd")
 const InviteBanner = preload("res://scripts/app/invite_banner.gd")
-const OrdersPanel = preload("res://scripts/app/orders_panel.gd")
-const LeaderboardPanel = preload("res://scripts/app/leaderboard_panel.gd")
-const DailyReward = preload("res://scripts/app/daily_reward.gd")
 const SocialUI = preload("res://scripts/app/social_ui.gd")
 const LbFetch = preload("res://scripts/meta/lb_fetch.gd")
 const Notify = preload("res://scripts/meta/notify.gd")
@@ -149,6 +156,10 @@ var _guard: Node = null
 # own 30 and puts this back when it ends. The real app only (tests and tools run the menus as fast as they can).
 const MENU_FPS := 60
 
+static func _later(path: String) -> GDScript:
+	# 0.31.141: a script not compiled at start-up (LATER): from the background queue, or loaded there and then
+	return Assets.res(path) as GDScript
+
 func _boot_mark(phase: String) -> void:
 	if _guard != null:
 		_guard.mark(phase)
@@ -161,7 +172,7 @@ func _ready() -> void:
 	safe_boot = _guard != null and bool(_guard.safe_boot)
 	if not safe_boot:
 		_boot_mark("preload models")
-		Assets.preload_async()                 # 0.31.8: load the match's models on a thread while the menus are up
+		Assets.preload_async(LATER)     # 0.31.8: load the match's models on a thread while the menus are up
 	_boot_mark("profile")
 	profile = Profile.new(profile_path, legacy_path)
 	profile.now_override = now_override
@@ -284,7 +295,10 @@ func _ready() -> void:
 	content_scroll.get_v_scroll_bar().value_changed.connect(_on_scroll)
 	show_tab("home")
 	_boot_mark("home shown, waiting for frames")
-	if get_tree().get_script() == null or OS.has_environment("FB_TITLE"):
+	var up := get_tree().get_nodes_in_group(TitleScreen.GROUP)
+	if not up.is_empty():
+		adopt_title(up[0])                     # 0.31.141: the boot screen put it up first, the game loading behind it
+	elif get_tree().get_script() == null or OS.has_environment("FB_TITLE"):
 		show_title()                           # 0.31.139: the title screen over Home (not under tests and tools)
 	if version_check:
 		call_deferred("check_server_version")
@@ -780,6 +794,27 @@ func show_title() -> void:
 	title_screen.done.connect(func():
 		title_screen = null
 		layer.queue_free())
+	_title_when_drawn()
+
+func adopt_title(ts: Control) -> void:
+	# 0.31.141 (Kevin: "Make the intro splash screen more exciting and also load faster"): the boot screen
+	# (content_loader.gd) puts the title up as soon as it can and loads the game behind it; the game takes it over here
+	title_screen = ts
+	ts.app = self
+	var layer := ts.get_parent()
+	ts.done.connect(func():
+		title_screen = null
+		if is_instance_valid(layer) and layer is CanvasLayer:
+			layer.queue_free())
+	_title_when_drawn()
+
+func _title_when_drawn() -> void:
+	# Home is built: once it has been drawn behind the title (its 3D compiled), the title says TAP TO START
+	for i in 3:
+		await get_tree().process_frame
+	if is_instance_valid(title_screen) and title_screen.has_method("home_ready"):
+		title_screen.home_ready()
+	_boot_mark("title: home ready behind it")
 
 func open_player_menu() -> void:
 	# 0.31.139 (Kevin: "Move the settings cog into a menu that players can press on their level icon on top left"): a
@@ -1160,7 +1195,7 @@ func open_war(first := "") -> void:
 	if social == null:
 		return
 	close_modal()
-	var m := WarTable.new()
+	var m = _later(WAR_TABLE).new()
 	add_child(m)
 	modal = m
 	m.open(self, first)
@@ -1185,7 +1220,7 @@ func _on_war_call(m: Dictionary, defend: bool) -> void:
 		return
 	var place := str(m.get("name", "a territory"))
 	var title := ("DEFEND %s!" % place.to_upper()) if defend else ("BATTLE FOR %s" % place.to_upper())
-	var sub := ("[%s] of House %s is attacking it" % [str(m.get("ct", "")), str(WarTable.Map.HOUSE_NAMES.get(str(m.get("h", "")), "?"))]) \
+	var sub := ("[%s] of House %s is attacking it" % [str(m.get("ct", "")), str(WarMap.HOUSE_NAMES.get(str(m.get("h", "")), "?"))]) \
 		if defend else ("%s calls the clan to fight" % str(m.get("by", "A clan mate")))
 	sfx("chatPop")
 	if is_instance_valid(_invite_banner):
@@ -1230,7 +1265,7 @@ func start_match(online: bool, tutorial := false, follow := false) -> void:
 	if analytics != null and not tutorial:
 		analytics.log_ev("match_join", {"mode":"online" if online else "bots",
 			"party_n":social.party_size() if social != null and social.online() and social.in_party() else 1})
-	siege = Siege.new()
+	siege = _later(SIEGE_MODE).new()
 	siege.online = online
 	siege.tutorial = tutorial
 	siege.profile = profile
@@ -1548,7 +1583,7 @@ func show_update_screen() -> void:
 		move_child(update_screen, get_child_count() - 1)
 		update_screen.visible = true
 		return
-	update_screen = UpdateScreen.new()
+	update_screen = _later(UPDATE_SCREEN).new()
 	update_screen.server_version = server_version
 	if analytics != null:
 		analytics.log_ev("update_screen", {"from_build":Diag.BUILD, "need":server_version})
@@ -1578,6 +1613,9 @@ func _on_iap_granted(product: String, g: Dictionary) -> void:
 		bits.append(str(Eco.item(str(g.item)).get("name", "")))
 	toast("  ·  ".join(bits), UI.GOLD)
 	rebuild()
+
+func _exit_tree() -> void:
+	Assets.drain()                             # 0.31.141: no script left compiling on a thread as the app closes
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_GO_BACK_REQUEST:
@@ -1635,14 +1673,14 @@ func open_chat(ch := "global") -> void:
 	if social == null:
 		return
 	close_modal()
-	var m := ChatPanel.new()
+	var m = _later(CHAT_PANEL).new()
 	add_child(m)
 	modal = m
 	m.open(self, ch)
 
 func open_orders() -> void:
 	close_modal()
-	var m := OrdersPanel.new()
+	var m = _later(ORDERS_PANEL).new()
 	add_child(m)
 	modal = m
 	m.open(self)
@@ -1664,7 +1702,7 @@ func chest_started() -> void:
 func open_daily() -> void:
 	# 0.31.119: the DAILY REWARD card
 	close_modal()
-	var m := DailyReward.new()
+	var m = _later(DAILY_REWARD).new()
 	add_child(m)
 	modal = m
 	m.open(self)
@@ -1845,7 +1883,7 @@ func offer_daily() -> void:
 func open_leaderboard() -> void:
 	# 0.31.119: the week's leaderboard (RANKS on Home)
 	close_modal()
-	var m := LeaderboardPanel.new()
+	var m = _later(LEADERBOARD_PANEL).new()
 	add_child(m)
 	modal = m
 	m.open(self)
@@ -1855,7 +1893,7 @@ func open_friends() -> void:
 		return
 	close_modal()
 	social_tab = "friends"
-	var m := FriendsPanel.new()
+	var m = _later(FRIENDS_PANEL).new()
 	add_child(m)
 	modal = m
 	m.open(self)
@@ -1866,7 +1904,7 @@ func open_clan() -> void:
 		return
 	close_modal()
 	social_tab = "clan"
-	var m := ClanPanel.new()
+	var m = _later(CLAN_PANEL).new()
 	add_child(m)
 	modal = m
 	m.open(self)

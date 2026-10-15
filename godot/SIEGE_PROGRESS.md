@@ -4152,3 +4152,43 @@ currently online. Also make it so the chat messages don't get deleted, only dele
 - Quick suite: all 91 passed. The Play AAB built from this commit (throwaway key, presets untouched by the build):
   BASE OK (251 files, no pack data), CONTENT OK (no pack changed: ui-504c03c158f7 and audio-ab91387f1397 as in
   0.31.139), play_games true, bundletool valid.
+
+## 0.31.141 — the title screen up first, the game loading behind it; a bigger show
+Kevin: "Make the intro splash screen more exciting and also load faster"
+- Faster: until now the app loaded the whole game (Main.tscn: ~35k lines of scripts to compile, ~1.9 s on this box)
+  and built Home before the title screen existed, so the phone sat on the still boot splash, and the title's flight
+  then played over Home's first (3D) frames. Now the boot screen (content_loader.gd) puts the title up as soon as the
+  packs are mounted (~0.1 s after the boot screen; title_screen.gd and its art are ~0.1 s to load) and loads the game
+  behind it on a thread of its OWN. Once loaded and the slam has settled (title_screen.can_swap, 0.45 s after the
+  hit), the game goes in behind the title (change_scene_to_packed; the title stays on its own root layer) and takes it
+  over (siege_app.adopt_title); 3 frames after Home is built, TAP TO START (LOADING... until then; a tap meanwhile is
+  kept and lifts the screen the moment Home is ready). Desktop (lavapipe), warm start: the title's first frame 0.79 s
+  into the session (was ~3.9 s, behind a 4.6 s software 3D first frame).
+- Not on the worker pool: a pool-thread load froze the cold start here (tools/cold_start_check.sh, empty shader
+  cache, 2 cores: the main thread waiting on a lock held by the load, which waited for shader compiles that needed
+  the pool's threads -- the 0.31.91 trap). On its own Thread the check passes (twice). BootGuard.wait_for_game holds
+  the frame count (the title's frames aren't the menu's), so a game load that never finishes is still a stuck start.
+- Less to compile at start-up (Main.tscn 1.88 s -> 1.47 s here): the match's script (siege_mode.gd) and the windows
+  opened later (war table, clan, chat, friends, orders, daily reward, leaderboard, update screen) are no longer
+  preloaded by siege_app.gd; they load first in the background queue (Assets.preload_async(LATER), one at a time as
+  before) or there and then (_later) if needed first.
+- More exciting (title_screen.gd, title_logo.gd, title_rays.gdshader, title_glint.gdshader; no new art or sound
+  files): it opens as the boot splash left it and the edges darken; the torches flare alight one after the other (a
+  burst of sparks, tm_fireball1); the title launches with a whoosh (tm_sword_swing2) trailing two afterimages; the
+  jingle is started so its first note lands on the hit (0.58 s); the hit adds a shockwave ring, gold sparks, a
+  punch-in zoom, the torches gusting up, the slam louder, rubble trickling (tm_crumble1), and the King knocked into a
+  ~20 degree swing dying down to his gentle 7; then light rays turn slowly behind the title, a gold glint sweeps
+  across the letters every 4.5 s and embers drift up the screen. A long frame slows the show (max 1/20 s a step)
+  instead of skipping the flight. Reduce Motion: no flight, shake, zoom, glint or drifting embers.
+- Tests: title_logo_test (the flare, afterimages, the jingle on the hit, ring/sparks/zoom, the King's kick then back
+  to 7 degrees, rays, glint, LOADING and the kept tap, can_swap only after the slam); boot_title_test (new: from
+  Boot.tscn, the title is up before the game, the game loads on its own thread, goes in after the slam and takes
+  that title over, TAP TO START, a tap lifts it; the match's script and the windows aren't compiled with the game and
+  load from the queue). tools/title_shot.gd: LOADING=1.
+- The queue now holds scripts, so the app drains it as it closes (Assets.drain on siege_app._exit_tree): a script
+  half-compiled on a thread while the engine shut down failed to resolve ui.gd's constants (reward_fly_test's exit).
+- Version 0.31.141, versionCode 227 (server code unchanged; SERVER_BUILD follows the app's version).
+- Quick suite: all 92 passed. tools/cold_start_check.sh (Vulkan, empty shader cache, no live server): PASS twice (the
+  pool-thread version froze; 0.31.140 passes). The Play AAB built from this commit (throwaway key, presets untouched
+  by the build): BASE OK (253 files: the two title shaders), CONTENT OK (no pack changed), play_games true, bundletool
+  valid.

@@ -74,6 +74,13 @@ func hold(on: bool) -> void:
 		_write_state({"pending": not on, "build": Diag.BUILD, "safe_build": Diag.BUILD if safe_boot else ""})
 	mark("content download %s" % ("started" if on else "done"))
 
+func wait_for_game(on: bool) -> void:
+	# 0.31.141: the title screen is up while the game loads on a thread behind it -- its frames are not the menu's, so
+	# none count (the start stays pending) until the game is in.
+	_held = on
+	_frames = 0
+	mark("title up, the game loading behind it" if on else "the game in, behind the title")
+
 func _process(_delta: float) -> void:
 	# Frames drawn with the menu up; at OK_FRAMES the start counts as good.
 	if _done or _held:

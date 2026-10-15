@@ -152,6 +152,9 @@ run economy_fix_test     ECONOMY_FIX_PASS         60
 run menu_sound_test      MENU_SOUND_PASS          60
 # Home's "All Tied Up" title, the King swinging from the knot (0.31.113).
 run title_logo_test      TITLE_LOGO_PASS          90
+# 0.31.141: the title screen up first from the boot screen, the game loading behind it on a thread, put in after the
+# slam; the match's script and the later windows load in the background queue, not with the game.
+run boot_title_test      BOOT_TITLE_PASS          120
 # Home's heroes in two rows, nobody reaching into anybody, clear of the medallions and PLAY; no ribbon (0.31.114).
 # 0.31.138: Home is the war room -- the live war table and four heroes in 3D, the candles, sun, water and birds alive.
 run home_heroes_test     HOME_HEROES_PASS         90

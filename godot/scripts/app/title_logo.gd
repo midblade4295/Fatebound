@@ -19,6 +19,7 @@ var calm := false
 var t := 0.0
 var king: TextureRect
 var _base: TextureRect
+var _kick := 0.0                        # 0.31.141: extra swing (degrees) from the title screen's slam, dying away
 
 static func aspect() -> float:
 	return BASE.y / BASE.x
@@ -53,6 +54,18 @@ func _lay() -> void:
 	king.size = KING_SIZE * s
 	king.pivot_offset = (PIVOT - KING_AT) * s
 
+func kick(deg: float) -> void:
+	# 0.31.141: the title slamming onto the wall knocks the King into a big swing that dies down to his gentle one
+	if king == null or calm:
+		return
+	_kick = maxf(0.0, deg - SWING_DEG)
+	t = 0.0
+
+func set_shine(mat: Material) -> void:
+	# 0.31.141: a material on the lettering (the title screen's gold glint)
+	if _base != null:
+		_base.material = mat
+
 func _process(delta: float) -> void:
 	if king == null:
 		return
@@ -60,7 +73,8 @@ func _process(delta: float) -> void:
 		king.rotation = 0.0
 		return
 	t = fmod(t + delta, PERIOD)
-	king.rotation = deg_to_rad(SWING_DEG) * sin(TAU * t / PERIOD)
+	_kick *= exp(-delta / 1.0)
+	king.rotation = deg_to_rad(SWING_DEG + _kick) * sin(TAU * t / PERIOD)
 
 func _fallback() -> void:
 	# the text logo it replaced, with the new line

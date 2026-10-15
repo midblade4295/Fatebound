@@ -17,6 +17,8 @@ const DIR := "user://packs"                    # Android and the desktop
 const VERIFIED := "user://packs/verified.json"
 const Platform = preload("res://scripts/meta/platform.gd")
 const MAIN := "res://scenes/Main.tscn"
+const TITLE := "res://scripts/app/title_screen.gd"   # 0.31.141: up first, the game loading behind it (not preloaded:
+                                                     # its art is in the ui pack, mounted first)
 const CHUNK := 8 * 1024 * 1024
 const RETRY := [2.0, 4.0, 8.0, 15.0, 30.0]
 const TITLE_FONT = preload("res://assets/fonts/LuckiestGuy-Regular.ttf")
@@ -43,6 +45,13 @@ var speed := 0.0
 var guard: Node = null
 var finished := false
 var status_note := ""
+var title_screen: Control = null      # 0.31.141: the title screen, up while the game loads on a thread
+var _loading_main := false
+var _swapped := false
+var _title_ms := 0
+var _game_thread: Thread = null
+var _game: PackedScene = null
+var _game_done := false
 
 var bar: ProgressBar
 var title: Label
@@ -257,6 +266,8 @@ func _retry_now() -> void:
 		_request()
 
 func _process(delta: float) -> void:
+	if _loading_main and not _swapped:
+		_poll_game()
 	if finished or http == null:
 		return
 	if wait > 0.0:
@@ -312,7 +323,74 @@ func _register_uids() -> int:
 	return n
 
 func _start_game() -> void:
-	get_tree().change_scene_to_file(MAIN)
+	# 0.31.141 (Kevin: "Make the intro splash screen more exciting and also load faster"): the title screen goes up
+	# now, and the game (Main.tscn: the scripts, ~1.5 s to compile) loads behind it on a thread of its OWN -- not on
+	# Godot's worker pool: with the shader cache empty (a fresh install or update) a load on a pool thread waits for
+	# the shader compiles that need those same pool threads, while the title's own drawing waits on the load's lock
+	# (tools/cold_start_check.sh froze that way on a 2-core box; the 0.31.91 lesson, asset_cache.gd). Once loaded, and
+	# the title's slam has settled (title_screen.can_swap), the game goes in behind the title, which stays up on its
+	# own layer until Home is built and the player taps.
+	if OS.has_environment("FB_NO_TITLE"):
+		get_tree().change_scene_to_file(MAIN)
+		return
+	_game_thread = Thread.new()
+	if _game_thread.start(_load_game) != OK:
+		_game_thread = null
+		get_tree().change_scene_to_file(MAIN)
+		return
+	_loading_main = true
+	_title_ms = Time.get_ticks_msec()
+	_show_title()
+
+func _load_game() -> void:
+	# (the game's own thread)
+	var p := ResourceLoader.load(MAIN) as PackedScene
+	_loaded.call_deferred(p)
+
+func _loaded(p: PackedScene) -> void:
+	_game = p
+	_game_done = true
+
+func _show_title() -> void:
+	var script: GDScript = load(TITLE)
+	if script == null:
+		return
+	var settings: Dictionary = script.saved_settings()
+	var layer := CanvasLayer.new()
+	layer.name = "TitleLayer"
+	layer.layer = 90                                   # (as siege_app.show_title: over everything the game builds)
+	get_tree().root.add_child(layer)
+	title_screen = script.new(null, bool(settings.get("reduce_motion", false)))
+	layer.add_child(title_screen)
+	visible = false                                    # (the download screen, if it was up)
+	if guard != null and guard.has_method("wait_for_game"):
+		guard.wait_for_game(true)
+
+func _poll_game() -> void:
+	if not _game_done:
+		return
+	if _game == null:
+		_swapped = true
+		_finish_thread()
+		_log("CONTENT the game didn't load on its thread: loading it directly")
+		get_tree().change_scene_to_file(MAIN)
+		return
+	if is_instance_valid(title_screen) and not title_screen.can_swap():
+		return
+	_swapped = true
+	_finish_thread()
+	_log("CONTENT the game loaded behind the title (%d ms after it went up)" % (Time.get_ticks_msec() - _title_ms))
+	if guard != null and guard.has_method("wait_for_game"):
+		guard.wait_for_game(false)
+	get_tree().change_scene_to_packed(_game)
+
+func _finish_thread() -> void:
+	if _game_thread != null and _game_thread.is_started():
+		_game_thread.wait_to_finish()
+	_game_thread = null
+
+func _exit_tree() -> void:
+	_finish_thread()                                   # (the app closed while the game was still loading)
 
 func _cleanup(keep: Array) -> void:
 	var d := DirAccess.open(dir)

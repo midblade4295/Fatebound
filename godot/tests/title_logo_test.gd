@@ -10,6 +10,12 @@ extends SceneTree
 #  - Reduce Motion: no flight, no shake, the King still;
 #  - the loading screens have it: the first-start download screen (the wall and the title from the base build), the
 #    match's warm-up cover (the wall and the swinging title), and the boot splash is the wall.
+# 0.31.141 (Kevin: "Make the intro splash screen more exciting and also load faster"):
+#  - the torches flare alight, the title flies in trailing afterimages, the jingle starts so its first note lands on
+#    the hit; the hit: shockwave ring, gold sparks, a punch-in zoom (back to 1), the King knocked into a big swing that
+#    dies down to his gentle one; light rays behind the title and a glint sweeping across the letters;
+#  - TAP TO START only once the game behind says Home is ready (LOADING... until; a tap meanwhile lifts it the moment
+#    it is); the game may be put in behind only after the slam (can_swap). (The boot order itself: boot_title_test.)
 #   godot --headless --path godot -s res://tests/title_logo_test.gd
 const App = preload("res://scripts/app/siege_app.gd")
 const TitleLogo = preload("res://scripts/app/title_logo.gd")
@@ -18,6 +24,11 @@ const UI2 = preload("res://scripts/app/ui2.gd")
 
 var app
 var still                                # a title screen with Reduce Motion
+var waiting                              # a title screen with no game behind it yet (as the boot screen puts it up)
+var waiting_gone := false
+var kick := 0.0
+var swept := false
+var punch_max := 1.0
 var fails: Array = []
 var t := 0.0
 var step := 0
@@ -51,6 +62,10 @@ func _init() -> void:
 	still = TitleScreen.new(null, true)
 	still.size = Vector2(420, 933)
 	root.add_child(still)
+	waiting = TitleScreen.new(null, false)
+	waiting.size = Vector2(420, 933)
+	waiting.done.connect(func(): waiting_gone = true)
+	root.add_child(waiting)
 
 func _process(d: float) -> bool:
 	t += d
@@ -65,8 +80,9 @@ func _process(d: float) -> bool:
 				"Home has no title of its own any more")
 			var wall: Texture2D = ts.wall.texture
 			check(wall != null and wall.get_size() == Vector2(1152, 2560), "the castle wall (%s)" % (str(wall.get_size()) if wall else "none"))
-			check(ts.jingle != null and ts.jingle.playing and ts.jingle.stream is AudioStreamOggVorbis, "the jingle plays")
+			check(ts.jingle != null and ts.jingle.stream is AudioStreamOggVorbis and not ts.jingle.playing, "the jingle is ready (it starts on the way to the hit)")
 			check(ResourceLoader.exists("res://assets/sounds/titleSlam.wav"), "the slam's sound is there")
+			check(not ts.can_swap(), "the game isn't put in behind before the slam")
 			var bt: Texture2D = UI2.tex(UI2.V2 + "logo_base.webp")
 			var kt: Texture2D = UI2.tex(UI2.V2 + "logo_king.webp")
 			check(bt != null and Vector2(bt.get_size()) == TitleLogo.BASE and kt != null and Vector2(kt.get_size()) == TitleLogo.KING_SIZE,
@@ -74,36 +90,68 @@ func _process(d: float) -> bool:
 			step = 1
 		1:
 			var ts = app.title_screen
-			if t >= 0.32 and t < 0.42 and not seen.has("flying"):
-				seen["flying"] = [ts.logo.scale.x, ts.logo.modulate.a, ts.landed]
+			if ts.t >= 0.1 and ts.t < 0.2 and not seen.has("ignite"):
+				seen["ignite"] = [float(ts._flames[0].boost), float(ts.vignette.modulate.a)]
+			if ts.t >= 0.32 and ts.t < 0.42 and not seen.has("flying"):
+				seen["flying"] = [ts.logo.scale.x, ts.logo.modulate.a, ts.landed, (ts.ghosts[0] as Control).modulate.a,
+					(ts.ghosts[0] as Control).scale.x]
 			if ts.landed and not seen.has("hit"):
-				seen["hit"] = [t, ts.shake, (ts._bursts[0] as CPUParticles2D).emitting]
-			if ts.landed and t > 1.0 and not seen.has("settled"):
-				seen["settled"] = [ts.logo.scale, ts.tap.modulate.a]
-			if t < 1.8:
+				seen["hit"] = [ts._land_t, ts.shake, (ts._bursts[0] as CPUParticles2D).emitting, ts.jingle != null and ts.jingle.playing,
+					ts.ring.p >= 0.0, (ts._bursts[2] as CPUParticles2D).emitting, ts.stage.scale.x, ts.can_swap()]
+			if ts.landed and ts.t - ts._land_t < 0.3:
+				punch_max = maxf(punch_max, ts.stage.scale.x)
+			if ts.landed and ts.t < 1.6:
+				kick = maxf(kick, absf(rad_to_deg(ts.logo.king.rotation)))
+			if ts.landed and ts.can_swap() and not seen.has("swap"):
+				seen["swap"] = ts.t
+			if ts.t < 1.8:                     # (the title's own clock: a long frame slows its show)
 				return false
-			var f: Array = seen.get("flying", [0.0, 1.0, true])
+			var ig: Array = seen.get("ignite", [0.0, 0.0])
+			check(float(ig[0]) > 0.5 and float(ig[1]) > 0.1, "the torches flare alight as the edges darken (flare %.2f)" % float(ig[0]))
+			var f: Array = seen.get("flying", [0.0, 1.0, true, 0.0, 0.0])
 			check(float(f[0]) > 1.3 and not bool(f[2]), "the title flies in big from the viewer (scale %.2f)" % float(f[0]))
-			var h: Array = seen.get("hit", [99.0, 0.0, false])
-			check(float(h[0]) < 0.7 and float(h[1]) > 0.5 and bool(h[2]), "...and slams onto the wall at %.2f s: the screen shakes, the dust bursts" % float(h[0]))
-			check((ts.logo.scale as Vector2).distance_to(Vector2.ONE) < 0.02 and ts.stage.position.length() < 0.5 and ts.cracks.grow >= 1.0,
-				"it settles on the wall, cracks run out round it, the shake dies down")
-			check(ts.tap.text == "TAP TO START" and ts.tap.modulate.a > 0.4, "TAP TO START")
+			check(float(f[3]) > 0.05 and float(f[4]) > float(f[0]), "...trailing afterimages (%.2f, scale %.2f)" % [float(f[3]), float(f[4])])
+			var h: Array = seen.get("hit", [99.0, 0.0, false, false, false, false, 1.0, true])
+			check(float(h[0]) < 0.75 and float(h[1]) > 0.5 and bool(h[2]), "...and slams onto the wall at %.2f s: the screen shakes, the dust bursts" % float(h[0]))
+			check(bool(h[3]), "the jingle is playing as it hits")
+			check(bool(h[4]) and bool(h[5]) and punch_max > 1.03, "the hit: a shockwave ring, gold sparks, a punch-in zoom (%.3f)" % punch_max)
+			check(not bool(h[7]) and float(seen.get("swap", 99.0)) - float(h[0]) > 0.4 and float(seen.get("swap", 99.0)) - float(h[0]) < 0.6,
+				"the game may go in behind %.2f s after the slam, not before" % (float(seen.get("swap", 99.0)) - float(h[0])))
+			check(kick > TitleLogo.SWING_DEG * 2.0, "the slam knocks the King into a big swing (%.0f degrees)" % kick)
+			check((ts.logo.scale as Vector2).distance_to(Vector2.ONE) < 0.02 and ts.stage.position.length() < 0.5 and ts.cracks.grow >= 1.0
+				and absf(ts.stage.scale.x - 1.0) < 0.002, "it settles on the wall, cracks run out round it, the shake and the zoom die down")
+			check(float(ts.rays_mat.get_shader_parameter("power")) > 0.3, "light rays behind the title")
+			check(ts.tap.text == "TAP TO START" and ts.tap.modulate.a > 0.4 and ts.home_is_ready, "TAP TO START (the game behind is ready)")
 			knot0 = _knot()
 			step = 2
 			t = 0.0
 		2:
+			var gs: float = app.title_screen.glint_mat.get_shader_parameter("sweep")
+			swept = swept or (gs > 0.2 and gs < 0.8)
+			if t < 3.0:
+				return false                 # (the slam's big swing dying down)
 			var r: float = rad_to_deg(app.title_screen.logo.king.rotation)
 			lo = minf(lo, r)
 			hi = maxf(hi, r)
 			knot_moved = maxf(knot_moved, _knot().distance_to(knot0))
-			if t < 3.0:
+			if t < 6.0:
 				return false
+			check(swept, "a gold glint sweeps across the letters")
 			check(lo < -TitleLogo.SWING_DEG * 0.8 and hi > TitleLogo.SWING_DEG * 0.8, "the King swings both ways (%.1f to %.1f degrees)" % [lo, hi])
-			check(lo >= -TitleLogo.SWING_DEG - 0.01 and hi <= TitleLogo.SWING_DEG + 0.01, "no further than %.0f degrees" % TitleLogo.SWING_DEG)
+			check(lo >= -TitleLogo.SWING_DEG - 0.6 and hi <= TitleLogo.SWING_DEG + 0.6, "...and is back to no further than %.0f degrees" % TitleLogo.SWING_DEG)
 			check(knot_moved < 0.5, "he turns about the knot (it moved %.2f px)" % knot_moved)
 			check(still.landed and still.logo.scale == Vector2.ONE and still.stage.position == Vector2.ZERO
 				and absf(still.logo.king.rotation) < 0.0001, "with Reduce Motion: no flight, no shake, the King hangs still")
+			# no game behind it: LOADING..., a tap is kept, and the moment the game is ready the screen lifts
+			check(waiting.tap.text == "LOADING..." and waiting.tap.modulate.a > 0.2 and not waiting.home_is_ready,
+				"with no game behind it yet: LOADING..., not TAP TO START")
+			var ev0 := InputEventMouseButton.new()
+			ev0.button_index = MOUSE_BUTTON_LEFT
+			ev0.pressed = true
+			waiting._gui_input(ev0)
+			check(waiting.want_leave and not waiting.leaving, "a tap while loading is kept")
+			waiting.home_ready()
+			check(waiting.leaving, "...and lifts the screen the moment the game is ready")
 			# a tap lifts it off Home
 			app.title_screen.done.connect(func(): gone = true)
 			var ev := InputEventMouseButton.new()
@@ -116,6 +164,7 @@ func _process(d: float) -> bool:
 			if t < 0.8:
 				return false
 			check(gone and app.title_screen == null and app.tab == "home", "a tap lifts the title screen off Home")
+			check(waiting_gone, "(the waiting one is gone too)")
 			_loading_screens()
 			print("TITLE_LOGO_PASS" if fails.is_empty() else "TITLE_LOGO_FAIL %s" % str(fails))
 			quit(0 if fails.is_empty() else 1)
