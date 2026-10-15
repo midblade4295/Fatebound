@@ -4250,3 +4250,7 @@ Kevin (his S21's log of 0.31.142): "It freezes while loading for a few seconds"
 - Quick suite: all 92 passed. tools/cold_start_check.sh: PASS. The Play AAB built from this commit (throwaway key,
   presets untouched by the build): BASE OK (253 files), CONTENT OK (no pack changed), play_games true, bundletool
   valid.
+- Kevin's S21, two starts of 0.31.143 (2026-10-15): "pipeline cache: pipelines.mobile.adreno_(tm)_660.cache 2.29 MB"
+  loaded at boot. The title up 0.5-0.66 s after the boot guard, the game loaded 1.5 s later, Home built and drawn by
+  3.0 s, the slam 3.3-3.7 s, TAP TO START at 3.9-4.3 s (0.31.141: 9.4 s; 0.31.142: 12.9 s). The longest frame of the
+  build 0.48-0.64 s (was 7.3 s without a frame); the show smooth on the second start (fps 34, worst 52 ms).
