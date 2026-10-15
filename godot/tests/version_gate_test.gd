@@ -16,6 +16,8 @@ const VersionCheck = preload("res://scripts/app/version_check.gd")
 const UpdateScreen = preload("res://scripts/app/update_screen.gd")
 
 var port := 8096          # the real server
+var _probe: StreamPeerTCP = null
+var t_wait := 0.0
 var fport := 8097         # the fake server (this process)
 var pid := -1
 var fails: Array = []
@@ -151,7 +153,22 @@ func _process(delta: float) -> bool:
 			UpdateScreen.open_store(func(u): return OK, tried)
 			check(tried[-1] == UpdateScreen.WEB_URL and UpdateScreen.WEB_URL == "https://play.google.com/store/apps/details?id=com.fatebound.game"
 				and UpdateScreen.MARKET_URL == "market://details?id=com.fatebound.game", "store URLs (market:// on Android, https fallback)")
-			phase = "server_boot"; wait_until = t + 1.5
+			phase = "server_wait"; wait_until = t + 0.5; t_wait = t
+		"server_wait":
+			# 0.31.148: the real server (its own process) may take a while to listen on a slow machine -- knock until it does
+			if _probe == null:
+				_probe = StreamPeerTCP.new()
+				_probe.connect_to_host("127.0.0.1", port)
+			_probe.poll()
+			if _probe.get_status() == StreamPeerTCP.STATUS_CONNECTED:
+				_probe.disconnect_from_host()
+				_probe = null
+				phase = "server_boot"; wait_until = t + 0.2
+			elif _probe.get_status() == StreamPeerTCP.STATUS_ERROR or _probe.get_status() == StreamPeerTCP.STATUS_NONE:
+				_probe = null
+				wait_until = t + 0.3
+				if t - t_wait > 20.0:
+					check(false, "the real server listens within 20 s"); _finish()
 		"server_boot":
 			raw = WebSocketPeer.new()
 			raw.connect_to_url(surl)

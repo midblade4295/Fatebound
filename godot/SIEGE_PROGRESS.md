@@ -4385,3 +4385,8 @@ no clans in game yet"
   handed on, kept in clans.json, a players' [LION] kept and the Lion Guard on [LNG]); clans_ui_test (YOUR HOUSE'S CLAN,
   JOIN, the house clan's window, leaving with no wait; 5,000 taken); world_test's clans take other tags.
 - Version 0.31.148, versionCode 234 (server code changed: SERVER_BUILD 0.31.148).
+- version_gate_test: the same slow-machine race (it dialed the real server 1.5 s after starting it) -- it now knocks
+  until the server listens.
+- Quick suite: 92 of 93 in one run (war_tour_test new); version_gate_test (the race above) passed alone three times.
+  tools/cold_start_check.sh: PASS. The Play AAB built from this commit (throwaway key, presets untouched by the build):
+  BASE OK (255 files: war_tour.gd and its uid), CONTENT OK (no pack changed), play_games true, bundletool valid.
