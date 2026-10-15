@@ -4121,3 +4121,7 @@ location so you can move the map table lower to bottom of screen so the window t
   app_flow_test (the tab bar, Settings through the shield's menu, Home's layout); clans_ui_test and social_ui_test open
   the window from ALLIANCE.
 - Version 0.31.139, versionCode 225 (server code unchanged; SERVER_BUILD follows the app's version).
+- Quick suite: all 91 passed (social_ui_test's real-time chat check missed once in the first run and passed on
+  rerun). The Play AAB built from this commit (throwaway key, presets untouched by the build): BASE OK (251 files, no
+  pack data), CONTENT OK (6 packs on the branch: ui and audio uploaded, content-packs 982860d), play_games true,
+  bundletool valid.
