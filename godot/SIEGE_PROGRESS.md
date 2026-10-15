@@ -4444,3 +4444,44 @@ Kevin: "Remove the 5 battle daily"
 - Quick suite: all 93 passed (first try). tools/cold_start_check.sh: PASS. The Play AAB built from this commit (throwaway
   key, presets untouched by the build): BASE OK (255 files), CONTENT OK (no pack changed), play_games true, bundletool
   valid.
+
+## 0.31.151 — war rewards, room for every battle, JOIN a friend's battle, King's Day, heroes pack reimport
+Kevin: "What's next to add" -> war rewards, battle capacity, friend JOIN into battles, phone alerts, King's Day, tour
+VO, Meshy UID reimport; then "Do them all".
+- Capacity (siege_server.gd): no room held back for matchmaking any more -- battles on the war map may use every room;
+  MAX_ROOMS 6 by default (was 4; SIEGE_MAX_ROOMS in /etc/fatebound-siege.env overrides it; a full room is ~9% of a core
+  and ~350 kB/s out). war_battle_test runs with SIEGE_MAX_ROOMS 1 to check the full case.
+- Friends > JOIN into a battle: a friend's card carries the battle they're in (wb, wt); JOIN starts that battle on your
+  side (siege_app.join_friend -> start_war); the card says "Fighting at <place>". An older phone's JOIN into a friend's
+  battle is routed into it by the server (hello join fallback -> the friend's war room).
+- War rewards (Eco): WAR_TAKE (200 gold + a Silver Chest) to each of the clan's fighters in the battle that takes a
+  land; WAR_WEEK (50 gems + a Gold Chest) to everyone in a clan of the house that wins the week; WAR_KEEP (300 gold + a
+  Gold Chest) for storming a keep on King's Day. Paid on the server into the account (eco_accounts.grant_war, once per
+  reward id; Profile.grant_war is not a phone op), so the phone gets it with its next sync. The match results say
+  "Your reward: ..."; Home says it once (CROWN WAR: "You took Old Tower for House Stags! You got 200 gold and a Silver
+  Chest."). The Herald's week line names the Gold Chest and the gems.
+- King's Day (Sunday, UTC -- the week's last day; the map resets Monday): keeps can be stormed. Map.KINGS_DAY,
+  NEED_HOME 2000 points, HOME_WORTH 3 (a stormed keep counts as three lands for its captor until the week ends). A
+  keep can be attacked only from a linked land, and its own house can always storm it back (the keep is theirs again).
+  Every clan of the keep's house hears the alarm. The map sends kd / kd_at; the strip over the map says "👑 KING'S DAY
+  · ENDS IN ..." on the day, and a keep's sheet says when the next one is (or that it can be stormed today, and how
+  many points take it). The Herald's keeps line explains it. Labels on the map are clipped to it (a keep's label slid
+  over the strip).
+- Phone alerts when the app is closed (land attacked / your clan attacking): need real push (Firebase Cloud Messaging,
+  APNs through it for iPhone) -- the chest notifications are scheduled on the phone and the server can't send them.
+  PUSH_HANDOFF.md lists what Kevin sets up first (Firebase project, google-services.json, the FCM API, the service
+  account's role, the server's key file); not built yet.
+- Herald tour voice-over: estimated, not generated -- ~1,380 ElevenLabs credits a take for the 10 fixed lines
+  (voice "Edward - British", eleven_v4), waiting on Kevin's OK. The app plays assets/vo/war_tour/<id>.ogg when there.
+- Heroes content pack: six Meshy models (archmage, assassin, berserker, crusader, necromancer, sniper) had imported
+  scenes naming their texture by a stale UID (this machine's import cache predated the textures' current .import
+  files; harmless -- Godot found them by path -- but a warning each load). Reimported (the cached scenes removed, then
+  --import); no warnings when loading every asset and scene (515). The pack's inputs didn't change, so
+  tools/content_packs.py has PACK_REV (heroes: 2) folded into its hash: heroes-98bd68ca9e0c.pck (68.5 MB), uploaded to
+  content-packs (cf00cc6). Phones download it once more.
+- Needs the server redeployed (sudo bash godot/server/deploy/install_siege_server.sh) for the rooms, the friend's
+  battle, the rewards and King's Day.
+- Tests: war_rewards_test (new: the profile, the account, Home's note), world_test (who gets rewards; King's Day: off
+  day refused, Sunday stormed, counts 3, its house storms it back, the alarm), war_tour_test (keep sheet off / on King's
+  Day; JOIN into a friend's battle), social_test (the card's battle), war_battle_test (one room), content_test.
+- Version 0.31.151, versionCode 237 (server code changed: SERVER_BUILD 0.31.151).
