@@ -169,7 +169,7 @@ run clans_test           CLANS_PASS               90
 run clans_ui_test        CLANS_UI_PASS            240
 # The war map (0.31.135, Crown War step 2): server/world.gd alone (reach, attempts, bars, captures, the weekly reset),
 # a battle end to end against the real server (8120: called, alarmed, seated by side, scored), then the app's war table
-# (8121): Home's CROWN WAR, tap a territory, ATTACK, the battle, WAR MAP back, a clan mate's JOIN banner.
+# (8121): Home's PLAY opens the map (QUICK BATTLE at its foot), tap a territory, ATTACK, the battle, WAR MAP back, a clan mate's JOIN banner.
 run world_test           WORLD_PASS               60
 run war_battle_test      WAR_BATTLE_PASS          150
 run war_ui_test          WAR_UI_PASS              240

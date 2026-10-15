@@ -47,6 +47,8 @@ var _cam_at := Vector3.ZERO            # (_fit_camera: where the camera aims and
 var _cam_dist := 20.0
 var _zoom := 1.0
 var _pan := Vector2.ZERO
+var _held_room: Node = null            # 0.31.145: Home's 3D, held still behind the window
+var _held_mode := Node.PROCESS_MODE_INHERIT
 
 func open(a, first := "") -> void:
 	app = a
@@ -79,6 +81,18 @@ func open(a, first := "") -> void:
 	sf.add_theme_constant_override("separation", 6)
 	sf.custom_minimum_size.y = 150          # (the table doesn't jump about as the sheet changes)
 	_sheet = sf
+	# 0.31.145 (Kevin: "Play open war map"): Home's PLAY opens this map; the match PLAY started until now is at its foot --
+	# matchmaking, 16 vs 16, for any house or none (bots in the empty seats)
+	var qb := UI2.button(body, "QUICK BATTLE  ·  16 VS 16", "green", func():
+		app.sfx("confirm")
+		app.quick_battle(), "war_quick", 18, 50.0, 14.0, UI2.icon_path("swords"))
+	qb.name = "QuickBattle"
+	# Home's war table and heroes (war_room.gd) are behind this window: held on their last frame while it's open
+	var room = app.get("hero_node")
+	if is_instance_valid(room) and room.process_mode != Node.PROCESS_MODE_DISABLED:
+		_held_room = room
+		_held_mode = room.process_mode
+		room.process_mode = Node.PROCESS_MODE_DISABLED
 	_build_table()
 	social.changed.connect(_on_changed)
 	social.war_went.connect(_on_went)
@@ -101,6 +115,9 @@ func _names_button() -> void:
 	_names_btn.offset_bottom = 34
 
 func _exit_tree() -> void:
+	if is_instance_valid(_held_room):
+		_held_room.process_mode = _held_mode
+	_held_room = null
 	if social != null:
 		social.war_close()
 		if social.changed.is_connected(_on_changed):

@@ -278,6 +278,11 @@ func _process(delta: float) -> bool:
 		"play":
 			if t_phase > 0.5:
 				press("play")
+				# 0.31.145: PLAY opens the war map; its QUICK BATTLE is the match from matchmaking
+				check(app.modal != null and str(app.modal.get_script().resource_path).ends_with("war_table.gd") and app.siege == null,
+					"PLAY opens the war map (in a clan, not in a party)")
+				press("war_quick")
+				check(app.siege != null and app.modal == null, "...its QUICK BATTLE starts a match")
 				_ws("match_bob", {"t":"hello", "v":Net.VERSION, "name":"bob", "build":"0.31.134-fatebound", "pred":false,
 					"acct":accts.bob[0], "key":accts.bob[1]})
 				_go("in_match")

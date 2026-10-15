@@ -4281,3 +4281,22 @@ Kevin: "Go ahead with adjust" (the cleanups after 0.31.143's start-up fix)
   The Play AAB built from this commit (throwaway key, presets untouched by the build): BASE OK (253 files), CONTENT OK
   (no pack changed), play_games true, bundletool valid.
 - Kevin on 0.31.144 (2026-10-15): "Ok works good".
+
+## 0.31.145 — PLAY opens the war map; QUICK BATTLE at its foot
+Kevin (Crown War's next steps, asked one at a time): "Play open war map"
+- Home's PLAY (siege_app.play) opens the war map (war_table.gd). At its foot, QUICK BATTLE · 16 VS 16
+  (siege_app.quick_battle): the match from matchmaking that PLAY started until now, for any house or none (bots in the
+  empty seats). Players in a clan pick a territory and ATTACK / JOIN / DEFEND as before; players without a clan see how
+  the war works, FIND A CLAN, and QUICK BATTLE.
+- Straight into a match as before when the map can't show anything (not connected, a server without the war map) and
+  for a party: its leader's PLAY ×N takes everyone into one match, which a battle on the map doesn't (start_match's
+  party path is unchanged). An update needed: PLAY shows the update screen, as before.
+- Home's line at the top: the players online for everyone now (a clan member's CROWN WAR · HOUSE X pill went: PLAY
+  opens the map) -- Kevin, 0.31.140: "make sure it shows players currently online".
+- While the map is open, Home's war room (war_room.gd: the table and the heroes behind the window's dimmed backdrop)
+  is held on its last frame (process off), so two 3D views don't draw at once; it's let go when the map closes.
+- Opening the map from PLAY: ~140 ms here (the land, the sea, the trees and the miniatures built at once).
+- Tests: war_ui_test (no CROWN WAR pill, the players-online line; PLAY opens the map with QUICK BATTLE; Home's 3D held
+  and let go), clans_ui_test (PLAY opens the map in a clan; QUICK BATTLE starts the match). social_ui_test's party
+  PLAY still goes straight in.
+- Version 0.31.145, versionCode 231 (server code unchanged; SERVER_BUILD follows the app's version).

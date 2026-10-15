@@ -1,7 +1,7 @@
 extends SceneTree
 # 0.31.135 (Crown War step 2): the war map through the app's real buttons, against the real server (its own process,
 # port 8121), in REAL time. Alice is the app, leader of [LION] Lion Hearts (House Lions, which holds the Mill); Bob is a
-# second phone in her clan; Sam leads [STAG] Stag Party (House Stags, which holds the Old Tower). Home's CROWN WAR opens
+# second phone in her clan; Sam leads [STAG] Stag Party (House Stags, which holds the Old Tower). Home's PLAY (0.31.145) opens
 # the war table; tapping the Old Tower (where it is drawn) shows it held by the Stags with ATTACK; the High Pass isn't
 # linked to Lions land, so no ATTACK there. ATTACK (calling the clan) takes Alice's app into the battle -- Bob is
 # called, Sam is alarmed -- a 6-second battle the attackers win (SIEGE_TEST_SCORE); the results show what it did to the
@@ -164,10 +164,15 @@ func _process(delta: float) -> bool:
 				_go("home")
 		"home":
 			if t_phase > 0.6:
-				var hb := btn("home_war")
-				check(hb != null and hb.text.contains("HOUSE LIONS"), "Home: CROWN WAR · HOUSE LIONS at the top (in a clan)")
+				# 0.31.145 (Kevin: "Play open war map"): PLAY opens the war map; the line at the top is the players online
+				check(btn("home_war") == null and (has_text(app.content, "ONLINE") or has_text(app.content, "LIVE SIEGE SERVER")) and not app.online_refs.is_empty(),
+					"Home: the players-online line at the top (no CROWN WAR pill: PLAY opens the map)")
 				_shot("war_home")
-				press("home_war")
+				var room = app.hero_node
+				press("play")
+				check(_table() != null and app.siege == null, "PLAY opens the war map")
+				check(btn("war_quick") != null and btn("war_quick").text.begins_with("QUICK BATTLE"), "...with QUICK BATTLE at its foot")
+				check(room == null or room.process_mode == Node.PROCESS_MODE_DISABLED, "Home's 3D held still behind it")
 				_go("table")
 		"table":
 			var tb = _table()
@@ -216,6 +221,7 @@ func _process(delta: float) -> bool:
 			if app.siege != null:
 				bid = str(app.siege.war_bid)
 				check(bid != "" and app.modal == null, "ATTACK: the app goes into the battle (%s)" % bid)
+				check(app.hero_node == null or app.hero_node.process_mode == Node.PROCESS_MODE_INHERIT, "(Home's 3D let go with the map)")
 				_go("calls")
 		"calls":
 			var call: Dictionary = bob.get_meta("seen_war_call", {})

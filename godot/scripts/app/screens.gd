@@ -12,7 +12,6 @@ const Diag = preload("res://scripts/siege/siege_diag.gd")
 const Net = preload("res://scripts/siege/siege_net.gd")
 const Platform = preload("res://scripts/meta/platform.gd")          # 0.31.130: Google Play or the App Store
 const StoreBilling = preload("res://scripts/meta/store_billing.gd")
-const Map = preload("res://scripts/meta/war_map.gd")                # 0.31.135: Crown War's houses
 
 const PRIVACY_URL := "https://136-113-125-3.sslip.io/fatebound/privacy.html"
 
@@ -388,7 +387,9 @@ static func home(app, root: VBoxContainer) -> void:
 		gr.add_child(gl)
 		gt.reset_size()
 		gt.position = Vector2(dw - gt.get_combined_minimum_size().x + 10.0, -12.0)
-	# --- the line at the top, between the medallion columns: your party, CROWN WAR (in a clan), or the server
+	# --- the line at the top, between the medallion columns: your party, or the players online. (0.31.135-0.31.144: a
+	# clan member's CROWN WAR · HOUSE X stood here instead; 0.31.145 PLAY opens the war map, so it's the players online
+	# for everyone -- Kevin, 0.31.140: "make sure it shows players currently online".)
 	var sw := w - 2.0 * 70.0
 	if soc != null and soc.online() and soc.in_party():
 		# in a party: who's in it (the leader first, with a crown)
@@ -401,16 +402,6 @@ static func home(app, root: VBoxContainer) -> void:
 		pb.position = Vector2((w - sw) * 0.5, STATUS_Y)
 		pb.size = Vector2(sw, 34)
 		pb.clip_text = true
-		app.online_refs = {}
-	elif soc != null and soc.online() and soc.has_war and soc.in_clan():
-		# 0.31.135 (Crown War step 2): in a clan, the war map instead of the players online
-		var house := str(soc.clan.get("house", ""))
-		var wb := UI2.button(top, "CROWN WAR · HOUSE %s" % Map.HOUSE_NAMES.get(house, "?").to_upper(), "red", func():
-			app.sfx("menuOpen")
-			app.open_war(), "home_war", 13, 34.0, 17.0, UI2.icon_path("swords"))
-		wb.position = Vector2((w - sw) * 0.5, STATUS_Y)
-		wb.size = Vector2(sw, 34)
-		wb.clip_text = true
 		app.online_refs = {}
 	else:
 		_online_pill(app, top, w, STATUS_Y)
@@ -426,7 +417,7 @@ static func home(app, root: VBoxContainer) -> void:
 	play.position = Vector2(px, py)
 	play.size = Vector2(PLAQUE_W, PLAQUE_H)
 	play.set_meta("action_key", "play")
-	play.pressed.connect(func(): app.start_match(true))
+	play.pressed.connect(func(): app.play())          # 0.31.145: the war map (siege_app.play), or straight into a match
 	top.add_child(play)
 	var art := TextureRect.new()
 	art.name = "Plaque"
