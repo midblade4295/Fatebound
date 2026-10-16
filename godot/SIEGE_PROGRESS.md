@@ -4810,3 +4810,9 @@ Kevin: "Make new model concepts for the minions" (the lane minions still wear th
   (a sword-and-shield suit, a crossbow suit with glowing bolts, a stone golem with a mortar on its back, an iron
   colossus with a glowing core). 16 images, ~6,710 credits. Sheets: reports/concepts/minion_<melee|caster|siege|super>
   _concepts.png, all of them: minion_concepts_all.jpg. Waiting on Kevin's picks (then turnarounds -> Meshy -> rig).
+- Kevin picked A1 for all four (the levy footman, crossbowman, bombardier, castle champion). Turnarounds: 2K T-pose
+  sheets (front / side / back, unarmed -- the weapons are the game's hand-slot props; the bombardier keeps his powder
+  keg and bandolier, the crossbowman his bolt quiver), gpt-image-2 with the pick and tpose_ref.png as references,
+  ~2,600 credits: reports/concepts/minion_<kind>_turnaround.png. tools/meshy_character.py (new): split (the three views
+  at one shared scale) and model (Meshy multi-image-to-3D, latest, t-pose, image enhancement off, the views as the
+  texture references, remeshed; then the auto-rig). Waiting on the Meshy key for the models.
