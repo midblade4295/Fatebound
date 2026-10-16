@@ -4,12 +4,16 @@ extends SceneTree
 #     window: 12 heroes, the last pick kept;
 #  2. a hero picked, BATTLE: an offline 5v5 as that hero (no server, no ticket);
 #  3. the HUD: level and XP, the towers standing; a level-up's three upgrades tapped on the screen apply one;
-#  4. the end: the results without rewards (the gold as it was).
+#  4. (0.31.157) the gold and SHOP under the towers line: tapped, the shop; an item picked and bought in your castle;
+#     the ULT button: LV 6 until level 6, then the Archmage's METEORS, tapped: cast; the jungle's skeletons and the
+#     Bone Lord on the field (pictures);
+#  5. the end: the results without rewards (the gold as it was).
 #   godot --headless --path godot -s res://tests/moba_ui_test.gd   (SHOT_DIR=... under Xvfb for pictures)
 const App = preload("res://scripts/app/siege_app.gd")
 const Profile = preload("res://scripts/meta/profile.gd")
 const Moba = preload("res://scripts/siege/moba.gd")
 const HeroPanel = preload("res://scripts/app/moba_panel.gd")
+const Sim = preload("res://scripts/siege/siege_sim.gd")
 
 var fails: Array = []
 var phase := "fresh"
@@ -18,6 +22,7 @@ var t_phase := 0.0
 var app
 var shots := ""
 var gold0 := 0
+var ult_seen := false
 
 func check(ok: bool, what: String) -> void:
 	print(("ok   " if ok else "FAIL ") + what)
@@ -78,7 +83,7 @@ func _app(done: bool) -> void:
 func _process(delta: float) -> bool:
 	t += delta
 	t_phase += delta
-	if t > 150.0:
+	if t > 200.0:
 		check(false, "timed out in phase %s" % phase)
 		return _finish()
 	match phase:
@@ -135,11 +140,92 @@ func _process(delta: float) -> bool:
 				s.hud._touch(0, r.get_center(), false)
 				check(int(me.level) == 2 and (me.picks as Array).is_empty() and int((me.ups as Dictionary).get(str(offer[1]), 0)) == 1,
 					"level 2: three upgrades on the screen; the second tapped (%s) applies" % str(offer[1]))
+				# the shop: the gold pill tapped
+				var ub: Array = s.hud._buttons().filter(func(b): return str(b.id) == "ult")
+				check(ub.size() == 1 and s.sim.moba.ult_rank(me) == 0, "the ULT button, locked (LV %d)" % Moba.ULT_LEVEL)
+				var sr: Rect2 = s.hud.shop_rect()
+				s.hud._touch(0, sr.get_center(), true)
+				s.hud._touch(0, sr.get_center(), false)
+				_go("shop")
+		"shop":
+			if t_phase > 0.6:
+				var s = app.siege
+				var me: Dictionary = s.sim.by_id["you"]
+				check(s.hud.shop_open() and btn("shop_item_sword") != null and btn("shop_item_bloodthirster") != null and btn("shop_slot_0") != null,
+					"tapped: the shop -- your slots, the small items and the big ones")
+				var g0 := int(me.gold)
+				press("shop_item_sword")
+				s.hud._refresh_shop(me)
+				check(has_text(s.hud.shop_panel, "LONG SWORD") and has_text(s.hud.shop_panel, "BUY · 350"), "a Long Sword picked: what it gives, BUY · 350")
+				press("shop_act")
+				check((me.items as Array) == ["sword"] and int(me.gold) == g0 - 350, "bought, in your castle (%d gold left)" % int(me.gold))
+				_go("shop2")
+		"shop2":
+			if t_phase > 0.5:
+				_shot("moba_shop")
+				press("shop_close")
+				var s = app.siege
+				var me: Dictionary = s.sim.by_id["you"]
+				s.sim.moba.add_xp(me, 99999.0)
+				while not (me.picks as Array).is_empty():
+					s.sim.moba.pick(me, 0)
+				me.pos = Vector2(-20.0, 38.0)
+				me.face = s.sim.angle_of(Vector2(0, -1))
+				me.state = "idle"
+				_go("ult")
+		"ult":
+			if t_phase > 0.5:
+				var s = app.siege
+				var me: Dictionary = s.sim.by_id["you"]
+				var b: Dictionary = s.hud._buttons().filter(func(x): return str(x.id) == "ult")[0]
+				check(not s.hud.shop_open() and s.sim.moba.ult_rank(me) >= 1, "closed; level %d: the ultimate is yours" % int(me.level))
+				s.hud._touch(1, b.c, true)
+				s.hud._touch(1, b.c, false)
+				_go("ult2")
+		"ult2":
+			if t_phase > 0.1 and not ult_seen:
+				ult_seen = true
+				var s = app.siege
+				var me: Dictionary = s.sim.by_id["you"]
+				check(float(me.ult_cd) > 0.0 and s.sim.meteors.size() >= Moba.STORM_N, "ULT tapped: METEORS (%d)" % s.sim.meteors.size())
+			if t_phase > 1.1:
+				_shot("moba_ult")
+				var s = app.siege
+				var camp: Dictionary = s.sim.moba.camps.filter(func(c): return str(c.kind) == "pack" and int(c.side) == 0)[0]
+				s.sim.moba._spawn_camp(camp)
+				var me: Dictionary = s.sim.by_id["you"]
+				me.pos = (camp.p as Vector2) + Vector2(1.0, 5.0)
+				me.face = s.sim.angle_of(Vector2(0, -1))
+				s.view.snap_camera()
+				_go("camp")
+		"camp":
+			if t_phase > 1.2:
+				var s = app.siege
+				var mons: Array = s.sim.units.filter(func(u): return u.has("mon") and s.sim.alive(u))
+				check(mons.size() == 3 and mons.all(func(u): return s.view.actors.has(u.id) and s.view.actors[u.id].body != null),
+					"the Bone Pack on the field: three skeletons")
+				_shot("moba_camp")
+				var lc: Dictionary = s.sim.moba.camps.filter(func(c): return str(c.kind) == "lord")[0]
+				s.sim.moba._spawn_camp(lc)
+				var me: Dictionary = s.sim.by_id["you"]
+				me.pos = Moba.BOSS_P + Vector2(0.5, 6.0)
+				me.face = s.sim.angle_of(Vector2(0, -1))
+				s.view.snap_camera()
+				_go("lord")
+		"lord":
+			if t_phase > 1.2:
+				var s = app.siege
+				var lord: Dictionary = s.sim.moba._lord_unit()
+				check(not lord.is_empty() and s.view.actors.has(lord.id), "the Bone Lord on the island")
+				_shot("moba_lord")
+				s.sim.by_id["you"].pos = Sim.spawn(0)
 				_go("play")
 		"play":
 			if t_phase > 0.5 and t_phase < 0.6:
 				var s0 = app.siege
-				s0.sim.moba.add_xp(s0.sim.by_id["you"], Moba.XP_BASE * 3.0)    # (picks waiting, for the picture)
+				var y0: Dictionary = s0.sim.by_id["you"]
+				for k in 2:
+					(y0.picks as Array).append(s0.sim.moba._offer(y0))     # (picks waiting, for the picture)
 			if t_phase > 3.0:
 				_shot("moba_match")
 				var s = app.siege

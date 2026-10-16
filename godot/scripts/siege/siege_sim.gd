@@ -608,7 +608,7 @@ func _update_gate_nav() -> void:
 	nav_version += 1
 
 func find_path(team: int, from: Vector2, to: Vector2) -> PackedVector2Array:
-	var grid: AStarGrid2D = nav[team]
+	var grid: AStarGrid2D = nav[team if team <= 1 else 0]     # (0.31.157: a jungle monster, team 2, walks blue's grid)
 	# Starting inside an enemy castle: its intact gates are a way out (lets_out), not an obstacle, for this search.
 	var opened := []
 	for gi in gates.size():
@@ -858,6 +858,8 @@ func _liftable(u: Dictionary) -> Dictionary:
 # ---------- input (from HUD or bot brain) ----------
 func act(id: String, action: String, arg: Variant = null) -> bool:
 	var u: Dictionary = by_id.get(id, {})
+	if not u.is_empty() and not ended and moba != null and action in ["shop_buy", "shop_sell"]:
+		return moba.buy(u, str(arg)) if action == "shop_buy" else moba.sell(u, int(arg))     # (0.31.157: down too)
 	if u.is_empty() or ended or not alive(u):
 		return false
 	match action:
@@ -879,6 +881,12 @@ func act(id: String, action: String, arg: Variant = null) -> bool:
 		"interact": return _interact(u)
 		"pick":                                      # 0.31.155: a 5v5 hero's level-up choice (arg: 0-2)
 			return moba != null and moba.pick(u, int(arg))
+		"ult":                                       # 0.31.157 5V5: the ultimate (level 6)
+			return moba != null and moba.ult(u)
+		"shop_buy":                                  # 0.31.157 5V5: an item (arg: its id) -- in your castle or while down
+			return moba != null and moba.buy(u, str(arg))
+		"shop_sell":                                 # (arg: the slot)
+			return moba != null and moba.sell(u, int(arg))
 		"hat_swap": return moba == null and _swap_hat(u)
 		"take_tools": return moba == null and _take_tools(u)
 		"buy":
@@ -1098,6 +1106,7 @@ func _step_beam(u: Dictionary, dt: float) -> void:
 
 func _heal(by: Dictionary, t: Dictionary, amount: float) -> void:
 	# Heal t; what an ally gets (not yourself) counts toward the healer's "healed" (0.31.87: the Merciful title).
+	amount *= float(by.get("m_heal", 1.0))           # 0.31.157 5V5: the Holy Relic
 	var before: float = t.hp
 	t.hp = minf(t.max_hp, t.hp + amount)
 	if by != t:
@@ -1562,6 +1571,8 @@ func _damage(src: Dictionary, dst: Dictionary, amount: float, stun := 0.0) -> vo
 	if not _blockers.is_empty() and src.has("pos") and shield_blocks(src.pos, dst):
 		_event("blocked", {"id":dst.id, "pos":dst.pos})
 		return
+	if moba != null:
+		amount = moba.mod_damage(src, dst, amount)    # 0.31.157: ultimates, items, buffs (more dealt, less taken, UNDYING)
 	dst.hp -= amount
 	if moba != null:
 		moba.on_damage(src, dst, amount)          # 0.31.155: lifesteal; who hit a hero (the towers' and minions' call for help)
@@ -1637,8 +1648,10 @@ func _kill(src: Dictionary, dst: Dictionary) -> void:
 func _damage_gate(src: Dictionary, g: Dictionary, amount: float) -> void:
 	if not gate_blocks(g):
 		return
-	if moba != null and not moba.gate_open(g):
-		return                                    # 0.31.155: a gate behind standing towers can't be touched
+	if moba != null and (not moba.gate_open(g) or int(src.get("team", 0)) > 1):
+		return                                    # 0.31.155: a gate behind standing towers can't be touched (0.31.157: nor by a monster)
+	if moba != null:
+		amount *= moba.gate_mult(src)             # 0.31.157: minions hit gates harder
 	g.hp = maxf(0.0, g.hp - amount)
 	g["hit_at"] = time
 	if src.has("gate_dmg"):
@@ -1710,9 +1723,12 @@ func _drop_oracle(o: Dictionary, u: Dictionary, thrown: bool) -> void:
 func _melee(u: Dictionary, reach: float, arc: float, dmg: float, stun := 0.0) -> int:
 	var fwd := dir_of(u.face)
 	var hits := 0
+	var spare_mon: bool = moba != null and bool(u.get("minion", false)) and not bool(u.get("summon", false))
 	for o in units:
 		if o.team == u.team or not alive(o) or int(o.tower) >= 0:
 			continue
+		if spare_mon and int(o.team) > 1:
+			continue                                 # (0.31.157: lane minions leave the jungle's monsters alone)
 		var off: Vector2 = o.pos - u.pos
 		var d := off.length()
 		if d > reach + UNIT_R:
@@ -1790,6 +1806,9 @@ func _resolve_attack(u: Dictionary) -> void:
 	var dmg := float(stat(u,"dmg"))
 	if u.atk == "attack":
 		if c.ranged:
+			if float(c.proj_speed) <= 0.0:
+				return                                 # 0.31.157: a Priest's "attack" is his beam -- no shot (a bot's swing
+				                                       # made a still, endless arrow: hundreds piled up in a 5v5 match)
 			# 0.31.5 balance: the Mage's fireball does 10 % less (MAGE_BOLT); her nova keeps its damage and size.
 			_shoot(u, u.face, dmg * (MAGE_BOLT if u.cls == "mage" else 1.0), float(c.aoe), float(c.proj_speed), float(c.range) * tower_range(u))
 		else:
@@ -2293,17 +2312,21 @@ func _step_projectiles(dt: float) -> void:
 	# (Packed arrays are VALUES in Godot 4: appending through `tpos[t] as PackedVector2Array`
 	# appended to a copy, so these stayed empty and arrows/bolts hit NO units from 0.16.0 to
 	# 0.18.1. Build them as locals.)
+	# (0.31.157: a third list for the 5v5 jungle's monsters, team 2 -- everyone's enemy)
 	var pos0 := PackedVector2Array()
 	var pos1 := PackedVector2Array()
-	var tunit := [[], []]
+	var pos2 := PackedVector2Array()
+	var tunit := [[], [], []]
 	for o in units:
 		if alive(o):
 			if o.team == 0:
 				pos0.append(o.pos)
-			else:
+			elif o.team == 1:
 				pos1.append(o.pos)
-			(tunit[o.team] as Array).append(o)
-	var tpos := [pos0, pos1]
+			else:
+				pos2.append(o.pos)
+			(tunit[clampi(int(o.team), 0, 2)] as Array).append(o)
+	var tpos := [pos0, pos1, pos2]
 	var hit_r2 := (UNIT_R + 0.25) * (UNIT_R + 0.25)
 	for i in range(projectiles.size()-1, -1, -1):
 		var p: Dictionary = projectiles[i]
@@ -2328,6 +2351,9 @@ func _step_projectiles(dt: float) -> void:
 		p.life -= dt
 		var hit := {}
 		var et: int = (1 - int(p.team)) if int(p.team) >= 0 else -1
+		var foe_teams: Array = [0, 1, 2] if et < 0 else ([et, 2] if int(p.team) <= 1 else [0, 1])
+		if et >= 0 and moba != null and moba.lane_minion(str(p.owner)):
+			foe_teams = [et]                         # (a lane minion's arrow flies past the jungle's monsters)
 		# Swept test: the whole path since last tick (from the shooter on the first tick) against
 		# each enemy's hit circle -- an arrow moves 0.73 m a tick, and checking only its new point
 		# let glancing shots skip past a target. The nearest hit along the path wins.
@@ -2335,7 +2361,7 @@ func _step_projectiles(dt: float) -> void:
 		p.erase("from")
 		var best_t := INF
 		var impact := Vector2.ZERO
-		for t in ([et] if et >= 0 else [0, 1]):
+		for t in foe_teams:
 			var arr: PackedVector2Array = tpos[t]
 			for k in arr.size():
 				var c: Vector2 = arr[k]
@@ -2351,7 +2377,7 @@ func _step_projectiles(dt: float) -> void:
 			# 0.31.32: the Sniper's shot goes through everyone in its path, each once
 			var already: Array = p.get("hit", [])
 			var owner_p: Dictionary = by_id.get(str(p.owner), {})
-			for t2 in ([et] if et >= 0 else [0, 1]):
+			for t2 in foe_teams:
 				var arr2: PackedVector2Array = tpos[t2]
 				for k2 in arr2.size():
 					var o2: Dictionary = tunit[t2][k2]
@@ -2360,7 +2386,7 @@ func _step_projectiles(dt: float) -> void:
 					if arr2[k2].distance_squared_to(seg_closest(arr2[k2], from, p.pos)) < hit_r2:
 						already.append(o2.id)
 						_next_push = _push_along(p.vel, 4.0, 1.4)
-						_damage(owner_p, o2, float(p.dmg))
+						_damage(owner_p, o2, float(p.dmg), float(p.get("stun", 0.0)))     # (0.31.157: the Ranger's DEADEYE stuns)
 						_event("pierce_hit", {"id":o2.id, "pos":o2.pos})
 			p["hit"] = already
 			hit = {}
@@ -3693,7 +3719,7 @@ func _step_hammer(p: Dictionary, dt: float, tunit: Array) -> bool:
 		p.vel = to.normalized() * HAMMER_SPEED
 		p.pos += (p.vel as Vector2) * dt
 	var r := UNIT_R + HAMMER_HIT_R
-	for o in tunit[1 - int(p.team)]:
+	for o in (tunit[1 - int(p.team)] as Array) + (tunit[2] as Array):        # (0.31.157: and the jungle's monsters)
 		if (p.hit as Array).has(o.id) or not alive(o):
 			continue
 		if (o.pos as Vector2).distance_to(p.pos) < r:

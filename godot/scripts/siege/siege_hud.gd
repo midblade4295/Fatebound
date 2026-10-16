@@ -11,6 +11,8 @@ const BUTTON_STYLE := {"primary":"orange", "secondary":"blue", "gold":"gold", "r
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 const NetT = preload("res://scripts/siege/siege_net.gd")
 const Cards = preload("res://scripts/meta/cards.gd")
+const Moba = preload("res://scripts/siege/moba.gd")
+const ItemIcon = preload("res://scripts/siege/item_icon.gd")   # 0.31.157 5V5: the shop's item glyphs
 
 signal leave_requested
 signal replay_requested
@@ -23,7 +25,7 @@ signal workshop_buy(id: String)
 signal workshop_leave
 signal card_pressed(slot: int)          # 0.31.153 COMMANDER: a card in the hand tapped
 
-const TEAM_COLORS := [Color("#5fd2f0"), Color("#ff7b52")]
+const TEAM_COLORS := [Color("#5fd2f0"), Color("#ff7b52"), Color("#e2c85c")]      # (0.31.157: the jungle's monsters)
 
 var sim
 var diag
@@ -33,7 +35,7 @@ var player_name := "Player"         # (0.31.87: the results panel shows an earne
 
 func vt(t: int) -> int:
 	# 0.31.85: your side drawn blue, the other red, whichever team you're on (as siege_view.vt)
-	if t < 0 or sim == null:
+	if t < 0 or t > 1 or sim == null:
 		return t
 	return t if int(sim.by_id.get(player_id, {}).get("team", 0)) == 0 else 1 - t
 var project: Callable          # world Vector3 -> HUD Vector2
@@ -484,6 +486,8 @@ func show_result(result: Dictionary = {}) -> void:
 		# 0.31.155 5V5 (the test): the towers each side brought down, your level; no rewards yet
 		UI2.center(UI2.body(v, "Towers down: theirs %d · yours %d  ·  you reached level %d" % [sim.moba.towers_down(1 - int(me.team)),
 			sim.moba.towers_down(int(me.team)), int(me.get("level", 1))], 12, Color("#ffcf7a"), false))
+		UI2.center(UI2.body(v, "Gold earned %d · %d item%s" % [int(me.get("gold_total", 0.0)), (me.get("items", []) as Array).size(),
+			"" if (me.get("items", []) as Array).size() == 1 else "s"], 12, Color("#ffe39a"), false))
 		UI2.center(UI2.body(v, "5V5 is a test -- no rewards yet", 11, UI2.MUTED, false))
 	if sim.commander:
 		# 0.31.153 COMMANDER (the test): the cards each side played; no rewards yet
@@ -842,6 +846,24 @@ func on_event(e: Dictionary) -> void:
 			toast("Their King is protected until one of his gates falls", Color("#ffcf7a"))
 		"king_down":
 			toast("THEIR KING IS DEFEATED!" if int(e.get("team", -1)) != int(me.team) else "OUR KING HAS FALLEN", VisualTheme.GOLD if int(e.get("team", -1)) != int(me.team) else VisualTheme.RED)
+		"ult_ready":                                     # 0.31.157 5V5
+			if str(e.get("id", "")) == str(player_id):
+				var un := str(sim.moba.ult_info(me).get("name", "ULTIMATE"))
+				toast(("ULTIMATE READY: %s!" % un) if int(e.rank) < 2 else ("%s IS STRONGER NOW" % un), Color("#ffb04a"))
+		"buff":
+			if str(e.get("id", "")) == str(player_id):
+				toast("%s! %s" % [str(sim.moba.BUFF_NAMES.get(str(e.buff), "")), "Abilities recharge faster" if str(e.buff) == "arcane" else "You hit harder"], Color("#7fb8ff") if str(e.buff) == "arcane" else Color("#ff9a5a"))
+		"lord_down":
+			toast("WE SLEW THE BONE LORD! Gold for all, and his blessing" if int(e.get("team", -1)) == int(me.team) else "THEY SLEW THE BONE LORD", VisualTheme.GOLD if int(e.get("team", -1)) == int(me.team) else VisualTheme.RED)
+		"camp_up":
+			if str(e.get("kind", "")) == "lord":
+				toast("THE BONE LORD HAS RISEN ON THE ISLAND", Color("#d8c2ff"))
+		"buy":
+			if str(e.get("id", "")) == str(player_id):
+				toast("Bought %s" % str(sim.moba.ITEMS[str(e.item)].name), VisualTheme.GOLD)
+		"sell":
+			if str(e.get("id", "")) == str(player_id):
+				toast("Sold %s · +%d gold" % [str(sim.moba.ITEMS[str(e.item)].name), int(e.gold)], Color("#e8dcc0"))
 		"multikill":
 			var n := int(e.n)
 			if str(e.id) == str(player_id):
@@ -940,11 +962,13 @@ func _buttons() -> Array:
 		out.append({"id":"action", "c":br + Vector2(-172, -182), "r":36.0, "ctx":ctx})
 	if not me.is_empty() and me.cls == "knight" and bool(me.get("up", false)):
 		out.append({"id":"block", "c":br + Vector2(-262, -64), "r":30.0})     # the Crusader keeps his shield
+	if sim.moba != null and not me.is_empty() and bool(me.get("hero", false)) and ctx == "":
+		out.append({"id":"ult", "c":br + Vector2(-172, -182), "r":36.0})      # 0.31.157 5V5: the ultimate (level 6)
 	return out
 
 func _modal_open() -> bool:
 	return (workshop_panel != null and workshop_panel.visible) or paused() or (result_panel != null and result_panel.visible) \
-		or (score_panel != null and is_instance_valid(score_panel) and score_panel.visible)
+		or (score_panel != null and is_instance_valid(score_panel) and score_panel.visible) or shop_open()
 
 func _input(event: InputEvent) -> void:
 	if sim == null:
@@ -963,6 +987,10 @@ func _input(event: InputEvent) -> void:
 			KEY_K: action_pressed.emit("ability")
 			KEY_L, KEY_SHIFT: action_pressed.emit("dodge")
 			KEY_E: action_pressed.emit("action")
+			KEY_R: action_pressed.emit("ult")             # 0.31.157 5V5
+			KEY_B:
+				if sim.moba != null:
+					open_shop()
 
 func _touch(index: int, pos: Vector2, pressed: bool) -> void:
 	if pressed:
@@ -979,6 +1007,10 @@ func _touch(index: int, pos: Vector2, pressed: bool) -> void:
 					action_pressed.emit("pick%d" % i)
 					get_viewport().set_input_as_handled()
 					return
+			if shop_rect().grow(6.0).has_point(pos):
+				open_shop()                            # 0.31.157 5V5: the shop
+				get_viewport().set_input_as_handled()
+				return
 		if sim.commander:
 			for i in Cards.HAND:
 				if card_rect(i).grow(4.0).has_point(pos):
@@ -1093,6 +1125,8 @@ func _process(delta: float) -> void:
 	var me: Dictionary = sim.by_id.get(player_id, {})
 	if not me.is_empty():
 		_refresh_workshop(me)
+		if shop_open():
+			_refresh_shop(me)
 	queue_redraw()
 
 func _text(pos: Vector2, text: String, size_px: int, color: Color, font: Font = null, align := HORIZONTAL_ALIGNMENT_CENTER, width := -1.0) -> void:
@@ -1152,7 +1186,7 @@ func _draw_hud() -> void:
 	if age < 2.6 and _toast != "":
 		var c := _toast_color
 		c.a = clampf(2.6 - age, 0.0, 1.0)
-		_text(Vector2(w * 0.5, 176), _toast, 18, c, _bold)
+		_text(Vector2(w * 0.5, 176 if sim.moba == null else 284), _toast, 18, c, _bold)     # (0.31.157 5V5: under the kill feed, clear of the gold)
 	_draw_kill_feed()
 	_draw_idle(me)
 	_draw_rejoin()
@@ -1249,6 +1283,14 @@ func _kf_event(e: Dictionary, me: Dictionary) -> void:
 				return
 			_kf_add([["Enemy", TEAM_COLORS[vt(1 - int(me.team))].lightened(0.15)], [" sent ", grey],
 				[str(cd.name) + (" ×%d" % n if n > 1 else ""), Color(str(Cards.RARITY_COLOR.get(str(cd.rarity), "#ffffff")))]], false)
+		"lord_down":
+			var ours_l := int(e.get("team", -1)) == int(me.team)
+			var lb := str(e.get("by", ""))
+			if lb != "" and sim.by_id.has(lb):
+				_kf_add([kf_name(lb), [" slew the Bone Lord", VisualTheme.GOLD if ours_l else VisualTheme.RED]], lb == player_id)
+		"buff":
+			if str(e.get("id", "")) != str(player_id) and sim.by_id.has(str(e.get("id", ""))):
+				_kf_add([kf_name(str(e.id)), [" took %s" % str(sim.moba.BUFF_NAMES.get(str(e.buff), "")), Color("#7fb8ff") if str(e.buff) == "arcane" else Color("#ff9a5a")]], false)
 		"tower_down":
 			if sim.moba == null:
 				return
@@ -1256,8 +1298,8 @@ func _kf_event(e: Dictionary, me: Dictionary) -> void:
 			_kf_add([["%s %s %s tower fell" % ["Our" if ours_t else "Their", str(sim.moba.LANE_NAMES[int(e.lane)]),
 				"outer" if int(e.tier) == 1 else "inner"], VisualTheme.RED if ours_t else VisualTheme.GOLD]], false)
 		"death":
-			if bool(e.get("minion", false)):
-				return                                     # (0.31.155: minions fall all the time)
+			if bool(e.get("minion", false)) or bool(e.get("mon", false)):
+				return                                     # (0.31.155: minions fall all the time; 0.31.157: so do monsters)
 			var victim := str(e.get("id", ""))
 			var by := str(e.get("by", ""))
 			if not sim.by_id.has(victim):
@@ -1349,6 +1391,8 @@ func _draw_moba_status(me: Dictionary) -> void:
 		else:
 			theirs += 1
 	_text(Vector2(14, 164), "TOWERS  YOURS %d · THEIRS %d" % [ours, theirs], 11, Color("#cfe8b8"), _bold, HORIZONTAL_ALIGNMENT_LEFT, 260)
+	_draw_gold_and_items(me)                      # 0.31.157
+	_draw_camp_timers()
 
 func _picks_open() -> bool:
 	var me: Dictionary = sim.by_id.get(player_id, {})
@@ -1642,6 +1686,8 @@ func _draw_numbers() -> void:
 		if p.y < 150.0:
 			continue   # keep clear of the scoreboard and status lines
 		var c := Color("#ff6b5a") if n.mine else Color("#fff1c2")
+		if bool(n.get("gold", false)):
+			c = Color("#ffd65a")                       # 0.31.157 5V5: gold you earned
 		c.a = 1.0 - u * u
 		_text(p + Vector2(0, -34.0 * u), str(n.text), 18, c, _bold)
 
@@ -1876,6 +1922,21 @@ func _draw_button(b: Dictionary, me: Dictionary) -> void:
 			cd_max = maxf(0.1, {"hammer":Sim.HAMMER_CD, "resurrect":Sim.RESURRECT_CD, "vanish":Sim.VANISH_CD, "pierce":Sim.PIERCE_CD,
 				"meteor":Sim.METEOR_CD}.get(ab, float(Sim.CLASSES[me.cls].ab_cd)))
 			ready = ab != "" and cd <= 0.0 and not me.carrying
+		"ult":
+			# 0.31.157 5V5: the ultimate -- locked until level 6 (LV 6), its name once it's yours, a glow when it's ready
+			var info: Dictionary = sim.moba.ult_info(me)
+			var unlocked: bool = sim.moba.ult_rank(me) > 0
+			label = str(info.get("short", info.get("name", "ULT"))) if unlocked else "LV %d" % sim.moba.ULT_LEVEL
+			col = Color("#7a3208")
+			rim = Color("#ffd65a")
+			cd = float(me.get("ult_cd", 0.0))
+			cd_max = maxf(1.0, float(sim.moba.ult_max_cd(me)))
+			ready = unlocked and cd <= 0.0
+			if ready:
+				var pulse := 0.5 + 0.5 * sin(_time * 5.0)
+				draw_arc(c, r + 5.0 + 3.0 * pulse, 0, TAU, 48, Color(1.0, 0.84, 0.35, 0.35 + 0.4 * pulse), 4.0, true)
+			if unlocked and sim.moba.ult_rank(me) >= 2:
+				_text(c + Vector2(0, -r + 12), "II", 11, Color("#ffe9a6"), _bold)
 		"dodge":
 			label = "DODGE"
 			cd = me.cd_dodge
@@ -1909,3 +1970,270 @@ func _draw_button(b: Dictionary, me: Dictionary) -> void:
 	if cd > 0.0:
 		draw_arc(c, r - 6, -PI * 0.5, -PI * 0.5 + TAU * (cd / cd_max), 40, Color(1, 1, 1, 0.55), 5.0, true)
 	_text(c + Vector2(0, 6), label, 15 if r > 40 else 12, Color("#fffaf0") if ready else Color("#8a939a"), _bold)
+
+
+# ---------- 5V5: gold, the shop, the jungle's timers (0.31.157) ----------
+# Under the towers line: your gold and SHOP (tap: the shop; it glows while you can buy -- in your castle or while down),
+# your six item slots, the buffs you carry. The shop: your items (tap one to sell it), the basic and the big items (tap
+# one: what it gives, what it's built from, its price -- less what you own of it -- and BUY). Over a cleared camp in
+# view: when it's back.
+const STAT_NAMES := {"dmg":"damage", "hp":"health", "as":"attack speed", "spd":"speed", "cdr":"ability recharge", "ls":"lifesteal",
+	"regen":"health/s", "armor":"less damage taken", "heal":"healing"}
+var shop_panel: PanelContainer = null
+var _shop_gold: Label
+var _shop_where: Label
+var _shop_slots: Array = []
+var _shop_cells: Dictionary = {}               # item id -> {button, price}
+var _shop_name: Label
+var _shop_stats: Label
+var _shop_from: Label
+var _shop_act: Button
+var _shop_sel := {}                            # {"item": id} or {"slot": i}
+var _shop_key := ""
+var _shop_style: StyleBox = null
+var _coin_tex: Texture2D = null
+
+func shop_open() -> bool:
+	return shop_panel != null and shop_panel.visible
+
+func shop_rect() -> Rect2:
+	return Rect2(12, 174, 128, 30)
+
+func open_shop() -> void:
+	if sim == null or sim.moba == null:
+		return
+	if shop_panel == null:
+		_build_shop()
+	_shop_key = ""
+	shop_panel.visible = true
+	_center(shop_panel, true)
+	var me: Dictionary = sim.by_id.get(player_id, {})
+	if not me.is_empty():
+		_refresh_shop(me)
+
+func close_shop() -> void:
+	if shop_panel != null:
+		shop_panel.visible = false
+
+static func item_text(id: String) -> String:
+	var it: Dictionary = Moba.ITEMS.get(id, {})
+	var parts := []
+	for k in ["dmg", "hp", "as", "spd", "cdr", "ls", "armor", "heal"]:
+		if it.has(k):
+			parts.append("+%d%% %s" % [int(round(float(it[k]) * 100.0)), STAT_NAMES[k]])
+	if it.has("regen"):
+		parts.append("+%.1f%% health/s" % (float(it.regen) * 100.0))
+	return ", ".join(parts)
+
+func _item_cell(parent: Node, id: String) -> Button:
+	var b := Button.new()
+	b.focus_mode = Control.FOCUS_NONE
+	b.custom_minimum_size = Vector2(80, 66)
+	b.set_meta("action_key", "shop_item_" + id)
+	parent.add_child(b)
+	var ic := ItemIcon.new()
+	ic.item = id
+	ic.position = Vector2(22, 4)
+	ic.size = Vector2(36, 36)
+	ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	b.add_child(ic)
+	var pl := Label.new()
+	pl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	pl.position = Vector2(0, 42)
+	pl.size = Vector2(80, 20)
+	pl.add_theme_font_size_override("font_size", 13)
+	pl.add_theme_font_override("font", _bold)
+	pl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	b.add_child(pl)
+	b.pressed.connect(func():
+		_shop_sel = {"item":id}
+		_shop_key = "")
+	_shop_cells[id] = {"button":b, "price":pl, "icon":ic}
+	return b
+
+func _build_shop() -> void:
+	shop_panel = _panel(400)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 6)
+	shop_panel.add_child(v)
+	var hdr := HBoxContainer.new()
+	v.add_child(hdr)
+	var tl := UI2.text(hdr, "SHOP", 24, UI2.GOLD)
+	tl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_shop_gold = UI2.text(hdr, "", 20, Color("#ffd65a"))
+	_shop_where = _label(v, "", 11, Color("#d4cbbb"))
+	UI2.body(v, "YOUR ITEMS · tap one to sell it", 10, UI2.MUTED, false)
+	var slots := HBoxContainer.new()
+	slots.add_theme_constant_override("separation", 6)
+	slots.alignment = BoxContainer.ALIGNMENT_CENTER
+	v.add_child(slots)
+	_shop_slots = []
+	for i in Moba.ITEM_SLOTS:
+		var sb := Button.new()
+		sb.focus_mode = Control.FOCUS_NONE
+		sb.custom_minimum_size = Vector2(50, 50)
+		sb.set_meta("action_key", "shop_slot_%d" % i)
+		var ic := ItemIcon.new()
+		ic.position = Vector2(7, 7)
+		ic.size = Vector2(36, 36)
+		ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		sb.add_child(ic)
+		var slot := i
+		sb.pressed.connect(func():
+			_shop_sel = {"slot":slot}
+			_shop_key = "")
+		slots.add_child(sb)
+		_shop_slots.append({"button":sb, "icon":ic})
+	for group in [["BASIC", Moba.ITEM_ORDER.filter(func(x): return not Moba.ITEMS[x].has("from"))],
+			["BIG ITEMS · built from the small ones you own", Moba.ITEM_ORDER.filter(func(x): return Moba.ITEMS[x].has("from"))]]:
+		UI2.body(v, str(group[0]), 10, UI2.MUTED, false)
+		var g := GridContainer.new()
+		g.columns = 4
+		g.add_theme_constant_override("h_separation", 6)
+		g.add_theme_constant_override("v_separation", 6)
+		var cc := CenterContainer.new()
+		cc.add_child(g)
+		v.add_child(cc)
+		for id in group[1]:
+			_item_cell(g, str(id))
+	_shop_name = _label(v, "", 16, UI2.GOLD, _bold)
+	_shop_stats = _label(v, "", 12, Color.WHITE)
+	_shop_from = _label(v, "", 11, Color("#d4cbbb"))
+	_shop_act = _button(v, "BUY", "gold", func(): _shop_action())
+	_shop_act.set_meta("action_key", "shop_act")
+	var cb := _button(v, "CLOSE", "secondary", func(): close_shop())
+	cb.set_meta("action_key", "shop_close")
+
+func _shop_action() -> void:
+	if _shop_sel.has("item"):
+		action_pressed.emit("shop_buy:" + str(_shop_sel.item))
+	elif _shop_sel.has("slot"):
+		action_pressed.emit("shop_sell:%d" % int(_shop_sel.slot))
+		_shop_sel = {}
+	_shop_key = ""
+
+func _cell_style(big: bool, sel: bool, can: bool) -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.09, 0.06, 0.03, 0.95) if can else Color(0.05, 0.05, 0.07, 0.9)
+	sb.border_color = Color("#ffe9a6") if sel else (Color("#c99a3a") if big else Color("#5a6470"))
+	sb.set_border_width_all(3 if sel else 2)
+	sb.set_corner_radius_all(9)
+	return sb
+
+func _refresh_shop(me: Dictionary) -> void:
+	var inv: Array = me.get("items", [])
+	var here: bool = sim.moba.can_shop(me)
+	var key := "%d|%s|%s|%s" % [int(float(me.get("gold", 0.0))), str(inv), str(here), str(_shop_sel)]
+	if key == _shop_key:
+		return
+	_shop_key = key
+	var gold := int(float(me.get("gold", 0.0)))
+	_shop_gold.text = "%d gold" % gold
+	_shop_where.text = "In your castle -- tap an item, then BUY" if sim.alive(me) and here else ("You're down -- you can shop now" if here else "You can buy in your own castle, or while you're down")
+	_shop_where.add_theme_color_override("font_color", Color("#9fe07a") if here else Color("#ffb07a"))
+	for i in _shop_slots.size():
+		var sl: Dictionary = _shop_slots[i]
+		var ic: ItemIcon = sl.icon
+		ic.item = str(inv[i]) if i < inv.size() else ""
+		ic.queue_redraw()
+		var sb := _cell_style(false, _shop_sel.get("slot", -1) == i, ic.item != "")
+		for st in ["normal", "hover", "pressed", "focus", "hover_pressed", "disabled"]:
+			(sl.button as Button).add_theme_stylebox_override(st, sb)
+	for id in _shop_cells:
+		var cell: Dictionary = _shop_cells[id]
+		var pr: int = sim.moba.price(me, id)
+		var why: String = sim.moba.buy_why(me, id)
+		var can := why == "" or why == "where"
+		(cell.price as Label).text = str(pr)
+		(cell.price as Label).add_theme_color_override("font_color", Color("#ffd65a") if gold >= pr else Color("#a08c70"))
+		(cell.icon as ItemIcon).dim = not can
+		(cell.icon as ItemIcon).queue_redraw()
+		var sb2 := _cell_style(Moba.ITEMS[id].has("from"), str(_shop_sel.get("item", "")) == id, can)
+		for st in ["normal", "hover", "pressed", "focus", "hover_pressed", "disabled"]:
+			(cell.button as Button).add_theme_stylebox_override(st, sb2)
+	# the details of the one picked
+	if _shop_sel.has("item"):
+		var id2 := str(_shop_sel.item)
+		var it: Dictionary = Moba.ITEMS[id2]
+		_shop_name.text = str(it.name).to_upper()
+		_shop_stats.text = item_text(id2)
+		if it.has("from"):
+			var names := []
+			for c in it.from:
+				names.append(str(Moba.ITEMS[c].name))
+			var own: int = sim.moba._comps_owned(me, id2).size()
+			_shop_from.text = "Built from %s%s · full price %d" % [" + ".join(names), (" (you have %d)" % own) if own > 0 else "", int(it.cost)]
+		else:
+			_shop_from.text = "Goes into: %s" % ", ".join(Moba.ITEM_ORDER.filter(func(x): return (Moba.ITEMS[x].get("from", []) as Array).has(id2)).map(func(x): return str(Moba.ITEMS[x].name)))
+		var why2: String = sim.moba.buy_why(me, id2)
+		_shop_act.visible = true
+		_shop_act.disabled = why2 != ""
+		_shop_act.text = {"": "BUY · %d" % sim.moba.price(me, id2), "gold": "NEED %d GOLD" % sim.moba.price(me, id2), "where": "BUY IN YOUR CASTLE",
+			"full": "NO ROOM (6 ITEMS)", "boots": "ONE PAIR OF BOOTS"}.get(why2, "BUY")
+	elif _shop_sel.has("slot") and int(_shop_sel.slot) < inv.size():
+		var id3 := str(inv[int(_shop_sel.slot)])
+		_shop_name.text = str(Moba.ITEMS[id3].name).to_upper()
+		_shop_stats.text = item_text(id3)
+		_shop_from.text = "Yours"
+		_shop_act.visible = true
+		_shop_act.disabled = not here
+		_shop_act.text = ("SELL · +%d" % int(float(Moba.ITEMS[id3].cost) * Moba.SELL_BACK)) if here else "SELL IN YOUR CASTLE"
+	else:
+		_shop_name.text = "PICK AN ITEM"
+		_shop_stats.text = "Gold comes in every second, and from last hits, knockouts, towers and the jungle's camps."
+		_shop_from.text = ""
+		_shop_act.visible = false
+
+func _draw_gold_and_items(me: Dictionary) -> void:
+	var r := shop_rect()
+	var here: bool = sim.moba.can_shop(me)
+	if _shop_style == null:
+		_shop_style = VisualTheme.panel(Color(0.08, 0.05, 0.02, 0.9), VisualTheme.GOLD_DARK, 10, 6)
+	draw_style_box(_shop_style, r)
+	if here:
+		var pulse := 0.5 + 0.5 * sin(_time * 4.0)
+		draw_rect(r.grow(2.0), Color(1.0, 0.84, 0.35, 0.3 + 0.4 * pulse), false, 2.0)
+	if _coin_tex == null and ResourceLoader.exists("res://assets/ui/currency/coin.png"):
+		_coin_tex = load("res://assets/ui/currency/coin.png")
+	if _coin_tex != null:
+		draw_texture_rect(_coin_tex, Rect2(r.position + Vector2(5, 4), Vector2(22, 22)), false)
+	else:
+		draw_circle(r.position + Vector2(16, 15), 9, Color("#ffcf4a"))
+	_text(r.position + Vector2(31, 21), str(int(float(me.get("gold", 0.0)))), 15, Color("#ffd65a"), _bold, HORIZONTAL_ALIGNMENT_LEFT, 60)
+	_text(r.position + Vector2(r.size.x - 50, 21), "SHOP", 13, Color.WHITE if here else Color(1, 1, 1, 0.75), _bold, HORIZONTAL_ALIGNMENT_LEFT, 50)
+	var inv: Array = me.get("items", [])
+	for i in sim.moba.ITEM_SLOTS:
+		var q := Rect2(12 + i * 22, r.end.y + 5, 20, 20)
+		draw_rect(q, Color(0, 0, 0, 0.5))
+		draw_rect(q, Color(VisualTheme.GOLD_DARK, 0.8), false, 1.0)
+		if i < inv.size():
+			ItemIcon.draw_item(self, str(inv[i]), q.get_center(), 18.0)
+	# buffs
+	var x := 12.0
+	var y := r.end.y + 42.0
+	var b: Dictionary = me.get("buffs", {})
+	for k in ["arcane", "ember", "lord"]:
+		var left := float(b.get(k, -1.0)) - float(sim.time)
+		if left > 0.0:
+			var txt := "%s %d:%02d" % [str(sim.moba.BUFF_NAMES[k]), int(left) / 60, int(left) % 60]
+			var col := Color("#7fb8ff") if k == "arcane" else (Color("#ff9a5a") if k == "ember" else Color("#d8c2ff"))
+			_text(Vector2(x, y), txt, 11, col, _bold, HORIZONTAL_ALIGNMENT_LEFT, 160)
+			x += _bold.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 11).x + 10.0
+
+func _draw_camp_timers() -> void:
+	if not project.is_valid() or not on_screen.is_valid():
+		return
+	for camp in sim.moba.camps:
+		if bool(camp.alive):
+			continue
+		var p: Vector2 = camp.p
+		var w := Vector3(p.x, Sim.height_at(p) + 1.0, p.y)
+		if not on_screen.call(w):
+			continue
+		var sp: Vector2 = project.call(w)
+		if sp.y < 230.0:
+			continue
+		sp.x = clampf(sp.x, 70.0, size.x - 70.0)
+		var left := maxf(0.0, float(camp.next) - float(sim.time))
+		var nm := str(sim.moba.CAMP_KINDS[camp.kind].name).to_upper() + " " if str(camp.kind) in ["lord", "arcane", "ember"] else ""
+		_text(sp, "%s%d:%02d" % [nm, int(left) / 60, int(left) % 60], 13, Color("#e8dcc0"), _bold)

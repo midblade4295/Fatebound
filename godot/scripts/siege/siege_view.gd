@@ -14,7 +14,7 @@ const WeaponFx = preload("res://scripts/siege/weapon_fx.gd")
 
 const HEX := "res://assets/kaykit/hex/"
 const FOREST := "res://assets/kaykit/forest/"
-const TEAM_COLORS := [Color("#5fd2f0"), Color("#ff7b52")]
+const TEAM_COLORS := [Color("#5fd2f0"), Color("#ff7b52"), Color("#e2c85c")]      # (0.31.157: the third, the jungle's monsters)
 const GOLD := Color("#ffd46a")
 # The Vulkan (Mobile renderer) look; the only renderer since 0.31.92 (OpenGL removed). 0.31.71 (Kevin, comparing the
 # two renderers side by side: "OpenGL looks better"): retuned so Vulkan matches the OpenGL render -- deeper shadows, brighter sunlit tops, the same
@@ -62,6 +62,14 @@ const LOOKS := {
 	"rogue_kaykit": {"model":"Rogue_Hooded","r":"","l":"","idle":"g/Idle_B","attack":"m/Melee_Dualwield_Attack_Stab","ability":"m/Melee_1H_Attack_Jump_Chop"},
 	"ranger_kaykit": {"model":"Ranger","r":"","l":"","idle":"r/Ranged_Bow_Idle","attack":"r/Ranged_Bow_Release","ability":"r/Ranged_Bow_Release_Up"},
 	"mage_kaykit": {"model":"Mage","r":"","l":"","idle":"g/Idle_B","attack":"r/Ranged_Magic_Shoot","ability":"r/Ranged_Magic_Spellcasting"},
+	# 0.31.157 5V5 -- the jungle's monsters and the Necromancer's LEGION: KayKit Skeletons 1.0 (CC0; their own embedded
+	# animations stripped out -- the rig is the Adventurers' one, so the game's Rig_Medium libraries drive them)
+	"skel_minion": {"model":"Skeleton_Minion","r":"Skeleton_Blade","l":"","idle":"g/Idle_A","attack":"m/Melee_1H_Attack_Chop","ability":"m/Melee_1H_Attack_Jump_Chop","combo":["m/Melee_1H_Attack_Chop","m/Melee_1H_Attack_Slice_Diagonal","m/Melee_1H_Attack_Slice_Horizontal"]},
+	"skel_warrior": {"model":"Skeleton_Warrior","r":"Skeleton_Axe","l":"Skeleton_Shield_Small_A","idle":"g/Idle_A","attack":"m/Melee_1H_Attack_Chop","ability":"m/Melee_2H_Attack_Spin","combo":["m/Melee_1H_Attack_Chop","m/Melee_1H_Attack_Slice_Horizontal","m/Melee_Block_Attack"]},
+	"skel_rogue": {"model":"Skeleton_Rogue","r":"Skeleton_Crossbow","l":"","idle":"r/Ranged_Bow_Idle","attack":"r/Ranged_Bow_Release","ability":"r/Ranged_Bow_Release_Up"},
+	"skel_mage": {"model":"Skeleton_Mage","r":"Skeleton_Staff","l":"","idle":"g/Idle_A","attack":"r/Ranged_Magic_Shoot","ability":"r/Ranged_Magic_Spellcasting","tint":"#b9a8ff"},
+	"skel_brute": {"model":"Skeleton_Warrior","r":"Skeleton_Axe","l":"Skeleton_Shield_Large_A","idle":"g/Idle_A","attack":"m/Melee_1H_Attack_Chop","ability":"m/Melee_2H_Attack_Spin","tint":"#ff9b7a","combo":["m/Melee_1H_Attack_Chop","m/Melee_1H_Attack_Slice_Horizontal","m/Melee_Block_Attack"]},
+	"skel_lord": {"model":"Skeleton_Warrior","r":"Skeleton_Axe","l":"Skeleton_Shield_Large_A","idle":"g/Idle_A","attack":"m/Melee_1H_Attack_Chop","ability":"m/Melee_2H_Attack_Spin","tint":"#a993d6","combo":["m/Melee_1H_Attack_Chop","m/Melee_1H_Attack_Slice_Horizontal","m/Melee_Block_Attack"]},
 }
 const LOOP_HINTS := ["Idle","Running","Walking","Hammering","Holding","Aiming","_Pose","Blocking","Chopping","Pickaxing"]
 
@@ -87,7 +95,7 @@ var my_tag := ""                           # 0.31.134: your own clan's tag (from
 static var _kit_side := 0                  # the side the cached merged castle walls (_kit_merged) were tinted for
 
 func vt(t: int) -> int:
-	return t if t < 0 or my_side == 0 else 1 - t
+	return t if t < 0 or t > 1 or my_side == 0 else 1 - t
 var camera: Camera3D
 var actors: Dictionary = {}
 var oracle_nodes: Array = []
@@ -3174,6 +3182,8 @@ func unit_cosmetic(u: Dictionary) -> Dictionary:
 static var _tint_mats: Dictionary = {}
 
 static func look_key(u: Dictionary) -> String:
+	if u.has("look"):
+		return str(u.look)                      # 0.31.157: a jungle monster, a LEGION skeleton
 	if u.cls == "barbarian" and u.up:
 		return "berserker"
 	if u.cls == "priest" and u.up:
@@ -3296,6 +3306,9 @@ static func make_body(cls: String, cosmetic: Dictionary = {}) -> Dictionary:
 			return {}
 		body = packed.instantiate()
 		skeleton = body.find_child("Skeleton3D", true, false)
+		var rig := body.get_node_or_null("Rig")
+		if rig != null and body.get_node_or_null("Rig_Medium") == null:
+			rig.name = "Rig_Medium"            # 0.31.157: a Skeletons 1.0 body -- the libraries' tracks name the rig so
 	var staffs: Array = []
 	var hand_models: Array = []           # [model, hand, the KayKit file it is held like]
 	if skeleton != null:
@@ -3446,7 +3459,8 @@ static func _face_staff(model: Node3D, file: String, hand: String, sk: Skeleton3
 # the OTHER way round. The quarter turn the same way as the half turn left every Bits bow's string on the far side, away
 # from the archer (Hawkeye, Stag Hunter, Galeshot, Longshot, Heartseeker); tests/weapon_grip_test.gd measures it.
 const WEAPON_SCALE := {"bits/sword_E":0.75, "bits/spear_A":0.8, "bits/spear_B":0.8, "bits/bow_C_withString":0.75, "bits/staff_D":0.85,
-	"bits/halberd":0.85, "bits/shield_D":0.78, "bits/shield_C":0.85, "bits/shield_B":0.9, "bits/shield_A":1.0, "bits/sword_F":0.9, "bits/hammer_D":0.9}
+	"bits/halberd":0.85, "bits/shield_D":0.78, "bits/shield_C":0.85, "bits/shield_B":0.9, "bits/shield_A":1.0, "bits/sword_F":0.9, "bits/hammer_D":0.9,
+	"Skeleton_Axe":0.85, "Skeleton_Shield_Large_A":0.8}      # (0.31.157: the jungle's skeletons)
 
 # 0.31.44 (Kevin's screenshots): crossbows stood up like bows -- they lie forward (a quarter turn about X); shields sat
 # on the hand so the fist poked through the face -- they move out along the slot's Z so the hand is behind the board;
@@ -3655,7 +3669,8 @@ func _ensure_actor(u: Dictionary) -> Dictionary:
 	if made.is_empty():
 		return a
 	root.add_child(made.body)
-	made.body.scale = Vector3.ONE * BODY_SCALE * (MINION_SCALE if bool(u.get("minion", false)) else 1.0)   # 0.31.128 (Kevin): every class the upgraded size (base was 1.0); 0.31.155: 5v5 minions smaller
+	a["mlook"] = str(u.look) if u.has("look") else ""          # 0.31.157: a monster's own clips
+	made.body.scale = Vector3.ONE * BODY_SCALE * (MINION_SCALE * (1.2 if bool(u.get("super", false)) else 1.0) if bool(u.get("minion", false)) else 1.0) * float(u.get("mscale", 1.0))   # 0.31.157: big monsters; 0.31.128 (Kevin): every class the upgraded size (base was 1.0); 0.31.155: 5v5 minions smaller
 	a.body = made.body
 	a.player = made.player
 	_cape_setup(a)
@@ -3805,6 +3820,8 @@ func _build_moba() -> void:
 		moba_towers[int(tw.id)] = {"node":node, "ring":ring}
 
 func _sync_moba() -> void:
+	_sync_rains()
+	_sync_auras()
 	var me: Dictionary = sim.by_id.get(player_id, {})
 	for tw in sim.moba.towers:
 		var mt: Dictionary = moba_towers.get(int(tw.id), {})
@@ -3833,6 +3850,152 @@ func _sync_moba() -> void:
 			for j in 4:
 				spark(sh.to + Vector3(randf_range(-0.3, 0.3), randf_range(-0.2, 0.4), randf_range(-0.3, 0.3)), Color("#ffb04a"))
 			_tshots.remove_at(i)
+
+# ---------- 0.31.157: ultimates, the jungle, gold ----------
+const ULT_COL := {"knight":"#ffd65a", "barbarian":"#ff5a3a", "rogue":"#7a5ab8", "ranger":"#cfe8b8", "mage":"#ff8a3a",
+	"priest":"#fff1a8", "crusader":"#ffd65a", "berserker":"#ff2a2a", "assassin":"#9a6bff", "sniper":"#dff4ff",
+	"archmage":"#c070ff", "necromancer":"#7dff8a"}
+const AURA_COL := {"dr":"#ffd65a", "bl":"#ff5a3a", "ud":"#ff2a2a", "arcane":"#7fb8ff", "ember":"#ff8a3a", "lord":"#c9a6ff"}
+var _rain_fx: Array = []                   # {at, r, until, next}
+var _aura_at := 0.0
+
+func _ground(p: Vector2, up := 0.1) -> Vector3:
+	return Vector3(p.x, Sim.height_at(p) + up, p.y)
+
+func _moba_fx(e: Dictionary) -> void:
+	var a: Dictionary = actors.get(str(e.get("id", "")), {})
+	match str(e.k):
+		"ult":
+			var col := Color(str(ULT_COL.get(str(e.ult), "#ffffff")))
+			var at: Vector3 = (a.root as Node3D).position if not a.is_empty() and is_instance_valid(a.root) else _ground(e.pos)
+			match str(e.ult):
+				"knight", "priest", "necromancer":
+					ring_at(at, col, 2.0 * float(sim.moba.BULWARK_R) - 0.4 if str(e.ult) == "knight" else 3.0, 0.8)
+					for id in e.get("ids", []):
+						var oa: Dictionary = actors.get(str(id), {})
+						if oa.is_empty() or not is_instance_valid(oa.root):
+							continue
+						var op: Vector3 = (oa.root as Node3D).position
+						ring_at(op, col, 2.0, 0.7)
+						for i in 6:
+							spark(op + Vector3(randf_range(-0.5, 0.5), 0.3 + randf() * 2.0, randf_range(-0.5, 0.5)), col)
+				"barbarian", "berserker":
+					for i in 2:
+						ring_at(at, col, 3.0 + 2.0 * i, 0.5 + 0.2 * i)
+					for i in 12:
+						spark(at + Vector3(randf_range(-0.7, 0.7), 0.4 + randf() * 1.8, randf_range(-0.7, 0.7)), col)
+					shake(0.25)
+				"rogue":
+					for p2 in [e.get("from", e.pos), e.get("to", e.pos)]:
+						var q := _ground(p2, 0.2)
+						for i in 10:
+							spark(q + Vector3(randf_range(-0.6, 0.6), randf() * 1.8, randf_range(-0.6, 0.6)), col)
+					ring_at(_ground(e.get("to", e.pos)), col, 2.4, 0.5)
+				"ranger":
+					var c2: Vector2 = e.get("at", e.pos)
+					ring_at(_ground(c2), col, 2.0 * float(e.get("r", 4.5)) - 0.4, float(e.get("dur", 2.0)))
+					_rain_fx.append({"at":c2, "r":float(e.get("r", 4.5)), "until":_time + float(e.get("dur", 2.0)), "next":_time})
+				"mage", "crusader":
+					var r := float(e.get("r", 6.0))
+					for i in 3:
+						ring_at(at, col, 2.0 * r - 0.4 - i * 1.5, 0.5 + 0.15 * i)
+					if str(e.ult) == "mage":
+						_pack_explosion("light", at + Vector3(0, 0.6, 0), 1.6)
+					shockwave(at + Vector3(0, 0.3, 0), r)
+					for i in 16:
+						var ang := randf() * TAU
+						spark(at + Vector3(cos(ang) * r * 0.7, 0.4 + randf(), sin(ang) * r * 0.7), col)
+					shake(0.45)
+				"assassin", "sniper", "archmage":
+					ring_at(at, col, 2.6, 0.6)
+					for i in 8:
+						spark(at + Vector3(randf_range(-0.5, 0.5), 0.4 + randf() * 1.6, randf_range(-0.5, 0.5)), col)
+		"flurry_hit":
+			var fp := _ground(e.pos, 0.2)
+			for i in 6:
+				spark(fp + Vector3(randf_range(-0.5, 0.5), 0.3 + randf() * 1.5, randf_range(-0.5, 0.5)), Color("#9a6bff"))
+			ring_at(fp, Color("#9a6bff"), 1.4, 0.35)
+		"lord_slam":
+			var lp := _ground(e.pos, 0.2)
+			ring_at(lp, Color("#c9a6ff"), 2.0 * float(sim.moba.LORD_SLAM_R) - 0.4, 0.5)
+			shockwave(lp, float(sim.moba.LORD_SLAM_R))
+			for i in 8:
+				spark(lp + Vector3(randf_range(-2.0, 2.0), 0.3 + randf() * 0.8, randf_range(-2.0, 2.0)), Color("#d8c2ff"))
+			var me: Dictionary = sim.by_id.get(player_id, {})
+			if not me.is_empty() and (me.pos as Vector2).distance_to(e.pos) < 14.0:
+				shake(0.35)
+		"camp_up":
+			for id in e.get("ids", []):
+				var ca: Dictionary = actors.get(str(id), {})
+				var cu: Dictionary = sim.by_id.get(str(id), {})
+				if cu.is_empty():
+					continue
+				var cp := _ground(cu.pos)
+				ring_at(cp, TEAM_COLORS[2], 1.8, 0.6)
+				for i in 6:
+					spark(cp + Vector3(randf_range(-0.5, 0.5), randf() * 0.8, randf_range(-0.5, 0.5)), Color("#e8dcc0"))
+				if not ca.is_empty() and is_instance_valid(ca.root):
+					(ca.root as Node3D).position = cp - Vector3(0, 0.1, 0)
+		"buff":
+			if not a.is_empty() and is_instance_valid(a.root):
+				var bc := Color(str(AURA_COL.get(str(e.buff), "#ffffff")))
+				for i in 2:
+					ring_at((a.root as Node3D).position, bc, 2.4 + i * 1.6, 0.7 + 0.2 * i)
+				for i in 10:
+					spark((a.root as Node3D).position + Vector3(randf_range(-0.5, 0.5), 0.3 + randf() * 2.0, randf_range(-0.5, 0.5)), bc)
+		"lord_down":
+			var ld := _ground(sim.moba.BOSS_P, 0.2)
+			_pack_explosion("heavy", ld + Vector3(0, 1.4, 0), 1.6)
+			for i in 3:
+				ring_at(ld, Color("#c9a6ff"), 3.0 + i * 2.0, 0.8 + i * 0.2)
+			shake(0.6)
+		"gold":
+			if str(e.id) == player_id:
+				number(_ground(e.pos, 2.4), "+%d" % int(e.n), true, true)
+
+func _sync_rains() -> void:
+	for i in range(_rain_fx.size() - 1, -1, -1):
+		var rf: Dictionary = _rain_fx[i]
+		if _time >= float(rf.until):
+			_rain_fx.remove_at(i)
+			continue
+		if _time < float(rf.next):
+			continue
+		rf.next = _time + (0.12 if low_fx else 0.05)
+		var packed := Stage.scene("res://assets/kaykit/weapons/arrow_bow.gltf")
+		if packed == null:
+			continue
+		var ang := randf() * TAU
+		var to2: Vector2 = (rf.at as Vector2) + Vector2(cos(ang), sin(ang)) * sqrt(randf()) * float(rf.r)
+		var to := _ground(to2, 0.2)
+		var arrow: Node3D = packed.instantiate()
+		arrow.scale = Vector3.ONE * 1.3
+		arrow.rotation.x = PI * 0.5                   # nose down
+		add_child(arrow)
+		_fx.append({"node":arrow, "at":_time, "life":0.32, "kind":"fall", "p0":to + Vector3(randf_range(-1.0, 1.0), 9.0, randf_range(-1.0, 1.0)), "p1":to})
+
+func _sync_auras() -> void:
+	# a buffed or ult-boosted hero glows: a spark of its colour every so often
+	if low_fx or _time < _aura_at:
+		return
+	_aura_at = _time + 0.22
+	var t: float = sim.time
+	for u in sim.units:
+		if not bool(u.get("hero", false)) or not sim.alive(u):
+			continue
+		var a: Dictionary = actors.get(str(u.id), {})
+		if a.is_empty() or not is_instance_valid(a.root):
+			continue
+		var cols := []
+		if t < float(u.get("dr_until", -1.0)): cols.append(AURA_COL.dr)
+		if t < float(u.get("bl_until", -1.0)): cols.append(AURA_COL.bl)
+		if t < float(u.get("ud_until", -1.0)): cols.append(AURA_COL.ud)
+		var b: Dictionary = u.get("buffs", {})
+		for k in ["arcane", "ember", "lord"]:
+			if t < float(b.get(k, -1.0)):
+				cols.append(AURA_COL[k])
+		for c in cols:
+			spark((a.root as Node3D).position + Vector3(randf_range(-0.45, 0.45), 0.2 + randf() * 1.8, randf_range(-0.45, 0.45)), Color(str(c)))
 
 func _tower_shot(e: Dictionary) -> void:
 	var tw: Dictionary = sim.moba.towers[int(e.tw)]
@@ -4032,7 +4195,7 @@ func _sync_load(a: Dictionary, u: Dictionary) -> void:
 	a.load_node = n
 
 func _animate(a: Dictionary, u: Dictionary, vel: float) -> void:
-	var look: Dictionary = LOOKS.get(u.cls, LOOKS.villager)
+	var look: Dictionary = LOOKS.get(str(u.look) if u.has("look") else u.cls, LOOKS.villager)
 	if u.state == "dead":
 		if not a.dead:
 			a.dead = true
@@ -4079,7 +4242,7 @@ func on_event(e: Dictionary) -> void:
 		"attack":
 			if a.is_empty():
 				return
-			var look: Dictionary = LOOKS.get(a.cls, LOOKS.villager)
+			var look: Dictionary = LOOKS.get(str(a.get("mlook", "")) if str(a.get("mlook", "")) != "" else a.cls, LOOKS.villager)
 			var clip := str(look.ability if e.kind == "ability" else look.attack)
 			if e.kind == "attack" and look.has("combo"):                  # 0.31.62: the combo's swing
 				var cb: Array = look.combo
@@ -4235,6 +4398,8 @@ func on_event(e: Dictionary) -> void:
 			ring_at(Vector3(kp.x, ky + 0.2, kp.y), Color("#ffd65a"), float(sim.moba.KING_REACH), 0.5)
 			for i in 6:
 				spark(Vector3(kp.x + randf_range(-1.5, 1.5), ky + 0.4 + randf() * 1.0, kp.y + randf_range(-1.5, 1.5)), Color("#ffd65a"))
+		"ult", "flurry_hit", "lord_slam", "camp_up", "buff", "lord_down", "gold":
+			_moba_fx(e)                           # 0.31.157 5V5: ultimates, the jungle, gold
 		"king_down":
 			var kd: Vector2 = sim.moba.king_pos(int(e.team))
 			var kdy := Sim.height_at(kd)
@@ -4430,6 +4595,8 @@ func _sync_projectiles() -> void:
 		var node: Node3D = proj_nodes.get(p.id)
 		if node == null:
 			node = _make_projectile(str(p.kind))
+			if bool(p.get("big", false)):
+				node.scale = Vector3.ONE * 2.2             # 0.31.157: the Ranger's DEADEYE
 			proj_nodes[p.id] = node
 		# Offline the sim ticks at 30 Hz while frames run at 60: draw it where it is *now*.
 		var at: Vector2 = p.pos + (p.vel as Vector2) * proj_lead
@@ -4578,8 +4745,8 @@ func spark(at: Vector3, color: Color) -> void:
 	var dir := Vector3(randf_range(-1, 1), randf_range(0.6, 1.6), randf_range(-1, 1))
 	_fx.append({"node":mi, "at":_time, "life":0.45, "kind":"spark", "p0":at, "dir":dir})
 
-func number(at: Vector3, text: String, mine: bool) -> void:
-	numbers.append({"pos":at, "text":text, "mine":mine, "at":_time})
+func number(at: Vector3, text: String, mine: bool, gold := false) -> void:
+	numbers.append({"pos":at, "text":text, "mine":mine, "at":_time, "gold":gold})
 	if numbers.size() > 40:
 		numbers.pop_front()
 
@@ -4607,6 +4774,8 @@ func _step_fx() -> void:
 			"spark":
 				node.position = fx.p0 + fx.dir * u * 1.2
 				node.scale = Vector3.ONE * maxf(0.05, 1.0 - u)
+			"fall":                                     # 0.31.157: an ARROW RAIN arrow
+				node.position = (fx.p0 as Vector3).lerp(fx.p1, u)
 	for i in range(numbers.size()-1, -1, -1):
 		if _time - float(numbers[i].at) > 0.8:
 			numbers.remove_at(i)
@@ -4669,7 +4838,12 @@ func bars() -> Array:
 		if a.is_empty() or not is_instance_valid(a.root):
 			continue
 		var c: Color = Color("#7dff8a") if u.id == player_id else TEAM_COLORS[vt(int(u.team))]
-		var bar := {"pos": (a.root as Node3D).position + Vector3(0, 2.7, 0), "fill": clampf(u.hp / maxf(1.0, u.max_hp), 0.0, 1.0), "color": c}
+		var bar := {"pos": (a.root as Node3D).position + Vector3(0, 2.7 * float(u.get("mscale", 1.0)), 0), "fill": clampf(u.hp / maxf(1.0, u.max_hp), 0.0, 1.0), "color": c}
+		if u.has("mon") and float(u.get("mscale", 1.0)) > 1.0:
+			bar["name"] = str(sim.moba.MONSTERS[str(u.mkind)].name)        # 0.31.157: the buff monsters and the Bone Lord
+			bar["name_color"] = Color("#ffe9a6")
+			if str(u.mkind) == "lord":
+				bar["wide"] = true
 		if u.id == player_id and my_name != "":
 			# 0.31.88 (Kevin: "Show the nameplate for the players own name also"): yours from your profile, so it's there
 			# against bots too and doesn't wait on the server

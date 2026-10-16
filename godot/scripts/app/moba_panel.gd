@@ -33,8 +33,9 @@ func open(a) -> void:
 	tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	UI2.body(body, "You and four bot heroes against five. Every 30 seconds each castle sends minions down the three lanes. "
 		+ "Two towers guard each lane, and your gates are behind them. Level up to 10 by fighting near minions; pick an "
-		+ "upgrade each level. Break their towers and a gate, then defeat their King on his throne -- he's their heart, "
-		+ "and he hits back.", 12, UI2.SOFT)
+		+ "upgrade each level, and at level 6 your ULTIMATE. Earn gold and buy items in your castle. Skeleton camps in the "
+		+ "jungle give gold and buffs; the Bone Lord on the island blesses your whole side. Break their towers and a gate, "
+		+ "then defeat their King on his throne -- he's their heart, and he hits back.", 12, UI2.SOFT)
 	UI2.text(body, "PICK YOUR HERO", 16, UI2.GOLD)
 	var holder := CenterContainer.new()
 	holder.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -46,7 +47,7 @@ func open(a) -> void:
 	_grid.add_theme_constant_override("v_separation", 8)
 	holder.add_child(_grid)
 	_info = UI2.body(body, "", 12, Color.WHITE)
-	_info.custom_minimum_size = Vector2(0, 36)
+	_info.custom_minimum_size = Vector2(0, 54)
 	_go = UI2.button(body, "BATTLE", "orange", func():
 		app.profile.d.settings["moba_hero"] = hero
 		app.profile.save()
@@ -62,7 +63,9 @@ func _render() -> void:
 		c.queue_free()
 	for hid in Moba.HERO_ORDER:
 		_grid.add_child(_card(str(hid)))
-	_info.text = "%s: %s" % [str(Moba.HEROES[hero].name), str(Moba.HERO_LINE.get(hero, ""))]
+	var u: Dictionary = Moba.ULTS.get(hero, {})
+	_info.text = "%s: %s\nULTIMATE (level %d) %s: %s" % [str(Moba.HEROES[hero].name), str(Moba.HERO_LINE.get(hero, "")), Moba.ULT_LEVEL,
+		str(u.get("name", "")), str(u.get("text", ""))]
 
 func _card(hid: String) -> Control:
 	var on := hid == hero

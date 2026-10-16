@@ -4650,3 +4650,80 @@ Kevin: "Have the enemy king be the "heart" and players will have to defeat him"
   up yet on a busy machine) and staged_start_test (_ready 207 ms against 200, the known flake) -- both pass alone (twice /
   176 ms). tools/cold_start_check.sh: PASS. The Play AAB (throwaway key, presets untouched): BASE OK (263 files),
   CONTENT OK, play_games true, bundletool valid. Preview APK: build/Fatebound-Siege-0.31.156-fatebound.apk (preview key).
+
+## 0.31.157 — 5V5: ultimates, the jungle, gold and the shop
+Kevin: "Build the other 3 mechanics now" (the three left after 0.31.156: ultimates at level 6, jungle camps, a gold shop)
+- ULTIMATES (moba.gd ULTS; the ULT button where ACTION sits -- "LV 6" until then, the ult's name after, a gold glow when
+  ready, II from level 9): every hero his own, unlocked at level 6, from level 9 x1.35 and back in 3/4 of the time:
+  Knight BULWARK (he and every ally within 7 m take half damage for 5 s), Barbarian WAR CRY (6 s: wind-up and recovery
+  x0.67, +25 % damage, +15 % speed), Rogue EXECUTE (blinks behind the weakest enemy hero within 10 m, x3 damage + 20 %
+  of what he's missing), Archer ARROW RAIN (8 volleys over 2.4 s on a 4.5 m circle at the nearest hero within 15 m),
+  Mage INFERNO (x2.4 and a 1.2 s stun to everyone within 7 m), Priest GRACE (every hero on the side, anywhere, +35 %),
+  Crusader JUDGMENT (x2 and a 1.5 s stun within 5.5 m; allies there +15 %), Berserker UNDYING (5 s nothing takes him
+  below 1, +30 % damage), Assassin FLURRY (blinks to up to 4 enemies within 9 m in turn, x2 each), Ranger DEADEYE (a
+  huge piercing arrow 75 m across the field at the nearest hero within 60 m, x3.5, a 1.2 s stun to all it passes),
+  Archmage METEORS (6 meteors round the nearest hero within 14 m), Necromancer LEGION (4 skeletons on his side for
+  20 s; no reward for their fall). Recharge 50-80 s; ability-speed upgrades and items count, ARCANE too. Bots use
+  theirs when it pays (BULWARK with allies near or hurt, EXECUTE on a hero under 45 %, GRACE when one's under 30 %
+  or two under 60 %, UNDYING under 30 %, INFERNO on two heroes...). The view: rings, sparks, shockwaves, an arrow
+  storm, a glow while one lasts; each its own sound from the pack (bulwark, rampage, shadow, barrage, ember, magic,
+  surge, crit, meteor). The hero window tells each hero's ultimate.
+- GOLD: 500 to start; 2 a second from the first wave (while down too); the last hit on a minion (Knight 22, Archer and
+  Priest 15 -- a minion a tower or a minion finishes pays no one); a knockout 300, and 150 shared by the side's heroes
+  who hit him in the last 10 s or stood within 12 m; a tower 150 to the one who brings it down and 75 to everyone on
+  the side; the jungle (below). Gold you earn floats up gold (+22) with a coin.
+- THE SHOP (in your own castle, or anywhere while you're down): six slots; Long Sword 350 (+12 % damage), Ruby Crystal
+  400 (+15 % health), Dagger 300 (+12 % attack speed), Boots 300 (+10 % speed), Spell Tome 400 (abilities +20 %
+  faster), Vampire Fang 400 (7 % lifesteal), Healing Bead 250 (+0.6 % health a second), Cloth Armor 300 (10 % less
+  damage taken); and the big ones, built from the small ones you own (they come off the price and leave your slots):
+  Bloodthirster 1900 (Sword + Fang: +35 % damage, 12 % lifesteal), Titan's Belt 1700 (Ruby + Bead: +40 % health,
+  1.2 %/s), Phantom Blade 1700 (two Daggers: +35 % attack speed, +6 % speed), Archon Staff 1800 (Tome + Sword: +30 %
+  damage, abilities +30 %), Thornplate 1600 (Cloth + Ruby: 25 % less damage, +15 % health), Swift Greaves 900 (Boots:
+  +20 % speed), Holy Relic 1500 (Tome + Bead: +40 % healing, +15 % health, abilities +15 %). One pair of boots; damage
+  taken at most halved. Selling gives 70 % back. Bots buy their class's list (BUILDS) when home or down.
+  HUD: under TOWERS your gold and SHOP (glowing while you can buy), your six slots, your buffs with their time left;
+  tapped (or B), the shop: your slots (tap one, SELL +N), the 8 small and 7 big items (drawn glyphs, item_icon.gd; the
+  price is what's left for you), the one picked -- what it gives, what it's built from / goes into -- BUY (or why not:
+  NEED N GOLD, BUY IN YOUR CASTLE, NO ROOM, ONE PAIR OF BOOTS). The game keeps going while it's open.
+- THE JUNGLE: KayKit Skeletons 1.0 (CC0, from its GitHub; the bodies' 95 embedded animations stripped -- the rig is the
+  Adventurers', so the Rig_Medium libraries drive them). Per side (red's the point mirror of blue's): the Bone Pack
+  (a Skeleton Warrior and two Skeletons) between the west lane and the middle, the Grave Archers (two crossbow
+  Skeletons and one Skeleton) between the middle and the east lane, the ARCANE WRAITH (a big skeleton mage) and the
+  EMBER BRUTE (a big red skeleton warrior) out in the fields beyond the side lanes, each with two Skeletons; the BONE
+  LORD (a giant skeleton warrior, ~3400 health, a slam round him every 5 s) on the island's west end, from 5:00. Camps
+  come at 0:30; back 75 s (the Lord 180 s, the buff camps 120 s) after they're cleared; 5 % stronger for every minute
+  played. They're team 2 -- everyone's enemy -- but stand still until hit; then the camp fights whoever hit it while he
+  stays within 9 m of it (the Lord 8), turns on the latest other hitter inside when he leaves or falls, and walks home
+  and heals (30 %/s) when there's no one. Towers and lane minions leave them alone (and gates and Kings can't be hurt
+  by them). Gold (Skeleton 20, Warrior 45, Archer 28, the buff monsters 90) to the one who finishes each, XP to the
+  side's heroes near. The buff camps' big one gives its finisher 90 s of ARCANE (abilities and the ultimate recharge
+  30 % faster) or EMBER (+20 % damage); knock a buffed hero out and his buff is yours (30 s at least). The Bone Lord:
+  every hero of the side that brings him down +300 gold and 120 XP, and the LORD'S BLESSING for those standing (120 s:
+  +15 % damage; the side's minions come out with +40 % health and damage). One bot a side is the jungler (blue's fifth,
+  red's fourth): his side's camps nearest first, theirs from level 4, else a lane for a while; a ranged hero closes in
+  before he shoots (a rock or a tree in the way stopped arrows). A side's bots go for the Lord when he's up and they're
+  clearly ahead (two more of them standing, or 5 levels ahead with four up). The view: the skeletons in their camps,
+  neutral-yellow health bars (names over the big ones, a wide one for the Lord), their rise, the Lord's slam; the HUD:
+  over a cleared camp in view, when it's back ("ARCANE WRAITH 0:27"); toasts and the kill feed for buffs and the Lord
+  ("THE BONE LORD HAS RISEN ON THE ISLAND"); the 5V5 toast line moved under the kill feed (clear of the gold).
+- Pacing (with the jungle, gold and ultimates, six bot matches in a row went to time with both Kings untouched):
+  5v5 matches are 15 minutes (MATCH_5V5; 12 before); League's inhibitor -- a castle gate down sends super minions
+  down the lanes that end at it (x1.5 health and damage, a little bigger); minions hit towers and gates x1.5; towers
+  900 / 1150 (1000 / 1300), the 5v5 gates 800 (1100); the King 3000 health (3500), healing 0.2 %/s after 10 s alone
+  (1.5 %/s after 6 s -- he got back to full between pushes), his slam a third as hard on minions; respawns 4 + 2.6 s a
+  level (1.6); bot heroes hit an enemy gate that can be hurt while their minions are at it (as they do towers); when
+  their King is open and two more of us are standing, every bot with a third of his health goes for him; bots weigh
+  their ultimate before running home hurt.
+- Fixed (5v5 since 0.31.155): a Priest bot's "attack" fired a still, endless arrow (the Priest's shot has no speed) --
+  hundreds piled up over a match (297 by 7:00) and the projectile step took half the sim's time (12.6 ms a tick);
+  now no shot (sim._resolve_attack), and Priest heroes fight their way (the Necromancer drains from close enough, the
+  Priest keeps a few steps off and heals). A whole bot match: 4.7 ms a tick here (21,600 ticks, 326 over 10 ms).
+- The sim: a third side (team 2) -- projectiles (swept per side, three lists), the hammer, paths (blue's grid) and gates
+  know it; a lane minion's swing and arrow pass the monsters by; a hook before a hit lands (moba.mod_damage: BULWARK,
+  WAR CRY, UNDYING, EMBER, the LORD'S BLESSING, armor) and one on healing (the Holy Relic); act "ult", "shop_buy",
+  "shop_sell" (those two also while down).
+- Tests: moba_more_test (new, 59 checks: each ultimate, gold, the shop, the jungle, a whole bot match); moba_ui_test +
+  the gold and SHOP tapped, a Long Sword bought, ULT locked then cast (METEORS), the Bone Pack and the Bone Lord on the
+  field (pictures).
+- Version 0.31.157, versionCode 243 (server code changed: SERVER_BUILD 0.31.157 -- the server installs the sim and
+  moba.gd; the world content pack changes: the skeletons).

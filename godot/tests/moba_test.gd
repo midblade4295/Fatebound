@@ -270,8 +270,8 @@ func _init() -> void:
 			sm.time, sm.winner, sm.end_reason, int(sm.moba.king_frac(0) * 100.0), int(sm.moba.king_frac(1) * 100.0), str(sm.kills), sm.moba.towers_down(0),
 			sm.moba.towers_down(1), gates_down, str(lv), peak, Time.get_ticks_msec() - t0])
 		if mi == 0:
-			check(sm.ended and sm.moba.towers_down(0) + sm.moba.towers_down(1) >= 2 and lv.max() >= 6 and peak < 10 + 2 * Moba.MINION_CAP + 1,
-				"a whole match: towers fall (%d), heroes reach level %d, minions stay under the cap (%d units at most)" % [sm.moba.towers_down(0) + sm.moba.towers_down(1), lv.max(), peak])
+			check(sm.ended and sm.moba.towers_down(0) + sm.moba.towers_down(1) >= 2 and lv.max() >= 6 and peak < 10 + 2 * Moba.MINION_CAP + 25 + 12 + 1,
+				"a whole match: towers fall (%d), heroes reach level %d, minions stay under the cap (%d units at most, with the jungle's 25 and LEGIONs)" % [sm.moba.towers_down(0) + sm.moba.towers_down(1), lv.max(), peak])
 	print("MOBA_PASS" if fails.is_empty() else "MOBA_FAIL %s" % str(fails))
 	quit(0 if fails.is_empty() else 1)
 

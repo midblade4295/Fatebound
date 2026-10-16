@@ -873,6 +873,19 @@ func _on_action(kind: String) -> void:
 			if sim != null and sim.act(hud.player_id, "pick", int(kind.right(1))):
 				if audio != null and audio.has_method("play"):
 					audio.play("equip")
+		"ult":                                           # 0.31.157 5V5: the ultimate
+			if sim != null and sim.moba != null and not sim.act(hud.player_id, "ult"):
+				var me_u: Dictionary = sim.by_id.get(hud.player_id, {})
+				if not me_u.is_empty() and sim.moba.ult_rank(me_u) == 0:
+					hud.toast("Your ultimate comes at level %d" % sim.moba.ULT_LEVEL, Color("#ffcf7a"))
+				elif not me_u.is_empty() and float(me_u.get("ult_cd", 0.0)) <= 0.0 and sim.can_act(me_u):
+					hud.toast("No enemy in reach", Color("#ffcf7a"))         # (EXECUTE, FLURRY: they need someone near)
+		_:
+			if kind.begins_with("shop_buy:") or kind.begins_with("shop_sell:"):     # 0.31.157 5V5: the shop
+				var ok: bool = sim != null and sim.act(hud.player_id, "shop_buy" if kind.begins_with("shop_buy:") else "shop_sell",
+					kind.get_slice(":", 1) if kind.begins_with("shop_buy:") else int(kind.get_slice(":", 1)))
+				if audio != null and audio.has_method("play"):
+					audio.play("purchase" if ok and kind.begins_with("shop_buy:") else ("coin" if ok else "error"))
 
 var cards_played := 0                 # (tests)
 
@@ -1334,6 +1347,26 @@ func _event_sound(e: Dictionary) -> void:
 			_cue("tm_crumble", 2, e.pos, 32.0, false, 0.3)
 		"pierce_hit":
 			_cue("tm_bow_hit", 3, e.pos, HEAR_R, false, 1.1)
+		"ult":                                          # 0.31.157 5V5: each ultimate its own sound
+			var us: String = {"knight":"bulwark", "barbarian":"rampage", "rogue":"shadow", "ranger":"barrage", "mage":"ember",
+				"priest":"magic", "crusader":"surge", "berserker":"rampage", "assassin":"shadow", "sniper":"crit", "archmage":"meteor",
+				"necromancer":"magic"}.get(str(e.get("ult", "")), "surge")
+			_cue(us, 1, e.get("pos", _unit_pos(e.get("id", ""))), 40.0, mine)
+		"flurry_hit":
+			_cue("tm_sword_hit", 3, e.get("pos", Vector2.INF), HEAR_R, mine)
+		"lord_slam":
+			_cue("tm_rock_hit", 2, e.get("pos", Vector2.INF), 40.0, false, 1.0)
+		"lord_down", "camp_up":
+			if str(e.k) == "lord_down" or str(e.get("kind", "")) == "lord":
+				_cue("horn", 1, Vector2.INF, 0.0, true, 0.8)
+		"buff":
+			_cue("surge", 1, _unit_pos(e.get("id", "")), 24.0, mine, 0.8)
+		"ult_ready":
+			if mine:
+				_cue("levelUp", 1, Vector2.INF, 0.0, true, 0.8)
+		"gold":
+			if mine:
+				_cue("coin", 1, Vector2.INF, 0.0, true, 0.45)
 		"launch_count":                                 # 0.31.28: the launcher's lever
 			_cue("tm_gate_close", 1, e.pos, 30.0, false, 0.8)
 		"launch":
