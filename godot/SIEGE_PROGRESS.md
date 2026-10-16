@@ -4568,3 +4568,9 @@ Kevin (a Home screenshot, the phone's profile without the tutorial played): "I d
   PLAY), in its place after. Its TEST tag moved to its left side (over it, the tag covered TUTORIAL's label).
 - commander_ui_test: + a fresh profile -- COMMANDER under TUTORIAL, in line with it, above PLAY.
 - Version 0.31.154, versionCode 240 (server code unchanged; SERVER_BUILD follows the app's version).
+- Quick suite: 95 of 97 in the run. commander_ui_test's new check wanted COMMANDER above PLAY; headless the window is
+  short and PLAY's plaque comes up level with the fourth row (beside it, not under it) -- the check is now "not over
+  the plaque" (passes headless and at 420 x 933). staged_start_test: _ready 237 ms against 200 on a busy machine (the
+  known flake); alone 183 ms, pass. tools/cold_start_check.sh: PASS. The Play AAB (throwaway key, presets untouched):
+  BASE OK (259 files), CONTENT OK, play_games true, bundletool valid. Preview APK:
+  build/Fatebound-Siege-0.31.154-fatebound.apk (preview key).

@@ -87,10 +87,12 @@ func _process(delta: float) -> bool:
 				var tb := btn("tutorial_start")
 				var cb := btn("side_commander")
 				var pb := btn("play")
+				# (clear of PLAY: not over its plaque -- on a short screen the plaque comes up level with it, beside it)
+				var crect: Rect2 = cb.get_global_rect() if cb != null else Rect2()
 				check(tb != null and cb != null and cb.global_position.y >= tb.global_position.y + tb.size.y - 8.0
-					and absf(cb.global_position.x - tb.global_position.x) < 1.0 and pb != null and cb.global_position.y + cb.size.y < pb.global_position.y,
-					"no tutorial yet: COMMANDER under TUTORIAL (y %d -> %d), clear of PLAY (%d)" % [int(tb.global_position.y) if tb else -1,
-					int(cb.global_position.y) if cb else -1, int(pb.global_position.y) if pb else -1])
+					and absf(cb.global_position.x - tb.global_position.x) < 1.0 and pb != null and not crect.intersects(pb.get_global_rect()),
+					"no tutorial yet: COMMANDER under TUTORIAL (y %d -> %d), clear of PLAY (%s)" % [int(tb.global_position.y) if tb else -1,
+					int(cb.global_position.y) if cb else -1, str(pb.get_global_rect()) if pb else "-"])
 				_shot("cmd_home_fresh")
 				app.queue_free()
 				app = null
