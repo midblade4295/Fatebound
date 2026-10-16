@@ -4646,3 +4646,7 @@ Kevin: "Have the enemy king be the "heart" and players will have to defeat him"
   when left alone; the tiebreak; defeated -> the match won).
 - Four bot matches: two won on the King (10:38, 9:57), two at time (one with their King at 90 %).
 - Version 0.31.156, versionCode 242 (server code changed: SERVER_BUILD 0.31.156).
+- Quick suite: 97 of 99 in the run; notify_test (its CHEST NOTIFICATIONS window counted 4 frames after UNLOCK and wasn't
+  up yet on a busy machine) and staged_start_test (_ready 207 ms against 200, the known flake) -- both pass alone (twice /
+  176 ms). tools/cold_start_check.sh: PASS. The Play AAB (throwaway key, presets untouched): BASE OK (263 files),
+  CONTENT OK, play_games true, bundletool valid. Preview APK: build/Fatebound-Siege-0.31.156-fatebound.apk (preview key).
