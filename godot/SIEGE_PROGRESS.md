@@ -4799,3 +4799,14 @@ Sight, Brush, Ward, Minion, Turret, Monster).
   connection isn't retried); the test now waits for the server's port, then passes. tools/cold_start_check.sh: PASS.
   The Play AAB (throwaway key, presets untouched): BASE OK (267 files), CONTENT OK, play_games true, bundletool valid.
   Preview APK: build/Fatebound-Siege-0.31.158-fatebound.apk (preview key).
+
+## Minion model concepts (after 0.31.158; no game change)
+Kevin: "Make new model concepts for the minions" (the lane minions still wear the heroes' bodies, scaled down).
+- Concepts: ElevenLabs gpt-image-2 (flow "Fatebound minion concepts"), the hero concept picks side by side as the
+  style reference (reports/concepts/ref_minion_style.png); per minion kind two designs, two takes each, blue team
+  (red gets the team colour swap): A "the King's levy" -- faceless soldiers in royal-blue gambesons with the tower
+  emblem (a kettle-helm footman with sword and buckler, a wide-brimmed crossbowman, a goggled bombardier with a
+  shoulder cannon and powder keg, a hulking hammer champion); B "living armor" -- empty enchanted armor glowing blue
+  (a sword-and-shield suit, a crossbow suit with glowing bolts, a stone golem with a mortar on its back, an iron
+  colossus with a glowing core). 16 images, ~6,710 credits. Sheets: reports/concepts/minion_<melee|caster|siege|super>
+  _concepts.png, all of them: minion_concepts_all.jpg. Waiting on Kevin's picks (then turnarounds -> Meshy -> rig).
