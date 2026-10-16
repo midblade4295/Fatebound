@@ -64,6 +64,29 @@ func _init() -> void:
 	pid = OS.create_process(OS.get_executable_path(), ["--headless", "--path", ProjectSettings.globalize_path("res://"), "-s", "res://server/siege_server.gd"])
 	check(pid > 0, "server process started (pid %d)" % pid)
 
+var _probe: StreamPeerTCP = null
+var _probe_at := 0.0
+var _up := false
+
+func _server_up() -> bool:
+	if _up:
+		return true
+	if _probe == null:
+		if t < _probe_at:
+			return false
+		_probe = StreamPeerTCP.new()
+		_probe.connect_to_host("127.0.0.1", port)
+	_probe.poll()
+	match _probe.get_status():
+		StreamPeerTCP.STATUS_CONNECTED:
+			_probe.disconnect_from_host()
+			_up = true
+			t = 0.0
+		StreamPeerTCP.STATUS_ERROR, StreamPeerTCP.STATUS_NONE:
+			_probe = null
+			_probe_at = t + 0.2
+	return _up
+
 func _finish() -> void:
 	if pid > 0:
 		OS.kill(pid)
@@ -85,7 +108,13 @@ func _process(delta: float) -> bool:
 				raw_lobby_n += 1
 	match phase:
 		"boot":
-			if t > 1.5:
+			# 0.31.158: wait for the server to listen (its start-up took 1.5-1.8 s here; the client doesn't retry a
+			# refused connection, so a fixed 1.5 s raced it)
+			if not _server_up():
+				if t > 12.0:
+					check(false, "server listening within 12 s"); _finish()
+				return false
+			if t > 0.2:
 				mode = Mode.new()
 				mode.online = true
 				mode.net_url = "ws://127.0.0.1:%d/fatebound/siege/ws" % port
