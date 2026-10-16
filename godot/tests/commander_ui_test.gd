@@ -1,7 +1,6 @@
 extends SceneTree
 # 0.31.153 COMMANDER (the test) in the app:
-#  0. (0.31.154) a phone that hasn't played the tutorial: COMMANDER under the TUTORIAL medallion, clear of PLAY;
-#  1. Home: COMMANDER (with a TEST tag) where the tutorial was, once it's done; it opens the deck window;
+#  1. the deck window (0.31.155: no longer on Home -- 5V5 has its place; app.open_commander());
 #  2. the deck window: 14 cards, your 8 ticked, the average cost; a card out -> PICK 1 MORE (BATTLE off); a ninth
 #     refused; back to 8 -> BATTLE; the deck kept on the phone;
 #  3. BATTLE: an offline COMMANDER match with that deck (no server, no ticket); the hand drawn from it;
@@ -14,7 +13,7 @@ const Cards = preload("res://scripts/meta/cards.gd")
 const CmdPanel = preload("res://scripts/app/commander_panel.gd")
 
 var fails: Array = []
-var phase := "fresh"
+var phase := "boot"
 var t := 0.0
 var t_phase := 0.0
 var app
@@ -72,34 +71,7 @@ func _process(delta: float) -> bool:
 		check(false, "timed out in phase %s" % phase)
 		return _finish()
 	match phase:
-		"fresh":
-			var fb := "user://cmdui-fresh-%d" % Time.get_ticks_usec()
-			var fp = Profile.new(fb + "-profile.json", fb + "-none.json")
-			fp.load_or_create()
-			fp.save()
-			app = App.new()
-			app.profile_path = fb + "-profile.json"
-			app.legacy_path = fb + "-none.json"
-			root.add_child(app)
-			_go("fresh_home")
-		"fresh_home":
-			if t_phase > 1.0:
-				var tb := btn("tutorial_start")
-				var cb := btn("side_commander")
-				var pb := btn("play")
-				# (clear of PLAY: not over its plaque -- on a short screen the plaque comes up level with it, beside it)
-				var crect: Rect2 = cb.get_global_rect() if cb != null else Rect2()
-				check(tb != null and cb != null and cb.global_position.y >= tb.global_position.y + tb.size.y - 8.0
-					and absf(cb.global_position.x - tb.global_position.x) < 1.0 and pb != null and not crect.intersects(pb.get_global_rect()),
-					"no tutorial yet: COMMANDER under TUTORIAL (y %d -> %d), clear of PLAY (%s)" % [int(tb.global_position.y) if tb else -1,
-					int(cb.global_position.y) if cb else -1, str(pb.get_global_rect()) if pb else "-"])
-				_shot("cmd_home_fresh")
-				app.queue_free()
-				app = null
-				_go("boot")
 		"boot":
-			if t_phase < 0.3:
-				return false
 			var base := "user://cmdui-%d" % Time.get_ticks_usec()
 			var p = Profile.new(base + "-profile.json", base + "-none.json")
 			p.load_or_create()
@@ -113,10 +85,8 @@ func _process(delta: float) -> bool:
 			_go("home")
 		"home":
 			if t_phase > 1.0:
-				check(btn("side_commander") != null and has_text(btn("side_commander"), "COMMANDER") and btn("tutorial_start") == null,
-					"Home: COMMANDER where the tutorial was (it's done)")
-				_shot("cmd_home")
-				press("side_commander")
+				# (0.31.155: Home's medallion is 5V5's now -- moba_ui_test; COMMANDER opens from the app)
+				app.open_commander()
 				_go("deck")
 		"deck":
 			if t_phase > 0.4:

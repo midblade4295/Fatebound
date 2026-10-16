@@ -4574,3 +4574,53 @@ Kevin (a Home screenshot, the phone's profile without the tutorial played): "I d
   known flake); alone 183 ms, pass. tools/cold_start_check.sh: PASS. The Play AAB (throwaway key, presets untouched):
   BASE OK (259 files), CONTENT OK, play_games true, bundletool valid. Preview APK:
   build/Fatebound-Siege-0.31.154-fatebound.apk (preview key).
+
+## 0.31.155 — 5V5 (test): heroes, minion waves and League's towers, against bots
+Kevin, on COMMANDER: "Hm not sure if I like picking the troops give me other ideas" -- "More ideas" -- "What about putting
+in moba mechanics" -- "5v5" -- "Minions should spawn in a group of 1 healer, 2 ranged and 1 knight" -- "Remove the hat
+system. Minions will stack up if opportunity happens. If minions still alive then the new mions that spawn will
+eventually join them just like in league of legends. Make sure to have same tower mechanics as league of legends".
+(Asked meanwhile, no answer yet: is it won by rescuing the King or by destroying the castle's heart -- built with the
+King for now.)
+- scripts/siege/moba.gd (new), on the sim through hooks (stat, step, _think, _damage, _kill, _damage_gate, melee and
+  arrows on towers, ACTION, level picks; the 16v16, COMMANDER and the server don't change -- moba stays null):
+  - Heroes: five a side (you and four bots; five bots), 12 to pick from (the six classes and their six upgrades), each
+    keeping its class all match: no hats (the stands stay empty, nothing to take or swap), no Villagers, no workshop.
+    Heroes have 1.8x their class's health (an upgrade x1.15 more, its damage x1.1). A fallen hero comes back as himself
+    in his castle after 4 + 1.6 x level s; his own castle heals him 6 % a second.
+  - Levels 1-10: XP from enemy minions dying within 12 m (15, shared 65 % each when there are more of you), hero
+    knockouts (40 + 12 x their level; helpers half), towers (50 to the whole side). Each level +6 % health and damage
+    and 3 upgrades to choose from (+15 % damage, +15 % health, +8 % speed, +12 % attack speed, ability +25 % faster,
+    8 % lifesteal, regen 1 %/s; each up to 3 times; none of a healer's useless ones). Bots pick by themselves.
+  - Lanes: the three crossings (west bridge, island, east bridge) as tracks of points along the dirt paths from one
+    castle's gate to the other's. From 0:15, every 30 s each castle sends down each lane 1 Knight, 2 Archers, 1 Priest
+    (Kevin's group), smaller minions (x0.5 health, x0.45 damage). They march, fight whatever's in front (an enemy hero
+    who hurts one of their heroes first, then minions, then towers, then heroes), and push on; a wave still fighting
+    when the next comes is joined by it (stacking happens by itself; a 40-a-side ceiling only for the phone). At the
+    lane's end: the enemy gate, then inside.
+  - Towers, League's rules: two per lane per side (outer, inner) beside the track, solid (KayKit hex towers in the
+    side's colour). 11.5 m range; a shot every 0.9 s, homing. Target: an enemy hero who hurts one of its heroes in
+    range (call for help) over anything; else the nearest minion; heroes only when no minion is in range. On a hero
+    40 damage ramping +40 % a shot in a row (3 times at most), +4 % a minute; on a minion 45 % (Knight) / 70 % of its
+    health. An inner tower can't be damaged while its lane's outer one stands; a castle gate can't be damaged while an
+    inner tower of a lane leading to it stands (the jail: while the front gates stand). With none of the attackers'
+    minions in range a tower takes a third of the damage (backdoor). Only basic attacks and arrows/fire hurt towers.
+    1000 / 1300 health (from 1600 / 2000: at those, in three bot matches no gate ever fell).
+  - Bot heroes: a lane each (yours: west, middle, east x2; theirs: west, middle x2, east x2); follow their wave,
+    fight heroes not under a tower, then minions, then the enemy tower while our minions take its shots; step out of
+    an enemy tower's range when it would shoot them; home to heal under 30 %; their carrier taking their King home is
+    chased. Once an enemy gate is down, two of each side's bots go for the King with the siege brain.
+  - Winning: as before (3 rescues, or ahead at 12 minutes), then more of their towers down, then hero knockouts.
+- The view: the towers (a stump when down, an explosion), their health bars (wide), their range on the ground near an
+  enemy one (red when it's on you), their shots (a fireball from the top homing in; bigger as it warms up), minions
+  at 0.78 size. The HUD: LEVEL and an XP bar under your health, TOWERS yours / theirs; a level-up's three upgrades as
+  chips in the middle of the screen until you tap one ("LEVEL 3! PICK AN UPGRADE"); "That tower is protected" when you
+  hit one behind another; the kill feed without minions, with towers falling; no hat-shop signs. Results: towers down
+  each way, your level, "5V5 is a test -- no rewards yet" (no gold, XP, pass, challenges).
+- Home: 5V5 (TEST) takes COMMANDER's medallion (COMMANDER stays in the code, off Home); it opens the hero window
+  (moba_panel.gd: 12 heroes, a line each, the last pick kept in settings.moba_hero), BATTLE starts it offline.
+- The server installs scripts/siege/moba.gd (the sim loads it) -- caught by tools/test_server_files.py.
+- Three bot matches (MATCHES=3): towers down 5/4, 1/6, 5/2; gates down 4, 2, 2; one King rescued; heroes level 6-10;
+  at most 67 units on the field; about 3.5 ms a tick here (the 16v16's bot matches: 2.6-3.5).
+- Tests: moba_test (new), moba_ui_test (new); commander_ui_test opens COMMANDER from the app now.
+- Version 0.31.155, versionCode 241 (server code changed: SERVER_BUILD 0.31.155).

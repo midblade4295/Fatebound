@@ -182,6 +182,10 @@ run war_rewards_test     WAR_REWARDS_PASS         90
 # app -- Home's COMMANDER, the deck window, BATTLE, a card tapped on the HUD, the results without rewards
 run commander_test       COMMANDER_PASS           180
 run commander_ui_test    COMMANDER_UI_PASS        120
+# 0.31.155 5V5 (the test): heroes, waves (stacking), League's tower rules, gates behind towers, levels and picks, a
+# hero's fall, whole bot matches; then the app -- Home's 5V5, the hero window, BATTLE, a level-up picked on the screen
+run moba_test            MOBA_PASS                300
+run moba_ui_test         MOBA_UI_PASS             150
 # 0.31.153: every script the server installs can load what it loads (the installer copies a list)
 t0=$SECONDS
 if timeout 60 python3 tools/test_server_files.py > /tmp/siege_test_server_files.log 2>&1 && grep -q SERVER_FILES_PASS /tmp/siege_test_server_files.log; then

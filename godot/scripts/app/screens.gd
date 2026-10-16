@@ -344,13 +344,14 @@ static func home(app, root: VBoxContainer) -> void:
 		gold_tag.position = Vector2(-10, -8)
 		gold_tag.rotation = deg_to_rad(-8.0)
 	# 0.31.153 (Kevin: "Yes" -- the Clash Royale-style test): COMMANDER, in the tutorial's place once it's done; under the
-	# tutorial until then (0.31.154, Kevin: "I don't see the test button" -- a phone that hadn't played the tutorial)
+	# tutorial until then (0.31.154, Kevin: "I don't see the test button" -- a phone that hadn't played the tutorial).
+	# 0.31.155: 5V5 takes the slot (Kevin on COMMANDER: "not sure if I like picking the troops" -> MOBA, 5v5)
 	var cmd_y: float = MED_Y[2] if bool(d.get("tutorial_done", false)) else MED_Y[2] + (MED_Y[2] - MED_Y[1])
-	var cmb := _medallion(top, Vector2(w - 62, cmd_y), "helmet", "COMMANDER", func():
+	var cmb := _medallion(top, Vector2(w - 62, cmd_y), "swords", "5V5", func():
 		app.sfx("menuOpen")
-		app.open_commander(), "side_commander", 0, "silver")
+		app.open_moba(), "side_moba", 0, "silver")
 	var tt := _tag(cmb, "TEST", 11)
-	tt.name = "CommanderTest"
+	tt.name = "MobaTest"
 	tt.position = Vector2(-18, 26)                     # (on its left side: over it, it covered TUTORIAL's label)
 	tt.rotation = deg_to_rad(-8.0)
 	# 0.31.119 (Kevin: "Do all" -- leaderboards): RANKS takes the top-right medallion (the week's leaderboard); the first

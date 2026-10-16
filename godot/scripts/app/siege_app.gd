@@ -27,8 +27,9 @@ const LEADERBOARD_PANEL := "res://scripts/app/leaderboard_panel.gd"
 const DAILY_REWARD := "res://scripts/app/daily_reward.gd"
 const UPDATE_SCREEN := "res://scripts/app/update_screen.gd"
 const COMMANDER_PANEL := "res://scripts/app/commander_panel.gd"    # 0.31.153: COMMANDER (the test)
+const MOBA_PANEL := "res://scripts/app/moba_panel.gd"              # 0.31.155: 5V5 (the test)
 const LATER := [SIEGE_MODE, WAR_TABLE, CLAN_PANEL, CHAT_PANEL, FRIENDS_PANEL, ORDERS_PANEL, DAILY_REWARD, LEADERBOARD_PANEL, UPDATE_SCREEN,
-	COMMANDER_PANEL]
+	COMMANDER_PANEL, MOBA_PANEL]
 const WarMap = preload("res://scripts/meta/war_map.gd")
 const Audio = preload("res://scripts/native_audio.gd")
 const Assets = preload("res://scripts/siege/asset_cache.gd")
@@ -1261,6 +1262,24 @@ func start_commander(deck: Array) -> void:
 
 var pending_commander: Array = []         # 0.31.153: the deck the next match is a COMMANDER match with
 
+func open_moba() -> void:
+	# 0.31.155 5V5 (the test): the hero window (moba_panel.gd), then BATTLE -> start_moba
+	close_modal()
+	var m = _later(MOBA_PANEL).new()
+	add_child(m)
+	modal = m
+	m.open(self)
+
+func start_moba(hero: String) -> void:
+	# 0.31.155: an offline 5v5 against bots as this hero (siege_mode.gd moba_hero; scripts/siege/moba.gd). No server, no
+	# ticket, no rewards: a test of how it plays.
+	if siege != null:
+		return
+	pending_moba = hero
+	start_match(false, true)
+
+var pending_moba := ""                    # 0.31.155: the hero the next match is a 5v5 with
+
 var pending_join := ""                   # 0.31.120: a friend's public id whose match the next PLAY joins
 var pending_war := ""                    # 0.31.135: a battle on the war map the next match is for
 
@@ -1458,7 +1477,10 @@ func start_match(online: bool, tutorial := false, follow := false) -> void:
 			"party_n":social.party_size() if social != null and social.online() and social.in_party() else 1})
 	siege = _later(SIEGE_MODE).new()
 	siege.online = online
-	siege.tutorial = tutorial and pending_commander.is_empty()
+	siege.tutorial = tutorial and pending_commander.is_empty() and pending_moba == ""
+	if pending_moba != "":
+		siege.moba_hero = pending_moba              # 0.31.155 (start_moba: through the tutorial's door, a full 5v5)
+		pending_moba = ""
 	if not pending_commander.is_empty():
 		siege.commander = true                      # 0.31.153 (start_commander: through the tutorial's door -- offline, no
 		siege.deck = pending_commander              # ticket -- but a full match)

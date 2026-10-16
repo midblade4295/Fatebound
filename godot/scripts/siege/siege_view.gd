@@ -178,7 +178,9 @@ func setup_steps(s) -> Array:
 			["castle 1", func():
 				_build_castle(1)
 				_merge_kit(1)],
-			["props+nodes+stands", _build_props],
+			["props+nodes+stands", func():
+				_build_props()
+				_build_moba()],                  # 0.31.155 5V5: the lane towers
 			["edge scenery", _build_edge_scenery],
 			["oracles+warm", func():
 				for tm in 2:
@@ -3653,7 +3655,7 @@ func _ensure_actor(u: Dictionary) -> Dictionary:
 	if made.is_empty():
 		return a
 	root.add_child(made.body)
-	made.body.scale = Vector3.ONE * BODY_SCALE           # 0.31.128 (Kevin): every class the upgraded size (base was 1.0)
+	made.body.scale = Vector3.ONE * BODY_SCALE * (MINION_SCALE if bool(u.get("minion", false)) else 1.0)   # 0.31.128 (Kevin): every class the upgraded size (base was 1.0); 0.31.155: 5v5 minions smaller
 	a.body = made.body
 	a.player = made.player
 	_cape_setup(a)
@@ -3770,8 +3772,93 @@ func sync(dt: float) -> void:
 	_sync_oracles(dt)
 	_sync_castle(dt)
 	_sync_projectiles()
+	if sim.moba != null:
+		_sync_moba()
 	_step_fx()
 	_update_camera(dt)
+
+# ---------- 5V5 (0.31.155, scripts/siege/moba.gd) ----------
+# The lane towers (KayKit hex towers in the side's colour; a stump once fallen), their range on the ground when you're
+# near an enemy one (red when it's aiming at you), their shots (a fireball from the top that homes in on its target).
+const MINION_SCALE := 0.78
+const TOWER_SCALE := 2.0
+const TOWER_TOP := 4.4
+var moba_towers: Dictionary = {}           # tower id -> {node, ring}
+var _tshots: Array = []                    # {node, from, id, t0, flight, to}
+
+func _build_moba() -> void:
+	if sim.moba == null:
+		return
+	for tw in sim.moba.towers:
+		var col: String = COLOR[vt(int(tw.team))]
+		var gy := Sim.height_at(tw.p)
+		var face := 0.0 if int(tw.team) == 0 else PI
+		var node := _place(HEX + "building_tower_A_%s.gltf" % col, Vector3(tw.p.x, gy, tw.p.y), face, TOWER_SCALE)
+		var ring := MeshInstance3D.new()
+		ring.mesh = _ring_mesh(sim.moba.TOWER_RANGE, 0.16)
+		ring.scale = Vector3(1, 0.15, 1)
+		ring.material_override = _unshaded(Color(1.0, 0.85, 0.5, 0.55))
+		ring.position = Vector3(tw.p.x, gy + 0.08, tw.p.y)
+		ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		ring.visible = false
+		add_child(ring)
+		moba_towers[int(tw.id)] = {"node":node, "ring":ring}
+
+func _sync_moba() -> void:
+	var me: Dictionary = sim.by_id.get(player_id, {})
+	for tw in sim.moba.towers:
+		var mt: Dictionary = moba_towers.get(int(tw.id), {})
+		if mt.is_empty():
+			continue
+		var ring: MeshInstance3D = mt.ring
+		var show: bool = not bool(tw.dead) and not me.is_empty() and int(tw.team) != int(me.team) and sim.alive(me) \
+			and (me.pos as Vector2).distance_to(tw.p) <= float(sim.moba.TOWER_RANGE) + 5.0
+		ring.visible = show
+		if show:
+			var on_me: bool = str(tw.target) == str(me.id)
+			(ring.material_override as StandardMaterial3D).albedo_color = Color(1.0, 0.2, 0.15, 0.8) if on_me else Color(1.0, 0.85, 0.5, 0.45)
+	for i in range(_tshots.size() - 1, -1, -1):
+		var sh: Dictionary = _tshots[i]
+		var k := clampf((_time - float(sh.t0)) / float(sh.flight), 0.0, 1.0)
+		var a: Dictionary = actors.get(str(sh.id), {})
+		if not a.is_empty() and is_instance_valid(a.root):
+			sh.to = (a.root as Node3D).position + Vector3(0, 1.1, 0)
+		var at: Vector3 = (sh.from as Vector3).lerp(sh.to, k)
+		at.y += sin(k * PI) * 0.8
+		if is_instance_valid(sh.node):
+			(sh.node as Node3D).position = at
+		if k >= 1.0:
+			if is_instance_valid(sh.node):
+				(sh.node as Node3D).queue_free()
+			for j in 4:
+				spark(sh.to + Vector3(randf_range(-0.3, 0.3), randf_range(-0.2, 0.4), randf_range(-0.3, 0.3)), Color("#ffb04a"))
+			_tshots.remove_at(i)
+
+func _tower_shot(e: Dictionary) -> void:
+	var tw: Dictionary = sim.moba.towers[int(e.tw)]
+	var from := Vector3(tw.p.x, Sim.height_at(tw.p) + TOWER_TOP, tw.p.y)
+	var node := _make_projectile("fire")
+	node.position = from
+	if int(e.get("ramp", 0)) >= 2:
+		node.scale = Vector3.ONE * (1.0 + 0.2 * float(int(e.ramp)))      # (a tower warmed up on a hero: bigger shots)
+	var a: Dictionary = actors.get(str(e.id), {})
+	var to: Vector3 = (a.root as Node3D).position + Vector3(0, 1.1, 0) if not a.is_empty() and is_instance_valid(a.root) else from
+	_tshots.append({"node":node, "from":from, "id":str(e.id), "t0":_time, "flight":float(e.get("flight", 0.3)), "to":to})
+
+func _tower_down(e: Dictionary) -> void:
+	var tw: Dictionary = sim.moba.towers[int(e.tw)]
+	var mt: Dictionary = moba_towers.get(int(e.tw), {})
+	var gy := Sim.height_at(tw.p)
+	var at := Vector3(tw.p.x, gy, tw.p.y)
+	if not mt.is_empty():
+		if is_instance_valid(mt.node):
+			(mt.node as Node3D).queue_free()
+		(mt.ring as MeshInstance3D).visible = false
+		mt.node = _place(HEX + "building_tower_base_%s.gltf" % COLOR[vt(int(tw.team))], at, 0.0 if int(tw.team) == 0 else PI, TOWER_SCALE * 0.8)
+	_pack_explosion("heavy", at + Vector3(0, 2.0, 0), 1.6)
+	for i in 3:
+		ring_at(at + Vector3(0, 0.2, 0), Color("#e0c9a0"), 3.0 + i, 0.7 + i * 0.2)
+	_shake = maxf(_shake, 0.5)
 
 # ---------- hand tools (Round 19, KayKit RPG Tools Bits) ----------
 const TOOLS := "res://assets/kaykit/tools/"
@@ -4138,6 +4225,10 @@ func on_event(e: Dictionary) -> void:
 				ring_at(Vector3(g2.c.x, gy2 + 0.2, g2.c.y), Color("#e0c9a0"), 2.5 + i, 0.7 + i * 0.2)
 			for i in 12:
 				spark(Vector3(g2.c.x + randf_range(-2, 2), gy2 + 0.5 + randf() * 2.5, g2.c.y + randf_range(-1, 1)), Color("#c8b89a"))
+		"tshot":
+			_tower_shot(e)                        # 0.31.155 5V5
+		"tower_down":
+			_tower_down(e)
 		"gate_rebuilt":
 			var g3: Dictionary = sim.gates[int(e.gate)]
 			ring_at(Vector3(g3.c.x, Sim.height_at(Vector2(g3.c.x, g3.c.y)) + 0.2, g3.c.y), TEAM_COLORS[vt(int(e.team))], 3.0, 0.8)
@@ -4549,6 +4640,11 @@ func _update_camera(dt: float) -> void:
 func bars() -> Array:
 	# [{pos, fill, color}] for the HUD to draw 2D health bars over living units.
 	var out := []
+	if sim.moba != null:
+		for tw in sim.moba.towers:                 # 0.31.155 5V5: the towers' health (wide)
+			if not bool(tw.dead):
+				out.append({"pos":Vector3(tw.p.x, Sim.height_at(tw.p) + TOWER_TOP + 1.2, tw.p.y), "fill":clampf(float(tw.hp) / float(tw.max_hp), 0.0, 1.0),
+					"color":TEAM_COLORS[vt(int(tw.team))], "wide":true})
 	for u in sim.units:
 		if u.state == "dead":
 			continue

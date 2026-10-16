@@ -480,6 +480,11 @@ func show_result(result: Dictionary = {}) -> void:
 		UI2.body(r, str(ch[1]), 11, Color.WHITE, false)
 	if me.gathered > 0 or me.gate_dmg > 0.0:
 		UI2.center(UI2.body(v, "Gathered %d · gate damage %d" % [int(me.gathered), int(me.gate_dmg)], 12, Color("#cfe8b8"), false))
+	if sim.moba != null:
+		# 0.31.155 5V5 (the test): the towers each side brought down, your level; no rewards yet
+		UI2.center(UI2.body(v, "Towers down: theirs %d · yours %d  ·  you reached level %d" % [sim.moba.towers_down(1 - int(me.team)),
+			sim.moba.towers_down(int(me.team)), int(me.get("level", 1))], 12, Color("#ffcf7a"), false))
+		UI2.center(UI2.body(v, "5V5 is a test -- no rewards yet", 11, UI2.MUTED, false))
 	if sim.commander:
 		# 0.31.153 COMMANDER (the test): the cards each side played; no rewards yet
 		UI2.center(UI2.body(v, "Cards played: you %d · enemy %d" % [int(sim.cmd[me.team].played), int(sim.cmd[1 - int(me.team)].played)], 12, Color("#d6a2ff"), false))
@@ -695,7 +700,7 @@ func is_player(u: Dictionary) -> bool:
 
 func ranking(team := -1) -> Array:
 	# units by points (then knockouts, then fewer downs); team -1 = everyone
-	var out: Array = sim.units.filter(func(u): return team < 0 or int(u.team) == team)
+	var out: Array = sim.units.filter(func(u): return (team < 0 or int(u.team) == team) and (sim.moba == null or bool(u.get("hero", false))))
 	out.sort_custom(func(a, b):
 		var pa := points(a)
 		var pb := points(b)
@@ -828,6 +833,11 @@ func on_event(e: Dictionary) -> void:
 		toast("%s full · %d/%d" % [str(Sim.CLASSES.get(str(e.cls), {"name":str(e.cls).capitalize()}).get("name", str(e.cls).capitalize())) + ("s" if str(e.cls) != "worker" else "s"), int(e.n), int(e.cap)], VisualTheme.GOLD)
 		return
 	match str(e.k):
+		"level":
+			if str(e.get("id", "")) == str(player_id):
+				toast("LEVEL %d!  PICK AN UPGRADE" % int(e.level), VisualTheme.GOLD)
+		"tower_immune":
+			toast("That tower is protected -- take the one in front of it first", Color("#ffcf7a"))
 		"multikill":
 			var n := int(e.n)
 			if str(e.id) == str(player_id):
@@ -959,6 +969,12 @@ func _touch(index: int, pos: Vector2, pressed: bool) -> void:
 			if qc_panel.get_global_rect().has_point(pos + global_position):
 				return                             # (the wheel's own buttons take it)
 			qc_panel.visible = false
+		if sim.moba != null:
+			for i in 3:
+				if pick_rect(i).has_point(pos) and _picks_open():
+					action_pressed.emit("pick%d" % i)
+					get_viewport().set_input_as_handled()
+					return
 		if sim.commander:
 			for i in Cards.HAND:
 				if card_rect(i).grow(4.0).has_point(pos):
@@ -1138,7 +1154,9 @@ func _draw_hud() -> void:
 	if diag != null and diag.fps_text != "":
 		_text(Vector2(w - 212, 142), diag.fps_text, 11, Color(1, 1, 1, 0.6), _font, HORIZONTAL_ALIGNMENT_RIGHT, 200)
 	if sim.commander and not _modal_open():
-		_draw_cards(me)                           # (before the respawn line: the hand plays while you're down too)
+		_draw_cards(me)
+	if sim.moba != null and not _modal_open():
+		_draw_picks(me)                           # (before the respawn line: the hand plays while you're down too)
 	if me.state == "dead":
 		_text(Vector2(w * 0.5, size.y * 0.45), "RESPAWNING IN %d" % int(ceil(me.respawn_at - sim.time)), 22, VisualTheme.GOLD, _title)
 		return
@@ -1221,7 +1239,15 @@ func _kf_event(e: Dictionary, me: Dictionary) -> void:
 				return
 			_kf_add([["Enemy", TEAM_COLORS[vt(1 - int(me.team))].lightened(0.15)], [" sent ", grey],
 				[str(cd.name) + (" ×%d" % n if n > 1 else ""), Color(str(Cards.RARITY_COLOR.get(str(cd.rarity), "#ffffff")))]], false)
+		"tower_down":
+			if sim.moba == null:
+				return
+			var ours_t := int(e.get("team", -1)) == int(me.team)
+			_kf_add([["%s %s %s tower fell" % ["Our" if ours_t else "Their", str(sim.moba.LANE_NAMES[int(e.lane)]),
+				"outer" if int(e.tier) == 1 else "inner"], VisualTheme.RED if ours_t else VisualTheme.GOLD]], false)
 		"death":
+			if bool(e.get("minion", false)):
+				return                                     # (0.31.155: minions fall all the time)
 			var victim := str(e.get("id", ""))
 			var by := str(e.get("by", ""))
 			if not sim.by_id.has(victim):
@@ -1288,6 +1314,61 @@ func _draw_kill_feed() -> void:
 		y += KF_STEP
 	if keep.size() != kill_feed.size():
 		kill_feed = keep
+
+# ---------- 5V5 (0.31.155) ----------
+# Under your health: your level and XP, then the towers standing (yours, theirs). A level-up: three upgrade chips in
+# the middle of the screen until you tap one (siege_mode -> sim "pick").
+func _draw_moba_status(me: Dictionary) -> void:
+	var t: int = me.team
+	var lv := int(me.get("level", 1))
+	var need: float = sim.moba.need(lv)
+	var xr := Rect2(14, 140, minf(160.0, size.x * 0.38), 6)
+	_text(Vector2(xr.end.x + 8, 147), "LEVEL %d" % lv, 12, VisualTheme.GOLD, _bold, HORIZONTAL_ALIGNMENT_LEFT, 100)
+	draw_rect(xr.grow(1), Color(0, 0, 0, 0.6))
+	if lv < sim.moba.LEVEL_MAX:
+		draw_rect(Rect2(xr.position, Vector2(xr.size.x * clampf(float(me.get("xp", 0.0)) / need, 0.0, 1.0), xr.size.y)), Color("#ffd65a"))
+	else:
+		draw_rect(xr, Color("#ffd65a"))
+	var ours := 0
+	var theirs := 0
+	for tw in sim.moba.towers:
+		if bool(tw.dead):
+			continue
+		if int(tw.team) == t:
+			ours += 1
+		else:
+			theirs += 1
+	_text(Vector2(14, 164), "TOWERS  YOURS %d · THEIRS %d" % [ours, theirs], 11, Color("#cfe8b8"), _bold, HORIZONTAL_ALIGNMENT_LEFT, 260)
+
+func _picks_open() -> bool:
+	var me: Dictionary = sim.by_id.get(player_id, {})
+	return not me.is_empty() and not (me.get("picks", []) as Array).is_empty()
+
+func pick_rect(i: int) -> Rect2:
+	var w := minf(124.0, (size.x - 40.0) / 3.0)
+	var x0 := (size.x - (w * 3.0 + 16.0)) * 0.5
+	return Rect2(x0 + (w + 8.0) * float(i), 312.0, w, 52.0)
+
+var _pick_style: StyleBox = null
+
+func _draw_picks(me: Dictionary) -> void:
+	var picks: Array = me.get("picks", [])
+	if picks.is_empty():
+		return
+	var offer: Array = picks[0]
+	if _pick_style == null:
+		_pick_style = VisualTheme.panel(Color(0.08, 0.05, 0.16, 0.92), VisualTheme.GOLD, 10, 6)
+	var pulse := 0.75 + 0.25 * sin(_time * 5.0)
+	_text(Vector2(size.x * 0.5, 304.0), "LEVEL %d · CHOOSE ONE%s" % [int(me.level) - picks.size() + 1, "  (+%d more)" % (picks.size() - 1) if picks.size() > 1 else ""],
+		13, Color(1.0, 0.85, 0.4, pulse), _bold)
+	for i in offer.size():
+		var r := pick_rect(i)
+		draw_style_box(_pick_style, r)
+		var nm := str(sim.moba.UPGRADES.get(str(offer[i]), {}).get("name", str(offer[i])))
+		var have := int((me.get("ups", {}) as Dictionary).get(str(offer[i]), 0))
+		_text(Vector2(r.get_center().x, r.position.y + 25.0), nm, 12 if nm.length() <= 12 else 10, Color.WHITE, _bold)
+		if have > 0:
+			_text(Vector2(r.get_center().x, r.position.y + 42.0), "have %d" % have, 10, Color(1, 1, 1, 0.6), _font)
 
 # ---------- COMMANDER's hand (0.31.153) ----------
 # A column on the right edge, between the kill feed and DODGE: the next card (small), your army, then the 4 cards of the
@@ -1438,6 +1519,8 @@ func _draw_bars() -> void:
 		if p.y < 150.0:
 			continue
 		var r := Rect2(p - Vector2(17, 3), Vector2(34, 5))
+		if bool(b.get("wide", false)):
+			r = Rect2(p - Vector2(34, 4), Vector2(68, 8))         # (0.31.155: a 5v5 tower)
 		draw_rect(r.grow(1.0), Color(0, 0, 0, 0.7))
 		draw_rect(Rect2(r.position, Vector2(r.size.x * float(b.fill), r.size.y)), b.color)
 		if b.has("name"):                                 # 0.31.86: a live player's name over the bar
@@ -1554,6 +1637,9 @@ func _draw_numbers() -> void:
 
 func _draw_castle_status(me: Dictionary) -> void:
 	var t: int = me.team
+	if sim.moba != null:
+		_draw_moba_status(me)
+		return
 	var load_txt := ""
 	if me.load.n > 0:
 		load_txt = "   carrying %d %s" % [me.load.n, me.load.kind]
@@ -1665,7 +1751,7 @@ func _draw_station_titles(me: Dictionary) -> void:
 	# covering a lot of the ground"): one slim line -- the name (Cinzel 13) and, for hat shops, the stock
 	# as dots -- about half the height of the 0.19.5 two-line signboard; shown within 16 m, fading over
 	# the last 4. A pointer marks the building; kept on screen at the edges.
-	if not project.is_valid() or not on_screen.is_valid():
+	if not project.is_valid() or not on_screen.is_valid() or sim.moba != null:
 		return
 	var spots := []
 	for st in sim.stands:

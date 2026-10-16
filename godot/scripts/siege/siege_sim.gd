@@ -8,6 +8,10 @@ const TICK := 1.0 / 30.0
 const Land = preload("res://scripts/siege/siege_land.gd")
 const Castle = preload("res://scripts/siege/siege_castle.gd")
 const Cards = preload("res://scripts/meta/cards.gd")
+const Moba = preload("res://scripts/siege/moba.gd")
+# 0.31.155 5V5 (the test; scripts/siege/moba.gd): heroes, minion waves, towers. null unless setup_moba() was called:
+# then these hooks hand over to it (stat, step, _think, _damage, _kill, gates, melee and arrows on towers, ACTION).
+var moba = null
 const HALF_W := Land.HALF_W
 const HALF_L := Land.HALF_L
 # Castle layouts are authored in "castle-local" blue-space coordinates (x -13..13, z 15..29 with
@@ -736,6 +740,8 @@ func armory_mult(team: int) -> float:
 
 func stat(u: Dictionary, key: String) -> Variant:
 	var base: Variant = CLASSES[u.cls][key]
+	if moba != null:
+		return moba.stat(u, key, base)
 	if key in ["hp","dmg"]:
 		var v := float(base) * (1.25 if u.up else 1.0)
 		if u.cls != "villager" and u.cls != "worker":
@@ -871,8 +877,10 @@ func act(id: String, action: String, arg: Variant = null) -> bool:
 			return _block(u) if u.cls == "knight" else false
 		"dodge": return _dodge(u)
 		"interact": return _interact(u)
-		"hat_swap": return _swap_hat(u)
-		"take_tools": return _take_tools(u)
+		"pick":                                      # 0.31.155: a 5v5 hero's level-up choice (arg: 0-2)
+			return moba != null and moba.pick(u, int(arg))
+		"hat_swap": return moba == null and _swap_hat(u)
+		"take_tools": return moba == null and _take_tools(u)
 		"buy":
 			# Hat upgrades are bought AT the hat shop (Round 12), not through the workshop menu.
 			if str(arg).begins_with("hat_"):
@@ -1131,6 +1139,8 @@ func near_repair_gate(u: Dictionary) -> Dictionary:
 func _interact(u: Dictionary) -> bool:
 	if u.stun > 0.0 or not u.state in ["idle","move"]:
 		return false
+	if moba != null:
+		return moba.interact(u)
 	if u.carrying:
 		var ho := lifting_oracle(u)
 		_leave_lift(u, not ho.is_empty() and ho.lifters.size() == 1 and lifters_needed(ho) == 1)
@@ -1289,6 +1299,8 @@ func context_action(u: Dictionary) -> String:
 	# What the ACTION button does right now, for the HUD label.
 	if not alive(u):
 		return ""
+	if moba != null:
+		return moba.context(u)
 	if u.carrying:
 		var ho := lifting_oracle(u)
 		return "throw" if (not ho.is_empty() and ho.lifters.size() == 1 and lifters_needed(ho) == 1) else "letgo"
@@ -1405,6 +1417,8 @@ func _drop_hat(u: Dictionary) -> void:
 	_event("hat_drop", {"hat":h.id, "cls":h.cls, "pos":h.pos, "team":u.team})
 
 func _step_hats(dt: float) -> void:
+	if moba != null:
+		return                                    # 0.31.155: no hats in 5v5
 	for st in stands:
 		if int(st.stock) < int(STAND_STOCK.get(st.cls, HAT_STOCK_MAX)):
 			st.t += dt
@@ -1549,6 +1563,8 @@ func _damage(src: Dictionary, dst: Dictionary, amount: float, stun := 0.0) -> vo
 		_event("blocked", {"id":dst.id, "pos":dst.pos})
 		return
 	dst.hp -= amount
+	if moba != null:
+		moba.on_damage(src, dst, amount)          # 0.31.155: lifesteal; who hit a hero (the towers' and minions' call for help)
 	_stat_add(src, "dmg", amount)
 	_stat_add(dst, "taken", amount)
 	if stun > 0.0:
@@ -1589,6 +1605,9 @@ func _kill(src: Dictionary, dst: Dictionary) -> void:
 		away = away.normalized() if away.length() > 0.01 else dir_of(float(dst.face) + PI)
 		push = Vector3(away.x * 3.2, 1.6, away.y * 3.2)
 	dst["death_push"] = push
+	if moba != null:
+		moba.on_kill(src, dst)                     # 0.31.155: no hats; heroes come back as themselves, minions go
+		return
 	_multi_kill(src, dst)
 	_stat_add(src, "kills", 1.0)
 	_stat_add(dst, "deaths", 1.0)
@@ -1618,6 +1637,8 @@ func _kill(src: Dictionary, dst: Dictionary) -> void:
 func _damage_gate(src: Dictionary, g: Dictionary, amount: float) -> void:
 	if not gate_blocks(g):
 		return
+	if moba != null and not moba.gate_open(g):
+		return                                    # 0.31.155: a gate behind standing towers can't be touched
 	g.hp = maxf(0.0, g.hp - amount)
 	g["hit_at"] = time
 	if src.has("gate_dmg"):
@@ -1721,6 +1742,8 @@ func _melee(u: Dictionary, reach: float, arc: float, dmg: float, stun := 0.0) ->
 			continue
 		_damage_gate(u, g, dmg * float(CLASSES[u.cls].gate))
 		hits += 1
+	if moba != null and str(u.get("atk", "")) == "attack":
+		hits += moba.melee_towers(u, reach, arc, dmg)    # 0.31.155: basic attacks hit towers
 	return hits
 
 static func on_rampart(p: Vector2) -> bool:
@@ -1847,6 +1870,8 @@ func step(dt: float = TICK) -> void:
 	if profile: t0 = _p("world", t0)
 	if commander:
 		_step_cmd(dt)
+	if moba != null:
+		moba.step(dt)
 	if time >= match_time:
 		_finish("time")
 
@@ -1859,7 +1884,7 @@ func _step_unit(u: Dictionary, dt: float) -> void:
 		_step_flight(u)
 		return
 	u.cd_dodge = maxf(0.0, u.cd_dodge - dt)
-	u.cd_ability = maxf(0.0, u.cd_ability - dt)
+	u.cd_ability = maxf(0.0, u.cd_ability - dt * float(u.get("m_cdr", 1.0)))     # (0.31.155: a 5v5 hero's faster recharge)
 	if u.workshop_open and u.pos.distance_to(workshop(u.team)) > WORKSHOP_RADIUS + 0.8:
 		u.workshop_open = false
 	if u.load.n > 0:
@@ -2343,11 +2368,13 @@ func _step_projectiles(dt: float) -> void:
 			p.pos = impact                            # explode / stop where it struck, not past it
 		var blocked := false
 		var hit_gate := {}
+		var hit_tw := -1
 		var pb := _bucket(p.pos)
 		for oi in _bucket_obs_proj[pb]:
 			var ob: Dictionary = obstacles[oi]
 			if p.pos.distance_to(ob.p) < ob.r:
 				blocked = true
+				hit_tw = int(ob.get("tw", -1))           # 0.31.155: a 5v5 tower
 				break
 		if not blocked:
 			# Pre-filtered at build time: ledges, cell bars, river banks and rails don't stop arrows or
@@ -2373,6 +2400,8 @@ func _step_projectiles(dt: float) -> void:
 		var owner: Dictionary = by_id.get(p.owner, {"team":p.team})
 		if not hit_gate.is_empty():
 			_damage_gate(owner, hit_gate, p.dmg * float(p.gate_mult))
+		if hit_tw >= 0 and moba != null and hit.is_empty():
+			moba.hit_tower(owner, hit_tw, float(p.dmg))
 		if p.aoe > 0.0:
 			if not hit.is_empty():
 				_next_push = _push_along(p.vel, 3.6, 1.4)
@@ -2483,6 +2512,8 @@ func _step_oracles_inner(dt: float) -> void:
 					if u.team == t and alive(u) and u.hp < u.max_hp and u.pos.distance_to(o.pos) <= HEAL_R:
 						u.hp = minf(u.max_hp, u.hp + HEAL_RATE * dt)
 func _step_outposts(dt: float) -> void:
+	if moba != null:
+		return                                    # 0.31.155: the outposts are scenery in 5v5
 	for op in outposts:
 		var n := [0, 0]
 		for u in units:
@@ -2603,6 +2634,8 @@ func _step_world(dt: float) -> void:
 	_stat_time(dt)
 
 func _commander(team: int) -> void:
+	if moba != null:
+		return
 	# Team quartermaster. Works down a plan and saves for the next item instead of buying
 	# whatever is cheapest (which starved the stone-heavy upgrades). A badly damaged gate is the
 	# one exception. On the human's team it only spends surplus (2x the cost) so the player gets
@@ -2645,6 +2678,8 @@ func _finish(reason: String) -> void:
 	end_reason = reason
 	if score[0] != score[1]:
 		winner = 0 if score[0] > score[1] else 1
+	elif moba != null and moba.towers_down(0) != moba.towers_down(1):
+		winner = 0 if moba.towers_down(1) > moba.towers_down(0) else 1      # 0.31.155: more of their towers down
 	elif kills[0] != kills[1]:
 		winner = 0 if kills[0] > kills[1] else 1
 	else:
@@ -2694,6 +2729,11 @@ func setup_commander(decks: Array, ai: Array) -> void:
 		u["reserve"] = true
 		u.cls = "villager"
 		u.up = false
+
+func setup_moba(hero: String, seed_value: int) -> void:
+	# 0.31.155 5V5: after setup(5, ...): you (hero) and four bot heroes against five
+	moba = Moba.new()
+	moba.begin(self, hero, seed_value)
 
 func cmd_fallen(u: Dictionary) -> bool:
 	# a soldier who fell less than CMD_RETURN s ago: still lying on the field, not back in the barracks yet
@@ -2891,6 +2931,9 @@ func _unstick_check(u: Dictionary) -> void:
 	u.last_pos = u.pos
 
 func _think(u: Dictionary) -> void:
+	if moba != null:
+		moba.think(u)                              # 0.31.155: heroes and minions
+		return
 	# Run from a lit bomb (or one in the air) before anything else.
 	for b in bombs:
 		if not b.is_empty() and (b.state == "lit" or b.state == "flying") and u.pos.distance_to(b.to if b.state == "flying" else b.p) < BOMB_R + 1.5:

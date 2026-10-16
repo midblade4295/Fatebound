@@ -19,6 +19,7 @@ signal version_mismatch(server_v: int, verdict: String)
 var team_size := 16
 var tutorial := false          # the Herald's walkthrough (scripts/siege/tutorial.gd)
 var commander := false         # 0.31.153 COMMANDER (the prototype): you and your deck against the AI commander, offline
+var moba_hero := ""            # 0.31.155 5V5 (the test): your hero; a 5v5 against bots, offline (scripts/siege/moba.gd)
 var deck: Array = []           #   (your 8 cards; scripts/meta/cards.gd)
 const Cards = preload("res://scripts/meta/cards.gd")
 var analytics = null          # 0.31.118: usage statistics (scripts/meta/analytics.gd): VS BOTS matches and the tutorial
@@ -259,7 +260,11 @@ func _start_steps() -> Array:
 		if tutorial:
 			team_size = 2                      # a quiet castle: one ally, two enemies (one becomes the dummy)
 		var seed_value := int(Time.get_unix_time_from_system()) & 0x7fffffff
+		if moba_hero != "":
+			team_size = 5
 		sim.setup(team_size, seed_value)
+		if moba_hero != "":
+			sim.setup_moba(moba_hero, seed_value)
 		if commander:
 			sim.setup_commander([deck if Cards.valid_deck(deck) else Cards.DEFAULT_DECK, Cards.ai_deck(seed_value)], [false, true])
 		ready_times["sim.setup"] = Time.get_ticks_msec() - t_sim
@@ -290,7 +295,7 @@ func _start_steps() -> Array:
 		elif analytics != null and not online:
 			_an_match = Analytics.hex(4)
 			_an_class0 = class_of(sim.by_id.get(hud.player_id, {}))
-			analytics.log_ev("match_start", {"match":_an_match, "mode":"commander" if commander else "bots", "class":_an_class0})
+			analytics.log_ev("match_start", {"match":_an_match, "mode":"5v5" if moba_hero != "" else ("commander" if commander else "bots"), "class":_an_class0})
 		_lifts = 0
 		_title_reset())
 	return steps
@@ -864,6 +869,10 @@ func _on_action(kind: String) -> void:
 		"ability": _act("ability")
 		"dodge": _act("dodge")
 		"action": _act("interact")
+		"pick0", "pick1", "pick2":                       # 0.31.155 5V5: a level-up choice
+			if sim != null and sim.act(hud.player_id, "pick", int(kind.right(1))):
+				if audio != null and audio.has_method("play"):
+					audio.play("equip")
 
 var cards_played := 0                 # (tests)
 
@@ -1082,8 +1091,8 @@ func _process(delta: float) -> void:
 		var won: bool = sim.winner == int(me.team)
 		var draw: bool = sim.winner == -1
 		match_result = {}
-		if profile != null and not tutorial and not commander:      # a tutorial is not a match: no rewards/challenges (nor the
-			# COMMANDER test, 0.31.153: it isn't the game's yet)
+		if profile != null and not tutorial and not commander and moba_hero == "":      # a tutorial is not a match: no rewards/
+			# challenges (nor the COMMANDER and 5V5 tests, 0.31.153 / 0.31.155: they aren't the game's yet)
 			match_result = profile.apply_match(me, won, draw, online)
 			rewards = match_result.rewards
 		diag.write("REWARDS %s" % str(match_result.get("rewards", {}).get("gold", 0)))
@@ -1092,7 +1101,7 @@ func _process(delta: float) -> void:
 		if not tutorial:
 			_result_sounds(won, draw)
 		if analytics != null and not online and not tutorial and _an_match != "":
-			analytics.log_ev("match_finish", {"match":_an_match, "mode":"commander" if commander else "bots", "dur_s":int(sim.time),
+			analytics.log_ev("match_finish", {"match":_an_match, "mode":"5v5" if moba_hero != "" else ("commander" if commander else "bots"), "dur_s":int(sim.time),
 				"result":"win" if won else ("draw" if draw else "loss"), "team_n":1, "class":class_of(me), "class0":_an_class0})
 
 func _result_sounds(won: bool, draw: bool) -> void:
