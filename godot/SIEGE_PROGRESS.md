@@ -4794,7 +4794,7 @@ Sight, Brush, Ward, Minion, Turret, Monster).
   with the Archmage tends to run away with it (his meteor last-hits whole waves: 6-8k gold against 1-2k).
 - Version 0.31.158, versionCode 244 (server code changed: SERVER_BUILD 0.31.158 -- the server installs moba.gd and now
   moba_vision.gd too; no content pack change).
-- Quick suite: 101 of 104 in the run; staged_start_test and min_build_test pass alone; siege_net_smoke failed alone
+- Quick suite: 98 of 101 in the run; staged_start_test and min_build_test pass alone; siege_net_smoke failed alone
   too -- the server now takes ~1.8 s to listen here and the test's client connected at a fixed 1.5 s (a refused
   connection isn't retried); the test now waits for the server's port, then passes. tools/cold_start_check.sh: PASS.
   The Play AAB (throwaway key, presets untouched): BASE OK (267 files), CONTENT OK, play_games true, bundletool valid.
