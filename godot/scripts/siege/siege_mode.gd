@@ -18,6 +18,9 @@ signal version_mismatch(server_v: int, verdict: String)
 
 var team_size := 16
 var tutorial := false          # the Herald's walkthrough (scripts/siege/tutorial.gd)
+var commander := false         # 0.31.153 COMMANDER (the prototype): you and your deck against the AI commander, offline
+var deck: Array = []           #   (your 8 cards; scripts/meta/cards.gd)
+const Cards = preload("res://scripts/meta/cards.gd")
 var analytics = null          # 0.31.118: usage statistics (scripts/meta/analytics.gd): VS BOTS matches and the tutorial
 var _an_match := ""           #   (the server counts online matches itself)
 var _an_class0 := ""
@@ -208,6 +211,7 @@ func _ready() -> void:
 	hud.workshop_buy.connect(func(id): _act("buy", id))
 	hud.workshop_leave.connect(func(): _act("workshop_leave"))
 	hud.action_pressed.connect(_on_action)
+	hud.card_pressed.connect(_play_card)                   # 0.31.153 COMMANDER
 	hud.quick_chat.connect(_on_quick_chat)                 # 0.31.111
 	hud.unit_world = func(id: String) -> Vector3: return view.unit_world(id) if view != null else Vector3.INF
 	hud.qc_btn.visible = not tutorial
@@ -254,7 +258,10 @@ func _start_steps() -> Array:
 		sim = Sim.new()
 		if tutorial:
 			team_size = 2                      # a quiet castle: one ally, two enemies (one becomes the dummy)
-		sim.setup(team_size, int(Time.get_unix_time_from_system()) & 0x7fffffff)
+		var seed_value := int(Time.get_unix_time_from_system()) & 0x7fffffff
+		sim.setup(team_size, seed_value)
+		if commander:
+			sim.setup_commander([deck if Cards.valid_deck(deck) else Cards.DEFAULT_DECK, Cards.ai_deck(seed_value)], [false, true])
 		ready_times["sim.setup"] = Time.get_ticks_msec() - t_sim
 		view = View.new()
 		view.low_fx = low_fx
@@ -283,7 +290,7 @@ func _start_steps() -> Array:
 		elif analytics != null and not online:
 			_an_match = Analytics.hex(4)
 			_an_class0 = class_of(sim.by_id.get(hud.player_id, {}))
-			analytics.log_ev("match_start", {"match":_an_match, "mode":"bots", "class":_an_class0})
+			analytics.log_ev("match_start", {"match":_an_match, "mode":"commander" if commander else "bots", "class":_an_class0})
 		_lifts = 0
 		_title_reset())
 	return steps
@@ -858,6 +865,29 @@ func _on_action(kind: String) -> void:
 		"dodge": _act("dodge")
 		"action": _act("interact")
 
+var cards_played := 0                 # (tests)
+
+func _play_card(slot: int) -> void:
+	# 0.31.153 COMMANDER: a card from the hand (siege_hud) -- its squad out of our castle, or why not
+	if sim == null or not sim.commander or sim.ended or not sim.by_id.has(hud.player_id):
+		return
+	var t := int(sim.by_id[hud.player_id].team)
+	var why: String = sim.cmd_why(t, slot)
+	if why == "" and sim.play_card(t, slot):
+		cards_played += 1
+		if audio != null and audio.has_method("play"):
+			audio.play("flip")
+		buzz(25, 0.4)
+		return
+	hud.card_refused()
+	if audio != null and audio.has_method("play"):
+		audio.play("error")
+	if why == "points":
+		var cd: Dictionary = Cards.card(str(sim.cmd[t].hand[slot]))
+		hud.toast("%s needs %d command points" % [str(cd.get("name", "")), int(cd.get("cost", 0))], Color("#d6a2ff"))
+	elif why == "army":
+		hud.toast("Your whole army is out -- the fallen come back to the barracks", Color("#ff9a7a"))
+
 # ---- Warm-up cover (Round 16, Kevin: the 3D world showed black for a few seconds at match start: the
 # phone compiling the scene's shader pipelines). A FATEBOUND card covers the first moments while the
 # camera visits the key places so their materials compile behind it; it lifts once the engine's
@@ -1052,7 +1082,8 @@ func _process(delta: float) -> void:
 		var won: bool = sim.winner == int(me.team)
 		var draw: bool = sim.winner == -1
 		match_result = {}
-		if profile != null and not tutorial:      # a tutorial is not a match: no rewards/challenges
+		if profile != null and not tutorial and not commander:      # a tutorial is not a match: no rewards/challenges (nor the
+			# COMMANDER test, 0.31.153: it isn't the game's yet)
 			match_result = profile.apply_match(me, won, draw, online)
 			rewards = match_result.rewards
 		diag.write("REWARDS %s" % str(match_result.get("rewards", {}).get("gold", 0)))
@@ -1061,7 +1092,7 @@ func _process(delta: float) -> void:
 		if not tutorial:
 			_result_sounds(won, draw)
 		if analytics != null and not online and not tutorial and _an_match != "":
-			analytics.log_ev("match_finish", {"match":_an_match, "mode":"bots", "dur_s":int(sim.time),
+			analytics.log_ev("match_finish", {"match":_an_match, "mode":"commander" if commander else "bots", "dur_s":int(sim.time),
 				"result":"win" if won else ("draw" if draw else "loss"), "team_n":1, "class":class_of(me), "class0":_an_class0})
 
 func _result_sounds(won: bool, draw: bool) -> void:
@@ -1484,7 +1515,7 @@ func _announce_tick() -> void:
 	if not _ann_flags.has("start") and sim.time > 1.0:
 		_ann_flags["start"] = true
 		_announce("start")
-	var left: float = Sim.MATCH_TIME - sim.time
+	var left: float = float(sim.match_time) - sim.time
 	if not _ann_flags.has("minute") and left <= 60.0 and left > 55.0:
 		_ann_flags["minute"] = true
 		_announce("last_minute")

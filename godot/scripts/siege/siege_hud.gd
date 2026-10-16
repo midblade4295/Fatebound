@@ -10,6 +10,7 @@ const UI2 = preload("res://scripts/app/ui2.gd")
 const BUTTON_STYLE := {"primary":"orange", "secondary":"blue", "gold":"gold", "roll":"gold", "active":"green", "danger":"red"}   # 0.31.79: the menu skins
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 const NetT = preload("res://scripts/siege/siege_net.gd")
+const Cards = preload("res://scripts/meta/cards.gd")
 
 signal leave_requested
 signal replay_requested
@@ -20,6 +21,7 @@ var res_label_source: Callable   # -> float render scale
 signal workshop_tools
 signal workshop_buy(id: String)
 signal workshop_leave
+signal card_pressed(slot: int)          # 0.31.153 COMMANDER: a card in the hand tapped
 
 const TEAM_COLORS := [Color("#5fd2f0"), Color("#ff7b52")]
 
@@ -478,6 +480,10 @@ func show_result(result: Dictionary = {}) -> void:
 		UI2.body(r, str(ch[1]), 11, Color.WHITE, false)
 	if me.gathered > 0 or me.gate_dmg > 0.0:
 		UI2.center(UI2.body(v, "Gathered %d · gate damage %d" % [int(me.gathered), int(me.gate_dmg)], 12, Color("#cfe8b8"), false))
+	if sim.commander:
+		# 0.31.153 COMMANDER (the test): the cards each side played; no rewards yet
+		UI2.center(UI2.body(v, "Cards played: you %d · enemy %d" % [int(sim.cmd[me.team].played), int(sim.cmd[1 - int(me.team)].played)], 12, Color("#d6a2ff"), false))
+		UI2.center(UI2.body(v, "COMMANDER is a test -- no rewards yet", 11, UI2.MUTED, false))
 	_mvp_strip(v)
 	var rw: Dictionary = result.get("rewards", {})
 	if not rw.is_empty():
@@ -953,6 +959,13 @@ func _touch(index: int, pos: Vector2, pressed: bool) -> void:
 			if qc_panel.get_global_rect().has_point(pos + global_position):
 				return                             # (the wheel's own buttons take it)
 			qc_panel.visible = false
+		if sim.commander:
+			for i in Cards.HAND:
+				if card_rect(i).grow(4.0).has_point(pos):
+					_card_tap[i] = _time
+					card_pressed.emit(i)
+					get_viewport().set_input_as_handled()
+					return
 		for b in _buttons():
 			if pos.distance_to(b.c) <= b.r + 12.0:
 				_touches[index] = b.id
@@ -1097,7 +1110,7 @@ func _draw_hud() -> void:
 	_text(Vector2(24, 60), "%d ♛" % sim.score[t], 26, VisualTheme.GOLD, _title, HORIZONTAL_ALIGNMENT_LEFT, 120)
 	_text(Vector2(w - 144, 34), "ENEMY", 12, TEAM_COLORS[vt(1 - t)], _bold, HORIZONTAL_ALIGNMENT_RIGHT, 120)
 	_text(Vector2(w - 144, 60), "%d ♛" % sim.score[1 - t], 26, VisualTheme.GOLD, _title, HORIZONTAL_ALIGNMENT_RIGHT, 120)
-	var left := maxf(0.0, Sim.MATCH_TIME - sim.time)
+	var left := maxf(0.0, float(sim.match_time) - sim.time)
 	_text(Vector2(w * 0.5, 52), "%d:%02d" % [int(left) / 60, int(left) % 60], 32, Color("#e8eef2") if left > 60 else VisualTheme.RED, _title)
 	# Player status line.
 	var hp_rect := Rect2(12, 78, minf(220.0, w * 0.52), 14)
@@ -1124,6 +1137,8 @@ func _draw_hud() -> void:
 	_draw_numbers()
 	if diag != null and diag.fps_text != "":
 		_text(Vector2(w - 212, 142), diag.fps_text, 11, Color(1, 1, 1, 0.6), _font, HORIZONTAL_ALIGNMENT_RIGHT, 200)
+	if sim.commander and not _modal_open():
+		_draw_cards(me)                           # (before the respawn line: the hand plays while you're down too)
 	if me.state == "dead":
 		_text(Vector2(w * 0.5, size.y * 0.45), "RESPAWNING IN %d" % int(ceil(me.respawn_at - sim.time)), 22, VisualTheme.GOLD, _title)
 		return
@@ -1194,6 +1209,18 @@ func _kf_event(e: Dictionary, me: Dictionary) -> void:
 		return
 	var grey := Color("#c9d1dc")
 	match str(e.k):
+		"card":
+			# 0.31.153 COMMANDER: what the enemy commander just sent, in the feed; yours as a toast
+			var cd: Dictionary = Cards.card(str(e.get("card", "")))
+			var n: int = (e.get("ids", []) as Array).size()
+			if cd.is_empty() or n == 0:
+				return
+			if int(e.get("team", -1)) == int(me.team):
+				toast("%s%s ARE OUT!" % [str(cd.name).to_upper(), (" ×%d" % n) if n > 1 else ""] if n > 1 else "%s IS OUT!" % str(cd.name).to_upper(),
+					Color(str(Cards.RARITY_COLOR.get(str(cd.rarity), "#ffffff"))).lightened(0.2))
+				return
+			_kf_add([["Enemy", TEAM_COLORS[vt(1 - int(me.team))].lightened(0.15)], [" sent ", grey],
+				[str(cd.name) + (" ×%d" % n if n > 1 else ""), Color(str(Cards.RARITY_COLOR.get(str(cd.rarity), "#ffffff")))]], false)
 		"death":
 			var victim := str(e.get("id", ""))
 			var by := str(e.get("by", ""))
@@ -1261,6 +1288,128 @@ func _draw_kill_feed() -> void:
 		y += KF_STEP
 	if keep.size() != kill_feed.size():
 		kill_feed = keep
+
+# ---------- COMMANDER's hand (0.31.153) ----------
+# A column on the right edge, between the kill feed and DODGE: the next card (small), your army, then the 4 cards of the
+# hand, with the command points as a bar beside them. A card you can't pay for yet is dimmed and fills from the bottom as
+# the points come in; FULL when every soldier is already out. Tap a card to play it (siege_mode._play_card).
+const CMD_COL := Color("#b25cff")
+var _card_tex := {}
+var _card_tap := {}                    # slot -> when it was tapped (a little press)
+var _card_style := {}
+var _cmd_flash := -10.0                # (a refused card: the bar flashes)
+
+func _card_size() -> Vector2:
+	var top := maxf(KF_TOP + KF_STEP * 3.0, 150.0) + 58.0      # (under the kill feed's rows and the NEXT card)
+	var bottom := size.y - 262.0                               # (over DODGE)
+	var ch := clampf((bottom - top - 3.0 * 6.0) / 4.0, 52.0, 84.0)
+	return Vector2(roundf(ch * 0.8), roundf(ch))
+
+func card_rect(i: int) -> Rect2:
+	var cs := _card_size()
+	var bottom := size.y - 262.0
+	var x := size.x - cs.x - 8.0
+	var y := bottom - (cs.y + 6.0) * float(Cards.HAND - i) + 6.0
+	return Rect2(x, y, cs.x, cs.y)
+
+func _ctex(id: String) -> Texture2D:
+	if not _card_tex.has(id):
+		var p := Cards.portrait(id)
+		_card_tex[id] = load(p) as Texture2D if ResourceLoader.exists(p) else null
+	return _card_tex[id]
+
+func _cstyle(rarity: String, dim: bool) -> StyleBoxFlat:
+	var key := rarity + ("d" if dim else "")
+	if not _card_style.has(key):
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.07, 0.06, 0.12, 0.92)
+		var rc := Color(str(Cards.RARITY_COLOR.get(rarity, "#b8c4c9")))
+		sb.border_color = rc.darkened(0.45) if dim else rc
+		sb.set_border_width_all(3 if rarity in ["epic", "legendary"] else 2)
+		sb.set_corner_radius_all(8)
+		sb.shadow_color = Color(0, 0, 0, 0.45)
+		sb.shadow_size = 3
+		_card_style[key] = sb
+	return _card_style[key]
+
+func _draw_cards(me: Dictionary) -> void:
+	var t := int(me.team)
+	var c: Dictionary = sim.cmd[t]
+	if c.is_empty():
+		return
+	var pts := float(c.pts)
+	var full: bool = sim.cmd_ready(t).is_empty()
+	for i in Cards.HAND:
+		var id := str(c.hand[i])
+		var cd: Dictionary = Cards.card(id)
+		var r := card_rect(i)
+		var tap := _time - float(_card_tap.get(i, -10.0))
+		if tap < 0.12:
+			r = r.grow(-3.0)
+		var afford := pts >= float(cd.cost)
+		var dim := not afford or full
+		draw_style_box(_cstyle(str(cd.rarity), dim), r)
+		var inner := Rect2(r.position + Vector2(3, 3), Vector2(r.size.x - 6, r.size.y - 18))
+		var tex := _ctex(id)
+		if tex != null:
+			draw_texture_rect(tex, inner, false, Color(0.5, 0.5, 0.55) if dim else Color.WHITE)
+		if not afford:
+			# the points still to come, as a shade over the top of the portrait
+			var need := clampf(1.0 - pts / float(cd.cost), 0.0, 1.0)
+			draw_rect(Rect2(inner.position, Vector2(inner.size.x, inner.size.y * need)), Color(0.02, 0.02, 0.06, 0.55))
+		var name := str(cd.name).to_upper()
+		var nsz := 10 if name.length() <= 9 else 9
+		_text(Vector2(r.position.x + r.size.x * 0.5, r.end.y - 4.0), name, nsz, Color.WHITE if not dim else Color(0.75, 0.75, 0.8), _bold)
+		# cost bubble (top left), squad (top right)
+		var cc := r.position + Vector2(10, 10)
+		draw_circle(cc, 11.0, Color(0.1, 0.02, 0.18))
+		draw_circle(cc, 9.5, CMD_COL if afford else CMD_COL.darkened(0.5))
+		_text(cc + Vector2(0, 5), str(int(cd.cost)), 14, Color.WHITE, _title)
+		if int(cd.squad) > 1:
+			_text(Vector2(r.end.x - 12, r.position.y + 15), "×%d" % int(cd.squad), 11, Color.WHITE, _bold)
+		if full:
+			var fr := Rect2(r.position.x, r.position.y + r.size.y * 0.42, r.size.x, 15)
+			draw_rect(fr, Color(0.55, 0.08, 0.05, 0.85))
+			_text(Vector2(fr.position.x + fr.size.x * 0.5, fr.end.y - 3.0), "FULL", 11, Color.WHITE, _bold)
+	# the next card, small, over the column
+	var r0 := card_rect(0)
+	var nid := str((c.queue as Array)[0]) if not (c.queue as Array).is_empty() else ""
+	var nr := Rect2(r0.end.x - 40.0, r0.position.y - 48.0, 40.0, 40.0)
+	if nid != "":
+		draw_style_box(_cstyle(str(Cards.card(nid).rarity), true), nr)
+		var nt := _ctex(nid)
+		if nt != null:
+			draw_texture_rect(nt, nr.grow(-3.0), false, Color(0.8, 0.8, 0.85))
+		_text(Vector2(nr.position.x - 64.0, nr.position.y + 15.0), "NEXT", 10, Color(1, 1, 1, 0.7), _bold, HORIZONTAL_ALIGNMENT_RIGHT, 60)
+	# (right-aligned text: x is the left of the box it's aligned in)
+	_text(Vector2(nr.position.x - 104.0, nr.position.y + 33.0), "ARMY %d/%d" % [sim.cmd_army(t), sim.cmd_soldiers(t)], 11,
+		VisualTheme.GOLD if not full else Color("#ff9a7a"), _bold, HORIZONTAL_ALIGNMENT_RIGHT, 100)
+	# the command points: a bar of 10 down the left of the column, the count on top
+	var top := r0.position.y
+	var bottom := card_rect(Cards.HAND - 1).end.y
+	var bar := Rect2(r0.position.x - 15.0, top + 18.0, 9.0, bottom - top - 18.0)
+	draw_rect(bar, Color(0.05, 0.02, 0.1, 0.8))
+	var frac := clampf(pts / Sim.CMD_MAX, 0.0, 1.0)
+	var flash := clampf(1.0 - (_time - _cmd_flash) / 0.5, 0.0, 1.0)
+	var fill_col: Color = CMD_COL.lerp(Color("#ff5050"), flash)
+	draw_rect(Rect2(bar.position.x, bar.end.y - bar.size.y * frac, bar.size.x, bar.size.y * frac), fill_col)
+	for k in range(1, int(Sim.CMD_MAX)):
+		var yy := bar.end.y - bar.size.y * float(k) / Sim.CMD_MAX
+		draw_line(Vector2(bar.position.x, yy), Vector2(bar.end.x, yy), Color(0, 0, 0, 0.55), 1.0)
+	draw_rect(bar, Color(0.85, 0.7, 1.0, 0.6), false, 1.0)
+	var bc := Vector2(bar.position.x + bar.size.x * 0.5, top + 6.0)
+	draw_circle(bc, 12.0, Color(0.1, 0.02, 0.18))
+	draw_circle(bc, 10.5, fill_col)
+	_text(bc + Vector2(0, 6), str(int(floor(pts))), 15, Color.WHITE, _title)
+	if int(c.played) == 0 and me.state != "dead":
+		# until the first card: a pulsing hint beside the hand
+		var pa := 0.55 + 0.45 * sin(_time * 5.0)
+		var hy := (top + bottom) * 0.5
+		_text(Vector2(bar.position.x - 214.0, hy - 6.0), "TAP A CARD TO SEND", 14, Color(1, 1, 1, pa), _bold, HORIZONTAL_ALIGNMENT_RIGHT, 200)
+		_text(Vector2(bar.position.x - 214.0, hy + 12.0), "YOUR SOLDIERS OUT  ▶", 14, Color(0.84, 0.64, 1.0, pa), _bold, HORIZONTAL_ALIGNMENT_RIGHT, 200)
+
+func card_refused() -> void:
+	_cmd_flash = _time
 
 func _draw_rejoin() -> void:
 	# 0.31.120: "RECONNECTING..." while the game gets back onto my seat

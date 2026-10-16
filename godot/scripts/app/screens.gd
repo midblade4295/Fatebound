@@ -343,6 +343,15 @@ static func home(app, root: VBoxContainer) -> void:
 		gold_tag.name = "TutorialGold"
 		gold_tag.position = Vector2(-10, -8)
 		gold_tag.rotation = deg_to_rad(-8.0)
+	else:
+		# 0.31.153 (Kevin: "Yes" -- the Clash Royale-style test): COMMANDER, in the tutorial's place once it's done
+		var cmb := _medallion(top, Vector2(w - 62, MED_Y[2]), "helmet", "COMMANDER", func():
+			app.sfx("menuOpen")
+			app.open_commander(), "side_commander", 0, "silver")
+		var tt := _tag(cmb, "TEST", 11)
+		tt.name = "CommanderTest"
+		tt.position = Vector2(-8, -8)
+		tt.rotation = deg_to_rad(-8.0)
 	# 0.31.119 (Kevin: "Do all" -- leaderboards): RANKS takes the top-right medallion (the week's leaderboard); the first
 	# win of the day moved onto PLAY as a tag
 	var fw_open := str(d.first_win_day) != Eco.day_key(p.now())

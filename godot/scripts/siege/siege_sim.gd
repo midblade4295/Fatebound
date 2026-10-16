@@ -7,6 +7,7 @@ extends RefCounted
 const TICK := 1.0 / 30.0
 const Land = preload("res://scripts/siege/siege_land.gd")
 const Castle = preload("res://scripts/siege/siege_castle.gd")
+const Cards = preload("res://scripts/meta/cards.gd")
 const HALF_W := Land.HALF_W
 const HALF_L := Land.HALF_L
 # Castle layouts are authored in "castle-local" blue-space coordinates (x -13..13, z 15..29 with
@@ -18,6 +19,7 @@ const CASTLE_HX := Castle.HX          # 20 since Round 10 (was 13)
 const UNIT_R := 0.45
 const WIN_RESCUES := 3
 const MATCH_TIME := 720.0
+var match_time := MATCH_TIME     # 0.31.153: (COMMANDER's matches are shorter: CMD_MATCH_TIME)
 const RESPAWN_TIME := 5.0
 const DROP_RETURN := 25.0        # a dropped Oracle nobody moves goes back to her cell
 const WORKSHOP_RADIUS := 2.8
@@ -1419,6 +1421,8 @@ func _step_hats(dt: float) -> void:
 	# Bot Villagers take a hat by walking over one (dropped hats first, then any stand they reach); players press ACTION
 	# (0.31.22). Bots also swap to the upgraded hat at their stand once the team owns the upgrade.
 	for u in units:
+		if commander and u.bot and not bool(u.get("hero", false)):
+			continue                                  # 0.31.153 COMMANDER: a soldier wears the hat of the card that sent him
 		if alive(u) and u.bot and u.cls != "villager" and can_equip_upgrade(u):
 			_equip_upgrade(u)
 		if not alive(u) or u.cls != "villager" or u.carrying or u.stun > 0.0 or not u.bot:
@@ -1601,6 +1605,9 @@ func _kill(src: Dictionary, dst: Dictionary) -> void:
 	dst.load = {"kind":"", "n":0}
 	dst.offering = false
 	dst.respawn_at = time + RESPAWN_TIME
+	if commander and dst.bot and not bool(dst.get("hero", false)):
+		dst.respawn_at = INF                        # 0.31.153 COMMANDER: back to the barracks, out again with a card
+		dst["reserve"] = true
 	dst.deaths += 1
 	if not src.is_empty() and src.has("team"):
 		kills[src.team] += 1
@@ -1838,7 +1845,9 @@ func step(dt: float = TICK) -> void:
 	_step_oracles(dt)
 	_step_world(dt)
 	if profile: t0 = _p("world", t0)
-	if time >= MATCH_TIME:
+	if commander:
+		_step_cmd(dt)
+	if time >= match_time:
 		_finish("time")
 
 func _step_unit(u: Dictionary, dt: float) -> void:
@@ -2605,6 +2614,8 @@ func _commander(team: int) -> void:
 	var plan := ["armory", "catapult", "hat_knight", "gates", "hat_ranger", "hat_priest", "armory", "launcher", "hat_barbarian", "gates", "hat_mage", "armory", "hat_rogue"]
 	if human_team:
 		plan.erase("launcher")                       # (0.31.28) a team with a player leaves that big buy to the players
+	if commander:
+		plan = plan.filter(func(id): return not str(id).begins_with("hat_"))   # 0.31.153: the cards bring the upgraded troops
 	var seen := {}
 	var target := ""
 	for id in plan:
@@ -2639,6 +2650,163 @@ func _finish(reason: String) -> void:
 	else:
 		winner = -1
 	_event("end", {"winner":winner,"reason":reason})
+
+# ---------- COMMANDER (0.31.153, the prototype; scripts/meta/cards.gd) ----------
+# Each side: its hero (unit 0 -- you, or the enemy commander's) and the rest of the team, its soldiers, who start in
+# the barracks. Command points fill (CMD_RATE a second, twice as fast in the last CMD_DOUBLE seconds) up to CMD_MAX; a
+# card from the hand costs its points and sends up to its squad of soldiers from the barracks, wearing its hat and doing
+# its role. Its place in the hand takes the next card; it goes to the back of the deck. A fallen soldier drops his hat
+# and is back in the barracks CMD_RETURN s later. Nothing here runs unless setup_commander() was called.
+const CMD_MAX := 10.0
+const CMD_START := 5.0
+const CMD_RATE := 1.0 / 2.8              # (Clash Royale's elixir)
+const CMD_DOUBLE := 120.0
+const CMD_RETURN := 4.0
+const CMD_MATCH_TIME := 480.0
+var commander := false
+var cmd: Array = [{}, {}]                # per team: {"deck", "hand" (4 ids), "queue" (the rest, next first), "pts", "ai", "played", "ai_at", "save"}
+
+func setup_commander(decks: Array, ai: Array) -> void:
+	commander = true
+	match_time = CMD_MATCH_TIME
+	for t in 2:
+		var deck: Array = (decks[t] as Array).duplicate() if t < decks.size() and Cards.valid_deck(decks[t]) else Cards.DEFAULT_DECK.duplicate()
+		var order := deck.duplicate()
+		for i in range(order.size() - 1, 0, -1):          # shuffled, with the match's own rng (a replay of a seed is the same)
+			var j := rng.randi_range(0, i)
+			var tmp = order[i]
+			order[i] = order[j]
+			order[j] = tmp
+		cmd[t] = {"deck":deck, "hand":order.slice(0, Cards.HAND), "queue":order.slice(Cards.HAND), "pts":CMD_START,
+			"ai":t < ai.size() and bool(ai[t]), "played":0, "ai_at":2.0 + rng.randf() * 2.0, "save":0.0}
+	var first := [true, true]
+	for u in units:
+		var t := int(u.team)
+		if first[t]:
+			first[t] = false
+			u["hero"] = true                            # (unit 0 of each side: the commander's own fighter)
+			continue
+		if not u.bot:
+			continue
+		u.state = "dead"
+		u.hp = 0.0
+		u.respawn_at = INF
+		u["reserve"] = true
+		u.cls = "villager"
+		u.up = false
+
+func cmd_fallen(u: Dictionary) -> bool:
+	# a soldier who fell less than CMD_RETURN s ago: still lying on the field, not back in the barracks yet
+	return u.has("died_at") and time - float(u.died_at) < CMD_RETURN
+
+func cmd_ready(team: int) -> Array:
+	# the soldiers in the barracks, ready to go out
+	var out := []
+	for u in units:
+		if int(u.team) == team and u.state == "dead" and bool(u.get("reserve", false)) and not cmd_fallen(u):
+			out.append(u)
+	return out
+
+func cmd_army(team: int) -> int:
+	# soldiers on the field (not the hero)
+	var n := 0
+	for u in units:
+		if int(u.team) == team and u.bot and not bool(u.get("hero", false)) and alive(u):
+			n += 1
+	return n
+
+func cmd_soldiers(team: int) -> int:
+	var n := 0
+	for u in units:
+		if int(u.team) == team and not bool(u.get("hero", false)) and (u.bot or bool(u.get("reserve", false))):
+			n += 1
+	return n
+
+func cmd_why(team: int, slot: int) -> String:
+	# "" when the card in that slot can be played now, else why not ("points" / "army")
+	if not commander or ended or slot < 0 or slot >= (cmd[team].hand as Array).size():
+		return "none"
+	var cd: Dictionary = Cards.card(str(cmd[team].hand[slot]))
+	if float(cmd[team].pts) < float(cd.cost):
+		return "points"
+	if cmd_ready(team).is_empty():
+		return "army"
+	return ""
+
+func play_card(team: int, slot: int) -> bool:
+	if cmd_why(team, slot) != "":
+		return false
+	var c: Dictionary = cmd[team]
+	var id := str(c.hand[slot])
+	var cd: Dictionary = Cards.card(id)
+	var ready := cmd_ready(team)
+	var n := mini(int(cd.squad), ready.size())
+	c.pts = float(c.pts) - float(cd.cost)
+	var sent := []
+	for i in n:
+		var u: Dictionary = ready[i]
+		u.erase("reserve")
+		u.erase("post")
+		u.erase("call")
+		u.cls = str(cd.cls)
+		u.up = bool(cd.up)
+		u.role = str(cd.role)
+		u.load = {"kind":"", "n":0}
+		_respawn(u)
+		u.think_at = time + TICK * float(i + 1)
+		sent.append(u.id)
+	(c.queue as Array).append(id)
+	c.hand[slot] = (c.queue as Array).pop_front()
+	c.played = int(c.played) + 1
+	_event("card", {"team":team, "card":id, "ids":sent})
+	return true
+
+func _step_cmd(dt: float) -> void:
+	var rate := CMD_RATE * (2.0 if time >= match_time - CMD_DOUBLE else 1.0)
+	for t in 2:
+		var c: Dictionary = cmd[t]
+		if c.is_empty():
+			continue
+		c.pts = minf(CMD_MAX, float(c.pts) + rate * dt)
+		if bool(c.ai) and time >= float(c.ai_at):
+			c.ai_at = time + 0.5
+			_cmd_ai(t)
+
+func _cmd_ai(t: int) -> void:
+	# The enemy commander: every half second, the card in hand that fits the moment best -- Workers while it has fewer
+	# than two, wall troops when its castle is under attack, raiders when it isn't -- once it has its cost plus a little
+	# it saves up (0-3 points, new each time: it doesn't spend the moment it can). Full points: play anything.
+	var c: Dictionary = cmd[t]
+	if cmd_ready(t).is_empty():
+		return
+	var threat := 0
+	for o in units:
+		if int(o.team) != t and alive(o) and in_castle(o.pos, t):
+			threat += 1
+	var workers := class_count(t, "worker")
+	var best := -1
+	var best_s := -INF
+	for i in (c.hand as Array).size():
+		var cd: Dictionary = Cards.card(str(c.hand[i]))
+		var s := rng.randf() * 0.8
+		match str(cd.role):
+			"gather":
+				s += 3.0 if workers < 2 else (-2.0 if workers >= 3 else 0.0)
+			"defend":
+				s += 2.0 if threat >= 2 else 0.2
+			"escort":
+				s += 1.0 if threat >= 2 else 0.8
+			"raid":
+				s += 1.2 if threat == 0 else -0.5
+		if s > best_s:
+			best_s = s
+			best = i
+	if best < 0:
+		return
+	var cost := float(Cards.card(str(c.hand[best])).cost)
+	if float(c.pts) >= cost + float(c.save) or float(c.pts) >= CMD_MAX - 0.05:
+		if play_card(t, best):
+			c.save = float(rng.randi_range(0, 3))
 
 # ---------- bots ----------
 var _gate_alarm := [{"gate":-1, "at":-100.0}, {"gate":-1, "at":-100.0}]
@@ -2735,6 +2903,9 @@ func _think(u: Dictionary) -> void:
 		_think_tower(u)
 		return
 	_unstick_check(u)
+	if commander and u.cls == "villager" and not bool(u.get("hero", false)):
+		_think_fighter(u)                          # 0.31.153 COMMANDER: Peasants fight as they are (no hats from the stands)
+		return
 	if u.cls == "villager" and not u.carrying:
 		if u.role == "gather":
 			var ws := workshop(u.team)
@@ -3754,6 +3925,8 @@ func resurrect_target(u: Dictionary) -> Dictionary:
 	for a in units:
 		if a.team != u.team or a.state != "dead" or a.id == u.id:
 			continue
+		if commander and bool(a.get("reserve", false)) and not cmd_fallen(a):
+			continue                                  # 0.31.153: already back in the barracks
 		if (a.pos as Vector2).distance_to(u.pos) <= RESURRECT_R and float(a.get("died_at", -INF)) > latest:
 			latest = float(a.get("died_at", -INF))
 			best = a
@@ -3780,6 +3953,7 @@ func _resurrect(u: Dictionary) -> bool:
 	a.stun = 0.0
 	a.respawn_at = INF
 	a.task = {}
+	a.erase("reserve")                             # 0.31.153 COMMANDER: raised, not in the barracks
 	u.cd_ability = RESURRECT_CD
 	u.face = angle_of((a.pos as Vector2) - u.pos)
 	u.state = "recover"

@@ -26,7 +26,9 @@ const ORDERS_PANEL := "res://scripts/app/orders_panel.gd"
 const LEADERBOARD_PANEL := "res://scripts/app/leaderboard_panel.gd"
 const DAILY_REWARD := "res://scripts/app/daily_reward.gd"
 const UPDATE_SCREEN := "res://scripts/app/update_screen.gd"
-const LATER := [SIEGE_MODE, WAR_TABLE, CLAN_PANEL, CHAT_PANEL, FRIENDS_PANEL, ORDERS_PANEL, DAILY_REWARD, LEADERBOARD_PANEL, UPDATE_SCREEN]
+const COMMANDER_PANEL := "res://scripts/app/commander_panel.gd"    # 0.31.153: COMMANDER (the test)
+const LATER := [SIEGE_MODE, WAR_TABLE, CLAN_PANEL, CHAT_PANEL, FRIENDS_PANEL, ORDERS_PANEL, DAILY_REWARD, LEADERBOARD_PANEL, UPDATE_SCREEN,
+	COMMANDER_PANEL]
 const WarMap = preload("res://scripts/meta/war_map.gd")
 const Audio = preload("res://scripts/native_audio.gd")
 const Assets = preload("res://scripts/siege/asset_cache.gd")
@@ -1241,6 +1243,24 @@ func start_tutorial() -> void:
 	# The Herald's walkthrough: a small offline match (siege_mode.gd tutorial = true).
 	start_match(false, true)
 
+func open_commander() -> void:
+	# 0.31.153 COMMANDER (the test): the deck window (commander_panel.gd), then BATTLE -> start_commander
+	close_modal()
+	var m = _later(COMMANDER_PANEL).new()
+	add_child(m)
+	modal = m
+	m.open(self)
+
+func start_commander(deck: Array) -> void:
+	# 0.31.153: an offline match against the AI commander with this deck (siege_mode.gd commander = true). No server, no
+	# ticket, no rewards: it's a test of how the mode plays.
+	if siege != null:
+		return
+	pending_commander = deck
+	start_match(false, true)
+
+var pending_commander: Array = []         # 0.31.153: the deck the next match is a COMMANDER match with
+
 var pending_join := ""                   # 0.31.120: a friend's public id whose match the next PLAY joins
 var pending_war := ""                    # 0.31.135: a battle on the war map the next match is for
 
@@ -1438,7 +1458,11 @@ func start_match(online: bool, tutorial := false, follow := false) -> void:
 			"party_n":social.party_size() if social != null and social.online() and social.in_party() else 1})
 	siege = _later(SIEGE_MODE).new()
 	siege.online = online
-	siege.tutorial = tutorial
+	siege.tutorial = tutorial and pending_commander.is_empty()
+	if not pending_commander.is_empty():
+		siege.commander = true                      # 0.31.153 (start_commander: through the tutorial's door -- offline, no
+		siege.deck = pending_commander              # ticket -- but a full match)
+		pending_commander = []
 	siege.profile = profile
 	siege.audio = audio
 	siege.low_fx = bool(profile.d.settings.get("reduce_motion", false))

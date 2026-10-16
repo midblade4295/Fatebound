@@ -4507,3 +4507,52 @@ Kevin: "Go" (the tour's voice-over, estimated at 0.31.151).
 - Quick suite: all 94 passed (first try). tools/cold_start_check.sh: PASS. The Play AAB built from this commit (throwaway
   key, presets untouched by the build): BASE OK (255 files), CONTENT OK (audio-3b550a027262 on the branch), play_games
   true, bundletool valid. Preview APK: build/Fatebound-Siege-0.31.152-fatebound.apk (preview key).
+
+## 0.31.153 — COMMANDER (test): Clash Royale-style cards in a 1v1 against an AI commander
+Kevin: "I want to see about doing a clash royale style system with the heroes. And instead of it being 16v16 it'll be
+1v1 real player and 30 bots 15 on each side. The bots will be each players army and the player will need to unlock
+heros (cards) to be able to have more variety of troops (hats) on the field. There will be 15 common, 15 rare, 16 epic,
+2 legendary..." -- "What do you think? I'm not sure how it'll vibe together" -- (I: test it first, as a separate mode:
+you also command, a deck and points that fill, the cards send squads; offline against an AI commander; the 14 troops we
+have as the first cards) -- "Yes".
+- scripts/meta/cards.gd (new): the 14 cards -- Peasants (Villagers), Workers, Knights, Archers, Barbarians (common),
+  Rogues, Mages, Priest (rare), Crusader, Berserker, Assassin, Ranger (epic), Archmage, Necromancer (legendary) -- each
+  with its troop (class + upgraded), cost (1-5 points), squad (1-3 soldiers), role for the bots (raid / escort / defend /
+  gather) and a line; a deck is 8, the hand 4; the starting deck; the AI's deck (Workers + Knights + 6 at random).
+  Every number is a first guess.
+- siege_sim.gd, the COMMANDER section (only after setup_commander(); the 16v16 and the server don't change): each side's
+  unit 0 is its hero (you; the enemy commander's r0, an ordinary bot), the other 15 start in the barracks (dead, hidden,
+  never respawning by themselves). Command points: 5 to start, +1 every 2.8 s (twice as fast in the last 2 minutes), 10
+  at most. play_card: the cost paid, up to the card's squad out of the barracks at the castle's spawn, in the card's hat
+  and role; the card to the back of the deck and the next one into its place ("card" event). A soldier who falls drops
+  his hat as ever and is back in the barracks 4 s later (CMD_RETURN; a Necromancer can still raise him before that).
+  Soldiers never take hats (no stand swaps for Peasants, no upgrades at the stands) -- the cards decide; the heroes
+  still do. The enemy commander (_cmd_ai): every 0.5 s the card in its hand that fits -- Workers while it has fewer than
+  two, wall troops when its castle is attacked, raiders when it isn't -- played once it has the cost plus 0-3 saved (full
+  points: anything). The workshop's own buyer skips the hat upgrades. 8-minute matches (match_time; the HUD clock and the
+  Herald's "last minute" follow it).
+- The HUD: the hand on the right edge between the kill feed and DODGE -- 4 cards (portrait, cost bubble, ×squad, name,
+  rarity rim; dimmed and shaded from the top until it can be paid for; FULL when the whole army is out), the next card,
+  ARMY n/15, the points as a bar of 10 with the count; tap to play (siege_mode._play_card: a card flip and a buzz, or the
+  bar flashes red and a toast says why). "TAP A CARD TO SEND YOUR SOLDIERS OUT ▶" pulses until the first card. Your
+  card: "ARCHERS ×2 ARE OUT!"; the enemy's in the kill feed ("Enemy sent Berserker"). The view hides soldiers in the
+  barracks and bursts a squad out (gold for an upgraded troop). Results: the cards each side played, "COMMANDER is a test
+  -- no rewards yet" (no gold, XP, pass or challenges: profile.apply_match is skipped).
+- Home: COMMANDER (with a TEST tag) in the right column where the tutorial's medallion was (once it's done) opens the deck
+  window (commander_panel.gd): what the mode is, the 14 cards (your 8 ticked; tap one to take it out or put it in, its
+  line underneath), the average cost, BATTLE (PICK n MORE until there are 8). The deck is kept on the phone
+  (settings.cmd_deck). BATTLE starts the match offline (siege_app.start_commander: no server, no ticket).
+- The Peasants card's portrait: assets/ui/skins/default_villager.png (tools/render_skin_icons.gd renders the Villager
+  bust too now); the ui content pack rebuilt (ui-7d5a7af44d31.pck, 20.1 MB; uploaded to content-packs 7dbb744).
+- The server installs a list of scripts, and the sim now preloads cards.gd: added to META_SCRIPTS in
+  install_siege_server.sh. tools/test_server_files.py (new, in the suite) follows every preload/load of the installed
+  scripts and fails when one isn't installed (it fails without that line).
+- Tests: commander_test (new: the start, a card and its squad, refusals and why, a soldier falling and coming back, the
+  hero respawning, the army full, Peasants without hats, the points' rate, doubling and cap, the enemy commander's
+  first minute, a whole AI-vs-AI match), commander_ui_test (new: Home's COMMANDER, the deck window, BATTLE, a card
+  tapped on the HUD and one refused, the results without rewards), server_files (py).
+- Five AI-vs-AI matches (MATCHES=5 PRINT=1): one ended 3-2 on rescues at 4:16, four went the 8 minutes (2-1, 2-0, 0-0,
+  0-0); 48-70 cards a side; 55-120 knockouts a side; 2-8 workshop upgrades.
+- Needs the server redeployed (sudo bash godot/server/deploy/install_siege_server.sh) only because the sim file changed
+  (the mode itself is offline).
+- Version 0.31.153, versionCode 239 (server code changed: SERVER_BUILD 0.31.153).

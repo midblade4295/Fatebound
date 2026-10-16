@@ -3744,6 +3744,13 @@ func sync(dt: float) -> void:
 			a["whirl_spin"] = 0.0
 			root.rotation.y = lerp_angle(root.rotation.y, float(u.face), 1.0 - exp(-dt * 18.0))
 		(a.ring as MeshInstance3D).visible = u.state != "dead"
+		if sim.commander:
+			# 0.31.153 COMMANDER: a soldier back in the barracks isn't on the field (his body goes CMD_RETURN s after he fell)
+			var benched: bool = bool(u.get("reserve", false)) and not sim.cmd_fallen(u)
+			if benched == root.visible:
+				if benched and a.get("rag") != null:
+					_ragdoll_end(a)
+				root.visible = not benched
 		_sync_vanish(a, u)
 		_sync_load(a, u)
 		_sync_hand(a, u)
@@ -4021,6 +4028,18 @@ func on_event(e: Dictionary) -> void:
 			if not a.is_empty():
 				a.root.position = Vector3(sim.by_id[e.id].pos.x, 0, sim.by_id[e.id].pos.y)
 				ring_at(a.root.position, TEAM_COLORS[vt(int(sim.by_id[e.id].team))], 1.6, 0.6)
+		"card":
+			# 0.31.153 COMMANDER: a squad out of the gate -- a burst of its side's colour (gold for an upgraded troop)
+			for sid in e.get("ids", []):
+				var ca: Dictionary = actors.get(str(sid), {})
+				var su: Dictionary = sim.by_id.get(str(sid), {})
+				if ca.is_empty() or su.is_empty():
+					continue
+				ca.root.position = Vector3(su.pos.x, 0, su.pos.y)
+				var col: Color = GOLD if bool(su.up) else TEAM_COLORS[vt(int(su.team))]
+				ring_at(ca.root.position, col, 2.6, 0.7)
+				for i in 6:
+					spark(ca.root.position + Vector3(randf_range(-0.6, 0.6), 0.4 + randf() * 1.4, randf_range(-0.6, 0.6)), col)
 		"class":
 			if not a.is_empty():
 				ring_at(a.root.position, GOLD, 3.0 if e.up else 2.0, 0.8)
