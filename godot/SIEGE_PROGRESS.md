@@ -4727,3 +4727,7 @@ Kevin: "Build the other 3 mechanics now" (the three left after 0.31.156: ultimat
   field (pictures).
 - Version 0.31.157, versionCode 243 (server code changed: SERVER_BUILD 0.31.157 -- the server installs the sim and
   moba.gd; the world content pack changes: the skeletons).
+- Quick suite: 99 of 100 in the run; siege_net_smoke (its client had 8 s to join on a busy machine) passes alone.
+  tools/cold_start_check.sh: PASS. The Play AAB (throwaway key, presets untouched): BASE OK (265 files), CONTENT OK,
+  play_games true, bundletool valid. Preview APK: build/Fatebound-Siege-0.31.157-fatebound.apk (preview key).
+- Bot matches here after the tuning: one won on the King at 13:17, the rest at 15:00 (the test's: blue's King at 49 %).
