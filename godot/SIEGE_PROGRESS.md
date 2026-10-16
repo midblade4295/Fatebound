@@ -4560,3 +4560,11 @@ have as the first cards) -- "Yes".
   PASS. The Play AAB built from this commit (throwaway key, presets untouched by the build): BASE OK (259 files: the two
   new scripts and their remaps), CONTENT OK (ui-7d5a7af44d31 on the branch), play_games true, bundletool valid. Preview
   APK: build/Fatebound-Siege-0.31.153-fatebound.apk (preview key).
+
+## 0.31.154 — COMMANDER on every Home
+Kevin (a Home screenshot, the phone's profile without the tutorial played): "I don't see the test button"
+- COMMANDER only took the tutorial's place once the tutorial was done, so a phone that hadn't played it never showed it.
+  Now it's always there: under the TUTORIAL medallion until the tutorial is done (a fourth row on the right, clear of
+  PLAY), in its place after. Its TEST tag moved to its left side (over it, the tag covered TUTORIAL's label).
+- commander_ui_test: + a fresh profile -- COMMANDER under TUTORIAL, in line with it, above PLAY.
+- Version 0.31.154, versionCode 240 (server code unchanged; SERVER_BUILD follows the app's version).

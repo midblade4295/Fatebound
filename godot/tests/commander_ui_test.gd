@@ -1,5 +1,6 @@
 extends SceneTree
 # 0.31.153 COMMANDER (the test) in the app:
+#  0. (0.31.154) a phone that hasn't played the tutorial: COMMANDER under the TUTORIAL medallion, clear of PLAY;
 #  1. Home: COMMANDER (with a TEST tag) where the tutorial was, once it's done; it opens the deck window;
 #  2. the deck window: 14 cards, your 8 ticked, the average cost; a card out -> PICK 1 MORE (BATTLE off); a ninth
 #     refused; back to 8 -> BATTLE; the deck kept on the phone;
@@ -13,7 +14,7 @@ const Cards = preload("res://scripts/meta/cards.gd")
 const CmdPanel = preload("res://scripts/app/commander_panel.gd")
 
 var fails: Array = []
-var phase := "boot"
+var phase := "fresh"
 var t := 0.0
 var t_phase := 0.0
 var app
@@ -71,7 +72,32 @@ func _process(delta: float) -> bool:
 		check(false, "timed out in phase %s" % phase)
 		return _finish()
 	match phase:
+		"fresh":
+			var fb := "user://cmdui-fresh-%d" % Time.get_ticks_usec()
+			var fp = Profile.new(fb + "-profile.json", fb + "-none.json")
+			fp.load_or_create()
+			fp.save()
+			app = App.new()
+			app.profile_path = fb + "-profile.json"
+			app.legacy_path = fb + "-none.json"
+			root.add_child(app)
+			_go("fresh_home")
+		"fresh_home":
+			if t_phase > 1.0:
+				var tb := btn("tutorial_start")
+				var cb := btn("side_commander")
+				var pb := btn("play")
+				check(tb != null and cb != null and cb.global_position.y >= tb.global_position.y + tb.size.y - 8.0
+					and absf(cb.global_position.x - tb.global_position.x) < 1.0 and pb != null and cb.global_position.y + cb.size.y < pb.global_position.y,
+					"no tutorial yet: COMMANDER under TUTORIAL (y %d -> %d), clear of PLAY (%d)" % [int(tb.global_position.y) if tb else -1,
+					int(cb.global_position.y) if cb else -1, int(pb.global_position.y) if pb else -1])
+				_shot("cmd_home_fresh")
+				app.queue_free()
+				app = null
+				_go("boot")
 		"boot":
+			if t_phase < 0.3:
+				return false
 			var base := "user://cmdui-%d" % Time.get_ticks_usec()
 			var p = Profile.new(base + "-profile.json", base + "-none.json")
 			p.load_or_create()
