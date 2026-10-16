@@ -4556,3 +4556,7 @@ have as the first cards) -- "Yes".
 - Needs the server redeployed (sudo bash godot/server/deploy/install_siege_server.sh) only because the sim file changed
   (the mode itself is offline).
 - Version 0.31.153, versionCode 239 (server code changed: SERVER_BUILD 0.31.153).
+- Quick suite: all 97 passed (first try; + commander_test, commander_ui_test, server_files). tools/cold_start_check.sh:
+  PASS. The Play AAB built from this commit (throwaway key, presets untouched by the build): BASE OK (259 files: the two
+  new scripts and their remaps), CONTENT OK (ui-7d5a7af44d31 on the branch), play_games true, bundletool valid. Preview
+  APK: build/Fatebound-Siege-0.31.153-fatebound.apk (preview key).
