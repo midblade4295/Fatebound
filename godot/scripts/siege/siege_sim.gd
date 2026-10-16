@@ -2369,12 +2369,14 @@ func _step_projectiles(dt: float) -> void:
 		var blocked := false
 		var hit_gate := {}
 		var hit_tw := -1
+		var hit_kg := -1
 		var pb := _bucket(p.pos)
 		for oi in _bucket_obs_proj[pb]:
 			var ob: Dictionary = obstacles[oi]
 			if p.pos.distance_to(ob.p) < ob.r:
 				blocked = true
 				hit_tw = int(ob.get("tw", -1))           # 0.31.155: a 5v5 tower
+				hit_kg = int(ob.get("kg", -1))           # 0.31.156: a 5v5 King (the heart)
 				break
 		if not blocked:
 			# Pre-filtered at build time: ledges, cell bars, river banks and rails don't stop arrows or
@@ -2402,6 +2404,8 @@ func _step_projectiles(dt: float) -> void:
 			_damage_gate(owner, hit_gate, p.dmg * float(p.gate_mult))
 		if hit_tw >= 0 and moba != null and hit.is_empty():
 			moba.hit_tower(owner, hit_tw, float(p.dmg))
+		if hit_kg >= 0 and moba != null and hit.is_empty():
+			moba.hit_king(owner, hit_kg, float(p.dmg))
 		if p.aoe > 0.0:
 			if not hit.is_empty():
 				_next_push = _push_along(p.vel, 3.6, 1.4)
@@ -2420,6 +2424,8 @@ func _step_projectiles(dt: float) -> void:
 const DIGEST_EVERY := 75.0          # 0.31.26 (Kevin): a King works off one fish every 75 s -- feeding has to be kept up (40 s made him never fat)
 
 func _step_oracles(dt: float) -> void:
+	if moba != null:
+		return                                    # 0.31.156: in 5v5 the Kings are the hearts (moba.gd), on their thrones
 	for o in oracles:
 		if int(o.cakes) <= 0:
 			o["digest_t"] = 0.0
@@ -2678,8 +2684,8 @@ func _finish(reason: String) -> void:
 	end_reason = reason
 	if score[0] != score[1]:
 		winner = 0 if score[0] > score[1] else 1
-	elif moba != null and moba.towers_down(0) != moba.towers_down(1):
-		winner = 0 if moba.towers_down(1) > moba.towers_down(0) else 1      # 0.31.155: more of their towers down
+	elif moba != null and moba.tiebreak() >= 0:
+		winner = moba.tiebreak()                   # 0.31.156: time's up -- more done to their King, then their towers, then KOs
 	elif kills[0] != kills[1]:
 		winner = 0 if kills[0] > kills[1] else 1
 	else:

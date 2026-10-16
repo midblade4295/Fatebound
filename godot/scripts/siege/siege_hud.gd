@@ -454,7 +454,7 @@ func show_result(result: Dictionary = {}) -> void:
 		cell.custom_minimum_size = Vector2(92 if side == 1 else 0, 0)
 		sc.add_child(cell)
 		if side == 1:
-			UI2.center(UI2.body(cell, "RESCUES", 11, UI2.GOLD, false))
+			UI2.center(UI2.body(cell, "KINGS" if sim.moba != null else "RESCUES", 11, UI2.GOLD, false))
 			UI2.center(UI2.body(cell, "KOs %d–%d" % [sim.kills[me.team], sim.kills[1 - me.team]], 10, UI2.MUTED, false))
 			continue
 		var mine := side == 0
@@ -838,6 +838,10 @@ func on_event(e: Dictionary) -> void:
 				toast("LEVEL %d!  PICK AN UPGRADE" % int(e.level), VisualTheme.GOLD)
 		"tower_immune":
 			toast("That tower is protected -- take the one in front of it first", Color("#ffcf7a"))
+		"king_immune":
+			toast("Their King is protected until one of his gates falls", Color("#ffcf7a"))
+		"king_down":
+			toast("THEIR KING IS DEFEATED!" if int(e.get("team", -1)) != int(me.team) else "OUR KING HAS FALLEN", VisualTheme.GOLD if int(e.get("team", -1)) != int(me.team) else VisualTheme.RED)
 		"multikill":
 			var n := int(e.n)
 			if str(e.id) == str(player_id):
@@ -1123,9 +1127,15 @@ func _draw_hud() -> void:
 	draw_style_box(_bar_style, bar)
 	var t: int = me.team
 	_text(Vector2(24, 34), "YOUR SIDE", 12, TEAM_COLORS[vt(t)], _bold, HORIZONTAL_ALIGNMENT_LEFT, 120)
-	_text(Vector2(24, 60), "%d ♛" % sim.score[t], 26, VisualTheme.GOLD, _title, HORIZONTAL_ALIGNMENT_LEFT, 120)
-	_text(Vector2(w - 144, 34), "ENEMY", 12, TEAM_COLORS[vt(1 - t)], _bold, HORIZONTAL_ALIGNMENT_RIGHT, 120)
-	_text(Vector2(w - 144, 60), "%d ♛" % sim.score[1 - t], 26, VisualTheme.GOLD, _title, HORIZONTAL_ALIGNMENT_RIGHT, 120)
+	if sim.moba != null:
+		# 0.31.156 5V5: each side's King (the heart), his health
+		_text(Vector2(24, 60), "♛ %d%%" % int(ceil(sim.moba.king_frac(t) * 100.0)), 22, VisualTheme.GOLD, _title, HORIZONTAL_ALIGNMENT_LEFT, 120)
+		_text(Vector2(w - 144, 34), "ENEMY", 12, TEAM_COLORS[vt(1 - t)], _bold, HORIZONTAL_ALIGNMENT_RIGHT, 120)
+		_text(Vector2(w - 144, 60), "%d%% ♛" % int(ceil(sim.moba.king_frac(1 - t) * 100.0)), 22, VisualTheme.GOLD, _title, HORIZONTAL_ALIGNMENT_RIGHT, 120)
+	else:
+		_text(Vector2(24, 60), "%d ♛" % sim.score[t], 26, VisualTheme.GOLD, _title, HORIZONTAL_ALIGNMENT_LEFT, 120)
+		_text(Vector2(w - 144, 34), "ENEMY", 12, TEAM_COLORS[vt(1 - t)], _bold, HORIZONTAL_ALIGNMENT_RIGHT, 120)
+		_text(Vector2(w - 144, 60), "%d ♛" % sim.score[1 - t], 26, VisualTheme.GOLD, _title, HORIZONTAL_ALIGNMENT_RIGHT, 120)
 	var left := maxf(0.0, float(sim.match_time) - sim.time)
 	_text(Vector2(w * 0.5, 52), "%d:%02d" % [int(left) / 60, int(left) % 60], 32, Color("#e8eef2") if left > 60 else VisualTheme.RED, _title)
 	# Player status line.
@@ -1707,6 +1717,13 @@ func _draw_gate_bars() -> void:
 		draw_rect(Rect2(r.position, Vector2(r.size.x * float(b.fill), r.size.y)), b.color)
 
 func _oracle_status(me: Dictionary) -> String:
+	if sim.moba != null:
+		# 0.31.156 5V5: the Kings are the hearts
+		if not sim.moba.king_threat(int(me.team)).is_empty() and sim.moba.king_open(int(me.team)):
+			return "OUR KING IS UNDER ATTACK!"
+		if sim.moba.king_open(1 - int(me.team)):
+			return "Their King is open -- defeat him!"
+		return "Defeat their King -- he's guarded until a gate of his falls"
 	var o: Dictionary = sim.oracles[me.team]
 	var need: int = sim.lifters_needed(o)
 	var suffix := "  · size %d, needs %d" % [int(o.weight), need] if int(o.weight) > 0 else ""
@@ -1812,6 +1829,8 @@ func _draw_oracle_marker(me: Dictionary) -> void:
 	if not project.is_valid() or not on_screen.is_valid():
 		return
 	var goal: Vector2 = sim.oracles[me.team].pos
+	if sim.moba != null:
+		goal = sim.moba.king_pos(1 - int(me.team))         # 0.31.156: the King to defeat, theirs
 	if me.carrying:
 		var ho: Dictionary = sim.lifting_oracle(me)
 		goal = Sim.throne(me.team) if int(ho.get("team", me.team)) == me.team else Sim.cell(int(ho.team))

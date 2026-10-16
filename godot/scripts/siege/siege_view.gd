@@ -4229,6 +4229,19 @@ func on_event(e: Dictionary) -> void:
 			_tower_shot(e)                        # 0.31.155 5V5
 		"tower_down":
 			_tower_down(e)
+		"king_slam":
+			var kp: Vector2 = sim.moba.king_pos(int(e.team))              # 0.31.156 5V5: the King hits back
+			var ky := Sim.height_at(kp)
+			ring_at(Vector3(kp.x, ky + 0.2, kp.y), Color("#ffd65a"), float(sim.moba.KING_REACH), 0.5)
+			for i in 6:
+				spark(Vector3(kp.x + randf_range(-1.5, 1.5), ky + 0.4 + randf() * 1.0, kp.y + randf_range(-1.5, 1.5)), Color("#ffd65a"))
+		"king_down":
+			var kd: Vector2 = sim.moba.king_pos(int(e.team))
+			var kdy := Sim.height_at(kd)
+			_pack_explosion("heavy", Vector3(kd.x, kdy + 1.6, kd.y), 1.8)
+			for i in 3:
+				ring_at(Vector3(kd.x, kdy + 0.2, kd.y), Color("#ffd65a"), 3.0 + i * 1.5, 0.8 + i * 0.2)
+			_shake = maxf(_shake, 0.8)
 		"gate_rebuilt":
 			var g3: Dictionary = sim.gates[int(e.gate)]
 			ring_at(Vector3(g3.c.x, Sim.height_at(Vector2(g3.c.x, g3.c.y)) + 0.2, g3.c.y), TEAM_COLORS[vt(int(e.team))], 3.0, 0.8)
@@ -4645,6 +4658,10 @@ func bars() -> Array:
 			if not bool(tw.dead):
 				out.append({"pos":Vector3(tw.p.x, Sim.height_at(tw.p) + TOWER_TOP + 1.2, tw.p.y), "fill":clampf(float(tw.hp) / float(tw.max_hp), 0.0, 1.0),
 					"color":TEAM_COLORS[vt(int(tw.team))], "wide":true})
+		for kt in 2:                               # 0.31.156: the Kings (the hearts)
+			if not bool(sim.moba.kings[kt].dead):
+				var kp: Vector2 = sim.moba.king_pos(kt)
+				out.append({"pos":Vector3(kp.x, Sim.height_at(kp) + 3.4, kp.y), "fill":sim.moba.king_frac(kt), "color":Color("#ffd65a"), "wide":true})
 	for u in sim.units:
 		if u.state == "dead":
 			continue

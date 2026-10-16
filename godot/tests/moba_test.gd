@@ -12,7 +12,10 @@ extends SceneTree
 #  4. levels: XP from minions dying near you, a level up offers 3 upgrades, a pick applies; bots pick by themselves;
 #  5. a fallen hero: no hat, back as himself at his castle after 4 + 1.6 x level s; the castle heals; ACTION only for the
 #     King;
-#  6. a whole match, bots on both sides: towers fall, levels climb, it ends.
+#  6. (0.31.156) the Kings are the hearts: home on their thrones, untouchable while their front gates stand, then hit
+#     and hitting back (a slam round him), healing when left alone; defeat one and the match is won; at time, the side
+#     that did more to the other's King;
+#  7. a whole match, bots on both sides: towers fall, levels climb, it ends.
 #   godot --headless --path godot -s res://tests/moba_test.gd
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 const Moba = preload("res://scripts/siege/moba.gd")
@@ -213,7 +216,41 @@ func _init() -> void:
 	var st: Dictionary = l.stands.filter(func(x): return int(x.team) == 0)[0]
 	you.pos = st.p
 	check(l.context_action(you) == "" and not l.act("you", "interact") and not l.act("you", "hat_swap"), "at a hat stand: nothing to take")
-	# --- 6. whole matches
+	# --- 6. the Kings
+	var kk = _new("knight", 13)
+	_park_heroes(kk)
+	_clear_minions(kk)
+	kk.moba.wave_at = INF
+	check(kk.oracles[0].state == "home" and (kk.oracles[1].pos as Vector2).is_equal_approx(Sim.throne(1)) and float(kk.moba.kings[1].hp) == Moba.KING_HP
+		and kk.obstacles.filter(func(o): return str(o.kind) == "moba_king").size() == 2, "each King home on his throne, %d health, solid" % int(Moba.KING_HP))
+	var att: Dictionary = kk.by_id["b1"]
+	att.hp = 1.0e6
+	att.max_hp = 1.0e6
+	kk.moba.hit_king(att, 1, 300.0)
+	check(float(kk.moba.kings[1].hp) == Moba.KING_HP and not kk.moba.king_open(1), "while his front gates stand he can't be hurt")
+	var rg: Dictionary = kk.gates.filter(func(g): return int(g.team) == 1 and str(g.get("kind", "")) != "jail")[0]
+	rg.broken = true
+	rg.hp = 0.0
+	kk._update_gate_nav()
+	kk.moba.hit_king(att, 1, 300.0)
+	check(kk.moba.king_open(1) and float(kk.moba.kings[1].hp) == Moba.KING_HP - 300.0, "a gate of his down: he takes the hit")
+	att.pos = kk.moba.king_pos(1) + Vector2(2.0, 0.0)
+	var hp0 := float(att.hp)
+	var slams := 0
+	for e in _run(kk, 2.0):
+		if e.kk == "king_slam" and int(e.team) == 1:
+			slams += 1
+	check(slams >= 1 and float(att.hp) < hp0, "he hits back: a slam round him (%d)" % slams)
+	att.pos = Sim.spawn(0)
+	var kh := float(kk.moba.kings[1].hp)
+	_run(kk, Moba.KING_QUIET + 2.0)
+	check(float(kk.moba.kings[1].hp) > kh, "left alone, he heals")
+	check(kk.moba.tiebreak() == 0, "at time: the side that did more to the other's King wins")
+	att.pos = kk.moba.king_pos(1) + Vector2(2.0, 0.0)
+	kk.moba.hit_king(att, 1, Moba.KING_HP)
+	_run(kk, 0.2)
+	check(bool(kk.moba.kings[1].dead) and kk.ended and kk.winner == 0 and kk.end_reason == "king" and kk.score[0] == 1, "their King defeated: the match is won")
+	# --- 7. whole matches
 	var n := int(OS.get_environment("MATCHES")) if OS.has_environment("MATCHES") else 1
 	for mi in n:
 		var sm = _new(Moba.HERO_ORDER[mi % Moba.HERO_ORDER.size()], 2000 + mi)
@@ -229,9 +266,9 @@ func _init() -> void:
 			if int(sm.time * 30.0) % 300 == 0:
 				peak = maxi(peak, sm.units.size())
 		var lv: Array = sm.units.filter(func(u): return bool(u.get("hero", false))).map(func(u): return int(u.level))
-		print("  match %d: %.0f s, winner %d (%s), score %s, hero KOs %s, towers down %d/%d, gates down %d, levels %s, most units %d, %d ms" % [mi,
-			sm.time, sm.winner, sm.end_reason, str(sm.score), str(sm.kills), sm.moba.towers_down(0), sm.moba.towers_down(1), gates_down, str(lv), peak,
-			Time.get_ticks_msec() - t0])
+		print("  match %d: %.0f s, winner %d (%s), Kings %d%%/%d%%, hero KOs %s, towers down %d/%d, gates down %d, levels %s, most units %d, %d ms" % [mi,
+			sm.time, sm.winner, sm.end_reason, int(sm.moba.king_frac(0) * 100.0), int(sm.moba.king_frac(1) * 100.0), str(sm.kills), sm.moba.towers_down(0),
+			sm.moba.towers_down(1), gates_down, str(lv), peak, Time.get_ticks_msec() - t0])
 		if mi == 0:
 			check(sm.ended and sm.moba.towers_down(0) + sm.moba.towers_down(1) >= 2 and lv.max() >= 6 and peak < 10 + 2 * Moba.MINION_CAP + 1,
 				"a whole match: towers fall (%d), heroes reach level %d, minions stay under the cap (%d units at most)" % [sm.moba.towers_down(0) + sm.moba.towers_down(1), lv.max(), peak])

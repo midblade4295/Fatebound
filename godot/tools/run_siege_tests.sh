@@ -184,7 +184,7 @@ run commander_test       COMMANDER_PASS           180
 run commander_ui_test    COMMANDER_UI_PASS        120
 # 0.31.155 5V5 (the test): heroes, waves (stacking), League's tower rules, gates behind towers, levels and picks, a
 # hero's fall, whole bot matches; then the app -- Home's 5V5, the hero window, BATTLE, a level-up picked on the screen
-run moba_test            MOBA_PASS                300
+run moba_test            MOBA_PASS                480
 run moba_ui_test         MOBA_UI_PASS             150
 # 0.31.153: every script the server installs can load what it loads (the installer copies a list)
 t0=$SECONDS

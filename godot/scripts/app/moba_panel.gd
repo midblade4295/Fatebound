@@ -33,7 +33,8 @@ func open(a) -> void:
 	tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	UI2.body(body, "You and four bot heroes against five. Every 30 seconds each castle sends minions down the three lanes. "
 		+ "Two towers guard each lane, and your gates are behind them. Level up to 10 by fighting near minions; pick an "
-		+ "upgrade each level. Break their towers and gates, rescue your King.", 12, UI2.SOFT)
+		+ "upgrade each level. Break their towers and a gate, then defeat their King on his throne -- he's their heart, "
+		+ "and he hits back.", 12, UI2.SOFT)
 	UI2.text(body, "PICK YOUR HERO", 16, UI2.GOLD)
 	var holder := CenterContainer.new()
 	holder.size_flags_horizontal = Control.SIZE_EXPAND_FILL

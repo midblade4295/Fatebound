@@ -19,8 +19,12 @@ extends RefCounted
 #   tower can't be damaged while its outer one stands; a castle gate can't be damaged while an inner tower of a lane
 #   that leads to it stands. Without your minions near it a tower takes a third of the damage (backdoor protection).
 #   Only basic attacks (and arrows / fire) hurt towers.
-# - The match is still the King's: rescue him (3 to win), or be ahead at 12 minutes -- then more of their towers down,
-#   then hero knockouts. When an enemy gate is down two of each side's bots go for the King with the siege brain.
+# - The heart is the King (0.31.156, Kevin: "Have the enemy king be the "heart" and players will have to defeat him"):
+#   each King sits on his own throne, KING_HP of health, untouchable until one of his castle's front gates is down;
+#   then he can be hit (basic attacks, arrows, fire) and he fights back -- a slam round him every KING_EVERY s. Left
+#   alone a while he heals. Defeat theirs and the match is won; at 12 minutes, the side that did more to the other's
+#   King wins, then more towers down, then hero knockouts. No rescues, no lifting. When an enemy gate is down two of
+#   each side's bots go for that King; bots near their own King under attack defend him.
 
 const HEROES := {
 	"knight": {"name":"Knight", "cls":"knight", "up":false}, "barbarian": {"name":"Barbarian", "cls":"barbarian", "up":false},
@@ -95,6 +99,14 @@ const UPGRADES := {
 	"cdr":{"name":"ABILITY +25% FASTER"}, "ls":{"name":"8% LIFESTEAL"}, "regen":{"name":"REGEN 1%/s"},
 }
 const UP_MAX := 3
+const KING_HP := 3500.0
+const KING_R := 1.0
+const KING_REACH := 4.5
+const KING_SLAM := 50.0
+const KING_EVERY := 1.6
+const KING_REGEN := 0.015                                   # of his health a second, once left alone KING_QUIET s
+const KING_QUIET := 6.0
+const KING_GUARD := 14.0                                    # enemies this near: he's under attack (bots come to help)
 
 var s                                     # the sim
 var rng := RandomNumberGenerator.new()
@@ -106,6 +118,7 @@ var _mid := 0
 var heroes: Array = [[], []]              # unit ids
 var hero_of := {}                         # unit id -> hero id
 var _immune_note := -10.0
+var kings: Array = [{}, {}]               # per side: {hp, max_hp, dead, next, quiet}
 
 # ---------- setup ----------
 func begin(sim, my_hero: String, seed_value: int) -> void:
@@ -119,6 +132,14 @@ func begin(sim, my_hero: String, seed_value: int) -> void:
 		_add_tower(0, int(b[0]), int(b[1]), b[2])
 	for b in TOWERS_BLUE:
 		_add_tower(1, 2 - int(b[0]), int(b[1]), -(b[2] as Vector2))
+	for t in 2:                           # the Kings, home on their thrones: the hearts
+		var o: Dictionary = s.oracles[t]
+		o.state = "home"
+		o.pos = s.throne(t)
+		o.lifters = []
+		o.carrier = ""
+		kings[t] = {"hp":KING_HP, "max_hp":KING_HP, "dead":false, "next":0.0, "quiet":0.0}
+		s.obstacles.append({"p":o.pos, "r":KING_R, "kind":"moba_king", "kg":t, "team":t})
 	s._build_buckets()
 	s._build_nav()                        # (the towers block the way and stop arrows)
 	for t in 2:                           # the island lane at its plain cost: minions walk mid
@@ -257,6 +278,7 @@ func step(dt: float) -> void:
 			for l in 3:
 				_spawn_wave(t, l)
 	_step_towers(dt)
+	_step_kings(dt)
 	var gone := []
 	for u in s.units:
 		if not s.alive(u):
@@ -457,6 +479,12 @@ func melee_towers(u: Dictionary, reach: float, arc: float, dmg: float) -> int:
 			continue
 		hit_tower(u, int(tw.id), dmg)
 		hits += 1
+	var t2 := 1 - int(u.team)
+	var off2: Vector2 = king_pos(t2) - (u.pos as Vector2)
+	var d2 := off2.length()
+	if not bool(kings[t2].dead) and d2 - KING_R <= reach + 0.3 and (arc <= -1.0 or d2 < 0.3 or fwd.dot(off2 / d2) >= arc - 0.3):
+		hit_king(u, t2, dmg)
+		hits += 1
 	return hits
 
 func tower_in_range(team_of_tower: int, p: Vector2, extra := 0.0) -> Dictionary:
@@ -464,6 +492,92 @@ func tower_in_range(team_of_tower: int, p: Vector2, extra := 0.0) -> Dictionary:
 		if int(tw.team) == team_of_tower and not bool(tw.dead) and p.distance_to(tw.p) <= TOWER_RANGE + extra:
 			return tw
 	return {}
+
+# ---------- the Kings, the hearts (0.31.156) ----------
+func king_pos(t: int) -> Vector2:
+	return s.oracles[t].pos
+
+func king_open(t: int) -> bool:
+	# hittable once a front gate of his castle is down
+	if bool(kings[t].dead):
+		return false
+	for g in s.gates:
+		if int(g.team) == t and str(g.get("kind", "")) != "jail" and not s.gate_blocks(g):
+			return true
+	return false
+
+func king_frac(t: int) -> float:
+	return float(kings[t].hp) / float(kings[t].max_hp)
+
+func tiebreak() -> int:
+	# at time: who did more to the other's King, then towers, then hero knockouts (-1: level)
+	if absf(king_frac(0) - king_frac(1)) > 0.001:
+		return 0 if king_frac(1) < king_frac(0) else 1
+	if towers_down(0) != towers_down(1):
+		return 0 if towers_down(1) > towers_down(0) else 1
+	if s.kills[0] != s.kills[1]:
+		return 0 if s.kills[0] > s.kills[1] else 1
+	return -1
+
+func king_threat(t: int) -> Dictionary:
+	# the nearest enemy within KING_GUARD of King t ({} when none)
+	var best := {}
+	var bd := KING_GUARD
+	for o in s.units:
+		if int(o.team) != t and s.alive(o):
+			var d: float = (o.pos as Vector2).distance_to(king_pos(t))
+			if d < bd:
+				bd = d
+				best = o
+	return best
+
+func hit_king(src: Dictionary, t: int, amount: float) -> void:
+	var k: Dictionary = kings[t]
+	if bool(k.dead) or int(src.get("team", -1)) == t or int(src.get("team", -1)) < 0 or s.ended:
+		return
+	if not king_open(t):
+		if s.time - _immune_note > 1.5 and not bool(src.get("bot", true)):
+			_immune_note = s.time
+			s._event("king_immune", {"team":t})
+		return
+	k.hp = maxf(0.0, float(k.hp) - amount)
+	k.quiet = 0.0
+	s._event("king_hit", {"team":t, "dmg":int(round(amount))})
+	if float(k.hp) <= 0.0:
+		k.dead = true
+		s.score[1 - t] += 1
+		s._event("king_down", {"team":t, "by":str(src.get("id", ""))})
+		s._finish("king")
+
+func _step_kings(dt: float) -> void:
+	for t in 2:
+		var k: Dictionary = kings[t]
+		if bool(k.dead):
+			continue
+		var kp := king_pos(t)
+		var near := []
+		var any := false
+		for o in s.units:
+			if int(o.team) == t or not s.alive(o):
+				continue
+			var d: float = (o.pos as Vector2).distance_to(kp)
+			if d <= KING_GUARD:
+				any = true
+			if d <= KING_REACH + s.UNIT_R:
+				near.append(o)
+		if not near.is_empty() and s.time >= float(k.next):
+			k.next = s.time + KING_EVERY
+			var dmg: float = KING_SLAM * (1.0 + TOWER_GROW * float(s.time) / 60.0)
+			s._event("king_slam", {"team":t})
+			for o in near:
+				s._next_push = s._push_from(kp, o.pos, 5.0, 2.6)
+				s._damage({"id":"king%d" % t, "team":t, "pos":kp, "state":"idle"}, o, dmg)
+		if any:
+			k.quiet = 0.0
+		else:
+			k.quiet = float(k.quiet) + dt
+			if float(k.quiet) >= KING_QUIET and float(k.hp) < float(k.max_hp):
+				k.hp = minf(float(k.max_hp), float(k.hp) + float(k.max_hp) * KING_REGEN * dt)
 
 # ---------- hits and knockouts ----------
 func on_damage(src: Dictionary, dst: Dictionary, amount: float) -> void:
@@ -514,6 +628,8 @@ func on_kill(src: Dictionary, dst: Dictionary) -> void:
 
 # ---------- ACTION: only the King ----------
 func context(u: Dictionary) -> String:
+	if true:
+		return ""                                # (0.31.156: the Kings are the hearts -- nothing to lift)
 	if u.carrying:
 		var ho: Dictionary = s.lifting_oracle(u)
 		return "throw" if (not ho.is_empty() and ho.lifters.size() == 1 and s.lifters_needed(ho) == 1) else "letgo"
@@ -523,6 +639,8 @@ func context(u: Dictionary) -> String:
 	return ""
 
 func interact(u: Dictionary) -> bool:
+	if true:
+		return false
 	if u.carrying:
 		var ho: Dictionary = s.lifting_oracle(u)
 		s._leave_lift(u, not ho.is_empty() and ho.lifters.size() == 1 and s.lifters_needed(ho) == 1)
@@ -574,6 +692,10 @@ func _think_minion(u: Dictionary) -> void:
 	if not tw.is_empty():
 		_hit_structure(u, tw)
 		return
+	var eteam := 1 - int(u.team)
+	if king_open(eteam) and (u.pos as Vector2).distance_to(king_pos(eteam)) < aggro + KING_R + 2.0:
+		_hit_point(u, king_pos(eteam), KING_R)
+		return
 	foe = _minion_unit_target(u, aggro, true)
 	if not foe.is_empty():
 		u["mt"] = str(foe.id)
@@ -622,14 +744,17 @@ func _enemy_tower_near(u: Dictionary, r: float) -> Dictionary:
 
 func _hit_structure(u: Dictionary, tw: Dictionary) -> void:
 	# up to it and swing / shoot (an invulnerable one too: it's in the way -- the hit does nothing)
+	_hit_point(u, tw.p, TOWER_R)
+
+func _hit_point(u: Dictionary, p: Vector2, r: float) -> void:
 	var c: Dictionary = s.CLASSES[u.cls]
-	var d: float = (u.pos as Vector2).distance_to(tw.p) - TOWER_R
+	var d: float = (u.pos as Vector2).distance_to(p) - r
 	var reach: float = float(c.range) * (0.85 if bool(c.ranged) else 1.0)
 	if d > reach:
-		s._nav_to(u, tw.p, TOWER_R + reach * 0.8)
+		s._nav_to(u, p, r + reach * 0.8)
 		return
 	u.move = Vector2.ZERO
-	u.face = s.angle_of((tw.p as Vector2) - (u.pos as Vector2))
+	u.face = s.angle_of(p - (u.pos as Vector2))
 	s._start_attack(u, "attack", false)
 
 func _march(u: Dictionary) -> void:
@@ -669,15 +794,19 @@ func _hit_gate(u: Dictionary, g: Dictionary) -> void:
 func _think_hero(u: Dictionary) -> void:
 	var c: Dictionary = s.CLASSES[u.cls]
 	var reach := float(c.range)
-	# their carrier taking his King home: everyone near stops him; ours: escort
-	var ec: Dictionary = s.oracle_carrier(1 - int(u.team))
-	if not ec.is_empty() and (ec.pos as Vector2).distance_to(u.pos) < 30.0:
-		s._fight(u, ec)
+	# our King under attack: those near come back and fight whoever's at him
+	var th := king_threat(int(u.team))
+	if not th.is_empty() and (u.pos as Vector2).distance_to(king_pos(int(u.team))) < 45.0 and u.hp > u.max_hp * 0.35:
+		s._fight(u, th)
 		return
-	# a gate of theirs down: the King runners go for him (the siege brain: break the jail, lift, carry home)
-	if bool(u.get("kr", false)) and _enemy_gate_down(int(u.team)):
-		u.role = "raid"
-		s._think_fighter(u)
+	# their King open (a gate of his down): the King runners go for him -- their heroes in the way first
+	var eteam := 1 - int(u.team)
+	if bool(u.get("kr", false)) and king_open(eteam) and u.hp > u.max_hp * 0.45:
+		for o in s.units:
+			if int(o.team) == eteam and s.alive(o) and bool(o.get("hero", false)) and (o.pos as Vector2).distance_to(u.pos) < reach + 3.0:
+				s._fight(u, o)
+				return
+		_hit_point(u, king_pos(eteam), KING_R)
 		return
 	# hurt: home to heal
 	if bool(u.get("back", false)):

@@ -4624,3 +4624,25 @@ King for now.)
   at most 67 units on the field; about 3.5 ms a tick here (the 16v16's bot matches: 2.6-3.5).
 - Tests: moba_test (new), moba_ui_test (new); commander_ui_test opens COMMANDER from the app now.
 - Version 0.31.155, versionCode 241 (server code changed: SERVER_BUILD 0.31.155).
+- (0.31.155's checks were stopped part way -- 0.31.156 came straight after; its checks are 0.31.156's below.)
+
+## 0.31.156 — 5V5: the enemy King is the heart
+Kevin: "Have the enemy king be the "heart" and players will have to defeat him"
+- moba.gd: each King sits on his own throne (the oracle's state "home"; no rescues, no lifting, no cell, no fish, no
+  tantrums -- the sim's oracle step is off in 5v5), solid (an obstacle like the towers), 3500 health. He can't be hurt
+  until one of his castle's front gates is down; then basic attacks, arrows and fire hurt him -- and he hits back: a
+  slam on every enemy within 4.5 m every 1.6 s (50, +4 % a minute, knocking them back). Left alone (no enemy within
+  14 m) for 6 s he heals 1.5 % a second. Defeat him: that side scores, the match ends ("king"). At 12 minutes: the side
+  that did more to the other's King wins, then more towers down, then hero knockouts.
+- Bots: minions at the end of their lane go in and hit the King once he's open; the two King-runner bots of a side go
+  for an open King (fighting the heroes in their way first); bots within 45 m of their own King come back when
+  enemies are at him (and have health to spare).
+- HUD: each side's King's health at the top instead of the rescue count ("♛ 100%" / "75% ♛"); the status line "Defeat
+  their King -- he's guarded until a gate of his falls" / "Their King is open -- defeat him!" / "OUR KING IS UNDER
+  ATTACK!"; the KING pointer points at theirs; "Their King is protected until one of his gates falls" when you hit
+  him early; "THEIR KING IS DEFEATED!". The results say KINGS. The view: a gold health bar over each King, his slam
+  (a gold ring and sparks), his fall (an explosion). The hero window says it.
+- moba_test: + the Kings (home and solid; untouchable while the gates stand; hit once one's down; the slam; healing
+  when left alone; the tiebreak; defeated -> the match won).
+- Four bot matches: two won on the King (10:38, 9:57), two at time (one with their King at 90 %).
+- Version 0.31.156, versionCode 242 (server code changed: SERVER_BUILD 0.31.156).
