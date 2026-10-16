@@ -22,6 +22,8 @@ func _process(_d: float) -> bool:
 			continue                                   # tools-only bodies
 		var made: Dictionary = View.make_body(cls)
 		if not made.is_empty():
+			if str(cls).begins_with("minion_"):
+				View._team_red(made.body)              # (0.31.159: the red side's minion textures too)
 			(made.body as Node).free()
 	var paths: Array = Cache._cache.keys().filter(func(p): return Cache._cache[p] != null)
 	paths.append("res://assets/terrain/cache.res")

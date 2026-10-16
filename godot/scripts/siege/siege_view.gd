@@ -69,8 +69,17 @@ const LOOKS := {
 	"skel_rogue": {"model":"Skeleton_Rogue","r":"Skeleton_Crossbow","l":"","idle":"r/Ranged_Bow_Idle","attack":"r/Ranged_Bow_Release","ability":"r/Ranged_Bow_Release_Up"},
 	"skel_mage": {"model":"Skeleton_Mage","r":"Skeleton_Staff","l":"","idle":"g/Idle_A","attack":"r/Ranged_Magic_Shoot","ability":"r/Ranged_Magic_Spellcasting","tint":"#b9a8ff"},
 	"skel_brute": {"model":"Skeleton_Warrior","r":"Skeleton_Axe","l":"Skeleton_Shield_Large_A","idle":"g/Idle_A","attack":"m/Melee_1H_Attack_Chop","ability":"m/Melee_2H_Attack_Spin","tint":"#ff9b7a","combo":["m/Melee_1H_Attack_Chop","m/Melee_1H_Attack_Slice_Horizontal","m/Melee_Block_Attack"]},
+	# 0.31.159 5V5 lane minions (Kevin picked the A1 concepts, "the King's levy"): Meshy bodies of their own -- a kettle-
+	# helm footman (short sword, round buckler), a wide-brimmed crossbowman (hand crossbow, the bow's clips as the Ranger's), a
+	# goggled bombardier (powder keg on his back, a bronze hand-cannon thrust out to fire -- the Mage's shot), a castle
+	# champion (a big war hammer). (KayKit's 1H / 2H gun clips hold a piece fit like the crossbows straight up.) Their props are Meshy pieces from one parts sheet, fit to KayKit templates (MESHY_WEAPON_LIKE).
+	"minion_melee": {"model":"meshy:minion_melee","r":"mw/minion_sword","l":"mw/minion_buckler","idle":"g/Idle_A","attack":"m/Melee_1H_Attack_Slice_Diagonal","ability":"m/Melee_1H_Attack_Stab","combo":["m/Melee_1H_Attack_Slice_Diagonal","m/Melee_1H_Attack_Slice_Horizontal","m/Melee_1H_Attack_Stab"]},
+	"minion_caster": {"model":"meshy:minion_caster","r":"mw/minion_crossbow","l":"","idle":"r/Ranged_Bow_Idle","attack":"r/Ranged_Bow_Release","ability":"r/Ranged_Bow_Draw"},
+	"minion_siege": {"model":"meshy:minion_siege","r":"mw/minion_cannon","l":"","idle":"g/Idle_A","attack":"r/Ranged_Magic_Shoot","ability":"r/Ranged_Magic_Spellcasting"},
+	"minion_super": {"model":"meshy:minion_super","r":"mw/minion_hammer","l":"","idle":"m/Melee_2H_Idle","attack":"m/Melee_2H_Attack_Chop","ability":"m/Melee_2H_Attack_Spin","combo":["m/Melee_2H_Attack_Chop","m/Melee_2H_Attack_Slice","m/Melee_2H_Attack_Stab"]},
 	"skel_lord": {"model":"Skeleton_Warrior","r":"Skeleton_Axe","l":"Skeleton_Shield_Large_A","idle":"g/Idle_A","attack":"m/Melee_1H_Attack_Chop","ability":"m/Melee_2H_Attack_Spin","tint":"#a993d6","combo":["m/Melee_1H_Attack_Chop","m/Melee_1H_Attack_Slice_Horizontal","m/Melee_Block_Attack"]},
 }
+const MINION_LOOKS := {"melee":"minion_melee", "caster":"minion_caster", "siege":"minion_siege", "super":"minion_super"}
 const LOOP_HINTS := ["Idle","Running","Walking","Hammering","Holding","Aiming","_Pose","Blocking","Chopping","Pickaxing"]
 
 static var _libs: Dictionary = {}
@@ -3184,6 +3193,8 @@ static var _tint_mats: Dictionary = {}
 static func look_key(u: Dictionary) -> String:
 	if u.has("look"):
 		return str(u.look)                      # 0.31.157: a jungle monster, a LEGION skeleton
+	if bool(u.get("minion", false)) and MINION_LOOKS.has(str(u.get("mk", ""))):
+		return str(MINION_LOOKS[str(u.mk)])     # 0.31.159: the lane minions' own bodies
 	if u.cls == "barbarian" and u.up:
 		return "berserker"
 	if u.cls == "priest" and u.up:
@@ -3203,7 +3214,10 @@ const MESHY := {"assassin": "res://assets/meshy/assassin/", "archmage": "res://a
 	"berserker": "res://assets/meshy/berserker/", "sniper": "res://assets/meshy/sniper/",
 	"necromancer": "res://assets/meshy/necromancer/", "villager": "res://assets/meshy/villager/", "worker": "res://assets/meshy/worker/",
 	"knight": "res://assets/meshy/knight/", "barbarian": "res://assets/meshy/barbarian/", "rogue": "res://assets/meshy/rogue/",
-	"ranger": "res://assets/meshy/ranger/", "mage": "res://assets/meshy/mage/", "priest": "res://assets/meshy/priest/"}
+	"ranger": "res://assets/meshy/ranger/", "mage": "res://assets/meshy/mage/", "priest": "res://assets/meshy/priest/",
+	# 5v5 lane minions (Kevin picked the A1 concepts: the King's levy)
+	"minion_melee": "res://assets/meshy/minion_melee/", "minion_caster": "res://assets/meshy/minion_caster/",
+	"minion_siege": "res://assets/meshy/minion_siege/", "minion_super": "res://assets/meshy/minion_super/"}
 const MESHY_RENAME := {"Hips":"hips", "Spine02":"spine", "Spine":"chest", "Head":"head",
 	"LeftArm":"upperarm.l", "LeftForeArm":"lowerarm.l", "LeftHand":"wrist.l",
 	"RightArm":"upperarm.r", "RightForeArm":"lowerarm.r", "RightHand":"wrist.r",
@@ -3492,6 +3506,9 @@ const WEAPON_ROLL := {"axe_1handed":180.0, "bits/axe_D":180.0, "bits/sword_G":18
 # piece drawn upright is first turned onto the template's axes where that lies along Z or X -- bows, crossbows, claws;
 # a left-hand claw is the right one mirrored).
 const MESHY_WEAPON_LIKE := {
+	# 0.31.159: the 5v5 lane minions' props (not cosmetics)
+	"minion_sword": "sword_1handed", "minion_buckler": "shield_round", "minion_crossbow": "crossbow_1handed",
+	"minion_cannon": "crossbow_2handed", "minion_hammer": "axe_2handed",
 	# Knight
 	"squire_sword": "sword_1handed", "squire_shield": "bits/shield_B",
 	"steadfast_sword": "bits/sword_A", "steadfast_shield": "shield_round",
@@ -3627,6 +3644,31 @@ static func _apply_tint(body: Node3D, model: String, tint: Color) -> void:
 				_tint_mats[key] = m2
 			m3.set_surface_override_material(surf, _tint_mats[key])
 
+static var _red_mats := {}
+
+static func _team_red(body: Node) -> void:
+	# 0.31.159: a body (and what it holds) painted in the blue team's colours, in the red team's: each texture's
+	# <name>_red.jpg beside it (tools/team_red_tex.py) on a copy of its material -- the same shader, so nothing new to
+	# compile mid-match; textures without a red copy (steel, wood) stay as they are
+	for m3 in body.find_children("*", "MeshInstance3D", true, false):
+		var mi := m3 as MeshInstance3D
+		if mi.mesh == null:
+			continue
+		for surf in mi.mesh.get_surface_count():
+			var base := mi.get_active_material(surf) as StandardMaterial3D
+			if base == null or base.albedo_texture == null:
+				continue
+			var path := base.albedo_texture.resource_path
+			if not _red_mats.has(path):
+				var red := path.get_basename() + "_red.jpg"
+				var m2: StandardMaterial3D = null
+				if path != "" and ResourceLoader.exists(red):
+					m2 = base.duplicate()
+					m2.albedo_texture = Stage.texture(red)
+				_red_mats[path] = m2
+			if _red_mats[path] != null:
+				mi.set_surface_override_material(surf, _red_mats[path])
+
 # 0.31.128 (Kevin: "make the base class models the same size as the advanced class"): every body at the upgraded
 # classes' 1.14 (the base classes were 1.0); an upgraded one still shows by its own model and its gold ring.
 const BODY_SCALE := 1.14
@@ -3669,7 +3711,10 @@ func _ensure_actor(u: Dictionary) -> Dictionary:
 	if made.is_empty():
 		return a
 	root.add_child(made.body)
-	a["mlook"] = str(u.look) if u.has("look") else ""          # 0.31.157: a monster's own clips
+	var minion_look := bool(u.get("minion", false)) and MINION_LOOKS.has(str(u.get("mk", "")))
+	a["mlook"] = look_key(u) if u.has("look") or minion_look else ""     # 0.31.157: a monster's own clips (0.31.159: a minion's)
+	if minion_look and vt(int(u.team)) == 1:
+		_team_red(made.body)                    # 0.31.159: the minions are painted in the blue team's colours
 	made.body.scale = Vector3.ONE * BODY_SCALE * (MINION_SCALE if bool(u.get("minion", false)) else 1.0) * float(u.get("mscale", 1.0))   # 0.31.157: big monsters; 0.31.128 (Kevin): every class the upgraded size (base was 1.0); 0.31.155: 5v5 minions smaller
 	a.body = made.body
 	a.player = made.player
@@ -3679,7 +3724,7 @@ func _ensure_actor(u: Dictionary) -> Dictionary:
 	a.cosmetic = cosmetic
 	a.clip = ""
 	a.busy_until = 0.0
-	_play(a, str(LOOKS.get(u.cls, LOOKS.villager).idle))
+	_play(a, str(LOOKS.get(str(a.mlook) if str(a.mlook) != "" else u.cls, LOOKS.villager).idle))
 	# Upgraded: a gold ring (no material overrides on skinned meshes; 0.31.128: no longer a bigger body too).
 	var rc: Color = GOLD if (u.up or u.id == player_id) else TEAM_COLORS[vt(int(u.team))]
 	rc.a = 0.9
@@ -4417,7 +4462,7 @@ func _sync_load(a: Dictionary, u: Dictionary) -> void:
 	a.load_node = n
 
 func _animate(a: Dictionary, u: Dictionary, vel: float) -> void:
-	var look: Dictionary = LOOKS.get(str(u.look) if u.has("look") else u.cls, LOOKS.villager)
+	var look: Dictionary = LOOKS.get(str(a.get("mlook", "")) if str(a.get("mlook", "")) != "" else u.cls, LOOKS.villager)
 	if u.state == "dead":
 		if not a.dead:
 			a.dead = true

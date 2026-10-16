@@ -8,7 +8,8 @@ extends SceneTree
 #     the ULT button: LV 6 until level 6, then the Archmage's METEORS, tapped: cast; the jungle's skeletons and the
 #     Bone Lord on the field (pictures);
 #  5. (0.31.158) the fog of war: the shroud over what your side can't see (clear round you), an enemy out of your sight
-#     not drawn, one in it drawn; the brush's bushes; WARD tapped: a ward at your feet, shown;
+#     not drawn, one in it drawn; the brush's bushes; WARD tapped: a ward at your feet, shown; (0.31.159) the lane
+#     minions in their own Meshy bodies, the red side's repainted red;
 #  6. the end: the results without rewards (the gold as it was).
 #   godot --headless --path godot -s res://tests/moba_ui_test.gd   (SHOT_DIR=... under Xvfb for pictures)
 const App = preload("res://scripts/app/siege_app.gd")
@@ -233,6 +234,7 @@ func _process(delta: float) -> bool:
 						s.sim._respawn(r)
 				r1.pos = Vector2(28.0, -35.0)
 				r2.pos = me.pos + Vector2(4.0, -3.0)
+				s.sim.moba.wave_at = s.sim.time                  # (0.31.159: a wave, for the minions' bodies)
 				s.view.snap_camera()
 				var wb: Array = s.hud._buttons().filter(func(x): return str(x.id) == "ward")
 				check(wb.size() == 1, "the WARD button")
@@ -257,6 +259,23 @@ func _process(delta: float) -> bool:
 					if c is MultiMeshInstance3D and str(c.name).begins_with("Brush_"):
 						bushes += (c as MultiMeshInstance3D).multimesh.instance_count
 				check(bushes >= 40, "the brush patches' bushes (%d)" % bushes)
+				# 0.31.159: the minions' bodies -- each kind its own Meshy body, the red side's in red
+				var kinds := {}
+				var red_ok := false
+				for u in s.sim.units:
+					if not bool(u.get("minion", false)) or not s.view.actors.has(u.id):
+						continue
+					var ma: Dictionary = s.view.actors[u.id]
+					if ma.body == null:
+						continue
+					kinds[str(ma.get("mlook", ""))] = true
+					if int(u.team) == 1 and not red_ok:
+						for mi in (ma.body as Node).find_children("*", "MeshInstance3D", true, false):
+							for si in (mi as MeshInstance3D).mesh.get_surface_count():
+								var om := (mi as MeshInstance3D).get_surface_override_material(si) as StandardMaterial3D
+								red_ok = red_ok or (om != null and om.albedo_texture != null and om.albedo_texture.resource_path.ends_with("_red.jpg"))
+				check(kinds.has("minion_melee") and kinds.has("minion_caster") and not kinds.has(""), "the minions in their own bodies (%s)" % str(kinds.keys()))
+				check(red_ok, "...the red side's repainted red")
 				_shot("moba_fog")
 				me.pos = Sim.spawn(0)
 				_go("play")

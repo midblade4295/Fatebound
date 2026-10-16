@@ -32,6 +32,14 @@
 
 "res://assets/kaykit/forest/Tree_4_A_Color1.gltf",
 
+"res://assets/kaykit/heroes/Skeleton_Mage.glb",
+
+"res://assets/kaykit/heroes/Skeleton_Minion.glb",
+
+"res://assets/kaykit/heroes/Skeleton_Rogue.glb",
+
+"res://assets/kaykit/heroes/Skeleton_Warrior.glb",
+
 "res://assets/kaykit/hex/barrel.gltf",
 
 "res://assets/kaykit/hex/building_tower_catapult_blue.gltf",
@@ -65,6 +73,18 @@
 "res://assets/kaykit/hex/wheelbarrow.gltf",
 
 "res://assets/kaykit/tools/torch.gltf",
+
+"res://assets/kaykit/weapons/Skeleton_Axe.gltf",
+
+"res://assets/kaykit/weapons/Skeleton_Blade.gltf",
+
+"res://assets/kaykit/weapons/Skeleton_Crossbow.gltf",
+
+"res://assets/kaykit/weapons/Skeleton_Shield_Large_A.gltf",
+
+"res://assets/kaykit/weapons/Skeleton_Shield_Small_A.gltf",
+
+"res://assets/kaykit/weapons/Skeleton_Staff.gltf",
 
 "res://assets/kaykit/weapons/arrow_bow.gltf",
 
@@ -232,6 +252,70 @@
 
 "res://assets/meshy/mage_shop/mage_shop_red.png",
 
+"res://assets/meshy/minion_caster/anims_g.res",
+
+"res://assets/meshy/minion_caster/anims_m.res",
+
+"res://assets/meshy/minion_caster/anims_ma.res",
+
+"res://assets/meshy/minion_caster/anims_mb.res",
+
+"res://assets/meshy/minion_caster/anims_r.res",
+
+"res://assets/meshy/minion_caster/anims_t.res",
+
+"res://assets/meshy/minion_caster/rigged.glb",
+
+"res://assets/meshy/minion_caster/rigged_Image_0_red.jpg",
+
+"res://assets/meshy/minion_melee/anims_g.res",
+
+"res://assets/meshy/minion_melee/anims_m.res",
+
+"res://assets/meshy/minion_melee/anims_ma.res",
+
+"res://assets/meshy/minion_melee/anims_mb.res",
+
+"res://assets/meshy/minion_melee/anims_r.res",
+
+"res://assets/meshy/minion_melee/anims_t.res",
+
+"res://assets/meshy/minion_melee/rigged.glb",
+
+"res://assets/meshy/minion_melee/rigged_Image_0_red.jpg",
+
+"res://assets/meshy/minion_siege/anims_g.res",
+
+"res://assets/meshy/minion_siege/anims_m.res",
+
+"res://assets/meshy/minion_siege/anims_ma.res",
+
+"res://assets/meshy/minion_siege/anims_mb.res",
+
+"res://assets/meshy/minion_siege/anims_r.res",
+
+"res://assets/meshy/minion_siege/anims_t.res",
+
+"res://assets/meshy/minion_siege/rigged.glb",
+
+"res://assets/meshy/minion_siege/rigged_Image_0_red.jpg",
+
+"res://assets/meshy/minion_super/anims_g.res",
+
+"res://assets/meshy/minion_super/anims_m.res",
+
+"res://assets/meshy/minion_super/anims_ma.res",
+
+"res://assets/meshy/minion_super/anims_mb.res",
+
+"res://assets/meshy/minion_super/anims_r.res",
+
+"res://assets/meshy/minion_super/anims_t.res",
+
+"res://assets/meshy/minion_super/rigged.glb",
+
+"res://assets/meshy/minion_super/rigged_Image_0_red.jpg",
+
 "res://assets/meshy/necromancer/anims_g.res",
 
 "res://assets/meshy/necromancer/anims_m.res",
@@ -365,6 +449,20 @@
 "res://assets/meshy/weapons/magister_staff.glb",
 
 "res://assets/meshy/weapons/marksman_crossbow.glb",
+
+"res://assets/meshy/weapons/minion_buckler.glb",
+
+"res://assets/meshy/weapons/minion_buckler_0_red.jpg",
+
+"res://assets/meshy/weapons/minion_cannon.glb",
+
+"res://assets/meshy/weapons/minion_crossbow.glb",
+
+"res://assets/meshy/weapons/minion_hammer.glb",
+
+"res://assets/meshy/weapons/minion_hammer_0_red.jpg",
+
+"res://assets/meshy/weapons/minion_sword.glb",
 
 "res://assets/meshy/weapons/shade_dagger.glb",
 

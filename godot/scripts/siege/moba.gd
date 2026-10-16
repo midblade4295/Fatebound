@@ -87,7 +87,8 @@ const LATE_AT := 750.0                                      # 12:30 (League's 25
 const MINION_CLS := {"melee":"knight", "caster":"ranger", "siege":"mage", "super":"barbarian"}
 const MINION_KIND_HP := {"melee":0.5, "caster":0.58, "siege":1.9, "super":2.2}      # League: 477 / 296 / 912 health
 const MINION_KIND_DMG := {"melee":0.45, "caster":0.8, "siege":1.0, "super":1.6}
-const MINION_KIND_SCALE := {"siege":1.1, "super":1.25}      # (the view: x the minion size)
+const MINION_KIND_SCALE := {"siege":1.1}      # (the view: x the minion size; 0.31.159: the super minion's own body is
+	# fit by its full height, a head taller and twice as broad as the footman's, so no extra scale)
 const MINION_UP := 0.05                                     # +5 % health and damage every 90 s (League upgrades them too)
 const MINION_UP_EVERY := 90.0
 const MINION_VS_HERO := 0.6                                 # League: minions deal 60 % to champions

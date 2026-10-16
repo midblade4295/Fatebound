@@ -4816,3 +4816,29 @@ Kevin: "Make new model concepts for the minions" (the lane minions still wear th
   ~2,600 credits: reports/concepts/minion_<kind>_turnaround.png. tools/meshy_character.py (new): split (the three views
   at one shared scale) and model (Meshy multi-image-to-3D, latest, t-pose, image enhancement off, the views as the
   texture references, remeshed; then the auto-rig). Waiting on the Meshy key for the models.
+
+## 0.31.159 — 5V5: the lane minions get their own Meshy bodies (Kevin's A1 picks: the King's levy)
+Kevin: "Make new model concepts for the minions" -> "A1" (all four) -> his Meshy key ("save this key so I can stop
+making new ones": kept in his Claude memory and, for this machine's session, ~/.config/fatebound/meshy_key -- outside
+the repo, never committed).
+- Models (tools/meshy_character.py on the four T-pose turnarounds): Meshy multi-image-to-3D (latest, t-pose, image
+  enhancement off, the views as the texture references, ~10k triangles) + auto-rig; 35 credits each. Baked by
+  tools/retarget_meshy.gd (KK_FOR: footman <- Knight, crossbowman <- Archer, bombardier <- Mage, champion <- Barbarian;
+  the first three fit by the neck like every body, the champion by his full height -- his helm sits low between the
+  pauldrons, so by the neck he'd be no taller than a footman). assets/meshy/minion_<melee|caster|siege|super>/.
+- Props: one parts sheet (ElevenLabs gpt-image-2, the four picks as the reference, ~410 credits) -> crop -> Meshy
+  image-to-3D (sword, hand-cannon, hammer meshy-6-lite 15 each; buckler, crossbow meshy-7.1 30 each) -> fit to KayKit
+  templates (tools/meshy_weapon.py): assets/meshy/weapons/minion_<sword|buckler|crossbow|cannon|hammer>.glb, in
+  MESHY_WEAPON_LIKE (not cosmetics). Meshy: ~245 credits in all (369 left).
+- The view: look_key -> MINION_LOOKS by the minion's kind; LOOKS.minion_*: footman sword and buckler (the Knight's
+  swings), crossbowman the Ranger's bow clips (KayKit's 1H/2H gun clips hold a crossbow-fit piece straight up), the
+  bombardier's cannon thrust out with the Mage's shot, the champion's hammer with the two-handed swings; a minion's
+  clips come from its own look (a.mlook). The red side's minions are repainted: tools/team_red_tex.py (the hat shops'
+  blue-to-red rule) made <texture>_red.jpg beside each body texture and the buckler's and hammer's; _team_red() puts
+  them on copies of the same StandardMaterial3D (no new shader mid-match). Siege minions x1.1 as before; the
+  champion's extra x1.25 dropped (his own body is a head taller and twice as broad).
+- Content: a new "minions" pack (38.8 MB; heroes would have passed GitHub's 100 MB), weapons rebuilt (40.4 MB), both
+  on the content-packs branch; the base presets exclude it (content_packs.py presets). content/preload.json: the
+  minion bodies, their animations and the red textures (tools/preload_list.gd runs _team_red on them).
+- Tests: moba_ui_test -- the minions in their own bodies, the red side's repainted red; content_test -- 7 packs.
+- Version 0.31.159, versionCode 245 (SERVER_BUILD 0.31.159: moba.gd's minion scale).
