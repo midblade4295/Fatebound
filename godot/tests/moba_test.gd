@@ -238,7 +238,7 @@ func _init() -> void:
 	var hp0 := float(att.hp)
 	var slams := 0
 	for e in _run(kk, 2.0):
-		if e.kk == "king_slam" and int(e.team) == 1:
+		if e.k == "king_slam" and int(e.team) == 1:
 			slams += 1
 	check(slams >= 1 and float(att.hp) < hp0, "he hits back: a slam round him (%d)" % slams)
 	att.pos = Sim.spawn(0)
