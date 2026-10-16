@@ -880,6 +880,13 @@ func _on_action(kind: String) -> void:
 					hud.toast("Your ultimate comes at level %d" % sim.moba.ULT_LEVEL, Color("#ffcf7a"))
 				elif not me_u.is_empty() and float(me_u.get("ult_cd", 0.0)) <= 0.0 and sim.can_act(me_u):
 					hud.toast("No enemy in reach", Color("#ffcf7a"))         # (EXECUTE, FLURRY: they need someone near)
+		"ward":                                          # 0.31.158 5V5: a ward at your feet
+			if sim != null and sim.moba != null:
+				if sim.act(hud.player_id, "ward"):
+					if audio != null and audio.has_method("play"):
+						audio.play("equip")
+				else:
+					hud.toast("No ward charge yet", Color("#ffcf7a"))
 		_:
 			if kind.begins_with("shop_buy:") or kind.begins_with("shop_sell:"):     # 0.31.157 5V5: the shop
 				var ok: bool = sim != null and sim.act(hud.player_id, "shop_buy" if kind.begins_with("shop_buy:") else "shop_sell",
@@ -1356,8 +1363,8 @@ func _event_sound(e: Dictionary) -> void:
 			_cue("tm_sword_hit", 3, e.get("pos", Vector2.INF), HEAR_R, mine)
 		"lord_slam":
 			_cue("tm_rock_hit", 2, e.get("pos", Vector2.INF), 40.0, false, 1.0)
-		"lord_down", "camp_up":
-			if str(e.k) == "lord_down" or str(e.get("kind", "")) == "lord":
+		"lord_down", "camp_up", "lord_march":
+			if str(e.k) != "camp_up" or str(e.get("kind", "")) == "lord":
 				_cue("horn", 1, Vector2.INF, 0.0, true, 0.8)
 		"buff":
 			_cue("surge", 1, _unit_pos(e.get("id", "")), 24.0, mine, 0.8)

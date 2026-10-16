@@ -4731,3 +4731,66 @@ Kevin: "Build the other 3 mechanics now" (the three left after 0.31.156: ultimat
   tools/cold_start_check.sh: PASS. The Play AAB (throwaway key, presets untouched): BASE OK (265 files), CONTENT OK,
   play_games true, bundletool valid. Preview APK: build/Fatebound-Siege-0.31.157-fatebound.apk (preview key).
 - Bot matches here after the tuning: one won on the King at 13:17, the rest at 15:00 (the test's: blue's King at 49 %).
+
+## 0.31.158 — 5V5: League's fog of war, minions and towers; camps that don't reset at once; the Bone Lord marches
+Kevin: "Add a fog of war system like league of legends does it. Also the enemy camps seem to recharge health
+immediately if you get too far away. Make it so when a team kills the giant in middle, he will spawn on your side like
+a minion. Balance the minions better, the game ended up have tons of priests. Also minions need to work like LoL.
+Please look up it's mechanics so you know. Also check tower mechanics to work like league of legends" (League's wiki:
+Sight, Brush, Ward, Minion, Turret, Monster).
+- FOG OF WAR (new scripts/siege/moba_vision.gd; the server installs it): a side sees only what's within the sight of
+  its heroes (15 m), minions (13.5), super minions and the marching Lord (15), towers (15; their reach is 11.5), wards
+  (10) and its castle round the King (18) -- League's ratios to each other, set to the phone's screen (League's own
+  scale would put a hero's 20.5 m past the top of a portrait screen and the fog would never show). BRUSH: 15 patches
+  (seven a side in the jungle and by the lanes, one on the island) -- someone inside is hidden from the other side
+  unless one of theirs (or their ward) is in the same patch; from inside you see out. Attacking shows you for 2 s.
+  WARDS: every hero carries 2 charges (one back every 45 s); WARD (the new button over ATTACK's corner, or T) puts one
+  at your feet: 90 s of sight, unseen by the enemy, 3 at most (the oldest goes); bots put them in the brush they stand
+  in. Unseen enemies: not drawn (body, bar, effects, hit sparks), not picked by the auto-aim, bots or ultimates, not
+  targeted by minions. Monsters see everyone; towers shoot what's in reach; towers, castles and gates always show.
+  The view: a dark, cool veil over the fog -- ground, trees and castles -- one Decal over the field whose 2 m mask is
+  redrawn ~7 times a second from your side's sight (its texture replaced: a decal keeps a copy of its texture until
+  it's replaced; a screen-space veil from the depth buffer was tried -- the battle's MSAA leaves no depth buffer to
+  read on the Mobile renderer); KayKit bushes (Bush_1/2, already in the world pack) in each patch; your side's wards as
+  small glowing posts.
+- THE CAMPS (League's leash): chased outside the leash, a camp doesn't give up at once -- its patience drains (0.3 a
+  second, faster the farther out), comes back while the target's inside or hits it from inside; at zero, a SOFT reset:
+  6 s walking home healing 6 %/s, ignoring blows from outside (a blow from inside the leash and it fights again); then
+  a HARD reset: nothing hurts it, 15 %/s until home and whole. (Before: 30 %/s the moment you stepped out.)
+- THE BONE LORD MARCHES: slain, he rises out of the slayers' castle and walks the middle lane as one of their minions
+  (League's targets; towers shoot him first but a shot takes 5 % of him; towers and gates take x3 from him); 12x a
+  Barbarian's health and 1.4x his damage, growing with the match; 150 gold for whoever finishes him. The gold and the
+  LORD'S BLESSING stay. Toast "THE BONE LORD MARCHES WITH US DOWN THE MIDDLE!" (or on us), a horn, a burst where he
+  comes out; his name over his bar.
+- MINIONS (League's): a wave is 3 melee (Knights) and 3 casters (Archers) -- no Priests (0.31.157's healers kept each
+  other up and piled up); a siege minion (a Mage, a little bigger) every 3rd wave, every 2nd from 7:00 (with 2 melee),
+  every wave from 12:30; with a gate at the lane's end down, a super minion (a big Barbarian) in its place (two with
+  both gates down). Waves every 30 s, 25 s from 7:00, 20 s from 12:30 (League's 14:00 / 25:00 at our half length).
+  Health and damage by kind, +5 % every 90 s; they deal 60 % to heroes. Targets, League's order: an enemy hero hurting
+  an allied hero within 15 m (call for help -- not while it's hitting a tower), an enemy minion hitting an allied hero,
+  one hitting an allied minion, an enemy tower shooting an allied minion, the nearest enemy minion, the nearest enemy
+  hero -- within 8 m (casters their reach), seen; kept until a higher one shows. Last hits: melee 21, caster 14, siege
+  and super 60 (+3 every 90 s, 90 at most); XP 16 / 8 / 25.
+- TOWERS (League's): targets in order -- pets, siege / super minions and the Lord, melee, casters, heroes -- unless an
+  enemy hero hurts one of its heroes within 21.5 m; a shot every 1.2 s; on heroes 50 (+4 % a minute), +50 % a shot in a
+  row up to +150 %, cooling 5 s after its last shot on a hero (not on switching); on minions a share of their health:
+  melee 45 %, caster 70 %, siege 14 %, super 5 %. Without the attackers' minions near, a tower takes 20 % (League's
+  80 % reduction; 34 % before); melee heroes +20 %. Lane minions on towers and gates: melee and casters x0.4, siege and
+  super x1.6 (x1.5 all before -- with six to a wave a lone wave took an outer tower; now about a third, the third wave
+  with its siege minion finishes it). PLATES: until 7:00 an outer tower drops a plate each fifth of its health: 60
+  gold to each of the side's heroes within 12 m. Gold for a tower: 200 shared by the side's heroes within 18 m (and the
+  one who brought it down), +150 for the match's first; 50 (outer) / 25 (inner) to every hero of the side. A broken
+  castle gate stands again after 3:00 (League's inhibitor).
+- HUD: the WARD button (charges in its corner, the next filling round the rim); toasts for a plate, a gate rebuilt,
+  the Lord marching, a ward placed. (The ultimate's "II" mark was drawn under the button; now over it.)
+- Tests: moba_lol_test (new, 57 checks: the fog -- sight, brush both ways, reveals, wards, charges, the most, bots'
+  wards, towers' and the castle's sight, bots can't pick out the unseen; minions -- waves by time, kinds, upgrades, 60 %,
+  targets, hidden in brush, gold; towers -- targets, shares, Warming Up cooling, plates, a gate back up; the camps'
+  patience, soft and hard resets; the Lord marching); moba_test (waves of six, the fifth through a tower, melee x1.2),
+  moba_more_test (tower gold local / global, the Lord's blessing, the super minion, positions out of the brush and in
+  sight); moba_ui_test + the fog phase (the WARD button tapped, the veil clear round you and dark over red's jungle, an
+  enemy out of sight not drawn and one in sight drawn, the bushes).
+- Bot matches here (four seeds): one won on the King at 9:04, three to 15:00; 4.7 ms a tick (as 0.31.157). The side
+  with the Archmage tends to run away with it (his meteor last-hits whole waves: 6-8k gold against 1-2k).
+- Version 0.31.158, versionCode 244 (server code changed: SERVER_BUILD 0.31.158 -- the server installs moba.gd and now
+  moba_vision.gd too; no content pack change).

@@ -8,15 +8,17 @@ extends SceneTree
 #     six, LEGION raises four skeletons who crumble after 20 s); then it recharges; from level 9 it's stronger and back
 #     sooner;
 #  2. GOLD: 500 to start, a trickle every second from the first wave, the last hit on a minion, a knockout (and the
-#     helpers' share), a tower (the one who brought it down, and everyone on the side);
+#     helpers' share), a tower (0.31.158, League's: the side's heroes near share the local gold -- more for the match's
+#     first tower -- and everyone on the side gets the global);
 #  3. THE SHOP: only in your castle or while down; an item's stats count at once; a big item is built from the small
 #     ones you own (they come off its price and leave your slots); one pair of boots; six slots; selling gives 70 % back;
 #  4. THE JUNGLE: the camps come at 0:30 (the Bone Lord at 5:00), monsters of team 2 that stand still until hit; towers
 #     and lane minions leave them alone; hit, the camp fights back -- while its target stays inside the leash -- and
 #     walks home and heals when he's gone; a camp cleared: gold and XP, back after its time; the buff camps' big one
 #     gives its buff (ARCANE: quicker recharges; EMBER: harder hits), which goes to whoever knocks its holder out; the
-#     Bone Lord gives his killers' whole side gold and his blessing (their minions come out stronger); an enemy gate
-#     down at a lane's end: that lane's minions come out super (League's inhibitor);
+#     Bone Lord gives his killers' whole side gold and his blessing (their minions come out stronger) -- and (0.31.158)
+#     marches for them down the middle lane; an enemy gate down at a lane's end: that lane's waves bring a super minion
+#     (League's inhibitor);
 #  5. whole matches, bots on both sides: they buy, use their ultimates, clear camps.
 #   godot --headless --path godot -s res://tests/moba_more_test.gd
 const Sim = preload("res://scripts/siege/siege_sim.gd")
@@ -128,11 +130,12 @@ func _ultimates() -> void:
 	me = r[1]
 	var weak: Dictionary = s.by_id["r2"]
 	var strong: Dictionary = s.by_id["r3"]
-	weak.pos = P0 + Vector2(6, -2)
+	weak.pos = P0 + Vector2(6, 2)                               # (0.31.158: out of the brush patch at (-22, 33.5))
 	strong.pos = P0 + Vector2(-3, -1)
 	weak.hp = float(weak.max_hp) * 0.6
 	var wh := float(weak.hp)
 	var exp_dmg := float(s.stat(me, "dmg")) * Moba.EXECUTE_DMG + Moba.EXECUTE_MISSING * (float(weak.max_hp) - wh)
+	s.moba.vision._update()                                    # (0.31.158: the fog -- what blue sees, with them moved)
 	s.act("you", "ult")
 	check((me.pos as Vector2).distance_to(weak.pos) < 2.0 and (not s.alive(weak) or wh - float(weak.hp) >= exp_dmg * 0.95),
 		"EXECUTE: behind the weakest hero near (not the nearest), a heavy strike (%.0f)" % minf(wh, wh - float(weak.hp)))
@@ -209,10 +212,11 @@ func _ultimates() -> void:
 	s = r[0]
 	me = r[1]
 	foe = s.by_id["r1"]
-	foe.pos = Vector2(-36.0, 20.0)
+	foe.pos = Vector2(-36.0, 27.0)                             # (0.31.158: in your sight -- the fog)
 	me.pos = Vector2(-36.0, 40.0)
 	me.face = 0.0                                              # facing away: it turns to the hero
 	_tough(foe)
+	s.moba.vision._update()
 	s.act("you", "ult")
 	var pj: Array = s.projectiles.filter(func(p): return str(p.owner) == "you" and bool(p.get("big", false)))
 	var reach := float(pj[0].life) * Moba.DEADEYE_SPEED if not pj.is_empty() else 0.0
@@ -221,7 +225,7 @@ func _ultimates() -> void:
 		s.step()
 		stunned = stunned or float(foe.stun) > 0.0
 	check(reach >= 70.0 and float(foe.hp) < 100000.0 and stunned,
-		"DEADEYE: across the field to the hero 20 m off, stunning him")
+		"DEADEYE: across the field to the hero you see 13 m off, stunning him")
 	# METEORS
 	r = _ult_scene("archmage")
 	s = r[0]
@@ -270,7 +274,7 @@ func _gold() -> void:
 	var m: Dictionary = _add_minion(s, 1, "knight", me.pos + Vector2(2, 0))
 	var g0 := float(me.gold)
 	s._damage(me, m, 1.0e6)
-	check(is_equal_approx(float(me.gold) - g0, float(Moba.GOLD_MINION.knight)), "the last hit on a Knight minion: +%d" % int(Moba.GOLD_MINION.knight))
+	check(is_equal_approx(float(me.gold) - g0, float(Moba.GOLD_MINION.melee)), "the last hit on a melee minion: +%d" % int(Moba.GOLD_MINION.melee))
 	var m2: Dictionary = _add_minion(s, 1, "ranger", me.pos + Vector2(2, 0))
 	g0 = float(me.gold)
 	s._damage(s.by_id["b1"], m2, 10.0)
@@ -290,12 +294,21 @@ func _gold() -> void:
 		"a knockout: +%d for him, +%d for the one who helped" % [Moba.GOLD_HERO, Moba.GOLD_ASSIST])
 	# a tower
 	var tw: Dictionary = s.moba.towers.filter(func(t): return int(t.team) == 1 and int(t.tier) == 1)[0]
-	tw.dead = false
+	for t2 in s.moba.towers:
+		t2.dead = false                                         # (_quiet felled them: this is the match's first)
+	for hid in s.moba.heroes[0]:
+		s.by_id[hid].pos = P0                                   # (all of blue far from the tower)
+	var b3: Dictionary = s.by_id["b3"]
+	b3.pos = (tw.p as Vector2) + Vector2(0, 4)                # ...but one standing by it
 	var g1 := float(me.gold)
 	var g2 := float(s.by_id["b2"].gold)
+	var g3 := float(b3.gold)
 	s.moba.hit_tower(me, int(tw.id), 1.0e6)
-	check(bool(tw.dead) and is_equal_approx(float(me.gold) - g1, float(Moba.GOLD_TOWER + Moba.GOLD_TOWER_TEAM))
-		and is_equal_approx(float(s.by_id["b2"].gold) - g2, float(Moba.GOLD_TOWER_TEAM)), "a tower: +%d for the one, +%d for everyone" % [Moba.GOLD_TOWER, Moba.GOLD_TOWER_TEAM])
+	var glob := float(Moba.GOLD_TOWER_GLOBAL[1])
+	var loc := float(Moba.GOLD_TOWER_LOCAL + Moba.GOLD_FIRST_TOWER) / 2.0
+	check(bool(tw.dead) and is_equal_approx(float(me.gold) - g1, glob + loc) and is_equal_approx(float(b3.gold) - g3, glob + loc)
+		and is_equal_approx(float(s.by_id["b2"].gold) - g2, glob),
+		"the first tower: +%d for everyone, +%d more each for the blow and the one near (local, shared)" % [int(glob), int(loc)])
 
 # ---------------------------------------------------------------- 3. the shop
 func _shop() -> void:
@@ -385,9 +398,9 @@ func _jungle() -> void:
 	_run(j, 3.0)
 	check(float(me.hp) < 5000.0, "...and hits back (%.0f)" % (5000.0 - float(me.hp)))
 	me.pos = (camp.p as Vector2) + Vector2(0, Moba.LEASH + 6.0)
-	_run(j, 6.0)
+	_run(j, 10.0)
 	check(str(camp.target) == "" and mobs.all(func(m): return (m.pos as Vector2).distance_to(m.home) < 1.0 and float(m.hp) >= float(m.max_hp) - 0.5),
-		"you leave the leash: they walk home and heal")
+		"you leave the leash: their patience runs out, they walk home and heal")
 	# cleared: gold, XP, back after its time
 	me.pos = (camp.p as Vector2) + Vector2(0, 2.5)
 	var g0 := float(me.gold)
@@ -451,8 +464,9 @@ func _jungle() -> void:
 	check(all_paid and j.moba.has_buff(me, "lord"), "the Bone Lord down: +%d gold for every hero of the side, his blessing" % int(Moba.MONSTERS.lord.gold))
 	j.moba.wave_at = j.time
 	_run(j, 0.2)
-	var newm: Array = j.units.filter(func(u): return bool(u.get("minion", false)) and not bool(u.get("summon", false)) and int(u.team) == 0 and j.alive(u))
-	check(not newm.is_empty() and newm.all(func(u): return is_equal_approx(float(u.m_hp), Moba.MINION_HP * Moba.LORD_MINION)), "...their minions come out stronger")
+	var newm: Array = j.units.filter(func(u): return bool(u.get("minion", false)) and not bool(u.get("summon", false)) and not bool(u.get("lordling", false)) and int(u.team) == 0 and j.alive(u))
+	var up := 1.0 + Moba.MINION_UP * floorf(float(j.time) / Moba.MINION_UP_EVERY)
+	check(not newm.is_empty() and newm.all(func(u): return is_equal_approx(float(u.m_hp), float(Moba.MINION_KIND_HP[str(u.mk)]) * up * Moba.LORD_MINION)), "...their minions come out stronger")
 	# League's inhibitor: their gate at a lane's end down -> that lane's minions come out super
 	var sp = _new("knight", 12)
 	sp.moba.wave_at = INF
@@ -464,8 +478,11 @@ func _jungle() -> void:
 	_run(sp, 0.2)
 	var w0: Array = sp.units.filter(func(u): return bool(u.get("minion", false)) and int(u.team) == 0 and int(u.lane) == 0)
 	var w1: Array = sp.units.filter(func(u): return bool(u.get("minion", false)) and int(u.team) == 0 and int(u.lane) == 2)
-	check(not rg.is_empty() and w0.all(func(u): return bool(u.get("super", false)) and is_equal_approx(float(u.m_hp), Moba.MINION_HP * Moba.SUPER_MINION))
-		and w1.all(func(u): return not bool(u.get("super", false))), "their west gate down: blue's minions of the lanes that end there come out super (x%.1f), the east lane's not" % Moba.SUPER_MINION)
+	var sup0: Array = w0.filter(func(u): return bool(u.get("super", false)))
+	check(not rg.is_empty() and sup0.size() == 1 and str(sup0[0].mk) == "super" and str(sup0[0].cls) == "barbarian"
+		and is_equal_approx(float(sup0[0].m_hp), float(Moba.MINION_KIND_HP.super)) and w0.size() == 7 and not w0.any(func(u): return str(u.mk) == "siege")
+		and w1.all(func(u): return not bool(u.get("super", false))),
+		"their west gate down: the waves of the lanes that end there bring a super minion (in place of the siege one), the east lane's don't")
 
 # ---------------------------------------------------------------- 5. whole matches
 func _matches() -> void:
@@ -501,6 +518,7 @@ func _add_minion(s, team: int, cls: String, p: Vector2) -> Dictionary:
 	var u: Dictionary = s._new_unit(id, team, false, "raid")
 	u.cls = cls
 	u["minion"] = true
+	u["mk"] = {"knight":"melee", "ranger":"caster", "mage":"siege", "barbarian":"super"}.get(cls, "melee")     # (0.31.158)
 	u["lane"] = 0
 	u["wp"] = 1
 	u["m_hp"] = Moba.MINION_HP

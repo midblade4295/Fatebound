@@ -858,6 +858,17 @@ func on_event(e: Dictionary) -> void:
 		"camp_up":
 			if str(e.get("kind", "")) == "lord":
 				toast("THE BONE LORD HAS RISEN ON THE ISLAND", Color("#d8c2ff"))
+		"lord_march":                                    # 0.31.158 5V5: the slain Lord marches for the slayers
+			toast("THE BONE LORD MARCHES WITH US DOWN THE MIDDLE!" if int(e.get("team", -1)) == int(me.team) else "THE BONE LORD MARCHES ON US -- MIDDLE LANE!",
+				VisualTheme.GOLD if int(e.get("team", -1)) == int(me.team) else VisualTheme.RED)
+		"gate_rebuilt":
+			toast("Our gate is rebuilt" if int(e.get("team", -1)) == int(me.team) else "Their gate is rebuilt", Color("#e8dcc0"))
+		"plate":
+			if (e.get("ids", []) as Array).has(str(player_id)):
+				toast("TOWER PLATE! +%d gold" % int(e.get("gold", 0)), VisualTheme.GOLD)
+		"ward":
+			if str(e.get("id", "")) == str(player_id):
+				toast("Ward placed -- it watches %d s" % int(sim.moba.vision.WARD_LIFE), Color("#8fe3ff"))
 		"buy":
 			if str(e.get("id", "")) == str(player_id):
 				toast("Bought %s" % str(sim.moba.ITEMS[str(e.item)].name), VisualTheme.GOLD)
@@ -964,6 +975,8 @@ func _buttons() -> Array:
 		out.append({"id":"block", "c":br + Vector2(-262, -64), "r":30.0})     # the Crusader keeps his shield
 	if sim.moba != null and not me.is_empty() and bool(me.get("hero", false)) and ctx == "":
 		out.append({"id":"ult", "c":br + Vector2(-172, -182), "r":36.0})      # 0.31.157 5V5: the ultimate (level 6)
+	if sim.moba != null and not me.is_empty() and bool(me.get("hero", false)):
+		out.append({"id":"ward", "c":br + Vector2(-150, -264), "r":26.0})     # 0.31.158 5V5: a ward at your feet
 	return out
 
 func _modal_open() -> bool:
@@ -988,6 +1001,7 @@ func _input(event: InputEvent) -> void:
 			KEY_L, KEY_SHIFT: action_pressed.emit("dodge")
 			KEY_E: action_pressed.emit("action")
 			KEY_R: action_pressed.emit("ult")             # 0.31.157 5V5
+			KEY_T: action_pressed.emit("ward")            # 0.31.158 5V5
 			KEY_B:
 				if sim.moba != null:
 					open_shop()
@@ -1902,6 +1916,7 @@ func _draw_button(b: Dictionary, me: Dictionary) -> void:
 	var cd := 0.0
 	var cd_max := 1.0
 	var ready := true
+	var badge := ""                                  # (a small mark drawn over the button: the ult's rank, ward charges)
 	match str(b.id):
 		"attack":
 			label = "ATTACK"
@@ -1936,7 +1951,18 @@ func _draw_button(b: Dictionary, me: Dictionary) -> void:
 				var pulse := 0.5 + 0.5 * sin(_time * 5.0)
 				draw_arc(c, r + 5.0 + 3.0 * pulse, 0, TAU, 48, Color(1.0, 0.84, 0.35, 0.35 + 0.4 * pulse), 4.0, true)
 			if unlocked and sim.moba.ult_rank(me) >= 2:
-				_text(c + Vector2(0, -r + 12), "II", 11, Color("#ffe9a6"), _bold)
+				badge = "II"
+		"ward":
+			# 0.31.158 5V5: a ward at your feet -- its charges in the corner, the next one filling in round the rim
+			var ch := float(me.get("ward_ch", 0.0))
+			label = "WARD"
+			col = Color("#16485a")
+			rim = Color("#8fe3ff")
+			ready = ch >= 1.0 and sim.alive(me)
+			if ch < float(sim.moba.vision.WARD_CHARGES):
+				cd = 1.0 - (ch - floorf(ch))
+				cd_max = 1.0
+			badge = str(int(ch))
 		"dodge":
 			label = "DODGE"
 			cd = me.cd_dodge
@@ -1969,7 +1995,15 @@ func _draw_button(b: Dictionary, me: Dictionary) -> void:
 	draw_arc(c, r, 0, TAU, 48, rim if ready else rim.darkened(0.5), 3.0, true)
 	if cd > 0.0:
 		draw_arc(c, r - 6, -PI * 0.5, -PI * 0.5 + TAU * (cd / cd_max), 40, Color(1, 1, 1, 0.55), 5.0, true)
-	_text(c + Vector2(0, 6), label, 15 if r > 40 else 12, Color("#fffaf0") if ready else Color("#8a939a"), _bold)
+	_text(c + Vector2(0, 6), label, 15 if r > 40 else (12 if r > 30 else 11), Color("#fffaf0") if ready else Color("#8a939a"), _bold)
+	if badge != "":
+		if str(b.id) == "ward":
+			var bc := c + Vector2(r * 0.72, -r * 0.72)
+			draw_circle(bc, 9.0, Color("#0d2a33"))
+			draw_arc(bc, 9.0, 0, TAU, 24, rim, 1.5, true)
+			_text(bc + Vector2(0, 4), badge, 11, Color("#dff7ff"), _bold)
+		else:
+			_text(c + Vector2(0, -r + 12), badge, 11, Color("#ffe9a6"), _bold)
 
 
 # ---------- 5V5: gold, the shop, the jungle's timers (0.31.157) ----------

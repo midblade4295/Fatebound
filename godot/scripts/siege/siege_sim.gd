@@ -812,6 +812,8 @@ func nearest_enemy(u: Dictionary, max_d: float, prefer_front := false) -> Dictio
 			continue
 		if vanished(o) and d > 1.6:
 			continue                           # 0.31.32: an Assassin in Vanish can't be picked out (until he's on you)
+		if moba != null and not moba.can_see(int(u.team), o):
+			continue                           # 0.31.158 5V5: in the fog (or hidden in brush) -- not to be picked out
 		var s := d
 		if prefer_front and d > 0.01:
 			s += (1.0 - fwd.dot(off / d)) * 2.0
@@ -883,6 +885,8 @@ func act(id: String, action: String, arg: Variant = null) -> bool:
 			return moba != null and moba.pick(u, int(arg))
 		"ult":                                       # 0.31.157 5V5: the ultimate (level 6)
 			return moba != null and moba.ult(u)
+		"ward":                                      # 0.31.158 5V5: a ward at your feet (the fog of war)
+			return moba != null and moba.ward(u)
 		"shop_buy":                                  # 0.31.157 5V5: an item (arg: its id) -- in your castle or while down
 			return moba != null and moba.buy(u, str(arg))
 		"shop_sell":                                 # (arg: the slot)
@@ -1891,6 +1895,7 @@ func step(dt: float = TICK) -> void:
 		_step_cmd(dt)
 	if moba != null:
 		moba.step(dt)
+		if profile: t0 = _p("moba", t0)
 	if time >= match_time:
 		_finish("time")
 
@@ -2436,8 +2441,9 @@ func _step_projectiles(dt: float) -> void:
 			if not hit.is_empty():
 				_next_push = _push_along(p.vel, 3.6, 1.4)
 				_damage(owner, hit, p.dmg)                 # the struck unit: full damage, always
+			var spare_mon: bool = moba != null and moba.lane_minion(str(p.owner))     # (0.31.158: a siege minion's fire)
 			for o in units:
-				if o != hit and o.team != p.team and alive(o) and o.pos.distance_to(p.pos) <= p.aoe:
+				if o != hit and o.team != p.team and alive(o) and o.pos.distance_to(p.pos) <= p.aoe and not (spare_mon and int(o.team) > 1):
 					_next_push = _push_from(p.pos, o.pos, 4.0, 2.4)
 					_damage(owner, o, p.dmg * 0.6)
 			_event("boom", {"pos":p.pos})

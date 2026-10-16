@@ -583,7 +583,7 @@ func _sync_ripples(dt: float) -> void:
 		return
 	var drops := []
 	for u in sim.units:
-		if not sim.alive(u):
+		if not sim.alive(u) or _fogged(u):
 			_rip_prev.erase(u.id)
 			continue
 		var p: Vector2 = u.pos
@@ -1831,7 +1831,7 @@ func _sync_whirls() -> void:
 			add_child(fx)
 			whirl_nodes[u.id] = fx
 		var a: Dictionary = actors.get(u.id, {})
-		if a.is_empty():
+		if a.is_empty() or not (a.root as Node3D).visible:
 			fx.visible = false
 			continue
 		fx.visible = true
@@ -1857,7 +1857,7 @@ func _sync_shields() -> void:
 		if u.cls != "knight":
 			continue
 		var n: MeshInstance3D = shield_nodes.get(u.id)
-		if not sim.blocking(u):
+		if not sim.blocking(u) or _fogged(u):
 			if n != null:
 				n.visible = false
 			continue
@@ -1902,10 +1902,10 @@ func _sync_beams() -> void:
 			var n: MeshInstance3D = beam_nodes.get(slot[1])
 			var to: Dictionary = sim.by_id.get(str(u.get(slot[0], "")), {})
 			if slot[2] == "drain" or plasma_nodes.has(slot[1]):
-				_sync_plasma(slot[1], u, to if slot[2] == "drain" and sim.alive(u) else {})
+				_sync_plasma(slot[1], u, to if slot[2] == "drain" and sim.alive(u) and not _fogged(u) else {})
 				if slot[2] == "drain":
 					continue
-			if to.is_empty() or not sim.alive(u):
+			if to.is_empty() or not sim.alive(u) or _fogged(u):
 				if n != null:
 					n.visible = false
 				continue
@@ -3670,7 +3670,7 @@ func _ensure_actor(u: Dictionary) -> Dictionary:
 		return a
 	root.add_child(made.body)
 	a["mlook"] = str(u.look) if u.has("look") else ""          # 0.31.157: a monster's own clips
-	made.body.scale = Vector3.ONE * BODY_SCALE * (MINION_SCALE * (1.2 if bool(u.get("super", false)) else 1.0) if bool(u.get("minion", false)) else 1.0) * float(u.get("mscale", 1.0))   # 0.31.157: big monsters; 0.31.128 (Kevin): every class the upgraded size (base was 1.0); 0.31.155: 5v5 minions smaller
+	made.body.scale = Vector3.ONE * BODY_SCALE * (MINION_SCALE if bool(u.get("minion", false)) else 1.0) * float(u.get("mscale", 1.0))   # 0.31.157: big monsters; 0.31.128 (Kevin): every class the upgraded size (base was 1.0); 0.31.155: 5v5 minions smaller
 	a.body = made.body
 	a.player = made.player
 	_cape_setup(a)
@@ -3768,6 +3768,15 @@ func sync(dt: float) -> void:
 				if benched and a.get("rag") != null:
 					_ragdoll_end(a)
 				root.visible = not benched
+		if sim.moba != null:
+			# 0.31.158 5V5 fog of war: an enemy (or a monster) your side can't see isn't drawn (one that falls in sight
+			# stays shown where he fell)
+			var fv: bool = int(u.team) == _my_team() or (sim.alive(u) and sim.moba.can_see(_my_team(), u)) \
+				or (not sim.alive(u) and bool(a.get("fog_vis", false)))
+			if sim.alive(u):
+				a["fog_vis"] = fv
+			if root.visible != fv:
+				root.visible = fv
 		_sync_vanish(a, u)
 		_sync_load(a, u)
 		_sync_hand(a, u)
@@ -3775,7 +3784,7 @@ func sync(dt: float) -> void:
 		if a.get("cape") != null:
 			_cape_step(a, dt)
 		if is_instance_valid(a.player):
-			var show := planes.is_empty() or _on_screen(root.position, planes)
+			var show := (planes.is_empty() or _on_screen(root.position, planes)) and root.visible
 			if (a.player as AnimationPlayer).active != show:
 				(a.player as AnimationPlayer).active = show
 			if show:
@@ -3804,6 +3813,8 @@ var _tshots: Array = []                    # {node, from, id, t0, flight, to}
 func _build_moba() -> void:
 	if sim.moba == null:
 		return
+	_build_brush()
+	_build_fog()
 	for tw in sim.moba.towers:
 		var col: String = COLOR[vt(int(tw.team))]
 		var gy := Sim.height_at(tw.p)
@@ -3822,6 +3833,8 @@ func _build_moba() -> void:
 func _sync_moba() -> void:
 	_sync_rains()
 	_sync_auras()
+	_sync_fog()
+	_sync_wards()
 	var me: Dictionary = sim.by_id.get(player_id, {})
 	for tw in sim.moba.towers:
 		var mt: Dictionary = moba_towers.get(int(tw.id), {})
@@ -3850,6 +3863,201 @@ func _sync_moba() -> void:
 			for j in 4:
 				spark(sh.to + Vector3(randf_range(-0.3, 0.3), randf_range(-0.2, 0.4), randf_range(-0.3, 0.3)), Color("#ffb04a"))
 			_tshots.remove_at(i)
+
+# ---------- 0.31.158: the fog of war (moba_vision.gd) ----------
+# A dark veil over what your side can't see -- ground, trees and castles alike: one Decal over the whole field, its
+# texture a coarse mask (FOG_CELL m a texel, filtered smooth) redrawn FOG_EVERY s from your side's sight
+# (moba_vision.sources) -- each source a clear disc, brush patches dark again unless one of yours stands (or a ward of
+# yours stands) in them. (The texture is replaced, not updated: a decal keeps its own copy until its texture is
+# replaced. A screen-space veil from the depth buffer was tried: the depth buffer isn't there with the battle's MSAA on
+# the Mobile renderer.) Brush patches are KayKit bushes. Your side's wards show as little glowing posts; the enemy's
+# don't.
+const FOG_CELL := 2.0
+const FOG_ALPHA := 200
+const FOG_TINT := Color8(16, 22, 36)               # (a cool, dim veil: the decal mixes it in at FOG_ALPHA)
+const FOG_EVERY := 0.15
+const BUSHES := ["Bush_1_A_Color1", "Bush_1_B_Color1", "Bush_1_C_Color1", "Bush_2_A_Color1", "Bush_2_B_Color1", "Bush_2_C_Color1"]
+var _fog := {}
+var _ward_nodes := {}
+var fog_on := true                         # (tests and render tools can turn the veil off)
+
+func _fogged(u: Dictionary) -> bool:
+	# (0.31.158) the unit's body is hidden in the fog of war -- its effects go too
+	var a: Dictionary = actors.get(str(u.get("id", "")), {})
+	return not a.is_empty() and is_instance_valid(a.root) and not (a.root as Node3D).visible
+
+func _my_team() -> int:
+	return int(sim.by_id.get(player_id, {}).get("team", my_side))
+
+func _build_fog() -> void:
+	var r := Land.bake_rect()
+	var w := int(ceil(r.size.x / FOG_CELL))
+	var h := int(ceil(r.size.y / FOG_CELL))
+	var img := Image.create(w, h, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+	var tex := ImageTexture.create_from_image(img)
+	var d := Decal.new()
+	d.size = Vector3(float(w) * FOG_CELL, 40.0, float(h) * FOG_CELL)
+	d.position = Vector3(r.position.x + float(w) * FOG_CELL * 0.5, 8.0, r.position.y + float(h) * FOG_CELL * 0.5)
+	d.texture_albedo = tex
+	d.albedo_mix = 1.0
+	d.upper_fade = 0.0
+	d.lower_fade = 0.0
+	d.normal_fade = 0.0
+	d.name = "FogOfWar"
+	add_child(d)
+	_fog = {"decal":d, "img":img, "tex":tex, "w":w, "h":h, "rect":r, "at":-10.0}
+
+func fog_alpha_at(p: Vector2) -> int:
+	# (tests) the veil over p: 0 clear .. FOG_ALPHA
+	if _fog.is_empty():
+		return 0
+	var r: Rect2 = _fog.rect
+	var cx := int((p.x - r.position.x) / FOG_CELL)
+	var cz := int((p.y - r.position.y) / FOG_CELL)
+	if cx < 0 or cz < 0 or cx >= int(_fog.w) or cz >= int(_fog.h):
+		return 0
+	return (_fog.img as Image).get_pixel(cx, cz).a8
+
+func _stamp(img: Image, w: int, h: int, r: Rect2, c: Vector2, rad: float, col: Color) -> void:
+	# a disc of texels, a row at a time
+	var cx := (c.x - r.position.x) / FOG_CELL - 0.5
+	var cz := (c.y - r.position.y) / FOG_CELL - 0.5
+	var rr := rad / FOG_CELL
+	var z0 := maxi(0, int(floor(cz - rr)))
+	var z1 := mini(h - 1, int(ceil(cz + rr)))
+	for z in range(z0, z1 + 1):
+		var dz := float(z) - cz
+		var span := rr * rr - dz * dz
+		if span < 0.0:
+			continue
+		var half := sqrt(span)
+		var x0 := maxi(0, int(ceil(cx - half)))
+		var x1 := mini(w - 1, int(floor(cx + half)))
+		if x1 >= x0:
+			img.fill_rect(Rect2i(x0, z, x1 - x0 + 1, 1), col)
+
+func _sync_fog() -> void:
+	if _fog.is_empty() or sim.moba == null or sim.moba.vision == null:
+		return
+	(_fog.decal as Decal).visible = fog_on
+	if _time - float(_fog.at) < FOG_EVERY or not fog_on:
+		return
+	_fog.at = _time
+	var img: Image = _fog.img
+	var w: int = _fog.w
+	var h: int = _fog.h
+	var r: Rect2 = _fog.rect
+	var dark := Color(FOG_TINT, float(FOG_ALPHA) / 255.0)
+	var clear := Color(FOG_TINT, 0.0)
+	img.fill(dark)
+	var vis = sim.moba.vision
+	var src: Array = vis.sources(_my_team())
+	var done := []
+	var in_brush := {}
+	for sr in src:
+		if int(sr[2]) >= 0:
+			in_brush[int(sr[2])] = true
+		var skip := false
+		for d in done:
+			if (sr[0] as Vector2).distance_to(d[0]) < 3.0 and float(d[1]) >= float(sr[1]) - 0.1:
+				skip = true                              # (a pack of minions: one disc)
+				break
+		if skip:
+			continue
+		done.append(sr)
+		_stamp(img, w, h, r, sr[0], float(sr[1]), clear)
+	for b in vis.brushes:
+		if not in_brush.has(int(b.id)):
+			_stamp(img, w, h, r, b.p, float(b.r), dark)        # (looking in from outside: nothing)
+	(_fog.tex as ImageTexture).set_image(img)
+
+func _build_brush() -> void:
+	if sim.moba == null or sim.moba.vision == null:
+		return
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 158
+	var per := {}
+	for b in sim.moba.vision.brushes:
+		var c: Vector2 = b.p
+		var rad: float = b.r
+		var step := 1.15
+		var zi := -rad
+		while zi <= rad:
+			var xi := -rad
+			while xi <= rad:
+				var q := c + Vector2(xi, zi) + Vector2(rng.randf_range(-0.35, 0.35), rng.randf_range(-0.35, 0.35))
+				if q.distance_to(c) <= rad - 0.2:
+					var kind: String = BUSHES[rng.randi_range(0, BUSHES.size() - 1)]
+					if not per.has(kind):
+						per[kind] = []
+					var xf := Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3.ONE * rng.randf_range(1.5, 2.1)), Vector3(q.x, Sim.height_at(q) - 0.05, q.y))
+					(per[kind] as Array).append(xf)
+				xi += step
+			zi += step
+	for kind in per:
+		var src := _mesh_of(FOREST + kind + ".gltf")
+		if src.is_empty():
+			continue
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.mesh = src.mesh
+		mm.instance_count = (per[kind] as Array).size()
+		for i in mm.instance_count:
+			mm.set_instance_transform(i, per[kind][i])
+		var mmi := MultiMeshInstance3D.new()
+		mmi.multimesh = mm
+		mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mmi.name = "Brush_" + kind
+		add_child(mmi)
+
+func _sync_wards() -> void:
+	if sim.moba == null or sim.moba.vision == null:
+		return
+	var team := _my_team()
+	var live := {}
+	for w in sim.moba.vision.wards:
+		if int(w.team) != team:
+			continue                                    # (the enemy's wards are hidden)
+		live[int(w.id)] = true
+		if not _ward_nodes.has(int(w.id)):
+			_ward_nodes[int(w.id)] = _make_ward(w.p)
+	for id in _ward_nodes.keys():
+		if not live.has(id):
+			if is_instance_valid(_ward_nodes[id]):
+				(_ward_nodes[id] as Node3D).queue_free()
+			_ward_nodes.erase(id)
+
+func _make_ward(p: Vector2) -> Node3D:
+	var root := Node3D.new()
+	root.position = Vector3(p.x, Sim.height_at(p), p.y)
+	var post := MeshInstance3D.new()
+	var cm := CylinderMesh.new()
+	cm.top_radius = 0.05
+	cm.bottom_radius = 0.09
+	cm.height = 1.0
+	post.mesh = cm
+	var wood := StandardMaterial3D.new()
+	wood.albedo_color = Color("#5a3d22")
+	post.material_override = wood
+	post.position.y = 0.5
+	root.add_child(post)
+	var orb := MeshInstance3D.new()
+	var sm := SphereMesh.new()
+	sm.radius = 0.16
+	sm.height = 0.32
+	orb.mesh = sm
+	orb.material_override = _fx_mat(Color("#7fd8ff"))
+	orb.position.y = 1.1
+	root.add_child(orb)
+	var ring := MeshInstance3D.new()
+	ring.mesh = _ring_mesh(0.45, 0.06)
+	ring.scale = Vector3(1, 0.2, 1)
+	ring.material_override = _unshaded(Color(0.5, 0.85, 1.0, 0.7))
+	ring.position.y = 0.06
+	root.add_child(ring)
+	add_child(root)
+	return root
 
 # ---------- 0.31.157: ultimates, the jungle, gold ----------
 const ULT_COL := {"knight":"#ffd65a", "barbarian":"#ff5a3a", "rogue":"#7a5ab8", "ranger":"#cfe8b8", "mage":"#ff8a3a",
@@ -3952,6 +4160,20 @@ func _moba_fx(e: Dictionary) -> void:
 		"gold":
 			if str(e.id) == player_id:
 				number(_ground(e.pos, 2.4), "+%d" % int(e.n), true, true)
+		"lord_march":                                       # 0.31.158: the Bone Lord out of the slayers' castle
+			var lu: Dictionary = sim.by_id.get(str(e.get("id", "")), {})
+			if not lu.is_empty() and (int(e.team) == _my_team() or sim.moba.can_see(_my_team(), lu)):
+				var lm := _ground(lu.pos, 0.2)
+				for i in 3:
+					ring_at(lm, TEAM_COLORS[vt(int(e.team))].lightened(0.2), 2.0 + i * 1.6, 0.7 + i * 0.2)
+				for i in 12:
+					spark(lm + Vector3(randf_range(-1.2, 1.2), 0.3 + randf() * 2.4, randf_range(-1.2, 1.2)), Color("#d8c2ff"))
+		"ward":
+			if int(e.get("team", -1)) == _my_team():
+				var wp3 := _ground(e.pos, 0.15)
+				ring_at(wp3, Color("#8fe3ff"), 3.0, 0.5)
+				for i in 5:
+					spark(wp3 + Vector3(randf_range(-0.3, 0.3), 0.4 + randf() * 1.0, randf_range(-0.3, 0.3)), Color("#bdf0ff"))
 
 func _sync_rains() -> void:
 	for i in range(_rain_fx.size() - 1, -1, -1):
@@ -3984,7 +4206,7 @@ func _sync_auras() -> void:
 		if not bool(u.get("hero", false)) or not sim.alive(u):
 			continue
 		var a: Dictionary = actors.get(str(u.id), {})
-		if a.is_empty() or not is_instance_valid(a.root):
+		if a.is_empty() or not is_instance_valid(a.root) or not (a.root as Node3D).visible:
 			continue
 		var cols := []
 		if t < float(u.get("dr_until", -1.0)): cols.append(AURA_COL.dr)
@@ -4254,8 +4476,8 @@ func on_event(e: Dictionary) -> void:
 			if not a.is_empty():
 				_play(a, "m/Melee_Block_Hit", 1.6, 0.3)
 		"hit":
-			if a.is_empty():
-				return
+			if a.is_empty() or not (a.root as Node3D).visible:
+				return                                    # (0.31.158: nothing shown for a hit in the fog)
 			spark(a.root.position + Vector3(0, 1.3, 0), Color("#ffd27a"))
 			var hu: Dictionary = sim.by_id.get(str(e.id), {})
 			if not hu.is_empty():
@@ -4835,8 +5057,8 @@ func bars() -> Array:
 		if u.state == "dead":
 			continue
 		var a: Dictionary = actors.get(u.id, {})
-		if a.is_empty() or not is_instance_valid(a.root):
-			continue
+		if a.is_empty() or not is_instance_valid(a.root) or not (a.root as Node3D).visible:
+			continue                                    # (0.31.158: in the fog -- no bar either)
 		var c: Color = Color("#7dff8a") if u.id == player_id else TEAM_COLORS[vt(int(u.team))]
 		var bar := {"pos": (a.root as Node3D).position + Vector3(0, 2.7 * float(u.get("mscale", 1.0)), 0), "fill": clampf(u.hp / maxf(1.0, u.max_hp), 0.0, 1.0), "color": c}
 		if u.has("mon") and float(u.get("mscale", 1.0)) > 1.0:
@@ -4844,6 +5066,10 @@ func bars() -> Array:
 			bar["name_color"] = Color("#ffe9a6")
 			if str(u.mkind) == "lord":
 				bar["wide"] = true
+		elif bool(u.get("lordling", false)):
+			bar["name"] = "Bone Lord"                                       # 0.31.158: marching for a side
+			bar["name_color"] = TEAM_COLORS[vt(int(u.team))].lightened(0.3)
+			bar["wide"] = true
 		if u.id == player_id and my_name != "":
 			# 0.31.88 (Kevin: "Show the nameplate for the players own name also"): yours from your profile, so it's there
 			# against bots too and doesn't wait on the server

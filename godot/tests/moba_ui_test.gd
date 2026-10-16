@@ -7,7 +7,9 @@ extends SceneTree
 #  4. (0.31.157) the gold and SHOP under the towers line: tapped, the shop; an item picked and bought in your castle;
 #     the ULT button: LV 6 until level 6, then the Archmage's METEORS, tapped: cast; the jungle's skeletons and the
 #     Bone Lord on the field (pictures);
-#  5. the end: the results without rewards (the gold as it was).
+#  5. (0.31.158) the fog of war: the shroud over what your side can't see (clear round you), an enemy out of your sight
+#     not drawn, one in it drawn; the brush's bushes; WARD tapped: a ward at your feet, shown;
+#  6. the end: the results without rewards (the gold as it was).
 #   godot --headless --path godot -s res://tests/moba_ui_test.gd   (SHOT_DIR=... under Xvfb for pictures)
 const App = preload("res://scripts/app/siege_app.gd")
 const Profile = preload("res://scripts/meta/profile.gd")
@@ -218,7 +220,45 @@ func _process(delta: float) -> bool:
 				var lord: Dictionary = s.sim.moba._lord_unit()
 				check(not lord.is_empty() and s.view.actors.has(lord.id), "the Bone Lord on the island")
 				_shot("moba_lord")
-				s.sim.by_id["you"].pos = Sim.spawn(0)
+				# 0.31.158: the fog -- you in the jungle, one red hero far off in red's, one a few steps from you
+				var me: Dictionary = s.sim.by_id["you"]
+				me.pos = Vector2(-27.0, 26.0)
+				me.face = s.sim.angle_of(Vector2(0, -1))
+				var r1: Dictionary = s.sim.by_id["r1"]
+				var r2: Dictionary = s.sim.by_id["r2"]
+				for r in [r1, r2]:
+					r.bot = false
+					r.move = Vector2.ZERO
+					if not s.sim.alive(r):
+						s.sim._respawn(r)
+				r1.pos = Vector2(28.0, -35.0)
+				r2.pos = me.pos + Vector2(4.0, -3.0)
+				s.view.snap_camera()
+				var wb: Array = s.hud._buttons().filter(func(x): return str(x.id) == "ward")
+				check(wb.size() == 1, "the WARD button")
+				if wb.size() == 1:
+					s.hud._touch(1, wb[0].c, true)
+					s.hud._touch(1, wb[0].c, false)
+				_go("fog")
+		"fog":
+			if t_phase > 0.8:
+				var s = app.siege
+				var me: Dictionary = s.sim.by_id["you"]
+				var v = s.sim.moba.vision
+				check(v.wards.any(func(w): return str(w.owner) == "you") and s.view._ward_nodes.size() >= 1, "WARD tapped: a ward at your feet, shown")
+				check(s.view.get_node_or_null("FogOfWar") is Decal and s.view.fog_alpha_at(me.pos) == 0 and s.view.fog_alpha_at(Vector2(28.0, -35.0)) == s.view.FOG_ALPHA,
+					"the fog: clear round you, dark over red's jungle")
+				var a1: Dictionary = s.view.actors.get("r1", {})
+				var a2: Dictionary = s.view.actors.get("r2", {})
+				check(not a1.is_empty() and not (a1.root as Node3D).visible and not a2.is_empty() and (a2.root as Node3D).visible,
+					"a red hero out of your side's sight isn't drawn; one in it is")
+				var bushes := 0
+				for c in s.view.get_children():
+					if c is MultiMeshInstance3D and str(c.name).begins_with("Brush_"):
+						bushes += (c as MultiMeshInstance3D).multimesh.instance_count
+				check(bushes >= 40, "the brush patches' bushes (%d)" % bushes)
+				_shot("moba_fog")
+				me.pos = Sim.spawn(0)
 				_go("play")
 		"play":
 			if t_phase > 0.5 and t_phase < 0.6:

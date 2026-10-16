@@ -189,6 +189,9 @@ run moba_test            MOBA_PASS                480
 # building big items, one pair of boots, six slots, selling), the jungle (camps at 0:30, still until hit, leashed,
 # rewards and respawn, the buffs and passing them on, the Bone Lord and his blessing), a whole bot match
 run moba_more_test       MOBA_MORE_PASS           600
+# 0.31.158: League's rules -- the fog of war (sight, brush, reveals, wards), the waves and minions' targets, the towers'
+# targets, shares, Warming Up, plates, gates back up; the camps' patience and resets; the Bone Lord marching
+run moba_lol_test        MOBA_LOL_PASS            300
 run moba_ui_test         MOBA_UI_PASS             220
 # 0.31.153: every script the server installs can load what it loads (the installer copies a list)
 t0=$SECONDS

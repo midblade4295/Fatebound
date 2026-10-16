@@ -72,10 +72,28 @@ const LANE_NAMES := ["west", "middle", "east"]
 const TOWERS_BLUE := [[0, 1, Vector2(-15.0, 14.5)], [0, 2, Vector2(-12.5, 28.5)], [1, 1, Vector2(3.3, 19.0)],
 	[1, 2, Vector2(5.2, 30.0)], [2, 1, Vector2(17.0, 13.5)], [2, 2, Vector2(16.2, 26.0)]]
 
-const WAVE := ["knight", "ranger", "ranger", "priest"]      # Kevin: 1 healer, 2 ranged, 1 knight (front to back)
+# 0.31.158 (Kevin: "Balance the minions better, the game ended up have tons of priests. Also minions need to work like
+# LoL"): League's waves -- 3 melee (Knights) and 3 casters (Archers); a siege minion (a battle-mage: tanky, ranged fire)
+# every 3rd wave, every 2nd from MID_AT, every wave from LATE_AT (melee down to 2 in its waves from MID_AT); a super
+# minion (a big Barbarian) instead of the siege one in a lane whose enemy gate is down (2 once both are). No healers.
+# League's 30 / 25 / 20 s waves at 14:00 / 30:00 are at half the time here (the match is 15 minutes, not ~30).
+const WAVE := ["knight", "ranger", "ranger", "priest"]      # (0.31.155-157: Kevin's 1 healer, 2 ranged, 1 knight; unused now)
 const WAVE_FIRST := 15.0
 const WAVE_EVERY := 30.0
-const MINION_CAP := 40                                      # per side alive (a phone-safety ceiling; waves stack below it)
+const WAVE_EVERY_MID := 25.0
+const WAVE_EVERY_LATE := 20.0
+const MID_AT := 420.0                                       # 7:00 (League's 14:00)
+const LATE_AT := 750.0                                      # 12:30 (League's 25:00)
+const MINION_CLS := {"melee":"knight", "caster":"ranger", "siege":"mage", "super":"barbarian"}
+const MINION_KIND_HP := {"melee":0.5, "caster":0.58, "siege":1.9, "super":2.2}      # League: 477 / 296 / 912 health
+const MINION_KIND_DMG := {"melee":0.45, "caster":0.8, "siege":1.0, "super":1.6}
+const MINION_KIND_SCALE := {"siege":1.1, "super":1.25}      # (the view: x the minion size)
+const MINION_UP := 0.05                                     # +5 % health and damage every 90 s (League upgrades them too)
+const MINION_UP_EVERY := 90.0
+const MINION_VS_HERO := 0.6                                 # League: minions deal 60 % to champions
+const ACQ_R := 8.0                                          # a minion's acquisition range (League 500)
+const HELP_R := 15.0                                        # its call for help reaches allied heroes this far (League 1000)
+const MINION_CAP := 48                                      # per side alive (a phone-safety ceiling; waves stack below it)
 const MINION_HP := 0.5
 const MINION_DMG := 0.45
 const MINION_SPD := 0.88
@@ -86,6 +104,7 @@ const LEVEL_GROW := 0.06                                    # +6 % health and da
 const XP_BASE := 60.0
 const XP_STEP := 30.0
 const MINION_XP := 15.0
+const MINION_XP_BY := {"melee":16.0, "caster":8.0, "siege":25.0, "super":25.0}     # League's ratios (60 / 30 / 93)
 const XP_R := 12.0
 const HERO_XP := 40.0
 const HERO_XP_LVL := 12.0
@@ -96,16 +115,37 @@ const FOUNTAIN := 0.06                                      # of max health a se
 const TOWER_R := 1.5
 const TOWER_RANGE := 11.5
 const TOWER_HP := [0.0, 900.0, 1150.0]                     # (1000 / 1300 until 0.31.157)
-const MINION_SIEGE := 1.5                                   # 0.31.157: minions hit towers and gates this much harder
-const TOWER_EVERY := 0.9
+# a lane minion's blow on a tower or a gate, by kind (0.31.157: x1.5 for all; 0.31.158 -- six to a wave now, and League's
+# towers stand against a wave without heroes: a lone wave takes about a third of an outer tower, siege minions are
+# the ones that hurt)
+const MINION_TOWER := {"melee":0.4, "caster":0.4, "siege":1.6, "super":1.6}
+# 0.31.158 (Kevin: "check tower mechanics to work like league of legends"), from League's wiki: 0.83 shots a second;
+# targets by tier (pets, then siege / super minions, then melee, then casters, champions last; nearest within a tier)
+# and stays on its target until it dies or leaves; call for help -- an enemy champion who hurts one of ours within
+# 1400 (21.5 m here) of the tower, if it isn't already on a champion; "Warming Up": +50 % a shot on a champion, at most
+# +150 %, gone 5 s after the last hit on one (a new target doesn't reset it); minions lose 45 / 70 / 14 / 5 % (melee /
+# caster / siege / super) a shot; 80 % less damage taken with no enemy minions near; melee champions +20 % on towers;
+# outer towers carry 5 plates (gold each) until 7:00 (League's 14:00); local gold for those near, global for all.
+const TOWER_EVERY := 1.2                                    # (0.9 until 0.31.158)
 const TOWER_FLIGHT := 0.3
-const TOWER_HERO_DMG := 40.0
-const TOWER_RAMP := 0.4
+const TOWER_HERO_DMG := 50.0                                # (40 at 0.9 s a shot until 0.31.158)
+const TOWER_RAMP := 0.5
 const TOWER_RAMP_MAX := 3
+const TOWER_RAMP_COOL := 5.0
 const TOWER_GROW := 0.04                                    # +4 % a minute
-const TOWER_PCT := {"knight":0.45}                          # a share of a minion's health a shot (others 0.7)
+const TOWER_PCT := {"melee":0.45, "caster":0.7, "siege":0.14, "super":0.05, "pet":0.45, "lord":0.05}
 const TOWER_PCT_ELSE := 0.7
-const BACKDOOR := 0.34
+const TOWER_HELP_R := 21.5                                  # League 1400
+const BACKDOOR := 0.2                                       # (0.34 until 0.31.158; League's Reinforced Armor: -80 %)
+const MELEE_VS_TOWER := 1.2
+const PLATES := 5
+const PLATES_UNTIL := 420.0                                 # 7:00
+const GOLD_PLATE := 60                                      # to each hero of the side near (12 m) when a plate falls
+const GOLD_TOWER_LOCAL := 200                               # shared by the side's heroes within 18 m (and the killing blow)
+const GOLD_TOWER_GLOBAL := [0, 50, 25]                      # every hero of the side: outer 50, inner 25 (League's bounties)
+const GOLD_FIRST_TOWER := 150                               # the match's first tower: on top, for the local share
+const TOWER_LOCAL_R := 18.0
+const GATE_BACK := 180.0                                    # a broken gate stands again after this (League's inhibitor: 5 min)
 const HELP_FOR := 2.0
 const UPGRADES := {
 	"dmg":{"name":"+15% DAMAGE"}, "hp":{"name":"+15% HEALTH"}, "spd":{"name":"+8% SPEED"}, "as":{"name":"+12% ATTACK SPEED"},
@@ -189,12 +229,10 @@ const LEGION_DMG := 0.6
 # ---------- 0.31.157: gold and the shop ----------
 const GOLD_START := 500
 const GOLD_PASSIVE := 2.0                                   # a second, from the first wave
-const GOLD_MINION := {"knight":22, "ranger":15, "priest":15}
+const GOLD_MINION := {"melee":21, "caster":14, "siege":60, "super":60}     # League's (siege / super +3 every 90 s, at most 90)
 const GOLD_HERO := 300
 const GOLD_ASSIST := 150                                    # split between the helpers
 const ASSIST_WINDOW := 10.0
-const GOLD_TOWER := 150
-const GOLD_TOWER_TEAM := 75
 const SELL_BACK := 0.7
 const ITEM_SLOTS := 6
 const ARMOR_MAX := 0.5
@@ -260,7 +298,17 @@ const MONSTERS := {
 const MON_GROW := 0.05                                      # a monster comes back 5 % stronger for every minute played
 const LEASH := 9.0
 const LORD_LEASH := 8.0
-const RESET_HEAL := 0.3                                     # of its health a second, once left alone
+const RESET_HEAL := 0.3                                     # (0.31.157's heal the moment it was left alone; unused now)
+# 0.31.158 (Kevin: "the enemy camps seem to recharge health immediately if you get too far away"), League's leash: a
+# camp's patience drains while its target is outside the leash (faster the farther), and it keeps fighting while it
+# lasts; at zero, a soft reset -- 6 s walking home healing 6 %/s, ignoring attackers outside the leash (a hit from
+# inside ends it and gives some patience back) -- then a hard reset: home, ignoring everyone, healing 15 %/s.
+const PATIENCE_DRAIN := 0.3                                 # a second, just outside the leash
+const PATIENCE_FAR := 0.08                                  # + this per metre farther out
+const PATIENCE_BACK := 0.25                                 # a second, while the target's inside
+const SOFT_RESET := 6.0
+const SOFT_HEAL := 0.06
+const HARD_HEAL := 0.15
 const LORD_SLAM_EVERY := 5.0
 const LORD_SLAM_R := 4.5
 const LORD_SLAM_DMG := 1.4
@@ -271,10 +319,15 @@ const EMBER_DMG := 1.2
 const LORD_TIME := 120.0
 const LORD_DMG := 1.15
 const LORD_MINION := 1.4
-const SUPER_MINION := 1.5                                   # a lane whose enemy gate is down: its minions x this
+const SUPER_MINION := 1.5                                   # (0.31.157's super minions; 0.31.158: a super minion of its own)
+const LORD_SIEGE := 3.0                                     # 0.31.158: the Bone Lord marching for a side hits towers and gates x3
+const LORDLING_HP := 12.0                                   # (x the Barbarian's 130, +5 % a minute played)
+const LORDLING_DMG := 1.4
 const BUFF_NAMES := {"arcane":"ARCANE", "ember":"EMBER", "lord":"LORD'S BLESSING"}
 
+const Vision = preload("res://scripts/siege/moba_vision.gd")
 var s                                     # the sim
+var vision = null                         # 0.31.158: the fog of war (moba_vision.gd)
 var rng := RandomNumberGenerator.new()
 var towers: Array = []                    # {id, team, lane, tier, p, hp, max_hp, dead, target, ramp, ramp_id, next}
 var shots: Array = []                     # {tw, target, t, dmg}
@@ -347,6 +400,8 @@ func begin(sim, my_hero: String, seed_value: int) -> void:
 				taken.append(hid)
 			_make_hero(u, hid, int(lanes[t][mini(i, 4)]), (i in [1, 2]) if t == 0 else (i in [0, 1]))
 			i += 1
+	vision = Vision.new()                 # 0.31.158: the fog of war
+	vision.setup(self)
 	# the jungle (0.31.157): each side's four camps (red's the point mirror of blue's), the Bone Lord on the island
 	for t in 2:
 		for c in CAMPS_BLUE:
@@ -468,15 +523,25 @@ func pick(u: Dictionary, i: int) -> bool:
 # ---------- the match ----------
 func step(dt: float) -> void:
 	if s.time >= wave_at:
-		wave_at += WAVE_EVERY
+		wave_at += WAVE_EVERY if s.time < MID_AT else (WAVE_EVERY_MID if s.time < LATE_AT else WAVE_EVERY_LATE)
 		waves += 1
 		for t in 2:
 			for l in 3:
 				_spawn_wave(t, l)
+	for g in s.gates:                                  # 0.31.158: a broken gate stands again (League's inhibitor)
+		if bool(g.get("broken", false)) and str(g.get("kind", "")) != "jail" and s.time >= float(g.get("broken_at", INF)) + GATE_BACK:
+			g.broken = false
+			g.hp = float(g.max_hp)
+			g.erase("broken_at")
+			s._update_gate_nav()
+			s._event("gate_rebuilt", {"gate":int(g.id), "team":int(g.team)})
 	_step_towers(dt)
 	_step_kings(dt)
 	_step_camps(dt)
 	_step_rains(dt)
+	var tv := Time.get_ticks_usec() if s.profile else 0
+	vision.step(dt)
+	if s.profile: s._p("vision", tv)
 	var gold_on: bool = s.time >= WAVE_FIRST
 	var gone := []
 	for u in s.units:
@@ -520,39 +585,73 @@ func step(dt: float) -> void:
 		_boss_check = 0.0
 		_boss_call()
 
+func wave_kinds(t: int, l: int, n: int) -> Array:
+	# League's wave n (1-based) in lane l for side t, front to back: super(s), melee, siege, casters
+	var sup := 0
+	if _lane_gate_down(t, l):
+		sup = 2 if _gates_down(1 - t) >= 2 else 1
+	var siege := false
+	if sup == 0:
+		siege = (n % 3 == 0) if s.time < MID_AT else ((n % 2 == 0) if s.time < LATE_AT else true)
+	var out := []
+	for i in sup:
+		out.append("super")
+	for i in (2 if siege and s.time >= MID_AT else 3):
+		out.append("melee")
+	if siege:
+		out.append("siege")
+	for i in 3:
+		out.append("caster")
+	return out
+
+func _gates_down(team: int) -> int:
+	var n := 0
+	for g in s.gates:
+		if int(g.team) == team and str(g.get("kind", "")) != "jail" and not s.gate_blocks(g):
+			n += 1
+	return n
+
 func _spawn_wave(t: int, l: int) -> void:
 	var alive := 0
 	for u in s.units:
 		if bool(u.get("minion", false)) and not bool(u.get("summon", false)) and int(u.team) == t and s.alive(u):
 			alive += 1
 	var lord := lord_buff(t)                   # 0.31.157: the Bone Lord's blessing on this side -- stronger minions
-	var sup := _lane_gate_down(t, l)           # 0.31.157: League's inhibitor -- their gate at this lane's end down: super minions
+	var up := 1.0 + MINION_UP * floorf(float(s.time) / MINION_UP_EVERY)
+	var kinds := wave_kinds(t, l, waves)
 	var start := wp(t, l, 0)
 	var ahead := (wp(t, l, 1) - start).normalized()
 	var side := Vector2(-ahead.y, ahead.x)
+	var rows := int(ceil(float(kinds.size()) / 2.0))
 	var ids := []
-	for k in WAVE.size():
+	for k in kinds.size():
 		if alive >= MINION_CAP:
 			break
 		alive += 1
 		_mid += 1
+		var mk := str(kinds[k])
 		var id := "m%d" % _mid
 		var u: Dictionary = s._new_unit(id, t, true, "raid")
-		u.cls = str(WAVE[k])
+		u.cls = str(MINION_CLS[mk])
 		u["minion"] = true
+		u["mk"] = mk
 		u["lane"] = l
 		u["wp"] = 1
-		u["m_hp"] = MINION_HP * (LORD_MINION if lord else 1.0) * (SUPER_MINION if sup else 1.0)
-		u["m_dmg"] = MINION_DMG * (LORD_MINION if lord else 1.0) * (SUPER_MINION if sup else 1.0)
-		if sup:
-			u["super"] = true
+		u["m_hp"] = float(MINION_KIND_HP[mk]) * up * (LORD_MINION if lord else 1.0)
+		u["m_dmg"] = float(MINION_KIND_DMG[mk]) * up * (LORD_MINION if lord else 1.0)
 		u["m_spd"] = MINION_SPD
+		if mk == "super":
+			u["super"] = true
+		if MINION_KIND_SCALE.has(mk):
+			u["mscale"] = float(MINION_KIND_SCALE[mk])     # (siege and super minions stand a little bigger)
 		if lord:
 			u["lordly"] = true
 		u.max_hp = float(s.stat(u, "hp"))
 		u.hp = u.max_hp
-		# (front to back from the gate out: the Knight ahead, the Priest at the gate -- behind it is the castle wall)
-		u.pos = start + ahead * (1.4 * float(WAVE.size() - 1 - k)) + side * (0.9 if k == 1 else (-0.9 if k == 2 else 0.0))
+		# in pairs from the gate out, the front first (behind the gate is the castle wall)
+		var row := k / 2
+		var col := k % 2
+		u.pos = start + ahead * (1.3 * float(rows - 1 - row) + 0.5) + side * (0.8 if col == 0 else -0.8)
 		u.face = s.angle_of(ahead)
 		u.think_at = s.time + s.TICK * float(k + 1)
 		s.units.append(u)
@@ -609,6 +708,22 @@ func gate_open(g: Dictionary) -> bool:
 				return true
 	return false
 
+func _tower_tier(o: Dictionary) -> int:
+	# who a tower shoots first (League): pets, siege / super minions, melee, casters, champions
+	if bool(o.get("summon", false)):
+		return 0
+	if bool(o.get("minion", false)):
+		match str(o.get("mk", "melee")):
+			"siege", "super", "lord": return 1
+			"caster": return 3
+			_: return 2
+	return 4
+
+func _tower_pct(o: Dictionary) -> float:
+	if bool(o.get("summon", false)):
+		return float(TOWER_PCT.pet)
+	return float(TOWER_PCT.get(str(o.get("mk", "melee")), TOWER_PCT_ELSE))
+
 func _step_towers(dt: float) -> void:
 	for tw in towers:
 		if bool(tw.dead):
@@ -616,51 +731,50 @@ func _step_towers(dt: float) -> void:
 		var cur: Dictionary = s.by_id.get(str(tw.target), {})
 		if cur.is_empty() or not s.alive(cur) or (cur.pos as Vector2).distance_to(tw.p) > TOWER_RANGE + s.UNIT_R:
 			cur = {}
-		# call for help: an enemy hero in range who hurt one of our heroes in range just now
-		var help := {}
-		for h in s.units:
-			if not bool(h.get("hero", false)) or int(h.team) != int(tw.team) or not s.alive(h):
-				continue
-			if s.time - float(h.get("hh_at", -99.0)) > HELP_FOR or (h.pos as Vector2).distance_to(tw.p) > TOWER_RANGE:
-				continue
-			var a: Dictionary = s.by_id.get(str(h.get("hh_by", "")), {})
-			if not a.is_empty() and s.alive(a) and (a.pos as Vector2).distance_to(tw.p) <= TOWER_RANGE + s.UNIT_R:
-				help = a
-				break
-		if not help.is_empty() and (cur.is_empty() or not bool(cur.get("hero", false))):
-			cur = help
+		# call for help: an enemy champion in range who hurt one of our champions within TOWER_HELP_R just now (unless
+		# it's already on a champion)
+		if cur.is_empty() or not bool(cur.get("hero", false)):
+			for hid in heroes[int(tw.team)]:
+				var h: Dictionary = s.by_id.get(hid, {})
+				if h.is_empty() or not s.alive(h) or s.time - float(h.get("hh_at", -99.0)) > HELP_FOR or (h.pos as Vector2).distance_to(tw.p) > TOWER_HELP_R:
+					continue
+				var a: Dictionary = s.by_id.get(str(h.get("hh_by", "")), {})
+				if not a.is_empty() and s.alive(a) and (a.pos as Vector2).distance_to(tw.p) <= TOWER_RANGE + s.UNIT_R:
+					cur = a
+					break
 		if cur.is_empty():
 			var best := {}
+			var bt := 9
 			var bd := INF
-			for heroes_pass in [false, true]:                    # minions first; heroes only when there are none
-				for o in s.units:
-					if int(o.team) == int(tw.team) or int(o.team) > 1 or not s.alive(o) or bool(o.get("hero", false)) != heroes_pass:
-						continue
-					var d: float = (o.pos as Vector2).distance_to(tw.p)
-					if d <= TOWER_RANGE + s.UNIT_R and d < bd:
-						bd = d
-						best = o
-				if not best.is_empty():
-					break
+			for o in s.units:
+				if int(o.team) == int(tw.team) or int(o.team) > 1 or not s.alive(o) or o.state == "fly":
+					continue
+				var d: float = (o.pos as Vector2).distance_to(tw.p)
+				if d > TOWER_RANGE + s.UNIT_R:
+					continue
+				var tier := _tower_tier(o)
+				if tier < bt or (tier == bt and d < bd):
+					bt = tier
+					bd = d
+					best = o
 			cur = best
 		tw.target = str(cur.get("id", ""))
+		if s.time - float(tw.get("ramp_at", -99.0)) > TOWER_RAMP_COOL:
+			tw.ramp = 0                                # (Warming Up cools off 5 s after the last hit on a champion)
 		if cur.is_empty() or s.time < float(tw.next):
 			continue
 		tw.next = s.time + TOWER_EVERY
 		var dmg := 0.0
+		var ramp := 0
 		if bool(cur.get("hero", false)):
-			if str(tw.ramp_id) == str(cur.id):
-				tw.ramp = mini(int(tw.ramp) + 1, TOWER_RAMP_MAX)
-			else:
-				tw.ramp_id = str(cur.id)
-				tw.ramp = 0
-			dmg = TOWER_HERO_DMG * (1.0 + TOWER_RAMP * float(tw.ramp)) * (1.0 + TOWER_GROW * s.time / 60.0)
+			ramp = int(tw.ramp)
+			dmg = TOWER_HERO_DMG * (1.0 + TOWER_RAMP * float(ramp)) * (1.0 + TOWER_GROW * s.time / 60.0)
+			tw.ramp = mini(ramp + 1, TOWER_RAMP_MAX)
+			tw["ramp_at"] = s.time + TOWER_FLIGHT
 		else:
-			tw.ramp_id = ""
-			tw.ramp = 0
-			dmg = float(cur.max_hp) * float(TOWER_PCT.get(str(cur.cls), TOWER_PCT_ELSE))
+			dmg = float(cur.max_hp) * _tower_pct(cur)
 		shots.append({"tw":int(tw.id), "target":str(cur.id), "t":TOWER_FLIGHT, "dmg":dmg})
-		s._event("tshot", {"tw":int(tw.id), "id":str(cur.id), "flight":TOWER_FLIGHT, "ramp":int(tw.ramp)})
+		s._event("tshot", {"tw":int(tw.id), "id":str(cur.id), "flight":TOWER_FLIGHT, "ramp":ramp})
 	for i in range(shots.size() - 1, -1, -1):
 		var sh: Dictionary = shots[i]
 		sh.t = float(sh.t) - dt
@@ -668,10 +782,23 @@ func _step_towers(dt: float) -> void:
 			continue
 		shots.remove_at(i)
 		var tw2: Dictionary = towers[int(sh.tw)]
+		if bool(tw2.dead):
+			continue                                   # (League: a shot is wasted if its tower falls in flight)
 		var u: Dictionary = s.by_id.get(str(sh.target), {})
 		if not u.is_empty() and s.alive(u):
 			s._next_push = Vector3.ZERO
 			s._damage({"id":"tower%d" % int(tw2.id), "team":int(tw2.team), "pos":tw2.p, "state":"idle"}, u, float(sh.dmg))
+
+func tower_mult(src: Dictionary) -> float:
+	# a blow on a tower: melee champions +20 % (League), lane minions MINION_TOWER by kind, the Bone Lord marching for a
+	# side LORD_SIEGE
+	if bool(src.get("hero", false)) and not bool(s.CLASSES.get(str(src.get("cls", "")), {}).get("ranged", false)):
+		return MELEE_VS_TOWER
+	if bool(src.get("lordling", false)):
+		return LORD_SIEGE
+	if lane_minion(str(src.get("id", ""))):
+		return float(MINION_TOWER.get(str(src.get("mk", "melee")), 0.4))
+	return 1.0
 
 func hit_tower(src: Dictionary, id: int, amount: float) -> void:
 	if id < 0 or id >= towers.size():
@@ -690,22 +817,47 @@ func hit_tower(src: Dictionary, id: int, amount: float) -> void:
 			minions_near = true
 			break
 	if not minions_near:
-		amount *= BACKDOOR                      # no minions with you: the tower barely feels it
-	if lane_minion(str(src.get("id", ""))):
-		amount *= MINION_SIEGE
+		amount *= BACKDOOR                      # no minions with you: the tower barely feels it (League: -80 %)
+	amount *= tower_mult(src)
+	var before := float(tw.hp)
 	tw.hp = maxf(0.0, float(tw.hp) - amount)
 	s._event("tower_hit", {"tw":id, "dmg":int(round(amount))})
+	# outer towers' plates (until 7:00): each fifth of its health that falls pays the side's heroes near
+	if int(tw.tier) == 1 and s.time < PLATES_UNTIL and float(tw.hp) > 0.0:
+		var step := float(tw.max_hp) / float(PLATES)
+		var lost := int(floor((float(tw.max_hp) - float(tw.hp)) / step)) - int(floor((float(tw.max_hp) - before) / step))
+		for k in lost:
+			tw["plates"] = int(tw.get("plates", 0)) + 1
+			var paid := []
+			for h in _heroes_near(1 - int(tw.team), tw.p, 12.0, src):
+				add_gold(h, GOLD_PLATE, tw.p)
+				paid.append(str(h.id))
+			s._event("plate", {"tw":id, "team":int(tw.team), "n":int(tw.plates), "ids":paid, "gold":GOLD_PLATE})
 	if float(tw.hp) <= 0.0:
 		tw.dead = true
 		tw.target = ""
 		s._event("tower_down", {"tw":id, "team":int(tw.team), "lane":int(tw.lane), "tier":int(tw.tier), "by":str(src.get("id", ""))})
-		for hid in heroes[1 - int(tw.team)]:
+		var et := 1 - int(tw.team)
+		var first := towers_down(0) + towers_down(1) == 1
+		for hid in heroes[et]:
 			add_xp(s.by_id.get(hid, {}), TOWER_XP)
-			add_gold(s.by_id.get(hid, {}), GOLD_TOWER_TEAM, Vector2.INF)        # 0.31.157: everyone on the side
-		var by_h := _credit(src)
-		if not by_h.is_empty():
-			add_gold(by_h, GOLD_TOWER, tw.p)                                     # and the one who brought it down
+			add_gold(s.by_id.get(hid, {}), float(GOLD_TOWER_GLOBAL[int(tw.tier)]), Vector2.INF)     # global
+		var near := _heroes_near(et, tw.p, TOWER_LOCAL_R, src)
+		for h in near:
+			add_gold(h, float(GOLD_TOWER_LOCAL + (GOLD_FIRST_TOWER if first else 0)) / float(near.size()), tw.p)      # local
 		s._update_gate_nav()
+
+func _heroes_near(team: int, p: Vector2, r: float, src: Dictionary) -> Array:
+	# the side's heroes standing within r of p, and whoever's blow it was (wherever he is)
+	var out := []
+	var by_h := _credit(src)
+	if not by_h.is_empty() and int(by_h.team) == team:
+		out.append(by_h)
+	for hid in heroes[team]:
+		var h: Dictionary = s.by_id.get(hid, {})
+		if not h.is_empty() and not out.has(h) and s.alive(h) and (h.pos as Vector2).distance_to(p) <= r:
+			out.append(h)
+	return out
 
 func melee_towers(u: Dictionary, reach: float, arc: float, dmg: float) -> int:
 	if int(u.team) > 1:
@@ -827,6 +979,8 @@ func _step_kings(dt: float) -> void:
 func on_damage(src: Dictionary, dst: Dictionary, amount: float) -> void:
 	if src.is_empty() or int(src.get("team", -1)) == int(dst.team):
 		return
+	if vision != null and s.by_id.has(str(src.get("id", ""))):
+		vision.reveal(src)                                   # 0.31.158: attacking shows you for 2 s
 	var ls := float(src.get("m_ls", 0.0))
 	if ls > 0.0 and amount > 0.0 and src.has("hp") and s.alive(src):
 		s._heal(src, src, amount * ls)
@@ -842,9 +996,22 @@ func on_damage(src: Dictionary, dst: Dictionary, amount: float) -> void:
 	if dst.has("mon") and int(src.get("team", -1)) in [0, 1] and s.by_id.has(str(src.get("id", ""))):
 		var camp: Dictionary = camps[int(dst.mon)]            # 0.31.157: a camp hit -- it fights back
 		(camp.hits as Dictionary)[str(src.id)] = s.time
-		var cur: Dictionary = s.by_id.get(str(camp.target), {})
-		if cur.is_empty() or not s.alive(cur) or (cur.pos as Vector2).distance_to(camp.p) > _leash(camp):
-			camp.target = str(src.id)
+		var lr := _leash(camp)
+		match str(camp.reset):
+			"hard":
+				pass                                           # (0.31.158: going home, it ignores everyone)
+			"soft":
+				# a hit from inside the leash ends the soft reset and gives back some patience
+				if (src.pos as Vector2).distance_to(camp.p) <= lr and (dst.pos as Vector2).distance_to(camp.p) <= lr:
+					camp.reset = ""
+					camp.target = str(src.id)
+					camp.patience = maxf(float(camp.patience), 0.6)
+			_:
+				var cur: Dictionary = s.by_id.get(str(camp.target), {})
+				if cur.is_empty() or not s.alive(cur):
+					camp.target = str(src.id)
+				elif (src.pos as Vector2).distance_to(camp.p) <= lr:
+					camp.patience = minf(1.0, float(camp.patience) + 0.15)      # (a blow from inside: patience back)
 
 func on_kill(src: Dictionary, dst: Dictionary) -> void:
 	dst["died_at"] = s.time
@@ -870,10 +1037,11 @@ func on_kill(src: Dictionary, dst: Dictionary) -> void:
 			var h: Dictionary = s.by_id.get(hid, {})
 			if not h.is_empty() and s.alive(h) and (h.pos as Vector2).distance_to(dst.pos) <= XP_R:
 				near.append(h)
+		var mxp := float(MINION_XP_BY.get(str(dst.get("mk", "melee")), MINION_XP))
 		for h in near:
-			add_xp(h, MINION_XP * (1.0 if near.size() == 1 else 0.65))
+			add_xp(h, mxp * (1.0 if near.size() == 1 else 0.65))
 		if not by_h.is_empty() and int(by_h.team) != int(dst.team):
-			add_gold(by_h, float(GOLD_MINION.get(str(dst.cls), 15)), dst.pos)     # the last hit
+			add_gold(by_h, minion_gold(dst), dst.pos)     # the last hit
 	elif bool(dst.get("hero", false)):
 		dst.respawn_at = s.time + RESPAWN_BASE + RESPAWN_LVL * float(int(dst.level))
 		dst.erase("dance")
@@ -938,69 +1106,99 @@ func _forward(u: Dictionary) -> Vector2:
 	return Vector2(0, -1) if int(u.team) == 0 else Vector2(0, 1)
 
 func _think_minion(u: Dictionary) -> void:
+	# 0.31.158: League's minion -- its target by the priority list (_minion_target), kept until a higher one shows up;
+	# nothing in reach: the structure in its way (a tower, the gate at the lane's end, the King once open), else on
+	# down the lane
+	var tg := _minion_target(u)
+	if not tg.is_empty():
+		if tg.has("tw"):                               # an enemy tower (it's shooting one of ours)
+			u["mt"] = ""
+			u["mt_tw"] = int(tg.tw)
+			_hit_structure(u, towers[int(tg.tw)])
+			return
+		u["mt"] = str(tg.id)
+		u["mt_tw"] = -1
+		s._fight(u, tg)
+		return
+	u["mt"] = ""
+	u["mt_pri"] = 9
 	var c: Dictionary = s.CLASSES[u.cls]
-	var aggro := 9.0 if bool(c.ranged) else 5.5
-	if u.cls == "priest":
-		if s._think_priest(u):
-			return
-		# follow the wave: a step behind the nearest friend of the lane who isn't a priest
-		var lead := {}
-		var ld := 14.0
-		for o in s.units:
-			if o != u and int(o.team) == int(u.team) and s.alive(o) and bool(o.get("minion", false)) and int(o.lane) == int(u.lane) \
-					and o.cls != "priest" and (o.pos as Vector2).distance_to(u.pos) < ld:
-				ld = (o.pos as Vector2).distance_to(u.pos)
-				lead = o
-		if not lead.is_empty():
-			s._nav_to(u, (lead.pos as Vector2) - _forward(u) * 2.0, 1.2)
-			return
-		_march(u)
-		return
-	var foe := _minion_unit_target(u, aggro, false)
-	if not foe.is_empty():
-		u["mt"] = str(foe.id)
-		s._fight(u, foe)
-		return
-	var tw := _enemy_tower_near(u, aggro + TOWER_R)
+	var reach := ACQ_R if not bool(c.ranged) else maxf(ACQ_R, float(c.range) * 0.8)
+	var tw := _enemy_tower_near(u, reach + TOWER_R)
 	if not tw.is_empty():
+		u["mt_tw"] = int(tw.id)
 		_hit_structure(u, tw)
 		return
+	u["mt_tw"] = -1
 	var eteam := 1 - int(u.team)
-	if king_open(eteam) and (u.pos as Vector2).distance_to(king_pos(eteam)) < aggro + KING_R + 2.0:
+	if king_open(eteam) and (u.pos as Vector2).distance_to(king_pos(eteam)) < reach + KING_R + 2.0:
 		_hit_point(u, king_pos(eteam), KING_R)
-		return
-	foe = _minion_unit_target(u, aggro, true)
-	if not foe.is_empty():
-		u["mt"] = str(foe.id)
-		s._fight(u, foe)
 		return
 	_march(u)
 
-func _minion_unit_target(u: Dictionary, aggro: float, heroes_too: bool) -> Dictionary:
-	# a minion's target: an enemy hero who just hurt one of our heroes near me (call for help), the one I'm on, the
-	# nearest enemy minion -- heroes only on the second pass (after towers)
-	for h in s.units:
-		if int(h.team) != int(u.team) or not bool(h.get("hero", false)) or not s.alive(h):
-			continue
-		if s.time - float(h.get("hh_at", -99.0)) <= HELP_FOR and (h.pos as Vector2).distance_to(u.pos) < 9.0:
-			var a: Dictionary = s.by_id.get(str(h.get("hh_by", "")), {})
-			if not a.is_empty() and s.alive(a) and (a.pos as Vector2).distance_to(u.pos) < aggro + 3.0:
-				return a
+func _minion_target(u: Dictionary) -> Dictionary:
+	# League's minion targeting, highest first: 1 an enemy champion attacking an allied champion (call for help, the
+	# ally within HELP_R -- not while it's hitting a tower), 2 an enemy minion attacking an allied champion, 3 an enemy
+	# minion attacking an allied minion, 4 an enemy tower attacking an allied minion, 5 the nearest enemy minion, 6 the
+	# nearest enemy champion -- within ACQ_R (ranged: their reach), seen by its side. It keeps its target unless a
+	# higher one appears. Returns a unit, {"tw": id} for a tower, or {}.
+	var team := int(u.team)
+	var c: Dictionary = s.CLASSES[u.cls]
+	var acq := ACQ_R if not bool(c.ranged) else maxf(ACQ_R, float(c.range) * 0.8)
 	var cur: Dictionary = s.by_id.get(str(u.get("mt", "")), {})
-	if not cur.is_empty() and s.alive(cur) and int(cur.team) <= 1 and (cur.pos as Vector2).distance_to(u.pos) < aggro + 2.5 \
-			and (heroes_too or not bool(cur.get("hero", false))):
-		return cur
+	var cur_pri := int(u.get("mt_pri", 9))
+	if cur.is_empty() or not s.alive(cur) or int(cur.team) == team or int(cur.team) > 1 or (cur.pos as Vector2).distance_to(u.pos) > acq + 3.0 \
+			or not can_see(team, cur):
+		cur = {}
+		cur_pri = 9
+	var on_tower := int(u.get("mt_tw", -1)) >= 0
 	var best := {}
-	var bd := aggro
+	var bp := 9
+	var bd := INF
+	if not on_tower:
+		for hid in heroes[team]:
+			var h: Dictionary = s.by_id.get(hid, {})
+			if h.is_empty() or not s.alive(h) or s.time - float(h.get("hh_at", -99.0)) > HELP_FOR or (h.pos as Vector2).distance_to(u.pos) > HELP_R:
+				continue
+			var a: Dictionary = s.by_id.get(str(h.get("hh_by", "")), {})
+			if a.is_empty() or not s.alive(a) or not can_see(team, a):
+				continue
+			var da: float = (a.pos as Vector2).distance_to(u.pos)
+			if da <= acq + 4.0 and (bp > 1 or da < bd):
+				bp = 1
+				bd = da
+				best = a
 	for o in s.units:
-		if int(o.team) == int(u.team) or int(o.team) > 1 or not s.alive(o) or o.state == "fly":
-			continue                                  # (0.31.157: minions leave the jungle's monsters alone)
-		if bool(o.get("hero", false)) and not heroes_too:
+		if int(o.team) == team or int(o.team) > 1 or not s.alive(o) or o.state == "fly":
 			continue
 		var d: float = (o.pos as Vector2).distance_to(u.pos)
-		if d < bd:
+		if d > acq or not can_see(team, o):
+			continue
+		var pri := 6
+		if bool(o.get("minion", false)):
+			pri = 5
+			var ot: Dictionary = s.by_id.get(str(o.get("mt", "")), {})
+			if not ot.is_empty() and int(ot.team) == team:
+				pri = 2 if bool(ot.get("hero", false)) else 3
+		elif bool(o.get("hero", false)):
+			pri = 6
+		else:
+			continue
+		if pri < bp or (pri == bp and d < bd):
+			bp = pri
 			bd = d
 			best = o
+	if bp > 4:
+		for tw in towers:                              # 4: an enemy tower shooting one of our minions
+			if int(tw.team) == team or bool(tw.dead) or (tw.p as Vector2).distance_to(u.pos) > acq + TOWER_R + 2.0:
+				continue
+			var tt: Dictionary = s.by_id.get(str(tw.target), {})
+			if not tt.is_empty() and int(tt.team) == team and bool(tt.get("minion", false)):
+				u["mt_pri"] = 4
+				return {"tw":int(tw.id)}
+	if not cur.is_empty() and cur_pri <= bp:
+		return cur
+	u["mt_pri"] = bp
 	return best
 
 func _enemy_tower_near(u: Dictionary, r: float) -> Dictionary:
@@ -1076,7 +1274,8 @@ func _think_hero(u: Dictionary) -> void:
 	var eteam := 1 - int(u.team)
 	if king_open(eteam) and ((bool(u.get("kr", false)) and u.hp > u.max_hp * 0.45) or (_end_push(int(u.team)) and u.hp > u.max_hp * 0.35)):
 		for o in s.units:
-			if int(o.team) == eteam and s.alive(o) and bool(o.get("hero", false)) and (o.pos as Vector2).distance_to(u.pos) < reach + 3.0:
+			if int(o.team) == eteam and s.alive(o) and bool(o.get("hero", false)) and (o.pos as Vector2).distance_to(u.pos) < reach + 3.0 \
+					and can_see(int(u.team), o):
 				_fight_h(u, o)
 				return
 		_hit_point(u, king_pos(eteam), KING_R)
@@ -1110,7 +1309,7 @@ func _think_hero(u: Dictionary) -> void:
 	var foe := {}
 	var fd := reach + 4.0
 	for o in s.units:
-		if int(o.team) == int(u.team) or not s.alive(o) or not bool(o.get("hero", false)):
+		if int(o.team) == int(u.team) or not s.alive(o) or not bool(o.get("hero", false)) or not can_see(int(u.team), o):
 			continue
 		var d: float = (o.pos as Vector2).distance_to(u.pos)
 		if d < fd and (tower_in_range(1 - int(u.team), o.pos).is_empty() or _our_minions_near(int(u.team), o.pos)):
@@ -1130,7 +1329,7 @@ func _think_hero(u: Dictionary) -> void:
 	var m := {}
 	var md := maxf(reach + 2.0, 7.0)
 	for o in s.units:
-		if int(o.team) == int(u.team) or not s.alive(o) or not bool(o.get("minion", false)):
+		if int(o.team) == int(u.team) or not s.alive(o) or not bool(o.get("minion", false)) or not can_see(int(u.team), o):
 			continue
 		var d2: float = (o.pos as Vector2).distance_to(u.pos)
 		if d2 < md and tower_in_range(1 - int(u.team), o.pos).is_empty():
@@ -1364,7 +1563,7 @@ func _weakest_hero(u: Dictionary, r: float) -> Dictionary:
 	var best := {}
 	var bf := INF
 	for o in s.units:
-		if int(o.team) == int(u.team) or int(o.team) > 1 or not s.alive(o) or not bool(o.get("hero", false)):
+		if int(o.team) == int(u.team) or int(o.team) > 1 or not s.alive(o) or not bool(o.get("hero", false)) or not can_see(int(u.team), o):
 			continue
 		if (o.pos as Vector2).distance_to(u.pos) > r:
 			continue
@@ -1379,7 +1578,7 @@ func _ult_aim(u: Dictionary, r: float, fallback: Vector2) -> Vector2:
 	var h := {}
 	var hd := r
 	for o in s.units:
-		if int(o.team) != int(u.team) and int(o.team) <= 1 and s.alive(o) and bool(o.get("hero", false)):
+		if int(o.team) != int(u.team) and int(o.team) <= 1 and s.alive(o) and bool(o.get("hero", false)) and can_see(int(u.team), o):
 			var d: float = (o.pos as Vector2).distance_to(u.pos)
 			if d < hd:
 				hd = d
@@ -1393,7 +1592,7 @@ func _ult_aim_hero(u: Dictionary, r: float) -> Vector2:
 	var best := Vector2.INF
 	var bd := r
 	for o in s.units:
-		if int(o.team) != int(u.team) and int(o.team) <= 1 and s.alive(o) and bool(o.get("hero", false)):
+		if int(o.team) != int(u.team) and int(o.team) <= 1 and s.alive(o) and bool(o.get("hero", false)) and can_see(int(u.team), o):
 			var d: float = (o.pos as Vector2).distance_to(u.pos)
 			if d < bd:
 				bd = d
@@ -1455,11 +1654,15 @@ func mod_damage(src: Dictionary, dst: Dictionary, amount: float) -> float:
 				a *= EMBER_DMG
 			if t < float(b.get("lord", -1.0)):
 				a *= LORD_DMG
+	if bool(dst.get("hero", false)) and lane_minion(str(src.get("id", ""))):
+		a *= MINION_VS_HERO                             # 0.31.158: League's minions deal 60 % to champions
 	if t < float(dst.get("dr_until", -1.0)):
 		a *= 1.0 - float(dst.get("dr", 0.0))
 	a *= 1.0 - float(dst.get("m_armor", 0.0))
 	if t < float(dst.get("ud_until", -1.0)):
 		a = minf(a, maxf(0.0, float(dst.hp) - 1.0))         # UNDYING: never below 1
+	if dst.has("mon") and str(camps[int(dst.mon)].reset) == "hard":
+		a = 0.0                                             # (a camp hard-resetting can't be hurt till it's home)
 	return a
 
 func _raise_skeleton(owner: Dictionary, at: Vector2) -> Dictionary:
@@ -1497,6 +1700,8 @@ func _think_summon(u: Dictionary) -> void:
 			continue
 		if o.has("mon") and str(camps[int(o.mon)].target) == "":
 			continue                                   # (sleeping monsters are left alone)
+		if not can_see(int(u.team), o):
+			continue
 		var d: float = (o.pos as Vector2).distance_to(base)
 		if d < bd:
 			bd = d
@@ -1517,7 +1722,7 @@ func _bot_ult(u: Dictionary) -> bool:
 	var closest := {}
 	var cd := INF
 	for o in s.units:
-		if int(o.team) == int(u.team) or not s.alive(o):
+		if int(o.team) == int(u.team) or not s.alive(o) or not can_see(int(u.team), o):
 			continue
 		var d: float = (o.pos as Vector2).distance_to(u.pos)
 		if int(o.team) == et and bool(o.get("hero", false)):
@@ -1589,8 +1794,27 @@ func _allies_near(u: Dictionary, r: float) -> int:
 # 0.31.157 GOLD AND THE SHOP
 # ======================================================================================================================
 func gate_mult(src: Dictionary) -> float:
-	# (sim._damage_gate) a lane minion's blow on a gate counts MINION_SIEGE
-	return MINION_SIEGE if lane_minion(str(src.get("id", ""))) else 1.0
+	# (sim._damage_gate) a lane minion's blow on a gate counts as on a tower (MINION_TOWER), the Bone Lord's LORD_SIEGE
+	if bool(src.get("lordling", false)):
+		return LORD_SIEGE
+	return float(MINION_TOWER.get(str(src.get("mk", "melee")), 0.4)) if lane_minion(str(src.get("id", ""))) else 1.0
+
+func minion_gold(u: Dictionary) -> float:
+	# League's last-hit gold: melee 21, caster 14; siege and super 60, +3 every 90 s, at most 90; the Bone Lord 150
+	var mk := str(u.get("mk", "melee"))
+	if bool(u.get("lordling", false)):
+		return 150.0
+	var g := float(GOLD_MINION.get(mk, 14))
+	if mk in ["siege", "super"]:
+		g = minf(90.0, g + 3.0 * floorf(float(s.time) / MINION_UP_EVERY))
+	return g
+
+func can_see(team: int, u: Dictionary) -> bool:
+	# 0.31.158: side `team` sees u (its own, or in its sight and not hidden in brush) -- the fog of war
+	return vision == null or vision.can_see(team, u)
+
+func ward(u: Dictionary) -> bool:
+	return vision != null and vision.place_ward(u)
 
 func lane_minion(id: String) -> bool:
 	var u: Dictionary = s.by_id.get(id, {})
@@ -1728,7 +1952,7 @@ func _bot_shop(u: Dictionary) -> void:
 # ======================================================================================================================
 func _add_camp(kind: String, side: int, p: Vector2) -> void:
 	camps.append({"id":camps.size(), "kind":kind, "side":side, "p":p, "mobs":[], "alive":false,
-		"next":LORD_FIRST if kind == "lord" else CAMP_FIRST, "target":"", "hits":{}, "slam":0.0})
+		"next":LORD_FIRST if kind == "lord" else CAMP_FIRST, "target":"", "hits":{}, "slam":0.0, "patience":1.0, "reset":"", "reset_at":0.0})
 
 func _leash(camp: Dictionary) -> float:
 	return LORD_LEASH if str(camp.kind) == "lord" else LEASH
@@ -1768,6 +1992,8 @@ func _spawn_camp(camp: Dictionary) -> void:
 	camp.alive = true
 	camp.target = ""
 	camp.hits = {}
+	camp.patience = 1.0
+	camp.reset = ""
 	camp.slam = s.time + LORD_SLAM_EVERY
 	s._event("camp_up", {"camp":int(camp.id), "kind":str(camp.kind), "ids":ids})
 
@@ -1786,12 +2012,28 @@ func _step_camps(dt: float) -> void:
 				_spawn_camp(camp)
 			continue
 		var live := camp_live(camp)
-		# the fight: a target who left the leash or fell -> the latest of the others who hit it, still inside
-		var tgt: Dictionary = s.by_id.get(str(camp.target), {})
 		var lr := _leash(camp)
-		if not tgt.is_empty() and (not s.alive(tgt) or (tgt.pos as Vector2).distance_to(camp.p) > lr):
-			tgt = {}
-		if tgt.is_empty() and str(camp.target) != "":
+		match str(camp.reset):
+			"soft", "hard":
+				var rate := SOFT_HEAL if str(camp.reset) == "soft" else HARD_HEAL
+				var settled := true
+				for m in live:
+					if float(m.hp) < float(m.max_hp):
+						m.hp = minf(float(m.max_hp), float(m.hp) + float(m.max_hp) * rate * dt)
+						settled = false
+					if (m.pos as Vector2).distance_to(m.home) > 0.9:
+						settled = false
+				if str(camp.reset) == "soft" and s.time >= float(camp.reset_at):
+					camp.reset = "hard"
+					s._event("camp_reset", {"camp":int(camp.id), "hard":true})
+				if settled:
+					camp.reset = ""
+					camp.patience = 1.0
+					camp.hits = {}
+				continue
+		var tgt: Dictionary = s.by_id.get(str(camp.target), {})
+		if str(camp.target) != "" and (tgt.is_empty() or not s.alive(tgt)):
+			# its target fell: the latest other who hit it, still inside the leash; nobody -- reset
 			var best := ""
 			var bt := -INF
 			for hid in camp.hits:
@@ -1802,14 +2044,25 @@ func _step_camps(dt: float) -> void:
 					bt = float(camp.hits[hid])
 					best = str(hid)
 			camp.target = best
+			tgt = s.by_id.get(best, {})
 			if best == "":
-				camp.hits = {}
-		# left alone: they heal
+				_soft_reset(camp)
+				continue
 		if str(camp.target) == "":
 			for m in live:
-				if float(m.hp) < float(m.max_hp):
-					m.hp = minf(float(m.max_hp), float(m.hp) + float(m.max_hp) * RESET_HEAL * dt)
-		elif str(camp.kind) == "lord" and not live.is_empty() and s.time >= float(camp.slam):
+				if float(m.hp) < float(m.max_hp) - 0.5:
+					_soft_reset(camp)                # hurt with no one to fight (a stray blow): back and heal
+					break
+			continue
+		var d: float = (tgt.pos as Vector2).distance_to(camp.p)
+		if d > lr:
+			camp.patience = float(camp.patience) - dt * (PATIENCE_DRAIN + PATIENCE_FAR * (d - lr))
+			if float(camp.patience) <= 0.0:
+				_soft_reset(camp)
+				continue
+		else:
+			camp.patience = minf(1.0, float(camp.patience) + dt * PATIENCE_BACK)
+		if str(camp.kind) == "lord" and not live.is_empty() and s.time >= float(camp.slam):
 			# the Bone Lord's slam round him
 			camp.slam = s.time + LORD_SLAM_EVERY
 			var lord: Dictionary = live[0]
@@ -1821,17 +2074,71 @@ func _step_camps(dt: float) -> void:
 					hit += 1
 			s._event("lord_slam", {"id":lord.id, "pos":lord.pos, "n":hit})
 
+func _summon_lord(team: int) -> Dictionary:
+	# 0.31.158 (Kevin: "when a team kills the giant in middle, he will spawn on your side like a minion"): the Bone Lord
+	# comes out of the slayers' castle and marches down the middle lane with their minions, fighting like one (League's
+	# targeting), towers shooting him first but only 5 % a shot, and hitting towers and gates x LORD_SIEGE -- until he falls
+	_mid += 1
+	var id := "L%d" % _mid
+	var u: Dictionary = s._new_unit(id, team, true, "raid")
+	u.cls = "barbarian"
+	u["minion"] = true
+	u["mk"] = "lord"
+	u["lordling"] = true
+	u["look"] = "skel_lord"
+	u["mscale"] = 2.2
+	u["lane"] = 1
+	u["wp"] = 1
+	var grow := 1.0 + MON_GROW * float(s.time) / 60.0
+	u["m_hp"] = LORDLING_HP * grow
+	u["m_dmg"] = LORDLING_DMG * grow
+	u["m_spd"] = 0.8
+	u.max_hp = float(s.stat(u, "hp"))
+	u.hp = u.max_hp
+	var start := wp(team, 1, 0)
+	var ahead := (wp(team, 1, 1) - start).normalized()
+	u.pos = start + ahead * 2.5
+	u.face = s.angle_of(ahead)
+	u.think_at = s.time + s.TICK
+	s.units.append(u)
+	s.by_id[id] = u
+	s._event("lord_march", {"team":team, "id":id})
+	return u
+
+func _soft_reset(camp: Dictionary) -> void:
+	camp.reset = "soft"
+	camp.reset_at = s.time + SOFT_RESET
+	camp.target = ""
+	s._event("camp_reset", {"camp":int(camp.id), "hard":false})
+
 func _think_monster(u: Dictionary) -> void:
 	var camp: Dictionary = camps[int(u.mon)]
 	var home: Vector2 = u.home
-	var tgt: Dictionary = s.by_id.get(str(camp.target), {})
 	var lr := _leash(camp)
-	if not tgt.is_empty() and s.alive(tgt) and (tgt.pos as Vector2).distance_to(camp.p) <= lr \
-			and (u.pos as Vector2).distance_to(camp.p) <= lr + 4.0:
+	var tgt: Dictionary = s.by_id.get(str(camp.target), {})
+	if str(camp.reset) == "" and not tgt.is_empty() and s.alive(tgt):
 		u["resetting"] = false
-		s._fight(u, tgt)
+		if (tgt.pos as Vector2).distance_to(camp.p) <= lr:
+			s._fight(u, tgt)
+			return
+		# its target is outside the leash: to the leash's edge toward him (patience draining), shooting if he's in reach
+		var c: Dictionary = s.CLASSES[u.cls]
+		var d: float = (u.pos as Vector2).distance_to(tgt.pos)
+		if bool(c.ranged) and d <= float(c.range) * 0.9:
+			u.move = Vector2.ZERO
+			u.face = s.angle_of((tgt.pos as Vector2) - (u.pos as Vector2))
+			s._start_attack(u, "attack", false)
+			return
+		var edge: Vector2 = (camp.p as Vector2) + ((tgt.pos as Vector2) - (camp.p as Vector2)).normalized() * (lr - 0.5)
+		if (u.pos as Vector2).distance_to(edge) > 0.8:
+			s._nav_to(u, edge, 0.5)
+		else:
+			u.move = Vector2.ZERO
+			u.face = s.angle_of((tgt.pos as Vector2) - (u.pos as Vector2))
+			if d <= float(c.range) + s.UNIT_R + 0.2:
+				s._start_attack(u, "attack", false)
 		return
-	# nobody to fight: home, and stand
+	# resetting, or nobody to fight: home, and stand
 	if (u.pos as Vector2).distance_to(home) > 0.7:
 		u["resetting"] = true
 		s._nav_to(u, home, 0.4)
@@ -1857,6 +2164,8 @@ func _monster_down(dst: Dictionary, by_h: Dictionary) -> void:
 					(h.buffs as Dictionary)["lord"] = s.time + LORD_TIME
 			boss_go[side] = false
 		s._event("lord_down", {"team":side, "by":str(by_h.get("id", ""))})
+		if side >= 0:
+			_summon_lord(side)                         # 0.31.158 (Kevin): he rises again on their side, like a minion
 	else:
 		if not by_h.is_empty():
 			add_gold(by_h, float(md.gold), dst.pos)
@@ -1998,7 +2307,7 @@ func _go_lord(u: Dictionary) -> bool:
 	# their heroes at the pit first
 	for o in s.units:
 		if int(o.team) == 1 - int(u.team) and s.alive(o) and bool(o.get("hero", false)) and (o.pos as Vector2).distance_to(lord.pos) < 10.0 \
-				and (o.pos as Vector2).distance_to(u.pos) < 9.0:
+				and (o.pos as Vector2).distance_to(u.pos) < 9.0 and can_see(int(u.team), o):
 			_fight_h(u, o)
 			return true
 	_fight_h(u, lord)

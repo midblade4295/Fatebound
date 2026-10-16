@@ -2,12 +2,13 @@ extends SceneTree
 # 0.31.155 5V5 (the test; scripts/siege/moba.gd), the rules on the sim:
 #  1. the start: five heroes a side in their own classes (yours as picked; no Villagers, no hats on the stands), six
 #     towers a side beside the lanes, solid;
-#  2. the waves: every 30 s from 15 s, each castle sends 1 Knight, 2 Archers, 1 Priest down each lane; they march toward
-#     the enemy; a wave still alive when the next comes is caught up with (stacking);
+#  2. the waves: every 30 s from 15 s, each castle sends League's wave down each lane (0.31.158: 3 melee -- Knights --
+#     and 3 casters -- Archers; the siege minions and super minions are moba_more_test's); they march toward the enemy;
+#     a wave still alive when the next comes is caught up with (stacking);
 #  3. the towers (League's rules): the nearest minion first; an enemy hero who hurts one of its heroes in range -> him
-#     (call for help); heroes alone when no minion is in range; shots ramping on a hero (+40 % a shot, 3 times at most);
+#     (call for help); heroes alone when no minion is in range; shots ramping on a hero (+50 % a shot, 3 times at most);
 #     a minion loses 45 % (Knight) / 70 % of its health a shot; an inner tower can't be hurt while the outer stands; a
-#     tower without the attackers' minions near takes a third; a gate can't be hurt while an inner tower of a lane that
+#     tower without the attackers' minions near takes a fifth (melee heroes x1.2); a gate can't be hurt while an inner tower of a lane that
 #     leads to it stands;
 #  4. levels: XP from minions dying near you, a level up offers 3 upgrades, a pick applies; bots pick by themselves;
 #  5. a fallen hero: no hat, back as himself at his castle after 4 + 1.6 x level s; the castle heals; ACTION only for the
@@ -85,8 +86,9 @@ func _init() -> void:
 	var comp := {}
 	for u in w1:
 		comp["%d:%s" % [int(u.lane), u.cls]] = int(comp.get("%d:%s" % [int(u.lane), u.cls], 0)) + 1
-	check(w1.size() == 12 and _minions(s, 1).size() == 12 and comp.get("0:knight", 0) == 1 and comp.get("1:ranger", 0) == 2 and comp.get("2:priest", 0) == 1,
-		"at 0:15 each castle sends 12: per lane 1 Knight, 2 Archers, 1 Priest")
+	check(w1.size() == 18 and _minions(s, 1).size() == 18 and comp.get("0:knight", 0) == 3 and comp.get("1:ranger", 0) == 3 and comp.get("2:knight", 0) == 3
+		and not comp.has("0:priest") and not comp.has("1:priest") and not comp.has("2:priest"),
+		"at 0:15 each castle sends 18: per lane 3 melee (Knights), 3 casters (Archers), no Priests (%s)" % str(comp))
 	check(w1.all(func(u): return (u.pos as Vector2).distance_to(s.moba.wp(0, int(u.lane), 0)) < 6.0), "...from their own gate")
 	var z0: float = w1.map(func(u): return float(u.pos.y)).reduce(func(a, b): return a + b) / float(w1.size())
 	_run(s, 6.0)
@@ -111,7 +113,7 @@ func _init() -> void:
 						if (a.pos as Vector2).distance_to(b.pos) <= 8.0:
 							n += 1
 					most = maxi(most, n)
-	check(most > Moba.WAVE.size(), "waves stack: a wave still fighting when the next comes is joined by it (%d of one side's minions together)" % most)
+	check(most > 6, "waves stack: a wave still fighting when the next comes is joined by it (%d of one side's minions together)" % most)
 	# --- 3. the towers
 	var t = _new("knight", 5)
 	_park_heroes(t)
@@ -150,7 +152,7 @@ func _init() -> void:
 	bh.pos = twp + Vector2(3, 3)
 	tw.target = ""
 	shots = []
-	for e in _run(t, 1.0):
+	for e in _run(t, Moba.TOWER_EVERY + 0.3):
 		if e.k == "tshot" and int(e.tw) == int(tw.id):
 			shots.append(str(e.id))
 	check(not shots.is_empty() and shots[0] == "b1", "no minion in range: it shoots the hero")
@@ -162,11 +164,13 @@ func _init() -> void:
 	check(float(inner.hp) == ihp, "the inner tower can't be hurt while the outer stands")
 	var ohp := float(tw.hp)
 	t.moba.hit_tower(bh, int(tw.id), 100.0)
-	check(is_equal_approx(float(tw.hp), ohp - 100.0 * Moba.BACKDOOR), "the outer tower without our minions near: a third of the damage (%.0f)" % (ohp - float(tw.hp)))
+	var bm: float = t.moba.tower_mult(bh)
+	check(is_equal_approx(bm, Moba.MELEE_VS_TOWER), "a melee hero hits towers x%.1f (League: +20 %%)" % bm)
+	check(is_equal_approx(float(tw.hp), ohp - 100.0 * Moba.BACKDOOR * bm), "the outer tower without our minions near: a fifth of the damage (%.0f)" % (ohp - float(tw.hp)))
 	_add_minion(t, 0, "ranger", twp + Vector2(0, 8))
 	ohp = float(tw.hp)
 	t.moba.hit_tower(bh, int(tw.id), 100.0)
-	check(is_equal_approx(float(tw.hp), ohp - 100.0), "...with our minion near: all of it")
+	check(is_equal_approx(float(tw.hp), ohp - 100.0 * bm), "...with our minion near: all of it")
 	# gates
 	var red_gate: Dictionary = {}
 	for g in t.gates:
@@ -281,6 +285,7 @@ func _add_minion(s, team: int, cls: String, p: Vector2) -> Dictionary:
 	var u: Dictionary = s._new_unit(id, team, false, "raid")
 	u.cls = cls
 	u["minion"] = true
+	u["mk"] = {"knight":"melee", "ranger":"caster", "mage":"siege", "barbarian":"super"}.get(cls, "melee")     # (0.31.158)
 	u["lane"] = 0
 	u["wp"] = 1
 	u["m_hp"] = Moba.MINION_HP
