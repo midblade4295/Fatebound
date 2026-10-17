@@ -1,11 +1,15 @@
 extends Control
 # 0.31.155 5V5 (the test; scripts/siege/moba.gd): pick your hero, then BATTLE -- an offline 5v5 with bots on both sides
 # (siege_app.start_moba). Twelve heroes: the six classes and their six upgrades. The last pick is kept on the phone
-# (settings.moba_hero). Everything is unlocked for the test.
+# (settings.moba_hero). Everything is unlocked for the test. 0.31.167: by role, each card's role on it, and the picked
+# hero's role and kit (Q W E R) under the grid.
 const UI = preload("res://scripts/app/ui.gd")
 const UI2 = preload("res://scripts/app/ui2.gd")
 const SocialUI = preload("res://scripts/app/social_ui.gd")
 const Moba = preload("res://scripts/siege/moba.gd")
+const Kits = preload("res://scripts/siege/moba_kits.gd")      # 0.31.167: roles and kits
+const ROLE_COL := {"tank":"#6fa8dc", "fighter":"#e06666", "assassin":"#a48ae0", "mage":"#f6a24b", "marksman":"#8fd16f",
+	"support":"#ffd966"}
 
 const CARD_W := 74.0
 const CARD_H := 96.0
@@ -49,8 +53,8 @@ func open(a) -> void:
 	_grid.add_theme_constant_override("h_separation", 8)
 	_grid.add_theme_constant_override("v_separation", 8)
 	holder.add_child(_grid)
-	_info = UI2.body(body, "", 12, Color.WHITE)
-	_info.custom_minimum_size = Vector2(0, 54)
+	_info = UI2.body(body, "", 11, Color.WHITE)
+	_info.custom_minimum_size = Vector2(0, 120)
 	_go = UI2.button(body, "BATTLE", "orange", func():
 		app.profile.d.settings["moba_hero"] = hero
 		app.profile.save()
@@ -64,11 +68,29 @@ func _render() -> void:
 	for c in _grid.get_children():
 		_grid.remove_child(c)
 		c.queue_free()
-	for hid in Moba.HERO_ORDER:
+	# 0.31.167: by role (TANK, FIGHTER, ASSASSIN, MAGE, MARKSMAN, SUPPORT), each card tagged with its own
+	var order: Array = Moba.HERO_ORDER.duplicate()
+	order.sort_custom(func(a, b):
+		var ra := Kits.ROLE_ORDER.find(Kits.role_of(str(a)))
+		var rb := Kits.ROLE_ORDER.find(Kits.role_of(str(b)))
+		return ra < rb if ra != rb else Moba.HERO_ORDER.find(a) < Moba.HERO_ORDER.find(b))
+	for hid in order:
 		_grid.add_child(_card(str(hid)))
-	var u: Dictionary = Moba.ULTS.get(hero, {})
-	_info.text = "%s: %s\nULTIMATE (level %d) %s: %s" % [str(Moba.HEROES[hero].name), str(Moba.HERO_LINE.get(hero, "")), Moba.ULT_LEVEL,
-		str(u.get("name", "")), str(u.get("text", ""))]
+	_info.text = kit_text(hero)
+
+static func kit_text(hid: String) -> String:
+	# the hero's role and his kit: Q, W (level 2), E (level 3), R (level 6)
+	var role := Kits.role_of(hid)
+	var lines := ["%s · %s -- %s" % [str(Moba.HEROES[hid].name).to_upper(), str(Kits.ROLE_NAMES.get(role, "")),
+		str(Kits.ROLE_TEXT.get(role, ""))]]
+	var q := Kits.kit(hid, "q")
+	lines.append("Q %s: %s" % [str(q.get("name", "")), str(q.get("text", Moba.HERO_LINE.get(hid, "")))])
+	for slot in ["w", "e"]:
+		var k := Kits.kit(hid, slot)
+		lines.append("%s %s (lv %d): %s" % [slot.to_upper(), str(k.get("name", "")), int(Kits.UNLOCK[slot]), str(k.get("text", ""))])
+	var u: Dictionary = Moba.ULTS.get(hid, {})
+	lines.append("R %s (lv %d): %s" % [str(u.get("name", "")), Moba.ULT_LEVEL, str(u.get("text", ""))])
+	return "\n".join(lines)
 
 func _card(hid: String) -> Control:
 	var on := hid == hero
@@ -92,6 +114,19 @@ func _card(hid: String) -> Control:
 	tex.size = Vector2(CARD_W - 8, CARD_H - 24)
 	tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	b.add_child(tex)
+	var role := Kits.role_of(hid)                     # 0.31.167: the role, a strip across the top
+	var rc := Color(str(ROLE_COL.get(role, "#ffffff")))
+	var strip := ColorRect.new()
+	strip.color = Color(rc, 0.85)
+	strip.position = Vector2(4, 4)
+	strip.size = Vector2(CARD_W - 8, 13)
+	strip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	b.add_child(strip)
+	var rl := UI2.text(b, str(Kits.ROLE_NAMES.get(role, "")), 8, Color("#120a20"), Color(0, 0, 0, 0), 0, false)
+	rl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	rl.position = Vector2(0, 3)
+	rl.size = Vector2(CARD_W, 13)
+	rl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var nm := str(Moba.HEROES[hid].name).to_upper()
 	var nl := UI2.text(b, nm, 10 if nm.length() <= 9 else 9, Color.WHITE, Color("#120a20"), 4, false)
 	nl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

@@ -118,9 +118,11 @@ func _process(delta: float) -> bool:
 				for hid in Moba.HERO_ORDER:
 					if btn("moba_hero_" + str(hid)) != null:
 						n += 1
-				check(n == 12 and app.modal.hero == "knight" and has_text(app.modal, "Knight: Shield up"), "12 heroes; the Knight to start, described")
+				check(n == 12 and app.modal.hero == "knight" and has_text(app.modal, "KNIGHT · TANK") and has_text(app.modal, "W SHIELD BASH"),
+					"12 heroes; the Knight to start, described: his role and kit (0.31.167)")
 				press("moba_hero_archmage")
-				check(app.modal.hero == "archmage" and has_text(app.modal, "Archmage: Calls down a meteor"), "the Archmage picked")
+				check(app.modal.hero == "archmage" and has_text(app.modal, "ARCHMAGE · MAGE") and has_text(app.modal, "E MANA SHIELD"),
+					"the Archmage picked")
 				_shot("moba_heroes")
 				gold0 = int(app.profile.d.gold)
 				press("moba_battle")

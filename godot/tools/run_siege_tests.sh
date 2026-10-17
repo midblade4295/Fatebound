@@ -188,6 +188,9 @@ run moba_test            MOBA_PASS                480
 # building big items, one pair of boots, six slots, selling), the jungle (camps at 0:30, still until hit, leashed,
 # rewards and respawn, the buffs and passing them on, the Bone Lord and his blessing), a whole bot match
 run moba_more_test       MOBA_MORE_PASS           600
+# 0.31.167: roles (two of the twelve each of the six) and kits -- W at 2, E at 3, their recharges, each of the 24 doing
+# what it says, shields, slows, marks, poison, a fallen hero keeping nothing; the bots casting theirs
+run moba_kits_test       MOBA_KITS_PASS           400
 # 0.31.158: League's rules -- the fog of war (sight, brush, reveals, wards), the waves and minions' targets, the towers'
 # targets, shares, Warming Up, plates, gates back up; the camps' patience and resets; the Bone Lord marching
 run moba_lol_test        MOBA_LOL_PASS            300

@@ -979,6 +979,21 @@ func _buttons() -> Array:
 	var me: Dictionary = sim.by_id.get(player_id, {})
 	var ctx: String = "" if me.is_empty() else sim.context_action(me)
 	var br := Vector2(size.x, size.y)
+	if sim.moba != null and not me.is_empty() and bool(me.get("hero", false)):
+		# 0.31.167 5V5 (Kevin: "class roles like League of Legends"): Q, W, E and R in an arc round ATTACK (Wild Rift's
+		# layout), DODGE and WARD above them; on the narrowest screen (420 wide) Q and W reach as far left as the old
+		# ABILITY did. The Crusader's W is his shield, held (it was its own BLOCK button).
+		var crus: bool = me.cls == "knight" and bool(me.get("up", false))
+		var out5 := [
+			{"id":"attack", "c":br + Vector2(-78, -108), "r":46.0},
+			{"id":"ability", "c":br + Vector2(-178, -58), "r":32.0},
+			{"id":"block" if crus else "w", "c":br + Vector2(-188, -146), "r":32.0},
+			{"id":"e", "c":br + Vector2(-148, -226), "r":32.0},
+			{"id":"action" if ctx != "" else "ult", "c":br + Vector2(-66, -218), "r":36.0, "ctx":ctx},
+			{"id":"dodge", "c":br + Vector2(-46, -300), "r":28.0},
+			{"id":"ward", "c":br + Vector2(-122, -306), "r":24.0},
+		]
+		return out5
 	var out := [
 		{"id":"attack", "c":br + Vector2(-82, -118), "r":50.0},
 		{"id":"ability", "c":br + Vector2(-178, -78), "r":34.0},
@@ -1016,6 +1031,8 @@ func _input(event: InputEvent) -> void:
 			KEY_L, KEY_SHIFT: action_pressed.emit("dodge")
 			KEY_E: action_pressed.emit("action")
 			KEY_R: action_pressed.emit("ult")             # 0.31.157 5V5
+			KEY_U: action_pressed.emit("w")               # 0.31.167 5V5: W and E
+			KEY_I: action_pressed.emit("e")
 			KEY_T: action_pressed.emit("ward")            # 0.31.158 5V5
 			KEY_B:
 				if sim.moba != null:
@@ -2028,9 +2045,22 @@ func _draw_button(b: Dictionary, me: Dictionary) -> void:
 			col = Color("#2c4a6e")
 			rim = Color("#bcd8ff")
 			ready = not me.carrying
+		"w", "e":
+			# 0.31.167 5V5: W and E -- locked until their level (LV 2 / LV 3), then their name and recharge
+			var k: Dictionary = sim.moba.kits.kit(str(me.get("hid", "")), str(b.id))
+			var unl: bool = sim.moba.kits.unlocked(me, str(b.id))
+			label = str(k.get("short", k.get("name", "—"))) if unl else "LV %d" % int(sim.moba.kits.UNLOCK[str(b.id)])
+			col = Color("#1f4a33") if str(b.id) == "w" else Color("#4a2a1a")
+			rim = Color("#9ff0b8") if str(b.id) == "w" else Color("#ffc08a")
+			cd = float(me.get("cd_" + str(b.id), 0.0))
+			cd_max = maxf(0.1, float(k.get("cd", 1.0)))
+			ready = unl and cd <= 0.0 and sim.alive(me)
+			badge = str(b.id).to_upper()
 		"ability":
 			var ab := str(sim.ability_of(me))
 			label = ab.to_upper() if ab != "" else "—"
+			if sim.moba != null:
+				badge = "Q"
 			col = Color("#35226a")
 			rim = Color("#d6b8ff")
 			cd = me.cd_ability
@@ -2050,8 +2080,7 @@ func _draw_button(b: Dictionary, me: Dictionary) -> void:
 			if ready:
 				var pulse := 0.5 + 0.5 * sin(_time * 5.0)
 				draw_arc(c, r + 5.0 + 3.0 * pulse, 0, TAU, 48, Color(1.0, 0.84, 0.35, 0.35 + 0.4 * pulse), 4.0, true)
-			if unlocked and sim.moba.ult_rank(me) >= 2:
-				badge = "II"
+			badge = "R II" if unlocked and sim.moba.ult_rank(me) >= 2 else "R"
 		"ward":
 			# 0.31.158 5V5: a ward at your feet -- its charges in the corner, the next one filling in round the rim
 			var ch := float(me.get("ward_ch", 0.0))
@@ -2102,6 +2131,8 @@ func _draw_button(b: Dictionary, me: Dictionary) -> void:
 			draw_circle(bc, 9.0, Color("#0d2a33"))
 			draw_arc(bc, 9.0, 0, TAU, 24, rim, 1.5, true)
 			_text(bc + Vector2(0, 4), badge, 11, Color("#dff7ff"), _bold)
+		elif str(b.id) in ["ability", "w", "e"]:
+			_text(c + Vector2(0, -r + 13), badge, 10, Color(1, 1, 1, 0.75) if ready else Color(1, 1, 1, 0.35), _bold)
 		else:
 			_text(c + Vector2(0, -r + 12), badge, 11, Color("#ffe9a6"), _bold)
 

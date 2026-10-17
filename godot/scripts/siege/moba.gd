@@ -36,6 +36,9 @@ extends RefCounted
 #     give their killer a buff (ARCANE: abilities and the ultimate recharge faster; EMBER: harder hits); the Bone Lord
 #     gives his killers' whole side gold, XP and the LORD buff (harder hits; their minions come out stronger). Towers
 #     and minions leave them alone. One bot a side is the jungler; the bots gather for the Lord when they're ahead.
+# - 0.31.167 (Kevin: "We need more characters and class roles like League of Legends and heroes of the storm have"):
+#   League's six roles and kits of three abilities and the ultimate -- moba_kits.gd (ROLE_OF, KITS: Q the class's
+#   ability, W from level 2, E from 3, R the ultimate); each side drafted by role into League's five places (draft).
 #   * GOLD AND THE SHOP: GOLD_START, a trickle every second, last hits on minions, knockouts and assists, towers and
 #     camps. Items (ITEMS; ITEM_SLOTS of them) are bought in your own castle or while down -- the big ones are built from
 #     the small ones you own (their price is what's left) -- and sold back for SELL_BACK. Bots buy their class's BUILDS.
@@ -352,7 +355,9 @@ const WYRM_LEASH := 12.0                                     # (wider than the L
 const WYRM_GATHER := 3                                       # bots wait at the rim till this many of theirs are there
 
 const Vision = preload("res://scripts/siege/moba_vision.gd")
+const Kits = preload("res://scripts/siege/moba_kits.gd")      # 0.31.167: roles, W and E
 var s                                     # the sim
+var kits = null                           # 0.31.167: the heroes' W and E, and what they leave on units
 var vision = null                         # 0.31.158: the fog of war (moba_vision.gd)
 var rng := RandomNumberGenerator.new()
 var towers: Array = []                    # {id, team, lane, tier, p, hp, max_hp, dead, target, ramp, ramp_id, next}
@@ -416,6 +421,8 @@ func units_near(p: Vector2, r: float) -> Array:
 func begin(sim, my_hero: String, seed_value: int) -> void:
 	s = sim
 	rng.seed = seed_value
+	kits = Kits.new()
+	kits.setup(self)
 	s.match_time = MATCH_5V5
 	for st in s.stands:
 		st.stock = 0                      # (the shops stay as buildings; nothing to take)
@@ -439,25 +446,21 @@ func begin(sim, my_hero: String, seed_value: int) -> void:
 		s.obstacles.append({"p":o.pos, "r":KING_R, "kind":"moba_king", "kg":t, "team":t})
 	s._build_buckets()
 	s._build_nav()                        # (the towers block the way and stop arrows)
-	# the heroes: yours, then the bots' (no two the same on a side)
-	var pool: Array = HERO_ORDER.duplicate()
-	var lanes := [[-1, 0, 1, 2, JUNGLE], [0, 1, 2, JUNGLE, 1]]       # 0.31.157: one jungler a side
+	# the heroes: yours, then the bots' (no two the same on a side). 0.31.167 (League's roles): each side a team --
+	# top (a fighter or a tank), jungle (an assassin or a fighter), mid (a mage or an assassin), bottom (a marksman) and
+	# its support (a support or a tank) in the same lane; you take your role's place (your own lane is yours to choose),
+	# the bots fill the rest; the top and mid bots are the side's King runners
 	for t in 2:
-		var taken := []
-		if t == 0:
-			taken.append(my_hero if HEROES.has(my_hero) else "knight")
+		var mine := (my_hero if HEROES.has(my_hero) else "knight") if t == 0 else ""
+		var team := draft(mine)
 		var i := 0
 		for u in s.units:
-			if int(u.team) != t:
+			if int(u.team) != t or i >= team.size():
 				continue
-			var hid := ""
-			if t == 0 and i == 0:
-				hid = str(taken[0])
-			else:
-				var left := pool.filter(func(h): return not taken.has(h))
-				hid = str(left[rng.randi_range(0, left.size() - 1)])
-				taken.append(hid)
-			_make_hero(u, hid, int(lanes[t][mini(i, 4)]), (i in [1, 2]) if t == 0 else (i in [0, 1]))
+			var pk: Array = team[i]
+			var post := str(pk[1])
+			_make_hero(u, str(pk[0]), -1 if (t == 0 and i == 0) else int(POST_LANE[post]), post in ["top", "mid"])
+			u["post"] = post
 			i += 1
 	vision = Vision.new()                 # 0.31.158: the fog of war
 	vision.setup(self)
@@ -473,6 +476,44 @@ func _add_tower(team: int, lane: int, tier: int, p: Vector2) -> void:
 	towers.append({"id":id, "team":team, "lane":lane, "tier":tier, "p":p, "hp":TOWER_HP[tier], "max_hp":TOWER_HP[tier],
 		"dead":false, "target":"", "ramp":0, "ramp_id":"", "next":0.0})
 	s.obstacles.append({"p":p, "r":TOWER_R, "kind":"moba_tower", "tw":id, "team":team})
+
+# 0.31.167: a side's five places (League's) -- the lane each plays, the roles that fill it (first choice first), and the
+# place a role takes when it's yours
+const POSTS := ["top", "jungle", "mid", "bot", "support"]
+const POST_LANE := {"top":0, "jungle":JUNGLE, "mid":1, "bot":2, "support":2}
+const POST_ROLES := {"top":["fighter", "tank"], "jungle":["assassin", "fighter"], "mid":["mage", "assassin"], "bot":["marksman"],
+	"support":["support", "tank"]}
+const ROLE_POST := {"tank":"top", "fighter":"top", "assassin":"jungle", "mage":"mid", "marksman":"bot", "support":"support"}
+
+func draft(mine: String) -> Array:
+	# a side's five [hero, place]: yours first (if you play on it), then the bots' -- the specialised places filled first
+	var out := []
+	var taken := []
+	var open: Array = POSTS.duplicate()
+	if mine != "":
+		var mp := str(ROLE_POST.get(Kits.role_of(mine), "top"))
+		out.append([mine, mp])
+		taken.append(mine)
+		open.erase(mp)
+	for post in ["bot", "support", "mid", "jungle", "top"]:
+		if not open.has(post):
+			continue
+		var hid := ""
+		for role in POST_ROLES[post]:
+			var c: Array = HERO_ORDER.filter(func(h): return not taken.has(h) and Kits.role_of(str(h)) == str(role))
+			if not c.is_empty():
+				hid = str(c[rng.randi_range(0, c.size() - 1)])
+				break
+		if hid == "":
+			var any: Array = HERO_ORDER.filter(func(h): return not taken.has(h))
+			hid = str(any[rng.randi_range(0, any.size() - 1)])
+		taken.append(hid)
+		out.append([hid, post])
+	# in the side's own order: top, jungle, mid, bottom, support (yours stays first)
+	var head: Array = out.slice(0, 1) if mine != "" else []
+	var rest: Array = out.slice(head.size())
+	rest.sort_custom(func(a, b): return POSTS.find(str(a[1])) < POSTS.find(str(b[1])))
+	return head + rest
 
 func _make_hero(u: Dictionary, hid: String, lane: int, king_runner: bool) -> void:
 	var h: Dictionary = HEROES[hid]
@@ -506,9 +547,11 @@ func stat(u: Dictionary, key: String, base: Variant) -> Variant:
 		"dmg":
 			return float(base) * (1.1 if u.up else 1.0) * float(u.get("m_dmg", 1.0))
 		"speed":
-			return float(base) * float(u.get("m_spd", 1.0)) * (WARCRY_SPD if s.time < float(u.get("bl_until", -1.0)) else 1.0)
+			return float(base) * float(u.get("m_spd", 1.0)) * (WARCRY_SPD if s.time < float(u.get("bl_until", -1.0)) else 1.0) \
+				* (kits.speed_mult(u) if kits != null else 1.0)               # 0.31.167: slows and hastes
 		"windup", "recover":
-			return float(base) * float(u.get("m_as", 1.0)) * (WARCRY_AS if s.time < float(u.get("bl_until", -1.0)) else 1.0)
+			return float(base) * float(u.get("m_as", 1.0)) * (WARCRY_AS if s.time < float(u.get("bl_until", -1.0)) else 1.0) \
+				* (kits.swing_mult(u) if kits != null else 1.0)               # 0.31.167: FRENZY
 	return base
 
 func _apply(u: Dictionary) -> void:
@@ -604,6 +647,7 @@ func step(dt: float) -> void:
 	_step_camps(dt)
 	if s.profile: tv = s._p("m.camps", tv)
 	_step_rains(dt)
+	kits.step(dt)                                      # 0.31.167: zones, traps, poison
 	vision.step(dt)
 	if s.profile: tv = s._p("vision", tv)
 	var gold_on: bool = s.time >= WAVE_FIRST
@@ -626,6 +670,11 @@ func step(dt: float) -> void:
 			u.ult_cd = maxf(0.0, float(u.ult_cd) - dt * float(u.get("m_cdr", 1.0)) * (ARCANE_CDR if arcane else 1.0))
 			if arcane and float(u.cd_ability) > 0.0:
 				u.cd_ability = maxf(0.0, float(u.cd_ability) - dt * float(u.get("m_cdr", 1.0)) * (ARCANE_CDR - 1.0))
+			var cdk := dt * float(u.get("m_cdr", 1.0)) * (ARCANE_CDR if arcane else 1.0)     # 0.31.167: W and E
+			if float(u.get("cd_w", 0.0)) > 0.0:
+				u.cd_w = maxf(0.0, float(u.cd_w) - cdk)
+			if float(u.get("cd_e", 0.0)) > 0.0:
+				u.cd_e = maxf(0.0, float(u.cd_e) - cdk)
 			if gold_on:
 				u.gold = float(u.gold) + GOLD_PASSIVE * dt
 			if u.has("dance"):
@@ -1062,9 +1111,11 @@ func on_damage(src: Dictionary, dst: Dictionary, amount: float) -> void:
 		return
 	if vision != null and s.by_id.has(str(src.get("id", ""))):
 		vision.reveal(src)                                   # 0.31.158: attacking shows you for 2 s
-	var ls := float(src.get("m_ls", 0.0))
+	var ls: float = float(src.get("m_ls", 0.0)) + float(kits.lifesteal_add(src))        # (0.31.167: BLOODLUST)
 	if ls > 0.0 and amount > 0.0 and src.has("hp") and s.alive(src):
 		s._heal(src, src, amount * ls)
+	if s._basic_by != "" and s._basic_by == str(src.get("id", "")) and int(src.get("poison_n", 0)) > 0:
+		kits.poison_hit(src, dst, amount)                   # 0.31.167: POISON BLADES
 	if bool(dst.get("hero", false)) and bool(src.get("hero", false)):
 		dst["hh_by"] = str(src.id)
 		dst["hh_at"] = s.time
@@ -1095,6 +1146,7 @@ func on_damage(src: Dictionary, dst: Dictionary, amount: float) -> void:
 					camp.patience = minf(1.0, float(camp.patience) + 0.15)      # (a blow from inside: patience back)
 
 func on_kill(src: Dictionary, dst: Dictionary) -> void:
+	kits.clear(dst)                              # 0.31.167: shields, slows, poison... gone
 	dst["died_at"] = s.time
 	dst["died_hat"] = -1
 	dst.task = {}
@@ -1374,7 +1426,7 @@ func _think_hero(u: Dictionary) -> void:
 			_hit_structure(u, kt)
 			return
 	# 0.31.157: the ultimate when it's worth it (before running home: GRACE, BULWARK, UNDYING are for hard moments)
-	if _bot_ult(u):
+	if _bot_ult(u) or kits.bot_spells(u):              # (0.31.167: W and E too)
 		return
 	# hurt: home to heal
 	if bool(u.get("back", false)):
@@ -1754,6 +1806,8 @@ func mod_damage(src: Dictionary, dst: Dictionary, amount: float) -> float:
 	if t < float(dst.get("dr_until", -1.0)):
 		a *= 1.0 - float(dst.get("dr", 0.0))
 	a *= 1.0 - float(dst.get("m_armor", 0.0))
+	if kits != null:
+		a = kits.taken(src, dst, a)                         # 0.31.167: marks and curses, then shields
 	if t < float(dst.get("ud_until", -1.0)):
 		a = minf(a, maxf(0.0, float(dst.hp) - 1.0))         # UNDYING: never below 1
 	if dst.has("mon") and str(camps[int(dst.mon)].reset) == "hard":

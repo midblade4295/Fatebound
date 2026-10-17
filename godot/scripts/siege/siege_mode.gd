@@ -885,6 +885,13 @@ func _on_action(kind: String) -> void:
 					hud.toast("Your ultimate comes at level %d" % sim.moba.ULT_LEVEL, Color("#ffcf7a"))
 				elif not me_u.is_empty() and float(me_u.get("ult_cd", 0.0)) <= 0.0 and sim.can_act(me_u):
 					hud.toast("No enemy in reach", Color("#ffcf7a"))         # (EXECUTE, FLURRY: they need someone near)
+		"w", "e":                                        # 0.31.167 5V5: W and E
+			if sim != null and sim.moba != null and not sim.act(hud.player_id, "spell", kind):
+				var me_s: Dictionary = sim.by_id.get(hud.player_id, {})
+				if not me_s.is_empty() and not sim.moba.kits.unlocked(me_s, kind):
+					hud.toast("%s comes at level %d" % [kind.to_upper(), int(sim.moba.kits.UNLOCK[kind])], Color("#ffcf7a"))
+				elif not me_s.is_empty() and float(me_s.get("cd_" + kind, 0.0)) <= 0.0 and sim.can_act(me_s):
+					hud.toast("No enemy hero in reach", Color("#ffcf7a"))       # (SHADOW STEP, MARK, CURSE need one)
 		"ward":                                          # 0.31.158 5V5: a ward at your feet
 			if sim != null and sim.moba != null:
 				if sim.act(hud.player_id, "ward"):
@@ -1229,6 +1236,16 @@ func _listener() -> Vector2:
 		return me.pos
 	return _step_last if _step_last != Vector2.INF else Vector2.ZERO
 
+# 0.31.167: each W/E's sound -- [cue, takes, gain]
+const SPELL_CUE := {"bash":["tm_sword_block", 3, 1.0], "rally":["surge", 1, 0.7], "consecrate":["magic", 1, 0.8],
+	"leap":["tm_jump_dirt", 1, 1.0], "bloodlust":["rampage", 1, 0.6], "charge":["tm_sword_swing", 3, 1.0],
+	"frenzy":["rampage", 1, 0.5], "caltrops":["tm_rock_throw", 2, 0.8], "poison":["tm_unsheath", 2, 0.9],
+	"shadowstep":["shadow", 1, 0.7], "knives":["tm_sword_swing", 3, 0.9], "tumble":["tm_jump_dirt", 1, 0.9],
+	"snare":["tm_bow_shot", 2, 1.0], "trap":["tm_unlock", 1, 0.9], "mark":["crit", 1, 0.6],
+	"pillar":["tm_firespray", 2, 0.8], "blink":["magic", 1, 0.6], "missiles":["tm_spell_hit", 3, 0.9],
+	"manashield":["magic", 1, 0.7], "holylight":["magic", 1, 0.9], "dazzle":["surge", 1, 0.7],
+	"boneshield":["tm_revive", 1, 0.9], "curse":["shadow", 1, 0.6]}
+
 func _cue(base: String, n: int, at: Vector2, reach := HEAR_R, always := false, gain := 1.0) -> void:
 	if audio == null or not audio.has_method("play"):
 		return
@@ -1348,6 +1365,15 @@ func _event_sound(e: Dictionary) -> void:
 		"lord_down", "camp_up", "lord_march", "wyrm_down":
 			if str(e.k) != "camp_up" or str(e.get("kind", "")) in ["lord", "wyrm"]:
 				_cue("horn", 1, Vector2.INF, 0.0, true, 0.8)
+		"spell":                                               # 0.31.167: W and E, each its sound
+			var sc: Array = SPELL_CUE.get(str(e.get("spell", "")), ["tm_spell_hit", 3, 0.8])
+			_cue(str(sc[0]), int(sc[1]), e.get("pos", Vector2.INF), 30.0, mine, float(sc[2]))
+		"slam":
+			_cue("tm_rock_hit", 2, e.get("pos", Vector2.INF), 30.0, false, 0.9)
+		"pillar":
+			_cue("tm_fireball", 3, e.get("c", Vector2.INF), 30.0, false, 1.0)
+		"trap_snap":
+			_cue("tm_chest_close", 2, e.get("pos", Vector2.INF), 24.0, false, 1.0)
 		"wyrm_breath":                                         # 0.31.166: the Grave Wyrm's soul-fire
 			_cue("tm_fireball", 3, e.get("pos", Vector2.INF), 40.0, false, 1.0)
 		"buff":

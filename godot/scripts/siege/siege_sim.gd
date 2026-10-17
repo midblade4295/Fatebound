@@ -262,6 +262,7 @@ const AI_EVERY := 0.15            # seconds between a bot's decisions (_think; _
 const AI_SPREAD := 5              # the bots' first decisions fall on this many consecutive ticks (0.15 s = 4.5 ticks)
 var _cmd_clock := 0.0
 var _next_proj := 1
+var _basic_by := ""                  # 0.31.167: whose basic attack is landing right now (POISON BLADES), else ""
 
 # ---------- map ----------
 static func _m(team: int, p: Vector2) -> Vector2:
@@ -828,6 +829,8 @@ func act(id: String, action: String, arg: Variant = null) -> bool:
 			return moba != null and moba.pick(u, int(arg))
 		"ult":                                       # 0.31.157 5V5: the ultimate (level 6)
 			return moba != null and moba.ult(u)
+		"spell":                                     # 0.31.167 5V5: W or E (arg: "w" / "e")
+			return moba != null and moba.kits.spell(u, str(arg))
 		"ward":                                      # 0.31.158 5V5: a ward at your feet (the fog of war)
 			return moba != null and moba.ward(u)
 		"shop_buy":                                  # 0.31.157 5V5: an item (arg: its id) -- in your castle or while down
@@ -1730,7 +1733,7 @@ func _lob_at_rampart(u: Dictionary, d: Vector2, reach: float) -> bool:
 func _shoot(u: Dictionary, angle: float, dmg: float, aoe: float, speed: float, reach: float) -> void:
 	var d := dir_of(angle)
 	projectiles.append({"id":_next_proj,"team":u.team,"owner":u.id,"pos":u.pos + d*0.6,"from":u.pos,"vel":d*speed,
-		"dmg":dmg,"aoe":aoe,"life":reach/speed,"kind":"fire" if aoe > 0.0 else "arrow",
+		"dmg":dmg,"aoe":aoe,"life":reach/speed,"kind":"fire" if aoe > 0.0 else "arrow", "basic":u.atk == "attack",
 		"gate_mult":float(CLASSES[u.cls].gate),
 		# Shot from the rampart (or a terrace), or aimed at an enemy ON a rampart, or from the top of a tower:
 		# flies over the castle walls and gates (Round 15; Round 38; towers 0.30.0).
@@ -1750,6 +1753,8 @@ func _resolve_attack(u: Dictionary) -> void:
 	var c: Dictionary = CLASSES[u.cls]
 	var dmg := float(stat(u,"dmg"))
 	if u.atk == "attack":
+		if moba != null:
+			dmg *= moba.kits.on_basic(u)               # 0.31.167: TUMBLE's shot
 		if c.ranged:
 			if float(c.proj_speed) <= 0.0:
 				return                                 # 0.31.157: a Priest's "attack" is his beam -- no shot (a bot's swing
@@ -1757,7 +1762,9 @@ func _resolve_attack(u: Dictionary) -> void:
 			# 0.31.5 balance: the Mage's fireball does 10 % less (MAGE_BOLT); her nova keeps its damage and size.
 			_shoot(u, u.face, dmg * (MAGE_BOLT if u.cls == "mage" else 1.0), float(c.aoe), float(c.proj_speed), float(c.range) * tower_range(u))
 		else:
+			_basic_by = str(u.id)                      # (0.31.167: the hit is a basic attack -- POISON BLADES)
 			_melee(u, float(c.range), float(c.arc), dmg)
+			_basic_by = ""
 		return
 	match ability_of(u):
 		"pierce":
@@ -1892,6 +1899,12 @@ func _step_unit(u: Dictionary, dt: float) -> void:
 			if not _net_moves(u):
 				u.pos += u.dodge_dir * DODGE_SPEED * dt
 			if u.t <= 0.0:
+				u.state = "idle"
+			return
+		"dash":                                       # 0.31.167 5V5: a W/E's charge, leap or roll (moba_kits.gd)
+			if moba != null:
+				moba.kits.step_dash(u, dt)
+			else:
 				u.state = "idle"
 			return
 	if u.workshop_open:
@@ -2419,12 +2432,14 @@ func _step_projectiles(dt: float) -> void:
 		if hit.is_empty() and not blocked and p.life > 0.0 and absf(p.pos.x) < HALF_W + 2 and absf(p.pos.y) < HALF_L + 2:
 			continue
 		var owner: Dictionary = by_id.get(p.owner, {"team":p.team})
-		if not hit_gate.is_empty():
+		var spell_p := p.has("spell")                  # (0.31.167: a W/E's shot: heroes and minions only)
+		if not hit_gate.is_empty() and not spell_p:
 			_damage_gate(owner, hit_gate, p.dmg * float(p.gate_mult))
-		if hit_tw >= 0 and moba != null and hit.is_empty():
+		if hit_tw >= 0 and moba != null and hit.is_empty() and not spell_p:
 			moba.hit_tower(owner, hit_tw, float(p.dmg))
-		if hit_kg >= 0 and moba != null and hit.is_empty():
+		if hit_kg >= 0 and moba != null and hit.is_empty() and not spell_p:
 			moba.hit_king(owner, hit_kg, float(p.dmg))
+		_basic_by = str(p.owner) if bool(p.get("basic", false)) else ""
 		if p.aoe > 0.0:
 			if not hit.is_empty():
 				_next_push = _push_along(p.vel, 3.6, 1.4)
@@ -2437,7 +2452,10 @@ func _step_projectiles(dt: float) -> void:
 			_event("boom", {"pos":p.pos})
 		elif not hit.is_empty():
 			_next_push = _push_along(p.vel, 3.2, 1.2)
-			_damage(owner, hit, p.dmg)
+			_damage(owner, hit, p.dmg, float(p.get("stun", 0.0)))      # (0.31.167: SNARE ARROW roots)
+			if spell_p and moba != null:
+				moba.kits.proj_hit(p, hit)
+		_basic_by = ""
 		_event("proj_end", {"pid":p.id, "pos":p.pos})      # pos = the impact point (clients fly it there)
 		projectiles.remove_at(i)
 

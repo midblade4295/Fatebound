@@ -5065,3 +5065,41 @@ role), heroes unlocked with gold.
   armour, halberd), Assassin A (a masked duelist: rapier and parrying dagger), Mage B (a storm caller: lightning
   staff), Marksman A (a musketeer: long flintlock), Support B (an antlered druid: a living staff).
   reports/concepts/hero_<golem|dragoon|duelist|stormcaller|musketeer|druid>_pick.png.
+
+## 0.31.167 — 5V5: roles and kits (Q W E R)
+Kevin: "We need more characters and class roles like League of Legends and heroes of the storm have" -> League's six
+roles, three abilities and the ultimate (the six new heroes, unlocked with gold, come next: concepts and Meshy bodies
+above).
+- Roles (scripts/siege/moba_kits.gd ROLE_OF): TANK Knight, Crusader; FIGHTER Barbarian, Berserker; ASSASSIN Rogue,
+  Assassin; MAGE Mage, Archmage; MARKSMAN Archer, Ranger; SUPPORT Priest, Necromancer.
+- Kits: Q the class's ability as before, W from level 2, E from level 3, R the ultimate (level 6). The 24 new ones:
+  Knight SHIELD BASH (charge, first hit stunned) / RALLY (shields on him and allies near); Crusader W his shield (held;
+  it was its own button) / CONSECRATE (holy ground: enemies slowed and burnt, allies healed); Barbarian LEAP (onto a
+  hero, slam and slow) / BLOODLUST (lifesteal, haste); Berserker RECKLESS CHARGE (through them) / FRENZY (heal, quicker
+  swings); Rogue CALTROPS (a slowing, cutting patch) / POISON BLADES (three poisoned hits); Assassin SHADOW STEP (behind
+  a hero, strike) / FAN OF KNIVES (a fan: damage and slow); Archer TUMBLE (a roll, the next shot harder) / SNARE ARROW
+  (roots the first hit); Ranger BEAR TRAP (two at most, catches and shows the first enemy on it) / HUNTER'S MARK (seen,
+  20 % more damage taken); Mage FIRE PILLAR (erupts under an enemy: damage, stun) / BLINK; Archmage ARCANE MISSILES
+  (three bolts) / MANA SHIELD; Priest HOLY LIGHT (big heal, frees from slows) / DAZZLE (stuns all round); Necromancer
+  BONE SHIELD (on the most hurt ally) / CURSE (slow, more damage taken). Their effects live on the units for the rest of
+  the rules: shields take hits first (stacking to 60 % of health), slows and hastes in the speed, marks and curses in
+  the damage taken, quicker swings, lifesteal, poison ticking; a fallen hero keeps none of it. Spells' shots don't hurt
+  towers, gates or Kings. Recharges count ability speed and ARCANE like the ultimate's.
+- Bots cast theirs when it's worth it (an enemy hero in reach, a crowd, a hurt ally, low health); in two 10-minute bot
+  matches all 20 that bots use were cast, 7-37 times each.
+- The draft: each side gets League's five places -- top (a fighter or a tank), jungle (an assassin or a fighter), mid (a
+  mage or an assassin), bottom (a marksman) and its support (a support or a tank) in the same east lane; you take your
+  role's place (your lane's your own), the bots fill the rest; the top and mid bots run for the King.
+- HUD: Q, W, E and R in an arc round ATTACK (Wild Rift's layout), DODGE and WARD above (420 wide, Q and W reach as far
+  left as the old ABILITY); W and E show LV 2 / LV 3 until theirs, then their name and recharge; a letter on each. Keys
+  U and I. A toast when one's locked or has no hero to aim at.
+- The view: the caster's clip, a burst in the spell's colour shaped by what it is; shields as a bubble round a hero, a
+  pale ring under the slowed, a red one under the marked or cursed, green sparks off the poisoned, sparks behind a
+  dash; holy ground and caltrops a ring and a faint disc for their time, the fire pillar's warning circle until it
+  erupts; your side's traps. Sounds for each.
+- The 5V5 window: heroes by role, each card's role on a strip across the top, the picked hero's role and kit (Q W E R
+  with their levels).
+- Tests: moba_kits_test (new: roles, the draft, unlocks and recharges, each of the 24, shields/slows/marks/poison, a
+  fallen hero, bots casting); moba_ui_test (the window's role and kit). tools/kit_shots.gd (review shots of the HUD and
+  casts). The server installs moba_kits.gd (the sim loads it).
+- Version 0.31.167, versionCode 253, SERVER_BUILD 0.31.167.

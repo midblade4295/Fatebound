@@ -4289,6 +4289,7 @@ func _sync_moba() -> void:
 	_sync_rains()
 	_sync_auras()
 	_sync_breaths()
+	_sync_kits()                               # 0.31.167: W and E
 	_sync_fog()
 	_sync_wards()
 	var me: Dictionary = sim.by_id.get(player_id, {})
@@ -4651,6 +4652,214 @@ func _moba_fx(e: Dictionary) -> void:
 				ring_at(wp3, Color("#8fe3ff"), 3.0, 0.5)
 				for i in 5:
 					spark(wp3 + Vector3(randf_range(-0.3, 0.3), 0.4 + randf() * 1.0, randf_range(-0.3, 0.3)), Color("#bdf0ff"))
+
+# ---------- 0.31.167: W and E (moba_kits.gd) ----------
+# Each cast: its caster's clip (SPELL_CLIP) and a burst in its colour (SPELL_COL) shaped by what it is -- rings for the
+# area ones, a trail for the dashes, sparks at both ends of a blink or a shadow step, a fan for the knives, a pillar of
+# light for HOLY LIGHT, fire for the pillar's eruption. What lasts is drawn while it lasts (_sync_kits): a shield is a
+# glowing bubble round its hero, a slow a pale ring at his feet, a mark or a curse a red one, poison green sparks rising;
+# holy ground and caltrops a ring on the ground for their time, a fire pillar's warning circle until it erupts; your
+# side's bear traps (theirs are hidden).
+const SPELL_CLIP := {"bash":"m/Melee_Block_Attack", "rally":"r/Ranged_Magic_Raise", "consecrate":"r/Ranged_Magic_Raise",
+	"leap":"m/Melee_1H_Attack_Jump_Chop", "bloodlust":"r/Ranged_Magic_Raise", "charge":"mb/Running_B", "frenzy":"r/Ranged_Magic_Raise",
+	"caltrops":"g/Throw", "poison":"g/Use_Item", "shadowstep":"m/Melee_Dualwield_Attack_Stab", "knives":"g/Throw",
+	"tumble":"ma/Dodge_Forward", "snare":"r/Ranged_Bow_Release", "trap":"g/Interact", "mark":"g/Interact",
+	"pillar":"r/Ranged_Magic_Spellcasting", "missiles":"r/Ranged_Magic_Shoot", "manashield":"r/Ranged_Magic_Raise",
+	"holylight":"r/Ranged_Magic_Spellcasting", "dazzle":"r/Ranged_Magic_Raise", "boneshield":"r/Ranged_Magic_Spellcasting",
+	"curse":"r/Ranged_Magic_Shoot"}
+const SPELL_COL := {"bash":"#bcd8ff", "rally":"#ffd65a", "consecrate":"#ffe9a6", "leap":"#e0c9a0", "bloodlust":"#ff3a2a",
+	"charge":"#ff6a3a", "frenzy":"#ff5a3a", "caltrops":"#b8b8b8", "poison":"#7dff6a", "shadowstep":"#9a6bff", "knives":"#d8d0ff",
+	"tumble":"#e0d0b0", "snare":"#cfe8b8", "trap":"#a08060", "mark":"#ff4a4a", "pillar":"#ff8a3a", "blink":"#8fc8ff",
+	"missiles":"#c070ff", "manashield":"#7fb8ff", "holylight":"#fff1a8", "dazzle":"#ffffff", "boneshield":"#e8e0c8",
+	"curse":"#b04aff"}
+var _zone_nodes := {}                      # zone id -> its ring
+var _trap_nodes := {}                      # trap id -> its mesh
+var _kit_marks := {}                       # unit id -> {"shield": node, "slow": node, "amp": node}
+var _kit_next := 0.0
+
+func _kit_fx(e: Dictionary) -> void:
+	var a: Dictionary = actors.get(str(e.get("id", "")), {})
+	var shown: bool = not a.is_empty() and is_instance_valid(a.root) and (a.root as Node3D).visible
+	match str(e.k):
+		"spell":
+			var sp := str(e.spell)
+			var col := Color(str(SPELL_COL.get(sp, "#ffffff")))
+			if not shown and int(e.get("team", -1)) != _my_team():
+				return
+			if not a.is_empty() and SPELL_CLIP.has(sp):
+				_play(a, str(SPELL_CLIP[sp]), 1.4 if sp != "charge" else 1.8, 0.45)
+			var at: Vector3 = (a.root as Node3D).position if shown else _ground(e.pos)
+			match sp:
+				"rally", "dazzle", "consecrate":
+					var r := float(e.get("r", 4.0))
+					for i in 2:
+						ring_at(at, col, 2.0 * r - 0.4 - 1.2 * i, 0.55 + 0.15 * i)
+					for i in 10:
+						var ang := randf() * TAU
+						spark(at + Vector3(cos(ang) * r * 0.6, 0.3 + randf() * 1.2, sin(ang) * r * 0.6), col)
+					if sp == "dazzle":
+						_pack_explosion("light", at + Vector3(0, 1.2, 0), 0.7)
+				"bash", "charge", "tumble", "leap", "bloodlust", "frenzy", "manashield", "poison", "trap":
+					ring_at(at, col, 2.2, 0.45)
+					for i in 6:
+						spark(at + Vector3(randf_range(-0.5, 0.5), 0.3 + randf() * 1.4, randf_range(-0.5, 0.5)), col)
+				"shadowstep", "blink":
+					for p2 in [e.get("from", e.pos), e.get("to", e.pos)]:
+						var q := _ground(p2, 0.2)
+						for i in 8:
+							spark(q + Vector3(randf_range(-0.5, 0.5), randf() * 1.8, randf_range(-0.5, 0.5)), col)
+						ring_at(q, col, 1.8, 0.4)
+				"knives":
+					var d2: Vector2 = e.get("dir", Vector2(0, 1))
+					var r2 := float(e.get("r", 5.0))
+					for i in 14:
+						var off := d2.rotated(randf_range(-0.7, 0.7)) * randf_range(0.8, r2)
+						spark(_ground((e.pos as Vector2) + off, 0.9 + randf() * 0.4), col)
+				"caltrops", "pillar":
+					var c2: Vector2 = e.get("c", e.pos)
+					for i in 8:
+						spark(_ground(c2 + Vector2(randf_range(-1.2, 1.2), randf_range(-1.2, 1.2)), 0.2 + randf() * 0.6), col)
+				"holylight", "boneshield", "curse", "mark":
+					var tu: Dictionary = sim.by_id.get(str(e.get("target", "")), {})
+					if not tu.is_empty():
+						var tp := _ground(tu.pos, 0.1)
+						ring_at(tp, col, 2.4, 0.6)
+						for i in (14 if sp == "holylight" else 8):
+							spark(tp + Vector3(randf_range(-0.4, 0.4), randf() * (3.2 if sp == "holylight" else 1.8), randf_range(-0.4, 0.4)), col)
+		"slam":
+			var sp2 := _ground(e.pos, 0.2)
+			var r3 := float(e.get("r", 2.5))
+			ring_at(sp2, Color("#e0c9a0"), 2.0 * r3, 0.5)
+			shockwave(sp2, r3)
+			for i in 10:
+				spark(sp2 + Vector3(randf_range(-r3, r3) * 0.6, 0.2 + randf() * 0.8, randf_range(-r3, r3) * 0.6), Color("#c8b89a"))
+			var me: Dictionary = sim.by_id.get(player_id, {})
+			if not me.is_empty() and (me.pos as Vector2).distance_to(e.pos) < 12.0:
+				shake(0.25)
+		"pillar":
+			var pp := _ground(e.c, 0.2)
+			_pack_explosion("light", pp + Vector3(0, 0.8, 0), 1.3)
+			ring_at(pp, Color("#ff8a3a"), 2.0 * float(e.r), 0.55)
+			for i in 12:
+				spark(pp + Vector3(randf_range(-1.0, 1.0), randf() * 3.0, randf_range(-1.0, 1.0)), Color("#ffb04a"))
+		"trap_snap":
+			var tp2 := _ground(e.pos, 0.15)
+			ring_at(tp2, Color("#a08060"), 1.6, 0.4)
+			for i in 6:
+				spark(tp2 + Vector3(randf_range(-0.3, 0.3), randf() * 0.6, randf_range(-0.3, 0.3)), Color("#d8d0c0"))
+			if _trap_nodes.has(int(e.trap)):
+				(_trap_nodes[int(e.trap)] as Node3D).queue_free()
+				_trap_nodes.erase(int(e.trap))
+		"trap_gone":
+			if _trap_nodes.has(int(e.trap)):
+				(_trap_nodes[int(e.trap)] as Node3D).queue_free()
+				_trap_nodes.erase(int(e.trap))
+
+func _sync_kits() -> void:
+	var kits = sim.moba.kits
+	var t: float = sim.time
+	var my := _my_team()
+	# zones: a ring for each, its colour; a pillar's warning circle until it erupts
+	var live := {}
+	for z in kits.zones:
+		var zid := int(z.zid)
+		live[zid] = true
+		if not _zone_nodes.has(zid):
+			# its edge (a ring) and a faint disc over the ground it covers
+			var zc := Color(str(SPELL_COL.get(str(z.spell), "#ffffff")))
+			var mi := MeshInstance3D.new()
+			mi.mesh = _ring_mesh(float(z.r), 0.16)
+			zc.a = 0.9
+			mi.material_override = _fx_mat(zc)
+			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			mi.position = _ground(z.at, 0.12)
+			mi.scale = Vector3(1.0, 0.4, 1.0)
+			var disc := MeshInstance3D.new()
+			var cm := CylinderMesh.new()
+			cm.top_radius = float(z.r)
+			cm.bottom_radius = float(z.r)
+			cm.height = 0.02
+			cm.radial_segments = 32
+			disc.mesh = cm
+			zc.a = 0.16 if not z.has("delay_at") else 0.3
+			disc.material_override = _unshaded(zc)
+			disc.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			mi.add_child(disc)
+			add_child(mi)
+			_zone_nodes[zid] = mi
+		var zn: MeshInstance3D = _zone_nodes[zid]
+		if z.has("delay_at"):
+			zn.rotation.y = _time * 2.0
+		elif not low_fx and _time >= _kit_next and randf() < 0.5:
+			var ang := randf() * TAU
+			var rr := sqrt(randf()) * float(z.r)
+			spark(_ground((z.at as Vector2) + Vector2(cos(ang), sin(ang)) * rr, 0.2), Color(str(SPELL_COL.get(str(z.spell), "#ffffff"))))
+	for z in _zone_nodes.keys():
+		if not live.has(z):
+			(_zone_nodes[z] as Node3D).queue_free()
+			_zone_nodes.erase(z)
+	# your side's traps
+	for tr in kits.traps:
+		if int(tr.team) != my or _trap_nodes.has(int(tr.id)):
+			continue
+		var tm := MeshInstance3D.new()
+		tm.mesh = _ring_mesh(0.45, 0.16)
+		tm.material_override = _unshaded(Color(0.55, 0.45, 0.32, 0.9), false)
+		tm.position = _ground(tr.at, 0.05)
+		tm.scale = Vector3(1.0, 0.5, 1.0)
+		add_child(tm)
+		_trap_nodes[int(tr.id)] = tm
+	# what lasts on heroes: shields, slows, marks, poison
+	var spark_now := _time >= _kit_next
+	if spark_now:
+		_kit_next = _time + 0.15
+	for id in actors:
+		var u: Dictionary = sim.by_id.get(str(id), {})
+		if u.is_empty() or not bool(u.get("hero", false)):
+			continue
+		var a: Dictionary = actors[id]
+		if not is_instance_valid(a.root):
+			continue
+		var marks: Dictionary = _kit_marks.get(id, {})
+		var vis: bool = (a.root as Node3D).visible and sim.alive(u)
+		_kit_mark(a, marks, "shield", vis and float(u.get("shield", 0.0)) > 0.0 and t < float(u.get("shield_until", -1.0)))
+		_kit_mark(a, marks, "slow", vis and t < float(u.get("slow_until", -1.0)))
+		_kit_mark(a, marks, "amp", vis and t < float(u.get("amp_until", -1.0)))
+		_kit_marks[id] = marks
+		if vis and spark_now and u.has("dots") and not low_fx:
+			spark((a.root as Node3D).position + Vector3(randf_range(-0.3, 0.3), 0.6 + randf() * 1.2, randf_range(-0.3, 0.3)), Color("#7dff6a"))
+		if vis and u.state == "dash" and not low_fx:
+			spark((a.root as Node3D).position + Vector3(randf_range(-0.3, 0.3), 0.3 + randf() * 0.8, randf_range(-0.3, 0.3)), Color("#e0d0b0"))
+
+func _kit_mark(a: Dictionary, marks: Dictionary, kind: String, on: bool) -> void:
+	var n = marks.get(kind)
+	if on and (n == null or not is_instance_valid(n)):
+		var mi := MeshInstance3D.new()
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		match kind:
+			"shield":
+				var sm := SphereMesh.new()
+				sm.radius = 0.95
+				sm.height = 2.3
+				sm.radial_segments = 16
+				sm.rings = 8
+				mi.mesh = sm
+				mi.material_override = _unshaded(Color(0.45, 0.75, 1.0, 0.22))
+				mi.position = Vector3(0, 1.0, 0)
+			"slow":
+				mi.mesh = _ring_mesh(0.7, 0.1)
+				mi.material_override = _fx_mat(Color(0.7, 0.9, 1.0, 0.8))
+				mi.position = Vector3(0, 0.1, 0)
+			"amp":
+				mi.mesh = _ring_mesh(0.85, 0.08)
+				mi.material_override = _fx_mat(Color(1.0, 0.3, 0.3, 0.85))
+				mi.position = Vector3(0, 0.14, 0)
+		(a.root as Node3D).add_child(mi)
+		marks[kind] = mi
+	elif not on and n != null:
+		if is_instance_valid(n):
+			(n as Node3D).queue_free()
+		marks.erase(kind)
 
 # ---------- the Grave Wyrm's soul-fire (0.31.166) ----------
 # A pale cyan-green flame poured from its jaws along the breath's line: a GPU particle stream (the smoke puff sprite, added
@@ -5201,6 +5410,8 @@ func on_event(e: Dictionary) -> void:
 			ring_at(Vector3(kp.x, ky + 0.2, kp.y), Color("#ffd65a"), float(sim.moba.KING_REACH), 0.5)
 			for i in 6:
 				spark(Vector3(kp.x + randf_range(-1.5, 1.5), ky + 0.4 + randf() * 1.0, kp.y + randf_range(-1.5, 1.5)), Color("#ffd65a"))
+		"spell", "slam", "pillar", "trap_snap", "trap_gone":
+			_kit_fx(e)                            # 0.31.167 5V5: W and E
 		"ult", "flurry_hit", "lord_slam", "camp_up", "buff", "lord_down", "gold", "lord_march", "ward", "wyrm_breath", "wyrm_down":
 			_moba_fx(e)                           # 0.31.157 5V5: ultimates, the jungle, gold (0.31.166: the Wyrm; and the
 			                                      # Lord's march and a placed ward, whose effects were never reached)
