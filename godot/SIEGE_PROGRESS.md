@@ -4897,4 +4897,8 @@ Kevin (on what costs the most -- the 3D at 1440x3200 by the log's evidence, but 
 - Nothing cut: the 5v5's lane minions and small monsters cast shadows again (0.31.160 had turned them off), and every
   death in view throws the weapons out of the hands again, minions' and monsters' too. A body hidden in the fog
   doesn't (no ragdoll, no weapons: it isn't drawn, and since 0.31.160 it isn't moved while hidden).
-- Version 0.31.161, versionCode 247 (SERVER_BUILD stays 0.31.160: no server code changed).
+- Version 0.31.161, versionCode 247, SERVER_BUILD 0.31.161 (min_build_test holds it to the app's build).
+- Quick suite: 100 passed + min_build_test (SERVER_BUILD was left at 0.31.160; set to 0.31.161 it passes) = 101.
+  tools/cold_start_check.sh: PASS. The Play AAB (throwaway key, presets untouched): BASE OK (267 files), CONTENT OK,
+  play_games true, bundletool valid. Preview APK: build/Fatebound-Siege-0.31.161-fatebound.apk (preview key; the
+  server file isn't in it).
