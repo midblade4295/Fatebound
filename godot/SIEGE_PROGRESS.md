@@ -4880,3 +4880,7 @@ _event() stamps "at" with the time.
 - diag STAT: phys= (the physics step) and rag= loose= units= counts.
 - Version 0.31.160, versionCode 246 (SERVER_BUILD 0.31.160: siege_sim.gd and moba.gd changed -- a server redeploy).
 - tests/siege_sim_smoke.gd: the jail door's lift and shut checked after three ticks (the swing's new cadence).
+- Quick suite: 100 passed + siege_sim_smoke (failed on the jail door's one-tick check before the test change; passes
+  alone after it) = 101. tools/cold_start_check.sh: PASS. The Play AAB (throwaway key, presets untouched): BASE OK
+  (267 files), CONTENT OK, play_games true, bundletool valid. Preview APK:
+  build/Fatebound-Siege-0.31.160-fatebound.apk (preview key).
