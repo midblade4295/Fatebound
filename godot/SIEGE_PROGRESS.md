@@ -5011,3 +5011,10 @@ The plan's step 2 (Kevin's picks: replace the Siege field; 112 x 220 m, 3 towers
 - Server: online Siege matches on this server would end at once too: raise its minimum build to 0.31.164 (the file
   /etc/fatebound-siege/min_build) so older apps see "Update required" instead of playing them.
 - Version 0.31.165, versionCode 251, SERVER_BUILD 0.31.165.
+- The world content pack rebuilt for the Rift's baked terrain (world-07280a04b72d.pck, 56.9 MB) and pushed to the
+  content-packs branch; server/deploy/install_siege_server.sh installs keep.gd too (the sim loads it: without it a
+  fresh install couldn't compile the sim -- tools/test_server_files.py caught it).
+- Quick suite: 78 passed; 3 failed -- server_files (fixed above, then PASS), economy_fix_test and apple_iap_test (both
+  PASS on 4 reruns each; apple_iap_test failed once more in 5 runs, real-time and untouched by this change: flaky).
+  tools/cold_start_check.sh: PASS. The Play AAB (throwaway key, presets untouched): BASE OK (269 files), CONTENT OK,
+  play_games true, bundletool valid. Preview APK: build/Fatebound-Siege-0.31.165-fatebound.apk (preview key).
