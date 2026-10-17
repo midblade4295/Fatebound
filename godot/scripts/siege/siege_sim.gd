@@ -596,6 +596,7 @@ func _build_nav() -> void:
 var _gate_cells: Array = []
 
 func _update_gate_nav() -> void:
+	_po_epoch += 1                              # (a gate broke or stood again: everyone's push-out is re-checked)
 	# Own gates are free to walk through. Intact enemy gates are walkable but very expensive, so
 	# a path uses one only when there is no other way in; the bot then has to break it.
 	for gi in gates.size():
@@ -2270,6 +2271,10 @@ func _push_seg(p: Vector2, a: Vector2, b: Vector2, min_d: float) -> Vector2:
 func _clamp_to_field(p: Vector2) -> Vector2:
 	return Vector2(clampf(p.x, -HALF_W, HALF_W), clampf(p.y, -HALF_L, HALF_L))
 
+var _po_cache := {}                         # unit id -> [the position its last push-out gave, _po_epoch then]
+var _po_epoch := 0
+var _po_tick := 0
+
 func _separate() -> void:
 	# Pairs of living units pushed apart (0.31.78: on packed arrays -- the 496 pair checks of a 16 v 16 went through
 	# dictionary lookups each; same pushes, in the same order). The ground and a tower's deck don't touch.
@@ -2293,21 +2298,35 @@ func _separate() -> void:
 			if twr[j] != ta:
 				continue
 			var off := pos[j] - pa
-			var d := off.length()
-			if d < r2 and d > 0.0001:
+			var dd := off.length_squared()                # (0.31.160: the square root only for the pairs that touch)
+			if dd < r2 * r2 and dd > 0.00000001:
+				var d := sqrt(dd)
 				var push := off / d * (r2 - d) * 0.5
 				pa -= push
 				pos[j] += push
 		pos[i] = pa
 	for i in n:
 		live[i].pos = pos[i]
+	var tsp := Time.get_ticks_usec() if profile else 0
+	# 0.31.160: a unit standing where its push-out last left it is skipped (most of a 5v5's -- the jungle's monsters, a
+	# fighting wave -- stand still; the walls were half the separation's cost); everyone is re-checked once a second
+	# and whenever a gate's state changes (_po_epoch)
+	_po_tick += 1
+	if _po_tick % 30 == 0:
+		_po_epoch += 1
+		_po_cache.clear()
 	for u in units:
 		if alive(u) and int(u.tower) >= 0:
 			u.pos = tower_deck_clamp(u)            # kept on the tower's deck
 		elif alive(u):
+			var pc: Array = _po_cache.get(u.id, [])
+			if not pc.is_empty() and int(pc[1]) == _po_epoch and (pc[0] as Vector2) == (u.pos as Vector2):
+				continue
 			# Clamp first: pushing a unit that is slightly past the field edge off a wall end can
 			# send it diagonally, and clamping afterwards drops it back inside the wall.
 			u.pos = _clamp_to_field(_push_out(_clamp_to_field(u.pos), UNIT_R, u.team))
+			_po_cache[u.id] = [u.pos, _po_epoch]
+	if profile: _p("sep.pushout", tsp)
 
 func _step_projectiles(dt: float) -> void:
 	if projectiles.is_empty():
@@ -2594,13 +2613,24 @@ func _step_outposts(dt: float) -> void:
 				stock[int(op.owner)].wood += 1
 				stock[int(op.owner)].stone += 1
 
+var _gate_tick := 0
+var _stat_dt := 0.0
+
 func _step_world(dt: float) -> void:
+	var tw0 := Time.get_ticks_usec() if profile else 0
 	_step_outposts(dt)
+	if profile: tw0 = _p("w.outposts", tw0)
 	_step_hats(dt)
+	if profile: tw0 = _p("w.hats", tw0)
 	# Gates swing open for allies nearby (visual state), resource nodes regrow.
+	# (0.31.160: whether a gate swings open -- its look and sound only; gate_blocks doesn't use it -- every third tick)
+	_gate_tick += 1
+	var gate_look := _gate_tick % 3 == 0
 	for g in gates:
 		if g.has("relock"):
 			_try_relock(g)
+		if not gate_look:
+			continue
 		var open := false
 		if gate_blocks(g):
 			for u in units:
@@ -2657,6 +2687,7 @@ func _step_world(dt: float) -> void:
 		_blast_nodes(sh.to, CATAPULT_AOE + 0.6, 7.0)     # 0.31.34 (Kevin): a catapult stone breaks trees and boulders too
 		_event("catapult_hit", {"team":int(sh.team), "pos":sh.to, "shell":sh.id})
 		shells.remove_at(i)
+	if profile: tw0 = _p("w.gates+cat", tw0)
 	for n in nodes:
 		if n.amount <= 0:
 			n.t += dt
@@ -2665,11 +2696,17 @@ func _step_world(dt: float) -> void:
 				n.amount = n.max
 				_event("node_regrow", {"node":n.id})
 	_step_items(dt)
+	if profile: tw0 = _p("w.nodes+items", tw0)
 	_step_meteors(dt)
 	_step_hat_motion(dt)
 	_step_bombs()
 	_step_launchers()
-	_stat_time(dt)
+	if profile: tw0 = _p("w.meteor..launch", tw0)
+	_stat_dt += dt                              # (0.31.160: the time played, counted every sixth tick)
+	if _gate_tick % 6 == 0:
+		_stat_time(_stat_dt)
+		_stat_dt = 0.0
+	if profile: tw0 = _p("w.stat", tw0)
 
 func _commander(team: int) -> void:
 	if moba != null:

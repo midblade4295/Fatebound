@@ -4845,3 +4845,38 @@ the repo, never committed).
 - Quick suite: ALL SIEGE TESTS PASSED (101). tools/cold_start_check.sh: PASS. The Play AAB (throwaway key, presets
   untouched): BASE OK (267 files), CONTENT OK, play_games true, bundletool valid. Preview APK:
   build/Fatebound-Siege-0.31.159-fatebound.apk (preview key).
+
+## 0.31.160 — 5V5 frame rate (Kevin's phone log)
+Kevin: "Check logs for moba mode and see if we can improve the performance of fps". His S21 Ultra (0.31.159, 3D at
+100 % = 1440x3200): a 5v5 at 6:00 ran 14-20 fps -- sim 20-35 ms a frame (two 30 Hz ticks a frame at 15 fps), view
+12-16 ms, HUD 7 ms, process 70-90 ms; even the match's first seconds (sim+view+HUD 9 ms) held at 20 fps, so the GPU at
+full resolution is a floor of its own. One script error: _moba_fx's ARROW RAIN read the event's "at" -- the sim's
+_event() stamps "at" with the time.
+- tests/moba_bench.gd (not in the suite): a bot 5v5 fast-forwarded to 5:30, then 240 frames timed by part (the sim's
+  steps, the view's sync, the HUD, physics, primitives); CFG compares configurations, PHONE=1 counts primitives at the
+  phone's 1440x3200. Desktop numbers below (llvmpipe; the phone is ~4-5x slower on the CPU).
+- The ult events carry their centre as "c" (moba.gd ranger/mage, siege_view's rain).
+- Sim (2.99 -> 1.96 ms a tick at 5:00-6:00): moba.units_near() -- the units by 8 m cell, rebuilt once a tick -- for the
+  towers' targets, the minions' (League's priority list), the hero bots' scans, the King's threat, the summons; the
+  push-out off walls skipped for a unit standing where it last left it (cache cleared each second and whenever a gate
+  changes); the gates' open/close look every 3rd tick (they still lock every tick), the match stats every 6th; the
+  pair separation's square root only for pairs that touch.
+- View (4.0 -> 2.6 ms): per actor the ground height only when it moved, the transform only while it's still easing in,
+  and the hand, load, Vanish, animation and cape left alone while the body isn't drawn (in the fog: not moved at all,
+  snapped to its place when seen again; off the screen); _my_team() without a throwaway dictionary; beams skip the
+  units that never had one; the terrain's capture rings set only when they change (the 5v5 has none: a material update
+  a frame); blood drops land on the ground looked up once; tower and King bar heights kept; loose weapons kicked with
+  each actor's place looked up once a frame, not once a weapon.
+- HUD (2.4 -> 1.6 ms): the scoreboard and the status lines under it (5v5: level, towers, gold, items, buffs) on a
+  layer of their own ("TopLayer", behind the HUD as before), drawn again only when what they show changes; the camp
+  timers and the shop's pulse stay per frame.
+- Physics: at the frame cap's 30 Hz in a match (the engine's 60 bought two steps a drawn frame -- four at 15 fps --
+  for nothing to see; restored on leaving); a 5v5 minion or monster drops no weapon (21 loose bodies at a time, each
+  with a ground patch, down to ~2: heroes still drop theirs); a ragdoll ends with its actor (the gone minions held
+  RAG_MAX's slots and their ground patches); ground patches sampled at whole metres and remembered (they were offset by
+  the death spot's fractions, and each was 169-441 height_at). Physics ~2.6 -> ~0.8 ms a frame.
+- Render: the 5v5's lane minions and small monsters cast no shadow (heroes, buff monsters and the Bone Lord do): the
+  shadow pass at 1440x3200 511k -> 333k triangles. (A higher mesh LOD threshold measured -2-3 %: not taken.)
+- diag STAT: phys= (the physics step) and rag= loose= units= counts.
+- Version 0.31.160, versionCode 246 (SERVER_BUILD 0.31.160: siege_sim.gd and moba.gd changed -- a server redeploy).
+- tests/siege_sim_smoke.gd: the jail door's lift and shut checked after three ticks (the swing's new cadence).

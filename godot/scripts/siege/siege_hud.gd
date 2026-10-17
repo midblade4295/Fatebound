@@ -112,6 +112,17 @@ func _ready() -> void:
 	qc_btn.custom_minimum_size = Vector2(46, 46)
 	qc_btn.size = Vector2(46, 46)
 	qc_btn.add_theme_constant_override("icon_max_width", 34)
+	# 0.31.160: the scoreboard and the status lines under it on a layer of their own (_draw_top), drawn again only when
+	# what they show changes (_top_parts) -- they were a third of the HUD's 7 ms a frame on Kevin's phone. Behind the
+	# HUD's own drawing, as they were drawn first.
+	_top_layer = Control.new()
+	_top_layer.name = "TopLayer"
+	_top_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_top_layer.show_behind_parent = true
+	_top_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_top_layer.draw.connect(_draw_top_layer)
+	add_child(_top_layer)
+	move_child(_top_layer, 0)
 	# 0.31.8: the workshop and pause panels are built the first time they open (they cost ~370 ms at match start).
 	resized.connect(_layout)
 	_layout()
@@ -1141,6 +1152,13 @@ func _process(delta: float) -> void:
 		_refresh_workshop(me)
 		if shop_open():
 			_refresh_shop(me)
+		if sim.moba == null:
+			_outpost_alerts(int(me.team))
+	if _top_layer != null:
+		var tk := _top_key(me)
+		if tk != _top_parts:
+			_top_parts = tk
+			_top_layer.queue_redraw()
 	queue_redraw()
 
 func _text(pos: Vector2, text: String, size_px: int, color: Color, font: Font = null, align := HORIZONTAL_ALIGNMENT_CENTER, width := -1.0) -> void:
@@ -1148,8 +1166,54 @@ func _text(pos: Vector2, text: String, size_px: int, color: Color, font: Font = 
 	if align == HORIZONTAL_ALIGNMENT_CENTER and width < 0:
 		width = 400.0
 		pos.x -= width * 0.5
-	draw_string_outline(f, pos, text, align, width, size_px, 5, Color(0, 0, 0, 0.6))
-	draw_string(f, pos, text, align, width, size_px, color)
+	_ci.draw_string_outline(f, pos, text, align, width, size_px, 5, Color(0, 0, 0, 0.6))
+	_ci.draw_string(f, pos, text, align, width, size_px, color)
+
+# ---------- the top layer (0.31.160) ----------
+var _top_layer: Control = null
+var _ci: CanvasItem = self                    # what _text and the top's drawing draw on: the HUD, or the top layer
+var _top_parts: Array = []
+
+func _top_key(me: Dictionary) -> Array:
+	# everything _draw_top shows, as it shows it (whole numbers, bar widths in pixels): when it changes, it's redrawn
+	if me.is_empty():
+		return []
+	var t: int = me.team
+	var w := size.x
+	var hpw := minf(220.0, w * 0.52)
+	var k := [w, size.y, t, int(maxf(0.0, float(sim.match_time) - sim.time)), int(ceil(me.hp)),
+		int(hpw * clampf(me.hp / maxf(1.0, me.max_hp), 0.0, 1.0)), sim.class_label(me), _oracle_status(me)]
+	if sim.moba != null:
+		var lv := int(me.get("level", 1))
+		k.append_array([int(ceil(sim.moba.king_frac(t) * 100.0)), int(ceil(sim.moba.king_frac(1 - t) * 100.0)), lv,
+			int(minf(160.0, w * 0.38) * clampf(float(me.get("xp", 0.0)) / sim.moba.need(lv), 0.0, 1.0)),
+			sim.moba.towers_down(0), sim.moba.towers_down(1), int(float(me.get("gold", 0.0))), sim.moba.can_shop(me),
+			(me.get("items", []) as Array).duplicate()])
+		var b: Dictionary = me.get("buffs", {})
+		for bk in ["arcane", "ember", "lord"]:
+			k.append(int(maxf(0.0, float(b.get(bk, -1.0)) - float(sim.time))))
+	else:
+		k.append_array([sim.score[0], sim.score[1], sim.stock[t].wood, sim.stock[t].stone, int(me.load.n), str(me.load.kind)])
+		for g in sim.gates:
+			if g.team == t and str(g.get("kind", "")) != "jail":
+				k.append(int(56.0 * g.hp / g.max_hp) if sim.gate_blocks(g) else -1)
+		for op in sim.outposts:
+			k.append(int(op.owner))
+			k.append(roundi(float(op.prog) * 50.0))
+	return k
+
+func _draw_top_layer() -> void:
+	if sim == null:
+		return
+	var me: Dictionary = sim.by_id.get(player_id, {})
+	if me.is_empty():
+		return
+	var t0 := Time.get_ticks_usec()
+	_ci = _top_layer
+	_draw_top(me)
+	_ci = self
+	if diag != null:
+		diag.add_time("hud", Time.get_ticks_usec() - t0)
 
 func _draw() -> void:
 	var t0 := Time.get_ticks_usec()
@@ -1160,41 +1224,31 @@ func _draw() -> void:
 		diag.add_time("hud", Time.get_ticks_usec() - t0)
 		diag.mark("hud drawn, rendering")
 
+var prof_on := false                      # (tests/moba_bench.gd: microseconds per part of the draw in prof)
+var prof := {}
+
+func _ph(key: String, t0: int) -> int:
+	var now := Time.get_ticks_usec()
+	prof[key] = int(prof.get(key, 0)) + (now - t0)
+	return now
+
 func _draw_hud() -> void:
 	if sim == null:
 		return
 	var me: Dictionary = sim.by_id.get(player_id, {})
 	if me.is_empty():
 		return
+	var tq := Time.get_ticks_usec() if prof_on else 0
 	var w := size.x
 	_draw_station_titles(me)                  # first, so buttons and panels draw over them
-	# Scoreboard.
-	var bar := Rect2(8, 8, w - 16, 62)
-	if _bar_style == null:
-		_bar_style = VisualTheme.panel(Color(0.035, 0.09, 0.12, 0.92), VisualTheme.GOLD_DARK, 12, 8)
-	draw_style_box(_bar_style, bar)
-	var t: int = me.team
-	_text(Vector2(24, 34), "YOUR SIDE", 12, TEAM_COLORS[vt(t)], _bold, HORIZONTAL_ALIGNMENT_LEFT, 120)
+	if prof_on: tq = _ph("titles", tq)
+	if _top_layer == null:
+		_draw_top(me)                           # (no layer: drawn with the rest)
 	if sim.moba != null:
-		# 0.31.156 5V5: each side's King (the heart), his health
-		_text(Vector2(24, 60), "♛ %d%%" % int(ceil(sim.moba.king_frac(t) * 100.0)), 22, VisualTheme.GOLD, _title, HORIZONTAL_ALIGNMENT_LEFT, 120)
-		_text(Vector2(w - 144, 34), "ENEMY", 12, TEAM_COLORS[vt(1 - t)], _bold, HORIZONTAL_ALIGNMENT_RIGHT, 120)
-		_text(Vector2(w - 144, 60), "%d%% ♛" % int(ceil(sim.moba.king_frac(1 - t) * 100.0)), 22, VisualTheme.GOLD, _title, HORIZONTAL_ALIGNMENT_RIGHT, 120)
-	else:
-		_text(Vector2(24, 60), "%d ♛" % sim.score[t], 26, VisualTheme.GOLD, _title, HORIZONTAL_ALIGNMENT_LEFT, 120)
-		_text(Vector2(w - 144, 34), "ENEMY", 12, TEAM_COLORS[vt(1 - t)], _bold, HORIZONTAL_ALIGNMENT_RIGHT, 120)
-		_text(Vector2(w - 144, 60), "%d ♛" % sim.score[1 - t], 26, VisualTheme.GOLD, _title, HORIZONTAL_ALIGNMENT_RIGHT, 120)
-	var left := maxf(0.0, float(sim.match_time) - sim.time)
-	_text(Vector2(w * 0.5, 52), "%d:%02d" % [int(left) / 60, int(left) % 60], 32, Color("#e8eef2") if left > 60 else VisualTheme.RED, _title)
-	# Player status line.
-	var hp_rect := Rect2(12, 78, minf(220.0, w * 0.52), 14)
-	draw_rect(hp_rect, Color(0, 0, 0, 0.55))
-	var frac := clampf(me.hp / maxf(1.0, me.max_hp), 0.0, 1.0)
-	draw_rect(Rect2(hp_rect.position, Vector2(hp_rect.size.x * frac, hp_rect.size.y)), Color("#7dff8a") if frac > 0.35 else VisualTheme.RED)
-	draw_rect(hp_rect, VisualTheme.GOLD_DARK, false, 1.5)
-	_text(Vector2(14, 110), "%s · %d HP" % [sim.class_label(me).to_upper(), int(ceil(me.hp))], 13, VisualTheme.TEXT, _bold, HORIZONTAL_ALIGNMENT_LEFT, 260)
-	_text(Vector2(14, 128), _oracle_status(me), 12, VisualTheme.GOLD, _font, HORIZONTAL_ALIGNMENT_LEFT, w - 80)
-	_draw_castle_status(me)
+		_draw_shop_pulse(me)
+		_draw_camp_timers()
+	if prof_on: tq = _ph("top", tq)
+	if prof_on: tq = _ph("castle_status", tq)
 	# Toast.
 	var age := _time - _toast_at
 	if age < 2.6 and _toast != "":
@@ -1204,17 +1258,21 @@ func _draw_hud() -> void:
 	_draw_kill_feed()
 	_draw_idle(me)
 	_draw_rejoin()
+	if prof_on: tq = _ph("feed", tq)
 	_draw_bars()
+	if prof_on: tq = _ph("bars", tq)
 	_draw_pings()
 	_draw_gate_bars()
 	_draw_oracle_marker(me)
 	_draw_numbers()
+	if prof_on: tq = _ph("pings..numbers", tq)
 	if diag != null and diag.fps_text != "":
 		_text(Vector2(w - 212, 142), diag.fps_text, 11, Color(1, 1, 1, 0.6), _font, HORIZONTAL_ALIGNMENT_RIGHT, 200)
 	if sim.commander and not _modal_open():
 		_draw_cards(me)
 	if sim.moba != null and not _modal_open():
 		_draw_picks(me)                           # (before the respawn line: the hand plays while you're down too)
+	if prof_on: tq = _ph("cards+picks", tq)
 	if me.state == "dead":
 		_text(Vector2(w * 0.5, size.y * 0.45), "RESPAWNING IN %d" % int(ceil(me.respawn_at - sim.time)), 22, VisualTheme.GOLD, _title)
 		return
@@ -1233,6 +1291,38 @@ func _draw_hud() -> void:
 	# Combat buttons.
 	for b in _buttons():
 		_draw_button(b, me)
+	if prof_on: tq = _ph("stick+buttons", tq)
+
+func _draw_top(me: Dictionary) -> void:
+	# the scoreboard, my health and status, the castle's (or the 5v5's) status lines -- on the top layer (0.31.160)
+	var w := size.x
+	# Scoreboard.
+	var bar := Rect2(8, 8, w - 16, 62)
+	if _bar_style == null:
+		_bar_style = VisualTheme.panel(Color(0.035, 0.09, 0.12, 0.92), VisualTheme.GOLD_DARK, 12, 8)
+	_ci.draw_style_box(_bar_style, bar)
+	var t: int = me.team
+	_text(Vector2(24, 34), "YOUR SIDE", 12, TEAM_COLORS[vt(t)], _bold, HORIZONTAL_ALIGNMENT_LEFT, 120)
+	if sim.moba != null:
+		# 0.31.156 5V5: each side's King (the heart), his health
+		_text(Vector2(24, 60), "♛ %d%%" % int(ceil(sim.moba.king_frac(t) * 100.0)), 22, VisualTheme.GOLD, _title, HORIZONTAL_ALIGNMENT_LEFT, 120)
+		_text(Vector2(w - 144, 34), "ENEMY", 12, TEAM_COLORS[vt(1 - t)], _bold, HORIZONTAL_ALIGNMENT_RIGHT, 120)
+		_text(Vector2(w - 144, 60), "%d%% ♛" % int(ceil(sim.moba.king_frac(1 - t) * 100.0)), 22, VisualTheme.GOLD, _title, HORIZONTAL_ALIGNMENT_RIGHT, 120)
+	else:
+		_text(Vector2(24, 60), "%d ♛" % sim.score[t], 26, VisualTheme.GOLD, _title, HORIZONTAL_ALIGNMENT_LEFT, 120)
+		_text(Vector2(w - 144, 34), "ENEMY", 12, TEAM_COLORS[vt(1 - t)], _bold, HORIZONTAL_ALIGNMENT_RIGHT, 120)
+		_text(Vector2(w - 144, 60), "%d ♛" % sim.score[1 - t], 26, VisualTheme.GOLD, _title, HORIZONTAL_ALIGNMENT_RIGHT, 120)
+	var left := maxf(0.0, float(sim.match_time) - sim.time)
+	_text(Vector2(w * 0.5, 52), "%d:%02d" % [int(left) / 60, int(left) % 60], 32, Color("#e8eef2") if left > 60 else VisualTheme.RED, _title)
+	# Player status line.
+	var hp_rect := Rect2(12, 78, minf(220.0, w * 0.52), 14)
+	_ci.draw_rect(hp_rect, Color(0, 0, 0, 0.55))
+	var frac := clampf(me.hp / maxf(1.0, me.max_hp), 0.0, 1.0)
+	_ci.draw_rect(Rect2(hp_rect.position, Vector2(hp_rect.size.x * frac, hp_rect.size.y)), Color("#7dff8a") if frac > 0.35 else VisualTheme.RED)
+	_ci.draw_rect(hp_rect, VisualTheme.GOLD_DARK, false, 1.5)
+	_text(Vector2(14, 110), "%s · %d HP" % [sim.class_label(me).to_upper(), int(ceil(me.hp))], 13, VisualTheme.TEXT, _bold, HORIZONTAL_ALIGNMENT_LEFT, 260)
+	_text(Vector2(14, 128), _oracle_status(me), 12, VisualTheme.GOLD, _font, HORIZONTAL_ALIGNMENT_LEFT, w - 80)
+	_draw_castle_status(me)
 
 func _draw_idle(me: Dictionary) -> void:
 	# 0.31.119: "A BOT IS PLAYING FOR YOU" while the server's bot holds my unit (I gave no input for a while)
@@ -1390,11 +1480,11 @@ func _draw_moba_status(me: Dictionary) -> void:
 	var need: float = sim.moba.need(lv)
 	var xr := Rect2(14, 140, minf(160.0, size.x * 0.38), 6)
 	_text(Vector2(xr.end.x + 8, 147), "LEVEL %d" % lv, 12, VisualTheme.GOLD, _bold, HORIZONTAL_ALIGNMENT_LEFT, 100)
-	draw_rect(xr.grow(1), Color(0, 0, 0, 0.6))
+	_ci.draw_rect(xr.grow(1), Color(0, 0, 0, 0.6))
 	if lv < sim.moba.LEVEL_MAX:
-		draw_rect(Rect2(xr.position, Vector2(xr.size.x * clampf(float(me.get("xp", 0.0)) / need, 0.0, 1.0), xr.size.y)), Color("#ffd65a"))
+		_ci.draw_rect(Rect2(xr.position, Vector2(xr.size.x * clampf(float(me.get("xp", 0.0)) / need, 0.0, 1.0), xr.size.y)), Color("#ffd65a"))
 	else:
-		draw_rect(xr, Color("#ffd65a"))
+		_ci.draw_rect(xr, Color("#ffd65a"))
 	var ours := 0
 	var theirs := 0
 	for tw in sim.moba.towers:
@@ -1405,8 +1495,7 @@ func _draw_moba_status(me: Dictionary) -> void:
 		else:
 			theirs += 1
 	_text(Vector2(14, 164), "TOWERS  YOURS %d · THEIRS %d" % [ours, theirs], 11, Color("#cfe8b8"), _bold, HORIZONTAL_ALIGNMENT_LEFT, 260)
-	_draw_gold_and_items(me)                      # 0.31.157
-	_draw_camp_timers()
+	_draw_gold_and_items(me)                      # 0.31.157 (0.31.160: the camp timers and the shop's pulse per frame, in _draw_hud)
 
 func _picks_open() -> bool:
 	var me: Dictionary = sim.by_id.get(player_id, {})
@@ -1721,9 +1810,9 @@ func _draw_castle_status(me: Dictionary) -> void:
 			continue
 		var r := Rect2(Vector2(x + 40, 153), Vector2(56, 6))
 		_text(Vector2(x, 160), str(g.side).to_upper().left(1) + " GATE", 10, Color(1, 1, 1, 0.75), _bold, HORIZONTAL_ALIGNMENT_LEFT, 44)
-		draw_rect(r.grow(1), Color(0, 0, 0, 0.6))
+		_ci.draw_rect(r.grow(1), Color(0, 0, 0, 0.6))
 		if sim.gate_blocks(g):
-			draw_rect(Rect2(r.position, Vector2(r.size.x * g.hp / g.max_hp, r.size.y)), TEAM_COLORS[vt(t)])
+			_ci.draw_rect(Rect2(r.position, Vector2(r.size.x * g.hp / g.max_hp, r.size.y)), TEAM_COLORS[vt(t)])
 		else:
 			_text(r.position + Vector2(2, 7), "BROKEN", 9, VisualTheme.RED, _bold, HORIZONTAL_ALIGNMENT_LEFT, 60)
 		x += 112.0
@@ -1743,18 +1832,20 @@ func _draw_outpost_pips(t: int, x: float) -> void:
 		var c := Vector2(cx, 156)
 		var pts := PackedVector2Array([c + Vector2(0, -7), c + Vector2(7, 0), c + Vector2(0, 7), c + Vector2(-7, 0)])
 		var owner: int = op.owner
-		draw_colored_polygon(pts, Color(0, 0, 0, 0.6))
+		_ci.draw_colored_polygon(pts, Color(0, 0, 0, 0.6))
 		var inner := PackedVector2Array([c + Vector2(0, -5), c + Vector2(5, 0), c + Vector2(0, 5), c + Vector2(-5, 0)])
 		var base: Color = Color(0.55, 0.58, 0.62) if owner < 0 else TEAM_COLORS[vt(owner)]
-		draw_colored_polygon(inner, base)
+		_ci.draw_colored_polygon(inner, base)
 		var pr: float = op.prog
 		var capturing: bool = (owner < 0 and absf(pr) > 0.02) or (owner == 0 and pr < 0.999) or (owner == 1 and pr > -0.999)
 		if capturing:
 			var towards: Color = TEAM_COLORS[vt(0)] if pr > 0.0 else TEAM_COLORS[vt(1)]
 			var f := absf(pr) if owner < 0 else 1.0 - absf(pr)
-			draw_arc(c, 9.0, -PI / 2, -PI / 2 + TAU * clampf(f, 0.0, 1.0), 18, towards, 2.5, true)
+			_ci.draw_arc(c, 9.0, -PI / 2, -PI / 2 + TAU * clampf(f, 0.0, 1.0), 18, towards, 2.5, true)
 		cx += 20.0
-	# Alert once when enemies start taking one of ours.
+
+func _outpost_alerts(t: int) -> void:
+	# Alert once when enemies start taking one of ours. (0.31.160: from _process -- the pips are drawn only on change)
 	for op in sim.outposts:
 		var prev: float = _outpost_prev.get(op.id, op.prog)
 		var losing: bool = int(op.owner) == t and ((t == 0 and op.prog < prev - 0.0001) or (t == 1 and op.prog > prev + 0.0001))
@@ -2223,25 +2314,22 @@ func _draw_gold_and_items(me: Dictionary) -> void:
 	var here: bool = sim.moba.can_shop(me)
 	if _shop_style == null:
 		_shop_style = VisualTheme.panel(Color(0.08, 0.05, 0.02, 0.9), VisualTheme.GOLD_DARK, 10, 6)
-	draw_style_box(_shop_style, r)
-	if here:
-		var pulse := 0.5 + 0.5 * sin(_time * 4.0)
-		draw_rect(r.grow(2.0), Color(1.0, 0.84, 0.35, 0.3 + 0.4 * pulse), false, 2.0)
+	_ci.draw_style_box(_shop_style, r)
 	if _coin_tex == null and ResourceLoader.exists("res://assets/ui/currency/coin.png"):
 		_coin_tex = load("res://assets/ui/currency/coin.png")
 	if _coin_tex != null:
-		draw_texture_rect(_coin_tex, Rect2(r.position + Vector2(5, 4), Vector2(22, 22)), false)
+		_ci.draw_texture_rect(_coin_tex, Rect2(r.position + Vector2(5, 4), Vector2(22, 22)), false)
 	else:
-		draw_circle(r.position + Vector2(16, 15), 9, Color("#ffcf4a"))
+		_ci.draw_circle(r.position + Vector2(16, 15), 9, Color("#ffcf4a"))
 	_text(r.position + Vector2(31, 21), str(int(float(me.get("gold", 0.0)))), 15, Color("#ffd65a"), _bold, HORIZONTAL_ALIGNMENT_LEFT, 60)
 	_text(r.position + Vector2(r.size.x - 50, 21), "SHOP", 13, Color.WHITE if here else Color(1, 1, 1, 0.75), _bold, HORIZONTAL_ALIGNMENT_LEFT, 50)
 	var inv: Array = me.get("items", [])
 	for i in sim.moba.ITEM_SLOTS:
 		var q := Rect2(12 + i * 22, r.end.y + 5, 20, 20)
-		draw_rect(q, Color(0, 0, 0, 0.5))
-		draw_rect(q, Color(VisualTheme.GOLD_DARK, 0.8), false, 1.0)
+		_ci.draw_rect(q, Color(0, 0, 0, 0.5))
+		_ci.draw_rect(q, Color(VisualTheme.GOLD_DARK, 0.8), false, 1.0)
 		if i < inv.size():
-			ItemIcon.draw_item(self, str(inv[i]), q.get_center(), 18.0)
+			ItemIcon.draw_item(_ci, str(inv[i]), q.get_center(), 18.0)
 	# buffs
 	var x := 12.0
 	var y := r.end.y + 42.0
@@ -2253,6 +2341,11 @@ func _draw_gold_and_items(me: Dictionary) -> void:
 			var col := Color("#7fb8ff") if k == "arcane" else (Color("#ff9a5a") if k == "ember" else Color("#d8c2ff"))
 			_text(Vector2(x, y), txt, 11, col, _bold, HORIZONTAL_ALIGNMENT_LEFT, 160)
 			x += _bold.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 11).x + 10.0
+
+func _draw_shop_pulse(me: Dictionary) -> void:
+	if sim.moba.can_shop(me):
+		var pulse := 0.5 + 0.5 * sin(_time * 4.0)
+		draw_rect(shop_rect().grow(2.0), Color(1.0, 0.84, 0.35, 0.3 + 0.4 * pulse), false, 2.0)
 
 func _draw_camp_timers() -> void:
 	if not project.is_valid() or not on_screen.is_valid():

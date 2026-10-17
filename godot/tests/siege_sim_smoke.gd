@@ -188,11 +188,13 @@ func _init() -> void:
 	def.pos = (jail.c as Vector2) + ((jail.c as Vector2) - inside).normalized() * 1.0
 	jfoe.pos = Vector2(0, -40)
 	jfoe.bot = false
-	js.step(Sim.TICK)
+	for i in 3:                                    # (0.31.160: a gate's swing is looked at every third tick)
+		js.step(Sim.TICK)
 	assert(jail.open, "the jail door lifts for a defender")
 	jfoe.pos = (jail.c as Vector2) + ((jail.c as Vector2) - inside).normalized() * 2.5
 	jfoe.hp = jfoe.max_hp
-	js.step(Sim.TICK)
+	for i in 3:
+		js.step(Sim.TICK)
 	assert(not jail.open, "the jail door stays shut while an enemy is near it")
 	print("jail rules ok")
 	# Fishing (Round 19): ACTION on a river bank casts, the fish comes FISH_TIME later unless you're hit;

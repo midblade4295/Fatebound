@@ -775,6 +775,7 @@ func blood_hit(target: Vector2, from: Vector2, dmg: float) -> void:
 		d.p = Vector3(target.x, y0 + randf_range(-0.2, 0.3), target.y)
 		d.v = Vector3(dir2.x, 0.0, dir2.y) * randf_range(1.5, 3.8) + Vector3(0.0, randf_range(1.0, 2.8), 0.0)
 		d.size = randf_range(0.13, 0.24)
+		d["g"] = y0 - 1.0                           # 0.31.160: the ground under the hit, looked up once (they land within ~2 m)
 		d.on = true
 		(d.mi as MeshInstance3D).position = d.p
 		(d.mi as MeshInstance3D).visible = true
@@ -791,8 +792,7 @@ func _sync_blood(dt: float) -> void:
 			continue
 		d.v += Vector3(0.0, -9.8, 0.0) * dt
 		d.p += d.v * dt
-		var g := Sim.height_at(Vector2(d.p.x, d.p.z))
-		if d.p.y <= g + 0.03:
+		if d.p.y <= float(d.get("g", 0.0)) + 0.03:
 			d.on = false
 			(d.mi as MeshInstance3D).visible = false
 			_blood_mark(_splats, _splat_i, Vector2(d.p.x, d.p.z), float(d.size), 0.0, SPLAT_LIFE * 0.8)
@@ -1903,9 +1903,16 @@ func _beam_material(key: String) -> StandardMaterial3D:
 		_beam_mats[key] = m
 	return _beam_mats[key]
 
+var _beam_ids := {}                              # units that have had a beam (their nodes may need hiding)
+
 func _sync_beams() -> void:
 	# The Priest's gold healing beam; the Necromancer's green drain on an enemy plus a white heal to an ally (0.31.2).
 	for u in sim.units:
+		# 0.31.160: a unit with no beam that never had one: nothing to show or hide (this ran its two slots -- arrays,
+		# strings, lookups -- for every unit, every frame)
+		if str(u.get("beam", "")) == "" and str(u.get("beam2", "")) == "" and not _beam_ids.has(u.id):
+			continue
+		_beam_ids[u.id] = true
 		var necro: bool = u.cls == "priest" and bool(u.get("up", false))
 		for slot in [["beam", str(u.id), "drain" if necro else "heal"], ["beam2", str(u.id) + "#2", "white"]]:
 			var n: MeshInstance3D = beam_nodes.get(slot[1])
@@ -2331,6 +2338,8 @@ func _dress_tower_base(c: Vector2, seed_id: int, foot_r: float) -> void:
 		_place(FOREST + ["Bush_1_A_Color1", "Bush_2_A_Color1"][k % 2] + ".gltf", Vector3(q.x, y, q.y), rng.randf() * TAU,
 			rng.randf_range(2.4, 3.2) if k % 2 == 0 else rng.randf_range(1.4, 1.9))
 
+var _post_last: Array = [[], [], []]
+
 func _sync_outposts() -> void:
 	var posts := []
 	var rings := []
@@ -2356,6 +2365,9 @@ func _sync_outposts() -> void:
 		posts.append(Vector4(0, 0, 0, 0))
 		rings.append(Vector4(0, 0, 0, 0))
 		caps.append(Vector4(0, 0, 0, 0))
+	if posts == _post_last[0] and rings == _post_last[1] and caps == _post_last[2]:
+		return                                       # 0.31.160: unchanged (the 5v5 has none): no material update a frame
+	_post_last = [posts, rings, caps]
 	var tm: ShaderMaterial = _terrain_material()
 	tm.set_shader_parameter("posts", posts)
 	tm.set_shader_parameter("post_ring", rings)
@@ -3716,6 +3728,12 @@ func _ensure_actor(u: Dictionary) -> Dictionary:
 	if minion_look and vt(int(u.team)) == 1:
 		_team_red(made.body)                    # 0.31.159: the minions are painted in the blue team's colours
 	made.body.scale = Vector3.ONE * BODY_SCALE * (MINION_SCALE if bool(u.get("minion", false)) else 1.0) * float(u.get("mscale", 1.0))   # 0.31.157: big monsters; 0.31.128 (Kevin): every class the upgraded size (base was 1.0); 0.31.155: 5v5 minions smaller
+	if sim.moba != null and (bool(u.get("minion", false)) or u.has("mon")) and float(u.get("mscale", 1.0)) <= 1.0:
+		# 0.31.160 (Kevin's phone log, 5v5 at 14-20 fps): the lane minions and the small monsters cast no shadow -- a
+		# third of the shadow pass's triangles at the phone's resolution (tests/moba_bench.gd PHONE=1: 511k -> 333k); the
+		# heroes, the buff monsters and the Bone Lord keep theirs
+		for mi in (made.body as Node).find_children("*", "MeshInstance3D", true, false):
+			(mi as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	a.body = made.body
 	a.player = made.player
 	_cape_setup(a)
@@ -3760,51 +3778,109 @@ func _on_screen(p: Vector3, planes: Array) -> bool:
 			return false
 	return true
 
+var prof_on := false                      # (tests/moba_bench.gd: microseconds per part of sync in prof)
+var prof := {}
+
+func _pv(key: String, t0: int) -> int:
+	var now := Time.get_ticks_usec()
+	prof[key] = int(prof.get(key, 0)) + (now - t0)
+	return now
+
 func sync(dt: float) -> void:
+	var tp := Time.get_ticks_usec() if prof_on else 0
 	_time += dt
 	_sync_items(dt)
 	_sync_raising()
 	_sync_bombs(dt)
 	_sync_meteor_fx(dt)
 	_sync_chips(dt)
+	if prof_on: tp = _pv("pre.items..chips", tp)
 	_sync_shocks()
 	_kick_debris()
+	if prof_on: tp = _pv("pre.shocks+debris", tp)
 	_sync_launchers(dt)
 	_sync_ambience(dt)
+	if prof_on: tp = _pv("pre.launch+amb", tp)
 	_sync_ripples(dt)
+	if prof_on: tp = _pv("pre.ripples", tp)
 	_sync_blood(dt)
+	if prof_on: tp = _pv("pre.blood", tp)
 	var seen := {}
 	var planes: Array = camera.get_frustum() if anim_cull and is_instance_valid(camera) and camera.is_inside_tree() else []
 	anim_active = 0
+	# 0.31.160 (Kevin's phone log: the 5v5's view 12-16 ms a frame): per actor, only what changed -- the ground height
+	# looked up again only when the unit moved (Sim.height_at is ~6 us), the transform written only while it's still
+	# easing in (snapped once within a millimetre / a fraction of a degree), and the hand, load, Vanish, animation and
+	# cape left alone while the body isn't drawn (in the fog, or off the screen; the dead and the just-respawned
+	# always). A body hidden in the fog isn't moved at all: it snaps to its place when it's seen again.
+	var my_team := _my_team()
+	var pos_k := 1.0 - exp(-dt * 22.0)
+	var rot_k := 1.0 - exp(-dt * 18.0)
 	for u in sim.units:
 		seen[u.id] = true
+		var tu := Time.get_ticks_usec() if prof_on else 0
 		var a := _ensure_actor(u)
+		if prof_on: tu = _pv("a.ensure", tu)
 		if a.is_empty() or not is_instance_valid(a.root):
 			continue
 		var root: Node3D = a.root
+		var alive_u: bool = sim.alive(u)
+		if sim.moba != null:
+			# 0.31.158 5V5 fog of war: an enemy (or a monster) your side can't see isn't drawn (one that falls in sight
+			# stays shown where he fell)
+			var fv: bool = int(u.team) == my_team or (alive_u and sim.moba.can_see(my_team, u)) \
+				or (not alive_u and bool(a.get("fog_vis", false)))
+			if alive_u:
+				a["fog_vis"] = fv
+			if root.visible != fv:
+				root.visible = fv
+				if fv:
+					a["snap"] = true
+			if not fv:
+				if is_instance_valid(a.player) and (a.player as AnimationPlayer).active:
+					(a.player as AnimationPlayer).active = false
+				if prof_on: tu = _pv("a.place+fog", tu)
+				continue
+		var up: Vector2 = u.pos
 		var tw := int(u.get("tower", -1))
-		var gy := Sim.height_at(u.pos) if tw < 0 or tw >= sim.outposts.size() else Sim.height_at(sim.outposts[tw].p) + Land.tower_floor(tw)
+		var gy: float
+		if tw >= 0 and tw < sim.outposts.size():
+			gy = Sim.height_at(sim.outposts[tw].p) + Land.tower_floor(tw)
+		elif a.get("gp", Vector2.INF) == up:
+			gy = float(a.gy)
+		else:
+			gy = Sim.height_at(up)
+			a["gp"] = up
+			a["gy"] = gy
 		# On a ladder: up the rungs, over the wall, down the far side (Round 25).
-		var climb_d: float = sim.ladder_depth(u.pos, u.team) if not sim.ladders.is_empty() and u.state != "dead" else INF
+		var climb_d: float = sim.ladder_depth(up, u.team) if not sim.ladders.is_empty() and u.state != "dead" else INF
 		a.climb = climb_d != INF and Sim.ladder_lift(climb_d, gy) > gy + 0.15
-		var target := Vector3(u.pos.x, Sim.ladder_lift(climb_d, gy) if climb_d != INF else gy, u.pos.y)
+		var target := Vector3(up.x, Sim.ladder_lift(climb_d, gy) if climb_d != INF else gy, up.y)
 		if u.state == "fly":
 			target.y += sim.flight_height(u)             # 0.31.28: off the launcher, high over the field
 		var before := root.position
-		# Smooth between 30 Hz sim ticks; snap on respawn teleports.
-		if before.distance_to(target) > 6.0:
-			root.position = target
-		else:
-			root.position = before.lerp(target, 1.0 - exp(-dt * 22.0))
-		var vel := (root.position - before).length() / maxf(dt, 0.001)
+		# Smooth between 30 Hz sim ticks; snap on respawn teleports (and coming out of the fog).
+		var newp := target
+		if bool(a.get("snap", false)):
+			a.erase("snap")
+		elif before.distance_squared_to(target) <= 36.0:
+			newp = before.lerp(target, pos_k)
+			if newp.distance_squared_to(target) < 0.000001:
+				newp = target
+		if newp != before:
+			root.position = newp
+		var vel := (newp - before).length() / maxf(dt, 0.001)
 		if sim.whirling(u) and u.state != "dead":
 			# 0.31.16 (Kevin: "the barbarian model should spin with the vfx"): he turns with his whirlwind -- the same way
 			# round as its ribbons and nearly as fast (they turn at 44 and 34 rad/s; he at 38).
 			a["whirl_spin"] = float(a.get("whirl_spin", 0.0)) + dt * 38.0
 			root.rotation.y = float(u.face) - float(a.whirl_spin)
 		else:
-			a["whirl_spin"] = 0.0
-			root.rotation.y = lerp_angle(root.rotation.y, float(u.face), 1.0 - exp(-dt * 18.0))
+			if float(a.get("whirl_spin", 0.0)) != 0.0:
+				a["whirl_spin"] = 0.0
+			var ry := root.rotation.y
+			if absf(angle_difference(ry, float(u.face))) > 0.0005:
+				root.rotation.y = lerp_angle(ry, float(u.face), rot_k)
 		(a.ring as MeshInstance3D).visible = u.state != "dead"
 		if sim.commander:
 			# 0.31.153 COMMANDER: a soldier back in the barracks isn't on the field (his body goes CMD_RETURN s after he fell)
@@ -3813,38 +3889,42 @@ func sync(dt: float) -> void:
 				if benched and a.get("rag") != null:
 					_ragdoll_end(a)
 				root.visible = not benched
-		if sim.moba != null:
-			# 0.31.158 5V5 fog of war: an enemy (or a monster) your side can't see isn't drawn (one that falls in sight
-			# stays shown where he fell)
-			var fv: bool = int(u.team) == _my_team() or (sim.alive(u) and sim.moba.can_see(_my_team(), u)) \
-				or (not sim.alive(u) and bool(a.get("fog_vis", false)))
-			if sim.alive(u):
-				a["fog_vis"] = fv
-			if root.visible != fv:
-				root.visible = fv
-		_sync_vanish(a, u)
-		_sync_load(a, u)
-		_sync_hand(a, u)
-		_animate(a, u, vel)
-		if a.get("cape") != null:
-			_cape_step(a, dt)
+		if prof_on: tu = _pv("a.place+fog", tu)
+		var show := root.visible and (planes.is_empty() or _on_screen(newp, planes))
+		if show or not alive_u or bool(a.dead):
+			_sync_vanish(a, u)
+			_sync_load(a, u)
+			_sync_hand(a, u)
+			if prof_on: tu = _pv("a.vanish/load/hand", tu)
+			_animate(a, u, vel)
+			if prof_on: tu = _pv("a.animate", tu)
+			if a.get("cape") != null:
+				_cape_step(a, dt)
 		if is_instance_valid(a.player):
-			var show := (planes.is_empty() or _on_screen(root.position, planes)) and root.visible
 			if (a.player as AnimationPlayer).active != show:
 				(a.player as AnimationPlayer).active = show
 			if show:
 				anim_active += 1
+	if prof_on: tp = _pv("actors", tp)
 	for id in actors.keys():
 		if not seen.has(id):
+			if actors[id].get("rag") != null:
+				_ragdoll_end(actors[id])               # 0.31.160: its ground patch and its place among the RAG_MAX go too
 			actors[id].root.queue_free()
 			actors.erase(id)
 	_sync_oracles(dt)
+	if prof_on: tp = _pv("oracles", tp)
 	_sync_castle(dt)
+	if prof_on: tp = _pv("castle", tp)
 	_sync_projectiles()
+	if prof_on: tp = _pv("projectiles", tp)
 	if sim.moba != null:
 		_sync_moba()
+	if prof_on: tp = _pv("moba", tp)
 	_step_fx()
+	if prof_on: tp = _pv("fx", tp)
 	_update_camera(dt)
+	if prof_on: tp = _pv("camera", tp)
 
 # ---------- 5V5 (0.31.155, scripts/siege/moba.gd) ----------
 # The lane towers (KayKit hex towers in the side's colour; a stump once fallen), their range on the ground when you're
@@ -3932,7 +4012,8 @@ func _fogged(u: Dictionary) -> bool:
 	return not a.is_empty() and is_instance_valid(a.root) and not (a.root as Node3D).visible
 
 func _my_team() -> int:
-	return int(sim.by_id.get(player_id, {}).get("team", my_side))
+	var me = sim.by_id.get(player_id)               # (0.31.160: no throwaway {} per call -- it's asked per unit, per frame)
+	return int((me as Dictionary).get("team", my_side)) if me != null else my_side
 
 func _build_fog() -> void:
 	var r := Land.bake_rect()
@@ -4145,7 +4226,7 @@ func _moba_fx(e: Dictionary) -> void:
 							spark(q + Vector3(randf_range(-0.6, 0.6), randf() * 1.8, randf_range(-0.6, 0.6)), col)
 					ring_at(_ground(e.get("to", e.pos)), col, 2.4, 0.5)
 				"ranger":
-					var c2: Vector2 = e.get("at", e.pos)
+					var c2: Vector2 = e.get("c", e.pos)              # 0.31.160: was "at", the event's time stamp (the phone log's script error)
 					ring_at(_ground(c2), col, 2.0 * float(e.get("r", 4.5)) - 0.4, float(e.get("dur", 2.0)))
 					_rain_fx.append({"at":c2, "r":float(e.get("r", 4.5)), "until":_time + float(e.get("dur", 2.0)), "next":_time})
 				"mage", "crusader":
@@ -4539,7 +4620,8 @@ func on_event(e: Dictionary) -> void:
 			if not a.is_empty():
 				var pa: Array = e.get("push", [0.0, 1.6, 0.0])
 				var push := Vector3(float(pa[0]), float(pa[1]), float(pa[2])) if pa.size() >= 3 else Vector3(0.0, 1.6, 0.0)
-				_drop_weapons(a, push)
+				if sim.moba == null or not (bool(du.get("minion", false)) or du.has("mon")):
+					_drop_weapons(a, push)          # (0.31.160: not a 5v5 minion's or monster's -- dozens a minute, each a body)
 				_ragdoll(a, push)
 		"spawn":
 			if not a.is_empty():
@@ -5086,25 +5168,32 @@ func _update_camera(dt: float) -> void:
 		camera.position += Vector3(randf_range(-1, 1), randf_range(-0.5, 0.5), randf_range(-1, 1)) * _shake * 0.5
 		_shake = maxf(0.0, _shake - dt * 1.6)
 
+var _bar_y := {}                                  # 0.31.160: a tower's / King's bar height (they don't move; was height_at a frame)
+const MY_BAR := Color("#7dff8a")
+
 func bars() -> Array:
 	# [{pos, fill, color}] for the HUD to draw 2D health bars over living units.
 	var out := []
 	if sim.moba != null:
 		for tw in sim.moba.towers:                 # 0.31.155 5V5: the towers' health (wide)
 			if not bool(tw.dead):
-				out.append({"pos":Vector3(tw.p.x, Sim.height_at(tw.p) + TOWER_TOP + 1.2, tw.p.y), "fill":clampf(float(tw.hp) / float(tw.max_hp), 0.0, 1.0),
+				if not _bar_y.has(tw.id):
+					_bar_y[tw.id] = Sim.height_at(tw.p) + TOWER_TOP + 1.2
+				out.append({"pos":Vector3(tw.p.x, float(_bar_y[tw.id]), tw.p.y), "fill":clampf(float(tw.hp) / float(tw.max_hp), 0.0, 1.0),
 					"color":TEAM_COLORS[vt(int(tw.team))], "wide":true})
 		for kt in 2:                               # 0.31.156: the Kings (the hearts)
 			if not bool(sim.moba.kings[kt].dead):
 				var kp: Vector2 = sim.moba.king_pos(kt)
-				out.append({"pos":Vector3(kp.x, Sim.height_at(kp) + 3.4, kp.y), "fill":sim.moba.king_frac(kt), "color":Color("#ffd65a"), "wide":true})
+				if not _bar_y.has("k%d" % kt):
+					_bar_y["k%d" % kt] = Sim.height_at(kp) + 3.4
+				out.append({"pos":Vector3(kp.x, float(_bar_y["k%d" % kt]), kp.y), "fill":sim.moba.king_frac(kt), "color":Color("#ffd65a"), "wide":true})
 	for u in sim.units:
 		if u.state == "dead":
 			continue
 		var a: Dictionary = actors.get(u.id, {})
 		if a.is_empty() or not is_instance_valid(a.root) or not (a.root as Node3D).visible:
 			continue                                    # (0.31.158: in the fog -- no bar either)
-		var c: Color = Color("#7dff8a") if u.id == player_id else TEAM_COLORS[vt(int(u.team))]
+		var c: Color = MY_BAR if u.id == player_id else TEAM_COLORS[vt(int(u.team))]
 		var bar := {"pos": (a.root as Node3D).position + Vector3(0, 2.7 * float(u.get("mscale", 1.0)), 0), "fill": clampf(u.hp / maxf(1.0, u.max_hp), 0.0, 1.0), "color": c}
 		if u.has("mon") and float(u.get("mscale", 1.0)) > 1.0:
 			bar["name"] = str(sim.moba.MONSTERS[str(u.mkind)].name)        # 0.31.157: the buff monsters and the Bone Lord
@@ -5723,15 +5812,18 @@ func _kick_debris() -> void:
 	# loose weapons are kicked along by whoever walks into them
 	if _debris.is_empty():
 		return
+	# (0.31.160: each actor's place once a frame -- it was looked up for every weapon on the ground, for every actor)
+	var walkers := []
+	for a in actors.values():
+		if not (a.get("dead", false) or a.get("rag") != null) and (a.root as Node3D).visible:
+			walkers.append(a)
 	for db in _debris:
 		var rb = db.node
 		if not is_instance_valid(rb):
 			continue
-		var wp: Vector3 = (rb as Node3D).global_position
-		for a in actors.values():
-			if a.get("dead", false) or a.get("rag") != null:
-				continue
-			var ap: Vector3 = (a.root as Node3D).global_position
+		var wp: Vector3 = (rb as Node3D).position         # (both the view's children: its own space)
+		for a in walkers:
+			var ap: Vector3 = (a.root as Node3D).position
 			var d := Vector2(wp.x - ap.x, wp.z - ap.z)
 			if d.length() > 0.62 or absf(wp.y - ap.y) > 1.2:
 				continue
@@ -5744,7 +5836,7 @@ func _kick_debris() -> void:
 			(rb as RigidBody3D).linear_velocity = Vector3(dir.x * 3.2, 1.0, dir.y * 3.2)
 			(rb as RigidBody3D).angular_velocity += Vector3(randf_range(-4, 4), randf_range(-4, 4), randf_range(-4, 4))
 	for a in actors.values():
-		a["kick_last"] = (a.root as Node3D).global_position
+		a["kick_last"] = (a.root as Node3D).position
 
 # ---------- the EffectBlocks explosions (0.31.57, Kevin) ----------
 # The pack's heavy explosion (fireball, sparks, rolling smoke, burning debris with smoke trails) on the bomb and the
@@ -5979,22 +6071,36 @@ const RAG_SPEC := [
 var _ragdolls: Array = []
 var _debris: Array = []
 
+var _patch_h := {}                       # 0.31.160: the land's height at whole metres, for the ragdolls' ground patches
+
 func _ground_patch(c: Vector3, half: int = 7) -> StaticBody3D:
+	# 0.31.160: sampled at the whole metres the patch sits on (it was offset by the death spot's fractions: up to half a
+	# metre off) and remembered -- a patch is 169 or 441 Sim.height_at, ~6 us each here and several times that on the
+	# phone, for every death in view; a wave's deaths keep landing on the same few metres of lane
 	var hm := HeightMapShape3D.new()
 	var w := half * 2 + 1
 	hm.map_width = w
 	hm.map_depth = w
 	var data := PackedFloat32Array()
 	data.resize(w * w)
+	var cx := int(roundf(c.x))
+	var cz := int(roundf(c.z))
+	if _patch_h.size() > 40000:
+		_patch_h.clear()
 	for zi in w:
 		for xi in w:
-			data[zi * w + xi] = Sim.height_at(Vector2(c.x + float(xi - half), c.z + float(zi - half)))
+			var k := Vector2i(cx + xi - half, cz + zi - half)
+			var h = _patch_h.get(k)
+			if h == null:
+				h = Sim.height_at(Vector2(k))
+				_patch_h[k] = h
+			data[zi * w + xi] = h
 	hm.map_data = data
 	var sb := StaticBody3D.new()
 	var cs := CollisionShape3D.new()
 	cs.shape = hm
 	sb.add_child(cs)
-	sb.position = Vector3(roundf(c.x), 0.0, roundf(c.z))
+	sb.position = Vector3(float(cx), 0.0, float(cz))
 	sb.physics_material_override = PhysicsMaterial.new()
 	sb.physics_material_override.friction = 0.9
 	add_child(sb)

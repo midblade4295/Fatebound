@@ -20,6 +20,7 @@ var team_size := 16
 var tutorial := false          # the Herald's walkthrough (scripts/siege/tutorial.gd)
 var commander := false         # 0.31.153 COMMANDER (the prototype): you and your deck against the AI commander, offline
 var moba_hero := ""            # 0.31.155 5V5 (the test): your hero; a 5v5 against bots, offline (scripts/siege/moba.gd)
+var match_seed := -1           # (benchmarks: a fixed match; -1 the clock's)
 var deck: Array = []           #   (your 8 cards; scripts/meta/cards.gd)
 const Cards = preload("res://scripts/meta/cards.gd")
 var analytics = null          # 0.31.118: usage statistics (scripts/meta/analytics.gd): VS BOTS matches and the tutorial
@@ -35,6 +36,7 @@ const TUTORIAL_GOLD := 250
 var render_scale := 1.0
 const FPS_CAP := 30         # hard-locked (Round 32, Kevin: no fps options) -- the sim ticks at 30 Hz anyway
 var _prev_max_fps := 0
+var _prev_physics_tps := 60
 var fps_cap := FPS_CAP
 # Thermal guard: field logs (S21 Ultra) show fps sliding for several seconds before a GPU hang.
 # If fps stays under GUARD_FPS for GUARD_SECONDS while capped at 60, drop to 30 automatically.
@@ -140,6 +142,11 @@ func _ready() -> void:
 	# within ~70 s (field log, S21 Ultra). Restored when leaving.
 	_prev_max_fps = Engine.max_fps
 	set_fps_cap(FPS_CAP)
+	# 0.31.160 (Kevin's phone log, 5v5 at 14-20 fps): the physics -- only the ragdolls and the loose weapons -- at the
+	# frame cap's 30 Hz, not the engine's 60: two steps a drawn frame bought nothing to see, and at 15 fps it was four
+	# (tests/moba_bench.gd: ~1.3 ms a step here with a 5v5's eight ragdolls and twenty loose weapons). Restored on leaving.
+	_prev_physics_tps = Engine.physics_ticks_per_second
+	Engine.physics_ticks_per_second = FPS_CAP
 	viewport = SubViewport.new()
 	viewport.own_world_3d = true
 	# 2x (Round 35): 4x with High-quality graphics was the largest single cost in a big fight (tests/battle_bench.gd:
@@ -259,7 +266,7 @@ func _start_steps() -> Array:
 		sim = Sim.new()
 		if tutorial:
 			team_size = 2                      # a quiet castle: one ally, two enemies (one becomes the dummy)
-		var seed_value := int(Time.get_unix_time_from_system()) & 0x7fffffff
+		var seed_value := int(Time.get_unix_time_from_system()) & 0x7fffffff if match_seed < 0 else match_seed
 		if moba_hero != "":
 			team_size = 5
 		sim.setup(team_size, seed_value)
@@ -1198,6 +1205,7 @@ func set_fps_cap(v: int) -> void:
 
 func _exit_tree() -> void:
 	Engine.max_fps = _prev_max_fps
+	Engine.physics_ticks_per_second = _prev_physics_tps
 	if ws != null:
 		_net_send({"t":"leave"})            # 0.31.120: quitting on purpose -- the server doesn't hold the seat
 		ws.close(1000, "leave")

@@ -347,6 +347,44 @@ var _jid := 0
 var _zid := 0
 var _shop_clock := 0.0
 
+# 0.31.160 (Kevin's phone log: the 5v5's sim 20-35 ms a frame): the units by GRID-m cell, for the scans that only want
+# what's near a point (a minion's or a tower's or a hero's targets) instead of all 60+ units, each, every time. Rebuilt
+# when the tick or the unit count changes; a unit moves well under GRID_PAD within a tick, so a query reaches that much
+# further and the caller still checks the real distance.
+const GRID := 8.0
+const GRID_PAD := 1.0
+var _grid := {}
+var _grid_time := -1.0
+var _grid_n := -1
+
+func units_near(p: Vector2, r: float) -> Array:
+	if s.time != _grid_time or s.units.size() != _grid_n:
+		_grid_time = s.time
+		_grid_n = s.units.size()
+		_grid.clear()
+		for u in s.units:
+			var up: Vector2 = u.pos
+			var c := Vector2i(floori(up.x / GRID), floori(up.y / GRID))
+			var cell = _grid.get(c)
+			if cell == null:
+				_grid[c] = [u]
+			else:
+				(cell as Array).append(u)
+	var rr := r + GRID_PAD
+	var x0 := floori((p.x - rr) / GRID)
+	var x1 := floori((p.x + rr) / GRID)
+	var y0 := floori((p.y - rr) / GRID)
+	var y1 := floori((p.y + rr) / GRID)
+	if x0 == x1 and y0 == y1:
+		return _grid.get(Vector2i(x0, y0), [])
+	var out := []
+	for cx in range(x0, x1 + 1):
+		for cy in range(y0, y1 + 1):
+			var cell = _grid.get(Vector2i(cx, cy))
+			if cell != null:
+				out.append_array(cell)
+	return out
+
 # ---------- setup ----------
 func begin(sim, my_hero: String, seed_value: int) -> void:
 	s = sim
@@ -536,13 +574,16 @@ func step(dt: float) -> void:
 			g.erase("broken_at")
 			s._update_gate_nav()
 			s._event("gate_rebuilt", {"gate":int(g.id), "team":int(g.team)})
-	_step_towers(dt)
-	_step_kings(dt)
-	_step_camps(dt)
-	_step_rains(dt)
 	var tv := Time.get_ticks_usec() if s.profile else 0
+	_step_towers(dt)
+	if s.profile: tv = s._p("m.towers", tv)
+	_step_kings(dt)
+	if s.profile: tv = s._p("m.kings", tv)
+	_step_camps(dt)
+	if s.profile: tv = s._p("m.camps", tv)
+	_step_rains(dt)
 	vision.step(dt)
-	if s.profile: s._p("vision", tv)
+	if s.profile: tv = s._p("vision", tv)
 	var gold_on: bool = s.time >= WAVE_FIRST
 	var gone := []
 	for u in s.units:
@@ -572,6 +613,7 @@ func step(dt: float) -> void:
 	for u in gone:
 		s.units.erase(u)
 		s.by_id.erase(u.id)
+	if s.profile: tv = s._p("m.units", tv)
 	# the bots shop when they're home or down; the Lord: a side's bots go when they're ahead
 	_shop_clock += dt
 	if _shop_clock >= 1.0:
@@ -747,7 +789,7 @@ func _step_towers(dt: float) -> void:
 			var best := {}
 			var bt := 9
 			var bd := INF
-			for o in s.units:
+			for o in units_near(tw.p, TOWER_RANGE + s.UNIT_R):
 				if int(o.team) == int(tw.team) or int(o.team) > 1 or not s.alive(o) or o.state == "fly":
 					continue
 				var d: float = (o.pos as Vector2).distance_to(tw.p)
@@ -813,7 +855,7 @@ func hit_tower(src: Dictionary, id: int, amount: float) -> void:
 			s._event("tower_immune", {"tw":id, "team":int(tw.team)})
 		return
 	var minions_near := false
-	for o in s.units:
+	for o in units_near(tw.p, TOWER_RANGE):
 		if bool(o.get("minion", false)) and int(o.team) == int(src.team) and s.alive(o) and (o.pos as Vector2).distance_to(tw.p) <= TOWER_RANGE:
 			minions_near = true
 			break
@@ -920,9 +962,10 @@ func king_threat(t: int) -> Dictionary:
 	# the nearest enemy within KING_GUARD of King t ({} when none)
 	var best := {}
 	var bd := KING_GUARD
-	for o in s.units:
+	var kp := king_pos(t)
+	for o in units_near(kp, KING_GUARD):
 		if int(o.team) != t and int(o.team) <= 1 and s.alive(o):
-			var d: float = (o.pos as Vector2).distance_to(king_pos(t))
+			var d: float = (o.pos as Vector2).distance_to(kp)
 			if d < bd:
 				bd = d
 				best = o
@@ -1169,7 +1212,7 @@ func _minion_target(u: Dictionary) -> Dictionary:
 				bp = 1
 				bd = da
 				best = a
-	for o in s.units:
+	for o in units_near(u.pos, acq):
 		if int(o.team) == team or int(o.team) > 1 or not s.alive(o) or o.state == "fly":
 			continue
 		var d: float = (o.pos as Vector2).distance_to(u.pos)
@@ -1274,7 +1317,7 @@ func _think_hero(u: Dictionary) -> void:
 	# their King open (a gate of his down): the King runners go for him -- their heroes in the way first
 	var eteam := 1 - int(u.team)
 	if king_open(eteam) and ((bool(u.get("kr", false)) and u.hp > u.max_hp * 0.45) or (_end_push(int(u.team)) and u.hp > u.max_hp * 0.35)):
-		for o in s.units:
+		for o in units_near(u.pos, reach + 3.0):
 			if int(o.team) == eteam and s.alive(o) and bool(o.get("hero", false)) and (o.pos as Vector2).distance_to(u.pos) < reach + 3.0 \
 					and can_see(int(u.team), o):
 				_fight_h(u, o)
@@ -1309,7 +1352,7 @@ func _think_hero(u: Dictionary) -> void:
 	# an enemy hero in reach and not under his tower
 	var foe := {}
 	var fd := reach + 4.0
-	for o in s.units:
+	for o in units_near(u.pos, fd):
 		if int(o.team) == int(u.team) or not s.alive(o) or not bool(o.get("hero", false)) or not can_see(int(u.team), o):
 			continue
 		var d: float = (o.pos as Vector2).distance_to(u.pos)
@@ -1329,7 +1372,7 @@ func _think_hero(u: Dictionary) -> void:
 	# minions near
 	var m := {}
 	var md := maxf(reach + 2.0, 7.0)
-	for o in s.units:
+	for o in units_near(u.pos, md):
 		if int(o.team) == int(u.team) or not s.alive(o) or not bool(o.get("minion", false)) or not can_see(int(u.team), o):
 			continue
 		var d2: float = (o.pos as Vector2).distance_to(u.pos)
@@ -1397,7 +1440,7 @@ func _end_push(team: int) -> bool:
 	return up[team] >= 3 and up[team] >= up[1 - team] + 2
 
 func _our_minions_near(team: int, p: Vector2) -> bool:
-	for o in s.units:
+	for o in units_near(p, TOWER_RANGE):
 		if bool(o.get("minion", false)) and int(o.team) == team and s.alive(o) and (o.pos as Vector2).distance_to(p) <= TOWER_RANGE:
 			return true
 	return false
@@ -1473,7 +1516,7 @@ func ult(u: Dictionary) -> bool:
 			rains.append({"team":int(u.team), "owner":str(u.id), "at":at, "r":RAIN_R, "left":RAIN_TICKS, "next":s.time + 0.25,
 				"dmg":dmg * RAIN_DMG * k})
 			u.face = s.angle_of(at - (u.pos as Vector2))
-			ev["at"] = at
+			ev["c"] = at                                  # 0.31.160: not "at" (the sim's _event stamps "at" with the time)
 			ev["r"] = RAIN_R
 			ev["dur"] = 0.25 + RAIN_EVERY * float(RAIN_TICKS)
 		"mage":
@@ -1532,7 +1575,7 @@ func ult(u: Dictionary) -> bool:
 				var delay := 0.6 + 0.3 * float(i)
 				s.meteors.append({"team":int(u.team), "owner":u.id, "at":at2, "t_hit":s.time + delay, "dmg":dmg * STORM_DMG, "burn_until":-1.0})
 				s._event("meteor_warn", {"id":u.id, "team":int(u.team), "pos":at2, "delay":delay})
-			ev["at"] = c
+			ev["c"] = c
 		"necromancer":
 			var ids3 := []
 			var n2 := LEGION_N + (2 if k > 1.0 else 0)
@@ -1696,7 +1739,7 @@ func _think_summon(u: Dictionary) -> void:
 	var base: Vector2 = owner.pos if not owner.is_empty() and s.alive(owner) else u.pos
 	var best := {}
 	var bd := 12.0
-	for o in s.units:
+	for o in units_near(base, bd):
 		if int(o.team) == int(u.team) or not s.alive(o) or o.state == "fly":
 			continue
 		if o.has("mon") and str(camps[int(o.mon)].target) == "":
@@ -2306,7 +2349,7 @@ func _go_lord(u: Dictionary) -> bool:
 	if lord.is_empty() or (lord.pos as Vector2).distance_to(u.pos) > 60.0:
 		return false
 	# their heroes at the pit first
-	for o in s.units:
+	for o in units_near(u.pos, 9.0):
 		if int(o.team) == 1 - int(u.team) and s.alive(o) and bool(o.get("hero", false)) and (o.pos as Vector2).distance_to(lord.pos) < 10.0 \
 				and (o.pos as Vector2).distance_to(u.pos) < 9.0 and can_see(int(u.team), o):
 			_fight_h(u, o)

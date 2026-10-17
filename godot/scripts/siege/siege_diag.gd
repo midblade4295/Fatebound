@@ -15,7 +15,7 @@ const BOOT_PREV_PATH := "user://boot_diag_prev.log"
 # rotate it out of boot_diag_prev.log before anyone could copy it).
 const BOOT_STUCK_PATH := "user://boot_diag_stuck.log"
 const Platform = preload("res://scripts/meta/platform.gd")
-const BUILD := "0.31.159-fatebound"
+const BUILD := "0.31.160-fatebound"
 
 class ErrorCapture:
 	extends Logger
@@ -192,11 +192,12 @@ func _process(delta: float) -> void:
 	if mode != null and mode.sim != null:
 		var s = mode.sim
 		var me: Dictionary = s.by_id.get("you", {})
-		state = "t=%.0f score=%s kills=%s me=%s/%s hp=%.0f carry=%s fx=%d proj=%d" % [s.time, str(s.score), str(s.kills),
+		state = "t=%.0f score=%s kills=%s me=%s/%s hp=%.0f carry=%s fx=%d proj=%d rag=%d loose=%d units=%d" % [s.time, str(s.score), str(s.kills),
 			me.get("cls", "?"), me.get("state", "?"), me.get("hp", 0.0), me.get("carrying", false),
-			mode.view._fx.size() if mode.view != null else -1, s.projectiles.size()]
-	write("STAT fps=%d worst=%.0fms %s %s proc=%.1fms mem=%.1fMB vmem=%.1fMB tex=%.1fMB draws=%d prims=%d objs=%d nodes=%d ev=%d %s" % [fps, _worst_ms, _times_text(), _viewport_text(),
-		Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0, smem, vmem,
+			mode.view._fx.size() if mode.view != null else -1, s.projectiles.size(),
+			mode.view._ragdolls.size() if mode.view != null else -1, mode.view._debris.size() if mode.view != null else -1, s.units.size()]
+	write("STAT fps=%d worst=%.0fms %s %s proc=%.1fms phys=%.1fms mem=%.1fMB vmem=%.1fMB tex=%.1fMB draws=%d prims=%d objs=%d nodes=%d ev=%d %s" % [fps, _worst_ms, _times_text(), _viewport_text(),
+		Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0, Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0, smem, vmem,
 		Performance.get_monitor(Performance.RENDER_TEXTURE_MEM_USED) / 1048576.0,
 		Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME), Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME),
 		Performance.get_monitor(Performance.OBJECT_COUNT), Performance.get_monitor(Performance.OBJECT_NODE_COUNT), _events, state])
