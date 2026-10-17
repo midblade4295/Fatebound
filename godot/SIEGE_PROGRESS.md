@@ -5053,3 +5053,15 @@ made the model from it.
 - Quick suite: all passed (81). tools/cold_start_check.sh: PASS. The Play AAB (throwaway key, presets untouched): BASE OK
   (271 files), CONTENT OK, play_games true, bundletool valid, jar verified. Preview APK:
   build/Fatebound-Siege-0.31.166-fatebound.apk (preview key; sha256 89177337...0415).
+
+## New heroes and roles: concepts (after 0.31.166; no game change yet)
+Kevin: "We need more characters and class roles like League of Legends and heroes of the storm have" -> League's six
+roles (Tank, Fighter, Assassin, Mage, Marksman, Support), kits of three abilities + the ultimate, six new heroes (one a
+role), heroes unlocked with gold.
+- Concepts: ElevenLabs gpt-image-2 (flow "Fatebound new hero concepts", the hero concept picks as the style reference),
+  one sheet a role with two designs, one take each: 6 images, ~2,520 credits. reports/concepts/new_hero_<role>
+  _concepts.png, all of them: new_hero_concepts.jpg.
+- Kevin's picks: Tank B (a mossy stone guardian: slab shield, stone maul), Fighter B (a dragoon: winged helm, scale
+  armour, halberd), Assassin A (a masked duelist: rapier and parrying dagger), Mage B (a storm caller: lightning
+  staff), Marksman A (a musketeer: long flintlock), Support B (an antlered druid: a living staff).
+  reports/concepts/hero_<golem|dragoon|duelist|stormcaller|musketeer|druid>_pick.png.
