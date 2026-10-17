@@ -77,6 +77,7 @@ func _init() -> void:
 	_gold()
 	_shop()
 	_jungle()
+	_wyrm()
 	_matches()
 	print("MOBA_MORE_PASS" if fails.is_empty() else "MOBA_MORE_FAIL %s" % str(fails))
 	quit(0 if fails.is_empty() else 1)
@@ -353,8 +354,9 @@ func _shop() -> void:
 # ---------------------------------------------------------------- 4. the jungle
 func _jungle() -> void:
 	var s = _new("knight", 8)
-	check(s.moba.camps.size() == 13 and s.moba.camps.filter(func(c): return str(c.kind) == "lord").size() == 1,
-		"thirteen camps: six a side and the Bone Lord (0.31.165: the Rift; nine until then)")
+	check(s.moba.camps.size() == 14 and s.moba.camps.filter(func(c): return str(c.kind) == "lord").size() == 1
+		and s.moba.camps.filter(func(c): return str(c.kind) == "wyrm").size() == 1,
+		"fourteen camps: six a side, the Bone Lord and the Grave Wyrm (0.31.166; 0.31.165's Rift thirteen, nine until then)")
 	var mirrored := true
 	for c in s.moba.camps:
 		if int(c.side) == 0:
@@ -365,7 +367,7 @@ func _jungle() -> void:
 	_run(s, 1.0)
 	var mons: Array = s.units.filter(func(u): return u.has("mon"))
 	check(mons.size() == 36 and mons.all(func(u): return int(u.team) == 2) and not s.moba.camps.filter(func(c): return str(c.kind) == "lord")[0].alive,
-		"at 0:30 the twelve camps (36 skeletons, team 2); the Lord not yet")
+		"at 0:30 the twelve camps (36 skeletons, team 2); the Lord and the Wyrm not yet")
 	# a scene: no waves, heroes home
 	var j = _new("knight", 9)
 	j.moba.wave_at = INF
@@ -485,6 +487,116 @@ func _jungle() -> void:
 		and w1.all(func(u): return not bool(u.get("super", false))),
 		"their west gate down: the waves of the lanes that end there bring a super minion (in place of the siege one), the east lane's don't")
 
+# ---------------------------------------------------------------- 4b. the Grave Wyrm (0.31.166)
+func _hide(h: Dictionary) -> float:
+	# a hero's health over what his level alone gives (no upgrades or items in these scenes): his side's Hide
+	return float(h.m_hp) / (Moba.HERO_HP * (1.0 + Moba.LEVEL_GROW * float(int(h.level) - 1)))
+
+func _wyrm() -> void:
+	var s = _new("knight", 15)
+	var wcs: Array = s.moba.camps.filter(func(c): return str(c.kind) == "wyrm")
+	var wc: Dictionary = wcs[0]
+	check(wcs.size() == 1 and int(wc.side) == -1 and float(Moba.WYRM_FIRST) == 180.0 and float(wc.next) == float(Moba.WYRM_FIRST),
+		"one Grave Wyrm, nobody's, first up at 3:00")
+	check((Moba.WYRM_P as Vector2).is_equal_approx(-(Moba.BOSS_P as Vector2)) and (wc.p as Vector2).is_equal_approx(Moba.WYRM_P),
+		"...in the east pit, the Bone Lord's mirrored")
+	_quiet(s)
+	s.moba._spawn_camp(wc)
+	var wy: Dictionary = s.moba.camp_live(wc)[0]
+	check((wy.pos as Vector2).is_equal_approx(Moba.WYRM_P) and str(wy.look) == "wyrm" and int(wy.team) == 2 and float(wy.max_hp) > 1000.0,
+		"it rises (%d health)" % int(wy.max_hp))
+	# its soul-fire: a cone at whoever it's fighting
+	var me: Dictionary = s.by_id["you"]
+	me.pos = Moba.WYRM_P + Vector2(0, 3)
+	_tough(me)
+	var mate: Dictionary = s.by_id["b1"]
+	mate.pos = Moba.WYRM_P + Vector2(0.8, 4.5)
+	_tough(mate)
+	var behind: Dictionary = s.by_id["b2"]
+	behind.pos = Moba.WYRM_P + Vector2(0, -5.0)
+	_tough(behind)
+	s._damage(me, wy, 10.0)
+	var breath := {}
+	for e in _run(s, Moba.WYRM_BREATH_EVERY + 1.0):
+		if e.k == "wyrm_breath":
+			breath = e
+	check(not breath.is_empty() and int(breath.n) >= 2 and float(me.hp) < float(me.max_hp) and float(mate.hp) < float(mate.max_hp)
+		and float(behind.hp) == float(behind.max_hp),
+		"every %d s its soul-fire: the cone toward you burns you and the ally beside you (%d), not the one behind it" % [int(Moba.WYRM_BREATH_EVERY), int(breath.get("n", 0))])
+	# League's leash: the one it's after walks out of it -- it turns on the other still at it (no reset, no healing)
+	s._damage(mate, wy, 10.0)
+	s._damage(me, wy, 10.0)
+	var hp1 := float(wy.hp)
+	me.pos = Moba.WYRM_P + Vector2(0, Moba.WYRM_LEASH + 4.0)
+	_run(s, 1.0)
+	check(str(wc.target) == "b1" and str(wc.reset) == "" and float(wy.hp) <= hp1, "you walk out of its leash: it turns on your ally still at it, and doesn't heal")
+	me.pos = Moba.WYRM_P + Vector2(0, 3)
+	# down: the slaying side's heroes, gold, XP, and a stack of WYRM'S HIDE for good
+	var g0 := {}
+	var e0 := {}
+	for t in 2:
+		for hid in s.moba.heroes[t]:
+			g0[hid] = float(s.by_id[hid].gold)
+			e0[hid] = int(s.by_id[hid].get("epics", 0))
+	s._damage(me, wy, 1.0e7)
+	var evs: Array = s.drain_events()
+	var paid := true
+	var hide := true
+	for t in 2:
+		for hid in s.moba.heroes[t]:
+			var h: Dictionary = s.by_id[hid]
+			if t == 0:
+				paid = paid and is_equal_approx(float(h.gold) - g0[hid], float(Moba.MONSTERS.wyrm.gold)) and int(h.epics) == e0[hid] + 1
+				hide = hide and is_equal_approx(_hide(h), 1.0 + Moba.WYRM_HIDE)          # (the XP may have levelled him)
+			else:
+				paid = paid and float(h.gold) == g0[hid]
+				hide = hide and is_equal_approx(_hide(h), 1.0)
+	check(int(s.moba.wyrm_stacks[0]) == 1 and int(s.moba.wyrm_stacks[1]) == 0 and evs.any(func(e): return e.k == "wyrm_down" and int(e.team) == 0 and int(e.stacks) == 1),
+		"the Wyrm down by blue: a stack of WYRM'S HIDE for blue")
+	check(paid and hide, "...every blue hero +%d gold and +%d %% max health (an epic each); red nothing" % [int(Moba.MONSTERS.wyrm.gold), int(Moba.WYRM_HIDE * 100.0)])
+	check(not bool(wc.alive) and absf(float(wc.next) - s.time - Moba.WYRM_BACK) < 0.2 and float(Moba.WYRM_BACK) == 180.0, "...back 3:00 later")
+	# the Hide stacks to WYRM_STACKS
+	for i in 5:
+		s.moba._spawn_camp(wc)
+		s._damage(me, s.moba.camp_live(wc)[0], 1.0e9)
+		s.drain_events()
+	var full := true
+	for hid in s.moba.heroes[0]:
+		full = full and is_equal_approx(_hide(s.by_id[hid]), 1.0 + Moba.WYRM_HIDE * Moba.WYRM_STACKS)
+	check(int(s.moba.wyrm_stacks[0]) == Moba.WYRM_STACKS and Moba.WYRM_STACKS == 4 and full, "...up to %d stacks (+%d %%), no more" % [Moba.WYRM_STACKS, int(Moba.WYRM_HIDE * Moba.WYRM_STACKS * 100.0)])
+	var b3: Dictionary = s.by_id["b3"]
+	var r0 := float(b3.m_hp)
+	_to_level(s, b3, int(b3.level) + 2)
+	check(float(b3.m_hp) > r0 * 1.05 and is_equal_approx(_hide(b3), 1.0 + Moba.WYRM_HIDE * Moba.WYRM_STACKS),
+		"...and it stays through levels")
+	var foe: Dictionary = s.by_id["r1"]
+	foe.pos = Moba.WYRM_P + Vector2(0, -3)
+	s.moba._spawn_camp(wc)
+	s._damage(foe, s.moba.camp_live(wc)[0], 1.0e9)
+	s.drain_events()
+	check(int(s.moba.wyrm_stacks[1]) == 1, "red's kill: red's own stack")
+	# bots: a side with three up and not outnumbered goes for it (not past the cap)
+	var w = _new("knight", 16)
+	_quiet(w)
+	for tw in w.moba.towers:
+		tw.dead = false                                 # (keeps shut: no King runs)
+	var wc2: Dictionary = w.moba.camps.filter(func(c): return str(c.kind) == "wyrm")[0]
+	w.moba._spawn_camp(wc2)
+	var wy2: Dictionary = w.moba.camp_live(wc2)[0]
+	var k := 0
+	for hid in w.moba.heroes[0]:
+		var h: Dictionary = w.by_id[hid]
+		if hid == "you":
+			continue
+		h.bot = true
+		h.pos = Moba.WYRM_P + Vector2(-6.0 + 3.0 * k, 13.0)
+		k += 1
+	_run(w, 6.0)
+	check(bool(w.moba.wyrm_go[0]) and float(wy2.hp) < float(wy2.max_hp), "bots: three or more up and not outnumbered, they go for the Wyrm (%.0f%% left)" % (100.0 * float(wy2.hp) / float(wy2.max_hp)))
+	w.moba.wyrm_stacks[0] = Moba.WYRM_STACKS
+	w.moba._boss_call()
+	check(not bool(w.moba.wyrm_go[0]), "...but not once their Hide is full")
+
 # ---------------------------------------------------------------- 5. whole matches
 func _matches() -> void:
 	var n := int(OS.get_environment("MATCHES")) if OS.has_environment("MATCHES") else 1
@@ -495,6 +607,7 @@ func _matches() -> void:
 		var clears := 0
 		var buys := 0
 		var lord := 0
+		var wyrm := 0
 		var t0 := Time.get_ticks_msec()
 		while not sm.ended:
 			sm.step()
@@ -504,10 +617,11 @@ func _matches() -> void:
 					"camp_clear": clears += 1
 					"buy": buys += 1
 					"lord_down": lord += 1
+					"wyrm_down": wyrm += 1
 		var items: Array = sm.units.filter(func(u): return bool(u.get("hero", false))).map(func(u): return (u.items as Array).size())
-		print("  match %d: %.0f s, winner %d (%s), Kings %d%%/%d%%, KOs %s, towers %d/%d, camps cleared %d, Lord %d, items bought %d %s, ultimates %s, %d ms" % [mi,
+		print("  match %d: %.0f s, winner %d (%s), Kings %d%%/%d%%, KOs %s, towers %d/%d, camps cleared %d, Lord %d, Wyrm %d (Hide %s), items bought %d %s, ultimates %s, %d ms" % [mi,
 			sm.time, sm.winner, sm.end_reason, int(sm.moba.king_frac(0) * 100.0), int(sm.moba.king_frac(1) * 100.0), str(sm.kills), sm.moba.towers_down(0),
-			sm.moba.towers_down(1), clears, lord, buys, str(items), str(ults), Time.get_ticks_msec() - t0])
+			sm.moba.towers_down(1), clears, lord, wyrm, str(sm.moba.wyrm_stacks), buys, str(items), str(ults), Time.get_ticks_msec() - t0])
 		if mi == 0:
 			check(buys >= 10 and items.all(func(k): return k >= 1), "a whole match: every hero bought items (%d buys)" % buys)
 			check(ults.size() >= 3, "...the bots used their ultimates (%d kinds)" % ults.size())

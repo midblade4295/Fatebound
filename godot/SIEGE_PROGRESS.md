@@ -5018,3 +5018,34 @@ The plan's step 2 (Kevin's picks: replace the Siege field; 112 x 220 m, 3 towers
   PASS on 4 reruns each; apple_iap_test failed once more in 5 runs, real-time and untouched by this change: flaky).
   tools/cold_start_check.sh: PASS. The Play AAB (throwaway key, presets untouched): BASE OK (269 files), CONTENT OK,
   play_games true, bundletool valid. Preview APK: build/Fatebound-Siege-0.31.165-fatebound.apk (preview key).
+
+## 0.31.166 — the Grave Wyrm (step 3 of the new map)
+Kevin approved the concept sheet ("Go") and picked concept "A" (a skeletal dragon with soul-fire in its ribs); Meshy
+made the model from it.
+- The monster (moba.gd): a skeletal dragon in the Rift's east pit, the Bone Lord's opposite. Up at 3:00, back 3:00
+  after it falls. Each kill gives the slaying side a stack of WYRM'S HIDE for the rest of the match: +6 % max health for
+  every one of its heroes, at most 4 stacks (+24 %); its heroes also get 150 gold and 80 XP each, and it counts as an
+  epic (the challenges). Besides its bite it breathes soul-fire every 6 s: a cone (6.5 m, 0.6 rad either side) at
+  whoever it's fighting. Health 14, damage 0.8 (the Lord 26 and 1.9), leash 12 m (rangers shoot it from the rim).
+- Bots: a side goes for it when it's up, it has three heroes up and the edge (more up, or as many and not behind in
+  levels), and its Hide can still grow; they gather three at the pit's rim before they start. Camps of every kind now
+  turn on another hero still hitting them when the one they're after walks out of their leash (League's), instead of
+  resetting and healing. On whole bot matches: 3-4 Wyrms a match, the first at about 4:30-7:00 (before the tuning --
+  health 20, damage 1.5, the camps' old leash, both sides contesting -- one a match, at 14-17 min).
+- The model (tools/wyrm_prep.py, from Meshy's GLB): off its rock base, turned to face +Z, 4 m tall (8.7 m wingspan),
+  11.7k triangles, 1024 px texture; no rig, so its limbs are painted into its vertex colours -- everything more than
+  0.9 m over the surface from the torso falls apart into two wings, the neck, the tail and four legs.
+- The view (scripts/siege/wyrm_body.gd): a shader bends the limbs about their roots -- the wings on a hinge along the
+  body, the neck and head about its base, the tail in a travelling wave, the legs stepping in diagonal pairs -- with
+  its idle (breathing, wings and tail stirring, head turning) on the shader's clock, and clips of its own driven
+  through the shader's uniforms and a pivot: bite, wing buffet, soul-fire, flinches, a fall, and a rise out of the
+  pit when it comes. The cyan in its bones glows. Soul-fire: a GPU particle stream along the breath's cone, cinders, a
+  scorch ring; its fall a burst of the same, rings and a shockwave. Its own ring, a wide name bar; its shaders warmed
+  at load. (Also: the Bone Lord's march and a placed ward never reached their effects -- the event list missed them.)
+- HUD: the WYRM'S HIDE chip, toasts (it stirs, it falls), the kill feed, the camp timers; sounds: the horn, the
+  fireball cue for its breath. The 5V5 panel mentions it.
+- Content: assets/meshy/wyrm in the minions pack.
+- Tests: moba_more_test (14 camps; the Wyrm: up at 3:00 in the east pit, its soul-fire cone, League's leash, the Hide
+  for the slaying side, its stacks to 4 and through levels, red's own stack, bots go for it and stop at the cap).
+  tools/rift_shots.gd: the Wyrm up from the start for the wyrm_* shots, wyrm_close and wyrm_breath.
+- Version 0.31.166, versionCode 252, SERVER_BUILD 0.31.166.

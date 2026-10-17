@@ -291,6 +291,7 @@ const CAMP_KINDS := {
 	"arcane": {"name":"Arcane Wraith", "mobs":[["wraith", Vector2(0, 0)], ["minion", Vector2(-1.8, 1.4)], ["minion", Vector2(1.8, 1.4)]], "respawn":120.0, "buff":"arcane"},
 	"ember": {"name":"Ember Brute", "mobs":[["brute", Vector2(0, 0)], ["minion", Vector2(-1.8, 1.4)], ["minion", Vector2(1.8, 1.4)]], "respawn":120.0, "buff":"ember"},
 	"lord": {"name":"Bone Lord", "mobs":[["lord", Vector2(0, 0)]], "respawn":180.0},
+	"wyrm": {"name":"Grave Wyrm", "mobs":[["wyrm", Vector2(0, 0)]], "respawn":180.0},       # (WYRM_BACK)
 }
 const MONSTERS := {
 	"minion": {"name":"Skeleton", "look":"skel_minion", "cls":"rogue", "hp":2.0, "dmg":0.6, "spd":0.85, "gold":20, "xp":18},
@@ -299,6 +300,7 @@ const MONSTERS := {
 	"wraith": {"name":"Arcane Wraith", "look":"skel_mage", "cls":"mage", "hp":7.0, "dmg":0.8, "spd":0.8, "gold":90, "xp":70, "scale":1.3},
 	"brute": {"name":"Ember Brute", "look":"skel_brute", "cls":"barbarian", "hp":6.5, "dmg":0.85, "spd":0.8, "gold":90, "xp":70, "scale":1.35},
 	"lord": {"name":"Bone Lord", "look":"skel_lord", "cls":"barbarian", "hp":26.0, "dmg":1.9, "spd":0.75, "gold":300, "xp":120, "scale":1.9},
+	"wyrm": {"name":"Grave Wyrm", "look":"wyrm", "cls":"barbarian", "hp":14.0, "dmg":0.8, "spd":0.7, "gold":150, "xp":80, "scale":1.8},
 }
 const MON_GROW := 0.05                                      # a monster comes back 5 % stronger for every minute played
 const LEASH := 9.0
@@ -329,6 +331,25 @@ const LORD_SIEGE := 3.0                                     # 0.31.158: the Bone
 const LORDLING_HP := 12.0                                   # (x the Barbarian's 130, +5 % a minute played)
 const LORDLING_DMG := 1.4
 const BUFF_NAMES := {"arcane":"ARCANE", "ember":"EMBER", "lord":"LORD'S BLESSING"}
+# ---------- 0.31.166: the Grave Wyrm (step 3 of the new map; Kevin picked concept A) ----------
+# A skeletal dragon in the Rift's east pit, the Bone Lord's opposite. Up at 3:00, back WYRM_BACK s after it falls. Each
+# kill gives the slaying side a stack of WYRM'S HIDE for the rest of the match: +WYRM_HIDE max health for every one of
+# its heroes, at most WYRM_STACKS. Besides its bite, every WYRM_BREATH_EVERY s it breathes soul-fire in a cone at
+# whoever it's fighting. Gold and XP to every hero of the side; it counts as an epic monster (the challenges, "epics").
+# A side's bots go for it when it's up and they have the edge (_epic_call), gathering WYRM_GATHER at the pit's rim first.
+# Tuned on whole bot matches: with health 14 and damage 0.8 (a buff monster's; the Lord's 26 and 1.9), the bots take it
+# three or four times a match, the first at about 4:30-7:00 (at 20 and 1.5, one at 14-17 min).
+const WYRM_P := Vector2(26.0, 3.877)                         # the east pit's island (Land.pit_c(1))
+const WYRM_FIRST := 180.0
+const WYRM_BACK := 180.0
+const WYRM_HIDE := 0.06
+const WYRM_STACKS := 4
+const WYRM_BREATH_EVERY := 6.0
+const WYRM_BREATH_R := 6.5
+const WYRM_BREATH_ARC := 0.6                                 # half the cone's angle (radians)
+const WYRM_BREATH_DMG := 1.0                                 # x its damage, to everyone in the cone
+const WYRM_LEASH := 12.0                                     # (wider than the Lord's 8: a ranged hero shoots it from the pit's rim)
+const WYRM_GATHER := 3                                       # bots wait at the rim till this many of theirs are there
 
 const Vision = preload("res://scripts/siege/moba_vision.gd")
 var s                                     # the sim
@@ -346,6 +367,8 @@ var kings: Array = [{}, {}]               # per side: {hp, max_hp, dead, next, q
 var camps: Array = []                     # 0.31.157: {id, kind, side (0/1, -1 the Lord), p, mobs, alive, next, target, hits}
 var rains: Array = []                     # ARROW RAIN in progress: {team, owner, at, r, left, next, dmg}
 var boss_go := [false, false]             # a side's bots are going for the Bone Lord
+var wyrm_go := [false, false]             # 0.31.166: ...for the Grave Wyrm
+var wyrm_stacks := [0, 0]                 # 0.31.166: each side's WYRM'S HIDE
 var _boss_check := 0.0
 var _jid := 0
 var _zid := 0
@@ -443,6 +466,7 @@ func begin(sim, my_hero: String, seed_value: int) -> void:
 		for c in CAMPS_BLUE:
 			_add_camp(str(c.kind), t, c.p if t == 0 else -(c.p as Vector2))
 	_add_camp("lord", -1, BOSS_P)
+	_add_camp("wyrm", -1, WYRM_P)                       # 0.31.166: the Grave Wyrm in the east pit
 
 func _add_tower(team: int, lane: int, tier: int, p: Vector2) -> void:
 	var id := towers.size()
@@ -493,7 +517,8 @@ func _apply(u: Dictionary) -> void:
 	var lv := float(int(u.get("level", 1)) - 1)
 	var before: float = float(u.get("max_hp", 0.0))
 	var it := item_stats(u)                   # 0.31.157: what the items add
-	u["m_hp"] = HERO_HP * (1.0 + LEVEL_GROW * lv) * (1.0 + 0.15 * float(ups.get("hp", 0))) * (1.0 + float(it.get("hp", 0.0)))
+	u["m_hp"] = HERO_HP * (1.0 + LEVEL_GROW * lv) * (1.0 + 0.15 * float(ups.get("hp", 0))) * (1.0 + float(it.get("hp", 0.0))) \
+		* (1.0 + WYRM_HIDE * float(wyrm_stacks[clampi(int(u.team), 0, 1)]))      # 0.31.166: the side's WYRM'S HIDE
 	u["m_dmg"] = (1.0 + LEVEL_GROW * lv) * (1.0 + 0.15 * float(ups.get("dmg", 0))) * (1.0 + float(it.get("dmg", 0.0)))
 	u["m_spd"] = 1.0 + 0.08 * float(ups.get("spd", 0)) + float(it.get("spd", 0.0))
 	u["m_as"] = pow(0.88, float(ups.get("as", 0))) / (1.0 + float(it.get("as", 0.0)))
@@ -1365,6 +1390,8 @@ func _think_hero(u: Dictionary) -> void:
 	# 0.31.157: the Bone Lord when the side goes for him
 	if boss_go[int(u.team)] and u.hp > u.max_hp * 0.45 and _go_lord(u):
 		return
+	if wyrm_go[int(u.team)] and u.hp > u.max_hp * 0.4 and _go_epic(u, _wyrm_unit(), WYRM_GATHER):     # 0.31.166
+		return
 	if u.cls == "priest" and s._think_priest(u):
 		return
 	# under an enemy tower that would shoot me (no minion of ours for it to shoot first, or it's on me): step out
@@ -2020,10 +2047,14 @@ func _bot_shop(u: Dictionary) -> void:
 # ======================================================================================================================
 func _add_camp(kind: String, side: int, p: Vector2) -> void:
 	camps.append({"id":camps.size(), "kind":kind, "side":side, "p":p, "mobs":[], "alive":false,
-		"next":LORD_FIRST if kind == "lord" else CAMP_FIRST, "target":"", "hits":{}, "slam":0.0, "patience":1.0, "reset":"", "reset_at":0.0})
+		"next":LORD_FIRST if kind == "lord" else (WYRM_FIRST if kind == "wyrm" else CAMP_FIRST), "target":"", "hits":{}, "slam":0.0,
+		"patience":1.0, "reset":"", "reset_at":0.0})
 
 func _leash(camp: Dictionary) -> float:
-	return LORD_LEASH if str(camp.kind) == "lord" else LEASH
+	match str(camp.kind):
+		"lord": return LORD_LEASH
+		"wyrm": return WYRM_LEASH
+	return LEASH
 
 func _spawn_camp(camp: Dictionary) -> void:
 	var kd: Dictionary = CAMP_KINDS[camp.kind]
@@ -2062,7 +2093,7 @@ func _spawn_camp(camp: Dictionary) -> void:
 	camp.hits = {}
 	camp.patience = 1.0
 	camp.reset = ""
-	camp.slam = s.time + LORD_SLAM_EVERY
+	camp.slam = s.time + (WYRM_BREATH_EVERY if str(camp.kind) == "wyrm" else LORD_SLAM_EVERY)
 	s._event("camp_up", {"camp":int(camp.id), "kind":str(camp.kind), "ids":ids})
 
 func camp_live(camp: Dictionary) -> Array:
@@ -2124,10 +2155,26 @@ func _step_camps(dt: float) -> void:
 			continue
 		var d: float = (tgt.pos as Vector2).distance_to(camp.p)
 		if d > lr:
-			camp.patience = float(camp.patience) - dt * (PATIENCE_DRAIN + PATIENCE_FAR * (d - lr))
-			if float(camp.patience) <= 0.0:
-				_soft_reset(camp)
-				continue
+			# 0.31.166, League's: its target gone out of the leash -- it turns on the latest other who hit it still inside
+			# (the Wyrm healed whenever its tank walked off, three more of them at it)
+			var other := ""
+			var ot := -INF
+			for hid in camp.hits:
+				var h: Dictionary = s.by_id.get(str(hid), {})
+				if str(hid) == str(camp.target) or h.is_empty() or not s.alive(h) or (h.pos as Vector2).distance_to(camp.p) > lr \
+						or s.time - float(camp.hits[hid]) > 6.0:
+					continue
+				if float(camp.hits[hid]) > ot:
+					ot = float(camp.hits[hid])
+					other = str(hid)
+			if other != "":
+				camp.target = other
+				tgt = s.by_id[other]
+			else:
+				camp.patience = float(camp.patience) - dt * (PATIENCE_DRAIN + PATIENCE_FAR * (d - lr))
+				if float(camp.patience) <= 0.0:
+					_soft_reset(camp)
+					continue
 		else:
 			camp.patience = minf(1.0, float(camp.patience) + dt * PATIENCE_BACK)
 		if str(camp.kind) == "lord" and not live.is_empty() and s.time >= float(camp.slam):
@@ -2141,6 +2188,22 @@ func _step_camps(dt: float) -> void:
 					s._damage(lord, o, float(s.stat(lord, "dmg")) * LORD_SLAM_DMG)
 					hit += 1
 			s._event("lord_slam", {"id":lord.id, "pos":lord.pos, "n":hit})
+		if str(camp.kind) == "wyrm" and not live.is_empty() and not tgt.is_empty() and s.time >= float(camp.slam) \
+				and (tgt.pos as Vector2).distance_to((live[0] as Dictionary).pos) <= WYRM_BREATH_R:
+			# 0.31.166: the Grave Wyrm's soul-fire, a cone at whoever it's fighting
+			camp.slam = s.time + WYRM_BREATH_EVERY
+			var wy: Dictionary = live[0]
+			var dir: Vector2 = ((tgt.pos as Vector2) - (wy.pos as Vector2)).normalized()
+			wy.face = s.angle_of(dir)
+			var burnt := 0
+			for o in units_near(wy.pos, WYRM_BREATH_R + 1.0):
+				if int(o.team) > 1 or not s.alive(o):
+					continue
+				var off: Vector2 = (o.pos as Vector2) - (wy.pos as Vector2)
+				if off.length() <= WYRM_BREATH_R and (off.length() < 1.0 or absf(dir.angle_to(off)) <= WYRM_BREATH_ARC):
+					s._damage(wy, o, float(s.stat(wy, "dmg")) * WYRM_BREATH_DMG)
+					burnt += 1
+			s._event("wyrm_breath", {"id":wy.id, "pos":wy.pos, "dir":dir, "n":burnt})
 
 func _summon_lord(team: int) -> Dictionary:
 	# 0.31.158 (Kevin: "when a team kills the giant in middle, he will spawn on your side like a minion"): the Bone Lord
@@ -2235,6 +2298,21 @@ func _monster_down(dst: Dictionary, by_h: Dictionary) -> void:
 		s._event("lord_down", {"team":side, "by":str(by_h.get("id", ""))})
 		if side >= 0:
 			_summon_lord(side)                         # 0.31.158 (Kevin): he rises again on their side, like a minion
+	elif str(dst.mkind) == "wyrm":
+		# 0.31.166: the Grave Wyrm -- every hero of the slaying side: gold, XP, and a stack of WYRM'S HIDE for good
+		var wside := int(by_h.team) if not by_h.is_empty() else _side_near(dst.pos)
+		if wside >= 0:
+			wyrm_stacks[wside] = mini(WYRM_STACKS, int(wyrm_stacks[wside]) + 1)
+			for hid in heroes[wside]:
+				var wh: Dictionary = s.by_id.get(hid, {})
+				if wh.is_empty():
+					continue
+				add_gold(wh, float(md.gold), dst.pos)
+				add_xp(wh, float(md.xp))
+				wh["epics"] = int(wh.get("epics", 0)) + 1
+				_apply(wh)                                 # (the health it brings comes with it)
+			wyrm_go[wside] = false
+		s._event("wyrm_down", {"team":wside, "by":str(by_h.get("id", "")), "stacks":int(wyrm_stacks[wside]) if wside >= 0 else 0})
 	else:
 		if not by_h.is_empty():
 			add_gold(by_h, float(md.gold), dst.pos)
@@ -2250,7 +2328,7 @@ func _monster_down(dst: Dictionary, by_h: Dictionary) -> void:
 				(by_h.buffs as Dictionary)[buff] = s.time + BUFF_TIME       # the big one's buff: to whoever finished him
 				s._event("buff", {"id":by_h.id, "team":int(by_h.team), "buff":buff})
 	if camp_live(camp).is_empty():
-		if not by_h.is_empty() and str(dst.mkind) != "lord":
+		if not by_h.is_empty() and not str(dst.mkind) in ["lord", "wyrm"]:
 			by_h["camps"] = int(by_h.get("camps", 0)) + 1    # (0.31.164: a camp cleared -- whoever finished it)
 		camp.alive = false
 		camp.next = s.time + float(CAMP_KINDS[camp.kind].respawn)
@@ -2319,7 +2397,7 @@ func _think_jungle(u: Dictionary) -> bool:
 	var bd := INF
 	for pass_i in 2:
 		for camp in camps:
-			if not bool(camp.alive) or str(camp.kind) == "lord":
+			if not bool(camp.alive) or str(camp.kind) in ["lord", "wyrm"]:
 				continue
 			if pass_i == 0 and int(camp.side) != int(u.team):
 				continue
@@ -2368,18 +2446,63 @@ func _boss_call() -> void:
 				if s.alive(h):
 					up[tt] += 1
 		boss_go[t] = up[t] >= 3 and (up[1 - t] <= up[t] - 2 or (lv[t] >= lv[1 - t] + 5 and up[t] >= 4))
+	_epic_call()
+
+func _epic_call() -> void:
+	# 0.31.166: a side's bots go for the Grave Wyrm when it's up, they have at least three up and aren't outnumbered (as
+	# many up: not behind in levels either -- the side with the edge takes it, rather than both meeting at the pit), and
+	# its Hide can still grow for them; they give it up when that's no longer so (the Lord comes first)
+	var wy := _wyrm_unit()
+	var up := [0, 0]
+	var lv := [0, 0]
+	for tt in 2:
+		for hid in heroes[tt]:
+			var h: Dictionary = s.by_id.get(hid, {})
+			if h.is_empty():
+				continue
+			lv[tt] += int(h.level)
+			if s.alive(h):
+				up[tt] += 1
+	for t in 2:
+		wyrm_go[t] = not wy.is_empty() and not boss_go[t] and int(wyrm_stacks[t]) < WYRM_STACKS and up[t] >= 3 \
+			and (up[t] > up[1 - t] or (up[t] == up[1 - t] and lv[t] >= lv[1 - t]))
 
 func _go_lord(u: Dictionary) -> bool:
+	return _go_epic(u, _lord_unit())
+
+func _go_epic(u: Dictionary, boss: Dictionary, gather := 0) -> bool:
 	if not bool(u.bot):
 		return false
-	var lord := _lord_unit()
-	if lord.is_empty() or (lord.pos as Vector2).distance_to(u.pos) > 60.0:
+	if boss.is_empty() or (boss.pos as Vector2).distance_to(u.pos) > 60.0:
 		return false
 	# their heroes at the pit first
 	for o in units_near(u.pos, 9.0):
-		if int(o.team) == 1 - int(u.team) and s.alive(o) and bool(o.get("hero", false)) and (o.pos as Vector2).distance_to(lord.pos) < 10.0 \
+		if int(o.team) == 1 - int(u.team) and s.alive(o) and bool(o.get("hero", false)) and (o.pos as Vector2).distance_to(boss.pos) < 10.0 \
 				and (o.pos as Vector2).distance_to(u.pos) < 9.0 and can_see(int(u.team), o):
 			_fight_h(u, o)
 			return true
-	_fight_h(u, lord)
+	if gather > 0:
+		# 0.31.166: the Grave Wyrm is a fight for several -- one at a time it burns them down and heals in between: wait at the
+		# rim till `gather` of ours are there, unless it's already fighting one of us
+		var fighting: Dictionary = s.by_id.get(str(camps[int(boss.mon)].target), {})
+		if fighting.is_empty() or int(fighting.team) != int(u.team):
+			var near := 0
+			for o in units_near(boss.pos, 14.0):
+				if int(o.team) == int(u.team) and bool(o.get("hero", false)) and s.alive(o):
+					near += 1
+			if near < gather:
+				var stage: Vector2 = (boss.pos as Vector2) + ((u.pos as Vector2) - (boss.pos as Vector2)).normalized() * 9.5
+				if (u.pos as Vector2).distance_to(stage) > 1.2:
+					s._nav_to(u, stage, 1.0)
+				else:
+					u.move = Vector2.ZERO
+				return true
+	_fight_h(u, boss)
 	return true
+
+func _wyrm_unit() -> Dictionary:
+	for camp in camps:
+		if str(camp.kind) == "wyrm" and bool(camp.alive):
+			var live := camp_live(camp)
+			return live[0] if not live.is_empty() else {}
+	return {}

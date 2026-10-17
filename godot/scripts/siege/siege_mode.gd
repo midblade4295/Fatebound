@@ -1345,9 +1345,11 @@ func _event_sound(e: Dictionary) -> void:
 			_cue("tm_sword_hit", 3, e.get("pos", Vector2.INF), HEAR_R, mine)
 		"lord_slam":
 			_cue("tm_rock_hit", 2, e.get("pos", Vector2.INF), 40.0, false, 1.0)
-		"lord_down", "camp_up", "lord_march":
-			if str(e.k) != "camp_up" or str(e.get("kind", "")) == "lord":
+		"lord_down", "camp_up", "lord_march", "wyrm_down":
+			if str(e.k) != "camp_up" or str(e.get("kind", "")) in ["lord", "wyrm"]:
 				_cue("horn", 1, Vector2.INF, 0.0, true, 0.8)
+		"wyrm_breath":                                         # 0.31.166: the Grave Wyrm's soul-fire
+			_cue("tm_fireball", 3, e.get("pos", Vector2.INF), 40.0, false, 1.0)
 		"buff":
 			_cue("surge", 1, _unit_pos(e.get("id", "")), 24.0, mine, 0.8)
 		"ult_ready":

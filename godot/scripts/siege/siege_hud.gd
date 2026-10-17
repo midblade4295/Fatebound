@@ -865,7 +865,14 @@ func on_event(e: Dictionary) -> void:
 			toast("WE SLEW THE BONE LORD! Gold for all, and his blessing" if int(e.get("team", -1)) == int(me.team) else "THEY SLEW THE BONE LORD", VisualTheme.GOLD if int(e.get("team", -1)) == int(me.team) else VisualTheme.RED)
 		"camp_up":
 			if str(e.get("kind", "")) == "lord":
-				toast("THE BONE LORD HAS RISEN ON THE ISLAND", Color("#d8c2ff"))
+				toast("THE BONE LORD HAS RISEN IN THE WEST PIT", Color("#d8c2ff"))
+			elif str(e.get("kind", "")) == "wyrm":
+				toast("THE GRAVE WYRM STIRS IN THE EAST PIT", Color("#7fffd4"))
+		"wyrm_down":                                     # 0.31.166
+			var ours_w := int(e.get("team", -1)) == int(me.team)
+			var pct := int(round(sim.moba.WYRM_HIDE * 100.0 * int(e.get("stacks", 0))))
+			toast(("WE SLEW THE GRAVE WYRM! WYRM'S HIDE x%d: +%d%% HEALTH FOR ALL" if ours_w else "THEY SLEW THE GRAVE WYRM -- THEIR HIDE x%d (+%d%%)") % [int(e.get("stacks", 0)), pct],
+				VisualTheme.GOLD if ours_w else VisualTheme.RED)
 		"lord_march":                                    # 0.31.158 5V5: the slain Lord marches for the slayers
 			toast("THE BONE LORD MARCHES WITH US DOWN THE MIDDLE!" if int(e.get("team", -1)) == int(me.team) else "THE BONE LORD MARCHES ON US -- MIDDLE LANE!",
 				VisualTheme.GOLD if int(e.get("team", -1)) == int(me.team) else VisualTheme.RED)
@@ -1189,6 +1196,7 @@ func _top_key(me: Dictionary) -> Array:
 		var b: Dictionary = me.get("buffs", {})
 		for bk in ["arcane", "ember", "lord"]:
 			k.append(int(maxf(0.0, float(b.get(bk, -1.0)) - float(sim.time))))
+		k.append(int(sim.moba.wyrm_stacks[clampi(t, 0, 1)]))
 	else:
 		k.append_array([sim.score[0], sim.score[1], sim.stock[t].wood, sim.stock[t].stone, int(me.load.n), str(me.load.kind)])
 		for g in sim.gates:
@@ -1388,6 +1396,11 @@ func _kf_event(e: Dictionary, me: Dictionary) -> void:
 			var lb := str(e.get("by", ""))
 			if lb != "" and sim.by_id.has(lb):
 				_kf_add([kf_name(lb), [" slew the Bone Lord", VisualTheme.GOLD if ours_l else VisualTheme.RED]], lb == player_id)
+		"wyrm_down":
+			var ours_k := int(e.get("team", -1)) == int(me.team)
+			var wb := str(e.get("by", ""))
+			if wb != "" and sim.by_id.has(wb):
+				_kf_add([kf_name(wb), [" slew the Grave Wyrm", VisualTheme.GOLD if ours_k else VisualTheme.RED]], wb == player_id)
 		"buff":
 			if str(e.get("id", "")) != str(player_id) and sim.by_id.has(str(e.get("id", ""))):
 				_kf_add([kf_name(str(e.id)), [" took %s" % str(sim.moba.BUFF_NAMES.get(str(e.buff), "")), Color("#7fb8ff") if str(e.buff) == "arcane" else Color("#ff9a5a")]], false)
@@ -2337,6 +2350,10 @@ func _draw_gold_and_items(me: Dictionary) -> void:
 			var col := Color("#7fb8ff") if k == "arcane" else (Color("#ff9a5a") if k == "ember" else Color("#d8c2ff"))
 			_text(Vector2(x, y), txt, 11, col, _bold, HORIZONTAL_ALIGNMENT_LEFT, 160)
 			x += _bold.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 11).x + 10.0
+	var hide := int(sim.moba.wyrm_stacks[clampi(int(me.team), 0, 1)])
+	if hide > 0:                                          # 0.31.166: the side's WYRM'S HIDE (for the rest of the match)
+		var ht := "WYRM'S HIDE x%d +%d%%" % [hide, int(round(sim.moba.WYRM_HIDE * 100.0 * hide))]
+		_text(Vector2(x, y), ht, 11, Color("#7fffd4"), _bold, HORIZONTAL_ALIGNMENT_LEFT, 180)
 
 func _draw_shop_pulse(me: Dictionary) -> void:
 	if sim.moba.can_shop(me):
@@ -2358,5 +2375,5 @@ func _draw_camp_timers() -> void:
 			continue
 		sp.x = clampf(sp.x, 70.0, size.x - 70.0)
 		var left := maxf(0.0, float(camp.next) - float(sim.time))
-		var nm := str(sim.moba.CAMP_KINDS[camp.kind].name).to_upper() + " " if str(camp.kind) in ["lord", "arcane", "ember"] else ""
+		var nm := str(sim.moba.CAMP_KINDS[camp.kind].name).to_upper() + " " if str(camp.kind) in ["lord", "wyrm", "arcane", "ember"] else ""
 		_text(sp, "%s%d:%02d" % [nm, int(left) / 60, int(left) % 60], 13, Color("#e8dcc0"), _bold)

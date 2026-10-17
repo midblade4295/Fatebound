@@ -12,6 +12,7 @@ const PATH_TEX := preload("res://assets/terrain/path.png")       # (the castle f
 const DIRT_TEX := preload("res://assets/terrain/dirt.png")       # 0.31.126: the map's dirt paths (tools/make_dirt_texture.py)
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 const WeaponFx = preload("res://scripts/siege/weapon_fx.gd")
+const WyrmBody = preload("res://scripts/siege/wyrm_body.gd")   # 0.31.166: the Grave Wyrm (a body without a rig)
 
 const HEX := "res://assets/kaykit/hex/"
 const FOREST := "res://assets/kaykit/forest/"
@@ -79,6 +80,10 @@ const LOOKS := {
 	"minion_siege": {"model":"meshy:minion_siege","r":"mw/minion_cannon","l":"","idle":"g/Idle_A","attack":"r/Ranged_Magic_Shoot","ability":"r/Ranged_Magic_Spellcasting"},
 	"minion_super": {"model":"meshy:minion_super","r":"mw/minion_hammer","l":"","idle":"m/Melee_2H_Idle","attack":"m/Melee_2H_Attack_Chop","ability":"m/Melee_2H_Attack_Spin","combo":["m/Melee_2H_Attack_Chop","m/Melee_2H_Attack_Slice","m/Melee_2H_Attack_Stab"]},
 	"skel_lord": {"model":"Skeleton_Warrior","r":"Skeleton_Axe","l":"Skeleton_Shield_Large_A","idle":"g/Idle_A","attack":"m/Melee_1H_Attack_Chop","ability":"m/Melee_2H_Attack_Spin","tint":"#a993d6","combo":["m/Melee_1H_Attack_Chop","m/Melee_1H_Attack_Slice_Horizontal","m/Melee_Block_Attack"]},
+	# 0.31.166 (Kevin picked concept "A"): the Grave Wyrm, a skeletal dragon from Meshy -- a body of its own with no rig
+	# (wyrm_body.gd: its limbs bent in a shader, its clips its own). "size": its scale in place of BODY_SCALE x mscale
+	# (the model is 4 m tall); "ring": its ring's radius.
+	"wyrm": {"model":"prop:wyrm","r":"","l":"","idle":"w/Idle","attack":"w/Bite","ability":"w/Swipe","combo":["w/Bite","w/Bite","w/Swipe"],"size":1.0,"ring":2.4},
 }
 const MINION_LOOKS := {"melee":"minion_melee", "caster":"minion_caster", "siege":"minion_siege", "super":"minion_super"}
 const LOOP_HINTS := ["Idle","Running","Walking","Hammering","Holding","Aiming","_Pose","Blocking","Chopping","Pickaxing"]
@@ -226,6 +231,14 @@ func _warm_up() -> void:
 		var n := _make_projectile(kind)
 		n.position = at
 		get_tree().create_timer(0.3).timeout.connect(n.queue_free)
+	if sim.moba != null:
+		# 0.31.166: the Grave Wyrm's body and soul-fire (their shaders, before it rises at 3:00)
+		var wm := WyrmBody.make(Stage.scene(WyrmBody.MODEL), _cast_static)
+		if not wm.is_empty():
+			(wm.body as Node3D).position = at + Vector3(0, 0, -3.0)
+			add_child(wm.body)
+			get_tree().create_timer(0.3).timeout.connect((wm.body as Node3D).queue_free)
+		_soul_fire(at, Vector3.UP, 0.3, 0.1)
 
 # ---------- High-quality ambience (Round 32: "add even more effects to make the game look more beautiful") ----------
 const CLOUD_STRENGTH := 0.2
@@ -3626,6 +3639,8 @@ static func make_body(cls: String, cosmetic: Dictionary = {}) -> Dictionary:
 	for hand in ["r", "l"]:
 		if cosmetic.has(hand):
 			look[hand] = cosmetic[hand]
+	if str(look.model) == "prop:wyrm":
+		return WyrmBody.make(Stage.scene(WyrmBody.MODEL), _cast_static)
 	if str(look.model) in ["Knight", "meshy:knight", "meshy:crusader"] and str(look.l) == "":
 		look.l = "bits/shield_B"            # 0.31.41 (Kevin): a Knight (and a Crusader) always carries a shield
 	var meshy := str(look.model).begins_with("meshy:")
@@ -4041,6 +4056,9 @@ func _ensure_actor(u: Dictionary) -> Dictionary:
 	if minion_look and vt(int(u.team)) == 1:
 		_team_red(made.body)                    # 0.31.159: the minions are painted in the blue team's colours
 	made.body.scale = Vector3.ONE * BODY_SCALE * (MINION_SCALE if bool(u.get("minion", false)) else 1.0) * float(u.get("mscale", 1.0))   # 0.31.157: big monsters; 0.31.128 (Kevin): every class the upgraded size (base was 1.0); 0.31.155: 5v5 minions smaller
+	var look: Dictionary = LOOKS.get(look_key(u), {})
+	if look.has("size"):
+		made.body.scale = Vector3.ONE * float(look.size)     # 0.31.166: the Wyrm, at its own size
 	a.body = made.body
 	a.player = made.player
 	_cape_setup(a)
@@ -4050,11 +4068,16 @@ func _ensure_actor(u: Dictionary) -> Dictionary:
 	a.clip = ""
 	a.busy_until = 0.0
 	_play(a, str(LOOKS.get(str(a.mlook) if str(a.mlook) != "" else u.cls, LOOKS.villager).idle))
+	a["big"] = float(look.get("ring", 0.0))                # (0.31.166: a body far wider than a man)
+	if a.big > 0.0 and sim.alive(u) and (sim.moba == null or sim.moba.can_see(_my_team(), u)):
+		_play(a, "w/Rise", 1.0, 1.6)                        # up out of its pit when it comes (seen)
 	# Upgraded: a gold ring (no material overrides on skinned meshes; 0.31.128: no longer a bigger body too).
 	var rc: Color = GOLD if (u.up or u.id == player_id) else TEAM_COLORS[vt(int(u.team))]
 	rc.a = 0.9
 	(a.ring as MeshInstance3D).material_override = _fx_mat(rc)
 	(a.ring as MeshInstance3D).mesh = _ring_mesh(0.75 if u.up else (0.62 if u.id == player_id else 0.5), 0.14 if u.up else 0.12)
+	if float(a.big) > 0.0:
+		(a.ring as MeshInstance3D).mesh = _ring_mesh(float(a.big), 0.22)
 	return a
 
 func _play(a: Dictionary, clip: String, speed := 1.0, busy := 0.0) -> void:
@@ -4077,11 +4100,11 @@ func _play(a: Dictionary, clip: String, speed := 1.0, busy := 0.0) -> void:
 var anim_cull := true
 var anim_active := 0
 
-func _on_screen(p: Vector3, planes: Array) -> bool:
-	# Bounding sphere (1.8 m) against the camera frustum planes.
+func _on_screen(p: Vector3, planes: Array, r := 1.8) -> bool:
+	# Bounding sphere (1.8 m; 0.31.166: a big body's own) against the camera frustum planes.
 	var c := p + Vector3(0, 1.0, 0)
 	for pl in planes:
-		if (pl as Plane).distance_to(c) > 1.8:
+		if (pl as Plane).distance_to(c) > r:
 			return false
 	return true
 
@@ -4197,7 +4220,7 @@ func sync(dt: float) -> void:
 					_ragdoll_end(a)
 				root.visible = not benched
 		if prof_on: tu = _pv("a.place+fog", tu)
-		var show := root.visible and (planes.is_empty() or _on_screen(newp, planes))
+		var show := root.visible and (planes.is_empty() or _on_screen(newp, planes, 1.8 if float(a.get("big", 0.0)) <= 0.0 else 5.0))
 		if show or not alive_u or bool(a.dead):
 			_sync_vanish(a, u)
 			_sync_load(a, u)
@@ -4265,6 +4288,7 @@ func _build_moba() -> void:
 func _sync_moba() -> void:
 	_sync_rains()
 	_sync_auras()
+	_sync_breaths()
 	_sync_fog()
 	_sync_wards()
 	var me: Dictionary = sim.by_id.get(player_id, {})
@@ -4601,12 +4625,134 @@ func _moba_fx(e: Dictionary) -> void:
 					ring_at(lm, TEAM_COLORS[vt(int(e.team))].lightened(0.2), 2.0 + i * 1.6, 0.7 + i * 0.2)
 				for i in 12:
 					spark(lm + Vector3(randf_range(-1.2, 1.2), 0.3 + randf() * 2.4, randf_range(-1.2, 1.2)), Color("#d8c2ff"))
+		"wyrm_breath":                                      # 0.31.166: the Grave Wyrm's soul-fire
+			if a.is_empty() or not is_instance_valid(a.root) or not (a.root as Node3D).visible:
+				return
+			_play(a, "w/Breath", 1.0, 1.4)
+			var bd: Vector2 = (e.get("dir", Vector2(0, 1)) as Vector2).normalized()
+			var root3: Node3D = a.root
+			var mouth: Vector3 = root3.position + Basis(Vector3.UP, Sim.angle_of(bd)) * (WyrmBody.mouth_local() * (a.body as Node3D).scale.x)
+			_breaths.append({"at":_time + WyrmBody.BREATH_AT, "from":mouth, "dir":bd})
+		"wyrm_down":                                        # 0.31.166: its soul-fire bursts out of it
+			var wd := _ground(sim.moba.WYRM_P, 0.2)
+			for id in actors:
+				if float(actors[id].get("big", 0.0)) > 0.0 and is_instance_valid(actors[id].root):
+					wd = (actors[id].root as Node3D).position + Vector3(0, 0.2, 0)
+			for i in 3:
+				ring_at(wd, WYRM_FIRE, 3.0 + i * 2.2, 0.8 + i * 0.25)
+			_soul_fire(wd + Vector3(0, 1.6, 0), Vector3.UP, 1.4, 0.9)
+			shockwave(wd + Vector3(0, 0.3, 0), 7.0)
+			for i in 16:
+				spark(wd + Vector3(randf_range(-2.5, 2.5), 0.4 + randf() * 3.0, randf_range(-2.5, 2.5)), WYRM_FIRE)
+			shake(0.6)
 		"ward":
 			if int(e.get("team", -1)) == _my_team():
 				var wp3 := _ground(e.pos, 0.15)
 				ring_at(wp3, Color("#8fe3ff"), 3.0, 0.5)
 				for i in 5:
 					spark(wp3 + Vector3(randf_range(-0.3, 0.3), 0.4 + randf() * 1.0, randf_range(-0.3, 0.3)), Color("#bdf0ff"))
+
+# ---------- the Grave Wyrm's soul-fire (0.31.166) ----------
+# A pale cyan-green flame poured from its jaws along the breath's line: a GPU particle stream (the smoke puff sprite, added
+# on, white-hot to green to nothing, swelling as it goes) spread to the sim's cone (moba.gd WYRM_BREATH_ARC, out to
+# WYRM_BREATH_R), cinders, and the ground it reaches scorched with a ring.
+const WYRM_FIRE := Color("#7dffd0")
+var _breaths: Array = []                   # {at, from, dir}: soul-fire to pour (once the clip has lunged)
+static var _soul_pm: ParticleProcessMaterial = null
+static var _soul_draw: StandardMaterial3D = null
+
+func _sync_breaths() -> void:
+	for i in range(_breaths.size() - 1, -1, -1):
+		var b: Dictionary = _breaths[i]
+		if _time < float(b.at):
+			continue
+		_breaths.remove_at(i)
+		var d2: Vector2 = b.dir
+		var from: Vector3 = b.from
+		var from2 := Vector2(from.x, from.z)
+		var reach: float = float(sim.moba.WYRM_BREATH_R)
+		_soul_fire(from, (Vector3(d2.x, 0.0, d2.y) + Vector3(0, -0.28, 0)).normalized(), 1.0, 0.85)
+		ring_at(_ground(from2 + d2 * reach * 0.8), WYRM_FIRE, reach * 0.9, 0.7)
+		for k in 10:
+			var off := d2.rotated(randf_range(-1.0, 1.0) * float(sim.moba.WYRM_BREATH_ARC)) * randf_range(0.3, 1.0) * reach
+			spark(_ground(from2 + off, 0.3 + randf() * 0.8), WYRM_FIRE)
+		var me: Dictionary = sim.by_id.get(player_id, {})
+		if not me.is_empty() and (me.pos as Vector2).distance_to(from2) < 12.0:
+			shake(0.3)
+
+func _soul_fire(at: Vector3, dir: Vector3, size: float, pour: float) -> void:
+	# the flame stream, poured for `pour` seconds along dir from at; straight up (Vector3.UP), one burst
+	if _soul_pm == null:
+		var pm := ParticleProcessMaterial.new()
+		pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
+		pm.emission_sphere_radius = 0.25
+		pm.direction = Vector3(0, 0, -1)
+		pm.spread = 30.0                                  # about WYRM_BREATH_ARC (0.6 rad) either side
+		pm.initial_velocity_min = 10.0
+		pm.initial_velocity_max = 14.0
+		pm.damping_min = 9.0
+		pm.damping_max = 13.0
+		pm.gravity = Vector3(0, 2.2, 0)                   # flames rise
+		pm.angle_min = -180.0
+		pm.angle_max = 180.0
+		pm.angular_velocity_min = -90.0
+		pm.angular_velocity_max = 90.0
+		pm.scale_min = 0.7
+		pm.scale_max = 1.1
+		var sc := Curve.new()
+		sc.add_point(Vector2(0.0, 0.3))
+		sc.add_point(Vector2(0.35, 1.0))
+		sc.add_point(Vector2(1.0, 1.7))
+		var sct := CurveTexture.new()
+		sct.curve = sc
+		pm.scale_curve = sct
+		var g := Gradient.new()
+		g.offsets = PackedFloat32Array([0.0, 0.12, 0.45, 1.0])
+		g.colors = PackedColorArray([Color(0.75, 1.0, 0.95, 0.0), Color(0.45, 1.0, 0.8, 0.5), Color(0.12, 0.7, 0.5, 0.32), Color(0.0, 0.2, 0.15, 0.0)])
+		var gt := GradientTexture1D.new()
+		gt.gradient = g
+		pm.color_ramp = gt
+		pm.lifetime_randomness = 0.3
+		_soul_pm = pm
+		var m := StandardMaterial3D.new()
+		m.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+		m.billboard_keep_scale = true
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		m.vertex_color_use_as_albedo = true
+		m.albedo_texture = SMOKE_TEX
+		m.cull_mode = BaseMaterial3D.CULL_DISABLED
+		_soul_draw = m
+	var p := GPUParticles3D.new()
+	p.process_material = _soul_pm
+	var q := QuadMesh.new()
+	q.size = Vector2.ONE
+	q.material = _soul_draw
+	p.draw_pass_1 = q
+	p.amount = 90
+	p.lifetime = 0.9
+	p.fixed_fps = 30
+	p.interpolate = true
+	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	p.visibility_aabb = AABB(Vector3(-10, -4, -10), Vector3(20, 14, 20))
+	if low_fx:
+		p.amount_ratio = 0.5
+	p.position = at
+	var burst := absf(dir.normalized().dot(Vector3.UP)) > 0.99
+	if burst:
+		p.basis = Basis(Vector3.RIGHT, PI * 0.5).scaled(Vector3.ONE * size)          # its -Z up
+		p.explosiveness = 0.8
+		p.one_shot = true
+	else:
+		p.basis = Basis.looking_at(dir, Vector3.UP).scaled(Vector3.ONE * size)
+	add_child(p)
+	p.restart()
+	if not burst:
+		get_tree().create_timer(pour).timeout.connect(func():
+			if is_instance_valid(p):
+				p.emitting = false)
+	get_tree().create_timer(pour + p.lifetime + 0.5).timeout.connect(p.queue_free)
 
 func _sync_rains() -> void:
 	for i in range(_rain_fx.size() - 1, -1, -1):
@@ -5055,8 +5201,9 @@ func on_event(e: Dictionary) -> void:
 			ring_at(Vector3(kp.x, ky + 0.2, kp.y), Color("#ffd65a"), float(sim.moba.KING_REACH), 0.5)
 			for i in 6:
 				spark(Vector3(kp.x + randf_range(-1.5, 1.5), ky + 0.4 + randf() * 1.0, kp.y + randf_range(-1.5, 1.5)), Color("#ffd65a"))
-		"ult", "flurry_hit", "lord_slam", "camp_up", "buff", "lord_down", "gold":
-			_moba_fx(e)                           # 0.31.157 5V5: ultimates, the jungle, gold
+		"ult", "flurry_hit", "lord_slam", "camp_up", "buff", "lord_down", "gold", "lord_march", "ward", "wyrm_breath", "wyrm_down":
+			_moba_fx(e)                           # 0.31.157 5V5: ultimates, the jungle, gold (0.31.166: the Wyrm; and the
+			                                      # Lord's march and a placed ward, whose effects were never reached)
 		"king_down":
 			var kd: Vector2 = sim.moba.king_pos(int(e.team))
 			var kdy := Sim.height_at(kd)
@@ -5506,7 +5653,7 @@ func bars() -> Array:
 		if u.has("mon") and float(u.get("mscale", 1.0)) > 1.0:
 			bar["name"] = str(sim.moba.MONSTERS[str(u.mkind)].name)        # 0.31.157: the buff monsters and the Bone Lord
 			bar["name_color"] = Color("#ffe9a6")
-			if str(u.mkind) == "lord":
+			if str(u.mkind) in ["lord", "wyrm"]:
 				bar["wide"] = true
 		elif bool(u.get("lordling", false)):
 			bar["name"] = "Bone Lord"                                       # 0.31.158: marching for a side

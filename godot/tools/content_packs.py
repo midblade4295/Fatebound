@@ -54,7 +54,8 @@ PACKS = [
     ("world", ["assets/meshy/castle/*", "assets/meshy/*_shop/*", "assets/meshy/workshop/*", "assets/meshy/outpost_*/*",
                "assets/kaykit/*", "assets/kings/*", "assets/terrain/*", "assets/props/*"]),
     ("heroes", ["assets/meshy/%s/*" % b for b in BODIES]),
-    ("minions", ["assets/meshy/minion_*/*"]),   # 0.31.159: the 5v5 lane minions (heroes would pass GitHub's 100 MB)
+    ("minions", ["assets/meshy/minion_*/*", "assets/meshy/wyrm/*"]),   # 0.31.159: the 5v5 lane minions (heroes would pass
+                                                                      # GitHub's 100 MB); 0.31.166: the Grave Wyrm
     ("weapons", ["assets/meshy/weapons/*"]),
     ("war", ["assets/meshy/war/*", "assets/war_land/*"]),   # 0.31.136-137: the war map (its own pack: world stays put)
     ("audio", ["assets/music/*", "assets/sounds/*", "assets/vo/*"]),
