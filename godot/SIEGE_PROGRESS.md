@@ -5107,3 +5107,67 @@ above).
   being baked beside it) -- re-run alone: PASS. tools/cold_start_check.sh: PASS. The Play AAB (throwaway key, presets
   untouched): BASE OK (273 files), CONTENT OK, play_games true, bundletool valid. Preview APK:
   build/Fatebound-Siege-0.31.167-fatebound.apk (preview key; sha256 73442bf6...de5042).
+
+## 0.31.168 — Six new heroes, one a role, unlocked with gold (Kevin's picks: Golem, Dragoon, Duelist, Stormcaller, Musketeer, Druid)
+- Bodies: Kevin's six concept picks -> turnarounds (ElevenLabs) -> Meshy multi-image-to-3D + auto-rig (35 credits each,
+  210) -> tools/retarget_meshy.gd (KK_FOR: Golem <- Barbarian, fit by his full height -- his head sits low between the
+  shoulders; Dragoon <- Knight, Duelist <- Rogue, Stormcaller and Druid <- Mage, Musketeer <- Archer, by the neck).
+  assets/meshy/<golem|dragoon|duelist|stormcaller|musketeer|druid>/, textures VRAM-compressed like the others.
+- Props: one parts sheet of the six concepts' gear (ElevenLabs gpt-image-2 2K, the picks as reference, ~502 credits) ->
+  crop -> Meshy image-to-3D (meshy-6-lite 15 each; the Golem's slab shield meshy-7.1, 30; 120 in all, 9 left) -> fit to
+  KayKit templates (tools/meshy_weapon.py): golem_hammer (hammer_C), golem_shield (shield_A), dragoon_halberd
+  (halberd), duelist_rapier (sword_1handed, 1.15 long), storm_staff and druid_staff (staff), musket (crossbow_2handed,
+  held in the bow clips like the Ranger's crossbow). The Duelist's parrying dagger is the Needlepoint stiletto.
+  MESHY_WEAPON_LIKE entries; not cosmetics (unit_cosmetic leaves a body of its own alone).
+- Each plays on an old class's frame -- its basic attack, swings, a bot's way of fighting (Golem a Barbarian, Dragoon a
+  Knight without the shield, Duelist a Rogue, Stormcaller and Druid a Mage, Musketeer an Archer) -- with its own body
+  (u.look), numbers (moba.HERO_BASE through stat(): health, damage, speed, reach, swing, shot speed, splash), shot
+  (HERO_SHOT: the Stormcaller's lightning bolt, the Musketeer's ball, the Druid's thorn) and whole kit. The Golem
+  stands 12 % taller (mscale).
+- Kits (moba_kits.gd; their Q is a kit spell too -- it recharges on cd_ability, the old Q's clock, so the Q button, the
+  bots' "ability" and ability_of() all carry on; R in kits.ult(), names/recharges/text in moba.ULTS):
+  - GOLEM (tank): Q BOULDER (a rolling boulder, first enemy stunned 1 s), W STONESKIN (40 % less damage 4 s, slows
+    fall off), E QUAKE (hurt and 40 % slow round him), R LANDSLIDE (rolls 9 m through them; the ground breaks where
+    he stops: stun 1.5 s).
+  - DRAGOON (fighter): Q SWEEP (wide halberd arc; 5 % health back per hero hit), W IMPALE (a 6 m thrust that drags
+    everyone in it 3 m in and slows), E VAULT (6 m pole-vault, next strike +60 %), R DRAGON DIVE (leaps onto a hero up
+    to 11 m off and crashes down: heavy damage, 1 s stun round her).
+  - DUELIST (assassin): Q LUNGE (5 m; first enemy met takes a hard thrust -- a hero, and it recharges twice as fast),
+    W RIPOSTE (1 s parry: nothing lands; if struck, he answers the nearest enemy: heavy thrust and 0.8 s stun), E FEINT
+    (springs back and vanishes 1.5 s: the first strike out of it hits double), R GRAND CHALLENGE (five strikes from
+    every side at the nearest hero up to 8 m, harder the more hurt he is -- the Assassin's FLURRY dance on one target).
+  - STORMCALLER (mage): Q CHAIN LIGHTNING (strikes the nearest enemy, leaps to three more, each weaker), W STATIC FIELD
+    (crackling ground: shocks and slows 3 s), E GUST (blows enemies back 4 m and slows), R THUNDERSTORM (a storm up to
+    13 m off: a bolt every 0.45 s onto an enemy under it, each a short stun).
+  - MUSKETEER (marksman): Q BUCKSHOT (a cone of shot that shoves; much harder close up), W POWDER KEG (lobbed, bursts
+    0.8 s later, throwing everyone round it), E SMOKE ROLL (rolls 4.5 m away out of a slowing smoke cloud; next shot
+    +60 %), R QUICKDRAW (shoots every enemy hero in sight within 15 m, up to five, for double + their missing health).
+  - DRUID (support): Q REJUVENATE (the most hurt ally hero: 6 % health a second for 5 s), W ENTANGLE (roots under an
+    enemy: hurt and held 1.5 s), E BARKSKIN (the most hurt ally: 30 % less damage 4 s), R WILD GROWTH (a 7 m grove for
+    5 s: allies heal 5 % a second, enemies slowed and stung).
+  New pieces: zones that strike (THUNDERSTORM), delayed bursts that throw (keg) or don't push (roots) -- a "burst"
+  event; heal-over-time on the poison clock; damage taken down through BULWARK's dr; a parry that answers; dashes that
+  hand back their recharge and land with a stun; a leap's arc in the view (LEAP, VAULT, DRAGON DIVE rise and fall).
+  Bots: Q, W and E by the kit's rules (the sim's random "ability" skips them), each ultimate when it's worth it
+  (bot_ult); the Golem and the Druid buy a tank's and a support's items. The Dragoon never raises a shield.
+- The view: the shots (a crackling blue bolt, a lead ball and its white trail, a glowing thorn, a rune boulder that
+  rolls), lightning lines (chain lightning, the storm's bolts, QUICKDRAW's tracers), the keg's arc and blast, roots
+  bursting up, stone/bark over a hero while it lasts, the parry ring; each cast's clip. Sounds from the game's set
+  (the musket a muffled blast, the bolt a crackle, roots and stone a crumble, the riposte the parry ring).
+- The hero window (moba_panel.gd): eighteen heroes as a table of League's six roles -- a column each under its name,
+  the class, its upgrade and the new hero in it; new portraits (tools/render_skin_icons.gd). The new six cost 2,000
+  gold each (economy.gd HERO_PRICES; Kevin: "Unlock with gold"): a locked card is dimmed with its price, picking one
+  shows its kit with LOCKED and the gold you have, and BATTLE turns into UNLOCK 2000 GOLD (greyed while you can't
+  afford it). Owned heroes: the profile's new "heroes" list (added on load, no reset); profile.buy_hero is an economy
+  op ("buy_hero"), so the server's copy replays it -- the server needs this build's profile.gd (a redeploy) before
+  unlocks stick with the server economy on. The bots play all eighteen.
+- Content: a new "champions" pack (the six bodies; heroes and minions are near GitHub's 100 MB), weapons and ui
+  rebuilt.
+- HUD: the Q button shows the kit's name and recharge for the new six; the status line names the hero, not his frame.
+- Tests: moba_kits_test (three of each role; the 18 new Q/W/E spells and 6 ultimates each do what they say; the new
+  frames' numbers and shots); moba_ui_test (18 heroes; the Golem locked at 2,000 with 1,000 gold, then unlocked with
+  2,600 -> 600); content_test (8 packs). tools/hero_pose_shot.gd (new: heroes in gear, by clip and angle);
+  tools/kit_shots.gd (CLOSE=1, the enemy held in place for each cast).
+- Credits: ElevenLabs ~2,518 (six concept sheets) + ~3,894 (six turnarounds) + ~502 (props sheet); Meshy 210 (bodies)
+  + 120 (props), 9 left.
+- Version 0.31.168, versionCode 254, SERVER_BUILD 0.31.168.

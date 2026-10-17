@@ -4,10 +4,10 @@
  "packs": [
   {
    "name": "ui",
-   "file": "ui-7d5a7af44d31.pck",
-   "size": 20114288,
-   "sha256": "0d8201ed98075bf463184bcfc40c9e29d2b002deb239822cf42a7d24c59c85d8",
-   "inputs": "7d5a7af44d31328ec57cf7cb28a1b3f635525d07733958d6122bf352ea37cfee",
+   "file": "ui-070d7994fcc7.pck",
+   "size": 20468056,
+   "sha256": "16bc260f1c4682e884b27d7fd51ddec14254796d971aa5d288321383a4afd944",
+   "inputs": "070d7994fcc7dde7c5ebdeb9a72492e05c34d49e3e4a6cadf76a225c069570b5",
    "probe": "res://assets/ui/currency/coin.png"
   },
   {
@@ -35,11 +35,19 @@
    "probe": "res://assets/meshy/minion_caster/rigged.glb"
   },
   {
+   "name": "champions",
+   "file": "champions-d581a7642d07.pck",
+   "size": 29581792,
+   "sha256": "bb6a698174e852b6ad01b53e827890d70dea5bdd9f56cef5383aef6fdcd332b5",
+   "inputs": "d581a7642d07270283ecb86e1a199a104506f10523bdb7251f6349d11e0ab776",
+   "probe": "res://assets/meshy/dragoon/rigged.glb"
+  },
+  {
    "name": "weapons",
-   "file": "weapons-718ec709f489.pck",
-   "size": 40364744,
-   "sha256": "e055d32e178c15ee1fcc6175a01687be84ddaa09c5812c048693fdea631dda32",
-   "inputs": "718ec709f489ed288a79e7a221c547bcce7c0bf8f87f5f8bb1f46bbfb6bf0500",
+   "file": "weapons-438176b129c4.pck",
+   "size": 42619140,
+   "sha256": "2d60fbbb04a9981403d992965299c7d6e18b8e20fb6019c016e54c481cf768f8",
+   "inputs": "438176b129c4868667ab1fc9930a23161a8fa6a8f8e17157f148cd6409f65256",
    "probe": "res://assets/meshy/weapons/acolyte_wand.glb"
   },
   {
