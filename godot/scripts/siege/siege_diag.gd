@@ -15,7 +15,7 @@ const BOOT_PREV_PATH := "user://boot_diag_prev.log"
 # rotate it out of boot_diag_prev.log before anyone could copy it).
 const BOOT_STUCK_PATH := "user://boot_diag_stuck.log"
 const Platform = preload("res://scripts/meta/platform.gd")
-const BUILD := "0.31.160-fatebound"
+const BUILD := "0.31.161-fatebound"
 
 class ErrorCapture:
 	extends Logger
@@ -61,6 +61,26 @@ func _times_text() -> String:
 	_times.clear()
 	return " ".join(parts)
 
+# 0.31.161 (Kevin: "Add to log"): what the graphics chip spends -- its time on the 3D view (gpu3d) and on the screen
+# itself (gpuhud: the HUD and the 3D picture stretched onto it), and the CPU's time preparing the 3D view's draw
+# (rcpu3d: culling, building the draw lists) -- every frame, as mean/max on each STAT line beside sim/view/hud. The
+# engine's own per-pass timings (shadows, opaque, glow...) are only for its editor profiler, not a phone build.
+var _measured_vp := RID()
+
+func _sample_render() -> void:
+	if mode == null or mode.viewport == null or not is_instance_valid(mode.viewport):
+		return
+	var v3: RID = mode.viewport.get_viewport_rid()
+	var root: RID = get_viewport().get_viewport_rid()
+	if v3 != _measured_vp:
+		_measured_vp = v3
+		RenderingServer.viewport_set_measure_render_time(v3, true)
+		RenderingServer.viewport_set_measure_render_time(root, true)
+		return
+	add_time("gpu3d", int(RenderingServer.viewport_get_measured_render_time_gpu(v3) * 1000.0))
+	add_time("gpuhud", int(RenderingServer.viewport_get_measured_render_time_gpu(root) * 1000.0))
+	add_time("rcpu3d", int(RenderingServer.viewport_get_measured_render_time_cpu(v3) * 1000.0))
+
 func _viewport_text() -> String:
 	# Draw calls/triangles split by the 3D SubViewport vs the HUD canvas.
 	if mode == null or mode.viewport == null:
@@ -71,8 +91,10 @@ func _viewport_text() -> String:
 	var C := RenderingServer.VIEWPORT_RENDER_INFO_TYPE_CANVAS
 	var D := RenderingServer.VIEWPORT_RENDER_INFO_DRAW_CALLS_IN_FRAME
 	var P := RenderingServer.VIEWPORT_RENDER_INFO_PRIMITIVES_IN_FRAME
-	return "3d_draws=%d 3d_prims=%d hud_draws=%d" % [RenderingServer.viewport_get_render_info(v3, I, D),
-		RenderingServer.viewport_get_render_info(v3, I, P), RenderingServer.viewport_get_render_info(root, C, D)]
+	return "3d_px=%dx%d 3d_draws=%d 3d_prims=%d 3d_shadow_prims=%d hud_draws=%d" % [mode.viewport.size.x, mode.viewport.size.y,
+		RenderingServer.viewport_get_render_info(v3, I, D), RenderingServer.viewport_get_render_info(v3, I, P),
+		RenderingServer.viewport_get_render_info(v3, RenderingServer.VIEWPORT_RENDER_INFO_TYPE_SHADOW, P),
+		RenderingServer.viewport_get_render_info(root, C, D)]
 
 var _started := false
 
@@ -111,6 +133,8 @@ func _exit_tree() -> void:
 		_watchdog.wait_to_finish()
 	if RenderingServer.frame_post_draw.is_connected(_on_frame_drawn):
 		RenderingServer.frame_post_draw.disconnect(_on_frame_drawn)
+	if _measured_vp.is_valid() and is_inside_tree():
+		RenderingServer.viewport_set_measure_render_time(get_viewport().get_viewport_rid(), false)
 	if _logger != null:
 		OS.remove_logger(_logger)
 	write("SESSION END")
@@ -176,6 +200,7 @@ func _process(delta: float) -> void:
 	_mutex.lock()
 	_beat_ms = Time.get_ticks_msec()
 	_mutex.unlock()
+	_sample_render()
 	var now := Time.get_ticks_usec()
 	if _last_frame_us > 0:
 		_worst_ms = maxf(_worst_ms, (now - _last_frame_us) / 1000.0)

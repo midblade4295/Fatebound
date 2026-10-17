@@ -3728,12 +3728,6 @@ func _ensure_actor(u: Dictionary) -> Dictionary:
 	if minion_look and vt(int(u.team)) == 1:
 		_team_red(made.body)                    # 0.31.159: the minions are painted in the blue team's colours
 	made.body.scale = Vector3.ONE * BODY_SCALE * (MINION_SCALE if bool(u.get("minion", false)) else 1.0) * float(u.get("mscale", 1.0))   # 0.31.157: big monsters; 0.31.128 (Kevin): every class the upgraded size (base was 1.0); 0.31.155: 5v5 minions smaller
-	if sim.moba != null and (bool(u.get("minion", false)) or u.has("mon")) and float(u.get("mscale", 1.0)) <= 1.0:
-		# 0.31.160 (Kevin's phone log, 5v5 at 14-20 fps): the lane minions and the small monsters cast no shadow -- a
-		# third of the shadow pass's triangles at the phone's resolution (tests/moba_bench.gd PHONE=1: 511k -> 333k); the
-		# heroes, the buff monsters and the Bone Lord keep theirs
-		for mi in (made.body as Node).find_children("*", "MeshInstance3D", true, false):
-			(mi as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	a.body = made.body
 	a.player = made.player
 	_cape_setup(a)
@@ -4617,11 +4611,12 @@ func on_event(e: Dictionary) -> void:
 			var du: Dictionary = sim.by_id.get(str(e.get("id", "")), {})
 			if not du.is_empty():
 				blood_pool(du.pos)
-			if not a.is_empty():
+			if not a.is_empty() and (a.root as Node3D).visible:
+				# (0.31.161: everyone's weapons fly out again -- Kevin: "I want the minions weapons to fly out of hands";
+				# not for a body hidden in the 5v5's fog: nothing to see, and it isn't moved while hidden)
 				var pa: Array = e.get("push", [0.0, 1.6, 0.0])
 				var push := Vector3(float(pa[0]), float(pa[1]), float(pa[2])) if pa.size() >= 3 else Vector3(0.0, 1.6, 0.0)
-				if sim.moba == null or not (bool(du.get("minion", false)) or du.has("mon")):
-					_drop_weapons(a, push)          # (0.31.160: not a 5v5 minion's or monster's -- dozens a minute, each a body)
+				_drop_weapons(a, push)
 				_ragdoll(a, push)
 		"spawn":
 			if not a.is_empty():

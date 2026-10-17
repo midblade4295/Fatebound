@@ -4884,3 +4884,17 @@ _event() stamps "at" with the time.
   alone after it) = 101. tools/cold_start_check.sh: PASS. The Play AAB (throwaway key, presets untouched): BASE OK
   (267 files), CONTENT OK, play_games true, bundletool valid. Preview APK:
   build/Fatebound-Siege-0.31.160-fatebound.apk (preview key).
+
+## 0.31.161 — the graphics chip's time in the log; minion weapons and shadows back
+Kevin (on what costs the most -- the 3D at 1440x3200 by the log's evidence, but the log couldn't split the drawing):
+"Add to log but don't cut anything. I also want the minions weapons to fly out of hands".
+- siege_diag: every frame the GPU's time on the 3D view (gpu3d) and on the screen itself (gpuhud: the HUD and the 3D
+  picture stretched onto it), and the CPU's time preparing the 3D view's draw (rcpu3d) -- viewport render-time
+  measurement -- as mean/max on each STAT line beside sim/view/hud; plus 3d_px (the 3D view's size: the resolution
+  setting and the heat guard's 75 % show) and 3d_shadow_prims. The engine's per-pass timings (shadows, opaque, glow)
+  are its editor profiler's only (RenderingServer.set_frame_profiling_enabled isn't scriptable; a phone build
+  captures only the viewports' begin/end).
+- Nothing cut: the 5v5's lane minions and small monsters cast shadows again (0.31.160 had turned them off), and every
+  death in view throws the weapons out of the hands again, minions' and monsters' too. A body hidden in the fog
+  doesn't (no ragdoll, no weapons: it isn't drawn, and since 0.31.160 it isn't moved while hidden).
+- Version 0.31.161, versionCode 247 (SERVER_BUILD stays 0.31.160: no server code changed).
