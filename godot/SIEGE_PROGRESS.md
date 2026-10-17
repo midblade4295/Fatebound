@@ -4913,3 +4913,6 @@ frame that doesn't change with resolution (triangles: shadows and the view) and 
   30 cap, so it no longer steps: the resolution stays what's picked. The sim still ticks at 30 Hz.
 - tests/siege_guard_smoke.gd: forced to ~20 fps the cap stays 60 and the resolution 100 %.
 - Version 0.31.162, versionCode 248, SERVER_BUILD 0.31.162.
+- Quick suite: ALL SIEGE TESTS PASSED (101). tools/cold_start_check.sh: PASS (a first run failed with the test
+  machine's virtual display down; passed once it was restarted). The Play AAB (throwaway key, presets untouched): BASE
+  OK, CONTENT OK, play_games true, bundletool valid. Preview APK: build/Fatebound-Siege-0.31.162-fatebound.apk.
