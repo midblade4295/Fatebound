@@ -28,10 +28,10 @@
   },
   {
    "name": "minions",
-   "file": "minions-12c236247a16.pck",
-   "size": 38810932,
-   "sha256": "1ffca346fbec4bff928dc30eeebd4a8225a21bfac12eac71a479c1652313d166",
-   "inputs": "12c236247a16ef209191cbdd89697fa99208e78f2cb1f013df3dc843a01c703f",
+   "file": "minions-101c07f10d78.pck",
+   "size": 41233356,
+   "sha256": "bd4647bdaa4b89f2a305299e0041dacc3a22b732d1e459a9898611ac990f1aab",
+   "inputs": "101c07f10d780524c9e523c2bb7a202d1f8e8621c6c9f23f61d79e33b980e404",
    "probe": "res://assets/meshy/minion_caster/rigged.glb"
   },
   {

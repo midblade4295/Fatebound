@@ -5044,7 +5044,8 @@ made the model from it.
   at load. (Also: the Bone Lord's march and a placed ward never reached their effects -- the event list missed them.)
 - HUD: the WYRM'S HIDE chip, toasts (it stirs, it falls), the kill feed, the camp timers; sounds: the horn, the
   fireball cue for its breath. The 5V5 panel mentions it.
-- Content: assets/meshy/wyrm in the minions pack.
+- Content: assets/meshy/wyrm in the minions pack (rebuilt: minions-101c07f10d78.pck, 41.2 MB, pushed to the
+  content-packs branch).
 - Tests: moba_more_test (14 camps; the Wyrm: up at 3:00 in the east pit, its soul-fire cone, League's leash, the Hide
   for the slaying side, its stacks to 4 and through levels, red's own stack, bots go for it and stop at the cap).
   tools/rift_shots.gd: the Wyrm up from the start for the wyrm_* shots, wyrm_close and wyrm_breath.
