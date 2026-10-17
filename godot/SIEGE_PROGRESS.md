@@ -5103,3 +5103,7 @@ above).
   fallen hero, bots casting); moba_ui_test (the window's role and kit). tools/kit_shots.gd (review shots of the HUD and
   casts). The server installs moba_kits.gd (the sim loads it).
 - Version 0.31.167, versionCode 253, SERVER_BUILD 0.31.167.
+- Quick suite: 81 passed, 1 failed under load (net_load_test: no client connected while the new heroes' bodies were
+  being baked beside it) -- re-run alone: PASS. tools/cold_start_check.sh: PASS. The Play AAB (throwaway key, presets
+  untouched): BASE OK (273 files), CONTENT OK, play_games true, bundletool valid. Preview APK:
+  build/Fatebound-Siege-0.31.167-fatebound.apk (preview key; sha256 73442bf6...de5042).
