@@ -4842,3 +4842,6 @@ the repo, never committed).
   minion bodies, their animations and the red textures (tools/preload_list.gd runs _team_red on them).
 - Tests: moba_ui_test -- the minions in their own bodies, the red side's repainted red; content_test -- 7 packs.
 - Version 0.31.159, versionCode 245 (SERVER_BUILD 0.31.159: moba.gd's minion scale).
+- Quick suite: ALL SIEGE TESTS PASSED (101). tools/cold_start_check.sh: PASS. The Play AAB (throwaway key, presets
+  untouched): BASE OK (267 files), CONTENT OK, play_games true, bundletool valid. Preview APK:
+  build/Fatebound-Siege-0.31.159-fatebound.apk (preview key).
