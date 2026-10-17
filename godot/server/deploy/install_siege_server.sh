@@ -23,8 +23,9 @@ SRC="$(cd "$(dirname "$0")/../.." && pwd)"                  # .../godot
 SERVICE_SRC="$SRC/server/deploy/fatebound-siege.service"
 
 # The sim preloads the land and the castle layout (siege_land.gd, siege_castle.gd -- 0.31.82: they were missing here,
-# so a fresh install could not compile the sim). Nothing else: the baked terrain files are only the client's.
-SERVER_SCRIPTS="scripts/siege/siege_sim.gd scripts/siege/siege_net.gd scripts/siege/siege_land.gd scripts/siege/siege_castle.gd scripts/siege/moba.gd scripts/siege/moba_vision.gd"
+# so a fresh install could not compile the sim; 0.31.165: and the Rift's keep, keep.gd). Nothing else: the baked
+# terrain files are only the client's.
+SERVER_SCRIPTS="scripts/siege/siege_sim.gd scripts/siege/siege_net.gd scripts/siege/siege_land.gd scripts/siege/siege_castle.gd scripts/siege/keep.gd scripts/siege/moba.gd scripts/siege/moba_vision.gd"
 # 0.31.108: the accounts -- the server replays every player's changes with the game's own economy and profile code
 # 0.31.118: the analytics allow-list (events and their props), shared by the phone and the server
 # 0.31.131: the App Store account token (UUIDv5 of the account id), shared by the phone and the purchase check
