@@ -34,7 +34,7 @@ const Analytics = preload("res://scripts/meta/analytics.gd")
 const TUTORIAL_GOLD := 250
 # 3D resolution as a fraction of the PHYSICAL screen (window pixels, not logical UI units).
 var render_scale := 1.0
-const FPS_CAP := 30         # hard-locked (Round 32, Kevin: no fps options) -- the sim ticks at 30 Hz anyway
+const FPS_CAP := 60         # 0.31.162 (Kevin: "Change the fps cap to 60 so I can see how high fps goes on each resolution"; 30 since Round 32, no fps options) -- the sim still ticks at 30 Hz
 var _prev_max_fps := 0
 var _prev_physics_tps := 60
 var fps_cap := FPS_CAP
@@ -143,8 +143,9 @@ func _ready() -> void:
 	_prev_max_fps = Engine.max_fps
 	set_fps_cap(FPS_CAP)
 	# 0.31.160 (Kevin's phone log, 5v5 at 14-20 fps): the physics -- only the ragdolls and the loose weapons -- at the
-	# frame cap's 30 Hz, not the engine's 60: two steps a drawn frame bought nothing to see, and at 15 fps it was four
-	# (tests/moba_bench.gd: ~1.3 ms a step here with a 5v5's eight ragdolls and twenty loose weapons). Restored on leaving.
+	# frame cap's rate: steps beyond one a drawn frame buy nothing to see (at the 30 cap and 15 fps it had been four at
+	# the engine's 60; tests/moba_bench.gd: ~1.3 ms a step here with a 5v5's eight ragdolls and twenty loose weapons).
+	# 0.31.162: the cap is 60, so 60 Hz. Restored on leaving.
 	_prev_physics_tps = Engine.physics_ticks_per_second
 	Engine.physics_ticks_per_second = FPS_CAP
 	viewport = SubViewport.new()
@@ -1183,6 +1184,7 @@ func _thermal_guard(delta: float) -> void:
 		_guard_low = 0
 		return
 	# Locked at 30 fps (Round 32): what's left of the guard is the resolution step when even 30 can't be held.
+	# (0.31.162: at the 60 cap it never steps -- the resolution stays what Kevin picks)
 	_thermal_guard_res()
 
 func _thermal_guard_res() -> void:

@@ -4902,3 +4902,14 @@ Kevin (on what costs the most -- the 3D at 1440x3200 by the log's evidence, but 
   tools/cold_start_check.sh: PASS. The Play AAB (throwaway key, presets untouched): BASE OK (267 files), CONTENT OK,
   play_games true, bundletool valid. Preview APK: build/Fatebound-Siege-0.31.161-fatebound.apk (preview key; the
   server file isn't in it).
+
+## 0.31.162 — the frame cap at 60
+Kevin's 0.31.161 log (5v5, 6:00-7:00): the game's own work 8-17 ms a frame (44-58 in 0.31.159); the graphics chip's
+time on the 3D view ~22 ms at 50 %, ~36 ms at 75 %, ~46 ms at 100 % (+3-6 ms for the screen and HUD) -- under the 30
+cap each frame took one 33 ms refresh (50 %: 30 fps) or two (75 % and 100 %: ~20 fps). Fitting the three: ~14 ms a
+frame that doesn't change with resolution (triangles: shadows and the view) and ~7 ms per million pixels. Kevin:
+"Change the fps cap to 60 so I can see how high fps goes on each resolution".
+- siege_mode FPS_CAP 60 (30 since Round 32); the physics follow it (60 Hz). The heat guard's 75 % step is only at a
+  30 cap, so it no longer steps: the resolution stays what's picked. The sim still ticks at 30 Hz.
+- tests/siege_guard_smoke.gd: forced to ~20 fps the cap stays 60 and the resolution 100 %.
+- Version 0.31.162, versionCode 248, SERVER_BUILD 0.31.162.
