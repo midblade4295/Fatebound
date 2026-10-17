@@ -38,6 +38,7 @@ const OPS := {
 	"set_name": [TYPE_STRING], "finish_tutorial": [],
 	"claim_login": [],                                           # 0.31.119: the daily login reward
 	"claim_discord": [],                                         # 0.31.124: JOIN OUR DISCORD, once
+	"buy_hero": [TYPE_STRING],                                   # 0.31.168: a 5v5 hero for gold
 }
 
 func _rec(op: String, args: Array) -> void:
@@ -119,6 +120,7 @@ static func defaults() -> Dictionary:
 	return {"schema":SCHEMA, "name":"Player", "gold":0, "gems":0, "level":1, "xp":0,
 		"pass":{"season":0, "xp":0, "premium":false, "free":[], "prem":[], "swaps":{}},
 		"owned":[], "equip":equip, "title":"",
+		"heroes":[],                                                 # 0.31.168: the 5v5 heroes bought with gold (Eco.HERO_PRICES)
 		"challenges":{"day":"", "daily":[], "week":"", "weekly":[], "rerolled":false},
 		"stats":{"matches":0, "wins":0, "rescues":0, "kills":0, "gates":0, "gathered":0, "fed":0,
 			"lifts":0, "repaired":0, "healed":0, "best_multi":0, "streak":0, "best_streak":0},     # (0.31.87: for the titles)
@@ -503,6 +505,26 @@ func buy(id: String) -> Dictionary:
 	d.owned.append(id)
 	save()
 	_rec("buy", [id])
+	return {"ok":true}
+
+# 0.31.168 (Kevin: "Unlock with gold"): the 5v5's six new heroes are bought with gold, once; the rest are everyone's
+func owns_hero(hid: String) -> bool:
+	return not Eco.HERO_PRICES.has(hid) or (d.get("heroes", []) as Array).has(hid)
+
+func buy_hero(hid: String) -> Dictionary:
+	if not Eco.HERO_PRICES.has(hid):
+		return {"ok":false, "error":"Not for sale"}
+	if owns_hero(hid):
+		return {"ok":false, "error":"Already yours"}
+	var price := {"gold":int(Eco.HERO_PRICES[hid])}
+	if not can_afford(price):
+		return {"ok":false, "error":"Not enough gold"}
+	d.gold -= int(price.gold)
+	if not d.has("heroes"):
+		d["heroes"] = []
+	(d.heroes as Array).append(hid)
+	save()
+	_rec("buy_hero", [hid])
 	return {"ok":true}
 
 func buy_pack(pack_id: String) -> Dictionary:

@@ -871,7 +871,14 @@ func _act(action: String, arg: Variant = null) -> void:
 func _on_action(kind: String) -> void:
 	match kind:
 		"attack": _act("attack")
-		"ability": _act("ability")
+		"ability":
+			var me_q: Dictionary = sim.by_id.get(hud.player_id, {}) if sim != null else {}
+			if sim != null and sim.moba != null and not me_q.is_empty() and me_q.has("kq") and not online:
+				# 0.31.168: a new hero's Q is a kit spell -- say why when it can't go (CHAIN, ROOTS need someone near)
+				if not sim.act(hud.player_id, "ability") and float(me_q.get("cd_ability", 0.0)) <= 0.0 and sim.can_act(me_q):
+					hud.toast("No enemy in reach", Color("#ffcf7a"))
+			else:
+				_act("ability")
 		"dodge": _act("dodge")
 		"action": _act("interact")
 		"pick0", "pick1", "pick2":                       # 0.31.155 5V5: a level-up choice
@@ -1244,7 +1251,14 @@ const SPELL_CUE := {"bash":["tm_sword_block", 3, 1.0], "rally":["surge", 1, 0.7]
 	"snare":["tm_bow_shot", 2, 1.0], "trap":["tm_unlock", 1, 0.9], "mark":["crit", 1, 0.6],
 	"pillar":["tm_firespray", 2, 0.8], "blink":["magic", 1, 0.6], "missiles":["tm_spell_hit", 3, 0.9],
 	"manashield":["magic", 1, 0.7], "holylight":["magic", 1, 0.9], "dazzle":["surge", 1, 0.7],
-	"boneshield":["tm_revive", 1, 0.9], "curse":["shadow", 1, 0.6]}
+	"boneshield":["tm_revive", 1, 0.9], "curse":["shadow", 1, 0.6],
+	# 0.31.168: the six new heroes
+	"boulder":["tm_rock_throw", 2, 1.0], "stoneskin":["tm_crumble", 2, 0.7], "quake":["tm_rock_hit", 2, 1.0],
+	"sweep":["tm_sword_swing", 3, 1.0], "impale":["tm_sword_hit", 3, 0.9], "vault":["tm_jump_dirt", 1, 1.0],
+	"thrust":["tm_sword_swing", 3, 1.0], "riposte":["tm_sword_block", 3, 1.0], "feint":["shadow", 1, 0.6],
+	"chain":["energy", 1, 0.9], "static":["energy", 1, 0.7], "gust":["tm_firespray", 2, 0.5],
+	"buckshot":["tm_bomb_blast", 1, 0.5], "keg":["tm_rock_throw", 2, 0.7], "smokeroll":["roll", 1, 0.8],
+	"rejuv":["magic", 1, 0.8], "entangle":["tm_crumble", 2, 0.6], "barkskin":["tm_revive", 1, 0.8]}
 
 func _cue(base: String, n: int, at: Vector2, reach := HEAR_R, always := false, gain := 1.0) -> void:
 	if audio == null or not audio.has_method("play"):
@@ -1278,6 +1292,10 @@ func _event_sound(e: Dictionary) -> void:
 			var ab := str(e.get("ability", ""))
 			if ab == "hammer":
 				_cue("hammerThrow", 1, src.pos, HEAR_R + 4.0, mine)
+			elif str(src.get("shot", "")) == "ball":
+				_cue("tm_bomb_blast", 1, src.pos, HEAR_R + 6.0, mine, 0.35)        # 0.31.168: the Musketeer's flintlock
+			elif str(src.get("shot", "")) == "bolt":
+				_cue("energy", 1, src.pos, HEAR_R, mine, 0.6)                     # 0.31.168: the Stormcaller's bolt
 			elif src.cls == "ranger":
 				_cue("tm_bow_shot", 2, src.pos, HEAR_R, mine)
 			elif src.cls == "mage":
@@ -1356,7 +1374,8 @@ func _event_sound(e: Dictionary) -> void:
 		"ult":                                          # 0.31.157 5V5: each ultimate its own sound
 			var us: String = {"knight":"bulwark", "barbarian":"rampage", "rogue":"shadow", "ranger":"barrage", "mage":"ember",
 				"priest":"magic", "crusader":"surge", "berserker":"rampage", "assassin":"shadow", "sniper":"crit", "archmage":"meteor",
-				"necromancer":"magic"}.get(str(e.get("ult", "")), "surge")
+				"necromancer":"magic", "golem":"rampage", "dragoon":"surge", "duelist":"crit", "stormcaller":"energy",
+				"musketeer":"barrage", "druid":"magic"}.get(str(e.get("ult", "")), "surge")
 			_cue(us, 1, e.get("pos", _unit_pos(e.get("id", ""))), 40.0, mine)
 		"flurry_hit":
 			_cue("tm_sword_hit", 3, e.get("pos", Vector2.INF), HEAR_R, mine)
@@ -1374,6 +1393,15 @@ func _event_sound(e: Dictionary) -> void:
 			_cue("tm_fireball", 3, e.get("c", Vector2.INF), 30.0, false, 1.0)
 		"trap_snap":
 			_cue("tm_chest_close", 2, e.get("pos", Vector2.INF), 24.0, false, 1.0)
+		"burst":                                               # 0.31.168: a powder keg, roots
+			if str(e.get("spell", "")) == "keg":
+				_cue("tm_bomb_blast", 1, e.get("c", Vector2.INF), 36.0, false, 0.8)
+			else:
+				_cue("tm_crumble", 2, e.get("c", Vector2.INF), 24.0, false, 0.9)
+		"zap":                                                 # 0.31.168: a THUNDERSTORM bolt
+			_cue("energy", 1, e.get("c", Vector2.INF), 36.0, false, 0.9)
+		"riposte":
+			_cue("parry", 1, e.get("pos", Vector2.INF), HEAR_R, mine, 1.0)
 		"wyrm_breath":                                         # 0.31.166: the Grave Wyrm's soul-fire
 			_cue("tm_fireball", 3, e.get("pos", Vector2.INF), 40.0, false, 1.0)
 		"buff":

@@ -12,7 +12,10 @@ const KK_FOR := {"assassin": "rogue_kaykit", "archmage": "mage_kaykit", "crusade
 	"sniper": "ranger_kaykit", "necromancer": "necromancer_kaykit", "villager": "villager_kaykit", "worker": "villager_kaykit",
 	"knight": "knight_kaykit", "barbarian": "barbarian_kaykit", "rogue": "rogue_kaykit", "ranger": "ranger_kaykit",
 	"mage": "mage_kaykit", "priest": "mage_kaykit",
-	"minion_melee": "knight_kaykit", "minion_caster": "ranger_kaykit", "minion_siege": "mage_kaykit", "minion_super": "barbarian_kaykit"}   # the KayKit body it replaces: source skeleton and height (0.31.80: the
+	"minion_melee": "knight_kaykit", "minion_caster": "ranger_kaykit", "minion_siege": "mage_kaykit", "minion_super": "barbarian_kaykit",
+	# 0.31.168: the six new 5v5 heroes (Kevin picked the concepts)
+	"golem": "barbarian_kaykit", "dragoon": "knight_kaykit", "duelist": "rogue_kaykit", "stormcaller": "mage_kaykit",
+	"musketeer": "ranger_kaykit", "druid": "mage_kaykit"}   # the KayKit body it replaces: source skeleton and height (0.31.80: the
 	# base classes are Meshy bodies now, so every entry names a stock *_kaykit body)
 
 func _initialize() -> void:

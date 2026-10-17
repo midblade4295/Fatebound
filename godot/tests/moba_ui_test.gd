@@ -118,8 +118,20 @@ func _process(delta: float) -> bool:
 				for hid in Moba.HERO_ORDER:
 					if btn("moba_hero_" + str(hid)) != null:
 						n += 1
-				check(n == 12 and app.modal.hero == "knight" and has_text(app.modal, "KNIGHT · TANK") and has_text(app.modal, "W SHIELD BASH"),
-					"12 heroes; the Knight to start, described: his role and kit (0.31.167)")
+				check(n == 18 and app.modal.hero == "knight" and has_text(app.modal, "KNIGHT · TANK") and has_text(app.modal, "W SHIELD BASH"),
+					"18 heroes; the Knight to start, described: his role and kit (0.31.167)")
+				# 0.31.168: the new six are bought with gold -- a locked one shows its price; BATTLE becomes UNLOCK
+				app.profile.d.gold = 1000
+				press("moba_hero_golem")
+				var go: Button = app.modal._go
+				check(app.modal.hero == "golem" and not app.profile.owns_hero("golem") and go.text.begins_with("UNLOCK") and go.disabled
+					and has_text(app.modal, "GOLEM · TANK") and has_text(app.modal, "Q BOULDER"), "the Golem: locked, 2000 gold (you have 1000)")
+				_shot("moba_heroes_locked")
+				app.profile.d.gold = 2600
+				press("moba_hero_golem")
+				press("moba_battle")
+				check(app.profile.owns_hero("golem") and int(app.profile.d.gold) == 600 and app.modal != null and app.modal._go.text == "BATTLE",
+					"UNLOCK: 2000 gold, the Golem is yours (and still the window)")
 				press("moba_hero_archmage")
 				check(app.modal.hero == "archmage" and has_text(app.modal, "ARCHMAGE · MAGE") and has_text(app.modal, "E MANA SHIELD"),
 					"the Archmage picked")

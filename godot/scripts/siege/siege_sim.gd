@@ -694,6 +694,8 @@ func stat(u: Dictionary, key: String) -> Variant:
 	return base
 
 func class_label(u: Dictionary) -> String:
+	if moba != null and u.has("kq"):
+		return str(moba.HEROES[str(u.hid)].name)    # 0.31.168: a new hero is himself, not his class's frame
 	return UPGRADE_NAME.get(u.cls,"") if u.up else str(CLASSES[u.cls].name)
 
 
@@ -814,6 +816,8 @@ func act(id: String, action: String, arg: Variant = null) -> bool:
 				return _throw_bomb(u)
 			return _beam(u) if u.cls == "priest" else _start_attack(u, "attack")
 		"ability":
+			if moba != null and u.has("kq"):
+				return moba.kits.spell(u, "q")           # 0.31.168: a new hero's Q is a kit spell
 			match ability_of(u):
 				"block": return _block(u)
 				"whirlwind": return _whirl(u)
@@ -870,6 +874,8 @@ func _aim(u: Dictionary, reach: float) -> void:
 const COMBO_GAP := 0.9
 
 func _start_attack(u: Dictionary, kind: String, aim := true) -> bool:
+	if kind == "ability" and moba != null and u.has("kq"):
+		return moba.kits.spell(u, "q")               # 0.31.168: a new hero's Q (the bots' fights call this)
 	if not can_act(u) or u.carrying or u.offering or blocking(u) or whirling(u):
 		return false
 	var on_tower := int(u.get("tower", -1)) >= 0
@@ -884,7 +890,7 @@ func _start_attack(u: Dictionary, kind: String, aim := true) -> bool:
 			return false                       # the mage's nova is a blast round her feet
 		u.cd_ability = float(CLASSES[u.cls].ab_cd)
 	var reach := float(stat(u,"range")) * (1.0 if CLASSES[u.cls].ranged else 1.9)
-	if kind == "ability" and CLASSES[u.cls].ability == "lunge":
+	if kind == "ability" and str(CLASSES[u.cls].ability) == "lunge":
 		reach = 6.0
 	if on_tower:
 		reach *= TOWER_RANGE
@@ -908,6 +914,8 @@ func _start_attack(u: Dictionary, kind: String, aim := true) -> bool:
 
 # ---------- knight block / berserker whirlwind ----------
 func ability_of(u: Dictionary) -> String:
+	if u.has("kq"):
+		return str(u.kq)                         # 0.31.168: a new hero's Q (moba_kits.gd)
 	if u.cls == "barbarian" and u.up:
 		return "whirlwind"
 	if u.cls == "knight" and u.up:
@@ -957,6 +965,8 @@ func shield_blocks(from: Vector2, dst: Dictionary) -> bool:
 	return false
 
 func _block(u: Dictionary) -> bool:
+	if u.has("kq"):
+		return false                           # (0.31.168: a new hero on a Knight's frame -- the Dragoon -- has no shield)
 	if int(u.get("tower", -1)) >= 0:
 		return false                           # nothing but bows and spells up a tower
 	if not alive(u) or u.stun > 0.0 or u.carrying or u.state in ["wind", "recover", "dodge"] or u.workshop_open:
@@ -1733,7 +1743,7 @@ func _lob_at_rampart(u: Dictionary, d: Vector2, reach: float) -> bool:
 func _shoot(u: Dictionary, angle: float, dmg: float, aoe: float, speed: float, reach: float) -> void:
 	var d := dir_of(angle)
 	projectiles.append({"id":_next_proj,"team":u.team,"owner":u.id,"pos":u.pos + d*0.6,"from":u.pos,"vel":d*speed,
-		"dmg":dmg,"aoe":aoe,"life":reach/speed,"kind":"fire" if aoe > 0.0 else "arrow", "basic":u.atk == "attack",
+		"dmg":dmg,"aoe":aoe,"life":reach/speed,"kind":_shot_kind(u, aoe), "basic":u.atk == "attack",
 		"gate_mult":float(CLASSES[u.cls].gate),
 		# Shot from the rampart (or a terrace), or aimed at an enemy ON a rampart, or from the top of a tower:
 		# flies over the castle walls and gates (Round 15; Round 38; towers 0.30.0).
@@ -1746,8 +1756,12 @@ func _shoot(u: Dictionary, angle: float, dmg: float, aoe: float, speed: float, r
 		pj["o"] = u.pos
 		var ad := float(u.get("aim_d", 0.0))
 		pj["dd"] = ad if ad > 0.5 else reach
-	_event("proj", {"pid":_next_proj,"kind":"fire" if aoe > 0.0 else "arrow"})
+	_event("proj", {"pid":_next_proj,"kind":_shot_kind(u, aoe)})
 	_next_proj += 1
+
+func _shot_kind(u: Dictionary, aoe: float) -> String:
+	# a fireball if it splashes, else an arrow -- 0.31.168: or the hero's own (a bolt, a musket ball, a thorn)
+	return str(u.get("shot", "fire" if aoe > 0.0 else "arrow"))
 
 func _resolve_attack(u: Dictionary) -> void:
 	var c: Dictionary = CLASSES[u.cls]
@@ -1760,10 +1774,12 @@ func _resolve_attack(u: Dictionary) -> void:
 				return                                 # 0.31.157: a Priest's "attack" is his beam -- no shot (a bot's swing
 				                                       # made a still, endless arrow: hundreds piled up in a 5v5 match)
 			# 0.31.5 balance: the Mage's fireball does 10 % less (MAGE_BOLT); her nova keeps its damage and size.
-			_shoot(u, u.face, dmg * (MAGE_BOLT if u.cls == "mage" else 1.0), float(c.aoe), float(c.proj_speed), float(c.range) * tower_range(u))
+			# (0.31.168: stat() -- the new heroes' own range, splash and shot speed)
+			_shoot(u, u.face, dmg * (MAGE_BOLT if u.cls == "mage" else 1.0), float(stat(u, "aoe")), float(stat(u, "proj_speed")),
+				float(stat(u, "range")) * tower_range(u))
 		else:
 			_basic_by = str(u.id)                      # (0.31.167: the hit is a basic attack -- POISON BLADES)
-			_melee(u, float(c.range), float(c.arc), dmg)
+			_melee(u, float(stat(u, "range")), float(stat(u, "arc")), dmg)
 			_basic_by = ""
 		return
 	match ability_of(u):
@@ -1821,7 +1837,7 @@ func step(dt: float = TICK) -> void:
 			u.think_at = time + AI_EVERY
 			_think(u)
 		elif u.bot and u.cls == "knight" and not projectiles.is_empty() and not u.carrying and int(u.tower) < 0 \
-				and alive(u) and not blocking(u):
+				and alive(u) and not blocking(u) and not u.has("kq"):
 			_shield_reflex(u)                        # (a Knight or a Crusader: the shield between decisions too)
 	if profile: t0 = _p("think", t0)
 	if _cmd_clock >= 2.0:
@@ -3517,7 +3533,8 @@ func _fight(u: Dictionary, foe: Dictionary) -> void:
 	var d: float = u.pos.distance_to(foe.pos)
 	if u.bot and u.up and u.cls in ["rogue", "ranger", "mage"] and _bot_upgrade_ability(u, foe):
 		return
-	var reach := float(c.range)
+	var reach := float(stat(u, "range"))           # (0.31.168: a new hero's own)
+	var kq := u.has("kq")                          # (0.31.168: his Q is cast by the kit's bot rules, not at random here)
 	if c.ranged:
 		if d < reach * 0.45:
 			u.move = (u.pos - foe.pos).normalized()
@@ -3528,7 +3545,7 @@ func _fight(u: Dictionary, foe: Dictionary) -> void:
 		if d <= reach * 0.9:
 			u.face = angle_of(foe.pos - u.pos)
 			var nova_now: bool = str(c.ability) == "nova" and _melee_count(u, NOVA_R) >= 2      # 0.31.26: a burst, not a single-target nova
-			if u.cd_ability <= 0.0 and (nova_now or (str(c.ability) != "nova" and rng.randf() < 0.35)):
+			if not kq and u.cd_ability <= 0.0 and (nova_now or (str(c.ability) != "nova" and rng.randf() < 0.35)):
 				_start_attack(u, "ability")
 			else:
 				_start_attack(u, "attack")
@@ -3538,12 +3555,12 @@ func _fight(u: Dictionary, foe: Dictionary) -> void:
 		u.face = angle_of(foe.pos - u.pos)
 		var ab := str(c.ability)
 		var crowd := _melee_count(u, 2.8)
-		if u.cd_ability <= 0.0 and ((ab == "spin" and crowd >= 2) or ab == "bash" or rng.randf() < 0.3):
+		if not kq and u.cd_ability <= 0.0 and ((ab == "spin" and crowd >= 2) or ab == "bash" or rng.randf() < 0.3):
 			_start_attack(u, "ability")
 		else:
 			_start_attack(u, "attack")
 		return
-	if str(c.ability) == "lunge" and d < 5.5 and u.cd_ability <= 0.0:
+	if not kq and str(c.ability) == "lunge" and d < 5.5 and u.cd_ability <= 0.0:
 		u.face = angle_of(foe.pos - u.pos)
 		_start_attack(u, "ability")
 		return

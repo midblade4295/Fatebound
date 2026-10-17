@@ -12,6 +12,10 @@ extends RefCounted
 # poisoned, poison ticking, a parry. Zones (holy ground, caltrops, a fire pillar's eruption), traps and dashes step
 # here (moba.step -> step). Each cast is a "spell" event {id, team, hid, slot, spell, pos, ...} for the view, the HUD
 # and the sound. Bots cast theirs when it's worth it (bot_spells, from moba._think_hero).
+# 0.31.168 (Kevin picked six new heroes, one a role -- the Golem, the Dragoon, the Duelist, the Stormcaller, the
+# Musketeer, the Druid): their whole kit lives here. Their Q is a kit spell too (an "id" in its "q"; it recharges on
+# cd_ability, the old Q's clock, so the HUD's Q button and the bots' "ability" use it as before), and their ultimate
+# is "r" (moba.ult hands it to ult(); ULTS keeps its name, recharge and text).
 
 const ROLE_ORDER := ["tank", "fighter", "assassin", "mage", "marksman", "support"]
 const ROLE_NAMES := {"tank":"TANK", "fighter":"FIGHTER", "assassin":"ASSASSIN", "mage":"MAGE", "marksman":"MARKSMAN",
@@ -21,7 +25,8 @@ const ROLE_TEXT := {"tank":"Takes the hits and holds the line.", "fighter":"Figh
 	"marksman":"Steady damage from range; carries late.", "support":"Heals, shields and sets up the team."}
 const ROLE_OF := {"knight":"tank", "crusader":"tank", "barbarian":"fighter", "berserker":"fighter", "rogue":"assassin",
 	"assassin":"assassin", "ranger":"marksman", "sniper":"marksman", "mage":"mage", "archmage":"mage", "priest":"support",
-	"necromancer":"support"}
+	"necromancer":"support",
+	"golem":"tank", "dragoon":"fighter", "duelist":"assassin", "stormcaller":"mage", "musketeer":"marksman", "druid":"support"}
 const UNLOCK := {"q":1, "w":2, "e":3}
 
 # hid -> {"q": what the class's ability is, "w": {...}, "e": {...}}. A W/E: id (the effect), name, short (the button),
@@ -99,6 +104,55 @@ const KITS := {
 			"text":"Bones wrap the most hurt ally hero near you (or you): a shield of 20 % of their health, 4 s."},
 		"e": {"id":"curse", "name":"CURSE", "cd":13.0, "range":10.0, "slow":0.35, "amp":0.15, "dur":4.0,
 			"text":"Curse an enemy hero up to 10 m away: slowed 35 % and takes 15 % more damage for 4 s."}},
+	# ---- 0.31.168: the six new heroes (Q is theirs too, and R) ----
+	"golem": {
+		"q": {"id":"boulder", "name":"BOULDER", "cd":9.0, "range":11.0, "dmg":1.2, "stun":1.0,
+			"text":"Hurl a boulder: the first enemy it hits takes heavy damage and is stunned for 1 s."},
+		"w": {"id":"stoneskin", "name":"STONESKIN", "short":"STONE", "cd":15.0, "dr":0.4, "dur":4.0,
+			"text":"Your skin turns to stone for 4 s: you take 40 % less damage, and slows fall off you."},
+		"e": {"id":"quake", "name":"QUAKE", "cd":11.0, "r":4.0, "dmg":0.9, "slow":0.4, "dur":2.0,
+			"text":"Stamp the ground: everyone round you hurt and slowed 40 % for 2 s."},
+		"r": {"id":"landslide", "dist":9.0, "dmg":1.2, "r":4.0, "land":1.6, "stun":1.5}},
+	"dragoon": {
+		"q": {"id":"sweep", "name":"SWEEP", "cd":7.0, "r":3.8, "arc":1.05, "dmg":1.3, "heal":0.05,
+			"text":"A wide sweep of the halberd ahead: damage, and you heal 5 % of your health for each hero hit."},
+		"w": {"id":"impale", "name":"IMPALE", "cd":11.0, "len":6.0, "w":1.0, "dmg":1.0, "pull":3.0, "slow":0.3, "dur":1.5,
+			"text":"Thrust 6 m ahead: everyone in the line hurt, dragged 3 m toward you and slowed."},
+		"e": {"id":"vault", "name":"VAULT", "cd":12.0, "dist":6.0, "emp":0.6, "dur":3.0,
+			"text":"Pole-vault 6 m; your next strike within 3 s hits 60 % harder."},
+		"r": {"id":"dragondive", "range":11.0, "r":3.5, "dmg":2.2, "stun":1.0}},
+	"duelist": {
+		"q": {"id":"thrust", "name":"LUNGE", "cd":5.0, "dist":5.0, "dmg":1.4, "refund":0.5,
+			"text":"Lunge 5 m: the first enemy you meet takes a hard thrust -- a hero, and it's back twice as soon."},
+		"w": {"id":"riposte", "name":"RIPOSTE", "cd":12.0, "dur":1.0, "r":3.5, "dmg":1.8, "stun":0.8,
+			"text":"Parry for 1 s: nothing hurts you. If anything struck, you answer the nearest enemy: a heavy thrust and a 0.8 s stun."},
+		"e": {"id":"feint", "name":"FEINT", "cd":11.0, "dist":3.5, "hide":1.5,
+			"text":"Spring back 3.5 m and vanish for 1.5 s: your first strike out of it hits twice as hard."},
+		"r": {"id":"challenge", "range":8.0, "n":5, "dmg":0.8, "missing":0.06}},
+	"stormcaller": {
+		"q": {"id":"chain", "name":"CHAIN LIGHTNING", "short":"CHAIN", "cd":7.0, "range":10.0, "jump":4.5, "n":4, "dmg":1.3,
+			"fall":0.75, "text":"Lightning strikes the nearest enemy and leaps to three more near him, each a little weaker."},
+		"w": {"id":"static", "name":"STATIC FIELD", "short":"STATIC", "cd":12.0, "range":9.0, "r":3.0, "dur":3.0, "dmg":0.35,
+			"slow":0.3, "text":"A crackling field up to 9 m away for 3 s: enemies in it shocked and slowed 30 %."},
+		"e": {"id":"gust", "name":"GUST", "cd":12.0, "r":5.0, "arc":0.8, "push":4.0, "dmg":0.5, "slow":0.3, "dur":1.5,
+			"text":"A blast of wind ahead: enemies blown back 4 m and slowed."},
+		"r": {"id":"thunderstorm", "range":13.0, "r":5.0, "n":8, "every":0.45, "dmg":1.1, "stun":0.35}},
+	"musketeer": {
+		"q": {"id":"buckshot", "name":"BUCKSHOT", "short":"BUCK", "cd":7.0, "r":7.0, "arc":0.45, "dmg":1.3, "close":1.6,
+			"push":1.5, "text":"A spread of shot ahead: damage and a shove -- close up it hits much harder."},
+		"w": {"id":"keg", "name":"POWDER KEG", "short":"KEG", "cd":11.0, "range":9.0, "r":3.0, "delay":0.8, "dmg":1.5, "push":2.5,
+			"text":"Lob a lit keg up to 9 m: a moment later it bursts, hurting and throwing back everyone round it."},
+		"e": {"id":"smokeroll", "name":"SMOKE ROLL", "short":"ROLL", "cd":10.0, "dist":4.5, "r":3.0, "zdur":3.0, "slow":0.3,
+			"emp":0.6, "dur":3.0, "text":"Roll 4.5 m out of a cloud of smoke that slows enemies in it; your next shot within 3 s hits 60 % harder."},
+		"r": {"id":"quickdraw", "range":15.0, "n":5, "dmg":2.0, "missing":0.12}},
+	"druid": {
+		"q": {"id":"rejuv", "name":"REJUVENATE", "short":"REJUV", "cd":8.0, "range":10.0, "hps":0.06, "dur":5.0,
+			"text":"The most hurt ally hero near you (or you) heals 6 % of their health a second for 5 s."},
+		"w": {"id":"entangle", "name":"ENTANGLE", "short":"ROOTS", "cd":12.0, "range":10.0, "r":1.8, "delay":0.5, "dmg":0.8,
+			"stun":1.5, "text":"Roots burst up under an enemy up to 10 m away: hurt and held fast for 1.5 s."},
+		"e": {"id":"barkskin", "name":"BARKSKIN", "short":"BARK", "cd":14.0, "range":10.0, "dr":0.3, "dur":4.0,
+			"text":"Bark covers the most hurt ally hero near you (or you): 30 % less damage for 4 s."},
+		"r": {"id":"wildgrowth", "r":7.0, "dur":5.0, "heal":0.025, "slow":0.3, "dmg":0.15}},
 }
 
 const DASH_SPEED := 17.0
@@ -111,7 +165,8 @@ var zones: Array = []                    # {zid, spell, team, owner, at, r, unti
 var traps: Array = []                    # {id, team, owner, at, armed_at, until, r, dmg, stun}
 var _trap_id := 0
 var _zone_id := 0
-var _afflicted := {}                     # unit id -> true: someone with poison ticking
+var _afflicted := {}                     # unit id -> true: someone with poison ticking (or REJUVENATE healing)
+var _riposting := {}                     # unit id -> true: a Duelist parrying (RIPOSTE)
 
 func setup(moba) -> void:
 	m = moba
@@ -124,8 +179,15 @@ static func role_of(hid: String) -> String:
 static func kit(hid: String, slot: String) -> Dictionary:
 	return (KITS.get(hid, {}) as Dictionary).get(slot, {})
 
+static func kit_q(hid: String) -> String:
+	# 0.31.168: the hero's Q when it's a kit spell (the six new heroes), else ""
+	return str(kit(hid, "q").get("id", ""))
+
+static func cd_key(slot: String) -> String:
+	return "cd_ability" if slot == "q" else "cd_" + slot
+
 func cd(u: Dictionary, slot: String) -> float:
-	return float(u.get("cd_" + slot, 0.0))
+	return float(u.get(cd_key(slot), 0.0))
 
 func unlocked(u: Dictionary, slot: String) -> bool:
 	return int(u.get("level", 1)) >= int(UNLOCK.get(slot, 1))
@@ -153,6 +215,8 @@ func taken(src: Dictionary, dst: Dictionary, a: float) -> float:
 	# (moba.mod_damage, after its own multipliers) a parry, marks and curses, then shields
 	var t: float = s.time
 	if t < float(dst.get("parry_until", -1.0)):
+		if dst.has("riposte") and a > 0.0 and int(src.get("team", -1)) != int(dst.team):
+			dst.riposte["hit"] = true                 # (RIPOSTE: something struck -- he answers when the parry ends)
 		return 0.0
 	if t < float(dst.get("amp_until", -1.0)):
 		a *= 1.0 + float(dst.get("amp_k", 0.0))
@@ -168,21 +232,23 @@ func taken(src: Dictionary, dst: Dictionary, a: float) -> float:
 func clear(u: Dictionary) -> void:
 	# fallen (or back): nothing carries over
 	for k in ["shield", "shield_until", "slow_until", "haste_until", "amp_until", "as_until", "ls_until", "emp_n", "poison_n",
-			"parry_until", "dots", "dash"]:
+			"parry_until", "dots", "dash", "riposte", "unstop_until"]:
 		u.erase(k)
 	_afflicted.erase(str(u.get("id", "")))
+	_riposting.erase(str(u.get("id", "")))
 
 # ---------- casting ----------
 func spell(u: Dictionary, slot: String) -> bool:
 	var k := kit(str(u.get("hid", "")), slot)
-	if k.is_empty() or bool(k.get("hold", false)):
+	if k.is_empty() or not k.has("id") or bool(k.get("hold", false)) or slot == "r":
 		return false
 	if not can_cast(u, slot) or not s.can_act(u) or u.has("dance") or int(u.get("tower", -1)) >= 0:
 		return false
 	var ev := {"id":u.id, "team":int(u.team), "hid":str(u.hid), "slot":slot, "spell":str(k.id), "pos":u.pos}
+	u[cd_key(slot)] = float(k.cd)                 # (before the cast: LUNGE's dash may hand half of it back)
 	if not _cast(u, k, ev):
+		u[cd_key(slot)] = 0.0
 		return false
-	u["cd_" + slot] = float(k.cd)
 	s._event("spell", ev)
 	return true
 
@@ -330,6 +396,232 @@ func _cast(u: Dictionary, k: Dictionary, ev: Dictionary) -> bool:
 			_slow(tgt3, float(k.slow), float(k.dur))
 			_amp(tgt3, float(k.amp), float(k.dur))
 			ev["target"] = str(tgt3.id)
+		# ---- 0.31.168: the six new heroes ----
+		"boulder":
+			var aim3 := _aim(u, float(k.range), float(k.range))
+			u.face = s.angle_of(aim3 - (u.pos as Vector2))
+			_shot(u, "boulder", s.dir_of(u.face), 20.0, float(k.range), dmg * float(k.dmg), {"stun":float(k.stun), "spell":"boulder"})
+		"stoneskin":
+			_dr(u, float(k.dr), float(k.dur))
+			u["unstop_until"] = s.time + float(k.dur)
+			u.erase("slow_until")
+		"quake":
+			var n4 := 0
+			for o in _enemies_near(u, u.pos, float(k.r)):
+				s._next_push = s._push_from(u.pos, o.pos, 3.0, 2.0)
+				s._damage(u, o, dmg * float(k.dmg))
+				_slow(o, float(k.slow), float(k.dur))
+				n4 += 1
+			ev["r"] = float(k.r)
+			ev["n"] = n4
+		"sweep":
+			var d3 := _face_foe(u, float(k.r) + 1.0)
+			var heroes_hit := 0
+			for o in _enemies_near(u, u.pos, float(k.r)):
+				var off3: Vector2 = (o.pos as Vector2) - (u.pos as Vector2)
+				if off3.length() < 0.8 or absf(d3.angle_to(off3)) <= float(k.arc):
+					s._damage(u, o, dmg * float(k.dmg))
+					if bool(o.get("hero", false)):
+						heroes_hit += 1
+			if heroes_hit > 0:
+				s._heal(u, u, mhp * float(k.heal) * float(heroes_hit))
+			ev["dir"] = d3
+			ev["r"] = float(k.r)
+		"impale":
+			var d4 := _face_foe(u, float(k.len))
+			var hit_n := 0
+			for o in _enemies_near(u, u.pos, float(k.len) + 0.5):
+				var off4: Vector2 = (o.pos as Vector2) - (u.pos as Vector2)
+				var along := off4.dot(d4)
+				if along < -0.3 or along > float(k.len) or absf(off4.cross(d4)) > float(k.w) + s.UNIT_R:
+					continue
+				s._damage(u, o, dmg * float(k.dmg))
+				if s.alive(o) and not o.has("mon"):
+					s._knockback(o, -d4 * minf(float(k.pull), maxf(0.0, along - 1.3)))
+				_slow(o, float(k.slow), float(k.dur))
+				hit_n += 1
+			ev["dir"] = d4
+			ev["len"] = float(k.len)
+			ev["n"] = hit_n
+		"vault":
+			_dash(u, _move_dir(u), float(k.dist), {"leap":true}, 15.0)
+			u["emp_n"] = 1
+			u["emp_k"] = float(k.emp)
+			u["emp_until"] = s.time + float(k.dur) + 0.4
+		"thrust":
+			var d5 := _face_foe(u, float(k.dist) + 1.0)
+			_dash(u, d5, float(k.dist), {"dmg":dmg * float(k.dmg), "first":true, "refund":float(k.refund)}, 20.0)
+		"riposte":
+			u["parry_until"] = s.time + float(k.dur)
+			u["riposte"] = {"until":s.time + float(k.dur), "hit":false, "r":float(k.r), "dmg":dmg * float(k.dmg),
+				"stun":float(k.stun)}
+			_riposting[str(u.id)] = true
+		"feint":
+			var back: Vector2 = -s.dir_of(float(u.face))
+			if (u.move as Vector2).length() > 0.2:
+				back = (u.move as Vector2).normalized()
+			_dash(u, back, float(k.dist), {}, 18.0)
+			u.face = s.angle_of(-back)
+			u["vanish_until"] = s.time + float(k.hide)
+			s._event("vanish", {"id":u.id, "team":u.team, "until":s.time + float(k.hide)})
+		"chain":
+			var first := _hero_near(u, float(k.range))
+			if first.is_empty():
+				first = s.nearest_enemy(u, float(k.range))
+			if first.is_empty():
+				return false
+			u.face = s.angle_of((first.pos as Vector2) - (u.pos as Vector2))
+			var pts := [u.pos]
+			var hit := [str(first.id)]
+			var cur: Dictionary = first
+			var amt := dmg * float(k.dmg)
+			for i in int(k.n):
+				pts.append(cur.pos)
+				s._damage(u, cur, amt)
+				amt *= float(k.fall)
+				var nxt := {}
+				var nd := float(k.jump)
+				for o in _enemies_near(u, cur.pos, float(k.jump)):
+					if hit.has(str(o.id)):
+						continue
+					var dd2: float = (o.pos as Vector2).distance_to(cur.pos) - (2.0 if bool(o.get("hero", false)) else 0.0)
+					if dd2 < nd:
+						nd = dd2
+						nxt = o
+				if nxt.is_empty():
+					break
+				hit.append(str(nxt.id))
+				cur = nxt
+			ev["pts"] = pts
+		"static":
+			var at3 := _aim(u, float(k.range), 6.0)
+			_zone(u, str(k.id), at3, float(k.r), float(k.dur), {"dmg":dmg * float(k.dmg), "slow":float(k.slow)})
+			u.face = s.angle_of(at3 - (u.pos as Vector2))
+			ev["c"] = at3
+			ev["r"] = float(k.r)
+		"gust":
+			var d6 := _face_foe(u, float(k.r))
+			for o in _enemies_near(u, u.pos, float(k.r)):
+				var off6: Vector2 = (o.pos as Vector2) - (u.pos as Vector2)
+				if off6.length() < 0.8 or absf(d6.angle_to(off6)) <= float(k.arc):
+					s._damage(u, o, dmg * float(k.dmg))
+					if s.alive(o) and not o.has("mon"):
+						s._knockback(o, (off6.normalized() if off6.length() > 0.1 else d6) * float(k.push))
+					_slow(o, float(k.slow), float(k.dur))
+			ev["dir"] = d6
+			ev["r"] = float(k.r)
+		"buckshot":
+			var d7 := _face_foe(u, float(k.r))
+			for o in _enemies_near(u, u.pos, float(k.r)):
+				var off7: Vector2 = (o.pos as Vector2) - (u.pos as Vector2)
+				if off7.length() < 0.8 or absf(d7.angle_to(off7)) <= float(k.arc):
+					var close := clampf(1.0 - (off7.length() - 1.5) / (float(k.r) - 1.5), 0.0, 1.0)
+					s._damage(u, o, dmg * float(k.dmg) * lerpf(1.0, float(k.close), close))
+					if s.alive(o) and not o.has("mon"):
+						s._knockback(o, (off7.normalized() if off7.length() > 0.1 else d7) * float(k.push))
+			ev["dir"] = d7
+			ev["r"] = float(k.r)
+		"keg":
+			var at4 := _aim(u, float(k.range), 6.0)
+			_zone(u, str(k.id), at4, float(k.r), 0.0, {"dmg":dmg * float(k.dmg), "push":float(k.push),
+				"delay_at":s.time + float(k.delay)})
+			u.face = s.angle_of(at4 - (u.pos as Vector2))
+			ev["c"] = at4
+			ev["r"] = float(k.r)
+			ev["delay"] = float(k.delay)
+		"smokeroll":
+			_zone(u, "smoke", u.pos, float(k.r), float(k.zdur), {"slow":float(k.slow)})
+			_dash(u, _away_dir(u), float(k.dist), {}, 18.0)
+			u["emp_n"] = 1
+			u["emp_k"] = float(k.emp)
+			u["emp_until"] = s.time + float(k.dur) + 0.4
+			ev["r"] = float(k.r)
+		"rejuv":
+			var who3 := _most_hurt(u, float(k.range))
+			_dot(who3, u, float(who3.max_hp) * float(k.hps), float(k.dur), true)
+			ev["target"] = str(who3.id)
+		"entangle":
+			var tgt4 := _hero_near(u, float(k.range))
+			if tgt4.is_empty():
+				tgt4 = s.nearest_enemy(u, float(k.range))
+			if tgt4.is_empty():
+				return false
+			_zone(u, str(k.id), tgt4.pos, float(k.r), 0.0, {"dmg":dmg * float(k.dmg), "stun":float(k.stun),
+				"delay_at":s.time + float(k.delay), "push":0.0})
+			u.face = s.angle_of((tgt4.pos as Vector2) - (u.pos as Vector2))
+			ev["c"] = tgt4.pos
+			ev["r"] = float(k.r)
+			ev["delay"] = float(k.delay)
+		"barkskin":
+			var who4 := _most_hurt(u, float(k.range))
+			_dr(who4, float(k.dr), float(k.dur))
+			ev["target"] = str(who4.id)
+		_:
+			return false
+	return true
+
+# ---------- 0.31.168: the six new heroes' ultimates (moba.ult -> here; k: its rank's power) ----------
+func ult(u: Dictionary, pk: float, dmg: float, ev: Dictionary) -> bool:
+	var k := kit(str(u.get("hid", "")), "r")
+	if k.is_empty():
+		return false
+	ev["spell"] = str(k.id)
+	match str(k.id):
+		"landslide":
+			var to := _aim(u, float(k.dist), float(k.dist))
+			var dir: Vector2 = (to - (u.pos as Vector2)).normalized() if to.distance_to(u.pos) > 0.5 else _move_dir(u)
+			_dash(u, dir, float(k.dist), {"dmg":dmg * float(k.dmg) * pk, "through":true, "land":{"r":float(k.r),
+				"dmg":dmg * float(k.land) * pk, "stun":float(k.stun)}}, 16.0)
+			ev["dir"] = dir
+		"dragondive":
+			var tgt := _hero_near(u, float(k.range))
+			var to2: Vector2 = tgt.pos if not tgt.is_empty() else _aim(u, float(k.range), 8.0)
+			var off: Vector2 = to2 - (u.pos as Vector2)
+			_dash(u, off.normalized() if off.length() > 0.3 else s.dir_of(u.face), minf(float(k.range), off.length()),
+				{"leap":true, "land":{"r":float(k.r), "dmg":dmg * float(k.dmg) * pk, "stun":float(k.stun)}}, 14.0)
+			ev["to"] = to2
+		"challenge":
+			var tgt2 := _hero_near(u, float(k.range))
+			if tgt2.is_empty():
+				return false
+			var ids := []
+			for i in int(k.n) + (1 if pk > 1.0 else 0):
+				ids.append(str(tgt2.id))
+			u["dance"] = {"ids":ids, "i":0, "next":s.time, "dmg":dmg * float(k.dmg) * pk, "missing":float(k.missing)}
+			ev["target"] = str(tgt2.id)
+		"thunderstorm":
+			var c := _aim(u, float(k.range), 8.0)
+			var n := int(k.n) + (2 if pk > 1.0 else 0)
+			_zone(u, str(k.id), c, float(k.r), float(k.every) * float(n) + 0.3, {"strike":{"dmg":dmg * float(k.dmg),
+				"stun":float(k.stun)}, "every":float(k.every), "next_at":s.time + 0.3})
+			u.face = s.angle_of(c - (u.pos as Vector2))
+			ev["c"] = c
+			ev["r"] = float(k.r)
+		"quickdraw":
+			var pool := []
+			for o in m.units_near(u.pos, float(k.range)):
+				if int(o.team) != int(u.team) and int(o.team) <= 1 and s.alive(o) and bool(o.get("hero", false)) \
+						and o.state != "fly" and m.can_see(int(u.team), o) and (o.pos as Vector2).distance_to(u.pos) <= float(k.range):
+					pool.append(o)
+			if pool.is_empty():
+				return false
+			var me_p: Vector2 = u.pos
+			pool.sort_custom(func(a, b): return (a.pos as Vector2).distance_to(me_p) < (b.pos as Vector2).distance_to(me_p))
+			var ids2 := []
+			var pts := []
+			for o in pool.slice(0, int(k.n)):
+				s._next_push = s._push_from(u.pos, o.pos, 4.0, 1.6)
+				s._damage(u, o, dmg * float(k.dmg) * pk + float(k.missing) * maxf(0.0, float(o.max_hp) - float(o.hp)))
+				ids2.append(str(o.id))
+				pts.append(o.pos)
+			u.face = s.angle_of((pts[0] as Vector2) - (u.pos as Vector2))
+			ev["ids"] = ids2
+			ev["pts"] = pts
+		"wildgrowth":
+			_zone(u, str(k.id), u.pos, float(k.r), float(k.dur), {"heal":float(k.heal) * pk, "slow":float(k.slow),
+				"dmg":dmg * float(k.dmg)})
+			ev["c"] = u.pos
+			ev["r"] = float(k.r)
 		_:
 			return false
 	return true
@@ -341,6 +633,8 @@ func _shield(u: Dictionary, amount: float, dur: float) -> void:
 	u["shield_until"] = maxf(float(u.get("shield_until", -1.0)), s.time + dur)
 
 func _slow(u: Dictionary, k: float, dur: float) -> void:
+	if k <= 0.0 or s.time < float(u.get("unstop_until", -1.0)):
+		return                                   # (STONESKIN: slows fall off him)
 	if s.time < float(u.get("slow_until", -1.0)):
 		u["slow_k"] = maxf(float(u.get("slow_k", 0.0)), k)
 		u["slow_until"] = maxf(float(u.slow_until), s.time + dur)
@@ -356,16 +650,27 @@ func _amp(u: Dictionary, k: float, dur: float) -> void:
 	u["amp_k"] = maxf(k, float(u.get("amp_k", 0.0)) if s.time < float(u.get("amp_until", -1.0)) else 0.0)
 	u["amp_until"] = maxf(float(u.get("amp_until", -1.0)), s.time + dur)
 
-func _dot(u: Dictionary, by: Dictionary, dps: float, dur: float) -> void:
+func _dot(u: Dictionary, by: Dictionary, dps: float, dur: float, heal := false) -> void:
+	# poison ticking once a second -- or (heal: 0.31.168, REJUVENATE) healing
 	var dots: Array = u.get("dots", [])
 	for d in dots:
-		if str(d.by) == str(by.get("id", "")):
+		if str(d.by) == str(by.get("id", "")) and bool(d.get("heal", false)) == heal:
 			d.dps = maxf(float(d.dps), dps)
 			d.until = s.time + dur
 			return
-	dots.append({"by":str(by.get("id", "")), "team":int(by.get("team", -1)), "dps":dps, "until":s.time + dur, "next":s.time + 1.0})
+	dots.append({"by":str(by.get("id", "")), "team":int(by.get("team", -1)), "dps":dps, "until":s.time + dur, "next":s.time + 1.0,
+		"heal":heal})
 	u["dots"] = dots
 	_afflicted[str(u.id)] = true
+
+func _dr(u: Dictionary, k: float, dur: float) -> void:
+	# damage taken down (moba.mod_damage reads dr / dr_until -- BULWARK's): STONESKIN, BARKSKIN
+	if s.time < float(u.get("dr_until", -1.0)):
+		u["dr"] = maxf(float(u.get("dr", 0.0)), k)
+	else:
+		u["dr"] = k
+	u["dr_until"] = maxf(float(u.get("dr_until", -1.0)), s.time + dur)
+	u["skin_until"] = s.time + dur                # (the view: bark or stone over him)
 
 func _zone(u: Dictionary, kind: String, at: Vector2, r: float, dur: float, fx: Dictionary) -> void:
 	_zone_id += 1
@@ -379,7 +684,7 @@ func _dash(u: Dictionary, dir: Vector2, dist: float, fx: Dictionary, speed := DA
 	u.face = s.angle_of(dir)
 	u.move = Vector2.ZERO
 	u.task = {}
-	var dd := {"dir":dir, "left":dist, "speed":speed, "hits":[]}
+	var dd := {"dir":dir, "left":dist, "total":dist, "speed":speed, "hits":[]}
 	dd.merge(fx)
 	u["dash"] = dd
 
@@ -422,13 +727,38 @@ func step(dt: float) -> void:
 			if s.time < float(z.delay_at):
 				continue
 			for o in _enemies_near(owner, z.at, float(z.r) + s.UNIT_R):
-				s._next_push = s._push_from(z.at, o.pos, 5.0, 3.0)
+				if float(z.get("push", -1.0)) != 0.0:
+					s._next_push = s._push_from(z.at, o.pos, 5.0, 3.0)
 				s._damage(owner, o, float(z.dmg), float(z.get("stun", 0.0)))
-			s._event("pillar", {"c":z.at, "r":float(z.r), "team":int(z.team)})
+				if float(z.get("push", 0.0)) > 0.0 and s.alive(o) and not o.has("mon"):
+					var away: Vector2 = (o.pos as Vector2) - (z.at as Vector2)
+					s._knockback(o, (away.normalized() if away.length() > 0.1 else Vector2.from_angle(s.rng.randf() * TAU)) \
+						* float(z.push) * (1.0 - 0.5 * clampf(away.length() / float(z.r), 0.0, 1.0)))
+			# (the fire pillar's own event; 0.31.168: the Musketeer's keg and the Druid's roots a "burst")
+			if str(z.spell) == "pillar":
+				s._event("pillar", {"c":z.at, "r":float(z.r), "team":int(z.team)})
+			else:
+				s._event("burst", {"spell":str(z.spell), "c":z.at, "r":float(z.r), "team":int(z.team)})
 			zones.remove_at(i)
 			continue
 		if s.time >= float(z.until):
 			zones.remove_at(i)
+			continue
+		if z.has("strike"):
+			# 0.31.168: THUNDERSTORM -- a bolt every `every` s onto an enemy under it (heroes first), else the ground
+			if s.time >= float(z.next_at):
+				z.next_at = float(z.next_at) + float(z.every)
+				var pool := _enemies_near(owner, z.at, float(z.r))
+				var pick := {}
+				for o in pool:
+					if pick.is_empty() or (bool(o.get("hero", false)) and not bool(pick.get("hero", false))) \
+							or (bool(o.get("hero", false)) == bool(pick.get("hero", false)) and s.rng.randf() < 0.5):
+						pick = o
+				var spot: Vector2 = pick.pos if not pick.is_empty() else (z.at as Vector2) + Vector2.from_angle(s.rng.randf() * TAU) \
+					* sqrt(s.rng.randf()) * float(z.r)
+				if not pick.is_empty():
+					s._damage(owner, pick, float(z.strike.dmg), float(z.strike.stun))
+				s._event("zap", {"c":spot, "team":int(z.team), "id":str(pick.get("id", ""))})
 			continue
 		if s.time < float(z.next):
 			continue
@@ -473,7 +803,10 @@ func step(dt: float) -> void:
 				if s.time >= float(d.next):
 					d.next = float(d.next) + 1.0
 					var by: Dictionary = s.by_id.get(str(d.by), {"team":int(d.team), "id":""})
-					s._damage(by, u, float(d.dps))
+					if bool(d.get("heal", false)):
+						s._heal(by, u, float(d.dps))
+					else:
+						s._damage(by, u, float(d.dps))
 					if not s.alive(u):
 						break
 				if s.time >= float(d.until):
@@ -481,6 +814,34 @@ func step(dt: float) -> void:
 			if dots.is_empty():
 				u.erase("dots")
 				_afflicted.erase(id)
+	if not _riposting.is_empty():
+		# 0.31.168 RIPOSTE: when the parry ends -- if anything struck him, he answers the nearest enemy
+		for id2 in _riposting.keys():
+			var du: Dictionary = s.by_id.get(str(id2), {})
+			if du.is_empty() or not s.alive(du) or not du.has("riposte"):
+				_riposting.erase(id2)
+				continue
+			var rp: Dictionary = du.riposte
+			if s.time < float(rp.until):
+				continue
+			_riposting.erase(id2)
+			du.erase("riposte")
+			if not bool(rp.hit):
+				continue
+			var foe := {}
+			var fd := float(rp.r)
+			for o in _enemies_near(du, du.pos, float(rp.r)):
+				var dd: float = (o.pos as Vector2).distance_to(du.pos) - (1.5 if bool(o.get("hero", false)) else 0.0)
+				if dd < fd:
+					fd = dd
+					foe = o
+			if foe.is_empty():
+				continue
+			du.face = s.angle_of((foe.pos as Vector2) - (du.pos as Vector2))
+			s._next_push = s._push_from(du.pos, foe.pos, 4.0, 1.8)
+			s._damage(du, foe, float(rp.dmg), float(rp.stun))
+			s._event("riposte", {"id":du.id, "target":str(foe.id), "pos":foe.pos})
+			s._event("attack", {"id":du.id, "kind":"attack", "ability":"", "combo":2})
 
 func step_dash(u: Dictionary, dt: float) -> void:
 	# (siege_sim._step_unit, state "dash") along the line; who it hits on the way; what it does when it lands
@@ -501,6 +862,8 @@ func step_dash(u: Dictionary, dt: float) -> void:
 			(dd.hits as Array).append(o.id)
 			s._next_push = s._push_from(u.pos, o.pos, 4.0, 1.8)
 			s._damage(u, o, float(dd.dmg), float(dd.get("stun", 0.0)))
+			if float(dd.get("refund", 0.0)) > 0.0 and bool(o.get("hero", false)):
+				u.cd_ability = float(u.cd_ability) * float(dd.refund)       # (LUNGE: a hero -- back twice as soon)
 			if bool(dd.get("through", false)) and s.alive(o):
 				var side := Vector2(-(dd.dir as Vector2).y, (dd.dir as Vector2).x)
 				if side.dot((o.pos as Vector2) - (u.pos as Vector2)) < 0.0:
@@ -514,7 +877,7 @@ func step_dash(u: Dictionary, dt: float) -> void:
 		if not land.is_empty():
 			for o in _enemies_near(u, u.pos, float(land.r)):
 				s._next_push = s._push_from(u.pos, o.pos, 5.0, 2.6)
-				s._damage(u, o, float(land.dmg))
+				s._damage(u, o, float(land.dmg), float(land.get("stun", 0.0)))
 				_slow(o, float(land.get("slow", 0.0)), float(land.get("dur", 1.0)))
 			s._event("slam", {"id":u.id, "pos":u.pos, "r":float(land.r)})
 		u.erase("dash")
@@ -525,6 +888,16 @@ func step_dash(u: Dictionary, dt: float) -> void:
 func _move_dir(u: Dictionary) -> Vector2:
 	var mv: Vector2 = u.move
 	return mv.normalized() if mv.length() > 0.2 else s.dir_of(float(u.face))
+
+func _away_dir(u: Dictionary) -> Vector2:
+	# (0.31.168, SMOKE ROLL) the way you're going -- standing still, away from the nearest enemy (else back)
+	var mv: Vector2 = u.move
+	if mv.length() > 0.2:
+		return mv.normalized()
+	var foe: Dictionary = s.nearest_enemy(u, 10.0)
+	if not foe.is_empty() and (foe.pos as Vector2).distance_to(u.pos) > 0.1:
+		return ((u.pos as Vector2) - (foe.pos as Vector2)).normalized()
+	return -s.dir_of(float(u.face))
 
 func _hero_near(u: Dictionary, r: float) -> Dictionary:
 	var best := {}
@@ -592,9 +965,9 @@ func bot_spells(u: Dictionary) -> bool:
 	if not s.can_act(u):
 		return false
 	var hid := str(u.hid)
-	for slot in ["w", "e"]:
+	for slot in ["q", "w", "e"]:                  # (0.31.168: Q too, for the heroes whose Q is a kit spell)
 		var k := kit(hid, slot)
-		if k.is_empty() or bool(k.get("hold", false)) or not can_cast(u, slot):
+		if k.is_empty() or not k.has("id") or bool(k.get("hold", false)) or not can_cast(u, slot):
 			continue
 		if _worth(u, k) and spell(u, slot):
 			return true
@@ -623,4 +996,62 @@ func _worth(u: Dictionary, k: Dictionary) -> bool:
 		"trap":
 			return near_foes == 0 and not s.in_castle(u.pos, int(u.team)) \
 				and traps.filter(func(tr): return str(tr.owner) == str(u.id)).size() < int(k.n)
+		# ---- 0.31.168 ----
+		"boulder", "entangle", "static", "keg":
+			return not foe.is_empty() or (str(k.id) in ["static", "keg"] and near_foes >= 3)
+		"chain":
+			return not foe.is_empty() or _enemies_near(u, u.pos, float(k.range)).size() >= 3
+		"thrust", "impale":
+			var r2 := float(k.get("dist", k.get("len", 5.0)))
+			return not _hero_near(u, r2).is_empty() and (hp > 0.35 or str(k.id) == "impale")
+		"sweep", "quake", "buckshot", "gust":
+			var reach := float(k.r) * (0.6 if str(k.id) in ["buckshot", "gust"] else 0.9)
+			return not _hero_near(u, reach).is_empty() or _enemies_near(u, u.pos, reach).size() >= 3 \
+				or (str(k.id) == "gust" and hp < 0.5 and near_foes > 0)
+		"stoneskin":
+			return near_foes > 0 and (hp < 0.6 or not _hero_near(u, 4.0).is_empty())
+		"riposte":
+			return not _hero_near(u, 2.6).is_empty() and hp < 0.85
+		"vault", "smokeroll", "feint":
+			return (hp < 0.35 and near_foes > 0) or (str(k.id) == "vault" and hp > 0.6 and not _hero_near(u, 7.0).is_empty()
+				and _hero_near(u, 3.0).is_empty())
+		"rejuv":
+			var who3 := _most_hurt(u, float(k.range))
+			return float(who3.hp) / maxf(1.0, float(who3.max_hp)) < 0.7 and not who3.has("dots")
+		"barkskin":
+			var who4 := _most_hurt(u, float(k.range))
+			return float(who4.hp) / maxf(1.0, float(who4.max_hp)) < 0.5 and not _enemies_near(u, who4.pos, 6.0).is_empty()
+	return false
+
+func bot_ult(u: Dictionary, near_h: int, near_any: int, closest: Dictionary, cd_h: float, lord_fight: bool) -> bool:
+	# (moba._bot_ult) when the six new heroes' ultimates are worth it; near_h / near_any within 7 m
+	var k := kit(str(u.get("hid", "")), "r")
+	var hp := float(u.hp) / maxf(1.0, float(u.max_hp))
+	match str(k.get("id", "")):
+		"landslide":
+			return (near_h >= 1 and (near_any >= 2 or hp < 0.5)) or lord_fight
+		"dragondive":
+			return (not closest.is_empty() and cd_h <= float(k.range) and (float(closest.hp) < float(closest.max_hp) * 0.6
+				or near_any >= 2)) or lord_fight
+		"challenge":
+			return not closest.is_empty() and cd_h <= float(k.range) and float(closest.hp) < float(closest.max_hp) * 0.65
+		"thunderstorm":
+			if closest.is_empty() or cd_h > float(k.range):
+				return lord_fight
+			return _enemies_near(u, closest.pos, float(k.r)).size() >= 3 or float(closest.hp) < float(closest.max_hp) * 0.4
+		"quickdraw":
+			var seen := 0
+			var low := false
+			for o in m.units_near(u.pos, float(k.range)):
+				if int(o.team) != int(u.team) and int(o.team) <= 1 and s.alive(o) and bool(o.get("hero", false)) \
+						and m.can_see(int(u.team), o):
+					seen += 1
+					low = low or float(o.hp) < float(o.max_hp) * 0.35
+			return seen >= 2 or low
+		"wildgrowth":
+			var hurt := 0
+			for o in _allies_near(u, float(k.r), true):
+				if float(o.hp) < float(o.max_hp) * 0.6:
+					hurt += 1
+			return (hurt >= 2 and near_any > 0) or (hp < 0.3 and near_h > 0) or lord_fight
 	return false

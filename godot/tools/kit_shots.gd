@@ -29,7 +29,10 @@ func _init() -> void:
 		if frames == shot_at:
 			var nm := "hud" if ci < 0 else "%d_%s" % [ci, str(casts[ci])]
 			root.get_texture().get_image().save_png("%s%s.png" % [prefix, nm])
-			print("SHOT ", nm))
+			var f: Dictionary = mode.sim.by_id["r1"]
+			var a: Dictionary = mode.view.actors.get("r1", {})
+			print("SHOT ", nm, " foe ", f.pos, " ", f.state, " hp ", int(f.hp), " seen ", mode.sim.moba.can_see(0, f),
+				" drawn ", (not a.is_empty() and (a.root as Node3D).visible)))
 
 func _process(_delta: float) -> bool:
 	frames += 1
@@ -59,6 +62,12 @@ func _process(_delta: float) -> bool:
 			if u != me and u != foe and u != mate and bool(u.get("hero", false)):
 				u.bot = false
 				u.pos = s.spawn(int(u.team))
+			if bool(u.get("hero", false)):
+				u.move = Vector2.ZERO                  # (0.31.168: a bot's last step kept them walking)
+				u.task = {}
+		if OS.get_environment("CLOSE") == "1":
+			# 0.31.168: a close camera on the two of them (CLOSE=1)
+			mode.view.cam_override = [Vector3(5.0, 10.0, 52.0), Vector3(0.0, 0.8, 41.5)]
 		frames = 41
 	if frames >= next_at:
 		ci += 1
@@ -69,6 +78,11 @@ func _process(_delta: float) -> bool:
 			var c := str(casts[ci])
 			var me2: Dictionary = s.by_id["you"]
 			me2.face = s.angle_of(Vector2(0, -1))
+			var foe2: Dictionary = s.by_id["r1"]              # (0.31.168: each cast at him where he stood)
+			if s.alive(foe2):
+				foe2.pos = Vector2(0.0, 40.0)
+				foe2.move = Vector2.ZERO
+				foe2.stun = 0.0
 			match c:
 				"q": s.act("you", "ability")
 				"r": s.act("you", "ult")

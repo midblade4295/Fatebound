@@ -8,6 +8,9 @@ extends SceneTree
 #  4. shields take hits first, slows slow, marks and curses make hits land harder, poison ticks, a fallen hero keeps
 #     nothing;
 #  5. whole bot matches: the bots cast their W and E.
+# 0.31.168 (Kevin picked six new heroes, one a role): three of each role now; the new six's Q is a kit spell too (each
+# of the 18 new spells does what it says, same scene), and each new ultimate does what it says; their own numbers
+# (HERO_BASE) and shots.
 #   godot --headless --path godot -s res://tests/moba_kits_test.gd
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 const Moba = preload("res://scripts/siege/moba.gd")
@@ -60,6 +63,7 @@ func _init() -> void:
 	_roles()
 	_unlocks()
 	_each()
+	_ults()
 	_effects()
 	_bots()
 	print("MOBA_KITS_PASS" if fails.is_empty() else "MOBA_KITS_FAIL %s" % str(fails))
@@ -74,8 +78,8 @@ func _roles() -> void:
 		per[r] = int(per.get(r, 0)) + 1
 		kits_ok = kits_ok and not Kits.kit(str(hid), "q").is_empty() and not Kits.kit(str(hid), "w").is_empty() \
 			and not Kits.kit(str(hid), "e").is_empty() and Moba.ULTS.has(str(hid))
-	check(Kits.ROLE_ORDER.all(func(r): return int(per.get(r, 0)) == 2) and per.size() == 6,
-		"every hero a role, two of each of the six (%s)" % str(per))
+	check(Kits.ROLE_ORDER.all(func(r): return int(per.get(r, 0)) == 3) and per.size() == 6,
+		"every hero a role, three of each of the six (%s)" % str(per))
 	check(kits_ok, "...and a kit: Q, W, E and the ultimate")
 	# the draft: League's five places, filled by role; you in your role's place
 	var s = _new("mage", 61)
@@ -144,8 +148,8 @@ func _unlocks() -> void:
 func _cast(hero: String, slot: String) -> Array:
 	var sc := _scene(hero)
 	var s = sc[0]
-	var before := {"p":sc[1].pos, "f_hp":float(sc[2].hp), "m_hp":float(sc[3].hp)}
-	var ok: bool = s.act("you", "spell", slot)
+	var before := {"p":sc[1].pos, "f_hp":float(sc[2].hp), "m_hp":float(sc[3].hp), "f_p":sc[2].pos}
+	var ok: bool = s.act("you", "ability") if slot == "q" else s.act("you", "spell", slot)      # (0.31.168: a kit Q)
 	var evs: Array = s.drain_events()
 	sc.append(ok)
 	sc.append(evs.filter(func(e): return e.k == "spell"))
@@ -154,10 +158,10 @@ func _cast(hero: String, slot: String) -> Array:
 
 func _each() -> void:
 	for hid in Moba.HERO_ORDER:
-		for slot in ["w", "e"]:
+		for slot in ["q", "w", "e"]:
 			var k := Kits.kit(str(hid), slot)
-			if bool(k.get("hold", false)):
-				continue
+			if bool(k.get("hold", false)) or not k.has("id"):
+				continue                                  # (a class's own Q: the sim's tests)
 			var sc := _cast(str(hid), slot)
 			var s = sc[0]
 			var me: Dictionary = sc[1]
@@ -169,6 +173,12 @@ func _each() -> void:
 			var f_hp := float(sc[6].f_hp)
 			var m_hp := float(sc[6].m_hp)
 			var seen := {"stun":false, "slow":false}
+			var parried := false
+			if str(k.id) == "riposte":
+				var hp_pre := float(me.hp)
+				s._damage(foe, me, 20.0)                   # (struck while parrying: nothing lands, and he answers)
+				parried = float(me.hp) == hp_pre
+			var hid_v: bool = float(me.get("vanish_until", -1.0)) > s.time
 			for i in int(1.5 / Sim.TICK):
 				s.step()
 				s.drain_events()
@@ -216,8 +226,95 @@ func _each() -> void:
 					ok = float(mate.hp) > m_hp + float(mate.max_hp) * 0.15
 				"boneshield":
 					ok = float(mate.get("shield", 0.0)) > 0.0
+				# ---- 0.31.168 ----
+				"boulder", "entangle":
+					ok = seen.stun and float(foe.hp) < f_hp
+				"stoneskin":
+					ok = s.time < float(me.get("dr_until", -1.0)) and float(me.dr) >= 0.4 and s.time < float(me.get("unstop_until", -1.0))
+				"quake", "static":
+					ok = seen.slow and float(foe.hp) < f_hp
+				"sweep", "chain":
+					ok = float(foe.hp) < f_hp
+				"impale":
+					ok = float(foe.hp) < f_hp and seen.slow and (foe.pos as Vector2).distance_to(p0) < 2.0
+				"vault", "smokeroll":
+					ok = (me.pos as Vector2).distance_to(p0) > 3.0 and int(me.get("emp_n", 0)) == 1
+				"thrust":
+					ok = float(foe.hp) < f_hp and float(me.cd_ability) < float(k.cd) * 0.5
+				"riposte":
+					ok = parried and seen.stun and float(foe.hp) < f_hp
+					why = "(%.0f -> %.0f)" % [f_hp, float(foe.hp)]
+				"feint":
+					ok = hid_v and (me.pos as Vector2).distance_to(foe.pos) > 5.0
+				"gust", "buckshot":
+					ok = float(foe.hp) < f_hp and (foe.pos as Vector2).distance_to(p0) > 3.6 and (seen.slow or str(k.id) != "gust")
+					why = "(pushed to %.1f m)" % (foe.pos as Vector2).distance_to(p0)
+				"keg":
+					ok = float(foe.hp) < f_hp and (foe.pos as Vector2).distance_to(sc[6].f_p) > 1.5     # (thrown off the spot)
+					why = "(thrown %.1f m)" % (foe.pos as Vector2).distance_to(sc[6].f_p)
+				"rejuv":
+					ok = float(mate.hp) > m_hp and mate.has("dots")
+				"barkskin":
+					ok = s.time < float(mate.get("dr_until", -1.0)) and float(mate.dr) >= 0.3
 			check(cast_ok and spells.size() == 1 and str(spells[0].spell) == str(k.id) and ok,
 				"%s %s: %s %s" % [str(hid).to_upper(), slot.to_upper(), str(k.name), why])
+
+# ---------------------------------------------------------------- 3b. the new heroes' ultimates and frames (0.31.168)
+func _ults() -> void:
+	for hid in ["golem", "dragoon", "duelist", "stormcaller", "musketeer", "druid"]:
+		var sc := _scene(hid, 6)
+		var s = sc[0]
+		var me: Dictionary = sc[1]
+		var foe: Dictionary = sc[2]
+		var mate: Dictionary = sc[3]
+		var p0: Vector2 = me.pos
+		var f_hp := float(foe.hp)
+		var m_hp := float(mate.hp)
+		var cast_ok: bool = s.act("you", "ult")
+		var seen := {"stun":false, "slow":false, "flurry":0, "zap":0}
+		for i in int(3.0 / Sim.TICK):
+			s.step()
+			for e in s.drain_events():
+				if e.k == "flurry_hit":
+					seen.flurry += 1
+				elif e.k == "zap":
+					seen.zap += 1
+			seen.stun = seen.stun or float(foe.stun) > 0.0
+			seen.slow = seen.slow or s.time < float(foe.get("slow_until", -1.0))
+		var k := Kits.kit(hid, "r")
+		var ok := false
+		match str(k.id):
+			"landslide":
+				ok = float(foe.hp) < f_hp and (me.pos as Vector2).distance_to(p0) > 7.0
+			"dragondive":
+				ok = float(foe.hp) < f_hp and seen.stun and (me.pos as Vector2).distance_to(foe.pos) < 3.6
+			"challenge":
+				ok = float(foe.hp) < f_hp and int(seen.flurry) >= int(k.n)
+			"thunderstorm":
+				ok = float(foe.hp) < f_hp and seen.stun and int(seen.zap) >= 5
+			"quickdraw":
+				ok = float(foe.hp) < f_hp
+			"wildgrowth":
+				ok = float(mate.hp) > m_hp and seen.slow
+		check(cast_ok and ok and float(me.ult_cd) > 0.0, "%s R: %s" % [hid.to_upper(), str(Moba.ULTS[hid].name)])
+	# their own numbers and shots
+	var s2 = _new("golem", 77)
+	var g: Dictionary = s2.by_id["you"]
+	check(float(g.max_hp) > 160.0 and absf(float(s2.stat(g, "range")) - 2.1) < 0.01 and str(Sim.CLASSES[g.cls].ability) == "spin"
+		and s2.ability_of(g) == "boulder", "the Golem: a Barbarian's frame, his own health (%.0f), reach and Q" % float(g.max_hp))
+	var shots := {}
+	for hid in ["stormcaller", "musketeer", "druid"]:
+		var sc2 := _scene(hid, 1)
+		var s3 = sc2[0]
+		var u: Dictionary = sc2[1]
+		u.face = s3.angle_of((sc2[2].pos as Vector2) - (u.pos as Vector2))
+		s3.act("you", "attack")
+		for i in int(1.0 / Sim.TICK):
+			s3.step()
+			for e in s3.drain_events():
+				if e.k == "proj":
+					shots[hid] = str(e.kind)
+	check(shots == {"stormcaller":"bolt", "musketeer":"ball", "druid":"thorn"}, "their own shots (%s)" % str(shots))
 
 # ---------------------------------------------------------------- 4. the effects
 func _effects() -> void:

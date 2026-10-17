@@ -50,15 +50,40 @@ const HEROES := {
 	"crusader": {"name":"Crusader", "cls":"knight", "up":true}, "berserker": {"name":"Berserker", "cls":"barbarian", "up":true},
 	"assassin": {"name":"Assassin", "cls":"rogue", "up":true}, "sniper": {"name":"Ranger", "cls":"ranger", "up":true},
 	"archmage": {"name":"Archmage", "cls":"mage", "up":true}, "necromancer": {"name":"Necromancer", "cls":"priest", "up":true},
+	# 0.31.168 (Kevin picked six new heroes, one a role): each plays on an old class's frame -- its basic attack, its swings,
+	# how a bot fights with it -- but has its own body, its own numbers (HERO_BASE), its own shot (HERO_SHOT) and its whole
+	# kit, Q included (moba_kits.gd). Bought with gold in the app (economy.gd HERO_PRICES); the bots play them all.
+	"golem": {"name":"Golem", "cls":"barbarian", "up":false},
+	"dragoon": {"name":"Dragoon", "cls":"knight", "up":false},
+	"duelist": {"name":"Duelist", "cls":"rogue", "up":false},
+	"stormcaller": {"name":"Stormcaller", "cls":"mage", "up":false},
+	"musketeer": {"name":"Musketeer", "cls":"ranger", "up":false},
+	"druid": {"name":"Druid", "cls":"mage", "up":false},
 }
 const HERO_ORDER := ["knight", "barbarian", "rogue", "ranger", "mage", "priest", "crusader", "berserker", "assassin", "sniper",
-	"archmage", "necromancer"]
+	"archmage", "necromancer", "golem", "dragoon", "duelist", "stormcaller", "musketeer", "druid"]
+# 0.31.168: the new heroes' own numbers over their class's (siege_sim.CLASSES; stat() reads them) and their shots
+const HERO_BASE := {
+	"golem": {"hp":172.0, "dmg":19.0, "speed":4.5, "range":2.1, "arc":0.35, "windup":0.36, "recover":0.48},
+	"dragoon": {"hp":142.0, "dmg":23.0, "speed":4.8, "range":2.7, "arc":0.3, "windup":0.3, "recover":0.45},
+	"duelist": {"hp":94.0, "dmg":15.0, "speed":6.3, "range":1.6, "arc":0.5, "windup":0.12, "recover":0.2},
+	"stormcaller": {"hp":76.0, "dmg":21.0, "speed":5.0, "range":9.5, "proj_speed":34.0, "aoe":0.0, "windup":0.35, "recover":0.5},
+	"musketeer": {"hp":80.0, "dmg":25.0, "speed":5.2, "range":12.5, "proj_speed":46.0, "windup":0.42, "recover":0.85},
+	"druid": {"hp":88.0, "dmg":14.0, "speed":5.1, "range":9.0, "proj_speed":26.0, "aoe":0.0, "windup":0.35, "recover":0.45},
+}
+const HERO_SHOT := {"stormcaller":"bolt", "musketeer":"ball", "druid":"thorn"}
+const HERO_SCALE := {"golem":1.12}                             # (the view: the Golem stands a head taller)
 const HERO_LINE := {"knight":"Shield up: blocks everything from the front.", "barbarian":"Spins through a crowd.",
 	"rogue":"Lunges in, quick and sharp.", "ranger":"Arrows from range, a volley of five.", "mage":"Fireballs, and a nova all round.",
 	"priest":"Heals with a beam; Sanctuary heals everyone near.", "crusader":"Throws his hammer through a line, and blocks.",
 	"berserker":"A whirlwind that keeps moving.", "assassin":"Vanishes, then strikes twice as hard.",
 	"sniper":"A piercing shot through everyone in a line.", "archmage":"Calls down a meteor.",
-	"necromancer":"Drains enemies to heal friends; raises the fallen."}
+	"necromancer":"Drains enemies to heal friends; raises the fallen.",
+	"golem":"A wall of living stone: boulders, quakes, an avalanche.", "dragoon":"A halberd that sweeps, drags and dives from the sky.",
+	"duelist":"Lunges, parries and answers -- a blade for one foe at a time.",
+	"stormcaller":"Lightning that leaps from foe to foe, wind and a storm.",
+	"musketeer":"Long, heavy shots; buckshot and powder kegs up close.",
+	"druid":"Heals that grow over time, roots and bark, a grove of life."}
 
 # the lanes as world points from the blue (team 0) gate to the red (team 1) gate; red walks them backwards. Point
 # symmetric: lane 0 backwards and mirrored is lane 2. 0.31.165: the Rift's (siege_land.gd LANES; until then the Siege
@@ -189,6 +214,19 @@ const ULTS := {
 	"sniper": {"name":"DEADEYE", "cd":70.0, "text":"A huge arrow across the whole field, through everyone in its way, stunning."},
 	"archmage": {"name":"METEORS", "cd":75.0, "text":"Six meteors rain down round your target."},
 	"necromancer": {"name":"LEGION", "cd":80.0, "text":"Raises four skeletons who fight for you for 20 s."},
+	# 0.31.168: the six new heroes (moba_kits.gd ult())
+	"golem": {"name":"LANDSLIDE", "short":"SLIDE", "cd":75.0,
+		"text":"Roll 9 m like an avalanche, flattening everyone in the way; where you stop the ground breaks -- enemies near stunned 1.5 s."},
+	"dragoon": {"name":"DRAGON DIVE", "short":"DIVE", "cd":70.0,
+		"text":"Leap high onto an enemy hero up to 11 m away and crash down: heavy damage and a 1 s stun round you."},
+	"duelist": {"name":"GRAND CHALLENGE", "short":"DUEL", "cd":65.0,
+		"text":"Five lightning strikes at the nearest enemy hero up to 8 m, from every side -- harder the more hurt he is."},
+	"stormcaller": {"name":"THUNDERSTORM", "short":"STORM", "cd":75.0,
+		"text":"A storm up to 13 m away: for 3.5 s bolts strike the enemies under it, each a short stun."},
+	"musketeer": {"name":"QUICKDRAW", "short":"DRAW", "cd":70.0,
+		"text":"Shoots every enemy hero you can see within 15 m -- up to five -- for double, more the more hurt they are."},
+	"druid": {"name":"WILD GROWTH", "short":"GROVE", "cd":80.0,
+		"text":"A grove round you for 5 s: allies in it heal 5 % of their health a second; enemies in it slowed and stung."},
 }
 const BULWARK_R := 7.0
 const BULWARK_DR := 0.5
@@ -270,6 +308,9 @@ const BUILDS := {
 	"ranger": ["dagger", "boots", "dagger", "phantom", "sword", "fang", "bloodthirster", "greaves", "ruby", "bead", "titan"],
 	"mage": ["tome", "boots", "sword", "archon", "greaves", "ruby", "bead", "titan", "cloth"],
 	"priest": ["tome", "boots", "bead", "relic", "greaves", "ruby", "cloth", "thorn"],
+	# 0.31.168: by hero where his class's list doesn't fit him -- the Golem a tank's, the Druid a support's
+	"golem": ["boots", "ruby", "cloth", "thorn", "greaves", "sword", "fang", "bloodthirster", "bead", "titan"],
+	"druid": ["tome", "boots", "bead", "relic", "greaves", "ruby", "cloth", "thorn"],
 }
 
 # ---------- 0.31.157: the jungle ----------
@@ -521,6 +562,13 @@ func _make_hero(u: Dictionary, hid: String, lane: int, king_runner: bool) -> voi
 	u.up = bool(h.up)
 	u["hero"] = true
 	u["hid"] = hid
+	if Kits.kit_q(hid) != "":
+		u["kq"] = Kits.kit_q(hid)                  # 0.31.168: his Q is a kit spell (siege_sim.ability_of)
+		u["look"] = hid                            # his own body (siege_view.look_key)
+	if HERO_SHOT.has(hid):
+		u["shot"] = str(HERO_SHOT[hid])            # his basic attack's shot (siege_sim._shoot)
+	if HERO_SCALE.has(hid):
+		u["mscale"] = float(HERO_SCALE[hid])
 	u["lane"] = lane
 	u["kr"] = king_runner and u.bot
 	u["level"] = 1
@@ -541,6 +589,9 @@ func _make_hero(u: Dictionary, hid: String, lane: int, king_runner: bool) -> voi
 
 # ---------- stats ----------
 func stat(u: Dictionary, key: String, base: Variant) -> Variant:
+	var hb: Dictionary = HERO_BASE.get(str(u.get("hid", "")), {})
+	if hb.has(key):
+		base = hb[key]                             # 0.31.168: the new heroes' own numbers
 	match key:
 		"hp":
 			return float(base) * (1.15 if u.up else 1.0) * float(u.get("m_hp", 1.0))
@@ -1257,7 +1308,7 @@ func _think_minion(u: Dictionary) -> void:
 	u["mt"] = ""
 	u["mt_pri"] = 9
 	var c: Dictionary = s.CLASSES[u.cls]
-	var reach := ACQ_R if not bool(c.ranged) else maxf(ACQ_R, float(c.range) * 0.8)
+	var reach := ACQ_R if not bool(c.ranged) else maxf(ACQ_R, float(s.stat(u, "range")) * 0.8)
 	var tw := _enemy_tower_near(u, reach + TOWER_R)
 	if not tw.is_empty():
 		u["mt_tw"] = int(tw.id)
@@ -1278,7 +1329,7 @@ func _minion_target(u: Dictionary) -> Dictionary:
 	# higher one appears. Returns a unit, {"tw": id} for a tower, or {}.
 	var team := int(u.team)
 	var c: Dictionary = s.CLASSES[u.cls]
-	var acq := ACQ_R if not bool(c.ranged) else maxf(ACQ_R, float(c.range) * 0.8)
+	var acq := ACQ_R if not bool(c.ranged) else maxf(ACQ_R, float(s.stat(u, "range")) * 0.8)
 	var cur: Dictionary = s.by_id.get(str(u.get("mt", "")), {})
 	var cur_pri := int(u.get("mt_pri", 9))
 	if cur.is_empty() or not s.alive(cur) or int(cur.team) == team or int(cur.team) > 1 or (cur.pos as Vector2).distance_to(u.pos) > acq + 3.0 \
@@ -1354,7 +1405,7 @@ func _hit_structure(u: Dictionary, tw: Dictionary) -> void:
 func _hit_point(u: Dictionary, p: Vector2, r: float) -> void:
 	var c: Dictionary = s.CLASSES[u.cls]
 	var d: float = (u.pos as Vector2).distance_to(p) - r
-	var reach: float = float(c.range) * (0.85 if bool(c.ranged) else 1.0)
+	var reach: float = float(s.stat(u, "range")) * (0.85 if bool(c.ranged) else 1.0)
 	if d > reach:
 		s._nav_to(u, p, r + reach * 0.8)
 		return
@@ -1388,7 +1439,7 @@ func _hit_gate(u: Dictionary, g: Dictionary) -> void:
 	var c: Dictionary = s.CLASSES[u.cls]
 	var cp: Vector2 = s.seg_closest(u.pos, g.a, g.b)
 	var d: float = (u.pos as Vector2).distance_to(cp)
-	var reach: float = float(c.range) * (0.8 if bool(c.ranged) else 1.0)
+	var reach: float = float(s.stat(u, "range")) * (0.8 if bool(c.ranged) else 1.0)
 	if d > reach + s.WALL_R:
 		s._nav_to(u, cp + (g["in"] as Vector2) * -1.2, 0.6)
 		return
@@ -1398,7 +1449,7 @@ func _hit_gate(u: Dictionary, g: Dictionary) -> void:
 
 func _think_hero(u: Dictionary) -> void:
 	var c: Dictionary = s.CLASSES[u.cls]
-	var reach := float(c.range)
+	var reach := float(s.stat(u, "range"))
 	# our King under attack: those near come back and fight whoever's at him
 	var th := king_threat(int(u.team))
 	if not th.is_empty() and (u.pos as Vector2).distance_to(king_pos(int(u.team))) < 45.0 and u.hp > u.max_hp * 0.35:
@@ -1687,9 +1738,10 @@ func ult(u: Dictionary) -> bool:
 				ids3.append(z.id)
 			ev["ids"] = ids3
 		_:
-			return false
+			if not kits.ult(u, k, dmg, ev):            # 0.31.168: the six new heroes' (moba_kits.gd)
+				return false
 	u.ult_cd = ult_max_cd(u)
-	if hid not in ["rogue", "assassin"]:
+	if hid not in ["rogue", "assassin"] and u.state != "dash" and not u.has("dance"):
 		u.state = "recover"                        # (a beat to cast it; the view plays the cast)
 		u.t = 0.35
 		u.move = Vector2.ZERO
@@ -1779,7 +1831,7 @@ func _step_dance(u: Dictionary) -> void:
 		u.t = FLURRY_EVERY + 0.05
 		u.move = Vector2.ZERO
 		s._next_push = s._push_from(u.pos, t.pos, 4.0, 1.6)
-		s._damage(u, t, float(dn.dmg))
+		s._damage(u, t, float(dn.dmg) + float(dn.get("missing", 0.0)) * maxf(0.0, float(t.max_hp) - float(t.hp)))   # (0.31.168: GRAND CHALLENGE)
 		s._event("flurry_hit", {"id":u.id, "target":t.id, "from":from, "pos":u.pos})
 		s._event("attack", {"id":u.id, "kind":"attack", "ability":"", "combo":int(dn.i) % 3})
 		dn.next = s.time + FLURRY_EVERY
@@ -1930,6 +1982,8 @@ func _bot_ult(u: Dictionary) -> bool:
 			return false
 		"necromancer":
 			return (near_h >= 1 or near_any >= 3 or lord_fight) and ult(u)
+		_:
+			return kits.bot_ult(u, near_h, near_any, closest, cd, lord_fight) and ult(u)      # 0.31.168: the six new heroes
 	return false
 
 func _allies_near(u: Dictionary, r: float) -> int:
@@ -2087,7 +2141,7 @@ func sell(u: Dictionary, slot: int) -> bool:
 
 func _bot_shop(u: Dictionary) -> void:
 	# the next thing on its class's list it hasn't bought (counting what went into bigger items); saves up for it
-	var build: Array = BUILDS.get(str(u.cls), BUILDS.knight)
+	var build: Array = BUILDS.get(str(u.get("hid", "")), BUILDS.get(str(u.cls), BUILDS.knight))
 	var seen := {}
 	for id in build:
 		seen[id] = int(seen.get(id, 0)) + 1
@@ -2309,7 +2363,7 @@ func _think_monster(u: Dictionary) -> void:
 		# its target is outside the leash: to the leash's edge toward him (patience draining), shooting if he's in reach
 		var c: Dictionary = s.CLASSES[u.cls]
 		var d: float = (u.pos as Vector2).distance_to(tgt.pos)
-		if bool(c.ranged) and d <= float(c.range) * 0.9:
+		if bool(c.ranged) and d <= float(s.stat(u, "range")) * 0.9:
 			u.move = Vector2.ZERO
 			u.face = s.angle_of((tgt.pos as Vector2) - (u.pos as Vector2))
 			s._start_attack(u, "attack", false)
@@ -2320,7 +2374,7 @@ func _think_monster(u: Dictionary) -> void:
 		else:
 			u.move = Vector2.ZERO
 			u.face = s.angle_of((tgt.pos as Vector2) - (u.pos as Vector2))
-			if d <= float(c.range) + s.UNIT_R + 0.2:
+			if d <= float(s.stat(u, "range")) + s.UNIT_R + 0.2:
 				s._start_attack(u, "attack", false)
 		return
 	# resetting, or nobody to fight: home, and stand

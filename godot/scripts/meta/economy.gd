@@ -5,6 +5,10 @@ extends RefCounted
 #
 # Everything sold is cosmetic. The forge still decides your class in battle.
 
+# 0.31.168 (Kevin: "Unlock with gold"): the 5v5 heroes you buy with gold (moba.gd HEROES; Profile.buy_hero). The twelve
+# from the old classes are everyone's.
+const HERO_PRICES := {"golem":2000, "dragoon":2000, "duelist":2000, "stormcaller":2000, "musketeer":2000, "druid":2000}
+
 const CLASSES := ["knight", "barbarian", "rogue", "ranger", "mage", "priest", "worker"]
 # 0.31.164 (Kevin: "Remove them now: 5v5 only"): the classes a 5v5 hero can be -- the Worker was Siege's (his quest and
 # titles are kept for the record but not shown, see RETIRED)

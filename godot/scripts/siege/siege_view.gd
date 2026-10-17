@@ -84,6 +84,16 @@ const LOOKS := {
 	# (wyrm_body.gd: its limbs bent in a shader, its clips its own). "size": its scale in place of BODY_SCALE x mscale
 	# (the model is 4 m tall); "ring": its ring's radius.
 	"wyrm": {"model":"prop:wyrm","r":"","l":"","idle":"w/Idle","attack":"w/Bite","ability":"w/Swipe","combo":["w/Bite","w/Bite","w/Swipe"],"size":1.0,"ring":2.4},
+	# 0.31.168 (Kevin picked six new 5v5 heroes, one a role): Meshy bodies (KK_FOR in tools/retarget_meshy.gd) and Meshy
+	# props from one parts sheet of the six concepts (assets/meshy/weapons): the Golem's rune hammer and stone slab shield,
+	# the Dragoon's halberd, the Duelist's rapier (and a parrying dagger), the Stormcaller's trident staff, the
+	# Musketeer's flintlock, the Druid's living-wood staff. Not cosmetics: unit_cosmetic leaves them as they are.
+	"golem": {"model":"meshy:golem","r":"mw/golem_hammer","l":"mw/golem_shield","idle":"g/Idle_A","attack":"m/Melee_1H_Attack_Chop","ability":"m/Melee_Block_Attack","combo":["m/Melee_1H_Attack_Chop","m/Melee_1H_Attack_Slice_Horizontal","m/Melee_Block_Attack"]},
+	"dragoon": {"model":"meshy:dragoon","r":"mw/dragoon_halberd","l":"","idle":"g/Idle_A","attack":"m/Melee_2H_Attack_Stab","ability":"m/Melee_2H_Attack_Slice","combo":["m/Melee_2H_Attack_Stab","m/Melee_2H_Attack_Slice","m/Melee_2H_Attack_Chop"]},
+	"duelist": {"model":"meshy:duelist","r":"mw/duelist_rapier","l":"mw/needlepoint_stiletto","idle":"g/Idle_A","attack":"m/Melee_1H_Attack_Stab","ability":"m/Melee_1H_Attack_Jump_Chop","combo":["m/Melee_1H_Attack_Stab","m/Melee_Dualwield_Attack_Slice","m/Melee_1H_Attack_Stab"]},
+	"stormcaller": {"model":"meshy:stormcaller","r":"mw/storm_staff","l":"","idle":"g/Idle_A","attack":"r/Ranged_Magic_Shoot","ability":"r/Ranged_Magic_Spellcasting"},
+	"musketeer": {"model":"meshy:musketeer","r":"mw/musket","l":"","idle":"r/Ranged_Bow_Idle","attack":"r/Ranged_Bow_Release","ability":"r/Ranged_Bow_Draw"},
+	"druid": {"model":"meshy:druid","r":"mw/druid_staff","l":"","idle":"g/Idle_A","attack":"r/Ranged_Magic_Shoot","ability":"r/Ranged_Magic_Raise"},
 }
 const MINION_LOOKS := {"melee":"minion_melee", "caster":"minion_caster", "siege":"minion_siege", "super":"minion_super"}
 const LOOP_HINTS := ["Idle","Running","Walking","Hammering","Holding","Aiming","_Pose","Blocking","Chopping","Pickaxing"]
@@ -227,7 +237,7 @@ func _warm_up() -> void:
 	ring_at(at, GOLD, 1.0, 0.2)
 	spark(at, GOLD)
 	number(at, "0", false)
-	for kind in ["arrow", "fire"]:
+	for kind in (["arrow", "fire", "bolt", "ball", "thorn", "boulder"] if sim.moba != null else ["arrow", "fire"]):
 		var n := _make_projectile(kind)
 		n.position = at
 		get_tree().create_timer(0.3).timeout.connect(n.queue_free)
@@ -3521,6 +3531,8 @@ func set_unit_looks(wire: Dictionary) -> void:
 
 func unit_cosmetic(u: Dictionary) -> Dictionary:
 	# what this unit wears for the class it has on: mine from the profile, another player's from the server
+	if u.has("look"):
+		return NO_LOOK                           # (0.31.168: a body of its own -- a new hero, a monster -- keeps its own gear)
 	var key := Eco.cosmetic_class(str(u.cls), bool(u.up))
 	if str(u.id) == player_id:
 		return player_looks.get(key, NO_LOOK)
@@ -3555,7 +3567,10 @@ const MESHY := {"assassin": "res://assets/meshy/assassin/", "archmage": "res://a
 	"ranger": "res://assets/meshy/ranger/", "mage": "res://assets/meshy/mage/", "priest": "res://assets/meshy/priest/",
 	# 5v5 lane minions (Kevin picked the A1 concepts: the King's levy)
 	"minion_melee": "res://assets/meshy/minion_melee/", "minion_caster": "res://assets/meshy/minion_caster/",
-	"minion_siege": "res://assets/meshy/minion_siege/", "minion_super": "res://assets/meshy/minion_super/"}
+	"minion_siege": "res://assets/meshy/minion_siege/", "minion_super": "res://assets/meshy/minion_super/",
+	# 0.31.168: the six new 5v5 heroes
+	"golem": "res://assets/meshy/golem/", "dragoon": "res://assets/meshy/dragoon/", "duelist": "res://assets/meshy/duelist/",
+	"stormcaller": "res://assets/meshy/stormcaller/", "musketeer": "res://assets/meshy/musketeer/", "druid": "res://assets/meshy/druid/"}
 const MESHY_RENAME := {"Hips":"hips", "Spine02":"spine", "Spine":"chest", "Head":"head",
 	"LeftArm":"upperarm.l", "LeftForeArm":"lowerarm.l", "LeftHand":"wrist.l",
 	"RightArm":"upperarm.r", "RightForeArm":"lowerarm.r", "RightHand":"wrist.r",
@@ -3846,6 +3861,9 @@ const WEAPON_ROLL := {"axe_1handed":180.0, "bits/axe_D":180.0, "bits/sword_G":18
 # piece drawn upright is first turned onto the template's axes where that lies along Z or X -- bows, crossbows, claws;
 # a left-hand claw is the right one mirrored).
 const MESHY_WEAPON_LIKE := {
+	# 0.31.168: the six new 5v5 heroes' props (not cosmetics)
+	"golem_hammer": "bits/hammer_C", "golem_shield": "bits/shield_A", "dragoon_halberd": "bits/halberd",
+	"duelist_rapier": "sword_1handed", "storm_staff": "staff", "druid_staff": "staff", "musket": "crossbow_2handed",
 	# 0.31.159: the 5v5 lane minions' props (not cosmetics)
 	"minion_sword": "sword_1handed", "minion_buckler": "shield_round", "minion_crossbow": "crossbow_1handed",
 	"minion_cannon": "crossbow_2handed", "minion_hammer": "axe_2handed",
@@ -4188,6 +4206,12 @@ func sync(dt: float) -> void:
 		var target := Vector3(up.x, Sim.ladder_lift(climb_d, gy) if climb_d != INF else gy, up.y)
 		if u.state == "fly":
 			target.y += sim.flight_height(u)             # 0.31.28: off the launcher, high over the field
+		elif u.state == "dash" and u.has("dash") and bool(u.dash.get("leap", false)):
+			# 0.31.168: a leap arcs (LEAP, VAULT, DRAGON DIVE): up and down over the dash, higher the longer it is
+			var dd: Dictionary = u.dash
+			var tot := maxf(0.5, float(dd.get("total", dd.left)))
+			var k := clampf(1.0 - float(dd.left) / tot, 0.0, 1.0)
+			target.y += sin(k * PI) * minf(4.5, 0.35 * tot)
 		var before := root.position
 		# Smooth between 30 Hz sim ticks; snap on respawn teleports (and coming out of the fog).
 		var newp := target
@@ -4576,6 +4600,12 @@ func _moba_fx(e: Dictionary) -> void:
 					ring_at(at, col, 2.6, 0.6)
 					for i in 8:
 						spark(at + Vector3(randf_range(-0.5, 0.5), 0.4 + randf() * 1.6, randf_range(-0.5, 0.5)), col)
+				_:
+					var sp := str(e.get("spell", ""))      # 0.31.168: the six new heroes' (moba_kits.gd ult)
+					if sp != "":
+						if not a.is_empty() and NEW_ULT_CLIP.has(sp):
+							_play(a, str(NEW_ULT_CLIP[sp]), 1.2, 0.45)
+						_new_spell_fx(sp, e, a, at, Color(str(SPELL_COL.get(sp, "#ffffff"))))
 		"flurry_hit":
 			var fp := _ground(e.pos, 0.2)
 			for i in 6:
@@ -4666,12 +4696,24 @@ const SPELL_CLIP := {"bash":"m/Melee_Block_Attack", "rally":"r/Ranged_Magic_Rais
 	"tumble":"ma/Dodge_Forward", "snare":"r/Ranged_Bow_Release", "trap":"g/Interact", "mark":"g/Interact",
 	"pillar":"r/Ranged_Magic_Spellcasting", "missiles":"r/Ranged_Magic_Shoot", "manashield":"r/Ranged_Magic_Raise",
 	"holylight":"r/Ranged_Magic_Spellcasting", "dazzle":"r/Ranged_Magic_Raise", "boneshield":"r/Ranged_Magic_Spellcasting",
-	"curse":"r/Ranged_Magic_Shoot"}
+	"curse":"r/Ranged_Magic_Shoot",
+	# 0.31.168: the six new heroes
+	"boulder":"g/Throw", "stoneskin":"r/Ranged_Magic_Raise", "quake":"m/Melee_1H_Attack_Jump_Chop", "sweep":"m/Melee_2H_Attack_Slice",
+	"impale":"m/Melee_2H_Attack_Stab", "vault":"mb/Jump_Full_Long", "thrust":"m/Melee_1H_Attack_Stab", "riposte":"m/Melee_Blocking",
+	"feint":"ma/Dodge_Backward", "chain":"r/Ranged_Magic_Shoot", "static":"r/Ranged_Magic_Spellcasting", "gust":"r/Ranged_Magic_Shoot",
+	"buckshot":"r/Ranged_Bow_Release", "keg":"g/Throw", "smokeroll":"ma/Dodge_Forward", "rejuv":"r/Ranged_Magic_Spellcasting",
+	"entangle":"r/Ranged_Magic_Summon", "barkskin":"r/Ranged_Magic_Raise"}
 const SPELL_COL := {"bash":"#bcd8ff", "rally":"#ffd65a", "consecrate":"#ffe9a6", "leap":"#e0c9a0", "bloodlust":"#ff3a2a",
 	"charge":"#ff6a3a", "frenzy":"#ff5a3a", "caltrops":"#b8b8b8", "poison":"#7dff6a", "shadowstep":"#9a6bff", "knives":"#d8d0ff",
 	"tumble":"#e0d0b0", "snare":"#cfe8b8", "trap":"#a08060", "mark":"#ff4a4a", "pillar":"#ff8a3a", "blink":"#8fc8ff",
 	"missiles":"#c070ff", "manashield":"#7fb8ff", "holylight":"#fff1a8", "dazzle":"#ffffff", "boneshield":"#e8e0c8",
-	"curse":"#b04aff"}
+	"curse":"#b04aff",
+	# 0.31.168
+	"boulder":"#9a978e", "stoneskin":"#b8b2a4", "quake":"#c8b48a", "sweep":"#e8e4dc", "impale":"#f0d0a0", "vault":"#ffcf8a",
+	"thrust":"#f4f0ff", "riposte":"#ffe27a", "feint":"#c9b8ff", "chain":"#9fd4ff", "static":"#6fb4ff", "gust":"#d8f4ff",
+	"buckshot":"#ffe0a0", "keg":"#ff9a3a", "smokeroll":"#c8c8c8", "smoke":"#b8b8b8", "rejuv":"#8dff6a", "entangle":"#6fbf3a",
+	"barkskin":"#a07a4a", "landslide":"#b0a48a", "dragondive":"#ff7a3a", "challenge":"#ffe27a", "thunderstorm":"#7fb8ff",
+	"quickdraw":"#ffd890", "wildgrowth":"#6aff7a"}
 var _zone_nodes := {}                      # zone id -> its ring
 var _trap_nodes := {}                      # trap id -> its mesh
 var _kit_marks := {}                       # unit id -> {"shield": node, "slow": node, "amp": node}
@@ -4726,6 +4768,8 @@ func _kit_fx(e: Dictionary) -> void:
 						ring_at(tp, col, 2.4, 0.6)
 						for i in (14 if sp == "holylight" else 8):
 							spark(tp + Vector3(randf_range(-0.4, 0.4), randf() * (3.2 if sp == "holylight" else 1.8), randf_range(-0.4, 0.4)), col)
+				_:
+					_new_spell_fx(sp, e, a, at, col)        # 0.31.168: the six new heroes'
 		"slam":
 			var sp2 := _ground(e.pos, 0.2)
 			var r3 := float(e.get("r", 2.5))
@@ -4754,6 +4798,182 @@ func _kit_fx(e: Dictionary) -> void:
 			if _trap_nodes.has(int(e.trap)):
 				(_trap_nodes[int(e.trap)] as Node3D).queue_free()
 				_trap_nodes.erase(int(e.trap))
+		"burst":                                        # 0.31.168: the Musketeer's keg goes off, the Druid's roots burst up
+			var bp := _ground(e.c, 0.2)
+			var br := float(e.get("r", 2.0))
+			if str(e.spell) == "keg":
+				_pack_explosion("light", bp + Vector3(0, 0.5, 0), 1.2)
+				ring_at(bp, Color("#ff9a3a"), 2.0 * br, 0.5)
+				shockwave(bp, br)
+				var me2: Dictionary = sim.by_id.get(player_id, {})
+				if not me2.is_empty() and (me2.pos as Vector2).distance_to(e.c) < 12.0:
+					shake(0.25)
+			else:
+				ring_at(bp, Color("#6fbf3a"), 2.0 * br, 0.7)
+				for i in 12:
+					var ang := randf() * TAU
+					spark(bp + Vector3(cos(ang) * br * 0.5, randf() * 1.6, sin(ang) * br * 0.5), Color("#7fd24a"))
+				_vines(bp, br)
+		"zap":                                          # 0.31.168: a THUNDERSTORM bolt
+			var zp := _ground(e.c, 0.1)
+			_bolt_line(zp + Vector3(randf_range(-1.0, 1.0), 9.0, randf_range(-1.0, 1.0)), zp + Vector3(0, 0.4, 0), Color("#cfe6ff"), 0.3, 1.6)
+			ring_at(zp, Color("#7fb8ff"), 1.6, 0.35)
+			for i in 5:
+				spark(zp + Vector3(randf_range(-0.4, 0.4), randf() * 0.8, randf_range(-0.4, 0.4)), Color("#dff0ff"))
+		"riposte":                                      # 0.31.168: the Duelist answers
+			var rp := _ground(e.pos, 1.0)
+			ring_at(rp - Vector3(0, 0.9, 0), Color("#ffe27a"), 1.8, 0.4)
+			for i in 8:
+				spark(rp + Vector3(randf_range(-0.4, 0.4), randf_range(-0.4, 0.6), randf_range(-0.4, 0.4)), Color("#fff4c0"))
+
+# ---------- 0.31.168: the six new heroes' spells and ultimates ----------
+func _new_spell_fx(sp: String, e: Dictionary, a: Dictionary, at: Vector3, col: Color) -> void:
+	# each cast's burst (the ultimates come here too: _moba_fx "ult", e.spell their id)
+	match sp:
+		"boulder", "feint", "smokeroll", "vault", "thrust", "stoneskin", "riposte", "rejuv", "barkskin":
+			var tu: Dictionary = sim.by_id.get(str(e.get("target", "")), {})
+			var tp: Vector3 = _ground(tu.pos, 0.1) if not tu.is_empty() else at
+			ring_at(tp, col, 2.2 if sp != "stoneskin" else 2.8, 0.5)
+			for i in (12 if sp in ["stoneskin", "barkskin", "rejuv"] else 6):
+				spark(tp + Vector3(randf_range(-0.5, 0.5), 0.3 + randf() * 1.6, randf_range(-0.5, 0.5)), col)
+			if sp == "smokeroll":
+				_pack_explosion("light", at + Vector3(0, 0.4, 0), 0.5)
+		"quake":
+			var r := float(e.get("r", 4.0))
+			ring_at(at, col, 2.0 * r - 0.4, 0.5)
+			shockwave(at, r)
+			for i in 12:
+				var ang := randf() * TAU
+				spark(at + Vector3(cos(ang) * r * 0.6, 0.2 + randf() * 0.6, sin(ang) * r * 0.6), Color("#8f8a7c"))
+			_shake_near(e.pos, 10.0, 0.25)
+		"sweep", "gust", "buckshot":
+			var d: Vector2 = e.get("dir", Vector2(0, 1))
+			var r2 := float(e.get("r", 4.0))
+			var spread: float = {"sweep":1.0, "gust":0.8, "buckshot":0.45}[sp]
+			for i in (16 if sp != "sweep" else 12):
+				var off := d.rotated(randf_range(-spread, spread)) * randf_range(0.8, r2)
+				spark(_ground((e.pos as Vector2) + off, 0.6 + randf() * 0.8), col)
+			if sp == "buckshot":
+				var mz := _ground((e.pos as Vector2) + d * 1.0, 1.3)
+				_pack_explosion("light", mz, 0.35)
+		"impale":
+			var d2: Vector2 = e.get("dir", Vector2(0, 1))
+			for i in 10:
+				spark(_ground((e.pos as Vector2) + d2 * (float(i) / 10.0) * float(e.get("len", 6.0)), 1.0), col)
+		"chain":
+			var pts: Array = e.get("pts", [])
+			for i in range(pts.size() - 1):
+				var pa := _ground(pts[i], 1.3)
+				var pb := _ground(pts[i + 1], 1.1)
+				_bolt_line(pa, pb, Color("#dff0ff"), 0.45, 0.6)
+				for j in 4:
+					spark(pb + Vector3(randf_range(-0.3, 0.3), randf_range(-0.3, 0.5), randf_range(-0.3, 0.3)), col)
+		"static", "keg", "entangle":
+			var c2: Vector2 = e.get("c", e.pos)
+			if sp == "keg":
+				_lob(at + Vector3(0, 1.4, 0), _ground(c2, 0.3), float(e.get("delay", 0.8)), Color("#6a4a2a"))
+			else:
+				for i in 8:
+					spark(_ground(c2 + Vector2(randf_range(-1.2, 1.2), randf_range(-1.2, 1.2)), 0.2 + randf() * 0.6), col)
+		"landslide":
+			for i in 2:
+				ring_at(at, col, 3.0 + 2.0 * i, 0.5 + 0.2 * i)
+			for i in 14:
+				spark(at + Vector3(randf_range(-0.8, 0.8), 0.2 + randf() * 1.2, randf_range(-0.8, 0.8)), Color("#8f8a7c"))
+			_shake_near(e.pos, 12.0, 0.3)
+		"dragondive":
+			ring_at(at, col, 2.6, 0.5)
+			for i in 10:
+				spark(at + Vector3(randf_range(-0.5, 0.5), 0.3 + randf() * 2.2, randf_range(-0.5, 0.5)), col)
+			ring_at(_ground(e.get("to", e.pos), 0.15), Color("#ff3a2a"), 5.0, 0.9)      # where he'll come down
+		"challenge":
+			var tu2: Dictionary = sim.by_id.get(str(e.get("target", "")), {})
+			if not tu2.is_empty():
+				for i in 2:
+					ring_at(_ground(tu2.pos, 0.1), col, 2.4 + 1.6 * i, 0.6 + 0.2 * i)
+		"thunderstorm":
+			var c3: Vector2 = e.get("c", e.pos)
+			ring_at(_ground(c3, 0.15), col, 2.0 * float(e.get("r", 5.0)) - 0.4, 0.8)
+		"quickdraw":
+			for p2 in e.get("pts", []):
+				var tp2 := _ground(p2, 1.1)
+				_bolt_line(at + Vector3(0, 1.3, 0), tp2, Color("#fff0c8"), 0.18, 0.15)
+				ring_at(tp2 - Vector3(0, 1.0, 0), col, 1.8, 0.4)
+			_pack_explosion("light", at + Vector3(0, 1.3, 0), 0.4)
+		"wildgrowth":
+			for i in 2:
+				ring_at(at, col, 2.0 * float(e.get("r", 7.0)) - 0.4 - 1.5 * i, 0.7 + 0.2 * i)
+			_vines(at, float(e.get("r", 7.0)) * 0.6)
+			for i in 16:
+				var ang2 := randf() * TAU
+				spark(at + Vector3(cos(ang2) * 3.0, 0.3 + randf() * 1.6, sin(ang2) * 3.0), col)
+
+func _shake_near(p: Vector2, r: float, k: float) -> void:
+	var me: Dictionary = sim.by_id.get(player_id, {})
+	if not me.is_empty() and (me.pos as Vector2).distance_to(p) < r:
+		shake(k)
+
+const NEW_ULT_CLIP := {"landslide":"mb/Running_B", "dragondive":"mb/Jump_Full_Long", "thunderstorm":"r/Ranged_Magic_Summon",
+	"quickdraw":"r/Ranged_Bow_Release", "wildgrowth":"r/Ranged_Magic_Raise"}
+static var _bolt_mesh: BoxMesh
+
+func _bolt_line(from: Vector3, to: Vector3, col: Color, life: float, jag: float) -> void:
+	# a jagged streak of light (chain lightning, the storm's bolts, a musket's tracer): a few thin boxes, each from one
+	# kink to the next, thinning out over its life (_step_fx "bolt")
+	if low_fx and life < 0.2:
+		return
+	if _bolt_mesh == null:
+		_bolt_mesh = BoxMesh.new()
+		_bolt_mesh.size = Vector3(0.16, 0.16, 1.0)
+	var n := maxi(1, int(from.distance_to(to) / 1.2))
+	var prev := from
+	for i in n:
+		var t := float(i + 1) / float(n)
+		var nxt := from.lerp(to, t)
+		if i < n - 1:
+			nxt += Vector3(randf_range(-jag, jag), randf_range(-jag, jag) * 0.6, randf_range(-jag, jag)) * 0.5
+		var seg := MeshInstance3D.new()
+		seg.mesh = _bolt_mesh
+		seg.material_override = _fx_mat(col)
+		seg.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(seg)
+		var mid := (prev + nxt) * 0.5
+		var len := maxf(0.05, prev.distance_to(nxt))
+		seg.position = mid
+		if len > 0.06:
+			seg.look_at_from_position(mid, nxt, Vector3.UP if absf((nxt - prev).normalized().y) < 0.95 else Vector3.RIGHT)
+		seg.scale = Vector3(1.0, 1.0, len)
+		_fx.append({"node":seg, "at":_time, "life":life, "kind":"bolt"})
+		prev = nxt
+
+func _lob(from: Vector3, to: Vector3, dur: float, col: Color) -> void:
+	# a thrown thing's arc (the powder keg): _step_fx's "shell"
+	var mi := MeshInstance3D.new()
+	var cm := CylinderMesh.new()
+	cm.top_radius = 0.22
+	cm.bottom_radius = 0.22
+	cm.height = 0.42
+	mi.mesh = cm
+	mi.material_override = _shot_mat("keg", col, 0.0, 0.8)
+	mi.position = from
+	add_child(mi)
+	_fx.append({"node":mi, "at":_time, "life":dur, "kind":"shell", "p0":from, "p1":to})
+
+func _vines(at: Vector3, r: float) -> void:
+	# roots bursting up (ENTANGLE, WILD GROWTH): a ring of green spikes that sink back (_step_fx "spark" moves them)
+	for i in 8:
+		var ang := TAU * float(i) / 8.0 + randf() * 0.3
+		var mi := MeshInstance3D.new()
+		var pm := PrismMesh.new()
+		pm.size = Vector3(0.18, 0.9, 0.18)
+		mi.mesh = pm
+		mi.material_override = _shot_mat("vine", Color("#4f8f2a"), 0.4, 0.8)
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var p := at + Vector3(cos(ang) * r * 0.5, 0.3, sin(ang) * r * 0.5)
+		mi.position = p
+		mi.rotation = Vector3(randf_range(-0.4, 0.4), 0.0, randf_range(-0.4, 0.4))
+		add_child(mi)
+		_fx.append({"node":mi, "at":_time, "life":0.9, "kind":"spark", "p0":p, "dir":Vector3(0, -0.3, 0)})
 
 func _sync_kits() -> void:
 	var kits = sim.moba.kits
@@ -4825,6 +5045,8 @@ func _sync_kits() -> void:
 		_kit_mark(a, marks, "shield", vis and float(u.get("shield", 0.0)) > 0.0 and t < float(u.get("shield_until", -1.0)))
 		_kit_mark(a, marks, "slow", vis and t < float(u.get("slow_until", -1.0)))
 		_kit_mark(a, marks, "amp", vis and t < float(u.get("amp_until", -1.0)))
+		_kit_mark(a, marks, "skin", vis and t < float(u.get("skin_until", -1.0)))       # 0.31.168: STONESKIN, BARKSKIN
+		_kit_mark(a, marks, "parry", vis and u.has("riposte"))                          # 0.31.168: RIPOSTE
 		_kit_marks[id] = marks
 		if vis and spark_now and u.has("dots") and not low_fx:
 			spark((a.root as Node3D).position + Vector3(randf_range(-0.3, 0.3), 0.6 + randf() * 1.2, randf_range(-0.3, 0.3)), Color("#7dff6a"))
@@ -4854,6 +5076,20 @@ func _kit_mark(a: Dictionary, marks: Dictionary, kind: String, on: bool) -> void
 				mi.mesh = _ring_mesh(0.85, 0.08)
 				mi.material_override = _fx_mat(Color(1.0, 0.3, 0.3, 0.85))
 				mi.position = Vector3(0, 0.14, 0)
+			"skin":
+				var sk := SphereMesh.new()
+				sk.radius = 0.85
+				sk.height = 2.1
+				sk.radial_segments = 10
+				sk.rings = 6
+				mi.mesh = sk
+				mi.material_override = _unshaded(Color(0.62, 0.52, 0.36, 0.3))
+				mi.position = Vector3(0, 1.0, 0)
+			"parry":
+				mi.mesh = _ring_mesh(0.6, 0.06)
+				mi.material_override = _fx_mat(Color(1.0, 0.9, 0.5, 0.9))
+				mi.position = Vector3(0, 1.1, 0.0)
+				mi.rotation.x = PI * 0.5
 		(a.root as Node3D).add_child(mi)
 		marks[kind] = mi
 	elif not on and n != null:
@@ -5410,8 +5646,8 @@ func on_event(e: Dictionary) -> void:
 			ring_at(Vector3(kp.x, ky + 0.2, kp.y), Color("#ffd65a"), float(sim.moba.KING_REACH), 0.5)
 			for i in 6:
 				spark(Vector3(kp.x + randf_range(-1.5, 1.5), ky + 0.4 + randf() * 1.0, kp.y + randf_range(-1.5, 1.5)), Color("#ffd65a"))
-		"spell", "slam", "pillar", "trap_snap", "trap_gone":
-			_kit_fx(e)                            # 0.31.167 5V5: W and E
+		"spell", "slam", "pillar", "trap_snap", "trap_gone", "burst", "zap", "riposte":
+			_kit_fx(e)                            # 0.31.167 5V5: W and E (0.31.168: the new heroes' bursts, bolts, ripostes)
 		"ult", "flurry_hit", "lord_slam", "camp_up", "buff", "lord_down", "gold", "lord_march", "ward", "wyrm_breath", "wyrm_down":
 			_moba_fx(e)                           # 0.31.157 5V5: ultimates, the jungle, gold (0.31.166: the Wyrm; and the
 			                                      # Lord's march and a placed ward, whose effects were never reached)
@@ -5627,10 +5863,10 @@ func _sync_projectiles() -> void:
 				pitch = atan2(top - (1.2 + Sim.height_at(at)), maxf(float(p.dd), 0.5))
 		node.position = Vector3(at.x, y, at.y)
 		node.rotation = Vector3(pitch, Sim.angle_of(p.vel), 0.0)     # +X tips the +Z nose down
-		if str(p.kind) == "hammer":
+		if str(p.kind) == "hammer" or str(p.kind) == "boulder":
 			var sp := node.get_node_or_null("spin") as Node3D
 			if sp != null:
-				sp.rotation.x = Time.get_ticks_msec() * 0.018          # end over end
+				sp.rotation.x = Time.get_ticks_msec() * (0.018 if str(p.kind) == "hammer" else 0.012)   # end over end; the boulder rolls
 	for id in proj_nodes.keys():
 		if not live.has(id):
 			proj_nodes[id].queue_free()
@@ -5690,6 +5926,9 @@ func _make_projectile(kind: String) -> Node3D:
 		pr.add_child(streak)
 		add_child(pr)
 		return pr
+	if kind in ["bolt", "ball", "thorn", "boulder"]:
+		_make_shot_fx(root, kind)                    # 0.31.168: the new heroes' shots
+		return root
 	if kind == "arrow":
 		var packed := Stage.scene("res://assets/kaykit/weapons/arrow_bow.gltf")
 		if packed != null:
@@ -5708,6 +5947,95 @@ func _make_projectile(kind: String) -> Node3D:
 	ball.material_override = _unshaded(_bright(Color(1.0, 0.55, 0.15, 0.95) if kind == "fire" else Color(1, 1, 0.8, 0.9)))
 	root.add_child(ball)
 	return root
+
+static var _shot_mats := {}
+
+func _shot_mat(key: String, col: Color, glow: float, rough := 0.6) -> StandardMaterial3D:
+	if not _shot_mats.has(key):
+		var m := StandardMaterial3D.new()
+		m.albedo_color = col
+		m.roughness = rough
+		if glow > 0.0:
+			m.emission_enabled = true
+			m.emission = col
+			m.emission_energy_multiplier = glow
+		_shot_mats[key] = m
+	return _shot_mats[key]
+
+func _make_shot_fx(root: Node3D, kind: String) -> void:
+	# 0.31.168: the Stormcaller's bolt (a crackling blue streak), the Musketeer's ball (a lead shot and its white trail),
+	# the Druid's thorn (a glowing green seed), the Golem's boulder (a carved stone with a cyan rune, rolling)
+	match kind:
+		"bolt":
+			var core := MeshInstance3D.new()
+			var cm := CapsuleMesh.new()
+			cm.radius = 0.07
+			cm.height = 1.1
+			core.mesh = cm
+			core.rotation.x = PI * 0.5
+			core.material_override = _fx_mat(Color(0.85, 0.95, 1.0))
+			root.add_child(core)
+			var glow := MeshInstance3D.new()
+			var gm := CapsuleMesh.new()
+			gm.radius = 0.16
+			gm.height = 1.4
+			glow.mesh = gm
+			glow.rotation.x = PI * 0.5
+			glow.material_override = _unshaded(Color(0.35, 0.6, 1.0, 0.45))
+			root.add_child(glow)
+		"ball":
+			var ball := MeshInstance3D.new()
+			var sm := SphereMesh.new()
+			sm.radius = 0.09
+			sm.height = 0.18
+			ball.mesh = sm
+			ball.material_override = _shot_mat("ball", Color(0.35, 0.36, 0.4), 0.0, 0.3)
+			root.add_child(ball)
+			var trail := MeshInstance3D.new()
+			var tm := CylinderMesh.new()
+			tm.top_radius = 0.07
+			tm.bottom_radius = 0.0
+			tm.height = 1.6
+			trail.mesh = tm
+			trail.rotation.x = PI * 0.5
+			trail.position.z = -0.85
+			trail.material_override = _unshaded(Color(1.0, 0.97, 0.9, 0.55))
+			root.add_child(trail)
+		"thorn":
+			var seed := MeshInstance3D.new()
+			var pm := PrismMesh.new()
+			pm.size = Vector3(0.16, 0.5, 0.16)
+			seed.mesh = pm
+			seed.rotation.x = PI * 0.5
+			seed.material_override = _fx_mat(Color(0.55, 1.0, 0.35))
+			root.add_child(seed)
+			var halo := MeshInstance3D.new()
+			var hm := SphereMesh.new()
+			hm.radius = 0.2
+			hm.height = 0.4
+			halo.mesh = hm
+			halo.material_override = _unshaded(Color(0.4, 1.0, 0.3, 0.35))
+			root.add_child(halo)
+		"boulder":
+			var spin := Node3D.new()
+			spin.name = "spin"
+			root.add_child(spin)
+			var rock := MeshInstance3D.new()
+			var rm := SphereMesh.new()
+			rm.radius = 0.48
+			rm.height = 0.9
+			rm.radial_segments = 9
+			rm.rings = 5
+			rock.mesh = rm
+			rock.material_override = _shot_mat("boulder", Color("#8d8a82"), 0.0, 0.95)
+			spin.add_child(rock)
+			var rune := MeshInstance3D.new()
+			rune.mesh = _ring_mesh(0.3, 0.06)
+			rune.rotation.z = PI * 0.5
+			rune.position.x = 0.44
+			rune.material_override = _fx_mat(Color("#5fe8ff"))
+			spin.add_child(rune)
+			spin.position.y = -0.6
 
 # ---------- effects ----------
 # No material or text writes per frame here. In Godot's GLES3 renderer every material parameter
@@ -5791,6 +6119,9 @@ func _step_fx() -> void:
 				node.scale = Vector3.ONE * maxf(0.05, 1.0 - u)
 			"fall":                                     # 0.31.157: an ARROW RAIN arrow
 				node.position = (fx.p0 as Vector3).lerp(fx.p1, u)
+			"bolt":                                     # 0.31.168: a lightning segment -- thins out and goes
+				var w := maxf(0.05, 1.0 - u * u)
+				node.scale = Vector3(w, w, 1.0)
 	for i in range(numbers.size()-1, -1, -1):
 		if _time - float(numbers[i].at) > 0.8:
 			numbers.remove_at(i)

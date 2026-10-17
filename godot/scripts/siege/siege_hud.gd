@@ -2066,6 +2066,11 @@ func _draw_button(b: Dictionary, me: Dictionary) -> void:
 			cd = me.cd_ability
 			cd_max = maxf(0.1, {"hammer":Sim.HAMMER_CD, "resurrect":Sim.RESURRECT_CD, "vanish":Sim.VANISH_CD, "pierce":Sim.PIERCE_CD,
 				"meteor":Sim.METEOR_CD}.get(ab, float(Sim.CLASSES[me.cls].ab_cd)))
+			if me.has("kq") and sim.moba != null:
+				# 0.31.168: a new hero's Q is a kit spell -- its own name and recharge
+				var kq: Dictionary = sim.moba.kits.kit(str(me.get("hid", "")), "q")
+				label = str(kq.get("short", kq.get("name", label)))
+				cd_max = maxf(0.1, float(kq.get("cd", cd_max)))
 			ready = ab != "" and cd <= 0.0 and not me.carrying
 		"ult":
 			# 0.31.157 5V5: the ultimate -- locked until level 6 (LV 6), its name once it's yours, a glow when it's ready
