@@ -4932,3 +4932,6 @@ settings so players don't see also".
   Settings > GRAPHICS keeps only Reduce effects, and the match is always high quality (siege_app ignores a saved
   "off"). tests/notify_test.gd: no High-quality graphics switch, Reduce effects still there.
 - Version 0.31.163, versionCode 249, SERVER_BUILD 0.31.163.
+- Quick suite: ALL SIEGE TESTS PASSED (101). tools/cold_start_check.sh: PASS. The Play AAB (throwaway key, presets
+  untouched): BASE OK (267 files), CONTENT OK, play_games true, bundletool valid. Preview APK:
+  build/Fatebound-Siege-0.31.163-fatebound.apk (preview key).
