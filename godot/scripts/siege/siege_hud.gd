@@ -1258,8 +1258,7 @@ func _draw_hud() -> void:
 	_draw_oracle_marker(me)
 	_draw_numbers()
 	if prof_on: tq = _ph("pings..numbers", tq)
-	if diag != null and diag.fps_text != "":
-		_text(Vector2(w - 212, 142), diag.fps_text, 11, Color(1, 1, 1, 0.6), _font, HORIZONTAL_ALIGNMENT_RIGHT, 200)
+	# (0.31.163, Kevin: "Remove both": the fps / memory readout isn't shown -- it's in the diag log's STAT lines)
 	if sim.commander and not _modal_open():
 		_draw_cards(me)
 	if sim.moba != null and not _modal_open():

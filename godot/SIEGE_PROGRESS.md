@@ -4927,4 +4927,8 @@ settings so players don't see also".
 - The heat guard is gone: its one remaining step raised nothing at 50 % (it only stepped 100 % -> 75 %).
 - tests/siege_guard_smoke.gd: forced to ~20 fps the cap stays 30, physics 30 Hz, the 3D 50 % (the view's size
   checked), no RESOLUTION button. The benches' guard lines dropped; perf_bench's baseline is RENDER_SCALE.
+- Then (asked whether the fps/memory readout under the pause button and Settings' High-quality graphics switch should
+  go too): "Remove both". The HUD no longer draws the readout (the diag STAT lines still carry fps and memory);
+  Settings > GRAPHICS keeps only Reduce effects, and the match is always high quality (siege_app ignores a saved
+  "off"). tests/notify_test.gd: no High-quality graphics switch, Reduce effects still there.
 - Version 0.31.163, versionCode 249, SERVER_BUILD 0.31.163.

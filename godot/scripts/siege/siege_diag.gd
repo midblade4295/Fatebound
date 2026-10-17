@@ -43,7 +43,7 @@ var _worst_ms := 0.0
 var _last_frame_us := 0
 var _events := 0
 var _error_lines := 0
-var fps_text := ""
+var fps_text := ""            # (not shown since 0.31.163; the STAT lines carry it)
 var _times := {}   # label -> [total_us, max_us, count]
 
 func add_time(label: String, us: int) -> void:

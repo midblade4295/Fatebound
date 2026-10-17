@@ -2527,10 +2527,7 @@ static func settings(app, root: VBoxContainer) -> void:
 	# Graphics
 	var gx := UI2.frame(root, "night", 12, 18.0, "gold")
 	UI2.divider(gx, "GRAPHICS", 20)
-	UI2.toggle(gx, "High-quality graphics", "Shadows, glow, smooth edges", bool(d.settings.get("hq_graphics", true)), "hq_graphics", func(on: bool):
-		app.sfx("toggle")
-		d.settings.hq_graphics = on
-		p.save())
+	# (0.31.163, Kevin: "Remove both": no High-quality graphics toggle -- always on, siege_app ignores a saved "off")
 	UI2.toggle(gx, "Reduce effects", "Smoother on older phones", bool(d.settings.get("reduce_motion", false)), "reduce_motion", func(on: bool):
 		app.sfx("toggle")
 		d.settings.reduce_motion = on

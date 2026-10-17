@@ -115,6 +115,8 @@ func _process(_d: float) -> bool:
 	elif frames == 24:
 		var t := _btn("notify")
 		check(t != null and not t.disabled and t.button_pressed, "Settings: NOTIFICATIONS > Chest ready, on")
+		# 0.31.163 (Kevin: "Remove both"): no High-quality graphics switch in Settings; Reduce effects stays
+		check(_btn("hq_graphics") == null and _btn("reduce_motion") != null, "Settings: no High-quality graphics switch (Reduce effects still there)")
 		app.notify = Notify.new()
 		app.show_tab("settings")
 	elif frames == 30:

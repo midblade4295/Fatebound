@@ -1488,7 +1488,7 @@ func start_match(online: bool, tutorial := false, follow := false) -> void:
 	siege.profile = profile
 	siege.audio = audio
 	siege.low_fx = bool(profile.d.settings.get("reduce_motion", false))
-	siege.hq_gfx = bool(profile.d.settings.get("hq_graphics", true))
+	siege.hq_gfx = true                         # 0.31.163: always (no toggle in Settings; an old saved "off" is ignored)
 	siege.vibrate = bool(profile.d.settings.get("vibrate", true))          # 0.31.120
 	siege.player_name = str(profile.d.name)
 	siege.clan_tag = social.my_tag() if social != null else ""        # 0.31.134: on your own plate
