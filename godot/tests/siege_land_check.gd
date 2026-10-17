@@ -2,6 +2,9 @@ extends SceneTree
 # Round 7 landscape sanity: every tree/stone/rock/outpost sits clear of walls (river, rails,
 # ledge faces, castle), off the brick paths, outside other things; the land is point-symmetric;
 # bridges and ramps connect (nav). Prints each problem.
+# 0.31.165, the Rift (siege_land.gd, keep.gd): the river is crossed on its fords; and the 5v5's own layout -- every tower
+# and camp clear of the walls with room to walk round it and reachable from both keeps, both pits too, every lane's
+# track walkable from gate to gate, the camps and the brush point-mirrored.
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 const Land = preload("res://scripts/siege/siege_land.gd")
 var fails := []
@@ -61,9 +64,10 @@ func _init() -> void:
 		if signf(a.y - Land.river_c(a.x)) != signf(b.y - Land.river_c(b.x)):
 			crossings += 1
 			var on_bridge := false
-			if Land.on_bridge(a, 0.6) or Land.on_bridge(b, 0.6) or Land.island_off(a) < 0.0 or Land.island_off(b) < 0.0:
+			if Land.on_bridge(a, 0.6) or Land.on_bridge(b, 0.6) or Land.island_off(a) < 0.0 or Land.island_off(b) < 0.0 \
+					or Land.on_ford(a, 0.6) or Land.on_ford(b, 0.6):
 				on_bridge = true
-			check(on_bridge, "castle-to-castle path crosses the river off a bridge at %s" % str(a))
+			check(on_bridge, "castle-to-castle path crosses the river off a bridge or a ford at %s" % str(a))
 	check(crossings >= 1, "castle-to-castle path never crosses the river")
 	# 5. the baked terrain must match the landscape code (re-run tools/bake_land.gd after edits)
 	var himg: Image = load(Land.HEIGHT_RES)
@@ -132,5 +136,54 @@ func _init() -> void:
 				if gap > 0.02 and gap < Sim.UNIT_R * 2.0 + 0.1:
 					fails.append("squeeze trap %.2f m between a %s wall end %s and the field edge" % [gap, str(w.kind), str(q)])
 					print("FAIL ", fails[-1])
+	_rift()
 	print("SIEGE_LAND_PASS" if fails.is_empty() else "SIEGE_LAND_FAIL %d problems" % fails.size())
 	quit(0 if fails.is_empty() else 1)
+
+func _rift() -> void:
+	# 0.31.165: the 5v5 on the Rift
+	var m = Sim.new()
+	m.setup(5, 3)
+	m.setup_moba("knight", 3)
+	var mo = m.moba
+	var walls_of := func(p: Vector2) -> float:
+		var best := INF
+		for w in m.walls:
+			best = minf(best, p.distance_to(Sim.seg_closest(p, w.a, w.b)) - float(w.r))
+		return best
+	for tw in mo.towers:
+		var gap: float = walls_of.call(tw.p) - mo.TOWER_R
+		check(gap >= Sim.UNIT_R * 2.0 + 0.3, "tower %d (team %d tier %d) at %s only %.1f m from a wall" % [int(tw.id), int(tw.team), int(tw.tier), str(tw.p), gap])
+		for t in 2:
+			var goal: Vector2 = (tw.p as Vector2) + ((Vector2.ZERO - (tw.p as Vector2)).normalized() if int(tw.tier) < 4 else Vector2(0.0, -signf((tw.p as Vector2).y))) * (mo.TOWER_R + 1.2)
+			var path: PackedVector2Array = m.find_path(t, Sim.spawn(t), goal)
+			check(path.size() > 0 and path[path.size() - 1].distance_to(goal) < 1.6, "team %d can't reach tower %d at %s" % [t, int(tw.id), str(tw.p)])
+	for c in mo.camps:
+		var cp: Vector2 = c.p
+		check(walls_of.call(cp) >= 3.0, "%s camp at %s only %.1f m from a wall" % [c.kind, str(cp), walls_of.call(cp)])
+		check(Land.shore(cp) > 0.5 or str(c.kind) == "lord", "%s camp at %s in the water" % [c.kind, str(cp)])
+		for t in 2:
+			var path2: PackedVector2Array = m.find_path(t, Sim.spawn(t), cp)
+			check(path2.size() > 0 and path2[path2.size() - 1].distance_to(cp) < 1.6, "team %d can't reach the %s camp at %s" % [t, c.kind, str(cp)])
+	for i in 2:
+		for t in 2:
+			var pc: Vector2 = Land.pit_c(i)
+			var path3: PackedVector2Array = m.find_path(t, Sim.spawn(t), pc)
+			check(path3.size() > 0 and path3[path3.size() - 1].distance_to(pc) < 1.6, "team %d can't reach pit %d" % [t, i])
+	for l in mo.LANES.size():
+		var pts: Array = mo.LANES[l]
+		for k in pts.size():
+			var q: Vector2 = pts[k]
+			if k > 0 and k < pts.size() - 1:
+				check(walls_of.call(q) >= 2.0, "lane %d point %s only %.1f m from a wall" % [l, str(q), walls_of.call(q)])
+		var a: Vector2 = pts[0]
+		var b: Vector2 = pts[pts.size() - 1]
+		var gl: PackedVector2Array = m.find_path(0, a + ((pts[1] as Vector2) - a).normalized() * 1.5, b + ((pts[pts.size() - 2] as Vector2) - b).normalized() * 1.5)
+		check(gl.size() > 0, "lane %d: no way from gate to gate" % l)
+	var mirrored := true
+	for b2 in mo.vision.brushes:
+		mirrored = mirrored and mo.vision.brushes.any(func(o): return (o.p as Vector2).is_equal_approx(-(b2.p as Vector2)) and is_equal_approx(float(o.r), float(b2.r)))
+	check(mirrored, "the brush isn't point-mirrored")
+	for b3 in mo.vision.brushes:
+		check(walls_of.call(b3.p) >= 0.5 and Land.shore(b3.p) > 0.0, "brush at %s in a wall or the water" % str(b3.p))
+	print("rift: towers %d camps %d brush %d" % [mo.towers.size(), mo.camps.size(), mo.vision.brushes.size()])

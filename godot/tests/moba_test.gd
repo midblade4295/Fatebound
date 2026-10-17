@@ -1,19 +1,19 @@
 extends SceneTree
 # 0.31.155 5V5 (the test; scripts/siege/moba.gd), the rules on the sim:
-#  1. the start: five heroes a side in their own classes (yours as picked; no Villagers, no hats on the stands), six
-#     towers a side beside the lanes, solid;
+#  1. the start: five heroes a side in their own classes (yours as picked; no Villagers, no hats on the stands), eleven
+#     towers a side (0.31.165, the Rift: three a lane and two King towers in the keep; six until then), solid;
 #  2. the waves: every 30 s from 15 s, each castle sends League's wave down each lane (0.31.158: 3 melee -- Knights --
 #     and 3 casters -- Archers; the siege minions and super minions are moba_more_test's); they march toward the enemy;
 #     a wave still alive when the next comes is caught up with (stacking);
 #  3. the towers (League's rules): the nearest minion first; an enemy hero who hurts one of its heroes in range -> him
 #     (call for help); heroes alone when no minion is in range; shots ramping on a hero (+50 % a shot, 3 times at most);
 #     a minion loses 45 % (Knight) / 70 % of its health a shot; an inner tower can't be hurt while the outer stands; a
-#     tower without the attackers' minions near takes a fifth (melee heroes x1.2); a gate can't be hurt while an inner tower of a lane that
-#     leads to it stands;
+#     tower without the attackers' minions near takes a fifth (melee heroes x1.2); a gate can't be hurt while the third tower of the lane that
+#     ends at it stands; the King towers while all the keep's gates stand (0.31.165);
 #  4. levels: XP from minions dying near you, a level up offers 3 upgrades, a pick applies; bots pick by themselves;
 #  5. a fallen hero: no hat, back as himself at his castle after 4 + 1.6 x level s; the castle heals; ACTION only for the
 #     King;
-#  6. (0.31.156) the Kings are the hearts: home on their thrones, untouchable while their front gates stand, then hit
+#  6. (0.31.156) the Kings are the hearts: home on their thrones, untouchable while their King towers stand (0.31.165), then hit
 #     and hitting back (a slam round him), healing when left alone; defeat one and the match is won; at time, the side
 #     that did more to the other's King;
 #  7. a whole match, bots on both sides: towers fall, levels climb, it ends.
@@ -69,14 +69,17 @@ func _init() -> void:
 	var blue: Array = s.units.filter(func(u): return int(u.team) == 0).map(func(u): return str(u.hid))
 	check(blue.size() == 5 and blue.all(func(h): return blue.count(h) == 1), "no two heroes the same on a side (%s)" % str(blue))
 	check(s.stands.all(func(st): return int(st.stock) == 0) and s.hats.is_empty(), "the hat stands are empty")
-	check(s.moba.towers.size() == 12 and s.moba.towers.filter(func(t): return int(t.team) == 0).size() == 6
-		and s.obstacles.filter(func(o): return str(o.kind) == "moba_tower").size() == 12, "six towers a side, solid")
+	# (0.31.165, the Rift: three towers a lane and two King towers in the keep -- six a side until then)
+	check(s.moba.towers.size() == 22 and s.moba.towers.filter(func(t): return int(t.team) == 0).size() == 11
+		and s.moba.towers.filter(func(t): return int(t.tier) == 4).size() == 4
+		and s.obstacles.filter(func(o): return str(o.kind) == "moba_tower").size() == 22, "eleven towers a side (three a lane, two King towers), solid")
 	var paired := true
 	for tw in s.moba.towers:
 		if int(tw.team) != 0:
 			continue
-		var twin = s.moba.towers.filter(func(o): return int(o.team) == 1 and int(o.lane) == 2 - int(tw.lane) and int(o.tier) == int(tw.tier))
-		paired = paired and twin.size() == 1 and (twin[0].p as Vector2).is_equal_approx(-(tw.p as Vector2))
+		var twin = s.moba.towers.filter(func(o): return int(o.team) == 1 and (o.p as Vector2).is_equal_approx(-(tw.p as Vector2)))
+		paired = paired and twin.size() == 1 and int(twin[0].tier) == int(tw.tier) \
+			and int(twin[0].lane) == (2 - int(tw.lane) if int(tw.lane) >= 0 else -1)
 	check(paired, "red's towers are blue's, mirrored")
 	# --- 2. the waves
 	_run(s, 14.8)
@@ -178,13 +181,22 @@ func _init() -> void:
 			red_gate = g
 	var ghp := float(red_gate.hp)
 	t._damage_gate(bh, red_gate, 200.0)
-	check(not red_gate.is_empty() and float(red_gate.hp) == ghp, "their gate at the end of the west lane can't be hurt while its inner tower stands")
+	check(not red_gate.is_empty() and float(red_gate.hp) == ghp, "their gate at the end of the west lane can't be hurt while its towers stand")
+	var third: Dictionary = t.moba.towers.filter(func(o): return int(o.team) == 1 and int(o.lane) == 0 and int(o.tier) == 3)[0]
 	t.moba.hit_tower(bh, int(tw.id), 100000.0)
 	t.moba.hit_tower(bh, int(inner.id), 100000.0)
-	check(bool(tw.dead) and bool(inner.dead), "outer, then inner tower down")
 	t._damage_gate(bh, red_gate, 200.0)
-	check(float(red_gate.hp) == ghp - 200.0, "...now the gate takes damage")
-	check(t.moba.towers_down(1) == 2, "two of red's towers down")
+	check(bool(tw.dead) and bool(inner.dead) and float(red_gate.hp) == ghp, "outer, then inner tower down; the gate still can't be hurt (0.31.165: a third tower)")
+	var kts: Array = t.moba.towers.filter(func(o): return int(o.team) == 1 and int(o.tier) == 4)
+	var khp := float(kts[0].hp)
+	t.moba.hit_tower(bh, int(third.id), 100000.0)
+	t._damage_gate(bh, red_gate, 200.0)
+	check(bool(third.dead) and float(red_gate.hp) == ghp - 200.0, "...the third down: now the gate takes damage")
+	check(t.moba.towers_down(1) == 3, "three of red's towers down")
+	t.moba.hit_tower(bh, int(kts[0].id), 100.0)
+	check(float(kts[0].hp) == khp and not t.moba.vulnerable(kts[0]), "a King tower can't be hurt while the keep's gates stand")
+	t._damage_gate(bh, red_gate, 100000.0)
+	check(not t.gate_blocks(red_gate) and t.moba.vulnerable(kts[0]) and t.moba.vulnerable(kts[1]), "...a gate down: both can")
 	# --- 4. levels
 	var l = _new("knight", 9)
 	var you: Dictionary = l.by_id["you"]
@@ -217,9 +229,9 @@ func _init() -> void:
 	var h0 := float(you.hp)
 	_run(l, 2.0)
 	check(float(you.hp) > h0 + you.max_hp * 0.09, "his castle heals him")
-	var st: Dictionary = l.stands.filter(func(x): return int(x.team) == 0)[0]
-	you.pos = st.p
-	check(l.context_action(you) == "" and not l.act("you", "interact") and not l.act("you", "hat_swap"), "at a hat stand: nothing to take")
+	check(l.stands.is_empty(), "no hat stands (0.31.165: the Rift's keeps)")
+	you.pos = Sim.spawn(0) + Vector2(2.0, 0.0)
+	check(l.context_action(you) == "" and not l.act("you", "interact") and not l.act("you", "hat_swap"), "at the fountain: nothing to take")
 	# --- 6. the Kings
 	var kk = _new("knight", 13)
 	_park_heroes(kk)
@@ -231,13 +243,20 @@ func _init() -> void:
 	att.hp = 1.0e6
 	att.max_hp = 1.0e6
 	kk.moba.hit_king(att, 1, 300.0)
-	check(float(kk.moba.kings[1].hp) == Moba.KING_HP and not kk.moba.king_open(1), "while his front gates stand he can't be hurt")
+	check(float(kk.moba.kings[1].hp) == Moba.KING_HP and not kk.moba.king_open(1), "while his King towers stand he can't be hurt")
 	var rg: Dictionary = kk.gates.filter(func(g): return int(g.team) == 1 and str(g.get("kind", "")) != "jail")[0]
 	rg.broken = true
 	rg.hp = 0.0
 	kk._update_gate_nav()
 	kk.moba.hit_king(att, 1, 300.0)
-	check(kk.moba.king_open(1) and float(kk.moba.kings[1].hp) == Moba.KING_HP - 300.0, "a gate of his down: he takes the hit")
+	check(not kk.moba.king_open(1) and float(kk.moba.kings[1].hp) == Moba.KING_HP, "a gate of his down: still not (0.31.165)")
+	var rkt: Array = kk.moba.towers.filter(func(o): return int(o.team) == 1 and int(o.tier) == 4)
+	kk.moba.hit_tower(att, int(rkt[0].id), 100000.0)
+	kk.moba.hit_king(att, 1, 300.0)
+	check(bool(rkt[0].dead) and not kk.moba.king_open(1) and float(kk.moba.kings[1].hp) == Moba.KING_HP, "one King tower down: still not")
+	kk.moba.hit_tower(att, int(rkt[1].id), 100000.0)
+	kk.moba.hit_king(att, 1, 300.0)
+	check(kk.moba.king_open(1) and float(kk.moba.kings[1].hp) == Moba.KING_HP - 300.0, "both down: he takes the hit")
 	att.pos = kk.moba.king_pos(1) + Vector2(2.0, 0.0)
 	var hp0 := float(att.hp)
 	var slams := 0
@@ -274,8 +293,8 @@ func _init() -> void:
 			sm.time, sm.winner, sm.end_reason, int(sm.moba.king_frac(0) * 100.0), int(sm.moba.king_frac(1) * 100.0), str(sm.kills), sm.moba.towers_down(0),
 			sm.moba.towers_down(1), gates_down, str(lv), peak, Time.get_ticks_msec() - t0])
 		if mi == 0:
-			check(sm.ended and sm.moba.towers_down(0) + sm.moba.towers_down(1) >= 2 and lv.max() >= 6 and peak < 10 + 2 * Moba.MINION_CAP + 25 + 12 + 1,
-				"a whole match: towers fall (%d), heroes reach level %d, minions stay under the cap (%d units at most, with the jungle's 25 and LEGIONs)" % [sm.moba.towers_down(0) + sm.moba.towers_down(1), lv.max(), peak])
+			check(sm.ended and sm.moba.towers_down(0) + sm.moba.towers_down(1) >= 2 and lv.max() >= 6 and peak < 10 + 2 * Moba.MINION_CAP + 37 + 12 + 1,
+				"a whole match: towers fall (%d), heroes reach level %d, minions stay under the cap (%d units at most, with the jungle's 37 and LEGIONs)" % [sm.moba.towers_down(0) + sm.moba.towers_down(1), lv.max(), peak])
 	print("MOBA_PASS" if fails.is_empty() else "MOBA_FAIL %s" % str(fails))
 	quit(0 if fails.is_empty() else 1)
 

@@ -21,6 +21,7 @@ func _init() -> void:
 	root.add_child(rec)
 	mode = Mode.new()
 	mode.audio = rec
+	mode.moba_hero = "knight"                      # (0.31.165: the game's match -- a Siege match on the Rift is over at once)
 	root.add_child(mode)
 
 func _process(_d: float) -> bool:
@@ -32,7 +33,9 @@ func _process(_d: float) -> bool:
 			mode._event_sound(e)
 		var me: Dictionary = mode.sim.by_id.get(str(mode.hud.player_id), {})
 		if not me.is_empty():
-			mode.sim.set_move(mode.hud.player_id, Vector2(0.3, -1.0).normalized())
+			if frames == 6:
+				me.pos = Vector2(0.0, 60.0)             # (0.31.165: out on the middle lane -- the keep's wall is in the way)
+			mode.sim.set_move(mode.hud.player_id, Vector2(0.0, -1.0) if mode.sim.in_castle(me.pos, int(me.team)) == false else Vector2.ZERO)
 		mode._footsteps(0.2)
 	if frames < 900:
 		return false
@@ -76,8 +79,8 @@ func _process(_d: float) -> bool:
 	# Footsteps by surface, under control: walk the player across known spots.
 	var me: Dictionary = mode.sim.by_id.get(str(mode.hud.player_id), {})
 	var Land = preload("res://scripts/siege/siege_land.gd")
-	var spots := {"dirt": Vector2(-11.0, 24.0), "water": Vector2(10.0, Land.river_c(10.0)),
-		"wood": (Land.bridges()[0].c as Vector2), "stone": Vector2(0.0, mode.Sim.CASTLE_SHIFT + mode.Sim.FRONT_Z + 6.0)}
+	# (0.31.165, the Rift: a side lane's dirt, the river's water, a keep's stone floor; no bridges, so no wood)
+	var spots := {"dirt": Vector2(-46.0, 30.0), "water": Vector2(10.0, Land.river_c(10.0)), "stone": Vector2(0.0, 92.0)}
 	for surf in spots:
 		me.hp = me.max_hp
 		me.state = "idle"

@@ -23,10 +23,14 @@ const WARD_RECHARGE := 45.0
 const WARD_CHARGES := 2
 const WARD_MAX := 3
 const EVERY := 0.2                                         # seconds between vision updates
-# blue's brush patches [centre, radius] (red's are the point mirror); one more on the island's east end
-const BRUSH_BLUE := [[Vector2(-22.5, 12.0), 2.8], [Vector2(25.5, 11.5), 2.8], [Vector2(-13.0, 23.5), 2.4],
-	[Vector2(17.0, 20.0), 2.4], [Vector2(-22.0, 33.5), 2.8], [Vector2(25.0, 23.0), 2.8], [Vector2(8.5, 13.5), 2.0]]
-const BRUSH_MID := [[Vector2(6.0, 0.0), 2.5]]
+# blue's brush patches [centre, radius] (red's are the point mirror). 0.31.165, the Rift: beside each side lane (outside
+# it), at the jungle's ways in -- from the river, from the middle lane, inside the buff camps' pockets -- and outside the
+# side lanes by the keep.
+const BRUSH_BLUE := [[Vector2(-51.0, 22.0), 2.8], [Vector2(-50.5, 46.0), 2.6], [Vector2(-40.5, 9.5), 2.6],
+	[Vector2(-14.0, 11.0), 2.6], [Vector2(-31.0, 41.0), 2.4], [Vector2(-14.0, 42.5), 2.4], [Vector2(-33.0, 82.0), 2.4],
+	[Vector2(51.0, 26.0), 2.8], [Vector2(50.5, 50.0), 2.6], [Vector2(40.5, 12.0), 2.6], [Vector2(14.0, 15.0), 2.6],
+	[Vector2(30.5, 43.5), 2.4], [Vector2(14.5, 43.0), 2.4], [Vector2(33.0, 82.0), 2.4]]
+const BRUSH_MID := []                                      # (the Siege field's: one on the island's east end)
 
 var m                                                      # moba.gd
 var s                                                      # the sim

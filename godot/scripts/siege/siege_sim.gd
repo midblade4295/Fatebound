@@ -6,7 +6,8 @@ extends RefCounted
 
 const TICK := 1.0 / 30.0
 const Land = preload("res://scripts/siege/siege_land.gd")
-const Castle = preload("res://scripts/siege/siege_castle.gd")
+const Castle = preload("res://scripts/siege/siege_castle.gd")   # (the Siege castles: only the Siege's own code, unused since 0.31.165)
+const Keep = preload("res://scripts/siege/keep.gd")              # 0.31.165: the Rift's keeps (the world is the 5v5's map)
 const Cards = preload("res://scripts/meta/cards.gd")
 const Moba = preload("res://scripts/siege/moba.gd")
 # 0.31.155 5V5 (the test; scripts/siege/moba.gd): heroes, minion waves, towers. null unless setup_moba() was called:
@@ -92,8 +93,10 @@ const LADDER_COST := 8
 const LADDER_BUILD := 3.0
 const LADDER_HP := 250.0
 const LADDER_HALF := 1.1          # half-width of the passage along the wall
-const WATER_MOVE := 0.45         # wading speed in the river (Round 33)
-const WATER_NAV_COST := 2.5      # river cells cost this much in the nav grid: bots still prefer a nearby bridge
+const WATER_MOVE := 0.45         # wading speed in the river (Round 33; the Rift's river is shallow: ~0.8 at its deepest)
+const WATER_NAV_COST := 1.6      # river cells cost this much in the nav grid: paths still prefer a nearby ford (2.5 and
+                                 # depth > 0.15 on the Siege field, for its bridges)
+const WATER_NAV_DEPTH := 0.05
 # The island lane (0.30.0) is the shortest way across but one lane wide: every bot raider took it and the
 # whole army died in the bottleneck (no King picked up in two 12-minute bot matches). Costing its cells a
 # little more spreads the bots over the side bridges too; players still take whichever way they like.
@@ -269,39 +272,37 @@ static func _c(team: int, p: Vector2) -> Vector2:
 	return _m(team, p + Vector2(0.0, CASTLE_SHIFT))
 
 static func throne(team: int) -> Vector2:
-	# Where a team brings its rescued Oracle: its own throne room (east back room for blue).
-	return _c(team, Castle.THRONE)
+	# Where a team's King stands (0.31.165: in front of his throne at the back of his keep).
+	return _m(team, Keep.KING)
 
 const CELL_C := Castle.CELL_C      # dungeon cell centre (L1 west wing since Round 10)
 const CELL_HX := Castle.CELL_HX
 const CELL_HZ := Castle.CELL_HZ
 
 static func cell(team: int) -> Vector2:
-	# Where a team's own Oracle is held captive: the ENEMY castle's dungeon.
-	return _c(1 - team, CELL_C)
+	# Where a team's own Oracle was held captive in the Siege (the enemy castle's dungeon); the Rift has no dungeons:
+	# the King starts at home.
+	return throne(team)
 
 static func height_at(p: Vector2) -> float:
-	# Ground height for rendering. Castles are evaluated in blue space (mirror for red).
-	var q := (p if p.y >= 0.0 else -p) - Vector2(0.0, CASTLE_SHIFT)
-	if Castle.inside(q):
-		return Castle.height_local(q)                # courtyard, terraces, grand stairs
-	# Just around the castle is flat; everything else is the landscape (slopes, ledges, bridges).
-	if absf(q.x) <= CASTLE_HX + 1.0 and q.y >= FRONT_Z - 1.0:
-		return 0.0
+	# Ground height for rendering (0.31.165: the Rift's; the keeps' floors are level).
 	return Land.ground_height(p)
 
 static func forge(team: int) -> Vector2:
-	# The hat stands' corner (kept under the old name: HUD hints, bots and tests aim here).
-	return _c(team, HAT_HALL)
+	# (the Siege's hat stands' corner, kept under the old name: hints and tests aim here) -- the keep's fountain
+	return _m(team, Keep.FOUNTAIN)
 
 static func workshop(team: int) -> Vector2:
-	return _c(team, Castle.WORKSHOP)
+	return _m(team, Keep.FOUNTAIN)
 
 static func spawn(team: int) -> Vector2:
-	return _c(team, Castle.SPAWN)
+	# 0.31.165: the fountain at the back of the keep
+	return _m(team, Keep.FOUNTAIN)
 
 static func gate_front(g: Dictionary) -> Vector2:
 	# Standing point just outside a gate (the side facing midfield).
+	if g.has("in"):
+		return (g.c as Vector2) - (g["in"] as Vector2) * 2.2
 	var outward := Vector2(0, -1) if g.team == 0 else Vector2(0, 1)
 	return g.c + outward * 2.2
 
@@ -363,6 +364,8 @@ func _add_wall(team: int, a: Vector2, b: Vector2, kind := "wall") -> void:
 	walls.append({"a":_c(team, a), "b":_c(team, b), "r":WALL_R, "team":team, "kind":kind})
 
 func _build_map() -> void:
+	# 0.31.165: the Rift (siege_land.gd) -- the keeps (keep.gd), the ridges, the pits' rims and the field's edge. (The
+	# Siege castles, their hat stands, the resource nodes, the cover rocks and the outposts are gone with the Siege.)
 	walls.clear()
 	gates.clear()
 	stands.clear()
@@ -370,84 +373,25 @@ func _build_map() -> void:
 	obstacles.clear()
 	nodes.clear()
 	for t in 2:
-		# Front wall (Round 10: z=3, 40 m wide) with a gatehouse piece around each gate. Pieces that
-		# meet the field edge run 1 m past it (no rounded wall end for a unit to be clamped into).
-		var gp: float = Castle.GATE_PIECE
-		var gx0: float = GATE_X[0]
-		var gx1: float = GATE_X[1]
-		_add_wall(t, Vector2(-CASTLE_HX, FRONT_Z), Vector2(gx0 - gp, FRONT_Z))
-		_add_wall(t, Vector2(gx0 + gp, FRONT_Z), Vector2(gx1 - gp, FRONT_Z))
-		_add_wall(t, Vector2(gx1 + gp, FRONT_Z), Vector2(CASTLE_HX, FRONT_Z))
-		# Side walls: the field is wider than the castle, so it needs its own flanks.
-		# West wall with the doorway down to the dungeon wing (Round 13); the wing's three walls.
-		_add_wall(t, Vector2(-CASTLE_HX, FRONT_Z), Vector2(-CASTLE_HX, Castle.DOOR_Z0 - 1.0))
-		_add_wall(t, Vector2(-CASTLE_HX, Castle.DOOR_Z1 + 1.0), Vector2(-CASTLE_HX, CASTLE_BACK + 1.0))
-		_add_wall(t, Vector2(Castle.ANNEX_X0, Castle.ANNEX_Z0), Vector2(Castle.ANNEX_X0, Castle.ANNEX_Z1))
-		# (They stop 1 m inside the west wall's thickness: ending on its inner face, their rounded ends
-		# made a squeeze slot with the knight's barracks -- Round 20.)
-		_add_wall(t, Vector2(Castle.ANNEX_X0, Castle.ANNEX_Z0), Vector2(-CASTLE_HX - 1.0, Castle.ANNEX_Z0))
-		_add_wall(t, Vector2(Castle.ANNEX_X0, Castle.ANNEX_Z1), Vector2(-CASTLE_HX - 1.0, Castle.ANNEX_Z1))
-		_add_wall(t, Vector2(CASTLE_HX, FRONT_Z), Vector2(CASTLE_HX, CASTLE_BACK + 1.0))
-		for gx in GATE_X:
-			# The gate model is a wall piece with a ~2.3 m doorway; only the doorway is the gate.
-			# The neighbouring wall ends (radius 1.0) cover the stone pillars either side.
-			var a := _c(t, Vector2(gx - GATE_HALF, FRONT_Z))
-			var b := _c(t, Vector2(gx + GATE_HALF, FRONT_Z))
-			# "in": the gate's inward normal (toward its castle) -- enemies on that side may walk out (lets_out).
-			var inw: Vector2 = Vector2(-(b - a).y, (b - a).x).normalized()
-			if inw.dot(_c(t, Vector2(0.0, 16.0)) - (a + b) * 0.5) < 0.0:
-				inw = -inw
-			gates.append({"id":gates.size(), "team":t, "a":a, "b":b, "c":(a + b) * 0.5, "hp":GATE_HP, "max_hp":GATE_HP,
-				"broken":false, "open":false, "side":"west" if gx < 0.0 else "east", "in":inw})
-		# Terrace faces (L1 at z=14, L2 at z=22) open only at the staircases, and ledges along each
-		# staircase's sides (siege_castle.gd).
-		for seg in Castle.ledges():
-			walls.append({"a":_c(t, seg[0]), "b":_c(t, seg[1]), "r":Castle.LEDGE_R, "team":t, "kind":"ledge"})
-		# The dungeon wing (Round 13): walls along both sides of the stairs down; the jail cell in
-		# the wing's front-west corner -- iron bars on its east side and the barred door on its north
-		# side (a "jail" gate: lifts for this castle's team, the enemy has to smash it). The other two
-		# sides are the wing's own walls.
-		# The back wall along the L2 back edge and the throne against it (Round 14).
-		_add_wall(t, Vector2(-CASTLE_HX, Castle.BACK_WALL_Z), Vector2(CASTLE_HX, Castle.BACK_WALL_Z), "backwall")
-		obstacles.append({"p":_c(t, Castle.THRONE_SEAT), "r":0.9, "kind":"castle_building", "team":t})
-		for seg in Castle.dungeon_ledges():
-			walls.append({"a":_c(t, seg[0]), "b":_c(t, seg[1]), "r":Castle.LEDGE_R, "team":t, "kind":"ledge"})
-		var wall_in_x: float = Castle.ANNEX_X0 + WALL_R
-		var wall_in_z: float = Castle.ANNEX_Z0 + WALL_R
-		walls.append({"a":_c(t, Vector2(Castle.JAIL_X1, wall_in_z)), "b":_c(t, Vector2(Castle.JAIL_X1, Castle.JAIL_Z1)),
-			"r":Castle.JAIL_R, "team":t, "kind":"bars"})
-		var ja := _c(t, Vector2(wall_in_x, Castle.JAIL_Z1))
-		var jb := _c(t, Vector2(Castle.JAIL_X1, Castle.JAIL_Z1))
-		gates.append({"id":gates.size(), "team":t, "a":ja, "b":jb, "c":(ja + jb) * 0.5, "hp":Castle.JAIL_HP,
-			"max_hp":Castle.JAIL_HP, "broken":false, "open":false, "side":"jail", "kind":"jail", "r":Castle.JAIL_R})
-		# Hat stands (solid posts) in the west corner; the workshop against the east wall.
-		for i in HAT_CLASSES.size():
-			var sp := _c(t, HAT_STANDS[i])
-			# The shop is the building (Round 20): solid, and you take the hat at its door (sp). b / top: where
-			# its name plate goes (over the roof).
-			var shop: Dictionary = Castle.HAT_SHOPS[i]
-			var bpos := _c(t, shop.b)
-			stands.append({"id":stands.size(), "team":t, "cls":HAT_CLASSES[i], "p":sp, "stock":int(STAND_STOCK.get(HAT_CLASSES[i], HAT_STOCK_MAX)), "t":0.0,
-				"b":bpos, "top":float(shop.y) + 4.4})
-			obstacles.append({"p":bpos, "r":float(shop.r), "kind":"castle_building", "team":t})
-		for bd in Castle.BUILDINGS:
-			obstacles.append({"p":_c(t, bd.p), "r":float(bd.r), "kind":"castle_building", "team":t})
-		# Resource nodes on each half (world coords, point-mirrored), placed off the paths, clear of
-		# the river, the ledge faces and the outposts (tests/siege_land_check.gd verifies this).
-		for tp in RES_WOOD:
-			_add_node(t, "wood", tp)
-		for sp in RES_STONE:
-			_add_node(t, "stone", sp)
-		for rp in COVER_ROCKS:
-			obstacles.append({"p":_m(t, rp), "r":1.2, "kind":"rock"})
-	# Landscape: river banks, bridge rails, ledge faces and ramp sides (Round 7).
+		_build_keep(t)
 	walls.append_array(Land.walls())
 	_fill_squeeze_slots()
-	# Outposts: a solid tower in the middle of each capture ring.
 	outposts = []
-	for op in Land.outpost_positions():
-		outposts.append({"id":outposts.size(), "p":op, "owner":-1, "prog":0.0, "t":0.0, "occ":[]})
-		obstacles.append({"p":op, "r":Land.OUTPOST_TOWER_R, "kind":"outpost_tower"})
+
+func _build_keep(t: int) -> void:
+	# The ring wall between the gatehouses (a wall end's cap covers the gatehouse's pillar, as on the Siege castles),
+	# the three gates (the doorways: "west" / "mid" / "east", by the lane that ends there) and the throne behind the King.
+	for seg in Keep.ring():
+		walls.append({"a":_m(t, seg[0]), "b":_m(t, seg[1]), "r":WALL_R, "team":t, "kind":"wall"})
+	for i in Keep.GATE_ANG.size():
+		var gd: Array = Keep.gate_ends(i)
+		var a := _m(t, gd[0])
+		var b := _m(t, gd[1])
+		# "in": the gate's inward normal (toward its keep) -- enemies on that side may walk out (lets_out).
+		var inw := (_m(t, Keep.C) - (a + b) * 0.5).normalized()
+		gates.append({"id":gates.size(), "team":t, "a":a, "b":b, "c":(a + b) * 0.5, "hp":GATE_HP, "max_hp":GATE_HP,
+			"broken":false, "open":false, "side":str(Keep.GATE_SIDE[i]), "lane":i, "in":inw})
+	obstacles.append({"p":_m(t, Keep.THRONE_SEAT), "r":Keep.THRONE_R, "kind":"castle_building", "team":t})
 
 func _add_node(team: int, kind: String, p: Vector2) -> void:
 	var pos := _m(team, p)
@@ -511,7 +455,7 @@ var _bucket_walls: Array = []
 var _blockers: Array = []             # knights with their shield up this tick
 var squeeze_fills := 0                # slots closed by _fill_squeeze_slots (see there)
 var _bucket_walls_proj: Array = []   # only walls that stop projectiles (not ledges/bars/river/rails)
-const PROJ_PASS_KINDS := ["ledge", "bars", "river", "rail", "edge"]
+const PROJ_PASS_KINDS := ["ledge", "bars", "river", "rail", "edge", "rock"]     # (0.31.165: shots fly over the Rift's ridges)
 var _bucket_obs: Array = []
 var _bucket_obs_proj: Array = []      # obstacles that stop shots (not the towers)
 
@@ -582,7 +526,7 @@ func _build_nav() -> void:
 	for ix in range(grid0.region.position.x, grid0.region.end.x):
 		for iz in range(grid0.region.position.y, grid0.region.end.y):
 			var cc := Vector2i(ix, iz)
-			if water_depth(nav_point(cc)) > 0.15:
+			if water_depth(nav_point(cc)) > WATER_NAV_DEPTH:
 				for t in 2:
 					(nav[t] as AStarGrid2D).set_point_weight_scale(cc, WATER_NAV_COST)
 			elif _lane_cell(nav_point(cc)):
@@ -671,9 +615,7 @@ func setup(team_size: int, seed_value: int, player_team := 0) -> void:
 	_build_nav()
 	oracles = [_new_oracle(0), _new_oracle(1)]
 
-	for t in 2:
-		for cx in [-CATAPULT_X, CATAPULT_X]:
-			catapults.append({"team":t, "p":_c(t, Vector2(cx, FRONT_Z + 0.3)), "t":rng.randf() * CATAPULT_EVERY})
+	catapults = []                       # (the Siege castles' corner catapults: none on the Rift since 0.31.165)
 	# One gatherer per team from 4 players up, two from 8.
 	# 16 per team: 7 raiders (incl. the human), 3 escorts, 3 defenders, 3 workers. Smaller teams
 	# take the first N slots.
@@ -756,7 +698,7 @@ func class_label(u: Dictionary) -> String:
 
 func _respawn(u: Dictionary, first := false) -> void:
 	var sp := spawn(u.team)
-	u.pos = sp + Vector2(rng.randf_range(-8.0, 8.0), rng.randf_range(-1.5, 1.5))
+	u.pos = sp + Vector2(rng.randf_range(-1.0, 1.0), rng.randf_range(-1.0, 1.0)) * (Keep.FOUNTAIN_R - 0.6)   # (0.31.165: round the fountain)
 	u.face = PI if u.team == 0 else 0.0
 	u.max_hp = float(stat(u,"hp"))
 	u.hp = u.max_hp
@@ -1373,9 +1315,8 @@ func stand_near(u: Dictionary) -> Dictionary:
 	return {}
 
 static func in_castle(p: Vector2, team: int) -> bool:
-	# Inside team's walls (courtyard or back rooms), in that castle's local coordinates.
-	var q := (p if team == 0 else -p) - Vector2(0.0, CASTLE_SHIFT)
-	return Castle.inside(q)
+	# Inside team's keep (0.31.165), in blue space.
+	return Keep.inside(p if team == 0 else -p)
 
 func class_count(team: int, cls: String) -> int:
 	var n := 0
@@ -1767,10 +1708,9 @@ func _melee(u: Dictionary, reach: float, arc: float, dmg: float, stun := 0.0) ->
 		hits += moba.melee_towers(u, reach, arc, dmg)    # 0.31.155: basic attacks hit towers
 	return hits
 
-static func on_rampart(p: Vector2) -> bool:
-	# On a castle's rampart walkway (behind the front wall's middle, Castle.WALK_*).
-	var q := (p if p.y >= 0.0 else -p) - Vector2(0.0, CASTLE_SHIFT)
-	return absf(q.x) <= Castle.WALK_X and q.y >= FRONT_Z + 0.5 and q.y < Castle.WALK_Z1
+static func on_rampart(_p: Vector2) -> bool:
+	# On a castle's rampart walkway (the Siege castles'; the Rift's keeps have none since 0.31.165).
+	return false
 
 func _lob_at_rampart(u: Dictionary, d: Vector2, reach: float) -> bool:
 	# A shot aimed (within ~11 deg) at an enemy on a rampart, in range: lobbed over the parapet (Round 38, Kevin:
@@ -1907,6 +1847,12 @@ func _step_unit(u: Dictionary, dt: float) -> void:
 		return
 	if u.state == "fly":
 		_step_flight(u)
+		return
+	if u.state == "idle" and u.has("mon") and u.stun <= 0.0 and (u.move as Vector2) == Vector2.ZERO:
+		# 0.31.165: a jungle monster standing at home (most of the Rift's 37, most of the time): nothing to step but
+		# its recharges
+		u.cd_dodge = maxf(0.0, u.cd_dodge - dt)
+		u.cd_ability = maxf(0.0, u.cd_ability - dt)
 		return
 	u.cd_dodge = maxf(0.0, u.cd_dodge - dt)
 	u.cd_ability = maxf(0.0, u.cd_ability - dt * float(u.get("m_cdr", 1.0)))     # (0.31.155: a 5v5 hero's faster recharge)
@@ -2275,6 +2221,8 @@ var _po_cache := {}                         # unit id -> [the position its last 
 var _po_epoch := 0
 var _po_tick := 0
 
+const SEP_CELL := 0.9                # (UNIT_R * 2: two units that touch are in neighbouring cells)
+
 func _separate() -> void:
 	# Pairs of living units pushed apart (0.31.78: on packed arrays -- the 496 pair checks of a 16 v 16 went through
 	# dictionary lookups each; same pushes, in the same order). The ground and a tower's deck don't touch.
@@ -2291,19 +2239,40 @@ func _separate() -> void:
 		pos[i] = live[i].pos
 		twr[i] = int(live[i].tower)
 	var r2 := UNIT_R * 2.0
+	# 0.31.165 (the Rift's longer lanes keep ~75 units alive by 5:30, 130 late on; every pair was 2,800 checks a tick, and
+	# 8,000): only the pairs in neighbouring SEP_CELL squares -- two units that touch are never further apart than one.
+	# Same pushes, in the order each unit's neighbours were listed (by index).
+	var cells := {}
+	var keys: Array[Vector2i] = []
+	keys.resize(n)
+	for i in n:
+		var k := Vector2i(floori(pos[i].x / SEP_CELL), floori(pos[i].y / SEP_CELL))
+		keys[i] = k
+		var lst = cells.get(k)
+		if lst == null:
+			cells[k] = PackedInt32Array([i])
+		else:
+			(lst as PackedInt32Array).append(i)
+			cells[k] = lst
 	for i in n:
 		var pa := pos[i]
 		var ta := twr[i]
-		for j in range(i + 1, n):
-			if twr[j] != ta:
-				continue
-			var off := pos[j] - pa
-			var dd := off.length_squared()                # (0.31.160: the square root only for the pairs that touch)
-			if dd < r2 * r2 and dd > 0.00000001:
-				var d := sqrt(dd)
-				var push := off / d * (r2 - d) * 0.5
-				pa -= push
-				pos[j] += push
+		var ck: Vector2i = keys[i]
+		for dx in 3:
+			for dy in 3:
+				var lst = cells.get(Vector2i(ck.x + dx - 1, ck.y + dy - 1))
+				if lst == null:
+					continue
+				for j in (lst as PackedInt32Array):
+					if j <= i or twr[j] != ta:
+						continue
+					var off := pos[j] - pa
+					var dd := off.length_squared()                # (0.31.160: the square root only for the pairs that touch)
+					if dd < r2 * r2 and dd > 0.00000001:
+						var d := sqrt(dd)
+						var push := off / d * (r2 - d) * 0.5
+						pa -= push
+						pos[j] += push
 		pos[i] = pa
 	for i in n:
 		live[i].pos = pos[i]
@@ -2439,9 +2408,9 @@ func _step_projectiles(dt: float) -> void:
 				if p.pos.distance_to(seg_closest(p.pos, w.a, w.b)) < w.r * 0.8:
 					blocked = true
 					break
-		# Gates only exist at the castle fronts (|z| = CASTLE_SHIFT + FRONT_Z): skip the check anywhere
-		# else (it was ~30 % of the projectile step, measured).
-		if not blocked and not bool(p.get("high", false)) and absf(p.pos.y) >= CASTLE_SHIFT + FRONT_Z - 3.0:
+		# Gates only exist in the keeps' walls (0.31.165: a ring Keep.R round each keep's middle): skip the check
+		# anywhere else (it was ~30 % of the projectile step, measured).
+		if not blocked and not bool(p.get("high", false)) and Land.keep_dist(p.pos) >= Keep.R - 3.0 and Land.keep_dist(p.pos) <= Keep.R + 3.0:
 			for g in gates:
 				if g.team != p.team and gate_blocks(g) and p.pos.distance_to(seg_closest(p.pos, g.a, g.b)) < float(g.get("r", WALL_R)) * 0.8:
 					hit_gate = g
@@ -2633,13 +2602,15 @@ func _step_world(dt: float) -> void:
 			continue
 		var open := false
 		if gate_blocks(g):
-			for u in units:
+			# (0.31.165: in a 5v5 only the units near it -- six gates, 80-130 units)
+			var near: Array = moba.units_near(g.c, GATE_OPEN_RADIUS) if moba != null else units
+			for u in near:
 				if u.team == g.team and alive(u) and u.pos.distance_to(g.c) < GATE_OPEN_RADIUS:
 					open = true
 					break
 			# It also swings open for an enemy walking out (lets_out).
 			if not open and g.has("in"):
-				for u in units:
+				for u in near:
 					if u.team != g.team and alive(u) and lets_out(g, u.pos) and u.pos.distance_to(g.c) < GATE_OPEN_RADIUS:
 						open = true
 						break
@@ -3701,13 +3672,8 @@ func _bot_climb(u: Dictionary) -> bool:
 	return true
 
 
-static func _lane_cell(p: Vector2) -> bool:
-	# On the island lane: its two bridges or the island between them.
-	if Land.island_off(p) < 0.5:
-		return true
-	for b in Land.bridges():
-		if bool(b.lane) and absf(p.x - (b.c as Vector2).x) <= float(b.half_w) + 0.6 and absf(p.y - (b.c as Vector2).y) <= float(b.half_len):
-			return true
+static func _lane_cell(_p: Vector2) -> bool:
+	# On the Siege field's island lane (its two bridges or the island between them): the Rift has none (0.31.165).
 	return false
 
 

@@ -24,7 +24,7 @@ const Sim = preload("res://scripts/siege/siege_sim.gd")
 const Moba = preload("res://scripts/siege/moba.gd")
 const Vision = preload("res://scripts/siege/moba_vision.gd")
 
-const Q := Vector2(28.0, -35.0)               # open ground on red's side (its Arcane camp's spot; the camps cleared)
+const Q := Vector2(14.0, -20.0)               # open ground on red's side of the river (0.31.165: the Rift; was (28, -35))
 
 var fails: Array = []
 
@@ -118,7 +118,7 @@ func _fog() -> void:
 	_run(s, 0.3)
 	check(s.nearest_enemy(b1, 40.0).get("id", "") == "r1", "...seen: he can")
 	# brush
-	var bp := Vector2(22.0, -33.5)                         # one of red's brush patches
+	var bp := Vector2(14.0, -42.5)                         # one of red's brush patches (0.31.165: the Rift's)
 	var bid: int = v.brush_at(bp)
 	check(bid >= 0 and v.brush_at(bp + Vector2(0, 5)) < 0, "red's side has its brush patches (%d in all)" % v.brushes.size())
 	r1.pos = bp
@@ -253,7 +253,7 @@ func _minions() -> void:
 	bm.mt = ""
 	bm.mt_pri = 9
 	var hid_m: Dictionary = _add_minion(t, 1, "caster", Vector2.ZERO, false)
-	var bp := Vector2(-22.5, 12.0)                        # one of blue's brush patches
+	var bp := Vector2(-14.0, 11.0)                        # one of blue's brush patches (0.31.165: the Rift's)
 	bm.pos = bp + Vector2(0, 4.5)
 	hid_m.pos = bp
 	_run(t, 0.5)

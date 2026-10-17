@@ -212,8 +212,8 @@ func _ultimates() -> void:
 	s = r[0]
 	me = r[1]
 	foe = s.by_id["r1"]
-	foe.pos = Vector2(-36.0, 27.0)                             # (0.31.158: in your sight -- the fog)
-	me.pos = Vector2(-36.0, 40.0)
+	foe.pos = Vector2(-20.0, 15.0)                             # (0.31.158: in your sight -- the fog; 0.31.165: open
+	me.pos = Vector2(-20.0, 28.0)                              # ground on the Rift)
 	me.face = 0.0                                              # facing away: it turns to the hero
 	_tough(foe)
 	s.moba.vision._update()
@@ -353,7 +353,8 @@ func _shop() -> void:
 # ---------------------------------------------------------------- 4. the jungle
 func _jungle() -> void:
 	var s = _new("knight", 8)
-	check(s.moba.camps.size() == 9 and s.moba.camps.filter(func(c): return str(c.kind) == "lord").size() == 1, "nine camps: four a side and the Bone Lord")
+	check(s.moba.camps.size() == 13 and s.moba.camps.filter(func(c): return str(c.kind) == "lord").size() == 1,
+		"thirteen camps: six a side and the Bone Lord (0.31.165: the Rift; nine until then)")
 	var mirrored := true
 	for c in s.moba.camps:
 		if int(c.side) == 0:
@@ -363,8 +364,8 @@ func _jungle() -> void:
 	check(s.units.filter(func(u): return u.has("mon")).is_empty(), "no camps before 0:30")
 	_run(s, 1.0)
 	var mons: Array = s.units.filter(func(u): return u.has("mon"))
-	check(mons.size() == 24 and mons.all(func(u): return int(u.team) == 2) and not s.moba.camps.filter(func(c): return str(c.kind) == "lord")[0].alive,
-		"at 0:30 the eight camps (24 skeletons, team 2); the Lord not yet")
+	check(mons.size() == 36 and mons.all(func(u): return int(u.team) == 2) and not s.moba.camps.filter(func(c): return str(c.kind) == "lord")[0].alive,
+		"at 0:30 the twelve camps (36 skeletons, team 2); the Lord not yet")
 	# a scene: no waves, heroes home
 	var j = _new("knight", 9)
 	j.moba.wave_at = INF

@@ -30,11 +30,13 @@ func open(a) -> void:
 		app.close_modal(), 56.0 + float(app.safe_top), 24.0)
 	var body: VBoxContainer = w.body
 	# (0.31.155-0.31.163: "TEST MODE" -- 0.31.164, Kevin: "5v5 only": it's the game's match now, PLAY opens this)
-	UI2.body(body, "You and four bot heroes against five. Every 30 seconds each castle sends minions down the three lanes. "
-		+ "Two towers guard each lane, and your gates are behind them. Level up to 10 by fighting near minions; pick an "
-		+ "upgrade each level, and at level 6 your ULTIMATE. Earn gold and buy items in your castle. Skeleton camps in the "
-		+ "jungle give gold and buffs; the Bone Lord on the island blesses your whole side. Break their towers and a gate, "
-		+ "then defeat their King on his throne -- he's their heart, and he hits back.", 12, UI2.SOFT)
+	# (0.31.165: the Rift -- three towers a lane, a keep with a gate at each lane's end and two King towers inside)
+	UI2.body(body, "You and four bot heroes against five. Every 30 seconds each keep sends minions down the three lanes. "
+		+ "Three towers guard each lane, and a gate of your keep stands at its end. Level up to 10 by fighting near "
+		+ "minions; pick an upgrade each level, and at level 6 your ULTIMATE. Earn gold and buy items in your keep. "
+		+ "Skeleton camps in the jungle give gold and buffs; the Bone Lord in the river's west pit blesses your whole "
+		+ "side. Break a lane's towers and its gate, then the two King towers inside, then defeat their King on his "
+		+ "throne -- he's their heart, and he hits back.", 12, UI2.SOFT)
 	UI2.text(body, "PICK YOUR HERO", 16, UI2.GOLD)
 	var holder := CenterContainer.new()
 	holder.size_flags_horizontal = Control.SIZE_EXPAND_FILL

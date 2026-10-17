@@ -8,28 +8,30 @@ extends RefCounted
 #   villagers. Levels 1-10 from XP (minions dying near you, hero kills, towers); every level a little more health and
 #   damage, and a choice of 1 of 3 upgrades. A hero who falls comes back as himself at his castle, later the higher his
 #   level; standing in your own castle heals you.
-# - Lanes: the three crossings -- the west bridge, the island, the east bridge -- each a track of points from one
-#   castle's gate to the other's (the dirt paths). Every 30 s each castle sends a group down each lane: 1 Priest, 2
+# - Lanes (0.31.165: the Rift, siege_land.gd LANES -- the middle straight down the field, the two side lanes out along
+#   its edges; until then the Siege field's west bridge, island and east bridge): each a track of points from one
+#   keep's gate to the other's (the dirt paths). Every 30 s each castle sends a group down each lane: 1 Priest, 2
 #   Archers, 1 Knight (WAVE). Minions march, fight what's in front of them and push on; a wave that's still alive when
 #   the next comes is simply caught up with -- waves stack.
-# - Towers (League's rules): two per lane per side (outer, inner) beside the track. A tower shoots the nearest enemy
+# - Towers (League's rules): three per lane per side (0.31.165; two until then) beside the track, and two King towers
+#   in each keep (TOWERS_BLUE). A tower shoots the nearest enemy
 #   minion in range; an enemy hero who hurts one of its heroes in range becomes its target at once (call for help);
 #   otherwise heroes only when no minion is in range. Shots home in (no dodging); on a hero each shot in a row hits
-#   harder (+40 %, up to 3 times), on a minion a share of its health (a Knight 45 %, the others 70 %). A lane's inner
-#   tower can't be damaged while its outer one stands; a castle gate can't be damaged while an inner tower of a lane
-#   that leads to it stands. Without your minions near it a tower takes a third of the damage (backdoor protection).
+#   harder (+40 %, up to 3 times), on a minion a share of its health (a Knight 45 %, the others 70 %). A lane's tower
+#   can't be damaged while the one before it stands; a keep's gate can't be damaged while the third tower of the lane
+#   that ends at it stands; the King towers while all three gates stand. Without your minions near it a tower takes a third of the damage (backdoor protection).
 #   Only basic attacks (and arrows / fire) hurt towers.
 # - The heart is the King (0.31.156, Kevin: "Have the enemy king be the "heart" and players will have to defeat him"):
-#   each King sits on his own throne, KING_HP of health, untouchable until one of his castle's front gates is down;
-#   then he can be hit (basic attacks, arrows, fire) and he fights back -- a slam round him every KING_EVERY s. Left
+#   each King sits on his own throne, KING_HP of health, untouchable until both his King towers are down (0.31.165;
+#   until then one of his castle's front gates); then he can be hit (basic attacks, arrows, fire) and he fights back -- a slam round him every KING_EVERY s. Left
 #   alone a while he heals. Defeat theirs and the match is won; at time (15 minutes since 0.31.157), the side that did more to the other's
 #   King wins, then more towers down, then hero knockouts. No rescues, no lifting. When an enemy gate is down two of
-#   each side's bots go for that King; bots near their own King under attack defend him.
+#   each side's bots go for that keep's King towers, then the King; bots near their own King under attack defend him.
 # - 0.31.157 (Kevin: "Build the other 3 mechanics now" -- the ultimates, the jungle, the gold shop):
 #   * ULTIMATES: at level ULT_LEVEL every hero gets his own (ULTS; the ULT button), stronger from ULT_RANK2. Bots use
 #     theirs when it's worth it (_bot_ult).
-#   * THE JUNGLE: camps of KayKit skeletons between and beside the lanes (CAMPS_BLUE, mirrored for red; the Bone Lord on
-#     the island). They're team 2 -- everyone's enemy -- but stand still until hit; then the camp fights whoever hit it
+#   * THE JUNGLE: camps of KayKit skeletons between and beside the lanes (CAMPS_BLUE, mirrored for red; the Bone Lord in
+#     the river's west pit since 0.31.165, on the island until then). They're team 2 -- everyone's enemy -- but stand still until hit; then the camp fights whoever hit it
 #     while he's within its LEASH, and walks home and heals once he's gone. Gold and XP for each; the two buff camps
 #     give their killer a buff (ARCANE: abilities and the ultimate recharge faster; EMBER: harder hits); the Bone Lord
 #     gives his killers' whole side gold, XP and the LORD buff (harder hits; their minions come out stronger). Towers
@@ -56,21 +58,20 @@ const HERO_LINE := {"knight":"Shield up: blocks everything from the front.", "ba
 	"necromancer":"Drains enemies to heal friends; raises the fallen."}
 
 # the lanes as world points from the blue (team 0) gate to the red (team 1) gate; red walks them backwards. Point
-# symmetric: lane 0 backwards and mirrored is lane 2 (the castles are point mirrors).
-const LANES := [
-	[Vector2(-7, 41), Vector2(-9.5, 39), Vector2(-13.5, 34.5), Vector2(-15.5, 29), Vector2(-15.8, 22), Vector2(-18, 14.5),
-		Vector2(-22, 9.5), Vector2(-24, 6.6), Vector2(-24, -4.7), Vector2(-21, -8.5), Vector2(-20, -13.5), Vector2(-19.5, -21),
-		Vector2(-19, -28.5), Vector2(-13, -35), Vector2(-5, -38.5), Vector2(-7, -41)],
-	[Vector2(7, 41), Vector2(5, 38.5), Vector2(2, 31), Vector2(0.5, 22), Vector2(0, 13.6), Vector2(0, -13.6), Vector2(-0.5, -22),
-		Vector2(-2, -31), Vector2(-5, -38.5), Vector2(-7, -41)],
-	[Vector2(7, 41), Vector2(5, 38.5), Vector2(13, 35), Vector2(19, 28.5), Vector2(19.5, 21), Vector2(20, 13.5), Vector2(21, 8.5),
-		Vector2(24, 4.7), Vector2(24, -6.6), Vector2(22, -9.5), Vector2(18, -14.5), Vector2(15.8, -22), Vector2(15.5, -29),
-		Vector2(13.5, -34.5), Vector2(9.5, -39), Vector2(7, -41)],
-]
+# symmetric: lane 0 backwards and mirrored is lane 2. 0.31.165: the Rift's (siege_land.gd LANES; until then the Siege
+# field's three crossings -- the west bridge, the island, the east bridge)
+const Land = preload("res://scripts/siege/siege_land.gd")
+const Keep = preload("res://scripts/siege/keep.gd")
+const LANES := Land.LANES
 const LANE_NAMES := ["west", "middle", "east"]
-# blue's towers [lane, tier (1 outer, 2 inner), position] -- beside the track, on its inner side; red's are the mirror
-const TOWERS_BLUE := [[0, 1, Vector2(-15.0, 14.5)], [0, 2, Vector2(-12.5, 28.5)], [1, 1, Vector2(3.3, 19.0)],
-	[1, 2, Vector2(5.2, 30.0)], [2, 1, Vector2(17.0, 13.5)], [2, 2, Vector2(16.2, 26.0)]]
+# blue's towers [lane, tier, position] -- beside the track, on its inner side; red's are the mirror. 0.31.165 (Kevin: "3
+# towers per lane"): tier 1 outer, 2 inner, 3 the gate's (League's inhibitor turret), and tier 4 the two King towers in the
+# keep (lane -1: League's nexus turrets). Each lane's tier n can't be hurt while its tier n - 1 stands; the gate at a
+# lane's end while its tier 3 does; the King towers while all three gates stand; the King while a King tower does.
+const TOWERS_BLUE := [[0, 1, Vector2(-42.3, 34.0)], [0, 2, Vector2(-40.8, 57.0)], [0, 3, Vector2(-23.1, 77.6)],
+	[1, 1, Vector2(4.0, 30.0)], [1, 2, Vector2(4.0, 54.0)], [1, 3, Vector2(4.0, 74.5)],
+	[2, 1, Vector2(42.3, 34.0)], [2, 2, Vector2(40.8, 57.0)], [2, 3, Vector2(23.1, 77.6)],
+	[-1, 4, Keep.KING_TOWERS[0]], [-1, 4, Keep.KING_TOWERS[1]]]
 
 # 0.31.158 (Kevin: "Balance the minions better, the game ended up have tons of priests. Also minions need to work like
 # LoL"): League's waves -- 3 melee (Knights) and 3 casters (Archers); a siege minion (a battle-mage: tanky, ranged fire)
@@ -115,7 +116,7 @@ const RESPAWN_LVL := 2.6                                    # (1.6 until 0.31.15
 const FOUNTAIN := 0.06                                      # of max health a second, in your own castle
 const TOWER_R := 1.5
 const TOWER_RANGE := 11.5
-const TOWER_HP := [0.0, 900.0, 1150.0]                     # (1000 / 1300 until 0.31.157)
+const TOWER_HP := [0.0, 900.0, 1150.0, 1300.0, 1200.0]     # by tier (1000 / 1300 until 0.31.157; tiers 3 and 4 since 0.31.165)
 # a lane minion's blow on a tower or a gate, by kind (0.31.157: x1.5 for all; 0.31.158 -- six to a wave now, and League's
 # towers stand against a wave without heroes: a lone wave takes about a third of an outer tower, siege minions are
 # the ones that hurt)
@@ -143,7 +144,7 @@ const PLATES := 5
 const PLATES_UNTIL := 420.0                                 # 7:00
 const GOLD_PLATE := 60                                      # to each hero of the side near (12 m) when a plate falls
 const GOLD_TOWER_LOCAL := 200                               # shared by the side's heroes within 18 m (and the killing blow)
-const GOLD_TOWER_GLOBAL := [0, 50, 25]                      # every hero of the side: outer 50, inner 25 (League's bounties)
+const GOLD_TOWER_GLOBAL := [0, 50, 25, 25, 25]              # every hero of the side, by tier (League's bounties: outer 50, the rest 25)
 const GOLD_FIRST_TOWER := 150                               # the match's first tower: on top, for the local share
 const TOWER_LOCAL_R := 18.0
 const GATE_BACK := 180.0                                    # a broken gate stands again after this (League's inhibitor: 5 min)
@@ -162,7 +163,8 @@ const KING_EVERY := 1.6
 const KING_REGEN := 0.002                                   # of his health a second, once left alone KING_QUIET s (0.015
 const KING_QUIET := 10.0                                    # and 6 s until 0.31.157: a King got back to full between pushes)
 const GATE_HP_5V5 := 800.0                                  # 0.31.157: the castle gates in 5v5 (1100 in the siege)
-const MATCH_5V5 := 900.0                                    # 0.31.157: 15 minutes (12 until now -- with the jungle, gold and
+const MATCH_5V5 := 1200.0                                   # 0.31.165: 20 minutes on the Rift (bot matches seldom took a lane's three
+                                                            # towers, its gate and both King towers in 15). 0.31.157: 15 minutes (12 until then -- with the jungle, gold and
                                                             # ultimates, bot matches seldom got to a King in 12)
 const KING_GUARD := 14.0                                    # enemies this near: he's under attack (bots come to help)
 
@@ -271,16 +273,18 @@ const BUILDS := {
 const JUNGLE := -2                                          # a hero's "lane": the jungler
 const CAMP_FIRST := 30.0
 const LORD_FIRST := 300.0                                   # the Bone Lord rises at 5:00
-# blue's camps (red's are the point mirror): the Bone Pack between the west lane and the middle, the Grave Archers
-# between the middle and the east lane; the two buff camps out in the open fields beyond the side lanes, on blue's
-# half (each spot the most open one round there -- tools: rocks and trees in the way stopped bots' arrows)
+# blue's camps (red's are the point mirror). 0.31.165, the Rift: in each jungle quadrant of blue's half a Bone Pack near
+# the river, a Grave Archers near the keep, and a buff camp in the middle -- the Arcane Wraith on the west, the Ember
+# Brute on the east -- each in its pocket of ridges (siege_land.gd RIDGES_BLUE); the Bone Lord in the west pit.
 const CAMPS_BLUE := [
-	{"kind":"pack", "p":Vector2(-8.5, 16.0)},
-	{"kind":"archers", "p":Vector2(8.5, 24.0)},
-	{"kind":"arcane", "p":Vector2(-28.0, 35.0)},
-	{"kind":"ember", "p":Vector2(28.5, 29.0)},
+	{"kind":"pack", "p":Vector2(-30.0, 21.0)},
+	{"kind":"archers", "p":Vector2(-14.5, 69.0)},
+	{"kind":"arcane", "p":Vector2(-24.0, 46.5)},
+	{"kind":"pack", "p":Vector2(30.0, 25.0)},
+	{"kind":"archers", "p":Vector2(15.5, 68.0)},
+	{"kind":"ember", "p":Vector2(25.0, 48.0)},
 ]
-const BOSS_P := Vector2(-7.5, -0.5)                         # the island's west end, beside the old tower
+const BOSS_P := Vector2(-Land.POOL_X, -3.877)               # the west pit's island (Land.pit_c(0); the island until 0.31.165)
 const CAMP_KINDS := {
 	"pack": {"name":"Bone Pack", "mobs":[["warrior", Vector2(0, 0)], ["minion", Vector2(-1.7, 1.2)], ["minion", Vector2(1.7, 1.2)]], "respawn":75.0},
 	"archers": {"name":"Grave Archers", "mobs":[["archer", Vector2(-1.3, 0)], ["archer", Vector2(1.3, 0)], ["minion", Vector2(0, 1.5)]], "respawn":75.0},
@@ -397,7 +401,7 @@ func begin(sim, my_hero: String, seed_value: int) -> void:
 	for b in TOWERS_BLUE:
 		_add_tower(0, int(b[0]), int(b[1]), b[2])
 	for b in TOWERS_BLUE:
-		_add_tower(1, 2 - int(b[0]), int(b[1]), -(b[2] as Vector2))
+		_add_tower(1, 2 - int(b[0]) if int(b[0]) >= 0 else -1, int(b[1]), -(b[2] as Vector2))
 	for g in s.gates:                     # 0.31.157: the gates (League's inhibitors) a little easier to break
 		if str(g.get("kind", "")) != "jail":
 			g.hp = GATE_HP_5V5
@@ -412,13 +416,6 @@ func begin(sim, my_hero: String, seed_value: int) -> void:
 		s.obstacles.append({"p":o.pos, "r":KING_R, "kind":"moba_king", "kg":t, "team":t})
 	s._build_buckets()
 	s._build_nav()                        # (the towers block the way and stop arrows)
-	for t in 2:                           # the island lane at its plain cost: minions walk mid
-		var grid: AStarGrid2D = s.nav[t]
-		for ix in range(grid.region.position.x, grid.region.end.x):
-			for iz in range(grid.region.position.y, grid.region.end.y):
-				var cc := Vector2i(ix, iz)
-				if s._lane_cell(s.nav_point(cc)) and s.water_depth(s.nav_point(cc)) <= 0.15:
-					grid.set_point_weight_scale(cc, 1.0)
 	# the heroes: yours, then the bots' (no two the same on a side)
 	var pool: Array = HERO_ORDER.duplicate()
 	var lanes := [[-1, 0, 1, 2, JUNGLE], [0, 1, 2, JUNGLE, 1]]       # 0.31.157: one jungler a side
@@ -723,6 +720,8 @@ func vulnerable(tw: Dictionary) -> bool:
 		return false
 	if int(tw.tier) == 1:
 		return true
+	if int(tw.tier) == 4:                              # 0.31.165: a King tower, once a gate of its keep is down
+		return _gates_down(int(tw.team)) > 0
 	for o in towers:
 		if int(o.team) == int(tw.team) and int(o.lane) == int(tw.lane) and int(o.tier) == int(tw.tier) - 1 and not bool(o.dead):
 			return false
@@ -736,7 +735,8 @@ func towers_down(team: int) -> int:
 	return n
 
 func gate_open(g: Dictionary) -> bool:
-	# a castle gate can be hit once an inner tower of a lane that ends at it is down (the jail: once a front gate is)
+	# a keep's gate can be hit once the third tower of the lane that ends at it is down (0.31.165: its tier 3; the inner
+	# tower, tier 2, on the Siege field) (the jail: once a front gate is)
 	if str(g.get("kind", "")) == "jail":
 		for o in s.gates:
 			if int(o.team) == int(g.team) and str(o.get("kind", "")) != "jail" and not s.gate_blocks(o):
@@ -747,7 +747,7 @@ func gate_open(g: Dictionary) -> bool:
 		if end.distance_to(g.c) > 6.0:
 			continue
 		for tw in towers:
-			if int(tw.team) == int(g.team) and int(tw.lane) == l and int(tw.tier) == 2 and bool(tw.dead):
+			if int(tw.team) == int(g.team) and int(tw.lane) == l and int(tw.tier) == 3 and bool(tw.dead):
 				return true
 	return false
 
@@ -940,13 +940,20 @@ func king_pos(t: int) -> Vector2:
 	return s.oracles[t].pos
 
 func king_open(t: int) -> bool:
-	# hittable once a front gate of his castle is down
+	# hittable once both King towers of his keep are down (0.31.165; until then once a gate of his castle was)
 	if bool(kings[t].dead):
 		return false
-	for g in s.gates:
-		if int(g.team) == t and str(g.get("kind", "")) != "jail" and not s.gate_blocks(g):
-			return true
-	return false
+	for tw in towers:
+		if int(tw.team) == t and int(tw.tier) == 4 and not bool(tw.dead):
+			return false
+	return true
+
+func king_towers_up(t: int) -> Array:
+	var out := []
+	for tw in towers:
+		if int(tw.team) == t and int(tw.tier) == 4 and not bool(tw.dead):
+			out.append(tw)
+	return out
 
 func king_frac(t: int) -> float:
 	return float(kings[t].hp) / float(kings[t].max_hp)
@@ -1320,16 +1327,27 @@ func _think_hero(u: Dictionary) -> void:
 	if not th.is_empty() and (u.pos as Vector2).distance_to(king_pos(int(u.team))) < 45.0 and u.hp > u.max_hp * 0.35:
 		_fight_h(u, th)
 		return
-	# their King open (a gate of his down): the King runners go for him -- their heroes in the way first
+	# their keep open (a gate of it down): the King runners go for its King towers, then the King once they're down
+	# (0.31.165; until then the King himself once a gate was down) -- their heroes in the way first
 	var eteam := 1 - int(u.team)
-	if king_open(eteam) and ((bool(u.get("kr", false)) and u.hp > u.max_hp * 0.45) or (_end_push(int(u.team)) and u.hp > u.max_hp * 0.35)):
+	var kts: Array = king_towers_up(eteam) if _gates_down(eteam) > 0 else []
+	if (king_open(eteam) or not kts.is_empty()) and ((bool(u.get("kr", false)) and u.hp > u.max_hp * 0.45) \
+			or (_end_push(int(u.team)) and u.hp > u.max_hp * 0.35)):
 		for o in units_near(u.pos, reach + 3.0):
 			if int(o.team) == eteam and s.alive(o) and bool(o.get("hero", false)) and (o.pos as Vector2).distance_to(u.pos) < reach + 3.0 \
 					and can_see(int(u.team), o):
 				_fight_h(u, o)
 				return
-		_hit_point(u, king_pos(eteam), KING_R)
-		return
+		if king_open(eteam):
+			_hit_point(u, king_pos(eteam), KING_R)
+			return
+		var kt: Dictionary = kts[0]
+		for o in kts:
+			if (o.p as Vector2).distance_to(u.pos) < (kt.p as Vector2).distance_to(u.pos):
+				kt = o
+		if str(kt.target) != str(u.id) or _our_minions_near(int(u.team), kt.p) or u.hp > u.max_hp * 0.7:
+			_hit_structure(u, kt)
+			return
 	# 0.31.157: the ultimate when it's worth it (before running home: GRACE, BULWARK, UNDYING are for hard moments)
 	if _bot_ult(u):
 		return

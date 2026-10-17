@@ -1,10 +1,10 @@
 extends SceneTree
 # The Meshy castle kits (0.31.74, castle_kit.gd): every piece and floor texture is there, each team has a kit, and the
-# props stand where nobody needs to walk -- on their level, off the stairs, the wall-walk and the way to the dungeon,
-# clear of the gates, the hat shops and the workshop. The castle's layout itself is the sim's and unchanged
-# (siege_land_check covers it).
+# props stand where nobody needs to walk (0.31.165: in the Rift's keeps -- see below). The keep's layout itself is the
+# sim's (siege_land_check covers it).
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 const Castle = preload("res://scripts/siege/siege_castle.gd")
+const Keep = preload("res://scripts/siege/keep.gd")
 const CastleKit = preload("res://scripts/siege/castle_kit.gd")
 var fails := []
 
@@ -59,43 +59,25 @@ func _init() -> void:
 			check(ResourceLoader.exists(CastleKit.DIR + "floors/%s.jpg" % f[0]), "%s: %s floor texture" % [style, area])
 		for fm in kit.fires:
 			check(models.has(fm), "%s: fires on a model it uses (%s)" % [style, fm])
-		# Props: on their level, clear of where people walk.
+		# 0.31.165: the Rift's keeps (keep.gd) build from the kit too -- their props and fountain models are the kit's,
+		# inside the ring, clear of the King towers, the throne, the fountain's ring and the way from each gate to the
+		# King. (Until then: the Siege castles' props on their terraces, off the stairs, the wall-walk and the way to the
+		# dungeon -- that castle isn't built any more.)
 		var s = Sim.new()
 		s.setup(2, 3)
-		for pr in kit.props:
+		check(ResourceLoader.exists(CastleKit.DIR + Keep.FOUNTAIN_MODEL + ".glb"), "%s: the keep's fountain model" % style)
+		for pr in Keep.PROPS:
 			var spot: Vector2 = pr[1]
-			var y := float(pr[2])
 			var name := "%s %s at %s" % [style, pr[0], spot]
-			var w: Vector2 = Sim._c(0, spot)
-			check(absf(Sim.height_at(w) - y) < 0.06, "%s stands on its level (%.2f, ground %.2f)" % [name, y, Sim.height_at(w)])
-			var clear := true
-			var why := ""
-			for st in Castle.STAIRS:
-				if _in_rect(spot, float(st.x0), float(st.x1), float(st.z0), float(st.z1), 0.6):
-					clear = false
-					why = "on a stair"
-			if _in_rect(spot, -Castle.WALK_X, Castle.WALK_X, Castle.FRONT_Z, Castle.WALK_Z1, 0.3):
-				clear = false
-				why = "on the wall-walk"
-			for gx in Castle.GATE_X:
-				if spot.distance_to(Vector2(float(gx), Castle.FRONT_Z + 1.0)) < 2.6:
-					clear = false
-					why = "in a gateway"
-			for hs in Castle.HAT_SHOPS:
-				if spot.distance_to(hs.b) < float(hs.r) + 1.2 or spot.distance_to(hs.door) < 1.4:
-					clear = false
-					why = "at the %s shop" % hs.cls
-			for bd in Castle.BUILDINGS:
-				if spot.distance_to(bd.p) < float(bd.r) + 1.2:
-					clear = false
-					why = "at the workshop"
-			# The way to the dungeon: from the west stairs' top along the first terrace to its doorway.
-			if spot.y > Castle.L1_Z + 2.5 and spot.y < Castle.DOOR_Z1 + 0.6 and spot.x < -7.5:
-				clear = false
-				why = "on the way to the dungeon"
-			if spot.distance_to(Castle.THRONE) < Sim.THRONE_RADIUS + 1.2:
-				clear = false
-				why = "at the throne"
-			check(clear, "%s is out of the way%s" % [name, "" if clear else " (" + why + ")"])
+			check(ResourceLoader.exists(CastleKit.DIR + str(pr[0]) + ".glb"), "%s: its model" % name)
+			var clear := Keep.inside(spot) and spot.distance_to(Keep.C) < Keep.R - 1.8
+			for kt in Keep.KING_TOWERS:
+				clear = clear and spot.distance_to(kt) > 3.0
+			clear = clear and spot.distance_to(Keep.THRONE_SEAT) > 2.2 and spot.distance_to(Keep.KING) > 2.5
+			clear = clear and spot.distance_to(Keep.FOUNTAIN) > Keep.FOUNTAIN_R + 1.0
+			for i in Keep.GATE_ANG.size():
+				var g: Vector2 = Keep.gate_c(i)
+				clear = clear and spot.distance_to(Sim.seg_closest(spot, g, Keep.KING)) > 2.6
+			check(clear, "%s is out of the way" % name)
 	print("CASTLE_KIT_PASS" if fails.is_empty() else "CASTLE_KIT_FAIL %s" % [fails])
 	quit(0 if fails.is_empty() else 1)

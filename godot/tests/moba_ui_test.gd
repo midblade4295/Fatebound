@@ -216,7 +216,7 @@ func _process(delta: float) -> bool:
 			if t_phase > 1.2:
 				var s = app.siege
 				var lord: Dictionary = s.sim.moba._lord_unit()
-				check(not lord.is_empty() and s.view.actors.has(lord.id), "the Bone Lord on the island")
+				check(not lord.is_empty() and s.view.actors.has(lord.id), "the Bone Lord in his pit")
 				_shot("moba_lord")
 				# 0.31.158: the fog -- you in the jungle, one red hero far off in red's, one a few steps from you
 				var me: Dictionary = s.sim.by_id["you"]
@@ -229,7 +229,7 @@ func _process(delta: float) -> bool:
 					r.move = Vector2.ZERO
 					if not s.sim.alive(r):
 						s.sim._respawn(r)
-				r1.pos = Vector2(28.0, -35.0)
+				r1.pos = Vector2(14.0, -20.0)
 				r2.pos = me.pos + Vector2(4.0, -3.0)
 				s.sim.moba.wave_at = s.sim.time                  # (0.31.159: a wave, for the minions' bodies)
 				s.view.snap_camera()
@@ -245,7 +245,7 @@ func _process(delta: float) -> bool:
 				var me: Dictionary = s.sim.by_id["you"]
 				var v = s.sim.moba.vision
 				check(v.wards.any(func(w): return str(w.owner) == "you") and s.view._ward_nodes.size() >= 1, "WARD tapped: a ward at your feet, shown")
-				check(s.view.get_node_or_null("FogOfWar") is Decal and s.view.fog_alpha_at(me.pos) == 0 and s.view.fog_alpha_at(Vector2(28.0, -35.0)) == s.view.FOG_ALPHA,
+				check(s.view.get_node_or_null("FogOfWar") is Decal and s.view.fog_alpha_at(me.pos) == 0 and s.view.fog_alpha_at(Vector2(14.0, -20.0)) == s.view.FOG_ALPHA,
 					"the fog: clear round you, dark over red's jungle")
 				var a1: Dictionary = s.view.actors.get("r1", {})
 				var a2: Dictionary = s.view.actors.get("r2", {})
@@ -300,7 +300,7 @@ func _process(delta: float) -> bool:
 func has_moba_status(s) -> bool:
 	# (drawn, not nodes: the HUD's status draws from these)
 	var me: Dictionary = s.sim.by_id["you"]
-	return int(me.level) >= 2 and s.sim.moba.towers.size() == 12
+	return int(me.level) >= 2 and s.sim.moba.towers.size() == 22        # (0.31.165: the Rift's eleven a side)
 
 func _finish() -> bool:
 	print("MOBA_UI_PASS" if fails.is_empty() else "MOBA_UI_FAIL %s" % str(fails))

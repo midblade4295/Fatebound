@@ -6,6 +6,7 @@ const Land = preload("res://scripts/siege/siege_land.gd")
 const Castle = preload("res://scripts/siege/siege_castle.gd")
 const CastleMesh = preload("res://scripts/siege/castle_mesh.gd")
 const CastleKit = preload("res://scripts/siege/castle_kit.gd")
+const Keep = preload("res://scripts/siege/keep.gd")       # 0.31.165: the Rift's keeps (the Siege castles' builders are unused)
 static var CASTLE_KITS := true      # 0.31.74 Meshy castle kits (castle_kit.gd); false = the KayKit castle (tools compare)
 const PATH_TEX := preload("res://assets/terrain/path.png")       # (the castle floors' herringbone when there's no kit)
 const DIRT_TEX := preload("res://assets/terrain/dirt.png")       # 0.31.126: the map's dirt paths (tools/make_dirt_texture.py)
@@ -189,11 +190,14 @@ func setup_steps(s) -> Array:
 			["terrain+water", _build_terrain],
 			["outer land", _build_outer_land],
 			["foliage", _build_foliage],
-			["castle 0", func():
-				_build_castle(0)
-				_merge_kit(0)],          # per castle, so the one off-screen is culled as a whole
-			["castle 1", func():
-				_build_castle(1)
+			["ridges+fords", func():
+				_build_ridges()
+				_build_fords()],
+			["keep 0", func():
+				_build_keep(0)
+				_merge_kit(0)],          # per keep, so the one off-screen is culled as a whole
+			["keep 1", func():
+				_build_keep(1)
 				_merge_kit(1)],
 			["props+nodes+stands", func():
 				_build_props()
@@ -339,12 +343,15 @@ func _build_ambience() -> void:
 	_motes.visibility_aabb = AABB(Vector3(-24, -4, -24), Vector3(48, 10, 48))
 	_motes.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(_motes)
-	# Wall torches in each dungeon: a warm, flickering light (the KayKit RPG Tools torch).
+	# Wall torches either side of each keep's middle gate, on the wall's inner face: a warm, flickering light (the KayKit
+	# RPG Tools torch). (In each Siege castle's dungeon until 0.31.165.)
 	var torch_scene := Stage.scene("res://assets/kaykit/tools/torch.gltf")
 	for t in 2:
-		for spot in [[Vector2(-24.5, 23.0), Vector2(0.0, -1.0)], [Vector2(-32.0, 16.0), Vector2(1.0, 0.0)]]:
-			var p: Vector2 = Sim._c(t, spot[0])
-			var into: Vector2 = Sim._c(t, spot[0] + spot[1]) - p
+		var gm: Vector2 = Keep.gate_c(1)
+		for spot in [gm + Vector2(-4.3, 1.4), gm + Vector2(4.3, 1.4)]:
+			var into0: Vector2 = (Keep.C - spot).normalized()
+			var p: Vector2 = Sim._m(t, spot)
+			var into: Vector2 = Sim._m(t, spot + into0) - p
 			var fy := Sim.height_at(p + into * 0.6) + 1.9
 			if torch_scene != null:
 				var tm: Node3D = torch_scene.instantiate()
@@ -596,7 +603,7 @@ func _sync_ripples(dt: float) -> void:
 			_rip_prev.erase(u.id)
 			continue
 		var p: Vector2 = u.pos
-		var wet := Sim.water_depth(p) > 0.12 and absf(p.x) < RIP_HALF - 0.5
+		var wet := Sim.water_depth(p) > 0.05 and absf(p.x) < RIP_HALF - 0.5     # (0.31.165: the Rift's shallow river)
 		var last: Array = _rip_prev.get(u.id, [p, false])
 		var spd: float = (p - (last[0] as Vector2)).length() / maxf(dt, 0.001)
 		if wet and drops.size() < 16:
@@ -1300,8 +1307,8 @@ static func _foliage_ok(p: Vector2, mask: Image, obstacles: Array, allow_slope :
 		return false
 	if Land.shore(p) < 0.9 or Land.edge_dist(p) > -0.9 or Land.on_bridge(p, 0.6):
 		return false
-	if absf(p.x) <= Sim.CASTLE_HX + 1.5 and absf(p.y) >= Sim.CASTLE_SHIFT + Sim.FRONT_Z - 1.5:
-		return false
+	if Land.keep_dist(p) < Keep.R + 1.5:
+		return false                          # (0.31.165: the keeps' floors)
 	if Land.in_dungeon_pit(p, 1.5):
 		return false                          # the dungeon wing's floor and walls (Kevin: grass on the floor)
 	var r := Land.bake_rect()
@@ -1395,7 +1402,7 @@ func _plan_foliage() -> Dictionary:
 			if Land.shore(q) > 0.9 and Land.edge_dist(q) < -0.9:
 				out[FLOWERS[rng.randi() % FLOWERS.size()]].append(_foliage_xf(q, rng, 2.0, 2.6))
 	# 3. Clumps across the fields.
-	for c in 520:
+	for c in int(520.0 * Sim.HALF_W * Sim.HALF_L / (44.0 * 70.0)):     # (520 on the 88 x 140 m Siege field: as dense on the Rift)
 		var cp := Vector2(rng.randf_range(-Sim.HALF_W, Sim.HALF_W), rng.randf_range(-Sim.HALF_L, Sim.HALF_L))
 		for k in rng.randi_range(2, 5):
 			tuft.call(cp + Vector2(rng.randf_range(-0.8, 0.8), rng.randf_range(-0.8, 0.8)))
@@ -2978,6 +2985,312 @@ func _build_castle(t: int) -> void:
 	_place(HEX + "wheelbarrow.gltf", Vector3(wb.x, 0, wb.y), face + 0.8, 3.0)
 	stock_piles.append(piles)
 
+# ---------- 0.31.165: the Rift's keeps (keep.gd), ridges and fords (siege_land.gd) ----------
+func _build_keep(t: int) -> void:
+	# A keep: its paved floor; the kit's curtain wall along the sim's ring (so collision and visuals agree), a tower on
+	# every third joint; a gatehouse with doors at each gate (they swing open for the keep's own side, break into
+	# rubble -- the gates are League's inhibitors); the throne with the kit's canopy behind it and a carpet down to the
+	# middle gate; the fountain at the back where heroes come back.
+	var kit: Dictionary = CastleKit.kit(t)
+	var face := 0.0 if t == 0 else PI
+	var cen: Vector2 = Sim._m(t, Keep.C)
+	_kit_skip = CASTLE_KITS and _kit_merged.has(t)
+	_keep_floor(t, cen)
+	for w in sim.walls:
+		if int(w.team) == t and str(w.kind) == "wall":
+			# (a little longer than the chord: the pieces overlap at the joints, no wedge of sky between them)
+			var d: Vector2 = ((w.b as Vector2) - (w.a as Vector2)).normalized()
+			_kit_wall_run(t, (w.a as Vector2) - d * 0.4, (w.b as Vector2) + d * 0.4, 0.0, false, cen)
+	var tk: Dictionary = kit.tower
+	var joints := Keep.joints()
+	for k in joints.size():
+		if k % 3 != 0:
+			continue
+		var jp: Vector2 = Sim._m(t, joints[k])
+		var out: Vector2 = (jp - cen).normalized()
+		var tw := _kit_piece(str(tk.m), t, false)
+		tw.position = Vector3(jp.x, 0.0, jp.y)
+		tw.rotation.y = atan2(out.x, out.y)
+		tw.scale = Vector3.ONE * float(tk.s)
+	var gk: Dictionary = kit.gatehouse
+	var big := Keep.GATEHOUSE_K
+	for g in sim.gates:
+		if int(g.team) != t:
+			continue
+		var out: Vector2 = -(g["in"] as Vector2)
+		var rot := atan2(out.x, out.y)                   # local +Z (the stone face) outwards
+		var node := _place(HEX + "wall_straight_gate.gltf", Vector3(g.c.x, 0, g.c.y), rot, Sim.WALL_SCALE)
+		var gh := _kit_piece(str(gk.m), t, false)
+		var gp: Vector2 = (g.c as Vector2) + out * float(gk.out)
+		gh.position = Vector3(gp.x, 0.0, gp.y)
+		gh.rotation.y = rot
+		gh.scale = Vector3.ONE * float(gk.s) * big
+		node.scale = Vector3.ONE * float(gk.door) * big
+		for mi in node.find_children("*", "MeshInstance3D", true, false):
+			if not str(mi.name).contains("door"):
+				(mi as MeshInstance3D).mesh = null          # its wall piece (the doors are its children: hiding it hid them)
+		var doors := []
+		for mi in node.find_children("*door*", "MeshInstance3D", true, false):
+			doors.append({"node":mi, "sign":1.0 if str(mi.name).contains("left") else -1.0})
+		var rubble := Node3D.new()
+		rubble.position = Vector3(g.c.x, 0, g.c.y)
+		add_child(rubble)
+		var along := Vector2(out.y, -out.x)
+		for i in 3:
+			var rp: Vector2 = (g.c as Vector2) + along * (i - 1) * 1.1 + out * randf_range(-0.3, 0.3)
+			var r := _place(HEX + ["rock_single_D.gltf", "rock_single_E.gltf", "crate_open.gltf"][i],
+				Vector3(rp.x, 0, rp.y), randf() * TAU, [3.2, 3.2, 1.7][i])
+			if r != null:
+				r.reparent(rubble, true)
+		rubble.visible = false
+		gate_nodes[g.id] = {"doors":doors, "rubble":rubble, "open":0.0, "broken":false}
+	# the throne: the kit's canopy behind it, the Blender throne (velvet in the side's colour), a carpet to the gate
+	var thk: Dictionary = kit.throne
+	var tp: Vector2 = Sim._m(t, Keep.THRONE_SEAT)
+	var cpiece := _kit_piece(str(thk.m), t, false)
+	var csize: Vector3 = cpiece.get_meta("size")
+	var s3 := float(thk.s)
+	var bp: Vector2 = Sim._m(t, Keep.THRONE_SEAT + Vector2(0.0, 0.55))
+	cpiece.position = Vector3(bp.x, -float(thk.get("sink", 0.0)), bp.y)
+	cpiece.rotation.y = face + PI
+	cpiece.scale = Vector3(s3, s3 * float(thk.ys), s3)
+	for fp in (kit.fires as Dictionary).get(str(thk.m), []):
+		_kit_fire(cpiece, Vector3(fp), csize)
+	var throne := _place("res://assets/props/throne.glb", Vector3(tp.x, float(thk.lift), tp.y), PI if t == 0 else 0.0, 1.0)
+	if throne != null:
+		var velvet := StandardMaterial3D.new()
+		velvet.albedo_color = Color("#2d58b8") if vt(t) == 0 else Color("#b3223a")
+		velvet.roughness = 0.85
+		for mi in throne.find_children("*", "MeshInstance3D", true, false):
+			var m: MeshInstance3D = mi
+			for si in m.mesh.get_surface_count():
+				var sm := m.mesh.surface_get_material(si)
+				if sm != null and str(sm.resource_name) == "Velvet":
+					m.set_surface_override_material(si, velvet)
+	_carpet(Sim._m(t, Keep.KING + Vector2(0.0, 1.2)), Sim._m(t, Keep.gate_c(1) + Vector2(0.0, 1.6)), 2.6,
+		Color("#2f5f8a") if vt(t) == 0 else Color("#8a3a2f"))
+	var th: Vector2 = Sim.throne(t)
+	_decal(Vector3(th.x, 0.06, th.y), Sim.THRONE_RADIUS, TEAM_COLORS[vt(t)], 0.6)
+	# the fountain: the kit's fountain on a round dais, a ring of light round where heroes come back and heal
+	var fpos: Vector2 = Sim._m(t, Keep.FOUNTAIN)
+	_keep_prop(t, Keep.FOUNTAIN_MODEL, Keep.FOUNTAIN, 0.0, 2.2)
+	_decal(Vector3(fpos.x, 0.07, fpos.y), Keep.FOUNTAIN_R + 0.2, TEAM_COLORS[vt(t)], 0.55)
+	# a few of the kit's props against the back of the wall (clear of the fighting in the middle)
+	for pr in Keep.PROPS:
+		_keep_prop(t, str(pr[0]), pr[1], float(pr[2]), float(pr[3]))
+
+func _keep_prop(t: int, model: String, spot: Vector2, turn_deg: float, height: float) -> Node3D:
+	# a kit prop at a spot in blue's keep (world coordinates, mirrored for red): turn 0 = its front faces the keep's front
+	var root := _kit_piece(model, t, false)
+	var size: Vector3 = root.get_meta("size")
+	var p: Vector2 = Sim._m(t, spot)
+	root.position = Vector3(p.x, 0.0, p.y)
+	root.rotation.y = (0.0 if t == 0 else PI) + PI + deg_to_rad(turn_deg)
+	root.scale = Vector3.ONE * (height / size.y)
+	for fp in (CastleKit.kit(t).fires as Dictionary).get(model, []):
+		_kit_fire(root, Vector3(fp), size)
+	return root
+
+static var _keep_floor_mats: Dictionary = {}
+
+func _keep_floor(t: int, cen: Vector2) -> void:
+	# the kit's courtyard paving over the whole keep (under the wall's foot), the cloud shadows drifting over it too
+	if not _keep_floor_mats.has(t):
+		var tex: Texture2D = PATH_TEX
+		var tint := Color(0.86, 0.84, 0.8)
+		var uv := 1.0
+		if CASTLE_KITS:
+			var f: Array = CastleKit.kit(t).floors.court
+			tex = Stage.texture(CastleKit.DIR + "floors/%s.jpg" % f[0])
+			tint = f[2]
+			uv = CastleMesh.FLOOR_TILE / float(f[1])
+		if _cast_static:
+			_keep_floor_mats[t] = _cloud_floor_material(tex, tint, uv)
+		else:
+			var fm := StandardMaterial3D.new()
+			fm.albedo_texture = tex
+			fm.albedo_color = tint
+			fm.uv1_scale = Vector3(uv, uv, 1.0)
+			fm.roughness = 0.95
+			fm.specular_mode = BaseMaterial3D.SPECULAR_DISABLED
+			_keep_floor_mats[t] = fm
+	var n := 48
+	var rad := Keep.R + 0.6
+	var verts := PackedVector3Array()
+	var uvs := PackedVector2Array()
+	var norms := PackedVector3Array()
+	var idx := PackedInt32Array()
+	verts.append(Vector3(cen.x, 0.03, cen.y))
+	uvs.append(cen / CastleMesh.FLOOR_TILE)
+	norms.append(Vector3.UP)
+	for k in n:
+		var q := cen + Vector2.from_angle(TAU * k / n) * rad
+		verts.append(Vector3(q.x, 0.03, q.y))
+		uvs.append(q / CastleMesh.FLOOR_TILE)
+		norms.append(Vector3.UP)
+	for k in n:
+		idx.append_array([0, 1 + k, 1 + (k + 1) % n])        # (clockwise seen from above: the front)
+	var arr := []
+	arr.resize(Mesh.ARRAY_MAX)
+	arr[Mesh.ARRAY_VERTEX] = verts
+	arr[Mesh.ARRAY_TEX_UV] = uvs
+	arr[Mesh.ARRAY_NORMAL] = norms
+	arr[Mesh.ARRAY_INDEX] = idx
+	var am := ArrayMesh.new()
+	am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
+	var mi := MeshInstance3D.new()
+	mi.mesh = am
+	mi.material_override = _keep_floor_mats[t]
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mi.set_meta("perf", "castle")
+	add_child(mi)
+
+func _carpet(a: Vector2, b: Vector2, w: float, color: Color) -> void:
+	var key := color.to_html()
+	if not _floor_mats.has(key):
+		var m := StandardMaterial3D.new()
+		m.albedo_color = color
+		m.roughness = 0.95
+		_floor_mats[key] = m
+	var pm := PlaneMesh.new()
+	pm.size = Vector2(w, a.distance_to(b))
+	var mi := MeshInstance3D.new()
+	mi.mesh = pm
+	mi.material_override = _floor_mats[key]
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var c := (a + b) * 0.5
+	mi.position = Vector3(c.x, 0.05, c.y)
+	mi.rotation.y = atan2(b.x - a.x, b.y - a.y)
+	add_child(mi)
+
+const RIDGE_ROCKS := ["Rock_1_D_Color1", "Rock_1_E_Color1", "Rock_1_F_Color1"]
+const RIDGE_SMALL := ["Rock_1_A_Color1", "Rock_1_B_Color1", "Rock_1_C_Color1"]
+const RIDGE_TREES := ["Tree_1_A_Color1", "Tree_1_B_Color1", "Tree_2_A_Color1", "Tree_2_B_Color1", "Tree_3_A_Color1", "Tree_4_A_Color1"]
+static var _ridge_plan: Dictionary = {}       # model -> Array[Transform3D], built once per session
+
+static func _plan_ridges() -> Dictionary:
+	# Along each of the Rift's ridges (Land.ridges(): the sim's "rock" walls): boulders shouldered together along the
+	# line with smaller stones at their feet, or a stand of trees with bushes under them. Seeded: the same every match.
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 165
+	var out := {}
+	for k in RIDGE_ROCKS + RIDGE_SMALL + RIDGE_TREES + BUSHES:
+		out[k] = []
+	for rg in Land.ridges():
+		var pts: Array = rg.pts
+		var r := float(rg.r)
+		var trees: bool = str(rg.look) == "trees"
+		for i in pts.size() - 1:
+			var a: Vector2 = pts[i]
+			var b: Vector2 = pts[i + 1]
+			var L := a.distance_to(b)
+			var d := (b - a) / L
+			var nrm := Vector2(-d.y, d.x)
+			var t := 0.0 if i == 0 else rng.randf_range(0.4, 0.9)
+			while t <= L + 0.01:
+				var q := a + d * t + nrm * rng.randf_range(-0.35, 0.35) * r
+				var y := Land.terrain_height(q) - 0.15
+				if trees:
+					var s := rng.randf_range(0.72, 0.92)
+					out[RIDGE_TREES[rng.randi() % RIDGE_TREES.size()]].append(
+						Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3.ONE * s), Vector3(q.x, y, q.y)))
+					for side in [-1.0, 1.0]:
+						if rng.randf() < 0.7:
+							var bq: Vector2 = q + nrm * side * (r + rng.randf_range(-0.2, 0.3)) + d * rng.randf_range(-0.6, 0.6)
+							var bs := rng.randf_range(2.6, 3.6)
+							out[BUSHES[rng.randi() % BUSHES.size()]].append(Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled(
+								Vector3.ONE * bs), Vector3(bq.x, Land.ground_height(bq, false) - 0.05, bq.y)))
+					t += rng.randf_range(1.6, 2.2)
+				else:
+					var s2 := (2.0 * r + 0.4) * rng.randf_range(0.95, 1.2)
+					var sy := rng.randf_range(0.75, 1.05)
+					out[RIDGE_ROCKS[rng.randi() % RIDGE_ROCKS.size()]].append(Transform3D(
+						Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(s2, s2 * sy, s2)), Vector3(q.x, y - 0.25, q.y)))
+					for side in [-1.0, 1.0]:
+						if rng.randf() < 0.45:
+							var sq: Vector2 = q + nrm * side * (r + rng.randf_range(0.0, 0.4)) + d * rng.randf_range(-0.7, 0.7)
+							var ss := rng.randf_range(0.9, 1.6)
+							out[RIDGE_SMALL[rng.randi() % RIDGE_SMALL.size()]].append(Transform3D(
+								Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3.ONE * ss), Vector3(sq.x, Land.ground_height(sq, false) - 0.08, sq.y)))
+					t += rng.randf_range(1.1, 1.5) * r
+	return out
+
+func _build_ridges() -> void:
+	# One MultiMesh per model and 32 m band (off-screen bands are culled); they cast shadows like the keeps do.
+	if _ridge_plan.is_empty():
+		_ridge_plan = _plan_ridges()
+	for kind in _ridge_plan:
+		var xfs: Array = _ridge_plan[kind]
+		if xfs.is_empty():
+			continue
+		var packed := Stage.scene(FOREST + str(kind) + ".gltf")
+		if packed == null:
+			continue
+		var node: Node3D = packed.instantiate()
+		var src: MeshInstance3D = node.find_children("*", "MeshInstance3D", true, false)[0]
+		var bands := {}
+		for xf in xfs:
+			var bkey := int(floor(((xf as Transform3D).origin.z + Sim.HALF_L) / 32.0))
+			if not bands.has(bkey):
+				bands[bkey] = []
+			bands[bkey].append(xf)
+		for bkey in bands:
+			var mm := MultiMesh.new()
+			mm.transform_format = MultiMesh.TRANSFORM_3D
+			mm.mesh = src.mesh
+			mm.instance_count = bands[bkey].size()
+			for i in mm.instance_count:
+				mm.set_instance_transform(i, (bands[bkey][i] as Transform3D) * src.transform)
+			var mmi := MultiMeshInstance3D.new()
+			mmi.multimesh = mm
+			mmi.cast_shadow = _cast() if not BUSHES.has(kind) else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			mmi.set_meta("perf", "ridges")
+			mmi.set_meta("perf_kind", kind)
+			add_child(mmi)
+		node.free()
+
+func _build_fords() -> void:
+	# The fords' stepping stones: flat stones across each (Land.FORDS), a little proud of the water, in staggered rows.
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 166
+	var src := _mesh_of(FOREST + "Rock_1_E_Color1.gltf")
+	if src.is_empty():
+		return
+	var xfs := []
+	for f in Land.FORDS:
+		var fx := float(f[0])
+		var hw := float(f[1])
+		var c := Land.river_c(fx)
+		var reach := Land.river_hw(fx) + 0.6
+		var y := c - reach
+		var row := 0
+		while y <= c + reach:
+			var x := fx - hw + (0.55 if row % 2 == 1 else 0.0) + rng.randf_range(0.0, 0.3)
+			while x <= fx + hw:
+				var q := Vector2(x, y + rng.randf_range(-0.15, 0.15))
+				if Land.shore(q) < 0.4 and Land.island_off(q) > 0.2:
+					var s := rng.randf_range(0.7, 0.95)
+					xfs.append(Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(s, 0.16, s)),
+						Vector3(q.x, Land.FORD_Y - 0.12, q.y)))
+				x += rng.randf_range(1.1, 1.4)
+			y += 1.15
+			row += 1
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.mesh = src.mesh
+	mm.instance_count = xfs.size()
+	for i in xfs.size():
+		mm.set_instance_transform(i, xfs[i])
+	var mmi := MultiMeshInstance3D.new()
+	mmi.multimesh = mm
+	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var sm := StandardMaterial3D.new()                   # pale, water-worn stone (the forest rocks' grey read as a dark cobble patch)
+	sm.albedo_color = Color("#b9b2a2")
+	sm.roughness = 0.9
+	mmi.material_override = sm
+	mmi.set_meta("perf", "fords")
+	add_child(mmi)
+
 func _bars(a: Vector2, b: Vector2) -> void:
 	# Cell bars (Round 13, Kevin: "actual jail bars"): an iron grille on the dungeon floor.
 	var n := _iron_bars(a, b, 2.3)
@@ -3127,7 +3440,7 @@ func _sync_castle(dt: float) -> void:
 				body.rotation = Vector3(0.12 * sin(_time * 5.2), 0.0, 0.16 * sin(_time * 4.1 + 0.7))
 			else:
 				body.rotation = Vector3(0.0, 0.08 * sin(_time * 0.9 + t * 2.0), 0.035 * sin(_time * 1.3 + t))
-		for kind in ["wood", "stone"]:
+		for kind in (["wood", "stone"] if t < stock_piles.size() else []):        # (the Siege castles' stockpiles)
 			var pile: Node3D = stock_piles[t][kind]
 			var shown := clampi(int(ceil(float(sim.stock[t][kind]) / 5.0)), 0, pile.get_child_count())
 			if shown != int(pile.get_meta("shown", -1)):
@@ -4923,7 +5236,7 @@ func _sync_oracles(dt: float) -> void:
 					if int(g.team) != t and str(g.get("kind", "")) == "jail":
 						root.rotation.y = lerp_angle(root.rotation.y, Sim.angle_of((g.c as Vector2) - (o.pos as Vector2)), 1.0 - exp(-dt * 6.0))
 			elif (o.pos as Vector2).distance_to(Sim.throne(t)) < 1.5:
-				root.rotation.y = lerp_angle(root.rotation.y, Sim.angle_of(Sim._c(t, Vector2(0.0, 0.0)) - Sim.throne(t)), 1.0 - exp(-dt * 6.0))
+				root.rotation.y = lerp_angle(root.rotation.y, Sim.angle_of(Sim._m(t, Keep.gate_c(1)) - Sim.throne(t)), 1.0 - exp(-dt * 6.0))
 			var pulse := 0.8 + sin(_time * 4.0) * 0.2
 			(n.ground as Node3D).scale = Vector3(pulse, 0.15, pulse)
 			if n.state == "carried" and n.player != null:

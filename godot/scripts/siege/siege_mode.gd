@@ -3,6 +3,7 @@ extends Control
 # 3D view and HUD. Emits `exited` when the player leaves.
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 const Land = preload("res://scripts/siege/siege_land.gd")
+const Keep = preload("res://scripts/siege/keep.gd")
 const View = preload("res://scripts/siege/siege_view.gd")
 const Hud = preload("res://scripts/siege/siege_hud.gd")
 const Diag = preload("res://scripts/siege/siege_diag.gd")
@@ -997,8 +998,8 @@ func _warm_begin() -> void:
 	_cover_show()
 	var spots := []
 	for t in 2:
-		for q in [Vector2(0.0, 6.0), Vector2(0.0, 20.0), Vector2(0.0, 27.0), Vector2(-26.5, 14.0), Vector2(0.0, -6.0)]:
-			spots.append(Sim._c(t, q))
+		for q in [Keep.C, Keep.FOUNTAIN, Keep.gate_c(1) + Vector2(0.0, -6.0)]:      # (0.31.165: the keeps)
+			spots.append(Sim._m(t, q))
 	spots.append(Vector2.ZERO)
 	for op in sim.outposts:
 		spots.append(op.p)
@@ -1410,12 +1411,12 @@ func _footsteps(delta: float) -> void:
 	var speed := moved / maxf(delta, 0.001)
 	_step_t = clampf(1.55 / maxf(speed, 1.0), 0.24, 0.42)
 	var surf := "dirt"
-	if Sim.water_depth(p) > 0.15:
+	if Sim.water_depth(p) > 0.05:                # (0.31.165: the Rift's river is shallow -- 0.15 m at its deepest)
 		surf = "water"
 	elif int(me.get("tower", -1)) >= 0 or Land.on_bridge(p, 0.2):
 		surf = "wood"
-	elif absf(p.x) <= Sim.CASTLE_HX + 1.0 and absf(p.y) >= Sim.CASTLE_SHIFT + Sim.FRONT_Z - 0.5:
-		surf = "stone"                        # (0.31.126: the paths are dirt now, so only the castles sound of stone)
+	elif Land.keep_dist(p) < Keep.R + 0.5 or Land.on_ford(p):
+		surf = "stone"                        # (0.31.126: the paths are dirt now, so only the keeps and the fords sound of stone)
 	var chain := "_chain" if me.cls == "knight" else ""
 	audio.play("tm_step_%s%s%d" % [surf, chain, 1 + _snd_rng.randi() % 5], false, 1.0)
 

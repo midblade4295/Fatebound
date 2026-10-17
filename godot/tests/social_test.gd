@@ -452,16 +452,8 @@ func _finish() -> bool:
 		if u.has("call"):
 			called += 1
 	check(n == called and n == Sim.CALL_BOTS, "\"Need help!\" calls the %d nearest free bots (%d came)" % [Sim.CALL_BOTS, n])
-	var far := {}
-	for u in sim.units:
-		if u.has("call") and (far.is_empty() or (u.pos as Vector2).distance_to(sim.by_id["you"].pos) > (far.pos as Vector2).distance_to(sim.by_id["you"].pos)):
-			far = u
-	sim.by_id["you"].pos += Vector2(0, -8)                # the caller walks off: the bots follow
-	var d0: float = (far.pos as Vector2).distance_to(sim.by_id["you"].pos)
-	for i in 90:
-		sim.step(Sim.TICK)
-	var d1: float = (far.pos as Vector2).distance_to(sim.by_id["you"].pos)
-	check(d1 < d0 - 2.0 or d1 < 3.5, "a called bot comes to the caller (%.1f m -> %.1f m)" % [d0, d1])
+	# (until 0.31.165 the caller then walked off and the bots followed: a Siege match -- on the Rift a Siege match is over
+	# at once, its Kings at home on their thrones; the Siege's bots and this call go with its code)
 	print("SOCIAL_PASS" if fails.is_empty() else "SOCIAL_FAIL %s" % str(fails))
 	quit(0 if fails.is_empty() else 1)
 	return true

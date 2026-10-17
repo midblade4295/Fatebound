@@ -29,7 +29,14 @@ func _init() -> void:
 	const CELL := 4.0
 	var reach := Land.PATH_CORE + Land.PATH_FADE + 1.0          # (beyond this R is 0 whatever the wobble)
 	var buckets := {}
+	# 0.31.165: the lanes, then the jungle trails (narrower: their distance pushed out by the difference)
+	var lines := []
 	for pl in Land.paths():
+		lines.append([pl, 0.0])
+	for pl in Land.trails():
+		lines.append([pl, Land.PATH_HALF_W - Land.TRAIL_HALF])
+	for ln in lines:
+		var pl: Array = ln[0]
 		for i in range(pl.size() - 1):
 			var a0: Vector2 = pl[i]
 			var b0: Vector2 = pl[i + 1]
@@ -40,7 +47,7 @@ func _init() -> void:
 					var key := Vector2i(cx, cz)
 					if not buckets.has(key):
 						buckets[key] = []
-					(buckets[key] as Array).append([a0, b0 - a0])
+					(buckets[key] as Array).append([a0, b0 - a0, float(ln[1])])
 	for j in mh:
 		for i in mw:
 			var p := r.position + (Vector2(i, j) + Vector2(0.5, 0.5)) / Land.MASK_PPM
@@ -49,7 +56,7 @@ func _init() -> void:
 				var a: Vector2 = sg[0]
 				var ab: Vector2 = sg[1]
 				var t := clampf((p - a).dot(ab) / maxf(ab.length_squared(), 0.0001), 0.0, 1.0)
-				best = minf(best, p.distance_to(a + ab * t))
+				best = minf(best, p.distance_to(a + ab * t) + float(sg[2]))
 			var k := (j * mw + i) * 4
 			var gd := Land.ground_dist(p, best)                    # (0.31.127: and the towers' patches of earth)
 			md[k] = int(255.0 * Land.path_r(gd, p)) if gd < INF else 0
@@ -75,7 +82,8 @@ func _bake_cache() -> void:
 	cache.terrain = View._make_terrain_meshes()
 	cache.outer = View._make_outer_meshes()
 	var sim = Sim.new()
-	sim.setup(16, 1)
+	sim.setup(5, 1)
+	sim.setup_moba("knight", 1)                  # (0.31.165: the 5v5's towers and Kings stand clear of the grass)
 	var v = View.new()
 	v.sim = sim
 	cache.foliage = v._plan_foliage()

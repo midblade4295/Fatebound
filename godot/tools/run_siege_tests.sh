@@ -39,7 +39,7 @@ run() {   # run <name> <marker> <timeout> [extra godot args...]
 }
 
 if [ $QUICK -eq 1 ]; then export SEEDS=11,22; export NO_RESCUE_CHECK=1; fi
-run siege_sim_smoke      SIEGE_SIM_PASS           600
+# run siege_sim_smoke      SIEGE_SIM_PASS           600    # (the Siege, gone from the app since 0.31.164: on the Rift (0.31.165) its rules no longer hold -- deleted with its code in step 4)
 run siege_reach          SIEGE_REACH_PASS         120
 run siege_land_check     SIEGE_LAND_PASS          120
 run siege_mode_smoke     SIEGE_MODE_PASS          300 --fixed-fps 30
@@ -48,38 +48,38 @@ run siege_diag_smoke     SIEGE_DIAG_PASS          150 --fixed-fps 30
 run siege_guard_smoke    SIEGE_GUARD_PASS         120
 run siege_logcat_filter  SIEGE_LOGCAT_FILTER_PASS 120
 # Online: real server process + clients over WebSockets. Real time (no --fixed-fps), port 8092.
-run siege_net_smoke      SIEGE_NET_PASS           150
+# run siege_net_smoke      SIEGE_NET_PASS           150    # (online Siege matches: on the Rift a Siege match is over at once; the server keeps them shut to old apps with its min build -- the online 5v5 brings its own)
 run parse_all            PARSE_ALL_PASS           120
 run meta_economy_test    META_ECONOMY_PASS        120
 # The Siege app shell through its real buttons. REAL time (no --fixed-fps).
 run app_flow_test        APP_FLOW_PASS            150
 run app_scroll_test      APP_SCROLL_PASS          60
-run tutorial_test        TUTORIAL_PASS            120
-run net_interp_test      NET_INTERP_PASS          60
+# run tutorial_test        TUTORIAL_PASS            120    # (the Siege, gone from the app since 0.31.164: on the Rift (0.31.165) its rules no longer hold -- deleted with its code in step 4)
+# run net_interp_test      NET_INTERP_PASS          60    # (online Siege matches: on the Rift a Siege match is over at once; the server keeps them shut to old apps with its min build -- the online 5v5 brings its own)
 run knight_ai_test       KNIGHT_AI_PASS           90
-run tower_test           TOWER_PASS               150
+# run tower_test           TOWER_PASS               150    # (the Siege, gone from the app since 0.31.164: on the Rift (0.31.165) its rules no longer hold -- deleted with its code in step 4)
 run hammer_test          HAMMER_PASS              150
 run match_audio_test     MATCH_AUDIO_PASS         280
-run items_test           ITEMS_PASS               290
+# run items_test           ITEMS_PASS               290    # (the Siege, gone from the app since 0.31.164: on the Rift (0.31.165) its rules no longer hold -- deleted with its code in step 4)
 run priest_test          PRIEST_PASS              200
-run stands_test          STANDS_PASS              200
-run bomb_test            BOMB_TEST_PASS           200
+# run stands_test          STANDS_PASS              200    # (the Siege, gone from the app since 0.31.164: on the Rift (0.31.165) its rules no longer hold -- deleted with its code in step 4)
+# run bomb_test            BOMB_TEST_PASS           200    # (the Siege, gone from the app since 0.31.164: on the Rift (0.31.165) its rules no longer hold -- deleted with its code in step 4)
 run digest_test          DIGEST_PASS              60
 run answer_test          ANSWER_PASS              60
 run launcher_test        LAUNCHER_PASS            60
 run multikill_test       MULTIKILL_PASS           60
-run announce_test        ANNOUNCE_PASS            120  --fixed-fps 60
+# run announce_test        ANNOUNCE_PASS            120  --fixed-fps 60    # (the Siege, gone from the app since 0.31.164: on the Rift (0.31.165) its rules no longer hold -- deleted with its code in step 4)
 run upgrades_test        UPGRADES_PASS            60
-run blast_nodes_test     BLAST_NODES_PASS         60
+# run blast_nodes_test     BLAST_NODES_PASS         60    # (the Siege, gone from the app since 0.31.164: on the Rift (0.31.165) its rules no longer hold -- deleted with its code in step 4)
 run chest_test           CHEST_PASS               60
 run combo_test           COMBO_PASS               60
 run net_load_test        NET_LOAD_PASS            120
 # Match rooms (0.31.119): rooms of 3, at most 2 (real server on 8102)
-run match_rooms_test     MATCH_ROOMS_PASS         120
+# run match_rooms_test     MATCH_ROOMS_PASS         120    # (online Siege matches: on the Rift a Siege match is over at once; the server keeps them shut to old apps with its min build -- the online 5v5 brings its own)
 # Idle players (0.31.119): a bot takes over, input gives it back, removal (real server on 8103 + the real client)
-run idle_test            IDLE_PASS                120
+# run idle_test            IDLE_PASS                120    # (online Siege matches: on the Rift a Siege match is over at once; the server keeps them shut to old apps with its min build -- the online 5v5 brings its own)
 # Rejoin after a dropped connection (0.31.120): real server on 8105 + the real client
-run rejoin_test          REJOIN_PASS              120
+# run rejoin_test          REJOIN_PASS              120    # (online Siege matches: on the Rift a Siege match is over at once; the server keeps them shut to old apps with its min build -- the online 5v5 brings its own)
 # (0.31.164: join_friend_test -- no online matches to join until the 5v5 is online)
 # End-of-match MVP strip and scoreboard (0.31.119)
 run scoreboard_test      SCOREBOARD_PASS          60
@@ -94,7 +94,7 @@ run diag_send_test       DIAG_SEND_PASS           120
 # Kill feed and vibration (0.31.120): the HUD feed, siege_mode haptics, Settings > VIBRATION
 run kill_feed_test       KILL_FEED_PASS           90
 # The next match only after PLAY AGAIN (0.31.122): real server (8110) + the real client; older apps as before
-run next_match_test      NEXT_MATCH_PASS          150
+# run next_match_test      NEXT_MATCH_PASS          150    # (online Siege matches: on the Rift a Siege match is over at once; the server keeps them shut to old apps with its min build -- the online 5v5 brings its own)
 # Discord link + its one-time gem reward (0.31.124)
 run discord_test         DISCORD_PASS             60
 # Daily login reward (0.31.119): the calendar, the server's replay, the card on Home and in ORDERS
@@ -111,7 +111,7 @@ run version_gate_test    VERSION_GATE_PASS        120
 # Server minimum app build: an outdated build is refused as "update required" (real servers on 8098/8099)
 run min_build_test       MIN_BUILD_PASS           120
 run boot_guard_test      BOOT_GUARD_PASS          60
-run outpost_look_test    OUTPOST_LOOK_PASS        90
+# run outpost_look_test    OUTPOST_LOOK_PASS        90    # (the Siege, gone from the app since 0.31.164: on the Rift (0.31.165) its rules no longer hold -- deleted with its code in step 4)
 run castle_kit_test      CASTLE_KIT_PASS          90
 # Seated on either team (online): the stick follows the screen, your side drawn blue (0.31.85).
 run side_view_test       SIDE_VIEW_PASS           120 --fixed-fps 30
@@ -179,7 +179,7 @@ run world_test           WORLD_PASS               60
 run war_rewards_test     WAR_REWARDS_PASS         90
 # 0.31.153 COMMANDER (the test): the sim's cards, barracks, points and AI commander, a whole AI-vs-AI match; then the
 # app -- Home's COMMANDER, the deck window, BATTLE, a card tapped on the HUD, the results without rewards
-run commander_test       COMMANDER_PASS           180
+# run commander_test       COMMANDER_PASS           180    # (the Siege, gone from the app since 0.31.164: on the Rift (0.31.165) its rules no longer hold -- deleted with its code in step 4)
 run commander_ui_test    COMMANDER_UI_PASS        120
 # 0.31.155 5V5 (the test): heroes, waves (stacking), League's tower rules, gates behind towers, levels and picks, a
 # hero's fall, whole bot matches; then the app -- Home's 5V5, the hero window, BATTLE, a level-up picked on the screen
@@ -207,7 +207,7 @@ fi
 # the real server on 8100 (the probe included), then the report on a fixture.
 run analytics_client_test ANALYTICS_CLIENT_PASS   60
 run analytics_server_test ANALYTICS_SERVER_PASS   90
-run analytics_events_test ANALYTICS_EVENTS_PASS   150
+# run analytics_events_test ANALYTICS_EVENTS_PASS   150    # (online Siege matches: on the Rift a Siege match is over at once; the server keeps them shut to old apps with its min build -- the online 5v5 brings its own)
 t0=$SECONDS
 if timeout 120 python3 tools/test_analytics_report.py > /tmp/siege_test_analytics_report.log 2>&1 && grep -q ANALYTICS_REPORT_PASS /tmp/siege_test_analytics_report.log; then
   printf "PASS  %-22s %4ds\n" "analytics_report (py)" $((SECONDS - t0))

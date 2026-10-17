@@ -4968,3 +4968,46 @@ deleted.
 - Quick suite: ALL SIEGE TESTS PASSED (98). tools/cold_start_check.sh: PASS. The Play AAB (throwaway key, presets
   untouched): BASE OK (267 files), CONTENT OK, play_games true, bundletool valid. Preview APK:
   build/Fatebound-Siege-0.31.164-fatebound.apk (preview key).
+
+## 0.31.165 — the Rift: the new 5v5 map (step 2)
+The plan's step 2 (Kevin's picks: replace the Siege field; 112 x 220 m, 3 towers a lane; an open keep with 3 gates).
+- The field (scripts/siege/siege_land.gd, rewritten as the Rift; point-symmetric like before): 112 x 220 m inside a
+  rock-walled edge. Three lanes (LANES, also moba.gd's): the middle straight down the field, the side lanes out along
+  the edges (x +-46) and in on a diagonal to the keeps. A shallow river across the middle (wading ~0.8 speed at its
+  deepest, nav cost 1.6) with stone fords where the lanes cross it (no wading on a lane); a pool on either side round a
+  rocky island -- the pits, each walled with a mouth and a causeway toward either bank: the Bone Lord's (west, x -26)
+  and the Grave Wyrm's (east, x +26; empty until step 3). Each half's jungle: two quadrants, each with ridges of rock
+  or tree lines (RIDGES_BLUE; sim walls "rock" -- shots fly over them, nobody walks through), a Bone Pack near the
+  river, a Grave Archers near the keep and a buff camp between (the Arcane Wraith west, the Ember Brute east), dirt
+  trails between them; 14 brush patches a side (moba_vision.gd). No bridges, hills, scarps, outposts or resource nodes.
+- The keep (scripts/siege/keep.gd, new): a ring wall (r 14 m round (0, 96)) with three gates -- west and east at -150 and
+  -30 degrees toward the side lanes, the middle one down the middle lane -- 3.5 m doorways (the kit's gatehouse x1.2);
+  inside, the King in front of his throne, the two King towers, the fountain behind him where heroes come back
+  (spawn) and heal; the kit's banners, statues and topiaries at the back. The sim's world functions (throne, spawn,
+  in_castle, height_at, gate_front) are the keep's; _build_map builds the keeps and the Rift (the Siege castles'
+  stands, buildings, catapults and dungeons aren't built).
+- The 5v5 (moba.gd): three towers a lane (tier 3 by the gate) and two King towers (tier 4, lane -1): a lane's tower
+  can't be hurt while the one before it stands; a gate while its lane's tier 3 does; the King towers while all three
+  gates stand; the King while a King tower does (until now: once a gate was down). Bots that run for the King take the
+  King towers first. 6 camps a side + the Bone Lord (13). 20-minute matches (bot matches on the Rift took 7-9 towers
+  in 15 minutes and never a King; in 20 one side took 9 towers, 2 gates and a King tower).
+- The view: the keep from the castle kit (curtain wall along the sim's ring, towers on every third joint, gatehouses
+  with swinging doors and rubble, the throne and canopy, a carpet to the middle gate, the kit's fountain on a ring of
+  light), paved floor; ridges as boulders or trees with bushes (MultiMeshes per 32 m band); pale stepping stones on
+  the fords; the pits' arenas trodden earth; torches by the middle gates. Terrain, mask and start-up cache re-baked
+  (tools/bake_land.gd: trails narrower than lanes; foliage planned round the 5v5's towers). Footsteps: stone in the
+  keeps and on the fords, water in the river.
+- Speed (the Rift keeps ~75 units alive at 5:30 against ~47 on the Siege field: longer lanes, more camps): unit
+  separation by 0.9 m cells, jungle monsters standing at home skip their step, gates look for allies only near them.
+  Sim-only bench at 5:30: 2.4 ms a tick (1.4 on the old field).
+- Tools: tools/rift_plan.gd (the map's plan from the data), tools/rift_shots.gd (review shots in a 5v5),
+  tools/rift_match.gd (a bot 5v5, sim only: what falls when).
+- Tests: siege_land_check (fords; the 5v5's towers, camps, pits and lanes clear and reachable, brush mirrored),
+  moba_test (11 towers a side, the tier rules, King towers), moba_more_test (13 camps), moba_lol_test / moba_ui_test
+  (Rift spots), match_audio_test (a 5v5), castle_kit_test (the keep's props), hammer_test, social_test updated. Out of
+  the suite: the Siege's own (siege_sim_smoke, tower, items, stands, bomb, blast_nodes, announce, outpost_look,
+  tutorial, commander) and online Siege matches (siege_net_smoke, net_interp, match_rooms, idle, rejoin, next_match,
+  analytics_events) -- on the Rift a Siege match ends at once (its Kings are home on their thrones).
+- Server: online Siege matches on this server would end at once too: raise its minimum build to 0.31.164 (the file
+  /etc/fatebound-siege/min_build) so older apps see "Update required" instead of playing them.
+- Version 0.31.165, versionCode 251, SERVER_BUILD 0.31.165.

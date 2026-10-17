@@ -72,15 +72,16 @@ func _init() -> void:
 			back = true
 			break
 	check(back, "it finds the thrower after they've moved")
-	# not from a tower deck
-	var op: Dictionary = s.outposts[0]
-	op.owner = 0
-	op.prog = 1.0
-	c.cd_ability = 0.0
-	c.state = "idle"
-	c.pos = (op.p as Vector2) + Vector2(Land.OUTPOST_TOWER_R + 0.8, 0)
-	s.act(c.id, "interact")
-	check(int(c.tower) >= 0 and not s.act(c.id, "ability"), "no hammer from a tower's deck")
+	# not from a tower deck (the Siege field's outposts; the Rift has none since 0.31.165)
+	if not s.outposts.is_empty():
+		var op: Dictionary = s.outposts[0]
+		op.owner = 0
+		op.prog = 1.0
+		c.cd_ability = 0.0
+		c.state = "idle"
+		c.pos = (op.p as Vector2) + Vector2(Land.OUTPOST_TOWER_R + 0.8, 0)
+		s.act(c.id, "interact")
+		check(int(c.tower) >= 0 and not s.act(c.id, "ability"), "no hammer from a tower's deck")
 	# bots throw at a line of enemies
 	var s2 = Sim.new()
 	s2.setup(6, 7)
