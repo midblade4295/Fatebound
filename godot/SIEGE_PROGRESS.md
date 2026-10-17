@@ -5050,3 +5050,6 @@ made the model from it.
   for the slaying side, its stacks to 4 and through levels, red's own stack, bots go for it and stop at the cap).
   tools/rift_shots.gd: the Wyrm up from the start for the wyrm_* shots, wyrm_close and wyrm_breath.
 - Version 0.31.166, versionCode 252, SERVER_BUILD 0.31.166.
+- Quick suite: all passed (81). tools/cold_start_check.sh: PASS. The Play AAB (throwaway key, presets untouched): BASE OK
+  (271 files), CONTENT OK, play_games true, bundletool valid, jar verified. Preview APK:
+  build/Fatebound-Siege-0.31.166-fatebound.apk (preview key; sha256 89177337...0415).
