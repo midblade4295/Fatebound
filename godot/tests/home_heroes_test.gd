@@ -306,7 +306,7 @@ func _checks_app() -> void:
 	var hold: PackedColorArray = app.home_scene.room.land.land_mat.get_shader_parameter("holder")
 	check(hold[LandData.IDS.find("forge")].a > 0.5, "the war as the server tells it shows on Home's table")
 	# ---- the ribbon
-	check(not has_text(app.content, "16 v 16 SIEGE") and has_text(app.content, "16 vs 16"), "no ribbon on Home; the line under PLAY says 16 vs 16")
+	check(not has_text(app.content, "16 v 16 SIEGE") and has_text(app.content, "5 vs 5"), "no ribbon on Home; the line at the top says 5 vs 5 (0.31.164)")
 	# ---- empty chest slots
 	var ghosts: Array = app.content.find_children("*", "TextureRect", true, false).filter(func(n): return n.has_meta("empty_slot") and n.is_visible_in_tree())
 	var empty_n: int = 4 - app.profile.chests().size()
@@ -328,5 +328,5 @@ func _checks_app() -> void:
 	var many := main.text
 	os_node.info = {"online": 7, "in_match": 3}
 	app.paint_online()
-	check(nobody == "LIVE SIEGE SERVER" and me_only == "1 PLAYER ONLINE" and many == "12 PLAYERS ONLINE" and main.text == "7 PLAYERS ONLINE",
+	check(nobody == "FATEBOUND" and me_only == "1 PLAYER ONLINE" and many == "12 PLAYERS ONLINE" and main.text == "7 PLAYERS ONLINE",
 		"0.31.140: the players online -- everyone with the game open, you too (%s / %s / %s; an older server: %s)" % [nobody, me_only, many, main.text])

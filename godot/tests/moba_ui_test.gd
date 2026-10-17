@@ -1,8 +1,8 @@
 extends SceneTree
 # 0.31.155 5V5 (the test) in the app:
-#  1. Home: 5V5 (TEST) on the right -- under TUTORIAL until the tutorial's done, in its place after; it opens the hero
-#     window: 12 heroes, the last pick kept;
-#  2. a hero picked, BATTLE: an offline 5v5 as that hero (no server, no ticket);
+#  1. Home: (0.31.164, Kevin: "5v5 only") PLAY opens the hero window -- no TUTORIAL, no 5V5 (TEST) medallion, for a new
+#     player too: 12 heroes, the last pick kept;
+#  2. a hero picked, BATTLE: an offline 5v5 as that hero;
 #  3. the HUD: level and XP, the towers standing; a level-up's three upgrades tapped on the screen apply one;
 #  4. (0.31.157) the gold and SHOP under the towers line: tapped, the shop; an item picked and bought in your castle;
 #     the ULT button: LV 6 until level 6, then the Archmage's METEORS, tapped: cast; the jungle's skeletons and the
@@ -10,7 +10,7 @@ extends SceneTree
 #  5. (0.31.158) the fog of war: the shroud over what your side can't see (clear round you), an enemy out of your sight
 #     not drawn, one in it drawn; the brush's bushes; WARD tapped: a ward at your feet, shown; (0.31.159) the lane
 #     minions in their own Meshy bodies, the red side's repainted red;
-#  6. the end: the results without rewards (the gold as it was).
+#  6. the end: the results, paid like a match (0.31.164).
 #   godot --headless --path godot -s res://tests/moba_ui_test.gd   (SHOT_DIR=... under Xvfb for pictures)
 const App = preload("res://scripts/app/siege_app.gd")
 const Profile = preload("res://scripts/meta/profile.gd")
@@ -95,12 +95,8 @@ func _process(delta: float) -> bool:
 			_go("fresh_home")
 		"fresh_home":
 			if t_phase > 1.0:
-				var tb := btn("tutorial_start")
-				var mb := btn("side_moba")
-				var pb := btn("play")
-				check(tb != null and mb != null and has_text(mb, "5V5") and mb.global_position.y >= tb.global_position.y + tb.size.y - 8.0
-					and absf(mb.global_position.x - tb.global_position.x) < 1.0 and pb != null and not mb.get_global_rect().intersects(pb.get_global_rect()),
-					"no tutorial yet: 5V5 under TUTORIAL, clear of PLAY")
+				check(btn("tutorial_start") == null and btn("side_moba") == null and btn("side_commander") == null and btn("play") != null,
+					"a new player's Home: PLAY, and no TUTORIAL or 5V5 medallion")
 				app.queue_free()
 				app = null
 				_go("boot")
@@ -110,9 +106,10 @@ func _process(delta: float) -> bool:
 				_go("home")
 		"home":
 			if t_phase > 1.0:
-				check(btn("side_moba") != null and btn("tutorial_start") == null and btn("side_commander") == null, "Home: 5V5 where the tutorial was")
+				check(btn("side_moba") == null and btn("tutorial_start") == null and btn("side_commander") == null and btn("play") != null,
+					"Home: PLAY (the 5v5)")
 				_shot("moba_home")
-				press("side_moba")
+				press("play")
 				_go("heroes")
 		"heroes":
 			if t_phase > 0.4:
@@ -294,7 +291,8 @@ func _process(delta: float) -> bool:
 		"end":
 			if t_phase > 1.5:
 				var s = app.siege
-				check(s.hud.result_panel != null and int(app.profile.d.gold) == gold0, "the results; no rewards (the gold as it was)")
+				check(s.hud.result_panel != null and int(app.profile.d.gold) > gold0 and int(app.profile.d.stats.get("matches", 0)) == 1,
+					"the results, paid like a match (+%d gold)" % (int(app.profile.d.gold) - gold0))
 				_shot("moba_result")
 				return _finish()
 	return false

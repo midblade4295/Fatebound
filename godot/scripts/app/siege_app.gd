@@ -1011,8 +1011,8 @@ func paint_online() -> void:
 	var info: Dictionary = online_status.info if online_status != null else {}
 	# (0.31.139: a short line -- the pill sits between the medallion columns at the top now)
 	if info.is_empty():
-		main.text = "LIVE SIEGE SERVER"
-		sub.text = "16 vs 16"
+		main.text = "FATEBOUND"                    # (0.31.164: was LIVE SIEGE SERVER / 16 vs 16)
+		sub.text = "5 vs 5"
 		return
 	# 0.31.140 (Kevin: "make sure it shows players currently online"): everyone with the game open -- the server's
 	# "chatting" (its social connections: Home, the menus and matches alike; you're one of them), not "online" (only the
@@ -1020,7 +1020,10 @@ func paint_online() -> void:
 	var n := maxi(int(info.get("chatting", 0)), int(info.get("online", 0)))
 	if n < 1 and social != null and social.online():
 		n = 1                                       # (you are)
-	main.text = ("%d PLAYER%s ONLINE" % [n, "" if n == 1 else "S"]) if n >= 1 else "LIVE SIEGE SERVER"
+	main.text = ("%d PLAYER%s ONLINE" % [n, "" if n == 1 else "S"]) if n >= 1 else "FATEBOUND"
+	if not ONLINE_MATCHES:
+		sub.text = "5 vs 5"                        # (0.31.164: no lobby or battles on the server to count)
+		return
 	var fighting := int(info.get("in_match", 0))
 	var waiting := int(info.get("waiting", 0))
 	if waiting > 0 and float(info.get("lobby", -1.0)) >= 0.0:
@@ -1271,12 +1274,14 @@ func open_moba() -> void:
 	m.open(self)
 
 func start_moba(hero: String) -> void:
-	# 0.31.155: an offline 5v5 against bots as this hero (siege_mode.gd moba_hero; scripts/siege/moba.gd). No server, no
-	# ticket, no rewards: a test of how it plays.
+	# 0.31.155: an offline 5v5 against bots as this hero (siege_mode.gd moba_hero; scripts/siege/moba.gd). 0.31.164: the
+	# game's match -- a VS BOTS ticket from the server first, paid like one (start_match)
 	if siege != null:
 		return
 	pending_moba = hero
-	start_match(false, true)
+	start_match(false, false)
+	if siege == null and not _ticket_wait:
+		pending_moba = ""                          # (no ticket: nothing started)
 
 var pending_moba := ""                    # 0.31.155: the hero the next match is a 5v5 with
 
@@ -1285,6 +1290,9 @@ var pending_war := ""                    # 0.31.135: a battle on the war map the
 
 func join_friend(pid: String) -> void:
 	# 0.31.120 (Kevin: "make so it's a join match option"): Friends > JOIN on a friend who's in a match
+	if not ONLINE_MATCHES:
+		toast("Matches with friends are coming to 5v5 soon", UI.MUTED)     # 0.31.164 (5v5 only: offline for now)
+		return
 	var wb := str(social.card_of(pid).get("wb", "")) if social != null else ""
 	if wb != "":
 		start_war(wb)                          # 0.31.151: their battle on the war map (your house's side; a party follows you)
@@ -1299,6 +1307,11 @@ func join_friend(pid: String) -> void:
 	if siege == null:
 		pending_join = ""
 
+# 0.31.164 (Kevin, on the new 5v5 map: "Remove them now: 5v5 only"): Siege, Commander, the tutorial and the war map's
+# battles are gone from the app -- PLAY is the 5v5 (the hero window, then a match against bots, paid like any match).
+# Online matches come back with an online 5v5; until then JOIN and a party's PLAY don't start one.
+const ONLINE_MATCHES := false
+
 func play() -> void:
 	# 0.31.145 (Kevin: "Play open war map"): Home's PLAY opens the war map -- a territory to attack, or QUICK BATTLE (the
 	# match PLAY started until now) at its foot. 0.31.146 (Kevin: "I want the play button to always bring players into
@@ -1306,6 +1319,10 @@ func play() -> void:
 	# is there for all of them).
 	if update_required:
 		show_update_screen()
+		return
+	if not ONLINE_MATCHES:
+		sfx("menuOpen")
+		open_moba()                                # 0.31.164: the 5v5's hero window
 		return
 	if social == null:                             # (tests without the social side only: the app always has it)
 		start_match(true)
@@ -1465,7 +1482,8 @@ func start_match(online: bool, tutorial := false, follow := false) -> void:
 			_ticket_wait = false
 			if tk == "":
 				sfx("error")
-				toast("VS BOTS needs a connection to the server", UI.RED)
+				toast("A match needs a connection to the server", UI.RED)
+				pending_moba = ""
 				return
 			_ticket_ok = true
 			start_match(false, false)
@@ -1520,6 +1538,7 @@ func _menu_fps() -> void:
 		Engine.max_fps = MENU_FPS
 
 func _end_match() -> void:
+	var replay := ""
 	var note := ""
 	var to_war := false
 	var war_tid := ""
@@ -1527,6 +1546,7 @@ func _end_match() -> void:
 		note = str(siege.exit_note)
 		to_war = str(siege.war_bid) != "" and siege.hud != null and str(siege.hud.exit_to) == "war"   # 0.31.135: WAR MAP
 		war_tid = str(siege.war_info.get("tid", siege.war_result.get("tid", "")))                       # (open on it)
+		replay = str(siege.replay_hero)          # 0.31.164: PLAY AGAIN after a 5v5 -- a new match, with its own ticket
 		siege.note_leaving()                     # 0.31.118: a VS BOTS match or the tutorial left before its end
 		siege.queue_free()
 	siege = null
@@ -1549,6 +1569,8 @@ func _end_match() -> void:
 		notice("REMOVED FOR BEING IDLE", "You didn't move or attack for 3 minutes, so a bot took your place. Nothing was paid for that match.")
 	elif to_war:
 		open_war(war_tid)
+	elif replay != "":
+		start_moba(replay)
 
 # ---------------- Google Play's copy of the progress (0.31.102) ----------------
 func ask_cloud() -> void:
@@ -2113,7 +2135,7 @@ func offer_daily() -> void:
 		return
 	if not daily_auto or siege != null or update_required or tab != "home" or is_instance_valid(modal):
 		return
-	if not bool(profile.d.get("tutorial_done", false)) or not profile.login_ready():
+	if not profile.login_ready():                  # (0.31.164: no tutorial to finish first any more)
 		return
 	var today := Eco.day_key(profile.now())
 	if _daily_offered == today:
@@ -2200,7 +2222,7 @@ func _on_party_invite(pa: String, card: Dictionary) -> void:
 
 func _on_party_go(_pa: String, by: String) -> void:
 	# the party leader pressed PLAY: everyone in the menu follows
-	if siege != null or update_required or is_instance_valid(update_screen):
+	if siege != null or update_required or is_instance_valid(update_screen) or not ONLINE_MATCHES:
 		return
 	close_modal()
 	toast("%s is heading into battle -- your party follows!" % by, UI.GOLD)

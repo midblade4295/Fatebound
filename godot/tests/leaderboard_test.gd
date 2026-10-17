@@ -6,8 +6,7 @@ extends SceneTree
 #  2. end to end (the real server, port 8104, 4-second matches): an online match paid to an account puts it on the board;
 #     {"t":"lb"} with its key answers it (its row marked, its friends' rows), "status" says "lb":1, a wrong key gets
 #     4007 and nothing.
-#  3. the app: Home's RANKS medallion (FIRST WIN is a tag on PLAY now), the LEADERBOARD window with the player's row,
-#     the FRIENDS tab.
+#  3. the app: (0.31.164: no RANKS on Home) the LEADERBOARD window with the player's row, the FRIENDS tab.
 #   godot --headless --path godot -s res://tests/leaderboard_test.gd
 const Leaderboard = preload("res://server/leaderboard.gd")
 const LbFetch = preload("res://scripts/meta/lb_fetch.gd")
@@ -215,10 +214,12 @@ func _process(delta: float) -> bool:
 			_go("home")
 		"home":
 			if t_phase > 1.0:
-				check(_btn("side_ranks") != null and _btn("side_first_win") == null, "Home: RANKS where FIRST WIN was")
+				# 0.31.164 (Kevin: "5v5 only"): no RANKS on Home -- the board counts online matches, none until the 5v5 is online;
+				# the window itself still works (opened here directly)
+				check(_btn("side_ranks") == null and _btn("side_first_win") == null, "Home: no RANKS (no online matches for now)")
 				check(not _find(app, func(n): return str(n.name) == "FirstWinTag").is_empty(), "the first win of the day is a tag on PLAY")
-				_btn("side_ranks").pressed.emit()
-				check(app.modal is LeaderboardPanel, "RANKS opens the LEADERBOARD")
+				app.open_leaderboard()
+				check(app.modal is LeaderboardPanel, "the LEADERBOARD window opens")
 				_go("panel")
 		"panel":
 			var rows := _find(app.modal, func(n): return str(n.name).begins_with("LbRow") and n.has_meta("rank"))

@@ -62,6 +62,8 @@ var clan_query := ""
 var clan_infos := {}                    # clan id -> its card (clan_info), "_at": clock
 # 0.31.135: the war map
 var has_war := false                    # the server has the war map ("me" said so)
+# 0.31.164 (Kevin: "5v5 only"): the war map's battles were Siege matches -- the app leaves the server's war map alone
+const WAR_MAP := false
 var war: Dictionary = {}                # the last map: {"week", "ends", "terr": {id: {...}}, "house", "att", "max", "counts", "tally", ...}
 var war_watching := false               # the map is open (the server pushes changes)
 var _war_eyes := {}                     # 0.31.138: who has it on screen ("map": the war map, "home": Home's war table)
@@ -177,7 +179,7 @@ func _on(m: Dictionary) -> void:
 		"me":
 			me = {"pid":str(m.get("pid", "")), "n":str(m.get("n", "")), "tt":str(m.get("tt", "")), "max":int(m.get("max", 120)), "ct":str(m.get("ct", ""))}
 			has_clans = int(m.get("clans", 0)) == 1
-			has_war = int(m.get("war", 0)) == 1
+			has_war = WAR_MAP and int(m.get("war", 0)) == 1
 			var was := state
 			state = "online"
 			_fails = 0
@@ -283,11 +285,14 @@ func _on(m: Dictionary) -> void:
 			war = wm
 			changed.emit("war")
 		"war_go":
-			war_went.emit(m)
+			if WAR_MAP:
+				war_went.emit(m)
 		"war_call":
-			war_called.emit(m)
+			if WAR_MAP:
+				war_called.emit(m)
 		"war_alarm":
-			war_alarmed.emit(m)
+			if WAR_MAP:
+				war_alarmed.emit(m)
 		"prof":
 			var pp := str(m.get("pid", ""))
 			if pp != "":

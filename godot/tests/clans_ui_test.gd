@@ -3,8 +3,8 @@ extends SceneTree
 # 8118), in REAL time. Alice is the app (an account with 25,000 gold); Bob is a second phone (scripts/meta/social.gd +
 # a raw match socket). Home's SOCIAL opens FRIENDS with a CLAN tab; Alice starts [WOLF] Iron Wolves of House Stags
 # (the server takes 5,000 gold -- 0.31.148 -- and her app shows it); Bob finds and joins it; Bob's clan line reaches Alice's CLAN
-# chat with his tag; she makes him an officer from MANAGE; his tag is on her chat and on his name card, and the match's
-# lobby and "pn" carry it for everyone in the match; he leaves and waits 24 hours.
+# chat with his tag; she makes him an officer from MANAGE; his tag is on her chat and on his name card (0.31.164: the
+# online match carrying it went with Siege); he leaves and waits 24 hours.
 # With a display and SHOT_DIR set, screenshots of each window go there.
 #   godot --headless --path godot -s res://tests/clans_ui_test.gd
 const App = preload("res://scripts/app/siege_app.gd")
@@ -328,7 +328,10 @@ func _process(delta: float) -> bool:
 			if str(bob.clan.get("role", "")) == "officer":
 				check(true, "Bob is an officer")
 				app.close_modal()
-				_go("play")
+				# 0.31.164 (Kevin: "5v5 only"): no war map battle to take the clan into (PLAY is the offline 5v5) -- the match's
+				# plates and names with the tag went with Siege's online matches; Bob leaves the clan from here
+				bob.clan_leave()
+				_go("left")
 		"play":
 			if t_phase > 0.5:
 				press("play")

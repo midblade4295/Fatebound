@@ -2,7 +2,8 @@ extends SceneTree
 # 0.31.111: the chat, Friends, the party and quick chat through the app's real buttons, against the real server (its
 # own process, port 8095), in REAL time. Alice is the app; Bob is a second phone (scripts/meta/social.gd + a raw match
 # socket). Bob's line shows on Home's chat line; Alice opens the chat, sends a line, taps Bob's name and adds him; he
-# accepts; she opens Friends from Home and invites him; he joins; Home shows the party and PLAY ×2; 0.31.149 (Kevin:
+# accepts; she opens Friends from Home and invites him; he joins; Home shows the party (0.31.164: the rest -- a war map
+# battle with the party, the quick chat in it -- went with Siege's online matches); 0.31.149 (Kevin:
 # "Remove the quick play so the player needs to choose where to fight. Maybe show hot zones where players are actively
 # fighting and players can jump right into that battle"): Bob joins The Lion Guard and starts a battle; it shows under
 # Alice's war map (BATTLES NOW); she has no clan, so JOIN LIONS puts her in The Lion Guard and into the battle, and as the
@@ -237,9 +238,12 @@ func _process(delta: float) -> bool:
 				_go("home_party")
 		"home_party":
 			if t_phase > 0.5:
-				check(has_text(app.content, "PARTY 2/4") and has_text(app.content, "PLAY ×2"), "Home shows the party (0.31.139: at the top) and PLAY ×2")
+				# 0.31.164 (Kevin: "5v5 only"): PLAY is the offline 5v5 -- no party count on it, and no war map battle to take the
+				# party into (the battle, the seating and the in-match quick chat were Siege's online matches)
+				check(has_text(app.content, "PARTY 2/4") and has_text(app.content, "PLAY") and not has_text(app.content, "PLAY ×2"),
+					"Home shows the party (0.31.139: at the top); PLAY has no party count")
 				_shot("social_home_party")
-				_go("press_play")
+				_go("end")
 		"press_play":
 			if t_phase > 0.6:
 				bob.clan_join("h_lions")                 # (0.31.148: the Lions' own clan)

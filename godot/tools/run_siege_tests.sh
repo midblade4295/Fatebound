@@ -80,8 +80,7 @@ run match_rooms_test     MATCH_ROOMS_PASS         120
 run idle_test            IDLE_PASS                120
 # Rejoin after a dropped connection (0.31.120): real server on 8105 + the real client
 run rejoin_test          REJOIN_PASS              120
-# Join a friend's match from Friends (0.31.120): real server on 8106 + the real app
-run join_friend_test     JOIN_FRIEND_PASS         150
+# (0.31.164: join_friend_test -- no online matches to join until the 5v5 is online)
 # End-of-match MVP strip and scoreboard (0.31.119)
 run scoreboard_test      SCOREBOARD_PASS          60
 # Weekly leaderboard (0.31.119): the board, the server (8104), the RANKS window
@@ -171,11 +170,11 @@ run clans_ui_test        CLANS_UI_PASS            240
 # a battle end to end against the real server (8120: called, alarmed, seated by side, scored), then the app's war table
 # (8121): Home's PLAY opens the map (QUICK BATTLE at its foot), tap a territory, ATTACK, the battle, WAR MAP back, a clan mate's JOIN banner.
 run world_test           WORLD_PASS               60
-run war_battle_test      WAR_BATTLE_PASS          150
-run war_ui_test          WAR_UI_PASS              240
+# (0.31.164, Kevin: "5v5 only": the war map's battles were Siege matches -- war_battle_test and war_ui_test are out of
+# the suite with the app's war map; server/world.gd still has its own test above)
 # 0.31.147: PLAY's push into the war table, the map's dive, the Herald's tour of the map (by itself the first time; "?";
 # SKIP), JOIN A CLAN opening the CLAN window on joining; reduce motion (no server: the map put in place)
-run war_tour_test        WAR_TOUR_PASS            120
+# (0.31.164: war_tour_test -- PLAY no longer pushes into the war map)
 # 0.31.151: the war's rewards -- the profile, the account (once), Home saying so
 run war_rewards_test     WAR_REWARDS_PASS         90
 # 0.31.153 COMMANDER (the test): the sim's cards, barracks, points and AI commander, a whole AI-vs-AI match; then the
@@ -193,6 +192,8 @@ run moba_more_test       MOBA_MORE_PASS           600
 # targets, shares, Warming Up, plates, gates back up; the camps' patience and resets; the Bone Lord marching
 run moba_lol_test        MOBA_LOL_PASS            300
 run moba_ui_test         MOBA_UI_PASS             220
+# 0.31.164 (Kevin: "5v5 only"): the 5v5's numbers on the hero, its rewards and challenges, Siege's swapped out, the server's clamp
+run five_only_test        FIVE_ONLY_PASS           120
 # 0.31.153: every script the server installs can load what it loads (the installer copies a list)
 t0=$SECONDS
 if timeout 60 python3 tools/test_server_files.py > /tmp/siege_test_server_files.log 2>&1 && grep -q SERVER_FILES_PASS /tmp/siege_test_server_files.log; then

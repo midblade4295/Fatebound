@@ -473,7 +473,10 @@ func show_result(result: Dictionary = {}) -> void:
 	you.alignment = BoxContainer.ALIGNMENT_CENTER
 	you.add_theme_constant_override("separation", 6)
 	v.add_child(you)
-	for ch in [["skull", "%d KOs" % me.kills], ["helmet", "%d downs" % me.deaths], ["crown", "%d rescue%s" % [me.rescues, "" if me.rescues == 1 else "s"]]]:
+	var third := ["crown", "%d rescue%s" % [me.rescues, "" if me.rescues == 1 else "s"]]
+	if sim.moba != null:
+		third = ["castle", "%d tower%s" % [int(me.get("towers", 0)), "" if int(me.get("towers", 0)) == 1 else "s"]]     # (0.31.164)
+	for ch in [["skull", "%d KOs" % me.kills], ["helmet", "%d downs" % me.deaths], third]:
 		var c := UI2.chip(you, "", Color(0.01, 0.02, 0.08, 0.8), Color.WHITE, Color(UI2.GOLD, 0.4))
 		var cl: Label = c.get_child(0)
 		c.remove_child(cl)
@@ -483,15 +486,17 @@ func show_result(result: Dictionary = {}) -> void:
 		c.add_child(r)
 		UI2.icon(r, str(ch[0]), 20.0)
 		UI2.body(r, str(ch[1]), 11, Color.WHITE, false)
-	if me.gathered > 0 or me.gate_dmg > 0.0:
+	if sim.moba != null:
+		UI2.center(UI2.body(v, "Last hits %d · camps %d · tower and gate damage %d" % [int(me.get("lh", 0)), int(me.get("camps", 0)),
+			int(me.gate_dmg)], 12, Color("#cfe8b8"), false))
+	elif me.gathered > 0 or me.gate_dmg > 0.0:
 		UI2.center(UI2.body(v, "Gathered %d · gate damage %d" % [int(me.gathered), int(me.gate_dmg)], 12, Color("#cfe8b8"), false))
 	if sim.moba != null:
-		# 0.31.155 5V5 (the test): the towers each side brought down, your level; no rewards yet
+		# 0.31.155 5V5: the towers each side brought down, your level (0.31.164: paid like any match now)
 		UI2.center(UI2.body(v, "Towers down: theirs %d · yours %d  ·  you reached level %d" % [sim.moba.towers_down(1 - int(me.team)),
 			sim.moba.towers_down(int(me.team)), int(me.get("level", 1))], 12, Color("#ffcf7a"), false))
 		UI2.center(UI2.body(v, "Gold earned %d · %d item%s" % [int(me.get("gold_total", 0.0)), (me.get("items", []) as Array).size(),
 			"" if (me.get("items", []) as Array).size() == 1 else "s"], 12, Color("#ffe39a"), false))
-		UI2.center(UI2.body(v, "5V5 is a test -- no rewards yet", 11, UI2.MUTED, false))
 	if sim.commander:
 		# 0.31.153 COMMANDER (the test): the cards each side played; no rewards yet
 		UI2.center(UI2.body(v, "Cards played: you %d · enemy %d" % [int(sim.cmd[me.team].played), int(sim.cmd[1 - int(me.team)].played)], 12, Color("#d6a2ff"), false))

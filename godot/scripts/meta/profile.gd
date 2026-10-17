@@ -337,6 +337,36 @@ func refresh() -> void:
 	if ch.week != week:
 		ch.week = week
 		ch.weekly = Eco.roll_challenges("weekly", week, Eco.WEEKLY_COUNT)
+	_retire_challenges(ch.daily, "daily", str(ch.day))
+	_retire_challenges(ch.weekly, "weekly", str(ch.week))
+
+func _retire_challenges(list: Array, span: String, key: String) -> void:
+	# 0.31.164 (Kevin: "5v5 only"): a saved Siege challenge (King rescues, fish, gathering, King lifts) is swapped in place
+	# for a 5v5 one -- the same slot (the server replays claims by index) and the same claimed state; the same rolls on
+	# the phone and the server
+	var keep := []
+	for c in list:
+		if c is Dictionary and Eco.CHALLENGES.has(str(c.get("id", ""))):
+			keep.append(str(c.id))
+	if keep.size() == list.size():
+		return
+	var fresh := Eco.roll_challenges(span, key + "-5v5", list.size() - keep.size(), keep)
+	var fi := 0
+	for i in list.size():
+		var c: Variant = list[i]
+		if c is Dictionary and Eco.CHALLENGES.has(str(c.get("id", ""))):
+			continue
+		if fi >= fresh.size():
+			break
+		var nc: Dictionary = fresh[fi]
+		fi += 1
+		if c is Dictionary and bool(c.get("claimed", false)):
+			nc.claimed = true
+			nc.progress = int(Eco.CHALLENGES[nc.id].goal)
+		list[i] = nc
+	for i in range(list.size() - 1, -1, -1):
+		if not (list[i] is Dictionary) or not Eco.CHALLENGES.has(str(list[i].get("id", ""))):
+			list.remove_at(i)                          # (nothing left to swap in: dropped)
 
 # ---------------- level / pass ----------------
 func pass_tier() -> int:
@@ -751,7 +781,7 @@ func apply_match(me: Dictionary, won: bool, draw: bool, online: bool) -> Diction
 		add_chest("silver", out)
 	_add_xp(int(r.xp), out)
 	_add_pass_xp(int(r.pass), out)
-	for key in ["matches", "wins", "rescues", "kills", "gates", "gathered", "fed", "lifts", "repaired", "healed"]:
+	for key in ["matches", "wins", "rescues", "kills", "gates", "gathered", "fed", "lifts", "repaired", "healed"] + Eco.FIVE_STATS:
 		d.stats[key] = int(d.stats.get(key, 0)) + int(stats.get(key, 0))
 	_title_stats(stats, won)
 	out["quests"] = _quest_stats(stats, won)
@@ -778,7 +808,7 @@ static func slim_me(me: Dictionary) -> Dictionary:
 	# what a match's result needs of the unit (the op that carries it goes to the server; the unit has much more)
 	var out := {}
 	for k in ["kills", "rescues", "gate_dmg", "gathered", "fed", "lifts", "repaired", "healed", "best_multi", "cls", "cls_main",
-			"kills_cls", "q"]:
+			"kills_cls", "q"] + Eco.FIVE_STATS:
 		if me.has(k):
 			var v: Variant = me[k]
 			out[k] = (v as Dictionary).duplicate(true) if v is Dictionary else v
@@ -894,7 +924,7 @@ func quest_ready(cls: String) -> bool:
 func quests_ready() -> int:
 	var n := 0
 	for cls in Eco.QUESTS:
-		if quest_ready(cls):
+		if quest_ready(cls) and str(cls) != "worker":          # (0.31.164: the Worker's is Siege's, not shown)
 			n += 1
 	return n
 

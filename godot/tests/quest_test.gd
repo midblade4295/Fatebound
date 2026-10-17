@@ -90,7 +90,7 @@ func _init() -> void:
 	var r1: Dictionary = p.claim_quest("knight")
 	check(bool(r1.ok) and int(p.d.gold) == g0 + 400 and int(p.d.embers) == e0 + 30 and p.quest_step("knight") == 1, "step 1 pays 400 gold and 30 Embers")
 	check(not p.quest_ready("knight") and not bool(p.claim_quest("knight").ok), "step 3's goal reached doesn't skip step 2")
-	p.d.stats["q_knight_rescues"] = 10
+	p.d.stats["q_knight_towers"] = 10            # (0.31.164: step 2 is 10 towers -- it was 10 King rescues)
 	var gem0 := int(p.d.gems)
 	var ch0: int = p.d.chests.slots.size()
 	var r2: Dictionary = p.claim_quest("knight")
@@ -106,7 +106,7 @@ func _init() -> void:
 	p.save()
 	var p2 := Profile.new(p.path, "user://none.json")
 	p2.load_or_create()
-	check(p2.quest_step("knight") == 3 and p2.quest_step("rogue") == 3 and not p2.d.quests.has("nobody") and int(p2.d.stats.get("q_knight_rescues", 0)) == 10,
+	check(p2.quest_step("knight") == 3 and p2.quest_step("rogue") == 3 and not p2.d.quests.has("nobody") and int(p2.d.stats.get("q_knight_towers", 0)) == 10,
 		"quests survive a reload; a bad value is clamped, an unknown class dropped")
 	# ---- the screens
 	var base := "user://quest_ui-%d" % Time.get_ticks_usec()
@@ -149,12 +149,12 @@ func _process(_d: float) -> bool:
 			check(btn("side_quests") != null, "Home has a QUESTS button")
 			press("side_quests")
 			check(app.tab == "quests" and str(app.quest_cls) == "mage", "QUESTS opens on the class with a step ready (%s)" % str(app.quest_cls))
-			check(btn("quest_claim_mage") != null and btn("quest_knight") != null and btn("quest_archmage") != null, "the Quests screen: all 13 classes and CLAIM")
+			check(btn("quest_claim_mage") != null and btn("quest_knight") != null and btn("quest_archmage") != null, "the Quests screen: the 12 hero classes and CLAIM")
 		1:
 			var g0 := int(p.d.gold)
 			press("quest_claim_mage")
 			check(p.quest_step("mage") == 1 and int(p.d.gold) == g0 + 400, "CLAIM pays step 1")
-			p.d.stats["q_mage_lifts"] = 15
+			p.d.stats["q_mage_camps"] = 15            # (0.31.164: step 2 is 15 jungle camps -- it was 15 King lifts)
 			p.d.stats["q_mage_wins"] = 60
 			app.rebuild()
 		2:
@@ -172,9 +172,12 @@ func _process(_d: float) -> bool:
 			app.locker_class = "worker"
 			app.show_tab("locker")
 		5:
-			check(btn("locker_quest_worker") != null, "the Locker shows the Worker's quest")
-			press("locker_quest_worker")
-			check(app.tab == "quests" and str(app.quest_cls) == "worker", "and opens it")
+			# 0.31.164 (5v5 only): the Worker was Siege's -- no Worker in the Locker, nor his quest
+			check(btn("locker_worker") == null and btn("locker_quest_worker") == null and str(app.locker_class) == "knight",
+				"the Locker has no Worker (Siege's) and falls back to the Knight")
+			check(btn("locker_quest_knight") != null, "the Locker shows the Knight's quest")
+			press("locker_quest_knight")
+			check(app.tab == "quests" and str(app.quest_cls) == "knight", "and opens it")
 			print("QUEST_PASS" if fails.is_empty() else "QUEST_FAIL %s" % str(fails))
 			quit(0 if fails.is_empty() else 1)
 	step += 1

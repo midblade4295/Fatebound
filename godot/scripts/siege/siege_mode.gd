@@ -44,6 +44,7 @@ var _prev_physics_tps := 60
 var fps_cap := FPS_CAP
 var low_fx := false
 var hq_gfx := true          # High-quality graphics (Settings): shadows, glow, smoother edges
+var replay_hero := ""       # 0.31.164: PLAY AGAIN after a 5v5 -- siege_app starts the next one (with its own ticket)
 var audio: Node = null
 var profile = null       # scripts/meta/profile.gd — rewards, challenges and cosmetics
 var rewards: Dictionary = {}
@@ -56,7 +57,8 @@ var _kills_seen := 0
 var _repaired := 0.0     # gate health repaired (the sim's "repair" events)
 var _best_multi := 0     # most knockouts in one burst ("multikill" events)
 # 0.31.97 (class quests): the same, per class as worn -- a Crusader apart from a Knight (Eco.cosmetic_class)
-const Q_UNIT := {"kills":"kills", "rescues":"rescues", "gate_dmg":"gate_dmg", "gathered":"gathered", "fed":"fed", "healed":"healed"}
+const Q_UNIT := {"kills":"kills", "rescues":"rescues", "gate_dmg":"gate_dmg", "gathered":"gathered", "fed":"fed", "healed":"healed",
+	"towers":"towers", "camps":"camps", "lh":"lh", "epics":"epics"}       # (0.31.164: the 5v5's, moba.gd counts them on the hero)
 var _q := {}             # worn class -> {"t": seconds, "kills", "rescues", "gate_dmg", "gathered", "fed", "healed", "repaired", "lifts", "best_multi"}
 var _q_seen := {}        # my unit's running totals already credited
 var _q_cls := ""         # the class I wear right now ("" = none)
@@ -203,6 +205,10 @@ func _ready() -> void:
 					hud.score_panel.queue_free()
 				hud.score_panel = null
 			hud.toast("Next match starts shortly...", Color("#f2d18d"))
+		elif moba_hero != "" and profile != null:
+			# 0.31.164: a 5v5 is paid against a ticket of its own -- back through the app (siege_app.start_moba)
+			replay_hero = moba_hero
+			exited.emit()
 		else:
 			_restart())
 	hud.workshop_tools.connect(func(): _act("take_tools"))
@@ -421,7 +427,8 @@ func title_summary() -> Dictionary:
 		q[c] = {"t": float(e.get("t", 0.0)), "kills": int(e.get("kills", 0.0)), "rescues": int(e.get("rescues", 0.0)),
 			"gates": int(float(e.get("gate_dmg", 0.0)) / 100.0), "gathered": int(e.get("gathered", 0.0)), "fed": int(e.get("fed", 0.0)),
 			"healed": int(e.get("healed", 0.0)), "repaired": int(e.get("repaired", 0.0)), "lifts": int(e.get("lifts", 0.0)),
-			"best_multi": int(e.get("best_multi", 0))}
+			"best_multi": int(e.get("best_multi", 0)), "towers": int(e.get("towers", 0.0)), "camps": int(e.get("camps", 0.0)),
+			"lh": int(e.get("lh", 0.0)), "epics": int(e.get("epics", 0.0))}
 	return {"cls_main": main, "kills_cls": _kills_cls.duplicate(), "repaired": _repaired, "best_multi": _best_multi, "q": q}
 
 func _q_entry(c: String) -> Dictionary:
@@ -1107,8 +1114,8 @@ func _process(delta: float) -> void:
 		var won: bool = sim.winner == int(me.team)
 		var draw: bool = sim.winner == -1
 		match_result = {}
-		if profile != null and not tutorial and not commander and moba_hero == "":      # a tutorial is not a match: no rewards/
-			# challenges (nor the COMMANDER and 5V5 tests, 0.31.153 / 0.31.155: they aren't the game's yet)
+		if profile != null and not tutorial and not commander:      # a tutorial is not a match: no rewards/challenges (nor the
+			# COMMANDER test, 0.31.153; 0.31.164: the 5v5 is the game -- Kevin: "5v5 only" -- and pays like a match)
 			match_result = profile.apply_match(me, won, draw, online)
 			rewards = match_result.rewards
 		diag.write("REWARDS %s" % str(match_result.get("rewards", {}).get("gold", 0)))

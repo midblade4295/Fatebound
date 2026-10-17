@@ -353,7 +353,9 @@ static func clamp_me(me: Dictionary, secs: int) -> Dictionary:
 	# A phone's claim about its own VS BOTS match: nothing beyond what one match of that length can hold.
 	var mins := maxf(1.0, float(secs) / 60.0)
 	var cap := {"kills": mini(150, int(mins * 12.0)), "rescues": 5, "gate_dmg": 40000.0, "gathered": mini(400, int(mins * 40.0)),
-		"fed": 20, "lifts": 30, "repaired": 40000.0, "healed": 40000.0, "best_multi": 10}
+		"fed": 20, "lifts": 30, "repaired": 40000.0, "healed": 40000.0, "best_multi": 10,
+		# 0.31.164 (5v5): towers destroyed (11 a side), jungle camps, minion last hits, epic monsters
+		"towers": 12, "camps": mini(40, int(mins * 3.0)), "lh": mini(400, int(mins * 20.0)), "epics": 8}
 	var out := {}
 	for k in cap:
 		var v: Variant = me.get(k, 0)
@@ -384,7 +386,7 @@ static func clamp_me(me: Dictionary, secs: int) -> Dictionary:
 			var t := clampf(float(e.get("t", 0.0)) if (e.get("t", 0.0) is int or e.get("t", 0.0) is float) else 0.0, 0.0, t_left)
 			t_left -= t
 			var qe := {"t":t}
-			for st in ["kills", "rescues", "gathered", "fed", "lifts", "best_multi"]:
+			for st in ["kills", "rescues", "gathered", "fed", "lifts", "best_multi", "towers", "camps", "lh", "epics"]:
 				var x: Variant = e.get(st, 0)
 				qe[st] = clampi(int(x) if (x is int or x is float) else 0, 0, int(out.get(st, 0)))
 			var g: Variant = e.get("gates", 0)

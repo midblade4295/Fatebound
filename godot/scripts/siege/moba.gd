@@ -864,6 +864,8 @@ func hit_tower(src: Dictionary, id: int, amount: float) -> void:
 	amount *= tower_mult(src)
 	var before := float(tw.hp)
 	tw.hp = maxf(0.0, float(tw.hp) - amount)
+	if src.has("gate_dmg"):
+		src.gate_dmg = float(src.gate_dmg) + minf(amount, before)     # (0.31.164: towers count as gate damage -- "gates")
 	s._event("tower_hit", {"tw":id, "dmg":int(round(amount))})
 	# outer towers' plates (until 7:00): each fifth of its health that falls pays the side's heroes near
 	if int(tw.tier) == 1 and s.time < PLATES_UNTIL and float(tw.hp) > 0.0:
@@ -888,6 +890,7 @@ func hit_tower(src: Dictionary, id: int, amount: float) -> void:
 		var near := _heroes_near(et, tw.p, TOWER_LOCAL_R, src)
 		for h in near:
 			add_gold(h, float(GOLD_TOWER_LOCAL + (GOLD_FIRST_TOWER if first else 0)) / float(near.size()), tw.p)      # local
+			h["towers"] = int(h.get("towers", 0)) + 1     # (0.31.164: a tower destroyed -- by you or near you)
 		s._update_gate_nav()
 
 func _heroes_near(team: int, p: Vector2, r: float, src: Dictionary) -> Array:
@@ -980,6 +983,8 @@ func hit_king(src: Dictionary, t: int, amount: float) -> void:
 			_immune_note = s.time
 			s._event("king_immune", {"team":t})
 		return
+	if src.has("gate_dmg"):
+		src.gate_dmg = float(src.gate_dmg) + minf(amount, float(k.hp))     # (0.31.164: the King too)
 	k.hp = maxf(0.0, float(k.hp) - amount)
 	k.quiet = 0.0
 	s._event("king_hit", {"team":t, "dmg":int(round(amount))})
@@ -1086,6 +1091,7 @@ func on_kill(src: Dictionary, dst: Dictionary) -> void:
 			add_xp(h, mxp * (1.0 if near.size() == 1 else 0.65))
 		if not by_h.is_empty() and int(by_h.team) != int(dst.team):
 			add_gold(by_h, minion_gold(dst), dst.pos)     # the last hit
+			by_h["lh"] = int(by_h.get("lh", 0)) + 1       # (0.31.164: the match's rewards and challenges count it)
 	elif bool(dst.get("hero", false)):
 		dst.respawn_at = s.time + RESPAWN_BASE + RESPAWN_LVL * float(int(dst.level))
 		dst.erase("dance")
@@ -2204,6 +2210,7 @@ func _monster_down(dst: Dictionary, by_h: Dictionary) -> void:
 					continue
 				add_gold(h, float(md.gold), dst.pos)
 				add_xp(h, float(md.xp))
+				h["epics"] = int(h.get("epics", 0)) + 1      # (0.31.164)
 				if s.alive(h):
 					(h.buffs as Dictionary)["lord"] = s.time + LORD_TIME
 			boss_go[side] = false
@@ -2225,6 +2232,8 @@ func _monster_down(dst: Dictionary, by_h: Dictionary) -> void:
 				(by_h.buffs as Dictionary)[buff] = s.time + BUFF_TIME       # the big one's buff: to whoever finished him
 				s._event("buff", {"id":by_h.id, "team":int(by_h.team), "buff":buff})
 	if camp_live(camp).is_empty():
+		if not by_h.is_empty() and str(dst.mkind) != "lord":
+			by_h["camps"] = int(by_h.get("camps", 0)) + 1    # (0.31.164: a camp cleared -- whoever finished it)
 		camp.alive = false
 		camp.next = s.time + float(CAMP_KINDS[camp.kind].respawn)
 		camp.target = ""

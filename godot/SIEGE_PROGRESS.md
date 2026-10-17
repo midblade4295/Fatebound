@@ -4935,3 +4935,33 @@ settings so players don't see also".
 - Quick suite: ALL SIEGE TESTS PASSED (101). tools/cold_start_check.sh: PASS. The Play AAB (throwaway key, presets
   untouched): BASE OK (267 files), CONTENT OK, play_games true, bundletool valid. Preview APK:
   build/Fatebound-Siege-0.31.163-fatebound.apk (preview key).
+
+## 0.31.164 — 5v5 only (step 1 of the new map)
+Kevin: "I think we need to design a new map now to accommodate the games new play style" -> a plan (the Siege field
+with today's lanes, towers and camps drawn on it, beside a 112 x 220 m 5v5 map) -> his picks: "Replace it" (the Siege
+field), 112 x 220 m with 3 towers a lane, an open keep with 3 gates, a new epic monster -> and for Siege, Commander,
+the tutorial and the war map's battles: "Remove them now: 5v5 only". The order: (1) the app 5v5-only -- this; (2) the
+new map; (3) the epic monster (proposed: the Grave Wyrm, permanent +6 % max health a stack); (4) Siege's code and assets
+deleted.
+- Home: PLAY opens the 5v5's hero window (siege_app.play; ONLINE_MATCHES false); no TUTORIAL, 5V5 (TEST) or RANKS
+  medallion (FORGE moves up); the pill says FATEBOUND / 5 vs 5 (players online when known); no party count on PLAY.
+  Settings: no HOW TO PLAY (TUTORIAL). The daily login reward no longer waits for the tutorial. The hero window loses
+  TEST MODE.
+- No war map: social.WAR_MAP false (the server's war flag and its war_go / war_call / war_alarm are ignored: no WAR MAP
+  buttons, no battle banners, no home war watch); Friends' JOIN says matches with friends are coming; a party leader's
+  PLAY takes nobody along. (The code stays until step 4; the server is unchanged apart from below.)
+- The 5v5 pays: a VS BOTS ticket first (start_moba -> start_match), Profile.apply_match at the end, PLAY AGAIN through
+  the app for a fresh ticket (siege_mode.replay_hero). moba.gd counts on the hero: minion last hits ("lh"), jungle
+  camps cleared by whoever finishes one ("camps"), epic monsters for every hero of the slaying side ("epics"), towers
+  destroyed by you or near you ("towers"), and tower and King damage with the gates' ("gate_dmg" -> "gates").
+- Economy: rewards itemise towers (25 g), camps (6), last hits (1), epic monsters (40) beside the old lines; the
+  challenges are the 5v5's (heroes knocked out, towers, camps, last hits, epics, tower and gate damage, wins,
+  matches) -- a saved Siege one is swapped in place on refresh (same slot, claimed stays claimed, the same roll on the
+  server's copy); Siege's 9 titles are retired (kept if owned, not listed to earn); the quests' King-rescue / King-lift
+  steps ask for towers / camps; no Worker in Quests, the Locker or the Forge (HERO_CLASSES). The result screen: KOs,
+  downs, towers; last hits, camps, damage. Profile card: towers, last hits, camps, tower damage.
+- Server (eco_accounts.clamp_me): caps for towers 12, camps, last hits, epics 8 and the quests' copies.
+- Tests: tests/five_only_test.gd (new); app_flow, moba_ui, quest, leaderboard, social_ui, clans_ui, home_heroes
+  updated; war_battle, war_ui, war_tour and join_friend out of the suite (their app paths are gone).
+- Version 0.31.164, versionCode 250, SERVER_BUILD 0.31.164 (the eco server's clamp and the economy changed -- a
+  server redeploy pays the 5v5's new lines; an older server's copy would miss them).

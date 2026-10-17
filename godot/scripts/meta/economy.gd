@@ -6,6 +6,9 @@ extends RefCounted
 # Everything sold is cosmetic. The forge still decides your class in battle.
 
 const CLASSES := ["knight", "barbarian", "rogue", "ranger", "mage", "priest", "worker"]
+# 0.31.164 (Kevin: "Remove them now: 5v5 only"): the classes a 5v5 hero can be -- the Worker was Siege's (his quest and
+# titles are kept for the record but not shown, see RETIRED)
+const HERO_CLASSES := ["knight", "barbarian", "rogue", "ranger", "mage", "priest"]
 # 0.31.38: the upgraded classes have their own cosmetics (and equip slots): what they upgrade from, and which body
 # the game builds for them (the Crusader is a Knight body)
 const UP_CLASSES := ["crusader", "berserker", "necromancer", "assassin", "sniper", "archmage"]
@@ -481,20 +484,23 @@ static func _rotation(key: String, currency: String, n: int, unix := 0) -> Array
 # ---------------- challenges ----------------
 # stat keys come from match_stats(): wins, matches, rescues, kills, gates (gate damage / 100),
 # gathered, fed, lifts (Oracle lifts joined), class_<name> (matches finished as that class).
+# 0.31.164 (Kevin: "5v5 only"): the 5v5's challenges -- Siege's (King rescues, fish, gathering, King lifts) are gone; a
+# saved one of those is swapped for a new one when the profile refreshes (Profile._retire_challenges). "gates" is now
+# the damage dealt to towers, gates and the King (per 100).
 const CHALLENGES := {
 	"win1":     {"text":"Win a match", "stat":"wins", "goal":1, "pass":500, "gold":100, "span":"daily"},
 	"play3":    {"text":"Play 3 matches", "stat":"matches", "goal":3, "pass":400, "gold":80, "span":"daily"},
-	"rescue1":  {"text":"Rescue your King", "stat":"rescues", "goal":1, "pass":600, "gold":120, "span":"daily"},
-	"kos15":    {"text":"Knock out 15 enemies", "stat":"kills", "goal":15, "pass":400, "gold":80, "span":"daily"},
-	"gate5":    {"text":"Deal 500 gate damage", "stat":"gates", "goal":5, "pass":450, "gold":90, "span":"daily"},
-	"gather40": {"text":"Gather 40 wood or stone", "stat":"gathered", "goal":40, "pass":400, "gold":80, "span":"daily"},
-	"feed3":    {"text":"Feed 3 fish to their King", "stat":"fed", "goal":3, "pass":450, "gold":90, "span":"daily"},
-	"lift2":    {"text":"Help lift your King twice", "stat":"lifts", "goal":2, "pass":400, "gold":80, "span":"daily"},
+	"kos5":     {"text":"Knock out 5 enemy heroes", "stat":"kills", "goal":5, "pass":400, "gold":80, "span":"daily"},
+	"gate5":    {"text":"Deal 500 damage to towers and gates", "stat":"gates", "goal":5, "pass":450, "gold":90, "span":"daily"},
+	"tower2":   {"text":"Destroy 2 towers", "stat":"towers", "goal":2, "pass":500, "gold":100, "span":"daily"},
+	"camps4":   {"text":"Clear 4 jungle camps", "stat":"camps", "goal":4, "pass":450, "gold":90, "span":"daily"},
+	"lh60":     {"text":"Last-hit 60 minions", "stat":"lh", "goal":60, "pass":400, "gold":80, "span":"daily"},
+	"epic1":    {"text":"Defeat an epic monster", "stat":"epics", "goal":1, "pass":600, "gold":120, "span":"daily"},
 	"w_win5":   {"text":"Win 5 matches", "stat":"wins", "goal":5, "pass":2000, "gems":40, "span":"weekly"},
-	"w_rescue4":{"text":"Rescue your King 4 times", "stat":"rescues", "goal":4, "pass":2000, "gems":40, "span":"weekly"},
-	"w_kos100": {"text":"Knock out 100 enemies", "stat":"kills", "goal":100, "pass":1800, "gems":30, "span":"weekly"},
-	"w_gate30": {"text":"Deal 3,000 gate damage", "stat":"gates", "goal":30, "pass":1800, "gems":30, "span":"weekly"},
-	"w_feed12": {"text":"Feed 12 fish", "stat":"fed", "goal":12, "pass":1800, "gems":30, "span":"weekly"},
+	"w_kos30":  {"text":"Knock out 30 enemy heroes", "stat":"kills", "goal":30, "pass":1800, "gems":30, "span":"weekly"},
+	"w_gate30": {"text":"Deal 3,000 damage to towers and gates", "stat":"gates", "goal":30, "pass":1800, "gems":30, "span":"weekly"},
+	"w_tower12":{"text":"Destroy 12 towers", "stat":"towers", "goal":12, "pass":2000, "gems":40, "span":"weekly"},
+	"w_camps20":{"text":"Clear 20 jungle camps", "stat":"camps", "goal":20, "pass":1800, "gems":30, "span":"weekly"},
 	"w_play12": {"text":"Play 12 matches", "stat":"matches", "goal":12, "pass":1600, "gems":25, "span":"weekly"},
 }
 const DAILY_COUNT := 3
@@ -570,6 +576,9 @@ static func match_stats(me: Dictionary, won: bool, _draw: bool) -> Dictionary:
 	var s := {"matches":1, "wins":1 if won else 0, "rescues":int(me.get("rescues", 0)), "kills":int(me.get("kills", 0)),
 		"gates":int(float(me.get("gate_dmg", 0.0)) / 100.0), "gathered":int(me.get("gathered", 0)), "fed":int(me.get("fed", 0)),
 		"lifts":int(me.get("lifts", 0))}
+	# 0.31.164 (5v5): towers destroyed (yours or near you), jungle camps cleared, minion last hits, epic monsters slain
+	for k in FIVE_STATS:
+		s[k] = int(me.get(k, 0))
 	s["class_" + str(me.get("cls", "villager"))] = 1
 	# 0.31.87 (titles): what siege_mode gathered over the match -- the class played most (cls_main), knockouts by the
 	# class they were made as, gate health repaired, health healed, the biggest burst of knockouts
@@ -595,16 +604,16 @@ const TITLE_GOALS := {
 	"title_squire":         {"stat":"matches", "n":5, "task":"Play 5 matches", "cls":""},
 	"title_victor":         {"stat":"wins", "n":5, "task":"Win 5 matches", "cls":""},
 	"title_brawler":        {"stat":"kills", "n":50, "task":"Knock out 50 enemies", "cls":""},
-	"title_woodcutter":     {"stat":"gathered", "n":200, "task":"Gather 200 wood or stone", "cls":""},
-	"title_fishmonger":     {"stat":"fed", "n":10, "task":"Feed 10 fish to your King", "cls":""},
-	"title_gatebreaker":    {"stat":"gates", "n":100, "task":"Deal 10,000 gate damage", "cls":""},
-	"title_kingbearer":     {"stat":"lifts", "n":25, "task":"Help lift your King 25 times", "cls":""},
-	"title_many_hats":      {"stat":"classes", "n":7, "task":"Play a match as each of the 7 classes", "cls":""},
+	"title_woodcutter":     {"stat":"gathered", "n":200, "task":"Gather 200 wood or stone", "cls":"", "siege":true},
+	"title_fishmonger":     {"stat":"fed", "n":10, "task":"Feed 10 fish to your King", "cls":"", "siege":true},
+	"title_gatebreaker":    {"stat":"gates", "n":100, "task":"Deal 10,000 damage to towers and gates", "cls":""},
+	"title_kingbearer":     {"stat":"lifts", "n":25, "task":"Help lift your King 25 times", "cls":"", "siege":true},
+	"title_many_hats":      {"stat":"classes", "n":7, "task":"Play a match as each of the 7 classes", "cls":"", "siege":true},
 	"title_tempest":        {"stat":"best_multi", "n":3, "task":"Knock out 3 enemies in one burst", "cls":""},
 	"title_relentless":     {"stat":"best_streak", "n":5, "task":"Win 5 matches in a row", "cls":""},
-	"title_cake_baron":     {"stat":"fed", "n":100, "task":"Feed 100 fish to your King", "cls":""},
+	"title_cake_baron":     {"stat":"fed", "n":100, "task":"Feed 100 fish to your King", "cls":"", "siege":true},
 	"title_siege_lord":     {"stat":"wins", "n":50, "task":"Win 50 matches", "cls":""},
-	"title_oracle_sworn":   {"stat":"rescues", "n":50, "task":"Rescue your King 50 times", "cls":""},
+	"title_oracle_sworn":   {"stat":"rescues", "n":50, "task":"Rescue your King 50 times", "cls":"", "siege":true},
 	"title_unstoppable":    {"stat":"best_multi", "n":5, "task":"Knock out 5 enemies in one burst", "cls":""},
 	"title_undefeated":     {"stat":"best_streak", "n":10, "task":"Win 10 matches in a row", "cls":""},
 	"title_legend":         {"stat":"wins", "n":250, "task":"Win 250 matches", "cls":""},
@@ -626,11 +635,16 @@ const TITLE_GOALS := {
 	"title_acolyte":        {"stat":"win_priest", "n":10, "task":"Win 10 matches as Priest or Necromancer", "cls":"priest"},
 	"title_merciful":       {"stat":"healed", "n":25000, "task":"Heal 25,000 health", "cls":"priest"},
 	"title_lightbringer":   {"stat":"win_priest", "n":100, "task":"Win 100 matches as Priest or Necromancer", "cls":"priest"},
-	"title_foreman":        {"stat":"win_worker", "n":10, "task":"Win 10 matches as Worker", "cls":"worker"},
-	"title_mason":          {"stat":"repaired", "n":20000, "task":"Repair 20,000 gate health", "cls":"worker"},
-	"title_master_builder": {"stat":"gathered", "n":5000, "task":"Gather 5,000 wood or stone", "cls":"worker"},
+	"title_foreman":        {"stat":"win_worker", "n":10, "task":"Win 10 matches as Worker", "cls":"worker", "siege":true},
+	"title_mason":          {"stat":"repaired", "n":20000, "task":"Repair 20,000 gate health", "cls":"worker", "siege":true},
+	"title_master_builder": {"stat":"gathered", "n":5000, "task":"Gather 5,000 wood or stone", "cls":"worker", "siege":true},
 }
+# 0.31.164: "siege": true -- earned in Siege (King rescues, fish, King lifts, gathering, repairs, the Worker, all 7 classes):
+# kept by whoever has it, not shown to earn any more (retired())
 const TITLE_RARITY_ORDER := ["common", "rare", "epic", "legendary"]
+
+static func retired(goal: Dictionary) -> bool:
+	return bool(goal.get("siege", false))
 
 # ---------------- class quests (0.31.97, Kevin: "Build the quest system and I want quests for each class") ----------------
 # Every class has one quest: three steps, claimed in order; the first two pay out (QUEST_REWARDS), the third gives the
@@ -641,16 +655,18 @@ const TITLE_RARITY_ORDER := ["common", "rare", "epic", "legendary"]
 # (per 100 gate damage), gathered, fed, repaired / healed (health), lifts (King lifts joined), best_multi (the most
 # knockouts in one burst -- a best, not a sum).
 const QUEST_MIN_TIME := 60.0
-const QUEST_COUNTS := ["kills", "rescues", "gates", "gathered", "fed", "repaired", "healed", "lifts"]
+const QUEST_COUNTS := ["kills", "rescues", "gates", "gathered", "fed", "repaired", "healed", "lifts", "towers", "camps", "lh", "epics"]
+# 0.31.164 (5v5 only): the steps that asked for King rescues or King lifts ask for towers or jungle camps now ("gates" is
+# tower and gate damage); the Worker's quest is Siege's -- kept, not shown (HERO_CLASSES)
 const QUEST_REWARDS := [{"gold":400, "embers":30}, {"gems":50, "chest":"gold"}]      # steps 1 and 2; step 3 is the weapon
 const QUESTS := {
 	"knight":      {"item":"knight_wpn_kingsguard", "steps":[
 		{"stat":"wins", "n":3, "task":"Win 3 matches as a Knight"},
-		{"stat":"rescues", "n":10, "task":"Rescue your King 10 times as a Knight"},
+		{"stat":"towers", "n":10, "task":"Destroy 10 towers as a Knight"},
 		{"stat":"kills", "n":500, "task":"Knock out 500 enemies as a Knight"}]},
 	"barbarian":   {"item":"barb_wpn_skyrender", "steps":[
 		{"stat":"kills", "n":40, "task":"Knock out 40 enemies as a Barbarian"},
-		{"stat":"gates", "n":100, "task":"Deal 10,000 gate damage as a Barbarian"},
+		{"stat":"gates", "n":100, "task":"Deal 10,000 damage to towers and gates as a Barbarian"},
 		{"stat":"wins", "n":60, "task":"Win 60 matches as a Barbarian"}]},
 	"rogue":       {"item":"rogue_wpn_moonfang", "steps":[
 		{"stat":"kills", "n":40, "task":"Knock out 40 enemies as a Rogue"},
@@ -662,11 +678,11 @@ const QUESTS := {
 		{"stat":"kills", "n":750, "task":"Knock out 750 enemies as an Archer"}]},
 	"mage":        {"item":"mage_wpn_emberheart", "steps":[
 		{"stat":"kills", "n":40, "task":"Knock out 40 enemies as a Mage"},
-		{"stat":"lifts", "n":15, "task":"Help lift your King 15 times as a Mage"},
+		{"stat":"camps", "n":15, "task":"Clear 15 jungle camps as a Mage"},
 		{"stat":"wins", "n":60, "task":"Win 60 matches as a Mage"}]},
 	"priest":      {"item":"priest_wpn_seraph", "steps":[
 		{"stat":"healed", "n":2000, "task":"Heal 2,000 health as a Priest"},
-		{"stat":"rescues", "n":10, "task":"Rescue your King 10 times as a Priest"},
+		{"stat":"towers", "n":10, "task":"Destroy 10 towers as a Priest"},
 		{"stat":"wins", "n":60, "task":"Win 60 matches as a Priest"}]},
 	"worker":      {"item":"worker_wpn_sledge", "steps":[
 		{"stat":"gathered", "n":300, "task":"Gather 300 wood or stone"},
@@ -674,11 +690,11 @@ const QUESTS := {
 		{"stat":"wins", "n":60, "task":"Win 60 matches as a Worker"}]},
 	"crusader":    {"item":"crus_wpn_oathbound", "steps":[
 		{"stat":"kills", "n":25, "task":"Knock out 25 enemies as a Crusader"},
-		{"stat":"rescues", "n":8, "task":"Rescue your King 8 times as a Crusader"},
+		{"stat":"towers", "n":8, "task":"Destroy 8 towers as a Crusader"},
 		{"stat":"wins", "n":30, "task":"Win 30 matches as a Crusader"}]},
 	"berserker":   {"item":"bers_wpn_bloodroar", "steps":[
 		{"stat":"kills", "n":25, "task":"Knock out 25 enemies as a Berserker"},
-		{"stat":"gates", "n":80, "task":"Deal 8,000 gate damage as a Berserker"},
+		{"stat":"gates", "n":80, "task":"Deal 8,000 damage to towers and gates as a Berserker"},
 		{"stat":"wins", "n":30, "task":"Win 30 matches as a Berserker"}]},
 	"necromancer": {"item":"necro_wpn_lichcrown", "steps":[
 		{"stat":"kills", "n":25, "task":"Knock out 25 enemies as a Necromancer"},
@@ -694,7 +710,7 @@ const QUESTS := {
 		{"stat":"kills", "n":400, "task":"Knock out 400 enemies as a Ranger"}]},
 	"archmage":    {"item":"arch_wpn_astral", "steps":[
 		{"stat":"kills", "n":25, "task":"Knock out 25 enemies as an Archmage"},
-		{"stat":"lifts", "n":10, "task":"Help lift your King 10 times as an Archmage"},
+		{"stat":"camps", "n":10, "task":"Clear 10 jungle camps as an Archmage"},
 		{"stat":"wins", "n":30, "task":"Win 30 matches as an Archmage"}]},
 }
 
@@ -742,6 +758,8 @@ static func title_progress(stats: Dictionary, id: String) -> int:
 		return n
 	return int(stats.get(str(g.stat), 0))
 
+const FIVE_STATS := ["towers", "camps", "lh", "epics"]
+
 static func match_rewards(stats: Dictionary, won: bool, draw: bool, online: bool, first_win: bool) -> Dictionary:
 	# Itemised so the results screen can show where every coin came from.
 	var lines := []
@@ -758,10 +776,23 @@ static func match_rewards(stats: Dictionary, won: bool, draw: bool, online: bool
 		lines.append({"label":"Gathered x%d" % g, "gold":g, "xp":g, "pass":g})
 	var gd: int = mini(40, int(stats.get("gates", 0)))
 	if gd > 0:
-		lines.append({"label":"Gate damage", "gold":2 * gd, "xp":3 * gd, "pass":3 * gd})
+		lines.append({"label":"Tower and gate damage", "gold":2 * gd, "xp":3 * gd, "pass":3 * gd})
 	var f: int = mini(10, int(stats.get("fed", 0)))
 	if f > 0:
 		lines.append({"label":"Fish fed x%d" % f, "gold":10 * f, "xp":10 * f, "pass":15 * f})
+	# 0.31.164 (5v5)
+	var tw: int = mini(12, int(stats.get("towers", 0)))
+	if tw > 0:
+		lines.append({"label":"Towers destroyed x%d" % tw, "gold":25 * tw, "xp":30 * tw, "pass":40 * tw})
+	var cp: int = mini(30, int(stats.get("camps", 0)))
+	if cp > 0:
+		lines.append({"label":"Jungle camps x%d" % cp, "gold":6 * cp, "xp":8 * cp, "pass":10 * cp})
+	var lh: int = mini(150, int(stats.get("lh", 0)))
+	if lh > 0:
+		lines.append({"label":"Minion last hits x%d" % lh, "gold":lh, "xp":lh, "pass":lh})
+	var ep: int = mini(6, int(stats.get("epics", 0)))
+	if ep > 0:
+		lines.append({"label":"Epic monsters x%d" % ep, "gold":40 * ep, "xp":40 * ep, "pass":60 * ep})
 	if online:
 		var sub := {"gold":0, "xp":0, "pass":0}
 		for ln in lines:

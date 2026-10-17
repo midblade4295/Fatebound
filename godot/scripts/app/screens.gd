@@ -301,7 +301,7 @@ static func home(app, root: VBoxContainer) -> void:
 	var orders_ready := 1 if p.login_ready() else 0          # 0.31.119: the daily login reward is in ORDERS too
 	for span in ["daily", "weekly"]:
 		for ch in (d.challenges.daily if span == "daily" else d.challenges.weekly):
-			if not bool(ch.claimed) and int(ch.progress) >= int(Eco.CHALLENGES[ch.id].goal):
+			if not bool(ch.claimed) and Eco.CHALLENGES.has(str(ch.id)) and int(ch.progress) >= int(Eco.CHALLENGES[ch.id].goal):
 				orders_ready += 1
 	var sp := _medallion(top, Vector2(-2, MED_Y[0]), "banner", "PASS", func():
 		app.sfx("tab")
@@ -323,7 +323,7 @@ static func home(app, root: VBoxContainer) -> void:
 		UI2.wiggle(ob.get_meta("icon"))
 	# 0.31.93: the Forge, under FIRST WIN (a badge when an equipped weapon's next star can be forged)
 	var fready := forge_ready(p)
-	var fgb := _medallion(top, Vector2(w - 62, MED_Y[1]), "anvil", "FORGE", func():
+	var fgb := _medallion(top, Vector2(w - 62, MED_Y[0]), "anvil", "FORGE", func():          # (0.31.164: top right, RANKS gone)
 		app.sfx("tab")
 		app.forge_cls = app.locker_class if (Eco.CLASSES + Eco.UP_CLASSES).has(str(app.locker_class)) else "knight"
 		app.forge_pick = ""
@@ -333,34 +333,9 @@ static func home(app, root: VBoxContainer) -> void:
 	# (0.31.111-0.31.138: SOCIAL stood under the Forge; 0.31.139 it's the ALLIANCE tab.) The tutorial takes its place
 	# until it's been played through, with its gold as a tag.
 	var soc = app.get("social")
-	if not bool(d.get("tutorial_done", false)):
-		var tb := _medallion(top, Vector2(w - 62, MED_Y[2]), "horn", "TUTORIAL", func():
-			app.sfx("confirm")
-			app.start_tutorial(), "tutorial_start", 0, "gold")
-		UI2.glow(tb, Rect2(-14, -14, 94, 94), Color(1.0, 0.85, 0.4, 0.5))
-		UI2.wiggle(tb.get_meta("icon"), 1.6)
-		var gold_tag := _tag(tb, "+%d" % app.TUTORIAL_GOLD, 12)
-		gold_tag.name = "TutorialGold"
-		gold_tag.position = Vector2(-10, -8)
-		gold_tag.rotation = deg_to_rad(-8.0)
-	# 0.31.153 (Kevin: "Yes" -- the Clash Royale-style test): COMMANDER, in the tutorial's place once it's done; under the
-	# tutorial until then (0.31.154, Kevin: "I don't see the test button" -- a phone that hadn't played the tutorial).
-	# 0.31.155: 5V5 takes the slot (Kevin on COMMANDER: "not sure if I like picking the troops" -> MOBA, 5v5)
-	var cmd_y: float = MED_Y[2] if bool(d.get("tutorial_done", false)) else MED_Y[2] + (MED_Y[2] - MED_Y[1])
-	var cmb := _medallion(top, Vector2(w - 62, cmd_y), "swords", "5V5", func():
-		app.sfx("menuOpen")
-		app.open_moba(), "side_moba", 0, "silver")
-	var tt := _tag(cmb, "TEST", 11)
-	tt.name = "MobaTest"
-	tt.position = Vector2(-18, 26)                     # (on its left side: over it, it covered TUTORIAL's label)
-	tt.rotation = deg_to_rad(-8.0)
-	# 0.31.119 (Kevin: "Do all" -- leaderboards): RANKS takes the top-right medallion (the week's leaderboard); the first
-	# win of the day moved onto PLAY as a tag
+	# 0.31.164 (Kevin: "5v5 only"): no TUTORIAL (Siege's walkthrough), no 5V5 TEST (PLAY is the 5v5 now) and no RANKS
+	# (the weekly leaderboard counts online matches -- none until the 5v5 is online)
 	var fw_open := str(d.first_win_day) != Eco.day_key(p.now())
-	var rkb := _medallion(top, Vector2(w - 62, MED_Y[0]), "trophy", "RANKS", func():
-		app.sfx("menuOpen")
-		app.open_leaderboard(), "side_ranks", 0, "silver")
-	UI2.bob(rkb.get_meta("icon"), 3.0, 1.6)
 	# 0.31.125 (Kevin: "Put a discord button on front page that goes away after they claim it then leave the other discord
 	# button in settings"): under the logo between the medallion columns, with its gift as a tag, until it's claimed
 	if not bool(d.get("discord", false)):
@@ -441,9 +416,7 @@ static func home(app, root: VBoxContainer) -> void:
 	play.add_child(art)
 	if art.texture == null:                         # (without the ui pack's art: the old orange button's colours)
 		UI2.plate(art, "orange", 18.0, "gold")
-	var word := "PLAY"                            # (0.31.149: a party member's PLAY opens the map too -- not READY)
-	if soc != null and soc.online() and soc.in_party() and soc.is_leader() and soc.party_size() > 1:
-		word = "PLAY ×%d" % soc.party_size()
+	var word := "PLAY"                            # (0.31.164: the 5v5 -- offline, so no party count)
 	var face := Rect2(PLAQUE_FACE.position * play.size, PLAQUE_FACE.size * play.size)
 	var pl := UI2.text(play, word, 40 if word.length() <= 5 else 32, Color.WHITE, Color("#6a1a04"), 10)
 	pl.name = "PlayWord"
@@ -538,9 +511,9 @@ static func _online_pill(app, top: Control, w: float, y: float) -> void:
 		var tw := dot.create_tween().set_loops()
 		tw.tween_property(dot, "modulate:a", 0.3, 0.8).set_trans(Tween.TRANS_SINE)
 		tw.tween_property(dot, "modulate:a", 1.0, 0.8).set_trans(Tween.TRANS_SINE))
-	var om := UI2.text(hint, "LIVE SIEGE SERVER", 13, Color("#8cf0a8"), Color("#0b2a14"), 5)
+	var om := UI2.text(hint, "FATEBOUND", 13, Color("#8cf0a8"), Color("#0b2a14"), 5)
 	om.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	var osub := UI2.body(hint, "16 vs 16", 11, Color("#c2cdea"), false)     # (0.31.139: at the top, shorter)
+	var osub := UI2.body(hint, "5 vs 5", 11, Color("#c2cdea"), false)     # (0.31.139: at the top, shorter; 0.31.164: the 5v5)
 	osub.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	app.online_refs = {"main": om, "sub": osub}
 	if app.has_method("paint_online"):
@@ -740,6 +713,8 @@ static func challenges_card(app, root: Node, span: String) -> Control:
 	rl.autowrap_mode = TextServer.AUTOWRAP_OFF
 	for i in list.size():
 		var ch: Dictionary = list[i]
+		if not Eco.CHALLENGES.has(str(ch.id)):
+			continue                                   # (0.31.164: a retired Siege one, before the profile swapped it)
 		var def: Dictionary = Eco.CHALLENGES[ch.id]
 		var row := UI.row(c, 10)
 		var v := VBoxContainer.new()
@@ -1932,12 +1907,14 @@ static func locker(app, root: VBoxContainer) -> void:
 	var p = app.profile
 	var title := UI2.text(root, "LOCKER", 30, UI2.GOLD)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	if str(app.locker_class) == "worker":
+		app.locker_class = "knight"                  # (0.31.164: the Worker was Siege's)
 	var rail := UI2.frame(root, "glass", 8, 18.0)
 	var r1 := HBoxContainer.new()
 	r1.alignment = BoxContainer.ALIGNMENT_CENTER
 	r1.add_theme_constant_override("separation", 4)
 	rail.add_child(r1)
-	for cls in Eco.CLASSES:
+	for cls in Eco.HERO_CLASSES:                     # (0.31.164: no Worker)
 		var c: String = cls
 		_class_coin(r1, cls, app.locker_class == cls, "locker_" + cls, func():
 			app.locker_class = c
@@ -1971,10 +1948,10 @@ static func locker(app, root: VBoxContainer) -> void:
 		ne.disabled = str(p.d.title) == ""
 		ne.custom_minimum_size.x = 104
 		# 0.31.87: every title is earned -- for everyone first, then each class's three (upgrades count as their class)
-		for sec in [""] + Eco.CLASSES:
+		for sec in [""] + Eco.HERO_CLASSES:          # (0.31.164: no Worker -- Siege's)
 			var ids := []
 			for id in Eco.TITLE_GOALS:
-				if str(Eco.TITLE_GOALS[id].cls) == sec:
+				if str(Eco.TITLE_GOALS[id].cls) == sec and (not Eco.retired(Eco.TITLE_GOALS[id]) or p.owns(id)):
 					ids.append(id)
 			ids.sort_custom(func(a, b): return Eco.TITLE_RARITY_ORDER.find(str(Eco.CATALOG[a].rarity)) < Eco.TITLE_RARITY_ORDER.find(str(Eco.CATALOG[b].rarity)))
 			var head := "FOR EVERYONE" if sec == "" else str(Eco.CLASS_NAMES[sec]).to_upper()
@@ -2417,9 +2394,10 @@ static func settings(app, root: VBoxContainer) -> void:
 	car.add_child(grid)
 	var wins := int(st.wins)
 	var matches := int(st.matches)
-	var tiles := [["swords", UI.compact(matches), "MATCHES"], ["trophy", UI.compact(wins), "WINS"], ["crown", UI.compact(int(st.rescues)), "RESCUES"],
-		["skull", UI.compact(int(st.kills)), "KNOCKOUTS"], ["castle", UI.compact(int(st.gates) * 100), "GATE DMG"], ["stall", UI.compact(int(st.gathered)), "GATHERED"],
-		["fish", UI.compact(int(st.fed)), "FISH FED"], ["banner", ("%d%%" % int(round(100.0 * wins / matches))) if matches > 0 else "--", "WIN RATE"]]
+	# (0.31.164, 5v5 only: towers, last hits and jungle camps where King rescues, gathering and fish were)
+	var tiles := [["swords", UI.compact(matches), "MATCHES"], ["trophy", UI.compact(wins), "WINS"], ["castle", UI.compact(int(st.get("towers", 0))), "TOWERS"],
+		["skull", UI.compact(int(st.kills)), "KNOCKOUTS"], ["anvil", UI.compact(int(st.gates) * 100), "TOWER DMG"], ["helmet", UI.compact(int(st.get("lh", 0))), "LAST HITS"],
+		["horn", UI.compact(int(st.get("camps", 0))), "CAMPS"], ["banner", ("%d%%" % int(round(100.0 * wins / matches))) if matches > 0 else "--", "WIN RATE"]]
 	var i := 0
 	for tdef in tiles:
 		var tc := VBoxContainer.new()
@@ -2546,10 +2524,7 @@ static func settings(app, root: VBoxContainer) -> void:
 			DisplayServer.clipboard_set(Diag.read_logs())
 			app.toast("Diagnostics copied", UI.CYAN), "copy_diag", 13, 40.0))
 	UI.grow(UI2.button(help, "PRIVACY POLICY", "blue", func(): OS.shell_open(PRIVACY_URL), "privacy", 13, 40.0))
-	# 0.31.112: the tutorial again any time (Home shows it only until it's been played)
-	UI2.button(root, "HOW TO PLAY (TUTORIAL)", "blue", func():
-		app.sfx("confirm")
-		app.start_tutorial(), "tutorial", 14, 40.0)
+	# (0.31.112-0.31.163: HOW TO PLAY (TUTORIAL) -- Siege's walkthrough; gone with Siege, 0.31.164)
 	var ver := UI2.body(root, "Fatebound %s" % Diag.BUILD, 11, UI2.MUTED)
 	ver.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
@@ -2658,9 +2633,11 @@ static func forge(app, root: VBoxContainer) -> void:
 					app.toast("Not enough gems", UI.RED), "forge_buy_" + pid, 13, 32.0, 10.0, "res://assets/ui/currency/gem.png")
 			bb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	# class picker (base classes, then the upgrades)
+	if str(app.forge_cls) == "worker":
+		app.forge_cls = "knight"                     # (0.31.164: the Worker was Siege's)
 	var cls: String = app.forge_cls
 	var rail := UI2.frame(root, "glass", 8, 18.0)
-	for row_classes in [Eco.CLASSES, Eco.UP_CLASSES]:
+	for row_classes in [Eco.HERO_CLASSES, Eco.UP_CLASSES]:
 		var rr := HBoxContainer.new()
 		rr.alignment = BoxContainer.ALIGNMENT_CENTER
 		rr.add_theme_constant_override("separation", 4)
@@ -2876,11 +2853,13 @@ static func _reward_chips(parent: Node, r: Dictionary, ink := Color.WHITE) -> HB
 static func quest_first(p) -> String:
 	# the class to open the Quests screen on: one with a step ready, else the one played most, else the Knight
 	for cls in Eco.QUESTS:
-		if p.quest_ready(cls):
+		if p.quest_ready(cls) and str(cls) != "worker":
 			return str(cls)
 	var best := "knight"
 	var most := 0
 	for cls in Eco.QUESTS:
+		if str(cls) == "worker":
+			continue
 		var n := int(p.d.stats.get(Eco.quest_key(cls, "matches"), 0))
 		if n > most:
 			most = n
@@ -2934,10 +2913,10 @@ static func quests(app, root: VBoxContainer) -> void:
 	UI.icon(back, "home", 22, Color.WHITE).position = Vector2(12, 7)
 	UI2.center(UI2.body(root, "Every class has a quest. Finish its three steps to earn its legendary weapon -- never sold.", 12, UI2.SOFT))
 	# class picker: a badge where a step is ready, a tick where the quest is done
-	var cls: String = app.quest_cls if Eco.QUESTS.has(str(app.quest_cls)) else quest_first(p)
+	var cls: String = app.quest_cls if Eco.QUESTS.has(str(app.quest_cls)) and str(app.quest_cls) != "worker" else quest_first(p)
 	app.quest_cls = cls
 	var rail := UI2.frame(root, "glass", 8, 18.0)
-	for row_classes in [Eco.CLASSES, Eco.UP_CLASSES]:
+	for row_classes in [Eco.HERO_CLASSES, Eco.UP_CLASSES]:             # (0.31.164: no Worker -- Siege's)
 		var rr := HBoxContainer.new()
 		rr.alignment = BoxContainer.ALIGNMENT_CENTER
 		rr.add_theme_constant_override("separation", 4)

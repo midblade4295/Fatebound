@@ -97,7 +97,8 @@ func _process(d: float) -> bool:
 			var hh: float = app.home_height()
 			var Screens = load("res://scripts/app/screens.gd")
 			check(app.home_fixed == (float(Screens.home_layout(hh).needed) <= hh + 1.0) and (app._scroll_target() == null) == app.home_fixed \
-				and btn("tutorial_start") != null, "Home scrolls only when the screen is too short (%.0f px here); the tutorial is on Home" % hh)
+				and btn("tutorial_start") == null and btn("side_moba") == null and btn("side_ranks") == null,
+				"Home scrolls only when the screen is too short (%.0f px here); no TUTORIAL, 5V5 or RANKS (0.31.164: 5v5 only)" % hh)
 			for h in [723.0, 700.0, 680.0]:
 				var l: Dictionary = Screens.home_layout(h)
 				check(float(l.needed) <= h + 1.0 and float(l.play) >= Screens.PLAY_MIN \
@@ -113,10 +114,7 @@ func _process(d: float) -> bool:
 			press("go_pass")
 			check(app.tab == "pass" and app.modal == null, "the pass summary in the window goes to the PASS tab")
 			check(app.tab_buttons.keys() == ["shop", "pass", "home", "locker", "alliance"], "the tab bar: SHOP on the left, HOME in the middle, ALLIANCE on the right")
-			p.d.tutorial_done = true
-			p.save()
 			press("tab_home")
-			check(btn("tutorial_start") == null, "once played, the tutorial button is gone from Home")
 		4:
 			press("top_level")                         # 0.31.139: Settings is in the level shield's menu
 			check(app.modal != null and app.modal.has_meta("player_menu") and btn("menu_settings") != null, "the level shield opens the player's menu")
@@ -155,13 +153,13 @@ func _process(d: float) -> bool:
 			check(app.siege == null and app.chrome.visible and app.tab == "home", "HOME from results returns to the menu")
 			check(app.hero_layer.is_visible_in_tree() and app.hero_layer.process_mode != Node.PROCESS_MODE_DISABLED and app.chrome.process_mode != Node.PROCESS_MODE_DISABLED, "hero and menu resume after the match")
 			press("play")
-			wait_until = t + 1.0                    # (0.31.147: Home's push into the war table first)
+			wait_until = t + 0.5
 		9:
-			# 0.31.146 (Kevin: "I want the play button to always bring players into map"): not connected too -- the map says
-			# so. 0.31.149: no QUICK BATTLE (every match is a battle chosen on the map); the online session's own path
-			# (a party's match, the old-server fallback) still meets the unreachable server the same way
-			check(app.siege == null and app.modal != null and str(app.modal.get_script().resource_path).ends_with("war_table.gd")
-				and btn("war_quick") == null and has_text(app.modal, "Not connected"), "PLAY opens the war map (not connected: it says so; no QUICK BATTLE)")
+			# 0.31.164 (Kevin: "5v5 only"): PLAY opens the 5v5's hero window (it was the war map); an online session's own path
+			# (still in the code for the 5v5 going online) meets the unreachable server as before
+			check(app.siege == null and app.modal != null and str(app.modal.get_script().resource_path).ends_with("moba_panel.gd")
+				and btn("moba_battle") != null, "PLAY opens the 5v5's hero window")
+			app.close_modal()
 			app.quick_battle()
 			check(app.siege != null and app.siege.online and app.modal == null, "an online session starts")
 			wait_until = t + 5.0

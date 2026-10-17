@@ -29,8 +29,7 @@ func open(a) -> void:
 		app.sfx("menuClose")
 		app.close_modal(), 56.0 + float(app.safe_top), 24.0)
 	var body: VBoxContainer = w.body
-	var tag := UI2.body(body, "TEST MODE", 11, Color("#ffcf7a"))
-	tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	# (0.31.155-0.31.163: "TEST MODE" -- 0.31.164, Kevin: "5v5 only": it's the game's match now, PLAY opens this)
 	UI2.body(body, "You and four bot heroes against five. Every 30 seconds each castle sends minions down the three lanes. "
 		+ "Two towers guard each lane, and your gates are behind them. Level up to 10 by fighting near minions; pick an "
 		+ "upgrade each level, and at level 6 your ULTIMATE. Earn gold and buy items in your castle. Skeleton camps in the "
