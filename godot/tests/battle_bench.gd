@@ -57,10 +57,8 @@ func _apply(cfg: String) -> void:
 			if v._motes != null: v._motes.visible = false
 func _process(d: float) -> bool:
 	frames += 1
-	mode._guard_clock = -1.0e9
 	var s = mode.sim
 	if frames == 3:
-		mode._guard_res_low = -100000
 		RenderingServer.viewport_set_measure_render_time(_vp().get_viewport_rid(), true)
 		# A big fight at the blue front gate: everyone a bot, lots of archers and mages on both sides.
 		var gate: Vector2 = s.gates.filter(func(g): return g.team == 0 and not g.has("kind"))[0].c

@@ -17,7 +17,6 @@ func _init() -> void:
 
 func _process(_d: float) -> bool:
 	frames += 1
-	mode._guard_clock = -1.0e9
 	var s = mode.sim
 	if frames == 3:
 		var gate: Vector2 = s.gates.filter(func(g): return g.team == 0 and not g.has("kind"))[0].c

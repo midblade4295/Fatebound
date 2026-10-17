@@ -33,8 +33,8 @@ func _apply(cfg: String) -> void:
 		if not orig_meshes.has(n):
 			orig_meshes[n] = (n as MeshInstance3D).mesh
 		(n as MeshInstance3D).mesh = orig_meshes[n]
-	if absf(mode.render_scale - 1.0) > 0.01:
-		mode.set_render_scale(1.0)
+	if absf(mode.render_scale - mode.RENDER_SCALE) > 0.01:
+		mode.set_render_scale(mode.RENDER_SCALE)          # (0.31.163: the locked 50 %)
 	var env: Environment = mode.view.find_children("*", "WorldEnvironment", true, false)[0].environment
 	# Restore each build's own settings (don't force them on).
 	if not has_meta("env0"):

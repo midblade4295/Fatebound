@@ -43,7 +43,6 @@ func _process(_delta: float) -> bool:
 		"start":
 			_start_match()
 		"frames":
-			mode._guard_clock = -1.0e9
 			var now := Time.get_ticks_usec()
 			frame_times.append([(now - _last_us) / 1000.0, (now - _last_us) / 1000.0, mode.view.actors.size()])   # wall clock per frame
 			_last_us = now

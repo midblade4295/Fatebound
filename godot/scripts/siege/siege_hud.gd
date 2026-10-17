@@ -18,8 +18,6 @@ signal leave_requested
 signal replay_requested
 signal action_pressed(kind: String)
 signal quick_chat(i: int)              # 0.31.111: a line from the quick chat wheel (NetT.QUICK_CHAT index)
-signal res_cycled
-var res_label_source: Callable   # -> float render scale
 signal workshop_tools
 signal workshop_buy(id: String)
 signal workshop_leave
@@ -419,13 +417,7 @@ func _build_pause_panel() -> void:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 8)
 	v.add_child(row)
-	var res_btn := _button(row, "RESOLUTION: 100%", "secondary", func(): pass)
-	res_btn.add_theme_font_size_override("font_size", 13)
-	res_btn.pressed.connect(func():
-		res_cycled.emit()
-		res_btn.text = "RESOLUTION: %d%%" % int(res_label_source.call() * 100.0) if res_label_source.is_valid() else "RESOLUTION")
-	pause_panel.visibility_changed.connect(func():
-		if res_label_source.is_valid(): res_btn.text = "RESOLUTION: %d%%" % int(res_label_source.call() * 100.0))
+	# (0.31.163: no RESOLUTION button -- the 3D is locked at 50 %, siege_mode.RENDER_SCALE)
 	var lv := _button(row, "LEAVE MATCH", "danger", func(): leave_requested.emit())
 	lv.add_theme_font_size_override("font_size", 13)
 

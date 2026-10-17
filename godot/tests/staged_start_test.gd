@@ -33,7 +33,6 @@ func _process(_d: float) -> bool:
 		_last_us = Time.get_ticks_usec()
 		return false
 	frames += 1
-	mode._guard_clock = -1.0e9
 	var now := Time.get_ticks_usec()
 	if built_at < 0:
 		worst_step_ms = maxf(worst_step_ms, (now - _last_us) / 1000.0)

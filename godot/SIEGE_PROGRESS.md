@@ -4916,3 +4916,15 @@ frame that doesn't change with resolution (triangles: shadows and the view) and 
 - Quick suite: ALL SIEGE TESTS PASSED (101). tools/cold_start_check.sh: PASS (a first run failed with the test
   machine's virtual display down; passed once it was restarted). The Play AAB (throwaway key, presets untouched): BASE
   OK, CONTENT OK, play_games true, bundletool valid. Preview APK: build/Fatebound-Siege-0.31.162-fatebound.apk.
+
+## 0.31.163 — locked at 30 fps and 50 % resolution, no setting for either
+Kevin's 0.31.162 log (the 60 cap): 50 % ran 30-34 fps (22-28 in the wave fights), 100 % 15-21 -- the graphics chip
+~22-27 ms a frame at 50 %, ~42-52 at 100 %; nothing near 60. Kevin: "Ok lock it to 30fps and 50% resolution. Remove
+settings so players don't see also".
+- siege_mode: FPS_CAP 30 again (physics with it, 30 Hz); RENDER_SCALE 0.5 -- the 3D view at half the screen's pixels
+  each way (720x1600 on his phone; 2x MSAA as below 100 % before).
+- The pause menu's RESOLUTION button is gone (HUD res_cycled / res_label_source with it); LEAVE MATCH takes the row.
+- The heat guard is gone: its one remaining step raised nothing at 50 % (it only stepped 100 % -> 75 %).
+- tests/siege_guard_smoke.gd: forced to ~20 fps the cap stays 30, physics 30 Hz, the 3D 50 % (the view's size
+  checked), no RESOLUTION button. The benches' guard lines dropped; perf_bench's baseline is RENDER_SCALE.
+- Version 0.31.163, versionCode 249, SERVER_BUILD 0.31.163.

@@ -14,7 +14,6 @@ func _init() -> void:
 			if frames == f: root.get_texture().get_image().save_png("/tmp/wade_%d.png" % f))
 func _process(d: float) -> bool:
 	frames += 1
-	mode._guard_clock = -1.0e9
 	var s = mode.sim
 	var me: Dictionary = s.by_id[mode.hud.player_id]
 	if frames == 3:

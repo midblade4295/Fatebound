@@ -33,19 +33,15 @@ const Tutorial = preload("res://scripts/siege/tutorial.gd")
 const Analytics = preload("res://scripts/meta/analytics.gd")
 const TUTORIAL_GOLD := 250
 # 3D resolution as a fraction of the PHYSICAL screen (window pixels, not logical UI units).
-var render_scale := 1.0
-const FPS_CAP := 60         # 0.31.162 (Kevin: "Change the fps cap to 60 so I can see how high fps goes on each resolution"; 30 since Round 32, no fps options) -- the sim still ticks at 30 Hz
+# 0.31.163 (Kevin: "lock it to 30fps and 50% resolution. Remove settings so players don't see"): locked at 50 % -- on his
+# S21 Ultra the graphics chip took ~22 ms a frame there against ~36 at 75 % and ~46 at 100 %, and only 50 % held 30 fps.
+# No RESOLUTION button any more, no heat guard stepping it (set_render_scale stays for the benches).
+const RENDER_SCALE := 0.5
+var render_scale := RENDER_SCALE
+const FPS_CAP := 30         # hard-locked, no fps options (Round 32; 60 for one test build, 0.31.162) -- the sim ticks at 30 Hz
 var _prev_max_fps := 0
 var _prev_physics_tps := 60
 var fps_cap := FPS_CAP
-# Thermal guard: field logs (S21 Ultra) show fps sliding for several seconds before a GPU hang.
-# If fps stays under GUARD_FPS for GUARD_SECONDS while capped at 60, drop to 30 automatically.
-const GUARD_FPS := 50
-const GUARD_SECONDS := 3
-var _guard_low := 0
-var _guard_clock := 0.0
-var guard_tripped := false
-var _guard_res_low := 0
 var low_fx := false
 var hq_gfx := true          # High-quality graphics (Settings): shadows, glow, smoother edges
 var audio: Node = null
@@ -209,13 +205,6 @@ func _ready() -> void:
 			hud.toast("Next match starts shortly...", Color("#f2d18d"))
 		else:
 			_restart())
-	hud.res_label_source = func() -> float: return render_scale
-	hud.res_cycled.connect(func():
-		var steps := [1.0, 0.75, 0.5]
-		var i := 0
-		for j in steps.size():
-			if absf(steps[j] - render_scale) < 0.01: i = j
-		set_render_scale(steps[(i + 1) % steps.size()]))
 	hud.workshop_tools.connect(func(): _act("take_tools"))
 	hud.workshop_buy.connect(func(id): _act("buy", id))
 	hud.workshop_leave.connect(func(): _act("workshop_leave"))
@@ -1108,7 +1097,6 @@ func _process(delta: float) -> void:
 	view.sync(delta)
 	diag.add_time("view", Time.get_ticks_usec() - t_view)
 	diag.mark("process done")
-	_thermal_guard(delta)
 	diag.add_time("game", Time.get_ticks_usec() - t_start)
 	if sim.ended and not _result_shown:
 		_result_shown = true
@@ -1174,30 +1162,6 @@ func note_leaving() -> void:
 	elif not online and _an_match != "" and sim != null and not sim.ended:
 		analytics.log_ev("match_quit", {"match":_an_match, "mode":"bots", "quit_at_s":int(sim.time),
 			"class":class_of(sim.by_id.get(hud.player_id, {})), "class0":_an_class0})
-
-func _thermal_guard(delta: float) -> void:
-	_guard_clock += delta
-	if _guard_clock < 1.0:
-		return
-	_guard_clock = 0.0
-	if hud.paused():
-		_guard_low = 0
-		return
-	# Locked at 30 fps (Round 32): what's left of the guard is the resolution step when even 30 can't be held.
-	# (0.31.162: at the 60 cap it never steps -- the resolution stays what Kevin picks)
-	_thermal_guard_res()
-
-func _thermal_guard_res() -> void:
-	# Second step: already at 30 fps and still missing frames -> drop 3D resolution to 75 %.
-	if fps_cap == 30 and render_scale > 0.8 and Engine.get_frames_per_second() < 26:
-		_guard_res_low += 1
-		if _guard_res_low >= 5:
-			diag.write("THERMAL GUARD still under 26 fps at 30 cap -> 3D resolution 75%")
-			guard_tripped = true
-			set_render_scale(0.75)
-			hud.toast("Device running hot: resolution 75%", Color("#f2d18d"))
-	else:
-		_guard_res_low = 0
 
 func set_fps_cap(v: int) -> void:
 	fps_cap = v
