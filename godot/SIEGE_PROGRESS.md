@@ -4965,3 +4965,6 @@ deleted.
   updated; war_battle, war_ui, war_tour and join_friend out of the suite (their app paths are gone).
 - Version 0.31.164, versionCode 250, SERVER_BUILD 0.31.164 (the eco server's clamp and the economy changed -- a
   server redeploy pays the 5v5's new lines; an older server's copy would miss them).
+- Quick suite: ALL SIEGE TESTS PASSED (98). tools/cold_start_check.sh: PASS. The Play AAB (throwaway key, presets
+  untouched): BASE OK (267 files), CONTENT OK, play_games true, bundletool valid. Preview APK:
+  build/Fatebound-Siege-0.31.164-fatebound.apk (preview key).
