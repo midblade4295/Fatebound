@@ -5280,3 +5280,11 @@ button so player is always playing on server plus they play with bots anyway whe
 - Version 0.31.170, versionCode 256, SERVER_BUILD 0.31.170. Kevin: the server redeploy
   (sudo bash godot/server/deploy/install_siege_server.sh) puts the online 5v5 live; until then the app plays against
   bots as before (it asks the server first). Raising min_build to 0.31.170 later keeps older apps out of matches anyway.
+- (0.31.170, after: a level-up pick tapped while down isn't taken on the phone either -- the server refuses it.)
+- Checks: quick suite ALL SIEGE TESTS PASSED (84, with net_mirror_test and online_five_test); the online test runs
+  above (online_five 3,432 comparisons, 0 mismatches; net_mirror 600 s, every snapshot equal); tools/cold_start_check.sh:
+  COLD_START_PASS; the Play AAB (throwaway key, presets untouched): BASE OK (259 files), CONTENT OK, play_games true,
+  bundletool valid; the sim's fingerprint as 0.31.169 (seed 3 97e30cea900b6b37, seed 17 e7fc16691408f976); net_load_test
+  (32 phones, 4 rooms): all open, step 288 ms/s + snapshots 145 ms/s for the 4 rooms early in their matches (before the
+  snapshot speed-up). Preview APK: build/Fatebound-Siege-0.31.170-fatebound.apk (31 MB, preview key), sha256
+  c8d0a8a9...6bfe914d1adf.
