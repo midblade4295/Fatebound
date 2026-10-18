@@ -5469,3 +5469,25 @@ looking and more high quality".
   bundletool valid; content_packs check and coverage OK; the sim's fingerprint as 0.31.174; both screens reviewed in
   shots at the phone's 450 x 1000 (the hero window with an owned and a locked hero, the shop). Preview APK:
   build/Fatebound-Siege-0.31.175-fatebound.apk (32 MB, preview key), sha256 fe1d69bb...cda5eee762c.
+
+## 0.31.176 — the live scoreboard
+Kevin: "Create concept for new scoreboard. I'm wanting to give players ability to pull up live score anytime in match.
+Make a scoreboard that gives the stats that league of legends does" -> three concepts drawn as phone screens from a
+real bot 5v5 at 12:00 (art_sources/scoreboard: A a full board like League's Tab, B matchups by role like Wild Rift, C a
+quick peek) -> his picks: "A: Full board", "Tap the score bar".
+- The sim (moba.gd) keeps what League's board shows that it didn't: assists (each helper a knockout's assist gold is
+  shared with -- hit him lately or stood by -- not the one who landed it) and each side's Bone Lords and Grave Wyrms
+  slain (epic_kills). The snapshot carries the epics to the phones ("ek", in full when they change; the assists go
+  with every hero's other keys). SERVER_BUILD 0.31.176: a server redeploy brings them online (an older server's
+  phones show 0 for both). The sim's fingerprint is unchanged (no event, no movement changed).
+- The board (siege_hud.gd): tap the score bar -- the match keeps running, the bar and its clock stay in sight. Your
+  side, then the enemy; each side's strip: knockouts, enemy towers destroyed, LORD / WYRM, its gold (what its heroes
+  carry plus their items' cost, as League counts it) and the lead; then a row a hero by role (tank first): portrait in
+  the side's colour with his level (greyed with the seconds to his return while he's down), name ("Bot" for a bot)
+  with his role badge and hero, K / D / A (deaths in red), CS (minions last-hit), his six item slots with the painted
+  icons, his gold. Refreshed four times a second while open. The score bar again, the X, or a tap outside it closes
+  it; the shop, pause and the results close it too.
+- Tests: live_board_test (new, in the suite): assists counted in a 6:00 bot 5v5, the epics and assists through a
+  snapshot to a phone's mirror; the bar tapped: the board under it, ten rows, your side first, every row as the sim
+  has it (level, K / D / A, CS, items, gold), the strips, a downed hero's timer, live while open, closing three ways.
+- Version 0.31.176, versionCode 262, SERVER_BUILD 0.31.176.

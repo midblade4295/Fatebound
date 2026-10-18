@@ -64,6 +64,7 @@ run match_audio_test     MATCH_AUDIO_PASS         280
 run hero_assets_test     HERO_ASSETS_PASS         120
 run tower_look_test      TOWER_LOOK_PASS          120
 run foliage_test         FOLIAGE_PASS             120
+run live_board_test      LIVE_BOARD_PASS          200
 run priest_test          PRIEST_PASS              200
 run multikill_test       MULTIKILL_PASS           60
 run upgrades_test        UPGRADES_PASS            60

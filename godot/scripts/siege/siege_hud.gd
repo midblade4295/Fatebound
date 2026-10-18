@@ -12,6 +12,7 @@ const Sim = preload("res://scripts/siege/siege_sim.gd")
 const NetT = preload("res://scripts/siege/siege_net.gd")
 const Moba = preload("res://scripts/siege/moba.gd")
 const ItemIcon = preload("res://scripts/siege/item_icon.gd")   # 0.31.157 5V5: the shop's item glyphs
+const Kits = preload("res://scripts/siege/moba_kits.gd")       # 0.31.176: the live scoreboard's roles
 
 signal leave_requested
 signal replay_requested
@@ -308,6 +309,7 @@ func paused() -> bool:
 	return pause_panel != null and pause_panel.visible
 
 func show_pause() -> void:
+	close_board()
 	if pause_panel == null:
 		_build_pause_panel()
 	pause_panel.visible = true
@@ -355,6 +357,7 @@ func _build_pause_panel() -> void:
 	lv.add_theme_font_size_override("font_size", 13)
 
 func show_result(result: Dictionary = {}) -> void:
+	close_board()                                  # (0.31.176: the live scoreboard gives way to the results)
 	# 0.31.79: a ribbon banner (VICTORY / DEFEAT / DRAW) with a crown and a sunburst behind a win, the score in team
 	# colours, your match, the spoils as a table, chests with their pictures, then PLAY AGAIN / HOME.
 	if result_panel != null:
@@ -772,7 +775,7 @@ func _buttons() -> Array:
 
 func _modal_open() -> bool:
 	return paused() or (result_panel != null and result_panel.visible) \
-		or (score_panel != null and is_instance_valid(score_panel) and score_panel.visible) or shop_open()
+		or (score_panel != null and is_instance_valid(score_panel) and score_panel.visible) or shop_open() or board_open()
 
 func _input(event: InputEvent) -> void:
 	if sim == null:
@@ -797,6 +800,16 @@ func _input(event: InputEvent) -> void:
 			KEY_B: open_shop()
 
 func _touch(index: int, pos: Vector2, pressed: bool) -> void:
+	if pressed and board_open():
+		# 0.31.176: the live scoreboard -- the score bar again or a tap outside it closes it (its X too)
+		if score_bar_rect().has_point(pos) or not board_panel.get_global_rect().has_point(pos + global_position):
+			close_board()
+			get_viewport().set_input_as_handled()
+		return
+	if pressed and sim != null and sim.moba != null and not _modal_open() and score_bar_rect().has_point(pos):
+		open_board()                               # 0.31.176: tap the score bar for the live scoreboard
+		get_viewport().set_input_as_handled()
+		return
 	if pressed:
 		if _modal_open() or pause_btn.get_global_rect().has_point(pos + global_position) \
 				or (qc_btn.visible and qc_btn.get_global_rect().has_point(pos + global_position)):
@@ -921,6 +934,11 @@ func _process(delta: float) -> void:
 	var me: Dictionary = sim.by_id.get(player_id, {})
 	if not me.is_empty() and shop_open():
 		_refresh_shop(me)
+	if board_open():
+		_board_tick -= delta
+		if _board_tick <= 0.0:
+			_board_tick = 0.25                      # (live: four times a second)
+			_refresh_board()
 	if _top_layer != null:
 		var tk := _top_key(me)
 		if tk != _top_parts:
@@ -1615,6 +1633,7 @@ func shop_rect() -> Rect2:
 func open_shop() -> void:
 	if sim == null or sim.moba == null:
 		return
+	close_board()
 	if shop_panel == null:
 		_build_shop()
 	_shop_key = ""
@@ -1907,6 +1926,302 @@ func _refresh_shop(me: Dictionary) -> void:
 		_shop_stats.text = "Gold comes in every second, and from last hits, knockouts, towers and the jungle's camps."
 		_shop_from.text = ""
 		_shop_act.visible = false
+
+# ---------------- the live scoreboard (0.31.176) ----------------
+# Kevin: "I'm wanting to give players ability to pull up live score anytime in match. Make a scoreboard that gives the
+# stats that league of legends does" -> concept A ("Full board"), opened by tapping the score bar. League's Tab board:
+# your side, then the enemy -- each a strip of the side's knockouts, towers destroyed, Bone Lords and Grave Wyrms slain,
+# its gold (what its heroes carry and their items' worth) and the lead -- and a row a hero (by role): portrait with his
+# level (greyed with the seconds to his return while he's down), name (a bot: "Bot") and hero, K / D / A, CS (minions
+# last-hit), his six item slots, his gold. Live while open (the match goes on); the score bar again, the X, or a tap
+# outside closes it.
+var board_panel: PanelContainer = null
+var _board_rows: Dictionary = {}               # unit id -> the row's controls
+var _board_heads: Array = []                   # per side (mine first): the strip's controls
+var _board_clock: Label
+var _board_tick := 0.0
+const BOARD_SKULL := "res://assets/ui/v2/icons/skull.png"
+const BOARD_TOWER := "res://assets/ui/v2/icons/castle.png"
+const BOARD_W := {"por": 40.0, "name": 80.0, "kda": 58.0, "cs": 28.0, "slot": 19.0}
+
+func board_open() -> bool:
+	return board_panel != null and board_panel.visible
+
+func score_bar_rect() -> Rect2:
+	return Rect2(8, 8, size.x - 16, 62)
+
+static func net_worth(u: Dictionary) -> int:
+	# a hero's gold as League counts it on the board: what he carries and what his items cost
+	var n := float(u.get("gold", 0.0))
+	for id in u.get("items", []):
+		n += float(Moba.ITEMS.get(str(id), {}).get("cost", 0))
+	return int(n)
+
+static func gold_k(n: float) -> String:
+	return "%.1fk" % (n / 1000.0)
+
+func board_heroes(side: int) -> Array:
+	# a side's heroes, by role (tank first), as the hero window lists them
+	var out: Array = sim.units.filter(func(u): return int(u.team) == side and bool(u.get("hero", false)))
+	out.sort_custom(func(a, b):
+		var ra := Kits.ROLE_ORDER.find(Kits.role_of(str(a.get("hid", ""))))
+		var rb := Kits.ROLE_ORDER.find(Kits.role_of(str(b.get("hid", ""))))
+		return ra < rb if ra != rb else str(a.id) < str(b.id))
+	return out
+
+func board_team(side: int) -> Dictionary:
+	# a side's strip: knockouts, enemy towers down, epic monsters slain, gold
+	var towers := 0
+	for tw in sim.moba.towers:
+		if int(tw.team) != side and bool(tw.dead):
+			towers += 1
+	var ek: Dictionary = sim.moba.epic_kills
+	var gold := 0
+	for u in board_heroes(side):
+		gold += net_worth(u)
+	return {"kills": int(sim.kills[side]), "towers": towers, "lord": int((ek.get("lord", [0, 0]) as Array)[side]),
+		"wyrm": int((ek.get("wyrm", [0, 0]) as Array)[side]), "gold": gold}
+
+func open_board() -> void:
+	if sim == null or sim.moba == null:
+		return
+	close_shop()
+	if board_panel != null:
+		board_panel.queue_free()
+	_build_board()
+	board_panel.visible = true
+	_refresh_board()
+	board_panel.reset_size()
+	board_panel.position = Vector2((size.x - board_panel.size.x) * 0.5, score_bar_rect().end.y + 6.0)
+	var fit := minf(1.0, (size.y - board_panel.position.y - 8.0) / maxf(1.0, board_panel.size.y))
+	board_panel.pivot_offset = Vector2(board_panel.size.x * 0.5, 0)
+	board_panel.scale = Vector2.ONE * fit
+
+func close_board() -> void:
+	if board_panel != null:
+		board_panel.visible = false
+
+func _bl(parent: Node, text: String, px: int, col: Color, w := 0.0, align := HORIZONTAL_ALIGNMENT_LEFT, lg := true) -> Label:
+	# a board label: Luckiest Guy (numbers, names of sides) or the bold body font
+	var l := Label.new()
+	l.text = text
+	l.add_theme_font_override("font", UI2.LG if lg else _bold)
+	l.add_theme_font_size_override("font_size", px)
+	l.add_theme_color_override("font_color", col)
+	if lg:
+		l.add_theme_color_override("font_outline_color", Color("#0b0820"))
+		l.add_theme_constant_override("outline_size", 4)
+	l.horizontal_alignment = align
+	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if w > 0.0:
+		l.custom_minimum_size = Vector2(w, 0)
+		l.clip_text = true
+	parent.add_child(l)
+	return l
+
+func _bimg(parent: Node, path: String, px: float) -> TextureRect:
+	var t := TextureRect.new()
+	t.texture = load(path) if ResourceLoader.exists(path) else null
+	t.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	t.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	t.custom_minimum_size = Vector2(px, px)
+	t.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	t.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(t)
+	return t
+
+func _bstyle(bg: Color, border := Color(0, 0, 0, 0), bw := 0, r := 10, m := 5.0) -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = bg
+	sb.border_color = border
+	sb.set_border_width_all(bw)
+	sb.set_corner_radius_all(r)
+	sb.content_margin_left = m
+	sb.content_margin_right = m
+	sb.content_margin_top = m * 0.8
+	sb.content_margin_bottom = m * 0.8
+	return sb
+
+func _build_board() -> void:
+	board_panel = PanelContainer.new()
+	board_panel.name = "LiveBoard"
+	var ps := StyleBoxEmpty.new()
+	for side in ["left", "right"]:
+		ps.set("content_margin_" + side, 10)
+	ps.content_margin_top = 12
+	ps.content_margin_bottom = 12
+	board_panel.add_theme_stylebox_override("panel", ps)
+	board_panel.custom_minimum_size = Vector2(minf(size.x - 12.0, 440.0), 0)
+	board_panel.visible = false
+	board_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(board_panel)
+	UI2.plate(board_panel, "night", 18.0, "gold", {"rim": 3.0, "shadow_y": 8.0, "shadow_alpha": 0.6, "shadow_soft": 10.0})
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 3)
+	board_panel.add_child(v)
+	var top := HBoxContainer.new()
+	top.add_theme_constant_override("separation", 8)
+	v.add_child(top)
+	var tl := UI2.text(top, "SCOREBOARD", 22, UI2.GOLD, Color("#1a0c02"), 5)
+	tl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_board_clock = _bl(top, "", 14, Color("#c8d0f0"))
+	var x := UI2.button(top, "✕", "ghost", func(): close_board(), "board_close", 16, 32.0, 10.0)
+	x.custom_minimum_size = Vector2(34, 32)
+	x.set_meta("action_key", "board_close")
+	_board_rows = {}
+	_board_heads = []
+	var me: Dictionary = sim.by_id.get(player_id, {})
+	var my_team := int(me.get("team", 0))
+	for side in [my_team, 1 - my_team]:
+		_board_heads.append(_board_head(v, side, side == my_team))
+		var cols := HBoxContainer.new()
+		cols.add_theme_constant_override("separation", 6)
+		v.add_child(cols)
+		var pad := Control.new()
+		pad.custom_minimum_size = Vector2(4, 0)
+		cols.add_child(pad)
+		for c in [["HERO", BOARD_W.por + 6.0 + BOARD_W.name], ["K / D / A", BOARD_W.kda], ["CS", BOARD_W.cs], ["ITEMS", BOARD_W.slot * 6.0 + 5.0]]:
+			_bl(cols, str(c[0]), 9, Color("#a9b2d6"), float(c[1]), HORIZONTAL_ALIGNMENT_LEFT, false)
+		var gl := _bl(cols, "GOLD", 9, Color("#a9b2d6"), 0.0, HORIZONTAL_ALIGNMENT_RIGHT, false)
+		gl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		for u in board_heroes(side):
+			_board_rows[str(u.id)] = _board_row(v, u, side)
+
+func _board_head(v: VBoxContainer, side: int, mine: bool) -> Dictionary:
+	var pc := PanelContainer.new()
+	pc.add_theme_stylebox_override("panel", _bstyle(Color("#14305e") if vt(side) == 0 else Color("#4a1a22"), Color(0, 0, 0, 0), 0, 10, 7.0))
+	v.add_child(pc)
+	var h := HBoxContainer.new()
+	h.add_theme_constant_override("separation", 7)
+	pc.add_child(h)
+	var nl := _bl(h, "YOUR SIDE" if mine else "ENEMY", 16, TEAM_COLORS[vt(side)].lightened(0.1))
+	nl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_bimg(h, BOARD_SKULL, 17)
+	var kl := _bl(h, "", 15, Color.WHITE)
+	_bimg(h, BOARD_TOWER, 17)
+	var tw := _bl(h, "", 15, Color.WHITE)
+	var ep := _bl(h, "", 10, Color("#d8c2ff"))
+	_bimg(h, "res://assets/ui/currency/coin.png", 14)
+	var gl := _bl(h, "", 15, Color("#ffd65a"))
+	var ld := _bl(h, "", 11, Color("#9fe07a"))
+	return {"side": side, "kills": kl, "towers": tw, "epics": ep, "gold": gl, "lead": ld}
+
+func _board_row(v: VBoxContainer, u: Dictionary, side: int) -> Dictionary:
+	var mine := str(u.id) == player_id
+	var pc := PanelContainer.new()
+	pc.add_theme_stylebox_override("panel", _bstyle(Color(1.0, 0.76, 0.24, 0.1) if mine else Color(1, 1, 1, 0.06),
+		Color("#ffc23d") if mine else Color(0, 0, 0, 0), 2 if mine else 0, 10, 5.0))
+	pc.set_meta("unit", str(u.id))
+	v.add_child(pc)
+	var h := HBoxContainer.new()
+	h.add_theme_constant_override("separation", 6)
+	pc.add_child(h)
+	# the portrait: a frame in the side's colour, his level in the corner; down: grey, and the seconds to his return
+	var frame := Panel.new()
+	frame.custom_minimum_size = Vector2(BOARD_W.por, BOARD_W.por)
+	frame.add_theme_stylebox_override("panel", _bstyle(Color("#0b0f26"), TEAM_COLORS[vt(side)], 2, 9, 0.0))
+	frame.clip_children = CanvasItem.CLIP_CHILDREN_AND_DRAW
+	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	h.add_child(frame)
+	var por := TextureRect.new()
+	var pp := "res://assets/ui/skins/default_%s.png" % str(u.get("hid", u.cls))
+	por.texture = load(pp) if ResourceLoader.exists(pp) else null
+	por.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	por.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	por.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	por.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	frame.add_child(por)
+	var resp := _bl(frame, "", 17, Color("#ff8a7a"), 0.0, HORIZONTAL_ALIGNMENT_CENTER)
+	resp.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var lvb := PanelContainer.new()
+	lvb.add_theme_stylebox_override("panel", _bstyle(Color("#0b0820"), Color(0, 0, 0, 0), 0, 5, 2.0))
+	lvb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	frame.add_child(lvb)
+	var lv := _bl(lvb, "", 10, Color("#ffe9b0"))
+	lvb.position = Vector2(BOARD_W.por - 17, BOARD_W.por - 15)
+	var nb := VBoxContainer.new()
+	nb.add_theme_constant_override("separation", 0)
+	nb.custom_minimum_size = Vector2(BOARD_W.name, 0)
+	nb.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	h.add_child(nb)
+	var who := "Bot" if not is_player(u) else (player_name if mine else str(net_names.get(str(u.id), "Player")))
+	_bl(nb, who, 12, Color.WHITE, BOARD_W.name, HORIZONTAL_ALIGNMENT_LEFT, false)
+	var hr := HBoxContainer.new()
+	hr.add_theme_constant_override("separation", 3)
+	nb.add_child(hr)
+	_bimg(hr, "res://assets/ui/roles/%s.png" % Kits.role_of(str(u.get("hid", ""))), 12)
+	_bl(hr, sim.class_label(u), 10, Color("#a9b2d6"), BOARD_W.name - 15.0, HORIZONTAL_ALIGNMENT_LEFT, false)
+	var kda := HBoxContainer.new()
+	kda.add_theme_constant_override("separation", 0)
+	kda.custom_minimum_size = Vector2(BOARD_W.kda, 0)
+	h.add_child(kda)
+	var kk := _bl(kda, "", 15, Color.WHITE)
+	_bl(kda, "/", 15, Color("#8890b0"))
+	var dd := _bl(kda, "", 15, Color("#ff8a7a"))
+	_bl(kda, "/", 15, Color("#8890b0"))
+	var aa := _bl(kda, "", 15, Color.WHITE)
+	var cs := _bl(h, "", 14, Color.WHITE, BOARD_W.cs)
+	var its := HBoxContainer.new()
+	its.add_theme_constant_override("separation", 1)
+	h.add_child(its)
+	var slots := []
+	for i in Moba.ITEM_SLOTS:
+		var sl := Panel.new()
+		sl.custom_minimum_size = Vector2(BOARD_W.slot, BOARD_W.slot)
+		sl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		sl.add_theme_stylebox_override("panel", _bstyle(Color("#0b0f26"), Color("#3a4568"), 1, 4, 0.0))
+		sl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		its.add_child(sl)
+		var ic := ItemIcon.new()
+		ic.position = Vector2(1, 1)
+		ic.size = Vector2(BOARD_W.slot - 2.0, BOARD_W.slot - 2.0)
+		ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		sl.add_child(ic)
+		slots.append(ic)
+	var gold := _bl(h, "", 13, Color("#ffd65a"), 0.0, HORIZONTAL_ALIGNMENT_RIGHT)
+	gold.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	return {"por": por, "resp": resp, "lv": lv, "k": kk, "d": dd, "a": aa, "cs": cs, "slots": slots, "gold": gold}
+
+func _refresh_board() -> void:
+	if board_panel == null or sim == null or sim.moba == null:
+		return
+	var left := maxf(0.0, float(sim.match_time) - sim.time)
+	_board_clock.text = "%d:%02d" % [int(left) / 60, int(left) % 60]
+	var teams := {}
+	for hd in _board_heads:
+		teams[int(hd.side)] = board_team(int(hd.side))
+	for hd in _board_heads:
+		var t: Dictionary = teams[int(hd.side)]
+		var o: Dictionary = teams.get(1 - int(hd.side), t)
+		(hd.kills as Label).text = str(t.kills)
+		(hd.towers as Label).text = str(t.towers)
+		(hd.epics as Label).text = "LORD %d\nWYRM %d" % [int(t.lord), int(t.wyrm)]
+		(hd.gold as Label).text = gold_k(float(t.gold))
+		var lead := int(t.gold) - int(o.gold)
+		(hd.lead as Label).text = ("+" if lead > 0 else "") + gold_k(float(lead))
+		(hd.lead as Label).add_theme_color_override("font_color", Color("#9fe07a") if lead >= 0 else Color("#ff8a7a"))
+	for id in _board_rows:
+		var u: Dictionary = sim.by_id.get(id, {})
+		if u.is_empty():
+			continue
+		var r: Dictionary = _board_rows[id]
+		var down: bool = not sim.alive(u)
+		(r.por as TextureRect).modulate = Color(0.42, 0.42, 0.46) if down else Color.WHITE
+		(r.resp as Label).text = str(int(ceil(maxf(0.0, float(u.get("respawn_at", 0.0)) - sim.time)))) if down else ""
+		(r.lv as Label).text = str(int(u.get("level", 1)))
+		(r.k as Label).text = str(int(u.get("kills", 0)))
+		(r.d as Label).text = str(int(u.get("deaths", 0)))
+		(r.a as Label).text = str(int(u.get("assists", 0)))
+		(r.cs as Label).text = str(int(u.get("lh", 0)))
+		var inv: Array = u.get("items", [])
+		for i in (r.slots as Array).size():
+			var ic: ItemIcon = r.slots[i]
+			var it := str(inv[i]) if i < inv.size() else ""
+			if ic.item != it:
+				ic.item = it
+				ic.queue_redraw()
+		(r.gold as Label).text = gold_k(float(net_worth(u)))
 
 func _draw_gold_and_items(me: Dictionary) -> void:
 	var r := shop_rect()

@@ -282,7 +282,8 @@ static func _wrap16(v: int) -> int:
 #          and the times its effects end -- absolute match times, so the phone needs no clock of its own) but NO_SYNC
 #   "ux"   {unit id: [keys]}: keys a unit lost (an effect that ended)
 #   "o"    {"tw:3": {key: value}}: the towers', Kings', gates' and camps' changes (OBJ_SKIP: what never changes)
-#   "zn" "tr" "wd" "ws"  the spells' zones and traps, the wards, the Wyrm's stacks: in full when they changed
+#   "zn" "tr" "wd" "ws" "ek"  the spells' zones and traps, the wards, the Wyrm's stacks, each side's epic monsters
+#          slain (0.31.176): in full when they changed
 #   "p"    the projectiles, 6 x 16 bits each (id, x, z, vx, vz, kind + 16 if big)
 #   "e"    the match's events since the last snapshot (the view's and the HUD's effects, sounds, toasts)
 const FAST := 7
@@ -320,7 +321,7 @@ static func _blobs(sim) -> Dictionary:
 		var c: Dictionary = z.duplicate()
 		c.erase("next")                                 # (its next tick: the server's)
 		zn.append(c)
-	return {"zn":zn, "tr":sim.moba.kits.traps, "wd":sim.moba.vision.wards, "ws":sim.moba.wyrm_stacks}
+	return {"zn":zn, "tr":sim.moba.kits.traps, "wd":sim.moba.vision.wards, "ws":sim.moba.wyrm_stacks, "ek":sim.moba.epic_kills}
 
 static func _diff(sync: Dictionary, key: String, d: Dictionary, skip: Dictionary, changed: Dictionary, erased: Dictionary) -> void:
 	# d's keys (but skip) that differ from what was last sent for `key` -> changed[key]; keys it lost -> erased[key]
@@ -669,6 +670,8 @@ static func apply(sim, msg: Dictionary, me_id: String, predict := false) -> void
 			sim.moba.vision.wards = msg.wd
 		if msg.has("ws"):
 			sim.moba.wyrm_stacks = msg.ws
+		if msg.has("ek"):
+			sim.moba.epic_kills = msg.ek                # 0.31.176: the epic monsters each side slew (the scoreboard)
 	_apply_proj(sim, msg, snap_t)
 	if not mine_prev.is_empty() and sim.by_id.has(me_id):
 		var me2: Dictionary = sim.by_id[me_id]

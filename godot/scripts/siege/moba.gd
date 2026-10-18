@@ -415,6 +415,7 @@ var rains: Array = []                     # ARROW RAIN in progress: {team, owner
 var boss_go := [false, false]             # a side's bots are going for the Bone Lord
 var wyrm_go := [false, false]             # 0.31.166: ...for the Grave Wyrm
 var wyrm_stacks := [0, 0]                 # 0.31.166: each side's WYRM'S HIDE
+var epic_kills := {"lord": [0, 0], "wyrm": [0, 0]}   # 0.31.176: each side's Bone Lords and Grave Wyrms slain (the scoreboard)
 var _boss_check := 0.0
 var _jid := 0
 var _zid := 0
@@ -2046,6 +2047,7 @@ func _hero_down_gold(dst: Dictionary, by_h: Dictionary) -> void:
 			helpers.append(h)
 	for h in helpers:
 		add_gold(h, float(GOLD_ASSIST) / float(helpers.size()), dst.pos)
+		h["assists"] = int(h.get("assists", 0)) + 1        # 0.31.176: the scoreboard's K/D/A (League's: helped, not the blow)
 	dst["hit_log"] = {}
 
 func item_stats(u: Dictionary) -> Dictionary:
@@ -2391,6 +2393,7 @@ func _monster_down(dst: Dictionary, by_h: Dictionary) -> void:
 				if s.alive(h):
 					(h.buffs as Dictionary)["lord"] = s.time + LORD_TIME
 			boss_go[side] = false
+			epic_kills.lord[side] = int(epic_kills.lord[side]) + 1
 		s._event("lord_down", {"team":side, "by":str(by_h.get("id", ""))})
 		if side >= 0:
 			_summon_lord(side)                         # 0.31.158 (Kevin): he rises again on their side, like a minion
@@ -2408,6 +2411,7 @@ func _monster_down(dst: Dictionary, by_h: Dictionary) -> void:
 				wh["epics"] = int(wh.get("epics", 0)) + 1
 				_apply(wh)                                 # (the health it brings comes with it)
 			wyrm_go[wside] = false
+			epic_kills.wyrm[wside] = int(epic_kills.wyrm[wside]) + 1
 		s._event("wyrm_down", {"team":wside, "by":str(by_h.get("id", "")), "stacks":int(wyrm_stacks[wside]) if wside >= 0 else 0})
 	else:
 		if not by_h.is_empty():
