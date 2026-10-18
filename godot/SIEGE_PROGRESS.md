@@ -5414,3 +5414,22 @@ sixteen (eight trees, eight bushes and grasses); on a local mesh-reduction step:
   seed 17 e7fc16691408f976); the Rift reviewed in shots (the jungles, the side lanes, the brush sets) beside
   0.31.172's. Preview APK: build/Fatebound-Siege-0.31.173-fatebound.apk (32 MB, preview key), sha256
   46dac48c...e85ebe702472f.
+
+## 0.31.174 — no paths through walls
+Kevin (a screenshot: a dirt trail running into the tree line beside the middle lane): "Go through and audit the
+pathing of map. There's a lot of paths that go through unpassable walls".
+- tools/path_audit.gd (new): the baked path mask the terrain draws against the walls the 5v5's sim stops units at (the
+  ridges' rock and tree lines, the pits' rims, the field's edge, the keeps' ring walls; a gate is a way through, a
+  pit's own floor meets its rim) -- every dirt pixel within 1 m of a wall's body (1.5 m of a tree line's: the
+  canopies) listed by wall, with a map. 0.31.173: ten places, five a side -- the Bone Packs' trails to the middle lane
+  straight through the tree lines (x +-9..10, the one in the screenshot), the side lanes' trails to the Packs through
+  the river ends of the outer rock ridges, and the Grave Archers' trail grazing a tree line's end. The lanes, the river
+  and the keeps were clear.
+- siege_land.gd TRAILS_BLUE (both halves): the side lanes' trails swing round the rock ridges' river ends; the Packs'
+  trails to the middle lane go round the tree lines' river ends (past the brush there) and meet the lane short of the
+  river; the Archers' trail keeps between the tree line and the rock ridge. The walls are where they were: nothing
+  about where units can walk changed (the sim's fingerprint as 0.31.173). assets/terrain/pathmask.res and cache.res
+  re-baked; the world pack re-uploaded (32.3 MB).
+- Tests: path_clear_test (new, in the suite): the audit finds nothing, and every trail's centre line is walkable and
+  out of the water.
+- Version 0.31.174, versionCode 260, SERVER_BUILD 0.31.174.

@@ -197,13 +197,17 @@ static func ridge_dist(p: Vector2) -> Vector2:
 # The lanes (LANES) as trodden dirt, and a few jungle trails between the camps (blue half; red's mirrored).
 # paths() curves through the control points (Catmull-Rom every PATH_STEP m) and path_wobble() makes the track swell,
 # narrow and fray -- baked into the mask's R as a distance (path_r), which terrain.gdshader draws as trodden dirt.
+# 0.31.174 (Kevin: "There's a lot of paths that go through unpassable walls"): every trail goes where a unit can --
+# round a ridge's end, never through it (tools/path_audit.gd: no dirt under a ridge's rocks or trees). The side lanes'
+# trails to the Bone Packs went through the end of the outer rock ridges; the Packs' trails to the middle lane through
+# the tree lines (now round their river ends); the Archers' trail brushed the tree line's end.
 const TRAILS_BLUE := [
-	[Vector2(-44.0, 12.0), Vector2(-36.0, 14.0), Vector2(-31.0, 20.0)],
-	[Vector2(-31.0, 20.0), Vector2(-26.0, 26.0), Vector2(-14.0, 30.0), Vector2(-4.0, 30.0)],
+	[Vector2(-45.0, 9.0), Vector2(-39.0, 7.5), Vector2(-33.0, 10.5), Vector2(-31.0, 16.0), Vector2(-31.0, 20.0)],
+	[Vector2(-31.0, 20.0), Vector2(-24.0, 23.0), Vector2(-16.0, 21.5), Vector2(-10.5, 16.5), Vector2(-4.0, 15.0)],
 	[Vector2(-37.0, 44.0), Vector2(-30.0, 45.0), Vector2(-24.0, 46.0), Vector2(-14.0, 44.0), Vector2(-4.0, 44.0)],
-	[Vector2(-24.0, 46.0), Vector2(-16.0, 52.0), Vector2(-15.0, 62.0), Vector2(-14.0, 70.0)],
-	[Vector2(44.0, 14.0), Vector2(37.0, 17.0), Vector2(32.0, 24.0)],
-	[Vector2(32.0, 24.0), Vector2(24.0, 30.0), Vector2(14.0, 31.0), Vector2(4.0, 31.0)],
+	[Vector2(-24.0, 46.0), Vector2(-16.0, 51.0), Vector2(-13.8, 57.5), Vector2(-14.0, 63.0), Vector2(-14.0, 70.0)],
+	[Vector2(45.0, 10.0), Vector2(39.0, 9.5), Vector2(33.0, 13.0), Vector2(31.0, 19.0), Vector2(32.0, 24.0)],
+	[Vector2(32.0, 24.0), Vector2(25.0, 25.0), Vector2(17.0, 21.5), Vector2(11.0, 16.5), Vector2(4.0, 16.0)],
 	[Vector2(37.0, 48.0), Vector2(30.0, 48.0), Vector2(24.0, 48.0), Vector2(15.0, 45.0), Vector2(5.0, 44.0)],
 	[Vector2(24.0, 48.0), Vector2(16.0, 53.0), Vector2(15.0, 62.0), Vector2(14.0, 70.0)],
 ]
