@@ -5433,3 +5433,9 @@ pathing of map. There's a lot of paths that go through unpassable walls".
 - Tests: path_clear_test (new, in the suite): the audit finds nothing, and every trail's centre line is walkable and
   out of the water.
 - Version 0.31.174, versionCode 260, SERVER_BUILD 0.31.174.
+- Checks: the quick suite ALL SIEGE TESTS PASSED (88, path_clear_test and online_five_test among them);
+  COLD_START_PASS; the Play AAB (throwaway key, presets untouched): BASE OK (265 files), CONTENT OK, play_games true,
+  bundletool valid; content_packs check and coverage OK; the sim's fingerprint as 0.31.173 (seed 3 97e30cea900b6b37,
+  seed 17 e7fc16691408f976); the new trails reviewed in shots from the game camera (both Packs, the tree lines' ends,
+  the Archers' way). Preview APK: build/Fatebound-Siege-0.31.174-fatebound.apk (32 MB, preview key), sha256
+  145ae9f6...12aacaa219b.
