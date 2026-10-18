@@ -900,8 +900,8 @@ func _on_action_online(kind: String) -> void:
 	match kind:
 		"pick0", "pick1", "pick2":
 			var picks: Array = me.get("picks", [])
-			if picks.is_empty():
-				return
+			if picks.is_empty() or not sim.alive(me):
+				return                                   # (down: the server wouldn't take it, as against bots)
 			picks.pop_front()                            # (shown at once; the server's count follows)
 			_act("pick", int(kind.right(1)))
 			play.call("equip")

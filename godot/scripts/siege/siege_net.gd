@@ -328,6 +328,8 @@ static func _diff(sync: Dictionary, key: String, d: Dictionary, skip: Dictionary
 	var c: Dictionary = cache.get(key, {})
 	if not cache.has(key):
 		cache[key] = c
+	# Its keys are listed again when it gained or lost one: its size changed, or a listed key went. (A skipped or NO_SYNC
+	# key never comes and goes on a unit -- else one leaving as another arrives would hide the new one.)
 	var kl: Array = sync.kl.get(key, [])
 	var rebuild: bool = d.size() != int(sync.ksz.get(key, -1))
 	if not rebuild:
