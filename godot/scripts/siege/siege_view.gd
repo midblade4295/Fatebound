@@ -12,6 +12,8 @@ const DIRT_TEX := preload("res://assets/terrain/dirt.png")       # 0.31.126: the
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 const WeaponFx = preload("res://scripts/siege/weapon_fx.gd")
 const WyrmBody = preload("res://scripts/siege/wyrm_body.gd")   # 0.31.166: the Grave Wyrm (a body without a rig)
+const Towers = preload("res://scripts/siege/towers.gd")        # 0.31.172: the 5v5's towers (Meshy, breaking as they're hurt)
+signal tower_broke(at: Vector3, stage: int)                    # (siege_mode plays the crumble)
 
 const HEX := "res://assets/kaykit/hex/"
 const FOREST := "res://assets/kaykit/forest/"
@@ -3069,6 +3071,7 @@ func sync(dt: float) -> void:
 	if prof_on: tp = _pv("projectiles", tp)
 	if sim.moba != null:
 		_sync_moba()
+		_sync_falling(dt)                          # 0.31.172: a tower's broken-off pieces
 	if prof_on: tp = _pv("moba", tp)
 	_step_fx()
 	if prof_on: tp = _pv("fx", tp)
@@ -3076,13 +3079,17 @@ func sync(dt: float) -> void:
 	if prof_on: tp = _pv("camera", tp)
 
 # ---------- 5V5 (0.31.155, scripts/siege/moba.gd) ----------
-# The lane towers (KayKit hex towers in the side's colour; a stump once fallen), their range on the ground when you're
-# near an enemy one (red when it's aiming at you), their shots (a fireball from the top that homes in on its target).
+# The lane towers, their range on the ground when you're near an enemy one (red when it's aiming at you), their shots
+# (a fireball from the brazier that homes in on its target). 0.31.172 (Kevin: "new tower models ... I want them to
+# visually break as their health gets lower"): the Meshy towers of towers.gd -- the lane tower (a little bigger each
+# tier) and the King tower -- breaking in stages as they're hurt: cracks spreading, pieces breaking off and tumbling
+# down (_tower_stage, _sync_falling), the brazier going out, smoke and then fire from the broken top; when one falls,
+# all but its foot comes down in a burst of rubble. (Was KayKit hex towers in the side's colour; a stump once fallen.)
 const MINION_SCALE := 0.78
-const TOWER_SCALE := 2.0
-const TOWER_TOP := 4.4
-var moba_towers: Dictionary = {}           # tower id -> {node, ring}
+const TOWER_SMOKE_H := [0.0, 0.0, 0.74, 0.52, 0.2]       # by stage: where the smoke rises from (of the tower's height)
+var moba_towers: Dictionary = {}           # tower id -> {node, mesh, ring, stage, tier, h, top, fire, smoke, flames, dmg}
 var _tshots: Array = []                    # {node, from, id, t0, flight, to}
+var _falling: Array = []                   # broken-off pieces: {node, vel, spin, ground, t, rest}
 
 func _build_moba() -> void:
 	if sim.moba == null:
@@ -3090,10 +3097,15 @@ func _build_moba() -> void:
 	_build_brush()
 	_build_fog()
 	for tw in sim.moba.towers:
-		var col: String = COLOR[vt(int(tw.team))]
 		var gy := Sim.height_at(tw.p)
-		var face := 0.0 if int(tw.team) == 0 else PI
-		var node := _place(HEX + "building_tower_A_%s.gltf" % col, Vector3(tw.p.x, gy, tw.p.y), face, TOWER_SCALE)
+		var tier := int(tw.tier)
+		# its front (the brazier's gem; the King tower's stairs) towards the other side's keep
+		var d: Vector2 = Sim.throne(1 - int(tw.team)) - (tw.p as Vector2)
+		var node := Towers.instance(tier, vt(int(tw.team)))
+		node.position = Vector3(tw.p.x, gy, tw.p.y)
+		node.rotation.y = atan2(d.x, d.y)
+		add_child(node)
+		var top: Vector3 = node.position + Basis(Vector3.UP, node.rotation.y) * Towers.brazier(tier)
 		var ring := MeshInstance3D.new()
 		ring.mesh = _ring_mesh(sim.moba.TOWER_RANGE, 0.16)
 		ring.scale = Vector3(1, 0.15, 1)
@@ -3102,7 +3114,155 @@ func _build_moba() -> void:
 		ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		ring.visible = false
 		add_child(ring)
-		moba_towers[int(tw.id)] = {"node":node, "ring":ring}
+		var fire := _beacon_fire(top - Vector3(0, 0.25, 0))
+		fire.scale = Vector3.ONE * (0.2 if tier < 4 else 0.26)          # (a small flame in the bowl, under the gem)
+		fire.amount = 8
+		((fire.draw_pass_1 as QuadMesh).material as StandardMaterial3D).albedo_color = Color(1.5, 0.62, 0.18, 0.8)
+		moba_towers[int(tw.id)] = {"node":node, "mesh":node.get_meta("mesh", null), "ring":ring, "stage":-1, "tier":tier,
+			"h":Towers.height(tier), "top":top, "fire":fire, "smoke":null, "flames":null, "dmg":-1.0}
+		var tmi: MeshInstance3D = node.get_meta("mesh", null)
+		if tmi != null:
+			Towers.chunks(Towers.kind_of(tier), tmi.mesh)      # (the pieces made now, not in the middle of a fight)
+
+func _tower_stage(tw: Dictionary, mt: Dictionary, stage: int, animate: bool) -> void:
+	# A tower's look at a stage (towers.gd): that stage's cells hidden in its mesh and, when it happens before your
+	# eyes, dropped as pieces; the brazier out from stage 3; smoke from 2, flames from the broken top at 3; at 4 (it
+	# fell) the foot smoulders.
+	var old := int(mt.stage)
+	mt.stage = stage
+	var mi: MeshInstance3D = mt.mesh
+	if mi != null:
+		mi.set_instance_shader_parameter("broken", float(stage))
+		mi.set_instance_shader_parameter("lit", 1.0 if stage < 3 else 0.0)
+	var node: Node3D = mt.node
+	var base: Vector3 = node.position
+	if animate and old >= 0 and stage > old and mi != null:
+		var pieces := Towers.chunks(Towers.kind_of(int(mt.tier)), mi.mesh)
+		var mid := Vector3.ZERO
+		var n := 0
+		for c in pieces:
+			if int(c.stage) > old and int(c.stage) <= stage:
+				var at: Vector3 = node.to_global((c.center as Vector3) * float(mt.h))
+				_drop_piece(c, mt, at, base)
+				mid += at
+				n += 1
+		if n > 0:
+			mid /= float(n)
+			smoke_cloud(mid, 0.28 if stage < 4 else 0.7, 5 if stage < 4 else 14, 3.0)
+			tower_broke.emit(mid, stage)
+	if stage >= 3 and is_instance_valid(mt.fire):
+		(mt.fire as Node).queue_free()
+		mt.fire = null
+	if stage >= 2:
+		var sh: Vector3 = base + Vector3(0, float(mt.h) * float(TOWER_SMOKE_H[mini(stage, 4)]), 0)
+		if mt.smoke == null or not is_instance_valid(mt.smoke):
+			mt.smoke = _tower_smoke(sh)
+		(mt.smoke as Node3D).position = sh
+		(mt.smoke as GPUParticles3D).amount_ratio = 1.0 if stage < 4 else 0.5
+	if stage == 3 and (mt.flames == null or not is_instance_valid(mt.flames)):
+		mt.flames = _beacon_fire(base + Vector3(0, float(mt.h) * 0.5, 0))
+		(mt.flames as Node3D).scale = Vector3.ONE * 0.3
+		(((mt.flames as GPUParticles3D).draw_pass_1 as QuadMesh).material as StandardMaterial3D).albedo_color = Color(1.5, 0.62, 0.18, 0.8)
+	elif stage >= 4 and mt.flames != null and is_instance_valid(mt.flames):
+		(mt.flames as Node).queue_free()
+		mt.flames = null
+
+func _drop_piece(c: Dictionary, mt: Dictionary, at: Vector3, base: Vector3) -> void:
+	# a broken-off piece: thrown out from the tower's middle, tumbling, it bounces once and settles, then sinks away
+	if _falling.size() >= 90:
+		return
+	var p := MeshInstance3D.new()
+	p.mesh = c.mesh
+	p.material_override = (mt.mesh as MeshInstance3D).material_override
+	p.set_instance_shader_parameter("dmg", float(mt.dmg))
+	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF if low_fx else GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	p.position = at
+	p.basis = (mt.node as Node3D).basis.scaled(Vector3.ONE * float(mt.h))
+	add_child(p)
+	var out := Vector2(at.x - base.x, at.z - base.z)
+	out = out.normalized() if out.length() > 0.05 else Vector2.from_angle(randf() * TAU)
+	var spd := randf_range(1.2, 3.4)
+	_falling.append({"node":p, "vel":Vector3(out.x * spd, randf_range(0.5, 2.6), out.y * spd),
+		"spin":Vector3(randf_range(-1, 1), randf_range(-1, 1), randf_range(-1, 1)).normalized() * randf_range(2.0, 6.0),
+		"ground":Sim.height_at(Vector2(at.x, at.z)), "bounced":false, "rest":-1.0, "t":0.0})
+
+func _sync_falling(dt: float) -> void:
+	for i in range(_falling.size() - 1, -1, -1):
+		var f: Dictionary = _falling[i]
+		var p: MeshInstance3D = f.node
+		if not is_instance_valid(p):
+			_falling.remove_at(i)
+			continue
+		f.t = float(f.t) + dt
+		if float(f.rest) < 0.0:
+			var v: Vector3 = f.vel
+			v.y -= 22.0 * dt
+			p.position += v * dt
+			var sp: Vector3 = f.spin
+			if sp.length() > 0.01:
+				p.basis = Basis(sp.normalized(), sp.length() * dt) * p.basis
+			var gy := float(f.ground) + 0.15
+			if p.position.y <= gy:
+				p.position.y = gy
+				if not bool(f.bounced):
+					f.bounced = true
+					v = Vector3(v.x * 0.45, -v.y * 0.28, v.z * 0.45)
+					f.spin = sp * 0.4
+					if randf() < 0.5:
+						spark(p.position + Vector3(0, 0.1, 0), Color("#d9cdb4"))
+				else:
+					f.rest = float(f.t)
+			f.vel = v
+		elif float(f.t) - float(f.rest) > 2.6:
+			p.position.y -= dt * 0.5                     # (sinks into the ground, then goes)
+			if float(f.t) - float(f.rest) > 4.2:
+				p.queue_free()
+				_falling.remove_at(i)
+
+func _tower_smoke(at: Vector3) -> GPUParticles3D:
+	# a broken tower's smoke: a thin grey column drifting with the breeze, as long as it stands (and from its foot after)
+	var pm := ParticleProcessMaterial.new()
+	pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
+	pm.emission_sphere_radius = 0.5
+	pm.direction = Vector3(0, 1, 0)
+	pm.spread = 10.0
+	pm.initial_velocity_min = 0.8
+	pm.initial_velocity_max = 1.5
+	pm.gravity = Vector3(0.0, 0.5, 0.0) + SMOKE_WIND * 1.4
+	pm.damping_min = 0.2
+	pm.damping_max = 0.4
+	pm.scale_min = 0.9
+	pm.scale_max = 1.5
+	var sc := Curve.new()
+	sc.add_point(Vector2(0.0, 0.5))
+	sc.add_point(Vector2(1.0, 2.2))
+	var sct := CurveTexture.new()
+	sct.curve = sc
+	pm.scale_curve = sct
+	pm.angle_min = -180.0
+	pm.angle_max = 180.0
+	var g := Gradient.new()
+	g.offsets = PackedFloat32Array([0.0, 0.15, 0.6, 1.0])
+	g.colors = PackedColorArray([Color(0.22, 0.2, 0.19, 0.0), Color(0.25, 0.23, 0.22, 0.55), Color(0.42, 0.41, 0.4, 0.3),
+		Color(0.55, 0.55, 0.55, 0.0)])
+	var gt := GradientTexture1D.new()
+	gt.gradient = g
+	pm.color_ramp = gt
+	var q := QuadMesh.new()
+	q.size = Vector2(1.3, 1.3)
+	q.material = _smoke_draw_mat()
+	var ps := GPUParticles3D.new()
+	ps.process_material = pm
+	ps.draw_pass_1 = q
+	ps.amount = 5 if low_fx else 9
+	ps.lifetime = 5.0
+	ps.preprocess = 3.0
+	ps.local_coords = false
+	ps.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	ps.visibility_aabb = AABB(Vector3(-6, -1, -6), Vector3(12, 12, 12))
+	ps.position = at
+	add_child(ps)
+	return ps
 
 func _sync_moba() -> void:
 	_sync_rains()
@@ -3116,6 +3276,14 @@ func _sync_moba() -> void:
 		var mt: Dictionary = moba_towers.get(int(tw.id), {})
 		if mt.is_empty():
 			continue
+		# 0.31.172: breaking with its health (a first look -- a match joined late -- shows it as it is, nothing falls)
+		var stg := Towers.stage_of(float(tw.hp), float(tw.max_hp), bool(tw.dead))
+		if stg != int(mt.stage) and stg > int(mt.stage):
+			_tower_stage(tw, mt, stg, int(mt.stage) >= 0)
+		var dm := 1.0 if bool(tw.dead) else clampf(1.0 - float(tw.hp) / maxf(float(tw.max_hp), 1.0), 0.0, 1.0)
+		if absf(dm - float(mt.dmg)) > 0.01 and mt.mesh != null:
+			mt.dmg = dm
+			(mt.mesh as MeshInstance3D).set_instance_shader_parameter("dmg", dm)
 		var ring: MeshInstance3D = mt.ring
 		var show: bool = not bool(tw.dead) and not me.is_empty() and int(tw.team) != int(me.team) and sim.alive(me) \
 			and (me.pos as Vector2).distance_to(tw.p) <= float(sim.moba.TOWER_RANGE) + 5.0
@@ -4040,7 +4208,8 @@ func _sync_auras() -> void:
 
 func _tower_shot(e: Dictionary) -> void:
 	var tw: Dictionary = sim.moba.towers[int(e.tw)]
-	var from := Vector3(tw.p.x, Sim.height_at(tw.p) + TOWER_TOP, tw.p.y)
+	var mt0: Dictionary = moba_towers.get(int(e.tw), {})
+	var from: Vector3 = mt0.top if not mt0.is_empty() else Vector3(tw.p.x, Sim.height_at(tw.p) + 4.4, tw.p.y)   # (its brazier)
 	var node := _make_projectile("fire")
 	node.position = from
 	if int(e.get("ramp", 0)) >= 2:
@@ -4050,15 +4219,15 @@ func _tower_shot(e: Dictionary) -> void:
 	_tshots.append({"node":node, "from":from, "id":str(e.id), "t0":_time, "flight":float(e.get("flight", 0.3)), "to":to})
 
 func _tower_down(e: Dictionary) -> void:
+	# it falls: all but its foot comes down (_tower_stage 4), a blast of rubble and dust
 	var tw: Dictionary = sim.moba.towers[int(e.tw)]
 	var mt: Dictionary = moba_towers.get(int(e.tw), {})
 	var gy := Sim.height_at(tw.p)
 	var at := Vector3(tw.p.x, gy, tw.p.y)
 	if not mt.is_empty():
-		if is_instance_valid(mt.node):
-			(mt.node as Node3D).queue_free()
 		(mt.ring as MeshInstance3D).visible = false
-		mt.node = _place(HEX + "building_tower_base_%s.gltf" % COLOR[vt(int(tw.team))], at, 0.0 if int(tw.team) == 0 else PI, TOWER_SCALE * 0.8)
+		if int(mt.stage) < 4:
+			_tower_stage(tw, mt, 4, int(mt.stage) >= 0)
 	_pack_explosion("heavy", at + Vector3(0, 2.0, 0), 1.6)
 	for i in 3:
 		ring_at(at + Vector3(0, 0.2, 0), Color("#e0c9a0"), 3.0 + i, 0.7 + i * 0.2)
@@ -4567,7 +4736,7 @@ func bars() -> Array:
 		for tw in sim.moba.towers:                 # 0.31.155 5V5: the towers' health (wide)
 			if not bool(tw.dead):
 				if not _bar_y.has(tw.id):
-					_bar_y[tw.id] = Sim.height_at(tw.p) + TOWER_TOP + 1.2
+					_bar_y[tw.id] = Sim.height_at(tw.p) + Towers.height(int(tw.tier)) + 0.5     # (0.31.172: over the new towers)
 				out.append({"pos":Vector3(tw.p.x, float(_bar_y[tw.id]), tw.p.y), "fill":clampf(float(tw.hp) / float(tw.max_hp), 0.0, 1.0),
 					"color":TEAM_COLORS[vt(int(tw.team))], "wide":true})
 		for kt in 2:                               # 0.31.156: the Kings (the hearts)

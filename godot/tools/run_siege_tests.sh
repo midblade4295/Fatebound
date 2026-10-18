@@ -61,6 +61,7 @@ run online_five_test     ONLINE_FIVE_PASS         240
 run hammer_test          HAMMER_PASS              150
 run match_audio_test     MATCH_AUDIO_PASS         280
 run hero_assets_test     HERO_ASSETS_PASS         120
+run tower_look_test      TOWER_LOOK_PASS          120
 run priest_test          PRIEST_PASS              200
 run multikill_test       MULTIKILL_PASS           60
 run upgrades_test        UPGRADES_PASS            60

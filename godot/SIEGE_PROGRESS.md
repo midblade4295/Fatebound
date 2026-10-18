@@ -5324,3 +5324,41 @@ and a sound of its own for every ability, the better of two takes each.
   content_packs check and coverage OK; the sim's fingerprint as 0.31.170 (seed 3 97e30cea900b6b37, seed 17
   e7fc16691408f976); review shots of the HUD (Golem at level 6 through Q/W/E/R, the Crusader at level 1) and the hero
   window. Preview APK: build/Fatebound-Siege-0.31.171-fatebound.apk (31 MB, preview key), sha256 19e4d3c9...ca00c463.
+
+## 0.31.172 — new towers that break as they're hurt
+Kevin: "Now I want to do new tower models": a lane tower and a King tower ("Lane + King"), "Also I want them to visually
+break as their health gets lower"; concepts in two styles first, the Royal A sheet picked for both; Meshy topped up.
+- Concepts: four ElevenLabs gpt-image-2 sheets (Royal and Arcane, two takes each: the lane tower whole / damaged /
+  nearly destroyed and the King tower; ~738 credits; art_sources/towers). From Royal A: each tower redrawn alone, no
+  ground, by Meshy image-to-image (12 credits each), then Meshy image-to-3D (meshy-7.1, two takes each, 30 credits each:
+  lane 6.2k triangles, King 10.3k; the a takes kept -- the slimmer lane tower with banners all round, the compact King
+  tower). Meshy credits: 144.
+- tools/tower_prep.py stands each model up (1.0 tall, foot at 0, front on +Z), cuts its texture to 1K and its glow mask
+  (the brazier's fire and gem), and cuts the surface into cells (54 lane, 75 King: farthest-point seeds, a relaxation
+  step, small cells merged), each cell with its own vertices and UV2 = (stage, cell): the stage it breaks off at --
+  1 at 75 % health, 2 at 50 %, 3 at 25 %, 4 when it falls, never (the foot) -- by height (the roof and the brazier
+  first, then the crenellations, holes in the wall, the body) with a seeded shuffle, and no piece left hanging (a cell
+  breaks no later than the last cell under it: a roof falls with its pillars). tools/tower_cracks.py: a tileable crack
+  network and the order the cracks show in.
+- scripts/siege/towers.gd + tower.gdshader: the towers in their side's colours from one texture (the keep's blue-to-red
+  rule); per tower instance values: broken (that stage's cells collapse in the vertex shader -- nothing drawn, no
+  shadow), dmg (cracks spread over the stone with the damage taken, box-mapped in the model's space), lit (the
+  brazier's glow). The inside of a hole is broken stone. The pieces (each cell as its own mesh about its middle) are
+  made when the match is built, not mid-fight.
+- The view (siege_view.gd): the lane tower for tiers 1-3 (6 m, x1.07, x1.14 by tier), the King tower (7 m) in the
+  keeps; each faces the other side's keep; a small flame in the brazier; shots start at the brazier; health bars over
+  the new heights. As a tower's health passes a stage its cells break off: thrown out and tumbling, a bounce, a puff
+  of dust; they settle, then sink away (at most 90 at once); smoke rises from 50 %, the brazier goes out and flames burn
+  on the broken top at 25 %; when it falls all but its foot comes down with the old blast and rings, and the foot
+  smoulders. A tower already hurt when you first see it (a match joined late) is drawn so at once. Stone crumbles
+  (tm_crumble; louder, with a rock hit, when it falls) -- the view's tower_broke signal to siege_mode. The KayKit hex
+  towers and stumps are no longer used.
+- Triangles: a lane tower 6.2k (the KayKit tower 2.1k), a King tower 10.3k; one draw a tower. The world pack: +1.4 MB
+  (25.2 MB). content/preload.json re-run (tools/preload_list.gd): the towers in; the Siege-era shops, tools animations
+  and props out, the six new heroes' bodies and weapons and the Wyrm in.
+- Tests: tower_look_test (new): the stages by health; both models' cells cover every triangle, each stage takes some
+  of the tower and the foot stays; in a match every tower drawn from its model facing the other keep, shots from the
+  brazier, a tower hurt past 75 / 50 / 25 % and felled -- stage, hidden cells, falling pieces, cracks, smoke, the
+  brazier out, flames, the foot standing, the pieces landed and gone; a first look at a half-down tower. Dev tools:
+  tower_shots.gd (a tower through its stages from the game camera), model_shots.gd (a GLB round about, unimported).
+- Version 0.31.172, versionCode 258, SERVER_BUILD 0.31.172 (unchanged otherwise).

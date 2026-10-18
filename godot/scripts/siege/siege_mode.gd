@@ -256,6 +256,7 @@ func _start_steps() -> Array:
 		view.my_name = player_name
 		view.my_title = my_title()
 		view.my_tag = clan_tag
+		view.tower_broke.connect(_on_tower_broke)
 		viewport.add_child(view)
 		_view_steps = view.setup_steps(sim))
 	# (the view's own steps run from _view_steps between these two: the array is filled by the first step)
@@ -551,6 +552,7 @@ func _build_online_match(msg: Dictionary) -> void:
 	view.my_name = player_name
 	view.my_title = my_title()
 	view.my_tag = clan_tag
+	view.tower_broke.connect(_on_tower_broke)
 	viewport.add_child(view)
 	view.setup(sim)
 	hud.sim = sim
@@ -1265,6 +1267,12 @@ func _gate_pos(gid: Variant) -> Vector2:
 		if str(g.id) == str(gid):
 			return Sim.gate_front(g)
 	return Vector2.INF
+
+func _on_tower_broke(at: Vector3, stage: int) -> void:
+	# 0.31.172: a tower breaking as it's hurt -- stone crumbling (louder when it falls)
+	_cue("tm_crumble", 2, Vector2(at.x, at.z), 40.0, false, 0.65 if stage < 4 else 1.1)
+	if stage >= 4:
+		_cue("tm_rock_hit", 2, Vector2(at.x, at.z), 40.0, false, 1.0)
 
 func _event_sound(e: Dictionary) -> void:
 	if audio == null or not audio.has_method("play"):

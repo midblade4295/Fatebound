@@ -52,7 +52,8 @@ NEW_HEROES = ["dragoon", "druid", "duelist", "golem", "musketeer", "stormcaller"
 # name -> the folders (Godot filter patterns, relative to res://) whose files the pack carries, in download order
 PACKS = [
     ("ui", ["assets/ui/*"]),
-    ("world", ["assets/meshy/castle/*", "assets/kaykit/*", "assets/kings/*", "assets/terrain/*", "assets/props/*"]),
+    ("world", ["assets/meshy/castle/*", "assets/kaykit/*", "assets/kings/*", "assets/terrain/*", "assets/props/*",
+               "assets/meshy/towers/*"]),                             # 0.31.172: the 5v5's towers
                                                                       # (0.31.169: Siege's hat shops, workshop and
                                                                       # outposts went with it)
     ("heroes", ["assets/meshy/%s/*" % b for b in BODIES]),

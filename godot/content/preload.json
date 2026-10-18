@@ -10,15 +10,33 @@
 
 "res://assets/kaykit/anim/Rig_Medium_MovementBasic.glb",
 
-"res://assets/kaykit/anim/Rig_Medium_Tools.glb",
-
 "res://assets/kaykit/forest/Bush_1_A_Color1.gltf",
 
+"res://assets/kaykit/forest/Bush_1_B_Color1.gltf",
+
+"res://assets/kaykit/forest/Bush_1_C_Color1.gltf",
+
 "res://assets/kaykit/forest/Bush_2_A_Color1.gltf",
+
+"res://assets/kaykit/forest/Bush_2_B_Color1.gltf",
+
+"res://assets/kaykit/forest/Bush_2_C_Color1.gltf",
 
 "res://assets/kaykit/forest/Grass_1_A_Color1.gltf",
 
 "res://assets/kaykit/forest/Grass_2_A_Color1.gltf",
+
+"res://assets/kaykit/forest/Rock_1_A_Color1.gltf",
+
+"res://assets/kaykit/forest/Rock_1_B_Color1.gltf",
+
+"res://assets/kaykit/forest/Rock_1_C_Color1.gltf",
+
+"res://assets/kaykit/forest/Rock_1_D_Color1.gltf",
+
+"res://assets/kaykit/forest/Rock_1_E_Color1.gltf",
+
+"res://assets/kaykit/forest/Rock_1_F_Color1.gltf",
 
 "res://assets/kaykit/forest/Tree_1_A_Color1.gltf",
 
@@ -40,37 +58,15 @@
 
 "res://assets/kaykit/heroes/Skeleton_Warrior.glb",
 
-"res://assets/kaykit/hex/barrel.gltf",
-
-"res://assets/kaykit/hex/building_tower_catapult_blue.gltf",
-
-"res://assets/kaykit/hex/building_tower_catapult_red.gltf",
-
 "res://assets/kaykit/hex/crate_open.gltf",
 
-"res://assets/kaykit/hex/flag_blue.gltf",
-
-"res://assets/kaykit/hex/flag_red.gltf",
-
 "res://assets/kaykit/hex/mountain_A_grass_trees.gltf",
-
-"res://assets/kaykit/hex/resource_lumber.gltf",
 
 "res://assets/kaykit/hex/rock_single_D.gltf",
 
 "res://assets/kaykit/hex/rock_single_E.gltf",
 
-"res://assets/kaykit/hex/tree_single_A.gltf",
-
-"res://assets/kaykit/hex/tree_single_A_cut.gltf",
-
-"res://assets/kaykit/hex/tree_single_B.gltf",
-
-"res://assets/kaykit/hex/tree_single_B_cut.gltf",
-
 "res://assets/kaykit/hex/wall_straight_gate.gltf",
-
-"res://assets/kaykit/hex/wheelbarrow.gltf",
 
 "res://assets/kaykit/tools/torch.gltf",
 
@@ -90,21 +86,7 @@
 
 "res://assets/kings/king_blue_fat.glb",
 
-"res://assets/kings/king_blue_fatter.glb",
-
-"res://assets/kings/king_blue_fattest.glb",
-
 "res://assets/kings/king_red_fat.glb",
-
-"res://assets/kings/king_red_fatter.glb",
-
-"res://assets/kings/king_red_fattest.glb",
-
-"res://assets/meshy/archer_shop/archer_shop.glb",
-
-"res://assets/meshy/archer_shop/archer_shop_glow.png",
-
-"res://assets/meshy/archer_shop/archer_shop_red.png",
 
 "res://assets/meshy/archmage/anims_g.res",
 
@@ -115,8 +97,6 @@
 "res://assets/meshy/archmage/anims_mb.res",
 
 "res://assets/meshy/archmage/anims_r.res",
-
-"res://assets/meshy/archmage/anims_t.res",
 
 "res://assets/meshy/archmage/rigged.glb",
 
@@ -130,8 +110,6 @@
 
 "res://assets/meshy/assassin/anims_r.res",
 
-"res://assets/meshy/assassin/anims_t.res",
-
 "res://assets/meshy/assassin/rigged.glb",
 
 "res://assets/meshy/barbarian/anims_g.res",
@@ -144,15 +122,7 @@
 
 "res://assets/meshy/barbarian/anims_r.res",
 
-"res://assets/meshy/barbarian/anims_t.res",
-
 "res://assets/meshy/barbarian/rigged.glb",
-
-"res://assets/meshy/barbarian_shop/barbarian_shop.glb",
-
-"res://assets/meshy/barbarian_shop/barbarian_shop_glow.png",
-
-"res://assets/meshy/barbarian_shop/barbarian_shop_red.png",
 
 "res://assets/meshy/berserker/anims_g.res",
 
@@ -164,31 +134,17 @@
 
 "res://assets/meshy/berserker/anims_r.res",
 
-"res://assets/meshy/berserker/anims_t.res",
-
 "res://assets/meshy/berserker/rigged.glb",
 
 "res://assets/meshy/castle/floors/royal_court.jpg",
 
-"res://assets/meshy/castle/floors/royal_garden.jpg",
-
-"res://assets/meshy/castle/floors/royal_marble.jpg",
-
 "res://assets/meshy/castle/royal_banner.glb",
-
-"res://assets/meshy/castle/royal_dungeon_arch.glb",
 
 "res://assets/meshy/castle/royal_fountain.glb",
 
 "res://assets/meshy/castle/royal_gatehouse.glb",
 
-"res://assets/meshy/castle/royal_hedge_box.glb",
-
-"res://assets/meshy/castle/royal_stall.glb",
-
 "res://assets/meshy/castle/royal_statue.glb",
-
-"res://assets/meshy/castle/royal_terrace_wall.glb",
 
 "res://assets/meshy/castle/royal_throne_canopy.glb",
 
@@ -208,9 +164,55 @@
 
 "res://assets/meshy/crusader/anims_r.res",
 
-"res://assets/meshy/crusader/anims_t.res",
-
 "res://assets/meshy/crusader/rigged.glb",
+
+"res://assets/meshy/dragoon/anims_g.res",
+
+"res://assets/meshy/dragoon/anims_m.res",
+
+"res://assets/meshy/dragoon/anims_ma.res",
+
+"res://assets/meshy/dragoon/anims_mb.res",
+
+"res://assets/meshy/dragoon/anims_r.res",
+
+"res://assets/meshy/dragoon/rigged.glb",
+
+"res://assets/meshy/druid/anims_g.res",
+
+"res://assets/meshy/druid/anims_m.res",
+
+"res://assets/meshy/druid/anims_ma.res",
+
+"res://assets/meshy/druid/anims_mb.res",
+
+"res://assets/meshy/druid/anims_r.res",
+
+"res://assets/meshy/druid/rigged.glb",
+
+"res://assets/meshy/duelist/anims_g.res",
+
+"res://assets/meshy/duelist/anims_m.res",
+
+"res://assets/meshy/duelist/anims_ma.res",
+
+"res://assets/meshy/duelist/anims_mb.res",
+
+"res://assets/meshy/duelist/anims_r.res",
+
+"res://assets/meshy/duelist/rigged.glb",
+
+"res://assets/meshy/golem/anims_g.res",
+
+"res://assets/meshy/golem/anims_m.res",
+
+"res://assets/meshy/golem/anims_ma.res",
+
+"res://assets/meshy/golem/anims_mb.res",
+
+"res://assets/meshy/golem/anims_r.res",
+
+"res://assets/meshy/golem/rigged.glb",
 
 "res://assets/meshy/knight/anims_g.res",
 
@@ -222,15 +224,7 @@
 
 "res://assets/meshy/knight/anims_r.res",
 
-"res://assets/meshy/knight/anims_t.res",
-
 "res://assets/meshy/knight/rigged.glb",
-
-"res://assets/meshy/knight_shop/knight_shop.glb",
-
-"res://assets/meshy/knight_shop/knight_shop_glow.png",
-
-"res://assets/meshy/knight_shop/knight_shop_red.png",
 
 "res://assets/meshy/mage/anims_g.res",
 
@@ -242,15 +236,7 @@
 
 "res://assets/meshy/mage/anims_r.res",
 
-"res://assets/meshy/mage/anims_t.res",
-
 "res://assets/meshy/mage/rigged.glb",
-
-"res://assets/meshy/mage_shop/mage_shop.glb",
-
-"res://assets/meshy/mage_shop/mage_shop_glow.png",
-
-"res://assets/meshy/mage_shop/mage_shop_red.png",
 
 "res://assets/meshy/minion_caster/anims_g.res",
 
@@ -261,8 +247,6 @@
 "res://assets/meshy/minion_caster/anims_mb.res",
 
 "res://assets/meshy/minion_caster/anims_r.res",
-
-"res://assets/meshy/minion_caster/anims_t.res",
 
 "res://assets/meshy/minion_caster/rigged.glb",
 
@@ -278,8 +262,6 @@
 
 "res://assets/meshy/minion_melee/anims_r.res",
 
-"res://assets/meshy/minion_melee/anims_t.res",
-
 "res://assets/meshy/minion_melee/rigged.glb",
 
 "res://assets/meshy/minion_melee/rigged_Image_0_red.jpg",
@@ -293,8 +275,6 @@
 "res://assets/meshy/minion_siege/anims_mb.res",
 
 "res://assets/meshy/minion_siege/anims_r.res",
-
-"res://assets/meshy/minion_siege/anims_t.res",
 
 "res://assets/meshy/minion_siege/rigged.glb",
 
@@ -310,11 +290,21 @@
 
 "res://assets/meshy/minion_super/anims_r.res",
 
-"res://assets/meshy/minion_super/anims_t.res",
-
 "res://assets/meshy/minion_super/rigged.glb",
 
 "res://assets/meshy/minion_super/rigged_Image_0_red.jpg",
+
+"res://assets/meshy/musketeer/anims_g.res",
+
+"res://assets/meshy/musketeer/anims_m.res",
+
+"res://assets/meshy/musketeer/anims_ma.res",
+
+"res://assets/meshy/musketeer/anims_mb.res",
+
+"res://assets/meshy/musketeer/anims_r.res",
+
+"res://assets/meshy/musketeer/rigged.glb",
 
 "res://assets/meshy/necromancer/anims_g.res",
 
@@ -326,29 +316,7 @@
 
 "res://assets/meshy/necromancer/anims_r.res",
 
-"res://assets/meshy/necromancer/anims_t.res",
-
 "res://assets/meshy/necromancer/rigged.glb",
-
-"res://assets/meshy/outpost_beacon/outpost_beacon.glb",
-
-"res://assets/meshy/outpost_beacon/outpost_beacon_glow.png",
-
-"res://assets/meshy/outpost_fort/outpost_fort.glb",
-
-"res://assets/meshy/outpost_fort/outpost_fort_glow.png",
-
-"res://assets/meshy/outpost_rook/outpost_rook.glb",
-
-"res://assets/meshy/outpost_rook/outpost_rook_glow.png",
-
-"res://assets/meshy/outpost_ruin/outpost_ruin.glb",
-
-"res://assets/meshy/outpost_ruin/outpost_ruin_glow.png",
-
-"res://assets/meshy/outpost_watchtower/outpost_watchtower.glb",
-
-"res://assets/meshy/outpost_watchtower/outpost_watchtower_glow.png",
 
 "res://assets/meshy/priest/anims_g.res",
 
@@ -360,15 +328,7 @@
 
 "res://assets/meshy/priest/anims_r.res",
 
-"res://assets/meshy/priest/anims_t.res",
-
 "res://assets/meshy/priest/rigged.glb",
-
-"res://assets/meshy/priest_shop/priest_shop.glb",
-
-"res://assets/meshy/priest_shop/priest_shop_glow.png",
-
-"res://assets/meshy/priest_shop/priest_shop_red.png",
 
 "res://assets/meshy/ranger/anims_g.res",
 
@@ -379,8 +339,6 @@
 "res://assets/meshy/ranger/anims_mb.res",
 
 "res://assets/meshy/ranger/anims_r.res",
-
-"res://assets/meshy/ranger/anims_t.res",
 
 "res://assets/meshy/ranger/rigged.glb",
 
@@ -394,15 +352,7 @@
 
 "res://assets/meshy/rogue/anims_r.res",
 
-"res://assets/meshy/rogue/anims_t.res",
-
 "res://assets/meshy/rogue/rigged.glb",
-
-"res://assets/meshy/rogue_shop/rogue_shop.glb",
-
-"res://assets/meshy/rogue_shop/rogue_shop_glow.png",
-
-"res://assets/meshy/rogue_shop/rogue_shop_red.png",
 
 "res://assets/meshy/sniper/anims_g.res",
 
@@ -414,23 +364,29 @@
 
 "res://assets/meshy/sniper/anims_r.res",
 
-"res://assets/meshy/sniper/anims_t.res",
-
 "res://assets/meshy/sniper/rigged.glb",
 
-"res://assets/meshy/villager/anims_g.res",
+"res://assets/meshy/stormcaller/anims_g.res",
 
-"res://assets/meshy/villager/anims_m.res",
+"res://assets/meshy/stormcaller/anims_m.res",
 
-"res://assets/meshy/villager/anims_ma.res",
+"res://assets/meshy/stormcaller/anims_ma.res",
 
-"res://assets/meshy/villager/anims_mb.res",
+"res://assets/meshy/stormcaller/anims_mb.res",
 
-"res://assets/meshy/villager/anims_r.res",
+"res://assets/meshy/stormcaller/anims_r.res",
 
-"res://assets/meshy/villager/anims_t.res",
+"res://assets/meshy/stormcaller/rigged.glb",
 
-"res://assets/meshy/villager/rigged.glb",
+"res://assets/meshy/towers/cracks.png",
+
+"res://assets/meshy/towers/tower_king.glb",
+
+"res://assets/meshy/towers/tower_king_glow.png",
+
+"res://assets/meshy/towers/tower_lane.glb",
+
+"res://assets/meshy/towers/tower_lane_glow.png",
 
 "res://assets/meshy/weapons/acolyte_wand.glb",
 
@@ -441,6 +397,16 @@
 "res://assets/meshy/weapons/bonecaller_staff.glb",
 
 "res://assets/meshy/weapons/cutpurse_dagger.glb",
+
+"res://assets/meshy/weapons/dragoon_halberd.glb",
+
+"res://assets/meshy/weapons/druid_staff.glb",
+
+"res://assets/meshy/weapons/duelist_rapier.glb",
+
+"res://assets/meshy/weapons/golem_hammer.glb",
+
+"res://assets/meshy/weapons/golem_shield.glb",
 
 "res://assets/meshy/weapons/ironhewer_greatsword.glb",
 
@@ -464,11 +430,17 @@
 
 "res://assets/meshy/weapons/minion_sword.glb",
 
+"res://assets/meshy/weapons/musket.glb",
+
+"res://assets/meshy/weapons/needlepoint_stiletto.glb",
+
 "res://assets/meshy/weapons/shade_dagger.glb",
 
 "res://assets/meshy/weapons/squire_shield.glb",
 
 "res://assets/meshy/weapons/squire_sword.glb",
+
+"res://assets/meshy/weapons/storm_staff.glb",
 
 "res://assets/meshy/weapons/templar_shield.glb",
 
@@ -488,19 +460,11 @@
 
 "res://assets/meshy/worker/anims_r.res",
 
-"res://assets/meshy/worker/anims_t.res",
-
 "res://assets/meshy/worker/rigged.glb",
 
-"res://assets/meshy/workshop/workshop.glb",
-
-"res://assets/meshy/workshop/workshop_glow.png",
-
-"res://assets/meshy/workshop/workshop_red.png",
+"res://assets/meshy/wyrm/wyrm.glb",
 
 "res://assets/props/throne.glb",
-
-"res://assets/terrain/bridge.glb",
 
 "res://assets/terrain/cache.res",
 
