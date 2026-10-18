@@ -5406,3 +5406,11 @@ sixteen (eight trees, eight bushes and grasses); on a local mesh-reduction step:
   the brush, ridges, edge and woods drawn, every batch one small cell, the trees' shadows from their copies only, every
   brush patch filled and on the ground.
 - Version 0.31.173, versionCode 259, SERVER_BUILD 0.31.173 (nothing else on the server changed).
+- Checks: the quick suite 86 passed (foliage_test among them) + online_five_test, which failed once in the suite run
+  (Alice's walk: 0.0 m in its 2 s of real time; everything else in it passed, 3372 comparisons, 0 mismatches) and passed
+  3 of 3 alone (6.0-6.2 m) -- a real-time flake, nothing it runs changed (the server and the sim are as 0.31.172);
+  COLD_START_PASS; the Play AAB (throwaway key, presets untouched): BASE OK (265 files), CONTENT OK, play_games true,
+  bundletool valid; content_packs check and coverage OK; the sim's fingerprint as 0.31.172 (seed 3 97e30cea900b6b37,
+  seed 17 e7fc16691408f976); the Rift reviewed in shots (the jungles, the side lanes, the brush sets) beside
+  0.31.172's. Preview APK: build/Fatebound-Siege-0.31.173-fatebound.apk (32 MB, preview key), sha256
+  46dac48c...e85ebe702472f.
