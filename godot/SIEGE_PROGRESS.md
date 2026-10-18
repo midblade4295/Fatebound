@@ -5464,3 +5464,8 @@ looking and more high quality".
   and the shop in paint (every item's icon, the names, the armory, the picked item's icon).
 - The ui pack: 21.4 -> 23.6 MB (uploaded).
 - Version 0.31.175, versionCode 261, SERVER_BUILD 0.31.175.
+- Checks: the quick suite ALL SIEGE TESTS PASSED (88, moba_ui_test with the stage and the painted shop);
+  COLD_START_PASS; the Play AAB (throwaway key, presets untouched): BASE OK (265 files), CONTENT OK, play_games true,
+  bundletool valid; content_packs check and coverage OK; the sim's fingerprint as 0.31.174; both screens reviewed in
+  shots at the phone's 450 x 1000 (the hero window with an owned and a locked hero, the shop). Preview APK:
+  build/Fatebound-Siege-0.31.175-fatebound.apk (32 MB, preview key), sha256 fe1d69bb...cda5eee762c.
