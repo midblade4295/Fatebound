@@ -5362,3 +5362,8 @@ break as their health gets lower"; concepts in two styles first, the Royal A she
   brazier out, flames, the foot standing, the pieces landed and gone; a first look at a half-down tower. Dev tools:
   tower_shots.gd (a tower through its stages from the game camera), model_shots.gd (a GLB round about, unimported).
 - Version 0.31.172, versionCode 258, SERVER_BUILD 0.31.172 (unchanged otherwise).
+- Checks: the quick suite ALL SIEGE TESTS PASSED (86, tower_look_test among them); COLD_START_PASS; the Play AAB
+  (throwaway key, presets untouched): BASE OK (262 files), CONTENT OK, play_games true, bundletool valid; content_packs
+  check and coverage OK; the sim's fingerprint as 0.31.171 (seed 3 97e30cea900b6b37, seed 17 e7fc16691408f976); the
+  stages reviewed in shots (both towers, blue and red, from the game camera and close). Preview APK:
+  build/Fatebound-Siege-0.31.172-fatebound.apk (32 MB, preview key), sha256 6c0c5510...69303d1116.
