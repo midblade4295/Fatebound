@@ -5238,3 +5238,45 @@ deterministic fingerprint (two 480 s bot matches, every event and unit hashed ev
   (throwaway key, presets untouched): BASE OK (259 files), CONTENT OK, play_games true, bundletool valid; the sim's
   fingerprint as 0.31.168 (seed 3 97e30cea900b6b37, seed 17 e7fc16691408f976). Preview APK:
   build/Fatebound-Siege-0.31.169-fatebound.apk (31 MB, preview key), sha256 6f1519a7...a38729c42.
+
+## 0.31.170 — the online 5v5 (step 2 of the plan)
+Kevin: "Do step 2 now" (the online 5v5, after 0.31.169 deleted Siege). PLAY -> the hero window -> BATTLE now goes to the
+server's 5v5: the players online, with bots in every seat nobody has taken (Kevin, earlier: "Only have the regular play
+button so player is always playing on server plus they play with bots anyway when there aren't enough players").
+- The snapshot (siege_net.gd), rewritten for the 5v5: units come and go all match (minions, monsters, summons), so each
+  snapshot names them ("ids", only when one came or went) and carries, per unit, health, position, facing, state, stun
+  and the Q recharge (16 bits each, as the difference from the last snapshot -- mostly zeros); the heroes' gold and W, E,
+  ultimate and ward recharges ("h"); and every other key of a unit only when it changed ("ud"/"ux": its hero, level,
+  items, picks, buffs, shields, the times its effects end -- absolute match times). Towers, Kings, gates and camps
+  likewise ("o"); the spells' zones and traps, the wards and the Wyrm's stacks when they changed; projectiles with the
+  5v5's shots (bolt, ball, thorn, boulder; DEADEYE's big one). What only the server uses (paths, the bots' thinking, who
+  hit whom) never goes. A player seated, back from a drop, or whose socket couldn't take a snapshot gets a keyframe (the
+  lot) first. The phone's fog of war is worked out on the phone from what arrives.
+- Measured over 8-10 minute bot matches: ~11 kB/s a phone (zstd), 1.5 ms of server time a snapshot (about 30 ms a
+  second a room, beside ~78 for the sim itself), 0.8 ms to apply on the phone; a 480 s match with a hero swapped and a
+  late phone keyed in: the mirror equals the server's sim after every one of 9,600 snapshots (net_mirror_test).
+- The server (SERVER_BUILD 0.31.170): a hello says the hero picked ("hero"); a bought one only if the account owns it
+  (eco_accounts.wear now lists them; a hero bought a moment before BATTLE is sent up first -- eco_sync.flush). The
+  player takes the bot playing that hero on their side, else the bot in that hero's place (top, jungle, mid, bottom,
+  support), and the seat becomes their hero, keeping its place, level, gold and items (moba.swap_hero). A side never has
+  a hero twice: one a player there already plays sends them to the other side when it has room, else they play the
+  seat's own. The 5v5's buttons come over the wire (Net.ACTIONS + clean_arg: a level-up pick, the ultimate, W and E, a
+  ward, buying and selling -- bad arguments dropped). A server match drafts both sides alike (blue's first seat was
+  always a laneless Knight). "five":1 in "ver", "status", the lobby and the welcome; an app without it (0.31.163 and
+  older -- 0.31.164-0.31.169 never asked for a match) is refused as too old: its Update screen. Protocol stays 35.
+- The phone: PLAY's BATTLE is online (the hero picked; a party's PLAY and Friends > JOIN too, as the last pick); the
+  5v5's buttons go to the server with the same toasts and sounds; a server from before 0.31.170 (it says no "five") is
+  left at once and Home starts the match against bots instead, as in 0.31.164-0.31.169. A body changes when a seat's
+  hero does. The lobby says 5 vs 5. Home: RANKS is back (the week's board of online matches) and PLAY ×n for a party's
+  leader. The quick chat's "Stop the carrier!" is "Take the tower!".
+- The leaderboard's points are the 5v5's (KO 20, tower/gate/King damage ÷10, a win +100; Siege's rescue/fish/gathering
+  parts could no longer grow) and its ♛ column is TW, the towers.
+- Tests back in the suite: net_interp (a snapshot late rather than lost: each builds on the last), match_rooms, idle,
+  rejoin, join_friend, next_match, analytics_events; social_ui's party match and quick chat again; leaderboard's points
+  and RANKS. New: net_mirror_test (the protocol against a server's sim) and online_five_test (the real server, four
+  phones and the game client: heroes owned and picked, every phone's mirror equal to every other's at the same snapshot
+  -- 3,400 comparisons, a phone joining mid-match, buying, selling, a ward, walking, the end, the pay, a stand-in old
+  server).
+- Version 0.31.170, versionCode 256, SERVER_BUILD 0.31.170. Kevin: the server redeploy
+  (sudo bash godot/server/deploy/install_siege_server.sh) puts the online 5v5 live; until then the app plays against
+  bots as before (it asks the server first). Raising min_build to 0.31.170 later keeps older apps out of matches anyway.

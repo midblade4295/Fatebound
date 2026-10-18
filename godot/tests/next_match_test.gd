@@ -77,7 +77,7 @@ func welcome(name: String) -> Dictionary:
 	return w[w.size() - 1] if not w.is_empty() else {}
 
 func hello(name: String, ask: bool) -> Dictionary:
-	var h := {"t":"hello", "v":Net.VERSION, "name":name, "build":"0.31.122-fatebound"}
+	var h := {"t":"hello", "v":Net.VERSION, "five":Net.FIVE, "name":name, "build":"0.31.122-fatebound"}
 	if ask:
 		h["ask_next"] = true
 	return h

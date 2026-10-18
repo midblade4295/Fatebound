@@ -52,7 +52,12 @@ run meta_economy_test    META_ECONOMY_PASS        120
 # The app shell through its real buttons. REAL time (no --fixed-fps).
 run app_flow_test        APP_FLOW_PASS            150
 run app_scroll_test      APP_SCROLL_PASS          60
-# run net_interp_test      NET_INTERP_PASS          60    # (online matches: back with the online 5v5 -- step 2)
+run net_interp_test      NET_INTERP_PASS          60
+# The online 5v5 (0.31.170): the snapshot protocol end to end against a server's 5v5 of bots (8 minutes of match, a hero
+# swapped for a player's, a phone joining from a keyframe); then the real server (8121, stand-in old one on 8122) with
+# phones and the game client -- heroes picked and owned, the mirrors agreeing, the 5v5's buttons, the end, the pay
+run net_mirror_test      NET_MIRROR_PASS          600
+run online_five_test     ONLINE_FIVE_PASS         240
 run hammer_test          HAMMER_PASS              150
 run match_audio_test     MATCH_AUDIO_PASS         280
 run priest_test          PRIEST_PASS              200
@@ -62,12 +67,13 @@ run chest_test           CHEST_PASS               60
 run combo_test           COMBO_PASS               60
 run net_load_test        NET_LOAD_PASS            120
 # Match rooms (0.31.119): rooms of 3, at most 2 (real server on 8102)
-# run match_rooms_test     MATCH_ROOMS_PASS         120    # (online matches: back with the online 5v5 -- step 2)
+run match_rooms_test     MATCH_ROOMS_PASS         120
 # Idle players (0.31.119): a bot takes over, input gives it back, removal (real server on 8103 + the real client)
-# run idle_test            IDLE_PASS                120    # (online matches: back with the online 5v5 -- step 2)
+run idle_test            IDLE_PASS                120
 # Rejoin after a dropped connection (0.31.120): real server on 8105 + the real client
-# run rejoin_test          REJOIN_PASS              120    # (online matches: back with the online 5v5 -- step 2)
-# (0.31.164: join_friend_test -- no online matches to join until the 5v5 is online)
+run rejoin_test          REJOIN_PASS              120
+# Friends > JOIN into a friend's match (0.31.120; out 0.31.164-0.31.169, back with the online 5v5): real server on 8106
+run join_friend_test     JOIN_FRIEND_PASS         150
 # End-of-match MVP strip and scoreboard (0.31.119)
 run scoreboard_test      SCOREBOARD_PASS          60
 # Weekly leaderboard (0.31.119): the board, the server (8104), the RANKS window
@@ -81,7 +87,7 @@ run diag_send_test       DIAG_SEND_PASS           120
 # Kill feed and vibration (0.31.120): the HUD feed, siege_mode haptics, Settings > VIBRATION
 run kill_feed_test       KILL_FEED_PASS           90
 # The next match only after PLAY AGAIN (0.31.122): real server (8110) + the real client; older apps as before
-# run next_match_test      NEXT_MATCH_PASS          150    # (online matches: back with the online 5v5 -- step 2)
+run next_match_test      NEXT_MATCH_PASS          150
 # Discord link + its one-time gem reward (0.31.124)
 run discord_test         DISCORD_PASS             60
 # Daily login reward (0.31.119): the calendar, the server's replay, the card on Home and in ORDERS
@@ -182,7 +188,7 @@ fi
 # the real server on 8100 (the probe included), then the report on a fixture.
 run analytics_client_test ANALYTICS_CLIENT_PASS   60
 run analytics_server_test ANALYTICS_SERVER_PASS   90
-# run analytics_events_test ANALYTICS_EVENTS_PASS   150    # (online matches: back with the online 5v5 -- step 2)
+run analytics_events_test ANALYTICS_EVENTS_PASS   150
 t0=$SECONDS
 if timeout 120 python3 tools/test_analytics_report.py > /tmp/siege_test_analytics_report.log 2>&1 && grep -q ANALYTICS_REPORT_PASS /tmp/siege_test_analytics_report.log; then
   printf "PASS  %-22s %4ds\n" "analytics_report (py)" $((SECONDS - t0))

@@ -72,7 +72,7 @@ func _process(d: float) -> bool:
 	var st := ws.get_ready_state()
 	if st == WebSocketPeer.STATE_OPEN and not sent:
 		sent = true
-		ws.put_packet(Net.encode({"t":"hello", "v":Net.VERSION, "name":"probe", "build":build}))
+		ws.put_packet(Net.encode({"t":"hello", "v":Net.VERSION, "name":"probe", "build":build, "five":Net.FIVE}))   # (0.31.170: a 5v5 app)
 	stat_ws.poll()
 	if stat_ws.get_ready_state() == WebSocketPeer.STATE_OPEN and not stat_sent:
 		stat_sent = true

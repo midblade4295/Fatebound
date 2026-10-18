@@ -137,6 +137,9 @@ func _process(delta: float) -> bool:
 					"the Archmage picked")
 				_shot("moba_heroes")
 				gold0 = int(app.profile.d.gold)
+				# (0.31.170: a server without the online 5v5 -- BATTLE is the match against bots, as here since 0.31.155;
+				# online_five_test plays the server's)
+				app.server_five = 0
 				press("moba_battle")
 				_go("match")
 		"match":

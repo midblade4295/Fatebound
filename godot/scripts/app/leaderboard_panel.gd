@@ -69,7 +69,7 @@ func _render() -> void:
 		return
 	if bool(data.get("_fail", false)):
 		var why := "Play an online match first -- your account is made then." if str(data.get("_why", "")) == "account" \
-			else "Couldn't reach the Siege server. Try again in a moment."
+			else "Couldn't reach the server. Try again in a moment."
 		UI2.center(UI2.body(_list, why, 14, UI2.SOFT))
 		return
 	# when the week ends
@@ -119,7 +119,7 @@ func _render() -> void:
 			nl.clip_text = true
 			var pl := UI.label(lr, "%d pts" % int(c.get("pts", 0)), 12, UI2.SOFT, UI.HEAVY_FONT)
 			pl.autowrap_mode = TextServer.AUTOWRAP_OFF
-	UI2.center(UI2.body(_list, "Points come from online matches: rescue 300 · KO 20 · fish fed 30 · gathering 2 · gate damage ÷10 · a win +100. A new week starts every Monday (UTC).", 11, UI2.MUTED))
+	UI2.center(UI2.body(_list, "Points come from online matches: KO 20 · tower, gate and King damage ÷10 · a win +100. A new week starts every Monday (UTC).", 11, UI2.MUTED))
 	UI2.center(UI2.body(_list, "%d player%s on the board" % [int(data.get("players", 0)), "" if int(data.get("players", 0)) == 1 else "s"], 11, UI2.MUTED, false))
 
 func _header(parent: Node) -> void:
@@ -127,7 +127,7 @@ func _header(parent: Node) -> void:
 	var a := UI.label(h, "PLAYER", 10, UI2.MUTED, UI.HEAVY_FONT)
 	a.autowrap_mode = TextServer.AUTOWRAP_OFF
 	a.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	for hh in [["WINS", 40], ["♛", 28], ["PTS", 56]]:
+	for hh in [["WINS", 40], ["TW", 28], ["PTS", 56]]:          # (0.31.170: towers; Siege's ♛ rescues until then)
 		var l := UI.label(h, str(hh[0]), 10, UI2.MUTED, UI.HEAVY_FONT)
 		l.autowrap_mode = TextServer.AUTOWRAP_OFF
 		l.custom_minimum_size.x = float(hh[1])
@@ -180,7 +180,7 @@ func _row(parent: Node, r: Dictionary) -> void:
 		# 0.31.120: not in the running for a prize yet
 		var ql := UI.label(col, "%d more match%s for a prize" % [Eco.LB_MIN_MATCHES - int(r.get("m", 0)), "" if Eco.LB_MIN_MATCHES - int(r.get("m", 0)) == 1 else "es"], 10, UI2.MUTED, UI.HEAVY_FONT)
 		ql.autowrap_mode = TextServer.AUTOWRAP_OFF
-	for v in [[str(int(r.get("w", 0))), 40], [str(int(r.get("r", 0))), 28], [str(int(r.get("pts", 0))), 56]]:
+	for v in [[str(int(r.get("w", 0))), 40], [str(int(r.get("tw", 0))), 28], [str(int(r.get("pts", 0))), 56]]:
 		var l := UI.label(h, str(v[0]), 14, Color.WHITE, UI.HEAVY_FONT)
 		l.autowrap_mode = TextServer.AUTOWRAP_OFF
 		l.custom_minimum_size.x = float(v[1])

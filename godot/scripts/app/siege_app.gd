@@ -76,6 +76,8 @@ var home_fixed := false                # 0.31.112: Home fits the screen and does
 var update_required := false
 var server_updating := false
 var server_version := -1
+var server_five := -1                      # 0.31.170: the server's online 5v5 -- -1 not known yet, 1 there, 0 not (an older
+                                           # server: PLAY is a match against bots, as in 0.31.164-0.31.169)
 var update_screen: Control = null
 # Tests may set these before the node enters the tree. Headless (tests, tools) skips the start-up check unless asked.
 var version_check := DisplayServer.get_name() != "headless"
@@ -1024,7 +1026,7 @@ func paint_online() -> void:
 	elif fighting > 0:
 		sub.text = "%d in battle" % fighting
 	else:
-		sub.text = "16 vs 16"
+		sub.text = "5 vs 5"
 
 # ---------------- feedback ----------------
 func toast(text: String, color := UI.TEXT) -> void:
@@ -1243,8 +1245,13 @@ func open_moba() -> void:
 
 func start_moba(hero: String) -> void:
 	# 0.31.155: an offline 5v5 against bots as this hero (siege_mode.gd moba_hero; scripts/siege/moba.gd). 0.31.164: the
-	# game's match -- a VS BOTS ticket from the server first, paid like one (start_match)
+	# game's match -- a VS BOTS ticket from the server first, paid like one (start_match). 0.31.170: online -- the
+	# server's 5v5, with whoever else is playing and bots in the seats nobody has taken (against bots only when the
+	# server is from before it)
 	if siege != null:
+		return
+	if ONLINE_MATCHES and server_five != 0:
+		start_online_moba(hero)
 		return
 	pending_moba = hero
 	start_match(false)
@@ -1252,6 +1259,32 @@ func start_moba(hero: String) -> void:
 		pending_moba = ""                          # (no ticket: nothing started)
 
 var pending_moba := ""                    # 0.31.155: the hero the next match is a 5v5 with
+var _flush_wait := false
+
+func start_online_moba(hero: String, follow := false) -> void:
+	# 0.31.170: into the server's 5v5 as this hero. Changes still on their way to the server go first -- a hero bought a
+	# moment ago must be the account's there, or the match seats you as another
+	if siege != null:
+		return
+	if eco_sync != null and eco_sync.enabled and eco_sync.pending() > 0 and not follow:
+		if _flush_wait:
+			return
+		_flush_wait = true
+		toast("Connecting to the server...", UI.GOLD)
+		eco_sync.flush(func():
+			_flush_wait = false
+			start_online_moba(hero, true))
+		return
+	pending_moba = hero
+	start_match(true, follow)
+	if siege == null:
+		pending_moba = ""
+
+func saved_hero() -> String:
+	# the hero window's last pick (settings.moba_hero), if it's still yours
+	var h := str(profile.d.settings.get("moba_hero", ""))
+	var heroes: Dictionary = load("res://scripts/siege/moba.gd").HEROES      # (loaded when needed: not at boot)
+	return h if heroes.has(h) and profile.owns_hero(h) else "knight"
 
 var pending_join := ""                   # 0.31.120: a friend's public id whose match the next PLAY joins
 
@@ -1266,15 +1299,19 @@ func join_friend(pid: String) -> void:
 		return
 	close_modal()
 	pending_join = pid
+	pending_moba = saved_hero()                      # 0.31.170: as your last pick
 	start_match(true)
 	if siege == null:
 		pending_join = ""
+		pending_moba = ""
 
 # 0.31.164 (Kevin, on the new 5v5 map: "Remove them now: 5v5 only"): Siege, Commander, the tutorial and the war map's
 # battles are gone from the app -- PLAY is the 5v5 (the hero window, then a match against bots, paid like any match).
 # Online matches come back with an online 5v5; until then JOIN and a party's PLAY don't start one. (0.31.169: their
-# code went too -- Crown War with it.)
-const ONLINE_MATCHES := false
+# code went too -- Crown War with it.) 0.31.170: the online 5v5 -- PLAY, a party's PLAY and JOIN go to the server's
+# match (Kevin: "Only have the regular play button so player is always playing on server plus they play with bots
+# anyway when there aren't enough players")
+const ONLINE_MATCHES := true
 
 func play() -> void:
 	# Home's PLAY: the 5v5's hero window (0.31.164)
@@ -1383,6 +1420,11 @@ func _end_match() -> void:
 		toast(SERVER_UPDATING, UI.GOLD)
 	elif note == "idle":
 		notice("REMOVED FOR BEING IDLE", "You didn't move or attack for 3 minutes, so a bot took your place. Nothing was paid for that match.")
+	elif note == "no_five" and replay != "":
+		# 0.31.170: the server isn't on the online 5v5 yet -- the match against bots, as before
+		server_five = 0
+		toast("Online 5v5 isn't on the server yet -- a match against bots", UI.GOLD)
+		start_moba(replay)
 	elif replay != "":
 		start_moba(replay)
 
@@ -1585,6 +1627,7 @@ func check_server_version() -> void:
 	_version_checker.url = version_check_url
 	_version_checker.done.connect(_on_server_version)
 	_version_checker.answered.connect(func(m: Dictionary):
+		server_five = 1 if int(m.get("five", 0)) >= Net.FIVE else 0
 		if analytics != null:
 			analytics.server_ok = int(m.get("an", 0)) == 1)
 	add_child(_version_checker)
@@ -2016,7 +2059,7 @@ func _on_party_go(_pa: String, by: String) -> void:
 		return
 	close_modal()
 	toast("%s is heading into battle -- your party follows!" % by, UI.GOLD)
-	start_match(true, true)
+	start_online_moba(saved_hero(), true)            # 0.31.170: as your last pick
 
 func social_sig() -> String:
 	if social == null or not social.online():

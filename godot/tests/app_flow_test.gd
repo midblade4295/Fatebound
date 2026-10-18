@@ -97,8 +97,8 @@ func _process(d: float) -> bool:
 			var hh: float = app.home_height()
 			var Screens = load("res://scripts/app/screens.gd")
 			check(app.home_fixed == (float(Screens.home_layout(hh).needed) <= hh + 1.0) and (app._scroll_target() == null) == app.home_fixed \
-				and btn("tutorial_start") == null and btn("side_moba") == null and btn("side_ranks") == null,
-				"Home scrolls only when the screen is too short (%.0f px here); no TUTORIAL, 5V5 or RANKS (0.31.164: 5v5 only)" % hh)
+				and btn("tutorial_start") == null and btn("side_moba") == null and btn("side_ranks") != null,
+				"Home scrolls only when the screen is too short (%.0f px here); no TUTORIAL or 5V5 (0.31.164: 5v5 only); RANKS (0.31.170: online)" % hh)
 			for h in [723.0, 700.0, 680.0]:
 				var l: Dictionary = Screens.home_layout(h)
 				check(float(l.needed) <= h + 1.0 and float(l.play) >= Screens.PLAY_MIN \
@@ -155,13 +155,13 @@ func _process(d: float) -> bool:
 			press("play")
 			wait_until = t + 0.5
 		9:
-			# 0.31.164 (Kevin: "5v5 only"): PLAY opens the 5v5's hero window (it was the war map); an online session's own path
-			# (still in the code for the 5v5 going online) meets the unreachable server as before
+			# 0.31.164 (Kevin: "5v5 only"): PLAY opens the 5v5's hero window (it was the war map). 0.31.170 (the online 5v5):
+			# its BATTLE goes to the server's match, as the hero picked -- here it meets the unreachable server as before
 			check(app.siege == null and app.modal != null and str(app.modal.get_script().resource_path).ends_with("moba_panel.gd")
 				and btn("moba_battle") != null, "PLAY opens the 5v5's hero window")
-			app.close_modal()
-			app.start_match(true)
-			check(app.siege != null and app.siege.online and app.modal == null, "an online session starts")
+			press("moba_battle")
+			check(app.siege != null and app.siege.online and app.siege.moba_hero == "knight" and app.modal == null,
+				"BATTLE: an online session, as the Knight")
 			wait_until = t + 5.0
 		10:
 			check(app.siege == null and app.chrome.visible, "unreachable server -> message, back to the menu")

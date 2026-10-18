@@ -53,7 +53,7 @@ func _process(delta: float) -> bool:
 		if ws.get_ready_state() != WebSocketPeer.STATE_OPEN:
 			continue
 		if not hello_sent[i]:
-			ws.put_packet(Net.encode({"t":"hello", "v":Net.VERSION, "name":"Load%d" % i, "build":"load", "pred":true}))
+			ws.put_packet(Net.encode({"t":"hello", "v":Net.VERSION, "five":Net.FIVE, "name":"Load%d" % i, "build":"load", "pred":true}))
 			hello_sent[i] = true
 		while ws.get_available_packet_count() > 0:
 			rx_bytes += ws.get_packet().size()

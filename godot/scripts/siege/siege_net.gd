@@ -1,10 +1,11 @@
 extends RefCounted
 # Fatebound's online protocol, shared by the headless server (server/siege_server.gd) and the phone (siege_mode.gd).
-# The server runs the real sim; clients keep a mirror sim (same map from setup()) whose dynamic state is overwritten
-# from snapshots, so the view and HUD render online matches unchanged. (0.31.169: Siege's state -- carrying, loads,
-# tasks, items, bombs, launchers, nodes, outposts, hat stands, ladders, the Kings' carrying -- is gone from the
-# snapshot with Siege; the online 5v5 adds the 5v5's. The protocol number stays: the economy and the leaderboard send it
-# too, and the match rooms stay shut until the online 5v5.)
+# The server runs the real sim; clients keep a mirror sim (the same map and heroes from setup() + setup_moba()) brought to
+# each snapshot, so the view and HUD draw an online match as they draw one against bots. (0.31.170: the online 5v5 --
+# its minions, monsters and summons come and go, its heroes level, shop and cast; snapshot() below. The protocol number
+# stays 35: the economy, the leaderboard and the version check send it too and a bump would force every app to update;
+# a 5v5 app says so in its hello ("five":1) and a 5v5 server in its answers, and the server refuses a match to an app
+# without it as too old -- the Update screen.)
 #
 # Transport: WebSocket binary frames, each one var_to_bytes(Dictionary). Never bytes_to_var with
 # objects: decode() uses the default allow_objects=false.
@@ -21,9 +22,8 @@ const DEFAULT_PORT := 8082
 const SNAP_HZ := 20.0            # 15 -> 20 (0.31.23); 10 -> 15 (0.18.4)
 const INTERP_DELAY := 1.5 / SNAP_HZ   # 0.31.23: remote units are drawn this far behind the newest snapshot (75 ms)
 const HIST := 4
-const FULL_EVERY := 15           # 0.31.8: slow-changing state (the gates) rides along only when it changed, and in full
-                                 # once a second
-const PROJ_KINDS := ["arrow", "fire", "hammer", "pierce"]
+# 0.31.170: the 5v5's shots too (a kind + 16 = a big one, the Ranger's DEADEYE)
+const PROJ_KINDS := ["arrow", "fire", "hammer", "pierce", "bolt", "ball", "thorn", "boulder"]
 const PREDICT_SNAP := 2.5        # m: a predicting phone snaps to the server beyond this
 const PREDICT_SOFT := 0.7        # m: beyond this it is eased back toward the server's position (0.31.24)
 const MAX_PACKET := 64 * 1024            # client -> server; anything larger is dropped
@@ -35,7 +35,7 @@ const QUICK_CHAT := [
 	{"x":"Attack!", "c":"#ff8a5c"},
 	{"x":"Defend the gate!", "c":"#7ec8ff"},
 	{"x":"Get our King!", "c":"#ffd65a"},
-	{"x":"Stop the carrier!", "c":"#ff6a6a"},
+	{"x":"Take the tower!", "c":"#ff6a6a"},          # (0.31.170: "Stop the carrier!" went with Siege)
 	{"x":"Need help!", "c":"#ff6a6a"},
 	{"x":"Follow me!", "c":"#9dff8a"},
 	{"x":"Thanks!", "c":"#e6e6e6"},
@@ -43,19 +43,24 @@ const QUICK_CHAT := [
 ]
 const QC_GAP := 2.0              # s between one player's quick chats
 
-const STATES := ["idle", "move", "wind", "recover", "dodge", "dead"]
-const CLASSES := ["knight", "barbarian", "rogue", "ranger", "mage", "priest"]
-const ATKS := ["", "attack", "ability"]
-# Actions a client may ask for (anything else is ignored by the server).
-const ACTIONS := ["attack", "ability", "block", "dodge"]
+const STATES := ["idle", "move", "wind", "recover", "dodge", "dead", "dash"]
+# Actions a client may ask for (anything else is ignored by the server), and what each takes (clean_arg). 0.31.170: the
+# 5v5's -- a level-up pick, the ultimate, W and E, a ward, the shop.
+const ACTIONS := ["attack", "ability", "block", "dodge", "pick", "ult", "spell", "ward", "shop_buy", "shop_sell"]
+const FIVE := 1                  # 0.31.170: the online 5v5 (the hello's "five", the server's answers' "five")
 
-# Per-unit values in the snapshot, in this order, each packed as a signed 16-bit integer of
-# value * SCALE[i] (positions to 1 cm, angles to 0.001 rad, timers to 0.01 s):
-#   hp, max hp, x, z, facing, state, class, upgraded, stun, ability recharge, dodge recharge, knockouts, downs,
-#   gate damage, bot, respawn at, swing kind, beam target, blocking, whirl left, second beam target
-const F := 21
-const SCALE := [1.0, 1.0, 100.0, 100.0, 1000.0, 1.0, 1.0, 1.0, 100.0, 100.0,
-	100.0, 1.0, 1.0, 0.1, 1.0, 10.0, 1.0, 1.0, 1.0, 100.0, 1.0]
+static func clean_arg(action: String, arg: Variant) -> Array:
+	# -> [ok, the argument as the sim takes it] for an action from a phone
+	match action:
+		"pick":
+			return [true, int(arg)] if (arg is int or arg is float) and int(arg) >= 0 and int(arg) <= 2 else [false, null]
+		"spell":
+			return [true, str(arg)] if arg is String and str(arg) in ["w", "e"] else [false, null]
+		"shop_buy":
+			return [true, str(arg)] if arg is String and str(arg).length() <= 24 and _word(str(arg), true) else [false, null]
+		"shop_sell":
+			return [true, int(arg)] if (arg is int or arg is float) and int(arg) >= 0 and int(arg) < 8 else [false, null]
+	return [ACTIONS.has(action), null]
 
 # ---------------- version mismatch (0.31.73: the "Update required" screen) ----------------
 # What the client should do about the server's protocol `server_v`, compared with ours (VERSION):
@@ -253,90 +258,281 @@ static func decode(bytes: PackedByteArray) -> Dictionary:
 	var v: Variant = bytes_to_var(raw)
 	return v if v is Dictionary else {}
 
-static func _pack(arr: PackedByteArray, i: int, v: float) -> void:
-	arr.encode_s16(i * 2, clampi(int(round(v * SCALE[i % F])), -32768, 32767))
+static func _s16(arr: PackedByteArray, i: int, v: float) -> void:
+	arr.encode_s16(i * 2, _i16(v))
 
-static func _unpack(arr: PackedByteArray, i: int) -> float:
-	return float(arr.decode_s16(i * 2)) / SCALE[i % F]
+static func _i16(v: float) -> int:
+	return clampi(int(round(v)), -32768, 32767)
 
-static func _code(list: Array, value: Variant) -> int:
-	var i := list.find(value)
-	return maxi(0, i)
+static func _wrap16(v: int) -> int:
+	# a 16-bit difference (the phone adds it back the same way: exact whatever the values)
+	return ((v + 32768) & 0xFFFF) - 32768
 
 # ---------------- server side ----------------
-static var _slow_hash := {}
-static var _slow_n := 0
+# 0.31.170 (the online 5v5): one snapshot for every player, 20 a second. What changes all the time goes in full each
+# time, packed; everything else only when it changed since the last snapshot (each player's socket delivers every one,
+# in order, so a change sent once is never lost; a player seated, back from a drop, or whose socket couldn't take a
+# snapshot gets a KEYFRAME -- the lot -- first):
+#   "ids"  the units' ids, in the order of "u" (only when a unit came or went; the 5v5's minions, monsters and summons
+#          come and go all match long)
+#   "u"    per unit, FAST 16-bit values: health, x, z (1 cm), facing (0.001 rad), state, stun and ability recharge
+#          (0.01 s)
+#   "ho"/"h"  the heroes' ids (once) and per hero HERO_FAST: gold and the W, E, ultimate and ward recharges
+#   "ud"   {unit id: {key: value}}: every other key of a unit that changed (its hero, level, items, buffs, the shield
+#          and the times its effects end -- absolute match times, so the phone needs no clock of its own) but NO_SYNC
+#   "ux"   {unit id: [keys]}: keys a unit lost (an effect that ended)
+#   "o"    {"tw:3": {key: value}}: the towers', Kings', gates' and camps' changes (OBJ_SKIP: what never changes)
+#   "zn" "tr" "wd" "ws"  the spells' zones and traps, the wards, the Wyrm's stacks: in full when they changed
+#   "p"    the projectiles, 6 x 16 bits each (id, x, z, vx, vz, kind + 16 if big)
+#   "e"    the match's events since the last snapshot (the view's and the HUD's effects, sounds, toasts)
+const FAST := 7
+const HERO_FAST := ["gold", "cd_w", "cd_e", "ult_cd", "ward_ch"]
+const HERO_FAST_SCALE := [1.0, 100.0, 100.0, 100.0, 100.0]
+# Never sent: the server's own bookkeeping (paths, the bots' thinking and targets, who hit whom for assists, the
+# multi-kill window, the camps' monsters' homes) and clocks that tick all the time and the phone never reads.
+const NO_SYNC := {"t":true, "move":true, "path":true, "path_i":true, "path_goal":true, "path_at":true, "path_ver":true,
+	"think_at":true, "unstick":true, "unstick_dir":true, "stuck_t":true, "last_pos":true, "aim_d":true, "drain_acc":true,
+	"hit_log":true, "hh_at":true, "hh_by":true, "hurt_at":true, "hurt_by":true, "mt":true, "mt_pri":true, "mt_tw":true,
+	"wp":true, "home":true, "home_face":true, "healed":true, "mk_n":true, "mk_t":true, "beam_heal_t":true,
+	"combo_t":true, "dodge_dir":true, "lunge_hit":true, "whirl_t":true, "net_driven":true, "id":true}
+const FAST_KEYS := {"hp":true, "pos":true, "face":true, "state":true, "stun":true, "cd_ability":true,
+	"gold":true, "cd_w":true, "cd_e":true, "ult_cd":true, "ward_ch":true}
+const OBJ_SKIP := {
+	"tw": {"id":true, "team":true, "lane":true, "tier":true, "p":true},
+	"kg": {"quiet":true},
+	"gt": {"id":true, "team":true, "a":true, "b":true, "c":true, "side":true, "lane":true, "in":true, "r":true},
+	"cp": {"id":true, "kind":true, "side":true, "p":true, "patience":true, "hits":true},
+}
 
-static func snapshot(sim, for_unit: String, events: Array) -> Dictionary:
-	# One snapshot for every player (for_unit: kept for the callers; nothing in it is private any more).
-	var vals := PackedFloat32Array()
-	vals.resize(sim.units.size() * F)
-	var u_arr := vals
+static func _objs(sim) -> Array:
+	# [prefix, the list] for the "o" channel
+	var out := [["gt", sim.gates]]
+	if sim.moba != null:
+		out.append_array([["tw", sim.moba.towers], ["kg", sim.moba.kings], ["cp", sim.moba.camps]])
+	return out
+
+static func _blobs(sim) -> Dictionary:
+	# the slow lists, as sent
+	if sim.moba == null:
+		return {}
+	var zn := []
+	for z in sim.moba.kits.zones:
+		var c: Dictionary = z.duplicate()
+		c.erase("next")                                 # (its next tick: the server's)
+		zn.append(c)
+	return {"zn":zn, "tr":sim.moba.kits.traps, "wd":sim.moba.vision.wards, "ws":sim.moba.wyrm_stacks}
+
+static func _diff(sync: Dictionary, key: String, d: Dictionary, skip: Dictionary, changed: Dictionary, erased: Dictionary) -> void:
+	# d's keys (but skip) that differ from what was last sent for `key` -> changed[key]; keys it lost -> erased[key]
+	var cache: Dictionary = sync.c
+	var c: Dictionary = cache.get(key, {})
+	if not cache.has(key):
+		cache[key] = c
+	var kl: Array = sync.kl.get(key, [])
+	var rebuild: bool = d.size() != int(sync.ksz.get(key, -1))
+	if not rebuild:
+		for k in kl:
+			if not d.has(k):
+				rebuild = true
+				break
+	if rebuild:
+		kl = []
+		for k in d:
+			if not skip.has(k) and not NO_SYNC.has(k):
+				kl.append(k)
+		sync.kl[key] = kl
+		sync.ksz[key] = d.size()
+		var gone := []
+		for k in c.keys():
+			if not d.has(k):
+				c.erase(k)
+				gone.append(k)
+		if not gone.is_empty():
+			erased[key] = gone
+	var ch := {}
+	for k in kl:
+		var v: Variant = d[k]
+		var cv: Variant = c.get(k)                       # (null: never sent -- no key of a unit is ever null)
+		if cv == null or typeof(cv) != typeof(v) or cv != v:
+			var sv: Variant = v.duplicate(true) if (v is Array or v is Dictionary) else v
+			c[k] = sv
+			ch[k] = sv
+	if not ch.is_empty():
+		changed[key] = ch
+
+static func _sync_of(sim) -> Dictionary:
+	var sync: Dictionary = sim.net_sync
+	if not sync.has("c"):
+		sync.merge({"c":{}, "kl":{}, "ksz":{}, "ids":PackedStringArray(), "ho":PackedStringArray(), "blob":{}, "last":{}})
+	return sync
+
+static func snapshot(sim, _for_unit: String, events: Array) -> Dictionary:
+	# The next snapshot for everyone in the match (_for_unit: kept for the callers; nothing in it is private).
+	var sync := _sync_of(sim)
+	var msg := {"t":"s", "tm":sim.time, "sc":sim.score.duplicate(), "k":sim.kills.duplicate(),
+		"end":[sim.ended, sim.winner, sim.end_reason], "e":events}
+	var ids := PackedStringArray()
+	var n: int = sim.units.size()
+	var abs_i := PackedInt32Array()                    # the values themselves (a keyframe's)
+	abs_i.resize(n * FAST)
+	var fast := PackedByteArray()                      # what's sent: each value less the last snapshot's (mostly 0)
+	fast.resize(n * FAST * 2)
+	var prev_ids: PackedStringArray = sync.ids
+	var prev_i: PackedInt32Array = sync.get("abs_i", PackedInt32Array())
+	var prev_at := {}
+	var ud := {}
+	var ux := {}
 	var i := 0
 	for u in sim.units:
-		var b := i * F
-		u_arr[b + 0] = u.hp
-		u_arr[b + 1] = u.max_hp
-		u_arr[b + 2] = u.pos.x
-		u_arr[b + 3] = u.pos.y
-		u_arr[b + 4] = u.face
-		u_arr[b + 5] = _code(STATES, u.state)
-		u_arr[b + 6] = _code(CLASSES, u.cls)
-		u_arr[b + 7] = 1.0 if u.up else 0.0
-		u_arr[b + 8] = u.stun
-		u_arr[b + 9] = u.cd_ability
-		u_arr[b + 10] = u.cd_dodge
-		u_arr[b + 11] = u.kills
-		u_arr[b + 12] = u.deaths
-		u_arr[b + 13] = u.gate_dmg
-		u_arr[b + 14] = 1.0 if u.bot else 0.0
-		u_arr[b + 15] = u.respawn_at
-		u_arr[b + 16] = _code(ATKS, u.get("atk", ""))
-		# Priest beam target: its unit index + 1 (0 = none).
-		u_arr[b + 17] = float(sim.units.find(sim.by_id.get(str(u.beam), {})) + 1) if str(u.get("beam", "")) != "" else 0.0
-		u_arr[b + 18] = 1.0 if sim.blocking(u) else 0.0
-		u_arr[b + 19] = maxf(0.0, float(u.get("whirl_until", 0.0)) - sim.time)
-		u_arr[b + 20] = float(sim.units.find(sim.by_id.get(str(u.get("beam2", "")), {})) + 1) if str(u.get("beam2", "")) != "" else 0.0
+		var id := str(u.id)
+		ids.append(id)
+		var b := i * FAST
+		var hp := float(u.hp)
+		var p: Vector2 = u.pos
+		abs_i[b] = clampi(int(ceilf(hp)), 0, 32767) if hp > 0.0 else 0
+		abs_i[b + 1] = clampi(int(round(p.x * 100.0)), -32768, 32767)
+		abs_i[b + 2] = clampi(int(round(p.y * 100.0)), -32768, 32767)
+		abs_i[b + 3] = clampi(int(round(wrapf(float(u.face), -PI, PI) * 1000.0)), -32768, 32767)
+		abs_i[b + 4] = maxi(0, STATES.find(str(u.state)))
+		abs_i[b + 5] = clampi(int(round(float(u.stun) * 100.0)), -32768, 32767)
+		abs_i[b + 6] = clampi(int(round(float(u.cd_ability) * 100.0)), -32768, 32767)
+		var j := i if i < prev_ids.size() and prev_ids[i] == id else -1
+		if j < 0 and not prev_ids.is_empty():
+			if prev_at.is_empty():
+				for pi in prev_ids.size():
+					prev_at[prev_ids[pi]] = pi
+			j = int(prev_at.get(id, -1))
+		if j >= 0:
+			var pb := j * FAST
+			for k in FAST:
+				fast.encode_s16((b + k) * 2, ((abs_i[b + k] - prev_i[pb + k] + 32768) & 0xFFFF) - 32768)
+		else:
+			for k in FAST:
+				fast.encode_s16((b + k) * 2, abs_i[b + k])
+		_diff(sync, id, u, FAST_KEYS, ud, ux)
 		i += 1
-	var packed := PackedByteArray()
-	packed.resize(vals.size() * 2)
-	for k in vals.size():
-		_pack(packed, k, vals[k])
-	# Projectiles: 6 int16 each (id, x, z, vx, vz, kind).
+	if ids != sync.ids:
+		# units came or went: their cached keys go with them
+		var live := {}
+		for id in ids:
+			live[id] = true
+		for id in (sync.ids as PackedStringArray):
+			if not live.has(id):
+				sync.c.erase(id)
+				sync.kl.erase(id)
+				sync.ksz.erase(id)
+		sync.ids = ids
+		msg["ids"] = ids
+	sync["abs_i"] = abs_i
+	msg["u"] = fast
+	# the heroes' gold and recharges (each less the last snapshot's too)
+	var ho := PackedStringArray()
+	var abs_h := PackedInt32Array()
+	var hf := PackedByteArray()
+	if sim.moba != null:
+		for t in 2:
+			for hid in sim.moba.heroes[t]:
+				ho.append(str(hid))
+		var hn := HERO_FAST.size()
+		abs_h.resize(ho.size() * hn)
+		hf.resize(abs_h.size() * 2)
+		var prev_h: PackedInt32Array = sync.get("abs_h", PackedInt32Array()) if ho == sync.ho else PackedInt32Array()
+		var hi := 0
+		for hid in ho:
+			var h: Dictionary = sim.by_id.get(hid, {})
+			for k in hn:
+				var at := hi * hn + k
+				var v := clampi(int(round(float(h.get(HERO_FAST[k], 0.0)) * float(HERO_FAST_SCALE[k]))), -32768, 32767)
+				abs_h[at] = v
+				hf.encode_s16(at * 2, _wrap16(v - (prev_h[at] if at < prev_h.size() else 0)))
+			hi += 1
+	if ho != sync.ho:
+		sync.ho = ho
+		msg["ho"] = ho
+	sync["abs_h"] = abs_h
+	msg["h"] = hf
+	if not ud.is_empty():
+		msg["ud"] = ud
+	if not ux.is_empty():
+		msg["ux"] = ux
+	# towers, Kings, gates, camps
+	var od := {}
+	var ox := {}
+	for pair in _objs(sim):
+		var pre: String = pair[0]
+		var list: Array = pair[1]
+		for j in list.size():
+			_diff(sync, pre + ":" + str(j), list[j], OBJ_SKIP[pre], od, ox)
+	if not od.is_empty():
+		msg["o"] = od
+	if not ox.is_empty():
+		msg["ox"] = ox
+	# zones, traps, wards, the Wyrm's stacks
+	var blobs := _blobs(sim)
+	for k in blobs:
+		var v: Variant = blobs[k]
+		if not sync.blob.has(k) or sync.blob[k] != v:
+			var sv: Variant = v.duplicate(true)
+			sync.blob[k] = sv
+			msg[k] = sv
+	msg["p"] = _pack_proj(sim)
+	sync.last = {"tm":msg.tm, "sc":msg.sc, "k":msg.k, "end":msg.end, "p":msg.p}
+	return msg
+
+static func keyframe(sim) -> Dictionary:
+	# Everything a phone needs to draw the match as of the last snapshot sent (the next one builds on it): for a player
+	# just seated, back from a drop, or whose socket dropped a snapshot. Nothing sent yet: the first snapshot is one.
+	var sync := _sync_of(sim)
+	if (sync.last as Dictionary).is_empty():
+		var first := snapshot(sim, "", [])
+		first["kf"] = true
+		return first
+	var msg := {"t":"s", "kf":true, "e":[], "ids":sync.ids, "ho":sync.ho, "u":_bytes16(sync.abs_i), "h":_bytes16(sync.abs_h)}
+	msg.merge(sync.last)
+	var ud := {}
+	for id in (sync.ids as PackedStringArray):
+		ud[id] = sync.c.get(id, {})
+	msg["ud"] = ud
+	var od := {}
+	for k in sync.c:
+		if str(k).contains(":"):
+			od[k] = sync.c[k]
+	msg["o"] = od
+	msg.merge(sync.blob)
+	return msg
+
+static func _bytes16(v: PackedInt32Array) -> PackedByteArray:
+	var out := PackedByteArray()
+	out.resize(v.size() * 2)
+	for i in v.size():
+		out.encode_s16(i * 2, v[i])
+	return out
+
+static func _pack_proj(sim) -> PackedByteArray:
+	# 6 x 16 bits each: id, x, z (1 cm), vx, vz (1 cm/s), kind (+16: a big one, the Ranger's DEADEYE)
 	var proj := PackedByteArray()
 	proj.resize(sim.projectiles.size() * 12)
 	var pi := 0
 	for p in sim.projectiles:
 		var vals_p := [int(p.id) % 65536 - 32768, (p.pos as Vector2).x * 100.0, (p.pos as Vector2).y * 100.0, (p.vel as Vector2).x * 100.0,
-			(p.vel as Vector2).y * 100.0, PROJ_KINDS.find(str(p.kind))]
+			(p.vel as Vector2).y * 100.0, maxi(0, PROJ_KINDS.find(str(p.kind))) + (16 if bool(p.get("big", false)) else 0)]
 		for k in 6:
-			proj.encode_s16((pi * 6 + k) * 2, clampi(int(round(float(vals_p[k]))), -32768, 32767))
+			_s16(proj, pi * 6 + k, float(vals_p[k]))
 		pi += 1
-	var gates := PackedFloat32Array()
-	for g in sim.gates:
-		gates.append_array([g.hp, g.max_hp, 1.0 if g.broken else 0.0, 1.0 if g.open else 0.0])
-	var msg := {"t":"s", "tm":sim.time, "sc":sim.score.duplicate(), "k":sim.kills.duplicate(), "end":[sim.ended, sim.winner, sim.end_reason],
-		"u":packed, "p":proj, "e":events}
-	# Slow-changing state: only when it changed, and in full once a second (FULL_EVERY) so a late joiner catches up.
-	_slow_n += 1
-	var full := _slow_n % FULL_EVERY == 0
-	for pair in [["g", gates]]:
-		var h := hash(pair[1])
-		if full or int(_slow_hash.get(pair[0], 0)) != h:
-			_slow_hash[pair[0]] = h
-			msg[pair[0]] = pair[1]
-	return msg
+	return proj
 
 # ---------------- client side ----------------
 static func apply(sim, msg: Dictionary, me_id: String, predict := false) -> void:
-	# Overwrites the mirror sim's dynamic state. Unit positions go to "net_to" so the client can
-	# interpolate between snapshots; everything else is set directly.
-	# The phone predicts its own unit: keep its position/facing (and a dodge it started) unless the
-	# server disagrees by > PREDICT_SNAP or the unit is in a server-driven state (0.18.4).
+	# Brings the mirror sim to the snapshot. Unit positions go into each unit's history (net_hist: interpolate_at draws
+	# remote units between them); everything else is set directly.
+	# The phone predicts its own unit: keep its position/facing (and a dodge or swing it started) unless the server
+	# disagrees by > PREDICT_SNAP or the unit is in a server-driven state (0.18.4).
 	var mine_prev := {}
 	if predict and sim.by_id.has(me_id):
 		var mp: Dictionary = sim.by_id[me_id]
 		mine_prev = {"pos": mp.pos, "face": mp.face, "state": mp.state, "t": float(mp.get("t", 0.0))}
+	var sync: Dictionary = sim.net_sync
+	var kf := bool(msg.get("kf", false))
 	sim.time = float(msg.get("tm", sim.time))
 	var snap_t: float = sim.time
 	sim.score = msg.get("sc", sim.score)
@@ -345,46 +541,168 @@ static func apply(sim, msg: Dictionary, me_id: String, predict := false) -> void
 	sim.ended = bool(end[0])
 	sim.winner = int(end[1])
 	sim.end_reason = str(end[2])
-	var packed: PackedByteArray = msg.get("u", PackedByteArray())
-	var u_arr := PackedFloat32Array()
-	u_arr.resize(packed.size() / 2)
-	for k in u_arr.size():
-		u_arr[k] = _unpack(packed, k)
-	var n_units: int = mini(sim.units.size(), u_arr.size() / F)
+	var ud: Dictionary = msg.get("ud", {})
+	# the units: new ones made, gone ones dropped, in the server's order
+	if msg.has("ids"):
+		var ids: PackedStringArray = msg.ids
+		var keep := []
+		for id in ids:
+			var u: Dictionary = sim.by_id.get(id, {})
+			if u.is_empty():
+				var d0: Dictionary = ud.get(id, {})
+				u = sim._new_unit(id, int(d0.get("team", 0)), bool(d0.get("bot", true)))
+				u["net_new"] = true
+				sim.by_id[id] = u
+			keep.append(u)
+		var live := {}
+		for id in ids:
+			live[id] = true
+		for u in sim.units:
+			if not live.has(str(u.id)):
+				sim.by_id.erase(u.id)
+		sim.units.clear()
+		sim.units.append_array(keep)
+		sync["ids"] = ids
+	var ids_now: PackedStringArray = sync.get("ids", PackedStringArray())
+	var hero_changed := false
+	for id in ud:
+		var u: Dictionary = sim.by_id.get(id, {})
+		if u.is_empty():
+			continue
+		var d: Dictionary = ud[id]
+		if kf:
+			for k in u.keys():
+				if not d.has(k) and not _client_key(str(k)):
+					u.erase(k)                      # (a key the server's unit doesn't have: the mirror's own draft)
+		for k in d:
+			u[k] = d[k]
+		if d.has("hid"):
+			hero_changed = true
+	var ux: Dictionary = msg.get("ux", {})
+	for id in ux:
+		var u: Dictionary = sim.by_id.get(id, {})
+		for k in ux[id]:
+			u.erase(k)
+	if hero_changed and sim.moba != null:
+		for u in sim.units:
+			if u.has("hid"):
+				sim.moba.hero_of[str(u.id)] = str(u.hid)
+	# the fast values: each the last snapshot's plus what this one says (a keyframe's are the values themselves)
+	var fast: PackedByteArray = msg.get("u", PackedByteArray())
+	var n_units: int = mini(ids_now.size(), fast.size() / (FAST * 2))
 	for i in n_units:
-		var u: Dictionary = sim.units[i]
-		var b := i * F
+		var u: Dictionary = sim.by_id.get(ids_now[i], {})
+		if u.is_empty():
+			continue
+		var b := i * FAST
+		var nf: PackedInt32Array = u.get("net_f", PackedInt32Array())
+		if kf or nf.size() != FAST:
+			nf = PackedInt32Array()
+			nf.resize(FAST)
+		for k in FAST:
+			nf[k] = _wrap16(nf[k] + fast.decode_s16((b + k) * 2))
+		u["net_f"] = nf
 		var was_dead: bool = u.state == "dead"
-		u.hp = u_arr[b + 0]
-		u.max_hp = u_arr[b + 1]
-		var to := Vector2(u_arr[b + 2], u_arr[b + 3])
+		u.hp = float(nf[0])
+		var to := Vector2(float(nf[1]) / 100.0, float(nf[2]) / 100.0)
+		var face := float(nf[3]) / 1000.0
+		var state: String = STATES[clampi(nf[4], 0, STATES.size() - 1)]
+		if bool(u.get("net_new", false)):
+			u.erase("net_new")
+			u.pos = to                           # (a new unit: where it is, no sliding in from the field's middle)
+			u.face = face
+		_push_hist(u, snap_t, to, face)
 		u["net_from"] = u.pos
 		u["net_to"] = to
-		_push_hist(u, snap_t, to, u_arr[b + 4])
-		var state: String = STATES[clampi(int(u_arr[b + 5]), 0, STATES.size() - 1)]
 		if was_dead != (state == "dead") or u.pos.distance_to(to) > 6.0:
-			u.pos = to                       # respawn / teleport: no sliding across the map
+			u.pos = to                           # respawn / teleport: no sliding across the map
 			u["net_from"] = to
-		u.face = u_arr[b + 4]
+		u.face = face
 		u.state = state
-		u.cls = CLASSES[clampi(int(u_arr[b + 6]), 0, CLASSES.size() - 1)]
-		u.up = u_arr[b + 7] > 0.5
-		u.stun = u_arr[b + 8]
-		u.cd_ability = u_arr[b + 9]
-		u.cd_dodge = u_arr[b + 10]
-		u.kills = int(u_arr[b + 11])
-		u.deaths = int(u_arr[b + 12])
-		u.gate_dmg = u_arr[b + 13]
-		u.bot = u_arr[b + 14] > 0.5
-		u.respawn_at = u_arr[b + 15]
-		u.atk = ATKS[clampi(int(u_arr[b + 16]), 0, ATKS.size() - 1)]
-		var bi := int(round(u_arr[b + 17])) - 1
-		u.beam = str(sim.units[bi].id) if bi >= 0 and bi < sim.units.size() else ""
-		# The mirror doesn't step: flag the states open-ended; the next snapshot clears them.
-		u.block_until = 1.0e9 if u_arr[b + 18] > 0.5 else 0.0
-		u.whirl_until = 1.0e9 if u_arr[b + 19] > 0.005 else 0.0
-		var b2 := int(round(u_arr[b + 20])) - 1
-		u.beam2 = str(sim.units[b2].id) if b2 >= 0 and b2 < sim.units.size() else ""
+		u.stun = float(nf[5]) / 100.0
+		u.cd_ability = float(nf[6]) / 100.0
+	if msg.has("ho"):
+		sync["ho"] = msg.ho
+	var ho: PackedStringArray = sync.get("ho", PackedStringArray())
+	var hf: PackedByteArray = msg.get("h", PackedByteArray())
+	var hn := HERO_FAST.size()
+	var hv: PackedInt32Array = sync.get("hv", PackedInt32Array())
+	if kf or msg.has("ho") or hv.size() != ho.size() * hn:
+		hv = PackedInt32Array()
+		hv.resize(ho.size() * hn)
+	for hi in mini(ho.size(), hf.size() / (hn * 2)):
+		var h: Dictionary = sim.by_id.get(ho[hi], {})
+		for k in hn:
+			var at := hi * hn + k
+			hv[at] = _wrap16(hv[at] + hf.decode_s16(at * 2))
+			if not h.is_empty():
+				h[HERO_FAST[k]] = float(hv[at]) / float(HERO_FAST_SCALE[k])
+	sync["hv"] = hv
+	# towers, Kings, gates, camps
+	var od: Dictionary = msg.get("o", {})
+	var ox: Dictionary = msg.get("ox", {})
+	if not od.is_empty() or not ox.is_empty():
+		var lists := {}
+		for pair in _objs(sim):
+			lists[pair[0]] = pair[1]
+		for key in od:
+			var o: Dictionary = _obj(lists, str(key))
+			if o.is_empty():
+				continue
+			if kf:
+				for k in o.keys():
+					if not (od[key] as Dictionary).has(k) and not OBJ_SKIP[str(key).get_slice(":", 0)].has(k):
+						o.erase(k)
+			o.merge(od[key], true)
+		for key in ox:
+			var o2: Dictionary = _obj(lists, str(key))
+			for k in ox[key]:
+				o2.erase(k)
+	if sim.moba != null:
+		if msg.has("zn"):
+			sim.moba.kits.zones = msg.zn
+		if msg.has("tr"):
+			sim.moba.kits.traps = msg.tr
+		if msg.has("wd"):
+			sim.moba.vision.wards = msg.wd
+		if msg.has("ws"):
+			sim.moba.wyrm_stacks = msg.ws
+	_apply_proj(sim, msg, snap_t)
+	if not mine_prev.is_empty() and sim.by_id.has(me_id):
+		var me2: Dictionary = sim.by_id[me_id]
+		var server_pos: Vector2 = me2.get("net_to", me2.pos)
+		me2.erase("net_to")
+		me2.erase("net_from")
+		me2["srv_pos"] = server_pos
+		var drift: float = (mine_prev.pos as Vector2).distance_to(server_pos)
+		if sim.client_drivable(me2) and drift <= PREDICT_SNAP:
+			# 0.31.24: past PREDICT_SOFT the server's position pulls ours back a little each snapshot, so a correction
+			# is a slide rather than a 2.5 m teleport (the server's position is a round trip old, so only a little)
+			me2.pos = mine_prev.pos if drift <= PREDICT_SOFT else (mine_prev.pos as Vector2).lerp(server_pos, 0.12)
+			me2.face = mine_prev.face
+			# A dodge or swing we started locally keeps playing until its timer runs out (the server's
+			# confirmation arrives a round trip later).
+			if str(mine_prev.state) in ["dodge", "wind", "recover"] and float(mine_prev.t) > 0.0:
+				me2.state = mine_prev.state
+				me2.t = mine_prev.t
+		else:
+			me2.pos = server_pos
+	# the fog of war: worked out here from what the snapshot brought, as often as the server does
+	if sim.moba != null and sim.moba.vision != null and (kf or snap_t - float(sync.get("vis_at", -99.0)) >= sim.moba.vision.EVERY):
+		sync["vis_at"] = snap_t
+		sim.moba.vision._update()
+
+static func _client_key(k: String) -> bool:
+	# a key the phone keeps on a unit whatever a keyframe says: its own (the draw history, the prediction) and the
+	# keys the snapshot carries some other way or never
+	return NO_SYNC.has(k) or FAST_KEYS.has(k) or k.begins_with("net_") or k == "srv_pos"
+
+static func _obj(lists: Dictionary, key: String) -> Dictionary:
+	var list: Array = lists.get(key.get_slice(":", 0), [])
+	var j := key.get_slice(":", 1).to_int()
+	return list[j] if j >= 0 and j < list.size() and list[j] is Dictionary else {}
+
+static func _apply_proj(sim, msg: Dictionary, snap_t: float) -> void:
 	# Projectiles slide between snapshots like units (0.18.5, Kevin: "projectiles skip across the
 	# screen online"): they used to be redrawn only at each snapshot's position, so an arrow at
 	# 22 m/s sat still for 66 ms and then jumped 1.5 m. Now each keeps from/to: a new one starts at
@@ -405,9 +723,13 @@ static func apply(sim, msg: Dictionary, me_id: String, predict := false) -> void
 		var prev: Dictionary = old.get(pid, {})
 		var from: Vector2 = prev.get("net_to", to)
 		var t0: float = float(prev.get("net_t", snap_t - 1.0 / SNAP_HZ))
-		sim.projectiles.append({"id":pid, "pos":from, "net_from":from, "net_to":to, "vel":Vector2(float(v[3]) / 100.0, float(v[4]) / 100.0),
-			"kind":PROJ_KINDS[clampi(int(v[5]), 0, PROJ_KINDS.size() - 1)], "team":-1,
-			"net_t":snap_t, "net_t0":t0, "net_dt":maxf(snap_t - t0, 0.001)})
+		var kc := int(v[5])
+		var p := {"id":pid, "pos":from, "net_from":from, "net_to":to, "vel":Vector2(float(v[3]) / 100.0, float(v[4]) / 100.0),
+			"kind":PROJ_KINDS[clampi(kc % 16, 0, PROJ_KINDS.size() - 1)], "team":-1,
+			"net_t":snap_t, "net_t0":t0, "net_dt":maxf(snap_t - t0, 0.001)}
+		if kc >= 16:
+			p["big"] = true
+		sim.projectiles.append(p)
 		seen[pid] = true
 	var ends := {}
 	for e in msg.get("e", []):
@@ -417,34 +739,11 @@ static func apply(sim, msg: Dictionary, me_id: String, predict := false) -> void
 		var gone: Dictionary = old[id]
 		if not seen.has(id) and ends.has(id) and not bool(gone.get("ghost", false)):
 			var last: Vector2 = gone.get("net_to", gone.pos)
-			sim.projectiles.append({"id":id, "pos":last, "net_from":last, "net_to":ends[id], "vel":gone.vel,
-				"kind":gone.kind, "team":-1, "ghost":true})
-	var gates: PackedFloat32Array = msg.get("g", PackedFloat32Array())
-	for gi in mini(sim.gates.size(), gates.size() / 4):
-		var g: Dictionary = sim.gates[gi]
-		g.hp = gates[gi * 4]
-		g.max_hp = gates[gi * 4 + 1]
-		g.broken = gates[gi * 4 + 2] > 0.5
-		g.open = gates[gi * 4 + 3] > 0.5
-	if not mine_prev.is_empty():
-		var me2: Dictionary = sim.by_id[me_id]
-		var server_pos: Vector2 = me2.get("net_to", me2.pos)
-		me2.erase("net_to")
-		me2.erase("net_from")
-		me2["srv_pos"] = server_pos
-		var drift: float = (mine_prev.pos as Vector2).distance_to(server_pos)
-		if sim.client_drivable(me2) and drift <= PREDICT_SNAP:
-			# 0.31.24: past PREDICT_SOFT the server's position pulls ours back a little each snapshot, so a correction
-			# is a slide rather than a 2.5 m teleport (the server's position is a round trip old, so only a little)
-			me2.pos = mine_prev.pos if drift <= PREDICT_SOFT else (mine_prev.pos as Vector2).lerp(server_pos, 0.12)
-			me2.face = mine_prev.face
-			# A dodge or swing we started locally keeps playing until its timer runs out (the server's
-			# confirmation arrives a round trip later).
-			if str(mine_prev.state) in ["dodge", "wind", "recover"] and float(mine_prev.t) > 0.0:
-				me2.state = mine_prev.state
-				me2.t = mine_prev.t
-		else:
-			me2.pos = server_pos
+			var gp := {"id":id, "pos":last, "net_from":last, "net_to":ends[id], "vel":gone.vel,
+				"kind":gone.kind, "team":-1, "ghost":true}
+			if gone.has("big"):
+				gp["big"] = true
+			sim.projectiles.append(gp)
 
 static func interpolate(sim, alpha: float) -> void:
 	# Called every frame between snapshots: slide unit positions from the previous snapshot to

@@ -3,7 +3,7 @@ extends SceneTree
 # leaderboard, usage statistics -- and the match rooms, each running the same sim as offline play, authoritative, with
 # bots in every seat no human holds. 0.31.169: Siege's code went (16v16 Siege matches, Crown War -- the war map, its
 # battles and rewards, server/world.gd); a room's match is the 5v5 now (sim.setup_moba), its seats the ten heroes.
-# Match rooms are reached only by an app that plays online, and the apps from 0.31.164 don't until the online 5v5.
+# 0.31.170: the online 5v5 -- PLAY on the phone comes here (see the 0.31.170 notes at the end of this header).
 #
 #   godot --headless --path <project> -s res://server/siege_server.gd
 # Env: SIEGE_HOST (default 127.0.0.1 — keep it on loopback behind Caddy), SIEGE_PORT (8082),
@@ -102,6 +102,17 @@ extends SceneTree
 # 0.31.120 (Kevin: a friend in a match -- "make so it's a join match option"): a hello with "join": a friend's public id
 # (social.gd's pid) goes into that friend's room -- their match, on their side while it has room -- when the two are
 # friends and the room has space; otherwise the usual room, and {"t":"joinr", "ok":false, "why":"full"|"gone"} says why.
+#
+# 0.31.170 (Kevin: "Do step 2 now" -- the online 5v5): a hello says it can show one ("five":1; without it the app is
+# refused as too old -- its Update screen -- since it couldn't draw the match) and names the hero picked ("hero": one of
+# moba.gd HEROES, and a bought one only if the account owns it -- eco_accounts.wear). Seating (_seat, _seat_for): the
+# bot playing that hero on the player's side, else the bot in the hero's place (top, jungle, mid, bottom, support), else
+# any; the seat becomes the player's hero (moba.swap_hero: its place, level, gold and items stay). A side has a hero
+# once: one a player there already plays sends them to the other side when it can, else they keep the seat's own. The
+# welcome says the hero they got. The snapshots are siege_net.gd's 5v5 ones: a keyframe at the seat (and on a rejoin,
+# and for a socket that couldn't take one -- "resync"), then only what changed. "in" carries the 5v5's actions with
+# their argument (Net.ACTIONS, Net.clean_arg: a pick, the ultimate, W/E, a ward, the shop). "ver", "status", the lobby
+# and the welcome answer "five":1. The protocol stays 35 (the economy, leaderboard and version check send it too).
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 const Net = preload("res://scripts/siege/siege_net.gd")
 const IapVerify = preload("res://server/iap_verify.gd")
@@ -114,6 +125,9 @@ const Analytics = preload("res://server/analytics.gd")
 const Leaderboard = preload("res://server/leaderboard.gd")
 const Referrals = preload("res://server/referrals.gd")
 const DiagReports = preload("res://server/diag_reports.gd")
+const Moba = preload("res://scripts/siege/moba.gd")           # 0.31.170: the heroes a player may pick
+const Kits = preload("res://scripts/siege/moba_kits.gd")
+const Eco = preload("res://scripts/meta/economy.gd")
 
 const RESTART_AFTER := 15.0          # seconds of results screen before the next match
 const RESULTS_KEEP := 600.0          # 0.31.122: a player who stays on the results (PLAY AGAIN not pressed) is let go after this
@@ -122,7 +136,7 @@ const LOBBY_TIME := 20.0             # the join countdown (0.31.82)
 const HELLO_TIMEOUT := 10.0
 const IAP_TIMEOUT := 40.0              # a purchase check may take a token request and an API call
 const REFUSE_CLOSE_DELAY := 0.25     # s between a "bye"/"ver" reply and closing the socket
-const SERVER_BUILD := "0.31.169"      # this server's game version; the probe says it by default (identifies as current)
+const SERVER_BUILD := "0.31.170"      # this server's game version; the probe says it by default (identifies as current)
 const MIN_BUILD_FILE := "/etc/fatebound-siege/min_build"
 const MIN_BUILD_RELOAD := 10.0       # s between re-reads of the min-build file
 const UPDATE_MSG := "A new version of Fatebound is out. Update now on Google Play to keep playing online."
@@ -436,16 +450,18 @@ func _poll_clients() -> void:
 				continue
 			_handle(cid, Net.decode(pkt))
 
-func _send(cid: int, msg: Dictionary) -> void:
-	_send_raw(cid, Net.encode(msg, msg.get("t", "") in ["s", "eco", "iap", "an", "lb"]))      # (0.31.108: an account travels compressed; 0.31.118: and usage acks)
+func _send(cid: int, msg: Dictionary) -> Error:
+	return _send_raw(cid, Net.encode(msg, msg.get("t", "") in ["s", "eco", "iap", "an", "lb"]))      # (0.31.108: an account travels compressed; 0.31.118: and usage acks)
 
-func _send_raw(cid: int, bytes: PackedByteArray) -> void:
+func _send_raw(cid: int, bytes: PackedByteArray) -> Error:
+	# -> OK, or why it didn't go (0.31.170: a snapshot that couldn't go -- the socket's buffer full -- means a keyframe next)
 	var c: Dictionary = clients.get(cid, {})
 	if c.is_empty():
-		return
+		return ERR_DOES_NOT_EXIST
 	var ws: WebSocketPeer = c.ws
 	if ws.get_ready_state() == WebSocketPeer.STATE_OPEN:
-		ws.put_packet(bytes)
+		return ws.put_packet(bytes)
+	return ERR_CONNECTION_ERROR
 
 # Load stats (0.31.23): every STATS_EVERY s, how long the sim steps, the snapshot build and the sends took per second,
 # and the bytes sent -- logged with SIEGE_STATS=1 (the net load test reads them). 0.31.119: all rooms together.
@@ -587,7 +603,8 @@ func _handle(cid: int, msg: Dictionary) -> void:
 			# so the client treats no answer as "unknown" and checks again on connect.
 			if c.hello:
 				return
-			_send(cid, {"t":"ver", "v":Net.VERSION, "build":SERVER_BUILD, "min_build":min_build, "eco":1, "social":1, "an":1, "lb":1, "ref":1, "diag":1, "move":1, "clans":1})
+			_send(cid, {"t":"ver", "v":Net.VERSION, "build":SERVER_BUILD, "min_build":min_build, "eco":1, "social":1, "an":1, "lb":1, "ref":1, "diag":1, "move":1, "clans":1,
+				"five":Net.FIVE})
 			_refuse(cid, 1000, "ver")
 		"hello":
 			if c.hello or c.has("social"):
@@ -611,6 +628,14 @@ func _handle(cid: int, msg: Dictionary) -> void:
 					analytics.server_event(str(msg.acct), "update_screen", {"from_build":build, "need":min_build}, build)
 				_log("refused %s: build %s older than min build %s" % [str(msg.get("name", "?")).left(20), build.left(30), min_build])
 				return
+			if int(msg.get("five", 0)) < Net.FIVE:
+				# 0.31.170: the matches are the online 5v5 -- an app from before it can't show one. Refused as too old (the same
+				# protocol, so: as if the server were one ahead), which is what puts up its "Update required" screen.
+				var need5 := Net.VERSION + 1
+				_send(cid, {"t":"bye", "why":"version", "need":need5, "min_build":min_build, "msg":UPDATE_MSG})
+				_refuse(cid, Net.CLOSE_VERSION, "version:%d" % need5)
+				_log("refused %s: build %s has no online 5v5" % [str(msg.get("name", "?")).left(20), build.left(30)])
+				return
 			if str(msg.get("rj", "")) != "" and _rejoin(cid, msg):
 				return                                         # 0.31.120: back on their seat
 			var name := clean_name(str(msg.get("name", "Player")))
@@ -619,6 +644,7 @@ func _handle(cid: int, msg: Dictionary) -> void:
 			var looks: Dictionary = Net.clean_looks(msg.get("lk", {}))  # 0.31.101: what they wear, for everyone to see
 			var acct := ""
 			var party := ""
+			var owned: Array = []
 			if msg.has("acct") and eco != null:
 				# 0.31.108: an account -- its own name, title and looks (owned only), and the match is paid to it
 				var w: Dictionary = eco.wear(str(msg.get("acct", "")), str(msg.get("key", "")))
@@ -627,6 +653,7 @@ func _handle(cid: int, msg: Dictionary) -> void:
 					name = clean_name(str(w.name))
 					title = str(w.title)
 					looks = w.looks
+					owned = w.get("heroes", [])
 					if social != null:
 						party = social.party_for(acct)    # 0.31.111: seated with their party
 			var r: Room = null
@@ -676,6 +703,11 @@ func _handle(cid: int, msg: Dictionary) -> void:
 				analytics.set_opt_out(c.acct, bool(msg.get("an_off", false)))
 				analytics.server_event(c.acct, "session_online", {}, c.build)
 			c.pred = bool(msg.get("pred", false))         # the phone moves its own unit (0.18.4)
+			# 0.31.170: the hero they picked -- one of the game's, and bought if it costs gold ("": the seat's own)
+			var hero := str(msg.get("hero", ""))
+			if not Moba.HEROES.has(hero) or (Eco.HERO_PRICES.has(hero) and not owned.has(hero)):
+				hero = ""
+			c.hero = hero
 			c.ask_next = bool(msg.get("ask_next", false))  # 0.31.122: the phone says when it wants the next match (PLAY AGAIN)
 			c.queued = true                                # 0.31.82: into the lobby; seated when the countdown ends
 			if r.wave_end < 0.0:
@@ -865,7 +897,9 @@ func _handle(cid: int, msg: Dictionary) -> void:
 			if bool(c.get("idle", false)):
 				return                                         # (a bot plays for them until they do something)
 			if a != "" and a in Net.ACTIONS:
-				r.sim.act(c.unit, a, null)
+				var ca: Array = Net.clean_arg(a, msg.get("arg", null))       # 0.31.170: the 5v5's take one (a pick, W/E, an item)
+				if bool(ca[0]):
+					r.sim.act(c.unit, a, ca[1])
 
 func _eco_op(cid: int, op: String, msg: Dictionary) -> void:
 	# 0.31.132 (the iOS port, IOS_PORT_SPEC_FOR_CLAUDE.md §4, §6), one per socket like any "eco":
@@ -980,16 +1014,17 @@ func _seat(r: Room, cid: int) -> void:
 					team = jt
 				break
 	# (0.31.169: the 5v5 -- a seat is one of the ten heroes; minions, monsters and summons are never anyone's)
-	var seat := ""
-	for u in sim.units:
-		if u.team == team and u.bot and bool(u.get("hero", false)) and not _unit_taken(r, u.id):
-			seat = u.id
-			break
+	# 0.31.170: as the hero they picked. A side has each hero once: one a player there already plays sends them to the
+	# other side when it has room and the hero's free there (not a party's or a friend's side, which they asked for);
+	# failing that they play the seat's own hero.
+	var hero := str(c.get("hero", ""))
+	if hero != "" and pa == "" and ja == "" and _hero_played(r, team, hero) and humans[1 - team] < Net.TEAM_SIZE \
+			and not _hero_played(r, 1 - team, hero):
+		team = 1 - team
+	var seat := _seat_for(r, team, hero)
 	if seat == "":
-		for u in sim.units:
-			if u.bot and bool(u.get("hero", false)) and not _unit_taken(r, u.id):
-				seat = u.id
-				break
+		for t in [1 - team]:
+			seat = _seat_for(r, t, hero)
 	c.unit = seat
 	c.queued = false
 	c.move = Vector2.ZERO
@@ -997,7 +1032,11 @@ func _seat(r: Room, cid: int) -> void:
 	c.idle_s = -LOAD_GRACE                 # (counts from the phone's first input message, or after the grace)
 	c.got_in = false
 	if seat != "":
-		sim.by_id[seat].bot = false
+		var su: Dictionary = sim.by_id[seat]
+		if hero != "" and str(su.get("hid", "")) != hero and not _hero_played(r, int(su.team), hero):
+			sim.moba.swap_hero(su, hero)
+		su.bot = false
+		su["kr"] = false                       # (a player isn't one of the bots' King runners; nor his bot when he's idle)
 		if c.has("acct"):
 			c.ledger = MatchLedger.new()          # 0.31.108: counted from here (a bot held the seat before)
 			c.ledger.start(sim.by_id[seat])
@@ -1007,11 +1046,38 @@ func _seat(r: Room, cid: int) -> void:
 			if analytics != null:
 				analytics.server_event(c.acct, "match_start", {"match":c.match_key, "mode":"online", "class":c.class0}, str(c.get("build", "")))
 	_send(cid, {"t":"welcome", "v":Net.VERSION, "you":seat, "match":r.match_id, "seed":r.match_seed,
-		"team_size":Net.TEAM_SIZE, "players":_room_humans(r), "rj":str(c.get("rj", ""))})
+		"team_size":Net.TEAM_SIZE, "players":_room_humans(r), "rj":str(c.get("rj", "")), "five":Net.FIVE,
+		"hero":str(sim.by_id.get(seat, {}).get("hid", ""))})
 	r.names_dirty = true
-	# The first snapshot right away so the client can build its view.
-	_send(cid, Net.snapshot(sim, seat, []))
+	# The match as it stands right away (0.31.170: a keyframe -- the snapshots after it carry only what changed)
+	if _send(cid, Net.keyframe(sim)) != OK:
+		c.resync = true
 	_log("join %s -> %s (room %d, match %d, players %d)" % [c.name, seat, r.id, r.match_id, _room_humans(r)])
+
+func _seat_for(r: Room, team: int, hero: String) -> String:
+	# 0.31.170: a free hero seat (a bot's) on the side for a player picking `hero`: the bot playing it, else the bot in
+	# the hero's place (top for a fighter, the jungle for an assassin, ...), else any
+	var sim = r.sim
+	var free: Array = sim.units.filter(func(u): return int(u.team) == team and bool(u.bot) and bool(u.get("hero", false)) \
+		and not _unit_taken(r, str(u.id)))
+	if free.is_empty():
+		return ""
+	if hero != "":
+		for u in free:
+			if str(u.get("hid", "")) == hero:
+				return str(u.id)
+		var post := str(Moba.ROLE_POST.get(Kits.role_of(hero), ""))
+		for u in free:
+			if str(u.get("post", "")) == post:
+				return str(u.id)
+	return str(free[0].id)
+
+func _hero_played(r: Room, team: int, hero: String) -> bool:
+	# a player of the side (or one whose seat is held for them) plays this hero
+	for u in r.sim.units:
+		if int(u.team) == team and str(u.get("hid", "")) == hero and _unit_taken(r, str(u.id)):
+			return true
+	return false
 
 func _unit_taken(r: Room, id: String) -> bool:
 	for cid in _members(r):
@@ -1136,7 +1202,7 @@ func _send_lobby(r: Room, waiting: Array) -> void:
 	var msg := {"t":"lobby", "left":maxf(0.0, r.wave_end - _now()), "wait":lobby_time,
 		"names":names, "tt":titles, "ct":tags,
 		"in_match":_seated_count(r), "online":_human_count(), "slots":Net.TEAM_SIZE * 2,
-		"running":r.sim != null and not r.sim.ended and _seated_count(r) > 0, "match":r.match_id}   # (running: they join it)
+		"running":r.sim != null and not r.sim.ended and _seated_count(r) > 0, "match":r.match_id, "five":Net.FIVE}   # (running: they join it)
 	for i in waiting.size():
 		msg["me"] = i
 		_send(waiting[i], msg)
@@ -1156,7 +1222,7 @@ func _status() -> Dictionary:
 			running = true
 	return {"t":"status", "v":Net.VERSION, "online":_human_count(), "in_match":in_match, "waiting":waiting,
 		"lobby":lobby, "running":running, "slots":Net.TEAM_SIZE * 2, "max":max_players * max_rooms, "rooms":rooms.size(),
-		"build":SERVER_BUILD, "min_build":min_build, "eco":1, "social":1, "an":1, "lb":1, "ref":1, "diag":1, "clans":1,
+		"build":SERVER_BUILD, "min_build":min_build, "eco":1, "social":1, "an":1, "lb":1, "ref":1, "diag":1, "clans":1, "five":Net.FIVE,
 		"chatting":social.online.size() if social != null else 0}
 
 # ---------------- statistics (0.31.118) ----------------
@@ -1164,7 +1230,9 @@ func match_key(r: Room) -> String:
 	return "%d-%d" % [boot_time, r.match_id]
 
 static func class_of(u: Dictionary) -> String:
-	# the class a unit plays, its upgrade marked ("knight", "knight+")
+	# the class a unit plays, its upgrade marked ("knight", "knight+"); 0.31.170: a 5v5 hero, his own name ("golem")
+	if str(u.get("hid", "")) != "":
+		return str(u.hid)
 	return str(u.get("cls", "")) + ("+" if bool(u.get("up", false)) else "")
 
 func _team_humans(r: Room, team: int) -> int:
@@ -1267,8 +1335,10 @@ func _rejoin(cid: int, msg: Dictionary) -> bool:
 	u.bot = false
 	room.names_dirty = true
 	_send(cid, {"t":"welcome", "v":Net.VERSION, "you":c.unit, "match":room.match_id, "seed":room.match_seed,
-		"team_size":Net.TEAM_SIZE, "players":_room_humans(room), "rj":rj, "rejoin":true})
-	_send(cid, Net.snapshot(room.sim, c.unit, []))
+		"team_size":Net.TEAM_SIZE, "players":_room_humans(room), "rj":rj, "rejoin":true, "five":Net.FIVE,
+		"hero":str(u.get("hid", ""))})
+	if _send(cid, Net.keyframe(room.sim)) != OK:       # (0.31.170: everything, as it stands)
+		c.resync = true
 	if social != null and c.has("acct"):
 		social.acct_changed(str(c.acct))
 	_log("rejoin %s -> %s (room %d, match %d)" % [c.name, c.unit, room.id, room.match_id])
@@ -1454,12 +1524,23 @@ func _run_match(r: Room, delta: float) -> bool:
 		# 0.31.23: encoded and compressed ONCE and sent to everyone (before, every player's copy was encoded and compressed
 		# separately). (0.31.169: Siege's private bit -- the player's task, an "m" message -- went with Siege.)
 		var bytes := Net.encode(base, true)
+		var kf_bytes := PackedByteArray()
 		for cid in _members(r):
 			var c: Dictionary = clients[cid]
 			if bool(c.get("queued", false)) or bool(c.get("after", false)):
 				continue                               # (still in the lobby: no match to show yet; 0.31.122: or still on the last one's results)
-			_send_raw(cid, bytes)
-			_st_bytes += bytes.size()
+			if bool(c.get("resync", false)):
+				# 0.31.170: a snapshot didn't go (or the seat's keyframe): this one carries everything instead
+				if kf_bytes.is_empty():
+					kf_bytes = Net.encode(Net.keyframe(sim), true)
+				if _send_raw(cid, kf_bytes) == OK:
+					c.erase("resync")
+					c.resyncs = int(c.get("resyncs", 0)) + 1
+				_st_bytes += kf_bytes.size()
+			else:
+				if _send_raw(cid, bytes) != OK:
+					c.resync = true
+				_st_bytes += bytes.size()
 			var me: Dictionary = sim.by_id.get(c.unit, {})
 			if not me.is_empty():
 				# 0.31.87: the health they've healed, for the Merciful title (at most once a second, when it changed)

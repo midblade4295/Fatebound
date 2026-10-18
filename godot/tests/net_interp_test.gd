@@ -25,8 +25,8 @@ func _init() -> void:
 	var shooter: Dictionary = s.units.filter(func(x): return x.team == 0)[0]
 	var target: Dictionary = s.units.filter(func(x): return x.team == 1)[0]
 	s._set_class(shooter, "ranger", false)
-	shooter.pos = Vector2(-8.0, 20.0)
-	target.pos = Vector2(-8.0, 32.0)
+	shooter.pos = Vector2(0.0, -20.0)              # (0.31.170: open ground on the Rift; (-8, 20) was the Siege field's)
+	target.pos = Vector2(0.0, -8.0)
 	target.hp = 9999.0
 	target.max_hp = 9999.0
 	s._shoot(shooter, Sim.angle_of(Vector2(0, 1)), 1.0, 0.0, 22.0, 14.0)
@@ -44,9 +44,9 @@ func _init() -> void:
 		var msg := Net.decode(Net.encode(snap, true))
 		Net.apply(m, msg, "you")
 		var pb: PackedByteArray = msg.get("p", PackedByteArray())
-		for pi in pb.size() / 22:
-			if pb.decode_s16(pi * 22) + 32768 == pid:
-				var raw := Vector2(pb.decode_s16(pi * 22 + 2) / 100.0, pb.decode_s16(pi * 22 + 4) / 100.0)
+		for pi in pb.size() / 12:                                 # (6 x 16 bits a projectile)
+			if pb.decode_s16(pi * 12) + 32768 == pid:
+				var raw := Vector2(pb.decode_s16(pi * 12 + 2) / 100.0, pb.decode_s16(pi * 12 + 4) / 100.0)
 				if last_raw != Vector2.INF:
 					old_jump = maxf(old_jump, last_raw.distance_to(raw))
 				last_raw = raw
@@ -78,7 +78,7 @@ func _init() -> void:
 
 func _jitter_check() -> void:
 	# 0.31.23: a remote unit walking a straight line at 5 m/s, snapshots at SNAP_HZ arriving with +-25 ms of jitter and
-	# one dropped, drawn at 60 fps through the render clock (as siege_mode does). Steps between frames must stay even:
+	# one late (0.31.170: not dropped -- see below), drawn at 60 fps through the render clock (as siege_mode does). Steps between frames must stay even:
 	# no freezes, no jumps -- the old slide-to-the-newest scheme stalled and leapt under the same jitter.
 	var srv = Sim.new()
 	srv.setup(2, 5)
@@ -105,9 +105,12 @@ func _jitter_check() -> void:
 		srv.time += dt
 		if srv.time >= next_snap:
 			next_snap += 1.0 / Net.SNAP_HZ
-			if frame != 90:                          # one snapshot lost
-				arrivals.append([wall + rng.randf_range(-0.025, 0.025) + 0.04, Net.snapshot(srv, "", [])])
-		arrivals.sort_custom(func(x, y): return x[0] < y[0])
+			# 0.31.170: a snapshot carries what changed since the one before, over a socket that delivers each in order --
+			# so none is lost or overtaken: one held up 120 ms instead (the ones behind it wait for it), the rest jittered
+			var at := wall + rng.randf_range(-0.025, 0.025) + 0.04 + (0.12 if frame == 90 else 0.0)
+			if not arrivals.is_empty():
+				at = maxf(at, float(arrivals[-1][0]))
+			arrivals.append([at, Net.decode(Net.encode(Net.snapshot(srv, "", []), true))])
 		while not arrivals.is_empty() and arrivals[0][0] <= wall:
 			var msg: Dictionary = arrivals.pop_front()[1]
 			Net.apply(cli, msg, "you")
@@ -134,5 +137,5 @@ func _jitter_check() -> void:
 		if st < mean * 0.25:
 			stalls += 1
 	check(mean > 0.06 and mean < 0.1, "the walker advances ~5 m/s on screen (%.3f m per frame)" % mean)
-	check(worst < mean * 1.5, "under jitter and a dropped snapshot, the worst frame step is within 1.5x the mean (%.3f vs %.3f)" % [worst, mean])
+	check(worst < mean * 1.5, "under jitter and a late snapshot, the worst frame step is within 1.5x the mean (%.3f vs %.3f)" % [worst, mean])
 	check(stalls <= 2, "no more than 2 near-stalled frames (%d)" % stalls)

@@ -230,7 +230,7 @@ func _process(delta: float) -> bool:
 				_go("online")
 		"online":
 			if not raw_sent and raw.get_ready_state() == WebSocketPeer.STATE_OPEN:
-				raw.put_packet(Net.encode({"t":"hello", "v":Net.VERSION, "name":"Edited Name", "build":"0.31.108-fatebound",
+				raw.put_packet(Net.encode({"t":"hello", "v":Net.VERSION, "five":Net.FIVE, "name":"Edited Name", "build":"0.31.108-fatebound",
 					"title":"title_legend", "acct":str(p.d.account.id), "key":str(p.d.account.key)}))
 				raw_sent = true
 			var ended := false

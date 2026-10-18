@@ -11,6 +11,7 @@ const Net = preload("res://scripts/siege/siege_net.gd")
 const Eco = preload("res://scripts/meta/economy.gd")
 const VisualTheme = preload("res://scripts/ui/visual_theme.gd")
 const Lobby = preload("res://scripts/siege/lobby_panel.gd")
+const Moba = preload("res://scripts/siege/moba.gd")
 
 signal exited
 # 0.31.73: the server refused our protocol. verdict "update" (server newer: this build is too old -> the app shows
@@ -412,7 +413,7 @@ func _start_online() -> void:
 	net_state = "connecting"
 	_net_started = Time.get_ticks_msec() / 1000.0
 	diag.write("NET connect %s err=%d" % [net_url, err])
-	hud.toast("Connecting to the Siege server...", Color("#f2d18d"))
+	hud.toast("Connecting to the server...", Color("#f2d18d"))
 	lobby = Lobby.new()
 	lobby.audio = audio
 	lobby.leave.connect(func(): exited.emit())
@@ -436,6 +437,20 @@ func _net_fail(why: String) -> void:
 func _net_exit() -> void:
 	if is_inside_tree():
 		exited.emit()
+
+func _net_no_five() -> void:
+	# 0.31.170: the server answered from before the online 5v5 (not redeployed yet): leave quietly, and Home starts this
+	# hero's match against bots instead (siege_app._end_match, exit_note "no_five")
+	if net_state == "closed":
+		return
+	net_state = "closed"
+	diag.write("NET the server has no online 5v5: a match against bots instead")
+	_net_send({"t":"leave"})
+	if ws != null:
+		ws.close(1000, "leave")
+	exit_note = "no_five"
+	replay_hero = _hero()
+	_net_exit()
 
 func _net_version_refused(code: int, reason: String) -> bool:
 	# A version refusal, from the bye ("need") or the close (code 4001, reason "version:<n>"). Works for every
@@ -473,6 +488,8 @@ func _hello() -> Dictionary:
 	if party_join != "":
 		hi["join"] = party_join                      # 0.31.120: into this friend's match (Friends > JOIN)
 	hi["ask_next"] = true                            # 0.31.122: the next match only after PLAY AGAIN (older servers ignore it)
+	hi["five"] = Net.FIVE                            # 0.31.170: the online 5v5 -- as my hero (the server checks I own it)
+	hi["hero"] = _hero()
 	return hi
 
 func _begin_rejoin() -> void:
@@ -603,6 +620,9 @@ func _net_process(delta: float) -> void:
 		var msg := Net.decode(ws.get_packet())
 		match str(msg.get("t", "")):
 			"welcome":
+				if int(msg.get("five", 0)) < Net.FIVE:
+					_net_no_five()                              # 0.31.170: a server from before the online 5v5
+					return
 				_rj = str(msg.get("rj", _rj))                   # 0.31.120: my seat's token, for a rejoin
 				if bool(msg.get("rejoin", false)) and int(msg.get("match", -1)) == net_match and sim != null:
 					net_state = "playing"
@@ -614,6 +634,11 @@ func _net_process(delta: float) -> void:
 					diag.write("NET rejoined match %d as %s" % [net_match, str(msg.get("you", ""))])
 				elif int(msg.get("match", -1)) != net_match:
 					_build_online_match(msg)
+					var got := str(msg.get("hero", ""))
+					if got != "" and got != _hero() and Moba.HEROES.has(got):
+						# 0.31.170: someone on my side plays my pick, or the server doesn't know I bought it yet
+						hud.toast("%s was taken -- you're the %s" % [str(Moba.HEROES.get(_hero(), {}).get("name", _hero())),
+							str(Moba.HEROES[got].name)], Color("#f2d18d"))
 			"s":
 				if sim == null:
 					continue
@@ -646,6 +671,9 @@ func _net_process(delta: float) -> void:
 					_event_sound(e)
 					hud.on_event(e)
 			"lobby":                                          # 0.31.82: waiting for the wave's countdown
+				if int(msg.get("five", 0)) < Net.FIVE:
+					_net_no_five()                              # 0.31.170: a server from before the online 5v5
+					return
 				lobby_msgs += 1
 				if lobby_msgs == 1:
 					diag.write("NET lobby left=%.1f names=%d online=%d running=%s" % [float(msg.get("left", 0)), (msg.get("names", []) as Array).size(), int(msg.get("online", 0)), str(msg.get("running", false))])
@@ -796,7 +824,8 @@ func _act(action: String, arg: Variant = null) -> void:
 				sim._dodge(me_a)
 			elif me_a.cls != "priest":
 				sim._start_attack(me_a, "attack")
-		elif action == "ability" and not me_a.is_empty() and sim.client_drivable(me_a):
+		elif action == "ability" and not me_a.is_empty() and sim.client_drivable(me_a) and not me_a.has("kq"):
+			# (0.31.170: not a new hero's Q -- a kit spell only the server casts)
 			# 0.31.23 (Kevin: "abilities lag"): the ability's start shows now -- the swing, the spin, the ring; the
 			# server resolves what it does (the predicted start happens in _process right after this frame's input)
 			if sim.predict_ability(me_a):
@@ -813,6 +842,9 @@ func _act(action: String, arg: Variant = null) -> void:
 	sim.act(hud.player_id, action, arg)
 
 func _on_action(kind: String) -> void:
+	if online and kind not in ["attack", "ability", "dodge"]:
+		_on_action_online(kind)
+		return
 	match kind:
 		"attack": _act("attack")
 		"ability":
@@ -855,6 +887,53 @@ func _on_action(kind: String) -> void:
 					kind.get_slice(":", 1) if kind.begins_with("shop_buy:") else int(kind.get_slice(":", 1)))
 				if audio != null and audio.has_method("play"):
 					audio.play("purchase" if ok and kind.begins_with("shop_buy:") else ("coin" if ok else "error"))
+
+func _on_action_online(kind: String) -> void:
+	# 0.31.170: the 5v5's buttons online -- the server does it (the next snapshots show it); here only what my copy of the
+	# match can already tell: the same toasts and sounds as against bots when it can't be done, and the sound when it can
+	var me: Dictionary = sim.by_id.get(hud.player_id, {}) if sim != null else {}
+	if me.is_empty() or sim.ended:
+		return
+	var play := func(cue: String) -> void:
+		if audio != null and audio.has_method("play"):
+			audio.play(cue)
+	match kind:
+		"pick0", "pick1", "pick2":
+			var picks: Array = me.get("picks", [])
+			if picks.is_empty():
+				return
+			picks.pop_front()                            # (shown at once; the server's count follows)
+			_act("pick", int(kind.right(1)))
+			play.call("equip")
+		"ult":
+			if sim.moba.ult_rank(me) == 0:
+				hud.toast("Your ultimate comes at level %d" % sim.moba.ULT_LEVEL, Color("#ffcf7a"))
+			elif float(me.get("ult_cd", 0.0)) <= 0.0 and sim.can_act(me):
+				_act("ult")
+		"w", "e":
+			if not sim.moba.kits.unlocked(me, kind):
+				hud.toast("%s comes at level %d" % [kind.to_upper(), int(sim.moba.kits.UNLOCK[kind])], Color("#ffcf7a"))
+			elif float(me.get("cd_" + kind, 0.0)) <= 0.0 and sim.can_act(me):
+				_act("spell", kind)
+		"ward":
+			if sim.moba.vision.ward_ready(me):
+				_act("ward")
+				play.call("equip")
+			else:
+				hud.toast("No ward charge yet", Color("#ffcf7a"))
+		_:
+			if kind.begins_with("shop_buy:"):
+				var id := kind.get_slice(":", 1)
+				var ok: bool = sim.moba.buy_why(me, id) == ""
+				if ok:
+					_act("shop_buy", id)
+				play.call("purchase" if ok else "error")
+			elif kind.begins_with("shop_sell:"):
+				var slot := int(kind.get_slice(":", 1))
+				var ok2: bool = sim.moba.can_shop(me) and slot >= 0 and slot < (me.get("items", []) as Array).size()
+				if ok2:
+					_act("shop_sell", slot)
+				play.call("coin" if ok2 else "error")
 
 # ---- Warm-up cover (Round 16, Kevin: the 3D world showed black for a few seconds at match start: the
 # phone compiling the scene's shader pipelines). A FATEBOUND card covers the first moments while the

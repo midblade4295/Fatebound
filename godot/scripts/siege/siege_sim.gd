@@ -82,6 +82,8 @@ var oracles: Array = []
 var score := [0, 0]
 var kills := [0, 0]
 var events: Array = []
+var net_sync := {}              # 0.31.170: online -- what the players were last sent (server) / the snapshot's bookkeeping
+                                # (phone); siege_net.gd's alone, the match never reads it
 var obstacles: Array = []      # circles: trees, rocks, ruin, buildings  {p, r, kind, team?}
 var walls: Array = []          # segments {a, b, r, team, kind}
 var gates: Array = []          # {id, team, a, b, c, hp, max_hp, broken, open}

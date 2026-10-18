@@ -382,7 +382,7 @@ func _process(delta: float) -> bool:
 			if phones.bob.party_play != "":
 				check(phones.bob.party_play == str(phones.alice.party.id), "Bob's phone is told to follow Alice into the match")
 				for n in ["alice", "bob"]:
-					_ws("match_" + n, {"t":"hello", "v":Net.VERSION, "name":n, "build":"0.31.111-fatebound", "pred":false,
+					_ws("match_" + n, {"t":"hello", "v":Net.VERSION, "five":Net.FIVE, "name":n, "build":"0.31.111-fatebound", "pred":false,
 						"acct":accts[n][0], "key":accts[n][1], "party":phones.alice.party.id})
 				_go("seated")
 		"seated":

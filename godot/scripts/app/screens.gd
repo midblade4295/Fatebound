@@ -323,7 +323,7 @@ static func home(app, root: VBoxContainer) -> void:
 		UI2.wiggle(ob.get_meta("icon"))
 	# 0.31.93: the Forge, under FIRST WIN (a badge when an equipped weapon's next star can be forged)
 	var fready := forge_ready(p)
-	var fgb := _medallion(top, Vector2(w - 62, MED_Y[0]), "anvil", "FORGE", func():          # (0.31.164: top right, RANKS gone)
+	var fgb := _medallion(top, Vector2(w - 62, MED_Y[1]), "anvil", "FORGE", func():          # (0.31.164-169: top right)
 		app.sfx("tab")
 		app.forge_cls = app.locker_class if (Eco.CLASSES + Eco.UP_CLASSES).has(str(app.locker_class)) else "knight"
 		app.forge_pick = ""
@@ -334,8 +334,13 @@ static func home(app, root: VBoxContainer) -> void:
 	# until it's been played through, with its gold as a tag.
 	var soc = app.get("social")
 	# 0.31.164 (Kevin: "5v5 only"): no TUTORIAL (Siege's walkthrough), no 5V5 TEST (PLAY is the 5v5 now) and no RANKS
-	# (the weekly leaderboard counts online matches -- none until the 5v5 is online)
+	# (the weekly leaderboard counts online matches -- none until the 5v5 is online). 0.31.170: the online 5v5 -- RANKS
+	# back at the top right (the week's leaderboard), the Forge under it again
 	var fw_open := str(d.first_win_day) != Eco.day_key(p.now())
+	var rkb := _medallion(top, Vector2(w - 62, MED_Y[0]), "trophy", "RANKS", func():
+		app.sfx("menuOpen")
+		app.open_leaderboard(), "side_ranks", 0, "silver")
+	UI2.bob(rkb.get_meta("icon"), 3.0, 1.6)
 	# 0.31.125 (Kevin: "Put a discord button on front page that goes away after they claim it then leave the other discord
 	# button in settings"): under the logo between the medallion columns, with its gift as a tag, until it's claimed
 	if not bool(d.get("discord", false)):
@@ -416,7 +421,9 @@ static func home(app, root: VBoxContainer) -> void:
 	play.add_child(art)
 	if art.texture == null:                         # (without the ui pack's art: the old orange button's colours)
 		UI2.plate(art, "orange", 18.0, "gold")
-	var word := "PLAY"                            # (0.31.164: the 5v5 -- offline, so no party count)
+	var word := "PLAY"                            # (0.31.164-169: the 5v5 offline, no party count)
+	if soc != null and soc.online() and soc.in_party() and soc.is_leader() and soc.party_size() > 1:
+		word = "PLAY ×%d" % soc.party_size()       # 0.31.170: the online 5v5 -- the party goes in together
 	var face := Rect2(PLAQUE_FACE.position * play.size, PLAQUE_FACE.size * play.size)
 	var pl := UI2.text(play, word, 40 if word.length() <= 5 else 32, Color.WHITE, Color("#6a1a04"), 10)
 	pl.name = "PlayWord"

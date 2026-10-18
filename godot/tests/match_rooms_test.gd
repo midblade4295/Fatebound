@@ -85,7 +85,7 @@ func welcome(name: String) -> Dictionary:
 	return w[w.size() - 1] if not w.is_empty() else {}
 
 func hello(name: String, who := "") -> Dictionary:
-	var h := {"t":"hello", "v":Net.VERSION, "name":name, "build":"0.31.119-fatebound"}
+	var h := {"t":"hello", "v":Net.VERSION, "five":Net.FIVE, "name":name, "build":"0.31.119-fatebound"}
 	if who != "":
 		h["acct"] = accts[who].acct
 		h["key"] = accts[who].key

@@ -99,7 +99,7 @@ func ended(name: String) -> bool:
 	return false
 
 func hello(name: String, p, build := Diag.BUILD, off := false) -> Dictionary:
-	var h := {"t":"hello", "v":Net.VERSION, "name":SECRET_NAME, "build":build, "acct":str(p.d.account.id), "key":str(p.d.account.key)}
+	var h := {"t":"hello", "v":Net.VERSION, "five":Net.FIVE, "name":SECRET_NAME, "build":build, "acct":str(p.d.account.id), "key":str(p.d.account.key)}
 	if off:
 		h["an_off"] = 1
 	return h

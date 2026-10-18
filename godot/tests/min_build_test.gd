@@ -106,7 +106,7 @@ func _let_in(r: Dictionary) -> bool:
 	return (r.lobby or r.welcome) and r.bye.is_empty()
 
 func _hello(build) -> Dictionary:
-	var h := {"t":"hello", "v":Net.VERSION, "name":"MB", "pred":true}
+	var h := {"t":"hello", "v":Net.VERSION, "five":Net.FIVE, "name":"MB", "pred":true}
 	if build != null:
 		h.build = build
 	return h

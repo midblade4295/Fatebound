@@ -92,6 +92,26 @@ func request_ticket(cb: Callable) -> void:
 func pending() -> int:
 	return outbox.size()
 
+var _flush_cbs: Array = []
+
+func flush(cb: Callable) -> void:
+	# 0.31.170: cb() once the changes waiting here have reached the server (or it couldn't be reached) -- before an
+	# online match, so the server knows a hero bought a moment ago
+	if not enabled or outbox.is_empty():
+		cb.call()
+		return
+	_flush_cbs.append(cb)
+	_want = true
+	_send_at = minf(_send_at, _clock)
+
+func _flush_done(all: bool) -> void:
+	if _flush_cbs.is_empty() or (not all and not outbox.is_empty()):
+		return
+	var cbs := _flush_cbs.duplicate()
+	_flush_cbs.clear()
+	for cb in cbs:
+		(cb as Callable).call()
+
 # ---------------- the outbox ----------------
 func _on_op(op: String, args: Array) -> void:
 	if not enabled:
@@ -192,6 +212,7 @@ func _failed() -> void:
 		# no account yet: an older server that keeps none, or no connection -- a few tries, then the next start
 		_want = _fails < 3
 	_ticket_done("")
+	_flush_done(true)
 	state_changed.emit()
 
 func _ticket_done(tk: String) -> void:
@@ -215,6 +236,7 @@ func apply_answer(a: Dictionary, sent: Dictionary = {}, had_ticket := false) -> 
 			_account_changed()
 			_want = true
 		_ticket_done("")
+		_flush_done(true)
 		state_changed.emit()
 		return
 	if a.has("key"):
@@ -242,6 +264,7 @@ func apply_answer(a: Dictionary, sent: Dictionary = {}, had_ticket := false) -> 
 		_ticket_done(ticket)
 	if not outbox.is_empty():
 		_send_at = _clock                           # more waiting: straight on
+	_flush_done(false)
 	state_changed.emit()
 
 func adopt(sp: Variant, seq: int) -> void:

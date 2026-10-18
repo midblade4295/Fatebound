@@ -484,8 +484,10 @@ func begin(sim, my_hero: String, seed_value: int) -> void:
 	# top (a fighter or a tank), jungle (an assassin or a fighter), mid (a mage or an assassin), bottom (a marksman) and
 	# its support (a support or a tank) in the same lane; you take your role's place (your own lane is yours to choose),
 	# the bots fill the rest; the top and mid bots are the side's King runners
+	# 0.31.170: my_hero "" (the server's match: every seat a bot until a player takes it) -- both sides drafted alike, each
+	# bot in its own place's lane (blue's first was a Knight with no lane, as if a player had him)
 	for t in 2:
-		var mine := (my_hero if HEROES.has(my_hero) else "knight") if t == 0 else ""
+		var mine := ((my_hero if HEROES.has(my_hero) else "knight") if my_hero != "" else "") if t == 0 else ""
 		var team := draft(mine)
 		var i := 0
 		for u in s.units:
@@ -493,7 +495,7 @@ func begin(sim, my_hero: String, seed_value: int) -> void:
 				continue
 			var pk: Array = team[i]
 			var post := str(pk[1])
-			_make_hero(u, str(pk[0]), -1 if (t == 0 and i == 0) else int(POST_LANE[post]), post in ["top", "mid"])
+			_make_hero(u, str(pk[0]), -1 if (t == 0 and i == 0 and mine != "") else int(POST_LANE[post]), post in ["top", "mid"])
 			u["post"] = post
 			i += 1
 	vision = Vision.new()                 # 0.31.158: the fog of war
@@ -578,6 +580,35 @@ func _make_hero(u: Dictionary, hid: String, lane: int, king_runner: bool) -> voi
 	hero_of[u.id] = hid
 	_apply(u)
 	s._respawn(u, true)
+
+func swap_hero(u: Dictionary, hid: String) -> void:
+	# 0.31.170 (online): a player takes this seat as their own hero -- its place, level, gold, items and upgrades stay
+	if not HEROES.has(hid) or str(u.get("hid", "")) == hid:
+		return
+	var ratio: float = float(u.hp) / maxf(1.0, float(u.max_hp))
+	var h: Dictionary = HEROES[hid]
+	u.cls = str(h.cls)
+	u.up = bool(h.up)
+	u["hid"] = hid
+	for k in ["kq", "look", "shot", "mscale"]:
+		u.erase(k)
+	if Kits.kit_q(hid) != "":
+		u["kq"] = Kits.kit_q(hid)
+		u["look"] = hid
+	if HERO_SHOT.has(hid):
+		u["shot"] = str(HERO_SHOT[hid])
+	if HERO_SCALE.has(hid):
+		u["mscale"] = float(HERO_SCALE[hid])
+	u.cd_ability = 0.0
+	u["cd_w"] = 0.0
+	u["cd_e"] = 0.0
+	hero_of[u.id] = hid
+	var offers: Array = u.get("picks", [])
+	for i in offers.size():
+		offers[i] = _offer(u)                      # (the offers made for the old class: a Priest's leave out damage)
+	_apply(u)
+	if s.alive(u):
+		u.hp = maxf(1.0, float(u.max_hp) * ratio)
 
 # ---------- stats ----------
 func stat(u: Dictionary, key: String, base: Variant) -> Variant:

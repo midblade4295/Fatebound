@@ -44,7 +44,8 @@ func open(a) -> void:
 	# (0.31.155-0.31.163: "TEST MODE" -- 0.31.164, Kevin: "5v5 only": it's the game's match now, PLAY opens this)
 	# (0.31.165: the Rift -- three towers a lane, a keep with a gate at each lane's end and two King towers inside;
 	# 0.31.166: the Grave Wyrm)
-	UI2.body(body, "You and four bot heroes against five. Minions march down three lanes past three towers each to a "
+	# (0.31.170: online -- the players in the match and bots in the seats nobody has taken)
+	UI2.body(body, "Five heroes a side: you, other players and bots in the seats nobody has taken. Minions march down three lanes past three towers each to a "
 		+ "gate of the keep. Level up to 10 near the fighting -- W at level 2, E at 3, your ULTIMATE at 6 -- earn gold and "
 		+ "buy items in your keep. The jungle's camps give gold and buffs; the Bone Lord blesses your side, every Grave "
 		+ "Wyrm slain toughens it. Break a lane, its gate and the two King towers, then defeat their King on his throne.", 11, UI2.SOFT)

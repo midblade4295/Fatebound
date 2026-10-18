@@ -2,9 +2,10 @@ extends SceneTree
 # 0.31.111: the chat, Friends, the party and quick chat through the app's real buttons, against the real server (its
 # own process, port 8095), in REAL time. Alice is the app; Bob is a second phone (scripts/meta/social.gd + a raw match
 # socket). Bob's line shows on Home's chat line; Alice opens the chat, sends a line, taps Bob's name and adds him; he
-# accepts; she opens Friends from Home and invites him; he joins; Home shows the party. (0.31.164: the rest -- a war map
-# battle with the party, the quick chat in it -- went with Siege's online matches; 0.31.169: their phases too. The online
-# 5v5 brings a party's match and its quick chat back.)
+# accepts; she opens Friends from Home and invites him; he joins; Home shows the party and PLAY ×2. (0.31.164: the rest
+# -- a war map battle with the party, the quick chat in it -- went with Siege's online matches; 0.31.169: their phases
+# too.) 0.31.170, the online 5v5: Alice's PLAY, her hero window's BATTLE -- the party's match: Bob is told to follow
+# ("go"), both are seated on one side, Alice's quick chat reaches Bob and Bob's shows over his head on her HUD.
 # With a display and SHOT_DIR set, screenshots of each window go there.
 #   godot --headless --path godot -s res://tests/social_ui_test.gd
 const App = preload("res://scripts/app/siege_app.gd")
@@ -24,6 +25,7 @@ var raw := {}
 var accts := {}
 var app
 var bob
+var bob_unit := ""
 var shots := ""
 
 func check(ok: bool, what: String) -> void:
@@ -227,12 +229,69 @@ func _process(delta: float) -> bool:
 				_go("home_party")
 		"home_party":
 			if t_phase > 0.5:
-				# 0.31.164 (Kevin: "5v5 only"): PLAY is the offline 5v5 -- no party count on it, and no war map battle to take the
-				# party into (the battle, the seating and the in-match quick chat were Siege's online matches)
-				check(has_text(app.content, "PARTY 2/4") and has_text(app.content, "PLAY") and not has_text(app.content, "PLAY ×2"),
-					"Home shows the party (0.31.139: at the top); PLAY has no party count")
+				# 0.31.170 (the online 5v5): the leader's PLAY takes the party (0.31.164-169: none -- PLAY was offline)
+				check(has_text(app.content, "PARTY 2/4") and has_text(app.content, "PLAY ×2"), "Home shows the party (0.31.139: at the top) and PLAY ×2")
 				_shot("social_home_party")
+				press("play")
+				_go("party_heroes")
+		"party_heroes":
+			if t_phase > 0.5 and btn("moba_battle") != null:
+				press("moba_battle")
+				_go("go")
+			elif t_phase > 5.0:
+				check(false, "PLAY opens the hero window")
+				return _finish()
+		"go":
+			if bob.party_play != "" and app.siege != null and app.siege.online:
+				check(true, "BATTLE: Alice into the online 5v5 -- the party's leader, she takes Bob along (\"go\")")
+				_ws("match_bob", {"t":"hello", "v":Net.VERSION, "five":Net.FIVE, "name":"bob", "build":"0.31.170-fatebound", "pred":false,
+					"acct":accts.bob[0], "key":accts.bob[1], "hero":"mage"})
+				_go("seated")
+			elif t_phase > 15.0:
+				check(false, "Alice goes into the match and Bob is told to follow (siege %s, go %s)" % [str(app.siege != null), bob.party_play])
+				return _finish()
+		"seated":
+			var w := _raw_got("match_bob", "welcome")
+			if not w.is_empty() and app.siege != null and app.siege.sim != null and app.siege.hud != null and str(app.siege.hud.player_id) != "":
+				bob_unit = str(w[0].you)
+				var mine := str(app.siege.hud.player_id)
+				check(mine[0] == bob_unit[0], "the party is on one side: Alice %s, Bob %s" % [mine, bob_unit])
+				_go("open_qc")
+			elif t_phase > 20.0:
+				check(false, "both seated within 20 s")
+				return _finish()
+		"open_qc":
+			if t_phase > (2.0 if shots != "" else 0.1):
+				app.siege.hud._toggle_qc()
+				check(app.siege.hud.qc_panel.visible, "the horn opens the quick chat")
+				_shot("social_quick_chat")
+				_go("say_qc")
+		"say_qc":
+			if t_phase > 0.5:
+				press("qc_1")
+				_go("qc")
+		"qc":
+			var q := _raw_got("match_bob", "qc")
+			if not q.is_empty():
+				check(int(q[0].i) == 1 and str(q[0].u) == str(app.siege.hud.player_id), "Alice's \"Defend the gate!\" reaches Bob")
+				(raw.match_bob.ws as WebSocketPeer).put_packet(Net.encode({"t":"qc", "i":5}))
+				_go("qc_back")
+			elif t_phase > 6.0:
+				check(false, "Alice's quick chat reaches Bob")
+				return _finish()
+		"qc_back":
+			var hud = app.siege.hud
+			var seen := false
+			for p in hud._pings:
+				if str(p.u) == bob_unit and int(p.i) == 5:
+					seen = true
+			if seen:
+				check(true, "Bob's \"Follow me!\" shows on Alice's HUD")
+				_shot("social_ping")
 				_go("end")
+			elif t_phase > 5.0:
+				check(false, "Bob's quick chat shows on Alice's HUD")
+				return _finish()
 		"end":
 			if t_phase > 0.5:
 				return _finish()

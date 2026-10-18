@@ -54,7 +54,7 @@ func _process(delta: float) -> bool:
 		raw.poll()
 		if raw.get_ready_state() == WebSocketPeer.STATE_OPEN:
 			if not raw_sent:
-				raw.put_packet(Net.encode({"t":"hello", "v":Net.VERSION, "name":"Busy", "build":"0.31.119-fatebound"}))
+				raw.put_packet(Net.encode({"t":"hello", "v":Net.VERSION, "five":Net.FIVE, "name":"Busy", "build":"0.31.119-fatebound"}))
 				raw_sent = true
 			raw_clock += delta
 			if raw_clock > 0.1:                      # a player who keeps moving
@@ -89,7 +89,8 @@ func _process(delta: float) -> bool:
 			if mode._me_bot and mode.hud.idle_kick_at > 0.0:
 				var left: float = mode.hud.idle_kick_at - Time.get_ticks_msec() / 1000.0
 				var since: float = Time.get_ticks_msec() / 1000.0 - float(notes.seat_at)
-				check(since > 1.8 and since < 4.5, "no input for 2 s: a bot plays for us (%.1f s after the match came up)" % since)
+				# (counted from the phone's first input, sent as its match came up -- the frame that builds the 5v5's view is long)
+				check(since > 1.5 and since < 4.5, "no input for 2 s: a bot plays for us (%.1f s after the match came up)" % since)
 				check(left > 3.0 and left <= 5.5, "the banner counts down to removal (%.1f s left)" % left)
 				notes.p1 = _me().pos
 				_go("bot_walks")

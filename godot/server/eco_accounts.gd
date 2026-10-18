@@ -483,14 +483,15 @@ func grant_purchase(id: String, key: String, product: String, token: String, con
 	return g
 
 func wear(id: String, key: String) -> Dictionary:
-	# what an account may show online: its own name, title (owned) and looks (owned weapons, its own Forge stars)
+	# what an account may show online: its own name, title (owned) and looks (owned weapons, its own Forge stars); the
+	# 5v5 heroes it bought (0.31.170: a hero it picks for an online match must be one of them, or free)
 	var e := open(id, key)
 	if e.is_empty():
 		return {}
 	var p = e.p
 	var t := str(p.d.get("title", ""))
 	return {"name":str(p.d.get("name", "Player")), "title":t if p.owns(t) and Net.TITLES.has(t) else "",
-		"looks":Net.clean_looks(p.wire_looks())}
+		"looks":Net.clean_looks(p.wire_looks()), "heroes":(p.d.get("heroes", []) as Array).duplicate()}   # (0.31.170: bought ones)
 
 func stats_of(id: String) -> Dictionary:
 	# 0.31.120 (Kevin: player profile card): what anyone may see of an account when they tap its name -- its level and

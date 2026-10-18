@@ -2,8 +2,9 @@ extends RefCounted
 # 0.31.119 (Kevin: "Do all" -- 4. leaderboards): the week's best players, from this server's own count of online matches.
 #
 # Each paid online match (siege_server _pay_match: the server's ledger, never the phone's word) adds to the account's
-# week: points (the scoreboard's: rescue 300, knockout 20, fish fed 30, gathering 2, gate damage 1 per 10, + WIN_BONUS
-# for a win), wins, matches, rescues, knockouts. Weeks start Monday 00:00 UTC; when one ends its top 3 are kept as
+# week: points (the scoreboard's: knockout 20, tower/gate/King damage 1 per 10, + WIN_BONUS for a win -- 0.31.170: the
+# 5v5's; Siege's rescues, fish and gathering went with it), wins, matches, towers (0.31.170; "r", Siege's rescues, stays
+# for older apps and no longer grows), knockouts. Weeks start Monday 00:00 UTC; when one ends its top 3 are kept as
 # last week's champions and the board starts empty. Kept in leaderboard.json in the state directory (written a few
 # seconds after a change).
 #
@@ -22,10 +23,7 @@ const Eco = preload("res://scripts/meta/economy.gd")
 const WIN_BONUS := 100
 const TOP_N := 50
 const SAVE_DELAY := 3.0
-const P_RESCUE := 300
 const P_KO := 20
-const P_FED := 30
-const P_GATHER := 2
 const P_GATE := 0.1
 
 var path := ""
@@ -66,8 +64,7 @@ static func week_end(t: int) -> int:
 	return (day - posmod(day + 3, 7) + 7) * 86400
 
 static func points_of(me: Dictionary, won: bool) -> int:
-	return int(me.get("rescues", 0)) * P_RESCUE + int(me.get("kills", 0)) * P_KO + int(me.get("fed", 0)) * P_FED \
-		+ int(me.get("gathered", 0)) * P_GATHER + int(float(me.get("gate_dmg", 0.0)) * P_GATE) + (WIN_BONUS if won else 0)
+	return int(me.get("kills", 0)) * P_KO + int(float(me.get("gate_dmg", 0.0)) * P_GATE) + (WIN_BONUS if won else 0)
 
 func add_match(acct: String, name: String, title: String, me: Dictionary, won: bool) -> void:
 	if acct == "":
@@ -80,6 +77,7 @@ func add_match(acct: String, name: String, title: String, me: Dictionary, won: b
 	r.w = int(r.w) + (1 if won else 0)
 	r.m = int(r.m) + 1
 	r.r = int(r.r) + maxi(0, int(me.get("rescues", 0)))
+	r.tw = int(r.get("tw", 0)) + maxi(0, int(me.get("towers", 0)))      # 0.31.170: the 5v5's towers
 	r.k = int(r.k) + maxi(0, int(me.get("kills", 0)))
 	r.at = now()
 	rows[acct] = r
@@ -116,7 +114,7 @@ func rank_of(acct: String) -> int:
 func _row(acct: String, rank: int, mine: bool) -> Dictionary:
 	var r: Dictionary = rows[acct]
 	var out := {"rank":rank, "name":str(r.get("name", "Player")), "title":str(r.get("title", "")), "pts":int(r.pts),
-		"w":int(r.w), "m":int(r.m), "r":int(r.r), "k":int(r.k), "q":qualified(r),
+		"w":int(r.w), "m":int(r.m), "r":int(r.r), "tw":int(r.get("tw", 0)), "k":int(r.k), "q":qualified(r),
 		"pid":acct.sha256_text().left(10)}             # 0.31.120: the public friend code (tap a row: the player's card)
 	var ct := str(tag_fn.call(acct))
 	if ct != "":

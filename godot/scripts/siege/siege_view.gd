@@ -2851,9 +2851,9 @@ func _ensure_actor(u: Dictionary) -> Dictionary:
 	var a: Dictionary = actors.get(u.id, {})
 	# The usual case first, without building keys: the actor exists and wears this class (0.31.78: this ran for every
 	# unit every frame, formatting a string -- with the player's cosmetics dictionary in it -- 32 times a frame).
-	if not a.is_empty() and a.cls == u.cls and a.up == u.up and ((u.id != player_id and a.cosmetic.is_empty() and not unit_looks.has(u.id))
-			or a.cosmetic == unit_cosmetic(u)):
-		return a
+	if not a.is_empty() and a.cls == u.cls and a.up == u.up and str(a.get("lk", "")) == str(u.get("look", "")) \
+			and ((u.id != player_id and a.cosmetic.is_empty() and not unit_looks.has(u.id)) or a.cosmetic == unit_cosmetic(u)):
+		return a                                    # (0.31.170: and the same body -- online a player's hero takes a bot's seat)
 	# 0.31.38: an upgraded class wears its own cosmetics (the Crusader's, the Berserker's...), not the base class's.
 	# 0.31.101: every live player's, not only mine (unit_cosmetic)
 	var cosmetic: Dictionary = unit_cosmetic(u)
@@ -2898,6 +2898,7 @@ func _ensure_actor(u: Dictionary) -> Dictionary:
 	_cape_setup(a)
 	a.cls = u.cls
 	a.up = u.up
+	a["lk"] = str(u.get("look", ""))
 	a.cosmetic = cosmetic
 	a.clip = ""
 	a.busy_until = 0.0

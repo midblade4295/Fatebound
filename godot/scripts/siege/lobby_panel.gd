@@ -65,7 +65,7 @@ func _ready() -> void:
 	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(v)
 	UI2.center(UI2.text(v, "FATEBOUND", 42, GOLD, Color("#2e1908"), 11))
-	UI2.center(UI2.body(v, "16 vs 16 SIEGE", 12, Color("#9fb0d6")))
+	UI2.center(UI2.body(v, "5 vs 5", 12, Color("#9fb0d6")))          # (0.31.170: was 16 vs 16 SIEGE)
 	var top_gap := Control.new()
 	top_gap.custom_minimum_size = Vector2(0, 26)
 	top_gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -85,7 +85,7 @@ func _ready() -> void:
 	number.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	number.offset_top = -4
 	number.resized.connect(func(): number.pivot_offset = number.size * 0.5)
-	mode_lbl = UI2.center(UI2.body(v, "Connecting to the Siege server...", 14, Color("#fff4d6")))
+	mode_lbl = UI2.center(UI2.body(v, "Connecting to the server...", 14, Color("#fff4d6")))
 	var cr := HBoxContainer.new()
 	cr.alignment = BoxContainer.ALIGNMENT_CENTER
 	cr.add_theme_constant_override("separation", 8)
@@ -102,7 +102,7 @@ func _ready() -> void:
 	dot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	cr.add_child(dot)
-	count_lbl = UI2.text(cr, "16 vs 16", 22, Color("#8cf0a8"), Color("#0b2a14"))
+	count_lbl = UI2.text(cr, "5 vs 5", 22, Color("#8cf0a8"), Color("#0b2a14"))
 	sub_lbl = UI2.center(UI2.body(v, "bots fill the empty slots", 12, Color("#9fb0d6")))
 	join_head = UI2.divider(v, "JOINING", 18)
 	join_head.visible = false

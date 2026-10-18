@@ -1,12 +1,13 @@
 extends SceneTree
 # 0.31.119 (Kevin: "Do all" -- 4. leaderboards).
-#  1. server/leaderboard.gd on its own: weeks start Monday 00:00 UTC; a match's points (rescue 300, KO 20, fish 30,
-#     gathering 2, gate damage 1 per 10, a win +100); best first; your row and your friends' rows; no account id in an
+#  1. server/leaderboard.gd on its own: weeks start Monday 00:00 UTC; a match's points (0.31.170, the 5v5's: KO 20, tower,
+#     gate and King damage 1 per 10, a win +100; towers counted for the TW column); best first; your row and your friends' rows; no account id in an
 #     answer; kept on disk; a new week keeps last week's top 3 and starts empty.
 #  2. end to end (the real server, port 8104, 4-second matches): an online match paid to an account puts it on the board;
 #     {"t":"lb"} with its key answers it (its row marked, its friends' rows), "status" says "lb":1, a wrong key gets
 #     4007 and nothing.
-#  3. the app: (0.31.164: no RANKS on Home) the LEADERBOARD window with the player's row, the FRIENDS tab.
+#  3. the app: (0.31.164-169: no RANKS on Home; 0.31.170, the online 5v5: RANKS again) the LEADERBOARD window with the
+#     player's row, the FRIENDS tab.
 #   godot --headless --path godot -s res://tests/leaderboard_test.gd
 const Leaderboard = preload("res://server/leaderboard.gd")
 const LbFetch = preload("res://scripts/meta/lb_fetch.gd")
@@ -54,18 +55,19 @@ func _part1() -> void:
 		and Leaderboard.week_of(MON + 7 * 86400) == "2026-10-19" and Leaderboard.week_of(MON - 1) == "2026-10-05",
 		"weeks start Monday 00:00 UTC (%s)" % Leaderboard.week_of(MON + 3 * 86400))
 	check(Leaderboard.week_end(MON + 100000) == MON + 7 * 86400, "...and end the next Monday")
-	check(Leaderboard.points_of({"rescues":1, "kills":5, "fed":1, "gathered":10, "gate_dmg":200.0}, true) == 300 + 100 + 30 + 20 + 20 + 100,
-		"a match's points: rescue 300, KO 20, fish 30, gathering 2, gate 1 per 10, a win +100")
+	check(Leaderboard.points_of({"kills":5, "gate_dmg":200.0, "towers":2, "rescues":1}, true) == 100 + 20 + 100,
+		"a match's points: KO 20, tower/gate/King damage 1 per 10, a win +100 (Siege's rescues count nothing)")
 	var dir := OS.get_user_data_dir().path_join("lbtest-%d" % Time.get_ticks_usec())
 	DirAccess.make_dir_recursive_absolute(dir)
 	var lb = Leaderboard.new(dir, MON + 3600)
-	lb.add_match("a".repeat(20), "Alice", "title_victor", {"rescues":1, "kills":5}, true)        # 500
+	lb.add_match("a".repeat(20), "Alice", "title_victor", {"kills":5, "towers":1}, true)         # 200
 	lb.add_match("b".repeat(20), "Bob", "", {"kills":10}, false)                                   # 200
 	lb.add_match("c".repeat(20), "Cara", "", {"kills":1}, false)                                   # 20
-	lb.add_match("b".repeat(20), "Bob", "", {"kills":10, "rescues":1}, true)                      # +600 = 800
+	lb.add_match("b".repeat(20), "Bob", "", {"kills":10, "gate_dmg":1000.0, "towers":2}, true)    # +400 = 600
 	var ans: Dictionary = lb.answer("a".repeat(20), ["b".repeat(20), "z".repeat(20)])
 	var top: Array = ans.top
-	check(top.size() == 3 and str(top[0].name) == "Bob" and int(top[0].pts) == 800 and int(top[0].w) == 1 and int(top[0].m) == 2
+	check(top.size() == 3 and str(top[0].name) == "Bob" and int(top[0].pts) == 600 and int(top[0].w) == 1 and int(top[0].m) == 2
+		and int(top[0].tw) == 2 and int(top[1].tw) == 1
 		and str(top[1].name) == "Alice" and bool(top[1].get("you", false)) and int(top[1].rank) == 2, "best first, your row marked: %s" % str(top.map(func(r): return [r.name, r.pts])))
 	check(int(ans.me.rank) == 2 and str(ans.me.title) == "title_victor" and int(ans.players) == 3, "your own row (rank 2, your title)")
 	check(ans.friends.size() == 2 and str(ans.friends[0].name) == "Bob" and str(ans.friends[1].name) == "Alice", "friends: you and your friends on the board, best first")
@@ -73,10 +75,10 @@ func _part1() -> void:
 	check((lb.answer("d".repeat(20), []).me as Dictionary).is_empty(), "not on the board: no row")
 	lb.save_now()
 	var lb2 = Leaderboard.new(dir, MON + 7200)
-	check(lb2.rows.size() == 3 and int(lb2.rows["b".repeat(20)].pts) == 800, "kept on disk")
+	check(lb2.rows.size() == 3 and int(lb2.rows["b".repeat(20)].pts) == 600, "kept on disk")
 	lb2.now_override = MON + 7 * 86400 + 60
 	var a2: Dictionary = lb2.answer("a".repeat(20), [])
-	check(str(a2.week) == "2026-10-19" and int(a2.players) == 0 and (a2.last as Array).size() == 3 and str(a2.last[0].name) == "Bob" and int(a2.last[0].pts) == 800,
+	check(str(a2.week) == "2026-10-19" and int(a2.players) == 0 and (a2.last as Array).size() == 3 and str(a2.last[0].name) == "Bob" and int(a2.last[0].pts) == 600,
 		"a new week: last week's top 3 kept, the board empty")
 
 # ---------------- 2 + 3 ----------------
@@ -165,7 +167,7 @@ func _process(delta: float) -> bool:
 				notes.fs = 2
 				notes.at = t_phase
 			elif step == 2 and t_phase - float(notes.at) > 0.5:
-				_ws("play_a", {"t":"hello", "v":Net.VERSION, "name":"x", "build":"0.31.119-fatebound", "acct":accts.alice.acct, "key":accts.alice.key})
+				_ws("play_a", {"t":"hello", "v":Net.VERSION, "five":Net.FIVE, "name":"x", "build":"0.31.119-fatebound", "acct":accts.alice.acct, "key":accts.alice.key})
 				_go("match")
 			elif t_phase > 10.0:
 				check(false, "friends within 10 s")
@@ -214,11 +216,10 @@ func _process(delta: float) -> bool:
 			_go("home")
 		"home":
 			if t_phase > 1.0:
-				# 0.31.164 (Kevin: "5v5 only"): no RANKS on Home -- the board counts online matches, none until the 5v5 is online;
-				# the window itself still works (opened here directly)
-				check(_btn("side_ranks") == null and _btn("side_first_win") == null, "Home: no RANKS (no online matches for now)")
+				# 0.31.170 (the online 5v5): RANKS on Home again (0.31.164-169 had none -- no online matches to count)
+				check(_btn("side_ranks") != null and _btn("side_first_win") == null, "Home: RANKS (the week's board of online matches)")
 				check(not _find(app, func(n): return str(n.name) == "FirstWinTag").is_empty(), "the first win of the day is a tag on PLAY")
-				app.open_leaderboard()
+				_btn("side_ranks").pressed.emit()
 				check(app.modal is LeaderboardPanel, "the LEADERBOARD window opens")
 				_go("panel")
 		"panel":
