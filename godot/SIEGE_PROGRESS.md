@@ -5554,3 +5554,6 @@ prettier".
   shop; the alert only with your King open and an enemy at him. moba_ui_test, live_board_test, kill_feed_test,
   side_view_test, scoreboard_test and names_aim_test pass.
 - Version 0.31.178, versionCode 264, SERVER_BUILD 0.31.178 (nothing new on the server; it keeps the builds equal).
+- Checks: the quick suite all passed (91, hud_top_test among them); COLD_START_PASS; the Play AAB (throwaway key,
+  presets untouched): BASE OK (265 files), CONTENT OK, play_games true, bundletool valid; no content pack changed.
+  Preview APK: build/Fatebound-Siege-0.31.178-fatebound.apk (32 MB, preview key), sha256 52d9ac9e...ea588364.
