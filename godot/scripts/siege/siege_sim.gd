@@ -1411,9 +1411,13 @@ func _step_projectiles(dt: float) -> void:
 		var spell_p := p.has("spell")                  # (0.31.167: a W/E's shot: heroes and minions only)
 		if not hit_gate.is_empty() and not spell_p:
 			_damage_gate(owner, hit_gate, p.dmg * float(p.gate_mult))
-		if hit_tw >= 0 and moba != null and hit.is_empty() and not spell_p:
-			moba.hit_tower(owner, hit_tw, float(p.dmg))
-		if hit_kg >= 0 and moba != null and hit.is_empty() and not spell_p:
+		# (0.31.179, Kevin: "make sure only basic attacks damage towers and that they only damage while inside the towers
+		# damage range": a basic shot only -- an ability's arrows, bolts or balls leave towers and the King alone -- and
+		# a tower only when it was shot from inside its range)
+		var basic_p: bool = bool(p.get("basic", false)) and not spell_p
+		if hit_tw >= 0 and moba != null and hit.is_empty() and basic_p:
+			moba.hit_tower(owner, hit_tw, float(p.dmg), p.get("from", owner.get("pos", Vector2.INF)))
+		if hit_kg >= 0 and moba != null and hit.is_empty() and basic_p:
 			moba.hit_king(owner, hit_kg, float(p.dmg))
 		_basic_by = str(p.owner) if bool(p.get("basic", false)) else ""
 		if p.aoe > 0.0:

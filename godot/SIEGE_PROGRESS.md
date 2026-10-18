@@ -5557,3 +5557,29 @@ prettier".
 - Checks: the quick suite all passed (91, hud_top_test among them); COLD_START_PASS; the Play AAB (throwaway key,
   presets untouched): BASE OK (265 files), CONTENT OK, play_games true, bundletool valid; no content pack changed.
   Preview APK: build/Fatebound-Siege-0.31.178-fatebound.apk (32 MB, preview key), sha256 52d9ac9e...ea588364.
+
+## 0.31.179 — one shop button; towers only to basic attacks, from inside their range
+Kevin (a screenshot in his base): "The shop button changes weird colors. Also, make sure only basic attacks damage
+towers and that they only damage while inside the towers damage range".
+- The shop button (siege_hud.gd): 0.31.178 lit it gold in your base and dark elsewhere; now it is always the dark
+  button with its gold rim and gold numbers. Where you can shop it only glows (the pulse ring, as before).
+- Basic attacks only (siege_sim.gd, the projectile's impact): a shot hurts a tower or the King only if it's a basic
+  attack (the shot's "basic", set when it's loosed). An ability's arrows, bolts and balls (the Archer's VOLLEY, the
+  Ranger's PIERCE and DEADEYE, the Crusader's hammer) no longer chip them; the W / E spells already didn't. Melee
+  abilities (SPIN, BASH, NOVA, the lunge) already didn't (moba.melee_towers runs only for a basic swing).
+- From inside its range only (moba.gd hit_tower, given where the hit came from: the swinger, or where the shot was
+  loosed): the tower must be able to shoot you -- TOWER_RANGE 11.5 m to your edge, as the tower picks its target
+  (in_tower_range). From outside it does nothing, and your screen says "Too far -- step into the tower's range to hurt
+  it" (the "tower_far" event, for the one who did it). So a Musketeer (12.5 m) or a long-ranged build can't outrange a
+  tower.
+- A player's attack only turns to a tower he can hurt from where he stands (aim_structure). The bots and minions walk
+  in: _hit_structure stands them inside the range (TOWER_RANGE - 0.6) before they swing or shoot.
+- The sim's fingerprint changes (abilities and long shots no longer hurt towers; the bots close in): seed 3
+  37bc8d3327338461, seed 17 544d78d3d9215137.
+- Tests: tower_rules_test (new, in the suite; it fails on 0.31.178's code): VOLLEY, SPIN and PIERCE leave an open tower
+  whole while a basic shot and a swing hurt it; the King the same; a Musketeer's ball from 12.3 m does nothing with
+  "too far" on his screen only, from 9 m it lands; the aim; a Musketeer bot sent from 12 m closes to 10.8 m and
+  shoots; a bots' 5v5 still has 7 towers down at 10:00. moba_test, moba_lol_test, moba_more_test, five_only_test,
+  names_aim_test, hud_top_test, moba_ui_test and tower_look_test pass.
+- Version 0.31.179, versionCode 265, SERVER_BUILD 0.31.179 (a server redeploy brings the rules online: the server's sim
+  decides a hit).

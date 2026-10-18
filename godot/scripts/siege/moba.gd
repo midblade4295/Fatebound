@@ -409,6 +409,7 @@ var _mid := 0
 var heroes: Array = [[], []]              # unit ids
 var hero_of := {}                         # unit id -> hero id
 var _immune_note := -10.0
+var _far_note := -10.0                   # (0.31.179: "out of the tower's range", once in a while)
 var kings: Array = [{}, {}]               # per side: {hp, max_hp, dead, next, quiet}
 var camps: Array = []                     # 0.31.157: {id, kind, side (0/1, -1 the Lord), p, mobs, alive, next, target, hits}
 var rains: Array = []                     # ARROW RAIN in progress: {team, owner, at, r, left, next, dmg}
@@ -1009,7 +1010,9 @@ func tower_mult(src: Dictionary) -> float:
 		return float(MINION_TOWER.get(str(src.get("mk", "melee")), 0.4))
 	return 1.0
 
-func hit_tower(src: Dictionary, id: int, amount: float) -> void:
+func hit_tower(src: Dictionary, id: int, amount: float, from := Vector2.INF) -> void:
+	# a basic attack's hit on a tower (0.31.179: only basic attacks reach this -- siege_sim._melee and a basic shot's
+	# impact -- and, given where it was struck from, only from inside the tower's own range)
 	if id < 0 or id >= towers.size():
 		return
 	var tw: Dictionary = towers[id]
@@ -1019,6 +1022,13 @@ func hit_tower(src: Dictionary, id: int, amount: float) -> void:
 		if s.time - _immune_note > 1.5 and not bool(src.get("bot", true)):
 			_immune_note = s.time
 			s._event("tower_immune", {"tw":id, "team":int(tw.team)})
+		return
+	if from != Vector2.INF and not in_tower_range(tw, from):
+		# 0.31.179 (Kevin: "make sure only basic attacks damage towers and that they only damage while inside the towers
+		# damage range"): out of its reach (where it would shoot you) a tower isn't hurt -- no sniping it from outside
+		if s.time - _far_note > 1.5 and not bool(src.get("bot", true)):
+			_far_note = s.time
+			s._event("tower_far", {"tw":id, "team":int(tw.team), "by":str(src.get("id", ""))})
 		return
 	var minions_near := false
 	for o in units_near(tw.p, TOWER_RANGE):
@@ -1080,7 +1090,7 @@ func aim_structure(u: Dictionary, reach: float) -> Dictionary:
 	var fwd: Vector2 = s.dir_of(u.face)
 	var cands := []
 	for tw in towers:
-		if int(tw.team) != int(u.team) and vulnerable(tw):
+		if int(tw.team) != int(u.team) and vulnerable(tw) and in_tower_range(tw, u.pos):     # (0.31.179: one you can hurt from here)
 			cands.append([tw.p, TOWER_R])
 	var et := 1 - int(u.team)
 	if et >= 0 and et <= 1 and not bool(kings[et].dead) and king_open(et):
@@ -1115,7 +1125,7 @@ func melee_towers(u: Dictionary, reach: float, arc: float, dmg: float) -> int:
 			continue
 		if arc > -1.0 and d > 0.3 and fwd.dot(off / d) < arc - 0.3:
 			continue
-		hit_tower(u, int(tw.id), dmg)
+		hit_tower(u, int(tw.id), dmg, u.pos)
 		hits += 1
 	var t2 := 1 - int(u.team)
 	var off2: Vector2 = king_pos(t2) - (u.pos as Vector2)
@@ -1124,6 +1134,10 @@ func melee_towers(u: Dictionary, reach: float, arc: float, dmg: float) -> int:
 		hit_king(u, t2, dmg)
 		hits += 1
 	return hits
+
+func in_tower_range(tw: Dictionary, p: Vector2) -> bool:
+	# where a tower can shoot you (as _step_towers picks its target: its range, to the edge of you)
+	return p.distance_to(tw.p) <= TOWER_RANGE + s.UNIT_R
 
 func tower_in_range(team_of_tower: int, p: Vector2, extra := 0.0) -> Dictionary:
 	for tw in towers:
@@ -1440,13 +1454,14 @@ func _enemy_tower_near(u: Dictionary, r: float) -> Dictionary:
 	return best
 
 func _hit_structure(u: Dictionary, tw: Dictionary) -> void:
-	# up to it and swing / shoot (an invulnerable one too: it's in the way -- the hit does nothing)
-	_hit_point(u, tw.p, TOWER_R)
+	# up to it and swing / shoot (an invulnerable one too: it's in the way -- the hit does nothing). 0.31.179: from
+	# inside its range (a hit from outside does nothing), so a long gun walks in too
+	_hit_point(u, tw.p, TOWER_R, TOWER_RANGE - 0.6)
 
-func _hit_point(u: Dictionary, p: Vector2, r: float) -> void:
+func _hit_point(u: Dictionary, p: Vector2, r: float, within := INF) -> void:
 	var c: Dictionary = s.CLASSES[u.cls]
 	var d: float = (u.pos as Vector2).distance_to(p) - r
-	var reach: float = float(s.stat(u, "range")) * (0.85 if bool(c.ranged) else 1.0)
+	var reach: float = minf(float(s.stat(u, "range")) * (0.85 if bool(c.ranged) else 1.0), within - r)
 	if d > reach:
 		s._nav_to(u, p, r + reach * 0.8)
 		return

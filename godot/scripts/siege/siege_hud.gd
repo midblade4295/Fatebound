@@ -701,6 +701,9 @@ func on_event(e: Dictionary) -> void:
 				toast("LEVEL %d!  PICK AN UPGRADE" % int(e.level), VisualTheme.GOLD)
 		"tower_immune":
 			toast("That tower is protected -- take the one in front of it first", Color("#ffcf7a"))
+		"tower_far":                                     # 0.31.179: hit from outside its range
+			if str(e.get("by", "")) == str(player_id):
+				toast("Too far -- step into the tower's range to hurt it", Color("#ffcf7a"))
 		"king_immune":
 			toast("Their King is protected until both his towers fall", Color("#ffcf7a"))
 		"king_down":
@@ -971,7 +974,7 @@ func _top_key(me: Dictionary) -> Array:
 		int(ceil(sim.moba.king_frac(t) * 100.0)), int(ceil(sim.moba.king_frac(1 - t) * 100.0)),
 		sim.moba.king_open(t), sim.moba.king_open(1 - t), int(sim.kills[t]), int(sim.kills[1 - t]),
 		towers_standing(t), towers_standing(1 - t), lv, int(xp_frac(me) * 120.0),
-		int(float(me.get("gold", 0.0))), sim.moba.can_shop(me), (me.get("items", []) as Array).duplicate()]
+		int(float(me.get("gold", 0.0))), (me.get("items", []) as Array).duplicate()]
 	var b: Dictionary = me.get("buffs", {})
 	for bk in ["arcane", "ember", "lord"]:
 		k.append(int(maxf(0.0, float(b.get(bk, -1.0)) - float(sim.time))))
@@ -2324,11 +2327,11 @@ func _refresh_board() -> void:
 		(r.gold as Label).text = gold_k(float(net_worth(u)))
 
 func _draw_gold_and_items(me: Dictionary) -> void:
-	# 0.31.178: the button lit gold while you can shop (in your base), dark otherwise; the slots framed; the buffs pills
+	# 0.31.178: the gold-and-shop button, the slots framed, the buffs pills. 0.31.179 (Kevin: "The shop button changes
+	# weird colors"): one look always -- dark with its gold rim; where you can shop it only glows (_draw_shop_pulse)
 	var r := shop_rect()
-	var here: bool = sim.moba.can_shop(me)
 	if _shop_styles.is_empty():
-		_shop_styles = [VisualTheme.tactile("secondary", "normal", 10), VisualTheme.tactile("gold", "normal", 10)]
+		_shop_styles = [VisualTheme.tactile("secondary", "normal", 10)]
 		for full in [false, true]:
 			var ss := StyleBoxFlat.new()
 			ss.bg_color = Color(0.03, 0.05, 0.07, 0.78)
@@ -2338,20 +2341,20 @@ func _draw_gold_and_items(me: Dictionary) -> void:
 			ss.set_corner_radius_all(6)
 			ss.anti_aliasing = true
 			_slot_styles.append(ss)
-	_ci.draw_style_box(_shop_styles[1 if here else 0], r)
+	_ci.draw_style_box(_shop_styles[0], r)
 	if _coin_tex == null and ResourceLoader.exists("res://assets/ui/currency/coin.png"):
 		_coin_tex = load("res://assets/ui/currency/coin.png")
 	var face := r.position + Vector2(0, -1)                         # (the face sits above the button's lip)
-	_ci.draw_circle(face + Vector2(20, 18), 13.0, Color(0.16, 0.09, 0.01, 0.55 if here else 0.8))      # (the coin's inset)
+	_ci.draw_circle(face + Vector2(20, 18), 13.0, Color(0.16, 0.09, 0.01, 0.8))                      # (the coin's inset)
 	if _coin_tex != null:
 		_ci.draw_texture_rect(_coin_tex, Rect2(face + Vector2(9, 7), Vector2(22, 22)), false)
 	else:
 		_ci.draw_circle(face + Vector2(20, 18), 10, Color("#ffcf4a"))
-	var ink := Color("#3a2205") if here else Color("#ffd65a")
+	var ink := Color("#ffd65a")
 	_text(face + Vector2(38, 25), str(int(float(me.get("gold", 0.0)))), 17, ink, _bold, HORIZONTAL_ALIGNMENT_LEFT, 62)
 	var dx := face.x + r.size.x - 50.0
 	_ci.draw_line(Vector2(dx, face.y + 8.0), Vector2(dx, face.y + 29.0), Color(ink, 0.35), 1.5)
-	_text(Vector2(dx + 6.0, face.y + 24.0), "SHOP", 12, ink if here else Color(1, 1, 1, 0.85), _bold, HORIZONTAL_ALIGNMENT_LEFT, 44)
+	_text(Vector2(dx + 6.0, face.y + 24.0), "SHOP", 12, Color(1, 1, 1, 0.85), _bold, HORIZONTAL_ALIGNMENT_LEFT, 44)
 	var inv: Array = me.get("items", [])
 	for i in sim.moba.ITEM_SLOTS:
 		var q := item_slot_rect(i)
