@@ -5558,15 +5558,24 @@ prettier".
   presets untouched): BASE OK (265 files), CONTENT OK, play_games true, bundletool valid; no content pack changed.
   Preview APK: build/Fatebound-Siege-0.31.178-fatebound.apk (32 MB, preview key), sha256 52d9ac9e...ea588364.
 
-## 0.31.179 — one shop button; towers only to basic attacks, from inside their range
+## 0.31.179 — one shop button; towers only to basic attacks, from inside their range; Kings to any ability
 Kevin (a screenshot in his base): "The shop button changes weird colors. Also, make sure only basic attacks damage
 towers and that they only damage while inside the towers damage range".
 - The shop button (siege_hud.gd): 0.31.178 lit it gold in your base and dark elsewhere; now it is always the dark
   button with its gold rim and gold numbers. Where you can shop it only glows (the pulse ring, as before).
-- Basic attacks only (siege_sim.gd, the projectile's impact): a shot hurts a tower or the King only if it's a basic
-  attack (the shot's "basic", set when it's loosed). An ability's arrows, bolts and balls (the Archer's VOLLEY, the
-  Ranger's PIERCE and DEADEYE, the Crusader's hammer) no longer chip them; the W / E spells already didn't. Melee
-  abilities (SPIN, BASH, NOVA, the lunge) already didn't (moba.melee_towers runs only for a basic swing).
+- Basic attacks only (siege_sim.gd, the projectile's impact): a shot hurts a tower only if it's a basic attack (the
+  shot's "basic", set when it's loosed). An ability's arrows, bolts and balls (the Archer's VOLLEY, the Ranger's PIERCE
+  and DEADEYE) no longer chip towers; the W / E spells already didn't. Melee abilities (SPIN, BASH, NOVA, the lunge)
+  already didn't (moba.melee_towers runs only for a basic swing).
+- The Kings the other way -- Kevin: "Kings should still get damaged by any ability": every ability that reaches the
+  enemy King now hurts him (once he's open: his towers down, as before). moba.gd king_in_reach / ability_king: the
+  ability's own shape (a circle, a cone, a line) with his body KING_R. Wired into: any projectile striking him (basic,
+  ability or W / E spell: SNARE, BOULDER...), an ability's blast beside him; the ability swings (SPIN, BASH, NOVA, the
+  Rogue's lunge); the Berserker's WHIRLWIND; the Crusader's hammer (once each way); meteors and the Archmage's storm
+  (and their burn, half a second at a time); ARROW RAIN, INFERNO, JUDGMENT; the kits' FAN OF KNIVES, QUAKE, SWEEP,
+  IMPALE, GUST, BUCKSHOT, the keg / pillar / roots bursts, the lasting zones' ticks, THUNDERSTORM (the King under it
+  struck as a hero would be), the dashes on the way and their landings. Spells aimed at one unit (SHADOW STEP,
+  EXECUTE, CHAIN, QUICKDRAW, FLURRY, CHALLENGE, a trap, poison) stay on units.
 - From inside its range only (moba.gd hit_tower, given where the hit came from: the swinger, or where the shot was
   loosed): the tower must be able to shoot you -- TOWER_RANGE 11.5 m to your edge, as the tower picks its target
   (in_tower_range). From outside it does nothing, and your screen says "Too far -- step into the tower's range to hurt
@@ -5576,10 +5585,12 @@ towers and that they only damage while inside the towers damage range".
   in: _hit_structure stands them inside the range (TOWER_RANGE - 0.6) before they swing or shoot.
 - The sim's fingerprint changes (abilities and long shots no longer hurt towers; the bots close in): seed 3
   37bc8d3327338461, seed 17 544d78d3d9215137.
-- Tests: tower_rules_test (new, in the suite; it fails on 0.31.178's code): VOLLEY, SPIN and PIERCE leave an open tower
-  whole while a basic shot and a swing hurt it; the King the same; a Musketeer's ball from 12.3 m does nothing with
+- Tests: tower_rules_test (new, in the suite; it fails on 0.31.178's code): VOLLEY, SPIN, PIERCE and QUAKE leave an
+  open tower whole while a basic shot and a swing hurt it; the open King hurt by VOLLEY, a basic shot, SPIN, QUAKE,
+  BOULDER, INFERNO, the storm, a keg, FAN OF KNIVES and the Duelist's lunge, and not by QUAKE while his towers stand;
+  a Musketeer's ball from 12.3 m does nothing with
   "too far" on his screen only, from 9 m it lands; the aim; a Musketeer bot sent from 12 m closes to 10.8 m and
   shoots; a bots' 5v5 still has 7 towers down at 10:00. moba_test, moba_lol_test, moba_more_test, five_only_test,
-  names_aim_test, hud_top_test, moba_ui_test and tower_look_test pass.
+  moba_kits_test, hammer_test, upgrades_test, names_aim_test, hud_top_test, moba_ui_test and tower_look_test pass.
 - Version 0.31.179, versionCode 265, SERVER_BUILD 0.31.179 (a server redeploy brings the rules online: the server's sim
   decides a hit).

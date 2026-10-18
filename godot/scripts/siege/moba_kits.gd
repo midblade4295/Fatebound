@@ -315,6 +315,7 @@ func _cast(u: Dictionary, k: Dictionary, ev: Dictionary) -> bool:
 					s._damage(u, o, dmg * float(k.dmg))
 					_slow(o, float(k.slow), float(k.dur))
 					n += 1
+			n += m.ability_king(u, dmg * float(k.dmg), u.pos, float(k.r), d, cos(float(k.arc)))
 			ev["dir"] = d
 			ev["r"] = float(k.r)
 			ev["n"] = n
@@ -412,6 +413,7 @@ func _cast(u: Dictionary, k: Dictionary, ev: Dictionary) -> bool:
 				s._damage(u, o, dmg * float(k.dmg))
 				_slow(o, float(k.slow), float(k.dur))
 				n4 += 1
+			n4 += m.ability_king(u, dmg * float(k.dmg), u.pos, float(k.r))
 			ev["r"] = float(k.r)
 			ev["n"] = n4
 		"sweep":
@@ -425,6 +427,7 @@ func _cast(u: Dictionary, k: Dictionary, ev: Dictionary) -> bool:
 						heroes_hit += 1
 			if heroes_hit > 0:
 				s._heal(u, u, mhp * float(k.heal) * float(heroes_hit))
+			m.ability_king(u, dmg * float(k.dmg), u.pos, float(k.r), d3, cos(float(k.arc)))
 			ev["dir"] = d3
 			ev["r"] = float(k.r)
 		"impale":
@@ -440,6 +443,7 @@ func _cast(u: Dictionary, k: Dictionary, ev: Dictionary) -> bool:
 					s._knockback(o, -d4 * minf(float(k.pull), maxf(0.0, along - 1.3)))
 				_slow(o, float(k.slow), float(k.dur))
 				hit_n += 1
+			hit_n += m.ability_king(u, dmg * float(k.dmg), u.pos, float(k.len), d4, -2.0, float(k.w))
 			ev["dir"] = d4
 			ev["len"] = float(k.len)
 			ev["n"] = hit_n
@@ -508,6 +512,7 @@ func _cast(u: Dictionary, k: Dictionary, ev: Dictionary) -> bool:
 					if s.alive(o) and not o.has("mon"):
 						s._knockback(o, (off6.normalized() if off6.length() > 0.1 else d6) * float(k.push))
 					_slow(o, float(k.slow), float(k.dur))
+			m.ability_king(u, dmg * float(k.dmg), u.pos, float(k.r), d6, cos(float(k.arc)))
 			ev["dir"] = d6
 			ev["r"] = float(k.r)
 		"buckshot":
@@ -519,6 +524,7 @@ func _cast(u: Dictionary, k: Dictionary, ev: Dictionary) -> bool:
 					s._damage(u, o, dmg * float(k.dmg) * lerpf(1.0, float(k.close), close))
 					if s.alive(o) and not o.has("mon"):
 						s._knockback(o, (off7.normalized() if off7.length() > 0.1 else d7) * float(k.push))
+			m.ability_king(u, dmg * float(k.dmg), u.pos, float(k.r), d7, cos(float(k.arc)))
 			ev["dir"] = d7
 			ev["r"] = float(k.r)
 		"keg":
@@ -733,6 +739,8 @@ func step(dt: float) -> void:
 					var away: Vector2 = (o.pos as Vector2) - (z.at as Vector2)
 					s._knockback(o, (away.normalized() if away.length() > 0.1 else Vector2.from_angle(s.rng.randf() * TAU)) \
 						* float(z.push) * (1.0 - 0.5 * clampf(away.length() / float(z.r), 0.0, 1.0)))
+			if float(z.get("dmg", 0.0)) > 0.0:
+				m.ability_king(owner, float(z.dmg), z.at, float(z.r))       # (0.31.179: abilities hurt the King)
 			# (the fire pillar's own event; 0.31.168: the Musketeer's keg and the Druid's roots a "burst")
 			if str(z.spell) == "pillar":
 				s._event("pillar", {"c":z.at, "r":float(z.r), "team":int(z.team)})
@@ -753,9 +761,15 @@ func step(dt: float) -> void:
 					if pick.is_empty() or (bool(o.get("hero", false)) and not bool(pick.get("hero", false))) \
 							or (bool(o.get("hero", false)) == bool(pick.get("hero", false)) and s.rng.randf() < 0.5):
 						pick = o
-				var spot: Vector2 = pick.pos if not pick.is_empty() else (z.at as Vector2) + Vector2.from_angle(s.rng.randf() * TAU) \
-					* sqrt(s.rng.randf()) * float(z.r)
-				if not pick.is_empty():
+				# (0.31.179: the enemy King under it counts as a hero)
+				var kt: int = m.king_in_reach(owner, z.at, float(z.r)) if (pick.is_empty() or not bool(pick.get("hero", false))) else -1
+				if kt >= 0:
+					pick = {}
+				var spot: Vector2 = m.king_pos(kt) if kt >= 0 else (pick.pos if not pick.is_empty() else (z.at as Vector2) + Vector2.from_angle(s.rng.randf() * TAU) \
+					* sqrt(s.rng.randf()) * float(z.r))
+				if kt >= 0:
+					m.hit_king(owner, kt, float(z.strike.dmg))
+				elif not pick.is_empty():
 					s._damage(owner, pick, float(z.strike.dmg), float(z.strike.stun))
 				s._event("zap", {"c":spot, "team":int(z.team), "id":str(pick.get("id", ""))})
 			continue
@@ -772,6 +786,8 @@ func step(dt: float) -> void:
 					_slow(o, float(z.slow), ZONE_EVERY + 0.15)
 			elif float(z.get("heal", 0.0)) > 0.0 and (bool(o.get("hero", false)) or bool(o.get("minion", false))):
 				s._heal(owner, o, float(o.max_hp) * float(z.heal))
+		if float(z.get("dmg", 0.0)) > 0.0:
+			m.ability_king(owner, float(z.dmg), z.at, float(z.r))          # (0.31.179: the King in it)
 	for i in range(traps.size() - 1, -1, -1):
 		var tr: Dictionary = traps[i]
 		if s.time >= float(tr.until):
@@ -871,6 +887,12 @@ func step_dash(u: Dictionary, dt: float) -> void:
 			if bool(dd.get("first", false)):
 				dd.left = 0.0                      # (SHIELD BASH stops on the first)
 				break
+		if not (dd.hits as Array).has("king") and float(dd.left) > 0.0 \
+				and m.king_in_reach(u, u.pos, s.UNIT_R + 0.35) >= 0:
+			(dd.hits as Array).append("king")       # (0.31.179: the King on the way, once)
+			m.ability_king(u, float(dd.dmg), u.pos, s.UNIT_R + 0.35)
+			if bool(dd.get("first", false)):
+				dd.left = 0.0
 	if float(dd.left) <= 0.001 or u.t <= 0.0:
 		var land: Dictionary = dd.get("land", {})
 		if not land.is_empty():
@@ -878,6 +900,7 @@ func step_dash(u: Dictionary, dt: float) -> void:
 				s._next_push = s._push_from(u.pos, o.pos, 5.0, 2.6)
 				s._damage(u, o, float(land.dmg), float(land.get("stun", 0.0)))
 				_slow(o, float(land.get("slow", 0.0)), float(land.get("dur", 1.0)))
+			m.ability_king(u, float(land.dmg), u.pos, float(land.r))
 			s._event("slam", {"id":u.id, "pos":u.pos, "r":float(land.r)})
 		u.erase("dash")
 		u.state = "recover"

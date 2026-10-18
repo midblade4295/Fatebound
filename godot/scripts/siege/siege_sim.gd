@@ -705,6 +705,8 @@ func _step_whirl(u: Dictionary, dt: float) -> void:
 	for o in units:
 		if o.team != u.team and alive(o) and o.pos.distance_to(u.pos) <= WHIRL_R:
 			_damage(u, o, dmg)
+	if moba != null:
+		moba.ability_king(u, dmg, u.pos, WHIRL_R)                # (0.31.179: abilities hurt the King)
 	for g in gates:
 		if g.team != u.team and gate_blocks(g) and u.pos.distance_to(seg_closest(u.pos, g.a, g.b)) <= WHIRL_R:
 			_damage_gate(u, g, dmg * float(CLASSES[u.cls].gate))
@@ -897,7 +899,9 @@ func _melee(u: Dictionary, reach: float, arc: float, dmg: float, stun := 0.0) ->
 		_damage_gate(u, g, dmg * float(CLASSES[u.cls].gate))
 		hits += 1
 	if moba != null and str(u.get("atk", "")) == "attack":
-		hits += moba.melee_towers(u, reach, arc, dmg)    # 0.31.155: basic attacks hit towers
+		hits += moba.melee_towers(u, reach, arc, dmg)    # 0.31.155: basic attacks hit towers (and the King)
+	elif moba != null:
+		hits += moba.ability_king(u, dmg, u.pos, reach + 0.3, fwd, arc - 0.3)      # 0.31.179: an ability's swing, the King only
 	return hits
 
 func _shoot(u: Dictionary, angle: float, dmg: float, aoe: float, speed: float, reach: float) -> void:
@@ -1417,8 +1421,10 @@ func _step_projectiles(dt: float) -> void:
 		var basic_p: bool = bool(p.get("basic", false)) and not spell_p
 		if hit_tw >= 0 and moba != null and hit.is_empty() and basic_p:
 			moba.hit_tower(owner, hit_tw, float(p.dmg), p.get("from", owner.get("pos", Vector2.INF)))
-		if hit_kg >= 0 and moba != null and hit.is_empty() and basic_p:
-			moba.hit_king(owner, hit_kg, float(p.dmg))
+		if hit_kg >= 0 and moba != null and hit.is_empty():
+			moba.hit_king(owner, hit_kg, float(p.dmg))             # (0.31.179, Kevin: "Kings should still get damaged by any ability")
+		elif moba != null and not basic_p and float(p.aoe) > 0.0:
+			moba.ability_king(owner, float(p.dmg) * 0.6, p.pos, float(p.aoe))       # (an ability's blast beside him)
 		_basic_by = str(p.owner) if bool(p.get("basic", false)) else ""
 		if p.aoe > 0.0:
 			if not hit.is_empty():
@@ -1706,6 +1712,9 @@ func _step_hammer(p: Dictionary, dt: float, tunit: Array) -> bool:
 			(p.hit as Array).append(o.id)
 			_next_push = _push_along(p.vel, 4.6, 2.2)      # a hammer kill throws him the way it was going
 			_damage(owner, o, float(p.dmg))
+	if moba != null and not (p.hit as Array).has("king") and moba.king_in_reach(owner, p.pos, HAMMER_HIT_R) >= 0:
+		(p.hit as Array).append("king")                # 0.31.179: the King too, once each way
+		moba.ability_king(owner, float(p.dmg), p.pos, HAMMER_HIT_R)
 	return false
 
 # ---------- the High Priest's Resurrection (0.31.1, Kevin) ----------
@@ -1922,6 +1931,11 @@ func _step_meteors(dt: float) -> void:
 				if d <= METEOR_R:
 					_next_push = _push_from(m.at, o.pos, 4.6, 3.8)
 					_damage(owner if not owner.is_empty() else {"team":int(m.team), "id":""}, o, float(m.dmg) * (1.0 - 0.5 * d / METEOR_R), 0.4)
+			if moba != null:                           # (0.31.179: the King under it)
+				var kt: int = moba.king_in_reach({"team":int(m.team)}, m.at, METEOR_R)
+				if kt >= 0:
+					var kd := maxf(0.0, moba.king_pos(kt).distance_to(m.at) - moba.KING_R)
+					moba.hit_king(owner if not owner.is_empty() else {"team":int(m.team), "id":""}, kt, float(m.dmg) * (1.0 - 0.5 * minf(1.0, kd / METEOR_R)))
 			m.burn_until = time + METEOR_BURN
 			_event("meteor_hit", {"team":int(m.team), "pos":m.at, "burn":METEOR_BURN})
 			continue
@@ -1934,6 +1948,11 @@ func _step_meteors(dt: float) -> void:
 				if o.hp <= 0.0:
 					o.hp = 0.1
 					_damage(owner if not owner.is_empty() else {"team":int(m.team), "id":""}, o, 1.0)
+		if moba != null and moba.king_in_reach({"team":int(m.team)}, m.at, METEOR_R * 0.8) >= 0:
+			m["kburn"] = float(m.get("kburn", 0.0)) + BURN_DPS * dt         # (0.31.179: the King burns too, half a second at a time)
+			if float(m.kburn) >= BURN_DPS * 0.5:
+				moba.ability_king(owner if not owner.is_empty() else {"team":int(m.team), "id":""}, float(m.kburn), m.at, METEOR_R * 0.8)
+				m.kburn = 0.0
 
 # Bots: when to use them (called from _fight).
 func _bot_upgrade_ability(u: Dictionary, foe: Dictionary) -> bool:

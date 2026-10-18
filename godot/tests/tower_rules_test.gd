@@ -1,8 +1,11 @@
 extends SceneTree
 # 0.31.179 (Kevin: "make sure only basic attacks damage towers and that they only damage while inside the towers damage
 # range"):
-#  - basic attacks only: an Archer's VOLLEY, a Barbarian's SPIN, a Ranger's PIERCE into an open tower leave it whole
-#    (the King too); his basic shot and the Barbarian's swing hurt it;
+#  - basic attacks only: an Archer's VOLLEY, a Barbarian's SPIN, a Ranger's PIERCE, a Golem's QUAKE at an open tower
+#    leave it whole; his basic shot and the Barbarian's swing hurt it;
+#  - the King, though, any ability (Kevin: "Kings should still get damaged by any ability"): VOLLEY, SPIN, QUAKE,
+#    BOULDER, INFERNO, the Archmage's storm, a powder keg, a fan of knives, a Duelist's lunge -- not while his towers
+#    stand;
 #  - from inside its range only (where it would shoot you: TOWER_RANGE to your edge): a Musketeer's ball from 12.3 m
 #    does nothing -- "too far" on his screen, not on another's -- and from 9 m it lands;
 #  - a player's attack doesn't turn to a tower he can't hurt from where he stands;
@@ -46,6 +49,40 @@ static func _at_tower(s, me: Dictionary, dist: float) -> Dictionary:
 	_clear(s, me)
 	return tw
 
+# you `dist` m from red's King, facing him, at level 18 (every spell and the ultimate), his towers down if `open`
+static func _king_case(hero: String, seed_v: int, dist: float, open: bool) -> Dictionary:
+	var s = _fresh(hero, seed_v)
+	var me: Dictionary = s.by_id["you"]
+	me.level = 18
+	if open:
+		for t2 in s.moba.towers:
+			if int(t2.team) == 1 and int(t2.tier) == 4:
+				t2.dead = true
+	var kp: Vector2 = s.moba.king_pos(1)
+	var side := 1.0 if kp.y < 0.0 else -1.0
+	me.pos = kp + Vector2(0, side) * dist
+	me.face = Sim.angle_of(kp - (me.pos as Vector2))
+	me.move = Vector2.ZERO
+	_clear(s, me)
+	return {"s": s, "me": me}
+
+static func _cast(s, me: Dictionary, what: String) -> void:
+	match what:
+		"spin":
+			me.cd_ability = 0.0
+			s._start_attack(me, "ability", false)
+		"inferno", "storm":
+			me.ult_cd = 0.0
+			s.moba.ult(me)
+		"quake":
+			s.moba.kits.spell(me, "e")
+		"boulder", "buckshot", "thrust":
+			s.moba.kits.spell(me, "q")
+		"keg":
+			s.moba.kits.spell(me, "w")
+		"knives":
+			s.moba.kits.spell(me, "e")
+
 static func _run(s, n: int, me: Dictionary, hold := true) -> Array:
 	var evs := []
 	for i in n:
@@ -88,26 +125,41 @@ func _init() -> void:
 	s._pierce_shot(me, float(s.stat(me, "dmg")))
 	_run(s, 60, me)
 	check(float(tw.hp) == hp0, "a Ranger's PIERCE through it: whole")
-	# the King: open, a VOLLEY does nothing, a basic shot hurts him
-	s = _fresh("ranger", 64)
+	# a golem's QUAKE beside an open tower: whole
+	s = _fresh("golem", 70)
 	me = s.by_id["you"]
-	for t2 in s.moba.towers:
-		if int(t2.team) == 1 and int(t2.tier) == 4:
-			t2.dead = true
-	var kp: Vector2 = s.moba.king_pos(1)
-	var side := 1.0 if kp.y < 0.0 else -1.0
-	me.pos = kp + Vector2(0, side) * 6.0
-	me.face = Sim.angle_of(kp - (me.pos as Vector2))
-	_clear(s, me)
+	me.level = 18
+	tw = _at_tower(s, me, Moba.TOWER_R + 1.0)
+	hp0 = float(tw.hp)
+	check(s.moba.kits.spell(me, "e"), "a Golem's QUAKE beside it")
+	_run(s, 10, me)
+	check(float(tw.hp) == hp0, "...it stands whole")
+	# ---- the Kings: any ability (0.31.179, Kevin: "Kings should still get damaged by any ability")
+	var k := _king_case("ranger", 71, 6.0, true)
+	k.me.cd_ability = 0.0
+	s = k.s
 	var k0 := float(s.moba.kings[1].hp)
-	me.cd_ability = 0.0
-	s._start_attack(me, "ability", false)
-	_run(s, 50, me)
+	s._start_attack(k.me, "ability", false)
+	_run(s, 50, k.me)
 	var k1 := float(s.moba.kings[1].hp)
-	s._start_attack(me, "attack", false)
-	_run(s, 50, me)
+	s._start_attack(k.me, "attack", false)
+	_run(s, 50, k.me)
 	var k2 := float(s.moba.kings[1].hp)
-	check(k1 == k0 and k2 < k1, "the King: a VOLLEY nothing, a basic shot hurts him (%.0f, %.0f, %.0f)" % [k0, k1, k2])
+	check(k1 < k0 and k2 < k1, "the King: an Archer's VOLLEY hurts him, and a basic shot (%.0f, %.0f, %.0f)" % [k0, k1, k2])
+	for c in [["barbarian", "spin", 2.2], ["golem", "quake", 2.4], ["golem", "boulder", 7.0], ["mage", "inferno", 2.5],
+			["archmage", "storm", 6.0], ["musketeer", "keg", 6.0], ["assassin", "knives", 2.6], ["duelist", "thrust", 3.0]]:
+		k = _king_case(str(c[0]), 72, float(c[2]), true)
+		s = k.s
+		k0 = float(s.moba.kings[1].hp)
+		_cast(s, k.me, str(c[1]))
+		_run(s, 120, k.me)
+		check(float(s.moba.kings[1].hp) < k0, "...%s %s's %s (%.0f -> %.0f)" % ["an" if "aeiou".contains(str(c[0]).left(1)) else "a", str(c[0]), str(c[1]).to_upper(), k0, float(s.moba.kings[1].hp)])
+	k = _king_case("golem", 73, 2.4, false)
+	s = k.s
+	k0 = float(s.moba.kings[1].hp)
+	_cast(s, k.me, "quake")
+	_run(s, 20, k.me)
+	check(float(s.moba.kings[1].hp) == k0, "a QUAKE at him while his towers stand: nothing (he's guarded)")
 	# ---- from inside its range only
 	s = _fresh("musketeer", 65)
 	me = s.by_id["you"]

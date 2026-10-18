@@ -1211,6 +1211,40 @@ func hit_king(src: Dictionary, t: int, amount: float) -> void:
 		s._event("king_down", {"team":t, "by":str(src.get("id", ""))})
 		s._finish("king")
 
+# 0.31.179 (Kevin: "Kings should still get damaged by any ability"): an ability's reach taking in the enemy King hurts
+# him (towers take basic attacks only). The shapes as the abilities' own: a circle round `at` (r), a cone (d, cos_arc:
+# the cosine of its half angle, as siege_sim._melee's), a line from `at` along d (r long, width either side); his body
+# KING_R counts.
+func king_in_reach(src: Dictionary, at: Vector2, r: float, d := Vector2.ZERO, cos_arc := -2.0, width := -1.0) -> int:
+	var st := int(src.get("team", -1))
+	if st < 0 or st > 1:
+		return -1
+	var t := 1 - st
+	if bool(kings[t].dead):
+		return -1
+	var off: Vector2 = king_pos(t) - at
+	var dist := off.length()
+	if width >= 0.0:
+		var along := off.dot(d)
+		if along < -KING_R or along > r + KING_R or absf(off.cross(d)) > width + KING_R:
+			return -1
+		return t
+	if dist > r + KING_R:
+		return -1
+	if cos_arc > -1.0 and dist > KING_R + 0.8 and d != Vector2.ZERO:
+		var half := acos(clampf(cos_arc, -1.0, 1.0)) + asin(clampf(KING_R / dist, 0.0, 1.0))
+		if absf(d.angle_to(off)) > half:
+			return -1
+	return t
+
+func ability_king(src: Dictionary, amount: float, at: Vector2, r: float, d := Vector2.ZERO, cos_arc := -2.0, width := -1.0) -> int:
+	# hurt the enemy King if he's in this ability's reach: 1 if he was, else 0
+	var t := king_in_reach(src, at, r, d, cos_arc, width)
+	if t < 0:
+		return 0
+	hit_king(src, t, amount)
+	return 1
+
 func _step_kings(dt: float) -> void:
 	for t in 2:
 		var k: Dictionary = kings[t]
@@ -1733,6 +1767,7 @@ func ult(u: Dictionary) -> bool:
 			for o in _enemies_in(u, u.pos, INFERNO_R):
 				s._next_push = s._push_from(u.pos, o.pos, 6.0, 3.0)
 				s._damage(u, o, dmg * INFERNO_DMG * k, INFERNO_STUN)
+			ability_king(u, dmg * INFERNO_DMG * k, u.pos, INFERNO_R)
 			ev["r"] = INFERNO_R
 		"priest":
 			var ids2 := []
@@ -1746,6 +1781,7 @@ func ult(u: Dictionary) -> bool:
 			for o in _enemies_in(u, u.pos, JUDGMENT_R):
 				s._next_push = s._push_from(u.pos, o.pos, 4.0, 2.4)
 				s._damage(u, o, dmg * JUDGMENT_DMG * k, JUDGMENT_STUN)
+			ability_king(u, dmg * JUDGMENT_DMG * k, u.pos, JUDGMENT_R)
 			for o2 in s.units:
 				if int(o2.team) == int(u.team) and s.alive(o2) and (o2.pos as Vector2).distance_to(u.pos) <= JUDGMENT_R:
 					s._heal(u, o2, float(o2.max_hp) * JUDGMENT_HEAL * k)
@@ -1865,6 +1901,7 @@ func _step_rains(_dt: float) -> void:
 		for o in s.units:
 			if int(o.team) != int(r.team) and s.alive(o) and (o.pos as Vector2).distance_to(r.at) <= float(r.r):
 				s._damage(owner, o, float(r.dmg))
+		ability_king(owner, float(r.dmg), r.at, float(r.r))             # (0.31.179: the King under it too)
 		if int(r.left) <= 0:
 			rains.remove_at(i)
 
