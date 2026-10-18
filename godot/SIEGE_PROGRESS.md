@@ -5491,3 +5491,10 @@ quick peek) -> his picks: "A: Full board", "Tap the score bar".
   snapshot to a phone's mirror; the bar tapped: the board under it, ten rows, your side first, every row as the sim
   has it (level, K / D / A, CS, items, gold), the strips, a downed hero's timer, live while open, closing three ways.
 - Version 0.31.176, versionCode 262, SERVER_BUILD 0.31.176.
+- Checks: the quick suite 87 passed (live_board_test and net_mirror_test among them) + two real-time tests that failed
+  in the suite run and passed alone: online_five_test (Alice's 2 s walk: 0.0 m -- the same flake as in 0.31.173's run;
+  2 of the last 4 suite runs: worth a look) and analytics_events_test ("the purchase was granted (SIEGE_IAP_FAKE)",
+  first seen); COLD_START_PASS; the Play AAB (throwaway key, presets untouched): BASE OK (265 files), CONTENT OK,
+  play_games true, bundletool valid; content_packs check OK (no pack changed); the sim's fingerprint as 0.31.175 (seed 3
+  97e30cea900b6b37, seed 17 e7fc16691408f976). Preview APK: build/Fatebound-Siege-0.31.176-fatebound.apk (32 MB,
+  preview key), sha256 f69bc13e...774a2eb168.
