@@ -5171,3 +5171,6 @@ above).
 - Credits: ElevenLabs ~2,518 (six concept sheets) + ~3,894 (six turnarounds) + ~502 (props sheet); Meshy 210 (bodies)
   + 120 (props), 9 left.
 - Version 0.31.168, versionCode 254, SERVER_BUILD 0.31.168.
+- Quick suite: all passed (82). tools/cold_start_check.sh: PASS. The Play AAB (throwaway key, presets untouched): BASE OK
+  (273 files), CONTENT OK, play_games true, bundletool valid. Preview APK:
+  build/Fatebound-Siege-0.31.168-fatebound.apk (preview key; sha256 60ea3f16...ce7198).
