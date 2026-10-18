@@ -10,18 +10,6 @@
 
 "res://assets/kaykit/anim/Rig_Medium_MovementBasic.glb",
 
-"res://assets/kaykit/forest/Bush_1_A_Color1.gltf",
-
-"res://assets/kaykit/forest/Bush_1_B_Color1.gltf",
-
-"res://assets/kaykit/forest/Bush_1_C_Color1.gltf",
-
-"res://assets/kaykit/forest/Bush_2_A_Color1.gltf",
-
-"res://assets/kaykit/forest/Bush_2_B_Color1.gltf",
-
-"res://assets/kaykit/forest/Bush_2_C_Color1.gltf",
-
 "res://assets/kaykit/forest/Grass_1_A_Color1.gltf",
 
 "res://assets/kaykit/forest/Grass_2_A_Color1.gltf",
@@ -37,18 +25,6 @@
 "res://assets/kaykit/forest/Rock_1_E_Color1.gltf",
 
 "res://assets/kaykit/forest/Rock_1_F_Color1.gltf",
-
-"res://assets/kaykit/forest/Tree_1_A_Color1.gltf",
-
-"res://assets/kaykit/forest/Tree_1_B_Color1.gltf",
-
-"res://assets/kaykit/forest/Tree_2_A_Color1.gltf",
-
-"res://assets/kaykit/forest/Tree_2_B_Color1.gltf",
-
-"res://assets/kaykit/forest/Tree_3_A_Color1.gltf",
-
-"res://assets/kaykit/forest/Tree_4_A_Color1.gltf",
 
 "res://assets/kaykit/heroes/Skeleton_Mage.glb",
 
@@ -201,6 +177,68 @@
 "res://assets/meshy/duelist/anims_r.res",
 
 "res://assets/meshy/duelist/rigged.glb",
+
+"res://assets/meshy/foliage/bush_berry.glb",
+
+"res://assets/meshy/foliage/bush_broadleaf.glb",
+
+"res://assets/meshy/foliage/bush_fern.glb",
+
+"res://assets/meshy/foliage/bush_flower.glb",
+
+"res://assets/meshy/foliage/bush_round.glb",
+
+"res://assets/meshy/foliage/grass_glow.glb",
+
+"res://assets/meshy/foliage/grass_glow_glow.png",
+
+"res://assets/meshy/foliage/grass_reeds.glb",
+
+"res://assets/meshy/foliage/grass_tall.glb",
+
+"res://assets/meshy/foliage/tree_autumn.glb",
+
+"res://assets/meshy/foliage/tree_autumn_far.glb",
+
+"res://assets/meshy/foliage/tree_autumn_shadow.glb",
+
+"res://assets/meshy/foliage/tree_birch.glb",
+
+"res://assets/meshy/foliage/tree_birch_far.glb",
+
+"res://assets/meshy/foliage/tree_birch_shadow.glb",
+
+"res://assets/meshy/foliage/tree_blossom.glb",
+
+"res://assets/meshy/foliage/tree_blossom_shadow.glb",
+
+"res://assets/meshy/foliage/tree_fir.glb",
+
+"res://assets/meshy/foliage/tree_fir_far.glb",
+
+"res://assets/meshy/foliage/tree_fir_shadow.glb",
+
+"res://assets/meshy/foliage/tree_glow.glb",
+
+"res://assets/meshy/foliage/tree_glow_glow.png",
+
+"res://assets/meshy/foliage/tree_glow_shadow.glb",
+
+"res://assets/meshy/foliage/tree_gnarled.glb",
+
+"res://assets/meshy/foliage/tree_gnarled_shadow.glb",
+
+"res://assets/meshy/foliage/tree_mossy.glb",
+
+"res://assets/meshy/foliage/tree_mossy_far.glb",
+
+"res://assets/meshy/foliage/tree_mossy_shadow.glb",
+
+"res://assets/meshy/foliage/tree_oak.glb",
+
+"res://assets/meshy/foliage/tree_oak_far.glb",
+
+"res://assets/meshy/foliage/tree_oak_shadow.glb",
 
 "res://assets/meshy/golem/anims_g.res",
 

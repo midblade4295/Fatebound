@@ -13,6 +13,8 @@ Pipeline per piece (a sword, a shield, a staff ...):
   crop  SHEET OUTDIR name1 name2 ...      pieces in reading order (rows top to bottom, left to right)
   model PNG NAME WORKDIR [--ai meshy-6-lite|meshy-6|meshy-7.1] [--poly N]
   wait  WORKDIR NAME                      poll until done, download NAME.glb + NAME_thumb.png
+  remesh SRC_WORKDIR NAME WORKDIR --poly N   (0.31.173) Meshy's remesh of a finished image-to-3D task (SRC_WORKDIR's
+        NAME.task) to N triangles -- the same model, lighter; then wait WORKDIR NAME as for a model
   fit   IN.glb TEMPLATE OUT.glb KIND [--len F] [--tex N] [--axes X,Y,Z]
         KIND sword|blade|pole (length on +Y, grip at the template's) | shield|handheld (face area, face +Z) |
         box (longest side, centred); TEMPLATE a KayKit .gltf; --len scales the size vs the template;
@@ -134,11 +136,21 @@ def model(png, name, workdir, ai="meshy-6-lite", poly=4000):
     print(name, "task", r["result"], ai, poly)
 
 
+def remesh(src_workdir, name, workdir, poly):
+    os.makedirs(workdir, exist_ok=True)
+    src = json.load(open(os.path.join(src_workdir, name + ".task")))
+    r = req("POST", "/remesh", {"input_task_id": src["id"], "target_formats": ["glb"], "topology": "triangle",
+                                "target_polycount": int(poly)})
+    open(os.path.join(workdir, name + ".task"), "w").write(json.dumps({"id": r["result"], "kind": "remesh", "from": src["id"],
+                                                                       "poly": poly}))
+    print(name, "remesh task", r["result"], poly)
+
+
 def wait(workdir, name, timeout=900):
     t = json.load(open(os.path.join(workdir, name + ".task")))
     t0 = time.time()
     while True:
-        s = req("GET", "/image-to-3d/" + t["id"])
+        s = req("GET", ("/remesh/" if t.get("kind") == "remesh" else "/image-to-3d/") + t["id"])
         if s["status"] in ("SUCCEEDED", "FAILED", "CANCELED"):
             break
         if time.time() - t0 > timeout:
@@ -335,6 +347,8 @@ def main():
         model(pos[0], pos[1], pos[2], opt.get("ai", "meshy-6-lite"), int(opt.get("poly", 4000)))
     elif cmd == "wait":
         wait(pos[0], pos[1])
+    elif cmd == "remesh":
+        remesh(pos[0], pos[1], pos[2], int(opt.get("poly", 3000)))
     elif cmd == "fit":
         fit(pos[0], pos[1], pos[2], pos[3], float(opt.get("len", 1.0)), int(opt.get("tex", 512)), opt.get("axes", "X,Y,Z"),
             opt.get("grip", "1") != "0")

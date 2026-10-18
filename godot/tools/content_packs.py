@@ -53,7 +53,7 @@ NEW_HEROES = ["dragoon", "druid", "duelist", "golem", "musketeer", "stormcaller"
 PACKS = [
     ("ui", ["assets/ui/*"]),
     ("world", ["assets/meshy/castle/*", "assets/kaykit/*", "assets/kings/*", "assets/terrain/*", "assets/props/*",
-               "assets/meshy/towers/*"]),                             # 0.31.172: the 5v5's towers
+               "assets/meshy/towers/*", "assets/meshy/foliage/*"]),   # 0.31.172: the 5v5's towers; 0.31.173: trees, bushes
                                                                       # (0.31.169: Siege's hat shops, workshop and
                                                                       # outposts went with it)
     ("heroes", ["assets/meshy/%s/*" % b for b in BODIES]),

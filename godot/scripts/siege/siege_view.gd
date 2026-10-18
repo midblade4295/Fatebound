@@ -12,6 +12,7 @@ const DIRT_TEX := preload("res://assets/terrain/dirt.png")       # 0.31.126: the
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 const WeaponFx = preload("res://scripts/siege/weapon_fx.gd")
 const WyrmBody = preload("res://scripts/siege/wyrm_body.gd")   # 0.31.166: the Grave Wyrm (a body without a rig)
+const Foliage = preload("res://scripts/siege/foliage.gd")      # 0.31.173: the Meshy trees and bushes
 const Towers = preload("res://scripts/siege/towers.gd")        # 0.31.172: the 5v5's towers (Meshy, breaking as they're hurt)
 signal tower_broke(at: Vector3, stage: int)                    # (siege_mode plays the crumble)
 
@@ -984,7 +985,8 @@ static func _terrain_material() -> ShaderMaterial:
 static var _outer_meshes: Array = []
 static var _outer_mat: ShaderMaterial = null
 const OUTER_RINGS := [-1.0, 0.0, 2.0, 5.0, 9.0, 14.0, 21.0, 30.0, 42.0, 58.0, 80.0, 110.0, 150.0, 200.0, 260.0]
-const OUTER_TREES := ["Tree_1_A_Color1", "Tree_2_A_Color1", "Tree_4_A_Color1"]
+# (0.31.173: the outer woods are Foliage.OUTER_TREES -- the light *_far copies of the Meshy trees; were KayKit's
+# Tree_1_A / 2_A / 4_A)
 
 static func _outer_side_points(side: int) -> Array:
 	# Points along one side of the baked rect, with their outward directions; each side also owns
@@ -1098,10 +1100,10 @@ static func _plan_outer_trees() -> Dictionary:
 			+ absf(Land.outer_height(p + Vector2(0, 1)) - Land.outer_height(p - Vector2(0, 1)))
 		if h > 22.0 or slope > 1.4 or p.distance_to(q) < 1.5:
 			continue
-		var t := rng.randi() % OUTER_TREES.size()
+		var kind := Foliage.pick(rng, Foliage.OUTER_TREES) + "_far"          # (0.31.173: was one of three KayKit trees)
 		var sc := rng.randf_range(0.6, 1.0)
 		var xf := Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3.ONE * sc), Vector3(p.x, h - 0.1, p.y))
-		var key := "%d:%d" % [side, t]
+		var key := "%d:%s" % [side, kind]
 		if not per.has(key):
 			per[key] = []
 		(per[key] as Array).append(xf)
@@ -1109,29 +1111,18 @@ static func _plan_outer_trees() -> Dictionary:
 	return per
 
 func _build_outer_trees() -> void:
-	# One MultiMesh per side and tree type, so a side off-screen costs nothing.
+	# The woods beyond the field: the light *_far trees, one MultiMesh per kind and 24 m square (0.31.173: was one per
+	# side and kind -- a whole side drawn when any of it was on screen).
 	if _outer_trees.is_empty():
 		_outer_trees = _plan_outer_trees()
+	var per := {}
 	for key in _outer_trees:
-		var t := int(str(key).split(":")[1])
-		var packed := Stage.scene(FOREST + OUTER_TREES[t] + ".gltf")
-		if packed == null:
-			continue
-		var node: Node3D = packed.instantiate()
-		var src: MeshInstance3D = node.find_children("*", "MeshInstance3D", true, false)[0]
-		var mm := MultiMesh.new()
-		mm.transform_format = MultiMesh.TRANSFORM_3D
-		mm.mesh = src.mesh
-		var list: Array = _outer_trees[key]
-		mm.instance_count = list.size()
-		for i in list.size():
-			mm.set_instance_transform(i, (list[i] as Transform3D) * src.transform)
-		node.free()
-		var mmi := MultiMeshInstance3D.new()
-		mmi.multimesh = mm
-		mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		mmi.set_meta("perf", "outer_trees")
-		add_child(mmi)
+		var kind := str(key).split(":")[1]
+		if not per.has(kind):
+			per[kind] = []
+		(per[kind] as Array).append_array(_outer_trees[key])
+	for kind in per:
+		_plant_batch(kind, per[kind], GeometryInstance3D.SHADOW_CASTING_SETTING_OFF, "outer_trees", 24.0)
 
 static func _make_terrain_meshes() -> Array:
 	# One mesh per 32 m band (tight AABBs -> off-screen bands are culled), vertices every
@@ -1812,7 +1803,7 @@ func _build_edge_scenery() -> void:
 	# the cliff side or in the river's gorge; a few wooded hills further out.
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 21
-	var forest_trees := ["Tree_1_A_Color1","Tree_1_B_Color1","Tree_2_A_Color1","Tree_2_B_Color1","Tree_3_A_Color1"]
+	var per := {}                                   # (0.31.173: the Meshy trees, batched per kind; were KayKit trees, a node each)
 	var loop := Land.edge_loop()
 	for i in loop.size():
 		var a: Vector2 = loop[i]
@@ -1825,8 +1816,14 @@ func _build_edge_scenery() -> void:
 		while t < L:
 			var q := a.lerp(b, t / L) + nrm * rng.randf_range(3.5, 7.5)
 			if absf(q.y - Land.river_c(q.x)) > Land.RIVER_HW + 3.5 and not Land.in_dungeon_pit(q, 2.0):
-				_place(FOREST + forest_trees[rng.randi() % forest_trees.size()] + ".gltf", Vector3(q.x, Land.terrain_height(q), q.y), rng.randf()*TAU, 0.5 + rng.randf()*0.2)
+				var kind := Foliage.pick(rng, Foliage.OUTER_TREES)
+				if not per.has(kind):
+					per[kind] = []
+				(per[kind] as Array).append(Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3.ONE * (0.6 + rng.randf() * 0.25)),
+					Vector3(q.x, Land.terrain_height(q), q.y)))
 			t += rng.randf_range(4.0, 6.5)
+	for kind in per:
+		_plant_batch(kind, per[kind], _cast(), "edge_trees")
 	for p in [Vector3(-Sim.HALF_W - 8, 0.5, -40), Vector3(-Sim.HALF_W - 8, 0.5, 14), Vector3(-Sim.HALF_W - 8, 0.5, -10),
 			Vector3(Sim.HALF_W - 4, 0.5, 64), Vector3(Sim.HALF_W - 4, 0.5, -64), Vector3(0, 0.5, -Sim.HALF_L - 8), Vector3(0, 0.5, Sim.HALF_L + 8)]:
 		_place(HEX + "mountain_A_grass_trees.gltf", Vector3(p.x, Land.terrain_height(Vector2(p.x, p.z)) - 0.3, p.z), rng.randf()*TAU, 1.6)
@@ -2140,7 +2137,6 @@ func _carpet(a: Vector2, b: Vector2, w: float, color: Color) -> void:
 
 const RIDGE_ROCKS := ["Rock_1_D_Color1", "Rock_1_E_Color1", "Rock_1_F_Color1"]
 const RIDGE_SMALL := ["Rock_1_A_Color1", "Rock_1_B_Color1", "Rock_1_C_Color1"]
-const RIDGE_TREES := ["Tree_1_A_Color1", "Tree_1_B_Color1", "Tree_2_A_Color1", "Tree_2_B_Color1", "Tree_3_A_Color1", "Tree_4_A_Color1"]
 static var _ridge_plan: Dictionary = {}       # model -> Array[Transform3D], built once per session
 
 static func _plan_ridges() -> Dictionary:
@@ -2149,7 +2145,7 @@ static func _plan_ridges() -> Dictionary:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 165
 	var out := {}
-	for k in RIDGE_ROCKS + RIDGE_SMALL + RIDGE_TREES + BUSHES:
+	for k in RIDGE_ROCKS + RIDGE_SMALL + Foliage.RIDGE_TREES.keys() + Foliage.RIDGE_BUSHES.keys():
 		out[k] = []
 	for rg in Land.ridges():
 		var pts: Array = rg.pts
@@ -2166,16 +2162,17 @@ static func _plan_ridges() -> Dictionary:
 				var q := a + d * t + nrm * rng.randf_range(-0.35, 0.35) * r
 				var y := Land.terrain_height(q) - 0.15
 				if trees:
-					var s := rng.randf_range(0.72, 0.92)
-					out[RIDGE_TREES[rng.randi() % RIDGE_TREES.size()]].append(
+					# (0.31.173: the Meshy trees and bushes of foliage.gd; were KayKit's)
+					var s := rng.randf_range(0.78, 0.98)
+					out[Foliage.pick(rng, Foliage.RIDGE_TREES)].append(
 						Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3.ONE * s), Vector3(q.x, y, q.y)))
 					for side in [-1.0, 1.0]:
 						if rng.randf() < 0.7:
 							var bq: Vector2 = q + nrm * side * (r + rng.randf_range(-0.2, 0.3)) + d * rng.randf_range(-0.6, 0.6)
-							var bs := rng.randf_range(2.6, 3.6)
-							out[BUSHES[rng.randi() % BUSHES.size()]].append(Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled(
+							var bs := rng.randf_range(1.3, 1.9)
+							out[Foliage.pick(rng, Foliage.RIDGE_BUSHES)].append(Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled(
 								Vector3.ONE * bs), Vector3(bq.x, Land.ground_height(bq, false) - 0.05, bq.y)))
-					t += rng.randf_range(1.6, 2.2)
+					t += rng.randf_range(1.8, 2.4)
 				else:
 					var s2 := (2.0 * r + 0.4) * rng.randf_range(0.95, 1.2)
 					var sy := rng.randf_range(0.75, 1.05)
@@ -2198,6 +2195,10 @@ func _build_ridges() -> void:
 		var xfs: Array = _ridge_plan[kind]
 		if xfs.is_empty():
 			continue
+		if Foliage.is_plant(str(kind)):
+			# (0.31.173) a Meshy tree or bush: trees cast shadows, bushes don't
+			_plant_batch(str(kind), xfs, _cast() if str(kind).begins_with("tree") else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF, "ridges")
+			continue
 		var packed := Stage.scene(FOREST + str(kind) + ".gltf")
 		if packed == null:
 			continue
@@ -2218,11 +2219,59 @@ func _build_ridges() -> void:
 				mm.set_instance_transform(i, (bands[bkey][i] as Transform3D) * src.transform)
 			var mmi := MultiMeshInstance3D.new()
 			mmi.multimesh = mm
-			mmi.cast_shadow = _cast() if not BUSHES.has(kind) else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			mmi.cast_shadow = _cast()
 			mmi.set_meta("perf", "ridges")
 			mmi.set_meta("perf_kind", kind)
 			add_child(mmi)
 		node.free()
+
+const PLANT_CELL := 16.0
+
+func _plant_batch(kind: String, xfs: Array, shadow: GeometryInstance3D.ShadowCastingSetting, perf: String, cell := PLANT_CELL) -> void:
+	# 0.31.173: a Meshy tree or bush (foliage.gd) at these places -- one MultiMesh per PLANT_CELL square: the portrait
+	# view sees a strip a fraction of the field's width, so whole-width bands drew ~3x the plants on screen, and a
+	# small cell's distance lets the far ones take the engine's lighter LODs (only where the difference is under a pixel).
+	# A tree's shadow is drawn from its shadow copy (Foliage.shadow_of: the same model remeshed by Meshy, its canopy just
+	# inside the tree's own -- tools/foliage_prep.py --shadow) in a shadow-only MultiMesh; the tree itself casts none:
+	# a third of the triangles in the shadow pass for the same shadow on the ground.
+	var tm := Foliage.mesh(kind)
+	if tm == null:
+		return
+	var sk := Foliage.shadow_of(kind) if shadow != GeometryInstance3D.SHADOW_CASTING_SETTING_OFF else ""
+	var sm: Mesh = Foliage.mesh(sk) if sk != "" else null
+	var cells := {}
+	for xf in xfs:
+		var o: Vector3 = (xf as Transform3D).origin
+		var ckey := Vector2i(int(floor(o.x / cell)), int(floor(o.z / cell)))
+		if not cells.has(ckey):
+			cells[ckey] = []
+		cells[ckey].append(xf)
+	for ckey in cells:
+		var mmi := _plant_mm(tm, cells[ckey], Foliage.material(kind), GeometryInstance3D.SHADOW_CASTING_SETTING_OFF if sm != null else shadow)
+		mmi.set_meta("perf", perf)
+		mmi.set_meta("perf_kind", kind)
+		mmi.set_meta("places", cells[ckey])          # (the instances' transforms live in the renderer: tests read them here)
+		mmi.name = "%s_%s_%d_%d" % ["Brush" if perf == "brush" else "Plants", kind, ckey.x, ckey.y]     # (tests and the bench find the brush by name)
+		add_child(mmi)
+		if sm != null:
+			var smi := _plant_mm(sm, cells[ckey], Foliage.material(sk), GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY)
+			smi.set_meta("perf", perf + "_shadow")
+			smi.set_meta("perf_kind", sk)
+			smi.name = "Shadows_%s_%d_%d" % [kind, ckey.x, ckey.y]
+			add_child(smi)
+
+static func _plant_mm(m: Mesh, xfs: Array, mat: Material, shadow: GeometryInstance3D.ShadowCastingSetting) -> MultiMeshInstance3D:
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.mesh = m
+	mm.instance_count = xfs.size()
+	for i in mm.instance_count:
+		mm.set_instance_transform(i, xfs[i])
+	var mmi := MultiMeshInstance3D.new()
+	mmi.multimesh = mm
+	mmi.material_override = mat
+	mmi.cast_shadow = shadow
+	return mmi
 
 func _build_fords() -> void:
 	# The fords' stepping stones: flat stones across each (Land.FORDS), a little proud of the water, in staggered rows.
@@ -3320,7 +3369,6 @@ const FOG_CELL := 2.0
 const FOG_ALPHA := 200
 const FOG_TINT := Color8(16, 22, 36)               # (a cool, dim veil: the decal mixes it in at FOG_ALPHA)
 const FOG_EVERY := 0.15
-const BUSHES := ["Bush_1_A_Color1", "Bush_1_B_Color1", "Bush_1_C_Color1", "Bush_2_A_Color1", "Bush_2_B_Color1", "Bush_2_C_Color1"]
 var _fog := {}
 var _ward_nodes := {}
 var fog_on := true                         # (tests and render tools can turn the veil off)
@@ -3418,6 +3466,8 @@ func _sync_fog() -> void:
 	(_fog.tex as ImageTexture).set_image(img)
 
 func _build_brush() -> void:
+	# The brush you hide in (moba_vision.gd's patches): each patch one of foliage.gd's BRUSH_SETS (tall grass, a leafy
+	# thicket or an enchanted one) filling its circle. 0.31.173: the Meshy bushes (were KayKit's, a smaller grid).
 	if sim.moba == null or sim.moba.vision == null:
 		return
 	var rng := RandomNumberGenerator.new()
@@ -3426,35 +3476,23 @@ func _build_brush() -> void:
 	for b in sim.moba.vision.brushes:
 		var c: Vector2 = b.p
 		var rad: float = b.r
-		var step := 1.15
+		var bset: Dictionary = Foliage.BRUSH_SETS[rng.randi() % Foliage.BRUSH_SETS.size()]
+		var step := 1.6                             # (1.15 with KayKit's smaller bushes)
 		var zi := -rad
 		while zi <= rad:
 			var xi := -rad
 			while xi <= rad:
 				var q := c + Vector2(xi, zi) + Vector2(rng.randf_range(-0.35, 0.35), rng.randf_range(-0.35, 0.35))
-				if q.distance_to(c) <= rad - 0.2:
-					var kind: String = BUSHES[rng.randi_range(0, BUSHES.size() - 1)]
+				if q.distance_to(c) <= rad - 0.5:              # (the bigger plants' edges ~ the patch's)
+					var kind := Foliage.pick(rng, bset)
 					if not per.has(kind):
 						per[kind] = []
-					var xf := Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3.ONE * rng.randf_range(1.5, 2.1)), Vector3(q.x, Sim.height_at(q) - 0.05, q.y))
+					var xf := Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3.ONE * Foliage.brush_scale(rng, kind)), Vector3(q.x, Sim.height_at(q) - 0.05, q.y))
 					(per[kind] as Array).append(xf)
 				xi += step
 			zi += step
 	for kind in per:
-		var src := _mesh_of(FOREST + kind + ".gltf")
-		if src.is_empty():
-			continue
-		var mm := MultiMesh.new()
-		mm.transform_format = MultiMesh.TRANSFORM_3D
-		mm.mesh = src.mesh
-		mm.instance_count = (per[kind] as Array).size()
-		for i in mm.instance_count:
-			mm.set_instance_transform(i, per[kind][i])
-		var mmi := MultiMeshInstance3D.new()
-		mmi.multimesh = mm
-		mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		mmi.name = "Brush_" + kind
-		add_child(mmi)
+		_plant_batch(kind, per[kind], GeometryInstance3D.SHADOW_CASTING_SETTING_OFF, "brush")
 
 func _sync_wards() -> void:
 	if sim.moba == null or sim.moba.vision == null:

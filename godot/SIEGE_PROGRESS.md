@@ -5367,3 +5367,42 @@ break as their health gets lower"; concepts in two styles first, the Royal A she
   check and coverage OK; the sim's fingerprint as 0.31.171 (seed 3 97e30cea900b6b37, seed 17 e7fc16691408f976); the
   stages reviewed in shots (both towers, blue and red, from the game camera and close). Preview APK:
   build/Fatebound-Siege-0.31.172-fatebound.apk (32 MB, preview key), sha256 6c0c5510...69303d1116.
+
+## 0.31.173 — new trees and bushes
+Kevin: "I want better trees and bush models" -> concept sheets of a Summer and an Enchanted set -> he picked all
+sixteen (eight trees, eight bushes and grasses); on a local mesh-reduction step: "Use meshy for the models".
+- Concepts: two ElevenLabs gpt-image-2 sheets a set (~738 credits; art_sources/foliage). Each plant redrawn alone by
+  Meshy image-to-image (12 credits), then Meshy image-to-3D (meshy-7.1, 30 credits). A first pass at 800-2000 triangles
+  shredded the leaves into shards; the kept takes are trees at 6000 (3.9-6.2k) and bushes and grasses at 3000
+  (1.5-2.8k). The berry bush took four tries and still lost most of its berries (a dark dome with a few red ones).
+  Meshy credits: 1374 (balance 1491).
+- tools/foliage_prep.py stands each model up (foot at 0; trees 4.6-6 m, bushes 1 m across, grasses 1 m tall), rounds
+  out the shallow footprint front-on concepts give (x1.2-2.2), smooths the shading (welded normals, the canopy's bent
+  out from its middle: painted and puffy, not every facet lit on its own), cuts the texture (1K trees, 512 the rest)
+  and the glow masks (the glowing fruit, the blue flowers).
+- scripts/siege/foliage.gd + foliage.gdshader: the sixteen plants and where each goes -- the ridges' trees (mostly
+  greens, a blossom, an autumn tree or a glowing one here and there) and the bushes under them; the woods beyond the
+  field (oak, mossy, fir, birch, autumn: their light *_far copies, Meshy's first 1.3-1.9k takes); the brush patches,
+  each one of three sets (tall grass and reeds, a leafy thicket of round, flowering and fern bushes, an enchanted one of
+  berry and broad-leaf bushes with glowing-flower grass). The shader sways each canopy on its own beat (trunks still,
+  the tops most; bushes a little) and lights the glow masks in the texture's own colour.
+- The view (siege_view.gd): the KayKit trees and bushes are gone from the ridges, the field's edge, the outer woods
+  and the brush. The brush stands a hero's height or more (bushes ~2-2.4 m across, grass 1.5-1.8 m) and keeps inside
+  its patch. Drawing: each plant kind one MultiMesh per 16 m square (24 m in the woods) -- the portrait view sees a
+  strip of the field, and whole-width bands drew three times the plants on screen. A tree casts its shadow from a
+  shadow copy (Meshy's remesh of the same model to ~1000 triangles, its canopy pulled 7 % inside the tree's, the trunk
+  the remesh dropped taken back from the model: tools/foliage_prep.py --like/--shadow; tools/meshy_weapon.py remesh),
+  a shadow-only MultiMesh beside it; the tree itself casts none. (Meshy's remesh at 1000-3000 also lost the bushes'
+  leaves and the trees' fine edges -- tried and not used for the plants themselves.)
+- Cost (tools/plant_cost.gd, new: nine play spots, the match's camera, the 3D at the phone's real 720x1600, the sim
+  held): 0.31.172 drew 122k triangles a spot in the view and 79k in the shadow pass, 60 draw calls; now 209k and 97k,
+  61 (the ridges' plants ~50k, the brush ~27k, the edge's trees ~15k, the trees' shadows ~25k; the woods are off
+  screen from the field). The first cut (32 m whole-width bands, the trees casting their own shadows) was 3.5x.
+  The world pack: 25.2 -> 32.3 MB.
+- content/preload.json re-run: the foliage in, the KayKit forest's trees and bushes out. assets/terrain/cache.res
+  re-baked (the woods' plan names the Meshy trees).
+- Tests: foliage_test (new, in the suite): every plant from its Meshy model with foliage.gdshader, the glowing ones
+  their masks, every tree's shadow copy lighter and inside it, the woods' far copies; in a match no KayKit plant left,
+  the brush, ridges, edge and woods drawn, every batch one small cell, the trees' shadows from their copies only, every
+  brush patch filled and on the ground.
+- Version 0.31.173, versionCode 259, SERVER_BUILD 0.31.173 (nothing else on the server changed).
