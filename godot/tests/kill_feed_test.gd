@@ -1,6 +1,7 @@
 extends SceneTree
 # 0.31.120 (Kevin: "kill feed" and "phone vibration").
-#  1. the kill feed (siege_hud.gd): knockouts "<who> ⚔ <whom>" (players by name, bots by class, you "You" on a gold
+#  1. the kill feed (siege_hud.gd): knockouts "<who> ⚔ <whom>" (players by name, bots by class -- 0.31.177: a 5v5's bot
+#     heroes by their bots' names, "Bot <name>" -- you "You" on a gold
 #     plate; nobody behind it: a skull), a tower fallen, a gate broken, the Bone Lord slain; newest first, 4 at most,
 #     gone after KF_LIFE; off when a match turns it off
 #  2. vibration (siege_mode.gd): 0.31.128 -- only my knockouts buzz (one each); nothing for being hit, falling, a
@@ -13,6 +14,7 @@ const Sim = preload("res://scripts/siege/siege_sim.gd")
 const Mode = preload("res://scripts/siege/siege_mode.gd")
 const App = preload("res://scripts/app/siege_app.gd")
 const Profile = preload("res://scripts/meta/profile.gd")
+const Moba = preload("res://scripts/siege/moba.gd")
 
 var fails: Array = []
 var hud
@@ -72,9 +74,10 @@ func _process(_d: float) -> bool:
 		# --- 1. the feed
 		_ev({"k":"death", "id":foe2, "by":ally})
 		var it: Dictionary = hud.kill_feed[0]
-		check(_texts(it) == "%s  ⚔  %s" % [sim.class_label(sim.by_id[ally]), sim.class_label(sim.by_id[foe2])] and not bool(it.me)
+		check(_texts(it) == "%s  ⚔  %s" % [Moba.bot_label(sim.by_id[ally]), Moba.bot_label(sim.by_id[foe2])] and not bool(it.me)
+			and _texts(it).begins_with("Bot ")
 			and (it.parts[0][1] as Color).is_equal_approx(Hud.TEAM_COLORS[hud.vt(int(sim.by_id[ally].team))].lightened(0.15)),
-			"a bot knocks out a bot: their classes in their sides' colours (%s)" % _texts(it))
+			"a bot knocks out a bot: their bots' names in their sides' colours (%s)" % _texts(it))
 		_ev({"k":"death", "id":foe, "by":"b2"})
 		check(_texts(hud.kill_feed[0]) == "You  ⚔  DragonSlayer99" and bool(hud.kill_feed[0].me), "I knock out a player: \"You ⚔ DragonSlayer99\", on a gold plate")
 		_ev({"k":"death", "id":"b2", "by":""})

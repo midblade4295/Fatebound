@@ -2,13 +2,15 @@ extends SceneTree
 # 0.31.119 (Kevin: "Do all" -- 3. a proper end-of-match screen): the results panel's MVP strip and the SCOREBOARD
 # (siege_hud.gd), built from a finished match's units like the app has them (online: from the snapshots).
 #   - points: knockout 20, tower, gate and King damage 1 per 10 (0.31.169: Siege's rescues, fish and gathering went)
-#   - the MVP is the best of everyone (a bot that outplayed everybody is named as one: "Bot · <class>"); you: "YOU ARE
+#   - the MVP is the best of everyone (a bot that outplayed everybody is named as one: "Bot · <class>"; 0.31.177: a 5v5
+#     bot by its seat's name, "Bot Alfred"); you: "YOU ARE
 #     THE MVP!"; nobody scored: no strip
 #   - SCORES opens the board (the results hide), both sides best first, players by name, you marked; BACK brings the
 #     results back. A 5v5: five heroes a side.
 #   godot --headless --path godot -s res://tests/scoreboard_test.gd
 const Hud = preload("res://scripts/siege/siege_hud.gd")
 const Sim = preload("res://scripts/siege/siege_sim.gd")
+const Moba = preload("res://scripts/siege/moba.gd")
 
 var fails: Array = []
 var hud
@@ -74,7 +76,7 @@ func _process(_d: float) -> bool:
 		var mvp: Dictionary = hud.mvp()
 		check(str(mvp.get("id", "")) == "b0", "the MVP is the best of everyone (%s)" % str(mvp.get("id", "")))
 		var head := str((strip.find_child("MvpName", true, false) as Label).text) if strip != null else ""
-		check(head.begins_with("MVP  ·  Bot · "), "a bot MVP is named as one: %s" % head)
+		check(head == "MVP  ·  " + Moba.bot_label(sim.by_id["b0"]) and head.begins_with("MVP  ·  Bot "), "a bot MVP is named as one -- his seat's name (0.31.177): %s" % head)
 		check(_labels(strip).any(func(t): return t.contains("2 towers") and t.contains("3 KOs") and t.contains("460 pts")), "with what they did: %s" % str(_labels(strip)))
 		check(_press(hud.result_panel, "scoreboard"), "SCORES button on the results")
 	elif frames == 6:
@@ -88,7 +90,7 @@ func _process(_d: float) -> bool:
 		var mine := texts.find("Kevin")
 		check(mine > i_side and mine < i_enemy, "you're on your side's list")
 		var first_side_name: String = texts[i_side + 5]          # (header: name, KO, TW, PTS; then rank, name)
-		check(texts[i_side + 4] == "1" and first_side_name.begins_with("Bot · "), "your side's best first: %s" % first_side_name)
+		check(texts[i_side + 4] == "1" and first_side_name == Moba.bot_label(sim.by_id["b0"]), "your side's best first: %s" % first_side_name)
 		var e1 := texts.find("1", i_enemy)
 		check(e1 > i_enemy and texts[e1 + 1] == "Rival", "the enemy's best first: %s" % (texts[e1 + 1] if e1 > 0 else "?"))
 		check(hud._modal_open(), "the board counts as a panel (no stick or buttons under it)")

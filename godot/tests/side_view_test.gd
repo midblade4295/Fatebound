@@ -79,13 +79,16 @@ func _verify(i: int) -> void:
 	check(foe_ok >= 3 and foe_bad == 0, "enemy health bars red (%d ok, %d not)" % [foe_ok, foe_bad])
 	# 0.31.88 (Kevin: "Show the nameplate for the players own name also"): my plate from my profile, with no "pn" from
 	# a server; nobody else gets one without it.
+	# (0.31.177: and a 5v5's bot heroes theirs, "Bot <name>" -- Kevin: "If it's a bot then give bot name")
 	var mine := 0
 	var others := 0
+	var bots := 0
 	for b in view.bars():
 		if b.has("name"):
 			if str(b.name) == "Midblade" and b.name_color == Color("#ffd65a") and b.color == Color("#7dff8a"): mine += 1
+			elif str(b.name).begins_with("Bot "): bots += 1
 			else: others += 1
-	check(mine == 1 and others == 0 and mode.net_names.is_empty(), "my own nameplate, gold, with no names from a server (%d mine, %d others)" % [mine, others])
+	check(mine == 1 and others == 0 and mode.net_names.is_empty(), "my own nameplate, gold, with no names from a server; the bots' by their names (%d mine, %d bots, %d others)" % [mine, bots, others])
 	# The stick: pushed up the unit heads up the screen, pushed right it heads right.
 	var p0 := Vector3(me.pos.x, Sim_height(me.pos), me.pos.y)
 	var s0: Vector2 = view.screen_point(p0)

@@ -5498,3 +5498,33 @@ quick peek) -> his picks: "A: Full board", "Tap the score bar".
   play_games true, bundletool valid; content_packs check OK (no pack changed); the sim's fingerprint as 0.31.175 (seed 3
   97e30cea900b6b37, seed 17 e7fc16691408f976). Preview APK: build/Fatebound-Siege-0.31.176-fatebound.apk (32 MB,
   preview key), sha256 f69bc13e...774a2eb168.
+
+## 0.31.177 — names over the heroes, bots by name, towers you can hit
+Kevin: "Put the player names above the players so people know if it's player or minion easier. If it's a bot then give
+bot name like "bot Alfred" for example. Also towers aren't targetable."
+- Bot names (moba.gd): BOT_NAMES (43 names); begin() gives each of the ten seats a different one from a generator of
+  its own (seed * 7919 + 13), so the match's own draws are untouched. bot_label(u) is "Bot <name>" (an older server's
+  unit without one: a name from its id). The name is a unit key, so the snapshot carries the server's to the phones.
+- Over the heads (siege_view.gd bars()): your name in gold as before, players' names from the server as before, and
+  now "Bot <name>" over each bot's hero (blue for your side, red for the enemy). Minions and monsters keep no name, so
+  a hero stands out at a glance. The live board, the results and the kill feed say "Bot <name>" too (the minions
+  stay by class).
+- Towers (siege_sim.gd _aim, moba.gd aim_structure): a player's attack turned only to heroes and minions, so a swing
+  next to a tower went wherever you faced. Now it also turns to an enemy tower, King or gate that can be hurt (the
+  tower before it down; the King open; a gate's lane third tower down), within reach of its edge -- scored like a unit
+  (distance plus up to 2 m for being off to the side), so a minion or hero nearer in front is still the one you hit.
+  A guarded tower isn't turned to (the "guarded" note still shows when you hit it). The bots aim for themselves.
+- A hit on a tower shows: stone chips off the side it came from, your damage over it, and a stone thud for a hero's
+  hit (siege_view.gd, siege_mode.gd; the tower_hit event now says who hit). Without your minions near it a tower
+  takes a fifth (League's rule, as since 0.31.158), so lone hits show small numbers.
+- The sim's play is unchanged: the fingerprint with tower_hit's new "by" left out is 0.31.176's (seed 3
+  97e30cea900b6b37, seed 17 e7fc16691408f976); with it, the new baseline is seed 3 5f374a9d41c71a47, seed 17
+  460ab3e66d0ec2ee.
+- SERVER_BUILD 0.31.177: a server redeploy brings the names and the tower aim online (an older server's phones show
+  names from the bots' ids, and its sim doesn't turn your attack to a tower).
+- Tests: names_aim_test (new, in the suite): ten different names a match, the same for the same seed, carried to a
+  phone; beside red's outer tower facing away the attack turns to it and lands; a nearer minion in front wins; a
+  guarded tower isn't turned to; a Musketeer 8 m off turns and his shot lands; a bot isn't turned; "Bot <name>" over
+  all nine bots, none over a minion, yours over you; a tower hit's number for yours only; board and kill feed names.
+  kill_feed_test, side_view_test and scoreboard_test now expect the bots' names.
+- Version 0.31.177, versionCode 263, SERVER_BUILD 0.31.177.

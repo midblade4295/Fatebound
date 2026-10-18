@@ -567,9 +567,24 @@ func can_act(u: Dictionary) -> bool:
 func _aim(u: Dictionary, reach: float) -> void:
 	var target := nearest_enemy(u, reach, true)
 	u["aim_d"] = 0.0
+	var aim_p := Vector2.INF
 	if not target.is_empty():
-		u.face = angle_of(target.pos - u.pos)
-		u["aim_d"] = u.pos.distance_to(target.pos)
+		aim_p = target.pos
+	# 0.31.177 (Kevin: "towers aren't targetable"): a player's attack turns to an enemy tower, King or gate that can be
+	# hurt -- when it's nearer (in front counting) than any hero or minion in reach. (The bots aim for themselves.)
+	if moba != null and not bool(u.get("bot", false)):
+		var st: Dictionary = moba.aim_structure(u, reach)
+		if not st.is_empty():
+			var us := INF
+			if not target.is_empty():
+				var off: Vector2 = target.pos - u.pos
+				var d := off.length()
+				us = d + ((1.0 - dir_of(u.face).dot(off / d)) * 2.0 if d > 0.01 else 0.0)
+			if float(st.score) < us:
+				aim_p = st.p
+	if aim_p != Vector2.INF:
+		u.face = angle_of(aim_p - u.pos)
+		u["aim_d"] = u.pos.distance_to(aim_p)
 
 const COMBO_GAP := 0.9
 

@@ -416,6 +416,19 @@ var boss_go := [false, false]             # a side's bots are going for the Bone
 var wyrm_go := [false, false]             # 0.31.166: ...for the Grave Wyrm
 var wyrm_stacks := [0, 0]                 # 0.31.166: each side's WYRM'S HIDE
 var epic_kills := {"lord": [0, 0], "wyrm": [0, 0]}   # 0.31.176: each side's Bone Lords and Grave Wyrms slain (the scoreboard)
+# 0.31.177 (Kevin: "Put the player names above the players so people know if it's player or minion easier. If it's a
+# bot then give bot name like "bot Alfred""): each seat's bot's name, "Bot Alfred" over its head while a bot plays it
+const BOT_NAMES := ["Alfred", "Bertram", "Cedric", "Dorian", "Edmund", "Felix", "Gideon", "Harold", "Ivo", "Jasper",
+	"Kendrick", "Leopold", "Magnus", "Nigel", "Osric", "Percival", "Quentin", "Roland", "Sigmund", "Tobias", "Ulric",
+	"Victor", "Wendell", "Yorick", "Ada", "Beatrix", "Clara", "Delia", "Edith", "Freya", "Greta", "Hilda", "Isolde",
+	"Juno", "Lena", "Mira", "Nora", "Petra", "Rosa", "Sybil", "Tessa", "Vera", "Wren"]
+
+static func bot_label(u: Dictionary) -> String:
+	# "Bot Alfred": the seat's own name (an older server's units have none: one from the seat's id, the same on every phone)
+	var n := str(u.get("bot_name", ""))
+	if n == "":
+		n = str(BOT_NAMES[absi(hash(str(u.get("id", "")))) % BOT_NAMES.size()])
+	return "Bot " + n
 var _boss_check := 0.0
 var _jid := 0
 var _zid := 0
@@ -499,6 +512,15 @@ func begin(sim, my_hero: String, seed_value: int) -> void:
 			_make_hero(u, str(pk[0]), -1 if (t == 0 and i == 0 and mine != "") else int(POST_LANE[post]), post in ["top", "mid"])
 			u["post"] = post
 			i += 1
+	# 0.31.177: every seat a bot's name, ten different ones a match -- from a generator of their own, so the match's own
+	# draws (the drafts, the bots' choices) stay as they were
+	var nr := RandomNumberGenerator.new()
+	nr.seed = seed_value * 7919 + 13
+	var pool: Array = BOT_NAMES.duplicate()
+	for hid in heroes[0] + heroes[1]:
+		var k := nr.randi_range(0, pool.size() - 1)
+		s.by_id[hid]["bot_name"] = str(pool[k])
+		pool.remove_at(k)
 	vision = Vision.new()                 # 0.31.158: the fog of war
 	vision.setup(self)
 	# the jungle (0.31.157): each side's four camps (red's the point mirror of blue's), the Bone Lord on the island
@@ -1010,7 +1032,7 @@ func hit_tower(src: Dictionary, id: int, amount: float) -> void:
 	tw.hp = maxf(0.0, float(tw.hp) - amount)
 	if src.has("gate_dmg"):
 		src.gate_dmg = float(src.gate_dmg) + minf(amount, before)     # (0.31.164: towers count as gate damage -- "gates")
-	s._event("tower_hit", {"tw":id, "dmg":int(round(amount))})
+	s._event("tower_hit", {"tw":id, "dmg":int(round(amount)), "by":str(src.get("id", ""))})     # (0.31.177: who, for the hit's look)
 	# outer towers' plates (until 7:00): each fifth of its health that falls pays the side's heroes near
 	if int(tw.tier) == 1 and s.time < PLATES_UNTIL and float(tw.hp) > 0.0:
 		var step := float(tw.max_hp) / float(PLATES)
@@ -1048,6 +1070,36 @@ func _heroes_near(team: int, p: Vector2, r: float, src: Dictionary) -> Array:
 		if not h.is_empty() and not out.has(h) and s.alive(h) and (h.pos as Vector2).distance_to(p) <= r:
 			out.append(h)
 	return out
+
+func aim_structure(u: Dictionary, reach: float) -> Dictionary:
+	# 0.31.177 (Kevin: "towers aren't targetable"): the enemy tower, King or gate a player's attack can turn to -- one that
+	# can be hurt now (a tower once the one before it fell; the King once his towers are down; a gate once its lane's
+	# third tower is), within reach of its edge -- scored as siege_sim.nearest_enemy scores a unit (distance, plus up to
+	# 2 m for being off to the side or behind): {"p", "d", "score"}, or {} for none
+	var best := {}
+	var fwd: Vector2 = s.dir_of(u.face)
+	var cands := []
+	for tw in towers:
+		if int(tw.team) != int(u.team) and vulnerable(tw):
+			cands.append([tw.p, TOWER_R])
+	var et := 1 - int(u.team)
+	if et >= 0 and et <= 1 and not bool(kings[et].dead) and king_open(et):
+		cands.append([king_pos(et), KING_R])
+	for g in s.gates:
+		if int(g.team) != int(u.team) and s.gate_blocks(g) and gate_open(g):
+			cands.append([s.seg_closest(u.pos, g.a, g.b), 0.0])
+	for c in cands:
+		var off: Vector2 = (c[0] as Vector2) - (u.pos as Vector2)
+		var d := off.length()
+		var edge := d - float(c[1])
+		if edge > reach:
+			continue
+		var sc := maxf(0.0, edge)
+		if d > 0.01:
+			sc += (1.0 - fwd.dot(off / d)) * 2.0
+		if best.is_empty() or sc < float(best.score):
+			best = {"p": c[0], "d": d, "score": sc}
+	return best
 
 func melee_towers(u: Dictionary, reach: float, arc: float, dmg: float) -> int:
 	if int(u.team) > 1:

@@ -4390,6 +4390,21 @@ func on_event(e: Dictionary) -> void:
 				ring_at(Vector3(g2.c.x, gy2 + 0.2, g2.c.y), Color("#e0c9a0"), 2.5 + i, 0.7 + i * 0.2)
 			for i in 12:
 				spark(Vector3(g2.c.x + randf_range(-2, 2), gy2 + 0.5 + randf() * 2.5, g2.c.y + randf_range(-1, 1)), Color("#c8b89a"))
+		"tower_hit":
+			# 0.31.177 (Kevin: "towers aren't targetable"): a hit on a tower shows -- chips of stone off the side it came
+			# from, and the damage over it when it's yours
+			var mt: Dictionary = moba_towers.get(int(e.tw), {})
+			if mt.is_empty() or sim.moba == null:
+				return
+			var twp: Vector2 = sim.moba.towers[int(e.tw)].p
+			var by_u: Dictionary = sim.by_id.get(str(e.get("by", "")), {})
+			var side := ((by_u.pos as Vector2) - twp).normalized() if not by_u.is_empty() else Vector2.ZERO
+			var ty := Sim.height_at(twp)
+			var chip := Vector3(twp.x + side.x * sim.moba.TOWER_R, ty + 1.0 + randf() * 1.6, twp.y + side.y * sim.moba.TOWER_R)
+			spark(chip, Color("#e8d6b0"))
+			if str(e.get("by", "")) == player_id:
+				spark(chip, Color("#ffd27a"))
+				number((mt.top as Vector3) + Vector3(0, 1.1, 0), str(e.dmg), false)
 		"tshot":
 			_tower_shot(e)                        # 0.31.155 5V5
 		"tower_down":
@@ -4808,12 +4823,17 @@ func bars() -> Array:
 			bar["name_color"] = Color("#ffd65a")
 		elif player_names.has(u.id):
 			# 0.31.86 (Kevin: "shows the player names on the battlefield above their heads. Only live players will show
-			# names."): over the bar -- yours gold, your side's light blue, theirs light red; bots have none
+			# names."): over the bar -- yours gold, your side's light blue, theirs light red (0.31.177: bots by their names)
 			bar["name"] = str(player_names[u.id])
 			if str(player_tags.get(u.id, "")) != "":
 				bar["name"] = "[%s] %s" % [str(player_tags[u.id]), str(player_names[u.id])]   # 0.31.134: their clan's tag
 			bar["title"] = str(player_titles.get(u.id, ""))
 			bar["name_color"] = Color("#ffd65a") if u.id == player_id else (Color("#bfeeff") if vt(int(u.team)) == 0 else Color("#ffc4b4"))
+		elif bool(u.get("hero", false)) and bool(u.get("bot", false)) and sim.moba != null:
+			# 0.31.177 (Kevin: "Put the player names above the players so people know if it's player or minion easier. If
+			# it's a bot then give bot name like "bot Alfred""): a bot's hero too, by its seat's name, a shade softer
+			bar["name"] = sim.moba.bot_label(u)
+			bar["name_color"] = Color("#a8dcef") if vt(int(u.team)) == 0 else Color("#f0b4a6")
 		out.append(bar)
 	return out
 

@@ -1326,6 +1326,11 @@ func _event_sound(e: Dictionary) -> void:
 			_cue("ab_shield", 1, _unit_pos(e.get("id", "")), HEAR_R, mine)      # 0.31.171: the Knight's Q, the Crusader's W
 		"gate_hit":
 			_cue("tm_gate_hit", 2, _gate_pos(e.get("gate", "")), HEAR_R + 6.0)
+		"tower_hit":
+			# 0.31.177: a hero's hit on a tower thuds on its stone (yours always heard; the minions' left quiet)
+			var tb: Dictionary = sim.by_id.get(str(e.get("by", "")), {})
+			if bool(tb.get("hero", false)) and sim.moba != null and int(e.get("tw", -1)) >= 0 and int(e.tw) < sim.moba.towers.size():
+				_cue("tm_gate_hit", 2, sim.moba.towers[int(e.tw)].p, HEAR_R, str(e.by) == str(hud.player_id), 0.8)
 		"gate_broken":
 			_cue("tm_crumble", 2, _gate_pos(e.get("gate", "")), 48.0)
 			_announce_gate(e)

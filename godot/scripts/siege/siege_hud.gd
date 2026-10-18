@@ -544,7 +544,7 @@ func show_result(result: Dictionary = {}) -> void:
 # ---------- scoreboard and MVP (0.31.119, Kevin: "Do all" -- a proper end-of-match screen) ----------
 # Every hero's knockouts, downs, towers and tower/gate damage come with the snapshots (and are the sim's own offline), so
 # the board is the match as the server counted it. Points: a knockout 20, tower, gate and King damage 1 per 10. Bots are
-# on the board too (as "Bot · <hero>"): most matches are mostly bots, and an honest board says when one outplayed
+# on the board too (as "Bot · <hero>"; 0.31.177: a 5v5 bot by its name, "Bot Alfred"): most matches are mostly bots, and an honest board says when one outplayed
 # everybody.
 const MVP_KO := 20
 const MVP_GATE := 0.1
@@ -557,6 +557,8 @@ func display_name(u: Dictionary) -> String:
 		return player_name
 	if net_names.has(str(u.id)):
 		return str(net_names[str(u.id)])
+	if bool(u.get("hero", false)) and sim.moba != null:
+		return sim.moba.bot_label(u)               # 0.31.177: "Bot Alfred", as over its head
 	return "Bot · %s" % sim.class_label(u)
 
 func is_player(u: Dictionary) -> bool:
@@ -1108,7 +1110,7 @@ var _idle_style: StyleBox = null
 # ---------------- kill feed (0.31.120, Kevin: "kill feed") ----------------
 # On the right under the toast line: who knocked out whom, towers and gates broken, epic monsters slain --
 # newest on top, KF_MAX lines, each KF_LIFE seconds then fading. Players by name (you: "You", on a gold plate),
-# bots by class, in their side's colour; a knockout with no one behind it (a fall, the moat) shows a skull.
+# bots by class (0.31.177: a 5v5 bot's hero by its name, "Bot Alfred"), in their side's colour; a knockout with no one behind it (a fall, the moat) shows a skull.
 const KF_MAX := 4
 const KF_LIFE := 6.0
 const KF_PX := 12
@@ -1127,6 +1129,8 @@ func kf_name(id: String) -> Array:
 		return ["You", VisualTheme.GOLD]
 	if net_names.has(id):
 		return [str(net_names[id]).left(16), col]
+	if bool(u.get("hero", false)) and sim.moba != null:
+		return [sim.moba.bot_label(u), col]       # 0.31.177: a bot's hero by its name, as over its head
 	return [sim.class_label(u), col]
 
 func _kf_add(parts: Array, mine: bool) -> void:
@@ -1932,7 +1936,7 @@ func _refresh_shop(me: Dictionary) -> void:
 # stats that league of legends does" -> concept A ("Full board"), opened by tapping the score bar. League's Tab board:
 # your side, then the enemy -- each a strip of the side's knockouts, towers destroyed, Bone Lords and Grave Wyrms slain,
 # its gold (what its heroes carry and their items' worth) and the lead -- and a row a hero (by role): portrait with his
-# level (greyed with the seconds to his return while he's down), name (a bot: "Bot") and hero, K / D / A, CS (minions
+# level (greyed with the seconds to his return while he's down), name (0.31.177: a bot's, "Bot Alfred") and hero, K / D / A, CS (minions
 # last-hit), his six item slots, his gold. Live while open (the match goes on); the score bar again, the X, or a tap
 # outside closes it.
 var board_panel: PanelContainer = null
@@ -2145,7 +2149,7 @@ func _board_row(v: VBoxContainer, u: Dictionary, side: int) -> Dictionary:
 	nb.custom_minimum_size = Vector2(BOARD_W.name, 0)
 	nb.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	h.add_child(nb)
-	var who := "Bot" if not is_player(u) else (player_name if mine else str(net_names.get(str(u.id), "Player")))
+	var who := display_name(u)                     # (0.31.177: a bot by its name: "Bot Alfred")
 	_bl(nb, who, 12, Color.WHITE, BOARD_W.name, HORIZONTAL_ALIGNMENT_LEFT, false)
 	var hr := HBoxContainer.new()
 	hr.add_theme_constant_override("separation", 3)
