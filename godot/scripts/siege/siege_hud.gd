@@ -1597,6 +1597,7 @@ var _shop_where: Label
 var _shop_slots: Array = []
 var _shop_cells: Dictionary = {}               # item id -> {button, price}
 var _shop_name: Label
+var _shop_pick_icon                            # 0.31.175: the picked item's icon beside its name
 var _shop_stats: Label
 var _shop_from: Label
 var _shop_act: Button
@@ -1637,42 +1638,130 @@ static func item_text(id: String) -> String:
 		parts.append("+%.1f%% health/s" % (float(it.regen) * 100.0))
 	return ", ".join(parts)
 
+const SHOP_BANNER := "res://assets/ui/menu/shop_banner.webp"
+const CELL_W := 84.0
+const CELL_H := 82.0
+
 func _item_cell(parent: Node, id: String) -> Button:
+	# 0.31.175: the item's painted icon, its name, and its price beside a coin
 	var b := Button.new()
 	b.focus_mode = Control.FOCUS_NONE
-	b.custom_minimum_size = Vector2(80, 66)
+	b.custom_minimum_size = Vector2(CELL_W, CELL_H)
 	b.set_meta("action_key", "shop_item_" + id)
 	parent.add_child(b)
 	var ic := ItemIcon.new()
 	ic.item = id
-	ic.position = Vector2(22, 4)
-	ic.size = Vector2(36, 36)
+	ic.position = Vector2((CELL_W - 44.0) * 0.5, 3)
+	ic.size = Vector2(44, 44)
 	ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	b.add_child(ic)
+	var nl := Label.new()
+	nl.text = str(Moba.ITEMS[id].name)
+	nl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	nl.clip_text = true
+	nl.position = Vector2(2, 46)
+	nl.size = Vector2(CELL_W - 4, 15)
+	nl.add_theme_font_size_override("font_size", 10)
+	nl.add_theme_font_override("font", _bold)
+	nl.add_theme_color_override("font_color", Color("#f2e6cf"))
+	nl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	b.add_child(nl)
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 2)
+	row.position = Vector2(0, 61)
+	row.size = Vector2(CELL_W, 18)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	b.add_child(row)
+	var coin := TextureRect.new()
+	coin.texture = _coin()
+	coin.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	coin.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	coin.custom_minimum_size = Vector2(14, 14)
+	coin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(coin)
 	var pl := Label.new()
-	pl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	pl.position = Vector2(0, 42)
-	pl.size = Vector2(80, 20)
 	pl.add_theme_font_size_override("font_size", 13)
 	pl.add_theme_font_override("font", _bold)
 	pl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	b.add_child(pl)
+	row.add_child(pl)
 	b.pressed.connect(func():
 		_shop_sel = {"item":id}
 		_shop_key = "")
-	_shop_cells[id] = {"button":b, "price":pl, "icon":ic}
+	_shop_cells[id] = {"button":b, "price":pl, "icon":ic, "name":nl}
 	return b
+
+func _coin() -> Texture2D:
+	if _coin_tex == null and ResourceLoader.exists("res://assets/ui/currency/coin.png"):
+		_coin_tex = load("res://assets/ui/currency/coin.png")
+	return _coin_tex
 
 func _build_shop() -> void:
 	shop_panel = _panel(400)
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 6)
 	shop_panel.add_child(v)
-	var hdr := HBoxContainer.new()
+	# 0.31.175 (Kevin: "make these menus better looking and more high quality"): the keep's armory painted across the
+	# top (ElevenLabs; tools/build_menu_icons.py), SHOP and your gold over it
+	var hdr := Panel.new()
+	hdr.custom_minimum_size = Vector2(0, 84)
+	hdr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var hs := StyleBoxFlat.new()
+	hs.bg_color = Color(0.06, 0.04, 0.03)
+	hs.set_corner_radius_all(12)
+	hdr.add_theme_stylebox_override("panel", hs)
+	hdr.clip_children = CanvasItem.CLIP_CHILDREN_AND_DRAW
 	v.add_child(hdr)
-	var tl := UI2.text(hdr, "SHOP", 24, UI2.GOLD)
+	var art := TextureRect.new()
+	art.texture = load(SHOP_BANNER) if ResourceLoader.exists(SHOP_BANNER) else null
+	art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	art.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hdr.add_child(art)
+	var shade := TextureRect.new()                       # (darker toward the foot, under the words)
+	var gg := Gradient.new()
+	gg.set_color(0, Color(0, 0, 0, 0.0))
+	gg.set_color(1, Color(0.02, 0.01, 0.03, 0.78))
+	var gt := GradientTexture2D.new()
+	gt.gradient = gg
+	gt.fill_from = Vector2(0, 0.25)
+	gt.fill_to = Vector2(0, 1)
+	shade.texture = gt
+	shade.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	shade.stretch_mode = TextureRect.STRETCH_SCALE
+	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hdr.add_child(shade)
+	var rim := Panel.new()
+	var rs := StyleBoxFlat.new()
+	rs.draw_center = false
+	rs.border_color = Color("#c99a3a")
+	rs.set_border_width_all(2)
+	rs.set_corner_radius_all(12)
+	rim.add_theme_stylebox_override("panel", rs)
+	rim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	rim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hdr.add_child(rim)
+	var hrow := HBoxContainer.new()
+	hrow.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	hrow.offset_top = -40
+	hrow.offset_bottom = -6
+	hrow.offset_left = 12
+	hrow.offset_right = -12
+	hrow.add_theme_constant_override("separation", 6)
+	hrow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hdr.add_child(hrow)
+	var tl := UI2.text(hrow, "SHOP", 28, UI2.GOLD)
 	tl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_shop_gold = UI2.text(hdr, "", 20, Color("#ffd65a"))
+	var gc := TextureRect.new()
+	gc.texture = _coin()
+	gc.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	gc.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	gc.custom_minimum_size = Vector2(24, 24)
+	gc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hrow.add_child(gc)
+	_shop_gold = UI2.text(hrow, "", 22, Color("#ffd65a"))
 	_shop_where = _label(v, "", 11, Color("#d4cbbb"))
 	UI2.body(v, "YOUR ITEMS · tap one to sell it", 10, UI2.MUTED, false)
 	var slots := HBoxContainer.new()
@@ -1683,11 +1772,11 @@ func _build_shop() -> void:
 	for i in Moba.ITEM_SLOTS:
 		var sb := Button.new()
 		sb.focus_mode = Control.FOCUS_NONE
-		sb.custom_minimum_size = Vector2(50, 50)
+		sb.custom_minimum_size = Vector2(52, 52)
 		sb.set_meta("action_key", "shop_slot_%d" % i)
 		var ic := ItemIcon.new()
-		ic.position = Vector2(7, 7)
-		ic.size = Vector2(36, 36)
+		ic.position = Vector2(5, 5)
+		ic.size = Vector2(42, 42)
 		ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		sb.add_child(ic)
 		var slot := i
@@ -1701,14 +1790,24 @@ func _build_shop() -> void:
 		UI2.body(v, str(group[0]), 10, UI2.MUTED, false)
 		var g := GridContainer.new()
 		g.columns = 4
-		g.add_theme_constant_override("h_separation", 6)
-		g.add_theme_constant_override("v_separation", 6)
+		g.add_theme_constant_override("h_separation", 5)
+		g.add_theme_constant_override("v_separation", 5)
 		var cc := CenterContainer.new()
 		cc.add_child(g)
 		v.add_child(cc)
 		for id in group[1]:
 			_item_cell(g, str(id))
-	_shop_name = _label(v, "", 16, UI2.GOLD, _bold)
+	var nrow := HBoxContainer.new()
+	nrow.alignment = BoxContainer.ALIGNMENT_CENTER
+	nrow.add_theme_constant_override("separation", 8)
+	v.add_child(nrow)
+	_shop_pick_icon = ItemIcon.new()
+	_shop_pick_icon.custom_minimum_size = Vector2(40, 40)
+	_shop_pick_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	nrow.add_child(_shop_pick_icon)
+	_shop_name = _label(nrow, "", 17, UI2.GOLD, _bold)
+	_shop_name.custom_minimum_size = Vector2(0, 0)
+	_shop_name.autowrap_mode = TextServer.AUTOWRAP_OFF
 	_shop_stats = _label(v, "", 12, Color.WHITE)
 	_shop_from = _label(v, "", 11, Color("#d4cbbb"))
 	_shop_act = _button(v, "BUY", "gold", func(): _shop_action())
@@ -1725,11 +1824,19 @@ func _shop_action() -> void:
 	_shop_key = ""
 
 func _cell_style(big: bool, sel: bool, can: bool) -> StyleBoxFlat:
+	# 0.31.175: a warm ground for what you can buy now, cooler for the rest; the big items in gold on a deep purple;
+	# the picked one lit
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.09, 0.06, 0.03, 0.95) if can else Color(0.05, 0.05, 0.07, 0.9)
-	sb.border_color = Color("#ffe9a6") if sel else (Color("#c99a3a") if big else Color("#5a6470"))
+	if big:
+		sb.bg_color = Color(0.2, 0.1, 0.24, 0.96) if can else Color(0.09, 0.06, 0.12, 0.92)
+	else:
+		sb.bg_color = Color(0.16, 0.11, 0.06, 0.96) if can else Color(0.06, 0.06, 0.09, 0.92)
+	sb.border_color = Color("#ffe9a6") if sel else (Color("#c99a3a") if big else Color("#6a7486"))
 	sb.set_border_width_all(3 if sel else 2)
-	sb.set_corner_radius_all(9)
+	sb.set_corner_radius_all(10)
+	if sel:
+		sb.shadow_color = Color(1.0, 0.85, 0.4, 0.55)
+		sb.shadow_size = 5
 	return sb
 
 func _refresh_shop(me: Dictionary) -> void:
@@ -1740,7 +1847,7 @@ func _refresh_shop(me: Dictionary) -> void:
 		return
 	_shop_key = key
 	var gold := int(float(me.get("gold", 0.0)))
-	_shop_gold.text = "%d gold" % gold
+	_shop_gold.text = "%d" % gold
 	_shop_where.text = "In your castle -- tap an item, then BUY" if sim.alive(me) and here else ("You're down -- you can shop now" if here else "You can buy in your own castle, or while you're down")
 	_shop_where.add_theme_color_override("font_color", Color("#9fe07a") if here else Color("#ffb07a"))
 	for i in _shop_slots.size():
@@ -1758,12 +1865,17 @@ func _refresh_shop(me: Dictionary) -> void:
 		var can := why == "" or why == "where"
 		(cell.price as Label).text = str(pr)
 		(cell.price as Label).add_theme_color_override("font_color", Color("#ffd65a") if gold >= pr else Color("#a08c70"))
+		(cell.name as Label).add_theme_color_override("font_color", Color("#f2e6cf") if can else Color("#9a927f"))
 		(cell.icon as ItemIcon).dim = not can
 		(cell.icon as ItemIcon).queue_redraw()
 		var sb2 := _cell_style(Moba.ITEMS[id].has("from"), str(_shop_sel.get("item", "")) == id, can)
 		for st in ["normal", "hover", "pressed", "focus", "hover_pressed", "disabled"]:
 			(cell.button as Button).add_theme_stylebox_override(st, sb2)
 	# the details of the one picked
+	var picked := str(_shop_sel.get("item", "")) if _shop_sel.has("item") else (str(inv[int(_shop_sel.slot)]) if _shop_sel.has("slot") and int(_shop_sel.slot) < inv.size() else "")
+	_shop_pick_icon.item = picked
+	_shop_pick_icon.visible = picked != ""
+	_shop_pick_icon.queue_redraw()
 	if _shop_sel.has("item"):
 		var id2 := str(_shop_sel.item)
 		var it: Dictionary = Moba.ITEMS[id2]

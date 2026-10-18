@@ -1,7 +1,17 @@
 extends Control
 # 0.31.157 5V5: an item's glyph (scripts/siege/moba.gd ITEMS), drawn, not an image -- the shop's cells and slots use this
-# Control; the HUD's item slots call draw_item() on its own canvas.
+# Control; the HUD's item slots call draw_item() on its own canvas. 0.31.175 (Kevin: "make these menus better looking
+# and more high quality"): each item its own painted icon (assets/ui/items/<id>.png, tools/build_menu_icons.py); the
+# drawn glyph only if one is missing.
 const Moba = preload("res://scripts/siege/moba.gd")
+const DIR := "res://assets/ui/items/"
+static var _tex: Dictionary = {}
+
+static func texture(id: String) -> Texture2D:
+	if not _tex.has(id):
+		var p := DIR + id + ".png"
+		_tex[id] = load(p) if ResourceLoader.exists(p) else null
+	return _tex[id]
 
 const ITEM_TINT := {"sword":"#d8dee6", "ruby":"#e8304a", "dagger":"#cfd6de", "boots":"#9a6a3a", "tome":"#3a6bd0", "fang":"#f2ead8",
 	"bead":"#4ad07a", "cloth":"#9aa6b2", "greaves":"#e0b040", "bloodthirster":"#e04040", "titan":"#ff8a3a", "phantom":"#9a6bff",
@@ -14,7 +24,12 @@ func _draw() -> void:
 		draw_item(self, item, size * 0.5, minf(size.x, size.y), dim)
 
 static func draw_item(ci: CanvasItem, id: String, c: Vector2, sz: float, dim := false) -> void:
-	# an item's glyph, drawn in a 32x32 space (crisp at any size); the big items on a gold disc
+	# an item's painted icon; or its glyph, drawn in a 32x32 space (crisp at any size), the big items on a gold disc
+	var t := texture(id)
+	if t != null:
+		ci.draw_texture_rect(t, Rect2(c - Vector2(sz, sz) * 0.5, Vector2(sz, sz)), false,
+			Color(0.58, 0.58, 0.64) if dim else Color.WHITE)
+		return
 	var it: Dictionary = Moba.ITEMS.get(id, {})
 	var tint := Color(str(ITEM_TINT.get(id, "#ffffff")))
 	if dim:

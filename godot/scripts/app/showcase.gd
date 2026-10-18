@@ -18,6 +18,9 @@ var _key := ""
 var cam_z := 7.4
 var cam_y := 1.45
 var look_y := 0.88
+# 0.31.175: without its own stone plinth (a contact shadow only) -- the 5v5 hero window stands the hero on the painted
+# hall's dais instead
+var plinth := true
 # 0.31.42: turn it with a finger (the Siege Pass detail view). A drag spins the figure; let go and it coasts to a stop,
 # then turns slowly on its own.
 var interactive := false
@@ -136,6 +139,15 @@ func _build_scene() -> void:
 	shadow.material_override = shm
 	shadow.position = Vector3(0, -0.6, 0)
 	world.add_child(shadow)
+	holder = Node3D.new()
+	holder.position = Vector3(0, -0.24, 0)
+	if not plinth:
+		sm.top_radius = 0.75
+		sm.bottom_radius = 0.75
+		shm.albedo_color = Color(0, 0, 0, 0.42)
+		shadow.position = Vector3(0, -0.235, 0)
+		world.add_child(holder)
+		return
 	var edge := MeshInstance3D.new()
 	var rm := CylinderMesh.new()
 	rm.top_radius = 1.42
@@ -156,8 +168,6 @@ func _build_scene() -> void:
 	dais.material_override = _mat(Color("#77839e"))
 	dais.position = Vector3(0, -0.38, 0)
 	world.add_child(dais)
-	holder = Node3D.new()
-	holder.position = Vector3(0, -0.24, 0)
 	world.add_child(holder)
 
 func show_look(new_cls: String, new_cosmetic: Dictionary) -> void:

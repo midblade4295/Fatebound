@@ -5439,3 +5439,28 @@ pathing of map. There's a lot of paths that go through unpassable walls".
   seed 17 e7fc16691408f976); the new trails reviewed in shots from the game camera (both Packs, the tree lines' ends,
   the Archers' way). Preview APK: build/Fatebound-Siege-0.31.174-fatebound.apk (32 MB, preview key), sha256
   145ae9f6...12aacaa219b.
+
+## 0.31.175 — the hero picker and the shop in paint
+Kevin (screenshots of the 5V5 hero window and the in-match shop): "Use eleven or meshy to make these menus better
+looking and more high quality".
+- Art (ElevenLabs gpt-image-2, two takes each, 3,103 credits; art_sources/menus): a 6 x 4 icon sheet on white in the
+  style of the menus' own icons (assets/ui/v2/icons as the reference) -- the fifteen items, the six role badges and a
+  padlock (and gold coins and a coin pouch, not used yet); the champions' hall (a lit dais, blue and red banners, a dark
+  right half for text) and the keep's armory, both in the Market banner's painted style. tools/build_menu_icons.py cuts
+  each icon out (the white flooded in from the cell's edge and stopped by the dark outline; glows kept half-clear in
+  their own colour; white pockets the icon closes round -- the bead's cord, the padlock's shackle -- cleared too; stray
+  bits of the next cell dropped) -> assets/ui/items, assets/ui/roles, assets/ui/menu.
+- The 5V5 window (moba_panel.gd): a stage at the top -- the picked hero in 3D, idling, on the painted hall's dais
+  (showcase.gd without its own plinth, a contact shadow only), his name, role badge and role, what the role does, and
+  the padlock and price while he's locked (dimmed). Over each column the role's badge and its name in a size that fits
+  (was a coloured strip with the name at 5-8 px, MARKSMAN cut short). The cards on a dark ground in their role's colour
+  with a glow behind the portrait and the name on a band; a hero to unlock dimmed with the padlock and his price; the
+  picked one in a lit gold frame. The mode's text said shorter (the same points) to make the room.
+- The shop (siege_hud.gd): the armory painted across the top with SHOP and your gold (a coin) over it; every item its
+  painted icon (item_icon.gd: the drawn glyphs only if one is missing -- the HUD's item slots use them too), its name
+  and its price beside a coin on its cell; what you can buy on a warm ground, the big items in gold on deep purple, the
+  picked one lit; the picked item's icon beside its name. Same buttons and action keys.
+- tests/moba_ui_test.gd: the stage (the hero in 3D in the hall, his name, role and badge; locked: the padlock and 2000)
+  and the shop in paint (every item's icon, the names, the armory, the picked item's icon).
+- The ui pack: 21.4 -> 23.6 MB (uploaded).
+- Version 0.31.175, versionCode 261, SERVER_BUILD 0.31.175.

@@ -16,6 +16,7 @@ const App = preload("res://scripts/app/siege_app.gd")
 const Profile = preload("res://scripts/meta/profile.gd")
 const Moba = preload("res://scripts/siege/moba.gd")
 const HeroPanel = preload("res://scripts/app/moba_panel.gd")
+const ItemIcon = preload("res://scripts/siege/item_icon.gd")
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 
 var fails: Array = []
@@ -118,14 +119,20 @@ func _process(delta: float) -> bool:
 				for hid in Moba.HERO_ORDER:
 					if btn("moba_hero_" + str(hid)) != null:
 						n += 1
-				check(n == 18 and app.modal.hero == "knight" and has_text(app.modal, "KNIGHT · TANK") and has_text(app.modal, "W SHIELD BASH"),
+				var m = app.modal
+				check(n == 18 and m.hero == "knight" and m._stage_name.text == "KNIGHT" and m._stage_role.text == "TANK" and has_text(m, "W SHIELD BASH"),
 					"18 heroes; the Knight to start, described: his role and kit (0.31.167)")
+				# 0.31.175: the stage -- the Knight in 3D on the hall's dais, his role's badge; the role badges over the columns
+				check(m._show != null and m._show.cls == "knight" and m._stage_badge.texture != null and not m._stage_lock.visible
+					and HeroPanel.role_badge("marksman") != null and m.find_children("*", "TextureRect", true, false).any(func(t): return t.texture != null and str(t.texture.resource_path).ends_with("hero_hall.webp")),
+					"the stage: the Knight in 3D in the champions' hall, the TANK badge; a badge for each role")
 				# 0.31.168: the new six are bought with gold -- a locked one shows its price; BATTLE becomes UNLOCK
 				app.profile.d.gold = 1000
 				press("moba_hero_golem")
 				var go: Button = app.modal._go
 				check(app.modal.hero == "golem" and not app.profile.owns_hero("golem") and go.text.begins_with("UNLOCK") and go.disabled
-					and has_text(app.modal, "GOLEM · TANK") and has_text(app.modal, "Q BOULDER"), "the Golem: locked, 2000 gold (you have 1000)")
+					and app.modal._stage_name.text == "GOLEM" and app.modal._stage_lock.visible and app.modal._stage_price.text == "2000"
+					and has_text(app.modal, "Q BOULDER"), "the Golem: locked, 2000 gold (you have 1000)")
 				_shot("moba_heroes_locked")
 				app.profile.d.gold = 2600
 				press("moba_hero_golem")
@@ -133,8 +140,8 @@ func _process(delta: float) -> bool:
 				check(app.profile.owns_hero("golem") and int(app.profile.d.gold) == 600 and app.modal != null and app.modal._go.text == "BATTLE",
 					"UNLOCK: 2000 gold, the Golem is yours (and still the window)")
 				press("moba_hero_archmage")
-				check(app.modal.hero == "archmage" and has_text(app.modal, "ARCHMAGE · MAGE") and has_text(app.modal, "E MANA SHIELD"),
-					"the Archmage picked")
+				check(app.modal.hero == "archmage" and app.modal._stage_name.text == "ARCHMAGE" and app.modal._stage_role.text == "MAGE"
+					and app.modal._show.cls == "archmage" and has_text(app.modal, "E MANA SHIELD"), "the Archmage picked")
 				_shot("moba_heroes")
 				gold0 = int(app.profile.d.gold)
 				# (0.31.170: a server without the online 5v5 -- BATTLE is the match against bots, as here since 0.31.155;
@@ -174,6 +181,11 @@ func _process(delta: float) -> bool:
 				press("shop_item_sword")
 				s.hud._refresh_shop(me)
 				check(has_text(s.hud.shop_panel, "LONG SWORD") and has_text(s.hud.shop_panel, "BUY · 350"), "a Long Sword picked: what it gives, BUY · 350")
+				# 0.31.175: every item its painted icon and its name on its cell; the armory painted over the shop
+				var painted := Moba.ITEM_ORDER.all(func(x): return ItemIcon.texture(str(x)) != null)
+				check(painted and has_text(s.hud.shop_panel, "Bloodthirster") and s.hud._shop_pick_icon.item == "sword"
+					and s.hud.shop_panel.find_children("*", "TextureRect", true, false).any(func(t): return t.texture != null and str(t.texture.resource_path).ends_with("shop_banner.webp")),
+					"the shop in paint: each item's icon and name, the armory across the top, the picked item's icon")
 				press("shop_act")
 				check((me.items as Array) == ["sword"] and int(me.gold) == g0 - 350, "bought, in your castle (%d gold left)" % int(me.gold))
 				_go("shop2")

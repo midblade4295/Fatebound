@@ -12,12 +12,19 @@ const Moba = preload("res://scripts/siege/moba.gd")
 const Kits = preload("res://scripts/siege/moba_kits.gd")      # 0.31.167: roles and kits
 const Eco = preload("res://scripts/meta/economy.gd")
 const Hud = preload("res://scripts/siege/siege_hud.gd")         # 0.31.171: the ability icons
+const Showcase = preload("res://scripts/app/showcase.gd")      # 0.31.175: the picked hero in 3D
 const ROLE_COL := {"tank":"#6fa8dc", "fighter":"#e06666", "assassin":"#a48ae0", "mage":"#f6a24b", "marksman":"#8fd16f",
 	"support":"#ffd966"}
 const COIN := "res://assets/ui/currency/coin.png"
+# 0.31.175 (Kevin: "Use eleven or meshy to make these menus better looking and more high quality"): ElevenLabs paintings
+# (tools/build_menu_icons.py) -- the champions' hall the picked hero stands in, the six role badges over the columns,
+# the padlock on a hero still to unlock
+const HALL := "res://assets/ui/menu/hero_hall.webp"
+const LOCK := "res://assets/ui/menu/lock.png"
+const STAGE_H := 136.0
 
 const CARD_W := 54.0
-const CARD_H := 78.0
+const CARD_H := 72.0
 const LOOK := {"knight":"knight", "barbarian":"barbarian", "rogue":"rogue", "ranger":"ranger", "mage":"mage", "priest":"priest",
 	"crusader":"crusader", "berserker":"berserker", "assassin":"assassin", "sniper":"sniper", "archmage":"archmage", "necromancer":"necromancer",
 	"golem":"golem", "dragoon":"dragoon", "duelist":"duelist", "stormcaller":"stormcaller", "musketeer":"musketeer", "druid":"druid"}
@@ -25,9 +32,22 @@ const LOOK := {"knight":"knight", "barbarian":"barbarian", "rogue":"rogue", "ran
 var app
 var hero := "knight"
 var _grid: GridContainer
-var _info: Label
 var _go: Button
 var _kit: VBoxContainer          # 0.31.171: the kit, a row per ability with its icon
+var _show                        # 0.31.175: the stage -- the hero in 3D on the hall's dais, his name, role and price
+var _stage_name: Label
+var _stage_role: Label
+var _stage_badge: TextureRect
+var _stage_text: Label
+var _stage_lock: HBoxContainer
+var _stage_price: Label
+
+static func role_badge(role: String) -> Texture2D:
+	var p := "res://assets/ui/roles/%s.png" % role
+	return load(p) if ResourceLoader.exists(p) else null
+
+static func _tex(p: String) -> Texture2D:
+	return load(p) if ResourceLoader.exists(p) else null
 
 static func portrait(hid: String) -> String:
 	return "res://assets/ui/skins/default_%s.png" % str(LOOK.get(hid, "knight"))
@@ -47,10 +67,12 @@ func open(a) -> void:
 	# (0.31.165: the Rift -- three towers a lane, a keep with a gate at each lane's end and two King towers inside;
 	# 0.31.166: the Grave Wyrm)
 	# (0.31.170: online -- the players in the match and bots in the seats nobody has taken)
-	UI2.body(body, "Five heroes a side: you, other players and bots in the seats nobody has taken. Minions march down three lanes past three towers each to a "
-		+ "gate of the keep. Level up to 10 near the fighting -- W at level 2, E at 3, your ULTIMATE at 6 -- earn gold and "
-		+ "buy items in your keep. The jungle's camps give gold and buffs; the Bone Lord blesses your side, every Grave "
-		+ "Wyrm slain toughens it. Break a lane, its gate and the two King towers, then defeat their King on his throne.", 11, UI2.SOFT)
+	_build_stage(body)
+	# (0.31.175: the same, said shorter -- the stage took its room)
+	UI2.body(body, "Five heroes a side -- players, and bots in the empty seats. Minions march down three lanes, past three towers "
+		+ "each, to a gate of the keep. Level up to 10 near the fighting (W at 2, E at 3, ULTIMATE at 6), earn gold, buy items "
+		+ "in your keep. Jungle camps give gold and buffs; the Bone Lord blesses your side, each Grave Wyrm slain toughens "
+		+ "it. Break a lane, its gate and the two King towers, then defeat their King.", 10, UI2.SOFT)
 	UI2.text(body, "PICK YOUR HERO", 16, UI2.GOLD)
 	var holder := CenterContainer.new()
 	holder.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -60,8 +82,6 @@ func open(a) -> void:
 	_grid.add_theme_constant_override("h_separation", 4)
 	_grid.add_theme_constant_override("v_separation", 5)
 	holder.add_child(_grid)
-	_info = UI2.body(body, "", 11, Color.WHITE)
-	_info.vertical_alignment = VERTICAL_ALIGNMENT_TOP
 	_kit = VBoxContainer.new()
 	_kit.add_theme_constant_override("separation", 3)
 	_kit.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -69,6 +89,101 @@ func open(a) -> void:
 	_go = UI2.button(body, "BATTLE", "orange", _on_go, "moba_battle", 22, 56.0, 16.0)
 	UI2.sweep(_go)
 	_render()
+
+func _build_stage(body: VBoxContainer) -> void:
+	# 0.31.175: the picked hero, in 3D and idling, on the dais of the painted champions' hall; his name, role badge,
+	# what the role does, and the price while he's locked, on the hall's dark right side
+	var st := Panel.new()
+	st.custom_minimum_size = Vector2(0, STAGE_H)
+	st.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.04, 0.03, 0.06)
+	sb.set_corner_radius_all(12)
+	st.add_theme_stylebox_override("panel", sb)
+	st.clip_children = CanvasItem.CLIP_CHILDREN_AND_DRAW
+	body.add_child(st)
+	var hall := TextureRect.new()
+	hall.texture = _tex(HALL)
+	hall.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	hall.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	hall.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	hall.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	st.add_child(hall)
+	var rim := Panel.new()                 # (a thin gold rim over the painting's edge)
+	var rs := StyleBoxFlat.new()
+	rs.draw_center = false
+	rs.border_color = Color("#c99a3a")
+	rs.set_border_width_all(2)
+	rs.set_corner_radius_all(12)
+	rim.add_theme_stylebox_override("panel", rs)
+	rim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	rim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_show = Showcase.new()
+	_show.plinth = false
+	_show.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	st.add_child(_show)
+	var info := VBoxContainer.new()
+	info.add_theme_constant_override("separation", 3)
+	info.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	st.add_child(info)
+	_stage_name = UI2.text(info, "", 24, Color.WHITE, Color("#120a20"))
+	var rr := HBoxContainer.new()
+	rr.add_theme_constant_override("separation", 5)
+	rr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	info.add_child(rr)
+	_stage_badge = TextureRect.new()
+	_stage_badge.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_stage_badge.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_stage_badge.custom_minimum_size = Vector2(26, 26)
+	_stage_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	rr.add_child(_stage_badge)
+	_stage_role = UI2.text(rr, "", 15, Color.WHITE, Color("#120a20"))
+	_stage_text = UI2.body(info, "", 10, Color("#e8dcc8"))
+	_stage_text.custom_minimum_size = Vector2(150, 0)
+	_stage_lock = HBoxContainer.new()
+	_stage_lock.add_theme_constant_override("separation", 4)
+	_stage_lock.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	info.add_child(_stage_lock)
+	for t in [LOCK, COIN]:
+		var ic := TextureRect.new()
+		ic.texture = _tex(t)
+		ic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		ic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		ic.custom_minimum_size = Vector2(20, 20)
+		ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_stage_lock.add_child(ic)
+		if t == LOCK:
+			_stage_lock.move_child(ic, 0)
+	_stage_price = UI2.text(_stage_lock, "", 15, Color("#ffd65a"), Color("#201002"))
+	_stage_lock.move_child(_stage_price, 2)
+	st.add_child(rim)
+	st.resized.connect(func():
+		# the hall's dais is at ~23 % across, its top ~76 % down the painting (cover-scaled to the stage's width): the
+		# hero's feet (78 % down his frame) on it
+		var w := st.size.x
+		var hh := w * 0.5
+		var dais := Vector2(w * 0.235, hh * 0.755 - (hh - st.size.y) * 0.5)
+		var fh := 176.0
+		_show.size = Vector2(150, fh)
+		_show.position = Vector2(dais.x - 75.0, dais.y - fh * 0.78)
+		info.position = Vector2(w * 0.47, 14)
+		_stage_text.custom_minimum_size.x = w * 0.53 - 14
+		info.size = Vector2(w * 0.53 - 10, 0))
+
+func _render_stage() -> void:
+	var role := Kits.role_of(hero)
+	_stage_name.text = str(Moba.HEROES[hero].name).to_upper()
+	_stage_role.text = str(Kits.ROLE_NAMES.get(role, ""))
+	_stage_role.add_theme_color_override("font_color", Color(str(ROLE_COL.get(role, "#ffffff"))).lightened(0.25))
+	_stage_badge.texture = role_badge(role)
+	_stage_text.text = str(Kits.ROLE_TEXT.get(role, ""))
+	var owned := _owns(hero)
+	_stage_lock.visible = not owned
+	_stage_price.text = "%d" % int(Eco.HERO_PRICES.get(hero, 0))
+	if _show != null:
+		var look: Dictionary = app.profile.look_for(hero) if (Eco.CLASSES + Eco.UP_CLASSES).has(hero) else {}
+		_show.show_look(hero, look)
+		_show.modulate = Color.WHITE if owned else Color(0.62, 0.62, 0.7)
 
 func _on_go() -> void:
 	if not _owns(hero):
@@ -120,10 +235,7 @@ func _render() -> void:
 		else:
 			_grid.add_child(_card(id))
 	var lines := kit_lines(hero)
-	var txt: String = lines[0]
-	if not _owns(hero):
-		txt = "LOCKED -- %d gold to unlock (you have %d).\n" % [int(Eco.HERO_PRICES.get(hero, 0)), int(app.profile.d.gold)] + txt
-	_info.text = txt
+	_render_stage()
 	for c in _kit.get_children():
 		_kit.remove_child(c)
 		c.queue_free()
@@ -173,35 +285,77 @@ func _kit_row(hid: String, slot: String, line: String) -> Control:
 	return row
 
 func _role_head(role: String) -> Control:
+	# 0.31.175: the role's painted badge and its name (was a coloured strip with the name in 5-8 px)
 	var c := Control.new()
-	c.custom_minimum_size = Vector2(CARD_W, 15)
-	var strip := ColorRect.new()
-	strip.color = Color(Color(str(ROLE_COL.get(role, "#ffffff"))), 0.9)
-	strip.position = Vector2(0, 1)
-	strip.size = Vector2(CARD_W, 13)
-	c.add_child(strip)
-	var rl := UI2.text(c, str(Kits.ROLE_NAMES.get(role, "")), {"marksman":5, "assassin":6, "support":6, "fighter":6}.get(role, 8), Color("#120a20"),
-		Color(0, 0, 0, 0), 0, false)
+	c.custom_minimum_size = Vector2(CARD_W, 33)
+	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var b := TextureRect.new()
+	b.texture = role_badge(role)
+	b.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	b.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	b.position = Vector2((CARD_W - 22.0) * 0.5, 0)
+	b.size = Vector2(22, 22)
+	b.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	c.add_child(b)
+	var nm := str(Kits.ROLE_NAMES.get(role, ""))
+	var fs := 9
+	while fs > 6 and UI2.LG.get_string_size(nm, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > CARD_W - 2.0:
+		fs -= 1
+	var rl := UI2.text(c, nm, fs, Color(str(ROLE_COL.get(role, "#ffffff"))).lightened(0.2), Color("#120a20"), 2, false)
 	rl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	rl.position = Vector2(0, 2)
-	rl.size = Vector2(CARD_W, 13)
+	rl.position = Vector2(-2, 21)
+	rl.size = Vector2(CARD_W + 4, 12)
 	return c
 
+static var _glows: Dictionary = {}
+
+static func _glow(role: String) -> Texture2D:
+	# a soft light behind a card's portrait in its role's colour
+	if not _glows.has(role):
+		var g := Gradient.new()
+		var c := Color(str(ROLE_COL.get(role, "#ffffff")))
+		g.set_color(0, Color(c, 0.75))
+		g.set_color(1, Color(c.darkened(0.6), 0.0))
+		var gt := GradientTexture2D.new()
+		gt.gradient = g
+		gt.fill = GradientTexture2D.FILL_RADIAL
+		gt.fill_from = Vector2(0.5, 0.42)
+		gt.fill_to = Vector2(0.5, 1.05)
+		gt.width = 64
+		gt.height = 96
+		_glows[role] = gt
+	return _glows[role]
+
 func _card(hid: String) -> Control:
+	# 0.31.175: on a dark ground in its role's colour with a glow behind the portrait; a hero to unlock dimmed, with
+	# the padlock and his price in gold; the picked one in a gold frame with a tick
 	var on := hid == hero
 	var owned := _owns(hid)
+	var role := Kits.role_of(hid)
+	var rim := Color(str(ROLE_COL.get(role, "#5a6470")))
 	var b := Button.new()
 	b.focus_mode = Control.FOCUS_NONE
 	b.custom_minimum_size = Vector2(CARD_W, CARD_H)
 	b.set_meta("action_key", "moba_hero_" + hid)
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.1, 0.07, 0.03) if on else Color(0.05, 0.05, 0.08)
-	var rim := Color(str(ROLE_COL.get(Kits.role_of(hid), "#5a6470")))
-	sb.border_color = Color("#ffc23d") if on else (rim.darkened(0.15) if owned else Color("#3a3f48"))
+	sb.bg_color = rim.darkened(0.82) if owned else Color(0.06, 0.06, 0.08)
+	sb.border_color = Color("#ffc23d") if on else (rim.darkened(0.1) if owned else Color("#3a3f48"))
 	sb.set_border_width_all(3 if on else 2)
 	sb.set_corner_radius_all(8)
+	if on:
+		sb.shadow_color = Color(1.0, 0.78, 0.25, 0.55)
+		sb.shadow_size = 5
 	for st in ["normal", "hover", "pressed", "focus", "hover_pressed", "disabled"]:
 		b.add_theme_stylebox_override(st, sb)
+	var glow := TextureRect.new()
+	glow.texture = _glow(role)
+	glow.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	glow.stretch_mode = TextureRect.STRETCH_SCALE
+	glow.position = Vector2(3, 3)
+	glow.size = Vector2(CARD_W - 6, CARD_H - 6)
+	glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	glow.modulate = Color(1, 1, 1, 0.9 if owned else 0.25)
+	b.add_child(glow)
 	var tex := TextureRect.new()
 	var p := portrait(hid)
 	tex.texture = load(p) if ResourceLoader.exists(p) else null
@@ -213,6 +367,13 @@ func _card(hid: String) -> Control:
 	if not owned:
 		tex.modulate = Color(0.45, 0.45, 0.5)
 	b.add_child(tex)
+	# the name on a dark band across the card's foot
+	var band := ColorRect.new()
+	band.color = Color(0.03, 0.02, 0.05, 0.82)
+	band.position = Vector2(2, CARD_H - 17)
+	band.size = Vector2(CARD_W - 4, 15)
+	band.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	b.add_child(band)
 	var nm := str(Moba.HEROES[hid].name).to_upper()
 	var nl := UI2.text(b, nm, 8 if nm.length() <= 6 else (7 if nm.length() <= 8 else 6), Color.WHITE, Color("#120a20"), 3, false)
 	nl.clip_text = true
@@ -221,11 +382,19 @@ func _card(hid: String) -> Control:
 	nl.size = Vector2(CARD_W, 14)
 	nl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	if not owned:
-		# the price over the portrait: a coin and the gold
+		var lk := TextureRect.new()
+		lk.texture = _tex(LOCK)
+		lk.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		lk.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		lk.position = Vector2(CARD_W * 0.5 - 11, CARD_H * 0.2)
+		lk.size = Vector2(22, 22)
+		lk.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		b.add_child(lk)
+		# the price under the padlock: a coin and the gold
 		var chip := HBoxContainer.new()
 		chip.add_theme_constant_override("separation", 1)
 		chip.alignment = BoxContainer.ALIGNMENT_CENTER
-		chip.position = Vector2(0, CARD_H * 0.36)
+		chip.position = Vector2(0, CARD_H * 0.52)
 		chip.size = Vector2(CARD_W, 16)
 		chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		b.add_child(chip)
