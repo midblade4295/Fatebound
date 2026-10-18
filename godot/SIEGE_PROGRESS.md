@@ -5288,3 +5288,32 @@ button so player is always playing on server plus they play with bots anyway whe
   (32 phones, 4 rooms): all open, step 288 ms/s + snapshots 145 ms/s for the 4 rooms early in their matches (before the
   snapshot speed-up). Preview APK: build/Fatebound-Siege-0.31.170-fatebound.apk (31 MB, preview key), sha256
   c8d0a8a9...6bfe914d1adf.
+
+## 0.31.171 — every ability its own icon and sound (step 3 of the plan: hero polish)
+Kevin: "Step 3 now" (hero polish and SFX), and for what it would cost: "Both, 2 takes (Recommended)" -- painted icons
+and a sound of its own for every ability, the better of two takes each.
+- Icons: 72, a Q, W, E and R for each of the 18 heroes, painted by ElevenLabs gpt-image-2 as three sprite sheets (a
+  column a hero, a row an ability; the ultimates golden), two takes each, the better icon of the two picked one by one.
+  tools/build_ability_icons.py finds each sheet's tiles, cuts a square out of the middle of the picked one and writes
+  assets/ui/abilities/<hero>_<q|w|e|r>.png (192 px; sources in art_sources/hero_icons, outside the project). The match's
+  Q, W (the Crusader's shield too), E and R buttons show their icon in the circle: lit when it's ready, dimmed while it
+  recharges with the part still to go shaded and the seconds left over it, dark with LV 2 / LV 3 / LV 6 while locked;
+  the Q/W/E/R mark and the ultimate's glow and rank as before. ATTACK, DODGE and WARD keep their names. The hero window
+  shows the kit as four rows, each its icon and its line.
+- Sounds: 77 new cues from 72 ElevenLabs sound-effect prompts (eleven_text_to_sound_v2, two takes each; the better take
+  picked by its waveform and spectrogram, cut and layered by tools/build_hero_sfx.py -- mono 44.1 kHz, high-passed for
+  phone speakers, levelled: a Q/W/E to the loudness of the old combat cues, an ultimate a little over; sources in
+  art_sources/hero_sfx). Every W and E, and the new heroes' Qs, play their own ("ab_<spell>") instead of a borrowed one;
+  all 18 ultimates their own ("ult_<hero>"; they had six synthesized sounds between them, most shared);
+  the Knight's SHIELD and the Crusader's (they were silent), the Berserker's WHIRLWIND, the Assassin's VANISH, the
+  Sniper's PIERCE; a spell that lands later has its sound where it lands: FIRE PILLAR's eruption, ENTANGLE's roots, a
+  BEAR TRAP snapping shut, a RIPOSTE's answer, LEAP's and DRAGON DIVE's landing, THUNDERSTORM's bolts; FLURRY's slashes
+  and GRAND CHALLENGE's thrusts; and the Musketeer's, Stormcaller's, Druid's and Golem's basic attacks and hits.
+- ElevenLabs credits: the sounds ~2,400 (144 generations at 16.7), the icon sheets ~1,107 (6 at 184.6) -- about 3,500 of
+  the ~8,800 estimated.
+- New test: hero_assets_test (every hero's four icons; every spell's sound its own; the match's sound picker fed every
+  ultimate, spell, shot, hit and kit moment plays that one's cue, a file that exists, short and mono).
+- Version 0.31.171, versionCode 257 (the server is untouched: SERVER_BUILD stays 0.31.170). The packs: ui (21.3 MB,
+  the icons imported as lossy WebP at 0.85: 1 MB for the 72) and audio (8.0 MB) rebuilt and on the content-packs
+  branch; the rest unchanged. Dev tools: kit_shots.gd takes LEVEL (the locked buttons), app_shots.gd SHOT_MOBA=<hero>
+  (the hero window).

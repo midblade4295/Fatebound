@@ -1224,22 +1224,27 @@ func _listener() -> Vector2:
 		return me.pos
 	return _step_last if _step_last != Vector2.INF else Vector2.ZERO
 
-# 0.31.167: each W/E's sound -- [cue, takes, gain]
-const SPELL_CUE := {"bash":["tm_sword_block", 3, 1.0], "rally":["surge", 1, 0.7], "consecrate":["magic", 1, 0.8],
-	"leap":["tm_jump_dirt", 1, 1.0], "bloodlust":["rampage", 1, 0.6], "charge":["tm_sword_swing", 3, 1.0],
-	"frenzy":["rampage", 1, 0.5], "caltrops":["tm_rock_throw", 2, 0.8], "poison":["tm_unsheath", 2, 0.9],
-	"shadowstep":["shadow", 1, 0.7], "knives":["tm_sword_swing", 3, 0.9], "tumble":["tm_jump_dirt", 1, 0.9],
-	"snare":["tm_bow_shot", 2, 1.0], "trap":["tm_unlock", 1, 0.9], "mark":["crit", 1, 0.6],
-	"pillar":["tm_firespray", 2, 0.8], "blink":["magic", 1, 0.6], "missiles":["tm_spell_hit", 3, 0.9],
-	"manashield":["magic", 1, 0.7], "holylight":["magic", 1, 0.9], "dazzle":["surge", 1, 0.7],
-	"boneshield":["tm_revive", 1, 0.9], "curse":["shadow", 1, 0.6],
+# 0.31.167: each W/E's sound -- [cue, takes, gain]. 0.31.171 (step 3, hero polish): every one its own (tools/
+# build_hero_sfx.py, "ab_<spell>"); a spell that lands a moment later (FIRE PILLAR, ENTANGLE) or answers a blow
+# (RIPOSTE) keeps a light cast and has its own sound where it lands ("pillar", "burst", "riposte").
+const SPELL_CUE := {"bash":["ab_bash", 1, 1.0], "rally":["ab_rally", 1, 1.0], "consecrate":["ab_consecrate", 1, 1.0],
+	"leap":["ab_leap", 1, 1.0], "bloodlust":["ab_bloodlust", 1, 1.0], "charge":["ab_charge", 1, 1.0],
+	"frenzy":["ab_frenzy", 1, 1.0], "caltrops":["ab_caltrops", 1, 1.0], "poison":["ab_poison", 1, 1.0],
+	"shadowstep":["ab_shadowstep", 1, 1.0], "knives":["ab_knives", 1, 1.0], "tumble":["ab_tumble", 1, 1.0],
+	"snare":["ab_snare", 1, 1.0], "trap":["ab_trap", 1, 1.0], "mark":["ab_mark", 1, 1.0],
+	"pillar":["tm_firespray", 2, 0.5], "blink":["ab_blink", 1, 1.0], "missiles":["ab_missiles", 1, 1.0],
+	"manashield":["ab_manashield", 1, 1.0], "holylight":["ab_holylight", 1, 1.0], "dazzle":["ab_dazzle", 1, 1.0],
+	"boneshield":["ab_boneshield", 1, 1.0], "curse":["ab_curse", 1, 1.0],
 	# 0.31.168: the six new heroes
-	"boulder":["tm_rock_throw", 2, 1.0], "stoneskin":["tm_crumble", 2, 0.7], "quake":["tm_rock_hit", 2, 1.0],
-	"sweep":["tm_sword_swing", 3, 1.0], "impale":["tm_sword_hit", 3, 0.9], "vault":["tm_jump_dirt", 1, 1.0],
-	"thrust":["tm_sword_swing", 3, 1.0], "riposte":["tm_sword_block", 3, 1.0], "feint":["shadow", 1, 0.6],
-	"chain":["energy", 1, 0.9], "static":["energy", 1, 0.7], "gust":["tm_firespray", 2, 0.5],
-	"buckshot":["tm_bomb_blast", 1, 0.5], "keg":["tm_rock_throw", 2, 0.7], "smokeroll":["roll", 1, 0.8],
-	"rejuv":["magic", 1, 0.8], "entangle":["tm_crumble", 2, 0.6], "barkskin":["tm_revive", 1, 0.8]}
+	"boulder":["ab_boulder", 1, 1.0], "stoneskin":["ab_stoneskin", 1, 1.0], "quake":["ab_quake", 1, 1.0],
+	"sweep":["ab_sweep", 1, 1.0], "impale":["ab_impale", 1, 1.0], "vault":["ab_vault", 1, 1.0],
+	"thrust":["ab_thrust", 1, 1.0], "riposte":["tm_sword_block", 3, 0.8], "feint":["ab_feint", 1, 1.0],
+	"chain":["ab_chain", 1, 1.0], "static":["ab_static", 1, 1.0], "gust":["ab_gust", 1, 1.0],
+	"buckshot":["ab_buckshot", 1, 1.0], "keg":["ab_keg", 1, 1.0], "smokeroll":["ab_smokeroll", 1, 1.0],
+	"rejuv":["ab_rejuv", 1, 1.0], "entangle":["tm_crumble", 2, 0.4], "barkskin":["ab_barkskin", 1, 1.0]}
+# 0.31.171: the new heroes' basic attacks and their hits (by HERO_SHOT, and the Golem's stone hammer)
+const SHOT_CUE := {"ball":"atk_musket", "bolt":"atk_bolt", "thorn":"atk_thorn"}
+const HIT_CUE := {"musketeer":"hit_musket", "stormcaller":"hit_bolt", "druid":"hit_thorn", "golem":"hit_golem"}
 
 func _cue(base: String, n: int, at: Vector2, reach := HEAR_R, always := false, gain := 1.0) -> void:
 	if audio == null or not audio.has_method("play"):
@@ -1273,10 +1278,13 @@ func _event_sound(e: Dictionary) -> void:
 			var ab := str(e.get("ability", ""))
 			if ab == "hammer":
 				_cue("hammerThrow", 1, src.pos, HEAR_R + 4.0, mine)
-			elif str(src.get("shot", "")) == "ball":
-				_cue("tm_bomb_blast", 1, src.pos, HEAR_R + 6.0, mine, 0.35)        # 0.31.168: the Musketeer's flintlock
-			elif str(src.get("shot", "")) == "bolt":
-				_cue("energy", 1, src.pos, HEAR_R, mine, 0.6)                     # 0.31.168: the Stormcaller's bolt
+			elif str(e.get("kind", "")) == "ability" and str(sim.ability_of(src)) == "pierce":
+				_cue("ab_pierce", 1, src.pos, HEAR_R + 4.0, mine)                # 0.31.171: the Sniper's PIERCE
+			elif SHOT_CUE.has(str(src.get("shot", ""))):
+				# 0.31.168: the Musketeer's flintlock, the Stormcaller's bolt, the Druid's thorn (0.31.171: their own)
+				_cue(str(SHOT_CUE[str(src.shot)]), 1, src.pos, HEAR_R + (6.0 if str(src.shot) == "ball" else 0.0), mine)
+			elif str(src.get("hid", "")) == "golem":
+				_cue("atk_golem", 1, src.pos, HEAR_R, mine)                      # 0.31.171: his stone hammer
 			elif src.cls == "ranger":
 				_cue("tm_bow_shot", 2, src.pos, HEAR_R, mine)
 			elif src.cls == "mage":
@@ -1292,7 +1300,9 @@ func _event_sound(e: Dictionary) -> void:
 			var hurt_me := mine or str(e.get("by", "")) == str(hud.player_id)
 			if by.is_empty() or by.cls == "priest":
 				return                                       # a drain is silent
-			if by.cls == "ranger":
+			if HIT_CUE.has(str(by.get("hid", ""))):
+				_cue(str(HIT_CUE[str(by.hid)]), 1, at, HEAR_R, hurt_me)          # 0.31.171: the new heroes' hits
+			elif by.cls == "ranger":
 				_cue("tm_bow_hit", 3, at, HEAR_R, hurt_me)
 			elif by.cls == "mage":
 				_cue("tm_spell_hit", 3, at, HEAR_R, hurt_me)
@@ -1303,7 +1313,9 @@ func _event_sound(e: Dictionary) -> void:
 		"nova":
 			_cue("tm_firespray", 2, _unit_pos(e.get("id", "")), HEAR_R, mine)
 		"whirl":
-			_cue("tm_sword_swing", 3, _unit_pos(e.get("id", "")), HEAR_R, mine)
+			_cue("ab_whirl", 1, _unit_pos(e.get("id", "")), HEAR_R, mine)       # 0.31.171: the Berserker's WHIRLWIND
+		"block_up":
+			_cue("ab_shield", 1, _unit_pos(e.get("id", "")), HEAR_R, mine)      # 0.31.171: the Knight's Q, the Crusader's W
 		"gate_hit":
 			_cue("tm_gate_hit", 2, _gate_pos(e.get("gate", "")), HEAR_R + 6.0)
 		"gate_broken":
@@ -1320,7 +1332,9 @@ func _event_sound(e: Dictionary) -> void:
 			if str(e.get("id", "")) == hud.player_id:
 				_herald_say("mk_" + ["", "", "double", "triple", "quadra", "penta", "legendary"][mini(int(e.n), 6)])
 		"vanish":                                       # 0.31.32: the three upgrades' new abilities
-			_cue("tm_firespray", 2, _unit_pos(str(e.id)), 14.0, false, 0.35)
+			# (0.31.171: the Assassin's own; the Duelist's FEINT has its spell's)
+			if str(sim.by_id.get(str(e.id), {}).get("hid", "")) != "duelist":
+				_cue("ab_vanish", 1, _unit_pos(str(e.id)), 14.0, false, 0.8)
 		"meteor_warn":
 			_cue("tm_fireball", 3, e.pos, 40.0, false, 0.9)
 		"meteor_hit":                                   # 0.31.58 (Kevin): quieter, less dramatic than Siege's bomb
@@ -1329,13 +1343,15 @@ func _event_sound(e: Dictionary) -> void:
 		"pierce_hit":
 			_cue("tm_bow_hit", 3, e.pos, HEAR_R, false, 1.1)
 		"ult":                                          # 0.31.157 5V5: each ultimate its own sound
-			var us: String = {"knight":"bulwark", "barbarian":"rampage", "rogue":"shadow", "ranger":"barrage", "mage":"ember",
-				"priest":"magic", "crusader":"surge", "berserker":"rampage", "assassin":"shadow", "sniper":"crit", "archmage":"meteor",
-				"necromancer":"magic", "golem":"rampage", "dragoon":"surge", "duelist":"crit", "stormcaller":"energy",
-				"musketeer":"barrage", "druid":"magic"}.get(str(e.get("ult", "")), "surge")
-			_cue(us, 1, e.get("pos", _unit_pos(e.get("id", ""))), 40.0, mine)
+			# (0.31.171: all eighteen from tools/build_hero_sfx.py, "ult_<hero>")
+			var hid := str(e.get("ult", ""))
+			_cue("ult_" + hid if Moba.HEROES.has(hid) else "surge", 1, e.get("pos", _unit_pos(e.get("id", ""))), 40.0, mine)
 		"flurry_hit":
-			_cue("tm_sword_hit", 3, e.get("pos", Vector2.INF), HEAR_R, mine)
+			# 0.31.171: the Assassin's FLURRY slashes, the Duelist's GRAND CHALLENGE thrusts
+			if str(sim.by_id.get(str(e.get("id", "")), {}).get("hid", "")) == "duelist":
+				_cue("ab_thrust", 1, e.get("pos", Vector2.INF), HEAR_R, mine, 0.9)
+			else:
+				_cue("flurry", 3, e.get("pos", Vector2.INF), HEAR_R, mine)
 		"lord_slam":
 			_cue("tm_rock_hit", 2, e.get("pos", Vector2.INF), 40.0, false, 1.0)
 		"lord_down", "camp_up", "lord_march", "wyrm_down":
@@ -1345,20 +1361,26 @@ func _event_sound(e: Dictionary) -> void:
 			var sc: Array = SPELL_CUE.get(str(e.get("spell", "")), ["tm_spell_hit", 3, 0.8])
 			_cue(str(sc[0]), int(sc[1]), e.get("pos", Vector2.INF), 30.0, mine, float(sc[2]))
 		"slam":
-			_cue("tm_rock_hit", 2, e.get("pos", Vector2.INF), 30.0, false, 0.9)
+			# a leap's landing (0.31.171: LEAP's and DRAGON DIVE's own)
+			var land: String = {"barbarian":"ab_leap_land", "dragoon":"ult_dragoon_land"}.get(
+				str(sim.by_id.get(str(e.get("id", "")), {}).get("hid", "")), "")
+			if land != "":
+				_cue(land, 1, e.get("pos", Vector2.INF), 30.0, mine)
+			else:
+				_cue("tm_rock_hit", 2, e.get("pos", Vector2.INF), 30.0, false, 0.9)
 		"pillar":
-			_cue("tm_fireball", 3, e.get("c", Vector2.INF), 30.0, false, 1.0)
+			_cue("ab_pillar", 1, e.get("c", Vector2.INF), 30.0, false, 1.0)         # 0.31.171: the eruption
 		"trap_snap":
-			_cue("tm_chest_close", 2, e.get("pos", Vector2.INF), 24.0, false, 1.0)
+			_cue("ab_trap_snap", 1, e.get("pos", Vector2.INF), 24.0, false, 1.0)
 		"burst":                                               # 0.31.168: a powder keg, roots
 			if str(e.get("spell", "")) == "keg":
 				_cue("tm_bomb_blast", 1, e.get("c", Vector2.INF), 36.0, false, 0.8)
 			else:
-				_cue("tm_crumble", 2, e.get("c", Vector2.INF), 24.0, false, 0.9)
+				_cue("ab_entangle", 1, e.get("c", Vector2.INF), 24.0, false, 1.0)  # 0.31.171: the roots
 		"zap":                                                 # 0.31.168: a THUNDERSTORM bolt
-			_cue("energy", 1, e.get("c", Vector2.INF), 36.0, false, 0.9)
+			_cue("hit_bolt", 1, e.get("c", Vector2.INF), 36.0, false, 1.0)
 		"riposte":
-			_cue("parry", 1, e.get("pos", Vector2.INF), HEAR_R, mine, 1.0)
+			_cue("ab_riposte", 1, e.get("pos", Vector2.INF), HEAR_R, mine, 1.0)    # 0.31.171: the answer
 		"wyrm_breath":                                         # 0.31.166: the Grave Wyrm's soul-fire
 			_cue("tm_fireball", 3, e.get("pos", Vector2.INF), 40.0, false, 1.0)
 		"buff":

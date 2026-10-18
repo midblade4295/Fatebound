@@ -149,6 +149,11 @@ func _process(_d: float) -> bool:
 				Screens.open_item(app, pv)
 		if frames == base_f + 12 and tabs[i] == "home" and OS.has_environment("SHOT_ORDERS"):
 			app.open_orders()                            # 0.31.112: the ORDERS window
+		if frames == base_f + 12 and tabs[i] == "home" and OS.has_environment("SHOT_MOBA"):
+			app.open_moba()                              # 0.31.171: the hero window (SHOT_MOBA=<hero>: that one picked)
+			if app.modal != null and OS.get_environment("SHOT_MOBA") != "1":
+				app.modal.hero = OS.get_environment("SHOT_MOBA")
+				app.modal._render()
 		if frames == base_f + 21 and OS.has_environment("SHOT_ZOOM"):
 			var zroot: Node = app.modal if app.modal != null else app          # (0.31.64: the locker's hero too)
 			for c in zroot.find_children("*", "Control", true, false):

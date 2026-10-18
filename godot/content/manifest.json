@@ -4,11 +4,11 @@
  "packs": [
   {
    "name": "ui",
-   "file": "ui-aa97e38c4269.pck",
-   "size": 20414416,
-   "sha256": "53a25b7f7762079d2707316fc340f6910fe85b68a0b99377c9e9e42eae8f9155",
-   "inputs": "aa97e38c42692f480f4c923eee2addf90e1d3321b12645b0e7332edf4b2077be",
-   "probe": "res://assets/ui/currency/coin.png"
+   "file": "ui-2534d059e5ee.pck",
+   "size": 21310656,
+   "sha256": "b973cc4ac5ce64e8a81858e4d655be550140266807665dc8cf6dffa0b2cca756",
+   "inputs": "2534d059e5ee2b98c41643bd4276b034eea7f09730f1fae4b550ae7c521c7680",
+   "probe": "res://assets/ui/abilities/archmage_e.png"
   },
   {
    "name": "world",
@@ -60,10 +60,10 @@
   },
   {
    "name": "audio",
-   "file": "audio-9591e4704a15.pck",
-   "size": 6726828,
-   "sha256": "a21da94110a403dd905c8715209461ef9e107916285e8d5d9a92a852a948d508",
-   "inputs": "9591e4704a157980881dcddf7ffaefd58854323a3ae93dbf4aef2f931bab579d",
+   "file": "audio-94b4a69800d6.pck",
+   "size": 7975776,
+   "sha256": "7fe01f6d1151500b5938afe76b5184f1c526f8821d219d3a4747dc41180ef477",
+   "inputs": "94b4a69800d62dd7033906481814f8968ef4501114913dbd604f343a303cc164",
    "probe": "res://assets/music/match.ogg"
   }
  ]

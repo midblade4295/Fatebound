@@ -11,6 +11,7 @@ const SocialUI = preload("res://scripts/app/social_ui.gd")
 const Moba = preload("res://scripts/siege/moba.gd")
 const Kits = preload("res://scripts/siege/moba_kits.gd")      # 0.31.167: roles and kits
 const Eco = preload("res://scripts/meta/economy.gd")
+const Hud = preload("res://scripts/siege/siege_hud.gd")         # 0.31.171: the ability icons
 const ROLE_COL := {"tank":"#6fa8dc", "fighter":"#e06666", "assassin":"#a48ae0", "mage":"#f6a24b", "marksman":"#8fd16f",
 	"support":"#ffd966"}
 const COIN := "res://assets/ui/currency/coin.png"
@@ -26,6 +27,7 @@ var hero := "knight"
 var _grid: GridContainer
 var _info: Label
 var _go: Button
+var _kit: VBoxContainer          # 0.31.171: the kit, a row per ability with its icon
 
 static func portrait(hid: String) -> String:
 	return "res://assets/ui/skins/default_%s.png" % str(LOOK.get(hid, "knight"))
@@ -59,9 +61,11 @@ func open(a) -> void:
 	_grid.add_theme_constant_override("v_separation", 5)
 	holder.add_child(_grid)
 	_info = UI2.body(body, "", 11, Color.WHITE)
-	_info.custom_minimum_size = Vector2(0, 120)
-	_info.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_info.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+	_kit = VBoxContainer.new()
+	_kit.add_theme_constant_override("separation", 3)
+	_kit.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	body.add_child(_kit)
 	_go = UI2.button(body, "BATTLE", "orange", _on_go, "moba_battle", 22, 56.0, 16.0)
 	UI2.sweep(_go)
 	_render()
@@ -115,10 +119,16 @@ func _render() -> void:
 			_grid.add_child(gap)
 		else:
 			_grid.add_child(_card(id))
-	var txt := kit_text(hero)
+	var lines := kit_lines(hero)
+	var txt: String = lines[0]
 	if not _owns(hero):
 		txt = "LOCKED -- %d gold to unlock (you have %d).\n" % [int(Eco.HERO_PRICES.get(hero, 0)), int(app.profile.d.gold)] + txt
 	_info.text = txt
+	for c in _kit.get_children():
+		_kit.remove_child(c)
+		c.queue_free()
+	for i in 4:
+		_kit.add_child(_kit_row(hero, ["q", "w", "e", "r"][i], str(lines[i + 1])))
 	if _owns(hero):
 		_go.text = "BATTLE"
 		_go.disabled = false
@@ -128,7 +138,10 @@ func _render() -> void:
 		_go.disabled = int(app.profile.d.gold) < price
 
 static func kit_text(hid: String) -> String:
-	# the hero's role and his kit: Q, W (level 2), E (level 3), R (level 6)
+	return "\n".join(kit_lines(hid))
+
+static func kit_lines(hid: String) -> Array:
+	# the hero's role, then his kit: Q, W (level 2), E (level 3), R (level 6)
 	var role := Kits.role_of(hid)
 	var lines := ["%s · %s -- %s" % [str(Moba.HEROES[hid].name).to_upper(), str(Kits.ROLE_NAMES.get(role, "")),
 		str(Kits.ROLE_TEXT.get(role, ""))]]
@@ -139,7 +152,25 @@ static func kit_text(hid: String) -> String:
 		lines.append("%s %s (lv %d): %s" % [slot.to_upper(), str(k.get("name", "")), int(Kits.UNLOCK[slot]), str(k.get("text", ""))])
 	var u: Dictionary = Moba.ULTS.get(hid, {})
 	lines.append("R %s (lv %d): %s" % [str(u.get("name", "")), Moba.ULT_LEVEL, str(u.get("text", ""))])
-	return "\n".join(lines)
+	return lines
+
+func _kit_row(hid: String, slot: String, line: String) -> Control:
+	# 0.31.171: the ability's icon (the HUD's button) beside its line
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var ic := TextureRect.new()
+	ic.texture = Hud.ability_icon(hid, slot)
+	ic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	ic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	ic.custom_minimum_size = Vector2(30, 30)
+	ic.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(ic)
+	var l := UI2.body(row, line, 10, Color.WHITE)
+	l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	l.custom_minimum_size = Vector2(10, 0)
+	return row
 
 func _role_head(role: String) -> Control:
 	var c := Control.new()

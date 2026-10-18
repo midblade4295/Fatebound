@@ -1,7 +1,8 @@
 extends SceneTree
 # 0.31.167: review shots of the 5v5 kits -- the HUD's Q W E R and each cast's effect, from the match's own camera.
 #   Xvfb :98 & DISPLAY=:98 godot --rendering-method mobile --resolution 900x1600 --path godot -s res://tools/kit_shots.gd
-# HERO (default knight), CASTS (comma list of w / e / q / r, a shot after each), OUT (prefix, default /tmp/kit_).
+# HERO (default knight), CASTS (comma list of w / e / q / r, a shot after each), OUT (prefix, default /tmp/kit_),
+# LEVEL (default 6).
 # You stand on open ground in the middle lane at level 6, an enemy hero 4 m ahead and a hurt ally beside you.
 const Mode = preload("res://scripts/siege/siege_mode.gd")
 var mode
@@ -44,7 +45,8 @@ func _process(_delta: float) -> bool:
 		for c in s.moba.camps:
 			c.next = INF
 		var me: Dictionary = s.by_id["you"]
-		while int(me.level) < 6:
+		var lv := int(OS.get_environment("LEVEL")) if OS.has_environment("LEVEL") else 6     # (0.31.171: LEVEL=1 -- the locked buttons)
+		while int(me.level) < lv:
 			s.moba.add_xp(me, s.moba.need(int(me.level)))
 		me.picks = []
 		me.pos = Vector2(0.0, 44.0)

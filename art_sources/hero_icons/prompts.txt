@@ -1,0 +1,53 @@
+The heroes' ability icons (0.31.171): ElevenLabs gpt-image-2, 16:9, 1K, medium quality, two takes per sheet
+(sheet<N>_a.png, sheet<N>_b.png). godot/tools/build_ability_icons.py cuts the picked take of each icon.
+
+Every sheet's prompt starts:
+A landscape 3:2 sprite sheet of 24 fantasy mobile-game ability icons in an exact grid of 6 columns and 4 rows, every
+icon a separate rounded-square tile of the same size with an even gap between tiles, on a plain flat dark charcoal
+background. Style: bold, glossy, hand-painted like Clash Royale and League of Legends: Wild Rift ability icons -- one
+clear subject per icon, strong silhouette, rich saturated colours, dramatic lighting, a glowing background inside each
+tile tinted to the ability's element. Absolutely no text, letters, numbers or labels anywhere.
+
+sheet1 -- Columns left to right: 1 Knight, 2 Barbarian, 3 Rogue, 4 Archer, 5 Fire Mage, 6 Priest. Rows top to bottom
+are each hero's four abilities.
+Row 1: (1) a steel kite shield with a gold rim raised high, a bright glint; (2) a great axe spinning in a red whirl of
+motion; (3) twin daggers thrusting forward with speed streaks; (4) five arrows fanning out in a spread; (5) a ring of
+fire exploding outward; (6) a glowing golden healing circle with a radiant holy symbol.
+Row 2: (1) a shield ramming forward with an impact shockwave; (2) a barbarian leaping down axe-first onto cracking
+ground; (3) scattered spiky iron caltrops; (4) an acrobatic roll arc with a bow and dust; (5) a column of fire erupting
+from the ground; (6) a beam of holy light shining down onto an open hand.
+Row 3: (1) a war banner with a glowing blue protective aura; (2) a blood-red axe blade dripping crimson energy; (3) a
+dagger dripping bright green venom; (4) an arrow wrapped in tightening green vines; (5) a purple-blue teleport swirl
+with sparkles; (6) a blinding white starburst flash.
+Row 4 (ultimates, extra epic, golden glow): (1) a huge golden dome of light over a shield; (2) a horned war horn
+blasting red sound waves; (3) a dagger plunging down over a red skull mark; (4) arrows raining down from dark clouds;
+(5) a gigantic blazing ring of fire; (6) radiant angel wings of light.
+
+sheet2 -- Columns left to right: 1 Crusader, 2 Berserker, 3 Assassin, 4 Crossbow Ranger, 5 Archmage, 6 Necromancer.
+Row 1: (1) a golden warhammer spinning through the air; (2) a greatsword whirlwind like a tornado of blades; (3) a
+hooded figure dissolving into dark smoke; (4) a crossbow bolt piercing straight through a line of three targets; (5) a
+flaming meteor falling from the sky; (6) a skeletal hand rising from a grave in green light.
+Row 2: (1) a white templar shield with a gold emblem braced against a blow; (2) a horned helmet charging forward with
+speed lines; (3) a dark shadow silhouette appearing behind a target with a dagger; (4) an open iron bear trap with
+sharp teeth; (5) three purple arcane magic bolts; (6) a round shield made of bones.
+Row 3: (1) golden holy fire spreading on the ground; (2) a red pulsing heart with crossed blades; (3) a fan of throwing
+knives flying outward; (4) a red crosshair hunter's mark on a target; (5) a blue glassy magical bubble shield; (6) a
+dark purple cursed eye inside a skull.
+Row 4 (ultimates, extra epic, golden glow): (1) a hammer of holy light smashing down with a shockwave; (2) a flaming
+skull with glowing red eyes; (3) many crossing blade slash marks; (4) a giant glowing arrow with an all-seeing eye; (5)
+a rain of many meteors; (6) several skeleton warriors rising from the ground.
+
+sheet3 -- Columns left to right: 1 Stone Golem, 2 Halberd Dragoon, 3 Rapier Duelist, 4 Lightning Stormcaller,
+5 Musketeer, 6 Druid.
+Row 1: (1) a rune-carved boulder rolling with dust; (2) a halberd sweeping in a wide glowing arc; (3) a rapier
+thrusting forward with a sharp gleam; (4) lightning chaining between three points; (5) a blunderbuss blast with a spray
+of shot; (6) a green sprouting leaf with healing sparkles.
+Row 2: (1) a fist turning into cracked grey stone; (2) a halberd thrusting forward pulling a chain; (3) two rapiers
+crossed with a bright parry spark; (4) a crackling electric field circle on the ground; (5) a lit powder keg with a
+sparking fuse; (6) gnarled roots bursting up and gripping.
+Row 3: (1) a giant stone foot stomping with cracked earth; (2) a warrior pole-vaulting high on a halberd; (3) a fading
+silhouette with a fluttering cape; (4) a swirling blast of wind; (5) a grey smoke cloud with a rolling figure; (6) an
+arm covered in tree bark armor.
+Row 4 (ultimates, extra epic, golden glow): (1) an avalanche of crashing rocks; (2) a dragon-winged warrior diving down
+with a halberd; (3) five rapier strikes converging on one target; (4) a dark thundercloud striking lightning; (5) twin
+flintlock pistols firing; (6) a magical tree grove blooming with light.

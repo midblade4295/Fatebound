@@ -1447,6 +1447,8 @@ func _draw_button(b: Dictionary, me: Dictionary) -> void:
 	var cd_max := 1.0
 	var ready := true
 	var badge := ""                                  # (a small mark drawn over the button: the ult's rank, ward charges)
+	var icon: Texture2D = null                       # 0.31.171: Q, W, E and R show their painted icon (assets/ui/abilities)
+	var locked := false
 	match str(b.id):
 		"attack":
 			label = "ATTACK"
@@ -1456,6 +1458,7 @@ func _draw_button(b: Dictionary, me: Dictionary) -> void:
 			label = "BLOCK"
 			col = Color("#2c4a6e")
 			rim = Color("#bcd8ff")
+			icon = ability_icon(str(me.get("hid", "")), "w")    # (the Crusader's W: his shield)
 		"w", "e":
 			# 0.31.167 5V5: W and E -- locked until their level (LV 2 / LV 3), then their name and recharge
 			var k: Dictionary = sim.moba.kits.kit(str(me.get("hid", "")), str(b.id))
@@ -1467,6 +1470,8 @@ func _draw_button(b: Dictionary, me: Dictionary) -> void:
 			cd_max = maxf(0.1, float(k.get("cd", 1.0)))
 			ready = unl and cd <= 0.0 and sim.alive(me)
 			badge = str(b.id).to_upper()
+			icon = ability_icon(str(me.get("hid", "")), str(b.id))
+			locked = not unl
 		"ability":
 			var ab := str(sim.ability_of(me))
 			label = ab.to_upper() if ab != "" else "—"
@@ -1482,6 +1487,7 @@ func _draw_button(b: Dictionary, me: Dictionary) -> void:
 				label = str(kq.get("short", kq.get("name", label)))
 				cd_max = maxf(0.1, float(kq.get("cd", cd_max)))
 			ready = ab != "" and cd <= 0.0
+			icon = ability_icon(str(me.get("hid", "")), "q")
 		"ult":
 			# 0.31.157 5V5: the ultimate -- locked until level 6 (LV 6), its name once it's yours, a glow when it's ready
 			var info: Dictionary = sim.moba.ult_info(me)
@@ -1496,6 +1502,8 @@ func _draw_button(b: Dictionary, me: Dictionary) -> void:
 				var pulse := 0.5 + 0.5 * sin(_time * 5.0)
 				draw_arc(c, r + 5.0 + 3.0 * pulse, 0, TAU, 48, Color(1.0, 0.84, 0.35, 0.35 + 0.4 * pulse), 4.0, true)
 			badge = "R II" if unlocked and sim.moba.ult_rank(me) >= 2 else "R"
+			icon = ability_icon(str(me.get("hid", "")), "r")
+			locked = not unlocked
 		"ward":
 			# 0.31.158 5V5: a ward at your feet -- its charges in the corner, the next one filling in round the rim
 			var ch := float(me.get("ward_ch", 0.0))
@@ -1518,10 +1526,23 @@ func _draw_button(b: Dictionary, me: Dictionary) -> void:
 		body = body.darkened(0.45)
 	draw_circle(c + Vector2(0, 4), r, Color(0, 0, 0, 0.45))
 	draw_circle(c, r, body)
+	if icon != null:
+		# 0.31.171: the icon in the circle -- dimmed while it recharges or is locked, the time left over it
+		var lit := Color(1, 1, 1) if ready else (Color(0.3, 0.3, 0.34) if locked else Color(0.5, 0.5, 0.54))
+		_icon_circle(c, r - 1.5, icon, lit)
+		if pressed:
+			draw_circle(c, r - 1.5, Color(1, 1, 1, 0.18))
+		if cd > 0.0 and not locked and cd / cd_max > 0.01:
+			_pie(c, r - 1.5, cd / cd_max, Color(0, 0, 0, 0.45))
 	draw_arc(c, r, 0, TAU, 48, rim if ready else rim.darkened(0.5), 3.0, true)
 	if cd > 0.0:
 		draw_arc(c, r - 6, -PI * 0.5, -PI * 0.5 + TAU * (cd / cd_max), 40, Color(1, 1, 1, 0.55), 5.0, true)
-	_text(c + Vector2(0, 6), label, 15 if r > 40 else (12 if r > 30 else 11), Color("#fffaf0") if ready else Color("#8a939a"), _bold)
+	if icon == null:
+		_text(c + Vector2(0, 6), label, 15 if r > 40 else (12 if r > 30 else 11), Color("#fffaf0") if ready else Color("#8a939a"), _bold)
+	elif locked:
+		_text(c + Vector2(0, 6), label, 12 if r > 30 else 11, Color("#c9d0d6"), _bold)          # LV 2 / LV 3 / LV 6
+	elif cd > 0.0 and str(b.id) != "ward":
+		_text(c + Vector2(0, 7), str(ceili(cd)) if cd >= 1.0 else "%.1f" % cd, 18 if r > 33 else 16, Color("#fffaf0"), _bold)
 	if badge != "":
 		if str(b.id) == "ward":
 			var bc := c + Vector2(r * 0.72, -r * 0.72)
@@ -1533,6 +1554,35 @@ func _draw_button(b: Dictionary, me: Dictionary) -> void:
 		else:
 			_text(c + Vector2(0, -r + 12), badge, 11, Color("#ffe9a6"), _bold)
 
+
+# 0.31.171: the ability icons (tools/build_ability_icons.py): <hero>_<q|w|e|r>.png, loaded once (a missing one: the
+# button's name, as before)
+const ICON_DIR := "res://assets/ui/abilities/"
+static var _icons := {}
+
+static func ability_icon(hid: String, slot: String) -> Texture2D:
+	var key := "%s_%s" % [hid, slot]
+	if not _icons.has(key):
+		var p := ICON_DIR + key + ".png"
+		_icons[key] = load(p) if hid != "" and ResourceLoader.exists(p) else null
+	return _icons[key]
+
+func _icon_circle(c: Vector2, r: float, tex: Texture2D, tint: Color) -> void:
+	var pts := PackedVector2Array()
+	var uvs := PackedVector2Array()
+	for i in 40:
+		var d := Vector2.from_angle(TAU * float(i) / 40.0)
+		pts.append(c + d * r)
+		uvs.append(Vector2(0.5, 0.5) + d * 0.5)
+	draw_polygon(pts, PackedColorArray([tint]), uvs, tex)
+
+func _pie(c: Vector2, r: float, frac: float, color: Color) -> void:
+	# the part still recharging, clockwise from the top
+	var n := maxi(3, int(40.0 * clampf(frac, 0.0, 1.0)) + 1)
+	var pts := PackedVector2Array([c])
+	for i in n + 1:
+		pts.append(c + Vector2.from_angle(-PI * 0.5 + TAU * clampf(frac, 0.0, 1.0) * float(i) / float(n)) * r)
+	draw_colored_polygon(pts, color)
 
 # ---------- 5V5: gold, the shop, the jungle's timers (0.31.157) ----------
 # Under the towers line: your gold and SHOP (tap: the shop; it glows while you can buy -- in your castle or while down),
