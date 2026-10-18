@@ -5313,7 +5313,14 @@ and a sound of its own for every ability, the better of two takes each.
   the ~8,800 estimated.
 - New test: hero_assets_test (every hero's four icons; every spell's sound its own; the match's sound picker fed every
   ultimate, spell, shot, hit and kit moment plays that one's cue, a file that exists, short and mono).
-- Version 0.31.171, versionCode 257 (the server is untouched: SERVER_BUILD stays 0.31.170). The packs: ui (21.3 MB,
+- Version 0.31.171, versionCode 257, SERVER_BUILD 0.31.171 (min_build_test wants it equal to the app's; the server's
+  code is otherwise unchanged -- a redeploy only renames it). The packs: ui (21.3 MB,
   the icons imported as lossy WebP at 0.85: 1 MB for the 72) and audio (8.0 MB) rebuilt and on the content-packs
   branch; the rest unchanged. Dev tools: kit_shots.gd takes LEVEL (the locked buttons), app_shots.gd SHOT_MOBA=<hero>
   (the hero window).
+- Checks: the quick suite 84 of 85 (min_build_test: SERVER_BUILD was still 0.31.170 -- raised, then MIN_BUILD_PASS;
+  hero_assets_test, match_audio_test, moba_ui_test, app_flow_test, menu_sound_test among the passes); COLD_START_PASS;
+  the Play AAB (throwaway key, presets untouched): BASE OK (259 files), CONTENT OK, play_games true, bundletool valid;
+  content_packs check and coverage OK; the sim's fingerprint as 0.31.170 (seed 3 97e30cea900b6b37, seed 17
+  e7fc16691408f976); review shots of the HUD (Golem at level 6 through Q/W/E/R, the Crusader at level 1) and the hero
+  window. Preview APK: build/Fatebound-Siege-0.31.171-fatebound.apk (31 MB, preview key), sha256 19e4d3c9...ca00c463.
