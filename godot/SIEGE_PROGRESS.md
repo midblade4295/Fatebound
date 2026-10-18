@@ -5528,3 +5528,7 @@ bot name like "bot Alfred" for example. Also towers aren't targetable."
   all nine bots, none over a minion, yours over you; a tower hit's number for yours only; board and kill feed names.
   kill_feed_test, side_view_test and scoreboard_test now expect the bots' names.
 - Version 0.31.177, versionCode 263, SERVER_BUILD 0.31.177.
+- Checks: the quick suite all passed (90, names_aim_test among them; online_five_test and analytics_events_test passed
+  this run); COLD_START_PASS; the Play AAB (throwaway key, presets untouched): BASE OK (265 files), CONTENT OK,
+  play_games true, bundletool valid; content_packs check OK (no pack changed); the sim's fingerprint as above. Preview
+  APK: build/Fatebound-Siege-0.31.177-fatebound.apk (32 MB, preview key), sha256 02c179ed...a7102001.
