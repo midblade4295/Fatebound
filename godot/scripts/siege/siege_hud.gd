@@ -962,19 +962,16 @@ var _ci: CanvasItem = self                    # what _text and the top's drawing
 var _top_parts: Array = []
 
 func _top_key(me: Dictionary) -> Array:
-	# everything _draw_top shows, as it shows it (whole numbers, bar widths in pixels): when it changes, it's redrawn
+	# everything _draw_top shows, as it shows it (whole numbers, ring and bar sizes in steps): when it changes, it's redrawn
 	if me.is_empty():
 		return []
 	var t: int = me.team
-	var w := size.x
-	var hpw := minf(220.0, w * 0.52)
-	var k := [w, size.y, t, int(maxf(0.0, float(sim.match_time) - sim.time)), int(ceil(me.hp)),
-		int(hpw * clampf(me.hp / maxf(1.0, me.max_hp), 0.0, 1.0)), sim.class_label(me), _king_status(me)]
 	var lv := int(me.get("level", 1))
-	k.append_array([int(ceil(sim.moba.king_frac(t) * 100.0)), int(ceil(sim.moba.king_frac(1 - t) * 100.0)), lv,
-		int(minf(160.0, w * 0.38) * clampf(float(me.get("xp", 0.0)) / sim.moba.need(lv), 0.0, 1.0)),
-		sim.moba.towers_down(0), sim.moba.towers_down(1), int(float(me.get("gold", 0.0))), sim.moba.can_shop(me),
-		(me.get("items", []) as Array).duplicate()])
+	var k := [size.x, size.y, t, int(maxf(0.0, float(sim.match_time) - sim.time)),
+		int(ceil(sim.moba.king_frac(t) * 100.0)), int(ceil(sim.moba.king_frac(1 - t) * 100.0)),
+		sim.moba.king_open(t), sim.moba.king_open(1 - t), int(sim.kills[t]), int(sim.kills[1 - t]),
+		towers_standing(t), towers_standing(1 - t), lv, int(xp_frac(me) * 120.0),
+		int(float(me.get("gold", 0.0))), sim.moba.can_shop(me), (me.get("items", []) as Array).duplicate()]
 	var b: Dictionary = me.get("buffs", {})
 	for bk in ["arcane", "ember", "lord"]:
 		k.append(int(maxf(0.0, float(b.get(bk, -1.0)) - float(sim.time))))
@@ -1066,30 +1063,130 @@ func _draw_hud() -> void:
 	if prof_on: tq = _ph("stick+buttons", tq)
 
 func _draw_top(me: Dictionary) -> void:
-	# the scoreboard, my health and status, the 5v5's status lines -- on the top layer (0.31.160)
-	var w := size.x
-	# Scoreboard.
-	var bar := Rect2(8, 8, w - 16, 62)
+	# the scoreboard and, under it, your level, gold and items -- on the top layer (0.31.160). 0.31.178 (Kevin: "Clean up
+	# and make this UI much better looking. Player health bar doesn't need to be there since they already have one above
+	# head. The objective doesn't need to be there ect. Make the other stuff prettier"): no health bar, class line or
+	# objective line any more (your King under attack shows on the bar itself, _draw_king_alert)
+	_draw_score_bar(me)
+	_draw_moba_status(me)
+
+func score_bar_rect() -> Rect2:
+	return Rect2(8, 8, size.x - 16, 62)
+
+func clock_rect() -> Rect2:
+	# the clock's plate in the middle of the bar, standing a little proud of it
+	return Rect2(size.x * 0.5 - 58.0, 4.0, 116.0, 70.0)
+
+func towers_standing(t: int) -> int:
+	var n := 0
+	for tw in sim.moba.towers:
+		if int(tw.team) == t and not bool(tw.dead):
+			n += 1
+	return n
+
+static func hud_icon(name: String) -> Texture2D:
+	# the menus' glossy icons (assets/ui/v2/icons), for the bar
+	if not _hud_icons.has(name):
+		var p := "res://assets/ui/v2/icons/%s.png" % name
+		_hud_icons[name] = load(p) if ResourceLoader.exists(p) else null
+	return _hud_icons[name]
+
+static var _hud_icons := {}
+var _wash_styles: Array = []
+var _clock_style: StyleBox = null
+
+func _icon_at(name: String, r: Rect2, mod := Color.WHITE) -> void:
+	var tx := hud_icon(name)
+	if tx != null:
+		_ci.draw_texture_rect(tx, r, false, mod)
+
+func _draw_score_bar(me: Dictionary) -> void:
+	# 0.31.178: your side on the left in blue, theirs on the right in red (no labels): each King's crown and health,
+	# then the towers still standing and the knockouts; the clock on its own plate in the middle. Tapping it opens the
+	# live board (0.31.176).
+	var bar := score_bar_rect()
 	if _bar_style == null:
-		_bar_style = VisualTheme.panel(Color(0.035, 0.09, 0.12, 0.92), VisualTheme.GOLD_DARK, 12, 8)
+		_bar_style = VisualTheme.panel(Color(0.035, 0.07, 0.1, 0.94), VisualTheme.GOLD_DARK, 12, 8)
+		for side in 2:
+			var ws := StyleBoxFlat.new()
+			var c: Color = TEAM_COLORS[side]
+			ws.bg_color = Color(c.darkened(0.42), 0.62)
+			ws.border_color = Color(c, 0.45)
+			ws.set_border_width_all(0)
+			ws.border_width_bottom = 2
+			ws.set_corner_radius_all(8)
+			ws.anti_aliasing = true
+			_wash_styles.append(ws)
+		_clock_style = VisualTheme.panel(Color(0.02, 0.04, 0.06, 0.98), VisualTheme.GOLD, 12, 6)
 	_ci.draw_style_box(_bar_style, bar)
 	var t: int = me.team
-	_text(Vector2(24, 34), "YOUR SIDE", 12, TEAM_COLORS[vt(t)], _bold, HORIZONTAL_ALIGNMENT_LEFT, 120)
-	# 0.31.156 5V5: each side's King (the heart), his health
-	_text(Vector2(24, 60), "♛ %d%%" % int(ceil(sim.moba.king_frac(t) * 100.0)), 22, VisualTheme.GOLD, _title, HORIZONTAL_ALIGNMENT_LEFT, 120)
-	_text(Vector2(w - 144, 34), "ENEMY", 12, TEAM_COLORS[vt(1 - t)], _bold, HORIZONTAL_ALIGNMENT_RIGHT, 120)
-	_text(Vector2(w - 144, 60), "%d%% ♛" % int(ceil(sim.moba.king_frac(1 - t) * 100.0)), 22, VisualTheme.GOLD, _title, HORIZONTAL_ALIGNMENT_RIGHT, 120)
+	var cr := clock_rect()
+	var inner := bar.grow(-6.0)
+	_ci.draw_style_box(_wash_styles[0], Rect2(inner.position, Vector2(cr.position.x - inner.position.x + 4.0, inner.size.y)))
+	_ci.draw_style_box(_wash_styles[1], Rect2(Vector2(cr.end.x - 4.0, inner.position.y), Vector2(inner.end.x - cr.end.x + 4.0, inner.size.y)))
+	for side in 2:
+		var team := t if side == 0 else 1 - t
+		var right := side == 1
+		var x0 := inner.position.x + 8.0 if not right else inner.end.x - 8.0
+		var sgn := 1.0 if not right else -1.0
+		# the King: his crown (lit gold when he's open to be beaten) and his health
+		var crown := Rect2(Vector2(x0 if not right else x0 - 28.0, inner.position.y + 1.0), Vector2(28, 28))
+		if right and sim.moba.king_open(team):
+			_ci.draw_circle(crown.get_center(), 17.0, Color(1.0, 0.82, 0.3, 0.35))
+		_icon_at("crown", crown)
+		var pct := "%d%%" % int(ceil(sim.moba.king_frac(team) * 100.0))
+		var col := VisualTheme.GOLD
+		if sim.moba.king_frac(team) < 0.995:
+			col = Color("#ffe9a8") if not right else Color("#ffd0b8")
+		_text(Vector2(x0 + sgn * 32.0 - (80.0 if right else 0.0), inner.position.y + 24.0), pct, 22, col, _title,
+			HORIZONTAL_ALIGNMENT_RIGHT if right else HORIZONTAL_ALIGNMENT_LEFT, 80.0)
+		# the towers he still has and the side's knockouts
+		var y := inner.position.y + 32.0
+		var parts := [["castle", str(towers_standing(team))], ["swords", str(int(sim.kills[team]))]]
+		var x := x0
+		for pi in parts.size():
+			var part: Array = parts[pi]
+			var txt := str(part[1])
+			var tw := _bold.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x
+			var ir := Rect2(Vector2(x if not right else x - 18.0, y), Vector2(18, 18))
+			if right:
+				ir.position.x = x - 18.0
+				_icon_at(str(part[0]), ir)
+				_text(Vector2(x - 22.0 - tw, y + 15.0), txt, 15, Color("#eef3f6"), _bold, HORIZONTAL_ALIGNMENT_LEFT, tw + 4.0)
+				x -= 22.0 + tw + 12.0
+			else:
+				_icon_at(str(part[0]), ir)
+				_text(Vector2(x + 22.0, y + 15.0), txt, 15, Color("#eef3f6"), _bold, HORIZONTAL_ALIGNMENT_LEFT, tw + 4.0)
+				x += 22.0 + tw + 12.0
+	# the clock
+	_ci.draw_style_box(_clock_style, cr)
 	var left := maxf(0.0, float(sim.match_time) - sim.time)
-	_text(Vector2(w * 0.5, 52), "%d:%02d" % [int(left) / 60, int(left) % 60], 32, Color("#e8eef2") if left > 60 else VisualTheme.RED, _title)
-	# Player status line.
-	var hp_rect := Rect2(12, 78, minf(220.0, w * 0.52), 14)
-	_ci.draw_rect(hp_rect, Color(0, 0, 0, 0.55))
-	var frac := clampf(me.hp / maxf(1.0, me.max_hp), 0.0, 1.0)
-	_ci.draw_rect(Rect2(hp_rect.position, Vector2(hp_rect.size.x * frac, hp_rect.size.y)), Color("#7dff8a") if frac > 0.35 else VisualTheme.RED)
-	_ci.draw_rect(hp_rect, VisualTheme.GOLD_DARK, false, 1.5)
-	_text(Vector2(14, 110), "%s · %d HP" % [sim.class_label(me).to_upper(), int(ceil(me.hp))], 13, VisualTheme.TEXT, _bold, HORIZONTAL_ALIGNMENT_LEFT, 260)
-	_text(Vector2(14, 128), _king_status(me), 12, VisualTheme.GOLD, _font, HORIZONTAL_ALIGNMENT_LEFT, w - 80)
-	_draw_moba_status(me)
+	_text(Vector2(cr.get_center().x, cr.position.y + 46.0), "%d:%02d" % [int(left) / 60, int(left) % 60], 30,
+		Color("#eef3f6") if left > 60 else VisualTheme.RED, _title)
+
+func king_alert(me: Dictionary) -> bool:
+	# your King open and an enemy at him
+	return sim.moba != null and not sim.moba.king_threat(int(me.team)).is_empty() and sim.moba.king_open(int(me.team))
+
+func _draw_king_alert(me: Dictionary) -> void:
+	# 0.31.178: your King under attack -- your half of the bar beats red, and a line under the clock says it
+	if not king_alert(me):
+		return
+	var pulse := 0.5 + 0.5 * sin(_time * 7.0)
+	var bar := score_bar_rect().grow(-6.0)
+	var half := Rect2(bar.position, Vector2(clock_rect().position.x - bar.position.x + 4.0, bar.size.y))
+	if _alert_style == null:
+		_alert_style = StyleBoxFlat.new()
+		_alert_style.draw_center = false
+		_alert_style.set_border_width_all(2)
+		_alert_style.set_corner_radius_all(8)
+		_alert_style.anti_aliasing = true
+	_alert_style.border_color = Color(1.0, 0.25, 0.2, 0.45 + 0.5 * pulse)
+	draw_style_box(_alert_style, half)
+	draw_rect(half.grow(-2.0), Color(1.0, 0.15, 0.1, 0.12 * pulse))
+	_text(Vector2(size.x * 0.5, 90.0), "KING UNDER ATTACK!", 13, Color(1.0, 0.45, 0.38, 0.65 + 0.35 * pulse), _bold)
+
+var _alert_style: StyleBoxFlat = null
 
 func _draw_idle(me: Dictionary) -> void:
 	# 0.31.119: "A BOT IS PLAYING FOR YOU" while the server's bot holds my unit (I gave no input for a while)
@@ -1220,29 +1317,31 @@ func _draw_kill_feed() -> void:
 		kill_feed = keep
 
 # ---------- 5V5 (0.31.155) ----------
-# Under your health: your level and XP, then the towers standing (yours, theirs). A level-up: three upgrade chips in
-# the middle of the screen until you tap one (siege_mode -> sim "pick").
-func _draw_moba_status(me: Dictionary) -> void:
-	var t: int = me.team
+# Under the bar on the left (0.31.178): your level on a medallion ringed by your XP, the gold-and-shop button beside it,
+# your six item slots under them, then the buffs you carry. A level-up: three upgrade chips in the middle of the screen
+# until you tap one (siege_mode -> sim "pick").
+func xp_frac(me: Dictionary) -> float:
 	var lv := int(me.get("level", 1))
-	var need: float = sim.moba.need(lv)
-	var xr := Rect2(14, 140, minf(160.0, size.x * 0.38), 6)
-	_text(Vector2(xr.end.x + 8, 147), "LEVEL %d" % lv, 12, VisualTheme.GOLD, _bold, HORIZONTAL_ALIGNMENT_LEFT, 100)
-	_ci.draw_rect(xr.grow(1), Color(0, 0, 0, 0.6))
-	if lv < sim.moba.LEVEL_MAX:
-		_ci.draw_rect(Rect2(xr.position, Vector2(xr.size.x * clampf(float(me.get("xp", 0.0)) / need, 0.0, 1.0), xr.size.y)), Color("#ffd65a"))
-	else:
-		_ci.draw_rect(xr, Color("#ffd65a"))
-	var ours := 0
-	var theirs := 0
-	for tw in sim.moba.towers:
-		if bool(tw.dead):
-			continue
-		if int(tw.team) == t:
-			ours += 1
-		else:
-			theirs += 1
-	_text(Vector2(14, 164), "TOWERS  YOURS %d · THEIRS %d" % [ours, theirs], 11, Color("#cfe8b8"), _bold, HORIZONTAL_ALIGNMENT_LEFT, 260)
+	if lv >= sim.moba.LEVEL_MAX:
+		return 1.0
+	return clampf(float(me.get("xp", 0.0)) / float(sim.moba.need(lv)), 0.0, 1.0)
+
+func level_center() -> Vector2:
+	return Vector2(36, 108)
+
+func _draw_moba_status(me: Dictionary) -> void:
+	var c := level_center()
+	var lv := int(me.get("level", 1))
+	_ci.draw_circle(c + Vector2(0, 2), 27.0, Color(0, 0, 0, 0.35))                   # (its shadow)
+	_ci.draw_circle(c, 26.0, Color(0.03, 0.06, 0.08, 0.95))
+	_ci.draw_arc(c, 22.5, 0.0, TAU, 48, Color(0.0, 0.0, 0.0, 0.55), 5.0, true)          # the XP track
+	var f := xp_frac(me)
+	if f > 0.0:
+		_ci.draw_arc(c, 22.5, -PI * 0.5, -PI * 0.5 + TAU * f, maxi(4, int(48.0 * f)), Color("#ffd65a"), 5.0, true)
+	_ci.draw_arc(c, 26.0, 0.0, TAU, 48, VisualTheme.GOLD_DARK, 1.5, true)
+	_ci.draw_arc(c, 19.5, 0.0, TAU, 40, Color(VisualTheme.GOLD_DARK, 0.7), 1.0, true)
+	_text(c + Vector2(0, -6.0), "LV", 9, VisualTheme.GOLD, _bold)
+	_text(c + Vector2(0, 13.0), str(lv), 20 if lv < 10 else 18, Color("#fff4d6"), _title)
 	_draw_gold_and_items(me)                      # 0.31.157 (0.31.160: the camp timers and the shop's pulse per frame, in _draw_hud)
 
 func _picks_open() -> bool:
@@ -1632,7 +1731,7 @@ func shop_open() -> bool:
 	return shop_panel != null and shop_panel.visible
 
 func shop_rect() -> Rect2:
-	return Rect2(12, 174, 128, 30)
+	return Rect2(70, 90, 150, 38)          # (0.31.178: beside your level; 12, 174 until then)
 
 func open_shop() -> void:
 	if sim == null or sim.moba == null:
@@ -1951,9 +2050,6 @@ const BOARD_W := {"por": 40.0, "name": 80.0, "kda": 58.0, "cs": 28.0, "slot": 19
 func board_open() -> bool:
 	return board_panel != null and board_panel.visible
 
-func score_bar_rect() -> Rect2:
-	return Rect2(8, 8, size.x - 16, 62)
-
 static func net_worth(u: Dictionary) -> int:
 	# a hero's gold as League counts it on the board: what he carries and what his items cost
 	var n := float(u.get("gold", 0.0))
@@ -2228,46 +2324,94 @@ func _refresh_board() -> void:
 		(r.gold as Label).text = gold_k(float(net_worth(u)))
 
 func _draw_gold_and_items(me: Dictionary) -> void:
+	# 0.31.178: the button lit gold while you can shop (in your base), dark otherwise; the slots framed; the buffs pills
 	var r := shop_rect()
 	var here: bool = sim.moba.can_shop(me)
-	if _shop_style == null:
-		_shop_style = VisualTheme.panel(Color(0.08, 0.05, 0.02, 0.9), VisualTheme.GOLD_DARK, 10, 6)
-	_ci.draw_style_box(_shop_style, r)
+	if _shop_styles.is_empty():
+		_shop_styles = [VisualTheme.tactile("secondary", "normal", 10), VisualTheme.tactile("gold", "normal", 10)]
+		for full in [false, true]:
+			var ss := StyleBoxFlat.new()
+			ss.bg_color = Color(0.03, 0.05, 0.07, 0.78)
+			ss.border_color = Color(VisualTheme.GOLD_DARK, 0.95 if full else 0.5)
+			ss.set_border_width_all(1)
+			ss.border_width_bottom = 2
+			ss.set_corner_radius_all(6)
+			ss.anti_aliasing = true
+			_slot_styles.append(ss)
+	_ci.draw_style_box(_shop_styles[1 if here else 0], r)
 	if _coin_tex == null and ResourceLoader.exists("res://assets/ui/currency/coin.png"):
 		_coin_tex = load("res://assets/ui/currency/coin.png")
+	var face := r.position + Vector2(0, -1)                         # (the face sits above the button's lip)
+	_ci.draw_circle(face + Vector2(20, 18), 13.0, Color(0.16, 0.09, 0.01, 0.55 if here else 0.8))      # (the coin's inset)
 	if _coin_tex != null:
-		_ci.draw_texture_rect(_coin_tex, Rect2(r.position + Vector2(5, 4), Vector2(22, 22)), false)
+		_ci.draw_texture_rect(_coin_tex, Rect2(face + Vector2(9, 7), Vector2(22, 22)), false)
 	else:
-		_ci.draw_circle(r.position + Vector2(16, 15), 9, Color("#ffcf4a"))
-	_text(r.position + Vector2(31, 21), str(int(float(me.get("gold", 0.0)))), 15, Color("#ffd65a"), _bold, HORIZONTAL_ALIGNMENT_LEFT, 60)
-	_text(r.position + Vector2(r.size.x - 50, 21), "SHOP", 13, Color.WHITE if here else Color(1, 1, 1, 0.75), _bold, HORIZONTAL_ALIGNMENT_LEFT, 50)
+		_ci.draw_circle(face + Vector2(20, 18), 10, Color("#ffcf4a"))
+	var ink := Color("#3a2205") if here else Color("#ffd65a")
+	_text(face + Vector2(38, 25), str(int(float(me.get("gold", 0.0)))), 17, ink, _bold, HORIZONTAL_ALIGNMENT_LEFT, 62)
+	var dx := face.x + r.size.x - 50.0
+	_ci.draw_line(Vector2(dx, face.y + 8.0), Vector2(dx, face.y + 29.0), Color(ink, 0.35), 1.5)
+	_text(Vector2(dx + 6.0, face.y + 24.0), "SHOP", 12, ink if here else Color(1, 1, 1, 0.85), _bold, HORIZONTAL_ALIGNMENT_LEFT, 44)
 	var inv: Array = me.get("items", [])
 	for i in sim.moba.ITEM_SLOTS:
-		var q := Rect2(12 + i * 22, r.end.y + 5, 20, 20)
-		_ci.draw_rect(q, Color(0, 0, 0, 0.5))
-		_ci.draw_rect(q, Color(VisualTheme.GOLD_DARK, 0.8), false, 1.0)
+		var q := item_slot_rect(i)
+		_ci.draw_style_box(_slot_styles[1 if i < inv.size() else 0], q)
 		if i < inv.size():
-			ItemIcon.draw_item(_ci, str(inv[i]), q.get_center(), 18.0)
-	# buffs
+			ItemIcon.draw_item(_ci, str(inv[i]), q.get_center(), q.size.x - 4.0)
+	# the buffs: a pill each, its colour, its time
 	var x := 12.0
-	var y := r.end.y + 42.0
+	var y := item_slot_rect(0).end.y + 8.0
 	var b: Dictionary = me.get("buffs", {})
+	var pills := []
 	for k in ["arcane", "ember", "lord"]:
 		var left := float(b.get(k, -1.0)) - float(sim.time)
 		if left > 0.0:
-			var txt := "%s %d:%02d" % [str(sim.moba.BUFF_NAMES[k]), int(left) / 60, int(left) % 60]
-			var col := Color("#7fb8ff") if k == "arcane" else (Color("#ff9a5a") if k == "ember" else Color("#d8c2ff"))
-			_text(Vector2(x, y), txt, 11, col, _bold, HORIZONTAL_ALIGNMENT_LEFT, 160)
-			x += _bold.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 11).x + 10.0
+			pills.append(["%s %d:%02d" % [str(sim.moba.BUFF_NAMES[k]), int(left) / 60, int(left) % 60],
+				Color("#7fb8ff") if k == "arcane" else (Color("#ff9a5a") if k == "ember" else Color("#d8c2ff"))])
 	var hide := int(sim.moba.wyrm_stacks[clampi(int(me.team), 0, 1)])
 	if hide > 0:                                          # 0.31.166: the side's WYRM'S HIDE (for the rest of the match)
-		var ht := "WYRM'S HIDE x%d +%d%%" % [hide, int(round(sim.moba.WYRM_HIDE * 100.0 * hide))]
-		_text(Vector2(x, y), ht, 11, Color("#7fffd4"), _bold, HORIZONTAL_ALIGNMENT_LEFT, 180)
+		pills.append(["WYRM'S HIDE x%d +%d%%" % [hide, int(round(sim.moba.WYRM_HIDE * 100.0 * hide))], Color("#7fffd4")])
+	for pl in pills:
+		var txt := str(pl[0])
+		var col: Color = pl[1]
+		var tw := _bold.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 10).x
+		if x + tw + 22.0 > size.x * 0.62 and x > 12.0:
+			x = 12.0
+			y += 22.0
+		var pr := Rect2(x, y, tw + 22.0, 18.0)
+		if _pill_style == null:
+			_pill_style = StyleBoxFlat.new()
+			_pill_style.set_corner_radius_all(9)
+			_pill_style.set_border_width_all(1)
+			_pill_style.anti_aliasing = true
+		_pill_style.bg_color = Color(col.darkened(0.72), 0.85)
+		_pill_style.border_color = Color(col, 0.75)
+		_ci.draw_style_box(_pill_style, pr)
+		_ci.draw_circle(pr.position + Vector2(9, 9), 3.5, col)
+		_text(pr.position + Vector2(16, 13), txt, 10, col.lightened(0.25), _bold, HORIZONTAL_ALIGNMENT_LEFT, tw + 4.0)
+		x += pr.size.x + 6.0
+
+func item_slot_rect(i: int) -> Rect2:
+	return Rect2(12.0 + 31.0 * float(i), 140.0, 28.0, 28.0)
+
+var _shop_styles: Array = []
+var _slot_styles: Array = []
+var _pill_style: StyleBoxFlat = null
 
 func _draw_shop_pulse(me: Dictionary) -> void:
 	if sim.moba.can_shop(me):
 		var pulse := 0.5 + 0.5 * sin(_time * 4.0)
-		draw_rect(shop_rect().grow(2.0), Color(1.0, 0.84, 0.35, 0.3 + 0.4 * pulse), false, 2.0)
+		if _pulse_style == null:
+			_pulse_style = StyleBoxFlat.new()
+			_pulse_style.draw_center = false
+			_pulse_style.set_border_width_all(2)
+			_pulse_style.set_corner_radius_all(12)
+			_pulse_style.anti_aliasing = true
+		_pulse_style.border_color = Color(1.0, 0.86, 0.4, 0.25 + 0.45 * pulse)
+		draw_style_box(_pulse_style, shop_rect().grow(3.0))
+	_draw_king_alert(me)
+
+var _pulse_style: StyleBoxFlat = null
 
 func _draw_camp_timers() -> void:
 	if not project.is_valid() or not on_screen.is_valid():

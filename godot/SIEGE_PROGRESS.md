@@ -5532,3 +5532,25 @@ bot name like "bot Alfred" for example. Also towers aren't targetable."
   this run); COLD_START_PASS; the Play AAB (throwaway key, presets untouched): BASE OK (265 files), CONTENT OK,
   play_games true, bundletool valid; content_packs check OK (no pack changed); the sim's fingerprint as above. Preview
   APK: build/Fatebound-Siege-0.31.177-fatebound.apk (32 MB, preview key), sha256 02c179ed...a7102001.
+
+## 0.31.178 — the 5v5's top, cleaned up
+Kevin (a screenshot of the top-left): "Clean up and make this UI much better looking. Player health bar doesn't need to
+be there since they already have one above head. The objective doesn't need to be there ect. Make the other stuff
+prettier".
+- Gone (siege_hud.gd _draw_top): the health bar, the "ARCHER · 27 HP" line, the objective line, the "LEVEL n" bar and
+  the "TOWERS YOURS · THEIRS" line.
+- The bar: no YOUR SIDE / ENEMY labels -- your side on the left on a blue wash, theirs on the right on red. Each side: its
+  King's crown and health (the menus' crown icon; their crown lit gold once he's open), then the towers it still has
+  (castle icon) and its knockouts (swords icon). The clock on a plate of its own in the middle, a little proud of the
+  bar. Tapping it still opens the live board.
+- Your King open with an enemy at him (was the objective line's "OUR KING IS UNDER ATTACK!"): your half of the bar beats
+  red and "KING UNDER ATTACK!" shows under the clock (_draw_king_alert, per frame).
+- Under the bar on the left: your level on a round medallion ringed by your XP; beside it the gold-and-shop button (a
+  tactile button: dark with gold numbers in the field, lit gold in your base where you can shop; the coin on an inset,
+  "SHOP" past a divider; shop_rect now 70, 90, 150 x 38); under them six framed item slots with the painted icons (lit
+  rims when filled); then the buffs as coloured pills with their times.
+- Tests: hud_top_test (new, in the suite): health not on the top; towers and knockouts as the sim has them; the XP
+  ring; bar, medallion, button, slots and the horn / pause buttons apart and above the kill feed; the button opens the
+  shop; the alert only with your King open and an enemy at him. moba_ui_test, live_board_test, kill_feed_test,
+  side_view_test, scoreboard_test and names_aim_test pass.
+- Version 0.31.178, versionCode 264, SERVER_BUILD 0.31.178 (nothing new on the server; it keeps the builds equal).
