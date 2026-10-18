@@ -20,17 +20,14 @@ const SIEGE_MODE := "res://scripts/siege/siege_mode.gd"
 # if opened first)
 const CHAT_PANEL := "res://scripts/app/chat_panel.gd"
 const FRIENDS_PANEL := "res://scripts/app/friends_panel.gd"
-const CLAN_PANEL := "res://scripts/app/clan_panel.gd"                # 0.31.134: Crown War step 1
-const WAR_TABLE := "res://scripts/app/war_table.gd"                  # 0.31.135: Crown War step 2, the map
+const CLAN_PANEL := "res://scripts/app/clan_panel.gd"                # 0.31.134: clans
 const ORDERS_PANEL := "res://scripts/app/orders_panel.gd"
 const LEADERBOARD_PANEL := "res://scripts/app/leaderboard_panel.gd"
 const DAILY_REWARD := "res://scripts/app/daily_reward.gd"
 const UPDATE_SCREEN := "res://scripts/app/update_screen.gd"
-const COMMANDER_PANEL := "res://scripts/app/commander_panel.gd"    # 0.31.153: COMMANDER (the test)
 const MOBA_PANEL := "res://scripts/app/moba_panel.gd"              # 0.31.155: 5V5 (the test)
-const LATER := [SIEGE_MODE, WAR_TABLE, CLAN_PANEL, CHAT_PANEL, FRIENDS_PANEL, ORDERS_PANEL, DAILY_REWARD, LEADERBOARD_PANEL, UPDATE_SCREEN,
-	COMMANDER_PANEL, MOBA_PANEL]
-const WarMap = preload("res://scripts/meta/war_map.gd")
+const LATER := [SIEGE_MODE, CLAN_PANEL, CHAT_PANEL, FRIENDS_PANEL, ORDERS_PANEL, DAILY_REWARD, LEADERBOARD_PANEL, UPDATE_SCREEN,
+	MOBA_PANEL]
 const Audio = preload("res://scripts/native_audio.gd")
 const Assets = preload("res://scripts/siege/asset_cache.gd")
 const Net = preload("res://scripts/siege/siege_net.gd")
@@ -262,8 +259,6 @@ func _ready() -> void:
 	social.go.connect(_on_party_go)
 	social.changed.connect(_on_social_changed)
 	social.clan_invited.connect(_on_clan_invited)
-	social.war_called.connect(_on_war_call.bind(false))     # 0.31.135: a clan mate calls the clan to a battle
-	social.war_alarmed.connect(_on_war_call.bind(true))     # ... or someone attacks the clan's land
 	chat_ticker.setup(self)
 	if social_autostart:
 		social.set_active(true)
@@ -483,8 +478,7 @@ func hero_show(_cls := "", _look := {}) -> void:
 	# room is laid out again too, now that the chat line and the tab bar are there to measure from.)
 	if home_scene != null:
 		home_scene.place(home_play_top())
-		if social != null:
-			home_scene.paint_war(social.war)
+		home_scene.paint_war({})                 # (0.31.169: no Crown War -- the table's land unclaimed)
 	if hero_node != null:
 		var looks := {}
 		for c in Eco.CLASSES:
@@ -969,9 +963,8 @@ func show_tab(id: String) -> void:
 		chat_ticker.visible = id == "home"
 	if online_status != null:
 		online_status.set_active(id == "home" and siege == null)
-	_home_war_watch()
 	hero_layer.position = Vector2.ZERO
-	hero_layer.scale = Vector2.ONE                 # (0.31.147: out of PLAY's push into the table)
+	hero_layer.scale = Vector2.ONE
 	hero_layer.modulate.a = 1.0
 	content_scroll.scroll_vertical = 0
 	rebuild()
@@ -1094,14 +1087,12 @@ func notice(title_text: String, body: String) -> void:
 		sfx("menuClose")
 		close_modal(), "modal_ok"))
 
-func close_modal(keep_zoom := false) -> void:
+func close_modal() -> void:
 	if is_instance_valid(modal):
 		modal.queue_free()
 	modal = null
 	if social != null:
 		_social_home.call_deferred()
-	if not keep_zoom:
-		_unzoom()                              # 0.31.147: Home back from its push into the war table
 
 # ---------------- menu drag-scroll (0.18.3, Kevin: "the main menu can't scroll up and down") ----------------
 # Every screen is cards and buttons, and those stop input, so the ScrollContainer's own touch drag
@@ -1236,34 +1227,11 @@ func _on_eco_synced(differs: bool) -> void:
 		analytics.note_level(int(profile.d.level))
 	if siege == null and tab == "home":
 		offer_referral.call_deferred()            # 0.31.120: a referral chest that came with this answer (it checks)
-		offer_war_reward.call_deferred()          # 0.31.151: a war reward that came with it (a land taken, a week won)
 	if not differs or siege != null:
 		return
 	refresh_top()
 	if not is_instance_valid(modal):
 		rebuild()
-
-func start_tutorial() -> void:
-	# The Herald's walkthrough: a small offline match (siege_mode.gd tutorial = true).
-	start_match(false, true)
-
-func open_commander() -> void:
-	# 0.31.153 COMMANDER (the test): the deck window (commander_panel.gd), then BATTLE -> start_commander
-	close_modal()
-	var m = _later(COMMANDER_PANEL).new()
-	add_child(m)
-	modal = m
-	m.open(self)
-
-func start_commander(deck: Array) -> void:
-	# 0.31.153: an offline match against the AI commander with this deck (siege_mode.gd commander = true). No server, no
-	# ticket, no rewards: it's a test of how the mode plays.
-	if siege != null:
-		return
-	pending_commander = deck
-	start_match(false, true)
-
-var pending_commander: Array = []         # 0.31.153: the deck the next match is a COMMANDER match with
 
 func open_moba() -> void:
 	# 0.31.155 5V5 (the test): the hero window (moba_panel.gd), then BATTLE -> start_moba
@@ -1279,23 +1247,18 @@ func start_moba(hero: String) -> void:
 	if siege != null:
 		return
 	pending_moba = hero
-	start_match(false, false)
+	start_match(false)
 	if siege == null and not _ticket_wait:
 		pending_moba = ""                          # (no ticket: nothing started)
 
 var pending_moba := ""                    # 0.31.155: the hero the next match is a 5v5 with
 
 var pending_join := ""                   # 0.31.120: a friend's public id whose match the next PLAY joins
-var pending_war := ""                    # 0.31.135: a battle on the war map the next match is for
 
 func join_friend(pid: String) -> void:
 	# 0.31.120 (Kevin: "make so it's a join match option"): Friends > JOIN on a friend who's in a match
 	if not ONLINE_MATCHES:
 		toast("Matches with friends are coming to 5v5 soon", UI.MUTED)     # 0.31.164 (5v5 only: offline for now)
-		return
-	var wb := str(social.card_of(pid).get("wb", "")) if social != null else ""
-	if wb != "":
-		start_war(wb)                          # 0.31.151: their battle on the war map (your house's side; a party follows you)
 		return
 	if social != null and social.in_party() and social.party_size() > 1:
 		sfx("error")
@@ -1309,160 +1272,25 @@ func join_friend(pid: String) -> void:
 
 # 0.31.164 (Kevin, on the new 5v5 map: "Remove them now: 5v5 only"): Siege, Commander, the tutorial and the war map's
 # battles are gone from the app -- PLAY is the 5v5 (the hero window, then a match against bots, paid like any match).
-# Online matches come back with an online 5v5; until then JOIN and a party's PLAY don't start one.
+# Online matches come back with an online 5v5; until then JOIN and a party's PLAY don't start one. (0.31.169: their
+# code went too -- Crown War with it.)
 const ONLINE_MATCHES := false
 
 func play() -> void:
-	# 0.31.145 (Kevin: "Play open war map"): Home's PLAY opens the war map -- a territory to attack, or QUICK BATTLE (the
-	# match PLAY started until now) at its foot. 0.31.146 (Kevin: "I want the play button to always bring players into
-	# map"): always -- in a party, not connected, or on a server without the war map too (the map says so; QUICK BATTLE
-	# is there for all of them).
+	# Home's PLAY: the 5v5's hero window (0.31.164)
 	if update_required:
 		show_update_screen()
-		return
-	if not ONLINE_MATCHES:
-		sfx("menuOpen")
-		open_moba()                                # 0.31.164: the 5v5's hero window
-		return
-	if social == null:                             # (tests without the social side only: the app always has it)
-		start_match(true)
-		return
-	if _zooming:
 		return
 	sfx("menuOpen")
-	if hero_node == null or not is_instance_valid(hero_node) or not hero_node.has_method("table_center") or tab != "home" \
-			or siege != null or bool(profile.d.settings.get("reduce_motion", false)) or not hero_layer.is_visible_in_tree():
-		open_war()
-		return
-	_zoom_into_table()
+	open_moba()
 
-# 0.31.147 (Kevin: "then the map opens up have camera zoom to it as animation"): PLAY pushes Home's view into the war
-# table (the painting and the 3D together, Home's buttons fading), then the war map opens over it and its own camera
-# dives onto the land (war_table.gd INTRO_*); Home comes back out when the map closes (close_modal -> _unzoom).
-const HOME_ZOOM := 2.1
-const HOME_ZOOM_SECS := 0.45
-var _zooming := false
-var _zoom_tw: Tween = null
-
-func _zoom_into_table() -> void:
-	_zooming = true
-	hero_layer.scale = Vector2.ONE
-	var c: Vector2 = hero_node.table_center() - hero_layer.global_position   # (in hero_layer's own pixels)
-	var aim := Vector2(size.x * 0.5, (safe_top + size.y - 130.0) * 0.5)    # where the war map's land will be
-	var block := Control.new()                     # (no other button during the push)
-	block.name = "ZoomBlock"
-	block.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	block.mouse_filter = Control.MOUSE_FILTER_STOP
-	add_child(block)
-	if _zoom_tw != null and _zoom_tw.is_valid():
-		_zoom_tw.kill()
-	hero_layer.pivot_offset = c
-	_zoom_tw = create_tween().set_parallel(true)
-	_zoom_tw.tween_property(hero_layer, "scale", Vector2.ONE * HOME_ZOOM, HOME_ZOOM_SECS).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
-	_zoom_tw.tween_property(hero_layer, "position", aim - c, HOME_ZOOM_SECS).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
-	_zoom_tw.tween_property(content, "modulate:a", 0.0, HOME_ZOOM_SECS * 0.6)
-	_zoom_tw.chain().tween_callback(func():
-		block.queue_free()
-		_zooming = false
-		if siege == null and not update_required:
-			open_war()
-			# (the push carries on a little under the map as it fades in)
-			_zoom_tw = create_tween()
-			_zoom_tw.tween_property(hero_layer, "scale", Vector2.ONE * HOME_ZOOM * 1.25, 0.5).set_ease(Tween.EASE_OUT)
-		else:
-			_unzoom())
-
-func _unzoom() -> void:
-	# Home out of its push into the table: eased back on Home, at once anywhere else (a match, another tab)
-	if hero_layer == null or content == null:
-		return
-	if _zoom_tw != null and _zoom_tw.is_valid():
-		_zoom_tw.kill()
-	_zooming = false
-	for b in get_children():
-		if b.name == "ZoomBlock":
-			b.queue_free()
-	if hero_layer.scale.is_equal_approx(Vector2.ONE) and is_equal_approx(content.modulate.a, 1.0):
-		return
-	if siege != null or tab != "home" or not is_inside_tree() or bool(profile.d.settings.get("reduce_motion", false)):
-		hero_layer.scale = Vector2.ONE
-		hero_layer.position = Vector2.ZERO
-		content.modulate.a = 1.0
-		return
-	_zoom_tw = create_tween().set_parallel(true)
-	_zoom_tw.tween_property(hero_layer, "scale", Vector2.ONE, 0.35).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-	_zoom_tw.tween_property(hero_layer, "position", Vector2.ZERO, 0.35).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-	_zoom_tw.tween_property(content, "modulate:a", 1.0, 0.3)
-
-func war_tour_due() -> bool:
-	# 0.31.147: the Herald's tour of the war map runs by itself once a phone (settings stay on the phone)
-	return not bool(profile.d.settings.get("war_tour", false))
-
-func war_tour_seen() -> void:
-	if not bool(profile.d.settings.get("war_tour", false)):
-		profile.d.settings["war_tour"] = true
-		profile.save()
-
-func quick_battle() -> void:
-	# the war map's QUICK BATTLE: a match from matchmaking (16 vs 16, bots in the empty seats), any house or none. In a
-	# party the leader's takes everyone (start_match: social "play"); a member's says the leader starts it, the map stays.
-	if update_required:
-		close_modal()
-		show_update_screen()
-		return
-	start_match(true)
-	if siege != null:
-		close_modal()
-
-func open_war(first := "") -> void:
-	# 0.31.135 (Crown War step 2): the war table -- Home's PLAY (0.31.145), the CLAN window's WAR MAP, a battle's WAR MAP
-	if social == null:
-		return
-	close_modal(true)                          # (Home stays pushed into the table under it: PLAY's zoom)
-	var m = _later(WAR_TABLE).new()
-	add_child(m)
-	modal = m
-	m.open(self, first)
-
-func start_war(bid: String) -> void:
-	# into a battle on the war map: its own room on the server (siege_server.gd "war"), seated on your house's side
-	if bid == "" or siege != null:
-		return
-	if update_required:
-		show_update_screen()
-		return
-	close_modal()
-	if is_instance_valid(_invite_banner):
-		_invite_banner.queue_free()
-	pending_war = bid
-	# 0.31.149: a party's leader takes the party into the battle (its members of the same house are seated with them)
-	if social != null and social.online() and social.in_party() and social.is_leader() and social.party_size() > 1:
-		social.play(bid)
-	start_match(true)
-	if siege == null:
-		pending_war = ""
-
-func _on_war_call(m: Dictionary, defend: bool) -> void:
-	if siege != null or str(m.get("bid", "")) == "":
-		return
-	var place := str(m.get("name", "a territory"))
-	var title := ("DEFEND %s!" % place.to_upper()) if defend else ("BATTLE FOR %s" % place.to_upper())
-	var sub := ("[%s] of House %s is attacking it" % [str(m.get("ct", "")), str(WarMap.HOUSE_NAMES.get(str(m.get("h", "")), "?"))]) \
-		if defend else ("%s calls the clan to fight" % str(m.get("by", "A clan mate")))
-	sfx("chatPop")
-	if is_instance_valid(_invite_banner):
-		_invite_banner.queue_free()
-	_invite_banner = InviteBanner.new()
-	add_child(_invite_banner)
-	_invite_banner.show_war(self, str(m.bid), title, sub, defend, safe_top + TOP_H + 14.0)
-
-func start_match(online: bool, tutorial := false, follow := false) -> void:
+func start_match(online: bool, follow := false) -> void:
 	if siege != null:
 		return
 	if online and update_required:
 		show_update_screen()               # online stays locked until the update is installed
 		return
-	if online and not tutorial and pending_war == "" and social != null and social.online() and social.in_party():
+	if online and social != null and social.online() and social.in_party():
 		# 0.31.111: a party plays together -- the leader's PLAY takes everyone in the menu along (social "play" ->
 		# "go"); a member waits for the leader (follow: the leader's "go" arrived)
 		if social.is_leader():
@@ -1472,7 +1300,7 @@ func start_match(online: bool, tutorial := false, follow := false) -> void:
 			var lead := str(social.card_of(str(social.party.get("leader", ""))).get("n", "your leader"))
 			toast("%s starts your party's match -- or leave the party to play alone" % lead, UI.MUTED)
 			return
-	if not online and not tutorial and eco_sync != null and eco_sync.enabled and not _ticket_ok:
+	if not online and eco_sync != null and eco_sync.enabled and not _ticket_ok:
 		# 0.31.108 (Kevin: "Always online"): a VS BOTS match pays only against a ticket the server gives now
 		if _ticket_wait:
 			return
@@ -1486,23 +1314,18 @@ func start_match(online: bool, tutorial := false, follow := false) -> void:
 				pending_moba = ""
 				return
 			_ticket_ok = true
-			start_match(false, false)
+			start_match(false)
 			_ticket_ok = false)
 		return
 	sfx("matchStart")
-	if analytics != null and not tutorial:
+	if analytics != null:
 		analytics.log_ev("match_join", {"mode":"online" if online else "bots",
 			"party_n":social.party_size() if social != null and social.online() and social.in_party() else 1})
 	siege = _later(SIEGE_MODE).new()
 	siege.online = online
-	siege.tutorial = tutorial and pending_commander.is_empty() and pending_moba == ""
 	if pending_moba != "":
 		siege.moba_hero = pending_moba              # 0.31.155 (start_moba: through the tutorial's door, a full 5v5)
 		pending_moba = ""
-	if not pending_commander.is_empty():
-		siege.commander = true                      # 0.31.153 (start_commander: through the tutorial's door -- offline, no
-		siege.deck = pending_commander              # ticket -- but a full match)
-		pending_commander = []
 	siege.profile = profile
 	siege.audio = audio
 	siege.low_fx = bool(profile.d.settings.get("reduce_motion", false))
@@ -1513,8 +1336,6 @@ func start_match(online: bool, tutorial := false, follow := false) -> void:
 	siege.analytics = analytics
 	siege.party_join = pending_join                 # 0.31.120: Friends > JOIN (their match)
 	pending_join = ""
-	siege.war_bid = pending_war                     # 0.31.135: a battle on the war map
-	pending_war = ""
 	siege.exited.connect(_end_match)
 	siege.version_mismatch.connect(_on_version_mismatch)
 	if online_status != null:
@@ -1531,7 +1352,6 @@ func _set_menu_active(on: bool) -> void:
 	hero_layer.process_mode = Node.PROCESS_MODE_INHERIT if on else Node.PROCESS_MODE_DISABLED
 	if not on:
 		hero_layer.visible = false          # coming back, show_tab decides (home only)
-	_home_war_watch()
 
 func _menu_fps() -> void:
 	if get_tree().get_script() == null or OS.has_environment("FB_MENU_FPS"):
@@ -1540,14 +1360,10 @@ func _menu_fps() -> void:
 func _end_match() -> void:
 	var replay := ""
 	var note := ""
-	var to_war := false
-	var war_tid := ""
 	if is_instance_valid(siege):
 		note = str(siege.exit_note)
-		to_war = str(siege.war_bid) != "" and siege.hud != null and str(siege.hud.exit_to) == "war"   # 0.31.135: WAR MAP
-		war_tid = str(siege.war_info.get("tid", siege.war_result.get("tid", "")))                       # (open on it)
 		replay = str(siege.replay_hero)          # 0.31.164: PLAY AGAIN after a 5v5 -- a new match, with its own ticket
-		siege.note_leaving()                     # 0.31.118: a VS BOTS match or the tutorial left before its end
+		siege.note_leaving()                     # 0.31.118: a VS BOTS match left before its end
 		siege.queue_free()
 	siege = null
 	if eco_sync != null and eco_sync.enabled:
@@ -1567,8 +1383,6 @@ func _end_match() -> void:
 		toast(SERVER_UPDATING, UI.GOLD)
 	elif note == "idle":
 		notice("REMOVED FOR BEING IDLE", "You didn't move or attack for 3 minutes, so a bot took your place. Nothing was paid for that match.")
-	elif to_war:
-		open_war(war_tid)
 	elif replay != "":
 		start_moba(replay)
 
@@ -1971,30 +1785,6 @@ func offer_prize() -> bool:
 	notice("LEADERBOARD PRIZE", "You finished #%d on last week's leaderboard! You got %s." % [int(x.get("rank", 0)), ", ".join(bits)])
 	return true
 
-func offer_war_reward() -> bool:
-	# 0.31.151: a war reward the server paid (a land taken, a week won) we haven't shown -- once, the newest
-	if not daily_auto or siege != null or update_required or tab != "home" or is_instance_valid(modal):
-		return false
-	var wr: Array = profile.d.get("war_rewards", [])
-	if wr.is_empty() or str(wr[0].get("id", "")) == str(profile.d.settings.get("war_seen", "")):
-		return false
-	var x: Dictionary = wr[0]
-	profile.d.settings["war_seen"] = str(x.id)
-	profile.save()
-	notice("CROWN WAR", "%s You got %s." % [str(x.get("text", "")), war_reward_text(x)])
-	sfx("confirm")
-	return true
-
-static func war_reward_text(x: Dictionary) -> String:
-	var bits := []
-	if int(x.get("gold", 0)) > 0:
-		bits.append("%d gold" % int(x.gold))
-	if int(x.get("gems", 0)) > 0:
-		bits.append("%d gems" % int(x.gems))
-	if str(x.get("chest", "")) != "":
-		bits.append("a %s" % str(Eco.CHESTS.get(str(x.chest), {}).get("name", "chest")))
-	return " and ".join(bits) if bits.size() <= 2 else ", ".join(bits.slice(0, bits.size() - 1)) + " and " + str(bits[-1])
-
 func offer_referral() -> bool:
 	# 0.31.120: Gold chests from a referral (server/referrals.gd) since we last said so
 	if not daily_auto or siege != null or update_required or tab != "home" or is_instance_valid(modal):
@@ -2131,7 +1921,7 @@ func open_send_diag() -> void:
 				UI2.dim_button(send, false)))
 
 func offer_daily() -> void:
-	if offer_prize() or offer_war_reward() or offer_referral():
+	if offer_prize() or offer_referral():
 		return
 	if not daily_auto or siege != null or update_required or tab != "home" or is_instance_valid(modal):
 		return
@@ -2162,8 +1952,8 @@ func open_friends() -> void:
 	m.open(self)
 
 func open_clan(focus := "") -> void:
-	# 0.31.134 (Crown War step 1): the CLAN window, beside FRIENDS. 0.31.147: focus "join" (the war map's JOIN A CLAN and
-	# the Herald's tour): not in a clan, it opens on joining -- the clans to join, START MY OWN CLAN
+	# 0.31.134: the CLAN window, beside FRIENDS. Focus "join": not in a clan, it opens on joining -- the clans to join,
+	# START MY OWN CLAN
 	if social == null:
 		return
 	close_modal()
@@ -2226,11 +2016,7 @@ func _on_party_go(_pa: String, by: String) -> void:
 		return
 	close_modal()
 	toast("%s is heading into battle -- your party follows!" % by, UI.GOLD)
-	var wb := str(social.party_war) if social != null else ""
-	if wb != "":
-		start_war(wb)                          # 0.31.149: the leader's battle on the war map
-	else:
-		start_match(true, false, true)
+	start_match(true, true)
 
 func social_sig() -> String:
 	if social == null or not social.online():
@@ -2238,30 +2024,15 @@ func social_sig() -> String:
 	var names := []
 	for m in social.party.get("members", []):
 		names.append(str(m.pid) + str(m.n))
-	return "%d|%s|%s|%s%s" % [social.attention(), str(social.party.get("leader", "")), ",".join(names), social.my_tag(),
-		"w" if social.has_war else ""]                    # 0.31.135: Home's CROWN WAR comes with a clan
+	return "%d|%s|%s|%s" % [social.attention(), str(social.party.get("leader", "")), ",".join(names), social.my_tag()]
 
 func _on_social_changed(what: String) -> void:
 	if what == "me":
 		_social_name = str(profile.d.name)
-	if what in ["me", "state"]:
-		_home_war_watch()
 	paint_alliance()
-	if what == "war" and home_scene != null:
-		home_scene.paint_war(social.war)                 # 0.31.138: Home's table shows the war as it stands
 	if siege != null or not what in ["friends", "party", "state", "clan"]:
 		return
 	_social_home()
-
-func _home_war_watch() -> void:
-	# 0.31.138: Home's war table is live while Home is up (not under a match): the server pushes the map's changes
-	if social == null:
-		return
-	var want: bool = tab == "home" and siege == null and social.has_war and social.online()
-	if want and not social.war_eyes("home"):
-		social.war_open("home")
-	elif not want and social.war_eyes("home"):
-		social.war_close("home")
 
 func _social_home() -> void:
 	# Home shows the Friends badge and the party: redraw it when they change (not under a window: when it closes)

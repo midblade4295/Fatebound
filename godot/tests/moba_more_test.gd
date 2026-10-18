@@ -630,7 +630,7 @@ func _matches() -> void:
 func _add_minion(s, team: int, cls: String, p: Vector2) -> Dictionary:
 	s.moba._mid += 1
 	var id := "tm%d" % s.moba._mid
-	var u: Dictionary = s._new_unit(id, team, false, "raid")
+	var u: Dictionary = s._new_unit(id, team, false)
 	u.cls = cls
 	u["minion"] = true
 	u["mk"] = {"knight":"melee", "ranger":"caster", "mage":"siege", "barbarian":"super"}.get(cls, "melee")     # (0.31.158)

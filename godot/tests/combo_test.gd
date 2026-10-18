@@ -30,7 +30,7 @@ func _init():
 			after = int(e.combo)
 	print("after a 2.5 s pause: ", after)
 	var ok: bool = seen.slice(0, 4) == [0, 1, 2, 0] and after == 0
-	for cls in ["knight", "crusader", "barbarian", "berserker", "rogue", "assassin", "worker", "villager"]:
+	for cls in ["knight", "crusader", "barbarian", "berserker", "rogue", "assassin"]:
 		var look: Dictionary = View.LOOKS[cls]
 		ok = ok and look.has("combo") and (look.combo as Array).size() == 3
 	print("COMBO_PASS" if ok else "COMBO_FAIL")

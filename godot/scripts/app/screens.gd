@@ -2006,13 +2006,13 @@ static func locker(app, root: VBoxContainer) -> void:
 	nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	var sub := ""
 	if Eco.UP_BASE.has(cls):
-		sub = "From the %s stand once your team's workshop buys %s hats" % [str(Eco.CLASS_NAMES[Eco.UP_BASE[cls]]), str(Eco.CLASS_NAMES[cls])]
+		sub = "The %s's upgrade  ·  a hero of its own" % str(Eco.CLASS_NAMES[Eco.UP_BASE[cls]])       # (0.31.169: was Siege's hat stands)
 	else:
 		var up := ""
 		for u in Eco.UP_BASE:
 			if Eco.UP_BASE[u] == cls:
 				up = str(Eco.CLASS_NAMES[u])
-		sub = ("Grab its hat at the %s stand  ·  upgrade: %s" % [str(Eco.CLASS_NAMES[cls]), up]) if up != "" else "Gathers wood and stone, repairs gates, pays for upgrades"
+		sub = ("Its upgrade: the %s" % up) if up != "" else ""
 	UI2.center(UI2.body(np, sub, 11, Color("#ffe39a")))
 	quest_card(app, root, cls)                               # 0.31.97: the class's quest and its legendary
 	# weapons

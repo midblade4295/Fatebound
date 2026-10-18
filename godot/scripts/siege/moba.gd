@@ -465,24 +465,17 @@ func begin(sim, my_hero: String, seed_value: int) -> void:
 	kits = Kits.new()
 	kits.setup(self)
 	s.match_time = MATCH_5V5
-	for st in s.stands:
-		st.stock = 0                      # (the shops stay as buildings; nothing to take)
-	s.hats = []
-	s.bomb_next = [INF, INF]
 	for b in TOWERS_BLUE:
 		_add_tower(0, int(b[0]), int(b[1]), b[2])
 	for b in TOWERS_BLUE:
 		_add_tower(1, 2 - int(b[0]) if int(b[0]) >= 0 else -1, int(b[1]), -(b[2] as Vector2))
 	for g in s.gates:                     # 0.31.157: the gates (League's inhibitors) a little easier to break
-		if str(g.get("kind", "")) != "jail":
-			g.hp = GATE_HP_5V5
-			g.max_hp = GATE_HP_5V5
+		g.hp = GATE_HP_5V5
+		g.max_hp = GATE_HP_5V5
 	for t in 2:                           # the Kings, home on their thrones: the hearts
 		var o: Dictionary = s.oracles[t]
 		o.state = "home"
 		o.pos = s.throne(t)
-		o.lifters = []
-		o.carrier = ""
 		kings[t] = {"hp":KING_HP, "max_hp":KING_HP, "dead":false, "next":0.0, "quiet":0.0}
 		s.obstacles.append({"p":o.pos, "r":KING_R, "kind":"moba_king", "kg":t, "team":t})
 	s._build_buckets()
@@ -581,7 +574,6 @@ func _make_hero(u: Dictionary, hid: String, lane: int, king_runner: bool) -> voi
 	u["items"] = []
 	u["bought"] = []
 	u["buffs"] = {}
-	u.role = "escort"
 	heroes[int(u.team)].append(u.id)
 	hero_of[u.id] = hid
 	_apply(u)
@@ -684,7 +676,7 @@ func step(dt: float) -> void:
 			for l in 3:
 				_spawn_wave(t, l)
 	for g in s.gates:                                  # 0.31.158: a broken gate stands again (League's inhibitor)
-		if bool(g.get("broken", false)) and str(g.get("kind", "")) != "jail" and s.time >= float(g.get("broken_at", INF)) + GATE_BACK:
+		if bool(g.get("broken", false)) and s.time >= float(g.get("broken_at", INF)) + GATE_BACK:
 			g.broken = false
 			g.hp = float(g.max_hp)
 			g.erase("broken_at")
@@ -772,7 +764,7 @@ func wave_kinds(t: int, l: int, n: int) -> Array:
 func _gates_down(team: int) -> int:
 	var n := 0
 	for g in s.gates:
-		if int(g.team) == team and str(g.get("kind", "")) != "jail" and not s.gate_blocks(g):
+		if int(g.team) == team and not s.gate_blocks(g):
 			n += 1
 	return n
 
@@ -796,7 +788,7 @@ func _spawn_wave(t: int, l: int) -> void:
 		_mid += 1
 		var mk := str(kinds[k])
 		var id := "m%d" % _mid
-		var u: Dictionary = s._new_unit(id, t, true, "raid")
+		var u: Dictionary = s._new_unit(id, t, true)
 		u.cls = str(MINION_CLS[mk])
 		u["minion"] = true
 		u["mk"] = mk
@@ -861,12 +853,7 @@ func towers_down(team: int) -> int:
 
 func gate_open(g: Dictionary) -> bool:
 	# a keep's gate can be hit once the third tower of the lane that ends at it is down (0.31.165: its tier 3; the inner
-	# tower, tier 2, on the Siege field) (the jail: once a front gate is)
-	if str(g.get("kind", "")) == "jail":
-		for o in s.gates:
-			if int(o.team) == int(g.team) and str(o.get("kind", "")) != "jail" and not s.gate_blocks(o):
-				return true
-		return false
+	# tower, tier 2, on the Siege field)
 	for l in 3:
 		var end := wp(1 - int(g.team), l, lane_len(l) - 1)        # where the attackers' track ends: at this castle
 		if end.distance_to(g.c) > 6.0:
@@ -915,7 +902,7 @@ func _step_towers(dt: float) -> void:
 			var bt := 9
 			var bd := INF
 			for o in units_near(tw.p, TOWER_RANGE + s.UNIT_R):
-				if int(o.team) == int(tw.team) or int(o.team) > 1 or not s.alive(o) or o.state == "fly":
+				if int(o.team) == int(tw.team) or int(o.team) > 1 or not s.alive(o):
 					continue
 				var d: float = (o.pos as Vector2).distance_to(tw.p)
 				if d > TOWER_RANGE + s.UNIT_R:
@@ -1199,10 +1186,6 @@ func on_damage(src: Dictionary, dst: Dictionary, amount: float) -> void:
 func on_kill(src: Dictionary, dst: Dictionary) -> void:
 	kits.clear(dst)                              # 0.31.167: shields, slows, poison... gone
 	dst["died_at"] = s.time
-	dst["died_hat"] = -1
-	dst.task = {}
-	dst.load = {"kind":"", "n":0}
-	dst.offering = false
 	dst.deaths = int(dst.deaths) + 1
 	var push: Vector3 = dst.get("death_push", Vector3.ZERO)
 	var by_h := _credit(src)                     # 0.31.157: the hero behind the blow (a Necromancer's skeleton's: him)
@@ -1235,7 +1218,6 @@ func on_kill(src: Dictionary, dst: Dictionary) -> void:
 			if bool(src.get("hero", false)):
 				src.kills = int(src.kills) + 1
 				s._multi_kill(src, dst)
-				s._stat_add(src, "kills", 1.0)
 		var reward := HERO_XP + HERO_XP_LVL * float(int(dst.level))
 		if bool(src.get("hero", false)):
 			add_xp(src, reward)
@@ -1247,31 +1229,6 @@ func on_kill(src: Dictionary, dst: Dictionary) -> void:
 		_pass_buffs(dst, by_h)
 	s._event("death", {"id":dst.id, "by":src.get("id", ""), "push":[snappedf(push.x, 0.01), snappedf(push.y, 0.01), snappedf(push.z, 0.01)],
 		"minion":bool(dst.get("minion", false)), "mon":dst.has("mon")})
-
-# ---------- ACTION: only the King ----------
-func context(u: Dictionary) -> String:
-	if true:
-		return ""                                # (0.31.156: the Kings are the hearts -- nothing to lift)
-	if u.carrying:
-		var ho: Dictionary = s.lifting_oracle(u)
-		return "throw" if (not ho.is_empty() and ho.lifters.size() == 1 and s.lifters_needed(ho) == 1) else "letgo"
-	var lo: Dictionary = s._liftable(u)
-	if not lo.is_empty():
-		return "join" if lo.state == "carried" else "grab"
-	return ""
-
-func interact(u: Dictionary) -> bool:
-	if true:
-		return false
-	if u.carrying:
-		var ho: Dictionary = s.lifting_oracle(u)
-		s._leave_lift(u, not ho.is_empty() and ho.lifters.size() == 1 and s.lifters_needed(ho) == 1)
-		return true
-	var lo: Dictionary = s._liftable(u)
-	if not lo.is_empty():
-		s._join_lift(u, lo)
-		return true
-	return false
 
 # ---------- the bots ----------
 func think(u: Dictionary) -> void:
@@ -1354,7 +1311,7 @@ func _minion_target(u: Dictionary) -> Dictionary:
 				bd = da
 				best = a
 	for o in units_near(u.pos, acq):
-		if int(o.team) == team or int(o.team) > 1 or not s.alive(o) or o.state == "fly":
+		if int(o.team) == team or int(o.team) > 1 or not s.alive(o):
 			continue
 		var d: float = (o.pos as Vector2).distance_to(u.pos)
 		if d > acq or not can_see(team, o):
@@ -1431,7 +1388,7 @@ func _march(u: Dictionary) -> void:
 
 func _gate_at(team: int, p: Vector2) -> Dictionary:
 	for g in s.gates:
-		if int(g.team) == team and str(g.get("kind", "")) != "jail" and (g.c as Vector2).distance_to(p) < 6.0:
+		if int(g.team) == team and (g.c as Vector2).distance_to(p) < 6.0:
 			return g
 	return {}
 
@@ -1543,7 +1500,7 @@ func _think_hero(u: Dictionary) -> void:
 		return
 	# 0.31.157: their gate, once it can be hurt, while our minions are at it (League's heroes hit the inhibitor too)
 	for g in s.gates:
-		if int(g.team) == int(u.team) or str(g.get("kind", "")) == "jail" or not s.gate_blocks(g) or not gate_open(g):
+		if int(g.team) == int(u.team) or not s.gate_blocks(g) or not gate_open(g):
 			continue
 		if (g.c as Vector2).distance_to(u.pos) < reach + 10.0 and _our_minions_near(int(u.team), g.c):
 			_hit_gate(u, g)
@@ -1612,7 +1569,7 @@ func _home_tower_spot(team: int, l: int) -> Vector2:
 
 func _enemy_gate_down(team: int) -> bool:
 	for g in s.gates:
-		if int(g.team) != team and str(g.get("kind", "")) != "jail" and not s.gate_blocks(g):
+		if int(g.team) != team and not s.gate_blocks(g):
 			return true
 	return false
 
@@ -1754,7 +1711,7 @@ func _flurry_key(o: Dictionary, p: Vector2) -> float:
 func _enemies_in(u: Dictionary, at: Vector2, r: float) -> Array:
 	var out := []
 	for o in s.units:
-		if int(o.team) != int(u.team) and s.alive(o) and o.state != "fly" and (o.pos as Vector2).distance_to(at) <= r:
+		if int(o.team) != int(u.team) and s.alive(o) and (o.pos as Vector2).distance_to(at) <= r:
 			out.append(o)
 	return out
 
@@ -1807,7 +1764,7 @@ func _step_rains(_dt: float) -> void:
 		r.left = int(r.left) - 1
 		var owner: Dictionary = s.by_id.get(str(r.owner), {"team":int(r.team), "id":""})
 		for o in s.units:
-			if int(o.team) != int(r.team) and s.alive(o) and o.state != "fly" and (o.pos as Vector2).distance_to(r.at) <= float(r.r):
+			if int(o.team) != int(r.team) and s.alive(o) and (o.pos as Vector2).distance_to(r.at) <= float(r.r):
 				s._damage(owner, o, float(r.dmg))
 		if int(r.left) <= 0:
 			rains.remove_at(i)
@@ -1869,7 +1826,7 @@ func mod_damage(src: Dictionary, dst: Dictionary, amount: float) -> float:
 func _raise_skeleton(owner: Dictionary, at: Vector2) -> Dictionary:
 	_zid += 1
 	var id := "z%d" % _zid
-	var z: Dictionary = s._new_unit(id, int(owner.team), true, "raid")
+	var z: Dictionary = s._new_unit(id, int(owner.team), true)
 	z.cls = "rogue"
 	z["summon"] = true
 	z["minion"] = true
@@ -1897,7 +1854,7 @@ func _think_summon(u: Dictionary) -> void:
 	var best := {}
 	var bd := 12.0
 	for o in units_near(base, bd):
-		if int(o.team) == int(u.team) or not s.alive(o) or o.state == "fly":
+		if int(o.team) == int(u.team) or not s.alive(o):
 			continue
 		if o.has("mon") and str(camps[int(o.mon)].target) == "":
 			continue                                   # (sleeping monsters are left alone)
@@ -2176,7 +2133,7 @@ func _spawn_camp(camp: Dictionary) -> void:
 			off = -off                                  # (red's camps face the other way)
 		_jid += 1
 		var id := "j%d" % _jid
-		var u: Dictionary = s._new_unit(id, 2, true, "raid")
+		var u: Dictionary = s._new_unit(id, 2, true)
 		u.cls = str(md.cls)
 		u["mon"] = int(camp.id)
 		u["mkind"] = mk
@@ -2319,7 +2276,7 @@ func _summon_lord(team: int) -> Dictionary:
 	# targeting), towers shooting him first but only 5 % a shot, and hitting towers and gates x LORD_SIEGE -- until he falls
 	_mid += 1
 	var id := "L%d" % _mid
-	var u: Dictionary = s._new_unit(id, team, true, "raid")
+	var u: Dictionary = s._new_unit(id, team, true)
 	u.cls = "barbarian"
 	u["minion"] = true
 	u["mk"] = "lord"

@@ -601,7 +601,7 @@ func ult(u: Dictionary, pk: float, dmg: float, ev: Dictionary) -> bool:
 			var pool := []
 			for o in m.units_near(u.pos, float(k.range)):
 				if int(o.team) != int(u.team) and int(o.team) <= 1 and s.alive(o) and bool(o.get("hero", false)) \
-						and o.state != "fly" and m.can_see(int(u.team), o) and (o.pos as Vector2).distance_to(u.pos) <= float(k.range):
+						and m.can_see(int(u.team), o) and (o.pos as Vector2).distance_to(u.pos) <= float(k.range):
 					pool.append(o)
 			if pool.is_empty():
 				return false
@@ -683,7 +683,6 @@ func _dash(u: Dictionary, dir: Vector2, dist: float, fx: Dictionary, speed := DA
 	u.t = dist / speed + 0.05
 	u.face = s.angle_of(dir)
 	u.move = Vector2.ZERO
-	u.task = {}
 	var dd := {"dir":dir, "left":dist, "total":dist, "speed":speed, "hits":[]}
 	dd.merge(fx)
 	u["dash"] = dd
@@ -764,7 +763,7 @@ func step(dt: float) -> void:
 			continue
 		z.next = float(z.next) + ZONE_EVERY
 		for o in m.units_near(z.at, float(z.r) + 1.0):
-			if not s.alive(o) or o.state == "fly" or (o.pos as Vector2).distance_to(z.at) > float(z.r):
+			if not s.alive(o) or (o.pos as Vector2).distance_to(z.at) > float(z.r):
 				continue
 			if int(o.team) != int(z.team):
 				if float(z.get("dmg", 0.0)) > 0.0:
@@ -782,7 +781,7 @@ func step(dt: float) -> void:
 		if s.time < float(tr.armed_at):
 			continue
 		for o in m.units_near(tr.at, float(tr.r) + 1.0):
-			if int(o.team) == int(tr.team) or int(o.team) > 1 or not s.alive(o) or o.state == "fly" \
+			if int(o.team) == int(tr.team) or int(o.team) > 1 or not s.alive(o) \
 					or (o.pos as Vector2).distance_to(tr.at) > float(tr.r):
 				continue
 			var owner2: Dictionary = s.by_id.get(str(tr.owner), {"team":int(tr.team), "id":""})
@@ -855,7 +854,7 @@ func step_dash(u: Dictionary, dt: float) -> void:
 	dd.left = float(dd.left) - step_len
 	if float(dd.get("dmg", 0.0)) > 0.0 and not (bool(dd.get("first", false)) and not (dd.hits as Array).is_empty()):
 		for o in m.units_near(u.pos, 2.0):
-			if int(o.team) == int(u.team) or not s.alive(o) or o.state == "fly" or (dd.hits as Array).has(o.id):
+			if int(o.team) == int(u.team) or not s.alive(o) or (dd.hits as Array).has(o.id):
 				continue
 			if (o.pos as Vector2).distance_to(u.pos) > s.UNIT_R * 2.0 + 0.35:
 				continue
@@ -904,7 +903,7 @@ func _hero_near(u: Dictionary, r: float) -> Dictionary:
 	var bd := r
 	for o in m.units_near(u.pos, r):
 		if int(o.team) == int(u.team) or int(o.team) > 1 or not s.alive(o) or not bool(o.get("hero", false)) \
-				or o.state == "fly" or not m.can_see(int(u.team), o):
+				or not m.can_see(int(u.team), o):
 			continue
 		var d: float = (o.pos as Vector2).distance_to(u.pos)
 		if d <= bd:
@@ -932,7 +931,7 @@ func _face_foe(u: Dictionary, r: float) -> Vector2:
 func _enemies_near(u: Dictionary, at: Vector2, r: float) -> Array:
 	var out := []
 	for o in m.units_near(at, r):
-		if int(o.team) != int(u.get("team", -1)) and s.alive(o) and o.state != "fly" and (o.pos as Vector2).distance_to(at) <= r:
+		if int(o.team) != int(u.get("team", -1)) and s.alive(o) and (o.pos as Vector2).distance_to(at) <= r:
 			if o.has("mon") and str(m.camps[int(o.mon)].target) == "" and int(u.get("team", -1)) <= 1:
 				continue                           # (sleeping monsters are left out of area spells)
 			out.append(o)

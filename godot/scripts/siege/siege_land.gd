@@ -47,14 +47,6 @@ const BED_Y := -0.58             # shallow: wading is a little slower (Sim.move_
 const FORD_Y := -0.4             # the fords' stones stand just out of the water: no wading on a lane
 # [x, half-width] -- across the whole river at that x: the three lanes, and a causeway out to each pit's two mouths
 const FORDS := [[0.0, 3.4], [46.0, 3.4], [-46.0, 3.4], [POOL_X, PIT_MOUTH], [-POOL_X, PIT_MOUTH]]
-const RIVER_WALL_R := 0.5
-const BRIDGE_ARCH := 0.55
-const RAIL_R := 0.25
-const SIDE_BRIDGE_X := 24.0      # (the Siege field's; tools only)
-const LANE_HALF := 1.25
-const ISLAND_RX := PIT_R
-const ISLAND_RZ := PIT_R
-const ISLAND_TOWER := Vector2.ZERO
 
 static func river_c(x: float) -> float:
 	# Odd in x, so the river is its own point mirror: c(-x) = -c(x).
@@ -88,15 +80,6 @@ static func on_ford(p: Vector2, margin := 0.0) -> bool:
 	for f in FORDS:
 		if absf(p.x - float(f[0])) <= float(f[1]) + margin:
 			return true
-	return false
-
-static func bridges() -> Array:
-	return []                    # (the Siege field's bridges: the Rift is forded)
-
-static func bridge_deck(_p: Vector2) -> float:
-	return -INF
-
-static func on_bridge(_p: Vector2, _margin := 0.0) -> bool:
 	return false
 
 # ---------------- the field's edge ----------------
@@ -210,31 +193,6 @@ static func ridge_dist(p: Vector2) -> Vector2:
 				br = float(rg.r)
 	return Vector2(best, br)
 
-# ---------------- (the Siege field's hills, scarps and outposts: none on the Rift) ----------------
-const HILLS := []
-const SCARPS := []
-const SCARP_W := 1.0
-const OUTPOST_R := 6.5
-const OUTPOST_TOWER_R := 3.0
-const TOWER_TOP_R := 1.85
-const OUTPOST_LOOKS := []
-const OUTPOSTS_BLUE_HALF := []
-
-static func hills_height(_p: Vector2) -> float:
-	return 0.0
-
-static func scarp_rim(_p: Vector2) -> Vector2:
-	return Vector2.ZERO
-
-static func tower_floor(id: int) -> float:
-	return float(OUTPOST_LOOKS[id].floor) if id >= 0 and id < OUTPOST_LOOKS.size() else 0.0
-
-static func tower_block(_id: int) -> Vector3:
-	return Vector3.ZERO
-
-static func outpost_positions() -> Array:
-	return []
-
 # ---------------- dirt paths (visual) ----------------
 # The lanes (LANES) as trodden dirt, and a few jungle trails between the camps (blue half; red's mirrored).
 # paths() curves through the control points (Catmull-Rom every PATH_STEP m) and path_wobble() makes the track swell,
@@ -299,7 +257,6 @@ static func path_wobble(p: Vector2) -> float:
 	var rag := 0.20 * cos(1.3 * p.x + 0.9 * p.y) + 0.13 * cos(2.3 * p.x - 1.9 * p.y) + 0.08 * sin(3.7 * p.x) * sin(4.1 * p.y)
 	return slow + rag
 
-const APRON_IN := 3.3
 const APRON_BLEND := 2.2
 
 static func smooth_min(a: float, b: float, k: float) -> float:

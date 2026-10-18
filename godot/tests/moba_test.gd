@@ -68,7 +68,6 @@ func _init() -> void:
 		"you: the Archmage (%d health: the class's x1.15 x%.1f)" % [int(me.max_hp), Moba.HERO_HP])
 	var blue: Array = s.units.filter(func(u): return int(u.team) == 0).map(func(u): return str(u.hid))
 	check(blue.size() == 5 and blue.all(func(h): return blue.count(h) == 1), "no two heroes the same on a side (%s)" % str(blue))
-	check(s.stands.all(func(st): return int(st.stock) == 0) and s.hats.is_empty(), "the hat stands are empty")
 	# (0.31.165, the Rift: three towers a lane and two King towers in the keep -- six a side until then)
 	check(s.moba.towers.size() == 22 and s.moba.towers.filter(func(t): return int(t.team) == 0).size() == 11
 		and s.moba.towers.filter(func(t): return int(t.tier) == 4).size() == 4
@@ -220,7 +219,7 @@ func _init() -> void:
 	var cls0 := str(you.cls)
 	you.pos = Vector2(0, 5)
 	l._kill({}, you)
-	check(l.hats.is_empty() and you.cls == cls0, "a hero falls: no hat drops, he stays a %s" % cls0)
+	check(you.cls == cls0, "a hero falls: he stays a %s" % cls0)
 	var wait := Moba.RESPAWN_BASE + Moba.RESPAWN_LVL * float(int(you.level))
 	check(is_equal_approx(float(you.respawn_at) - l.time, wait), "back in %.1f s (level %d)" % [wait, int(you.level)])
 	_run(l, wait + 0.2)
@@ -229,9 +228,6 @@ func _init() -> void:
 	var h0 := float(you.hp)
 	_run(l, 2.0)
 	check(float(you.hp) > h0 + you.max_hp * 0.09, "his castle heals him")
-	check(l.stands.is_empty(), "no hat stands (0.31.165: the Rift's keeps)")
-	you.pos = Sim.spawn(0) + Vector2(2.0, 0.0)
-	check(l.context_action(you) == "" and not l.act("you", "interact") and not l.act("you", "hat_swap"), "at the fountain: nothing to take")
 	# --- 6. the Kings
 	var kk = _new("knight", 13)
 	_park_heroes(kk)
@@ -301,7 +297,7 @@ func _init() -> void:
 func _add_minion(s, team: int, cls: String, p: Vector2) -> Dictionary:
 	s.moba._mid += 1
 	var id := "tm%d" % s.moba._mid
-	var u: Dictionary = s._new_unit(id, team, false, "raid")
+	var u: Dictionary = s._new_unit(id, team, false)
 	u.cls = cls
 	u["minion"] = true
 	u["mk"] = {"knight":"melee", "ranger":"caster", "mage":"siege", "barbarian":"super"}.get(cls, "melee")     # (0.31.158)

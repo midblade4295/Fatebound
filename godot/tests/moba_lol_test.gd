@@ -71,7 +71,7 @@ func _tough(u: Dictionary) -> void:
 func _add_minion(s, team: int, mk: String, p: Vector2, think := true) -> Dictionary:
 	s.moba._mid += 1
 	var id := "tm%d" % s.moba._mid
-	var u: Dictionary = s._new_unit(id, team, think, "raid")
+	var u: Dictionary = s._new_unit(id, team, think)
 	u.cls = str(Moba.MINION_CLS[mk])
 	u["minion"] = true
 	u["mk"] = mk

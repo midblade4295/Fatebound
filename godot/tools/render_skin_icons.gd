@@ -10,7 +10,6 @@ const BUST_FRAME := {"mage": [Vector3(0.0, 1.8, 3.45), Vector3(0, 1.6, 0)], "kni
 	"barbarian": [Vector3(0.0, 1.72, 3.3), Vector3(0, 1.52, 0)],
 	"archmage": [Vector3(0.0, 1.8, 3.45), Vector3(0, 1.6, 0)], "crusader": [Vector3(0.0, 1.68, 3.1), Vector3(0, 1.48, 0)],
 	"necromancer": [Vector3(0.0, 1.7, 3.4), Vector3(0, 1.5, 0)], "berserker": [Vector3(0.0, 1.66, 3.3), Vector3(0, 1.46, 0)],
-	"villager": [Vector3(0.0, 1.62, 3.7), Vector3(0, 1.36, 0)],
 	# 0.31.168: the six new heroes -- the Golem's head sits low between his shoulders, the Druid's antlers and the
 	# Musketeer's plumed hat stand high
 	"golem": [Vector3(0.0, 1.95, 3.2), Vector3(0, 1.66, 0)], "dragoon": [Vector3(0.0, 1.66, 2.95), Vector3(0, 1.48, 0)],
@@ -67,7 +66,7 @@ func _initialize() -> void:
 
 func _run() -> void:
 	var jobs: Array = []
-	for cls in ["villager"] + Eco.CLASSES + Eco.UP_CLASSES:          # (0.31.153: the Villager too -- COMMANDER's Peasants card)
+	for cls in Eco.CLASSES + Eco.UP_CLASSES:
 		jobs.append(["default_" + cls, cls, ""])
 	for hid in Eco.HERO_PRICES:                                     # 0.31.168: the 5v5's six new heroes (their own looks)
 		jobs.append(["default_" + hid, hid, ""])

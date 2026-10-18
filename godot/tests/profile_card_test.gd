@@ -14,7 +14,7 @@ const Eco = preload("res://scripts/meta/economy.gd")
 const Net = preload("res://scripts/siege/siege_net.gd")
 const App = preload("res://scripts/app/siege_app.gd")
 
-const CARD_KEYS := ["t", "k", "pid", "ok", "n", "tt", "rank", "lv", "m", "w", "r", "ko", "bs", "since", "cls", "cm", "cw", "wpn", "wr", "ws", "wc", "ww", "ct"]   # (0.31.134: "ct", the clan tag)
+const CARD_KEYS := ["t", "k", "pid", "ok", "n", "tt", "rank", "lv", "m", "w", "r", "ko", "bs", "since", "cls", "cm", "cw", "wpn", "wr", "ws", "wc", "ww", "ct", "tw"]   # (0.31.134: "ct", the clan tag)
 
 var fails: Array = []
 var port := 8108
@@ -53,6 +53,7 @@ func _init() -> void:
 	d.stats.matches = 40
 	d.stats.wins = 25
 	d.stats.rescues = 7
+	d.stats["towers"] = 11
 	d.stats.kills = 160
 	d.stats.best_streak = 6
 	d.stats["main_knight"] = 22
@@ -67,8 +68,8 @@ func _init() -> void:
 	var s: Dictionary = acc.stats_of(who.Alice.acct)
 	check(str(s.get("cls", "")) == "knight" and int(s.cm) == 22 and int(s.cw) == 15, "the class she plays most: Knight, 22 matches, 15 won")
 	check(str(s.get("wpn", "")) == Eco.STARTER_NAMES.knight and int(s.ws) == 2 and int(s.ww) == 9, "the weapon she wins most with, 2 stars")
-	check(int(s.lv) == 12 and int(s.m) == 40 and int(s.w) == 25 and int(s.r) == 7 and int(s.ko) == 160 and int(s.bs) == 6 and int(s.since) > 0,
-		"level, matches, wins, rescues, knockouts, best streak, since")
+	check(int(s.lv) == 12 and int(s.m) == 40 and int(s.w) == 25 and int(s.r) == 7 and int(s.ko) == 160 and int(s.bs) == 6 and int(s.since) > 0
+		and int(s.get("tw", -1)) == 11, "level, matches, wins, rescues (older apps), knockouts, best streak, since, towers")
 	check(s.keys().all(func(k): return CARD_KEYS.has(str(k))), "nothing else: %s" % str(s.keys()))
 	var fresh: Dictionary = acc.stats_of(who.Bob.acct)
 	check(str(fresh.cls) == "" and not fresh.has("wpn") and int(fresh.lv) == 1, "a new account: no class or weapon yet")

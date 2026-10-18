@@ -1,10 +1,11 @@
 extends SceneTree
 # 0.31.120 (Kevin: "kill feed" and "phone vibration").
 #  1. the kill feed (siege_hud.gd): knockouts "<who> ⚔ <whom>" (players by name, bots by class, you "You" on a gold
-#     plate; nobody behind it: a skull), a King grabbed or rescued, a gate or the jail broken; newest first, 4 at most,
-#     gone after KF_LIFE; off in the tutorial
+#     plate; nobody behind it: a skull), a tower fallen, a gate broken, the Bone Lord slain; newest first, 4 at most,
+#     gone after KF_LIFE; off when a match turns it off
 #  2. vibration (siege_mode.gd): 0.31.128 -- only my knockouts buzz (one each); nothing for being hit, falling, a
-#     multi-knockout's banner, the King, a rescue or a gate; nothing for other players' knocks; nothing with it off
+#     multi-knockout's banner, a tower or a gate; nothing for other players' knocks; nothing with it off
+# (0.31.169: a 5v5 -- Siege's King grabbed and rescued went with it)
 #  3. the app: Settings > VIBRATION (on by default; off is kept), and a match gets the setting
 #   godot --headless --path godot -s res://tests/kill_feed_test.gd
 const Hud = preload("res://scripts/siege/siege_hud.gd")
@@ -31,7 +32,8 @@ func check(ok: bool, what: String) -> void:
 
 func _init() -> void:
 	sim = Sim.new()
-	sim.setup(16, 4242, -1)
+	sim.setup(5, 4242, -1)
+	sim.setup_moba("", 4242)
 	hud = Hud.new()
 	hud.sim = sim
 	hud.player_id = "b2"
@@ -40,7 +42,7 @@ func _init() -> void:
 	hud.size = Vector2(420, 933)
 	var me: Dictionary = sim.by_id["b2"]
 	for u in sim.units:
-		if str(u.get("cls", "")) == "oracle" or str(u.id) == "b2":
+		if not bool(u.get("hero", false)) or str(u.id) == "b2":
 			continue
 		if int(u.team) == int(me.team):
 			if ally == "":
@@ -77,18 +79,18 @@ func _process(_d: float) -> bool:
 		check(_texts(hud.kill_feed[0]) == "You  ⚔  DragonSlayer99" and bool(hud.kill_feed[0].me), "I knock out a player: \"You ⚔ DragonSlayer99\", on a gold plate")
 		_ev({"k":"death", "id":"b2", "by":""})
 		check(_texts(hud.kill_feed[0]) == "☠ You" and bool(hud.kill_feed[0].me), "I fall with nobody behind it: a skull")
-		_ev({"k":"pickup", "id":ally2, "team":1 - int(sim.by_id["b2"].team), "carry_team":int(sim.by_id["b2"].team)})
-		check(_texts(hud.kill_feed[0]).ends_with(" grabbed their King"), "an ally grabs their King: %s" % _texts(hud.kill_feed[0]))
+		_ev({"k":"tower_down", "team":1 - int(sim.by_id["b2"].team), "lane":1, "tier":1})
+		check(_texts(hud.kill_feed[0]) == "Their middle outer tower fell", "their tower falls: %s" % _texts(hud.kill_feed[0]))
 		var gi := -1
 		for i in sim.gates.size():
-			if int(sim.gates[i].team) == int(sim.by_id["b2"].team) and str(sim.gates[i].get("kind", "")) != "jail":
+			if int(sim.gates[i].team) == int(sim.by_id["b2"].team):
 				gi = i
 				break
 		_ev({"k":"gate_broken", "gate":gi, "team":int(sim.gates[gi].team), "by":foe})
 		check(_texts(hud.kill_feed[0]) == "DragonSlayer99 broke our %s gate" % str(sim.gates[gi].side).to_lower(), "a player breaks our gate: %s" % _texts(hud.kill_feed[0]))
 		check(hud.kill_feed.size() == Hud.KF_MAX, "%d at most (newest first)" % Hud.KF_MAX)
-		_ev({"k":"rescue", "id":ally, "team":int(sim.by_id["b2"].team), "n":3})
-		check(_texts(hud.kill_feed[0]).ends_with(" rescued our King!") and _texts(hud.kill_feed[-1]) == "☠ You", "a rescue on top; the oldest went")
+		_ev({"k":"lord_down", "by":ally, "team":int(sim.by_id["b2"].team)})
+		check(_texts(hud.kill_feed[0]).ends_with(" slew the Bone Lord") and _texts(hud.kill_feed[-1]) == "☠ You", "the Bone Lord slain on top; the oldest went")
 		# --- 2. vibration
 		check(mode.buzzes == 0, "vibration off: no buzz for any of that")
 		mode.vibrate = true
@@ -104,17 +106,15 @@ func _process(_d: float) -> bool:
 			_ev({"k":"hit", "id":"b2", "by":foe, "dmg":8})
 		_ev({"k":"death", "id":"b2", "by":foe})
 		_ev({"k":"multikill", "id":"b2", "team":int(sim.by_id["b2"].team), "n":3, "name":"TRIPLE"})
-		_ev({"k":"pickup", "id":"b2", "team":1, "carry_team":0})
-		_ev({"k":"rescue", "id":ally, "team":int(sim.by_id["b2"].team), "n":3})
-		_ev({"k":"rescue", "id":foe, "team":1 - int(sim.by_id["b2"].team), "n":3})
+		_ev({"k":"tower_down", "team":int(sim.by_id["b2"].team), "lane":0, "tier":1})
 		_ev({"k":"gate_broken", "gate":gi, "team":int(sim.gates[gi].team), "by":foe})
-		check(mode.buzzes == n0, "no buzz when hit, knocked out, for a multi-knockout's banner, the King, a rescue or a gate")
+		check(mode.buzzes == n0, "no buzz when hit, knocked out, for a multi-knockout's banner, a tower or a gate")
 		hud._time += Hud.KF_LIFE + 0.5
 	elif frames == 4:
 		check(hud.kill_feed.is_empty(), "after %d s the feed is empty" % int(Hud.KF_LIFE))
 		hud.kill_feed_on = false
 		_ev({"k":"death", "id":foe, "by":ally})
-		check(hud.kill_feed.is_empty(), "off (the tutorial): nothing")
+		check(hud.kill_feed.is_empty(), "off: nothing")
 		mode.free()
 		# --- 3. the app
 		var base := "user://kftest-%d" % Time.get_ticks_usec()

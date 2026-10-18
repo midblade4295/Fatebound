@@ -1,8 +1,10 @@
 extends RefCounted
-# Fatebound Siege online protocol, shared by the headless server (server/siege_server.gd) and the
-# phone client (siege_net_client.gd). The server runs the real SiegeSim; clients keep a mirror
-# SiegeSim (same map from setup()) whose dynamic state is overwritten from snapshots, so the
-# existing view and HUD render online matches unchanged.
+# Fatebound's online protocol, shared by the headless server (server/siege_server.gd) and the phone (siege_mode.gd).
+# The server runs the real sim; clients keep a mirror sim (same map from setup()) whose dynamic state is overwritten
+# from snapshots, so the view and HUD render online matches unchanged. (0.31.169: Siege's state -- carrying, loads,
+# tasks, items, bombs, launchers, nodes, outposts, hat stands, ladders, the Kings' carrying -- is gone from the
+# snapshot with Siege; the online 5v5 adds the 5v5's. The protocol number stays: the economy and the leaderboard send it
+# too, and the match rooms stay shut until the online 5v5.)
 #
 # Transport: WebSocket binary frames, each one var_to_bytes(Dictionary). Never bytes_to_var with
 # objects: decode() uses the default allow_objects=false.
@@ -19,45 +21,41 @@ const DEFAULT_PORT := 8082
 const SNAP_HZ := 20.0            # 15 -> 20 (0.31.23); 10 -> 15 (0.18.4)
 const INTERP_DELAY := 1.5 / SNAP_HZ   # 0.31.23: remote units are drawn this far behind the newest snapshot (75 ms)
 const HIST := 4
-const FULL_EVERY := 15           # 0.31.8: slow-changing state (stock, levels, nodes, stands, outposts, gates, ladders,
-                                 # dropped hats) rides along only when it changed, and in full once a second
+const FULL_EVERY := 15           # 0.31.8: slow-changing state (the gates) rides along only when it changed, and in full
+                                 # once a second
 const PROJ_KINDS := ["arrow", "fire", "hammer", "pierce"]
-const ORACLE_STATES := ["cell", "carried", "dropped", "home", "returning", "rescued", "loose"]
 const PREDICT_SNAP := 2.5        # m: a predicting phone snaps to the server beyond this
 const PREDICT_SOFT := 0.7        # m: beyond this it is eased back toward the server's position (0.31.24)
 const MAX_PACKET := 64 * 1024            # client -> server; anything larger is dropped
-const TEAM_SIZE := 16
+const TEAM_SIZE := 5               # (0.31.169: the 5v5's; 16 a side in Siege)
 # 0.31.111 (Kevin: "add the quick chat pings"): the in-match quick chat. {"t":"qc", "i": index} from a player; the
-# server sends {"t":"qc", "u": unit, "i"} to their side ("all": to both sides). "call": the nearest bots of their side
-# come to them for a while (siege_sim.call_bots). Additive: an older server ignores it, an older app never sends it.
+# server sends {"t":"qc", "u": unit, "i"} to their side ("all": to both sides). Additive: an older server ignores it,
+# an older app never sends it.
 const QUICK_CHAT := [
 	{"x":"Attack!", "c":"#ff8a5c"},
 	{"x":"Defend the gate!", "c":"#7ec8ff"},
 	{"x":"Get our King!", "c":"#ffd65a"},
 	{"x":"Stop the carrier!", "c":"#ff6a6a"},
-	{"x":"Need help!", "c":"#ff6a6a", "call":true},
-	{"x":"Follow me!", "c":"#9dff8a", "call":true},
+	{"x":"Need help!", "c":"#ff6a6a"},
+	{"x":"Follow me!", "c":"#9dff8a"},
 	{"x":"Thanks!", "c":"#e6e6e6"},
 	{"x":"Good game!", "c":"#e6c2ff", "all":true},
 ]
 const QC_GAP := 2.0              # s between one player's quick chats
 
-const STATES := ["idle", "move", "wind", "recover", "dodge", "dead", "lift", "gather", "repair", "build_ladder", "fish", "fly"]
-const CLASSES := ["villager", "worker", "knight", "barbarian", "rogue", "ranger", "mage", "priest"]
-const LOADS := ["", "wood", "stone"]
-const TASKS := ["", "gather", "repair", "build_ladder"]
+const STATES := ["idle", "move", "wind", "recover", "dodge", "dead"]
+const CLASSES := ["knight", "barbarian", "rogue", "ranger", "mage", "priest"]
 const ATKS := ["", "attack", "ability"]
 # Actions a client may ask for (anything else is ignored by the server).
-const ACTIONS := ["attack", "ability", "block", "dodge", "interact", "hat_swap",
-	"take_tools", "buy", "workshop_leave"]
-const HAT_CLS := ["knight", "barbarian", "rogue", "ranger", "mage", "worker", "priest"]
+const ACTIONS := ["attack", "ability", "block", "dodge"]
 
 # Per-unit values in the snapshot, in this order, each packed as a signed 16-bit integer of
-# value * SCALE[i] (positions to 1 cm, angles to 0.001 rad, timers to 0.01 s).
-const F := 33
-const SCALE := [1.0, 1.0, 100.0, 100.0, 1000.0, 1.0, 1.0, 1.0, 100.0, 1.0,
-	1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 100.0, 100.0, 1.0, 1.0,
-	1.0, 1.0, 0.1, 1.0, 10.0, 1.0, 1.0, 1.0, 1.0, 1.0, 100.0, 1.0, 1.0]
+# value * SCALE[i] (positions to 1 cm, angles to 0.001 rad, timers to 0.01 s):
+#   hp, max hp, x, z, facing, state, class, upgraded, stun, ability recharge, dodge recharge, knockouts, downs,
+#   gate damage, bot, respawn at, swing kind, beam target, blocking, whirl left, second beam target
+const F := 21
+const SCALE := [1.0, 1.0, 100.0, 100.0, 1000.0, 1.0, 1.0, 1.0, 100.0, 100.0,
+	100.0, 1.0, 1.0, 0.1, 1.0, 10.0, 1.0, 1.0, 1.0, 100.0, 1.0]
 
 # ---------------- version mismatch (0.31.73: the "Update required" screen) ----------------
 # What the client should do about the server's protocol `server_v`, compared with ours (VERSION):
@@ -270,13 +268,12 @@ static var _slow_hash := {}
 static var _slow_n := 0
 
 static func snapshot(sim, for_unit: String, events: Array) -> Dictionary:
-	# for_unit "" = the shared part only (see for_player).
+	# One snapshot for every player (for_unit: kept for the callers; nothing in it is private any more).
 	var vals := PackedFloat32Array()
 	vals.resize(sim.units.size() * F)
 	var u_arr := vals
 	var i := 0
 	for u in sim.units:
-		var task: Dictionary = u.task
 		var b := i * F
 		u_arr[b + 0] = u.hp
 		u_arr[b + 1] = u.max_hp
@@ -287,96 +284,47 @@ static func snapshot(sim, for_unit: String, events: Array) -> Dictionary:
 		u_arr[b + 6] = _code(CLASSES, u.cls)
 		u_arr[b + 7] = 1.0 if u.up else 0.0
 		u_arr[b + 8] = u.stun
-		u_arr[b + 9] = 1.0 if u.carrying else 0.0
-		u_arr[b + 10] = float(u.get("lifting", -1))
-		u_arr[b + 11] = _code(LOADS, u.load.kind)
-		u_arr[b + 12] = u.load.n
-		u_arr[b + 13] = 1.0 if u.get("offering", false) else 0.0
-		u_arr[b + 14] = _code(TASKS, task.get("kind", ""))
-		u_arr[b + 15] = float(task.get("node", task.get("gate", -1)))
-		u_arr[b + 16] = u.cd_ability
-		u_arr[b + 17] = u.cd_dodge
-		u_arr[b + 18] = u.kills
-		u_arr[b + 19] = u.deaths
-		u_arr[b + 20] = u.rescues
-		u_arr[b + 21] = u.gathered
-		u_arr[b + 22] = u.gate_dmg
-		u_arr[b + 23] = 1.0 if u.bot else 0.0
-		u_arr[b + 24] = u.respawn_at
-		u_arr[b + 25] = _code(ATKS, u.get("atk", ""))
+		u_arr[b + 9] = u.cd_ability
+		u_arr[b + 10] = u.cd_dodge
+		u_arr[b + 11] = u.kills
+		u_arr[b + 12] = u.deaths
+		u_arr[b + 13] = u.gate_dmg
+		u_arr[b + 14] = 1.0 if u.bot else 0.0
+		u_arr[b + 15] = u.respawn_at
+		u_arr[b + 16] = _code(ATKS, u.get("atk", ""))
 		# Priest beam target: its unit index + 1 (0 = none).
-		u_arr[b + 26] = float(sim.units.find(sim.by_id.get(str(u.beam), {})) + 1) if str(u.get("beam", "")) != "" else 0.0
-		u_arr[b + 27] = 1.0 if u.workshop_open else 0.0
-		u_arr[b + 28] = float(u.get("fed", 0))
-		u_arr[b + 29] = 1.0 if sim.blocking(u) else 0.0
-		u_arr[b + 30] = maxf(0.0, float(u.get("whirl_until", 0.0)) - sim.time)
-		u_arr[b + 31] = float(int(u.get("tower", -1)) + 1)       # 0 = on the ground
-		u_arr[b + 32] = float(sim.units.find(sim.by_id.get(str(u.get("beam2", "")), {})) + 1) if str(u.get("beam2", "")) != "" else 0.0
+		u_arr[b + 17] = float(sim.units.find(sim.by_id.get(str(u.beam), {})) + 1) if str(u.get("beam", "")) != "" else 0.0
+		u_arr[b + 18] = 1.0 if sim.blocking(u) else 0.0
+		u_arr[b + 19] = maxf(0.0, float(u.get("whirl_until", 0.0)) - sim.time)
+		u_arr[b + 20] = float(sim.units.find(sim.by_id.get(str(u.get("beam2", "")), {})) + 1) if str(u.get("beam2", "")) != "" else 0.0
 		i += 1
 	var packed := PackedByteArray()
 	packed.resize(vals.size() * 2)
 	for k in vals.size():
 		_pack(packed, k, vals[k])
-	# Projectiles: 11 int16 each (id, x, z, vx, vz, kind, from-tower flag, origin x/z, launch height, drop distance).
+	# Projectiles: 6 int16 each (id, x, z, vx, vz, kind).
 	var proj := PackedByteArray()
-	proj.resize(sim.projectiles.size() * 22)
+	proj.resize(sim.projectiles.size() * 12)
 	var pi := 0
 	for p in sim.projectiles:
-		var tower: bool = p.has("h0")
-		var o: Vector2 = p.o if tower else Vector2.ZERO
 		var vals_p := [int(p.id) % 65536 - 32768, (p.pos as Vector2).x * 100.0, (p.pos as Vector2).y * 100.0, (p.vel as Vector2).x * 100.0,
-			(p.vel as Vector2).y * 100.0, PROJ_KINDS.find(str(p.kind)), 1 if tower else 0, o.x * 100.0, o.y * 100.0,
-			float(p.get("h0", 0.0)) * 100.0, float(p.get("dd", 0.0)) * 100.0]
-		for k in 11:
-			proj.encode_s16((pi * 11 + k) * 2, clampi(int(round(float(vals_p[k]))), -32768, 32767))
+			(p.vel as Vector2).y * 100.0, PROJ_KINDS.find(str(p.kind))]
+		for k in 6:
+			proj.encode_s16((pi * 6 + k) * 2, clampi(int(round(float(vals_p[k]))), -32768, 32767))
 		pi += 1
 	var gates := PackedFloat32Array()
 	for g in sim.gates:
 		gates.append_array([g.hp, g.max_hp, 1.0 if g.broken else 0.0, 1.0 if g.open else 0.0])
-	var nodes := PackedInt32Array()
-	for n in sim.nodes:
-		nodes.append(n.amount)
-	var outposts := PackedFloat32Array()
-	for op in sim.outposts:
-		outposts.append_array([float(op.owner), float(op.prog), float(op.get("stock", 0))])
-	# Hats: stock per stand, and every dropped hat as [id, class, upgraded, x, z].
-	var stocks := PackedByteArray()
-	for st in sim.stands:
-		stocks.append(int(st.stock))
-	var hats := PackedFloat32Array()
-	for h in sim.hats:
-		hats.append_array([float(h.id), float(HAT_CLS.find(h.cls)), 1.0 if h.up else 0.0, h.pos.x, h.pos.y])
-	# The Kings: [state code, x, z, carrier unit index+1, carry_team+1, dropped_at, cakes, weight, lifter indices...] each.
-	var oracles := []
-	for o in sim.oracles:
-		var lif := []
-		for id in o.lifters:
-			lif.append(sim.units.find(sim.by_id.get(str(id), {})))
-		oracles.append([_code(ORACLE_STATES, o.state), snappedf((o.pos as Vector2).x, 0.01), snappedf((o.pos as Vector2).y, 0.01),
-			sim.units.find(sim.by_id.get(str(o.carrier), {})) + 1, int(o.carry_team) + 1, snappedf(float(o.dropped_at), 0.1), int(o.cakes), int(o.weight), lif])
 	var msg := {"t":"s", "tm":sim.time, "sc":sim.score.duplicate(), "k":sim.kills.duplicate(), "end":[sim.ended, sim.winner, sim.end_reason],
-		"it":_pack_items(sim), "bm":_pack_bombs(sim), "u":packed, "p":proj, "o":oracles, "e":events,
-		"la":[[sim.launchers[0].count_at, sim.launchers[0].ready_at], [sim.launchers[1].count_at, sim.launchers[1].ready_at]]}
+		"u":packed, "p":proj, "e":events}
 	# Slow-changing state: only when it changed, and in full once a second (FULL_EVERY) so a late joiner catches up.
 	_slow_n += 1
 	var full := _slow_n % FULL_EVERY == 0
-	for pair in [["st", sim.stock.duplicate(true)], ["lv", sim.levels.duplicate(true)], ["g", gates], ["n", nodes], ["op", outposts],
-			["hs", stocks], ["hd", hats], ["l", sim.ladders.duplicate(true)]]:
+	for pair in [["g", gates]]:
 		var h := hash(pair[1])
 		if full or int(_slow_hash.get(pair[0], 0)) != h:
 			_slow_hash[pair[0]] = h
 			msg[pair[0]] = pair[1]
-	if for_unit != "":
-		return for_player(msg, sim, for_unit)
-	return msg
-
-static func for_player(base: Dictionary, sim, unit_id: String) -> Dictionary:
-	# The shared snapshot plus this player's private bits (task). Shallow copy: the
-	# big arrays are shared, only "me" differs, so the server builds the snapshot once per tick.
-	var msg := base.duplicate(false)
-	if sim.by_id.has(unit_id):
-		var me: Dictionary = sim.by_id[unit_id]
-		msg["me"] = {"task":me.task.duplicate(true)}
 	return msg
 
 # ---------------- client side ----------------
@@ -393,8 +341,6 @@ static func apply(sim, msg: Dictionary, me_id: String, predict := false) -> void
 	var snap_t: float = sim.time
 	sim.score = msg.get("sc", sim.score)
 	sim.kills = msg.get("k", sim.kills)
-	sim.stock = msg.get("st", sim.stock)
-	sim.levels = msg.get("lv", sim.levels)
 	var end: Array = msg.get("end", [false, -1, ""])
 	sim.ended = bool(end[0])
 	sim.winner = int(end[1])
@@ -424,39 +370,21 @@ static func apply(sim, msg: Dictionary, me_id: String, predict := false) -> void
 		u.cls = CLASSES[clampi(int(u_arr[b + 6]), 0, CLASSES.size() - 1)]
 		u.up = u_arr[b + 7] > 0.5
 		u.stun = u_arr[b + 8]
-		u.carrying = u_arr[b + 9] > 0.5
-		u.lifting = int(u_arr[b + 10])
-		u.load = {"kind":LOADS[clampi(int(u_arr[b + 11]), 0, LOADS.size() - 1)], "n":int(u_arr[b + 12])}
-		u.offering = u_arr[b + 13] > 0.5
-		var tk: String = TASKS[clampi(int(u_arr[b + 14]), 0, TASKS.size() - 1)]
-		u.task = {} if tk == "" else {"kind":tk, "node":int(u_arr[b + 15]), "gate":int(u_arr[b + 15]), "t":0.0}
-		u.cd_ability = u_arr[b + 16]
-		u.cd_dodge = u_arr[b + 17]
-		u.kills = int(u_arr[b + 18])
-		u.deaths = int(u_arr[b + 19])
-		u.rescues = int(u_arr[b + 20])
-		u.gathered = int(u_arr[b + 21])
-		u.gate_dmg = u_arr[b + 22]
-		u.bot = u_arr[b + 23] > 0.5
-		u.respawn_at = u_arr[b + 24]
-		u.atk = ATKS[clampi(int(u_arr[b + 25]), 0, ATKS.size() - 1)]
-		var bi := int(round(u_arr[b + 26])) - 1
+		u.cd_ability = u_arr[b + 9]
+		u.cd_dodge = u_arr[b + 10]
+		u.kills = int(u_arr[b + 11])
+		u.deaths = int(u_arr[b + 12])
+		u.gate_dmg = u_arr[b + 13]
+		u.bot = u_arr[b + 14] > 0.5
+		u.respawn_at = u_arr[b + 15]
+		u.atk = ATKS[clampi(int(u_arr[b + 16]), 0, ATKS.size() - 1)]
+		var bi := int(round(u_arr[b + 17])) - 1
 		u.beam = str(sim.units[bi].id) if bi >= 0 and bi < sim.units.size() else ""
-		u.workshop_open = u_arr[b + 27] > 0.5
 		# The mirror doesn't step: flag the states open-ended; the next snapshot clears them.
-		u.block_until = 1.0e9 if u_arr[b + 29] > 0.5 else 0.0
-		u.whirl_until = 1.0e9 if u_arr[b + 30] > 0.005 else 0.0
-		u.fed = int(u_arr[b + 28])
-		u.tower = int(round(u_arr[b + 31])) - 1
-		var b2 := int(round(u_arr[b + 32])) - 1
+		u.block_until = 1.0e9 if u_arr[b + 18] > 0.5 else 0.0
+		u.whirl_until = 1.0e9 if u_arr[b + 19] > 0.005 else 0.0
+		var b2 := int(round(u_arr[b + 20])) - 1
 		u.beam2 = str(sim.units[b2].id) if b2 >= 0 and b2 < sim.units.size() else ""
-	# Who is up which tower, rebuilt from the units (the view and the HUD read op.occ).
-	for op in sim.outposts:
-		op.occ = []
-	for u in sim.units:
-		var tw := int(u.get("tower", -1))
-		if tw >= 0 and tw < sim.outposts.size():
-			(sim.outposts[tw].occ as Array).append(u.id)
 	# Projectiles slide between snapshots like units (0.18.5, Kevin: "projectiles skip across the
 	# screen online"): they used to be redrawn only at each snapshot's position, so an arrow at
 	# 22 m/s sat still for 66 ms and then jumped 1.5 m. Now each keeps from/to: a new one starts at
@@ -468,23 +396,18 @@ static func apply(sim, msg: Dictionary, me_id: String, predict := false) -> void
 	sim.projectiles.clear()
 	var seen := {}
 	var pb: PackedByteArray = msg.get("p", PackedByteArray())
-	for pi in pb.size() / 22:
+	for pi in pb.size() / 12:
 		var v := []
-		for k in 11:
-			v.append(pb.decode_s16((pi * 11 + k) * 2))
+		for k in 6:
+			v.append(pb.decode_s16((pi * 6 + k) * 2))
 		var pid := int(v[0]) + 32768
 		var to := Vector2(float(v[1]) / 100.0, float(v[2]) / 100.0)
 		var prev: Dictionary = old.get(pid, {})
 		var from: Vector2 = prev.get("net_to", to)
 		var t0: float = float(prev.get("net_t", snap_t - 1.0 / SNAP_HZ))
-		var np := {"id":pid, "pos":from, "net_from":from, "net_to":to, "vel":Vector2(float(v[3]) / 100.0, float(v[4]) / 100.0),
+		sim.projectiles.append({"id":pid, "pos":from, "net_from":from, "net_to":to, "vel":Vector2(float(v[3]) / 100.0, float(v[4]) / 100.0),
 			"kind":PROJ_KINDS[clampi(int(v[5]), 0, PROJ_KINDS.size() - 1)], "team":-1,
-			"net_t":snap_t, "net_t0":t0, "net_dt":maxf(snap_t - t0, 0.001)}
-		if int(v[6]) == 1:
-			np["o"] = Vector2(float(v[7]) / 100.0, float(v[8]) / 100.0)
-			np["h0"] = float(v[9]) / 100.0
-			np["dd"] = float(v[10]) / 100.0
-		sim.projectiles.append(np)
+			"net_t":snap_t, "net_t0":t0, "net_dt":maxf(snap_t - t0, 0.001)})
 		seen[pid] = true
 	var ends := {}
 	for e in msg.get("e", []):
@@ -494,12 +417,8 @@ static func apply(sim, msg: Dictionary, me_id: String, predict := false) -> void
 		var gone: Dictionary = old[id]
 		if not seen.has(id) and ends.has(id) and not bool(gone.get("ghost", false)):
 			var last: Vector2 = gone.get("net_to", gone.pos)
-			var gp := {"id":id, "pos":last, "net_from":last, "net_to":ends[id], "vel":gone.vel,
-				"kind":gone.kind, "team":-1, "ghost":true}
-			for key in ["o", "h0", "dd"]:
-				if gone.has(key):
-					gp[key] = gone[key]
-			sim.projectiles.append(gp)
+			sim.projectiles.append({"id":id, "pos":last, "net_from":last, "net_to":ends[id], "vel":gone.vel,
+				"kind":gone.kind, "team":-1, "ghost":true})
 	var gates: PackedFloat32Array = msg.get("g", PackedFloat32Array())
 	for gi in mini(sim.gates.size(), gates.size() / 4):
 		var g: Dictionary = sim.gates[gi]
@@ -507,47 +426,6 @@ static func apply(sim, msg: Dictionary, me_id: String, predict := false) -> void
 		g.max_hp = gates[gi * 4 + 1]
 		g.broken = gates[gi * 4 + 2] > 0.5
 		g.open = gates[gi * 4 + 3] > 0.5
-	_apply_items(sim, msg.get("it", PackedByteArray()))
-	_apply_bombs(sim, msg.get("bm", []))
-	var la: Array = msg.get("la", [])
-	for t in mini(2, la.size()):
-		sim.launchers[t] = {"count_at":float(la[t][0]), "ready_at":float(la[t][1])}
-	var nodes: PackedInt32Array = msg.get("n", PackedInt32Array())
-	for ni in mini(sim.nodes.size(), nodes.size()):
-		sim.nodes[ni].amount = nodes[ni]
-	var oracles: Array = msg.get("o", [])
-	for t in mini(2, oracles.size()):
-		var a: Array = oracles[t]
-		var o: Dictionary = sim.oracles[t]
-		o.state = ORACLE_STATES[clampi(int(a[0]), 0, ORACLE_STATES.size() - 1)]
-		o.pos = Vector2(float(a[1]), float(a[2]))
-		var ci := int(a[3]) - 1
-		o.carrier = str(sim.units[ci].id) if ci >= 0 and ci < sim.units.size() else ""
-		o.carry_team = int(a[4]) - 1
-		o.dropped_at = float(a[5])
-		o.cakes = int(a[6])
-		o.weight = int(a[7])
-		var lif := []
-		for li in a[8]:
-			if int(li) >= 0 and int(li) < sim.units.size():
-				lif.append(sim.units[int(li)].id)
-		o.lifters = lif
-	sim.ladders = msg.get("l", sim.ladders)
-	var ops: PackedFloat32Array = msg.get("op", PackedFloat32Array())
-	for oi in mini(sim.outposts.size(), ops.size() / 3):
-		sim.outposts[oi].owner = int(ops[oi * 3])
-		sim.outposts[oi].prog = ops[oi * 3 + 1]
-		sim.outposts[oi].stock = int(ops[oi * 3 + 2])
-	var stocks: PackedByteArray = msg.get("hs", PackedByteArray())
-	for si in mini(sim.stands.size(), stocks.size()):
-		sim.stands[si].stock = stocks[si]
-	var hd: PackedFloat32Array = msg.get("hd", PackedFloat32Array())
-	if msg.has("hd"):
-		sim.hats = []
-	for hi in hd.size() / 5:
-		var k := hi * 5
-		sim.hats.append({"id":int(hd[k]), "cls":HAT_CLS[clampi(int(hd[k + 1]), 0, HAT_CLS.size() - 1)], "up":hd[k + 2] > 0.5,
-			"pos":Vector2(hd[k + 3], hd[k + 4]), "t":0.0})
 	if not mine_prev.is_empty():
 		var me2: Dictionary = sim.by_id[me_id]
 		var server_pos: Vector2 = me2.get("net_to", me2.pos)
@@ -567,9 +445,6 @@ static func apply(sim, msg: Dictionary, me_id: String, predict := false) -> void
 				me2.t = mine_prev.t
 		else:
 			me2.pos = server_pos
-	if msg.has("me") and sim.by_id.has(me_id):
-		var me: Dictionary = sim.by_id[me_id]
-		me.task = msg.me.task
 
 static func interpolate(sim, alpha: float) -> void:
 	# Called every frame between snapshots: slide unit positions from the previous snapshot to
@@ -581,64 +456,6 @@ static func interpolate(sim, alpha: float) -> void:
 	for p in sim.projectiles:
 		if p.has("net_to"):
 			p.pos = (p.net_from as Vector2).lerp(p.net_to, a)
-
-
-# Loose logs and rocks (0.31.0): [id, 0 log / 1 rock, x, z, ang, roll, rax] each, positions to 1 cm.
-static func _pack_items(sim) -> PackedByteArray:
-	# 7 int16 each: id, log/rock, x, z (cm), ang, roll, rax (mrad).
-	var out := PackedByteArray()
-	out.resize(sim.items.size() * 14)
-	var i := 0
-	for it in sim.items:
-		var vals := [int(it.id) % 65536 - 32768, 0 if it.kind == "log" else 1, (it.pos as Vector2).x * 100.0, (it.pos as Vector2).y * 100.0,
-			wrapf(float(it.ang), -PI, PI) * 1000.0, fmod(float(it.roll), TAU) * 1000.0, wrapf(float(it.rax), -PI, PI) * 1000.0]
-		for k in 7:
-			out.encode_s16((i * 7 + k) * 2, clampi(int(round(float(vals[k]))), -32768, 32767))
-		i += 1
-	return out
-
-static func _apply_items(sim, arr: PackedByteArray) -> void:
-	var out := []
-	for i in arr.size() / 14:
-		var v := []
-		for k in 7:
-			v.append(arr.decode_s16((i * 7 + k) * 2))
-		var log_kind := int(v[1]) == 0
-		out.append({"id":int(v[0]) + 32768, "kind":"log" if log_kind else "rock", "res":"wood" if log_kind else "stone",
-			"pos":Vector2(float(v[2]) / 100.0, float(v[3]) / 100.0), "vel":Vector2.ZERO, "ang":float(v[4]) / 1000.0, "spin":0.0,
-			"roll":float(v[5]) / 1000.0, "rax":float(v[6]) / 1000.0, "born":sim.time, "val":Sim.ITEM_VALUE})
-	sim.items = out
-
-
-# The bombs (0.31.19): per team [] or [state, x, y, h, fuse left (-1 unlit), carrier id, to x, to y].
-const BOMB_STATES := ["", "ready", "carried", "flying", "lit", "loose"]
-
-static func _pack_bombs(sim) -> Array:
-	var out := []
-	for b in sim.bombs:
-		if b.is_empty():
-			out.append([])
-			continue
-		var left := -1.0 if float(b.lit_at) < 0.0 else maxf(0.0, sim.BOMB_FUSE - (sim.time - float(b.lit_at)))
-		out.append([BOMB_STATES.find(str(b.state)), snappedf(b.p.x, 0.01), snappedf(b.p.y, 0.01), snappedf(float(b.h), 0.01),
-			snappedf(left, 0.01), str(b.carrier), snappedf(b.to.x, 0.01), snappedf(b.to.y, 0.01)])
-	return out
-
-static func _apply_bombs(sim, packed: Array) -> void:
-	for u in sim.units:
-		u["bomb_held"] = false
-	for t in mini(2, packed.size()):
-		var a: Array = packed[t]
-		if a.size() < 8:
-			sim.bombs[t] = {}
-			continue
-		var left := float(a[4])
-		var b := {"id":t, "team":t, "state":BOMB_STATES[clampi(int(a[0]), 0, BOMB_STATES.size() - 1)], "p":Vector2(float(a[1]), float(a[2])),
-			"h":float(a[3]), "carrier":str(a[5]), "by":"", "from":Vector2(float(a[1]), float(a[2])), "to":Vector2(float(a[6]), float(a[7])),
-			"t0":sim.time, "lit_at":-1.0 if left < 0.0 else sim.time - (sim.BOMB_FUSE - left)}
-		sim.bombs[t] = b
-		if b.state == "carried" and sim.by_id.has(b.carrier):
-			sim.by_id[b.carrier]["bomb_held"] = true
 
 
 # ---------- timed interpolation (0.31.23) ----------

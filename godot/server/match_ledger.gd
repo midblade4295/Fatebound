@@ -1,13 +1,14 @@
 extends RefCounted
 # 0.31.108: what one seated player did in an online match, counted by the SERVER from its own simulation (the phone
 # counts the same thing for its results screen, siege_mode.gd _title_track / _count, but only this count is paid):
-# knockouts, rescues, gate damage, gathering, fish, healing from the unit's totals since the player took the seat (a
-# bot held it before), King lifts, repairs and the best burst from the match's events, and per class worn the time
-# and what was done as it (the quests and titles, Eco.QUESTS / TITLE_GOALS). me() -> the dictionary Profile.apply_match
-# takes, as the phone builds it.
-const Sim = preload("res://scripts/siege/siege_sim.gd")
+# knockouts, tower/gate/King damage, healing and the 5v5's towers, camps, last hits and epic monsters from the unit's
+# totals since the player took the seat (a bot held it before), the best burst from the match's events, and per class
+# worn the time and what was done as it (the quests and titles, Eco.QUESTS / TITLE_GOALS). me() -> the dictionary
+# Profile.apply_match takes, as the phone builds it. (0.31.169: Siege's rescues, gathering, fish, King lifts and repairs
+# went with Siege; the 5v5's numbers came in, as siege_mode counts them.)
 const Eco = preload("res://scripts/meta/economy.gd")
-const Q_UNIT := {"kills":"kills", "rescues":"rescues", "gate_dmg":"gate_dmg", "gathered":"gathered", "fed":"fed", "healed":"healed"}
+const Q_UNIT := {"kills":"kills", "gate_dmg":"gate_dmg", "healed":"healed", "towers":"towers", "camps":"camps", "lh":"lh",
+	"epics":"epics"}
 
 var uid := ""
 var team := -1
@@ -19,8 +20,6 @@ var kills_seen := 0
 var q := {}
 var q_cls := ""
 var best_multi := 0
-var lifts := 0
-var repaired := 0.0
 
 func start(u: Dictionary) -> void:
 	uid = str(u.id)
@@ -44,14 +43,13 @@ func _q_add(stat: String, v: float) -> void:
 func track(u: Dictionary, delta: float) -> void:
 	# every server frame: the class worn, and what the unit's totals grew by, credited to it
 	var cls := str(u.cls)
-	if str(u.state) != "dead" and cls != "villager":
+	if str(u.state) != "dead":
 		cls_time[cls] = float(cls_time.get(cls, 0.0)) + delta
 	var k := int(u.kills)
 	if k > kills_seen:
-		if cls != "villager":
-			kills_cls[cls] = int(kills_cls.get(cls, 0)) + (k - kills_seen)
+		kills_cls[cls] = int(kills_cls.get(cls, 0)) + (k - kills_seen)
 		kills_seen = k
-	q_cls = "" if cls == "villager" else Eco.cosmetic_class(cls, bool(u.get("up", false)))
+	q_cls = Eco.cosmetic_class(cls, bool(u.get("up", false)))
 	if q_cls != "" and str(u.state) != "dead":
 		var e := _entry(q_cls)
 		e["t"] = float(e.get("t", 0.0)) + delta
@@ -63,16 +61,9 @@ func track(u: Dictionary, delta: float) -> void:
 		seen[f] = v
 
 func on_event(e: Dictionary) -> void:
-	var k := str(e.get("k", ""))
-	if k == "lift_join" and str(e.get("id", "")) == uid and int(e.get("team", -1)) == team:
-		lifts += 1
-		_q_add("lifts", 1.0)
 	if str(e.get("id", "")) != uid:
 		return
-	if k == "repair":
-		repaired += Sim.REPAIR_HP
-		_q_add("repaired", Sim.REPAIR_HP)
-	elif k == "multikill":
+	if str(e.get("k", "")) == "multikill":
 		best_multi = maxi(best_multi, int(e.get("n", 0)))
 		if q_cls != "":
 			var qe := _entry(q_cls)
@@ -88,15 +79,14 @@ func me(u: Dictionary) -> Dictionary:
 	var qq := {}
 	for c in q:
 		var e: Dictionary = q[c]
-		qq[c] = {"t": float(e.get("t", 0.0)), "kills": int(e.get("kills", 0.0)), "rescues": int(e.get("rescues", 0.0)),
-			"gates": int(float(e.get("gate_dmg", 0.0)) / 100.0), "gathered": int(e.get("gathered", 0.0)), "fed": int(e.get("fed", 0.0)),
-			"healed": int(e.get("healed", 0.0)), "repaired": int(e.get("repaired", 0.0)), "lifts": int(e.get("lifts", 0.0)),
-			"best_multi": int(e.get("best_multi", 0))}
-	return {"kills": int(u.get("kills", 0)) - int(base.get("kills", 0.0)),
-		"rescues": int(u.get("rescues", 0)) - int(base.get("rescues", 0.0)),
+		qq[c] = {"t": float(e.get("t", 0.0)), "kills": int(e.get("kills", 0.0)),
+			"gates": int(float(e.get("gate_dmg", 0.0)) / 100.0), "healed": int(e.get("healed", 0.0)),
+			"best_multi": int(e.get("best_multi", 0)), "towers": int(e.get("towers", 0.0)), "camps": int(e.get("camps", 0.0)),
+			"lh": int(e.get("lh", 0.0)), "epics": int(e.get("epics", 0.0))}
+	var out := {"kills": int(u.get("kills", 0)) - int(base.get("kills", 0.0)),
 		"gate_dmg": maxf(0.0, float(u.get("gate_dmg", 0.0)) - float(base.get("gate_dmg", 0.0))),
-		"gathered": int(u.get("gathered", 0)) - int(base.get("gathered", 0.0)),
-		"fed": int(u.get("fed", 0)) - int(base.get("fed", 0.0)),
 		"healed": maxf(0.0, float(u.get("healed", 0.0)) - float(base.get("healed", 0.0))),
-		"lifts": lifts, "repaired": repaired, "best_multi": best_multi, "cls": str(u.cls), "cls_main": main,
-		"kills_cls": kills_cls.duplicate(), "q": qq}
+		"best_multi": best_multi, "cls": str(u.cls), "cls_main": main, "kills_cls": kills_cls.duplicate(), "q": qq}
+	for f in Eco.FIVE_STATS:
+		out[f] = maxi(0, int(u.get(f, 0)) - int(base.get(f, 0.0)))
+	return out

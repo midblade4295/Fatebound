@@ -1,7 +1,6 @@
 extends SceneTree
-# Round 7 landscape sanity: every tree/stone/rock/outpost sits clear of walls (river, rails,
-# ledge faces, castle), off the brick paths, outside other things; the land is point-symmetric;
-# bridges and ramps connect (nav). Prints each problem.
+# Round 7 landscape sanity: everything that stands on the field sits clear of walls, off the paths, outside other
+# things; the land is point-symmetric. Prints each problem.
 # 0.31.165, the Rift (siege_land.gd, keep.gd): the river is crossed on its fords; and the 5v5's own layout -- every tower
 # and camp clear of the walls with room to walk round it and reachable from both keeps, both pits too, every lane's
 # track walkable from gate to gate, the camps and the brush point-mirrored.
@@ -14,48 +13,31 @@ func check(ok: bool, what: String) -> void:
 
 func _init() -> void:
 	var s = Sim.new()
-	s.setup(16, 1)
-	# 1. obstacles clear of walls, paths, outposts, each other
+	s.setup(5, 1)
+	# 1. obstacles clear of walls, paths, each other
 	for ob in s.obstacles:
 		var p: Vector2 = ob.p
-		if str(ob.kind) in ["hat_stand", "castle_building"]:
+		if str(ob.kind) == "castle_building":
 			continue
 		var wmin := INF
 		for w in s.walls:
 			wmin = minf(wmin, p.distance_to(Sim.seg_closest(p, w.a, w.b)) - float(w.r))
 		# 1.2 m of walking room between a thing and any wall (a unit is 0.9 m wide)
-		check(wmin >= float(ob.r) + 1.2 or str(ob.kind) == "outpost_tower", "%s at %s only %.1f m from a wall" % [ob.kind, str(p), wmin - float(ob.r)])
-		if str(ob.kind) != "outpost_tower":
-			check(Land.dist_to_paths(p) >= Land.PATH_HALF_W + float(ob.r) + 0.3, "%s at %s sits on a brick path" % [ob.kind, str(p)])
-			for op in s.outposts:
-				check(p.distance_to(op.p) >= Land.OUTPOST_R + float(ob.r), "%s at %s is inside outpost %d's ring" % [ob.kind, str(p), op.id])
+		check(wmin >= float(ob.r) + 1.2, "%s at %s only %.1f m from a wall" % [ob.kind, str(p), wmin - float(ob.r)])
+		check(Land.dist_to_paths(p) >= Land.PATH_HALF_W + float(ob.r) + 0.3, "%s at %s sits on a brick path" % [ob.kind, str(p)])
 		check(Land.edge_dist(p) <= -(float(ob.r) + 1.2) or str(ob.kind) == "castle_building", "%s at %s outside the field or against its edge" % [ob.kind, str(p)])
 	for i in s.obstacles.size():
 		for j in range(i + 1, s.obstacles.size()):
 			var a: Dictionary = s.obstacles[i]
 			var b: Dictionary = s.obstacles[j]
 			check((a.p as Vector2).distance_to(b.p) >= float(a.r) + float(b.r) + 1.2, "%s %s and %s %s too close" % [a.kind, str(a.p), b.kind, str(b.p)])
-	# 2. outposts: tower clear of walls by a ring's walking room; ring on one level
-	for op in s.outposts:
-		var h0 := Sim.height_at(op.p)
-		for k in 16:
-			var q: Vector2 = op.p + Vector2(cos(k * TAU / 16.0), sin(k * TAU / 16.0)) * 3.0
-			check(absf(Sim.height_at(q) - h0) < 0.25, "outpost %d ring not flat at %s" % [op.id, str(q)])
 	# 3. point symmetry of heights and walls
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 3
 	for k in 400:
 		var q := Vector2(rng.randf_range(-Sim.HALF_W, Sim.HALF_W), rng.randf_range(-Sim.HALF_L, Sim.HALF_L))
 		check(absf(Sim.height_at(q) - Sim.height_at(-q)) < 0.001, "height not symmetric at %s" % str(q))
-	# 4. nav: every bridge and ramp reachable from both spawns; the river only crossable on bridges
-	for t in 2:
-		for br in Land.bridges():
-			var bc: Vector2 = br.c
-			var path: PackedVector2Array = s.find_path(t, Sim.spawn(t), bc)
-			check(path.size() > 0 and path[path.size() - 1].distance_to(bc) < 1.5, "team %d can't reach bridge %d" % [t, Land.bridges().find(br)])
-		for op in s.outposts:
-			var pp: PackedVector2Array = s.find_path(t, Sim.spawn(t), (op.p as Vector2) + Vector2(3.0, 0.0))
-			check(pp.size() > 0 and pp[pp.size() - 1].distance_to((op.p as Vector2) + Vector2(3.0, 0.0)) < 1.5, "team %d can't reach outpost %d" % [t, op.id])
+	# 4. nav: the river only crossable on its fords (or the pits' islands)
 	var crossings := 0
 	var path2: PackedVector2Array = s.find_path(0, Sim.spawn(0), Sim.spawn(1))
 	for i in range(1, path2.size()):
@@ -63,12 +45,9 @@ func _init() -> void:
 		var b := path2[i]
 		if signf(a.y - Land.river_c(a.x)) != signf(b.y - Land.river_c(b.x)):
 			crossings += 1
-			var on_bridge := false
-			if Land.on_bridge(a, 0.6) or Land.on_bridge(b, 0.6) or Land.island_off(a) < 0.0 or Land.island_off(b) < 0.0 \
-					or Land.on_ford(a, 0.6) or Land.on_ford(b, 0.6):
-				on_bridge = true
-			check(on_bridge, "castle-to-castle path crosses the river off a bridge or a ford at %s" % str(a))
-	check(crossings >= 1, "castle-to-castle path never crosses the river")
+			var on_ford := Land.island_off(a) < 0.0 or Land.island_off(b) < 0.0 or Land.on_ford(a, 0.6) or Land.on_ford(b, 0.6)
+			check(on_ford, "keep-to-keep path crosses the river off a ford at %s" % str(a))
+	check(crossings >= 1, "keep-to-keep path never crosses the river")
 	# 5. the baked terrain must match the landscape code (re-run tools/bake_land.gd after edits)
 	var himg: Image = load(Land.HEIGHT_RES)
 	var r := Land.bake_rect()
@@ -83,7 +62,7 @@ func _init() -> void:
 			worst = maxf(worst, absf(himg.get_pixel(i, j).r - Land.terrain_height(r.position + Vector2(i, j) * Land.BAKE_STEP)))
 		check(worst < 0.001, "baked heights are stale (worst diff %.3f m): re-run tools/bake_land.gd" % worst)
 	check(load(Land.MASK_RES) != null, "baked path mask missing: run tools/bake_land.gd")
-	print("walls %d obstacles %d outposts %d squeeze fillers %d" % [s.walls.size(), s.obstacles.size(), s.outposts.size(), s.squeeze_fills])
+	print("walls %d obstacles %d squeeze fillers %d" % [s.walls.size(), s.obstacles.size(), s.squeeze_fills])
 	# Squeeze traps (Round 11): two solid things in a castle closer together than a unit is wide
 	# but not touching. The push-out resolves walls one at a time, so a unit wedged into such a
 	# slot gets pushed from one into the other every tick (a knight ended inside a terrace wall
@@ -94,7 +73,7 @@ func _init() -> void:
 		# got wedged between a bank end and a bridge rail (Round 12).
 		solids.append({"a":w.a, "b":w.b, "r":float(w.r), "what":str(w.kind)})
 	for ob in s.obstacles:
-		if str(ob.kind) in ["castle_building", "hat_stand"]:
+		if str(ob.kind) == "castle_building":
 			solids.append({"a":ob.p, "b":ob.p, "r":float(ob.r), "what":str(ob.kind)})
 	var need := Sim.UNIT_R * 2.0 + 0.1
 	for i in solids.size():

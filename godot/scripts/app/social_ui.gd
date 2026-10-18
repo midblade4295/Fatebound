@@ -6,7 +6,6 @@ extends RefCounted
 const UI = preload("res://scripts/app/ui.gd")
 const UI2 = preload("res://scripts/app/ui2.gd")
 const Net = preload("res://scripts/siege/siege_net.gd")
-const Map = preload("res://scripts/meta/war_map.gd")       # 0.31.151: where a friend is fighting
 const Eco = preload("res://scripts/meta/economy.gd")
 
 const ST_COL := {"online": Color("#5fdc86"), "match": Color("#ffb13d"), "offline": Color("#6b778a")}
@@ -14,7 +13,7 @@ const RARITY_COL := {"common": Color("#cfd8e0"), "rare": Color("#6cc4ff"), "epic
 const NAME_ME := Color("#ffd65a")
 const NAME_OTHER := Color("#9fd8ff")
 const REPORTS := [["language", "Offensive language"], ["spam", "Spam"], ["cheating", "Cheating"], ["name", "Offensive name"], ["other", "Something else"]]
-# 0.31.134 (Crown War step 1): the three houses a clan fights for
+# 0.31.134: the three houses a clan belongs to
 const HOUSES := ["lions", "stags", "ravens"]
 const HOUSE_NAME := {"lions": "Lions", "stags": "Stags", "ravens": "Ravens"}
 const HOUSE_COL := {"lions": Color("#ffc23d"), "stags": Color("#6be07c"), "ravens": Color("#c99bff")}
@@ -75,9 +74,7 @@ static func ago(secs: int) -> String:
 static func status_text(c: Dictionary) -> String:
 	match str(c.get("st", "offline")):
 		"online": return "Online"
-		"match":
-			# 0.31.151: a friend in a battle on the war map says where
-			return ("Fighting at %s" % Map.name_of(str(c.wt))) if str(c.get("wt", "")) != "" and Map.T.has(str(c.wt)) else "In a match"
+		"match": return "In a match"
 	var seen := int(c.get("seen", 0))
 	return "Last seen " + ago(int(Time.get_unix_time_from_system()) - seen) if seen > 0 else "Offline"
 
@@ -443,7 +440,7 @@ static func _stats_block(v: VBoxContainer, pr: Dictionary, online: bool) -> void
 	_tile(g, str(int(pr.get("lv", 1))), "LEVEL", UI2.GOLD)
 	_tile(g, str(int(pr.get("w", 0))), "WINS")
 	_tile(g, ("%d%%" % roundi(100.0 * int(pr.get("w", 0)) / m)) if m > 0 else "-", "WIN RATE")
-	_tile(g, str(int(pr.get("r", 0))), "RESCUES")
+	_tile(g, str(int(pr.get("tw", 0))), "TOWERS")                 # (0.31.169: was Siege's RESCUES)
 	_tile(g, str(int(pr.get("ko", 0))), "KNOCKOUTS")
 	_tile(g, str(int(pr.get("bs", 0))), "BEST STREAK")
 	var bits := []

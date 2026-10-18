@@ -56,7 +56,7 @@ func _process(_d: float) -> bool:
 			var f := "res://assets/sounds/%s%s.wav" % [m.get_string(1), str(k) if n > 1 else ""]
 			if not ResourceLoader.exists(f):
 				bad.append(f)
-	for surf in ["dirt", "stone", "wood", "water"]:
+	for surf in ["dirt", "stone", "water"]:                  # (0.31.169: no wooden decks or bridges since the Rift)
 		for ch in ["", "_chain"]:
 			for k in range(1, 6):
 				if not ResourceLoader.exists("res://assets/sounds/tm_step_%s%s%d.wav" % [surf, ch, k]):

@@ -537,11 +537,6 @@ const LB_PRIZES := [
 	{"from":4, "to":10, "gems":100, "chest":"gold", "title":"title_top_ten"},
 	{"from":11, "to":100, "gems":30, "chest":"silver"},
 ]
-# 0.31.151 (Kevin: "Do them all" -- rewards for the war): the server pays them (server/world.gd), each once
-# (Profile.grant_war: "war_rewards"), and the phone says so the next time Home is up.
-const WAR_TAKE := {"gold":200, "chest":"silver"}     # each of the clan's fighters in the battle that takes a land
-const WAR_WEEK := {"gems":50, "chest":"gold"}        # everyone in a clan of the house that wins the week
-const WAR_KEEP := {"gold":300, "chest":"gold"}       # each of the clan's fighters in the battle that storms a keep (King's Day)
 
 const PRIZE_TITLES := {
 	"title_champion": {"task":"Finish #1 on a weekly leaderboard", "n":1, "cls":""},

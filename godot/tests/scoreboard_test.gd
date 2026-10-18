@@ -1,11 +1,11 @@
 extends SceneTree
 # 0.31.119 (Kevin: "Do all" -- 3. a proper end-of-match screen): the results panel's MVP strip and the SCOREBOARD
 # (siege_hud.gd), built from a finished match's units like the app has them (online: from the snapshots).
-#   - points: rescue 300, knockout 20, fish fed 30, gathering 2, gate damage 1 per 10
+#   - points: knockout 20, tower, gate and King damage 1 per 10 (0.31.169: Siege's rescues, fish and gathering went)
 #   - the MVP is the best of everyone (a bot that outplayed everybody is named as one: "Bot · <class>"); you: "YOU ARE
 #     THE MVP!"; nobody scored: no strip
-#   - SCORES opens the board (the results hide), both sides best first, players by name, you marked; you're listed on
-#     your side even below the top 6; BACK brings the results back
+#   - SCORES opens the board (the results hide), both sides best first, players by name, you marked; BACK brings the
+#     results back. A 5v5: five heroes a side.
 #   godot --headless --path godot -s res://tests/scoreboard_test.gd
 const Hud = preload("res://scripts/siege/siege_hud.gd")
 const Sim = preload("res://scripts/siege/siege_sim.gd")
@@ -21,11 +21,12 @@ func check(ok: bool, what: String) -> void:
 		fails.append(what)
 
 func _init() -> void:
-	check(Hud.points({"rescues":1, "kills":5, "fed":2, "gathered":10, "gate_dmg":455.0}) == 300 + 100 + 60 + 20 + 45, "points: rescue 300, KO 20, fish 30, gathering 2, gate damage 1 per 10")
+	check(Hud.points({"kills":5, "gate_dmg":455.0}) == 100 + 45, "points: KO 20, tower/gate/King damage 1 per 10")
 	sim = Sim.new()
-	sim.setup(16, 4242, -1)
+	sim.setup(5, 4242, -1)
+	sim.setup_moba("", 4242)
 	for u in sim.units:
-		for k in ["kills", "deaths", "rescues", "gathered", "fed"]:
+		for k in ["kills", "deaths", "towers"]:
 			u[k] = 0
 		u.gate_dmg = 0.0
 	sim.ended = true
@@ -34,7 +35,7 @@ func _init() -> void:
 	hud.sim = sim
 	hud.player_id = "b2"
 	hud.player_name = "Kevin"
-	hud.net_names = {"r3":"Rival", "b5":"Buddy"}
+	hud.net_names = {"r3":"Rival", "b4":"Buddy"}
 	root.add_child(hud)
 	hud.size = Vector2(420, 933)
 
@@ -61,12 +62,12 @@ func _process(_d: float) -> bool:
 		hud.result_panel.visible = false               # (left in the tree: its placement timer may still run)
 		hud.result_panel = null
 		# a bot outplayed everybody
-		_put("b2", {"kills":5, "rescues":1, "deaths":2})          # me: 400
+		_put("b2", {"kills":5, "deaths":2})                        # me: 100
 		_put("r3", {"kills":12, "deaths":1})                       # Rival: 240
-		_put("b0", {"rescues":2, "kills":1})                       # a bot: 620
-		_put("b5", {"gathered":40, "gate_dmg":1500.0})             # Buddy: 230
-		for i in 9:
-			_put("b%d" % (7 + i if 7 + i < 16 else 6), {"kills":6 + i})  # (bots above me on my side: I drop out of the top 6)
+		_put("b0", {"kills":3, "gate_dmg":4000.0, "towers":2})     # a bot: 460
+		_put("b4", {"gate_dmg":1500.0})                            # Buddy: 150
+		_put("b1", {"kills":6})                                    # (bots above me on my side: 120, 140)
+		_put("b3", {"kills":7})
 		hud.show_result({})
 	elif frames == 4:
 		var strip: Node = hud.result_panel.find_child("MvpStrip", true, false)
@@ -74,7 +75,7 @@ func _process(_d: float) -> bool:
 		check(str(mvp.get("id", "")) == "b0", "the MVP is the best of everyone (%s)" % str(mvp.get("id", "")))
 		var head := str((strip.find_child("MvpName", true, false) as Label).text) if strip != null else ""
 		check(head.begins_with("MVP  ·  Bot · "), "a bot MVP is named as one: %s" % head)
-		check(_labels(strip).any(func(t): return t.contains("2 rescues") and t.contains("620 pts")), "with what they did: %s" % str(_labels(strip)))
+		check(_labels(strip).any(func(t): return t.contains("2 towers") and t.contains("3 KOs") and t.contains("460 pts")), "with what they did: %s" % str(_labels(strip)))
 		check(_press(hud.result_panel, "scoreboard"), "SCORES button on the results")
 	elif frames == 6:
 		var sp: PanelContainer = hud.score_panel
@@ -85,8 +86,8 @@ func _process(_d: float) -> bool:
 		check(i_side >= 0 and i_enemy > i_side, "your side first, then the enemy")
 		check(texts.has("Rival") and texts.has("Kevin") and texts.has("Buddy") == false or texts.has("Buddy"), "players by name")
 		var mine := texts.find("Kevin")
-		check(mine > i_side and mine < i_enemy, "you're on your side's list even below its top 6")
-		var first_side_name: String = texts[i_side + 5]          # (header: name, KO, crown, PTS; then rank, name)
+		check(mine > i_side and mine < i_enemy, "you're on your side's list")
+		var first_side_name: String = texts[i_side + 5]          # (header: name, KO, TW, PTS; then rank, name)
 		check(texts[i_side + 4] == "1" and first_side_name.begins_with("Bot · "), "your side's best first: %s" % first_side_name)
 		var e1 := texts.find("1", i_enemy)
 		check(e1 > i_enemy and texts[e1 + 1] == "Rival", "the enemy's best first: %s" % (texts[e1 + 1] if e1 > 0 else "?"))
@@ -97,7 +98,7 @@ func _process(_d: float) -> bool:
 		# me as MVP
 		hud.result_panel.visible = false               # (left in the tree: its placement timer may still run)
 		hud.result_panel = null
-		_put("b2", {"rescues":3})
+		_put("b2", {"kills":30})
 		hud.show_result({})
 	elif frames == 10:
 		var strip: Node = hud.result_panel.find_child("MvpStrip", true, false)

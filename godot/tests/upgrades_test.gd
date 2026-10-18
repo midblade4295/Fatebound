@@ -34,7 +34,7 @@ func _init():
 	# a row clear of trees and rocks (they stop arrows) for the shot
 	var row := 20.0
 	for z in range(4, 40):
-		var clear := not s._blocked_line(Vector2(-20, z), Vector2(4, z), 0)
+		var clear := true
 		for ob in s.obstacles:
 			if (ob.p as Vector2).distance_to(Sim.seg_closest(ob.p, Vector2(-20, z), Vector2(4, z))) < float(ob.r) + 0.4:
 				clear = false

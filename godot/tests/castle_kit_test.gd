@@ -3,7 +3,6 @@ extends SceneTree
 # props stand where nobody needs to walk (0.31.165: in the Rift's keeps -- see below). The keep's layout itself is the
 # sim's (siege_land_check covers it).
 const Sim = preload("res://scripts/siege/siege_sim.gd")
-const Castle = preload("res://scripts/siege/siege_castle.gd")
 const Keep = preload("res://scripts/siege/keep.gd")
 const CastleKit = preload("res://scripts/siege/castle_kit.gd")
 var fails := []

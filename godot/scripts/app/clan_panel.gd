@@ -1,5 +1,5 @@
 extends Control
-# 0.31.134 (Kevin, Crown War step 1): the CLAN window, beside FRIENDS (the tabs at the top switch between them).
+# 0.31.134 (Kevin): the CLAN window, beside FRIENDS (the tabs at the top switch between them).
 # Not in a clan: invites waiting, FIND A CLAN (a search, the three houses as filters, JOIN / ASK on each), START A CLAN
 # (name, tag, house -- never changes --, who may join, the lowest level; 10,000 gold, taken by the server).
 # In a clan: its banner (house colours), CLAN CHAT, requests waiting (officers), INVITE A PLAYER by friend code
@@ -29,7 +29,7 @@ var _set_join := ""                   # the settings being edited (officers)
 var _set_lv := 0
 var _fields := {}                     # name -> LineEdit (what's typed survives a redraw)
 var _typed := {}
-var focus := ""                       # 0.31.147: "join" -- opened to join one (the war map's JOIN A CLAN, the Herald's tour)
+var focus := ""                       # 0.31.147: "join" -- opened to join one
 var _start_box: Control = null        # START A CLAN's section (START MY OWN CLAN scrolls to it)
 var _shown_clan := ""                 # the clan the window was drawn for (a change: back to the top)
 var _asked_list := false              # (0.31.148: in a house clan, the players' clans asked for once)
@@ -205,7 +205,7 @@ func _render_free() -> void:
 	if cool > 0:
 		UI2.body(intro, "You left a clan recently. You can join a players' clan or start one again in %s -- your house's clan is open to you now." % _hours(cool), 13, UI2.GOLD)
 	elif focus == "join":
-		UI2.body(intro, "Pick your house's clan -- free, open to all -- or a players' clan, and fight for its house on the war map. Or start your own and choose the house.", 13, UI2.SOFT)
+		UI2.body(intro, "Pick your house's clan -- free, open to all -- or a players' clan. Or start your own and choose the house.", 13, UI2.SOFT)
 	else:
 		UI2.body(intro, "You're not in a clan yet. Join your house's clan or a players' clan below, or start your own. Every clan fights for one of the three houses.", 13, UI2.SOFT)
 	# 0.31.147 (Kevin: "When they click join clan it put the list of available clans or they have option to start clan"):
@@ -213,11 +213,6 @@ func _render_free() -> void:
 	UI2.button(intro, "START MY OWN CLAN", "gold", func():
 		app.sfx("tab")
 		_to_start(), "clan_to_start", 14, 38.0)
-	if social.has_war and focus != "join":
-		# 0.31.135: the war map is there to look at before joining (who holds what)
-		UI2.button(intro, "SEE THE WAR MAP", "red", func():
-			app.sfx("menuOpen")
-			app.open_war(), "clan_war_map", 15, 40.0)
 	# ---- invites
 	if not social.clan_inv.is_empty():
 		var inf := _section("CLAN INVITES", str(social.clan_inv.size()))
@@ -248,7 +243,7 @@ func _house_section() -> void:
 	if social.house_clans.is_empty():
 		return
 	var hf := _section("YOUR HOUSE'S CLAN", "FREE")
-	UI2.body(hf, "Every house has its own clan, open to all. Join one to fight for that house on the war map.", 12, UI2.MUTED)
+	UI2.body(hf, "Every house has its own clan, open to all.", 12, UI2.MUTED)
 	for c in social.house_clans:
 		var r := _clan_line(hf, c)
 		var cid := str(c.get("id", ""))
@@ -454,11 +449,6 @@ func _render_mine() -> void:
 	UI.grow(UI2.button(cr, "CLAN CHAT" + ("  (%d)" % n if n > 0 else ""), "orange", func():
 		app.sfx("menuOpen")
 		app.open_chat("clan"), "clan_chat", 16, 44.0))
-	if social.has_war:
-		# 0.31.135 (Crown War step 2): the war map, from the clan's own window
-		UI.grow(UI2.button(cr, "WAR MAP", "red", func():
-			app.sfx("menuOpen")
-			app.open_war(), "clan_war_map", 16, 44.0))
 	var you := UI.label(cr,{"leader":"YOU LEAD", "officer":"OFFICER", "member":"MEMBER"}.get(role, ""), 12, UI2.GOLD, UI.HEAVY_FONT)
 	you.autowrap_mode = TextServer.AUTOWRAP_OFF
 	you.size_flags_vertical = Control.SIZE_SHRINK_CENTER

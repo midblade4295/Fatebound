@@ -8,8 +8,6 @@ var app
 var party := ""
 var _until := 0.0
 
-var war := ""                       # 0.31.135: a Crown War call / alarm (the battle's id) instead of a party
-
 func show_invite(a, pa: String, card: Dictionary, top: float) -> void:
 	app = a
 	party = pa
@@ -36,39 +34,6 @@ func show_invite(a, pa: String, card: Dictionary, top: float) -> void:
 		app.sfx("menuClose")
 		app.social.no_join(party)
 		queue_free(), "invite_banner_no", 15, 40.0, 12.0)
-	x.custom_minimum_size.x = 44
-	x.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	_drop_in(top)
-
-func show_war(a, bid: String, title: String, sub: String, defend: bool, top: float) -> void:
-	# 0.31.135 (Crown War step 2): a clan mate called the clan to a battle (JOIN), or someone attacks land the clan holds
-	# (DEFEND). Either opens the battle straight away; it lasts as long as the battle's countdown might.
-	app = a
-	war = bid
-	_until = Time.get_ticks_msec() / 1000.0 + 45.0
-	var col := Color("#ff6a4d") if defend else Color("#6be07c")
-	_frame(col, top)
-	var r := UI.row(self, 8)
-	UI2.icon(r, "swords", 40.0).size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 0)
-	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	r.add_child(v)
-	var n := UI2.text(v, title, 15, col)
-	n.clip_text = true
-	n.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	var b := UI2.body(v, sub, 12, Color.WHITE, false)
-	b.clip_text = true
-	b.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	var j := UI2.button(r, "DEFEND" if defend else "JOIN", "red" if defend else "green", func():
-		app.sfx("confirm")
-		app.start_war(war)
-		queue_free(), "war_banner_go", 15, 40.0, 12.0)
-	j.custom_minimum_size.x = 86
-	j.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	var x := UI2.button(r, "✕", "ghost", func():
-		app.sfx("menuClose")
-		queue_free(), "war_banner_no", 15, 40.0, 12.0)
 	x.custom_minimum_size.x = 44
 	x.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_drop_in(top)

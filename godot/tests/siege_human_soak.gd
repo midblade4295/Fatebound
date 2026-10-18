@@ -1,6 +1,6 @@
 extends SceneTree
-# Plays as the human through real touch events on the HUD (stick, ATTACK, ability, DODGE, ACTION,
-# hat stands) and checks the match keeps advancing: sim time must track frame time, no errors.
+# Plays as the human through real touch events on the HUD (stick, ATTACK, Q, W, E, R, DODGE) in a 5v5 and checks the
+# match keeps advancing: sim time must track frame time, no errors. (0.31.169: was a Siege match.)
 const Mode = preload("res://scripts/siege/siege_mode.gd")
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 var mode
@@ -16,6 +16,7 @@ var worst_ms := 0.0
 func _init() -> void:
 	rng.seed = int(OS.get_environment("SEED")) if OS.has_environment("SEED") else 5
 	mode = Mode.new()
+	mode.moba_hero = "knight"
 	mode.size = Vector2(420, 780)
 	root.add_child(mode)
 func touch(index: int, pos: Vector2, pressed: bool) -> void:
@@ -43,14 +44,10 @@ func _process(delta: float) -> bool:
 		if s.time <= last_time: stalls += 1
 	last_time = s.time
 	if me.state != "dead":
-		# Steer with the stick toward a goal: the hat stands while a villager, else our Oracle, else home.
-		var goal: Vector2
-		if me.cls == "villager": goal = Sim.forge(0)
-		elif me.carrying: goal = Sim.throne(0)
-		elif s.oracles[0].state != "carried": goal = s.oracles[0].pos
-		else: goal = s.oracles[0].pos
+		# Steer with the stick toward their King, or the nearest enemy close by.
+		var goal: Vector2 = s.moba.king_pos(1)
 		var foe: Dictionary = s.nearest_enemy(me, 4.0)
-		if not foe.is_empty() and not me.carrying: goal = foe.pos
+		if not foe.is_empty(): goal = foe.pos
 		var dir: Vector2 = (goal - me.pos).normalized()
 		# Screen up is -z for the blue side, matching the camera.
 		var origin := Vector2(110, 640)
@@ -61,9 +58,11 @@ func _process(delta: float) -> bool:
 		if frames % 9 == 0:
 			var id := "attack"
 			var r := rng.randf()
-			if s.context_action(me) != "" and r < 0.5: id = "action"
-			elif r < 0.12: id = "ability"
-			elif r < 0.18: id = "dodge"
+			if r < 0.12: id = "ability"
+			elif r < 0.16: id = "w"
+			elif r < 0.20: id = "e"
+			elif r < 0.22: id = "ult"
+			elif r < 0.28: id = "dodge"
 			var p := button_pos(id)
 			if p.x >= 0:
 				touch(1, p, true)
@@ -78,6 +77,6 @@ func _process(delta: float) -> bool:
 			me.cls, me.state, me.pos.x, me.pos.y, str(s.score), stalls, worst_ms])
 		worst_ms = 0.0
 	if s.ended or frames > 30 * 400:
-		print("HUMAN_SOAK_DONE t=%.1f ended=%s reason=%s score=%s winner=%d stalls=%d kills=%d deaths=%d rescues=%d" % [s.time, s.ended, s.end_reason, str(s.score), s.winner, stalls, me.kills, me.deaths, me.rescues])
+		print("HUMAN_SOAK_DONE t=%.1f ended=%s reason=%s score=%s winner=%d stalls=%d kills=%d deaths=%d" % [s.time, s.ended, s.end_reason, str(s.score), s.winner, stalls, me.kills, me.deaths])
 		quit(0)
 	return false

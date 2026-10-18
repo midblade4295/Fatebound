@@ -41,7 +41,7 @@ func _init() -> void:
 			s.step(Sim.TICK)
 			events.append_array(s.drain_events())
 		var snap := Net.snapshot(s, "", events)
-		var msg := Net.decode(Net.encode(Net.for_player(snap, s, "you"), true))
+		var msg := Net.decode(Net.encode(snap, true))
 		Net.apply(m, msg, "you")
 		var pb: PackedByteArray = msg.get("p", PackedByteArray())
 		for pi in pb.size() / 22:

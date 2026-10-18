@@ -1,8 +1,7 @@
 extends SceneTree
 # The Crusader (0.30.5): the Knight's upgrade. Its ability throws a hammer that passes through enemies, comes back
-# to the thrower and hits each enemy going out and coming back; no swinging while it's out; not from a tower deck.
+# to the thrower and hits each enemy going out and coming back; no swinging while it's out.
 const Sim = preload("res://scripts/siege/siege_sim.gd")
-const Land = preload("res://scripts/siege/siege_land.gd")
 var fails := []
 
 func check(ok: bool, what: String) -> void:
@@ -72,35 +71,5 @@ func _init() -> void:
 			back = true
 			break
 	check(back, "it finds the thrower after they've moved")
-	# not from a tower deck (the Siege field's outposts; the Rift has none since 0.31.165)
-	if not s.outposts.is_empty():
-		var op: Dictionary = s.outposts[0]
-		op.owner = 0
-		op.prog = 1.0
-		c.cd_ability = 0.0
-		c.state = "idle"
-		c.pos = (op.p as Vector2) + Vector2(Land.OUTPOST_TOWER_R + 0.8, 0)
-		s.act(c.id, "interact")
-		check(int(c.tower) >= 0 and not s.act(c.id, "ability"), "no hammer from a tower's deck")
-	# bots throw at a line of enemies
-	var s2 = Sim.new()
-	s2.setup(6, 7)
-	for u in s2.units:
-		u.bot = false
-		u.pos = Sim.spawn(u.team) + Vector2(randf_range(-6, 6), 0)
-	var b: Dictionary = s2.units.filter(func(u): return u.team == 0)[0]
-	s2._set_class(b, "knight", true)
-	b.bot = true
-	b.pos = base
-	var t2: Array = s2.units.filter(func(u): return u.team == 1)
-	t2[0].pos = base + Vector2(4.0, 0.0)
-	t2[1].pos = base + Vector2(6.5, 0.2)
-	var threw := false
-	for i in 60:
-		s2.step()
-		if int(b.get("hammer_out", -1)) >= 0:
-			threw = true
-			break
-	check(threw, "a Crusader bot throws at two enemies in a line")
 	print("HAMMER_PASS" if fails.is_empty() else "HAMMER_FAIL %d" % fails.size())
 	quit()

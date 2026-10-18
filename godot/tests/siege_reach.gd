@@ -1,19 +1,29 @@
 extends SceneTree
-# Every objective must be reachable over the stairs and platforms (with enemy gates broken).
+# Every objective must be reachable (with the enemy's gates broken): from each side's fountain, the enemy King, each of
+# his keep's gates from inside, the middle of the field and both pits. (0.31.169: the 5v5's; until then the Siege's
+# cells, hat stands and workshops.)
 const Sim = preload("res://scripts/siege/siege_sim.gd")
+const Land = preload("res://scripts/siege/siege_land.gd")
+const Keep = preload("res://scripts/siege/keep.gd")
 func _init() -> void:
 	var sim = Sim.new()
-	sim.setup(16, 1)
+	sim.setup(5, 1)
+	sim.setup_moba("knight", 1)
 	for g in sim.gates: g.hp = 0.0; g.broken = true
 	sim._update_gate_nav()
 	for t in 2:
-		for pair in [[Sim.spawn(t), Sim.cell(t), "spawn->enemy cell"], [Sim.cell(t), Sim.throne(t), "enemy cell->own throne"],
-				[Sim.spawn(t), Sim._c(t, Sim.HAT_HALL), "spawn->hat stands"], [Sim.spawn(t), Sim.workshop(t), "spawn->workshop"],
-				[Sim.spawn(t), Vector2(0.0, 3.6), "spawn->island (north landing)"], [Sim.spawn(t), Vector2(0.0, -3.6), "spawn->island (south landing)"], [Sim.spawn(t), Vector2(-27.5, 25.0), "spawn->tower on the west ledge"], [Sim.spawn(t), Vector2(20.5, 17.0), "spawn->open ground west of the east rise"], [Sim.spawn(t), Vector2(38.0, 22.0), "spawn->east rise beside its tower"]]:
+		var e := 1 - t
+		var pairs := [[Sim.spawn(t), sim.moba.king_pos(e) + (Sim._m(e, Keep.gate_c(1)) - sim.moba.king_pos(e)).normalized() * 3.0, "fountain->enemy King"],
+			[Sim.spawn(t), Vector2.ZERO, "fountain->mid field"], [Sim.spawn(t), Land.pit_c(0), "fountain->west pit"],
+			[Sim.spawn(t), Land.pit_c(1), "fountain->east pit"]]
+		for i in Keep.GATE_ANG.size():
+			var gc: Vector2 = Sim._m(e, Keep.gate_c(i))
+			pairs.append([Sim.spawn(t), gc + (Sim._m(e, Keep.C) - gc).normalized() * 2.0, "fountain->inside enemy gate %d" % i])
+		for pair in pairs:
 			var path: PackedVector2Array = sim.find_path(t, pair[0], pair[1])
 			var end: Vector2 = path[path.size() - 1] if path.size() > 0 else pair[0]
 			var miss: float = end.distance_to(pair[1])
-			print("team %d %-24s %2d steps, ends %.2f m away" % [t, pair[2], path.size(), miss])
+			print("team %d %-30s %3d steps, ends %.2f m away" % [t, pair[2], path.size(), miss])
 			assert(miss < 1.2, "unreachable: " + pair[2])
 	print("SIEGE_REACH_PASS")
 	quit(0)

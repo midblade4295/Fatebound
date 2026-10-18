@@ -1,10 +1,10 @@
 extends SceneTree
-# 0.31.134 (Crown War step 1): clans through the app's real buttons, against the real server (its own process, port
+# 0.31.134: clans through the app's real buttons, against the real server (its own process, port
 # 8118), in REAL time. Alice is the app (an account with 25,000 gold); Bob is a second phone (scripts/meta/social.gd +
 # a raw match socket). Home's SOCIAL opens FRIENDS with a CLAN tab; Alice starts [WOLF] Iron Wolves of House Stags
 # (the server takes 5,000 gold -- 0.31.148 -- and her app shows it); Bob finds and joins it; Bob's clan line reaches Alice's CLAN
 # chat with his tag; she makes him an officer from MANAGE; his tag is on her chat and on his name card (0.31.164: the
-# online match carrying it went with Siege); he leaves and waits 24 hours.
+# online match carrying it went with Siege; 0.31.169: its phases too); he leaves and waits 24 hours.
 # With a display and SHOT_DIR set, screenshots of each window go there.
 #   godot --headless --path godot -s res://tests/clans_ui_test.gd
 const App = preload("res://scripts/app/siege_app.gd")
@@ -15,7 +15,6 @@ const ClanPanel = preload("res://scripts/app/clan_panel.gd")
 const ChatPanel = preload("res://scripts/app/chat_panel.gd")
 const EcoAccounts = preload("res://server/eco_accounts.gd")
 const Net = preload("res://scripts/siege/siege_net.gd")
-const WarMap = preload("res://scripts/meta/war_map.gd")
 
 var port := 8118
 var server_pid := -1
@@ -79,7 +78,6 @@ func _init() -> void:
 	OS.set_environment("SIEGE_PORT", str(port))
 	OS.set_environment("SIEGE_HOST", "127.0.0.1")
 	OS.set_environment("SIEGE_LOBBY", "1.0")
-	OS.set_environment("SIEGE_WAR_LOBBY", "2.0")           # (0.31.149: the match is a battle on the war map)
 	OS.set_environment("STATE_DIRECTORY", sd)
 	OS.set_environment("SIEGE_MIN_BUILD", "off")
 	OS.set_environment("SIEGE_URL", "ws://127.0.0.1:%d" % port)
@@ -143,7 +141,6 @@ func _process(delta: float) -> bool:
 				p.d.level = 8
 				p.d.account = {"id":accts.alice[0], "key":accts.alice[1], "seq":0}
 				p.d.tutorial_done = true
-				p.d.settings["war_tour"] = true          # (0.31.147: the Herald's tour has its own test)
 				p.save()
 				app = App.new()
 				app.profile_path = base + "-profile.json"
@@ -163,14 +160,14 @@ func _process(delta: float) -> bool:
 			if app.social.online() and bob.online() and t_phase > 1.0:
 				check(app.social.has_clans and bob.has_clans, "the server has clans")
 				# 0.31.147 (Kevin: "When they click join clan it put the list of available clans or they have option to
-				# start clan"): the war map's JOIN A CLAN / the Herald's tour open the CLAN window on joining
+				# start clan"): JOIN A CLAN opens the CLAN window on joining
 				app.open_clan("join")
 				_go("join_view")
 		"join_view":
 			if t_phase > 0.8:
 				check(app.modal is ClanPanel and has_text(app.modal, "JOIN A CLAN") and has_text(app.modal, "FIND A CLAN") and has_text(app.modal, "be the first")
-					and btn("clan_to_start") != null and btn("clan_war_map") == null,
-					"JOIN A CLAN: the clans to join (no players' clans yet: be the first), START MY OWN CLAN; no SEE THE WAR MAP (from the map)")
+					and btn("clan_to_start") != null,
+					"JOIN A CLAN: the clans to join (no players' clans yet: be the first), START MY OWN CLAN")
 				# 0.31.148 (Kevin: "make a default clan for each faction that the new players can choose"): the house clans first
 				check(has_text(app.modal, "YOUR HOUSE'S CLAN") and has_text(app.modal, "The Lion Guard") and has_text(app.modal, "The Stag Guard")
 					and has_text(app.modal, "The Raven Guard") and btn("clan_house_join_lions") != null and btn("clan_house_join_stags") != null
@@ -330,56 +327,6 @@ func _process(delta: float) -> bool:
 				app.close_modal()
 				# 0.31.164 (Kevin: "5v5 only"): no war map battle to take the clan into (PLAY is the offline 5v5) -- the match's
 				# plates and names with the tag went with Siege's online matches; Bob leaves the clan from here
-				bob.clan_leave()
-				_go("left")
-		"play":
-			if t_phase > 0.5:
-				press("play")
-				_go("play_map")
-		"play_map":
-			# 0.31.145: PLAY opens the war map (0.31.147: after Home's push into the table). 0.31.149 (Kevin: "Remove the
-			# quick play so the player needs to choose where to fight"): no QUICK BATTLE -- Alice ATTACKs a land her house
-			# (the Stags) can reach, and Bob comes into that battle
-			if app.modal != null and str(app.modal.get_script().resource_path).ends_with("war_table.gd") \
-					and str(app.social.war.get("house", "")) == "stags" and t_phase > 0.5:
-				check(app.siege == null and btn("war_quick") == null, "PLAY opens the war map (in a clan), no QUICK BATTLE")
-				var tid := ""
-				for id in WarMap.T:
-					if tid == "" and not WarMap.is_home(id) and WarMap.neighbours(id).has("home_stags"):
-						tid = id
-				app.modal.select(tid)
-				_go("attack")
-		"attack":
-			if t_phase > 0.4:
-				press("war_attack")
-				_go("attacked")
-		"attacked":
-			if app.siege != null and str(app.siege.war_bid) != "":
-				check(app.modal == null, "ATTACK takes Alice into her battle (%s)" % str(app.siege.war_bid))
-				_ws("match_bob", {"t":"hello", "v":Net.VERSION, "name":"bob", "build":"0.31.149-fatebound", "pred":false,
-					"acct":accts.bob[0], "key":accts.bob[1], "war":str(app.siege.war_bid)})
-				_go("in_match")
-			elif t_phase > 10.0:
-				check(false, "ATTACK takes Alice into a battle")
-				return _finish()
-		"in_match":
-			if app.siege != null and app.siege.sim != null and app.siege.hud != null and str(app.siege.hud.player_id) != "" and is_instance_valid(app.siege.view):
-				if t_phase > (3.0 if shots != "" else 0.2):
-					var mine := ""
-					for b in app.siege.view.bars():
-						if str(b.get("name", "")).ends_with("Alice"):
-							mine = str(b.name)
-					check(mine == "[WOLF] Alice", "her own plate in the match reads [WOLF] Alice (%s)" % mine)
-					_shot("clan_match")
-					_go("match")
-		"match":
-			var lob := _raw_got("match_bob", "lobby")
-			var pn := _raw_got("match_bob", "pn")
-			if not pn.is_empty() and not lob.is_empty():
-				var ct: Dictionary = pn[-1].get("ct", {})
-				check((lob[0].get("ct", []) as Array).has("WOLF"), "the lobby carries Bob's tag")
-				check(ct.values().has("WOLF"), "the match's names carry his tag for everyone: %s" % str(ct))
-				(raw.match_bob.ws as WebSocketPeer).close()
 				bob.clan_leave()
 				_go("left")
 		"left":

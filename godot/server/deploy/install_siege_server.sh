@@ -22,17 +22,17 @@ NO_SYSTEMD="${NO_SYSTEMD:-0}"
 SRC="$(cd "$(dirname "$0")/../.." && pwd)"                  # .../godot
 SERVICE_SRC="$SRC/server/deploy/fatebound-siege.service"
 
-# The sim preloads the land and the castle layout (siege_land.gd, siege_castle.gd -- 0.31.82: they were missing here,
-# so a fresh install could not compile the sim; 0.31.165: and the Rift's keep, keep.gd). Nothing else: the baked
-# terrain files are only the client's.
-SERVER_SCRIPTS="scripts/siege/siege_sim.gd scripts/siege/siege_net.gd scripts/siege/siege_land.gd scripts/siege/siege_castle.gd scripts/siege/keep.gd scripts/siege/moba.gd scripts/siege/moba_vision.gd scripts/siege/moba_kits.gd"
+# The sim preloads the land and the keep (siege_land.gd, keep.gd -- 0.31.82: the land was missing here, so a fresh
+# install could not compile the sim; 0.31.165: the Rift's keep) and the 5v5 (moba*.gd). Nothing else: the baked terrain
+# files are only the client's. (0.31.169: Siege's castle layout, siege_castle.gd, went with Siege.)
+SERVER_SCRIPTS="scripts/siege/siege_sim.gd scripts/siege/siege_net.gd scripts/siege/siege_land.gd scripts/siege/keep.gd scripts/siege/moba.gd scripts/siege/moba_vision.gd scripts/siege/moba_kits.gd"
 # 0.31.108: the accounts -- the server replays every player's changes with the game's own economy and profile code
 # 0.31.118: the analytics allow-list (events and their props), shared by the phone and the server
 # 0.31.131: the App Store account token (UUIDv5 of the account id), shared by the phone and the purchase check
-# 0.31.135: the war map (territories, links, the numbers), shared by the phone and server/world.gd
-META_SCRIPTS="scripts/meta/economy.gd scripts/meta/profile.gd scripts/meta/analytics_events.gd scripts/meta/apple_token.gd scripts/meta/war_map.gd scripts/meta/cards.gd"
+# (0.31.135-0.31.168: the war map, scripts/meta/war_map.gd, for server/world.gd -- Crown War went in 0.31.169)
+META_SCRIPTS="scripts/meta/economy.gd scripts/meta/profile.gd scripts/meta/analytics_events.gd scripts/meta/apple_token.gd"
 # 0.31.131: App Store purchase checks -- the verifier, its helper (python3 + the openssl command) and Apple's public root
-SERVER_FILES="server/siege_server.gd server/siege_probe.gd server/clans.gd server/world.gd server/iap_verify.gd server/iap_verify_apple.gd server/apple_jws.py server/certs/AppleRootCA-G3.cer server/eco_accounts.gd server/match_ledger.gd server/social.gd server/analytics.gd server/leaderboard.gd server/referrals.gd server/diag_reports.gd"
+SERVER_FILES="server/siege_server.gd server/siege_probe.gd server/clans.gd server/iap_verify.gd server/iap_verify_apple.gd server/apple_jws.py server/certs/AppleRootCA-G3.cer server/eco_accounts.gd server/match_ledger.gd server/social.gd server/analytics.gd server/leaderboard.gd server/referrals.gd server/diag_reports.gd"
 for f in $SERVER_SCRIPTS $META_SCRIPTS $SERVER_FILES; do
   [ -f "$SRC/$f" ] || { echo "Missing $SRC/$f — run this from the Siege branch checkout." >&2; exit 1; }
 done

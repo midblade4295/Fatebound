@@ -3,13 +3,13 @@ extends SceneTree
 #   NAME=archmage godot --headless --path godot -s res://tools/retarget_meshy.gd    (NAME: the folder under assets/meshy)
 # 1. rig.json: "fit" scales the Meshy model to the KayKit body's height; "slot_r"/"slot_l" are hand-slot bone rests
 #    (children of the wrists) placed and turned like KayKit's handslot bones, so weapons sit as they do on KayKit hands.
-# 2. anims_<g|m|r|mb|ma|t>.res: each KayKit library re-baked frame by frame. For a mapped bone, its GLOBAL rotation
+# 2. anims_<g|m|r|mb|ma>.res: each KayKit library re-baked frame by frame. For a mapped bone, its GLOBAL rotation
 #    relative to its KayKit rest is applied to the Meshy bone's rest and turned back into a LOCAL rotation; the hips also
 #    carry their motion (scaled by the hip heights). Unmapped bones (Spine01, neck, shoulders) hold their rest.
 const View = preload("res://scripts/siege/siege_view.gd")
 const FPS := 30.0
 const KK_FOR := {"assassin": "rogue_kaykit", "archmage": "mage_kaykit", "crusader": "knight_kaykit", "berserker": "barbarian_kaykit",
-	"sniper": "ranger_kaykit", "necromancer": "necromancer_kaykit", "villager": "villager_kaykit", "worker": "villager_kaykit",
+	"sniper": "ranger_kaykit", "necromancer": "necromancer_kaykit", "worker": "villager_kaykit",
 	"knight": "knight_kaykit", "barbarian": "barbarian_kaykit", "rogue": "rogue_kaykit", "ranger": "ranger_kaykit",
 	"mage": "mage_kaykit", "priest": "mage_kaykit",
 	"minion_melee": "knight_kaykit", "minion_caster": "ranger_kaykit", "minion_siege": "mage_kaykit", "minion_super": "barbarian_kaykit",

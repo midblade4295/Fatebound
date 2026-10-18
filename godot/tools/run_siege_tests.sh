@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Runs every Siege + app test headless and checks each one's pass marker.
+# Runs every match + app test headless and checks each one's pass marker.
 # Usage (from the repo root or godot/):  GODOT=/path/to/Godot_v4.7.2-stable_linux.x86_64 godot/tools/run_siege_tests.sh [--quick]
 #   --quick  : 2 simulation seeds instead of 6 (about 1 min instead of 3)
 # Exit code 0 only if every test printed its marker with no SCRIPT ERROR.
@@ -39,7 +39,6 @@ run() {   # run <name> <marker> <timeout> [extra godot args...]
 }
 
 if [ $QUICK -eq 1 ]; then export SEEDS=11,22; export NO_RESCUE_CHECK=1; fi
-# run siege_sim_smoke      SIEGE_SIM_PASS           600    # (the Siege, gone from the app since 0.31.164: on the Rift (0.31.165) its rules no longer hold -- deleted with its code in step 4)
 run siege_reach          SIEGE_REACH_PASS         120
 run siege_land_check     SIEGE_LAND_PASS          120
 run siege_mode_smoke     SIEGE_MODE_PASS          300 --fixed-fps 30
@@ -48,38 +47,26 @@ run siege_diag_smoke     SIEGE_DIAG_PASS          150 --fixed-fps 30
 run siege_guard_smoke    SIEGE_GUARD_PASS         120
 run siege_logcat_filter  SIEGE_LOGCAT_FILTER_PASS 120
 # Online: real server process + clients over WebSockets. Real time (no --fixed-fps), port 8092.
-# run siege_net_smoke      SIEGE_NET_PASS           150    # (online Siege matches: on the Rift a Siege match is over at once; the server keeps them shut to old apps with its min build -- the online 5v5 brings its own)
 run parse_all            PARSE_ALL_PASS           120
 run meta_economy_test    META_ECONOMY_PASS        120
-# The Siege app shell through its real buttons. REAL time (no --fixed-fps).
+# The app shell through its real buttons. REAL time (no --fixed-fps).
 run app_flow_test        APP_FLOW_PASS            150
 run app_scroll_test      APP_SCROLL_PASS          60
-# run tutorial_test        TUTORIAL_PASS            120    # (the Siege, gone from the app since 0.31.164: on the Rift (0.31.165) its rules no longer hold -- deleted with its code in step 4)
-# run net_interp_test      NET_INTERP_PASS          60    # (online Siege matches: on the Rift a Siege match is over at once; the server keeps them shut to old apps with its min build -- the online 5v5 brings its own)
-run knight_ai_test       KNIGHT_AI_PASS           90
-# run tower_test           TOWER_PASS               150    # (the Siege, gone from the app since 0.31.164: on the Rift (0.31.165) its rules no longer hold -- deleted with its code in step 4)
+# run net_interp_test      NET_INTERP_PASS          60    # (online matches: back with the online 5v5 -- step 2)
 run hammer_test          HAMMER_PASS              150
 run match_audio_test     MATCH_AUDIO_PASS         280
-# run items_test           ITEMS_PASS               290    # (the Siege, gone from the app since 0.31.164: on the Rift (0.31.165) its rules no longer hold -- deleted with its code in step 4)
 run priest_test          PRIEST_PASS              200
-# run stands_test          STANDS_PASS              200    # (the Siege, gone from the app since 0.31.164: on the Rift (0.31.165) its rules no longer hold -- deleted with its code in step 4)
-# run bomb_test            BOMB_TEST_PASS           200    # (the Siege, gone from the app since 0.31.164: on the Rift (0.31.165) its rules no longer hold -- deleted with its code in step 4)
-run digest_test          DIGEST_PASS              60
-run answer_test          ANSWER_PASS              60
-run launcher_test        LAUNCHER_PASS            60
 run multikill_test       MULTIKILL_PASS           60
-# run announce_test        ANNOUNCE_PASS            120  --fixed-fps 60    # (the Siege, gone from the app since 0.31.164: on the Rift (0.31.165) its rules no longer hold -- deleted with its code in step 4)
 run upgrades_test        UPGRADES_PASS            60
-# run blast_nodes_test     BLAST_NODES_PASS         60    # (the Siege, gone from the app since 0.31.164: on the Rift (0.31.165) its rules no longer hold -- deleted with its code in step 4)
 run chest_test           CHEST_PASS               60
 run combo_test           COMBO_PASS               60
 run net_load_test        NET_LOAD_PASS            120
 # Match rooms (0.31.119): rooms of 3, at most 2 (real server on 8102)
-# run match_rooms_test     MATCH_ROOMS_PASS         120    # (online Siege matches: on the Rift a Siege match is over at once; the server keeps them shut to old apps with its min build -- the online 5v5 brings its own)
+# run match_rooms_test     MATCH_ROOMS_PASS         120    # (online matches: back with the online 5v5 -- step 2)
 # Idle players (0.31.119): a bot takes over, input gives it back, removal (real server on 8103 + the real client)
-# run idle_test            IDLE_PASS                120    # (online Siege matches: on the Rift a Siege match is over at once; the server keeps them shut to old apps with its min build -- the online 5v5 brings its own)
+# run idle_test            IDLE_PASS                120    # (online matches: back with the online 5v5 -- step 2)
 # Rejoin after a dropped connection (0.31.120): real server on 8105 + the real client
-# run rejoin_test          REJOIN_PASS              120    # (online Siege matches: on the Rift a Siege match is over at once; the server keeps them shut to old apps with its min build -- the online 5v5 brings its own)
+# run rejoin_test          REJOIN_PASS              120    # (online matches: back with the online 5v5 -- step 2)
 # (0.31.164: join_friend_test -- no online matches to join until the 5v5 is online)
 # End-of-match MVP strip and scoreboard (0.31.119)
 run scoreboard_test      SCOREBOARD_PASS          60
@@ -94,7 +81,7 @@ run diag_send_test       DIAG_SEND_PASS           120
 # Kill feed and vibration (0.31.120): the HUD feed, siege_mode haptics, Settings > VIBRATION
 run kill_feed_test       KILL_FEED_PASS           90
 # The next match only after PLAY AGAIN (0.31.122): real server (8110) + the real client; older apps as before
-# run next_match_test      NEXT_MATCH_PASS          150    # (online Siege matches: on the Rift a Siege match is over at once; the server keeps them shut to old apps with its min build -- the online 5v5 brings its own)
+# run next_match_test      NEXT_MATCH_PASS          150    # (online matches: back with the online 5v5 -- step 2)
 # Discord link + its one-time gem reward (0.31.124)
 run discord_test         DISCORD_PASS             60
 # Daily login reward (0.31.119): the calendar, the server's replay, the card on Home and in ORDERS
@@ -111,7 +98,6 @@ run version_gate_test    VERSION_GATE_PASS        120
 # Server minimum app build: an outdated build is refused as "update required" (real servers on 8098/8099)
 run min_build_test       MIN_BUILD_PASS           120
 run boot_guard_test      BOOT_GUARD_PASS          60
-# run outpost_look_test    OUTPOST_LOOK_PASS        90    # (the Siege, gone from the app since 0.31.164: on the Rift (0.31.165) its rules no longer hold -- deleted with its code in step 4)
 run castle_kit_test      CASTLE_KIT_PASS          90
 # Seated on either team (online): the stick follows the screen, your side drawn blue (0.31.85).
 run side_view_test       SIDE_VIEW_PASS           120 --fixed-fps 30
@@ -155,32 +141,18 @@ run title_logo_test      TITLE_LOGO_PASS          90
 # slam; the match's script and the later windows load in the background queue, not with the game.
 run boot_title_test      BOOT_TITLE_PASS          120
 # Home's heroes in two rows, nobody reaching into anybody, clear of the medallions and PLAY; no ribbon (0.31.114).
-# 0.31.138: Home is the war room -- the live war table and four heroes in 3D, the candles, sun, water and birds alive.
+# 0.31.138: Home is the war room -- the table and four heroes in 3D, the candles, sun, water and birds alive.
 run home_heroes_test     HOME_HEROES_PASS         90
 # Floating menu icons move smoothly: no snapping to whole canvas pixels, and they float with their layout (0.31.116).
 run menu_float_test      MENU_FLOAT_PASS          60
 # Chat, friends, parties and quick chat (0.31.111): server/social.gd alone, then two phones against the real server.
 run social_test          SOCIAL_PASS              150
 run social_ui_test       SOCIAL_UI_PASS           200
-# Clans (0.31.134, Crown War step 1): server/clans.gd through social.gd, then the app's CLAN window against the real
+# Clans (0.31.134): server/clans.gd through social.gd, then the app's CLAN window against the real
 # server (8118) with a second phone: start a clan (gold taken), find, request, accept, clan chat, MANAGE, tags in the match.
 run clans_test           CLANS_PASS               90
 run clans_ui_test        CLANS_UI_PASS            240
-# The war map (0.31.135, Crown War step 2): server/world.gd alone (reach, attempts, bars, captures, the weekly reset),
-# a battle end to end against the real server (8120: called, alarmed, seated by side, scored), then the app's war table
-# (8121): Home's PLAY opens the map (QUICK BATTLE at its foot), tap a territory, ATTACK, the battle, WAR MAP back, a clan mate's JOIN banner.
-run world_test           WORLD_PASS               60
-# (0.31.164, Kevin: "5v5 only": the war map's battles were Siege matches -- war_battle_test and war_ui_test are out of
-# the suite with the app's war map; server/world.gd still has its own test above)
-# 0.31.147: PLAY's push into the war table, the map's dive, the Herald's tour of the map (by itself the first time; "?";
-# SKIP), JOIN A CLAN opening the CLAN window on joining; reduce motion (no server: the map put in place)
-# (0.31.164: war_tour_test -- PLAY no longer pushes into the war map)
-# 0.31.151: the war's rewards -- the profile, the account (once), Home saying so
-run war_rewards_test     WAR_REWARDS_PASS         90
-# 0.31.153 COMMANDER (the test): the sim's cards, barracks, points and AI commander, a whole AI-vs-AI match; then the
-# app -- Home's COMMANDER, the deck window, BATTLE, a card tapped on the HUD, the results without rewards
-# run commander_test       COMMANDER_PASS           180    # (the Siege, gone from the app since 0.31.164: on the Rift (0.31.165) its rules no longer hold -- deleted with its code in step 4)
-run commander_ui_test    COMMANDER_UI_PASS        120
+# (0.31.169: Crown War's tests went with it -- the war map's battles were Siege matches)
 # 0.31.155 5V5 (the test): heroes, waves (stacking), League's tower rules, gates behind towers, levels and picks, a
 # hero's fall, whole bot matches; then the app -- Home's 5V5, the hero window, BATTLE, a level-up picked on the screen
 run moba_test            MOBA_PASS                480
@@ -210,7 +182,7 @@ fi
 # the real server on 8100 (the probe included), then the report on a fixture.
 run analytics_client_test ANALYTICS_CLIENT_PASS   60
 run analytics_server_test ANALYTICS_SERVER_PASS   90
-# run analytics_events_test ANALYTICS_EVENTS_PASS   150    # (online Siege matches: on the Rift a Siege match is over at once; the server keeps them shut to old apps with its min build -- the online 5v5 brings its own)
+# run analytics_events_test ANALYTICS_EVENTS_PASS   150    # (online matches: back with the online 5v5 -- step 2)
 t0=$SECONDS
 if timeout 120 python3 tools/test_analytics_report.py > /tmp/siege_test_analytics_report.log 2>&1 && grep -q ANALYTICS_REPORT_PASS /tmp/siege_test_analytics_report.log; then
   printf "PASS  %-22s %4ds\n" "analytics_report (py)" $((SECONDS - t0))

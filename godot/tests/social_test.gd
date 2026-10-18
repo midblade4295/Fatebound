@@ -15,7 +15,6 @@ const Social = preload("res://server/social.gd")
 const ClientSocial = preload("res://scripts/meta/social.gd")
 const Profile = preload("res://scripts/meta/profile.gd")
 const Net = preload("res://scripts/siege/siege_net.gd")
-const Sim = preload("res://scripts/siege/siege_sim.gd")
 
 var fails: Array = []
 
@@ -126,13 +125,6 @@ func _part1() -> void:
 	matching[ids[1]] = true
 	s.acct_changed(ids[1])
 	check(str(last(1, "pres").get("c", {}).get("st", "")) == "match", "a friend in a match shows in a match")
-	# 0.31.151: in a battle on the war map, the card says which (Friends > JOIN goes into it) and where
-	s.war_of_fn = func(acct) -> Dictionary: return {"bid":"b9zz", "tid":"tower"} if acct == ids[1] else {}
-	clear()
-	s.acct_changed(ids[1])
-	var wc: Dictionary = last(1, "pres").get("c", {})
-	check(str(wc.get("wb", "")) == "b9zz" and str(wc.get("wt", "")) == "tower", "a friend in a battle: the card names it (b9zz at the Tower)")
-	s.war_of_fn = func(_acct) -> Dictionary: return {}
 	matching.erase(ids[1])
 	s.acct_changed(ids[1])
 	s.handle(1, {"k":"add", "pid":C})
@@ -439,21 +431,6 @@ func _process(delta: float) -> bool:
 func _finish() -> bool:
 	if server_pid > 0:
 		OS.kill(server_pid)
-	# (a quick sanity check of the sim's bot call, offline)
-	var sim = Sim.new()
-	sim.setup(Net.TEAM_SIZE, 7, 0)
-	for i in 30:
-		sim.step(Sim.TICK)
-	for id in ["b1", "b4", "b5", "b6", "b7"]:
-		sim.by_id[id].cls = "knight"          # (at the start everyone is a villager on the way to a hat)
-	var n: int = sim.call_bots("you")
-	var called := 0
-	for u in sim.units:
-		if u.has("call"):
-			called += 1
-	check(n == called and n == Sim.CALL_BOTS, "\"Need help!\" calls the %d nearest free bots (%d came)" % [Sim.CALL_BOTS, n])
-	# (until 0.31.165 the caller then walked off and the bots followed: a Siege match -- on the Rift a Siege match is over
-	# at once, its Kings at home on their thrones; the Siege's bots and this call go with its code)
 	print("SOCIAL_PASS" if fails.is_empty() else "SOCIAL_FAIL %s" % str(fails))
 	quit(0 if fails.is_empty() else 1)
 	return true

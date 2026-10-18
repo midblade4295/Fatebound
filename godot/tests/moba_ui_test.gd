@@ -144,7 +144,7 @@ func _process(delta: float) -> bool:
 				var s = app.siege
 				var me: Dictionary = s.sim.by_id["you"]
 				check(str(app.profile.d.settings.get("moba_hero", "")) == "archmage", "the pick kept on the phone")
-				check(s.moba_hero == "archmage" and not s.online and not s.tutorial and s.sim.moba != null and me.cls == "mage" and me.up
+				check(s.moba_hero == "archmage" and not s.online and s.sim.moba != null and me.cls == "mage" and me.up
 					and s.sim.units.size() == 10, "BATTLE: an offline 5v5, you the Archmage")
 				# a level up: three upgrades on the screen; tap the second
 				s.sim.moba.add_xp(me, Moba.XP_BASE + 1.0)

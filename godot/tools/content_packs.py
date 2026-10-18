@@ -47,20 +47,21 @@ OUT = os.environ.get("CONTENT_OUT", os.path.join(ROOT, "build", "packs"))
 PACK_PRESET = os.environ.get("CONTENT_PACK_PRESET", "Content Pack")   # (tools/content_e2e.sh: the desktop one)
 BASE_PRESETS = ["Android Play Store", "Android KayKit Rebuild", "iOS App Store"]   # (iOS port step 2: the same base)
 BODIES = ["archmage", "assassin", "barbarian", "berserker", "crusader", "knight", "mage", "necromancer", "priest",
-          "ranger", "rogue", "sniper", "villager", "worker"]
+          "ranger", "rogue", "sniper", "worker"]
 NEW_HEROES = ["dragoon", "druid", "duelist", "golem", "musketeer", "stormcaller"]     # 0.31.168: the 5v5's six new heroes
 # name -> the folders (Godot filter patterns, relative to res://) whose files the pack carries, in download order
 PACKS = [
     ("ui", ["assets/ui/*"]),
-    ("world", ["assets/meshy/castle/*", "assets/meshy/*_shop/*", "assets/meshy/workshop/*", "assets/meshy/outpost_*/*",
-               "assets/kaykit/*", "assets/kings/*", "assets/terrain/*", "assets/props/*"]),
+    ("world", ["assets/meshy/castle/*", "assets/kaykit/*", "assets/kings/*", "assets/terrain/*", "assets/props/*"]),
+                                                                      # (0.31.169: Siege's hat shops, workshop and
+                                                                      # outposts went with it)
     ("heroes", ["assets/meshy/%s/*" % b for b in BODIES]),
     ("minions", ["assets/meshy/minion_*/*", "assets/meshy/wyrm/*"]),   # 0.31.159: the 5v5 lane minions (heroes would pass
                                                                       # GitHub's 100 MB); 0.31.166: the Grave Wyrm
     ("champions", ["assets/meshy/%s/*" % b for b in NEW_HEROES]),     # 0.31.168: the six new heroes' bodies (their own pack:
                                                                       # heroes and minions would pass 100 MB)
     ("weapons", ["assets/meshy/weapons/*"]),
-    ("war", ["assets/meshy/war/*", "assets/war_land/*"]),   # 0.31.136-137: the war map (its own pack: world stays put)
+    ("war", ["assets/meshy/war/*", "assets/war_land/*"]),   # 0.31.136-137: the war map's land and miniatures (Home's table)
     ("audio", ["assets/music/*", "assets/sounds/*", "assets/vo/*"]),
 ]
 BASE_ASSETS = ["assets/branding/*", "assets/fonts/*", "assets/vfx/*"]       # what the loader (and the update screen) use

@@ -31,14 +31,13 @@ func _init() -> void:
 	k.pos = base + Vector2(4.0, 0.0)
 	hp.pos = base
 	s._kill({}, k)
-	check(k.state == "dead" and k.cls == "villager" and not s.hats.is_empty(), "a knight falls and drops his hat")
+	check(k.state == "dead", "a knight falls")
 	check(s.act(hp.id, "ability"), "the High Priest raises him")
-	check(k.state != "dead" and k.cls == "knight" and (k.pos as Vector2).distance_to(base + Vector2(4.0, 0.0)) < 0.1, "back on his feet where he fell, a knight again")
+	check(k.state != "dead" and k.cls == "knight" and (k.pos as Vector2).distance_to(base + Vector2(4.0, 0.0)) < 0.1, "back on his feet where he fell, a knight still")
 	check(absf(k.hp - k.max_hp * Sim.RESURRECT_HP) < 0.5, "at %d%% health (%.0f of %.0f)" % [int(Sim.RESURRECT_HP * 100), k.hp, k.max_hp])
-	check(s.hats.filter(func(h): return h.cls == "knight").is_empty(), "his dropped hat is gone from the ground")
 	for i in int((Sim.RESPAWN_TIME + 1.0) / Sim.TICK):
 		s.step()
-	check((k.pos as Vector2).distance_to(base + Vector2(4.0, 0.0)) < 3.0, "and the old respawn doesn't whisk him back to the castle")
+	check((k.pos as Vector2).distance_to(base + Vector2(4.0, 0.0)) < 3.0, "and the old respawn doesn't whisk him back to the keep")
 	var v: Dictionary = mine[3]
 	v.pos = base + Vector2(0.0, 3.0)
 	s._kill({}, v)
@@ -47,21 +46,6 @@ func _init() -> void:
 	hp.state = "idle"
 	v.pos = base + Vector2(0.0, Sim.RESURRECT_R + 1.0)
 	check(not s.act(hp.id, "ability"), "nobody in reach: nothing happens")
-	# a bot High Priest uses it
-	var s2 = _fresh(8)
-	var m2: Array = s2.units.filter(func(u): return u.team == 0)
-	var bh: Dictionary = m2[0]
-	s2._set_class(bh, "priest", true)
-	bh.bot = true
-	bh.pos = base
-	var fallen: Dictionary = m2[1]
-	fallen.pos = base + Vector2(3.0, 0.0)
-	s2._kill({}, fallen)
-	for i in 30:
-		s2.step()
-		if fallen.state != "dead":
-			break
-	check(fallen.state != "dead", "a High Priest bot raises a fallen ally next to it")
 	# bigger heal and nova
 	var s3 = _fresh(3)
 	var m3: Array = s3.units.filter(func(u): return u.team == 0)

@@ -286,25 +286,14 @@ func _checks_alive() -> void:
 	check(held == still._flames.size() and still._birds.process_mode == Node.PROCESS_MODE_DISABLED
 		and float((sart.material as ShaderMaterial).get_shader_parameter("motion")) == 0.0 and still.room.calm,
 		"reduce motion: the flames, the water and the candles' light hold still, no birds")
-	# ---- Home and the war map both watch the war
-	var s := Social.new()
-	s.war_open("home")
-	s.war_open("map")
-	s.war_close("map")
-	var both := s.war_watching
-	s.war_close("home")
-	check(both and not s.war_watching, "closing the war map leaves Home's table watching; closing both stops it")
-	s.free()
 
 func _checks_app() -> void:
 	# ---- in the app
 	check(app.home_scene != null and app.hero_node == app.home_scene.room and app.home_scene.room != null,
 		"Home's backdrop is the war room, its heroes the line-up")
 	check(absf(app.hero_layer.size.y - app.size.y) < 1.0, "the hero layer is as tall as the app (%.0f / %.0f)" % [app.hero_layer.size.y, app.size.y])
-	app.social.war = {"terr": {"forge": {"h": "ravens"}}}
-	app._on_social_changed("war")
 	var hold: PackedColorArray = app.home_scene.room.land.land_mat.get_shader_parameter("holder")
-	check(hold[LandData.IDS.find("forge")].a > 0.5, "the war as the server tells it shows on Home's table")
+	check(hold.size() == LandData.IDS.size() and Array(hold).all(func(c): return c.a == 0.0), "Home's table shows its land unclaimed (no Crown War since 0.31.169)")
 	# ---- the ribbon
 	check(not has_text(app.content, "16 v 16 SIEGE") and has_text(app.content, "5 vs 5"), "no ribbon on Home; the line at the top says 5 vs 5 (0.31.164)")
 	# ---- empty chest slots

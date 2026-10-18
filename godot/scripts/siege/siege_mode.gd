@@ -18,19 +18,11 @@ signal exited
 signal version_mismatch(server_v: int, verdict: String)
 
 var team_size := 16
-var tutorial := false          # the Herald's walkthrough (scripts/siege/tutorial.gd)
-var commander := false         # 0.31.153 COMMANDER (the prototype): you and your deck against the AI commander, offline
 var moba_hero := ""            # 0.31.155 5V5 (the test): your hero; a 5v5 against bots, offline (scripts/siege/moba.gd)
 var match_seed := -1           # (benchmarks: a fixed match; -1 the clock's)
-var deck: Array = []           #   (your 8 cards; scripts/meta/cards.gd)
-const Cards = preload("res://scripts/meta/cards.gd")
 var analytics = null          # 0.31.118: usage statistics (scripts/meta/analytics.gd): VS BOTS matches and the tutorial
 var _an_match := ""           #   (the server counts online matches itself)
 var _an_class0 := ""
-var _tut_t0 := 0
-var _tut_done := false
-var tut: Control = null
-const Tutorial = preload("res://scripts/siege/tutorial.gd")
 const Analytics = preload("res://scripts/meta/analytics.gd")
 const TUTORIAL_GOLD := 250
 # 3D resolution as a fraction of the PHYSICAL screen (window pixels, not logical UI units).
@@ -50,17 +42,15 @@ var audio: Node = null
 var profile = null       # scripts/meta/profile.gd — rewards, challenges and cosmetics
 var rewards: Dictionary = {}
 var match_result: Dictionary = {}
-var _lifts := 0          # times the player joined a lift of their own Oracle this match
 # 0.31.87 (titles): what the match counts toward them, gathered here so offline and online count the same way
 var _cls_time := {}      # class -> seconds played as it (alive; the upgrade counts as its class)
 var _kills_cls := {}     # class -> knockouts made as it
 var _kills_seen := 0
-var _repaired := 0.0     # gate health repaired (the sim's "repair" events)
 var _best_multi := 0     # most knockouts in one burst ("multikill" events)
 # 0.31.97 (class quests): the same, per class as worn -- a Crusader apart from a Knight (Eco.cosmetic_class)
-const Q_UNIT := {"kills":"kills", "rescues":"rescues", "gate_dmg":"gate_dmg", "gathered":"gathered", "fed":"fed", "healed":"healed",
+const Q_UNIT := {"kills":"kills", "gate_dmg":"gate_dmg", "healed":"healed",
 	"towers":"towers", "camps":"camps", "lh":"lh", "epics":"epics"}       # (0.31.164: the 5v5's, moba.gd counts them on the hero)
-var _q := {}             # worn class -> {"t": seconds, "kills", "rescues", "gate_dmg", "gathered", "fed", "healed", "repaired", "lifts", "best_multi"}
+var _q := {}             # worn class -> {"t": seconds, "kills", "gate_dmg", "healed", "best_multi", "towers", "camps", "lh", "epics"}
 var _q_seen := {}        # my unit's running totals already credited
 var _q_cls := ""         # the class I wear right now ("" = none)
 
@@ -90,9 +80,6 @@ var _rejoin_sent := false
 var rejoins := 0                    # (tests, diag)
 var again_sent := 0                 # 0.31.122: PLAY AGAIN presses sent to the server (tests)
 var party_join := ""                # 0.31.120: a friend's public id: their match is the one to join (Friends > JOIN)
-var war_bid := ""                   # 0.31.135: a battle on the war map (server/world.gd): its room, on my house's side
-var war_result := {}                # 0.31.135: what the battle did ({"t":"war", ...} from the server)
-var war_info := {}                  # 0.31.135: the battle (the lobby's "war": {"tid", "name", "ah", "dh"})
 var exit_note := ""                 # 0.31.119: why the match ended for me, for Home to say (removed for being idle)
 const MSG_UPDATE := "A new version of Fatebound is available. Update to keep playing."
 const MSG_SERVER_OLD := "Servers are updating, try again in a few minutes"
@@ -191,7 +178,6 @@ func _ready() -> void:
 	add_child(hud)
 	ready_times["hud"] = Time.get_ticks_msec() - t_hud
 	hud.leave_requested.connect(func(): exited.emit())
-	hud.war_battle = war_bid != ""                   # 0.31.135
 	hud.replay_requested.connect(func():
 		if online:
 			# 0.31.122 (Kevin: "make it so the game doesn't automatically put player back in a new game because they could be
@@ -206,20 +192,16 @@ func _ready() -> void:
 					hud.score_panel.queue_free()
 				hud.score_panel = null
 			hud.toast("Next match starts shortly...", Color("#f2d18d"))
-		elif moba_hero != "" and profile != null:
+		elif profile != null:
 			# 0.31.164: a 5v5 is paid against a ticket of its own -- back through the app (siege_app.start_moba)
-			replay_hero = moba_hero
+			replay_hero = _hero()
 			exited.emit()
 		else:
 			_restart())
-	hud.workshop_tools.connect(func(): _act("take_tools"))
-	hud.workshop_buy.connect(func(id): _act("buy", id))
-	hud.workshop_leave.connect(func(): _act("workshop_leave"))
 	hud.action_pressed.connect(_on_action)
-	hud.card_pressed.connect(_play_card)                   # 0.31.153 COMMANDER
 	hud.quick_chat.connect(_on_quick_chat)                 # 0.31.111
 	hud.unit_world = func(id: String) -> Vector3: return view.unit_world(id) if view != null else Vector3.INF
-	hud.qc_btn.visible = not tutorial
+	hud.qc_btn.visible = true
 	hud.project = func(world: Vector3) -> Vector2: return _to_hud(view.screen_point(world))
 	hud.on_screen = func(world: Vector3) -> bool: return view.is_on_screen(world)
 	hud.numbers_source = func() -> Array: return view.numbers if view != null else []
@@ -261,16 +243,10 @@ func _start_steps() -> Array:
 	steps.append(func():
 		var t_sim := Time.get_ticks_msec()
 		sim = Sim.new()
-		if tutorial:
-			team_size = 2                      # a quiet castle: one ally, two enemies (one becomes the dummy)
 		var seed_value := int(Time.get_unix_time_from_system()) & 0x7fffffff if match_seed < 0 else match_seed
-		if moba_hero != "":
-			team_size = 5
+		team_size = 5
 		sim.setup(team_size, seed_value)
-		if moba_hero != "":
-			sim.setup_moba(moba_hero, seed_value)
-		if commander:
-			sim.setup_commander([deck if Cards.valid_deck(deck) else Cards.DEFAULT_DECK, Cards.ai_deck(seed_value)], [false, true])
+		sim.setup_moba(_hero(), seed_value)
 		ready_times["sim.setup"] = Time.get_ticks_msec() - t_sim
 		view = View.new()
 		view.low_fx = low_fx
@@ -285,24 +261,20 @@ func _start_steps() -> Array:
 	steps.append(_run_view_steps)
 	steps.append(func():
 		hud.sim = sim
-		hud.kill_feed_on = not tutorial               # 0.31.120: (the tutorial's lessons don't need a kill feed)
+		hud.kill_feed_on = true
 		hud.kill_feed = []
 		_accum = 0.0
 		_result_shown = false
-		if tutorial:
-			tut = Tutorial.new()
-			add_child(tut)                     # after the HUD: drawn on top of it
-			tut.begin(self)
-			_tut_t0 = int(Time.get_unix_time_from_system())
-			if analytics != null:
-				analytics.log_ev("tutorial_start", {})
-		elif analytics != null and not online:
+		if analytics != null and not online:
 			_an_match = Analytics.hex(4)
 			_an_class0 = class_of(sim.by_id.get(hud.player_id, {}))
-			analytics.log_ev("match_start", {"match":_an_match, "mode":"5v5" if moba_hero != "" else ("commander" if commander else "bots"), "class":_an_class0})
-		_lifts = 0
+			analytics.log_ev("match_start", {"match":_an_match, "mode":"5v5", "class":_an_class0})
 		_title_reset())
 	return steps
+
+func _hero() -> String:
+	# the hero of an offline match (a 5v5 against bots): the one picked, else the Knight
+	return moba_hero if moba_hero != "" else "knight"
 
 var _build_queue: Array = []           # steps still to run, one per frame (staged start)
 var _view_steps: Array = []
@@ -357,20 +329,11 @@ func buzz(ms: int, strength: float) -> void:
 
 func _count(e: Dictionary) -> void:
 	_haptic(e)
-	if str(e.get("k", "")) == "lift_join" and str(e.get("id", "")) == hud.player_id and sim != null \
-			and sim.by_id.has(hud.player_id) and int(e.get("team", -1)) == int(sim.by_id[hud.player_id].team):
-		_lifts += 1
-		_q_add("lifts", 1.0)
-	if str(e.get("id", "")) == hud.player_id:
-		match str(e.get("k", "")):
-			"repair":
-				_repaired += Sim.REPAIR_HP
-				_q_add("repaired", Sim.REPAIR_HP)
-			"multikill":
-				_best_multi = maxi(_best_multi, int(e.get("n", 0)))
-				if _q_cls != "":
-					var qe: Dictionary = _q_entry(_q_cls)
-					qe["best_multi"] = maxi(int(qe.get("best_multi", 0)), int(e.get("n", 0)))
+	if str(e.get("id", "")) == hud.player_id and str(e.get("k", "")) == "multikill":
+		_best_multi = maxi(_best_multi, int(e.get("n", 0)))
+		if _q_cls != "":
+			var qe: Dictionary = _q_entry(_q_cls)
+			qe["best_multi"] = maxi(int(qe.get("best_multi", 0)), int(e.get("n", 0)))
 
 func my_title() -> String:
 	# The title to wear online: the profile's, if it is one the game knows and the player owns.
@@ -383,7 +346,6 @@ func _title_reset() -> void:
 	_cls_time = {}
 	_kills_cls = {}
 	_kills_seen = 0
-	_repaired = 0.0
 	_best_multi = 0
 	_q = {}
 	_q_seen = {}
@@ -395,15 +357,14 @@ func _title_track(delta: float) -> void:
 	if me.is_empty() or sim.ended:
 		return
 	var cls := str(me.cls)
-	if me.state != "dead" and cls != "villager":
+	if me.state != "dead":
 		_cls_time[cls] = float(_cls_time.get(cls, 0.0)) + delta
 	var k := int(me.kills)
 	if k > _kills_seen:
-		if cls != "villager":
-			_kills_cls[cls] = int(_kills_cls.get(cls, 0)) + (k - _kills_seen)
+		_kills_cls[cls] = int(_kills_cls.get(cls, 0)) + (k - _kills_seen)
 		_kills_seen = k
 	# 0.31.97: quests -- time as the class worn, and whatever my unit's totals grew by, credited to it
-	_q_cls = "" if cls == "villager" else Eco.cosmetic_class(cls, bool(me.get("up", false)))
+	_q_cls = Eco.cosmetic_class(cls, bool(me.get("up", false)))
 	if _q_cls != "" and me.state != "dead":
 		var qe: Dictionary = _q_entry(_q_cls)
 		qe["t"] = float(qe.get("t", 0.0)) + delta
@@ -425,12 +386,11 @@ func title_summary() -> Dictionary:
 	var q := {}
 	for c in _q:
 		var e: Dictionary = _q[c]
-		q[c] = {"t": float(e.get("t", 0.0)), "kills": int(e.get("kills", 0.0)), "rescues": int(e.get("rescues", 0.0)),
-			"gates": int(float(e.get("gate_dmg", 0.0)) / 100.0), "gathered": int(e.get("gathered", 0.0)), "fed": int(e.get("fed", 0.0)),
-			"healed": int(e.get("healed", 0.0)), "repaired": int(e.get("repaired", 0.0)), "lifts": int(e.get("lifts", 0.0)),
+		q[c] = {"t": float(e.get("t", 0.0)), "kills": int(e.get("kills", 0.0)),
+			"gates": int(float(e.get("gate_dmg", 0.0)) / 100.0), "healed": int(e.get("healed", 0.0)),
 			"best_multi": int(e.get("best_multi", 0)), "towers": int(e.get("towers", 0.0)), "camps": int(e.get("camps", 0.0)),
 			"lh": int(e.get("lh", 0.0)), "epics": int(e.get("epics", 0.0))}
-	return {"cls_main": main, "kills_cls": _kills_cls.duplicate(), "repaired": _repaired, "best_multi": _best_multi, "q": q}
+	return {"cls_main": main, "kills_cls": _kills_cls.duplicate(), "best_multi": _best_multi, "q": q}
 
 func _q_entry(c: String) -> Dictionary:
 	if not _q.has(c):
@@ -438,7 +398,7 @@ func _q_entry(c: String) -> Dictionary:
 	return _q[c]
 
 func _q_add(stat: String, n: float) -> void:
-	# credit n of a stat to the class I'm wearing (nothing while I'm a villager)
+	# credit n of a stat to the class I'm wearing
 	if _q_cls == "":
 		return
 	var qe := _q_entry(_q_cls)
@@ -512,8 +472,6 @@ func _hello() -> Dictionary:
 	hi.merge(Analytics.hello_flags(profile))         # 0.31.118: "an_off" when usage statistics are off
 	if party_join != "":
 		hi["join"] = party_join                      # 0.31.120: into this friend's match (Friends > JOIN)
-	if war_bid != "":
-		hi["war"] = war_bid                          # 0.31.135: a battle on the war map
 	hi["ask_next"] = true                            # 0.31.122: the next match only after PLAY AGAIN (older servers ignore it)
 	return hi
 
@@ -561,6 +519,7 @@ func _build_online_match(msg: Dictionary) -> void:
 		hud.score_panel = null
 	sim = Sim.new()
 	sim.setup(int(msg.get("team_size", Net.TEAM_SIZE)), int(msg.get("seed", 1)), -1)
+	sim.setup_moba("", int(msg.get("seed", 1)))      # (0.31.169: the server's 5v5, its heroes drafted from the same seed)
 	var me_id := str(msg.get("you", ""))
 	hud.player_id = me_id
 	view = View.new()
@@ -582,7 +541,6 @@ func _build_online_match(msg: Dictionary) -> void:
 	net_match = int(msg.get("match", 0))
 	hud.rejoin_until = -1.0
 	_result_shown = false
-	_lifts = 0
 	_title_reset()
 	net_state = "playing"
 	diag.write("NET welcome match=%d you=%s players=%d" % [net_match, me_id, int(msg.get("players", 1))])
@@ -625,12 +583,8 @@ func _net_process(delta: float) -> void:
 		if str(_net_bye.get("why", "")) == "full" or ws.get_close_code() == Net.CLOSE_FULL:
 			_net_fail("Server is full")
 			return
-		if str(_net_bye.get("why", "")) == "done" or (str(_net_bye.get("why", "")) == "war_over" and sim != null):
+		if str(_net_bye.get("why", "")) == "done":
 			_net_exit()                                  # 0.31.122: (the bye and the close arrived together)
-			return
-		if str(_net_bye.get("why", "")).begins_with("war_"):
-			_net_fail({"war_side":"Only the two houses at war can join this battle", "war_gone":"That battle is over",
-				"war_over":"That battle is over", "war_full":"Your side of this battle is full", "war_twice":"You're in this battle already"}.get(str(_net_bye.why), "Can't join that battle"))
 			return
 		if sim != null and not sim.ended and _rj != "" and net_state == "playing" and _net_bye.is_empty() and ws.get_close_code() != 4006:
 			_begin_rejoin()                              # 0.31.120: the connection dropped -- try to get back in
@@ -695,8 +649,6 @@ func _net_process(delta: float) -> void:
 				lobby_msgs += 1
 				if lobby_msgs == 1:
 					diag.write("NET lobby left=%.1f names=%d online=%d running=%s" % [float(msg.get("left", 0)), (msg.get("names", []) as Array).size(), int(msg.get("online", 0)), str(msg.get("running", false))])
-				if msg.get("war", null) is Dictionary:
-					war_info = msg.war                        # 0.31.135: the battle this lobby is for
 				if sim == null and is_instance_valid(lobby):
 					lobby.update(msg)
 			"pn":                                             # 0.31.86: the live players' names, by unit
@@ -714,9 +666,6 @@ func _net_process(delta: float) -> void:
 					view.player_titles = net_titles
 					view.player_tags = net_tags
 					view.set_unit_looks(net_looks)
-			"war":                                            # 0.31.135: what the battle did for my clan
-				war_result = msg
-				hud.show_war(msg)
 			"qc":                                             # 0.31.111: a quick chat line from a player of my side (or anyone's gg)
 				var qu := str(msg.get("u", ""))
 				if qu != hud.player_id and sim != null:      # (mine showed when I said it)
@@ -743,13 +692,8 @@ func _net_process(delta: float) -> void:
 				if _net_version_refused(-1, ""):
 					return
 				var why := str(msg.get("why", ""))
-				if why == "done" or why == "war_over" and sim != null:
+				if why == "done":
 					_net_exit()                             # 0.31.122: left on the results a long while -- back to Home
-					return
-				if why.begins_with("war_"):
-					# 0.31.135: a battle this player can't join (another house's, over, or its side full)
-					_net_fail({"war_side":"Only the two houses at war can join this battle", "war_gone":"That battle is over",
-						"war_over":"That battle is over", "war_full":"Your side of this battle is full", "war_twice":"You're in this battle already"}.get(why, "Can't join that battle"))
 					return
 				if why == "idle":
 					exit_note = "idle"
@@ -782,7 +726,7 @@ func _net_process(delta: float) -> void:
 	if not me_p.is_empty() and not _me_bot and sim.client_drivable(me_p):
 		sim.predict_step(me_p, mv, delta)
 		# Held ATTACK: the server swings every time it can; start the same swings locally.
-		if hold and me_p.cls != "priest" and sim.can_act(me_p) and not me_p.carrying:
+		if hold and me_p.cls != "priest" and sim.can_act(me_p):
 			sim._start_attack(me_p, "attack")
 		sim.drain_events()                         # (prediction events are shown in _act; nothing else should pile up)
 	if _send_clock >= 0.05 or (mv - _sent_move).length() > 0.25 or hold != _sent_hold or bhold != _sent_bhold:
@@ -873,34 +817,33 @@ func _on_action(kind: String) -> void:
 		"attack": _act("attack")
 		"ability":
 			var me_q: Dictionary = sim.by_id.get(hud.player_id, {}) if sim != null else {}
-			if sim != null and sim.moba != null and not me_q.is_empty() and me_q.has("kq") and not online:
+			if sim != null and not me_q.is_empty() and me_q.has("kq") and not online:
 				# 0.31.168: a new hero's Q is a kit spell -- say why when it can't go (CHAIN, ROOTS need someone near)
 				if not sim.act(hud.player_id, "ability") and float(me_q.get("cd_ability", 0.0)) <= 0.0 and sim.can_act(me_q):
 					hud.toast("No enemy in reach", Color("#ffcf7a"))
 			else:
 				_act("ability")
 		"dodge": _act("dodge")
-		"action": _act("interact")
 		"pick0", "pick1", "pick2":                       # 0.31.155 5V5: a level-up choice
 			if sim != null and sim.act(hud.player_id, "pick", int(kind.right(1))):
 				if audio != null and audio.has_method("play"):
 					audio.play("equip")
 		"ult":                                           # 0.31.157 5V5: the ultimate
-			if sim != null and sim.moba != null and not sim.act(hud.player_id, "ult"):
+			if sim != null and not sim.act(hud.player_id, "ult"):
 				var me_u: Dictionary = sim.by_id.get(hud.player_id, {})
 				if not me_u.is_empty() and sim.moba.ult_rank(me_u) == 0:
 					hud.toast("Your ultimate comes at level %d" % sim.moba.ULT_LEVEL, Color("#ffcf7a"))
 				elif not me_u.is_empty() and float(me_u.get("ult_cd", 0.0)) <= 0.0 and sim.can_act(me_u):
 					hud.toast("No enemy in reach", Color("#ffcf7a"))         # (EXECUTE, FLURRY: they need someone near)
 		"w", "e":                                        # 0.31.167 5V5: W and E
-			if sim != null and sim.moba != null and not sim.act(hud.player_id, "spell", kind):
+			if sim != null and not sim.act(hud.player_id, "spell", kind):
 				var me_s: Dictionary = sim.by_id.get(hud.player_id, {})
 				if not me_s.is_empty() and not sim.moba.kits.unlocked(me_s, kind):
 					hud.toast("%s comes at level %d" % [kind.to_upper(), int(sim.moba.kits.UNLOCK[kind])], Color("#ffcf7a"))
 				elif not me_s.is_empty() and float(me_s.get("cd_" + kind, 0.0)) <= 0.0 and sim.can_act(me_s):
 					hud.toast("No enemy hero in reach", Color("#ffcf7a"))       # (SHADOW STEP, MARK, CURSE need one)
 		"ward":                                          # 0.31.158 5V5: a ward at your feet
-			if sim != null and sim.moba != null:
+			if sim != null:
 				if sim.act(hud.player_id, "ward"):
 					if audio != null and audio.has_method("play"):
 						audio.play("equip")
@@ -912,29 +855,6 @@ func _on_action(kind: String) -> void:
 					kind.get_slice(":", 1) if kind.begins_with("shop_buy:") else int(kind.get_slice(":", 1)))
 				if audio != null and audio.has_method("play"):
 					audio.play("purchase" if ok and kind.begins_with("shop_buy:") else ("coin" if ok else "error"))
-
-var cards_played := 0                 # (tests)
-
-func _play_card(slot: int) -> void:
-	# 0.31.153 COMMANDER: a card from the hand (siege_hud) -- its squad out of our castle, or why not
-	if sim == null or not sim.commander or sim.ended or not sim.by_id.has(hud.player_id):
-		return
-	var t := int(sim.by_id[hud.player_id].team)
-	var why: String = sim.cmd_why(t, slot)
-	if why == "" and sim.play_card(t, slot):
-		cards_played += 1
-		if audio != null and audio.has_method("play"):
-			audio.play("flip")
-		buzz(25, 0.4)
-		return
-	hud.card_refused()
-	if audio != null and audio.has_method("play"):
-		audio.play("error")
-	if why == "points":
-		var cd: Dictionary = Cards.card(str(sim.cmd[t].hand[slot]))
-		hud.toast("%s needs %d command points" % [str(cd.get("name", "")), int(cd.get("cost", 0))], Color("#d6a2ff"))
-	elif why == "army":
-		hud.toast("Your whole army is out -- the fallen come back to the barracks", Color("#ff9a7a"))
 
 # ---- Warm-up cover (Round 16, Kevin: the 3D world showed black for a few seconds at match start: the
 # phone compiling the scene's shader pipelines). A FATEBOUND card covers the first moments while the
@@ -1015,8 +935,6 @@ func _warm_begin() -> void:
 		for q in [Keep.C, Keep.FOUNTAIN, Keep.gate_c(1) + Vector2(0.0, -6.0)]:      # (0.31.165: the keeps)
 			spots.append(Sim._m(t, q))
 	spots.append(Vector2.ZERO)
-	for op in sim.outposts:
-		spots.append(op.p)
 	_warm = {"cover": _cover, "t": 0.0, "last": -1, "still": 0.0, "spots": spots, "i": 0, "fade": -1.0}
 
 func _warm_step(delta: float) -> bool:
@@ -1097,7 +1015,7 @@ func _process(delta: float) -> void:
 			sim.act(hud.player_id, "block")
 		if hud.attack_held():
 			var me: Dictionary = sim.by_id[hud.player_id]
-			if sim.can_act(me) and not me.carrying:
+			if sim.can_act(me):
 				sim.act(hud.player_id, "attack")
 		_accum += minf(delta, 0.1)
 		diag.mark("sim.step")
@@ -1124,22 +1042,19 @@ func _process(delta: float) -> void:
 		_result_shown = true
 		diag.write("MATCH END winner=%d reason=%s score=%s" % [sim.winner, sim.end_reason, str(sim.score)])
 		var me: Dictionary = (sim.by_id[hud.player_id] as Dictionary).duplicate()
-		me["lifts"] = _lifts
 		me.merge(title_summary(), true)
 		var won: bool = sim.winner == int(me.team)
 		var draw: bool = sim.winner == -1
 		match_result = {}
-		if profile != null and not tutorial and not commander:      # a tutorial is not a match: no rewards/challenges (nor the
-			# COMMANDER test, 0.31.153; 0.31.164: the 5v5 is the game -- Kevin: "5v5 only" -- and pays like a match)
+		if profile != null:
 			match_result = profile.apply_match(me, won, draw, online)
 			rewards = match_result.rewards
 		diag.write("REWARDS %s" % str(match_result.get("rewards", {}).get("gold", 0)))
 		hud.player_name = player_name
 		hud.show_result(match_result)
-		if not tutorial:
-			_result_sounds(won, draw)
-		if analytics != null and not online and not tutorial and _an_match != "":
-			analytics.log_ev("match_finish", {"match":_an_match, "mode":"5v5" if moba_hero != "" else ("commander" if commander else "bots"), "dur_s":int(sim.time),
+		_result_sounds(won, draw)
+		if analytics != null and not online and _an_match != "":
+			analytics.log_ev("match_finish", {"match":_an_match, "mode":"5v5", "dur_s":int(sim.time),
 				"result":"win" if won else ("draw" if draw else "loss"), "team_n":1, "class":class_of(me), "class0":_an_class0})
 
 func _result_sounds(won: bool, draw: bool) -> void:
@@ -1160,28 +1075,15 @@ func _late_cue(cue: String) -> void:
 	if audio != null and audio.has_method("play"):
 		audio.play(cue)
 
-func finish_tutorial() -> void:
-	# The Herald's last line: mark it done, pay the recruit, back to the menu.
-	if profile != null:
-		profile.finish_tutorial()                  # (0.31.108: the pay, once -- the server pays it too)
-	_tut_done = true
-	if analytics != null:
-		analytics.log_ev("tutorial_complete", {"dur_s":int(Time.get_unix_time_from_system()) - _tut_t0})
-	exited.emit()
-
 static func class_of(u: Dictionary) -> String:
 	# 0.31.118: the class a unit plays, its upgrade marked ("knight", "knight+") -- as the server writes it
 	return str(u.get("cls", "")) + ("+" if bool(u.get("up", false)) else "")
 
 func note_leaving() -> void:
-	# 0.31.118: the app is taking us down -- a VS BOTS match left before its end, or the tutorial before its last line
+	# 0.31.118: the app is taking us down -- a VS BOTS match left before its end
 	if analytics == null:
 		return
-	if tutorial:
-		if not _tut_done and tut != null:
-			analytics.log_ev("tutorial_skip", {"dur_s":int(Time.get_unix_time_from_system()) - _tut_t0, "step":int(tut.get("step")),
-				"id":str(Tutorial.STEPS[int(tut.get("step"))].id)})
-	elif not online and _an_match != "" and sim != null and not sim.ended:
+	if not online and _an_match != "" and sim != null and not sim.ended:
 		analytics.log_ev("match_quit", {"match":_an_match, "mode":"bots", "quit_at_s":int(sim.time),
 			"class":class_of(sim.by_id.get(hud.player_id, {})), "class0":_an_class0})
 
@@ -1310,7 +1212,7 @@ func _event_sound(e: Dictionary) -> void:
 			var by: Dictionary = sim.by_id.get(str(e.get("by", "")), {})
 			var hurt_me := mine or str(e.get("by", "")) == str(hud.player_id)
 			if by.is_empty() or by.cls == "priest":
-				return                                       # catapult stones have their own crash; a drain is silent
+				return                                       # a drain is silent
 			if by.cls == "ranger":
 				_cue("tm_bow_hit", 3, at, HEAR_R, hurt_me)
 			elif by.cls == "mage":
@@ -1323,39 +1225,15 @@ func _event_sound(e: Dictionary) -> void:
 			_cue("tm_firespray", 2, _unit_pos(e.get("id", "")), HEAR_R, mine)
 		"whirl":
 			_cue("tm_sword_swing", 3, _unit_pos(e.get("id", "")), HEAR_R, mine)
-		"gather":
-			_cue("tm_chop" if str(e.get("kind", "")) == "wood" else "tm_mine", 4 if str(e.get("kind", "")) == "wood" else 5,
-				_unit_pos(e.get("id", "")), 18.0, mine)
-		"repair":
-			_cue("tm_mine", 5, _unit_pos(e.get("id", "")), 18.0, mine)
-		"deliver":
-			_cue("tm_chest_close", 2, _unit_pos(e.get("id", "")), 16.0, mine)
-		"upgrade", "hat_upgrade":
-			_cue("tm_chest_open", 2, _unit_pos(e.get("id", "")), 16.0, mine or str(e.get("id", "")) == "")
-		"hat_take", "hat_pick":
-			_cue("tm_unsheath", 2, _unit_pos(e.get("id", "")), 14.0, mine)
-		"hat_drop":
-			_cue("tm_sheath", 2, e.get("pos", Vector2.INF), 14.0)
 		"gate_hit":
 			_cue("tm_gate_hit", 2, _gate_pos(e.get("gate", "")), HEAR_R + 6.0)
-		"bomb_boom":                                    # 0.31.58 (Kevin): a huge bang that rolls off into a long rumble
-			_cue("tm_bomb_blast", 1, e.pos, 95.0, false, 2.6)
-		"bomb_throw":
-			_cue("tm_firespray", 2, e.from, HEAR_R, false, 0.8)      # the fuse catching
-		"bomb_pick", "bomb_spawn":
-			_cue("tm_gate_close", 1, e.get("pos", _listener()) if e.k == "bomb_spawn" else _unit_pos(str(e.id)), 14.0, false, 0.5)
 		"gate_broken":
 			_cue("tm_crumble", 2, _gate_pos(e.get("gate", "")), 48.0)
+			_announce_gate(e)
 		"gate_rebuilt":
 			_cue("tm_gate_close", 1, _gate_pos(e.get("gate", "")), 18.0)
-		"gate_close":                                        # allies pass through every few seconds: keep it soft
-			_cue("tm_gate_close", 1, _gate_pos(e.get("gate", "")), 12.0, false, 0.55)
 		"gate_open":
 			_cue("tm_gate_open", 1, _gate_pos(e.get("gate", "")), 12.0, false, 0.55)
-		"jail_reset":
-			_cue("tm_unlock", 1, _gate_pos(e.get("gate", "")), 18.0)
-		"pickup", "drop", "rescue", "gate_broken", "outpost_captured", "outpost_lost":
-			_announce_event(e)
 		"multikill":                                    # 0.31.29: the Herald calls your multi-kills
 			if str(e.get("id", "")) == hud.player_id and sim.by_id.has(hud.player_id):
 				# (0.31.37: kept on my unit online too, where the sim's own count lives on the server -- a chest rule)
@@ -1366,7 +1244,7 @@ func _event_sound(e: Dictionary) -> void:
 			_cue("tm_firespray", 2, _unit_pos(str(e.id)), 14.0, false, 0.35)
 		"meteor_warn":
 			_cue("tm_fireball", 3, e.pos, 40.0, false, 0.9)
-		"meteor_hit":                                   # 0.31.58 (Kevin): quieter, less dramatic than the bomb
+		"meteor_hit":                                   # 0.31.58 (Kevin): quieter, less dramatic than Siege's bomb
 			_cue("tm_fireball", 3, e.pos, 45.0, false, 0.55)
 			_cue("tm_crumble", 2, e.pos, 32.0, false, 0.3)
 		"pierce_hit":
@@ -1412,43 +1290,15 @@ func _event_sound(e: Dictionary) -> void:
 		"gold":
 			if mine:
 				_cue("coin", 1, Vector2.INF, 0.0, true, 0.45)
-		"launch_count":                                 # 0.31.28: the launcher's lever
-			_cue("tm_gate_close", 1, e.pos, 30.0, false, 0.8)
-		"launch":
-			_cue("tm_rock_throw", 2, e.pos, 60.0, false, 1.5)
-			_cue("tm_crumble", 2, e.pos, 40.0, false, 0.5)
-		"land":
-			_cue("tm_rock_hit", 2, e.pos, 30.0, false, 0.9)
-		"catapult_fire":
-			_cue("tm_rock_throw", 2, e.get("from", Vector2.INF), 32.0)
-		"catapult_hit":
-			_cue("tm_rock_hit", 2, e.get("pos", Vector2.INF), 36.0)
 		"boom":
 			_cue("tm_spell_hit", 3, e.get("pos", Vector2.INF), HEAR_R)
-		"ladder_up", "tower_up":
-			_cue("tm_land_wood", 1, _unit_pos(e.get("id", "")), 16.0, mine)
-		"tower_down":
-			_cue("tm_land_dirt", 1, _unit_pos(e.get("id", "")), 16.0, mine)
 		"dodge":
 			_cue("tm_jump_dirt", 1, _unit_pos(e.get("id", "")), 14.0, mine)
-		"fish_cast":
-			_cue("tm_splash", 1, e.get("pos", Vector2.INF), 16.0, mine)
-		"fish_caught":
-			_cue("tm_water_jump", 1, e.get("pos", Vector2.INF), 16.0, mine)
-		"node_fell":                                          # 0.31.0: a tree comes down / a boulder breaks
-			if str(e.get("kind", "")) == "wood":
-				_cue("tm_land_wood", 1, e.get("pos", Vector2.INF), 26.0, false, 1.0)
-			else:
-				_cue("tm_crumble", 2, e.get("pos", Vector2.INF), 26.0)
 		"resurrect":
 			_cue("tm_revive", 1, e.get("pos", Vector2.INF), HEAR_R, str(e.get("by", "")) == str(hud.player_id) or mine)
-		"item_pickup":
-			_cue("tm_land_wood" if str(e.get("kind", "")) == "log" else "tm_mine", 1 if str(e.get("kind", "")) == "log" else 5,
-				_unit_pos(e.get("id", "")), 14.0, mine, 0.8)
-
 func _footsteps(delta: float) -> void:
-	# Your own footsteps, by what you're walking on: water when wading, wood on bridges, tower decks and ladders,
-	# stone in the castles and on the brick paths, earth elsewhere. Knights (and Crusaders) clink in mail.
+	# Your own footsteps, by what you're walking on: water when wading, stone in the keeps and on the fords, earth
+	# elsewhere. Knights (and Crusaders) clink in mail.
 	if audio == null or not audio.has_method("play"):
 		return
 	var me: Dictionary = sim.by_id.get(str(hud.player_id), {})
@@ -1469,8 +1319,6 @@ func _footsteps(delta: float) -> void:
 	var surf := "dirt"
 	if Sim.water_depth(p) > 0.05:                # (0.31.165: the Rift's river is shallow -- 0.15 m at its deepest)
 		surf = "water"
-	elif int(me.get("tower", -1)) >= 0 or Land.on_bridge(p, 0.2):
-		surf = "wood"
 	elif Land.keep_dist(p) < Keep.R + 0.5 or Land.on_ford(p):
 		surf = "stone"                        # (0.31.126: the paths are dirt now, so only the keeps and the fords sound of stone)
 	var chain := "_chain" if me.cls == "knight" else ""
@@ -1556,15 +1404,12 @@ func _herald_say(id: String) -> void:
 
 # ---------- the Herald's match announcements (0.31.30, Kevin: "only important ones") ----------
 # assets/vo/herald/an_<key>_<n>.ogg (n variants, picked at random). From your team's side. Priorities: 3 cuts in on
-# anything (rescues, match point, the end, ten seconds); 2 waits for the line playing to finish; lower-priority calls
-# that can't play within 5 s are dropped. Each key has a cooldown (gates break often). Multi-kill calls (priority 2)
-# share the same voice.
+# anything (the end, the last minute, ten seconds); 2 waits for the line playing to finish; lower-priority calls that
+# can't play within 5 s are dropped. Each key has a cooldown (gates break often). Multi-kill calls (priority 2) share
+# the same voice. (0.31.169: Siege's King, jail and outpost calls went with it; a gate of a keep broken is called.)
 const ANNOUNCE := {
-	"start":[2, 0.0], "our_pickup":[2, 25.0], "their_pickup":[2, 25.0], "our_drop":[2, 20.0],
-	"our_rescue":[3, 0.0], "their_rescue":[3, 0.0], "our_gate":[2, 45.0], "their_gate":[2, 45.0],
-	"their_jail":[2, 45.0], "our_jail":[2, 45.0], "match_point_us":[3, 0.0], "match_point_them":[3, 0.0],
-	"last_minute":[3, 0.0], "ten_seconds":[3, 0.0], "victory":[3, 0.0], "defeat":[3, 0.0], "draw":[3, 0.0],
-	"our_outpost":[2, 20.0], "their_outpost":[2, 20.0]}          # 0.31.31: towers taken
+	"start":[2, 0.0], "our_gate":[2, 45.0], "their_gate":[2, 45.0],
+	"last_minute":[3, 0.0], "ten_seconds":[3, 0.0], "victory":[3, 0.0], "defeat":[3, 0.0], "draw":[3, 0.0]}
 var _ann_last := {}
 var _ann_queue: Array = []                  # [key, priority, wanted_at]
 var _ann_flags := {}
@@ -1592,7 +1437,7 @@ func _ann_file(key: String) -> String:
 
 func _announce_tick() -> void:
 	# the queue, and the clock-driven calls (start, last minute, ten seconds, the end)
-	if sim == null or tutorial:
+	if sim == null:
 		return
 	var now := _ann_clock
 	if not _ann_queue.is_empty() and now >= _herald_until:
@@ -1615,47 +1460,13 @@ func _announce_tick() -> void:
 		var team: int = int(me.get("team", 0))
 		_announce("draw" if int(sim.winner) < 0 else ("victory" if int(sim.winner) == team else "defeat"))
 
-func _announce_event(e: Dictionary) -> void:
-	if sim == null or tutorial:
+func _announce_gate(e: Dictionary) -> void:
+	# a gate of a keep broken: "our gate" / "their gate", from your side
+	var me: Dictionary = sim.by_id.get(hud.player_id, {}) if sim != null else {}
+	var gi := int(e.get("gate", -1))
+	if me.is_empty() or gi < 0 or gi >= sim.gates.size():
 		return
-	var me: Dictionary = sim.by_id.get(hud.player_id, {})
-	if me.is_empty():
-		return
-	var mine: int = int(me.team)
-	match str(e.k):
-		"pickup":
-			if int(e.team) == mine and int(e.get("carry_team", -1)) == mine:
-				_announce("our_pickup")
-			elif int(e.team) != mine and int(e.get("carry_team", -1)) != mine:
-				_announce("their_pickup")
-		"drop":
-			var carrier: Dictionary = sim.by_id.get(str(e.get("id", "")), {})
-			if int(e.team) == mine and not carrier.is_empty() and int(carrier.team) == mine:
-				_announce("our_drop")
-		"rescue":
-			if int(e.team) == mine:
-				_announce("our_rescue")
-			else:
-				_announce("their_rescue")
-			if not sim.ended:
-				if int(sim.score[mine]) == Sim.WIN_RESCUES - 1:
-					_ann_queue.append(["match_point_us", 2, _ann_clock])
-				elif int(sim.score[1 - mine]) == Sim.WIN_RESCUES - 1:
-					_ann_queue.append(["match_point_them", 2, _ann_clock])
-		"outpost_captured":
-			_announce("our_outpost" if int(e.team) == mine else "their_outpost")
-		"outpost_lost":
-			if int(e.team) == mine:
-				_announce("their_outpost")             # one of ours fell to them
-		"gate_broken":
-			var g: Dictionary = sim.gates[int(e.gate)] if int(e.gate) < sim.gates.size() else {}
-			if g.is_empty():
-				return
-			var jail: bool = str(g.get("kind", "")) == "jail"
-			if int(g.team) == mine:
-				_announce("our_jail" if jail else "our_gate")
-			else:
-				_announce("their_jail" if jail else "their_gate")
+	_announce("our_gate" if int(sim.gates[gi].team) == int(me.team) else "their_gate")
 
 
 # ---------- quick chat (0.31.111, Kevin: "add the quick chat pings") ----------
@@ -1673,10 +1484,6 @@ func _on_quick_chat(i: int) -> void:
 	_ping_sound()
 	if online:
 		_net_send({"t":"qc", "i":i})
-	elif bool(Net.QUICK_CHAT[i].get("call", false)) and not sim.ended:
-		var n: int = sim.call_bots(hud.player_id)           # VS BOTS: the nearest bots of my side come
-		if n > 0:
-			hud.toast("%d all%s on the way" % [n, "y" if n == 1 else "ies"], Color("#9dff8a"))
 
 func _ping_sound() -> void:
 	if audio != null and audio.has_method("play"):

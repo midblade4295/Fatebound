@@ -1,10 +1,13 @@
 extends SceneTree
-# Fatebound Siege dedicated server (headless Godot). Runs the same SiegeSim as offline play,
-# authoritative, 16v16 with bots in every slot no human holds.
+# Fatebound's dedicated server (headless Godot): the accounts, purchases, chat, friends, parties, clans, the
+# leaderboard, usage statistics -- and the match rooms, each running the same sim as offline play, authoritative, with
+# bots in every seat no human holds. 0.31.169: Siege's code went (16v16 Siege matches, Crown War -- the war map, its
+# battles and rewards, server/world.gd); a room's match is the 5v5 now (sim.setup_moba), its seats the ten heroes.
+# Match rooms are reached only by an app that plays online, and the apps from 0.31.164 don't until the online 5v5.
 #
 #   godot --headless --path <project> -s res://server/siege_server.gd
 # Env: SIEGE_HOST (default 127.0.0.1 — keep it on loopback behind Caddy), SIEGE_PORT (8082),
-#      SIEGE_MAX_PLAYERS (32: humans in one match room), SIEGE_MAX_ROOMS (4: matches at once, 0.31.119),
+#      SIEGE_MAX_PLAYERS (10: humans in one match room), SIEGE_MAX_ROOMS (6: matches at once, 0.31.119),
 #      SIEGE_LOG (1 = log joins/leaves/match results to stdout),
 #      SIEGE_LOBBY (seconds of the join countdown, default 20),
 #      SIEGE_MIN_BUILD (oldest app build allowed online, e.g. 0.31.84; "off"/empty = no minimum). Without it the
@@ -53,20 +56,11 @@ extends SceneTree
 # {"t":"so", "k":"hi", "acct", "key"} is a phone's social side (server/social.gd: chat, friends, parties) and stays
 # open without a hello (it never counts as a player). A hello from an account in a party is seated on its party's team.
 # {"t":"qc", "i"} in a match: a quick chat line (Net.QUICK_CHAT) to the player's side (or everyone), at most one every
-# Net.QC_GAP s; "Need help!" / "Follow me!" call the nearest bots (sim.call_bots). "ver"/"status" answer "social":1.
+# Net.QC_GAP s. "ver"/"status" answer "social":1.
 # 0.31.134 (Crown War step 1): clans (server/clans.gd) on the same social socket; "pn" carries "ct":{unit id: clan tag}
 # and the lobby "ct" beside its names, so the tag shows before a player's name; "ver"/"status" answer "clans":1.
-# 0.31.135 (Crown War step 2): the war map (server/world.gd, on the social socket). A battle for a territory gets a room
-# of its own (_war_room): never offered to ordinary matchmaking, waiting WAR_WAIT s for its first player, a WAR_LOBBY s
-# countdown for the clan to gather, one match and no next one. A hello with "war": <battle id> is seated by house --
-# the attackers' house on team 1, the holders' house on team 0 (world.side_for); anyone else is refused (bye "war_side",
-# "war_gone", "war_full", "war_over", "war_twice": that account has a seat there already). Starting a battle spent the
-# starter's attempt; another attacker of the attacking clan spends one when seated (world.seated). At the end
-# world.battle_over gets the attackers' crowns (a defender's gate broken -- not the jail door --, a rescue, the win)
-# and who of them is still there; each player gets {"t":"war", ...} with what the battle did. PLAY AGAIN after a
-# battle: bye "war_over"; everyone on its results is let go after WAR_RESULTS_KEEP s, so the room closes. Battles
-# take any free room (0.31.151; they kept the last one for matchmaking until then). Tests: SIEGE_WAR_LOBBY, SIEGE_WAR_WAIT, SIEGE_TEST_SCORE ("blue:red", set when
-# SIEGE_TEST_MATCH_S ends a match).
+# (0.31.135-0.31.168: Crown War's battles had rooms of their own here -- gone with Crown War in 0.31.169.) Tests:
+# SIEGE_TEST_SCORE ("blue:red", set when SIEGE_TEST_MATCH_S ends a match).
 #
 # 0.31.118 (Kevin's spec, ANALYTICS_SPEC_FOR_CLAUDE.md -- self-hosted analytics, no SDK, no third party): a socket whose
 # first message is {"t":"an", "acct", "key", "ev":[...]} hands over a batch of the phone's usage events
@@ -79,7 +73,7 @@ extends SceneTree
 #
 # 0.31.119 (Kevin: "Do all" -- more than one match at a time): the server runs ROOMS, each its own match, lobby
 # countdown and results screen, exactly as the one match ran before. SIEGE_MAX_PLAYERS is now the humans in ONE room
-# (32 = 16v16, as before); SIEGE_MAX_ROOMS (default 4) how many rooms may run at once. A hello goes to its party's room
+# (32 = 16v16 then; 10 for the 5v5 since 0.31.169); SIEGE_MAX_ROOMS (default 4) how many rooms may run at once. A hello goes to its party's room
 # when it has space, else the busiest room with space (players together rather than spread thin), else a new room;
 # only when every room is full is it "full". A room with nobody in it for IDLE_STOP s closes. Match ids are unique
 # across rooms ("match" in the welcome). "status" counts every room (+ "rooms"); the lobby message's "in_match" and
@@ -116,33 +110,28 @@ const EcoAccounts = preload("res://server/eco_accounts.gd")
 const MatchLedger = preload("res://server/match_ledger.gd")
 const Social = preload("res://server/social.gd")
 const Clans = preload("res://server/clans.gd")          # 0.31.134: Crown War step 1
-const World = preload("res://server/world.gd")          # 0.31.135: Crown War step 2
-const Map = preload("res://scripts/meta/war_map.gd")
 const Analytics = preload("res://server/analytics.gd")
 const Leaderboard = preload("res://server/leaderboard.gd")
 const Referrals = preload("res://server/referrals.gd")
 const DiagReports = preload("res://server/diag_reports.gd")
 
 const RESTART_AFTER := 15.0          # seconds of results screen before the next match
-const WAR_RESULTS_KEEP := 180.0      # 0.31.135: ... in a battle's room (there's no next match there)
 const RESULTS_KEEP := 600.0          # 0.31.122: a player who stays on the results (PLAY AGAIN not pressed) is let go after this
 const IDLE_STOP := 30.0              # no players for this long -> stop simulating (and the room closes)
 const LOBBY_TIME := 20.0             # the join countdown (0.31.82)
 const HELLO_TIMEOUT := 10.0
 const IAP_TIMEOUT := 40.0              # a purchase check may take a token request and an API call
 const REFUSE_CLOSE_DELAY := 0.25     # s between a "bye"/"ver" reply and closing the socket
-const SERVER_BUILD := "0.31.168"      # this server's game version; the probe says it by default (identifies as current)
+const SERVER_BUILD := "0.31.169"      # this server's game version; the probe says it by default (identifies as current)
 const MIN_BUILD_FILE := "/etc/fatebound-siege/min_build"
 const MIN_BUILD_RELOAD := 10.0       # s between re-reads of the min-build file
 const UPDATE_MSG := "A new version of Fatebound is out. Update now on Google Play to keep playing online."
 const MAX_MSGS_PER_SEC := 90         # per client; beyond this, messages are dropped
-const MAX_ROOMS := 6                 # 0.31.119: matches at once (SIEGE_MAX_ROOMS). 0.31.151: 6 (was 4) -- every match is a
-                                     # battle on the war map now; a full room is ~9% of a CPU core and ~350 kB/s out
+const MAX_ROOMS := 6                 # 0.31.119: matches at once (SIEGE_MAX_ROOMS). 0.31.151: 6 (was 4) -- a full Siege room
+                                     # was ~9% of a CPU core and ~350 kB/s out
 const IDLE_BOT := 45.0               # 0.31.119: s without input before a bot plays for them (SIEGE_IDLE_BOT)
 const IDLE_KICK := 180.0             # ...and before they're removed (SIEGE_IDLE_KICK)
 const CLOSE_IDLE := 4006
-const WAR_LOBBY := 30.0              # 0.31.135: s a battle's room counts down for the clan to gather (SIEGE_WAR_LOBBY)
-const WAR_WAIT := 90.0               # 0.31.135: s a battle's room waits for its first player (SIEGE_WAR_WAIT)
 const REJOIN_HOLD := 60.0            # 0.31.120: s a dropped player's seat waits for them
 const SILENT_DROP := 8.0             # 0.31.120: a seated phone that has sent nothing for this long is gone (its seat is held)
 const LOAD_GRACE := 20.0             # s a phone may take to build the match before its idle time counts (until its first input)
@@ -164,10 +153,6 @@ class Room:
 	var names_dirty := false          # a seat changed: send the players' names (0.31.86)
 	var paid_match := -1              # the match whose results went to the accounts
 	var held := {}                    # 0.31.120: rejoin token -> a dropped player's seat ({"c": their client, "until", "drop_at"})
-	var war := {}                     # 0.31.135: a battle's room: {"bid", "tid", "ah", "dh", "att_team", "def_team"} ({} = matchmaking)
-	var war_made := 0.0
-	var war_gate := false             # the attackers broke one of the defenders' gates (a crown)
-	var war_done := false
 
 var tcp := TCPServer.new()
 var clients := {}                    # cid -> {ws, unit, name, hello, room, move, hold, joined_at, msgs, msg_clock}
@@ -178,7 +163,7 @@ var match_counter := 0               # match ids, unique across rooms
 var max_rooms := MAX_ROOMS
 var host := "127.0.0.1"
 var port := Net.DEFAULT_PORT
-var max_players := 32                # humans in one room
+var max_players := Net.TEAM_SIZE * 2   # humans in one room (0.31.169: the 5v5's ten heroes; 32 for Siege's 16 a side)
 var log_on := true
 var lobby_time := LOBBY_TIME
 var idle_stop := IDLE_STOP           # (tests: SIEGE_IDLE_STOP)
@@ -195,9 +180,6 @@ var analytics = null                 # 0.31.118: usage statistics (server/analyt
 var leaderboard = null               # 0.31.119: the week's best players (server/leaderboard.gd)
 var referrals = null                 # 0.31.120: friend codes entered by new players (server/referrals.gd)
 var diag_reports = null              # 0.31.120: SEND TO DEVELOPER (server/diag_reports.gd)
-var world = null                     # 0.31.135: the war map (server/world.gd)
-var war_lobby := WAR_LOBBY
-var war_wait := WAR_WAIT
 var test_score: Array = []           # tests only (SIEGE_TEST_SCORE): the score a SIEGE_TEST_MATCH_S match ends with
 var boot_time := int(Time.get_unix_time_from_system())   # (with the match id: a match's id across restarts)
 var test_match_s := 0.0              # tests only (SIEGE_TEST_MATCH_S): a match ends after this many seconds
@@ -212,7 +194,7 @@ func _init() -> void:
 	if OS.has_environment("SIEGE_PORT"):
 		port = int(OS.get_environment("SIEGE_PORT"))
 	if OS.has_environment("SIEGE_MAX_PLAYERS"):
-		max_players = clampi(int(OS.get_environment("SIEGE_MAX_PLAYERS")), 1, 32)
+		max_players = clampi(int(OS.get_environment("SIEGE_MAX_PLAYERS")), 1, Net.TEAM_SIZE * 2)
 	if OS.has_environment("SIEGE_MAX_ROOMS"):
 		max_rooms = clampi(int(OS.get_environment("SIEGE_MAX_ROOMS")), 1, 64)
 	log_on = OS.get_environment("SIEGE_LOG") != "0"
@@ -236,10 +218,6 @@ func _init() -> void:
 		var sc := OS.get_environment("SIEGE_TEST_SCORE").split(":")
 		if sc.size() == 2:
 			test_score = [int(sc[0]), int(sc[1])]
-	if OS.has_environment("SIEGE_WAR_LOBBY"):
-		war_lobby = clampf(float(OS.get_environment("SIEGE_WAR_LOBBY")), 0.0, 300.0)
-	if OS.has_environment("SIEGE_WAR_WAIT"):
-		war_wait = clampf(float(OS.get_environment("SIEGE_WAR_WAIT")), 1.0, 3600.0)
 	if OS.has_environment("SIEGE_MIN_BUILD"):
 		min_build_env = true
 		_set_min_build(OS.get_environment("SIEGE_MIN_BUILD"), "SIEGE_MIN_BUILD")
@@ -275,9 +253,6 @@ func _init() -> void:
 		if clients.has(cid) and not clients[cid].has("close_at"):
 			_send(cid, {"t":"so", "k":"bye", "why":"replaced"})
 			_refuse(cid, 4003, "replaced")
-	social.war_of_fn = func(acct: String) -> Dictionary:    # 0.31.151: a friend's battle (Friends > JOIN goes into it)
-		var r := _room_of_acct(acct)
-		return {"bid":str(r.war.bid), "tid":str(r.war.tid)} if r != null and not r.war.is_empty() else {}
 	social.in_match_fn = func(acct: String) -> bool:
 		for cid in clients:
 			var c: Dictionary = clients[cid]
@@ -285,16 +260,11 @@ func _init() -> void:
 				return true
 		return false
 	social.clans = Clans.new(social.state, social)          # 0.31.134: clans ride the social socket
-	world = World.new(social.state, social)                 # 0.31.135: the war map, on the social socket too
-	world.room_fn = _war_room
-	world.count_fn = _war_counts                            # 0.31.149: the players in each battle (the map's hot zones)
-	social.world = world
-	_log("social: %d players known, %d clans, %d global chat lines kept; war map week %s, %d held" % [social.users.size(), social.clans.clans.size(),
-		(social.hist.get("global", []) as Array).size(), world.week, world.owners.size()])
+	_log("social: %d players known, %d clans, %d global chat lines kept" % [social.users.size(), social.clans.clans.size(),
+		(social.hist.get("global", []) as Array).size()])
 	analytics = Analytics.new()
 	analytics.log_fn = _log
 	social.event_fn = func(acct: String, ev: String, p: Dictionary): analytics.server_event(acct, ev, p)
-	world.event_fn = func(acct: String, ev: String, p: Dictionary): analytics.server_event(acct, ev, p)
 	_log("analytics: %s (%d accounts opted out)" % [analytics.dir, analytics.opted.size()])
 	leaderboard = Leaderboard.new()
 	leaderboard.log_fn = _log
@@ -389,18 +359,10 @@ func _process(delta: float) -> bool:
 			_send_names(r)
 		_expire_holds(r)
 		if r.sim == null and _room_humans(r) == 0:
-			if not r.war.is_empty() and r.match_id == 0 and _now() - r.war_made < war_wait:
-				continue                                 # 0.31.135: a battle's room waits for its first player
 			rooms.erase(rid)                         # 0.31.119: nobody left and nothing running: the room closes
 			_log("room %d closed (%d open)" % [rid, rooms.size()])
-			if not r.war.is_empty() and world != null:
-				world.battle_gone(str(r.war.bid))
 	if ran:
 		_stats_tick(delta)
-	_war_count_clock += delta
-	if _war_count_clock >= WAR_COUNT_GAP:
-		_war_count_clock = 0.0
-		_war_counts_tick()                       # 0.31.149: the battles' players to the open maps
 	if social != null:
 		social.tick(delta)
 	if analytics != null:
@@ -574,16 +536,6 @@ func _human_count() -> int:
 func _room_of(c: Dictionary) -> Room:
 	return rooms.get(int(c.get("room", 0)), null)
 
-func _room_of_acct(acct: String) -> Room:
-	# the room a player (by account) is in now, or null
-	if acct == "":
-		return null
-	for cid in clients:
-		var c: Dictionary = clients[cid]
-		if c.hello and str(c.get("acct", "")) == acct:
-			return _room_of(c)
-	return null
-
 func _members(r: Room) -> Array:
 	# the room's players (seated or waiting)
 	var out := []
@@ -603,13 +555,11 @@ func _pick_room(party: String) -> Room:
 			var o: Dictionary = clients[cid]
 			if o.hello and str(o.get("party", "")) == party:
 				var pr := _room_of(o)
-				if pr != null and pr.war.is_empty() and _room_humans(pr) + pr.held.size() < max_players:
+				if pr != null and _room_humans(pr) + pr.held.size() < max_players:
 					return pr
 	var best: Room = null
 	var best_n := -1
 	for r in rooms.values():
-		if not (r as Room).war.is_empty():
-			continue                                     # 0.31.135: a battle's room is for its two houses only
 		var n: int = _room_humans(r) + r.held.size()
 		if n < max_players and n > best_n:
 			best = r
@@ -682,41 +632,7 @@ func _handle(cid: int, msg: Dictionary) -> void:
 			var r: Room = null
 			var join_acct := ""
 			var jp := str(msg.get("join", ""))
-			var war_bid := str(msg.get("war", ""))
-			var war_team := -1
-			if jp != "" and war_bid == "" and acct != "" and social != null:
-				# 0.31.151: a friend in a battle on the war map -- JOIN goes into that battle (on their side when it's your
-				# house's; otherwise the battle's own refusal says why). Phones from 0.31.151 ask for it by its id already.
-				var fr := _room_of_acct(str(social.users.get(jp, {}).get("acct", "")))
-				if fr != null and not fr.war.is_empty():
-					war_bid = str(fr.war.bid)
-			if war_bid != "":
-				# 0.31.135: a battle on the war map -- its own room, on the side of the player's house
-				var why := "war_gone"
-				var wr := _war_room_of(war_bid)
-				if acct == "" or world == null:
-					why = "war_side"
-				elif wr != null:
-					var side: String = world.side_for(Social.pid_of(acct), war_bid)
-					if wr.war_done or (wr.sim == null and wr.match_id != 0) or str(world.battles.get(war_bid, {}).get("state", "over")) == "over":
-						why = "war_over"
-					elif side == "":
-						why = "war_side"
-					elif _war_has_acct(wr, acct):
-						why = "war_twice"                     # (one seat an account: a second phone or socket can't fill the side)
-					else:
-						var wt := int(wr.war.att_team) if side == "att" else int(wr.war.def_team)
-						if _war_side_n(wr, wt) >= Net.TEAM_SIZE:
-							why = "war_full"
-						else:
-							r = wr
-							war_team = wt
-				if r == null:
-					_send(cid, {"t":"bye", "why":why})
-					_refuse(cid, 4005, why)
-					_log("refused %s for battle %s: %s" % [name, war_bid, why])
-					return
-			if jp != "" and acct != "" and social != null and war_bid == "":
+			if jp != "" and acct != "" and social != null:
 				# 0.31.120: into a friend's match (Friends > JOIN)
 				var why := "gone"
 				var me_pid := Social.pid_of(acct)
@@ -726,7 +642,7 @@ func _handle(cid: int, msg: Dictionary) -> void:
 						var o: Dictionary = clients[ocid]
 						if o.hello and str(o.get("acct", "")) == ta:
 							var tr := _room_of(o)
-							if tr != null and tr.war.is_empty() and _room_humans(tr) + tr.held.size() < max_players:
+							if tr != null and _room_humans(tr) + tr.held.size() < max_players:
 								r = tr
 								join_acct = ta
 							elif tr != null:
@@ -743,9 +659,6 @@ func _handle(cid: int, msg: Dictionary) -> void:
 				return
 			c.hello = true
 			c.room = r.id
-			if war_team >= 0:
-				c.war_bid = war_bid
-				c.war_team = war_team
 			c.rj = Crypto.new().generate_random_bytes(8).hex_encode()   # 0.31.120: this player's rejoin token
 			c.name = name
 			c.title = title
@@ -766,7 +679,7 @@ func _handle(cid: int, msg: Dictionary) -> void:
 			c.ask_next = bool(msg.get("ask_next", false))  # 0.31.122: the phone says when it wants the next match (PLAY AGAIN)
 			c.queued = true                                # 0.31.82: into the lobby; seated when the countdown ends
 			if r.wave_end < 0.0:
-				r.wave_end = _now() + (war_lobby if not r.war.is_empty() and r.sim == null else lobby_time)
+				r.wave_end = _now() + lobby_time
 			_log("queue %s (room %d, seated in %.0f s, players %d)" % [c.name, r.id, r.wave_end - _now(), _human_count()])
 			r.lobby_clock = 1.0                            # tell everyone waiting at once
 		"leave":
@@ -778,10 +691,6 @@ func _handle(cid: int, msg: Dictionary) -> void:
 			# starts; once it's running (they stayed on the scores): seated in it now.
 			var ra := _room_of(c)
 			if not c.hello or ra == null or bool(c.get("queued", false)) or c.has("close_at"):
-				return
-			if not ra.war.is_empty():
-				_send(cid, {"t":"bye", "why":"war_over"})       # 0.31.135: a battle is played once
-				_refuse(cid, 1000, "war_over")
 				return
 			c.erase("results_at")
 			if ra.sim != null and ra.sim.ended:
@@ -826,8 +735,6 @@ func _handle(cid: int, msg: Dictionary) -> void:
 			_active(r, cid)
 			var q: Dictionary = Net.QUICK_CHAT[qi]
 			var qteam := int(r.sim.by_id[c.unit].team)
-			if bool(q.get("call", false)) and not r.sim.ended:
-				r.sim.call_bots(c.unit)
 			if c.has("acct") and analytics != null:
 				analytics.server_event(c.acct, "quick_chat", {"i":qi}, str(c.get("build", "")))
 			var qmsg := {"t":"qc", "u":c.unit, "i":qi}
@@ -958,12 +865,7 @@ func _handle(cid: int, msg: Dictionary) -> void:
 			if bool(c.get("idle", false)):
 				return                                         # (a bot plays for them until they do something)
 			if a != "" and a in Net.ACTIONS:
-				var arg: Variant = msg.get("arg", null)
-				if a == "buy":
-					arg = str(arg) if str(arg) in Sim.UPGRADES else ""
-				else:
-					arg = null
-				r.sim.act(c.unit, a, arg)
+				r.sim.act(c.unit, a, null)
 
 func _eco_op(cid: int, op: String, msg: Dictionary) -> void:
 	# 0.31.132 (the iOS port, IOS_PORT_SPEC_FOR_CLAUDE.md §4, §6), one per socket like any "eco":
@@ -1058,9 +960,6 @@ func _seat(r: Room, cid: int) -> void:
 			humans[sim.by_id[oc.unit].team] += 1
 	var team := 0 if humans[0] <= humans[1] else 1
 	var pa := str(c.get("party", ""))
-	if c.has("war_team"):
-		team = int(c.war_team)                         # 0.31.135: a battle: the side of their house
-		pa = ""
 	if pa != "":
 		# 0.31.111: a party plays on one side -- the side a member already holds a seat on (while it has room)
 		for other in _members(r):
@@ -1070,7 +969,7 @@ func _seat(r: Room, cid: int) -> void:
 				if humans[pt] < Net.TEAM_SIZE:
 					team = pt
 				break
-	var ja := str(c.get("join_acct", "")) if not c.has("war_team") else ""
+	var ja := str(c.get("join_acct", ""))
 	if ja != "":
 		# 0.31.120: joined a friend's match -- their side, while it has room
 		for other in _members(r):
@@ -1080,20 +979,17 @@ func _seat(r: Room, cid: int) -> void:
 				if humans[jt] < Net.TEAM_SIZE:
 					team = jt
 				break
+	# (0.31.169: the 5v5 -- a seat is one of the ten heroes; minions, monsters and summons are never anyone's)
 	var seat := ""
 	for u in sim.units:
-		if u.team == team and u.bot and not _unit_taken(r, u.id):
+		if u.team == team and u.bot and bool(u.get("hero", false)) and not _unit_taken(r, u.id):
 			seat = u.id
 			break
-	if seat == "" and not c.has("war_team"):
+	if seat == "":
 		for u in sim.units:
-			if u.bot and not _unit_taken(r, u.id):
+			if u.bot and bool(u.get("hero", false)) and not _unit_taken(r, u.id):
 				seat = u.id
 				break
-	if seat == "" and c.has("war_team"):
-		_send(cid, {"t":"bye", "why":"war_full"})
-		_refuse(cid, 4005, "war_full")
-		return
 	c.unit = seat
 	c.queued = false
 	c.move = Vector2.ZERO
@@ -1110,8 +1006,6 @@ func _seat(r: Room, cid: int) -> void:
 			c.match_key = match_key(r)
 			if analytics != null:
 				analytics.server_event(c.acct, "match_start", {"match":c.match_key, "mode":"online", "class":c.class0}, str(c.get("build", "")))
-			if c.has("war_team") and int(c.war_team) == int(r.war.get("att_team", 1)) and world != null:
-				c.war_scores = world.seated(str(c.war_bid), Social.pid_of(str(c.acct)), str(c.acct), str(c.name))   # 0.31.135
 	_send(cid, {"t":"welcome", "v":Net.VERSION, "you":seat, "match":r.match_id, "seed":r.match_seed,
 		"team_size":Net.TEAM_SIZE, "players":_room_humans(r), "rj":str(c.get("rj", ""))})
 	r.names_dirty = true
@@ -1215,23 +1109,13 @@ func _run_lobby(r: Room, delta: float) -> void:
 		r.wave_end = -1.0                      # they all left (or the restart seated them)
 		return
 	var now := _now()
-	if not r.war.is_empty() and (r.war_done or (r.sim == null and r.match_id != 0)):
-		for cid in waiting:                           # 0.31.135: the battle is over -- no next one
-			_send(cid, {"t":"bye", "why":"war_over"})
-			_refuse(cid, 1000, "war_over")
-		r.wave_end = -1.0
-		return
 	if r.sim != null and r.sim.ended:
 		# the results screen is up: they go into the next match with everyone (the restart seats them)
 		var restart := (r.ended_at if r.ended_at >= 0.0 else now) + restart_after
 		r.wave_end = maxf(r.wave_end, restart)
 	elif now >= r.wave_end:
-		if r.war.is_empty() and (r.sim == null or _seated_count(r) == 0):
+		if r.sim == null or _seated_count(r) == 0:
 			_new_match(r)                      # (a bots-only match left running by players who quit: a fresh one)
-		elif not r.war.is_empty() and r.sim == null:
-			_new_match(r)                      # 0.31.135: the battle starts (once: a running one is joined as it is)
-			if world != null:
-				world.started(str(r.war.bid))
 		for cid in waiting:
 			_seat(r, cid)
 		r.wave_end = -1.0
@@ -1249,12 +1133,10 @@ func _send_lobby(r: Room, waiting: Array) -> void:
 		names.append(clients[cid].name)
 		titles.append(str(clients[cid].get("title", "")))
 		tags.append(social.clans.tag_of_acct(str(clients[cid].get("acct", ""))) if social != null and social.clans != null else "")
-	var msg := {"t":"lobby", "left":maxf(0.0, r.wave_end - _now()), "wait":war_lobby if not r.war.is_empty() and r.sim == null else lobby_time,
+	var msg := {"t":"lobby", "left":maxf(0.0, r.wave_end - _now()), "wait":lobby_time,
 		"names":names, "tt":titles, "ct":tags,
 		"in_match":_seated_count(r), "online":_human_count(), "slots":Net.TEAM_SIZE * 2,
 		"running":r.sim != null and not r.sim.ended and _seated_count(r) > 0, "match":r.match_id}   # (running: they join it)
-	if not r.war.is_empty():
-		msg["war"] = {"tid":str(r.war.tid), "name":Map.name_of(str(r.war.tid)), "ah":str(r.war.ah), "dh":str(r.war.dh)}   # 0.31.135
 	for i in waiting.size():
 		msg["me"] = i
 		_send(waiting[i], msg)
@@ -1449,6 +1331,7 @@ func _new_match(r: Room) -> void:
 	r.match_seed = randi() & 0x7fffffff
 	r.sim = Sim.new()
 	r.sim.setup(Net.TEAM_SIZE, r.match_seed, -1)      # no local human; every unit starts as a bot
+	r.sim.setup_moba("", r.match_seed)                # 0.31.169: the 5v5 (the phone's mirror drafts the same heroes)
 	r.accum = 0.0
 	r.snap_accum = 0.0
 	r.ended_at = -1.0
@@ -1456,114 +1339,10 @@ func _new_match(r: Room) -> void:
 	r.held.clear()                                    # (a seat in the last match is no seat in this one)
 	_log("match %d start (room %d, seed %d)" % [r.match_id, r.id, r.match_seed])
 
-# ---------------- the war map's battles (0.31.135) ----------------
-func _war_room(b: Dictionary) -> int:
-	# world.gd: a room for a battle (0: every room is busy). 0.31.151: battles may take every room (0.31.135-0.31.150
-	# kept the last one for matchmaking -- every match is a battle now; matchmaking is for phones before 0.31.149)
-	if rooms.size() >= max_rooms:
-		return 0
-	var nr := Room.new()
-	nr.id = next_room
-	next_room += 1
-	nr.war = {"bid":str(b.bid), "tid":str(b.tid), "ah":str(b.ah), "dh":str(b.dh), "att_team":1, "def_team":0}
-	nr.war_made = _now()
-	rooms[nr.id] = nr
-	_log("room %d opened for battle %s (%s attacks %s, held by %s)" % [nr.id, str(b.bid), str(b.ah), str(b.tid), str(b.dh) if str(b.dh) != "" else "nobody"])
-	return nr.id
-
-func _war_counts(bid: String) -> Array:
-	# 0.31.149: [attackers, defenders] seated in a battle's room now (world.gd map_msg: the hot zones)
-	var r := _war_room_of(bid)
-	if r == null:
-		return [0, 0]
-	return [_war_side_n(r, int(r.war.att_team)), _war_side_n(r, int(r.war.def_team))]
-
-var _war_sig := ""
-var _war_count_clock := 0.0
-const WAR_COUNT_GAP := 1.0
-func _war_counts_tick() -> void:
-	# 0.31.149: the players in the battles changed -- the open maps hear it (at most every WAR_COUNT_GAP s)
-	if world == null:
-		return
-	var parts := []
-	for r in rooms.values():
-		if not (r as Room).war.is_empty():
-			var n := _war_counts(str(r.war.bid))
-			parts.append("%s:%d:%d" % [str(r.war.bid), int(n[0]), int(n[1])])
-	var sig := ",".join(parts)
-	if sig != _war_sig:
-		_war_sig = sig
-		world.touch()
-
-func _war_room_of(bid: String) -> Room:
-	for r in rooms.values():
-		if str((r as Room).war.get("bid", "")) == bid:
-			return r
-	return null
-
-func _war_has_acct(r: Room, acct: String) -> bool:
-	for cid in _members(r):
-		if str(clients[cid].get("acct", "")) == acct:
-			return true
-	for k in r.held:
-		if str(r.held[k].c.get("acct", "")) == acct:
-			return true
-	return false
-
-func _war_side_n(r: Room, team: int) -> int:
-	var n := 0
-	for cid in _members(r):
-		if int(clients[cid].get("war_team", -1)) == team:
-			n += 1
-	return n
-
-func _war_events(r: Room, evs: Array) -> void:
-	# a gate of the defenders broken (not their jail door): the attackers' gate crown
-	if r.war.is_empty() or r.war_gate:
-		return
-	for e in evs:
-		if str(e.get("k", "")) == "gate_broken" and int(e.get("team", -1)) == int(r.war.def_team):
-			for g in r.sim.gates:
-				if str(g.id) == str(e.get("gate", "")) and str(g.get("kind", "")) != "jail":
-					r.war_gate = true
-
-func _war_over(r: Room) -> void:
-	# the battle ended: its points to the clan's bar (world.gd), and each player hears what it did
-	if r.war.is_empty() or r.war_done or world == null or r.sim == null:
-		return
-	r.war_done = true
-	var sim = r.sim
-	var att := int(r.war.att_team)
-	var present := []
-	var payees := []
-	for cid in _members(r):
-		payees.append(clients[cid])
-	for k in r.held:
-		payees.append(r.held[k].c)
-	for c in payees:
-		if c.has("acct") and str(c.get("unit", "")) != "" and sim.by_id.has(c.unit) and int(sim.by_id[c.unit].team) == att:
-			present.append(Social.pid_of(str(c.acct)))
-	var tid := str(r.war.tid)
-	var res: Dictionary = world.battle_over(str(r.war.bid), {"won":sim.winner == att, "gate":r.war_gate, "king":int(sim.score[att]) > 0, "present":present})
-	var held: bool = not res.values().any(func(x): return bool(x.get("took", false)))
-	for cid in _members(r):
-		var c: Dictionary = clients[cid]
-		if not c.has("acct"):
-			continue
-		var pid := Social.pid_of(str(c.acct))
-		if res.has(pid):
-			var m: Dictionary = (res[pid] as Dictionary).duplicate()
-			m["t"] = "war"
-			_send(cid, m)
-		elif int(c.get("war_team", -1)) == int(r.war.def_team):
-			_send(cid, {"t":"war", "tid":tid, "name":Map.name_of(tid), "def":true, "held":held})
-		elif int(c.get("war_team", -1)) == att:
-			_send(cid, {"t":"war", "tid":tid, "name":Map.name_of(tid), "helped":true, "won":sim.winner == att})
-
 func _results_tick(r: Room) -> void:
 	# 0.31.122: a player left on the results (PLAY AGAIN never pressed) for results_keep seconds goes back to the menu
 	var now := _now()
-	var keep := results_keep if r.war.is_empty() else minf(results_keep, WAR_RESULTS_KEEP)
+	var keep := results_keep
 	for cid in _members(r):
 		var c: Dictionary = clients[cid]
 		if c.has("results_at") and not c.has("close_at") and now - float(c.results_at) > keep:
@@ -1594,12 +1373,10 @@ func _run_match(r: Room, delta: float) -> bool:
 			r.ended_at = Time.get_ticks_msec() / 1000.0
 			_log("match %d end (room %d) winner=%d reason=%s score=%s" % [r.match_id, r.id, sim.winner, sim.end_reason, str(sim.score)])
 			_pay_match(r)
-			_war_over(r)
 			for cid in _members(r):                       # 0.31.122: their results are up until they say otherwise
-				# (0.31.135: in a battle's room everyone's are -- there's no next match, and the room must close)
-				if (bool(clients[cid].get("ask_next", false)) or not r.war.is_empty()) and not bool(clients[cid].get("queued", false)):
+				if bool(clients[cid].get("ask_next", false)) and not bool(clients[cid].get("queued", false)):
 					clients[cid].results_at = r.ended_at
-		elif r.war.is_empty() and Time.get_ticks_msec() / 1000.0 - r.ended_at > restart_after:
+		elif Time.get_ticks_msec() / 1000.0 - r.ended_at > restart_after:
 			# The next match. 0.31.122: an app that asks for it (ask_next) goes in only once its player pressed PLAY AGAIN;
 			# the others stay on their results. Older apps and players waiting in the lobby go in as before. Nobody wants
 			# it yet: no new match until somebody does.
@@ -1644,7 +1421,7 @@ func _run_match(r: Room, delta: float) -> bool:
 				sim.act(c.unit, "block")
 			if c.hold:
 				var u: Dictionary = sim.by_id[c.unit]
-				if sim.can_act(u) and not u.carrying:
+				if sim.can_act(u):
 					sim.act(c.unit, "attack")
 	r.accum = minf(r.accum + delta, TICK * 6)
 	var t_step := Time.get_ticks_usec()
@@ -1653,7 +1430,6 @@ func _run_match(r: Room, delta: float) -> bool:
 		sim.step(TICK)
 		var evs: Array = sim.drain_events()
 		_ledger_events(r, evs)
-		_war_events(r, evs)
 		r.pending_events.append_array(evs)
 		_ledger_track(r, TICK)
 		if test_match_s > 0.0 and sim.time >= test_match_s and not sim.ended:
@@ -1664,10 +1440,8 @@ func _run_match(r: Room, delta: float) -> bool:
 	if sim.ended:
 		var evs2: Array = sim.drain_events()
 		_ledger_events(r, evs2)
-		_war_events(r, evs2)
 		r.pending_events.append_array(evs2)
 		_pay_match(r)
-		_war_over(r)
 	r.snap_accum += delta
 	if r.snap_accum >= 1.0 / Net.SNAP_HZ:
 		r.snap_accum = minf(r.snap_accum - 1.0 / Net.SNAP_HZ, 1.0 / Net.SNAP_HZ)
@@ -1677,8 +1451,8 @@ func _run_match(r: Room, delta: float) -> bool:
 		var base := Net.snapshot(sim, "", events)      # built once, shared by every player
 		_st_snap += Time.get_ticks_usec() - t_snap
 		var t_send := Time.get_ticks_usec()
-		# 0.31.23: encoded and compressed ONCE and sent to everyone; each player's private bit (their task) goes in its
-		# own small "m" message, only when it changes. Before, every player's copy was encoded and compressed separately.
+		# 0.31.23: encoded and compressed ONCE and sent to everyone (before, every player's copy was encoded and compressed
+		# separately). (0.31.169: Siege's private bit -- the player's task, an "m" message -- went with Siege.)
 		var bytes := Net.encode(base, true)
 		for cid in _members(r):
 			var c: Dictionary = clients[cid]
@@ -1688,10 +1462,6 @@ func _run_match(r: Room, delta: float) -> bool:
 			_st_bytes += bytes.size()
 			var me: Dictionary = sim.by_id.get(c.unit, {})
 			if not me.is_empty():
-				var th := hash(me.task)
-				if int(c.get("task_hash", -1)) != th:
-					c.task_hash = th
-					_send(cid, {"t":"m", "task":me.task.duplicate(true)})
 				# 0.31.87: the health they've healed, for the Merciful title (at most once a second, when it changed)
 				var healed := int(me.get("healed", 0.0))
 				if healed != int(c.get("heal_sent", 0)) and _now() - float(c.get("heal_at", -10.0)) >= 1.0:

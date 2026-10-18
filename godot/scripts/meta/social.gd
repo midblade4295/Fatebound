@@ -5,12 +5,9 @@ extends Node
 # against a server older than 0.31.111 (it never answers "hi"), it stays off and the screens say so.
 # The app sets `want` (in front, account ready); this keeps the connection, retrying with a growing wait, and holds
 # what the screens show: the chat lines, friends, requests, the party and invites. Every change emits `changed`.
-# 0.31.134 (Crown War step 1): clans (server/clans.gd) -- the player's clan, invites, search results, a clan's card,
-# and the "clan" chat channel; cards and lines carry "ct", a player's clan tag. "me" says "clans":1 when the server
-# has them.
-# 0.31.135 (Crown War step 2): the war map (server/world.gd) -- war_open/war_close (the map on screen: "war" now and on
-# every change), war_go (a battle: "war_go" answers with its id), "war_call" (your clan's battle: JOIN) and
-# "war_alarm" (your clan's land attacked: DEFEND). "me" says "war":1 when the server has it.
+# 0.31.134: clans (server/clans.gd) -- the player's clan, invites, search results, a clan's card, and the "clan" chat
+# channel; cards and lines carry "ct", a player's clan tag. "me" says "clans":1 when the server has them. (0.31.169:
+# Crown War's war map -- its battles were Siege matches -- went with Siege.)
 const Net = preload("res://scripts/siege/siege_net.gd")
 
 signal changed(what: String)            # "state", "me", "chat", "friends", "party", "prof" (0.31.120), "clan", "clans", "clan_info" (0.31.134)
@@ -20,9 +17,6 @@ signal invited(party: String, card: Dictionary)
 signal go(party: String, by: String)    # the party leader started a match
 signal clan_invited(c: Dictionary, by: Dictionary)   # 0.31.134: an officer of a clan invited this player
 signal clan_made(ok: bool, why: String)              # 0.31.134: the answer to clan_new (ok: the gold was taken)
-signal war_went(ans: Dictionary)                     # 0.31.135: the answer to war_go ({"ok", "bid", "tid", "side", "why"})
-signal war_called(m: Dictionary)                     # 0.31.135: a clanmate started a battle ({"bid", "tid", "name", "by", "ct", "h"})
-signal war_alarmed(m: Dictionary)                    # 0.31.135: your clan's land is attacked ({"bid", "tid", "name", "ct", "h"})
 
 const RETRY := [2.0, 5.0, 10.0, 20.0, 40.0, 60.0]
 const OLD_SERVER_RETRY := 600.0         # s before asking a server that never answered "hi" again
@@ -46,7 +40,6 @@ var blocked: Array = []
 var party: Dictionary = {}              # {} or {"id", "leader", "members", "pending", "max"}
 var invites: Dictionary = {}            # party id -> {"from": card, "at": clock}
 var party_play := ""                    # the party a "go" was for (siege_app passes it into the match)
-var party_war := ""                     # 0.31.149: the battle on the war map the leader went into (the "go"'s "war")
 var profiles := {}                      # 0.31.120: pid -> its profile card's numbers ({"t":"so", "k":"prof", ...}, "_at": clock)
 # 0.31.134: clans
 var has_clans := false                  # the server has clans ("me" said so)
@@ -60,13 +53,6 @@ var clan_max := 30
 var clan_list: Array = []               # the last search's clans
 var clan_query := ""
 var clan_infos := {}                    # clan id -> its card (clan_info), "_at": clock
-# 0.31.135: the war map
-var has_war := false                    # the server has the war map ("me" said so)
-# 0.31.164 (Kevin: "5v5 only"): the war map's battles were Siege matches -- the app leaves the server's war map alone
-const WAR_MAP := false
-var war: Dictionary = {}                # the last map: {"week", "ends", "terr": {id: {...}}, "house", "att", "max", "counts", "tally", ...}
-var war_watching := false               # the map is open (the server pushes changes)
-var _war_eyes := {}                     # 0.31.138: who has it on screen ("map": the war map, "home": Home's war table)
 var _ws: WebSocketPeer = null
 var _clock := 0.0
 var _next_try := 0.0
@@ -179,12 +165,9 @@ func _on(m: Dictionary) -> void:
 		"me":
 			me = {"pid":str(m.get("pid", "")), "n":str(m.get("n", "")), "tt":str(m.get("tt", "")), "max":int(m.get("max", 120)), "ct":str(m.get("ct", ""))}
 			has_clans = int(m.get("clans", 0)) == 1
-			has_war = WAR_MAP and int(m.get("war", 0)) == 1
 			var was := state
 			state = "online"
 			_fails = 0
-			if war_watching and was != "online":
-				_send({"k":"war_open"})                 # (back online with the map open)
 			changed.emit("me")
 			if was != "online":
 				changed.emit("state")
@@ -244,7 +227,6 @@ func _on(m: Dictionary) -> void:
 			changed.emit("party")
 		"go":
 			party_play = str(m.get("party", ""))
-			party_war = str(m.get("war", ""))                # 0.31.149: the leader's battle on the war map
 			go.emit(party_play, str(m.get("by", "")))
 		"note":
 			note.emit(str(m.get("x", "")), bool(m.get("bad", false)), bool(m.get("pop", false)))
@@ -278,21 +260,6 @@ func _on(m: Dictionary) -> void:
 			clan_invited.emit(m.get("c", {}), m.get("by", {}))
 		"clan_made":
 			clan_made.emit(bool(m.get("ok", false)), str(m.get("why", "")))
-		"war":                                        # 0.31.135: the war map
-			var wm: Dictionary = m.duplicate()
-			wm.erase("t")
-			wm.erase("k")
-			war = wm
-			changed.emit("war")
-		"war_go":
-			if WAR_MAP:
-				war_went.emit(m)
-		"war_call":
-			if WAR_MAP:
-				war_called.emit(m)
-		"war_alarm":
-			if WAR_MAP:
-				war_alarmed.emit(m)
 		"prof":
 			var pp := str(m.get("pid", ""))
 			if pp != "":
@@ -345,9 +312,9 @@ func leave() -> bool:
 func kick(pid: String) -> bool:
 	return _send({"k":"kick", "pid":pid})
 
-func play(war := "") -> bool:
-	# the party leader starts: the members follow (0.31.149: into the leader's battle on the war map, with its id)
-	return _send({"k":"play", "war":war} if war != "" else {"k":"play"})
+func play() -> bool:
+	# the party leader starts: the members follow
+	return _send({"k":"play"})
 
 func refresh() -> bool:
 	return _send({"k":"refresh"})
@@ -431,25 +398,6 @@ func clan_requests() -> int:
 
 func clan_cool_left() -> int:
 	return maxi(0, clan_cool - int(Time.get_unix_time_from_system()))
-
-# ---------------- the war map (0.31.135) ----------------
-func war_open(who := "map") -> bool:
-	# 0.31.138: the war map and Home's war table (home_scene.gd) both watch it: the server pushes while either is up
-	_war_eyes[who] = true
-	war_watching = true
-	return _send({"k":"war_open"})
-
-func war_close(who := "map") -> void:
-	_war_eyes.erase(who)
-	if _war_eyes.is_empty() and war_watching:
-		war_watching = false
-		_send({"k":"war_close"})
-
-func war_eyes(who: String) -> bool:
-	return _war_eyes.has(who)
-
-func war_go(tid: String, call := true) -> bool:
-	return _send({"k":"war_go", "tid":tid, "call":call})
 
 static func tagged(name: String, ct: String) -> String:
 	# "[WOLF] Kevin" -- a player's name with their clan tag before it

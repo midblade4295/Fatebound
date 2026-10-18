@@ -1,8 +1,8 @@
 extends Control
 const Sim_Eco = preload("res://scripts/meta/economy.gd")
-# Siege HUD. The stick and the combat buttons are drawn and hit-tested by hand from raw
+# The match HUD. The stick and the combat buttons are drawn and hit-tested by hand from raw
 # InputEventScreenTouch events, because Godot's Buttons only follow the first finger and on a
-# phone you hold the stick while tapping ATTACK. Modal panels (workshop, pause, result) use Buttons.
+# phone you hold the stick while tapping ATTACK. Modal panels (pause, result, shop) use Buttons.
 const VisualTheme = preload("res://scripts/ui/visual_theme.gd")
 const UI = preload("res://scripts/app/ui.gd")
 const UI2 = preload("res://scripts/app/ui2.gd")
@@ -10,7 +10,6 @@ const UI2 = preload("res://scripts/app/ui2.gd")
 const BUTTON_STYLE := {"primary":"orange", "secondary":"blue", "gold":"gold", "roll":"gold", "active":"green", "danger":"red"}   # 0.31.79: the menu skins
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 const NetT = preload("res://scripts/siege/siege_net.gd")
-const Cards = preload("res://scripts/meta/cards.gd")
 const Moba = preload("res://scripts/siege/moba.gd")
 const ItemIcon = preload("res://scripts/siege/item_icon.gd")   # 0.31.157 5V5: the shop's item glyphs
 
@@ -18,10 +17,6 @@ signal leave_requested
 signal replay_requested
 signal action_pressed(kind: String)
 signal quick_chat(i: int)              # 0.31.111: a line from the quick chat wheel (NetT.QUICK_CHAT index)
-signal workshop_tools
-signal workshop_buy(id: String)
-signal workshop_leave
-signal card_pressed(slot: int)          # 0.31.153 COMMANDER: a card in the hand tapped
 
 const TEAM_COLORS := [Color("#5fd2f0"), Color("#ff7b52"), Color("#e2c85c")]      # (0.31.157: the jungle's monsters)
 
@@ -66,18 +61,9 @@ var _font: Font
 var _bold: Font
 var _title: Font
 
-var workshop_panel: PanelContainer
-var workshop_stock: Label
-var workshop_buttons: Dictionary = {}
-var workshop_tools_btn: Button
-var _workshop_key := ""
 var gate_bars_source: Callable   # -> Array of {pos, fill, color, broken}
 var pause_panel: PanelContainer
 var result_panel: PanelContainer
-var war_battle := false                 # 0.31.135: a battle on the war map: no PLAY AGAIN, WAR MAP instead
-var war_line := {}                      # 0.31.135: what the battle did ({"t":"war", ...}); shown on the results
-var exit_to := ""                       # 0.31.135: "war": the app opens the war map after this match
-var _war_box: VBoxContainer = null
 var pause_btn: Button
 # 0.31.111 (Kevin: "add the quick chat pings"): the horn beside the pause button opens the quick chat; a line said shows
 # as a bubble over the speaker (pinned to the screen edge, with an arrow, when they're off it) and in a short feed.
@@ -121,7 +107,7 @@ func _ready() -> void:
 	_top_layer.draw.connect(_draw_top_layer)
 	add_child(_top_layer)
 	move_child(_top_layer, 0)
-	# 0.31.8: the workshop and pause panels are built the first time they open (they cost ~370 ms at match start).
+	# 0.31.8: the pause panel is built the first time it opens.
 	resized.connect(_layout)
 	_layout()
 	ready_times["hud _ready total"] = Time.get_ticks_msec() - t0
@@ -318,24 +304,6 @@ func _place(p: Control) -> void:
 	p.scale = Vector2.ONE * fit
 	p.position = Vector2((size.x - p.size.x) * 0.5, maxf(12.0, (size.y - p.size.y * fit) * 0.5))
 
-func _build_workshop_panel() -> void:
-	workshop_panel = _panel(340)
-	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 9)
-	workshop_panel.add_child(v)
-	UI2.center(UI2.text(v, "THE WORKSHOP", 26, UI2.GOLD))
-	workshop_stock = _label(v, "", 15, VisualTheme.TEXT, _bold)
-	workshop_tools_btn = _button(v, "TAKE TOOLS · BECOME A WORKER", "active", func(): workshop_tools.emit())
-	_label(v, "Workers chop trees and mine stone, carry it here, and repair gates with wood.", 11, Color("#d4cbbb"))
-	for id in ["gates", "armory", "catapult", "launcher"]:
-		var up: Dictionary = Sim.UPGRADES[id]
-		var b := _button(v, str(up.name), "gold", func(): workshop_buy.emit(id))
-		b.custom_minimum_size = Vector2(0, 54)
-		b.add_theme_font_size_override("font_size", 14)
-		workshop_buttons[id] = b
-	_label(v, "Hat upgrades are bought at each hat shop.", 11, Color("#d4cbbb"))
-	_button(v, "LEAVE WORKSHOP", "secondary", func(): workshop_leave.emit())
-
 func paused() -> bool:
 	return pause_panel != null and pause_panel.visible
 
@@ -344,41 +312,6 @@ func show_pause() -> void:
 		_build_pause_panel()
 	pause_panel.visible = true
 	_center(pause_panel, true)
-
-func _refresh_workshop(me: Dictionary) -> void:
-	if not me.workshop_open:
-		if workshop_panel != null and workshop_panel.visible:
-			workshop_panel.visible = false
-		return
-	if workshop_panel == null:
-		_build_workshop_panel()
-	var t: int = me.team
-	var key := "%s|%s|%s|%s" % [str(sim.stock[t]), str(sim.levels[t]), me.cls, me.carrying]
-	if workshop_panel.visible and key == _workshop_key:
-		return
-	_workshop_key = key
-	if not workshop_panel.visible:
-		workshop_panel.visible = true
-		_center(workshop_panel)
-	workshop_stock.text = "WOOD %d   ·   STONE %d" % [sim.stock[t].wood, sim.stock[t].stone]
-	workshop_tools_btn.disabled = me.cls == "worker" or me.carrying
-	workshop_tools_btn.text = "YOU ARE A WORKER" if me.cls == "worker" else "TAKE TOOLS · BECOME A WORKER"
-	workshop_tools_btn.disabled = false
-	for id in workshop_buttons:
-		var up: Dictionary = Sim.UPGRADES[id]
-		var lvl: int = sim.levels[t][id]
-		var b: Button = workshop_buttons[id]
-		var cost: Dictionary = sim.upgrade_cost(t, id)
-		if cost.is_empty():
-			b.text = ("%s ✔" % str(Sim.UPGRADE_NAME[id.substr(4)]).to_upper()) if id.begins_with("hat_") else "%s · MAX" % up.name
-			b.disabled = true
-		else:
-			if id.begins_with("hat_"):
-				b.text = "%s\n%dw · %ds" % [str(Sim.UPGRADE_NAME[id.substr(4)]).to_upper(), int(cost.wood), int(cost.stone)]
-			else:
-				b.text = "%s %s\n%d wood · %d stone" % [up.name, "I".repeat(lvl + 1) if int(up.max) > 1 else "", int(cost.wood), int(cost.stone)]
-			b.disabled = not sim.can_buy(t, id)
-		b.tooltip_text = str(up.desc)
 
 func _build_pause_panel() -> void:
 	# 0.31.79: a parchment sheet -- how to win in three steps with the 3D icons, the tricks, then RESUME.
@@ -390,8 +323,8 @@ func _build_pause_panel() -> void:
 	UI2.center(UI2.text(v, "PAUSED", 38, UI2.GOLD, ink, 9))
 	var hw := UI.label(v, "HOW TO WIN", 11, Color("#8a6a44"), UI.HEAVY_FONT)
 	hw.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	for st in [["castle", "1 · BREAK IN", "Smash their gate or fly over the wall"], ["crown", "2 · CARRY YOUR KING HOME", "From their dungeon to your throne room"],
-			["trophy", "3 · FIRST TO %d RESCUES" % Sim.WIN_RESCUES, "wins the siege"]]:
+	for st in [["castle", "1 · PUSH A LANE", "Bring down its towers, then a gate of their keep"], ["swords", "2 · THE KING'S TOWERS", "Inside, the two towers guarding their King"],
+			["crown", "3 · DEFEAT THEIR KING", "wins the match"]]:
 		var r := HBoxContainer.new()
 		r.add_theme_constant_override("separation", 10)
 		v.add_child(r)
@@ -408,7 +341,7 @@ func _build_pause_panel() -> void:
 		UI2.text(tv, str(st[1]), 15, ink, ink, 0, false)
 		var sl := UI.label(tv, str(st[2]), 12, Color("#5d3a1c"), UI.HEAVY_FONT)
 		sl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	var tricks := UI.label(v, "Standing by your King in their dungeon heals you. Catch fish from the river (ACTION on a bank) and feed them to THEIR King: each size needs another lifter (up to 6). Left on the ground, a King throws a tantrum that knocks everyone back. Workers gather, repair gates and fund upgrades.", 11, Color("#5d3a1c"), UI.HEAVY_FONT)
+	var tricks := UI.label(v, "Walk in behind your minions: a tower shoots the nearest of them first. Last hits, jungle camps and towers pay gold -- shop in your keep or while you're down. The Bone Lord and the Grave Wyrm make your whole side stronger. Your fountain heals you.", 11, Color("#5d3a1c"), UI.HEAVY_FONT)
 	tricks.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	tricks.custom_minimum_size = Vector2(290, 0)
 	var rb := _button(v, "RESUME", "active", func(): pause_panel.visible = false)
@@ -459,7 +392,7 @@ func show_result(result: Dictionary = {}) -> void:
 		cell.custom_minimum_size = Vector2(92 if side == 1 else 0, 0)
 		sc.add_child(cell)
 		if side == 1:
-			UI2.center(UI2.body(cell, "KINGS" if sim.moba != null else "RESCUES", 11, UI2.GOLD, false))
+			UI2.center(UI2.body(cell, "KINGS", 11, UI2.GOLD, false))
 			UI2.center(UI2.body(cell, "KOs %d–%d" % [sim.kills[me.team], sim.kills[1 - me.team]], 10, UI2.MUTED, false))
 			continue
 		var mine := side == 0
@@ -473,9 +406,7 @@ func show_result(result: Dictionary = {}) -> void:
 	you.alignment = BoxContainer.ALIGNMENT_CENTER
 	you.add_theme_constant_override("separation", 6)
 	v.add_child(you)
-	var third := ["crown", "%d rescue%s" % [me.rescues, "" if me.rescues == 1 else "s"]]
-	if sim.moba != null:
-		third = ["castle", "%d tower%s" % [int(me.get("towers", 0)), "" if int(me.get("towers", 0)) == 1 else "s"]]     # (0.31.164)
+	var third := ["castle", "%d tower%s" % [int(me.get("towers", 0)), "" if int(me.get("towers", 0)) == 1 else "s"]]     # (0.31.164)
 	for ch in [["skull", "%d KOs" % me.kills], ["helmet", "%d downs" % me.deaths], third]:
 		var c := UI2.chip(you, "", Color(0.01, 0.02, 0.08, 0.8), Color.WHITE, Color(UI2.GOLD, 0.4))
 		var cl: Label = c.get_child(0)
@@ -486,21 +417,13 @@ func show_result(result: Dictionary = {}) -> void:
 		c.add_child(r)
 		UI2.icon(r, str(ch[0]), 20.0)
 		UI2.body(r, str(ch[1]), 11, Color.WHITE, false)
-	if sim.moba != null:
-		UI2.center(UI2.body(v, "Last hits %d · camps %d · tower and gate damage %d" % [int(me.get("lh", 0)), int(me.get("camps", 0)),
-			int(me.gate_dmg)], 12, Color("#cfe8b8"), false))
-	elif me.gathered > 0 or me.gate_dmg > 0.0:
-		UI2.center(UI2.body(v, "Gathered %d · gate damage %d" % [int(me.gathered), int(me.gate_dmg)], 12, Color("#cfe8b8"), false))
-	if sim.moba != null:
-		# 0.31.155 5V5: the towers each side brought down, your level (0.31.164: paid like any match now)
-		UI2.center(UI2.body(v, "Towers down: theirs %d · yours %d  ·  you reached level %d" % [sim.moba.towers_down(1 - int(me.team)),
-			sim.moba.towers_down(int(me.team)), int(me.get("level", 1))], 12, Color("#ffcf7a"), false))
-		UI2.center(UI2.body(v, "Gold earned %d · %d item%s" % [int(me.get("gold_total", 0.0)), (me.get("items", []) as Array).size(),
-			"" if (me.get("items", []) as Array).size() == 1 else "s"], 12, Color("#ffe39a"), false))
-	if sim.commander:
-		# 0.31.153 COMMANDER (the test): the cards each side played; no rewards yet
-		UI2.center(UI2.body(v, "Cards played: you %d · enemy %d" % [int(sim.cmd[me.team].played), int(sim.cmd[1 - int(me.team)].played)], 12, Color("#d6a2ff"), false))
-		UI2.center(UI2.body(v, "COMMANDER is a test -- no rewards yet", 11, UI2.MUTED, false))
+	UI2.center(UI2.body(v, "Last hits %d · camps %d · tower and gate damage %d" % [int(me.get("lh", 0)), int(me.get("camps", 0)),
+		int(me.gate_dmg)], 12, Color("#cfe8b8"), false))
+	# 0.31.155 5V5: the towers each side brought down, your level (0.31.164: paid like any match now)
+	UI2.center(UI2.body(v, "Towers down: theirs %d · yours %d  ·  you reached level %d" % [sim.moba.towers_down(1 - int(me.team)),
+		sim.moba.towers_down(int(me.team)), int(me.get("level", 1))], 12, Color("#ffcf7a"), false))
+	UI2.center(UI2.body(v, "Gold earned %d · %d item%s" % [int(me.get("gold_total", 0.0)), (me.get("items", []) as Array).size(),
+		"" if (me.get("items", []) as Array).size() == 1 else "s"], 12, Color("#ffe39a"), false))
 	_mvp_strip(v)
 	var rw: Dictionary = result.get("rewards", {})
 	if not rw.is_empty():
@@ -601,104 +524,30 @@ func show_result(result: Dictionary = {}) -> void:
 			UI2.center(UI2.body(qb, "Claim it in Quests from Home", 10, Color(1, 1, 1, 0.75), false))
 		for ql in qlines.filter(func(x): return not bool(x.done)).slice(0, 2):
 			UI2.center(UI2.body(v, "⚔  %s quest  %s  %d/%d" % [str(Sim_Eco.CLASS_NAMES.get(str(ql.cls), "")), str(ql.text), int(ql.progress), int(ql.goal)], 11, Color("#ffcf7a"), false))
-	if war_battle:
-		_war_box = VBoxContainer.new()                      # 0.31.135: what the battle did (now, or when it arrives)
-		_war_box.add_theme_constant_override("separation", 2)
-		v.add_child(_war_box)
-		v.move_child(_war_box, 2)
-		_fill_war()
 	var br := HBoxContainer.new()
 	br.add_theme_constant_override("separation", 10)
 	v.add_child(br)
 	_button(br, "HOME", "secondary", func(): leave_requested.emit())
 	var sb := _button(br, "SCORES", "gold", func(): show_scoreboard())         # 0.31.119
 	sb.set_meta("key", "scoreboard")
-	if war_battle:
-		var wm := _button(br, "WAR MAP", "primary", func():
-			exit_to = "war"
-			leave_requested.emit())
-		wm.size_flags_stretch_ratio = 1.5
-		wm.set_meta("key", "war_map")
-		UI2.sweep(wm)
-	else:
-		var pa := _button(br, "PLAY AGAIN", "primary", func(): replay_requested.emit())
-		pa.size_flags_stretch_ratio = 1.5
-		UI2.sweep(pa)
+	var pa := _button(br, "PLAY AGAIN", "primary", func(): replay_requested.emit())
+	pa.size_flags_stretch_ratio = 1.5
+	UI2.sweep(pa)
 	result_panel.visible = true
 	_center(result_panel, true)
 	if pause_panel != null:
 		pause_panel.visible = false
 
-# ---------- the war map's battle (0.31.135) ----------
-func show_war(m: Dictionary) -> void:
-	war_line = m
-	_fill_war()
-
-func _fill_war() -> void:
-	# a gold frame on the results: the territory, the crowns, the points and the clan's bar (or, defending, if it held)
-	if not is_instance_valid(_war_box):
-		return
-	for c in _war_box.get_children():
-		c.queue_free()
-	var m := war_line
-	var f := UI2.frame(_war_box, "ember", 8, 14.0, "orange", {"pattern_mix": 0.0})
-	var place := str(m.get("name", "the territory")).to_upper()
-	if m.is_empty():
-		UI2.center(UI2.body(f, "Counting the battle...", 12, UI2.MUTED, false))
-		return
-	if bool(m.get("def", false)):
-		UI2.center(UI2.text(f, ("%s HELD!" if bool(m.get("held", false)) else "%s LOST") % place, 16, Color("#ffd27a")))
-		UI2.center(UI2.body(f, "You defended it for your house" if bool(m.get("held", false)) else "The attackers took it", 11, Color.WHITE, false))
-		return
-	if bool(m.get("helped", false)):
-		UI2.center(UI2.text(f, "BATTLE FOR %s" % place, 15, Color("#ffd27a")))
-		# (0.31.150: no daily attempts -- "helped" is one of another clan of the attackers' house: its bar moved, not yours)
-		UI2.center(UI2.body(f, "You fought for your house beside another clan (its bar moves, not your clan's)", 11, Color.WHITE, false))
-		return
-	if bool(m.get("late", false)):
-		UI2.center(UI2.text(f, "BATTLE FOR %s" % place, 15, Color("#ffd27a")))
-		UI2.center(UI2.body(f, "The week ended before the battle did -- it doesn't count on the new map", 11, Color.WHITE, false))
-		return
-	var crowns := []
-	if bool(m.get("gate", false)):
-		crowns.append("gate")
-	if bool(m.get("king", false)):
-		crowns.append("rescue")
-	if bool(m.get("won", false)):
-		crowns.append("win")
-	UI2.center(UI2.text(f, ("%s IS YOURS!" % place) if bool(m.get("took", false)) else "BATTLE FOR %s" % place, 16, Color("#ffd27a")))
-	UI2.center(UI2.body(f, "%s  %s   %+d points" % ["♛".repeat(int(m.get("crowns", 0))) if int(m.get("crowns", 0)) > 0 else "no crowns",
-		("(" + ", ".join(crowns) + ")") if not crowns.is_empty() else "", int(m.get("pts", 0))], 13, Color.WHITE, false))
-	if not bool(m.get("took", false)):
-		UI2.center(UI2.body(f, "Your clan: %d / %d to take it" % [int(m.get("bar", 0)), int(m.get("need", 0))], 11, Color(1, 1, 1, 0.8), false))
-	elif m.get("reward", null) is Dictionary:
-		# 0.31.151: the land taken -- the fighters' reward (already in the account)
-		var rw: Dictionary = m.reward
-		var bits := []
-		if int(rw.get("gold", 0)) > 0:
-			bits.append("+%d gold" % int(rw.gold))
-		if int(rw.get("gems", 0)) > 0:
-			bits.append("+%d gems" % int(rw.gems))
-		if str(rw.get("chest", "")) != "":
-			bits.append("a %s" % str(Sim_Eco.CHESTS.get(str(rw.chest), {}).get("name", "chest")))
-		var rl := UI2.body(f, "Your reward: " + "  ·  ".join(bits), 12, Color("#ffd27a"), false)
-		rl.name = "WarReward"
-		UI2.center(rl)
-
 # ---------- scoreboard and MVP (0.31.119, Kevin: "Do all" -- a proper end-of-match screen) ----------
-# Every unit's knockouts, downs, rescues, gathering, gate damage and fish fed come with the snapshots (and are the sim's
-# own offline), so the board is the match as the server counted it. Points: a rescue 300, a knockout 20, a fish fed
-# to their King 30, gathering 2 a load, gate damage 1 per 10. Bots are on the board too (as "Bot · <class>"): most
-# matches are mostly bots, and an honest board says when one outplayed everybody.
-const MVP_RESCUE := 300
+# Every hero's knockouts, downs, towers and tower/gate damage come with the snapshots (and are the sim's own offline), so
+# the board is the match as the server counted it. Points: a knockout 20, tower, gate and King damage 1 per 10. Bots are
+# on the board too (as "Bot · <hero>"): most matches are mostly bots, and an honest board says when one outplayed
+# everybody.
 const MVP_KO := 20
-const MVP_FED := 30
-const MVP_GATHER := 2
 const MVP_GATE := 0.1
 
 static func points(u: Dictionary) -> int:
-	return int(u.get("rescues", 0)) * MVP_RESCUE + int(u.get("kills", 0)) * MVP_KO + int(u.get("fed", 0)) * MVP_FED \
-		+ int(u.get("gathered", 0)) * MVP_GATHER + int(float(u.get("gate_dmg", 0.0)) * MVP_GATE)
+	return int(u.get("kills", 0)) * MVP_KO + int(float(u.get("gate_dmg", 0.0)) * MVP_GATE)
 
 func display_name(u: Dictionary) -> String:
 	if str(u.id) == player_id:
@@ -712,7 +561,7 @@ func is_player(u: Dictionary) -> bool:
 
 func ranking(team := -1) -> Array:
 	# units by points (then knockouts, then fewer downs); team -1 = everyone
-	var out: Array = sim.units.filter(func(u): return (team < 0 or int(u.team) == team) and (sim.moba == null or bool(u.get("hero", false))))
+	var out: Array = sim.units.filter(func(u): return (team < 0 or int(u.team) == team) and bool(u.get("hero", false)))
 	out.sort_custom(func(a, b):
 		var pa := points(a)
 		var pb := points(b)
@@ -750,8 +599,8 @@ func _mvp_strip(v: VBoxContainer) -> void:
 		UI2.GOLD if mine else Color.WHITE, Color("#1a0c02"), 5)
 	head.name = "MvpName"
 	var bits := []
-	if int(m.rescues) > 0:
-		bits.append("%d rescue%s" % [int(m.rescues), "" if int(m.rescues) == 1 else "s"])
+	if int(m.get("towers", 0)) > 0:
+		bits.append("%d tower%s" % [int(m.towers), "" if int(m.towers) == 1 else "s"])
 	bits.append("%d KOs" % int(m.kills))
 	bits.append("%d pts" % points(m))
 	UI2.body(col, " · ".join(bits), 11, Color(1, 1, 1, 0.85), false)
@@ -774,7 +623,7 @@ func show_scoreboard() -> void:
 		v.add_child(hdr)
 		var hl := UI2.text(hdr, "YOUR SIDE" if side == my_team else "ENEMY", 14, TEAM_COLORS[vt(side)], Color("#0a1238"), 4)
 		hl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		for hh in [["KO", 34], ["♛", 26], ["PTS", 46]]:
+		for hh in [["KO", 34], ["TW", 26], ["PTS", 46]]:
 			var hc := UI.label(hdr, str(hh[0]), 10, UI2.MUTED, UI.HEAVY_FONT)
 			hc.autowrap_mode = TextServer.AUTOWRAP_OFF
 			hc.custom_minimum_size = Vector2(float(hh[1]), 0)
@@ -786,7 +635,7 @@ func show_scoreboard() -> void:
 			shown.append(me)
 		for u in shown:
 			_score_row(v, u, rows.find(u) + 1, str(u.id) == player_id, side)
-	UI2.center(UI2.body(v, "Points: rescue %d · KO %d · fish %d · gathering %d · gate dmg ÷%d" % [MVP_RESCUE, MVP_KO, MVP_FED, MVP_GATHER, int(1.0 / MVP_GATE)], 10, UI2.MUTED, true))
+	UI2.center(UI2.body(v, "Points: KO %d · tower, gate and King damage ÷%d  ·  TW: towers" % [MVP_KO, int(1.0 / MVP_GATE)], 10, UI2.MUTED, true))
 	var back := _button(v, "BACK", "secondary", func():
 		score_panel.visible = false                  # (hidden, not freed: its opening animation may still be running)
 		if result_panel != null:
@@ -824,7 +673,7 @@ func _score_row(v: VBoxContainer, u: Dictionary, rank: int, mine: bool, side: in
 	nl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	nl.clip_text = true
 	nl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	for val in [[str(int(u.kills)), 34], [str(int(u.rescues)), 26], [str(points(u)), 46]]:
+	for val in [[str(int(u.kills)), 34], [str(int(u.get("towers", 0))), 26], [str(points(u)), 46]]:
 		var vl := UI.label(h, str(val[0]), 13, Color.WHITE, UI.HEAVY_FONT)
 		vl.autowrap_mode = TextServer.AUTOWRAP_OFF
 		vl.custom_minimum_size = Vector2(float(val[1]), 0)
@@ -841,9 +690,6 @@ func on_event(e: Dictionary) -> void:
 		return
 	_kf_event(e, me)
 	var mine: bool = e.get("team", -1) == me.team
-	if str(e.k) == "class_full" and str(e.get("id", "")) == str(player_id):
-		toast("%s full · %d/%d" % [str(Sim.CLASSES.get(str(e.cls), {"name":str(e.cls).capitalize()}).get("name", str(e.cls).capitalize())) + ("s" if str(e.cls) != "worker" else "s"), int(e.n), int(e.cap)], VisualTheme.GOLD)
-		return
 	match str(e.k):
 		"level":
 			if str(e.get("id", "")) == str(player_id):
@@ -851,7 +697,7 @@ func on_event(e: Dictionary) -> void:
 		"tower_immune":
 			toast("That tower is protected -- take the one in front of it first", Color("#ffcf7a"))
 		"king_immune":
-			toast("Their King is protected until one of his gates falls", Color("#ffcf7a"))
+			toast("Their King is protected until both his towers fall", Color("#ffcf7a"))
 		"king_down":
 			toast("THEIR KING IS DEFEATED!" if int(e.get("team", -1)) != int(me.team) else "OUR KING HAS FALLEN", VisualTheme.GOLD if int(e.get("team", -1)) != int(me.team) else VisualTheme.RED)
 		"ult_ready":                                     # 0.31.157 5V5
@@ -897,120 +743,35 @@ func on_event(e: Dictionary) -> void:
 			elif n >= 3:
 				var who: String = "An ally" if mine else "An enemy"
 				toast("%s: %s" % [who, str(e.name)], VisualTheme.CYAN if mine else VisualTheme.RED)
-		"rescue":
-			toast("OUR KING IS HOME!" if mine else "THE ENEMY RESCUED THEIR KING", VisualTheme.GOLD if mine else VisualTheme.RED)
-		"pickup":
-			toast("You have the King — run home!" if e.id == player_id else ("An ally has our King — escort!" if mine else "Enemy took their King — stop them!"), VisualTheme.CYAN if mine else VisualTheme.RED)
-		"drop":
-			if mine:
-				toast("Our King is loose — grab him!", VisualTheme.GOLD)
-		"recaptured":
-			toast("Our King was dragged back to his cell" if mine else "Enemy King returned to our keep", Color("#d4cbbb"))
-		"class":
-			if e.id == player_id:
-				var nm: String = sim.class_label(me)
-				toast("You are now %s %s" % ["an" if "AEIOU".contains(nm.left(1).to_upper()) else "a", nm], VisualTheme.GOLD)
 		"death":
 			if e.id == player_id:
 				toast("You fell!", VisualTheme.RED)
-		"fed":
-			# Only stage changes are worth a toast (every other fish is just a third of a stage).
-			if bool(e.get("stage_up", true)):
-				if mine:
-					toast("Our King got fatter! Size %d — needs %d to lift" % [int(e.weight), int(e.need)], VisualTheme.RED)
-				else:
-					toast("Their King grew to size %d — needs %d to lift" % [int(e.weight), int(e.need)], Color("#ff9ec8"))
-		"fish_caught":
-			if e.id == player_id:
-				toast("Caught a fish! Feed it to their King in our dungeon", Color("#9fdcff"))
-		"fish_lost":
-			if e.id == player_id:
-				toast("The fish got away!", Color("#c8d4dc"))
-		"tantrum":
-			var tt := int(e.team)
-			if tt == sim.by_id[player_id].team:
-				toast("Our King throws a TANTRUM — reach him now!", VisualTheme.GOLD)
-			else:
-				toast("Their King throws a tantrum!", Color("#ffb3c6"))
-		"lift_join":
-			var lo: Dictionary = sim.oracles[int(e.team)]
-			if lo.carrier == player_id or e.id == player_id:
-				var need := int(e.need)
-				if int(e.n) < need:
-					toast("Lifting %d/%d — need %d more" % [int(e.n), need, need - int(e.n)], Color("#f2d18d"))
-				elif int(e.n) == need:
-					toast("Enough hands — move him!", VisualTheme.GOLD)
 		"gate_broken":
 			var side: String = str(sim.gates[int(e.gate)].side).to_upper()
-			if side == "JAIL":
-				# The jail door in the dungeon wing (Round 13).
-				toast("THEY SMASHED OUR JAIL — stop them taking their King!" if mine else "THEIR JAIL IS OPEN — grab our King!", VisualTheme.RED if mine else VisualTheme.GOLD)
-			else:
-				toast("OUR %s GATE HAS FALLEN!" % side if mine else "ENEMY %s GATE BROKEN — CHARGE!" % side, VisualTheme.RED if mine else VisualTheme.GOLD)
-		"jail_reset":
-			if mine:
-				toast("Our jail is locked again", VisualTheme.CYAN)
-		"gate_rebuilt":
-			if mine:
-				toast("Our %s gate is rebuilt" % str(sim.gates[int(e.gate)].side), VisualTheme.CYAN)
-		"hat_take", "hat_pick":
-			if str(e.get("id", "")) == player_id:
-				var nm: String = sim.class_label(me)
-				toast(("You are now a%s %s!" % ["n" if nm.left(1) in ["A", "E", "I", "O", "U"] else "", nm]), VisualTheme.GOLD)
-		"outpost_captured":
-			if int(e.team) == me.team:
-				toast("Outpost captured! Climb it, or drop resources here", VisualTheme.GOLD)
-			else:
-				toast("The enemy took an outpost", VisualTheme.RED)
-		"outpost_lost":
-			if int(e.team) == me.team:
-				toast("We lost an outpost", VisualTheme.RED)
-		"ladder_up":
-			toast("Ladder raised on the enemy wall — climb over!" if mine else "Enemy ladder on our wall — knock it down!", VisualTheme.GOLD if mine else VisualTheme.RED)
-		"ladder_down":
-			toast("Our ladder was knocked down" if mine else "Enemy ladder destroyed", Color("#d4cbbb"))
-		"upgrade":
-			if mine:
-				var up: Dictionary = Sim.UPGRADES[str(e.upgrade)]
-				toast("%s upgraded (level %d)" % [up.name, int(e.level)], VisualTheme.GOLD)
+			toast("OUR %s GATE HAS FALLEN!" % side if mine else "ENEMY %s GATE BROKEN — CHARGE!" % side, VisualTheme.RED if mine else VisualTheme.GOLD)
 
 # ---------- input ----------
 func _buttons() -> Array:
 	var me: Dictionary = sim.by_id.get(player_id, {})
-	var ctx: String = "" if me.is_empty() else sim.context_action(me)
+	if me.is_empty() or not bool(me.get("hero", false)):
+		return []
 	var br := Vector2(size.x, size.y)
-	if sim.moba != null and not me.is_empty() and bool(me.get("hero", false)):
-		# 0.31.167 5V5 (Kevin: "class roles like League of Legends"): Q, W, E and R in an arc round ATTACK (Wild Rift's
-		# layout), DODGE and WARD above them; on the narrowest screen (420 wide) Q and W reach as far left as the old
-		# ABILITY did. The Crusader's W is his shield, held (it was its own BLOCK button).
-		var crus: bool = me.cls == "knight" and bool(me.get("up", false))
-		var out5 := [
-			{"id":"attack", "c":br + Vector2(-78, -108), "r":46.0},
-			{"id":"ability", "c":br + Vector2(-178, -58), "r":32.0},
-			{"id":"block" if crus else "w", "c":br + Vector2(-188, -146), "r":32.0},
-			{"id":"e", "c":br + Vector2(-148, -226), "r":32.0},
-			{"id":"action" if ctx != "" else "ult", "c":br + Vector2(-66, -218), "r":36.0, "ctx":ctx},
-			{"id":"dodge", "c":br + Vector2(-46, -300), "r":28.0},
-			{"id":"ward", "c":br + Vector2(-122, -306), "r":24.0},
-		]
-		return out5
-	var out := [
-		{"id":"attack", "c":br + Vector2(-82, -118), "r":50.0},
-		{"id":"ability", "c":br + Vector2(-178, -78), "r":34.0},
-		{"id":"dodge", "c":br + Vector2(-66, -228), "r":31.0},
+	# 0.31.167 5V5 (Kevin: "class roles like League of Legends"): Q, W, E and R in an arc round ATTACK (Wild Rift's
+	# layout), DODGE and WARD above them; on the narrowest screen (420 wide) Q and W reach as far left as the old
+	# ABILITY did. The Crusader's W is his shield, held (it was its own BLOCK button).
+	var crus: bool = me.cls == "knight" and bool(me.get("up", false))
+	return [
+		{"id":"attack", "c":br + Vector2(-78, -108), "r":46.0},
+		{"id":"ability", "c":br + Vector2(-178, -58), "r":32.0},
+		{"id":"block" if crus else "w", "c":br + Vector2(-188, -146), "r":32.0},
+		{"id":"e", "c":br + Vector2(-148, -226), "r":32.0},
+		{"id":"ult", "c":br + Vector2(-66, -218), "r":36.0},
+		{"id":"dodge", "c":br + Vector2(-46, -300), "r":28.0},
+		{"id":"ward", "c":br + Vector2(-122, -306), "r":24.0},
 	]
-	if ctx != "":
-		out.append({"id":"action", "c":br + Vector2(-172, -182), "r":36.0, "ctx":ctx})
-	if not me.is_empty() and me.cls == "knight" and bool(me.get("up", false)):
-		out.append({"id":"block", "c":br + Vector2(-262, -64), "r":30.0})     # the Crusader keeps his shield
-	if sim.moba != null and not me.is_empty() and bool(me.get("hero", false)) and ctx == "":
-		out.append({"id":"ult", "c":br + Vector2(-172, -182), "r":36.0})      # 0.31.157 5V5: the ultimate (level 6)
-	if sim.moba != null and not me.is_empty() and bool(me.get("hero", false)):
-		out.append({"id":"ward", "c":br + Vector2(-150, -264), "r":26.0})     # 0.31.158 5V5: a ward at your feet
-	return out
 
 func _modal_open() -> bool:
-	return (workshop_panel != null and workshop_panel.visible) or paused() or (result_panel != null and result_panel.visible) \
+	return paused() or (result_panel != null and result_panel.visible) \
 		or (score_panel != null and is_instance_valid(score_panel) and score_panel.visible) or shop_open()
 
 func _input(event: InputEvent) -> void:
@@ -1029,14 +790,11 @@ func _input(event: InputEvent) -> void:
 			KEY_J, KEY_SPACE: action_pressed.emit("attack")
 			KEY_K: action_pressed.emit("ability")
 			KEY_L, KEY_SHIFT: action_pressed.emit("dodge")
-			KEY_E: action_pressed.emit("action")
 			KEY_R: action_pressed.emit("ult")             # 0.31.157 5V5
 			KEY_U: action_pressed.emit("w")               # 0.31.167 5V5: W and E
 			KEY_I: action_pressed.emit("e")
 			KEY_T: action_pressed.emit("ward")            # 0.31.158 5V5
-			KEY_B:
-				if sim.moba != null:
-					open_shop()
+			KEY_B: open_shop()
 
 func _touch(index: int, pos: Vector2, pressed: bool) -> void:
 	if pressed:
@@ -1047,23 +805,15 @@ func _touch(index: int, pos: Vector2, pressed: bool) -> void:
 			if qc_panel.get_global_rect().has_point(pos + global_position):
 				return                             # (the wheel's own buttons take it)
 			qc_panel.visible = false
-		if sim.moba != null:
-			for i in 3:
-				if pick_rect(i).has_point(pos) and _picks_open():
-					action_pressed.emit("pick%d" % i)
-					get_viewport().set_input_as_handled()
-					return
-			if shop_rect().grow(6.0).has_point(pos):
-				open_shop()                            # 0.31.157 5V5: the shop
+		for i in 3:
+			if pick_rect(i).has_point(pos) and _picks_open():
+				action_pressed.emit("pick%d" % i)
 				get_viewport().set_input_as_handled()
 				return
-		if sim.commander:
-			for i in Cards.HAND:
-				if card_rect(i).grow(4.0).has_point(pos):
-					_card_tap[i] = _time
-					card_pressed.emit(i)
-					get_viewport().set_input_as_handled()
-					return
+		if shop_rect().grow(6.0).has_point(pos):
+			open_shop()                            # 0.31.157 5V5: the shop
+			get_viewport().set_input_as_handled()
+			return
 		for b in _buttons():
 			if pos.distance_to(b.c) <= b.r + 12.0:
 				_touches[index] = b.id
@@ -1169,12 +919,8 @@ func _process(delta: float) -> void:
 	if sim == null:
 		return
 	var me: Dictionary = sim.by_id.get(player_id, {})
-	if not me.is_empty():
-		_refresh_workshop(me)
-		if shop_open():
-			_refresh_shop(me)
-		if sim.moba == null:
-			_outpost_alerts(int(me.team))
+	if not me.is_empty() and shop_open():
+		_refresh_shop(me)
 	if _top_layer != null:
 		var tk := _top_key(me)
 		if tk != _top_parts:
@@ -1203,25 +949,16 @@ func _top_key(me: Dictionary) -> Array:
 	var w := size.x
 	var hpw := minf(220.0, w * 0.52)
 	var k := [w, size.y, t, int(maxf(0.0, float(sim.match_time) - sim.time)), int(ceil(me.hp)),
-		int(hpw * clampf(me.hp / maxf(1.0, me.max_hp), 0.0, 1.0)), sim.class_label(me), _oracle_status(me)]
-	if sim.moba != null:
-		var lv := int(me.get("level", 1))
-		k.append_array([int(ceil(sim.moba.king_frac(t) * 100.0)), int(ceil(sim.moba.king_frac(1 - t) * 100.0)), lv,
-			int(minf(160.0, w * 0.38) * clampf(float(me.get("xp", 0.0)) / sim.moba.need(lv), 0.0, 1.0)),
-			sim.moba.towers_down(0), sim.moba.towers_down(1), int(float(me.get("gold", 0.0))), sim.moba.can_shop(me),
-			(me.get("items", []) as Array).duplicate()])
-		var b: Dictionary = me.get("buffs", {})
-		for bk in ["arcane", "ember", "lord"]:
-			k.append(int(maxf(0.0, float(b.get(bk, -1.0)) - float(sim.time))))
-		k.append(int(sim.moba.wyrm_stacks[clampi(t, 0, 1)]))
-	else:
-		k.append_array([sim.score[0], sim.score[1], sim.stock[t].wood, sim.stock[t].stone, int(me.load.n), str(me.load.kind)])
-		for g in sim.gates:
-			if g.team == t and str(g.get("kind", "")) != "jail":
-				k.append(int(56.0 * g.hp / g.max_hp) if sim.gate_blocks(g) else -1)
-		for op in sim.outposts:
-			k.append(int(op.owner))
-			k.append(roundi(float(op.prog) * 50.0))
+		int(hpw * clampf(me.hp / maxf(1.0, me.max_hp), 0.0, 1.0)), sim.class_label(me), _king_status(me)]
+	var lv := int(me.get("level", 1))
+	k.append_array([int(ceil(sim.moba.king_frac(t) * 100.0)), int(ceil(sim.moba.king_frac(1 - t) * 100.0)), lv,
+		int(minf(160.0, w * 0.38) * clampf(float(me.get("xp", 0.0)) / sim.moba.need(lv), 0.0, 1.0)),
+		sim.moba.towers_down(0), sim.moba.towers_down(1), int(float(me.get("gold", 0.0))), sim.moba.can_shop(me),
+		(me.get("items", []) as Array).duplicate()])
+	var b: Dictionary = me.get("buffs", {})
+	for bk in ["arcane", "ember", "lord"]:
+		k.append(int(maxf(0.0, float(b.get(bk, -1.0)) - float(sim.time))))
+	k.append(int(sim.moba.wyrm_stacks[clampi(t, 0, 1)]))
 	return k
 
 func _draw_top_layer() -> void:
@@ -1262,21 +999,17 @@ func _draw_hud() -> void:
 		return
 	var tq := Time.get_ticks_usec() if prof_on else 0
 	var w := size.x
-	_draw_station_titles(me)                  # first, so buttons and panels draw over them
-	if prof_on: tq = _ph("titles", tq)
 	if _top_layer == null:
 		_draw_top(me)                           # (no layer: drawn with the rest)
-	if sim.moba != null:
-		_draw_shop_pulse(me)
-		_draw_camp_timers()
+	_draw_shop_pulse(me)
+	_draw_camp_timers()
 	if prof_on: tq = _ph("top", tq)
-	if prof_on: tq = _ph("castle_status", tq)
 	# Toast.
 	var age := _time - _toast_at
 	if age < 2.6 and _toast != "":
 		var c := _toast_color
 		c.a = clampf(2.6 - age, 0.0, 1.0)
-		_text(Vector2(w * 0.5, 176 if sim.moba == null else 284), _toast, 18, c, _bold)     # (0.31.157 5V5: under the kill feed, clear of the gold)
+		_text(Vector2(w * 0.5, 284), _toast, 18, c, _bold)     # (0.31.157 5V5: under the kill feed, clear of the gold)
 	_draw_kill_feed()
 	_draw_idle(me)
 	_draw_rejoin()
@@ -1285,13 +1018,11 @@ func _draw_hud() -> void:
 	if prof_on: tq = _ph("bars", tq)
 	_draw_pings()
 	_draw_gate_bars()
-	_draw_oracle_marker(me)
+	_draw_king_marker(me)
 	_draw_numbers()
 	if prof_on: tq = _ph("pings..numbers", tq)
 	# (0.31.163, Kevin: "Remove both": the fps / memory readout isn't shown -- it's in the diag log's STAT lines)
-	if sim.commander and not _modal_open():
-		_draw_cards(me)
-	if sim.moba != null and not _modal_open():
+	if not _modal_open():
 		_draw_picks(me)                           # (before the respawn line: the hand plays while you're down too)
 	if prof_on: tq = _ph("cards+picks", tq)
 	if me.state == "dead":
@@ -1315,7 +1046,7 @@ func _draw_hud() -> void:
 	if prof_on: tq = _ph("stick+buttons", tq)
 
 func _draw_top(me: Dictionary) -> void:
-	# the scoreboard, my health and status, the castle's (or the 5v5's) status lines -- on the top layer (0.31.160)
+	# the scoreboard, my health and status, the 5v5's status lines -- on the top layer (0.31.160)
 	var w := size.x
 	# Scoreboard.
 	var bar := Rect2(8, 8, w - 16, 62)
@@ -1324,15 +1055,10 @@ func _draw_top(me: Dictionary) -> void:
 	_ci.draw_style_box(_bar_style, bar)
 	var t: int = me.team
 	_text(Vector2(24, 34), "YOUR SIDE", 12, TEAM_COLORS[vt(t)], _bold, HORIZONTAL_ALIGNMENT_LEFT, 120)
-	if sim.moba != null:
-		# 0.31.156 5V5: each side's King (the heart), his health
-		_text(Vector2(24, 60), "♛ %d%%" % int(ceil(sim.moba.king_frac(t) * 100.0)), 22, VisualTheme.GOLD, _title, HORIZONTAL_ALIGNMENT_LEFT, 120)
-		_text(Vector2(w - 144, 34), "ENEMY", 12, TEAM_COLORS[vt(1 - t)], _bold, HORIZONTAL_ALIGNMENT_RIGHT, 120)
-		_text(Vector2(w - 144, 60), "%d%% ♛" % int(ceil(sim.moba.king_frac(1 - t) * 100.0)), 22, VisualTheme.GOLD, _title, HORIZONTAL_ALIGNMENT_RIGHT, 120)
-	else:
-		_text(Vector2(24, 60), "%d ♛" % sim.score[t], 26, VisualTheme.GOLD, _title, HORIZONTAL_ALIGNMENT_LEFT, 120)
-		_text(Vector2(w - 144, 34), "ENEMY", 12, TEAM_COLORS[vt(1 - t)], _bold, HORIZONTAL_ALIGNMENT_RIGHT, 120)
-		_text(Vector2(w - 144, 60), "%d ♛" % sim.score[1 - t], 26, VisualTheme.GOLD, _title, HORIZONTAL_ALIGNMENT_RIGHT, 120)
+	# 0.31.156 5V5: each side's King (the heart), his health
+	_text(Vector2(24, 60), "♛ %d%%" % int(ceil(sim.moba.king_frac(t) * 100.0)), 22, VisualTheme.GOLD, _title, HORIZONTAL_ALIGNMENT_LEFT, 120)
+	_text(Vector2(w - 144, 34), "ENEMY", 12, TEAM_COLORS[vt(1 - t)], _bold, HORIZONTAL_ALIGNMENT_RIGHT, 120)
+	_text(Vector2(w - 144, 60), "%d%% ♛" % int(ceil(sim.moba.king_frac(1 - t) * 100.0)), 22, VisualTheme.GOLD, _title, HORIZONTAL_ALIGNMENT_RIGHT, 120)
 	var left := maxf(0.0, float(sim.match_time) - sim.time)
 	_text(Vector2(w * 0.5, 52), "%d:%02d" % [int(left) / 60, int(left) % 60], 32, Color("#e8eef2") if left > 60 else VisualTheme.RED, _title)
 	# Player status line.
@@ -1342,8 +1068,8 @@ func _draw_top(me: Dictionary) -> void:
 	_ci.draw_rect(Rect2(hp_rect.position, Vector2(hp_rect.size.x * frac, hp_rect.size.y)), Color("#7dff8a") if frac > 0.35 else VisualTheme.RED)
 	_ci.draw_rect(hp_rect, VisualTheme.GOLD_DARK, false, 1.5)
 	_text(Vector2(14, 110), "%s · %d HP" % [sim.class_label(me).to_upper(), int(ceil(me.hp))], 13, VisualTheme.TEXT, _bold, HORIZONTAL_ALIGNMENT_LEFT, 260)
-	_text(Vector2(14, 128), _oracle_status(me), 12, VisualTheme.GOLD, _font, HORIZONTAL_ALIGNMENT_LEFT, w - 80)
-	_draw_castle_status(me)
+	_text(Vector2(14, 128), _king_status(me), 12, VisualTheme.GOLD, _font, HORIZONTAL_ALIGNMENT_LEFT, w - 80)
+	_draw_moba_status(me)
 
 func _draw_idle(me: Dictionary) -> void:
 	# 0.31.119: "A BOT IS PLAYING FOR YOU" while the server's bot holds my unit (I gave no input for a while)
@@ -1362,7 +1088,7 @@ func _draw_idle(me: Dictionary) -> void:
 var _idle_style: StyleBox = null
 
 # ---------------- kill feed (0.31.120, Kevin: "kill feed") ----------------
-# On the right under the toast line: who knocked out whom, kings grabbed and rescued, gates broken --
+# On the right under the toast line: who knocked out whom, towers and gates broken, epic monsters slain --
 # newest on top, KF_MAX lines, each KF_LIFE seconds then fading. Players by name (you: "You", on a gold plate),
 # bots by class, in their side's colour; a knockout with no one behind it (a fall, the moat) shows a skull.
 const KF_MAX := 4
@@ -1371,7 +1097,7 @@ const KF_PX := 12
 const KF_TOP := 202.0                 # (under the toast; the quick-chat lines are on the left at the same height)
 const KF_STEP := 19.0
 var kill_feed: Array = []                  # newest first: {"parts": [[text, colour], ...], "at": _time, "me": I'm in it}
-var kill_feed_on := true                   # (a match can turn it off: the tutorial)
+var kill_feed_on := true                   # (a match can turn it off)
 
 func kf_name(id: String) -> Array:
 	# [text, colour] for a unit in the feed
@@ -1396,18 +1122,6 @@ func _kf_event(e: Dictionary, me: Dictionary) -> void:
 		return
 	var grey := Color("#c9d1dc")
 	match str(e.k):
-		"card":
-			# 0.31.153 COMMANDER: what the enemy commander just sent, in the feed; yours as a toast
-			var cd: Dictionary = Cards.card(str(e.get("card", "")))
-			var n: int = (e.get("ids", []) as Array).size()
-			if cd.is_empty() or n == 0:
-				return
-			if int(e.get("team", -1)) == int(me.team):
-				toast("%s%s ARE OUT!" % [str(cd.name).to_upper(), (" ×%d" % n) if n > 1 else ""] if n > 1 else "%s IS OUT!" % str(cd.name).to_upper(),
-					Color(str(Cards.RARITY_COLOR.get(str(cd.rarity), "#ffffff"))).lightened(0.2))
-				return
-			_kf_add([["Enemy", TEAM_COLORS[vt(1 - int(me.team))].lightened(0.15)], [" sent ", grey],
-				[str(cd.name) + (" ×%d" % n if n > 1 else ""), Color(str(Cards.RARITY_COLOR.get(str(cd.rarity), "#ffffff")))]], false)
 		"lord_down":
 			var ours_l := int(e.get("team", -1)) == int(me.team)
 			var lb := str(e.get("by", ""))
@@ -1422,8 +1136,6 @@ func _kf_event(e: Dictionary, me: Dictionary) -> void:
 			if str(e.get("id", "")) != str(player_id) and sim.by_id.has(str(e.get("id", ""))):
 				_kf_add([kf_name(str(e.id)), [" took %s" % str(sim.moba.BUFF_NAMES.get(str(e.buff), "")), Color("#7fb8ff") if str(e.buff) == "arcane" else Color("#ff9a5a")]], false)
 		"tower_down":
-			if sim.moba == null:
-				return
 			var ours_t := int(e.get("team", -1)) == int(me.team)
 			_kf_add([["%s %s %s tower fell" % ["Our" if ours_t else "Their", str(sim.moba.LANE_NAMES[int(e.lane)]),
 				"outer" if int(e.tier) == 1 else "inner"], VisualTheme.RED if ours_t else VisualTheme.GOLD]], false)
@@ -1438,25 +1150,13 @@ func _kf_event(e: Dictionary, me: Dictionary) -> void:
 				_kf_add([["☠", grey], [" ", grey], kf_name(victim)], victim == player_id)
 			else:
 				_kf_add([kf_name(by), ["  ⚔  ", Color(1, 1, 1, 0.85)], kf_name(victim)], victim == player_id or by == player_id)
-		"rescue":
-			var lead := str(e.get("id", ""))
-			var ours := int(e.get("team", -1)) == int(me.team)
-			if sim.by_id.has(lead):
-				_kf_add([kf_name(lead), [" rescued %s King!" % ("our" if ours else "their"), VisualTheme.GOLD]], lead == player_id)
-			else:
-				_kf_add([["%s King was rescued!" % ("Our" if ours else "Their"), VisualTheme.GOLD]], false)
-		"pickup":
-			var carrier := str(e.get("id", ""))
-			if sim.by_id.has(carrier):
-				var ours2 := int(e.get("team", -1)) == int(me.team)
-				_kf_add([kf_name(carrier), [" grabbed %s King" % ("our" if ours2 else "their"), grey]], carrier == player_id)
 		"gate_broken":
 			var gi := int(e.get("gate", -1))
 			if gi < 0 or gi >= sim.gates.size():
 				return
 			var g: Dictionary = sim.gates[gi]
 			var ours3 := int(g.team) == int(me.team)
-			var what := "the jail" if str(g.get("kind", "")) == "jail" or str(g.get("side", "")) == "jail" else "the %s gate" % str(g.get("side", "")).to_lower()
+			var what := "the %s gate" % str(g.get("side", "")).to_lower()
 			var by2 := str(e.get("by", ""))
 			var tail := [" broke %s %s" % [("our" if ours3 else "their"), what.trim_prefix("the ")], VisualTheme.RED if ours3 else VisualTheme.GOLD]
 			if by2 != "" and sim.by_id.has(by2):
@@ -1552,128 +1252,6 @@ func _draw_picks(me: Dictionary) -> void:
 		_text(Vector2(r.get_center().x, r.position.y + 25.0), nm, 12 if nm.length() <= 12 else 10, Color.WHITE, _bold)
 		if have > 0:
 			_text(Vector2(r.get_center().x, r.position.y + 42.0), "have %d" % have, 10, Color(1, 1, 1, 0.6), _font)
-
-# ---------- COMMANDER's hand (0.31.153) ----------
-# A column on the right edge, between the kill feed and DODGE: the next card (small), your army, then the 4 cards of the
-# hand, with the command points as a bar beside them. A card you can't pay for yet is dimmed and fills from the bottom as
-# the points come in; FULL when every soldier is already out. Tap a card to play it (siege_mode._play_card).
-const CMD_COL := Color("#b25cff")
-var _card_tex := {}
-var _card_tap := {}                    # slot -> when it was tapped (a little press)
-var _card_style := {}
-var _cmd_flash := -10.0                # (a refused card: the bar flashes)
-
-func _card_size() -> Vector2:
-	var top := maxf(KF_TOP + KF_STEP * 3.0, 150.0) + 58.0      # (under the kill feed's rows and the NEXT card)
-	var bottom := size.y - 262.0                               # (over DODGE)
-	var ch := clampf((bottom - top - 3.0 * 6.0) / 4.0, 52.0, 84.0)
-	return Vector2(roundf(ch * 0.8), roundf(ch))
-
-func card_rect(i: int) -> Rect2:
-	var cs := _card_size()
-	var bottom := size.y - 262.0
-	var x := size.x - cs.x - 8.0
-	var y := bottom - (cs.y + 6.0) * float(Cards.HAND - i) + 6.0
-	return Rect2(x, y, cs.x, cs.y)
-
-func _ctex(id: String) -> Texture2D:
-	if not _card_tex.has(id):
-		var p := Cards.portrait(id)
-		_card_tex[id] = load(p) as Texture2D if ResourceLoader.exists(p) else null
-	return _card_tex[id]
-
-func _cstyle(rarity: String, dim: bool) -> StyleBoxFlat:
-	var key := rarity + ("d" if dim else "")
-	if not _card_style.has(key):
-		var sb := StyleBoxFlat.new()
-		sb.bg_color = Color(0.07, 0.06, 0.12, 0.92)
-		var rc := Color(str(Cards.RARITY_COLOR.get(rarity, "#b8c4c9")))
-		sb.border_color = rc.darkened(0.45) if dim else rc
-		sb.set_border_width_all(3 if rarity in ["epic", "legendary"] else 2)
-		sb.set_corner_radius_all(8)
-		sb.shadow_color = Color(0, 0, 0, 0.45)
-		sb.shadow_size = 3
-		_card_style[key] = sb
-	return _card_style[key]
-
-func _draw_cards(me: Dictionary) -> void:
-	var t := int(me.team)
-	var c: Dictionary = sim.cmd[t]
-	if c.is_empty():
-		return
-	var pts := float(c.pts)
-	var full: bool = sim.cmd_ready(t).is_empty()
-	for i in Cards.HAND:
-		var id := str(c.hand[i])
-		var cd: Dictionary = Cards.card(id)
-		var r := card_rect(i)
-		var tap := _time - float(_card_tap.get(i, -10.0))
-		if tap < 0.12:
-			r = r.grow(-3.0)
-		var afford := pts >= float(cd.cost)
-		var dim := not afford or full
-		draw_style_box(_cstyle(str(cd.rarity), dim), r)
-		var inner := Rect2(r.position + Vector2(3, 3), Vector2(r.size.x - 6, r.size.y - 18))
-		var tex := _ctex(id)
-		if tex != null:
-			draw_texture_rect(tex, inner, false, Color(0.5, 0.5, 0.55) if dim else Color.WHITE)
-		if not afford:
-			# the points still to come, as a shade over the top of the portrait
-			var need := clampf(1.0 - pts / float(cd.cost), 0.0, 1.0)
-			draw_rect(Rect2(inner.position, Vector2(inner.size.x, inner.size.y * need)), Color(0.02, 0.02, 0.06, 0.55))
-		var name := str(cd.name).to_upper()
-		var nsz := 10 if name.length() <= 9 else 9
-		_text(Vector2(r.position.x + r.size.x * 0.5, r.end.y - 4.0), name, nsz, Color.WHITE if not dim else Color(0.75, 0.75, 0.8), _bold)
-		# cost bubble (top left), squad (top right)
-		var cc := r.position + Vector2(10, 10)
-		draw_circle(cc, 11.0, Color(0.1, 0.02, 0.18))
-		draw_circle(cc, 9.5, CMD_COL if afford else CMD_COL.darkened(0.5))
-		_text(cc + Vector2(0, 5), str(int(cd.cost)), 14, Color.WHITE, _title)
-		if int(cd.squad) > 1:
-			_text(Vector2(r.end.x - 12, r.position.y + 15), "×%d" % int(cd.squad), 11, Color.WHITE, _bold)
-		if full:
-			var fr := Rect2(r.position.x, r.position.y + r.size.y * 0.42, r.size.x, 15)
-			draw_rect(fr, Color(0.55, 0.08, 0.05, 0.85))
-			_text(Vector2(fr.position.x + fr.size.x * 0.5, fr.end.y - 3.0), "FULL", 11, Color.WHITE, _bold)
-	# the next card, small, over the column
-	var r0 := card_rect(0)
-	var nid := str((c.queue as Array)[0]) if not (c.queue as Array).is_empty() else ""
-	var nr := Rect2(r0.end.x - 40.0, r0.position.y - 48.0, 40.0, 40.0)
-	if nid != "":
-		draw_style_box(_cstyle(str(Cards.card(nid).rarity), true), nr)
-		var nt := _ctex(nid)
-		if nt != null:
-			draw_texture_rect(nt, nr.grow(-3.0), false, Color(0.8, 0.8, 0.85))
-		_text(Vector2(nr.position.x - 64.0, nr.position.y + 15.0), "NEXT", 10, Color(1, 1, 1, 0.7), _bold, HORIZONTAL_ALIGNMENT_RIGHT, 60)
-	# (right-aligned text: x is the left of the box it's aligned in)
-	_text(Vector2(nr.position.x - 104.0, nr.position.y + 33.0), "ARMY %d/%d" % [sim.cmd_army(t), sim.cmd_soldiers(t)], 11,
-		VisualTheme.GOLD if not full else Color("#ff9a7a"), _bold, HORIZONTAL_ALIGNMENT_RIGHT, 100)
-	# the command points: a bar of 10 down the left of the column, the count on top
-	var top := r0.position.y
-	var bottom := card_rect(Cards.HAND - 1).end.y
-	var bar := Rect2(r0.position.x - 15.0, top + 18.0, 9.0, bottom - top - 18.0)
-	draw_rect(bar, Color(0.05, 0.02, 0.1, 0.8))
-	var frac := clampf(pts / Sim.CMD_MAX, 0.0, 1.0)
-	var flash := clampf(1.0 - (_time - _cmd_flash) / 0.5, 0.0, 1.0)
-	var fill_col: Color = CMD_COL.lerp(Color("#ff5050"), flash)
-	draw_rect(Rect2(bar.position.x, bar.end.y - bar.size.y * frac, bar.size.x, bar.size.y * frac), fill_col)
-	for k in range(1, int(Sim.CMD_MAX)):
-		var yy := bar.end.y - bar.size.y * float(k) / Sim.CMD_MAX
-		draw_line(Vector2(bar.position.x, yy), Vector2(bar.end.x, yy), Color(0, 0, 0, 0.55), 1.0)
-	draw_rect(bar, Color(0.85, 0.7, 1.0, 0.6), false, 1.0)
-	var bc := Vector2(bar.position.x + bar.size.x * 0.5, top + 6.0)
-	draw_circle(bc, 12.0, Color(0.1, 0.02, 0.18))
-	draw_circle(bc, 10.5, fill_col)
-	_text(bc + Vector2(0, 6), str(int(floor(pts))), 15, Color.WHITE, _title)
-	if int(c.played) == 0 and me.state != "dead":
-		# until the first card: a pulsing hint beside the hand
-		var pa := 0.55 + 0.45 * sin(_time * 5.0)
-		var hy := (top + bottom) * 0.5
-		_text(Vector2(bar.position.x - 214.0, hy - 6.0), "TAP A CARD TO SEND", 14, Color(1, 1, 1, pa), _bold, HORIZONTAL_ALIGNMENT_RIGHT, 200)
-		_text(Vector2(bar.position.x - 214.0, hy + 12.0), "YOUR SOLDIERS OUT  ▶", 14, Color(0.84, 0.64, 1.0, pa), _bold, HORIZONTAL_ALIGNMENT_RIGHT, 200)
-
-func card_refused() -> void:
-	_cmd_flash = _time
 
 func _draw_rejoin() -> void:
 	# 0.31.120: "RECONNECTING..." while the game gets back onto my seat
@@ -1820,66 +1398,6 @@ func _draw_numbers() -> void:
 		c.a = 1.0 - u * u
 		_text(p + Vector2(0, -34.0 * u), str(n.text), 18, c, _bold)
 
-func _draw_castle_status(me: Dictionary) -> void:
-	var t: int = me.team
-	if sim.moba != null:
-		_draw_moba_status(me)
-		return
-	var load_txt := ""
-	if me.load.n > 0:
-		load_txt = "   carrying %d %s" % [me.load.n, me.load.kind]
-	_text(Vector2(14, 146), "WOOD %d · STONE %d%s" % [sim.stock[t].wood, sim.stock[t].stone, load_txt], 12, Color("#cfe8b8"), _bold, HORIZONTAL_ALIGNMENT_LEFT, 300)
-	# Our two gates as small health bars.
-	var x := 14.0
-	for g in sim.gates:
-		if g.team != t or str(g.get("kind", "")) == "jail":      # the jail door shows its own bar in the world
-			continue
-		var r := Rect2(Vector2(x + 40, 153), Vector2(56, 6))
-		_text(Vector2(x, 160), str(g.side).to_upper().left(1) + " GATE", 10, Color(1, 1, 1, 0.75), _bold, HORIZONTAL_ALIGNMENT_LEFT, 44)
-		_ci.draw_rect(r.grow(1), Color(0, 0, 0, 0.6))
-		if sim.gate_blocks(g):
-			_ci.draw_rect(Rect2(r.position, Vector2(r.size.x * g.hp / g.max_hp, r.size.y)), TEAM_COLORS[vt(t)])
-		else:
-			_text(r.position + Vector2(2, 7), "BROKEN", 9, VisualTheme.RED, _bold, HORIZONTAL_ALIGNMENT_LEFT, 60)
-		x += 112.0
-	_draw_outpost_pips(t, x + 4.0)
-
-var _outpost_alert_at := -100.0
-var _outpost_prev: Dictionary = {}
-
-func _draw_outpost_pips(t: int, x: float) -> void:
-	# One diamond per outpost: owner colour (grey neutral); while a capture is in progress it
-	# fills with the capturing team's colour. Ours first, then the enemy side.
-	if sim.outposts.is_empty():
-		return
-	_text(Vector2(x, 160), "POSTS", 10, Color(1, 1, 1, 0.75), _bold, HORIZONTAL_ALIGNMENT_LEFT, 44)
-	var cx := x + 44.0
-	for op in sim.outposts:
-		var c := Vector2(cx, 156)
-		var pts := PackedVector2Array([c + Vector2(0, -7), c + Vector2(7, 0), c + Vector2(0, 7), c + Vector2(-7, 0)])
-		var owner: int = op.owner
-		_ci.draw_colored_polygon(pts, Color(0, 0, 0, 0.6))
-		var inner := PackedVector2Array([c + Vector2(0, -5), c + Vector2(5, 0), c + Vector2(0, 5), c + Vector2(-5, 0)])
-		var base: Color = Color(0.55, 0.58, 0.62) if owner < 0 else TEAM_COLORS[vt(owner)]
-		_ci.draw_colored_polygon(inner, base)
-		var pr: float = op.prog
-		var capturing: bool = (owner < 0 and absf(pr) > 0.02) or (owner == 0 and pr < 0.999) or (owner == 1 and pr > -0.999)
-		if capturing:
-			var towards: Color = TEAM_COLORS[vt(0)] if pr > 0.0 else TEAM_COLORS[vt(1)]
-			var f := absf(pr) if owner < 0 else 1.0 - absf(pr)
-			_ci.draw_arc(c, 9.0, -PI / 2, -PI / 2 + TAU * clampf(f, 0.0, 1.0), 18, towards, 2.5, true)
-		cx += 20.0
-
-func _outpost_alerts(t: int) -> void:
-	# Alert once when enemies start taking one of ours. (0.31.160: from _process -- the pips are drawn only on change)
-	for op in sim.outposts:
-		var prev: float = _outpost_prev.get(op.id, op.prog)
-		var losing: bool = int(op.owner) == t and ((t == 0 and op.prog < prev - 0.0001) or (t == 1 and op.prog > prev + 0.0001))
-		if losing and _time - _outpost_alert_at > 10.0:
-			_outpost_alert_at = _time
-			toast("Enemies are taking one of our outposts!", VisualTheme.RED)
-		_outpost_prev[op.id] = op.prog
-
 func _draw_gate_bars() -> void:
 	if not gate_bars_source.is_valid() or not project.is_valid():
 		return
@@ -1893,124 +1411,19 @@ func _draw_gate_bars() -> void:
 		draw_rect(r.grow(1.5), Color(0, 0, 0, 0.7))
 		draw_rect(Rect2(r.position, Vector2(r.size.x * float(b.fill), r.size.y)), b.color)
 
-func _oracle_status(me: Dictionary) -> String:
-	if sim.moba != null:
-		# 0.31.156 5V5: the Kings are the hearts
-		if not sim.moba.king_threat(int(me.team)).is_empty() and sim.moba.king_open(int(me.team)):
-			return "OUR KING IS UNDER ATTACK!"
-		if sim.moba.king_open(1 - int(me.team)):
-			return "Their King is open -- defeat him!"
-		return "Defeat their King -- he's guarded until a gate of his falls"
-	var o: Dictionary = sim.oracles[me.team]
-	var need: int = sim.lifters_needed(o)
-	var suffix := "  · size %d, needs %d" % [int(o.weight), need] if int(o.weight) > 0 else ""
-	return _oracle_state_text(me, o) + suffix
+func _king_status(me: Dictionary) -> String:
+	# 0.31.156 5V5: the Kings are the hearts
+	if not sim.moba.king_threat(int(me.team)).is_empty() and sim.moba.king_open(int(me.team)):
+		return "OUR KING IS UNDER ATTACK!"
+	if sim.moba.king_open(1 - int(me.team)):
+		return "Their King is open -- defeat him!"
+	return "Defeat their King -- he's guarded until both his towers fall"
 
-func _oracle_state_text(_me: Dictionary, o: Dictionary) -> String:
-	match str(o.state):
-		"cell": return "Our King: captive in the enemy dungeon"
-		"carried":
-			var n: int = o.lifters.size()
-			var need: int = sim.lifters_needed(o)
-			if int(o.carry_team) != int(o.team):
-				return "Our King: ENEMIES are hauling him back!"
-			if n < need:
-				return "Our King: lifting %d/%d — need %d more!" % [n, need, need - n]
-			return "Our King: YOU lead the lift!" if o.carrier == player_id else "Our King: allies are carrying him"
-		"dropped": return "Our King: loose — back to his cell in %ds" % int(ceil(Sim.DROP_RETURN - (sim.time - o.dropped_at)))
-	return ""
-
-static var _plate_styles: Dictionary = {}
-
-func _plate_style(team: int, up: bool) -> StyleBoxFlat:
-	# A slim signboard: dark lacquered panel, thin gold rim (brighter when upgraded), a team-coloured
-	# top edge, a soft shadow. Anti-aliased rounded corners. Cached.
-	var key := "%d:%s" % [team, up]
-	if not _plate_styles.has(key):
-		var sb := StyleBoxFlat.new()
-		sb.bg_color = Color(0.10, 0.08, 0.06, 0.88)
-		sb.border_color = Color("#ffd257") if up else Color("#c9a45a")
-		sb.set_border_width_all(1)
-		sb.border_width_top = 2
-		sb.set_corner_radius_all(6)
-		sb.shadow_color = Color(0, 0, 0, 0.35)
-		sb.shadow_size = 3
-		sb.shadow_offset = Vector2(0, 2)
-		sb.anti_aliasing = true
-		_plate_styles[key] = sb
-	return _plate_styles[key]
-
-func _draw_station_titles(me: Dictionary) -> void:
-	# Name plates over the hat shops and the workshops in view. Round 18 (Kevin: "very bulky and
-	# covering a lot of the ground"): one slim line -- the name (Cinzel 13) and, for hat shops, the stock
-	# as dots -- about half the height of the 0.19.5 two-line signboard; shown within 16 m, fading over
-	# the last 4. A pointer marks the building; kept on screen at the edges.
-	if not project.is_valid() or not on_screen.is_valid() or sim.moba != null:
-		return
-	var spots := []
-	for st in sim.stands:
-		var up: bool = int(sim.levels[int(st.team)].get("hat_" + str(st.cls), 0)) > 0
-		var nm: String = (str(Sim.UPGRADE_NAME[st.cls]) if up else str(Sim.CLASSES[st.cls].name)).to_upper()
-		spots.append({"p": st.p, "name": nm, "stock": int(st.stock), "team": int(st.team), "up": up,
-			"at": st.get("b", st.p), "top": float(st.get("top", 2.7))})
-	for t in 2:
-		spots.append({"p": Sim.workshop(t), "name": "WORKSHOP", "stock": -1, "team": t, "up": false})
-	var title_font: Font = VisualTheme.TITLE_FONT
-	var name_px := 13
-	for sp in spots:
-		var dist: float = (sp.p as Vector2).distance_to(me.pos)
-		if dist > 16.0:
-			continue
-		# Over the building's roof for hat shops (Round 20), over the spot otherwise.
-		var at: Vector2 = sp.get("at", sp.p)
-		var world := Vector3(at.x, Sim.height_at(sp.p) + float(sp.get("top", 2.7)) - (Sim.height_at(sp.p) if sp.has("top") else 0.0), at.y)
-		if not on_screen.call(world):
-			continue
-		var fade := clampf((16.0 - dist) / 4.0, 0.0, 1.0)
-		var s: Vector2 = project.call(world)
-		var title := ("★ " if sp.up else "") + str(sp.name)
-		var tw := title_font.get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1, name_px).x
-		var pips := int(sp.stock) >= 0
-		var w := tw + 18.0 + (3 * 7.5 + 5.0 if pips else 0.0)
-		var h := 22.0
-		var x := clampf(s.x - w * 0.5, 6.0, size.x - w - 6.0)          # never cut off at the edge
-		var r := Rect2(x, s.y - h - 7.0, w, h)
-		var sb := _plate_style(int(sp.team), bool(sp.up))
-		var team_col: Color = TEAM_COLORS[vt(int(sp.team))]
-		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-		var tip := Vector2(clampf(s.x, r.position.x + 8.0, r.end.x - 8.0), r.end.y + 5.0)
-		draw_colored_polygon(PackedVector2Array([tip, tip + Vector2(-5, -6), tip + Vector2(5, -6)]), Color(sb.border_color, fade))
-		sb.bg_color.a = 0.88 * fade
-		sb.border_color.a = fade
-		sb.shadow_color.a = 0.35 * fade
-		draw_style_box(sb, r)
-		sb.bg_color.a = 0.88
-		sb.border_color.a = 1.0
-		sb.shadow_color.a = 0.35
-		draw_rect(Rect2(r.position + Vector2(6, 1), Vector2(r.size.x - 12, 1.5)), Color(team_col, 0.9 * fade))
-		var name_col := Color("#ffe9b0") if sp.up else Color("#fff6e3")
-		var tx := r.position.x + 9.0
-		var ty := r.position.y + 16.0
-		draw_string_outline(title_font, Vector2(tx, ty), title, HORIZONTAL_ALIGNMENT_LEFT, -1, name_px, 3, Color(0, 0, 0, 0.6 * fade))
-		draw_string(title_font, Vector2(tx, ty), title, HORIZONTAL_ALIGNMENT_LEFT, -1, name_px, Color(name_col, fade))
-		if pips:
-			for k in 3:
-				var c := Vector2(tx + tw + 8.0 + k * 7.5, r.position.y + h * 0.5 + 0.5)
-				if k < int(sp.stock):
-					draw_circle(c, 2.6, Color(team_col, fade))
-				else:
-					draw_arc(c, 2.4, 0.0, TAU, 12, Color(0.86, 0.79, 0.64, 0.6 * fade), 1.0, true)
-
-func _draw_oracle_marker(me: Dictionary) -> void:
-	# Point to our Oracle (or home, while carrying her) when she is off-screen.
+func _draw_king_marker(me: Dictionary) -> void:
+	# 0.31.156: point to the King to defeat, theirs, when he is off-screen
 	if not project.is_valid() or not on_screen.is_valid():
 		return
-	var goal: Vector2 = sim.oracles[me.team].pos
-	if sim.moba != null:
-		goal = sim.moba.king_pos(1 - int(me.team))         # 0.31.156: the King to defeat, theirs
-	if me.carrying:
-		var ho: Dictionary = sim.lifting_oracle(me)
-		goal = Sim.throne(me.team) if int(ho.get("team", me.team)) == me.team else Sim.cell(int(ho.team))
+	var goal: Vector2 = sim.moba.king_pos(1 - int(me.team))
 	var world := Vector3(goal.x, 1.0, goal.y)
 	if on_screen.call(world):
 		return
@@ -2018,11 +1431,11 @@ func _draw_oracle_marker(me: Dictionary) -> void:
 	var center := size * 0.5
 	var dir := (p - center).normalized()
 	var edge := center + dir * minf(size.x * 0.42, size.y * 0.36)
-	var col: Color = VisualTheme.GOLD if not me.carrying else TEAM_COLORS[vt(int(me.team))]
+	var col: Color = VisualTheme.GOLD
 	var tip := edge + dir * 16
 	var side := Vector2(-dir.y, dir.x) * 11
 	draw_colored_polygon(PackedVector2Array([tip, edge - dir * 6 + side, edge - dir * 6 - side]), col)
-	_text(edge - dir * 22 + Vector2(0, 5), "HOME" if me.carrying else "KING", 11, col, _bold)
+	_text(edge - dir * 22 + Vector2(0, 5), "KING", 11, col, _bold)
 
 func _draw_button(b: Dictionary, me: Dictionary) -> void:
 	var c: Vector2 = b.c
@@ -2039,12 +1452,10 @@ func _draw_button(b: Dictionary, me: Dictionary) -> void:
 			label = "ATTACK"
 			col = Color("#9a6414")
 			rim = Color("#fff1bf")
-			ready = not me.carrying
 		"block":
 			label = "BLOCK"
 			col = Color("#2c4a6e")
 			rim = Color("#bcd8ff")
-			ready = not me.carrying
 		"w", "e":
 			# 0.31.167 5V5: W and E -- locked until their level (LV 2 / LV 3), then their name and recharge
 			var k: Dictionary = sim.moba.kits.kit(str(me.get("hid", "")), str(b.id))
@@ -2059,19 +1470,18 @@ func _draw_button(b: Dictionary, me: Dictionary) -> void:
 		"ability":
 			var ab := str(sim.ability_of(me))
 			label = ab.to_upper() if ab != "" else "—"
-			if sim.moba != null:
-				badge = "Q"
+			badge = "Q"
 			col = Color("#35226a")
 			rim = Color("#d6b8ff")
 			cd = me.cd_ability
 			cd_max = maxf(0.1, {"hammer":Sim.HAMMER_CD, "resurrect":Sim.RESURRECT_CD, "vanish":Sim.VANISH_CD, "pierce":Sim.PIERCE_CD,
 				"meteor":Sim.METEOR_CD}.get(ab, float(Sim.CLASSES[me.cls].ab_cd)))
-			if me.has("kq") and sim.moba != null:
+			if me.has("kq"):
 				# 0.31.168: a new hero's Q is a kit spell -- its own name and recharge
 				var kq: Dictionary = sim.moba.kits.kit(str(me.get("hid", "")), "q")
 				label = str(kq.get("short", kq.get("name", label)))
 				cd_max = maxf(0.1, float(kq.get("cd", cd_max)))
-			ready = ab != "" and cd <= 0.0 and not me.carrying
+			ready = ab != "" and cd <= 0.0
 		"ult":
 			# 0.31.157 5V5: the ultimate -- locked until level 6 (LV 6), its name once it's yours, a glow when it's ready
 			var info: Dictionary = sim.moba.ult_info(me)
@@ -2101,25 +1511,7 @@ func _draw_button(b: Dictionary, me: Dictionary) -> void:
 			label = "DODGE"
 			cd = me.cd_dodge
 			cd_max = 2.2
-			ready = cd <= 0.0 and not me.carrying
-		"action":
-			label = {"hat_up":"UPGRADE","hat":"NEW HAT","class_full":"FULL","grab":"LIFT","throw":"THROW","workshop":"WORKSHOP","chop":"CHOP","mine":"MINE",
-				"repair":"REPAIR","gather":"WORKING","repairing":"REPAIRING","ladder":"LADDER","build_ladder":"BUILDING","fish":"FISH","feed":"FEED",
-				"join":"HELP LIFT","letgo":"LET GO","tower_up":"CLIMB","tower_down":"CLIMB DOWN","pick_up":"PICK UP",
-				"bomb_pick":"PICK UP BOMB","bomb_throw":"THROW BOMB",
-				"hat_pick":"PICK UP HAT","hat_equip_up":"WEAR UPGRADE",
-				"launch_lever":"PULL LEVER"}.get(b.ctx, "USE")
-			col = Color("#155258")
-			rim = Color("#9ff6ef")
-			if b.ctx == "hat_up":
-				# Upgrade at the hat shop: gold button, cost underneath, dim when unaffordable.
-				var hid: String = sim.hat_shop_upgrade(me)
-				if hid != "":
-					var cost: Dictionary = sim.upgrade_cost(me.team, hid)
-					ready = sim.can_buy(me.team, hid)
-					col = Color("#8a5a10")
-					rim = Color("#ffe39a")
-					_text(b.c + Vector2(-60, b.r + 18), "%dw · %ds" % [int(cost.wood), int(cost.stone)], 11, Color(1, 1, 1, 0.85), _bold, HORIZONTAL_ALIGNMENT_CENTER, 120)
+			ready = cd <= 0.0
 	var pressed: bool = _time - float(_pressed_at.get(b.id, -10.0)) < 0.12 or (b.id == "attack" and _attack_held)
 	var body := col.lightened(0.15) if pressed else col
 	if not ready:

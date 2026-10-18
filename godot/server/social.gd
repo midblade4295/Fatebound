@@ -72,13 +72,11 @@ var eco = null             # eco_accounts.gd
 var send_fn: Callable = func(_cid, _msg): pass
 var close_fn: Callable = func(_cid): pass
 var in_match_fn: Callable = func(_acct) -> bool: return false
-var war_of_fn: Callable = func(_acct) -> Dictionary: return {}   # 0.31.151: siege_server -- the battle a player is in ({bid, tid})
 var log_fn: Callable = func(_s): pass
 var event_fn: Callable = func(_acct, _ev, _p): pass   # 0.31.118: usage statistics (server/analytics.gd) -- never the text
 var rank_fn: Callable = func(_acct) -> int: return 0   # 0.31.120: this week's leaderboard rank (0: not on it)
 var prof_at := {}          # 0.31.120: pid -> clocks of its recent profile-card asks
 var clans = null           # 0.31.134: server/clans.gd (null: no clans -- the tests of this file alone)
-var world = null           # 0.31.135: server/world.gd, the war map (Crown War step 2)
 var _dirty_at := -1.0
 var _mute_clock := 0.0
 
@@ -261,8 +259,6 @@ func tick(delta: float) -> void:
 		_reload_muted()
 	if clans != null:
 		clans.tick(delta)
-	if world != null:
-		world.tick(delta)
 	for pid in invites.keys():
 		var mine: Dictionary = invites[pid]
 		for pa in mine.keys():
@@ -350,8 +346,6 @@ func drop(cid: int) -> void:
 	if not list.is_empty():
 		return
 	online.erase(pid)
-	if world != null:
-		world.unwatch(pid)
 	if users.has(pid):
 		users[pid].seen = unix()
 		_mark()
@@ -380,8 +374,6 @@ func forget(acct: String) -> void:
 		_leave(pid)
 	if clans != null:
 		clans.forget(pid)
-	if world != null:
-		world.forget(pid)
 	for cid in conns.keys():
 		if str(conns[cid]) == pid:
 			close_fn.call(cid)
@@ -411,12 +403,6 @@ func _read_name(pid: String) -> void:
 func _card(pid: String) -> Dictionary:
 	var u: Dictionary = users.get(pid, {})
 	var c := {"pid":pid, "n":str(u.get("name", "Player")), "tt":str(u.get("title", "")), "st":status_of(pid), "seen":int(u.get("seen", 0))}
-	if str(c.st) == "match":
-		# 0.31.151: in a battle on the war map -- which one (a friend's JOIN goes into it) and where
-		var wb: Dictionary = war_of_fn.call(str(u.get("acct", "")))
-		if not wb.is_empty():
-			c["wb"] = str(wb.get("bid", ""))
-			c["wt"] = str(wb.get("tid", ""))
 	var ct := tag_of(pid)
 	if ct != "":
 		c["ct"] = ct                                     # 0.31.134: their clan's tag
@@ -431,8 +417,6 @@ func _me_msg(pid: String) -> Dictionary:
 	if clans != null:
 		m["clans"] = 1
 		m["ct"] = tag_of(pid)
-	if world != null:
-		m["war"] = 1                                     # 0.31.135: the war map is on this server
 	return m
 
 func _friends_msg(pid: String) -> Dictionary:
@@ -475,10 +459,6 @@ func handle(cid: int, msg: Dictionary) -> void:
 		if clans != null:
 			clans.handle(pid, msg)                       # 0.31.134
 		return
-	if k.begins_with("war_"):
-		if world != null and clans != null:
-			world.handle(pid, msg)                       # 0.31.135
-		return
 	match k:
 		"chat": _chat(pid, msg)
 		"add": _add(pid, who)
@@ -492,7 +472,7 @@ func handle(cid: int, msg: Dictionary) -> void:
 		"nojoin": _decline_invite(pid, str(msg.get("party", "")))
 		"leave": _leave(pid)
 		"kick": _kick(pid, who)
-		"play": _play(pid, str(msg.get("war", "")).left(40))
+		"play": _play(pid)
 		"prof": _prof(cid, pid, who)
 		"refresh":
 			_read_name(pid)
@@ -877,19 +857,16 @@ func _kick(pid: String, target: String) -> void:
 	_leave(target)
 	_note(target, "You were removed from the party", true)
 
-func _play(pid: String, war := "") -> void:
-	# the leader starts: everyone in the menu goes into the online match with them. 0.31.149: or into the leader's battle
-	# on the war map ("war": its id -- every match is a battle there now; a member of another house is turned away there)
+func _play(pid: String) -> void:
+	# the leader starts: everyone in the menu goes into the online match with them (0.31.169: Crown War's battles -- a
+	# "war" id -- went with Crown War)
 	var pa: String = party_of.get(pid, "")
 	if pa == "" or str(parties[pa].leader) != pid:
 		return
 	var n := 0
 	for m in parties[pa].members:
 		if str(m) != pid and online.has(str(m)) and status_of(str(m)) == "online":
-			var go := {"t":"so", "k":"go", "party":pa, "by":_name(pid)}
-			if war != "":
-				go["war"] = war
-			_send(str(m), go)
+			_send(str(m), {"t":"so", "k":"go", "party":pa, "by":_name(pid)})
 			n += 1
 	_sys(pa, "%s is heading into battle%s" % [_name(pid), " -- the party follows!" if n > 0 else ""])
 	log_fn.call("party %s plays (%d with the leader)" % [pa, n + 1])

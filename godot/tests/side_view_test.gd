@@ -24,7 +24,16 @@ func _init() -> void:
 	root.add_child(mode)
 
 func _seat(i: int) -> void:
-	mode._build_online_match({"team_size": 16, "seed": 4242, "you": IDS[i], "match": i + 1})
+	mode._build_online_match({"team_size": 5, "seed": 4242, "you": IDS[i], "match": i + 1})
+	# (0.31.169: a 5v5 -- the enemy heroes brought into view a few metres off, revealed through the fog of war)
+	var sim = mode.sim
+	var me: Dictionary = sim.by_id[IDS[i]]
+	var k := 0
+	for u in sim.units:
+		if bool(u.get("hero", false)) and int(u.team) != int(me.team):
+			u.pos = (me.pos as Vector2) + Vector2(-6.0 + 3.0 * k, 5.0 if int(me.team) == 0 else -5.0)
+			u["rev_until"] = INF
+			k += 1
 
 func _stick(off: Vector2) -> Vector2:
 	var hud = mode.hud
@@ -66,8 +75,8 @@ func _verify(i: int) -> void:
 		else:
 			if c == View.TEAM_COLORS[1]: foe_ok += 1
 			else: foe_bad += 1
-	check(ally_ok > 5 and ally_bad == 0, "ally health bars blue (%d ok, %d not)" % [ally_ok, ally_bad])
-	check(foe_ok > 5 and foe_bad == 0, "enemy health bars red (%d ok, %d not)" % [foe_ok, foe_bad])
+	check(ally_ok >= 3 and ally_bad == 0, "ally health bars blue (%d ok, %d not)" % [ally_ok, ally_bad])
+	check(foe_ok >= 3 and foe_bad == 0, "enemy health bars red (%d ok, %d not)" % [foe_ok, foe_bad])
 	# 0.31.88 (Kevin: "Show the nameplate for the players own name also"): my plate from my profile, with no "pn" from
 	# a server; nobody else gets one without it.
 	var mine := 0

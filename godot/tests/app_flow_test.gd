@@ -130,7 +130,7 @@ func _process(d: float) -> bool:
 		5:
 			gold_before = p.d.gold
 			check(btn("mode_bots") == null and btn("mode_online") == null, "no VS BOTS / ONLINE choice on Home (always the server)")
-			app.start_match(false)                     # a local match (as the tutorial runs) to check rewards without a server
+			app.start_match(false)                     # a local match to check rewards without a server
 			check(app.siege != null and not app.chrome.visible, "a match starts with the menu hidden")
 			# The home hero owns a 4x-MSAA physical-resolution 3D viewport plus particles; it must not
 			# keep rendering behind the match (the menu's looping PLAY tweens should pause too).
@@ -140,9 +140,9 @@ func _process(d: float) -> bool:
 		6:
 			var s = app.siege.sim
 			var me: Dictionary = s.by_id["you"]
-			me.rescues = 1; me.kills = 5
+			me.kills = 5
 			s.score = [3, 0]
-			s._finish("rescue")
+			s._finish("king")
 			wait_until = t + 1.0
 		7:
 			check(int(p.d.stats.matches) == 1 and int(p.d.gold) > gold_before, "match rewards landed in the profile (+%d gold)" % (int(p.d.gold) - gold_before))
@@ -160,7 +160,7 @@ func _process(d: float) -> bool:
 			check(app.siege == null and app.modal != null and str(app.modal.get_script().resource_path).ends_with("moba_panel.gd")
 				and btn("moba_battle") != null, "PLAY opens the 5v5's hero window")
 			app.close_modal()
-			app.quick_battle()
+			app.start_match(true)
 			check(app.siege != null and app.siege.online and app.modal == null, "an online session starts")
 			wait_until = t + 5.0
 		10:

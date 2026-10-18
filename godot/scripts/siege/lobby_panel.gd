@@ -143,20 +143,14 @@ func update(msg: Dictionary) -> void:
 		left = l
 	title.text = "BATTLE STARTS IN"
 	title.add_theme_color_override("font_color", GOLD)
-	var slots := int(msg.get("slots", 32))
+	var slots := int(msg.get("slots", 10))
 	var online := int(msg.get("online", 1))
 	count_lbl.text = "%d / %d PLAYERS" % [mini(online, slots), slots]
-	if msg.get("war", null) is Dictionary:
-		# 0.31.135: a battle on the war map
-		var wr: Dictionary = msg.war
-		var hn := {"lions":"Lions", "stags":"Stags", "ravens":"Ravens"}
-		mode_lbl.text = "BATTLE FOR %s  ·  House %s attack%s" % [str(wr.get("name", "")).to_upper(), str(hn.get(str(wr.get("ah", "")), "?")),
-			(" House %s" % str(hn.get(str(wr.get("dh", "")), ""))) if str(wr.get("dh", "")) != "" else " (nobody holds it)"]
-	elif bool(msg.get("running", false)):
+	if bool(msg.get("running", false)):
 		var n := int(msg.get("in_match", 0))
 		mode_lbl.text = "A battle is on -- %d player%s fighting. You join it at zero." % [n, "" if n == 1 else "s"]
 	else:
-		mode_lbl.text = "A new 16 vs 16 battle starts at zero"
+		mode_lbl.text = "A new 5 vs 5 battle starts at zero"
 	sub_lbl.text = note_text if note_text != "" else "bots fill the empty slots"
 	var names: Array = (msg.get("names", []) as Array).duplicate()
 	var tt: Array = msg.get("tt", []) if msg.get("tt", []) is Array else []
