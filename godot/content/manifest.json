@@ -4,42 +4,42 @@
  "packs": [
   {
    "name": "ui",
-   "file": "ui-070d7994fcc7.pck",
-   "size": 20468056,
-   "sha256": "16bc260f1c4682e884b27d7fd51ddec14254796d971aa5d288321383a4afd944",
-   "inputs": "070d7994fcc7dde7c5ebdeb9a72492e05c34d49e3e4a6cadf76a225c069570b5",
+   "file": "ui-aa97e38c4269.pck",
+   "size": 20414416,
+   "sha256": "53a25b7f7762079d2707316fc340f6910fe85b68a0b99377c9e9e42eae8f9155",
+   "inputs": "aa97e38c42692f480f4c923eee2addf90e1d3321b12645b0e7332edf4b2077be",
    "probe": "res://assets/ui/currency/coin.png"
   },
   {
    "name": "world",
-   "file": "world-07280a04b72d.pck",
-   "size": 56885828,
-   "sha256": "4ba0803b72eee971267f3e47a5ae0cebc73ba7eaa45e08c9478b119dd3ca581c",
-   "inputs": "07280a04b72ddadf8684cd2c1381427f0a137d8bfaa677dc08acfaf449057dfb",
+   "file": "world-69a3843b2a64.pck",
+   "size": 23796232,
+   "sha256": "cff73adc31a36baf2cbf5f65a5fc1d3126ef07f7921ea2314bed18d7acf9eb0d",
+   "inputs": "69a3843b2a644011d4fed6cfdb55e86b8db5cf887d352623f67d6cc02c128063",
    "probe": "res://assets/kaykit/anim/Rig_Medium_CombatMelee.glb"
   },
   {
    "name": "heroes",
-   "file": "heroes-98bd68ca9e0c.pck",
-   "size": 68462196,
-   "sha256": "b85089097c9b90f09ee460621e5af6f3a9d9f6338a776ba8f68f1aec7803091c",
-   "inputs": "98bd68ca9e0c3617f69f9e5e4866a6ce1a322e9b6bd4ea1962f50f31d56ec9c0",
+   "file": "heroes-5cb06d1b61f2.pck",
+   "size": 55045820,
+   "sha256": "fe3ce751ba4565000fed7a09b46e695e94eac23a193f1284aebb677eb551cb61",
+   "inputs": "5cb06d1b61f24625e9b285c6c1a536f948126285964a6e58423931a41d575e98",
    "probe": "res://assets/meshy/archmage/rigged.glb"
   },
   {
    "name": "minions",
-   "file": "minions-101c07f10d78.pck",
-   "size": 41233356,
-   "sha256": "bd4647bdaa4b89f2a305299e0041dacc3a22b732d1e459a9898611ac990f1aab",
-   "inputs": "101c07f10d780524c9e523c2bb7a202d1f8e8621c6c9f23f61d79e33b980e404",
+   "file": "minions-81b68a271fb7.pck",
+   "size": 38603660,
+   "sha256": "fa3737b99728fff7a2375b3572b653a25d3dd2ddbda6729acf2a8a3f6aabf7e2",
+   "inputs": "81b68a271fb751f1275244972da138422b41f8d2ac5d3ce8ba29ca693409671f",
    "probe": "res://assets/meshy/minion_caster/rigged.glb"
   },
   {
    "name": "champions",
-   "file": "champions-d581a7642d07.pck",
-   "size": 29581792,
-   "sha256": "bb6a698174e852b6ad01b53e827890d70dea5bdd9f56cef5383aef6fdcd332b5",
-   "inputs": "d581a7642d07270283ecb86e1a199a104506f10523bdb7251f6349d11e0ab776",
+   "file": "champions-d87532ee6242.pck",
+   "size": 25634552,
+   "sha256": "41db0bb2451604445df5079bf7694c6ca51a2a8936aceeb4457a897e9301df16",
+   "inputs": "d87532ee6242179368c33ea5bcfa00ddd38cec4821e5e0ae9d2885306a94fb6e",
    "probe": "res://assets/meshy/dragoon/rigged.glb"
   },
   {
@@ -60,10 +60,10 @@
   },
   {
    "name": "audio",
-   "file": "audio-3b550a027262.pck",
-   "size": 12797668,
-   "sha256": "28e924dc5660ced3892e6dadbccdde51ab2ffcabb52969338fc11a0f83d062ef",
-   "inputs": "3b550a0272629cd7350c530a60c6ff5e88df8e176825c8bde834f9a128047ee0",
+   "file": "audio-9591e4704a15.pck",
+   "size": 6726828,
+   "sha256": "a21da94110a403dd905c8715209461ef9e107916285e8d5d9a92a852a948d508",
+   "inputs": "9591e4704a157980881dcddf7ffaefd58854323a3ae93dbf4aef2f931bab579d",
    "probe": "res://assets/music/match.ogg"
   }
  ]

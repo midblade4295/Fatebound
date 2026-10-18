@@ -5174,3 +5174,67 @@ above).
 - Quick suite: all passed (82). tools/cold_start_check.sh: PASS. The Play AAB (throwaway key, presets untouched): BASE OK
   (273 files), CONTENT OK, play_games true, bundletool valid. Preview APK:
   build/Fatebound-Siege-0.31.168-fatebound.apk (preview key; sha256 60ea3f16...ce7198).
+
+## 0.31.169 — Siege's code and assets deleted (step 4 of the 5v5 plan)
+Kevin ("Yes" to: delete the old Siege code and assets, then online 5v5). The 5v5 plays exactly as before: the sim's
+deterministic fingerprint (two 480 s bot matches, every event and unit hashed every 5 s) is unchanged -- seed 3
+97e30cea900b6b37, seed 17 e7fc16691408f976 -- and the map's still shots match 0.31.168's within render noise.
+- 20,800 lines of GDScript out (scripts and server 10,300; the rest tests and tools); assets 414 -> 335 MB in the repo;
+  a fresh install downloads 222 MB of content packs instead of 281.
+- The sim (siege_sim.gd, 4,881 -> 1,960 lines): hats and hat stands, the workshop, forge, upgrades and stock, items,
+  resource nodes and gathering, Workers and Villagers, ladders, catapults, bombs, the launcher, the Kings' carrying /
+  feeding / fish / tantrums / jail, outposts and tower climbing, the Siege bots' brain (raids, ramparts, answering,
+  calls), the castle layout (siege_castle.gd) and Commander. A match is setup(5, seed) + setup_moba(hero, seed); the
+  Kings are each side's heart on his throne. Without the 5v5 (tests' plain sims) bots stand still and a knockout is only
+  counted and respawned; _set_class stays for tests. The per-class balance stats nothing read any more are gone.
+- The view (siege_view.gd, 7,584 -> 5,300): the Siege castles and their kits' builders, castle_mesh.gd, hat shops,
+  the workshop, outposts and their fires, resource nodes, loose logs/rocks, bombs, launchers, ladders, catapults,
+  hats in hand, loads, fishing gear, chips; the King's fatter stages (one model, breathing and swaying as before);
+  the KayKit Tools clips ("t/": chopping, fishing, carrying) and the Villager's look; the jail gate; the tower-deck
+  shot arc; 24 Siege events. The Worker's look stays (his weapons still come round in the shop).
+- The HUD: the workshop panel, the castle status (wood, stone, gates, outpost pips), hat-shop titles, the King's
+  carrying status and HOME marker, ACTION and its labels, Siege's toasts and kill-feed lines, the war map's results.
+  The pause sheet's HOW TO WIN is the 5v5's (push a lane, the King's towers, defeat their King); the status line says
+  the King is guarded until both his towers fall (it said "a gate"); the scoreboard's crown column is towers (TW) and
+  points are KOs and tower/gate/King damage (rescues, fish and gathering were always 0 in a 5v5).
+- The match (siege_mode.gd): no workshop, call-the-bots, King lifts, repairs; Siege's sounds (chopping, mining,
+  hats, bombs, catapults, ladders, fishing, wooden decks); the Herald's Siege calls (pickups, rescues, jails,
+  outposts, match point). A gate of a keep broken is now announced ("our gate" / "their gate": its case was shadowed).
+  An offline match is always a 5v5 (the Knight when no hero was picked).
+- Online (still off -- step 2): the snapshot carries only what the 5v5 shares (21 unit fields, not 33: no carrying,
+  loads, tasks, rescues, gathering, fed, towers; no items, bombs, launchers, nodes, outposts, hat stands, hats,
+  ladders, stock, levels, Kings' carrying; projectiles without the tower-deck arc). Net.TEAM_SIZE 5. The server's
+  rooms run a 5v5 (setup_moba), seats are heroes. Protocol stays 35 (the economy and leaderboard send it too).
+- Crown War (the war map), whose battles were Siege matches: gone -- war_table.gd, war_tour.gd (and its voiced
+  Herald), the clan window's WAR MAP, the battle banners, JOIN into a friend's battle, the results' WAR MAP, the war
+  rewards notice; server/world.gd, the war rooms, the war messages, the war reward grant. Home keeps its war room
+  (the table's land, unclaimed). Clans and houses stay.
+- The server (0.31.169): world.gd, the war rooms, call_bots, the "m" task messages and Siege's ledger counts gone; the
+  ledger pays the 5v5's numbers like the phone counts them; the profile card carries towers ("tw"; "r" stays for older
+  apps) and the app shows TOWERS where it showed RESCUES; the install list matches (test_server_files.py now also flags
+  installed scripts nothing loads). The leaderboard's points (still Siege's rescue/fish/gathering formula, which can no
+  longer grow) stay for the online 5v5 to redo.
+- The Locker's line under a class: its upgrade (or whose upgrade it is), not Siege's hat stands and workshop.
+- The land: the Siege field's stubs (bridges, hills, scarps, outposts) and their callers.
+- Tests: deleted with their features -- siege_sim_smoke, tower, items, stands, bomb, announce, blast_nodes, digest,
+  answer, launcher, outpost_look, knight_ai, siege_net_smoke, world, war_battle, war_ui, war_tour, war_rewards, and the
+  Siege benches/diagnostics (siege_trace, siege_profile, fight_bench, battle_bench, perf_bench, _king3, _wade,
+  _block_rules); updated for the 5v5 -- siege_reach (fountain to the enemy King, his gates, the pits), siege_land_check,
+  siege_human_soak, hammer, priest, combo, quest_track, scoreboard, kill_feed, side_view, match_audio, home_heroes,
+  app_flow, social, social_ui, clans_ui, profile_card, moba.
+- Tools: the Siege trailers, store shots and their compositing, castle/outpost/item/terrain/water shots, map_plan,
+  class_balance, economy_sim, vo_split.
+- Assets (packs ui, world, heroes, minions, champions, audio rebuilt and uploaded): the hat shops, workshop and
+  outposts (Meshy), the Villager's body and portrait, every body's KayKit Tools clips
+  (anims_t.res) and Rig_Medium_Tools.glb, the King's fatter/fattest models, the fish, the tutorial's and the war tour's
+  voice, the Herald's Siege calls, Siege's sounds, the bridge, unused KayKit tools and 80 unused hexagon pieces.
+- Kept on purpose: the economy's Siege data (stats, titles, the Worker's weapons in the shop rotation and his body to
+  preview them, achievements registered in Play Console) for saves and the server; the Siege Pass's name; Home's war
+  room backdrop and its land (war_map.gd, war_land_*); the online plumbing (rooms, lobby, idle, rejoin, JOIN a friend)
+  for step 2.
+- Version 0.31.169, versionCode 255, SERVER_BUILD 0.31.169 (a server redeploy is needed for the profile card's towers;
+  nothing else in the live game changes until then).
+- Checks: quick suite ALL SIEGE TESTS PASSED (75); tools/cold_start_check.sh: COLD_START_PASS; the Play AAB
+  (throwaway key, presets untouched): BASE OK (259 files), CONTENT OK, play_games true, bundletool valid; the sim's
+  fingerprint as 0.31.168 (seed 3 97e30cea900b6b37, seed 17 e7fc16691408f976). Preview APK:
+  build/Fatebound-Siege-0.31.169-fatebound.apk (31 MB, preview key), sha256 6f1519a7...a38729c42.
