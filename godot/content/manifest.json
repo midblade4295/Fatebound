@@ -4,10 +4,10 @@
  "packs": [
   {
    "name": "ui",
-   "file": "ui-9fb984929972.pck",
-   "size": 31563472,
-   "sha256": "a9673cffe173a4acb7797dac3e054f546120127ac6cdbf430ed52d93f252f17a",
-   "inputs": "9fb98492997235c4637f2e502dcd47fbb46ac356e66f44dc73ad9cfa5d42100a",
+   "file": "ui-d5f10492a0c1.pck",
+   "size": 31119920,
+   "sha256": "8415622df355d2dd78e30bfc9e90d6b9a66c74b952b81e8c733a87b9790aeb3a",
+   "inputs": "d5f10492a0c1a782b51e7d86282da380d88b18439bd4e2f4beb6319872257e1e",
    "probe": "res://assets/ui/abilities/archmage_e.png"
   },
   {

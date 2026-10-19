@@ -3,12 +3,12 @@ extends RefCounted
 # scroll (assets/ui/tutorial/scroll_<pose>.png): its size, its parchment and the clear part of it for the text, in
 # its pixels
 const POSES := {
-	"hold": {"size": Vector2(1100, 623), "parch": Rect2(171.4, 262.6, 874.3, 316.9), "text": Rect2(206.4, 325.2, 729.6, 239.5)},
-	"lying": {"size": Vector2(988, 671), "parch": Rect2(48.0, 310.0, 889.0, 315.0), "text": Rect2(89.0, 361.0, 734.0, 250.0)},
-	"leaning": {"size": Vector2(1100, 653), "parch": Rect2(281.7, 242.8, 769.2, 332.7), "text": Rect2(311.4, 294.7, 633.9, 266.9)},
-	"sitting": {"size": Vector2(1060, 696), "parch": Rect2(50.0, 320.0, 957.0, 331.0), "text": Rect2(77.0, 391.0, 574.0, 242.0)},
-	"peeking": {"size": Vector2(1082, 674), "parch": Rect2(56.0, 219.0, 963.0, 404.0), "text": Rect2(87.0, 297.0, 806.0, 308.0)},
-	"napping": {"size": Vector2(1072, 625), "parch": Rect2(53.0, 241.0, 962.0, 337.0), "text": Rect2(80.0, 328.0, 814.0, 234.0)},
-	"pointing": {"size": Vector2(1033, 694), "parch": Rect2(42.0, 377.0, 943.0, 280.0), "text": Rect2(68.0, 466.0, 816.0, 178.0)},
-	"hanging": {"size": Vector2(1100, 577), "parch": Rect2(44.7, 174.2, 802.9, 356.7), "text": Rect2(71.7, 227.3, 650.1, 288.7)},
+	"hold": {"size": Vector2(1100, 624), "parch": Rect2(172.0, 263.0, 872.8, 316.4), "text": Rect2(206.9, 325.6, 728.4, 239.1)},
+	"lying": {"size": Vector2(989, 673), "parch": Rect2(48.0, 312.0, 889.0, 315.0), "text": Rect2(89.0, 363.0, 734.0, 250.0)},
+	"leaning": {"size": Vector2(1100, 652), "parch": Rect2(281.7, 242.0, 766.6, 332.5), "text": Rect2(311.3, 293.7, 631.7, 266.0)},
+	"sitting": {"size": Vector2(1062, 698), "parch": Rect2(51.0, 321.0, 957.0, 331.0), "text": Rect2(78.0, 392.0, 574.0, 242.0)},
+	"peeking": {"size": Vector2(1086, 678), "parch": Rect2(58.0, 221.0, 963.0, 404.0), "text": Rect2(89.0, 299.0, 806.0, 308.0)},
+	"napping": {"size": Vector2(1073, 627), "parch": Rect2(53.0, 241.0, 962.0, 339.0), "text": Rect2(88.0, 328.0, 806.0, 238.0)},
+	"pointing": {"size": Vector2(1034, 697), "parch": Rect2(43.0, 379.0, 943.0, 281.0), "text": Rect2(69.0, 468.0, 816.0, 178.0)},
+	"hanging": {"size": Vector2(1100, 579), "parch": Rect2(45.6, 173.2, 802.9, 358.6), "text": Rect2(72.7, 230.1, 650.1, 285.0)},
 }

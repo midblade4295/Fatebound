@@ -5731,3 +5731,19 @@ on top of it and sometimes leaning on it ect".
 - Checks: the quick suite all passed (96, tutorial_test among them); COLD_START_PASS; the Play AAB (throwaway key,
   presets untouched): BASE OK (271 files), CONTENT OK, play_games true, bundletool valid. Preview APK:
   build/Fatebound-Siege-0.31.182-fatebound.apk (32 MB, preview key), sha256 68c8ab38...11776d6f.
+
+## 0.31.183 — the Herald's white cut away
+Kevin: "There is white showing on most of herald images. Go through each one and make sure all the white cutout is gone"
+(the sitting pose up close, the lying one in a match). 0.31.182's cut took only the pure white reaching the image's edge
+(and big pure-white pockets); the shaded white between his legs, between his arm and body, between him and the scroll
+and under the pointer stick (pointing: an 11,000 px triangle) is a little grey, so it stayed.
+- The art: each pose's Herald matted by ElevenLabs' BiRefNet (birefnet-v2-bg-removal, 8 x 30 = 242 credits; its alpha
+  kept, art_sources/tutorial/poses/matte/<pose>.png). It keeps the scroll too in four poses and drops it in the other
+  four, so tools/build_tutorial_assets.py cut() takes the Herald from the matte (his white plume, ruff, gloves and teacup
+  his) and the scroll from what isn't white: nothing whitish (bright, grey) outside him -- a pale spot the parchment
+  closes round with no Herald by it is the parchment's. The see-through edge takes the nearest solid pixel's colour (no
+  white rim on the dark field). The build now fails if a patch of white ground over 30 px is left at the cut's edge
+  (each pose: 2-4 px). The eight rebuilt; the writing's clear rectangles within a few px of before.
+- Looked at: each pose on a dark field at full size, and all eight in a match at 900 x 2000 -- no white.
+- Content packs: ui (31.1 MB) rebuilt and uploaded; check and coverage OK. tutorial_test passes.
+- Version 0.31.183, versionCode 269, SERVER_BUILD 0.31.183 (nothing new for the server).

@@ -33,7 +33,7 @@ sfx/recall_done_<take>.mp3    1.5 s: "Fantasy video game teleport arrival: a qui
 
 godot/tools/build_tutorial_assets.py makes the game's files from these:
   assets/vo/tutorial/<id>.ogg     trimmed, -16 LUFS, mono vorbis
-  assets/ui/tutorial/herald.png   cut out of its white ground
+  assets/ui/tutorial/herald.png   cut out of its white ground (0.31.182: the scroll poses instead, below)
   assets/sounds/recall_start.wav, recall_done.wav
 
 concepts/ (Kevin, on 0.31.181's dialog: "The herald needs to sit higher on the text box. Actually should make it so he
@@ -64,3 +64,8 @@ tutorial is written on it, with the pose that suits it (scripts/siege/tutorial.g
                     background, no text and no writing anywhere." (the poses' own words: on the flow)
 godot/tools/build_tutorial_assets.py poses -> assets/ui/tutorial/scroll_<pose>.png (cut out, cropped, 1100 wide) and
 scripts/siege/tutorial_poses.gd (each one's size, its parchment, and the biggest clear rectangle of it for the writing).
+poses/matte/<pose>.png (0.31.183, Kevin: "There is white showing on most of herald images. Go through each one and make
+sure all the white cutout is gone"): birefnet-v2-bg-removal on each pose, its alpha kept (the matte of the Herald; it
+keeps the scroll too in hold, leaning, peeking and hanging, and drops it in the rest), 8 x 30 = 242 credits. The cut
+takes the Herald from it and the scroll from what isn't white (the build checks no patch of white ground over a few
+px is left at the edge).

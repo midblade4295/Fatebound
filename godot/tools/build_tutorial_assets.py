@@ -11,6 +11,7 @@ Sources (art_sources/tutorial, ElevenLabs; README.txt there has the prompts and 
                       sometimes he's laying on top of it and sometimes leaning on it ect") the Herald with his
                       proclamation scroll, eight ways (hold, lying, leaning, sitting, peeking, napping, pointing,
                       hanging), gpt-image-2 / gpt-image-2.5-sunburst, on white
+  poses/matte/<pose>.png  (0.31.183) BiRefNet's matte of the Herald in each (birefnet-v2-bg-removal, its alpha)
 Out:
   assets/vo/tutorial/<id>.ogg   silence trimmed at both ends, loudness-matched (EBU R128 -16 LUFS), mono vorbis 44.1 kHz
                                 (as the Herald's match calls)
@@ -71,22 +72,48 @@ POSES = ["hold", "lying", "leaning", "sitting", "peeking", "napping", "pointing"
 POSE_W = 1100                                 # (the parchment ~900 px of it: the phone's 1080-wide screen, a little under)
 
 
-def cut(rgb):
-    """(rgba) the art cut out of its white ground. The figurine style has no dark outline to stop a flood of near-white:
-    the ground is only the pure white (>= 0.975) reaching the edge, and pure-white pockets bigger than 600 px; the
-    edge pulled in 2 px (no white fringe) and softened."""
+def cut(rgb, matte):
+    """(rgba) the art cut out of its white ground. (0.31.183, Kevin: "There is white showing on most of herald images
+    ... make sure all the white cutout is gone" -- 0.31.182 took only the pure white reaching the edge, and the shaded
+    white between his legs, his arm and the scroll, under the pointer stayed.)
+    The Herald is BiRefNet's matte of him (matte/<pose>.png; it keeps the scroll too, or drops it, as it likes) -- his
+    white bits (plume, ruff, gloves, the teacup) are his. Everything else is what isn't ground: not the pure white
+    (>= 0.975) reaching the edge, and nothing whitish (bright and grey) -- but a pale spot the parchment closes round with
+    no Herald by it is the parchment's. The see-through edge takes the colour of the nearest solid pixel (no white
+    fringe on the dark field)."""
     import scipy.ndimage as nd
     mn = rgb.min(2)
-    lab, n = nd.label(mn >= 0.975)
-    sizes = nd.sum(np.ones_like(mn), lab, range(1, n + 1))
+    sat = rgb.max(2) - mn
+    lab, _ = nd.label(mn >= 0.975)
     edge = set(np.unique(np.concatenate([lab[0], lab[-1], lab[:, 0], lab[:, -1]]))) - {0}
-    pockets = {i + 1 for i, sz in enumerate(sizes) if sz > 600} - edge
-    fg = ~np.isin(lab, list(edge | pockets))
-    fg = nd.binary_erosion(fg, iterations=2)
-    fg = nd.binary_fill_holes(fg) & ~np.isin(lab, list(pockets))
-    alpha = nd.gaussian_filter(fg.astype(np.float64), 1.0)
+    ground = np.isin(lab, list(edge))
+    him = matte > 0.5
+    sc = ~ground & ~((mn > 0.78) & (sat < 0.08))
+    sc = nd.binary_opening(sc, iterations=1)
+    lab, n = nd.label(sc)
+    sizes = nd.sum(sc, lab, range(1, n + 1))
+    sc = np.isin(lab, [i + 1 for i, sz in enumerate(sizes) if sz >= 400])
+    holes, n = nd.label(nd.binary_fill_holes(sc) & ~sc)
+    by_him = nd.binary_dilation(him, iterations=3)
+    sc |= np.isin(holes, [i for i in range(1, n + 1) if not (by_him & (holes == i)).any()])
+    sc = nd.gaussian_filter(nd.binary_erosion(sc, iterations=1).astype(np.float64), 0.8)
+    alpha = np.maximum(np.clip((matte - 0.1) / 0.8, 0.0, 1.0), sc)
     alpha[alpha < 0.03] = 0.0
+    solid = alpha >= 0.95
+    _, (iy, ix) = nd.distance_transform_edt(~solid, return_indices=True)
+    rgb = np.where(solid[..., None], rgb, rgb[iy, ix])
     return np.dstack([rgb, alpha])
+
+
+def white_left(rgba, matte):
+    """the biggest patch of white still showing at the cut's edge that isn't the Herald's own (his plume's and ruff's
+    rims are his): the white ground left between him and the scroll, in px -- a few px at most"""
+    import scipy.ndimage as nd
+    rgb, a = rgba[..., :3], rgba[..., 3]
+    mn = rgb.min(2)
+    lab, n = nd.label((mn > 0.85) & (rgb.max(2) - mn < 0.06) & (a > 0.2) & (matte < 0.5))
+    rim = nd.binary_dilation(a < 0.03, iterations=3)
+    return max([int((lab == i).sum()) for i in range(1, n + 1) if (rim & (lab == i)).any()] or [0])
 
 
 def parchment(rgba):
@@ -138,7 +165,10 @@ def poses():
     out = {}
     for pose in POSES:
         rgb = np.asarray(Image.open(os.path.join(SRC, "poses", pose + ".png")).convert("RGB")).astype(np.float64) / 255.0
-        rgba = cut(rgb)
+        matte = np.asarray(Image.open(os.path.join(SRC, "poses", "matte", pose + ".png")).convert("L")).astype(np.float64) / 255.0
+        rgba = cut(rgb, matte)
+        left = white_left(rgba, matte)
+        assert left <= 30, "%s: %d px of white ground left showing" % (pose, left)
         a = rgba[..., 3]
         ys, xs = np.nonzero(a > 0.06)
         x0, x1, y0, y1 = max(0, xs.min() - 6), min(a.shape[1], xs.max() + 7), max(0, ys.min() - 6), min(a.shape[0], ys.max() + 7)
@@ -149,7 +179,7 @@ def poses():
         p, t = parchment(rgba)
         sc = lambda r: [round(v * k, 1) for v in r]
         out[pose] = {"size": [im.width, im.height], "parch": sc(p), "text": sc(t)}
-        print("%-9s parchment %s  clear %s" % (pose, sc(p), sc(t)))
+        print("%-9s parchment %s  clear %s  white left %d px" % (pose, sc(p), sc(t), left))
     lines = ["extends RefCounted", "# generated by tools/build_tutorial_assets.py (0.31.182) -- don't edit: each pose of the Herald with his",
              "# scroll (assets/ui/tutorial/scroll_<pose>.png): its size, its parchment and the clear part of it for the text, in",
              "# its pixels", "const POSES := {"]
