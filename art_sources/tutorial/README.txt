@@ -35,3 +35,14 @@ godot/tools/build_tutorial_assets.py makes the game's files from these:
   assets/vo/tutorial/<id>.ogg     trimmed, -16 LUFS, mono vorbis
   assets/ui/tutorial/herald.png   cut out of its white ground
   assets/sounds/recall_start.wav, recall_done.wav
+
+concepts/ (Kevin, on 0.31.181's dialog: "The herald needs to sit higher on the text box. Actually should make it so he
+blends into text box seamlessly. Create new herald design concepts" -- then "Remove his horn that's attached to his
+neck"): herald_dialog_concepts.jpg, six ways over a real tutorial frame (mock.py makes it; the frame from a 900x2000
+render of the tower lesson):
+  A rises out of the box (his portrait behind it, the box's edge across his chest)   B a gold medallion on its corner
+  C leaning on the box's top edge (C_ledge.png)    D holding the proclamation scroll that is the text box (D_scroll)
+  E leaning in from the screen's edge, presenting the box (E_side)    F the Herald and the box painted as one (F_panel)
+  gpt-image-2, 1K, one take each, the current portrait and the hero figurines as references: 2,858 credits. Then the
+  horn (his trumpet behind his neck) edited out of the portrait (herald_nohorn.png) and D, E, F with
+  gpt-image-2.5-sunburst: 1,731 credits. (C never had it.)
