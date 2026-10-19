@@ -5599,3 +5599,50 @@ towers and that they only damage while inside the towers damage range".
   bundletool valid; no content pack changed; the sim's fingerprint as above (no King opened in its 8 minutes). Preview
   APK: build/Fatebound-Siege-0.31.179-fatebound.apk (32 MB, preview key), sha256 621e0fd7...a7f15cea. (A first chain
   run was stopped: the Kings change was being made under it.)
+
+## 0.31.180 — kill banners, League's kill rules and bounties
+Kevin: "Make banner in middle of screen when a player kills another player. It'll show "name" has slain "name"" --
+with League's multi-kill timers, ACE, kill credit and assists, Double / Triple / Quadra / Penta banners growing,
+FIRST BLOOD, SHUTDOWN, and League's bounty system; "Give me concepts of each banner before implementing" (11 concepts,
+art_sources/killbanners) -> "I want the banner art created by eleven so they look more detailed. I also want special
+effects on the kill streak and first blood ones".
+- The rules (moba.gd):
+  - the kill: the hero behind the blow, else the last enemy hero to touch him within KILL_CREDIT 15 s (a tower or a
+    minion finishing his work: still his kill, its gold and XP); after 15 s no one's (the side's count still);
+  - assists: hurt him or held him (a slow, a stun -- note_cc, from the kits' _slow and _damage's stun) in the last
+    ASSIST_WINDOW 10 s, or healed his killer then (note_heal, from _heal); standing by no longer counts;
+  - multi-kills: each within MULTI_GAP 10 s (until 0.31.180 4 s); after a QUADRA the PENTA within PENTA_GAP 30 s,
+    unless one of the enemy came back first (last_respawn); a PENTA ends the chain (no LEGENDARY in the 5v5);
+  - FIRST BLOOD: the match's first hero kill; ACE: the whole side down at once;
+  - bounty: a quarter of what a hero earns from kills and assists (add_gold "kill"), a twentieth from minions and
+    monsters ("cs"); his killer is paid up to BOUNTY_MAX 700 of it on top of GOLD_HERO 300 (the rest stays for his
+    next life); devalued 20 % to 80 % when his side is 10 % to 40 % behind in gold (devalue); the board shows it from
+    BOUNTY_SHOW 150 in steps of 50 (bounty_shown);
+  - events: "kb" {kind: kill / first_blood / multi / shutdown, n, by, id, team, bounty, shut} for each hero kill with a
+    killer, "ace" {team, by, ids}; "multikill" as before (the Herald's calls).
+- The banners (kill_banner.gd, over the HUD, under its panels; the old DOUBLE KILL label of yours and the "An enemy:
+  TRIPLE KILL" toasts gone): one at a time a little above the middle; a newer one cuts the showing one short after
+  0.8 s, a long run drops the plain kills first. Each: the name plaque (blue when your side killed, red when the enemy
+  did), the killer's portrait and the victim's (greyed, a skull) in its sockets, "<killer> HAS SLAIN <victim>" fitted
+  between (yours gold, your side blue, theirs red); over it the painted title; a SHUTDOWN's gold under it (+kill and
+  bounty); ACE alone with the five fallen and who sealed it. They slam in, settle and fade.
+- The art: ElevenLabs gpt-image-2 (5,645 credits, one take each; art_sources/killbanners/eleven), cut by
+  tools/build_kill_banners.py into assets/ui/banners/ (plaque_blue, plaque_red, first_blood, double, triple, quadra,
+  penta, ace, shutdown).
+- The effects: a light sweeps across every title (again and again on the big ones); FIRST BLOOD bursts blood from its
+  medallion, drips from its edge, a red ring and the screen's edges flashing red; DOUBLE silver sparks; TRIPLE gold
+  sparks and rising embers; QUADRA light rays turning behind its crest, gold sparks and coins; PENTAKILL bigger rays,
+  sparks, coins, gold confetti falling the whole time and the screen's edges glowing gold; SHUTDOWN a burst ring,
+  embers and coins from the broken crown; ACE blue rays and stars.
+- The sounds (ElevenLabs, ~333 credits; tools/build_kill_sfx.py -> assets/sounds/kb_*.wav, assets/vo/herald/kb_*.ogg):
+  a banner slam for a kill, a bell-and-blade chime for FIRST BLOOD, sharper stings for DOUBLE and TRIPLE, a fanfare
+  hit for QUADRA, a map-wide fanfare for PENTAKILL (whoever's), a shattering crown and coins for SHUTDOWN, a horn
+  for ACE; the Herald says "First blood!", "Shutdown!", "Ace!" (his own multi-kill calls as before).
+- The live board: a gold coin badge with a hero's bounty on his portrait from 150.
+- The sim's fingerprint: seed 3 17ef5358c1b28bc4, seed 17 3696da7df8f2e415 (the kill credit, the bounties' gold and
+  the new events change the bots' matches).
+- Content packs: ui (28.0 MB) and audio (8.3 MB) rebuilt and uploaded.
+- Tests: kill_rules_test and kill_banner_test (new, in the suite). moba_test, moba_lol_test, moba_more_test,
+  kill_feed_test, multikill_test, live_board_test, net_mirror_test, scoreboard_test pass.
+- Version 0.31.180, versionCode 266, SERVER_BUILD 0.31.180 (a server redeploy brings the rules online: the server's
+  sim makes the kills, the bounties and the events).
