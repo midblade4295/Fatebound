@@ -5594,3 +5594,8 @@ towers and that they only damage while inside the towers damage range".
   moba_kits_test, hammer_test, upgrades_test, names_aim_test, hud_top_test, moba_ui_test and tower_look_test pass.
 - Version 0.31.179, versionCode 265, SERVER_BUILD 0.31.179 (a server redeploy brings the rules online: the server's sim
   decides a hit).
+- Checks (on 4325543, the Kings change in): the quick suite all passed (92, tower_rules_test among them);
+  COLD_START_PASS; the Play AAB (throwaway key, presets untouched): BASE OK (265 files), CONTENT OK, play_games true,
+  bundletool valid; no content pack changed; the sim's fingerprint as above (no King opened in its 8 minutes). Preview
+  APK: build/Fatebound-Siege-0.31.179-fatebound.apk (32 MB, preview key), sha256 621e0fd7...a7f15cea. (A first chain
+  run was stopped: the Kings change was being made under it.)
