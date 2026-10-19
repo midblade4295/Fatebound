@@ -477,6 +477,8 @@ func _enter_task() -> void:
 			_shield_t = 0.0
 			_w_done = false
 			_e_done = false
+			for k in ["cd_ability", "cd_w", "cd_e"]:
+				me[k] = 0.0                          # (all three ready, whatever was used in the lane)
 
 static func _side(team: int, p: Vector2) -> Vector2:
 	return p if team == 0 else -p
@@ -571,7 +573,7 @@ func task_done() -> bool:
 		"jungle":
 			return not _camp.is_empty() and sim.moba.camp_live(_camp).is_empty()
 		"tower":
-			return _tw_hits >= TOWER_HITS
+			return _tw_hits >= TOWER_HITS or (not _tw.is_empty() and bool(_tw.dead))     # (the minions beat you to it)
 	return true
 
 func _task_tick(delta: float) -> void:
