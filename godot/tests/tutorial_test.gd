@@ -2,7 +2,8 @@ extends SceneTree
 # 0.31.181 (Kevin: "create a tutorial walking player through the basics of a match ... Make it voiced and make it
 # humorous and sarcastic"): the 5v5 tutorial (scripts/siege/tutorial.gd) played through in a real match.
 #  - every line has its voice (assets/vo/tutorial/<id>.ogg) and its caption is the recorded script's
-#    (art_sources/tutorial/script.json); the Herald's portrait is there;
+#    (art_sources/tutorial/script.json); (0.31.182) each line's pose of the Herald with his scroll is there, and the line
+#    fits the clear part of its parchment at 13 px or more on the narrowest phone (420 x 933);
 #  - the match is quiet: every other hero held at his fountain, no waves or camps of its own; the match waits while the
 #    Herald talks (the HUD's buttons too), and steps during a task; you can't fall;
 #  - each task done the way a player does it: walk; two last hits on the wave put down for it; the scoreboard; HOME (a
@@ -71,7 +72,22 @@ func _run() -> void:
 			differ.append(l[0])
 	check(lines.size() == 33 and missing.is_empty(), "%d lines, every one voiced (missing %s)" % [lines.size(), str(missing)])
 	check(differ.is_empty(), "the captions are the recorded script's (differ: %s)" % str(differ))
-	check(ResourceLoader.exists(Tut.PORTRAIT), "the Herald's portrait")
+	var bad := []
+	var small := []
+	var used := {}
+	for l in lines:
+		var pz := str(l[2]) if (l as Array).size() > 2 else ""
+		used[pz] = true
+		if not Tut.Poses.POSES.has(pz) or not ResourceLoader.exists(Tut.POSE_PATH % pz):
+			bad.append("%s:%s" % [l[0], pz])
+			continue
+		var r: Dictionary = Tut.scroll_rects(pz, Vector2(420, 933))
+		var px: int = Tut.fit_px(str(l[1]), (r.text as Rect2).size)
+		var hgt: float = Tut.text_height(str(l[1]), (r.text as Rect2).size.x, px)
+		if px < 13 or hgt > (r.text as Rect2).size.y or not Rect2(0, 0, 420, 933).encloses((r.art as Rect2).grow(-1.0)):
+			small.append("%s:%s %dpx" % [l[0], pz, px])
+	check(bad.is_empty() and used.size() == 8, "every line posed, all 8 poses used (%s)" % str(bad))
+	check(small.is_empty(), "every line fits its scroll at 13 px or more, the Herald all on the screen (%s)" % str(small))
 	# ---- the match
 	mode = Mode.new()
 	mode.tutorial = true
@@ -87,6 +103,7 @@ func _run() -> void:
 	await _until(func(): return tut.phase == "talk", 120)
 	var me: Dictionary = s.by_id["you"]
 	check(tut.lines_said == ["t5_intro_1"] and hud.tut_modal and hud._modal_open(), "the Herald's first line; the HUD's buttons wait")
+	check(tut.pose == "hold" and tut.scroll.visible and tut.scroll.texture != null, "...on his scroll, holding it open")
 	var held := true
 	for t in 2:
 		for hid in s.moba.heroes[t]:

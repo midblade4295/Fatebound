@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://tl2fcheg5lrx"
-path="res://.godot/imported/herald.png-6f316e366f7f7966f6e49566b93dccf7.ctex"
+uid="uid://b6hldoqnj1m72"
+path="res://.godot/imported/scroll_hold.png-8ce92ca7394244299582c672c0ffde3f.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/ui/tutorial/herald.png"
-dest_files=["res://.godot/imported/herald.png-6f316e366f7f7966f6e49566b93dccf7.ctex"]
+source_file="res://assets/ui/tutorial/scroll_hold.png"
+dest_files=["res://.godot/imported/scroll_hold.png-8ce92ca7394244299582c672c0ffde3f.ctex"]
 
 [params]
 

@@ -5706,3 +5706,25 @@ mechanic".
   lets a unit within 3 cm of a sight's edge fall either side. All three pass since. COLD_START_PASS; the Play AAB
   (throwaway key, presets untouched): BASE OK (269 files), CONTENT OK, play_games true, bundletool valid. Preview APK:
   build/Fatebound-Siege-0.31.181-fatebound.apk (32 MB, preview key), sha256 4f9b355d...8aadf3.
+
+## 0.31.182 — the Herald on his scroll, eight ways
+Kevin, of 0.31.181's dialog: "The herald needs to sit higher on the text box. Actually should make it so he blends into
+text box seamlessly. Create new herald design concepts" (six, art_sources/tutorial/concepts) -> "Remove his horn that's
+attached to his neck" -> "I like D but also have him doing some funny stuff with the scroll like sometimes he's laying
+on top of it and sometimes leaning on it ect".
+- The talk (scripts/siege/tutorial.gd): no panel and portrait any more -- each line is written on the Herald's
+  proclamation scroll, the Herald with it in the pose that suits the line: holding it open, lying on it, leaning on its
+  rod with his arms crossed, sitting on it with his tea, peeking over it, asleep on it, standing on it with a pointer
+  stick, hanging off its rod. A new pose pops in (a little scale and fade). The scroll as wide as the screen allows with
+  all of him on it; the line in the biggest clear rectangle of its parchment (scripts/siege/tutorial_poses.gd, measured
+  from the art), dark ink, the biggest size from 17 down that fits (all 33 lines fit at 15 or more on a 420 x 933
+  screen; the test checks 13+), the lines 3 px closer than the font's own. LESSON n OF 12 and TAP TO CONTINUE under the
+  scroll, on the shade. The objective card as before ("THE HERALD WANTS YOU TO").
+- The art (ElevenLabs; art_sources/tutorial/poses, README.txt): the horn edited out of him; the scroll alone (concept D
+  with him edited out) the reference for seven new poses with the hornless Herald (gpt-image-2, one take each). The
+  concepts and the edits 4,589 credits, the poses 5,016. tools/build_tutorial_assets.py poses cuts them out
+  (assets/ui/tutorial/scroll_<pose>.png) and writes tutorial_poses.gd; the old portrait (herald.png) gone.
+- Content packs: ui (31.6 MB) rebuilt and uploaded; check and coverage OK.
+- tutorial_test: every line posed, all eight poses used, every line fits its scroll at 13 px or more with all of the
+  Herald on the screen; the first line on the scroll, holding it open.
+- Version 0.31.182, versionCode 268, SERVER_BUILD 0.31.182 (nothing new for the server; its build kept with the app's).

@@ -6,19 +6,33 @@ extends Control
 # A 5v5 against bots, made quiet (siege_mode.gd tutorial = true; begin() below): every hero but you stays at his
 # fountain ("a tea break"), no waves and no camps of their own, and you can't fall (half damage, and a floor under
 # your health). Over it, under the HUD's pause button and panels, this overlay: the Royal Herald talks -- the match
-# waits (siege_mode doesn't step it while holds()), his portrait over a panel, the line typed out as he says it, a tap
+# waits (siege_mode doesn't step it while holds()), the line typed out on his proclamation scroll as he says it, a tap
 # for the next -- then sets a task to DO in the live match, checked every frame, with guidance drawn over the world
 # (a marching dotted route, a ring and an arrow on the target, an edge arrow when it's off screen) or a TAP / HOLD ring
 # on the HUD's button. What a task needs is put there by the tutorial ("royal paperwork"): a wave each side to
 # last-hit, our Grave Archers camp, our minions walking under their tower, a hop to where it all is.
 #
+# 0.31.182 (Kevin, of the dialog: "make it so he blends into text box seamlessly" -> concept D, the scroll, "but also
+# have him doing some funny stuff with the scroll like sometimes he's laying on top of it and sometimes leaning on it"):
+# each line is written on the scroll, the Herald with it in one of eight poses (scroll_<pose>.png, ElevenLabs; their
+# parchment and its clear part in tutorial_poses.gd): holding it open, lying on it, leaning on it, sitting on it with
+# his tea, peeking over it, asleep on it, standing on it with a pointer, hanging off it. The scroll as wide as it can be
+# with all of him on the screen; the line in the clear part of its parchment, the biggest type that fits.
 # VOICE: assets/vo/tutorial/<id>.ogg, the Herald's voice (ElevenLabs; art_sources/tutorial: script.json, the prompts;
 # tools/build_tutorial_assets.py). The captions here are script.json's lines (tests/tutorial_test.gd checks).
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 const VisualTheme = preload("res://scripts/ui/visual_theme.gd")
 const UI2 = preload("res://scripts/app/ui2.gd")
 const VO_DIR := "res://assets/vo/tutorial/"
-const PORTRAIT := "res://assets/ui/tutorial/herald.png"
+const Poses = preload("res://scripts/siege/tutorial_poses.gd")
+const POSE_PATH := "res://assets/ui/tutorial/scroll_%s.png"
+const INK_TEXT := Color("#3e2610")             # (the scroll's writing)
+const INK_HINT := Color("#8c241e")
+const SCROLL_SIDE := 18.0                      # the parchment at most the screen less this each side
+const SCROLL_FIT := 4.0                        # ...and all of the Herald on the screen, this from its edges
+const SCROLL_BOTTOM := 32.0                    # the parchment's foot this above the screen's (TAP TO CONTINUE under it)
+const LINE_GAP := -3                           # the writing's lines a little closer than the font's own
+const TEXT_PX := [17, 16, 15, 14, 13, 12]
 const TYPE_CPS := 42.0
 const VOICE_GAIN := 0.55          # x master (the Herald's match calls: 0.5)
 const LH_GOAL := 2
@@ -34,63 +48,63 @@ const TOWER_KINDS := ["melee", "melee", "melee", "melee", "caster", "caster"]
 const CAMP_WEAK := 0.6            # the tutorial's Grave Archers: "a bit under the weather"
 
 # Each step: talk (lines before the task), task (shown as the objective), done (lines once it's done). A line is
-# [voice id, caption]. "@pay": the last line, by whether the tutorial's gold is still to be paid.
+# [voice id, caption, the Herald's pose]. "@pay": the last line, by whether the tutorial's gold is still to be paid.
 const STEPS := [
 	{"id":"intro", "talk":[
-		["t5_intro_1", "Ah. A new recruit. How thrilling. I'm the Royal Herald. I announce things. Today I announce you. And, I suspect, your mistakes."],
-		["t5_intro_2", "This is the Rift. Five of us, five of them, three lanes, and a King on each side. Knock theirs off his throne and we win. Simple. You'd be amazed."]]},
+		["t5_intro_1", "Ah. A new recruit. How thrilling. I'm the Royal Herald. I announce things. Today I announce you. And, I suspect, your mistakes.", "hold"],
+		["t5_intro_2", "This is the Rift. Five of us, five of them, three lanes, and a King on each side. Knock theirs off his throne and we win. Simple. You'd be amazed.", "lying"]]},
 	{"id":"move", "talk":[
-		["t5_move_1", "Let's begin with walking. Drag your thumb on the left side of the screen. You can do it. I believe in you. Mildly."]],
+		["t5_move_1", "Let's begin with walking. Drag your thumb on the left side of the screen. You can do it. I believe in you. Mildly.", "leaning"]],
 		"task":"Drag on the left side of the screen to walk",
-		"done":[["t5_move_done", "Legs! Working legs. The bards are already writing a song about it. A short one."]]},
+		"done":[["t5_move_done", "Legs! Working legs. The bards are already writing a song about it. A short one.", "sitting"]]},
 	{"id":"lane", "talk":[
-		["t5_lane_1", "Both castles send waves of minions down every lane. They march, they fight, they die. Nobody writes them songs either."],
-		["t5_lane_2", "Here's the secret: a minion pays its gold only to whoever lands the killing blow. That's a last hit. Softening it up earns you nothing but sore arms."],
-		["t5_lane_3", "I've had a wave delivered. Wait until an enemy minion is nearly dead, then finish it off. Two last hits, please. I'll be counting."]],
+		["t5_lane_1", "Both castles send waves of minions down every lane. They march, they fight, they die. Nobody writes them songs either.", "napping"],
+		["t5_lane_2", "Here's the secret: a minion pays its gold only to whoever lands the killing blow. That's a last hit. Softening it up earns you nothing but sore arms.", "peeking"],
+		["t5_lane_3", "I've had a wave delivered. Wait until an enemy minion is nearly dead, then finish it off. Two last hits, please. I'll be counting.", "pointing"]],
 		"task":"Land the killing blow on 2 enemy minions",
-		"done":[["t5_lh_done", "Gold! Funny how it turns up when you actually finish things. There's a life lesson in there. I shan't spell it out."]]},
+		"done":[["t5_lh_done", "Gold! Funny how it turns up when you actually finish things. There's a life lesson in there. I shan't spell it out.", "hanging"]]},
 	{"id":"eco", "talk":[
-		["t5_eco_1", "Gold is everything here. Minions, monsters, towers and enemy heroes all pay. Even standing about pays a trickle, which explains a great many recruits."],
-		["t5_eco_2", "And it's not just your gold. The whole team's gold decides who wins the big fights. Tap the score bar at the top to see everyone's."]],
+		["t5_eco_1", "Gold is everything here. Minions, monsters, towers and enemy heroes all pay. Even standing about pays a trickle, which explains a great many recruits.", "napping"],
+		["t5_eco_2", "And it's not just your gold. The whole team's gold decides who wins the big fights. Tap the score bar at the top to see everyone's.", "pointing"]],
 		"task":"Tap the score bar at the top",
-		"done":[["t5_eco_done", "Our gold, their gold, and who's slacking. Close it when you've finished judging people. I never have."]]},
+		"done":[["t5_eco_done", "Our gold, their gold, and who's slacking. Close it when you've finished judging people. I never have.", "sitting"]]},
 	{"id":"recall", "talk":[
-		["t5_recall_1", "Pockets full? Then go home and spend it. Tap HOME to recall. It takes six seconds, and anything that hits you cancels it. So perhaps not next to the enemy. Just a thought."]],
+		["t5_recall_1", "Pockets full? Then go home and spend it. Tap HOME to recall. It takes six seconds, and anything that hits you cancels it. So perhaps not next to the enemy. Just a thought.", "peeking"]],
 		"task":"Tap HOME, then stand still for 6 seconds",
-		"done":[["t5_recall_done", "Home sweet castle. The fountain heals you, and the shop serves you here. Or while you're dead. Retail is grim."]]},
+		"done":[["t5_recall_done", "Home sweet castle. The fountain heals you, and the shop serves you here. Or while you're dead. Retail is grim.", "leaning"]]},
 	{"id":"shop", "talk":[
-		["t5_shop_1", "Tap SHOP and buy an item. Items make you hit harder, live longer, and look slightly less doomed. Can't decide? The shop suggests things. Like me, but less charming."]],
+		["t5_shop_1", "Tap SHOP and buy an item. Items make you hit harder, live longer, and look slightly less doomed. Can't decide? The shop suggests things. Like me, but less charming.", "lying"]],
 		"task":"Open the SHOP and buy an item",
-		"done":[["t5_shop_done", "A purchase! Remember: gold in your pocket does nothing. Gold turned into swords does a great deal."]]},
+		"done":[["t5_shop_done", "A purchase! Remember: gold in your pocket does nothing. Gold turned into swords does a great deal.", "hold"]]},
 	{"id":"abilities", "talk":[
-		["t5_ab_1", "Now, your tricks. Q, W and E are your abilities, and R, your ultimate, arrives at level six. I've had you promoted to level three. Paperwork. Don't ask."],
-		["t5_ab_2", "Hold Q to raise your shield. Tap W to bash, and E to rally. Each level also brings an upgrade card, so pick one. Try everything, so I know it all works."]],
+		["t5_ab_1", "Now, your tricks. Q, W and E are your abilities, and R, your ultimate, arrives at level six. I've had you promoted to level three. Paperwork. Don't ask.", "peeking"],
+		["t5_ab_2", "Hold Q to raise your shield. Tap W to bash, and E to rally. Each level also brings an upgrade card, so pick one. Try everything, so I know it all works.", "lying"]],
 		"task":"Hold Q, tap W, tap E, and pick your upgrades",
-		"done":[["t5_ab_done", "A shield, a shove and a pep talk. Very knightly. Very you."]]},
+		"done":[["t5_ab_done", "A shield, a shove and a pep talk. Very knightly. Very you.", "leaning"]]},
 	{"id":"jungle", "talk":[
-		["t5_jg_1", "Between the lanes lies the jungle, full of monsters. Rude ones. Clear a camp and it pays gold and experience. Some even leave a buff that makes you stronger."],
-		["t5_jg_2", "Our Grave Archers are just over there. Go and clear the camp. They do hit back, so keep that shield handy."]],
+		["t5_jg_1", "Between the lanes lies the jungle, full of monsters. Rude ones. Clear a camp and it pays gold and experience. Some even leave a buff that makes you stronger.", "napping"],
+		["t5_jg_2", "Our Grave Archers are just over there. Go and clear the camp. They do hit back, so keep that shield handy.", "hanging"]],
 		"task":"Clear the Grave Archers camp",
-		"done":[["t5_jg_done", "Cleared! That's the jungle: a team that takes its camps out-earns one that doesn't. Free gold. Well. Paid for in bruises."]]},
+		"done":[["t5_jg_done", "Cleared! That's the jungle: a team that takes its camps out-earns one that doesn't. Free gold. Well. Paid for in bruises.", "hold"]]},
 	{"id":"tower", "talk":[
-		["t5_tw_1", "Now, towers. They guard each lane and shoot whatever wanders in. Only basic attacks hurt them, and only from inside their range. No sniping. I checked."],
-		["t5_tw_2", "Golden rule: minions first. A tower shoots minions before heroes, unless you hit one of their heroes right under it. More paperwork, and here we are. Hit it three times."]],
+		["t5_tw_1", "Now, towers. They guard each lane and shoot whatever wanders in. Only basic attacks hurt them, and only from inside their range. No sniping. I checked.", "peeking"],
+		["t5_tw_2", "Golden rule: minions first. A tower shoots minions before heroes, unless you hit one of their heroes right under it. More paperwork, and here we are. Hit it three times.", "lying"]],
 		"task":"Hit the enemy tower 3 times with ATTACK",
-		"done":[["t5_tw_done", "Lovely. Keep that up and it falls. Every tower pays the whole team, and brings us one step closer to their King."]]},
+		"done":[["t5_tw_done", "Lovely. Keep that up and it falls. Every tower pays the whole team, and brings us one step closer to their King.", "leaning"]]},
 	{"id":"die", "talk":[
-		["t5_die_1", "Now, the important bit. Dying. Every time you die, the enemy gets three hundred gold. Plus your bounty, if you've been showing off."],
-		["t5_die_2", "That gold buys them swords. Swords they then use on you. You see the problem. Dying isn't just embarrassing. It's a donation."],
-		["t5_die_3", "So when your health runs low, back off and recall. A living coward earns more than a dead hero. I should know. I'm still here."],
-		["t5_die_4", "And if you take down someone with a big bounty, that's a shutdown, and all that gold is yours. Revenge is so much nicer when it pays."]]},
+		["t5_die_1", "Now, the important bit. Dying. Every time you die, the enemy gets three hundred gold. Plus your bounty, if you've been showing off.", "pointing"],
+		["t5_die_2", "That gold buys them swords. Swords they then use on you. You see the problem. Dying isn't just embarrassing. It's a donation.", "hanging"],
+		["t5_die_3", "So when your health runs low, back off and recall. A living coward earns more than a dead hero. I should know. I'm still here.", "peeking"],
+		["t5_die_4", "And if you take down someone with a big bounty, that's a shutdown, and all that gold is yours. Revenge is so much nicer when it pays.", "lying"]]},
 	{"id":"win", "talk":[
-		["t5_win_1", "To win, push down a lane: outer tower, inner tower, gate tower, then the gate. Then the two towers by their King, then the King himself. He's large, grumpy, and hits back."],
-		["t5_win_2", "And do it together. Five heroes with full pockets beat one brave idiot every time. I've watched it happen. Repeatedly."]]},
+		["t5_win_1", "To win, push down a lane: outer tower, inner tower, gate tower, then the gate. Then the two towers by their King, then the King himself. He's large, grumpy, and hits back.", "peeking"],
+		["t5_win_2", "And do it together. Five heroes with full pockets beat one brave idiot every time. I've watched it happen. Repeatedly.", "napping"]]},
 	{"id":"end", "talk":[
-		["t5_end_1", "That's the lot. You're ready. Well. Readier."],
-		["@pay", ""]]},
+		["t5_end_1", "That's the lot. You're ready. Well. Readier.", "sitting"],
+		["@pay", "", ""]]},
 ]
-const END_GOLD := ["t5_end_gold", "Here's two hundred and fifty gold for sitting through all that. Go on. Win something. Make me look good."]
-const END_NOGOLD := ["t5_end_nogold", "No pay this time, I'm afraid. You've had your gold already, and the treasury has a long memory. Go on. Win something."]
+const END_GOLD := ["t5_end_gold", "Here's two hundred and fifty gold for sitting through all that. Go on. Win something. Make me look good.", "hold"]
+const END_NOGOLD := ["t5_end_nogold", "No pay this time, I'm afraid. You've had your gold already, and the treasury has a long memory. Go on. Win something.", "hanging"]
 
 var mode                      # siege_mode.gd
 var sim
@@ -117,15 +131,14 @@ var _note := ""               # a line under the objective for a moment ("Interr
 var _note_until := 0.0
 var _path := PackedVector2Array()
 var _path_clock := 0.0
-var _portrait: Texture2D = null
-# the talk: a dimmer that takes the tap, the panel, the portrait over it
+var _pose_tex := {}
+var pose := ""                # the Herald's pose showing
+# the talk: a dimmer that takes the tap, the Herald with his scroll, the writing on it
 var dim: Control
-var panel: PanelContainer
+var scroll: TextureRect
 var text_label: Label
 var hint_label: Label
-var name_label: Label
 var count_label: Label
-var face: TextureRect
 # the task: the objective card
 var card: PanelContainer
 var task_label: Label
@@ -134,7 +147,6 @@ var note_label: Label
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_portrait = load(PORTRAIT) if ResourceLoader.exists(PORTRAIT) else null
 	voice = AudioStreamPlayer.new()
 	voice.bus = "Master"
 	add_child(voice)
@@ -142,48 +154,23 @@ func _ready() -> void:
 	dim.tut = self
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(dim)
-	panel = PanelContainer.new()
-	panel.add_theme_stylebox_override("panel", _box(Color(0.04, 0.06, 0.15, 0.95), VisualTheme.GOLD, 16, 14))
-	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	panel.anchor_left = 0.0
-	panel.anchor_right = 1.0
-	panel.anchor_top = 1.0
-	panel.anchor_bottom = 1.0
-	panel.offset_left = 10
-	panel.offset_right = -10
-	panel.offset_bottom = -22
-	panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	add_child(panel)
-	var v := VBoxContainer.new()
-	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	v.add_theme_constant_override("separation", 6)
-	panel.add_child(v)
+	scroll = TextureRect.new()
+	scroll.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	scroll.stretch_mode = TextureRect.STRETCH_SCALE
+	scroll.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	scroll.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(scroll)
 	text_label = Label.new()
 	text_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	text_label.custom_minimum_size = Vector2(0, 92)
 	text_label.add_theme_font_override("font", VisualTheme.BOLD_FONT)
-	text_label.add_theme_font_size_override("font_size", 17)
-	text_label.add_theme_color_override("font_color", VisualTheme.TEXT)
+	text_label.add_theme_font_size_override("font_size", 16)
+	text_label.add_theme_color_override("font_color", INK_TEXT)
+	text_label.add_theme_constant_override("line_spacing", LINE_GAP)
 	text_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	v.add_child(text_label)
-	hint_label = Label.new()
-	hint_label.text = "TAP TO CONTINUE  ▸"
+	add_child(text_label)
+	hint_label = _ink_label("TAP TO CONTINUE  >", 12, VisualTheme.GOLD)
 	hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	hint_label.add_theme_font_override("font", VisualTheme.BOLD_FONT)
-	hint_label.add_theme_font_size_override("font_size", 12)
-	hint_label.add_theme_color_override("font_color", VisualTheme.GOLD)
-	hint_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	v.add_child(hint_label)
-	face = TextureRect.new()
-	face.texture = _portrait
-	face.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	face.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	face.size = Vector2(132, 146)
-	face.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(face)
-	name_label = _plate_label("THE ROYAL HERALD", 15)
-	count_label = _plate_label("", 11)
-	count_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.6))
+	count_label = _ink_label("", 11, Color(1, 1, 1, 0.55))
 	card = PanelContainer.new()
 	card.add_theme_stylebox_override("panel", _box(Color(0.04, 0.06, 0.15, 0.9), VisualTheme.GOLD_DARK, 12, 8))
 	card.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -197,7 +184,7 @@ func _ready() -> void:
 	cv.add_theme_constant_override("separation", 1)
 	card.add_child(cv)
 	var head := Label.new()
-	head.text = "      THE HERALD WANTS YOU TO"
+	head.text = "THE HERALD WANTS YOU TO"
 	head.add_theme_font_override("font", VisualTheme.BOLD_FONT)
 	head.add_theme_font_size_override("font_size", 10)
 	head.add_theme_color_override("font_color", VisualTheme.GOLD)
@@ -233,17 +220,51 @@ static func _box(bg: Color, rim: Color, radius: int, pad: int) -> StyleBoxFlat:
 	sb.shadow_size = 6
 	return sb
 
-func _plate_label(text: String, px: int) -> Label:
+func _ink_label(text: String, px: int, col: Color) -> Label:
 	var l := Label.new()
 	l.text = text
-	l.add_theme_font_override("font", UI2.LG)
+	l.add_theme_font_override("font", VisualTheme.BOLD_FONT)
 	l.add_theme_font_size_override("font_size", px)
-	l.add_theme_color_override("font_color", VisualTheme.GOLD)
-	l.add_theme_color_override("font_outline_color", Color(0.05, 0.03, 0.02))
-	l.add_theme_constant_override("outline_size", 6)
+	l.add_theme_color_override("font_color", col)
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(l)
 	return l
+
+# ---------------- the scroll ----------------
+func pose_tex(p: String) -> Texture2D:
+	if not _pose_tex.has(p):
+		var path := POSE_PATH % p
+		_pose_tex[p] = load(path) if ResourceLoader.exists(path) else null
+	return _pose_tex[p]
+
+static func scroll_rects(p: String, view: Vector2) -> Dictionary:
+	# where pose p's art goes on a screen of size view: "art" (the whole of it), "parch", "text" (the clear part, the
+	# writing's), "k" (its scale). The parchment as wide as the screen less SCROLL_SIDE each side, unless that would put
+	# some of the Herald off the screen; centred on it, then nudged in; its foot SCROLL_BOTTOM above the screen's.
+	var g: Dictionary = Poses.POSES.get(p, Poses.POSES["hold"])
+	var sz: Vector2 = g.size
+	var pr: Rect2 = g.parch
+	var tr: Rect2 = g.text
+	var k := minf((view.x - 2.0 * SCROLL_SIDE) / pr.size.x, (view.x - 2.0 * SCROLL_FIT) / sz.x)
+	var x := view.x * 0.5 - (pr.position.x + pr.size.x * 0.5) * k
+	x = clampf(x, SCROLL_FIT - 0.0, view.x - SCROLL_FIT - sz.x * k) if sz.x * k <= view.x - 2.0 * SCROLL_FIT else x
+	var y := minf(view.y - SCROLL_BOTTOM - pr.end.y * k, view.y - 2.0 - sz.y * k)     # (his feet on the screen too)
+	var o := Vector2(x, y)
+	return {"art": Rect2(o, sz * k), "parch": Rect2(o + pr.position * k, pr.size * k), "text": Rect2(o + tr.position * k, tr.size * k), "k": k}
+
+static func text_height(text: String, width: float, px: int) -> float:
+	# the writing's height at px in that width, its lines LINE_GAP closer than the font's own
+	var font: Font = VisualTheme.BOLD_FONT
+	var lh := font.get_height(px)
+	var n := roundi(font.get_multiline_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, width, px).y / lh)
+	return float(n) * lh + float(maxi(0, n - 1) * LINE_GAP)
+
+static func fit_px(text: String, box: Vector2) -> int:
+	# the biggest of TEXT_PX that fits the line in the box
+	for px in TEXT_PX:
+		if text_height(text, box.x, px) <= box.y:
+			return px
+	return int(TEXT_PX[-1])
 
 # A full-screen shade that takes the tap moving the Herald on -- not over the HUD's pause button
 class Dimmer extends ColorRect:
@@ -313,7 +334,7 @@ func _lines() -> Array:
 func current_line() -> Array:
 	var ls := _lines()
 	if line >= ls.size():
-		return ["", ""]
+		return ["", "", "hold"]
 	var l: Array = ls[line]
 	if str(l[0]) == "@pay":
 		return END_GOLD if mode != null and mode.tutorial_pays() else END_NOGOLD
@@ -377,6 +398,7 @@ func _show_line() -> void:
 	var l := current_line()
 	var id := str(l[0])
 	lines_said.append(id)
+	_set_pose(str(l[2]) if l.size() > 2 and str(l[2]) != "" else "hold")
 	voice.stop()
 	var master := 1.0
 	var muted := false
@@ -390,14 +412,28 @@ func _show_line() -> void:
 		voice.play()
 	_refresh()
 
+func _set_pose(p: String) -> void:
+	if p == pose:
+		return
+	pose = p
+	scroll.texture = pose_tex(p)
+	# he changes how he's holding it: the scroll pops a little
+	var r: Dictionary = scroll_rects(p, size)
+	scroll.pivot_offset = Vector2((r.art as Rect2).size.x * 0.5, (r.art as Rect2).size.y)
+	scroll.scale = Vector2(0.94, 0.94)
+	scroll.modulate.a = 0.35
+	var tw := create_tween().set_parallel(true)
+	tw.tween_property(scroll, "scale", Vector2.ONE, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(scroll, "modulate:a", 1.0, 0.12)
+
 func _refresh() -> void:
 	var talking := phase in ["talk", "done"] or finished
 	if hud != null:
 		hud.tut_modal = talking or phase == "wait"
 	dim.visible = talking
-	panel.visible = talking
-	face.visible = talking and _portrait != null
-	name_label.visible = talking
+	scroll.visible = talking and scroll.texture != null
+	text_label.visible = talking
+	hint_label.visible = talking
 	count_label.visible = talking
 	card.visible = phase == "task" and not (hud != null and (hud.shop_open() or hud.board_open()))
 	count_label.text = "LESSON %d OF %d" % [step + 1, STEPS.size()]
@@ -406,14 +442,26 @@ func _refresh() -> void:
 	text_label.text = str(current_line()[1]) if talking else ""
 	text_label.visible_characters = int(shown) if shown < 9000.0 else -1
 	_layout()
+	if talking:
+		var r: Dictionary = scroll_rects(pose, size)
+		text_label.add_theme_font_size_override("font_size", fit_px(text_label.text, (r.text as Rect2).size))
 
 func _layout() -> void:
-	if panel == null:
+	if scroll == null:
 		return
-	var pr := panel.get_rect()
-	face.position = Vector2(pr.position.x + 4.0, pr.position.y - face.size.y + 22.0)
-	name_label.position = Vector2(pr.position.x + 140.0, pr.position.y - 30.0)
-	count_label.position = Vector2(pr.end.x - 112.0, pr.position.y - 22.0)
+	var r: Dictionary = scroll_rects(pose if pose != "" else "hold", size)
+	var art: Rect2 = r.art
+	var tr: Rect2 = r.text
+	scroll.position = art.position
+	scroll.size = art.size
+	text_label.position = tr.position
+	text_label.size = tr.size
+	# under the scroll, on the shade: the lesson on the left, TAP TO CONTINUE on the right
+	var foot := size.y - SCROLL_BOTTOM + 13.0                  # (clear of the rods' caps)
+	hint_label.position = Vector2(size.x * 0.5, foot)
+	hint_label.size = Vector2(size.x * 0.5 - SCROLL_SIDE, 18)
+	count_label.position = Vector2(SCROLL_SIDE, foot)
+	count_label.size = Vector2(size.x * 0.5, 18)
 	# the objective card under the HUD's top (gold, items); hidden while the shop or the board is open (they say it)
 	card.visible = phase == "task" and not (hud != null and (hud.shop_open() or hud.board_open()))
 	card.offset_top = 182.0
@@ -736,8 +784,6 @@ func _arrow(tip: Vector2, s: float, up := false) -> void:
 func _draw() -> void:
 	if sim == null:
 		return
-	if phase in ["talk", "done"] and _portrait != null:
-		pass                                   # (the panel, the portrait and the plates are controls)
 	if phase != "task":
 		return
 	var info := task_info()

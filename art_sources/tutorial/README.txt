@@ -46,3 +46,21 @@ render of the tower lesson):
   gpt-image-2, 1K, one take each, the current portrait and the hero figurines as references: 2,858 credits. Then the
   horn (his trumpet behind his neck) edited out of the portrait (herald_nohorn.png) and D, E, F with
   gpt-image-2.5-sunburst: 1,731 credits. (C never had it.)
+
+poses/ (0.31.182, Kevin: "I like D but also have him doing some funny stuff with the scroll like sometimes he's laying on
+top of it and sometimes leaning on it ect"): the Herald with his proclamation scroll eight ways -- each line of the
+tutorial is written on it, with the pose that suits it (scripts/siege/tutorial.gd STEPS).
+  scroll_blank.png  the scroll alone: concept D with the Herald edited out (gpt-image-2.5-sunburst, 433 credits) --
+                    the reference for the rest
+  hold.png          concept D, the horn removed (concepts/D_scroll_nohorn.png)
+  lying, leaning, sitting (with his tea), peeking, napping, pointing (a pointer stick), hanging (off the right rod):
+                    gpt-image-2, 1K, one take each, the hornless portrait and scroll_blank.png as references, 4,583
+                    credits; the prompts: "Game UI illustration for a fantasy mobile game, in exactly the style of the
+                    reference images: a chunky stylised 3D clay-toy look with smooth soft shading. The exact same Royal
+                    Herald as in the first reference image (... he carries no trumpet) and the exact same unrolled
+                    parchment scroll as in the second reference image (...). The scroll lies horizontally, flat and
+                    facing the viewer, in the lower half of the image, about 80% of the image width, its parchment
+                    completely blank. <the pose> Plain flat pure white background (#FFFFFF), no shadow on the
+                    background, no text and no writing anywhere." (the poses' own words: on the flow)
+godot/tools/build_tutorial_assets.py poses -> assets/ui/tutorial/scroll_<pose>.png (cut out, cropped, 1100 wide) and
+scripts/siege/tutorial_poses.gd (each one's size, its parchment, and the biggest clear rectangle of it for the writing).
