@@ -70,8 +70,9 @@ func _init() -> void:
 				pe.embers += int(Eco.pass_reward(sid, t, prem).get("embers", 0))
 		pe.free += int(Eco.pass_reward(1, t, false).get("gold", 0)) if t % 4 == 2 else 0
 		pe.prem += int(Eco.pass_reward(1, t, true).get("gold", 0)) if t % 4 == 2 else 0
-	check(pe.embers == 0 and Eco.pass_reward(1, 2, false) == {"gold": Eco.PASS_GOLD_FREE} and Eco.pass_reward(1, 2, true) == {"gold": Eco.PASS_GOLD_PREMIUM}
-		and Eco.pass_reward(2, 4, true) == {"gold": Eco.PASS_GOLD_GEM_TIER} and pe.free == 6 * Eco.PASS_GOLD_FREE and pe.prem == 4 * Eco.PASS_GOLD_PREMIUM,
+	# (0.31.185: premium tier 2 holds the first weapon now -- tier 1 is the Hero Token's -- so 3 premium gold tiers, not 4)
+	check(pe.embers == 0 and Eco.pass_reward(1, 2, false) == {"gold": Eco.PASS_GOLD_FREE} and Eco.pass_reward(1, 6, true) == {"gold": Eco.PASS_GOLD_PREMIUM}
+		and Eco.pass_reward(2, 4, true) == {"gold": Eco.PASS_GOLD_GEM_TIER} and pe.free == 6 * Eco.PASS_GOLD_FREE and pe.prem == 3 * Eco.PASS_GOLD_PREMIUM,
 		"the pass's Ember tiers give their gold (%d free, %d premium in season 1; no Embers anywhere)" % [pe.free, pe.prem])
 	# ---- an old save's Embers are turned into gold, once
 	var old := fresh("c")

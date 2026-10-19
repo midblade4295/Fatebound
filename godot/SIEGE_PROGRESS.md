@@ -5783,3 +5783,42 @@ they never reach the Forge): "Maybe let's have the two currency so it's more sim
 - Checks: the quick suite all passed (96); COLD_START_PASS; the Play AAB (throwaway key, presets untouched): BASE OK
   (271 files), CONTENT OK, play_games true, bundletool valid. Screens looked at (420 x 933): Home, the Forge, the shop,
   the pass. Preview APK: build/Fatebound-Siege-0.31.184-fatebound.apk (32 MB, preview key), sha256 67056083...ff47f7b9.
+
+## 0.31.185 — heroes the League way
+Kevin: "Ok now I want the same IAP system as league of legends" -- then, asked: all four parts (hero unlocks, hero
+shards in chests, a League-style pass, hero skins -- the skins next, 0.31.186) and the gold packs removed ("League
+never lets you turn paid currency into the free one").
+- Hero prices (economy.gd): each of the six sold heroes 2,000 gold (League's Blue Essence, earned only) OR 450 gems
+  (its RP); a new hero launches at 4,000 / 600 for 14 days (HERO_LAUNCH, when he came out -- none yet) and joins the
+  free rotation only after.
+- The free rotation: 2 sold heroes free to play each week (Monday 00:00 UTC), in a fixed shuffled order so all six
+  come round every three weeks (Eco.free_heroes). Playable like your own (Profile.can_play_hero) in an offline match,
+  as the saved pick, and online -- the server's queue check takes them by its own clock (siege_server.gd).
+- Hero shards (League's champion shards): Silver chests 10 %, Gold 30 %, Royal always (any of the six; rolled after
+  everything else, so a chest's gold, gems and weapon roll as before; the odds text says so); the pass's free tiers 5,
+  15 and 25 give a shard of a hero you don't own yet (kept with the tier once claimed). A shard unlocks its hero for
+  60 % of his gold (1,200) or melts for 20 % (400).
+- The pass: premium tier 1 is a Hero Token (any locked hero, yours; kept until there's one to unlock); its first
+  weapon moved to tier 2. The premium pitch says so.
+- Gold packs gone: no gem -> gold exchange (EXCHANGE, the shop's GEMS -> GOLD, the "exchange" op). The gem packs, the
+  pass, tier skips, chest skips and the gem items stay.
+- The hero window: FREE on this week's free ones; a ◆ on a hero you hold a shard of; HERO TOKEN xN · ◆ SHARDS N beside
+  PICK YOUR HERO; UNLOCK opens a chooser over the window (League's "unlock with BE or RP"): gold, gems, shard + gold,
+  Hero Token, CANCEL -- what you can't pay dimmed; a free one has BATTLE and UNLOCK side by side; MELT +400 beside
+  BATTLE for a shard of a hero you own. Chests show a shard as a chip with the hero's face; the pass's tiles show
+  "Druid Shard" / "Hero Token".
+- New ops (the server replays them): buy_hero_gems, use_shard, melt_shard, use_token.
+- Not cosmetic any more: heroes are sold for gems (they were for gold since 0.31.168). The store listing's
+  "Everything you unlock is cosmetic. No pay-to-win." line (store-listing/listing/STORE_LISTING.md, the Play listing)
+  needs Kevin's rewording before a release; the shop's "EVERYTHING HERE IS COSMETIC" stays true (heroes are bought in
+  the hero window).
+- Tests: league_iap_test (new: prices and launch, the rotation turning Monday 00:00 UTC, shards from chests and the
+  pass, the Hero Token, the ops replayed, no exchange); online_five_test (the sold hero is one not free that week,
+  Carl plays a free one); moba_ui_test (the chooser); shop_packs_test, meta_economy_test, eco_server_test,
+  economy_fix_test (no gold packs); forge_test (premium tier 2 is an item now: 3 premium gold tiers -- it failed in
+  the chain's suite, fixed after and passing on its own).
+- Version 0.31.185, versionCode 271, SERVER_BUILD 0.31.185 (the server needs the redeploy: the ops, the rotation).
+- Checks: the quick suite 96 passed, forge_test failed (above, fixed); COLD_START_PASS; the Play AAB (throwaway key,
+  presets untouched): BASE OK (271 files), CONTENT OK, play_games true, bundletool valid. Screens looked at (420 x 933):
+  the hero window (locked, the chooser, a free one), a Royal chest with a shard, the pass's token and shard tiers.
+  Preview APK: build/Fatebound-Siege-0.31.185-fatebound.apk (32 MB, preview key), sha256 15bb9e68...44089b0a.
