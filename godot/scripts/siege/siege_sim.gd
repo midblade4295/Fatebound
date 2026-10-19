@@ -524,6 +524,8 @@ func nearest_enemy(u: Dictionary, max_d: float, prefer_front := false) -> Dictio
 # ---------- input (from HUD or bot brain) ----------
 func act(id: String, action: String, arg: Variant = null) -> bool:
 	var u: Dictionary = by_id.get(id, {})
+	if not u.is_empty() and action in ["attack", "ability", "block", "dodge", "ult", "spell"]:
+		recall_cancel(u)                             # (0.31.181: fighting ends a recall)
 	if not u.is_empty() and not ended and moba != null and action in ["shop_buy", "shop_sell"]:
 		return moba.buy(u, str(arg)) if action == "shop_buy" else moba.sell(u, int(arg))     # (0.31.157: down too)
 	if u.is_empty() or ended or not alive(u):
@@ -552,11 +554,49 @@ func act(id: String, action: String, arg: Variant = null) -> bool:
 			return moba != null and moba.kits.spell(u, str(arg))
 		"ward":                                      # 0.31.158 5V5: a ward at your feet (the fog of war)
 			return moba != null and moba.ward(u)
+		"recall":                                    # 0.31.181 5V5: home to the fountain after RECALL_TIME
+			return _recall(u)
 		"shop_buy":                                  # 0.31.157 5V5: an item (arg: its id) -- in your castle or while down
 			return moba != null and moba.buy(u, str(arg))
 		"shop_sell":                                 # (arg: the slot)
 			return moba != null and moba.sell(u, int(arg))
 	return false
+
+# ---------- RECALL (0.31.181, Kevin: "add a teleport back to castle mechanic") ----------
+# A 5v5 hero stands still for RECALL_TIME s and is back at his fountain: moving, fighting, a stun or any damage ends it
+# (League's recall). Events: "recall" {id, until} as it starts, "recall_cancel" {id}, "recall_done" {id, from, to}.
+const RECALL_TIME := 6.0
+
+func recalling(u: Dictionary) -> bool:
+	return float(u.get("recall_until", -1.0)) > 0.0
+
+func _recall(u: Dictionary) -> bool:
+	if moba == null or not bool(u.get("hero", false)) or not can_act(u) or recalling(u) or int(u.team) > 1:
+		return false
+	if (u.pos as Vector2).distance_to(spawn(int(u.team))) < Keep.FOUNTAIN_R + 1.0:
+		return false                                 # (home already)
+	u["recall_until"] = time + RECALL_TIME
+	u.move = Vector2.ZERO
+	u.path = PackedVector2Array()
+	_event("recall", {"id":u.id, "until":float(u.recall_until)})
+	return true
+
+func recall_cancel(u: Dictionary) -> void:
+	if recalling(u):
+		u["recall_until"] = -1.0
+		_event("recall_cancel", {"id":u.id})
+
+func _step_recall(u: Dictionary) -> void:
+	if (u.move as Vector2).length() > 0.1 or u.stun > 0.0 or u.state != "idle":
+		recall_cancel(u)
+	elif time >= float(u.recall_until):
+		var from: Vector2 = u.pos
+		var k := float(absi(hash(str(u.id))) % 360) * PI / 180.0      # (each to his own spot round the fountain)
+		u.pos = spawn(int(u.team)) + Vector2.from_angle(k) * (Keep.FOUNTAIN_R - 0.8)
+		u.face = PI if int(u.team) == 0 else 0.0
+		u.path = PackedVector2Array()
+		u["recall_until"] = -1.0
+		_event("recall_done", {"id":u.id, "from":from, "to":u.pos})
 
 func set_move(id: String, v: Vector2) -> void:
 	var u: Dictionary = by_id.get(id, {})
@@ -810,6 +850,8 @@ func _damage(src: Dictionary, dst: Dictionary, amount: float, stun := 0.0) -> vo
 	if moba != null:
 		amount = moba.mod_damage(src, dst, amount)    # 0.31.157: ultimates, items, buffs (more dealt, less taken, UNDYING)
 	dst.hp -= amount
+	if amount > 0.0 and recalling(dst):
+		recall_cancel(dst)                       # (0.31.181: hurt -- the recall's off)
 	if moba != null:
 		moba.on_damage(src, dst, amount)          # 0.31.155: lifesteal; who hit a hero (the towers' and minions' call for help)
 	if stun > 0.0:
@@ -826,6 +868,7 @@ func _damage(src: Dictionary, dst: Dictionary, amount: float, stun := 0.0) -> vo
 
 func _kill(src: Dictionary, dst: Dictionary) -> void:
 	dst["hammer_out"] = -1                     # its hammer, if out, drops (_step_hammer)
+	recall_cancel(dst)
 	dst.hp = 0.0
 	dst.state = "dead"
 	dst.beam = ""
@@ -1021,6 +1064,8 @@ func _step_unit(u: Dictionary, dt: float) -> void:
 		u.cd_dodge = maxf(0.0, u.cd_dodge - dt)
 		u.cd_ability = maxf(0.0, u.cd_ability - dt)
 		return
+	if recalling(u):
+		_step_recall(u)                          # 0.31.181: a hero on his way home
 	u.cd_dodge = maxf(0.0, u.cd_dodge - dt)
 	u.cd_ability = maxf(0.0, u.cd_ability - dt * float(u.get("m_cdr", 1.0)))     # (0.31.155: a 5v5 hero's faster recharge)
 	_step_beam(u, dt)

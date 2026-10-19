@@ -775,6 +775,7 @@ func _buttons() -> Array:
 		{"id":"ult", "c":br + Vector2(-66, -218), "r":36.0},
 		{"id":"dodge", "c":br + Vector2(-46, -300), "r":28.0},
 		{"id":"ward", "c":br + Vector2(-122, -306), "r":24.0},
+		{"id":"recall", "c":br + Vector2(-198, -300), "r":24.0},     # 0.31.181: home to the fountain
 	]
 
 func _modal_open() -> bool:
@@ -801,6 +802,7 @@ func _input(event: InputEvent) -> void:
 			KEY_U: action_pressed.emit("w")               # 0.31.167 5V5: W and E
 			KEY_I: action_pressed.emit("e")
 			KEY_T: action_pressed.emit("ward")            # 0.31.158 5V5
+			KEY_B: action_pressed.emit("recall")          # 0.31.181 (League's B)
 			KEY_B: open_shop()
 
 func _touch(index: int, pos: Vector2, pressed: bool) -> void:
@@ -1030,6 +1032,7 @@ func _draw_hud() -> void:
 	# Combat buttons.
 	for b in _buttons():
 		_draw_button(b, me)
+	_draw_recall(me)
 	if prof_on: tq = _ph("stick+buttons", tq)
 
 func _draw_top(me: Dictionary) -> void:
@@ -1157,6 +1160,19 @@ func _draw_king_alert(me: Dictionary) -> void:
 	_text(Vector2(size.x * 0.5, 90.0), "KING UNDER ATTACK!", 13, Color(1.0, 0.45, 0.38, 0.65 + 0.35 * pulse), _bold)
 
 var _alert_style: StyleBoxFlat = null
+
+func _draw_recall(me: Dictionary) -> void:
+	# 0.31.181: "RECALLING" and its bar under you while you channel home
+	if sim.moba == null or not sim.recalling(me):
+		return
+	var left := maxf(0.0, float(me.recall_until) - float(sim.time))
+	var f := clampf(1.0 - left / Sim.RECALL_TIME, 0.0, 1.0)
+	var w := minf(200.0, size.x * 0.5)
+	var r := Rect2(Vector2(size.x * 0.5 - w * 0.5, size.y * 0.6), Vector2(w, 10.0))
+	draw_rect(r.grow(2.0), Color(0.04, 0.03, 0.1, 0.8))
+	draw_rect(Rect2(r.position, Vector2(w * f, r.size.y)), Color("#b9a8ff"))
+	draw_rect(r.grow(2.0), Color("#6d5ed0"), false, 1.5)
+	_text(Vector2(size.x * 0.5, r.position.y - 6.0), "RECALLING  %.1f" % left, 13, Color("#e6deff"), _bold)
 
 func _draw_idle(me: Dictionary) -> void:
 	# 0.31.119: "A BOT IS PLAYING FOR YOU" while the server's bot holds my unit (I gave no input for a while)
@@ -1611,6 +1627,16 @@ func _draw_button(b: Dictionary, me: Dictionary) -> void:
 			cd = me.cd_dodge
 			cd_max = 2.2
 			ready = cd <= 0.0
+		"recall":
+			# 0.31.181: home to the fountain -- the castle on it; while it channels, its ring fills
+			label = "HOME"
+			col = Color("#2a2456")
+			rim = Color("#b9a8ff")
+			icon = hud_icon("castle")
+			ready = sim.alive(me) and not sim.recalling(me)
+			if sim.recalling(me):
+				var left := maxf(0.0, float(me.recall_until) - float(sim.time))
+				draw_arc(c, r + 4.0, -PI * 0.5, -PI * 0.5 + TAU * (1.0 - left / Sim.RECALL_TIME), 40, Color("#d8ccff"), 4.0, true)
 	var pressed: bool = _time - float(_pressed_at.get(b.id, -10.0)) < 0.12 or (b.id == "attack" and _attack_held)
 	var body := col.lightened(0.15) if pressed else col
 	if not ready:

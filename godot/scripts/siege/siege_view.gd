@@ -3006,6 +3006,7 @@ func sync(dt: float) -> void:
 	var tp := Time.get_ticks_usec() if prof_on else 0
 	_time += dt
 	_sync_meteor_fx(dt)
+	_sync_recall_fx(dt)
 	if prof_on: tp = _pv("pre.meteors", tp)
 	_sync_shocks()
 	_kick_debris()
@@ -4405,6 +4406,18 @@ func on_event(e: Dictionary) -> void:
 			if str(e.get("by", "")) == player_id:
 				spark(chip, Color("#ffd27a"))
 				number((mt.top as Vector3) + Vector3(0, 1.1, 0), str(e.dmg), false)
+		"recall_done":                            # 0.31.181: gone from there, here now
+			var ru: Dictionary = sim.by_id.get(str(e.get("id", "")), {})
+			if not a.is_empty() and not ru.is_empty():
+				a.root.position = Vector3(ru.pos.x, Sim.height_at(ru.pos), ru.pos.y)     # (no gliding across the map)
+				if str(e.id) == player_id and has_method("snap_camera"):
+					call("snap_camera")
+			for key in ["from", "to"]:
+				var rp: Vector2 = e.get(key, Vector2.ZERO)
+				var ry := Sim.height_at(rp)
+				ring_at(Vector3(rp.x, ry + 0.1, rp.y), RECALL_COL, 2.6, 0.7)
+				for i in 10:
+					spark(Vector3(rp.x + randf_range(-0.6, 0.6), ry + 0.3 + randf() * 2.2, rp.y + randf_range(-0.6, 0.6)), RECALL_COL)
 		"tshot":
 			_tower_shot(e)                        # 0.31.155 5V5
 		"tower_down":
@@ -4670,6 +4683,30 @@ var _shake := 0.0
 
 func shake(amount: float) -> void:
 	_shake = maxf(_shake, amount)
+
+# 0.31.181: a hero recalling -- a violet ring rising round his feet and motes going up, faster as he's nearly gone;
+# where he left and where he arrives a flash (on_event "recall_done")
+var _recall_t := 0.0
+const RECALL_COL := Color("#b9a8ff")
+
+func _sync_recall_fx(dt: float) -> void:
+	if sim == null or sim.moba == null:
+		return
+	_recall_t -= dt
+	if _recall_t > 0.0:
+		return
+	_recall_t = 0.22
+	for u in sim.units:
+		if not bool(u.get("hero", false)) or not sim.recalling(u):
+			continue
+		var a: Dictionary = actors.get(str(u.id), {})
+		if a.is_empty() or not (a.root as Node3D).visible:
+			continue
+		var p: Vector3 = (a.root as Node3D).position
+		var k := 1.0 - clampf((float(u.recall_until) - float(sim.time)) / sim.RECALL_TIME, 0.0, 1.0)
+		ring_at(p + Vector3(0, 0.08, 0), RECALL_COL, 0.6 + 0.8 * k, 0.55)
+		for i in 1 + int(k * 3.0):
+			spark(p + Vector3(randf_range(-0.5, 0.5), 0.2 + randf() * 1.6, randf_range(-0.5, 0.5)), RECALL_COL)
 
 func ring_at(at: Vector3, color: Color, grow := 2.2, life := 0.6) -> void:
 	if low_fx and life < 0.5:

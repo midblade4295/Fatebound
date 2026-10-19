@@ -46,7 +46,7 @@ const QC_GAP := 2.0              # s between one player's quick chats
 const STATES := ["idle", "move", "wind", "recover", "dodge", "dead", "dash"]
 # Actions a client may ask for (anything else is ignored by the server), and what each takes (clean_arg). 0.31.170: the
 # 5v5's -- a level-up pick, the ultimate, W and E, a ward, the shop.
-const ACTIONS := ["attack", "ability", "block", "dodge", "pick", "ult", "spell", "ward", "shop_buy", "shop_sell"]
+const ACTIONS := ["attack", "ability", "block", "dodge", "pick", "ult", "spell", "ward", "shop_buy", "shop_sell", "recall"]
 const FIVE := 1                  # 0.31.170: the online 5v5 (the hello's "five", the server's answers' "five")
 
 static func clean_arg(action: String, arg: Variant) -> Array:

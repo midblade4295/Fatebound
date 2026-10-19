@@ -876,6 +876,13 @@ func _on_action(kind: String) -> void:
 					hud.toast("%s comes at level %d" % [kind.to_upper(), int(sim.moba.kits.UNLOCK[kind])], Color("#ffcf7a"))
 				elif not me_s.is_empty() and float(me_s.get("cd_" + kind, 0.0)) <= 0.0 and sim.can_act(me_s):
 					hud.toast("No enemy hero in reach", Color("#ffcf7a"))       # (SHADOW STEP, MARK, CURSE need one)
+		"recall":                                        # 0.31.181: home to the fountain
+			if sim != null:
+				var me_r: Dictionary = sim.by_id.get(hud.player_id, {})
+				if sim.act(hud.player_id, "recall"):
+					pass                                     # (its sound comes with its event)
+				elif not me_r.is_empty() and sim.alive(me_r) and not sim.recalling(me_r):
+					hud.toast("You're home already" if (me_r.pos as Vector2).distance_to(sim.spawn(int(me_r.team))) < 8.0 else "Can't recall right now", Color("#ffcf7a"))
 		"ward":                                          # 0.31.158 5V5: a ward at your feet
 			if sim != null:
 				if sim.act(hud.player_id, "ward"):
@@ -917,6 +924,9 @@ func _on_action_online(kind: String) -> void:
 				hud.toast("%s comes at level %d" % [kind.to_upper(), int(sim.moba.kits.UNLOCK[kind])], Color("#ffcf7a"))
 			elif float(me.get("cd_" + kind, 0.0)) <= 0.0 and sim.can_act(me):
 				_act("spell", kind)
+		"recall":                                        # 0.31.181
+			if sim.alive(me) and not sim.recalling(me) and sim.can_act(me):
+				_act("recall")
 		"ward":
 			if sim.moba.vision.ward_ready(me):
 				_act("ward")
@@ -1354,6 +1364,10 @@ func _event_sound(e: Dictionary) -> void:
 					_herald_say("kb_shutdown")
 				_:
 					_cue("kb_kill", 1, Vector2.ZERO, HEAR_R, true, 0.8 if mine_kb else 0.5)
+		"recall":                                       # 0.31.181: the recall's hum, and its arrival
+			_cue("recall_start", 1, _unit_pos(e.get("id", "")), HEAR_R, mine, 0.8)
+		"recall_done":
+			_cue("recall_done", 1, (e.get("to", Vector2.ZERO) as Vector2), HEAR_R, mine, 0.9)
 		"ace":
 			_cue("kb_ace", 1, Vector2.ZERO, HEAR_R, true, 0.9)
 			_herald_say("kb_ace")

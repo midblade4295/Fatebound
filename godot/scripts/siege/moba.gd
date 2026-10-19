@@ -1535,6 +1535,20 @@ func _enemy_tower_near(u: Dictionary, r: float) -> Dictionary:
 			best = tw
 	return best
 
+func _bot_recall(u: Dictionary) -> bool:
+	# 0.31.181: a bot going home recalls when it's safe to stand still (no enemy hero within BOT_RECALL_SAFE m, no
+	# enemy tower in reach, not in his own keep already)
+	if s.in_castle(u.pos, int(u.team)) or not tower_in_range(1 - int(u.team), u.pos, 1.0).is_empty():
+		return false
+	for o in units_near(u.pos, BOT_RECALL_SAFE):
+		if int(o.team) == 1 - int(u.team) and s.alive(o) and bool(o.get("hero", false)) \
+				and (o.pos as Vector2).distance_to(u.pos) < BOT_RECALL_SAFE:
+			return false
+	u.move = Vector2.ZERO
+	return s.act(str(u.id), "recall")
+
+const BOT_RECALL_SAFE := 14.0
+
 func _hit_structure(u: Dictionary, tw: Dictionary) -> void:
 	# up to it and swing / shoot (an invulnerable one too: it's in the way -- the hit does nothing). 0.31.179: from
 	# inside its range (a hit from outside does nothing), so a long gun walks in too
@@ -1617,16 +1631,21 @@ func _think_hero(u: Dictionary) -> void:
 	# 0.31.157: the ultimate when it's worth it (before running home: GRACE, BULWARK, UNDYING are for hard moments)
 	if _bot_ult(u) or kits.bot_spells(u):              # (0.31.167: W and E too)
 		return
-	# hurt: home to heal
+	# hurt: home to heal -- 0.31.181: by RECALL when no enemy hero is near and no tower is on him, else on foot
+	if s.recalling(u):
+		u.move = Vector2.ZERO
+		return
 	if bool(u.get("back", false)):
 		if u.hp >= u.max_hp * 0.92:
 			u.back = false
 		else:
-			s._nav_to(u, s.spawn(int(u.team)), 1.5)
+			if not _bot_recall(u):
+				s._nav_to(u, s.spawn(int(u.team)), 1.5)
 			return
 	if u.hp < u.max_hp * 0.3 and not s.in_castle(u.pos, int(u.team)):
 		u["back"] = true
-		s._nav_to(u, s.spawn(int(u.team)), 1.5)
+		if not _bot_recall(u):
+			s._nav_to(u, s.spawn(int(u.team)), 1.5)
 		return
 	# 0.31.157: the Bone Lord when the side goes for him
 	if boss_go[int(u.team)] and u.hp > u.max_hp * 0.45 and _go_lord(u):

@@ -70,6 +70,7 @@ run hud_top_test         HUD_TOP_PASS             200
 run tower_rules_test     TOWER_RULES_PASS         400
 run kill_rules_test      KILL_RULES_PASS          200
 run kill_banner_test     KILL_BANNER_PASS         400
+run recall_test          RECALL_PASS              300
 run priest_test          PRIEST_PASS              200
 run multikill_test       MULTIKILL_PASS           60
 run upgrades_test        UPGRADES_PASS            60
