@@ -28,15 +28,16 @@ func _init() -> void:
 		if not ResourceLoader.exists(str(p.probe)):
 			sound = false
 			print("   probe missing ", p.probe)
-	check(names == ["ui", "world", "heroes", "minions", "champions", "weapons", "war", "audio"] and sound, "8 packs, each named by its hash, sized, with a sha256 and a probe in the project (%s)" % str(names))
+	# (0.31.186: "skins", the hero skins' textures, after the weapons)
+	check(names == ["ui", "world", "heroes", "minions", "champions", "weapons", "skins", "war", "audio"] and sound, "9 packs, each named by its hash, sized, with a sha256 and a probe in the project (%s)" % str(names))
 	# the plan
 	var all := Loader.plan(m, {}, func(_p): return true)
 	check((all.mount as Array).is_empty() and (all.fetch as Array).is_empty() and (all.keep as Array).is_empty(), "running from source (every probe there): nothing to do")
 	var fresh := Loader.plan(m, {}, func(_p): return false)
-	check((fresh.fetch as Array).size() == 8 and (fresh.keep as Array).size() == 8, "a fresh install downloads all 8")
+	check((fresh.fetch as Array).size() == 9 and (fresh.keep as Array).size() == 9, "a fresh install downloads all 9")
 	var have := {str(packs[0].file): str(packs[0].sha256), str(packs[2].file): str(packs[2].sha256), str(packs[3].file): "0bad"}
 	var some := Loader.plan(m, have, func(_p): return false)
-	check((some.mount as Array).size() == 2 and (some.fetch as Array).size() == 6 and str(some.fetch[1].name) == "minions",
+	check((some.mount as Array).size() == 2 and (some.fetch as Array).size() == 7 and str(some.fetch[1].name) == "minions",
 		"two checked packs mount, a pack whose check doesn't match downloads again")
 	check(Loader.range_header(0, 20000000) == "Range: bytes=0-%d" % (Loader.CHUNK - 1) and
 		Loader.range_header(2 * Loader.CHUNK, 20000000) == "Range: bytes=%d-19999999" % (2 * Loader.CHUNK), "byte ranges of 8 MB, the last one short")

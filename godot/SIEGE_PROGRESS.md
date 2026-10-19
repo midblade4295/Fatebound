@@ -5822,3 +5822,38 @@ never lets you turn paid currency into the free one").
   presets untouched): BASE OK (271 files), CONTENT OK, play_games true, bundletool valid. Screens looked at (420 x 933):
   the hero window (locked, the chooser, a free one), a Royal chest with a shard, the pass's token and shard tiers.
   Preview APK: build/Fatebound-Siege-0.31.185-fatebound.apk (32 MB, preview key), sha256 15bb9e68...44089b0a.
+
+## 0.31.186 — hero skins: the Frostbound line
+The fourth part of Kevin's "the same IAP system as league of legends": hero skins, sold for gems, each with its hero.
+- The art: every hero's own rigged model (assets/meshy/<hero>/rigged.glb) repainted by Meshy's retexture with his UVs
+  kept (enable_original_uv) -- the new texture fits the mesh the game has: same mesh, rig and silhouette, so every hero
+  still reads as himself (why weapons were the only cosmetic since 0.31.39), the team ring under him as before. The
+  Frostbound line, all 18 heroes: icy blue, white and frosted silver (the per-hero prompts: art_sources/skins/frostbound
+  prompts.json, README.txt). The Priest's first take changed his face (darker skin, a goatee): made again with his face
+  named -- 19 retextures, 190 Meshy credits (1,301 left). tools/meshy_retexture.py (one skin), tools/build_skins.py
+  (assets/skins/<id>.jpg, 1024, VRAM-compressed: the new "skins" content pack, 12.6 MB), tools/render_skin_icons.gd
+  (the shop's portraits, assets/ui/skins/<id>.png, rendered on the game's own models).
+- The economy (economy.gd SKINS): <hero>_frost, "Frostbound <Hero>", epic, 750 gems (SKIN_GEMS: rare 390, epic 750,
+  legendary 1,350 for lines to come). Profile: buy_skin (gems; a locked hero's skin brings the hero, League's way;
+  worn at once), wear_skin (per hero; "" his own look); skins / skin_on in the save, a damaged one cleaned. New ops
+  buy_skin, wear_skin (the server replays them).
+- Online: the looks carry "_sk" (the skins worn, "knight_frost,golem_frost"; siege_net.clean_looks keeps good ids);
+  the server's account looks hold only owned ones (eco_accounts.wear). Each app shows the skin made for the hero
+  played; an id it doesn't know: his own look. Additive: an older server drops "_sk", an older app ignores it.
+- The view (siege_view.gd): apply_skin paints the body's own meshes before the weapons go in his hands (they keep
+  theirs), one material per skin shared by every body in it; unit_cosmetic adds the skin of the hero played (mine
+  from the profile, theirs from "_sk", a bot none), one dictionary made once per unit (not every frame).
+- The shop: HERO SKINS after the daily deals -- every skin, its portrait, 750 with BUY (asks first; "+ HERO" on a
+  locked hero's), WEAR / WORN once owned. The hero window: the hero in his worn skin on the stage, SKIN: FROSTBOUND
+  (tap: the next one you own, his own look among them).
+- Tests: skins_test (new: the catalog, buying with the hero, wearing, a damaged save, the looks' "_sk", clean_looks,
+  the server's looks, the ops replayed, the texture on the body and not the weapons, the material shared, mine /
+  theirs / a bot's); content_test (9 packs: it failed in the chain's suite, fixed after and passing on its own).
+- Looked at (420 x 933): the shop's skins, the hero window (Knight, Golem in Frostbound), a match as the Frostbound
+  Golem and as the Frostbound Knight.
+- Version 0.31.186, versionCode 272, SERVER_BUILD 0.31.186 (the server: the skin ops and "_sk" -- the redeploy).
+- Checks: the quick suite 97 passed, content_test failed (above, fixed); COLD_START_PASS; content packs: ui (32.2 MB)
+  and skins (12.6 MB) built and uploaded, check and coverage OK; the Play AAB (throwaway key, presets untouched by the
+  chain -- the base presets' exclude filters gained assets/skins/* from content_packs.py presets): BASE OK (271 files),
+  CONTENT OK, play_games true, bundletool valid. Preview APK: build/Fatebound-Siege-0.31.186-fatebound.apk (32 MB,
+  preview key), sha256 58f36cca...e75bfab.
