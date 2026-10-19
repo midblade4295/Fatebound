@@ -5700,3 +5700,9 @@ mechanic".
   line voiced and its caption the recorded script's).
 - Version 0.31.181, versionCode 267, SERVER_BUILD 0.31.181 (a server redeploy brings the recall online and the bots'
   recalls to the server's matches).
+- Checks: the quick suite 93 of 96 passed. app_flow_test and moba_ui_test still asserted no TUTORIAL on Home (now: it
+  is there, and a new player's starts the tutorial's match without a ticket); net_mirror_test's fog: a monster 14.998
+  m from a hero's 15 m sight on the server, 15.001 on the phone (positions travel to the centimetre) -- the test now
+  lets a unit within 3 cm of a sight's edge fall either side. All three pass since. COLD_START_PASS; the Play AAB
+  (throwaway key, presets untouched): BASE OK (269 files), CONTENT OK, play_games true, bundletool valid. Preview APK:
+  build/Fatebound-Siege-0.31.181-fatebound.apk (32 MB, preview key), sha256 4f9b355d...8aadf3.

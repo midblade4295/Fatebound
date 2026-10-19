@@ -1,7 +1,7 @@
 extends SceneTree
 # 0.31.155 5V5 (the test) in the app:
-#  1. Home: (0.31.164, Kevin: "5v5 only") PLAY opens the hero window -- no TUTORIAL, no 5V5 (TEST) medallion, for a new
-#     player too: 12 heroes, the last pick kept;
+#  1. Home: (0.31.164, Kevin: "5v5 only") PLAY opens the hero window -- no 5V5 (TEST) medallion, for a new player too:
+#     12 heroes, the last pick kept; (0.31.181) TUTORIAL, the 5v5's: a new player's starts it without a ticket;
 #  2. a hero picked, BATTLE: an offline 5v5 as that hero;
 #  3. the HUD: level and XP, the towers standing; a level-up's three upgrades tapped on the screen apply one;
 #  4. (0.31.157) the gold and SHOP under the towers line: tapped, the shop; an item picked and bought in your castle;
@@ -96,8 +96,14 @@ func _process(delta: float) -> bool:
 			_go("fresh_home")
 		"fresh_home":
 			if t_phase > 1.0:
-				check(btn("tutorial_start") == null and btn("side_moba") == null and btn("side_commander") == null and btn("play") != null,
-					"a new player's Home: PLAY, and no TUTORIAL or 5V5 medallion")
+				check(btn("tutorial_start") != null and btn("side_moba") == null and btn("side_commander") == null and btn("play") != null,
+					"a new player's Home: PLAY and TUTORIAL, no 5V5 medallion")
+				press("tutorial_start")
+				_go("fresh_tutorial")
+		"fresh_tutorial":
+			if t_phase > 0.5:
+				check(app.siege != null and bool(app.siege.tutorial) and not bool(app.siege.online) and str(app.siege.moba_hero) == "knight",
+					"TUTORIAL: the tutorial's match, offline, as the Knight (no ticket asked)")
 				app.queue_free()
 				app = null
 				_go("boot")
@@ -107,8 +113,8 @@ func _process(delta: float) -> bool:
 				_go("home")
 		"home":
 			if t_phase > 1.0:
-				check(btn("side_moba") == null and btn("tutorial_start") == null and btn("side_commander") == null and btn("play") != null,
-					"Home: PLAY (the 5v5)")
+				check(btn("side_moba") == null and btn("tutorial_start") != null and btn("side_commander") == null and btn("play") != null,
+					"Home: PLAY (the 5v5), TUTORIAL")
 				_shot("moba_home")
 				press("play")
 				_go("heroes")

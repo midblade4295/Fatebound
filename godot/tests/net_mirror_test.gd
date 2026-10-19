@@ -10,6 +10,7 @@ const Sim = preload("res://scripts/siege/siege_sim.gd")
 const Net = preload("res://scripts/siege/siege_net.gd")
 
 var fails := 0
+const EDGE := 0.03                     # (positions travel to the phone to the centimetre: a unit this near a sight's edge)
 
 func _fail(why: String) -> void:
 	fails += 1
@@ -197,5 +198,13 @@ func _compare_fog(srv, m) -> void:
 	for t in 2:
 		var a: Dictionary = srv.moba.vision.seen[t]
 		var b: Dictionary = m.moba.vision.seen[t]
-		if a.keys().size() != b.keys().size() or not a.keys().all(func(k): return b.has(k)):
-			_fail("fog t=%.1f side %d: phone sees %d, server %d" % [srv.time, t, b.size(), a.size()])
+		var srcs: Array = srv.moba.vision.sources(t)
+		for k in a.keys() + b.keys():
+			if a.has(k) == b.has(k):
+				continue
+			# 0.31.181: a unit right on the edge of a sight (within the snapshot's centimetre) may fall either side of it
+			# on the phone -- one of the monsters, 14.998 m from a hero's 15 m sight on the server, 15.001 on the phone
+			var up: Vector2 = srv.by_id.get(k, {}).get("pos", Vector2.INF)
+			if srcs.any(func(sr): return absf((sr[0] as Vector2).distance_to(up) - float(sr[1])) < EDGE):
+				continue
+			_fail("fog t=%.1f side %d: %s seen by the phone %s, by the server %s" % [srv.time, t, k, str(b.has(k)), str(a.has(k))])
