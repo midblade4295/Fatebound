@@ -1338,6 +1338,25 @@ func _event_sound(e: Dictionary) -> void:
 			_cue("tm_gate_close", 1, _gate_pos(e.get("gate", "")), 18.0)
 		"gate_open":
 			_cue("tm_gate_open", 1, _gate_pos(e.get("gate", "")), 12.0, false, 0.55)
+		"kb":                                           # 0.31.180: the kill banners' sounds (siege_hud.gd kill_banner)
+			var kind := str(e.get("kind", "kill"))
+			var mine_kb := str(e.get("by", "")) == str(hud.player_id) or str(e.get("id", "")) == str(hud.player_id)
+			match kind:
+				"first_blood":
+					_cue("kb_first_blood", 1, Vector2.ZERO, HEAR_R, true, 0.9)
+					_herald_say("kb_first_blood")
+				"multi":
+					var mn := clampi(int(e.get("n", 2)), 2, 5)
+					_cue(["", "", "kb_double", "kb_triple", "kb_quadra", "kb_penta"][mn], 1, Vector2.ZERO, HEAR_R, true,
+						1.0 if mine_kb or mn >= 4 else 0.7)     # (a PENTAKILL is heard across the map, whoever's)
+				"shutdown":
+					_cue("kb_shutdown", 1, Vector2.ZERO, HEAR_R, true, 0.9)
+					_herald_say("kb_shutdown")
+				_:
+					_cue("kb_kill", 1, Vector2.ZERO, HEAR_R, true, 0.8 if mine_kb else 0.5)
+		"ace":
+			_cue("kb_ace", 1, Vector2.ZERO, HEAR_R, true, 0.9)
+			_herald_say("kb_ace")
 		"multikill":                                    # 0.31.29: the Herald calls your multi-kills
 			if str(e.get("id", "")) == hud.player_id and sim.by_id.has(hud.player_id):
 				# (0.31.37: kept on my unit online too, where the sim's own count lives on the server -- a chest rule)

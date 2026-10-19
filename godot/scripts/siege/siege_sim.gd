@@ -464,6 +464,8 @@ func _respawn(u: Dictionary, first := false) -> void:
 	u.t = 0.0
 	u.stun = 0.0
 	u.path = PackedVector2Array()
+	if moba != null and bool(u.get("hero", false)) and not first and int(u.team) >= 0 and int(u.team) <= 1:
+		moba.last_respawn[int(u.team)] = time          # (0.31.180: a PENTA's window ends when one of them is back)
 	if not first:
 		_event("spawn", {"id":u.id})
 
@@ -774,6 +776,8 @@ func _heal(by: Dictionary, t: Dictionary, amount: float) -> void:
 	t.hp = minf(t.max_hp, t.hp + amount)
 	if by != t:
 		by["healed"] = float(by.get("healed", 0.0)) + (t.hp - before)
+		if moba != null and t.hp > before:
+			moba.note_heal(by, t)                    # (0.31.180: healing a killer -- an assist)
 
 func _dodge(u: Dictionary) -> bool:
 	if not alive(u) or u.stun > 0.0 or u.cd_dodge > 0.0 or u.state in ["wind","dodge"]:
@@ -810,6 +814,8 @@ func _damage(src: Dictionary, dst: Dictionary, amount: float, stun := 0.0) -> vo
 		moba.on_damage(src, dst, amount)          # 0.31.155: lifesteal; who hit a hero (the towers' and minions' call for help)
 	if stun > 0.0:
 		dst.stun = maxf(dst.stun, stun)
+		if moba != null:
+			moba.note_cc(src, dst)                    # (0.31.180: held -- an assist)
 	_event("hit", {"id":dst.id,"by":src.get("id",""),"dmg":int(round(amount))})
 	if src.has("pos") and str(src.get("id", "")) != "" and int(src.get("team", -1)) != int(dst.team):
 		dst["hurt_by"] = str(src.id)                  # 0.31.27: bots answer whoever is hurting them (or a friend nearby)

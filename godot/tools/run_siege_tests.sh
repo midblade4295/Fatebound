@@ -68,6 +68,8 @@ run live_board_test      LIVE_BOARD_PASS          200
 run names_aim_test       NAMES_AIM_PASS           200
 run hud_top_test         HUD_TOP_PASS             200
 run tower_rules_test     TOWER_RULES_PASS         400
+run kill_rules_test      KILL_RULES_PASS          200
+run kill_banner_test     KILL_BANNER_PASS         400
 run priest_test          PRIEST_PASS              200
 run multikill_test       MULTIKILL_PASS           60
 run upgrades_test        UPGRADES_PASS            60

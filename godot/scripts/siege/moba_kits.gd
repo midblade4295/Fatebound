@@ -313,7 +313,7 @@ func _cast(u: Dictionary, k: Dictionary, ev: Dictionary) -> bool:
 				var off: Vector2 = (o.pos as Vector2) - (u.pos as Vector2)
 				if off.length() < 0.8 or absf(d.angle_to(off)) <= float(k.arc):
 					s._damage(u, o, dmg * float(k.dmg))
-					_slow(o, float(k.slow), float(k.dur))
+					_slow(o, float(k.slow), float(k.dur), u)
 					n += 1
 			n += m.ability_king(u, dmg * float(k.dmg), u.pos, float(k.r), d, cos(float(k.arc)))
 			ev["dir"] = d
@@ -383,6 +383,7 @@ func _cast(u: Dictionary, k: Dictionary, ev: Dictionary) -> bool:
 			var n3 := 0
 			for o in _enemies_near(u, u.pos, float(k.r)):
 				o.stun = maxf(float(o.stun), float(k.stun))
+				m.note_cc(u, o)
 				n3 += 1
 			ev["r"] = float(k.r)
 			ev["n"] = n3
@@ -394,7 +395,7 @@ func _cast(u: Dictionary, k: Dictionary, ev: Dictionary) -> bool:
 			var tgt3 := _hero_near(u, float(k.range))
 			if tgt3.is_empty():
 				return false
-			_slow(tgt3, float(k.slow), float(k.dur))
+			_slow(tgt3, float(k.slow), float(k.dur), u)
 			_amp(tgt3, float(k.amp), float(k.dur))
 			ev["target"] = str(tgt3.id)
 		# ---- 0.31.168: the six new heroes ----
@@ -411,7 +412,7 @@ func _cast(u: Dictionary, k: Dictionary, ev: Dictionary) -> bool:
 			for o in _enemies_near(u, u.pos, float(k.r)):
 				s._next_push = s._push_from(u.pos, o.pos, 3.0, 2.0)
 				s._damage(u, o, dmg * float(k.dmg))
-				_slow(o, float(k.slow), float(k.dur))
+				_slow(o, float(k.slow), float(k.dur), u)
 				n4 += 1
 			n4 += m.ability_king(u, dmg * float(k.dmg), u.pos, float(k.r))
 			ev["r"] = float(k.r)
@@ -441,7 +442,7 @@ func _cast(u: Dictionary, k: Dictionary, ev: Dictionary) -> bool:
 				s._damage(u, o, dmg * float(k.dmg))
 				if s.alive(o) and not o.has("mon"):
 					s._knockback(o, -d4 * minf(float(k.pull), maxf(0.0, along - 1.3)))
-				_slow(o, float(k.slow), float(k.dur))
+				_slow(o, float(k.slow), float(k.dur), u)
 				hit_n += 1
 			hit_n += m.ability_king(u, dmg * float(k.dmg), u.pos, float(k.len), d4, -2.0, float(k.w))
 			ev["dir"] = d4
@@ -511,7 +512,7 @@ func _cast(u: Dictionary, k: Dictionary, ev: Dictionary) -> bool:
 					s._damage(u, o, dmg * float(k.dmg))
 					if s.alive(o) and not o.has("mon"):
 						s._knockback(o, (off6.normalized() if off6.length() > 0.1 else d6) * float(k.push))
-					_slow(o, float(k.slow), float(k.dur))
+					_slow(o, float(k.slow), float(k.dur), u)
 			m.ability_king(u, dmg * float(k.dmg), u.pos, float(k.r), d6, cos(float(k.arc)))
 			ev["dir"] = d6
 			ev["r"] = float(k.r)
@@ -638,9 +639,11 @@ func _shield(u: Dictionary, amount: float, dur: float) -> void:
 	u["shield"] = minf(have + amount, float(u.max_hp) * SHIELD_CAP)
 	u["shield_until"] = maxf(float(u.get("shield_until", -1.0)), s.time + dur)
 
-func _slow(u: Dictionary, k: float, dur: float) -> void:
+func _slow(u: Dictionary, k: float, dur: float, by := {}) -> void:
 	if k <= 0.0 or s.time < float(u.get("unstop_until", -1.0)):
 		return                                   # (STONESKIN: slows fall off him)
+	if not by.is_empty():
+		m.note_cc(by, u)                         # (0.31.180: an assist if he falls soon)
 	if s.time < float(u.get("slow_until", -1.0)):
 		u["slow_k"] = maxf(float(u.get("slow_k", 0.0)), k)
 		u["slow_until"] = maxf(float(u.slow_until), s.time + dur)
@@ -704,7 +707,7 @@ func _shot(u: Dictionary, kind: String, dir: Vector2, speed: float, reach: float
 func proj_hit(p: Dictionary, hit: Dictionary) -> void:
 	# (siege_sim._step_projectiles) a spell's shot struck: what it does besides the damage
 	if float(p.get("slow", 0.0)) > 0.0:
-		_slow(hit, float(p.slow), float(p.get("slow_dur", 1.5)))
+		_slow(hit, float(p.slow), float(p.get("slow_dur", 1.5)), s.by_id.get(str(p.get("owner", "")), {}))
 
 func on_basic(u: Dictionary) -> float:
 	# (siege_sim._resolve_attack) a basic attack is about to land: the damage it gets (TUMBLE's empowered shot);
@@ -783,7 +786,7 @@ func step(dt: float) -> void:
 				if float(z.get("dmg", 0.0)) > 0.0:
 					s._damage(owner, o, float(z.dmg))
 				if float(z.get("slow", 0.0)) > 0.0:
-					_slow(o, float(z.slow), ZONE_EVERY + 0.15)
+					_slow(o, float(z.slow), ZONE_EVERY + 0.15, owner)
 			elif float(z.get("heal", 0.0)) > 0.0 and (bool(o.get("hero", false)) or bool(o.get("minion", false))):
 				s._heal(owner, o, float(o.max_hp) * float(z.heal))
 		if float(z.get("dmg", 0.0)) > 0.0:
@@ -899,7 +902,7 @@ func step_dash(u: Dictionary, dt: float) -> void:
 			for o in _enemies_near(u, u.pos, float(land.r)):
 				s._next_push = s._push_from(u.pos, o.pos, 5.0, 2.6)
 				s._damage(u, o, float(land.dmg), float(land.get("stun", 0.0)))
-				_slow(o, float(land.get("slow", 0.0)), float(land.get("dur", 1.0)))
+				_slow(o, float(land.get("slow", 0.0)), float(land.get("dur", 1.0)), u)
 			m.ability_king(u, float(land.dmg), u.pos, float(land.r))
 			s._event("slam", {"id":u.id, "pos":u.pos, "r":float(land.r)})
 		u.erase("dash")

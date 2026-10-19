@@ -48,9 +48,8 @@ var _ability_held := false
 var _block_held := false            # 0.31.61: the Crusader's shield button
 var _pressed_at := {}
 var _toast := ""
-var _multi: Label = null                 # 0.31.29: DOUBLE KILL ... LEGENDARY
-var _multi_at := -10.0
-const MULTI_COLORS := [Color.WHITE, Color.WHITE, Color("#ffe08a"), Color("#ffb04a"), Color("#ff6a3d"), Color("#ff3d6e"), Color("#c77dff")]
+const KillBanner = preload("res://scripts/siege/kill_banner.gd")
+var kill_banner: Control = null         # 0.31.180: the kill banners (kill_banner.gd; until then a DOUBLE KILL label of yours)
 var _toast_at := -10.0
 var net_names := {}                 # 0.31.119: online, unit id -> player name (the server's "pn"), for the scoreboard
 var score_panel: PanelContainer = null
@@ -108,6 +107,10 @@ func _ready() -> void:
 	_top_layer.draw.connect(_draw_top_layer)
 	add_child(_top_layer)
 	move_child(_top_layer, 0)
+	kill_banner = KillBanner.new()                 # 0.31.180: over the match and the buttons, under the panels
+	kill_banner.name = "KillBanner"
+	kill_banner.hud = self
+	add_child(kill_banner)
 	# 0.31.8: the pause panel is built the first time it opens.
 	resized.connect(_layout)
 	_layout()
@@ -744,16 +747,12 @@ func on_event(e: Dictionary) -> void:
 		"sell":
 			if str(e.get("id", "")) == str(player_id):
 				toast("Sold %s · +%d gold" % [str(sim.moba.ITEMS[str(e.item)].name), int(e.gold)], Color("#e8dcc0"))
-		"multikill":
-			var n := int(e.n)
-			if str(e.id) == str(player_id):
-				_show_multi(str(e.name), n)
-			elif n >= 3:
-				var who: String = "An ally" if mine else "An enemy"
-				toast("%s: %s" % [who, str(e.name)], VisualTheme.CYAN if mine else VisualTheme.RED)
+		"kb", "ace":
+			if kill_banner != null:
+				kill_banner.push(e)                      # 0.31.180: every hero kill, FIRST BLOOD, multi-kills, SHUTDOWN, ACE
 		"death":
-			if e.id == player_id:
-				toast("You fell!", VisualTheme.RED)
+			if e.id == player_id and not bool(sim.by_id.get(str(e.get("by", "")), {}).get("hero", false)):
+				toast("You fell!", VisualTheme.RED)     # (a hero's kill has its banner)
 		"gate_broken":
 			var side: String = str(sim.gates[int(e.gate)].side).to_upper()
 			toast("OUR %s GATE HAS FALLEN!" % side if mine else "ENEMY %s GATE BROKEN — CHARGE!" % side, VisualTheme.RED if mine else VisualTheme.GOLD)
@@ -900,39 +899,7 @@ func attack_held() -> bool:
 	return _attack_held or (not _modal_open() and (Input.is_physical_key_pressed(KEY_J) or Input.is_physical_key_pressed(KEY_SPACE)))
 
 # ---------- drawing ----------
-func _show_multi(text: String, n: int) -> void:
-	if _multi == null:
-		_multi = Label.new()
-		_multi.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		_multi.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		_multi.add_theme_font_override("font", load("res://assets/fonts/LuckiestGuy-Regular.ttf"))
-		_multi.add_theme_constant_override("outline_size", 14)
-		_multi.add_theme_color_override("font_outline_color", Color(0.12, 0.06, 0.02))
-		_multi.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		add_child(_multi)
-	_multi.text = text
-	_multi.add_theme_font_size_override("font_size", 64 + 4 * mini(n - 2, 3))     # fits a portrait phone at rest
-	_multi.add_theme_color_override("font_color", MULTI_COLORS[mini(n, MULTI_COLORS.size() - 1)])
-	_multi_at = _time
-	_multi.visible = true
-
-func _sync_multi() -> void:
-	if _multi == null or not _multi.visible:
-		return
-	var k := (_time - _multi_at) / 1.8
-	if k >= 1.0:
-		_multi.visible = false
-		return
-	var vs := get_viewport_rect().size
-	_multi.size = Vector2(vs.x, 120.0)
-	_multi.pivot_offset = _multi.size * 0.5
-	_multi.position = Vector2(0.0, vs.y * 0.3)
-	var pop := 1.0 + 0.45 * maxf(0.0, 1.0 - k * 6.0)          # slams in big, settles
-	_multi.scale = Vector2.ONE * pop
-	_multi.modulate.a = clampf((1.0 - k) * 3.0, 0.0, 1.0)
-
 func _process(delta: float) -> void:
-	_sync_multi()
 	_time += delta
 	if sim == null:
 		return
@@ -2221,12 +2188,30 @@ func _board_row(v: VBoxContainer, u: Dictionary, side: int) -> Dictionary:
 	h.add_theme_constant_override("separation", 6)
 	pc.add_child(h)
 	# the portrait: a frame in the side's colour, his level in the corner; down: grey, and the seconds to his return
+	var holder := Control.new()                     # (0.31.180: the portrait and, over its top, the bounty)
+	holder.custom_minimum_size = Vector2(BOARD_W.por, BOARD_W.por)
+	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	h.add_child(holder)
 	var frame := Panel.new()
 	frame.custom_minimum_size = Vector2(BOARD_W.por, BOARD_W.por)
+	frame.size = Vector2(BOARD_W.por, BOARD_W.por)
 	frame.add_theme_stylebox_override("panel", _bstyle(Color("#0b0f26"), TEAM_COLORS[vt(side)], 2, 9, 0.0))
 	frame.clip_children = CanvasItem.CLIP_CHILDREN_AND_DRAW
 	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	h.add_child(frame)
+	holder.add_child(frame)
+	# 0.31.180: his bounty -- a gold coin badge once it's 150 or more (League's: steps of 50)
+	var bbox := PanelContainer.new()
+	bbox.add_theme_stylebox_override("panel", _bstyle(Color("#e3a72c"), Color("#3a2205"), 1, 8, 1.0))
+	bbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	bbox.position = Vector2(-3, -7)
+	bbox.visible = false
+	holder.add_child(bbox)
+	var bh := HBoxContainer.new()
+	bh.add_theme_constant_override("separation", 1)
+	bbox.add_child(bh)
+	_bimg(bh, "res://assets/ui/currency/coin.png", 10)
+	var bty := _bl(bh, "", 10, Color("#3a2205"))
+	bty.add_theme_constant_override("outline_size", 0)
 	var por := TextureRect.new()
 	var pp := "res://assets/ui/skins/default_%s.png" % str(u.get("hid", u.cls))
 	por.texture = load(pp) if ResourceLoader.exists(pp) else null
@@ -2284,7 +2269,8 @@ func _board_row(v: VBoxContainer, u: Dictionary, side: int) -> Dictionary:
 		slots.append(ic)
 	var gold := _bl(h, "", 13, Color("#ffd65a"), 0.0, HORIZONTAL_ALIGNMENT_RIGHT)
 	gold.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	return {"por": por, "resp": resp, "lv": lv, "k": kk, "d": dd, "a": aa, "cs": cs, "slots": slots, "gold": gold}
+	return {"por": por, "resp": resp, "lv": lv, "k": kk, "d": dd, "a": aa, "cs": cs, "slots": slots, "gold": gold,
+		"bounty_box": bbox, "bounty": bty}
 
 func _refresh_board() -> void:
 	if board_panel == null or sim == null or sim.moba == null:
@@ -2325,6 +2311,9 @@ func _refresh_board() -> void:
 				ic.item = it
 				ic.queue_redraw()
 		(r.gold as Label).text = gold_k(float(net_worth(u)))
+		var bshown: int = sim.moba.bounty_shown(u)
+		(r.bounty_box as Control).visible = bshown > 0
+		(r.bounty as Label).text = str(bshown)
 
 func _draw_gold_and_items(me: Dictionary) -> void:
 	# 0.31.178: the gold-and-shop button, the slots framed, the buffs pills. 0.31.179 (Kevin: "The shop button changes

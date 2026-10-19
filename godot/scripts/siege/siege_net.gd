@@ -295,7 +295,8 @@ const NO_SYNC := {"t":true, "move":true, "path":true, "path_i":true, "path_goal"
 	"think_at":true, "unstick":true, "unstick_dir":true, "stuck_t":true, "last_pos":true, "aim_d":true, "drain_acc":true,
 	"hit_log":true, "hh_at":true, "hh_by":true, "hurt_at":true, "hurt_by":true, "mt":true, "mt_pri":true, "mt_tw":true,
 	"wp":true, "home":true, "home_face":true, "healed":true, "mk_n":true, "mk_t":true, "beam_heal_t":true,
-	"combo_t":true, "dodge_dir":true, "lunge_hit":true, "whirl_t":true, "net_driven":true, "id":true}
+	"combo_t":true, "dodge_dir":true, "lunge_hit":true, "whirl_t":true, "net_driven":true, "id":true,
+	"cc_log":true, "heal_log":true}
 const FAST_KEYS := {"hp":true, "pos":true, "face":true, "state":true, "stun":true, "cd_ability":true,
 	"gold":true, "cd_w":true, "cd_e":true, "ult_cd":true, "ward_ch":true}
 const OBJ_SKIP := {

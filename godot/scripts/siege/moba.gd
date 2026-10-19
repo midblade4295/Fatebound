@@ -276,6 +276,26 @@ const GOLD_PASSIVE := 2.0                                   # a second, from the
 const GOLD_MINION := {"melee":21, "caster":14, "siege":60, "super":60}     # League's (siege / super +3 every 90 s, at most 90)
 const GOLD_HERO := 300
 const GOLD_ASSIST := 150                                    # split between the helpers
+# 0.31.180 (Kevin, League's rules): the kill goes to the last enemy hero to touch him within KILL_CREDIT s (a tower or
+# a minion landing the blow included); an assist to each who hurt him or held him (a slow, a stun) in the last
+# ASSIST_WINDOW s, or healed his killer then. Multi-kills: each within MULTI_GAP s of the last; after a QUADRA the
+# PENTA may come within PENTA_GAP s, unless one of the enemy comes back first. Bounties: what a hero earns from kills
+# and assists counts a quarter, from minions and monsters a twentieth; his killer is paid up to BOUNTY_MAX of it on
+# top of GOLD_HERO (the rest carries over to his next life), less when his side is well behind in gold (DEVALUE_*);
+# the board shows it from BOUNTY_SHOW, in steps of BOUNTY_STEP.
+const KILL_CREDIT := 15.0
+const MULTI_GAP := 10.0
+const PENTA_GAP := 30.0
+const MULTI_NAMES := ["", "", "DOUBLE KILL", "TRIPLE KILL", "QUADRA KILL", "PENTAKILL"]
+const BOUNTY_KILL := 0.25
+const BOUNTY_CS := 0.05
+const BOUNTY_MAX := 700.0
+const BOUNTY_SHOW := 150
+const BOUNTY_STEP := 50
+const DEVALUE_FROM := 0.10                                  # (a side this far behind in gold: its bounties count less --
+const DEVALUE_FULL := 0.40                                  #  from 20 % there to 80 % this far behind)
+const DEVALUE_MIN := 0.2
+const DEVALUE_MAX := 0.8
 const ASSIST_WINDOW := 10.0
 const SELL_BACK := 0.7
 const ITEM_SLOTS := 6
@@ -416,6 +436,8 @@ var rains: Array = []                     # ARROW RAIN in progress: {team, owner
 var boss_go := [false, false]             # a side's bots are going for the Bone Lord
 var wyrm_go := [false, false]             # 0.31.166: ...for the Grave Wyrm
 var wyrm_stacks := [0, 0]                 # 0.31.166: each side's WYRM'S HIDE
+var first_blood := false                 # 0.31.180: the match's first hero kill made
+var last_respawn := [-INF, -INF]          # 0.31.180: when a hero of each side last came back (a PENTA's window ends)
 var epic_kills := {"lord": [0, 0], "wyrm": [0, 0]}   # 0.31.176: each side's Bone Lords and Grave Wyrms slain (the scoreboard)
 # 0.31.177 (Kevin: "Put the player names above the players so people know if it's player or minion easier. If it's a
 # bot then give bot name like "bot Alfred""): each seat's bot's name, "Bot Alfred" over its head while a bot plays it
@@ -1340,25 +1362,51 @@ func on_kill(src: Dictionary, dst: Dictionary) -> void:
 		for h in near:
 			add_xp(h, mxp * (1.0 if near.size() == 1 else 0.65))
 		if not by_h.is_empty() and int(by_h.team) != int(dst.team):
-			add_gold(by_h, minion_gold(dst), dst.pos)     # the last hit
+			add_gold(by_h, minion_gold(dst), dst.pos, "cs")     # the last hit
 			by_h["lh"] = int(by_h.get("lh", 0)) + 1       # (0.31.164: the match's rewards and challenges count it)
 	elif bool(dst.get("hero", false)):
 		dst.respawn_at = s.time + RESPAWN_BASE + RESPAWN_LVL * float(int(dst.level))
 		dst.erase("dance")
-		if not src.is_empty() and src.has("team") and int(src.team) != int(dst.team) and int(src.team) <= 1:
-			s.kills[int(src.team)] += 1
-			if bool(src.get("hero", false)):
-				src.kills = int(src.kills) + 1
-				s._multi_kill(src, dst)
+		# 0.31.180: whose kill it is -- the hero behind the blow, else the last enemy hero to touch him within KILL_CREDIT
+		var killer := kill_credit(dst, by_h)
+		var et := 1 - int(dst.team)
+		if not killer.is_empty() or (not src.is_empty() and src.has("team") and int(src.team) == et):
+			s.kills[et] += 1
+		var n := 0
+		if not killer.is_empty():
+			killer.kills = int(killer.kills) + 1
+			n = _multi(killer, dst)
 		var reward := HERO_XP + HERO_XP_LVL * float(int(dst.level))
-		if bool(src.get("hero", false)):
-			add_xp(src, reward)
-		for hid in heroes[1 - int(dst.team)]:
+		if not killer.is_empty():
+			add_xp(killer, reward)
+		for hid in heroes[et]:
 			var h2: Dictionary = s.by_id.get(hid, {})
-			if not h2.is_empty() and h2 != src and s.alive(h2) and (h2.pos as Vector2).distance_to(dst.pos) <= XP_R:
+			if not h2.is_empty() and h2 != killer and s.alive(h2) and (h2.pos as Vector2).distance_to(dst.pos) <= XP_R:
 				add_xp(h2, reward * 0.5)
-		_hero_down_gold(dst, by_h)
+		var shown := bounty_shown(dst)
+		var paid := _hero_down_gold(dst, killer)
 		_pass_buffs(dst, by_h)
+		if not killer.is_empty():
+			# the banner (siege_hud.gd): FIRST BLOOD, a multi-kill, a SHUTDOWN (a bounty the board showed), else a kill
+			var kind := "kill"
+			if not first_blood:
+				kind = "first_blood"
+			elif n >= 2:
+				kind = "multi"
+			elif shown >= BOUNTY_SHOW:
+				kind = "shutdown"
+			first_blood = true
+			s._event("kb", {"kind":kind, "n":n, "by":str(killer.id), "id":str(dst.id), "team":et, "bounty":int(round(paid)),
+				"shut":shown >= BOUNTY_SHOW})
+		# ACE: the whole side down at once
+		var all_down := true
+		for hid3 in heroes[int(dst.team)]:
+			var h3: Dictionary = s.by_id.get(hid3, {})
+			if not h3.is_empty() and s.alive(h3):
+				all_down = false
+				break
+		if all_down and (not killer.is_empty() or (not src.is_empty() and int(src.get("team", -1)) == et)):
+			s._event("ace", {"team":et, "by":str(killer.get("id", "")), "ids":(heroes[int(dst.team)] as Array).duplicate()})
 	s._event("death", {"id":dst.id, "by":src.get("id", ""), "push":[snappedf(push.x, 0.01), snappedf(push.y, 0.01), snappedf(push.z, 0.01)],
 		"minion":bool(dst.get("minion", false)), "mon":dst.has("mon")})
 
@@ -2128,31 +2176,130 @@ func _credit(src: Dictionary) -> Dictionary:
 			return o
 	return {}
 
-func add_gold(u: Dictionary, n: float, at: Vector2) -> void:
+func add_gold(u: Dictionary, n: float, at: Vector2, kind := "") -> void:
+	# (0.31.180: kind "kill" -- a kill's or an assist's gold -- or "cs" -- a minion's or a monster's: the bounty grows)
 	if u.is_empty() or not bool(u.get("hero", false)) or n <= 0.0:
 		return
+	if kind == "kill" or kind == "cs":
+		u["bounty"] = float(u.get("bounty", 0.0)) + n * (BOUNTY_KILL if kind == "kill" else BOUNTY_CS)
 	u.gold = float(u.gold) + n
 	u.gold_total = float(u.get("gold_total", 0.0)) + n
 	s._event("gold", {"id":u.id, "n":int(round(n)), "pos":at if at != Vector2.INF else u.pos})
 
-func _hero_down_gold(dst: Dictionary, by_h: Dictionary) -> void:
-	# a hero knocked out: GOLD_HERO to whoever did it, GOLD_ASSIST between those who helped (hit him lately or stood by)
+func _hero_down_gold(dst: Dictionary, killer: Dictionary) -> float:
+	# a hero knocked out: GOLD_HERO and his bounty to his killer, GOLD_ASSIST between those who helped (0.31.180:
+	# hurt or held him, or healed the killer, within ASSIST_WINDOW s -- League's). The bounty paid back.
 	var et := 1 - int(dst.team)
-	if not by_h.is_empty() and int(by_h.team) == et:
-		add_gold(by_h, GOLD_HERO, dst.pos)
+	var paid := 0.0
+	if not killer.is_empty() and int(killer.team) == et:
+		var raw := minf(float(dst.get("bounty", 0.0)), BOUNTY_MAX)
+		paid = raw * (1.0 - devalue(int(dst.team)))
+		dst["bounty"] = float(dst.get("bounty", 0.0)) - raw            # (above BOUNTY_MAX: the rest is his next life's)
+		add_gold(killer, GOLD_HERO + paid, dst.pos, "kill")
 	var hlog: Dictionary = dst.get("hit_log", {})
+	var clog: Dictionary = dst.get("cc_log", {})
+	var heals: Dictionary = killer.get("heal_log", {}) if not killer.is_empty() else {}
 	var helpers := []
 	for hid in heroes[et]:
 		var h: Dictionary = s.by_id.get(hid, {})
-		if h.is_empty() or h == by_h:
+		if h.is_empty() or h == killer:
 			continue
-		var hit_lately: bool = s.time - float(hlog.get(str(hid), -99.0)) <= ASSIST_WINDOW
-		if hit_lately or (s.alive(h) and (h.pos as Vector2).distance_to(dst.pos) <= XP_R):
+		var t_last := maxf(float(hlog.get(str(hid), -99.0)), maxf(float(clog.get(str(hid), -99.0)), float(heals.get(str(hid), -99.0))))
+		if s.time - t_last <= ASSIST_WINDOW:
 			helpers.append(h)
 	for h in helpers:
-		add_gold(h, float(GOLD_ASSIST) / float(helpers.size()), dst.pos)
+		add_gold(h, float(GOLD_ASSIST) / float(helpers.size()), dst.pos, "kill")
 		h["assists"] = int(h.get("assists", 0)) + 1        # 0.31.176: the scoreboard's K/D/A (League's: helped, not the blow)
 	dst["hit_log"] = {}
+	dst["cc_log"] = {}
+	return paid
+
+func kill_credit(dst: Dictionary, by_h: Dictionary) -> Dictionary:
+	# 0.31.180: the enemy hero whose kill it is -- the one behind the blow, else the last enemy hero to touch him within
+	# KILL_CREDIT s (League's: a tower or a minion finishing what he started); {} for none
+	var et := 1 - int(dst.team)
+	if not by_h.is_empty() and int(by_h.get("team", -1)) == et:
+		return by_h
+	var best := {}
+	var bt: float = s.time - KILL_CREDIT
+	for hid in dst.get("hit_log", {}):
+		var h: Dictionary = s.by_id.get(str(hid), {})
+		var at := float(dst.hit_log[hid])
+		if not h.is_empty() and int(h.team) == et and bool(h.get("hero", false)) and at >= bt:
+			best = h
+			bt = at
+	return best
+
+func _multi(k: Dictionary, dst: Dictionary) -> int:
+	# 0.31.180: League's multi-kill windows (MULTI_GAP between kills; a QUADRA's PENTA within PENTA_GAP unless one of
+	# the enemy came back first); a PENTA ends the chain. The step is a "multikill" event (the Herald calls it).
+	var n := 1
+	var last := float(k.get("mk_t", -INF))
+	var had := int(k.get("mk_n", 0))
+	if had == 4:
+		if s.time - last <= PENTA_GAP and float(last_respawn[int(dst.team)]) <= last:
+			n = 5
+	elif had >= 1 and had < 4 and s.time - last <= MULTI_GAP:
+		n = had + 1
+	k["mk_n"] = n if n < 5 else 0
+	k["mk_t"] = s.time
+	if n >= 2:
+		k["best_multi"] = maxi(int(k.get("best_multi", 0)), n)
+		s._event("multikill", {"id":k.id, "team":int(k.team), "n":n, "name":MULTI_NAMES[n]})
+	return n
+
+func worth(u: Dictionary) -> float:
+	# what a hero carries and his items' cost (the board's gold)
+	var n := float(u.get("gold", 0.0))
+	for id in u.get("items", []):
+		n += float(ITEMS.get(str(id), {}).get("cost", 0))
+	return n
+
+func side_worth(t: int) -> float:
+	var n := 0.0
+	for hid in heroes[t]:
+		n += worth(s.by_id.get(hid, {}))
+	return n
+
+func devalue(t: int) -> float:
+	# how much less side t's bounties count: nothing until it's DEVALUE_FROM behind in gold, DEVALUE_MIN there, up to
+	# DEVALUE_MAX at DEVALUE_FULL behind
+	var ours := side_worth(t)
+	var theirs := side_worth(1 - t)
+	if theirs <= 0.0 or ours >= theirs:
+		return 0.0
+	var d := (theirs - ours) / theirs
+	if d < DEVALUE_FROM:
+		return 0.0
+	return lerpf(DEVALUE_MIN, DEVALUE_MAX, clampf((d - DEVALUE_FROM) / (DEVALUE_FULL - DEVALUE_FROM), 0.0, 1.0))
+
+func bounty_value(u: Dictionary) -> float:
+	# what his killer would be paid on top of the kill now
+	if not bool(u.get("hero", false)) or int(u.get("team", -1)) < 0 or int(u.get("team", -1)) > 1:
+		return 0.0
+	return minf(float(u.get("bounty", 0.0)), BOUNTY_MAX) * (1.0 - devalue(int(u.team)))
+
+func bounty_shown(u: Dictionary) -> int:
+	# the board's figure: from BOUNTY_SHOW, in steps of BOUNTY_STEP (0: none shown)
+	var v := bounty_value(u)
+	return 0 if v < float(BOUNTY_SHOW) else int(floor(v / float(BOUNTY_STEP))) * BOUNTY_STEP
+
+func note_cc(by: Dictionary, dst: Dictionary) -> void:
+	# 0.31.180: a hero slowed / stunned / held dst (an assist if dst falls within ASSIST_WINDOW)
+	var hb := _credit(by)
+	if hb.is_empty() or not bool(dst.get("hero", false)) or int(hb.team) == int(dst.get("team", -1)):
+		return
+	if not dst.has("cc_log"):
+		dst["cc_log"] = {}
+	(dst.cc_log as Dictionary)[str(hb.id)] = s.time
+
+func note_heal(by: Dictionary, dst: Dictionary) -> void:
+	# 0.31.180: a hero healed an ally (an assist if that ally kills within ASSIST_WINDOW)
+	if by == dst or not bool(by.get("hero", false)) or not bool(dst.get("hero", false)) or int(by.team) != int(dst.team):
+		return
+	if not dst.has("heal_log"):
+		dst["heal_log"] = {}
+	(dst.heal_log as Dictionary)[str(by.id)] = s.time
 
 func item_stats(u: Dictionary) -> Dictionary:
 	var out := {}
@@ -2491,7 +2638,7 @@ func _monster_down(dst: Dictionary, by_h: Dictionary) -> void:
 				var h: Dictionary = s.by_id.get(hid, {})
 				if h.is_empty():
 					continue
-				add_gold(h, float(md.gold), dst.pos)
+				add_gold(h, float(md.gold), dst.pos, "cs")
 				add_xp(h, float(md.xp))
 				h["epics"] = int(h.get("epics", 0)) + 1      # (0.31.164)
 				if s.alive(h):
@@ -2510,7 +2657,7 @@ func _monster_down(dst: Dictionary, by_h: Dictionary) -> void:
 				var wh: Dictionary = s.by_id.get(hid, {})
 				if wh.is_empty():
 					continue
-				add_gold(wh, float(md.gold), dst.pos)
+				add_gold(wh, float(md.gold), dst.pos, "cs")
 				add_xp(wh, float(md.xp))
 				wh["epics"] = int(wh.get("epics", 0)) + 1
 				_apply(wh)                                 # (the health it brings comes with it)
@@ -2519,7 +2666,7 @@ func _monster_down(dst: Dictionary, by_h: Dictionary) -> void:
 		s._event("wyrm_down", {"team":wside, "by":str(by_h.get("id", "")), "stacks":int(wyrm_stacks[wside]) if wside >= 0 else 0})
 	else:
 		if not by_h.is_empty():
-			add_gold(by_h, float(md.gold), dst.pos)
+			add_gold(by_h, float(md.gold), dst.pos, "cs")
 			var near := []
 			for hid in heroes[int(by_h.team)]:
 				var h2: Dictionary = s.by_id.get(hid, {})

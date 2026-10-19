@@ -18,3 +18,38 @@ the fonts, portraits, icons and backgrounds copied from godot/assets and a match
   10_shutdown        SHUTDOWN in fire over a dark banner, a cracked crown; the bounty paid (+1000: 300 kill + 700 bounty)
   11_bounty_board    the live board: a gold coin badge on a hero's portrait once his bounty is 150 or more (steps of 50)
   all.webp           all of them side by side
+
+The game's art (0.31.180, Kevin: "I want the banner art created by eleven so they look more detailed. I also want
+special effects on the kill streak and first blood ones"):
+eleven/   ElevenLabs gpt-image-2, 1K, medium, one take each, style references the menus' crown and swords icons; flow
+          "Fatebound kill banners 0.31.180". 5,645 credits (~$1.03): the plaques 730, the 2:1 banners 631 each, the
+          crests 797 each. godot/tools/build_kill_banners.py cuts them into godot/assets/ui/banners/.
+  plaques.png     two name plaques (navy, crimson) with a portrait socket at each end, no text
+  first_blood.png crimson swallowtail, blood-drop medallion on crossed swords, "FIRST BLOOD"
+  double.png      navy with silver trim and chevrons, two skulls, "DOUBLE KILL"
+  triple.png      navy with gold trim and wings, three skulls, "TRIPLE KILL"
+  quadra.png      gold-rimmed purple shield, four skulls, a crown, laurels, a crimson ribbon "QUADRA KILL"
+  penta.png       jewelled crest, a big crown, five skulls, gold wings, laurels, a purple ribbon "PENTAKILL"
+  ace.png         blue shield, silver wings, a star, "ACE"
+  shutdown.png    scorched iron, broken gold trim, a cracked crown shedding coins, "SHUTDOWN"
+  (Each prompt: "Game UI asset for a fantasy mobile MOBA: the <X> announcement banner, painted in exactly the style of
+  the two reference icons: glossy chunky 3D-cartoon objects with a bold dark-brown outline, bright specular highlights
+  and rich saturated colours, like Supercell / Clash Royale UI ... EXACT TEXT: <title> -- big chunky bold rounded
+  game-title letters ... Plain flat pure white background (#FFFFFF) ... no shadow on the background, no glow, no
+  rays, no scene." -- the full prompts are on the flow.)
+sfx/      ElevenLabs, two takes each; flow "Fatebound kill banner sounds 0.31.180". ~333 credits: the eight
+          eleven_text_to_sound_v2 cues (~120) and the Herald's take (eleven_v4, Edward, 214).
+  kb_kill        "A short punchy fantasy video game UI banner slam: a quick metallic whoosh into a solid wood-and-steel
+                 thump" (1.2 s)
+  kb_first_blood "a deep resonant church-bell strike layered with a sharp sword being drawn and a low boom, then a
+                 short ringing tail" (2.5 s)
+  kb_double      "two quick ringing steel sword shings followed by a punchy brass stab" (1.5 s)
+  kb_triple      "three fast rising steel sword shings into a bright brass hit with a cymbal splash" (1.8 s)
+  kb_quadra      "A heroic short brass fanfare hit with pounding war drums and a big cymbal crash" (2.2 s)
+  kb_penta       "soaring trumpets, a big choir swell and huge war drums, a celebration heard across the whole
+                 battlefield" (4 s)
+  kb_shutdown    "A golden crown shattering: a sharp metallic crack and break, then a shower of gold coins" (2.2 s)
+  kb_ace         "A bright triumphant war horn call with a big drum hit and shimmering bells" (2.5 s)
+  herald_<take>  "First blood!", "Shutdown!", "Ace!" (take 2 used)
+          godot/tools/build_kill_sfx.py cuts, layers and levels them into godot/assets/sounds/kb_*.wav and the
+          Herald's lines into godot/assets/vo/herald/kb_*.ogg.
