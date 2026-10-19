@@ -28,6 +28,29 @@ func fresh(tag: String) -> Profile:
 	return p
 
 func _init() -> void:
+	# ---- 0. 0.31.187 (Kevin: "Make the champions the higher price since they are new"): the six launched together on
+	# 2026-10-19 -- their launch price for 14 days; the free rotation goes on with them (too few would be left without)
+	var six: Dictionary = Eco.HERO_LAUNCH.duplicate()
+	var L := Eco.SIX_LAUNCH
+	check(six.size() == 6 and six.keys().all(func(h): return Eco.HERO_PRICES.has(h) and int(six[h]) == L)
+		and Eco.hero_price("golem", L + 86400) == {"gold": 4000, "gems": 600} and Eco.hero_price("druid", L + 14 * 86400 - 1).gold == 4000
+		and Eco.hero_price("golem", L + 14 * 86400) == {"gold": 2000, "gems": 450}, "the six: 4,000 gold or 600 gems from 2026-10-19 for 14 days, then 2,000 / 450")
+	Eco.HERO_LAUNCH.clear()
+	var plain: Array = Eco.free_heroes(L + 86400)
+	Eco.HERO_LAUNCH.merge(six)
+	check(Eco.free_heroes(L + 86400).size() == 2 and Eco.free_heroes(L + 86400) == plain,
+		"...the free rotation still has two while they launch -- the same two a server without the launch picks")
+	var lp := fresh("launch")
+	lp.now_override = L + 86400
+	lp.d.gold = 3000
+	var locked6 := ""
+	for h in ["golem", "dragoon", "duelist", "stormcaller", "musketeer", "druid"]:
+		if not Eco.free_heroes(L + 86400).has(h) and locked6 == "":
+			locked6 = h
+	check(not bool(lp.buy_hero(locked6).ok) and lp.hero_price(locked6).gold == 4000, "3,000 gold isn't enough for a launching hero (%s)" % locked6)
+	lp.d.gold = 4000
+	check(bool(lp.buy_hero(locked6).ok) and int(lp.d.gold) == 0 and lp.owns_hero(locked6), "...4,000 is")
+	Eco.HERO_LAUNCH.clear()                   # (the rest: the prices after the launch)
 	# ---- 1. prices
 	check(Eco.hero_price("golem", T0) == {"gold": 2000, "gems": 450} and Eco.hero_price("knight", T0).is_empty(),
 		"a sold hero: 2,000 gold or 450 gems; the twelve old ones aren't sold")
@@ -141,5 +164,6 @@ func _init() -> void:
 	bad.d.tokens = -3
 	var n: Dictionary = bad._normalized(bad.d)
 	check(n.shards == ["golem", "druid"] and int(n.tokens) == 0, "a damaged save: only real heroes' shards, no negative tokens")
+	Eco.HERO_LAUNCH.merge(six)
 	print("LEAGUE_IAP_%s" % ("PASS" if fails.is_empty() else "FAIL %s" % str(fails)))
 	quit(0 if fails.is_empty() else 1)

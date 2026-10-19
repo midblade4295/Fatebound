@@ -5857,3 +5857,54 @@ The fourth part of Kevin's "the same IAP system as league of legends": hero skin
   chain -- the base presets' exclude filters gained assets/skins/* from content_packs.py presets): BASE OK (271 files),
   CONTENT OK, play_games true, bundletool valid. Preview APK: build/Fatebound-Siege-0.31.186-fatebound.apk (32 MB,
   preview key), sha256 58f36cca...e75bfab.
+
+## 0.31.187 — champions: launch prices, names and stories, the Locker's CHAMPIONS and each one's own window
+Kevin: "Make the champions the higher price since they are new. Also, give every champion a unique name that fits its
+class and character and give each one a short background story. Put all this in a revamped locker tab. When clicking on
+a champion, make a customized window for them that pops up that is themed around them and player can also zoom in and
+rotate them. Use art and effects that match each characters lore. Also put every skin that character has into that page
+that allows players to purchase or preview what it looks like"
+- Launch prices (economy.gd): the six new heroes launch together on 2026-10-19 00:00 UTC (SIX_LAUNCH, HERO_LAUNCH) --
+  4,000 gold or 600 gems (LAUNCH_GOLD / LAUNCH_GEMS, twice their own) for 14 days, then 2,000 / 450, as 0.31.185 set up.
+  A shard unlocks a launching one for 60 % of the launch price. The free rotation leaves a launching hero out unless too
+  few would be left -- with all six launching it goes on with every one of them (the same two a week a server without
+  the launch picks), so it isn't empty for two weeks.
+- Who they are (scripts/meta/champions.gd): a name of his own, a title, a short story (2-3 sentences) and a line each --
+  Sir Aldric Vane the Oathbound Wall (Knight), Hroth Bearcloak (Barbarian), Wren Ashveil (Rogue), Kestrel Finn (Archer),
+  Elara Flintwick (Mage), Brother Cael Sunward (Priest), Lord Gideon Hale (Crusader), Ulfgar Blackmaw (Berserker),
+  Vesper Nightshade (Assassin), Hollis Thorne (Ranger), Theron Starweave (Archmage), Silas Graves (Necromancer), Gorrak
+  Stoneheart (Golem), Kael Wyrmlance (Dragoon), Rafael Montclair (Duelist), Torvald Stormcrown (Stormcaller), Captain
+  Armand Belleroc (Musketeer), Elowen Thornbloom (Druid). The class names stay what they are (the 5v5's picker, the
+  HUD); the champion's name is who he is.
+- The art: a painting of each one's own place, ElevenLabs gpt-image-2 (9:16, 1K, medium, one take each, the Market
+  banner as the style reference; 18 x 420 = 7,554 credits, estimated and reported first): the Knight's castle bridge at
+  dawn, the Barbarian's clan camp with its bonfire, the Necromancer's moonlit graveyard, the Stormcaller's ring of rune
+  stones under lightning... each with open ground half way down for him to stand on. art_sources/champions (README,
+  prompts.json); tools/build_champion_art.py -> assets/ui/champions/<hid>.webp (720 x 1280) and cards/<hid>.webp (the
+  Locker card's crop). 2.1 MB, in the ui pack.
+- The effects (scripts/app/champion_fx.gd): each champion's layers (champions.gd fx) of the weapons' own effect sprites,
+  moved by hand -- rising embers, falling leaves / feathers / petals / snow, drifting smoke, twinkling stars and
+  fireflies, runes or sigils turning round him, a halo of light, rain, a lightning bolt with the sky lighting, a meteor
+  now and then. Behind him or in front, added as light or laid over (the sprites are brightness only: laid over, a
+  small shader makes the brightness the shape).
+- The Locker: three tabs -- CHAMPIONS (first), ARMORY (the class rail, the vault, the quest, the weapons -- as before;
+  the nameplate has the champion's name and MEET <NAME>) and TITLES. CHAMPIONS: the eighteen by role (League's six, a
+  row of three each), each card his painting, him in the skin he wears, his name and class, YOURS / FREE / NEW and his
+  price, ◆ for a shard, his skins' count. Picking a class or "titles" (app.locker_class) picks its tab, as before.
+- His window (scripts/app/champion_window.gd, app.open_champion): his painting full screen, slowly breathing, his
+  colour over it, his effects; him in 3D in the skin he wears -- drag to turn, pinch or + / - to zoom; his class and
+  role, name and title; NEW · n DAYS AT LAUNCH PRICE / FREE THIS WEEK. Below: YOURS and PLAY (the 5v5 window with him
+  picked) or his price and UNLOCK (gold, gems, a shard, a Hero Token -- the 5v5 window's choices); SKINS -- his own look
+  and every skin of his (tap one: he's shown in it, PREVIEW; WEAR / WORN one you own; BUY for gems, asked first; a
+  locked hero's skin brings him); THE STORY and his line; ABILITIES (Q W E R with their icons).
+- Tests: champions_test (new: the eighteen's names, stories, art and effects; the launch price; the Locker's tabs and
+  cards; the window -- painting, words, kit, effects moving, turn and zoom, preview, buy (with the hero), wear, unlock,
+  PLAY); league_iap_test (the six's launch, the rotation while they launch; the rest with the launch cleared);
+  moba_ui_test (the Golem's 2,000 after the launch).
+- Server: the launch price is the economy's -- the server replays buy_hero with its own copy, so it needs the redeploy
+  for 0.31.187 (sudo bash godot/server/deploy/install_siege_server.sh); until then it charges 2,000 and its answer wins.
+  The rotation is the same either way (above).
+- Version 0.31.187, versionCode 273, SERVER_BUILD 0.31.187.
+- Checks so far: champions_test, league_iap_test, skins_test, app_flow_test, lb_prizes_test, quest_test, moba_ui_test,
+  online_five_test, eco_server_test pass; content packs: ui rebuilt (34.2 MB) and uploaded, check and coverage OK.
+  Looked at (420 x 933): the Locker's CHAMPIONS, all eighteen windows, a skin previewed, the story and kit, zoomed in.

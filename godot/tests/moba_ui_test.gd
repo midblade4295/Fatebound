@@ -135,7 +135,8 @@ func _process(delta: float) -> bool:
 					"the stage: the Knight in 3D in the champions' hall, the TANK badge; a badge for each role")
 				# 0.31.168: the new six are bought with gold -- a locked one shows its price; BATTLE becomes UNLOCK
 				# (0.31.185: the clock on a week the Golem isn't in the free rotation)
-				var wk := int(Time.get_unix_time_from_system())
+				# (0.31.187: and after the six's launch price -- the launch price has its own test, league_iap_test)
+				var wk := maxi(int(Time.get_unix_time_from_system()), Eco.SIX_LAUNCH + Eco.LAUNCH_DAYS * 86400)
 				while Eco.free_heroes(wk).has("golem"):
 					wk += 7 * 86400
 				app.profile.now_override = wk

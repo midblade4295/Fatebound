@@ -12,6 +12,7 @@ const Diag = preload("res://scripts/siege/siege_diag.gd")
 const Net = preload("res://scripts/siege/siege_net.gd")
 const Platform = preload("res://scripts/meta/platform.gd")          # 0.31.130: Google Play or the App Store
 const StoreBilling = preload("res://scripts/meta/store_billing.gd")
+const Champions = preload("res://scripts/meta/champions.gd")       # 0.31.187: who the eighteen are (the Locker)
 
 const PRIVACY_URL := "https://136-113-125-3.sslip.io/fatebound/privacy.html"
 
@@ -1960,39 +1961,57 @@ static func _class_coin(parent: Node, cls: String, on: bool, key: String, on_pre
 static func locker(app, root: VBoxContainer) -> void:
 	# 0.31.79: the vault -- the class picker as round portraits (base classes, then the hat upgrades), the hero on the
 	# vault's pedestal (turn and zoom it), the nameplate and the weapons as cards.
+	# 0.31.187 (Kevin: "give every champion a unique name ... a short background story. Put all this in a revamped locker
+	# tab"): three tabs -- CHAMPIONS first (the eighteen by role: tap one for his own window, champion_window.gd), ARMORY
+	# (the vault, as it was) and TITLES.
 	var p = app.profile
 	var title := UI2.text(root, "LOCKER", 30, UI2.GOLD)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	if str(app.locker_class) == "worker":
 		app.locker_class = "knight"                  # (0.31.164: the Worker was Siege's)
-	var rail := UI2.frame(root, "glass", 8, 18.0)
-	var r1 := HBoxContainer.new()
-	r1.alignment = BoxContainer.ALIGNMENT_CENTER
-	r1.add_theme_constant_override("separation", 4)
-	rail.add_child(r1)
-	for cls in Eco.HERO_CLASSES:                     # (0.31.164: no Worker)
-		var c: String = cls
-		_class_coin(r1, cls, app.locker_class == cls, "locker_" + cls, func():
-			app.locker_class = c
-			app.sfx("tap")
-			app.rebuild(), str(Eco.CLASS_NAMES[cls]).to_upper(), 44.0)
-	var r2 := HBoxContainer.new()
-	r2.alignment = BoxContainer.ALIGNMENT_CENTER
-	r2.add_theme_constant_override("separation", 4)
-	rail.add_child(r2)
-	var short := {"crusader":"CRUSADER", "berserker":"BERSERK", "necromancer":"NECRO", "assassin":"ASSASSIN", "sniper":"RANGER", "archmage":"ARCHMAGE"}
-	for ucls in Eco.UP_CLASSES:
-		var u: String = ucls
-		_class_coin(r2, ucls, app.locker_class == ucls, "locker_" + ucls, func():
-			app.locker_class = u
-			app.sfx("tap")
-			app.rebuild(), str(short[ucls]), 40.0)
-	var tsel: bool = app.locker_class == "titles"
-	var tb := UI2.button(r2, "TITLES", "gold" if tsel else "blue", func():
-		app.locker_class = "titles"
-		app.sfx("tap")
-		app.rebuild(), "locker_titles", 12, 40.0, 12.0)
-	tb.custom_minimum_size.x = 62
+	var tabs := HBoxContainer.new()
+	tabs.alignment = BoxContainer.ALIGNMENT_CENTER
+	tabs.add_theme_constant_override("separation", 6)
+	root.add_child(tabs)
+	for t in [["champions", "CHAMPIONS", "helmet"], ["armory", "ARMORY", "swords"], ["titles", "TITLES", "crown"]]:
+		var tid: String = t[0]
+		var on: bool = str(app.locker_tab) == tid
+		var tb0 := UI2.button(tabs, str(t[1]), "gold" if on else "blue", func():
+			if tid == "titles":
+				app.locker_class = "titles"
+			elif tid == "armory":
+				app.locker_class = "knight" if str(app.locker_class) == "titles" else str(app.locker_class)
+			else:
+				app.locker_tab = "champions"
+			app.sfx("tab")
+			app.rebuild(), "locker_tab_" + tid, 14, 44.0, 14.0)
+		tb0.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	if str(app.locker_tab) == "champions":
+		locker_champions(app, root)
+		return
+	if str(app.locker_tab) == "armory":
+		var rail := UI2.frame(root, "glass", 8, 18.0)
+		var r1 := HBoxContainer.new()
+		r1.alignment = BoxContainer.ALIGNMENT_CENTER
+		r1.add_theme_constant_override("separation", 4)
+		rail.add_child(r1)
+		for cls in Eco.HERO_CLASSES:                     # (0.31.164: no Worker)
+			var c: String = cls
+			_class_coin(r1, cls, app.locker_class == cls, "locker_" + cls, func():
+				app.locker_class = c
+				app.sfx("tap")
+				app.rebuild(), str(Eco.CLASS_NAMES[cls]).to_upper(), 44.0)
+		var r2 := HBoxContainer.new()
+		r2.alignment = BoxContainer.ALIGNMENT_CENTER
+		r2.add_theme_constant_override("separation", 4)
+		rail.add_child(r2)
+		var short := {"crusader":"CRUSADER", "berserker":"BERSERK", "necromancer":"NECRO", "assassin":"ASSASSIN", "sniper":"RANGER", "archmage":"ARCHMAGE"}
+		for ucls in Eco.UP_CLASSES:
+			var u: String = ucls
+			_class_coin(r2, ucls, app.locker_class == ucls, "locker_" + ucls, func():
+				app.locker_class = u
+				app.sfx("tap")
+				app.rebuild(), str(short[ucls]), 44.0)
 	if app.locker_class == "titles":
 		UI2.divider(root, "TITLES", 20, "shown next to your name")
 		var none := UI2.frame(root, "night", 10, 14.0, "gold")
@@ -2070,6 +2089,15 @@ static func locker(app, root: VBoxContainer) -> void:
 				up = str(Eco.CLASS_NAMES[u])
 		sub = ("Its upgrade: the %s" % up) if up != "" else ""
 	UI2.center(UI2.body(np, sub, 11, Color("#ffe39a")))
+	# 0.31.187: who he is -- and his own window
+	var mr := HBoxContainer.new()
+	mr.alignment = BoxContainer.ALIGNMENT_CENTER
+	mr.add_theme_constant_override("separation", 8)
+	np.add_child(mr)
+	var who := UI.label(mr, "%s, %s" % [Champions.name_of(cls), str(Champions.of(cls).get("title", ""))], 13, Champions.accent(cls).lightened(0.4), UI.TITLE_FONT, true)
+	who.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var meet := UI2.button(mr, "MEET %s" % Champions.short_of(cls).to_upper(), "purple", func(): app.open_champion(cls), "locker_meet_" + cls, 12, 32.0, 10.0)
+	meet.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	quest_card(app, root, cls)                               # 0.31.97: the class's quest and its legendary
 	# weapons
 	var owned := 1
@@ -2099,6 +2127,179 @@ static func locker(app, root: VBoxContainer) -> void:
 		var it: Dictionary = Eco.CATALOG[id]
 		if it.kind == "weapon" and str(it["class"]) == cls:
 			_gear_card(app, grid, str(id), cls, item_texture_path(str(id)), str(it.name).to_upper(), str(it.rarity), p.owns(id), is_equipped(p, id))
+
+# ---------------- the Locker's CHAMPIONS (0.31.187) ----------------
+# The eighteen by role (League's six: a row of three each -- the class, its upgrade, the new hero), each a card: his own
+# place painted behind him (Champions.card_art), him in the skin he wears, his name and class, and where he stands with
+# you: yours (a tick), FREE this week, NEW at his launch price, or his price and a padlock; ◆ when you hold his shard, and
+# how many skins he has. Tap: his window (champion_window.gd).
+const ROLE_ORDER := ["tank", "fighter", "assassin", "mage", "marksman", "support"]
+
+static func locker_champions(app, root: VBoxContainer) -> void:
+	var p = app.profile
+	var Kits = load("res://scripts/siege/moba_kits.gd")          # (loaded here, not at boot: the 5v5's)
+	var order: Array = Champions.ORDER
+	var yours: int = order.filter(func(h): return p.owns_hero(str(h))).size()
+	var top := UI2.center(UI2.body(root, "%d champions  ·  %d yours  ·  tap one for the story, the skins and a closer look" % [order.size(), yours], 11, UI2.SOFT))
+	top.custom_minimum_size.x = 10
+	var inv := ""
+	if int(p.d.get("tokens", 0)) > 0:
+		inv = "HERO TOKEN x%d" % int(p.d.tokens)
+	var nsh := (p.d.get("shards", []) as Array).size()
+	if nsh > 0:
+		inv += ("  ·  " if inv != "" else "") + "◆ SHARD%s %d" % ["S" if nsh > 1 else "", nsh]
+	if inv != "":
+		var ic := UI2.chip(root, inv, Color("#173a1e"), Color("#c9f7bd"), Color("#6be07c"))
+		ic.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	for role in ROLE_ORDER:
+		var rh := HBoxContainer.new()
+		rh.add_theme_constant_override("separation", 8)
+		root.add_child(rh)
+		var bp := "res://assets/ui/roles/%s.png" % role
+		if ResourceLoader.exists(bp):
+			var bi := UI2.img(rh, bp, 30.0)
+			bi.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		var rt := UI2.text(rh, str(Kits.ROLE_NAMES.get(role, role)), 19, UI2.GOLD, UI2.INK, 5)
+		rt.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		var rs := UI2.body(rh, str(Kits.ROLE_TEXT.get(role, "")), 10, UI2.SOFT, true)
+		rs.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		rs.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		rs.custom_minimum_size.x = 10
+		var grid := GridContainer.new()
+		grid.columns = 3
+		grid.add_theme_constant_override("h_separation", 8)
+		grid.add_theme_constant_override("v_separation", 8)
+		root.add_child(grid)
+		for hid in order:
+			if Kits.role_of(str(hid)) == role:
+				champion_card(app, grid, str(hid))
+
+static func champion_card(app, grid: Node, hid: String) -> Button:
+	var p = app.profile
+	var acc: Color = Champions.accent(hid)
+	var owned: bool = p.owns_hero(hid)
+	var plays: bool = p.can_play_hero(hid)
+	var b := Button.new()
+	b.flat = true
+	b.focus_mode = Control.FOCUS_NONE
+	for st_name in ["normal", "hover", "pressed", "focus"]:
+		b.add_theme_stylebox_override(st_name, StyleBoxEmpty.new())
+	b.custom_minimum_size = Vector2(0, 196)
+	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	b.set_meta("action_key", "champ_" + hid)
+	b.pressed.connect(func(): app.open_champion(hid))
+	grid.add_child(b)
+	# the card: his place (cover), clipped to the rounded frame, darker toward the bottom for the name
+	var card := Panel.new()
+	card.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	card.clip_children = CanvasItem.CLIP_CHILDREN_AND_DRAW
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = acc.darkened(0.8)
+	sb.set_corner_radius_all(14)
+	card.add_theme_stylebox_override("panel", sb)
+	b.add_child(card)
+	var art := TextureRect.new()
+	var ap := Champions.card_art(hid)
+	art.texture = load(ap) if ResourceLoader.exists(ap) else null
+	art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	art.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if not plays:
+		art.modulate = Color(0.62, 0.62, 0.7)
+	card.add_child(art)
+	var g := Gradient.new()
+	g.offsets = PackedFloat32Array([0.0, 0.5, 1.0])
+	g.colors = PackedColorArray([Color(0, 0, 0, 0.0), Color(0, 0, 0, 0.1), Color(acc.darkened(0.85), 0.95)])
+	var gt := GradientTexture2D.new()
+	gt.gradient = g
+	gt.width = 4
+	gt.height = 64
+	gt.fill_to = Vector2(0, 1)
+	var shade := TextureRect.new()
+	shade.texture = gt
+	shade.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	shade.stretch_mode = TextureRect.STRETCH_SCALE
+	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	card.add_child(shade)
+	# him, in the skin he wears
+	var worn: String = p.worn_skin(hid)
+	var pp := ("res://assets/ui/skins/%s.png" % worn) if worn != "" else ("res://assets/ui/skins/default_%s.png" % hid)
+	var por := TextureRect.new()
+	por.texture = load(pp) if ResourceLoader.exists(pp) else null
+	por.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	por.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	por.anchor_right = 1.0
+	por.offset_left = 4
+	por.offset_right = -4
+	por.offset_top = 22
+	por.offset_bottom = 142
+	por.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if not plays:
+		por.modulate = Color(0.7, 0.7, 0.78)
+	card.add_child(por)
+	var rim := Panel.new()
+	var rs := StyleBoxFlat.new()
+	rs.draw_center = false
+	rs.border_color = acc if owned else Color(acc.darkened(0.25), 0.8)
+	rs.set_border_width_all(3 if owned else 2)
+	rs.set_corner_radius_all(14)
+	rim.add_theme_stylebox_override("panel", rs)
+	rim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	rim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	b.add_child(rim)
+	# his name and class
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", -2)
+	v.anchor_top = 1.0
+	v.anchor_bottom = 1.0
+	v.anchor_right = 1.0
+	v.offset_top = -56
+	v.offset_bottom = -6
+	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	b.add_child(v)
+	var nl := UI2.text(v, Champions.short_of(hid).to_upper(), 17, Color.WHITE, acc.darkened(0.75), 5)
+	nl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var cl := UI2.body(v, str(Eco.SKIN_HEROES.get(hid, hid)).to_upper(), 9, acc.lightened(0.5), false)
+	cl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	# where he stands with you
+	var st := HBoxContainer.new()
+	st.add_theme_constant_override("separation", 3)
+	st.alignment = BoxContainer.ALIGNMENT_CENTER
+	st.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v.add_child(st)
+	if owned:
+		UI2.body(st, "✔ YOURS", 10, Color("#9dff8a"), false)
+	else:
+		var pr: Dictionary = p.hero_price(hid)
+		var li := UI2.img(st, "res://assets/ui/menu/lock.png", 14.0)
+		li.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		UI2.img(st, "res://assets/ui/currency/coin.png", 14.0).size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		UI2.text(st, UI.grouped(int(pr.get("gold", 0))), 12, UI2.GOLD, Color("#201002"), 3)
+	var chips := VBoxContainer.new()                # (stacked down the left: the skins' count is on the right)
+	chips.add_theme_constant_override("separation", 3)
+	chips.position = Vector2(6, 6)
+	chips.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	b.add_child(chips)
+	if not owned and plays:
+		UI2.chip(chips, "FREE", Color("#2f8a3e"), Color.WHITE, Color("#0a2006"))
+	if Eco.launching(hid, p.now()):
+		UI2.chip(chips, "NEW", Color("#d9682a"), Color.WHITE, Color("#3a1402"))
+	if not owned and p.shards_of(hid) > 0:
+		UI2.chip(chips, "◆", Color("#173a1e"), Color("#9dff8a"), Color("#6be07c"))
+	var nsk := Eco.skins_of(hid).size()
+	if nsk > 0:
+		var sc := UI2.chip(b, "%d SKIN%s" % [nsk, "" if nsk == 1 else "S"], Color(0.05, 0.03, 0.12, 0.8), Color("#e8ccff"), Color("#c47bff"))
+		sc.anchor_left = 1.0
+		sc.anchor_right = 1.0
+		sc.offset_left = -62
+		sc.offset_right = -6
+		sc.offset_top = 6
+		sc.offset_bottom = 22
+		sc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return b
 
 static func _gear_card(app, grid: Node, id: String, cls: String, icon: String, name: String, rar: String, owned: bool, equipped: bool) -> void:
 	var p = app.profile

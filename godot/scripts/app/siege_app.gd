@@ -26,8 +26,9 @@ const LEADERBOARD_PANEL := "res://scripts/app/leaderboard_panel.gd"
 const DAILY_REWARD := "res://scripts/app/daily_reward.gd"
 const UPDATE_SCREEN := "res://scripts/app/update_screen.gd"
 const MOBA_PANEL := "res://scripts/app/moba_panel.gd"              # 0.31.155: 5V5 (the test)
+const CHAMPION_WINDOW := "res://scripts/app/champion_window.gd"    # 0.31.187: a champion's own window (the Locker)
 const LATER := [SIEGE_MODE, CLAN_PANEL, CHAT_PANEL, FRIENDS_PANEL, ORDERS_PANEL, DAILY_REWARD, LEADERBOARD_PANEL, UPDATE_SCREEN,
-	MOBA_PANEL]
+	MOBA_PANEL, CHAMPION_WINDOW]
 const Audio = preload("res://scripts/native_audio.gd")
 const Assets = preload("res://scripts/siege/asset_cache.gd")
 const Net = preload("res://scripts/siege/siege_net.gd")
@@ -59,7 +60,13 @@ var profile
 var audio: Node
 var tab := "home"
 var home_class := "knight"
-var locker_class := "knight"
+# 0.31.187: the Locker's three tabs -- CHAMPIONS (first), ARMORY (a class's weapons: locker_class) and TITLES. Picking a
+# class (or "titles") in locker_class picks its tab too, as before the tabs.
+var locker_tab := "champions"
+var locker_class := "knight":
+	set(v):
+		locker_class = v
+		locker_tab = "titles" if v == "titles" else "armory"
 var forge_cls := "knight"              # 0.31.93: the Forge's class, weapon (Eco.forge_id) and the element picked for star 3
 var forge_pick := ""
 var quest_cls := ""                   # 0.31.97: the class shown on the Quests screen ("" = the first with a step ready)
@@ -1239,6 +1246,14 @@ func open_moba() -> void:
 	add_child(m)
 	modal = m
 	m.open(self)
+
+func open_champion(hid: String, skin := "__worn") -> void:
+	# 0.31.187: a champion's window (champion_window.gd) -- his place, his effects, him in 3D, his skins, story and kit
+	close_modal()
+	var m = _later(CHAMPION_WINDOW).new()
+	add_child(m)
+	modal = m
+	m.open(self, hid, skin)
 
 func start_moba(hero: String) -> void:
 	# 0.31.155: an offline 5v5 against bots as this hero (siege_mode.gd moba_hero; scripts/siege/moba.gd). 0.31.164: the

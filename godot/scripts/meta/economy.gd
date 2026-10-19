@@ -19,9 +19,12 @@ const HERO_PRICES := {"golem":2000, "dragoon":2000, "duelist":2000, "stormcaller
 #    for SHARD_UNLOCK of its gold price, or melt one for SHARD_MELT of it;
 #  - a Hero Token on the premium pass (tier 1): any locked hero, yours.
 const HERO_GEMS := 450
-# hero id -> unix it came out (none yet: the six came out together, 0.31.168). A static var, not a const, so a test can
-# put a hero in its launch; a new hero's line goes here when he ships.
-static var HERO_LAUNCH := {}
+# hero id -> unix it came out. A static var, not a const, so a test can put a hero in (or out of) its launch; a new
+# hero's line goes here when he ships. 0.31.187 (Kevin: "Make the champions the higher price since they are new"): the
+# six launch together on 2026-10-19 00:00 UTC -- LAUNCH_GOLD / LAUNCH_GEMS until 2026-11-02, then 2,000 / 450.
+const SIX_LAUNCH := 1792368000
+static var HERO_LAUNCH := {"golem": SIX_LAUNCH, "dragoon": SIX_LAUNCH, "duelist": SIX_LAUNCH, "stormcaller": SIX_LAUNCH,
+	"musketeer": SIX_LAUNCH, "druid": SIX_LAUNCH}
 const LAUNCH_DAYS := 14
 const LAUNCH_GOLD := 4000
 const LAUNCH_GEMS := 600
@@ -86,8 +89,11 @@ static func week_index(unix: int) -> int:
 
 static func free_heroes(unix: int) -> Array:
 	# this week's free rotation: FREE_HEROES of the sold heroes, in a fixed shuffled order so each comes round in turn
-	# (a launching one waits until its launch price ends)
+	# (a launching one waits until its launch price ends -- 0.31.187: unless too few are left to fill it, as while all six
+	# launch together: then the rotation goes on with every one of them, the same weeks the server keeps)
 	var pool: Array = HERO_PRICES.keys().filter(func(h): return not launching(str(h), unix))
+	if pool.size() < FREE_HEROES:
+		pool = HERO_PRICES.keys()
 	pool.sort()
 	if pool.is_empty():
 		return []
