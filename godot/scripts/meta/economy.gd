@@ -3,11 +3,79 @@ extends RefCounted
 # match rewards. Pure data + pure functions (no I/O) so it is easy to test and tune; the player's
 # state lives in scripts/meta/profile.gd.
 #
-# Everything sold is cosmetic. The forge still decides your class in battle.
+# Everything sold is cosmetic -- but the 5v5's six sold heroes (0.31.168 for gold; 0.31.185, League's way, for gems too:
+# HERO_GEMS), each also earned with gold from playing, and twelve heroes everyone's. The store listing's "Everything you
+# unlock is cosmetic" line needs Kevin's rewording (store-listing/listing/STORE_LISTING.md).
 
 # 0.31.168 (Kevin: "Unlock with gold"): the 5v5 heroes you buy with gold (moba.gd HEROES; Profile.buy_hero). The twelve
 # from the old classes are everyone's.
 const HERO_PRICES := {"golem":2000, "dragoon":2000, "duelist":2000, "stormcaller":2000, "musketeer":2000, "druid":2000}
+# 0.31.185 (Kevin: "I want the same IAP system as league of legends"): heroes the way League sells champions --
+#  - gold (League's Blue Essence, earned only: the gem -> gold packs are gone) OR gems (its RP): HERO_GEMS;
+#  - a new hero launches dearer (HERO_LAUNCH: when it came out) for LAUNCH_DAYS, then drops to its price -- and only
+#    then joins the free rotation (League: a new champion joins it in its third week);
+#  - a free rotation: FREE_HEROES of them free to play each week (Monday 00:00 UTC), in turn so each comes round;
+#  - hero shards (League's champion shards): from chests (CHESTS "shard") and the pass's free track -- unlock that hero
+#    for SHARD_UNLOCK of its gold price, or melt one for SHARD_MELT of it;
+#  - a Hero Token on the premium pass (tier 1): any locked hero, yours.
+const HERO_GEMS := 450
+# hero id -> unix it came out (none yet: the six came out together, 0.31.168). A static var, not a const, so a test can
+# put a hero in its launch; a new hero's line goes here when he ships.
+static var HERO_LAUNCH := {}
+const LAUNCH_DAYS := 14
+const LAUNCH_GOLD := 4000
+const LAUNCH_GEMS := 600
+const FREE_HEROES := 2
+const SHARD_UNLOCK := 0.6
+const SHARD_MELT := 0.2
+
+static func launching(hid: String, unix: int) -> bool:
+	return HERO_LAUNCH.has(hid) and unix < int(HERO_LAUNCH[hid]) + LAUNCH_DAYS * 86400
+
+static func hero_price(hid: String, unix: int) -> Dictionary:
+	# {"gold", "gems"} to unlock hid at this time; {} when it isn't sold (everyone's)
+	if not HERO_PRICES.has(hid):
+		return {}
+	if launching(hid, unix):
+		return {"gold": LAUNCH_GOLD, "gems": LAUNCH_GEMS}
+	return {"gold": int(HERO_PRICES[hid]), "gems": HERO_GEMS}
+
+static func shard_unlock_gold(hid: String, unix: int) -> int:
+	return int(round(float(hero_price(hid, unix).get("gold", 0)) * SHARD_UNLOCK / 10.0)) * 10
+
+static func shard_melt_gold(hid: String, unix: int) -> int:
+	return int(round(float(hero_price(hid, unix).get("gold", 0)) * SHARD_MELT / 10.0)) * 10
+
+static func week_index(unix: int) -> int:
+	# weeks since the Monday before 1970-01-01 (weeks start Monday 00:00 UTC, as week_key)
+	var days := int(floor(unix / 86400.0))
+	return int(floor(float(days + 3) / 7.0))
+
+static func free_heroes(unix: int) -> Array:
+	# this week's free rotation: FREE_HEROES of the sold heroes, in a fixed shuffled order so each comes round in turn
+	# (a launching one waits until its launch price ends)
+	var pool: Array = HERO_PRICES.keys().filter(func(h): return not launching(str(h), unix))
+	pool.sort()
+	if pool.is_empty():
+		return []
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash("free-heroes")
+	var order := []
+	while not pool.is_empty():
+		order.append(pool.pop_at(rng.randi() % pool.size()))
+	var out := []
+	var w := week_index(unix)
+	for i in mini(FREE_HEROES, order.size()):
+		out.append(order[(w * FREE_HEROES + i) % order.size()])
+	return out
+
+static func pick_shard(seed_text: String, heroes_owned: Array) -> String:
+	# a pass shard: one of the heroes not owned yet (any, once all are), the same on the phone and the server
+	var pool: Array = HERO_PRICES.keys().filter(func(h): return not heroes_owned.has(h))
+	if pool.is_empty():
+		pool = HERO_PRICES.keys()
+	pool.sort()
+	return str(pool[absi(hash(seed_text)) % pool.size()])
 
 const CLASSES := ["knight", "barbarian", "rogue", "ranger", "mage", "priest", "worker"]
 # 0.31.164 (Kevin: "Remove them now: 5v5 only"): the classes a 5v5 hero can be -- the Worker was Siege's (his quest and
@@ -75,6 +143,8 @@ static func pass_reward(sid: int, tier: int, premium: bool) -> Dictionary:
 	# PASS_PREMIUM_ITEMS (13), every epic and legendary among them, the best at tier 30 and a strong one at tier 1.
 	var items: Array = pass_items(sid)
 	if not premium:
+		if PASS_SHARD_TIERS.has(tier):
+			return {"shard": ""}                       # 0.31.185: a hero shard (which one: Profile.pass_reward_for)
 		var fi := FREE_ITEM_TIERS.find(tier)
 		if fi >= 0:
 			if str(CATALOG[items[fi]].kind) == "title":
@@ -87,6 +157,8 @@ static func pass_reward(sid: int, tier: int, premium: bool) -> Dictionary:
 		if tier % 4 == 2:
 			return {"gold": PASS_GOLD_FREE}            # (0.31.93-0.31.183: 20 Embers)
 		return {"gold": 150 + 5 * tier}
+	if tier == PASS_TOKEN_TIER:
+		return {"token": 1}                            # 0.31.185: the Hero Token -- any locked hero
 	var pi := premium_item_tiers(sid).find(tier)
 	if pi >= 0:
 		var it: String = items[PASS_FREE_ITEMS + pi]
@@ -106,7 +178,11 @@ static func pass_reward(sid: int, tier: int, premium: bool) -> Dictionary:
 const PASS_FREE_ITEMS := 3
 const PASS_PREMIUM_ITEMS := 13
 const FREE_ITEM_TIERS := [10, 20, 30]
-const PREMIUM_ITEM_TIERS := [1, 3, 5, 7, 9, 12, 15, 18, 21, 24, 26, 28, 30]
+const PREMIUM_ITEM_TIERS := [2, 3, 5, 7, 9, 12, 15, 18, 21, 24, 26, 28, 30]     # (0.31.185: the first from tier 1 to 2 -- the token's)
+# 0.31.185 (League's pass: Blue Essence and champion capsules on the free track): free tiers 5, 15 and 25 give a hero
+# shard (they gave gold); the premium track opens with a Hero Token
+const PASS_SHARD_TIERS := [5, 15, 25]
+const PASS_TOKEN_TIER := 1
 const RARITY_RANK := {"common":0, "rare":1, "epic":2, "legendary":3}
 
 # 0.31.87: the five titles the pass used to give stay in its draw (so every season's pass keeps the tiers it had), and
@@ -137,13 +213,14 @@ static func item_season(id: String) -> int:
 	return int(CATALOG.get(id, {}).get("season", 1))
 
 static func premium_item_tiers(sid: int) -> Array:
-	# the premium tiers that hold an item: the old 13 for a season without its own weapons, else n spread over 1..30
+	# the premium tiers that hold an item: the old 13 for a season without its own weapons, else n spread over 2..30
+	# (0.31.185: tier 1 is the Hero Token's)
 	var own: Array = PASS_SEASON_ITEMS.get(sid, [])
 	if own.size() < 2:
 		return PREMIUM_ITEM_TIERS
 	var out := []
 	for i in own.size():
-		out.append(1 + int(round(float(i) * float(PASS_TIERS - 1) / float(own.size() - 1))))
+		out.append(2 + int(round(float(i) * float(PASS_TIERS - 2) / float(own.size() - 1))))
 	return out
 
 static func vaulted(id: String, unix: int) -> bool:
@@ -454,8 +531,8 @@ static func item_price(id: String, unix := 0) -> Dictionary:
 # ---------------- shop rotation ----------------
 const DAILY_SLOTS := 6              # 0.31.38: 4 -> 6 (gold items in rotation went 19 -> 43 with the upgraded classes)
 const FEATURED_SLOTS := 4           # 2 -> 3 (gem items 9 -> 15); 0.31.108: 4 (the vaulted pass weapons join)
-const EXCHANGE := [{"id":"gold_s", "gems":50, "gold":600}, {"id":"gold_m", "gems":120, "gold":1600}, {"id":"gold_l", "gems":300, "gold":4500},
-	{"id":"gold_xl", "gems":700, "gold":12000}, {"id":"gold_xxl", "gems":1600, "gold":30000}]     # 0.31.106 (Kevin: "maybe add some higher gold packs")
+# (0.31.106-0.31.184 EXCHANGE: gold for gems, 50 -> 600 up to 1,600 -> 30,000. 0.31.185, League's way: gold is earned
+# only -- gems buy heroes (HERO_GEMS), skins, the pass and the shop's gem items)
 
 static func day_key(unix: int) -> String:
 	var d := Time.get_date_dict_from_unix_time(unix)
@@ -839,12 +916,14 @@ const CHESTS := {
 		"item_chance":0.15, "rarity":{"rare":1.0}, "color":"#a8794a"},                  # (0.31.108: the only common was Sparkstick)
 	# 0.31.108: Silver gems 5-10 every time -> a 30% chance of 5 (they were about half of all free gems)
 	"silver": {"name":"Silver Chest", "unlock":3 * 3600, "gold":[150, 250], "gems_chance":0.3, "gems":[5, 5],
-		"item_chance":0.35, "rarity":{"rare":0.75, "epic":0.25}, "color":"#c9d3dc"},
+		"item_chance":0.35, "rarity":{"rare":0.75, "epic":0.25}, "color":"#c9d3dc", "shard":0.1},
 	"gold":   {"name":"Gold Chest", "unlock":8 * 3600, "gold":[400, 600], "gems_chance":1.0, "gems":[15, 25],
-		"item_chance":1.0, "rarity":{"rare":0.8, "epic":0.2}, "color":"#ffcf4a"},
+		"item_chance":1.0, "rarity":{"rare":0.8, "epic":0.2}, "color":"#ffcf4a", "shard":0.3},
 	"royal":  {"name":"Royal Chest", "unlock":12 * 3600, "gold":[1000, 1000], "gems_chance":1.0, "gems":[40, 60],
-		"item_chance":1.0, "rarity":{"epic":0.85, "legendary":0.15}, "color":"#c47bff"},
+		"item_chance":1.0, "rarity":{"epic":0.85, "legendary":0.15}, "color":"#c47bff", "shard":1.0},
 }
+# 0.31.185 (League's champion capsules): "shard" -- the chance of a hero shard (any of the sold heroes: unlock it for
+# Eco.SHARD_UNLOCK of its gold price, or melt it), rolled after everything else so the rest of a roll is as before
 const CHEST_FULL_GOLD := {"wooden":50, "silver":120, "gold":300, "royal":700}   # slots full: the chest becomes gold
 const DUPE_GOLD := {"common":100, "rare":250, "epic":600, "legendary":1500}       # a cosmetic already owned (0.31.93-0.31.183 it was Embers, a tenth of this)
 const PITY_EPIC := 10              # Gold/Royal chests: an epic or better at the latest every 10th
@@ -866,11 +945,12 @@ static func chest_pool(rarity: String, sid := 1) -> Array:
 	return ids
 
 static func roll_chest(kind: String, seed_value: int, owned: Array, pity: int, sid := 1) -> Dictionary:
-	# -> {gold, gems, item ("" if none), dupe_gold (a duplicate's gold, on top of gold), pity (the new count)}
+	# -> {gold, gems, item ("" if none), dupe_gold (a duplicate's gold, on top of gold), pity (the new count), shard (a
+	# hero, "" if none)}
 	var c: Dictionary = CHESTS[kind]
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_value
-	var out := {"gold":rng.randi_range(int(c.gold[0]), int(c.gold[1])), "gems":0, "item":"", "dupe_gold":0, "pity":pity}
+	var out := {"gold":rng.randi_range(int(c.gold[0]), int(c.gold[1])), "gems":0, "item":"", "dupe_gold":0, "pity":pity, "shard":""}
 	if rng.randf() < float(c.gems_chance):
 		out.gems = rng.randi_range(int(c.gems[0]), int(c.gems[1]))
 	if rng.randf() < float(c.item_chance):
@@ -898,6 +978,11 @@ static func roll_chest(kind: String, seed_value: int, owned: Array, pity: int, s
 				out.dupe_gold = int(DUPE_GOLD.get(rar, 250))         # (0.31.93-0.31.183: Embers for the Forge)
 			else:
 				out.item = id
+	# 0.31.185: a hero shard, last (so the rest rolls as it did)
+	if float(c.get("shard", 0.0)) > 0.0 and rng.randf() < float(c.shard):
+		var heroes: Array = HERO_PRICES.keys()
+		heroes.sort()
+		out.shard = str(heroes[rng.randi_range(0, heroes.size() - 1)])
 	return out
 
 static func chest_odds(kind: String) -> String:
@@ -915,6 +1000,8 @@ static func chest_odds(kind: String) -> String:
 	if kind in ["gold", "royal"]:
 		parts.append("an epic or better at least every %d" % PITY_EPIC)
 	parts.append("duplicates turn into gold")
+	if float(c.get("shard", 0.0)) > 0.0:
+		parts.append("a hero shard" if float(c.shard) >= 1.0 else "%d%% chance of a hero shard" % int(round(float(c.shard) * 100.0)))
 	return " · ".join(parts)
 
 

@@ -16,6 +16,7 @@ const App = preload("res://scripts/app/siege_app.gd")
 const Profile = preload("res://scripts/meta/profile.gd")
 const Moba = preload("res://scripts/siege/moba.gd")
 const HeroPanel = preload("res://scripts/app/moba_panel.gd")
+const Eco = preload("res://scripts/meta/economy.gd")
 const ItemIcon = preload("res://scripts/siege/item_icon.gd")
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 
@@ -133,18 +134,30 @@ func _process(delta: float) -> bool:
 					and HeroPanel.role_badge("marksman") != null and m.find_children("*", "TextureRect", true, false).any(func(t): return t.texture != null and str(t.texture.resource_path).ends_with("hero_hall.webp")),
 					"the stage: the Knight in 3D in the champions' hall, the TANK badge; a badge for each role")
 				# 0.31.168: the new six are bought with gold -- a locked one shows its price; BATTLE becomes UNLOCK
+				# (0.31.185: the clock on a week the Golem isn't in the free rotation)
+				var wk := int(Time.get_unix_time_from_system())
+				while Eco.free_heroes(wk).has("golem"):
+					wk += 7 * 86400
+				app.profile.now_override = wk
 				app.profile.d.gold = 1000
 				press("moba_hero_golem")
 				var go: Button = app.modal._go
-				check(app.modal.hero == "golem" and not app.profile.owns_hero("golem") and go.text.begins_with("UNLOCK") and go.disabled
-					and app.modal._stage_name.text == "GOLEM" and app.modal._stage_lock.visible and app.modal._stage_price.text == "2000"
+				check(app.modal.hero == "golem" and not app.profile.owns_hero("golem") and go.text == "UNLOCK" and not go.disabled
+					and app.modal._stage_name.text == "GOLEM" and app.modal._stage_lock.visible and app.modal._stage_price.text == "2,000"
 					and has_text(app.modal, "Q BOULDER"), "the Golem: locked, 2000 gold (you have 1000)")
 				_shot("moba_heroes_locked")
 				app.profile.d.gold = 2600
 				press("moba_hero_golem")
 				press("moba_battle")
-				check(app.profile.owns_hero("golem") and int(app.profile.d.gold) == 600 and app.modal != null and app.modal._go.text == "BATTLE",
-					"UNLOCK: 2000 gold, the Golem is yours (and still the window)")
+				# 0.31.185: UNLOCK opens the chooser -- gold or gems (no shard or token held: neither offered)
+				check(app.modal.chooser != null and btn("moba_unlock_gold") != null and btn("moba_unlock_gems") != null
+					and btn("moba_unlock_shard") == null and btn("moba_unlock_token") == null and has_text(app.modal, "UNLOCK GOLEM"),
+					"UNLOCK: the chooser -- 2,000 gold or 450 gems")
+				_shot("moba_unlock_chooser")
+				press("moba_unlock_gold")
+				check(app.profile.owns_hero("golem") and int(app.profile.d.gold) == 600 and app.modal != null and app.modal._go.text == "BATTLE"
+					and app.modal.chooser == null, "2000 gold: the Golem is yours (the chooser shut, still the window)")
+				app.profile.now_override = -1
 				press("moba_hero_archmage")
 				check(app.modal.hero == "archmage" and app.modal._stage_name.text == "ARCHMAGE" and app.modal._stage_role.text == "MAGE"
 					and app.modal._show.cls == "archmage" and has_text(app.modal, "E MANA SHIELD"), "the Archmage picked")

@@ -103,8 +103,8 @@ func _part1() -> void:
 	var errs := []
 	for x in r.results:
 		errs.append(str(x.error) if not bool(x.ok) else "ok")
-	check(errs == ["Not enough gems", "bad args", "unknown op", "no ticket"] and int(r.profile.gems) == int(sp.gems),
-		"refused: an exchange without the gems, a malformed op, a purchase grant, a match without a ticket %s" % str(errs))
+	check(errs == ["unknown op", "bad args", "unknown op", "no ticket"] and int(r.profile.gems) == int(sp.gems),
+		"refused: an exchange (0.31.185: gone), a malformed op, a purchase grant, a match without a ticket %s" % str(errs))
 	# --- VS BOTS: a ticket, not too soon, clamped, once
 	r = acc.handle({"t":"eco", "acct":id, "key":key, "ticket":true})
 	var tk := str(r.get("ticket", ""))

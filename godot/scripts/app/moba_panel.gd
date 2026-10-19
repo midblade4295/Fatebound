@@ -5,6 +5,10 @@ extends Control
 # the grid. 0.31.168 (Kevin: six new heroes, "Unlock with gold"): eighteen, as a table of League's six roles -- a column
 # each, three heroes in it (the class, its upgrade, the new one); the new six cost gold (economy.gd HERO_PRICES, the
 # profile's "heroes"): a locked card shows its price, and picking one turns BATTLE into UNLOCK.
+# 0.31.185 (Kevin: "I want the same IAP system as league of legends"): this week's two free heroes play like your own
+# (FREE on the card); UNLOCK opens a chooser over the window (League's "unlock with Blue Essence or RP"): the gold, the
+# gems, a hero shard (at Eco.SHARD_UNLOCK of the gold) or a Hero Token; beside BATTLE, UNLOCK for a free one and MELT for
+# a shard of a hero you own. Your Hero Tokens and shards beside PICK YOUR HERO (a ◆ on a card: a shard of him).
 const UI = preload("res://scripts/app/ui.gd")
 const UI2 = preload("res://scripts/app/ui2.gd")
 const SocialUI = preload("res://scripts/app/social_ui.gd")
@@ -16,6 +20,7 @@ const Showcase = preload("res://scripts/app/showcase.gd")      # 0.31.175: the p
 const ROLE_COL := {"tank":"#6fa8dc", "fighter":"#e06666", "assassin":"#a48ae0", "mage":"#f6a24b", "marksman":"#8fd16f",
 	"support":"#ffd966"}
 const COIN := "res://assets/ui/currency/coin.png"
+const GEM := "res://assets/ui/currency/gem.png"
 # 0.31.175 (Kevin: "Use eleven or meshy to make these menus better looking and more high quality"): ElevenLabs paintings
 # (tools/build_menu_icons.py) -- the champions' hall the picked hero stands in, the six role badges over the columns,
 # the padlock on a hero still to unlock
@@ -33,6 +38,10 @@ var app
 var hero := "knight"
 var _grid: GridContainer
 var _go: Button
+var _side: Button               # 0.31.185: beside BATTLE -- UNLOCK (one free this week)
+var _melt: Button               # ... or MELT (a shard of one you own)
+var _inv: Label                  # 0.31.185: the Hero Tokens and shards you hold
+var chooser: Control             # 0.31.185: the unlock chooser, open
 var _kit: VBoxContainer          # 0.31.171: the kit, a row per ability with its icon
 var _show                        # 0.31.175: the stage -- the hero in 3D on the hall's dais, his name, role and price
 var _stage_name: Label
@@ -41,6 +50,7 @@ var _stage_badge: TextureRect
 var _stage_text: Label
 var _stage_lock: HBoxContainer
 var _stage_price: Label
+var _stage_free: Label           # 0.31.185: FREE THIS WEEK (the rotation)
 
 static func role_badge(role: String) -> Texture2D:
 	var p := "res://assets/ui/roles/%s.png" % role
@@ -55,10 +65,14 @@ static func portrait(hid: String) -> String:
 func _owns(hid: String) -> bool:
 	return app.profile.owns_hero(hid)
 
+func _plays(hid: String) -> bool:
+	# yours, or free this week (0.31.185)
+	return app.profile.can_play_hero(hid)
+
 func open(a) -> void:
 	app = a
 	var saved := str(app.profile.d.settings.get("moba_hero", ""))
-	hero = saved if Moba.HEROES.has(saved) and _owns(saved) else "knight"
+	hero = saved if Moba.HEROES.has(saved) and _plays(saved) else "knight"
 	var w := SocialUI.window(self, "5V5", "swords", func():
 		app.sfx("menuClose")
 		app.close_modal(), 56.0 + float(app.safe_top), 24.0)
@@ -73,7 +87,12 @@ func open(a) -> void:
 		+ "each, to a gate of the keep. Level up to 10 near the fighting (W at 2, E at 3, ULTIMATE at 6), earn gold, buy items "
 		+ "in your keep. Jungle camps give gold and buffs; the Bone Lord blesses your side, each Grave Wyrm slain toughens "
 		+ "it. Break a lane, its gate and the two King towers, then defeat their King.", 10, UI2.SOFT)
-	UI2.text(body, "PICK YOUR HERO", 16, UI2.GOLD)
+	var ph := UI.row(body, 8)
+	UI2.text(ph, "PICK YOUR HERO", 16, UI2.GOLD)
+	_inv = UI2.body(ph, "", 10, Color("#c9f7bd"))
+	_inv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_inv.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_inv.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	var holder := CenterContainer.new()
 	holder.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	body.add_child(holder)
@@ -86,8 +105,14 @@ func open(a) -> void:
 	_kit.add_theme_constant_override("separation", 3)
 	_kit.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	body.add_child(_kit)
-	_go = UI2.button(body, "BATTLE", "orange", _on_go, "moba_battle", 22, 56.0, 16.0)
+	var foot := UI.row(body, 8)
+	_go = UI2.button(foot, "BATTLE", "orange", _on_go, "moba_battle", 22, 56.0, 16.0)
+	_go.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	UI2.sweep(_go)
+	_side = UI2.button(foot, "UNLOCK", "gold", open_chooser, "moba_side_unlock", 16, 56.0, 16.0)
+	_side.custom_minimum_size.x = 120
+	_melt = UI2.button(foot, "MELT", "green", func(): _unlock_by("melt"), "moba_melt_shard", 15, 56.0, 16.0, COIN)
+	_melt.custom_minimum_size.x = 132
 	_render()
 
 func _build_stage(body: VBoxContainer) -> void:
@@ -156,6 +181,7 @@ func _build_stage(body: VBoxContainer) -> void:
 			_stage_lock.move_child(ic, 0)
 	_stage_price = UI2.text(_stage_lock, "", 15, Color("#ffd65a"), Color("#201002"))
 	_stage_lock.move_child(_stage_price, 2)
+	_stage_free = UI2.text(info, "FREE THIS WEEK", 13, Color("#9dff8a"), Color("#0a2006"))
 	st.add_child(rim)
 	st.resized.connect(func():
 		# the hall's dais is at ~23 % across, its top ~76 % down the painting (cover-scaled to the stage's width): the
@@ -178,24 +204,18 @@ func _render_stage() -> void:
 	_stage_badge.texture = role_badge(role)
 	_stage_text.text = str(Kits.ROLE_TEXT.get(role, ""))
 	var owned := _owns(hero)
-	_stage_lock.visible = not owned
-	_stage_price.text = "%d" % int(Eco.HERO_PRICES.get(hero, 0))
+	_stage_free.visible = not owned and _plays(hero)       # (in the price's place: UNLOCK beside BATTLE has the prices)
+	_stage_lock.visible = not owned and not _stage_free.visible
+	_stage_price.text = UI.grouped(int(app.profile.hero_price(hero).get("gold", 0)))
 	if _show != null:
 		var look: Dictionary = app.profile.look_for(hero) if (Eco.CLASSES + Eco.UP_CLASSES).has(hero) else {}
 		_show.show_look(hero, look)
-		_show.modulate = Color.WHITE if owned else Color(0.62, 0.62, 0.7)
+		_show.modulate = Color.WHITE if _plays(hero) else Color(0.62, 0.62, 0.7)
 
 func _on_go() -> void:
-	if not _owns(hero):
-		# 0.31.168: UNLOCK -- the gold, then the hero is yours (and picked)
-		var r: Dictionary = app.profile.buy_hero(hero)
-		if bool(r.get("ok", false)):
-			app.sfx("purchase")
-			app.toast("%s unlocked!" % str(Moba.HEROES[hero].name), UI2.GOLD)
-		else:
-			app.sfx("error")
-			app.toast(str(r.get("error", "Can't unlock")), Color("#ff8a7a"))
-		_render()
+	if not _plays(hero):
+		# 0.31.168: UNLOCK (0.31.185: the chooser -- gold, gems, a shard or a Hero Token)
+		open_chooser()
 		return
 	app.profile.d.settings["moba_hero"] = hero
 	app.profile.save()
@@ -235,19 +255,100 @@ func _render() -> void:
 		else:
 			_grid.add_child(_card(id))
 	var lines := kit_lines(hero)
+	_inv.text = inventory_text(app.profile)
+	_inv.visible = _inv.text != ""
 	_render_stage()
 	for c in _kit.get_children():
 		_kit.remove_child(c)
 		c.queue_free()
 	for i in 4:
 		_kit.add_child(_kit_row(hero, ["q", "w", "e", "r"][i], str(lines[i + 1])))
-	if _owns(hero):
-		_go.text = "BATTLE"
-		_go.disabled = false
+	_go.disabled = false
+	_go.text = "BATTLE" if _plays(hero) else "UNLOCK"
+	# 0.31.185: beside it, UNLOCK for one free this week, MELT for a shard of one you own
+	var p = app.profile
+	_side.visible = _plays(hero) and not _owns(hero)
+	_melt.visible = _owns(hero) and p.shards_of(hero) > 0
+	_melt.text = "MELT +%s" % UI.grouped(Eco.shard_melt_gold(hero, p.now()))
+
+static func inventory_text(p) -> String:
+	# "HERO TOKEN x1  ·  ◆ SHARDS 2" (which heroes: the ◆ on their cards; this week's free ones: FREE on theirs)
+	var bits := []
+	if int(p.d.get("tokens", 0)) > 0:
+		bits.append("HERO TOKEN x%d" % int(p.d.tokens))
+	var n := (p.d.get("shards", []) as Array).size()
+	if n > 0:
+		bits.append("◆ SHARD%s %d" % ["S" if n > 1 else "", n])
+	return "  ·  ".join(bits)
+
+func open_chooser() -> void:
+	# 0.31.185: UNLOCK <HERO> over the window -- each way to unlock him, those you can't pay dimmed; CANCEL
+	close_chooser()
+	var p = app.profile
+	var pr: Dictionary = p.hero_price(hero)
+	if pr.is_empty() or _owns(hero):
+		return
+	app.sfx("menuOpen")
+	chooser = ColorRect.new()
+	(chooser as ColorRect).color = Color(0, 0, 0, 0.62)
+	chooser.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	chooser.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(chooser)
+	var cc := CenterContainer.new()
+	cc.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	chooser.add_child(cc)
+	var box := UI2.frame(cc, "night", 14, 18.0, "gold")
+	(box.get_parent() as Control).custom_minimum_size = Vector2(300, 0)
+	box.add_theme_constant_override("separation", 8)
+	var nm := str(Moba.HEROES[hero].name).to_upper()
+	UI2.center(UI2.text(box, "UNLOCK " + nm, 22, UI2.GOLD))
+	UI2.center(UI2.body(box, "Yours for good." + ("  Launch price for now." if Eco.launching(hero, p.now()) else ""), 11, UI2.SOFT))
+	var opts := [["%s GOLD" % UI.grouped(int(pr.gold)), "gold", COIN, "moba_unlock_gold", int(p.d.gold) >= int(pr.gold), "gold"],
+		["%s GEMS" % UI.grouped(int(pr.gems)), "blue", GEM, "moba_unlock_gems", int(p.d.gems) >= int(pr.gems), "gems"]]
+	if p.shards_of(hero) > 0:
+		var sg := Eco.shard_unlock_gold(hero, p.now())
+		opts.append(["SHARD + %s GOLD" % UI.grouped(sg), "green", COIN, "moba_unlock_shard", int(p.d.gold) >= sg, "shard"])
+	if int(p.d.get("tokens", 0)) > 0:
+		opts.append(["HERO TOKEN", "purple", "", "moba_unlock_token", true, "token"])
+	for o in opts:
+		var how: String = o[5]
+		var b := UI2.button(box, str(o[0]), str(o[1]), func(): _unlock_by(how), str(o[3]), 17, 46.0, 14.0, str(o[2]))
+		b.disabled = not bool(o[4])
+	UI2.button(box, "CANCEL", "grey", func():
+		app.sfx("menuClose")
+		close_chooser(), "moba_unlock_cancel", 15, 40.0, 12.0)
+
+func close_chooser() -> void:
+	if is_instance_valid(chooser):
+		chooser.queue_free()
+	chooser = null
+
+func _unlock_by(how: String) -> void:
+	var p = app.profile
+	var r: Dictionary
+	match how:
+		"gold":
+			r = p.buy_hero(hero)
+		"gems":
+			r = p.buy_hero_gems(hero)
+		"shard":
+			r = p.use_shard(hero)
+		"token":
+			r = p.use_token(hero)
+		_:
+			r = p.melt_shard(hero)
+	if bool(r.get("ok", false)):
+		app.sfx("purchase")
+		if how == "melt":
+			app.toast("Shard melted: +%s gold" % UI.grouped(int(r.get("gold", 0))), UI2.GOLD)
+		else:
+			app.toast("%s unlocked!" % str(Moba.HEROES[hero].name), UI2.GOLD)
+		app.refresh_top()
+		close_chooser()
 	else:
-		var price := int(Eco.HERO_PRICES.get(hero, 0))
-		_go.text = "UNLOCK  %d GOLD" % price
-		_go.disabled = int(app.profile.d.gold) < price
+		app.sfx("error")
+		app.toast(str(r.get("error", "Can't unlock")), Color("#ff8a7a"))
+	_render()
 
 static func kit_text(hid: String) -> String:
 	return "\n".join(kit_lines(hid))
@@ -330,7 +431,8 @@ func _card(hid: String) -> Control:
 	# 0.31.175: on a dark ground in its role's colour with a glow behind the portrait; a hero to unlock dimmed, with
 	# the padlock and his price in gold; the picked one in a gold frame with a tick
 	var on := hid == hero
-	var owned := _owns(hid)
+	var owned := _plays(hid)             # (0.31.185: a free one this week shows as playable, FREE on it)
+	var free := owned and not _owns(hid)
 	var role := Kits.role_of(hid)
 	var rim := Color(str(ROLE_COL.get(role, "#5a6470")))
 	var b := Button.new()
@@ -405,12 +507,20 @@ func _card(hid: String) -> Control:
 		ci.custom_minimum_size = Vector2(13, 13)
 		ci.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		chip.add_child(ci)
-		var pl := UI2.text(chip, str(int(Eco.HERO_PRICES.get(hid, 0))), 10, Color("#ffd65a"), Color("#201002"), 3, false)
+		var pl := UI2.text(chip, str(int(app.profile.hero_price(hid).get("gold", 0))), 10, Color("#ffd65a"), Color("#201002"), 3, false)
 		pl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	elif free:
+		var fr := UI2.text(b, "FREE", 8, Color("#9dff8a"), Color("#0a2006"), 3, false)     # 0.31.185: this week's rotation
+		fr.position = Vector2(3, 1)
+		fr.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	elif Eco.HERO_PRICES.has(hid):
 		var nw := UI2.text(b, "★", 10, Color("#ffd65a"), Color("#201002"), 3, false)      # (one you bought)
 		nw.position = Vector2(4, 1)
 		nw.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if app.profile.shards_of(hid) > 0:                   # 0.31.185: a shard of him held
+		var sd := UI2.text(b, "◆", 10, Color("#9dff8a"), Color("#0a2006"), 3, false)
+		sd.position = Vector2(CARD_W - 13, CARD_H - 31)
+		sd.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	if on:
 		var ck := UI2.text(b, "✔", 12, Color("#ffd65a"), Color("#201002"), 4, false)
 		ck.position = Vector2(CARD_W - 15, 1)

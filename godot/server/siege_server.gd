@@ -136,7 +136,7 @@ const LOBBY_TIME := 20.0             # the join countdown (0.31.82)
 const HELLO_TIMEOUT := 10.0
 const IAP_TIMEOUT := 40.0              # a purchase check may take a token request and an API call
 const REFUSE_CLOSE_DELAY := 0.25     # s between a "bye"/"ver" reply and closing the socket
-const SERVER_BUILD := "0.31.184"      # this server's game version; the probe says it by default (identifies as current)
+const SERVER_BUILD := "0.31.185"      # this server's game version; the probe says it by default (identifies as current)
 const MIN_BUILD_FILE := "/etc/fatebound-siege/min_build"
 const MIN_BUILD_RELOAD := 10.0       # s between re-reads of the min-build file
 const UPDATE_MSG := "A new version of Fatebound is out. Update now on Google Play to keep playing online."
@@ -703,9 +703,11 @@ func _handle(cid: int, msg: Dictionary) -> void:
 				analytics.set_opt_out(c.acct, bool(msg.get("an_off", false)))
 				analytics.server_event(c.acct, "session_online", {}, c.build)
 			c.pred = bool(msg.get("pred", false))         # the phone moves its own unit (0.18.4)
-			# 0.31.170: the hero they picked -- one of the game's, and bought if it costs gold ("": the seat's own)
+			# 0.31.170: the hero they picked -- one of the game's, and bought if it costs gold ("": the seat's own);
+			# 0.31.185: or free this week (the rotation, by the server's clock)
 			var hero := str(msg.get("hero", ""))
-			if not Moba.HEROES.has(hero) or (Eco.HERO_PRICES.has(hero) and not owned.has(hero)):
+			if not Moba.HEROES.has(hero) or (Eco.HERO_PRICES.has(hero) and not owned.has(hero)
+					and not Eco.free_heroes(int(Time.get_unix_time_from_system())).has(hero)):
 				hero = ""
 			c.hero = hero
 			c.ask_next = bool(msg.get("ask_next", false))  # 0.31.122: the phone says when it wants the next match (PLAY AGAIN)

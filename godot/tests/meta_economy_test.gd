@@ -161,8 +161,7 @@ func _init() -> void:
 	var look := b.look_for(str(it.get("class", "knight")))
 	check(it.kind == "title" or not look.is_empty(), "equipped look reaches the battle view (%s)" % str(look))
 	check(not b.equip("knight_wpn_tower").ok or b.owns("knight_wpn_tower"), "can't equip unowned items")
-	b.d.gems = 200
-	check(b.exchange("gold_m").ok and b.d.gems == 80, "gems -> gold exchange")
+	check(not b.has_method("exchange") and not b.OPS.has("exchange"), "no gems -> gold exchange (0.31.185, League's way)")
 
 	# ---- rollover ----
 	var r := fresh("roll")

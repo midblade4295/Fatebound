@@ -76,6 +76,9 @@ static func item_swatch(parent: Node, id: String, px := 56) -> void:
 static func chest_icon(kind: String) -> String:
 	return UI2.V2 + "chests/%s_icon.png" % str({"wooden": "wood"}.get(kind, kind))
 
+const HERO_NAMES := {"golem":"Golem", "dragoon":"Dragoon", "duelist":"Duelist", "stormcaller":"Stormcaller", "musketeer":"Musketeer",
+	"druid":"Druid"}                     # (moba.gd HEROES' names for the sold ones -- this file doesn't load the sim)
+
 static func reward_text(r: Dictionary) -> Array:
 	# -> [glyph kind, text, colour, texture path or ""]
 	if r.has("chest"):                                   # (0.31.79: chests used to read "0 gold" here)
@@ -86,6 +89,14 @@ static func reward_text(r: Dictionary) -> Array:
 		return [item_icon(it), str(it.get("name", "?")), rarity(it), item_texture_path(str(r.item))]
 	if r.has("gems"):
 		return ["gem", "%d gems" % int(r.gems), UI.CYAN, "res://assets/ui/currency/gem.png"]
+	# 0.31.185 (League's way): a hero shard (which hero, once it's known) and the premium pass's Hero Token
+	if r.has("shard"):
+		var sh := str(r.shard)
+		if sh != "":
+			return ["star", "%s Shard" % str(HERO_NAMES.get(sh, sh.capitalize())), Color("#9dff8a"), "res://assets/ui/skins/default_%s.png" % sh]
+		return ["star", "Hero Shard", Color("#9dff8a"), UI2.V2 + "icons/helmet.png"]
+	if r.has("token"):
+		return ["star", "Hero Token", Color("#e2b8ff"), UI2.V2 + "icons/helmet.png"]
 	var g := int(r.get("gold", 0))
 	return ["coin", "%d gold" % g, UI.GOLD, "res://assets/ui/currency/%s.png" % ("coins_s" if g >= 300 else "coin")]
 
@@ -955,7 +966,7 @@ static func pass_screen(app, root: VBoxContainer) -> void:
 		pt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		ph.add_child(pt)
 		UI2.text(pt, "UNLOCK PREMIUM", 20, UI2.GOLD)
-		UI2.body(pt, "%d exclusive cosmetics (%d legendary) · gold chests · a Royal chest · %s" % [int(pcos.n), legendary,
+		UI2.body(pt, "A Hero Token (any hero) · %d exclusive cosmetics (%d legendary) · gold chests · a Royal chest · %s" % [int(pcos.n), legendary,
 			"more gems on every tier" if sid < 2 else "more gold on every tier"], 12, Color("#efe2ff"))     # (0.31.108-0.31.183: Embers and gold from season 2)
 		var b := UI2.button(pc, "UNLOCK  %d" % Eco.PREMIUM_COST, "purple", func(): _buy_premium(app), "buy_premium", 20, 52.0, 16.0, "res://assets/ui/currency/gem.png")
 		b.disabled = int(d.gems) < Eco.PREMIUM_COST
@@ -1234,7 +1245,7 @@ static func _skip_tiers(app) -> void:
 static func _buy_premium(app) -> void:
 	var p = app.profile
 	var psid := int(app.profile.d.pass.season)
-	app.confirm("UNLOCK PREMIUM?", "%d exclusive cosmetics, gold and Royal chests and %s on every tier this season. Costs %d gems." % [int(Eco.pass_cosmetics(psid).n),
+	app.confirm("UNLOCK PREMIUM?", "A Hero Token for any hero, %d exclusive cosmetics, gold and Royal chests and %s on every tier this season. Costs %d gems." % [int(Eco.pass_cosmetics(psid).n),
 		"more gems" if psid < 2 else "more gold", Eco.PREMIUM_COST], "UNLOCK", "premium", func():
 		var r: Dictionary = p.buy_premium()
 		if r.ok:
@@ -1392,58 +1403,8 @@ static func shop(app, root: VBoxContainer) -> void:
 	UI2.divider(root, "ARSENALS", 22, "bundles for one class")
 	pack_list(app, root)
 	gem_packs(app, root)
-	UI2.divider(root, "GEMS  →  GOLD", 22, "trade gems for gold any time")
-	var ex_grids := []
-	for cols in [3, 2]:                              # (0.31.106: two bigger offers under the first three)
-		var eg := GridContainer.new()
-		eg.columns = cols
-		eg.add_theme_constant_override("h_separation", 10)
-		eg.add_theme_constant_override("v_separation", 12)
-		root.add_child(eg)
-		ex_grids.append(eg)
-	var n := 0
-	for off in Eco.EXCHANGE:
-		var best: bool = n == Eco.EXCHANGE.size() - 1
-		var big: bool = n >= 3
-		var c := Control.new()
-		UI.grow(c)
-		(ex_grids[0 if n < 3 else 1] as GridContainer).add_child(c)
-		if best:
-			UI2.glow(c, Rect2(-16, -16, 10, 10), Color(1.0, 0.85, 0.4, 0.5))
-			var gw := c.get_child(c.get_child_count() - 1) as Control
-			c.resized.connect(func(): gw.size = c.size + Vector2(32, 32))
-		UI2.plate(c, "royal" if big else "night", 18.0, "gold")
-		var art_px := pack_art(c, "res://assets/ui/packs/gold_pack_%d.png" % mini(n + 1, 5), n + 1, big, Color(1.0, 0.82, 0.4))
-		var gl := UI2.text(c, "+" + UI.grouped(int(off.gold)), 22 if big else 20, UI2.GOLD, UI2.INK, 5)
-		gl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		gl.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-		gl.offset_top = art_px + 8.0
-		gl.offset_bottom = art_px + 32.0
-		var oid: String = off.id
-		var b := UI2.button(c, str(int(off.gems)), "purple", func():
-			var r: Dictionary = p.exchange(oid)
-			if r.ok:
-				app.sfx("purchase")
-				app.toast("+%s gold" % UI.grouped(int(off.gold)), UI.GOLD)
-			else:
-				app.sfx("error")
-				app.toast(str(r.error), UI.RED)
-			app.rebuild(), "exchange_" + oid, 16, 36.0, 11.0, "res://assets/ui/currency/gem.png")
-		b.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
-		b.offset_left = 8
-		b.offset_right = -8
-		b.offset_top = -46
-		b.offset_bottom = -8
-		b.disabled = int(p.d.gems) < int(off.gems)
-		if best:
-			var bv := UI2.chip(c, "BEST VALUE", Color("#e8443a"), Color.WHITE, Color("#3a0805"))
-			bv.anchor_left = 0.5
-			bv.anchor_right = 0.5
-			bv.offset_left = -40
-			bv.offset_right = 40
-			bv.offset_top = -10
-			bv.offset_bottom = 8
-		n += 1
+	# (0.31.106-0.31.184 "GEMS -> GOLD": five gold packs for gems. 0.31.185, Kevin: "I want the same IAP system as league of
+	# legends" -- League never turns its paid currency into the earned one: gold is earned only, gems buy heroes outright)
 	var fn := UI2.body(root, "Chests are earned by playing  ·  never sold", 11, Color("#cdb79a"))
 	fn.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 

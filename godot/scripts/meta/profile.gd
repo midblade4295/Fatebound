@@ -30,7 +30,7 @@ var ready_grace := 0            # the server: a chest counts as unlocked this ma
 const OPS := {
 	# op -> argument types (JSON numbers arrive as floats; ints are converted)
 	"claim_tier": [TYPE_INT, TYPE_BOOL], "claim_all": [], "skip_tiers": [], "buy_premium": [],
-	"buy": [TYPE_STRING], "buy_pack": [TYPE_STRING], "exchange": [TYPE_STRING],
+	"buy": [TYPE_STRING], "buy_pack": [TYPE_STRING],              # (0.31.106-0.31.184 "exchange": gold for gems)
 	"equip": [TYPE_STRING], "unequip": [TYPE_STRING, TYPE_STRING],
 	"reroll_daily": [TYPE_INT], "claim_challenge": [TYPE_STRING, TYPE_INT],
 	"claim_quest": [TYPE_STRING], "forge": [TYPE_STRING, TYPE_STRING], "set_forge_element": [TYPE_STRING, TYPE_STRING],
@@ -39,6 +39,8 @@ const OPS := {
 	"claim_login": [],                                           # 0.31.119: the daily login reward
 	"claim_discord": [],                                         # 0.31.124: JOIN OUR DISCORD, once
 	"buy_hero": [TYPE_STRING],                                   # 0.31.168: a 5v5 hero for gold
+	# 0.31.185 (League's way): a hero for gems, a hero shard used (unlock at a discount) or melted, a Hero Token used
+	"buy_hero_gems": [TYPE_STRING], "use_shard": [TYPE_STRING], "melt_shard": [TYPE_STRING], "use_token": [TYPE_STRING],
 }
 
 func _rec(op: String, args: Array) -> void:
@@ -121,6 +123,8 @@ static func defaults() -> Dictionary:
 		"pass":{"season":0, "xp":0, "premium":false, "free":[], "prem":[], "swaps":{}},
 		"owned":[], "equip":equip, "title":"",
 		"heroes":[],                                                 # 0.31.168: the 5v5 heroes bought with gold (Eco.HERO_PRICES)
+		"shards":[],                                                 # 0.31.185: hero shards (a hero id each; League's champion shards)
+		"tokens":0,                                                  # 0.31.185: Hero Tokens (the premium pass's: any locked hero)
 		"challenges":{"day":"", "daily":[], "week":"", "weekly":[], "rerolled":false},
 		"stats":{"matches":0, "wins":0, "rescues":0, "kills":0, "gates":0, "gathered":0, "fed":0,
 			"lifts":0, "repaired":0, "healed":0, "best_multi":0, "streak":0, "best_streak":0},     # (0.31.87: for the titles)
@@ -211,6 +215,15 @@ func _normalized(v: Dictionary) -> Dictionary:
 	if out.has("embers"):
 		out.gold = int(out.gold) + maxi(0, int(out.embers if _is_num(out.embers) else 0)) * Eco.EMBER_GOLD
 		out.erase("embers")
+	# 0.31.185: heroes, shards and tokens -- only real heroes, no negative tokens
+	for k in ["heroes", "shards"]:
+		var keep := []
+		if out.get(k) is Array:
+			for h in out[k]:
+				if Eco.HERO_PRICES.has(str(h)) and (k == "shards" or not keep.has(str(h))):
+					keep.append(str(h))
+		out[k] = keep
+	out["tokens"] = maxi(0, int(out.get("tokens", 0)) if _is_num(out.get("tokens", 0)) else 0)
 	# 0.31.93: the Forge -- ints again, nothing out of range
 	for part in ["stars", "wins", "element"]:
 		if not (out.forge.get(part) is Dictionary):
@@ -410,6 +423,9 @@ func pass_reward_for(tier: int, premium: bool) -> Dictionary:
 	if sw.has(key) and (d.pass.prem if premium else d.pass.free).has(tier):
 		return sw[key]
 	var r := Eco.pass_reward(int(d.pass.season), tier, premium)
+	if r.has("shard") and str(r.shard) == "":
+		# 0.31.185: which hero's shard -- one not owned yet (the same on the phone and the server); kept once claimed
+		return {"shard": Eco.pick_shard("pass-shard-%d-%d" % [int(d.pass.season), tier], d.get("heroes", []))}
 	var id := str(r.get("item", ""))
 	if id != "" and owns(id):
 		return Eco.pass_swap(int(d.pass.season), tier, premium, id, d.owned)
@@ -417,7 +433,7 @@ func pass_reward_for(tier: int, premium: bool) -> Dictionary:
 
 func _claim(tier: int, premium: bool) -> Dictionary:
 	var r := pass_reward_for(tier, premium)
-	if r.has("swap"):
+	if r.has("swap") or r.has("shard"):
 		if not d.pass.has("swaps"):
 			d.pass["swaps"] = {}
 		d.pass.swaps[("p%d" if premium else "f%d") % tier] = r
@@ -479,6 +495,9 @@ func buy_premium() -> Dictionary:
 func _grant(r: Dictionary) -> void:
 	d.gold += int(r.get("gold", 0))
 	d.gems += int(r.get("gems", 0))
+	if str(r.get("shard", "")) != "":                            # 0.31.185: a hero shard, a Hero Token
+		(d.shards as Array).append(str(r.shard))
+	d.tokens = int(d.get("tokens", 0)) + int(r.get("token", 0))
 	if r.has("chest"):
 		add_chest(str(r.chest), {}, true)
 	var id := str(r.get("item", ""))
@@ -509,24 +528,99 @@ func buy(id: String) -> Dictionary:
 	_rec("buy", [id])
 	return {"ok":true}
 
-# 0.31.168 (Kevin: "Unlock with gold"): the 5v5's six new heroes are bought with gold, once; the rest are everyone's
+# 0.31.168 (Kevin: "Unlock with gold"): the 5v5's six new heroes are bought with gold, once; the rest are everyone's.
+# 0.31.185 (Kevin: "I want the same IAP system as league of legends"): or with gems, a hero shard or a Hero Token; and
+# this week's free ones are everyone's to play (Eco.free_heroes) -- see economy.gd HERO_GEMS.
 func owns_hero(hid: String) -> bool:
 	return not Eco.HERO_PRICES.has(hid) or (d.get("heroes", []) as Array).has(hid)
 
-func buy_hero(hid: String) -> Dictionary:
-	if not Eco.HERO_PRICES.has(hid):
-		return {"ok":false, "error":"Not for sale"}
-	if owns_hero(hid):
-		return {"ok":false, "error":"Already yours"}
-	var price := {"gold":int(Eco.HERO_PRICES[hid])}
-	if not can_afford(price):
-		return {"ok":false, "error":"Not enough gold"}
-	d.gold -= int(price.gold)
+func can_play_hero(hid: String) -> bool:
+	return owns_hero(hid) or Eco.free_heroes(now()).has(hid)
+
+func hero_price(hid: String) -> Dictionary:
+	return Eco.hero_price(hid, now())
+
+func _own_hero(hid: String) -> void:
 	if not d.has("heroes"):
 		d["heroes"] = []
 	(d.heroes as Array).append(hid)
+
+func _can_unlock(hid: String) -> String:
+	# "" when hid can be unlocked, else why not
+	if not Eco.HERO_PRICES.has(hid):
+		return "Not for sale"
+	if owns_hero(hid):
+		return "Already yours"
+	return ""
+
+func buy_hero(hid: String) -> Dictionary:
+	var why := _can_unlock(hid)
+	if why != "":
+		return {"ok":false, "error":why}
+	var price := {"gold":int(hero_price(hid).gold)}
+	if not can_afford(price):
+		return {"ok":false, "error":"Not enough gold"}
+	d.gold -= int(price.gold)
+	_own_hero(hid)
 	save()
 	_rec("buy_hero", [hid])
+	return {"ok":true}
+
+func buy_hero_gems(hid: String) -> Dictionary:
+	var why := _can_unlock(hid)
+	if why != "":
+		return {"ok":false, "error":why}
+	var price := {"gems":int(hero_price(hid).gems)}
+	if not can_afford(price):
+		return {"ok":false, "error":"Not enough gems"}
+	d.gems -= int(price.gems)
+	_own_hero(hid)
+	save()
+	_rec("buy_hero_gems", [hid])
+	return {"ok":true}
+
+func shards_of(hid: String) -> int:
+	return (d.get("shards", []) as Array).count(hid)
+
+func use_shard(hid: String) -> Dictionary:
+	# a shard of a locked hero: the hero for Eco.SHARD_UNLOCK of his gold price
+	var why := _can_unlock(hid)
+	if why != "":
+		return {"ok":false, "error":why}
+	if shards_of(hid) <= 0:
+		return {"ok":false, "error":"No shard of that hero"}
+	var g := Eco.shard_unlock_gold(hid, now())
+	if int(d.gold) < g:
+		return {"ok":false, "error":"Not enough gold"}
+	d.gold -= g
+	(d.shards as Array).erase(hid)
+	_own_hero(hid)
+	save()
+	_rec("use_shard", [hid])
+	return {"ok":true, "gold":g}
+
+func melt_shard(hid: String) -> Dictionary:
+	# a shard melted down: Eco.SHARD_MELT of the hero's gold price
+	if shards_of(hid) <= 0:
+		return {"ok":false, "error":"No shard of that hero"}
+	var g := Eco.shard_melt_gold(hid, now())
+	(d.shards as Array).erase(hid)
+	d.gold += g
+	save()
+	_rec("melt_shard", [hid])
+	return {"ok":true, "gold":g}
+
+func use_token(hid: String) -> Dictionary:
+	# the premium pass's Hero Token: any locked hero (kept until there is one)
+	var why := _can_unlock(hid)
+	if why != "":
+		return {"ok":false, "error":why}
+	if int(d.get("tokens", 0)) <= 0:
+		return {"ok":false, "error":"No Hero Token"}
+	d.tokens = int(d.tokens) - 1
+	_own_hero(hid)
+	save()
+	_rec("use_token", [hid])
 	return {"ok":true}
 
 func buy_pack(pack_id: String) -> Dictionary:
@@ -585,18 +679,6 @@ func grant_iap(product: String, token: String) -> Dictionary:
 		d.iap.done.pop_front()
 	save()
 	return out
-
-func exchange(offer_id: String) -> Dictionary:
-	for off in Eco.EXCHANGE:
-		if off.id == offer_id:
-			if int(d.gems) < int(off.gems):
-				return {"ok":false, "error":"Not enough gems"}
-			d.gems -= int(off.gems)
-			d.gold += int(off.gold)
-			save()
-			_rec("exchange", [offer_id])
-			return {"ok":true}
-	return {"ok":false, "error":"Unknown offer"}
 
 func equip(id: String) -> Dictionary:
 	# Equip an owned cosmetic (id "" not allowed; use unequip).
@@ -1114,6 +1196,8 @@ func open_chest(index: int) -> Dictionary:
 		Eco.season_id(now()))
 	d.chests.pity = int(roll.pity)
 	d.gold += int(roll.gold) + int(roll.get("dupe_gold", 0))
+	if str(roll.get("shard", "")) != "":
+		(d.shards as Array).append(str(roll.shard))              # 0.31.185: a hero shard
 	d.gems += int(roll.gems)
 	if str(roll.item) != "" and not d.owned.has(roll.item):
 		d.owned.append(roll.item)

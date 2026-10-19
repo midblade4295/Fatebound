@@ -129,7 +129,6 @@ func _init() -> void:
 	a.on_op = func(op, args): log.append([op, args.duplicate(true)])
 	var daily: Array = Eco.shop_daily(S1)
 	a.buy(str(daily[0]))
-	a.exchange("gold_s")
 	a.add_chest("gold", {})
 	a.on_op = Callable()
 	b.add_chest("gold", {})
@@ -155,7 +154,7 @@ func _init() -> void:
 		for k in db:
 			if not da.has(k):
 				print("  only in b: %s = %s" % [k, str(db[k]).left(200)])
-	check(log.size() == 7 and same, "7 ops replayed (as JSON) give the same profile, chest roll included (%d ops; 0.31.184: no Embers to buy)" % log.size())
+	check(log.size() == 6 and same, "6 ops replayed (as JSON) give the same profile, chest roll included (%d ops; 0.31.184: no Embers to buy, 0.31.185: no gold for gems)" % log.size())
 	check(not b.apply_op("buy", ["x".repeat(65)]).ok and not b.apply_op("claim_tier", ["1", true]).ok and not b.apply_op("grant_iap", ["gems_80", "t"]).ok,
 		"long, mistyped and unlisted ops are refused")
 	var me := {"kills":3, "cls":"knight", "pos":Vector2(1, 2), "path":PackedVector2Array(), "task":{"x":1}, "q":{"knight":{"t":70.0}}}

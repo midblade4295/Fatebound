@@ -336,7 +336,7 @@ func _show_rewards() -> void:
 		app.sfx("coin")
 	# gold and gems
 	var chips := HBoxContainer.new()
-	chips.add_theme_constant_override("separation", 12)
+	chips.add_theme_constant_override("separation", 8)
 	chips.alignment = BoxContainer.ALIGNMENT_CENTER
 	chips.position = Vector2(20, top + 256)
 	chips.size = Vector2(size.x - 40, 60)
@@ -346,17 +346,20 @@ func _show_rewards() -> void:
 		amounts.append(["coins_m", "+%s" % UI.compact(int(result.get("gold", 0))), UI2.GOLD, UI2.INK])
 	if int(result.get("gems", 0)) > 0:
 		amounts.append(["gems", "+%d" % int(result.gems), UI2.CYAN, Color("#06283a")])
+	if str(result.get("shard", "")) != "":                # 0.31.185: a hero shard (League's champion shard)
+		amounts.append(["res://assets/ui/skins/default_%s.png" % str(result.shard), "SHARD", Color("#9dff8a"), Color("#0a2006")])
 	var k := 0
+	var narrow := amounts.size() >= 3
 	for a in amounts:
 		var f := UI2.frame(chips, "night", 6, 16.0, "gold")
 		var pc := f.get_parent() as Control
-		pc.custom_minimum_size = Vector2(150, 58)
+		pc.custom_minimum_size = Vector2(112 if narrow else 150, 58)
 		var r := HBoxContainer.new()
 		r.add_theme_constant_override("separation", 6)
 		r.alignment = BoxContainer.ALIGNMENT_CENTER
 		f.add_child(r)
-		UI2.img(r, "res://assets/ui/currency/%s.png" % a[0], 46.0)
-		UI2.text(r, a[1], 24, a[2], a[3], 6)
+		UI2.img(r, str(a[0]) if str(a[0]).begins_with("res://") else "res://assets/ui/currency/%s.png" % a[0], 40.0 if narrow else 46.0)
+		UI2.text(r, a[1], 18 if narrow else 24, a[2], a[3], 6)
 		pc.modulate.a = 0.0
 		var ct := create_tween()
 		ct.tween_interval(0.35 + k * 0.2)

@@ -2,9 +2,9 @@ extends SceneTree
 # 0.31.170 (the online 5v5, step 2 of the plan): the REAL server (port 8121) and phones, real time.
 #  1. The server says it has the online 5v5 ("five":1 in "status", "ver", the lobby and the welcome); an app from before
 #     it is refused as too old (bye "version" one ahead, close 4001 -- its Update screen).
-#  2. Heroes: Alice bought the Golem (an op the server replays) and plays it; Bob asks for the Golem without owning it
-#     and plays his seat's own hero; Carl (no account) asks for the Mage, a free hero, and gets it; no side has a hero
-#     twice.
+#  2. Heroes: Alice bought a sold hero (an op the server replays) and plays it; Bob asks for it without owning it and
+#     plays his seat's own hero; Carl (no account) asks for one of this week's free heroes (0.31.185, the rotation) and
+#     gets it; no side has a hero twice. (The sold hero: the first not free this week, so the test holds any week.)
 #  3. Every phone's mirror, brought up from its keyframe and the snapshots after it, holds exactly what every other
 #     phone's does at the same snapshot (units coming and going, every key the snapshot carries, towers, Kings, gates,
 #     camps, zones, traps, wards, projectiles); Erin, who comes in mid-match, too.
@@ -19,6 +19,9 @@ const Mode = preload("res://scripts/siege/siege_mode.gd")
 const Net = preload("res://scripts/siege/siege_net.gd")
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 const Profile = preload("res://scripts/meta/profile.gd")
+const Eco = preload("res://scripts/meta/economy.gd")
+var SOLD := ""                         # a sold hero not free this week (0.31.185)
+var FREE := ""                         # one of this week's free ones
 
 var fails: Array = []
 var port := 8121
@@ -45,6 +48,11 @@ func check(ok: bool, what: String) -> void:
 		fails.append(what)
 
 func _init() -> void:
+	var now := int(Time.get_unix_time_from_system())
+	FREE = str(Eco.free_heroes(now)[0])
+	var sold: Array = Eco.HERO_PRICES.keys().filter(func(h): return not Eco.free_heroes(now).has(h))
+	sold.sort()
+	SOLD = str(sold[0])
 	var sd := OS.get_user_data_dir().path_join("five-srv-%d" % Time.get_ticks_usec())
 	DirAccess.make_dir_recursive_absolute(sd)
 	OS.set_environment("SIEGE_PORT", str(port))
@@ -219,12 +227,12 @@ func _process(delta: float) -> bool:
 			if accts.size() == 2 and not notes.has("bought"):
 				notes.bought = true
 				_open("eco_buy", {"t":"eco", "v":Net.VERSION, "acct":accts.alice.acct, "key":accts.alice.key,
-					"ops":[{"s":1, "op":"buy_hero", "a":["golem"]}]})
+					"ops":[{"s":1, "op":"buy_hero", "a":[SOLD]}]})
 			var eb := _got("eco_buy", "eco")
 			if not eb.is_empty():
 				var res: Array = eb[0].get("results", [])
 				check(bool(eb[0].get("ok", false)) and not res.is_empty() and bool(res[0].get("ok", false))
-					and (eb[0].get("profile", {}).get("heroes", []) as Array).has("golem"), "Alice bought the Golem on the server (%s)" % str(res))
+					and (eb[0].get("profile", {}).get("heroes", []) as Array).has(SOLD), "Alice bought the %s on the server (%s)" % [SOLD, str(res)])
 				var st := _got("status", "status")
 				var vr := _got("ver", "ver")
 				check(not st.is_empty() and int(st[0].get("five", 0)) == Net.FIVE, "status says five:1")
@@ -240,9 +248,9 @@ func _process(delta: float) -> bool:
 				check(false, "accounts within 15 s")
 				_finish()
 		"play":
-			_open("alice", _hello("Alice", {"acct":accts.alice.acct, "key":accts.alice.key, "hero":"golem"}))
-			_open("bob", _hello("Bob", {"acct":accts.bob.acct, "key":accts.bob.key, "hero":"golem"}))
-			_open("carl", _hello("Carl", {"hero":"mage"}))
+			_open("alice", _hello("Alice", {"acct":accts.alice.acct, "key":accts.alice.key, "hero":SOLD}))
+			_open("bob", _hello("Bob", {"acct":accts.bob.acct, "key":accts.bob.key, "hero":SOLD}))
+			_open("carl", _hello("Carl", {"hero":FREE}))
 			mode = Mode.new()
 			mode.online = true
 			mode.net_url = "ws://127.0.0.1:%d/fatebound/siege/ws" % port
@@ -261,11 +269,11 @@ func _process(delta: float) -> bool:
 				var wa: Dictionary = socks.alice.welcome
 				check(int(wa.get("five", 0)) == Net.FIVE, "the welcome says five:1")
 				check(bool(socks.alice.kf) and bool(socks.bob.kf) and bool(socks.carl.kf), "each phone's first snapshot is a keyframe")
-				check(str(wa.hero) == "golem" and str(_me("alice").get("hid", "")) == "golem", "Alice plays the Golem she bought (welcome %s, mirror %s)" % [wa.hero, _me("alice").get("hid", "")])
+				check(str(wa.hero) == SOLD and str(_me("alice").get("hid", "")) == SOLD, "Alice plays the hero she bought (welcome %s, mirror %s)" % [wa.hero, _me("alice").get("hid", "")])
 				var wb: Dictionary = socks.bob.welcome
 				check(str(wb.hero) == str(socks.bob.draft_hid) and str(_me("bob").get("hid", "")) == str(wb.hero),
-					"Bob asked for the Golem without owning it: he plays his seat's own hero (%s)" % wb.hero)
-				check(str(socks.carl.welcome.hero) == "mage" and str(_me("carl").get("hid", "")) == "mage", "Carl (no account) plays the Mage, a free hero")
+					"Bob asked for it without owning it: he plays his seat's own hero (%s)" % wb.hero)
+				check(str(socks.carl.welcome.hero) == FREE and str(_me("carl").get("hid", "")) == FREE, "Carl (no account) plays %s, free this week" % FREE)
 				check(str(mode.sim.by_id[mode.hud.player_id].get("hid", "")) == "archmage", "the game client plays the Archmage it picked")
 				for t in 2:
 					var hids: Array = socks.alice.sim.units.filter(func(u): return bool(u.get("hero", false)) and int(u.team) == t).map(func(u): return str(u.hid))

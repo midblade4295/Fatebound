@@ -1291,10 +1291,10 @@ func start_online_moba(hero: String, follow := false) -> void:
 		pending_moba = ""
 
 func saved_hero() -> String:
-	# the hero window's last pick (settings.moba_hero), if it's still yours
+	# the hero window's last pick (settings.moba_hero), if it's still yours (0.31.185: or still free this week)
 	var h := str(profile.d.settings.get("moba_hero", ""))
 	var heroes: Dictionary = load("res://scripts/siege/moba.gd").HEROES      # (loaded when needed: not at boot)
-	return h if heroes.has(h) and profile.owns_hero(h) else "knight"
+	return h if heroes.has(h) and profile.can_play_hero(h) else "knight"
 
 var pending_join := ""                   # 0.31.120: a friend's public id whose match the next PLAY joins
 
