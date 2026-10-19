@@ -5728,3 +5728,6 @@ on top of it and sometimes leaning on it ect".
 - tutorial_test: every line posed, all eight poses used, every line fits its scroll at 13 px or more with all of the
   Herald on the screen; the first line on the scroll, holding it open.
 - Version 0.31.182, versionCode 268, SERVER_BUILD 0.31.182 (nothing new for the server; its build kept with the app's).
+- Checks: the quick suite all passed (96, tutorial_test among them); COLD_START_PASS; the Play AAB (throwaway key,
+  presets untouched): BASE OK (271 files), CONTENT OK, play_games true, bundletool valid. Preview APK:
+  build/Fatebound-Siege-0.31.182-fatebound.apk (32 MB, preview key), sha256 68c8ab38...11776d6f.
