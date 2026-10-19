@@ -39,6 +39,11 @@ var fps_cap := FPS_CAP
 var low_fx := false
 var hq_gfx := true          # High-quality graphics (Settings): shadows, glow, smoother edges
 var replay_hero := ""       # 0.31.164: PLAY AGAIN after a 5v5 -- siege_app starts the next one (with its own ticket)
+var tutorial := false       # 0.31.181: the 5v5 tutorial (scripts/siege/tutorial.gd): a quiet match against bots, the
+var tutorial_ui = null      #   Herald over it (the app's start_tutorial); no ticket, no match rewards -- its own gold once
+var _tut_done := false
+var _tut_t0 := 0
+const Tutorial = preload("res://scripts/siege/tutorial.gd")
 var audio: Node = null
 var profile = null       # scripts/meta/profile.gd — rewards, challenges and cosmetics
 var rewards: Dictionary = {}
@@ -202,7 +207,7 @@ func _ready() -> void:
 	hud.action_pressed.connect(_on_action)
 	hud.quick_chat.connect(_on_quick_chat)                 # 0.31.111
 	hud.unit_world = func(id: String) -> Vector3: return view.unit_world(id) if view != null else Vector3.INF
-	hud.qc_btn.visible = true
+	hud.qc_btn.visible = not tutorial
 	hud.project = func(world: Vector3) -> Vector2: return _to_hud(view.screen_point(world))
 	hud.on_screen = func(world: Vector3) -> bool: return view.is_on_screen(world)
 	hud.numbers_source = func() -> Array: return view.numbers if view != null else []
@@ -267,11 +272,13 @@ func _start_steps() -> Array:
 		hud.kill_feed = []
 		_accum = 0.0
 		_result_shown = false
-		if analytics != null and not online:
+		if analytics != null and not online and not tutorial:
 			_an_match = Analytics.hex(4)
 			_an_class0 = class_of(sim.by_id.get(hud.player_id, {}))
 			analytics.log_ev("match_start", {"match":_an_match, "mode":"5v5", "class":_an_class0})
-		_title_reset())
+		_title_reset()
+		if tutorial:
+			_tutorial_begin())
 	return steps
 
 func _hero() -> String:
@@ -1097,7 +1104,7 @@ func _process(delta: float) -> void:
 	var t_start := Time.get_ticks_usec()
 	if online:
 		pass   # the server steps the match; _net_process applied the latest snapshot
-	elif not hud.paused() or sim.ended:
+	elif (not hud.paused() and (tutorial_ui == null or not tutorial_ui.holds())) or sim.ended:
 		sim.set_move(hud.player_id, _move_input())
 		var me_b: Dictionary = sim.by_id.get(hud.player_id, {})
 		if hud.ability_held() and not me_b.is_empty() and sim.ability_of(me_b) == "block":
@@ -1122,6 +1129,8 @@ func _process(delta: float) -> void:
 			view.on_event(e)
 			hud.on_event(e)
 			_event_sound(e)
+			if tutorial_ui != null:
+				tutorial_ui.on_event(e)
 	diag.mark("view.sync")
 	view.proj_lead = 0.0 if online else _accum          # online, projectiles interpolate (Net)
 	var t_view := Time.get_ticks_usec()
@@ -1166,6 +1175,38 @@ func _late_cue(cue: String) -> void:
 	if audio != null and audio.has_method("play"):
 		audio.play(cue)
 
+# ---------- the tutorial (0.31.181) ----------
+func warmed() -> bool:
+	# the match is built and its warm-up cover is gone (the Herald waits for it)
+	return _warm_done and _warm.is_empty() and _build_queue.is_empty()
+
+func tutorial_pays() -> bool:
+	# its gold is still to come (Profile.finish_tutorial pays it once: Siege's tutorial before 0.31.164 counted)
+	return profile != null and not bool(profile.d.get("tutorial_done", false))
+
+func _tutorial_begin() -> void:
+	tutorial_ui = Tutorial.new()
+	tutorial_ui.name = "Tutorial"
+	hud.add_child(tutorial_ui)
+	hud.move_child(tutorial_ui, 1)       # over the HUD's drawing, under its pause button, panels and banners
+	tutorial_ui.begin(self)
+	_tut_t0 = Time.get_ticks_msec()
+	if analytics != null:
+		analytics.log_ev("tutorial_start", {})
+
+func finish_tutorial() -> void:
+	# the Herald's last line tapped: the recruit's pay (once ever), and home
+	if _tut_done:
+		return
+	_tut_done = true
+	var paid := false
+	if profile != null:
+		paid = bool(profile.finish_tutorial().get("ok", false))
+	exit_note = "tutorial_paid" if paid else "tutorial"
+	if analytics != null:
+		analytics.log_ev("tutorial_complete", {"dur_s":(Time.get_ticks_msec() - _tut_t0) / 1000})
+	exited.emit()
+
 static func class_of(u: Dictionary) -> String:
 	# 0.31.118: the class a unit plays, its upgrade marked ("knight", "knight+") -- as the server writes it
 	return str(u.get("cls", "")) + ("+" if bool(u.get("up", false)) else "")
@@ -1174,6 +1215,9 @@ func note_leaving() -> void:
 	# 0.31.118: the app is taking us down -- a VS BOTS match left before its end
 	if analytics == null:
 		return
+	if tutorial and not _tut_done and tutorial_ui != null:
+		analytics.log_ev("tutorial_skip", {"dur_s":(Time.get_ticks_msec() - _tut_t0) / 1000, "step":int(tutorial_ui.step),
+			"id":str(tutorial_ui.STEPS[int(tutorial_ui.step)].id)})
 	if not online and _an_match != "" and sim != null and not sim.ended:
 		analytics.log_ev("match_quit", {"match":_an_match, "mode":"bots", "quit_at_s":int(sim.time),
 			"class":class_of(sim.by_id.get(hud.player_id, {})), "class0":_an_class0})
@@ -1584,8 +1628,8 @@ func _ann_file(key: String) -> String:
 
 func _announce_tick() -> void:
 	# the queue, and the clock-driven calls (start, last minute, ten seconds, the end)
-	if sim == null:
-		return
+	if sim == null or tutorial:
+		return                              # (0.31.181: the tutorial's Herald does the talking)
 	var now := _ann_clock
 	if not _ann_queue.is_empty() and now >= _herald_until:
 		var item: Array = _ann_queue.pop_front()

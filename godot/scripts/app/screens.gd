@@ -341,6 +341,19 @@ static func home(app, root: VBoxContainer) -> void:
 		app.sfx("menuOpen")
 		app.open_leaderboard(), "side_ranks", 0, "silver")
 	UI2.bob(rkb.get_meta("icon"), 3.0, 1.6)
+	# 0.31.181 (Kevin: "create a tutorial walking player through the basics of a match"): the 5v5 tutorial under the
+	# Forge -- with its gold as a tag (and a glow) until that's been paid (Siege's tutorial, played before 0.31.164, paid it)
+	var tdone := bool(d.get("tutorial_done", false))
+	var tb := _medallion(top, Vector2(w - 62, MED_Y[2]), "horn", "TUTORIAL", func():
+		app.sfx("confirm")
+		app.start_tutorial(), "tutorial_start", 0, "silver" if tdone else "gold")
+	if not tdone:
+		UI2.glow(tb, Rect2(-14, -14, 94, 94), Color(1.0, 0.85, 0.4, 0.5))
+		UI2.wiggle(tb.get_meta("icon"), 1.6)
+		var gold_tag := _tag(tb, "+%d" % app.TUTORIAL_GOLD, 12)
+		gold_tag.name = "TutorialGold"
+		gold_tag.position = Vector2(-30, 20)               # (on its left: over its top it covered the FORGE label)
+		gold_tag.rotation = deg_to_rad(-8.0)
 	# 0.31.125 (Kevin: "Put a discord button on front page that goes away after they claim it then leave the other discord
 	# button in settings"): under the logo between the medallion columns, with its gift as a tag, until it's claimed
 	if not bool(d.get("discord", false)):
@@ -2531,7 +2544,10 @@ static func settings(app, root: VBoxContainer) -> void:
 			DisplayServer.clipboard_set(Diag.read_logs())
 			app.toast("Diagnostics copied", UI.CYAN), "copy_diag", 13, 40.0))
 	UI.grow(UI2.button(help, "PRIVACY POLICY", "blue", func(): OS.shell_open(PRIVACY_URL), "privacy", 13, 40.0))
-	# (0.31.112-0.31.163: HOW TO PLAY (TUTORIAL) -- Siege's walkthrough; gone with Siege, 0.31.164)
+	# (0.31.112-0.31.163: HOW TO PLAY (TUTORIAL) -- Siege's walkthrough; gone with Siege, 0.31.164.) 0.31.181: the 5v5's
+	UI2.button(root, "HOW TO PLAY (TUTORIAL)", "blue", func():
+		app.sfx("confirm")
+		app.start_tutorial(), "settings_tutorial", 14, 44.0)
 	var ver := UI2.body(root, "Fatebound %s" % Diag.BUILD, 11, UI2.MUTED)
 	ver.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 

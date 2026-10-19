@@ -862,26 +862,8 @@ func _spawn_wave(t: int, l: int) -> void:
 		if alive >= MINION_CAP:
 			break
 		alive += 1
-		_mid += 1
-		var mk := str(kinds[k])
-		var id := "m%d" % _mid
-		var u: Dictionary = s._new_unit(id, t, true)
-		u.cls = str(MINION_CLS[mk])
-		u["minion"] = true
-		u["mk"] = mk
-		u["lane"] = l
+		var u := _new_minion(t, l, str(kinds[k]), up, lord)
 		u["wp"] = 1
-		u["m_hp"] = float(MINION_KIND_HP[mk]) * up * (LORD_MINION if lord else 1.0)
-		u["m_dmg"] = float(MINION_KIND_DMG[mk]) * up * (LORD_MINION if lord else 1.0)
-		u["m_spd"] = MINION_SPD
-		if mk == "super":
-			u["super"] = true
-		if MINION_KIND_SCALE.has(mk):
-			u["mscale"] = float(MINION_KIND_SCALE[mk])     # (siege and super minions stand a little bigger)
-		if lord:
-			u["lordly"] = true
-		u.max_hp = float(s.stat(u, "hp"))
-		u.hp = u.max_hp
 		# in pairs from the gate out, the front first (behind the gate is the castle wall)
 		var row := k / 2
 		var col := k % 2
@@ -889,10 +871,57 @@ func _spawn_wave(t: int, l: int) -> void:
 		u.face = s.angle_of(ahead)
 		u.think_at = s.time + s.TICK * float(k + 1)
 		s.units.append(u)
-		s.by_id[id] = u
-		ids.append(id)
+		s.by_id[u.id] = u
+		ids.append(u.id)
 	if not ids.is_empty():
 		s._event("wave", {"team":t, "lane":l, "ids":ids})
+
+func _new_minion(t: int, l: int, mk: String, up: float, lord: bool) -> Dictionary:
+	# a lane minion of kind mk (not yet placed nor in the match)
+	_mid += 1
+	var u: Dictionary = s._new_unit("m%d" % _mid, t, true)
+	u.cls = str(MINION_CLS[mk])
+	u["minion"] = true
+	u["mk"] = mk
+	u["lane"] = l
+	u["m_hp"] = float(MINION_KIND_HP[mk]) * up * (LORD_MINION if lord else 1.0)
+	u["m_dmg"] = float(MINION_KIND_DMG[mk]) * up * (LORD_MINION if lord else 1.0)
+	u["m_spd"] = MINION_SPD
+	if mk == "super":
+		u["super"] = true
+	if MINION_KIND_SCALE.has(mk):
+		u["mscale"] = float(MINION_KIND_SCALE[mk])     # (siege and super minions stand a little bigger)
+	if lord:
+		u["lordly"] = true
+	u.max_hp = float(s.stat(u, "hp"))
+	u.hp = u.max_hp
+	return u
+
+func place_minions(t: int, l: int, kinds: Array, at: Vector2) -> Array:
+	# 0.31.181 (the tutorial's "delivered" wave): minions of side t put down at `at` on lane l, two abreast, walking on
+	# down it from the next of its points ahead of them
+	var up := 1.0 + MINION_UP * floorf(float(s.time) / MINION_UP_EVERY)
+	var fwd := _forward({"team":t})
+	var wi := lane_len(l) - 1
+	for i in lane_len(l):
+		if (wp(t, l, i) - at).dot(fwd) > 1.0:
+			wi = i
+			break
+	var ahead := (wp(t, l, wi) - at).normalized()
+	var side := Vector2(-ahead.y, ahead.x)
+	var ids := []
+	for k in kinds.size():
+		var u := _new_minion(t, l, str(kinds[k]), up, false)
+		u["wp"] = wi
+		u.pos = at - ahead * (1.3 * float(k / 2)) + side * (0.8 if k % 2 == 0 else -0.8)
+		u.face = s.angle_of(ahead)
+		u.think_at = s.time + s.TICK * float(k + 1)
+		s.units.append(u)
+		s.by_id[u.id] = u
+		ids.append(u.id)
+	if not ids.is_empty():
+		s._event("wave", {"team":t, "lane":l, "ids":ids})
+	return ids
 
 func _lane_gate_down(t: int, l: int) -> bool:
 	# the enemy castle's gate at the end of team t's lane l is down

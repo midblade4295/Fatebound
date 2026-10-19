@@ -50,6 +50,7 @@ var _pressed_at := {}
 var _toast := ""
 const KillBanner = preload("res://scripts/siege/kill_banner.gd")
 var kill_banner: Control = null         # 0.31.180: the kill banners (kill_banner.gd; until then a DOUBLE KILL label of yours)
+var tut_modal := false                   # 0.31.181: the tutorial's Herald is talking -- the match's buttons and stick wait
 var _toast_at := -10.0
 var net_names := {}                 # 0.31.119: online, unit id -> player name (the server's "pn"), for the scoreboard
 var score_panel: PanelContainer = null
@@ -779,7 +780,7 @@ func _buttons() -> Array:
 	]
 
 func _modal_open() -> bool:
-	return paused() or (result_panel != null and result_panel.visible) \
+	return paused() or tut_modal or (result_panel != null and result_panel.visible) \
 		or (score_panel != null and is_instance_valid(score_panel) and score_panel.visible) or shop_open() or board_open()
 
 func _input(event: InputEvent) -> void:
@@ -803,7 +804,7 @@ func _input(event: InputEvent) -> void:
 			KEY_I: action_pressed.emit("e")
 			KEY_T: action_pressed.emit("ward")            # 0.31.158 5V5
 			KEY_B: action_pressed.emit("recall")          # 0.31.181 (League's B)
-			KEY_B: open_shop()
+			KEY_P: open_shop()                            # (B until 0.31.181: League's P)
 
 func _touch(index: int, pos: Vector2, pressed: bool) -> void:
 	if pressed and board_open():

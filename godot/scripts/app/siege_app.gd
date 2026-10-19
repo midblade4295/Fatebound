@@ -1259,6 +1259,19 @@ func start_moba(hero: String) -> void:
 		pending_moba = ""                          # (no ticket: nothing started)
 
 var pending_moba := ""                    # 0.31.155: the hero the next match is a 5v5 with
+var pending_tutorial := false             # 0.31.181: the next match is the tutorial
+
+func start_tutorial() -> void:
+	# 0.31.181 (Kevin: "create a tutorial walking player through the basics of a match ... Make it voiced and make it
+	# humorous and sarcastic"): the 5v5 tutorial -- a quiet match against bots on this phone as the Knight, the Royal
+	# Herald walking you through it (scripts/siege/tutorial.gd). No ticket (nothing in it is paid like a match); its
+	# own gold, once, when it's finished (Profile.finish_tutorial)
+	if siege != null:
+		return
+	pending_tutorial = true
+	pending_moba = "knight"
+	start_match(false, true)
+	pending_tutorial = false
 var _flush_wait := false
 
 func start_online_moba(hero: String, follow := false) -> void:
@@ -1337,7 +1350,7 @@ func start_match(online: bool, follow := false) -> void:
 			var lead := str(social.card_of(str(social.party.get("leader", ""))).get("n", "your leader"))
 			toast("%s starts your party's match -- or leave the party to play alone" % lead, UI.MUTED)
 			return
-	if not online and eco_sync != null and eco_sync.enabled and not _ticket_ok:
+	if not online and eco_sync != null and eco_sync.enabled and not _ticket_ok and not pending_tutorial:
 		# 0.31.108 (Kevin: "Always online"): a VS BOTS match pays only against a ticket the server gives now
 		if _ticket_wait:
 			return
@@ -1355,11 +1368,12 @@ func start_match(online: bool, follow := false) -> void:
 			_ticket_ok = false)
 		return
 	sfx("matchStart")
-	if analytics != null:
+	if analytics != null and not pending_tutorial:
 		analytics.log_ev("match_join", {"mode":"online" if online else "bots",
 			"party_n":social.party_size() if social != null and social.online() and social.in_party() else 1})
 	siege = _later(SIEGE_MODE).new()
 	siege.online = online
+	siege.tutorial = pending_tutorial and not online
 	if pending_moba != "":
 		siege.moba_hero = pending_moba              # 0.31.155 (start_moba: through the tutorial's door, a full 5v5)
 		pending_moba = ""
@@ -1418,6 +1432,11 @@ func _end_match() -> void:
 		show_update_screen()
 	elif server_updating:
 		toast(SERVER_UPDATING, UI.GOLD)
+	elif note == "tutorial_paid":
+		toast("Tutorial complete! +%d gold" % TUTORIAL_GOLD, UI.GOLD)        # 0.31.181
+		sfx("claim")
+	elif note == "tutorial":
+		toast("Tutorial complete!", UI.GOLD)
 	elif note == "idle":
 		notice("REMOVED FOR BEING IDLE", "You didn't move or attack for 3 minutes, so a bot took your place. Nothing was paid for that match.")
 	elif note == "no_five" and replay != "":

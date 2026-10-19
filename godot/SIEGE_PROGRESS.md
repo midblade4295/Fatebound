@@ -5650,3 +5650,53 @@ effects on the kill streak and first blood ones".
   AAB (throwaway key, presets untouched): BASE OK (267 files), CONTENT OK, play_games true, bundletool valid; content
   packs check and coverage OK. Preview APK: build/Fatebound-Siege-0.31.180-fatebound.apk (32 MB, preview key), sha256
   d2f310fb...06b2fc6d.
+
+## 0.31.181 — recall (HOME) and the voiced 5v5 tutorial
+Kevin: "Now create a tutorial walking player through the basics of a match. Things like how buying works, economy in
+game, trying not to die because feeds enemy team economy. Benefits of building up team economy with minions and
+jungling ect ect. Make it voiced and make it humorous and sarcastic" -- and "Also add a teleport back to castle
+mechanic".
+- RECALL (siege_sim.gd _recall, League's B): HOME (B on a keyboard; P opens the shop now -- B did both and only the
+  recall could ever fire) starts a 6 s channel (RECALL_TIME); then you're at your fountain. Moving, attacking, an
+  ability, any damage, a stun or falling ends it; at the fountain it doesn't start. Events "recall" {id, until},
+  "recall_cancel", "recall_done" {id, from, to}. The HUD: the HOME button (a castle, its ring filling), RECALLING and
+  the seconds under you; the view: violet rings and motes while it channels, a flash where you leave and where you
+  land (the camera jumps with you). Bots going home to heal recall instead of walking when no enemy hero is near and
+  no tower is on them. Sounds (ElevenLabs, two takes each): a rising shimmer as it starts, a bright pop as you land
+  (assets/sounds/recall_start.wav, recall_done.wav). Online: "recall" is one of the actions the server takes.
+- THE TUTORIAL (scripts/siege/tutorial.gd; siege_mode.gd tutorial = true; siege_app.start_tutorial): a 5v5 against
+  bots on the phone as the Knight, made quiet -- every other hero at his fountain ("a tea break"), no waves or camps
+  of its own, half damage and a floor under your health (you can't fall), no announcer, no quick chat, no ticket and no
+  match rewards. The Royal Herald (his voice, and now his portrait) talks over a dimmed match -- it waits for him, the
+  line typed out as he says it, a tap for the next (the HUD's pause button still works) -- then sets a task in the live
+  match, checked every frame, with guidance: a marching dotted route, a ring and an arrow on the target (an edge arrow
+  when it's off screen), TAP / HOLD rings on HUD buttons, a frame round the score bar, the SHOP, the upgrade cards.
+  Twelve lessons:
+   1 who he is and how you win; 2 walking (a ghost thumb: DRAG HERE);
+   3 minions and last hits -- a wave each side "delivered" in mid lane (moba.place_minions), two killing blows
+     (LAST HIT NOW over the weakest; another delivery if others finish them all);
+   4 gold: what pays, and the team's gold deciding fights -- open the scoreboard;
+   5 HOME: recall (a hit cancels it, and he says so);
+   6 the shop: buy an item;
+   7 Q, W, E and R: promoted to level 3, hold the shield, BASH, RALLY, pick the upgrade cards;
+   8 the jungle: our Grave Archers (a little weaker) cleared;
+   9 towers: hopped in front of their outer mid tower with six of our minions to go first, three hits;
+  10 dying: 300 gold and your bounty to them, "a donation"; back off and recall; shutdowns;
+  11 winning: down a lane to the gate, the King's towers, the King -- together;
+  12 the end: TUTORIAL_GOLD 250, once (Profile.finish_tutorial; whoever played Siege's tutorial before 0.31.164 was
+     paid then -- he says so), and back to Home ("Tutorial complete! +250 gold").
+  Analytics: tutorial_start, tutorial_step, tutorial_complete (dur_s), tutorial_skip (left early).
+- Home: TUTORIAL under the Forge (gold-rimmed, glowing, "+250" until it's paid; silver after). Settings: HOW TO PLAY
+  (TUTORIAL).
+- The voice: 33 lines, ElevenLabs eleven_v4, the Herald's voice (Edward), one take each (art_sources/tutorial:
+  script.json, the prompts, README.txt); the portrait gpt-image-2 in the hero figurines' style. 5,026 credits (~$0.92)
+  with the recall's sounds. tools/build_tutorial_assets.py -> assets/vo/tutorial/*.ogg (trimmed, -16 LUFS),
+  assets/ui/tutorial/herald.png, assets/sounds/recall_*.wav.
+- moba.gd: _spawn_wave's minion made by _new_minion (unchanged), and place_minions(t, l, kinds, at) for the tutorial.
+- The sim's fingerprint: seed 3 62ad112691e5c8c9, seed 17 9d7c665c739dbd47 (the bots' recalls; the minion refactor
+  alone leaves it as it was -- measured with 0.31.180's moba.gd and the recall).
+- Content packs: ui (28.2 MB) and audio (11.9 MB) rebuilt and uploaded; check and coverage OK.
+- Tests: recall_test and tutorial_test (new, in the suite: the whole tutorial played through in a real match, every
+  line voiced and its caption the recorded script's).
+- Version 0.31.181, versionCode 267, SERVER_BUILD 0.31.181 (a server redeploy brings the recall online and the bots'
+  recalls to the server's matches).
