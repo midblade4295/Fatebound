@@ -5735,8 +5735,8 @@ on top of it and sometimes leaning on it ect".
 ## 0.31.183 — the Herald's white cut away
 Kevin: "There is white showing on most of herald images. Go through each one and make sure all the white cutout is gone"
 (the sitting pose up close, the lying one in a match). 0.31.182's cut took only the pure white reaching the image's edge
-(and big pure-white pockets); the shaded white between his legs, between his arm and body, between him and the scroll
-and under the pointer stick (pointing: an 11,000 px triangle) is a little grey, so it stayed.
+(and big pure-white pockets); the shaded white between his legs, between his arm and body, between him and the scroll,
+and a rim round him and along the pointer stick, is a little grey, so it stayed.
 - The art: each pose's Herald matted by ElevenLabs' BiRefNet (birefnet-v2-bg-removal, 8 x 30 = 242 credits; its alpha
   kept, art_sources/tutorial/poses/matte/<pose>.png). It keeps the scroll too in four poses and drops it in the other
   four, so tools/build_tutorial_assets.py cut() takes the Herald from the matte (his white plume, ruff, gloves and teacup
@@ -5747,3 +5747,6 @@ and under the pointer stick (pointing: an 11,000 px triangle) is a little grey, 
 - Looked at: each pose on a dark field at full size, and all eight in a match at 900 x 2000 -- no white.
 - Content packs: ui (31.1 MB) rebuilt and uploaded; check and coverage OK. tutorial_test passes.
 - Version 0.31.183, versionCode 269, SERVER_BUILD 0.31.183 (nothing new for the server).
+- Checks: the quick suite all passed (96); COLD_START_PASS; the Play AAB (throwaway key, presets untouched): BASE OK
+  (271 files), CONTENT OK, play_games true, bundletool valid. Preview APK: build/Fatebound-Siege-0.31.183-fatebound.apk
+  (32 MB, preview key), sha256 55fa09d8...b291072.
