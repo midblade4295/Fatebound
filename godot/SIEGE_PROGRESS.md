@@ -5646,3 +5646,7 @@ effects on the kill streak and first blood ones".
   kill_feed_test, multikill_test, live_board_test, net_mirror_test, scoreboard_test pass.
 - Version 0.31.180, versionCode 266, SERVER_BUILD 0.31.180 (a server redeploy brings the rules online: the server's
   sim makes the kills, the bounties and the events).
+- Checks: the quick suite all passed (94, kill_rules_test and kill_banner_test among them); COLD_START_PASS; the Play
+  AAB (throwaway key, presets untouched): BASE OK (267 files), CONTENT OK, play_games true, bundletool valid; content
+  packs check and coverage OK. Preview APK: build/Fatebound-Siege-0.31.180-fatebound.apk (32 MB, preview key), sha256
+  d2f310fb...06b2fc6d.
