@@ -29,6 +29,39 @@ const FREE_HEROES := 2
 const SHARD_UNLOCK := 0.6
 const SHARD_MELT := 0.2
 
+# 0.31.186 (League's way, the fourth part): hero skins -- the hero's own model repainted (Meshy's retexture with his
+# UVs kept, tools/meshy_retexture.py; the textures tools/build_skins.py, assets/skins/<id>.jpg): same mesh, rig and
+# silhouette, so every hero still reads as himself (the 0.31.39 reason weapons were the only cosmetic), with the team
+# ring under him. Bought for gems (SKIN_GEMS by rarity); like League, a skin of a hero you haven't unlocked comes with
+# him. Worn per hero (Profile.wear_skin), seen by everyone online ("_sk" in the looks, siege_net.clean_looks).
+# The first line: Frostbound, every hero (18), epic.
+const SKIN_GEMS := {"rare": 390, "epic": 750, "legendary": 1350}
+const SKIN_LINES := {"frost": "Frostbound"}
+const SKIN_HEROES := {"knight":"Knight", "barbarian":"Barbarian", "rogue":"Rogue", "ranger":"Archer", "mage":"Mage",
+	"priest":"Priest", "crusader":"Crusader", "berserker":"Berserker", "assassin":"Assassin", "sniper":"Ranger",
+	"archmage":"Archmage", "necromancer":"Necromancer", "golem":"Golem", "dragoon":"Dragoon", "duelist":"Duelist",
+	"stormcaller":"Stormcaller", "musketeer":"Musketeer", "druid":"Druid"}
+static var SKINS := _make_skins()
+
+static func _make_skins() -> Dictionary:
+	# id ("<hero>_<line>") -> {hero, line, name, rarity, gems}
+	var out := {}
+	for line in SKIN_LINES:
+		for h in SKIN_HEROES:
+			out["%s_%s" % [h, line]] = {"hero": h, "line": line, "name": "%s %s" % [SKIN_LINES[line], SKIN_HEROES[h]],
+				"rarity": "epic", "gems": int(SKIN_GEMS.epic)}
+	return out
+
+static func skin_texture(id: String) -> String:
+	return "res://assets/skins/%s.jpg" % id
+
+static func skins_of(hid: String) -> Array:
+	var out := []
+	for id in SKINS:
+		if str(SKINS[id].hero) == hid:
+			out.append(id)
+	return out
+
 static func launching(hid: String, unix: int) -> bool:
 	return HERO_LAUNCH.has(hid) and unix < int(HERO_LAUNCH[hid]) + LAUNCH_DAYS * 86400
 

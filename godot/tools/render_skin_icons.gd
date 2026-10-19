@@ -76,6 +76,8 @@ func _run() -> void:
 			jobs.append([id, str(it["class"]), str(it.tint)])
 		elif it.kind == "weapon" and (Eco.UP_CLASSES.has(str(it["class"])) or only.has(id) or not FileAccess.file_exists("res://assets/ui/icons/%s.png" % id)):      # (0.31.76: or named in ONLY -- re-render a base class's)
 			jobs.append([id, str(it["class"]), "", str(it.get("r", "")), str(it.get("l", ""))])      # 0.31.38: weapon icons
+	for sid in Eco.SKINS:                                      # 0.31.186: the hero skins (Meshy retextures, assets/skins)
+		jobs.append([sid, str(Eco.SKINS[sid].hero), ""])
 	for ucls in Eco.CLASSES + Eco.UP_CLASSES:                # (0.31.65: base classes' default gear too)
 		jobs.append(["wdefault_" + ucls, ucls, "", "-", "-"])
 	for job in jobs:
@@ -91,6 +93,8 @@ func _run() -> void:
 				cosmetic = {"r": job[3], "l": job[4]}
 		if job[2] != "":
 			cosmetic["tint"] = job[2]
+		if Eco.SKINS.has(str(job[0])):
+			cosmetic["skin"] = str(job[0])
 		var body_key := str(Eco.UP_LOOK.get(job[1], job[1]))
 		var made: Dictionary = View.make_body(body_key, cosmetic)
 		var body: Node3D = made.body

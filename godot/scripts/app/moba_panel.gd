@@ -51,6 +51,7 @@ var _stage_text: Label
 var _stage_lock: HBoxContainer
 var _stage_price: Label
 var _stage_free: Label           # 0.31.185: FREE THIS WEEK (the rotation)
+var _skin_btn: Button            # 0.31.186: the skin he wears -- tap for the next one you own (his own look among them)
 
 static func role_badge(role: String) -> Texture2D:
 	var p := "res://assets/ui/roles/%s.png" % role
@@ -183,6 +184,7 @@ func _build_stage(body: VBoxContainer) -> void:
 	_stage_lock.move_child(_stage_price, 2)
 	_stage_free = UI2.text(info, "FREE THIS WEEK", 13, Color("#9dff8a"), Color("#0a2006"))
 	st.add_child(rim)
+	_skin_btn = UI2.button(st, "", "blue", _next_skin, "moba_skin", 10, 26.0, 9.0)
 	st.resized.connect(func():
 		# the hall's dais is at ~23 % across, its top ~76 % down the painting (cover-scaled to the stage's width): the
 		# hero's feet (78 % down his frame) on it
@@ -194,7 +196,9 @@ func _build_stage(body: VBoxContainer) -> void:
 		_show.position = Vector2(dais.x - 75.0, dais.y - fh * 0.78)
 		info.position = Vector2(w * 0.47, 14)
 		_stage_text.custom_minimum_size.x = w * 0.53 - 14
-		info.size = Vector2(w * 0.53 - 10, 0))
+		info.size = Vector2(w * 0.53 - 10, 0)
+		_skin_btn.size = Vector2(minf(150.0, w * 0.42), 26)
+		_skin_btn.position = Vector2(8, st.size.y - 32))
 
 func _render_stage() -> void:
 	var role := Kits.role_of(hero)
@@ -209,8 +213,17 @@ func _render_stage() -> void:
 	_stage_price.text = UI.grouped(int(app.profile.hero_price(hero).get("gold", 0)))
 	if _show != null:
 		var look: Dictionary = app.profile.look_for(hero) if (Eco.CLASSES + Eco.UP_CLASSES).has(hero) else {}
+		var worn: String = app.profile.worn_skin(hero)
+		if worn != "":
+			look = look.duplicate()
+			look["skin"] = worn                 # 0.31.186: in the skin he wears
 		_show.show_look(hero, look)
 		_show.modulate = Color.WHITE if _plays(hero) else Color(0.62, 0.62, 0.7)
+	# 0.31.186: SKIN -- shown when you own one of his
+	var mine: Array = Eco.skins_of(hero).filter(func(id): return app.profile.owns_skin(str(id)))
+	_skin_btn.visible = not mine.is_empty() and _owns(hero)
+	var w2: String = app.profile.worn_skin(hero)
+	_skin_btn.text = "SKIN: " + (str(Eco.SKIN_LINES.get(str(Eco.SKINS[w2].line), "")).to_upper() if w2 != "" else "DEFAULT") + "  ▸"
 
 func _on_go() -> void:
 	if not _plays(hero):
@@ -270,6 +283,15 @@ func _render() -> void:
 	_side.visible = _plays(hero) and not _owns(hero)
 	_melt.visible = _owns(hero) and p.shards_of(hero) > 0
 	_melt.text = "MELT +%s" % UI.grouped(Eco.shard_melt_gold(hero, p.now()))
+
+func _next_skin() -> void:
+	# 0.31.186: his own look, then each skin of his you own, round and round
+	var p = app.profile
+	var cycle: Array = [""] + Eco.skins_of(hero).filter(func(id): return p.owns_skin(str(id)))
+	var i := cycle.find(p.worn_skin(hero))
+	p.wear_skin(hero, str(cycle[(i + 1) % cycle.size()]))
+	app.sfx("equip")
+	_render_stage()
 
 static func inventory_text(p) -> String:
 	# "HERO TOKEN x1  ·  ◆ SHARDS 2" (which heroes: the ◆ on their cards; this week's free ones: FREE on theirs)

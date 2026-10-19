@@ -131,6 +131,7 @@ run account_move_test    ACCOUNT_MOVE_PASS        150
 run preload_queue_test   PRELOAD_QUEUE_PASS       240
 run forge_test           FORGE_PASS               120
 run league_iap_test      LEAGUE_IAP_PASS          120
+run skins_test           SKINS_PASS               120
 run content_test         CONTENT_PASS             120
 # The shop's tap-to-preview (0.31.96): real taps on every card, then buy / cancel / equip / an Arsenal from the preview.
 run shop_preview_test    SHOP_PREVIEW_PASS        150 --resolution 420x933

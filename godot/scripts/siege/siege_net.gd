@@ -184,7 +184,24 @@ static func clean_looks(v: Variant) -> Dictionary:
 			var e := clean_look(v[k])
 			if e != "":
 				out[cls] = e
+		elif cls == "_sk" and v[k] is String:
+			var sk := clean_skins(v[k])
+			if sk != "":
+				out["_sk"] = sk
 	return out
+
+# 0.31.186: the hero skins worn, "_sk": "knight_frost,golem_frost" -- ids of a-z 0-9 _, at most SKINS_MAX (each app
+# shows the one for the hero being played, from its own catalog; an id it doesn't know: the hero's own look)
+const SKINS_MAX := 24
+
+static func clean_skins(s: String) -> String:
+	if s.length() > 600:
+		return ""
+	var keep := []
+	for id in s.split(","):
+		if id != "" and id.length() <= 40 and _word(id, true) and not keep.has(id) and keep.size() < SKINS_MAX:
+			keep.append(id)
+	return ",".join(keep)
 
 static func clean_look(s: String) -> String:
 	# "weapon id|stars|element" with every part checked, or "" (a bad element is dropped, the rest kept)

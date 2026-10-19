@@ -41,6 +41,7 @@ const OPS := {
 	"buy_hero": [TYPE_STRING],                                   # 0.31.168: a 5v5 hero for gold
 	# 0.31.185 (League's way): a hero for gems, a hero shard used (unlock at a discount) or melted, a Hero Token used
 	"buy_hero_gems": [TYPE_STRING], "use_shard": [TYPE_STRING], "melt_shard": [TYPE_STRING], "use_token": [TYPE_STRING],
+	"buy_skin": [TYPE_STRING], "wear_skin": [TYPE_STRING, TYPE_STRING],    # 0.31.186: hero skins
 }
 
 func _rec(op: String, args: Array) -> void:
@@ -125,6 +126,8 @@ static func defaults() -> Dictionary:
 		"heroes":[],                                                 # 0.31.168: the 5v5 heroes bought with gold (Eco.HERO_PRICES)
 		"shards":[],                                                 # 0.31.185: hero shards (a hero id each; League's champion shards)
 		"tokens":0,                                                  # 0.31.185: Hero Tokens (the premium pass's: any locked hero)
+		"skins":[],                                                  # 0.31.186: hero skins owned (Eco.SKINS ids)
+		"skin_on":{},                                                # 0.31.186: hero -> the skin he wears ("" or none: his own)
 		"challenges":{"day":"", "daily":[], "week":"", "weekly":[], "rerolled":false},
 		"stats":{"matches":0, "wins":0, "rescues":0, "kills":0, "gates":0, "gathered":0, "fed":0,
 			"lifts":0, "repaired":0, "healed":0, "best_multi":0, "streak":0, "best_streak":0},     # (0.31.87: for the titles)
@@ -224,6 +227,20 @@ func _normalized(v: Dictionary) -> Dictionary:
 					keep.append(str(h))
 		out[k] = keep
 	out["tokens"] = maxi(0, int(out.get("tokens", 0)) if _is_num(out.get("tokens", 0)) else 0)
+	# 0.31.186: skins -- only real ones, each worn by its own hero and owned
+	var sk := []
+	if out.get("skins") is Array:
+		for id in out.skins:
+			if Eco.SKINS.has(str(id)) and not sk.has(str(id)):
+				sk.append(str(id))
+	out.skins = sk
+	var on := {}
+	if out.get("skin_on") is Dictionary:
+		for h in out.skin_on:
+			var id := str(out.skin_on[h])
+			if sk.has(id) and str(Eco.SKINS[id].hero) == str(h):
+				on[str(h)] = id
+	out.skin_on = on
 	# 0.31.93: the Forge -- ints again, nothing out of range
 	for part in ["stars", "wins", "element"]:
 		if not (out.forge.get(part) is Dictionary):
@@ -610,6 +627,45 @@ func melt_shard(hid: String) -> Dictionary:
 	_rec("melt_shard", [hid])
 	return {"ok":true, "gold":g}
 
+# ---------------- hero skins (0.31.186) ----------------
+func owns_skin(id: String) -> bool:
+	return (d.get("skins", []) as Array).has(id)
+
+func worn_skin(hid: String) -> String:
+	return str((d.get("skin_on", {}) as Dictionary).get(hid, ""))
+
+func buy_skin(id: String) -> Dictionary:
+	# a skin for its gems -- and, League's way, his hero too if he's still locked; worn at once
+	if not Eco.SKINS.has(id):
+		return {"ok":false, "error":"Not for sale"}
+	if owns_skin(id):
+		return {"ok":false, "error":"Already yours"}
+	var gems := int(Eco.SKINS[id].gems)
+	if int(d.gems) < gems:
+		return {"ok":false, "error":"Not enough gems"}
+	d.gems -= gems
+	(d.skins as Array).append(id)
+	var hid := str(Eco.SKINS[id].hero)
+	var with_hero := not owns_hero(hid)
+	if with_hero:
+		_own_hero(hid)
+	d.skin_on[hid] = id
+	save()
+	_rec("buy_skin", [id])
+	return {"ok":true, "hero":with_hero}
+
+func wear_skin(hid: String, id: String) -> Dictionary:
+	# id "" -> the hero's own look
+	if id == "":
+		(d.skin_on as Dictionary).erase(hid)
+	elif not owns_skin(id) or str(Eco.SKINS[id].hero) != hid:
+		return {"ok":false}
+	else:
+		d.skin_on[hid] = id
+	save()
+	_rec("wear_skin", [hid, id])
+	return {"ok":true}
+
 func use_token(hid: String) -> Dictionary:
 	# the premium pass's Hero Token: any locked hero (kept until there is one)
 	var why := _can_unlock(hid)
@@ -724,6 +780,13 @@ func wire_looks() -> Dictionary:
 		var n := forge_stars(wid)
 		if w != "" or n > 0:
 			out[cls] = "%s|%d|%s" % [w, n, forge_element(wid) if n >= Eco.FORGE_STARS.size() else ""]
+	# 0.31.186: the skins worn, one a hero ("_sk": "knight_frost,golem_frost"): each app shows the one for the hero played
+	var worn := []
+	for h in d.get("skin_on", {}):
+		worn.append(str(d.skin_on[h]))
+	worn.sort()
+	if not worn.is_empty():
+		out["_sk"] = ",".join(worn)
 	return out
 
 # ---------------- challenges ----------------

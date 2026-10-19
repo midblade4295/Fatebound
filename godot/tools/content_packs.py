@@ -62,6 +62,7 @@ PACKS = [
     ("champions", ["assets/meshy/%s/*" % b for b in NEW_HEROES]),     # 0.31.168: the six new heroes' bodies (their own pack:
                                                                       # heroes and minions would pass 100 MB)
     ("weapons", ["assets/meshy/weapons/*"]),
+    ("skins", ["assets/skins/*"]),                                    # 0.31.186: the hero skins' textures (League's way)
     ("war", ["assets/meshy/war/*", "assets/war_land/*"]),   # 0.31.136-137: the war map's land and miniatures (Home's table)
     ("audio", ["assets/music/*", "assets/sounds/*", "assets/vo/*"]),
 ]

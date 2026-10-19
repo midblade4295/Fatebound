@@ -1400,6 +1400,8 @@ static func shop(app, root: VBoxContainer) -> void:
 			ti.position = Vector2(6, 4)
 	UI2.divider(root, "DAILY DEALS", 22, "new in %s  ·  paid with gold you earn" % UI.duration((days + 1) * 86400 - now))
 	item_grid(app, root, Eco.shop_daily(now), false)
+	UI2.divider(root, "HERO SKINS", 22, "a new look for a hero  ·  his hero comes with it")      # 0.31.186
+	skin_grid(app, root)
 	UI2.divider(root, "ARSENALS", 22, "bundles for one class")
 	pack_list(app, root)
 	gem_packs(app, root)
@@ -1822,6 +1824,82 @@ static func item_grid(app, root: Node, ids: Array, big: bool) -> void:
 		b.offset_right = -6
 		b.offset_top = -44
 		b.offset_bottom = -8
+
+# ---------------- hero skins (0.31.186, League's way) ----------------
+# Every skin (Eco.SKINS): the hero in it (assets/ui/skins/<id>.png, tools/render_skin_icons.gd), its name, its gems --
+# BUY asks first (a skin of a locked hero brings him: "+ HERO" on the card); one you own WEAR / WORN (tap WORN: his own
+# look again). The hero window has the same choice beside the hero.
+static func skin_grid(app, root: Node) -> void:
+	var p = app.profile
+	var grid := GridContainer.new()
+	grid.columns = 3
+	grid.add_theme_constant_override("h_separation", 10)
+	grid.add_theme_constant_override("v_separation", 12)
+	root.add_child(grid)
+	var ids: Array = Eco.SKINS.keys()
+	var order: Array = Eco.SKIN_HEROES.keys()
+	ids.sort_custom(func(a, b): return order.find(str(Eco.SKINS[a].hero)) < order.find(str(Eco.SKINS[b].hero)))
+	for id0 in ids:
+		var id: String = id0
+		var sk: Dictionary = Eco.SKINS[id]
+		var hid := str(sk.hero)
+		var rar := str(sk.rarity)
+		var c := Control.new()
+		c.custom_minimum_size = Vector2(0, 196)
+		UI.grow(c)
+		grid.add_child(c)
+		UI2.plate(c, _rar_panel(rar), 18.0, _rar_rim(rar))
+		var v := VBoxContainer.new()
+		v.add_theme_constant_override("separation", 1)
+		v.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		v.offset_left = 6
+		v.offset_right = -6
+		v.offset_top = 6
+		v.offset_bottom = -46
+		v.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		c.add_child(v)
+		var ti := UI2.img(v, "res://assets/ui/skins/%s.png" % id, 96.0)
+		ti.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		var nl := UI2.text(v, str(sk.name).to_upper(), 11, Color.WHITE, UI2.INK, 4)
+		nl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		nl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		nl.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		if not p.owns_hero(hid):
+			var hc := UI2.chip(c, "+ HERO", Color("#2f8a3e"), Color.WHITE, Color("#0a2006"))
+			hc.position = Vector2(6, 6)
+		var b: Button
+		if p.owns_skin(id):
+			var worn: bool = p.worn_skin(hid) == id
+			b = UI2.button(c, "WORN" if worn else "WEAR", "grey" if worn else "blue", func():
+				p.wear_skin(hid, "" if p.worn_skin(hid) == id else id)
+				app.sfx("equip")
+				app.rebuild(), "skin_wear_" + id, 13, 34.0, 11.0)
+		else:
+			b = UI2.button(c, str(int(sk.gems)), "purple", func(): buy_skin(app, id), "skin_buy_" + id, 14, 34.0, 11.0,
+				"res://assets/ui/currency/gem.png")
+			b.disabled = int(p.d.gems) < int(sk.gems)
+		b.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+		b.offset_left = 6
+		b.offset_right = -6
+		b.offset_top = -44
+		b.offset_bottom = -8
+
+static func buy_skin(app, id: String) -> void:
+	var p = app.profile
+	var sk: Dictionary = Eco.SKINS[id]
+	var hid := str(sk.hero)
+	var with_hero: bool = not p.owns_hero(hid)
+	app.confirm("BUY %s?" % str(sk.name).to_upper(), "%d gems.%s Worn at once -- change it in the shop or the hero window." % [int(sk.gems),
+		(" The %s comes with it." % str(Eco.SKIN_HEROES.get(hid, hid))) if with_hero else ""], "BUY", "premium", func():
+		var r: Dictionary = p.buy_skin(id)
+		if bool(r.get("ok", false)):
+			app.sfx("purchase")
+			app.toast("%s is yours%s" % [str(sk.name), " -- and the %s" % str(Eco.SKIN_HEROES.get(hid, hid)) if bool(r.get("hero", false)) else ""], UI.GOLD)
+			app.refresh_top()
+		else:
+			app.sfx("error")
+			app.toast(str(r.get("error", "Can't buy")), UI.RED)
+		app.rebuild())
 
 static func is_equipped(p, id: String) -> bool:
 	var it := Eco.item(id)

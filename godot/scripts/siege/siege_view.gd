@@ -2386,15 +2386,21 @@ func _decal(pos: Vector3, radius: float, color: Color, alpha: float) -> MeshInst
 # players' too, from the server's "pn" (set_unit_looks); bots wear the defaults.
 var player_looks: Dictionary = {}
 var unit_looks: Dictionary = {}              # unit id -> {cosmetic class: look}, the other players online (0.31.101)
+var player_skins: Dictionary = {}            # 0.31.186: hero -> the skin I wear on him (Profile.d.skin_on)
+var unit_skins: Dictionary = {}              # 0.31.186: unit id -> the skins that player wears (the looks' "_sk")
+var _skin_cos: Dictionary = {}               # unit id -> {"base", "skin", "out"}: a skinned cosmetic, made once
 const NO_LOOK := {}
 
 func set_unit_looks(wire: Dictionary) -> void:
 	# the server's {unit id: {class: "weapon id|stars|element"}} -> looks from this app's catalog; with fewer effects
 	# (low_fx) the other players' weapons keep their glow but not their particles
 	var out := {}
+	unit_skins = {}
 	for uid in wire:
 		if str(uid) == player_id:
 			continue
+		if wire[uid] is Dictionary and str((wire[uid] as Dictionary).get("_sk", "")) != "":
+			unit_skins[str(uid)] = str(wire[uid]._sk).split(",")      # 0.31.186: the skins they wear
 		var l: Dictionary = Eco.looks_from_wire(wire[uid])
 		if low_fx:
 			for cls in l:
@@ -2405,6 +2411,20 @@ func set_unit_looks(wire: Dictionary) -> void:
 
 func unit_cosmetic(u: Dictionary) -> Dictionary:
 	# what this unit wears for the class it has on: mine from the profile, another player's from the server
+	var base: Dictionary = _unit_gear(u)
+	# 0.31.186: and the skin worn on this hero (mine, or theirs online) -- made once, the same dictionary every frame
+	var skin := unit_skin(u)
+	if skin == "":
+		return base
+	var c: Dictionary = _skin_cos.get(u.id, {})
+	if c.is_empty() or not is_same(c.base, base) or str(c.skin) != skin:
+		var out: Dictionary = base.duplicate()
+		out["skin"] = skin
+		c = {"base": base, "skin": skin, "out": out}
+		_skin_cos[u.id] = c
+	return c.out
+
+func _unit_gear(u: Dictionary) -> Dictionary:
 	if u.has("look"):
 		return NO_LOOK                           # (0.31.168: a body of its own -- a new hero, a monster -- keeps its own gear)
 	var key := Eco.cosmetic_class(str(u.cls), bool(u.up))
@@ -2412,6 +2432,19 @@ func unit_cosmetic(u: Dictionary) -> Dictionary:
 		return player_looks.get(key, NO_LOOK)
 	var l: Dictionary = unit_looks.get(str(u.id), NO_LOOK)
 	return l.get(key, NO_LOOK) if not l.is_empty() else NO_LOOK
+
+func unit_skin(u: Dictionary) -> String:
+	# 0.31.186: the skin this hero wears -- the one of mine (or that player's) made for him; bots wear none
+	var hid := str(u.get("hid", ""))
+	if hid == "" or not bool(u.get("hero", true)):
+		return ""
+	if str(u.id) == player_id:
+		var mine := str(player_skins.get(hid, ""))
+		return mine if Eco.SKINS.has(mine) and str(Eco.SKINS[mine].hero) == hid else ""
+	for id in unit_skins.get(str(u.id), []):
+		if Eco.SKINS.has(str(id)) and str(Eco.SKINS[str(id)].hero) == hid:
+			return str(id)
+	return ""
 static var _tint_mats: Dictionary = {}
 
 static func look_key(u: Dictionary) -> String:
@@ -2543,6 +2576,8 @@ static func make_body(cls: String, cosmetic: Dictionary = {}) -> Dictionary:
 		body = mb.body
 		skeleton = mb.skeleton
 		chain = float(mb.chain)
+		if str(cosmetic.get("skin", "")) != "":
+			apply_skin(body, str(cosmetic.skin))        # 0.31.186: before the weapons go in his hands (they keep theirs)
 	else:
 		var packed := Stage.scene("res://assets/kaykit/heroes/%s.glb" % look.model)
 		if packed == null:
@@ -2601,6 +2636,33 @@ static func make_body(cls: String, cosmetic: Dictionary = {}) -> Dictionary:
 	if cosmetic.has("tint") and not meshy:                   # (a Meshy model is painted already)
 		_apply_tint(body, str(look.model), Color(str(cosmetic.tint)))
 	return {"body":body, "player":player}
+
+# 0.31.186: a hero skin -- his own meshes painted with the skin's texture (Eco.skin_texture: the same UVs as his own,
+# Meshy's retexture kept them). One material per skin and original material, shared by every body wearing it.
+static var _skin_mats: Dictionary = {}
+
+static func apply_skin(body: Node3D, skin: String) -> bool:
+	var path := Eco.skin_texture(skin)
+	if not ResourceLoader.exists(path):
+		return false
+	var tex: Texture2D = load(path)
+	var done := false
+	for mi in body.find_children("*", "MeshInstance3D", true, false):
+		var m3 := mi as MeshInstance3D
+		if m3.mesh == null:
+			continue
+		for surf in m3.mesh.get_surface_count():
+			var base := m3.get_active_material(surf)
+			if not (base is BaseMaterial3D):
+				continue
+			var key := "%s|%d" % [skin, base.get_instance_id()]
+			if not _skin_mats.has(key):
+				var mat := (base as BaseMaterial3D).duplicate() as BaseMaterial3D
+				mat.albedo_texture = tex
+				_skin_mats[key] = mat
+			m3.set_surface_override_material(surf, _skin_mats[key])
+			done = true
+	return done
 
 # ---------- staffs: the face turns toward the body (0.31.66, Kevin) ----------
 # 0.31.65 stood every staff upright; Kevin: "make the staffs held how it was before but just make the face of it face
@@ -2903,7 +2965,7 @@ func _ensure_actor(u: Dictionary) -> Dictionary:
 	# The usual case first, without building keys: the actor exists and wears this class (0.31.78: this ran for every
 	# unit every frame, formatting a string -- with the player's cosmetics dictionary in it -- 32 times a frame).
 	if not a.is_empty() and a.cls == u.cls and a.up == u.up and str(a.get("lk", "")) == str(u.get("look", "")) \
-			and ((u.id != player_id and a.cosmetic.is_empty() and not unit_looks.has(u.id)) or a.cosmetic == unit_cosmetic(u)):
+			and ((u.id != player_id and a.cosmetic.is_empty() and not unit_looks.has(u.id) and not unit_skins.has(u.id)) or a.cosmetic == unit_cosmetic(u)):
 		return a                                    # (0.31.170: and the same body -- online a player's hero takes a bot's seat)
 	# 0.31.38: an upgraded class wears its own cosmetics (the Crusader's, the Berserker's...), not the base class's.
 	# 0.31.101: every live player's, not only mine (unit_cosmetic)

@@ -4,10 +4,10 @@
  "packs": [
   {
    "name": "ui",
-   "file": "ui-d5f10492a0c1.pck",
-   "size": 31119920,
-   "sha256": "8415622df355d2dd78e30bfc9e90d6b9a66c74b952b81e8c733a87b9790aeb3a",
-   "inputs": "d5f10492a0c1a782b51e7d86282da380d88b18439bd4e2f4beb6319872257e1e",
+   "file": "ui-8df851a26f93.pck",
+   "size": 32162352,
+   "sha256": "d313c93fae811c497e1e7cc7b38355e0125b5eed145c22799074146390a075b5",
+   "inputs": "8df851a26f93634023793848e1108f109d839c74ee58a76f2cd048c9ef3c3527",
    "probe": "res://assets/ui/abilities/archmage_e.png"
   },
   {
@@ -49,6 +49,14 @@
    "sha256": "2d60fbbb04a9981403d992965299c7d6e18b8e20fb6019c016e54c481cf768f8",
    "inputs": "438176b129c4868667ab1fc9930a23161a8fa6a8f8e17157f148cd6409f65256",
    "probe": "res://assets/meshy/weapons/acolyte_wand.glb"
+  },
+  {
+   "name": "skins",
+   "file": "skins-6d3e7218e8e1.pck",
+   "size": 12592660,
+   "sha256": "500a202ad3b9b79dd7fd59d5f107d9c25e12eef0aab25321ddf504493bff5599",
+   "inputs": "6d3e7218e8e1958135d0bd50030892685dfa0c3666815a7c75dc28877e2b7789",
+   "probe": "res://assets/skins/archmage_frost.jpg"
   },
   {
    "name": "war",

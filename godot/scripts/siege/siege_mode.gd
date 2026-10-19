@@ -258,6 +258,7 @@ func _start_steps() -> Array:
 		view.low_fx = low_fx
 		view.hq_gfx = hq_gfx
 		view.player_looks = _looks()
+		view.player_skins = _skins()                   # 0.31.186
 		view.my_name = player_name
 		view.my_title = my_title()
 		view.my_tag = clan_tag
@@ -306,6 +307,10 @@ func _build_step() -> void:
 			if not _view_steps.is_empty():
 				continue
 		(_build_queue.pop_front() as Callable).call()
+
+func _skins() -> Dictionary:
+	# 0.31.186: hero -> the skin I wear on him
+	return (profile.d.get("skin_on", {}) as Dictionary).duplicate() if profile != null else {}
 
 func _looks() -> Dictionary:
 	var out := {}
@@ -552,6 +557,7 @@ func _build_online_match(msg: Dictionary) -> void:
 	view.hq_gfx = hq_gfx
 	view.player_id = me_id
 	view.player_looks = _looks()
+	view.player_skins = _skins()                       # 0.31.186
 	view.player_names = net_names
 	view.player_titles = net_titles
 	view.player_tags = net_tags
