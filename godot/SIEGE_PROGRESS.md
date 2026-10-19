@@ -5750,3 +5750,36 @@ and a rim round him and along the pointer stick, is a little grey, so it stayed.
 - Checks: the quick suite all passed (96); COLD_START_PASS; the Play AAB (throwaway key, presets untouched): BASE OK
   (271 files), CONTENT OK, play_games true, bundletool valid. Preview APK: build/Fatebound-Siege-0.31.183-fatebound.apk
   (32 MB, preview key), sha256 55fa09d8...b291072.
+
+## 0.31.184 — two currencies: Embers folded into gold
+Kevin, on what to do with Embers (their only use was the Forge, and the 5v5's six new heroes keep their own gear, so
+they never reach the Forge): "Maybe let's have the two currency so it's more simple". Gold and gems now.
+- The rate: 10 gold an Ember (economy.gd EMBER_GOLD) -- what a duplicate paid before Embers existed (DUPE_GOLD is
+  exactly ten times EMBERS_DUPE) and about what the gem exchange gives (50 gems: 600 gold; the 60-gem Ember pack gave
+  60). Everything moves at that rate, so nobody gains or loses:
+  - the Forge: gold only -- 1,400 / 4,200 / 11,000 (was 40 Embers + 1,000, 120 + 3,000, 300 + 8,000);
+  - a match: its Embers in its gold -- a win 150 -> 200, a draw 100 -> 120, a loss 75 -> 95;
+  - a daily order: +150 gold on top of its own (DAILY_GOLD; was 15 Embers), shown on the order;
+  - the pass: free tiers 2, 6, 10 ... 200 gold (20 Embers), premium 400 (40), season 2's premium gem tiers 600 (60);
+    an owned pass item with nothing to swap to: DUPE_GOLD;
+  - the login calendar: day 2 250 gold (25 Embers), day 5 500 gold (50);
+  - a quest's first step: 700 gold (400 + 30 Embers);
+  - a chest duplicate: DUPE_GOLD (100 / 250 / 600 / 1,500), shown as "+250 GOLD · A WEAPON YOU OWN · TURNED INTO GOLD";
+  - the starter pack: 500 gems + 3,000 gold + an epic (was 300 Embers). Same ID, type and price.
+- Old balances: Profile._normalized turns a save's Embers into gold once and drops the key -- on the phone and on the
+  server (its accounts load through the same code). The server's import caps take the Embers' old cap into gold.
+- Gone: the Ember packs (60/150/400 gems -- the gold exchange covers it), the buy_embers op, the Embers counter at the
+  top (two pills now: gold, gems; the gem pill opens the shop), the Embers panel in the Forge, Embers in the match
+  results, the login tiles, the quest chips and the starter pack's text. The Ember Brute camp and its EMBER buff, and
+  the "ember" frame style, are not the currency and stay.
+- Store listings (Kevin): the starter pack's description says "300 Embers" in Play Console (and App Store Connect if
+  entered): it should read "500 gems, 3,000 gold and an epic weapon. One per player." (PLAY_IAP_HANDOFF.md, IOS_HANDOFF.md).
+- Server: the economy runs on the server too (eco_accounts.gd replays the phone's ops with this code) -- it needs the
+  redeploy for 0.31.184 (sudo bash godot/server/deploy/install_siege_server.sh); until then a 0.31.184 phone's Forge
+  predictions differ from the server's and the server's answer wins.
+- Tests: forge_test (gold costs, where the Embers' gold comes from, an old save turned once), economy_fix_test,
+  daily_reward_test, iap_test, eco_server_test, quest_test, chest_test, ios_port_test, reward_fly_test updated.
+- Version 0.31.184, versionCode 270, SERVER_BUILD 0.31.184.
+- Checks: the quick suite all passed (96); COLD_START_PASS; the Play AAB (throwaway key, presets untouched): BASE OK
+  (271 files), CONTENT OK, play_games true, bundletool valid. Screens looked at (420 x 933): Home, the Forge, the shop,
+  the pass. Preview APK: build/Fatebound-Siege-0.31.184-fatebound.apk (32 MB, preview key), sha256 67056083...ff47f7b9.

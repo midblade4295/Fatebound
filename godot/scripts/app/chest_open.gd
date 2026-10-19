@@ -270,10 +270,10 @@ func _show_rewards() -> void:
 		title = str(it.get("name", "")).to_upper()
 		tag = "%s  ·  %s %s" % [rar.to_upper(), str(Eco.CLASS_NAMES.get(str(it.get("class", "")), "")).to_upper(), str(it.get("kind", "")).to_upper()]
 		icon = "res://assets/ui/icons/%s.png" % item
-	elif int(result.get("dupe_embers", 0)) > 0:          # 0.31.93: a duplicate feeds the Forge
-		title = "+%d EMBERS" % int(result.dupe_embers)
-		tag = "A WEAPON YOU OWN  ·  TURNED INTO EMBERS"
-		icon = "res://assets/ui/currency/embers.png"
+	elif int(result.get("dupe_gold", 0)) > 0:            # a duplicate: gold (0.31.93-0.31.183 Embers for the Forge)
+		title = "+%s GOLD" % UI.grouped(int(result.dupe_gold))
+		tag = "A WEAPON YOU OWN  ·  TURNED INTO GOLD"
+		icon = "res://assets/ui/currency/coins_l.png"
 	else:
 		title = "+%d GOLD" % int(result.get("gold", 0))
 		tag = "NO WEAPON THIS TIME"
@@ -329,11 +329,11 @@ func _show_rewards() -> void:
 	tw.tween_property(card, "scale", Vector2.ONE, 0.5).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	tw.tween_property(card, "modulate:a", 1.0, 0.25)
 	# 0.31.110: the card's sound by what it holds -- a rare's crystal bells, an epic's swell, a legendary's golden choir;
-	# a duplicate's Embers, plain gold's coin
+	# a duplicate's gold and plain gold the coin
 	if item != "":
 		app.sfx({"epic": "revealEpic", "legendary": "revealLegendary"}.get(rar, "revealRare"))
 	else:
-		app.sfx("ember" if int(result.get("dupe_embers", 0)) > 0 else "coin")
+		app.sfx("coin")
 	# gold and gems
 	var chips := HBoxContainer.new()
 	chips.add_theme_constant_override("separation", 12)
@@ -342,7 +342,7 @@ func _show_rewards() -> void:
 	chips.size = Vector2(size.x - 40, 60)
 	_reveal.add_child(chips)
 	var amounts := []
-	if item != "" or int(result.get("dupe_embers", 0)) > 0:
+	if item != "" or int(result.get("dupe_gold", 0)) > 0:
 		amounts.append(["coins_m", "+%s" % UI.compact(int(result.get("gold", 0))), UI2.GOLD, UI2.INK])
 	if int(result.get("gems", 0)) > 0:
 		amounts.append(["gems", "+%d" % int(result.gems), UI2.CYAN, Color("#06283a")])

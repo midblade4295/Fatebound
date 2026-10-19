@@ -1,5 +1,5 @@
 extends SceneTree
-# 0.31.93 Armory Reforged: the Forge (stars, Embers and where they come from, the third star's wins and element), the
+# 0.31.93 Armory Reforged: the Forge (stars, their gold -- 0.31.184: Embers folded into gold --, the third star's wins and element), the
 # Meshy weapons' table, and the star effects on a model.
 #   godot --headless --path godot -s res://tests/forge_test.gd
 const Eco = preload("res://scripts/meta/economy.gd")
@@ -21,62 +21,72 @@ func fresh(tag: String) -> Profile:
 	return p
 
 func _init() -> void:
-	# ---- the table
-	check(Eco.forge_cost(1) == {"embers":40, "gold":1000} and Eco.forge_cost(2) == {"embers":120, "gold":3000} and Eco.forge_cost(3) == {"embers":300, "gold":8000} and Eco.forge_cost(4).is_empty(), "star costs (0.31.108): 40/1,000, 120/3,000, 300/8,000")
+	# ---- the table (0.31.184: gold only -- each star's Embers in its gold, Eco.EMBER_GOLD each)
+	check(Eco.forge_cost(1) == {"gold":1400} and Eco.forge_cost(2) == {"gold":4200} and Eco.forge_cost(3) == {"gold":11000} and Eco.forge_cost(4).is_empty(), "star costs (0.31.184): 1,400, 4,200, 11,000 gold")
 	check(Eco.forge_id("knight", "") == "default_knight" and Eco.forge_name("default_knight") == "Squire's Blade" and Eco.forge_rarity("default_knight") == "common", "a starter is forged as default_<class>, by its name")
 	check(Eco.forge_name("knight_wpn_oath") == "Kingsoath" and Eco.forge_class("knight_wpn_oath") == "knight", "the Knight's weapons have their new names")
 	# ---- forging
 	var p := fresh("a")
 	var wid := "default_knight"
 	check(p.forge_owns(wid) and not p.forge_owns("knight_wpn_oath"), "a starter is always yours, a catalog weapon once owned")
-	check(str(p.can_forge(wid).why) == "embers", "no Embers: can't forge")
-	p.d.embers = 1000
+	p.d.gold = 1000
+	check(str(p.can_forge(wid).why) == "gold", "not enough gold: can't forge")
 	p.d.gold = 20000
-	check(bool(p.forge(wid).ok) and p.forge_stars(wid) == 1 and int(p.d.embers) == 960 and int(p.d.gold) == 19000, "star 1 costs 40 Embers and 1,000 gold")
-	check(bool(p.forge(wid).ok) and p.forge_stars(wid) == 2 and int(p.d.embers) == 840, "star 2: 120 Embers")
+	check(bool(p.forge(wid).ok) and p.forge_stars(wid) == 1 and int(p.d.gold) == 18600, "star 1 costs 1,400 gold")
+	check(bool(p.forge(wid).ok) and p.forge_stars(wid) == 2 and int(p.d.gold) == 14400, "star 2: 4,200 gold")
 	check(str(p.can_forge(wid, "fire").why) == "wins", "star 3 needs %d wins with the weapon" % Eco.FORGE_WINS)
 	p.d.forge.wins[wid] = Eco.FORGE_WINS
 	check(str(p.can_forge(wid).why) == "element", "... and an element")
-	check(bool(p.forge(wid, "frost").ok) and p.forge_stars(wid) == 3 and p.forge_element(wid) == "frost" and int(p.d.embers) == 540, "star 3 with Frost")
+	check(bool(p.forge(wid, "frost").ok) and p.forge_stars(wid) == 3 and p.forge_element(wid) == "frost" and int(p.d.gold) == 3400, "star 3 with Frost: 11,000 gold")
 	check(str(p.can_forge(wid, "fire").why) == "maxed", "three stars is the most")
-	check(p.set_forge_element(wid, "void") and p.forge_element(wid) == "void" and int(p.d.embers) == 540, "an Ascended weapon changes element for free")
+	check(p.set_forge_element(wid, "void") and p.forge_element(wid) == "void" and int(p.d.gold) == 3400, "an Ascended weapon changes element for free")
 	var fx: Dictionary = p.look_for("knight").get("forge", {})
 	check(int(fx.get("stars", 0)) == 3 and str(fx.element) == "void" and str(fx.rarity) == "common", "the battle look carries the stars: %s" % str(fx))
 	check(not p.look_for("barbarian").has("forge"), "an unforged weapon has none")
-	# ---- Embers in
+	# ---- 0.31.184: what gave Embers gives their gold (EMBER_GOLD each)
 	var q := fresh("b")
-	check(not bool(q.buy_embers("embers_s").ok), "Embers for gems: not without the gems")
-	q.d.gems = 200
-	check(bool(q.buy_embers("embers_m").ok) and int(q.d.embers) == 170 and int(q.d.gems) == 50, "150 gems -> 170 Embers")
-	var me := {"cls":"knight", "cls_main":"knight", "kills":2, "rescues":0, "gathered":0, "fed":0, "gate_dmg":0.0, "lifts":0}
-	var e0 := int(q.d.embers)
-	var r1: Dictionary = q.apply_match(me, false, false, false)
-	check(int(q.d.embers) == e0 + Eco.EMBERS_MATCH and int(r1.embers) == Eco.EMBERS_MATCH, "a lost match: +%d Embers" % Eco.EMBERS_MATCH)
+	check(not Profile.OPS.has("buy_embers") and not q.has_method("buy_embers"), "no Embers to buy any more")
+	var me := {"cls":"knight", "cls_main":"knight", "kills":0, "rescues":0, "gathered":0, "fed":0, "gate_dmg":0.0, "lifts":0}
+	check(int(Eco.match_rewards(Eco.match_stats(me, false, false), false, false, false, false).gold) == 75 + 2 * Eco.EMBER_GOLD
+		and int(Eco.match_rewards(Eco.match_stats(me, true, false), true, false, false, false).gold) == 150 + 5 * Eco.EMBER_GOLD,
+		"a match's 2 Embers (a win's 5) are in its gold: 95, 200")
 	q.d.owned.append("knight_wpn_oath")
 	q.equip("knight_wpn_oath")
-	q.apply_match(me, true, false, false)
-	check(int(q.d.embers) == e0 + Eco.EMBERS_MATCH + Eco.EMBERS_WIN, "a win: +%d Embers" % Eco.EMBERS_WIN)
+	var r1: Dictionary = q.apply_match(me, true, false, false)
+	check(not r1.has("embers") and not q.d.has("embers"), "no Embers from a match")
 	check(q.forge_wins("knight_wpn_oath") == 1 and q.forge_wins("default_knight") == 0, "a win counts for the equipped weapon of the class played most")
 	q.d.challenges.daily[0].progress = 9999
-	var e1 := int(q.d.embers)
+	var g1 := int(q.d.gold)
+	var def: Dictionary = Eco.CHALLENGES[str(q.d.challenges.daily[0].id)]
 	var cr: Dictionary = q.claim_challenge("daily", 0)
-	check(bool(cr.ok) and int(q.d.embers) == e1 + Eco.EMBERS_DAILY, "a daily order: +%d Embers" % Eco.EMBERS_DAILY)
+	check(bool(cr.ok) and int(q.d.gold) == g1 + int(def.get("gold", 0)) + Eco.DAILY_GOLD and int(cr.gold) == int(def.get("gold", 0)) + Eco.DAILY_GOLD,
+		"a daily order: its gold + %d (its 15 Embers)" % Eco.DAILY_GOLD)
 	var dup := Eco.roll_chest("royal", 7, Eco.chest_pool("epic") + Eco.chest_pool("legendary") + Eco.chest_pool("rare"), 0)
-	check(int(dup.dupe_embers) > 0 and not dup.has("dupe_gold"), "a duplicate in a chest becomes Embers (%d)" % int(dup.dupe_embers))
-	var pe := {"free": 0, "prem": 0}
+	check(int(dup.get("dupe_gold", 0)) >= Eco.DUPE_GOLD.epic and not dup.has("dupe_embers"), "a duplicate in a chest becomes gold (%d)" % int(dup.get("dupe_gold", 0)))
+	var pe := {"free": 0, "prem": 0, "embers": 0}
 	for t in range(1, Eco.PASS_TIERS + 1):
-		pe.free += int(Eco.pass_reward(1, t, false).get("embers", 0))
-		pe.prem += int(Eco.pass_reward(1, t, true).get("embers", 0))
-	check(pe.free >= 100 and pe.prem >= 150, "Embers on both pass tracks (%d free, %d premium a season)" % [pe.free, pe.prem])
-	var e2 := int(q.d.embers)
-	q._grant({"embers": 20})
-	check(int(q.d.embers) == e2 + 20, "a reward of Embers is granted")
+		for prem in [false, true]:
+			for sid in [1, 2]:
+				pe.embers += int(Eco.pass_reward(sid, t, prem).get("embers", 0))
+		pe.free += int(Eco.pass_reward(1, t, false).get("gold", 0)) if t % 4 == 2 else 0
+		pe.prem += int(Eco.pass_reward(1, t, true).get("gold", 0)) if t % 4 == 2 else 0
+	check(pe.embers == 0 and Eco.pass_reward(1, 2, false) == {"gold": Eco.PASS_GOLD_FREE} and Eco.pass_reward(1, 2, true) == {"gold": Eco.PASS_GOLD_PREMIUM}
+		and Eco.pass_reward(2, 4, true) == {"gold": Eco.PASS_GOLD_GEM_TIER} and pe.free == 6 * Eco.PASS_GOLD_FREE and pe.prem == 4 * Eco.PASS_GOLD_PREMIUM,
+		"the pass's Ember tiers give their gold (%d free, %d premium in season 1; no Embers anywhere)" % [pe.free, pe.prem])
+	# ---- an old save's Embers are turned into gold, once
+	var old := fresh("c")
+	old.d["embers"] = 520
+	old.d.gold = 1000
+	var turned: Dictionary = old._normalized(old.d)
+	check(int(turned.gold) == 1000 + 520 * Eco.EMBER_GOLD and not turned.has("embers"), "an old save: 520 Embers -> 5,200 gold (%d)" % int(turned.gold))
+	check(int(old._normalized(turned).gold) == int(turned.gold), "... once")
 	# ---- a bad save is cleaned up
-	var bad := fresh("c")
+	var bad := fresh("d")
 	bad.d.forge = {"stars": {"x": 9, "y": -2}, "wins": "nope"}
-	bad.d.embers = -5
+	bad.d["embers"] = -5
 	var clean: Dictionary = bad._normalized(bad.d)
-	check(int(clean.forge.stars.x) == 3 and int(clean.forge.stars.y) == 0 and clean.forge.wins is Dictionary and int(clean.embers) == 0, "a damaged Forge save is put right")
+	check(int(clean.forge.stars.x) == 3 and int(clean.forge.stars.y) == 0 and clean.forge.wins is Dictionary and not clean.has("embers")
+		and int(clean.gold) == int(bad.d.gold), "a damaged Forge save is put right (negative Embers: nothing)")
 	# ---- the Meshy weapons
 	var ok_files := true
 	for id in View.MESHY_WEAPON_LIKE:

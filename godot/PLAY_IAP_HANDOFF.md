@@ -67,12 +67,15 @@ each one **Active**.
 | `gems_2400` | Vault of Gems | 2,400 gems. | 19.99 |
 | `gems_6500` | Royal Treasury | 6,500 gems. | 49.99 |
 | `gems_14000` | Dragon's Hoard | 14,000 gems. | 99.99 |
-| `starter_pack` | Starter Pack | 500 gems, 300 Embers and an epic weapon. One per player. | 2.99 |
+| `starter_pack` | Starter Pack | 500 gems, 3,000 gold and an epic weapon. One per player. | 2.99 |
 
 Notes:
 - 0.31.108 (the economy review): `gems_14000` is new -- create it like the others (the game shows it only once Google
   Play returns its price, so the app can ship before it exists). The starter pack's contents went up (500 gems,
   300 Embers, an epic weapon): update its description in Play Console; its ID and price stay.
+- 0.31.184 (Kevin: "Maybe let's have the two currency so it's more simple"): no more Embers -- the starter pack's
+  300 Embers are 3,000 gold. Update its description in Play Console to "500 gems, 3,000 gold and an epic weapon. One
+  per player."; its ID, type and price stay.
 - All seven are one-time products. The game **consumes** the gem packs, so they can be bought again. It
   **acknowledges but never consumes** `starter_pack`, so Google allows it only once per Google account. No
   subscriptions.

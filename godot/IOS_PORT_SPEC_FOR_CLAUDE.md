@@ -74,7 +74,7 @@ testers + the iOS Simulator only.
 | `gems_2400` | 2400 | | 19.99 | Consumable |
 | `gems_6500` | 6500 | tag "BEST VALUE" | 49.99 | Consumable |
 | `gems_14000` | 14000 | shown only when the store returns a price | 99.99 | Consumable (create on Apple; already live on Play since 2026-10-12) |
-| `starter_pack` | 500 | 300 Embers + epic weapon, `once:true` | 2.99 | **Non-Consumable** |
+| `starter_pack` | 500 | 3,000 gold + epic weapon, `once:true` (0.31.184: was 300 Embers) | 2.99 | **Non-Consumable** |
 Source: `Net.IAP` in `scripts/siege/siege_net.gd`. Play Console already has the full set: the five gem packs +
 `gems_14000` (created 2026-10-12) + `starter_pack` (PLAY_IAP_HANDOFF.md Status row 3). Create the **same full set**
 on App Store Connect (same IDs, same prices, same types). Same IDs on Apple keep one catalog and one ledger.

@@ -86,9 +86,8 @@ func _init() -> void:
 	p.d.stats["q_knight_wins"] = 3
 	p.d.stats["q_knight_kills"] = 999          # step 3's goal reached early: still claimed in order
 	check(p.quest_ready("knight") and p.quests_ready() == 1, "step 1 ready")
-	var e0 := int(p.d.embers)
 	var r1: Dictionary = p.claim_quest("knight")
-	check(bool(r1.ok) and int(p.d.gold) == g0 + 400 and int(p.d.embers) == e0 + 30 and p.quest_step("knight") == 1, "step 1 pays 400 gold and 30 Embers")
+	check(bool(r1.ok) and int(p.d.gold) == g0 + 700 and p.quest_step("knight") == 1, "step 1 pays 700 gold (0.31.184: 400 gold and 30 Embers)")
 	check(not p.quest_ready("knight") and not bool(p.claim_quest("knight").ok), "step 3's goal reached doesn't skip step 2")
 	p.d.stats["q_knight_towers"] = 10            # (0.31.164: step 2 is 10 towers -- it was 10 King rescues)
 	var gem0 := int(p.d.gems)
@@ -153,7 +152,7 @@ func _process(_d: float) -> bool:
 		1:
 			var g0 := int(p.d.gold)
 			press("quest_claim_mage")
-			check(p.quest_step("mage") == 1 and int(p.d.gold) == g0 + 400, "CLAIM pays step 1")
+			check(p.quest_step("mage") == 1 and int(p.d.gold) == g0 + 700, "CLAIM pays step 1 (700 gold)")
 			p.d.stats["q_mage_camps"] = 15            # (0.31.164: step 2 is 15 jungle camps -- it was 15 King lifts)
 			p.d.stats["q_mage_wins"] = 60
 			app.rebuild()

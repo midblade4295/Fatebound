@@ -65,7 +65,7 @@ func _part1() -> void:
 	var src := Profile.defaults()
 	src.gems = 50000
 	src.gold = 999999
-	src.embers = 99999
+	src["embers"] = 99999                     # (an old phone's Embers: 0.31.184 turns them into gold, Eco.EMBER_GOLD each)
 	src.level = 90
 	src.stats.matches = 10
 	src.owned = ["knight_wpn_greatsword", "knight_wpn_kingsguard", "mage_wpn_wand"]
@@ -78,8 +78,8 @@ func _part1() -> void:
 	var meta_txt := FileAccess.get_file_as_string(tmp.path_join("accounts/%s.meta.json" % id))
 	check(not meta_txt.contains(key) and meta_txt.contains(key.sha256_text()), "the key itself is never written down")
 	check(int(sp.gems) == 500 + 300 + 12 * 10, "gems held to 10 matches' worth + the confirmed purchase: %d" % int(sp.gems))
-	check(int(sp.gold) == 5000 + 900 * 10 and int(sp.embers) == 200 + 400 and int(sp.level) == 3 + 5,
-		"gold, Embers and level held too (%d, %d, %d)" % [int(sp.gold), int(sp.embers), int(sp.level)])
+	check(int(sp.gold) == 5000 + 900 * 10 + (200 + 400) * Eco.EMBER_GOLD and not sp.has("embers") and int(sp.level) == 3 + 5,
+		"gold (with the Embers' cap in it) and level held too (%d, %d)" % [int(sp.gold), int(sp.level)])
 	check(sp.owned.has("knight_wpn_greatsword") and not sp.owned.has("knight_wpn_kingsguard"), "owned kept, but no quest legendary without its quest")
 	check(str(acc.tokens.get(Accounts.token_hash("tok-old-purchase-1"), "")) == id and int(sp.iap.n) == 1, "the confirmed purchase is this account's now; the made-up one is dropped")
 	var b: Dictionary = acc.handle({"t":"eco", "new":true, "import":src})

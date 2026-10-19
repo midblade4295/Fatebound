@@ -35,8 +35,6 @@ static func reward_text(rw: Dictionary) -> Array:
 	var out := []
 	if rw.has("gold"):
 		out.append(["res://assets/ui/currency/coin.png", "%d" % int(rw.gold)])
-	if rw.has("embers"):
-		out.append(["res://assets/ui/currency/embers.png", "%d" % int(rw.embers)])
 	if rw.has("chest"):
 		out.append([UI2.V2 + "chests/%s_icon.png" % str({"wooden": "wood"}.get(str(rw.chest), str(rw.chest))), str(Eco.CHESTS[str(rw.chest)].name)])
 	if rw.has("gems"):

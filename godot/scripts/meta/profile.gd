@@ -34,7 +34,7 @@ const OPS := {
 	"equip": [TYPE_STRING], "unequip": [TYPE_STRING, TYPE_STRING],
 	"reroll_daily": [TYPE_INT], "claim_challenge": [TYPE_STRING, TYPE_INT],
 	"claim_quest": [TYPE_STRING], "forge": [TYPE_STRING, TYPE_STRING], "set_forge_element": [TYPE_STRING, TYPE_STRING],
-	"buy_embers": [TYPE_STRING], "start_unlock": [TYPE_INT], "skip_chest": [TYPE_INT], "open_chest": [TYPE_INT],
+	"start_unlock": [TYPE_INT], "skip_chest": [TYPE_INT], "open_chest": [TYPE_INT],
 	"set_name": [TYPE_STRING], "finish_tutorial": [],
 	"claim_login": [],                                           # 0.31.119: the daily login reward
 	"claim_discord": [],                                         # 0.31.124: JOIN OUR DISCORD, once
@@ -132,7 +132,6 @@ static func defaults() -> Dictionary:
 		"war_rewards":[],                                            # 0.31.151: the war's rewards paid (0.31.169: no more -- Crown War is gone; kept in saves)
 		"paid":[],                                                   # 0.31.134: gold the server took (a clan), newest first
 		"referral":{"by":"", "notes":[]},                            # 0.31.120: whose code was entered; friend rewards (newest first)
-		"embers":0,                                                  # 0.31.90: the Forge's material
 		"forge":{"stars":{}, "wins":{}, "element":{}},              # 0.31.93: per weapon (Eco.forge_id): stars 0-3, wins, aura element
 		"iap":{"done":[], "starter":false},                          # 0.31.90: purchase tokens already granted
 		"chests":{"slots":[], "next":1, "pity":0, "queue":[], "salt":0},   # 0.31.108: queue (reward chests waiting), salt (the rolls' seed)
@@ -207,8 +206,12 @@ func _normalized(v: Dictionary) -> Dictionary:
 	for span in ["daily", "weekly"]:
 		for c in out.challenges[span]:
 			c.progress = int(c.get("progress", 0))
+	# 0.31.184 (Kevin: "Maybe let's have the two currency so it's more simple"): Embers (0.31.90-0.31.183, the Forge's
+	# material) are gold now, Eco.EMBER_GOLD each -- a save from before is turned once (the key goes with it)
+	if out.has("embers"):
+		out.gold = int(out.gold) + maxi(0, int(out.embers if _is_num(out.embers) else 0)) * Eco.EMBER_GOLD
+		out.erase("embers")
 	# 0.31.93: the Forge -- ints again, nothing out of range
-	out.embers = maxi(0, int(out.get("embers", 0)))
 	for part in ["stars", "wins", "element"]:
 		if not (out.forge.get(part) is Dictionary):
 			out.forge[part] = {}
@@ -476,7 +479,6 @@ func buy_premium() -> Dictionary:
 func _grant(r: Dictionary) -> void:
 	d.gold += int(r.get("gold", 0))
 	d.gems += int(r.get("gems", 0))
-	d.embers = int(d.get("embers", 0)) + int(r.get("embers", 0))
 	if r.has("chest"):
 		add_chest(str(r.chest), {}, true)
 	var id := str(r.get("item", ""))
@@ -553,17 +555,17 @@ func iap_granted(token: String) -> bool:
 
 func grant_iap(product: String, token: String) -> Dictionary:
 	# A purchase Google and the server have confirmed: add what it holds. Idempotent per token (a retry after a crash,
-	# or the same purchase seen again on the next start, grants nothing twice). -> {ok, gems, embers, item, again}
+	# or the same purchase seen again on the next start, grants nothing twice). -> {ok, gems, gold, item, again}
 	var pk: Dictionary = Net.IAP.get(product, {})
 	if pk.is_empty() or token == "":
 		return {"ok":false, "error":"Unknown purchase"}
 	if server_mode:
 		return {"ok":false, "error":"The server grants purchases"}       # (0.31.108: eco_accounts.gd does)
 	if iap_granted(token):
-		return {"ok":true, "again":true, "gems":0, "embers":0, "item":""}
-	var out := {"ok":true, "again":false, "gems":int(pk.get("gems", 0)), "embers":int(pk.get("embers", 0)), "item":""}
+		return {"ok":true, "again":true, "gems":0, "gold":0, "item":""}
+	var out := {"ok":true, "again":false, "gems":int(pk.get("gems", 0)), "gold":int(pk.get("gold", 0)), "item":""}
 	d.gems = int(d.gems) + int(out.gems)
-	d.embers = int(d.get("embers", 0)) + int(out.embers)
+	d.gold = int(d.gold) + int(out.gold)
 	if str(pk.get("weapon", "")) != "":
 		# a weapon of that rarity the player doesn't own yet (shop pool), picked from the token so a retry picks the same
 		var pool: Array = []
@@ -674,14 +676,14 @@ func claim_challenge(span: String, index: int) -> Dictionary:
 	_add_pass_xp(int(def.get("pass", 0)), out)
 	d.gold += int(def.get("gold", 0))
 	d.gems += int(def.get("gems", 0))
-	var embers := Eco.EMBERS_DAILY if span == "daily" else 0      # 0.31.93
-	d.embers = int(d.get("embers", 0)) + embers
+	var bonus := Eco.DAILY_GOLD if span == "daily" else 0      # 0.31.184 (0.31.93-0.31.183: Embers)
+	d.gold += bonus
 	# 0.31.37: the whole day's challenges done -> a Silver chest; the whole week's -> a Gold chest
 	if list.all(func(x): return bool(x.claimed)):
 		add_chest("silver" if span == "daily" else "gold", out, true)
 	save()
 	_rec("claim_challenge", [span, index])
-	return {"ok":true, "tiers":out.tiers, "chests":out.chests, "embers":embers}
+	return {"ok":true, "tiers":out.tiers, "chests":out.chests, "gold":int(def.get("gold", 0)) + bonus}
 
 # ---------------- weekly leaderboard prizes (0.31.120) ----------------
 func grant_prize(week: String, rank: int, prize: Dictionary) -> Dictionary:
@@ -746,7 +748,6 @@ func claim_login() -> Dictionary:
 	var out := {"chests":[]}
 	d.gold = int(d.gold) + int(rw.get("gold", 0))
 	d.gems = int(d.gems) + int(rw.get("gems", 0))
-	d.embers = int(d.get("embers", 0)) + int(rw.get("embers", 0))
 	if rw.has("chest"):
 		add_chest(str(rw.chest), out, true)
 	d.login.day = Eco.day_key(now())
@@ -768,10 +769,7 @@ func apply_match(me: Dictionary, won: bool, draw: bool, online: bool) -> Diction
 	var r := Eco.match_rewards(stats, won, draw, online, first_win)
 	var out := {"rewards":r, "levels":[], "tiers":[], "challenges":[], "first_win":first_win, "chests":[]}
 	d.gold += int(r.gold)
-	# 0.31.93: Embers for the Forge, and a win counts toward the equipped weapon's third star
-	var embers := Eco.EMBERS_WIN if won else Eco.EMBERS_MATCH
-	d.embers = int(d.get("embers", 0)) + embers
-	out["embers"] = embers
+	# 0.31.93: a win counts toward the equipped weapon's third star (0.31.184: the match's Embers are in its gold)
 	var main := str(stats.get("main", ""))
 	if won and main != "" and d.equip.has(main):
 		var wid := Eco.forge_id(main, str(d.equip[main].weapon))
@@ -934,7 +932,7 @@ func quest_done(cls: String) -> bool:
 	return Eco.QUESTS.has(cls) and quest_step(cls) >= Eco.QUESTS[cls].steps.size()
 
 func claim_quest(cls: String) -> Dictionary:
-	# Claim cls's current step: its reward (gold / Embers / gems / a chest, or the legendary on the last step).
+	# Claim cls's current step: its reward (gold / gems / a chest, or the legendary on the last step).
 	# -> {ok, step (the one claimed, 0-based), reward, chests, item}
 	if not quest_ready(cls):
 		return {"ok":false}
@@ -943,7 +941,6 @@ func claim_quest(cls: String) -> Dictionary:
 	var out := {"ok":true, "step":step, "reward":r, "chests":[], "item":str(r.get("item", ""))}
 	d.gold = int(d.gold) + int(r.get("gold", 0))
 	d.gems = int(d.gems) + int(r.get("gems", 0))
-	d.embers = int(d.get("embers", 0)) + int(r.get("embers", 0))
 	if r.has("chest"):
 		add_chest(str(r.chest), out, true)
 	if out.item != "" and not d.owned.has(out.item):
@@ -982,7 +979,7 @@ func forge_owns(wid: String) -> bool:
 	return wid.begins_with("default_") and (Eco.CLASSES + Eco.UP_CLASSES).has(wid.substr(8)) or owns(wid)
 
 func can_forge(wid: String, element := "") -> Dictionary:
-	# -> {"ok": bool, "why": what's missing ("owned" | "maxed" | "embers" | "gold" | "wins" | "element")}
+	# -> {"ok": bool, "why": what's missing ("owned" | "maxed" | "gold" | "wins" | "element")}
 	if not forge_owns(wid):
 		return {"ok":false, "why":"owned"}
 	var next := forge_stars(wid) + 1
@@ -994,8 +991,6 @@ func can_forge(wid: String, element := "") -> Dictionary:
 			return {"ok":false, "why":"wins"}
 		if not Eco.ELEMENTS.has(element):
 			return {"ok":false, "why":"element"}
-	if int(d.get("embers", 0)) < int(cost.embers):
-		return {"ok":false, "why":"embers"}
 	if int(d.gold) < int(cost.gold):
 		return {"ok":false, "why":"gold"}
 	return {"ok":true, "why":""}
@@ -1006,7 +1001,6 @@ func forge(wid: String, element := "") -> Dictionary:
 		return c
 	var next := forge_stars(wid) + 1
 	var cost := Eco.forge_cost(next)
-	d.embers = int(d.embers) - int(cost.embers)
 	d.gold -= int(cost.gold)
 	d.forge.stars[wid] = next
 	if next == Eco.FORGE_STARS.size():
@@ -1023,16 +1017,6 @@ func set_forge_element(wid: String, element: String) -> bool:
 	save()
 	_rec("set_forge_element", [wid, element])
 	return true
-
-func buy_embers(pack_id: String) -> Dictionary:
-	var pk := Eco.ember_pack(pack_id)
-	if pk.is_empty() or int(d.gems) < int(pk.gems):
-		return {"ok":false}
-	d.gems -= int(pk.gems)
-	d.embers = int(d.get("embers", 0)) + int(pk.embers)
-	save()
-	_rec("buy_embers", [pack_id])
-	return {"ok":true, "embers":int(pk.embers)}
 
 func forge_fx(cls: String) -> Dictionary:
 	# the equipped weapon's Forge look for the battle view: {} when it has no stars
@@ -1129,8 +1113,7 @@ func open_chest(index: int) -> Dictionary:
 	var roll := Eco.roll_chest(str(c.kind), hash([int(d.chests.get("salt", 0)), int(c.id), str(c.kind)]), d.owned, int(d.chests.pity),
 		Eco.season_id(now()))
 	d.chests.pity = int(roll.pity)
-	d.gold += int(roll.gold)
-	d.embers = int(d.get("embers", 0)) + int(roll.get("dupe_embers", 0))
+	d.gold += int(roll.gold) + int(roll.get("dupe_gold", 0))
 	d.gems += int(roll.gems)
 	if str(roll.item) != "" and not d.owned.has(roll.item):
 		d.owned.append(roll.item)

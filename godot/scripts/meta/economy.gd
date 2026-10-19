@@ -85,7 +85,7 @@ static func pass_reward(sid: int, tier: int, premium: bool) -> Dictionary:
 		if tier % 4 == 0:
 			return {"gems": 30}
 		if tier % 4 == 2:
-			return {"embers": PASS_EMBERS_FREE}        # 0.31.93: Embers for the Forge on both tracks
+			return {"gold": PASS_GOLD_FREE}            # (0.31.93-0.31.183: 20 Embers)
 		return {"gold": 150 + 5 * tier}
 	var pi := premium_item_tiers(sid).find(tier)
 	if pi >= 0:
@@ -98,9 +98,9 @@ static func pass_reward(sid: int, tier: int, premium: bool) -> Dictionary:
 	if tier == 22:
 		return {"chest": "royal"}
 	if tier % 4 == 0:
-		return {"embers": PASS_EMBERS_GEM_TIER} if sid >= 2 else {"gems": 60}     # 0.31.108: Embers from season 2
+		return {"gold": PASS_GOLD_GEM_TIER} if sid >= 2 else {"gems": 60}     # 0.31.108: not gems from season 2 (until 0.31.184 60 Embers)
 	if tier % 4 == 2:
-		return {"embers": PASS_EMBERS_PREMIUM}
+		return {"gold": PASS_GOLD_PREMIUM}         # (0.31.93-0.31.183: 40 Embers)
 	return {"gold": 300 + 10 * tier}
 
 const PASS_FREE_ITEMS := 3
@@ -120,13 +120,17 @@ const PASS_TITLE_GEMS := {"epic": 50, "legendary": 100}
 #    track, at SEASON_ITEM_TIERS spread over 1..30 (the best at 30, a strong one at 1); the free track keeps three of
 #    the older pass weapons; a season with none of its own falls back to the old draw from everything before it;
 #  - a pass item the player already owns is swapped when claimed (Profile.pass_reward_for): another pass weapon of the
-#    same rarity he doesn't own and this season doesn't give, else Embers (EMBERS_DUPE, like a chest duplicate);
-#  - from season 2 the premium track's gem tiers give Embers (PASS_EMBERS_GEM_TIER) -- with the Silver chest change a
+#    same rarity he doesn't own and this season doesn't give, else gold (DUPE_GOLD, like a chest duplicate);
+#  - from season 2 the premium track's gem tiers give gold (PASS_GOLD_GEM_TIER) -- with the Silver chest change a
 #    premium pass no longer pays for the next one;
 #  - an earlier season's pass weapons are "vaulted": sold in the Featured shop for gems (VAULT_GEMS), and the vaulted
 #    legendaries join the Royal chest's legendary roll.
 const PASS_SEASON_ITEMS := {}           # sid -> its own weapons (season 2's await Kevin's picks of the concepts)
-const PASS_EMBERS_GEM_TIER := 60
+# 0.31.184 (Kevin: "Maybe let's have the two currency so it's more simple"): the Embers the pass gave are gold, ten for
+# one (EMBER_GOLD)
+const PASS_GOLD_FREE := 200
+const PASS_GOLD_PREMIUM := 400
+const PASS_GOLD_GEM_TIER := 600
 const VAULT_GEMS := {"common": 100, "rare": 150, "epic": 300, "legendary": 450}
 
 static func item_season(id: String) -> int:
@@ -167,7 +171,7 @@ static func pass_swap(sid: int, tier: int, premium: bool, id: String, owned: Arr
 			cands.append(c)
 	if not cands.is_empty():
 		return {"item": cands[absi(hash("swap-%d-%d-%d" % [sid, tier, int(premium)])) % cands.size()], "swap": id}
-	return {"embers": int(EMBERS_DUPE.get(rar, 25)), "swap": id}
+	return {"gold": int(DUPE_GOLD.get(rar, 250)), "swap": id}
 
 static func pass_cosmetics(sid: int) -> Dictionary:
 	# How many cosmetics the premium track really gives (the title tiers are gems now): {"n", "legendary"}
@@ -562,10 +566,10 @@ static func lb_prize(rank: int) -> Dictionary:
 # found Silver chests were already half of all free gems). Chests are reward chests: with the slots full they wait.
 const LOGIN_REWARDS := [
 	{"gold":150},
-	{"embers":25},
+	{"gold":250},
 	{"chest":"silver"},
 	{"gold":250},
-	{"embers":50},
+	{"gold":500},
 	{"gold":400},
 	{"chest":"gold", "gems":20},
 ]
@@ -657,7 +661,7 @@ const QUEST_MIN_TIME := 60.0
 const QUEST_COUNTS := ["kills", "rescues", "gates", "gathered", "fed", "repaired", "healed", "lifts", "towers", "camps", "lh", "epics"]
 # 0.31.164 (5v5 only): the steps that asked for King rescues or King lifts ask for towers or jungle camps now ("gates" is
 # tower and gate damage); the Worker's quest is Siege's -- kept, not shown (HERO_CLASSES)
-const QUEST_REWARDS := [{"gold":400, "embers":30}, {"gems":50, "chest":"gold"}]      # steps 1 and 2; step 3 is the weapon
+const QUEST_REWARDS := [{"gold":700}, {"gems":50, "chest":"gold"}]      # steps 1 and 2; step 3 is the weapon (0.31.184: 400 gold + 30 Embers -> 700 gold)
 const QUESTS := {
 	"knight":      {"item":"knight_wpn_kingsguard", "steps":[
 		{"stat":"wins", "n":3, "task":"Win 3 matches as a Knight"},
@@ -762,7 +766,8 @@ const FIVE_STATS := ["towers", "camps", "lh", "epics"]
 static func match_rewards(stats: Dictionary, won: bool, draw: bool, online: bool, first_win: bool) -> Dictionary:
 	# Itemised so the results screen can show where every coin came from.
 	var lines := []
-	var base: Dictionary = {"gold":150, "xp":250, "pass":400} if won else ({"gold":100, "xp":175, "pass":300} if draw else {"gold":75, "xp":125, "pass":250})
+	# (0.31.184: the Embers a match gave are in its gold, EMBER_GOLD each -- a win 5 -> 150 + 50, a draw or a loss 2 -> + 20)
+	var base: Dictionary = {"gold":200, "xp":250, "pass":400} if won else ({"gold":120, "xp":175, "pass":300} if draw else {"gold":95, "xp":125, "pass":250})
 	lines.append({"label":"Victory" if won else ("Draw" if draw else "Defeat"), "gold":base.gold, "xp":base.xp, "pass":base.pass})
 	var r: int = int(stats.get("rescues", 0))
 	if r > 0:
@@ -841,7 +846,7 @@ const CHESTS := {
 		"item_chance":1.0, "rarity":{"epic":0.85, "legendary":0.15}, "color":"#c47bff"},
 }
 const CHEST_FULL_GOLD := {"wooden":50, "silver":120, "gold":300, "royal":700}   # slots full: the chest becomes gold
-const DUPE_GOLD := {"common":100, "rare":250, "epic":600, "legendary":1500}       # (until 0.31.92: a cosmetic already owned; the starter pack's fallback)
+const DUPE_GOLD := {"common":100, "rare":250, "epic":600, "legendary":1500}       # a cosmetic already owned (0.31.93-0.31.183 it was Embers, a tenth of this)
 const PITY_EPIC := 10              # Gold/Royal chests: an epic or better at the latest every 10th
 const CHEST_QUEUE_MAX := 12        # 0.31.108: reward chests waiting for a slot (beyond this they turn into gold)
 
@@ -861,11 +866,11 @@ static func chest_pool(rarity: String, sid := 1) -> Array:
 	return ids
 
 static func roll_chest(kind: String, seed_value: int, owned: Array, pity: int, sid := 1) -> Dictionary:
-	# -> {gold, gems, item ("" if none), dupe_embers, pity (the new count)}
+	# -> {gold, gems, item ("" if none), dupe_gold (a duplicate's gold, on top of gold), pity (the new count)}
 	var c: Dictionary = CHESTS[kind]
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_value
-	var out := {"gold":rng.randi_range(int(c.gold[0]), int(c.gold[1])), "gems":0, "item":"", "dupe_embers":0, "pity":pity}
+	var out := {"gold":rng.randi_range(int(c.gold[0]), int(c.gold[1])), "gems":0, "item":"", "dupe_gold":0, "pity":pity}
 	if rng.randf() < float(c.gems_chance):
 		out.gems = rng.randi_range(int(c.gems[0]), int(c.gems[1]))
 	if rng.randf() < float(c.item_chance):
@@ -890,7 +895,7 @@ static func roll_chest(kind: String, seed_value: int, owned: Array, pity: int, s
 		if not pool.is_empty():
 			var id: String = pool[rng.randi_range(0, pool.size() - 1)]
 			if owned.has(id):
-				out.dupe_embers = int(EMBERS_DUPE.get(rar, 25))      # 0.31.93: Embers for the Forge (was gold)
+				out.dupe_gold = int(DUPE_GOLD.get(rar, 250))         # (0.31.93-0.31.183: Embers for the Forge)
 			else:
 				out.item = id
 	return out
@@ -909,29 +914,29 @@ static func chest_odds(kind: String) -> String:
 	parts.append("%s: %s" % ["a cosmetic" if float(c.item_chance) >= 1.0 else "%d%% chance of a cosmetic" % int(round(float(c.item_chance) * 100.0)), ", ".join(rs)])
 	if kind in ["gold", "royal"]:
 		parts.append("an epic or better at least every %d" % PITY_EPIC)
-	parts.append("duplicates turn into Embers for the Forge")
+	parts.append("duplicates turn into gold")
 	return " · ".join(parts)
 
 
 # ---------------- the Forge (0.31.93, Armory Reforged; Kevin: "begin the weapon models and forge system") ----------------
 # Bring a weapon you own (a starter too) and raise it to three stars: the same weapon, more impressive each time. Looks
-# only, never damage. Paid in Embers (earned by playing, or bought with gems here) plus gold; the third star also needs
-# FORGE_WINS wins with that weapon equipped, and picks the aura's element.
+# only, never damage. Paid in gold; the third star also needs FORGE_WINS wins with that weapon equipped, and picks the
+# aura's element.
+# 0.31.184 (Kevin: "Maybe let's have the two currency so it's more simple"): no more Embers -- gold and gems. Each star's
+# Embers are in its gold at EMBER_GOLD a piece (40 + 1,000 -> 1,400; 120 + 3,000 -> 4,200; 300 + 8,000 -> 11,000), and
+# everything that gave Embers gives that much gold: a match (2 -> 20 more gold; a win 5 -> 50: match_rewards' base), a
+# daily order (15 -> DAILY_GOLD), the pass, the login calendar, a quest's first step, a duplicate (DUPE_GOLD), the
+# starter pack (300 -> 3,000). A balance from before is turned into gold once (Profile._normalized). Ten for one is the
+# rate the duplicates had before Embers (DUPE_GOLD) and about what the gem exchange gives (50 gems: 600 gold; they were 60
+# Embers).
+const EMBER_GOLD := 10
 const FORGE_STARS := [
-	{"name":"Polished", "embers":40, "gold":1000, "text":"A glint runs up the metal and it sparkles, in its rarity's colour."},
-	{"name":"Runed", "embers":120, "gold":3000, "text":"Glowing veins pulse through it, runes drift around it, a trail when you swing."},
-	{"name":"Ascended", "embers":300, "gold":8000, "text":"Flames, frost, lightning, holy light, leaves or a void vortex -- the element you pick."}]
+	{"name":"Polished", "gold":1400, "text":"A glint runs up the metal and it sparkles, in its rarity's colour."},
+	{"name":"Runed", "gold":4200, "text":"Glowing veins pulse through it, runes drift around it, a trail when you swing."},
+	{"name":"Ascended", "gold":11000, "text":"Flames, frost, lightning, holy light, leaves or a void vortex -- the element you pick."}]
 const FORGE_WINS := 25
-# 0.31.108: the gold doubled (500 / 1,500 / 4,000 -> 1,000 / 3,000 / 8,000) -- gold piled up once the shop was bought
-# out; now a player's Embers and gold run out at about the same pace.
-const EMBERS_DUPE := {"common":10, "rare":25, "epic":60, "legendary":150}      # a duplicate from a chest
-const EMBERS_MATCH := 2                 # every finished match ...
-const EMBERS_WIN := 5                   # ... or this for a win
-const EMBERS_DAILY := 15                # each daily challenge claimed
-const PASS_EMBERS_FREE := 20            # pass tiers 2, 6, 10 ... on the free track
-const PASS_EMBERS_PREMIUM := 40         # ... and on the premium track
-const EMBER_PACKS := [{"id":"embers_s", "gems":60, "embers":60}, {"id":"embers_m", "gems":150, "embers":170},
-	{"id":"embers_l", "gems":400, "embers":500}]
+# 0.31.108: the gold doubled (500 / 1,500 / 4,000 -> 1,000 / 3,000 / 8,000) -- gold piled up once the shop was bought out.
+const DAILY_GOLD := 150                 # each daily order claimed (0.31.93-0.31.183: 15 Embers)
 const ELEMENTS := ["fire", "frost", "storm", "holy", "nature", "void"]
 const ELEMENT_COLOR := {"fire":"#ff7a2e", "frost":"#7fd8ff", "storm":"#b48cff", "holy":"#ffd76a", "nature":"#7dff8a", "void":"#c04dff"}
 const ELEMENT_NAME := {"fire":"Fire", "frost":"Frost", "storm":"Storm", "holy":"Holy", "nature":"Nature", "void":"Void"}
@@ -989,14 +994,8 @@ static func forge_name(wid: String) -> String:
 	return str(item(wid).get("name", ""))
 
 static func forge_cost(next_star: int) -> Dictionary:
-	# next_star 1..3 -> {"embers", "gold"}; {} past the third
+	# next_star 1..3 -> {"gold"}; {} past the third
 	if next_star < 1 or next_star > FORGE_STARS.size():
 		return {}
 	var f: Dictionary = FORGE_STARS[next_star - 1]
-	return {"embers":int(f.embers), "gold":int(f.gold)}
-
-static func ember_pack(id: String) -> Dictionary:
-	for p in EMBER_PACKS:
-		if str(p.id) == id:
-			return p
-	return {}
+	return {"gold":int(f.gold)}

@@ -310,7 +310,7 @@ func _billing() -> void:
 	sk2.catalog = ALL_PRICES.duplicate()
 	var b2 = BillingIos.new()
 	root.add_child(b2)
-	b2.verify_fn = func(_p, _j, _t, cb): cb.call({"ok":true, "granted":{"ok":true, "gems":500, "embers":300}})
+	b2.verify_fn = func(_p, _j, _t, cb): cb.call({"ok":true, "granted":{"ok":true, "gems":500, "gold":3000}})
 	b2.setup(bq, sk2)
 	var t8 := FakeTxn.new("starter_pack", 8008, 8000)
 	sk2.owned = [t8]

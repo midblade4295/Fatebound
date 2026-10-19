@@ -91,8 +91,9 @@ const IAP := {
 	# 0.31.108 (the economy review): a $99.99 pack. "play_only": shown only once Google Play returns its price (the
 	# product has to be created in Play Console first, PLAY_IAP_HANDOFF.md); it then takes BEST VALUE from gems_6500.
 	"gems_14000":   {"gems":14000, "usd":"99.99", "tag":"BEST VALUE", "play_only":true},
-	# 0.31.108: 300 gems + 150 Embers + a rare -> 500 + 300 + an epic (about 2.6x its price; was 1.5x)
-	"starter_pack": {"gems":500,  "embers":300, "weapon":"epic", "once":true, "usd":"2.99"},
+	# 0.31.108: 300 gems + 150 Embers + a rare -> 500 + 300 + an epic (about 2.6x its price; was 1.5x). 0.31.184 (no more
+	# Embers): 500 gems + 3,000 gold + an epic -- the 300 Embers at economy.gd EMBER_GOLD
+	"starter_pack": {"gems":500,  "gold":3000, "weapon":"epic", "once":true, "usd":"2.99"},
 }
 
 const TITLES := {

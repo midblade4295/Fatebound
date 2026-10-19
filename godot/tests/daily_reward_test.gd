@@ -1,7 +1,8 @@
 extends SceneTree
 # 0.31.119 (Kevin: "Do all" -- 6. a daily login reward).
-#  1. the profile: one claim a UTC day, the calendar's next reward (150 gold, 25 Embers, a Silver chest, 250 gold,
-#     50 Embers, 400 gold, a Gold chest + 20 gems), round and round; a missed day doesn't reset it; a chest waits when
+#  1. the profile: one claim a UTC day, the calendar's next reward (150 gold, 250 gold, a Silver chest, 250 gold,
+#     500 gold, 400 gold, a Gold chest + 20 gems -- 0.31.184: days 2 and 5 were 25 and 50 Embers), round and round; a
+#     missed day doesn't reset it; a chest waits when
 #     the slots are full.
 #  2. the server (server/eco_accounts.gd replaying the phone's ops with ITS clock): a claim counts once a day -- a phone
 #     that changed its clock and claims again gets nothing.
@@ -54,8 +55,8 @@ func _part1() -> void:
 	p.now_override = T0 + 11 * 3600 + 59 * 60                       # 23:59 UTC
 	check(not p.login_ready(), "still today at 23:59 UTC")
 	p.now_override = T0 + 12 * 3600 + 60                            # 00:01 UTC the next day
-	var e0 := int(p.d.embers)
-	check(p.login_ready() and bool(p.claim_login().ok) and int(p.d.embers) == e0 + 25, "day 2 (the next UTC day): +25 Embers")
+	var e0 := int(p.d.gold)
+	check(p.login_ready() and bool(p.claim_login().ok) and int(p.d.gold) == e0 + 250, "day 2 (the next UTC day): +250 gold (its 25 Embers)")
 	p.now_override += 4 * 86400                                       # 3 days missed
 	var slots := (p.d.chests.slots as Array).size()
 	r = p.claim_login()
@@ -80,7 +81,7 @@ func _part1() -> void:
 	for rw in Eco.LOGIN_REWARDS:
 		for k in week:
 			week[k] += int(rw.get(k, 0))
-	check(week.gold == 800 and week.gems == 20 and week.embers == 75, "a week: 800 gold, 75 Embers, 20 gems, a Silver and a Gold chest (%s)" % str(week))
+	check(week.gold == 800 + 75 * Eco.EMBER_GOLD and week.gems == 20 and week.embers == 0, "a week: 1,550 gold, 20 gems, a Silver and a Gold chest (%s)" % str(week))
 
 func _part2() -> void:
 	var tmp := OS.get_user_data_dir().path_join("dailytest-srv-%d" % Time.get_ticks_usec())
@@ -97,7 +98,7 @@ func _part2() -> void:
 	check(not bool(r.results[0].ok) and int(r.profile.gold) == g0 + 150, "a phone that moved its clock and claims again: the server says no")
 	acc.now_override = T0 + 86400
 	r = acc.handle({"t":"eco", "acct":id, "key":key, "ops":[{"s":3, "op":"claim_login", "a":[]}]})
-	check(bool(r.results[0].ok) and int(r.profile.embers) >= 25, "the server's next day: day 2")
+	check(bool(r.results[0].ok) and int(r.profile.gold) >= g0 + 150 + 250, "the server's next day: day 2")
 
 func _find(node: Node, pred: Callable) -> Array:
 	var out := []

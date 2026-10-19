@@ -64,7 +64,6 @@ var forge_cls := "knight"              # 0.31.93: the Forge's class, weapon (Eco
 var forge_pick := ""
 var quest_cls := ""                   # 0.31.97: the class shown on the Quests screen ("" = the first with a step ready)
 var forge_element := ""
-var forge_shop := false                # the Embers packs open
 var siege = null
 var home_fixed := false                # 0.31.112: Home fits the screen and doesn't scroll (Screens.home sets it)
 
@@ -96,8 +95,7 @@ var name_label: Label
 var xp_bar: ProgressBar
 var gold_label: Label
 var gems_label: Label
-var embers_label: Label                # 0.31.105 (Kevin: "Yes put an ember counter at top also")
-# 0.31.105: gains fly into the counters (reward_fly.gd). kind (coin / gem / ember) -> {target: the profile's amount,
+# 0.31.105: gains fly into the counters (reward_fly.gd). kind (coin / gem) -> {target: the profile's amount,
 # shown: what the counter says (it catches up as the pieces land), flying: bursts in the air}
 var reward_fly: Node2D
 var quiet_top := false                 # (a restored save: the counters just change)
@@ -569,7 +567,7 @@ func _build_chrome() -> void:
 	who.add_child(xp_holder)
 	gold_label = _pill(bar, "coin")
 	gems_label = _pill(bar, "gem")
-	embers_label = _pill(bar, "ember")
+	# (0.31.105-0.31.183 an Embers counter too: 0.31.184, Kevin: "Maybe let's have the two currency so it's more simple")
 	# --- screen area ---
 	content_scroll = ScrollContainer.new()
 	content_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -646,7 +644,7 @@ func _pill(parent: Node, kind: String) -> Label:
 	p.add_theme_stylebox_override("panel", sb)
 	p.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	parent.add_child(p)
-	var edge := {"coin": Color("#e9b648"), "gem": Color("#5fd2f0"), "ember": Color("#ff8a3d")}
+	var edge := {"coin": Color("#e9b648"), "gem": Color("#5fd2f0")}
 	UI2.skin(p, {"radius": 15.0, "outline": 2.0, "outline_color": edge.get(kind, Color("#5fd2f0")),
 		"rim": 0.0, "fill_top": Color(0.06, 0.09, 0.24, 0.94), "fill_bottom": Color(0.01, 0.02, 0.08, 0.94), "shadow_y": 3.0, "shadow_alpha": 0.5, "bevel": 0.1})
 	var r := HBoxContainer.new()
@@ -688,7 +686,7 @@ func _pill(parent: Node, kind: String) -> Label:
 	hit.set_meta("action_key", "pill_" + kind)
 	hit.pressed.connect(func():
 		sfx("tab")
-		show_tab("forge" if kind == "ember" else "shop"))      # (Embers are bought in the Forge)
+		show_tab("shop"))
 	p.add_child(hit)
 	return l
 
@@ -772,7 +770,6 @@ func refresh_top() -> void:
 	UI2.bar(xp_holder, int(d.xp), Eco.level_xp(int(d.level)), Color("#b6f3ff"), Color("#36b9ea"), 10.0)
 	_counter("coin", gold_label, int(d.gold))
 	_counter("gem", gems_label, int(d.gems))
-	_counter("ember", embers_label, int(d.get("embers", 0)))
 	# Badge on the PASS tab when rewards are waiting.
 	var claimable := 0
 	for tier in range(1, profile.pass_tier() + 1):
@@ -1722,8 +1719,8 @@ func _on_iap_granted(product: String, g: Dictionary) -> void:
 		return
 	sfx("gemPack" if int(g.get("gems", 0)) > 0 else "purchase")       # 0.31.110: gems pouring out
 	var bits := ["+%s gems" % UI.compact(int(g.get("gems", 0)))]
-	if int(g.get("embers", 0)) > 0:
-		bits.append("+%d Embers" % int(g.embers))
+	if int(g.get("gold", 0)) > 0:
+		bits.append("+%s gold" % UI.grouped(int(g.gold)))
 	if str(g.get("item", "")) != "":
 		bits.append(str(Eco.item(str(g.item)).get("name", "")))
 	toast("  ·  ".join(bits), UI.GOLD)

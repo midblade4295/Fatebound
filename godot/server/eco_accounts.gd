@@ -214,7 +214,7 @@ func _import(p, src: Dictionary, id: String) -> Dictionary:
 	var v: Dictionary = p._normalized(src)
 	var matches := clampi(int(v.stats.get("matches", 0)), 0, 20000)
 	var paid_gems := 0
-	var paid_embers := 0
+	var paid_gold := 0
 	var done := []
 	for t in v.iap.get("done", []):
 		var tok := str((t as Dictionary).get("t", "")) if t is Dictionary else ""
@@ -223,15 +223,19 @@ func _import(p, src: Dictionary, id: String) -> Dictionary:
 		if tok != "" and tokens.has(h) and str(tokens[h]) == "" and Net.IAP.has(prod):
 			tokens[h] = id
 			paid_gems += int(Net.IAP[prod].get("gems", 0))
-			paid_embers += int(Net.IAP[prod].get("embers", 0))
+			# (0.31.184: a starter pack bought before gave 300 Embers -- gold now, ten for one, as the phone's balance was turned)
+			paid_gold += int(Net.IAP[prod].get("gold", 0))
 			done.append(t)
 	if not done.is_empty():
 		_save_tokens()
-	var caps := {"gems": paid_gems + mini(3000, 300 + 12 * matches), "gold": mini(400000, 5000 + 900 * matches),
-		"embers": paid_embers + mini(20000, 200 + 40 * matches), "level": mini(150, 3 + matches / 2),
+	# 0.31.184: Embers are gold (Profile._normalized turned them, Eco.EMBER_GOLD each): the gold cap takes in what the
+	# Embers' was (200 + 40 a match, up to 20,000)
+	var caps := {"gems": paid_gems + mini(3000, 300 + 12 * matches),
+		"gold": paid_gold + mini(400000, 5000 + 900 * matches) + mini(20000, 200 + 40 * matches) * Eco.EMBER_GOLD,
+		"level": mini(150, 3 + matches / 2),
 		"pass": mini(Eco.PASS_TIERS * Eco.TIER_XP, 5000 + 1500 * matches), "items": 15 + matches / 2 + (30 if paid_gems > 0 else 0)}
 	var out := {"matches":matches, "gems":[int(v.gems), mini(int(v.gems), caps.gems)], "gold":[int(v.gold), mini(int(v.gold), caps.gold)],
-		"embers":[int(v.embers), mini(int(v.embers), caps.embers)], "paid":paid_gems}
+		"paid":paid_gems}
 	var keep := Profile.defaults()
 	for k in ["name", "level", "xp", "pass", "owned", "equip", "title", "challenges", "stats", "first_win_day", "history",
 			"forge", "chests", "quests", "tutorial_done"]:
@@ -239,7 +243,6 @@ func _import(p, src: Dictionary, id: String) -> Dictionary:
 			keep[k] = v[k]
 	keep.gems = mini(int(v.gems), caps.gems)
 	keep.gold = mini(int(v.gold), caps.gold)
-	keep.embers = mini(int(v.embers), caps.embers)
 	keep.level = clampi(int(v.level), 1, caps.level)
 	keep.xp = clampi(int(v.xp), 0, Eco.level_xp(int(keep.level)) - 1)
 	keep.pass.xp = clampi(int(v.pass.xp), 0, caps.pass)

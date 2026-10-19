@@ -44,7 +44,6 @@ func _seed() -> void:
 	p.d.level = 14
 	p.d.gold += 8400
 	p.d.gems += 640
-	p.d.embers = 520
 	p.d.tutorial_done = true
 	p.d.pass.xp = 12 * 2500 + 900
 	for id in ["knight_wpn_greatsword", "knight_wpn_oath", "barb_wpn_spiked", "mage_wpn_crystal"]:

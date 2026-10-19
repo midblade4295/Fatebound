@@ -76,8 +76,6 @@ static func item_swatch(parent: Node, id: String, px := 56) -> void:
 static func chest_icon(kind: String) -> String:
 	return UI2.V2 + "chests/%s_icon.png" % str({"wooden": "wood"}.get(kind, kind))
 
-const EMBER_COLOR := Color("#ff9a3c")
-
 static func reward_text(r: Dictionary) -> Array:
 	# -> [glyph kind, text, colour, texture path or ""]
 	if r.has("chest"):                                   # (0.31.79: chests used to read "0 gold" here)
@@ -88,8 +86,6 @@ static func reward_text(r: Dictionary) -> Array:
 		return [item_icon(it), str(it.get("name", "?")), rarity(it), item_texture_path(str(r.item))]
 	if r.has("gems"):
 		return ["gem", "%d gems" % int(r.gems), UI.CYAN, "res://assets/ui/currency/gem.png"]
-	if r.has("embers"):                                  # 0.31.93: the Forge's material
-		return ["star", "%d Embers" % int(r.embers), EMBER_COLOR, "res://assets/ui/currency/embers.png"]
 	var g := int(r.get("gold", 0))
 	return ["coin", "%d gold" % g, UI.GOLD, "res://assets/ui/currency/%s.png" % ("coins_s" if g >= 300 else "coin")]
 
@@ -743,8 +739,9 @@ static func challenges_card(app, root: Node, span: String) -> Control:
 		row.add_child(v)
 		UI.label(v, str(def.text), 13, ink, UI.HEAVY_FONT)
 		var reward := "+%d pass XP" % int(def.pass)
-		if def.has("gold"):
-			reward += " · +%d gold" % int(def.gold)
+		var order_gold := int(def.get("gold", 0)) + (Eco.DAILY_GOLD if span == "daily" else 0)     # (0.31.184: a daily's Embers are gold)
+		if order_gold > 0:
+			reward += " · +%d gold" % order_gold
 		if def.has("gems"):
 			reward += " · +%d gems" % int(def.gems)
 		var pr := UI.row(v, 6)
@@ -959,7 +956,7 @@ static func pass_screen(app, root: VBoxContainer) -> void:
 		ph.add_child(pt)
 		UI2.text(pt, "UNLOCK PREMIUM", 20, UI2.GOLD)
 		UI2.body(pt, "%d exclusive cosmetics (%d legendary) · gold chests · a Royal chest · %s" % [int(pcos.n), legendary,
-			"more gems on every tier" if sid < 2 else "Embers and gold on every tier"], 12, Color("#efe2ff"))     # (0.31.108: Embers from season 2)
+			"more gems on every tier" if sid < 2 else "more gold on every tier"], 12, Color("#efe2ff"))     # (0.31.108-0.31.183: Embers and gold from season 2)
 		var b := UI2.button(pc, "UNLOCK  %d" % Eco.PREMIUM_COST, "purple", func(): _buy_premium(app), "buy_premium", 20, 52.0, 16.0, "res://assets/ui/currency/gem.png")
 		b.disabled = int(d.gems) < Eco.PREMIUM_COST
 		UI2.sweep(b)
@@ -1238,7 +1235,7 @@ static func _buy_premium(app) -> void:
 	var p = app.profile
 	var psid := int(app.profile.d.pass.season)
 	app.confirm("UNLOCK PREMIUM?", "%d exclusive cosmetics, gold and Royal chests and %s on every tier this season. Costs %d gems." % [int(Eco.pass_cosmetics(psid).n),
-		"more gems" if psid < 2 else "Embers and gold", Eco.PREMIUM_COST], "UNLOCK", "premium", func():
+		"more gems" if psid < 2 else "more gold", Eco.PREMIUM_COST], "UNLOCK", "premium", func():
 		var r: Dictionary = p.buy_premium()
 		if r.ok:
 			app.sfx("premium")                 # 0.31.110: a rich golden chord
@@ -1651,7 +1648,7 @@ static func gem_packs(app, root: Node) -> void:
 		sc.add_child(v)
 		UI2.text(v, "STARTER PACK", 20, UI2.GOLD, UI2.INK, 5)
 		var sp: Dictionary = Net.IAP.starter_pack
-		UI2.body(v, "%d gems  ·  %d Embers  ·  %s %s weapon  ·  once per player" % [int(sp.gems), int(sp.embers),
+		UI2.body(v, "%d gems  ·  %s gold  ·  %s %s weapon  ·  once per player" % [int(sp.gems), UI.grouped(int(sp.get("gold", 0))),
 			"an" if str(sp.get("weapon", "rare")) == "epic" else "a", str(sp.get("weapon", "rare"))], 12, Color("#ffe9c7"))
 		var sb := _iap_button(app, sc, "starter_pack", Vector2.ZERO, Vector2.ZERO)
 		sb.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
@@ -2618,43 +2615,7 @@ static func forge(app, root: VBoxContainer) -> void:
 	back.size = Vector2(46, 40)
 	UI.icon(back, "home", 22, Color.WHITE).position = Vector2(12, 7)
 	UI2.center(UI2.body(root, "Raise a weapon you own to three stars. It only changes the look -- every weapon still plays the same.", 12, UI2.SOFT))
-	# Embers
-	var eb := UI2.frame(root, "ember", 10, 16.0, "orange")
-	var er := UI.row(eb, 8)
-	UI2.img(er, "res://assets/ui/currency/embers.png", 40.0).size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	var ev := VBoxContainer.new()
-	ev.add_theme_constant_override("separation", 0)
-	UI.grow(ev)
-	er.add_child(ev)
-	UI2.text(ev, "%s EMBERS" % UI.compact(int(d.get("embers", 0))), 20, Color("#ffd9a0"), Color("#3d1602"), 5)
-	UI2.body(ev, "+%d a match, +%d a win, +%d a daily order, duplicates from chests, the Siege Pass" % [Eco.EMBERS_MATCH, Eco.EMBERS_WIN, Eco.EMBERS_DAILY], 10, Color("#ffe7c8"))
-	var shop_open: bool = app.forge_shop
-	var gb := UI2.button(er, "GET" if not shop_open else "CLOSE", "orange", func():
-		app.forge_shop = not app.forge_shop
-		app.sfx("menuOpen" if app.forge_shop else "menuClose")
-		app.rebuild(), "forge_get_embers", 13, 38.0, 11.0)
-	gb.custom_minimum_size.x = 76
-	gb.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	if shop_open:
-		var pr := HBoxContainer.new()
-		pr.add_theme_constant_override("separation", 8)
-		eb.add_child(pr)
-		for pk in Eco.EMBER_PACKS:
-			var pid := str(pk.id)
-			var cell := UI2.frame(pr, "night", 6, 12.0, "orange")
-			(cell.get_parent() as Control).size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			UI2.img(cell, "res://assets/ui/currency/embers.png", 34.0).size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-			UI2.center(UI2.text(cell, "%d" % int(pk.embers), 16, Color("#ffd9a0")))
-			var bb := UI2.button(cell, "%d" % int(pk.gems), "blue", func():
-				var res: Dictionary = p.buy_embers(pid)
-				if bool(res.get("ok", false)):
-					app.sfx("purchase")
-					app.toast("+%d Embers" % int(res.embers), EMBER_COLOR)
-					app.refresh_top()
-					app.rebuild()
-				else:
-					app.toast("Not enough gems", UI.RED), "forge_buy_" + pid, 13, 32.0, 10.0, "res://assets/ui/currency/gem.png")
-			bb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	# (0.31.93-0.31.183 the Embers stood here, with their packs: 0.31.184, the Forge is paid in gold -- the top bar has it)
 	# class picker (base classes, then the upgrades)
 	if str(app.forge_cls) == "worker":
 		app.forge_cls = "knight"                     # (0.31.164: the Worker was Siege's)
@@ -2737,15 +2698,14 @@ static func forge(app, root: VBoxContainer) -> void:
 	cr.alignment = BoxContainer.ALIGNMENT_CENTER
 	cr.add_theme_constant_override("separation", 14)
 	info.add_child(cr)
-	for cc in [["res://assets/ui/currency/embers.png", int(cost.embers), int(d.get("embers", 0)) >= int(cost.embers), EMBER_COLOR],
-			["res://assets/ui/currency/coin.png", int(cost.gold), int(d.gold) >= int(cost.gold), UI2.GOLD]]:
+	for cc in [["res://assets/ui/currency/coin.png", int(cost.gold), int(d.gold) >= int(cost.gold), UI2.GOLD]]:
 		var ch := HBoxContainer.new()
 		ch.add_theme_constant_override("separation", 4)
 		cr.add_child(ch)
 		UI2.img(ch, str(cc[0]), 26.0)
 		UI2.text(ch, UI.compact(int(cc[1])), 17, cc[3] if bool(cc[2]) else UI.RED, UI2.INK, 4)
 	var check: Dictionary = p.can_forge(wid, el)
-	var why := {"owned": "YOU DON'T OWN IT", "embers": "NEED MORE EMBERS", "gold": "NEED MORE GOLD", "wins": "%d MORE WINS" % maxi(0, Eco.FORGE_WINS - p.forge_wins(wid)), "element": "PICK AN ELEMENT"}
+	var why := {"owned": "YOU DON'T OWN IT", "gold": "NEED MORE GOLD", "wins": "%d MORE WINS" % maxi(0, Eco.FORGE_WINS - p.forge_wins(wid)), "element": "PICK AN ELEMENT"}
 	var label := "FORGE  %s" % str(fs.name).to_upper() if bool(check.ok) else str(why.get(str(check.why), "CAN'T FORGE"))
 	var fb := UI2.button(info, label, "orange" if bool(check.ok) else "grey", func():
 		var res: Dictionary = p.forge(wid, el)
@@ -2857,7 +2817,7 @@ static func _reward_chips(parent: Node, r: Dictionary, ink := Color.WHITE) -> HB
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	parent.add_child(row)
 	var parts := []
-	for k in ["gold", "embers", "gems", "chest", "item"]:
+	for k in ["gold", "gems", "chest", "item"]:
 		if r.has(k):
 			parts.append({k: r[k]})
 	for part in parts:
@@ -2868,7 +2828,7 @@ static func _reward_chips(parent: Node, r: Dictionary, ink := Color.WHITE) -> HB
 		if str(rt[3]) != "":
 			UI2.img(cell, str(rt[3]), 22.0).size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		var t := str(rt[1])
-		if part.has("gold") or part.has("gems") or part.has("embers"):
+		if part.has("gold") or part.has("gems"):
 			t = "+%d" % int(part.values()[0])
 		UI2.body(cell, t, 11, rt[2] if ink == Color.WHITE else ink, false).size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	return row
@@ -2903,9 +2863,9 @@ static func claim_quest(app, cls: String) -> void:
 		open_item(app, str(res.item))
 		return
 	var bits := []
-	for k in ["gold", "embers", "gems"]:
+	for k in ["gold", "gems"]:
 		if int(res.reward.get(k, 0)) > 0:
-			bits.append("+%d %s" % [int(res.reward[k]), {"gold": "gold", "embers": "Embers", "gems": "gems"}[k]])
+			bits.append("+%d %s" % [int(res.reward[k]), {"gold": "gold", "gems": "gems"}[k]])
 	if res.reward.has("chest"):
 		bits.append("a %s" % str(Eco.CHESTS[str(res.reward.chest)].name))
 	app.toast("Quest step %d done: %s" % [int(res.step) + 1, ", ".join(bits)], UI.GOLD)

@@ -467,8 +467,6 @@ func show_result(result: Dictionary = {}) -> void:
 		tot.add_theme_constant_override("separation", 10)
 		v.add_child(tot)
 		var totals := [["res://assets/ui/currency/coin.png", "+%d" % int(rw.gold), UI2.GOLD], ["", "+%d XP" % int(rw.xp), UI2.CYAN], ["", "+%d PASS" % int(rw.pass), UI2.PURPLE]]
-		if int(result.get("embers", 0)) > 0:                    # 0.31.93: Embers for the Forge
-			totals.append(["res://assets/ui/currency/embers.png", "+%d" % int(result.embers), Color("#ff9a3c")])
 		if totals.size() > 3:
 			tot.add_theme_constant_override("separation", 6)       # (four totals fit a narrow phone)
 		for tv in totals:

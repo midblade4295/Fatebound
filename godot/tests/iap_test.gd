@@ -1,6 +1,7 @@
 extends SceneTree
 # 0.31.90 in-app purchases (Kevin: "I want to incorporate IAP"; Play Console side: PLAY_IAP_HANDOFF.md). REAL time.
-#  1. The product table matches the handoff's IDs; Profile.grant_iap adds gems / Embers / a rare weapon once per token.
+#  1. The product table matches the handoff's IDs; Profile.grant_iap adds gems / gold (0.31.184: Embers before) / a
+#     weapon once per token.
 #  2. Billing (scripts/meta/billing.gd) against a stand-in for the Play plugin: prices from Google, buy -> server check ->
 #     grant -> consume (gem packs) or acknowledge (starter pack); the same purchase seen again grants nothing; pending,
 #     "unreachable" (kept, granted on resume) and "bad" purchases grant nothing.
@@ -79,9 +80,10 @@ func _init() -> void:
 	check(r.ok and int(r.gems) == 500 and int(p.d.gems) == g0 + 500, "a gem pack adds its gems")
 	r = p.grant_iap("gems_500", "tok-aaaaaaaaaaaa")
 	check(r.ok and bool(r.again) and int(p.d.gems) == g0 + 500, "the same token never grants twice")
+	var gold0 := int(p.d.gold)
 	r = p.grant_iap("starter_pack", "tok-starter-123456")
-	check(r.ok and int(p.d.embers) == 300 and int(r.gems) == 500 and str(r.item) != "" and p.owns(str(r.item)) and str(Eco.item(str(r.item)).rarity) == "epic"
-		and bool(p.d.iap.starter), "the starter pack (0.31.108): 500 gems, 300 Embers and an epic weapon not owned yet (%s)" % str(r.item))
+	check(r.ok and int(p.d.gold) == gold0 + 3000 and int(r.gold) == 3000 and int(r.gems) == 500 and str(r.item) != "" and p.owns(str(r.item)) and str(Eco.item(str(r.item)).rarity) == "epic"
+		and bool(p.d.iap.starter), "the starter pack (0.31.184): 500 gems, 3,000 gold and an epic weapon not owned yet (%s)" % str(r.item))
 	check(not p.grant_iap("chest_royal", "tok-zzzzzzzzzzzz").ok, "an unknown product grants nothing")
 	var p2 = fresh("allrares")
 	for id in Eco.chest_pool("epic"):
@@ -91,7 +93,7 @@ func _init() -> void:
 	check(str(r.item) == "" and int(p2.d.gems) == g2 + 500 + Eco.DUPE_GOLD.epic / 10, "owning every epic: gems instead of the weapon")
 	var p3 = Profile.new(p.path, "user://none.json")
 	p3.load_or_create()
-	check(p3.iap_granted("tok-aaaaaaaaaaaa") and int(p3.d.embers) == 300, "granted tokens and Embers are saved")
+	check(p3.iap_granted("tok-aaaaaaaaaaaa") and int(p3.d.gold) == gold0 + 3000, "granted tokens and gold are saved")
 
 	# ---- 2. billing against a stand-in plugin
 	var bp = fresh("billing")
