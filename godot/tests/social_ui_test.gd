@@ -230,7 +230,7 @@ func _process(delta: float) -> bool:
 		"home_party":
 			if t_phase > 0.5:
 				# 0.31.170 (the online 5v5): the leader's PLAY takes the party (0.31.164-169: none -- PLAY was offline)
-				check(has_text(app.content, "PARTY 2/4") and has_text(app.content, "PLAY ×2"), "Home shows the party (0.31.139: at the top) and PLAY ×2")
+				check(has_text(app.content, "PARTY 2/5") and has_text(app.content, "PLAY ×2"), "Home shows the party of up to 5 (0.31.139: at the top; 0.31.196: 5) and PLAY ×2")
 				_shot("social_home_party")
 				press("play")
 				_go("party_heroes")

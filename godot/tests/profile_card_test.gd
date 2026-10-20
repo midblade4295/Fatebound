@@ -15,7 +15,7 @@ const Eco = preload("res://scripts/meta/economy.gd")
 const Net = preload("res://scripts/siege/siege_net.gd")
 const App = preload("res://scripts/app/siege_app.gd")
 
-const CARD_KEYS := ["t", "k", "pid", "ok", "n", "tt", "rank", "lv", "m", "w", "r", "ko", "bs", "since", "cls", "cm", "cw", "sk", "ct", "tw"]   # (0.31.134: "ct", the clan tag; 0.31.188: "sk" for the weapon's wpn/wr/ws/wc/ww)
+const CARD_KEYS := ["t", "k", "pid", "ok", "n", "tt", "rank", "lv", "m", "w", "r", "ko", "bs", "since", "cls", "cm", "cw", "sk", "ct", "cc", "tw"]   # (0.31.134: "ct", the clan tag; 0.31.188: "sk" for the weapon's wpn/wr/ws/wc/ww; 0.31.196: "cc", the clan's crest)
 
 var fails: Array = []
 var port := 8108
