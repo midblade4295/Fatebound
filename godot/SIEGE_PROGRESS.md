@@ -6196,3 +6196,6 @@ wider: FROSTBOUND wrapped in the Shop). Kevin: "Do A."; the small text (Nunito):
 - side_view_test: your own nameplate green.
 - Version 0.31.195, versionCode 281, SERVER_BUILD 0.31.195. Packs unchanged (the font is in the base build); CONTENT OK,
   coverage OK, presets unchanged.
+- Verified: suite all passed, COLD_START_PASS, the Play-shape AAB check exit 0 (bundletool valid, BASE OK 275 files),
+  presets unchanged. Preview APK: build/Fatebound-Siege-0.31.195-fatebound.apk (32 MB, preview key), sha256
+  dcf9fe6e...c9e319681cd93f68.
