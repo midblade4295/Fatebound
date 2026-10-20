@@ -6176,3 +6176,6 @@ today's Home and the six champions as references: art_sources/home_redesign/). K
   Meshy miniatures and the map) -- only Home's table showed them since Crown War went (0.31.169). Left for now.
 - Content pack: ui-e6754bd2e4ad uploaded; CONTENT OK, coverage OK, presets unchanged.
 - Version 0.31.194, versionCode 280, SERVER_BUILD 0.31.194.
+- Verified: suite all passed, COLD_START_PASS, the Play-shape AAB check exit 0 (bundletool valid, BASE OK 275 files),
+  presets unchanged. Preview APK: build/Fatebound-Siege-0.31.194-fatebound.apk (32 MB, preview key), sha256
+  62d2473c...5923bcbc37b0b2b78.
