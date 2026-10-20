@@ -100,7 +100,7 @@ func _tile(parent: Node, i: int, claimed: bool, is_today: bool, wide: bool) -> v
 	v.alignment = BoxContainer.ALIGNMENT_CENTER
 	v.add_theme_constant_override("separation", 1)
 	t.add_child(v)
-	UI2.center(UI2.text(v, "DAY %d" % (i + 1), 12, UI2.GOLD if is_today else Color.WHITE))
+	UI2.center(UI2.text(v, "DAY %d" % (i + 1), 12, UI2.CYAN if is_today else Color.WHITE))
 	var icons := HBoxContainer.new()
 	icons.alignment = BoxContainer.ALIGNMENT_CENTER
 	icons.add_theme_constant_override("separation", 2)

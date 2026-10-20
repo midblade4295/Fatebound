@@ -2,7 +2,10 @@ extends RefCounted
 # Fatebound Siege UI toolkit: palette, fonts and styled building blocks for the app shell.
 # Static helpers only; screens call these so the whole app shares one look.
 
-const TITLE_FONT = preload("res://assets/fonts/Cinzel-Black.woff2")
+# 0.31.195 (Kevin: "Change text style of UI" -> Lilita One, "A"): the titles and buttons in Lilita One (Brawl Stars'
+# face), the small text still Nunito; Cinzel only for the champions' lore lines (their epithet and their saying)
+const TITLE_FONT = preload("res://assets/fonts/LilitaOne-Regular.ttf")
+const LORE_FONT = preload("res://assets/fonts/Cinzel-Black.woff2")
 const HEAVY_FONT = preload("res://assets/fonts/Nunito-ExtraBold.woff2")
 const BODY_FONT = preload("res://assets/fonts/Nunito-Bold.woff2")
 const Icon = preload("res://scripts/app/icon.gd")
@@ -57,12 +60,20 @@ static func card(parent: Node, fill := CARD, border := CARD_HI) -> VBoxContainer
 	p.add_child(v)
 	return v
 
+# 0.31.195 (Kevin: "Also I don't like the yellow"): no yellow text anywhere -- a gold or yellow colour asked of a label
+# is drawn white (the gold stays on frames, rims, glows and buttons); a highlight that was gold is green for you
+# (your name in the boards and the kill banners) and cyan for what's picked (the open class, today, the current step)
+static func ink(c: Color) -> Color:
+	if c.h > 0.105 and c.h < 0.19 and c.s > 0.38 and c.v > 0.8:
+		return Color(1.0, 1.0, 1.0, c.a)
+	return c
+
 static func label(parent: Node, text: String, size := 14, color := TEXT, font: Font = null, outline := false) -> Label:
 	var l := Label.new()
 	l.text = text
 	l.add_theme_font_override("font", font if font != null else HEAVY_FONT)
 	l.add_theme_font_size_override("font_size", size)
-	l.add_theme_color_override("font_color", color)
+	l.add_theme_color_override("font_color", ink(color))
 	if outline:
 		l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
 		l.add_theme_constant_override("outline_size", maxi(3, size / 5))

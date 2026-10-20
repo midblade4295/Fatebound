@@ -142,7 +142,7 @@ func update(msg: Dictionary) -> void:
 	if left < 0.0 or absf(l - left) > 0.35:        # (between messages the clock runs here; resync on drift)
 		left = l
 	title.text = "BATTLE STARTS IN"
-	title.add_theme_color_override("font_color", GOLD)
+	title.add_theme_color_override("font_color", Color.WHITE)     # (0.31.195: no yellow text)
 	var slots := int(msg.get("slots", 10))
 	var online := int(msg.get("online", 1))
 	count_lbl.text = "%d / %d PLAYERS" % [mini(online, slots), slots]

@@ -957,7 +957,7 @@ func _on_action_online(kind: String) -> void:
 const WARM_MIN := 0.6
 const WARM_MAX := 10.0
 const WARM_STILL := 0.5
-const _LOGO_FONT = preload("res://assets/fonts/LuckiestGuy-Regular.ttf")
+const _LOGO_FONT = preload("res://assets/fonts/LilitaOne-Regular.ttf")
 const _TitleLogo = preload("res://scripts/app/title_logo.gd")
 const _COVER_WALL := "res://assets/ui/v2/bg_title_wall.webp"
 var _warm: Dictionary = {}

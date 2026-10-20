@@ -168,7 +168,7 @@ func _row(parent: Node, r: Dictionary) -> void:
 	var nm := str(r.get("name", "Player"))
 	if str(r.get("ct", "")) != "":
 		nm = "[%s] %s" % [str(r.ct), nm]                # 0.31.134: their clan's tag
-	var nl := UI.label(col, nm + ("  (you)" if mine else ""), 14, UI2.GOLD if mine else Color.WHITE, UI.HEAVY_FONT)
+	var nl := UI.label(col, nm + ("  (you)" if mine else ""), 14, UI2.GREEN if mine else Color.WHITE, UI.HEAVY_FONT)
 	nl.autowrap_mode = TextServer.AUTOWRAP_OFF
 	nl.clip_text = true
 	nl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS

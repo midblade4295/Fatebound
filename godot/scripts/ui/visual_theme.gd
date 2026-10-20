@@ -2,7 +2,7 @@ extends RefCounted
 # One visual language for the native menus and the match HUD.
 const BODY_FONT = preload("res://assets/fonts/DejaVuSans.ttf")
 const BOLD_FONT = preload("res://assets/fonts/Nunito-ExtraBold.woff2")
-const TITLE_FONT = preload("res://assets/fonts/Cinzel-Black.woff2")      # Cinzel (OFL) for big titles
+const TITLE_FONT = preload("res://assets/fonts/LilitaOne-Regular.ttf")  # big titles (0.31.195: Lilita One, as the menus; Cinzel before)
 const INK := Color("#06131b")
 const SURFACE := Color("#091d27")
 const RAISED := Color("#102c37")

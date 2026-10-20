@@ -6179,3 +6179,20 @@ today's Home and the six champions as references: art_sources/home_redesign/). K
 - Verified: suite all passed, COLD_START_PASS, the Play-shape AAB check exit 0 (bundletool valid, BASE OK 275 files),
   presets unchanged. Preview APK: build/Fatebound-Siege-0.31.194-fatebound.apk (32 MB, preview key), sha256
   62d2473c...5923bcbc37b0b2b78.
+
+## 0.31.195 — the UI's text: Lilita One, and no yellow
+Kevin: "Change text style of UI". Shown in the game (Home with its menu, the Shop): the titles and buttons as they were
+(Luckiest Guy) and in four free (OFL) faces -- A Lilita One, B Titan One, C Bowlby One SC, D Cinzel Decorative (B-D
+wider: FROSTBOUND wrapped in the Shop). Kevin: "Do A."; the small text (Nunito): "Keep. Also I don't like the yellow".
+- assets/fonts/LilitaOne-Regular.ttf (Juan Montoreano, OFL: LICENSE-LilitaOne-OFL.txt) for every title, button and
+  board label -- UI2.LG, UI.TITLE_FONT, the HUD's big titles (VisualTheme.TITLE_FONT, Cinzel before), the kill banners,
+  the match's logo, the first-start download screen; Luckiest Guy and its licence gone. Cinzel stays only for the
+  champions' lore lines in their window (UI.LORE_FONT: the epithet and the saying). Nunito unchanged.
+- No yellow text: UI.ink() draws any gold or yellow asked of a label white (UI.label, UI2.text and so every chip and
+  heading, the toasts, the HUD's labels, drawn text and toasts); gold stays on frames, rims, glows and gold buttons.
+  Where gold marked something it's now green for you (your name on the boards, the kill banners, your nameplate over
+  your hero, your quick chat) and cyan for what's picked (the open class, today's reward, the current quest step); the
+  open tab's label white (the others a muted cream). Home's JOIN OUR DISCORD a size smaller, its +100 tag off the words.
+- side_view_test: your own nameplate green.
+- Version 0.31.195, versionCode 281, SERVER_BUILD 0.31.195. Packs unchanged (the font is in the base build); CONTENT OK,
+  coverage OK, presets unchanged.

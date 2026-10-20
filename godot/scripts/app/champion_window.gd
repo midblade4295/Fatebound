@@ -129,7 +129,7 @@ func open(a, hid: String, show_skin := "__worn") -> void:
 	var nm := UI2.text(head, str(ch.get("name", hero)).to_upper(), 27, Color.WHITE, acc.darkened(0.7), 7)
 	nm.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	nm.set_meta("champ_name", true)
-	var ep := UI.label(head, str(ch.get("title", "")), 15, acc.lightened(0.55), UI.TITLE_FONT, true)
+	var ep := UI.label(head, str(ch.get("title", "")), 15, acc.lightened(0.55), UI.LORE_FONT, true)
 	ep.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
 	ep.add_theme_constant_override("outline_size", 5)
 	var x := UI2.button(self, "✕", "ghost", close, "champ_close", 20, 44.0, 14.0)
@@ -305,7 +305,7 @@ func _render() -> void:
 	_head(_sheet, "THE STORY", "", acc)
 	var lore := UI2.body(_sheet, str(ch.get("lore", "")), 12, Color("#efe6d6"))
 	lore.custom_minimum_size.x = 10
-	var q := UI.label(_sheet, "“%s”" % str(ch.get("quote", "")), 14, acc.lightened(0.45), UI.TITLE_FONT, true)
+	var q := UI.label(_sheet, "“%s”" % str(ch.get("quote", "")), 14, acc.lightened(0.45), UI.LORE_FONT, true)
 	q.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	q.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	q.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))

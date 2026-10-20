@@ -1,10 +1,11 @@
 extends RefCounted
 # 0.31.79 menu look (Kevin: "really spruce up the menus ... very good looking and have animated parts"): framed panels
-# on damask / parchment / wood / stone, glossy lipped buttons, Luckiest Guy titles with chunky outlines, ribbons,
+# on damask / parchment / wood / stone, glossy lipped buttons, chunky outlined titles (0.31.195: Lilita One, white --
+# Luckiest Guy and gold until then), ribbons,
 # dividers and the 3D-style icons. Every box is one SDF skin (skin.gd + ui_skin.gdshader), crisp at any density.
 const UI = preload("res://scripts/app/ui.gd")
 const SkinNode = preload("res://scripts/app/skin.gd")
-const LG = preload("res://assets/fonts/LuckiestGuy-Regular.ttf")
+const LG = preload("res://assets/fonts/LilitaOne-Regular.ttf")      # 0.31.195 (Kevin picked "A"; Luckiest Guy before)
 
 const V2 := "res://assets/ui/v2/"
 const INK := Color("#2a1604")
@@ -125,7 +126,7 @@ static func text(parent: Node, s: String, size := 20, color := Color.WHITE, ink 
 	l.text = s
 	l.add_theme_font_override("font", LG)
 	l.add_theme_font_size_override("font_size", size)
-	l.add_theme_color_override("font_color", color)
+	l.add_theme_color_override("font_color", UI.ink(color))     # (0.31.195: no yellow text)
 	var o := outline if outline >= 0 else maxi(4, int(round(size / 3.2)))
 	if o > 0:
 		l.add_theme_color_override("font_outline_color", ink)

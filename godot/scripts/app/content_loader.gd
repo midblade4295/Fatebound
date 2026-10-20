@@ -21,7 +21,7 @@ const TITLE := "res://scripts/app/title_screen.gd"   # 0.31.141: up first, the g
                                                      # its art is in the ui pack, mounted first)
 const CHUNK := 8 * 1024 * 1024
 const RETRY := [2.0, 4.0, 8.0, 15.0, 30.0]
-const TITLE_FONT = preload("res://assets/fonts/LuckiestGuy-Regular.ttf")
+const TITLE_FONT = preload("res://assets/fonts/LilitaOne-Regular.ttf")
 const BODY_FONT = preload("res://assets/fonts/Nunito-ExtraBold.woff2")
 const GOLD := Color("#ffc23d")
 
@@ -463,7 +463,7 @@ func _build_ui() -> void:
 	title = _label("", TITLE_FONT, 10, Color.WHITE, 2)      # (the title is the picture above now)
 	title.visible = false
 	col.add_child(title)
-	col.add_child(_label("UPDATING", TITLE_FONT, 30, GOLD, 8))
+	col.add_child(_label("UPDATING", TITLE_FONT, 30, Color.WHITE, 8))   # (0.31.195: white, not gold)
 	var gap := Control.new()
 	gap.custom_minimum_size = Vector2(0, 6)
 	col.add_child(gap)

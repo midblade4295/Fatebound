@@ -5,7 +5,7 @@ extends Control
 # banners, one at a time a little above the middle of the screen, from the sim's "kb" and "ace" events.
 #  - every hero kill: the name plaque (assets/ui/banners/plaque_*, ElevenLabs), the killer's portrait and the victim's
 #    (greyed, a skull on it) in its sockets, "<killer>  HAS SLAIN  <victim>" between them -- names in their sides'
-#    colours (yours gold); blue when your side made the kill, red when the enemy did;
+#    colours (yours green since 0.31.195, gold before); blue when your side made the kill, red when the enemy did;
 #  - over it the painted title for FIRST BLOOD, DOUBLE / TRIPLE / QUADRA KILL, PENTAKILL and SHUTDOWN (the gold paid
 #    under the plaque); ACE on its own with the five fallen;
 #  - each slams in (big, then settling), holds, fades. Effects: a light sweeps across the title; FIRST BLOOD bursts
@@ -27,7 +27,7 @@ const LIFE := {"kill": 2.4, "first_blood": 3.2, "double": 2.8, "triple": 3.0, "q
 const OUT := 0.35                       # the fade at the end
 const CUT_AFTER := 0.8                  # a newer banner may cut the one showing short after this long
 const SIDE_COL := [Color("#7fe0ff"), Color("#ff8f6a")]
-const YOU_COL := Color("#ffd65a")
+const YOU_COL := Color("#8cf0a8")        # your own name (0.31.195: green -- no yellow text)
 const SHINE_CODE := """
 shader_type canvas_item;
 uniform float sweep = -1.0;
@@ -59,7 +59,7 @@ var _drip_t := 0.0
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_lg = load("res://assets/fonts/LuckiestGuy-Regular.ttf")
+	_lg = load("res://assets/fonts/LilitaOne-Regular.ttf")
 	_rng.seed = 180
 	_art = TextureRect.new()
 	_art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -328,7 +328,7 @@ func _draw_plaque(a: float) -> void:
 		var coin := tex("res://assets/ui/currency/coin.png")
 		if coin != null:
 			_front.draw_texture_rect(coin, Rect2(cr.position + Vector2(5, 3), Vector2(26, 26)), false, w)
-		_word(txt, _lg, 24, cr.position + Vector2(34, 26), Color("#ffd65a"), a)
+		_word(txt, _lg, 24, cr.position + Vector2(34, 26), Color.WHITE, a)
 		var sub := "%d BOUNTY" % int(cur.bounty)
 		var sw := bold.get_string_size(sub, HORIZONTAL_ALIGNMENT_LEFT, -1, 10).x
 		_word(sub, bold, 10, Vector2(-sw * 0.5, cr.end.y + 13.0), Color("#e8dcc0"), a)

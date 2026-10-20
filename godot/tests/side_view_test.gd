@@ -85,10 +85,10 @@ func _verify(i: int) -> void:
 	var bots := 0
 	for b in view.bars():
 		if b.has("name"):
-			if str(b.name) == "Midblade" and b.name_color == Color("#ffd65a") and b.color == Color("#7dff8a"): mine += 1
+			if str(b.name) == "Midblade" and b.name_color == Color("#8cf0a8") and b.color == Color("#7dff8a"): mine += 1
 			elif str(b.name).begins_with("Bot "): bots += 1
 			else: others += 1
-	check(mine == 1 and others == 0 and mode.net_names.is_empty(), "my own nameplate, gold, with no names from a server; the bots' by their names (%d mine, %d bots, %d others)" % [mine, bots, others])
+	check(mine == 1 and others == 0 and mode.net_names.is_empty(), "my own nameplate, green (0.31.195; gold before), with no names from a server; the bots' by their names (%d mine, %d bots, %d others)" % [mine, bots, others])
 	# The stick: pushed up the unit heads up the screen, pushed right it heads right.
 	var p0 := Vector3(me.pos.x, Sim_height(me.pos), me.pos.y)
 	var s0: Vector2 = view.screen_point(p0)

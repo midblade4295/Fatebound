@@ -4913,15 +4913,15 @@ func bars() -> Array:
 			# against bots too and doesn't wait on the server
 			bar["name"] = ("[%s] %s" % [my_tag, my_name]) if my_tag != "" else my_name
 			bar["title"] = my_title
-			bar["name_color"] = Color("#ffd65a")
+			bar["name_color"] = Color("#8cf0a8")       # (0.31.195: yours green -- no yellow text; gold until then)
 		elif player_names.has(u.id):
 			# 0.31.86 (Kevin: "shows the player names on the battlefield above their heads. Only live players will show
-			# names."): over the bar -- yours gold, your side's light blue, theirs light red (0.31.177: bots by their names)
+			# names."): over the bar -- yours gold (green since 0.31.195), your side's light blue, theirs light red (0.31.177: bots by their names)
 			bar["name"] = str(player_names[u.id])
 			if str(player_tags.get(u.id, "")) != "":
 				bar["name"] = "[%s] %s" % [str(player_tags[u.id]), str(player_names[u.id])]   # 0.31.134: their clan's tag
 			bar["title"] = str(player_titles.get(u.id, ""))
-			bar["name_color"] = Color("#ffd65a") if u.id == player_id else (Color("#bfeeff") if vt(int(u.team)) == 0 else Color("#ffc4b4"))
+			bar["name_color"] = Color("#8cf0a8") if u.id == player_id else (Color("#bfeeff") if vt(int(u.team)) == 0 else Color("#ffc4b4"))
 		elif bool(u.get("hero", false)) and bool(u.get("bot", false)) and sim.moba != null:
 			# 0.31.177 (Kevin: "Put the player names above the players so people know if it's player or minion easier. If
 			# it's a bot then give bot name like "bot Alfred""): a bot's hero too, by its seat's name, a shade softer

@@ -163,7 +163,7 @@ func add_ping(unit: String, i: int, name: String) -> void:
 	_pings.append({"u":unit, "i":i, "at":_time})
 	var u: Dictionary = sim.by_id.get(unit, {}) if sim != null else {}
 	var me: Dictionary = sim.by_id.get(player_id, {}) if sim != null else {}
-	var col: Color = Color("#ffd65a") if unit == player_id else (TEAM_COLORS[vt(int(u.team))] if not u.is_empty() else Color.WHITE)
+	var col: Color = Color("#8cf0a8") if unit == player_id else (TEAM_COLORS[vt(int(u.team))] if not u.is_empty() else Color.WHITE)
 	_feed.append({"n":name if name != "" else "Ally", "i":i, "at":_time, "col":col, "enemy":not u.is_empty() and not me.is_empty() and int(u.team) != int(me.team)})
 	while _feed.size() > 3:
 		_feed.pop_front()
@@ -264,7 +264,7 @@ func _label(parent: Node, text: String, size_px: int, color: Color, font: Font =
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	l.custom_minimum_size = Vector2(290, 0)
 	l.add_theme_font_size_override("font_size", size_px)
-	l.add_theme_color_override("font_color", color)
+	l.add_theme_color_override("font_color", UI.ink(color))       # (0.31.195: no yellow text)
 	if font != null:
 		l.add_theme_font_override("font", font)
 	parent.add_child(l)
@@ -675,7 +675,7 @@ func _score_row(v: VBoxContainer, u: Dictionary, rank: int, mine: bool, side: in
 	rl.autowrap_mode = TextServer.AUTOWRAP_OFF
 	rl.custom_minimum_size = Vector2(18, 0)
 	var name_col := Color.WHITE if is_player(u) else Color(1, 1, 1, 0.62)
-	var nl := UI.label(h, display_name(u), 13, UI2.GOLD if mine else name_col, UI.HEAVY_FONT)
+	var nl := UI.label(h, display_name(u), 13, UI2.GREEN if mine else name_col, UI.HEAVY_FONT)    # (0.31.195: green, not gold)
 	nl.autowrap_mode = TextServer.AUTOWRAP_OFF
 	nl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	nl.clip_text = true
@@ -689,7 +689,7 @@ func _score_row(v: VBoxContainer, u: Dictionary, rank: int, mine: bool, side: in
 func toast(text: String, color := Color.WHITE) -> void:
 	_toast = text
 	_toast_at = _time
-	_toast_color = color
+	_toast_color = UI.ink(color)
 
 func on_event(e: Dictionary) -> void:
 	var me: Dictionary = sim.by_id.get(player_id, {})
@@ -925,7 +925,7 @@ func _text(pos: Vector2, text: String, size_px: int, color: Color, font: Font = 
 		width = 400.0
 		pos.x -= width * 0.5
 	_ci.draw_string_outline(f, pos, text, align, width, size_px, 5, Color(0, 0, 0, 0.6))
-	_ci.draw_string(f, pos, text, align, width, size_px, color)
+	_ci.draw_string(f, pos, text, align, width, size_px, UI.ink(color))   # (0.31.195: no yellow text)
 
 # ---------- the top layer (0.31.160) ----------
 var _top_layer: Control = null
@@ -1500,7 +1500,7 @@ func _draw_numbers() -> void:
 			continue   # keep clear of the scoreboard and status lines
 		var c := Color("#ff6b5a") if n.mine else Color("#fff1c2")
 		if bool(n.get("gold", false)):
-			c = Color("#ffd65a")                       # 0.31.157 5V5: gold you earned
+			c = Color("#ffd65a")                       # 0.31.157 5V5: gold you earned (_text draws it white: 0.31.195)
 		c.a = 1.0 - u * u
 		_text(p + Vector2(0, -34.0 * u), str(n.text), 18, c, _bold)
 
@@ -1981,7 +1981,7 @@ func _refresh_shop(me: Dictionary) -> void:
 		var why: String = sim.moba.buy_why(me, id)
 		var can := why == "" or why == "where"
 		(cell.price as Label).text = str(pr)
-		(cell.price as Label).add_theme_color_override("font_color", Color("#ffd65a") if gold >= pr else Color("#a08c70"))
+		(cell.price as Label).add_theme_color_override("font_color", Color.WHITE if gold >= pr else Color("#a08c70"))   # (0.31.195: white, not gold)
 		(cell.name as Label).add_theme_color_override("font_color", Color("#f2e6cf") if can else Color("#9a927f"))
 		(cell.icon as ItemIcon).dim = not can
 		(cell.icon as ItemIcon).queue_redraw()
@@ -2097,7 +2097,7 @@ func close_board() -> void:
 		board_panel.visible = false
 
 func _bl(parent: Node, text: String, px: int, col: Color, w := 0.0, align := HORIZONTAL_ALIGNMENT_LEFT, lg := true) -> Label:
-	# a board label: Luckiest Guy (numbers, names of sides) or the bold body font
+	# a board label: the title face (numbers, names of sides; Lilita One since 0.31.195) or the bold body font
 	var l := Label.new()
 	l.text = text
 	l.add_theme_font_override("font", UI2.LG if lg else _bold)

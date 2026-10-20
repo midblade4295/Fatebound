@@ -249,7 +249,7 @@ static func _first_win_tab(parent: Control) -> Control:
 static func _discord_button(app, top: Control, at: Rect2) -> void:
 	# 0.31.125: JOIN OUR DISCORD, its gift as a tag on its corner, until it's claimed (0.31.194: on the top row's right,
 	# two lines, as B2 has it)
-	var db := UI2.button(top, "JOIN OUR\nDISCORD", "discord", func(): discord_press(app), "home_discord", 12, at.size.y, 14.0)
+	var db := UI2.button(top, "JOIN OUR\nDISCORD", "discord", func(): discord_press(app), "home_discord", 11, at.size.y, 14.0)
 	db.name = "HomeDiscord"
 	db.position = at.position
 	db.size = at.size
@@ -282,7 +282,7 @@ static func _discord_button(app, top: Control, at: Rect2) -> void:
 	gl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	gr.add_child(gl)
 	gt.reset_size()
-	gt.position = Vector2(at.size.x - gt.get_combined_minimum_size().x + 8.0, at.size.y - 12.0)
+	gt.position = Vector2(at.size.x - gt.get_combined_minimum_size().x + 10.0, at.size.y - 5.0)   # (off the words)
 
 static func _tag(parent: Control, text: String, font := 12) -> PanelContainer:
 	# a gold tag with dark text (the tutorial's gold in the menu)
@@ -1524,7 +1524,7 @@ static func _class_coin(parent: Node, cls: String, on: bool, key: String, on_pre
 	t.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	clip.add_child(t)
 	if label != "":
-		var l := UI2.text(b, label, 9, UI2.GOLD if on else Color.WHITE, UI2.INK, 3, false)
+		var l := UI2.text(b, label, 9, UI2.CYAN if on else Color.WHITE, UI2.INK, 3, false)
 		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		l.position = Vector2(-10, px + 1)
 		l.size = Vector2(px + 20, 12)
@@ -2357,7 +2357,7 @@ static func quest_step_card(app, root: Node, cls: String, i: int) -> void:
 	disc.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	r.add_child(disc)
 	UI2.plate(disc, "royal" if not claimed else "night", 20.0, "gold" if (current or claimed) else "silver", {"rim": 2.0})
-	var dl := UI2.text(disc, "✔" if claimed else str(i + 1), 18, UI2.GOLD if current else Color.WHITE, UI2.INK, 4)
+	var dl := UI2.text(disc, "✔" if claimed else str(i + 1), 18, UI2.CYAN if current else Color.WHITE, UI2.INK, 4)
 	dl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	dl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	dl.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)

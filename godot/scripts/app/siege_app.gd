@@ -461,7 +461,7 @@ func _build_hero() -> void:
 	# fatebound title and instead put that in a startup screen and any loading screens": the title screen
 	# (title_screen.gd), the first-start download screen and the match's warm-up cover have it now.)
 
-const LOGO_FONT = preload("res://assets/fonts/LuckiestGuy-Regular.ttf")
+const LOGO_FONT = preload("res://assets/fonts/LilitaOne-Regular.ttf")
 
 func hero_show(_cls := "", _look := {}) -> void:
 	# (Home builds call this:) the camp laid out again, now that the chat line and the tab bar are there to measure
@@ -733,7 +733,7 @@ func _style_tab(tb: Dictionary, on: bool) -> void:
 	b.resized.connect(place)
 	place.call()
 	ic.modulate = Color.WHITE if on else Color(0.92, 0.88, 0.84)
-	l.add_theme_color_override("font_color", UI2.GOLD if on else Color("#f1dfba"))
+	l.add_theme_color_override("font_color", Color.WHITE if on else Color("#d8c7a8"))     # (0.31.195: white, not gold)
 	l.add_theme_font_size_override("font_size", 13 if on else 10)
 	l.add_theme_constant_override("outline_size", 4 if on else 3)
 	var key := str(b.get_meta("action_key"))
@@ -1210,7 +1210,7 @@ func paint_online() -> void:
 # ---------------- feedback ----------------
 func toast(text: String, color := UI.TEXT) -> void:
 	_toast.text = text
-	_toast.add_theme_color_override("font_color", color)
+	_toast.add_theme_color_override("font_color", UI.ink(color))     # (0.31.195: the good news white, not gold)
 	_toast_box.visible = true
 	_toast_box.modulate.a = 1.0
 	_toast_until = Time.get_ticks_msec() / 1000.0 + 2.8
