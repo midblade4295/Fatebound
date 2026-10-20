@@ -60,17 +60,9 @@ var profile
 var audio: Node
 var tab := "home"
 var home_class := "knight"
-# 0.31.187: the Locker's three tabs -- CHAMPIONS (first), ARMORY (a class's weapons: locker_class) and TITLES. Picking a
-# class (or "titles") in locker_class picks its tab too, as before the tabs.
+# 0.31.187: the Locker's tabs -- CHAMPIONS (first) and TITLES (0.31.187's ARMORY, a class's weapons, went with them)
 var locker_tab := "champions"
-var locker_class := "knight":
-	set(v):
-		locker_class = v
-		locker_tab = "titles" if v == "titles" else "armory"
-var forge_cls := "knight"              # 0.31.93: the Forge's class, weapon (Eco.forge_id) and the element picked for star 3
-var forge_pick := ""
 var quest_cls := ""                   # 0.31.97: the class shown on the Quests screen ("" = the first with a step ready)
-var forge_element := ""
 var siege = null
 var home_fixed := false                # 0.31.112: Home fits the screen and doesn't scroll (Screens.home sets it)
 
@@ -996,7 +988,6 @@ func rebuild() -> void:
 		"shop": Screens.shop(self, content)
 		"locker": Screens.locker(self, content)
 		"settings": Screens.settings(self, content)
-		"forge": Screens.forge(self, content)
 		"quests": Screens.quests(self, content)
 	refresh_top()
 
@@ -1736,8 +1727,8 @@ func _on_iap_granted(product: String, g: Dictionary) -> void:
 	var bits := ["+%s gems" % UI.compact(int(g.get("gems", 0)))]
 	if int(g.get("gold", 0)) > 0:
 		bits.append("+%s gold" % UI.grouped(int(g.gold)))
-	if str(g.get("item", "")) != "":
-		bits.append(str(Eco.item(str(g.item)).get("name", "")))
+	if int(g.get("token", 0)) > 0:
+		bits.append("a Hero Token")                  # 0.31.188: the starter pack's (it held a weapon)
 	toast("  ·  ".join(bits), UI.GOLD)
 	rebuild()
 

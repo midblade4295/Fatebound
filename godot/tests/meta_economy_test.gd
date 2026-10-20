@@ -1,6 +1,7 @@
 extends SceneTree
 # Economy + profile: migration, rewards, levels, pass, premium, shop, equip, challenges, rollover,
-# persistence, corrupt profile, catalog integrity.
+# persistence, corrupt profile, catalog integrity. (0.31.188: the catalog is titles only -- outfits are the cosmetics;
+# outfits_test has them.)
 const Eco = preload("res://scripts/meta/economy.gd")
 const View = preload("res://scripts/siege/siege_view.gd")
 const Profile = preload("res://scripts/meta/profile.gd")
@@ -26,53 +27,19 @@ func fresh(tag: String, legacy: Dictionary = {}) -> Profile:
 
 func _init() -> void:
 	# ---- catalog integrity ----
-	var models_ok := true
+	var titles_only := true
 	for id in Eco.CATALOG:
-		var it: Dictionary = Eco.CATALOG[id]
-		if it.kind == "weapon":
-			for hand in ["r", "l"]:
-				var m := str(it.get(hand, ""))
-				var mpath := View.weapon_path(m)
-				if m != "" and (not FileAccess.file_exists(mpath) or (m.begins_with("mw/") and not View.MESHY_WEAPON_LIKE.has(m.substr(3)))):
-					models_ok = false; print("   missing model ", m, " for ", id)
-		if it.kind == "skin" and not Color.html_is_valid(str(it.tint)):
-			models_ok = false
-		if it.kind != "title" and not (Eco.CLASSES + Eco.UP_CLASSES).has(str(it["class"])):        # (0.31.38: upgraded classes too)
-			models_ok = false
-	check(models_ok, "every catalog weapon model exists, skins have valid tints, classes valid")
-	var items := Eco.pass_items(1)
-	var uniq := {}
-	for i in items: uniq[i] = true
-	var want := Eco.PASS_FREE_ITEMS + Eco.PASS_PREMIUM_ITEMS
-	check(items.size() == want and uniq.size() == want, "season pass has %d distinct cosmetics" % want)
-	# 0.31.42: the premium side has more unlocks and the best gear
-	var rank := func(id): return int(Eco.RARITY_RANK.get(str(Eco.CATALOG[id].rarity), 1))
-	var free_best := 0
-	for i in Eco.PASS_FREE_ITEMS: free_best = maxi(free_best, rank.call(items[i]))
-	var prem_low := 9
-	var prem_top := 0
-	for i in range(Eco.PASS_FREE_ITEMS, want):
-		prem_low = mini(prem_low, rank.call(items[i]))
-		prem_top = maxi(prem_top, rank.call(items[i]))
-	check(Eco.PASS_PREMIUM_ITEMS > Eco.PASS_FREE_ITEMS * 3 and free_best <= prem_low and prem_top == 3, "premium: %d items incl. legendary, free: %d of the lowest rarity" % [Eco.PASS_PREMIUM_ITEMS, Eco.PASS_FREE_ITEMS])
-	check(Eco.pass_reward(1, 30, true).get("item", "") == items[want - 1], "the season's best item is premium tier 30")
-	# Packs: price covers only what isn't owned; a fully owned pack can't be bought.
-	var pk: Dictionary = Eco.PACKS["pack_warlord"]
-	var full := Eco.pack_price("pack_warlord", [])
-	var half := Eco.pack_price("pack_warlord", [pk.items[0]])
-	check(full == int(pk.gems) and half > 0 and half < full and Eco.pack_price("pack_warlord", pk.items) == 0,
-		"pack price: full %d, one item owned %d, all owned 0" % [full, half])
-	for pid in Eco.PACKS:
-		for id in Eco.PACKS[pid].items:
-			check(not Eco.item(id).is_empty(), "pack %s item %s exists" % [pid, id])
+		titles_only = titles_only and str(Eco.CATALOG[id].kind) == "title" and str(id).begins_with("title_")
+	check(titles_only and Eco.CATALOG.size() > 5, "the catalog is titles only (0.31.188: no weapons, no packs) -- %d" % Eco.CATALOG.size())
 	var pass_valid := true
 	for tier in range(1, Eco.PASS_TIERS + 1):
 		for prem in [false, true]:
 			var r := Eco.pass_reward(1, tier, prem)
-			if r.is_empty() or (r.has("item") and not Eco.CATALOG.has(r.item)): pass_valid = false
-	check(pass_valid, "all 60 pass rewards are valid")
-	check(Eco.shop_daily(1791000000).size() == Eco.DAILY_SLOTS and Eco.shop_featured(1791000000).size() == Eco.FEATURED_SLOTS, "shop rotations are full")
-	check(Eco.shop_daily(1791000000) == Eco.shop_daily(1791000000 + 3600), "daily shop stable within a day")
+			if r.is_empty() or r.has("item"): pass_valid = false
+			for k in r:
+				if not (k in ["gold", "gems", "chest", "shard", "token"]): pass_valid = false
+	check(pass_valid, "all 60 pass rewards are valid: gold, gems, chests, shards and the token -- no items")
+	check(Eco.pass_reward(1, 30, true) == {"chest": "royal", "gems": 150}, "premium tier 30: a Royal chest and 150 gems")
 	check(Eco.week_key(1791000000) == "2026-09-28", "week starts Monday (%s)" % Eco.week_key(1791000000))
 
 	# ---- migration ----
@@ -134,8 +101,9 @@ func _init() -> void:
 	check(not s.claim_tier(1, true).ok, "premium tier needs the premium pass")
 	check(not s.buy_premium().ok, "premium needs gems")
 	s.d.gems = Eco.PREMIUM_COST + 5
+	var ch0: int = s.chests().size() + s.chests_waiting()
 	check(s.buy_premium().ok and s.d.gems == 5 and s.claim_tier(3, true).ok, "premium bought and premium tier 3 claimed")
-	check(s.owns(Eco.pass_items(1)[Eco.PASS_FREE_ITEMS + 1]), "premium tier 3 cosmetic owned")
+	check(s.chests().size() + s.chests_waiting() == ch0 + 1, "premium tier 3: a Gold chest (0.31.188; it was a weapon)")
 	var s2 := Profile.new(s.path, s.legacy_path)
 	s2.now_override = s.now_override
 	s2.load_or_create()
@@ -143,24 +111,16 @@ func _init() -> void:
 	var all := s.claim_all()
 	check(all.size() == 7 + 7 - 2, "claim all got the remaining %d rewards" % all.size())
 
-	# ---- shop + equip ----
+	# ---- shop + equip (0.31.188: outfits for gems; titles to equip) ----
 	var b := fresh("shop")
-	var daily := Eco.shop_daily(b.now())
-	var target: String = daily[0]
-	var price := Eco.item_price(target)
-	check(not b.buy(target).ok, "can't buy without gold")
-	b.d.gold = 99999
-	check(b.buy(target).ok and b.owns(target) and not b.buy(target).ok, "bought %s once" % target)
-	var not_today := ""
-	for id in Eco.CATALOG:
-		if Eco.CATALOG[id].source == "shop" and not daily.has(id) and not Eco.shop_featured(b.now()).has(id):
-			not_today = id; break
-	check(not_today == "" or not b.buy(not_today).ok, "items outside today's rotation can't be bought")
-	check(b.equip(target).ok, "equip owned item")
-	var it := Eco.item(target)
-	var look := b.look_for(str(it.get("class", "knight")))
-	check(it.kind == "title" or not look.is_empty(), "equipped look reaches the battle view (%s)" % str(look))
-	check(not b.equip("knight_wpn_tower").ok or b.owns("knight_wpn_tower"), "can't equip unowned items")
+	check(not b.buy_skin("knight_frost").ok, "can't buy an outfit without gems")
+	b.d.gems = 5000
+	check(b.buy_skin("knight_frost").ok and b.owns_skin("knight_frost") and not b.buy_skin("knight_frost").ok, "bought the Frostbound Knight once")
+	check(b.look_for("knight") == {"skin": "knight_frost"} and b.look_for("mage").is_empty(), "the outfit worn reaches the battle view (%s)" % str(b.look_for("knight")))
+	check(not b.has_method("buy") and not b.OPS.has("buy") and not b.OPS.has("buy_pack") and not b.OPS.has("forge"), "no weapons to buy or forge")
+	b.d.owned.append("title_squire")
+	check(b.equip("title_squire").ok and str(b.d.title) == "title_squire", "an earned title is worn")
+	check(not b.equip("title_legend").ok, "can't equip a title not earned")
 	check(not b.has_method("exchange") and not b.OPS.has("exchange"), "no gems -> gold exchange (0.31.185, League's way)")
 
 	# ---- rollover ----
@@ -174,45 +134,17 @@ func _init() -> void:
 	r.refresh()
 	check(int(r.d.pass.season) == 2 and int(r.d.pass.xp) == 0, "new season resets the pass")
 
-	# ---- 0.31.38: the upgraded classes' cosmetics ----
-	var up := fresh("upcos")
-	up.d.gold = 10000
+	# ---- 0.31.38: the upgraded classes dress from their own slot ----
 	check(Eco.cosmetic_class("knight", true) == "crusader" and Eco.cosmetic_class("knight", false) == "knight" and Eco.cosmetic_class("worker", true) == "worker", "an upgraded Knight dresses from the Crusader slot")
-	up.d.owned.append("crus_wpn_warhammer")          # (buying depends on the day's rotation; tested above)
-	check(bool(up.equip("crus_wpn_warhammer").get("ok", false)), "a Crusader weapon owned and equipped")
-	check(str(up.look_for("crusader").get("r", "")) == "mw/bulwark_hammer" and not up.look_for("knight").has("r"), "it arms the Crusader, not the plain Knight")
-	var upcount := 0
-	var upquest := 0
-	for cid in Eco.CATALOG:
-		if Eco.UP_CLASSES.has(str(Eco.CATALOG[cid].get("class", ""))):
-			if str(Eco.CATALOG[cid].get("source", "")) == "quest":
-				upquest += 1                                   # (0.31.97: each class's quest legendary)
-			else:
-				upcount += 1
-	check(upcount == 18 and upquest == 6, "18 upgraded-class weapons (3 for each of 6 classes, 0.31.40) and their 6 quest legendaries: %d + %d" % [upcount, upquest])
-	# ---- 0.31.39: weapons only -- no skins; bought skins refunded once ----
-	var skins := 0
-	for cid in Eco.CATALOG:
-		if str(Eco.CATALOG[cid].kind) == "skin":
-			skins += 1
-	check(skins == 0, "no skins left in the catalog")
-	var shieldless := []
-	for cid in Eco.CATALOG:
-		var ci: Dictionary = Eco.CATALOG[cid]
-		if str(ci.kind) == "weapon" and str(ci["class"]) in ["knight", "crusader"] and not str(ci.get("l", "")).contains("shield"):
-			shieldless.append(cid)
-	check(shieldless.is_empty(), "every Knight and Crusader weapon comes with a shield (0.31.41) %s" % str(shieldless))
 	var rf := fresh("refund")
 	var rawsave := rf.d.duplicate(true)
-	rawsave.owned = ["knight_skin_royal", "knight_skin_gilded", "knight_wpn_greatsword"]
+	rawsave.owned = ["knight_skin_royal", "knight_skin_gilded", "knight_wpn_greatsword", "title_squire"]
 	rawsave.erase("skins_refunded")
 	rawsave.gold = 100
 	rawsave.gems = 10
 	var after := rf._normalized(rawsave)
-	check(int(after.gold) == 100 + 1200 and int(after.gems) == 10 + 400 and after.owned == ["knight_wpn_greatsword"], "an old save's bought skins come back as their price (gold %d, gems %d)" % [int(after.gold), int(after.gems)])
+	check(int(after.gold) == 100 + 1200 and int(after.gems) == 10 + 400 and after.owned == ["title_squire"], "an old save's bought skins come back as their price (gold %d, gems %d); 0.31.188: its weapons go, no refund" % [int(after.gold), int(after.gems)])
 	var again := rf._normalized(after)
 	check(int(again.gold) == int(after.gold) and int(again.gems) == int(after.gems), "and only once")
-	var lk := up.look_for("knight")
-	check(not lk.has("tint"), "no tints reach the battle")
 	print("META_ECONOMY_PASS" if fails.is_empty() else "META_ECONOMY_FAIL %s" % str(fails))
 	quit(0 if fails.is_empty() else 1)

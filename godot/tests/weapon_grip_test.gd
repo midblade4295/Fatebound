@@ -6,8 +6,8 @@ extends SceneTree
 #    on the far side;
 #  - a one-handed hammer, mace, axe or wand is held at the end of its handle: the hand in the bottom part of the piece,
 #    not halfway up it under the head (tools/weapon_grip.py END);
-#  - the Eye of the Archon and the Lich-Crown are held on their shafts, well below their long heads (most of the staff
-#    ahead of the hand).
+#  - (0.31.104-0.31.187: the Eye of the Archon and the Lich-Crown held on their shafts -- gone with the catalog's weapons)
+#    0.31.188: each outfit's staff is held like the hero's own (the same length, the hand as far down it).
 #   godot --headless --path godot -s res://tests/weapon_grip_test.gd
 const Eco = preload("res://scripts/meta/economy.gd")
 const View = preload("res://scripts/siege/siege_view.gd")
@@ -63,10 +63,9 @@ func _init() -> void:
 			high.append("%s %.2f" % [k, frac])
 		n_end += 1
 		inst.free()
-	check(n_end >= 18 and high.is_empty(), "every one-handed hammer, mace, axe and wand is held at the end of its handle (%d) %s" % [n_end, str(high)])
-	# ---- the long-headed staffs: most of the staff ahead of the hand
-	var close := []
-	for k in ["archon_staff", "lichcrown_staff"]:
+	check(n_end >= 6 and high.is_empty(), "every one-handed hammer, mace, axe and wand is held at the end of its handle (%d) %s" % [n_end, str(high)])
+	# ---- the outfits' staffs: held like the hero's own staff (0.31.188)
+	var span := func(k: String) -> Vector2:
 		var inst: Node3D = (load(View.weapon_path("mw/" + k)) as PackedScene).instantiate()
 		var pts := _points(inst, func(m: MeshInstance3D, p: Vector3) -> Vector3: return _rel(m, inst) * p)
 		var lo := INF
@@ -74,23 +73,34 @@ func _init() -> void:
 		for p in pts:
 			lo = minf(lo, p.y)
 			hi = maxf(hi, p.y)
-		if hi / (hi - lo) < 0.72:
-			close.append("%s %.2f" % [k, hi / (hi - lo)])
 		inst.free()
-	check(close.is_empty(), "the Archon and the Lich-Crown are held on the shaft, below the head %s" % str(close))
-	# ---- every bow in its class's idle
-	for id in Eco.CATALOG:
-		var it: Dictionary = Eco.CATALOG[id]
-		var l := str(it.get("l", ""))
-		if str(it.get("kind", "")) == "weapon" and l.contains("bow") and not l.contains("crossbow"):
-			var cls := str(it["class"])
-			var made: Dictionary = View.make_body(cls, {"r": str(it.get("r", "")), "l": l})
+		return Vector2(hi - lo, hi / maxf(hi - lo, 0.001))
+	var own: Vector2 = span.call("apprentice_staff")
+	var off := []
+	var n_staff := 0
+	for id in Eco.SKINS:
+		for hand in (Eco.SKINS[id].get("weapon", {}) as Dictionary).values():
+			var k := str(hand).substr(3)
+			if str(View.MESHY_WEAPON_LIKE.get(k, "")) != "staff":
+				continue
+			n_staff += 1
+			var sp: Vector2 = span.call(k)
+			if absf(sp.x - own.x) > own.x * 0.15 or absf(sp.y - own.y) > 0.06:
+				off.append("%s %.2f/%.2f" % [k, sp.x, sp.y])
+	check(n_staff >= 5 and off.is_empty(), "the outfits' staffs are held like the hero's own (%d; %.2f long, %.2f ahead of the hand) %s" % [n_staff, own.x, own.y, str(off)])
+	# ---- every bow in its class's idle (0.31.188: the outfits' bows -- the catalog's weapons are gone)
+	for id in Eco.SKINS:
+		var sk: Dictionary = Eco.SKINS[id]
+		var l := str((sk.get("weapon", {}) as Dictionary).get("l", ""))
+		if l.contains("bow") and not l.contains("crossbow"):
+			var cls := str(sk.hero)
+			var made: Dictionary = View.make_body(cls, {"skin": id})
 			root.add_child(made.body)
 			var pl: AnimationPlayer = made.player
 			pl.play(str(View.LOOKS[cls].idle))
 			pl.seek(0.6, true)
 			pl.speed_scale = 0.0
-			bows.append([str(it["name"]), made.body])
+			bows.append([str(sk.name), made.body])
 	for cls in ["ranger"]:
 		var made2: Dictionary = View.make_body(cls, {})
 		root.add_child(made2.body)
@@ -128,7 +138,7 @@ func _process(_d: float) -> bool:
 		var to_body := Vector3(-g.x, 0, -g.z)
 		if (tips - g).dot(to_body) <= 0.0:
 			away.append(b[0])
-	check(bows.size() >= 8 and away.is_empty(), "every bow's string is on the archer's side (%d bows) %s" % [bows.size(), str(away)])
+	check(bows.size() >= 2 and away.is_empty(), "every bow's string is on the archer's side (%d bows) %s" % [bows.size(), str(away)])
 	print("WEAPON_GRIP_PASS" if fails.is_empty() else "WEAPON_GRIP_FAIL %s" % str(fails))
 	quit(0 if fails.is_empty() else 1)
 	return false

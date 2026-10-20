@@ -1,0 +1,92 @@
+{
+ "knight": {
+  "task": "01a156da-ad4f-779f-958d-017f2e9a740a",
+  "credits": 10,
+  "prompt": "Lionguard knight outfit: the very same knight character -- keep his face exactly as it is: the same face, the same skin tone, the same hair and beard (or none), the same eyes. Only the clothes and armour change: royal guard armour of polished steel with crimson enamel and gold trim, a crimson tabard with a roaring gold lion crest, gold lion-head pauldrons, a crimson plume. Same chunky stylised clay-toy look, clean hand-painted colours, no text."
+ },
+ "barbarian": {
+  "task": "01a156eb-3324-7178-b91a-38edabd3e1d8",
+  "credits": 10,
+  "prompt": "Mammoth Chief barbarian outfit: the very same barbarian -- keep his face exactly: his brown beard, light skin, the same eyes. Only his hood and furs change: the bear-head hood becomes a dark reddish-brown shaggy woolly-mammoth head with two small curved ivory tusks, dark chestnut-brown shaggy fur pelts, ivory bone beads and tusk ornaments, ochre war paint stripes on his arms. Same chunky stylised clay-toy look, clean hand-painted colours, no text."
+ },
+ "rogue": {
+  "task": "01a156f2-e730-76e5-9eb6-ffebc2cbb961",
+  "credits": 10,
+  "prompt": "Velvet Thief rogue outfit: the very same young rogue -- keep his face exactly: young, light skin, brown hair, no beard, no eye mask. The cloth mask over his nose and mouth becomes deep plum-purple velvet. Only his clothes change: a deep plum-purple velvet hood and cloak instead of green, black leathers, gold coin trims and a belt of small gold coins. Same chunky stylised clay-toy look, clean hand-painted colours, no text."
+ },
+ "ranger": {
+  "task": "01a156dd-226b-71df-8c5f-3636f2814dc8",
+  "credits": 10,
+  "prompt": "Orchard Warden ranger outfit: the very same ranger character -- keep his face exactly as it is: the same face, the same skin tone, the same hair and beard (or none), the same eyes. Only the clothes and armour change: an apple-red wide-brimmed hat with a green leaf feather, a harvest-gold scarf instead of orange, apple-red and warm brown leathers with green leaf embroidery. Same chunky stylised clay-toy look, clean hand-painted colours, no text."
+ },
+ "mage": {
+  "task": "01a156dd-d68b-7462-864c-93c4873db97a",
+  "credits": 10,
+  "prompt": "Phoenix mage outfit: the very same mage character -- keep his face exactly as it is: the same face, the same skin tone, the same hair and beard (or none), the same eyes. Only the clothes and armour change: crimson and gold robes and pointed hat with golden phoenix-feather patterns instead of stars, flame-orange trim, a gold feather collar. Same chunky stylised clay-toy look, clean hand-painted colours, no text."
+ },
+ "priest": {
+  "task": "01a156de-8e3a-759b-9db0-b81c3dd7c77e",
+  "credits": 10,
+  "prompt": "Bellringer priest outfit: the very same priest character -- keep his face exactly as it is: the same face, the same skin tone, the same hair and beard (or none), the same eyes. Only the clothes and armour change: ivory and warm bronze abbey vestments with a bronze bell emblem instead of the sun, a rope belt, bronze trim. Same chunky stylised clay-toy look, clean hand-painted colours, no text."
+ },
+ "crusader": {
+  "task": "01a156df-3ff5-751e-b71d-7a84df5664f8",
+  "credits": 10,
+  "prompt": "Ashen Templar crusader outfit: the very same crusader character -- keep his face exactly as it is: the same face, the same skin tone, the same hair and beard (or none), the same eyes. Only the clothes and armour change: soot-black and ash-grey plate armour with glowing orange ember cracks, an ash-grey tabard with a faded sunburst, a charcoal plume with ember tips. Same chunky stylised clay-toy look, clean hand-painted colours, no text."
+ },
+ "berserker": {
+  "task": "01a156df-f327-75b8-98d6-09fb28ab4b3b",
+  "credits": 10,
+  "prompt": "Blood Moon berserker outfit: the very same berserker character -- keep his face exactly as it is: the same face, the same skin tone, the same hair and beard (or none), the same eyes. Only the clothes and armour change: a black bear pelt with crimson fur tips, crimson war paint with red moon sigils, dark red leathers and iron bracers with red moon emblems. Same chunky stylised clay-toy look, clean hand-painted colours, no text."
+ },
+ "assassin": {
+  "task": "01a156e0-ad8a-73b6-80f0-a0bb5fc0d82e",
+  "credits": 10,
+  "prompt": "Red Ribbon assassin outfit: the very same assassin character -- keep his face exactly as it is: the same face, the same skin tone, the same hair and beard (or none), the same eyes. Only the clothes and armour change: black silk leathers wrapped in long crimson silk ribbons, a crimson ribbon tied over the mask, gold ribbon clasps. Same chunky stylised clay-toy look, clean hand-painted colours, no text."
+ },
+ "sniper": {
+  "task": "01a156e1-8d72-750b-bfa3-69d7baeccd86",
+  "credits": 10,
+  "prompt": "Wolfstalker sniper outfit: the very same sniper character -- keep his face exactly as it is: the same face, the same skin tone, the same hair and beard (or none), the same eyes. Only the clothes and armour change: a grey wolf-pelt hat and cloak instead of green, bone and fang trims, dark grey leathers, pale wolf-grey fur collar. Same chunky stylised clay-toy look, clean hand-painted colours, no text."
+ },
+ "archmage": {
+  "task": "01a156e8-654e-735b-b5e4-1ca41d45d83e",
+  "credits": 10,
+  "prompt": "Stargazer archmage outfit: the very same very old archmage -- keep his face exactly: a long white beard, white eyebrows, light skin, an old man's face. Only his robes and pointed hat change: deep midnight-blue robes and pointed hat covered in thin gold constellation lines and small brass orrery rings instead of stars and moons, gold trim. Same chunky stylised clay-toy look, clean hand-painted colours, no text."
+ },
+ "necromancer": {
+  "task": "01a156e9-18bf-7745-ace0-9073ed4bb359",
+  "credits": 10,
+  "prompt": "Gravekeeper necromancer outfit: the very same necromancer -- keep his face exactly: pale grey-green skin, black hair, glowing green eyes, no beard, no stubble, a thin pale face. Only his clothes change: a charcoal and moss-green gravedigger's coat with brass lantern buttons, a mossy green scarf, muddy brown boots. Same chunky stylised clay-toy look, clean hand-painted colours, no text."
+ },
+ "golem": {
+  "task": "01a156e3-b58f-71cf-aa9b-ef221c494888",
+  "credits": 10,
+  "prompt": "Geode golem outfit: the very same golem character -- keep the same stone face and the same shapes. Only the clothes and armour change: dark grey stone veined with glowing amethyst-purple crystals instead of the green moss, purple crystal clusters on the shoulders, glowing purple runes. Same chunky stylised clay-toy look, clean hand-painted colours, no text."
+ },
+ "dragoon": {
+  "task": "01a156e4-6c63-7595-9259-3fbce350c81a",
+  "credits": 10,
+  "prompt": "Dragonscale dragoon outfit: the very same dragoon character -- keep his face exactly as it is: the same face, the same skin tone, the same hair and beard (or none), the same eyes. Only the clothes and armour change: crimson dragon-scale armour with gold edges, dark red wing crests on the helmet, a flame-orange scarf, gold claw buckles. Same chunky stylised clay-toy look, clean hand-painted colours, no text."
+ },
+ "duelist": {
+  "task": "01a156e9-cc82-76f8-9b9f-44dd8b3dcd62",
+  "credits": 10,
+  "prompt": "Golden Rose duelist outfit: the very same young duelist -- keep his face exactly: clean-shaven, no beard, no moustache, light skin, brown hair; his eye mask stays, now gold. Only his clothes change: an ivory-white and gold duelist coat embroidered with red roses, green vine trim, gold buttons. Same chunky stylised clay-toy look, clean hand-painted colours, no text."
+ },
+ "stormcaller": {
+  "task": "01a156ea-8171-72c7-9959-577705587cd8",
+  "credits": 10,
+  "prompt": "Stormforged stormcaller outfit: the very same stormcaller -- keep his face exactly: black hair and a full black beard (white tips), light skin, the same eyes. Only his clothes change: a copper and bronze coat with glowing electric-blue lightning veins and copper rivets instead of blue, a copper lightning emblem on the belt. Same chunky stylised clay-toy look, clean hand-painted colours, no text."
+ },
+ "musketeer": {
+  "task": "01a156e6-67b2-723b-8923-f98286379930",
+  "credits": 10,
+  "prompt": "Privateer musketeer outfit: the very same musketeer character -- keep his face exactly as it is: the same face, the same skin tone, the same hair and beard (or none), the same eyes. Only the clothes and armour change: a deep teal sea-captain's coat with brass buttons and gold braid, a black tricorn-style hat with a red feather, a crimson sash. Same chunky stylised clay-toy look, clean hand-painted colours, no text."
+ },
+ "druid": {
+  "task": "01a156e7-1d44-72f4-a27a-82ed16175d8e",
+  "credits": 10,
+  "prompt": "Cherry Blossom druid outfit: the very same druid character -- keep his face exactly as it is: the same face, the same skin tone, the same hair and beard (or none), the same eyes. Only the clothes and armour change: pale pink and white robes and hood covered in cherry blossoms instead of green leaves, blossoming branches on the antlers, a soft pink sash. Same chunky stylised clay-toy look, clean hand-painted colours, no text."
+ }
+}

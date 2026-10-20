@@ -341,12 +341,15 @@ func _billing() -> void:
 
 func _game_center() -> void:
 	# the ids: Apple's own strings, one per achievement, within Apple's limits (<= 100 points each, <= 1000 in all)
-	var keys_ok := GcIds.IDS.size() == Achievements.LIST.size()
+	# (0.31.188: Master Smith retired with the Forge -- its id stays, Apple never frees one, and is no longer reported)
+	var keys_ok := GcIds.IDS.size() == Achievements.LIST.size() + Achievements.RETIRED.size()
 	var pts := 0
 	for a in Achievements.LIST:
 		keys_ok = keys_ok and str(GcIds.IDS.get(a.key, "")) == "fatebound." + str(a.key) and int(a.xp) <= 100
 		pts += int(a.xp)
-	check(keys_ok and pts == 570, "18 Game Center ids fatebound.<key>, %d points (Apple: <= 1000, each <= 100)" % pts)
+	for k in Achievements.RETIRED:
+		keys_ok = keys_ok and GcIds.IDS.has(k)
+	check(keys_ok and pts == 530, "17 Game Center ids fatebound.<key> (+ Master Smith's, retired), %d points (Apple: <= 1000, each <= 100)" % pts)
 	var p = fresh("gc")
 	p.d.tutorial_done = true
 	p.d.stats.kills = 140

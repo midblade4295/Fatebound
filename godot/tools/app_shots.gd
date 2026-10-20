@@ -67,20 +67,7 @@ func _process(_d: float) -> bool:
 		var p = app.profile
 		p.d.gems += 400
 		p.d.pass.xp = 7 * 2500 + 900
-		p.d.owned.append("knight_wpn_greatsword"); p.equip("knight_wpn_greatsword")
-		if OS.has_environment("SHOT_FORGE"):            # 0.31.93: a profile mid-way through the Forge
-			p.d.gold += 6000
-			p.d.forge.stars["knight_wpn_greatsword"] = 2
-			p.d.forge.wins["knight_wpn_greatsword"] = 27
-			p.d.owned.append("knight_wpn_oath")
-			p.d.forge.stars["knight_wpn_oath"] = 3
-			p.d.forge.element["knight_wpn_oath"] = "holy"
-			app.forge_element = OS.get_environment("SHOT_FORGE")
-			if OS.has_environment("SHOT_FORGE_CLS"):        # 0.31.94: another class's Forge (its weapons all owned)
-				app.forge_cls = OS.get_environment("SHOT_FORGE_CLS")
-				for id in Eco.CATALOG:
-					if str(Eco.CATALOG[id].get("class", "")) == app.forge_cls and not p.d.owned.has(id):
-						p.d.owned.append(id)
+		# (0.31.93-0.31.187: a weapon equipped, SHOT_FORGE a profile mid-way through the Forge -- gone, 0.31.188)
 		if OS.has_environment("SHOT_QUESTS"):            # 0.31.97: some class quests under way, one step ready
 			p.d.stats["q_knight_wins"] = 3
 			p.d.stats["q_knight_rescues"] = 4
@@ -88,13 +75,13 @@ func _process(_d: float) -> bool:
 			p.d.quests["ranger"] = 2
 			p.d.stats["q_ranger_kills"] = 420
 			p.d.quests["worker"] = 3
-			p.d.owned.append("worker_wpn_sledge")
 			app.quest_cls = OS.get_environment("SHOT_QUESTS")
-		if OS.has_environment("SHOT_EQUIP"):             # 0.31.100: wear these (owned for the shot), e.g. a legendary's effects
+		if OS.has_environment("SHOT_EQUIP"):             # 0.31.100: wear these (owned for the shot; 0.31.188: outfits)
 			for id in OS.get_environment("SHOT_EQUIP").split(","):
-				if not p.d.owned.has(id):
-					p.d.owned.append(id)
-				p.equip(id)
+				if Eco.SKINS.has(id):
+					if not p.d.skins.has(id):
+						p.d.skins.append(id)
+					p.wear_skin(str(Eco.SKINS[id].hero), id)
 		if OS.has_environment("SHOT_PLAY"):              # 0.31.102: Settings' Google Play card: out | synced | ask
 			var fp := ShotPlay.new()
 			fp.signed = OS.get_environment("SHOT_PLAY") != "out"
@@ -130,7 +117,7 @@ func _process(_d: float) -> bool:
 		if frames == base_f:
 			app.show_tab(tabs[i])
 			if tabs[i] == "locker" and OS.has_environment("SHOT_LOCKER"):
-				app.locker_class = OS.get_environment("SHOT_LOCKER")
+				app.locker_tab = OS.get_environment("SHOT_LOCKER")       # champions | titles
 				app.rebuild()
 		if frames == base_f + 12 and tabs[i] == "home" and OS.has_environment("SHOT_MENU"):
 			app.open_player_menu()                       # 0.31.139: the menu under the level shield
@@ -138,14 +125,7 @@ func _process(_d: float) -> bool:
 			var pd: PackedStringArray = OS.get_environment("SHOT_PASS_DETAIL").split(",")
 			Screens.open_pass_item(app, int(app.profile.d.pass.season), int(pd[0]), pd[1] == "prem")
 		if frames == base_f + 12 and tabs[i] == "shop" and OS.has_environment("SHOT_PREVIEW"):
-			# 0.31.96: the shop's tap-to-preview; "item_id" or "@pack_id,n"; SHOT_PREVIEW_MODE hand|weapon
-			app.set_meta("shop_preview_mode", OS.get_environment("SHOT_PREVIEW_MODE") if OS.has_environment("SHOT_PREVIEW_MODE") else "hand")
-			var pv := OS.get_environment("SHOT_PREVIEW")
-			if pv.begins_with("@"):
-				var pp := pv.substr(1).split(",")
-				Screens.open_item(app, "", pp[0], int(pp[1]) if pp.size() > 1 else 0)
-			else:
-				Screens.open_item(app, pv)
+			app.open_champion(str(Eco.SKINS[OS.get_environment("SHOT_PREVIEW")].hero), OS.get_environment("SHOT_PREVIEW"))     # 0.31.188: an outfit
 		if frames == base_f + 12 and tabs[i] == "home" and OS.has_environment("SHOT_ORDERS"):
 			app.open_orders()                            # 0.31.112: the ORDERS window
 		if frames == base_f + 12 and tabs[i] == "home" and OS.has_environment("SHOT_MOBA"):

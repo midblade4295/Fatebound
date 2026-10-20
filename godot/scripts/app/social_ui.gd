@@ -378,12 +378,13 @@ static func _stats_block(v: VBoxContainer, pr: Dictionary, online: bool) -> void
 		l.custom_minimum_size.y = 120
 		l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		return
-	# the class they play most, and the weapon they win most with
+	# the class they play most, and the outfit they wear on him (0.31.188: it was the weapon they won most with)
 	var cls := str(pr.get("cls", ""))
+	var outfit := str(pr.get("sk", ""))
 	var top := HBoxContainer.new()
 	top.add_theme_constant_override("separation", 10)
 	f.add_child(top)
-	var portrait := "res://assets/ui/skins/default_%s.png" % cls
+	var portrait := ("res://assets/ui/skins/%s.png" % outfit) if outfit != "" and Eco.SKINS.has(outfit) else "res://assets/ui/skins/default_%s.png" % cls
 	var tex: Texture2D = UI2.tex(portrait) if cls != "" and ResourceLoader.exists(portrait) else null
 	if tex != null:
 		var disc := PanelContainer.new()
@@ -415,21 +416,10 @@ static func _stats_block(v: VBoxContainer, pr: Dictionary, online: bool) -> void
 		sub.autowrap_mode = TextServer.AUTOWRAP_OFF
 	else:
 		UI2.text(tv, "New recruit", 18, UI2.GOLD)
-	if str(pr.get("wpn", "")) != "":
-		var wr := HBoxContainer.new()
-		wr.add_theme_constant_override("separation", 5)
-		tv.add_child(wr)
-		var wl := UI.label(wr, "⚔ " + str(pr.wpn), 12, RARITY_COL.get(str(pr.get("wr", "common")), Color.WHITE), UI.HEAVY_FONT)
+	if outfit != "" and Eco.SKINS.has(outfit):
+		var wl := UI.label(tv, "Wears " + str(Eco.SKINS[outfit].name), 12, Color(str(Eco.RARITY_COLOR.get(str(Eco.SKINS[outfit].rarity), "#ffffff"))), UI.HEAVY_FONT)
 		wl.autowrap_mode = TextServer.AUTOWRAP_OFF
 		wl.clip_text = true
-		wl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		var ws := int(pr.get("ws", 0))
-		if ws > 0:
-			var st := Label.new()
-			st.text = "★".repeat(ws)
-			st.add_theme_font_size_override("font_size", 12)
-			st.add_theme_color_override("font_color", Color("#ffd24a"))
-			wr.add_child(st)
 	# the numbers
 	var g := GridContainer.new()
 	g.columns = 3

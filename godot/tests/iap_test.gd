@@ -1,7 +1,7 @@
 extends SceneTree
 # 0.31.90 in-app purchases (Kevin: "I want to incorporate IAP"; Play Console side: PLAY_IAP_HANDOFF.md). REAL time.
 #  1. The product table matches the handoff's IDs; Profile.grant_iap adds gems / gold (0.31.184: Embers before) / a
-#     weapon once per token.
+#     Hero Token (0.31.188; a weapon before) once per token.
 #  2. Billing (scripts/meta/billing.gd) against a stand-in for the Play plugin: prices from Google, buy -> server check ->
 #     grant -> consume (gem packs) or acknowledge (starter pack); the same purchase seen again grants nothing; pending,
 #     "unreachable" (kept, granted on resume) and "bad" purchases grant nothing.
@@ -81,16 +81,13 @@ func _init() -> void:
 	r = p.grant_iap("gems_500", "tok-aaaaaaaaaaaa")
 	check(r.ok and bool(r.again) and int(p.d.gems) == g0 + 500, "the same token never grants twice")
 	var gold0 := int(p.d.gold)
+	var t0 := int(p.d.tokens)
 	r = p.grant_iap("starter_pack", "tok-starter-123456")
-	check(r.ok and int(p.d.gold) == gold0 + 3000 and int(r.gold) == 3000 and int(r.gems) == 500 and str(r.item) != "" and p.owns(str(r.item)) and str(Eco.item(str(r.item)).rarity) == "epic"
-		and bool(p.d.iap.starter), "the starter pack (0.31.184): 500 gems, 3,000 gold and an epic weapon not owned yet (%s)" % str(r.item))
+	check(r.ok and int(p.d.gold) == gold0 + 3000 and int(r.gold) == 3000 and int(r.gems) == 500 and int(r.token) == 1 and int(p.d.tokens) == t0 + 1
+		and not r.has("item") and bool(p.d.iap.starter), "the starter pack: 500 gems, 3,000 gold and a Hero Token (0.31.188; an epic weapon until then) %s" % str(r))
 	check(not p.grant_iap("chest_royal", "tok-zzzzzzzzzzzz").ok, "an unknown product grants nothing")
-	var p2 = fresh("allrares")
-	for id in Eco.chest_pool("epic"):
-		p2.d.owned.append(id)
-	var g2 := int(p2.d.gems)
-	r = p2.grant_iap("starter_pack", "tok-starter-999999")
-	check(str(r.item) == "" and int(p2.d.gems) == g2 + 500 + Eco.DUPE_GOLD.epic / 10, "owning every epic: gems instead of the weapon")
+	r = p.grant_iap("starter_pack", "tok-starter-123456")
+	check(bool(r.again) and int(p.d.tokens) == t0 + 1, "the same token never grants the token twice")
 	var p3 = Profile.new(p.path, "user://none.json")
 	p3.load_or_create()
 	check(p3.iap_granted("tok-aaaaaaaaaaaa") and int(p3.d.gold) == gold0 + 3000, "granted tokens and gold are saved")

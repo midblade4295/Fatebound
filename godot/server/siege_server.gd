@@ -26,9 +26,10 @@ extends SceneTree
 # "tt":{unit id: title id} beside the names and the lobby "tt" beside its names; the app joins them with the right
 # punctuation. "st" {"heal"} tells each player the health they've healed (the Merciful title), at most once a second.
 #
-# 0.31.101 (Kevin: "I want players to see everything the other players are wearing"): a hello may carry "lk", the
-# player's weapons and Forge stars per class (Net.clean_looks keeps only well-formed entries); "pn" carries
-# "lk":{unit id: {class: entry}} beside the names and titles, and each app dresses those units from its own catalog.
+# 0.31.101 (Kevin: "I want players to see everything the other players are wearing"): a hello may carry "lk", what the
+# player wears (0.31.188: the outfits, "_sk" -- the weapons and Forge stars are gone; Net.clean_looks keeps only
+# well-formed entries); "pn" carries "lk":{unit id: looks} beside the names and titles, and each app dresses those units
+# from its own catalog.
 #
 # 0.31.86 (Kevin: "shows the player names on the battlefield above their heads. Only live players will show names."):
 # {"t":"pn", "n":{unit id: name}} -- the seated players' names, sent to everyone in the match whenever a seat changes
@@ -47,7 +48,7 @@ extends SceneTree
 # player's account (server/eco_accounts.gd). "eco" (no hello, one per socket, like "iap"): a phone's ops replayed on
 # its account, a VS BOTS ticket, the account back. "iap" with "acct"/"key": the confirmed purchase granted to that
 # account here. A hello with "acct"/"key": the player's name, title and looks come from the account (nobody shows a
-# weapon or title they don't own), and when the match ends the result is paid to the account from THIS server's count
+# outfit or title they don't own), and when the match ends the result is paid to the account from THIS server's count
 # (server/match_ledger.gd), never the phone's. "ver" and "status" answer "eco":1 so the app knows. All additive: an
 # older app keeps its own local economy until the minimum build is raised past it.
 #
@@ -136,7 +137,7 @@ const LOBBY_TIME := 20.0             # the join countdown (0.31.82)
 const HELLO_TIMEOUT := 10.0
 const IAP_TIMEOUT := 40.0              # a purchase check may take a token request and an API call
 const REFUSE_CLOSE_DELAY := 0.25     # s between a "bye"/"ver" reply and closing the socket
-const SERVER_BUILD := "0.31.187"      # this server's game version; the probe says it by default (identifies as current)
+const SERVER_BUILD := "0.31.188"      # this server's game version; the probe says it by default (identifies as current)
 const MIN_BUILD_FILE := "/etc/fatebound-siege/min_build"
 const MIN_BUILD_RELOAD := 10.0       # s between re-reads of the min-build file
 const UPDATE_MSG := "A new version of Fatebound is out. Update now on Google Play to keep playing online."
@@ -1136,7 +1137,7 @@ func player_tags(r: Room) -> Dictionary:
 	return out
 
 func player_looks(r: Room) -> Dictionary:
-	# 0.31.101: unit id -> {class: "weapon id|stars|element"} for each seated player who wears something
+	# 0.31.101: unit id -> looks ({"_sk": the outfits}) for each seated player who wears something
 	var out := {}
 	for cid in _seated(r):
 		if not (clients[cid].get("looks", {}) as Dictionary).is_empty():

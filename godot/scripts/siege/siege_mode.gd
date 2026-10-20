@@ -106,7 +106,7 @@ var lobby: Control = null           # 0.31.82: the join countdown, from PLAY unt
 var lobby_msgs := 0                 # "lobby" messages received (tests)
 var net_names := {}                 # unit id -> name of each live player in the match (0.31.86, the server's "pn")
 var net_titles := {}                # unit id -> their title id (0.31.87, the "pn" message's "tt")
-var net_looks := {}                 # unit id -> {class: "weapon id|stars|element"}: what they wear (0.31.101, "pn" "lk")
+var net_looks := {}                 # unit id -> their looks ({"_sk": the outfits}): what they wear (0.31.101, "pn" "lk")
 var net_tags := {}                  # unit id -> clan tag (0.31.134, "pn" "ct")
 var clan_tag := ""                  # 0.31.134: the player's own clan tag (set by the app; shown on your plate)
 
@@ -257,8 +257,7 @@ func _start_steps() -> Array:
 		view = View.new()
 		view.low_fx = low_fx
 		view.hq_gfx = hq_gfx
-		view.player_looks = _looks()
-		view.player_skins = _skins()                   # 0.31.186
+		view.player_skins = _skins()                   # 0.31.186 (0.31.188: the outfits are all there is)
 		view.my_name = player_name
 		view.my_title = my_title()
 		view.my_tag = clan_tag
@@ -311,15 +310,6 @@ func _build_step() -> void:
 func _skins() -> Dictionary:
 	# 0.31.186: hero -> the skin I wear on him
 	return (profile.d.get("skin_on", {}) as Dictionary).duplicate() if profile != null else {}
-
-func _looks() -> Dictionary:
-	var out := {}
-	if profile != null:
-		for cls in Eco.CLASSES + Eco.UP_CLASSES:      # (0.31.97: the Priest was missing -- his weapon never showed in a match)
-			var l: Dictionary = profile.look_for(cls)
-			if not l.is_empty():
-				out[cls] = l
-	return out
 
 # ---------- vibration (0.31.120, Kevin: "phone vibration") ----------
 # 0.31.128 (Kevin: "I only want phone to vibrate when player makes a kill"): one buzz for each enemy I knock out --
@@ -556,7 +546,6 @@ func _build_online_match(msg: Dictionary) -> void:
 	view.low_fx = low_fx
 	view.hq_gfx = hq_gfx
 	view.player_id = me_id
-	view.player_looks = _looks()
 	view.player_skins = _skins()                       # 0.31.186
 	view.player_names = net_names
 	view.player_titles = net_titles

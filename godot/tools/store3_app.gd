@@ -1,9 +1,9 @@
 extends SceneTree
 # Play Store menu shots (0.31.116): the real app's screens with a mid-game profile, never the live server.
-#   PART=forge|chest|friends|home OUT_DIR=<dir> DISPLAY=:98 godot --rendering-method mobile --fixed-fps 30 \
+#   PART=chest|friends|home OUT_DIR=<dir> DISPLAY=:98 godot --rendering-method mobile --fixed-fps 30 \
 #       --resolution 1080x2400 --path . -s res://tools/store3_app.gd
-# forge: the Forge on the Knight's legendary Kingsoath raised to three stars, fire picked (FORGE_PICK=<id> for another); chest: a Royal Chest opening (the burst,
-# then the reveal -- its legendary, Final Verdict, the one a Royal Chest can drop); friends: the Friends window in a
+# chest: a Royal Chest opening (the burst, then the reveal -- a hero shard; 0.31.116-0.31.187 also PART=forge, the Forge,
+# and the chest's legendary weapon -- gone with them, 0.31.188); friends: the Friends window in a
 # party, friends online (sample names: no server); home: Home in that party.
 # Writes menu_<part>.png (chest: menu_chest_burst.png and menu_chest.png).
 const App = preload("res://scripts/app/siege_app.gd")
@@ -12,7 +12,7 @@ const Eco = preload("res://scripts/meta/economy.gd")
 
 var app
 var frames := 0
-var part := "forge"
+var part := "chest"
 var dir := "/tmp/store3"
 var pending := ""
 var done_at := 120
@@ -46,14 +46,6 @@ func _seed() -> void:
 	p.d.gems += 640
 	p.d.tutorial_done = true
 	p.d.pass.xp = 12 * 2500 + 900
-	for id in ["knight_wpn_greatsword", "knight_wpn_oath", "barb_wpn_spiked", "mage_wpn_crystal"]:
-		if not p.d.owned.has(id):
-			p.d.owned.append(id)
-	p.equip("knight_wpn_oath")
-	p.d.forge.stars["knight_wpn_oath"] = 3
-	p.d.forge.element["knight_wpn_oath"] = "fire"
-	p.d.forge.stars["knight_wpn_greatsword"] = 2
-	p.d.forge.wins["knight_wpn_greatsword"] = 27
 	p.d.stats.wins = 86
 	p.d.stats.matches = 141
 	for k in ["royal", "gold", "silver", "wooden"]:
@@ -89,15 +81,6 @@ func _process(_d: float) -> bool:
 		_seed()
 		app.rebuild()
 	match part:
-		"forge":
-			if frames == 10:
-				app.forge_cls = "knight"
-				app.forge_pick = OS.get_environment("FORGE_PICK") if OS.has_environment("FORGE_PICK") else "knight_wpn_oath"
-				app.forge_element = "fire"
-				app.show_tab("forge")
-			if frames == 55:
-				pending = "menu_forge"
-			done_at = 65
 		"chest":
 			if frames == 10:
 				app.show_tab("home")
@@ -105,8 +88,8 @@ func _process(_d: float) -> bool:
 				Screens.open_chest(app, 0)
 			if frames == 50:
 				app.modal.open()
-			if frames == 50 + 40:                      # (before the rewards rise at 1.45 s: its legendary)
-				app.modal.result["item"] = "crus_wpn_maul"
+			if frames == 50 + 40:                      # (before the rewards rise at 1.45 s: a hero shard)
+				app.modal.result["shard"] = "golem"
 			if frames == 50 + 17:
 				pending = "menu_chest_burst"
 			if frames == 50 + 105:

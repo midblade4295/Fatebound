@@ -6,7 +6,7 @@ A Meshy weapon is one mesh, but its pieces are often separate connected componen
 around it). This writes the same GLB with one node per part: "Body" (everything not named), and each named part
 placed at its pivot (the centre of the given components) with its vertices re-expressed about it -- so turning the
 node about its own axes turns the piece in place, and at rest the weapon looks (and is held) exactly as before.
-weapon_fx.gd's LEGENDARY "spin" turns the nodes by name.
+weapon_fx.gd's SIGNATURE "spin" turns the nodes by name (LEGENDARY until 0.31.188).
 
   python3 tools/weapon_spin_parts.py IN.glb --list                  # the components, numbered by size
   python3 tools/weapon_spin_parts.py IN.glb OUT.glb --part Rings:0,3:2 --part Crystal:2

@@ -43,22 +43,20 @@ func _init():
 	p.d.gems = 100
 	check(bool(p.skip_chest(0).ok) and int(p.d.gems) == 82 and p.chest_ready(p.chests()[0]), "with them: ready at once, gems paid")
 	check(bool(p.open_chest(0).ok), "and opened")
-	# rolls: deterministic, bad-luck protection on Gold chests
-	check(str(Eco.roll_chest("gold", 42, [], 0)) == str(Eco.roll_chest("gold", 42, [], 0)), "the same chest always rolls the same (no re-roll by reloading)")
-	var pity := 0
-	var since := 0
-	var worst := 0
+	# rolls: deterministic; gold, gems and hero shards (0.31.188: no weapons any more)
+	check(str(Eco.roll_chest("gold", 42)) == str(Eco.roll_chest("gold", 42)), "the same chest always rolls the same (no re-roll by reloading)")
+	var shards := 0
+	var keys_ok := true
 	for i in 200:
-		var rr := Eco.roll_chest("gold", i * 7919, [], pity)
-		pity = int(rr.pity)
-		var rar := str(Eco.item(str(rr.item)).get("rarity", "")) if str(rr.item) != "" else ""
-		since = 0 if rar in ["epic", "legendary"] else since + 1
-		worst = maxi(worst, since)
-	check(worst < Eco.PITY_EPIC, "an epic at least every %d Gold chests (longest gap %d)" % [Eco.PITY_EPIC, worst])
-	var all_owned: Array = Eco.chest_pool("epic") + Eco.chest_pool("legendary") + Eco.chest_pool("rare") + Eco.chest_pool("common")
-	var dup := Eco.roll_chest("royal", 7, all_owned, 0)
-	check(str(dup.item) == "" and int(dup.get("dupe_gold", 0)) >= Eco.DUPE_GOLD.epic, "a cosmetic you own turns into gold (%d; 0.31.93-0.31.183 Embers)" % int(dup.get("dupe_gold", 0)))
-	check(Eco.chest_odds("silver").contains("75%") and Eco.chest_odds("gold").contains("every 10"), "the odds read out plainly")
+		var rr := Eco.roll_chest("gold", i * 7919)
+		keys_ok = keys_ok and rr.keys().size() == 3 and rr.has("gold") and rr.has("gems") and rr.has("shard")
+		keys_ok = keys_ok and int(rr.gold) >= 500 and int(rr.gems) >= 20
+		if str(rr.shard) != "":
+			shards += 1
+			keys_ok = keys_ok and Eco.HERO_PRICES.has(str(rr.shard))
+	check(keys_ok and shards > 50 and shards < 110, "Gold chests: gold, gems and a hero shard 40%% of the time, no weapon (%d / 200)" % shards)
+	check(str(Eco.roll_chest("royal", 7).shard) != "", "a Royal chest always holds a hero shard")
+	check(Eco.chest_odds("silver").contains("40% chance of 5-10 gems") and Eco.chest_odds("gold").contains("40% chance of a hero shard") and Eco.chest_odds("royal").contains("a hero shard"), "the odds read out plainly (%s)" % Eco.chest_odds("gold"))
 	check(Eco.level_reward(5).get("chest", "") == "gold" and Eco.level_reward(10).get("chest", "") == "royal", "levels 5 and 10 give Gold and Royal chests")
 	for f in DirAccess.get_files_at("user://"):
 		if f.begins_with(base.get_file()):

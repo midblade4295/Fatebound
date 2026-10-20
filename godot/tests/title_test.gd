@@ -114,28 +114,27 @@ func _init() -> void:
 	check(v2.d.has("title_note") and (v2.d.title_note as Array).size() == 4, "and Home is told how many (%s)" % str(v2.d.get("title_note", [])))
 	check(v2.owns("title_oracle_sworn") and str(v2.d.title) == "title_oracle_sworn", "a title bought before stays owned and worn")
 
-	# ---- the pass, the shop, the pack
-	check(Eco.pass_reward(1, 5, true) == {"gems": 50} and Eco.pass_reward(1, 9, true) == {"gems": 50} and Eco.pass_reward(1, 21, true) == {"gems": 100},
-		"season 1: premium tiers 5, 9, 21 (the old titles) give 50, 50, 100 gems")
-	var names := []
-	for id in Eco.pass_items(1):
-		names.append(str(Eco.CATALOG[id].name))
-	check(names.slice(0, 5) == ["Tavern Brawler", "Twin Sparks", "Brickbreaker", "Solaris", "Ravenclaws"] and names[15] == "Grimgrin",
-		"the rest of season 1's pass is unchanged %s" % str(names))
-	check(int(Eco.pass_cosmetics(1).n) == 10 and int(Eco.pass_cosmetics(1).legendary) == 5, "the premium offer counts 10 cosmetics, 5 legendary (%s)" % str(Eco.pass_cosmetics(1)))
-	var shop_titles := []
-	for day in 60:
-		for id in Eco.shop_daily(1791000000 + day * 86400) + Eco.shop_featured(1791000000 + day * 86400):
-			if str(Eco.CATALOG[id].kind) == "title":
-				shop_titles.append(id)
-	check(shop_titles.is_empty(), "no title in 60 days of shop rotations")
-	check(not Eco.PACKS.pack_crusader.items.has("title_gatebreaker") and int(Eco.PACKS.pack_crusader.gems) == 280, "Knight Arsenal: no title, 280 gems")
+	# ---- the pass, the shop, the chests: no titles (0.31.188: and no weapons -- outfits are bought, titles earned)
+	check(Eco.pass_reward(1, 5, true) == {"shard": ""} and Eco.pass_reward(1, 9, true) == {"chest": "gold"} and Eco.pass_reward(1, 21, true) == {"shard": ""},
+		"premium tiers 5, 9, 21 (the old titles; gems until 0.31.188): a shard, a Gold chest, a shard")
+	var pass_items := []
+	for tier in range(1, Eco.PASS_TIERS + 1):
+		for prem in [false, true]:
+			if Eco.pass_reward(1, tier, prem).has("item"):
+				pass_items.append(tier)
+	check(pass_items.is_empty(), "no title (or anything else from the catalog) on the pass %s" % str(pass_items))
 	var chest_titles := []
-	for rar in Eco.TITLE_RARITY_ORDER:
-		for id in Eco.chest_pool(rar):
-			if str(Eco.CATALOG[id].kind) == "title":
-				chest_titles.append(id)
+	for kind in Eco.CHESTS:
+		for i in 50:
+			var rr := Eco.roll_chest(str(kind), i)
+			if rr.has("item"):
+				chest_titles.append(kind)
 	check(chest_titles.is_empty(), "no title in the chests")
+	var sold := []
+	for id in Eco.CATALOG:
+		if not (str(Eco.CATALOG[id].get("source", "")) in ["earn", "prize"]):
+			sold.append(id)
+	check(sold.is_empty(), "every title is earned (or a leaderboard prize), none sold %s" % str(sold))
 
 	# ---- the sim counts healing (the Merciful title): a priest's beam on a hurt ally, not himself
 	var sim := Sim.new()

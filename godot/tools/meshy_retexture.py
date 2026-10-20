@@ -8,6 +8,8 @@ same silhouette, only the paint changes.
       -> OUTDIR/HERO.jpg (the base colour, 2048, the source the game's 1024 skin is made from: tools/build_skins.py),
          OUTDIR/HERO_meshy_preview.png (Meshy's preview), and HERO's entry in OUTDIR/tasks.json (task id, credits, the
          prompt). 10 credits a skin. The key comes from the environment and is never written down.
+  0.31.188: HERO may instead be a weapon piece, "mw/<name>" (assets/meshy/weapons/<name>.glb) -- an outfit's repainting
+  of a hero's own weapon (OUTDIR/<name>.jpg; tools/build_skins.py -> assets/skins/weapons/<name>_<line>.jpg).
 """
 import base64
 import io
@@ -33,7 +35,11 @@ def main():
     from PIL import Image
     hero, out, prompt = sys.argv[1], sys.argv[2], sys.argv[3]
     os.makedirs(out, exist_ok=True)
-    glb = open(os.path.join(GODOT, "assets", "meshy", hero, "rigged.glb"), "rb").read()
+    if hero.startswith("mw/"):
+        glb = open(os.path.join(GODOT, "assets", "meshy", "weapons", hero[3:] + ".glb"), "rb").read()
+        hero = hero[3:]
+    else:
+        glb = open(os.path.join(GODOT, "assets", "meshy", hero, "rigged.glb"), "rb").read()
     t = req("POST", "/retexture", {"model_url": "data:application/octet-stream;base64," + base64.b64encode(glb).decode(),
                                    "text_style_prompt": prompt, "enable_original_uv": True, "enable_pbr": False,
                                    "target_formats": ["glb"]})

@@ -27,52 +27,10 @@ static func section(root: Node, text: String, right := "", icon := "") -> void:
 		l.autowrap_mode = TextServer.AUTOWRAP_OFF
 
 static func item_icon(it: Dictionary) -> String:
-	match str(it.get("kind", "")):
-		"title": return "title"
-		"skin": return str(it.get("class", "skin"))
-		"weapon": return str(it.get("class", "weapon"))
-	return "star"
-
-static func item_kind_text(it: Dictionary) -> String:
-	var cls := str(Eco.CLASS_NAMES.get(str(it.get("class", "")), ""))
-	var k := {"skin":"Skin", "weapon":"Weapon", "title":"Title"}.get(str(it.get("kind", "")), "") as String
-	return (cls + " · " + k) if cls != "" else k
+	return "title" if str(it.get("kind", "")) == "title" else "star"
 
 static func rarity(it: Dictionary) -> Color:
 	return Color(str(Eco.RARITY_COLOR.get(str(it.get("rarity", "common")), "#b8c4c9")))
-
-static func swatch(parent: Node, tex: Texture2D, edge: Color, px := 56, fallback := "", tint := Color.WHITE) -> void:
-	# A rarity-framed tile showing a pre-rendered icon (or a procedural glyph if there is none).
-	var box := PanelContainer.new()
-	var sb := UI.card_style(Color(edge.r * 0.20, edge.g * 0.20, edge.b * 0.26, 0.92), 14, edge, false)
-	sb.set_border_width_all(2)
-	for side in ["left", "right", "top", "bottom"]:
-		sb.set("content_margin_" + side, 3.0)
-	box.add_theme_stylebox_override("panel", sb)
-	box.custom_minimum_size = Vector2(px, px)
-	parent.add_child(box)
-	if tex != null:
-		var t := TextureRect.new()
-		t.texture = tex
-		t.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		t.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		t.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		box.add_child(t)
-	else:
-		var ic := UI.icon(box, fallback, px - 22, tint)
-		ic.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-		ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-
-static func item_texture_path(id: String) -> String:
-	match str(Eco.item(id).get("kind", "")):
-		"skin": return "res://assets/ui/skins/%s.png" % id
-		"weapon": return "res://assets/ui/icons/%s.png" % id
-	return ""
-
-static func item_swatch(parent: Node, id: String, px := 56) -> void:
-	var it := Eco.item(id)
-	var tp := item_texture_path(id)
-	swatch(parent, UI.tex(tp) if tp != "" else null, rarity(it), px, item_icon(it), rarity(it).lightened(0.25))
 
 static func chest_icon(kind: String) -> String:
 	return UI2.V2 + "chests/%s_icon.png" % str({"wooden": "wood"}.get(kind, kind))
@@ -85,9 +43,6 @@ static func reward_text(r: Dictionary) -> Array:
 	if r.has("chest"):                                   # (0.31.79: chests used to read "0 gold" here)
 		var ck := str(r.chest)
 		return ["chest", str(Eco.CHESTS.get(ck, {}).get("name", "Chest")), Color(str(Eco.CHESTS.get(ck, {}).get("color", "#ffcf4a"))), chest_icon(ck)]
-	if r.has("item"):
-		var it := Eco.item(str(r.item))
-		return [item_icon(it), str(it.get("name", "?")), rarity(it), item_texture_path(str(r.item))]
 	if r.has("gems"):
 		return ["gem", "%d gems" % int(r.gems), UI.CYAN, "res://assets/ui/currency/gem.png"]
 	# 0.31.185 (League's way): a hero shard (which hero, once it's known) and the premium pass's Hero Token
@@ -101,77 +56,6 @@ static func reward_text(r: Dictionary) -> Array:
 	var g := int(r.get("gold", 0))
 	return ["coin", "%d gold" % g, UI.GOLD, "res://assets/ui/currency/%s.png" % ("coins_s" if g >= 300 else "coin")]
 
-static func pack_list(app, root: Node) -> void:
-	# 0.31.79: the Arsenals, two to a row: the items fanned out, the name, what's in it, a gem button (the price covers
-	# only what the player doesn't own yet).
-	var p = app.profile
-	var grid := GridContainer.new()
-	grid.columns = 2
-	grid.add_theme_constant_override("h_separation", 10)
-	grid.add_theme_constant_override("v_separation", 12)
-	root.add_child(grid)
-	for pid in Eco.PACKS:
-		var pk: Dictionary = Eco.PACKS[pid]
-		var rar := str(pk.rarity)
-		var c := Control.new()
-		c.custom_minimum_size = Vector2(0, 232)
-		UI.grow(c)
-		grid.add_child(c)
-		var ppid := str(pid)
-		_tap_area(c, "preview_" + ppid, func(): open_item(app, "", ppid, 0))
-		var clip := Control.new()
-		clip.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		clip.offset_left = 4
-		clip.offset_top = 4
-		clip.offset_right = -4
-		clip.offset_bottom = -4
-		clip.clip_contents = true
-		clip.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		c.add_child(clip)
-		UI2.plate(c, _rar_panel(rar), 18.0, _rar_rim(rar))
-		var ry := UI2.rays(clip, 230.0, _rar_tint(rar), 26.0, 0.4)
-		ry.position = Vector2(-30, -80)
-		var icons := []
-		for id in pk.items:
-			var tp := item_texture_path(str(id))
-			if tp != "" and UI2.tex(tp) != null:
-				icons.append([str(id), tp])
-		var fan := [[Vector2(10, 10), -12.0], [Vector2(60, 22), 10.0], [Vector2(36, 2), 0.0]]
-		for k in mini(icons.size(), 3):
-			var ti := UI2.img(c, str(icons[k][1]), 92.0)
-			ti.position = fan[k][0]
-			ti.pivot_offset = Vector2(46, 46)
-			ti.rotation = deg_to_rad(fan[k][1])
-			if p.owns(str(icons[k][0])):
-				ti.modulate = Color(1, 1, 1, 0.45)
-		var v := VBoxContainer.new()
-		v.add_theme_constant_override("separation", 2)
-		v.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		v.offset_left = 10
-		v.offset_right = -10
-		v.offset_top = 116
-		v.offset_bottom = -50
-		v.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		c.add_child(v)
-		UI2.text(v, str(pk.name).to_upper(), 15, Color.WHITE, UI2.INK, 5)
-		var names := []
-		for id in pk.items:
-			names.append(str(Eco.item(id).name))
-		var tl := UI2.body(v, " · ".join(names), 10, Color("#efe6ff"))
-		tl.vertical_alignment = VERTICAL_ALIGNMENT_TOP
-		var gems := Eco.pack_price(pid, p.d.owned)
-		if gems <= 0:
-			var ob := UI2.chip(c, "OWNED", Color("#27a248"), Color.WHITE)
-			ob.position = Vector2(12, 192)
-			continue
-		var b := UI2.button(c, str(UI.compact(gems)), "purple", func(): buy_pack(app, pid), "buy_" + pid, 17, 36.0, 11.0, "res://assets/ui/currency/gem.png")
-		b.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
-		b.offset_left = 10
-		b.offset_right = -10
-		b.offset_top = -48
-		b.offset_bottom = -10
-		b.disabled = not p.can_afford({"gems": gems})
-
 static func _rar_panel(rar: String) -> String:
 	return {"common": "night", "rare": "royal", "epic": "purple", "legendary": "ember"}.get(rar, "night")
 
@@ -180,49 +64,6 @@ static func _rar_rim(rar: String) -> String:
 
 static func _rar_tint(rar: String) -> Color:
 	return {"common": Color(0.85, 0.88, 1.0), "rare": Color(0.55, 0.78, 1.0), "epic": Color(0.85, 0.6, 1.0), "legendary": Color(1.0, 0.78, 0.35)}.get(rar, Color(1, 0.9, 0.6))
-
-static func buy_pack(app, pid: String, then := Callable()) -> void:
-	var pk: Dictionary = Eco.PACKS[pid]
-	var gems := Eco.pack_price(pid, app.profile.d.owned)
-	app.confirm("BUY %s?" % str(pk.name).to_upper(), "%d items for %d gems." % [pk.items.size(), gems], "BUY", "premium", func():
-		var r: Dictionary = app.profile.buy_pack(pid)
-		if r.ok:
-			app.sfx("purchase")
-			app.toast("Unlocked the %s — equip it in the Locker" % str(pk.name), UI.GOLD)
-		else:
-			app.sfx("error")
-			app.toast(str(r.error), UI.RED)
-		app.rebuild()
-		if r.ok and then.is_valid():
-			then.call(), then)   # (0.31.96: CANCEL goes back to the shop preview it came from)
-
-static func price_button(parent: Node, app, id: String, size := 15, h := 34.0) -> Button:
-	var price := Eco.item_price(id, app.profile.now())
-	var gems: bool = price.has("gems")
-	var amount: int = int(price.get("gems", price.get("gold", 0)))
-	var b := UI2.button(parent, UI.compact(amount), "purple" if gems else "gold", func(): buy(app, id), "buy_" + id, size, h, 11.0,
-		"res://assets/ui/currency/%s.png" % ("gem" if gems else "coin"))
-	b.disabled = not app.profile.can_afford(price)
-	return b
-
-static func buy(app, id: String, then := Callable()) -> void:
-	var it := Eco.item(id)
-	var price := Eco.item_price(id, app.profile.now())
-	var do_buy := func():
-		var r: Dictionary = app.profile.buy(id)
-		if r.ok:
-			app.sfx("purchase")
-			app.toast("Unlocked %s — equip it in the Locker" % str(it.name), UI.GOLD)
-		else:
-			app.sfx("error")
-			app.toast(str(r.error), UI.RED)
-		app.rebuild()
-		if r.ok and then.is_valid():
-			then.call()
-	if price.has("gems"):
-		app.confirm("BUY %s?" % str(it.name).to_upper(), "%s for %d gems." % [item_kind_text(it), int(price.gems)], "BUY", "premium", do_buy, then)
-	else:
-		do_buy.call()
 
 # ---------------- HOME ----------------
 # 0.31.79 (Kevin: the concepts, "build it"): the painted battlements with every class on the dais (the app's hero layer),
@@ -329,17 +170,8 @@ static func home(app, root: VBoxContainer) -> void:
 		app.open_orders(), "side_orders", orders_ready)
 	if orders_ready > 0:
 		UI2.wiggle(ob.get_meta("icon"))
-	# 0.31.93: the Forge, under FIRST WIN (a badge when an equipped weapon's next star can be forged)
-	var fready := forge_ready(p)
-	var fgb := _medallion(top, Vector2(w - 62, MED_Y[1]), "anvil", "FORGE", func():          # (0.31.164-169: top right)
-		app.sfx("tab")
-		app.forge_cls = app.locker_class if (Eco.CLASSES + Eco.UP_CLASSES).has(str(app.locker_class)) else "knight"
-		app.forge_pick = ""
-		app.show_tab("forge"), "side_forge", fready, "silver")
-	if fready > 0:
-		UI2.wiggle(fgb.get_meta("icon"))
-	# (0.31.111-0.31.138: SOCIAL stood under the Forge; 0.31.139 it's the ALLIANCE tab.) The tutorial takes its place
-	# until it's been played through, with its gold as a tag.
+	# (0.31.93-0.31.187: the FORGE stood under RANKS -- gone with the weapons, 0.31.188; the tutorial moved up to its place.
+	# 0.31.111-0.31.138: SOCIAL stood under the Forge; 0.31.139 it's the ALLIANCE tab.)
 	var soc = app.get("social")
 	# 0.31.164 (Kevin: "5v5 only"): no TUTORIAL (Siege's walkthrough), no 5V5 TEST (PLAY is the 5v5 now) and no RANKS
 	# (the weekly leaderboard counts online matches -- none until the 5v5 is online). 0.31.170: the online 5v5 -- RANKS
@@ -352,7 +184,7 @@ static func home(app, root: VBoxContainer) -> void:
 	# 0.31.181 (Kevin: "create a tutorial walking player through the basics of a match"): the 5v5 tutorial under the
 	# Forge -- with its gold as a tag (and a glow) until that's been paid (Siege's tutorial, played before 0.31.164, paid it)
 	var tdone := bool(d.get("tutorial_done", false))
-	var tb := _medallion(top, Vector2(w - 62, MED_Y[2]), "horn", "TUTORIAL", func():
+	var tb := _medallion(top, Vector2(w - 62, MED_Y[1]), "horn", "TUTORIAL", func():
 		app.sfx("confirm")
 		app.start_tutorial(), "tutorial_start", 0, "silver" if tdone else "gold")
 	if not tdone:
@@ -874,12 +706,12 @@ static func banner(root: Node, art: String, title: String, h := 210.0, title_col
 
 static func pass_screen(app, root: VBoxContainer) -> void:
 	# 0.31.42 (Kevin): a richer Siege Pass; 0.31.79: the painted banner, the tier medallion in a sunburst, the premium
-	# offer, the season's best item turning in 3D, then the track -- free on the left, premium on the right, a gold spine.
+	# offer, then the track -- free on the left, premium on the right, a gold spine. (0.31.79-0.31.187: the season's best
+	# weapon turning in 3D under the offer -- 0.31.188 the pass gives no cosmetics: outfits are bought.)
 	var p = app.profile
 	var d: Dictionary = p.d
 	var sid: int = int(d.pass.season)
 	var tier: int = p.pass_tier()
-	var items: Array = Eco.pass_items(sid)
 
 	# --- banner
 	var ban := banner(root, UI2.V2 + "art_pass.webp", "SIEGE PASS", 214.0)
@@ -951,8 +783,6 @@ static func pass_screen(app, root: VBoxContainer) -> void:
 		kb.disabled = int(d.gems) < int(so.gems)
 
 	# --- premium
-	var pcos := Eco.pass_cosmetics(sid)                  # (0.31.87: the title tiers give gems now)
-	var legendary: int = int(pcos.legendary)
 	if bool(d.pass.premium):
 		var pa := UI2.frame(root, "purple", 10, 16.0, "gold")
 		var pr := UI.row(pa, 10)
@@ -967,61 +797,11 @@ static func pass_screen(app, root: VBoxContainer) -> void:
 		pt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		ph.add_child(pt)
 		UI2.text(pt, "UNLOCK PREMIUM", 20, UI2.GOLD)
-		UI2.body(pt, "A Hero Token (any hero) · %d exclusive cosmetics (%d legendary) · gold chests · a Royal chest · %s" % [int(pcos.n), legendary,
-			"more gems on every tier" if sid < 2 else "more gold on every tier"], 12, Color("#efe2ff"))     # (0.31.108-0.31.183: Embers and gold from season 2)
+		UI2.body(pt, premium_summary(sid), 12, Color("#efe2ff"))
 		var b := UI2.button(pc, "UNLOCK  %d" % Eco.PREMIUM_COST, "purple", func(): _buy_premium(app), "buy_premium", 20, 52.0, 16.0, "res://assets/ui/currency/gem.png")
 		b.disabled = int(d.gems) < Eco.PREMIUM_COST
 		UI2.sweep(b)
 		UI2.center(UI2.body(pc, "You have %d gems" % int(d.gems), 11, Color("#d8c6ff")))
-
-	# --- the season's best: premium tier 30, turning
-	var best: String = str(items[items.size() - 1])
-	var bit: Dictionary = Eco.CATALOG[best]
-	var fr: String = {"legendary": "ember", "epic": "purple", "rare": "royal"}.get(str(bit.rarity), "night")
-	var rim: String = {"legendary": "orange", "epic": "purple", "rare": "blue"}.get(str(bit.rarity), "gold")
-	var fc := Control.new()
-	fc.custom_minimum_size = Vector2(0, 236)
-	root.add_child(fc)
-	var stage := Control.new()
-	stage.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	stage.offset_left = 5
-	stage.offset_top = 5
-	stage.offset_right = -5
-	stage.offset_bottom = -5
-	stage.clip_contents = true
-	fc.add_child(stage)
-	UI2.plate(fc, fr, 20.0, rim, {"rim": 4.0})
-	var sr := UI2.rays(stage, 420.0, Color(1.0, 0.75, 0.35) if fr == "ember" else Color(0.85, 0.6, 1.0), 30.0, 0.5)
-	stage.resized.connect(func(): sr.position = Vector2(stage.size.x * 0.32 - 210.0, stage.size.y * 0.5 - 210.0))
-	if str(bit.kind) == "weapon":
-		var sh := Showcase.new()
-		sh.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		sh.anchor_right = 0.66
-		stage.add_child(sh)
-		sh.show_look(str(bit["class"]), {"r": str(bit.get("r", "")), "l": str(bit.get("l", ""))})
-	var cap := VBoxContainer.new()
-	cap.add_theme_constant_override("separation", 4)
-	cap.anchor_left = 0.56
-	cap.anchor_right = 1.0
-	cap.anchor_bottom = 1.0
-	cap.offset_top = 22
-	cap.offset_right = -12
-	cap.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	stage.add_child(cap)
-	UI2.body(cap, "THIS SEASON'S PRIZE", 10, Color("#ffe0a8"))
-	var bn := UI2.text(cap, str(bit.name).to_upper(), 24, Color("#ffbf4d") if fr == "ember" else UI2.PURPLE)
-	bn.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	UI2.body(cap, "TIER 30  ·  %s" % str(bit.rarity).to_upper(), 11, Color.WHITE)
-	if str(bit.kind) == "weapon":
-		UI2.body(cap, "%s weapon on the premium track" % str(Eco.CLASS_NAMES.get(str(bit["class"]), "")), 11, Color("#f3d6b8"))
-	UI2.body(cap, "Tap to look closer", 10, Color(1, 1, 1, 0.6))
-	var tap := Button.new()
-	tap.flat = true
-	for st_name in ["normal", "hover", "pressed", "focus"]:
-		tap.add_theme_stylebox_override(st_name, StyleBoxEmpty.new())
-	tap.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	tap.pressed.connect(func(): open_pass_item(app, sid, Eco.PASS_TIERS, true))
-	stage.add_child(tap)
 
 	# --- claim all
 	var claimable := 0
@@ -1062,6 +842,27 @@ static func pass_screen(app, root: VBoxContainer) -> void:
 		pass_cell(app, row, sid, t, false)
 		_spine(row, t, tier)
 		pass_cell(app, row, sid, t, true)
+
+static func premium_summary(sid: int) -> String:
+	# what the premium track holds, counted from the season's rewards: "A Hero Token (any hero) · 3 hero shards · ..."
+	var n := {"token": 0, "shard": 0, "royal": 0, "gold": 0, "gems": 0}
+	for t in range(1, Eco.PASS_TIERS + 1):
+		var r := Eco.pass_reward(sid, t, true)
+		n.token += int(r.get("token", 0))
+		n.shard += 1 if r.has("shard") else 0
+		n.gems += int(r.get("gems", 0))
+		if r.has("chest"):
+			n[str(r.chest) if str(r.chest) in ["royal", "gold"] else "gold"] += 1
+	var bits := []
+	if int(n.token) > 0:
+		bits.append("A Hero Token (any hero)")
+	if int(n.shard) > 0:
+		bits.append("%d hero shards" % int(n.shard))
+	bits.append("%d Royal and %d Gold chests" % [int(n.royal), int(n.gold)])
+	if int(n.gems) > 0:
+		bits.append("%s gems" % UI.grouped(int(n.gems)))
+	bits.append("more gold on every tier")
+	return " · ".join(bits)
 
 const PASS_GOLD := Color("#ffcf5a")
 const PASS_PURPLE := Color("#b77cff")
@@ -1136,9 +937,8 @@ static func _spine(row: Node, t: int, tier: int) -> void:
 
 static func pass_cell(app, parent: Node, sid: int, t: int, prem: bool) -> void:
 	var p = app.profile
-	var r: Dictionary = p.pass_reward_for(t, prem)          # (0.31.108: an item already owned shows what replaces it)
+	var r: Dictionary = p.pass_reward_for(t, prem)          # (a shard: the hero it is for this player)
 	var rt: Array = reward_text(r)
-	var it: Dictionary = Eco.item(str(r.get("item", "")))
 	var claimed: bool = (p.d.pass.prem if prem else p.d.pass.free).has(t)
 	var ready: bool = p.can_claim(t, prem)
 	var locked_prem: bool = prem and not bool(p.d.pass.premium)
@@ -1148,8 +948,6 @@ static func pass_cell(app, parent: Node, sid: int, t: int, prem: bool) -> void:
 	if ready:
 		kind = "green"
 		rim = "green"
-	elif not it.is_empty():
-		rim = {"legendary": "orange", "epic": "purple", "rare": "blue"}.get(str(it.rarity), rim)
 	var cell := Control.new()
 	cell.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	cell.custom_minimum_size = Vector2(0, 116 if ready else 104)
@@ -1158,8 +956,8 @@ static func pass_cell(app, parent: Node, sid: int, t: int, prem: bool) -> void:
 		var g := UI2.glow(cell, Rect2(-16, -16, 10, 10), Color(0.55, 1.0, 0.6, 0.5))
 		cell.resized.connect(func(): g.size = cell.size + Vector2(32, 32))
 	UI2.plate(cell, kind, 16.0, rim, {"dim": 0.45 if (claimed or locked_prem) else 0.0})
-	if not it.is_empty() and str(it.rarity) in ["epic", "legendary"] and not claimed:
-		var rays := UI2.rays(cell, 150.0, Color(1, 0.8, 0.4) if str(it.rarity) == "legendary" else Color(0.85, 0.6, 1.0), 20.0, 0.35)
+	if r.has("chest") and str(r.chest) == "royal" and not claimed:
+		var rays := UI2.rays(cell, 150.0, Color(0.85, 0.6, 1.0), 20.0, 0.35)       # (a Royal chest stands out)
 		cell.resized.connect(func(): rays.position = Vector2(cell.size.x * 0.5 - 75.0, 4.0))
 		cell.clip_contents = false
 	var v := VBoxContainer.new()
@@ -1187,9 +985,6 @@ static func pass_cell(app, parent: Node, sid: int, t: int, prem: bool) -> void:
 	nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	nm.clip_text = true
 	nm.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	if not it.is_empty():
-		var rl := UI2.body(v, str(it.rarity).to_upper(), 9, rt[2].lightened(0.3), false)
-		rl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	if claimed or locked or locked_prem:
 		var badge := Control.new()
 		badge.size = Vector2(28, 28)
@@ -1246,8 +1041,7 @@ static func _skip_tiers(app) -> void:
 static func _buy_premium(app) -> void:
 	var p = app.profile
 	var psid := int(app.profile.d.pass.season)
-	app.confirm("UNLOCK PREMIUM?", "A Hero Token for any hero, %d exclusive cosmetics, gold and Royal chests and %s on every tier this season. Costs %d gems." % [int(Eco.pass_cosmetics(psid).n),
-		"more gems" if psid < 2 else "more gold", Eco.PREMIUM_COST], "UNLOCK", "premium", func():
+	app.confirm("UNLOCK PREMIUM?", "%s this season. Costs %d gems." % [premium_summary(psid), Eco.PREMIUM_COST], "UNLOCK", "premium", func():
 		var r: Dictionary = p.buy_premium()
 		if r.ok:
 			app.sfx("premium")                 # 0.31.110: a rich golden chord
@@ -1258,11 +1052,10 @@ static func _buy_premium(app) -> void:
 		app.rebuild())
 
 static func open_pass_item(app, sid: int, t: int, prem: bool) -> void:
-	# the detail view: the reward big -- a weapon in its class's hands, turning with your finger
+	# the detail view: the reward big (0.31.42-0.31.187: a weapon in its class's hands, turning with your finger)
 	var p = app.profile
 	var r: Dictionary = p.pass_reward_for(t, prem)
 	var rt: Array = reward_text(r)
-	var it: Dictionary = Eco.item(str(r.get("item", "")))
 	app.sfx("menuOpen")
 	app.close_modal()
 	var m := Control.new()
@@ -1280,7 +1073,7 @@ static func open_pass_item(app, sid: int, t: int, prem: bool) -> void:
 	margin.add_theme_constant_override("margin_top", 60)
 	margin.add_theme_constant_override("margin_bottom", 40)
 	m.add_child(margin)
-	var edge: Color = rt[2] if not it.is_empty() else (PASS_PURPLE if prem else PASS_GOLD)
+	var edge: Color = PASS_PURPLE if prem else PASS_GOLD
 	var sheet := _panel(margin, Color("#140d26"), edge, 22, Color(edge.r, edge.g, edge.b, 0.45), 14)
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 8)
@@ -1298,53 +1091,22 @@ static func open_pass_item(app, sid: int, t: int, prem: bool) -> void:
 	stage.custom_minimum_size = Vector2(0, 340)
 	stage.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	v.add_child(stage)
-	if str(it.get("kind", "")) == "weapon":
-		Showcase.backdrop(stage)
-		var sh := Showcase.new()
-		sh.interactive = true
-		sh.cam_z = 5.6
-		sh.cam_y = 1.35
-		sh.look_y = 0.95
-		sh.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		stage.add_child(sh)
-		sh.show_look(str(it["class"]), {"r": str(it.get("r", "")), "l": str(it.get("l", ""))})
-		zoom_controls(stage, sh, "pass")
+	Showcase.backdrop(stage)
+	var cc := CenterContainer.new()
+	cc.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	stage.add_child(cc)
+	var icc := CenterContainer.new()
+	cc.add_child(icc)
+	if str(rt[3]) != "":
+		UI.tex_icon(icc, str(rt[3]), 120)
 	else:
-		Showcase.backdrop(stage)
-		var cc := CenterContainer.new()
-		cc.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		stage.add_child(cc)
-		var cv := VBoxContainer.new()
-		cc.add_child(cv)
-		if str(it.get("kind", "")) == "title":
-			var tt := UI.label(cv, "« %s »" % str(it.name), 30, PASS_GOLD, UI.TITLE_FONT, true)
-			tt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			UI.label(cv, "a title shown next to your name", 12, Color.WHITE).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		else:
-			var icc := CenterContainer.new()
-			cv.add_child(icc)
-			if str(rt[3]) != "":
-				UI.tex_icon(icc, str(rt[3]), 120)
-			else:
-				UI.icon(icc, str(rt[0]), 96, rt[2])
+		UI.icon(icc, str(rt[0]), 96, rt[2])
 	var nm := UI.label(v, str(rt[1]), 24, Color.WHITE, UI.TITLE_FONT, true)
 	nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	if not it.is_empty():
-		var ir := UI.row(v, 8)
-		ir.alignment = BoxContainer.ALIGNMENT_CENTER
-		_chip(ir, str(it.rarity).to_upper(), rt[2], Color("#120c22"))
-		if str(it.get("kind", "")) == "weapon":
-			_chip(ir, str(Eco.CLASS_NAMES.get(str(it["class"]), "")).to_upper() + " WEAPON", Color(1, 1, 1, 0.12), Color.WHITE)
-		if p.owns(str(r.item)):
-			_chip(ir, "OWNED", UI.GREEN, Color("#0c2014"))
-	elif r.has("chest"):
+	if r.has("chest"):
 		var cd := UI.label(v, Eco.chest_odds(str(r.chest)), 11, UI.MUTED)
 		cd.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	if r.has("swap"):
-		# 0.31.108: this tier's item was one the player already had
-		var sw := UI.label(v, "In place of %s, which you already own" % str(Eco.item(str(r.swap)).get("name", "")), 11, UI.MUTED)
-		sw.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		sw.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		cd.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	var claimed: bool = (p.d.pass.prem if prem else p.d.pass.free).has(t)
 	if claimed:
 		UI.button(v, "CLAIMED ✓", "secondary", func(): pass, "pass_detail_claimed", 15).disabled = true
@@ -1359,8 +1121,9 @@ static func open_pass_item(app, sid: int, t: int, prem: bool) -> void:
 
 # ---------------- SHOP ----------------
 static func shop(app, root: VBoxContainer) -> void:
-	# 0.31.79: the market stall banner, this week's featured item big (its class holding it, turning), the daily deals,
-	# the Arsenals and the gem exchange.
+	# 0.31.79: the market stall banner, the week's featured, the daily deals, the Arsenals and the gems. 0.31.188 (Kevin:
+	# "I only want the cosmetics to be an entire outfit"): the outfits -- this week's three big (the hero in it, in his
+	# own place), then every outfit by hero -- and the gems; tap an outfit to see it on him in his window.
 	var p = app.profile
 	var now: int = p.now()
 	var ban := banner(root, UI2.V2 + "art_shop.webp", "MARKET", 196.0)
@@ -1368,17 +1131,16 @@ static func shop(app, root: VBoxContainer) -> void:
 	note.position = Vector2(12, 12)
 	var days := int(floor(now / 86400.0))
 	var monday := days - ((days + 3) % 7)
-	UI2.divider(root, "FEATURED", 22, "new picks in " + UI.duration((monday + 7) * 86400 - now))
-	var feat: Array = Eco.shop_featured(now)
-	var sel := clampi(int(app.get_meta("shop_feat", 0)), 0, maxi(0, feat.size() - 1))
+	var feat: Array = Eco.featured_outfits(now)
 	if not feat.is_empty():
-		featured_card(app, root, str(feat[sel]))
+		UI2.divider(root, "FEATURED OUTFITS", 22, "new picks in " + UI.duration((monday + 7) * 86400 - now))
+		var sel := clampi(int(app.get_meta("shop_feat", 0)), 0, feat.size() - 1)
+		featured_outfit(app, root, str(feat[sel]))
 		var thumbs := HBoxContainer.new()
 		thumbs.alignment = BoxContainer.ALIGNMENT_CENTER
 		thumbs.add_theme_constant_override("separation", 14)
 		root.add_child(thumbs)
 		for i in feat.size():
-			var fid := str(feat[i])
 			var on := i == sel
 			var tb := Button.new()
 			tb.flat = true
@@ -1396,193 +1158,16 @@ static func shop(app, root: VBoxContainer) -> void:
 			if on:
 				UI2.skin(tb, UI2.button_params("gold", 16.0, 3.0))
 			else:
-				UI2.plate(tb, _rar_panel(str(Eco.item(fid).rarity)), 16.0, _rar_rim(str(Eco.item(fid).rarity)), {"rim": 2.0, "dim": 0.25})
-			var ti := UI2.img(tb, item_texture_path(fid), 56.0)
+				UI2.plate(tb, "purple", 16.0, "purple", {"rim": 2.0, "dim": 0.25})
+			var ti := UI2.img(tb, "res://assets/ui/skins/%s.png" % str(feat[i]), 56.0)
 			ti.position = Vector2(6, 4)
-	UI2.divider(root, "DAILY DEALS", 22, "new in %s  ·  paid with gold you earn" % UI.duration((days + 1) * 86400 - now))
-	item_grid(app, root, Eco.shop_daily(now), false)
-	UI2.divider(root, "HERO SKINS", 22, "a new look for a hero  ·  his hero comes with it")      # 0.31.186
+	UI2.divider(root, "OUTFITS", 22, "a whole new look and weapon  ·  his hero comes with it")      # 0.31.186 (0.31.188: whole outfits)
 	skin_grid(app, root)
-	UI2.divider(root, "ARSENALS", 22, "bundles for one class")
-	pack_list(app, root)
 	gem_packs(app, root)
 	# (0.31.106-0.31.184 "GEMS -> GOLD": five gold packs for gems. 0.31.185, Kevin: "I want the same IAP system as league of
 	# legends" -- League never turns its paid currency into the earned one: gold is earned only, gems buy heroes outright)
 	var fn := UI2.body(root, "Chests are earned by playing  ·  never sold", 11, Color("#cdb79a"))
 	fn.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-
-# ---------------- shop preview (0.31.96, Kevin: "make it so you can click the items in the store page and preview them") ----------------
-# Tapping a featured weapon, a daily deal or an Arsenal opens this: the weapon in its class's hands (drag to turn, pinch
-# or +/- to zoom) or the weapon on its own, turning, with its stars; its name, rarity and class; and buy or equip right
-# there. An Arsenal shows its weapons one at a time (the row of icons under the stage) with the Arsenal's price.
-static func _tap_area(parent: Control, key: String, on_press: Callable) -> Button:
-	# an invisible full-card button under the card's own buttons (the menu still scrolls when the finger moves)
-	var tb := Button.new()
-	tb.flat = true
-	tb.focus_mode = Control.FOCUS_NONE
-	for st_name in ["normal", "hover", "pressed", "focus", "disabled"]:
-		tb.add_theme_stylebox_override(st_name, StyleBoxEmpty.new())
-	tb.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	tb.set_meta("action_key", key)
-	tb.pressed.connect(on_press)
-	parent.add_child(tb)
-	parent.move_child(tb, 0)
-	return tb
-
-static func open_item(app, id: String, pack := "", pick := 0) -> void:
-	var p = app.profile
-	var ids: Array = [id] if pack == "" else Array(Eco.PACKS[pack].items)
-	pick = clampi(pick, 0, ids.size() - 1)
-	var sid := str(ids[pick])
-	var it := Eco.item(sid)
-	if it.is_empty():
-		return
-	var rar := str(it.get("rarity", "rare"))
-	var tint := _rar_tint(rar if pack == "" else str(Eco.PACKS[pack].get("rarity", rar)))
-	var weapon := str(it.get("kind", "")) == "weapon"
-	var mode := str(app.get_meta("shop_preview_mode", "hand"))
-	app.sfx("menuOpen")
-	app.close_modal()
-	var m := Control.new()
-	m.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	app.add_child(m)
-	app.modal = m
-	var dim := ColorRect.new()
-	dim.color = Color(0.02, 0.01, 0.05, 0.84)
-	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	m.add_child(dim)
-	var margin := MarginContainer.new()
-	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	for side in ["left", "right"]:
-		margin.add_theme_constant_override("margin_" + side, 14)
-	margin.add_theme_constant_override("margin_top", 54)
-	margin.add_theme_constant_override("margin_bottom", 34)
-	m.add_child(margin)
-	var sheet := _panel(margin, Color("#140d26"), tint, 22, Color(tint.r, tint.g, tint.b, 0.45), 14)
-	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 8)
-	sheet.add_child(v)
-	var hr := UI.row(v, 8)
-	_chip(hr, ("ARSENAL  ·  " + str(Eco.PACKS[pack].name).to_upper()) if pack != "" else "MARKET", Color("#2b3a55"), Color.WHITE)
-	var sp := Control.new()
-	sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	hr.add_child(sp)
-	UI.button(hr, "✕", "ghost", func():
-		app.sfx("menuClose")
-		app.close_modal(), "shop_preview_close", 16, 12)
-	if weapon:
-		var tg := UI.row(v, 8)
-		tg.alignment = BoxContainer.ALIGNMENT_CENTER
-		for t in [["hand", "IN HAND"], ["weapon", "WEAPON"]]:
-			var key: String = t[0]
-			var on := mode == key
-			var b := UI2.button(tg, str(t[1]), "gold" if on else "grey", func():
-				app.set_meta("shop_preview_mode", key)
-				open_item(app, id, pack, pick), "shop_preview_" + key, 14, 36.0, 11.0)
-			b.custom_minimum_size = Vector2(130, 36)
-	var stage := Control.new()
-	stage.clip_contents = true
-	stage.custom_minimum_size = Vector2(0, 330)
-	stage.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	v.add_child(stage)
-	Showcase.backdrop(stage)
-	var fx: Dictionary = p.forge_fx(Eco.forge_id(str(it.get("class", "")), sid)) if p.has_method("forge_fx") else {}
-	if weapon and mode == "weapon":
-		var st := ForgeStage.new()
-		st.interactive = true
-		st.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		stage.add_child(st)
-		st.show_set(str(it.get("r", "")), str(it.get("l", "")), fx)
-		var hint := UI2.chip(stage, "DRAG TO TURN", Color(0.02, 0.03, 0.1, 0.75), Color(1, 1, 1, 0.85), Color(UI2.GOLD, 0.5))
-		hint.anchor_left = 0.5
-		hint.anchor_right = 0.5
-		hint.anchor_top = 1.0
-		hint.anchor_bottom = 1.0
-		hint.offset_left = -60
-		hint.offset_right = 60
-		hint.offset_top = -30
-		hint.offset_bottom = -10
-	elif weapon:
-		var sh := Showcase.new()
-		sh.interactive = true
-		sh.cam_z = 6.6
-		sh.cam_y = 1.4
-		sh.look_y = 0.9
-		sh.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		stage.add_child(sh)
-		var look := {"r": str(it.get("r", "")), "l": str(it.get("l", ""))}
-		if int(fx.get("stars", 0)) > 0:
-			look["forge"] = fx
-		sh.show_look(str(it["class"]), look)
-		zoom_controls(stage, sh, "shop_preview")
-	else:
-		var cc := CenterContainer.new()
-		cc.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		stage.add_child(cc)
-		var tt := UI.label(cc, "« %s »" % str(it.name), 30, PASS_GOLD, UI.TITLE_FONT, true)
-		tt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	if ids.size() > 1:
-		var thumbs := HBoxContainer.new()
-		thumbs.alignment = BoxContainer.ALIGNMENT_CENTER
-		thumbs.add_theme_constant_override("separation", 10)
-		v.add_child(thumbs)
-		for i in ids.size():
-			var tid := str(ids[i])
-			var tb := Button.new()
-			tb.flat = true
-			tb.focus_mode = Control.FOCUS_NONE
-			for st_name in ["normal", "hover", "pressed", "focus"]:
-				tb.add_theme_stylebox_override(st_name, StyleBoxEmpty.new())
-			tb.custom_minimum_size = Vector2(62, 62)
-			tb.set_meta("action_key", "shop_preview_item_%d" % i)
-			var ii := i
-			tb.pressed.connect(func(): open_item(app, id, pack, ii))
-			thumbs.add_child(tb)
-			if i == pick:
-				UI2.skin(tb, UI2.button_params("gold", 14.0, 3.0))
-			else:
-				UI2.plate(tb, _rar_panel(str(Eco.item(tid).rarity)), 14.0, _rar_rim(str(Eco.item(tid).rarity)), {"rim": 2.0, "dim": 0.25})
-			var ti := UI2.img(tb, item_texture_path(tid), 50.0)
-			ti.position = Vector2(6, 5)
-	var nm := UI.label(v, str(it.name), 24, Color.WHITE, UI.TITLE_FONT, true)
-	nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	var ir := UI.row(v, 8)
-	ir.alignment = BoxContainer.ALIGNMENT_CENTER
-	_chip(ir, rar.to_upper(), tint, Color("#120c22"))
-	if weapon:
-		_chip(ir, str(Eco.CLASS_NAMES.get(str(it["class"]), "")).to_upper() + " WEAPON", Color(1, 1, 1, 0.12), Color.WHITE)
-	if p.owns(sid):
-		_chip(ir, "OWNED", UI.GREEN, Color("#0c2014"))
-	if int(fx.get("stars", 0)) > 0:
-		_chip(ir, "%s  %s" % ["★".repeat(int(fx.stars)), str(Eco.FORGE_STARS[int(fx.stars) - 1].get("name", "")).to_upper()], Color("#3a2410"), Color("#ffd27a"))
-	var note := UI.label(v, "Changes your look only. Every weapon plays the same." if weapon else "A title shown next to your name.", 12, UI.MUTED)
-	note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	var reopen := func(): open_item(app, id, pack, pick)
-	if pack != "":
-		var gems := Eco.pack_price(pack, p.d.owned)
-		if gems <= 0:
-			UI.button(v, "ARSENAL OWNED ✓", "secondary", func(): pass, "shop_preview_owned", 15).disabled = true
-		else:
-			var bb := UI2.button(v, "BUY ARSENAL  ·  %s" % UI.compact(gems), "purple", func(): buy_pack(app, pack, reopen),
-				"shop_preview_buy_pack", 17, 48.0, 12.0, "res://assets/ui/currency/gem.png")
-			bb.disabled = not p.can_afford({"gems": gems})
-	elif p.owns(sid):
-		var eq: bool = is_equipped(p, sid)
-		var eb := UI2.button(v, "EQUIPPED" if eq else "EQUIP", "grey" if eq else "green", func():
-			equip(app, sid)
-			reopen.call(), "shop_preview_equip", 17, 48.0)
-		eb.disabled = eq
-	elif str(it.get("source", "")) == "quest":
-		UI.button(v, "EARNED BY ITS CLASS QUEST", "secondary", func(): pass, "shop_preview_quest", 15).disabled = true
-	elif Eco.item_price(sid, p.now()).is_empty():
-		UI.button(v, "A SIEGE PASS REWARD", "secondary", func(): pass, "shop_preview_pass", 15).disabled = true
-	else:
-		var price := Eco.item_price(sid, p.now())
-		var gems2: bool = price.has("gems")
-		var amount: int = int(price.get("gems", price.get("gold", 0)))
-		var pb := UI2.button(v, "BUY  ·  %s" % UI.compact(amount), "purple" if gems2 else "gold", func(): buy(app, sid, reopen),
-			"shop_preview_buy", 17, 48.0, 12.0, "res://assets/ui/currency/%s.png" % ("gem" if gems2 else "coin"))
-		pb.disabled = not p.can_afford(price)
 
 static func gem_packs(app, root: Node) -> void:
 	# 0.31.90 (Kevin: in-app purchases): gems for real money, Google Play only. The starter pack first while it can still
@@ -1612,8 +1197,8 @@ static func gem_packs(app, root: Node) -> void:
 		sc.add_child(v)
 		UI2.text(v, "STARTER PACK", 20, UI2.GOLD, UI2.INK, 5)
 		var sp: Dictionary = Net.IAP.starter_pack
-		UI2.body(v, "%d gems  ·  %s gold  ·  %s %s weapon  ·  once per player" % [int(sp.gems), UI.grouped(int(sp.get("gold", 0))),
-			"an" if str(sp.get("weapon", "rare")) == "epic" else "a", str(sp.get("weapon", "rare"))], 12, Color("#ffe9c7"))
+		UI2.body(v, "%d gems  ·  %s gold  ·  a Hero Token (any hero)  ·  once per player" % [int(sp.gems), UI.grouped(int(sp.get("gold", 0)))],
+			12, Color("#ffe9c7"))            # (0.31.108-0.31.187: an epic weapon)
 		var sb := _iap_button(app, sc, "starter_pack", Vector2.ZERO, Vector2.ZERO)
 		sb.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 		sb.offset_left = 120
@@ -1721,115 +1306,96 @@ static func _iap_button(app, parent: Control, pid: String, at: Vector2, sz: Vect
 		b.disabled = not bl.can_buy(pid)
 	return b
 
-static func featured_card(app, root: Node, id: String) -> void:
-	var p = app.profile
-	var it := Eco.item(id)
-	var rar := str(it.get("rarity", "epic"))
-	var fc := Control.new()
-	fc.custom_minimum_size = Vector2(0, 262)
-	root.add_child(fc)
-	var stage := Control.new()
-	stage.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	stage.offset_left = 5
-	stage.offset_top = 5
-	stage.offset_right = -5
-	stage.offset_bottom = -5
-	stage.clip_contents = true
-	fc.add_child(stage)
-	UI2.plate(fc, _rar_panel(rar), 22.0, _rar_rim(rar), {"rim": 4.0})
-	var sr := UI2.rays(stage, 440.0, _rar_tint(rar), 30.0, 0.5)
-	stage.resized.connect(func(): sr.position = Vector2(stage.size.x * 0.3 - 220.0, stage.size.y * 0.5 - 220.0))
-	_tap_area(stage, "preview_" + id, func(): open_item(app, id))
-	if str(it.get("kind", "")) == "weapon":
-		var sh := Showcase.new()
-		sh.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		sh.anchor_right = 0.6
-		sh.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		stage.add_child(sh)
-		sh.show_look(str(it["class"]), {"r": str(it.get("r", "")), "l": str(it.get("l", ""))})
-		var tap := UI2.chip(stage, "TAP TO PREVIEW", Color(0.02, 0.03, 0.1, 0.7), Color(1, 1, 1, 0.85), Color(UI2.GOLD, 0.5))
-		tap.position = Vector2(10, 8)
-	var cap := VBoxContainer.new()
-	cap.add_theme_constant_override("separation", 6)
-	cap.anchor_left = 0.56
-	cap.anchor_right = 1.0
-	cap.anchor_bottom = 1.0
-	cap.offset_top = 18
-	cap.offset_right = -12
-	cap.offset_bottom = -14
-	stage.add_child(cap)
-	UI2.chip(cap, "%s  ·  %s" % [rar.to_upper(), str(Eco.CLASS_NAMES.get(str(it.get("class", "")), "")).to_upper()], Color(0.05, 0.02, 0.12, 0.8), _rar_tint(rar).lightened(0.3), Color(_rar_tint(rar), 0.8))
-	var nl := UI2.text(cap, str(it.name).to_upper(), 22, Color.WHITE, UI2.INK, 6)
-	nl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	UI2.body(cap, "Changes your look only. Every weapon plays the same.", 11, Color("#efe6ff"))
-	var sp := Control.new()
-	sp.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	sp.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	cap.add_child(sp)
-	if p.owns(id):
-		var eq: bool = is_equipped(p, id)
-		var eb := UI2.button(cap, "EQUIPPED" if eq else "EQUIP", "green" if not eq else "grey", func(): equip(app, id), "equip_" + id, 17, 44.0)
-		eb.disabled = eq
-	else:
-		var pb := price_button(cap, app, id, 20, 50.0)
-		UI2.sweep(pb)
-
-static func item_grid(app, root: Node, ids: Array, big: bool) -> void:
-	var grid := GridContainer.new()
-	grid.columns = 2 if big else 3
-	grid.add_theme_constant_override("h_separation", 10)
-	grid.add_theme_constant_override("v_separation", 12)
-	root.add_child(grid)
-	for id in ids:
-		var it := Eco.item(id)
-		var p = app.profile
-		var rar := str(it.get("rarity", "rare"))
-		var c := Control.new()
-		c.custom_minimum_size = Vector2(0, 206)
-		UI.grow(c)
-		grid.add_child(c)
-		UI2.plate(c, _rar_panel(rar), 18.0, _rar_rim(rar))
-		var did := str(id)
-		_tap_area(c, "preview_" + did, func(): open_item(app, did))
-		var g := UI2.glow(c, Rect2(0, 0, 10, 10), Color(_rar_tint(rar), 0.6))
-		c.resized.connect(func():
-			g.position = Vector2(c.size.x * 0.5 - 60, -2)
-			g.size = Vector2(120, 110))
-		var v := VBoxContainer.new()
-		v.add_theme_constant_override("separation", 2)
-		v.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		v.offset_left = 6
-		v.offset_right = -6
-		v.offset_top = 8
-		v.offset_bottom = -46
-		v.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		c.add_child(v)
-		var ti := UI2.img(v, item_texture_path(str(id)), 84.0)
-		ti.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-		var nl := UI2.text(v, str(it.name).to_upper(), 12, Color.WHITE, UI2.INK, 4)
-		nl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		nl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		nl.size_flags_vertical = Control.SIZE_EXPAND_FILL
-		var kl := UI2.body(v, "%s · %s" % [rar.to_upper(), str(Eco.CLASS_NAMES.get(str(it.get("class", "")), "")).to_upper()], 9, _rar_tint(rar).lightened(0.35), false)
-		kl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		kl.clip_text = true
-		var b: Button
-		if p.owns(id):
-			var equipped: bool = is_equipped(p, id)
-			b = UI2.button(c, "EQUIPPED" if equipped else "EQUIP", "grey" if equipped else "blue", func(): equip(app, id), "equip_" + id, 13, 34.0, 11.0)
-			b.disabled = equipped
-		else:
-			b = price_button(c, app, id, 14, 34.0)
-		b.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
-		b.offset_left = 6
-		b.offset_right = -6
-		b.offset_top = -44
-		b.offset_bottom = -8
-
 # ---------------- hero skins (0.31.186, League's way) ----------------
 # Every skin (Eco.SKINS): the hero in it (assets/ui/skins/<id>.png, tools/render_skin_icons.gd), its name, its gems --
 # BUY asks first (a skin of a locked hero brings him: "+ HERO" on the card); one you own WEAR / WORN (tap WORN: his own
 # look again). The hero window has the same choice beside the hero.
+static func featured_outfit(app, root: Node, id: String) -> void:
+	# 0.31.188: one of the week's outfits big -- the hero in it, turning, in front of his own place (Champions.art), its
+	# name, his name, its price; tap: his window with it on (preview, buy, wear)
+	var p = app.profile
+	var sk: Dictionary = Eco.SKINS[id]
+	var hid := str(sk.hero)
+	var fc := Control.new()
+	fc.custom_minimum_size = Vector2(0, 280)
+	root.add_child(fc)
+	var stage := Panel.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.04, 0.03, 0.06)
+	sb.set_corner_radius_all(20)
+	stage.add_theme_stylebox_override("panel", sb)
+	stage.clip_children = CanvasItem.CLIP_CHILDREN_AND_DRAW
+	stage.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	stage.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	fc.add_child(stage)
+	var art := TextureRect.new()
+	var ap := Champions.art(hid)
+	art.texture = load(ap) if ResourceLoader.exists(ap) else null
+	art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	art.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	art.offset_top = -120
+	art.offset_bottom = 60
+	art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	stage.add_child(art)
+	var sh := Showcase.new()
+	sh.plinth = false
+	sh.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	sh.anchor_right = 0.62
+	sh.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	stage.add_child(sh)
+	sh.show_look(hid, {"skin": id})
+	var rim := Panel.new()
+	var rs := StyleBoxFlat.new()
+	rs.draw_center = false
+	rs.border_color = Color(str(Eco.RARITY_COLOR.get(str(sk.rarity), "#c47bff")))
+	rs.set_border_width_all(3)
+	rs.set_corner_radius_all(20)
+	rim.add_theme_stylebox_override("panel", rs)
+	rim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	rim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	fc.add_child(rim)
+	var cap := VBoxContainer.new()
+	cap.add_theme_constant_override("separation", 3)
+	cap.anchor_left = 0.55
+	cap.anchor_right = 1.0
+	cap.offset_top = 18
+	cap.offset_right = -12
+	cap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	fc.add_child(cap)
+	UI2.chip(cap, str(sk.rarity).to_upper() + " OUTFIT", Color(str(Eco.RARITY_COLOR.get(str(sk.rarity), "#c47bff"))), Color("#120a02"))
+	var nl := UI2.text(cap, str(sk.set).to_upper(), 24, Color.WHITE, Color("#1e0a45"), 6)
+	nl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	UI2.body(cap, "%s, the %s" % [Champions.name_of(hid), str(Eco.SKIN_HEROES.get(hid, hid))], 11, Champions.accent(hid).lightened(0.45))
+	UI2.body(cap, "Tap to see it on him", 10, Color(1, 1, 1, 0.65))
+	var tap := Button.new()
+	tap.flat = true
+	tap.focus_mode = Control.FOCUS_NONE
+	for st_name in ["normal", "hover", "pressed", "focus"]:
+		tap.add_theme_stylebox_override(st_name, StyleBoxEmpty.new())
+	tap.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	tap.set_meta("action_key", "feat_open")
+	tap.pressed.connect(func(): app.open_champion(hid, id))
+	fc.add_child(tap)
+	var b: Button
+	if p.owns_skin(id):
+		var worn: bool = p.worn_skin(hid) == id
+		b = UI2.button(fc, "WORN" if worn else "WEAR", "grey" if worn else "blue", func():
+			p.wear_skin(hid, "" if p.worn_skin(hid) == id else id)
+			app.sfx("equip")
+			app.rebuild(), "feat_wear", 16, 44.0, 12.0)
+	else:
+		b = UI2.button(fc, UI.grouped(int(sk.gems)), "purple", func(): buy_skin(app, id), "feat_buy", 17, 44.0, 12.0,
+			"res://assets/ui/currency/gem.png")
+		b.disabled = int(p.d.gems) < int(sk.gems)
+	b.anchor_left = 0.58
+	b.anchor_right = 1.0
+	b.anchor_top = 1.0
+	b.anchor_bottom = 1.0
+	b.offset_right = -12
+	b.offset_top = -58
+	b.offset_bottom = -12
+
 static func skin_grid(app, root: Node) -> void:
 	var p = app.profile
 	var grid := GridContainer.new()
@@ -1839,7 +1405,11 @@ static func skin_grid(app, root: Node) -> void:
 	root.add_child(grid)
 	var ids: Array = Eco.SKINS.keys()
 	var order: Array = Eco.SKIN_HEROES.keys()
-	ids.sort_custom(func(a, b): return order.find(str(Eco.SKINS[a].hero)) < order.find(str(Eco.SKINS[b].hero)))
+	# (by hero; his own set before the Frostbound line)
+	ids.sort_custom(func(a, b):
+		var ha := order.find(str(Eco.SKINS[a].hero))
+		var hb := order.find(str(Eco.SKINS[b].hero))
+		return ha < hb if ha != hb else (Eco.SKINS[a].has("weapon") and not Eco.SKINS[b].has("weapon")))
 	for id0 in ids:
 		var id: String = id0
 		var sk: Dictionary = Eco.SKINS[id]
@@ -1868,6 +1438,16 @@ static func skin_grid(app, root: Node) -> void:
 		if not p.owns_hero(hid):
 			var hc := UI2.chip(c, "+ HERO", Color("#2f8a3e"), Color.WHITE, Color("#0a2006"))
 			hc.position = Vector2(6, 6)
+		var look := Button.new()                         # 0.31.188: tap the card -- his window with it on
+		look.flat = true
+		look.focus_mode = Control.FOCUS_NONE
+		for st_name in ["normal", "hover", "pressed", "focus"]:
+			look.add_theme_stylebox_override(st_name, StyleBoxEmpty.new())
+		look.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		look.offset_bottom = -46
+		look.set_meta("action_key", "skin_look_" + id)
+		look.pressed.connect(func(): app.open_champion(hid, id))
+		c.add_child(look)
 		var b: Button
 		if p.owns_skin(id):
 			var worn: bool = p.worn_skin(hid) == id
@@ -1903,12 +1483,8 @@ static func buy_skin(app, id: String) -> void:
 		app.rebuild())
 
 static func is_equipped(p, id: String) -> bool:
-	var it := Eco.item(id)
-	if it.is_empty():
-		return false
-	if it.kind == "title":
-		return str(p.d.title) == id
-	return str(p.d.equip[str(it["class"])][str(it.kind)]) == id
+	# a title worn (0.31.188: titles are all there is to equip)
+	return Eco.item(id).get("kind", "") == "title" and str(p.d.title) == id
 
 static func equip(app, id: String) -> void:
 	if app.profile.equip(id).ok:
@@ -1959,174 +1535,58 @@ static func _class_coin(parent: Node, cls: String, on: bool, key: String, on_pre
 	return b
 
 static func locker(app, root: VBoxContainer) -> void:
-	# 0.31.79: the vault -- the class picker as round portraits (base classes, then the hat upgrades), the hero on the
-	# vault's pedestal (turn and zoom it), the nameplate and the weapons as cards.
+	# 0.31.79: the vault -- the class picker, the hero on the vault's pedestal, the nameplate and the weapons as cards.
 	# 0.31.187 (Kevin: "give every champion a unique name ... a short background story. Put all this in a revamped locker
-	# tab"): three tabs -- CHAMPIONS first (the eighteen by role: tap one for his own window, champion_window.gd), ARMORY
-	# (the vault, as it was) and TITLES.
+	# tab"): CHAMPIONS first (the eighteen by role: tap one for his own window, champion_window.gd), then TITLES.
+	# (0.31.187: ARMORY, the vault and its weapons -- gone with the weapons, 0.31.188: an outfit is his whole look.)
 	var p = app.profile
 	var title := UI2.text(root, "LOCKER", 30, UI2.GOLD)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	if str(app.locker_class) == "worker":
-		app.locker_class = "knight"                  # (0.31.164: the Worker was Siege's)
+	if not (str(app.locker_tab) in ["champions", "titles"]):
+		app.locker_tab = "champions"
 	var tabs := HBoxContainer.new()
 	tabs.alignment = BoxContainer.ALIGNMENT_CENTER
 	tabs.add_theme_constant_override("separation", 6)
 	root.add_child(tabs)
-	for t in [["champions", "CHAMPIONS", "helmet"], ["armory", "ARMORY", "swords"], ["titles", "TITLES", "crown"]]:
+	for t in [["champions", "CHAMPIONS"], ["titles", "TITLES"]]:
 		var tid: String = t[0]
 		var on: bool = str(app.locker_tab) == tid
 		var tb0 := UI2.button(tabs, str(t[1]), "gold" if on else "blue", func():
-			if tid == "titles":
-				app.locker_class = "titles"
-			elif tid == "armory":
-				app.locker_class = "knight" if str(app.locker_class) == "titles" else str(app.locker_class)
-			else:
-				app.locker_tab = "champions"
+			app.locker_tab = tid
 			app.sfx("tab")
-			app.rebuild(), "locker_tab_" + tid, 14, 44.0, 14.0)
+			app.rebuild(), "locker_tab_" + tid, 15, 44.0, 14.0)
 		tb0.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	if str(app.locker_tab) == "champions":
 		locker_champions(app, root)
 		return
-	if str(app.locker_tab) == "armory":
-		var rail := UI2.frame(root, "glass", 8, 18.0)
-		var r1 := HBoxContainer.new()
-		r1.alignment = BoxContainer.ALIGNMENT_CENTER
-		r1.add_theme_constant_override("separation", 4)
-		rail.add_child(r1)
-		for cls in Eco.HERO_CLASSES:                     # (0.31.164: no Worker)
-			var c: String = cls
-			_class_coin(r1, cls, app.locker_class == cls, "locker_" + cls, func():
-				app.locker_class = c
-				app.sfx("tap")
-				app.rebuild(), str(Eco.CLASS_NAMES[cls]).to_upper(), 44.0)
-		var r2 := HBoxContainer.new()
-		r2.alignment = BoxContainer.ALIGNMENT_CENTER
-		r2.add_theme_constant_override("separation", 4)
-		rail.add_child(r2)
-		var short := {"crusader":"CRUSADER", "berserker":"BERSERK", "necromancer":"NECRO", "assassin":"ASSASSIN", "sniper":"RANGER", "archmage":"ARCHMAGE"}
-		for ucls in Eco.UP_CLASSES:
-			var u: String = ucls
-			_class_coin(r2, ucls, app.locker_class == ucls, "locker_" + ucls, func():
-				app.locker_class = u
-				app.sfx("tap")
-				app.rebuild(), str(short[ucls]), 44.0)
-	if app.locker_class == "titles":
-		UI2.divider(root, "TITLES", 20, "shown next to your name")
-		var none := UI2.frame(root, "night", 10, 14.0, "gold")
-		var nr := UI.row(none, 8)
-		UI.grow(UI2.text(nr, "NO TITLE", 15, Color.WHITE))
-		var ne := UI2.button(nr, "EQUIPPED" if str(p.d.title) == "" else "EQUIP", "grey" if str(p.d.title) == "" else "blue", func():
-			p.unequip("", "title")
-			app.rebuild(), "equip_default_title", 13, 34.0, 11.0)
-		ne.disabled = str(p.d.title) == ""
-		ne.custom_minimum_size.x = 104
-		# 0.31.87: every title is earned -- for everyone first, then each class's three (upgrades count as their class)
-		for sec in [""] + Eco.HERO_CLASSES:          # (0.31.164: no Worker -- Siege's)
-			var ids := []
-			for id in Eco.TITLE_GOALS:
-				if str(Eco.TITLE_GOALS[id].cls) == sec and (not Eco.retired(Eco.TITLE_GOALS[id]) or p.owns(id)):
-					ids.append(id)
-			ids.sort_custom(func(a, b): return Eco.TITLE_RARITY_ORDER.find(str(Eco.CATALOG[a].rarity)) < Eco.TITLE_RARITY_ORDER.find(str(Eco.CATALOG[b].rarity)))
-			var head := "FOR EVERYONE" if sec == "" else str(Eco.CLASS_NAMES[sec]).to_upper()
-			var up := ""
-			for u in Eco.UP_BASE:
-				if str(Eco.UP_BASE[u]) == sec:
-					up = str(Eco.CLASS_NAMES[u])
-			UI2.divider(root, head, 18, ("as %s or %s" % [Eco.CLASS_NAMES[sec], up]) if up != "" else ("" if sec == "" else "as %s" % Eco.CLASS_NAMES[sec]))
-			for id in ids:
-				locker_row(app, root, id)
-		# 0.31.120: the weekly leaderboard's own titles
-		UI2.divider(root, "LEADERBOARD", 18, "from the weekly leaderboard's prizes")
-		for id in Eco.PRIZE_TITLES:
-			locker_row(app, root, id)
-		return
-	var cls: String = app.locker_class
-	# the vault
-	var hero := Control.new()
-	hero.custom_minimum_size = Vector2(0, 340)
-	root.add_child(hero)
-	var stage := Control.new()
-	stage.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	stage.offset_left = 5
-	stage.offset_top = 5
-	stage.offset_right = -5
-	stage.offset_bottom = -5
-	stage.clip_contents = true
-	hero.add_child(stage)
-	UI2.plate(hero, "night", 22.0, "gold", {"rim": 4.0})
-	var vault := TextureRect.new()
-	vault.texture = UI2.tex(UI2.V2 + "bg_vault.webp")
-	vault.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	vault.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-	vault.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	vault.offset_top = -170
-	vault.offset_bottom = 60
-	vault.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	stage.add_child(vault)
-	var beam := UI2.glow(stage, Rect2(0, 0, 10, 10), Color(1.0, 0.9, 0.6, 0.35))
-	stage.resized.connect(func():
-		beam.size = Vector2(220, 300)
-		beam.position = Vector2(stage.size.x * 0.5 - 110, 20))
-	var show := Showcase.new()
-	show.interactive = true                                  # 0.31.64 (Kevin): turn and zoom the hero in the locker too
-	show.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	stage.add_child(show)
-	show.show_look(cls, p.look_for(cls))
-	zoom_controls(stage, show, "locker")
-	# nameplate
-	var np := UI2.frame(root, "royal", 8, 16.0, "gold")
-	var nm := UI2.text(np, str(Eco.CLASS_NAMES[cls]).to_upper(), 24, Color.WHITE, Color("#0e1433"))
-	nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	var sub := ""
-	if Eco.UP_BASE.has(cls):
-		sub = "The %s's upgrade  ·  a hero of its own" % str(Eco.CLASS_NAMES[Eco.UP_BASE[cls]])       # (0.31.169: was Siege's hat stands)
-	else:
+	UI2.divider(root, "TITLES", 20, "shown next to your name")
+	var none := UI2.frame(root, "night", 10, 14.0, "gold")
+	var nr := UI.row(none, 8)
+	UI.grow(UI2.text(nr, "NO TITLE", 15, Color.WHITE))
+	var ne := UI2.button(nr, "EQUIPPED" if str(p.d.title) == "" else "EQUIP", "grey" if str(p.d.title) == "" else "blue", func():
+		p.unequip("", "title")
+		app.rebuild(), "equip_default_title", 13, 34.0, 11.0)
+	ne.disabled = str(p.d.title) == ""
+	ne.custom_minimum_size.x = 104
+	# 0.31.87: every title is earned -- for everyone first, then each class's three (upgrades count as their class)
+	for sec in [""] + Eco.HERO_CLASSES:          # (0.31.164: no Worker -- Siege's)
+		var ids := []
+		for id in Eco.TITLE_GOALS:
+			if str(Eco.TITLE_GOALS[id].cls) == sec and (not Eco.retired(Eco.TITLE_GOALS[id]) or p.owns(id)):
+				ids.append(id)
+		ids.sort_custom(func(a, b): return Eco.TITLE_RARITY_ORDER.find(str(Eco.CATALOG[a].rarity)) < Eco.TITLE_RARITY_ORDER.find(str(Eco.CATALOG[b].rarity)))
+		var head := "FOR EVERYONE" if sec == "" else str(Eco.CLASS_NAMES[sec]).to_upper()
 		var up := ""
 		for u in Eco.UP_BASE:
-			if Eco.UP_BASE[u] == cls:
+			if str(Eco.UP_BASE[u]) == sec:
 				up = str(Eco.CLASS_NAMES[u])
-		sub = ("Its upgrade: the %s" % up) if up != "" else ""
-	UI2.center(UI2.body(np, sub, 11, Color("#ffe39a")))
-	# 0.31.187: who he is -- and his own window
-	var mr := HBoxContainer.new()
-	mr.alignment = BoxContainer.ALIGNMENT_CENTER
-	mr.add_theme_constant_override("separation", 8)
-	np.add_child(mr)
-	var who := UI.label(mr, "%s, %s" % [Champions.name_of(cls), str(Champions.of(cls).get("title", ""))], 13, Champions.accent(cls).lightened(0.4), UI.TITLE_FONT, true)
-	who.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	var meet := UI2.button(mr, "MEET %s" % Champions.short_of(cls).to_upper(), "purple", func(): app.open_champion(cls), "locker_meet_" + cls, 12, 32.0, 10.0)
-	meet.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	quest_card(app, root, cls)                               # 0.31.97: the class's quest and its legendary
-	# weapons
-	var owned := 1
-	var total := 1
-	for id in Eco.CATALOG:
-		var it: Dictionary = Eco.CATALOG[id]
-		if it.kind == "weapon" and str(it["class"]) == cls:
-			total += 1
-			if p.owns(id):
-				owned += 1
-	UI2.divider(root, "WEAPONS", 22, "%d of %d owned  ·  looks only, every weapon plays the same" % [owned, total])
-	var fl := UI2.button(root, "FORGE YOUR %s WEAPONS" % str(Eco.CLASS_NAMES[cls]).to_upper(), "orange", func():
-		app.forge_cls = cls
-		app.forge_pick = ""
-		app.sfx("tab")
-		app.show_tab("forge"), "locker_forge", 14, 40.0, 12.0, UI2.icon_path("anvil"))
-	fl.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	fl.custom_minimum_size.x = 280
-	var grid := GridContainer.new()
-	grid.columns = 2
-	grid.add_theme_constant_override("h_separation", 10)
-	grid.add_theme_constant_override("v_separation", 12)
-	root.add_child(grid)
-	var is_def: bool = str(p.d.equip[cls]["weapon"]) == ""
-	_gear_card(app, grid, "", cls, "res://assets/ui/icons/default_%s.png" % cls, str(Eco.STARTER_NAMES.get(cls, "Default gear")).to_upper(), "common", true, is_def)
-	for id in Eco.CATALOG:
-		var it: Dictionary = Eco.CATALOG[id]
-		if it.kind == "weapon" and str(it["class"]) == cls:
-			_gear_card(app, grid, str(id), cls, item_texture_path(str(id)), str(it.name).to_upper(), str(it.rarity), p.owns(id), is_equipped(p, id))
+		UI2.divider(root, head, 18, ("as %s or %s" % [Eco.CLASS_NAMES[sec], up]) if up != "" else ("" if sec == "" else "as %s" % Eco.CLASS_NAMES[sec]))
+		for id in ids:
+			locker_row(app, root, id)
+	# 0.31.120: the weekly leaderboard's own titles
+	UI2.divider(root, "LEADERBOARD", 18, "from the weekly leaderboard's prizes")
+	for id in Eco.PRIZE_TITLES:
+		locker_row(app, root, id)
 
 # ---------------- the Locker's CHAMPIONS (0.31.187) ----------------
 # The eighteen by role (League's six: a row of three each -- the class, its upgrade, the new hero), each a card: his own
@@ -2291,7 +1751,7 @@ static func champion_card(app, grid: Node, hid: String) -> Button:
 		UI2.chip(chips, "◆", Color("#173a1e"), Color("#9dff8a"), Color("#6be07c"))
 	var nsk := Eco.skins_of(hid).size()
 	if nsk > 0:
-		var sc := UI2.chip(b, "%d SKIN%s" % [nsk, "" if nsk == 1 else "S"], Color(0.05, 0.03, 0.12, 0.8), Color("#e8ccff"), Color("#c47bff"))
+		var sc := UI2.chip(b, "%d OUTFIT%s" % [nsk, "" if nsk == 1 else "S"], Color(0.05, 0.03, 0.12, 0.8), Color("#e8ccff"), Color("#c47bff"))
 		sc.anchor_left = 1.0
 		sc.anchor_right = 1.0
 		sc.offset_left = -62
@@ -2300,77 +1760,6 @@ static func champion_card(app, grid: Node, hid: String) -> Button:
 		sc.offset_bottom = 22
 		sc.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return b
-
-static func _gear_card(app, grid: Node, id: String, cls: String, icon: String, name: String, rar: String, owned: bool, equipped: bool) -> void:
-	var p = app.profile
-	var c := Control.new()
-	c.custom_minimum_size = Vector2(0, 214)
-	UI.grow(c)
-	grid.add_child(c)
-	if equipped:
-		var g := UI2.glow(c, Rect2(-14, -14, 10, 10), Color(1.0, 0.85, 0.4, 0.5))
-		c.resized.connect(func(): g.size = c.size + Vector2(28, 28))
-	UI2.plate(c, _rar_panel(rar), 18.0, "gold" if equipped else _rar_rim(rar), {"dim": 0.0 if owned else 0.3})
-	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 2)
-	v.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	v.offset_left = 8
-	v.offset_right = -8
-	v.offset_top = 8
-	v.offset_bottom = -48
-	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	c.add_child(v)
-	var ti := UI2.img(v, icon, 96.0)
-	ti.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	if not owned:
-		ti.modulate = Color(0.65, 0.65, 0.72)
-	elif equipped:
-		UI2.bob(ti, 3.0, 1.2)
-	var nl := UI2.text(v, name, 13, Color.WHITE, UI2.INK, 4)
-	nl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	nl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	var rl := UI2.body(v, rar.to_upper(), 9, _rar_tint(rar).lightened(0.35), false)
-	rl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	var fstars: int = p.forge_stars(Eco.forge_id(cls, id)) if owned else 0      # 0.31.93: the Forge's stars
-	if fstars > 0:
-		stars_row(v, fstars, 14).alignment = BoxContainer.ALIGNMENT_CENTER
-	var b: Button = null
-	if owned:
-		if id == "":
-			b = UI2.button(c, "EQUIPPED" if equipped else "EQUIP", "gold" if equipped else "blue", func():
-				p.unequip(cls, "weapon")
-				app.sfx("equip")
-				app.rebuild(), "equip_default_%s_weapon" % cls, 14, 34.0, 11.0)
-		else:
-			b = UI2.button(c, "EQUIPPED" if equipped else "EQUIP", "gold" if equipped else "blue", func(): equip(app, id), "equip_" + id, 14, 34.0, 11.0)
-		b.disabled = equipped
-	else:
-		var it := Eco.item(id)
-		var where := "Siege Pass reward"
-		if str(it.get("source", "")) == "quest":
-			where = "Quest reward"
-		elif str(it.get("source", "")) == "shop" or Eco.vaulted(id, p.now()):
-			var now: int = p.now()
-			where = "In the shop today" if (Eco.shop_daily(now).has(id) or Eco.shop_featured(now).has(id)) else "Rotates through the shop"
-		var wl := UI2.body(c, where, 10, UI2.SOFT, false)
-		wl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		wl.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
-		wl.offset_top = -40
-		wl.offset_bottom = -14
-		var lk := Control.new()
-		lk.size = Vector2(28, 28)
-		lk.position = Vector2(6, 6)
-		lk.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		c.add_child(lk)
-		UI2.plate(lk, "night", 14.0, "gold", {"rim": 0.0, "outline": 2.0, "outline_color": Color(1, 0.84, 0.35, 0.7)})
-		var li := UI.icon(lk, "lock", 16, UI2.GOLD)
-		li.position = Vector2(6, 5)
-	if b != null:
-		b.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
-		b.offset_left = 8
-		b.offset_right = -8
-		b.offset_top = -44
-		b.offset_bottom = -8
 
 # + / − zoom buttons and the hint over an interactive showcase (the pass item view, 0.31.48; the locker, 0.31.64)
 static func zoom_controls(stage: Control, sh, prefix: String) -> void:
@@ -2788,263 +2177,11 @@ static func settings(app, root: VBoxContainer) -> void:
 	var ver := UI2.body(root, "Fatebound %s" % Diag.BUILD, 11, UI2.MUTED)
 	ver.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
-# ---------------- THE FORGE (0.31.93, Armory Reforged) ----------------
-const ForgeStage = preload("res://scripts/app/forge_stage.gd")
-
-static func stars_row(parent: Node, n: int, px := 18, of := 3) -> HBoxContainer:
-	# n gold stars of `of` (the rest dim)
-	var r := HBoxContainer.new()
-	r.add_theme_constant_override("separation", 1)
-	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	parent.add_child(r)
-	for i in of:
-		UI.icon(r, "star", px, Color("#ffd24a") if i < n else Color(1, 1, 1, 0.22))
-	return r
-
-static func forge_weapons(p, cls: String) -> Array:
-	# the class's weapons you own, starter first, as Forge ids
-	var out := [Eco.forge_id(cls, "")]
-	for id in Eco.CATALOG:
-		var it: Dictionary = Eco.CATALOG[id]
-		if str(it.get("kind", "")) == "weapon" and str(it["class"]) == cls and p.owns(id):
-			out.append(str(id))
-	return out
-
-static func forge_ready(p) -> int:
-	# equipped weapons of the classes you play whose next star could be forged now (the Home badge)
-	var n := 0
-	for cls in Eco.CLASSES + Eco.UP_CLASSES:
-		if int(p.d.stats.get("main_" + cls, 0)) <= 0:
-			continue
-		var wid := Eco.forge_id(cls, str(p.d.equip[cls].weapon))
-		var c: Dictionary = p.can_forge(wid, Eco.ELEMENTS[0])
-		if bool(c.ok):
-			n += 1
-	return n
-
-static func _forge_hands(wid: String) -> Array:
-	if wid.begins_with("default_"):
-		var look: Dictionary = View.LOOKS.get(wid.substr(8), {})
-		return [str(look.get("r", "")), str(look.get("l", ""))]
-	var it := Eco.item(wid)
-	return [str(it.get("r", "")), str(it.get("l", ""))]
-
-static func forge(app, root: VBoxContainer) -> void:
-	var p = app.profile
-	var d: Dictionary = p.d
-	# the sign
-	var sign := Control.new()
-	sign.custom_minimum_size = Vector2(0, 66)
-	root.add_child(sign)
-	var board := HBoxContainer.new()
-	board.alignment = BoxContainer.ALIGNMENT_CENTER
-	board.add_theme_constant_override("separation", 10)
-	board.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	sign.add_child(board)
-	sign.resized.connect(func():
-		board.size = Vector2(250, 60)
-		board.position = Vector2((sign.size.x - 250.0) * 0.5, 2))
-	UI2.plate(board, "wood", 14.0, "gold", {"rim": 4.0})
-	var anvil := UI2.icon(board, "anvil", 46.0)
-	anvil.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	UI2.text(board, "THE FORGE", 28, UI2.GOLD).size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	var back := UI2.button(sign, "", "ghost", func():
-		app.sfx("menuClose")
-		app.show_tab("home"), "forge_back", 14, 40.0, 12.0)
-	back.position = Vector2(0, 12)
-	back.size = Vector2(46, 40)
-	UI.icon(back, "home", 22, Color.WHITE).position = Vector2(12, 7)
-	UI2.center(UI2.body(root, "Raise a weapon you own to three stars. It only changes the look -- every weapon still plays the same.", 12, UI2.SOFT))
-	# (0.31.93-0.31.183 the Embers stood here, with their packs: 0.31.184, the Forge is paid in gold -- the top bar has it)
-	# class picker (base classes, then the upgrades)
-	if str(app.forge_cls) == "worker":
-		app.forge_cls = "knight"                     # (0.31.164: the Worker was Siege's)
-	var cls: String = app.forge_cls
-	var rail := UI2.frame(root, "glass", 8, 18.0)
-	for row_classes in [Eco.HERO_CLASSES, Eco.UP_CLASSES]:
-		var rr := HBoxContainer.new()
-		rr.alignment = BoxContainer.ALIGNMENT_CENTER
-		rr.add_theme_constant_override("separation", 4)
-		rail.add_child(rr)
-		for c0 in row_classes:
-			var c: String = c0
-			_class_coin(rr, c, cls == c, "forge_" + c, func():
-				app.forge_cls = c
-				app.forge_pick = ""
-				app.forge_element = ""
-				app.sfx("tap")
-				app.rebuild(), "", 38.0)
-	var weapons := forge_weapons(p, cls)
-	var wid: String = app.forge_pick
-	if not weapons.has(wid):
-		wid = Eco.forge_id(cls, str(d.equip[cls].weapon))
-		if not weapons.has(wid):
-			wid = weapons[0]
-	# the anvil: the chosen weapon, turning, with its stars
-	var stars: int = p.forge_stars(wid)
-	var maxed := stars >= Eco.FORGE_STARS.size()
-	var stage_box := Control.new()
-	stage_box.custom_minimum_size = Vector2(0, 250)
-	root.add_child(stage_box)
-	UI2.plate(stage_box, "night", 22.0, _rar_rim(Eco.forge_rarity(wid)), {"rim": 4.0})
-	var g := UI2.glow(stage_box, Rect2(0, 0, 10, 10), Color(1.0, 0.55, 0.2, 0.35))
-	stage_box.resized.connect(func():
-		g.size = Vector2(260, 200)
-		g.position = Vector2(stage_box.size.x * 0.5 - 130, 30))
-	var st := ForgeStage.new()
-	st.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	st.offset_top = 8
-	st.offset_bottom = -8
-	stage_box.add_child(st)
-	var hands := _forge_hands(wid)
-	var el: String = p.forge_element(wid) if maxed else app.forge_element
-	var fx := {"stars": stars, "rarity": Eco.forge_rarity(wid), "element": el}
-	if not maxed and stars + 1 == Eco.FORGE_STARS.size() and Eco.ELEMENTS.has(el):
-		fx = {"stars": stars + 1, "rarity": fx.rarity, "element": el}     # preview the Ascended look in the colour picked
-	UI2.when_ready(st, func(): st.show_set(hands[0], hands[1], fx))
-	var info := UI2.frame(root, "royal", 10, 16.0, "gold")
-	var nr := UI.row(info, 6)
-	var nv := VBoxContainer.new()
-	nv.add_theme_constant_override("separation", 0)
-	UI.grow(nv)
-	nr.add_child(nv)
-	UI2.text(nv, Eco.forge_name(wid).to_upper(), 20, Color.WHITE, UI2.INK, 5)
-	UI2.body(nv, "%s  ·  %s" % [Eco.forge_rarity(wid).to_upper(), str(Eco.CLASS_NAMES.get(cls, "")).to_upper()], 10, _rar_tint(Eco.forge_rarity(wid)).lightened(0.35), false)
-	stars_row(nr, stars, 24).size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	if maxed:
-		UI2.center(UI2.text(info, "ASCENDED", 18, UI2.GOLD))
-		UI2.center(UI2.body(info, "Fully forged. Change the aura's element any time, free.", 11, UI2.SOFT))
-		_element_row(app, info, wid, p.forge_element(wid), true)
-		return
-	var next := stars + 1
-	var fs: Dictionary = Eco.FORGE_STARS[next - 1]
-	var cost := Eco.forge_cost(next)
-	UI2.text(info, "NEXT STAR: %s" % str(fs.name).to_upper(), 15, UI2.GOLD)
-	UI2.body(info, str(fs.text), 12, Color.WHITE)
-	if next == Eco.FORGE_STARS.size():
-		var wins: int = p.forge_wins(wid)
-		var wl := UI.row(info, 6)
-		UI.grow(UI2.body(wl, "Wins with this weapon equipped", 11, UI2.SOFT, false))
-		UI2.text(wl, "%d / %d" % [mini(wins, Eco.FORGE_WINS), Eco.FORGE_WINS], 13, UI2.GREEN if wins >= Eco.FORGE_WINS else Color.WHITE)
-		var bar := ProgressBar.new()
-		bar.max_value = Eco.FORGE_WINS
-		bar.value = mini(wins, Eco.FORGE_WINS)
-		bar.show_percentage = false
-		bar.custom_minimum_size = Vector2(0, 10)
-		info.add_child(bar)
-		UI2.body(info, "Pick the element of its aura:", 11, UI2.SOFT)
-		_element_row(app, info, wid, el, false)
-	var cr := HBoxContainer.new()
-	cr.alignment = BoxContainer.ALIGNMENT_CENTER
-	cr.add_theme_constant_override("separation", 14)
-	info.add_child(cr)
-	for cc in [["res://assets/ui/currency/coin.png", int(cost.gold), int(d.gold) >= int(cost.gold), UI2.GOLD]]:
-		var ch := HBoxContainer.new()
-		ch.add_theme_constant_override("separation", 4)
-		cr.add_child(ch)
-		UI2.img(ch, str(cc[0]), 26.0)
-		UI2.text(ch, UI.compact(int(cc[1])), 17, cc[3] if bool(cc[2]) else UI.RED, UI2.INK, 4)
-	var check: Dictionary = p.can_forge(wid, el)
-	var why := {"owned": "YOU DON'T OWN IT", "gold": "NEED MORE GOLD", "wins": "%d MORE WINS" % maxi(0, Eco.FORGE_WINS - p.forge_wins(wid)), "element": "PICK AN ELEMENT"}
-	var label := "FORGE  %s" % str(fs.name).to_upper() if bool(check.ok) else str(why.get(str(check.why), "CAN'T FORGE"))
-	var fb := UI2.button(info, label, "orange" if bool(check.ok) else "grey", func():
-		var res: Dictionary = p.forge(wid, el)
-		if bool(res.get("ok", false)):
-			if app.get("analytics") != null:
-				app.analytics.log_ev("forge", {"item":wid, "stars":int(res.stars)})      # 0.31.118
-			app.sfx("forge")
-			app.toast("%s is now %s!" % [Eco.forge_name(wid), str(Eco.FORGE_STARS[int(res.stars) - 1].name)], UI2.GOLD)
-			app.forge_element = ""
-			app.refresh_top()
-			app.hero_show()
-			app.rebuild(), "forge_go", 18, 52.0, 14.0, UI2.icon_path("anvil"))
-	fb.disabled = not bool(check.ok)
-	# the class's weapons
-	UI2.divider(root, "YOUR %s WEAPONS" % str(Eco.CLASS_NAMES.get(cls, "")).to_upper(), 18, "%d owned" % weapons.size())
-	var grid := GridContainer.new()
-	grid.columns = 3
-	grid.add_theme_constant_override("h_separation", 8)
-	grid.add_theme_constant_override("v_separation", 8)
-	root.add_child(grid)
-	for w0 in weapons:
-		var w: String = w0
-		var sel := w == wid
-		var card := Button.new()
-		card.flat = true
-		card.focus_mode = Control.FOCUS_NONE
-		for st_name in ["normal", "hover", "pressed", "focus"]:
-			card.add_theme_stylebox_override(st_name, StyleBoxEmpty.new())
-		card.custom_minimum_size = Vector2(0, 132)
-		UI.grow(card)
-		card.set_meta("action_key", "forge_pick_" + w)
-		card.pressed.connect(func():
-			app.forge_pick = w
-			app.forge_element = ""
-			app.sfx("tap")
-			app.rebuild())
-		grid.add_child(card)
-		var rar := Eco.forge_rarity(w)
-		UI2.plate(card, _rar_panel(rar), 14.0, "gold" if sel else _rar_rim(rar), {"rim": 4.0 if sel else 2.0})
-		var cv := VBoxContainer.new()
-		cv.add_theme_constant_override("separation", 0)
-		cv.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		cv.offset_left = 4
-		cv.offset_right = -4
-		cv.offset_top = 4
-		cv.offset_bottom = -4
-		cv.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		card.add_child(cv)
-		var icon_path := "res://assets/ui/icons/%s.png" % w
-		UI2.img(cv, icon_path, 70.0).size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-		var nl := UI2.text(cv, Eco.forge_name(w).to_upper(), 10, Color.WHITE, UI2.INK, 3)
-		nl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		nl.clip_text = true
-		var sr := stars_row(cv, p.forge_stars(w), 14)
-		sr.alignment = BoxContainer.ALIGNMENT_CENTER
-
-static func _element_row(app, parent: Node, wid: String, current: String, free_change: bool) -> void:
-	var p = app.profile
-	var er := HBoxContainer.new()
-	er.alignment = BoxContainer.ALIGNMENT_CENTER
-	er.add_theme_constant_override("separation", 6)
-	parent.add_child(er)
-	for e0 in Eco.ELEMENTS:
-		var e: String = e0
-		var on := e == current
-		var b := Button.new()
-		b.flat = true
-		b.focus_mode = Control.FOCUS_NONE
-		for st_name in ["normal", "hover", "pressed", "focus"]:
-			b.add_theme_stylebox_override(st_name, StyleBoxEmpty.new())
-		b.custom_minimum_size = Vector2(46, 52)
-		b.set_meta("action_key", "forge_element_" + e)
-		b.pressed.connect(func():
-			app.sfx("tap")
-			if free_change:
-				p.set_forge_element(wid, e)
-				app.hero_show()
-			else:
-				app.forge_element = e
-			app.rebuild())
-		er.add_child(b)
-		var col := Color(str(Eco.ELEMENT_COLOR[e]))
-		var disc := Control.new()
-		disc.size = Vector2(34, 34)
-		disc.position = Vector2(6, 0)
-		disc.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		b.add_child(disc)
-		UI2.skin(disc, {"radius": 17.0, "outline": 2.5, "outline_color": Color.WHITE if on else UI2.INK, "rim": 0.0,
-			"fill_top": col.lightened(0.35), "fill_bottom": col.darkened(0.25), "gloss": 1.0, "bevel": 0.2,
-			"shadow_y": 3.0, "shadow_alpha": 0.5, "shadow_soft": 3.0, "glow": 8.0 if on else 0.0, "glow_color": col})
-		var l := UI2.text(b, str(Eco.ELEMENT_NAME[e]).to_upper(), 8, Color.WHITE if on else UI2.SOFT, UI2.INK, 3, false)
-		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		l.position = Vector2(-4, 36)
-		l.size = Vector2(54, 12)
-
 # ---------------- QUESTS (0.31.97, Kevin: "Build the quest system and I want quests for each class") ----------------
-# Every class has one quest (Eco.QUESTS): three steps claimed in order, the last one its legendary weapon. The class
-# picker shows a badge where a step is ready and a tick where the quest is done; the hero holds the legendary (turn and
-# zoom it); each step shows its task, how far along it is, what it pays and CLAIM when it can be claimed.
+# Every class has one quest (Eco.QUESTS): three steps claimed in order (0.31.188: the last pays gems and a Royal chest --
+# it gave the class's legendary weapon). The class picker shows a badge where a step is ready and a tick where the quest
+# is done; the hero stands in his own place in the outfit he wears (turn and zoom him); each step shows its task, how far
+# along it is, what it pays and CLAIM when it can be claimed.
 const QUEST_ICON := "res://assets/ui/v2/icons/quest.png"
 
 static func quest_icon_name() -> String:
@@ -3057,7 +2194,7 @@ static func _reward_chips(parent: Node, r: Dictionary, ink := Color.WHITE) -> HB
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	parent.add_child(row)
 	var parts := []
-	for k in ["gold", "gems", "chest", "item"]:
+	for k in ["gold", "gems", "chest"]:
 		if r.has(k):
 			parts.append({k: r[k]})
 	for part in parts:
@@ -3094,21 +2231,16 @@ static func claim_quest(app, cls: String) -> void:
 	var res: Dictionary = p.claim_quest(cls)
 	if not bool(res.get("ok", false)):
 		return
-	app.sfx("revealLegendary" if str(res.item) != "" else "claim")      # 0.31.110: the quest's legendary gets the golden choir
+	var last: bool = int(res.step) + 1 >= (Eco.QUESTS[cls].steps as Array).size()
+	app.sfx("revealLegendary" if last else "claim")      # 0.31.110: the quest's end gets the golden choir
 	app.refresh_top()
-	if str(res.item) != "":
-		# the legendary: show it off, with EQUIP right there
-		app.toast("%s earned! Quest complete" % str(Eco.item(str(res.item)).name), UI.GOLD)
-		app.rebuild()
-		open_item(app, str(res.item))
-		return
 	var bits := []
 	for k in ["gold", "gems"]:
 		if int(res.reward.get(k, 0)) > 0:
 			bits.append("+%d %s" % [int(res.reward[k]), {"gold": "gold", "gems": "gems"}[k]])
 	if res.reward.has("chest"):
 		bits.append("a %s" % str(Eco.CHESTS[str(res.reward.chest)].name))
-	app.toast("Quest step %d done: %s" % [int(res.step) + 1, ", ".join(bits)], UI.GOLD)
+	app.toast(("Quest complete! %s" if last else "Quest step %d done: %s" % [int(res.step) + 1, "%s"]) % ", ".join(bits), UI.GOLD)
 	app.rebuild()
 
 static func quests(app, root: VBoxContainer) -> void:
@@ -3134,7 +2266,7 @@ static func quests(app, root: VBoxContainer) -> void:
 	back.position = Vector2(0, 12)
 	back.size = Vector2(46, 40)
 	UI.icon(back, "home", 22, Color.WHITE).position = Vector2(12, 7)
-	UI2.center(UI2.body(root, "Every class has a quest. Finish its three steps to earn its legendary weapon -- never sold.", 12, UI2.SOFT))
+	UI2.center(UI2.body(root, "Every class has a quest. Finish its three steps for gold, gems and a Royal chest.", 12, UI2.SOFT))
 	# class picker: a badge where a step is ready, a tick where the quest is done
 	var cls: String = app.quest_cls if Eco.QUESTS.has(str(app.quest_cls)) and str(app.quest_cls) != "worker" else quest_first(p)
 	app.quest_cls = cls
@@ -3157,11 +2289,9 @@ static func quests(app, root: VBoxContainer) -> void:
 				tick.position = Vector2(16, -4)
 				tick.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var q: Dictionary = Eco.QUESTS[cls]
-	var wid := str(q.item)
-	var it := Eco.item(wid)
 	var step: int = p.quest_step(cls)
 	var done: bool = p.quest_done(cls)
-	# the hero holding the reward
+	# the hero, in his own place (0.31.188; it was the hero holding the legendary)
 	var hero := Control.new()
 	hero.custom_minimum_size = Vector2(0, 300)
 	root.add_child(hero)
@@ -3174,28 +2304,33 @@ static func quests(app, root: VBoxContainer) -> void:
 	stage.clip_contents = true
 	hero.add_child(stage)
 	UI2.plate(hero, "ember", 22.0, "orange", {"rim": 4.0})
-	Showcase.backdrop(stage)
-	var ry := UI2.rays(stage, 420.0, Color(1.0, 0.8, 0.4), 22.0, 0.25)
-	stage.resized.connect(func(): ry.position = Vector2(stage.size.x * 0.5 - 210.0, -60.0))
+	var art := TextureRect.new()
+	var ap := Champions.art(cls)
+	art.texture = load(ap) if ResourceLoader.exists(ap) else null
+	art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	art.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	art.offset_top = -110
+	art.offset_bottom = 90
+	art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	stage.add_child(art)
 	var sh := Showcase.new()
 	sh.interactive = true
-	sh.cam_z = 6.6
-	sh.cam_y = 1.4
-	sh.look_y = 0.9
+	sh.plinth = false
 	sh.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	stage.add_child(sh)
-	sh.show_look(cls, {"r": str(it.get("r", "")), "l": str(it.get("l", ""))})
+	sh.show_look(cls, p.look_for(cls))
 	zoom_controls(stage, sh, "quests")
-	var tag := UI2.chip(stage, "OWNED" if p.owns(wid) else "LEGENDARY REWARD", Color("#2f9e55") if p.owns(wid) else Color("#3a2410"),
-		Color.WHITE if p.owns(wid) else Color("#ffd27a"), Color(UI2.GOLD, 0.6))
-	tag.position = Vector2(10, 8)
-	tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	# the nameplate
+	if done:
+		var tag := UI2.chip(stage, "QUEST COMPLETE", Color("#2f9e55"), Color.WHITE, Color(UI2.GOLD, 0.6))
+		tag.position = Vector2(10, 8)
+		tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# the nameplate: who he is
 	var np := UI2.frame(root, "ember", 8, 16.0, "orange")
-	var nm := UI2.text(np, str(it.name).to_upper(), 26, Color("#ffd27a"), Color("#3d1602"), 6)
+	var nm := UI2.text(np, Champions.name_of(cls).to_upper(), 24, Color("#ffd27a"), Color("#3d1602"), 6)
 	nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	UI2.sweep(np.get_parent() as Control, 2.6, 60.0, 0.3)
-	var sub := "%s  ·  LEGENDARY  ·  QUEST %s" % [str(Eco.CLASS_NAMES[cls]).to_upper(), "COMPLETE" if done else "STEP %d OF %d" % [step + 1, q.steps.size()]]
+	var sub := "%s  ·  QUEST %s" % [str(Eco.CLASS_NAMES[cls]).to_upper(), "COMPLETE" if done else "STEP %d OF %d" % [step + 1, q.steps.size()]]
 	UI2.center(UI2.body(np, sub, 11, Color("#ffe7c8"), false))
 	var note := Eco.quest_note(cls)
 	if note != "":
@@ -3203,11 +2338,6 @@ static func quests(app, root: VBoxContainer) -> void:
 	# the steps
 	for i in q.steps.size():
 		quest_step_card(app, root, cls, i)
-	if done and p.owns(wid):
-		var eq: bool = is_equipped(p, wid)
-		var eb := UI2.button(root, "EQUIPPED" if eq else "EQUIP %s" % str(it.name).to_upper(), "grey" if eq else "green", func():
-			equip(app, wid), "quest_equip_" + cls, 16, 46.0, 12.0)
-		eb.disabled = eq
 
 static func quest_step_card(app, root: Node, cls: String, i: int) -> void:
 	var p = app.profile
@@ -3245,7 +2375,7 @@ static func quest_step_card(app, root: Node, cls: String, i: int) -> void:
 	UI2.bar(pr, float(have), float(n), Color("#fff3ad") if gold else Color("#b6f3ff"), Color("#f0a024") if gold else Color("#36b9ea"), 10.0)
 	UI2.body(pr, "%s / %s" % [_thousands(have), _thousands(n)], 11, Color.WHITE, false)
 	var rw := UI.row(v, 6)
-	UI2.body(rw, "CLAIMED" if claimed else ("REWARD" if not last else "LEGENDARY"), 9, Color("#8cf0a8") if claimed else Color(1, 1, 1, 0.6), false)
+	UI2.body(rw, "CLAIMED" if claimed else ("REWARD" if not last else "FINAL REWARD"), 9, Color("#8cf0a8") if claimed else Color(1, 1, 1, 0.6), false)
 	_reward_chips(rw, Eco.quest_reward(cls, i))
 	if ready:
 		var b := UI2.button(r, "CLAIM", "gold", func(): claim_quest(app, cls), "quest_claim_" + cls, 14, 42.0, 12.0)
@@ -3254,38 +2384,3 @@ static func quest_step_card(app, root: Node, cls: String, i: int) -> void:
 		UI2.pulse(b, 0.03, 1.0)
 	elif i > step:
 		UI2.body(r, "after step %d" % (i), 10, Color(1, 1, 1, 0.5), false).size_flags_vertical = Control.SIZE_SHRINK_CENTER
-
-static func quest_card(app, root: Node, cls: String) -> void:
-	# the Locker's line for a class's quest: its legendary, the step being worked on and how far, OPEN QUESTS
-	var p = app.profile
-	if not Eco.QUESTS.has(cls):
-		return
-	var q: Dictionary = Eco.QUESTS[cls]
-	var it := Eco.item(str(q.item))
-	var done: bool = p.quest_done(cls)
-	var ready: bool = p.quest_ready(cls)
-	var c := UI2.frame(root, "ember", 8, 16.0, "gold" if ready else "orange", {"pattern_mix": 0.0})
-	var r := UI.row(c, 10)
-	var ic := UI2.img(r, item_texture_path(str(q.item)), 56.0)
-	ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 2)
-	UI.grow(v)
-	r.add_child(v)
-	UI2.text(v, "QUEST  ·  %s" % str(it.name).to_upper(), 14, Color("#ffd27a"), Color("#3d1602"), 4)
-	if done:
-		UI2.body(v, "Complete -- the legendary is yours", 11, Color("#8cf0a8"), false)
-	else:
-		var step: int = p.quest_step(cls)
-		var s: Dictionary = q.steps[step]
-		UI2.body(v, "Step %d of %d: %s" % [step + 1, q.steps.size(), str(s.task)], 11, Color.WHITE, false).autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		var pr := UI.row(v, 6)
-		var have: int = mini(int(s.n), p.quest_have(cls))
-		UI2.bar(pr, float(have), float(s.n), Color("#fff3ad"), Color("#f0a024"), 8.0)
-		UI2.body(pr, "%s / %s" % [_thousands(have), _thousands(int(s.n))], 10, Color.WHITE, false)
-	var b := UI2.button(r, "CLAIM" if ready else "OPEN", "gold" if ready else "orange", func():
-		app.quest_cls = cls
-		app.sfx("tab")
-		app.show_tab("quests"), "locker_quest_" + cls, 13, 40.0, 12.0)
-	b.custom_minimum_size.x = 70
-	b.size_flags_vertical = Control.SIZE_SHRINK_CENTER

@@ -2381,57 +2381,34 @@ func _decal(pos: Vector3, radius: float, color: Color, alpha: float) -> MeshInst
 	return mi
 
 # ---------- actors ----------
-# Equipped cosmetics for the local player, per class: {"r": model, "l": model, "forge": stars}. Set by the mode from
-# the profile. 0.31.101 (Kevin: "I want players to see everything the other players are wearing"): the other live
-# players' too, from the server's "pn" (set_unit_looks); bots wear the defaults.
-var player_looks: Dictionary = {}
-var unit_looks: Dictionary = {}              # unit id -> {cosmetic class: look}, the other players online (0.31.101)
-var player_skins: Dictionary = {}            # 0.31.186: hero -> the skin I wear on him (Profile.d.skin_on)
-var unit_skins: Dictionary = {}              # 0.31.186: unit id -> the skins that player wears (the looks' "_sk")
-var _skin_cos: Dictionary = {}               # unit id -> {"base", "skin", "out"}: a skinned cosmetic, made once
+# What the players wear (0.31.101, Kevin: "I want players to see everything the other players are wearing"): mine from
+# the profile, the other live players' from the server's "pn" (set_unit_looks); bots wear the defaults. 0.31.188 (Kevin:
+# "I only want the cosmetics to be an entire outfit"): an outfit -- the hero's body repainted and its own weapon
+# (Eco.SKINS) -- is all there is; the weapons and Forge stars per class (0.31.101-0.31.187) are gone.
+var player_skins: Dictionary = {}            # 0.31.186: hero -> the outfit I wear on him (Profile.d.skin_on)
+var unit_skins: Dictionary = {}              # 0.31.186: unit id -> the outfits that player wears (the looks' "_sk")
+var _skin_cos: Dictionary = {}               # unit id -> {"skin", "out"}: an outfit's cosmetic, made once
 const NO_LOOK := {}
 
 func set_unit_looks(wire: Dictionary) -> void:
-	# the server's {unit id: {class: "weapon id|stars|element"}} -> looks from this app's catalog; with fewer effects
-	# (low_fx) the other players' weapons keep their glow but not their particles
-	var out := {}
+	# the server's {unit id: looks} -> the outfits each other player wears
 	unit_skins = {}
 	for uid in wire:
 		if str(uid) == player_id:
 			continue
 		if wire[uid] is Dictionary and str((wire[uid] as Dictionary).get("_sk", "")) != "":
-			unit_skins[str(uid)] = str(wire[uid]._sk).split(",")      # 0.31.186: the skins they wear
-		var l: Dictionary = Eco.looks_from_wire(wire[uid])
-		if low_fx:
-			for cls in l:
-				l[cls]["lite"] = true
-		if not l.is_empty():
-			out[str(uid)] = l
-	unit_looks = out
+			unit_skins[str(uid)] = str(wire[uid]._sk).split(",")      # 0.31.186: the outfits they wear
 
 func unit_cosmetic(u: Dictionary) -> Dictionary:
-	# what this unit wears for the class it has on: mine from the profile, another player's from the server
-	var base: Dictionary = _unit_gear(u)
-	# 0.31.186: and the skin worn on this hero (mine, or theirs online) -- made once, the same dictionary every frame
+	# what this unit wears: the outfit on this hero (mine, or theirs online) -- made once, the same dictionary every frame
 	var skin := unit_skin(u)
 	if skin == "":
-		return base
+		return NO_LOOK
 	var c: Dictionary = _skin_cos.get(u.id, {})
-	if c.is_empty() or not is_same(c.base, base) or str(c.skin) != skin:
-		var out: Dictionary = base.duplicate()
-		out["skin"] = skin
-		c = {"base": base, "skin": skin, "out": out}
+	if c.is_empty() or str(c.skin) != skin:
+		c = {"skin": skin, "out": {"skin": skin, "lite": low_fx and str(u.id) != player_id}}
 		_skin_cos[u.id] = c
 	return c.out
-
-func _unit_gear(u: Dictionary) -> Dictionary:
-	if u.has("look"):
-		return NO_LOOK                           # (0.31.168: a body of its own -- a new hero, a monster -- keeps its own gear)
-	var key := Eco.cosmetic_class(str(u.cls), bool(u.up))
-	if str(u.id) == player_id:
-		return player_looks.get(key, NO_LOOK)
-	var l: Dictionary = unit_looks.get(str(u.id), NO_LOOK)
-	return l.get(key, NO_LOOK) if not l.is_empty() else NO_LOOK
 
 func unit_skin(u: Dictionary) -> String:
 	# 0.31.186: the skin this hero wears -- the one of mine (or that player's) made for him; bots wear none
@@ -2558,9 +2535,14 @@ static func meshy_libraries(name: String) -> Dictionary:
 
 static func make_body(cls: String, cosmetic: Dictionary = {}) -> Dictionary:
 	var look: Dictionary = (LOOKS.get(cls, LOOKS.knight) as Dictionary).duplicate()
+	# 0.31.188: an outfit brings its own weapon (Eco.SKINS "weapon": {"r", "l"}), or his own repainted ("weapon_tex")
+	var outfit: Dictionary = Eco.SKINS.get(str(cosmetic.get("skin", "")), {})
+	var owpn: Dictionary = outfit.get("weapon", {})
 	for hand in ["r", "l"]:
+		if owpn.has(hand):
+			look[hand] = owpn[hand]
 		if cosmetic.has(hand):
-			look[hand] = cosmetic[hand]
+			look[hand] = cosmetic[hand]                # (an explicit hand wins: the portraits' busts hold nothing)
 	if str(look.model) == "prop:wyrm":
 		return WyrmBody.make(Stage.scene(WyrmBody.MODEL), _cast_static)
 	if str(look.model) in ["Knight", "meshy:knight", "meshy:crusader"] and str(look.l) == "":
@@ -2604,6 +2586,8 @@ static func make_body(cls: String, cosmetic: Dictionary = {}) -> Dictionary:
 			var weapon := Stage.scene(weapon_path(file))
 			if weapon != null:
 				var model: Node3D = weapon.instantiate()
+				if str(outfit.get("weapon_tex", "")) != "":
+					apply_weapon_skin(model, file, str(outfit.weapon_tex))     # 0.31.188: his own weapon, repainted
 				_fit_weapon(model, fit_as, str(look.model), hand)
 				hand_models.append([model, hand, fit_as])
 				if is_staff(fit_as):
@@ -2623,11 +2607,10 @@ static func make_body(cls: String, cosmetic: Dictionary = {}) -> Dictionary:
 		player.add_animation_library(key, libs[key])
 	for st in staffs:
 		_face_staff(st[0], str(st[1]), str(st[2]), skeleton, libs, str(look.idle), str(look.model))
-	var fx: Dictionary = cosmetic.get("forge", {})               # 0.31.93: the Forge's stars on this weapon
-	for hm in hand_models:                                       # 0.31.100: and a legendary's own effects
+	for hm in hand_models:                                       # 0.31.100: a signature weapon's own effects (0.31.188: an outfit's)
 		var hf := str(look.get(str(hm[1]), ""))
-		if WeaponFx.wants(hf, fx):
-			WeaponFx.apply(hm[0], hf, fx, str(hm[1]) == "r" or hand_models.size() == 1, str(hm[2]), bool(cosmetic.get("lite", false)))
+		if WeaponFx.wants(hf):
+			WeaponFx.apply(hm[0], hf, str(hm[1]) == "r" or hand_models.size() == 1, str(hm[2]), bool(cosmetic.get("lite", false)))
 	for mi in body.find_children("*", "MeshInstance3D", true, false):
 		(mi as MeshInstance3D).cast_shadow = (GeometryInstance3D.SHADOW_CASTING_SETTING_ON if _cast_static else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
 	if not cosmetic.has("tint") and look.has("tint"):
@@ -2645,9 +2628,19 @@ static func apply_skin(body: Node3D, skin: String) -> bool:
 	var path := Eco.skin_texture(skin)
 	if not ResourceLoader.exists(path):
 		return false
-	var tex: Texture2D = load(path)
+	return _paint(body, load(path), skin)
+
+# 0.31.188: an outfit's repainted weapon -- the piece's own meshes with the outfit's texture for it (Eco.skin_weapon_texture,
+# Meshy's retexture of that piece with its UVs kept), one material per texture and original, shared
+static func apply_weapon_skin(model: Node3D, file: String, key: String) -> bool:
+	var path := Eco.skin_weapon_texture(file, key)
+	if not ResourceLoader.exists(path):
+		return false
+	return _paint(model, load(path), path)
+
+static func _paint(root: Node3D, tex: Texture2D, key0: String) -> bool:
 	var done := false
-	for mi in body.find_children("*", "MeshInstance3D", true, false):
+	for mi in root.find_children("*", "MeshInstance3D", true, false):
 		var m3 := mi as MeshInstance3D
 		if m3.mesh == null:
 			continue
@@ -2655,7 +2648,7 @@ static func apply_skin(body: Node3D, skin: String) -> bool:
 			var base := m3.get_active_material(surf)
 			if not (base is BaseMaterial3D):
 				continue
-			var key := "%s|%d" % [skin, base.get_instance_id()]
+			var key := "%s|%d" % [key0, base.get_instance_id()]
 			if not _skin_mats.has(key):
 				var mat := (base as BaseMaterial3D).duplicate() as BaseMaterial3D
 				mat.albedo_texture = tex
@@ -2797,76 +2790,30 @@ const WEAPON_ROLL := {"axe_1handed":180.0, "bits/axe_D":180.0, "bits/sword_G":18
 # piece drawn upright is first turned onto the template's axes where that lies along Z or X -- bows, crossbows, claws;
 # a left-hand claw is the right one mirrored).
 const MESHY_WEAPON_LIKE := {
+	# (0.31.188, Kevin: "Remove the forge and the individual weapon skins": the catalog's weapons and the quests'
+	# legendaries are gone, models and all -- 0.31.93-0.31.187 in git history)
+	# 0.31.188: the outfits' own weapons (economy.gd OUTFITS) -- each held like its hero's own (tools/meshy_weapon.py fit)
+	"lion_sword": "sword_1handed", "lion_shield": "bits/shield_B", "mammoth_axe": "axe_2handed",
+	"coin_dagger": "dagger", "orchard_bow": "bow_withString", "phoenix_staff": "staff", "bell_scepter": "wand",
+	"ember_hammer": "bits/hammer_C", "ashen_shield": "bits/shield_B", "bloodmoon_greatsword": "bits/sword_E",
+	"ribbon_dagger": "dagger", "wolf_crossbow": "crossbow_2handed", "orrery_staff": "staff",
+	"starchart_tome": "spellbook_open", "lantern_shovel": "staff", "geode_hammer": "bits/hammer_C",
+	"geode_shield": "bits/shield_A", "dragon_halberd": "bits/halberd", "rose_rapier": "sword_1handed",
+	"thorn_stiletto": "bits/dagger_A", "lightning_rod_staff": "staff", "brass_blunderbuss": "crossbow_2handed",
+	"blossom_staff": "staff",
 	# 0.31.168: the six new 5v5 heroes' props (not cosmetics)
 	"golem_hammer": "bits/hammer_C", "golem_shield": "bits/shield_A", "dragoon_halberd": "bits/halberd",
-	"duelist_rapier": "sword_1handed", "storm_staff": "staff", "druid_staff": "staff", "musket": "crossbow_2handed",
+	"duelist_rapier": "sword_1handed", "needlepoint_stiletto": "bits/dagger_A", "storm_staff": "staff",
+	"druid_staff": "staff", "musket": "crossbow_2handed",
 	# 0.31.159: the 5v5 lane minions' props (not cosmetics)
 	"minion_sword": "sword_1handed", "minion_buckler": "shield_round", "minion_crossbow": "crossbow_1handed",
 	"minion_cannon": "crossbow_2handed", "minion_hammer": "axe_2handed",
-	# Knight
-	"squire_sword": "sword_1handed", "squire_shield": "bits/shield_B",
-	"steadfast_sword": "bits/sword_A", "steadfast_shield": "shield_round",
-	"highguard_sword": "sword_2handed", "highguard_shield": "bits/shield_A",
-	"lionheart_sword": "sword_1handed", "lionheart_shield": "shield_badge_color",
-	"dawnwall_sword": "sword_1handed", "dawnwall_shield": "shield_square_color",
-	"bloodmoon_sword": "sword_1handed", "bloodmoon_shield": "shield_round_color",
-	"stonewarden_sword": "bits/sword_B", "stonewarden_shield": "bits/shield_D",
-	"thornspire_halberd": "bits/halberd", "thornspire_shield": "shield_square_color",
-	"frostward_sword": "bits/sword_C", "frostward_shield": "shield_square",
-	"ironbriar_sword": "bits/sword_D", "ironbriar_shield": "shield_spikes",
-	"kingsoath_sword": "bits/sword_G", "kingsoath_shield": "bits/shield_C",
-	# Barbarian
-	"woodsplitter_axe": "axe_2handed", "raider_axe": "axe_1handed", "raider_shield": "shield_round_barbarian",
-	"frostbeard_axe": "bits/axe_A", "frostbeard_shield": "shield_round_color", "skullknocker_hammer": "bits/hammer_C",
-	"thornhide_axe": "axe_1handed", "thornhide_shield": "shield_spikes_color", "twinfury_axe": "bits/axe_B",
-	"bonecarver_cleaver": "bits/sword_F", "rockfist_r": "bits/fistweapon_C_right",
-	"rockfist_l": "bits/fistweapon_C_left", "worldsplitter_axe": "bits/axe_D",
-	# Rogue
-	"cutpurse_dagger": "dagger", "smokescreen_dagger": "dagger",
-	"viper_fang": "bits/dagger_B", "needlepoint_stiletto": "bits/dagger_A", "alley_knuckles": "bits/fistweapon_A",
-	"whisperbolt_dagger": "dagger",
-	"ravenclaw_r": "bits/fistweapon_C_right", "ravenclaw_l": "bits/fistweapon_C_left", "grimgrin_scythe": "bits/scythe",
-	# Archer
-	"ashwood_bow": "bow_withString", "trailblazer_bow": "bow_withString", "trailblazer_quiver": "quiver",
-	"hawkeye_bow": "bits/bow_B_withString", "staghunter_bow": "bits/bow_A_withString",
-	"boarsbane_spear": "bits/spear_A", "ironjaw_crossbow": "crossbow_2handed", "galeshot_bow": "bits/bow_C_withString",
-	# Mage
-	"apprentice_staff": "staff", "sparkstick_wand": "wand", "spellwright_wand": "wand",
-	"spellwright_tome": "spellbook_open", "twinsparks_fire": "bits/wand_A", "twinsparks_frost": "bits/wand_A",
-	"hex_knife": "bits/dagger_C", "hex_tome": "spellbook_open", "starshard_staff": "bits/staff_B",
-	"archon_staff": "bits/staff_D",
-	# Priest
-	"acolyte_wand": "wand", "candle_wand": "bits/wand_B", "wayfarer_staff": "bits/staff_A",
-	"sunrise_mace": "bits/hammer_B", "sunrise_shield": "shield_badge", "solaris_staff": "bits/staff_C",
-	# Worker
-	"work_hatchet": "axe_1handed", "brawler_axe": "axe_1handed", "brawler_mug": "mug_full",
-	"brickbreaker_mallet": "bits/hammer_A", "timberfall_axe": "bits/axe_C",
-	# Crusader
-	"templar_sword": "sword_1handed", "templar_shield": "bits/shield_B", "penitent_mace": "bits/hammer_C",
-	"penitent_shield": "bits/shield_A", "bulwark_hammer": "bits/hammer_A", "bulwark_shield": "bits/shield_D",
-	"verdict_maul": "bits/hammer_D", "verdict_shield": "shield_badge",
-	# Berserker
-	"ironhewer_greatsword": "bits/sword_E", "ragebiter_axe": "axe_2handed", "hidesplitter_cleaver": "bits/sword_D",
-	"stormcleaver_axe": "bits/halberd",
-	# Necromancer
-	"bonecaller_staff": "Skeleton_Staff", "gravecaller_staff": "Skeleton_Staff", "gravecaller_tome": "spellbook_open",
-	"soulreaper_scythe": "bits/scythe", "wraithspine_spear": "bits/spear_B",
-	# Assassin
-	"shade_dagger": "dagger", "asp_dagger": "bits/dagger_B", "shadow_talon_r": "bits/fistweapon_C_right",
-	"shadow_talon_l": "bits/fistweapon_C_left", "eclipse_dagger": "bits/dagger_C",
-	# Ranger (sniper)
-	"marksman_crossbow": "crossbow_2handed", "longshot_bow": "bits/bow_B_withString",
-	"rattlesnake_crossbow": "crossbow_1handed", "heartseeker_bow": "bits/bow_C_withString",
-	# Archmage
-	"magister_staff": "staff", "magister_book": "spellbook_open", "prism_staff": "bits/staff_C",
-	"prism_tome": "spellbook_open", "rootwise_staff": "bits/staff_A", "rootwise_tome": "spellbook_open",
-	"voidrod_staff": "bits/staff_D",
-	# 0.31.97: the class quests' legendaries (Eco.QUESTS)
-	"kingsguard_sword": "sword_1handed", "kingsguard_shield": "shield_badge_color", "skyrender_axe": "axe_2handed",
-	"moonfang_dagger": "dagger", "dawnpiercer_bow": "bow_withString", "emberheart_staff": "staff", "seraph_staff": "bits/staff_C",
-	"goldensledge_hammer": "bits/hammer_D", "oathbound_hammer": "bits/hammer_A", "oathbound_shield": "shield_badge",
-	"bloodroar_demon": "bits/sword_E", "lichcrown_staff": "Skeleton_Staff", "lastbreath_dagger": "bits/dagger_C",
-	"hawksjudgment_crossbow": "crossbow_2handed", "astral_staff": "bits/staff_D", "astral_book": "spellbook_open",
+	# each class's own (siege_view LOOKS; 0.31.93 Armory Reforged)
+	"squire_sword": "sword_1handed", "squire_shield": "bits/shield_B", "woodsplitter_axe": "axe_2handed",
+	"cutpurse_dagger": "dagger", "ashwood_bow": "bow_withString", "apprentice_staff": "staff", "acolyte_wand": "wand",
+	"work_hatchet": "axe_1handed", "templar_sword": "sword_1handed", "templar_shield": "bits/shield_B",
+	"ironhewer_greatsword": "bits/sword_E", "bonecaller_staff": "Skeleton_Staff", "shade_dagger": "dagger",
+	"marksman_crossbow": "crossbow_2handed", "magister_staff": "staff", "magister_book": "spellbook_open"
 }
 
 static func weapon_path(file: String) -> String:
@@ -2965,7 +2912,7 @@ func _ensure_actor(u: Dictionary) -> Dictionary:
 	# The usual case first, without building keys: the actor exists and wears this class (0.31.78: this ran for every
 	# unit every frame, formatting a string -- with the player's cosmetics dictionary in it -- 32 times a frame).
 	if not a.is_empty() and a.cls == u.cls and a.up == u.up and str(a.get("lk", "")) == str(u.get("look", "")) \
-			and ((u.id != player_id and a.cosmetic.is_empty() and not unit_looks.has(u.id) and not unit_skins.has(u.id)) or a.cosmetic == unit_cosmetic(u)):
+			and ((u.id != player_id and a.cosmetic.is_empty() and not unit_skins.has(u.id)) or a.cosmetic == unit_cosmetic(u)):
 		return a                                    # (0.31.170: and the same body -- online a player's hero takes a bot's seat)
 	# 0.31.38: an upgraded class wears its own cosmetics (the Crusader's, the Berserker's...), not the base class's.
 	# 0.31.101: every live player's, not only mine (unit_cosmetic)

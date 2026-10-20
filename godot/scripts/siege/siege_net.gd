@@ -92,8 +92,9 @@ const IAP := {
 	# product has to be created in Play Console first, PLAY_IAP_HANDOFF.md); it then takes BEST VALUE from gems_6500.
 	"gems_14000":   {"gems":14000, "usd":"99.99", "tag":"BEST VALUE", "play_only":true},
 	# 0.31.108: 300 gems + 150 Embers + a rare -> 500 + 300 + an epic (about 2.6x its price; was 1.5x). 0.31.184 (no more
-	# Embers): 500 gems + 3,000 gold + an epic -- the 300 Embers at economy.gd EMBER_GOLD
-	"starter_pack": {"gems":500,  "gold":3000, "weapon":"epic", "once":true, "usd":"2.99"},
+	# Embers): 500 gems + 3,000 gold + an epic -- the 300 Embers at economy.gd EMBER_GOLD. 0.31.188 (no more weapons): a
+	# Hero Token for the epic -- any locked hero (the product ID, type and price stay; its store text is Kevin's to change)
+	"starter_pack": {"gems":500,  "gold":3000, "token":1, "once":true, "usd":"2.99"},
 }
 
 const TITLES := {
@@ -163,31 +164,19 @@ static func title_rarity(title_id: String) -> String:
 	return str(t[2]) if not t.is_empty() else ""
 
 # ---------------- what the players wear (0.31.101) ----------------
-# Kevin: "I want players to see everything the other players are wearing". A hello may carry "lk": {class: "weapon
-# id|stars|element"} for each class the player has dressed (Profile.wire_looks: the equipped weapon and its Forge stars
-# and element). The server keeps only well-formed entries (clean_looks: one of LOOK_CLASSES, an id of a-z 0-9 _, stars
-# 0-3, an element word) and sends them in "pn" as "lk": {unit id: {class: entry}}, as it does names and titles. Ids are
-# not checked against the catalog here (the server carries no economy, and a newer app may know newer items): each app
-# makes the look with its own catalog (Eco.looks_from_wire) and shows the starter for an id it doesn't know.
-# Additive: an older server ignores "lk" in a hello, an older app ignores it in "pn"; the protocol stays.
-const LOOK_CLASSES := ["knight", "barbarian", "rogue", "ranger", "mage", "priest", "worker",
-	"crusader", "berserker", "necromancer", "assassin", "sniper", "archmage"]
-const LOOK_STARS := 3                # Eco.FORGE_STARS.size()
-
+# Kevin: "I want players to see everything the other players are wearing". A hello may carry "lk": what the player wears
+# (Profile.wire_looks); the server keeps only well-formed entries (clean_looks) and sends them in "pn" as "lk": {unit id:
+# looks}, as it does names and titles. 0.31.188 (Kevin: "I only want the cosmetics to be an entire outfit"): the outfits
+# worn, "_sk", are all there is -- the weapons' "<class>": "weapon id|stars|element" entries (0.31.101-0.31.187) are
+# dropped (an older app still sending them: left out). Additive: an older server ignores "lk", an older app ignores "_sk".
 static func clean_looks(v: Variant) -> Dictionary:
 	var out := {}
 	if not (v is Dictionary):
 		return out
-	for k in v:
-		var cls := str(k)
-		if LOOK_CLASSES.has(cls) and v[k] is String:
-			var e := clean_look(v[k])
-			if e != "":
-				out[cls] = e
-		elif cls == "_sk" and v[k] is String:
-			var sk := clean_skins(v[k])
-			if sk != "":
-				out["_sk"] = sk
+	if v.get("_sk") is String:
+		var sk := clean_skins(v["_sk"])
+		if sk != "":
+			out["_sk"] = sk
 	return out
 
 # 0.31.186: the hero skins worn, "_sk": "knight_frost,golem_frost" -- ids of a-z 0-9 _, at most SKINS_MAX (each app
@@ -202,19 +191,6 @@ static func clean_skins(s: String) -> String:
 		if id != "" and id.length() <= 40 and _word(id, true) and not keep.has(id) and keep.size() < SKINS_MAX:
 			keep.append(id)
 	return ",".join(keep)
-
-static func clean_look(s: String) -> String:
-	# "weapon id|stars|element" with every part checked, or "" (a bad element is dropped, the rest kept)
-	if s.length() > 64:
-		return ""
-	var p := s.split("|")
-	if p.size() != 3 or p[0].length() > 40 or not _word(p[0], true) or not p[1].is_valid_int():
-		return ""
-	var n := clampi(p[1].to_int(), 0, LOOK_STARS)
-	var el := p[2] if p[2].length() <= 12 and _word(p[2], false) else ""
-	if p[0] == "" and n == 0:
-		return ""
-	return "%s|%d|%s" % [p[0], n, el]
 
 static func _word(s: String, digits: bool) -> bool:
 	for ch in s:

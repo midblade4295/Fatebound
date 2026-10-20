@@ -1,10 +1,11 @@
 extends SceneTree
 # 0.31.186 (League's way, the fourth part: hero skins). The Frostbound line -- every hero repainted by Meshy's
 # retexture with his own UVs kept (tools/meshy_retexture.py, tools/build_skins.py).
-#  1. The catalog: 18 skins, one a hero, epic at 750 gems; each one's texture (assets/skins) and portrait (assets/ui/skins).
+#  1. The catalog (0.31.188: whole outfits): 36 -- each hero's own set (epic, 750 gems, its own weapon) and his Frostbound
+#     (rare, 390 gems, his weapon frosted); each one's texture (assets/skins) and portrait (assets/ui/skins).
 #  2. Buying: gems only; a locked hero's skin brings him (League); worn at once; another hero's skin can't be worn on
 #     him; wear "" = his own look; a damaged save keeps only real, owned skins worn by their own heroes.
-#  3. Online: the looks carry "_sk" (the skins worn); clean_looks keeps good ids only; the server's account looks hold
+#  3. Online: the looks carry "_sk" (the skins worn -- all they carry, 0.31.188); clean_looks keeps good ids only; the server's account looks hold
 #     only the skins the account owns; buy_skin / wear_skin replay to the same profile.
 #  4. The view: a skinned body's own meshes take the skin's texture (one material shared per skin), his weapons keep
 #     theirs; my hero wears my skin, another player's hero his (from "_sk"), a bot none -- and unit_cosmetic gives the
@@ -33,23 +34,28 @@ func _init() -> void:
 	var missing := []
 	for id in Eco.SKINS:
 		var sk: Dictionary = Eco.SKINS[id]
-		heroes[str(sk.hero)] = true
+		heroes[str(sk.hero)] = int(heroes.get(str(sk.hero), 0)) + 1
 		if not ResourceLoader.exists(Eco.skin_texture(id)):
 			missing.append(Eco.skin_texture(id))
 		if not ResourceLoader.exists("res://assets/ui/skins/%s.png" % id):
 			missing.append("portrait " + id)
-		if int(sk.gems) != 750 or str(sk.rarity) != "epic":
+		var frost := str(sk.line) == "frost"
+		if int(sk.gems) != (390 if frost else 750) or str(sk.rarity) != ("rare" if frost else "epic"):
 			missing.append("price " + id)
-	check(Eco.SKINS.size() == 18 and heroes.size() == 18 and missing.is_empty(), "18 Frostbound skins, one a hero, 750 gems, each with its texture and portrait %s" % str(missing))
-	check(Eco.SKINS.knight_frost.name == "Frostbound Knight" and Eco.skins_of("golem") == ["golem_frost"], "named by line and hero")
+	check(Eco.SKINS.size() == 36 and heroes.size() == 18 and heroes.values().all(func(n): return n == 2) and missing.is_empty(),
+		"36 outfits, two a hero (his own set at 750 gems, Frostbound at 390), each with its texture and portrait %s" % str(missing))
+	var golem_sk: Array = Eco.skins_of("golem")
+	golem_sk.sort()
+	check(Eco.SKINS.knight_frost.name == "Frostbound Knight" and Eco.SKINS.knight_lion.name == "Lionguard Knight" and golem_sk == ["golem_frost", "golem_geode"],
+		"named by set and hero (%s)" % str(golem_sk))
 	# ---- 2. buying and wearing
 	var p := fresh("buy")
-	p.d.gems = 1000
+	p.d.gems = 500
 	check(not bool(p.buy_skin("nope_frost").ok), "an unknown skin isn't sold")
 	var r: Dictionary = p.buy_skin("golem_frost")
 	check(bool(r.ok) and bool(r.hero) and p.owns_hero("golem") and p.owns_skin("golem_frost") and p.worn_skin("golem") == "golem_frost"
-		and int(p.d.gems) == 250, "the Frostbound Golem: 750 gems, the Golem with it (League), worn at once")
-	check(not bool(p.buy_skin("knight_frost").ok) and int(p.d.gems) == 250, "not enough gems: no")
+		and int(p.d.gems) == 110, "the Frostbound Golem: 390 gems, the Golem with it (League), worn at once")
+	check(not bool(p.buy_skin("knight_frost").ok) and int(p.d.gems) == 110, "not enough gems: no")
 	check(not bool(p.buy_skin("golem_frost").ok), "...and a skin once")
 	p.d.gems = 2000
 	check(bool(p.buy_skin("knight_frost").ok) and not bool(p.buy_skin("mage_frost").get("hero", true)), "a free hero's skin: no hero to add")
@@ -64,7 +70,7 @@ func _init() -> void:
 	var wl: Dictionary = p.wire_looks()
 	check(str(wl.get("_sk", "")) == "golem_frost,knight_frost,mage_frost", "the looks carry the skins worn (%s)" % str(wl.get("_sk", "")))
 	var cl: Dictionary = Net.clean_looks({"_sk": "knight_frost,BAD-ID,golem_frost,knight_frost", "knight": "|2|"})
-	check(str(cl.get("_sk", "")) == "knight_frost,golem_frost" and cl.has("knight"), "clean_looks keeps good skin ids, once each (%s)" % str(cl))
+	check(str(cl.get("_sk", "")) == "knight_frost,golem_frost" and not cl.has("knight"), "clean_looks keeps good skin ids, once each -- and nothing else (an old phone's weapon looks, 0.31.188) (%s)" % str(cl))
 	var a := fresh("opa")
 	var b := fresh("opb")
 	a.d.gems = 3000

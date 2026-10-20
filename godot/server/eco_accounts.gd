@@ -237,8 +237,8 @@ func _import(p, src: Dictionary, id: String) -> Dictionary:
 	var out := {"matches":matches, "gems":[int(v.gems), mini(int(v.gems), caps.gems)], "gold":[int(v.gold), mini(int(v.gold), caps.gold)],
 		"paid":paid_gems}
 	var keep := Profile.defaults()
-	for k in ["name", "level", "xp", "pass", "owned", "equip", "title", "challenges", "stats", "first_win_day", "history",
-			"forge", "chests", "quests", "tutorial_done"]:
+	for k in ["name", "level", "xp", "pass", "owned", "title", "challenges", "stats", "first_win_day", "history",
+			"chests", "quests", "tutorial_done"]:            # (0.31.188: no "equip" / "forge" -- the weapons are gone)
 		if v.has(k):
 			keep[k] = v[k]
 	keep.gems = mini(int(v.gems), caps.gems)
@@ -250,15 +250,7 @@ func _import(p, src: Dictionary, id: String) -> Dictionary:
 	var owned: Array = keep.owned
 	if owned.size() > int(caps.items):
 		owned.resize(int(caps.items))                  # (the earliest kept: owned is in the order they were got)
-	var ok_owned := []
-	for id2 in owned:                                  # a quest's legendary only with its quest done
-		var it := Eco.item(str(id2))
-		if str(it.get("source", "")) == "quest":
-			var cls := str(it.get("class", ""))
-			var q: Dictionary = Eco.QUESTS.get(cls, {})
-			if q.is_empty() or int(keep.quests.get(cls, 0)) < (q.steps as Array).size():
-				continue
-		ok_owned.append(id2)
+	var ok_owned := owned.duplicate()                  # (titles; 0.31.97-0.31.187 a quest's legendary only with its quest done)
 	keep.owned = ok_owned
 	keep.chests.slots = (keep.chests.slots as Array).slice(0, Eco.CHEST_SLOTS)
 	keep.chests.queue = (keep.chests.get("queue", []) as Array).slice(0, Eco.CHEST_QUEUE_MAX)
@@ -486,7 +478,7 @@ func grant_purchase(id: String, key: String, product: String, token: String, con
 	return g
 
 func wear(id: String, key: String) -> Dictionary:
-	# what an account may show online: its own name, title (owned) and looks (owned weapons, its own Forge stars); the
+	# what an account may show online: its own name, title (owned) and looks (the outfits it owns and wears); the
 	# 5v5 heroes it bought (0.31.170: a hero it picks for an online match must be one of them, or free)
 	var e := open(id, key)
 	if e.is_empty():
@@ -499,7 +491,7 @@ func wear(id: String, key: String) -> Dictionary:
 func stats_of(id: String) -> Dictionary:
 	# 0.31.120 (Kevin: player profile card): what anyone may see of an account when they tap its name -- its level and
 	# lifetime numbers, the class it plays most (stats.main_<cls>: matches with it as the match's main class) and the
-	# weapon it wins most with (forge.wins) or else that class's weapon. No ids, currencies or purchases.
+	# outfit it wears on that hero ("sk"; 0.31.188 -- it was the weapon it won most with). No currencies or purchases.
 	var e := _load(id)
 	if e.is_empty():
 		return {}
@@ -515,21 +507,9 @@ func stats_of(id: String) -> Dictionary:
 		"ko":int(st.get("kills", 0)), "bs":int(st.get("best_streak", 0)), "since":int(e.meta.get("created", 0)),
 		"cls":fav, "cm":fav_n, "cw":int(st.get("win_" + fav, 0)) if fav != "" else 0,
 		"tw":int(st.get("towers", 0))}             # (0.31.169: towers for the card's RESCUES tile; "r" stays for older apps)
-	var wid := ""
-	var best := 0
-	var fw: Dictionary = d.get("forge", {}).get("wins", {})
-	for w in fw:
-		if int(fw[w]) > best:
-			wid = str(w)
-			best = int(fw[w])
-	if wid == "" and fav != "" and d.get("equip", {}).has(fav):
-		wid = Eco.forge_id(fav, str(d.equip[fav].get("weapon", "")))
-	if wid != "" and Eco.forge_name(wid) != "":
-		out["wpn"] = Eco.forge_name(wid)
-		out["wr"] = Eco.forge_rarity(wid)
-		out["ws"] = int(d.get("forge", {}).get("stars", {}).get(wid, 0))
-		out["wc"] = Eco.forge_class(wid)
-		out["ww"] = best
+	var worn := str((d.get("skin_on", {}) as Dictionary).get(fav, "")) if d.get("skin_on") is Dictionary else ""
+	if worn != "" and Eco.SKINS.has(worn):
+		out["sk"] = worn
 	return out
 
 func public_of(id: String) -> Dictionary:

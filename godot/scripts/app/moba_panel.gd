@@ -212,18 +212,13 @@ func _render_stage() -> void:
 	_stage_lock.visible = not owned and not _stage_free.visible
 	_stage_price.text = UI.grouped(int(app.profile.hero_price(hero).get("gold", 0)))
 	if _show != null:
-		var look: Dictionary = app.profile.look_for(hero) if (Eco.CLASSES + Eco.UP_CLASSES).has(hero) else {}
-		var worn: String = app.profile.worn_skin(hero)
-		if worn != "":
-			look = look.duplicate()
-			look["skin"] = worn                 # 0.31.186: in the skin he wears
-		_show.show_look(hero, look)
+		_show.show_look(hero, app.profile.look_for(hero))     # 0.31.186: in the outfit he wears (0.31.188: its weapon too)
 		_show.modulate = Color.WHITE if _plays(hero) else Color(0.62, 0.62, 0.7)
 	# 0.31.186: SKIN -- shown when you own one of his
 	var mine: Array = Eco.skins_of(hero).filter(func(id): return app.profile.owns_skin(str(id)))
 	_skin_btn.visible = not mine.is_empty() and _owns(hero)
 	var w2: String = app.profile.worn_skin(hero)
-	_skin_btn.text = "SKIN: " + (str(Eco.SKIN_LINES.get(str(Eco.SKINS[w2].line), "")).to_upper() if w2 != "" else "DEFAULT") + "  ▸"
+	_skin_btn.text = "OUTFIT: " + (str(Eco.SKINS[w2].set).to_upper() if w2 != "" else "DEFAULT") + "  ▸"
 
 func _on_go() -> void:
 	if not _plays(hero):

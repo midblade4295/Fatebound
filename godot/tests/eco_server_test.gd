@@ -68,7 +68,7 @@ func _part1() -> void:
 	src["embers"] = 99999                     # (an old phone's Embers: 0.31.184 turns them into gold, Eco.EMBER_GOLD each)
 	src.level = 90
 	src.stats.matches = 10
-	src.owned = ["knight_wpn_greatsword", "knight_wpn_kingsguard", "mage_wpn_wand"]
+	src.owned = ["knight_wpn_greatsword", "knight_wpn_kingsguard", "mage_wpn_wand", "title_squire"]
 	src.iap.done = [{"t":"tok-old-purchase-1", "p":"gems_500", "at":1}, {"t":"tok-made-up-2", "p":"gems_6500", "at":1}]
 	var a: Dictionary = acc.handle({"t":"eco", "new":true, "import":src})
 	var id := str(a.get("acct", ""))
@@ -80,31 +80,32 @@ func _part1() -> void:
 	check(int(sp.gems) == 500 + 300 + 12 * 10, "gems held to 10 matches' worth + the confirmed purchase: %d" % int(sp.gems))
 	check(int(sp.gold) == 5000 + 900 * 10 + (200 + 400) * Eco.EMBER_GOLD and not sp.has("embers") and int(sp.level) == 3 + 5,
 		"gold (with the Embers' cap in it) and level held too (%d, %d)" % [int(sp.gold), int(sp.level)])
-	check(sp.owned.has("knight_wpn_greatsword") and not sp.owned.has("knight_wpn_kingsguard"), "owned kept, but no quest legendary without its quest")
+	check(sp.owned == ["title_squire"], "a title kept, the weapons gone with the Forge (0.31.188, no refund) %s" % str(sp.owned))
 	check(str(acc.tokens.get(Accounts.token_hash("tok-old-purchase-1"), "")) == id and int(sp.iap.n) == 1, "the confirmed purchase is this account's now; the made-up one is dropped")
 	var b: Dictionary = acc.handle({"t":"eco", "new":true, "import":src})
 	check(int(b.profile.gems) == 300 + 12 * 10, "a second account can't count the same purchase (%d)" % int(b.profile.gems))
 	check(not bool(acc.handle({"t":"eco", "acct":id, "key":"0".repeat(64)}).ok), "a wrong key gets nothing")
 	# --- ops, replayed with the game's rules
 	var e: Dictionary = acc.open(id, key)
-	var buy_id := ""
-	for d_id in Eco.shop_daily(now):
-		if Eco.item_price(d_id, now).has("gold") and not e.p.owns(d_id):
-			buy_id = d_id
-			break
-	var g0 := int(e.p.d.gold)
-	var r: Dictionary = acc.handle({"t":"eco", "acct":id, "key":key, "ops":[{"s":1, "op":"buy", "a":[buy_id]}]})
-	check(bool(r.results[0].ok) and r.profile.owned.has(buy_id) and int(r.profile.gold) == g0 - int(Eco.item_price(buy_id).gold),
+	var buy_id := "knight_frost"                       # (0.31.188: outfits are what the shop sells, for gems)
+	var g0 := int(e.p.d.gems)
+	var r: Dictionary = acc.handle({"t":"eco", "acct":id, "key":key, "ops":[{"s":1, "op":"buy_skin", "a":[buy_id]}]})
+	check(bool(r.results[0].ok) and (r.profile.skins as Array).has(buy_id) and int(r.profile.gems) == g0 - int(Eco.SKINS[buy_id].gems),
 		"a purchase in the shop is made on the server's copy (%s)" % buy_id)
-	r = acc.handle({"t":"eco", "acct":id, "key":key, "ops":[{"s":1, "op":"buy", "a":[buy_id]}]})
-	check(bool(r.results[0].get("dup", false)) and int(r.profile.gold) == g0 - int(Eco.item_price(buy_id).gold), "the same op sent again is done once")
-	r = acc.handle({"t":"eco", "acct":id, "key":key, "ops":[{"s":2, "op":"exchange", "a":["gold_xxl"]}, {"s":3, "op":"buy", "a":[123]},
+	r = acc.handle({"t":"eco", "acct":id, "key":key, "ops":[{"s":1, "op":"buy_skin", "a":[buy_id]}]})
+	check(bool(r.results[0].get("dup", false)) and int(r.profile.gems) == g0 - int(Eco.SKINS[buy_id].gems), "the same op sent again is done once")
+	sp.gems = int(r.profile.gems)
+	r = acc.handle({"t":"eco", "acct":id, "key":key, "ops":[{"s":2, "op":"exchange", "a":["gold_xxl"]}, {"s":3, "op":"buy_skin", "a":[123]},
 		{"s":4, "op":"grant_iap", "a":["gems_6500", "tok-x"]}, {"s":5, "op":"match", "a":[{"kills":3}, true, false]}]})
 	var errs := []
+	var r2: Dictionary
 	for x in r.results:
 		errs.append(str(x.error) if not bool(x.ok) else "ok")
-	check(errs == ["unknown op", "bad args", "unknown op", "no ticket"] and int(r.profile.gems) == int(sp.gems),
-		"refused: an exchange (0.31.185: gone), a malformed op, a purchase grant, a match without a ticket %s" % str(errs))
+	r2 = acc.handle({"t":"eco", "acct":id, "key":key, "ops":[{"s":6, "op":"buy", "a":["knight_wpn_greatsword"]}, {"s":7, "op":"forge", "a":["knight_wpn_greatsword"]}]})
+	for x in r2.results:
+		errs.append(str(x.error) if not bool(x.ok) else "ok")
+	check(errs == ["unknown op", "bad args", "unknown op", "no ticket", "unknown op", "unknown op"] and int(r.profile.gems) == int(sp.gems),
+		"refused: an exchange (0.31.185: gone), a malformed op, a purchase grant, a match without a ticket, a weapon bought or forged (0.31.188: gone) %s" % str(errs))
 	# --- VS BOTS: a ticket, not too soon, clamped, once
 	r = acc.handle({"t":"eco", "acct":id, "key":key, "ticket":true})
 	var tk := str(r.get("ticket", ""))
@@ -137,7 +138,7 @@ func _part1() -> void:
 	acc.now_override += 9 * 3600
 	r = acc.handle({"t":"eco", "acct":id, "key":key, "ops":[{"s":10, "op":"open_chest", "a":[cid]}]})
 	check(bool(r.results[0].ok) and int(r.profile.gold) == int(phone.d.gold) and int(r.profile.gems) == int(phone.d.gems)
-		and r.profile.owned == phone.d.owned, "the phone's chest roll is the server's (%s)" % str(pr.get("item", "")))
+		and str(r.profile.get("shards", [])) == str(phone.d.get("shards", [])), "the phone's chest roll is the server's (%s)" % str(pr))
 	# --- purchases: once, one account
 	var g1: Dictionary = acc.grant_purchase(id, key, "gems_80", "tok-new-purchase-1")
 	var g2: Dictionary = acc.grant_purchase(id, key, "gems_80", "tok-new-purchase-1")
@@ -198,18 +199,14 @@ func _process(delta: float) -> bool:
 		"tamper":
 			if t_phase > 0.3 and sync._req.is_empty() and not sync._want:
 				check(int(p.d.gems) == 300 + 12 * 20, "an edited save is put back by the next answer (%d)" % int(p.d.gems))
-				var buy_id := ""
-				for d_id in Eco.shop_daily(p.now()):
-					if Eco.item_price(d_id, p.now()).has("gold") and not p.owns(d_id) and int(Eco.item_price(d_id).gold) <= int(p.d.gold):
-						buy_id = d_id
-						break
+				var buy_id := "mage_frost"                 # (0.31.188: an outfit for gems; until then a weapon for gold)
 				notes["buy"] = buy_id
-				var ok: bool = bool(p.buy(buy_id).ok)
+				var ok: bool = bool(p.buy_skin(buy_id).ok)
 				check(ok and sync.pending() == 1, "a shop purchase is made at once and waits to go up")
 				_go("bought")
 		"bought":
 			if t_phase > 0.5 and sync.pending() == 0 and sync._req.is_empty():
-				check(p.owns(str(notes.buy)) and sync.online, "the server kept the purchase (%s)" % str(notes.buy))
+				check(p.owns_skin(str(notes.buy)) and sync.online, "the server kept the purchase (%s)" % str(notes.buy))
 				gold_before = int(p.d.gold)
 				sync.request_ticket(func(tk): notes["ticket"] = tk)
 				_go("ticket")

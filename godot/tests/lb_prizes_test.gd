@@ -95,7 +95,7 @@ func _process(_d: float) -> bool:
 	elif frames == 26:
 		check(app.modal == null or not is_instance_valid(app.modal) or not _labels(app.modal).has("LEADERBOARD PRIZE"), "...not twice")
 		app.close_modal()
-		app.locker_class = "titles"
+		app.locker_tab = "titles"
 		app.show_tab("locker")
 	elif frames == 32:
 		var txt := _labels(app)

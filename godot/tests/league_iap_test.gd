@@ -4,11 +4,10 @@ extends SceneTree
 #     at his launch price (4,000 / 600) for 14 days, then his own; the profile buys with either.
 #  2. The free rotation: 2 sold heroes a week (Monday 00:00 UTC), every one of them in turn over three weeks, a launching
 #     one left out; a free one plays like your own (can_play_hero), but isn't yours.
-#  3. Hero shards: Royal chests always hold one (Gold 30 %, Silver 10 %, Wooden none -- the odds say so), rolled after
-#     the rest so an old roll's gold, gems and weapon are as they were; a shard unlocks its hero for 60 % of the gold, or
-#     melts for 20 %.
+#  3. Hero shards: Royal chests always hold one (0.31.188, no weapons in chests: Gold 40 %, Silver 15 %, Wooden 5 % --
+#     the odds say so); a shard unlocks its hero for 60 % of the gold, or melts for 20 %.
 #  4. The pass: free tiers 5, 15, 25 a shard of a hero not owned yet (the claimed tier keeps the hero it gave); premium
-#     tier 1 a Hero Token (the first premium weapon on tier 2 now); the token unlocks any locked hero.
+#     tier 1 a Hero Token (0.31.188: tier 2 is 50 gems, the pass holds no weapons); the token unlocks any locked hero.
 #  5. The ops replay to the same profile (the server's copy), and an unknown one ("exchange") is refused.
 #   godot --headless --path godot -s res://tests/league_iap_test.gd
 const Profile = preload("res://scripts/meta/profile.gd")
@@ -92,24 +91,22 @@ func _init() -> void:
 	var gone := Eco.free_heroes(q.now()).has(fr) == false
 	check(gone == not q.can_play_hero(fr), "...the week after, only if he's free again")
 	# ---- 3. hero shards
-	var all_owned: Array = Eco.chest_pool("epic") + Eco.chest_pool("legendary") + Eco.chest_pool("rare") + Eco.chest_pool("common")
 	var royal_shards := 0
 	var gold_shards := 0
 	var wooden_shards := 0
 	for i in 300:
-		if str(Eco.roll_chest("royal", 1000 + i, all_owned, 0).shard) != "":
+		if str(Eco.roll_chest("royal", 1000 + i).shard) != "":
 			royal_shards += 1
-		if str(Eco.roll_chest("gold", 2000 + i, all_owned, 0).shard) != "":
+		if str(Eco.roll_chest("gold", 2000 + i).shard) != "":
 			gold_shards += 1
-		if str(Eco.roll_chest("wooden", 3000 + i, all_owned, 0).shard) != "":
+		if str(Eco.roll_chest("wooden", 3000 + i).shard) != "":
 			wooden_shards += 1
-	check(royal_shards == 300 and gold_shards > 60 and gold_shards < 120 and wooden_shards == 0,
-		"shards: every Royal chest, ~30 %% of Gold (%d/300), no Wooden" % gold_shards)
-	check(Eco.chest_odds("royal").contains("a hero shard") and Eco.chest_odds("gold").contains("30% chance of a hero shard")
-		and not Eco.chest_odds("wooden").contains("shard"), "the odds say so")
-	var r1 := Eco.roll_chest("gold", 777, [], 3)
-	var keys_same := r1.has("gold") and r1.has("gems") and r1.has("item") and r1.has("pity")
-	check(keys_same, "a roll still has its gold, gems, weapon and pity")
+	check(royal_shards == 300 and gold_shards > 90 and gold_shards < 150 and wooden_shards > 3 and wooden_shards < 35,
+		"shards: every Royal chest, ~40 %% of Gold (%d/300), ~5 %% of Wooden (%d/300)" % [gold_shards, wooden_shards])
+	check(Eco.chest_odds("royal").contains("a hero shard") and Eco.chest_odds("gold").contains("40% chance of a hero shard")
+		and Eco.chest_odds("wooden").contains("5% chance of a hero shard"), "the odds say so")
+	var r1 := Eco.roll_chest("gold", 777)
+	check(r1.keys().size() == 3 and r1.has("gold") and r1.has("gems") and r1.has("shard"), "a roll: gold, gems and a shard -- no weapon, no pity (0.31.188)")
 	var s := fresh("shard")
 	s.d.gold = 5000
 	s.d.shards = [locked, locked]
@@ -120,8 +117,8 @@ func _init() -> void:
 	# ---- 4. the pass
 	check(Eco.pass_reward(1, 5, false) == {"shard": ""} and Eco.pass_reward(1, 15, false) == {"shard": ""} and Eco.pass_reward(1, 25, false) == {"shard": ""},
 		"free tiers 5, 15, 25: a hero shard")
-	check(Eco.pass_reward(1, 1, true) == {"token": 1} and Eco.premium_item_tiers(1)[0] == 2 and Eco.pass_reward(1, 2, true).has("item"),
-		"premium tier 1: a Hero Token; the first premium weapon on tier 2")
+	check(Eco.pass_reward(1, 1, true) == {"token": 1} and Eco.pass_reward(1, 2, true) == {"gems": 50},
+		"premium tier 1: a Hero Token; tier 2 50 gems (0.31.188: it was the first premium weapon)")
 	var t := fresh("pass")
 	t.d.heroes = ["golem", "dragoon", "duelist", "stormcaller", "musketeer"]
 	var want: Dictionary = t.pass_reward_for(5, false)

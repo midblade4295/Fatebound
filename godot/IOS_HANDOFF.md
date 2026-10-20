@@ -46,7 +46,7 @@ Apple account: **midblade4295@hotmail.com** (Individual, Kevin Petrie), Team ID 
    | `gems_2400` | Consumable | Vault of Gems | 2,400 gems. | 19.99 |
    | `gems_6500` | Consumable | Royal Treasury | 6,500 gems. | 49.99 |
    | `gems_14000` | Consumable | Dragon's Hoard | 14,000 gems. | 99.99 |
-   | `starter_pack` | **Non-Consumable** | Starter Pack | 500 gems, 3,000 gold and an epic weapon. One per player. (0.31.184: was 300 Embers -- update the description if it was entered with Embers) | 2.99 |
+   | `starter_pack` | **Non-Consumable** | Starter Pack | 500 gems, 3,000 gold and a Hero Token (unlock any hero). One per player. (0.31.184: was 300 Embers; 0.31.188: the epic weapon became a Hero Token -- update the description if it was entered with either) | 2.99 |
 
    Each needs a review screenshot (the shop: `store-listing/graphics/phone_screenshots/`) and goes in with the first
    build submitted for review (Kevin's call). For TestFlight they work as soon as they are "Ready to Submit".

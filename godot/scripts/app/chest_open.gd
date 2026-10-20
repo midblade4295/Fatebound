@@ -1,8 +1,8 @@
 extends Control
 # 0.31.79 (Kevin: "chests in 3d and animated"): opening a chest. The Meshy chest teases in the middle of a sunburst;
 # TAP TO OPEN (or OPEN) rolls the contents (Profile.open_chest), the chest shakes, the lid flies open with a flash and a
-# spray of coins, the chest sinks and the rewards rise into view one by one: the weapon (or the gold), then the gold and
-# gems, then COLLECT / EQUIP NOW.
+# spray of coins, the chest sinks and the rewards rise into view one by one: a hero shard (or the gold), then the gold and
+# gems, then COLLECT. (0.31.79-0.31.187 a weapon came first, with EQUIP NOW -- 0.31.188 chests hold gold, gems and shards.)
 const UI = preload("res://scripts/app/ui.gd")
 const UI2 = preload("res://scripts/app/ui2.gd")
 const Eco = preload("res://scripts/meta/economy.gd")
@@ -173,9 +173,8 @@ func open() -> void:
 	if not bool(result.get("ok", false)):
 		app.close_modal()
 		return
-	if app.get("analytics") != null:          # 0.31.118: what came out (its rarity), and which chest
-		var it := str(result.get("item", ""))
-		app.analytics.log_ev("chest_open", {"rarity":str(Eco.item(it).get("rarity", "none")) if it != "" else "none", "src":kind})
+	if app.get("analytics") != null:          # 0.31.118: what came out, and which chest (0.31.188: "shard" or "none")
+		app.analytics.log_ev("chest_open", {"rarity":"shard" if str(result.get("shard", "")) != "" else "none", "src":kind})
 	app.sfx("chestOpen")                   # 0.31.109: the lid, the magic swelling into the burst at 0.45 s, the sparkle
 	_open_t = 0.0
 	var tw := create_tween()
@@ -253,7 +252,7 @@ func _show_rewards() -> void:
 	_reveal.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_reveal.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_reveal)
-	var item := str(result.get("item", ""))
+	var shard := str(result.get("shard", ""))
 	var top := 168.0 + _safe()
 	var card := Control.new()
 	card.size = Vector2(210, 238)
@@ -264,19 +263,14 @@ func _show_rewards() -> void:
 	var title := ""
 	var tag := ""
 	var icon := ""
-	if item != "":
-		var it := Eco.item(item)
-		rar = str(it.get("rarity", "rare"))
-		title = str(it.get("name", "")).to_upper()
-		tag = "%s  ·  %s %s" % [rar.to_upper(), str(Eco.CLASS_NAMES.get(str(it.get("class", "")), "")).to_upper(), str(it.get("kind", "")).to_upper()]
-		icon = "res://assets/ui/icons/%s.png" % item
-	elif int(result.get("dupe_gold", 0)) > 0:            # a duplicate: gold (0.31.93-0.31.183 Embers for the Forge)
-		title = "+%s GOLD" % UI.grouped(int(result.dupe_gold))
-		tag = "A WEAPON YOU OWN  ·  TURNED INTO GOLD"
-		icon = "res://assets/ui/currency/coins_l.png"
+	if shard != "":
+		rar = "epic"                                     # 0.31.185: a hero shard -- the chest's best
+		title = "%s SHARD" % str(Eco.SKIN_HEROES.get(shard, shard.capitalize())).to_upper()
+		tag = "UNLOCK HIM FOR LESS  ·  OR MELT IT"
+		icon = "res://assets/ui/skins/default_%s.png" % shard
 	else:
-		title = "+%d GOLD" % int(result.get("gold", 0))
-		tag = "NO WEAPON THIS TIME"
+		title = "+%s GOLD" % UI.grouped(int(result.get("gold", 0)))
+		tag = str(Eco.CHESTS.get(kind, {}).get("name", "CHEST")).to_upper()
 		icon = "res://assets/ui/currency/coins_l.png"
 	var panel: String = {"common": "night", "rare": "royal", "epic": "purple", "legendary": "ember"}.get(rar, "night")
 	var rim: String = {"common": "silver", "rare": "blue", "epic": "purple", "legendary": "orange"}.get(rar, "gold")
@@ -307,7 +301,7 @@ func _show_rewards() -> void:
 	var tl := UI2.body(v, tag, 10, tint.lightened(0.2), false)
 	tl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	tl.clip_text = true
-	if item != "":
+	if shard != "":
 		var nb := PanelContainer.new()
 		var sb := StyleBoxFlat.new()
 		sb.bg_color = Color("#e8443a")
@@ -328,12 +322,8 @@ func _show_rewards() -> void:
 	var tw := create_tween().set_parallel()
 	tw.tween_property(card, "scale", Vector2.ONE, 0.5).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	tw.tween_property(card, "modulate:a", 1.0, 0.25)
-	# 0.31.110: the card's sound by what it holds -- a rare's crystal bells, an epic's swell, a legendary's golden choir;
-	# a duplicate's gold and plain gold the coin
-	if item != "":
-		app.sfx({"epic": "revealEpic", "legendary": "revealLegendary"}.get(rar, "revealRare"))
-	else:
-		app.sfx("coin")
+	# 0.31.110: the card's sound by what it holds -- a shard an epic's swell, gold the coin
+	app.sfx("revealEpic" if shard != "" else "coin")
 	# gold and gems
 	var chips := HBoxContainer.new()
 	chips.add_theme_constant_override("separation", 8)
@@ -342,12 +332,10 @@ func _show_rewards() -> void:
 	chips.size = Vector2(size.x - 40, 60)
 	_reveal.add_child(chips)
 	var amounts := []
-	if item != "" or int(result.get("dupe_gold", 0)) > 0:
+	if shard != "":
 		amounts.append(["coins_m", "+%s" % UI.compact(int(result.get("gold", 0))), UI2.GOLD, UI2.INK])
 	if int(result.get("gems", 0)) > 0:
 		amounts.append(["gems", "+%d" % int(result.gems), UI2.CYAN, Color("#06283a")])
-	if str(result.get("shard", "")) != "":                # 0.31.185: a hero shard (League's champion shard)
-		amounts.append(["res://assets/ui/skins/default_%s.png" % str(result.shard), "SHARD", Color("#9dff8a"), Color("#0a2006")])
 	var k := 0
 	var narrow := amounts.size() >= 3
 	for a in amounts:
@@ -376,12 +364,6 @@ func _show_rewards() -> void:
 	row.offset_top = -100
 	row.offset_bottom = -36
 	_reveal.add_child(row)
-	if item != "":
-		var eb := UI2.button(row, "EQUIP NOW", "blue", func():
-			app.profile.equip(item)
-			app.sfx("equip")
-			_close(), "chest_equip", 20, 62.0, 18.0)
-		eb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var cb := UI2.button(row, "COLLECT", "green", _close, "chest_collect", 26, 62.0, 18.0)
 	cb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	cb.size_flags_stretch_ratio = 1.3

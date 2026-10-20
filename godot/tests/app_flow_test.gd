@@ -1,6 +1,6 @@
 extends SceneTree
 # The Siege app end to end through its real buttons (action_key metas), in REAL time.
-# Shop buy (gold + gems with confirm), locker equip, pass claim + premium + claim all, challenge
+# Shop buy (an outfit for gems, with confirm -- 0.31.188), locker title equip, pass claim + premium + claim all, challenge
 # claim + reroll, rename, offline match -> rewards -> home, online failure -> home, back button.
 const App = preload("res://scripts/app/siege_app.gd")
 const Eco = preload("res://scripts/meta/economy.gd")
@@ -60,21 +60,19 @@ func _process(d: float) -> bool:
 			p.d.gold = 50000; p.d.gems = 3000; p.save()
 			press("tab_shop")
 		1:
-			var id: String = Eco.shop_daily(p.now())[0]
-			var gold0: int = p.d.gold
-			press("buy_" + id)
-			check(p.owns(id) and int(p.d.gold) == gold0 - int(Eco.item_price(id).gold), "bought daily item %s for gold" % id)
-			var gid: String = Eco.shop_featured(p.now())[0]
-			press("buy_" + gid)
-			check(app.modal != null and not p.owns(gid), "gem purchase asks for confirmation first")
+			var id := "knight_lion"
+			var gems0: int = p.d.gems
+			press("skin_buy_" + id)
+			check(app.modal != null and not p.owns_skin(id), "an outfit asks for confirmation first")
 			press("modal_yes")
-			check(p.owns(gid), "gem item %s bought after confirming" % gid)
-			var it := Eco.item(id)
-			app.locker_class = "titles" if it.kind == "title" else str(it["class"])
+			check(p.owns_skin(id) and p.worn_skin("knight") == id and int(p.d.gems) == gems0 - int(Eco.SKINS[id].gems), "the Lionguard Knight bought for %d gems and worn" % int(Eco.SKINS[id].gems))
+			check(btn("buy_knight_wpn_greatsword") == null and btn("pack_buy_pack_hunter") == null, "no weapons or Arsenals in the shop (0.31.188)")
+			p.d.owned.append("title_squire")
+			app.locker_tab = "titles"
 			press("tab_locker")
-			press("equip_" + id)
-			var eq: bool = str(p.d.title) == id if it.kind == "title" else str(p.d.equip[it["class"]][it.kind]) == id
-			check(eq, "equipped %s from the Locker" % id)
+			press("equip_title_squire")
+			check(str(p.d.title) == "title_squire", "a title equipped from the Locker")
+			p.d.gems = 3000; p.save()
 		2:
 			p.d.pass.xp = 3 * Eco.TIER_XP + 10; p.save()
 			press("tab_pass")

@@ -203,11 +203,8 @@ func _fx_layer(in_front: bool, add: bool) -> void:
 	f.setup(fx, in_front, add, Vector2(0.5, STAGE_TOP + (STAGE_BOTTOM - STAGE_TOP) * 0.6))
 
 func _look() -> Dictionary:
-	var look: Dictionary = app.profile.look_for(hero) if (Eco.CLASSES + Eco.UP_CLASSES).has(hero) else {}
-	look = look.duplicate()
-	if preview != "":
-		look["skin"] = preview
-	return look
+	# the outfit shown -- its body and its own weapon (0.31.188); {} his own look
+	return {"skin": preview} if preview != "" else {}
 
 func _show_look() -> void:
 	if _show != null:
@@ -293,7 +290,7 @@ func _render() -> void:
 	# ---- SKINS
 	var ids: Array = [""] + Eco.skins_of(hero)
 	var mine := 1 + Eco.skins_of(hero).filter(func(id): return p.owns_skin(str(id))).size()
-	_head(_sheet, "SKINS", "%d of %d yours  ·  tap one to try it on" % [mine, ids.size()], acc)
+	_head(_sheet, "OUTFITS", "%d of %d yours  ·  tap one to try it on" % [mine, ids.size()], acc)      # (0.31.188: whole outfits, weapon and all)
 	var hs := ScrollContainer.new()
 	hs.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	hs.custom_minimum_size = Vector2(0, 124)
@@ -369,7 +366,7 @@ func _skin_tile(parent: Node, id: String, acc: Color) -> void:
 	ti.size = Vector2(76, 76)
 	ti.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	b.add_child(ti)
-	var label := "DEFAULT" if id == "" else str(Eco.SKIN_LINES.get(str(Eco.SKINS[id].line), "")).to_upper()
+	var label := "DEFAULT" if id == "" else str(Eco.SKINS[id].set).to_upper()
 	var l := UI2.text(b, label, 11, Color.WHITE, UI2.INK, 4)
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	l.position = Vector2(0, 80)
@@ -404,7 +401,8 @@ func _skin_action(acc: Color) -> void:
 	UI2.text(v, nm.to_upper(), 14, Color.WHITE, UI2.INK, 4)
 	if preview != "":
 		var rar := str(Eco.SKINS[preview].rarity)
-		UI2.body(v, rar.to_upper() + " SKIN  ·  " + ("yours" if p.owns_skin(preview) else (("%s comes with it" % Champions.short_of(hero)) if not p.owns_hero(hero) else "a new look, same champion")),
+		var what := "a new look and its own weapon" if Eco.SKINS[preview].has("weapon") else "a new look, the weapon repainted to match"
+		UI2.body(v, rar.to_upper() + " OUTFIT  ·  " + ("yours" if p.owns_skin(preview) else (("%s comes with it" % Champions.short_of(hero)) if not p.owns_hero(hero) else what)),
 			10, Color(str(Eco.RARITY_COLOR.get(rar, "#b8c4c9"))).lightened(0.3), false)
 	else:
 		UI2.body(v, "DEFAULT  ·  the original look", 10, UI2.SOFT, false)

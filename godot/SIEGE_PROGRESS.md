@@ -5910,3 +5910,68 @@ that allows players to purchase or preview what it looks like"
   CONTENT OK, play_games true, bundletool valid. Looked at (420 x 933): the Locker's CHAMPIONS, all eighteen windows,
   a skin previewed, the story and kit, zoomed in. Preview APK: build/Fatebound-Siege-0.31.187-fatebound.apk (32 MB,
   preview key), sha256 45e21a6e...dcf03bd53b7dbcf2717d29a49.
+
+## 0.31.188 — outfits only: the Forge and the weapon cosmetics gone, a new set for every hero with its own weapon
+Kevin: "Remove the forge and the individual weapon skins. I only want the cosmetics to be an entire outfit. Each outfit
+has its own specific looking weapon". Asked first, his answers: what the weapons were in (chests, the pass, quests, the
+starter pack) becomes gold / gems / hero shards; owned weapons "Remove, no refund. I want to wipe players progress
+anyway"; and "I actually want more unique variety for every character for their extra skins. Not just frosted for
+everyone. Make all new sets for every hero and make each one unique to their class and lore along with the weapons to
+go along with each skin".
+- The outfits (economy.gd OUTFITS / SKINS, 36): each hero's own set -- epic, 750 gems, a body repaint and a weapon of
+  its own: Lionguard Knight (lion sword and shield), Mammoth Hunter Barbarian (tusk axe), Velvet Thief Rogue (coin
+  daggers), Orchard Warden Archer (blossoming bow), Phoenix Mage (phoenix staff), Bellringer Priest (bell scepter),
+  Ashen Templar Crusader (ember hammer, ashen shield), Blood Moon Berserker (greatsword), Red Ribbon Assassin (ribbon
+  daggers), Wolfstalker Ranger (wolf crossbow), Stargazer Archmage (orrery staff, star-chart tome), Gravekeeper
+  Necromancer (lantern shovel), Geode Golem (crystal hammer and shield), Dragonscale Dragoon (dragon halberd), Golden
+  Rose Duelist (rose rapier, thorn stiletto), Stormforged Stormcaller (lightning-rod staff), Privateer Musketeer (brass
+  blunderbuss), Cherry Blossom Druid (blossom staff). Frostbound stays as the cheaper line -- rare, 390 gems (was epic
+  750) -- with the hero's own weapon repainted in frost ("weapon_tex"). Names "<Set> <Class>". The class's own look is
+  free, as before.
+- How they're worn (siege_view.gd make_body): an outfit puts its weapon in his hands (Eco.SKINS "weapon" {"r","l"}),
+  held like his own piece (MESHY_WEAPON_LIKE: each fitted into that piece's space, tools/meshy_weapon.py fit), or
+  paints his own (apply_weapon_skin, assets/skins/weapons/<piece>_frost.jpg); an explicit hand wins (the portraits'
+  busts hold nothing). weapon_fx.gd: the old Forge and legendary effects became SIGNATURE -- a glow, particles and a
+  trail for each set's weapon (embers on the phoenix staff, sparks on the lightning rod, petals on the blossom staff...).
+- Gone: the Forge (stars, elements, its screen, the FORGE medallion on Home -- TUTORIAL moved up), the catalog's
+  weapons (titles are all it holds), the Arsenals, the daily and featured weapon deals, the vault, duplicate gold, the
+  chests' bad-luck counter, the quest legendaries, the pass's weapons and its swaps, the Locker's ARMORY, item looks
+  online ("lk" carries only "_sk"), the profile card's weapon (it shows the outfit worn: "Wears Lionguard Knight").
+  Master Smith (forge a weapon to 3 stars) is retired: achievements.gd RETIRED keeps its Play / Game Center id (they can
+  never be reused) and nothing reports it -- hide it in Play Console and App Store Connect.
+- What took the weapons' places: chests hold gold, gems and hero shards only, each a bit more -- Wooden 80-150 gold, 15 %
+  5 gems, 5 % a shard (was 60-120, 10 %, a rare weapon 15 %); Silver 200-320, 40 % 5-10 gems, 15 % a shard (150-250, 30 %
+  of 5, 10 %); Gold 500-750, 20-30 gems, 40 % a shard (400-600, 15-25, 30 %); Royal 1,200, 60-80 gems, always a shard
+  (1,000, 40-60). The pass: free 10 / 20 a Gold chest, 30 a Royal chest; premium 2 50 gems, 3 a Gold chest, 5 a shard,
+  7 50 gems, 9 a Gold chest, 12 a shard, 15 75 gems, 18 a Royal chest, 21 a shard, 24 75 gems, 26 a Royal chest, 28 100
+  gems, 30 a Royal chest and 150 gems (the old title tiers 5, 9, 21 included). A class quest's last step: 150 gems and a
+  Royal chest. The starter pack (same ID, price and type): 500 gems, 3,000 gold and a Hero Token.
+- Saves (Profile._normalized, the server's import too): weapons owned, what was equipped and forged, the chests' pity,
+  the pass's weapon swaps -- dropped, no refund (Kevin). Titles, outfits, heroes, shards, gold and gems stay. No reset.
+- The shop: FEATURED OUTFITS (three a week, Monday, the new sets first in the turn: the hero in it on his painting --
+  tap: his window with it on -- and BUY / WEAR), OUTFITS (all 36 by hero, his set first; tap a card: his window), GEM
+  PACKS. The Locker: CHAMPIONS and TITLES. His window says OUTFITS, "EPIC OUTFIT · a new look and its own weapon" /
+  "RARE OUTFIT · a new look, the weapon repainted to match"; the Locker's cards "2 OUTFITS".
+- The art (art_sources/skins/README.txt): the 18 sets by Meshy's retexture of each hero's own model (his UVs kept; 24
+  takes -- the Archmage, Necromancer, Duelist and Stormcaller came back with other faces, the Barbarian's hood unchanged
+  and the Rogue's mask read as a beard, each made again with his face named; 240 credits). The 23 set weapons: two
+  concept sheets (ElevenLabs image generation, 2,578 credits, estimated first), cropped and made 3D by Meshy (13 on
+  meshy-7.1, 10 on meshy-6-lite; 540 credits), fitted to the piece each is held like. The 23 frosted weapons: Meshy
+  retextures (230 credits). Meshy this release 1,010 credits. Portraits (assets/ui/skins/<id>.png) by
+  tools/render_skin_icons.gd (now busts only: the weapon icons went with the catalog).
+- Cleaned up with them: the 105 Meshy weapon models nothing uses any more (the catalog's and the quests') and the 150
+  item icons -- git history keeps them. Packs: weapons 42.6 -> 17.7 MB (the new set weapons VRAM-compressed like the
+  rest), skins 12.6 -> 29.2 MB (18 more bodies, 23 weapon paints), ui 34.2 -> 31.8 MB.
+- Tests: outfits_test (new: the catalog titles only, the ops, an old save cleaned, chests and the pass with no items,
+  the quest's last step, the starter pack's token, every hero's set and Frostbound with their files, his set's weapon in
+  his hands, the frost paint, the bust, the looks online); forge_test, shop_preview_test, weapon_fx_test,
+  shared_looks_test retired; chest_test, economy_fix_test, eco_server_test, iap_test, league_iap_test,
+  meta_economy_test, quest_test, title_test, skins_test, profile_card_test, weapon_grip_test (the outfits' bow and
+  staffs), app_flow_test, champions_test (the Stormforged set previewed with its staff), achievements_test,
+  ios_port_test, lb_prizes_test brought up to date.
+- Server: the economy (it replays the ops with its own copy), the import, the looks it relays and the profile card's
+  "sk" are 0.31.188's -- it needs the redeploy (sudo bash godot/server/deploy/install_siege_server.sh) BEFORE this
+  build goes out: an older server doesn't know the 18 new sets (buying one is refused and the gems come back), charges
+  750 for Frostbound, and pays chests, the pass and quests the old way (its answer wins).
+- Store listings: the starter pack's description (PLAY_IAP_HANDOFF.md, IOS_HANDOFF.md).
+- Version 0.31.188, versionCode 274, SERVER_BUILD 0.31.188.

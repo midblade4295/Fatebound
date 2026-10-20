@@ -7,11 +7,12 @@ extends SceneTree
 #  1. the eighteen: each a name of his own (none the same, none just his class), a title, a short story and a line; his
 #     painting and card in the game, his colour, his effects' sprites all there; Champions.ORDER is the 5v5's order;
 #  2. the Locker: CHAMPIONS first -- six roles, three cards each, each card his name, YOURS / FREE / NEW and a price;
-#     ARMORY and TITLES as before (a class picked in locker_class picks ARMORY, "titles" TITLES);
+#     and TITLES (0.31.188: the ARMORY went with the weapons -- the outfits are in his window and the shop);
 #  3. a card tapped: his window -- his painting, his effects (moving), him in 3D (turned by a drag, zoomed by + / -), his
 #     name, title, class and role, his story, his line and his kit; the launch price on a new one;
-#  4. SKINS: his own look and every skin of his; a skin tapped is shown on him (PREVIEW, not bought); BUY asks first,
-#     then it's his and worn; his own look again: WEAR; a locked hero's skin brings him;
+#  4. SKINS: his own look and every outfit of his (0.31.188: his own set with its weapon, and Frostbound); a skin tapped
+#     is shown on him (PREVIEW, not bought) -- his set with its own weapon in his hand; BUY asks first, then it's his and
+#     worn; his own look again: WEAR; a locked hero's skin brings him;
 #  5. UNLOCK in the window: the chooser (gold or gems), then he's yours; PLAY: the 5v5 window with him picked.
 #   godot --headless --path godot -s res://tests/champions_test.gd   (SHOT_DIR=... under Xvfb for pictures)
 const App = preload("res://scripts/app/siege_app.gd")
@@ -160,7 +161,7 @@ func _process(delta: float) -> bool:
 			if t_phase > 0.5:
 				# ---- 2. the Locker
 				check(app.tab == "locker" and str(app.locker_tab) == "champions" and btn("locker_tab_champions") != null
-					and btn("locker_tab_armory") != null and btn("locker_tab_titles") != null, "the Locker opens on CHAMPIONS; ARMORY and TITLES beside it")
+					and btn("locker_tab_armory") == null and btn("locker_tab_titles") != null, "the Locker opens on CHAMPIONS; TITLES beside it (no ARMORY, 0.31.188)")
 				var n := 0
 				for hid in Moba.HERO_ORDER:
 					if btn("champ_" + str(hid)) != null:
@@ -173,18 +174,13 @@ func _process(delta: float) -> bool:
 				var lk := _locked_new()
 				check(lk != "" and has_text(btn("champ_knight"), "ALDRIC") and has_text(btn("champ_knight"), "YOURS")
 					and has_text(btn("champ_" + lk), Champions.short_of(lk).to_upper()) and has_text(btn("champ_" + lk), "4,000")
-					and has_text(btn("champ_" + lk), "NEW") and has_text(btn("champ_" + lk), "1 SKIN"),
+					and has_text(btn("champ_" + lk), "NEW") and has_text(btn("champ_" + lk), "2 OUTFITS"),
 					"a card: his name, YOURS -- or NEW at 4,000 (%s); his skins" % lk)
 				var fr: String = Eco.free_heroes(app.profile.now())[0]
 				check(has_text(btn("champ_" + fr), "FREE"), "this week's free one says FREE (%s)" % fr)
 				_shot("champ_locker")
-				press("locker_tab_armory")
-				check(str(app.locker_tab) == "armory" and btn("locker_knight") != null and btn("locker_meet_knight") != null
-					and has_text(app.content, "Sir Aldric Vane"), "ARMORY: the vault as before, his name on the nameplate, MEET ALDRIC")
 				press("locker_tab_titles")
-				check(str(app.locker_tab) == "titles" and str(app.locker_class) == "titles" and has_text(app.content, "NO TITLE"), "TITLES")
-				app.locker_class = "mage"
-				check(str(app.locker_tab) == "armory", "a class picked: the ARMORY")
+				check(str(app.locker_tab) == "titles" and has_text(app.content, "NO TITLE"), "TITLES")
 				press("locker_tab_champions")
 				press("champ_stormcaller")
 				_go("window")
@@ -232,8 +228,12 @@ func _process(delta: float) -> bool:
 				_shot("champ_zoom")
 				# ---- 4. SKINS
 				var w = app.modal
-				check(btn("champ_skin_default") != null and btn("champ_skin_stormcaller_frost") != null, "SKINS: his own look and the Frostbound")
+				check(btn("champ_skin_default") != null and btn("champ_skin_stormcaller_frost") != null and btn("champ_skin_stormcaller_stormforged") != null,
+					"SKINS: his own look, his Stormforged set and the Frostbound")
 				press("champ_zoom_out")
+				press("champ_skin_stormcaller_stormforged")
+				check(w.preview == "stormcaller_stormforged" and _holds(w._show.body, "lightning_rod_staff") and has_text(w, "STORMFORGED STORMCALLER"),
+					"his set previewed: the Stormforged coat and its own weapon, the lightning-rod staff")
 				press("champ_skin_stormcaller_frost")
 				check(w.preview == "stormcaller_frost" and str(w._show.cosmetic.get("skin", "")) == "stormcaller_frost"
 					and has_text(w, "PREVIEW") and not app.profile.owns_skin("stormcaller_frost") and has_text(w, "FROSTBOUND STORMCALLER"),
@@ -255,7 +255,7 @@ func _process(delta: float) -> bool:
 				var gems0 := int(app.profile.d.gems)
 				press("champ_buy_yes")
 				check(app.profile.owns_skin("stormcaller_frost") and app.profile.owns_hero("stormcaller") and app.profile.worn_skin("stormcaller") == "stormcaller_frost"
-					and int(app.profile.d.gems) == gems0 - 750 and app.modal == w and w.overlay == null and has_text(w, "YOURS") and btn("champ_play") != null,
+					and int(app.profile.d.gems) == gems0 - 390 and app.modal == w and w.overlay == null and has_text(w, "YOURS") and btn("champ_play") != null,
 					"bought: the skin worn, the Stormcaller with it -- still his window, YOURS, PLAY")
 				press("champ_skin_default")
 				press("champ_wear")
@@ -279,4 +279,17 @@ func _process(delta: float) -> bool:
 				check(app.modal is HeroPanel and app.modal.hero == lk, "PLAY: the 5v5 window with him picked")
 				app.close_modal()
 				return _finish()
+	return false
+
+func _holds(body: Node, piece: String) -> bool:
+	# a weapon model of that name in one of his hands (0.31.188: an outfit's own weapon)
+	if body == null:
+		return false
+	for slot in body.find_children("*", "BoneAttachment3D", true, false):
+		for c in slot.find_children("*", "", true, false):
+			if str(c.scene_file_path).contains(piece):
+				return true
+		for c in slot.get_children():
+			if str(c.scene_file_path).contains(piece):
+				return true
 	return false

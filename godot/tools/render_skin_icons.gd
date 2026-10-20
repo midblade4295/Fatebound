@@ -1,6 +1,6 @@
 extends SceneTree
-# Renders one bust icon per skin (and per class default) to assets/ui/skins/<id>.png, using the
-# same character builder, idle animation and tint as the game, so the icon is exactly what you get.
+# Renders one bust icon per outfit (and per class default) to assets/ui/skins/<id>.png, using the
+# same character builder and idle animation as the game, so the icon is exactly what you get.
 #   Xvfb :98 -screen 0 480x1000x24 & DISPLAY=:98 godot --rendering-method mobile --path godot \
 #     -s res://tools/render_skin_icons.gd        (ONLY=id1,id2 to render a subset)
 const View = preload("res://scripts/siege/siege_view.gd")
@@ -65,34 +65,20 @@ func _initialize() -> void:
 	_run()
 
 func _run() -> void:
+	# (0.31.188: busts only -- the catalog's weapon icons and the classes' default-gear icons went with the Forge)
 	var jobs: Array = []
 	for cls in Eco.CLASSES + Eco.UP_CLASSES:
-		jobs.append(["default_" + cls, cls, ""])
+		jobs.append(["default_" + cls, cls])
 	for hid in Eco.HERO_PRICES:                                     # 0.31.168: the 5v5's six new heroes (their own looks)
-		jobs.append(["default_" + hid, hid, ""])
-	for id in Eco.CATALOG:
-		var it: Dictionary = Eco.CATALOG[id]
-		if it.kind == "skin":
-			jobs.append([id, str(it["class"]), str(it.tint)])
-		elif it.kind == "weapon" and (Eco.UP_CLASSES.has(str(it["class"])) or only.has(id) or not FileAccess.file_exists("res://assets/ui/icons/%s.png" % id)):      # (0.31.76: or named in ONLY -- re-render a base class's)
-			jobs.append([id, str(it["class"]), "", str(it.get("r", "")), str(it.get("l", ""))])      # 0.31.38: weapon icons
-	for sid in Eco.SKINS:                                      # 0.31.186: the hero skins (Meshy retextures, assets/skins)
-		jobs.append([sid, str(Eco.SKINS[sid].hero), ""])
-	for ucls in Eco.CLASSES + Eco.UP_CLASSES:                # (0.31.65: base classes' default gear too)
-		jobs.append(["wdefault_" + ucls, ucls, "", "-", "-"])
+		jobs.append(["default_" + hid, hid])
+	for sid in Eco.SKINS:                                      # 0.31.186: the outfits (Meshy retextures, assets/skins)
+		jobs.append([sid, str(Eco.SKINS[sid].hero)])
 	for job in jobs:
 		if not only.is_empty() and not only.has(job[0]):
 			continue
 		for c in holder.get_children():
 			c.queue_free()
 		var cosmetic := {"r": "", "l": ""}                  # busts show the outfit, not the gear
-		var weapon_job: bool = job.size() > 3
-		if weapon_job:
-			cosmetic = {}                                   # the class's own gear ("-") or the item's
-			if str(job[3]) != "-":
-				cosmetic = {"r": job[3], "l": job[4]}
-		if job[2] != "":
-			cosmetic["tint"] = job[2]
 		if Eco.SKINS.has(str(job[0])):
 			cosmetic["skin"] = str(job[0])
 		var body_key := str(Eco.UP_LOOK.get(job[1], job[1]))
@@ -102,17 +88,14 @@ func _run() -> void:
 		body.rotation.y = deg_to_rad(-18.0)
 		var idle: String = str(View.LOOKS.get(body_key, View.LOOKS.knight).idle)
 		var cam: Camera3D = cam3
-		var cpos := Vector3(0.0, 1.15, 4.4) if weapon_job else Vector3(0.0, 1.62, 3.0)       # whole figure for gear
-		var aim := Vector3(0, 0.95, 0) if weapon_job else Vector3(0, 1.42, 0)
-		if str(job[1]) in BUST_FRAME and not weapon_job:   # (0.31.80: the Mage's pointed hat, the Knight's plume, the bear head; 0.31.81: the new upgrades)
+		var cpos := Vector3(0.0, 1.62, 3.0)
+		var aim := Vector3(0, 1.42, 0)
+		if str(job[1]) in BUST_FRAME:   # (0.31.80: the Mage's pointed hat, the Knight's plume, the bear head; 0.31.81: the new upgrades)
 			cpos = BUST_FRAME[str(job[1])][0]
 			aim = BUST_FRAME[str(job[1])][1]
-		elif str(job[1]) == "archmage":                  # (0.31.55: the wizard's tall hat -- pull back and up)
-			cpos = Vector3(0.0, 1.45, 5.6) if weapon_job else Vector3(0.0, 2.0, 3.9)
-			aim = Vector3(0, 1.2, 0) if weapon_job else Vector3(0, 1.72, 0)
 		elif str(job[1]) == "worker":                    # (0.31.76: the farmer's straw hat -- a little back and up)
-			cpos = Vector3(0.0, 1.3, 5.0) if weapon_job else Vector3(0.0, 1.85, 3.5)
-			aim = Vector3(0, 1.08, 0) if weapon_job else Vector3(0, 1.6, 0)
+			cpos = Vector3(0.0, 1.85, 3.5)
+			aim = Vector3(0, 1.6, 0)
 		cam.transform = Transform3D(Basis.looking_at(aim - cpos, Vector3.UP), cpos)
 		if made.player.has_animation(idle):
 			made.player.play(idle)
@@ -121,10 +104,7 @@ func _run() -> void:
 			await process_frame
 		await RenderingServer.frame_post_draw
 		var img := vp.get_texture().get_image()
-		var out_path: String = "res://assets/ui/skins/%s.png" % job[0]
-		if weapon_job:
-			out_path = "res://assets/ui/icons/%s.png" % (str(job[0]).replace("wdefault_", "default_"))
-		img.save_png(ProjectSettings.globalize_path(out_path))
+		img.save_png(ProjectSettings.globalize_path("res://assets/ui/skins/%s.png" % job[0]))
 		print("SKIN_DONE ", job[0])
 	print("SKINS_ALL_DONE")
 	quit(0)

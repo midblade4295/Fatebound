@@ -129,18 +129,14 @@ run apple_iap_test       APPLE_IAP_PASS           150
 # account; server/eco_accounts.gd alone, then two phones against the real server (8116)
 run account_move_test    ACCOUNT_MOVE_PASS        150
 run preload_queue_test   PRELOAD_QUEUE_PASS       240
-run forge_test           FORGE_PASS               120
+run outfits_test         OUTFITS_PASS             150
 run league_iap_test      LEAGUE_IAP_PASS          120
 run skins_test           SKINS_PASS               120
 run champions_test       CHAMPIONS_PASS           200
 run content_test         CONTENT_PASS             120
-# The shop's tap-to-preview (0.31.96): real taps on every card, then buy / cancel / equip / an Arsenal from the preview.
-run shop_preview_test    SHOP_PREVIEW_PASS        150 --resolution 420x933
 # Class quests (0.31.97): the table, counting per class worn, claiming in order, the screens; and the in-match tracking.
 run quest_test           QUEST_PASS               150 --resolution 420x933
 run quest_track_test     QUEST_TRACK_PASS         120 --fixed-fps 30
-run weapon_fx_test       WEAPON_FX_PASS           120 --fixed-fps 30
-run shared_looks_test    SHARED_LOOKS_PASS        90
 # Weapon grips (0.31.104): bow strings on the archer's side, one-handers held at the end of the handle.
 run weapon_grip_test     WEAPON_GRIP_PASS         120
 # Currency flies into the top bar's counters (0.31.105), and the Ember counter.

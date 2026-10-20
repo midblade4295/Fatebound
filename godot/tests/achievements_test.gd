@@ -3,7 +3,8 @@ extends SceneTree
 # against a fake of the Play Games plugin.
 #   - every achievement has an id slot for Play Console (play_achievement_ids.gd) and a name/description within Play's
 #     limits; goals within Play's incremental limits (2-10,000 steps)
-#   - read from the profile (the server's account): tutorial, knockouts, wins, classes played, the Forge's 3 stars, level
+#   - read from the profile (the server's account): tutorial, knockouts, wins, classes played, level (0.31.188: the
+#     Forge's 3 stars, Master Smith, retired with the Forge -- its id stays, it isn't reported)
 #   - signed in: incremental ones as their steps (capped), standard ones unlocked once met; only what changed is sent
 #     again; an achievement with no id yet is skipped
 #   - Settings: ACHIEVEMENTS opens Google's screen when signed in
@@ -58,7 +59,8 @@ func _init() -> void:
 		keys[a.key] = true
 		ok_list = ok_list and Ids.IDS.has(a.key) and str(a.name).length() <= 100 and str(a.desc).length() <= 500 \
 			and (not bool(a.inc) or (int(a.n) >= 2 and int(a.n) <= 10000))
-	check(ok_list and keys.size() == Achievements.LIST.size() and Ids.IDS.size() == keys.size(), "%d achievements, each with an id slot, within Play's limits" % keys.size())
+	check(ok_list and keys.size() == Achievements.LIST.size() and Ids.IDS.size() == keys.size() + Achievements.RETIRED.size()
+		and Achievements.RETIRED.all(func(k): return Ids.IDS.has(k) and not keys.has(k)), "%d achievements, each with an id slot, within Play's limits (Master Smith retired)" % keys.size())
 	# 0.31.121: the ids from Play Console -- every one filled, all different, all of this game (the prefix carries the
 	# Play Games Game ID 1022979193240), in the table's order (Play numbers them as they were made)
 	var vals := Ids.IDS.values().map(func(x): return str(x))
@@ -66,9 +68,11 @@ func _init() -> void:
 	for v in vals:
 		uniq[v] = true
 	var in_order := true
+	var last := 1
 	for i in Achievements.LIST.size():
 		var raw := Marshalls.base64_to_raw(str(Ids.IDS[Achievements.LIST[i].key]).replace("-", "+").replace("_", "/") + "==")
-		in_order = in_order and raw.size() > 0 and int(raw[raw.size() - 1]) == i + 2
+		in_order = in_order and raw.size() > 0 and int(raw[raw.size() - 1]) > last
+		last = int(raw[raw.size() - 1]) if raw.size() > 0 else last
 	check(Achievements.configured() == Achievements.LIST.size() and uniq.size() == vals.size()
 		and vals.all(func(v): return v.begins_with("CgkImPO-8uIdEAIQ")) and in_order,
 		"all %d Play Console ids filled in, different, of game 1022979193240, in the table's order" % Achievements.configured())
@@ -84,9 +88,8 @@ func _init() -> void:
 	p.d.stats.best_streak = 2
 	p.d.stats["main_knight"] = 2
 	p.d.stats["main_mage"] = 1
-	p.d.forge.stars["knight_wpn_oath"] = 3
 	p.d.level = 7
-	check(Achievements.value(p, "tutorial") == 1 and Achievements.value(p, "classes") == 2 and Achievements.value(p, "forge3") == 1
+	check(Achievements.value(p, "tutorial") == 1 and Achievements.value(p, "classes") == 2
 		and Achievements.value(p, "level") == 7 and Achievements.value(p, "kills") == 140, "read from the profile")
 	var a = Achievements.new()
 	var f := FakePlay.new()
@@ -101,7 +104,7 @@ func _init() -> void:
 	for c in f.calls:
 		if c[0] == "steps":
 			steps[c[1]] = c[2]
-	check(unl.has("ID_welcome") and unl.has("ID_first_blood") and unl.has("ID_first_victory") and unl.has("ID_master_smith")
+	check(unl.has("ID_welcome") and unl.has("ID_first_blood") and unl.has("ID_first_victory") and not unl.has("ID_master_smith")
 		and not unl.has("ID_relentless") and not unl.has("ID_kings_rescue"), "standard ones unlocked once met: %s" % str(unl))
 	check(int(steps.get("ID_centurion", -1)) == 100 and int(steps.get("ID_many_hats", -1)) == 2 and int(steps.get("ID_siege_lord", -1)) == 3
 		and int(steps.get("ID_seasoned", -1)) == 7 and not steps.has("ID_slayer") and not steps.has("ID_fattening"),

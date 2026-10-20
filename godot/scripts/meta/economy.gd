@@ -6,6 +6,12 @@ extends RefCounted
 # Everything sold is cosmetic -- but the 5v5's six sold heroes (0.31.168 for gold; 0.31.185, League's way, for gems too:
 # HERO_GEMS), each also earned with gold from playing, and twelve heroes everyone's. The store listing's "Everything you
 # unlock is cosmetic" line needs Kevin's rewording (store-listing/listing/STORE_LISTING.md).
+# 0.31.188 (Kevin: "Remove the forge and the individual weapon skins. I only want the cosmetics to be an entire outfit.
+# Each outfit has its own specific looking weapon"): the 75 weapons (CATALOG), the Arsenal packs, the shop's daily and
+# featured weapons, the Forge (stars, elements, Embers' heir) are gone. The only cosmetics are outfits (SKINS): a hero's
+# whole look -- his body repainted and a weapon of its own -- bought for gems. Titles (earned name tags) stay. What gave
+# weapons gives gold, gems, hero shards and chests: chests, the pass's item tiers, a quest's last step, the starter pack
+# (a Hero Token). Owned weapons and Forge stars simply drop from a save (Kevin: "Remove, no refund").
 
 # 0.31.168 (Kevin: "Unlock with gold"): the 5v5 heroes you buy with gold (moba.gd HEROES; Profile.buy_hero). The twelve
 # from the old classes are everyone's.
@@ -34,29 +40,68 @@ const SHARD_MELT := 0.2
 
 # 0.31.186 (League's way, the fourth part): hero skins -- the hero's own model repainted (Meshy's retexture with his
 # UVs kept, tools/meshy_retexture.py; the textures tools/build_skins.py, assets/skins/<id>.jpg): same mesh, rig and
-# silhouette, so every hero still reads as himself (the 0.31.39 reason weapons were the only cosmetic), with the team
-# ring under him. Bought for gems (SKIN_GEMS by rarity); like League, a skin of a hero you haven't unlocked comes with
-# him. Worn per hero (Profile.wear_skin), seen by everyone online ("_sk" in the looks, siege_net.clean_looks).
-# The first line: Frostbound, every hero (18), epic.
+# silhouette, so every hero still reads as himself, with the team ring under him. Bought for gems (SKIN_GEMS by rarity);
+# like League, a skin of a hero you haven't unlocked comes with him. Worn per hero (Profile.wear_skin), seen by everyone
+# online ("_sk" in the looks, siege_net.clean_looks).
+# 0.31.188 (Kevin: "I only want the cosmetics to be an entire outfit. Each outfit has its own specific looking weapon" /
+# "Make all new sets for every hero and make each one unique to their class and lore along with the weapons"): a skin is
+# a whole outfit -- the body and a weapon of its own:
+#  - OUTFITS: one set made for each hero (his class and his story, champions.gd), its weapon a model of its own
+#    ("weapon": {"r", "l"}, assets/meshy/weapons/<model>.glb, held like the hero's own -- siege_view MESHY_WEAPON_LIKE),
+#    epic;
+#  - Frostbound (SKIN_LINES, every hero): his own weapon repainted in frost ("weapon_tex": assets/skins/weapons/
+#    <model>_frost.jpg -- skin_weapon_texture), rare.
 const SKIN_GEMS := {"rare": 390, "epic": 750, "legendary": 1350}
 const SKIN_LINES := {"frost": "Frostbound"}
 const SKIN_HEROES := {"knight":"Knight", "barbarian":"Barbarian", "rogue":"Rogue", "ranger":"Archer", "mage":"Mage",
 	"priest":"Priest", "crusader":"Crusader", "berserker":"Berserker", "assassin":"Assassin", "sniper":"Ranger",
 	"archmage":"Archmage", "necromancer":"Necromancer", "golem":"Golem", "dragoon":"Dragoon", "duelist":"Duelist",
 	"stormcaller":"Stormcaller", "musketeer":"Musketeer", "druid":"Druid"}
+# id ("<hero>_<set key>") -> {set (its name), weapon {"r", "l"}} -- each hero's own set
+const OUTFITS := {
+	"knight_lion":             {"set": "Lionguard", "weapon": {"r": "mw/lion_sword", "l": "mw/lion_shield"}},
+	"barbarian_mammoth":       {"set": "Mammoth Hunter", "weapon": {"r": "mw/mammoth_axe"}},
+	"rogue_velvet":            {"set": "Velvet Thief", "weapon": {"r": "mw/coin_dagger", "l": "mw/coin_dagger"}},
+	"ranger_orchard":          {"set": "Orchard Warden", "weapon": {"l": "mw/orchard_bow"}},
+	"mage_phoenix":            {"set": "Phoenix", "weapon": {"r": "mw/phoenix_staff"}},
+	"priest_bell":             {"set": "Bellringer", "weapon": {"r": "mw/bell_scepter"}},
+	"crusader_ashen":          {"set": "Ashen Templar", "weapon": {"r": "mw/ember_hammer", "l": "mw/ashen_shield"}},
+	"berserker_bloodmoon":     {"set": "Blood Moon", "weapon": {"r": "mw/bloodmoon_greatsword"}},
+	"assassin_ribbon":         {"set": "Red Ribbon", "weapon": {"r": "mw/ribbon_dagger", "l": "mw/ribbon_dagger"}},
+	"sniper_wolf":             {"set": "Wolfstalker", "weapon": {"r": "mw/wolf_crossbow"}},
+	"archmage_stargazer":      {"set": "Stargazer", "weapon": {"r": "mw/orrery_staff", "l": "mw/starchart_tome"}},
+	"necromancer_gravekeeper": {"set": "Gravekeeper", "weapon": {"r": "mw/lantern_shovel"}},
+	"golem_geode":             {"set": "Geode", "weapon": {"r": "mw/geode_hammer", "l": "mw/geode_shield"}},
+	"dragoon_dragonscale":     {"set": "Dragonscale", "weapon": {"r": "mw/dragon_halberd"}},
+	"duelist_rose":            {"set": "Golden Rose", "weapon": {"r": "mw/rose_rapier", "l": "mw/thorn_stiletto"}},
+	"stormcaller_stormforged": {"set": "Stormforged", "weapon": {"r": "mw/lightning_rod_staff"}},
+	"musketeer_privateer":     {"set": "Privateer", "weapon": {"r": "mw/brass_blunderbuss"}},
+	"druid_blossom":           {"set": "Cherry Blossom", "weapon": {"r": "mw/blossom_staff"}},
+}
 static var SKINS := _make_skins()
 
 static func _make_skins() -> Dictionary:
-	# id ("<hero>_<line>") -> {hero, line, name, rarity, gems}
+	# id -> {hero, line (the set's key), set (its name), name, rarity, gems, weapon {"r","l"} | weapon_tex (a key)}
 	var out := {}
+	for id in OUTFITS:
+		var o: Dictionary = OUTFITS[id]
+		var h := str(id).substr(0, str(id).find("_"))
+		out[id] = {"hero": h, "line": str(id).substr(h.length() + 1), "set": str(o.set),
+			"name": "%s %s" % [str(o.set), SKIN_HEROES[h]], "rarity": "epic", "gems": int(SKIN_GEMS.epic),
+			"weapon": (o.weapon as Dictionary).duplicate()}
 	for line in SKIN_LINES:
 		for h in SKIN_HEROES:
-			out["%s_%s" % [h, line]] = {"hero": h, "line": line, "name": "%s %s" % [SKIN_LINES[line], SKIN_HEROES[h]],
-				"rarity": "epic", "gems": int(SKIN_GEMS.epic)}
+			out["%s_%s" % [h, line]] = {"hero": h, "line": line, "set": str(SKIN_LINES[line]),
+				"name": "%s %s" % [SKIN_LINES[line], SKIN_HEROES[h]], "rarity": "rare", "gems": int(SKIN_GEMS.rare),
+				"weapon_tex": line}
 	return out
 
 static func skin_texture(id: String) -> String:
 	return "res://assets/skins/%s.jpg" % id
+
+static func skin_weapon_texture(file: String, key: String) -> String:
+	# an outfit's repainting of a weapon piece ("mw/squire_sword", "frost" -> assets/skins/weapons/squire_sword_frost.jpg)
+	return "res://assets/skins/weapons/%s_%s.jpg" % [file.get_file(), key]
 
 static func skins_of(hid: String) -> Array:
 	var out := []
@@ -176,19 +221,13 @@ static func season_ends(sid: int) -> int:
 	return SEASON_EPOCH + sid * SEASON_DAYS * 86400
 
 static func pass_reward(sid: int, tier: int, premium: bool) -> Dictionary:
-	# tier is 1..PASS_TIERS. Deterministic per season; cosmetic items rotate by season.
-	# 0.31.42 (Kevin: less gear on the free side, the best-looking gear and more unlocks on the paid side): the free
-	# track has PASS_FREE_ITEMS (3) cosmetics at tiers 10/20/30, the lowest rarities of the season; the premium track has
-	# PASS_PREMIUM_ITEMS (13), every epic and legendary among them, the best at tier 30 and a strong one at tier 1.
-	var items: Array = pass_items(sid)
+	# tier is 1..PASS_TIERS. 0.31.188: no cosmetics on the pass (outfits are bought) -- the tiers that held a weapon give
+	# chests, gems and hero shards (PASS_FREE_EXTRA / PASS_PREMIUM_EXTRA); the rest as before.
 	if not premium:
 		if PASS_SHARD_TIERS.has(tier):
 			return {"shard": ""}                       # 0.31.185: a hero shard (which one: Profile.pass_reward_for)
-		var fi := FREE_ITEM_TIERS.find(tier)
-		if fi >= 0:
-			if str(CATALOG[items[fi]].kind) == "title":
-				return {"gems": 30}
-			return {"item": items[fi]}
+		if PASS_FREE_EXTRA.has(tier):
+			return (PASS_FREE_EXTRA[tier] as Dictionary).duplicate()
 		if tier == 12 or tier == 24:
 			return {"chest": "silver"}
 		if tier % 4 == 0:
@@ -198,12 +237,8 @@ static func pass_reward(sid: int, tier: int, premium: bool) -> Dictionary:
 		return {"gold": 150 + 5 * tier}
 	if tier == PASS_TOKEN_TIER:
 		return {"token": 1}                            # 0.31.185: the Hero Token -- any locked hero
-	var pi := premium_item_tiers(sid).find(tier)
-	if pi >= 0:
-		var it: String = items[PASS_FREE_ITEMS + pi]
-		if str(CATALOG[it].kind) == "title":
-			return {"gems": PASS_TITLE_GEMS.get(str(CATALOG[it].rarity), 50)}     # (0.31.87: titles are earned now)
-		return {"item": it}
+	if PASS_PREMIUM_EXTRA.has(tier):
+		return (PASS_PREMIUM_EXTRA[tier] as Dictionary).duplicate()
 	if tier == 8 or tier == 16:
 		return {"chest": "gold"}
 	if tier == 22:
@@ -214,182 +249,32 @@ static func pass_reward(sid: int, tier: int, premium: bool) -> Dictionary:
 		return {"gold": PASS_GOLD_PREMIUM}         # (0.31.93-0.31.183: 40 Embers)
 	return {"gold": 300 + 10 * tier}
 
-const PASS_FREE_ITEMS := 3
-const PASS_PREMIUM_ITEMS := 13
-const FREE_ITEM_TIERS := [10, 20, 30]
-const PREMIUM_ITEM_TIERS := [2, 3, 5, 7, 9, 12, 15, 18, 21, 24, 26, 28, 30]     # (0.31.185: the first from tier 1 to 2 -- the token's)
+# 0.31.188: the tiers that held the pass's weapons (free 10/20/30, premium 2 ... 30)
+const PASS_FREE_EXTRA := {10: {"chest": "gold"}, 20: {"chest": "gold"}, 30: {"chest": "royal"}}
+const PASS_PREMIUM_EXTRA := {2: {"gems": 50}, 3: {"chest": "gold"}, 5: {"shard": ""}, 7: {"gems": 50},
+	9: {"chest": "gold"}, 12: {"shard": ""}, 15: {"gems": 75}, 18: {"chest": "royal"}, 21: {"shard": ""},
+	24: {"gems": 75}, 26: {"chest": "royal"}, 28: {"gems": 100}, 30: {"chest": "royal", "gems": 150}}
 # 0.31.185 (League's pass: Blue Essence and champion capsules on the free track): free tiers 5, 15 and 25 give a hero
 # shard (they gave gold); the premium track opens with a Hero Token
 const PASS_SHARD_TIERS := [5, 15, 25]
 const PASS_TOKEN_TIER := 1
-const RARITY_RANK := {"common":0, "rare":1, "epic":2, "legendary":3}
-
-# 0.31.87: the five titles the pass used to give stay in its draw (so every season's pass keeps the tiers it had), and
-# the tiers that drew one give gems instead.
-const PASS_LEGACY_TITLES := ["title_cake_baron", "title_lightbringer", "title_shieldwall", "title_siege_lord", "title_whirlwind"]
-const PASS_TITLE_GEMS := {"epic": 50, "legendary": 100}
-
-# 0.31.108 (Kevin: "fix everything" -- the economy review): every season draws from the same pass weapons, so from
-# season 2 a premium buyer got 8 of 13 items he already had, and a repeat gave nothing. Now:
-#  - a season can have its own pass-exclusive weapons (PASS_SEASON_ITEMS, CATALOG "season": n): they are its premium
-#    track, at SEASON_ITEM_TIERS spread over 1..30 (the best at 30, a strong one at 1); the free track keeps three of
-#    the older pass weapons; a season with none of its own falls back to the old draw from everything before it;
-#  - a pass item the player already owns is swapped when claimed (Profile.pass_reward_for): another pass weapon of the
-#    same rarity he doesn't own and this season doesn't give, else gold (DUPE_GOLD, like a chest duplicate);
-#  - from season 2 the premium track's gem tiers give gold (PASS_GOLD_GEM_TIER) -- with the Silver chest change a
-#    premium pass no longer pays for the next one;
-#  - an earlier season's pass weapons are "vaulted": sold in the Featured shop for gems (VAULT_GEMS), and the vaulted
-#    legendaries join the Royal chest's legendary roll.
-const PASS_SEASON_ITEMS := {}           # sid -> its own weapons (season 2's await Kevin's picks of the concepts)
 # 0.31.184 (Kevin: "Maybe let's have the two currency so it's more simple"): the Embers the pass gave are gold, ten for
 # one (EMBER_GOLD)
 const PASS_GOLD_FREE := 200
 const PASS_GOLD_PREMIUM := 400
 const PASS_GOLD_GEM_TIER := 600
-const VAULT_GEMS := {"common": 100, "rare": 150, "epic": 300, "legendary": 450}
-
-static func item_season(id: String) -> int:
-	return int(CATALOG.get(id, {}).get("season", 1))
-
-static func premium_item_tiers(sid: int) -> Array:
-	# the premium tiers that hold an item: the old 13 for a season without its own weapons, else n spread over 2..30
-	# (0.31.185: tier 1 is the Hero Token's)
-	var own: Array = PASS_SEASON_ITEMS.get(sid, [])
-	if own.size() < 2:
-		return PREMIUM_ITEM_TIERS
-	var out := []
-	for i in own.size():
-		out.append(2 + int(round(float(i) * float(PASS_TIERS - 2) / float(own.size() - 1))))
-	return out
-
-static func vaulted(id: String, unix: int) -> bool:
-	# an earlier season's pass weapon: sold for gems in the Featured shop from the next season on
-	var it := item(id)
-	return str(it.get("source", "")) == "pass" and str(it.get("kind", "")) == "weapon" and item_season(id) < season_id(unix)
-
-static func pass_pool_weapons(max_season: int) -> Array:
-	# every pass weapon of seasons up to max_season, sorted (the swap's candidates)
-	var out := []
-	for id in CATALOG:
-		var it: Dictionary = CATALOG[id]
-		if str(it.get("source", "")) == "pass" and str(it.get("kind", "")) == "weapon" and item_season(id) <= max_season:
-			out.append(id)
-	out.sort()
-	return out
-
-static func pass_swap(sid: int, tier: int, premium: bool, id: String, owned: Array) -> Dictionary:
-	# what a pass item the player already owns turns into (deterministic, so the phone and the server agree)
-	var rar := str(item(id).get("rarity", "rare"))
-	var season_items: Array = pass_items(sid)
-	var cands := []
-	for c in pass_pool_weapons(sid):
-		if str(CATALOG[c].rarity) == rar and not owned.has(c) and not season_items.has(c):
-			cands.append(c)
-	if not cands.is_empty():
-		return {"item": cands[absi(hash("swap-%d-%d-%d" % [sid, tier, int(premium)])) % cands.size()], "swap": id}
-	return {"gold": int(DUPE_GOLD.get(rar, 250)), "swap": id}
-
-static func pass_cosmetics(sid: int) -> Dictionary:
-	# How many cosmetics the premium track really gives (the title tiers are gems now): {"n", "legendary"}
-	var items: Array = pass_items(sid)
-	var out := {"n": 0, "legendary": 0}
-	for k in range(PASS_FREE_ITEMS, items.size()):
-		if str(CATALOG[items[k]].kind) != "title":
-			out.n += 1
-			if str(CATALOG[items[k]].rarity) == "legendary":
-				out.legendary += 1
-	return out
-
-static func pass_items(sid: int) -> Array:
-	# PASS_FREE_ITEMS free + PASS_PREMIUM_ITEMS premium cosmetics for season `sid`, from the "pass" pool: shuffled per
-	# season, then ranked by rarity -- the free track takes the lowest, the premium track the rest in rising rarity
-	# (tier 1 gets the second-best of its rank band so the first premium unlock feels good; tier 30 the best).
-	var pool: Array = PASS_LEGACY_TITLES.duplicate()
-	var upto := maxi(1, sid - 1) if sid > 1 else 1               # (0.31.108: the weapons of the seasons before)
-	for id in CATALOG:
-		if CATALOG[id].get("source", "") == "pass" and str(CATALOG[id].kind) == "weapon" and item_season(id) <= upto:
-			pool.append(id)
-	pool.sort()
-	var rng := RandomNumberGenerator.new()
-	rng.seed = hash("pass-%d" % sid)
-	var shuffled := []
-	var src := pool.duplicate()
-	while not src.is_empty():
-		shuffled.append(src.pop_at(rng.randi() % src.size()))
-	shuffled.sort_custom(func(a, b): return int(RARITY_RANK.get(str(CATALOG[a].rarity), 1)) < int(RARITY_RANK.get(str(CATALOG[b].rarity), 1)))
-	var want := PASS_FREE_ITEMS + PASS_PREMIUM_ITEMS
-	while shuffled.size() < want:
-		shuffled.push_front(shuffled[shuffled.size() % maxi(1, pool.size())])
-	var free := shuffled.slice(0, PASS_FREE_ITEMS)
-	if (PASS_SEASON_ITEMS.get(sid, []) as Array).size() >= 2:
-		# 0.31.108: the season's own weapons are its premium track, rising rarity (ties by name), a strong one first
-		var own: Array = (PASS_SEASON_ITEMS[sid] as Array).duplicate()
-		own.sort_custom(func(a, b):
-			var ra := int(RARITY_RANK.get(str(CATALOG[a].rarity), 1))
-			var rb := int(RARITY_RANK.get(str(CATALOG[b].rarity), 1))
-			return ra < rb if ra != rb else str(a) < str(b))
-		if own.size() >= 3:
-			var op: String = own[own.size() - 2]
-			own.remove_at(own.size() - 2)
-			own.push_front(op)
-		return free + own
-	var prem := shuffled.slice(shuffled.size() - PASS_PREMIUM_ITEMS)       # the best PASS_PREMIUM_ITEMS, rising rarity
-	if prem.size() >= 3:
-		var opener: String = prem[prem.size() - 2]                          # a strong one to open the premium track
-		prem.remove_at(prem.size() - 2)
-		prem.push_front(opener)
-	return free + prem
 
 # ---------------- cosmetics ----------------
-# kind "weapon": right/left hand models for a class (0.31.39: the only class cosmetic -- no skins/tints, so every
-# class keeps its own readable look). kind "title": text on the profile.
-# kind "title": text shown on the profile. source "shop" (gold/gems), "pass", "level".
-# 0.31.93 Armory Reforged: each class's starting weapon has a name too (Kevin approved the roster, 2026-10-09); the
-# Knight's shipped first, every other class in 0.31.94.
+# 0.31.188: the titles (kind "title": text shown with the name, all earned -- TITLE_GOALS, the leaderboard's prizes).
+# The weapons that were here (0.31.39-0.31.187) are gone; each hero's own weapon is siege_view.gd LOOKS, and an outfit's
+# its own (SKINS).
+# Each class's own weapon has a name (0.31.93 Armory Reforged, Kevin's roster).
 const STARTER_NAMES := {"knight": "Squire's Blade", "barbarian": "Woodsplitter", "rogue": "Cutpurse Daggers",
 	"ranger": "Ashwood Bow", "mage": "Apprentice Staff", "priest": "Acolyte's Wand", "worker": "Work Hatchet",
 	"crusader": "Templar's Sword", "berserker": "Ironhewer", "necromancer": "Bonecaller", "assassin": "Shade Daggers",
 	"sniper": "Marksman's Crossbow", "archmage": "Magister's Staff"}
 
 const CATALOG := {
-	# --- Knight
-	"knight_wpn_greatsword":{"kind":"weapon", "class":"knight", "name":"Highguard", "rarity":"rare", "r":"mw/highguard_sword", "l":"mw/highguard_shield", "gold":900, "source":"shop"},
-	"knight_wpn_crest":    {"kind":"weapon", "class":"knight", "name":"Lionheart", "rarity":"rare", "r":"mw/lionheart_sword", "l":"mw/lionheart_shield", "gold":1100, "source":"shop"},
-	"knight_wpn_tower":    {"kind":"weapon", "class":"knight", "name":"Dawnwall", "rarity":"epic", "r":"mw/dawnwall_sword", "l":"mw/dawnwall_shield", "gems":250, "source":"shop"},
-	"knight_wpn_crimson":  {"kind":"weapon", "class":"knight", "name":"Bloodmoon", "rarity":"epic", "r":"mw/bloodmoon_sword", "l":"mw/bloodmoon_shield", "source":"pass"},
-	# --- Barbarian
-	"barb_wpn_raider":     {"kind":"weapon", "class":"barbarian", "name":"Raider's Bite", "rarity":"rare", "r":"mw/raider_axe", "l":"mw/raider_shield", "gold":1000, "source":"shop"},
-	"barb_wpn_spiked":     {"kind":"weapon", "class":"barbarian", "name":"Thornhide", "rarity":"epic", "r":"mw/thornhide_axe", "l":"mw/thornhide_shield", "gems":250, "source":"shop"},
-	# --- Rogue
-	"rogue_wpn_bomb":      {"kind":"weapon", "class":"rogue", "name":"Smokescreen", "rarity":"rare", "r":"mw/smokescreen_dagger", "l":"mw/smokescreen_dagger", "gold":900, "source":"shop"},   # (0.31.99, Kevin: no smoke bomb -- the daggers)
-	"rogue_wpn_bolt":      {"kind":"weapon", "class":"rogue", "name":"Whisperblades", "rarity":"epic", "r":"mw/whisperbolt_dagger", "l":"mw/whisperbolt_dagger", "gems":250, "source":"shop"},   # (0.31.98, Kevin: no crossbow for the Rogue -- the daggers; 0.31.99 renamed from Whisperbolt)
-	# --- Ranger
-	"ranger_wpn_crossbow": {"kind":"weapon", "class":"ranger", "name":"Ironjaw", "rarity":"epic", "r":"mw/ironjaw_crossbow", "l":"", "source":"pass"},
-	"ranger_wpn_quiver":   {"kind":"weapon", "class":"ranger", "name":"Trailblazer", "rarity":"rare", "r":"mw/trailblazer_quiver", "l":"mw/trailblazer_bow", "gold":900, "source":"shop"},
-	# --- Mage
-	"mage_wpn_tome":       {"kind":"weapon", "class":"mage", "name":"Spellwright", "rarity":"rare", "r":"mw/spellwright_wand", "l":"mw/spellwright_tome", "gold":1000, "source":"shop"},
-	"mage_wpn_wand":       {"kind":"weapon", "class":"mage", "name":"Sparkstick", "rarity":"common", "r":"mw/sparkstick_wand", "l":"", "gold":500, "source":"shop"},
-	# --- Worker
-	"worker_wpn_mug":      {"kind":"weapon", "class":"worker", "name":"Tavern Brawler", "rarity":"rare", "r":"mw/brawler_axe", "l":"mw/brawler_mug", "source":"pass"},
-	# --- Round 11: KayKit Fantasy Weapons Bits ("bits/<model>") and the Priest
-	"knight_wpn_bastion":  {"kind":"weapon", "class":"knight", "name":"Stonewarden", "rarity":"epic", "r":"mw/stonewarden_sword", "l":"mw/stonewarden_shield", "gems":280, "source":"shop"},
-	"knight_wpn_oath":     {"kind":"weapon", "class":"knight", "name":"Kingsoath", "rarity":"legendary", "r":"mw/kingsoath_sword", "l":"mw/kingsoath_shield", "source":"pass"},
-	"knight_wpn_halberd":  {"kind":"weapon", "class":"knight", "name":"Thornspire", "rarity":"epic", "r":"mw/thornspire_halberd", "l":"mw/thornspire_shield", "source":"pass"},
-	"barb_wpn_hammer":     {"kind":"weapon", "class":"barbarian", "name":"Skullknocker", "rarity":"rare", "r":"mw/skullknocker_hammer", "l":"", "gold":1100, "source":"shop"},
-	"barb_wpn_twinaxe":    {"kind":"weapon", "class":"barbarian", "name":"Twin Fury", "rarity":"epic", "r":"mw/twinfury_axe", "l":"", "source":"pass"},
-	"barb_wpn_cleaver":    {"kind":"weapon", "class":"barbarian", "name":"Worldsplitter", "rarity":"legendary", "r":"mw/worldsplitter_axe", "l":"", "source":"pass"},
-	"rogue_wpn_fangs":     {"kind":"weapon", "class":"rogue", "name":"Viper Fangs", "rarity":"rare", "r":"mw/viper_fang", "l":"mw/viper_fang", "gold":1000, "source":"shop"},
-	"rogue_wpn_knuckles":  {"kind":"weapon", "class":"rogue", "name":"Ravenclaws", "rarity":"epic", "r":"mw/ravenclaw_r", "l":"mw/ravenclaw_l", "source":"pass"},
-	"rogue_wpn_reaper":    {"kind":"weapon", "class":"rogue", "name":"Grimgrin", "rarity":"legendary", "r":"mw/grimgrin_scythe", "l":"", "source":"pass"},
-	"ranger_wpn_recurve":  {"kind":"weapon", "class":"ranger", "name":"Hawkeye", "rarity":"rare", "r":"", "l":"mw/hawkeye_bow", "gold":1000, "source":"shop"},
-	"ranger_wpn_longbow":  {"kind":"weapon", "class":"ranger", "name":"Galeshot", "rarity":"epic", "r":"", "l":"mw/galeshot_bow", "source":"pass"},
-	"ranger_wpn_spear":    {"kind":"weapon", "class":"ranger", "name":"Boarsbane", "rarity":"rare", "r":"mw/boarsbane_spear", "l":"", "source":"pass"},
-	"mage_wpn_crystal":    {"kind":"weapon", "class":"mage", "name":"Starshard", "rarity":"epic", "r":"mw/starshard_staff", "l":"", "gems":250, "source":"shop"},
-	"mage_wpn_elder":      {"kind":"weapon", "class":"mage", "name":"Eye of the Archon", "rarity":"legendary", "r":"mw/archon_staff", "l":"", "source":"pass"},
-	"mage_wpn_twinwand":   {"kind":"weapon", "class":"mage", "name":"Twin Sparks", "rarity":"rare", "r":"mw/twinsparks_fire", "l":"mw/twinsparks_frost", "source":"pass"},
-	"priest_wpn_sun":      {"kind":"weapon", "class":"priest", "name":"Solaris", "rarity":"legendary", "r":"mw/solaris_staff", "l":"", "source":"pass"},
-	"priest_wpn_light":    {"kind":"weapon", "class":"priest", "name":"Candlewand", "rarity":"rare", "r":"mw/candle_wand", "l":"", "gold":900, "source":"shop"},
-	"worker_wpn_mallet":   {"kind":"weapon", "class":"worker", "name":"Brickbreaker", "rarity":"rare", "r":"mw/brickbreaker_mallet", "l":"", "source":"pass"},
 	# --- Titles (0.31.87, Kevin: "players have to earn the titles instead by doing tasks in the game"): source "earn" --
 	# not sold, not in the pass or chests; how each is earned is TITLE_GOALS, its text/form/rarity siege_net.TITLES
 	# (the same name and rarity here). Owned ones from before (shop, pass, the Knight Arsenal) stay owned.
@@ -434,56 +319,6 @@ const CATALOG := {
 	"title_champion":       {"kind":"title", "class":"", "name":"Champion", "rarity":"legendary", "source":"prize"},
 	"title_contender":      {"kind":"title", "class":"", "name":"the Contender", "rarity":"epic", "source":"prize"},
 	"title_top_ten":        {"kind":"title", "class":"", "name":"of the Ten", "rarity":"rare", "source":"prize"},
-	# --- 0.31.38: the upgraded classes (0.31.39: weapons only)
-	"crus_wpn_mace":       {"kind":"weapon", "class":"crusader", "name":"Penitent", "rarity":"rare", "r":"mw/penitent_mace", "l":"mw/penitent_shield", "gold":1200, "source":"shop"},
-	"crus_wpn_warhammer":  {"kind":"weapon", "class":"crusader", "name":"Hallowed Bulwark", "rarity":"epic", "r":"mw/bulwark_hammer", "l":"mw/bulwark_shield", "gold":2400, "source":"shop"},
-	"bers_wpn_twinaxe":    {"kind":"weapon", "class":"berserker", "name":"Ragebiter", "rarity":"rare", "r":"mw/ragebiter_axe", "l":"", "gold":1200, "source":"shop"},
-	"bers_wpn_halberd":    {"kind":"weapon", "class":"berserker", "name":"Stormcleaver", "rarity":"epic", "r":"mw/stormcleaver_axe", "l":"", "gold":2400, "source":"shop"},
-	"necro_wpn_tome":      {"kind":"weapon", "class":"necromancer", "name":"Gravecaller's Tome", "rarity":"rare", "r":"mw/gravecaller_staff", "l":"mw/gravecaller_tome", "gold":1200, "source":"shop"},
-	"necro_wpn_scythe":    {"kind":"weapon", "class":"necromancer", "name":"Soulreaper", "rarity":"epic", "r":"mw/soulreaper_scythe", "l":"", "gold":2400, "source":"shop"},
-	"assn_wpn_fangs":      {"kind":"weapon", "class":"assassin", "name":"Asp & Adder", "rarity":"rare", "r":"mw/asp_dagger", "l":"mw/asp_dagger", "gold":1200, "source":"shop"},
-	"assn_wpn_fists":      {"kind":"weapon", "class":"assassin", "name":"Shadow Talons", "rarity":"epic", "r":"mw/shadow_talon_r", "l":"mw/shadow_talon_l", "gold":2400, "source":"shop"},
-	"snip_wpn_recurve":    {"kind":"weapon", "class":"sniper", "name":"Longshot", "rarity":"rare", "r":"", "l":"mw/longshot_bow", "gold":1200, "source":"shop"},
-	"snip_wpn_heartwood":  {"kind":"weapon", "class":"sniper", "name":"Heartseeker", "rarity":"epic", "r":"", "l":"mw/heartseeker_bow", "gold":2400, "source":"shop"},
-	"arch_wpn_crystal":    {"kind":"weapon", "class":"archmage", "name":"Prism Staff", "rarity":"rare", "r":"mw/prism_staff", "l":"mw/prism_tome", "gold":1200, "source":"shop"},
-	"arch_wpn_rod":        {"kind":"weapon", "class":"archmage", "name":"Voidrod", "rarity":"epic", "r":"mw/voidrod_staff", "l":"", "gold":2400, "source":"shop"},
-	# --- 0.31.40: the rest of the KayKit weapons, given to the classes they suit (one-handed swords/axes/maces with
-	# shields to the Knight and Crusader, big blades and axes to the Barbarian and Berserker, daggers and knuckles to the
-	# Rogue and Assassin, bows to the archers, staves to the casters) ---
-	"knight_wpn_arming":   {"kind":"weapon", "class":"knight", "name":"Steadfast", "rarity":"rare", "r":"mw/steadfast_sword", "l":"mw/steadfast_shield", "gold":1000, "source":"shop"},
-	"knight_wpn_longsword":{"kind":"weapon", "class":"knight", "name":"Frostward", "rarity":"epic", "r":"mw/frostward_sword", "l":"mw/frostward_shield", "gold":2000, "source":"shop"},
-	"knight_wpn_spiked":   {"kind":"weapon", "class":"knight", "name":"Ironbriar", "rarity":"epic", "r":"mw/ironbriar_sword", "l":"mw/ironbriar_shield", "gold":2200, "source":"shop"},
-	"barb_wpn_bearded":    {"kind":"weapon", "class":"barbarian", "name":"Frostbeard", "rarity":"rare", "r":"mw/frostbeard_axe", "l":"mw/frostbeard_shield", "gold":1000, "source":"shop"},
-	"barb_wpn_butcher":    {"kind":"weapon", "class":"barbarian", "name":"Bonecarver", "rarity":"epic", "r":"mw/bonecarver_cleaver", "l":"", "gold":2000, "source":"shop"},
-	"barb_wpn_gauntlets":  {"kind":"weapon", "class":"barbarian", "name":"Rockfists", "rarity":"epic", "r":"mw/rockfist_r", "l":"mw/rockfist_l", "gold":2200, "source":"shop"},
-	"rogue_wpn_stilettos": {"kind":"weapon", "class":"rogue", "name":"Needlepoint", "rarity":"rare", "r":"mw/needlepoint_stiletto", "l":"mw/needlepoint_stiletto", "gold":1000, "source":"shop"},
-	"rogue_wpn_brass":     {"kind":"weapon", "class":"rogue", "name":"Alley Knuckles", "rarity":"rare", "r":"mw/alley_knuckles", "l":"mw/alley_knuckles", "gold":900, "source":"shop"},
-	"ranger_wpn_hunting":  {"kind":"weapon", "class":"ranger", "name":"Stag Hunter", "rarity":"rare", "r":"", "l":"mw/staghunter_bow", "gold":1000, "source":"shop"},
-	"mage_wpn_ritual":     {"kind":"weapon", "class":"mage", "name":"Hexblade", "rarity":"rare", "r":"mw/hex_knife", "l":"mw/hex_tome", "gold":1000, "source":"shop"},
-	"priest_wpn_pilgrim":  {"kind":"weapon", "class":"priest", "name":"Wayfarer's Lantern", "rarity":"rare", "r":"mw/wayfarer_staff", "l":"", "gold":1000, "source":"shop"},
-	"priest_wpn_mace":     {"kind":"weapon", "class":"priest", "name":"Sunrise Mace", "rarity":"epic", "r":"mw/sunrise_mace", "l":"mw/sunrise_shield", "gold":2000, "source":"shop"},
-	"worker_wpn_felling":  {"kind":"weapon", "class":"worker", "name":"Timberfall", "rarity":"rare", "r":"mw/timberfall_axe", "l":"", "gold":900, "source":"shop"},
-	"crus_wpn_maul":       {"kind":"weapon", "class":"crusader", "name":"Final Verdict", "rarity":"legendary", "r":"mw/verdict_maul", "l":"mw/verdict_shield", "gold":3600, "source":"shop"},
-	"bers_wpn_broad":      {"kind":"weapon", "class":"berserker", "name":"Hidesplitter", "rarity":"rare", "r":"mw/hidesplitter_cleaver", "l":"", "gold":1200, "source":"shop"},
-	"necro_wpn_spear":     {"kind":"weapon", "class":"necromancer", "name":"Wraithspine", "rarity":"epic", "r":"mw/wraithspine_spear", "l":"", "gold":2400, "source":"shop"},
-	"assn_wpn_night":      {"kind":"weapon", "class":"assassin", "name":"Eclipse Blades", "rarity":"epic", "r":"mw/eclipse_dagger", "l":"mw/eclipse_dagger", "gold":2400, "source":"shop"},
-	"snip_wpn_repeater":   {"kind":"weapon", "class":"sniper", "name":"Rattlesnake", "rarity":"rare", "r":"mw/rattlesnake_crossbow", "l":"", "gold":1200, "source":"shop"},
-	"arch_wpn_elder":      {"kind":"weapon", "class":"archmage", "name":"Rootwise", "rarity":"rare", "r":"mw/rootwise_staff", "l":"mw/rootwise_tome", "gold":1200, "source":"shop"},
-	# --- 0.31.97 (Kevin: "Build the quest system and I want quests for each class"): each class's legendary, earned by
-	# its quest (QUESTS) -- never sold, not in the pass or chests
-	"knight_wpn_kingsguard":  {"kind":"weapon", "class":"knight", "name":"Kingsguard", "rarity":"legendary", "r":"mw/kingsguard_sword", "l":"mw/kingsguard_shield", "source":"quest"},
-	"barb_wpn_skyrender":     {"kind":"weapon", "class":"barbarian", "name":"Skyrender", "rarity":"legendary", "r":"mw/skyrender_axe", "l":"", "source":"quest"},
-	"rogue_wpn_moonfang":     {"kind":"weapon", "class":"rogue", "name":"Moonfang", "rarity":"legendary", "r":"mw/moonfang_dagger", "l":"mw/moonfang_dagger", "source":"quest"},
-	"ranger_wpn_dawnpiercer": {"kind":"weapon", "class":"ranger", "name":"Dawnpiercer", "rarity":"legendary", "r":"", "l":"mw/dawnpiercer_bow", "source":"quest"},
-	"mage_wpn_emberheart":    {"kind":"weapon", "class":"mage", "name":"Emberheart", "rarity":"legendary", "r":"mw/emberheart_staff", "l":"", "source":"quest"},
-	"priest_wpn_seraph":      {"kind":"weapon", "class":"priest", "name":"Seraph's Grace", "rarity":"legendary", "r":"mw/seraph_staff", "l":"", "source":"quest"},
-	"worker_wpn_sledge":      {"kind":"weapon", "class":"worker", "name":"The Golden Sledge", "rarity":"legendary", "r":"mw/goldensledge_hammer", "l":"", "source":"quest"},
-	"crus_wpn_oathbound":     {"kind":"weapon", "class":"crusader", "name":"Oathbound", "rarity":"legendary", "r":"mw/oathbound_hammer", "l":"mw/oathbound_shield", "source":"quest"},
-	"bers_wpn_bloodroar":     {"kind":"weapon", "class":"berserker", "name":"Bloodroar", "rarity":"legendary", "r":"mw/bloodroar_demon", "l":"", "source":"quest"},
-	"necro_wpn_lichcrown":    {"kind":"weapon", "class":"necromancer", "name":"Lichcrown", "rarity":"legendary", "r":"mw/lichcrown_staff", "l":"", "source":"quest"},
-	"assn_wpn_lastbreath":    {"kind":"weapon", "class":"assassin", "name":"Last Breath", "rarity":"legendary", "r":"mw/lastbreath_dagger", "l":"mw/lastbreath_dagger", "source":"quest"},
-	"snip_wpn_hawk":          {"kind":"weapon", "class":"sniper", "name":"Hawk's Judgment", "rarity":"legendary", "r":"mw/hawksjudgment_crossbow", "l":"", "source":"quest"},
-	"arch_wpn_astral":        {"kind":"weapon", "class":"archmage", "name":"Astral Codex", "rarity":"legendary", "r":"mw/astral_staff", "l":"mw/astral_book", "source":"quest"},
 }
 
 # 0.31.39 (Kevin: "only the weapons are cosmetics -- so it's easy to tell who's playing what class"): the skins (tints)
@@ -518,60 +353,34 @@ const REMOVED_SKIN_REFUND := {
 	"arch_skin_void":{"gold":2800},
 	"arch_skin_starborn":{"gems":400}}
 
-# ---------------- packs (Round 11) ----------------
-# Bundles sold for gems in the shop. You pay only for what you don't own yet (proportional to the
-# items' value); a pack you fully own can't be bought.
-const PACKS := {
-	# 0.31.39: weapon bundles (each had a skin); priced at about 80 % of the items' value
-	"pack_crusader": {"name":"Knight Arsenal", "class":"knight", "rarity":"epic", "gems":280, "items":["knight_wpn_bastion", "knight_wpn_crest"]},   # (0.31.87: the Gatebreaker title is earned now; 330 -> 280)
-	"pack_warlord":  {"name":"Warlord Arsenal", "class":"barbarian", "rarity":"epic", "gems":260, "items":["barb_wpn_spiked", "barb_wpn_hammer"]},
-	"pack_shadow":   {"name":"Shadow Arsenal", "class":"rogue", "rarity":"epic", "gems":250, "items":["rogue_wpn_bolt", "rogue_wpn_fangs"]},
-	"pack_hunter":   {"name":"Hunter Arsenal", "class":"ranger", "rarity":"rare", "gems":80, "items":["ranger_wpn_recurve", "ranger_wpn_quiver"]},   # (0.31.108: 120 -> 80, the two weapons' gold at the 30,000 offer's rate, 80 %)
-	"pack_arcane":   {"name":"Arcane Arsenal", "class":"mage", "rarity":"epic", "gems":250, "items":["mage_wpn_crystal", "mage_wpn_tome"]},
-}
-
-static func item_value_gems(id: String) -> float:
-	# Rough value of an item in gems (gold at the exchange's best rate: 0.31.108, 30,000 gold = 1,600 gems; was 4500 = 300).
-	var pr := item_price(id)
-	if pr.has("gems"):
-		return float(pr.gems)
-	return float(pr.get("gold", 0)) * 1600.0 / 30000.0
-
-static func pack_price(pack_id: String, owned: Array) -> int:
-	# Gems for the part of the pack not owned yet; 0 when everything is owned.
-	var pk: Dictionary = PACKS.get(pack_id, {})
-	if pk.is_empty():
-		return 0
-	var total := 0.0
-	var missing := 0.0
-	for id in pk.items:
-		var v := item_value_gems(id)
-		total += v
-		if not owned.has(id):
-			missing += v
-	if missing <= 0.0:
-		return 0
-	return maxi(10, int(round(float(pk.gems) * missing / maxf(1.0, total) / 10.0)) * 10)
-
 static func item(id: String) -> Dictionary:
 	return CATALOG.get(id, {})
 
-static func item_price(id: String, unix := 0) -> Dictionary:
-	# unix: the time asked about -- a pass weapon has a price only once vaulted (0.31.108)
-	var it := item(id)
-	if str(it.get("source", "")) == "pass":
-		return {"gems": int(VAULT_GEMS.get(str(it.get("rarity", "")), 300))} if unix > 0 and vaulted(id, unix) else {}
-	if it.has("gems"):
-		return {"gems": int(it.gems)}
-	if it.has("gold"):
-		return {"gold": int(it.gold)}
-	return {}
+# ---------------- the shop's days and weeks ----------------
+# (0.31.36-0.31.187: the daily gold weapons and the weekly gem weapons rotated here -- 0.31.188 the shop sells outfits,
+# heroes, the pass and gem packs. 0.31.106-0.31.184 EXCHANGE: gold for gems. 0.31.185, League's way: gold is earned only)
 
-# ---------------- shop rotation ----------------
-const DAILY_SLOTS := 6              # 0.31.38: 4 -> 6 (gold items in rotation went 19 -> 43 with the upgraded classes)
-const FEATURED_SLOTS := 4           # 2 -> 3 (gem items 9 -> 15); 0.31.108: 4 (the vaulted pass weapons join)
-# (0.31.106-0.31.184 EXCHANGE: gold for gems, 50 -> 600 up to 1,600 -> 30,000. 0.31.185, League's way: gold is earned
-# only -- gems buy heroes (HERO_GEMS), skins, the pass and the shop's gem items)
+const FEATURED_OUTFITS := 3
+
+static func featured_outfits(unix: int) -> Array:
+	# 0.31.188: the shop's featured outfits this week (Monday 00:00 UTC) -- a fixed shuffle of every outfit, three a week
+	# in turn so each comes round; a hero's own set first in the shuffle's draw (they're the new ones)
+	var pool: Array = SKINS.keys()
+	pool.sort()
+	if pool.is_empty():
+		return []
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash("featured-outfits")
+	var order := []
+	while not pool.is_empty():
+		order.append(pool.pop_at(rng.randi() % pool.size()))
+	order.sort_custom(func(a, b): return SKINS[a].has("weapon") and not SKINS[b].has("weapon"))
+	var out := []
+	var w := week_index(unix)
+	var n := mini(FEATURED_OUTFITS, order.size())
+	for i in n:
+		out.append(order[(w * n + i) % order.size()])
+	return out
 
 static func day_key(unix: int) -> String:
 	var d := Time.get_date_dict_from_unix_time(unix)
@@ -582,28 +391,6 @@ static func week_key(unix: int) -> String:
 	var days := int(floor(unix / 86400.0))
 	var monday := days - ((days + 3) % 7)            # 1970-01-01 was a Thursday
 	return day_key(monday * 86400)
-
-static func shop_daily(unix: int) -> Array:
-	return _rotation("daily-" + day_key(unix), "gold", DAILY_SLOTS)
-
-static func shop_featured(unix: int) -> Array:
-	return _rotation("featured-" + week_key(unix), "gems", FEATURED_SLOTS, unix)
-
-static func _rotation(key: String, currency: String, n: int, unix := 0) -> Array:
-	var pool: Array = []
-	for id in CATALOG:
-		var it: Dictionary = CATALOG[id]
-		if it.get("source", "") == "shop" and it.has(currency):
-			pool.append(id)
-		elif currency == "gems" and unix > 0 and vaulted(str(id), unix):
-			pool.append(id)                          # 0.31.108: an earlier season's pass weapon
-	pool.sort()
-	var rng := RandomNumberGenerator.new()
-	rng.seed = hash(key)
-	var out := []
-	while out.size() < n and not pool.is_empty():
-		out.append(pool.pop_at(rng.randi() % pool.size()))
-	return out
 
 # ---------------- challenges ----------------
 # stat keys come from match_stats(): wins, matches, rescues, kills, gates (gate damage / 100),
@@ -766,8 +553,8 @@ static func retired(goal: Dictionary) -> bool:
 	return bool(goal.get("siege", false))
 
 # ---------------- class quests (0.31.97, Kevin: "Build the quest system and I want quests for each class") ----------------
-# Every class has one quest: three steps, claimed in order; the first two pay out (QUEST_REWARDS), the third gives the
-# class's legendary weapon (source "quest": never sold, not in the pass or chests). Progress is a lifetime count in the
+# Every class has one quest: three steps, claimed in order, each paying out (QUEST_REWARDS; the third gave the class's
+# legendary weapon until 0.31.188 -- now QUEST_FINAL: gems and a Royal chest). Progress is a lifetime count in the
 # profile's stats, "q_<class>_<stat>", kept from 0.31.97 on and credited to the class you were when you did it: a base
 # class counts its upgrade too (a Crusader's knockouts are a Knight's), an upgraded class only while in its hat. A match
 # counts as played (and won) as a class after QUEST_MIN_TIME seconds as it. Stats: matches, wins, kills, rescues, gates
@@ -777,57 +564,58 @@ const QUEST_MIN_TIME := 60.0
 const QUEST_COUNTS := ["kills", "rescues", "gates", "gathered", "fed", "repaired", "healed", "lifts", "towers", "camps", "lh", "epics"]
 # 0.31.164 (5v5 only): the steps that asked for King rescues or King lifts ask for towers or jungle camps now ("gates" is
 # tower and gate damage); the Worker's quest is Siege's -- kept, not shown (HERO_CLASSES)
-const QUEST_REWARDS := [{"gold":700}, {"gems":50, "chest":"gold"}]      # steps 1 and 2; step 3 is the weapon (0.31.184: 400 gold + 30 Embers -> 700 gold)
+const QUEST_REWARDS := [{"gold":700}, {"gems":50, "chest":"gold"}]      # steps 1 and 2 (0.31.184: 400 gold + 30 Embers -> 700 gold)
+const QUEST_FINAL := {"gems":150, "chest":"royal"}                       # step 3 (0.31.188: was the class's legendary weapon)
 const QUESTS := {
-	"knight":      {"item":"knight_wpn_kingsguard", "steps":[
+	"knight":      {"steps":[
 		{"stat":"wins", "n":3, "task":"Win 3 matches as a Knight"},
 		{"stat":"towers", "n":10, "task":"Destroy 10 towers as a Knight"},
 		{"stat":"kills", "n":500, "task":"Knock out 500 enemies as a Knight"}]},
-	"barbarian":   {"item":"barb_wpn_skyrender", "steps":[
+	"barbarian":   {"steps":[
 		{"stat":"kills", "n":40, "task":"Knock out 40 enemies as a Barbarian"},
 		{"stat":"gates", "n":100, "task":"Deal 10,000 damage to towers and gates as a Barbarian"},
 		{"stat":"wins", "n":60, "task":"Win 60 matches as a Barbarian"}]},
-	"rogue":       {"item":"rogue_wpn_moonfang", "steps":[
+	"rogue":       {"steps":[
 		{"stat":"kills", "n":40, "task":"Knock out 40 enemies as a Rogue"},
 		{"stat":"best_multi", "n":3, "task":"Knock out 3 enemies in one burst as a Rogue"},
 		{"stat":"kills", "n":750, "task":"Knock out 750 enemies as a Rogue"}]},
-	"ranger":      {"item":"ranger_wpn_dawnpiercer", "steps":[
+	"ranger":      {"steps":[
 		{"stat":"kills", "n":40, "task":"Knock out 40 enemies as an Archer"},
 		{"stat":"wins", "n":25, "task":"Win 25 matches as an Archer"},
 		{"stat":"kills", "n":750, "task":"Knock out 750 enemies as an Archer"}]},
-	"mage":        {"item":"mage_wpn_emberheart", "steps":[
+	"mage":        {"steps":[
 		{"stat":"kills", "n":40, "task":"Knock out 40 enemies as a Mage"},
 		{"stat":"camps", "n":15, "task":"Clear 15 jungle camps as a Mage"},
 		{"stat":"wins", "n":60, "task":"Win 60 matches as a Mage"}]},
-	"priest":      {"item":"priest_wpn_seraph", "steps":[
+	"priest":      {"steps":[
 		{"stat":"healed", "n":2000, "task":"Heal 2,000 health as a Priest"},
 		{"stat":"towers", "n":10, "task":"Destroy 10 towers as a Priest"},
 		{"stat":"wins", "n":60, "task":"Win 60 matches as a Priest"}]},
-	"worker":      {"item":"worker_wpn_sledge", "steps":[
+	"worker":      {"steps":[
 		{"stat":"gathered", "n":300, "task":"Gather 300 wood or stone"},
 		{"stat":"repaired", "n":10000, "task":"Repair 10,000 gate health"},
 		{"stat":"wins", "n":60, "task":"Win 60 matches as a Worker"}]},
-	"crusader":    {"item":"crus_wpn_oathbound", "steps":[
+	"crusader":    {"steps":[
 		{"stat":"kills", "n":25, "task":"Knock out 25 enemies as a Crusader"},
 		{"stat":"towers", "n":8, "task":"Destroy 8 towers as a Crusader"},
 		{"stat":"wins", "n":30, "task":"Win 30 matches as a Crusader"}]},
-	"berserker":   {"item":"bers_wpn_bloodroar", "steps":[
+	"berserker":   {"steps":[
 		{"stat":"kills", "n":25, "task":"Knock out 25 enemies as a Berserker"},
 		{"stat":"gates", "n":80, "task":"Deal 8,000 damage to towers and gates as a Berserker"},
 		{"stat":"wins", "n":30, "task":"Win 30 matches as a Berserker"}]},
-	"necromancer": {"item":"necro_wpn_lichcrown", "steps":[
+	"necromancer": {"steps":[
 		{"stat":"kills", "n":25, "task":"Knock out 25 enemies as a Necromancer"},
 		{"stat":"healed", "n":3000, "task":"Heal 3,000 health as a Necromancer"},
 		{"stat":"wins", "n":30, "task":"Win 30 matches as a Necromancer"}]},
-	"assassin":    {"item":"assn_wpn_lastbreath", "steps":[
+	"assassin":    {"steps":[
 		{"stat":"kills", "n":25, "task":"Knock out 25 enemies as an Assassin"},
 		{"stat":"best_multi", "n":3, "task":"Knock out 3 enemies in one burst as an Assassin"},
 		{"stat":"kills", "n":400, "task":"Knock out 400 enemies as an Assassin"}]},
-	"sniper":      {"item":"snip_wpn_hawk", "steps":[
+	"sniper":      {"steps":[
 		{"stat":"kills", "n":25, "task":"Knock out 25 enemies as a Ranger"},
 		{"stat":"wins", "n":20, "task":"Win 20 matches as a Ranger"},
 		{"stat":"kills", "n":400, "task":"Knock out 400 enemies as a Ranger"}]},
-	"archmage":    {"item":"arch_wpn_astral", "steps":[
+	"archmage":    {"steps":[
 		{"stat":"kills", "n":25, "task":"Knock out 25 enemies as an Archmage"},
 		{"stat":"camps", "n":10, "task":"Clear 10 jungle camps as an Archmage"},
 		{"stat":"wins", "n":30, "task":"Win 30 matches as an Archmage"}]},
@@ -851,10 +639,10 @@ static func quest_progress(stats: Dictionary, cls: String, step: int) -> int:
 	return int(stats.get(quest_key(cls, str(q.steps[step].stat)), 0))
 
 static func quest_reward(cls: String, step: int) -> Dictionary:
-	# what claiming step (0-based) gives: QUEST_REWARDS, or the class's legendary for the last
+	# what claiming step (0-based) gives: QUEST_REWARDS, QUEST_FINAL for the last
 	if step < QUEST_REWARDS.size():
 		return QUEST_REWARDS[step]
-	return {"item": str(QUESTS[cls].item)}
+	return QUEST_FINAL.duplicate()
 
 static func quest_note(cls: String) -> String:
 	# who counts: "Crusader play counts too" for a base class with an upgrade
@@ -951,73 +739,33 @@ const TUTORIAL_GOLD := 250         # the tutorial's pay, once (0.31.108: Profile
 const DISCORD_URL := "https://discord.gg/H8eKXH8TmM"
 const DISCORD_GEMS := 100
 const CHESTS := {
-	"wooden": {"name":"Wooden Chest", "unlock":1800, "gold":[60, 120], "gems_chance":0.10, "gems":[5, 5],
-		"item_chance":0.15, "rarity":{"rare":1.0}, "color":"#a8794a"},                  # (0.31.108: the only common was Sparkstick)
+	# 0.31.188 (no weapons to drop): gold, gems and hero shards only -- more of each than when a weapon came too
+	"wooden": {"name":"Wooden Chest", "unlock":1800, "gold":[80, 150], "gems_chance":0.15, "gems":[5, 5],
+		"color":"#a8794a", "shard":0.05},
 	# 0.31.108: Silver gems 5-10 every time -> a 30% chance of 5 (they were about half of all free gems)
-	"silver": {"name":"Silver Chest", "unlock":3 * 3600, "gold":[150, 250], "gems_chance":0.3, "gems":[5, 5],
-		"item_chance":0.35, "rarity":{"rare":0.75, "epic":0.25}, "color":"#c9d3dc", "shard":0.1},
-	"gold":   {"name":"Gold Chest", "unlock":8 * 3600, "gold":[400, 600], "gems_chance":1.0, "gems":[15, 25],
-		"item_chance":1.0, "rarity":{"rare":0.8, "epic":0.2}, "color":"#ffcf4a", "shard":0.3},
-	"royal":  {"name":"Royal Chest", "unlock":12 * 3600, "gold":[1000, 1000], "gems_chance":1.0, "gems":[40, 60],
-		"item_chance":1.0, "rarity":{"epic":0.85, "legendary":0.15}, "color":"#c47bff", "shard":1.0},
+	"silver": {"name":"Silver Chest", "unlock":3 * 3600, "gold":[200, 320], "gems_chance":0.4, "gems":[5, 10],
+		"color":"#c9d3dc", "shard":0.15},
+	"gold":   {"name":"Gold Chest", "unlock":8 * 3600, "gold":[500, 750], "gems_chance":1.0, "gems":[20, 30],
+		"color":"#ffcf4a", "shard":0.4},
+	"royal":  {"name":"Royal Chest", "unlock":12 * 3600, "gold":[1200, 1200], "gems_chance":1.0, "gems":[60, 80],
+		"color":"#c47bff", "shard":1.0},
 }
 # 0.31.185 (League's champion capsules): "shard" -- the chance of a hero shard (any of the sold heroes: unlock it for
-# Eco.SHARD_UNLOCK of its gold price, or melt it), rolled after everything else so the rest of a roll is as before
+# Eco.SHARD_UNLOCK of its gold price, or melt it)
 const CHEST_FULL_GOLD := {"wooden":50, "silver":120, "gold":300, "royal":700}   # slots full: the chest becomes gold
-const DUPE_GOLD := {"common":100, "rare":250, "epic":600, "legendary":1500}       # a cosmetic already owned (0.31.93-0.31.183 it was Embers, a tenth of this)
-const PITY_EPIC := 10              # Gold/Royal chests: an epic or better at the latest every 10th
 const CHEST_QUEUE_MAX := 12        # 0.31.108: reward chests waiting for a slot (beyond this they turn into gold)
 
 static func skip_cost(remaining_s: int) -> int:
 	return maxi(1, int(ceil(float(remaining_s) / 600.0)))
 
-static func chest_pool(rarity: String, sid := 1) -> Array:
-	# cosmetics that can drop: the shop's (the pass's own stay the pass's); 0.31.108: plus, for a legendary, the
-	# legendaries of the passes before season sid (the Royal chest's legendary was only ever Final Verdict)
-	var ids := []
-	for id in CATALOG:
-		var it: Dictionary = CATALOG[id]
-		if str(it.get("rarity", "")) != rarity or str(it.get("kind", "")) != "weapon":
-			continue
-		if str(it.get("source", "")) == "shop" or (rarity == "legendary" and str(it.get("source", "")) == "pass" and item_season(str(id)) < sid):
-			ids.append(id)
-	return ids
-
-static func roll_chest(kind: String, seed_value: int, owned: Array, pity: int, sid := 1) -> Dictionary:
-	# -> {gold, gems, item ("" if none), dupe_gold (a duplicate's gold, on top of gold), pity (the new count), shard (a
-	# hero, "" if none)}
+static func roll_chest(kind: String, seed_value: int) -> Dictionary:
+	# -> {gold, gems, shard (a hero, "" if none)} -- the same on the phone and the server (the seed is the chest's)
 	var c: Dictionary = CHESTS[kind]
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_value
-	var out := {"gold":rng.randi_range(int(c.gold[0]), int(c.gold[1])), "gems":0, "item":"", "dupe_gold":0, "pity":pity, "shard":""}
+	var out := {"gold":rng.randi_range(int(c.gold[0]), int(c.gold[1])), "gems":0, "shard":""}
 	if rng.randf() < float(c.gems_chance):
 		out.gems = rng.randi_range(int(c.gems[0]), int(c.gems[1]))
-	if rng.randf() < float(c.item_chance):
-		var rar := ""
-		var roll := rng.randf()
-		var acc := 0.0
-		for r in c.rarity:
-			acc += float(c.rarity[r])
-			if roll <= acc:
-				rar = r
-				break
-		if rar == "":
-			rar = c.rarity.keys()[-1]
-		var big: bool = kind in ["gold", "royal"]
-		if big and pity + 1 >= PITY_EPIC and rar in ["common", "rare"]:
-			rar = "epic"                              # bad-luck protection
-		if big:
-			out.pity = 0 if rar in ["epic", "legendary"] else pity + 1
-		var pool := chest_pool(rar, sid)
-		if pool.is_empty():
-			pool = chest_pool("rare")
-		if not pool.is_empty():
-			var id: String = pool[rng.randi_range(0, pool.size() - 1)]
-			if owned.has(id):
-				out.dupe_gold = int(DUPE_GOLD.get(rar, 250))         # (0.31.93-0.31.183: Embers for the Forge)
-			else:
-				out.item = id
-	# 0.31.185: a hero shard, last (so the rest rolls as it did)
 	if float(c.get("shard", 0.0)) > 0.0 and rng.randf() < float(c.shard):
 		var heroes: Array = HERO_PRICES.keys()
 		heroes.sort()
@@ -1027,101 +775,19 @@ static func roll_chest(kind: String, seed_value: int, owned: Array, pity: int, s
 static func chest_odds(kind: String) -> String:
 	# for the info panel: what's in it, plainly
 	var c: Dictionary = CHESTS[kind]
-	var parts := ["%d-%d gold" % [int(c.gold[0]), int(c.gold[1])]]
+	var parts := ["%d-%d gold" % [int(c.gold[0]), int(c.gold[1])] if int(c.gold[0]) != int(c.gold[1]) else "%d gold" % int(c.gold[0])]
+	var gems := ("%d" % int(c.gems[0])) if int(c.gems[0]) == int(c.gems[1]) else "%d-%d" % [int(c.gems[0]), int(c.gems[1])]
 	if float(c.gems_chance) >= 1.0:
-		parts.append("%d-%d gems" % [int(c.gems[0]), int(c.gems[1])])
+		parts.append("%s gems" % gems)
 	else:
-		parts.append("%d%% chance of %d gems" % [int(round(float(c.gems_chance) * 100.0)), int(c.gems[0])])
-	var rs := []
-	for r in c.rarity:
-		rs.append("%s %d%%" % [str(r).capitalize(), int(round(float(c.rarity[r]) * 100.0))])
-	parts.append("%s: %s" % ["a cosmetic" if float(c.item_chance) >= 1.0 else "%d%% chance of a cosmetic" % int(round(float(c.item_chance) * 100.0)), ", ".join(rs)])
-	if kind in ["gold", "royal"]:
-		parts.append("an epic or better at least every %d" % PITY_EPIC)
-	parts.append("duplicates turn into gold")
+		parts.append("%d%% chance of %s gems" % [int(round(float(c.gems_chance) * 100.0)), gems])
 	if float(c.get("shard", 0.0)) > 0.0:
 		parts.append("a hero shard" if float(c.shard) >= 1.0 else "%d%% chance of a hero shard" % int(round(float(c.shard) * 100.0)))
 	return " · ".join(parts)
 
 
-# ---------------- the Forge (0.31.93, Armory Reforged; Kevin: "begin the weapon models and forge system") ----------------
-# Bring a weapon you own (a starter too) and raise it to three stars: the same weapon, more impressive each time. Looks
-# only, never damage. Paid in gold; the third star also needs FORGE_WINS wins with that weapon equipped, and picks the
-# aura's element.
-# 0.31.184 (Kevin: "Maybe let's have the two currency so it's more simple"): no more Embers -- gold and gems. Each star's
-# Embers are in its gold at EMBER_GOLD a piece (40 + 1,000 -> 1,400; 120 + 3,000 -> 4,200; 300 + 8,000 -> 11,000), and
-# everything that gave Embers gives that much gold: a match (2 -> 20 more gold; a win 5 -> 50: match_rewards' base), a
-# daily order (15 -> DAILY_GOLD), the pass, the login calendar, a quest's first step, a duplicate (DUPE_GOLD), the
-# starter pack (300 -> 3,000). A balance from before is turned into gold once (Profile._normalized). Ten for one is the
-# rate the duplicates had before Embers (DUPE_GOLD) and about what the gem exchange gives (50 gems: 600 gold; they were 60
-# Embers).
+# ---------------- gold that was Embers (0.31.184) ----------------
+# (0.31.93-0.31.187: the Forge, Embers until 0.31.184.) Kevin: "Maybe let's have the two currency so it's more simple" --
+# what gave Embers gives gold at EMBER_GOLD a piece, and a save's Embers turn into gold once (Profile._normalized).
 const EMBER_GOLD := 10
-const FORGE_STARS := [
-	{"name":"Polished", "gold":1400, "text":"A glint runs up the metal and it sparkles, in its rarity's colour."},
-	{"name":"Runed", "gold":4200, "text":"Glowing veins pulse through it, runes drift around it, a trail when you swing."},
-	{"name":"Ascended", "gold":11000, "text":"Flames, frost, lightning, holy light, leaves or a void vortex -- the element you pick."}]
-const FORGE_WINS := 25
-# 0.31.108: the gold doubled (500 / 1,500 / 4,000 -> 1,000 / 3,000 / 8,000) -- gold piled up once the shop was bought out.
 const DAILY_GOLD := 150                 # each daily order claimed (0.31.93-0.31.183: 15 Embers)
-const ELEMENTS := ["fire", "frost", "storm", "holy", "nature", "void"]
-const ELEMENT_COLOR := {"fire":"#ff7a2e", "frost":"#7fd8ff", "storm":"#b48cff", "holy":"#ffd76a", "nature":"#7dff8a", "void":"#c04dff"}
-const ELEMENT_NAME := {"fire":"Fire", "frost":"Frost", "storm":"Storm", "holy":"Holy", "nature":"Nature", "void":"Void"}
-
-# ---------------- what a class wears in battle (0.31.101) ----------------
-# Kevin: "I want players to see everything the other players are wearing". One look from three things -- the class's
-# equipped weapon (a catalog id, "" = the starter) and that weapon's Forge stars and element -- used for my own units
-# (Profile.look_for) and for the other players' (their hello's "lk" entries, "weapon id|stars|element", relayed by the
-# server; siege_net.gd clean_looks). An id this catalog doesn't know, or of another class, is the starter.
-static func look_of(cls: String, weapon_id: String, stars: int, element: String) -> Dictionary:
-	# {"r": model, "l": model, "forge": {"stars", "rarity", "element"}} -- the battle view's cosmetic for the class
-	var out := {}
-	var wpn := item(weapon_id)
-	if not wpn.is_empty() and str(wpn.get("kind", "")) == "weapon" and str(wpn.get("class", "")) == cls:
-		out["r"] = str(wpn.get("r", ""))
-		out["l"] = str(wpn.get("l", ""))
-	else:
-		weapon_id = ""
-	var n := clampi(stars, 0, FORGE_STARS.size())
-	if n > 0:
-		out["forge"] = {"stars":n, "rarity":forge_rarity(forge_id(cls, weapon_id)),
-			"element":element if n >= FORGE_STARS.size() and ELEMENTS.has(element) else ""}
-	return out
-
-static func looks_from_wire(entries: Variant) -> Dictionary:
-	# a player's "lk" ({class: "weapon id|stars|element"}) -> {class: look}; anything malformed is left out
-	var out := {}
-	if not (entries is Dictionary):
-		return out
-	for k in entries:
-		var cls := str(k)
-		if not (CLASSES + UP_CLASSES).has(cls) or not (entries[k] is String):
-			continue
-		var p: PackedStringArray = str(entries[k]).split("|")
-		if p.size() != 3 or not p[1].is_valid_int():
-			continue
-		var look := look_of(cls, p[0], p[1].to_int(), p[2])
-		if not look.is_empty():
-			out[cls] = look
-	return out
-
-static func forge_id(cls: String, item_id: String) -> String:
-	# what the Forge keys a weapon by: its catalog id, or "default_<cls>" for a class's starter
-	return item_id if item_id != "" else "default_" + cls
-
-static func forge_class(wid: String) -> String:
-	return wid.substr(8) if wid.begins_with("default_") else str(item(wid).get("class", ""))
-
-static func forge_rarity(wid: String) -> String:
-	return "common" if wid.begins_with("default_") else str(item(wid).get("rarity", "common"))
-
-static func forge_name(wid: String) -> String:
-	if wid.begins_with("default_"):
-		return str(STARTER_NAMES.get(wid.substr(8), "Default gear"))
-	return str(item(wid).get("name", ""))
-
-static func forge_cost(next_star: int) -> Dictionary:
-	# next_star 1..3 -> {"gold"}; {} past the third
-	if next_star < 1 or next_star > FORGE_STARS.size():
-		return {}
-	var f: Dictionary = FORGE_STARS[next_star - 1]
-	return {"gold":int(f.gold)}

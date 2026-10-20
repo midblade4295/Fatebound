@@ -25,12 +25,15 @@ const LIST := [
 	{"key":"relentless", "name":"Relentless", "desc":"Win 5 matches in a row.", "stat":"best_streak", "n":5, "inc":false, "icon":"banner", "xp":30},
 	{"key":"unstoppable", "name":"Unstoppable", "desc":"Knock out 5 enemies in one burst.", "stat":"best_multi", "n":5, "inc":false, "icon":"swords", "xp":40},
 	{"key":"bodyguard", "name":"Royal Bodyguard", "desc":"Rescue your King 25 times.", "stat":"rescues", "n":25, "inc":true, "icon":"crown", "xp":40},
-	{"key":"master_smith", "name":"Master Smith", "desc":"Forge a weapon to 3 stars.", "stat":"forge3", "n":1, "inc":false, "icon":"anvil", "xp":40},
 	{"key":"seasoned", "name":"Seasoned", "desc":"Reach level 20.", "stat":"level", "n":20, "inc":true, "icon":"banner", "xp":40},
 	{"key":"siege_lord", "name":"Siege Lord", "desc":"Win 50 matches.", "stat":"wins", "n":50, "inc":true, "icon":"castle", "xp":60},
 	{"key":"slayer", "name":"Slayer of Thousands", "desc":"Knock out 1,000 enemies.", "stat":"kills", "n":1000, "inc":true, "icon":"skull", "xp":80},
 	{"key":"legend", "name":"Legend of the Siege", "desc":"Win 250 matches.", "stat":"wins", "n":250, "inc":true, "icon":"trophy", "xp":100},
 ]
+
+# 0.31.188: gone from the game but published -- Play Console and Game Center keep them (Kevin can hide them there); this
+# app no longer reports them. "master_smith", Master Smith: forge a weapon to 3 stars (0.31.119-0.31.187, the Forge).
+const RETIRED := ["master_smith"]
 
 var sent := {}                     # key -> the value last sent (this run)
 var ids: Dictionary = Ids.IDS      # (tests put their own)
@@ -46,11 +49,6 @@ static func value(profile, stat: String) -> int:
 				if int(d.stats.get("main_" + c, 0)) > 0:
 					n += 1
 			return n
-		"forge3":
-			for w in d.forge.get("stars", {}):
-				if int(d.forge.stars[w]) >= 3:
-					return 1
-			return 0
 		"level":
 			return int(d.get("level", 1))
 	return int(d.stats.get(stat, 0))
@@ -96,8 +94,9 @@ func _each_change(profile, send: Callable) -> int:
 	return calls
 
 static func configured() -> int:
+	# the achievements in the game with a Play Console id (0.31.188: not the retired ones)
 	var n := 0
-	for k in Ids.IDS:
-		if str(Ids.IDS[k]) != "":
+	for a in LIST:
+		if str(Ids.IDS.get(str(a.key), "")) != "":
 			n += 1
 	return n

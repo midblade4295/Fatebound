@@ -1,9 +1,10 @@
 extends SceneTree
 # 0.31.120 (Kevin: player profile card -- tap a name: level, title, wins, favourite class and weapon).
-#  1. eco_accounts.stats_of: the class played most (stats.main_<cls>), wins with it, the weapon won most with (forge.wins)
-#     and its stars; level and lifetime numbers; nothing private (no ids, keys, gold, gems, purchases)
+#  1. eco_accounts.stats_of: the class played most (stats.main_<cls>), wins with it, the outfit worn on that hero ("sk";
+#     0.31.188 -- it was the weapon won most with and its stars, until the Forge went); level and lifetime numbers;
+#     nothing private (no ids, keys, gold, gems, purchases)
 #  2. the REAL server (port 8108, accounts and this week's leaderboard written before it starts) and the real app for Bob:
-#     RANKS > tap Alice's row: her card fills in from the server (Knight, the weapon, LEVEL 12, #1 this week) with ADD
+#     RANKS > tap Alice's row: her card fills in from the server (Knight, the outfit, LEVEL 12, #1 this week) with ADD
 #     FRIEND; Carl blocked Bob: his card shows nothing; what goes over the wire has only the card's fields
 #   godot --headless --path godot -s res://tests/profile_card_test.gd
 const Accounts = preload("res://server/eco_accounts.gd")
@@ -14,7 +15,7 @@ const Eco = preload("res://scripts/meta/economy.gd")
 const Net = preload("res://scripts/siege/siege_net.gd")
 const App = preload("res://scripts/app/siege_app.gd")
 
-const CARD_KEYS := ["t", "k", "pid", "ok", "n", "tt", "rank", "lv", "m", "w", "r", "ko", "bs", "since", "cls", "cm", "cw", "wpn", "wr", "ws", "wc", "ww", "ct", "tw"]   # (0.31.134: "ct", the clan tag)
+const CARD_KEYS := ["t", "k", "pid", "ok", "n", "tt", "rank", "lv", "m", "w", "r", "ko", "bs", "since", "cls", "cm", "cw", "sk", "ct", "tw"]   # (0.31.134: "ct", the clan tag; 0.31.188: "sk" for the weapon's wpn/wr/ws/wc/ww)
 
 var fails: Array = []
 var port := 8108
@@ -59,20 +60,19 @@ func _init() -> void:
 	d.stats["main_knight"] = 22
 	d.stats["win_knight"] = 15
 	d.stats["main_mage"] = 18
-	d.forge.wins["default_mage"] = 2
-	d.forge.wins["default_knight"] = 9
-	d.forge.stars["default_knight"] = 2
+	d.skins = ["knight_lion", "mage_frost"]
+	d.skin_on = {"knight": "knight_lion", "mage": "mage_frost"}
 	d.gold = 4321
 	d.gems = 99
 	ae.p.save()
 	var s: Dictionary = acc.stats_of(who.Alice.acct)
 	check(str(s.get("cls", "")) == "knight" and int(s.cm) == 22 and int(s.cw) == 15, "the class she plays most: Knight, 22 matches, 15 won")
-	check(str(s.get("wpn", "")) == Eco.STARTER_NAMES.knight and int(s.ws) == 2 and int(s.ww) == 9, "the weapon she wins most with, 2 stars")
+	check(str(s.get("sk", "")) == "knight_lion" and not s.has("wpn"), "the outfit she wears on her Knight (%s)" % str(s.get("sk", "")))
 	check(int(s.lv) == 12 and int(s.m) == 40 and int(s.w) == 25 and int(s.r) == 7 and int(s.ko) == 160 and int(s.bs) == 6 and int(s.since) > 0
 		and int(s.get("tw", -1)) == 11, "level, matches, wins, rescues (older apps), knockouts, best streak, since, towers")
 	check(s.keys().all(func(k): return CARD_KEYS.has(str(k))), "nothing else: %s" % str(s.keys()))
 	var fresh: Dictionary = acc.stats_of(who.Bob.acct)
-	check(str(fresh.cls) == "" and not fresh.has("wpn") and int(fresh.lv) == 1, "a new account: no class or weapon yet")
+	check(str(fresh.cls) == "" and not fresh.has("sk") and int(fresh.lv) == 1, "a new account: no class or outfit yet")
 	check(acc.stats_of("0".repeat(20)).is_empty(), "no account: nothing")
 	# this week's board with Alice on it
 	var lb = Leaderboard.new(sd)
@@ -202,7 +202,7 @@ func _process(delta: float) -> bool:
 			var txt := _labels(c) if c != null else []
 			if txt.has("LEVEL"):
 				check(txt.has("Knight") and txt.any(func(t): return t.contains("22 matches") and t.contains("15 won")), "the class she plays most")
-				check(txt.any(func(t): return t.contains(Eco.STARTER_NAMES.knight)) and txt.has("★★"), "the weapon, 2 stars")
+				check(txt.has("Wears Lionguard Knight") and not txt.has("★★"), "the outfit she wears (no weapon, no stars)")
 				var i := txt.find("LEVEL")
 				check(i > 0 and txt[i - 1] == "12" and txt.has("25") and txt.has("63%") and txt.has("160") and txt.has("6"), "level 12, 25 wins, 63% win rate, 160 knockouts, best streak 6")
 				check(txt.any(func(t): return t.contains("#1 this week") and t.contains("40 matches")), "#1 this week, 40 matches")

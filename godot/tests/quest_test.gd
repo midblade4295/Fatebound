@@ -1,8 +1,9 @@
 extends SceneTree
 # Class quests (0.31.97, Kevin: "Build the quest system and I want quests for each class"): the table (13 classes, 3
-# steps, a legendary each that is never sold), counting a match per class worn (a base class counts its upgrade, an
-# upgrade only itself, a match only after a minute), claiming in order with the rewards, saving, and the screens --
-# Home's QUESTS button, the Quests screen's CLAIM, the legendary shown with EQUIP, the Locker's quest card.
+# steps; the last gives 150 gems and a Royal chest -- 0.31.188, a legendary weapon until then), counting a match per
+# class worn (a base class counts its upgrade, an upgrade only itself, a match only after a minute), claiming in order
+# with the rewards, saving, and the screens -- Home's QUESTS button, the Quests screen's CLAIM. (The Locker's quest card
+# went with its ARMORY, 0.31.188.)
 const Eco = preload("res://scripts/meta/economy.gd")
 const Profile = preload("res://scripts/meta/profile.gd")
 const View = preload("res://scripts/siege/siege_view.gd")
@@ -30,37 +31,15 @@ func _init() -> void:
 	# ---- the table
 	check(Eco.QUESTS.size() == 13, "a quest for each of the 13 classes (%d)" % Eco.QUESTS.size())
 	var bad := []
-	var items := {}
 	for cls in Eco.CLASSES + Eco.UP_CLASSES:
 		var q: Dictionary = Eco.QUESTS.get(cls, {})
-		var it: Dictionary = Eco.CATALOG.get(str(q.get("item", "")), {})
-		var ok: bool = not q.is_empty() and q.steps.size() == 3 and not it.is_empty() and str(it.kind) == "weapon" \
-			and str(it["class"]) == cls and str(it.rarity) == "legendary" and str(it.source) == "quest" and not it.has("gold") and not it.has("gems")
+		var ok: bool = not q.is_empty() and q.steps.size() == 3 and not q.has("item") and Eco.quest_reward(cls, 2) == Eco.QUEST_FINAL
 		for s in q.get("steps", []):
 			ok = ok and int(s.n) > 0 and str(s.task) != "" and (str(s.stat) in Eco.QUEST_COUNTS or str(s.stat) in ["wins", "matches", "best_multi"])
-		for hand in ["r", "l"]:
-			var f := str(it.get(hand, ""))
-			if f != "":
-				ok = ok and f.begins_with("mw/") and View.MESHY_WEAPON_LIKE.has(f.substr(3)) and ResourceLoader.exists(View.weapon_path(f))
 		if not ok:
 			bad.append(cls)
-		items[str(q.get("item", ""))] = true
-	check(bad.is_empty(), "each quest: 3 steps, a legendary of its class, earned not sold, its models in the game %s" % str(bad))
-	check(items.size() == 13, "13 different legendaries")
-	var leaked := []
-	for d in 60:
-		for id in Eco.shop_daily(1791000000 + d * 86400) + Eco.shop_featured(1791000000 + d * 86400):
-			if items.has(id):
-				leaked.append(id)
-	for sid in range(1, 8):
-		for id in Eco.pass_items(sid):
-			if items.has(id):
-				leaked.append(id)
-	for rar in ["common", "rare", "epic", "legendary"]:
-		for id in Eco.chest_pool(rar):
-			if items.has(id):
-				leaked.append(id)
-	check(leaked.is_empty(), "no quest legendary in the shop, the pass or a chest %s" % str(leaked))
+	check(bad.is_empty(), "each quest: 3 steps, the last 150 gems and a Royal chest (no weapon, 0.31.188) %s" % str(bad))
+	check(Eco.QUEST_FINAL == {"gems": 150, "chest": "royal"}, "the final reward: %s" % str(Eco.QUEST_FINAL))
 	check(Eco.quest_family("knight") == ["knight", "crusader"] and Eco.quest_family("crusader") == ["crusader"] and Eco.quest_family("worker") == ["worker"],
 		"a base class counts its upgrade; an upgrade counts itself")
 	# ---- counting
@@ -94,11 +73,13 @@ func _init() -> void:
 	var ch0: int = p.d.chests.slots.size()
 	var r2: Dictionary = p.claim_quest("knight")
 	check(bool(r2.ok) and int(p.d.gems) == gem0 + 50 and p.d.chests.slots.size() == ch0 + 1 and str(p.d.chests.slots[-1].kind) == "gold", "step 2 pays 50 gems and a Gold chest")
-	check(not p.owns("knight_wpn_kingsguard"), "the legendary isn't yours yet")
+	var gem1 := int(p.d.gems)
+	var royal0: int = p.d.chests.slots.filter(func(c): return str(c.kind) == "royal").size() + p.chests_waiting()
 	var r3: Dictionary = p.claim_quest("knight")
-	check(bool(r3.ok) and str(r3.item) == "knight_wpn_kingsguard" and p.owns("knight_wpn_kingsguard") and p.quest_done("knight"), "step 3 gives Kingsguard; the quest is done")
+	var royal1: int = p.d.chests.slots.filter(func(c): return str(c.kind) == "royal").size() + p.chests_waiting()
+	check(bool(r3.ok) and int(p.d.gems) == gem1 + 150 and royal1 == royal0 + 1 and not r3.has("item") and p.quest_done("knight"),
+		"step 3 gives 150 gems and a Royal chest; the quest is done")
 	check(not bool(p.claim_quest("knight").ok) and p.quests_ready() == 0, "nothing more to claim")
-	check(bool(p.equip("knight_wpn_kingsguard").ok) and str(p.look_for("knight").get("r", "")) == "mw/kingsguard_sword", "Kingsguard equips like any weapon")
 	# ---- saved and loaded
 	p.d.quests["rogue"] = 9
 	p.d.quests["nobody"] = 2
@@ -160,23 +141,15 @@ func _process(_d: float) -> bool:
 			press("quest_claim_mage")
 			check(p.quest_step("mage") == 2, "step 2 claimed")
 		3:
+			var gm := int(p.d.gems)
 			press("quest_claim_mage")
-			check(p.owns("mage_wpn_emberheart") and app.modal != null and btn("shop_preview_equip") != null, "the legendary shows off with EQUIP")
-			press("shop_preview_equip")
-			check(str(p.d.equip.mage.weapon) == "mage_wpn_emberheart", "Emberheart equipped from there")
-			press("shop_preview_close")
+			check(p.quest_done("mage") and int(p.d.gems) == gm + 150 and btn("shop_preview_equip") == null, "the last step: 150 gems and a Royal chest, nothing to equip (0.31.188)")
 		4:
 			press("quests_back")
 			check(app.tab == "home", "back to Home")
-			app.locker_class = "worker"
 			app.show_tab("locker")
 		5:
-			# 0.31.164 (5v5 only): the Worker was Siege's -- no Worker in the Locker, nor his quest
-			check(btn("locker_worker") == null and btn("locker_quest_worker") == null and str(app.locker_class) == "knight",
-				"the Locker has no Worker (Siege's) and falls back to the Knight")
-			check(btn("locker_quest_knight") != null, "the Locker shows the Knight's quest")
-			press("locker_quest_knight")
-			check(app.tab == "quests" and str(app.quest_cls) == "knight", "and opens it")
+			check(btn("locker_quest_knight") == null and btn("locker_tab_champions") != null, "the Locker: CHAMPIONS and TITLES, no quest card (the ARMORY's, 0.31.188)")
 			print("QUEST_PASS" if fails.is_empty() else "QUEST_FAIL %s" % str(fails))
 			quit(0 if fails.is_empty() else 1)
 	step += 1
