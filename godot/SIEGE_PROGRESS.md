@@ -5905,6 +5905,8 @@ that allows players to purchase or preview what it looks like"
   for 0.31.187 (sudo bash godot/server/deploy/install_siege_server.sh); until then it charges 2,000 and its answer wins.
   The rotation is the same either way (above).
 - Version 0.31.187, versionCode 273, SERVER_BUILD 0.31.187.
-- Checks so far: champions_test, league_iap_test, skins_test, app_flow_test, lb_prizes_test, quest_test, moba_ui_test,
-  online_five_test, eco_server_test pass; content packs: ui rebuilt (34.2 MB) and uploaded, check and coverage OK.
-  Looked at (420 x 933): the Locker's CHAMPIONS, all eighteen windows, a skin previewed, the story and kit, zoomed in.
+- Checks: the quick suite, all 99 passed (champions_test among them); COLD_START_PASS; content packs: ui rebuilt
+  (34.2 MB) and uploaded, check and coverage OK; the Play AAB (throwaway key, presets untouched): BASE OK (277 files),
+  CONTENT OK, play_games true, bundletool valid. Looked at (420 x 933): the Locker's CHAMPIONS, all eighteen windows,
+  a skin previewed, the story and kit, zoomed in. Preview APK: build/Fatebound-Siege-0.31.187-fatebound.apk (32 MB,
+  preview key), sha256 45e21a6e...dcf03bd53b7dbcf2717d29a49.
