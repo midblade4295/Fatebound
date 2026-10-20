@@ -113,6 +113,7 @@ def main():
     ap.add_argument("--grip-angles", type=float, nargs=3, default=[75.0, 80.0, 30.0], help="knuckle, middle, tip joint bends (deg)")
     ap.add_argument("--relax-angles", type=float, nargs=3, default=[20.0, 30.0, 20.0])
     ap.add_argument("--hinge", type=float, default=0.45, help="the joints' height in the finger, 0 palm side .. 1 back")
+    ap.add_argument("--ease", type=float, default=0.012, help="0.31.190: the knuckle bend eases in over this much of the finger (m)")
     ap.add_argument("--handle", type=float, default=0.07, help="the held handle's radius, KayKit metres")
     ap.add_argument("--thumb-z", type=float, default=0.07)
     ap.add_argument("--grip-thumb", type=float, nargs=2, default=[15.0, 25.0], help="thumb turn toward the fingers, then down (deg)")
@@ -174,7 +175,7 @@ def main():
         for n_, (js_, ang) in enumerate(reversed(joints)):
             piv = wr + u * (dk + js_) + up * y_piv
             # (the knuckle bends over the finger's first 12 mm -- the glove before it stays put; the others over +-4 mm)
-            t = smooth(s / 0.012) if js_ == 0.0 else smooth((s - js_ + 0.004) / 0.008)
+            t = smooth(s / a.ease) if js_ == 0.0 else smooth((s - js_ + 0.004) / 0.008)
             for k in range(len(idx)):
                 if t[k] <= 0.0:
                     continue

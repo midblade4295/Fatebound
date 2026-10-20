@@ -6020,3 +6020,35 @@ yours, what gold buys -- "Frostbound for gold (Recommended)"; how long a hero ta
   new numbers.
 - Server: the economy and the new op are the server's too -- it needs the redeploy (it already did for 0.31.184-0.31.188).
 - Version 0.31.189, versionCode 275, SERVER_BUILD 0.31.189.
+
+## 0.31.190 — weapons held the right way round, hands that grip
+Kevin (with the Privateer Musketeer and the Red Ribbon Assassin): "There are various weapons being held backwards or
+upside down. Go through all models and make sure weapons and shields are being held correctly and try to make hands
+actually gripping them".
+- 0.31.189's chain: its suite passed (ALL SIEGE TESTS PASSED) and COLD_START_PASS; it was stopped at the AAB (this work
+  had begun in the tree), so 0.31.189 ships inside 0.31.190's build.
+- Every piece (52) checked over its KayKit template's ghost (front and side, the hand a dot), and every hero, outfit and
+  minion in its idle, its attack and the champion window. Three were wrong, all refitted from Meshy's originals
+  (tools/meshy_weapon.py fit):
+  - ribbon_dagger (the Red Ribbon daggers): point down, handle up -- refit blade up (--axes -X,-Y,Z, pole).
+  - brass_blunderbuss (the Privateer): held by the bell, lying on its side -- refit upright, bell forward (--axes Z,Y,-X,
+    box).
+  - musket (the Musketeer's own, and so the Frostbound one): the same, butt forward on its side -- refit upright, muzzle
+    forward, the hand at the stock's wrist (--axes -Z,-X,Y, box; scratch hero_props/musket.glb).
+  The rest (swords, daggers, staffs, hammers, axes, halberds, bows, crossbows, the cannon, tomes, shields) were right.
+  Staffs held level and forward in the idle are KayKit's own hold (its Skeleton Mage does the same).
+- Hands: Meshy's rigs have no finger bones and its bodies came with flat open hands (but the Knight, Rogue and Assassin,
+  made closed; the Worker was posed in 0.31.77). tools/meshy_pose_hands.py (new) runs tools/meshy_hand_pose.py on 19
+  bodies from their originals at e08df3d: every hand that holds something closes into a fist (27), the hand slot moving
+  to where the fist hides the handle best (rig.json grip_r / grip_l); every free hand bends a little (11), the Archmage's
+  tome lying on his open hand. The knuckle lines were read off bind-pose renders of each hand; the thumb line is
+  measured (the index finger's outer edge at the tips + 4 mm). meshy_hand_pose.py: --ease (the knuckle bend eases in
+  over 12 mm, not 4: no crease at the glove).
+- Portraits (assets/ui/skins) re-rendered for the posed bodies (45; the Knight's, Rogue's, Assassin's and Worker's kept).
+- weapon_grip_test: every dagger and sword fits its template better as it is than upside down (the old Red Ribbon dagger
+  fails it); the musket and blunderbuss muzzle forward with the butt behind the hand, upright (the old ones fail it);
+  every Meshy body's weapon hand posed (rig.json grip_<hand>).
+- Content packs: heroes-dd14433830ca, minions-243914255b31, champions-5520b94c2332, weapons-ecc59537dce2,
+  ui-5621bda5a879 (uploaded; CONTENT OK, coverage OK, presets unchanged).
+- Server: unchanged by this step; it still needs the redeploy for 0.31.184-0.31.189's economy.
+- Version 0.31.190, versionCode 276, SERVER_BUILD 0.31.190.

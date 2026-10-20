@@ -15,7 +15,7 @@ const BOOT_PREV_PATH := "user://boot_diag_prev.log"
 # rotate it out of boot_diag_prev.log before anyone could copy it).
 const BOOT_STUCK_PATH := "user://boot_diag_stuck.log"
 const Platform = preload("res://scripts/meta/platform.gd")
-const BUILD := "0.31.189-fatebound"
+const BUILD := "0.31.190-fatebound"
 
 class ErrorCapture:
 	extends Logger

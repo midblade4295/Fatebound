@@ -8,6 +8,13 @@ extends SceneTree
 #    not halfway up it under the head (tools/weapon_grip.py END);
 #  - (0.31.104-0.31.187: the Eye of the Archon and the Lich-Crown held on their shafts -- gone with the catalog's weapons)
 #    0.31.188: each outfit's staff is held like the hero's own (the same length, the hand as far down it).
+#  - 0.31.190 (Kevin, with the Privateer Musketeer and the Red Ribbon Assassin: "There are various weapons being held
+#    backwards or upside down. Go through all models and make sure weapons and shields are being held correctly and try
+#    to make hands actually gripping them"): every blade is held blade up (the hand low on the piece: the Red Ribbon
+#    daggers were point-down); the guns muzzle forward, upright (the butt behind the hand and dropping below it: the
+#    Musketeer's own musket and the Privateer's blunderbuss were held by the muzzle, lying on their sides); and every
+#    Meshy body's weapon hand is a fist round the handle (tools/meshy_hand_pose.py: rig.json's grip_<hand>), but for
+#    the Knight, Rogue and Assassin, made with closed hands (and a tome's, which lies on the open hand).
 #   godot --headless --path godot -s res://tests/weapon_grip_test.gd
 const Eco = preload("res://scripts/meta/economy.gd")
 const View = preload("res://scripts/siege/siege_view.gd")
@@ -43,6 +50,30 @@ func _points(n: Node, xf: Callable) -> PackedVector3Array:
 			for k in range(0, v.size(), 2):
 				pts.append(xf.call(m, v[k]))
 	return pts
+
+func _sample(file: String, n := 300) -> PackedVector3Array:
+	# about n of the piece's vertices, in its own space
+	var inst: Node3D = (load(View.weapon_path(file)) as PackedScene).instantiate()
+	var pts := _points(inst, func(m: MeshInstance3D, p: Vector3) -> Vector3: return _rel(m, inst) * p)
+	inst.free()
+	var out := PackedVector3Array()
+	var step := maxf(1.0, float(pts.size()) / n)
+	var i := 0.0
+	while int(i) < pts.size():
+		out.append(pts[int(i)])
+		i += step
+	return out
+
+func _chamfer(a: PackedVector3Array, b: PackedVector3Array) -> float:
+	# the mean distance from each point to the other set's nearest, both ways
+	var s := 0.0
+	for pair in [[a, b], [b, a]]:
+		for p in pair[0]:
+			var best := INF
+			for q in pair[1]:
+				best = minf(best, p.distance_squared_to(q))
+			s += sqrt(best) / float((pair[0] as PackedVector3Array).size())
+	return s
 
 func _init() -> void:
 	# ---- one-handed pieces: the hand (the origin of the template space) low on the piece
@@ -88,6 +119,73 @@ func _init() -> void:
 			if absf(sp.x - own.x) > own.x * 0.15 or absf(sp.y - own.y) > 0.06:
 				off.append("%s %.2f/%.2f" % [k, sp.x, sp.y])
 	check(n_staff >= 5 and off.is_empty(), "the outfits' staffs are held like the hero's own (%d; %.2f long, %.2f ahead of the hand) %s" % [n_staff, own.x, own.y, str(off)])
+	# ---- 0.31.190: blades up (the piece lies over its KayKit template better as it is than turned upside down)
+	var down := []
+	var n_blade := 0
+	for k in View.MESHY_WEAPON_LIKE:
+		var t := str(View.MESHY_WEAPON_LIKE[k])
+		if not ["dagger", "bits/dagger_A", "sword_1handed", "bits/sword_E"].has(t):
+			continue
+		n_blade += 1
+		var a: PackedVector3Array = _sample(k.insert(0, "mw/"))
+		var tp: PackedVector3Array = _sample(t)
+		var lo := INF
+		var hi := -INF
+		for q in a:
+			lo = minf(lo, q.y)
+			hi = maxf(hi, q.y)
+		var flipped := PackedVector3Array()
+		for q in a:
+			flipped.append(Vector3(-q.x, lo + hi - q.y, q.z))  # (turned about Z, over the same height)
+		var ratio := _chamfer(flipped, tp) / maxf(_chamfer(a, tp), 0.0001)
+		if ratio < 1.03:
+			down.append("%s %.2f" % [k, ratio])
+	check(n_blade >= 12 and down.is_empty(), "every dagger and sword is held blade up: it fits its template better than upside down (%d) %s" % [n_blade, str(down)])
+	var guns_bad := []
+	for k in ["musket", "brass_blunderbuss"]:
+		var inst: Node3D = (load(View.weapon_path("mw/" + k)) as PackedScene).instantiate()
+		var pts := _points(inst, func(m: MeshInstance3D, p: Vector3) -> Vector3: return _rel(m, inst) * p)
+		inst.free()
+		var z0 := INF
+		var z1 := -INF
+		for p in pts:
+			z0 = minf(z0, p.z)
+			z1 = maxf(z1, p.z)
+		var q := (z1 - z0) * 0.25
+		var rear := AABB()
+		var front := AABB()
+		var nr := 0
+		var nf := 0
+		for p in pts:
+			if p.z < z0 + q:
+				rear = AABB(p, Vector3.ZERO) if nr == 0 else rear.expand(p)
+				nr += 1
+			elif p.z > z1 - q:
+				front = AABB(p, Vector3.ZERO) if nf == 0 else front.expand(p)
+				nf += 1
+		# the butt (the rear quarter, behind the hand at the origin) drops below the muzzle and stands taller than wide
+		if not (z0 < 0.0 and rear.position.y < front.position.y - 0.05 and rear.size.y > rear.size.x * 1.3):
+			guns_bad.append("%s rear y %.2f/%.2fx%.2f front y %.2f" % [k, rear.position.y, rear.size.y, rear.size.x, front.position.y])
+	check(guns_bad.is_empty(), "the musket and the blunderbuss: muzzle forward (+Z), the butt behind the hand, upright %s" % str(guns_bad))
+	# ---- 0.31.190: the hands close round the handle
+	var open := []
+	var n_hand := 0
+	for hero in View.LOOKS:
+		var look: Dictionary = View.LOOKS[hero]
+		if not str(look.model).begins_with("meshy:"):
+			continue
+		var body := str(look.model).substr(6)
+		if ["knight", "rogue", "assassin"].has(body):
+			continue
+		var rig = JSON.parse_string(FileAccess.get_file_as_string("res://assets/meshy/%s/rig.json" % body))
+		for side in ["r", "l"]:
+			var held := str(look.get(side, ""))
+			if held == "" or str(View.MESHY_WEAPON_LIKE.get(held.substr(3), "")).contains("book"):
+				continue                                    # (a tome lies on an open hand)
+			n_hand += 1
+			if not (rig is Dictionary and (rig as Dictionary).has("grip_" + side)):
+				open.append("%s.%s" % [body, side])
+	check(n_hand >= 20 and open.is_empty(), "every Meshy body's weapon hand is posed as a fist round the handle (%d hands) %s" % [n_hand, str(open)])
 	# ---- every bow in its class's idle (0.31.188: the outfits' bows -- the catalog's weapons are gone)
 	for id in Eco.SKINS:
 		var sk: Dictionary = Eco.SKINS[id]

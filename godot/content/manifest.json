@@ -4,10 +4,10 @@
  "packs": [
   {
    "name": "ui",
-   "file": "ui-ca2fbcfcf8b7.pck",
-   "size": 31764356,
-   "sha256": "662ccb9ad78cf5d9a2a4470c52e14b49ba6d38a5941c68d4e2d28f48de96a582",
-   "inputs": "ca2fbcfcf8b71622389c3d9eea087dfef3e949fcb1eb4a2c0cea4bc96cfdfe5a",
+   "file": "ui-5621bda5a879.pck",
+   "size": 31780212,
+   "sha256": "6c8c53cc2136d95562e54580ede798d66dd41dd5e37ea6abefacd312bdcf180a",
+   "inputs": "5621bda5a8793a8f11fbfff479dbfeabdf732c1738b7b3931b49094143e1080f",
    "probe": "res://assets/ui/abilities/archmage_e.png"
   },
   {
@@ -20,34 +20,34 @@
   },
   {
    "name": "heroes",
-   "file": "heroes-5cb06d1b61f2.pck",
-   "size": 55045820,
-   "sha256": "fe3ce751ba4565000fed7a09b46e695e94eac23a193f1284aebb677eb551cb61",
-   "inputs": "5cb06d1b61f24625e9b285c6c1a536f948126285964a6e58423931a41d575e98",
+   "file": "heroes-dd14433830ca.pck",
+   "size": 55050716,
+   "sha256": "a479546bc335b57296294fcfd75f1696273b302b010f3af0c9ba73354c8adbe8",
+   "inputs": "dd14433830ca80462bd598b3b1cd05a6cb065122a85b7e8669bef1a5f44ddb43",
    "probe": "res://assets/meshy/archmage/rigged.glb"
   },
   {
    "name": "minions",
-   "file": "minions-81b68a271fb7.pck",
-   "size": 38603660,
-   "sha256": "fa3737b99728fff7a2375b3572b653a25d3dd2ddbda6729acf2a8a3f6aabf7e2",
-   "inputs": "81b68a271fb751f1275244972da138422b41f8d2ac5d3ce8ba29ca693409671f",
+   "file": "minions-243914255b31.pck",
+   "size": 38605964,
+   "sha256": "bd5369635f4bc79e363616532cdd8c2fb17d13c5d8f91f82597175122e847467",
+   "inputs": "243914255b31c3385f0a1da396ae11110957d7d89543929dcf3aef95c432e451",
    "probe": "res://assets/meshy/minion_caster/rigged.glb"
   },
   {
    "name": "champions",
-   "file": "champions-d87532ee6242.pck",
-   "size": 25634552,
-   "sha256": "41db0bb2451604445df5079bf7694c6ca51a2a8936aceeb4457a897e9301df16",
-   "inputs": "d87532ee6242179368c33ea5bcfa00ddd38cec4821e5e0ae9d2885306a94fb6e",
+   "file": "champions-5520b94c2332.pck",
+   "size": 25639768,
+   "sha256": "045094fa0b97bac5b9624eff79a25bc925177aa4ae644b2f49677ab05fd08be5",
+   "inputs": "5520b94c23329828e36473172a0b3abd7812f39bf05cb5c95e7fc1b0fc0f940e",
    "probe": "res://assets/meshy/dragoon/rigged.glb"
   },
   {
    "name": "weapons",
-   "file": "weapons-fae153b543a2.pck",
-   "size": 17745992,
-   "sha256": "70bd4bd0d8665c314808d9bd36f3133eff450fe954d889bd1480fb09cc70cb76",
-   "inputs": "fae153b543a2f0773263b2cb87adac9723102f528f1b9d25351d808ab4ea1337",
+   "file": "weapons-ecc59537dce2.pck",
+   "size": 17745896,
+   "sha256": "cb79c4127c4f1ac82515f8507cb592a315ff51a4d6b7c22249686631b7d32afc",
+   "inputs": "ecc59537dce25e7469513f0de98044fd1bbde56ec6d72a0a30cf67d7d318b6c0",
    "probe": "res://assets/meshy/weapons/acolyte_wand.glb"
   },
   {
