@@ -6052,3 +6052,6 @@ actually gripping them".
   ui-5621bda5a879 (uploaded; CONTENT OK, coverage OK, presets unchanged).
 - Server: unchanged by this step; it still needs the redeploy for 0.31.184-0.31.189's economy.
 - Version 0.31.190, versionCode 276, SERVER_BUILD 0.31.190.
+- Verified: suite ALL SIEGE TESTS PASSED, COLD_START_PASS, the Play-shape AAB check (throwaway key) exit 0 with the
+  presets unchanged, BASE OK (273 files). Preview APK: build/Fatebound-Siege-0.31.190-fatebound.apk (32 MB, preview
+  key), sha256 0bb8ca50...6f605ee80c572a32b.
