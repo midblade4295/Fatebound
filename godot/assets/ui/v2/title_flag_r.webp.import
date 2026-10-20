@@ -2,28 +2,28 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dji4v7aaf5sxx"
-path="res://.godot/imported/logo_base.webp-3f8565d6077b6d6c2b45a2f26acb7852.ctex"
+uid="uid://ct2ik883yy8vb"
+path="res://.godot/imported/title_flag_r.webp-77894fe4767b68a8f08d6fda55008e6a.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/ui/v2/logo_base.webp"
-dest_files=["res://.godot/imported/logo_base.webp-3f8565d6077b6d6c2b45a2f26acb7852.ctex"]
+source_file="res://assets/ui/v2/title_flag_r.webp"
+dest_files=["res://.godot/imported/title_flag_r.webp-77894fe4767b68a8f08d6fda55008e6a.ctex"]
 
 [params]
 
-compress/mode=1
+compress/mode=0
 compress/high_quality=false
-compress/lossy_quality=0.92
+compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0
 compress/hdr_compression=1
 compress/normal_map=0
 compress/channel_pack=0
-mipmaps/generate=true
+mipmaps/generate=false
 mipmaps/limit=-1
 roughness/mode=0
 roughness/src_normal=""

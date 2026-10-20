@@ -16,7 +16,7 @@ Writes:
   assets/sounds/titleSlam.wav         the slam
   assets/branding/splash.png          the wall for the boot splash and the first-start download screen (the base
                                       build: no pack is there yet; 540 x 1200, 256 colours: 375 KB)
-  assets/branding/title_logo.webp     the title (logo_base + the King at rest) for that download screen
+  (assets/branding/title_logo.webp, the title for that download screen: tools/build_title_logo.py since 0.31.193)
 
   python3 tools/build_title_art.py
 """
@@ -60,15 +60,6 @@ def wall():
     print("bg_title_wall.webp", im.size, "splash.png", small.size)
 
 
-def logo():
-    base = Image.open(os.path.join(V2, "logo_base.webp")).convert("RGBA")
-    king = Image.open(os.path.join(V2, "logo_king.webp")).convert("RGBA")
-    base.alpha_composite(king, (898, 193))                   # (title_logo.gd KING_AT)
-    out = base.resize((640, round(base.size[1] * 640 / base.size[0])), Image.LANCZOS)
-    out.save(os.path.join(ROOT, "assets", "branding", "title_logo.webp"), "WEBP", quality=90, method=6)
-    print("title_logo.webp", out.size)
-
-
 def ff(*args):
     subprocess.run(["ffmpeg", "-loglevel", "error", "-y", *args], check=True)
 
@@ -91,5 +82,4 @@ def audio():
 if __name__ == "__main__":
     plaque()
     wall()
-    logo()
     audio()

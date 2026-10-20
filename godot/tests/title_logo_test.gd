@@ -20,6 +20,11 @@ extends SceneTree
 #  torches (the pre-roll); the game goes in behind a still LOADING... (hold_for_game: the embers fade, the torches hold
 #  steady, then can_swap); a tap while loading goes straight in once ready, without the show; the game's background
 #  loading starts once the show is over.
+# 0.31.193 (Kevin: "Let's make a brand new title graphic that fits new game style" -> C4, "make the flags on side blow
+#  around and the lighting effect in middle show effects"): the Rift title -- its layers match the art (the word, the two
+#  flags, the rift's glow); the flags wave all the time and whip about on the slam, then settle back to a breeze; the
+#  rift crackles with lightning (bolts, a flickering glow, sparks) and flares on the slam; Reduce Motion: all still.
+#  (Until then the "All Tied Up" title's King swung from his rope.)
 #   godot --headless --path godot -s res://tests/title_logo_test.gd
 const App = preload("res://scripts/app/siege_app.gd")
 const TitleLogo = preload("res://scripts/app/title_logo.gd")
@@ -36,10 +41,12 @@ var punch_max := 1.0
 var fails: Array = []
 var t := 0.0
 var step := 0
-var lo := 0.0
-var hi := 0.0
-var knot0 := Vector2.ZERO
-var knot_moved := 0.0
+var flare_max := 0.0
+var made0 := 0
+var glow_lo := 1.0
+var glow_hi := 0.0
+var flag_t0 := 0.0
+var boost_end := 0.0
 var seen := {}
 var gone := false
 
@@ -47,10 +54,6 @@ func check(ok: bool, what: String) -> void:
 	print(("ok   " if ok else "FAIL ") + what)
 	if not ok:
 		fails.append(what)
-
-func _knot() -> Vector2:
-	var k: Control = app.title_screen.logo.king
-	return k.get_global_transform() * k.pivot_offset
 
 func _init() -> void:
 	OS.set_environment("SIEGE_URL", "ws://127.0.0.1:1")      # nothing listens there
@@ -89,10 +92,14 @@ func _process(d: float) -> bool:
 			check(ResourceLoader.exists("res://assets/sounds/titleSlam.wav"), "the slam's sound is there")
 			check(not ts.can_swap(), "the game isn't put in behind before the screen has settled for it")
 			check(not app._background, "the game's background loading waits for the show")
-			var bt: Texture2D = UI2.tex(UI2.V2 + "logo_base.webp")
-			var kt: Texture2D = UI2.tex(UI2.V2 + "logo_king.webp")
-			check(bt != null and Vector2(bt.get_size()) == TitleLogo.BASE and kt != null and Vector2(kt.get_size()) == TitleLogo.KING_SIZE,
-				"the title's two layers match title_logo.gd")
+			var bt: Texture2D = UI2.tex(UI2.V2 + "title_rift_base.webp")
+			var lt: Texture2D = UI2.tex(UI2.V2 + "title_flag_l.webp")
+			var rt: Texture2D = UI2.tex(UI2.V2 + "title_flag_r.webp")
+			var gt: Texture2D = UI2.tex(UI2.V2 + "title_rift_glow.webp")
+			check(bt != null and Vector2(bt.get_size()) == TitleLogo.BASE and lt != null and Vector2(lt.get_size()) == TitleLogo.FLAG_L[1]
+				and rt != null and Vector2(rt.get_size()) == TitleLogo.FLAG_R[1] and gt != null and Vector2(gt.get_size()) == TitleLogo.GLOW[1],
+				"the title's layers match title_logo.gd (the word, the two flags, the rift's glow)")
+			check(not ResourceLoader.exists(UI2.V2 + "logo_king.webp"), "(the old title's King is gone)")
 			step = 1
 		1:
 			var ts = app.title_screen
@@ -107,7 +114,8 @@ func _process(d: float) -> bool:
 			if ts.landed and ts.t - ts._land_t < 0.3:
 				punch_max = maxf(punch_max, ts.stage.scale.x)
 			if ts.landed and ts.t < 1.6:
-				kick = maxf(kick, absf(rad_to_deg(ts.logo.king.rotation)))
+				kick = maxf(kick, float(ts.logo.boost))
+				flare_max = maxf(flare_max, float(ts.logo.rift.flare))
 			if ts.t < 1.8:                     # (the title's own clock: a long frame slows its show)
 				return false
 			var ig: Array = seen.get("ignite", [0.0, 0.0])
@@ -121,33 +129,40 @@ func _process(d: float) -> bool:
 			check(bool(h[4]) and bool(h[5]) and punch_max > 1.03, "the hit: a shockwave ring, gold sparks, a punch-in zoom (%.3f)" % punch_max)
 			check(float(h[7]) >= ts.START - 0.001 and absf(float(h[0]) - float(h[7]) - ts.FLIGHT) < 0.06,
 				"the show sets off once the game is ready (%.2f s) and hits %.2f s later" % [float(h[7]), float(h[0]) - float(h[7])])
-			check(kick > TitleLogo.SWING_DEG * 2.0, "the slam knocks the King into a big swing (%.0f degrees)" % kick)
+			check(kick > 1.5, "the slam whips the flags about (%.1f times their swing)" % (1.0 + kick))
+			check(flare_max > 0.5, "...and the rift flares (%.2f)" % flare_max)
 			check((ts.logo.scale as Vector2).distance_to(Vector2.ONE) < 0.02 and ts.stage.position.length() < 0.5 and ts.cracks.grow >= 1.0
 				and absf(ts.stage.scale.x - 1.0) < 0.002, "it settles on the wall, cracks run out round it, the shake and the zoom die down")
 			check(float(ts.rays_mat.get_shader_parameter("power")) > 0.3, "light rays behind the title")
 			check(ts.tap.text == "TAP TO START" and ts.tap.modulate.a > 0.4 and ts.home_is_ready, "TAP TO START (the game behind is ready)")
 			check(app._background, "...and with the show over, the game's background loading has started")
 			waiting.hold_for_game()                  # (the boot screen: the game has loaded, about to go in)
-			knot0 = _knot()
+			made0 = int(app.title_screen.logo.rift.made)
+			flag_t0 = float((app.title_screen.logo.flag_l.material as ShaderMaterial).get_shader_parameter("t"))
 			step = 2
 			t = 0.0
 		2:
 			var gs: float = app.title_screen.glint_mat.get_shader_parameter("sweep")
 			swept = swept or (gs > 0.2 and gs < 0.8)
-			if t < 3.0:
-				return false                 # (the slam's big swing dying down)
-			var r: float = rad_to_deg(app.title_screen.logo.king.rotation)
-			lo = minf(lo, r)
-			hi = maxf(hi, r)
-			knot_moved = maxf(knot_moved, _knot().distance_to(knot0))
+			var lg = app.title_screen.logo
+			var ga: float = lg.rift.glow.modulate.a
+			glow_lo = minf(glow_lo, ga)
+			glow_hi = maxf(glow_hi, ga)
 			if t < 6.0:
 				return false
 			check(swept, "a gold glint sweeps across the letters")
-			check(lo < -TitleLogo.SWING_DEG * 0.8 and hi > TitleLogo.SWING_DEG * 0.8, "the King swings both ways (%.1f to %.1f degrees)" % [lo, hi])
-			check(lo >= -TitleLogo.SWING_DEG - 0.6 and hi <= TitleLogo.SWING_DEG + 0.6, "...and is back to no further than %.0f degrees" % TitleLogo.SWING_DEG)
-			check(knot_moved < 0.5, "he turns about the knot (it moved %.2f px)" % knot_moved)
+			var lm := lg.flag_l.material as ShaderMaterial
+			var rm := lg.flag_r.material as ShaderMaterial
+			check(float(lm.get_shader_parameter("t")) - flag_t0 > 5.0 and lg.flag_amp() > 0.0 and float(rm.get_shader_parameter("amp")) > 0.0
+				and float(lm.get_shader_parameter("side")) == 1.0 and float(rm.get_shader_parameter("side")) == -1.0,
+				"both flags wave from their poles all the while (swing %.1f px)" % lg.flag_amp())
+			check(float(lg.boost) < 0.1 and lg.flag_amp() < TitleLogo.FLAG_AMP * 1.15, "...the slam's whipping died back to a breeze (%.2f)" % float(lg.boost))
+			var bolts := int(lg.rift.made) - made0
+			check(bolts >= 15 and (lg.rift.sparks as CPUParticles2D).emitting and glow_hi - glow_lo > 0.1,
+				"the rift crackles: %d bolts in 6 s, sparks, its glow flickering (%.2f to %.2f)" % [bolts, glow_lo, glow_hi])
 			check(still.landed and still.logo.scale == Vector2.ONE and still.stage.position == Vector2.ZERO
-				and absf(still.logo.king.rotation) < 0.0001, "with Reduce Motion: no flight, no shake, the King hangs still")
+				and still.logo.flag_amp() == 0.0 and int(still.logo.rift.made) == 0 and not (still.logo.rift.sparks as CPUParticles2D).emitting,
+				"with Reduce Motion: no flight, no shake, the flags and the rift still")
 			# no game behind it: LOADING..., no show; held still for the game going in; a tap is kept, and the moment
 			# the game is ready the screen lifts, straight in
 			check(waiting.tap.text == "LOADING..." and waiting.tap.modulate.a > 0.2 and not waiting.home_is_ready and waiting._launch < 0.0
@@ -196,7 +211,7 @@ func _loading_screens() -> void:
 	var cover: Control = sm._cover
 	var walls := cover.find_children("*", "TextureRect", false, false).filter(func(n): return (n as TextureRect).texture != null and (n as TextureRect).texture.resource_path.ends_with("bg_title_wall.webp"))
 	var logos := cover.find_children("*", "", true, false).filter(func(n): return n.get_script() == TitleLogo)
-	check(walls.size() == 1 and logos.size() == 1, "the warm-up cover: the castle wall and the swinging title")
+	check(walls.size() == 1 and logos.size() == 1, "the warm-up cover: the castle wall and the title")
 	sm.free()
 	# the boot splash
 	var img := str(ProjectSettings.get_setting("application/boot_splash/image", ""))

@@ -6100,3 +6100,32 @@ necromancers eyes".
   player's inputs stalled while the client loaded the match, so the server flagged it idle for a second); alone it
   passed 3 of 3 -- COLD_START_PASS, the Play-shape AAB check exit 0 with the presets unchanged, BASE OK (275 files).
   Preview APK: build/Fatebound-Siege-0.31.192-fatebound.apk (32 MB, preview key), sha256 7cc922ae...30ceb6da166d0269.
+
+## 0.31.193 — a new title: FATEBOUND split by a rift, its flags waving, its lightning crackling
+Kevin: "Let's make a brand new title graphic that fits new game style". Asked: three directions (all of them, 4 takes
+each) and the old tagline (it was the capture mode's: "No tagline"). 12 concepts (ElevenLabs gpt-image-2 2K, flow
+"Fatebound title 0.31.193"; A a crowned blue/red crest with sword and staff, B the six champions cheering over the word
+from a sheet of their portraits (art_sources/title_logo/champions_ref_0_31_193.png), C FATE in ice, BOUND in fire, split
+by a rift under a crown; ~3,650 credits), shown cut out on the title wall. Kevin: "I like c4 and make the flags on side
+blow around and the lighting effect in middle show effects".
+- The painting: art_sources/title_logo/fatebound_rift.png. tools/build_title_logo.py (rewritten; the "All Tied Up" one
+  in git history) cuts it from its white page (the rift's white-hot core kept) into assets/ui/v2/title_rift_base.webp
+  (the word, the crown, the rift; 1400 x 632), title_flag_l / title_flag_r.webp (each flag and its pole, cut along the
+  pole and the word's outline where the cloth goes behind it), title_rift_glow.webp (the core, blurred), and
+  assets/branding/title_logo.webp (the whole at rest, 640: the first-start download screen); it prints the numbers
+  title_logo.gd uses (each pole's line, the rift's line, read off the painting's white-hot pixels).
+- scripts/app/title_logo.gd (rewritten, the same API: aspect, kick, set_shine, calm): the flags behind the word, each
+  waving from its pole (scripts/app/title_flag.gdshader: the cloth moved by its distance from the pole -- a wave running
+  out to its free edge, a pull toward the pole on each crest, the folds lit and shaded; the two out of step, a gentle
+  gust), the rift alive over it (scripts/app/title_rift_fx.gd: its glow flickering; jagged lightning bolts along it a
+  few hundredths of a second each, now and then forking out into the letters; sparks spitting off and falling; every
+  couple of seconds a flare -- bolts the whole length, the glow up, a burst of sparks). The title screen's slam
+  (kick) whips the flags (3.6 times their swing, dying back to a breeze in ~2 s) and flares the rift (the King's big
+  swing until now). Reduce Motion and the flight's afterimages: all still. The match's warm-up cover has it too.
+- Gone: assets/ui/v2/logo_base.webp and logo_king.webp (the rope-bound title and the swinging King);
+  tools/build_title_art.py no longer writes the branding title.
+- title_logo_test: the layers match the art; the slam whips the flags and flares the rift; the flags wave all the
+  while, then back to a breeze; the rift crackles (66 bolts in 6 s, sparks, the glow 0.26-0.95); Reduce Motion still;
+  the old King gone.
+- Content pack: ui-b0a0ac25987d uploaded; CONTENT OK, coverage OK, presets unchanged.
+- Version 0.31.193, versionCode 279, SERVER_BUILD 0.31.193.

@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
-"""Home's title logo, "All Tied Up" (0.31.113, Kevin: "I like the all tied up one. Can you also make it so the king
-swings back and forth from the rope").
+"""The title logo, "Rift" (0.31.193, Kevin: "Let's make a brand new title graphic that fits new game style" -> picked C4,
+"make the flags on side blow around and the lighting effect in middle show effects").
 
-Cuts the one painting (art_sources/title_logo/fatebound_tied_up.png, the logo on a white page) into two layers:
-  assets/ui/v2/logo_base.webp   the logo and the tagline scroll with the hanging King painted out (the D's outline and
-                                face carried on behind him, the page left clear where he hung over it)
-  assets/ui/v2/logo_king.webp   the King with his two rope ends, from just under the knot down
-scripts/app/title_logo.gd turns the King about the knot. The King's outline is the white page around him, plus hand-traced
-rope ends and crown where he hangs in front of the D, refined with GrabCut. Prints the numbers title_logo.gd uses.
+One painting (art_sources/title_logo/fatebound_rift.png: ElevenLabs gpt-image-2 2K, flow "Fatebound title 0.31.193", the
+logo on a white page) -> the layers scripts/app/title_logo.gd puts together:
+  assets/ui/v2/title_rift_base.webp   FATEBOUND, the crown and the rift, the two flags taken out
+  assets/ui/v2/title_flag_l.webp      the blue flag and its pole (the wave shader moves the cloth, the pole holds)
+  assets/ui/v2/title_flag_r.webp      the red flag and its pole
+  assets/ui/v2/title_rift_glow.webp   the rift's white-hot core, blurred: an additive glow that flickers over it
+  assets/branding/title_logo.webp     the whole title at rest, 640 wide (the first-start download screen)
+and prints the numbers title_logo.gd uses (sizes, where the flags sit, each pole's line, the rift's line).
+(0.31.113-0.31.192: "All Tied Up", the rope-bound title with the King swinging -- art_sources/title_logo/
+fatebound_tied_up.png, the old version of this tool in git history.)
 
   python3 tools/build_title_logo.py            (needs numpy, scipy, opencv-python, pillow)
 """
@@ -20,40 +24,43 @@ import scipy.ndimage as nd
 from PIL import Image
 
 GODOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SRC = os.path.join(os.path.dirname(GODOT), "art_sources", "title_logo", "fatebound_tied_up.png")
+SRC = os.path.join(os.path.dirname(GODOT), "art_sources", "title_logo", "fatebound_rift.png")
 OUT = os.path.join(GODOT, "assets", "ui", "v2")
+WIDTH = 1400                   # the layers' width (the painting is 2048): a phone shows the title at most ~1080 px wide
+PAD = 16                       # transparent margin round each flag layer (the cloth waves past its outline), output px
 
-PIVOT = (1081.0, 284.0)        # under the knot, between the two rope ends (painting pixels)
-CUT = 393                      # below this the King hangs over the white page only
-TOP0, TOP1 = 286, 294          # the King's rope ends fade in over these rows; the base keeps the rope there
-# rope ends and crown where they hang in front of the D (painting pixels, traced on a 4x/6x grid)
-LEFT_ROPE = [(1063, 286), (1080, 286), (1078, 300), (1075, 320), (1071, 340), (1063, 360), (1058, 380), (1054, 393),
-             (1034, 393), (1037, 380), (1044, 360), (1050, 340), (1056, 320), (1061, 300)]
-RIGHT_ROPE = [(1083, 286), (1100, 286), (1103, 300), (1107, 320), (1113, 340), (1117, 365), (1098, 365), (1096, 340),
-              (1091, 320), (1086, 300)]
-CROWN = [(1060, 393), (1062, 370), (1071, 357), (1077, 350), (1078, 341), (1083, 334), (1091, 341), (1092, 351),
-         (1097, 360), (1108, 351), (1116, 344), (1119, 338), (1125, 334), (1131, 340), (1132, 351), (1137, 366),
-         (1148, 362), (1150, 358), (1163, 358), (1163, 369), (1158, 378), (1167, 376), (1177, 376), (1180, 386),
-         (1192, 393)]
-BODY_SEED = (1060, 500)        # a pixel of the ropes round his middle
-
-
-POCKET_MIN = 150               # enclosed bits of white page at least this big are page too
-POCKET_X1 = 1000               # (left of the King: his beard and fur are white and stay)
+# the flags: everything outside these lines (painting px, (y, x) points) -- the line runs down each pole and then the
+# word's outline where the cloth goes behind it; under the cloth's tails (y 780) nothing is flag
+EDGE_L = [(0, 200), (418, 205), (440, 200), (470, 212), (640, 205), (660, 192), (775, 184), (780, 0), (1024, 0)]
+EDGE_R = [(0, 1810), (420, 1810), (460, 1846), (490, 1862), (593, 1883), (653, 1893), (680, 1903), (700, 1935),
+          (775, 1935), (780, 2048), (1024, 2048)]
+# each pole's line, where the cloth hangs from (the cloth moves with its distance from it); below the pole, the edge
+POLE_L = [(260, 150), (330, 168), (420, 195), (470, 205), (640, 205), (820, 185), (1024, 175)]
+POLE_R = [(260, 1897), (330, 1885), (380, 1870), (450, 1850), (490, 1862), (593, 1883), (653, 1893), (700, 1905),
+          (1024, 1905)]
+RIFT_X = (925, 1020)           # the rift's white-hot core lies between these columns ...
+RIFT_Y = (322, 892)            # ... from under the crown's rim to the tip under the word
 
 
 def page_alpha(im):
-    """The white page around the logo becomes clear (flood fill of near-white from the border, 3px soft edge) -- and so
-    do the pockets of page shut in between the letters and the scroll (0.31.129, Kevin: "There is white showing on the
-    title"), which the flood from the border can't reach."""
+    """The white page becomes clear: a flood fill of near-white from the border (3 px soft edge), and the enclosed
+    pockets of page (in the letters' counters) too. The rift's white-hot core is kept: it never touches the page but
+    at its tip, and the fill stops at the tip's thin end."""
     mn = im.min(axis=2)
     lab, n = nd.label(mn > 238)
     border = set(np.unique(np.concatenate([lab[0], lab[-1], lab[:, 0], lab[:, -1]]))) - {0}
+    x0, x1 = RIFT_X
+    y0, y1 = RIFT_Y
     sizes = nd.sum(np.ones_like(mn), lab, range(1, n + 1))
     for i, sl in enumerate(nd.find_objects(lab)):
-        if sl is not None and sizes[i] >= POCKET_MIN and sl[1].stop <= POCKET_X1:
+        # enclosed pockets of page (150 px or more), but never the rift's core
+        if sl is not None and sizes[i] >= 150 and not (sl[1].start >= x0 - 10 and sl[1].stop <= x1 + 10):
             border.add(i + 1)
     bg = np.isin(lab, list(border))
+    # the rift's core touches the page at its tip: keep the core (inside the rift's box, above the tip) as logo
+    core = np.zeros_like(bg)
+    core[y0:y1 - 70, x0:x1] = True
+    bg &= ~core
     band = nd.binary_dilation(bg, iterations=3) & ~bg
     a = np.ones(mn.shape)
     a[bg] = 0.0
@@ -64,74 +71,88 @@ def page_alpha(im):
     return rgb, a
 
 
-def poly(shape, pts):
-    m = np.zeros(shape, np.uint8)
-    cv2.fillPoly(m, [np.array(pts, np.int32)], 1)
-    return m.astype(bool)
+def line_x(pts, H):
+    ys = np.arange(H)
+    return np.interp(ys, [p[0] for p in pts], [p[1] for p in pts])
 
 
-def king_mask(rgb, a):
-    H, W = a.shape
-    rough = poly((H, W), LEFT_ROPE) | poly((H, W), RIGHT_ROPE) | poly((H, W), CROWN)
-    below = a > 0.3
-    below[:CUT, :] = False
-    lab, _ = nd.label(below)
-    body = lab == lab[BODY_SEED[1], BODY_SEED[0]]
-    x0, y0, x1, y1 = 1020, 270, 1200, 410
-    roi = np.ascontiguousarray(rgb[y0:y1, x0:x1][:, :, ::-1].astype(np.uint8))
-    gm = np.full(roi.shape[:2], cv2.GC_PR_BGD, np.uint8)
-    r = rough[y0:y1, x0:x1]
-    gm[r] = cv2.GC_PR_FGD
-    gm[nd.binary_erosion(r, iterations=3)] = cv2.GC_FGD
-    gm[~nd.binary_dilation(r, iterations=5)] = cv2.GC_BGD
-    gm[body[y0:y1, x0:x1]] = cv2.GC_FGD
-    gm[:TOP0 - y0, :] = cv2.GC_BGD
-    gm[a[y0:y1, x0:x1] < 0.3] = cv2.GC_BGD
-    cv2.setRNGSeed(7)
-    cv2.grabCut(roi, gm, None, np.zeros((1, 65)), np.zeros((1, 65)), 6, cv2.GC_INIT_WITH_MASK)
-    top = np.zeros((H, W), bool)
-    top[y0:y1, x0:x1] = (gm == cv2.GC_FGD) | (gm == cv2.GC_PR_FGD)
-    top[CUT:, :] = False
-    king = body | top
-    lab2, _ = nd.label(king)
-    king = lab2 == lab2[BODY_SEED[1], BODY_SEED[0]]
-    return (nd.binary_closing(king, iterations=1) | king) & ((a > 0.3) | top)
+def rift_line(im, a):
+    """The rift's middle, row by row (the centroid of its white-hot pixels), smoothed, every 12 rows."""
+    mn = im.min(axis=2)
+    x0, x1 = RIFT_X
+    pts = []
+    for y in range(RIFT_Y[0], RIFT_Y[1], 4):
+        row = (mn[y, x0:x1] > 225) & (a[y, x0:x1] > 0.5)
+        xs = np.nonzero(row)[0]
+        if len(xs):
+            # the run nearest the last point (side cracks branch off the main one)
+            runs = np.split(xs, np.nonzero(np.diff(xs) > 2)[0] + 1)
+            last = pts[-1][0] if pts else (x0 + x1) / 2 - x0
+            best = min(runs, key=lambda r: abs(r.mean() + x0 - last))
+            pts.append((best.mean() + x0, y))
+    p = np.array(pts, float)
+    p[:, 0] = nd.uniform_filter1d(p[:, 0], 3, mode="nearest")
+    return p[::3]
 
 
 def main():
     im = np.asarray(Image.open(SRC).convert("RGB")).astype(np.float64)
+    H, W = im.shape[:2]
     rgb, a = page_alpha(im)
-    H, W = a.shape
-    king = king_mask(rgb, a)
-    # the King: the painting inside his outline (1px soft edge), his rope ends fading in under the knot
-    kf = np.clip(cv2.GaussianBlur(king.astype(np.float32), (0, 0), 0.7) * 1.6 - 0.3, 0, 1)
-    ramp = np.clip((np.arange(H)[:, None] - TOP0) / float(TOP1 - TOP0), 0, 1)
-    ka = kf * a * ramp
-    # the base: the King painted out. Colours come only from the logo (never the white page); the logo's edge carries on
-    # behind him where he hung in front of the D, and the page stays clear where he hung over it
-    hole = nd.binary_dilation(king, iterations=3)
-    hole[:TOP1, :] = False
-    unknown = hole | (nd.binary_dilation(hole, iterations=30) & (a < 0.6))
-    bgr = np.ascontiguousarray(np.clip(rgb, 0, 255).astype(np.uint8)[:, :, ::-1])
-    fill = cv2.inpaint(bgr, unknown.astype(np.uint8) * 255, 7, cv2.INPAINT_TELEA)[:, :, ::-1].astype(np.float64)
-    af = cv2.inpaint((a * 255).astype(np.uint8), hole.astype(np.uint8) * 255, 7, cv2.INPAINT_TELEA) / 255.0
-    af = cv2.GaussianBlur(np.clip((af - 0.5) * 10 + 0.5, 0, 1), (0, 0), 0.6)
-    base_rgb = np.where(hole[:, :, None], fill, rgb)
-    base_a = np.where(hole, af, a)
-    base_a[400:, :][hole[400:, :]] = 0.0
-    ys, xs = np.where(base_a > 0.05)
-    ky, kx = np.where(ka > 0.05)
-    x0, y0 = max(0, min(xs.min(), kx.min()) - 2), max(0, min(ys.min(), ky.min()) - 2)
-    x1, y1 = min(W, max(xs.max(), kx.max()) + 3), min(H, max(ys.max(), ky.max()) + 3)
-    base = np.dstack([base_rgb, base_a * 255]).round().astype(np.uint8)[y0:y1, x0:x1]
-    kx0, kx1, ky0, ky1 = kx.min() - 2, kx.max() + 3, ky.min() - 2, ky.max() + 3
-    spr = np.dstack([rgb, ka * 255]).round().astype(np.uint8)[ky0:ky1, kx0:kx1]
-    Image.fromarray(base, "RGBA").save(os.path.join(OUT, "logo_base.webp"), lossless=True, quality=100, method=6)
-    Image.fromarray(spr, "RGBA").save(os.path.join(OUT, "logo_king.webp"), lossless=True, quality=100, method=6)
-    print("BASE := Vector2(%d, %d)" % (x1 - x0, y1 - y0))
-    print("KING_AT := Vector2(%d, %d)" % (kx0 - x0, ky0 - y0))
-    print("KING_SIZE := Vector2(%d, %d)" % (kx1 - kx0, ky1 - ky0))
-    print("PIVOT := Vector2(%g, %g)" % (PIVOT[0] - x0, PIVOT[1] - y0))
+    xx = np.arange(W)[None, :]
+    left = xx < line_x(EDGE_L, H)[:, None]
+    right = xx > line_x(EDGE_R, H)[:, None]
+    ys, xs = np.nonzero(a > 0.05)
+    bx0, by0, bx1, by1 = max(0, xs.min() - 2), max(0, ys.min() - 2), min(W, xs.max() + 3), min(H, ys.max() + 3)
+    s = WIDTH / float(bx1 - bx0)
+
+    def to_out(arr, box):
+        x0, y0, x1, y1 = box
+        img = Image.fromarray(arr[y0:y1, x0:x1].round().clip(0, 255).astype(np.uint8), "RGBA")
+        return img.resize((max(1, round((x1 - x0) * s)), max(1, round((y1 - y0) * s))), Image.LANCZOS)
+
+    full = np.dstack([rgb, a * 255])
+    base = full.copy()
+    base[left | right, 3] = 0.0
+    base_img = to_out(base, (bx0, by0, bx1, by1))
+    base_img.save(os.path.join(OUT, "title_rift_base.webp"), "WEBP", quality=92, alpha_quality=100, method=6)
+    print("BASE := Vector2(%d, %d)" % base_img.size)
+    whole = to_out(full, (bx0, by0, bx1, by1))
+    for name, mask, pole in (("l", left, POLE_L), ("r", right, POLE_R)):
+        f = full.copy()
+        f[~mask, 3] = 0.0
+        fy, fx = np.nonzero(f[:, :, 3] > 5)
+        p = int(round(PAD / s))
+        box = (max(0, fx.min() - p), max(0, fy.min() - p), min(W, fx.max() + 1 + p), min(H, fy.max() + 1 + p))
+        img = to_out(f, box)
+        img.save(os.path.join(OUT, "title_flag_%s.webp" % name), "WEBP", quality=92, alpha_quality=100, method=6)
+        at = ((box[0] - bx0) * s, (box[1] - by0) * s)
+        print("FLAG_%s := [Vector2(%.1f, %.1f), Vector2(%d, %d)]   # its corner on the base, its size" %
+              (name.upper(), at[0], at[1], img.size[0], img.size[1]))
+        # the pole's line in the flag texture's own px, (y, x) pairs (title_flag.gdshader)
+        pl = [((py - box[1]) * s, (px - box[0]) * s) for py, px in pole]
+        print("POLE_%s := PackedVector2Array([%s])" % (name.upper(), ", ".join("Vector2(%.1f, %.1f)" % q for q in pl)))
+    # the rift: its line (base px) and its glow
+    rl = rift_line(im, a)
+    print("RIFT := PackedVector2Array([%s])" % ", ".join("Vector2(%.1f, %.1f)" % ((x - bx0) * s, (y - by0) * s)
+                                                         for x, y in rl))
+    mn = im.min(axis=2)
+    core = (mn > 225) & (a > 0.5)
+    keep = np.zeros_like(core)
+    keep[RIFT_Y[0]:RIFT_Y[1], RIFT_X[0]:RIFT_X[1]] = True
+    core &= keep
+    g = cv2.GaussianBlur(core.astype(np.float32), (0, 0), 7.0) * 2.2 + cv2.GaussianBlur(core.astype(np.float32), (0, 0), 2.0)
+    g = np.clip(g, 0, 1)
+    gx0, gy0, gx1, gy1 = RIFT_X[0] - 40, RIFT_Y[0] - 40, RIFT_X[1] + 40, RIFT_Y[1] + 30
+    glow = np.zeros((H, W, 4))
+    glow[:, :, 0], glow[:, :, 1], glow[:, :, 2] = 255, 236, 180
+    glow[:, :, 3] = g * 255
+    gimg = to_out(glow, (gx0, gy0, gx1, gy1))
+    gimg.save(os.path.join(OUT, "title_rift_glow.webp"), "WEBP", quality=90, alpha_quality=100, method=6)
+    print("GLOW := [Vector2(%.1f, %.1f), Vector2(%d, %d)]" % ((gx0 - bx0) * s, (gy0 - by0) * s, gimg.size[0], gimg.size[1]))
+    small = whole.resize((640, round(whole.size[1] * 640 / whole.size[0])), Image.LANCZOS)
+    small.save(os.path.join(GODOT, "assets", "branding", "title_logo.webp"), "WEBP", quality=90, method=6)
+    print("title_logo.webp", small.size)
 
 
 if __name__ == "__main__":

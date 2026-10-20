@@ -4,7 +4,8 @@ extends Control
 # something"): the screen the app opens on. A castle wall at dusk (bg_title_wall.webp; tools/build_title_art.py), its
 # two torches flickering and throwing up embers; the title (title_logo.gd) flies in from the viewer and slams onto the
 # wall: a thud (titleSlam), a flash, the screen shakes, dust bursts out from behind it and rubble drops, cracks run out
-# into the stones, the title squashes and settles -- and the King swings from his rope. Then TAP TO START: a tap
+# into the stones, the title squashes and settles -- its flags whip about and its rift flares (0.31.193; until then
+# the King swung from his rope). Then TAP TO START: a tap
 # anywhere lifts the screen off Home (a tap during the flight lands it first). Reduce motion: the title fades in and
 # holds still, no shake.
 #
@@ -16,7 +17,7 @@ extends Control
 #    lifts the screen the moment Home is ready). A long frame slows the show down rather than skipping it.
 #  - MORE EXCITING: the wall comes up from the boot splash as the edges darken; the torches flare alight one after the
 #    other (whoosh of fire); the title launches with a whoosh, trailing afterimages; it hits on the jingle's first
-#    note: a shockwave ring, gold sparks, a punch-in zoom, the torches flaring, the King knocked into a wild swing; then
+#    note: a shockwave ring, gold sparks, a punch-in zoom, the torches flaring, the title's flags whipping (0.31.193); then
 #    light rays turn slowly behind the title, a gold glint sweeps across the letters every few seconds, and embers
 #    drift up the screen. The game's own sounds (tm_fireball1, tm_sword_swing2, tm_crumble1), no new files.
 #    Reduce motion: no flight, shake, zoom, rays turning, glint or drifting embers.
@@ -60,7 +61,7 @@ const GLINT_AT := 0.8                  # the first glint, after the hit...
 const GLINT_EVERY := 4.5               # ...then every this often
 const GLINT_TIME := 0.75
 const GHOSTS := 2                      # afterimages trailing the flight
-const KICK_DEG := 32.0                 # the King's swing after the hit (dies down to his gentle 7)
+const KICK_DEG := 32.0                 # the hit's kick to the title (title_logo.kick: its flags whip, its rift flares)
 const MAX_STEP := 1.0 / 20.0           # a longer frame slows the show instead of skipping it
 
 signal done
@@ -593,7 +594,7 @@ func _mark(s: String) -> void:
 
 # ---------------- the show ----------------
 func land() -> void:
-	# the hit: the thud, a flash, the shockwave, sparks, dust and rubble, the cracks, the shake, the King knocked swinging
+	# the hit: the thud, a flash, the shockwave, sparks, dust and rubble, the cracks, the shake, the title's flags whipping
 	if landed:
 		return
 	landed = true

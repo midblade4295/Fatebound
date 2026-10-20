@@ -976,7 +976,7 @@ func _cover_show() -> void:
 	cover.mouse_filter = Control.MOUSE_FILTER_STOP
 	cover.z_index = 100
 	# 0.31.139 (Kevin: the title "in a startup screen and any loading screens"): the title screen's castle wall behind it,
-	# and the title itself, the King swinging (title_logo.gd; text if the ui pack's art isn't there)
+	# and the title itself, its flags waving and its rift crackling (title_logo.gd; text if the ui pack's art isn't there)
 	if ResourceLoader.exists(_COVER_WALL):
 		var wall := TextureRect.new()
 		wall.texture = load(_COVER_WALL)
