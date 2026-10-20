@@ -289,6 +289,7 @@ func _init() -> void:
 			_log("prize week %s: #%d %s (%d gems, %s chest, %s)" % [week, rank, acct, int(prize.get("gems", 0)), str(prize.get("chest", "")), str(prize.get("title", "-"))])
 		return ok
 	leaderboard.tag_fn = func(acct: String) -> String: return social.clans.tag_of_acct(acct)   # 0.31.134
+	leaderboard.crest_fn = func(acct: String) -> String: return social.clans.crest_of_acct(acct)   # 0.31.196
 	leaderboard.start()
 	social.rank_fn = func(acct: String) -> int: return leaderboard.rank_of(acct)       # 0.31.120: the profile card
 	referrals = Referrals.new()
@@ -1136,6 +1137,17 @@ func player_tags(r: Room) -> Dictionary:
 			out[clients[cid].unit] = ct
 	return out
 
+func player_crests(r: Room) -> Dictionary:
+	# 0.31.196: unit id -> clan crest code ("e.f.c") for each seated player in a clan
+	var out := {}
+	if social == null or social.clans == null:
+		return out
+	for cid in _seated(r):
+		var cc: String = social.clans.crest_of_acct(str(clients[cid].get("acct", "")))
+		if cc != "":
+			out[clients[cid].unit] = cc
+	return out
+
 func player_looks(r: Room) -> Dictionary:
 	# 0.31.101: unit id -> looks ({"_sk": the outfits}) for each seated player who wears something
 	var out := {}
@@ -1145,7 +1157,7 @@ func player_looks(r: Room) -> Dictionary:
 	return out
 
 func _send_names(r: Room) -> void:
-	var msg := {"t":"pn", "n":player_names(r), "tt":player_titles(r), "lk":player_looks(r), "ct":player_tags(r)}
+	var msg := {"t":"pn", "n":player_names(r), "tt":player_titles(r), "lk":player_looks(r), "ct":player_tags(r), "cc":player_crests(r)}
 	for cid in _members(r):
 		var c: Dictionary = clients[cid]
 		if not bool(c.get("queued", false)) and c.unit != "":
@@ -1198,12 +1210,14 @@ func _send_lobby(r: Room, waiting: Array) -> void:
 	var names := []
 	var titles := []
 	var tags := []
+	var crests := []                           # 0.31.196
 	for cid in waiting:
 		names.append(clients[cid].name)
 		titles.append(str(clients[cid].get("title", "")))
 		tags.append(social.clans.tag_of_acct(str(clients[cid].get("acct", ""))) if social != null and social.clans != null else "")
+		crests.append(social.clans.crest_of_acct(str(clients[cid].get("acct", ""))) if social != null and social.clans != null else "")
 	var msg := {"t":"lobby", "left":maxf(0.0, r.wave_end - _now()), "wait":lobby_time,
-		"names":names, "tt":titles, "ct":tags,
+		"names":names, "tt":titles, "ct":tags, "cc":crests,
 		"in_match":_seated_count(r), "online":_human_count(), "slots":Net.TEAM_SIZE * 2,
 		"running":r.sim != null and not r.sim.ended and _seated_count(r) > 0, "match":r.match_id, "five":Net.FIVE}   # (running: they join it)
 	for i in waiting.size():
@@ -1283,6 +1297,15 @@ func _pay_match(r: Room) -> void:
 		c.erase("ledger")
 		if leaderboard != null:
 			leaderboard.add_match(str(c.acct), str(c.name), str(c.get("title", "")), me, won)     # 0.31.119
+		if social != null and social.clans != null:
+			# 0.31.196: the clan's points -- doubled with a clanmate in the party (the party's members in this match)
+			var mates := []
+			var pa := str(c.get("party", ""))
+			if pa != "":
+				for o in payees:
+					if not is_same(o, c) and str(o.get("party", "")) == pa and o.has("acct"):
+						mates.append(str(o.acct))
+			social.clans.add_match(str(c.acct), me, won, draw, mates)
 		if referrals != null:
 			referrals.check(str(c.acct), eco)                 # 0.31.120: level 5 with a friend's code
 		if analytics != null:

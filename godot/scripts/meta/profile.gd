@@ -132,6 +132,7 @@ static func defaults() -> Dictionary:
 		"login":{"day":"", "n":0},                                   # 0.31.119: the last day claimed, claims so far
 		"discord":false,                                             # 0.31.124: the Discord reward claimed
 		"prizes":[],                                                 # 0.31.120: weekly leaderboard prizes paid (newest first)
+		"clan_rewards":[],                                           # 0.31.196: Clan Chests and League gems paid (newest first)
 		"war_rewards":[],                                            # 0.31.151: the war's rewards paid (0.31.169: no more -- Crown War is gone; kept in saves)
 		"paid":[],                                                   # 0.31.134: gold the server took (a clan), newest first
 		"referral":{"by":"", "notes":[]},                            # 0.31.120: whose code was entered; friend rewards (newest first)
@@ -823,6 +824,51 @@ func grant_referral(kind: String, name: String) -> Dictionary:
 		d.referral.notes.resize(20)
 	save()
 	return {"ok":true, "chests":out.chests}
+
+# ---------------- clans (0.31.196) ----------------
+func grant_clan_reward(week: String, r: Dictionary) -> Dictionary:
+	# the server only (server/clans.gd, when a week ends): the clan's Clan Chest (r.chest, a reward chest) and its League
+	# gems (r.gems) -- once a week; never an op a phone can send
+	if not (d.get("clan_rewards", null) is Array):
+		d["clan_rewards"] = []
+	for x in d.clan_rewards:
+		if str(x.get("week", "")) == week:
+			return {"ok":false, "error":"paid"}
+	var out := {"chests":[]}
+	var chest := str(r.get("chest", ""))
+	if chest != "" and Eco.CHESTS.has(chest):
+		add_chest(chest, out, true)
+	else:
+		chest = ""
+	var gems := maxi(0, int(r.get("gems", 0)))
+	d.gems = int(d.gems) + gems
+	d.clan_rewards.push_front({"week":week, "clan":str(r.get("clan", "")).left(24), "tag":str(r.get("tag", "")).left(4),
+		"chest":chest, "tier":int(r.get("tier", 0)), "rank":int(r.get("rank", 0)), "gems":gems, "pts":int(r.get("pts", 0))})
+	if (d.clan_rewards as Array).size() > 12:
+		d.clan_rewards.resize(12)
+	save()
+	return {"ok":true, "chests":out.chests}
+
+func give_shard(hid: String) -> Dictionary:
+	# the server only (server/clans.gd, a shard request answered): a shard of hid given to a clanmate -- gone from here,
+	# and what melting it would have paid (melt_shard's gold) paid here
+	if shards_of(hid) <= 0:
+		return {"ok":false, "error":"No shard of that hero"}
+	var g := Eco.shard_melt_gold(hid, now())
+	(d.shards as Array).erase(hid)
+	d.gold = int(d.gold) + g
+	save()
+	return {"ok":true, "gold":g}
+
+func receive_shard(hid: String) -> Dictionary:
+	# the server only: a clanmate's shard of hid, given to this account
+	if not Eco.HERO_PRICES.has(hid):
+		return {"ok":false, "error":"Not a hero"}
+	if not (d.get("shards", null) is Array):
+		d["shards"] = []
+	(d.shards as Array).append(hid)
+	save()
+	return {"ok":true}
 
 # ---------------- the daily login reward (0.31.119) ----------------
 func login_ready() -> bool:

@@ -441,6 +441,65 @@ func pay_gold(id: String, amount: int, why: String) -> bool:
 	log_fn.call("account %s paid %d gold (%s)" % [id, amount, why])
 	return true
 
+# ---------------- clans (0.31.196: server/clans.gd) ----------------
+func grant_clan_reward(id: String, week: String, r: Dictionary) -> bool:
+	# a week's Clan Chest and League gems -- once a week per account (Profile.grant_clan_reward)
+	var e := _load(id)
+	if e.is_empty():
+		return false
+	var p = e.p
+	p.refresh()
+	p.replaying = true
+	var res: Dictionary = p.grant_clan_reward(week, r)
+	p.replaying = false
+	if not bool(res.get("ok", false)):
+		return false
+	e.meta.rev = int(e.meta.get("rev", 0)) + 1
+	_save_meta(e)
+	log_fn.call("account %s: clan reward for %s (%s, %d gems)" % [id, week, str(r.get("chest", "")), int(r.get("gems", 0))])
+	return true
+
+func heroes_of(id: String) -> Dictionary:
+	# what a clan's shard requests need to know: {"own": heroes this account owns of those sold, "shards": its shards}
+	var e := _load(id)
+	if e.is_empty():
+		return {}
+	var p = e.p
+	var own := []
+	for h in Eco.HERO_PRICES:
+		if p.owns_hero(str(h)):
+			own.append(str(h))
+	return {"own":own, "shards":(p.d.get("shards", []) as Array).duplicate()}
+
+func give_shard(from_id: String, to_id: String, hid: String) -> Dictionary:
+	# a clanmate's shard request answered: the shard leaves the giver (who gets its melt gold) and joins the asker.
+	# Both accounts are loaded first; the giver's side is done only if the asker's can be. -> {"ok", "gold"?, "error"?}
+	if from_id == to_id:
+		return {"ok":false, "error":"self"}
+	var a := _load(from_id)
+	var b := _load(to_id)
+	if a.is_empty() or b.is_empty():
+		return {"ok":false, "error":"account"}
+	var pa = a.p
+	var pb = b.p
+	pa.refresh()
+	pb.refresh()
+	if pb.owns_hero(hid) or not Eco.HERO_PRICES.has(hid):
+		return {"ok":false, "error":"owned"}
+	pa.replaying = true
+	var r: Dictionary = pa.give_shard(hid)
+	pa.replaying = false
+	if not bool(r.get("ok", false)):
+		return {"ok":false, "error":"no_shard"}
+	pb.replaying = true
+	pb.receive_shard(hid)
+	pb.replaying = false
+	for e in [a, b]:
+		e.meta.rev = int(e.meta.get("rev", 0)) + 1
+		_save_meta(e)
+	log_fn.call("account %s gave a %s shard to %s (+%d gold)" % [from_id, hid, to_id, int(r.get("gold", 0))])
+	return {"ok":true, "gold":int(r.get("gold", 0))}
+
 func grant_referral(id: String, kind: String, name: String) -> bool:
 	# 0.31.120: a referral's Gold chest (server/referrals.gd)
 	var e := _load(id)

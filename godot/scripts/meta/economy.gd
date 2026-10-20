@@ -812,3 +812,102 @@ static func chest_odds(kind: String) -> String:
 const EMBER_GOLD := 10
 const DAILY_GOLD := 0                   # each daily order claimed (0.31.93-0.31.183: 15 Embers; 0.31.184-0.31.188: 150 gold --
                                         # 0.31.189: gone, each order pays its own gold)
+
+
+# ---------------- clans (0.31.196) ----------------
+# Kevin: "Now let's redo the clan system for new game" -> "Do clan chest, clan camp, crest, shard requests, 5-stack, lfg
+# button, league". server/clans.gd keeps the books; the phone (scripts/app/clan_panel.gd) shows them with these numbers.
+# A players' clan (not one of the three starter clans, the house clans of 0.31.148) earns CLAN POINTS from its members'
+# online matches (the server's own count, siege_server _pay_match): CLAN_POINTS for the result, the towers and the KOs,
+# doubled (CLAN_PARTY_X) for a member who had a clanmate in his party. A week's points (Monday 00:00 UTC, as the
+# leaderboard) fill the CLAN CHEST -- CLAN_CHEST_TIERS, one chest for the highest tier reached, to every member who earned
+# CLAN_CHEST_MIN that week -- and rank the clans in the CLAN LEAGUE (CLAN_LEAGUE_PRIZES: gems to the same members, and a
+# frame round the crest for the next week). Every point is clan XP too (and every shard given, CLAN_GIVE_XP): CLAN_LEVELS
+# -> the clan's level, which grows its camp (CLAN_CAMP_STAGE: the camp painting's four stages).
+const CLAN_POINTS := {"win":10, "draw":6, "loss":4, "tower":2, "ko":1, "ko_max":10}
+const CLAN_PARTY_X := 2
+const CLAN_CHEST_TIERS := [[60, "wooden"], [200, "silver"], [500, "gold"], [1000, "royal"]]
+const CLAN_CHEST_MIN := 10
+const CLAN_LEAGUE_PRIZES := [
+	{"from":1, "to":1, "gems":100, "frame":"gold"},
+	{"from":2, "to":2, "gems":60, "frame":"silver"},
+	{"from":3, "to":3, "gems":60, "frame":"bronze"},
+	{"from":4, "to":10, "gems":30, "frame":""},
+]
+const CLAN_LEVELS := [0, 200, 600, 1200, 2000, 3200, 4800, 7000, 10000, 14000]   # the XP for levels 1-10
+const CLAN_CAMP_STAGE := [1, 1, 2, 2, 3, 3, 3, 4, 4, 4]                           # the camp's stage at levels 1-10
+const CLAN_GIVE_XP := 5
+# shard requests: a member asks the clan for a shard of a hero he hasn't got (one ask open at a time, at most one every
+# CLAN_ASK_GAP, open CLAN_ASK_LIFE); a member holding a shard of that hero gives it -- the asker gets the shard, the giver
+# what melting it would have paid (Profile.melt_shard: no new gold in the game) and the clan CLAN_GIVE_XP
+const CLAN_ASK_GAP := 8 * 3600
+const CLAN_ASK_LIFE := 24 * 3600
+# LFG: a member says he's looking for a party (clan chat, CLAN_LFG_LIFE); clanmates JOIN straight into his party
+const CLAN_LFG_LIFE := 600
+# the crest: an emblem in one colour on a shield of another (assets/ui/clans/, tools/build_clan_art.py)
+const CLAN_EMBLEMS := ["lion", "stag", "raven", "wolf", "dragon", "bear", "eagle", "boar", "skull", "crown", "swords", "tower",
+	"tree", "flame", "moon", "bolt"]
+const CLAN_FIELDS := ["#2b59c3", "#c0392b", "#1f8a4c", "#7d3cc8", "#d97a1e", "#1d2436", "#0f8f8f", "#a0284f", "#6b4a2b", "#e8e2d0"]
+const CLAN_CHARGES := ["#ffffff", "#ffd65a", "#141414", "#ff6b5e", "#7fe3ff", "#8cf0a8", "#d9a8ff", "#c0c6cf"]
+# the three house clans' crests (and a players' clan made with a house by an older app: 0.31.134-0.31.195)
+const CLAN_HOUSE_CREST := {"lions": {"e":0, "f":4, "c":0}, "stags": {"e":1, "f":2, "c":0}, "ravens": {"e":2, "f":3, "c":0}}
+
+static func clan_points(me: Dictionary, won: bool, draw: bool) -> int:
+	# one online match's clan points (before CLAN_PARTY_X)
+	var p := int(CLAN_POINTS.win if won else (CLAN_POINTS.draw if draw else CLAN_POINTS.loss))
+	p += maxi(0, int(me.get("towers", 0))) * int(CLAN_POINTS.tower)
+	p += mini(maxi(0, int(me.get("kills", 0))) * int(CLAN_POINTS.ko), int(CLAN_POINTS.ko_max))
+	return p
+
+static func clan_level(xp: int) -> int:
+	var lv := 1
+	for i in CLAN_LEVELS.size():
+		if xp >= int(CLAN_LEVELS[i]):
+			lv = i + 1
+	return lv
+
+static func clan_level_xp(lv: int) -> int:
+	# the XP a level starts at (-1 past the last)
+	return int(CLAN_LEVELS[lv - 1]) if lv >= 1 and lv <= CLAN_LEVELS.size() else -1
+
+static func clan_camp_stage(lv: int) -> int:
+	return int(CLAN_CAMP_STAGE[clampi(lv, 1, CLAN_CAMP_STAGE.size()) - 1])
+
+static func clan_tier(pts: int) -> int:
+	# the Clan Chest's tier the week's points reached (0: none yet)
+	var t := 0
+	for i in CLAN_CHEST_TIERS.size():
+		if pts >= int(CLAN_CHEST_TIERS[i][0]):
+			t = i + 1
+	return t
+
+static func clan_chest_of(tier: int) -> String:
+	return str(CLAN_CHEST_TIERS[tier - 1][1]) if tier >= 1 and tier <= CLAN_CHEST_TIERS.size() else ""
+
+static func clan_league_prize(rank: int) -> Dictionary:
+	for t in CLAN_LEAGUE_PRIZES:
+		if rank >= int(t.from) and rank <= int(t.to):
+			return t
+	return {}
+
+static func clean_crest(c: Variant) -> Dictionary:
+	# {"e", "f", "c"} within the lists ({} when it isn't one)
+	if not (c is Dictionary):
+		return {}
+	var e := int(c.get("e", -1))
+	var f := int(c.get("f", -1))
+	var ch := int(c.get("c", -1))
+	if e < 0 or e >= CLAN_EMBLEMS.size() or f < 0 or f >= CLAN_FIELDS.size() or ch < 0 or ch >= CLAN_CHARGES.size():
+		return {}
+	return {"e":e, "f":f, "c":ch}
+
+static func crest_code(c: Dictionary) -> String:
+	# "e.f.c" -- the crest on cards, chat lines, the match's names and the leaderboard ("" for none)
+	var k := clean_crest(c)
+	return "" if k.is_empty() else "%d.%d.%d" % [int(k.e), int(k.f), int(k.c)]
+
+static func crest_of_code(s: String) -> Dictionary:
+	var p := s.split(".")
+	if p.size() != 3 or not p[0].is_valid_int() or not p[1].is_valid_int() or not p[2].is_valid_int():
+		return {}
+	return clean_crest({"e":int(p[0]), "f":int(p[1]), "c":int(p[2])})

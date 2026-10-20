@@ -171,6 +171,8 @@ run social_ui_test       SOCIAL_UI_PASS           200
 # Clans (0.31.134): server/clans.gd through social.gd, then the app's CLAN window against the real
 # server (8118) with a second phone: start a clan (gold taken), find, request, accept, clan chat, MANAGE, tags in the match.
 run clans_test           CLANS_PASS               90
+# 0.31.196: the crest, clan points, the week (Clan Chest, League), shard requests, 5-stacks, LFG
+run clan_week_test       CLAN_WEEK_PASS           90
 run clans_ui_test        CLANS_UI_PASS            240
 # (0.31.169: Crown War's tests went with it -- the war map's battles were Siege matches)
 # 0.31.155 5V5 (the test): heroes, waves (stacking), League's tower rules, gates behind towers, levels and picks, a

@@ -12,6 +12,7 @@ extends SceneTree
 const Social = preload("res://server/social.gd")
 const Clans = preload("res://server/clans.gd")
 const Leaderboard = preload("res://server/leaderboard.gd")
+const Eco = preload("res://scripts/meta/economy.gd")
 
 var fails: Array = []
 
@@ -109,7 +110,7 @@ func _init() -> void:
 	check(not bool(last(2, "clan_made").get("ok", true)) and str(last(2, "clan_made").why) == "gold" and players_clans(cl).is_empty() and int(eco.accts[ids[1]].gold) == 500,
 		"500 gold isn't enough: refused, nothing taken")
 	var bad := [[{"name":"Fuck Squad", "tag":"FSQ", "house":"lions"}, "name"], [{"name":"Ok Name", "tag":"AB", "house":"lions"}, "tag"],
-		[{"name":"Ok Name", "tag":"FUK", "house":"lions"}, "tag"], [{"name":"Ok Name", "tag":"OKN", "house":"dragons"}, "house"],
+		[{"name":"Ok Name", "tag":"FUK", "house":"lions"}, "tag"], [{"name":"Ok Name", "tag":"OKN", "house":"dragons"}, "crest"],
 		[{"name":"No<html>", "tag":"OKN", "house":"lions"}, "name"], [{"name":"ab", "tag":"OKN", "house":"lions"}, "name"],
 		[{"name":"Ok Name", "tag":"O K", "house":"lions"}, "tag"]]
 	for b in bad:
@@ -148,7 +149,8 @@ func _init() -> void:
 	check(found.size() == 1 and str(found[0].tag) == "WOLF" and int(found[0].n) == 1 and str(found[0].lead) == "Alice", "finding \"wol\": the Wolves, 1 member, led by Alice")
 	s.handle(2, {"k":"clan_find", "q":"", "house":"lions"})
 	var lions_found: Array = last(2, "clans").get("list", [])
-	check(lions_found.size() == 1 and bool(lions_found[0].get("hc", false)), "no players' clans of House Lions yet (its house clan only)")
+	check(lions_found.size() == 4 and lions_found.any(func(c): return str(c.tag) == "WOLF"),
+		"0.31.196: no house filter any more -- an older app asking for House Lions gets every clan (%d)" % lions_found.size())
 	clear()
 	s.handle(2, {"k":"clan_info", "id":wolves})
 	var info: Dictionary = last(2, "clan_info").get("c", {})
@@ -417,6 +419,9 @@ func _init() -> void:
 	f.close()
 	var older = Clans.new(dir2, s)
 	check(str(older.clans.cx.tag) == "LION" and str(older.clans[Clans.HOUSE_CLANS.lions.id].tag) == "LNG", "a players' [LION] kept: the Lion Guard is [LNG]")
+	check(Eco.crest_code(older.clans.cx.crest) == "0.4.0" and int(older.clans.cx.xp) == 0 and str(older.clans.cx.wk.week) == ""
+		and older.summary(older.clans.cx).get("cv", 0) == 2 and str(older.summary(older.clans.cx).house) == "lions",
+		"0.31.196: a clan from an older file gets its house's crest, no XP yet, and still says its house to older apps")
 	DirAccess.remove_absolute(dir2.path_join("clans.json"))
 	DirAccess.remove_absolute(dir2)
 

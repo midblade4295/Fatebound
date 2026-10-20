@@ -15,7 +15,7 @@ extends RefCounted
 #            never arrives); unfriends.
 #   report   a line in reports.jsonl in the state directory: who, about whom, why, their last lines -- for the developer.
 #   muted    pids listed in muted.txt in the state directory (one a line, # comments; re-read every 10 s) can't chat.
-#   party    up to 4. A member invites a friend who is online and not in a match (the invite lasts 60 s); "join",
+#   party    up to 4 (0.31.196: 5). A member invites a friend (0.31.196: or a clanmate) who is online and not in a match (the invite lasts 60 s); "join",
 #            "nojoin", "leave", "kick" (the leader). The leader's "play" sends every member in the menu "go": their apps
 #            join the online match with "party" in the hello, and siege_server seats a party on one team. A party is
 #            gone when one member is left with no invite out; a member away from the app for 3 minutes leaves it.
@@ -26,6 +26,14 @@ extends RefCounted
 # 0.31.134 (Crown War step 1): clans (server/clans.gd, set as `clans` by siege_server.gd) ride this socket too: the
 # "clan_*" messages go there, "clan" is a third chat channel (the clan's members), and cards and chat lines carry the
 # player's clan tag ("ct"). "me" says "clans":1 when the server has them.
+# 0.31.196 (Kevin: "Do clan chest, clan camp, crest, shard requests, 5 - stack, lfg button, league"):
+#   - a party is up to PARTY_MAX 5 (the 5v5's whole side: a "5-stack"), and a player invites friends OR clanmates;
+#   - cards and chat lines carry the clan's crest ("cc", Eco.crest_code) beside its tag;
+#   - LFG: {"k":"lfg", "on"} -- a clan member (alone, or his party's leader) calls for players: a line in clan chat
+#     ("lfg": his pid) with a JOIN button, open Eco.CLAN_LFG_LIFE s (or till his party is full, he's in a match or gone);
+#     {"k":"lfg_join", "pid"} puts a clanmate straight into his party (made then if he had none). The clan's state lists
+#     the open calls (clans.gd "lfg": lfg_of_clan).
+const Eco = preload("res://scripts/meta/economy.gd")
 const CHAT_MAX := 120
 const HIST_GLOBAL := 50
 const HIST_PARTY := 30
@@ -37,7 +45,8 @@ const MAX_FRIENDS := 100
 const MAX_REQ_OUT := 50
 const MAX_REQ_IN := 100
 const MAX_BLOCKED := 200
-const PARTY_MAX := 4
+const PARTY_MAX := 5                 # 0.31.196: a 5-stack (was 4)
+const LFG_REPOST := 60               # s before the same player's LFG call may go up again
 const INVITE_LIFE := 60.0
 const PARTY_GRACE := 180.0
 const SAVE_DELAY := 3.0
@@ -77,6 +86,8 @@ var event_fn: Callable = func(_acct, _ev, _p): pass   # 0.31.118: usage statisti
 var rank_fn: Callable = func(_acct) -> int: return 0   # 0.31.120: this week's leaderboard rank (0: not on it)
 var prof_at := {}          # 0.31.120: pid -> clocks of its recent profile-card asks
 var clans = null           # 0.31.134: server/clans.gd (null: no clans -- the tests of this file alone)
+var lfg := {}              # 0.31.196: pid -> {"at": unix, "clan": id} -- open LFG calls
+var _lfg_clock := 0.0
 var _dirty_at := -1.0
 var _mute_clock := 0.0
 
@@ -269,6 +280,12 @@ func tick(delta: float) -> void:
 					_send_party(pa)
 		if mine.is_empty():
 			invites.erase(pid)
+	_lfg_clock += delta
+	if _lfg_clock >= 2.0:
+		_lfg_clock = 0.0
+		for pid in lfg.keys():
+			if not _lfg_ok(str(pid)):
+				lfg_drop(str(pid))
 	for pid in away.keys():
 		if clock - float(away[pid]) > PARTY_GRACE:
 			away.erase(pid)
@@ -388,6 +405,7 @@ func forget(acct: String) -> void:
 	rates.erase(pid)
 	away.erase(pid)
 	prof_at.erase(pid)
+	lfg.erase(pid)
 	_mark()
 	log_fn.call("social: %s forgotten (account deleted)" % pid)
 
@@ -406,10 +424,14 @@ func _card(pid: String) -> Dictionary:
 	var ct := tag_of(pid)
 	if ct != "":
 		c["ct"] = ct                                     # 0.31.134: their clan's tag
+		c["cc"] = crest_of(pid)                          # 0.31.196: and crest
 	return c
 
 func tag_of(pid: String) -> String:
 	return clans.tag_of(pid) if clans != null else ""
+
+func crest_of(pid: String) -> String:
+	return clans.crest_of(pid) if clans != null else ""
 
 func _me_msg(pid: String) -> Dictionary:
 	var u: Dictionary = users[pid]
@@ -417,6 +439,8 @@ func _me_msg(pid: String) -> Dictionary:
 	if clans != null:
 		m["clans"] = 1
 		m["ct"] = tag_of(pid)
+		m["cc"] = crest_of(pid)
+		m["lfg"] = 1                                     # 0.31.196: LFG and 5-stacks here
 	return m
 
 func _friends_msg(pid: String) -> Dictionary:
@@ -473,6 +497,8 @@ func handle(cid: int, msg: Dictionary) -> void:
 		"leave": _leave(pid)
 		"kick": _kick(pid, who)
 		"play": _play(pid)
+		"lfg": _lfg(pid, bool(msg.get("on", true)))       # 0.31.196
+		"lfg_join": _lfg_join(pid, who)
 		"prof": _prof(cid, pid, who)
 		"refresh":
 			_read_name(pid)
@@ -502,6 +528,7 @@ func _prof(cid: int, pid: String, who: String) -> void:
 			out.n = str(u.get("name", "Player"))
 			out.tt = str(u.get("title", ""))
 			out.ct = tag_of(who)                          # 0.31.134: their clan's tag
+			out.cc = crest_of(who)
 			out.rank = int(rank_fn.call(str(u.acct)))
 	send_fn.call(cid, out)
 
@@ -544,6 +571,7 @@ func _chat(pid: String, msg: Dictionary) -> void:
 	var ct := tag_of(pid)
 	if ct != "":
 		m["ct"] = ct
+		m["cc"] = crest_of(pid)
 	next_msg += 1
 	if ch == "clan":
 		_hist_add("c:" + clan, m, HIST_CLAN)
@@ -769,8 +797,11 @@ func _tidy(pa: String) -> void:
 func _invite(pid: String, target: String) -> void:
 	if not users.has(target) or target == pid:
 		return
-	if not (users[pid].friends as Array).has(target):
-		_note(pid, "You can only invite friends", true)
+	if not (users[pid].friends as Array).has(target) and not _clanmates(pid, target):
+		_note(pid, "You can only invite friends and clanmates", true)
+		return
+	if (users[target].get("blocked", []) as Array).has(pid):
+		_note(pid, "%s can't join right now" % _name(target))
 		return
 	var st := status_of(target)
 	if st == "offline":
@@ -870,3 +901,114 @@ func _play(pid: String) -> void:
 			n += 1
 	_sys(pa, "%s is heading into battle%s" % [_name(pid), " -- the party follows!" if n > 0 else ""])
 	log_fn.call("party %s plays (%d with the leader)" % [pa, n + 1])
+
+# ---------------- LFG (0.31.196) ----------------
+func _clanmates(a: String, b: String) -> bool:
+	if clans == null:
+		return false
+	var ca := str(clans.clan_of(a))
+	return ca != "" and ca == str(clans.clan_of(b))
+
+func _lfg_size(pid: String) -> int:
+	var pa: String = party_of.get(pid, "")
+	return (parties[pa].members as Array).size() if pa != "" and parties.has(pa) else 1
+
+func _lfg_ok(pid: String) -> bool:
+	# a call still stands: not run out, the caller online in the menu, in that clan, leading (or alone), room left
+	var e: Dictionary = lfg.get(pid, {})
+	if e.is_empty() or clans == null or unix() - int(e.at) > Eco.CLAN_LFG_LIFE:
+		return false
+	if not online.has(pid) or status_of(pid) != "online" or str(clans.clan_of(pid)) != str(e.clan):
+		return false
+	var pa: String = party_of.get(pid, "")
+	if pa != "" and str(parties[pa].leader) != pid:
+		return false
+	return _lfg_size(pid) < PARTY_MAX
+
+func lfg_drop(pid: String) -> void:
+	if not lfg.has(pid):
+		return
+	var id := str(lfg[pid].clan)
+	lfg.erase(pid)
+	if clans != null and clans.clans.has(id):
+		clans._push[id] = true
+
+func lfg_of_clan(id: String) -> Array:
+	var out := []
+	for pid in lfg:
+		if str(lfg[pid].clan) == id and _lfg_ok(str(pid)):
+			out.append({"pid":str(pid), "n":_name(str(pid)), "at":int(lfg[pid].at), "size":_lfg_size(str(pid)), "max":PARTY_MAX,
+				"party":str(party_of.get(str(pid), ""))})
+	return out
+
+func _lfg(pid: String, on: bool) -> void:
+	if clans == null:
+		return
+	var id := str(clans.clan_of(pid))
+	if not on:
+		lfg_drop(pid)
+		return
+	if id == "":
+		_note(pid, "Join a clan first", true)
+		return
+	if status_of(pid) != "online":
+		_note(pid, "Finish your match first", true)
+		return
+	var pa: String = party_of.get(pid, "")
+	if pa != "" and str(parties[pa].leader) != pid:
+		_note(pid, "Only your party's leader can call for players", true)
+		return
+	if _lfg_size(pid) >= PARTY_MAX:
+		_note(pid, "Your party is full (%d)" % PARTY_MAX, true)
+		return
+	if lfg.has(pid) and unix() - int(lfg[pid].at) < LFG_REPOST and str(lfg[pid].clan) == id:
+		_note(pid, "Your call is up -- clanmates can JOIN from clan chat")
+		return
+	lfg[pid] = {"at":unix(), "clan":id}
+	event_fn.call(str(users[pid].acct), "clan_lfg", {"n":_lfg_size(pid)})
+	var n := _lfg_size(pid)
+	clans.post(id, pid, "Looking for players! %d/%d -- JOIN to play together" % [n, PARTY_MAX], {"lfg":pid})
+	clans._push[id] = true
+	_note(pid, "Called your clan -- they can JOIN for %d minutes" % int(Eco.CLAN_LFG_LIFE / 60))
+
+func _lfg_join(pid: String, host: String) -> void:
+	if host == pid or not users.has(host):
+		return
+	if not lfg.has(host) or not _lfg_ok(host):
+		_note(pid, "That call is over", true)
+		lfg_drop(host)
+		return
+	if not _clanmates(pid, host):
+		_note(pid, "That call is over", true)            # (for his clan only)
+		return
+	if status_of(pid) == "match":
+		_note(pid, "Finish your match first", true)
+		return
+	if (users[host].get("blocked", []) as Array).has(pid):
+		_note(pid, "That call is over", true)
+		return
+	var pa: String = party_of.get(host, "")
+	if pa != "" and party_of.get(pid, "") == pa:
+		return
+	if party_of.has(pid):
+		_leave(pid)
+	if pa == "" or not parties.has(pa):
+		pa = _new_party(host)
+		event_fn.call(str(users[host].get("acct", "")), "party_create", {})
+	if (parties[pa].members as Array).size() >= PARTY_MAX:
+		_note(pid, "That party is full", true)
+		lfg_drop(host)
+		return
+	(invites.get(pid, {}) as Dictionary).erase(pa)
+	parties[pa].members.append(pid)
+	party_of[pid] = pa
+	away.erase(pid)
+	event_fn.call(str(users[pid].get("acct", "")), "party_join", {"n":(parties[pa].members as Array).size(), "lfg":1})
+	_sys(pa, "%s joined the party" % _name(pid))
+	_send_party(pa)
+	_send(pid, {"t":"so", "k":"hist", "ch":"party", "list":_visible(pid, hist.get("p:" + pa, []))})
+	_note(host, "%s joined your party" % _name(pid))
+	if (parties[pa].members as Array).size() >= PARTY_MAX:
+		lfg_drop(host)
+	elif clans != null:
+		clans._push[str(lfg[host].clan)] = true

@@ -6199,3 +6199,25 @@ wider: FROSTBOUND wrapped in the Shop). Kevin: "Do A."; the small text (Nunito):
 - Verified: suite all passed, COLD_START_PASS, the Play-shape AAB check exit 0 (bundletool valid, BASE OK 275 files),
   presets unchanged. Preview APK: build/Fatebound-Siege-0.31.195-fatebound.apk (32 MB, preview key), sha256
   dcf9fe6e...c9e319681cd93f68.
+
+## 0.31.196 (in progress) — clans for the new game: crest, Clan Chest, League, camp, shard requests, 5-stacks, LFG
+Kevin: "Now let's redo the clan system for new game. Give me ideas what would work" -> "Do clan chest, clan camp, crest,
+shard requests, 5 - stack, lfg button, league".
+- Step 1, the server and the books (scripts/meta/economy.gd "clans (0.31.196)"; server/clans.gd, server/social.gd,
+  server/eco_accounts.gd, server/siege_server.gd, server/leaderboard.gd; Profile.grant_clan_reward / give_shard /
+  receive_shard, server-only):
+  - the crest (16 emblems x 8 colours on 10 shield colours) replaces the house: picked when a clan is made, changed by
+    the leader and officers (clan_crest); an older app's house brings that house's crest, and older apps still see a
+    house. Cards, chat lines, the match's names ("pn" "cc"), the lobby and the leaderboard carry the crest's code.
+  - clan points from every paid online match (win 10 / draw 6 / loss 4, +2 a tower, +1 a KO up to 10; doubled with a
+    clanmate in the party): the clan's XP (levels 1-10, which grow its camp) and the week's points.
+  - Monday 00:00 UTC: each players' clan's Clan Chest (Wooden 60 / Silver 200 / Gold 500 / Royal 1,000 points) and its
+    League place's gems (#1 100, #2-3 60, #4-10 30) to every member with 10+ points that week, once (the account
+    refuses a second time); the podium's gold/silver/bronze frame for the week after. clan_league answers the table.
+  - shard requests: clan_ask (a hero you don't own; one open, one every 8 h, open 24 h), clan_give (the giver's shard
+    -> the asker; the giver gets its melt gold; +5 clan XP; both phones fetch their accounts), clan_unask.
+  - parties of 5 (a full 5v5 side) and invites to clanmates who aren't friends; LFG ("lfg"/"lfg_join"): a call in clan
+    chat with JOIN, straight into the caller's party, open 10 minutes or till the party is full.
+  - The house clans (starter clans) earn no points, chest or League place.
+  - tests/clan_week_test.gd (CLAN_WEEK_PASS, new): all of it with fake sockets, and the accounts' side for real;
+    clans_test: no house filter, a refused crest, an older file's clan gets its house's crest.

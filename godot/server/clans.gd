@@ -34,6 +34,31 @@ extends RefCounted
 # members leave it without the 24-hour wait, a cooldown doesn't keep anyone out of it, and joining or starting a
 # players' clan moves a member out of it by itself. Its card shows HOUSE_LIST_MAX members (online first), and its chat
 # gets no join / leave lines.
+# 0.31.196 (Kevin: "Now let's redo the clan system for new game" -> "Do clan chest, clan camp, crest, shard requests,
+# 5-stack, lfg button, league"; the numbers are Eco's CLAN_* in scripts/meta/economy.gd):
+#   - the CREST (an emblem, its colour, the shield's colour: Eco.CLAN_EMBLEMS / CLAN_CHARGES / CLAN_FIELDS) takes the
+#     house's place: picked when a clan is made, changed by the leader and officers (clan_crest {e, f, c}). A clan made by
+#     an older app with a house gets that house's crest (Eco.CLAN_HOUSE_CREST); the house clans have theirs. "house"
+#     still goes out (older apps show it). Cards, chat lines, the match's names and the leaderboard carry "cc", the
+#     crest's code (Eco.crest_code) beside "ct".
+#   - CLAN POINTS: add_match (siege_server _pay_match, every paid online match) gives the member's players' clan
+#     Eco.clan_points, doubled for one who had a clanmate in his party; they are the clan's XP (its LEVEL: Eco.CLAN_LEVELS,
+#     which grows the camp) and its WEEK's points (Monday 00:00 UTC, as the leaderboard) -- who earned what ("by").
+#   - When a week ends (_roll), each players' clan that earned points is paid: its CLAN CHEST (the tier reached,
+#     Eco.CLAN_CHEST_TIERS) and its CLAN LEAGUE place's gems (Eco.CLAN_LEAGUE_PRIZES) to every member who earned
+#     Eco.CLAN_CHEST_MIN that week (eco_accounts.grant_clan_reward: once a week per account); the top three wear a gold,
+#     silver or bronze frame round their crest for the week after ("fr"). clan_league answers the table.
+#   - SHARD REQUESTS: clan_ask {h} (a hero the asker hasn't got, one ask open, at most one every Eco.CLAN_ASK_GAP, open
+#     Eco.CLAN_ASK_LIFE), clan_unask, clan_give {pid}: a member holding a shard of that hero gives it
+#     (eco_accounts.give_shard: the asker gets it, the giver its melt gold) and the clan Eco.CLAN_GIVE_XP; both phones are
+#     told to fetch their accounts ({"k":"eco"}). The ask is a line in clan chat ("ask": the hero) too.
+#   - LFG (server/social.gd "lfg" / "lfg_join"): a member's open call for his party, shown in clan chat and here ("lfg").
+#   - The house clans (starter clans: free, open, nobody leads them) earn no points, chest or League place.
+# A clan's state carries "cv": 2 (the phone shows the new parts only then).
+const Eco = preload("res://scripts/meta/economy.gd")
+const Leaderboard = preload("res://server/leaderboard.gd")   # (its week_of / week_end: the same weeks)
+const CLAN_VERSION := 2
+const LEAGUE_TOP := 50                 # clans in the League table
 const HOUSES := ["lions", "stags", "ravens"]
 const HOUSE_NAMES := {"lions": "Lions", "stags": "Stags", "ravens": "Ravens"}
 const JOIN_MODES := ["open", "request", "invite"]
@@ -77,6 +102,14 @@ var _dirty_at := -1.0
 var _check := 0.0
 var _rate := {}                    # pid -> [clock] of its recent clan_* messages
 var _asked_pop := {}               # "clan id:pid" -> unix of the last "asked to join" pop-up (memory only)
+# 0.31.196
+var week := ""                     # the week the clans' points are for (Leaderboard.week_of)
+var asked_at := {}                 # pid -> unix of their last shard request (Eco.CLAN_ASK_GAP)
+var league_last := []              # last week's top three clans: [{"name", "tag", "cr", "pts"}]
+var _week_check := 0.0
+var _push := {}                    # clan id -> true: its members' state goes out at the next push (points come often)
+var _push_clock := 0.0
+const PUSH_EVERY := 2.0
 
 func _init(state_dir: String, social) -> void:
 	soc = social
@@ -110,6 +143,7 @@ func _load() -> void:
 			if not (c.get("req", null) is Dictionary):
 				c["req"] = {}
 			c["id"] = str(id)
+			_fix(c)
 			clans[str(id)] = c
 			for pid in c.members:
 				member_of[str(pid)] = str(id)
@@ -122,6 +156,33 @@ func _load() -> void:
 	if cl is Dictionary:
 		for pid in cl:
 			cool[str(pid)] = int(cl[pid])
+	week = str(v.get("week", ""))
+	var aa: Variant = v.get("asked", {})
+	if aa is Dictionary:
+		for pid in aa:
+			asked_at[str(pid)] = int(aa[pid])
+	league_last = v.get("league_last", []) if v.get("league_last", []) is Array else []
+
+func _fix(c: Dictionary) -> void:
+	# 0.31.196: a clan from an older file -- its crest (its house's), XP, the week's points, frame, shard requests
+	if Eco.clean_crest(c.get("crest", null)).is_empty():
+		c["crest"] = (Eco.CLAN_HOUSE_CREST.get(str(c.get("house", "")), {"e":3, "f":0, "c":0}) as Dictionary).duplicate()
+	else:
+		c["crest"] = Eco.clean_crest(c.crest)
+	c["xp"] = int(c.get("xp", 0))
+	var wk: Variant = c.get("wk", null)
+	if not (wk is Dictionary) or not (wk.get("by", null) is Dictionary):
+		c["wk"] = {"week":"", "pts":0, "by":{}}
+	else:
+		wk["pts"] = int(wk.get("pts", 0))
+		wk["week"] = str(wk.get("week", ""))
+		for pid in (wk.by as Dictionary).keys():
+			wk.by[pid] = int(wk.by[pid])
+	c["fr"] = str(c.get("fr", ""))
+	if not (c.get("ask", null) is Dictionary):
+		c["ask"] = {}
+	if not (c.get("last", null) is Dictionary):
+		c["last"] = {}
 
 func ensure_house_clans() -> void:
 	# 0.31.148: each house's clan, made if it's missing (and kept as one: open, level 1, nobody leading it)
@@ -137,6 +198,8 @@ func ensure_house_clans() -> void:
 			c["leader"] = ""
 			c["officers"] = []
 			c["req"] = {}
+			c["crest"] = (Eco.CLAN_HOUSE_CREST[h] as Dictionary).duplicate()
+			_fix(c)
 			continue
 		var tag := ""
 		for t in spec.tags:
@@ -146,7 +209,8 @@ func ensure_house_clans() -> void:
 		if tag == "":
 			tag = h.left(3).to_upper() + "0"
 		clans[id] = {"id":id, "name":str(spec.name), "tag":tag, "house":h, "join":"open", "min_lv":1, "leader":"",
-			"officers":[], "members":{}, "req":{}, "created":unix(), "hc":true}
+			"officers":[], "members":{}, "req":{}, "created":unix(), "hc":true, "crest":(Eco.CLAN_HOUSE_CREST[h] as Dictionary).duplicate()}
+		_fix(clans[id])
 		soc.log_fn.call("clan %s [%s] %s: House %s's clan" % [id, tag, str(spec.name), HOUSE_NAMES[h]])
 		_mark()
 
@@ -167,7 +231,8 @@ func save_now() -> void:
 	var f := FileAccess.open(tmp, FileAccess.WRITE)
 	if f == null:
 		return
-	f.store_string(JSON.stringify({"v":1, "clans":clans, "inv":invites, "cool":cool}))
+	f.store_string(JSON.stringify({"v":2, "clans":clans, "inv":invites, "cool":cool, "week":week, "asked":asked_at,
+		"league_last":league_last}))
 	f.close()
 	DirAccess.rename_absolute(ProjectSettings.globalize_path(tmp), ProjectSettings.globalize_path(path))
 	_dirty_at = -1.0
@@ -183,6 +248,17 @@ func tick(delta: float) -> void:
 	if _check >= CHECK_EVERY:
 		_check = 0.0
 		sweep()
+	_week_check += delta
+	if _week_check >= 60.0:
+		_week_check = 0.0
+		_roll()                                   # (a week ends on time even with nobody playing)
+	_push_clock += delta
+	if _push_clock >= PUSH_EVERY and not _push.is_empty():
+		_push_clock = 0.0
+		var ids := _push.keys()
+		_push.clear()
+		for id in ids:
+			_refresh_all(str(id))
 
 func sweep() -> void:
 	# expired invites, requests and cooldowns; leaders away too long hand the clan on
@@ -204,6 +280,10 @@ func sweep() -> void:
 		for pid in (c.req as Dictionary).keys():
 			if t - int(c.req[pid]) > REQ_LIFE:
 				c.req.erase(pid)
+				_mark()
+		for pid in (c.ask as Dictionary).keys():          # 0.31.196: shard requests run out
+			if t - int(c.ask[pid].get("at", 0)) > Eco.CLAN_ASK_LIFE or not (c.members as Dictionary).has(pid):
+				c.ask.erase(pid)
 				_mark()
 		if not bool(c.get("hc", false)) and t - _seen(str(c.leader)) > LEADER_AWAY:
 			var next := _successor(c, str(c.leader), true)
@@ -228,6 +308,27 @@ func tag_of(pid: String) -> String:
 
 func tag_of_acct(acct: String) -> String:
 	return tag_of(soc.pid_of(acct)) if acct != "" else ""
+
+func crest_of(pid: String) -> String:
+	# 0.31.196: the crest's code ("e.f.c") of pid's clan ("" for none)
+	var id: String = member_of.get(pid, "")
+	return Eco.crest_code(clans[id].get("crest", {})) if id != "" and clans.has(id) else ""
+
+func crest_of_acct(acct: String) -> String:
+	return crest_of(soc.pid_of(acct)) if acct != "" else ""
+
+func old_house(c: Dictionary) -> String:
+	# what an older app (0.31.134-0.31.195) shows as the clan's house: its own, or one by its emblem
+	if str(c.get("house", "")) in HOUSES:
+		return str(c.house)
+	var e := int(c.get("crest", {}).get("e", 0))
+	return str(HOUSES[e]) if e < 3 else str(HOUSES[e % 3])
+
+func level_of(c: Dictionary) -> int:
+	return 1 if bool(c.get("hc", false)) else Eco.clan_level(int(c.get("xp", 0)))
+
+func week_pts(c: Dictionary) -> int:
+	return int(c.wk.pts) if str(c.wk.get("week", "")) == week else 0
 
 func members_of(id: String) -> Array:
 	return (clans[id].members as Dictionary).keys() if clans.has(id) else []
@@ -284,8 +385,12 @@ func _level(pid: String) -> int:
 
 # ---------------- what goes to the phones ----------------
 func summary(c: Dictionary) -> Dictionary:
-	var s := {"id":str(c.id), "name":str(c.name), "tag":str(c.tag), "house":str(c.house), "join":str(c.join),
-		"min_lv":int(c.min_lv), "n":(c.members as Dictionary).size(), "max":max_of(c), "lead":_name(str(c.leader))}
+	var s := {"id":str(c.id), "name":str(c.name), "tag":str(c.tag), "house":old_house(c), "join":str(c.join),
+		"min_lv":int(c.min_lv), "n":(c.members as Dictionary).size(), "max":max_of(c), "lead":_name(str(c.leader)),
+		"cv":CLAN_VERSION, "cr":(c.crest as Dictionary).duplicate(), "cc":Eco.crest_code(c.crest), "lv":level_of(c),
+		"pts":week_pts(c)}
+	if str(c.get("fr", "")) != "":
+		s["fr"] = str(c.fr)                              # last week's League podium: "gold" / "silver" / "bronze"
 	if bool(c.get("hc", false)):
 		s["hc"] = true
 		s["lead"] = ""
@@ -296,6 +401,8 @@ func _member_card(c: Dictionary, pid: String, full: bool) -> Dictionary:
 	card["role"] = "leader" if str(c.leader) == pid else ("officer" if (c.officers as Array).has(pid) else "member")
 	card["joined"] = int(c.members[pid])
 	card["ct"] = str(c.tag)
+	card["cc"] = Eco.crest_code(c.crest)
+	card["wp"] = int(c.wk.by.get(pid, 0)) if str(c.wk.get("week", "")) == week else 0   # 0.31.196: this week's clan points
 	return card
 
 func _members_list(c: Dictionary, full: bool, me := "") -> Array:
@@ -327,6 +434,21 @@ func state_msg(pid: String) -> Dictionary:
 		mine["members"] = _members_list(c, true, pid)
 		mine["role"] = role_of(pid)
 		mine["created"] = int(c.get("created", 0))
+		# 0.31.196: the clan's XP, the week (its end, the Clan Chest's tiers reached), last week's result, the shard
+		# requests and LFG calls open, and when this player may ask again
+		mine["xp"] = int(c.get("xp", 0))
+		mine["week"] = week
+		mine["ends"] = Leaderboard.week_end(unix())
+		mine["tier"] = Eco.clan_tier(week_pts(c))
+		mine["mine_pts"] = int(c.wk.by.get(pid, 0)) if str(c.wk.get("week", "")) == week else 0
+		if not (c.last as Dictionary).is_empty():
+			mine["last"] = (c.last as Dictionary).duplicate()
+		var asks := []
+		for a in c.ask:
+			asks.append({"pid":str(a), "n":_name(str(a)), "h":str(c.ask[a].h), "at":int(c.ask[a].at)})
+		mine["asks"] = asks
+		mine["ask_next"] = int(asked_at.get(pid, 0)) + Eco.CLAN_ASK_GAP
+		mine["lfg"] = soc.lfg_of_clan(id) if soc.has_method("lfg_of_clan") else []
 		if _is_officer(pid):
 			var rq := []
 			for r in c.req:
@@ -415,6 +537,11 @@ func handle(pid: String, msg: Dictionary) -> void:
 		"clan_set": _settings(pid, msg)
 		"clan_disband": _disband(pid)
 		"clan_state": _refresh(pid)
+		"clan_crest": _crest(pid, msg)                  # 0.31.196
+		"clan_ask": _ask(pid, str(msg.get("h", "")))
+		"clan_unask": _unask(pid)
+		"clan_give": _give(pid, who)
+		"clan_league": _league(pid)
 
 static func clean_clan_name(s: String) -> String:
 	# letters, digits, spaces, ' and - only; spaces squeezed ("" when anything else is in it)
@@ -471,10 +598,16 @@ func _new(pid: String, msg: Dictionary) -> void:
 	if soc.is_bad_word(tag) or soc.clean_text(tag, TAG_MAX) != tag:
 		_made(pid, false, "tag", "That tag isn't allowed")
 		return
+	# 0.31.196: a crest ("cr"); an older app sends a house, which brings that house's crest
 	var house := str(msg.get("house", ""))
-	if not house in HOUSES:
-		_made(pid, false, "house", "Pick a house")
+	var crest := Eco.clean_crest(msg.get("cr", null))
+	if crest.is_empty() and house in HOUSES:
+		crest = (Eco.CLAN_HOUSE_CREST[house] as Dictionary).duplicate()
+	if crest.is_empty():
+		_made(pid, false, "crest", "Pick a crest")
 		return
+	if not house in HOUSES:
+		house = ""
 	var join := str(msg.get("join", "open"))
 	if not join in JOIN_MODES:
 		join = "open"
@@ -497,15 +630,16 @@ func _new(pid: String, msg: Dictionary) -> void:
 		id = "c" + Crypto.new().generate_random_bytes(5).hex_encode()
 	var t := unix()
 	clans[id] = {"id":id, "name":name, "tag":tag, "house":house, "join":join, "min_lv":min_lv, "leader":pid,
-		"officers":[], "members":{pid: t}, "req":{}, "created":t}
+		"officers":[], "members":{pid: t}, "req":{}, "created":t, "crest":crest}
+	_fix(clans[id])
 	member_of[pid] = id
 	_drop_pending(pid)
 	_mark()
-	soc.event_fn.call(acct, "clan_create", {"house":house, "join":join})
-	soc.log_fn.call("clan %s [%s] %s made by %s (house %s)" % [id, tag, name, pid, house])
+	soc.event_fn.call(acct, "clan_create", {"crest":Eco.crest_code(crest), "join":join})
+	soc.log_fn.call("clan %s [%s] %s made by %s (crest %s)" % [id, tag, name, pid, Eco.crest_code(crest)])
 	save_now()                                         # (the gold is gone: the clan is on disk at once too)
 	_made(pid, true, "", "")
-	_sys(id, "%s founded %s for House %s" % [_name(pid), name, HOUSE_NAMES[house]])
+	_sys(id, "%s founded %s" % [_name(pid), name])
 	_refresh(pid)
 	soc._send(pid, {"t":"so", "k":"hist", "ch":"clan", "list":soc.hist.get("c:" + id, [])})
 	_presence_tag(pid)
@@ -538,12 +672,15 @@ func _find(pid: String, q: String, house: String) -> void:
 	var list := []
 	for cid in clans:
 		var c: Dictionary = clans[cid]
-		if house in HOUSES and str(c.house) != house:
-			continue
 		if qq != "" and not (str(c.name).to_lower().contains(qq) or str(c.tag).to_lower() == qq):
 			continue
 		list.append(c)
+	# 0.31.196: the busiest first -- this week's points, then members (no house filter any more: the houses are gone)
 	list.sort_custom(func(a, b):
+		var pa := week_pts(a)
+		var pb := week_pts(b)
+		if pa != pb:
+			return pa > pb
 		var na := (a.members as Dictionary).size()
 		var nb := (b.members as Dictionary).size()
 		return na > nb if na != nb else int(a.get("created", 0)) < int(b.get("created", 0)))
@@ -745,7 +882,10 @@ func _remove(id: String, pid: String) -> void:
 	var c: Dictionary = clans[id]
 	c.members.erase(pid)
 	(c.officers as Array).erase(pid)
+	(c.ask as Dictionary).erase(pid)                   # 0.31.196: their shard request, their LFG call
 	member_of.erase(pid)
+	if soc.has_method("lfg_drop"):
+		soc.lfg_drop(pid)
 	_mark()
 	if bool(c.get("hc", false)):
 		return                                         # (0.31.148: a house clan stays, empty or not; nobody leads it)
@@ -906,3 +1046,251 @@ func forget(pid: String) -> void:
 	for cid in clans:
 		(clans[cid].req as Dictionary).erase(pid)
 	_mark()
+
+# ---------------- 0.31.196: the crest, clan points, the week (Clan Chest, League), shard requests ----------------
+static func league_before(a: Dictionary, b: Dictionary, wk: String) -> bool:
+	# the League's order: the week's points, then XP, then the older clan
+	var pa := int(a.wk.pts) if str(a.wk.get("week", "")) == wk else 0
+	var pb := int(b.wk.pts) if str(b.wk.get("week", "")) == wk else 0
+	if pa != pb:
+		return pa > pb
+	if int(a.get("xp", 0)) != int(b.get("xp", 0)):
+		return int(a.get("xp", 0)) > int(b.get("xp", 0))
+	return int(a.get("created", 0)) < int(b.get("created", 0))
+
+func post(id: String, pid: String, text: String, extra: Dictionary) -> void:
+	# a player's line in the clan's chat that the game writes for him -- a shard request ("ask": the hero), an LFG call
+	# ("lfg": his party's size) -- with the buttons the phone puts on it
+	if not clans.has(id):
+		return
+	var u: Dictionary = soc.users.get(pid, {})
+	var m := {"id":soc.next_msg, "ch":"clan", "pid":pid, "n":str(u.get("name", "Player")), "tt":str(u.get("title", "")),
+		"x":text, "at":unix(), "ct":str(clans[id].tag), "cc":Eco.crest_code(clans[id].crest)}
+	m.merge(extra)
+	soc.next_msg += 1
+	soc._hist_add("c:" + id, m, HIST_CLAN)
+	for mp in members_of(id):
+		if not (soc.users.get(str(mp), {}).get("blocked", []) as Array).has(pid):
+			soc._send(str(mp), {"t":"so", "k":"chat", "m":m})
+
+func _crest(pid: String, msg: Dictionary) -> void:
+	var id: String = member_of.get(pid, "")
+	if id == "" or not clans.has(id) or is_house(id):
+		return
+	if not _is_officer(pid):
+		soc._note(pid, "Only the leader and officers can change the crest", true)
+		return
+	var cr := Eco.clean_crest(msg.get("cr", null))
+	var c: Dictionary = clans[id]
+	if cr.is_empty() or Eco.crest_code(cr) == Eco.crest_code(c.crest):
+		return
+	c.crest = cr
+	_mark()
+	_sys(id, "%s gave the clan a new crest" % _name(pid))
+	_refresh_all(id)
+	for m in members_of(id):
+		_presence_tag(str(m))
+
+func _gain_xp(id: String, n: int) -> void:
+	# clan XP (a players' clan): its level, the camp's stage -- a line in its chat when either grows
+	var c: Dictionary = clans[id]
+	var lv0 := level_of(c)
+	c.xp = int(c.get("xp", 0)) + n
+	var lv1 := level_of(c)
+	if lv1 > lv0:
+		var grew := Eco.clan_camp_stage(lv1) > Eco.clan_camp_stage(lv0)
+		_sys(id, "The clan reached level %d!%s" % [lv1, " The camp grew." if grew else ""])
+
+func add_match(acct: String, me: Dictionary, won: bool, draw: bool, mates: Array) -> int:
+	# siege_server _pay_match: an online match paid -- its clan points for the player's clan (a players' clan), doubled
+	# when a clanmate was in his party (mates: the accounts of the party's members in that match). -> the points
+	var pid := str(soc.pid_of(acct)) if acct != "" else ""
+	var id: String = member_of.get(pid, "") if pid != "" else ""
+	if id == "" or not clans.has(id) or is_house(id):
+		return 0
+	_roll()
+	var c: Dictionary = clans[id]
+	var p := Eco.clan_points(me, won, draw)
+	for a in mates:
+		var mp := str(soc.pid_of(str(a)))
+		if mp != "" and mp != pid and member_of.get(mp, "") == id:
+			p *= Eco.CLAN_PARTY_X
+			break
+	if str(c.wk.get("week", "")) != week:
+		c.wk = {"week":week, "pts":0, "by":{}}
+	var tier0 := Eco.clan_tier(int(c.wk.pts))
+	c.wk.pts = int(c.wk.pts) + p
+	c.wk.by[pid] = int(c.wk.by.get(pid, 0)) + p
+	_gain_xp(id, p)
+	var tier1 := Eco.clan_tier(int(c.wk.pts))
+	if tier1 > tier0:
+		_sys(id, "The Clan Chest reached %s! Everyone with %d+ points this week gets it on Monday." % [
+			str(Eco.CHESTS[Eco.clan_chest_of(tier1)].name), Eco.CLAN_CHEST_MIN])
+	_mark()
+	_push[id] = true
+	return p
+
+func _roll() -> void:
+	# a new week (Monday 00:00 UTC): the one that ended is settled, every clan starts the new one at 0
+	var w := Leaderboard.week_of(unix())
+	if w == week:
+		return
+	if week != "":
+		_settle(week)
+	week = w
+	for id in clans:
+		clans[id].wk = {"week":w, "pts":0, "by":{}}
+		if not is_house(str(id)):
+			_push[str(id)] = true
+	_mark()
+	save_now()
+
+func _settle(w: String) -> void:
+	# week w is over: each players' clan that earned points is paid -- its Clan Chest and its League place's gems to every
+	# member who earned Eco.CLAN_CHEST_MIN; the top three wear their frame this week
+	var ranked := []
+	for id in clans:
+		var c: Dictionary = clans[id]
+		c.fr = ""
+		if is_house(str(id)):
+			continue
+		if str(c.wk.get("week", "")) != w or int(c.wk.pts) <= 0:
+			c.last = {"week":w, "pts":0, "rank":0, "tier":0, "chest":"", "gems":0, "paid":0}
+			continue
+		ranked.append(c)
+	ranked.sort_custom(func(a, b): return league_before(a, b, w))
+	league_last = []
+	var n_paid := 0
+	var eco = soc.eco
+	for i in ranked.size():
+		var c: Dictionary = ranked[i]
+		var rank := i + 1
+		var pts := int(c.wk.pts)
+		var tier := Eco.clan_tier(pts)
+		var chest := Eco.clan_chest_of(tier)
+		var pr := Eco.clan_league_prize(rank)
+		var gems := int(pr.get("gems", 0))
+		c.fr = str(pr.get("frame", ""))
+		var paid := 0
+		if (chest != "" or gems > 0) and eco != null and eco.has_method("grant_clan_reward"):
+			for mp in c.wk.by:
+				var who := str(mp)
+				if int(c.wk.by[mp]) < Eco.CLAN_CHEST_MIN or not (c.members as Dictionary).has(who) or not soc.users.has(who):
+					continue
+				var r := {"chest":chest, "gems":gems, "rank":rank, "tier":tier, "clan":str(c.name), "tag":str(c.tag), "pts":pts}
+				if bool(eco.grant_clan_reward(str(soc.users[who].acct), w, r)):
+					paid += 1
+					soc._send(who, {"t":"so", "k":"eco"})          # (their phone fetches the account: the chest is in it)
+		n_paid += paid
+		c.last = {"week":w, "pts":pts, "rank":rank, "tier":tier, "chest":chest, "gems":gems, "paid":paid, "fr":str(c.fr)}
+		if rank <= 3:
+			league_last.append({"name":str(c.name), "tag":str(c.tag), "cc":Eco.crest_code(c.crest), "pts":pts, "fr":str(c.fr)})
+		var bits := ["%d points" % pts]
+		if chest != "":
+			bits.append("the %s" % str(Eco.CHESTS[chest].name))
+		bits.append("#%d in the League%s" % [rank, (" (+%d gems)" % gems) if gems > 0 else ""])
+		_sys(str(c.id), "Last week: %s." % ", ".join(bits))
+	soc.log_fn.call("clans: week %s settled, %d clans ranked, %d members paid; first %s" % [w, ranked.size(), n_paid,
+		str(ranked[0].name) if not ranked.is_empty() else "-"])
+
+func _ask(pid: String, h: String) -> void:
+	var id: String = member_of.get(pid, "")
+	if id == "" or not clans.has(id):
+		soc._note(pid, "Join a clan first", true)
+		return
+	if not Eco.HERO_PRICES.has(h):
+		return
+	var c: Dictionary = clans[id]
+	if (c.ask as Dictionary).has(pid):
+		soc._note(pid, "You already have a request open", true)
+		return
+	var left := int(asked_at.get(pid, 0)) + Eco.CLAN_ASK_GAP - unix()
+	if left > 0:
+		soc._note(pid, "You can ask again in %s" % hours_text(left), true)
+		return
+	var eco = soc.eco
+	var hs: Dictionary = eco.heroes_of(str(soc.users[pid].acct)) if eco != null and eco.has_method("heroes_of") else {}
+	if hs.is_empty():
+		soc._note(pid, "Couldn't ask right now -- try again", true)
+		return
+	if (hs.get("own", []) as Array).has(h):
+		soc._note(pid, "You have %s already" % h.capitalize(), true)
+		return
+	c.ask[pid] = {"h":h, "at":unix()}
+	asked_at[pid] = unix()
+	_mark()
+	soc.event_fn.call(str(soc.users[pid].acct), "clan_ask", {"hero":h})
+	post(id, pid, "Asks for a %s shard" % h.capitalize(), {"ask":h})
+	_refresh_all(id)
+
+func _unask(pid: String) -> void:
+	var id: String = member_of.get(pid, "")
+	if id == "" or not clans.has(id) or not (clans[id].ask as Dictionary).has(pid):
+		return
+	clans[id].ask.erase(pid)
+	_mark()
+	_refresh_all(id)
+
+func _give(pid: String, target: String) -> void:
+	var id: String = member_of.get(pid, "")
+	if id == "" or not clans.has(id) or target == pid or member_of.get(target, "") != id:
+		return
+	var c: Dictionary = clans[id]
+	if not (c.ask as Dictionary).has(target):
+		soc._note(pid, "That request is over")
+		_refresh(pid)
+		return
+	var h := str(c.ask[target].h)
+	var eco = soc.eco
+	if eco == null or not eco.has_method("give_shard"):
+		return
+	var r: Dictionary = eco.give_shard(str(soc.users[pid].acct), str(soc.users[target].acct), h)
+	if not bool(r.get("ok", false)):
+		var why := str(r.get("error", ""))
+		if why == "owned":
+			c.ask.erase(target)                            # (they have the hero now: the request is over)
+			_mark()
+			_refresh_all(id)
+		soc._note(pid, {"no_shard":"You don't have a %s shard" % h.capitalize(), "owned":"%s has %s already" % [_name(target), h.capitalize()]}.get(why,
+			"Couldn't give it right now -- try again"), true)
+		return
+	c.ask.erase(target)
+	if not is_house(id):
+		_gain_xp(id, Eco.CLAN_GIVE_XP)
+	_mark()
+	soc.event_fn.call(str(soc.users[pid].acct), "clan_give", {"hero":h})
+	_sys(id, "%s gave %s a %s shard" % [_name(pid), _name(target), h.capitalize()])
+	soc._send(pid, {"t":"so", "k":"eco"})
+	soc._send(target, {"t":"so", "k":"eco"})
+	soc._note(pid, "Thanks! +%d gold for the %s shard" % [int(r.get("gold", 0)), h.capitalize()])
+	soc._send(target, {"t":"so", "k":"note", "x":"%s gave you a %s shard!" % [_name(pid), h.capitalize()], "pop":true})
+	_refresh_all(id)
+
+func league_rows() -> Array:
+	# this week's players' clans with points, League order
+	var list := []
+	for id in clans:
+		if not is_house(str(id)) and week_pts(clans[id]) > 0:
+			list.append(clans[id])
+	list.sort_custom(func(a, b): return league_before(a, b, week))
+	return list
+
+func _league(pid: String) -> void:
+	_roll()
+	var list := league_rows()
+	var my_id: String = member_of.get(pid, "")
+	var rows := []
+	var mine := {}
+	for i in list.size():
+		var c: Dictionary = list[i]
+		var row := {"rank":i + 1, "id":str(c.id), "name":str(c.name), "tag":str(c.tag), "cc":Eco.crest_code(c.crest),
+			"pts":week_pts(c), "lv":level_of(c), "n":(c.members as Dictionary).size()}
+		if str(c.get("fr", "")) != "":
+			row["fr"] = str(c.fr)
+		if str(c.id) == my_id:
+			row["you"] = true
+			mine = row
+		if i < LEAGUE_TOP:
+			rows.append(row)
+	soc._send(pid, {"t":"so", "k":"clan_league", "week":week, "ends":Leaderboard.week_end(unix()), "list":rows, "me":mine,
+		"clans":list.size(), "last":league_last})
