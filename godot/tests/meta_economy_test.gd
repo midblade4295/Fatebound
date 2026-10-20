@@ -39,7 +39,7 @@ func _init() -> void:
 			for k in r:
 				if not (k in ["gold", "gems", "chest", "shard", "token"]): pass_valid = false
 	check(pass_valid, "all 60 pass rewards are valid: gold, gems, chests, shards and the token -- no items")
-	check(Eco.pass_reward(1, 30, true) == {"chest": "royal", "gems": 150}, "premium tier 30: a Royal chest and 150 gems")
+	check(Eco.pass_reward(1, 30, true) == {"chest": "royal", "gems": 100}, "premium tier 30: a Royal chest and 100 gems (0.31.189: 150)")
 	check(Eco.week_key(1791000000) == "2026-09-28", "week starts Monday (%s)" % Eco.week_key(1791000000))
 
 	# ---- migration ----

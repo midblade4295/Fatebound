@@ -12,10 +12,18 @@ extends RefCounted
 # whole look -- his body repainted and a weapon of its own -- bought for gems. Titles (earned name tags) stay. What gave
 # weapons gives gold, gems, hero shards and chests: chests, the pass's item tiers, a quest's last step, the starter pack
 # (a Hero Token). Owned weapons and Forge stars simply drop from a save (Kevin: "Remove, no refund").
+# 0.31.189 (Kevin: "Now check the gold and gem economy and make sure it's balanced"; tools/economy_sim.gd plays it out):
+# gold had almost nothing left to buy -- a light player owned all six sold heroes in 5 days and sat on 190,000 gold by
+# week 16 -- and free gems ran at about twice 0.31.108's targets (the premium pass paid back ~880 of its 950). Kevin's
+# calls: a hero takes a casual player (3 matches a day) about 10 days of gold (HERO_PRICES 25,000, launch 50,000), and
+# once the heroes are his, gold buys the Frostbound outfits (SKIN_GOLD; the heroes' own sets stay gems-only). Free gems
+# back near the review's targets (light ~300 a season, casual ~550, regular ~600, grinder ~650: chests, weekly orders,
+# the quests' last step), the premium track paying back about half its price, fewer hero shards.
 
 # 0.31.168 (Kevin: "Unlock with gold"): the 5v5 heroes you buy with gold (moba.gd HEROES; Profile.buy_hero). The twelve
 # from the old classes are everyone's.
-const HERO_PRICES := {"golem":2000, "dragoon":2000, "duelist":2000, "stormcaller":2000, "musketeer":2000, "druid":2000}
+# 0.31.189: 25,000 each (was 2,000 -- bought in the first days; Kevin: "About 10 days" for a casual player)
+const HERO_PRICES := {"golem":25000, "dragoon":25000, "duelist":25000, "stormcaller":25000, "musketeer":25000, "druid":25000}
 # 0.31.185 (Kevin: "I want the same IAP system as league of legends"): heroes the way League sells champions --
 #  - gold (League's Blue Essence, earned only: the gem -> gold packs are gone) OR gems (its RP): HERO_GEMS;
 #  - a new hero launches dearer (HERO_LAUNCH: when it came out) for LAUNCH_DAYS, then drops to its price -- and only
@@ -32,11 +40,11 @@ const SIX_LAUNCH := 1792368000
 static var HERO_LAUNCH := {"golem": SIX_LAUNCH, "dragoon": SIX_LAUNCH, "duelist": SIX_LAUNCH, "stormcaller": SIX_LAUNCH,
 	"musketeer": SIX_LAUNCH, "druid": SIX_LAUNCH}
 const LAUNCH_DAYS := 14
-const LAUNCH_GOLD := 4000
+const LAUNCH_GOLD := 50000             # (0.31.189: 4,000 until then -- twice the price, as before)
 const LAUNCH_GEMS := 600
 const FREE_HEROES := 2
 const SHARD_UNLOCK := 0.6
-const SHARD_MELT := 0.2
+const SHARD_MELT := 0.1                  # (0.31.189: 0.2 -- with the heroes at 25,000 a melted shard was 5,000)
 
 # 0.31.186 (League's way, the fourth part): hero skins -- the hero's own model repainted (Meshy's retexture with his
 # UVs kept, tools/meshy_retexture.py; the textures tools/build_skins.py, assets/skins/<id>.jpg): same mesh, rig and
@@ -52,6 +60,9 @@ const SHARD_MELT := 0.2
 #  - Frostbound (SKIN_LINES, every hero): his own weapon repainted in frost ("weapon_tex": assets/skins/weapons/
 #    <model>_frost.jpg -- skin_weapon_texture), rare.
 const SKIN_GEMS := {"rare": 390, "epic": 750, "legendary": 1350}
+# 0.31.189 (Kevin: "Frostbound for gold"): a rare outfit (the Frostbound line) is also sold for gold -- what gold buys once
+# the heroes are yours (about two weeks of a casual player's gold). The heroes' own sets (epic) are gems only.
+const SKIN_GOLD := {"rare": 40000}
 const SKIN_LINES := {"frost": "Frostbound"}
 const SKIN_HEROES := {"knight":"Knight", "barbarian":"Barbarian", "rogue":"Rogue", "ranger":"Archer", "mage":"Mage",
 	"priest":"Priest", "crusader":"Crusader", "berserker":"Berserker", "assassin":"Assassin", "sniper":"Ranger",
@@ -81,7 +92,8 @@ const OUTFITS := {
 static var SKINS := _make_skins()
 
 static func _make_skins() -> Dictionary:
-	# id -> {hero, line (the set's key), set (its name), name, rarity, gems, weapon {"r","l"} | weapon_tex (a key)}
+	# id -> {hero, line (the set's key), set (its name), name, rarity, gems, gold (0.31.189: rare ones -- or gold),
+	# weapon {"r","l"} | weapon_tex (a key)}
 	var out := {}
 	for id in OUTFITS:
 		var o: Dictionary = OUTFITS[id]
@@ -93,7 +105,7 @@ static func _make_skins() -> Dictionary:
 		for h in SKIN_HEROES:
 			out["%s_%s" % [h, line]] = {"hero": h, "line": line, "set": str(SKIN_LINES[line]),
 				"name": "%s %s" % [SKIN_LINES[line], SKIN_HEROES[h]], "rarity": "rare", "gems": int(SKIN_GEMS.rare),
-				"weapon_tex": line}
+				"gold": int(SKIN_GOLD.rare), "weapon_tex": line}
 	return out
 
 static func skin_texture(id: String) -> String:
@@ -251,12 +263,14 @@ static func pass_reward(sid: int, tier: int, premium: bool) -> Dictionary:
 
 # 0.31.188: the tiers that held the pass's weapons (free 10/20/30, premium 2 ... 30)
 const PASS_FREE_EXTRA := {10: {"chest": "gold"}, 20: {"chest": "gold"}, 30: {"chest": "royal"}}
-const PASS_PREMIUM_EXTRA := {2: {"gems": 50}, 3: {"chest": "gold"}, 5: {"shard": ""}, 7: {"gems": 50},
-	9: {"chest": "gold"}, 12: {"shard": ""}, 15: {"gems": 75}, 18: {"chest": "royal"}, 21: {"shard": ""},
-	24: {"gems": 75}, 26: {"chest": "royal"}, 28: {"gems": 100}, 30: {"chest": "royal", "gems": 150}}
+# 0.31.189 (the balance check): the track paid back ~880 of its 950 gems (500 on its tiers, ~380 in its chests); now about
+# half -- 260 on its tiers (7, 15, 24, 30) and ~190 in its chests; tiers 2 and 28 a Silver and a Gold chest
+const PASS_PREMIUM_EXTRA := {2: {"chest": "silver"}, 3: {"chest": "gold"}, 5: {"chest": "silver"}, 7: {"gems": 50},
+	9: {"chest": "gold"}, 12: {"shard": ""}, 15: {"gems": 50}, 18: {"chest": "royal"}, 21: {"shard": ""},
+	24: {"gems": 60}, 26: {"chest": "royal"}, 28: {"chest": "gold"}, 30: {"chest": "royal", "gems": 100}}
 # 0.31.185 (League's pass: Blue Essence and champion capsules on the free track): free tiers 5, 15 and 25 give a hero
 # shard (they gave gold); the premium track opens with a Hero Token
-const PASS_SHARD_TIERS := [5, 15, 25]
+const PASS_SHARD_TIERS := [15]             # (0.31.189: 5 and 25 too until then -- they give gold again)
 const PASS_TOKEN_TIER := 1
 # 0.31.184 (Kevin: "Maybe let's have the two currency so it's more simple"): the Embers the pass gave are gold, ten for
 # one (EMBER_GOLD)
@@ -407,13 +421,14 @@ const CHALLENGES := {
 	"camps4":   {"text":"Clear 4 jungle camps", "stat":"camps", "goal":4, "pass":450, "gold":90, "span":"daily"},
 	"lh60":     {"text":"Last-hit 60 minions", "stat":"lh", "goal":60, "pass":400, "gold":80, "span":"daily"},
 	"epic1":    {"text":"Defeat an epic monster", "stat":"epics", "goal":1, "pass":600, "gold":120, "span":"daily"},
-	"w_win5":   {"text":"Win 5 matches", "stat":"wins", "goal":5, "pass":2000, "gems":40, "span":"weekly"},
-	"w_kos30":  {"text":"Knock out 30 enemy heroes", "stat":"kills", "goal":30, "pass":1800, "gems":30, "span":"weekly"},
-	"w_gate30": {"text":"Deal 3,000 damage to towers and gates", "stat":"gates", "goal":30, "pass":1800, "gems":30, "span":"weekly"},
-	"w_tower12":{"text":"Destroy 12 towers", "stat":"towers", "goal":12, "pass":2000, "gems":40, "span":"weekly"},
-	"w_camps20":{"text":"Clear 20 jungle camps", "stat":"camps", "goal":20, "pass":1800, "gems":30, "span":"weekly"},
-	"w_play12": {"text":"Play 12 matches", "stat":"matches", "goal":12, "pass":1600, "gems":25, "span":"weekly"},
+	"w_win5":   {"text":"Win 5 matches", "stat":"wins", "goal":5, "pass":2000, "gems":15, "span":"weekly"},
+	"w_kos30":  {"text":"Knock out 30 enemy heroes", "stat":"kills", "goal":30, "pass":1800, "gems":12, "span":"weekly"},
+	"w_gate30": {"text":"Deal 3,000 damage to towers and gates", "stat":"gates", "goal":30, "pass":1800, "gems":12, "span":"weekly"},
+	"w_tower12":{"text":"Destroy 12 towers", "stat":"towers", "goal":12, "pass":2000, "gems":15, "span":"weekly"},
+	"w_camps20":{"text":"Clear 20 jungle camps", "stat":"camps", "goal":20, "pass":1800, "gems":12, "span":"weekly"},
+	"w_play12": {"text":"Play 12 matches", "stat":"matches", "goal":12, "pass":1600, "gems":10, "span":"weekly"},
 }
+# (0.31.189: the weeklies' gems 25-40 -> 10-15: they were a third of all free gems, ~400 a season)
 const DAILY_COUNT := 3
 const WEEKLY_COUNT := 3
 
@@ -432,7 +447,7 @@ static func roll_challenges(span: String, key: String, count: int, exclude: Arra
 	return out
 
 # ---------------- match rewards ----------------
-const FIRST_WIN := {"gold":300, "pass":500}
+const FIRST_WIN := {"gold":150, "pass":500}           # (0.31.189: 300 gold -- 8,400 a month of a casual player's gold)
 
 # 0.31.120 (Kevin: prizes for the weekly leaderboard): paid by the server to the accounts when a week ends
 # (server/leaderboard.gd), among players with at least LB_MIN_MATCHES online matches that week. The titles exist only
@@ -467,13 +482,13 @@ static func lb_prize(rank: int) -> Dictionary:
 # 0.31.119 (Kevin: "Do all" -- a daily login reward): a 7-day calendar, one claim a day (UTC days, like the orders and
 # the first win), round and round; a missed day doesn't reset it. Gems only on day 7 (20 a week -- the economy review
 # found Silver chests were already half of all free gems). Chests are reward chests: with the slots full they wait.
-const LOGIN_REWARDS := [
+const LOGIN_REWARDS := [                 # (0.31.189: gold 150 / 250 / 250 / 500 / 400 -> 100 / 150 / 150 / 300 / 250)
+	{"gold":100},
 	{"gold":150},
-	{"gold":250},
 	{"chest":"silver"},
+	{"gold":150},
+	{"gold":300},
 	{"gold":250},
-	{"gold":500},
-	{"gold":400},
 	{"chest":"gold", "gems":20},
 ]
 
@@ -565,7 +580,7 @@ const QUEST_COUNTS := ["kills", "rescues", "gates", "gathered", "fed", "repaired
 # 0.31.164 (5v5 only): the steps that asked for King rescues or King lifts ask for towers or jungle camps now ("gates" is
 # tower and gate damage); the Worker's quest is Siege's -- kept, not shown (HERO_CLASSES)
 const QUEST_REWARDS := [{"gold":700}, {"gems":50, "chest":"gold"}]      # steps 1 and 2 (0.31.184: 400 gold + 30 Embers -> 700 gold)
-const QUEST_FINAL := {"gems":150, "chest":"royal"}                       # step 3 (0.31.188: was the class's legendary weapon)
+const QUEST_FINAL := {"gems":100, "chest":"royal"}                       # step 3 (0.31.188: was the class's legendary weapon; 0.31.189: 150 -> 100 gems)
 const QUESTS := {
 	"knight":      {"steps":[
 		{"stat":"wins", "n":3, "task":"Win 3 matches as a Knight"},
@@ -671,7 +686,8 @@ static func match_rewards(stats: Dictionary, won: bool, draw: bool, online: bool
 	# Itemised so the results screen can show where every coin came from.
 	var lines := []
 	# (0.31.184: the Embers a match gave are in its gold, EMBER_GOLD each -- a win 5 -> 150 + 50, a draw or a loss 2 -> + 20)
-	var base: Dictionary = {"gold":200, "xp":250, "pass":400} if won else ({"gold":120, "xp":175, "pass":300} if draw else {"gold":95, "xp":125, "pass":250})
+	# (0.31.189, the balance check: a win 200 -> 150 gold, a draw 120 -> 100, a loss 95 -> 75 -- with the heroes at 25,000)
+	var base: Dictionary = {"gold":150, "xp":250, "pass":400} if won else ({"gold":100, "xp":175, "pass":300} if draw else {"gold":75, "xp":125, "pass":250})
 	lines.append({"label":"Victory" if won else ("Draw" if draw else "Defeat"), "gold":base.gold, "xp":base.xp, "pass":base.pass})
 	var r: int = int(stats.get("rescues", 0))
 	if r > 0:
@@ -739,16 +755,20 @@ const TUTORIAL_GOLD := 250         # the tutorial's pay, once (0.31.108: Profile
 const DISCORD_URL := "https://discord.gg/H8eKXH8TmM"
 const DISCORD_GEMS := 100
 const CHESTS := {
-	# 0.31.188 (no weapons to drop): gold, gems and hero shards only -- more of each than when a weapon came too
-	"wooden": {"name":"Wooden Chest", "unlock":1800, "gold":[80, 150], "gems_chance":0.15, "gems":[5, 5],
-		"color":"#a8794a", "shard":0.05},
+	# 0.31.188 (no weapons to drop): gold, gems and hero shards only. 0.31.189 (the balance check: with six heroes to buy
+	# the shards came faster than they could be used, and gems at twice the targets): Wooden 50-100 gold, no gems or shard
+	# (was 80-150, 15 % of 5 gems, 5 % a shard); Silver 120-200, 25 % of 5 gems, 2 % a shard (200-320, 40 % of 5-10, 15 %);
+	# Gold 300-450, 10-15 gems, 10 % a shard (500-750, 20-30, 40 %); Royal 800, 30-40 gems, a shard half the time
+	# (1,200, 60-80, always)
+	"wooden": {"name":"Wooden Chest", "unlock":1800, "gold":[50, 100], "gems_chance":0.0, "gems":[5, 5],
+		"color":"#a8794a", "shard":0.0},
 	# 0.31.108: Silver gems 5-10 every time -> a 30% chance of 5 (they were about half of all free gems)
-	"silver": {"name":"Silver Chest", "unlock":3 * 3600, "gold":[200, 320], "gems_chance":0.4, "gems":[5, 10],
-		"color":"#c9d3dc", "shard":0.15},
-	"gold":   {"name":"Gold Chest", "unlock":8 * 3600, "gold":[500, 750], "gems_chance":1.0, "gems":[20, 30],
-		"color":"#ffcf4a", "shard":0.4},
-	"royal":  {"name":"Royal Chest", "unlock":12 * 3600, "gold":[1200, 1200], "gems_chance":1.0, "gems":[60, 80],
-		"color":"#c47bff", "shard":1.0},
+	"silver": {"name":"Silver Chest", "unlock":3 * 3600, "gold":[120, 200], "gems_chance":0.25, "gems":[5, 5],
+		"color":"#c9d3dc", "shard":0.02},
+	"gold":   {"name":"Gold Chest", "unlock":8 * 3600, "gold":[300, 450], "gems_chance":1.0, "gems":[10, 15],
+		"color":"#ffcf4a", "shard":0.1},
+	"royal":  {"name":"Royal Chest", "unlock":12 * 3600, "gold":[800, 800], "gems_chance":1.0, "gems":[30, 40],
+		"color":"#c47bff", "shard":0.5},
 }
 # 0.31.185 (League's champion capsules): "shard" -- the chance of a hero shard (any of the sold heroes: unlock it for
 # Eco.SHARD_UNLOCK of its gold price, or melt it)
@@ -779,7 +799,7 @@ static func chest_odds(kind: String) -> String:
 	var gems := ("%d" % int(c.gems[0])) if int(c.gems[0]) == int(c.gems[1]) else "%d-%d" % [int(c.gems[0]), int(c.gems[1])]
 	if float(c.gems_chance) >= 1.0:
 		parts.append("%s gems" % gems)
-	else:
+	elif float(c.gems_chance) > 0.0:                   # (0.31.189: a Wooden chest holds no gems)
 		parts.append("%d%% chance of %s gems" % [int(round(float(c.gems_chance) * 100.0)), gems])
 	if float(c.get("shard", 0.0)) > 0.0:
 		parts.append("a hero shard" if float(c.shard) >= 1.0 else "%d%% chance of a hero shard" % int(round(float(c.shard) * 100.0)))
@@ -790,4 +810,5 @@ static func chest_odds(kind: String) -> String:
 # (0.31.93-0.31.187: the Forge, Embers until 0.31.184.) Kevin: "Maybe let's have the two currency so it's more simple" --
 # what gave Embers gives gold at EMBER_GOLD a piece, and a save's Embers turn into gold once (Profile._normalized).
 const EMBER_GOLD := 10
-const DAILY_GOLD := 150                 # each daily order claimed (0.31.93-0.31.183: 15 Embers)
+const DAILY_GOLD := 0                   # each daily order claimed (0.31.93-0.31.183: 15 Embers; 0.31.184-0.31.188: 150 gold --
+                                        # 0.31.189: gone, each order pays its own gold)

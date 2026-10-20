@@ -83,7 +83,7 @@ func _init() -> void:
 		var r: Dictionary = Eco.roll_chest("royal", 1000 + i)
 		keys_ok = keys_ok and r.keys().size() == 3 and r.has("gold") and r.has("gems") and r.has("shard")
 		shards += 1 if str(r.shard) != "" else 0
-	check(keys_ok and shards == 400, "a Royal chest: gold, gems and a hero shard every time, nothing else")
+	check(keys_ok and shards > 160 and shards < 240, "a Royal chest: gold, gems and a hero shard half the time (0.31.189), nothing else (%d / 400)" % shards)
 	var odds := ""
 	for k in Eco.CHESTS:
 		odds += Eco.chest_odds(k) + " | "
@@ -104,27 +104,27 @@ func _init() -> void:
 				var r := Eco.pass_reward(sid, t, prem)
 				items += 1 if r.has("item") else 0
 				shard_tiers += 1 if r.has("shard") else 0
-	check(items == 0 and Eco.pass_reward(1, 10, false) == {"chest": "gold"} and Eco.pass_reward(1, 30, true) == {"chest": "royal", "gems": 150}
-		and shard_tiers == 3 * 6, "the pass: no cosmetics on any tier -- chests, gems and shards where the weapons were")
+	check(items == 0 and Eco.pass_reward(1, 10, false) == {"chest": "gold"} and Eco.pass_reward(1, 30, true) == {"chest": "royal", "gems": 100}
+		and shard_tiers == 3 * 3, "the pass: no cosmetics on any tier -- chests, gems and shards where the weapons were (0.31.189: 3 shards a season)")
 	var pp := fresh("pass")
 	pp.d.pass.season = 1
 	pp.d.pass.premium = true
 	pp.d.pass.xp = Eco.PASS_TIERS * Eco.TIER_XP
 	var gems0 := int(pp.d.gems)
 	var claimed: Array = pp.claim_all()
-	check(claimed.size() == 2 * Eco.PASS_TIERS and int(pp.d.gems) > gems0 and pp.d.owned.is_empty() and (pp.d.shards as Array).size() == 6,
-		"claiming the whole pass: gems, chests and six shards -- nothing owned")
+	check(claimed.size() == 2 * Eco.PASS_TIERS and int(pp.d.gems) > gems0 and pp.d.owned.is_empty() and (pp.d.shards as Array).size() == 3,
+		"claiming the whole pass: gems, chests and three shards -- nothing owned")
 	# ---- 5. quests
 	var no_item := true
 	for cls in Eco.QUESTS:
 		no_item = no_item and not (Eco.QUESTS[cls] as Dictionary).has("item")
-	check(no_item and Eco.quest_reward("knight", 2) == {"gems": 150, "chest": "royal"}, "a quest's last step: 150 gems and a Royal chest")
+	check(no_item and Eco.quest_reward("knight", 2) == {"gems": 100, "chest": "royal"}, "a quest's last step: 100 gems and a Royal chest (0.31.189: 150)")
 	var q := fresh("quest")
 	q.d.quests["knight"] = 2
 	q.d.stats["q_knight_kills"] = 500
 	var qg := int(q.d.gems)
 	var qr: Dictionary = q.claim_quest("knight")
-	check(bool(qr.ok) and int(q.d.gems) == qg + 150 and q.quest_done("knight") and q.d.owned.is_empty(), "claimed: the gems, the chest, no weapon")
+	check(bool(qr.ok) and int(q.d.gems) == qg + 100 and q.quest_done("knight") and q.d.owned.is_empty(), "claimed: the gems, the chest, no weapon")
 	# ---- 6. the starter pack
 	var sp: Dictionary = Net.IAP.starter_pack
 	var s := fresh("starter")

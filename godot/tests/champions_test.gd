@@ -114,7 +114,7 @@ func _data() -> void:
 	# ---- the launch price (Kevin: "Make the champions the higher price since they are new")
 	var L := Eco.SIX_LAUNCH
 	check(Eco.HERO_LAUNCH.size() == 6 and Eco.hero_price("stormcaller", L + 3 * 86400) == {"gold": Eco.LAUNCH_GOLD, "gems": Eco.LAUNCH_GEMS}
-		and Eco.LAUNCH_GOLD == 2 * int(Eco.HERO_PRICES.stormcaller), "the six new ones at their launch price: 4,000 gold or 600 gems, twice their own")
+		and Eco.LAUNCH_GOLD == 2 * int(Eco.HERO_PRICES.stormcaller), "the six new ones at their launch price: 50,000 gold or 600 gems, twice their own (0.31.189)")
 
 func _app() -> void:
 	var base := "user://champs-%d" % Time.get_ticks_usec()
@@ -173,9 +173,9 @@ func _process(delta: float) -> bool:
 				check(n == 18 and roles == 6, "18 cards under the six roles (%d, %d)" % [n, roles])
 				var lk := _locked_new()
 				check(lk != "" and has_text(btn("champ_knight"), "ALDRIC") and has_text(btn("champ_knight"), "YOURS")
-					and has_text(btn("champ_" + lk), Champions.short_of(lk).to_upper()) and has_text(btn("champ_" + lk), "4,000")
+					and has_text(btn("champ_" + lk), Champions.short_of(lk).to_upper()) and has_text(btn("champ_" + lk), "50,000")
 					and has_text(btn("champ_" + lk), "NEW") and has_text(btn("champ_" + lk), "2 OUTFITS"),
-					"a card: his name, YOURS -- or NEW at 4,000 (%s); his skins" % lk)
+					"a card: his name, YOURS -- or NEW at 50,000 (%s); his skins" % lk)
 				var fr: String = Eco.free_heroes(app.profile.now())[0]
 				check(has_text(btn("champ_" + fr), "FREE"), "this week's free one says FREE (%s)" % fr)
 				_shot("champ_locker")
@@ -195,7 +195,7 @@ func _process(delta: float) -> bool:
 				check(has_text(w, "TORVALD STORMCROWN") and has_text(w, "Voice of the Thunder") and has_text(w, "STORMCALLER")
 					and has_text(w, "MAGE") and has_text(w, "the storm a question") and has_text(w, "The sky is answering")
 					and has_text(w, "CHAIN LIGHTNING") and has_text(w, "THUNDERSTORM"), "his name, title, class, role, story, line and kit")
-				check(has_text(w, "AT LAUNCH PRICE") and has_text(w, "4,000") and btn("champ_unlock") != null and btn("champ_play") == null,
+				check(has_text(w, "AT LAUNCH PRICE") and has_text(w, "50,000") and btn("champ_unlock") != null and btn("champ_play") == null,
 					"new: at his launch price -- UNLOCK, no PLAY")
 				var layers: Array = w.find_children("ChampionFx_*", "", true, false)
 				var parts := 0
@@ -250,8 +250,10 @@ func _process(delta: float) -> bool:
 				var w = app.modal
 				_shot("champ_story")
 				press("champ_buy")
-				check(w.overlay != null and has_text(w, "BUY FROSTBOUND STORMCALLER?") and has_text(w, "comes with it"),
-					"BUY asks first (and says the hero comes with it)")
+				var bgold = btn("champ_buy_gold")
+				check(w.overlay != null and has_text(w, "BUY FROSTBOUND STORMCALLER?") and has_text(w, "comes with it")
+					and has_text(w, "or 40,000 gold") and bgold != null and bgold.disabled == (int(app.profile.d.gold) < 40000),
+					"BUY asks first (and says the hero comes with it) -- gems, or gold for a Frostbound (0.31.189)")
 				var gems0 := int(app.profile.d.gems)
 				press("champ_buy_yes")
 				check(app.profile.owns_skin("stormcaller_frost") and app.profile.owns_hero("stormcaller") and app.profile.worn_skin("stormcaller") == "stormcaller_frost"
@@ -267,14 +269,14 @@ func _process(delta: float) -> bool:
 				check(app.modal == null or not is_instance_valid(app.modal), "✕ shuts it")
 				# ---- 5. UNLOCK and PLAY
 				var lk := _locked_new()
-				app.profile.d.gold = 5000
+				app.profile.d.gold = 51000
 				app.open_champion(lk)
 				press("champ_unlock")
 				check(app.modal.overlay != null and btn("champ_unlock_gold") != null and btn("champ_unlock_gems") != null
-					and has_text(app.modal, "4,000 GOLD"), "UNLOCK: the chooser -- 4,000 gold or 600 gems")
+					and has_text(app.modal, "50,000 GOLD"), "UNLOCK: the chooser -- 50,000 gold or 600 gems")
 				press("champ_unlock_gold")
 				check(app.profile.owns_hero(lk) and int(app.profile.d.gold) == 1000 and app.modal is ChampWindow and has_text(app.modal, "YOURS"),
-					"4,000 gold: %s is yours" % Champions.name_of(lk))
+					"50,000 gold: %s is yours" % Champions.name_of(lk))
 				press("champ_play")
 				check(app.modal is HeroPanel and app.modal.hero == lk, "PLAY: the 5v5 window with him picked")
 				app.close_modal()

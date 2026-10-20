@@ -33,7 +33,7 @@ func _init():
 	p.now_override += int(Eco.CHESTS.wooden.unlock)
 	check(p.chest_ready(p.chests()[0]), "ready when the time is up")
 	var o: Dictionary = p.open_chest(0)
-	check(bool(o.ok) and int(o.gold) >= 60 and p.chests().size() == 3, "opened: gold and the slot freed (%s)" % str(o))
+	check(bool(o.ok) and int(o.gold) >= 50 and p.chests().size() == 3, "opened: gold and the slot freed (%s)" % str(o))
 	# skipping with gems
 	var silver: Dictionary = p.chests()[0]
 	var cost := Eco.skip_cost(p.chest_left(silver))
@@ -50,13 +50,17 @@ func _init():
 	for i in 200:
 		var rr := Eco.roll_chest("gold", i * 7919)
 		keys_ok = keys_ok and rr.keys().size() == 3 and rr.has("gold") and rr.has("gems") and rr.has("shard")
-		keys_ok = keys_ok and int(rr.gold) >= 500 and int(rr.gems) >= 20
+		keys_ok = keys_ok and int(rr.gold) >= 300 and int(rr.gold) <= 450 and int(rr.gems) >= 10 and int(rr.gems) <= 15
 		if str(rr.shard) != "":
 			shards += 1
 			keys_ok = keys_ok and Eco.HERO_PRICES.has(str(rr.shard))
-	check(keys_ok and shards > 50 and shards < 110, "Gold chests: gold, gems and a hero shard 40%% of the time, no weapon (%d / 200)" % shards)
-	check(str(Eco.roll_chest("royal", 7).shard) != "", "a Royal chest always holds a hero shard")
-	check(Eco.chest_odds("silver").contains("40% chance of 5-10 gems") and Eco.chest_odds("gold").contains("40% chance of a hero shard") and Eco.chest_odds("royal").contains("a hero shard"), "the odds read out plainly (%s)" % Eco.chest_odds("gold"))
+	check(keys_ok and shards > 8 and shards < 36, "Gold chests: 300-450 gold, 10-15 gems and a hero shard 10%% of the time, no weapon (%d / 200; 0.31.189)" % shards)
+	var royal_shards := 0
+	for i in 200:
+		royal_shards += 1 if str(Eco.roll_chest("royal", 9000 + i).shard) != "" else 0
+	check(royal_shards > 75 and royal_shards < 125, "a Royal chest holds a hero shard half the time (%d / 200; 0.31.189, always until then)" % royal_shards)
+	check(Eco.chest_odds("silver").contains("25% chance of 5 gems") and Eco.chest_odds("gold").contains("10% chance of a hero shard")
+		and Eco.chest_odds("royal").contains("50% chance of a hero shard") and Eco.chest_odds("wooden") == "50-100 gold", "the odds read out plainly (%s | %s)" % [Eco.chest_odds("gold"), Eco.chest_odds("wooden")])
 	check(Eco.level_reward(5).get("chest", "") == "gold" and Eco.level_reward(10).get("chest", "") == "royal", "levels 5 and 10 give Gold and Royal chests")
 	for f in DirAccess.get_files_at("user://"):
 		if f.begins_with(base.get_file()):

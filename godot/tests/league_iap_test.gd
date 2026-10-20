@@ -1,13 +1,13 @@
 extends SceneTree
 # 0.31.185 (Kevin: "I want the same IAP system as league of legends"): heroes the way League sells champions.
-#  1. Prices: each sold hero 2,000 gold OR 450 gems (gold is earned only -- the gem -> gold packs are gone); a new hero
-#     at his launch price (4,000 / 600) for 14 days, then his own; the profile buys with either.
+#  1. Prices: each sold hero 25,000 gold (0.31.189; 2,000 until then) OR 450 gems (gold is earned only -- the gem -> gold packs are gone); a new hero
+#     at his launch price (50,000 / 600) for 14 days, then his own; the profile buys with either.
 #  2. The free rotation: 2 sold heroes a week (Monday 00:00 UTC), every one of them in turn over three weeks, a launching
 #     one left out; a free one plays like your own (can_play_hero), but isn't yours.
-#  3. Hero shards: Royal chests always hold one (0.31.188, no weapons in chests: Gold 40 %, Silver 15 %, Wooden 5 % --
-#     the odds say so); a shard unlocks its hero for 60 % of the gold, or melts for 20 %.
-#  4. The pass: free tiers 5, 15, 25 a shard of a hero not owned yet (the claimed tier keeps the hero it gave); premium
-#     tier 1 a Hero Token (0.31.188: tier 2 is 50 gems, the pass holds no weapons); the token unlocks any locked hero.
+#  3. Hero shards (0.31.189): half the Royal chests, Gold 10 %, Silver 2 %, Wooden none -- the odds say so; a shard
+#     unlocks its hero for 60 % of the gold, or melts for 10 %.
+#  4. The pass: free tier 15 a shard of a hero not owned yet (the claimed tier keeps the hero it gave); premium tier 1 a
+#     Hero Token; the token unlocks any locked hero.
 #  5. The ops replay to the same profile (the server's copy), and an unknown one ("exchange") is refused.
 #   godot --headless --path godot -s res://tests/league_iap_test.gd
 const Profile = preload("res://scripts/meta/profile.gd")
@@ -32,8 +32,8 @@ func _init() -> void:
 	var six: Dictionary = Eco.HERO_LAUNCH.duplicate()
 	var L := Eco.SIX_LAUNCH
 	check(six.size() == 6 and six.keys().all(func(h): return Eco.HERO_PRICES.has(h) and int(six[h]) == L)
-		and Eco.hero_price("golem", L + 86400) == {"gold": 4000, "gems": 600} and Eco.hero_price("druid", L + 14 * 86400 - 1).gold == 4000
-		and Eco.hero_price("golem", L + 14 * 86400) == {"gold": 2000, "gems": 450}, "the six: 4,000 gold or 600 gems from 2026-10-19 for 14 days, then 2,000 / 450")
+		and Eco.hero_price("golem", L + 86400) == {"gold": 50000, "gems": 600} and Eco.hero_price("druid", L + 14 * 86400 - 1).gold == 50000
+		and Eco.hero_price("golem", L + 14 * 86400) == {"gold": 25000, "gems": 450}, "the six: 50,000 gold or 600 gems from 2026-10-19 for 14 days, then 25,000 / 450 (0.31.189)")
 	Eco.HERO_LAUNCH.clear()
 	var plain: Array = Eco.free_heroes(L + 86400)
 	Eco.HERO_LAUNCH.merge(six)
@@ -41,35 +41,35 @@ func _init() -> void:
 		"...the free rotation still has two while they launch -- the same two a server without the launch picks")
 	var lp := fresh("launch")
 	lp.now_override = L + 86400
-	lp.d.gold = 3000
+	lp.d.gold = 30000
 	var locked6 := ""
 	for h in ["golem", "dragoon", "duelist", "stormcaller", "musketeer", "druid"]:
 		if not Eco.free_heroes(L + 86400).has(h) and locked6 == "":
 			locked6 = h
-	check(not bool(lp.buy_hero(locked6).ok) and lp.hero_price(locked6).gold == 4000, "3,000 gold isn't enough for a launching hero (%s)" % locked6)
-	lp.d.gold = 4000
-	check(bool(lp.buy_hero(locked6).ok) and int(lp.d.gold) == 0 and lp.owns_hero(locked6), "...4,000 is")
+	check(not bool(lp.buy_hero(locked6).ok) and lp.hero_price(locked6).gold == 50000, "30,000 gold isn't enough for a launching hero (%s)" % locked6)
+	lp.d.gold = 50000
+	check(bool(lp.buy_hero(locked6).ok) and int(lp.d.gold) == 0 and lp.owns_hero(locked6), "...50,000 is")
 	Eco.HERO_LAUNCH.clear()                   # (the rest: the prices after the launch)
 	# ---- 1. prices
-	check(Eco.hero_price("golem", T0) == {"gold": 2000, "gems": 450} and Eco.hero_price("knight", T0).is_empty(),
-		"a sold hero: 2,000 gold or 450 gems; the twelve old ones aren't sold")
+	check(Eco.hero_price("golem", T0) == {"gold": 25000, "gems": 450} and Eco.hero_price("knight", T0).is_empty(),
+		"a sold hero: 25,000 gold or 450 gems; the twelve old ones aren't sold")
 	Eco.HERO_LAUNCH["druid"] = T0 - 3 * 86400
 	check(Eco.hero_price("druid", T0) == {"gold": Eco.LAUNCH_GOLD, "gems": Eco.LAUNCH_GEMS} and Eco.launching("druid", T0)
-		and Eco.hero_price("druid", T0 + 12 * 86400) == {"gold": 2000, "gems": 450}, "a new hero: launch price for 14 days, then his own")
+		and Eco.hero_price("druid", T0 + 12 * 86400) == {"gold": 25000, "gems": 450}, "a new hero: launch price for 14 days, then his own")
 	var rot_launch := []
 	for w in 6:
 		rot_launch.append_array(Eco.free_heroes(T0 + w * 7 * 86400))
 	check(not Eco.free_heroes(T0).has("druid"), "...and not in the free rotation while launching")
 	Eco.HERO_LAUNCH.erase("druid")
 	var p := fresh("buy")
-	p.d.gold = 1000
+	p.d.gold = 20000
 	p.d.gems = 1000
 	var locked := ""
 	for h in ["golem", "dragoon", "duelist", "stormcaller", "musketeer", "druid"]:
 		if not Eco.free_heroes(T0).has(h) and locked == "":
 			locked = h
 	check(not bool(p.buy_hero(locked).ok) and bool(p.buy_hero_gems(locked).ok) and p.owns_hero(locked) and int(p.d.gems) == 550
-		and int(p.d.gold) == 1000, "not enough gold -- 450 gems instead: %s is yours" % locked)
+		and int(p.d.gold) == 20000, "not enough gold -- 450 gems instead: %s is yours" % locked)
 	check(not bool(p.buy_hero_gems(locked).ok), "...once")
 	# ---- 2. the free rotation
 	var seen := {}
@@ -101,34 +101,34 @@ func _init() -> void:
 			gold_shards += 1
 		if str(Eco.roll_chest("wooden", 3000 + i).shard) != "":
 			wooden_shards += 1
-	check(royal_shards == 300 and gold_shards > 90 and gold_shards < 150 and wooden_shards > 3 and wooden_shards < 35,
-		"shards: every Royal chest, ~40 %% of Gold (%d/300), ~5 %% of Wooden (%d/300)" % [gold_shards, wooden_shards])
-	check(Eco.chest_odds("royal").contains("a hero shard") and Eco.chest_odds("gold").contains("40% chance of a hero shard")
-		and Eco.chest_odds("wooden").contains("5% chance of a hero shard"), "the odds say so")
+	check(royal_shards > 120 and royal_shards < 180 and gold_shards > 15 and gold_shards < 50 and wooden_shards == 0,
+		"shards (0.31.189): half the Royal chests (%d/300), ~10 %% of Gold (%d/300), no Wooden" % [royal_shards, gold_shards])
+	check(Eco.chest_odds("royal").contains("50% chance of a hero shard") and Eco.chest_odds("gold").contains("10% chance of a hero shard")
+		and Eco.chest_odds("silver").contains("2% chance of a hero shard") and not Eco.chest_odds("wooden").contains("shard"), "the odds say so")
 	var r1 := Eco.roll_chest("gold", 777)
 	check(r1.keys().size() == 3 and r1.has("gold") and r1.has("gems") and r1.has("shard"), "a roll: gold, gems and a shard -- no weapon, no pity (0.31.188)")
 	var s := fresh("shard")
-	s.d.gold = 5000
+	s.d.gold = 20000
 	s.d.shards = [locked, locked]
-	check(s.shards_of(locked) == 2 and bool(s.use_shard(locked).ok) and s.owns_hero(locked) and int(s.d.gold) == 5000 - 1200
-		and s.shards_of(locked) == 1, "a shard: %s for 1,200 gold (60 %%)" % locked)
-	check(not bool(s.use_shard(locked).ok) and bool(s.melt_shard(locked).ok) and int(s.d.gold) == 3800 + 400 and s.shards_of(locked) == 0,
-		"a shard of a hero you own melts for 400 gold (20 %)")
+	check(s.shards_of(locked) == 2 and bool(s.use_shard(locked).ok) and s.owns_hero(locked) and int(s.d.gold) == 20000 - 15000
+		and s.shards_of(locked) == 1, "a shard: %s for 15,000 gold (60 %%)" % locked)
+	check(not bool(s.use_shard(locked).ok) and bool(s.melt_shard(locked).ok) and int(s.d.gold) == 5000 + 2500 and s.shards_of(locked) == 0,
+		"a shard of a hero you own melts for 2,500 gold (10 %; 0.31.189, 20 % until then)")
 	# ---- 4. the pass
-	check(Eco.pass_reward(1, 5, false) == {"shard": ""} and Eco.pass_reward(1, 15, false) == {"shard": ""} and Eco.pass_reward(1, 25, false) == {"shard": ""},
-		"free tiers 5, 15, 25: a hero shard")
-	check(Eco.pass_reward(1, 1, true) == {"token": 1} and Eco.pass_reward(1, 2, true) == {"gems": 50},
-		"premium tier 1: a Hero Token; tier 2 50 gems (0.31.188: it was the first premium weapon)")
+	check(Eco.pass_reward(1, 15, false) == {"shard": ""} and not Eco.pass_reward(1, 5, false).has("shard") and not Eco.pass_reward(1, 25, false).has("shard"),
+		"free tier 15: a hero shard (0.31.189: 5 and 25 gold again)")
+	check(Eco.pass_reward(1, 1, true) == {"token": 1} and Eco.pass_reward(1, 2, true) == {"chest": "silver"},
+		"premium tier 1: a Hero Token; tier 2 a Silver chest (0.31.189; 50 gems in 0.31.188, the first premium weapon before)")
 	var t := fresh("pass")
 	t.d.heroes = ["golem", "dragoon", "duelist", "stormcaller", "musketeer"]
-	var want: Dictionary = t.pass_reward_for(5, false)
+	var want: Dictionary = t.pass_reward_for(15, false)
 	check(want == {"shard": "druid"}, "the pass shard: the one hero not owned yet (%s)" % str(want))
 	t.d.pass.xp = Eco.PASS_TIERS * Eco.TIER_XP
 	t.d.pass.premium = true
-	var c1: Dictionary = t.claim_tier(5, false)
+	var c1: Dictionary = t.claim_tier(15, false)
 	check(bool(c1.ok) and c1.reward == {"shard": "druid"} and t.shards_of("druid") == 1, "claimed: a Druid shard")
 	t.d.heroes.append("druid")
-	check(t.pass_reward_for(5, false) == {"shard": "druid"}, "...and the claimed tier keeps showing the Druid")
+	check(t.pass_reward_for(15, false) == {"shard": "druid"}, "...and the claimed tier keeps showing the Druid")
 	t.d.heroes.erase("druid")
 	var c2: Dictionary = t.claim_tier(1, true)
 	check(bool(c2.ok) and int(t.d.tokens) == 1, "premium tier 1 claimed: a Hero Token")
@@ -137,7 +137,7 @@ func _init() -> void:
 	# ---- 5. ops replay to the same profile; the gold packs are gone
 	var a := fresh("opa")
 	var b := fresh("opb")
-	a.d.gold = 9000
+	a.d.gold = 45000
 	a.d.gems = 2000
 	a.d.shards = ["golem", "druid"]
 	a.d.tokens = 1

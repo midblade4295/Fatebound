@@ -42,6 +42,7 @@ const OPS := {
 	# 0.31.185 (League's way): a hero for gems, a hero shard used (unlock at a discount) or melted, a Hero Token used
 	"buy_hero_gems": [TYPE_STRING], "use_shard": [TYPE_STRING], "melt_shard": [TYPE_STRING], "use_token": [TYPE_STRING],
 	"buy_skin": [TYPE_STRING], "wear_skin": [TYPE_STRING, TYPE_STRING],    # 0.31.186: hero skins
+	"buy_skin_gold": [TYPE_STRING],                              # 0.31.189: a rare outfit (Frostbound) for gold
 }
 
 func _rec(op: String, args: Array) -> void:
@@ -622,6 +623,27 @@ func buy_skin(id: String) -> Dictionary:
 	d.skin_on[hid] = id
 	save()
 	_rec("buy_skin", [id])
+	return {"ok":true, "hero":with_hero}
+
+func buy_skin_gold(id: String) -> Dictionary:
+	# 0.31.189 (Kevin: "Frostbound for gold"): an outfit that has a gold price (Eco.SKINS "gold": the rare line) for gold --
+	# as with gems, a locked hero's outfit brings him; worn at once
+	if not Eco.SKINS.has(id) or int(Eco.SKINS[id].get("gold", 0)) <= 0:
+		return {"ok":false, "error":"Not for gold"}
+	if owns_skin(id):
+		return {"ok":false, "error":"Already yours"}
+	var gold := int(Eco.SKINS[id].gold)
+	if int(d.gold) < gold:
+		return {"ok":false, "error":"Not enough gold"}
+	d.gold -= gold
+	(d.skins as Array).append(id)
+	var hid := str(Eco.SKINS[id].hero)
+	var with_hero := not owns_hero(hid)
+	if with_hero:
+		_own_hero(hid)
+	d.skin_on[hid] = id
+	save()
+	_rec("buy_skin_gold", [id])
 	return {"ok":true, "hero":with_hero}
 
 func wear_skin(hid: String, id: String) -> Dictionary:

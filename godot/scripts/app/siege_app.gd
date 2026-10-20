@@ -1060,6 +1060,37 @@ func confirm(title_text: String, body: String, yes_text: String, style: String, 
 		close_modal()
 		on_yes.call(), "modal_yes"))
 
+func choose(title_text: String, body: String, options: Array) -> void:
+	# 0.31.189: a question with a button for each way (an outfit for gems or for gold): options [{text, style, key,
+	# enabled, call}], then CANCEL; the dialog closes before the chosen call runs
+	sfx("menuOpen")
+	close_modal()
+	modal = Control.new()
+	modal.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(modal)
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.6)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	modal.add_child(dim)
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	modal.add_child(center)
+	var v := UI.card(center)
+	(v.get_parent() as Control).custom_minimum_size = Vector2(minf(360, size.x - 32), 0)
+	UI.title(v, title_text, 20)
+	var b := UI.label(v, body, 14, UI.MUTED)
+	b.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	for o in options:
+		var call: Callable = o.call
+		var ob := UI.button(v, str(o.text), str(o.style), func():
+			close_modal()
+			call.call(), str(o.key))
+		ob.disabled = not bool(o.get("enabled", true))
+	UI.button(v, "CANCEL", "secondary", func():
+		sfx("menuClose")
+		close_modal(), "modal_no")
+
 func notice(title_text: String, body: String) -> void:
 	# 0.31.119: a message with one OK (why a match ended, ...)
 	sfx("menuOpen")

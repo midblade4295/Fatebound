@@ -208,7 +208,8 @@ func _process(delta: float) -> bool:
 			if t_phase > 2.0:
 				var imp := Profile.defaults()
 				imp.name = "Alice"
-				imp.gold = 5000
+				imp.gold = 55000                # (0.31.189: a hero 25,000, 50,000 while the six launch -- an import holds
+				imp.stats.matches = 40          # gold to what its matches could earn, so she brings 40 of them)
 				_open("eco_alice", {"t":"eco", "v":Net.VERSION, "new":true, "import":imp})
 				var imp2 := Profile.defaults()
 				imp2.name = "Bob"
@@ -364,7 +365,7 @@ func _process(delta: float) -> bool:
 			var ea := _got("eco_after", "eco")
 			if not ea.is_empty():
 				var stt: Dictionary = ea[0].get("profile", {}).get("stats", {})
-				check(int(stt.get("matches", 0)) == 1, "the server paid Alice's account for the online match (matches %d)" % int(stt.get("matches", 0)))
+				check(int(stt.get("matches", 0)) == 41, "the server paid Alice's account for the online match (matches %d, 40 imported)" % int(stt.get("matches", 0)))
 				check(compares >= 100 and mismatches == 0, "every phone's mirror agreed with Alice's at the same snapshot (%d comparisons, %d mismatches)" % [compares, mismatches])
 				_old_server()
 				_go("old")

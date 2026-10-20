@@ -115,8 +115,8 @@ func _init() -> void:
 	check(v2.owns("title_oracle_sworn") and str(v2.d.title) == "title_oracle_sworn", "a title bought before stays owned and worn")
 
 	# ---- the pass, the shop, the chests: no titles (0.31.188: and no weapons -- outfits are bought, titles earned)
-	check(Eco.pass_reward(1, 5, true) == {"shard": ""} and Eco.pass_reward(1, 9, true) == {"chest": "gold"} and Eco.pass_reward(1, 21, true) == {"shard": ""},
-		"premium tiers 5, 9, 21 (the old titles; gems until 0.31.188): a shard, a Gold chest, a shard")
+	check(Eco.pass_reward(1, 5, true) == {"chest": "silver"} and Eco.pass_reward(1, 9, true) == {"chest": "gold"} and Eco.pass_reward(1, 21, true) == {"shard": ""},
+		"premium tiers 5, 9, 21 (the old titles; gems until 0.31.188): a Silver chest (0.31.189), a Gold chest, a shard")
 	var pass_items := []
 	for tier in range(1, Eco.PASS_TIERS + 1):
 		for prem in [false, true]:

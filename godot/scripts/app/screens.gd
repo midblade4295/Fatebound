@@ -1367,6 +1367,8 @@ static func featured_outfit(app, root: Node, id: String) -> void:
 	var nl := UI2.text(cap, str(sk.set).to_upper(), 24, Color.WHITE, Color("#1e0a45"), 6)
 	nl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	UI2.body(cap, "%s, the %s" % [Champions.name_of(hid), str(Eco.SKIN_HEROES.get(hid, hid))], 11, Champions.accent(hid).lightened(0.45))
+	if int(sk.get("gold", 0)) > 0:                       # 0.31.189: a rare outfit -- or gold
+		UI2.body(cap, "or %s gold" % UI.grouped(int(sk.gold)), 11, Color("#ffd86b"))
 	UI2.body(cap, "Tap to see it on him", 10, Color(1, 1, 1, 0.65))
 	var tap := Button.new()
 	tap.flat = true
@@ -1387,7 +1389,7 @@ static func featured_outfit(app, root: Node, id: String) -> void:
 	else:
 		b = UI2.button(fc, UI.grouped(int(sk.gems)), "purple", func(): buy_skin(app, id), "feat_buy", 17, 44.0, 12.0,
 			"res://assets/ui/currency/gem.png")
-		b.disabled = int(p.d.gems) < int(sk.gems)
+		b.disabled = not can_buy_skin(p, id)
 	b.anchor_left = 0.58
 	b.anchor_right = 1.0
 	b.anchor_top = 1.0
@@ -1458,21 +1460,27 @@ static func skin_grid(app, root: Node) -> void:
 		else:
 			b = UI2.button(c, str(int(sk.gems)), "purple", func(): buy_skin(app, id), "skin_buy_" + id, 14, 34.0, 11.0,
 				"res://assets/ui/currency/gem.png")
-			b.disabled = int(p.d.gems) < int(sk.gems)
+			b.disabled = not can_buy_skin(p, id)
+			if int(sk.get("gold", 0)) > 0:                 # 0.31.189: or gold -- a coin chip over the card
+				var gc := UI2.chip(c, "or %dK" % (int(sk.gold) / 1000), Color("#5a3d08"), Color("#ffd86b"), Color("#1e1200"))
+				gc.position = Vector2(6, 6 if p.owns_hero(hid) else 30)      # (under "+ HERO" when that's there)
 		b.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 		b.offset_left = 6
 		b.offset_right = -6
 		b.offset_top = -44
 		b.offset_bottom = -8
 
+static func can_buy_skin(p, id: String) -> bool:
+	# the gems for it -- or (0.31.189: a rare outfit) the gold
+	var sk: Dictionary = Eco.SKINS[id]
+	return int(p.d.gems) >= int(sk.gems) or (int(sk.get("gold", 0)) > 0 and int(p.d.gold) >= int(sk.gold))
+
 static func buy_skin(app, id: String) -> void:
 	var p = app.profile
 	var sk: Dictionary = Eco.SKINS[id]
 	var hid := str(sk.hero)
 	var with_hero: bool = not p.owns_hero(hid)
-	app.confirm("BUY %s?" % str(sk.name).to_upper(), "%d gems.%s Worn at once -- change it in the shop or the hero window." % [int(sk.gems),
-		(" The %s comes with it." % str(Eco.SKIN_HEROES.get(hid, hid))) if with_hero else ""], "BUY", "premium", func():
-		var r: Dictionary = p.buy_skin(id)
+	var bought := func(r: Dictionary) -> void:
 		if bool(r.get("ok", false)):
 			app.sfx("purchase")
 			app.toast("%s is yours%s" % [str(sk.name), " -- and the %s" % str(Eco.SKIN_HEROES.get(hid, hid)) if bool(r.get("hero", false)) else ""], UI.GOLD)
@@ -1480,7 +1488,18 @@ static func buy_skin(app, id: String) -> void:
 		else:
 			app.sfx("error")
 			app.toast(str(r.get("error", "Can't buy")), UI.RED)
-		app.rebuild())
+		app.rebuild()
+	var tail := "%s Worn at once -- change it in the shop or the hero window." % ((" The %s comes with it." % str(Eco.SKIN_HEROES.get(hid, hid))) if with_hero else "")
+	if int(sk.get("gold", 0)) > 0:
+		# 0.31.189 (Kevin: "Frostbound for gold"): gems or gold
+		app.choose("BUY %s?" % str(sk.name).to_upper(), "%s gems or %s gold.%s" % [UI.grouped(int(sk.gems)), UI.grouped(int(sk.gold)), tail], [
+			{"text": "%s GEMS" % UI.grouped(int(sk.gems)), "style": "premium", "key": "modal_yes", "enabled": int(p.d.gems) >= int(sk.gems),
+				"call": func(): bought.call(p.buy_skin(id))},
+			{"text": "%s GOLD" % UI.grouped(int(sk.gold)), "style": "gold", "key": "modal_gold", "enabled": int(p.d.gold) >= int(sk.gold),
+				"call": func(): bought.call(p.buy_skin_gold(id))}])
+		return
+	app.confirm("BUY %s?" % str(sk.name).to_upper(), "%d gems.%s" % [int(sk.gems), tail], "BUY", "premium", func():
+		bought.call(p.buy_skin(id)))
 
 static func is_equipped(p, id: String) -> bool:
 	# a title worn (0.31.188: titles are all there is to equip)

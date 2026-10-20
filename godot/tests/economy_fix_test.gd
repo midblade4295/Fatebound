@@ -39,7 +39,7 @@ func _init() -> void:
 			gem_amounts[int(r.gems)] = true
 	var amounts: Array = gem_amounts.keys()
 	amounts.sort()
-	check(absf(with_gems / 2000.0 - 0.4) < 0.04 and amounts.front() == 5 and amounts.back() == 10, "Silver: a 40%% chance of 5-10 gems (%.1f%%; 0.31.188, was 30%% of 5)" % (with_gems / 20.0))
+	check(absf(with_gems / 2000.0 - 0.25) < 0.04 and amounts == [5], "Silver: a 25%% chance of 5 gems (%.1f%%; 0.31.189 -- 0.31.188 40%% of 5-10, before it 30%% of 5)" % (with_gems / 20.0))
 	# ---- pass: season 1 unchanged, gold from season 2 (0.31.184: the 60 Embers' 600 gold)
 	check(Eco.pass_reward(1, 4, true) == {"gems": 60} and Eco.pass_reward(2, 4, true) == {"gold": Eco.PASS_GOLD_GEM_TIER},
 		"premium tier 4: 60 gems in season 1, %d gold from season 2" % Eco.PASS_GOLD_GEM_TIER)

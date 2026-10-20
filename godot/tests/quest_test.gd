@@ -1,6 +1,6 @@
 extends SceneTree
 # Class quests (0.31.97, Kevin: "Build the quest system and I want quests for each class"): the table (13 classes, 3
-# steps; the last gives 150 gems and a Royal chest -- 0.31.188, a legendary weapon until then), counting a match per
+# steps; the last gives 100 gems and a Royal chest -- 0.31.189; 150 in 0.31.188, a legendary weapon until then), counting a match per
 # class worn (a base class counts its upgrade, an upgrade only itself, a match only after a minute), claiming in order
 # with the rewards, saving, and the screens -- Home's QUESTS button, the Quests screen's CLAIM. (The Locker's quest card
 # went with its ARMORY, 0.31.188.)
@@ -38,8 +38,8 @@ func _init() -> void:
 			ok = ok and int(s.n) > 0 and str(s.task) != "" and (str(s.stat) in Eco.QUEST_COUNTS or str(s.stat) in ["wins", "matches", "best_multi"])
 		if not ok:
 			bad.append(cls)
-	check(bad.is_empty(), "each quest: 3 steps, the last 150 gems and a Royal chest (no weapon, 0.31.188) %s" % str(bad))
-	check(Eco.QUEST_FINAL == {"gems": 150, "chest": "royal"}, "the final reward: %s" % str(Eco.QUEST_FINAL))
+	check(bad.is_empty(), "each quest: 3 steps, the last 100 gems and a Royal chest (no weapon, 0.31.188) %s" % str(bad))
+	check(Eco.QUEST_FINAL == {"gems": 100, "chest": "royal"}, "the final reward: %s" % str(Eco.QUEST_FINAL))
 	check(Eco.quest_family("knight") == ["knight", "crusader"] and Eco.quest_family("crusader") == ["crusader"] and Eco.quest_family("worker") == ["worker"],
 		"a base class counts its upgrade; an upgrade counts itself")
 	# ---- counting
@@ -77,8 +77,8 @@ func _init() -> void:
 	var royal0: int = p.d.chests.slots.filter(func(c): return str(c.kind) == "royal").size() + p.chests_waiting()
 	var r3: Dictionary = p.claim_quest("knight")
 	var royal1: int = p.d.chests.slots.filter(func(c): return str(c.kind) == "royal").size() + p.chests_waiting()
-	check(bool(r3.ok) and int(p.d.gems) == gem1 + 150 and royal1 == royal0 + 1 and not r3.has("item") and p.quest_done("knight"),
-		"step 3 gives 150 gems and a Royal chest; the quest is done")
+	check(bool(r3.ok) and int(p.d.gems) == gem1 + 100 and royal1 == royal0 + 1 and not r3.has("item") and p.quest_done("knight"),
+		"step 3 gives 100 gems and a Royal chest; the quest is done")
 	check(not bool(p.claim_quest("knight").ok) and p.quests_ready() == 0, "nothing more to claim")
 	# ---- saved and loaded
 	p.d.quests["rogue"] = 9
@@ -143,7 +143,7 @@ func _process(_d: float) -> bool:
 		3:
 			var gm := int(p.d.gems)
 			press("quest_claim_mage")
-			check(p.quest_done("mage") and int(p.d.gems) == gm + 150 and btn("shop_preview_equip") == null, "the last step: 150 gems and a Royal chest, nothing to equip (0.31.188)")
+			check(p.quest_done("mage") and int(p.d.gems) == gm + 100 and btn("shop_preview_equip") == null, "the last step: 100 gems and a Royal chest, nothing to equip (0.31.188)")
 		4:
 			press("quests_back")
 			check(app.tab == "home", "back to Home")

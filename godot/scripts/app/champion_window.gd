@@ -417,8 +417,11 @@ func _skin_action(acc: Color) -> void:
 		b.disabled = worn
 	else:
 		var gems := int(Eco.SKINS[preview].gems)
+		var gold := int(Eco.SKINS[preview].get("gold", 0))
 		b = UI2.button(r, UI.grouped(gems), "purple", _ask_buy, "champ_buy", 16, 42.0, 12.0, GEM)
-		b.disabled = int(p.d.gems) < gems
+		b.disabled = int(p.d.gems) < gems and (gold <= 0 or int(p.d.gold) < gold)      # (0.31.189: or the gold)
+		if gold > 0:
+			UI2.body(v, "or %s gold" % UI.grouped(gold), 10, Color("#ffd86b"), false)
 	b.custom_minimum_size.x = 112
 	b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 
@@ -532,11 +535,12 @@ func _ask_buy() -> void:
 	if id == "" or p.owns_skin(id):
 		return
 	var sk: Dictionary = Eco.SKINS[id]
+	var gold := int(sk.get("gold", 0))
 	var with_hero: bool = not p.owns_hero(hero)
-	var box := _overlay("BUY %s?" % str(sk.name).to_upper(), "%s gems. Worn at once.%s" % [UI.grouped(int(sk.gems)),
+	var box := _overlay("BUY %s?" % str(sk.name).to_upper(), "%s gems%s. Worn at once.%s" % [UI.grouped(int(sk.gems)),
+		(" or %s gold" % UI.grouped(gold)) if gold > 0 else "",
 		(" %s comes with it -- the %s is yours too." % [Champions.short_of(hero), str(Moba.HEROES[hero].name)]) if with_hero else ""])
-	UI2.button(box, "BUY  %s" % UI.grouped(int(sk.gems)), "purple", func():
-		var r: Dictionary = p.buy_skin(id)
+	var done := func(r: Dictionary) -> void:
 		if bool(r.get("ok", false)):
 			app.sfx("purchase")
 			app.toast("%s is yours%s" % [str(sk.name), (" -- and %s" % Champions.short_of(hero)) if bool(r.get("hero", false)) else ""], UI.GOLD)
@@ -545,7 +549,12 @@ func _ask_buy() -> void:
 			app.rebuild()
 		else:
 			app.sfx("error")
-			app.toast(str(r.get("error", "Can't buy")), UI.RED), "champ_buy_yes", 17, 46.0, 14.0, GEM)
+			app.toast(str(r.get("error", "Can't buy")), UI.RED)
+	var bg := UI2.button(box, "BUY  %s" % UI.grouped(int(sk.gems)), "purple", func(): done.call(p.buy_skin(id)), "champ_buy_yes", 17, 46.0, 14.0, GEM)
+	bg.disabled = int(p.d.gems) < int(sk.gems)
+	if gold > 0:                                       # 0.31.189 (Kevin: "Frostbound for gold")
+		var bo := UI2.button(box, "BUY  %s" % UI.grouped(gold), "gold", func(): done.call(p.buy_skin_gold(id)), "champ_buy_gold", 17, 46.0, 14.0, COIN)
+		bo.disabled = int(p.d.gold) < gold
 	UI2.button(box, "CANCEL", "grey", func():
 		app.sfx("menuClose")
 		close_overlay(), "champ_cancel", 15, 40.0, 12.0)

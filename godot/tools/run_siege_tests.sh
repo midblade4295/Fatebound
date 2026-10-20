@@ -130,6 +130,7 @@ run apple_iap_test       APPLE_IAP_PASS           150
 run account_move_test    ACCOUNT_MOVE_PASS        150
 run preload_queue_test   PRELOAD_QUEUE_PASS       240
 run outfits_test         OUTFITS_PASS             150
+run economy_balance_test ECONOMY_BALANCE_PASS   120 --resolution 420x933
 run league_iap_test      LEAGUE_IAP_PASS          120
 run skins_test           SKINS_PASS               120
 run champions_test       CHAMPIONS_PASS           200

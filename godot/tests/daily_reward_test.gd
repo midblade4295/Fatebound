@@ -1,7 +1,8 @@
 extends SceneTree
 # 0.31.119 (Kevin: "Do all" -- 6. a daily login reward).
-#  1. the profile: one claim a UTC day, the calendar's next reward (150 gold, 250 gold, a Silver chest, 250 gold,
-#     500 gold, 400 gold, a Gold chest + 20 gems -- 0.31.184: days 2 and 5 were 25 and 50 Embers), round and round; a
+#  1. the profile: one claim a UTC day, the calendar's next reward (100 gold, 150 gold, a Silver chest, 150 gold,
+#     300 gold, 250 gold, a Gold chest + 20 gems -- 0.31.189; 150 / 250 / 250 / 500 / 400 gold until then, and until
+#     0.31.184 days 2 and 5 were 25 and 50 Embers), round and round; a
 #     missed day doesn't reset it; a chest waits when
 #     the slots are full.
 #  2. the server (server/eco_accounts.gd replaying the phone's ops with ITS clock): a claim counts once a day -- a phone
@@ -50,13 +51,13 @@ func _part1() -> void:
 	var g0 := int(p.d.gold)
 	check(p.login_ready() and p.login_next() == 0, "a new player: day 1 ready")
 	var r: Dictionary = p.claim_login()
-	check(bool(r.ok) and int(r.day) == 1 and int(p.d.gold) == g0 + 150 and not p.login_ready(), "day 1: +150 gold, done for today")
-	check(not bool(p.claim_login().ok) and int(p.d.gold) == g0 + 150, "twice the same day: nothing")
+	check(bool(r.ok) and int(r.day) == 1 and int(p.d.gold) == g0 + 100 and not p.login_ready(), "day 1: +100 gold, done for today")
+	check(not bool(p.claim_login().ok) and int(p.d.gold) == g0 + 100, "twice the same day: nothing")
 	p.now_override = T0 + 11 * 3600 + 59 * 60                       # 23:59 UTC
 	check(not p.login_ready(), "still today at 23:59 UTC")
 	p.now_override = T0 + 12 * 3600 + 60                            # 00:01 UTC the next day
 	var e0 := int(p.d.gold)
-	check(p.login_ready() and bool(p.claim_login().ok) and int(p.d.gold) == e0 + 250, "day 2 (the next UTC day): +250 gold (its 25 Embers)")
+	check(p.login_ready() and bool(p.claim_login().ok) and int(p.d.gold) == e0 + 150, "day 2 (the next UTC day): +150 gold (0.31.189; 250, its 25 Embers, until then)")
 	p.now_override += 4 * 86400                                       # 3 days missed
 	var slots := (p.d.chests.slots as Array).size()
 	r = p.claim_login()
@@ -76,12 +77,12 @@ func _part1() -> void:
 	p.now_override += 86400
 	var gg := int(p.d.gold)
 	r = p.claim_login()
-	check(bool(r.ok) and int(r.day) == 1 and int(p.d.gold) == gg + 150, "then round again: day 1")
+	check(bool(r.ok) and int(r.day) == 1 and int(p.d.gold) == gg + 100, "then round again: day 1")
 	var week := {"gold":0, "gems":0, "embers":0}
 	for rw in Eco.LOGIN_REWARDS:
 		for k in week:
 			week[k] += int(rw.get(k, 0))
-	check(week.gold == 800 + 75 * Eco.EMBER_GOLD and week.gems == 20 and week.embers == 0, "a week: 1,550 gold, 20 gems, a Silver and a Gold chest (%s)" % str(week))
+	check(week.gold == 950 and week.gems == 20 and week.embers == 0, "a week: 950 gold, 20 gems, a Silver and a Gold chest (0.31.189; 1,550 gold until then) (%s)" % str(week))
 
 func _part2() -> void:
 	var tmp := OS.get_user_data_dir().path_join("dailytest-srv-%d" % Time.get_ticks_usec())
@@ -93,12 +94,12 @@ func _part2() -> void:
 	var key := str(a.key)
 	var g0 := int(a.profile.gold)
 	var r: Dictionary = acc.handle({"t":"eco", "acct":id, "key":key, "ops":[{"s":1, "op":"claim_login", "a":[]}]})
-	check(bool(r.results[0].ok) and int(r.profile.gold) == g0 + 150, "the server replays the claim (+150 gold)")
+	check(bool(r.results[0].ok) and int(r.profile.gold) == g0 + 100, "the server replays the claim (+100 gold)")
 	r = acc.handle({"t":"eco", "acct":id, "key":key, "ops":[{"s":2, "op":"claim_login", "a":[]}]})
-	check(not bool(r.results[0].ok) and int(r.profile.gold) == g0 + 150, "a phone that moved its clock and claims again: the server says no")
+	check(not bool(r.results[0].ok) and int(r.profile.gold) == g0 + 100, "a phone that moved its clock and claims again: the server says no")
 	acc.now_override = T0 + 86400
 	r = acc.handle({"t":"eco", "acct":id, "key":key, "ops":[{"s":3, "op":"claim_login", "a":[]}]})
-	check(bool(r.results[0].ok) and int(r.profile.gold) >= g0 + 150 + 250, "the server's next day: day 2")
+	check(bool(r.results[0].ok) and int(r.profile.gold) >= g0 + 100 + 150, "the server's next day: day 2")
 
 func _find(node: Node, pred: Callable) -> Array:
 	var out := []
@@ -122,7 +123,7 @@ func _process(_d: float) -> bool:
 		notes_badge = ob != null
 		var g0 := int(app.profile.d.gold)
 		_btn("daily_claim").pressed.emit()
-		check(int(app.profile.d.gold) == g0 + 150 and not app.profile.login_ready(), "CLAIM: +150 gold")
+		check(int(app.profile.d.gold) == g0 + 100 and not app.profile.login_ready(), "CLAIM: +100 gold")
 	elif frames == 24:
 		var t1 := _find(app.modal, func(n): return str(n.name) == "DayTile1")
 		check(not t1.is_empty() and bool(t1[0].get_meta("claimed")) and _btn("daily_claim") == null and _btn("daily_ok") != null, "day 1 claimed, CLAIM gone")

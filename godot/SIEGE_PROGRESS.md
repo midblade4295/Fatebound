@@ -5982,3 +5982,41 @@ go along with each skin".
   renders): all 18 sets with their weapons and the 18 Frostbound with theirs frosted, every outfit's portrait, the
   shop's FEATURED OUTFITS and OUTFITS, the Locker, six champion windows with the set previewed. Preview APK:
   build/Fatebound-Siege-0.31.188-fatebound.apk (32 MB, preview key), sha256 39ab6082...e95474738871.
+
+## 0.31.189 — the gold and gem economy balanced (heroes 25,000 gold, Frostbound for gold, free gems back to target)
+Kevin: "Now check the gold and gem economy and make sure it's balanced". Asked after the numbers: once the heroes are
+yours, what gold buys -- "Frostbound for gold (Recommended)"; how long a hero takes a casual player -- "About 10 days
+(Recommended)".
+- The model (tools/economy_sim.gd, the 5v5's heir of 0.31.108's): MODE=samples plays whole 5v5 bot matches (12 here,
+  120 hero results: ~17.5 min, a win ~400 gold of rewards, a loss ~270); MODE=season plays four free players for 16
+  weeks from a new account on the real Profile / Economy (light 2 matches a day 5 days a week, casual 3, regular 5,
+  grinder 10; half won): login, orders, quests, pass, chests opened the way a player would; gold spent on the heroes he
+  lacks (a token, then shards, then gold) and then on Frostbound outfits; gems kept and booked.
+- What it found (0.31.188): gold had almost nothing to buy -- every persona owned all six sold heroes (12,000 gold)
+  within 5 days and then piled it up (light 191,000 by week 16, grinder 756,000); free gems ran ~670 / 1,150 / 1,200 /
+  1,320 a season (0.31.108's targets 340 / 550 / 620 / 800), the premium track paying back ~880 of its 950; 14-20 hero
+  shards a month for 6 heroes, most melted.
+- Gold: a sold hero 25,000 (launch 50,000; gems unchanged, 450 / 600), a shard unlocks for 15,000 and melts for 2,500
+  (SHARD_MELT 20 % -> 10 %). Income trimmed where it was the Embers' heir: no gold bonus per daily order (DAILY_GOLD 150
+  -> 0), a win 200 -> 150 and a loss 95 -> 75 (a draw 120 -> 100), the first win of the day 300 -> 150, the login week
+  1,550 -> 950, chests' gold about two thirds (Wooden 50-100, Silver 120-200, Gold 300-450, Royal 800).
+- What gold buys after the heroes (Kevin): the 18 Frostbound outfits, 390 gems or 40,000 gold (Eco.SKIN_GOLD;
+  Profile.buy_skin_gold, op "buy_skin_gold"; the heroes' own sets stay gems-only). The shop's Frostbound cards say
+  "or 40K"; BUY asks gems or gold (app.choose); the hero window says "or 40,000 gold" and its BUY offers both.
+- Gems: weekly orders 25-40 -> 10-15 each; chests -- Wooden none (was 15 % of 5), Silver 25 % of 5 (40 % of 5-10), Gold
+  10-15 (20-30), Royal 30-40 (60-80); a quest's last step 150 -> 100 (and its Royal chest). The premium track: 260 gems
+  on its tiers (7: 50, 15: 50, 24: 60, 30: 100; tier 2 a Silver chest, 28 a Gold chest) -- ~465 with its chests, about
+  half its price (was ~880).
+- Shards: Silver 2 % (15 %), Gold 10 % (40 %), Royal half the time (always), Wooden none (5 %); the free track one at
+  tier 15 (5 and 25 gold again), the premium two (12, 21; tier 5 a Silver chest).
+- After (the same 16 weeks): all six heroes by day 85 / 49 / 36 / 22 (light / casual / regular / grinder -- a casual
+  player's later heroes about 10 days apart; was day 5 / 3 / 2 / 1); gold a season 36,000 / 69,000 / 94,000 / 153,000,
+  then Frostbound outfits for it (0 / 3 / 6 / 12 by week 16); free gems a season ~380 / 620 / 640 / 720 -- a casual
+  player's premium pass every ~1.5 seasons, or a hero's own set every ~5 weeks.
+- Tests: economy_balance_test (new: the prices, gold for Frostbound -- the profile, the replay, the server, the shop's
+  card and question --, the gems, the premium payback, the shards, a match's gold, the login week); chest_test,
+  economy_fix_test, league_iap_test, meta_economy_test, outfits_test, daily_reward_test, quest_test, title_test,
+  moba_ui_test, champions_test, online_five_test (Alice brings 40 matches so her import may hold a launch price) to the
+  new numbers.
+- Server: the economy and the new op are the server's too -- it needs the redeploy (it already did for 0.31.184-0.31.188).
+- Version 0.31.189, versionCode 275, SERVER_BUILD 0.31.189.
