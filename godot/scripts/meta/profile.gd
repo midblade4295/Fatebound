@@ -133,6 +133,7 @@ static func defaults() -> Dictionary:
 		"discord":false,                                             # 0.31.124: the Discord reward claimed
 		"prizes":[],                                                 # 0.31.120: weekly leaderboard prizes paid (newest first)
 		"clan_rewards":[],                                           # 0.31.196: Clan Chests and League gems paid (newest first)
+		"gift_shards":[],                                            # 0.31.196: shards a clanmate gave (of "shards"; never given on)
 		"war_rewards":[],                                            # 0.31.151: the war's rewards paid (0.31.169: no more -- Crown War is gone; kept in saves)
 		"paid":[],                                                   # 0.31.134: gold the server took (a clan), newest first
 		"referral":{"by":"", "notes":[]},                            # 0.31.120: whose code was entered; friend rewards (newest first)
@@ -227,6 +228,13 @@ func _normalized(v: Dictionary) -> Dictionary:
 				if Eco.HERO_PRICES.has(str(h)) and (k == "shards" or not keep.has(str(h))):
 					keep.append(str(h))
 		out[k] = keep
+	# 0.31.196: the shards clanmates gave -- each one of "shards" (no more of a hero than there are shards of him)
+	var gifts := []
+	if out.get("gift_shards") is Array:
+		for h in out.gift_shards:
+			if Eco.HERO_PRICES.has(str(h)) and gifts.count(str(h)) < (out.shards as Array).count(str(h)):
+				gifts.append(str(h))
+	out["gift_shards"] = gifts
 	out["tokens"] = maxi(0, int(out.get("tokens", 0)) if _is_num(out.get("tokens", 0)) else 0)
 	# 0.31.186: skins -- only real ones, each worn by its own hero and owned
 	var sk := []
@@ -571,6 +579,17 @@ func buy_hero_gems(hid: String) -> Dictionary:
 func shards_of(hid: String) -> int:
 	return (d.get("shards", []) as Array).count(hid)
 
+func giftable_shards(hid: String) -> int:
+	# 0.31.196: the shards of hid this player may give a clanmate -- not the ones a clanmate gave him (a shard given back
+	# and forth would pay its melt gold every time)
+	return maxi(0, shards_of(hid) - (d.get("gift_shards", []) as Array).count(hid))
+
+func _shard_gone(hid: String) -> void:
+	# a shard of hid used or melted: a gifted one goes first
+	(d.shards as Array).erase(hid)
+	if d.get("gift_shards", null) is Array and (d.gift_shards as Array).count(hid) > shards_of(hid):
+		(d.gift_shards as Array).erase(hid)
+
 func use_shard(hid: String) -> Dictionary:
 	# a shard of a locked hero: the hero for Eco.SHARD_UNLOCK of his gold price
 	var why := _can_unlock(hid)
@@ -582,7 +601,7 @@ func use_shard(hid: String) -> Dictionary:
 	if int(d.gold) < g:
 		return {"ok":false, "error":"Not enough gold"}
 	d.gold -= g
-	(d.shards as Array).erase(hid)
+	_shard_gone(hid)
 	_own_hero(hid)
 	save()
 	_rec("use_shard", [hid])
@@ -593,7 +612,7 @@ func melt_shard(hid: String) -> Dictionary:
 	if shards_of(hid) <= 0:
 		return {"ok":false, "error":"No shard of that hero"}
 	var g := Eco.shard_melt_gold(hid, now())
-	(d.shards as Array).erase(hid)
+	_shard_gone(hid)
 	d.gold += g
 	save()
 	_rec("melt_shard", [hid])
@@ -854,6 +873,8 @@ func give_shard(hid: String) -> Dictionary:
 	# and what melting it would have paid (melt_shard's gold) paid here
 	if shards_of(hid) <= 0:
 		return {"ok":false, "error":"No shard of that hero"}
+	if giftable_shards(hid) <= 0:
+		return {"ok":false, "error":"gifted"}            # (a clanmate's gift isn't given on)
 	var g := Eco.shard_melt_gold(hid, now())
 	(d.shards as Array).erase(hid)
 	d.gold = int(d.gold) + g
@@ -867,6 +888,9 @@ func receive_shard(hid: String) -> Dictionary:
 	if not (d.get("shards", null) is Array):
 		d["shards"] = []
 	(d.shards as Array).append(hid)
+	if not (d.get("gift_shards", null) is Array):
+		d["gift_shards"] = []
+	(d.gift_shards as Array).append(hid)
 	save()
 	return {"ok":true}
 

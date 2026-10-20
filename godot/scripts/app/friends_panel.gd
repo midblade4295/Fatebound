@@ -100,7 +100,8 @@ func _person(parent: Node, c: Dictionary, crown := false) -> HBoxContainer:
 		UI2.icon(top, "crown", 18.0).size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	UI2.text(top, str(c.get("n", "Player")), 15, Color.WHITE)
 	if str(c.get("ct", "")) != "":
-		UI.label(top, "[%s]" % str(c.ct), 12, UI2.GOLD, UI.HEAVY_FONT).size_flags_vertical = Control.SIZE_SHRINK_CENTER   # 0.31.134
+		SocialUI.crest(top, str(c.get("cc", "")), 18.0)            # 0.31.196: their clan's crest
+		UI.label(top, "[%s]" % str(c.ct), 12, UI2.SOFT, UI.HEAVY_FONT).size_flags_vertical = Control.SIZE_SHRINK_CENTER   # 0.31.134
 	SocialUI.title_label(top, str(c.get("tt", "")), 11)
 	var sl := UI.label(v, SocialUI.status_text(c), 11, SocialUI.ST_COL.get(str(c.get("st", "offline")), UI2.MUTED).lightened(0.25), UI.HEAVY_FONT)
 	sl.autowrap_mode = TextServer.AUTOWRAP_OFF
@@ -171,7 +172,7 @@ func _render() -> void:
 		for m in p.get("pending", []):
 			var r2 := _person(pf, m)
 			_tag(r2, "INVITED", UI2.MUTED)
-		UI2.body(pf, "Playing together comes with the online 5v5 -- until then each of you plays against bots.", 12, UI2.MUTED)
+		UI2.body(pf, "Your party plays the same match, on one side -- five of you are the whole team. With clanmates, double clan points.", 12, UI2.MUTED)
 		var br := UI.row(pf, 8)
 		if social.is_leader():
 			# the leader's PLAY (the party follows once matches are online again)
@@ -238,6 +239,25 @@ func _render() -> void:
 			_small(r, "JOIN", "green", "friend_join_" + cp, func():      # 0.31.120: into their match
 				app.sfx("confirm")
 				app.join_friend(cp), 80.0)
+	# ---- 0.31.196: clanmates online who aren't friends -- they can be invited too (a party of 5)
+	if social.has_lfg and social.in_clan():
+		var mates: Array = []
+		for m in social.clan.get("members", []):
+			var rel: String = social.relation(str(m.get("pid", "")))
+			if str(m.get("st", "")) == "online" and rel != "me" and rel != "friend" and rel != "blocked":
+				mates.append(m)
+		if not mates.is_empty():
+			var mf := _section("CLANMATES ONLINE", "%d" % mates.size())
+			for c in mates.slice(0, 12):
+				var r := _person(mf, c)
+				var cp := str(c.pid)
+				if social.in_my_party(cp):
+					_tag(r, "IN PARTY", UI2.GREEN)
+				elif not full:
+					_small(r, "INVITE", "orange", "clanmate_invite_" + cp, func():
+						app.sfx("confirm")
+						if not social.invite(cp):
+							_fail(), 80.0)
 	# ---- sent, blocked
 	if not social.rout.is_empty():
 		var sf := _section("REQUESTS SENT", str(social.rout.size()))

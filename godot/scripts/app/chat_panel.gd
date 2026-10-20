@@ -3,9 +3,12 @@ extends Control
 # GLOBAL (everyone online) and PARTY tabs, the lines (tap a name for its card: add friend, invite, block, report),
 # and a text field with SEND. The sheet rises above the phone's keyboard while it's open. Lines arrive live from
 # scripts/meta/social.gd; the tab on screen counts as read.
+# 0.31.196: the crest before a clan member's name; in CLAN, a shard request's line has GIVE (if you hold that hero's
+# shard; TAKE BACK on your own) and an LFG call's line JOIN (CANCEL on your own) while they're open.
 const UI = preload("res://scripts/app/ui.gd")
 const UI2 = preload("res://scripts/app/ui2.gd")
 const SocialUI = preload("res://scripts/app/social_ui.gd")
+const Eco = preload("res://scripts/meta/economy.gd")
 
 var app
 var social
@@ -22,6 +25,7 @@ var _shown_last := {}                 # 0.31.140: the last line on screen (lines
 var _shown_ch := ""                   # the channel on screen
 var _bottom := 24.0
 var _stick := true                    # follow new lines (the list is at its bottom)
+var _live: Array = []                 # 0.31.196: [button, line] -- a request's GIVE, a call's JOIN (kept up to date)
 
 func open(a, start_ch := "global") -> void:
 	app = a
@@ -113,6 +117,7 @@ func _on_changed(what: String) -> void:
 		if social.viewing == ch:
 			social.unread[ch] = 0
 		_render()
+		_live_update()
 
 func _render() -> void:
 	# tabs: the one open is gold; PARTY greys out without a party; unread counts on the other
@@ -144,6 +149,7 @@ func _render() -> void:
 	if ch != _shown_ch or _shown > lines.size() or first != _shown_first or at_end != _shown_last:
 		for c in _list.get_children():
 			c.queue_free()
+		_live = []
 		_shown = 0
 		_shown_first = first
 		_shown_ch = ch
@@ -209,6 +215,8 @@ func _row(l: Dictionary) -> void:
 	nb.set_meta("action_key", "chat_name")
 	var card := {"pid":str(l.get("pid", "")), "n":str(l.get("n", "")), "tt":str(l.get("tt", "")), "ct":str(l.get("ct", ""))}
 	nb.pressed.connect(func(): SocialUI.name_card(app, self, card))
+	if str(l.get("cc", "")) != "":
+		SocialUI.crest(head, str(l.cc), 20.0)          # 0.31.196: their clan's crest
 	head.add_child(nb)
 	SocialUI.title_label(head, str(l.get("tt", "")), 11)
 	var sp := Control.new()
@@ -221,6 +229,78 @@ func _row(l: Dictionary) -> void:
 	var x := UI.label(v, str(l.get("x", "")), 15, Color.WHITE, UI.BODY_FONT)
 	x.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	x.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if ch == "clan" and (l.has("ask") or l.has("lfg")):
+		# 0.31.196: a shard request (GIVE) or an LFG call (JOIN), live while it's open
+		var b := UI2.button(v, "", "green", func(): _act(l), "chat_give" if l.has("ask") else "chat_lfg_join", 13, 34.0, 10.0)
+		b.size_flags_horizontal = Control.SIZE_SHRINK_END
+		b.custom_minimum_size.x = 150
+		_live.append([b, l])
+		_live_one(b, l)
+
+func _live_update() -> void:
+	for e in _live:
+		if is_instance_valid(e[0]):
+			_live_one(e[0], e[1])
+
+func _live_one(b: Button, l: Dictionary) -> void:
+	var pid := str(l.get("pid", ""))
+	var mine: bool = pid == str(social.me.get("pid", ""))
+	var text := ""
+	var on := false
+	var col := "green"
+	if l.has("ask"):
+		var h := str(l.ask)
+		if social.ask_open(pid, h):
+			if mine:
+				text = "TAKE BACK"
+				col = "ghost"
+				on = true
+			elif app.profile.giftable_shards(h) > 0:
+				text = "GIVE  +%d GOLD" % Eco.shard_melt_gold(h, app.profile.now())
+				on = true
+			else:
+				text = "NO SHARD TO GIVE"
+				col = "grey"
+	else:
+		var call: Dictionary = social.lfg_call(str(l.lfg))
+		if not call.is_empty() and absi(int(call.get("at", 0)) - int(l.get("at", 0))) < 5:
+			if mine:
+				text = "CANCEL CALL"
+				col = "ghost"
+				on = true
+			elif social.in_my_party(pid):
+				text = "IN YOUR PARTY"
+				col = "grey"
+			else:
+				text = "JOIN  %d/%d" % [int(call.get("size", 1)), int(call.get("max", 5))]
+				on = true
+	b.visible = text != ""
+	if text != "" and (b.text != text or str(b.get_meta("col", "")) != col):
+		b.text = text
+		b.set_meta("col", col)
+		UI2.dim_button(b, not on)
+	b.set_meta("on", on)
+
+func _act(l: Dictionary) -> void:
+	var b: Button = null
+	for e in _live:
+		if e[1] == l and is_instance_valid(e[0]):
+			b = e[0]
+	if b == null or not bool(b.get_meta("on", false)):
+		app.sfx("error")
+		return
+	var pid := str(l.get("pid", ""))
+	var mine: bool = pid == str(social.me.get("pid", ""))
+	var ok := false
+	if l.has("ask"):
+		ok = social.clan_unask() if mine else social.clan_give(pid)
+	else:
+		ok = social.lfg(false) if mine else social.lfg_join(str(l.lfg))
+	if ok:
+		app.sfx("confirm")
+	else:
+		app.sfx("error")
+		app.toast("Not connected to the server right now", UI.RED)
 
 func _process(_delta: float) -> void:
 	# keep the field above the keyboard (its height is in window pixels: turned into this canvas's)

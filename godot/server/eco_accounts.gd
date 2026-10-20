@@ -490,7 +490,7 @@ func give_shard(from_id: String, to_id: String, hid: String) -> Dictionary:
 	var r: Dictionary = pa.give_shard(hid)
 	pa.replaying = false
 	if not bool(r.get("ok", false)):
-		return {"ok":false, "error":"no_shard"}
+		return {"ok":false, "error":"gifted" if str(r.get("error", "")) == "gifted" else "no_shard"}
 	pb.replaying = true
 	pb.receive_shard(hid)
 	pb.replaying = false

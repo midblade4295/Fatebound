@@ -7,10 +7,11 @@ const UI = preload("res://scripts/app/ui.gd")
 const UI2 = preload("res://scripts/app/ui2.gd")
 const Net = preload("res://scripts/siege/siege_net.gd")
 const Eco = preload("res://scripts/meta/economy.gd")
+const CREST = preload("res://scripts/app/crest.gd")
 
 const ST_COL := {"online": Color("#5fdc86"), "match": Color("#ffb13d"), "offline": Color("#6b778a")}
 const RARITY_COL := {"common": Color("#cfd8e0"), "rare": Color("#6cc4ff"), "epic": Color("#d6a2ff"), "legendary": Color("#ffc23d")}
-const NAME_ME := Color("#ffd65a")
+const NAME_ME := Color("#8cf0a8")              # 0.31.196: green, as everywhere your name is (0.31.195: no yellow text)
 const NAME_OTHER := Color("#9fd8ff")
 const REPORTS := [["language", "Offensive language"], ["spam", "Spam"], ["cheating", "Cheating"], ["name", "Offensive name"], ["other", "Something else"]]
 # 0.31.134: the three houses a clan belongs to
@@ -46,6 +47,16 @@ static func house_chip(parent: Node, h: String, px := 14.0) -> Panel:
 	d.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	parent.add_child(d)
 	return d
+
+static func crest(parent: Node, code: String, h := 20.0, frame := "") -> Control:
+	# 0.31.196: a clan's crest ("e.f.c"), h px tall (scripts/app/crest.gd); an empty one for no crest
+	var c = CREST.new()
+	c.set_crest(code, frame)
+	c.custom_minimum_size = Vector2(roundf(h / CREST.ASPECT), h) if code != "" else Vector2.ZERO
+	c.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	c.visible = code != ""
+	parent.add_child(c)
+	return c
 
 static func social_tabs(parent: Node, app, on: String) -> void:
 	# FRIENDS | CLAN at the top of both windows (a badge count on the other one)
@@ -217,8 +228,12 @@ static func _fill_card(app, ov: Control, v: VBoxContainer, c0: Dictionary) -> vo
 	var nl := UI2.text(v, str(c.get("n", "Player")), 24, Color.WHITE)
 	nl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	if ct != "":
-		var cl := UI2.text(v, "[%s]" % ct, 15, UI2.GOLD)
-		cl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		var crow := HBoxContainer.new()                  # 0.31.196: the crest beside the tag
+		crow.alignment = BoxContainer.ALIGNMENT_CENTER
+		crow.add_theme_constant_override("separation", 6)
+		v.add_child(crow)
+		crest(crow, str(c.get("cc", pr0.get("cc", ""))), 22.0)
+		UI2.text(crow, "[%s]" % ct, 15, UI2.GOLD)
 	var tr := HBoxContainer.new()
 	tr.alignment = BoxContainer.ALIGNMENT_CENTER
 	tr.add_theme_constant_override("separation", 8)
@@ -261,7 +276,7 @@ static func _fill_card(app, ov: Control, v: VBoxContainer, c0: Dictionary) -> vo
 				act.call(social.decline(pid)), "card_decline", 15, 46.0))
 		"friend":
 			var st := str(c.get("st", "offline"))
-			var full: bool = social.in_party() and social.party_size() + (social.party.get("pending", []) as Array).size() >= int(social.party.get("max", 4))
+			var full: bool = social.in_party() and social.party_size() + (social.party.get("pending", []) as Array).size() >= social.clan_party_max()
 			var can: bool = st == "online" and not social.in_my_party(pid) and not full
 			var why := "INVITE TO PARTY"
 			if social.in_my_party(pid):
@@ -296,6 +311,25 @@ static func _fill_card(app, ov: Control, v: VBoxContainer, c0: Dictionary) -> vo
 			UI2.button(v, "UNBLOCK", "blue", func():
 				app.sfx("tap")
 				act.call(social.unblock(pid)), "card_unblock", 16, 44.0)
+	if rel in ["none", "sent", "asked"] and social.has_lfg and social.in_my_clan(pid):
+		# 0.31.196: a clanmate who isn't a friend can be invited to the party too
+		var cst := str(c.get("st", "offline"))
+		var cfull: bool = social.in_party() and social.party_size() + (social.party.get("pending", []) as Array).size() >= social.clan_party_max()
+		var ccan: bool = cst == "online" and not social.in_my_party(pid) and not cfull
+		var cwhy := "INVITE TO PARTY"
+		if social.in_my_party(pid):
+			cwhy = "IN YOUR PARTY"
+		elif cst == "match":
+			cwhy = "IN A MATCH"
+		elif cst == "offline":
+			cwhy = "OFFLINE"
+		elif cfull:
+			cwhy = "PARTY FULL"
+		var cib := UI2.button(v, cwhy, "orange" if ccan else "grey", func():
+			if ccan:
+				app.sfx("confirm")
+				act.call(social.invite(pid)), "card_invite", 17, 46.0)
+		UI2.dim_button(cib, not ccan)
 	if rel != "blocked" and social.has_clans and social.is_clan_officer() and ct == "" and not social.in_my_clan(pid):
 		# 0.31.134: officers invite players who aren't in a clan
 		UI2.button(v, "INVITE TO CLAN", "purple", func():
@@ -469,7 +503,7 @@ static func clan_card(app, host: Control, c0: Dictionary) -> void:
 	cc.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	cc.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	ov.add_child(cc)
-	var v := UI2.frame(cc, "night", 14, 20.0, house_rim(str(c0.get("house", ""))))
+	var v := UI2.frame(cc, "night", 14, 20.0, "gold")
 	(v.get_parent() as Control).custom_minimum_size = Vector2(minf(340.0, host.size.x - 32.0), 0)
 	v.add_theme_constant_override("separation", 8)
 	_fill_clan_card(app, ov, v, c0)
@@ -491,9 +525,17 @@ static func _fill_clan_card(app, ov: Control, v: VBoxContainer, c0: Dictionary) 
 	var c: Dictionary = c0.duplicate()
 	c.merge(info, true)
 	var house := str(c.get("house", ""))
+	if str(c.get("cc", "")) != "":
+		# 0.31.196: its crest (in its League frame), [TAG] and level
+		var cw := CenterContainer.new()
+		v.add_child(cw)
+		crest(cw, str(c.cc), 64.0, str(c.get("fr", "")))
 	var nl := UI2.text(v, str(c.get("name", "")), 22, Color.WHITE)
 	nl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	var hl := UI2.text(v, "[%s]  ·  HOUSE %s" % [str(c.get("tag", "")), house_name(house).to_upper()], 14, house_color(house))
+	var sub_line := "[%s]  ·  HOUSE %s" % [str(c.get("tag", "")), house_name(house).to_upper()]
+	if int(c.get("cv", 0)) >= 2:
+		sub_line = "[%s]  ·  %s" % [str(c.get("tag", "")), "STARTER CLAN" if bool(c.get("hc", false)) else "LEVEL %d" % int(c.get("lv", 1))]
+	var hl := UI2.text(v, sub_line, 14, UI2.SOFT if int(c.get("cv", 0)) >= 2 else house_color(house))
 	hl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	var bits := ["%d / %d members" % [int(c.get("n", 0)), int(c.get("max", 30))],
 		{"open":"Open to all", "request":"Join by request", "invite":"Invite only"}.get(str(c.get("join", "")), "")]

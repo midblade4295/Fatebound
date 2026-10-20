@@ -10,6 +10,7 @@ const UI2 = preload("res://scripts/app/ui2.gd")
 const BUTTON_STYLE := {"primary":"orange", "secondary":"blue", "gold":"gold", "roll":"gold", "active":"green", "danger":"red"}   # 0.31.79: the menu skins
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 const NetT = preload("res://scripts/siege/siege_net.gd")
+const CrestT = preload("res://scripts/app/crest.gd")     # 0.31.196: clan crests by the names
 const Moba = preload("res://scripts/siege/moba.gd")
 const ItemIcon = preload("res://scripts/siege/item_icon.gd")   # 0.31.157 5V5: the shop's item glyphs
 const Kits = preload("res://scripts/siege/moba_kits.gd")       # 0.31.176: the live scoreboard's roles
@@ -1441,6 +1442,15 @@ func _draw_name_tags(tags: Array) -> void:
 			if not hit:
 				break
 			plate.position.y -= 18.0
+		var cc := str(b.get("crest", ""))
+		if cc != "":
+			# 0.31.196: the clan's crest left of the plate (the plate moves over to keep the pair centred)
+			plate.position.x += 8.0
+			var cr := Rect2(plate.position.x - 17.0, plate.position.y - 1.5, 15.0, 15.0 * CrestT.ASPECT)
+			placed.append(plate.merge(cr))
+			_draw_tag(plate, parts, NetT.title_rarity(str(b.get("title", ""))), b.get("name_color", Color.WHITE), t)
+			CrestT.draw_on(self, cc, cr)
+			continue
 		placed.append(plate)
 		_draw_tag(plate, parts, NetT.title_rarity(str(b.get("title", ""))), b.get("name_color", Color.WHITE), t)
 

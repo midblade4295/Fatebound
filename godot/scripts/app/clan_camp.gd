@@ -1,0 +1,173 @@
+extends Control
+# 0.31.196 (Kevin: "Do clan chest, clan camp, crest, ..."): the CLAN CAMP at the top of the CLAN window -- the clan's
+# camp painted at its stage (Eco.clan_camp_stage of its level: a tent and a banner; two tents and two banners; a palisade,
+# three banners and a cauldron; a hall, a watchtower and five banners -- tools/build_clan_art.py), alive: the banners in
+# the crest's field colour with the crest on each (the cloth ripples), the campfire's flames, halo and embers with its
+# light flickering over the camp (clan_camp.gdshader), fireflies. Its height follows its width (PAINT's shape); whatever
+# the window puts over it (the clan's name, its level) is its own children. Reduce Motion: still.
+const UI2 = preload("res://scripts/app/ui2.gd")
+const Eco = preload("res://scripts/meta/economy.gd")
+const CampScene = preload("res://scripts/app/camp_scene.gd")
+const CampShader = preload("res://scripts/app/clan_camp.gdshader")
+const Crest = preload("res://scripts/app/crest.gd")
+const PAINT := Vector2(1000.0, 760.0)
+# tools/build_clan_art.py prints these: per stage, each banner's cloth (above its swallowtails), and the fire's middle
+const BANNERS := [
+	[Rect2(548, 177, 94, 164)],
+	[Rect2(341, 174, 94, 177), Rect2(634, 174, 99, 178)],
+	[Rect2(325, 158, 84, 146), Rect2(462, 125, 86, 158), Rect2(598, 163, 84, 148)],
+	[Rect2(37, 128, 60, 122), Rect2(159, 131, 56, 120), Rect2(283, 141, 60, 122), Rect2(701, 151, 61, 118), Rect2(914, 134, 63, 126)],
+]
+const FIRES := [Vector2(505, 574), Vector2(512, 595), Vector2(512, 620), Vector2(513, 531)]
+const FIRE_SIZE := [1.0, 1.15, 0.8, 1.35]          # (stage 3's fire is under the cauldron)
+const CREST_W := 0.74                              # a banner's crest, of its width
+const FLIES := Rect2(70.0, 360.0, 860.0, 330.0)
+
+var stage := 1
+var code := ""
+var frame := ""
+var calm := false
+var layer: Control
+var art: TextureRect
+var crests: Array = []
+var _halo: TextureRect
+var _heart: TextureRect
+var _embers: CPUParticles2D
+var _clock := 0.0
+
+func setup(st: int, crest_code: String, fr := "", reduce_motion := false) -> void:
+	stage = clampi(st, 1, 4)
+	code = crest_code
+	frame = fr
+	calm = reduce_motion
+
+func _ready() -> void:
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	clip_contents = true
+	layer = Control.new()
+	layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.size = PAINT
+	add_child(layer)
+	art = TextureRect.new()
+	art.texture = UI2.tex("res://assets/ui/clans/camp_%d.webp" % stage)
+	art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	art.stretch_mode = TextureRect.STRETCH_SCALE
+	art.size = PAINT
+	art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	art.set_meta("clan_camp", stage)
+	var m := ShaderMaterial.new()
+	m.shader = CampShader
+	m.set_shader_parameter("paint_size", PAINT)
+	m.set_shader_parameter("motion", 0.0 if calm else 1.0)
+	var fire: Vector2 = FIRES[stage - 1]
+	m.set_shader_parameter("fire", Vector3(fire.x, fire.y, 300.0))
+	var cloth := []
+	for b in BANNERS[stage - 1]:
+		var r: Rect2 = b
+		cloth.append(Vector4(r.position.x, r.position.y, r.end.x, r.end.y))
+	m.set_shader_parameter("cloth", cloth)
+	m.set_shader_parameter("cloth_n", cloth.size())
+	var k := Crest.colors(code)
+	m.set_shader_parameter("recolor", 0.0 if k.is_empty() else 1.0)
+	if not k.is_empty():
+		var fc: Color = k.field
+		m.set_shader_parameter("field_col", Vector3(fc.r, fc.g, fc.b))
+	art.material = m
+	layer.add_child(art)
+	# the crest on each banner
+	for b in BANNERS[stage - 1]:
+		var r: Rect2 = b
+		var c := Crest.new()
+		c.set_crest(code, frame)
+		var w := r.size.x * CREST_W
+		c.size = Vector2(w, w * Crest.ASPECT)
+		c.position = Vector2(r.position.x + (r.size.x - w) * 0.5, r.position.y + r.size.y * 0.47 - c.size.y * 0.5)
+		c.set_meta("banner_crest", true)
+		layer.add_child(c)
+		crests.append(c)
+	# the fire
+	var s: float = FIRE_SIZE[stage - 1]
+	_halo = _glow(fire + Vector2(0, -10) * s, Vector2(380, 300) * s, Color(1.0, 0.5, 0.18, 0.3))
+	_heart = _glow(fire + Vector2(0, -12) * s, Vector2(70, 60) * s, Color(1.0, 0.9, 0.6, 0.55))
+	if not calm:
+		_embers = CPUParticles2D.new()
+		_embers.position = fire + Vector2(0, -24) * s
+		_embers.amount = 18
+		_embers.lifetime = 2.2
+		_embers.preprocess = 2.2
+		_embers.texture = CampScene._dot_tex()
+		_embers.local_coords = false
+		var g := Gradient.new()
+		g.set_color(0, Color(1.0, 0.95, 0.7, 1.0))
+		g.add_point(0.4, Color(1.0, 0.6, 0.2, 0.9))
+		g.set_color(g.get_point_count() - 1, Color(0.9, 0.2, 0.05, 0.0))
+		_embers.color_ramp = g
+		var add := CanvasItemMaterial.new()
+		add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+		_embers.material = add
+		_embers.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
+		_embers.emission_rect_extents = Vector2(26, 10) * s
+		_embers.direction = Vector2(0, -1)
+		_embers.spread = 22.0
+		_embers.gravity = Vector2(0, -25)
+		_embers.initial_velocity_min = 40.0
+		_embers.initial_velocity_max = 95.0
+		_embers.tangential_accel_min = -25.0
+		_embers.tangential_accel_max = 25.0
+		_embers.scale_amount_min = 0.16
+		_embers.scale_amount_max = 0.36
+		layer.add_child(_embers)
+		var flies = CampScene.Fireflies.new()
+		flies.tex = CampScene.glow_texture()
+		flies.area = FLIES
+		flies.setup(8)
+		layer.add_child(flies)
+	_fit()
+
+func _glow(centre: Vector2, sz: Vector2, col: Color) -> TextureRect:
+	var t := TextureRect.new()
+	t.texture = CampScene.glow_texture()
+	t.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	t.stretch_mode = TextureRect.STRETCH_SCALE
+	t.size = sz
+	t.pivot_offset = sz * 0.5
+	t.position = centre - sz * 0.5
+	t.modulate = col
+	t.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var mat := CanvasItemMaterial.new()
+	mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	t.material = mat
+	layer.add_child(t)
+	return t
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_RESIZED:
+		_fit()
+
+func _fit() -> void:
+	# the painting fills the width; the height follows
+	if layer == null or size.x <= 0.0:
+		return
+	var k := size.x / PAINT.x
+	layer.scale = Vector2(k, k)
+	var h := roundf(PAINT.y * k)
+	if absf(custom_minimum_size.y - h) > 0.5:
+		custom_minimum_size.y = h
+
+func to_local_px(p: Vector2) -> Vector2:
+	# a point of the painting -> this control's px
+	return p * (size.x / PAINT.x)
+
+func _process(delta: float) -> void:
+	if calm or not is_visible_in_tree() or art == null:
+		return
+	_clock += delta
+	var t := _clock
+	var flick := 0.55 * sin(t * 7.3) + 0.3 * sin(t * 13.1 + 1.3) + 0.15 * sin(t * 2.1 + 0.4)
+	_heart.modulate.a = 0.5 + 0.16 * flick
+	_heart.scale = Vector2.ONE * (0.95 + 0.08 * flick)
+	_halo.modulate.a = 0.28 + 0.07 * flick
+	_halo.scale = Vector2.ONE * (0.97 + 0.05 * flick)
+	var m := art.material as ShaderMaterial
+	m.set_shader_parameter("clock", t)
+	m.set_shader_parameter("fire_flick", flick)

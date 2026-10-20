@@ -1,19 +1,37 @@
 extends Control
 # 0.31.134 (Kevin): the CLAN window, beside FRIENDS (the tabs at the top switch between them).
-# Not in a clan: invites waiting, FIND A CLAN (a search, the three houses as filters, JOIN / ASK on each), START A CLAN
-# (name, tag, house -- never changes --, who may join, the lowest level; 10,000 gold, taken by the server).
-# In a clan: its banner (house colours), CLAN CHAT, requests waiting (officers), INVITE A PLAYER by friend code
-# (officers), the members (the leader's crown, OFFICER, each one's MANAGE for those you may manage), the settings
-# (officers) and LEAVE / DISBAND. Everything goes through scripts/meta/social.gd; the server (server/clans.gd) decides.
-# 0.31.148 (Kevin: "Make it cost 5000 gold and make a default clan for each faction that the new players can choose since
-# there are no clans in game yet"): YOUR HOUSE'S CLAN first when not in a clan -- the three house clans (free, open to
-# all; nobody runs them), JOIN on each; FIND A CLAN lists the players' clans under it. In a house clan: its banner,
-# chat, members (the ones online first), and the players' clans to move to or START A CLAN (moving needs no leaving).
+# Not in a clan: invites waiting, FIND A CLAN (a search, JOIN / ASK on each), START A CLAN (name, tag, who may join, the
+# lowest level; 5,000 gold, taken by the server). In a clan: CLAN CHAT, requests waiting (officers), INVITE A PLAYER by
+# friend code (officers), the members (the leader's crown, OFFICER, each one's MANAGE for those you may manage), the
+# settings (officers) and LEAVE / DISBAND. Everything goes through scripts/meta/social.gd; the server (server/clans.gd)
+# decides.
+# 0.31.148 (Kevin: "make a default clan for each faction that the new players can choose"): the three house clans (free,
+# open to all; nobody runs them) first when not in a clan, JOIN on each; in one, the players' clans to move to or START A
+# CLAN (moving needs no leaving).
+# 0.31.196 (Kevin: "Now let's redo the clan system for new game" -> "Do clan chest, clan camp, crest, shard requests,
+# 5 - stack, lfg button, league"): no houses -- a clan has a CREST (picked when it's made; the leader and officers change
+# it: CHANGE CREST), the house clans are the STARTER CLANS. In a clan the window opens on its CAMP (scripts/app/
+# clan_camp.gd: the camp at its level's stage, its banners in the crest's colours) with the clan's crest, name, level and
+# XP over it, and three tabs:
+#   CAMP     CLAN CHAT; the CLAN CHEST (the week's points against its four tiers, mine, last week's result); PLAY
+#            TOGETHER (LOOKING FOR GROUP: a call in clan chat clanmates JOIN; the calls open; a party of 5); SHARD
+#            REQUESTS (ASK FOR A SHARD of a hero you don't own; GIVE a clanmate one you hold, for its melt gold); then
+#            requests, invite, crest and settings (officers), and LEAVE / DISBAND
+#   MEMBERS  each member's points this week
+#   LEAGUE   this week's clans by points (clan_league), the prizes, last week's podium
+# Against a server older than 0.31.196 (no "cv"): the clan as before, with a line that the rest comes with its update.
 const UI = preload("res://scripts/app/ui.gd")
 const UI2 = preload("res://scripts/app/ui2.gd")
 const SocialUI = preload("res://scripts/app/social_ui.gd")
+const Eco = preload("res://scripts/meta/economy.gd")
+const ClanCamp = preload("res://scripts/app/clan_camp.gd")
+const Crest = preload("res://scripts/app/crest.gd")
+const Screens = preload("res://scripts/app/screens.gd")
 
 const JOIN_TEXT := {"open": "Open to all", "request": "Join by request", "invite": "Invite only"}
+const TIER_COL := {"wooden": Color("#c08a55"), "silver": Color("#c9d3dc"), "gold": Color("#ffcf4a"), "royal": Color("#c47bff")}
+const FRAME_COL := {"gold": Color("#ffcf4a"), "silver": Color("#d6e0ea"), "bronze": Color("#e0955a")}
+const LEAGUE_STALE := 20.0             # s before LEAGUE asks the server again
 
 var app
 var social
@@ -21,10 +39,9 @@ var _list: VBoxContainer
 var _scroll: ScrollContainer
 var _dirty := false
 var _making := false                  # START CLAN sent, waiting for the server's answer
-var _house := ""                      # the house picked for a new clan
+var _crest := {}                      # the crest for a new clan {"e", "f", "c"}
 var _join := "open"
 var _min_lv := 1
-var _fhouse := ""                     # FIND A CLAN's house filter ("" = all)
 var _set_join := ""                   # the settings being edited (officers)
 var _set_lv := 0
 var _fields := {}                     # name -> LineEdit (what's typed survives a redraw)
@@ -33,11 +50,17 @@ var focus := ""                       # 0.31.147: "join" -- opened to join one
 var _start_box: Control = null        # START A CLAN's section (START MY OWN CLAN scrolls to it)
 var _shown_clan := ""                 # the clan the window was drawn for (a change: back to the top)
 var _asked_list := false              # (0.31.148: in a house clan, the players' clans asked for once)
+var tab := "camp"                     # 0.31.196: CAMP / MEMBERS / LEAGUE
+var camp: Control = null              # the camp painting on screen (clan_camp.gd)
+var _camp_key := ""                   # (redrawn only when its stage, crest or frame changes)
+var _overlay: Control = null          # the crest editor or the hero picker, over the window
+var _league_asked := -999.0
 
 func open(a, f := "") -> void:
 	app = a
 	social = a.social
 	focus = f
+	_crest = random_crest()
 	var w := SocialUI.window(self, "CLAN", "castle", func():
 		app.sfx("menuClose")
 		app.close_modal(), 56.0 + float(app.safe_top), 24.0)
@@ -68,7 +91,7 @@ func _exit_tree() -> void:
 			social.clan_made.disconnect(_on_made)
 
 func _on_changed(what: String) -> void:
-	if what in ["clan", "clans", "state", "me", "friends"]:
+	if what in ["clan", "clans", "state", "me", "friends", "league", "party"]:
 		_dirty = true
 
 func _on_made(ok: bool, _why: String) -> void:
@@ -77,6 +100,7 @@ func _on_made(ok: bool, _why: String) -> void:
 		app.sfx("confirm")
 		for k in ["new_name", "new_tag"]:
 			_typed.erase(k)
+		tab = "camp"
 		app.clan_founded()
 	_dirty = true
 
@@ -88,11 +112,20 @@ func _process(_delta: float) -> void:
 		if now_in != _shown_clan:
 			keep = 0                               # (joined, left or moved clans: the window from its top)
 			_shown_clan = now_in
+			tab = "camp"
 		for k in _fields:
 			if is_instance_valid(_fields[k]):
 				_typed[k] = (_fields[k] as LineEdit).text
 		_render()
 		_scroll.set_deferred("scroll_vertical", keep)
+
+static func random_crest() -> Dictionary:
+	var e := randi() % Eco.CLAN_EMBLEMS.size()
+	var f := randi() % 6                         # (the strong colours first: blue, red, green, purple, orange, night)
+	var c := 0 if f != 9 else 2
+	if randf() < 0.35:
+		c = 1                                    # gold
+	return {"e":e, "f":f, "c":c}
 
 # ---------------- pieces ----------------
 func _section(title: String, sub := "", rim := "") -> VBoxContainer:
@@ -133,10 +166,21 @@ func _armed(b: Button, again: String, cb: Callable) -> void:
 			b.text = again
 			app.sfx("tap"))
 
+func _note_label(parent: Node, s: String, size := 12, col := UI2.MUTED) -> Label:
+	var l := UI.label(parent, s, size, col, UI.HEAVY_FONT)
+	l.autowrap_mode = TextServer.AUTOWRAP_OFF
+	l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return l
+
 func _clan_line(parent: Node, c: Dictionary) -> HBoxContainer:
-	# a clan in a list: its house chip, [TAG] name, and house · members · who may join
+	# a clan in a list: its crest (0.31.196; a house chip from an older server), [TAG] name, and level · members · who
+	# may join
 	var r := UI.row(parent, 8)
-	SocialUI.house_chip(r, str(c.get("house", "")))
+	if str(c.get("cc", "")) != "":
+		SocialUI.crest(r, str(c.cc), 34.0, str(c.get("fr", "")))
+	else:
+		SocialUI.house_chip(r, str(c.get("house", "")))
 	var nb := Button.new()
 	nb.flat = true
 	nb.focus_mode = Control.FOCUS_NONE
@@ -157,18 +201,21 @@ func _clan_line(parent: Node, c: Dictionary) -> HBoxContainer:
 	nb.add_child(v)
 	var top := UI.row(v, 6)
 	top.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var tl := UI2.text(top, "[%s]" % str(c.get("tag", "")), 15, SocialUI.house_color(str(c.get("house", ""))))
+	var v2 := int(c.get("cv", 0)) >= 2
+	var tl := UI2.text(top, "[%s]" % str(c.get("tag", "")), 15, UI2.SOFT if v2 else SocialUI.house_color(str(c.get("house", ""))))
 	tl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var nl := UI2.text(top, str(c.get("name", "")), 15, Color.WHITE)
 	nl.clip_text = true
 	nl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	nl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var bits := ["%s" % SocialUI.house_name(str(c.get("house", ""))), "%d/%d" % [int(c.get("n", 0)), int(c.get("max", 30))],
+	var bits := ["Lv %d" % int(c.get("lv", 1)) if v2 else SocialUI.house_name(str(c.get("house", ""))), "%d/%d" % [int(c.get("n", 0)), int(c.get("max", 30))],
 		str(JOIN_TEXT.get(str(c.get("join", "")), ""))]
 	if bool(c.get("hc", false)):
-		bits = ["House clan", "%d member%s" % [int(c.get("n", 0)), "" if int(c.get("n", 0)) == 1 else "s"], "free, open to all"]
+		bits = ["Starter clan", "%d member%s" % [int(c.get("n", 0)), "" if int(c.get("n", 0)) == 1 else "s"], "free, open to all"]
+	elif v2 and int(c.get("pts", 0)) > 0:
+		bits.insert(1, "%s pts this week" % _thousands(int(c.pts)))
 	if int(c.get("min_lv", 1)) > 1:
-		bits.append("Lv %d+" % int(c.min_lv))
+		bits.append("Lv %d+ to join" % int(c.min_lv))
 	var sl := UI.label(v, "  ·  ".join(bits), 11, UI2.MUTED, UI.HEAVY_FONT)
 	sl.autowrap_mode = TextServer.AUTOWRAP_OFF
 	sl.clip_text = true
@@ -178,6 +225,7 @@ func _clan_line(parent: Node, c: Dictionary) -> HBoxContainer:
 # ---------------- the window ----------------
 func _render() -> void:
 	_fields = {}
+	camp = null
 	for c in _list.get_children():
 		_list.remove_child(c)
 		c.queue_free()
@@ -194,7 +242,10 @@ func _render() -> void:
 		UI2.body(_section("CLANS"), "Clans arrive with the next server update.", 13, UI2.SOFT)
 		return
 	if social.in_clan():
-		_render_mine()
+		if social.clan_v2():
+			_render_mine()
+		else:
+			_render_mine_old()
 	else:
 		_render_free()
 
@@ -203,11 +254,11 @@ func _render_free() -> void:
 	var cool: int = social.clan_cool_left()
 	var intro := _section("JOIN A CLAN" if focus == "join" else "YOUR CLAN")
 	if cool > 0:
-		UI2.body(intro, "You left a clan recently. You can join a players' clan or start one again in %s -- your house's clan is open to you now." % _hours(cool), 13, UI2.GOLD)
+		UI2.body(intro, "You left a clan recently. You can join a players' clan or start one again in %s -- the starter clans are open to you now." % _hours(cool), 13, UI2.CYAN)
 	elif focus == "join":
-		UI2.body(intro, "Pick your house's clan -- free, open to all -- or a players' clan. Or start your own and choose the house.", 13, UI2.SOFT)
+		UI2.body(intro, "Pick a starter clan -- free, open to all -- or a players' clan. Or start your own with its own crest.", 13, UI2.SOFT)
 	else:
-		UI2.body(intro, "You're not in a clan yet. Join your house's clan or a players' clan below, or start your own. Every clan fights for one of the three houses.", 13, UI2.SOFT)
+		UI2.body(intro, "You're not in a clan yet. Clans fill a Clan Chest every week, climb the Clan League, party up 5 at a time and share hero shards. Join one below or start your own.", 13, UI2.SOFT)
 	# 0.31.147 (Kevin: "When they click join clan it put the list of available clans or they have option to start clan"):
 	# the list is right under this; START MY OWN CLAN goes down to the form
 	UI2.button(intro, "START MY OWN CLAN", "gold", func():
@@ -232,7 +283,7 @@ func _render_free() -> void:
 				app.sfx("tap")
 				social.clan_noinv(cid), 120.0)
 			nb.custom_minimum_size.y = 40
-	# ---- 0.31.148: the house clans
+	# ---- 0.31.148: the house clans (0.31.196: the starter clans)
 	_house_section()
 	_find_section(cool)
 	# ---- start one
@@ -242,15 +293,13 @@ func _house_section() -> void:
 	# 0.31.148: the three house clans, each with JOIN (free, open to all; the 24-hour wait doesn't apply)
 	if social.house_clans.is_empty():
 		return
-	var hf := _section("YOUR HOUSE'S CLAN", "FREE")
-	UI2.body(hf, "Every house has its own clan, open to all.", 12, UI2.MUTED)
+	var hf := _section("STARTER CLANS", "FREE")
+	UI2.body(hf, "Open to all, no wait to leave. Players' clans fill a Clan Chest and play in the League.", 12, UI2.MUTED)
 	for c in social.house_clans:
 		var r := _clan_line(hf, c)
 		var cid := str(c.get("id", ""))
 		if str(social.clan.get("id", "")) == cid:
-			var y := UI.label(r, "YOURS", 12, UI2.GOLD, UI.HEAVY_FONT)
-			y.autowrap_mode = TextServer.AUTOWRAP_OFF
-			y.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			_note_label(r, "YOURS", 12, UI2.GREEN)
 			continue
 		_small(r, "JOIN", "green", "clan_house_join_" + str(c.get("house", "")), func():
 			app.sfx("confirm")
@@ -263,17 +312,9 @@ func _find_section(cool: int) -> void:
 	var q := _field(sr, "find", "Clan name or tag", 20)
 	q.text_submitted.connect(func(_t): _search())
 	_small(sr, "FIND", "blue", "clan_find", func(): _search(), 80.0)
-	var hr := UI.row(ff, 6)
-	for h in [""] + SocialUI.HOUSES:
-		var hid: String = h
-		var hb := UI2.button(hr, "ALL" if hid == "" else SocialUI.house_name(hid).to_upper(), "gold" if _fhouse == hid else "grey", func():
-			app.sfx("tab")
-			_fhouse = hid
-			_search(), "clan_fhouse_" + (hid if hid != "" else "all"), 12, 32.0, 10.0)
-		UI.grow(hb)
-	var list: Array = social.clan_list.filter(func(c): return not bool(c.get("hc", false)))   # (the house clans: above)
+	var list: Array = social.clan_list.filter(func(c): return not bool(c.get("hc", false)))   # (the starter clans: above)
 	if list.is_empty():
-		UI2.body(ff, "No players' clans yet -- be the first to start one!" if social.clan_query == "" and _fhouse == "" else "No clans match that.", 13, UI2.MUTED)
+		UI2.body(ff, "No players' clans yet -- be the first to start one!" if social.clan_query == "" else "No clans match that.", 13, UI2.MUTED)
 	for c in list:
 		var r := _clan_line(ff, c)
 		var cid := str(c.get("id", ""))
@@ -307,7 +348,7 @@ func _search() -> void:
 	var t := ""
 	if _fields.has("find") and is_instance_valid(_fields["find"]):
 		t = (_fields["find"] as LineEdit).text
-	if not social.clan_find(t, _fhouse):
+	if not social.clan_find(t, ""):
 		_fail()
 
 func _to_start() -> void:
@@ -321,7 +362,7 @@ func _render_new(cool: int) -> void:
 	_start_box = nf
 	var gold := int(app.profile.d.get("gold", 0))
 	var cost: int = social.clan_cost
-	UI2.body(nf, "Costs %s gold (you have %s). Your clan's house can never change." % [_thousands(cost), _thousands(gold)], 13,
+	UI2.body(nf, "Costs %s gold (you have %s)." % [_thousands(cost), _thousands(gold)], 13,
 		UI2.SOFT if gold >= cost else Color("#ffb0a0"))
 	var nr := UI.row(nf, 8)
 	var ne := _field(nr, "new_name", "Clan name", 20)
@@ -333,18 +374,12 @@ func _render_new(cool: int) -> void:
 			var at := te.caret_column
 			te.text = tx.to_upper()
 			te.caret_column = at)
-	UI2.body(nf, "HOUSE", 12, UI2.MUTED)
-	var hr := UI.row(nf, 8)
-	for h in SocialUI.HOUSES:
-		var hid: String = h
-		var picked := _house == hid
-		var hb := UI2.button(hr, SocialUI.house_name(hid).to_upper(), SocialUI.house_button(hid) if picked else "grey", func():
-			app.sfx("tab")
-			_house = hid
-			_dirty = true, "clan_house_" + hid, 15, 42.0, 12.0)
-		UI.grow(hb)
-		if not picked and _house != "":
-			hb.modulate = Color(1, 1, 1, 0.6)
+	UI2.body(nf, "CREST", 12, UI2.MUTED)
+	crest_editor(nf, _crest, "crest", func(k: Dictionary):
+		_crest = k
+		_dirty = true)
+	if not social.has_lfg:
+		UI2.body(nf, "(Your crest shows once the game's server updates.)", 11, UI2.MUTED)
 	UI2.body(nf, "WHO MAY JOIN", 12, UI2.MUTED)
 	var jr := UI.row(nf, 6)
 	for j in ["open", "request", "invite"]:
@@ -362,9 +397,7 @@ func _render_new(cool: int) -> void:
 
 func _level_row(parent: Node, title: String, value: int, set_cb: Callable, key: String) -> void:
 	var r := UI.row(parent, 8)
-	var l := UI.label(r, title, 12, UI2.MUTED, UI.HEAVY_FONT)
-	l.autowrap_mode = TextServer.AUTOWRAP_OFF
-	l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_note_label(r, title)
 	var sp := Control.new()
 	sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	r.add_child(sp)
@@ -393,8 +426,8 @@ func _start() -> void:
 		why = "Give your clan a name (3-20 letters)"
 	elif tag.length() < 3 or not _alnum(tag):
 		why = "A tag is 3-4 letters or numbers (like WOLF)"
-	elif _house == "":
-		why = "Pick your clan's house"
+	elif Eco.clean_crest(_crest).is_empty():
+		why = "Pick your clan's crest"
 	elif social.clan_cool_left() > 0:
 		why = "You can start a clan again in %s" % _hours(social.clan_cool_left())
 	elif int(app.profile.d.get("gold", 0)) < int(social.clan_cost):
@@ -403,7 +436,7 @@ func _start() -> void:
 		app.sfx("error")
 		app.toast(why, UI.RED)
 		return
-	if not social.clan_new(name, tag, _house, _join, _min_lv):
+	if not social.clan_new(name, tag, Eco.clean_crest(_crest), _join, _min_lv):
 		_fail()
 		return
 	app.sfx("tap")
@@ -416,51 +449,258 @@ static func _alnum(t: String) -> bool:
 			return false
 	return true
 
-# ---------------- in a clan ----------------
+# ---------------- the crest editor (0.31.196) ----------------
+func crest_editor(parent: Node, k: Dictionary, key: String, changed: Callable) -> void:
+	# the crest as it stands (big) with SHUFFLE; the sixteen emblems (each in the crest's colours), the shield's colours,
+	# the emblem's colours. Every tap calls changed with the new {"e", "f", "c"}.
+	var cur := Eco.clean_crest(k)
+	if cur.is_empty():
+		cur = {"e":0, "f":0, "c":0}
+	var top := UI.row(parent, 12)
+	var pv := SocialUI.crest(top, Eco.crest_code(cur), 92.0)
+	pv.set_meta("crest_preview", Eco.crest_code(cur))
+	var tv := VBoxContainer.new()
+	tv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	tv.alignment = BoxContainer.ALIGNMENT_CENTER
+	top.add_child(tv)
+	UI2.body(tv, "Your clan's banner: on its camp, beside every member's name and on the League.", 12, UI2.SOFT)
+	UI2.button(tv, "SHUFFLE", "blue", func():
+		app.sfx("tap")
+		changed.call(random_crest()), key + "_random", 13, 34.0, 10.0)
+	_note_label(parent, "EMBLEM", 11)
+	var g := GridContainer.new()
+	g.columns = 8
+	g.add_theme_constant_override("h_separation", 4)
+	g.add_theme_constant_override("v_separation", 4)
+	parent.add_child(g)
+	for i in Eco.CLAN_EMBLEMS.size():
+		var ei: int = i
+		var b := _swatch(g, Color(str(Eco.CLAN_FIELDS[int(cur.f)])), int(cur.e) == ei, key + "_e_%d" % ei, func():
+			app.sfx("tab")
+			changed.call({"e":ei, "f":int(cur.f), "c":int(cur.c)}))
+		var t := TextureRect.new()
+		t.texture = Crest.tex("emblem_" + str(Eco.CLAN_EMBLEMS[ei]))
+		t.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		t.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		t.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+		t.modulate = Color(str(Eco.CLAN_CHARGES[int(cur.c)]))
+		t.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		t.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		t.offset_left = 5
+		t.offset_top = 5
+		t.offset_right = -5
+		t.offset_bottom = -5
+		b.add_child(t)
+	_note_label(parent, "SHIELD", 11)
+	var fr := GridContainer.new()
+	fr.columns = 10
+	fr.add_theme_constant_override("h_separation", 4)
+	parent.add_child(fr)
+	for i in Eco.CLAN_FIELDS.size():
+		var fi: int = i
+		_swatch(fr, Color(str(Eco.CLAN_FIELDS[fi])), int(cur.f) == fi, key + "_f_%d" % fi, func():
+			app.sfx("tab")
+			changed.call({"e":int(cur.e), "f":fi, "c":int(cur.c)}), 28.0)
+	_note_label(parent, "EMBLEM COLOUR", 11)
+	var cr := GridContainer.new()
+	cr.columns = 8
+	cr.add_theme_constant_override("h_separation", 4)
+	parent.add_child(cr)
+	for i in Eco.CLAN_CHARGES.size():
+		var ci: int = i
+		_swatch(cr, Color(str(Eco.CLAN_CHARGES[ci])), int(cur.c) == ci, key + "_c_%d" % ci, func():
+			app.sfx("tab")
+			changed.call({"e":int(cur.e), "f":int(cur.f), "c":ci}), 30.0)
+
+func _swatch(parent: Node, fill: Color, on: bool, key: String, cb: Callable, h := 36.0) -> Button:
+	var b := Button.new()
+	b.focus_mode = Control.FOCUS_NONE
+	b.custom_minimum_size = Vector2(0, h)
+	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	for st_name in ["normal", "hover", "pressed", "focus", "hover_pressed"]:
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = fill
+		sb.set_corner_radius_all(8)
+		sb.border_color = Color("#ffe08a") if on else Color(0, 0, 0, 0.55)
+		sb.set_border_width_all(3 if on else 1)
+		b.add_theme_stylebox_override(st_name, sb)
+	b.set_meta("action_key", key)
+	b.pressed.connect(cb)
+	parent.add_child(b)
+	return b
+
+func _open_overlay(title: String, w := 340.0, quiet := false) -> VBoxContainer:
+	_close_overlay()
+	if not quiet:
+		app.sfx("menuOpen")
+	var ov := Control.new()
+	ov.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(ov)
+	_overlay = ov
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.6)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dim.gui_input.connect(func(ev: InputEvent):
+		if (ev is InputEventMouseButton or ev is InputEventScreenTouch) and not ev.pressed:
+			app.sfx("menuClose")
+			_close_overlay())
+	ov.add_child(dim)
+	var cc := CenterContainer.new()
+	cc.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	cc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ov.add_child(cc)
+	var v := UI2.frame(cc, "royal", 14, 20.0, "gold")
+	(v.get_parent() as Control).custom_minimum_size = Vector2(minf(w, size.x - 28.0), 0)
+	UI2.center(UI2.text(v, title, 20, Color.WHITE))
+	return v
+
+func _close_overlay() -> void:
+	if is_instance_valid(_overlay):
+		_overlay.queue_free()
+	_overlay = null
+
+func _edit_crest(k: Dictionary, again := false) -> void:
+	# CHANGE CREST (the leader and officers)
+	var v := _open_overlay("CHANGE CREST", 360.0, again)
+	crest_editor(v, k, "crest_edit", func(nk: Dictionary): _edit_crest(nk, true))
+	var r := UI.row(v, 8)
+	UI.grow(UI2.button(r, "CANCEL", "ghost", func():
+		app.sfx("menuClose")
+		_close_overlay(), "clan_crest_cancel", 14, 42.0))
+	var same: bool = Eco.crest_code(k) == social.my_crest()
+	var sb := UI2.button(r, "SAVE CREST", "green", func():
+		if social.clan_crest(Eco.clean_crest(k)):
+			app.sfx("confirm")
+			_close_overlay()
+		else:
+			_fail(), "clan_crest_save", 15, 42.0)
+	UI.grow(sb)
+	UI2.dim_button(sb, same)
+
+# ---------------- in a clan (0.31.196) ----------------
 func _render_mine() -> void:
 	var c: Dictionary = social.clan
-	var house := str(c.get("house", ""))
-	var role: String = social.clan_role_of_me()
-	var officer: bool = social.is_clan_officer()
-	# ---- the banner
-	var bf := _section("", "", SocialUI.house_rim(house))
-	var tr := UI.row(bf, 10)
-	var ic := UI2.icon(tr, "banner", 54.0)
-	ic.modulate = SocialUI.house_color(house).lightened(0.15)
-	ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var hc := bool(c.get("hc", false))
+	_camp_header(c)
+	var tr := UI.row(_list, 6)
+	for t in [["camp", "CAMP"], ["members", "MEMBERS"], ["league", "LEAGUE"]]:
+		var id: String = t[0]
+		UI.grow(UI2.button(tr, t[1], "gold" if tab == id else "blue", func():
+			if tab == id:
+				return
+			app.sfx("tab")
+			tab = id
+			if id == "league":
+				_league_asked = Time.get_ticks_msec() / 1000.0
+				social.clan_league()
+			_dirty = true, "clan_tab_" + id, 14, 38.0, 12.0))
+	match tab:
+		"members":
+			_render_members(c, hc)
+		"league":
+			_render_league(c)
+		_:
+			_render_camp(c, hc)
+
+func _camp_header(c: Dictionary) -> void:
+	var hc := bool(c.get("hc", false))
+	var lv := int(c.get("lv", 1))
+	var f := UI2.frame(_list, "night", 4, 18.0, "gold")
+	camp = ClanCamp.new()
+	camp.setup(Eco.clan_camp_stage(lv), str(c.get("cc", "")), str(c.get("fr", "")), bool(app.profile.d.settings.get("reduce_motion", false)))
+	camp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	camp.custom_minimum_size = Vector2(0, 220)
+	f.add_child(camp)
+	# over its foot: a dark fade, the crest, the name, [TAG] and level, the XP to the next level
+	var shade := TextureRect.new()
+	shade.texture = _fade_tex()
+	shade.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	shade.stretch_mode = TextureRect.STRETCH_SCALE
+	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	shade.anchor_left = 0.0
+	shade.anchor_right = 1.0
+	shade.anchor_top = 0.45
+	shade.anchor_bottom = 1.0
+	camp.add_child(shade)
+	var foot := HBoxContainer.new()
+	foot.add_theme_constant_override("separation", 10)
+	foot.anchor_left = 0.0
+	foot.anchor_right = 1.0
+	foot.anchor_top = 1.0
+	foot.anchor_bottom = 1.0
+	foot.offset_left = 10
+	foot.offset_right = -10
+	foot.offset_top = -78
+	foot.offset_bottom = -8
+	foot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	camp.add_child(foot)
+	var big := SocialUI.crest(foot, str(c.get("cc", "")), 70.0, str(c.get("fr", "")))
+	big.set_meta("clan_crest_big", true)
 	var tv := VBoxContainer.new()
-	tv.add_theme_constant_override("separation", -2)
+	tv.add_theme_constant_override("separation", 0)
 	tv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	tr.add_child(tv)
+	tv.alignment = BoxContainer.ALIGNMENT_END
+	tv.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	foot.add_child(tv)
 	var nl := UI2.text(tv, str(c.get("name", "")), 22, Color.WHITE)
 	nl.clip_text = true
-	var hl := UI2.text(tv, "[%s]  ·  HOUSE %s" % [str(c.get("tag", "")), SocialUI.house_name(house).to_upper()], 14, SocialUI.house_color(house))
-	hl.clip_text = true
-	var hc := bool(c.get("hc", false))
-	var bits := ["%d / %d members" % [int(c.get("n", 0)), int(c.get("max", 30))], str(JOIN_TEXT.get(str(c.get("join", "")), ""))]
-	if hc:
-		bits = ["The %s' own clan" % SocialUI.house_name(house), "%d member%s" % [int(c.get("n", 0)), "" if int(c.get("n", 0)) == 1 else "s"]]
-	if int(c.get("min_lv", 1)) > 1:
-		bits.append("Lv %d+" % int(c.min_lv))
-	var il := UI.label(bf, "  ·  ".join(bits), 12, UI2.SOFT, UI.HEAVY_FONT)
-	il.autowrap_mode = TextServer.AUTOWRAP_OFF
-	var cr := UI.row(bf, 8)
+	nl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var sub := "[%s]  ·  %s" % [str(c.get("tag", "")), "STARTER CLAN" if hc else "LEVEL %d" % lv]
+	if str(c.get("fr", "")) != "":
+		sub += "  ·  LEAGUE #%d" % ({"gold":1, "silver":2, "bronze":3}.get(str(c.fr), 0))
+	var sl := UI2.text(tv, sub, 13, FRAME_COL.get(str(c.get("fr", "")), UI2.SOFT))
+	sl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if not hc:
+		var xp := int(c.get("xp", 0))
+		var at := Eco.clan_level_xp(lv)
+		var nxt := Eco.clan_level_xp(lv + 1)
+		var xr := UI.row(tv, 6)
+		xr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		if nxt > 0:
+			var b := UI2.bar(xr, float(xp - at), float(nxt - at), Color("#d9f99a"), Color("#5bbf3a"), 10.0)
+			b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			_note_label(xr, "%s / %s XP" % [_thousands(xp - at), _thousands(nxt - at)], 10, UI2.SOFT)
+		else:
+			_note_label(xr, "MAX LEVEL  ·  %s XP" % _thousands(xp), 10, UI2.GREEN)
+
+static var _fade: GradientTexture2D = null
+
+static func _fade_tex() -> GradientTexture2D:
+	if _fade == null:
+		var g := Gradient.new()
+		g.set_color(0, Color(0.02, 0.03, 0.08, 0.0))
+		g.set_color(1, Color(0.02, 0.03, 0.08, 0.88))
+		_fade = GradientTexture2D.new()
+		_fade.gradient = g
+		_fade.fill_from = Vector2(0.5, 0.0)
+		_fade.fill_to = Vector2(0.5, 1.0)
+		_fade.width = 8
+		_fade.height = 64
+	return _fade
+
+func _render_camp(c: Dictionary, hc: bool) -> void:
+	var role: String = social.clan_role_of_me()
+	var officer: bool = social.is_clan_officer()
+	var cr := UI.row(_list, 8)
 	var n := int(social.unread.get("clan", 0))
 	UI.grow(UI2.button(cr, "CLAN CHAT" + ("  (%d)" % n if n > 0 else ""), "orange", func():
 		app.sfx("menuOpen")
 		app.open_chat("clan"), "clan_chat", 16, 44.0))
-	var you := UI.label(cr,{"leader":"YOU LEAD", "officer":"OFFICER", "member":"MEMBER"}.get(role, ""), 12, UI2.GOLD, UI.HEAVY_FONT)
-	you.autowrap_mode = TextServer.AUTOWRAP_OFF
-	you.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_note_label(cr, {"leader":"YOU LEAD", "officer":"OFFICER", "member":"MEMBER"}.get(role, ""), 12, UI2.GREEN)
+	if hc:
+		var sf := _section("STARTER CLAN")
+		UI2.body(sf, "Starter clans don't fill a Clan Chest or play in the League. Join a players' clan or start your own for a chest every week and League gems -- your shard requests and LFG work here too.", 12, UI2.SOFT)
+	else:
+		_chest_section(c)
+	_lfg_section(c)
+	_shard_section(c)
 	# ---- requests (officers)
 	var req: Array = c.get("req", [])
 	if officer and not req.is_empty():
 		var rf := _section("REQUESTS", str(req.size()))
 		for p in req:
 			var r := _member_row(rf, p, "")
-			var lv := UI.label(r, "Lv %d" % int(p.get("lv", 1)), 12, UI2.GOLD, UI.HEAVY_FONT)
-			lv.autowrap_mode = TextServer.AUTOWRAP_OFF
-			lv.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			_note_label(r, "Lv %d" % int(p.get("lv", 1)), 12, UI2.CYAN)
 			var pp := str(p.pid)
 			_small(r, "ACCEPT", "green", "clan_accept_" + pp, func():
 				app.sfx("confirm")
@@ -477,48 +717,14 @@ func _render_mine() -> void:
 		ve.text_submitted.connect(func(_t): _invite_code())
 		_small(vr, "INVITE", "green", "clan_invite_code", func(): _invite_code(), 90.0)
 		UI2.body(vf, "Or tap a player's name anywhere (chat, friends, ranks) and choose INVITE TO CLAN.", 12, UI2.MUTED)
-	# ---- members
-	var shown: int = (c.get("members", []) as Array).size()
-	var mf := _section("MEMBERS", ("%d / %d" % [int(c.get("n", 0)), int(c.get("max", 30))]) if not hc
-		else ("%d" % int(c.get("n", 0)) if shown >= int(c.get("n", 0)) else "%d SHOWN OF %d" % [shown, int(c.get("n", 0))]))
-	for m in c.get("members", []):
-		var mrole := str(m.get("role", "member"))
-		var r := _member_row(mf, m, mrole)
-		var mp := str(m.pid)
-		if mp == str(social.me.get("pid", "")):
-			var y := UI.label(r, "YOU", 12, UI2.GOLD, UI.HEAVY_FONT)
-			y.autowrap_mode = TextServer.AUTOWRAP_OFF
-			y.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		elif role == "leader" or (role == "officer" and mrole == "member"):
-			var mc: Dictionary = m.duplicate()
-			_small(r, "MANAGE", "blue", "clan_manage_" + mp, func(): _manage(mc), 92.0)
-	# ---- settings (officers)
+	# ---- crest and settings (officers)
 	if officer:
-		var sf := _section("SETTINGS")
-		if _set_join == "":
-			_set_join = str(c.get("join", "open"))
-			_set_lv = int(c.get("min_lv", 1))
-		UI2.body(sf, "WHO MAY JOIN", 12, UI2.MUTED)
-		var jr := UI.row(sf, 6)
-		for j in ["open", "request", "invite"]:
-			var jid: String = j
-			UI.grow(UI2.button(jr, {"open":"OPEN", "request":"REQUEST", "invite":"INVITE"}[jid], "gold" if _set_join == jid else "grey", func():
-				app.sfx("tab")
-				_set_join = jid
-				_dirty = true, "clan_set_join_" + jid, 13, 36.0, 10.0))
-		_level_row(sf, "LOWEST LEVEL", _set_lv, func(v: int):
-			_set_lv = v
-			_dirty = true, "clan_set_lv")
-		var changed: bool = _set_join != str(c.get("join", "")) or _set_lv != int(c.get("min_lv", 1))
-		var sb := UI2.button(sf, "SAVE SETTINGS", "green", func():
-			if social.clan_set(_set_join, _set_lv):
-				app.sfx("confirm")
-				_set_join = ""
-			else:
-				_fail(), "clan_set_save", 15, 42.0)
-		UI2.dim_button(sb, not changed)
+		var sf := _section("CREST & SETTINGS")
+		var crr := UI.row(sf, 10)
+		SocialUI.crest(crr, str(c.get("cc", "")), 46.0, str(c.get("fr", "")))
+		UI.grow(UI2.button(crr, "CHANGE CREST", "purple", func(): _edit_crest(Eco.crest_of_code(str(c.get("cc", "")))), "clan_crest_edit", 15, 42.0))
+		_settings_rows(sf, c)
 	if hc:
-		# 0.31.148: a house clan -- the players' clans to move to, or start one (no leaving first, no wait)
 		var nf := _section("A CLAN OF YOUR OWN?")
 		UI2.body(nf, "Join a players' clan or start your own any time: you move over from %s by itself." % str(c.get("name", "")), 12, UI2.MUTED)
 		UI2.button(nf, "START MY OWN CLAN", "gold", func():
@@ -529,7 +735,218 @@ func _render_mine() -> void:
 			social.clan_find("", "")
 		_find_section(social.clan_cool_left())
 		_render_new(social.clan_cool_left())
-	# ---- leave / disband
+	_leave_section(c, hc, role)
+
+func _chest_section(c: Dictionary) -> void:
+	# the CLAN CHEST: the week's points against its four tiers, mine, when the week ends; last week's result
+	var pts := int(c.get("pts", 0))
+	var tier := Eco.clan_tier(pts)
+	var left := int(c.get("ends", 0)) - int(Time.get_unix_time_from_system())
+	var f := _section("CLAN CHEST", ("ENDS IN %s" % UI.duration(left)).to_upper() if left > 0 else "")
+	var top := UI.row(f, 10)
+	var shown := Eco.clan_chest_of(maxi(1, tier))
+	var ci := UI2.img(top, Screens.chest_icon(shown), 64.0)
+	ci.modulate = Color.WHITE if tier > 0 else Color(0.55, 0.55, 0.62, 0.85)
+	ci.set_meta("clan_chest_icon", shown)
+	var tv := VBoxContainer.new()
+	tv.add_theme_constant_override("separation", 2)
+	tv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	top.add_child(tv)
+	var head := "%s REACHED" % str(Eco.CHESTS[shown].name).to_upper() if tier > 0 else "NO CHEST YET"
+	UI2.text(tv, head, 16, TIER_COL.get(shown, Color.WHITE) if tier > 0 else UI2.SOFT)
+	var nxt := tier + 1
+	if nxt <= Eco.CLAN_CHEST_TIERS.size():
+		var need := int(Eco.CLAN_CHEST_TIERS[nxt - 1][0])
+		UI2.body(tv, "%s / %s points to the %s" % [_thousands(pts), _thousands(need), str(Eco.CHESTS[str(Eco.CLAN_CHEST_TIERS[nxt - 1][1])].name)], 12, UI2.SOFT)
+	else:
+		UI2.body(tv, "%s points -- the best chest there is!" % _thousands(pts), 12, UI2.GREEN)
+	var top_pts := float(Eco.CLAN_CHEST_TIERS[Eco.CLAN_CHEST_TIERS.size() - 1][0])
+	var bar := UI2.bar(f, minf(float(pts), top_pts), top_pts, Color("#ffe9a6"), Color("#e09a2a"), 14.0)
+	bar.set_meta("clan_chest_bar", pts)
+	# the tiers under the bar, each at its points
+	var marks := Control.new()
+	marks.custom_minimum_size = Vector2(0, 30)
+	marks.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	marks.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	f.add_child(marks)
+	for i in Eco.CLAN_CHEST_TIERS.size():
+		var t: Array = Eco.CLAN_CHEST_TIERS[i]
+		var lab := UI.label(marks, "%s\n%d" % [str(t[1]).to_upper(), int(t[0])], 9, TIER_COL.get(str(t[1]), Color.WHITE) if tier > i else UI2.MUTED, UI.HEAVY_FONT)
+		lab.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		lab.autowrap_mode = TextServer.AUTOWRAP_OFF
+		lab.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var frac := float(t[0]) / top_pts
+		var place := func():
+			lab.size = lab.get_combined_minimum_size()
+			lab.position = Vector2(clampf(marks.size.x * frac - lab.size.x * 0.5, 0.0, marks.size.x - lab.size.x), 0.0)
+		marks.resized.connect(place)
+		place.call_deferred()
+	var mine := int(c.get("mine_pts", 0))
+	var ok := mine >= Eco.CLAN_CHEST_MIN
+	UI2.body(f, ("Your points this week: %d -- the chest is yours on Monday." if ok else "Your points this week: %d -- earn %d to get the chest on Monday.") % [mine, Eco.CLAN_CHEST_MIN],
+		12, UI2.GREEN if ok else UI2.SOFT)
+	UI2.body(f, "Every online match earns points: a win 10, a draw 6, a loss 4, +2 a tower, +1 a KO. Doubled with a clanmate in your party!", 11, UI2.MUTED)
+	var last: Dictionary = c.get("last", {})
+	if int(last.get("pts", 0)) > 0:
+		var bits := ["%s points" % _thousands(int(last.pts))]
+		if str(last.get("chest", "")) != "":
+			bits.append(str(Eco.CHESTS.get(str(last.chest), {}).get("name", "")))
+		bits.append("League #%d%s" % [int(last.get("rank", 0)), (" (+%d gems)" % int(last.gems)) if int(last.get("gems", 0)) > 0 else ""])
+		UI2.body(f, "Last week: " + ",  ".join(bits), 12, UI2.CYAN)
+
+func _lfg_section(c: Dictionary) -> void:
+	var f := _section("PLAY TOGETHER", "PARTY OF %d" % social.clan_party_max())
+	var me_pid := str(social.me.get("pid", ""))
+	var mine: Dictionary = social.lfg_call(me_pid)
+	if not social.has_lfg:
+		UI2.body(f, "LOOKING FOR GROUP arrives with the next server update.", 12, UI2.MUTED)
+		return
+	if not mine.is_empty():
+		var r := UI.row(f, 8)
+		UI.grow(UI2.body(r, "Calling your clan... %d/%d in your party. Clanmates JOIN from here or clan chat." % [int(mine.get("size", 1)), int(mine.get("max", 5))], 12, UI2.GREEN))
+		_small(r, "CANCEL", "ghost", "clan_lfg_cancel", func():
+			app.sfx("tap")
+			if not social.lfg(false):
+				_fail(), 90.0)
+	else:
+		var can: bool = not social.in_party() or social.is_leader()
+		var lb := UI2.button(f, "LOOKING FOR GROUP", "green", func():
+			if not can:
+				app.sfx("error")
+				app.toast("Only your party's leader can call for players", UI.MUTED)
+				return
+			app.sfx("confirm")
+			if not social.lfg(true):
+				_fail(), "clan_lfg", 16, 44.0)
+		UI2.dim_button(lb, not can)
+	UI2.body(f, "Matches with clanmates in your party earn double clan points.", 11, UI2.MUTED)
+	for call in c.get("lfg", []):
+		var pid := str(call.get("pid", ""))
+		if pid == me_pid:
+			continue
+		var r := UI.row(f, 8)
+		SocialUI.dot(r, "online")
+		var nl := UI2.text(r, "%s  %d/%d" % [str(call.get("n", "Player")), int(call.get("size", 1)), int(call.get("max", 5))], 14, Color.WHITE)
+		nl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		nl.clip_text = true
+		var here: bool = social.in_my_party(pid)
+		var jb := _small(r, "IN PARTY" if here else "JOIN", "grey" if here else "green", "clan_lfg_join_" + pid, func():
+			if here:
+				return
+			app.sfx("confirm")
+			if not social.lfg_join(pid):
+				_fail(), 90.0)
+		UI2.dim_button(jb, here)
+
+func _shard_section(c: Dictionary) -> void:
+	var f := _section("SHARD REQUESTS")
+	var p = app.profile
+	var me_pid := str(social.me.get("pid", ""))
+	var mine: Dictionary = social.my_ask()
+	if not mine.is_empty():
+		var r := UI.row(f, 8)
+		UI2.img(r, "res://assets/ui/skins/default_%s.png" % str(mine.h), 40.0)
+		UI.grow(UI2.body(r, "You asked for a %s shard. A clanmate who has one can give it." % _hero(str(mine.h)), 12, UI2.SOFT))
+		_small(r, "TAKE BACK", "ghost", "clan_shard_back", func():
+			app.sfx("tap")
+			if not social.clan_unask():
+				_fail(), 96.0)
+	else:
+		var wait := int(c.get("ask_next", 0)) - int(Time.get_unix_time_from_system())
+		var ab := UI2.button(f, "ASK FOR A SHARD" if wait <= 0 else "NEXT ASK IN %s" % UI.duration(wait).to_upper(), "purple", func():
+			if wait > 0:
+				app.sfx("error")
+				app.toast("You can ask again in %s" % UI.duration(wait), UI.MUTED)
+				return
+			_pick_hero(), "clan_shard_ask", 15, 42.0)
+		UI2.dim_button(ab, wait > 0)
+	var others := (c.get("asks", []) as Array).filter(func(a): return str(a.get("pid", "")) != me_pid)
+	if others.is_empty():
+		UI2.body(f, "Ask your clan for a shard of a hero you don't have yet; give clanmates the ones you hold and get their melt gold.", 11, UI2.MUTED)
+	for a in others:
+		var h := str(a.get("h", ""))
+		var pid := str(a.get("pid", ""))
+		var r := UI.row(f, 8)
+		UI2.img(r, "res://assets/ui/skins/default_%s.png" % h, 40.0)
+		var tv := VBoxContainer.new()
+		tv.add_theme_constant_override("separation", -2)
+		tv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		r.add_child(tv)
+		var nl := UI2.text(tv, str(a.get("n", "Player")), 14, Color.WHITE)
+		nl.clip_text = true
+		UI2.body(tv, "needs a %s shard" % _hero(h), 11, UI2.SOFT)
+		var have: bool = p.giftable_shards(h) > 0
+		var gb := _small(r, ("GIVE +%d" % Eco.shard_melt_gold(h, p.now())) if have else "NO SHARD", "green" if have else "grey", "clan_shard_give_" + pid, func():
+			if not have:
+				app.sfx("error")
+				app.toast(("Your %s shard was a clanmate's gift -- it can't be given on" if p.shards_of(h) > 0 else "You don't have a %s shard") % _hero(h), UI.MUTED)
+				return
+			app.sfx("confirm")
+			if not social.clan_give(pid):
+				_fail(), 108.0)
+		UI2.dim_button(gb, not have)
+
+func _pick_hero() -> void:
+	# ASK FOR A SHARD: the heroes this player doesn't own
+	var v := _open_overlay("ASK FOR A SHARD")
+	UI2.center(UI2.body(v, "Which hero? Your clan sees the request for 24 hours.", 12, UI2.SOFT))
+	var g := GridContainer.new()
+	g.columns = 3
+	g.add_theme_constant_override("h_separation", 8)
+	g.add_theme_constant_override("v_separation", 8)
+	v.add_child(g)
+	var n := 0
+	for h in Eco.HERO_PRICES:
+		var hid := str(h)
+		if app.profile.owns_hero(hid):
+			continue
+		n += 1
+		var cell := VBoxContainer.new()
+		cell.add_theme_constant_override("separation", 2)
+		cell.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		g.add_child(cell)
+		var im := UI2.img(cell, "res://assets/ui/skins/default_%s.png" % hid, 72.0)
+		im.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		UI2.button(cell, _hero(hid).to_upper(), "purple", func():
+			if social.clan_ask(hid):
+				app.sfx("confirm")
+				_close_overlay()
+			else:
+				_fail(), "clan_shard_" + hid, 11, 32.0, 9.0)
+	if n == 0:
+		UI2.center(UI2.body(v, "You have every hero already!", 13, UI2.GREEN))
+	UI2.button(v, "CLOSE", "ghost", func():
+		app.sfx("menuClose")
+		_close_overlay(), "clan_shard_close", 14, 36.0)
+
+static func _hero(hid: String) -> String:
+	return str(Screens.HERO_NAMES.get(hid, hid.capitalize()))
+
+func _settings_rows(sf: VBoxContainer, c: Dictionary) -> void:
+	if _set_join == "":
+		_set_join = str(c.get("join", "open"))
+		_set_lv = int(c.get("min_lv", 1))
+	UI2.body(sf, "WHO MAY JOIN", 12, UI2.MUTED)
+	var jr := UI.row(sf, 6)
+	for j in ["open", "request", "invite"]:
+		var jid: String = j
+		UI.grow(UI2.button(jr, {"open":"OPEN", "request":"REQUEST", "invite":"INVITE"}[jid], "gold" if _set_join == jid else "grey", func():
+			app.sfx("tab")
+			_set_join = jid
+			_dirty = true, "clan_set_join_" + jid, 13, 36.0, 10.0))
+	_level_row(sf, "LOWEST LEVEL", _set_lv, func(v: int):
+		_set_lv = v
+		_dirty = true, "clan_set_lv")
+	var changed: bool = _set_join != str(c.get("join", "")) or _set_lv != int(c.get("min_lv", 1))
+	var sb := UI2.button(sf, "SAVE SETTINGS", "green", func():
+		if social.clan_set(_set_join, _set_lv):
+			app.sfx("confirm")
+			_set_join = ""
+		else:
+			_fail(), "clan_set_save", 15, 42.0)
+	UI2.dim_button(sb, not changed)
+
+func _leave_section(c: Dictionary, hc: bool, role: String) -> void:
 	var lf := _section("")
 	var lr := UI.row(lf, 8)
 	var lb := UI2.button(lr, "LEAVE CLAN", "red", func(): pass, "clan_leave", 15, 42.0)
@@ -547,11 +964,157 @@ func _render_mine() -> void:
 				_fail())
 	var note := "Leaving means waiting 24 hours before joining another clan."
 	if hc:
-		note = "Leaving your house's clan has no wait."
+		note = "Leaving a starter clan has no wait."
 	if role == "leader":
 		note += " If you leave, an officer takes over."
 	UI2.body(lf, note, 12, UI2.MUTED)
 
+func _render_members(c: Dictionary, hc: bool) -> void:
+	var role: String = social.clan_role_of_me()
+	var shown: int = (c.get("members", []) as Array).size()
+	var mf := _section("MEMBERS", ("%d / %d" % [int(c.get("n", 0)), int(c.get("max", 30))]) if not hc
+		else ("%d" % int(c.get("n", 0)) if shown >= int(c.get("n", 0)) else "%d SHOWN OF %d" % [shown, int(c.get("n", 0))]))
+	if not hc:
+		UI2.body(mf, "Points this week beside each name -- %d+ gets the Clan Chest." % Eco.CLAN_CHEST_MIN, 11, UI2.MUTED)
+	for m in c.get("members", []):
+		var mrole := str(m.get("role", "member"))
+		var r := _member_row(mf, m, mrole)
+		var mp := str(m.pid)
+		if not hc:
+			var wp := int(m.get("wp", 0))
+			var pl := _note_label(r, "%d pts" % wp, 12, UI2.GREEN if wp >= Eco.CLAN_CHEST_MIN else UI2.MUTED)
+			pl.custom_minimum_size.x = 52
+			pl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		if mp == str(social.me.get("pid", "")):
+			_note_label(r, "YOU", 12, UI2.GREEN)
+		elif role == "leader" or (role == "officer" and mrole == "member"):
+			var mc: Dictionary = m.duplicate()
+			_small(r, "MANAGE", "blue", "clan_manage_" + mp, func(): _manage(mc), 92.0)
+
+func _render_league(c: Dictionary) -> void:
+	var lg: Dictionary = social.league
+	var now := Time.get_ticks_msec() / 1000.0
+	if (lg.is_empty() or float(social._clock) - float(lg.get("_at", -999.0)) > LEAGUE_STALE) and now - _league_asked > LEAGUE_STALE:
+		_league_asked = now                      # (asked once in a while: the answer redraws the window)
+		social.clan_league()
+	var left := int(lg.get("ends", c.get("ends", 0))) - int(Time.get_unix_time_from_system())
+	var f := _section("CLAN LEAGUE", ("ENDS IN %s" % UI.duration(left)).to_upper() if left > 0 else "")
+	UI2.body(f, "Clans ranked by this week's points. On Monday every member with %d+ points gets the prize:" % Eco.CLAN_CHEST_MIN, 12, UI2.SOFT)
+	var pr := UI.row(f, 6)
+	for p in Eco.CLAN_LEAGUE_PRIZES:
+		var rank := "#%d" % int(p.from) if int(p.from) == int(p.to) else "#%d-%d" % [int(p.from), int(p.to)]
+		var col: Color = FRAME_COL.get(str(p.frame), UI2.SOFT)
+		var chip := UI2.chip(pr, "%s  %d GEMS" % [rank, int(p.gems)], Color(0.05, 0.07, 0.16, 0.9), col, col.darkened(0.4))
+		chip.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	UI2.body(f, "The top three wear a gold, silver or bronze frame round their crest all next week.", 11, UI2.MUTED)
+	var tf := _section("THIS WEEK", "%d CLANS" % int(lg.get("clans", 0)) if not lg.is_empty() else "")
+	var rows: Array = lg.get("list", [])
+	if lg.is_empty():
+		UI2.body(tf, "Loading...", 13, UI2.MUTED)
+	elif rows.is_empty():
+		UI2.body(tf, "No clan has points yet this week -- play an online match to put yours on top!", 13, UI2.MUTED)
+	for row in rows:
+		_league_row(tf, row)
+	var me_row: Dictionary = lg.get("me", {})
+	if not lg.is_empty() and not bool(c.get("hc", false)):
+		if me_row.is_empty():
+			UI2.body(tf, "Your clan: no points yet this week.", 12, UI2.SOFT)
+		elif int(me_row.get("rank", 0)) > rows.size():
+			_league_row(tf, me_row)
+	var last: Array = lg.get("last", [])
+	if not last.is_empty():
+		var lf := _section("LAST WEEK'S PODIUM")
+		for i in last.size():
+			var x: Dictionary = last[i]
+			var r := UI.row(lf, 8)
+			_note_label(r, "#%d" % (i + 1), 15, FRAME_COL.get(str(x.get("fr", "")), Color.WHITE))
+			SocialUI.crest(r, str(x.get("cc", "")), 30.0, str(x.get("fr", "")))
+			var nl := UI2.text(r, "[%s] %s" % [str(x.get("tag", "")), str(x.get("name", ""))], 14, Color.WHITE)
+			nl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			nl.clip_text = true
+			_note_label(r, "%s pts" % _thousands(int(x.get("pts", 0))), 12, UI2.SOFT)
+
+func _league_row(parent: Node, row: Dictionary) -> void:
+	var you := bool(row.get("you", false))
+	var pc := PanelContainer.new()
+	var st := StyleBoxFlat.new()
+	st.bg_color = Color(0.1, 0.3, 0.12, 0.55) if you else Color(0.0, 0.02, 0.08, 0.35)
+	st.border_color = Color(0.55, 0.94, 0.66, 0.6) if you else Color(0.5, 0.65, 0.95, 0.15)
+	st.set_border_width_all(1)
+	st.set_corner_radius_all(10)
+	st.content_margin_left = 8
+	st.content_margin_right = 8
+	st.content_margin_top = 3
+	st.content_margin_bottom = 3
+	pc.add_theme_stylebox_override("panel", st)
+	pc.set_meta("league_row", int(row.get("rank", 0)))
+	parent.add_child(pc)
+	var r := UI.row(pc, 8)
+	var rk := _note_label(r, "#%d" % int(row.get("rank", 0)), 15, FRAME_COL.get(str(row.get("fr", "")), Color.WHITE) if int(row.get("rank", 0)) > 3 else
+		FRAME_COL[["gold", "silver", "bronze"][int(row.get("rank", 1)) - 1]])
+	rk.custom_minimum_size.x = 34
+	SocialUI.crest(r, str(row.get("cc", "")), 30.0, str(row.get("fr", "")))
+	var tv := VBoxContainer.new()
+	tv.add_theme_constant_override("separation", -3)
+	tv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	r.add_child(tv)
+	var nl := UI2.text(tv, "[%s] %s" % [str(row.get("tag", "")), str(row.get("name", ""))], 14, SocialUI.NAME_ME if you else Color.WHITE)
+	nl.clip_text = true
+	var sl := UI.label(tv, "Level %d  ·  %d members" % [int(row.get("lv", 1)), int(row.get("n", 0))], 10, UI2.MUTED, UI.HEAVY_FONT)
+	sl.autowrap_mode = TextServer.AUTOWRAP_OFF
+	_note_label(r, "%s pts" % _thousands(int(row.get("pts", 0))), 13, UI2.CREAM)
+
+# ---------------- in a clan, an older server (0.31.134-0.31.195) ----------------
+func _render_mine_old() -> void:
+	var c: Dictionary = social.clan
+	var house := str(c.get("house", ""))
+	var role: String = social.clan_role_of_me()
+	var officer: bool = social.is_clan_officer()
+	var hc := bool(c.get("hc", false))
+	var bf := _section("", "", SocialUI.house_rim(house))
+	var tr := UI.row(bf, 10)
+	var ic := UI2.icon(tr, "banner", 54.0)
+	ic.modulate = SocialUI.house_color(house).lightened(0.15)
+	ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var tv := VBoxContainer.new()
+	tv.add_theme_constant_override("separation", -2)
+	tv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	tr.add_child(tv)
+	var nl := UI2.text(tv, str(c.get("name", "")), 22, Color.WHITE)
+	nl.clip_text = true
+	var hl := UI2.text(tv, "[%s]  ·  HOUSE %s" % [str(c.get("tag", "")), SocialUI.house_name(house).to_upper()], 14, SocialUI.house_color(house))
+	hl.clip_text = true
+	UI2.body(bf, "The clan camp, crest, Clan Chest, League, shard requests and LFG arrive with the next server update.", 12, UI2.MUTED)
+	var cr := UI.row(bf, 8)
+	var n := int(social.unread.get("clan", 0))
+	UI.grow(UI2.button(cr, "CLAN CHAT" + ("  (%d)" % n if n > 0 else ""), "orange", func():
+		app.sfx("menuOpen")
+		app.open_chat("clan"), "clan_chat", 16, 44.0))
+	var req: Array = c.get("req", [])
+	if officer and not req.is_empty():
+		var rf := _section("REQUESTS", str(req.size()))
+		for p in req:
+			var r := _member_row(rf, p, "")
+			var pp := str(p.pid)
+			_small(r, "ACCEPT", "green", "clan_accept_" + pp, func():
+				app.sfx("confirm")
+				if not social.clan_accept(pp):
+					_fail(), 84.0)
+			_small(r, "✕", "ghost", "clan_reject_" + pp, func():
+				app.sfx("tap")
+				social.clan_reject(pp), 44.0)
+	if officer:
+		var vf := _section("INVITE A PLAYER")
+		var vr := UI.row(vf, 8)
+		var ve := _field(vr, "invite", "Their friend code", 12)
+		ve.text_submitted.connect(func(_t): _invite_code())
+		_small(vr, "INVITE", "green", "clan_invite_code", func(): _invite_code(), 90.0)
+	_render_members(c, hc)
+	if officer:
+		_settings_rows(_section("SETTINGS"), c)
+	_leave_section(c, hc, role)
+
+# ---------------- members ----------------
 func _member_row(parent: Node, m: Dictionary, role: String) -> HBoxContainer:
 	var r := UI.row(parent, 8)
 	SocialUI.dot(r, str(m.get("st", "offline")))
@@ -579,9 +1142,7 @@ func _member_row(parent: Node, m: Dictionary, role: String) -> HBoxContainer:
 		UI2.icon(top, "crown", 18.0).size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	UI2.text(top, str(m.get("n", "Player")), 15, Color.WHITE)
 	if role == "officer":
-		var ol := UI.label(top, "OFFICER", 11, UI2.CYAN, UI.HEAVY_FONT)
-		ol.autowrap_mode = TextServer.AUTOWRAP_OFF
-		ol.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		_note_label(top, "OFFICER", 11, UI2.CYAN)
 	else:
 		SocialUI.title_label(top, str(m.get("tt", "")), 11)
 	if m.has("st"):
@@ -607,33 +1168,15 @@ func _invite_code() -> void:
 
 func _manage(m: Dictionary) -> void:
 	# what the leader (or an officer, for members) can do with one member
-	app.sfx("menuOpen")
-	var ov := Control.new()
-	ov.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	add_child(ov)
-	var dim := ColorRect.new()
-	dim.color = Color(0, 0, 0, 0.55)
-	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	dim.gui_input.connect(func(ev: InputEvent):
-		if (ev is InputEventMouseButton or ev is InputEventScreenTouch) and not ev.pressed:
-			ov.queue_free())
-	ov.add_child(dim)
-	var cc := CenterContainer.new()
-	cc.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	cc.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	ov.add_child(cc)
-	var v := UI2.frame(cc, "royal", 14, 20.0, "gold")
-	(v.get_parent() as Control).custom_minimum_size = Vector2(minf(320.0, size.x - 40.0), 0)
+	var v := _open_overlay(str(m.get("n", "Player")), 320.0)
 	var pid := str(m.get("pid", ""))
 	var role := str(m.get("role", "member"))
 	var mine: String = social.clan_role_of_me()
-	UI2.center(UI2.text(v, str(m.get("n", "Player")), 22, Color.WHITE))
 	UI2.center(UI2.body(v, {"officer":"Officer", "member":"Member"}.get(role, ""), 13, UI2.MUTED))
 	var done := func(ok: bool) -> void:
 		if not ok:
 			_fail()
-		if is_instance_valid(ov):
-			ov.queue_free()
+		_close_overlay()
 	if mine == "leader":
 		if role == "member":
 			UI2.button(v, "MAKE OFFICER", "blue", func():
@@ -653,7 +1196,7 @@ func _manage(m: Dictionary) -> void:
 		done.call(social.clan_kick(pid)))
 	UI2.button(v, "CLOSE", "ghost", func():
 		app.sfx("menuClose")
-		ov.queue_free(), "clan_m_close", 14, 36.0)
+		_close_overlay(), "clan_m_close", 14, 36.0)
 
 # ---------------- text ----------------
 static func _hours(secs: int) -> String:
@@ -661,9 +1204,9 @@ static func _hours(secs: int) -> String:
 	return "%d hour%s" % [h, "" if h == 1 else "s"]
 
 static func _thousands(n: int) -> String:
-	var s := str(n)
+	var s := str(absi(n))
 	var out := ""
 	while s.length() > 3:
 		out = "," + s.right(3) + out
 		s = s.left(s.length() - 3)
-	return s + out
+	return ("-" if n < 0 else "") + s + out

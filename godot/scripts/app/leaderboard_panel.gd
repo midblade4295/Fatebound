@@ -161,6 +161,8 @@ func _row(parent: Node, r: Dictionary) -> void:
 	var rk := UI.label(h, str(rank), 15 if rank <= 3 else 13, MEDAL[rank - 1] if rank >= 1 and rank <= 3 else UI2.MUTED, UI.HEAVY_FONT)
 	rk.autowrap_mode = TextServer.AUTOWRAP_OFF
 	rk.custom_minimum_size.x = 30
+	if str(r.get("cc", "")) != "":
+		SocialUI.crest(h, str(r.cc), 26.0)                 # 0.31.196: their clan's crest
 	var col := VBoxContainer.new()
 	col.add_theme_constant_override("separation", -2)
 	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -194,7 +196,7 @@ func _row(parent: Node, r: Dictionary) -> void:
 		for st_name in ["normal", "hover", "pressed", "focus", "hover_pressed"]:
 			tap.add_theme_stylebox_override(st_name, StyleBoxEmpty.new())
 		tap.set_meta("action_key", "lb_card_%d" % rank)
-		var card := {"pid":pid, "n":str(r.get("name", "Player")), "tt":str(r.get("title", "")), "ct":str(r.get("ct", ""))}
+		var card := {"pid":pid, "n":str(r.get("name", "Player")), "tt":str(r.get("title", "")), "ct":str(r.get("ct", "")), "cc":str(r.get("cc", ""))}
 		tap.pressed.connect(func(): SocialUI.name_card(app, self, card))
 		box.add_child(tap)
 

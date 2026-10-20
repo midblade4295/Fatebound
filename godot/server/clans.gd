@@ -1251,7 +1251,8 @@ func _give(pid: String, target: String) -> void:
 			c.ask.erase(target)                            # (they have the hero now: the request is over)
 			_mark()
 			_refresh_all(id)
-		soc._note(pid, {"no_shard":"You don't have a %s shard" % h.capitalize(), "owned":"%s has %s already" % [_name(target), h.capitalize()]}.get(why,
+		soc._note(pid, {"no_shard":"You don't have a %s shard" % h.capitalize(), "owned":"%s has %s already" % [_name(target), h.capitalize()],
+			"gifted":"Your %s shard was a clanmate's gift -- it can't be given on" % h.capitalize()}.get(why,
 			"Couldn't give it right now -- try again"), true)
 		return
 	c.ask.erase(target)

@@ -348,6 +348,16 @@ func _init() -> void:
 	check(bool(gr.get("ok", false)) and int(gr.gold) == Eco.shard_melt_gold("golem", pa1.now()) and int(pa1.d.gold) == gold0 + int(gr.gold)
 		and pa1.shards_of("golem") == 1 and pb1.shards_of("golem") == 1, "a shard given: the giver's melt gold (%d), the asker's shard" % int(gr.get("gold", 0)))
 	check(str(acc.give_shard(str(a1.acct), str(a2.acct), "druid").get("error", "")) == "no_shard", "no shard of that hero: nothing given")
+	var a3: Dictionary = acc.handle({"t":"eco", "new":true})
+	var pc1 = acc._load(str(a3.acct)).p
+	check(pb1.giftable_shards("golem") == 0 and (pb1.d.gift_shards as Array) == ["golem"]
+		and str(acc.give_shard(str(a2.acct), str(a3.acct), "golem").get("error", "")) == "gifted" and pc1.shards_of("golem") == 0,
+		"a shard a clanmate gave isn't given on (passed round it would pay its melt gold every time)")
+	pb1.d.gold = 0
+	check(bool(pb1.melt_shard("golem").ok) and pb1.shards_of("golem") == 0 and (pb1.d.gift_shards as Array).is_empty(), "...it can be melted (or used): the gift goes with it")
+	pb1.d.shards = ["golem"]
+	pb1.d.gift_shards = []
+	pb1.save()
 	pb1.d.heroes = ["golem"]
 	pb1.save()
 	check(str(acc.give_shard(str(a1.acct), str(a2.acct), "golem").get("error", "")) == "owned" and pa1.shards_of("golem") == 1,

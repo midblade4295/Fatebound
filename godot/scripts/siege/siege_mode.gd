@@ -109,6 +109,8 @@ var net_titles := {}                # unit id -> their title id (0.31.87, the "p
 var net_looks := {}                 # unit id -> their looks ({"_sk": the outfits}): what they wear (0.31.101, "pn" "lk")
 var net_tags := {}                  # unit id -> clan tag (0.31.134, "pn" "ct")
 var clan_tag := ""                  # 0.31.134: the player's own clan tag (set by the app; shown on your plate)
+var clan_crest := ""                # 0.31.196: ... and crest
+var net_crests := {}                # 0.31.196: unit id -> clan crest code ("pn" "cc")
 
 var sim
 var view
@@ -261,6 +263,7 @@ func _start_steps() -> Array:
 		view.my_name = player_name
 		view.my_title = my_title()
 		view.my_tag = clan_tag
+		view.my_crest = clan_crest
 		view.tower_broke.connect(_on_tower_broke)
 		viewport.add_child(view)
 		_view_steps = view.setup_steps(sim))
@@ -550,10 +553,12 @@ func _build_online_match(msg: Dictionary) -> void:
 	view.player_names = net_names
 	view.player_titles = net_titles
 	view.player_tags = net_tags
+	view.player_crests = net_crests
 	view.set_unit_looks(net_looks)
 	view.my_name = player_name
 	view.my_title = my_title()
 	view.my_tag = clan_tag
+	view.my_crest = clan_crest
 	view.tower_broke.connect(_on_tower_broke)
 	viewport.add_child(view)
 	view.setup(sim)
@@ -692,11 +697,14 @@ func _net_process(delta: float) -> void:
 				net_looks = lk if lk is Dictionary else {}
 				var ct: Variant = msg.get("ct", {})           # 0.31.134: their clan tags
 				net_tags = ct if ct is Dictionary else {}
+				var cc: Variant = msg.get("cc", {})           # 0.31.196: and crests
+				net_crests = cc if cc is Dictionary else {}
 				hud.net_names = net_names                     # 0.31.119: the scoreboard names the players
 				if is_instance_valid(view):
 					view.player_names = net_names
 					view.player_titles = net_titles
 					view.player_tags = net_tags
+					view.player_crests = net_crests
 					view.set_unit_looks(net_looks)
 			"qc":                                             # 0.31.111: a quick chat line from a player of my side (or anyone's gg)
 				var qu := str(msg.get("u", ""))

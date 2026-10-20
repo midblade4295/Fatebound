@@ -119,6 +119,8 @@ var my_name := ""                          # 0.31.88: your own name and title, f
 var my_title := ""                         # offline and online, whatever the server sends
 var player_tags := {}                      # 0.31.134: unit id -> clan tag (the "pn" message's "ct")
 var my_tag := ""                           # 0.31.134: your own clan's tag (from the app)
+var player_crests := {}                    # 0.31.196: unit id -> clan crest code (the "pn" message's "cc")
+var my_crest := ""                         # 0.31.196: your own clan's crest (from the app)
 static var _kit_side := 0                  # the side the cached merged castle walls (_kit_merged) were tinted for
 
 func vt(t: int) -> int:
@@ -4912,6 +4914,7 @@ func bars() -> Array:
 			# 0.31.88 (Kevin: "Show the nameplate for the players own name also"): yours from your profile, so it's there
 			# against bots too and doesn't wait on the server
 			bar["name"] = ("[%s] %s" % [my_tag, my_name]) if my_tag != "" else my_name
+			bar["crest"] = my_crest
 			bar["title"] = my_title
 			bar["name_color"] = Color("#8cf0a8")       # (0.31.195: yours green -- no yellow text; gold until then)
 		elif player_names.has(u.id):
@@ -4920,6 +4923,7 @@ func bars() -> Array:
 			bar["name"] = str(player_names[u.id])
 			if str(player_tags.get(u.id, "")) != "":
 				bar["name"] = "[%s] %s" % [str(player_tags[u.id]), str(player_names[u.id])]   # 0.31.134: their clan's tag
+				bar["crest"] = str(player_crests.get(u.id, ""))                                # 0.31.196: and crest
 			bar["title"] = str(player_titles.get(u.id, ""))
 			bar["name_color"] = Color("#8cf0a8") if u.id == player_id else (Color("#bfeeff") if vt(int(u.team)) == 0 else Color("#ffc4b4"))
 		elif bool(u.get("hero", false)) and bool(u.get("bot", false)) and sim.moba != null:

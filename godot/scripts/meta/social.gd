@@ -8,6 +8,10 @@ extends Node
 # 0.31.134: clans (server/clans.gd) -- the player's clan, invites, search results, a clan's card, and the "clan" chat
 # channel; cards and lines carry "ct", a player's clan tag. "me" says "clans":1 when the server has them. (0.31.169:
 # Crown War's war map -- its battles were Siege matches -- went with Siege.)
+# 0.31.196 (Kevin: "Do clan chest, clan camp, crest, shard requests, 5 - stack, lfg button, league"): a clan's crest ("cc"
+# on cards and lines, "cr" on the clan), its level, the week's points and Clan Chest, last week, the shard requests
+# ("asks") and LFG calls ("lfg") in the clan's state ("cv": 2 -- an older server has none of it); the League table
+# (clan_league); a party of 5. {"k":"eco"}: the server changed this account (a Clan Chest, a shard) -- `pull` it.
 const Net = preload("res://scripts/siege/siege_net.gd")
 
 signal changed(what: String)            # "state", "me", "chat", "friends", "party", "prof" (0.31.120), "clan", "clans", "clan_info" (0.31.134)
@@ -17,6 +21,7 @@ signal invited(party: String, card: Dictionary)
 signal go(party: String, by: String)    # the party leader started a match
 signal clan_invited(c: Dictionary, by: Dictionary)   # 0.31.134: an officer of a clan invited this player
 signal clan_made(ok: bool, why: String)              # 0.31.134: the answer to clan_new (ok: the gold was taken)
+signal pull                                          # 0.31.196: the server changed this account: fetch it (eco_sync)
 
 const RETRY := [2.0, 5.0, 10.0, 20.0, 40.0, 60.0]
 const OLD_SERVER_RETRY := 600.0         # s before asking a server that never answered "hi" again
@@ -53,6 +58,8 @@ var clan_max := 30
 var clan_list: Array = []               # the last search's clans
 var clan_query := ""
 var clan_infos := {}                    # clan id -> its card (clan_info), "_at": clock
+var league := {}                        # 0.31.196: the last clan_league answer ({"week", "ends", "list", "me", "last"}, "_at")
+var has_lfg := false                    # 0.31.196: the server has LFG and parties of 5 ("me" said so)
 var _ws: WebSocketPeer = null
 var _clock := 0.0
 var _next_try := 0.0
@@ -165,6 +172,8 @@ func _on(m: Dictionary) -> void:
 		"me":
 			me = {"pid":str(m.get("pid", "")), "n":str(m.get("n", "")), "tt":str(m.get("tt", "")), "max":int(m.get("max", 120)), "ct":str(m.get("ct", ""))}
 			has_clans = int(m.get("clans", 0)) == 1
+			has_lfg = int(m.get("lfg", 0)) == 1
+			me["cc"] = str(m.get("cc", ""))
 			var was := state
 			state = "online"
 			_fails = 0
@@ -242,6 +251,7 @@ func _on(m: Dictionary) -> void:
 				house_clans = m.hcs
 			clan_max = int(m.get("max", clan_max))
 			me["ct"] = str(clan.get("tag", ""))
+			me["cc"] = str(clan.get("cc", ""))
 			if str(clan.get("id", "")) != was:
 				lines.clan = []
 				unread.clan = 0
@@ -260,6 +270,12 @@ func _on(m: Dictionary) -> void:
 			clan_invited.emit(m.get("c", {}), m.get("by", {}))
 		"clan_made":
 			clan_made.emit(bool(m.get("ok", false)), str(m.get("why", "")))
+		"clan_league":                                # 0.31.196
+			league = m.duplicate()
+			league["_at"] = _clock
+			changed.emit("league")
+		"eco":                                        # 0.31.196: a Clan Chest, a shard given or received
+			pull.emit()
 		"prof":
 			var pp := str(m.get("pid", ""))
 			if pp != "":
@@ -330,8 +346,65 @@ func profile_of(pid: String) -> Dictionary:
 	return profiles.get(pid, {})
 
 # ---------------- clans (0.31.134) ----------------
-func clan_new(name: String, tag: String, house: String, join: String, min_lv: int) -> bool:
-	return _send({"k":"clan_new", "name":name.strip_edges(), "tag":tag.strip_edges().to_upper(), "house":house, "join":join, "min_lv":min_lv})
+func clan_new(name: String, tag: String, crest: Dictionary, join: String, min_lv: int) -> bool:
+	# 0.31.196: the crest ("cr"); and a house for a server older than crests (one by the emblem: Eco.CLAN_HOUSE_CREST's
+	# first three are the houses')
+	return _send({"k":"clan_new", "name":name.strip_edges(), "tag":tag.strip_edges().to_upper(), "cr":crest,
+		"house":HOUSES_OLD[int(crest.get("e", 0)) % 3], "join":join, "min_lv":min_lv})
+
+const HOUSES_OLD := ["lions", "stags", "ravens"]
+
+# 0.31.196
+func clan_v2() -> bool:
+	# the server's clans have the crest, points, Clan Chest, League, shard requests and LFG
+	return int(clan.get("cv", 0)) >= 2
+
+func clan_crest(cr: Dictionary) -> bool:
+	return _send({"k":"clan_crest", "cr":cr})
+
+func clan_ask(hid: String) -> bool:
+	return _send({"k":"clan_ask", "h":hid})
+
+func clan_unask() -> bool:
+	return _send({"k":"clan_unask"})
+
+func clan_give(pid: String) -> bool:
+	return _send({"k":"clan_give", "pid":pid})
+
+func clan_league() -> bool:
+	return _send({"k":"clan_league"})
+
+func lfg(on: bool) -> bool:
+	return _send({"k":"lfg", "on":on})
+
+func lfg_join(pid: String) -> bool:
+	return _send({"k":"lfg_join", "pid":pid})
+
+func my_crest() -> String:
+	return str(clan.get("cc", ""))
+
+func my_ask() -> Dictionary:
+	# my open shard request ({} for none)
+	for a in clan.get("asks", []):
+		if str(a.get("pid", "")) == str(me.get("pid", "")):
+			return a
+	return {}
+
+func ask_open(pid: String, hid: String) -> bool:
+	for a in clan.get("asks", []):
+		if str(a.get("pid", "")) == pid and str(a.get("h", "")) == hid:
+			return true
+	return false
+
+func lfg_call(pid: String) -> Dictionary:
+	# an open LFG call in my clan ({} for none)
+	for c in clan.get("lfg", []):
+		if str(c.get("pid", "")) == pid:
+			return c
+	return {}
+
+func clan_party_max() -> int:
+	return int(party.get("max", 5 if has_lfg else 4))
 
 func clan_find(q: String, house := "") -> bool:
 	return _send({"k":"clan_find", "q":q.strip_edges(), "house":house})

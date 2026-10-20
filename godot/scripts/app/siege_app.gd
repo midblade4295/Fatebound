@@ -258,6 +258,9 @@ func _ready() -> void:
 	social.go.connect(_on_party_go)
 	social.changed.connect(_on_social_changed)
 	social.clan_invited.connect(_on_clan_invited)
+	social.pull.connect(func():                  # 0.31.196: a Clan Chest, a shard given or received -- fetch the account
+		if eco_sync != null:
+			eco_sync.pull())
 	chat_ticker.setup(self)
 	if social_autostart:
 		social.set_active(true)
@@ -1602,6 +1605,7 @@ func start_match(online: bool, follow := false) -> void:
 	siege.vibrate = bool(profile.d.settings.get("vibrate", true))          # 0.31.120
 	siege.player_name = str(profile.d.name)
 	siege.clan_tag = social.my_tag() if social != null else ""        # 0.31.134: on your own plate
+	siege.clan_crest = social.my_crest() if social != null else ""    # 0.31.196
 	siege.analytics = analytics
 	siege.party_join = pending_join                 # 0.31.120: Friends > JOIN (their match)
 	pending_join = ""
@@ -2065,6 +2069,31 @@ func offer_prize() -> bool:
 	notice("LEADERBOARD PRIZE", "You finished #%d on last week's leaderboard! You got %s." % [int(x.get("rank", 0)), ", ".join(bits)])
 	return true
 
+func offer_clan_reward() -> bool:
+	# 0.31.196: a week's Clan Chest and League gems the server paid since we last said so -- once
+	if not daily_auto or siege != null or update_required or tab != "home" or is_instance_valid(modal):
+		return false
+	var cr: Array = profile.d.get("clan_rewards", [])
+	if cr.is_empty() or str(cr[0].get("week", "")) == str(profile.d.settings.get("clan_reward_seen", "")):
+		return false
+	var x: Dictionary = cr[0]
+	profile.d.settings["clan_reward_seen"] = str(x.week)
+	profile.save()
+	sfx("confirm")
+	notice("CLAN REWARDS", clan_reward_text(x))
+	return true
+
+static func clan_reward_text(x: Dictionary) -> String:
+	var bits := []
+	if str(x.get("chest", "")) != "":
+		bits.append("the %s" % str(Eco.CHESTS.get(str(x.chest), {}).get("name", "Chest")))
+	if int(x.get("gems", 0)) > 0:
+		bits.append("%d gems" % int(x.gems))
+	var place := " and finished #%d in the Clan League" % int(x.rank) if int(x.get("rank", 0)) > 0 else ""
+	return "[%s] %s scored %d points last week%s! You got %s.%s" % [str(x.get("tag", "")), str(x.get("clan", "Your clan")),
+		int(x.get("pts", 0)), place, " and ".join(bits) if not bits.is_empty() else "nothing this time",
+		"\nOpen the chest from your chest slots." if str(x.get("chest", "")) != "" else ""]
+
 func offer_referral() -> bool:
 	# 0.31.120: Gold chests from a referral (server/referrals.gd) since we last said so
 	if not daily_auto or siege != null or update_required or tab != "home" or is_instance_valid(modal):
@@ -2201,7 +2230,7 @@ func open_send_diag() -> void:
 				UI2.dim_button(send, false)))
 
 func offer_daily() -> void:
-	if offer_prize() or offer_referral():
+	if offer_prize() or offer_clan_reward() or offer_referral():
 		return
 	if not daily_auto or siege != null or update_required or tab != "home" or is_instance_valid(modal):
 		return

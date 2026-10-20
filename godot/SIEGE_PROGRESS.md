@@ -6200,7 +6200,7 @@ wider: FROSTBOUND wrapped in the Shop). Kevin: "Do A."; the small text (Nunito):
   presets unchanged. Preview APK: build/Fatebound-Siege-0.31.195-fatebound.apk (32 MB, preview key), sha256
   dcf9fe6e...c9e319681cd93f68.
 
-## 0.31.196 (in progress) — clans for the new game: crest, Clan Chest, League, camp, shard requests, 5-stacks, LFG
+## 0.31.196 — clans for the new game: crest, clan camp, Clan Chest, League, shard requests, 5-stacks, LFG
 Kevin: "Now let's redo the clan system for new game. Give me ideas what would work" -> "Do clan chest, clan camp, crest,
 shard requests, 5 - stack, lfg button, league".
 - Step 1, the server and the books (scripts/meta/economy.gd "clans (0.31.196)"; server/clans.gd, server/social.gd,
@@ -6221,3 +6221,37 @@ shard requests, 5 - stack, lfg button, league".
   - The house clans (starter clans) earn no points, chest or League place.
   - tests/clan_week_test.gd (CLAN_WEEK_PASS, new): all of it with fake sockets, and the accounts' side for real;
     clans_test: no house filter, a refused crest, an older file's clan gets its house's crest.
+- Step 2, the art (tools/build_clan_art.py; sources in art_sources/clans/, ElevenLabs gpt-image-2): 16 emblems (white
+  silhouettes, tinted in the app; the raven from an extra take of side-view ravens -- in the grid it was the eagle
+  twice), a shield in three layers (its field tinted, the emblem, an iron rim; gold / silver / bronze rims for the
+  League podium), and the clan camp at four stages (one tent and a banner -> a hall, a watchtower and five banners),
+  into assets/ui/clans/ (the ui pack). The script prints each stage's banners and fire for clan_camp.gd.
+- Step 3, the app:
+  - scripts/app/crest.gd: a crest from its code (SocialUI.crest; Crest.draw_on for anything that draws itself).
+  - scripts/app/clan_camp.gd + clan_camp.gdshader: the camp at the clan's stage, its banners recoloured to the crest's
+    field colour with the crest on each (rippling), the fire's flames, halo, embers and light, fireflies.
+  - The CLAN window (clan_panel.gd): not in a clan -- STARTER CLANS (the house clans), FIND A CLAN (no house filter),
+    START A CLAN with a crest editor (16 emblems in the crest's colours, 10 shield colours, 8 emblem colours,
+    SHUFFLE). In a clan -- the camp with the crest, name, [TAG], level and XP over it; CAMP / MEMBERS / LEAGUE.
+    CAMP: CLAN CHAT; the CLAN CHEST (the week's points against Wooden 60 / Silver 200 / Gold 500 / Royal 1,000, your
+    points against the 10 needed, when the week ends, last week's result); PLAY TOGETHER (LOOKING FOR GROUP / CANCEL,
+    clanmates' calls with JOIN); SHARD REQUESTS (ASK FOR A SHARD -> the heroes you don't own; TAKE BACK; GIVE +gold on
+    a clanmate's); requests and invites (officers); CREST & SETTINGS with CHANGE CREST (officers); LEAVE / DISBAND.
+    MEMBERS: each one's points this week. LEAGUE: the prizes, this week's table (your clan marked), last week's podium.
+    A starter clan: no chest or League (a line says why); LFG and shard requests work. An older server: the clan as
+    before and a line that the rest comes with its update.
+  - Clan chat: the crest before each name; a shard request's line with GIVE (TAKE BACK on yours), an LFG call's with
+    JOIN (CANCEL on yours), live while open. Name cards: the crest by the tag; INVITE TO PARTY for clanmates who
+    aren't friends. FRIENDS: CLANMATES ONLINE with INVITE; the party note says what a party is now. The leaderboard
+    and friends rows: the crest. In a match: the crest left of each player's nameplate (yours too).
+  - The server's {"k":"eco"} fetches the account (a Clan Chest, a shard); Home tells the week's CLAN REWARDS once.
+    Your own name in chat green (SocialUI.NAME_ME, 0.31.195's no-yellow).
+  - A shard a clanmate gave is never given on (Profile "gift_shards"; a gifted one goes first when used or melted):
+    passed back and forth between two clanmates it would have paid its melt gold every 8 hours.
+- Tests: clans_ui_test (the starter clans; START A CLAN with a crest; the camp at stage 1 with the crest on its
+  banner; the Clan Chest; CHANGE CREST; Bob's shard request and Alice's GIVE from clan chat with the melt gold; her
+  LFG call and Bob's JOIN into her party of 5; LEAGUE; MEMBERS and MANAGE); clan_week_test: gifted shards.
+- Version 0.31.196, versionCode 282, SERVER_BUILD 0.31.196. Packs: ui-c4b235bcb611 (the clan art), the rest unchanged;
+  CONTENT OK, coverage OK, presets unchanged.
+- Kevin: the server deploy (sudo bash godot/server/deploy/install_siege_server.sh) brings all of it -- until then the
+  app shows the clans as before (and the 0.31.184-0.31.189 economy waits on it too).

@@ -839,7 +839,8 @@ const CLAN_CAMP_STAGE := [1, 1, 2, 2, 3, 3, 3, 4, 4, 4]                         
 const CLAN_GIVE_XP := 5
 # shard requests: a member asks the clan for a shard of a hero he hasn't got (one ask open at a time, at most one every
 # CLAN_ASK_GAP, open CLAN_ASK_LIFE); a member holding a shard of that hero gives it -- the asker gets the shard, the giver
-# what melting it would have paid (Profile.melt_shard: no new gold in the game) and the clan CLAN_GIVE_XP
+# what melting it would have paid (Profile.melt_shard's gold) and the clan CLAN_GIVE_XP. A shard a clanmate gave can't be
+# given on (Profile "gift_shards"): passed back and forth it would pay its melt gold every time
 const CLAN_ASK_GAP := 8 * 3600
 const CLAN_ASK_LIFE := 24 * 3600
 # LFG: a member says he's looking for a party (clan chat, CLAN_LFG_LIFE); clanmates JOIN straight into his party

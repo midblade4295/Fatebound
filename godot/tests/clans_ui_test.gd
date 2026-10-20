@@ -5,6 +5,11 @@ extends SceneTree
 # (the server takes 5,000 gold -- 0.31.148 -- and her app shows it); Bob finds and joins it; Bob's clan line reaches Alice's CLAN
 # chat with his tag; she makes him an officer from MANAGE; his tag is on her chat and on his name card (0.31.164: the
 # online match carrying it went with Siege; 0.31.169: its phases too); he leaves and waits 24 hours.
+# 0.31.196 (Kevin: "Do clan chest, clan camp, crest, shard requests, 5 - stack, lfg button, league"): the starter
+# clans; START A CLAN with a crest (no house); her clan opens on its CAMP (the camp painting at stage 1, its banner in
+# the crest's colours with the crest on it, the crest, name and level over it), CAMP / MEMBERS / LEAGUE; the CLAN CHEST;
+# CHANGE CREST; Bob asks for a Golem shard and Alice GIVEs hers from clan chat (her melt gold, the request over); her
+# LOOKING FOR GROUP call and Bob JOINs her party (of 5); the LEAGUE tab; MANAGE from MEMBERS.
 # With a display and SHOT_DIR set, screenshots of each window go there.
 #   godot --headless --path godot -s res://tests/clans_ui_test.gd
 const App = preload("res://scripts/app/siege_app.gd")
@@ -15,6 +20,8 @@ const ClanPanel = preload("res://scripts/app/clan_panel.gd")
 const ChatPanel = preload("res://scripts/app/chat_panel.gd")
 const EcoAccounts = preload("res://server/eco_accounts.gd")
 const Net = preload("res://scripts/siege/siege_net.gd")
+const Eco = preload("res://scripts/meta/economy.gd")
+const ClanCamp = preload("res://scripts/app/clan_camp.gd")
 
 var port := 8118
 var server_pid := -1
@@ -28,6 +35,16 @@ var app
 var bob
 var shots := ""
 var clan_id := ""
+var _gold0 := 0
+
+func _find_meta(node: Node, key: String) -> String:
+	if node.has_meta(key):
+		return str(node.get_meta(key))
+	for c in node.get_children():
+		var r := _find_meta(c, key)
+		if r != "":
+			return r
+	return ""
 
 func check(ok: bool, what: String) -> void:
 	print(("ok   " if ok else "FAIL ") + what)
@@ -73,6 +90,8 @@ func _init() -> void:
 		e.p.d.gold = int(n[2])
 		e.p.d.level = 8
 		e.p.d.tutorial_done = true
+		if str(n[0]) == "alice":
+			e.p.d.shards = ["golem"]                     # 0.31.196: one to give Bob
 		e.p.save()
 		accts[n[0]] = [str(e.id), str(e.key_plain)]
 	OS.set_environment("SIEGE_PORT", str(port))
@@ -127,7 +146,7 @@ func _process(delta: float) -> bool:
 	t += delta
 	t_phase += delta
 	_poll_raw()
-	if t > 150.0:
+	if t > 200.0:
 		check(false, "timed out in phase %s" % phase)
 		return _finish()
 	match phase:
@@ -141,6 +160,7 @@ func _process(delta: float) -> bool:
 				p.d.level = 8
 				p.d.account = {"id":accts.alice[0], "key":accts.alice[1], "seq":0}
 				p.d.tutorial_done = true
+				p.d.shards = ["golem"]
 				p.save()
 				app = App.new()
 				app.profile_path = base + "-profile.json"
@@ -169,9 +189,9 @@ func _process(delta: float) -> bool:
 					and btn("clan_to_start") != null,
 					"JOIN A CLAN: the clans to join (no players' clans yet: be the first), START MY OWN CLAN")
 				# 0.31.148 (Kevin: "make a default clan for each faction that the new players can choose"): the house clans first
-				check(has_text(app.modal, "YOUR HOUSE'S CLAN") and has_text(app.modal, "The Lion Guard") and has_text(app.modal, "The Stag Guard")
+				check(has_text(app.modal, "STARTER CLANS") and has_text(app.modal, "The Lion Guard") and has_text(app.modal, "The Stag Guard")
 					and has_text(app.modal, "The Raven Guard") and btn("clan_house_join_lions") != null and btn("clan_house_join_stags") != null
-					and btn("clan_house_join_ravens") != null and app.social.house_clans.size() == 3, "YOUR HOUSE'S CLAN: the Lion, Stag and Raven Guards, JOIN on each")
+					and btn("clan_house_join_ravens") != null and app.social.house_clans.size() == 3, "STARTER CLANS: the Lion, Stag and Raven Guards, JOIN on each")
 				_shot("clan_join_view")
 				press("clan_to_start")
 				_go("join_scrolled")
@@ -186,9 +206,10 @@ func _process(delta: float) -> bool:
 			if app.social.in_house_clan() and t_phase > 0.6:
 				check(str(app.social.clan.get("name", "")) == "The Lion Guard" and str(app.social.my_tag()) != "" and str(app.social.clan.get("role", "")) == "member",
 					"JOIN: Alice is in The Lion Guard (free), a member")
-				check(has_text(app.modal, "own clan") and has_text(app.modal, "A CLAN OF YOUR OWN?") and has_text(app.modal, "MOVE TO A PLAYERS' CLAN")
-					and btn("clan_start") != null and btn("clan_invite_code") == null and btn("clan_disband") == null and has_text(app.modal, "no wait"),
-					"a house clan's window: the clan, the players' clans to move to, START A CLAN; no invites or disbanding; leaving has no wait")
+				check(has_text(app.modal, "STARTER CLAN") and has_text(app.modal, "A CLAN OF YOUR OWN?") and has_text(app.modal, "MOVE TO A PLAYERS' CLAN")
+					and btn("clan_start") != null and btn("clan_invite_code") == null and btn("clan_disband") == null and has_text(app.modal, "no wait")
+					and btn("clan_lfg") != null and btn("clan_shard_ask") != null and btn("clan_crest_edit") == null,
+					"a starter clan's window: its camp, LFG and shard requests, the players' clans to move to, START A CLAN; no invites, crest or disbanding; leaving has no wait")
 				_shot("clan_house")
 				press("clan_leave")
 				press("clan_leave")
@@ -217,13 +238,21 @@ func _process(delta: float) -> bool:
 			if t_phase > 0.8:
 				check(has_text(app.modal, "START A CLAN") and has_text(app.modal, "FIND A CLAN") and has_text(app.modal, "5,000"),
 					"not in a clan: FIND A CLAN and START A CLAN (0.31.148: 5,000 gold)")
-				check(btn("clan_start") != null and btn("clan_house_lions") != null and btn("clan_house_stags") != null and btn("clan_house_ravens") != null,
-					"the three houses to pick from")
+				check(btn("clan_start") != null and btn("crest_e_0") != null and btn("crest_e_15") != null and btn("crest_f_9") != null and btn("crest_c_7") != null
+					and btn("crest_random") != null and btn("clan_house_lions") == null, "a crest to make: 16 emblems, 10 shield colours, 8 emblem colours, SHUFFLE (no houses)")
 				_shot("clan_none")
 				(app.modal._fields["new_name"] as LineEdit).text = "Iron Wolves"
 				(app.modal._fields["new_tag"] as LineEdit).text = "wolf"
 				(app.modal._fields["new_tag"] as LineEdit).text_changed.emit("wolf")
-				press("clan_house_stags")
+				press("crest_e_3")
+				_go("pick_field")
+		"pick_field":
+			if t_phase > 0.3:
+				press("crest_f_5")
+				_go("pick_charge")
+		"pick_charge":
+			if t_phase > 0.3:
+				press("crest_c_1")
 				_go("pick_join")
 		"pick_join":
 			if t_phase > 0.3:
@@ -231,7 +260,8 @@ func _process(delta: float) -> bool:
 				_go("lv_up")
 		"lv_up":
 			if t_phase > 0.3:
-				check(str(app.modal._join) == "request" and str(app.modal._house) == "stags", "House Stags, join by request")
+				check(str(app.modal._join) == "request" and Eco.crest_code(app.modal._crest) == "3.5.1"
+					and _find_meta(app.modal, "crest_preview") == "3.5.1", "the crest (a wolf in gold on the night shield) in the preview; join by request")
 				press("clan_new_lv_up")
 				_go("start")
 		"start":
@@ -243,8 +273,9 @@ func _process(delta: float) -> bool:
 		"made":
 			if app.social.in_clan():
 				var c: Dictionary = app.social.clan
-				check(str(c.tag) == "WOLF" and str(c.name) == "Iron Wolves" and str(c.house) == "stags" and str(c.join) == "request"
-					and int(c.min_lv) == 2 and str(c.role) == "leader", "Alice leads [WOLF] Iron Wolves (House Stags, by request, level 2+)")
+				check(str(c.tag) == "WOLF" and str(c.name) == "Iron Wolves" and str(c.get("cc", "")) == "3.5.1" and str(c.join) == "request"
+					and int(c.min_lv) == 2 and str(c.role) == "leader" and int(c.get("cv", 0)) == 2 and int(c.get("lv", 0)) == 1,
+					"Alice leads [WOLF] Iron Wolves (its crest, by request, level 2+), a level-1 clan")
 				clan_id = str(c.id)
 				_go("gold")
 		"gold":
@@ -256,9 +287,38 @@ func _process(delta: float) -> bool:
 				_go("mine")
 		"mine":
 			if t_phase > 0.6:
-				check(has_text(app.modal, "Iron Wolves") and has_text(app.modal, "HOUSE STAGS") and btn("clan_chat") != null and btn("clan_leave") != null
-					and btn("clan_disband") != null and has_text(app.modal, "INVITE A PLAYER"), "her clan window: the banner, CLAN CHAT, invite, LEAVE, DISBAND")
+				check(has_text(app.modal, "Iron Wolves") and has_text(app.modal, "LEVEL 1") and btn("clan_chat") != null and btn("clan_leave") != null
+					and btn("clan_disband") != null and has_text(app.modal, "INVITE A PLAYER") and btn("clan_tab_camp") != null and btn("clan_tab_members") != null
+					and btn("clan_tab_league") != null, "her clan window: CAMP / MEMBERS / LEAGUE, the name and level, CLAN CHAT, invite, LEAVE, DISBAND")
+				var cp = app.modal.camp
+				check(cp is ClanCamp and int(cp.stage) == 1 and str(cp.code) == "3.5.1" and cp.crests.size() == 1 and cp.size.y > 100.0
+					and absf(cp.size.y - cp.size.x * 0.76) < 3.0, "the camp: stage 1 (one banner, with the crest on it), as wide as the window (%s)" % str(cp.size if cp != null else ""))
+				check(has_text(app.modal, "CLAN CHEST") and has_text(app.modal, "NO CHEST YET") and has_text(app.modal, "0 / 60") and has_text(app.modal, "PLAY TOGETHER")
+					and btn("clan_lfg") != null and has_text(app.modal, "SHARD REQUESTS") and btn("clan_shard_ask") != null and btn("clan_crest_edit") != null,
+					"CAMP: the Clan Chest (0 / 60 to the Wooden Chest), LOOKING FOR GROUP, ASK FOR A SHARD, CHANGE CREST")
 				_shot("clan_mine")
+				press("clan_crest_edit")
+				_go("crest_edit")
+		"crest_edit":
+			if t_phase > 0.5:
+				check(btn("crest_edit_e_0") != null and btn("clan_crest_save") != null and btn("clan_crest_save").disabled, "CHANGE CREST opens the editor (SAVE waits for a change)")
+				press("crest_edit_e_0")
+				_go("crest_edit2")
+		"crest_edit2":
+			if t_phase > 0.4:
+				_shot("clan_crest_edit")
+				press("clan_crest_save")
+				_go("crest_saved")
+		"crest_saved":
+			if str(app.social.clan.get("cc", "")) == "0.5.1":
+				check(true, "SAVE CREST: the clan's crest is the lion now")
+				_go("crest_redrawn")
+			elif t_phase > 8.0:
+				check(false, "the crest changes (it's %s)" % str(app.social.clan.get("cc", "")))
+				_go("crest_redrawn")
+		"crest_redrawn":
+			if t_phase > 0.6:
+				check(app.modal.camp != null and str(app.modal.camp.code) == "0.5.1", "the camp's banner carries the new crest")
 				bob.clan_find("wolf")
 				_go("bob_find")
 		"bob_find":
@@ -278,12 +338,21 @@ func _process(delta: float) -> bool:
 				_go("joined")
 		"joined":
 			if bob.in_clan() and int(app.social.clan.get("n", 0)) == 2:
-				check(str(bob.my_tag()) == "WOLF" and str(bob.clan.role) == "member", "Bob is in, a member, tagged WOLF")
+				check(str(bob.my_tag()) == "WOLF" and str(bob.clan.role) == "member" and bob.my_crest() == "0.5.1", "Bob is in, a member, tagged WOLF, the lion crest")
 				bob.say("clan", "hello wolves")
 				_go("clan_line")
 		"clan_line":
 			if not app.social.lines.clan.is_empty() and str(app.social.lines.clan[-1].get("x", "")) == "hello wolves":
-				check(str(app.social.lines.clan[-1].get("ct", "")) == "WOLF", "Bob's clan line reaches Alice, with his tag")
+				check(str(app.social.lines.clan[-1].get("ct", "")) == "WOLF" and str(app.social.lines.clan[-1].get("cc", "")) == "0.5.1",
+					"Bob's clan line reaches Alice, with his tag and crest")
+				bob.clan_ask("golem")
+				_go("asked")
+		"asked":
+			if app.social.ask_open(str(bob.me.pid), "golem") and app.social.lines.clan.any(func(l): return str(l.get("ask", "")) == "golem"):
+				check(true, "Bob asks for a Golem shard: on Alice's clan state and in clan chat")
+				_go("open_chat")
+			elif t_phase > 8.0:
+				check(false, "Bob's shard request reaches Alice")
 				_go("open_chat")
 		"open_chat":
 			if t_phase > 0.5:
@@ -293,7 +362,20 @@ func _process(delta: float) -> bool:
 		"chat_seen":
 			if t_phase > 0.6:
 				check(has_text(app.modal, "hello wolves") and btn("chat_name", null, "[WOLF] Bob") != null, "the line shows, his name as [WOLF] Bob")
+				var gb := btn("chat_give")
+				check(gb != null and gb.text.begins_with("GIVE") and not gb.disabled, "his request's line: GIVE (she holds a Golem shard) -- %s" % (gb.text if gb != null else "none"))
 				_shot("clan_chat")
+				_gold0 = int(app.profile.d.gold)
+				press("chat_give")
+				_go("given")
+		"given":
+			if not app.social.ask_open(str(bob.me.pid), "golem") and app.profile.shards_of("golem") == 0 and int(app.profile.d.gold) > _gold0:
+				check(app.social.lines.clan.any(func(l): return str(l.get("x", "")).contains("gave Bob a Golem shard")) and btn("chat_give") == null,
+					"GIVE: the shard is Bob's, Alice's account (pulled) has its melt gold (+%d), the line in chat, the button gone" % (int(app.profile.d.gold) - _gold0))
+				_go("tap_bob")
+			elif t_phase > 10.0:
+				check(false, "Alice gives Bob the shard (ask open %s, her shards %d, gold %d)" % [str(app.social.ask_open(str(bob.me.pid), "golem")),
+					app.profile.shards_of("golem"), int(app.profile.d.gold)])
 				_go("tap_bob")
 		"tap_bob":
 			if t_phase > 0.4:
@@ -307,9 +389,46 @@ func _process(delta: float) -> bool:
 		"to_clan2":
 			if t_phase > 0.4:
 				app.open_clan()
+				_go("lfg")
+		"lfg":
+			if t_phase > 0.6:
+				press("clan_lfg")
+				_go("lfg_up")
+		"lfg_up":
+			if not bob.lfg_call(str(app.social.me.pid)).is_empty():
+				check(app.social.lines.clan.any(func(l): return str(l.get("lfg", "")) == str(app.social.me.pid)), "LOOKING FOR GROUP: her call reaches Bob, a line in clan chat")
+				bob.lfg_join(str(app.social.me.pid))
+				_go("lfg_joined")
+			elif t_phase > 8.0:
+				check(false, "her LFG call reaches Bob")
+				_go("lfg_joined")
+		"lfg_joined":
+			if app.social.in_party() and app.social.party_size() == 2:
+				check(app.social.is_leader() and int(app.social.party.get("max", 0)) == 5 and bob.in_my_party(str(app.social.me.pid)),
+					"Bob JOINs: a party of 2 (of 5), led by Alice")
+				_go("lfg_view")
+			elif t_phase > 8.0:
+				check(false, "Bob joins her party from her call")
+				_go("lfg_view")
+		"lfg_view":
+			if t_phase > 0.8:
+				_shot("clan_lfg")
+				press("clan_tab_league")
+				_go("league")
+		"league":
+			if t_phase > 1.0:
+				check(not app.social.league.is_empty() and has_text(app.modal, "CLAN LEAGUE") and has_text(app.modal, "100 GEMS")
+					and has_text(app.modal, "No clan has points yet"), "LEAGUE: the table (no points yet this week), the prizes")
+				_shot("clan_league")
+				press("clan_tab_members")
+				_go("members")
+		"members":
+			if t_phase > 0.6:
+				check(has_text(app.modal, "0 pts") and btn("clan_manage_" + str(bob.me.pid)) != null, "MEMBERS: points this week, MANAGE")
+				_shot("clan_members")
 				_go("manage")
 		"manage":
-			if t_phase > 0.6:
+			if t_phase > 0.3:
 				press("clan_manage_" + str(bob.me.pid))
 				_go("officer")
 		"officer":
