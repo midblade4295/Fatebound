@@ -6055,3 +6055,21 @@ actually gripping them".
 - Verified: suite ALL SIEGE TESTS PASSED, COLD_START_PASS, the Play-shape AAB check (throwaway key) exit 0 with the
   presets unchanged, BASE OK (273 files). Preview APK: build/Fatebound-Siege-0.31.190-fatebound.apk (32 MB, preview
   key), sha256 0bb8ca50...6f605ee80c572a32b.
+
+## 0.31.191 — the right hand's crossbows and guns upright
+Kevin: "Now some of weapons are upside down like the musketeer weapons".
+- Measured in the world (each held piece's up and front through its hand slot, idle / attack / aim): every crossbow and
+  gun in a right hand -- the Musketeer's musket, Privateer blunderbuss and Frostbound musket, the Sniper's crossbows,
+  the crossbowman minion's -- had its up pointing at the ground (idle (0.04, -0.89, -0.45), aiming (0, -0.98, 0.2)).
+  0.31.190 refit the guns upright in their template's space, which the hold then turned over: the lock and trigger
+  underneath, the butt's drop on top. The cause is old: 0.31.46 turned the right hand's crossbows forward with -90
+  about X (siege_view _fit_weapon), which also turns them upside down.
+- Fix: the right hand's crossbow hold adds a half roll about the piece's own length -- up now points up (idle (-0.04,
+  0.89, 0.45), aiming (0, 0.98, -0.2)), still pointing forward; the fists still close on the stocks. (The siege
+  minion's cannon rolls with it; it lies the same way round, a barrel. The skeletons' KayKit crossbow is not on this
+  hold and is unchanged.)
+- weapon_grip_test: the Musketeer's, the Sniper's and the crossbowman's pieces, every outfit, idle and aiming -- up
+  points up and front points forward (fails without the fix).
+- Portraits: the Musketeer's and Sniper's six re-rendered (the guns at the bust's edge); ui-bbb6c294f5fe uploaded,
+  CONTENT OK, coverage OK, presets unchanged.
+- Version 0.31.191, versionCode 277, SERVER_BUILD 0.31.191.

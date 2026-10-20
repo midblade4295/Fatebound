@@ -15,6 +15,8 @@ extends SceneTree
 #    Musketeer's own musket and the Privateer's blunderbuss were held by the muzzle, lying on their sides); and every
 #    Meshy body's weapon hand is a fist round the handle (tools/meshy_hand_pose.py: rig.json's grip_<hand>), but for
 #    the Knight, Rogue and Assassin, made with closed hands (and a tome's, which lies on the open hand).
+#    Then (Kevin: "Now some of weapons are upside down like the musketeer weapons"): the right hand's crossbows and guns
+#    had been upside down in the world since 0.31.46 (siege_view _fit_weapon) -- upright now, idle and aiming.
 #   godot --headless --path godot -s res://tests/weapon_grip_test.gd
 const Eco = preload("res://scripts/meta/economy.gd")
 const View = preload("res://scripts/siege/siege_view.gd")
@@ -22,6 +24,7 @@ const END := ["wand", "bits/wand_A", "bits/wand_B", "axe_1handed", "bits/axe_A",
 	"bits/hammer_B", "bits/hammer_C", "bits/hammer_D"]
 var fails: Array = []
 var bows := []          # [label, body]
+var guns := []          # [label, body] (0.31.190: crossbows and guns in the right hand)
 var f := 0
 
 func check(ok: bool, what: String) -> void:
@@ -199,6 +202,21 @@ func _init() -> void:
 			pl.seek(0.6, true)
 			pl.speed_scale = 0.0
 			bows.append([str(sk.name), made.body])
+	# ---- 0.31.190: the right hand's crossbows and guns upright in the world (0.31.46's -90 about X turned them upside
+	# down: the trigger and a stock's drop on top) -- the piece's up (template +Y) points up, in the idle and the aim
+	for hero in ["musketeer", "sniper", "minion_caster"]:
+		var looks: Array = [{}]
+		for id in Eco.skins_of(hero):
+			looks.append({"skin": id})
+		for cos in looks:
+			for an_key in ["idle", "ability"]:
+				var made3: Dictionary = View.make_body(hero, cos)
+				root.add_child(made3.body)
+				var pl3: AnimationPlayer = made3.player
+				pl3.play(str(View.LOOKS[hero][an_key]))
+				pl3.seek(0.5 * pl3.current_animation_length, true)
+				pl3.speed_scale = 0.0
+				guns.append(["%s %s %s" % [hero, str(cos.get("skin", "own")), an_key], made3.body])
 	for cls in ["ranger"]:
 		var made2: Dictionary = View.make_body(cls, {})
 		root.add_child(made2.body)
@@ -237,6 +255,24 @@ func _process(_d: float) -> bool:
 		if (tips - g).dot(to_body) <= 0.0:
 			away.append(b[0])
 	check(bows.size() >= 2 and away.is_empty(), "every bow's string is on the archer's side (%d bows) %s" % [bows.size(), str(away)])
+	var upside := []
+	for gb in guns:
+		var held: MeshInstance3D = null
+		for s in (gb[1] as Node).find_children("*", "BoneAttachment3D", true, false):
+			if str((s as BoneAttachment3D).bone_name) == "handslot.r":
+				var ms: Array = (s as Node).find_children("*", "MeshInstance3D", true, false)
+				if not ms.is_empty():
+					held = ms[0]
+		if held == null:
+			upside.append("%s: nothing held" % gb[0])
+			continue
+		var b: Basis = held.global_transform.basis.orthonormalized()
+		var up: Vector3 = b * Vector3.UP
+		var front: Vector3 = b * Vector3.BACK
+		var body_front: Vector3 = (gb[1] as Node3D).global_transform.basis.z.normalized()
+		if up.y < 0.4 or front.dot(body_front) < 0.4:
+			upside.append("%s up %s front %s" % [gb[0], str(up.snapped(Vector3.ONE * 0.01)), str(front.snapped(Vector3.ONE * 0.01))])
+	check(guns.size() >= 14 and upside.is_empty(), "the right hand's crossbows and guns are upright and point forward, idle and aiming (%d) %s" % [guns.size(), str(upside)])
 	print("WEAPON_GRIP_PASS" if fails.is_empty() else "WEAPON_GRIP_FAIL %s" % str(fails))
 	quit(0 if fails.is_empty() else 1)
 	return false

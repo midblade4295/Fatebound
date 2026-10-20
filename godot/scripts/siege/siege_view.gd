@@ -2834,6 +2834,11 @@ static func _fit_weapon(model: Node3D, file: String, body_model := "", hand := "
 	model.scale = Vector3.ONE * float(WEAPON_SCALE.get(file, 1.0))
 	if file.contains("crossbow"):
 		model.rotation.x = deg_to_rad(-90.0 if hand == "r" else 90.0)
+		if hand == "r":
+			# 0.31.190 (Kevin: "Now some of weapons are upside down like the musketeer weapons"): 0.31.46's -90 turned the
+			# right hand's crossbows forward but also upside down (the stock's drop and the trigger on top, a gun's lock
+			# underneath) -- a half roll about the piece's own length puts them upright, still pointing forward
+			model.rotate_object_local(Vector3.BACK, PI)
 	elif file.contains("bow"):
 		model.rotation.y = -PI * 0.5 if file.begins_with("bits/") else PI
 	if WEAPON_ROT.has(file):
