@@ -6255,3 +6255,9 @@ shard requests, 5 - stack, lfg button, league".
   CONTENT OK, coverage OK, presets unchanged.
 - Kevin: the server deploy (sudo bash godot/server/deploy/install_siege_server.sh) brings all of it -- until then the
   app shows the clans as before (and the 0.31.184-0.31.189 economy waits on it too).
+- Verified: the suite (two tests still expected the old shapes -- profile_card_test's card fields without "cc",
+  social_ui_test's party "/4" -- fixed; rerun: all pass but idle_test once, a real-time timing check at its edge
+  (1.5 s; it passed in the first run and 3 of 3 alone since); COLD_START_PASS; the Play-shape AAB check exit 0
+  (bundletool valid, BASE OK 280 files), presets unchanged. Preview APK: build/Fatebound-Siege-0.31.196-fatebound.apk
+  (32 MB, preview key), sha256 10b1c50a...c5682dc1b2293717c45.
+- ElevenLabs for the clan art: about 5,200 credits for the 12 images reported before, and 185 for the extra ravens.
