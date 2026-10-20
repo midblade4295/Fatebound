@@ -4,10 +4,10 @@
  "packs": [
   {
    "name": "ui",
-   "file": "ui-bbb6c294f5fe.pck",
-   "size": 31780724,
-   "sha256": "c4f64c5c0409104bfbb637dcba6ed124acfd5ff0246120c94bd443fbfaeac5b0",
-   "inputs": "bbb6c294f5fe2ead9010e63efeadb2899b6651527a355e459e0127a7421425b9",
+   "file": "ui-a431c795b37e.pck",
+   "size": 31790020,
+   "sha256": "676ec3df96141fae04c9ee9b5bed9df9944fbba204c1207ffc1d013f4891ea84",
+   "inputs": "a431c795b37ea4de0efb00aea9ffdb1695cbcfe2eba01938866b4f1a7fb6ae2b",
    "probe": "res://assets/ui/abilities/archmage_e.png"
   },
   {
@@ -44,10 +44,10 @@
   },
   {
    "name": "weapons",
-   "file": "weapons-ecc59537dce2.pck",
-   "size": 17745896,
-   "sha256": "cb79c4127c4f1ac82515f8507cb592a315ff51a4d6b7c22249686631b7d32afc",
-   "inputs": "ecc59537dce25e7469513f0de98044fd1bbde56ec6d72a0a30cf67d7d318b6c0",
+   "file": "weapons-b2f2b5a13db1.pck",
+   "size": 17745928,
+   "sha256": "4112b420a84e0b46d8afed91ff32c93adee15c21a6e454fe3e61b2b6c611ba17",
+   "inputs": "b2f2b5a13db1cbdae31314f8eb85488067d40136aaa4a7f0bf055c017f604b76",
    "probe": "res://assets/meshy/weapons/acolyte_wand.glb"
   },
   {

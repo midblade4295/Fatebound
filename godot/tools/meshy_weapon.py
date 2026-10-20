@@ -23,6 +23,9 @@ Pipeline per piece (a sword, a shield, a staff ...):
         template best (all 24 / about +Y only / mirrored). 0.31.96: then the handle onto the hand -- a long weapon's
         shaft through the grip, a shield's back at the knuckles, a tome's back cover at the palm (tools/weapon_grip.py;
         --grip 0 skips it)
+  roll  IN.glb OUT.glb [--deg 180] [--about Y]   (0.31.192) turn a fitted piece about its own length (the template's
+        +Z) through (0, Y): the Wolfstalker's crossbow over, wolf head up -- the hand keeps its place on the stock
+        (--about: the stock's middle at the hand)
 Key from MESHY_KEY (never written to disk).
 """
 import base64
@@ -329,6 +332,41 @@ def fit(src, template, out, kind, length=1.0, tex=512, axes="X,Y,Z", grip=True):
         print("grip", gk, "move %+.3f %+.3f %+.3f" % tuple(move))
 
 
+def roll(src, out, deg=180.0, about=0.0):
+    """Turn a fitted piece (vertices baked, no node transforms) by deg about the line along +Z through (0, about):
+    positions, normals and tangents; the texture is kept as it is."""
+    import math
+    g, binc = mbt.read_glb(src)
+    binc = bytearray(binc)
+    a = math.radians(deg)
+    R = np.array([[math.cos(a), -math.sin(a), 0.0], [math.sin(a), math.cos(a), 0.0], [0.0, 0.0, 1.0]])
+    piv = np.array([0.0, about, 0.0])
+    done = set()
+    for m in g["meshes"]:
+        for p in m["primitives"]:
+            for key, n, shift in (("POSITION", 3, True), ("NORMAL", 3, False), ("TANGENT", 4, False)):
+                ai = p["attributes"].get(key)
+                if ai is None or ai in done:
+                    continue
+                done.add(ai)
+                acc = g["accessors"][ai]
+                bv = g["bufferViews"][acc["bufferView"]]
+                if bv.get("byteStride", 4 * n) != 4 * n or acc.get("componentType") != 5126:
+                    raise SystemExit("only packed float attributes are handled")
+                o = bv.get("byteOffset", 0) + acc.get("byteOffset", 0)
+                v = np.frombuffer(bytes(binc[o:o + acc["count"] * 4 * n]), np.float32).reshape(-1, n).astype(np.float64)
+                xyz = v[:, :3] - piv if shift else v[:, :3]
+                xyz = (R @ xyz.T).T + (piv if shift else 0.0)
+                v[:, :3] = xyz
+                binc[o:o + acc["count"] * 4 * n] = v.astype(np.float32).tobytes()
+                acc["min"] = [float(x) for x in v.min(0)]
+                acc["max"] = [float(x) for x in v.max(0)]
+    bv = g["bufferViews"][g["images"][mbt.base_color_image(g)]["bufferView"]]
+    img = bytes(binc[bv.get("byteOffset", 0):bv.get("byteOffset", 0) + bv["byteLength"]])
+    mbt.write_glb(out, g, bytes(binc), img)
+    print("roll", os.path.basename(src), "->", os.path.basename(out), "%.0f deg about z through y %.3f" % (deg, about))
+
+
 def main():
     cmd, args = sys.argv[1], sys.argv[2:]
     opt = {}
@@ -352,6 +390,8 @@ def main():
     elif cmd == "fit":
         fit(pos[0], pos[1], pos[2], pos[3], float(opt.get("len", 1.0)), int(opt.get("tex", 512)), opt.get("axes", "X,Y,Z"),
             opt.get("grip", "1") != "0")
+    elif cmd == "roll":
+        roll(pos[0], pos[1], float(opt.get("deg", 180.0)), float(opt.get("about", 0.0)))
     else:
         raise SystemExit(__doc__)
 

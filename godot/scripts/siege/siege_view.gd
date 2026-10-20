@@ -11,6 +11,7 @@ const PATH_TEX := preload("res://assets/terrain/path.png")       # (the castle f
 const DIRT_TEX := preload("res://assets/terrain/dirt.png")       # 0.31.126: the map's dirt paths (tools/make_dirt_texture.py)
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 const WeaponFx = preload("res://scripts/siege/weapon_fx.gd")
+const EyeFx = preload("res://scripts/siege/eye_fx.gd")         # 0.31.192: the Necromancer's glowing, smoking eyes
 const WyrmBody = preload("res://scripts/siege/wyrm_body.gd")   # 0.31.166: the Grave Wyrm (a body without a rig)
 const Foliage = preload("res://scripts/siege/foliage.gd")      # 0.31.173: the Meshy trees and bushes
 const Towers = preload("res://scripts/siege/towers.gd")        # 0.31.172: the 5v5's towers (Meshy, breaking as they're hurt)
@@ -2522,6 +2523,45 @@ static func meshy_body(name: String) -> Dictionary:
 	body.set_meta("meshy", name)
 	return {"body":body, "skeleton":sk, "chain":1.0}
 
+# 0.31.192 (Kevin: "add glow/smoky effects to the necromancers eyes"): a body's eyes glow and smoke (eye_fx.gd). pts:
+# each eye's middle on the mesh, in the rigged GLB's own space (found from the texels of the Necromancer's painted green
+# eyes, set a hair in front of the face); col: the glow's colour, per outfit -- his own lime green, the Frostbound's
+# ice, the Gravekeeper's lantern green.
+const EYE_FX := {"meshy:necromancer": {"pts": [Vector3(0.057, 0.7185, 0.153), Vector3(-0.057, 0.7185, 0.153)],
+	"col": "#9dff5a", "skins": {"necromancer_frost": "#86ecff", "necromancer_gravekeeper": "#7dff9a"}}}
+
+static func _eyes(body: Node3D, skeleton: Skeleton3D, model: String, skin: String, lite: bool) -> void:
+	var e: Dictionary = EYE_FX.get(model, {})
+	if e.is_empty() or skeleton.find_bone("head") < 0:
+		return
+	var sk: Skin = null
+	for mi in body.find_children("*", "MeshInstance3D", true, false):
+		if (mi as MeshInstance3D).skin != null:
+			sk = (mi as MeshInstance3D).skin
+			break
+	if sk == null:
+		return
+	var bind := -1
+	for b in sk.get_bind_count():
+		if str(sk.get_bind_name(b)) == "head" or (str(sk.get_bind_name(b)) == "" and sk.get_bind_bone(b) == skeleton.find_bone("head")):
+			bind = b
+	if bind < 0:
+		return
+	var att := BoneAttachment3D.new()
+	att.name = "Eyes"
+	att.bone_name = "head"
+	skeleton.add_child(att)
+	var fx: Node3D = EyeFx.new()
+	fx.name = "EyeFx"
+	fx.col = Color(str((e.get("skins", {}) as Dictionary).get(skin, e.col)))
+	fx.lite = lite
+	var bp := sk.get_bind_pose(bind)
+	for p in e.pts:
+		fx.pts.append(bp * (p as Vector3))                          # the eye where the skin puts that vertex
+	fx.up = bp.basis * Vector3.UP                                   # (the GLB's +Y up, +Z the face's front)
+	fx.fwd = bp.basis * Vector3.BACK
+	att.add_child(fx)
+
 static func meshy_libraries(name: String) -> Dictionary:
 	if not _meshy_libs.has(name):
 		var libs := {}
@@ -2613,6 +2653,8 @@ static func make_body(cls: String, cosmetic: Dictionary = {}) -> Dictionary:
 			WeaponFx.apply(hm[0], hf, str(hm[1]) == "r" or hand_models.size() == 1, str(hm[2]), bool(cosmetic.get("lite", false)))
 	for mi in body.find_children("*", "MeshInstance3D", true, false):
 		(mi as MeshInstance3D).cast_shadow = (GeometryInstance3D.SHADOW_CASTING_SETTING_ON if _cast_static else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
+	if meshy and EYE_FX.has(str(look.model)):
+		_eyes(body, skeleton, str(look.model), str(cosmetic.get("skin", "")), bool(cosmetic.get("lite", false)))
 	if not cosmetic.has("tint") and look.has("tint"):
 		cosmetic = cosmetic.duplicate()
 		cosmetic["tint"] = look.tint

@@ -17,6 +17,7 @@ extends SceneTree
 #    the Knight, Rogue and Assassin, made with closed hands (and a tome's, which lies on the open hand).
 #    Then (Kevin: "Now some of weapons are upside down like the musketeer weapons"): the right hand's crossbows and guns
 #    had been upside down in the world since 0.31.46 (siege_view _fit_weapon) -- upright now, idle and aiming.
+#    0.31.192: the Wolfstalker's crossbow turned over, the wolf's head up (Kevin).
 #   godot --headless --path godot -s res://tests/weapon_grip_test.gd
 const Eco = preload("res://scripts/meta/economy.gd")
 const View = preload("res://scripts/siege/siege_view.gd")
@@ -170,6 +171,16 @@ func _init() -> void:
 		if not (z0 < 0.0 and rear.position.y < front.position.y - 0.05 and rear.size.y > rear.size.x * 1.3):
 			guns_bad.append("%s rear y %.2f/%.2fx%.2f front y %.2f" % [k, rear.position.y, rear.size.y, rear.size.x, front.position.y])
 	check(guns_bad.is_empty(), "the musket and the blunderbuss: muzzle forward (+Z), the butt behind the hand, upright %s" % str(guns_bad))
+	# 0.31.192 (Kevin: "Flip the wolf stalker crossbow over so the wolf head is facing the sky"): turned over about its
+	# length through the stock at the hand (tools/meshy_weapon.py roll) -- the wolf's head and jaws, which hung under the
+	# front, stand over it: the piece reaches 0.41 over the hand and only 0.12 under (it was 0.33 over, 0.20 under)
+	var wolf := _sample("mw/wolf_crossbow", 4000)
+	var wlo := INF
+	var whi := -INF
+	for q in wolf:
+		wlo = minf(wlo, q.y)
+		whi = maxf(whi, q.y)
+	check(whi > 0.38 and wlo > -0.15, "the Wolfstalker's crossbow: the wolf's head up (%.2f over the hand, %.2f under)" % [whi, -wlo])
 	# ---- 0.31.190: the hands close round the handle
 	var open := []
 	var n_hand := 0

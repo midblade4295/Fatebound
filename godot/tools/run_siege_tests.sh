@@ -140,6 +140,8 @@ run quest_test           QUEST_PASS               150 --resolution 420x933
 run quest_track_test     QUEST_TRACK_PASS         120 --fixed-fps 30
 # Weapon grips (0.31.104): bow strings on the archer's side, one-handers held at the end of the handle.
 run weapon_grip_test     WEAPON_GRIP_PASS         120
+# The Necromancer's glowing, smoking eyes (0.31.192).
+run necro_eyes_test      NECRO_EYES_PASS          120
 # Currency flies into the top bar's counters (0.31.105), and the Ember counter.
 run reward_fly_test      REWARD_FLY_PASS          120 --fixed-fps 30 --resolution 420x933
 # The shop's tiered pack art and the five gold offers (0.31.106).

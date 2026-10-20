@@ -6076,3 +6076,23 @@ Kevin: "Now some of weapons are upside down like the musketeer weapons".
 - Verified: suite ALL SIEGE TESTS PASSED, COLD_START_PASS, the Play-shape AAB check exit 0 with the presets unchanged,
   BASE OK (273 files). Preview APK: build/Fatebound-Siege-0.31.191-fatebound.apk (32 MB, preview key), sha256
   c1e0749d...0d266c5f3f9054.
+
+## 0.31.192 — the Wolfstalker's crossbow wolf-head up; the Necromancer's eyes glow and smoke
+Kevin: "Flip the wolf stalker crossbow over so the wolf head is facing the sky. Also, add glow/smoky effects to the
+necromancers eyes".
+- wolf_crossbow turned over about its length (tools/meshy_weapon.py roll, new: --deg 180 --about 0.105, the stock's
+  middle at the hand, so the fist keeps its place on the stock): the wolf's head and jaws stand over the front instead of
+  hanging under it. weapon_grip_test pins it (0.41 over the hand, 0.12 under; was 0.33 / 0.20).
+- The Necromancer's eyes (scripts/siege/eye_fx.gd, new; siege_view EYE_FX / _eyes): each eye's middle found on the mesh
+  from the texels of his painted green eyes (the rigged GLB's space), put on a BoneAttachment3D on the head through the
+  skin's head bind, so it sits where the skin draws the eye in every animation. Each eye: a soft halo and a white-hot
+  core (the weapon effects' sprite shader, "dot"), pulsing out of step; wisps and a thin smoke streaming off it -- out
+  across the temple and curling up, left behind in the world as he moves. Sized from the gap between the eyes. Colour
+  per look: his own lime green #9dff5a, the Frostbound's ice #86ecff, the Gravekeeper's lantern green #7dff9a. With
+  fewer effects on ("lite": another player's body) the glow only.
+- Portraits: default_necromancer, necromancer_gravekeeper, necromancer_frost (the eyes) and sniper_wolf re-rendered.
+- necro_eyes_test (new): his own look and both outfits, lite or not -- two eyes, the glow and core in the outfit's
+  colour, the wisps and smoke (none when lite), on his face (0.24 apart, 0.31 in front of the head bone); not on the
+  Mage.
+- Content packs: weapons-b2f2b5a13db1, ui-a431c795b37e uploaded; CONTENT OK, coverage OK, presets unchanged.
+- Version 0.31.192, versionCode 278, SERVER_BUILD 0.31.192.
