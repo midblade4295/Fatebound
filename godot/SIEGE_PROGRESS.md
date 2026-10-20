@@ -5975,3 +5975,10 @@ go along with each skin".
   750 for Frostbound, and pays chests, the pass and quests the old way (its answer wins).
 - Store listings: the starter pack's description (PLAY_IAP_HANDOFF.md, IOS_HANDOFF.md).
 - Version 0.31.188, versionCode 274, SERVER_BUILD 0.31.188.
+- Checks: the quick suite, 95 of 96 at first -- eco_server_test's new refused-weapon ops reused the sequence numbers of
+  the ops after them (fixed: numbered on; it passes, no script errors), so 96 / 96; COLD_START_PASS; content packs: ui
+  (31.8 MB), weapons (17.7 MB) and skins (29.2 MB) rebuilt and uploaded, check and coverage OK; the Play AAB (throwaway
+  key, presets untouched): BASE OK, CONTENT OK, play_games true, bundletool valid. Looked at (420 x 933 and full-body
+  renders): all 18 sets with their weapons and the 18 Frostbound with theirs frosted, every outfit's portrait, the
+  shop's FEATURED OUTFITS and OUTFITS, the Locker, six champion windows with the set previewed. Preview APK:
+  build/Fatebound-Siege-0.31.188-fatebound.apk (32 MB, preview key), sha256 39ab6082...e95474738871.

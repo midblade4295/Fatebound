@@ -111,16 +111,16 @@ func _part1() -> void:
 	var tk := str(r.get("ticket", ""))
 	var big := {"kills":99999, "rescues":99, "gathered":5000, "gate_dmg":1e9, "fed":500, "cls":"knight", "cls_main":"knight",
 		"kills_cls":{"knight":99999}, "q":{"knight":{"t":99999.0, "kills":99999, "rescues":99, "gates":99999}}}
-	r = acc.handle({"t":"eco", "acct":id, "key":key, "ops":[{"s":6, "op":"match", "tk":tk, "a":[big, true, false]}]})
+	r = acc.handle({"t":"eco", "acct":id, "key":key, "ops":[{"s":8, "op":"match", "tk":tk, "a":[big, true, false]}]})
 	check(tk != "" and str(r.results[0].error) == "too short", "a result 0 s after its ticket is refused")
 	acc.now_override = now + 400
 	var k0 := int(r.profile.stats.kills)
 	var m0 := int(r.profile.stats.matches)
-	r = acc.handle({"t":"eco", "acct":id, "key":key, "ops":[{"s":7, "op":"match", "tk":tk, "a":[big, true, false]}]})
+	r = acc.handle({"t":"eco", "acct":id, "key":key, "ops":[{"s":9, "op":"match", "tk":tk, "a":[big, true, false]}]})
 	var kills_got := int(r.profile.stats.kills) - k0
 	check(bool(r.results[0].ok) and int(r.profile.stats.matches) == m0 + 1 and kills_got > 0 and kills_got <= 80 and int(r.profile.stats.rescues) <= 5,
 		"400 s later it counts, held to what a match that long can hold (%d knockouts)" % kills_got)
-	r = acc.handle({"t":"eco", "acct":id, "key":key, "ops":[{"s":8, "op":"match", "tk":tk, "a":[big, true, false]}]})
+	r = acc.handle({"t":"eco", "acct":id, "key":key, "ops":[{"s":10, "op":"match", "tk":tk, "a":[big, true, false]}]})
 	check(str(r.results[0].error) == "no ticket", "a ticket pays once")
 	# --- a chest rolls the same on the phone and on the server
 	e = acc.open(id, key)
@@ -134,9 +134,9 @@ func _part1() -> void:
 	phone.start_unlock(0)
 	phone.now_override += 9 * 3600
 	var pr: Dictionary = phone.open_chest(0)
-	r = acc.handle({"t":"eco", "acct":id, "key":key, "ops":[{"s":9, "op":"start_unlock", "a":[cid]}]})
+	r = acc.handle({"t":"eco", "acct":id, "key":key, "ops":[{"s":11, "op":"start_unlock", "a":[cid]}]})
 	acc.now_override += 9 * 3600
-	r = acc.handle({"t":"eco", "acct":id, "key":key, "ops":[{"s":10, "op":"open_chest", "a":[cid]}]})
+	r = acc.handle({"t":"eco", "acct":id, "key":key, "ops":[{"s":12, "op":"open_chest", "a":[cid]}]})
 	check(bool(r.results[0].ok) and int(r.profile.gold) == int(phone.d.gold) and int(r.profile.gems) == int(phone.d.gems)
 		and str(r.profile.get("shards", [])) == str(phone.d.get("shards", [])), "the phone's chest roll is the server's (%s)" % str(pr))
 	# --- purchases: once, one account
