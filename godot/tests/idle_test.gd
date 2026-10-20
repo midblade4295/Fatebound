@@ -7,6 +7,8 @@ extends SceneTree
 #   - any input: the unit is theirs again ("idle" off, bot flag off, prediction back on)
 #   - idle again until the limit: bye "idle", close 4006; the phone leaves the match and tells Home why (exit_note)
 #   - a second player who keeps moving is never touched
+#     (0.31.193: that player runs on a thread of its own -- on the main loop it went quiet for as long as the phone took
+#     to build the match, which under the suite's load passed the 2 s, and the server rightly put a bot on it)
 #   godot --headless --path godot -s res://tests/idle_test.gd
 const Mode = preload("res://scripts/siege/siege_mode.gd")
 const Net = preload("res://scripts/siege/siege_net.gd")
@@ -15,10 +17,11 @@ var fails: Array = []
 var port := 8103
 var pid := -1
 var mode
-var raw: WebSocketPeer
-var raw_sent := false
+var raw_thread: Thread
+var raw_lock := Mutex.new()
+var raw_stop := false
+var raw_open := false
 var raw_msgs: Array = []
-var raw_clock := 0.0
 var phase := "boot"
 var t_phase := 0.0
 var notes := {}
@@ -50,19 +53,6 @@ func _me() -> Dictionary:
 
 func _process(delta: float) -> bool:
 	t_phase += delta
-	if raw != null:
-		raw.poll()
-		if raw.get_ready_state() == WebSocketPeer.STATE_OPEN:
-			if not raw_sent:
-				raw.put_packet(Net.encode({"t":"hello", "v":Net.VERSION, "five":Net.FIVE, "name":"Busy", "build":"0.31.119-fatebound"}))
-				raw_sent = true
-			raw_clock += delta
-			if raw_clock > 0.1:                      # a player who keeps moving
-				raw_clock = 0.0
-				var a := Time.get_ticks_msec() / 700.0
-				raw.put_packet(Net.encode({"t":"in", "m":Vector2(cos(a), sin(a)), "h":false, "b":false}))
-		while raw.get_available_packet_count() > 0:
-			raw_msgs.append(Net.decode(raw.get_packet()))
 	match phase:
 		"boot":
 			if t_phase > 2.0:
@@ -72,8 +62,8 @@ func _process(delta: float) -> bool:
 				mode.player_name = "Sleepy"
 				mode.exited.connect(func(): exited = true)
 				root.add_child(mode)
-				raw = WebSocketPeer.new()
-				raw.connect_to_url("ws://127.0.0.1:%d/" % port)
+				raw_thread = Thread.new()
+				raw_thread.start(_raw_loop)
 				_go("join")
 		"join":
 			if mode.net_state == "playing" and not notes.has("seat_at"):  # (the match is up: idle time counts from our first input)
@@ -118,15 +108,58 @@ func _process(delta: float) -> bool:
 					check(mode.exit_note == "idle" and str(mode._net_bye.get("why", "")) == "idle", "the phone knows why (bye idle)")
 				if exited:
 					check(true, "the phone leaves the match on its own (back to Home, which says why)")
+					raw_lock.lock()
 					var raw_bye := raw_msgs.filter(func(m): return str(m.get("t", "")) in ["bye", "idle"])
-					check(raw_bye.is_empty() and raw.get_ready_state() == WebSocketPeer.STATE_OPEN, "the player who kept moving was never touched")
+					var still_open := raw_open
+					var got := raw_msgs.size()
+					raw_lock.unlock()
+					check(got > 0 and raw_bye.is_empty() and still_open, "the player who kept moving was never touched")
 					_finish()
 			elif t_phase > 16.0:
 				check(false, "removed within 16 s (state %s, note %s)" % [mode.net_state, mode.exit_note])
 				_finish()
 	return false
 
+func _raw_loop() -> void:
+	# the second player, who keeps moving: input ten times a second, whatever the main loop is doing
+	var ws := WebSocketPeer.new()
+	ws.connect_to_url("ws://127.0.0.1:%d/" % port)
+	var hello := false
+	var last := 0
+	while true:
+		raw_lock.lock()
+		var stop := raw_stop
+		raw_lock.unlock()
+		if stop:
+			break
+		ws.poll()
+		var st := ws.get_ready_state()
+		if st == WebSocketPeer.STATE_OPEN:
+			if not hello:
+				ws.put_packet(Net.encode({"t":"hello", "v":Net.VERSION, "five":Net.FIVE, "name":"Busy", "build":"0.31.119-fatebound"}))
+				hello = true
+			var now := Time.get_ticks_msec()
+			if now - last >= 100:
+				last = now
+				var a := now / 700.0
+				ws.put_packet(Net.encode({"t":"in", "m":Vector2(cos(a), sin(a)), "h":false, "b":false}))
+		var got: Array = []
+		while ws.get_available_packet_count() > 0:
+			got.append(Net.decode(ws.get_packet()))
+		raw_lock.lock()
+		raw_msgs.append_array(got)
+		raw_open = st == WebSocketPeer.STATE_OPEN
+		raw_lock.unlock()
+		OS.delay_msec(10)
+	ws.close()
+
 func _finish() -> void:
+	if raw_thread != null:
+		raw_lock.lock()
+		raw_stop = true
+		raw_lock.unlock()
+		raw_thread.wait_to_finish()
+		raw_thread = null
 	if pid > 0:
 		OS.kill(pid)
 		OS.execute("kill", ["-9", str(pid)])

@@ -6129,3 +6129,10 @@ blow around and the lighting effect in middle show effects".
   the old King gone.
 - Content pack: ui-b0a0ac25987d uploaded; CONTENT OK, coverage OK, presets unchanged.
 - Version 0.31.193, versionCode 279, SERVER_BUILD 0.31.193.
+- idle_test (it failed in the last two suites): "the player who kept moving" ran on the test's main loop, which goes
+  quiet while the phone builds the match -- under the suite's load longer than the test's 2 s idle limit, so the server
+  rightly put a bot on him. He runs on a thread of his own now (input ten times a second whatever the main loop does):
+  4 of 4 alone. (The server was right; unchanged.)
+- Verified: suite 97 of 98 (idle_test, above), COLD_START_PASS; the Play-shape AAB check ran out of disk the first time
+  (old scratch and packs cleared) and passed on its own: exit 0, bundletool valid, BASE OK (278 files), presets
+  unchanged. Preview APK: build/Fatebound-Siege-0.31.193-fatebound.apk (32 MB, preview key), sha256 421085a0...92f0a7f0ee725f1a.
