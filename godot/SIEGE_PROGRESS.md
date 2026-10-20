@@ -6073,3 +6073,6 @@ Kevin: "Now some of weapons are upside down like the musketeer weapons".
 - Portraits: the Musketeer's and Sniper's six re-rendered (the guns at the bust's edge); ui-bbb6c294f5fe uploaded,
   CONTENT OK, coverage OK, presets unchanged.
 - Version 0.31.191, versionCode 277, SERVER_BUILD 0.31.191.
+- Verified: suite ALL SIEGE TESTS PASSED, COLD_START_PASS, the Play-shape AAB check exit 0 with the presets unchanged,
+  BASE OK (273 files). Preview APK: build/Fatebound-Siege-0.31.191-fatebound.apk (32 MB, preview key), sha256
+  c1e0749d...0d266c5f3f9054.
