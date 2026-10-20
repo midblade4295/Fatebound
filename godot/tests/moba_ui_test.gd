@@ -97,8 +97,10 @@ func _process(delta: float) -> bool:
 			_go("fresh_home")
 		"fresh_home":
 			if t_phase > 1.0:
-				check(btn("tutorial_start") != null and btn("side_moba") == null and btn("side_commander") == null and btn("play") != null,
-					"a new player's Home: PLAY and TUTORIAL, no 5V5 medallion")
+				check(btn("side_moba") == null and btn("side_commander") == null and btn("play") != null and btn("home_menu") != null,
+					"a new player's Home: PLAY and the menu, no 5V5 medallion")
+				press("home_menu")                       # 0.31.194: the TUTORIAL is in the top bar's menu
+				check(btn("tutorial_start") != null, "the menu has the TUTORIAL")
 				press("tutorial_start")
 				_go("fresh_tutorial")
 		"fresh_tutorial":
@@ -114,8 +116,8 @@ func _process(delta: float) -> bool:
 				_go("home")
 		"home":
 			if t_phase > 1.0:
-				check(btn("side_moba") == null and btn("tutorial_start") != null and btn("side_commander") == null and btn("play") != null,
-					"Home: PLAY (the 5v5), TUTORIAL")
+				check(btn("side_moba") == null and btn("side_commander") == null and btn("play") != null and btn("home_menu") != null,
+					"Home: PLAY (the 5v5), the menu (the TUTORIAL in it)")
 				_shot("moba_home")
 				press("play")
 				_go("heroes")

@@ -3,7 +3,7 @@ extends Control
 # (top bar + tab bar), the five screens (scripts/app/screens.gd) and launching matches.
 const UI = preload("res://scripts/app/ui.gd")
 const UI2 = preload("res://scripts/app/ui2.gd")
-const HomeScene = preload("res://scripts/app/home_scene.gd")
+const CampScene = preload("res://scripts/app/camp_scene.gd")        # 0.31.194: Home's camp (0.31.138-0.31.193 the war room)
 const Eco = preload("res://scripts/meta/economy.gd")
 const Profile = preload("res://scripts/meta/profile.gd")
 const StoreBilling = preload("res://scripts/meta/store_billing.gd")     # 0.31.130: billing.gd (Play) or billing_ios.gd
@@ -106,8 +106,10 @@ var modal: Control = null
 var hero_layer: Control
 var title_screen: Control = null        # 0.31.139: the title screen the app opens on (title_screen.gd); null once gone
 var player_menu: Control = null         # 0.31.139: the menu under the level shield (SETTINGS, DISCORD)
-var hero_node: Control                 # Home's heroes (0.31.138: the war room's, war_room.gd); null on a safe start
-var home_scene: Control                # Home's war room (home_scene.gd)
+var home_menu: Control = null           # 0.31.194: the menu under the top bar's menu button (ORDERS, QUESTS, RANKS, TUTORIAL)
+var menu_button: Control                # 0.31.194: that button, in the top bar
+var menu_badge: Control                 # ... and its count of what's waiting in the menu
+var home_scene: Control                # Home's camp (camp_scene.gd; 0.31.138-0.31.193 the war room)
 var safe_top := 0.0
 var xp_holder: Control
 var pass_badge: Control
@@ -207,10 +209,8 @@ func _ready() -> void:
 	await _stage(boot_title, 0.66)
 	_boot_mark("hero")
 	_build_hero()
-	await _stage(boot_title, 0.72)
-	_boot_mark("hero 3D")
-	_build_room()
-	await _stage(boot_title, 0.8)
+	await _stage(boot_title, 0.76)
+	# (0.31.142-0.31.193: "hero 3D" -- the war room's table and heroes, a frame after its painting. The camp is painted.)
 	_boot_mark("menus")
 	_build_chrome()
 	await _stage(boot_title, 0.86)
@@ -430,10 +430,10 @@ func _band(parent: Control, c0: Color, c1: Color, top: bool, px: float) -> void:
 	parent.add_child(r)
 
 func _build_hero() -> void:
-	# 0.31.79: Home's painted backdrop and the heroes in 3D. 0.31.138 (Kevin picked the war room concept): the war room
-	# at dusk (home_scene.gd) -- the live war table and four heroes round it in 3D (war_room.gd), the sun, the water,
-	# the birds and the candles alive -- laid out so the table stands just over PLAY. Scrolls away with a parallax as
-	# the menu is scrolled.
+	# 0.31.79: Home's painted backdrop. 0.31.194 (Kevin picked B2, the champions' camp): the six champions round their
+	# campfire in the castle's courtyard at dusk (camp_scene.gd), the fire, the lanterns, the magic and the sky alive, laid
+	# out so the champions' feet are just over PLAY. (0.31.138-0.31.193: the war room, its table and heroes in 3D.)
+	# Scrolls away with a parallax as the menu is scrolled.
 	safe_top = _safe_top()
 	hero_layer = Control.new()
 	hero_layer.anchor_right = 1.0
@@ -448,11 +448,9 @@ func _build_hero() -> void:
 	under.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	under.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hero_layer.add_child(under)
-	home_scene = HomeScene.new(calm, safe_boot)
-	home_scene.defer_room = _building            # 0.31.142: staged behind the boot title -- the 3D a frame later
+	home_scene = CampScene.new(calm, safe_boot)
 	home_scene.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	hero_layer.add_child(home_scene)
-	hero_node = home_scene.room                 # (null on a safe start: the painting only, no live 3D)
 	var lay := func():
 		home_scene.place(home_play_top())
 	hero_layer.resized.connect(lay)
@@ -463,26 +461,13 @@ func _build_hero() -> void:
 	# fatebound title and instead put that in a startup screen and any loading screens": the title screen
 	# (title_screen.gd), the first-start download screen and the match's warm-up cover have it now.)
 
-func _build_room() -> void:
-	# 0.31.142: Home's 3D (the war table and heroes), when the build is staged a frame after the painting
-	if home_scene != null and home_scene.room == null and not safe_boot:
-		home_scene.add_room()
-		hero_node = home_scene.room
-		home_scene.place(home_play_top())
-
 const LOGO_FONT = preload("res://assets/fonts/LuckiestGuy-Regular.ttf")
 
 func hero_show(_cls := "", _look := {}) -> void:
-	# Home's heroes wear what's equipped (rebuilt only for a class whose look changed). (Home builds call this: the war
-	# room is laid out again too, now that the chat line and the tab bar are there to measure from.)
+	# (Home builds call this:) the camp laid out again, now that the chat line and the tab bar are there to measure
+	# from. (0.31.79-0.31.193 Home's heroes in 3D, in what's equipped: the camp's champions are painted.)
 	if home_scene != null:
 		home_scene.place(home_play_top())
-		home_scene.paint_war({})                 # (0.31.169: no Crown War -- the table's land unclaimed)
-	if hero_node != null:
-		var looks := {}
-		for c in Eco.CLASSES:
-			looks[c] = profile.look_for(c)
-		hero_node.set_looks(looks)
 
 func _on_scroll(v: float) -> void:
 	hero_layer.position.y = -v * 0.55
@@ -564,6 +549,7 @@ func _build_chrome() -> void:
 	xp_holder = VBoxContainer.new()
 	xp_holder.custom_minimum_size = Vector2(0, 10)
 	who.add_child(xp_holder)
+	menu_button = _menu_button(bar)
 	gold_label = _pill(bar, "coin")
 	gems_label = _pill(bar, "gem")
 	# (0.31.105-0.31.183 an Embers counter too: 0.31.184, Kevin: "Maybe let's have the two currency so it's more simple")
@@ -777,6 +763,7 @@ func refresh_top() -> void:
 				claimable += 1
 	pass_badge.visible = claimable > 0
 	(pass_badge.get_child(0) as Label).text = str(claimable)
+	paint_menu()                                  # 0.31.194
 
 # ---------------- the currency counters (0.31.105) ----------------
 func _counter(kind: String, lbl: Label, value: int) -> void:
@@ -927,6 +914,203 @@ func open_player_menu() -> void:
 	tw.tween_property(panel, "scale", Vector2.ONE, 0.14).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	tw.tween_property(panel, "modulate:a", 1.0, 0.1)
 
+func _menu_button(bar: Node) -> Control:
+	# 0.31.194 (Kevin picked the camp for Home, without its side buttons -- where they went: "Menu button"): a round
+	# button in the top bar; ORDERS, QUESTS, RANKS and the TUTORIAL in a panel under it (open_home_menu). Its badge counts
+	# what's ready in them (paint_menu); until the tutorial's been played it glows, with a "!".
+	var holder := Control.new()
+	holder.name = "MenuButton"
+	holder.custom_minimum_size = Vector2(44, 44)
+	holder.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	bar.add_child(holder)
+	var glow := UI2.glow(holder, Rect2(-14, -14, 72, 72), Color(1.0, 0.85, 0.4, 0.55))
+	glow.name = "MenuGlow"
+	glow.visible = false
+	var disc := Control.new()
+	disc.name = "Disc"
+	disc.position = Vector2(1, 1)
+	disc.size = Vector2(42, 42)
+	disc.pivot_offset = Vector2(21, 21)
+	disc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	holder.add_child(disc)
+	UI2.plate(disc, "royal", 21.0, "gold", {"rim": 3.0, "shadow_y": 3.0})
+	for i in 3:                                  # (three bars: the menu)
+		var line := Panel.new()
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = UI2.CREAM
+		sb.border_color = UI2.INK
+		sb.set_border_width_all(1)
+		sb.set_corner_radius_all(3)
+		line.add_theme_stylebox_override("panel", sb)
+		line.position = Vector2(10, 12.0 + i * 7.0)
+		line.size = Vector2(22, 5)
+		line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		disc.add_child(line)
+	var b := Button.new()
+	b.flat = true
+	b.focus_mode = Control.FOCUS_NONE
+	for st_name in ["normal", "hover", "pressed", "focus", "hover_pressed"]:
+		b.add_theme_stylebox_override(st_name, StyleBoxEmpty.new())
+	b.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	b.offset_left = -4
+	b.offset_right = 4
+	b.offset_top = -4
+	b.offset_bottom = 4
+	b.set_meta("action_key", "home_menu")
+	b.pressed.connect(func():
+		if is_instance_valid(home_menu) and modal == home_menu:
+			sfx("menuClose")
+			close_modal()
+			return
+		sfx("menuOpen")
+		open_home_menu())
+	holder.add_child(b)
+	menu_badge = UI2.badge(disc, "0", Vector2(8, -8))
+	menu_badge.visible = false
+	return holder
+
+func paint_menu() -> void:
+	# 0.31.194: the menu button's badge -- the orders and quest steps ready to claim (with the daily reward), and a "!"
+	# (and a glow) until the tutorial's been played
+	if menu_badge == null:
+		return
+	var c: Dictionary = Screens.menu_counts(self)
+	var n := int(c.orders) + int(c.quests)
+	var fresh := not bool(c.tutorial_done)
+	menu_badge.visible = n > 0 or fresh
+	var bl := menu_badge.find_children("*", "Label", true, false)
+	if not bl.is_empty():
+		(bl[0] as Label).text = str(n) if n > 0 else "!"
+	var g := menu_button.get_node_or_null("MenuGlow")
+	if g != null:
+		g.visible = fresh
+	var disc := menu_button.get_node_or_null("Disc") as Control
+	if disc == null or not disc.is_inside_tree():
+		return
+	var want := n > 0 or fresh                    # (it wiggles now and then while something's waiting)
+	var tw: Tween = disc.get_meta("wiggle") if disc.has_meta("wiggle") else null
+	if want and (tw == null or not tw.is_valid()):
+		tw = disc.create_tween().set_loops()
+		tw.tween_interval(3.0)
+		for a in [-12.0, 10.0, -7.0, 4.0, 0.0]:
+			tw.tween_property(disc, "rotation", deg_to_rad(a), 0.08)
+		disc.set_meta("wiggle", tw)
+	elif not want and tw != null:
+		tw.kill()
+		disc.remove_meta("wiggle")
+		disc.rotation = 0.0
+
+func open_home_menu() -> void:
+	# 0.31.194: what Home's side buttons were, in a panel under the menu button -- ORDERS (the daily reward, the daily
+	# and weekly orders), QUESTS (each champion's quest line), RANKS (the week's leaderboard) and the TUTORIAL (with its
+	# gold until that's been paid). PASS has its own tab. A tap outside closes it.
+	close_modal()
+	var c: Dictionary = Screens.menu_counts(self)
+	var m := Control.new()
+	m.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	m.set_meta("home_menu", true)
+	add_child(m)
+	modal = m
+	home_menu = m
+	var catcher := Button.new()
+	catcher.flat = true
+	catcher.focus_mode = Control.FOCUS_NONE
+	for st_name in ["normal", "hover", "pressed", "focus", "hover_pressed"]:
+		catcher.add_theme_stylebox_override(st_name, StyleBoxEmpty.new())
+	catcher.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	catcher.set_meta("action_key", "home_menu_close")
+	catcher.pressed.connect(func():
+		sfx("menuClose")
+		close_modal())
+	m.add_child(catcher)
+	var dim := ColorRect.new()
+	dim.color = Color(0.0, 0.01, 0.04, 0.35)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	m.add_child(dim)
+	var pw := minf(290.0, size.x - 16.0)
+	var holder := Control.new()
+	var bx := menu_button.global_position.x + menu_button.size.x * 0.5 if menu_button != null else size.x - 120.0
+	holder.position = Vector2(clampf(bx - pw * 0.62, 8.0, size.x - 8.0 - pw), 6.0 + safe_top + TOP_H - 2.0)
+	holder.size = Vector2(pw, 10)
+	m.add_child(holder)
+	var v := UI2.frame(holder, "night", 10, 16.0, "gold")
+	var panel := v.get_parent() as Control
+	panel.custom_minimum_size = Vector2(pw, 0)
+	v.add_theme_constant_override("separation", 6)
+	var tdone := bool(c.tutorial_done)
+	_menu_row(v, "scroll", "ORDERS", "The daily reward and your orders", int(c.orders), "side_orders", func():
+		sfx("menuOpen")
+		open_orders())
+	_menu_row(v, Screens.quest_icon_name(), "QUESTS", "Every champion's quest line", int(c.quests), "side_quests", func():
+		sfx("tab")
+		close_modal()
+		quest_cls = Screens.quest_first(profile)
+		show_tab("quests"))
+	_menu_row(v, "trophy", "RANKS", "This week's leaderboard", 0, "side_ranks", func():
+		sfx("menuOpen")
+		open_leaderboard())
+	var tr := _menu_row(v, "horn", "TUTORIAL", ("Learn the basics  ·  +%d gold" % TUTORIAL_GOLD) if not tdone else "Play the basics again", 0,
+		"tutorial_start", func():
+			close_modal()
+			sfx("confirm")
+			start_tutorial(), "gold" if not tdone else "silver")
+	if not tdone:
+		UI2.glow(tr.get_meta("disc"), Rect2(-12, -12, 70, 70), Color(1.0, 0.85, 0.4, 0.5))
+		UI2.wiggle(tr.get_meta("icon"), 1.6)
+	panel.reset_size()
+	panel.pivot_offset = Vector2(pw * 0.62, 0.0)
+	panel.scale = Vector2(0.92, 0.92)
+	panel.modulate.a = 0.0
+	var tw := panel.create_tween().set_parallel()
+	tw.tween_property(panel, "scale", Vector2.ONE, 0.14).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(panel, "modulate:a", 1.0, 0.1)
+
+func _menu_row(parent: Node, icon: String, title: String, sub: String, badge: int, key: String, on_press: Callable, rim := "gold") -> Button:
+	# one of the menu's rows: a medallion with its icon (and a badge), the name and a line under it
+	var b := Button.new()
+	b.flat = true
+	b.focus_mode = Control.FOCUS_NONE
+	for st_name in ["normal", "hover", "focus", "hover_pressed"]:
+		b.add_theme_stylebox_override(st_name, StyleBoxEmpty.new())
+	var pressed := StyleBoxFlat.new()
+	pressed.bg_color = Color(1, 1, 1, 0.08)
+	pressed.set_corner_radius_all(12)
+	b.add_theme_stylebox_override("pressed", pressed)
+	b.custom_minimum_size = Vector2(0, 60)
+	b.set_meta("action_key", key)
+	b.pressed.connect(on_press)
+	parent.add_child(b)
+	var r := HBoxContainer.new()
+	r.add_theme_constant_override("separation", 10)
+	r.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	b.add_child(r)
+	var disc := Control.new()
+	disc.custom_minimum_size = Vector2(52, 52)
+	disc.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	disc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	r.add_child(disc)
+	UI2.plate(disc, "royal", 26.0, rim, {"rim": 3.0, "shadow_y": 4.0})
+	var ic := UI2.icon(disc, icon, 44.0)
+	ic.position = Vector2(4, 3)
+	ic.pivot_offset = Vector2(22, 22)
+	if badge > 0:
+		UI2.badge(disc, str(badge), Vector2(6, -6))
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 0)
+	col.alignment = BoxContainer.ALIGNMENT_CENTER
+	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	r.add_child(col)
+	var t := UI2.text(col, title, 19, Color.WHITE, UI2.INK, 5)
+	t.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var s := UI2.body(col, sub, 12, UI2.SOFT)
+	s.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	b.set_meta("disc", disc)
+	b.set_meta("icon", ic)
+	return b
+
 func paint_alliance() -> void:
 	# 0.31.139: the ALLIANCE tab's badge: friend requests, party and clan invites, clan join requests (as SOCIAL had)
 	if alliance_badge == null:
@@ -938,7 +1122,7 @@ func paint_alliance() -> void:
 		(bl[0] as Label).text = str(n)
 
 func home_play_top() -> float:
-	# where PLAY's top is on the screen (the home scene stands the war table just over it)
+	# where PLAY's top is on the screen (the camp stands the champions' feet just over it)
 	return 6.0 + safe_top + TOP_H + 4.0 + float(Screens.home_layout(home_height()).play)
 
 func home_height() -> float:

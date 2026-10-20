@@ -119,8 +119,8 @@ func _process(_d: float) -> bool:
 		check(app.modal is DailyReward, "Home: the daily reward opens by itself")
 		var t1 := _find(app.modal, func(n): return str(n.name) == "DayTile1")
 		check(not t1.is_empty() and bool(t1[0].get_meta("today")) and not bool(t1[0].get_meta("claimed")), "day 1 is today's")
-		var ob := _btn("side_orders")
-		notes_badge = ob != null
+		var ob := _btn("home_menu")                  # 0.31.194: ORDERS is in the top bar's menu (its badge counts the reward)
+		notes_badge = ob != null and app.menu_badge.visible
 		var g0 := int(app.profile.d.gold)
 		_btn("daily_claim").pressed.emit()
 		check(int(app.profile.d.gold) == g0 + 100 and not app.profile.login_ready(), "CLAIM: +100 gold")
@@ -133,11 +133,12 @@ func _process(_d: float) -> bool:
 		app.show_tab("home")
 	elif frames == 36:
 		check(app.modal == null or not is_instance_valid(app.modal), "it doesn't open again the same day")
+		_btn("home_menu").pressed.emit()
 		_btn("side_orders").pressed.emit()
 	elif frames == 40:
 		check(app.modal is OrdersPanel and not _find(app.modal, func(n): return str(n.name) == "DailyCard").is_empty() and _btn("orders_daily") != null,
 			"ORDERS has the daily reward at the top")
-		check(notes_badge, "ORDERS medallion on Home")
+		check(notes_badge, "the menu button on Home, its badge showing the reward")
 		print("DAILY_REWARD_PASS" if fails.is_empty() else "DAILY_REWARD_FAIL %s" % str(fails))
 		quit(0 if fails.is_empty() else 1)
 	return false

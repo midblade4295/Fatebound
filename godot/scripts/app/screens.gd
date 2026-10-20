@@ -66,35 +66,31 @@ static func _rar_tint(rar: String) -> Color:
 	return {"common": Color(0.85, 0.88, 1.0), "rare": Color(0.55, 0.78, 1.0), "epic": Color(0.85, 0.6, 1.0), "legendary": Color(1.0, 0.78, 0.35)}.get(rar, Color(1, 0.9, 0.6))
 
 # ---------------- HOME ----------------
-# 0.31.79 (Kevin: the concepts, "build it"): the painted battlements with every class on the dais (the app's hero layer),
-# PASS / ORDERS / FIRST WIN medallions, the roster ribbon, one big PLAY (always the server), the chests in 3D, then
-# the orders and the pass under it. The top is laid out by hand in content pixels (the hero layer lines up with it).
-
+# 0.31.79 (Kevin: the concepts, "build it"): the painted backdrop with the heroes (the app's hero layer), one big PLAY
+# (always the server), the chests in 3D. The top is laid out by hand in content pixels (the hero layer lines up with it).
 # 0.31.112 (Kevin: "for home screen I don't want it to scroll down, just have the chests at bottom and move the orders and
-# stuff to its own popup menu. Put the play tutorial right under the play button and make it pulse"): Home fills the
-# screen and doesn't scroll -- the medallions, the ribbon, PLAY, under it the tutorial (until it's done) or the players
-# online, and the chests on the bottom edge. The orders and the pass summary open from ORDERS (orders_panel.gd). A
-# screen too short for all that (under ~19:9) drops the ribbon; shorter still, Home scrolls the little that's left.
-
-# 0.31.114 (Kevin: "The characters on main screen are too hudled together and clipping into each other. Is there a way
-# you can redesign the home screen so it's cleaner"): the heroes stand in two staggered rows on the dais (roster.gd) and
-# the ribbon is gone -- it sat on their feet, and the line under PLAY already says 16 vs 16. A party shows under PLAY.
-const MED_Y := [0.0, 82.0, 164.0]   # 0.31.114: the side medallions, tucked up under the top bar (clear of the heroes)
-# 0.31.139 (Kevin: "Change play button and tutorial button design and location so you can move the map table lower to
-# bottom of screen so the window to outside is more viewable"): PLAY is a gold-framed plaque (play_plaque.webp, crossed
-# swords behind it) standing just over the chests, the war table behind it; the tutorial a medallion in the right
-# column (where SOCIAL was -- it's the ALLIANCE tab now); the server line / CROWN WAR / your party at the top.
+# stuff to its own popup menu"): Home fills the screen and doesn't scroll, the chests on the bottom edge; on a screen too
+# short for it, Home scrolls the little that's left.
+# 0.31.194 (Kevin: "Now let's design a new home screen" -- he picked B2, the champions' camp, keeping the chest slots, the
+# chat bar and the Discord / server pill): top to bottom -- the 5v5 pill (or your party) and JOIN OUR DISCORD in one row
+# under the top bar; the camp (camp_scene.gd: six champions round their fire); PLAY, an orange enamel plaque in a gold
+# frame with a blue gem at each end, the first win of the day as a tab under it; the four chests, each on a dark wood
+# panel with its name, the chest in 3D and its button; then the chat line and the tabs (siege_app). The side buttons
+# are gone: PASS has its tab, and ORDERS, QUESTS, RANKS and the TUTORIAL are in the top bar's menu (siege_app
+# open_home_menu). (0.31.114-0.31.193: medallion columns down both sides -- PASS, ORDERS, QUESTS; RANKS, TUTORIAL.)
+const ROW_Y := 2.0             # the top row: the 5v5 pill (or your party) and JOIN OUR DISCORD
+const ROW_H := 40.0
+const DISCORD_W := 118.0
 const PLAQUE := "res://assets/ui/v2/play_plaque.webp"
-const PLAQUE_W := 260.0
-const PLAQUE_H := 104.0        # (760 x 305 art: its crown and its swords included)
-const PLAQUE_FACE := Rect2(0.125, 0.31, 0.75, 0.46)   # the enamel face, as fractions of the plaque
-const PLAY_MIN := 330.0        # (on a short screen PLAY goes no higher: Home scrolls a little instead)
-const STATUS_Y := 2.0          # the server line / CROWN WAR / the party, between the medallion columns
-const CHEST_H := 84.0         # a chest plate
-const CHEST_ART := 44.0       # the 3D chests (and their timer tags) stand this far above their plates
-
-const DISCORD_Y := 44.0       # 0.31.125: Home's JOIN OUR DISCORD, between the medallion columns (0.31.139: under the
-                               # server line; the title it was under is on the title screen now)
+const PLAQUE_W := 250.0
+const PLAQUE_H := 84.0         # (760 x 255 art: tools/home_camp.py; 0.31.139-0.31.193 a plaque with a crown and swords)
+const PLAQUE_FACE := Rect2(0.13, 0.18, 0.74, 0.7)    # the enamel face, as fractions of the plaque
+const FW_H := 26.0             # the FIRST WIN tab under PLAY ...
+const FW_HANG := 14.0          # ... hanging this far below the plaque
+const PLAY_GAP := 6.0          # between PLAY (its tab) and the chests
+const PLAY_MIN := 260.0        # (on a short screen PLAY goes no higher: Home scrolls a little instead)
+const CHEST_H := 104.0         # a chest's panel: its name, the chest in 3D, its button
+const CHEST_FILL := [Color("#3b2717"), Color("#140b05")]     # the panels' dark wood (top, bottom)
 
 static func discord_press(app) -> void:
 	# 0.31.124/125: Settings' and Home's JOIN OUR DISCORD -- open the invite; the first time, the gift (once per account)
@@ -110,14 +106,26 @@ static func discord_press(app) -> void:
 		app.rebuild()                                # (Home's button goes; Settings' loses its +100)
 
 static func home_layout(h: float) -> Dictionary:
-	# 0.31.139: the chests on the bottom edge, the PLAY plaque just over them (home_scene.gd stands the war table behind
-	# it); on a short screen PLAY goes no higher than PLAY_MIN and Home scrolls a little
+	# the chests on the bottom edge, PLAY (and its tab) just over them; on a short screen PLAY goes no higher than
+	# PLAY_MIN and Home scrolls a little
 	var chest_y := h - CHEST_H - 4.0
-	var play := chest_y - CHEST_ART - 2.0 - PLAQUE_H
+	var play := chest_y - PLAY_GAP - FW_HANG - PLAQUE_H
 	if play < PLAY_MIN:
 		play = PLAY_MIN
-		chest_y = play + PLAQUE_H + 2.0 + CHEST_ART
+		chest_y = play + PLAQUE_H + FW_HANG + PLAY_GAP
 	return {"play": play, "chests": chest_y, "needed": chest_y + CHEST_H + 4.0}
+
+static func menu_counts(app) -> Dictionary:
+	# 0.31.194: what's waiting in the top bar's menu -- the orders ready to claim (the daily login reward counts: 0.31.119)
+	# and the quest steps ready (0.31.97); whether the tutorial's been played
+	var p = app.profile
+	var d: Dictionary = p.d
+	var orders := 1 if p.login_ready() else 0
+	for span in ["daily", "weekly"]:
+		for ch in (d.challenges.daily if span == "daily" else d.challenges.weekly):
+			if not bool(ch.claimed) and Eco.CHALLENGES.has(str(ch.id)) and int(ch.progress) >= int(Eco.CHALLENGES[ch.id].goal):
+				orders += 1
+	return {"orders": orders, "quests": int(p.quests_ready()), "tutorial_done": bool(d.get("tutorial_done", false))}
 
 static func home(app, root: VBoxContainer) -> void:
 	var p = app.profile
@@ -141,100 +149,12 @@ static func home(app, root: VBoxContainer) -> void:
 		app.toast("Skins have been retired -- refunded %s" % ", ".join([("%d gold" % int(rn.gold)) if int(rn.gold) > 0 else "", ("%d gems" % int(rn.gems)) if int(rn.gems) > 0 else ""].filter(func(x): return x != "")), UI.GOLD)
 		d.erase("refund_note")
 		p.save()
-	# --- side medallions
-	var claimable := 0
-	for t in range(1, p.pass_tier() + 1):
-		for prem in [false, true]:
-			if p.can_claim(t, prem):
-				claimable += 1
-	var orders_ready := 1 if p.login_ready() else 0          # 0.31.119: the daily login reward is in ORDERS too
-	for span in ["daily", "weekly"]:
-		for ch in (d.challenges.daily if span == "daily" else d.challenges.weekly):
-			if not bool(ch.claimed) and Eco.CHALLENGES.has(str(ch.id)) and int(ch.progress) >= int(Eco.CHALLENGES[ch.id].goal):
-				orders_ready += 1
-	var sp := _medallion(top, Vector2(-2, MED_Y[0]), "banner", "PASS", func():
-		app.sfx("tab")
-		app.show_tab("pass"), "side_pass", claimable)
-	# 0.31.97: the class quests, under ORDERS (a badge for every quest step ready to claim)
-	var qready: int = p.quests_ready()
-	var qb := _medallion(top, Vector2(-2, MED_Y[2]), quest_icon_name(), "QUESTS", func():
-		app.sfx("tab")
-		app.quest_cls = quest_first(p)
-		app.show_tab("quests"), "side_quests", qready)
-	if qready > 0:
-		UI2.wiggle(qb.get_meta("icon"))
-	if claimable > 0:
-		UI2.wiggle(sp.get_meta("icon"))
-	var ob := _medallion(top, Vector2(-2, MED_Y[1]), "scroll", "ORDERS", func():
-		app.sfx("menuOpen")
-		app.open_orders(), "side_orders", orders_ready)
-	if orders_ready > 0:
-		UI2.wiggle(ob.get_meta("icon"))
-	# (0.31.93-0.31.187: the FORGE stood under RANKS -- gone with the weapons, 0.31.188; the tutorial moved up to its place.
-	# 0.31.111-0.31.138: SOCIAL stood under the Forge; 0.31.139 it's the ALLIANCE tab.)
 	var soc = app.get("social")
-	# 0.31.164 (Kevin: "5v5 only"): no TUTORIAL (Siege's walkthrough), no 5V5 TEST (PLAY is the 5v5 now) and no RANKS
-	# (the weekly leaderboard counts online matches -- none until the 5v5 is online). 0.31.170: the online 5v5 -- RANKS
-	# back at the top right (the week's leaderboard), the Forge under it again
 	var fw_open := str(d.first_win_day) != Eco.day_key(p.now())
-	var rkb := _medallion(top, Vector2(w - 62, MED_Y[0]), "trophy", "RANKS", func():
-		app.sfx("menuOpen")
-		app.open_leaderboard(), "side_ranks", 0, "silver")
-	UI2.bob(rkb.get_meta("icon"), 3.0, 1.6)
-	# 0.31.181 (Kevin: "create a tutorial walking player through the basics of a match"): the 5v5 tutorial under the
-	# Forge -- with its gold as a tag (and a glow) until that's been paid (Siege's tutorial, played before 0.31.164, paid it)
-	var tdone := bool(d.get("tutorial_done", false))
-	var tb := _medallion(top, Vector2(w - 62, MED_Y[1]), "horn", "TUTORIAL", func():
-		app.sfx("confirm")
-		app.start_tutorial(), "tutorial_start", 0, "silver" if tdone else "gold")
-	if not tdone:
-		UI2.glow(tb, Rect2(-14, -14, 94, 94), Color(1.0, 0.85, 0.4, 0.5))
-		UI2.wiggle(tb.get_meta("icon"), 1.6)
-		var gold_tag := _tag(tb, "+%d" % app.TUTORIAL_GOLD, 12)
-		gold_tag.name = "TutorialGold"
-		gold_tag.position = Vector2(-30, 20)               # (on its left: over its top it covered the FORGE label)
-		gold_tag.rotation = deg_to_rad(-8.0)
-	# 0.31.125 (Kevin: "Put a discord button on front page that goes away after they claim it then leave the other discord
-	# button in settings"): under the logo between the medallion columns, with its gift as a tag, until it's claimed
-	if not bool(d.get("discord", false)):
-		var dw := minf(210.0, w - 150.0)
-		var db := UI2.button(top, "JOIN OUR DISCORD", "discord", func(): discord_press(app), "home_discord", 14, 40.0, 20.0)
-		db.name = "HomeDiscord"
-		db.position = Vector2((w - dw) * 0.5, DISCORD_Y)
-		db.size = Vector2(dw, 40)
-		UI2.bob(db, 2.0, 1.8)
-		var gt := PanelContainer.new()
-		gt.name = "DiscordGift"
-		var gs := StyleBoxFlat.new()
-		gs.bg_color = Color("#ffc94d")
-		gs.border_color = Color("#3a1c02")
-		gs.set_border_width_all(2)
-		gs.set_corner_radius_all(10)
-		gs.content_margin_left = 6
-		gs.content_margin_right = 8
-		gs.shadow_color = Color(0, 0, 0, 0.35)
-		gs.shadow_size = 4
-		gt.add_theme_stylebox_override("panel", gs)
-		gt.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		db.add_child(gt)
-		var gr := HBoxContainer.new()
-		gr.add_theme_constant_override("separation", 3)
-		gr.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		gt.add_child(gr)
-		UI2.img(gr, "res://assets/ui/currency/gem.png", 16.0).size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		var gl := Label.new()                          # (a plain Label: a wrapping one sizes the tag a letter wide)
-		gl.text = "+%d" % Eco.DISCORD_GEMS
-		gl.add_theme_font_override("font", UI.HEAVY_FONT)
-		gl.add_theme_font_size_override("font_size", 12)
-		gl.add_theme_color_override("font_color", Color("#3a1c02"))
-		gl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		gr.add_child(gl)
-		gt.reset_size()
-		gt.position = Vector2(dw - gt.get_combined_minimum_size().x + 10.0, -12.0)
-	# --- the line at the top, between the medallion columns: your party, or the players online. (0.31.135-0.31.144: a
-	# clan member's CROWN WAR · HOUSE X stood here instead; 0.31.145 PLAY opens the war map, so it's the players online
-	# for everyone -- Kevin, 0.31.140: "make sure it shows players currently online".)
-	var sw := w - 2.0 * 70.0
+	# --- the top row: the 5v5 pill (or your party) on the left, JOIN OUR DISCORD on the right until it's claimed
+	# (0.31.125, Kevin: "Put a discord button on front page that goes away after they claim it")
+	var discord := not bool(d.get("discord", false))
+	var left_w := w - (DISCORD_W + 8.0 if discord else 0.0)
 	if soc != null and soc.online() and soc.in_party():
 		# in a party: who's in it (the leader first, with a crown)
 		var names := []
@@ -242,17 +162,19 @@ static func home(app, root: VBoxContainer) -> void:
 			names.append(("♛ " if str(m.pid) == str(soc.party.leader) else "") + str(m.n))
 		var pb := UI2.button(top, "PARTY %d/%d  ·  %s" % [soc.party_size(), int(soc.party.get("max", 4)), "  ·  ".join(names)], "green", func():
 			app.sfx("menuOpen")
-			app.open_friends(), "party_pill", 12, 34.0, 17.0)
-		pb.position = Vector2((w - sw) * 0.5, STATUS_Y)
-		pb.size = Vector2(sw, 34)
+			app.open_friends(), "party_pill", 12, ROW_H, 17.0)
+		pb.position = Vector2(0, ROW_Y)
+		pb.size = Vector2(left_w, ROW_H)
 		pb.clip_text = true
 		app.online_refs = {}
 	else:
-		_online_pill(app, top, w, STATUS_Y)
-	# --- PLAY: always the Siege server (0.31.79); the bots fill any empty slots. 0.31.139: the plaque over the chests.
+		_online_pill(app, top, Rect2(0, ROW_Y, left_w, ROW_H), not discord)
+	if discord:
+		_discord_button(app, top, Rect2(w - DISCORD_W, ROW_Y, DISCORD_W, ROW_H))
+	# --- PLAY: always the Siege server (0.31.79); the bots fill any empty slots. 0.31.145: it opens the 5v5's heroes.
 	var py: float = lay.play
 	var px := (w - PLAQUE_W) * 0.5
-	UI2.glow(top, Rect2(px - 40, py - 10, PLAQUE_W + 80, PLAQUE_H + 26), Color(1.0, 0.55, 0.15, 0.5))
+	UI2.glow(top, Rect2(px - 34, py - 12, PLAQUE_W + 68, PLAQUE_H + 30), Color(1.0, 0.55, 0.15, 0.5))
 	var play := Button.new()
 	play.flat = true
 	play.focus_mode = Control.FOCUS_NONE
@@ -261,7 +183,7 @@ static func home(app, root: VBoxContainer) -> void:
 	play.position = Vector2(px, py)
 	play.size = Vector2(PLAQUE_W, PLAQUE_H)
 	play.set_meta("action_key", "play")
-	play.pressed.connect(func(): app.play())          # 0.31.145: the war map (siege_app.play), or straight into a match
+	play.pressed.connect(func(): app.play())
 	top.add_child(play)
 	var art := TextureRect.new()
 	art.name = "Plaque"
@@ -272,36 +194,98 @@ static func home(app, root: VBoxContainer) -> void:
 	art.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	art.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	play.add_child(art)
-	if art.texture == null:                         # (without the ui pack's art: the old orange button's colours)
+	if art.texture == null:                         # (without the ui pack's art: an orange button's colours)
 		UI2.plate(art, "orange", 18.0, "gold")
 	var word := "PLAY"                            # (0.31.164-169: the 5v5 offline, no party count)
 	if soc != null and soc.online() and soc.in_party() and soc.is_leader() and soc.party_size() > 1:
 		word = "PLAY ×%d" % soc.party_size()       # 0.31.170: the online 5v5 -- the party goes in together
 	var face := Rect2(PLAQUE_FACE.position * play.size, PLAQUE_FACE.size * play.size)
-	var pl := UI2.text(play, word, 40 if word.length() <= 5 else 32, Color.WHITE, Color("#6a1a04"), 10)
+	var pl := UI2.text(play, word, 42 if word.length() <= 5 else 34, Color.WHITE, Color("#6a1a04"), 11)
 	pl.name = "PlayWord"
 	pl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	pl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	pl.position = face.position + Vector2(0, -3)
+	pl.position = face.position + Vector2(0, 1)
 	pl.size = face.size
 	pl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	UI2.sweep(play, 3.4, 60.0, 0.4)
 	UI2.pulse(play, 0.022, 1.1)
 	if fw_open:
-		# 0.31.119: the first win of the day, as a tag on PLAY's corner (it was the FIRST WIN medallion)
-		var tag := _tag(top, "FIRST WIN +%d" % Eco.FIRST_WIN.gold, 12)
-		tag.name = "FirstWinTag"
-		tag.position = Vector2(px + PLAQUE_W - tag.size.x + 10.0, py + 6.0)
-		tag.rotation = deg_to_rad(5.0)
-		UI2.bob(tag, 2.0, 1.4)
+		# 0.31.119: the first win of the day (it was the FIRST WIN medallion); 0.31.194 a dark tab hanging under PLAY
+		var tag := _first_win_tab(top)
+		tag.position = Vector2((w - tag.size.x) * 0.5, py + PLAQUE_H + FW_HANG - FW_H)
 	# --- chests, on the bottom edge
 	chests_row(app, top, w, float(lay.chests))
 	if bool(app.get("safe_boot")) and not bool(app.get_meta("safe_note", false)):
-		# 0.31.70: the last start never reached the menu, so this one skipped the live hero and the background loading
+		# 0.31.70: the last start never reached the menu, so this one skipped the background loading
 		app.set_meta("safe_note", true)
 		app.toast("The game got stuck starting last time -- please tap Settings > SEND TO DEVELOPER", UI.GOLD)
 
+static func _first_win_tab(parent: Control) -> Control:
+	# 0.31.194: FIRST WIN +150 and a coin, white and gold on a dark tab with a gold rim (B2's)
+	var tab := Control.new()
+	tab.name = "FirstWinTag"
+	tab.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(tab)
+	var r := HBoxContainer.new()
+	r.add_theme_constant_override("separation", 5)
+	r.alignment = BoxContainer.ALIGNMENT_CENTER
+	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tab.add_child(r)
+	var a := UI2.text(r, "FIRST WIN", 13, Color.WHITE, UI2.INK, 4)
+	a.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var b := UI2.text(r, "+%d" % int(Eco.FIRST_WIN.gold), 14, UI2.GOLD, UI2.INK, 4)
+	b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	UI2.img(r, "res://assets/ui/currency/coin.png", 18.0).size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var tw := (UI2.LG as Font).get_string_size("FIRST WIN", HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x \
+		+ (UI2.LG as Font).get_string_size("+%d" % int(Eco.FIRST_WIN.gold), HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x + 18.0 + 10.0 + 30.0
+	tab.size = Vector2(tw, FW_H)
+	r.position = Vector2.ZERO
+	r.size = tab.size
+	UI2.plate(tab, "night", 11.0, "gold", {"fill_top": Color("#3a2414"), "fill_bottom": Color("#160c05"), "rim": 2.0,
+		"shadow_y": 3.0})
+	UI2.bob(tab, 1.5, 1.4)
+	return tab
+
+static func _discord_button(app, top: Control, at: Rect2) -> void:
+	# 0.31.125: JOIN OUR DISCORD, its gift as a tag on its corner, until it's claimed (0.31.194: on the top row's right,
+	# two lines, as B2 has it)
+	var db := UI2.button(top, "JOIN OUR\nDISCORD", "discord", func(): discord_press(app), "home_discord", 12, at.size.y, 14.0)
+	db.name = "HomeDiscord"
+	db.position = at.position
+	db.size = at.size
+	db.add_theme_constant_override("line_spacing", -4)
+	UI2.bob(db, 2.0, 1.8)
+	var gt := PanelContainer.new()
+	gt.name = "DiscordGift"
+	var gs := StyleBoxFlat.new()
+	gs.bg_color = Color("#ffc94d")
+	gs.border_color = Color("#3a1c02")
+	gs.set_border_width_all(2)
+	gs.set_corner_radius_all(10)
+	gs.content_margin_left = 6
+	gs.content_margin_right = 8
+	gs.shadow_color = Color(0, 0, 0, 0.35)
+	gs.shadow_size = 4
+	gt.add_theme_stylebox_override("panel", gs)
+	gt.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	db.add_child(gt)
+	var gr := HBoxContainer.new()
+	gr.add_theme_constant_override("separation", 3)
+	gr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	gt.add_child(gr)
+	UI2.img(gr, "res://assets/ui/currency/gem.png", 16.0).size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var gl := Label.new()                          # (a plain Label: a wrapping one sizes the tag a letter wide)
+	gl.text = "+%d" % Eco.DISCORD_GEMS
+	gl.add_theme_font_override("font", UI.HEAVY_FONT)
+	gl.add_theme_font_size_override("font_size", 12)
+	gl.add_theme_color_override("font_color", Color("#3a1c02"))
+	gl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	gr.add_child(gl)
+	gt.reset_size()
+	gt.position = Vector2(at.size.x - gt.get_combined_minimum_size().x + 8.0, at.size.y - 12.0)
+
 static func _tag(parent: Control, text: String, font := 12) -> PanelContainer:
-	# a gold tag with dark text (FIRST WIN on PLAY, the tutorial's gold)
+	# a gold tag with dark text (the tutorial's gold in the menu)
 	var tag := PanelContainer.new()
 	var ts := StyleBoxFlat.new()
 	ts.bg_color = Color("#ffc94d")
@@ -331,96 +315,68 @@ static func _tag(parent: Control, text: String, font := 12) -> PanelContainer:
 	tag.size = tag.custom_minimum_size
 	return tag
 
-static func _online_pill(app, top: Control, w: float, y: float) -> void:
-	# --- players online (0.31.82, Kevin: "Add a players online in main menu"): a pill under PLAY, painted by
-	# app.paint_online() from the server's status answer (the plain server line until one comes)
-	var hc := CenterContainer.new()
-	hc.position = Vector2(0, y)
-	hc.size = Vector2(w, 30)
-	hc.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	top.add_child(hc)
-	var pill := PanelContainer.new()
-	var ps := StyleBoxFlat.new()
-	ps.bg_color = Color(0.02, 0.05, 0.12, 0.72)
-	ps.border_color = Color(0.37, 0.86, 0.53, 0.55)
-	ps.set_border_width_all(2)
-	ps.set_corner_radius_all(15)
-	ps.content_margin_left = 12
-	ps.content_margin_right = 14
-	ps.content_margin_top = 2
-	ps.content_margin_bottom = 3
-	pill.add_theme_stylebox_override("panel", ps)
+static func _online_pill(app, top: Control, at: Rect2, centred: bool) -> void:
+	# --- players online (0.31.82, Kevin: "Add a players online in main menu"), painted by app.paint_online() from the
+	# server's status answer (FATEBOUND / 5 vs 5 until one comes). 0.31.194: B2's green pill with a gold rim -- crossed
+	# swords, the line and the live dot -- on the top row's left (in the middle once JOIN OUR DISCORD has gone)
+	var pill := Control.new()
+	pill.name = "OnlinePill"
 	pill.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hc.add_child(pill)
-	var hint := HBoxContainer.new()
-	hint.add_theme_constant_override("separation", 7)
-	hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	pill.add_child(hint)
-	var dot := Panel.new()
+	top.add_child(pill)
+	var r := HBoxContainer.new()
+	r.add_theme_constant_override("separation", 7)
+	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	pill.add_child(r)
+	var sw := UI2.icon(r, "swords", 28.0)
+	sw.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", -3)
+	col.alignment = BoxContainer.ALIGNMENT_CENTER
+	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	r.add_child(col)
+	var om := UI2.text(col, "FATEBOUND", 14, Color.WHITE, Color("#0b2a14"), 5)
+	om.clip_text = true
+	var osub := UI2.text(col, "5 vs 5", 11, Color("#d9ffcf"), Color("#0b2a14"), 4)
+	var dot := Panel.new()                                # the live dot breathes
 	var ds := StyleBoxFlat.new()
-	ds.bg_color = Color("#5fdc86")
+	ds.bg_color = Color("#b9ff7a")
 	ds.set_corner_radius_all(4)
-	ds.shadow_color = Color(0.37, 0.86, 0.53, 0.7)
+	ds.shadow_color = Color(0.7, 1.0, 0.4, 0.7)
 	ds.shadow_size = 4
 	dot.add_theme_stylebox_override("panel", ds)
 	dot.custom_minimum_size = Vector2(8, 8)
 	dot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hint.add_child(dot)
-	UI2.when_ready(dot, func():                           # the live dot breathes
+	r.add_child(dot)
+	UI2.when_ready(dot, func():
 		var tw := dot.create_tween().set_loops()
 		tw.tween_property(dot, "modulate:a", 0.3, 0.8).set_trans(Tween.TRANS_SINE)
 		tw.tween_property(dot, "modulate:a", 1.0, 0.8).set_trans(Tween.TRANS_SINE))
-	var om := UI2.text(hint, "FATEBOUND", 13, Color("#8cf0a8"), Color("#0b2a14"), 5)
-	om.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	var osub := UI2.body(hint, "5 vs 5", 11, Color("#c2cdea"), false)     # (0.31.139: at the top, shorter; 0.31.164: the 5v5)
-	osub.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	# (as wide as its longest line can be -- "12 PLAYERS ONLINE" -- up to the room there is)
+	var tw := (UI2.LG as Font).get_string_size("123 PLAYERS ONLINE", HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x + 10.0 + 28.0 + 8.0 + 14.0 + 20.0
+	var pw := minf(at.size.x, tw)
+	pill.size = Vector2(pw, at.size.y)
+	pill.position = Vector2(at.position.x + ((at.size.x - pw) * 0.5 if centred else 0.0), at.position.y)
+	r.position = Vector2(10, 0)
+	r.size = Vector2(pw - 20, at.size.y)
+	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	UI2.plate(pill, "green", at.size.y * 0.5, "gold", {"rim": 2.5, "shadow_y": 3.0})
 	app.online_refs = {"main": om, "sub": osub}
 	if app.has_method("paint_online"):
 		app.paint_online()
 
-static func _medallion(parent: Control, at: Vector2, icon: String, label: String, on_press: Callable, key: String, badge := 0, rim := "gold") -> Button:
-	# A round gold-rimmed medallion with a 3D icon in it and a label under it (Home's side buttons).
-	var b := Button.new()
-	b.flat = true
-	b.focus_mode = Control.FOCUS_NONE
-	for st_name in ["normal", "hover", "pressed", "focus"]:
-		b.add_theme_stylebox_override(st_name, StyleBoxEmpty.new())
-	b.position = at
-	b.size = Vector2(66, 88)
-	b.set_meta("action_key", key)
-	b.pressed.connect(on_press)
-	parent.add_child(b)
-	var disc := Control.new()
-	disc.position = Vector2(2, 0)
-	disc.size = Vector2(62, 62)
-	disc.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	b.add_child(disc)
-	UI2.plate(disc, "royal", 31.0, rim, {"rim": 3.0, "shadow_y": 5.0})
-	if badge > 0 and rim == "gold":
-		UI2.glow(b, Rect2(-14, -14, 94, 94), Color(1.0, 0.85, 0.4, 0.5))
-	var ic := UI2.icon(b, icon, 52.0)
-	ic.position = Vector2(7, 3)
-	ic.pivot_offset = Vector2(26, 26)
-	b.set_meta("icon", ic)
-	var l := UI2.text(b, label, 12, Color.WHITE, UI2.INK, 4)
-	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	l.position = Vector2(-12, 62)
-	l.size = Vector2(90, 18)
-	if badge > 0:
-		UI2.badge(disc, str(badge), Vector2(6, -6))
-	return b
-
-# ---------- chests (0.31.37; 0.31.79 in 3D) ----------
+# ---------- chests (0.31.37; 0.31.79 in 3D; 0.31.194 on B2's panels) ----------
 static func chests_row(app, parent: Control, w: float, y: float) -> void:
+	# each slot a dark wood panel: the chest's name on top, the chest in 3D in the middle (all four in one view, over the
+	# panels), and under it what you can do -- OPEN, the time left and SKIP for gems, UNLOCK, or how long it'll take once
+	# it's its turn (QUEUED); an empty one shows a dim chest to come
 	var p = app.profile
 	var busy: Dictionary = p.unlocking()
 	var gap := 8.0
 	var sw := (w - gap * 3.0) / 4.0
 	var sh := CHEST_H
 	var slots := []
-	var cells := []
-	for i in Eco.CHEST_SLOTS:                           # the slot plates (under the chests)
+	for i in Eco.CHEST_SLOTS:                           # the panels (under the chests)
 		var x := i * (sw + gap)
 		var plate := Control.new()
 		plate.position = Vector2(x, y)
@@ -428,32 +384,29 @@ static func chests_row(app, parent: Control, w: float, y: float) -> void:
 		plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		parent.add_child(plate)
 		if i >= p.chests().size():
-			# 0.31.117 (Kevin: "The screen space under the play button is very empty looking"): see-through, over the
-			# painted treasure hall, with a dim chest waiting in it
-			UI2.plate(plate, "glass", 14.0, "gold", {"fill_top": Color(0.03, 0.05, 0.16, 0.42), "fill_bottom": Color(0.02, 0.03, 0.1, 0.62),
-				"outline_color": Color(1.0, 0.84, 0.35, 0.55)})
+			UI2.plate(plate, "glass", 12.0, "brown", {"fill_top": Color(CHEST_FILL[0], 0.55), "fill_bottom": Color(CHEST_FILL[1], 0.7),
+				"outline_color": Color(0.85, 0.62, 0.32, 0.5)})
 			continue
 		var ch: Dictionary = p.chests()[i]
 		var k := str(ch.kind)
 		var ready: bool = p.chest_ready(ch)
-		var rim: String = {"wooden": "brown", "silver": "silver", "gold": "gold", "royal": "purple"}.get(k, "gold")
 		if ready:
-			UI2.glow(plate, Rect2(-14, -40, sw + 28, sh + 40), Color(0.55, 1.0, 0.6, 0.55))
-		UI2.plate(plate, "green" if ready else "night", 14.0, rim)
+			UI2.glow(plate, Rect2(-14, -14, sw + 28, sh + 28), Color(0.55, 1.0, 0.6, 0.5))
+		UI2.plate(plate, "night", 12.0, "green" if ready else "brown", {"fill_top": CHEST_FILL[0], "fill_bottom": CHEST_FILL[1]})
 		slots.append({"kind": k, "mode": "tease" if ready else "idle", "x": x + sw * 0.5})
 	var row := ChestRow.new()                           # the chests themselves, in 3D
 	row.slots = slots
-	row.position = Vector2(0, y - 46)
-	row.size = Vector2(w, 110)
-	row.chest_px = minf(80.0, sw - 6.0)
-	row.base_y = 0.66
+	row.position = Vector2(0, y + 12.0)
+	row.size = Vector2(w, 66.0)
+	row.chest_px = minf(66.0, sw - 12.0)
+	row.base_y = 0.9
 	parent.add_child(row)
 	var waiting: int = p.chests_waiting()
 	if waiting > 0:                                     # 0.31.108: reward chests waiting for a free slot (over the row)
 		var wc := UI2.chip(parent, "+%d WAITING" % waiting, Color(0.03, 0.02, 0.1, 0.92), UI2.GOLD, Color(UI2.GOLD, 0.8))
-		wc.position = Vector2(w - 108, y - 40)
+		wc.position = Vector2(w - 108, y - 26)
 		wc.set_meta("action_key", "chests_waiting")
-	for i in Eco.CHEST_SLOTS:                           # and what's on each slot (over the chests)
+	for i in Eco.CHEST_SLOTS:                           # and what's on each panel (over the chests)
 		var x := i * (sw + gap)
 		var cell := Control.new()
 		cell.position = Vector2(x, y)
@@ -461,14 +414,14 @@ static func chests_row(app, parent: Control, w: float, y: float) -> void:
 		cell.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		parent.add_child(cell)
 		if i >= p.chests().size():
-			var ghost := UI2.img(cell, UI2.V2 + "chests/wood_icon.png", 52.0)
-			ghost.position = Vector2((sw - 52.0) * 0.5, 6.0)
-			ghost.modulate = Color(0.72, 0.78, 1.0, 0.6)           # (a dim, cool silhouette of the chest to come)
+			var ghost := UI2.img(cell, UI2.V2 + "chests/wood_icon.png", 48.0)
+			ghost.position = Vector2((sw - 48.0) * 0.5, 20.0)
+			ghost.modulate = Color(0.85, 0.75, 0.62, 0.45)           # (a dim silhouette of the chest to come)
 			ghost.set_meta("empty_slot", true)
 			var first_empty: bool = i == p.chests().size()
-			var e := UI2.text(cell, "WIN TO EARN" if first_empty else "EMPTY", 11, Color(0.86, 0.9, 1.0, 0.8) if first_empty else Color(0.7, 0.76, 0.95, 0.55), Color("#0b1230"), 3)
+			var e := UI2.text(cell, "WIN TO EARN" if first_empty else "EMPTY", 11, Color(1.0, 0.93, 0.8, 0.85) if first_empty else Color(0.9, 0.82, 0.7, 0.55), UI2.INK, 3)
 			e.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			e.position = Vector2(0, sh - 24)
+			e.position = Vector2(0, sh - 26)
 			e.size = Vector2(sw, 16)
 			e.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			continue
@@ -476,20 +429,21 @@ static func chests_row(app, parent: Control, w: float, y: float) -> void:
 		var k := str(ch.kind)
 		var ready: bool = p.chest_ready(ch)
 		var idx := i
+		_chest_name(cell, k, sw, Color("#c9ffb8") if ready else UI2.CREAM)
 		if ready:
 			var ob := UI2.button(cell, "OPEN", "green", func(): open_chest(app, idx), "chest_open_%d" % i, 15, 28.0, 9.0)
-			ob.position = Vector2(8, sh - 36)
-			ob.size = Vector2(sw - 16, 28)
+			ob.position = Vector2(6, sh - 33)
+			ob.size = Vector2(sw - 12, 28)
 			UI2.sweep(ob, 2.2, 30.0, 0.6)
 		elif int(ch.start) >= 0:
 			_slot_tag(cell, UI.duration(p.chest_left(ch)), UI2.GOLD)
 			var frac := 1.0 - float(p.chest_left(ch)) / float(Eco.CHESTS[k].unlock)
-			var pb := UI2.bar(cell, frac, 1.0, Color("#fff1a6"), Color("#f0a024"), 7.0)
-			pb.position = Vector2(10, sh - 46)
-			pb.size = Vector2(sw - 20, 7)
+			var pb := UI2.bar(cell, frac, 1.0, Color("#fff1a6"), Color("#f0a024"), 6.0)
+			pb.position = Vector2(8, sh - 40)
+			pb.size = Vector2(sw - 16, 6)
 			var sb := UI2.button(cell, "%d" % Eco.skip_cost(p.chest_left(ch)), "purple", func(): skip_chest(app, idx), "chest_skip_%d" % i, 14, 28.0, 9.0, "res://assets/ui/currency/gem.png")
-			sb.position = Vector2(8, sh - 36)
-			sb.size = Vector2(sw - 16, 28)
+			sb.position = Vector2(6, sh - 33)
+			sb.size = Vector2(sw - 12, 28)
 		elif busy.is_empty():
 			_slot_tag(cell, UI.duration(p.chest_left(ch)), Color.WHITE)
 			var ub := UI2.button(cell, "UNLOCK", "blue", func():
@@ -498,33 +452,56 @@ static func chests_row(app, parent: Control, w: float, y: float) -> void:
 				app.rebuild()
 				if app.has_method("chest_started"):
 					app.chest_started(), "chest_unlock_%d" % i, 13, 28.0, 9.0)
-			ub.position = Vector2(8, sh - 36)
-			ub.size = Vector2(sw - 16, 28)
+			ub.position = Vector2(6, sh - 33)
+			ub.size = Vector2(sw - 12, 28)
 		else:
-			_slot_tag(cell, "QUEUED", UI2.MUTED)
+			# waiting its turn: how long it'll take, under a dark QUEUED pill (B2's); tapping it opens it now for gems
+			var q := PanelContainer.new()
+			var qs := StyleBoxFlat.new()
+			qs.bg_color = Color(0.0, 0.0, 0.0, 0.45)
+			qs.border_color = Color(0.85, 0.62, 0.32, 0.45)
+			qs.set_border_width_all(1)
+			qs.set_corner_radius_all(9)
+			q.add_theme_stylebox_override("panel", qs)
+			q.position = Vector2(6, sh - 33)
+			q.size = Vector2(sw - 12, 28)
+			q.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			cell.add_child(q)
 			var tr := HBoxContainer.new()
 			tr.alignment = BoxContainer.ALIGNMENT_CENTER
 			tr.add_theme_constant_override("separation", 3)
-			tr.position = Vector2(0, sh - 34)
-			tr.size = Vector2(sw, 24)
 			tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			cell.add_child(tr)
-			UI2.icon(tr, "hourglass", 20.0)
-			UI2.text(tr, UI.duration(p.chest_left(ch)), 15, Color.WHITE, Color("#0e1433"), 4)
+			q.add_child(tr)
+			UI2.icon(tr, "hourglass", 18.0)
+			UI2.text(tr, UI.duration(p.chest_left(ch)), 14, Color.WHITE, Color("#1a0d04"), 4)
+			_slot_tag(cell, "QUEUED", UI2.MUTED)
 			var skip := UI2.button(cell, "", "ghost", func(): skip_chest(app, idx), "chest_skip_%d" % i, 10, 20.0, 8.0)
-			skip.position = Vector2(4, 4)
-			skip.size = Vector2(sw - 8, sh - 40)
-			skip.self_modulate = Color(1, 1, 1, 0)
+			skip.position = Vector2(4, 18)
+			skip.size = Vector2(sw - 8, sh - 22)
+			skip.modulate = Color(1, 1, 1, 0)            # (unseen: its skin too -- self_modulate left that over the chest)
+
+static func _chest_name(cell: Control, kind: String, sw: float, col: Color) -> void:
+	# the chest's name along the top of its panel ("SILVER CHEST"; just "SILVER" where the whole name won't fit)
+	var n := str(Eco.CHESTS[kind].name).to_upper()
+	if (UI2.LG as Font).get_string_size(n, HORIZONTAL_ALIGNMENT_LEFT, -1, 10).x > sw - 8.0:
+		n = n.get_slice(" ", 0)
+	var l := UI2.text(cell, n, 10, col, UI2.INK, 3)
+	l.name = "ChestName"
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.position = Vector2(0, 4)
+	l.size = Vector2(sw, 14)
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 static func _slot_tag(cell: Control, s: String, col: Color) -> void:
-	var c := UI2.chip(cell, s, Color(0.01, 0.02, 0.08, 0.88), col, Color(col, 0.7))
-	c.anchor_left = 1.0
-	c.anchor_right = 1.0
-	c.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-	c.offset_right = -4
-	c.offset_left = -60
-	c.offset_top = 4
-	c.offset_bottom = 20
+	# the time on a chest (or QUEUED), a chip over the chest's foot
+	var c := UI2.chip(cell, s, Color(0.01, 0.02, 0.08, 0.85), col, Color(col, 0.7))
+	c.anchor_left = 0.5
+	c.anchor_right = 0.5
+	c.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	c.offset_left = -30
+	c.offset_right = 30
+	c.offset_top = 46
+	c.offset_bottom = 62
 
 static func skip_chest(app, idx: int) -> void:
 	var r: Dictionary = app.profile.skip_chest(idx)

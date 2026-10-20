@@ -6136,3 +6136,43 @@ blow around and the lighting effect in middle show effects".
 - Verified: suite 97 of 98 (idle_test, above), COLD_START_PASS; the Play-shape AAB check ran out of disk the first time
   (old scratch and packs cleared) and passed on its own: exit 0, bundletool valid, BASE OK (278 files), presets
   unchanged. Preview APK: build/Fatebound-Siege-0.31.193-fatebound.apk (32 MB, preview key), sha256 421085a0...92f0a7f0ee725f1a.
+
+## 0.31.194 — a new Home: the champions' camp
+Kevin: "Now let's design a new home screen". Asked: the directions (all four: Champion spotlight, Champions' camp,
+Cleaner war room, Throne / keep gate) and what stays (the chest slots, the chat bar, the Discord / server pill; the
+side buttons go). 16 concepts (ElevenLabs gpt-image-2 2K, flow "Fatebound home 0.31.194", 4 each, ~3,610 credits;
+today's Home and the six champions as references: art_sources/home_redesign/). Kevin picked B2, the champions' camp
+(art_sources/home_redesign/concept_b2_camp.jpg), and for the side buttons "Menu button".
+- The art (~2,800 credits): B2 with its UI painted out and the ground carried down to the bottom (gpt-image-2.5-sunburst,
+  B2 as the reference; 4 takes, the first: art_sources/home_camp/camp.png) and a blank PLAY plaque in its style on green
+  (gpt-image-2; art_sources/home_camp/play_plaque_green.png). tools/home_camp.py writes assets/ui/v2/bg_camp.webp and
+  assets/ui/v2/play_plaque.webp (keyed, 760 x 255; tools/build_title_art.py no longer writes the old crowned plaque).
+- scripts/app/camp_scene.gd (Home's backdrop; home_scene.gd, war_room.gd, their shaders, home_war_room.py and
+  home_scene_shot.gd gone -- the 3D war table and heroes with them): the painting as wide as the screen, standing so the
+  champions' feet are just over PLAY, brought to life -- the campfire's tongues of flame swaying and flickering over the
+  painted ones, a hot heart and a breathing glow, embers spiralling up, a thin smoke, and its light flickering over the
+  champions and the stones (scripts/app/camp.gdshader); the lanterns, the gate's torches and the candles flickering and
+  each throwing a little light; the Necromancer's eyes and skull glowing green and breathing, wisps curling off them;
+  the Mage's orb pulsing blue, sparkles rising off his book; the castle's windows glowing (now and then one dims);
+  stars twinkling and now and then one falling; fireflies wandering; the two big banners rippling and the towers'
+  pennants fluttering (the shader). Reduce Motion: all still; a safe start: no particles. tools/camp_shot.gd shoots it.
+- Home (screens.gd): the top row -- the 5v5 pill (B2's green and gold, crossed swords, the players online) on the left,
+  JOIN OUR DISCORD (two lines, its +100 tag) on the right until it's claimed; PLAY on the new plaque, FIRST WIN +150 a
+  dark tab hanging under it; the four chests each on a dark wood panel with its name, the chest in 3D and its button
+  (OPEN / the time and SKIP / UNLOCK / QUEUED and its time); the chat line and the tabs as before. No side buttons.
+- The menu (siege_app _menu_button / open_home_menu / paint_menu): a round button in the top bar, between the name and
+  the gold; a panel under it with ORDERS (the daily reward and the orders), QUESTS, RANKS and the TUTORIAL (its gold
+  until played). Its badge counts the orders and quest steps ready to claim; until the tutorial's played it glows and
+  shows "!". PASS has its tab (with its badge) as before.
+- title_flag.gdshader (0.31.193): fragment()'s COLOR already holds the texture at UV, so `c * COLOR` multiplied the
+  waving flag by its own still self -- darker, with a ghost of the still cloth through it; it multiplies by the
+  modulate alone now (the camp's shader likewise).
+- Tests: home_camp_test (replaces home_heroes_test): the painting on 16:9 to 21:9 phones; the fire, lamps, magic,
+  windows, stars, falling star, fireflies alive; Reduce Motion and a safe start still; no side buttons; the top row; the
+  plaque and its tab; the chest panels over the chat line; empty slots; the players online; the menu button's badge
+  and glow, the menu's four rows, ORDERS from it. app_flow, quest, moba_ui, leaderboard, daily_reward and discord tests
+  open the menu where they pressed the side buttons.
+- Not used any more: the war land (war_land_view.gd, its shaders, war_land_data.gd) and the "war" content pack (12 MB of
+  Meshy miniatures and the map) -- only Home's table showed them since Crown War went (0.31.169). Left for now.
+- Content pack: ui-e6754bd2e4ad uploaded; CONTENT OK, coverage OK, presets unchanged.
+- Version 0.31.194, versionCode 280, SERVER_BUILD 0.31.194.

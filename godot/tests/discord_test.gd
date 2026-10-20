@@ -79,7 +79,7 @@ func _process(_d: float) -> bool:
 		# 0.31.125: Home's button, until it's claimed
 		var hb := _home_discord()
 		var tag: Array = hb.find_children("*", "Label", true, false).map(func(l): return str(l.text)) if hb != null else []
-		check(hb != null and hb is Button and (hb as Button).text == "JOIN OUR DISCORD" and tag.has("+%d" % Eco.DISCORD_GEMS),
+		check(hb != null and hb is Button and (hb as Button).text.replace("\n", " ") == "JOIN OUR DISCORD" and tag.has("+%d" % Eco.DISCORD_GEMS),
 			"Home: JOIN OUR DISCORD with a +%d gem tag" % Eco.DISCORD_GEMS)
 		g0 = int(app.profile.d.gems)
 		if hb != null:

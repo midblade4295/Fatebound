@@ -24,6 +24,14 @@ float pole_x(float y) {
 	return x;
 }
 
+// (fragment()'s COLOR comes in already multiplied by the texture at UV -- the modulate alone is the vertex's; 0.31.194:
+// the flag used to multiply by the former, darkening it and ghosting its undisplaced self through it)
+varying vec4 tint;
+
+void vertex() {
+	tint = COLOR;
+}
+
 void fragment() {
 	vec2 p = UV * tex_px;
 	float d = (pole_x(p.y) - p.x) * side;
@@ -34,5 +42,5 @@ void fragment() {
 	vec2 disp = vec2(side * a * 0.3 * (1.0 - cos(ph)), a * sin(ph));
 	vec4 c = texture(TEXTURE, (p - disp) / tex_px);
 	c.rgb *= 1.0 + 0.03 * a * cos(ph);
-	COLOR = c * COLOR;
+	COLOR = c * tint;
 }

@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bo15sdvxchif5"
-path="res://.godot/imported/bg_war_room_mask.png-7c900b253d8b01cbb44f6d6273acc2b8.ctex"
+uid="uid://cj8nnwaj8ygbe"
+path="res://.godot/imported/bg_camp.webp-81c7e4a8bc9a0db160a64140f28fadf8.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/ui/v2/bg_war_room_mask.png"
-dest_files=["res://.godot/imported/bg_war_room_mask.png-7c900b253d8b01cbb44f6d6273acc2b8.ctex"]
+source_file="res://assets/ui/v2/bg_camp.webp"
+dest_files=["res://.godot/imported/bg_camp.webp-81c7e4a8bc9a0db160a64140f28fadf8.ctex"]
 
 [params]
 
@@ -37,4 +37,4 @@ process/normal_map_invert_y=false
 process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
 process/size_limit=0
-detect_3d/compress_to=0
+detect_3d/compress_to=1

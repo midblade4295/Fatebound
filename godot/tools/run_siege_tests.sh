@@ -162,7 +162,7 @@ run title_logo_test      TITLE_LOGO_PASS          90
 run boot_title_test      BOOT_TITLE_PASS          120
 # Home's heroes in two rows, nobody reaching into anybody, clear of the medallions and PLAY; no ribbon (0.31.114).
 # 0.31.138: Home is the war room -- the table and four heroes in 3D, the candles, sun, water and birds alive.
-run home_heroes_test     HOME_HEROES_PASS         90
+run home_camp_test       HOME_CAMP_PASS           90
 # Floating menu icons move smoothly: no snapping to whole canvas pixels, and they float with their layout (0.31.116).
 run menu_float_test      MENU_FLOAT_PASS          60
 # Chat, friends, parties and quick chat (0.31.111): server/social.gd alone, then two phones against the real server.

@@ -6,7 +6,7 @@ const Screens = preload("res://scripts/app/screens.gd")
 # Env: SHOT_DIR (default /tmp/shots), SHOT_TABS (comma list, default all), SHOT_SCROLL (px to
 # scroll each screen down for a second shot named <tab>_2), SHOT_SWING (0.31.113: with SHOT_TABS=home and --fixed-fps 30,
 # this many frames of Home after its shot, one every 2nd frame: home_swing_NN), SHOT_MENU=1 (0.31.139: Home with the
-# level shield's menu open).
+# level shield's menu open), SHOT_HOME_MENU=1 (0.31.194: Home with the top bar's menu open).
 const App = preload("res://scripts/app/siege_app.gd")
 const Eco = preload("res://scripts/meta/economy.gd")
 const Profile = preload("res://scripts/meta/profile.gd")
@@ -121,6 +121,8 @@ func _process(_d: float) -> bool:
 				app.rebuild()
 		if frames == base_f + 12 and tabs[i] == "home" and OS.has_environment("SHOT_MENU"):
 			app.open_player_menu()                       # 0.31.139: the menu under the level shield
+		if frames == base_f + 12 and tabs[i] == "home" and OS.has_environment("SHOT_HOME_MENU"):
+			app.open_home_menu()                         # 0.31.194: the top bar's menu (ORDERS, QUESTS, RANKS, TUTORIAL)
 		if frames == base_f + 18 and tabs[i] == "pass" and OS.has_environment("SHOT_PASS_DETAIL"):
 			var pd: PackedStringArray = OS.get_environment("SHOT_PASS_DETAIL").split(",")
 			Screens.open_pass_item(app, int(app.profile.d.pass.season), int(pd[0]), pd[1] == "prem")

@@ -217,8 +217,9 @@ func _process(delta: float) -> bool:
 		"home":
 			if t_phase > 1.0:
 				# 0.31.170 (the online 5v5): RANKS on Home again (0.31.164-169 had none -- no online matches to count)
-				check(_btn("side_ranks") != null and _btn("side_first_win") == null, "Home: RANKS (the week's board of online matches)")
 				check(not _find(app, func(n): return str(n.name) == "FirstWinTag").is_empty(), "the first win of the day is a tag on PLAY")
+				_btn("home_menu").pressed.emit()          # 0.31.194: RANKS is in the top bar's menu
+				check(_btn("side_ranks") != null and _btn("side_first_win") == null, "Home's menu: RANKS (the week's board of online matches)")
 				_btn("side_ranks").pressed.emit()
 				check(app.modal is LeaderboardPanel, "the LEADERBOARD window opens")
 				_go("panel")

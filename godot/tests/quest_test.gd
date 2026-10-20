@@ -126,7 +126,8 @@ func _process(_d: float) -> bool:
 		0:
 			p.d.stats["q_mage_kills"] = 40
 			app.rebuild()
-			check(btn("side_quests") != null, "Home has a QUESTS button")
+			press("home_menu")                          # 0.31.194: QUESTS is in the top bar's menu
+			check(btn("side_quests") != null, "Home's menu has QUESTS")
 			press("side_quests")
 			check(app.tab == "quests" and str(app.quest_cls) == "mage", "QUESTS opens on the class with a step ready (%s)" % str(app.quest_cls))
 			check(btn("quest_claim_mage") != null and btn("quest_knight") != null and btn("quest_archmage") != null, "the Quests screen: the 12 hero classes and CLAIM")
