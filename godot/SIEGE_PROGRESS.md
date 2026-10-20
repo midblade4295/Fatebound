@@ -6096,3 +6096,7 @@ necromancers eyes".
   Mage.
 - Content packs: weapons-b2f2b5a13db1, ui-a431c795b37e uploaded; CONTENT OK, coverage OK, presets unchanged.
 - Version 0.31.192, versionCode 278, SERVER_BUILD 0.31.192.
+- Verified: suite 97 of 98 -- idle_test (the real server, real time) failed once under the chain's load (the second
+  player's inputs stalled while the client loaded the match, so the server flagged it idle for a second); alone it
+  passed 3 of 3 -- COLD_START_PASS, the Play-shape AAB check exit 0 with the presets unchanged, BASE OK (275 files).
+  Preview APK: build/Fatebound-Siege-0.31.192-fatebound.apk (32 MB, preview key), sha256 7cc922ae...30ceb6da166d0269.
