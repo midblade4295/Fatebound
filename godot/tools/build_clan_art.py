@@ -8,7 +8,10 @@ Sources (ElevenLabs, flow "Fatebound clans 0.31.196", gpt-image-2), in art_sourc
   raven.png         four side-view ravens (a 2 x 2 grid): the one on a branch (top right) is the raven
   shield_green.png  a gold-rimmed shield with a blank grey field on flat green (the first of four takes)
   camp_stages.png   the clan camp at its four stages (a 2 x 2 grid: a tent and a banner; two tents, two banners; a
-                    palisade, three banners, a cauldron; a hall, a watchtower, five banners)
+                    palisade, three banners, a cauldron; a hall, a watchtower, five banners) -- 0.31.196's
+  stage_<1-4>_square.png  each stage cut out of it (0.31.197: the references for the tall ones)
+  camp_tall_<1-4>.png     each stage carried up into the night sky and down over more ground, 1024 x 2048
+                    (gpt-image-2.5-sunburst from stage_<n>_square.png; the second of four takes each)
 
 Writes assets/ui/clans/ (the "ui" content pack):
   emblem_<name>.png             each emblem, white on clear, EMBLEM px square (tinted the crest's colour in the app)
@@ -16,7 +19,9 @@ Writes assets/ui/clans/ (the "ui" content pack):
                                 rim (tinted the crest's field colour)
   shield_rim_<metal>.png        the rim with the field cut out: iron (every clan), gold / silver / bronze (last week's
                                 League podium, Eco.CLAN_LEAGUE_PRIZES "frame")
-  camp_<1-4>.webp               the camp's stages, CAMP_W x CAMP_H (scripts/app/clan_camp.gd)
+  camp_<1-4>.webp               the camp's stages, tall (CAMP_W x CAMP_H): the whole CLAN screen behind its buttons
+                                (scripts/app/clan_camp.gd; 0.31.197, Kevin: "make the camp screen fill the entire
+                                screen")
 and prints the shield's field and, per stage, the banners' cloth and the fire (clan_camp.gd's consts).
 
   python3 tools/build_clan_art.py
@@ -35,8 +40,7 @@ NAMES = ["lion", "stag", "raven", "wolf", "dragon", "bear", "eagle", "boar", "sk
 EMBLEM = 160                      # px square; the emblem fills EMBLEM_FILL of it
 EMBLEM_FILL = 148
 SHIELD_W = 256
-CAMP_W, CAMP_H = 1000, 760        # a stage: its square panel at 1000 px, rows CAMP_Y0.. kept
-CAMP_Y0 = 120
+CAMP_W, CAMP_H = 1024, 2048       # a stage's tall painting
 
 
 def components(gray, n, merge=14):
@@ -157,33 +161,27 @@ def shield():
 
 
 def camp():
-    im = Image.open(os.path.join(SRC, "camp_stages.png")).convert("RGB")
-    L = np.asarray(im).astype(int).sum(2)
-    W, H = im.size
-
-    def gap(axis, n):
-        m = (L < 60).mean(axis)
-        idx = [i for i in range(int(n * 0.4), int(n * 0.6)) if m[i] > 0.5]
-        return min(idx), max(idx)
-
-    r0, r1 = gap(1, H)
-    c0, c1 = gap(0, W)
-    panels = [(0, 0, c0, r0), (c1 + 1, 0, W, r0), (0, r1 + 1, c0, H), (c1 + 1, r1 + 1, W, H)]
-    inset = 6
+    """the four stages (0.31.197): the tall paintings as they are; each one's banners (the blue cloth, above its
+    swallowtails) and fire found for clan_camp.gd"""
     banners_all = []
     fires = []
-    for k, (x0, y0, x1, y1) in enumerate(panels):
-        p = im.crop((x0 + inset, y0 + inset, x1 - inset, y1 - inset)).resize((1000, 1000), Image.LANCZOS)
-        p.crop((0, CAMP_Y0, CAMP_W, CAMP_Y0 + CAMP_H)).save(os.path.join(OUT, "camp_%d.webp" % (k + 1)), "WEBP", quality=88, method=6)
-        a = np.asarray(p).astype(int)
+    for k in range(1, 5):
+        im = Image.open(os.path.join(SRC, "camp_tall_%d.png" % k)).convert("RGB")
+        assert im.size == (CAMP_W, CAMP_H), im.size
+        im.save(os.path.join(OUT, "camp_%d.webp" % k), "WEBP", quality=90, method=6)
+        a = np.asarray(im).astype(int)
         r, g, b = a[..., 0], a[..., 1], a[..., 2]
-        blue = (b > 70) & (b > r * 2.0) & (b > g * 1.8)
-        blue[480:] = False
-        lab, n = nd.label(nd.binary_opening(blue, iterations=4))
+        blue = (b > 65) & (b < 170) & (b > r * 2.4) & (b > g * 2.1)   # (the cloth's deep blue -- not the purple sky)
+        blue[:int(CAMP_H * 0.27)] = False
+        blue[int(CAMP_H * 0.51):] = False
+        lab, n = nd.label(nd.binary_opening(blue, iterations=2))
         found = []
         for i, sl in enumerate(nd.find_objects(lab)):
             area = int((lab[sl] == i + 1).sum())
-            if area < 3000 or sl[1].stop - sl[1].start < 45 or sl[1].start < 10 or sl[1].stop > 990:
+            w = sl[1].stop - sl[1].start
+            h = sl[0].stop - sl[0].start
+            if area < 800 or w < 24 or h < w * 1.1 or area < 0.55 * w * h or sl[0].start < CAMP_H * 0.31 \
+                    or sl[1].start < 4 or sl[1].stop > CAMP_W - 8:
                 continue
             # the cloth: the longest run of columns that are cloth through its middle rows (a lake behind one: not it)
             ya, yb = sl[0].start, sl[0].stop
@@ -202,21 +200,23 @@ def camp():
             bx1 = bx0 + best[1]
             rows = blue[:, bx0:bx1].mean(1)
             ys = [y for y in range(ya, yb) if rows[y] > 0.6]
-            found.append((bx0, min(ys) - CAMP_Y0, bx1 - bx0, max(ys) - min(ys)))
+            if best[1] >= 20 and ys:
+                found.append((bx0, min(ys), bx1 - bx0, max(ys) - min(ys)))
         found.sort()
         banners_all.append(found)
         fire = (r > 240) & (g > 150) & (b < 150)
-        fire[:300] = False
+        fire[:int(CAMP_H * 0.35)] = False
         lab2, n2 = nd.label(nd.binary_dilation(fire, iterations=4))
         sizes = nd.sum(fire, lab2, range(1, n2 + 1))
         ys, xs = np.where(lab2 == int(np.argmax(sizes)) + 1)
-        fires.append((int(xs.mean()), int(ys.mean()) - CAMP_Y0))
-    print("camp: %d stages, %dx%d" % (len(panels), CAMP_W, CAMP_H))
+        fires.append((int(xs.mean()), int(ys.mean()), int(xs.max() - xs.min())))
+    print("camp: 4 stages, %dx%d" % (CAMP_W, CAMP_H))
     print("const BANNERS := [")
     for f in banners_all:
-        print("\t[%s]," % ", ".join("Rect2(%d, %d, %d, %d)" % b for b in f))
+        print("\t[%s]," % ", ".join("Rect2(%d, %d, %d, %d)" % bb for bb in f))
     print("]")
-    print("const FIRES := [%s]" % ", ".join("Vector2(%d, %d)" % f for f in fires))
+    print("const FIRES := [%s]" % ", ".join("Vector2(%d, %d)" % (f[0], f[1]) for f in fires))
+    print("(the fires' widths: %s)" % ", ".join(str(f[2]) for f in fires))
 
 
 if __name__ == "__main__":

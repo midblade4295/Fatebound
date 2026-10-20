@@ -841,7 +841,7 @@ const CLAN_GIVE_XP := 5
 # CLAN_ASK_GAP, open CLAN_ASK_LIFE); a member holding a shard of that hero gives it -- the asker gets the shard, the giver
 # what melting it would have paid (Profile.melt_shard's gold) and the clan CLAN_GIVE_XP. A shard a clanmate gave can't be
 # given on (Profile "gift_shards"): passed back and forth it would pay its melt gold every time
-const CLAN_ASK_GAP := 8 * 3600
+const CLAN_ASK_GAP := 7 * 3600              # 0.31.197 (Kevin: "put a request donation limit to once per 7 hours"; was 8)
 const CLAN_ASK_LIFE := 24 * 3600
 # LFG: a member says he's looking for a party (clan chat, CLAN_LFG_LIFE); clanmates JOIN straight into his party
 const CLAN_LFG_LIFE := 600

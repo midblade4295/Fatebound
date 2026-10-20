@@ -6261,3 +6261,30 @@ shard requests, 5 - stack, lfg button, league".
   (bundletool valid, BASE OK 280 files), presets unchanged. Preview APK: build/Fatebound-Siege-0.31.196-fatebound.apk
   (32 MB, preview key), sha256 10b1c50a...c5682dc1b2293717c45.
 - ElevenLabs for the clan art: about 5,200 credits for the 12 images reported before, and 185 for the extra ravens.
+
+## 0.31.197 — the clan camp fills the screen, its buttons in it; shard requests every 7 hours
+Kevin: "put a request donation limit to once per 7 hours. Also make the camp screen fill the entire screen instead of
+being a small box and incorporate the clan buttons into the screen".
+- Eco.CLAN_ASK_GAP 7 hours (was 8): a member asks his clan for a shard once every 7 hours (Clash Royale's request).
+- The camp's four stages as tall paintings (1024 x 2048): each square stage (art_sources/clans/stage_<n>_square.png,
+  cut from camp_stages.png) carried up into a starry night sky and down over more of the camp's ground by
+  gpt-image-2.5-sunburst (1:2, 2K, four takes a stage; the second of each: art_sources/clans/camp_tall_<n>.png --
+  about 5,000 ElevenLabs credits, after Kevin topped the account up). tools/build_clan_art.py writes them as
+  assets/ui/clans/camp_<n>.webp and finds their banners (the cloth's deep blue, not the purple sky) and fires.
+- scripts/app/clan_camp.gd covers the screen with the painting like Home's camp (centred; a phone longer than 1:2 loses
+  a little of its sides), stars twinkling and now and then falling in its sky; clan_camp.gdshader recolours only the
+  banners' cloth (not the sky between their swallowtails).
+- The CLAN window in a clan (clan_panel.gd, "full"): the camp IS the screen. In the sky FRIENDS and ✕, the crest, the
+  clan's name, [TAG] · LEVEL (or STARTER CLAN, or LEAGUE #n) and its XP; clanmates' LFG calls with JOIN under them; on
+  the ground by the fire the CLAN CHEST (its chest, the week's points against the next tier) and SHARDS (the request
+  board: how many you can give, or your own request); the medallions CHAT (unread), MEMBERS (n/30; requests for
+  officers), LEAGUE (your place) and CLAN; LOOKING FOR GROUP at the bottom (CALLING YOUR CLAN · n/5 and CANCEL while
+  your call is up). The CLAN CHEST, SHARDS, MEMBERS (requests, members with their points, invite), LEAGUE and CLAN
+  (crest and settings for officers, a starter clan's way to a players' clan, LEAVE / DISBAND) open as sheets over the
+  camp, ✕ or a tap outside closing them. CHAT opens the clan chat, whose ✕ comes back to the camp. Not in a clan, or
+  against an older server: the window as before.
+- tools/clan_camp_shot.gd: the four stages full screen with a crest, for a look.
+- clans_ui_test: the full-screen camp (its size, stage, the crest on its banner, the buttons), the sheets (CLAN CHEST,
+  CLAN, MEMBERS, LEAGUE), the LFG plaque; clan_week_test: 7 hours.
+- Version 0.31.197, versionCode 283, SERVER_BUILD 0.31.197. Packs: ui-a9e867eb137b (the tall camps), the rest
+  unchanged; CONTENT OK, coverage OK, presets unchanged.

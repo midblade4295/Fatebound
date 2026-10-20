@@ -5,7 +5,7 @@ shader_type canvas_item;
 //    ripples a little (still where the cloth hangs from its bar);
 //  - the campfire's light flickers over everything near it, in time with the flames clan_camp.gd draws.
 // All in the painting's px. motion 0 (Reduce Motion): still.
-uniform vec2 paint_size = vec2(1000.0, 760.0);
+uniform vec2 paint_size = vec2(1024.0, 2048.0);
 uniform float motion = 1.0;
 uniform float clock = 0.0;
 uniform vec3 fire = vec3(500.0, 560.0, 300.0);    // x, y, reach
@@ -43,7 +43,8 @@ void fragment() {
 	vec4 c = texture(TEXTURE, q / paint_size);
 	if (on_cloth > 0.5) {
 		// the painted cloth is a deep blue (about 0.12, 0.15, 0.38): that blue becomes the field's colour at the same light
-		float blue = smoothstep(0.04, 0.16, c.b - max(c.r, c.g));
+		// (0.31.197: and not the purple-blue sky behind the swallowtails -- the cloth is far bluer than it is red or green)
+		float blue = smoothstep(0.04, 0.12, c.b - max(c.r, c.g)) * smoothstep(1.9, 2.4, c.b / max(0.01, max(c.r, c.g)));
 		float lum = dot(c.rgb, vec3(0.3, 0.59, 0.11));
 		vec3 rec = field_col * clamp(lum / 0.17, 0.0, 2.2) * 0.92;
 		c.rgb = mix(c.rgb, rec, blue * recolor);

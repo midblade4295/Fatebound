@@ -10,6 +10,9 @@ extends SceneTree
 # the crest's colours with the crest on it, the crest, name and level over it), CAMP / MEMBERS / LEAGUE; the CLAN CHEST;
 # CHANGE CREST; Bob asks for a Golem shard and Alice GIVEs hers from clan chat (her melt gold, the request over); her
 # LOOKING FOR GROUP call and Bob JOINs her party (of 5); the LEAGUE tab; MANAGE from MEMBERS.
+# 0.31.197 (Kevin: "make the camp screen fill the entire screen ... and incorporate the clan buttons into the screen"):
+# in a clan the window is the camp, full screen, its buttons standing in it (the CLAN CHEST and SHARDS on the ground,
+# CHAT / MEMBERS / LEAGUE / CLAN, LOOKING FOR GROUP); each part opens its sheet over the camp.
 # With a display and SHOT_DIR set, screenshots of each window go there.
 #   godot --headless --path godot -s res://tests/clans_ui_test.gd
 const App = preload("res://scripts/app/siege_app.gd")
@@ -206,11 +209,21 @@ func _process(delta: float) -> bool:
 			if app.social.in_house_clan() and t_phase > 0.6:
 				check(str(app.social.clan.get("name", "")) == "The Lion Guard" and str(app.social.my_tag()) != "" and str(app.social.clan.get("role", "")) == "member",
 					"JOIN: Alice is in The Lion Guard (free), a member")
-				check(has_text(app.modal, "STARTER CLAN") and has_text(app.modal, "A CLAN OF YOUR OWN?") and has_text(app.modal, "MOVE TO A PLAYERS' CLAN")
-					and btn("clan_start") != null and btn("clan_invite_code") == null and btn("clan_disband") == null and has_text(app.modal, "no wait")
-					and btn("clan_lfg") != null and btn("clan_shard_ask") != null and btn("clan_crest_edit") == null,
-					"a starter clan's window: its camp, LFG and shard requests, the players' clans to move to, START A CLAN; no invites, crest or disbanding; leaving has no wait")
+				check(str(app.modal.mode) == "full" and app.modal.camp is ClanCamp and has_text(app.modal, "STARTER CLAN") and btn("clan_open_starter") != null
+					and btn("clan_open_chest") == null and btn("clan_lfg") != null and btn("clan_open_shards") != null and btn("clan_chat") != null,
+					"a starter clan: its camp, full screen -- STARTER CLAN on the ground (no Clan Chest), SHARDS, CHAT, LOOKING FOR GROUP")
 				_shot("clan_house")
+				press("clan_open_clan")
+				_go("house_sheet")
+			elif t_phase > 8.0:
+				check(false, "Alice joins The Lion Guard")
+				_go("left_house")
+		"house_sheet":
+			if t_phase > 0.5:
+				check(str(app.modal.sheet) == "clan" and has_text(app.modal, "A CLAN OF YOUR OWN?") and has_text(app.modal, "MOVE TO A PLAYERS' CLAN")
+					and btn("clan_start") != null and btn("clan_invite_code") == null and btn("clan_disband") == null and has_text(app.modal, "no wait")
+					and btn("clan_crest_edit") == null, "its CLAN sheet: the players' clans to move to, START A CLAN; no crest, invites or disbanding; leaving has no wait")
+				_shot("clan_house_sheet")
 				press("clan_leave")
 				press("clan_leave")
 				_go("left_house")
@@ -287,16 +300,34 @@ func _process(delta: float) -> bool:
 				_go("mine")
 		"mine":
 			if t_phase > 0.6:
-				check(has_text(app.modal, "Iron Wolves") and has_text(app.modal, "LEVEL 1") and btn("clan_chat") != null and btn("clan_leave") != null
-					and btn("clan_disband") != null and has_text(app.modal, "INVITE A PLAYER") and btn("clan_tab_camp") != null and btn("clan_tab_members") != null
-					and btn("clan_tab_league") != null, "her clan window: CAMP / MEMBERS / LEAGUE, the name and level, CLAN CHAT, invite, LEAVE, DISBAND")
+				check(has_text(app.modal, "Iron Wolves") and has_text(app.modal, "LEVEL 1") and btn("clan_chat") != null and btn("clan_open_members") != null
+					and btn("clan_open_league") != null and btn("clan_open_clan") != null and btn("clan_open_chest") != null and btn("clan_open_shards") != null
+					and btn("clan_lfg") != null and btn("clan_close") != null and btn("social_tab_friends") != null,
+					"her clan: the camp with its name and level, the CLAN CHEST and SHARDS, CHAT / MEMBERS / LEAGUE / CLAN, LOOKING FOR GROUP, FRIENDS, close")
 				var cp = app.modal.camp
-				check(cp is ClanCamp and int(cp.stage) == 1 and str(cp.code) == "3.5.1" and cp.crests.size() == 1 and cp.size.y > 100.0
-					and absf(cp.size.y - cp.size.x * 0.76) < 3.0, "the camp: stage 1 (one banner, with the crest on it), as wide as the window (%s)" % str(cp.size if cp != null else ""))
-				check(has_text(app.modal, "CLAN CHEST") and has_text(app.modal, "NO CHEST YET") and has_text(app.modal, "0 / 60") and has_text(app.modal, "PLAY TOGETHER")
-					and btn("clan_lfg") != null and has_text(app.modal, "SHARD REQUESTS") and btn("clan_shard_ask") != null and btn("clan_crest_edit") != null,
-					"CAMP: the Clan Chest (0 / 60 to the Wooden Chest), LOOKING FOR GROUP, ASK FOR A SHARD, CHANGE CREST")
+				check(cp is ClanCamp and int(cp.stage) == 1 and str(cp.code) == "3.5.1" and cp.crests.size() == 1 and cp.size.is_equal_approx(app.modal.size)
+					and cp.size.y > 600.0, "the camp fills the screen (%s): stage 1, its banner with the crest on it" % str(cp.size if cp != null else ""))
+				check(has_text(app.modal, "0 / 60 pts"), "the Clan Chest on the ground: 0 / 60 points")
 				_shot("clan_mine")
+				press("clan_open_chest")
+				_go("chest_sheet")
+		"chest_sheet":
+			if t_phase > 0.5:
+				check(str(app.modal.sheet) == "chest" and has_text(app.modal, "NO CHEST YET") and has_text(app.modal, "0 / 60 points") and has_text(app.modal, "WOODEN"),
+					"CLAN CHEST opens its sheet: no chest yet, 0 / 60 to the Wooden Chest, the four tiers")
+				_shot("clan_chest_sheet")
+				press("clan_sheet_close")
+				_go("clan_sheet")
+		"clan_sheet":
+			if t_phase > 0.4:
+				check(str(app.modal.sheet) == "", "✕ closes the sheet")
+				press("clan_open_clan")
+				_go("clan_sheet2")
+		"clan_sheet2":
+			if t_phase > 0.5:
+				check(btn("clan_crest_edit") != null and btn("clan_leave") != null and btn("clan_disband") != null and btn("clan_set_save") != null,
+					"CLAN: CHANGE CREST, the settings, LEAVE, DISBAND")
+				_shot("clan_clan_sheet")
 				press("clan_crest_edit")
 				_go("crest_edit")
 		"crest_edit":
@@ -319,6 +350,7 @@ func _process(delta: float) -> bool:
 		"crest_redrawn":
 			if t_phase > 0.6:
 				check(app.modal.camp != null and str(app.modal.camp.code) == "0.5.1", "the camp's banner carries the new crest")
+				press("clan_sheet_close")
 				bob.clan_find("wolf")
 				_go("bob_find")
 		"bob_find":
@@ -329,6 +361,10 @@ func _process(delta: float) -> bool:
 		"request":
 			if app.social.clan_requests() == 1:
 				check(true, "Bob's request reaches Alice")
+				_go("accept0")
+		"accept0":
+			if t_phase > 0.5:
+				press("clan_open_members")
 				_go("accept")
 		"accept":
 			if t_phase > 0.6:
@@ -412,15 +448,17 @@ func _process(delta: float) -> bool:
 				_go("lfg_view")
 		"lfg_view":
 			if t_phase > 0.8:
+				check(has_text(app.modal, "CALLING YOUR CLAN") and btn("clan_lfg_cancel") != null, "her call: CALLING YOUR CLAN, CANCEL")
 				_shot("clan_lfg")
-				press("clan_tab_league")
+				press("clan_open_league")
 				_go("league")
 		"league":
 			if t_phase > 1.0:
 				check(not app.social.league.is_empty() and has_text(app.modal, "CLAN LEAGUE") and has_text(app.modal, "100 GEMS")
 					and has_text(app.modal, "No clan has points yet"), "LEAGUE: the table (no points yet this week), the prizes")
 				_shot("clan_league")
-				press("clan_tab_members")
+				press("clan_sheet_close")
+				press("clan_open_members")
 				_go("members")
 		"members":
 			if t_phase > 0.6:

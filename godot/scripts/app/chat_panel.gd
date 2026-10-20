@@ -26,6 +26,7 @@ var _shown_ch := ""                   # the channel on screen
 var _bottom := 24.0
 var _stick := true                    # follow new lines (the list is at its bottom)
 var _live: Array = []                 # 0.31.196: [button, line] -- a request's GIVE, a call's JOIN (kept up to date)
+var back := ""                        # 0.31.197: "clan" -- opened from the clan camp: closing goes back to it
 
 func open(a, start_ch := "global") -> void:
 	app = a
@@ -44,7 +45,10 @@ func _exit_tree() -> void:
 func _build() -> void:
 	var w := SocialUI.window(self, "CHAT", "chat", func():
 		app.sfx("menuClose")
-		app.close_modal(), 56.0 + float(app.safe_top), _bottom)
+		if back == "clan" and app.social != null and app.social.in_clan():
+			app.open_clan()
+		else:
+			app.close_modal(), 56.0 + float(app.safe_top), _bottom)
 	_margin = w.margin
 	var body: VBoxContainer = w.body
 	var tr := UI.row(body, 8)

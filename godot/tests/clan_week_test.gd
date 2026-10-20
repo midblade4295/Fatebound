@@ -225,7 +225,7 @@ func _init() -> void:
 		"the clan gets %d XP, both phones are told to fetch their accounts, a line in chat" % Eco.CLAN_GIVE_XP)
 	clear()
 	s.handle(5, {"k":"clan_ask", "h":"dragoon"})
-	check(not (cl.clans[wolves].ask as Dictionary).has(E) and notes(5).contains("ask again in 8 hours"), "the next request waits %d hours" % (Eco.CLAN_ASK_GAP / 3600))
+	check(not (cl.clans[wolves].ask as Dictionary).has(E) and notes(5).contains("ask again in 7 hours"), "the next request waits %d hours" % (Eco.CLAN_ASK_GAP / 3600))
 	s.now_override = T0 + Eco.CLAN_ASK_GAP + 60
 	s.handle(5, {"k":"clan_ask", "h":"dragoon"})
 	s.handle(5, {"k":"clan_unask"})

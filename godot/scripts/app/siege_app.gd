@@ -2006,11 +2006,13 @@ func _notification(what: int) -> void:
 			check_server_version.call_deferred()   # back from the Play Store (or a long pause): ask again
 
 # ---------------- chat, friends, the party (0.31.111) ----------------
-func open_chat(ch := "global") -> void:
+func open_chat(ch := "global", back := "") -> void:
+	# back "clan" (0.31.197: the clan camp's CHAT): closing the chat goes back to the camp
 	if social == null:
 		return
 	close_modal()
 	var m = _later(CHAT_PANEL).new()
+	m.back = back
 	add_child(m)
 	modal = m
 	m.open(self, ch)

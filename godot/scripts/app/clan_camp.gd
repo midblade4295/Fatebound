@@ -3,25 +3,30 @@ extends Control
 # camp painted at its stage (Eco.clan_camp_stage of its level: a tent and a banner; two tents and two banners; a palisade,
 # three banners and a cauldron; a hall, a watchtower and five banners -- tools/build_clan_art.py), alive: the banners in
 # the crest's field colour with the crest on each (the cloth ripples), the campfire's flames, halo and embers with its
-# light flickering over the camp (clan_camp.gdshader), fireflies. Its height follows its width (PAINT's shape); whatever
-# the window puts over it (the clan's name, its level) is its own children. Reduce Motion: still.
+# light flickering over the camp (clan_camp.gdshader), fireflies. Reduce Motion: still.
+# 0.31.197 (Kevin: "make the camp screen fill the entire screen instead of being a small box and incorporate the clan
+# buttons into the screen"): the whole CLAN screen -- the painting is tall now (the stage in its middle, the night sky
+# above it, the ground falling into shadow below: tools/build_clan_art.py), covering this control like Home's camp
+# (cut at the sides on a phone longer than 1:2), with stars twinkling and now and then falling in its sky. The window
+# puts its buttons over it (clan_panel.gd).
 const UI2 = preload("res://scripts/app/ui2.gd")
 const Eco = preload("res://scripts/meta/economy.gd")
 const CampScene = preload("res://scripts/app/camp_scene.gd")
 const CampShader = preload("res://scripts/app/clan_camp.gdshader")
 const Crest = preload("res://scripts/app/crest.gd")
-const PAINT := Vector2(1000.0, 760.0)
+const PAINT := Vector2(1024.0, 2048.0)
 # tools/build_clan_art.py prints these: per stage, each banner's cloth (above its swallowtails), and the fire's middle
 const BANNERS := [
-	[Rect2(548, 177, 94, 164)],
-	[Rect2(341, 174, 94, 177), Rect2(634, 174, 99, 178)],
-	[Rect2(325, 158, 84, 146), Rect2(462, 125, 86, 158), Rect2(598, 163, 84, 148)],
-	[Rect2(37, 128, 60, 122), Rect2(159, 131, 56, 120), Rect2(283, 141, 60, 122), Rect2(701, 151, 61, 118), Rect2(914, 134, 63, 126)],
+	[Rect2(564, 774, 91, 158)],
+	[Rect2(349, 787, 90, 176), Rect2(649, 786, 99, 179)],
+	[Rect2(333, 730, 81, 146), Rect2(473, 697, 87, 154), Rect2(612, 734, 86, 153)],
+	[Rect2(38, 754, 61, 124), Rect2(163, 758, 57, 120), Rect2(289, 768, 61, 120), Rect2(715, 777, 62, 102), Rect2(932, 759, 64, 126)],
 ]
-const FIRES := [Vector2(505, 574), Vector2(512, 595), Vector2(512, 620), Vector2(513, 531)]
-const FIRE_SIZE := [1.0, 1.15, 0.8, 1.35]          # (stage 3's fire is under the cauldron)
+const FIRES := [Vector2(520, 1182), Vector2(522, 1217), Vector2(520, 1202), Vector2(525, 1162)]
+const FIRE_SIZE := [1.05, 0.85, 0.75, 1.3]         # (stage 3's fire is under the cauldron)
 const CREST_W := 0.74                              # a banner's crest, of its width
-const FLIES := Rect2(70.0, 360.0, 860.0, 330.0)
+const FLIES := Rect2(80.0, 1000.0, 860.0, 420.0)
+const SKY := Rect2(0.0, 0.0, 1024.0, 560.0)        # where the stars are (and the falling ones go)
 
 var stage := 1
 var code := ""
@@ -34,6 +39,9 @@ var _halo: TextureRect
 var _heart: TextureRect
 var _embers: CPUParticles2D
 var _clock := 0.0
+var _stars: Array = []                             # [TextureRect, rate, phase]
+var k := 1.0                                       # painting px -> this control's px
+var origin := Vector2.ZERO                         # the painting's top left here
 
 func setup(st: int, crest_code: String, fr := "", reduce_motion := false) -> void:
 	stage = clampi(st, 1, 4)
@@ -50,6 +58,7 @@ func _ready() -> void:
 	add_child(layer)
 	art = TextureRect.new()
 	art.texture = UI2.tex("res://assets/ui/clans/camp_%d.webp" % stage)
+	art.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	art.stretch_mode = TextureRect.STRETCH_SCALE
 	art.size = PAINT
@@ -120,8 +129,21 @@ func _ready() -> void:
 		var flies = CampScene.Fireflies.new()
 		flies.tex = CampScene.glow_texture()
 		flies.area = FLIES
-		flies.setup(8)
+		flies.setup(10)
 		layer.add_child(flies)
+	# the night sky: stars that twinkle, and now and then one that falls
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 197
+	for i in 26:
+		var at := Vector2(rng.randf_range(20.0, 980.0), rng.randf_range(16.0, SKY.end.y - 40.0))
+		var st := _glow(at, Vector2.ONE * rng.randf_range(10.0, 18.0), Color(0.95, 0.93, 1.0, 0.35 if calm else 0.0))
+		_stars.append([st, rng.randf_range(0.4, 1.2), rng.randf() * TAU])
+	if not calm:
+		var fall = CampScene.FallingStar.new()
+		fall.tex = CampScene.glow_texture()
+		fall.area = SKY
+		fall.wait = 5.0
+		layer.add_child(fall)
 	_fit()
 
 func _glow(centre: Vector2, sz: Vector2, col: Color) -> TextureRect:
@@ -145,18 +167,17 @@ func _notification(what: int) -> void:
 		_fit()
 
 func _fit() -> void:
-	# the painting fills the width; the height follows
-	if layer == null or size.x <= 0.0:
+	# the painting covers this control (centred: a phone longer than 1:2 loses a little of its sides)
+	if layer == null or size.x <= 0.0 or size.y <= 0.0:
 		return
-	var k := size.x / PAINT.x
+	k = maxf(size.x / PAINT.x, size.y / PAINT.y)
+	origin = ((size - PAINT * k) * 0.5).round()
+	layer.position = origin
 	layer.scale = Vector2(k, k)
-	var h := roundf(PAINT.y * k)
-	if absf(custom_minimum_size.y - h) > 0.5:
-		custom_minimum_size.y = h
 
-func to_local_px(p: Vector2) -> Vector2:
+func to_screen(p: Vector2) -> Vector2:
 	# a point of the painting -> this control's px
-	return p * (size.x / PAINT.x)
+	return origin + p * k
 
 func _process(delta: float) -> void:
 	if calm or not is_visible_in_tree() or art == null:
@@ -171,3 +192,5 @@ func _process(delta: float) -> void:
 	var m := art.material as ShaderMaterial
 	m.set_shader_parameter("clock", t)
 	m.set_shader_parameter("fire_flick", flick)
+	for st in _stars:
+		(st[0] as TextureRect).modulate.a = 0.8 * pow(maxf(0.0, sin(t * float(st[1]) + float(st[2]))), 3.0)
