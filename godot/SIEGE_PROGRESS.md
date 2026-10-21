@@ -6405,3 +6405,31 @@ Kevin: "Give me social media package that has banner and icon".
   avatars (the app icon at 1080/800/512/400/256: it was drawn for round masks), the icon at 1024 and the title logo
   see-through. The title sits top centre on the art's rift; the art's crown is painted out under it (the logo has its
   own). preview.jpg shows them all; README.md says where each goes.
+
+## Trailer 8, the 5v5 (tools only, no build)
+Kevin: "I want a trailer now. Very cinematic and showing gameplay. Also voice it. I want it to feature the dragon roaring
+for climax along with music ramping up to climax then showing the title animating in".
+- Plan in tools/trailer8_script.md. A narrator (ElevenLabs v4, "Don - Movie Trailers": "Two kingdoms. / One crown. / Rally
+  your team. / Eighteen champions. / Break their towers. / Topple their King. / But deep in its pit... / the Grave Wyrm
+  wakes. / Fatebound. / Five-on-five hero battles.") over staged moments of an offline 5v5: the Rift over our castle at
+  golden hour; their King on his throne; our five charging at the lens; the clash on the ford; the Archmage's meteors,
+  the Dragoon's dive, the Golem's landslide, the Knight and the Barbarian (the icon) sword on axe; a tower falling; the
+  King fight; then dusk: the Wyrm's pit, the Grave Wyrm rising out of it, rearing and roaring, its soul-fire pouring at
+  the lens on the music's peak; black; the lightning rift over its pit, and the game's own title (title_logo.gd) flying
+  in and slamming home -- flash, shake, flags whipping, rays, the glint -- with 5V5 HERO BATTLES.
+- tools/trailer8_shots.gd: 19 staged runs, 15 of them in the cut (and RUN=map: the Rift from straight above, for
+  planning cameras), one per process, recorded by Movie Maker (tools/trailer8_render.sh <run> [W H]; SNAP=t1,t2 for
+  stills without it). No fog of war (every unit revealed: the view hides what your side can't see), no team rings (their
+  mesh dropped each frame), no tower fire, the player's hero walked by pushing the HUD's stick (siege_mode sets his move
+  from it every frame). The Wyrm's rise played by the script (made while the fog still hid it, it came up already
+  risen). The title run builds a CanvasLayer over the dusk plate: the rift alone, crackling, then the word and crown and
+  flags flying in on the cue.
+- tools/trailer8_edit.py: the cut (16 shots, 56.6 s) on cue A's landmarks, the grade, the 2.39:1 letterbox, fades and
+  flashes; the mix -- the score (cue A ramped 3 dB into the roar), the narration (each line levelled; the music and
+  effects dip only in the voice band under it, on slow ramps; 9-35 dB over the rest in that band), the roar (two takes,
+  slowed), the rumble, the lightning, the game's title slam, and the game's own sounds on their moments (Movie Maker's
+  track is all but silent: the game hears from your hero, not the camera). -14.9 LUFS, -0.6 dB peak.
+- ElevenLabs (estimated first: 8,028; charged 4,567): narration x 4 takes 768, music cue A (46 s) x 4 2,759, cue B (14 s)
+  x 4 840, roar / rumble / lightning x 4 200. The takes used are in tools/trailer8_vo/raw.
+- Fatebound-Trailer-8: 56.6 s, 1920x1080 at 30 fps, H.264 + AAC (1080p 100 MB; 720p phone copy 21 MB).
+

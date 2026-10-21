@@ -15,7 +15,7 @@ const Sim = preload("res://scripts/siege/siege_sim.gd")
 const RUNS := ["map", "vista", "kingred", "charge", "clash", "storm", "meteor", "dive", "slide", "inferno", "rain", "legion", "duel", "tower",
 	"kingfight", "pit", "rise", "roar", "roar2", "title"]
 const LENGTH := {"map": 0.4, "vista": 7.5, "kingred": 6.0, "charge": 4.4, "clash": 4.2, "storm": 4.0, "meteor": 4.2, "dive": 3.6,
-	"slide": 3.4, "inferno": 3.0, "rain": 4.0, "legion": 4.0, "duel": 3.2, "tower": 4.6, "kingfight": 5.4, "pit": 5.0, "rise": 4.4, "roar": 5.6, "roar2": 5.6,
+	"slide": 3.4, "inferno": 3.0, "rain": 4.0, "legion": 4.0, "duel": 3.2, "tower": 4.6, "kingfight": 5.4, "pit": 5.0, "rise": 2.6, "roar": 5.6, "roar2": 5.6,
 	"title": 14.4}
 # slow motion: [game time, time scale] keys, linear between them (1.0 before the first)
 const SCALE := {
@@ -31,7 +31,7 @@ const SCALE := {
 	"duel": [[0.45, 1.0], [0.6, 0.22], [2.2, 0.22], [2.5, 0.6]],
 	"tower": [[1.5, 1.0], [1.6, 0.3], [3.4, 0.3]],
 	"kingfight": [[0.0, 0.6]],
-	"rise": [[0.0, 0.45]],
+	"rise": [[0.0, 0.2]],
 	"roar": [[2.2, 1.0], [2.35, 0.28]],
 	"roar2": [[2.2, 1.0], [2.35, 0.28]],
 }
@@ -552,30 +552,30 @@ func _stage_rise() -> void:
 	_cam(0.0, 4.4, {"kind":"world", "e0":_g(PIT + Vector2(-1.2, 7.0), 0.45), "l0":_g(PIT, 1.4),
 		"e1":_g(PIT + Vector2(-1.0, 6.3), 0.4), "l1":_g(PIT, 4.6), "fov0":54.0, "fov1":50.0, "shake_from":0.3})
 
-# --- the climax: it rears up and roars, pouring its soul-fire at them (roar: over our heroes' shoulders; roar2: low in
-# front of its head). Up from the staging (its rise is over by 2.2 s), the breath at 2.4 ---
+# --- the climax: it rears up and roars, pouring its soul-fire at them (roar: between our heroes; roar2: low in front of
+# it, the soul-fire pouring at the lens). Up from the staging (its rise is over by 2.2 s), the breath at 2.4 ---
 func _stage_roar() -> void:
-	var trio := {"you": Vector2(-0.6, 8.2), "b2": Vector2(-2.6, 9.3), "b3": Vector2(1.6, 9.6)}
+	var trio := {"you": Vector2(-0.6, 8.2), "b2": Vector2(-3.8, 9.0), "b3": Vector2(1.6, 9.6)}
 	for id in trio:
 		_place(id, PIT + (trio[id] as Vector2), PIT)
 		_sturdy(id)
 	_soul_light(_g(PIT, 2.0), 1.6)
 	_wyrm_at(0.0)
 	_beat(2.4, _breath)
-	_cam(0.0, 5.6, {"kind":"world", "e0":_g(PIT + Vector2(-3.4, 12.6), 1.45), "l0":_g(PIT + Vector2(0.9, 0.6), 3.4),
-		"e1":_g(PIT + Vector2(-3.0, 11.6), 1.3), "l1":_g(PIT + Vector2(0.9, 0.6), 3.9), "fov0":34.0, "fov1":30.0,
+	_cam(0.0, 5.6, {"kind":"world", "e0":_g(PIT + Vector2(-3.2, 11.4), 1.2), "l0":_g(PIT + Vector2(0.3, 0.5), 3.5),
+		"e1":_g(PIT + Vector2(-3.0, 10.6), 1.1), "l1":_g(PIT + Vector2(0.3, 0.5), 4.0), "fov0":40.0, "fov1":36.0,
 		"shake_from":2.45})
 
 func _stage_roar2() -> void:
-	var trio := {"you": Vector2(-0.6, 8.2), "b2": Vector2(-2.6, 9.3), "b3": Vector2(1.6, 9.6)}
+	var trio := {"you": Vector2(-0.6, 8.2), "b2": Vector2(-3.8, 9.0), "b3": Vector2(1.6, 9.6)}
 	for id in trio:
 		_place(id, PIT + (trio[id] as Vector2), PIT)
 		_sturdy(id)
 	_soul_light(_g(PIT, 2.0), 1.6)
 	_wyrm_at(0.0)
 	_beat(2.4, _breath)
-	_cam(0.0, 5.6, {"kind":"world", "e0":_g(PIT + Vector2(-4.9, 2.9), 0.5), "l0":_g(PIT + Vector2(0.0, 1.2), 3.8),
-		"e1":_g(PIT + Vector2(-4.5, 2.6), 0.45), "l1":_g(PIT + Vector2(0.0, 1.2), 4.4), "fov0":56.0, "fov1":52.0,
+	_cam(0.0, 5.6, {"kind":"world", "e0":_g(PIT + Vector2(0.9, 6.6), 0.9), "l0":_g(PIT + Vector2(0.0, 1.4), 4.0),
+		"e1":_g(PIT + Vector2(0.7, 6.2), 0.8), "l1":_g(PIT + Vector2(0.0, 1.4), 4.6), "fov0":58.0, "fov1":54.0,
 		"shake_from":2.45})
 
 # --- the title: black; the lightning rift splits the dark (cue B's first hit, TITLE_A); FATE and BOUND fly in from the
@@ -590,6 +590,7 @@ const TITLE_FLIGHT := 0.32
 const TITLE_W := 1180.0                 # the title's width on a 1920 x 1080 frame
 const TITLE_Y := 0.40                   # its middle, this far down
 const TAG_AT := 1.7                     # the tagline, this long after the slam
+const TITLE_CRACKS := [[1.9, 0.55], [2.6, 0.7], [3.3, 0.8], [4.45, 1.0]]   # the rift crackling alone: [time, strength]
 var tl: Dictionary = {}
 
 func _stage_title() -> void:
@@ -691,6 +692,13 @@ func _title_step(delta: float) -> void:
 		printerr("TITLE_A t=%.3f" % t)
 	if bool(tl.a):
 		dim.color.a = lerpf(1.0, 0.5, clampf((t - TITLE_A) / 1.2, 0.0, 1.0))
+		var ci := int(tl.get("crack", 0))
+		if ci < TITLE_CRACKS.size() and t >= float(TITLE_CRACKS[ci][0]):
+			var k := float(TITLE_CRACKS[ci][1])
+			logo.rift.burst(k)
+			flash.color.a = maxf(flash.color.a, 0.22 * k)
+			tl.shake = maxf(float(tl.shake), 0.3 * k)
+			tl["crack"] = ci + 1
 	var fly0 := TITLE_B - TITLE_FLIGHT
 	if t >= fly0 and not bool(tl.b):
 		var p := clampf((t - fly0) / TITLE_FLIGHT, 0.0, 1.0)
