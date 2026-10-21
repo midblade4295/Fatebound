@@ -44,17 +44,20 @@ The Oracle is waiting. Probably bored. Go get her!
 
 ---
 
-## Graphics in this folder
+## Graphics (`../graphics/`)
 | File | Use | Size |
 |---|---|---|
-| `01_battle.png` … `08_home.png` | Phone screenshots, in this order | 1080 × 1920 (9:16) |
-| `feature_graphic_1024x500.png` | Feature graphic (required) | 1024 × 500 |
+| `phone_screenshots/01_teamfight.png` … `08_tutorial.png` | Google Play phone screenshots, in this order | 1080 × 1920 (9:16) |
+| `feature_graphic_1024x500.png` | Google Play feature graphic (required) | 1024 × 500 |
+| `app_store/iphone_6_9in/01_teamfight.png` … `09_chest.png` | App Store iPhone 6.9" screenshots, in this order | 1320 × 2868 |
+| `app_store/ipad_13in/01_teamfight.png` … `09_chest.png` | App Store iPad 13" screenshots, in this order | 2048 × 2732 |
 
-Captions, in order: STORM THE CASTLE · RESCUE YOUR ORACLE · THE HAT MAKES THE HERO · SPIN. SHIELD. SMASH. ·
-FEED THEIR ORACLE CAKE · LEARN FROM THE HERALD · SKINS, WEAPONS & PACKS · SEVEN CLASSES
+Captions, in order: 5V5 HERO BATTLES · 18 CHAMPIONS · TOPPLE THEIR KING · SLAY THE GRAVE WYRM · 36 OUTFITS ·
+BUILD YOUR CLAN · SQUAD UP · LEARN FROM THE HERALD (· OPEN CHESTS, App Store only: Play takes 8)
 
-Every image is a real render of build 0.19.1 (in-game HUD included; the developer fps line hidden).
-Regenerate with `tools/store_shots_match.gd` and `tools/store_shots_app.gd` (see their headers).
+Every image is a real render of build 0.31.199 (the 5v5; the HUD as it plays, or the game's own engine with a camera of
+its own). Regenerate with `godot/tools/store4_match.gd`, `store4_app.gd` and `store4_compose.py` (`../README_FOR_AI.md`
+section 5). **The text above is still the 16 vs 16 Siege game's: rewrite it for the 5v5 before publishing.**
 
 ## Check before publishing
 - **In-app purchases:** the text doesn't mention prices. If gems or the premium pass will be sold for
