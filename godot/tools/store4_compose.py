@@ -107,6 +107,21 @@ def wrap(text, f, width, draw):
     return lines
 
 
+def balanced(text, f, width, draw):
+    # as few lines as fit, and as even as they can be (no word left alone on the last line)
+    lines = wrap(text, f, width, draw)
+    if len(lines) < 2:
+        return lines
+    lo = width
+    while lo > width * 0.4:
+        trial = wrap(text, f, lo - 8, draw)
+        if len(trial) > len(lines):
+            break
+        lo -= 8
+        lines = trial
+    return lines
+
+
 def fire_ice_bar(w, h):
     bar = Image.new("RGB", (w, h))
     d = ImageDraw.Draw(bar)
@@ -129,7 +144,7 @@ def compose(raw, target, headline, line):
     hf = font(TITLE_FONT, t["h"])
     lf = font(BODY_FONT, t["l"])
     y = t["top"]
-    for ln in wrap(headline, hf, W * 0.9, d):
+    for ln in balanced(headline, hf, W * 0.9, d):
         tw = d.textlength(ln, font=hf)
         sh = Image.new("RGBA", (W, int(t["h"] * 1.4)), (0, 0, 0, 0))
         ImageDraw.Draw(sh).text(((W - tw) / 2, 6), ln, font=hf, fill=(0, 0, 0, 170))
@@ -140,7 +155,7 @@ def compose(raw, target, headline, line):
     bh = max(6, t["h"] // 12)
     canvas.alpha_composite(fire_ice_bar(bw, bh), ((W - bw) // 2, y + bh))
     y += bh * 3 + t["l"] // 3
-    for ln in wrap(line, lf, W * 0.86, d):
+    for ln in balanced(line, lf, W * 0.86, d):
         tw = d.textlength(ln, font=lf)
         d.text(((W - tw) / 2, y), ln, font=lf, fill=LINE, stroke_width=2, stroke_fill=INK)
         y += int(t["l"] * 1.25)
