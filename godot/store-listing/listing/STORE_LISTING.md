@@ -1,46 +1,62 @@
-# Fatebound: Siege — Google Play store listing
+# Fatebound — Google Play and App Store listing (0.31.200, the 5v5)
 
-## App name (max 30) — 16 characters
-Fatebound: Siege
+## App name (max 30) — 27 characters
+Fatebound: 5v5 Hero Battles
 
-## Short description (max 80) — 73 characters
-Storm castles, steal hats and rescue your Oracle in chaotic 16v16 sieges!
+(The Play listing is still "Fatebound: Siege" until this is saved in the Play Console; the game itself is FATEBOUND.)
 
-## Full description (max 4000) — 1878 characters
-Your Oracle has been kidnapped. Rude. Grab a hat, rally your team and storm the enemy castle to bring her home!
+## Short description (max 80) — 77 characters
+Fast 5v5 hero battles! Pick a champion, push the lanes and topple their King.
 
-Fatebound: Siege is a chaotic medieval team battle for 16 vs 16 players. Break down the gates, carry your Oracle out of the enemy dungeon and get her back to your throne. Three rescues wins the match. Meanwhile, the other team is trying to do the exact same thing to you.
+## Full description (max 4000) — 2238 characters
+Their King sits on a very comfortable chair. Knock him off it.
 
-THE HAT MAKES THE HERO
-Everyone starts as a humble Villager. Walk into a hat shop and become a hero:
-• Knight: raise your shield and protect everyone standing behind you
-• Barbarian: smash gates, then upgrade to Berserker and whirlwind through crowds
-• Rogue: lunge in for the quick strike
-• Ranger: rain down volleys of arrows
-• Mage: blast groups apart with an arcane nova
-• Priest: heal allies with a holy beam and a sanctuary
-• Worker: chop wood, mine stone, repair gates and build ladders
-Fall in battle and your hat drops where you stood. Anyone can pick it up. Yes, even the enemy.
+Fatebound is a fast 5v5 hero battle game (a MOBA) made for your phone. Pick a champion, team up with four others, push down three lanes past the enemy towers and topple their King before they topple yours. Every match is a fresh fight of up to 20 minutes.
 
-SIEGE LIKE YOU MEAN IT
-• Break the gates or build ladders over the walls to get into the enemy castle
-• Carry your Oracle home together. The heavier she is, the more hands it takes
-• Feed the enemy's captive cake to make her heavier. Delicious sabotage.
-• Capture outposts to earn wood and stone and to respawn closer to the action
-• Spend resources at the workshop on reinforced gates, better armor and catapults
-• Upgrade each hat shop to unlock the Paladin, Berserker, Assassin, Sniper, Archmage and High Priest
+PICK YOUR CHAMPION
+• 18 champions in six roles: tanks, fighters, assassins, mages, marksmen and supports
+• Every champion has three abilities, plus an ultimate that unlocks at level 6
+• Level up during the match and choose an upgrade card each time
+• 12 champions are yours from the start and two more are free each week. Unlock the rest with the gold you win in matches
+
+TAKE THE RIFT
+• Three lanes, three towers in each, and two more guarding the King
+• Minion waves march down every lane. Land the last hit and the gold is yours
+• Clear jungle camps for gold, experience and powerful buffs
+• Slay the Grave Wyrm, or bring down the Bone Lord and send him marching for your side
+• Buy items in the shop and build them into bigger ones
+• Tap HOME to teleport back to your castle and heal up
+• Place wards to see through the fog of war
+• Every knockout pays, and every death feeds the other team. First Blood, multi-kills, shutdowns and Aces
 
 PLAY YOUR WAY
-• Jump into online 16 vs 16 battles
-• Or play offline against bots, anytime
-• Learn the ropes with the Royal Herald's funny, hands-on tutorial
+• Online 5v5 matches, with bots filling any empty seats
+• Or play a match against bots whenever you like
+• Party up with friends and clanmates, up to five together
+• Learn the ropes from the Royal Herald in a funny, fully voiced tutorial
 
-MAKE IT YOURS
-• Unlock skins, weapons, titles and bundles
-• Level up the Siege Pass and complete daily and weekly challenges
-• Everything you unlock is cosmetic. No pay-to-win.
+JOIN A CLAN
+• Choose your crest and grow your clan's camp from a single tent to a great hall
+• Earn clan points in every match for the weekly Clan Chest, and climb the Clan League
+• Ask your clan for hero shards, and give yours to clanmates
+• Call for players with Looking For Group and jump straight into a party
+• Chat with your clan, your party and everyone online
 
-The Oracle is waiting. Probably bored. Go get her!
+COLLECT AND CUSTOMIZE
+• 36 outfits: a set made for every champion with its own weapon, plus the Frostbound line
+• Win chests full of gold, gems and hero shards
+• Level up the Siege Pass, finish daily orders and champion quests, and win weekly leaderboard prizes
+• Outfits are cosmetic only
+
+Your King is counting on you. He's also eating. Mostly eating.
+
+---
+
+## App Store extras
+- **Subtitle** (max 30) — 16 characters: 5v5 Hero Battles
+- **Promotional text** (max 170) — 149 characters: New: the Royal Herald welcomes every new recruit, clans have their own camps, and 18 champions are ready for the Rift. Team up and topple their King!
+- **Keywords** (max 100, commas, no spaces) — 99 characters: `moba,5v5,arena,champions,heroes,lanes,towers,clan,multiplayer,pvp,fantasy,battle,team,strategy,rift`
+- **Description**: the full description above (the App Store's limit is 4,000 too).
 
 ---
 
@@ -57,14 +73,14 @@ BUILD YOUR CLAN · SQUAD UP · LEARN FROM THE HERALD (· OPEN CHESTS, App Store 
 
 Every image is a real render of build 0.31.199 (the 5v5; the HUD as it plays, or the game's own engine with a camera of
 its own). Regenerate with `godot/tools/store4_match.gd`, `store4_app.gd` and `store4_compose.py` (`../README_FOR_AI.md`
-section 5). **The text above is still the 16 vs 16 Siege game's: rewrite it for the 5v5 before publishing.**
+section 5). The text above is the 5v5's (0.31.200), every line checked against the game's code (`listing.json` → `game_facts`).
 
 ## Check before publishing
 - **In-app purchases:** the text doesn't mention prices. If gems or the premium pass will be sold for
   real money, Play shows "In-app purchases" automatically once billing products exist; keep the
-  "No pay-to-win" line true (shop items are cosmetic today).
+  "Outfits are cosmetic only" line true.
 - **Ads:** the text makes no claim either way; declare ads truthfully in the Play Console.
 - **Data safety / privacy policy:** online play connects to the Siege server (player name, match
   inputs); Play requires a privacy policy URL and a Data safety form.
 - **Content rating:** cartoon fantasy violence; fill in the IARC questionnaire accordingly.
-- **App icon:** a 512 × 512 icon is required separately (not in this folder).
+- **App icon:** `../graphics/app_icon_512x512.png` (Play) and `../ios/app_icon_1024.png` (App Store), 0.31.200's.

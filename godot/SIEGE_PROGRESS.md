@@ -6369,3 +6369,23 @@ Kevin: "Need all new pics for app stores".
   game's -- to be rewritten before publishing. The app icon is still 0.31.89's King Rescue.
 - Found on the way: lavapipe runs out of memory on the Grave Wyrm with shadows (FB_FORCE_HQ), so its shots render
   without; and the staging's levelling loop must stop at Moba.LEVEL_MAX (10).
+
+## 0.31.200 — a new game icon and the store description for the 5v5
+Kevin: "Yes make new game icon and store description".
+- The icon: six concepts (art_sources/app_icon/concepts: A a Knight and a Barbarian clashing over the logo's fire-and-ice
+  rift with its crown above, B a crowned shield split by the rift, C a charging Knight with the crown on his helmet; two
+  takes each, gpt-image-2 with the title logo and Home's camp painting as references, 4,784 ElevenLabs credits). A2 is
+  the icon: tools/build_app_icon.py makes assets/branding/icon.png (192, the legacy launcher icon and the window's),
+  background.png (the adaptive icon's back layer: the painting over its middle 80 dp, the edges mirrored into the
+  parallax margin), foreground.png (clear), the Play icon (store-listing/graphics/app_icon_512x512.png, fastlane's
+  icon.png) and the App Store's (store-listing/ios/app_icon_1024.png, which the iOS export uses). monochrome.png (the
+  themed icon's crown) unchanged.
+- The store text, rewritten for the 5v5 (store-listing/listing: STORE_LISTING.md, listing.json with a new game_facts
+  sheet, fastlane's title / short / full description): "Fatebound: 5v5 Hero Battles" (the Play listing keeps its old
+  name until Kevin saves the new one), the short line, the full description (champions and roles, the Rift, playing
+  online or against bots, parties, clans, outfits, chests, the pass; "Outfits are cosmetic only" -- not "no pay-to-win":
+  champions can also be bought with gems), and the App Store's subtitle, promotional text and keywords. Every claim
+  checked against the code (the figures: 18 champions, 12 owned from the start, 2 free a week, 20-minute matches,
+  parties of 5, 36 outfits).
+- Version 0.31.200, versionCode 286, SERVER_BUILD 0.31.200. Packs unchanged (the icons are in the base build); CONTENT
+  OK, coverage OK, presets unchanged.

@@ -1,12 +1,12 @@
-# Fatebound: Siege — Google Play store listing package (instructions for an AI agent)
+# Fatebound — Google Play and App Store listing package (instructions for an AI agent)
 
 Owner: **Kevin** (solo developer, GitHub `midblade4295`). Game repo: `github.com/midblade4295/Fatebound`,
 branch `claude/siege-dev-r5` (sanitized R5 source `d05f585`; this package is now included under
 `godot/store-listing/`). Read `godot/PLAY_STORE_HANDOFF.md` for current release build/signing instructions. Every image in this package
 is a real render of the game. The screenshots and feature graphic are from **0.31.199 (versionCode 285)**, the 5v5
 game, branch `claude/siege-dev-r6-local` (Kevin: "Need all new pics for app stores"): Google Play's phone set and
-feature graphic, and the App Store's iPhone 6.9" and iPad 13" sets. **The listing text is older** -- it still describes
-the 16 vs 16 Siege game; rewrite it for the 5v5 before publishing.
+feature graphic, and the App Store's iPhone 6.9" and iPad 13" sets. The listing text and the app icon are 0.31.200's
+(Kevin: "Yes make new game icon and store description").
 
 > Run the fastlane command from the repository root. Screenshot commands run from `godot/`.
 > Archive store-listing tools/assets are development material: exclude `store-listing/*` from Android game exports.
@@ -21,8 +21,9 @@ the 16 vs 16 Siege game; rewrite it for the 5v5 before publishing.
    `com.fatebound.game` (Godot export preset "Android Play Store"); a Play release needs an AAB from that
    preset signed with Kevin's upload key. Never create, move or use production signing keys.
 3. **Don't invent claims.** Everything the listing says is true of the build; `listing/listing.json` →
-   `game_facts` is the verified fact sheet (from the game code). Keep "Cosmetics only. No pay-to-win."
-   true — if anything paid ever affects gameplay, remove that line and screenshot 7's caption.
+   `game_facts` is the verified fact sheet (from the game code). Keep "Outfits are cosmetic only" true —
+   if an outfit ever changes gameplay, remove that line. (Champions can be bought with gems as well as won with gold,
+   so the text doesn't claim "no pay-to-win".)
 4. **Don't alter the screenshots** except by regenerating them with `tools/` (section 5). Play forbids
    misleading screenshots; these show the real game with its real HUD.
 5. If a step needs something that isn't here (Kevin's Play account decisions), stop and
@@ -45,20 +46,22 @@ the 16 vs 16 Siege game; rewrite it for the 5v5 before publishing.
 | `tools/fonts/` | The game's fonts as TTF (Cinzel Black, Nunito ExtraBold) + their SIL OFL licenses |
 
 ## 2. The listing (en-US)
-- **App name** (≤30): `Fatebound: Siege` — 16 chars
-- **Short description** (≤80): 73 chars — see `listing/STORE_LISTING.md`
-- **Full description** (≤4000): 1,878 chars — see `listing/STORE_LISTING.md`
+- **App name** (≤30): `Fatebound: 5v5 Hero Battles` — 27 chars (the Play listing still says "Fatebound: Siege" until saved)
+- **Short description** (≤80): 77 chars — see `listing/STORE_LISTING.md`
+- **Full description** (≤4000): 2,238 chars — see `listing/STORE_LISTING.md`
+- **App Store**: subtitle, promotional text and keywords — see `listing/STORE_LISTING.md` → App Store extras
 
 Screenshot captions, in order (0.31.199): 5V5 HERO BATTLES · 18 CHAMPIONS · TOPPLE THEIR KING · SLAY THE GRAVE WYRM ·
 36 OUTFITS · BUILD YOUR CLAN · SQUAD UP · LEARN FROM THE HERALD, and on the App Store also OPEN CHESTS (each with a
-subline; `listing/listing.json` → `phone_screenshots`, `app_store_screenshots`). The listing text is still the Siege
-game's (16 vs 16, the Oracle, hats) -- rewrite it for the 5v5 before publishing.
+subline; `listing/listing.json` → `phone_screenshots`, `app_store_screenshots`).
 
 ## 3. Fill it in — Play Console (manual)
 1. Play Console → the app (**`com.fatebound.game`**) → **Grow users → Store presence → Main store listing**.
 2. **App details:** App name, Short description, Full description — paste from `listing/STORE_LISTING.md`.
 3. **Graphics:**
-   - App icon (512×512, 32-bit PNG) — `graphics/app_icon_512x512.png` (0.31.89, Kevin's pick "King Rescue").
+   - App icon (512×512, 32-bit PNG) — `graphics/app_icon_512x512.png` (0.31.200: a Knight and a Barbarian clash over
+     the logo's fire-and-ice rift; `ios/app_icon_1024.png` is the App Store's; `godot/tools/build_app_icon.py` makes all
+     of them, and the app's launcher icons, from `art_sources/app_icon/icon.png`).
    - Feature graphic — `graphics/feature_graphic_1024x500.png`.
    - Phone screenshots — `graphics/phone_screenshots/01_teamfight.png` through `08_tutorial.png`, in that order.
    - Tablet screenshots — none provided (optional; skip unless Kevin asks).

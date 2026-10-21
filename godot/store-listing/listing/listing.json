@@ -1,19 +1,19 @@
 {
  "language": "en-US",
- "app_name": "Fatebound: Siege",
- "short_description": "Storm castles, steal hats and rescue your Oracle in chaotic 16v16 sieges!",
- "full_description": "Your Oracle has been kidnapped. Rude. Grab a hat, rally your team and storm the enemy castle to bring her home!\n\nFatebound: Siege is a chaotic medieval team battle for 16 vs 16 players. Break down the gates, carry your Oracle out of the enemy dungeon and get her back to your throne. Three rescues wins the match. Meanwhile, the other team is trying to do the exact same thing to you.\n\nTHE HAT MAKES THE HERO\nEveryone starts as a humble Villager. Walk into a hat shop and become a hero:\n• Knight: raise your shield and protect everyone standing behind you\n• Barbarian: smash gates, then upgrade to Berserker and whirlwind through crowds\n• Rogue: lunge in for the quick strike\n• Ranger: rain down volleys of arrows\n• Mage: blast groups apart with an arcane nova\n• Priest: heal allies with a holy beam and a sanctuary\n• Worker: chop wood, mine stone, repair gates and build ladders\nFall in battle and your hat drops where you stood. Anyone can pick it up. Yes, even the enemy.\n\nSIEGE LIKE YOU MEAN IT\n• Break the gates or build ladders over the walls to get into the enemy castle\n• Carry your Oracle home together. The heavier she is, the more hands it takes\n• Feed the enemy's captive cake to make her heavier. Delicious sabotage.\n• Capture outposts to earn wood and stone and to respawn closer to the action\n• Spend resources at the workshop on reinforced gates, better armor and catapults\n• Upgrade each hat shop to unlock the Paladin, Berserker, Assassin, Sniper, Archmage and High Priest\n\nPLAY YOUR WAY\n• Jump into online 16 vs 16 battles\n• Or play offline against bots, anytime\n• Learn the ropes with the Royal Herald's funny, hands-on tutorial\n\nMAKE IT YOURS\n• Unlock skins, weapons, titles and bundles\n• Level up the Siege Pass and complete daily and weekly challenges\n• Everything you unlock is cosmetic. No pay-to-win.\n\nThe Oracle is waiting. Probably bored. Go get her!",
+ "app_name": "Fatebound: 5v5 Hero Battles",
+ "short_description": "Fast 5v5 hero battles! Pick a champion, push the lanes and topple their King.",
+ "full_description": "Their King sits on a very comfortable chair. Knock him off it.\n\nFatebound is a fast 5v5 hero battle game (a MOBA) made for your phone. Pick a champion, team up with four others, push down three lanes past the enemy towers and topple their King before they topple yours. Every match is a fresh fight of up to 20 minutes.\n\nPICK YOUR CHAMPION\n• 18 champions in six roles: tanks, fighters, assassins, mages, marksmen and supports\n• Every champion has three abilities, plus an ultimate that unlocks at level 6\n• Level up during the match and choose an upgrade card each time\n• 12 champions are yours from the start and two more are free each week. Unlock the rest with the gold you win in matches\n\nTAKE THE RIFT\n• Three lanes, three towers in each, and two more guarding the King\n• Minion waves march down every lane. Land the last hit and the gold is yours\n• Clear jungle camps for gold, experience and powerful buffs\n• Slay the Grave Wyrm, or bring down the Bone Lord and send him marching for your side\n• Buy items in the shop and build them into bigger ones\n• Tap HOME to teleport back to your castle and heal up\n• Place wards to see through the fog of war\n• Every knockout pays, and every death feeds the other team. First Blood, multi-kills, shutdowns and Aces\n\nPLAY YOUR WAY\n• Online 5v5 matches, with bots filling any empty seats\n• Or play a match against bots whenever you like\n• Party up with friends and clanmates, up to five together\n• Learn the ropes from the Royal Herald in a funny, fully voiced tutorial\n\nJOIN A CLAN\n• Choose your crest and grow your clan's camp from a single tent to a great hall\n• Earn clan points in every match for the weekly Clan Chest, and climb the Clan League\n• Ask your clan for hero shards, and give yours to clanmates\n• Call for players with Looking For Group and jump straight into a party\n• Chat with your clan, your party and everyone online\n\nCOLLECT AND CUSTOMIZE\n• 36 outfits: a set made for every champion with its own weapon, plus the Frostbound line\n• Win chests full of gold, gems and hero shards\n• Level up the Siege Pass, finish daily orders and champion quests, and win weekly leaderboard prizes\n• Outfits are cosmetic only\n\nYour King is counting on you. He's also eating. Mostly eating.",
  "lengths": {
   "app_name": [
-   16,
+   27,
    30
   ],
   "short_description": [
-   73,
+   77,
    80
   ],
   "full_description": [
-   1878,
+   2238,
    4000
   ]
  },
@@ -88,7 +88,13 @@
   "size": "1024x500 RGB PNG (no alpha)",
   "shows": "the FATEBOUND title (fire and ice, the crown over the rift) and 5V5 HERO BATTLES over a 5v5 fight in the river (in-engine)"
  },
- "app_icon": null,
+ "app_icon": {
+  "file": "graphics/app_icon_512x512.png",
+  "ios": "ios/app_icon_1024.png",
+  "size": "512x512 32-bit PNG (Play); 1024x1024 RGB PNG (App Store)",
+  "shows": "0.31.200: a chibi Knight (blue, icy) and Barbarian (bear hood, fiery) clashing sword on axe over the logo's lightning rift, the golden crown above",
+  "source": "art_sources/app_icon/icon.png (concept A2; A1-C2 in art_sources/app_icon/concepts), built by godot/tools/build_app_icon.py"
+ },
  "rendered_from": {
   "repo": "github.com/midblade4295/Fatebound",
   "branch": "claude/siege-dev-r6-local",
@@ -105,36 +111,14 @@
   "com.fatebound.kaykitrebuild": "export preset 'Android KayKit Rebuild' (Siege preview APKs, preview-signed; NOT for Play)"
  },
  "game_facts": {
-  "mode": "16 vs 16 team siege; online (Siege server) or offline vs bots",
-  "win": "3 Oracle rescues (carry your Oracle from the enemy dungeon to your throne); 12-minute match timer",
-  "classes": {
-   "Villager": "starting class, no ability",
-   "Worker": "chops wood, mines stone, repairs gates, builds ladders",
-   "Knight": "block: hold to raise a shield that stops hits for the knight (front) and allies behind",
-   "Barbarian": "spin; upgraded Berserker: 3 s whirlwind with a greatsword",
-   "Rogue": "lunge",
-   "Ranger": "volley",
-   "Mage": "nova",
-   "Priest": "healing beam (attack) + sanctuary"
-  },
-  "upgraded_classes": [
-   "Paladin",
-   "Berserker",
-   "Assassin",
-   "Sniper",
-   "Archmage",
-   "High Priest"
-  ],
-  "hats": "classes come from hat shops in each castle; upgrades are bought at each hat shop; dropped hats can be taken by anyone",
-  "workshop": [
-   "Reinforced Gates",
-   "Armory",
-   "Catapults"
-  ],
-  "outposts": "capture to respawn forward; each pays +1 wood +1 stone every 15 s",
-  "cake": "feed cake to the enemy's captive Oracle to make her heavier (more lifters needed)",
-  "tutorial": "narrated by the Royal Herald; voiceover-ready",
-  "meta": "Siege Pass (free + premium tracks), daily and weekly challenges, cosmetic skins/weapons/titles/packs; shop is cosmetic only"
+  "mode": "5v5 on the Rift (three lanes, three towers a lane and two King towers; gates; the King in each keep). Online (the Siege server, bots fill empty seats) or against bots (a ticket from the server)",
+  "win": "knock the enemy King down (he can be hurt once both his King towers fall); 20-minute matches (moba.gd MATCH_5V5), time up: tiebreak on damage to the Kings, then towers, then knockouts",
+  "champions": "18 (moba.gd HERO_ORDER) in six roles (moba_kits ROLE_OF: tank, fighter, assassin, mage, marksman, support); Q W E abilities (levels 1-3) and R the ultimate at level 6; levels to 10 with an upgrade card each level",
+  "unlocks": "12 champions owned from the start; 6 sold (economy.gd HERO_PRICES: 25,000 gold, or gems, a shard or a Hero Token); 2 of them free each week (FREE_HEROES)",
+  "match": "minion waves (last hits pay), jungle camps with buffs (Arcane Wraith, Ember Brute), the Bone Lord (his side's minions stronger, he marches for them) and the Grave Wyrm; items built from smaller ones; HOME recall (6 s) to the castle, whose fountain heals; wards against the fog of war; kill banners (First Blood, multi-kills, shutdown, Ace); bounties",
+  "social": "friends, parties of up to 5, global / party / clan chat; clans: crest, a camp that grows over 10 levels (4 stages), weekly Clan Chest and Clan League, shard requests, Looking For Group",
+  "collect": "36 outfits (18 epic sets with their own weapons + 18 Frostbound), chests (gold, gems, hero shards), the Siege Pass, daily orders, champion quests, weekly leaderboard prizes; outfits cosmetic only",
+  "tutorial": "the Royal Herald's welcome (name, tour of Home) and the voiced 5v5 tutorial"
  },
  "app_store_screenshots": {
   "sizes": {
@@ -215,5 +199,24 @@
     "shows": "a Royal Chest opened: a Dragoon shard, gold and gems"
    }
   ]
+ },
+ "app_store": {
+  "subtitle": "5v5 Hero Battles",
+  "promotional_text": "New: the Royal Herald welcomes every new recruit, clans have their own camps, and 18 champions are ready for the Rift. Team up and topple their King!",
+  "keywords": "moba,5v5,arena,champions,heroes,lanes,towers,clan,multiplayer,pvp,fantasy,battle,team,strategy,rift",
+  "lengths": {
+   "subtitle": [
+    16,
+    30
+   ],
+   "promotional_text": [
+    149,
+    170
+   ],
+   "keywords": [
+    99,
+    100
+   ]
+  }
  }
 }
