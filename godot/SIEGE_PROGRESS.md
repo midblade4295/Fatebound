@@ -6392,3 +6392,16 @@ Kevin: "Yes make new game icon and store description".
 - Verified: suite all passed (100), COLD_START_PASS, the Play-shape AAB check exit 0 (bundletool valid), presets
   unchanged; the APK's launcher layers are the A1 icon's. Preview APK: build/Fatebound-Siege-0.31.200-fatebound.apk
   (32 MB, preview key), sha256 3eab57c4...87ff253f2.
+
+## The social media kit (no app change)
+Kevin: "Give me social media package that has banner and icon".
+- Key art: art_sources/social/key_art.png (2048 x 1152, gpt-image-2 with the app icon, Home's camp painting and the title
+  logo as references: the icon's Knight and Barbarian clashing over the ice-and-fire rift, the crown above, the Mage and
+  the Archer, the Necromancer and the Musketeer, a castle each side); key_art_take1.png the other take. 1,944 ElevenLabs
+  credits for the two. The prompt and node in art_sources/social/README.txt.
+- tools/build_social_kit.py makes store-listing/social (.gdignore'd; not in any export): banners for the X header, the
+  YouTube banner (the art inside the 1546 x 423 strip every device shows, over a blurred copy of itself), the Facebook
+  cover, the Twitch and Discord banners, a 1200 x 630 link-preview card, the key art with and without the title; the
+  avatars (the app icon at 1080/800/512/400/256: it was drawn for round masks), the icon at 1024 and the title logo
+  see-through. The title sits top centre on the art's rift; the art's crown is painted out under it (the logo has its
+  own). preview.jpg shows them all; README.md says where each goes.

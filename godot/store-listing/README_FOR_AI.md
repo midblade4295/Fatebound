@@ -39,6 +39,7 @@ feature graphic, and the App Store's iPhone 6.9" and iPad 13" sets. The listing 
 | `graphics/app_store/iphone_6_9in/01_teamfight.jpg … 09_chest.jpg` | App Store iPhone 6.9" screenshots (1320×2868), in this order |
 | `graphics/app_store/ipad_13in/01_teamfight.jpg … 09_chest.jpg` | App Store iPad 13" screenshots (2048×2732) -- needed while the export allows iPad |
 | `graphics/raw_renders/*.webp` | The uncaptioned renders they were composed from (`<shot>_play` 16:9, `_phone` 19.5:9, `_ipad` 3:4, `feature`) |
+| `social/` | The social media kit: banners (X, YouTube, Facebook, Twitch, Discord, link previews, key art) and profile icons -- see `social/README.md`; made by `godot/tools/build_social_kit.py` |
 | `fastlane/metadata/android/en-US/…` | The same text + Play images in fastlane `supply` layout |
 | `godot/tools/store4_match.gd`, `store4_app.gd` | Godot scripts that render the raw screenshots (5v5 moments, the app's screens) |
 | `godot/tools/store4_compose.py` | Adds captions and devices and builds the feature graphic (from the raw renders) |
