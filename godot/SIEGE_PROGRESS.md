@@ -6374,8 +6374,8 @@ Kevin: "Need all new pics for app stores".
 Kevin: "Yes make new game icon and store description".
 - The icon: six concepts (art_sources/app_icon/concepts: A a Knight and a Barbarian clashing over the logo's fire-and-ice
   rift with its crown above, B a crowned shield split by the rift, C a charging Knight with the crown on his helmet; two
-  takes each, gpt-image-2 with the title logo and Home's camp painting as references, 4,784 ElevenLabs credits). A2 is
-  the icon: tools/build_app_icon.py makes assets/branding/icon.png (192, the legacy launcher icon and the window's),
+  takes each, gpt-image-2 with the title logo and Home's camp painting as references, 4,784 ElevenLabs credits). A1 is
+  the icon (Kevin: "Use A1 instead" -- A2 until then): tools/build_app_icon.py makes assets/branding/icon.png (192, the legacy launcher icon and the window's),
   background.png (the adaptive icon's back layer: the painting over its middle 80 dp, the edges mirrored into the
   parallax margin), foreground.png (clear), the Play icon (store-listing/graphics/app_icon_512x512.png, fastlane's
   icon.png) and the App Store's (store-listing/ios/app_icon_1024.png, which the iOS export uses). monochrome.png (the

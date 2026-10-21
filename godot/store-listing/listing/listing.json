@@ -93,7 +93,7 @@
   "ios": "ios/app_icon_1024.png",
   "size": "512x512 32-bit PNG (Play); 1024x1024 RGB PNG (App Store)",
   "shows": "0.31.200: a chibi Knight (blue, icy) and Barbarian (bear hood, fiery) clashing sword on axe over the logo's lightning rift, the golden crown above",
-  "source": "art_sources/app_icon/icon.png (concept A2; A1-C2 in art_sources/app_icon/concepts), built by godot/tools/build_app_icon.py"
+  "source": "art_sources/app_icon/icon.png (concept A1, Kevin's pick; A1-C2 in art_sources/app_icon/concepts), built by godot/tools/build_app_icon.py"
  },
  "rendered_from": {
   "repo": "github.com/midblade4295/Fatebound",

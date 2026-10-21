@@ -9,6 +9,6 @@ concepts/  gpt-image-2 (1K, medium), two takes each, the title logo (godot/asset
            the other, the logo's golden crown above
   B1, B2   a heraldic shield split by the rift, ice and fire, the crown on it, a sword and an axe crossed behind
   C1, C2   one chibi Knight charging at you, sword up, the crown on his helmet, the rift behind him
-icon.png   A2 (the clash: the 5v5's two sides in the logo's colours). godot/tools/build_app_icon.py makes the launcher
+icon.png   A1 (Kevin's pick; the clash: the 5v5's two sides in the logo's colours). godot/tools/build_app_icon.py makes the launcher
            icons (assets/branding), the Play icon and the App Store's from it; to use another concept, copy it here and
            run that.
