@@ -200,8 +200,8 @@ func _stage_teamfight() -> void:
 	# swings or casts at the one across from him, a beat apart, and you (the Stormcaller) bring down your storm
 	var blue := _heroes(0)
 	var red := _heroes(1)
-	var bp := [Vector2(-5.2, 5.6), Vector2(-1.9, 4.9), Vector2(2.3, 5.1), Vector2(5.6, 5.8)]
-	var rp := [Vector2(-5.0, 0.4), Vector2(-1.6, -0.6), Vector2(1.8, 0.2), Vector2(5.2, -0.4), Vector2(0.2, -3.6)]
+	var bp := [Vector2(-5.2, 3.8), Vector2(-1.9, 3.1), Vector2(2.3, 3.3), Vector2(5.6, 4.0)]
+	var rp := [Vector2(-5.0, -1.2), Vector2(-1.6, -2.2), Vector2(1.8, -1.4), Vector2(5.2, -2.0), Vector2(0.2, -5.2)]
 	var j := 0
 	var pairs := []
 	for i in blue.size():
@@ -223,22 +223,22 @@ func _stage_teamfight() -> void:
 			u.hp = 1.0                                   # (your storm finishes these two: a DOUBLE KILL)
 		pairs.append([str(u.id), bp[mini(i, 3)]])
 	var me: Dictionary = s().by_id["you"]
-	_place(me, Vector2(0.3, 8.8), Vector2(0.0, -0.4))
+	_place(me, Vector2(0.3, 6.4), Vector2(0.0, -2.0))     # (the fight a little ahead: in the shot under the banners)
 	var acts := ["q", "a", "w", "e", "a", "q", "w", "a", "e"]
 	_plan = []
 	for i in pairs.size():
 		var f := 8 + 5 * i
 		_plan.append([f, "_face", [str(pairs[i][0]), pairs[i][1]]])
 		_plan.append([f + 1, "_cast", [str(pairs[i][0]), acts[i % acts.size()]]])
-	_plan.append([30, "_face", ["you", Vector2(-1.0, 0.0)]])
+	_plan.append([30, "_face", ["you", Vector2(-1.0, -1.6)]])
 	_plan.append([31, "_cast", ["you", "w"]])
-	_plan.append([50, "_face", ["you", Vector2(1.8, 0.2)]])
+	_plan.append([50, "_face", ["you", Vector2(1.8, -1.4)]])
 	_plan.append([51, "_cast", ["you", "r"]])
 	for i in pairs.size():
 		_plan.append([56 + i % 4, "_cast", [str(pairs[i][0]), "a"]])
 	at = 64 if scene != "teamfight" else int(OS.get_environment("AT")) if OS.has_environment("AT") else 84
 	if scene == "feature":
-		cam = [Vector3(-11.0, 7.0, 13.0), Vector3(0.5, 0.8, 2.0)]
+		cam = [Vector3(-14.0, 7.5, 12.0), Vector3(-4.0, 0.8, 1.5)]     # (the fight right of the middle: the title goes left)
 	elif scene == "fight":
 		cam = [Vector3(-9.5, 12.5, 19.5), Vector3(0.3, 0.4, 2.4)]
 

@@ -191,27 +191,32 @@ def logo():
 
 
 def feature(raw):
+    # the battle on the right (the render frames it there), the title and the line on the left over a shade
     W, H = 1024, 500
     bg = cover(raw, (W, H)).convert("RGBA")
-    # darker round the title, the battle bright at the sides
     shade = Image.new("L", (W, H), 0)
-    ImageDraw.Draw(shade).ellipse((W * 0.12, -H * 0.15, W * 0.88, H * 0.95), fill=165)
-    shade = shade.filter(ImageFilter.GaussianBlur(70))
-    bg = Image.composite(Image.new("RGBA", (W, H), INK + (255,)), bg, shade)
+    d0 = ImageDraw.Draw(shade)
+    for x in range(W):
+        d0.line([(x, 0), (x, H)], fill=int(max(0.0, 1.0 - x / (W * 0.62)) ** 1.3 * 200))
+    bg = Image.composite(Image.new("RGBA", (W, H), INK + (255,)), bg, shade.filter(ImageFilter.GaussianBlur(20)))
     lg = logo()
-    lw = 640
+    lw = 520
     lg = lg.resize((lw, int(lg.height * lw / lg.width)), Image.LANCZOS)
+    lx, ly = 28, 78
     sh = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     sh.alpha_composite(Image.merge("RGBA", (*Image.new("RGB", lg.size, (0, 0, 0)).split(), lg.split()[3].point(lambda a: a * 0.7))),
-                       ((W - lw) // 2, 54))
+                       (lx, ly + 12))
     bg.alpha_composite(sh.filter(ImageFilter.GaussianBlur(10)))
-    bg.alpha_composite(lg, ((W - lw) // 2, 40))
+    bg.alpha_composite(lg, (lx, ly))
     d = ImageDraw.Draw(bg)
-    f = font(TITLE_FONT, 40)
+    f = font(TITLE_FONT, 44)
     txt = "5V5 HERO BATTLES"
     tw = d.textlength(txt, font=f)
-    y = 40 + lg.height + 10
-    d.text(((W - tw) / 2, y), txt, font=f, fill=(255, 255, 255), stroke_width=3, stroke_fill=INK)
+    cx = lx + lw / 2
+    y = ly + lg.height + 14
+    d.text((cx - tw / 2, y), txt, font=f, fill=(255, 255, 255), stroke_width=3, stroke_fill=INK)
+    bw = int(tw * 0.7)
+    bg.alpha_composite(fire_ice_bar(bw, 6), (int(cx - bw / 2), y + 58))
     return bg.convert("RGB")
 
 
