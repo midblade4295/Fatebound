@@ -35,8 +35,8 @@ the 16 vs 16 Siege game; rewrite it for the 5v5 before publishing.
 | `listing/listing.json` | Same, machine-readable: text, lengths, screenshot order + captions, facts sheet |
 | `graphics/phone_screenshots/01_teamfight.png … 08_tutorial.png` | Google Play: 8 captioned phone screenshots (1080×1920), upload in this order |
 | `graphics/feature_graphic_1024x500.png` | Google Play feature graphic (required): the FATEBOUND title over a 5v5 fight |
-| `graphics/app_store/iphone_6_9in/01_teamfight.png … 09_chest.png` | App Store iPhone 6.9" screenshots (1320×2868), in this order |
-| `graphics/app_store/ipad_13in/01_teamfight.png … 09_chest.png` | App Store iPad 13" screenshots (2048×2732) -- needed while the export allows iPad |
+| `graphics/app_store/iphone_6_9in/01_teamfight.jpg … 09_chest.jpg` | App Store iPhone 6.9" screenshots (1320×2868), in this order |
+| `graphics/app_store/ipad_13in/01_teamfight.jpg … 09_chest.jpg` | App Store iPad 13" screenshots (2048×2732) -- needed while the export allows iPad |
 | `graphics/raw_renders/*.webp` | The uncaptioned renders they were composed from (`<shot>_play` 16:9, `_phone` 19.5:9, `_ipad` 3:4, `feature`) |
 | `fastlane/metadata/android/en-US/…` | The same text + Play images in fastlane `supply` layout |
 | `godot/tools/store4_match.gd`, `store4_app.gd` | Godot scripts that render the raw screenshots (5v5 moments, the app's screens) |
@@ -93,7 +93,8 @@ python3 tools/store4_compose.py --raw raw --out out
 Notes: each tool ends its own process once its picture is written; the match moments are staged (positions, levels,
 casts; seeded), never on the live server (SIEGE_URL unreachable; the names, clan tags and the clan are sample data).
 Look at every image before using it. Captions live in `SHOTS` in `tools/store4_compose.py` -- each checked against the
-game's code. (The 0.31.116 Siege set's store3 tools went with Siege in 0.31.169.)
+game's code. The App Store sets are kept here as JPEG (quality 95, no chroma subsampling; the App Store takes JPEG or
+PNG) to keep the repository small; the Play set is PNG. (The 0.31.116 Siege set's store3 tools went with Siege in 0.31.169.)
 
 ## 6. Before Kevin publishes (checklist — his decisions, don't answer them yourself)
 - **In-app purchases:** the text mentions no prices. If gems / the premium Siege Pass are sold for real

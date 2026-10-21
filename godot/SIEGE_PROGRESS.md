@@ -6351,3 +6351,21 @@ since players met him in the UI training. Also in training talk about how to tel
 - Verified: suite all passed (100), COLD_START_PASS, the Play-shape AAB check exit 0 (bundletool valid), presets
   unchanged. Preview APK: build/Fatebound-Siege-0.31.199-fatebound.apk (32 MB, preview key), sha256
   67747bb7...999f217b.
+
+## Store images for 0.31.199 (no app change)
+Kevin: "Need all new pics for app stores".
+- New tools: tools/store4_match.gd (the 5v5's moments, staged in a real offline match: who stands where at what level,
+  who casts what when; with the HUD as it plays, or CINE=1 a camera of its own and no fog), tools/store4_app.gd (the
+  app's screens with a mid-game profile; the friends, party and clan sample data, never the live server),
+  tools/store4_compose.py (captions in Lilita One with the logo's fire-and-ice bar, the render in a phone or tablet over
+  a blurred copy of itself, the feature graphic with the FATEBOUND title). The 3D drawn at full resolution.
+- store-listing/graphics: Google Play's 8 phone screenshots (1080 x 1920) and feature graphic, the App Store's iPhone
+  6.9" (1320 x 2868) and iPad 13" (2048 x 2732) sets of 9 (JPEG q95), the raw renders (webp); fastlane's copies; the
+  0.31.116 Siege set gone. Captions: 5V5 HERO BATTLES (a fight in the river, your storm's DOUBLE KILL) · 18 CHAMPIONS
+  (the Stormcaller's window) · TOPPLE THEIR KING (four of ours on the King on his throne) · SLAY THE GRAVE WYRM · 36
+  OUTFITS (the Phoenix Mage) · BUILD YOUR CLAN (the camp at stage 4) · SQUAD UP (Home in a party of three) · LEARN FROM
+  THE HERALD (the 5v5 tutorial's first line) · OPEN CHESTS (App Store only; Play takes 8).
+- listing.json, STORE_LISTING.md and README_FOR_AI.md updated for them. The listing TEXT is still the 16 vs 16 Siege
+  game's -- to be rewritten before publishing. The app icon is still 0.31.89's King Rescue.
+- Found on the way: lavapipe runs out of memory on the Grave Wyrm with shadows (FB_FORCE_HQ), so its shots render
+  without; and the staging's levelling loop must stop at Moba.LEVEL_MAX (10).

@@ -138,78 +138,78 @@
  },
  "app_store_screenshots": {
   "sizes": {
-   "iphone_6_9in": "1320x2868 RGB PNG",
-   "ipad_13in": "2048x2732 RGB PNG"
+   "iphone_6_9in": "1320x2868 RGB JPEG (quality 95)",
+   "ipad_13in": "2048x2732 RGB JPEG (quality 95)"
   },
   "shots": [
    {
     "order": 1,
-    "iphone_6_9in": "graphics/app_store/iphone_6_9in/01_teamfight.png",
-    "ipad_13in": "graphics/app_store/ipad_13in/01_teamfight.png",
+    "iphone_6_9in": "graphics/app_store/iphone_6_9in/01_teamfight.jpg",
+    "ipad_13in": "graphics/app_store/ipad_13in/01_teamfight.jpg",
     "headline": "5V5 HERO BATTLES",
     "subline": "Team up and take the Rift, online or against bots",
     "shows": "gameplay with the real HUD: a 5v5 fight in the river, your Stormcaller's storm finishing two of theirs -- the DOUBLE KILL banner and the kill feed"
    },
    {
     "order": 2,
-    "iphone_6_9in": "graphics/app_store/iphone_6_9in/02_champion.png",
-    "ipad_13in": "graphics/app_store/ipad_13in/02_champion.png",
+    "iphone_6_9in": "graphics/app_store/iphone_6_9in/02_champion.jpg",
+    "ipad_13in": "graphics/app_store/ipad_13in/02_champion.jpg",
     "headline": "18 CHAMPIONS",
     "subline": "Tanks, fighters, assassins, mages, marksmen and supports",
     "shows": "the Stormcaller's champion window: Torvald Stormcrown in 3D in his Stormforged outfit over his painted place, his outfits and story"
    },
    {
     "order": 3,
-    "iphone_6_9in": "graphics/app_store/iphone_6_9in/03_king.png",
-    "ipad_13in": "graphics/app_store/ipad_13in/03_king.png",
+    "iphone_6_9in": "graphics/app_store/iphone_6_9in/03_king.jpg",
+    "ipad_13in": "graphics/app_store/ipad_13in/03_king.jpg",
     "headline": "TOPPLE THEIR KING",
     "subline": "Push the lanes, break the towers, take the throne",
     "shows": "in-engine, no HUD: four of ours on their King on his throne in the open keep"
    },
    {
     "order": 4,
-    "iphone_6_9in": "graphics/app_store/iphone_6_9in/04_wyrm.png",
-    "ipad_13in": "graphics/app_store/ipad_13in/04_wyrm.png",
+    "iphone_6_9in": "graphics/app_store/iphone_6_9in/04_wyrm.jpg",
+    "ipad_13in": "graphics/app_store/ipad_13in/04_wyrm.jpg",
     "headline": "SLAY THE GRAVE WYRM",
     "subline": "Epic monsters, jungle camps and buffs that turn the fight",
     "shows": "in-engine, no HUD: the Grave Wyrm risen in its pit, its soul-fire pouring"
    },
    {
     "order": 5,
-    "iphone_6_9in": "graphics/app_store/iphone_6_9in/05_outfit.png",
-    "ipad_13in": "graphics/app_store/ipad_13in/05_outfit.png",
+    "iphone_6_9in": "graphics/app_store/iphone_6_9in/05_outfit.jpg",
+    "ipad_13in": "graphics/app_store/ipad_13in/05_outfit.jpg",
     "headline": "36 OUTFITS",
     "subline": "A set made for every champion, plus the Frostbound line",
     "shows": "the Mage's champion window in the Phoenix outfit (Elara Flintwick's library)"
    },
    {
     "order": 6,
-    "iphone_6_9in": "graphics/app_store/iphone_6_9in/06_clan.png",
-    "ipad_13in": "graphics/app_store/ipad_13in/06_clan.png",
+    "iphone_6_9in": "graphics/app_store/iphone_6_9in/06_clan.jpg",
+    "ipad_13in": "graphics/app_store/ipad_13in/06_clan.jpg",
     "headline": "BUILD YOUR CLAN",
     "subline": "A camp that grows, a weekly Clan Chest and the Clan League",
     "shows": "the clan camp at its last stage (the Iron Wolves, level 8): CLAN CHEST, SHARDS, CHAT / MEMBERS / LEAGUE / CLAN, LOOKING FOR GROUP"
    },
    {
     "order": 7,
-    "iphone_6_9in": "graphics/app_store/iphone_6_9in/07_home.png",
-    "ipad_13in": "graphics/app_store/ipad_13in/07_home.png",
+    "iphone_6_9in": "graphics/app_store/iphone_6_9in/07_home.jpg",
+    "ipad_13in": "graphics/app_store/ipad_13in/07_home.jpg",
     "headline": "SQUAD UP",
     "subline": "Parties of five with friends and clanmates",
     "shows": "Home, the champions' camp, in a party of three (PLAY x3), chests in the slots"
    },
    {
     "order": 8,
-    "iphone_6_9in": "graphics/app_store/iphone_6_9in/08_tutorial.png",
-    "ipad_13in": "graphics/app_store/ipad_13in/08_tutorial.png",
+    "iphone_6_9in": "graphics/app_store/iphone_6_9in/08_tutorial.jpg",
+    "ipad_13in": "graphics/app_store/ipad_13in/08_tutorial.jpg",
     "headline": "LEARN FROM THE HERALD",
     "subline": "A funny, fully voiced tutorial gets you battle-ready",
     "shows": "the 5v5 tutorial: the Royal Herald's first line on his scroll over our keep"
    },
    {
     "order": 9,
-    "iphone_6_9in": "graphics/app_store/iphone_6_9in/09_chest.png",
-    "ipad_13in": "graphics/app_store/ipad_13in/09_chest.png",
+    "iphone_6_9in": "graphics/app_store/iphone_6_9in/09_chest.jpg",
+    "ipad_13in": "graphics/app_store/ipad_13in/09_chest.jpg",
     "headline": "OPEN CHESTS",
     "subline": "Gold, gems and hero shards",
     "shows": "a Royal Chest opened: a Dragoon shard, gold and gems"

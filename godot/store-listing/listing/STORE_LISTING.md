@@ -49,8 +49,8 @@ The Oracle is waiting. Probably bored. Go get her!
 |---|---|---|
 | `phone_screenshots/01_teamfight.png` … `08_tutorial.png` | Google Play phone screenshots, in this order | 1080 × 1920 (9:16) |
 | `feature_graphic_1024x500.png` | Google Play feature graphic (required) | 1024 × 500 |
-| `app_store/iphone_6_9in/01_teamfight.png` … `09_chest.png` | App Store iPhone 6.9" screenshots, in this order | 1320 × 2868 |
-| `app_store/ipad_13in/01_teamfight.png` … `09_chest.png` | App Store iPad 13" screenshots, in this order | 2048 × 2732 |
+| `app_store/iphone_6_9in/01_teamfight.jpg` … `09_chest.jpg` | App Store iPhone 6.9" screenshots, in this order | 1320 × 2868 |
+| `app_store/ipad_13in/01_teamfight.jpg` … `09_chest.jpg` | App Store iPad 13" screenshots, in this order | 2048 × 2732 |
 
 Captions, in order: 5V5 HERO BATTLES · 18 CHAMPIONS · TOPPLE THEIR KING · SLAY THE GRAVE WYRM · 36 OUTFITS ·
 BUILD YOUR CLAN · SQUAD UP · LEARN FROM THE HERALD (· OPEN CHESTS, App Store only: Play takes 8)
