@@ -6433,3 +6433,21 @@ for climax along with music ramping up to climax then showing the title animatin
   x 4 840, roar / rumble / lightning x 4 200. The takes used are in tools/trailer8_vo/raw.
 - Fatebound-Trailer-8: 56.6 s, 1920x1080 at 30 fps, H.264 + AAC (1080p 100 MB; 720p phone copy 21 MB).
 
+
+## Trailer 8, revised: the Herald, the breach, no dead air (tools only, no build)
+Kevin: "I want it to be the herald voice. Also change the scene to not show king fight because king has no fight
+animations so it looks weird. Also fix pacing because there's several spots where there is no music and nothing
+happening".
+- The narration is the game's Royal Herald now (ElevenLabs v4, Edward, the voice the Herald's lines use: same ten lines,
+  2 takes, 470 credits; take 1 used, tools/trailer8_vo/raw/vo_herald_1.mp3; Don's take removed).
+- The King fight is gone, and the Necromancer's legion with it. In its place, "Topple their King." over a new run,
+  breach: their middle gate smashed in by our Knight, Golem and Archmage in slow motion, all five pouring through it,
+  the camera following them under the arch to their King on his throne ahead (no fighting on him). The tower ranges'
+  white arcs are hidden too (their ring meshes dropped like the team rings).
+- Pacing: the score is cut (trailer8_edit.py SCORE) instead of laid end to end -- the breath before the drums, most of
+  the drop, the black after the roar and the quiet between the title's two hits are taken out, crossfaded 0.12 s; every
+  shot tightened round it (the vista 4.6 s, the King 4.8 s, the pit 0.8 s, the lightning straight off the roar). The
+  only quiet left is the 0.6 s fade-up and the fade-out. A war horn under the charge, the gate's hits and blast under
+  the breach, a second rumble under the pit.
+- Fatebound-Trailer-8: 47.2 s (was 56.6), 1920x1080 at 30 fps, H.264 + AAC (1080p 92 MB; 720p 19 MB). -15.5 LUFS,
+  -1.0 dB peak (the limiter at 0.82 now).

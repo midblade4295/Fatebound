@@ -13,10 +13,10 @@ const Mode = preload("res://scripts/siege/siege_mode.gd")
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 
 const RUNS := ["map", "vista", "kingred", "charge", "clash", "storm", "meteor", "dive", "slide", "inferno", "rain", "legion", "duel", "tower",
-	"kingfight", "pit", "rise", "roar", "roar2", "title"]
-const LENGTH := {"map": 0.4, "vista": 7.5, "kingred": 6.0, "charge": 4.4, "clash": 4.2, "storm": 4.0, "meteor": 4.2, "dive": 3.6,
-	"slide": 3.4, "inferno": 3.0, "rain": 4.0, "legion": 4.0, "duel": 3.2, "tower": 4.6, "kingfight": 5.4, "pit": 5.0, "rise": 2.6, "roar": 5.6, "roar2": 5.6,
-	"title": 14.4}
+	"kingfight", "breach", "pit", "rise", "roar", "roar2", "title"]
+const LENGTH := {"map": 0.4, "vista": 5.6, "kingred": 6.0, "charge": 4.4, "clash": 4.2, "storm": 4.0, "meteor": 4.2, "dive": 3.6,
+	"slide": 3.4, "inferno": 3.0, "rain": 4.0, "legion": 4.0, "duel": 3.2, "tower": 4.6, "kingfight": 5.4, "breach": 5.2, "pit": 5.0, "rise": 2.6, "roar": 5.6, "roar2": 5.6,
+	"title": 9.8}
 # slow motion: [game time, time scale] keys, linear between them (1.0 before the first)
 const SCALE := {
 	"charge": [[0.0, 0.42]],
@@ -31,6 +31,7 @@ const SCALE := {
 	"duel": [[0.45, 1.0], [0.6, 0.22], [2.2, 0.22], [2.5, 0.6]],
 	"tower": [[1.5, 1.0], [1.6, 0.3], [3.4, 0.3]],
 	"kingfight": [[0.0, 0.6]],
+	"breach": [[0.8, 1.0], [0.95, 0.32], [1.7, 0.32], [2.1, 0.75]],
 	"rise": [[0.0, 0.2]],
 	"roar": [[2.2, 1.0], [2.35, 0.28]],
 	"roar2": [[2.2, 1.0], [2.35, 0.28]],
@@ -181,6 +182,9 @@ func _hide_rings() -> void:
 	for a in mode.view.actors.values():
 		if a.get("ring") != null and is_instance_valid(a.ring):
 			(a.ring as MeshInstance3D).mesh = null
+	for mt in mode.view.moba_towers.values():          # (and the towers' range rings)
+		if (mt as Dictionary).get("ring") != null and is_instance_valid(mt.ring):
+			(mt.ring as MeshInstance3D).mesh = null
 
 func _reveal_all() -> void:
 	# no fog of war in the film: every unit seen by both sides (the view hides what your side can't see)
@@ -326,8 +330,8 @@ func _stage_vista() -> void:
 		_place(ri[i], rp[i], bp[i]).bot = true
 		_sturdy(bi[i])
 		_sturdy(ri[i])
-	_cam(0.0, 7.5, {"kind":"world", "e0":Vector3(-9.0, 27.0, 128.0), "l0":Vector3(0.0, 3.0, 30.0),
-		"e1":Vector3(-4.0, 21.0, 104.0), "l1":Vector3(0.0, 3.0, -40.0), "fov0":50.0, "fov1":48.0, "lin":true})
+	_cam(0.0, 5.6, {"kind":"world", "e0":Vector3(-13.0, 35.0, 134.0), "l0":Vector3(0.0, 3.0, 42.0),
+		"e1":Vector3(-3.0, 17.0, 97.0), "l1":Vector3(0.0, 2.0, -46.0), "fov0":52.0, "fov1":47.0, "lin":true})
 
 # --- "One crown.": their King on his throne, a slow push in, low, the sun behind him ---
 func _stage_kingred() -> void:
@@ -531,6 +535,68 @@ func _stage_kingfight() -> void:
 	_cam(0.0, 5.4, {"kind":"world", "e0":_g(king + Vector2(1.5, 8.6), 1.7), "l0":_g(king, 2.0),
 		"e1":_g(king + Vector2(0.8, 5.4), 1.3), "l1":_g(king, 2.3), "fov0":46.0, "fov1":40.0})
 
+# --- "Topple their King.": their middle gate smashed in, our five pouring through it toward their King on his throne
+# (no blows on him: the King has no fight animations, Kevin: "it looks weird") ---
+var routes := {}                # id -> [waypoints], walked one after another at its speed (m/s): [points, speed]
+
+func _stage_breach() -> void:
+	for tw in sm.towers:
+		if int(tw.team) == 1 and int(tw.lane) == 1:
+			tw.hp = 0.0                                    # (a gate behind a standing tower can't be hurt)
+			tw.dead = true
+	var gate := {}
+	for g in s.gates:
+		if int(g.team) == 1 and int(g.get("lane", -1)) == 1:
+			gate = g
+	gate.hp = float(gate.max_hp) * 0.2
+	var gc: Vector2 = gate.c
+	set_meta("gate", int(gate.id))
+	sm.swap_hero(_u("b1"), "knight")                   # (the Knight on a bot's seat: the player's own hero draws an aim
+	sm.swap_hero(_u("you"), "stormcaller")             # line when he strikes; you are the Stormcaller here, behind)
+	var front := {"b1": Vector2(-1.5, 2.1), "b4": Vector2(1.8, 2.0), "b2": Vector2(0.1, 3.3), "you": Vector2(-3.0, 5.6),
+		"b3": Vector2(3.0, 5.9)}
+	for id in front:
+		_place(id, gc + (front[id] as Vector2), gc)
+		_sturdy(id)
+	for k in [0.1, 0.4, 0.7]:
+		_beat(k, func(): _hit("b1", gc))
+		_beat(k + 0.08, func(): _hit("b4", gc))
+		_beat(k + 0.15, func(): _hit("b2", gc))
+	_beat(0.9, func(): s._damage_gate(_u("b4"), s.gates[int(get_meta("gate"))], 99999.0))
+	# through the gate, two abreast, then fanning out up the courtyard toward the throne
+	var king := Vector2(0.0, -99.0)
+	var inside := {"b1": Vector2(-1.2, -9.0), "b4": Vector2(1.6, -8.4), "b2": Vector2(0.2, -11.0), "you": Vector2(-3.2, -7.0),
+		"b3": Vector2(3.4, -7.4)}
+	var order := ["b1", "b4", "b2", "you", "b3"]
+	for i in order.size():
+		var id: String = order[i]
+		_beat(1.25 + 0.12 * i, _route.bind(id, [gc + Vector2(-0.6 if i % 2 == 0 else 0.6, 0.5), gc + Vector2(0.0, -2.0),
+			gc + (inside[id] as Vector2)], 5.0))
+	_cam(0.0, 5.2, {"kind":"world", "e0":_g(gc + Vector2(2.4, 10.5), 2.3), "l0":_g(gc + Vector2(0.0, -5.0), 1.8),
+		"e1":_g(gc + Vector2(1.0, 4.6), 1.9), "l1":_g(king, 2.0), "fov0":48.0, "fov1":44.0, "shake_from":0.9})
+
+func _route(id: String, pts: Array, speed: float) -> void:
+	routes[id] = [pts, speed]
+
+func _walk_routes() -> void:
+	for id in routes.keys():
+		var u := _u(id)
+		if not s.alive(u):
+			continue
+		var pts: Array = routes[id][0]
+		while pts.size() > 1 and (u.pos as Vector2).distance_to(pts[0]) < 0.8:
+			pts.remove_at(0)
+		var to: Vector2 = (pts[0] as Vector2) - (u.pos as Vector2)
+		if pts.size() == 1 and to.length() < 0.4:
+			routes.erase(id)
+			walkers.erase(id)
+			u.move = Vector2.ZERO
+			if id == "you":
+				mode.hud._stick_active = false
+			continue
+		walkers[id] = to.normalized() * minf(1.0, float(routes[id][1]) / maxf(0.1, float(s.stat(u, "speed"))))
+		_face(id, pts[0])
+
 # --- "But deep in its pit...": dusk; three of ours at the pit's north mouth, the ground beginning to shake ---
 func _stage_pit() -> void:
 	var trio := {"you": Vector2(0.0, 9.6), "b2": Vector2(-1.9, 10.6), "b3": Vector2(1.9, 10.8)}
@@ -585,19 +651,19 @@ const TitleLogo = preload("res://scripts/app/title_logo.gd")
 const RaysShader = preload("res://scripts/app/title_rays.gdshader")
 const GlintShader = preload("res://scripts/app/title_glint.gdshader")
 const TITLE_A := 1.0                    # the rift (cue B at 0.0)
-const TITLE_B := 4.9                    # the slam (cue B at 3.9)
+const TITLE_B := 3.0                    # the slam (cue B at 3.9, its quiet middle cut: 2.0 s after the lightning)
 const TITLE_FLIGHT := 0.32
 const TITLE_W := 1180.0                 # the title's width on a 1920 x 1080 frame
 const TITLE_Y := 0.40                   # its middle, this far down
 const TAG_AT := 1.7                     # the tagline, this long after the slam
-const TITLE_CRACKS := [[1.9, 0.55], [2.6, 0.7], [3.3, 0.8], [4.45, 1.0]]   # the rift crackling alone: [time, strength]
+const TITLE_CRACKS := [[1.6, 0.7], [2.3, 0.9]]   # the rift crackling alone: [time, strength]
 var tl: Dictionary = {}
 
 func _stage_title() -> void:
 	_wyrm_at(0.0)
 	_soul_light(_g(PIT, 2.0), 1.6)
-	_cam(0.0, 13.0, {"kind":"world", "e0":Vector3(50.0, 30.0, 44.0), "l0":_g(PIT, 0.0),
-		"e1":Vector3(45.0, 27.0, 37.0), "l1":_g(PIT + Vector2(-6.0, -3.0), 0.0), "fov0":46.0, "lin":true})
+	_cam(0.0, 9.8, {"kind":"world", "e0":Vector3(50.0, 30.0, 44.0), "l0":_g(PIT, 0.0),
+		"e1":Vector3(46.0, 27.5, 38.5), "l1":_g(PIT + Vector2(-5.0, -2.5), 0.0), "fov0":46.0, "lin":true})
 	var vp: Vector2 = root.get_visible_rect().size
 	var k := vp.x / 1920.0
 	var layer := CanvasLayer.new()
@@ -890,6 +956,7 @@ func _process(delta: float) -> bool:
 			beats.erase(b)
 			(b[1] as Callable).call()
 	_apply_cam()
+	_walk_routes()
 	for id in walkers:
 		var wu := _u(id)
 		if s.alive(wu):

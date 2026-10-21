@@ -10,17 +10,15 @@ landmarks (CUTS), then per frame a filmic grade (a gentle S-curve, cool shadows 
 title, title_logo.gd, slammed in over the Rift at dusk).
 
 The sound (all at 48 kHz, mixed in numpy): the score (ElevenLabs Music v2.5 -- cue A, the dark opening, the battle, the
-drop and the climax; cue B, the title's two hits and its ring-out), the narrator (ElevenLabs v4, "Don"), the Grave
+drop and the climax; cue B, the title's two hits and its ring-out; their silent stretches cut out, SCORE), the narrator
+(the game's Royal Herald: ElevenLabs v4, his voice Edward), the Grave
 Wyrm's roar, the ground breaking, the lightning, the game's own title slam, and the game's sounds from the recordings
 under the action. The music dips only in its voice band (800-4000 Hz) under each line, on slow ramps (Kevin on trailer 6:
 "the music volume drops too much when voice happens, it needs to blend better"). -14 LUFS.
 
-    for r in vista kingred charge clash meteor dive slide duel tower kingfight pit rise roar roar2 title; do
-        OUTDIR=REC tools/trailer8_render.sh $r; done
-    python3 tools/trailer8_edit.py --rec REC --out Fatebound-Trailer-8.mp4 [--still T] [--only T0:T1] [--sound-only]
-Sources (tools/trailer8_vo/raw, the takes used): vo_1.mp3, musA_1.mp3, musB_1.mp3, roar_1.mp3, roar_4.mp3, rumble_1.mp3,
-rumble_2.mp3, bolt_2.mp3. Needs numpy, scipy, Pillow, ffmpeg. (T8_STEMS=1 also writes the narration and the rest apart,
-to measure one against the other.)
+    python3 tools/trailer8_edit.py --rec REC --out Fatebound-Trailer-8.mp4 [--still T] [--only T0:T1]
+Sources (tools/trailer8_vo/raw): vo_1.mp3, musA_1.mp3, musB_1.mp3, roar_1.mp3, roar_4.mp3, rumble_1.mp3, rumble_2.mp3,
+bolt_2.mp3. Needs numpy, scipy, Pillow, ffmpeg.
 """
 import argparse
 import json
@@ -40,41 +38,50 @@ W, H, FPS = 1920, 1080, 30
 SR = 48000
 BAR = 138                                   # 2.39:1 inside 16:9
 
-# ---------- the score's landmarks (cue A from 0.0; measured: tools/trailer8_script.md) ----------
-A_HIT = 16.53                               # the drums crash in
-A_DROP = 32.55                              # the drop
-A_HIT2 = 34.53                              # the climax crashes in
-A_END = 42.60                               # it ends (decays out)
-B_AT = 43.60                                # cue B: its first hit (the lightning), its second at +3.90 (the slam)
-B_SLAM = B_AT + 3.90
-TITLE_RUN_AT = 42.60                        # the title run's t = 0 (its TITLE_A at 1.0 = B_AT)
-TOTAL = 56.60
+# ---------- the score: cue A and cue B, cut so the music never stops (Kevin: "fix pacing because there's several spots
+# where there is no music and nothing happening") ----------
+# Cue A (musA_1): its first sound 0.5; a breath of silence before the drums (15.6-16.4) crash in at 16.53 (120 BPM, bars
+# on x.53); the drop 32.55, near silence 33.1-34.4 until the climax crashes in at 34.53; it ends 42.6. Cue B (musB_1): a
+# hit at 0.0 dying to near silence by 1.5, a swell from 3.3 into a second hit at 3.9, a chord to 7.5, ringing out.
+# The pieces kept: (source, from, to, trailer time), joined by short crossfades (XF).
+XF = 0.12
+SCORE = [
+    ("musA_1", 0.40, 15.45, 0.00),            # the opening
+    ("musA_1", 16.38, 33.10, 15.05),          # the battle (its drums crash in at 15.20)
+    ("musA_1", 34.28, 42.70, 31.77),          # a short drop, then the climax (crashing in at 32.02)
+    ("musB_1", 0.00, 1.10, 40.19),            # the title's first hit (the lightning)
+    ("musB_1", 3.00, 9.50, 41.29),            # the swell into its second hit (the slam, at 42.19), the chord
+]
+HIT = 15.20                                   # the drums
+HIT2 = 32.02                                  # the climax
+B_AT = 40.19                                  # the lightning
+B_SLAM = 42.19                                # the slam
+TOTAL = 47.20
 
 # ---------- the cut: (trailer start, end, run, the run's recording second at the start) ----------
 CUTS = [
-    (0.40, 5.60, "vista", 1.2),
-    (5.60, 10.60, "kingred", 0.5),
-    (10.60, 16.00, "charge", 4.4),
-    (16.53, 18.53, "clash", 0.95),
-    (18.53, 20.03, "meteor", 0.9),
-    (20.03, 21.53, "dive", 1.1),
-    (21.53, 23.03, "slide", 1.0),
-    (23.03, 24.53, "duel", 0.9),
-    (24.53, 27.03, "tower", 1.2),
-    (27.03, 30.03, "kingfight", 1.0),
-    (30.03, 32.55, "kingfight", 6.3),
-    (32.55, 34.53, "pit", 2.6),
-    (34.53, 38.60, "rise", 1.6),
-    (38.60, 40.40, "roar", 2.3),
-    (40.40, 42.60, "roar2", 4.1),
-    (42.60, TOTAL, "title", 0.0),
+    (0.00, 4.55, "vista", 0.1),
+    (4.55, 9.35, "kingred", 0.6),
+    (9.35, HIT, "charge", 4.0),
+    (HIT, 17.20, "clash", 0.95),
+    (17.20, 18.70, "meteor", 0.9),
+    (18.70, 20.20, "dive", 1.1),
+    (20.20, 21.70, "slide", 1.0),
+    (21.70, 23.20, "duel", 0.9),
+    (23.20, 25.20, "tower", 1.3),
+    (25.20, 31.20, "breach", 0.2),
+    (31.20, HIT2, "pit", 3.6),
+    (HIT2, 36.09, "rise", 1.6),
+    (36.09, 37.89, "roar", 2.3),
+    (37.89, B_AT, "roar2", 4.1),
+    (B_AT, TOTAL, "title", 1.033),            # (its lightning fired at 1.033: on cue B's first hit)
 ]
-FADES = [(0.40, 1.40, "in"), (TOTAL - 1.0, TOTAL, "out")]          # from / to black
-FLASHES = [(A_HIT, 0.25), (A_HIT2, 0.30)]                           # white, on the hits (fading over the seconds given)
+FADES = [(0.0, 0.6, "in"), (TOTAL - 1.0, TOTAL, "out")]            # from / to black
+FLASHES = [(HIT, 0.25), (HIT2, 0.30)]                               # white, on the hits (fading over the seconds given)
 
-# ---------- the narrator: (line, trailer time) ----------
-VO_LINES = [(1, 1.60), (2, 6.60), (3, 11.80), (4, 18.75), (5, 24.75), (6, 28.40), (7, 32.75), (8, 35.40), (9, 47.75),
-            (10, 49.60)]
+# ---------- the narrator, the Royal Herald (Edward): (line, trailer time) ----------
+VO_LINES = [(1, 0.90), (2, 5.40), (3, 10.30), (4, 17.35), (5, 23.40), (6, 26.30), (7, 30.75), (8, 32.70), (9, 42.35),
+            (10, 44.00)]
 
 
 def rec_start(rec, run):
@@ -207,14 +214,15 @@ def fade(clip, fin=0.0, fout=0.0):
     return c
 
 
-# the narrator's take (vo_1) cut at its nine pauses (ffmpeg silencedetect, -36 dB for 0.18 s: their middles)
-VO_CUTS = [1.276, 2.795, 4.540, 6.385, 8.011, 9.675, 11.680, 14.020, 15.388]
+# the Herald's take (vo_herald_1) cut at its nine pauses (ffmpeg silencedetect, -36 dB for 0.18 s: their middles)
+VO_TAKE = "vo_herald_1.mp3"
+VO_CUTS = [1.164, 2.536, 4.016, 5.693, 7.208, 8.859, 10.592, 12.857, 14.191]
 VO_LEVEL = -24.0                             # each line's voice-band level (dBFS) before the mix
 
 
 def vo_lines():
     """the narrator's take cut into its ten lines, each trimmed to its sound"""
-    x = load(os.path.join(RAW, "vo_1.mp3"))
+    x = load(os.path.join(RAW, VO_TAKE))
     bounds = [0] + [int(c * SR) for c in VO_CUTS] + [len(x)]
     lines = []
     for a, b in zip(bounds[:-1], bounds[1:]):
@@ -271,16 +279,20 @@ def trailer_time(rec, run, t):
 def sound(rec, out):
     n = int(TOTAL * SR) + SR
     music = np.zeros((n, 2), np.float32)
-    place(music, load(os.path.join(RAW, "musA_1.mp3")), 0.0, 0.0)
-    musB = load(os.path.join(RAW, "musB_1.mp3"))
-    place(music, musB, B_AT, -0.5)
-    # the climax ramps: cue A from the drop's return to the roar, rising 3 dB into it
-    i0, i1 = int(A_HIT2 * SR), int(40.2 * SR)
+    cues = {}
+    for (src, a, b, at) in SCORE:
+        if src not in cues:
+            cues[src] = load(os.path.join(RAW, src + ".mp3"))
+        x = cues[src]
+        i0, i1 = int(max(0.0, a - XF / 2) * SR), int((b + XF / 2) * SR)
+        place(music, fade(x[i0:i1], XF, XF), at - XF / 2, -0.5 if src == "musB_1" else 0.0)
+    # the climax ramps: cue A from its crash to the roar, rising 3 dB into it
+    i0, i1 = int(HIT2 * SR), int((ROAR_AT + 1.5) * SR)
     music[i0:i1] *= np.linspace(10 ** (-3 / 20), 1.0, i1 - i0)[:, None]
     fx = np.zeros((n, 2), np.float32)
     # the Grave Wyrm: the ground breaking under the pit and as it rises; its roar (slowed with the picture, two takes)
-    place(fx, fade(load(os.path.join(RAW, "rumble_2.mp3")), 1.2, 1.0), A_DROP + 0.4, -6.0)
-    place(fx, fade(load(os.path.join(RAW, "rumble_1.mp3")), 0.02, 1.5), A_HIT2 - 0.05, -2.0)
+    place(fx, fade(load(os.path.join(RAW, "rumble_2.mp3")), 0.6, 1.0), 30.9, -6.0)
+    place(fx, fade(load(os.path.join(RAW, "rumble_1.mp3")), 0.02, 1.5), HIT2 - 0.05, -2.0)
     roar = fade(load(os.path.join(RAW, "roar_1.mp3"), 0.86), 0.01, 0.6)
     roar2 = fade(load(os.path.join(RAW, "roar_4.mp3"), 0.8), 0.05, 0.8)
     place(fx, roar, ROAR_AT, 0.0)
@@ -327,7 +339,7 @@ def sound(rec, out):
     # to -14 LUFS by one gain (measured), then a limiter keeps the peaks under -1 dB
     tmp = out + ".mix.wav"
     write_wav(tmp, mix * (10.0 ** ((-14.0 - lufs(mix)) / 20.0)))
-    subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", tmp, "-af", "alimiter=limit=0.89:attack=4:release=60:level=false",
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", tmp, "-af", "alimiter=limit=0.82:attack=4:release=60:level=false",
                     "-ar", str(SR), "-c:a", "pcm_f32le", out + ".lim.wav"], check=True)
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", out + ".lim.wav", "-c:a", "aac", "-b:a", "256k", out], check=True)
     print("mix: %.1f LUFS after the limiter" % lufs(load(out + ".lim.wav")))
@@ -335,9 +347,9 @@ def sound(rec, out):
     os.remove(out + ".lim.wav")
 
 
-ROAR_AT = 38.90                              # (the roar shot: the Wyrm rears up)
+ROAR_AT = 36.41                              # (the roar shot: the Wyrm rears up)
 # the game's sounds: (run, its game time -- or "" and a trailer time, name in assets/sounds, gain dB, speed)
-SFX = [("", 10.70, "horn", -7.0, 0.9),
+SFX = [("", 9.55, "horn", -7.0, 0.9),
        ("clash", 1.04, "tm_sword_hit1", -6.0, 0.6), ("clash", 1.08, "tm_sword_block2", -8.0, 0.55),
        ("clash", 1.12, "tm_spell_hit1", -9.0, 0.6), ("clash", 1.18, "tm_sword_hit3", -7.0, 0.5),
        ("clash", 1.25, "axe", -8.0, 0.5), ("clash", 1.33, "tm_spell_hit2", -10.0, 0.5),
@@ -352,10 +364,9 @@ SFX = [("", 10.70, "horn", -7.0, 0.9),
        ("tower", 0.6, "tm_gate_hit1", -10.0, 0.9), ("tower", 1.0, "tm_gate_hit2", -10.0, 0.9),
        ("tower", 1.55, "tm_bomb_blast", -3.0, 0.5), ("tower", 1.56, "tm_crumble1", -4.0, 0.55),
        ("tower", 1.8, "tm_crumble2", -5.0, 0.55),
-       ("kingfight", 0.95, "tm_sword_hit1", -9.0, 0.8), ("kingfight", 1.35, "tm_sword_hit2", -9.0, 0.8),
-       ("kingfight", 1.75, "tm_sword_hit3", -9.0, 0.8), ("kingfight", 2.15, "tm_sword_hit1", -9.0, 0.8),
-       ("kingfight", 3.75, "tm_sword_hit2", -9.0, 0.8), ("kingfight", 4.15, "tm_sword_hit3", -9.0, 0.8),
-       ("kingfight", 4.55, "tm_sword_hit1", -9.0, 0.8)]
+       ("breach", 0.1, "tm_gate_hit1", -6.0, 0.8), ("breach", 0.4, "tm_gate_hit2", -6.0, 0.8),
+       ("breach", 0.7, "tm_gate_hit1", -5.0, 0.8), ("breach", 0.9, "tm_bomb_blast", -3.0, 0.5),
+       ("breach", 0.92, "tm_crumble1", -4.0, 0.55), ("breach", 1.15, "tm_crumble2", -6.0, 0.55)]
 VO_GAIN = {7: 1.0, 8: 4.0, 9: 8.0, 10: 6.0}            # (the climax and the title are loud under them)
 
 
