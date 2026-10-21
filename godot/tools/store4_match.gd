@@ -64,6 +64,7 @@ func _heroes(team: int) -> Array:
 	return outv
 
 func _level(u: Dictionary, lv: int) -> void:
+	lv = mini(lv, int(s().moba.LEVEL_MAX))          # (past the cap the loop never ends: the Wyrm and King scenes hung)
 	while int(u.level) < lv:
 		s().moba.add_xp(u, s().moba.need(int(u.level)))
 	u.picks = []
@@ -122,6 +123,8 @@ func _process(_delta: float) -> bool:
 			at = int(OS.get_environment("AT"))
 		return false
 	var k := frames - staged
+	if OS.has_environment("TRACE") and k % 10 == 0:
+		print("STORE4 trace k=", k, " t=", snapped(float(s().time), 0.01))
 	if k < 30:
 		_quiet()
 	for p in _plan:
@@ -144,7 +147,8 @@ const NAMES := {"you": ["Midblade", "WOLF", "3.5.1"], "b1": ["Ironclad", "WOLF",
 
 func _dress() -> void:
 	# mid-match: 9 minutes in, the kills, your gold and items, everyone's names (the toasts of the staging cleared)
-	s().time = 540.0
+	if OS.get_environment("NOTIME") != "1":
+		s().time = 540.0
 	s().kills = [14, 11]
 	var me: Dictionary = s().by_id["you"]
 	me.gold = 1285.0
@@ -231,7 +235,7 @@ func _stage_teamfight() -> void:
 	if scene == "feature":
 		cam = [Vector3(-16.0, 9.5, 17.0), Vector3(1.0, 0.5, 1.5)]
 	elif scene == "fight":
-		cam = [Vector3(-8.0, 10.5, 17.5), Vector3(0.4, 0.5, 2.6)]
+		cam = [Vector3(-9.5, 12.5, 19.5), Vector3(0.3, 0.4, 2.4)]
 
 func _stage_ult() -> void:
 	# the Archmage's meteor coming down on three of theirs, close and low (CINE)
@@ -259,7 +263,7 @@ func _stage_wyrm() -> void:
 	# the Grave Wyrm up in its pit, three of ours on it, its soul-fire pouring
 	var sm = s().moba
 	for c in sm.camps:
-		if str(c.kind) == "wyrm":
+		if str(c.kind) == "wyrm" and OS.get_environment("NOWYRM") != "1":
 			c.next = s().time
 	var blue := _heroes(0)
 	for i in blue.size():
