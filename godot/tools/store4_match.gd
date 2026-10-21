@@ -341,7 +341,7 @@ func _stage_king() -> void:
 	(sm.kings[1] as Dictionary).hp = float((sm.kings[1] as Dictionary).max_hp) * 0.35
 	for u in _heroes(1):
 		u.bot = false
-		u.pos = s().spawn(1) + Vector2(0, -6)
+		u.pos = Vector2(-38.0, -12.0)                    # (out of the way: their fountain is right behind the King)
 	var king := Vector2(0.0, -99.0)
 	var spots := [Vector2(-2.6, 5.2), Vector2(3.2, 3.8), Vector2(-4.4, 2.6), Vector2(1.0, 3.0)]
 	var blue := _heroes(0)
@@ -366,4 +366,4 @@ func _stage_king() -> void:
 	_plan.append([61, "_cast", ["you", "w"]])
 	at = 76
 	if cine:
-		cam = [Vector3(8.0, 6.5, -87.0), Vector3(-0.5, 2.6, -99.0)]
+		cam = [Vector3(9.5, 8.0, -84.0), Vector3(-0.6, 2.4, -99.5)]
