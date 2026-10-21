@@ -34,6 +34,8 @@ func _init() -> void:
 	app.profile_path = base + "-profile.json"
 	app.legacy_path = base + "-none.json"
 	app.now_override = NOW
+	app.intro_auto = false                           # (the Herald's welcome and the daily reward only when a part asks)
+	app.daily_auto = false
 	root.add_child(app)
 	RenderingServer.frame_post_draw.connect(func():
 		if pending:

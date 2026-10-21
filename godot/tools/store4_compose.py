@@ -33,16 +33,19 @@ LOGO = os.path.join(GODOT, "assets", "ui", "v2")
 #  fight: 5v5 online (siege_server) or offline against bots; champions: moba.gd HERO_ORDER (18) and moba_kits ROLE_OF's
 #  six roles; wyrm: the Grave Wyrm and the Bone Lord (moba.gd camps), buff camps; king: the King falls -> the match is
 #  won (moba.gd hit_king); outfit: economy.gd OUTFITS (18) + SKIN_LINES Frostbound (18) = 36; clan: clans (economy.gd
-#  clans: camp stages, Clan Chest, Clan League); home: social.gd PARTY_MAX 5; tutorial: tutorial.gd, voiced.
+#  clans: camp stages, Clan Chest, Clan League); home: social.gd PARTY_MAX 5; tutorial: tutorial.gd, voiced; chest:
+#  a chest's gold, gems and a chance of a hero shard (economy.gd CHESTS).
 SHOTS = [
     ("teamfight", "5V5 HERO BATTLES", "Team up and take the Rift, online or against bots"),
     ("champion", "18 CHAMPIONS", "Tanks, fighters, assassins, mages, marksmen and supports"),
-    ("wyrm", "SLAY THE GRAVE WYRM", "Epic monsters, jungle camps and buffs that turn the fight"),
     ("king", "TOPPLE THEIR KING", "Push the lanes, break the towers, take the throne"),
+    ("wyrm", "SLAY THE GRAVE WYRM", "Epic monsters, jungle camps and buffs that turn the fight"),
     ("outfit", "36 OUTFITS", "A set made for every champion, plus the Frostbound line"),
     ("clan", "BUILD YOUR CLAN", "A camp that grows, a weekly Clan Chest and the Clan League"),
     ("home", "SQUAD UP", "Parties of five with friends and clanmates"),
     ("tutorial", "LEARN FROM THE HERALD", "A funny, fully voiced tutorial gets you battle-ready"),
+    # (Google Play takes 8; the App Store 10 -- the chest only there)
+    ("chest", "OPEN CHESTS", "Gold, gems and hero shards", ("iphone", "ipad")),
 ]
 
 TARGETS = {
@@ -205,11 +208,13 @@ def main():
     a = ap.parse_args()
     only = [s for s in a.only.split(",") if s]
     n = 0
-    for key, head, line in SHOTS:
+    for shot in SHOTS:
+        key, head, line = shot[0], shot[1], shot[2]
+        targets = shot[3] if len(shot) > 3 else tuple(TARGETS)
         n += 1
         if only and key not in only:
             continue
-        for target in TARGETS:
+        for target in targets:
             src = os.path.join(a.raw, "%s_%s.png" % (key, TARGETS[target]["raw"]))
             if not os.path.exists(src):
                 print("missing", src)

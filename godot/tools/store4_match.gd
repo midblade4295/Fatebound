@@ -293,7 +293,7 @@ func _stage_wyrm() -> void:
 	_plan = [[60, "_cast", ["you", "r"]], [64, "_wyrm_breath", []]]
 	at = 86
 	if cine:
-		cam = [Vector3(14.0, 9.0, 15.5), Vector3(25.5, 2.5, 4.5)]
+		cam = [Vector3(18.5, 15.0, 16.5), Vector3(26.0, 1.0, 4.0)]
 
 func _red_tower(lane: int, tier: int) -> Dictionary:
 	for tw in s().moba.towers:
