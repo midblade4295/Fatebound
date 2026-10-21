@@ -6291,3 +6291,36 @@ being a small box and incorporate the clan buttons into the screen".
 - Verified: suite all passed (99), COLD_START_PASS, the Play-shape AAB check exit 0 (bundletool valid, BASE OK 280
   files), presets unchanged. Preview APK: build/Fatebound-Siege-0.31.197-fatebound.apk (32 MB, preview key), sha256
   f28d22c0...cb9fcd1b6efc39f27.
+
+## 0.31.198 — the server wiped so everyone starts fresh; the Royal Herald's welcome and a tour of Home
+Kevin: "I want to wipe the server so everyone starts fresh" (purchases: "Wipe them too"); what to keep: "Have the game
+ask their name and after they do that it'll briefly say what game is and then ask if they would like to play tutorial.
+Make the tutorial guy pop up while doing this and voice it. Do the same type of messages and model like he is in
+tutorial. Make it very funny"; then "Also have him briefly take player through menus".
+- The wipe (server/deploy/wipe_siege_server.sh, Kevin's to run with sudo AFTER install_siege_server.sh -- it refuses an
+  older server): stops the service, backs the whole state directory up to
+  /var/backups/fatebound-siege/state-before-wipe-<UTC>.tgz, deletes every account (progress, gems and gold -- bought
+  ones too --, heroes, outfits, titles, chests, the pass), the Game Center links, clans, friends, chat, the leaderboard
+  and referrals; keeps the purchase records (purchase_tokens.json, iap_ledger.jsonl: nothing is granted twice),
+  analytics, diagnostics, reports and the mute list; writes wipe.json; starts and probes it; prints how to undo.
+- server/eco_accounts.gd: with wipe.json a new account never takes in what a phone hands over (imports_open). Every
+  phone finds its key unknown ("auth"), asks for a new account with its old copy, and gets a fresh one named "Player".
+  An old starter pack's token (Google sells it once) marks it bought on the new account, so the shop doesn't offer a
+  BUY that would do nothing. The server's start-up log says when it was wiped.
+- The Royal Herald's welcome (scripts/app/herald_intro.gd) on Home for a player named "Player" (a new install, or anyone
+  after the wipe), before the daily offers and again after a sync makes the phone a new account: he pops up with his
+  scroll exactly as in the tutorial (his poses, the line typed on the parchment as he says it, TAP TO CONTINUE) and
+  asks the name -- a field and THAT'S ME over the scroll (nothing, "player", "King", "herald", "admin" get a written
+  word from him instead); the name is saved (the set_name op) and announced, ★ NAME ★; what Fatebound is; then the tour:
+  PLAY, the chests, SHOP, PASS, LOCKER, ALLIANCE and the menu, the shade opening over each with a gold ring, an arrow
+  and its name, the scroll sliding to the top of the screen while what he shows is below; then SHOW ME HOW (the
+  tutorial) or I'LL WING IT (Home; the daily reward comes next). 13 voiced lines: art_sources/tutorial/
+  intro_script.json, eleven_v4, Edward, two takes each (4,094 ElevenLabs credits), the ones kept -> assets/vo/tutorial/
+  intro_*.ogg, tour_*.ogg (tools/build_tutorial_assets.py vo, which now leaves lines already built alone).
+- Screens.chests_row tags its plates (chest_plate) for the tour; tools/herald_intro_shot.gd shoots every step.
+- tests: herald_intro_test (new, in the suite: the captions are the voiced script's, each voiced and posed; who gets
+  him; the name and its quips; the seven tour stops found, shaded open, the scroll out of the way; WING IT and SHOW ME
+  HOW); eco_server_test: imports refused after a wipe, old purchases not granted again (the starter not offered again),
+  a phone on the wiped server starts fresh as "Player".
+- Version 0.31.198, versionCode 284, SERVER_BUILD 0.31.198. Packs: audio-fda816c18723 (the Herald's new lines), the
+  rest unchanged; CONTENT OK, coverage OK, presets unchanged.
