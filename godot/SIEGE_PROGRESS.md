@@ -6324,3 +6324,9 @@ tutorial. Make it very funny"; then "Also have him briefly take player through m
   a phone on the wiped server starts fresh as "Player".
 - Version 0.31.198, versionCode 284, SERVER_BUILD 0.31.198. Packs: audio-fda816c18723 (the Herald's new lines), the
   rest unchanged; CONTENT OK, coverage OK, presets unchanged.
+- Verified: suite 99 passed, 1 failed -- social_ui_test "her own line shows in her chat", a race (Bob got her line
+  before her own chat drew it, under the suite's load; 3/3 alone): the test now waits for both. COLD_START_PASS, the
+  Play-shape AAB check exit 0 (bundletool valid), presets unchanged. Preview APK:
+  build/Fatebound-Siege-0.31.198-fatebound.apk (32 MB, preview key), sha256 db1bf530...07cb3ee0.
+- Kevin's to run, in this order: sudo bash godot/server/deploy/install_siege_server.sh, then
+  sudo bash godot/server/deploy/wipe_siege_server.sh --yes.

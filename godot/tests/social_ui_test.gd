@@ -173,7 +173,8 @@ func _process(delta: float) -> bool:
 				press("chat_send")
 				_go("sent")
 		"sent":
-			if not bob.lines.global.is_empty() and str(bob.lines.global[-1].x) == "hello bob":
+			# (0.31.198: and her own copy back in her chat -- Bob's can arrive first under load)
+			if not bob.lines.global.is_empty() and str(bob.lines.global[-1].x) == "hello bob" and (btn("chat_name", null, "Alice") != null or t_phase > 6.0):
 				check(str(bob.lines.global[-1].n) == "Alice", "Alice's line from the chat window reaches Bob")
 				check(btn("chat_name", null, "Alice") != null, "her own line shows in her chat")
 				_shot("social_chat")
