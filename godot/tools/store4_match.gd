@@ -155,6 +155,7 @@ func _dress() -> void:
 	me.items = ["archon", "greaves", "titan"]
 	me.kills = 5
 	var v = mode.view
+	mode.hud.player_name = str(NAMES.you[0])
 	v.my_name = str(NAMES.you[0])
 	v.my_tag = str(NAMES.you[1])
 	v.my_crest = str(NAMES.you[2])
@@ -162,6 +163,7 @@ func _dress() -> void:
 		if id == "you" or not s().by_id.has(id):
 			continue
 		v.player_names[id] = str(NAMES[id][0])
+		mode.hud.net_names[id] = str(NAMES[id][0])
 		if str(NAMES[id][1]) != "":
 			v.player_tags[id] = str(NAMES[id][1])
 			v.player_crests[id] = str(NAMES[id][2])
@@ -216,6 +218,8 @@ func _stage_teamfight() -> void:
 		_tough(u, 6.0, 0.4 + 0.12 * float(i % 4))
 		u.bot = false
 		_place(u, rp[i], bp[mini(i, 3)])
+		if scene == "teamfight" and (i == 1 or i == 2):
+			u.hp = 1.0                                   # (your storm finishes these two: a DOUBLE KILL)
 		pairs.append([str(u.id), bp[mini(i, 3)]])
 	var me: Dictionary = s().by_id["you"]
 	_place(me, Vector2(0.3, 8.8), Vector2(0.0, -0.4))
@@ -231,7 +235,7 @@ func _stage_teamfight() -> void:
 	_plan.append([51, "_cast", ["you", "r"]])
 	for i in pairs.size():
 		_plan.append([56 + i % 4, "_cast", [str(pairs[i][0]), "a"]])
-	at = 64
+	at = 64 if scene != "teamfight" else int(OS.get_environment("AT")) if OS.has_environment("AT") else 84
 	if scene == "feature":
 		cam = [Vector3(-16.0, 9.5, 17.0), Vector3(1.0, 0.5, 1.5)]
 	elif scene == "fight":
@@ -325,7 +329,7 @@ func _stage_tower() -> void:
 	at = 128
 
 func _stage_king() -> void:
-	# their keep open (the middle lane's towers, the gate and both King towers down), three of ours on the King
+	# their keep open (the middle lane's towers, the gate and both King towers down), four of ours on the King, posed
 	var sm = s().moba
 	for tw in sm.towers:
 		if int(tw.team) == 1 and (int(tw.lane) == 1 or int(tw.tier) == 4):
@@ -339,22 +343,27 @@ func _stage_king() -> void:
 		u.bot = false
 		u.pos = s().spawn(1) + Vector2(0, -6)
 	var king := Vector2(0.0, -99.0)
+	var spots := [Vector2(-2.6, 5.2), Vector2(3.2, 3.8), Vector2(-4.4, 2.6), Vector2(1.0, 3.0)]
 	var blue := _heroes(0)
-	var n := 0
-	for i in blue.size():
-		var u: Dictionary = blue[i]
-		_level(u, 13)
+	var n := 1
+	_plan = []
+	for u in blue:
+		_level(u, 10)
 		_tough(u)
-		if str(u.id) == "you":
-			_place(u, king + Vector2(0.5, 6.0), king)
-		elif n < 3:
-			_place(u, king + Vector2(-4.5 + 4.5 * float(n), 7.5 - 1.5 * float(n % 2)), king)
-			u.bot = true
-			n += 1
-		else:
-			u.bot = false
+		u.bot = false
+		var at_p: Vector2 = king + (spots[0] if str(u.id) == "you" else (spots[n] if n < spots.size() else Vector2(INF, 0)))
+		if str(u.id) != "you" and n >= spots.size():
 			u.pos = s().spawn(0)
-	_plan = [[30, "_face", ["you", king]], [31, "_cast", ["you", "q"]], [60, "_face", ["you", king]], [61, "_cast", ["you", "r"]]]
-	at = 82
+			continue
+		_place(u, at_p, king)
+		if str(u.id) != "you":
+			n += 1
+		for f in [12, 30, 48, 66]:
+			_plan.append([f + n * 3, "_hit", [str(u.id), king]])
+	_plan.append([40, "_face", ["you", king]])
+	_plan.append([41, "_cast", ["you", "q"]])
+	_plan.append([60, "_face", ["you", king]])
+	_plan.append([61, "_cast", ["you", "w"]])
+	at = 76
 	if cine:
-		cam = [Vector3(9.0, 7.5, -86.0), Vector3(0.0, 3.0, -99.0)]
+		cam = [Vector3(8.0, 6.5, -87.0), Vector3(-0.5, 2.6, -99.0)]
