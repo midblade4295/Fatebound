@@ -238,7 +238,7 @@ func _stage_teamfight() -> void:
 		_plan.append([56 + i % 4, "_cast", [str(pairs[i][0]), "a"]])
 	at = 64 if scene != "teamfight" else int(OS.get_environment("AT")) if OS.has_environment("AT") else 84
 	if scene == "feature":
-		cam = [Vector3(-16.0, 9.5, 17.0), Vector3(1.0, 0.5, 1.5)]
+		cam = [Vector3(-11.0, 7.0, 13.0), Vector3(0.5, 0.8, 2.0)]
 	elif scene == "fight":
 		cam = [Vector3(-9.5, 12.5, 19.5), Vector3(0.3, 0.4, 2.4)]
 
@@ -293,7 +293,7 @@ func _stage_wyrm() -> void:
 	_plan = [[60, "_cast", ["you", "r"]], [64, "_wyrm_breath", []]]
 	at = 86
 	if cine:
-		cam = [Vector3(18.5, 15.0, 16.5), Vector3(26.0, 1.0, 4.0)]
+		cam = [Vector3(17.5, 15.0, 18.0), Vector3(25.2, 1.0, 5.6)]
 
 func _red_tower(lane: int, tier: int) -> Dictionary:
 	for tw in s().moba.towers:
