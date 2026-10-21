@@ -6288,3 +6288,6 @@ being a small box and incorporate the clan buttons into the screen".
   CLAN, MEMBERS, LEAGUE), the LFG plaque; clan_week_test: 7 hours.
 - Version 0.31.197, versionCode 283, SERVER_BUILD 0.31.197. Packs: ui-a9e867eb137b (the tall camps), the rest
   unchanged; CONTENT OK, coverage OK, presets unchanged.
+- Verified: suite all passed (99), COLD_START_PASS, the Play-shape AAB check exit 0 (bundletool valid, BASE OK 280
+  files), presets unchanged. Preview APK: build/Fatebound-Siege-0.31.197-fatebound.apk (32 MB, preview key), sha256
+  f28d22c0...cb9fcd1b6efc39f27.
