@@ -6348,3 +6348,6 @@ since players met him in the UI training. Also in training talk about how to tel
     kingdom. The shop serves you here too. Or while you're dead. Retail is grim."
 - Version 0.31.199, versionCode 285, SERVER_BUILD 0.31.199. Packs: audio-df406b5ee642 (the four lines), the rest
   unchanged; CONTENT OK, coverage OK, presets unchanged.
+- Verified: suite all passed (100), COLD_START_PASS, the Play-shape AAB check exit 0 (bundletool valid), presets
+  unchanged. Preview APK: build/Fatebound-Siege-0.31.199-fatebound.apk (32 MB, preview key), sha256
+  67747bb7...999f217b.
