@@ -20,6 +20,10 @@ extends Control
 # with all of him on the screen; the line in the clear part of its parchment, the biggest type that fits.
 # VOICE: assets/vo/tutorial/<id>.ogg, the Herald's voice (ElevenLabs; art_sources/tutorial: script.json, the prompts;
 # tools/build_tutorial_assets.py). The captions here are script.json's lines (tests/tutorial_test.gd checks).
+# 0.31.199 (Kevin: "change the voice lines in the battle training now so the trainer doesn't introduce himself twice
+# since players met him in the UI training. Also in training talk about how to teleport back to base and it heals
+# you"): he opens knowing you (scripts/app/herald_intro.gd introduced him), the Rift's line calls back to the King's
+# chair, and the recall's lines say HOME teleports you back to the castle and the castle heals you.
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 const VisualTheme = preload("res://scripts/ui/visual_theme.gd")
 const UI2 = preload("res://scripts/app/ui2.gd")
@@ -51,8 +55,8 @@ const CAMP_WEAK := 0.6            # the tutorial's Grave Archers: "a bit under t
 # [voice id, caption, the Herald's pose]. "@pay": the last line, by whether the tutorial's gold is still to be paid.
 const STEPS := [
 	{"id":"intro", "talk":[
-		["t5_intro_1", "Ah. A new recruit. How thrilling. I'm the Royal Herald. I announce things. Today I announce you. And, I suspect, your mistakes.", "hold"],
-		["t5_intro_2", "This is the Rift. Five of us, five of them, three lanes, and a King on each side. Knock theirs off his throne and we win. Simple. You'd be amazed.", "lying"]]},
+		["t5_intro_1", "Oh, it's you again. I'd introduce myself, but we've done that, and once was plenty. Welcome to your first battle. It's only practice. The enemy promised to go easy on you. They laughed, but they promised.", "hold"],
+		["t5_intro_2", "This is the Rift. Remember the King and his very comfortable chair? Ours is behind us. Theirs is at the far end, looking smug. Knock him off it and we win. Simple. You'd be amazed.", "lying"]]},
 	{"id":"move", "talk":[
 		["t5_move_1", "Let's begin with walking. Drag your thumb on the left side of the screen. You can do it. I believe in you. Mildly.", "leaning"]],
 		"task":"Drag on the left side of the screen to walk",
@@ -69,9 +73,9 @@ const STEPS := [
 		"task":"Tap the score bar at the top",
 		"done":[["t5_eco_done", "Our gold, their gold, and who's slacking. Close it when you've finished judging people. I never have.", "sitting"]]},
 	{"id":"recall", "talk":[
-		["t5_recall_1", "Pockets full? Then go home and spend it. Tap HOME to recall. It takes six seconds, and anything that hits you cancels it. So perhaps not next to the enemy. Just a thought.", "peeking"]],
+		["t5_recall_1", "Pockets full, or health running low? Same answer: go home. Tap HOME and you teleport straight back to our castle. Stand still for six seconds, though. Anything that hits you cancels it. So perhaps not next to the enemy.", "peeking"]],
 		"task":"Tap HOME, then stand still for 6 seconds",
-		"done":[["t5_recall_done", "Home sweet castle. The fountain heals you, and the shop serves you here. Or while you're dead. Retail is grim.", "leaning"]]},
+		"done":[["t5_recall_done", "Home sweet castle. Stand here and you heal. Quickly, and for free. It's the only free thing in the kingdom. The shop serves you here too. Or while you're dead. Retail is grim.", "leaning"]]},
 	{"id":"shop", "talk":[
 		["t5_shop_1", "Tap SHOP and buy an item. Items make you hit harder, live longer, and look slightly less doomed. Can't decide? The shop suggests things. Like me, but less charming.", "lying"]],
 		"task":"Open the SHOP and buy an item",

@@ -80,3 +80,9 @@ pocketsphinx -- with no gaps or clipping; the one that heard more of its line): 
 no b, tour_play a, chests a, shop b, pass a, locker b, alliance a, menu a.
 godot/tools/build_tutorial_assets.py vo -> godot/assets/vo/tutorial/<id>.ogg (a line already built is left alone:
 vorbis isn't byte-stable; "force" builds all).
+
+0.31.199 (Kevin: "change the voice lines in the battle training now so the trainer doesn't introduce himself twice
+since players met him in the UI training. Also in training talk about how to teleport back to base and it heals you"):
+script.json's t5_intro_1 (he knows you now), t5_intro_2 (the King's chair, a callback to the welcome), t5_recall_1
+(HOME teleports you back to the castle) and t5_recall_done (the castle heals you) rewritten and voiced again: eleven_v4,
+Edward, two takes each, 1,568 credits; take a of each kept (vo/<id>.mp3 replaced).

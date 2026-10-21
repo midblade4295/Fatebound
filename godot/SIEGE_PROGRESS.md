@@ -6330,3 +6330,21 @@ tutorial. Make it very funny"; then "Also have him briefly take player through m
   build/Fatebound-Siege-0.31.198-fatebound.apk (32 MB, preview key), sha256 db1bf530...07cb3ee0.
 - Kevin's to run, in this order: sudo bash godot/server/deploy/install_siege_server.sh, then
   sudo bash godot/server/deploy/wipe_siege_server.sh --yes.
+
+## 0.31.199 — the battle training: no second introduction; the recall teleports you home, and home heals you
+Kevin: "Will need to change the voice lines in the battle training now so the trainer doesn't introduce himself twice
+since players met him in the UI training. Also in training talk about how to teleport back to base and it heals you".
+- scripts/siege/tutorial.gd + art_sources/tutorial/script.json, voiced again (eleven_v4, Edward, two takes each,
+  1,568 ElevenLabs credits; take a of each):
+  - t5_intro_1: "Oh, it's you again. I'd introduce myself, but we've done that, and once was plenty. Welcome to your
+    first battle. It's only practice. The enemy promised to go easy on you. They laughed, but they promised."
+  - t5_intro_2: "This is the Rift. Remember the King and his very comfortable chair? Ours is behind us. Theirs is at
+    the far end, looking smug. Knock him off it and we win. Simple. You'd be amazed." (the welcome's chair, not its
+    five-versus-five again)
+  - t5_recall_1: "Pockets full, or health running low? Same answer: go home. Tap HOME and you teleport straight back to
+    our castle. Stand still for six seconds, though. Anything that hits you cancels it. So perhaps not next to the
+    enemy."
+  - t5_recall_done: "Home sweet castle. Stand here and you heal. Quickly, and for free. It's the only free thing in the
+    kingdom. The shop serves you here too. Or while you're dead. Retail is grim."
+- Version 0.31.199, versionCode 285, SERVER_BUILD 0.31.199. Packs: audio-df406b5ee642 (the four lines), the rest
+  unchanged; CONTENT OK, coverage OK, presets unchanged.
