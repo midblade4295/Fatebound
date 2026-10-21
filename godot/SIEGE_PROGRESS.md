@@ -6389,3 +6389,6 @@ Kevin: "Yes make new game icon and store description".
   parties of 5, 36 outfits).
 - Version 0.31.200, versionCode 286, SERVER_BUILD 0.31.200. Packs unchanged (the icons are in the base build); CONTENT
   OK, coverage OK, presets unchanged.
+- Verified: suite all passed (100), COLD_START_PASS, the Play-shape AAB check exit 0 (bundletool valid), presets
+  unchanged; the APK's launcher layers are the A1 icon's. Preview APK: build/Fatebound-Siege-0.31.200-fatebound.apk
+  (32 MB, preview key), sha256 3eab57c4...87ff253f2.
