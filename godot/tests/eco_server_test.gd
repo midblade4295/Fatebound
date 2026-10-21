@@ -84,6 +84,57 @@ func _part1() -> void:
 	check(str(acc.tokens.get(Accounts.token_hash("tok-old-purchase-1"), "")) == id and int(sp.iap.n) == 1, "the confirmed purchase is this account's now; the made-up one is dropped")
 	var b: Dictionary = acc.handle({"t":"eco", "new":true, "import":src})
 	check(int(b.profile.gems) == 300 + 12 * 10, "a second account can't count the same purchase (%d)" % int(b.profile.gems))
+	# --- 0.31.198 (Kevin: "I want to wipe the server so everyone starts fresh"): after a wipe (wipe.json, from
+	# server/deploy/wipe_siege_server.sh) a new account takes in nothing the phone hands over -- a fresh "Player"
+	var tmpw := OS.get_user_data_dir().path_join("ecotest-wipe-%d" % Time.get_ticks_usec())
+	DirAccess.make_dir_recursive_absolute(tmpw)
+	var wfile := FileAccess.open(tmpw.path_join("wipe.json"), FileAccess.WRITE)
+	wfile.store_string("{\"at\":1790990000}\n")
+	wfile.close()
+	var accw = Accounts.new(tmpw)
+	accw.now_override = now
+	check(accw.wiped_at == 1790990000 and not accw.imports_open() and acc.imports_open() and acc.wiped_at == 0, "wipe.json read: imports closed (and open on a server never wiped)")
+	var srcw: Dictionary = src.duplicate(true)
+	srcw.name = "Old Name"
+	var w0: Dictionary = accw.handle({"t":"eco", "new":true, "import":{}})
+	var w1: Dictionary = accw.handle({"t":"eco", "new":true, "import":srcw})
+	var wp: Dictionary = w1.get("profile", {})
+	check(bool(w1.get("ok", false)) and str(wp.get("name", "")) == "Player" and int(wp.gems) == int(w0.profile.gems) and int(wp.gold) == int(w0.profile.gold)
+		and int(wp.level) == int(w0.profile.level) and int(wp.stats.matches) == 0 and (wp.owned as Array).is_empty() and int(wp.get("iap", {}).get("n", 0)) == 0,
+		"after a wipe a phone's old progress, purchases and name aren't taken in: a fresh Player (%s, %d gems, %d gold)" % [str(wp.get("name", "")), int(wp.gems), int(wp.gold)])
+	check(not FileAccess.get_file_as_string(tmpw.path_join("accounts/%s.meta.json" % str(w1.acct))).contains("imported"), "...and nothing noted as imported")
+	# ...purchases went with the accounts: an old token isn't granted again (purchase_tokens.json is kept) -- and the
+	# starter pack Google won't sell twice isn't offered again (its BUY would do nothing)
+	accw.tokens[Accounts.token_hash("tok-old-gems")] = "00000000000000000000"
+	accw.tokens[Accounts.token_hash("tok-old-starter")] = "00000000000000000000"
+	var gw: Dictionary = accw.grant_purchase(str(w1.acct), str(w1.key), "gems_80", "tok-old-gems")
+	var ew: Dictionary = accw.open(str(w1.acct), str(w1.key))
+	check(str(gw.get("why", "")) == "used" and int(ew.p.d.gems) == int(wp.gems) and not bool(ew.p.d.iap.starter), "an old gem pack's token: not granted again")
+	var sw: Dictionary = accw.grant_purchase(str(w1.acct), str(w1.key), "starter_pack", "tok-old-starter")
+	ew = accw.open(str(w1.acct), str(w1.key))
+	check(str(sw.get("why", "")) == "used" and int(ew.p.d.gems) == int(wp.gems) and bool(ew.p.d.iap.starter), "an old starter pack: not granted again, not offered again")
+	# ...and a phone with progress, on the wiped server: its key unknown ("auth"), it asks for a new account handing over
+	# its old copy, and takes the fresh one (named "Player": the Herald's welcome asks the name)
+	var ph = Profile.new("user://ecotest-wiped-%d.json" % Time.get_ticks_usec(), "user://none.json")
+	ph.load_or_create()
+	ph.d.name = "Midblade"
+	ph.d.gems = 777
+	ph.d.gold = 4321
+	ph.d.stats.matches = 30
+	ph.d.account = {"id":"0123456789abcdef0123", "key":"f".repeat(64), "seq":9}
+	ph.save()
+	var sy = EcoSync.new()
+	sy.auto_start = false
+	sy.setup(ph)
+	var ans: Dictionary = accw.handle(sy._message())
+	check(not bool(ans.get("ok", true)) and str(ans.get("why", "")) == "auth", "a phone's old account on the wiped server: unknown (auth)")
+	sy.apply_answer(ans)
+	var msg: Dictionary = sy._message()
+	check(bool(msg.get("new", false)) and str((msg.get("import", {}) as Dictionary).get("name", "")) == "Midblade", "...so it asks for a new one, handing over its old copy")
+	sy.apply_answer(accw.handle(msg), msg)
+	check(sy.enabled and str(ph.d.name) == "Player" and int(ph.d.gems) == int(w0.profile.gems) and int(ph.d.gold) == int(w0.profile.gold) and int(ph.d.stats.matches) == 0,
+		"...and starts fresh: named Player, %d gems, %d gold" % [int(ph.d.gems), int(ph.d.gold)])
+	sy.free()
 	check(not bool(acc.handle({"t":"eco", "acct":id, "key":"0".repeat(64)}).ok), "a wrong key gets nothing")
 	# --- ops, replayed with the game's rules
 	var e: Dictionary = acc.open(id, key)

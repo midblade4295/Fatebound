@@ -69,3 +69,14 @@ sure all the white cutout is gone"): birefnet-v2-bg-removal on each pose, its al
 keeps the scroll too in hold, leaning, peeking and hanging, and drops it in the rest), 8 x 30 = 242 credits. The cut
 takes the Herald from it and the scroll from what isn't white (the build checks no patch of white ground over a few
 px is left at the edge).
+
+intro_script.json + vo/intro_*.mp3, vo/tour_*.mp3 (0.31.198, Kevin, with the server wiped: "Have the game ask their
+name and after they do that it'll briefly say what game is and then ask if they would like to play tutorial. Make the
+tutorial guy pop up while doing this and voice it ... Make it very funny"; "Also have him briefly take player through
+menus"): the Royal Herald's welcome (godot/scripts/app/herald_intro.gd) -- [id, the prompt as spoken, [directions] and
+all]. eleven_v4, Edward (goT3UYdM9bhm0n2lmKQx), two takes each: the intro's seven lines 2,494 credits (intro_meta, the
+between-battles line, not used: the menu tour says it), the tour's seven 1,600. Takes kept (both said their words --
+pocketsphinx -- with no gaps or clipping; the one that heard more of its line): hello a, named b, what b, ask b, yes b,
+no b, tour_play a, chests a, shop b, pass a, locker b, alliance a, menu a.
+godot/tools/build_tutorial_assets.py vo -> godot/assets/vo/tutorial/<id>.ogg (a line already built is left alone:
+vorbis isn't byte-stable; "force" builds all).

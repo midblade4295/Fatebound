@@ -5,6 +5,8 @@ teleport back to castle mechanic").
 
 Sources (art_sources/tutorial, ElevenLabs; README.txt there has the prompts and costs):
   script.json         [id, audio tag, line] -- the lines as scripts/siege/tutorial.gd shows them (the tag is only spoken)
+  intro_script.json   (0.31.198) [id, prompt] -- the first-run intro and menu tour (scripts/app/herald_intro.gd shows
+                      each without its [directions])
   vo/<id>.mp3         eleven_v4, the Herald's voice (Edward), one take a line
   sfx/recall_*.mp3    eleven_text_to_sound_v2, two takes each
   poses/<pose>.png    (0.31.182, Kevin: concept D, "but also have him doing some funny stuff with the scroll like
@@ -53,6 +55,8 @@ RECALL = {
 def vo():
     os.makedirs(VO, exist_ok=True)
     lines = json.load(open(os.path.join(SRC, "script.json")))
+    # (0.31.198) and the first-run intro's (scripts/app/herald_intro.gd): [id, the spoken prompt, tags and all]
+    lines += [[lid, "", text] for lid, text in json.load(open(os.path.join(SRC, "intro_script.json")))]
     # trim: silence (below -45 dB) off the start, and off the end by reversing; loudness to -16 LUFS; tiny fades
     af = ("silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.05,areverse,"
           "silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.12,areverse,"
@@ -60,6 +64,8 @@ def vo():
     for lid, _tag, _text in lines:
         src = os.path.join(SRC, "vo", lid + ".mp3")
         out = os.path.join(VO, lid + ".ogg")
+        if os.path.exists(out) and os.path.getmtime(out) >= os.path.getmtime(src) and "force" not in ARGS:
+            continue                          # (0.31.198: built already -- vorbis isn't byte-stable, so no churn)
         subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", src, "-af", af, "-ac", "1", "-ar", "44100",
                         "-c:a", "libvorbis", "-q:a", "5", out], check=True)
         dur = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", out],

@@ -1,0 +1,15 @@
+[
+ ["intro_hello", "[startled] Oh! Hello. Didn't see you there. I'm the Royal Herald. I announce people. Which is awkward, because I have no idea who you are. [dry] What's your name? And do pick something I can say out loud. In public. Near children."],
+ ["intro_named", "[clears throat] [booming] Hear ye, hear ye! Presenting... [beat] [flat] that. Lovely. I've written it on the royal scroll. In permanent ink. I've regretted that before."],
+ ["intro_what", "Right. This is Fatebound. Five heroes versus five. Three lanes. Two castles. Each with a King sitting on a very comfortable chair. Knock their King off his chair, keep ours on his, and try not to die in ways I'll have to announce."],
+ ["intro_ask", "Now. I could teach you the basics. It's quick, it's mostly painless, and there's gold at the end. Or you can skip it and learn by losing. Loudly. In front of everyone. [dry] Your call."],
+ ["intro_yes", "Excellent. A recruit with sense. That's a first. Follow me, and mind the King's chair. [whispering] He's very particular about it."],
+ ["intro_no", "[sighs] Bold. Foolish, but bold. If you change your mind, the lessons are in the menu. I'll be right here. Napping. [yawns] Heroically."],
+ ["tour_play", "First, the big button. PLAY. It throws you straight into a battle. It is the most important button in the kingdom. [dry] Please don't sit on it."],
+ ["tour_chests", "Win, and you'll earn chests. They wait down here, unlocking slower than a royal tax refund. Then, gold, gems, and the odd hero shard."],
+ ["tour_shop", "The Shop. Heroes, outfits, gems. Everything a growing hero needs, [dry] and several things he doesn't."],
+ ["tour_pass", "The Pass. Play matches, climb its tiers, collect prizes. It's a ladder. Made of presents."],
+ ["tour_locker", "Your Locker. Your heroes, their outfits, your titles. Dress to impress. [beat] Or at least to intimidate."],
+ ["tour_alliance", "Alliance. Friends, parties, and your clan. Five of you on one side. The enemy hates it. [warmly] I adore it."],
+ ["tour_menu", "And up here, the menu. Daily orders, quests, the rankings, and my lessons. Do read the orders. They pay. [dry] I don't."]
+]

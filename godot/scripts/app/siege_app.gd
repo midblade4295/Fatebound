@@ -27,8 +27,9 @@ const DAILY_REWARD := "res://scripts/app/daily_reward.gd"
 const UPDATE_SCREEN := "res://scripts/app/update_screen.gd"
 const MOBA_PANEL := "res://scripts/app/moba_panel.gd"              # 0.31.155: 5V5 (the test)
 const CHAMPION_WINDOW := "res://scripts/app/champion_window.gd"    # 0.31.187: a champion's own window (the Locker)
+const HERALD_INTRO := "res://scripts/app/herald_intro.gd"          # 0.31.198: the Royal Herald's welcome
 const LATER := [SIEGE_MODE, CLAN_PANEL, CHAT_PANEL, FRIENDS_PANEL, ORDERS_PANEL, DAILY_REWARD, LEADERBOARD_PANEL, UPDATE_SCREEN,
-	MOBA_PANEL, CHAMPION_WINDOW]
+	MOBA_PANEL, CHAMPION_WINDOW, HERALD_INTRO]
 const Audio = preload("res://scripts/native_audio.gd")
 const Assets = preload("res://scripts/siege/asset_cache.gd")
 const Net = preload("res://scripts/siege/siege_net.gd")
@@ -1441,6 +1442,7 @@ func _on_eco_synced(differs: bool) -> void:
 	if analytics != null:
 		analytics.note_level(int(profile.d.level))
 	if siege == null and tab == "home":
+		offer_intro.call_deferred()               # 0.31.198: no name yet (a new account -- after the wipe, everyone's)
 		offer_referral.call_deferred()            # 0.31.120: a referral chest that came with this answer (it checks)
 	if not differs or siege != null:
 		return
@@ -2231,8 +2233,34 @@ func open_send_diag() -> void:
 				send.text = "SEND"
 				UI2.dim_button(send, false)))
 
+# 0.31.198 (Kevin, with the server wiped so everyone starts fresh: "Have the game ask their name and after they do that
+# it'll briefly say what game is and then ask if they would like to play tutorial. Make the tutorial guy pop up while
+# doing this and voice it ..."; "Also have him briefly take player through menus"): the Royal Herald's welcome
+# (herald_intro.gd) on Home, before anything else, for a player with no name yet -- Profile's "Player": a new install,
+# or anyone once the wiped server has made them a new account. Not in tests or screenshot tools, which call
+# open_intro or set intro_auto.
+var intro_auto := DisplayServer.get_name() != "headless" and not OS.has_environment("SHOT_DIR")
+
+func needs_intro() -> bool:
+	return profile != null and str(profile.d.get("name", "")) == "Player"
+
+func offer_intro() -> bool:
+	if not intro_auto or siege != null or update_required or tab != "home" or is_instance_valid(modal):
+		return false
+	if not needs_intro():
+		return false
+	open_intro()
+	return true
+
+func open_intro() -> void:
+	close_modal()
+	var m = _later(HERALD_INTRO).new()
+	add_child(m)
+	modal = m
+	m.open(self)
+
 func offer_daily() -> void:
-	if offer_prize() or offer_clan_reward() or offer_referral():
+	if offer_intro() or offer_prize() or offer_clan_reward() or offer_referral():
 		return
 	if not daily_auto or siege != null or update_required or tab != "home" or is_instance_valid(modal):
 		return

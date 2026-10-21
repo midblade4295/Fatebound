@@ -260,7 +260,8 @@ func _init() -> void:
 	_log("purchase checks: %s" % iap_apple.describe())
 	eco = EcoAccounts.new()
 	eco.log_fn = _log
-	_log("accounts: %d in %s" % [eco.count(), eco.dir])
+	_log("accounts: %d in %s%s" % [eco.count(), eco.dir, (" (wiped %s UTC: new accounts start fresh, nothing imported)" %
+		Time.get_datetime_string_from_unix_time(eco.wiped_at, true)) if eco.wiped_at > 0 else ""])
 	social = Social.new("", eco)
 	social.log_fn = _log
 	social.send_fn = func(cid: int, msg: Dictionary): _send(cid, msg)

@@ -53,6 +53,11 @@ var link_tries := {}                 # address -> [unix] (wrong codes)
 var link_tries_all: Array = []
 var gc_links := {}                   # gc_hash(teamPlayerID) -> account id
 var gc_path := ""
+# 0.31.198 (Kevin: "I want to wipe the server so everyone starts fresh" -- purchases too): wipe.json ({"at": unix}),
+# written by server/deploy/wipe_siege_server.sh with the accounts gone. From then on a new account takes in nothing a
+# phone hands over: every phone's key is unknown ("auth"), it asks for a new account with its old progress, and gets a
+# fresh one (Profile.defaults: named "Player", so the Herald's welcome asks the name -- scripts/app/herald_intro.gd).
+var wiped_at := 0
 var _made: Array = []                # when the last new accounts were made (the hourly limit)
 
 func _init(state_dir := "") -> void:
@@ -67,6 +72,15 @@ func _init(state_dir := "") -> void:
 	if FileAccess.file_exists(gc_path):
 		var g: Variant = JSON.parse_string(FileAccess.get_file_as_string(gc_path))
 		gc_links = g if g is Dictionary else {}
+	var wp := state.path_join("wipe.json")
+	if FileAccess.file_exists(wp):
+		var w: Variant = JSON.parse_string(FileAccess.get_file_as_string(wp))
+		wiped_at = int(w.get("at", 1)) if w is Dictionary else 1
+		wiped_at = maxi(wiped_at, 1)
+
+func imports_open() -> bool:
+	# a new account takes in the phone's progress: before IMPORT_UNTIL, and never after a wipe
+	return wiped_at <= 0 and now() < IMPORT_UNTIL
 
 func now() -> int:
 	return now_override if now_override >= 0 else int(Time.get_unix_time_from_system())
@@ -193,7 +207,7 @@ func create(import_d: Variant) -> Dictionary:
 	var p = _profile(id)
 	p.d = Profile.defaults()
 	var meta := {"v":1, "key":key.sha256_text(), "created":now(), "seq":0, "tickets":[], "rev":0}
-	if import_d is Dictionary and not (import_d as Dictionary).is_empty() and now() < IMPORT_UNTIL:
+	if import_d is Dictionary and not (import_d as Dictionary).is_empty() and imports_open():
 		meta["imported"] = _import(p, import_d, id)
 	p.d.chests.salt = int(cr.generate_random_bytes(4).decode_u32(0) & 0x7fffffff)
 	p.d.migration = {"from":"server", "at":now()}
@@ -524,6 +538,7 @@ func grant_purchase(id: String, key: String, product: String, token: String, con
 	var owner := str(tokens.get(h, ""))
 	if owner != "" and owner != id:
 		log_fn.call("purchase %s: token already granted to account %s, refused for %s" % [product, owner, id])
+		_owned_once(e, product)
 		return {"ok":false, "why":"used"}
 	if consumed and owner != id:
 		return {"ok":false, "why":"used"}
@@ -535,6 +550,17 @@ func grant_purchase(id: String, key: String, product: String, token: String, con
 	_save_meta(e)
 	g["profile"] = public_profile(p.d)
 	return g
+
+func _owned_once(e: Dictionary, product: String) -> void:
+	# 0.31.198: a pack Google sells once (the starter) that this player owns, granted to another account -- or to one the
+	# wipe took (purchases went with it): not granted again, and not offered again either (Google won't sell it twice,
+	# so its BUY would do nothing)
+	if not bool(Net.IAP.get(product, {}).get("once", false)) or bool(e.p.d.iap.get("starter", false)):
+		return
+	e.p.d.iap.starter = true
+	e.p.save()
+	e.meta.rev = int(e.meta.get("rev", 0)) + 1
+	_save_meta(e)
 
 func wear(id: String, key: String) -> Dictionary:
 	# what an account may show online: its own name, title (owned) and looks (the outfits it owns and wears); the

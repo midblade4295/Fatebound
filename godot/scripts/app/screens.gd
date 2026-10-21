@@ -382,6 +382,7 @@ static func chests_row(app, parent: Control, w: float, y: float) -> void:
 		plate.position = Vector2(x, y)
 		plate.size = Vector2(sw, sh)
 		plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		plate.set_meta("chest_plate", i)                # (0.31.198: the Herald's tour shows the row)
 		parent.add_child(plate)
 		if i >= p.chests().size():
 			UI2.plate(plate, "glass", 12.0, "brown", {"fill_top": Color(CHEST_FILL[0], 0.55), "fill_bottom": Color(CHEST_FILL[1], 0.7),
