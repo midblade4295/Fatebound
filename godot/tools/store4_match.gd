@@ -191,6 +191,7 @@ func _stage() -> void:
 		"king":
 			_stage_king()
 	if cine:
+		mode.view.fog_on = false                     # (a camera of its own: no side's fog of war over it)
 		mode.hud.visible = false                     # (the camera's own far plane: the whole field in view hung lavapipe)
 
 # ---- the scenes ----
@@ -292,7 +293,7 @@ func _stage_wyrm() -> void:
 	_plan = [[60, "_cast", ["you", "r"]], [64, "_wyrm_breath", []]]
 	at = 86
 	if cine:
-		cam = [Vector3(16.0, 10.0, 19.0), Vector3(25.0, 1.5, 4.5)]
+		cam = [Vector3(14.0, 9.0, 15.5), Vector3(25.5, 2.5, 4.5)]
 
 func _red_tower(lane: int, tier: int) -> Dictionary:
 	for tw in s().moba.towers:
@@ -366,4 +367,4 @@ func _stage_king() -> void:
 	_plan.append([61, "_cast", ["you", "w"]])
 	at = 76
 	if cine:
-		cam = [Vector3(9.5, 8.0, -84.0), Vector3(-0.6, 2.4, -99.5)]
+		cam = [Vector3(6.0, 10.5, -84.5), Vector3(-0.6, 2.2, -99.5)]

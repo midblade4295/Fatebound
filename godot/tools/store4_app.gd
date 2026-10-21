@@ -13,6 +13,7 @@ const App = preload("res://scripts/app/siege_app.gd")
 const Screens = preload("res://scripts/app/screens.gd")
 const Eco = preload("res://scripts/meta/economy.gd")
 
+const NOW := 1795000000                  # (mid-November 2026: past the new champions' launch weeks)
 var app
 var frames := 0
 var part := "home"
@@ -32,7 +33,7 @@ func _init() -> void:
 	app.version_check = false
 	app.profile_path = base + "-profile.json"
 	app.legacy_path = base + "-none.json"
-	app.now_override = 1791000000
+	app.now_override = NOW
 	root.add_child(app)
 	RenderingServer.frame_post_draw.connect(func():
 		if pending:
@@ -68,12 +69,13 @@ func _social(with_clan: bool) -> void:
 	s.me = me.duplicate()
 	s.state = "online"
 	s.has_clans = true
+	s.has_lfg = true
 	var f := [
 		{"pid":"9c41e07a2b", "n":"Ironclad", "tt":"", "st":"online", "ct":"WOLF", "cc":"3.5.1"},
 		{"pid":"51ab90cc3e", "n":"Mirabel", "tt":"", "st":"online"},
 		{"pid":"e7d2214f80", "n":"Thornwick", "tt":"", "st":"match", "ct":"WOLF", "cc":"3.5.1"},
 		{"pid":"0b3f8a1d55", "n":"Kaelen", "tt":"", "st":"online"},
-		{"pid":"77c0d1e3aa", "n":"Pyra", "tt":"", "st":"offline", "seen":1791000000 - 3 * 3600},
+		{"pid":"77c0d1e3aa", "n":"Pyra", "tt":"", "st":"offline", "seen":NOW - 3 * 3600},
 	]
 	s.friends = f
 	s.party = {"id":"pa1", "leader":me.pid, "members":[me, f[0], f[1]], "pending":[], "max":5}
@@ -89,9 +91,9 @@ func _social(with_clan: bool) -> void:
 		members[0].pid = me.pid
 		s.clan = {"id":"c1", "name":"Iron Wolves", "tag":"WOLF", "house":"", "join":"open", "min_lv":5, "n":names.size(),
 			"max":30, "lead":"Midblade", "cv":2, "cr":Eco.crest_of_code("3.5.1"), "cc":"3.5.1", "lv":8, "pts":2460, "fr":"silver",
-			"members":members, "role":"leader", "created":1789000000, "xp":7900, "week":"2026-W42", "ends":1791000000 + 3 * 86400,
-			"tier":Eco.clan_tier(2460), "mine_pts":420, "asks":[{"pid":"m05", "n":"Vex", "h":"golem", "at":1791000000 - 1200}],
-			"ask_next":0, "lfg":[{"pid":"m04", "n":"Odessa", "at":1791000000 - 60, "size":2, "max":5}]}
+			"members":members, "role":"leader", "created":1789000000, "xp":7900, "week":"2026-W47", "ends":NOW + 3 * 86400,
+			"tier":Eco.clan_tier(2460), "mine_pts":420, "asks":[{"pid":"m05", "n":"Vex", "h":"golem", "at":NOW - 1200}],
+			"ask_next":0, "lfg":[{"pid":"m04", "n":"Odessa", "at":NOW - 60, "size":2, "max":5}]}
 	s.changed.emit("state")
 	s.changed.emit("friends")
 	s.changed.emit("party")
