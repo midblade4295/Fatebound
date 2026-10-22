@@ -6553,7 +6553,8 @@ unique look and I want them especially the ultimates to look exciting".
   OUT); tools/fx_probe.gd a bare scene for one piece. Every hero's sheet reviewed; the light toned down twice (the
   additive light over the bright ground whites out fast: slimmer pillars, gold not white, dimmer discs, denser
   particles for what lasts).
-- Version 0.31.201, versionCode 287, SERVER_BUILD 0.31.201. No preview APK from here (no preview keystore or Android
-  SDK in this workspace).
+- Version 0.31.201, versionCode 287, SERVER_BUILD 0.31.201. The effect sprites are base assets (assets/vfx), so no
+  content pack changed (CONTENT OK, coverage OK). The game's protocol is unchanged: the live server needn't change.
 - Verified: suite all passed (100, --quick; the runner's 25-minute wrapper cut it off at the analytics tests, those
-  three were run on their own), human soak stalls=0.
+  three were run on their own), human soak stalls=0. Preview APK: build/Fatebound-Siege-0.31.201-fatebound.apk (33 MB,
+  preview key from the handoff folder, ANDROID_HOME=/root/android-sdk; Vulkan only, BASE OK), sha256 8d179b95...c8e6f6d07a.
