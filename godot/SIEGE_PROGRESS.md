@@ -6583,3 +6583,5 @@ shop). Everything it sells, every price and every button stays; the look and the
   already in the packs); the protocol is unchanged.
 - The quick suite: 99 of 100 passed on the first run, app_scroll_test failed on the moved button; with the window
   widened it and app_flow_test pass.
+- Preview APK: build/Fatebound-Siege-0.31.202-fatebound.apk (33,027,036 bytes, Vulkan only, preview key), sha256
+  87fd7814608ab0fd40116a9d2dfd30fd68e20002e508fde15fd760321144add8. Sent to Kevin with the before/after sheet.
