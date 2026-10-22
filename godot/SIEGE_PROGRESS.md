@@ -6664,3 +6664,5 @@ them".
 - The quick suite: 98 of 102 passed; app_flow_test (a type it couldn't infer, so parse_all too), shop_packs_test and
   ios_port_test (the gem packs are on the GEMS tab now) failed -- fixed, each passes on its own.
 - Version 0.31.204, versionCode 290, SERVER_BUILD 0.31.204.
+- Preview APK: build/Fatebound-Siege-0.31.204-fatebound.apk (33,047,516 bytes, Vulkan only, preview key), sha256
+  573f7dec33becfa5d30e230683a900801b2e0fc9344ebe8fc2ba38a02626662f. Sent to Kevin with the shots.
