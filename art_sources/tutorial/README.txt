@@ -86,3 +86,7 @@ since players met him in the UI training. Also in training talk about how to tel
 script.json's t5_intro_1 (he knows you now), t5_intro_2 (the King's chair, a callback to the welcome), t5_recall_1
 (HOME teleports you back to the castle) and t5_recall_done (the castle heals you) rewritten and voiced again: eleven_v4,
 Edward, two takes each, 1,568 credits; take a of each kept (vo/<id>.mp3 replaced).
+
+0.31.204 (Kevin: "redo the locker menu. Change the name to armory"): intro_script.json's tour_locker says "Your Armory"
+now and was voiced again: eleven_v4, Edward (goT3UYdM9bhm0n2lmKQx), two takes, 210 credits; take a kept (pocketsphinx
+heard more of its line; neither clipped) as vo/tour_locker.mp3. The id stays tour_locker (the tab keeps its id).

@@ -136,6 +136,8 @@ run league_iap_test      LEAGUE_IAP_PASS          120
 run skins_test           SKINS_PASS               120
 # The weekly sale (0.31.203): the featured three at 50/35/25 % off, buy_sale replayed on the server, its end, the shop
 run weekly_sale_test     WEEKLY_SALE_PASS         150 --resolution 420x933
+# The Armory and the Market's HEROES (0.31.204): only what you own in the Armory, heroes bought in the Market, the picker
+run armory_market_test   ARMORY_MARKET_PASS       150 --resolution 420x933
 run champions_test       CHAMPIONS_PASS           200
 run content_test         CONTENT_PASS             120
 # Class quests (0.31.97): the table, counting per class worn, claiming in order, the screens; and the in-match tracking.

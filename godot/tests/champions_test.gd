@@ -7,7 +7,10 @@ extends SceneTree
 #  1. the eighteen: each a name of his own (none the same, none just his class), a title, a short story and a line; his
 #     painting and card in the game, his colour, his effects' sprites all there; Champions.ORDER is the 5v5's order;
 #  2. the Locker: CHAMPIONS first -- six roles, three cards each, each card his name, YOURS / FREE / NEW and a price;
-#     and TITLES (0.31.188: the ARMORY went with the weapons -- the outfits are in his window and the shop);
+#     and TITLES (0.31.188: the ARMORY went with the weapons -- the outfits are in his window and the shop). 0.31.204
+#     (Kevin: "redo the locker menu. Change the name to armory and only put in there what the player owns. Also put a
+#     hero tab in the market"): the ARMORY's HEROES -- only the ones you own, under their roles, the look he wears on
+#     each; the rest in the Market's HEROES -- his name, NEW, FREE, 50K or 600, his outfits, UNLOCK; tapped: his window;
 #  3. a card tapped: his window -- his painting, his effects (moving), him in 3D (turned by a drag, zoomed by + / -), his
 #     name, title, class and role, his story, his line and his kit; the launch price on a new one;
 #  4. SKINS: his own look and every outfit of his (0.31.188: his own set with its weapon, and Frostbound); a skin tapped
@@ -159,30 +162,57 @@ func _process(delta: float) -> bool:
 				_go("locker")
 		"locker":
 			if t_phase > 0.5:
-				# ---- 2. the Locker
-				check(app.tab == "locker" and str(app.locker_tab) == "champions" and btn("locker_tab_champions") != null
-					and btn("locker_tab_armory") == null and btn("locker_tab_titles") != null, "the Locker opens on CHAMPIONS; TITLES beside it (no ARMORY, 0.31.188)")
+				# ---- 2. the Armory (0.31.204, was the Locker): only the heroes you own
+				var p = app.profile
+				var mine: Array = Moba.HERO_ORDER.filter(func(h): return p.owns_hero(str(h)))
+				check(app.tab == "locker" and str(app.locker_tab) == "heroes" and btn("locker_tab_heroes") != null and btn("locker_tab_outfits") != null
+					and btn("locker_tab_titles") != null and btn("locker_tab_champions") == null, "the Armory opens on HEROES; OUTFITS and TITLES beside it")
 				var n := 0
+				var others := 0
 				for hid in Moba.HERO_ORDER:
 					if btn("champ_" + str(hid)) != null:
-						n += 1
+						if p.owns_hero(str(hid)):
+							n += 1
+						else:
+							others += 1
 				var roles := 0
 				for r in Kits.ROLE_ORDER:
 					if has_text(app.content, str(Kits.ROLE_NAMES[r])):
 						roles += 1
-				check(n == 18 and roles == 6, "18 cards under the six roles (%d, %d)" % [n, roles])
-				var lk := _locked_new()
-				check(lk != "" and has_text(btn("champ_knight"), "ALDRIC") and has_text(btn("champ_knight"), "YOURS")
-					and has_text(btn("champ_" + lk), Champions.short_of(lk).to_upper()) and has_text(btn("champ_" + lk), "50,000")
-					and has_text(btn("champ_" + lk), "NEW") and has_text(btn("champ_" + lk), "2 OUTFITS"),
-					"a card: his name, YOURS -- or NEW at 50,000 (%s); his skins" % lk)
-				var fr: String = Eco.free_heroes(app.profile.now())[0]
-				check(has_text(btn("champ_" + fr), "FREE"), "this week's free one says FREE (%s)" % fr)
+				check(n == mine.size() and others == 0 and mine.size() < 18 and roles == 6,
+					"only the heroes you own, under the six roles (%d cards, %d not yours)" % [n, others])
+				check(has_text(btn("champ_knight"), "ALDRIC") and has_text(btn("champ_knight"), "ORIGINAL LOOK") and btn("armory_to_heroes") != null,
+					"a card: his name and the look he wears; MORE HEROES IN THE MARKET")
 				_shot("champ_locker")
 				press("locker_tab_titles")
 				check(str(app.locker_tab) == "titles" and has_text(app.content, "NO TITLE"), "TITLES")
-				press("locker_tab_champions")
-				press("champ_stormcaller")
+				press("locker_tab_heroes")
+				press("armory_to_heroes")
+				_go("market")
+		"market":
+			if t_phase > 0.5:
+				# ---- 2b. the Market's HEROES (0.31.204): the ones you don't own, to unlock
+				var p = app.profile
+				check(app.tab == "shop" and str(app.shop_tab) == "heroes", "MORE HEROES IN THE MARKET: the Market's HEROES")
+				var n := 0
+				var owned_shown := 0
+				for hid in Moba.HERO_ORDER:
+					if btn("hero_look_" + str(hid)) != null:
+						if p.owns_hero(str(hid)):
+							owned_shown += 1
+						else:
+							n += 1
+				var locked: int = Moba.HERO_ORDER.filter(func(h): return not p.owns_hero(str(h))).size()
+				check(n == locked and locked > 0 and owned_shown == 0, "every hero you don't own, none you do (%d)" % n)
+				var lk := _locked_new()
+				var card: Node = btn("hero_look_" + lk).get_parent() if btn("hero_look_" + lk) != null else null
+				check(card != null and has_text(card, Champions.short_of(lk).to_upper()) and has_text(card, "50K") and has_text(card, "600")
+					and has_text(card, "NEW") and has_text(card, "2 OUTFITS") and btn("hero_unlock_" + lk) != null,
+					"a card: his name, NEW, 50K or 600 gems, his outfits, UNLOCK (%s)" % lk)
+				var fr: String = Eco.free_heroes(p.now())[0]
+				check(btn("hero_look_" + fr) != null and has_text(btn("hero_look_" + fr).get_parent(), "FREE"), "this week's free one says FREE (%s)" % fr)
+				_shot("champ_market")
+				press("hero_look_stormcaller")
 				_go("window")
 		"window":
 			if t_phase > 1.2:

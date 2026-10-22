@@ -143,7 +143,7 @@ static func home(app, root: VBoxContainer) -> void:
 	root.add_child(top)
 	if d.has("title_note"):                               # 0.31.87: titles earned from the stats you already had
 		var tn: Array = d.title_note
-		app.toast("You've earned %d title%s for what you've already done -- see the Locker" % [tn.size(), "" if tn.size() == 1 else "s"], UI.GOLD)
+		app.toast("You've earned %d title%s for what you've already done -- see the Armory" % [tn.size(), "" if tn.size() == 1 else "s"], UI.GOLD)
 		d.erase("title_note")
 		p.save()
 	if d.has("refund_note"):                              # 0.31.39: skins removed -- tell them once what came back
@@ -1115,39 +1115,67 @@ static func shop(app, root: VBoxContainer) -> void:
 	note.position = Vector2(12, 12)
 	_twinkles(ban, 9, Color(0.75, 0.9, 1.0), Rect2(0.12, 0.12, 0.8, 0.5))
 	UI2.sweep(ban, 5.0, 90.0, 0.28)
-	var jump := HBoxContainer.new()
-	jump.add_theme_constant_override("separation", 8)
-	root.add_child(jump)
-	var marks := {}                                     # where each jump goes (filled as the page is built)
-	# (0.31.203: FEATURED is the WEEKLY SALE: "SALE" in red with the sale's starburst)
-	for jb in [["SALE", SALE + "sale_badge.webp", "feat", "red"], ["OUTFITS", UI2.icon_path("helmet"), "outfits", "blue"],
-			["GEMS", "res://assets/ui/currency/gem.png", "gems", "blue"]]:
-		var key: String = jb[2]
-		var b := UI2.button(jump, str(jb[0]), str(jb[3]), func():
-			app.sfx("tap")
-			_scroll_to(app, marks.get(key)), "shop_jump_" + key, 14, 36.0, 12.0, str(jb[1]))
+	# 0.31.204 (Kevin: "put a hero tab in the market that shows heroes that player doesn't own and that's where they will
+	# purchase them"): the Market in three tabs -- OUTFITS (the weekly sale on top, then every outfit; a red SALE tag on
+	# it), HEROES (market_heroes: the ones you don't own, to unlock) and GEMS (the packs). (0.31.202-0.31.203 a bar that
+	# jumped down one long page: SALE / OUTFITS / GEMS.)
+	if not (str(app.shop_tab) in ["outfits", "heroes", "gems"]):
+		app.shop_tab = "outfits"
+	var tabs := HBoxContainer.new()
+	tabs.add_theme_constant_override("separation", 8)
+	root.add_child(tabs)
+	var locked := Champions.ORDER.filter(func(h): return not p.owns_hero(str(h))).size()
+	for tb in [["outfits", "OUTFITS", UI2.icon_path("helmet")], ["heroes", "HEROES", UI2.icon_path("crown")],
+			["gems", "GEMS", "res://assets/ui/currency/gem.png"]]:
+		var tid: String = tb[0]
+		var on: bool = str(app.shop_tab) == tid
+		var b := UI2.button(tabs, str(tb[1]), "gold" if on else "blue", func():
+			if str(app.shop_tab) == tid:
+				return
+			app.sfx("tab")
+			app.shop_tab = tid
+			app.content_scroll.scroll_vertical = 0
+			app.rebuild(), "shop_tab_" + tid, 14, 40.0, 12.0, str(tb[2]))
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var feat: Array = Eco.featured_outfits(now)
-	if not feat.is_empty():
-		marks["feat"] = _sale_header(app, root, feat, now)
-		var sel := clampi(int(app.get_meta("shop_feat", 0)), 0, feat.size() - 1)
-		featured_outfit(app, root, str(feat[sel]))
-		var thumbs := HBoxContainer.new()
-		thumbs.alignment = BoxContainer.ALIGNMENT_CENTER
-		thumbs.add_theme_constant_override("separation", 24)      # (0.31.203: room for their sale badges)
-		root.add_child(thumbs)
-		for i in feat.size():
-			_feat_thumb(app, thumbs, str(feat[i]), i, i == sel)
-	var od := UI2.divider(root, "OUTFITS", 22, "a whole new look and weapon  ·  his hero comes with it")      # 0.31.186 (0.31.188: whole outfits)
-	marks["outfits"] = od
-	skin_grid(app, root)
-	var gd := gem_packs(app, root)
-	marks["gems"] = gd
-	# (0.31.106-0.31.184 "GEMS -> GOLD": five gold packs for gems. 0.31.185, Kevin: "I want the same IAP system as league of
-	# legends" -- League never turns its paid currency into the earned one: gold is earned only, gems buy heroes outright)
-	var fn := UI2.icon_chip(root, "res://assets/ui/v2/chests/gold_icon.png", "CHESTS ARE EARNED BY PLAYING  ·  NEVER SOLD",
-		Color(0.05, 0.04, 0.16, 0.7), Color("#e8d6b0"), Color(UI2.GOLD, 0.35))
-	fn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		var tag := ""
+		if tid == "outfits" and not Eco.featured_outfits(now).is_empty():
+			tag = "SALE"
+		elif tid == "heroes" and locked > 0:
+			tag = str(locked)
+		if tag != "":
+			var tc := _card_tag(b, tag, Color("#d6372b"), Color("#3a0805"))
+			tc.anchor_left = 1.0
+			tc.anchor_right = 1.0
+			tc.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+			tc.offset_right = 4
+			tc.offset_left = -30
+			tc.offset_top = -7
+			tc.offset_bottom = 9
+	match str(app.shop_tab):
+		"heroes":
+			market_heroes(app, root)
+		"gems":
+			gem_packs(app, root)
+			# (0.31.106-0.31.184 "GEMS -> GOLD": five gold packs for gems. 0.31.185, Kevin: "I want the same IAP system as
+			# league of legends" -- League never turns its paid currency into the earned one: gold is earned only, gems buy
+			# heroes outright)
+			var fn := UI2.icon_chip(root, "res://assets/ui/v2/chests/gold_icon.png", "CHESTS ARE EARNED BY PLAYING  ·  NEVER SOLD",
+				Color(0.05, 0.04, 0.16, 0.7), Color("#e8d6b0"), Color(UI2.GOLD, 0.35))
+			fn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		_:
+			var feat: Array = Eco.featured_outfits(now)
+			if not feat.is_empty():
+				_sale_header(app, root, feat, now)
+				var sel := clampi(int(app.get_meta("shop_feat", 0)), 0, feat.size() - 1)
+				featured_outfit(app, root, str(feat[sel]))
+				var thumbs := HBoxContainer.new()
+				thumbs.alignment = BoxContainer.ALIGNMENT_CENTER
+				thumbs.add_theme_constant_override("separation", 24)      # (0.31.203: room for their sale badges)
+				root.add_child(thumbs)
+				for i in feat.size():
+					_feat_thumb(app, thumbs, str(feat[i]), i, i == sel)
+			UI2.divider(root, "OUTFITS", 22, "a whole new look and weapon  ·  his hero comes with it")      # 0.31.186 (0.31.188: whole outfits)
+			skin_grid(app, root)
 
 static func _sale_header(app, root: Node, feat: Array, now: int) -> Control:
 	# 0.31.203 (Kevin: "make the graphic of the features look very eye catching"): WEEKLY SALE on a red silk ribbon with
@@ -1808,7 +1836,7 @@ static func _grad_rect(parent: Control, stops: Array, from := Vector2(0, 0), to 
 	parent.add_child(t)
 	return t
 
-static func outfit_card(app, grid: Node, id: String) -> Control:
+static func outfit_card(app, grid: Node, id: String, armory := false) -> Control:
 	# 0.31.202: one outfit -- the hero in it standing in his own place (Champions.card_art; the Frostbound line's
 	# frosted over), a glow of its rarity behind him (a set: turning rays too), its rarity and whether you own it or wear
 	# it, the set's name and the hero's, "or 40K" gold for the Frostbound line; tap the picture: his window with it on;
@@ -1884,7 +1912,7 @@ static func outfit_card(app, grid: Node, id: String) -> Control:
 	if worn:
 		right = "WORN"
 		rfill = Color("#b8861c")
-	elif owned:
+	elif owned and not armory:                     # (0.31.204: in the Armory everything is yours)
 		right = "OWNED ✓"
 	elif not p.owns_hero(hid):
 		right = "+ HERO"
@@ -1941,7 +1969,7 @@ static func outfit_card(app, grid: Node, id: String) -> Control:
 	look.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	look.offset_bottom = -46
 	look.set_meta("action_key", "skin_look_" + id)
-	look.pressed.connect(func(): app.open_champion(hid, id))
+	look.pressed.connect(func(): app.open_champion(hid, id, armory))
 	c.add_child(look)
 	var b: Button
 	if owned:
@@ -1965,6 +1993,276 @@ static func outfit_card(app, grid: Node, id: String) -> Control:
 		var bd := _sale_badge(c, int(offer.off), 50.0, view_low(app))
 		c.resized.connect(func(): bd.position = Vector2(c.size.x - 40.0, -10.0))
 	return c
+
+# ---------------- the Market's HEROES (0.31.204) ----------------
+static func market_heroes(app, root: VBoxContainer) -> void:
+	# 0.31.204 (Kevin: "put a hero tab in the market that shows heroes that player doesn't own and that's where they will
+	# purchase them"): every hero you don't own, by role (TANK ... SUPPORT), on cards like the outfits' -- him in his
+	# own place, FREE THIS WEEK / NEW / a shard of him, his gold and gem price, UNLOCK (gold, gems, a shard, a Hero Token;
+	# asked first); tap the picture: his window (story, kit, outfits). Once he's yours he's in the Armory. The 5v5
+	# picker's GET IN MARKET lands here with his card lit (app.open_market("heroes", hid)).
+	var p = app.profile
+	var Kits = load("res://scripts/siege/moba_kits.gd")          # (loaded here, not at boot: the 5v5's)
+	var locked: Array = Champions.ORDER.filter(func(h): return not p.owns_hero(str(h)))
+	UI2.divider(root, "HEROES", 22, "yours for good  ·  gold or gems  ·  then he's in your Armory")
+	var inv := ""
+	if int(p.d.get("tokens", 0)) > 0:
+		inv = "HERO TOKEN x%d" % int(p.d.tokens)
+	var nsh := (p.d.get("shards", []) as Array).size()
+	if nsh > 0:
+		inv += ("  ·  " if inv != "" else "") + "◆ SHARD%s %d" % ["S" if nsh > 1 else "", nsh]
+	if inv != "" and not locked.is_empty():
+		var ic := UI2.chip(root, inv, Color("#173a1e"), Color("#c9f7bd"), Color("#6be07c"))
+		ic.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	if locked.is_empty():
+		# every hero is yours
+		var box := UI2.frame(root, "night", 16, 18.0, "gold")
+		box.add_theme_constant_override("separation", 6)
+		var cr := UI2.img(box, UI2.icon_path("crown"), 64.0)
+		cr.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		UI2.center(UI2.text(box, "EVERY HERO IS YOURS", 22, Color.WHITE))
+		UI2.center(UI2.body(box, "All %d of them -- they're waiting in your Armory." % Champions.ORDER.size(), 12, UI2.SOFT))
+		var ab := UI2.button(box, "OPEN THE ARMORY", "gold", func():
+			app.sfx("tab")
+			app.locker_tab = "heroes"
+			app.show_tab("locker"), "market_to_armory", 15, 42.0, 12.0)
+		ab.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		return
+	var free: Array = Eco.free_heroes(p.now()).filter(func(h): return not p.owns_hero(str(h)))
+	if not free.is_empty():
+		var fc := UI2.chip(root, "FREE THIS WEEK: %s  ·  play them in battle, own them here" % ", ".join(free.map(func(h): return Champions.short_of(str(h)).to_upper())),
+			Color("#1f6a2e"), Color.WHITE, Color("#9dff8a", 0.6))
+		fc.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	var focus := str(app.get_meta("shop_hero_focus", ""))
+	if app.has_meta("shop_hero_focus"):
+		app.remove_meta("shop_hero_focus")
+	var lit: Control = null
+	for role in ROLE_ORDER:
+		var hs: Array = locked.filter(func(h): return Kits.role_of(str(h)) == role)
+		if hs.is_empty():
+			continue
+		var rh := HBoxContainer.new()
+		rh.add_theme_constant_override("separation", 8)
+		root.add_child(rh)
+		var bp := "res://assets/ui/roles/%s.png" % role
+		if ResourceLoader.exists(bp):
+			UI2.img(rh, bp, 30.0).size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		UI2.text(rh, str(Kits.ROLE_NAMES.get(role, role)), 19, UI2.GOLD, UI2.INK, 5).size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		var rs := UI2.body(rh, str(Kits.ROLE_TEXT.get(role, "")), 10, UI2.SOFT, true)
+		rs.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		rs.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		rs.custom_minimum_size.x = 10
+		var grid := GridContainer.new()
+		grid.columns = 3
+		grid.add_theme_constant_override("h_separation", 10)
+		grid.add_theme_constant_override("v_separation", 12)
+		root.add_child(grid)
+		for hid in hs:
+			var c := hero_offer_card(app, grid, str(hid))
+			if str(hid) == focus:
+				lit = c
+		if hs.size() < 3:                                  # (keep the cards a third wide)
+			for i in 3 - hs.size():
+				var gap := Control.new()
+				UI.grow(gap)
+				grid.add_child(gap)
+	if lit != null:
+		# from the 5v5 picker: glide to his card and light it up
+		var ring := Panel.new()
+		var rs2 := StyleBoxFlat.new()
+		rs2.draw_center = false
+		rs2.border_color = Color("#fff3ad")
+		rs2.set_border_width_all(4)
+		rs2.set_corner_radius_all(18)
+		rs2.shadow_color = Color(1.0, 0.8, 0.3, 0.8)
+		rs2.shadow_size = 14
+		ring.add_theme_stylebox_override("panel", rs2)
+		ring.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		ring.offset_left = -3
+		ring.offset_top = -3
+		ring.offset_right = 3
+		ring.offset_bottom = 3
+		ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		ring.set_meta("hero_focus_ring", true)
+		lit.add_child(ring)
+		UI2.when_ready(ring, func():
+			var tw := ring.create_tween().set_loops(4)
+			tw.tween_property(ring, "modulate:a", 0.25, 0.4).set_trans(Tween.TRANS_SINE)
+			tw.tween_property(ring, "modulate:a", 1.0, 0.4).set_trans(Tween.TRANS_SINE)
+			ring.get_tree().create_timer(0.12).timeout.connect(func():
+				var sc: ScrollContainer = app.content_scroll
+				if is_instance_valid(lit) and is_instance_valid(sc):
+					var to := maxi(0, sc.scroll_vertical + int(lit.global_position.y - sc.global_position.y) - 90)
+					sc.create_tween().tween_property(sc, "scroll_vertical", to, 0.45).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)))
+
+static func hero_offer_card(app, grid: Node, hid: String) -> Control:
+	# 0.31.204: one hero for sale -- him (in his own look) in his own place (Champions.card_art), a glow of his colour, his
+	# name and class, FREE THIS WEEK / NEW / ◆ shard tags, his price in gold and in gems, UNLOCK (asked first: each way);
+	# tap the picture: his window
+	var p = app.profile
+	var acc: Color = Champions.accent(hid)
+	var pr: Dictionary = p.hero_price(hid)
+	var plays: bool = p.can_play_hero(hid)
+	var c := Control.new()
+	c.custom_minimum_size = Vector2(0, 244)
+	UI.grow(c)
+	grid.add_child(c)
+	var pane := Panel.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = acc.darkened(0.82)
+	sb.set_corner_radius_all(16)
+	pane.add_theme_stylebox_override("panel", sb)
+	pane.clip_children = CanvasItem.CLIP_CHILDREN_AND_DRAW
+	pane.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	pane.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	c.add_child(pane)
+	var art := TextureRect.new()
+	art.texture = UI2.tex(Champions.card_art(hid))
+	art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	art.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	art.offset_bottom = -70
+	art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	pane.add_child(art)
+	var rays := UI2.rays(pane, 190.0, acc.lerp(Color(1.0, 0.9, 0.6), 0.4), 30.0, 0.32)
+	var halo := UI2.glow(pane, Rect2(0, 0, 150, 150), Color(acc.lerp(Color.WHITE, 0.2), 0.5), false)
+	var pool := UI2.glow(pane, Rect2(0, 0, 110, 26), Color(0, 0, 0, 0.55), false)
+	var ti := UI2.img(pane, "res://assets/ui/skins/default_%s.png" % hid, 128.0)
+	_grad_rect(pane, [[0.0, Color(0, 0, 0, 0)], [0.42, Color(0, 0, 0, 0)], [0.62, Color(acc.darkened(0.85), 0.92)], [1.0, Color(acc.darkened(0.9), 1.0)]])
+	c.resized.connect(func():
+		var cx := c.size.x * 0.5
+		ti.position = Vector2(cx - 64.0, 14.0)
+		halo.position = Vector2(cx - 75.0, 4.0)
+		pool.position = Vector2(cx - 55.0, 128.0)
+		rays.position = Vector2(cx - 95.0, 78.0 - 95.0))
+	var rim := Panel.new()
+	var rs := StyleBoxFlat.new()
+	rs.draw_center = false
+	rs.border_color = acc.lerp(Color.WHITE, 0.15)
+	rs.set_border_width_all(2)
+	rs.set_corner_radius_all(16)
+	rs.shadow_color = Color(acc, 0.35)
+	rs.shadow_size = 5
+	rim.add_theme_stylebox_override("panel", rs)
+	rim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	rim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	c.add_child(rim)
+	# tags down the left: FREE this week, NEW (at his launch price), ◆ a shard of him
+	var tags := VBoxContainer.new()
+	tags.add_theme_constant_override("separation", 3)
+	tags.position = Vector2(6, 6)
+	tags.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	c.add_child(tags)
+	if plays:
+		_card_tag(tags, "FREE", Color("#2f8a3e"), Color("#0a2006"))          # (this week's: the chip over the list says so)
+	if Eco.launching(hid, p.now()):
+		_card_tag(tags, "NEW", Color("#d9682a"), Color("#3a1402"))
+	if p.shards_of(hid) > 0:
+		_card_tag(tags, "◆ SHARD", Color("#1f6a2e"), Color("#6be07c"))
+	var nsk := Eco.skins_of(hid).size()
+	if nsk > 0:
+		var oc := _card_tag(c, "%d OUTFIT%s" % [nsk, "" if nsk == 1 else "S"], Color(0.08, 0.04, 0.16, 0.85), Color("#c47bff"))
+		oc.anchor_left = 1.0
+		oc.anchor_right = 1.0
+		oc.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+		oc.offset_right = -6
+		oc.offset_left = -60
+		oc.offset_top = 6
+		oc.offset_bottom = 22
+	# his name, his class, his prices
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 0)
+	v.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	v.offset_top = -118
+	v.offset_bottom = -44
+	v.offset_left = 4
+	v.offset_right = -4
+	v.alignment = BoxContainer.ALIGNMENT_END
+	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	c.add_child(v)
+	var nm := Champions.short_of(hid).to_upper()
+	var nl := UI2.text(v, nm, 16 if nm.length() <= 8 else 13, Color.WHITE, acc.darkened(0.75), 5)
+	nl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	nl.clip_text = true
+	var cl := UI.label(v, str(Eco.SKIN_HEROES.get(hid, hid)).to_upper(), 10, acc.lerp(Color.WHITE, 0.5), UI.HEAVY_FONT)
+	cl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	cl.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
+	cl.add_theme_constant_override("outline_size", 3)
+	if not pr.is_empty():
+		var prow := HBoxContainer.new()
+		prow.alignment = BoxContainer.ALIGNMENT_CENTER
+		prow.add_theme_constant_override("separation", 3)
+		prow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		v.add_child(prow)
+		UI2.img(prow, "res://assets/ui/currency/coin.png", 15.0).size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		UI2.text(prow, _short_gold(int(pr.gold)), 13, UI2.GOLD, Color("#201002"), 3)
+		UI2.body(prow, "or", 9, UI2.SOFT, false).size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		UI2.img(prow, "res://assets/ui/currency/gem.png", 15.0).size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		UI2.text(prow, str(int(pr.gems)), 13, Color("#cfe9ff"), Color("#0a1238"), 3)
+	var look := Button.new()                         # tap the picture: his window
+	look.flat = true
+	look.focus_mode = Control.FOCUS_NONE
+	for st_name in ["normal", "hover", "pressed", "focus"]:
+		look.add_theme_stylebox_override(st_name, StyleBoxEmpty.new())
+	look.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	look.offset_bottom = -46
+	look.set_meta("action_key", "hero_look_" + hid)
+	look.pressed.connect(func(): app.open_champion(hid))
+	c.add_child(look)
+	var b := UI2.button(c, "UNLOCK", "gold", func(): buy_hero(app, hid), "hero_unlock_" + hid, 14, 36.0, 11.0)
+	b.disabled = not can_unlock_hero(p, hid)
+	if not b.disabled:
+		UI2.sweep(b, 3.0, 40.0, 0.4)
+	b.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	b.offset_left = 7
+	b.offset_right = -7
+	b.offset_top = -42
+	b.offset_bottom = -7
+	return c
+
+static func _short_gold(n: int) -> String:
+	# 6,300 / 50K / 1.5K
+	if n >= 10000:
+		return "%dK" % (n / 1000) if n % 1000 == 0 else "%.1fK" % (n / 1000.0)
+	return UI.grouped(n)
+
+static func can_unlock_hero(p, hid: String) -> bool:
+	# any of the ways: his gold, his gems, a shard of him and its gold, a Hero Token
+	var pr: Dictionary = p.hero_price(hid)
+	if pr.is_empty() or p.owns_hero(hid):
+		return false
+	return int(p.d.gold) >= int(pr.gold) or int(p.d.gems) >= int(pr.gems) or int(p.d.get("tokens", 0)) > 0 \
+		or (p.shards_of(hid) > 0 and int(p.d.gold) >= Eco.shard_unlock_gold(hid, p.now()))
+
+static func buy_hero(app, hid: String) -> void:
+	# 0.31.204: UNLOCK <NAME>? -- each way (the 5v5 window's chooser, 0.31.185), those you can't pay dimmed; CANCEL
+	var p = app.profile
+	var pr: Dictionary = p.hero_price(hid)
+	if pr.is_empty() or p.owns_hero(hid):
+		return
+	var done := func(r: Dictionary) -> void:
+		if bool(r.get("ok", false)):
+			app.sfx("purchase")
+			app.toast("%s joins you! He's in your Armory." % Champions.name_of(hid), UI2.GOLD)
+			app.refresh_top()
+		else:
+			app.sfx("error")
+			app.toast(str(r.get("error", "Can't unlock")), UI.RED)
+		app.rebuild()
+	var opts := [
+		{"text": "%s GOLD" % UI.grouped(int(pr.gold)), "style": "gold", "key": "hero_buy_gold", "enabled": int(p.d.gold) >= int(pr.gold),
+			"call": func(): done.call(p.buy_hero(hid))},
+		{"text": "%s GEMS" % UI.grouped(int(pr.gems)), "style": "premium", "key": "hero_buy_gems", "enabled": int(p.d.gems) >= int(pr.gems),
+			"call": func(): done.call(p.buy_hero_gems(hid))}]
+	if p.shards_of(hid) > 0:
+		var sg := Eco.shard_unlock_gold(hid, p.now())
+		opts.append({"text": "SHARD + %s GOLD" % UI.grouped(sg), "style": "claim", "key": "hero_buy_shard", "enabled": int(p.d.gold) >= sg,
+			"call": func(): done.call(p.use_shard(hid))})
+	if int(p.d.get("tokens", 0)) > 0:
+		opts.append({"text": "HERO TOKEN", "style": "primary", "key": "hero_buy_token", "enabled": true,
+			"call": func(): done.call(p.use_token(hid))})
+	app.choose("UNLOCK %s?" % Champions.name_of(hid).to_upper(), "The %s, yours for good.%s" % [str(Eco.SKIN_HEROES.get(hid, hid)),
+		"  Launch price for now." if Eco.launching(hid, p.now()) else ""], opts)
 
 static func _card_tag(parent: Control, s: String, fill: Color, border: Color) -> PanelContainer:
 	# a small corner tag on a card (EPIC, RARE, + HERO, OWNED, WORN)
@@ -2081,26 +2379,115 @@ static func locker(app, root: VBoxContainer) -> void:
 	# 0.31.187 (Kevin: "give every champion a unique name ... a short background story. Put all this in a revamped locker
 	# tab"): CHAMPIONS first (the eighteen by role: tap one for his own window, champion_window.gd), then TITLES.
 	# (0.31.187: ARMORY, the vault and its weapons -- gone with the weapons, 0.31.188: an outfit is his whole look.)
+	# 0.31.204 (Kevin: "Now redo the locker menu. Change the name to armory and only put in there what the player owns"):
+	# the ARMORY (the tab keeps its id "locker") -- a painted armory hall (ElevenLabs) with what you hold on it, then
+	# three tabs: HEROES (yours, by role; tap one: his window with only his outfits you own), OUTFITS (yours: WEAR /
+	# WORN) and TITLES (earned: EQUIP). Nothing to buy and nothing locked: the Market sells heroes and outfits (a way
+	# there when there's more to get); a title you haven't earned isn't shown, only how many are left.
 	var p = app.profile
-	var title := UI2.text(root, "LOCKER", 30, UI2.GOLD)
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	if not (str(app.locker_tab) in ["champions", "titles"]):
-		app.locker_tab = "champions"
+	var heroes: Array = Champions.ORDER.filter(func(h): return p.owns_hero(str(h)))
+	var outfits: Array = []
+	for h in Champions.ORDER:
+		for id in Eco.skins_of(str(h)):
+			if p.owns_skin(str(id)):
+				outfits.append(str(id))
+	var titles: Array = _earned_titles(p)
+	var ban := banner(root, UI2.V2 + "art_armory.webp", "ARMORY", 176.0)
+	var hold := UI2.chip(ban, "%d HEROES  ·  %d OUTFITS  ·  %d TITLES" % [heroes.size(), outfits.size(), titles.size()],
+		Color(0.03, 0.02, 0.1, 0.8), UI2.CREAM, Color(UI2.GOLD, 0.6))
+	hold.position = Vector2(12, 12)
+	if not view_low(app):
+		_twinkles(ban, 6, Color(1.0, 0.86, 0.5), Rect2(0.1, 0.1, 0.8, 0.5))
+	if str(app.locker_tab) == "champions":
+		app.locker_tab = "heroes"                     # (0.31.187-0.31.203's name for it)
+	if not (str(app.locker_tab) in ["heroes", "outfits", "titles"]):
+		app.locker_tab = "heroes"
 	var tabs := HBoxContainer.new()
-	tabs.alignment = BoxContainer.ALIGNMENT_CENTER
-	tabs.add_theme_constant_override("separation", 6)
+	tabs.add_theme_constant_override("separation", 8)
 	root.add_child(tabs)
-	for t in [["champions", "CHAMPIONS"], ["titles", "TITLES"]]:
+	for t in [["heroes", "HEROES", heroes.size(), UI2.icon_path("crown")], ["outfits", "OUTFITS", outfits.size(), UI2.icon_path("helmet")],
+			["titles", "TITLES", titles.size(), UI2.icon_path("scroll")]]:
 		var tid: String = t[0]
 		var on: bool = str(app.locker_tab) == tid
-		var tb0 := UI2.button(tabs, str(t[1]), "gold" if on else "blue", func():
+		var tb0 := UI2.button(tabs, "%s %d" % [str(t[1]), int(t[2])], "gold" if on else "blue", func():
+			if str(app.locker_tab) == tid:
+				return
 			app.locker_tab = tid
 			app.sfx("tab")
-			app.rebuild(), "locker_tab_" + tid, 15, 44.0, 14.0)
+			app.content_scroll.scroll_vertical = 0
+			app.rebuild(), "locker_tab_" + tid, 14, 40.0, 12.0, str(t[3]))
 		tb0.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	if str(app.locker_tab) == "champions":
-		locker_champions(app, root)
+	match str(app.locker_tab):
+		"outfits":
+			armory_outfits(app, root, outfits)
+		"titles":
+			armory_titles(app, root, titles)
+		_:
+			locker_champions(app, root)
+
+static func _earned_titles(p) -> Array:
+	# the titles you hold, in the Locker's old order: for everyone, then each class's, then the leaderboard's
+	var out := []
+	for sec in [""] + Eco.HERO_CLASSES:
+		var ids := []
+		for id in Eco.TITLE_GOALS:
+			if str(Eco.TITLE_GOALS[id].cls) == sec and p.owns(id):
+				ids.append(id)
+		ids.sort_custom(func(a, b): return Eco.TITLE_RARITY_ORDER.find(str(Eco.CATALOG[a].rarity)) < Eco.TITLE_RARITY_ORDER.find(str(Eco.CATALOG[b].rarity)))
+		out.append_array(ids)
+	for id in Eco.PRIZE_TITLES:
+		if p.owns(id):
+			out.append(id)
+	return out
+
+static func _to_market(app, root: Node, text: String, tab_id: String, key: String) -> void:
+	# a way from the Armory to what the Market has (0.31.204)
+	var b := UI2.button(root, text, "purple", func():
+		app.sfx("tab")
+		app.open_market(tab_id), key, 13, 38.0, 12.0, UI2.icon_path("stall"))
+	b.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+
+static func _armory_empty(root: Node, icon: String, head: String, line: String) -> void:
+	var box := UI2.frame(root, "night", 16, 18.0, "gold")
+	box.add_theme_constant_override("separation", 6)
+	var ic := UI2.img(box, UI2.icon_path(icon), 56.0)
+	ic.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	UI2.center(UI2.text(box, head, 20, Color.WHITE))
+	var l := UI2.center(UI2.body(box, line, 12, UI2.SOFT))
+	l.custom_minimum_size.x = 10
+
+static func armory_outfits(app, root: VBoxContainer, outfits: Array) -> void:
+	# 0.31.204: the outfits you own, his heroes' order -- WEAR / WORN on each (tap WORN: his own look again); tap the
+	# picture: his window in it
+	var p = app.profile
+	var more := Eco.SKINS.size() - outfits.size()
+	if outfits.is_empty():
+		_armory_empty(root, "helmet", "NO OUTFITS YET", "A whole new look and weapon for a hero -- the Market has them, and a few are on sale this week.")
+		_to_market(app, root, "BROWSE OUTFITS IN THE MARKET  ▸", "outfits", "armory_to_outfits")
 		return
+	var worn := 0
+	for id in outfits:
+		if p.worn_skin(str(Eco.SKINS[id].hero)) == str(id):
+			worn += 1
+	UI2.center(UI2.body(root, "%d yours  ·  %d worn  ·  tap WORN for his own look again" % [outfits.size(), worn], 11, UI2.SOFT))
+	var grid := GridContainer.new()
+	grid.columns = 3
+	grid.add_theme_constant_override("h_separation", 10)
+	grid.add_theme_constant_override("v_separation", 12)
+	root.add_child(grid)
+	for id in outfits:
+		outfit_card(app, grid, str(id), true)
+	if outfits.size() % 3 != 0:
+		for i in 3 - outfits.size() % 3:
+			var gap := Control.new()
+			UI.grow(gap)
+			grid.add_child(gap)
+	if more > 0:
+		_to_market(app, root, "%d MORE IN THE MARKET  ▸" % more, "outfits", "armory_to_outfits")
+
+static func armory_titles(app, root: VBoxContainer, titles: Array) -> void:
+	# 0.31.204: NO TITLE, then every title you've earned (EQUIP / WORN); the ones still to earn aren't shown -- how many
+	var p = app.profile
 	UI2.divider(root, "TITLES", 20, "shown next to your name")
 	var none := UI2.frame(root, "night", 10, 14.0, "gold")
 	var nr := UI.row(none, 8)
@@ -2110,25 +2497,19 @@ static func locker(app, root: VBoxContainer) -> void:
 		app.rebuild(), "equip_default_title", 13, 34.0, 11.0)
 	ne.disabled = str(p.d.title) == ""
 	ne.custom_minimum_size.x = 104
-	# 0.31.87: every title is earned -- for everyone first, then each class's three (upgrades count as their class)
-	for sec in [""] + Eco.HERO_CLASSES:          # (0.31.164: no Worker -- Siege's)
-		var ids := []
-		for id in Eco.TITLE_GOALS:
-			if str(Eco.TITLE_GOALS[id].cls) == sec and (not Eco.retired(Eco.TITLE_GOALS[id]) or p.owns(id)):
-				ids.append(id)
-		ids.sort_custom(func(a, b): return Eco.TITLE_RARITY_ORDER.find(str(Eco.CATALOG[a].rarity)) < Eco.TITLE_RARITY_ORDER.find(str(Eco.CATALOG[b].rarity)))
-		var head := "FOR EVERYONE" if sec == "" else str(Eco.CLASS_NAMES[sec]).to_upper()
-		var up := ""
-		for u in Eco.UP_BASE:
-			if str(Eco.UP_BASE[u]) == sec:
-				up = str(Eco.CLASS_NAMES[u])
-		UI2.divider(root, head, 18, ("as %s or %s" % [Eco.CLASS_NAMES[sec], up]) if up != "" else ("" if sec == "" else "as %s" % Eco.CLASS_NAMES[sec]))
-		for id in ids:
-			locker_row(app, root, id)
-	# 0.31.120: the weekly leaderboard's own titles
-	UI2.divider(root, "LEADERBOARD", 18, "from the weekly leaderboard's prizes")
+	for id in titles:
+		locker_row(app, root, str(id))
+	var left := 0
+	for id in Eco.TITLE_GOALS:
+		if not p.owns(id) and not Eco.retired(Eco.TITLE_GOALS[id]):
+			left += 1
 	for id in Eco.PRIZE_TITLES:
-		locker_row(app, root, id)
+		if not p.owns(id):
+			left += 1
+	if titles.is_empty():
+		_armory_empty(root, "scroll", "NO TITLES YET", "Titles are earned by playing -- win, take towers, climb the weekly leaderboard.")
+	if left > 0:
+		UI2.center(UI2.body(root, "%d more to earn by playing" % left, 11, UI2.SOFT))
 
 # ---------------- the Locker's CHAMPIONS (0.31.187) ----------------
 # The eighteen by role (League's six: a row of three each -- the class, its upgrade, the new hero), each a card: his own
@@ -2138,11 +2519,13 @@ static func locker(app, root: VBoxContainer) -> void:
 const ROLE_ORDER := ["tank", "fighter", "assassin", "mage", "marksman", "support"]
 
 static func locker_champions(app, root: VBoxContainer) -> void:
+	# 0.31.204: the Armory's HEROES -- the heroes you own, by role (a role with none of yours left out); the ones you
+	# don't are in the Market's HEROES (a way there under them)
 	var p = app.profile
 	var Kits = load("res://scripts/siege/moba_kits.gd")          # (loaded here, not at boot: the 5v5's)
 	var order: Array = Champions.ORDER
-	var yours: int = order.filter(func(h): return p.owns_hero(str(h))).size()
-	var top := UI2.center(UI2.body(root, "%d champions  ·  %d yours  ·  tap one for the story, the skins and a closer look" % [order.size(), yours], 11, UI2.SOFT))
+	var mine: Array = order.filter(func(h): return p.owns_hero(str(h)))
+	var top := UI2.center(UI2.body(root, "%d of %d heroes yours  ·  tap one for his story, his outfits and a closer look" % [mine.size(), order.size()], 11, UI2.SOFT))
 	top.custom_minimum_size.x = 10
 	var inv := ""
 	if int(p.d.get("tokens", 0)) > 0:
@@ -2151,9 +2534,12 @@ static func locker_champions(app, root: VBoxContainer) -> void:
 	if nsh > 0:
 		inv += ("  ·  " if inv != "" else "") + "◆ SHARD%s %d" % ["S" if nsh > 1 else "", nsh]
 	if inv != "":
-		var ic := UI2.chip(root, inv, Color("#173a1e"), Color("#c9f7bd"), Color("#6be07c"))
+		var ic := UI2.chip(root, inv + "  ·  use them in the Market", Color("#173a1e"), Color("#c9f7bd"), Color("#6be07c"))
 		ic.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	for role in ROLE_ORDER:
+		var hs: Array = mine.filter(func(h): return Kits.role_of(str(h)) == role)
+		if hs.is_empty():
+			continue
 		var rh := HBoxContainer.new()
 		rh.add_theme_constant_override("separation", 8)
 		root.add_child(rh)
@@ -2172,9 +2558,16 @@ static func locker_champions(app, root: VBoxContainer) -> void:
 		grid.add_theme_constant_override("h_separation", 8)
 		grid.add_theme_constant_override("v_separation", 8)
 		root.add_child(grid)
-		for hid in order:
-			if Kits.role_of(str(hid)) == role:
-				champion_card(app, grid, str(hid))
+		for hid in hs:
+			champion_card(app, grid, str(hid))
+		if hs.size() < 3:                                  # (keep the cards a third wide)
+			for i in 3 - hs.size():
+				var gap := Control.new()
+				gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+				grid.add_child(gap)
+	var more := order.size() - mine.size()
+	if more > 0:
+		_to_market(app, root, "%d MORE HERO%s IN THE MARKET  ▸" % [more, "" if more == 1 else "ES"], "heroes", "armory_to_heroes")
 
 static func champion_card(app, grid: Node, hid: String) -> Button:
 	var p = app.profile
@@ -2189,7 +2582,7 @@ static func champion_card(app, grid: Node, hid: String) -> Button:
 	b.custom_minimum_size = Vector2(0, 196)
 	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	b.set_meta("action_key", "champ_" + hid)
-	b.pressed.connect(func(): app.open_champion(hid))
+	b.pressed.connect(func(): app.open_champion(hid, "__worn", true))     # (0.31.204: the Armory's -- his outfits you own)
 	grid.add_child(b)
 	# the card: his place (cover), clipped to the rounded frame, darker toward the bottom for the name
 	var card := Panel.new()
@@ -2272,14 +2665,9 @@ static func champion_card(app, grid: Node, hid: String) -> Button:
 	st.alignment = BoxContainer.ALIGNMENT_CENTER
 	st.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	v.add_child(st)
-	if owned:
-		UI2.body(st, "✔ YOURS", 10, Color("#9dff8a"), false)
-	else:
-		var pr: Dictionary = p.hero_price(hid)
-		var li := UI2.img(st, "res://assets/ui/menu/lock.png", 14.0)
-		li.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		UI2.img(st, "res://assets/ui/currency/coin.png", 14.0).size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		UI2.text(st, UI.grouped(int(pr.get("gold", 0))), 12, UI2.GOLD, Color("#201002"), 3)
+	# (0.31.204: the Armory has only yours -- the outfit he wears; 0.31.187-0.31.203 YOURS, or his price and a padlock)
+	var wk: String = p.worn_skin(hid)
+	UI2.body(st, (str(Eco.SKINS[wk].set).to_upper() if wk != "" else "ORIGINAL LOOK"), 9, Color("#e8ccff") if wk != "" else Color(1, 1, 1, 0.7), false)
 	var chips := VBoxContainer.new()                # (stacked down the left: the skins' count is on the right)
 	chips.add_theme_constant_override("separation", 3)
 	chips.position = Vector2(6, 6)
@@ -2291,7 +2679,7 @@ static func champion_card(app, grid: Node, hid: String) -> Button:
 		UI2.chip(chips, "NEW", Color("#d9682a"), Color.WHITE, Color("#3a1402"))
 	if not owned and p.shards_of(hid) > 0:
 		UI2.chip(chips, "◆", Color("#173a1e"), Color("#9dff8a"), Color("#6be07c"))
-	var nsk := Eco.skins_of(hid).size()
+	var nsk := Eco.skins_of(hid).filter(func(id): return p.owns_skin(str(id))).size()     # (0.31.204: the ones you own)
 	if nsk > 0:
 		var sc := UI2.chip(b, "%d OUTFIT%s" % [nsk, "" if nsk == 1 else "S"], Color(0.05, 0.03, 0.12, 0.8), Color("#e8ccff"), Color("#c47bff"))
 		sc.anchor_left = 1.0

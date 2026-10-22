@@ -5,7 +5,7 @@ extends SceneTree
 #     restart
 #  2. Profile.grant_prize / eco_accounts.grant_prize: gems, a reward chest, the prize title; a second prize for the
 #     same week is refused
-#  3. the app: the prize says so on Home once; the leaderboard window lists the prizes; the Locker has the prize titles
+#  3. the app: the prize says so on Home once; the leaderboard window lists the prizes; the Armory has the prize title you won (0.31.204: was the Locker, all of them)
 #   godot --headless --path godot -s res://tests/lb_prizes_test.gd
 const Leaderboard = preload("res://server/leaderboard.gd")
 const Accounts = preload("res://server/eco_accounts.gd")
@@ -99,8 +99,9 @@ func _process(_d: float) -> bool:
 		app.show_tab("locker")
 	elif frames == 32:
 		var txt := _labels(app)
-		check(txt.has("LEADERBOARD") and txt.has("Finish #1 on a weekly leaderboard") and txt.has("Finish 2nd or 3rd on a weekly leaderboard"),
-			"the Locker lists the leaderboard's titles")
+		# (0.31.204: the Armory, was the Locker -- only the titles you've earned: the Contender, not the Champion)
+		check(txt.has("Finish 2nd or 3rd on a weekly leaderboard") and not txt.has("Finish #1 on a weekly leaderboard"),
+			"the Armory lists the leaderboard title you won, not the ones you haven't")
 		print("LB_PRIZES_PASS" if fails.is_empty() else "LB_PRIZES_FAIL %s" % str(fails))
 		quit(0 if fails.is_empty() else 1)
 	return false

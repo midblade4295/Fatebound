@@ -9,6 +9,10 @@ extends Control
 # (FREE on the card); UNLOCK opens a chooser over the window (League's "unlock with Blue Essence or RP"): the gold, the
 # gems, a hero shard (at Eco.SHARD_UNLOCK of the gold) or a Hero Token; beside BATTLE, UNLOCK for a free one and MELT for
 # a shard of a hero you own. Your Hero Tokens and shards beside PICK YOUR HERO (a ◆ on a card: a shard of him).
+# 0.31.204 (Kevin: "put a hero tab in the market ... that's where they will purchase them"; asked about this window: "Send
+# to Market"): heroes are bought in the Market's HEROES -- a locked hero's BATTLE is GET IN MARKET, and beside BATTLE a
+# free one has MARKET; both open the Market's HEROES with his card lit (siege_app.open_market). The chooser is gone from
+# here (screens.gd buy_hero has it); MELT stays (a shard of a hero you own, for gold).
 const UI = preload("res://scripts/app/ui.gd")
 const UI2 = preload("res://scripts/app/ui2.gd")
 const SocialUI = preload("res://scripts/app/social_ui.gd")
@@ -38,10 +42,9 @@ var app
 var hero := "knight"
 var _grid: GridContainer
 var _go: Button
-var _side: Button               # 0.31.185: beside BATTLE -- UNLOCK (one free this week)
+var _side: Button               # 0.31.185: beside BATTLE -- UNLOCK (one free this week); 0.31.204: MARKET
 var _melt: Button               # ... or MELT (a shard of one you own)
 var _inv: Label                  # 0.31.185: the Hero Tokens and shards you hold
-var chooser: Control             # 0.31.185: the unlock chooser, open
 var _kit: VBoxContainer          # 0.31.171: the kit, a row per ability with its icon
 var _show                        # 0.31.175: the stage -- the hero in 3D on the hall's dais, his name, role and price
 var _stage_name: Label
@@ -110,7 +113,7 @@ func open(a) -> void:
 	_go = UI2.button(foot, "BATTLE", "orange", _on_go, "moba_battle", 22, 56.0, 16.0)
 	_go.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	UI2.sweep(_go)
-	_side = UI2.button(foot, "UNLOCK", "gold", open_chooser, "moba_side_unlock", 16, 56.0, 16.0)
+	_side = UI2.button(foot, "MARKET", "gold", _to_market, "moba_side_market", 16, 56.0, 16.0, "res://assets/ui/v2/icons/stall.png")
 	_side.custom_minimum_size.x = 120
 	_melt = UI2.button(foot, "MELT", "green", func(): _unlock_by("melt"), "moba_melt_shard", 15, 56.0, 16.0, COIN)
 	_melt.custom_minimum_size.x = 132
@@ -222,8 +225,8 @@ func _render_stage() -> void:
 
 func _on_go() -> void:
 	if not _plays(hero):
-		# 0.31.168: UNLOCK (0.31.185: the chooser -- gold, gems, a shard or a Hero Token)
-		open_chooser()
+		# 0.31.168: UNLOCK (0.31.185: the chooser -- gold, gems, a shard or a Hero Token). 0.31.204: the Market sells him
+		_to_market()
 		return
 	app.profile.d.settings["moba_hero"] = hero
 	app.profile.save()
@@ -272,8 +275,8 @@ func _render() -> void:
 	for i in 4:
 		_kit.add_child(_kit_row(hero, ["q", "w", "e", "r"][i], str(lines[i + 1])))
 	_go.disabled = false
-	_go.text = "BATTLE" if _plays(hero) else "UNLOCK"
-	# 0.31.185: beside it, UNLOCK for one free this week, MELT for a shard of one you own
+	_go.text = "BATTLE" if _plays(hero) else "GET IN MARKET"
+	# 0.31.185: beside it, UNLOCK for one free this week (0.31.204: MARKET), MELT for a shard of one you own
 	var p = app.profile
 	_side.visible = _plays(hero) and not _owns(hero)
 	_melt.visible = _owns(hero) and p.shards_of(hero) > 0
@@ -298,70 +301,19 @@ static func inventory_text(p) -> String:
 		bits.append("◆ SHARD%s %d" % ["S" if n > 1 else "", n])
 	return "  ·  ".join(bits)
 
-func open_chooser() -> void:
-	# 0.31.185: UNLOCK <HERO> over the window -- each way to unlock him, those you can't pay dimmed; CANCEL
-	close_chooser()
-	var p = app.profile
-	var pr: Dictionary = p.hero_price(hero)
-	if pr.is_empty() or _owns(hero):
-		return
-	app.sfx("menuOpen")
-	chooser = ColorRect.new()
-	(chooser as ColorRect).color = Color(0, 0, 0, 0.62)
-	chooser.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	chooser.mouse_filter = Control.MOUSE_FILTER_STOP
-	add_child(chooser)
-	var cc := CenterContainer.new()
-	cc.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	chooser.add_child(cc)
-	var box := UI2.frame(cc, "night", 14, 18.0, "gold")
-	(box.get_parent() as Control).custom_minimum_size = Vector2(300, 0)
-	box.add_theme_constant_override("separation", 8)
-	var nm := str(Moba.HEROES[hero].name).to_upper()
-	UI2.center(UI2.text(box, "UNLOCK " + nm, 22, UI2.GOLD))
-	UI2.center(UI2.body(box, "Yours for good." + ("  Launch price for now." if Eco.launching(hero, p.now()) else ""), 11, UI2.SOFT))
-	var opts := [["%s GOLD" % UI.grouped(int(pr.gold)), "gold", COIN, "moba_unlock_gold", int(p.d.gold) >= int(pr.gold), "gold"],
-		["%s GEMS" % UI.grouped(int(pr.gems)), "blue", GEM, "moba_unlock_gems", int(p.d.gems) >= int(pr.gems), "gems"]]
-	if p.shards_of(hero) > 0:
-		var sg := Eco.shard_unlock_gold(hero, p.now())
-		opts.append(["SHARD + %s GOLD" % UI.grouped(sg), "green", COIN, "moba_unlock_shard", int(p.d.gold) >= sg, "shard"])
-	if int(p.d.get("tokens", 0)) > 0:
-		opts.append(["HERO TOKEN", "purple", "", "moba_unlock_token", true, "token"])
-	for o in opts:
-		var how: String = o[5]
-		var b := UI2.button(box, str(o[0]), str(o[1]), func(): _unlock_by(how), str(o[3]), 17, 46.0, 14.0, str(o[2]))
-		b.disabled = not bool(o[4])
-	UI2.button(box, "CANCEL", "grey", func():
-		app.sfx("menuClose")
-		close_chooser(), "moba_unlock_cancel", 15, 40.0, 12.0)
-
-func close_chooser() -> void:
-	if is_instance_valid(chooser):
-		chooser.queue_free()
-	chooser = null
+func _to_market() -> void:
+	# 0.31.204: the Market's HEROES, his card lit -- heroes are bought there
+	app.sfx("tab")
+	app.open_market("heroes", hero)
 
 func _unlock_by(how: String) -> void:
+	# (0.31.204: only MELT is left here -- a shard of a hero you own, for gold)
 	var p = app.profile
-	var r: Dictionary
-	match how:
-		"gold":
-			r = p.buy_hero(hero)
-		"gems":
-			r = p.buy_hero_gems(hero)
-		"shard":
-			r = p.use_shard(hero)
-		"token":
-			r = p.use_token(hero)
-		_:
-			r = p.melt_shard(hero)
+	var r: Dictionary = p.melt_shard(hero) if how == "melt" else {"ok": false}
 	if bool(r.get("ok", false)):
 		app.sfx("purchase")
-		if how == "melt":
-			app.toast("Shard melted: +%s gold" % UI.grouped(int(r.get("gold", 0))), UI2.GOLD)
-		else:
-			app.toast("%s unlocked!" % str(Moba.HEROES[hero].name), UI2.GOLD)
+		app.toast("Shard melted: +%s gold" % UI.grouped(int(r.get("gold", 0))), UI2.GOLD)
 		app.refresh_top()
-		close_chooser()
 	else:
 		app.sfx("error")
 		app.toast(str(r.get("error", "Can't unlock")), Color("#ff8a7a"))

@@ -8,7 +8,7 @@ extends SceneTree
 #  - a player named "Player" (a new account) gets him on Home, nobody else does;
 #  - he asks the name: nothing, "player" or "King" get a word from him and no name; a name is saved (the op) and
 #    announced;
-#  - what Fatebound is, then the tour: PLAY, the chests, SHOP, PASS, LOCKER, ALLIANCE, the menu -- each one found on
+#  - what Fatebound is, then the tour: PLAY, the chests, SHOP, PASS, ARMORY (0.31.204: was the LOCKER), ALLIANCE, the menu -- each one found on
 #    Home, the shade open over it, the scroll out of its way (at the top for what's below);
 #  - the offer: I'LL WING IT closes him (Home, no tutorial); SHOW ME HOW starts the tutorial.
 #   godot --headless --path godot -s res://tests/herald_intro_test.gd
@@ -80,7 +80,7 @@ func _script_checks() -> void:
 		at = str(Intro.NEXT[at])
 		if Intro.TOUR.has(at):
 			tour.append(str(Intro.TOUR[at][1]))
-	check(at == "ask" and tour == ["PLAY", "CHESTS", "SHOP", "PASS", "LOCKER", "ALLIANCE", "MENU"], "named -> what -> the tour %s -> the offer" % str(tour))
+	check(at == "ask" and tour == ["PLAY", "CHESTS", "SHOP", "PASS", "ARMORY", "ALLIANCE", "MENU"], "named -> what -> the tour %s -> the offer" % str(tour))
 	for n in ["", "  ", "player", "PLAYER", "King", "herald", "Royal Herald", "admin"]:
 		check(Intro.name_quip(n) != "", "the name \"%s\" gets a word from him instead" % n)
 	check(Intro.name_quip("Midblade") == "" and Intro.name_quip("Kingsley") == "", "a real name doesn't")

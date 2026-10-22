@@ -117,7 +117,10 @@ func _process(_d: float) -> bool:
 		if frames == base_f:
 			app.show_tab(tabs[i])
 			if tabs[i] == "locker" and OS.has_environment("SHOT_LOCKER"):
-				app.locker_tab = OS.get_environment("SHOT_LOCKER")       # champions | titles
+				app.locker_tab = OS.get_environment("SHOT_LOCKER")       # the Armory's: heroes | outfits | titles (0.31.204)
+				app.rebuild()
+			if tabs[i] == "shop" and OS.has_environment("SHOT_SHOP_TAB"):
+				app.shop_tab = OS.get_environment("SHOT_SHOP_TAB")       # 0.31.204: the Market's outfits | heroes | gems
 				app.rebuild()
 		if frames == base_f + 12 and tabs[i] == "home" and OS.has_environment("SHOT_MENU"):
 			app.open_player_menu()                       # 0.31.139: the menu under the level shield

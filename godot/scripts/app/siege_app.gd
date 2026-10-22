@@ -50,7 +50,7 @@ const TitleScreen = preload("res://scripts/app/title_screen.gd")
 # 0.31.139 (Kevin: "Move the settings cog into a menu that players can press on their level icon on top left. then move
 # the social to where the settings was and rename that Alliance"): ALLIANCE (friends and clan) in SETTINGS' place;
 # Settings is under the level shield (open_player_menu). The settings screen is still the tab "settings".
-const TABS := [["shop", "SHOP", "stall"], ["pass", "PASS", "banner"], ["home", "HOME", "castle"], ["locker", "LOCKER", "helmet"], ["alliance", "ALLIANCE", "friends"]]
+const TABS := [["shop", "SHOP", "stall"], ["pass", "PASS", "banner"], ["home", "HOME", "castle"], ["locker", "ARMORY", "swords"], ["alliance", "ALLIANCE", "friends"]]
 
 # Tests may point these elsewhere before the node enters the tree.
 var profile_path := "user://siege_profile.json"
@@ -61,8 +61,14 @@ var profile
 var audio: Node
 var tab := "home"
 var home_class := "knight"
-# 0.31.187: the Locker's tabs -- CHAMPIONS (first) and TITLES (0.31.187's ARMORY, a class's weapons, went with them)
-var locker_tab := "champions"
+# 0.31.187: the Locker's tabs -- CHAMPIONS (first) and TITLES (0.31.187's ARMORY, a class's weapons, went with them).
+# 0.31.204 (Kevin: "redo the locker menu. Change the name to armory and only put in there what the player owns"): the
+# ARMORY (the tab keeps its id "locker") -- HEROES, OUTFITS, TITLES, each only what you own
+var locker_tab := "heroes"
+# 0.31.204 (Kevin: "put a hero tab in the market that shows heroes that player doesn't own and that's where they will
+# purchase them"): the Market's tabs -- OUTFITS (the weekly sale and every outfit), HEROES (the ones you don't own, to
+# unlock), GEMS
+var shop_tab := "outfits"
 var quest_cls := ""                   # 0.31.97: the class shown on the Quests screen ("" = the first with a step ready)
 var siege = null
 var home_fixed := false                # 0.31.112: Home fits the screen and doesn't scroll (Screens.home sets it)
@@ -675,6 +681,8 @@ func _pill(parent: Node, kind: String) -> Label:
 	hit.set_meta("action_key", "pill_" + kind)
 	hit.pressed.connect(func():
 		sfx("tab")
+		if kind == "gem":
+			shop_tab = "gems"                  # (0.31.204: the gem pill opens the Market's GEMS)
 		show_tab("shop"))
 	p.add_child(hit)
 	return l
@@ -1458,13 +1466,22 @@ func open_moba() -> void:
 	modal = m
 	m.open(self)
 
-func open_champion(hid: String, skin := "__worn") -> void:
-	# 0.31.187: a champion's window (champion_window.gd) -- his place, his effects, him in 3D, his skins, story and kit
+func open_champion(hid: String, skin := "__worn", owned_only := false) -> void:
+	# 0.31.187: a champion's window (champion_window.gd) -- his place, his effects, him in 3D, his skins, story and kit.
+	# 0.31.204: from the Armory (owned_only), only the outfits of his you own
 	close_modal()
 	var m = _later(CHAMPION_WINDOW).new()
 	add_child(m)
 	modal = m
-	m.open(self, hid, skin)
+	m.open(self, hid, skin, owned_only)
+
+func open_market(tab_id: String, hero_focus := "") -> void:
+	# 0.31.204: the Market on one of its tabs (OUTFITS, HEROES, GEMS) -- from the 5v5 picker's GET IN MARKET, the Armory's
+	# MORE IN THE MARKET, a hero window's; hero_focus: the hero whose card the HEROES tab glides to and lights up
+	shop_tab = tab_id
+	if hero_focus != "":
+		set_meta("shop_hero_focus", hero_focus)
+	show_tab("shop")
 
 func start_moba(hero: String) -> void:
 	# 0.31.155: an offline 5v5 against bots as this hero (siege_mode.gd moba_hero; scripts/siege/moba.gd). 0.31.164: the
@@ -2068,7 +2085,7 @@ func offer_prize() -> bool:
 		bits.append("a %s" % str(Eco.CHESTS[str(x.chest)].name))
 	var t := str(x.get("title", ""))
 	if t != "" and Net.TITLES.has(t):
-		bits.append("the title \"%s\" (wear it from the Locker)" % str(Net.TITLES[t][0]))
+		bits.append("the title \"%s\" (wear it from the Armory)" % str(Net.TITLES[t][0]))
 	sfx("confirm")
 	notice("LEADERBOARD PRIZE", "You finished #%d on last week's leaderboard! You got %s." % [int(x.get("rank", 0)), ", ".join(bits)])
 	return true

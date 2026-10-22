@@ -512,7 +512,7 @@ func show_result(result: Dictionary = {}) -> void:
 			tbox.add_child(tl)
 			for part in NetT.title_parts(str(player_name), str(tid)):
 				UI2.text(tl, str(part[0]), 17, TAG_COL.get(trar, Color.WHITE) if part[1] else Color.WHITE, Color("#120a02"), 5)
-			UI2.center(UI2.body(tbox, "%s · wear it from the Locker" % trar.capitalize(), 11, Color(1, 1, 1, 0.8), false))
+			UI2.center(UI2.body(tbox, "%s · wear it from the Armory" % trar.capitalize(), 11, Color(1, 1, 1, 0.8), false))
 		var tiers: Array = result.get("tiers", [])
 		if not tiers.is_empty():
 			UI2.center(UI2.body(v, "Siege Pass tier %s reached — claim it on the Pass screen" % (str(tiers[-1]) if tiers.size() == 1 else "%d–%d" % [tiers[0], tiers[-1]]), 12, Color("#ffcf7a")))

@@ -145,21 +145,30 @@ func _process(delta: float) -> bool:
 				app.profile.d.gold = 10000
 				press("moba_hero_golem")
 				var go: Button = app.modal._go
-				check(app.modal.hero == "golem" and not app.profile.owns_hero("golem") and go.text == "UNLOCK" and not go.disabled
+				check(app.modal.hero == "golem" and not app.profile.owns_hero("golem") and go.text == "GET IN MARKET" and not go.disabled
 					and app.modal._stage_name.text == "GOLEM" and app.modal._stage_lock.visible and app.modal._stage_price.text == "25,000"
-					and has_text(app.modal, "Q BOULDER"), "the Golem: locked, 25,000 gold (you have 10,000; 0.31.189)")
+					and has_text(app.modal, "Q BOULDER"), "the Golem: locked, 25,000 gold -- GET IN MARKET (0.31.204; 0.31.189-0.31.203 UNLOCK)")
 				_shot("moba_heroes_locked")
 				app.profile.d.gold = 25600
-				press("moba_hero_golem")
 				press("moba_battle")
-				# 0.31.185: UNLOCK opens the chooser -- gold or gems (no shard or token held: neither offered)
-				check(app.modal.chooser != null and btn("moba_unlock_gold") != null and btn("moba_unlock_gems") != null
-					and btn("moba_unlock_shard") == null and btn("moba_unlock_token") == null and has_text(app.modal, "UNLOCK GOLEM"),
-					"UNLOCK: the chooser -- 25,000 gold or 450 gems")
+				# 0.31.204 (Kevin: heroes are bought in the Market; asked: "Send to Market"): the Market's HEROES, his card lit
+				var ring: Array = app.content.find_children("*", "Panel", true, false).filter(func(n): return n.has_meta("hero_focus_ring"))
+				check(not is_instance_valid(app.modal) and app.tab == "shop" and str(app.shop_tab) == "heroes" and btn("hero_unlock_golem") != null
+					and ring.size() == 1 and ring[0].get_parent() == btn("hero_look_golem").get_parent(),
+					"GET IN MARKET: the window shuts, the Market's HEROES with the Golem's card lit")
+				press("hero_unlock_golem")
+				check(app.modal != null and btn("hero_buy_gold") != null and btn("hero_buy_gems") != null and btn("hero_buy_shard") == null
+					and btn("hero_buy_token") == null and has_text(app.modal, "UNLOCK GORRAK"), "UNLOCK there: the choice -- 25,000 gold or 450 gems")
 				_shot("moba_unlock_chooser")
-				press("moba_unlock_gold")
-				check(app.profile.owns_hero("golem") and int(app.profile.d.gold) == 600 and app.modal != null and app.modal._go.text == "BATTLE"
-					and app.modal.chooser == null, "25,000 gold: the Golem is yours (the chooser shut, still the window)")
+				press("hero_buy_gold")
+				check(app.profile.owns_hero("golem") and int(app.profile.d.gold) == 600 and btn("hero_look_golem") == null,
+					"25,000 gold: the Golem is yours (gone from the Market's HEROES)")
+				_go("reopen")                         # (a frame for the 5v5 window GET IN MARKET shut to go)
+		"reopen":
+			if t_phase > 0.1:
+				app.open_moba()
+				press("moba_hero_golem")
+				check(app.modal.hero == "golem" and app.modal._go.text == "BATTLE" and not app.modal._stage_lock.visible, "back in the 5v5 window: the Golem plays")
 				app.profile.now_override = -1
 				press("moba_hero_archmage")
 				check(app.modal.hero == "archmage" and app.modal._stage_name.text == "ARCHMAGE" and app.modal._stage_role.text == "MAGE"

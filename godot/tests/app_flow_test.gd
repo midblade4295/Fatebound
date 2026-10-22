@@ -60,13 +60,13 @@ func _process(d: float) -> bool:
 			p.d.gold = 50000; p.d.gems = 3000; p.save()
 			press("tab_shop")
 		1:
-			# 0.31.202: the shop's jump bar glides down to the gem packs
-			if not app.has_meta("jumped"):
-				app.set_meta("jumped", true)
-				press("shop_jump_gems")
-				wait_until = t + 0.9
-				return false
-			check(app.content_scroll.scroll_vertical > 2000 and btn("shop_role_tank") != null, "the shop's GEMS jump scrolls down to the gem packs (%d); the role coins are there" % app.content_scroll.scroll_vertical)
+			# 0.31.204: the Market's tabs -- GEMS (the packs), then OUTFITS (the role coins, the outfits); 0.31.202-0.31.203 a
+			# bar that jumped down one long page
+			press("shop_tab_gems")
+			var packs := btn("iap_gems_s") != null or app.content.find_children("*", "Label", true, false).any(func(l): return (l as Label).text == "GEM PACKS")
+			check(str(app.shop_tab) == "gems" and packs and btn("shop_role_tank") == null, "the Market's GEMS: the gem packs, no outfits")
+			press("shop_tab_outfits")
+			check(str(app.shop_tab) == "outfits" and btn("shop_role_tank") != null and btn("feat_open") != null, "OUTFITS: the weekly sale and the role coins")
 			var id := "knight_lion"
 			var gems0: int = p.d.gems
 			press("skin_buy_" + id)
@@ -78,7 +78,7 @@ func _process(d: float) -> bool:
 			app.locker_tab = "titles"
 			press("tab_locker")
 			press("equip_title_squire")
-			check(str(p.d.title) == "title_squire", "a title equipped from the Locker")
+			check(str(p.d.title) == "title_squire", "a title equipped from the Armory")
 			p.d.gems = 3000; p.save()
 		2:
 			p.d.pass.xp = 3 * Eco.TIER_XP + 10; p.save()

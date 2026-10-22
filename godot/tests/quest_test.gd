@@ -150,7 +150,7 @@ func _process(_d: float) -> bool:
 			check(app.tab == "home", "back to Home")
 			app.show_tab("locker")
 		5:
-			check(btn("locker_quest_knight") == null and btn("locker_tab_champions") != null, "the Locker: CHAMPIONS and TITLES, no quest card (the ARMORY's, 0.31.188)")
+			check(btn("locker_quest_knight") == null and btn("locker_tab_heroes") != null, "the Armory (0.31.204, was the Locker): HEROES, OUTFITS, TITLES, no quest card")
 			print("QUEST_PASS" if fails.is_empty() else "QUEST_FAIL %s" % str(fails))
 			quit(0 if fails.is_empty() else 1)
 	step += 1

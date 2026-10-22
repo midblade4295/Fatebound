@@ -2,7 +2,9 @@ extends Control
 # 0.31.187 (Kevin: "When clicking on a champion, make a customized window for them that pops up that is themed around them
 # and player can also zoom in and rotate them. Use art and effects that match each characters lore. Also put every skin
 # that character has into that page that allows players to purchase or preview what it looks like"): a champion's own
-# window, from the Locker's CHAMPIONS (screens.gd locker) and the Armory's nameplate.
+# window, from the Locker's CHAMPIONS (screens.gd locker) and the Armory's nameplate. 0.31.204: from the ARMORY's HEROES
+# (owned_only: only the outfits of his you own, and MORE IN THE MARKET when there are others) and the Market's HEROES
+# and outfit cards (all of them, to buy).
 #   * his place painted behind him (Champions.art -- the Knight's castle bridge at dawn, the Necromancer's graveyard...),
 #     slowly breathing, his colour over it, and his effects in it (champion_fx.gd: embers, leaves, rain and lightning...);
 #   * he stands in it in 3D, in the skin he wears: drag to turn him, pinch (or + / -) to zoom;
@@ -29,6 +31,7 @@ const STAGE_BOTTOM := 0.6          # open ground, about half way down)
 var app
 var hero := "knight"
 var preview := ""                  # the skin he's shown in ("" his own look) -- a skin you don't own is only a preview
+var owned_only := false            # 0.31.204: opened from the Armory -- his outfits you own, no others
 var _show
 var _bg: TextureRect
 var _sheet: VBoxContainer          # the panel's content (rebuilt by _render)
@@ -38,8 +41,9 @@ var _preview_chip: Control
 var overlay: Control               # the unlock chooser or a purchase question, over the window
 var fx: Array = []                 # the effect layers (champion_fx.gd)
 
-func open(a, hid: String, show_skin := "__worn") -> void:
+func open(a, hid: String, show_skin := "__worn", only_owned := false) -> void:
 	app = a
+	owned_only = only_owned
 	hero = hid if Moba.HEROES.has(hid) else "knight"
 	preview = app.profile.worn_skin(hero) if show_skin == "__worn" else show_skin
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -290,7 +294,12 @@ func _render() -> void:
 	# ---- SKINS
 	var ids: Array = [""] + Eco.skins_of(hero)
 	var mine := 1 + Eco.skins_of(hero).filter(func(id): return p.owns_skin(str(id))).size()
-	_head(_sheet, "OUTFITS", "%d of %d yours  ·  tap one to try it on" % [mine, ids.size()], acc)      # (0.31.188: whole outfits, weapon and all)
+	var others := ids.size() - mine
+	if owned_only:                                   # 0.31.204: the Armory's -- only what you own
+		ids = ids.filter(func(id): return str(id) == "" or p.owns_skin(str(id)))
+		_head(_sheet, "OUTFITS", "%d yours  ·  tap one to wear it" % mine, acc)
+	else:
+		_head(_sheet, "OUTFITS", "%d of %d yours  ·  tap one to try it on" % [mine, ids.size()], acc)      # (0.31.188: whole outfits, weapon and all)
 	var hs := ScrollContainer.new()
 	hs.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	hs.custom_minimum_size = Vector2(0, 124)
@@ -301,6 +310,11 @@ func _render() -> void:
 	for id0 in ids:
 		_skin_tile(strip, str(id0), acc)
 	_skin_action(acc)
+	if owned_only and others > 0:
+		var mk := UI2.button(_sheet, "%d MORE OUTFIT%s IN THE MARKET  ▸" % [others, "" if others == 1 else "S"], "purple", func():
+			app.sfx("tab")
+			app.open_market("outfits"), "champ_more_market", 13, 36.0, 11.0, "res://assets/ui/v2/icons/stall.png")
+		mk.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	# ---- the story
 	_head(_sheet, "THE STORY", "", acc)
 	var lore := UI2.body(_sheet, str(ch.get("lore", "")), 12, Color("#efe6d6"))

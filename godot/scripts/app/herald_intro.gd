@@ -7,7 +7,7 @@ extends Control
 # Herald pops up with his proclamation scroll exactly as in the tutorial (scripts/siege/tutorial.gd: his eight poses,
 # each line typed out on the parchment as he says it, TAP TO CONTINUE): he asks the player's name (a field over the
 # scroll; a few names get a word from him, unvoiced), announces it, says what Fatebound is, walks them round Home
-# (PLAY, the chests, SHOP, PASS, LOCKER, ALLIANCE, the menu: the shade lifts off each in turn, ringed and labelled, the
+# (PLAY, the chests, SHOP, PASS, ARMORY (0.31.204: was LOCKER), ALLIANCE, the menu: the shade lifts off each in turn, ringed and labelled, the
 # scroll at the top of the screen while what he shows is below), then offers the tutorial -- SHOW ME HOW
 # (siege_app.start_tutorial) or I'LL WING IT (Home). VOICE: assets/vo/tutorial/intro_*.ogg and tour_*.ogg, his voice
 # (ElevenLabs; art_sources/tutorial/intro_script.json, tools/build_tutorial_assets.py). The captions are that script's
@@ -32,7 +32,7 @@ const LINES := {
 	"tour_chests": ["tour_chests", "Win, and you'll earn chests. They wait down here, unlocking slower than a royal tax refund. Then, gold, gems, and the odd hero shard.", "leaning"],
 	"tour_shop": ["tour_shop", "The Shop. Heroes, outfits, gems. Everything a growing hero needs, and several things he doesn't.", "hold"],
 	"tour_pass": ["tour_pass", "The Pass. Play matches, climb its tiers, collect prizes. It's a ladder. Made of presents.", "sitting"],
-	"tour_locker": ["tour_locker", "Your Locker. Your heroes, their outfits, your titles. Dress to impress. Or at least to intimidate.", "peeking"],
+	"tour_locker": ["tour_locker", "Your Armory. Your heroes, their outfits, your titles. Dress to impress. Or at least to intimidate.", "peeking"],
 	"tour_alliance": ["tour_alliance", "Alliance. Friends, parties, and your clan. Five of you on one side. The enemy hates it. I adore it.", "hanging"],
 	"tour_menu": ["tour_menu", "And up here, the menu. Daily orders, quests, the rankings, and my lessons. Do read the orders. They pay. I don't.", "lying"],
 	"ask": ["intro_ask", "Now. I could teach you the basics. It's quick, it's mostly painless, and there's gold at the end. Or you can skip it and learn by losing. Loudly. In front of everyone. Your call.", "pointing"],
@@ -49,7 +49,7 @@ const TOUR := {
 	"tour_chests": ["@chest_plate", "CHESTS", "below"],          # (above them is PLAY)
 	"tour_shop": ["tab_shop", "SHOP"],
 	"tour_pass": ["tab_pass", "PASS"],
-	"tour_locker": ["tab_locker", "LOCKER"],
+	"tour_locker": ["tab_locker", "ARMORY"],         # (0.31.204: the Locker renamed, his line voiced again)
 	"tour_alliance": ["tab_alliance", "ALLIANCE"],
 	"tour_menu": ["home_menu", "MENU"],
 }
