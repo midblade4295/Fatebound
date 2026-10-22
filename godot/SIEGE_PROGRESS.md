@@ -6682,3 +6682,5 @@ Kevin: "Make the heros that are free for the week show up in players armory".
   moba_ui, app_flow, quest, app_scroll, lb_prizes, weekly_sale, parse_all -- all pass (not the whole suite: the change
   is the Armory's heroes and the hero window).
 - No pack, no server change. Version 0.31.205, versionCode 291, SERVER_BUILD 0.31.205.
+- Preview APK: build/Fatebound-Siege-0.31.205-fatebound.apk (33,047,516 bytes, Vulkan only, preview key), sha256
+  04cbde5bb431820784654d28571319c34fec8aafaef062823d8ebb47d3be1317. Sent to Kevin with the shots.
