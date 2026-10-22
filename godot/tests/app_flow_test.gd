@@ -63,7 +63,7 @@ func _process(d: float) -> bool:
 			# 0.31.204: the Market's tabs -- GEMS (the packs), then OUTFITS (the role coins, the outfits); 0.31.202-0.31.203 a
 			# bar that jumped down one long page
 			press("shop_tab_gems")
-			var packs := btn("iap_gems_s") != null or app.content.find_children("*", "Label", true, false).any(func(l): return (l as Label).text == "GEM PACKS")
+			var packs: bool = btn("iap_gems_s") != null or app.content.find_children("*", "Label", true, false).any(func(l): return (l as Label).text == "GEM PACKS")
 			check(str(app.shop_tab) == "gems" and packs and btn("shop_role_tank") == null, "the Market's GEMS: the gem packs, no outfits")
 			press("shop_tab_outfits")
 			check(str(app.shop_tab) == "outfits" and btn("shop_role_tank") != null and btn("feat_open") != null, "OUTFITS: the weekly sale and the role coins")

@@ -6623,3 +6623,44 @@ make the graphic of the features look very eye catching. Use eleven or meshy if 
 - Version 0.31.203, versionCode 289, SERVER_BUILD 0.31.203.
 - Preview APK: build/Fatebound-Siege-0.31.203-fatebound.apk (33,035,228 bytes, Vulkan only, preview key), sha256
   7d7dc73ab0e12c9ad34280cc09b1089f800ea56744e10da364c52b353d5dcff1. Sent to Kevin with the shots.
+
+## 0.31.204 — the Armory, and heroes in the Market
+Kevin: "Now redo the locker menu. Change the name to armory and only put in there what the player owns. Also put a
+hero tab in the market that shows heroes that player doesn't own and that's where they will purchase them." Asked
+two things first; his answers: the 5v5 picker with a locked hero -- "Send to Market"; titles not yet earned -- "Hide
+them".
+- The tab bar: ARMORY with the swords (the tab keeps its id "locker", tab_locker). siege_app: locker_tab heroes |
+  outfits | titles ("champions" read as heroes); shop_tab outfits | heroes | gems; open_market(tab, hero) (the Market on
+  a tab, a hero's card lit); open_champion(hid, skin, owned_only); the gem pill opens the Market's GEMS.
+- The ARMORY (screens.gd locker): a painted armory hall (ElevenLabs gpt-image-2.5, four takes, ~760 credits; the third
+  kept: assets/ui/v2/art_armory.webp) with "12 HEROES · 2 OUTFITS · 0 TITLES" on it, stars winking; HEROES n /
+  OUTFITS n / TITLES n.
+  - HEROES: only yours, by role (a role with none of yours left out); a card says the outfit he wears (or ORIGINAL
+    LOOK) and how many of his outfits you own -- no prices, no padlocks, no FREE; "N MORE HEROES IN THE MARKET".
+  - OUTFITS: only yours (the shop's outfit card, its OWNED tag dropped): WEAR / WORN; "N MORE IN THE MARKET"; none: NO
+    OUTFITS YET and the way to the Market.
+  - TITLES: NO TITLE and the titles you've earned (EQUIP / WORN); "N more to earn by playing" -- the others aren't shown.
+  - A hero tapped there: his window with only his outfits you own (his own look among them), and "N MORE OUTFITS IN
+    THE MARKET" (champion_window.gd owned_only); from the Market, all of them as before.
+- The MARKET (screens.gd shop): three tabs over the stall -- OUTFITS (the weekly sale and every outfit; a red SALE tag
+  on it), HEROES (how many you don't own, on it), GEMS (the packs and "chests are earned by playing") -- in place of
+  0.31.202's jump bar. HEROES (market_heroes): the heroes you don't own by role, "FREE THIS WEEK: ..." over them, your
+  Hero Tokens and shards; a card like the outfits' (him in his own place, rays and a glow of his colour, FREE / NEW /
+  ◆ SHARD, his outfits' count, "50K or 600"), UNLOCK -> UNLOCK <NAME>? with each way you have (gold, gems, a shard and
+  its gold, a Hero Token; buy_hero / buy_hero_gems / use_shard / use_token -- the ops the server already replays);
+  bought: "... joins you! He's in your Armory." and he's gone from the list. All yours: EVERY HERO IS YOURS and OPEN
+  THE ARMORY.
+- The 5v5 picker (moba_panel.gd): a locked hero's BATTLE is GET IN MARKET, a free one has MARKET beside BATTLE; both
+  shut the window and open the Market's HEROES, gliding to his card and ringing it in gold. Its unlock chooser is gone
+  (MELT stays).
+- The Herald's tour: "Your Armory. Your heroes, their outfits, your titles..." voiced again in his voice (eleven_v4,
+  Edward, two takes, 210 credits; take a), its caption and label ARMORY; "see the Armory" / "wear it from the Armory"
+  in the toasts.
+- Tests: armory_market_test (new, in the suite); champions_test (the Armory's HEROES, then the Market's), moba_ui_test
+  (GET IN MARKET, bought in the Market, back to BATTLE), app_flow_test (the Market's tabs), quest_test, lb_prizes_test
+  (only the title won), herald_intro_test (ARMORY). tools/app_shots.gd SHOT_SHOP_TAB.
+- No server change (the hero ops are the ones it has). The packs: ui-01827f45d9b1.pck (the armory picture) and
+  audio-6609a586ebc0.pck (the line) built and uploaded to the content-packs branch (a18ea80).
+- The quick suite: 98 of 102 passed; app_flow_test (a type it couldn't infer, so parse_all too), shop_packs_test and
+  ios_port_test (the gem packs are on the GEMS tab now) failed -- fixed, each passes on its own.
+- Version 0.31.204, versionCode 290, SERVER_BUILD 0.31.204.

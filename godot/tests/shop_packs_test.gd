@@ -44,6 +44,7 @@ func _process(_d: float) -> bool:
 		check(missing.is_empty(), "ten pack pictures, gem and gold tiers 1-5 %s" % str(missing))
 		check(not ("EXCHANGE" in Eco), "no gold offers (0.31.185)")
 		app.profile.d.gems = 2000
+		app.shop_tab = "gems"                      # (0.31.204: the Market's GEMS tab)
 		app.show_tab("shop")
 	if f == 12:
 		var arts := _arts()

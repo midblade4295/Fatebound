@@ -457,6 +457,7 @@ func _process(_d: float) -> bool:
 			fsk_app.catalog = ALL_PRICES.duplicate()
 			app.billing.setup(app.profile, fsk_app)
 			app.play_games.setup(app.profile, FakeGC.new())
+			app.shop_tab = "gems"                  # (0.31.204: the Market's GEMS tab)
 			app.show_tab("shop")
 		1:
 			var b80 := btn("iap_gems_80")
