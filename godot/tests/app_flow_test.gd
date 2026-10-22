@@ -60,6 +60,13 @@ func _process(d: float) -> bool:
 			p.d.gold = 50000; p.d.gems = 3000; p.save()
 			press("tab_shop")
 		1:
+			# 0.31.202: the shop's jump bar glides down to the gem packs
+			if not app.has_meta("jumped"):
+				app.set_meta("jumped", true)
+				press("shop_jump_gems")
+				wait_until = t + 0.9
+				return false
+			check(app.content_scroll.scroll_vertical > 2000 and btn("shop_role_tank") != null, "the shop's GEMS jump scrolls down to the gem packs (%d); the role coins are there" % app.content_scroll.scroll_vertical)
 			var id := "knight_lion"
 			var gems0: int = p.d.gems
 			press("skin_buy_" + id)

@@ -1102,16 +1102,37 @@ static func shop(app, root: VBoxContainer) -> void:
 	# 0.31.79: the market stall banner, the week's featured, the daily deals, the Arsenals and the gems. 0.31.188 (Kevin:
 	# "I only want the cosmetics to be an entire outfit"): the outfits -- this week's three big (the hero in it, in his
 	# own place), then every outfit by hero -- and the gems; tap an outfit to see it on him in his window.
+	# 0.31.202 (Kevin: "Let's spruce up and beautify the shop menu"): gems twinkling over the banner; a bar that jumps to
+	# FEATURED / OUTFITS / GEMS; the week's outfit with rays of its rarity behind him; the outfits by role (TANK ... SUPPORT,
+	# a coin each that jumps to its row; each role's sets on top, its Frostbound line under) on new cards -- his own place
+	# painted behind him (frosted for the Frostbound line), a glow of the rarity, OWNED / WORN; the starter pack shining.
 	var p = app.profile
 	var now: int = p.now()
 	var ban := banner(root, UI2.V2 + "art_shop.webp", "MARKET", 196.0)
 	var note := UI2.chip(ban, "EVERYTHING HERE IS COSMETIC", Color(0.03, 0.02, 0.1, 0.8), UI2.CREAM, Color(UI2.GOLD, 0.6))
 	note.position = Vector2(12, 12)
+	_twinkles(ban, 9, Color(0.75, 0.9, 1.0), Rect2(0.12, 0.12, 0.8, 0.5))
+	UI2.sweep(ban, 5.0, 90.0, 0.28)
+	var jump := HBoxContainer.new()
+	jump.add_theme_constant_override("separation", 8)
+	root.add_child(jump)
+	var marks := {}                                     # where each jump goes (filled as the page is built)
+	for jb in [["FEATURED", "crown", "feat"], ["OUTFITS", "helmet", "outfits"], ["GEMS", "", "gems"]]:
+		var key: String = jb[2]
+		var b := UI2.button(jump, str(jb[0]), "blue", func():
+			app.sfx("tap")
+			_scroll_to(app, marks.get(key)), "shop_jump_" + key, 14, 36.0, 12.0,
+			UI2.icon_path(str(jb[1])) if str(jb[1]) != "" else "res://assets/ui/currency/gem.png")
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var days := int(floor(now / 86400.0))
 	var monday := days - ((days + 3) % 7)
 	var feat: Array = Eco.featured_outfits(now)
 	if not feat.is_empty():
-		UI2.divider(root, "FEATURED OUTFITS", 22, "new picks in " + UI.duration((monday + 7) * 86400 - now))
+		var fd := UI2.divider(root, "FEATURED OUTFITS", 22)
+		marks["feat"] = fd
+		var tc := UI2.icon_chip(fd, UI2.icon_path("hourglass"), "NEW PICKS IN " + UI.duration((monday + 7) * 86400 - now).to_upper(),
+			Color(0.05, 0.04, 0.16, 0.85), UI2.CREAM, Color(UI2.GOLD, 0.5))
+		tc.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		var sel := clampi(int(app.get_meta("shop_feat", 0)), 0, feat.size() - 1)
 		featured_outfit(app, root, str(feat[sel]))
 		var thumbs := HBoxContainer.new()
@@ -1119,41 +1140,116 @@ static func shop(app, root: VBoxContainer) -> void:
 		thumbs.add_theme_constant_override("separation", 14)
 		root.add_child(thumbs)
 		for i in feat.size():
-			var on := i == sel
-			var tb := Button.new()
-			tb.flat = true
-			tb.focus_mode = Control.FOCUS_NONE
-			for st_name in ["normal", "hover", "pressed", "focus"]:
-				tb.add_theme_stylebox_override(st_name, StyleBoxEmpty.new())
-			tb.custom_minimum_size = Vector2(68, 68)
-			tb.set_meta("action_key", "feat_%d" % i)
-			var ii := i
-			tb.pressed.connect(func():
-				app.sfx("tap")
-				app.set_meta("shop_feat", ii)
-				app.rebuild())
-			thumbs.add_child(tb)
-			if on:
-				UI2.skin(tb, UI2.button_params("gold", 16.0, 3.0))
-			else:
-				UI2.plate(tb, "purple", 16.0, "purple", {"rim": 2.0, "dim": 0.25})
-			var ti := UI2.img(tb, "res://assets/ui/skins/%s.png" % str(feat[i]), 56.0)
-			ti.position = Vector2(6, 4)
-	UI2.divider(root, "OUTFITS", 22, "a whole new look and weapon  ·  his hero comes with it")      # 0.31.186 (0.31.188: whole outfits)
+			_feat_thumb(app, thumbs, str(feat[i]), i, i == sel)
+	var od := UI2.divider(root, "OUTFITS", 22, "a whole new look and weapon  ·  his hero comes with it")      # 0.31.186 (0.31.188: whole outfits)
+	marks["outfits"] = od
 	skin_grid(app, root)
-	gem_packs(app, root)
+	var gd := gem_packs(app, root)
+	marks["gems"] = gd
 	# (0.31.106-0.31.184 "GEMS -> GOLD": five gold packs for gems. 0.31.185, Kevin: "I want the same IAP system as league of
 	# legends" -- League never turns its paid currency into the earned one: gold is earned only, gems buy heroes outright)
-	var fn := UI2.body(root, "Chests are earned by playing  ·  never sold", 11, Color("#cdb79a"))
-	fn.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var fn := UI2.icon_chip(root, "res://assets/ui/v2/chests/gold_icon.png", "CHESTS ARE EARNED BY PLAYING  ·  NEVER SOLD",
+		Color(0.05, 0.04, 0.16, 0.7), Color("#e8d6b0"), Color(UI2.GOLD, 0.35))
+	fn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 
-static func gem_packs(app, root: Node) -> void:
+static func _scroll_to(app, node) -> void:
+	# glide the page so `node` sits at the top (the shop's jump bar and role coins)
+	var sc: ScrollContainer = app.content_scroll
+	if not is_instance_valid(sc) or node == null or not is_instance_valid(node):
+		return
+	var to := maxi(0, sc.scroll_vertical + int((node as Control).global_position.y - sc.global_position.y) - 8)
+	var tw := sc.create_tween()
+	tw.tween_property(sc, "scroll_vertical", to, 0.45).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+
+static func _twinkles(parent: Control, n: int, col: Color, area: Rect2, px := 22.0) -> void:
+	# little four-point stars winking on and off over a picture (area: fractions of the parent), each on its own beat
+	for i in n:
+		var t := TextureRect.new()
+		t.texture = UI2.tex("res://assets/vfx/spell/sparkle.png")
+		t.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		var sz := px * randf_range(0.6, 1.2)
+		t.size = Vector2(sz, sz)
+		t.pivot_offset = t.size * 0.5
+		t.modulate = Color(col, 0.0)
+		t.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var mat := CanvasItemMaterial.new()
+		mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+		t.material = mat
+		parent.add_child(t)
+		var fx := randf_range(area.position.x, area.position.x + area.size.x)
+		var fy := randf_range(area.position.y, area.position.y + area.size.y)
+		var place := func(): t.position = Vector2(parent.size.x * fx, parent.size.y * fy) - t.size * 0.5
+		parent.resized.connect(place)
+		UI2.when_ready(t, func():
+			place.call()
+			var tw := t.create_tween().set_loops()
+			tw.tween_interval(randf_range(0.2, 3.0))
+			tw.tween_property(t, "modulate:a", 1.0, 0.35).set_trans(Tween.TRANS_SINE)
+			tw.parallel().tween_property(t, "rotation", deg_to_rad(45.0), 0.7)
+			tw.tween_property(t, "modulate:a", 0.0, 0.45).set_trans(Tween.TRANS_SINE)
+			tw.tween_property(t, "rotation", 0.0, 0.01)
+			tw.tween_interval(randf_range(1.5, 3.5)))
+
+static func _feat_thumb(app, row: Node, id: String, i: int, on: bool) -> void:
+	# one of the week's three: him in it over his own place, a gold frame on the one showing
+	var sk: Dictionary = Eco.SKINS[id]
+	var hid := str(sk.hero)
+	var rc := Color(str(Eco.RARITY_COLOR.get(str(sk.rarity), "#c47bff")))
+	var tb := Button.new()
+	tb.flat = true
+	tb.focus_mode = Control.FOCUS_NONE
+	for st_name in ["normal", "hover", "pressed", "focus"]:
+		tb.add_theme_stylebox_override(st_name, StyleBoxEmpty.new())
+	tb.custom_minimum_size = Vector2(76, 76)
+	tb.set_meta("action_key", "feat_%d" % i)
+	tb.pressed.connect(func():
+		app.sfx("tap")
+		app.set_meta("shop_feat", i)
+		app.rebuild())
+	row.add_child(tb)
+	var pane := Panel.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Champions.accent(hid).darkened(0.75)
+	sb.set_corner_radius_all(16)
+	pane.add_theme_stylebox_override("panel", sb)
+	pane.clip_children = CanvasItem.CLIP_CHILDREN_AND_DRAW
+	pane.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	pane.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tb.add_child(pane)
+	var art := TextureRect.new()
+	art.texture = UI2.tex(Champions.card_art(hid))
+	art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	art.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	art.modulate = Color(1, 1, 1) if on else Color(0.55, 0.55, 0.65)
+	art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	pane.add_child(art)
+	var ti := UI2.img(pane, "res://assets/ui/skins/%s.png" % id, 70.0)
+	ti.position = Vector2(3, 6)
+	if not on:
+		ti.modulate = Color(0.75, 0.75, 0.82)
+	var rim := Panel.new()
+	var rs := StyleBoxFlat.new()
+	rs.draw_center = false
+	rs.border_color = UI2.GOLD if on else Color(rc, 0.8)
+	rs.set_border_width_all(3 if on else 2)
+	rs.set_corner_radius_all(16)
+	if on:
+		rs.shadow_color = Color(1.0, 0.82, 0.3, 0.6)
+		rs.shadow_size = 8
+	rim.add_theme_stylebox_override("panel", rs)
+	rim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	rim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tb.add_child(rim)
+
+static func gem_packs(app, root: Node) -> Control:
 	# 0.31.90 (Kevin: in-app purchases): gems for real money, Google Play only. The starter pack first while it can still
-	# be bought, then the five packs, priced in the player's currency once Google has answered.
+	# be bought, then the five packs, priced in the player's currency once Google has answered. (0.31.202: returns its
+	# heading -- the shop's GEMS jump)
 	var bl = app.billing
 	var live: bool = bl != null and bl.active()
 	# (0.31.130: the App Store on iOS; the same words otherwise)
-	UI2.divider(root, "GEM PACKS", 22, ("%s  ·  gems never change damage" if live else "in the %s version") % Platform.store_short())
+	var head := UI2.divider(root, "GEM PACKS", 22, ("%s  ·  gems never change damage" if live else "in the %s version") % Platform.store_short())
 	var p = app.profile
 	if not bool(p.d.iap.starter):
 		var sc := Control.new()
@@ -1164,6 +1260,17 @@ static func gem_packs(app, root: Node) -> void:
 		ry.position = Vector2(-40, -40)
 		var gi := UI2.img(sc, "res://assets/ui/packs/gem_pack_2.png", 96.0)
 		gi.position = Vector2(12, 16)
+		UI2.bob(gi, 4.0, 1.4)                                       # (0.31.202: it floats, it shines, it says once)
+		_twinkles(sc, 5, Color(0.8, 0.95, 1.0), Rect2(0.04, 0.1, 0.24, 0.7), 18.0)
+		UI2.sweep(sc, 3.6, 80.0, 0.3)
+		var once := UI2.chip(sc, "ONE-TIME OFFER", Color("#e8443a"), Color.WHITE, Color("#3a0805"))
+		once.anchor_left = 1.0
+		once.anchor_right = 1.0
+		once.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+		once.offset_right = -10
+		once.offset_left = -120
+		once.offset_top = -9
+		once.offset_bottom = 9
 		var v := VBoxContainer.new()
 		v.add_theme_constant_override("separation", 2)
 		v.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -1225,6 +1332,8 @@ static func gem_packs(app, root: Node) -> void:
 		var tag := str(pk.get("tag", ""))
 		if tag == "BEST VALUE" and pid != shown[shown.size() - 1]:
 			tag = ""                                    # (a bigger pack is the best value)
+		if tag == "BEST VALUE":
+			UI2.sweep(c, 3.0, 70.0, 0.32)                          # (0.31.202: the best value shines)
 		if tag != "":
 			var tg := UI2.chip(c, tag, Color("#e8443a") if tag == "BEST VALUE" else Color("#2f7de1"), Color.WHITE, Color("#170a05"))
 			tg.anchor_left = 0.5
@@ -1240,6 +1349,7 @@ static func gem_packs(app, root: Node) -> void:
 			app.sfx("tap")
 			bl.restore(), "iap_restore", 14, 38.0)
 		rb.disabled = bool(bl.restoring) or str(bl.busy) != ""
+	return head
 
 static func pack_art(c: Control, path: String, tier: int, big: bool, shine: Color) -> float:
 	# 0.31.106 (Kevin: "Make new art for the higher tier packs so it shows more the higher the pack is. Add fun things
@@ -1316,6 +1426,33 @@ static func featured_outfit(app, root: Node, id: String) -> void:
 	art.offset_bottom = 60
 	art.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	stage.add_child(art)
+	var rcol := Color(str(Eco.RARITY_COLOR.get(str(sk.rarity), "#c47bff")))
+	# (0.31.202: a dark wash on the right for the words; rays and a glow of its rarity behind him; a pool of light at his
+	# feet; stars winking)
+	var wash := TextureRect.new()
+	var wg := Gradient.new()
+	wg.set_color(0, Color(0.02, 0.01, 0.05, 0.0))
+	wg.set_color(1, Color(0.02, 0.01, 0.05, 0.72))
+	var wt := GradientTexture2D.new()
+	wt.gradient = wg
+	wt.fill_from = Vector2(0.35, 0.5)
+	wt.fill_to = Vector2(1.0, 0.5)
+	wt.width = 64
+	wt.height = 4
+	wash.texture = wt
+	wash.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	wash.stretch_mode = TextureRect.STRETCH_SCALE
+	wash.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	wash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	stage.add_child(wash)
+	var rays := UI2.rays(stage, 330.0, rcol.lerp(Color.WHITE, 0.35), 24.0, 0.45)
+	var halo := UI2.glow(stage, Rect2(0, 0, 230, 230), Color(rcol, 0.55))
+	var pool := UI2.glow(stage, Rect2(0, 0, 200, 46), Color(rcol.lerp(Color.WHITE, 0.5), 0.5), false)
+	fc.resized.connect(func():
+		var cx := fc.size.x * 0.31
+		rays.position = Vector2(cx - 165.0, fc.size.y * 0.42 - 165.0)
+		halo.position = Vector2(cx - 115.0, fc.size.y * 0.42 - 115.0)
+		pool.position = Vector2(cx - 100.0, fc.size.y - 64.0))
 	var sh := Showcase.new()
 	sh.plinth = false
 	sh.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -1323,12 +1460,15 @@ static func featured_outfit(app, root: Node, id: String) -> void:
 	sh.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	stage.add_child(sh)
 	sh.show_look(hid, {"skin": id})
+	_twinkles(stage, 7, rcol.lerp(Color.WHITE, 0.6), Rect2(0.05, 0.1, 0.5, 0.75), 20.0)
 	var rim := Panel.new()
 	var rs := StyleBoxFlat.new()
 	rs.draw_center = false
-	rs.border_color = Color(str(Eco.RARITY_COLOR.get(str(sk.rarity), "#c47bff")))
+	rs.border_color = rcol
 	rs.set_border_width_all(3)
 	rs.set_corner_radius_all(20)
+	rs.shadow_color = Color(rcol, 0.45)                     # (0.31.202: it glows its rarity)
+	rs.shadow_size = 10
 	rim.add_theme_stylebox_override("panel", rs)
 	rim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	rim.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -1341,7 +1481,7 @@ static func featured_outfit(app, root: Node, id: String) -> void:
 	cap.offset_right = -12
 	cap.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	fc.add_child(cap)
-	UI2.chip(cap, str(sk.rarity).to_upper() + " OUTFIT", Color(str(Eco.RARITY_COLOR.get(str(sk.rarity), "#c47bff"))), Color("#120a02"))
+	UI2.icon_chip(cap, UI2.icon_path("crown"), "FEATURED  ·  " + str(sk.rarity).to_upper(), rcol, Color("#120a02"))
 	var nl := UI2.text(cap, str(sk.set).to_upper(), 24, Color.WHITE, Color("#1e0a45"), 6)
 	nl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	UI2.body(cap, "%s, the %s" % [Champions.name_of(hid), str(Eco.SKIN_HEROES.get(hid, hid))], 11, Champions.accent(hid).lightened(0.45))
@@ -1368,6 +1508,8 @@ static func featured_outfit(app, root: Node, id: String) -> void:
 		b = UI2.button(fc, UI.grouped(int(sk.gems)), "purple", func(): buy_skin(app, id), "feat_buy", 17, 44.0, 12.0,
 			"res://assets/ui/currency/gem.png")
 		b.disabled = not can_buy_skin(p, id)
+		if not b.disabled:
+			UI2.sweep(b, 2.6, 46.0, 0.45)
 	b.anchor_left = 0.58
 	b.anchor_right = 1.0
 	b.anchor_top = 1.0
@@ -1377,76 +1519,268 @@ static func featured_outfit(app, root: Node, id: String) -> void:
 	b.offset_bottom = -12
 
 static func skin_grid(app, root: Node) -> void:
+	# 0.31.202: the outfits by role, the Locker's order (TANK ... SUPPORT) -- a row of the six roles' coins first, each
+	# jumping to its own; a role: its name, its heroes, then three to a row: their sets on top, the Frostbound line under
+	var Kits = load("res://scripts/siege/moba_kits.gd")          # (loaded here, not at boot: the 5v5's)
+	var heads := {}
+	var coins := HBoxContainer.new()
+	coins.alignment = BoxContainer.ALIGNMENT_CENTER
+	coins.add_theme_constant_override("separation", 6)
+	root.add_child(coins)
+	for role in ROLE_ORDER:
+		var rl: String = role
+		_role_coin(coins, rl, str(Kits.ROLE_NAMES.get(rl, rl)), func():
+			app.sfx("tap")
+			_scroll_to(app, heads.get(rl)))
+	for role in ROLE_ORDER:
+		var heroes: Array = Champions.ORDER.filter(func(h): return Kits.role_of(str(h)) == role and not Eco.skins_of(str(h)).is_empty())
+		if heroes.is_empty():
+			continue
+		var rh := HBoxContainer.new()
+		rh.add_theme_constant_override("separation", 8)
+		root.add_child(rh)
+		heads[role] = rh
+		var bp := "res://assets/ui/roles/%s.png" % role
+		if ResourceLoader.exists(bp):
+			var bi := UI2.img(rh, bp, 30.0)
+			bi.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		var rt := UI2.text(rh, str(Kits.ROLE_NAMES.get(role, role)), 19, UI2.GOLD, UI2.INK, 5)
+		rt.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		var names := heroes.map(func(h): return str(Eco.SKIN_HEROES.get(str(h), h)))
+		var rs := UI2.body(rh, "  ·  ".join(names), 10, UI2.SOFT, true)
+		rs.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		rs.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		rs.custom_minimum_size.x = 10
+		var grid := GridContainer.new()
+		grid.columns = 3
+		grid.add_theme_constant_override("h_separation", 10)
+		grid.add_theme_constant_override("v_separation", 12)
+		root.add_child(grid)
+		var ids := []
+		for frost in [false, true]:
+			for h in heroes:
+				for id in Eco.skins_of(str(h)):
+					if (str(Eco.SKINS[id].get("line", "")) in Eco.SKIN_LINES) == frost:
+						ids.append(str(id))
+		for id in ids:
+			outfit_card(app, grid, str(id))
+
+static func _role_coin(row: Node, role: String, label: String, on_press: Callable) -> Button:
+	# a round button with the role's emblem and its name under it (the shop's jump to that role)
+	var b := Button.new()
+	b.flat = true
+	b.focus_mode = Control.FOCUS_NONE
+	for st_name in ["normal", "hover", "pressed", "focus"]:
+		b.add_theme_stylebox_override(st_name, StyleBoxEmpty.new())
+	b.custom_minimum_size = Vector2(58, 64)
+	b.set_meta("action_key", "shop_role_" + role)
+	b.pressed.connect(on_press)
+	row.add_child(b)
+	var disc := Control.new()
+	disc.position = Vector2(6, 0)
+	disc.size = Vector2(46, 46)
+	disc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	b.add_child(disc)
+	UI2.plate(disc, "royal", 23.0, "gold", {"rim": 2.0})
+	var ic := UI2.img(disc, "res://assets/ui/roles/%s.png" % role, 34.0)
+	ic.position = Vector2(6, 6)
+	var l := UI.label(b, label, 9, UI2.CREAM, UI.HEAVY_FONT)
+	l.autowrap_mode = TextServer.AUTOWRAP_OFF
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.add_theme_color_override("font_outline_color", UI2.INK)
+	l.add_theme_constant_override("outline_size", 3)
+	l.position = Vector2(-4, 48)
+	l.size = Vector2(66, 14)
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return b
+
+static func _grad_rect(parent: Control, stops: Array, from := Vector2(0, 0), to := Vector2(0, 1)) -> TextureRect:
+	# a full-size gradient over the parent: stops = [[offset, Color], ...]
+	var g := Gradient.new()
+	var offs := PackedFloat32Array()
+	var cols := PackedColorArray()
+	for st in stops:
+		offs.append(float(st[0]))
+		cols.append(st[1])
+	g.offsets = offs
+	g.colors = cols
+	var gt := GradientTexture2D.new()
+	gt.gradient = g
+	gt.fill_from = from
+	gt.fill_to = to
+	gt.width = 4
+	gt.height = 64
+	var t := TextureRect.new()
+	t.texture = gt
+	t.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	t.stretch_mode = TextureRect.STRETCH_SCALE
+	t.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	t.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(t)
+	return t
+
+static func outfit_card(app, grid: Node, id: String) -> Control:
+	# 0.31.202: one outfit -- the hero in it standing in his own place (Champions.card_art; the Frostbound line's
+	# frosted over), a glow of its rarity behind him (a set: turning rays too), its rarity and whether you own it or wear
+	# it, the set's name and the hero's, "or 40K" gold for the Frostbound line; tap the picture: his window with it on;
+	# the button: its gems (BUY asks first), WEAR, WORN
 	var p = app.profile
-	var grid := GridContainer.new()
-	grid.columns = 3
-	grid.add_theme_constant_override("h_separation", 10)
-	grid.add_theme_constant_override("v_separation", 12)
-	root.add_child(grid)
-	var ids: Array = Eco.SKINS.keys()
-	var order: Array = Eco.SKIN_HEROES.keys()
-	# (by hero; his own set before the Frostbound line)
-	ids.sort_custom(func(a, b):
-		var ha := order.find(str(Eco.SKINS[a].hero))
-		var hb := order.find(str(Eco.SKINS[b].hero))
-		return ha < hb if ha != hb else (Eco.SKINS[a].has("weapon") and not Eco.SKINS[b].has("weapon")))
-	for id0 in ids:
-		var id: String = id0
-		var sk: Dictionary = Eco.SKINS[id]
-		var hid := str(sk.hero)
-		var rar := str(sk.rarity)
-		var c := Control.new()
-		c.custom_minimum_size = Vector2(0, 196)
-		UI.grow(c)
-		grid.add_child(c)
-		UI2.plate(c, _rar_panel(rar), 18.0, _rar_rim(rar))
-		var v := VBoxContainer.new()
-		v.add_theme_constant_override("separation", 1)
-		v.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		v.offset_left = 6
-		v.offset_right = -6
-		v.offset_top = 6
-		v.offset_bottom = -46
-		v.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		c.add_child(v)
-		var ti := UI2.img(v, "res://assets/ui/skins/%s.png" % id, 96.0)
-		ti.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-		var nl := UI2.text(v, str(sk.name).to_upper(), 11, Color.WHITE, UI2.INK, 4)
-		nl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		nl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		nl.size_flags_vertical = Control.SIZE_EXPAND_FILL
-		if not p.owns_hero(hid):
-			var hc := UI2.chip(c, "+ HERO", Color("#2f8a3e"), Color.WHITE, Color("#0a2006"))
-			hc.position = Vector2(6, 6)
-		var look := Button.new()                         # 0.31.188: tap the card -- his window with it on
-		look.flat = true
-		look.focus_mode = Control.FOCUS_NONE
-		for st_name in ["normal", "hover", "pressed", "focus"]:
-			look.add_theme_stylebox_override(st_name, StyleBoxEmpty.new())
-		look.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		look.offset_bottom = -46
-		look.set_meta("action_key", "skin_look_" + id)
-		look.pressed.connect(func(): app.open_champion(hid, id))
-		c.add_child(look)
-		var b: Button
-		if p.owns_skin(id):
-			var worn: bool = p.worn_skin(hid) == id
-			b = UI2.button(c, "WORN" if worn else "WEAR", "grey" if worn else "blue", func():
-				p.wear_skin(hid, "" if p.worn_skin(hid) == id else id)
-				app.sfx("equip")
-				app.rebuild(), "skin_wear_" + id, 13, 34.0, 11.0)
-		else:
-			b = UI2.button(c, str(int(sk.gems)), "purple", func(): buy_skin(app, id), "skin_buy_" + id, 14, 34.0, 11.0,
-				"res://assets/ui/currency/gem.png")
-			b.disabled = not can_buy_skin(p, id)
-			if int(sk.get("gold", 0)) > 0:                 # 0.31.189: or gold -- a coin chip over the card
-				var gc := UI2.chip(c, "or %dK" % (int(sk.gold) / 1000), Color("#5a3d08"), Color("#ffd86b"), Color("#1e1200"))
-				gc.position = Vector2(6, 6 if p.owns_hero(hid) else 30)      # (under "+ HERO" when that's there)
-		b.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
-		b.offset_left = 6
-		b.offset_right = -6
-		b.offset_top = -44
-		b.offset_bottom = -8
+	var sk: Dictionary = Eco.SKINS[id]
+	var hid := str(sk.hero)
+	var rar := str(sk.rarity)
+	var frost: bool = str(sk.get("line", "")) in Eco.SKIN_LINES
+	var rc := Color(str(Eco.RARITY_COLOR.get(rar, "#c47bff")))
+	var owned: bool = p.owns_skin(id)
+	var worn: bool = owned and p.worn_skin(hid) == id
+	var acc: Color = Champions.accent(hid)
+	var c := Control.new()
+	c.custom_minimum_size = Vector2(0, 226)
+	UI.grow(c)
+	grid.add_child(c)
+	var pane := Panel.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = rc.darkened(0.82)
+	sb.set_corner_radius_all(16)
+	pane.add_theme_stylebox_override("panel", sb)
+	pane.clip_children = CanvasItem.CLIP_CHILDREN_AND_DRAW
+	pane.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	pane.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	c.add_child(pane)
+	var art := TextureRect.new()
+	art.texture = UI2.tex(Champions.card_art(hid))
+	art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	art.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	art.offset_bottom = -52
+	art.modulate = Color(0.62, 0.8, 1.0) if frost else Color(0.92, 0.88, 1.0)
+	art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	pane.add_child(art)
+	if frost:
+		_grad_rect(pane, [[0.0, Color(0.85, 0.95, 1.0, 0.45)], [0.35, Color(0.7, 0.88, 1.0, 0.0)]])       # (a frost glaze)
+	var rays: TextureRect = null
+	if not frost:
+		rays = UI2.rays(pane, 190.0, rc.lerp(Color.WHITE, 0.3), 28.0, 0.38)
+	var halo := UI2.glow(pane, Rect2(0, 0, 150, 150), Color(rc, 0.55 if not frost else 0.42), false)
+	var pool := UI2.glow(pane, Rect2(0, 0, 110, 26), Color(0, 0, 0, 0.55), false)        # (his shadow)
+	var ti := UI2.img(pane, "res://assets/ui/skins/%s.png" % id, 128.0)
+	_grad_rect(pane, [[0.0, Color(0, 0, 0, 0)], [0.48, Color(0, 0, 0, 0)], [0.7, Color(rc.darkened(0.85), 0.9)], [1.0, Color(rc.darkened(0.88), 1.0)]])
+	c.resized.connect(func():
+		var cx := c.size.x * 0.5
+		ti.position = Vector2(cx - 64.0, 14.0)
+		halo.position = Vector2(cx - 75.0, 4.0)
+		pool.position = Vector2(cx - 55.0, 128.0)
+		if rays != null:
+			rays.position = Vector2(cx - 95.0, 78.0 - 95.0))
+	if frost and not view_low(app):
+		_twinkles(pane, 3, Color(0.85, 0.95, 1.0), Rect2(0.1, 0.08, 0.8, 0.5), 14.0)
+	var rim := Panel.new()
+	var rs := StyleBoxFlat.new()
+	rs.draw_center = false
+	rs.border_color = UI2.GOLD if worn else rc
+	rs.set_border_width_all(3 if worn else 2)
+	rs.set_corner_radius_all(16)
+	rs.shadow_color = Color(UI2.GOLD, 0.55) if worn else Color(rc, 0.3)
+	rs.shadow_size = 7 if worn else 4
+	rim.add_theme_stylebox_override("panel", rs)
+	rim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	rim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	c.add_child(rim)
+	# its rarity (left), and the hero coming with it / owned / worn (right)
+	var tag := _card_tag(c, rar.to_upper(), rc.darkened(0.15), rc.darkened(0.7))
+	tag.position = Vector2(6, 6)
+	var right := ""
+	var rfill := Color("#2f8a3e")
+	if worn:
+		right = "WORN"
+		rfill = Color("#b8861c")
+	elif owned:
+		right = "OWNED ✓"
+	elif not p.owns_hero(hid):
+		right = "+ HERO"
+	if right != "":
+		var hc := _card_tag(c, right, rfill, rfill.darkened(0.7))
+		hc.anchor_left = 1.0
+		hc.anchor_right = 1.0
+		hc.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+		hc.offset_right = -6
+		hc.offset_left = -60
+		hc.offset_top = 6
+		hc.offset_bottom = 22
+	# the names over the foot of the picture
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 0)
+	v.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	v.offset_top = -100
+	v.offset_bottom = -46
+	v.offset_left = 4
+	v.offset_right = -4
+	v.alignment = BoxContainer.ALIGNMENT_END
+	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	c.add_child(v)
+	var set_name := str(sk.set).to_upper()
+	var nl := UI2.text(v, set_name, 14 if set_name.length() <= 10 else (12 if set_name.length() <= 12 else 11), Color.WHITE, UI2.INK, 4)
+	nl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	nl.autowrap_mode = TextServer.AUTOWRAP_OFF
+	nl.clip_text = true
+	var hl := UI.label(v, str(Eco.SKIN_HEROES.get(hid, hid)).to_upper(), 10, acc.lerp(Color.WHITE, 0.45), UI.HEAVY_FONT)
+	hl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hl.autowrap_mode = TextServer.AUTOWRAP_OFF
+	hl.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
+	hl.add_theme_constant_override("outline_size", 3)
+	if not owned and int(sk.get("gold", 0)) > 0:          # 0.31.189: or gold
+		var gc := UI2.icon_chip(v, "res://assets/ui/currency/coin.png", "or %dK" % (int(sk.gold) / 1000), Color(0.18, 0.12, 0.02, 0.85),
+			Color("#ffd86b"), Color("#ffd86b", 0.5))
+		gc.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	var look := Button.new()                         # 0.31.188: tap the card -- his window with it on
+	look.flat = true
+	look.focus_mode = Control.FOCUS_NONE
+	for st_name in ["normal", "hover", "pressed", "focus"]:
+		look.add_theme_stylebox_override(st_name, StyleBoxEmpty.new())
+	look.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	look.offset_bottom = -46
+	look.set_meta("action_key", "skin_look_" + id)
+	look.pressed.connect(func(): app.open_champion(hid, id))
+	c.add_child(look)
+	var b: Button
+	if owned:
+		b = UI2.button(c, "WORN" if worn else "WEAR", "gold" if worn else "blue", func():
+			p.wear_skin(hid, "" if p.worn_skin(hid) == id else id)
+			app.sfx("equip")
+			app.rebuild(), "skin_wear_" + id, 13, 34.0, 11.0)
+	else:
+		b = UI2.button(c, str(int(sk.gems)), "purple", func(): buy_skin(app, id), "skin_buy_" + id, 14, 34.0, 11.0,
+			"res://assets/ui/currency/gem.png")
+		b.disabled = not can_buy_skin(p, id)
+	b.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	b.offset_left = 7
+	b.offset_right = -7
+	b.offset_top = -42
+	b.offset_bottom = -7
+	return c
+
+static func _card_tag(parent: Control, s: String, fill: Color, border: Color) -> PanelContainer:
+	# a small corner tag on a card (EPIC, RARE, + HERO, OWNED, WORN)
+	var pc := PanelContainer.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = fill
+	sb.border_color = border
+	sb.set_border_width_all(1)
+	sb.set_corner_radius_all(7)
+	sb.content_margin_left = 5
+	sb.content_margin_right = 5
+	sb.content_margin_top = 0
+	sb.content_margin_bottom = 1
+	pc.add_theme_stylebox_override("panel", sb)
+	pc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(pc)
+	var l := UI.label(pc, s, 9, Color.WHITE, UI.HEAVY_FONT)
+	l.autowrap_mode = TextServer.AUTOWRAP_OFF
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	return pc
+
+static func view_low(app) -> bool:
+	# fewer extras on "reduce motion" (Settings)
+	return app.profile != null and bool(app.profile.d.get("settings", {}).get("reduce_motion", false))
 
 static func can_buy_skin(p, id: String) -> bool:
 	# the gems for it -- or (0.31.189: a rare outfit) the gold
