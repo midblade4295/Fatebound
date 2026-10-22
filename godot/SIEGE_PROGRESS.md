@@ -6684,3 +6684,23 @@ Kevin: "Make the heros that are free for the week show up in players armory".
 - No pack, no server change. Version 0.31.205, versionCode 291, SERVER_BUILD 0.31.205.
 - Preview APK: build/Fatebound-Siege-0.31.205-fatebound.apk (33,047,516 bytes, Vulkan only, preview key), sha256
   04cbde5bb431820784654d28571319c34fec8aafaef062823d8ebb47d3be1317. Sent to Kevin with the shots.
+
+## 0.31.206 — HOME over DODGE, and the training teaches wards
+Kevin: "Put the teleport button above the dodge button" and "Also teach players about how wards work in the training".
+- siege_hud.gd _buttons: the recall (HOME, the castle) right above DODGE (br + (-46, -364); was the top row's left
+  end, over W). The training's TAP ring finds it by its id.
+- The battle training (tutorial.gd): a WARD lesson after the jungle, so 13 lessons --
+  - t5_ward_1: the fog of war, "we only see what our heroes, minions, towers and wards can see";
+  - t5_ward_2: the brush, hidden from outside unless a ward's in it with them -- walk in, tap WARD;
+  - the task "Walk into the brush and tap WARD": the brush of ours nearest you ringed, BRUSH and the way to it; if
+    it's more than 14 m off (you went home), a hop to 7 m short of it along the way ("paperwork", as the lane and the
+    tower); a charge put in your pocket; in the brush, TAP on WARD; a ward on open ground isn't it (the charge back,
+    "That's open ground. Into the brush first, then WARD.");
+  - t5_ward_done: 90 s, unseen by the enemy, two charges that come back (moba_vision.gd's numbers).
+  Voiced: eleven_v4, Edward, two takes each, 1,010 credits, take b of each (art_sources/tutorial/README.txt). The
+  last line on the "leaning" scroll (it didn't fit "sitting" at 13 px).
+- tests/tutorial_test.gd: 36 lines voiced, the ward lesson played (open ground refused, the brush done).
+- The audio pack: audio-ecd2c6ebbfc0.pck uploaded to content-packs (8338d2a).
+- The quick suite: all 102 passed. Version 0.31.206, versionCode 292, SERVER_BUILD 0.31.206 (no server change).
+- Preview APK: build/Fatebound-Siege-0.31.206-fatebound.apk (33,051,612 bytes, Vulkan only, preview key), sha256
+  cb2197b6376013e77609450801b64067b6c60cf0a828a888dbdaf8e8f7dcb28b. Sent to Kevin with the lesson's shots.
