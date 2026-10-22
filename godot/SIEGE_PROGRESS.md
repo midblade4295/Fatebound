@@ -6451,3 +6451,26 @@ happening".
   the breach, a second rumble under the pit.
 - Fatebound-Trailer-8: 47.2 s (was 56.6), 1920x1080 at 30 fps, H.264 + AAC (1080p 92 MB; 720p 19 MB). -15.5 LUFS,
   -1.0 dB peak (the limiter at 0.82 now).
+
+## Social kit for Muse (tools only, no build)
+Kevin: "Make a social media pack for my other bot" -- "Muse bot" -- "Just give me a zip file with everything like
+graphic art, what the game is about ect that I can give to it so it posts on socials".
+- Fatebound-Social-Kit.zip, made by tools/build_muse_kit.py (the zip isn't kept in the repo; its text is in
+  store-listing/muse_kit/). For the bot: START_HERE.md, brand/rules.md (no release date, no links but links.md's, no
+  money talk, no other games, no invented quotes or features...), game/overview.md (what the game is and isn't,
+  checked against listing.json's game_facts and the code), game/champions.md and facts.json (the 18 from the game:
+  names, titles, stories, lines, Q W E R, outfits), brand/voice.md (epic with a wink; the Royal Herald as a persona,
+  his real lines), brand/profiles.md (avatars, banners, bios), links.md (empty, for Kevin), posts/ (67 ready posts:
+  short and long captions, video captions, hashtags, the files to attach; a first fortnight), assets.json (all 130
+  pictures and videos: what each shows, alt text, how it was made, where it fits).
+- The art: the logo, icon and banners (the social kit), the key art at 1:1, 4:5 and 9:16, the 18 champions as cards
+  (tools/social_champions.gd: each one's own champion window with its buttons, panel and name hidden, the stage taller,
+  turned three-quarters; the name, title, role and line set under him) and clean, each one's epic outfit, the roster,
+  eight Herald posts on his scroll and his eight blank scrolls, the store screenshots with and without captions, ten
+  16:9 gameplay stills (trailer 8's recordings, graded like it), and trailer 8 with five clips of it, 16:9 and 9:16
+  (the middle of the picture over a blurred copy, the logo above, 5V5 HERO BATTLES below).
+- Checked: every picture looked at; the text fact-checked against the code by a separate pass (fixed: the Wyrm's Hide
+  stacks four times, the Bone Lord marches the middle lane, no "free" for the weekly rotation, the breach post's King
+  towers, pronouns for the four champions whose stories give none, "illustrated" not "painted" key art). The zip: 141
+  files, 186 MB (the trailer at 8 Mbps, the clips 6, the vertical ones 4; the vertical logo and tagline step aside for
+  the trailer's own title).
