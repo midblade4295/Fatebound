@@ -6486,3 +6486,21 @@ on the title card; the costs per model (one shot: Runway Gen-4.5 3,636 credits, 
 16,803, Veo 3.1 19,390). The test shot, the Grave Wyrm (flow "Fatebound trailer 9 (CGI)"): the game's still
 (art_sources/trailer9/refs/wyrm_still.jpg, public so the flow can fetch it) -> 2 keyframes (gpt-image-2.5-sunburst,
 866 credits) -> 8 s of video (Veo 3.1 Fast, 7,271). 8,137 credits spent.
+
+## Trailer 9, the CGI trailer (tools only, no build)
+Kevin: "I love the quality. Do it except don't have any voice lines. I want the trailer to tell the story like how world
+of Warcraft trailers are" / "Just have music and sound effects".
+- 76 s, no narration: the King on his comfortable throne; Aldric and his cracked shield; Hroth's war horn; both sides
+  charge; the ford (sword on greatsword, Elara's ring of fire, Gorrak's landslide); the ground shakes, the Grave Wyrm
+  rises and roars; Aldric holds its soul-fire back with his shield; our five burst into the throne hall; the King,
+  mid-bite, loses his crown and gulps; the game's own title. tools/trailer9_script.md has the shots, the trims, the
+  credits.
+- 14 AI shots (13 new + the test shot; ElevenLabs, Veo 3.1 Fast at 720p, their own sound effects), each from a
+  cinematic keyframe made from the game's own pictures (art_sources/trailer9/refs, the Wyrm frame as the style
+  reference). The score: four cues made for the cut (tools/trailer9_vo/raw, Music v2.5); the title: trailer 8's run and
+  cue B; "Not actual gameplay footage" on it (for social media and YouTube, not the store pages).
+- tools/trailer9_edit.py cuts and mixes it (shots upscaled to 1080p at 24 fps; each shot's sound levelled; the battle
+  cue starts on the horn, the dark cue's hit on the roar, the heroic cue stops dead on the King): -14.6 LUFS, -1.2 dB
+  peak. 1080p 93 MB, 720p 31 MB.
+- 109,951 credits in all (keyframes 27,736, videos 71,708, music 2,370, the test 8,137). The plan's cap ran out
+  mid-run; Kevin topped up for the last four shots.
