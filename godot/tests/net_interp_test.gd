@@ -4,6 +4,10 @@ extends SceneTree
 # snapshot -> encode -> decode -> Net.apply path into a client mirror, and the client samples
 # Net.interpolate at 5 points per snapshot interval (like frames between snapshots). Checks: no
 # jumps, no stalls while it flies, and it reaches the target before it vanishes.
+# 0.31.207 (Kevin: "the projectiles aren't smooth when traveling"): drawn as the game draws them -- at 60 fps on the
+# render clock (Net.interpolate_at, INTERP_DELAY behind the newest snapshot), three frames a snapshot: every step
+# between frames the arrow's own (22 m/s / 60 = 0.37 m) within 15 %, and it reaches the target before it goes. (The
+# from/to slide it had flown on since 0.31.23 stepped 0 to 0.55 m on the same clock: a stall, then a jump.)
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 const Net = preload("res://scripts/siege/siege_net.gd")
 var fails := []
@@ -35,7 +39,16 @@ func _init() -> void:
 	var samples := []
 	var old_jump := 0.0                                           # what the old code showed
 	var last_raw := Vector2.INF
-	for k in 40:
+	var rt := -1.0
+	var seen_it := false
+	var o_from := Vector2.INF                                     # (0.31.23-0.31.206's slide, on the same clock)
+	var o_to := Vector2.INF
+	var o_t0 := 0.0
+	var o_dt := 0.05
+	var o_t := -1.0
+	var o_steps := []
+	var o_last := Vector2.INF
+	for k in 60:
 		var events := []
 		for t in ticks:
 			s.step(Sim.TICK)
@@ -43,6 +56,8 @@ func _init() -> void:
 		var snap := Net.snapshot(s, "", events)
 		var msg := Net.decode(Net.encode(snap, true))
 		Net.apply(m, msg, "you")
+		if rt < 0.0:
+			rt = float(msg.tm) - Net.INTERP_DELAY
 		var pb: PackedByteArray = msg.get("p", PackedByteArray())
 		for pi in pb.size() / 12:                                 # (6 x 16 bits a projectile)
 			if pb.decode_s16(pi * 12) + 32768 == pid:
@@ -50,25 +65,48 @@ func _init() -> void:
 				if last_raw != Vector2.INF:
 					old_jump = maxf(old_jump, last_raw.distance_to(raw))
 				last_raw = raw
+				o_from = raw if o_to == Vector2.INF else o_to
+				o_to = raw
+				o_t0 = float(msg.tm) - 1.0 / Net.SNAP_HZ if o_t < 0.0 else o_t
+				o_dt = maxf(float(msg.tm) - o_t0, 0.001)
+				o_t = float(msg.tm)
 		var here := false
-		for a in [0.2, 0.4, 0.6, 0.8, 1.0]:
-			Net.interpolate(m, a)
+		for f in 3:                                              # three frames at 60 fps a snapshot (20 Hz)
+			rt += 1.0 / 60.0
+			Net.interpolate_at(m, rt, "you")
+			if o_to != Vector2.INF:
+				var op := o_from.lerp(o_to, clampf((rt - o_t0) / o_dt, 0.0, 1.2))
+				if o_last != Vector2.INF and (op.distance_to(o_last) > 0.001 or not o_steps.is_empty()):
+					o_steps.append(op.distance_to(o_last))
+				o_last = op
 			for p in m.projectiles:
 				if p.id == pid:
 					samples.append(p.pos)
 					here = true
-		if not here and not samples.is_empty():
+		if here:
+			seen_it = true
+		elif seen_it:
 			break
-	check(samples.size() >= 10, "the arrow was drawn for %d samples" % samples.size())
+	check(samples.size() >= 10, "the arrow was drawn for %d frames" % samples.size())
+	var step := 22.0 / 60.0
+	var uneven := 0
 	var worst := 0.0
-	var stalls := 0
+	var moving := []
 	for i in range(1, samples.size()):
 		var d: float = (samples[i] as Vector2).distance_to(samples[i - 1])
-		worst = maxf(worst, d)
-		if d < 0.01 and i > 5:                                   # the first interval sits at the spawn
-			stalls += 1
-	check(worst < 0.5, "no jumps: largest step between frames %.2f m (the old snapshot-only drawing jumped %.2f m)" % [worst, old_jump])
-	check(stalls == 0, "no stalls while it flies (%d)" % stalls)
+		if d > 0.001 or not moving.is_empty():
+			moving.append(d)
+	for i in range(1, moving.size() - 1):                         # (its first frame leaving the hand and its last, the impact: parts of a step)
+		var d2: float = moving[i]
+		worst = maxf(worst, absf(d2 - step))
+		if absf(d2 - step) > step * 0.15:
+			uneven += 1
+	var o_min := 99.0
+	var o_max := 0.0
+	for i in range(1, maxi(1, o_steps.size() - 1)):
+		o_min = minf(o_min, float(o_steps[i]))
+		o_max = maxf(o_max, float(o_steps[i]))
+	check(uneven == 0, "every step between frames its own speed's (%.2f m), within 15 %% (worst off by %.2f m; %d uneven; the snapshots jumped %.2f m; the old slide stepped %.2f to %.2f m)" % [step, worst, uneven, old_jump, o_min, o_max])
 	var end: Vector2 = samples[-1]
 	check(end.distance_to(target.pos) < 1.0, "it reaches the target before vanishing (ends %.2f m from it)" % end.distance_to(target.pos))
 	check(target.hp < 9999.0, "the arrow hit the target on the server")

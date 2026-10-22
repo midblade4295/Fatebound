@@ -20,6 +20,7 @@ const CLOSE_VERSION := 4001
 const CLOSE_FULL := 4002
 const DEFAULT_PORT := 8082
 const SNAP_HZ := 20.0            # 15 -> 20 (0.31.23); 10 -> 15 (0.18.4)
+const PROJ_HIST := 6                # 0.31.207: a projectile's positions kept (300 ms at 20 Hz: past the render delay)
 const INTERP_DELAY := 1.5 / SNAP_HZ   # 0.31.23: remote units are drawn this far behind the newest snapshot (75 ms)
 const HIST := 4
 # 0.31.170: the 5v5's shots too (a kind + 16 = a big one, the Ranger's DEADEYE)
@@ -708,6 +709,13 @@ static func _apply_proj(sim, msg: Dictionary, snap_t: float) -> void:
 	# 22 m/s sat still for 66 ms and then jumped 1.5 m. Now each keeps from/to: a new one starts at
 	# its spawn point (on the same one-interval-behind timeline as the units it flies between), and
 	# one that ended this snapshot gets one last slide to its impact point before it disappears.
+	# 0.31.207 (Kevin: "the projectiles aren't smooth when traveling"): from/to slid against the render clock, which runs
+	# INTERP_DELAY (75 ms+) behind the newest snapshot -- past each snapshot's interval -- so every 50 ms it jumped half a
+	# step ahead and sat still for a moment, and it vanished a snapshot before it reached what it hit. Now a projectile
+	# keeps a history of its positions with their server times, as the units do (net_hist), and is drawn on the same
+	# render clock (interpolate_at): between the two samples round it, past the newest along its velocity; one that
+	# ended keeps flying (a ghost) to its impact point, reached when it got there, then goes. net_to stays its newest
+	# position (the tests compare it with the server's).
 	var old := {}
 	for p in sim.projectiles:
 		old[p.id] = p
@@ -721,12 +729,15 @@ static func _apply_proj(sim, msg: Dictionary, snap_t: float) -> void:
 		var pid := int(v[0]) + 32768
 		var to := Vector2(float(v[1]) / 100.0, float(v[2]) / 100.0)
 		var prev: Dictionary = old.get(pid, {})
-		var from: Vector2 = prev.get("net_to", to)
-		var t0: float = float(prev.get("net_t", snap_t - 1.0 / SNAP_HZ))
 		var kc := int(v[5])
-		var p := {"id":pid, "pos":from, "net_from":from, "net_to":to, "vel":Vector2(float(v[3]) / 100.0, float(v[4]) / 100.0),
-			"kind":PROJ_KINDS[clampi(kc % 16, 0, PROJ_KINDS.size() - 1)], "team":-1,
-			"net_t":snap_t, "net_t0":t0, "net_dt":maxf(snap_t - t0, 0.001)}
+		var hist: Array = (prev.get("net_hist", []) as Array).duplicate()
+		if hist.is_empty() or float(hist[-1][0]) < snap_t:
+			hist.append([snap_t, to])
+		while hist.size() > PROJ_HIST:
+			hist.pop_front()
+		var p := {"id":pid, "pos":prev.get("pos", to), "net_to":to, "net_t":snap_t, "net_hist":hist,
+			"vel":Vector2(float(v[3]) / 100.0, float(v[4]) / 100.0),
+			"kind":PROJ_KINDS[clampi(kc % 16, 0, PROJ_KINDS.size() - 1)], "team":-1}
 		if kc >= 16:
 			p["big"] = true
 		sim.projectiles.append(p)
@@ -737,10 +748,23 @@ static func _apply_proj(sim, msg: Dictionary, snap_t: float) -> void:
 			ends[e.get("pid")] = e.pos
 	for id in old:
 		var gone: Dictionary = old[id]
-		if not seen.has(id) and ends.has(id) and not bool(gone.get("ghost", false)):
-			var last: Vector2 = gone.get("net_to", gone.pos)
-			var gp := {"id":id, "pos":last, "net_from":last, "net_to":ends[id], "vel":gone.vel,
-				"kind":gone.kind, "team":-1, "ghost":true}
+		if seen.has(id):
+			continue
+		if bool(gone.get("ghost", false)):
+			# still on its way to where it hit (the render clock is behind): kept until it gets there
+			if snap_t - float(gone.get("end_t", snap_t)) < 1.0:
+				sim.projectiles.append(gone)
+		elif ends.has(id) and gone.has("net_hist"):
+			# it hit (or ended) since the last snapshot: one last leg from its newest sample to the impact, at its speed
+			var hist2: Array = (gone.net_hist as Array).duplicate()
+			var last: Array = hist2[-1]
+			var endp: Vector2 = ends[id]
+			var speed := maxf((gone.vel as Vector2).length(), 1.0)
+			var t_end := minf(float(last[0]) + (last[1] as Vector2).distance_to(endp) / speed, snap_t)
+			t_end = maxf(t_end, float(last[0]) + 0.001)
+			hist2.append([t_end, endp])
+			var gp := {"id":id, "pos":gone.pos, "net_to":endp, "net_t":t_end, "net_hist":hist2, "vel":gone.vel, "kind":gone.kind,
+				"team":-1, "ghost":true, "end_t":t_end}
 			if gone.has("big"):
 				gp["big"] = true
 			sim.projectiles.append(gp)
@@ -753,7 +777,7 @@ static func interpolate(sim, alpha: float) -> void:
 		if u.has("net_to"):
 			u.pos = (u.net_from as Vector2).lerp(u.net_to, a)
 	for p in sim.projectiles:
-		if p.has("net_to"):
+		if p.has("net_from"):
 			p.pos = (p.net_from as Vector2).lerp(p.net_to, a)
 
 
@@ -797,7 +821,33 @@ static func interpolate_at(sim, rt: float, skip_id: String) -> void:
 				u.pos = (a2[1] as Vector2).lerp(b[1], f)
 				u.face = lerp_angle(float(a2[2]), float(b[2]), f)
 				break
+	# 0.31.207: projectiles on the same render clock (see _apply_proj): before their first sample, back along their
+	# velocity from it (they left the hand within the snapshot before; held there, at the hand, until then); between
+	# samples, along the line; past the newest, on along their velocity (a little); a ghost gone once the clock passes
+	# its impact
+	var done := false
 	for p in sim.projectiles:
-		if p.has("net_to"):
-			var pt := clampf((rt - float(p.get("net_t0", rt))) / maxf(float(p.get("net_dt", 1.0 / SNAP_HZ)), 0.001), 0.0, 1.2)
-			p.pos = (p.net_from as Vector2).lerp(p.net_to, pt)
+		if not p.has("net_hist"):
+			continue
+		var ph: Array = p.net_hist
+		if rt <= float(ph[0][0]):
+			p.pos = (ph[0][1] as Vector2) - (p.vel as Vector2) * minf(float(ph[0][0]) - rt, 1.0 / SNAP_HZ)
+			continue
+		var pn: Array = ph[-1]
+		if rt >= float(pn[0]):
+			if bool(p.get("ghost", false)):
+				p["done"] = true
+				done = true
+				p.pos = pn[1]
+				continue
+			p.pos = (pn[1] as Vector2) + (p.vel as Vector2) * minf(rt - float(pn[0]), 0.25)
+			continue
+		for k in range(ph.size() - 1, 0, -1):
+			var pa: Array = ph[k - 1]
+			if rt >= float(pa[0]):
+				var pb2: Array = ph[k]
+				var f := clampf((rt - float(pa[0])) / maxf(float(pb2[0]) - float(pa[0]), 0.001), 0.0, 1.0)
+				p.pos = (pa[1] as Vector2).lerp(pb2[1], f)
+				break
+	if done:
+		sim.projectiles = sim.projectiles.filter(func(p): return not bool(p.get("done", false)))

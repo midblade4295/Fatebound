@@ -2962,6 +2962,198 @@ static func _team_red(body: Node) -> void:
 # classes' 1.14 (the base classes were 1.0); an upgraded one still shows by its own model and its gold ring.
 const BODY_SCALE := 1.14
 
+# 0.31.207 (Kevin: "The match keeps getting stutters"): a wave of 36 lane minions was 36 bodies built in one frame --
+# the phone's log had a 100-350 ms frame every half minute (tools/hitch_bench.gd: +504 nodes in the frame the first wave
+# came). Now a minion's actor, when its minion goes, waits hidden in a pool (by body and team) for the next one; the
+# match's loading card fills the pool with a wave's worth (prefill_minions); and any other body still to build waits
+# its turn -- BUILD_PER_FRAME a frame (heroes never wait).
+const MINION_POOL_MAX := 30                     # (each body and team)
+const BUILD_PER_FRAME := 3
+var _minion_pool := {}                    # "minion_melee|0" -> [actor, ...]
+var _built_now := 0                       # bodies built this frame
+var pool_reused := 0                      # (tests, the bench)
+var _prefilling := false
+var pool_built := 0
+
+func _pool_key(u: Dictionary) -> String:
+	if not bool(u.get("minion", false)) or not MINION_LOOKS.has(str(u.get("mk", ""))) or u.has("look"):
+		return ""
+	return "%s|%d" % [look_key(u), vt(int(u.team))]
+
+func _pool_put(a: Dictionary) -> bool:
+	# a minion's actor, its minion gone: hidden, its animation still, kept for the next of its kind and side
+	var k := str(a.get("pool_key", ""))
+	if k == "" or not is_instance_valid(a.root) or a.get("body") == null or not is_instance_valid(a.body) or bool(a.get("vanish_on", false)):
+		return false
+	var list: Array = _minion_pool.get(k, [])
+	if list.size() >= MINION_POOL_MAX:
+		return false
+	if a.get("rag") != null:
+		_ragdoll_end(a)                           # (its bones back to the animation)
+	(a.root as Node3D).visible = false
+	if is_instance_valid(a.player):
+		(a.player as AnimationPlayer).active = false
+	list.append(a)
+	_minion_pool[k] = list
+	return true
+
+func _pool_take(k: String, u: Dictionary) -> Dictionary:
+	var list: Array = _minion_pool.get(k, [])
+	if list.is_empty():
+		return {}
+	var a: Dictionary = list.pop_back()
+	var root: Node3D = a.root
+	var p := Vector3(u.pos.x, Sim.height_at(u.pos), u.pos.y)
+	root.position = p
+	root.rotation = Vector3(0.0, float(u.get("face", 0.0)), 0.0)
+	root.visible = true
+	for kk in ["snap", "gp", "gy", "fog_vis", "whirl_spin", "kick_last", "hit_flip"]:
+		a.erase(kk)
+	a["snap"] = true
+	a.last = p
+	a.dead = false
+	a.busy_until = 0.0
+	a.clip = ""
+	a.team = u.team
+	a.cls = u.cls
+	a.up = u.up
+	# what flew out of his hands when he fell (copies) -- his own back in them
+	for slot in (a.body as Node3D).find_children("*", "BoneAttachment3D", true, false):
+		if str((slot as BoneAttachment3D).bone_name).begins_with("handslot"):
+			for w in (slot as Node).get_children():
+				if w is Node3D:
+					(w as Node3D).visible = true
+	(a.ring as MeshInstance3D).visible = true
+	if is_instance_valid(a.player):
+		(a.player as AnimationPlayer).active = true
+	_play(a, str(LOOKS.get(str(a.mlook) if str(a.get("mlook", "")) != "" else u.cls, LOOKS.knight).idle))
+	pool_reused += 1
+	return a
+
+func prefill_minions(per_lane: Dictionary, lanes := 3) -> Array:
+	# the match's loading card: bodies for a wave's minions on each side, hidden in the pool (a job a body, to spread
+	# them over the card's frames) -> [Callable, ...]
+	var jobs := []
+	for t in 2:
+		for mk in per_lane:
+			for i in int(per_lane[mk]) * lanes:
+				var team: int = t
+				var kind: String = mk
+				jobs.append(func():
+					var u := {"id":"__pool_%d_%s_%d" % [team, kind, i], "cls":"knight", "up":false, "minion":true, "mk":kind, "team":team,
+						"pos":Vector2(0.0, 300.0), "face":0.0, "state":"idle", "hp":1.0, "max_hp":1.0}
+					var k := _pool_key(u)
+					if k == "" or (_minion_pool.get(k, []) as Array).size() >= int(per_lane[kind]) * lanes:
+						return
+					var was := _built_now
+					_built_now = 0                # (the card's own budget: not the frame's)
+					_prefilling = true            # (a new body, not one from the pool)
+					var a := _ensure_actor(u)
+					_prefilling = false
+					_built_now = was
+					actors.erase(u.id)
+					if a.is_empty():
+						return
+					if not _pool_put(a):
+						(a.root as Node).queue_free()
+					elif (_minion_pool[k] as Array).size() == 1:
+						_warm_show(a))           # (the first of each kind and side: drawn once, beside you)
+	return jobs
+
+func pool_size() -> int:
+	var n := 0
+	for k in _minion_pool:
+		n += (_minion_pool[k] as Array).size()
+	return n
+
+var _pool_shown: Array = []               # the pooled bodies shown on the loading card (warm_end hides them)
+
+func _warm_show(a: Dictionary) -> void:
+	var me: Dictionary = actors.get(player_id, {})
+	if me.is_empty() or not is_instance_valid(me.root):
+		return
+	var root: Node3D = a.root
+	root.position = (me.root as Node3D).position + Vector3(randf_range(-3.0, 3.0), 0.0, randf_range(-3.0, 3.0))
+	root.visible = true
+	if is_instance_valid(a.player):
+		(a.player as AnimationPlayer).active = true
+	_pool_shown.append(a)
+
+func warm_fight() -> Array:
+	# the loading card: a fight's own looks once beside you -- a hit's spark, number and blood, a pool of it, a body
+	# falling and its weapons flying (the first of each drew late on the phone)
+	var jobs := []
+	jobs.append(func():
+		var me: Dictionary = actors.get(player_id, {})
+		if me.is_empty() or not is_instance_valid(me.root):
+			return
+		var at: Vector3 = (me.root as Node3D).position
+		var p2 := Vector2(at.x, at.z)
+		spark(at + Vector3(0, 1.3, 0), Color("#ffd27a"))
+		number(at + Vector3(0, 2.2, 0), "12", false)
+		number(at + Vector3(0.6, 2.2, 0), "12", true)
+		number(at + Vector3(-0.6, 2.2, 0), "+12", false, true)
+		blood_hit(p2 + Vector2(1.5, 0.0), p2, 40.0)
+		blood_pool(p2 + Vector2(2.0, 1.0)))
+	jobs.append(func():
+		for a in _pool_shown:
+			if is_instance_valid(a.root) and (a.root as Node3D).visible and a.get("rag") == null:
+				_drop_weapons(a, Vector3(0.0, 1.6, 0.0))
+				_ragdoll(a, Vector3(0.0, 1.6, 0.0))
+				return)
+	return jobs
+
+func warm_end() -> void:
+	# the loading card lifts: what it showed, gone (the bodies back in the pool, hidden; blood and loose weapons away)
+	for a in _pool_shown:
+		var k := str(a.get("pool_key", ""))
+		if not (_minion_pool.get(k, []) as Array).has(a) or not is_instance_valid(a.root):
+			continue                                   # (already taken for a minion)
+		if a.get("rag") != null:
+			_ragdoll_end(a)
+		(a.root as Node3D).visible = false
+		if is_instance_valid(a.player):
+			(a.player as AnimationPlayer).active = false
+	_pool_shown.clear()
+	for d in _debris:
+		if is_instance_valid(d.node):
+			(d.node as Node).queue_free()
+		if is_instance_valid(d.ground):
+			(d.ground as Node).queue_free()
+	_debris.clear()
+	for list in [_splats, _pools]:
+		for m in list:
+			(m.mi as MeshInstance3D).visible = false
+	for d in _drops:
+		d.on = false
+		(d.mi as MeshInstance3D).visible = false
+	for sh in _shocks:                             # (each shown again every frame it lasts)
+		if is_instance_valid(sh.node):
+			(sh.node as Node).queue_free()
+	_shocks.clear()
+
+const WARM_LOOKS := ["skel_minion", "skel_warrior", "skel_rogue", "skel_mage", "skel_brute", "skel_lord"]
+
+func warm_bodies(me_id: String) -> Array:
+	# the loading card: the jungle's monsters (they first come at 0:30, the Lord at 5:00) shown once beside you -- their
+	# materials made and drawn -- then gone (a job a body)
+	var jobs := []
+	for look in WARM_LOOKS:
+		var lk: String = look
+		jobs.append(func():
+			var a: Dictionary = actors.get(me_id, {})
+			if not LOOKS.has(lk) or a.is_empty() or not is_instance_valid(a.root):
+				return
+			var made := make_body(lk)
+			if made.is_empty():
+				return
+			var b: Node3D = made.body
+			add_child(b)
+			b.position = (a.root as Node3D).position + Vector3(randf_range(-2.0, 2.0), 0.0, randf_range(-2.0, 2.0))
+			b.scale = Vector3.ONE * BODY_SCALE
+			get_tree().create_timer(2.0).timeout.connect(b.queue_free))
+	return jobs
+
 func _ensure_actor(u: Dictionary) -> Dictionary:
 	var a: Dictionary = actors.get(u.id, {})
 	# The usual case first, without building keys: the actor exists and wears this class (0.31.78: this ran for every
@@ -2975,7 +3167,17 @@ func _ensure_actor(u: Dictionary) -> Dictionary:
 	if not a.is_empty() and u.state == "dead" and a.get("body") != null:
 		return a                                    # 0.31.20: the body stays as it fell until he respawns
 	var root: Node3D
+	var pk := _pool_key(u) if cosmetic.is_empty() else ""
 	if a.is_empty():
+		if pk != "" and not _prefilling:
+			var pa := _pool_take(pk, u)            # 0.31.207: a minion's body from the pool
+			if not pa.is_empty():
+				actors[u.id] = pa
+				return pa
+		if not bool(u.get("hero", false)) and _built_now >= BUILD_PER_FRAME:
+			return {}                              # (0.31.207: its turn next frame)
+		_built_now += 1
+		pool_built += 1
 		root = Node3D.new()
 		add_child(root)
 		root.position = Vector3(u.pos.x, 0, u.pos.y)
@@ -3010,6 +3212,7 @@ func _ensure_actor(u: Dictionary) -> Dictionary:
 		made.body.scale = Vector3.ONE * float(look.size)     # 0.31.166: the Wyrm, at its own size
 	a.body = made.body
 	a.player = made.player
+	a["pool_key"] = pk                            # (0.31.207: back to the pool when it goes)
 	_cape_setup(a)
 	a.cls = u.cls
 	a.up = u.up
@@ -3082,6 +3285,7 @@ func sync(dt: float) -> void:
 	_sync_blood(dt)
 	if prof_on: tp = _pv("pre.blood", tp)
 	var seen := {}
+	_built_now = 0                                 # 0.31.207: bodies built this frame (BUILD_PER_FRAME)
 	var planes: Array = camera.get_frustum() if anim_cull and is_instance_valid(camera) and camera.is_inside_tree() else []
 	anim_active = 0
 	# 0.31.160 (Kevin's phone log: the 5v5's view 12-16 ms a frame): per actor, only what changed -- the ground height
@@ -3173,6 +3377,9 @@ func sync(dt: float) -> void:
 	if prof_on: tp = _pv("actors", tp)
 	for id in actors.keys():
 		if not seen.has(id):
+			if _pool_put(actors[id]):                  # 0.31.207: a minion's body waits for the next one
+				actors.erase(id)
+				continue
 			if actors[id].get("rag") != null:
 				_ragdoll_end(actors[id])               # 0.31.160: its ground patch and its place among the RAG_MAX go too
 			actors[id].root.queue_free()
@@ -4048,7 +4255,11 @@ func _animate(a: Dictionary, u: Dictionary, vel: float) -> void:
 	else:
 		_play(a, str(look.idle))
 
+var ev_log = null                          # (tools/hitch_bench.gd: what happened, frame by frame)
+
 func on_event(e: Dictionary) -> void:
+	if ev_log != null:
+		ev_log.append(str(e.k) + ("/" + str(e.spell) if e.has("spell") else "") + ("/" + str(e.ult) if e.has("ult") else ""))
 	var a: Dictionary = actors.get(str(e.get("id", "")), {})
 	match str(e.k):
 		"attack":

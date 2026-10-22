@@ -725,6 +725,146 @@ func step(dt: float) -> void:
 			(e.fn as Callable).call(n, age / maxf(0.001, float(e.life)), age)
 	_step_holds()
 
+# ---------- the match's loading card (0.31.207) ----------
+# Kevin: "The match keeps getting stutters". Each look here is built the first time it's needed -- its particles' process
+# shader, its sprite material, the pipelines to draw them -- and on the phone the first of each in a match was a long
+# frame (tools/hitch_bench.gd: the long frames came with new particle materials and pipeline compiles). So behind the
+# match's loading card, in front of its camera, every look this match's heroes have is shown once on your own hero (a
+# job a frame): each hero's casts, Q and ultimate, the one-off events, the lasting states, the zones, a trap and each
+# projectile's trail -- then all of it cleared (clear_all) before the card lifts.
+const WARM_EVENTS := ["block_up", "pillar", "slam", "burst", "zap", "riposte", "flurry_hit", "trap_snap", "nova", "sanctuary",
+	"proj", "resurrect", "pierce_hit", "boom", "dodge", "meteor_warn", "meteor_hit"]
+const WARM_ZONES := ["consecrate", "caltrops", "static", "smoke", "wildgrowth", "thunderstorm", "pillar", "entangle"]
+const WARM_TRAILS := [["hammer", ""], ["pierce", ""], ["boulder", ""], ["bolt", ""], ["ball", ""], ["thorn", ""], ["fire", ""],
+	["fire", "missiles"], ["arrow", ""], ["arrow", "snare"]]
+const _Kits = preload("res://scripts/siege/moba_kits.gd")
+var warm_shown := 0                        # (tests: the looks the warm-up showed)
+
+func warm_jobs(me_id: String) -> Array:
+	# -> [Callable, ...], one a frame (siege_mode's warm-up)
+	var sim = view.sim
+	if sim == null or sim.moba == null or not sim.by_id.has(me_id):
+		return []
+	var jobs := []
+	var hids := {}
+	for u in sim.units:
+		var hid := str(u.get("hid", ""))
+		if bool(u.get("hero", false)) and hid != "" and not hids.has(hid):
+			hids[hid] = true
+			var hu: Dictionary = u
+			jobs.append(func(): _warm_hero(me_id, hu))
+	jobs.append(func(): _warm_events(me_id, hids.keys()))
+	jobs.append(func(): _warm_states(me_id))
+	jobs.append(func(): _warm_zones(me_id))
+	jobs.append(func(): _warm_trails(me_id))
+	return jobs
+
+func _warm_ev(me_id: String) -> Dictionary:
+	# a cast's event, every field a look reads, all on (or just ahead of) you
+	var me: Dictionary = view.sim.by_id.get(me_id, {})
+	var root := _root(me_id)
+	var p2: Vector2 = Vector2(root.position.x, root.position.z) if root != null else me.get("pos", Vector2.ZERO)
+	var f := Vector2(sin(float(me.get("face", 0.0))), cos(float(me.get("face", 0.0))))
+	var ahead := p2 + f * 4.0
+	return {"id":me_id, "team":int(me.get("team", 0)), "pos":p2, "dir":f, "to":ahead, "c":ahead, "from":p2, "r":3.0, "dur":1.0,
+		"delay":0.6, "burn":1.0, "target":me_id, "ids":[me_id], "pts":[ahead, ahead + f * 2.0], "arc":0.6, "len":4.0}
+
+func _warm_hero(me_id: String, h: Dictionary) -> void:
+	var a: Dictionary = view.actors.get(me_id, {})
+	var me: Dictionary = view.sim.by_id.get(me_id, {})
+	if a.is_empty() or me.is_empty() or not is_instance_valid(a.root):
+		return
+	var at: Vector3 = (a.root as Node3D).position
+	var hid := str(h.hid)
+	for slot in ["q", "w", "e"]:
+		var sp := str(_Kits.kit(hid, slot).get("id", ""))
+		if sp != "":
+			var e := _warm_ev(me_id)
+			e.merge({"k":"spell", "hid":hid, "slot":slot, "spell":sp}, true)
+			cast(sp, e, a, at, hid)
+			warm_shown += 1
+	if _Kits.kit_q(hid) == "":
+		var ab := str(view.sim.ability_of(h))
+		if ab != "":
+			q(ab, a, me)                               # (an old class's Q)
+			warm_shown += 1
+	var eu := _warm_ev(me_id)
+	eu.merge({"k":"ult", "ult":hid, "hid":hid, "spell":str(_Kits.kit(hid, "r").get("id", ""))}, true)
+	ult(hid, eu, a, at)
+	warm_shown += 1
+
+func _warm_events(me_id: String, hids: Array) -> void:
+	for k in WARM_EVENTS:
+		for spell in (["keg", "roots"] if k == "burst" else [""]):
+			var e := _warm_ev(me_id)
+			e.merge({"k":k, "spell":spell, "kind":"pierce", "pos":e.c}, true)
+			event(e)
+			warm_shown += 1
+	# a landing and a strike look like whose they are: the Barbarian's, the Dragoon's, the Golem's; the Duelist's
+	var me: Dictionary = view.sim.by_id.get(me_id, {})
+	var hid0 := str(me.get("hid", ""))
+	for hid in hids:
+		if hid in ["barbarian", "dragoon", "golem", "duelist"]:
+			me["hid"] = hid
+			var e := _warm_ev(me_id)
+			e.merge({"k":"slam", "pos":e.c}, true)
+			event(e)
+			e["k"] = "flurry_hit"
+			event(e)
+			warm_shown += 2
+	me["hid"] = hid0
+
+func _warm_states(me_id: String) -> void:
+	var a: Dictionary = view.actors.get(me_id, {})
+	var me: Dictionary = view.sim.by_id.get(me_id, {})
+	if a.is_empty() or me.is_empty() or not is_instance_valid(a.root):
+		return
+	var t: float = view.sim.time
+	var fake: Dictionary = me.duplicate()
+	for k in ["shield_until", "slow_until", "amp_until", "skin_until", "dr_until", "bl_until", "ud_until"]:
+		fake[k] = t + 5.0
+	fake["shield"] = 1.0
+	fake["riposte"] = {}
+	fake["dots"] = [{}]
+	fake["state"] = "dash"
+	fake["buffs"] = {"arcane":t + 5.0, "ember":t + 5.0, "lord":t + 5.0}
+	sync_unit(me_id, fake, a, true)               # (the real one, the next frame, lets them all go)
+	warm_shown += 1
+
+func _warm_zones(me_id: String) -> void:
+	var e := _warm_ev(me_id)
+	var i := 0
+	for sp in WARM_ZONES:
+		i += 1
+		zone({"zid":-1000 - i, "spell":sp, "team":int(e.team), "owner":me_id, "at":e.c, "r":2.5, "until":view.sim.time + 1.0})
+		warm_shown += 1
+	var tn := trap_node(_g(e.c, 0.05), Color.WHITE)
+	_live.append({"node":tn, "t0":_time, "life":0.5, "fn":Callable()})
+	warm_shown += 1
+
+func _warm_trails(me_id: String) -> void:
+	var root := _root(me_id)
+	if root == null:
+		return
+	for tk in WARM_TRAILS:
+		var n: Node3D = view._make_projectile(str(tk[0]))
+		n.position = root.position + Vector3(0.0, 1.2, 0.0)
+		proj_trail(n, {"kind":str(tk[0]), "spell":str(tk[1]), "vel":Vector2(0.0, 10.0)})
+		_live.append({"node":n, "t0":_time, "life":0.5, "fn":Callable()})
+		warm_shown += 1
+
+func clear_all() -> void:
+	# everything shown or held, gone at once (the end of the loading card's warm-up, before the match is seen)
+	for e in _live:
+		if is_instance_valid(e.node):
+			(e.node as Node).queue_free()
+	_live.clear()
+	for key in _holds.keys():
+		release(key, true)
+	_holds.clear()
+	for d in [_shield_style, _amp_style, _skin_style, _dash_style]:
+		(d as Dictionary).clear()
+
 # ---------- handy ----------
 func _g(p2: Vector2, up := 0.1) -> Vector3:
 	return Vector3(p2.x, Sim.height_at(p2) + up, p2.y)

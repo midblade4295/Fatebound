@@ -970,6 +970,7 @@ const _TitleLogo = preload("res://scripts/app/title_logo.gd")
 const _COVER_WALL := "res://assets/ui/v2/bg_title_wall.webp"
 var _warm: Dictionary = {}
 var _warm_done := false
+var warm_max := WARM_MAX                   # (tools/hitch_bench.gd: longer, for a desktop's software renderer)
 var _cover: ColorRect = null
 var _cover_sub: Label = null
 var _cover_t := 0.0
@@ -1036,7 +1037,7 @@ func _warm_begin() -> void:
 		for q in [Keep.C, Keep.FOUNTAIN, Keep.gate_c(1) + Vector2(0.0, -6.0)]:      # (0.31.165: the keeps)
 			spots.append(Sim._m(t, q))
 	spots.append(Vector2.ZERO)
-	_warm = {"cover": _cover, "t": 0.0, "last": -1, "still": 0.0, "spots": spots, "i": 0, "fade": -1.0}
+	_warm = {"cover": _cover, "t": 0.0, "last": -1, "still": 0.0, "spots": spots, "i": 0, "fade": -1.0, "fx": [], "pool": [], "fight": [], "shown": []}
 
 func _warm_step(delta: float) -> bool:
 	# True while the match should wait behind the cover.
@@ -1053,6 +1054,28 @@ func _warm_step(delta: float) -> bool:
 		view.cam_override = []
 		view.snap_camera()
 		w.i = i + 1
+		# 0.31.207 (Kevin: "The match keeps getting stutters"): with the camera on you, every look of this match's heroes
+		# once (spell_fx.warm_jobs), then a wave's minion bodies into the view's pool (prefill_minions)
+		if view.fxs != null:
+			w.fx = view.fxs.warm_jobs(hud.player_id)
+		if sim.moba != null:
+			(w.fx as Array).append_array(view.warm_bodies(hud.player_id))
+			w.pool = view.prefill_minions({"melee":6, "caster":6, "siege":1})     # (two waves' worth: they overlap)
+			w.fight = view.warm_fight()                                       # (after: a pooled body falls)
+	else:
+		# a look a frame and the pool's bodies four a frame, then the fight (on a pooled body); what the view itself
+		# makes for a look (smoke, blasts, roots, numbers) is noted, to hide when the card lifts
+		var pool: Array = w.pool
+		for k in 4:
+			if not pool.is_empty():
+				(pool.pop_front() as Callable).call()
+		var list: Array = w.fx if not (w.fx as Array).is_empty() else (w.fight if pool.is_empty() else [])
+		if not list.is_empty():
+			var shown: Array = w.shown
+			var grab := func(n: Node): shown.append(n)
+			view.child_entered_tree.connect(grab)
+			(list.pop_front() as Callable).call()
+			view.child_entered_tree.disconnect(grab)
 	var c := 0
 	for k in [RenderingServer.RENDERING_INFO_PIPELINE_COMPILATIONS_CANVAS, RenderingServer.RENDERING_INFO_PIPELINE_COMPILATIONS_MESH,
 			RenderingServer.RENDERING_INFO_PIPELINE_COMPILATIONS_SURFACE, RenderingServer.RENDERING_INFO_PIPELINE_COMPILATIONS_DRAW,
@@ -1066,9 +1089,12 @@ func _warm_step(delta: float) -> bool:
 	_cover_tick(delta)
 	var cover: ColorRect = w.cover
 	if float(w.fade) < 0.0:
-		if (int(w.i) > spots.size() * 2 and float(w.t) >= WARM_MIN and float(w.still) >= WARM_STILL) or float(w.t) >= WARM_MAX:
+		var jobs_done: bool = (w.fx as Array).is_empty() and (w.pool as Array).is_empty() and (w.fight as Array).is_empty()
+		if (int(w.i) > spots.size() * 2 and jobs_done and float(w.t) >= WARM_MIN and float(w.still) >= WARM_STILL) or float(w.t) >= warm_max:
 			w.fade = 0.0
-			diag.mark("warm-up %.1f s, %d pipeline compiles" % [float(w.t), c])
+			diag.mark("warm-up %.1f s, %d pipeline compiles, %d looks shown, %d bodies pooled%s" % [float(w.t), c,
+				int(view.fxs.warm_shown) if view.fxs != null else 0, view.pool_size(), "" if jobs_done else " (cut short)"])
+			_warm_clear()
 		return true
 	w.fade = float(w.fade) + delta
 	cover.modulate.a = clampf(1.0 - float(w.fade) / 0.3, 0.0, 1.0)
@@ -1079,6 +1105,19 @@ func _warm_step(delta: float) -> bool:
 		_warm = {}
 		return false
 	return float(w.fade) < 0.15
+
+func _warm_clear() -> void:
+	# the warm-up's looks gone before the match is seen (the view's own go on their timers, hidden till then)
+	if is_instance_valid(view) and view.fxs != null:
+		view.fxs.clear_all()
+	if is_instance_valid(view):
+		view.warm_end()
+	for n in _warm.get("shown", []):
+		if is_instance_valid(n) and n is Node3D and not view.proj_nodes.values().has(n):
+			(n as Node3D).visible = false
+	_warm["fx"] = []
+	_warm["pool"] = []
+	_warm["fight"] = []
 
 func _process(delta: float) -> void:
 	if not _build_queue.is_empty():

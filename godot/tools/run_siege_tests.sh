@@ -54,6 +54,10 @@ run meta_economy_test    META_ECONOMY_PASS        120
 run app_flow_test        APP_FLOW_PASS            150
 run app_scroll_test      APP_SCROLL_PASS          60
 run net_interp_test      NET_INTERP_PASS          60
+# 0.31.207 (Kevin: "The match keeps getting stutters"): the loading card shows every look once and clears it all; the
+# lane minions' bodies from a pool, any other body BUILD_PER_FRAME a frame
+run fx_warm_test         FX_WARM_PASS             120
+run minion_pool_test     MINION_POOL_PASS         240
 # The online 5v5 (0.31.170): the snapshot protocol end to end against a server's 5v5 of bots (8 minutes of match, a hero
 # swapped for a player's, a phone joining from a keyframe); then the real server (8121, stand-in old one on 8122) with
 # phones and the game client -- heroes picked and owned, the mirrors agreeing, the 5v5's buttons, the end, the pay
