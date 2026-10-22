@@ -6585,3 +6585,39 @@ shop). Everything it sells, every price and every button stays; the look and the
   widened it and app_flow_test pass.
 - Preview APK: build/Fatebound-Siege-0.31.202-fatebound.apk (33,027,036 bytes, Vulkan only, preview key), sha256
   87fd7814608ab0fd40116a9d2dfd30fd68e20002e508fde15fd760321144add8. Sent to Kevin with the before/after sheet.
+
+## 0.31.203 — the weekly sale
+Kevin: "For featured outfits, let's make them discounted. A new set of on sale skins will rotate once per week. Let's
+make the graphic of the features look very eye catching. Use eleven or meshy if needed".
+- The economy (economy.gd): the week's three featured outfits (the same rotation, a new three every Monday 00:00 UTC,
+  every outfit round in 12 weeks) are the WEEKLY SALE -- SALE_OFF 50 / 35 / 25 % in the week's order, gems and (the
+  Frostbound line) gold; prices round to 5 gems / 500 gold (an epic 375 / 490 / 565, a rare 195 / 255 / 295, its gold
+  20K / 26K / 30K). Eco.skin_offer(id, now): what an outfit costs now; week_start; featured_outfits_week.
+- profile.gd: a new op, buy_sale [id, week, gold] -- the week whose sale the buyer saw; the server takes this week's,
+  or last week's for SALE_GRACE (a day) after it ended (a buy still on its way, a phone offline at Sunday midnight),
+  refuses next week's, one not in that week's sale, one owned. buy_outfit(id, gold): what every BUY calls (the sale's
+  op on a sale outfit, buy_skin / buy_skin_gold otherwise). _got_skin: the three buys' shared ending.
+- The look (screens.gd), with ElevenLabs art (gpt-image-2.5, 12 images, ~2,280 credits; assets/ui/v2/sale: the stage
+  picked of four, the ribbon and starburst keyed off green): the jump bar's SALE in red with the starburst; WEEKLY SALE
+  on a red silk ribbon with gold trim, a shine running along it, stars round it, beating gently; "ENDS IN 1D 20:00:00"
+  ticking each second and "UP TO 50% OFF"; the stage a treasure hall with its curtains drawn back, the hero on its
+  pedestal (the art slid and sized so it's under his feet), rays and a halo behind him, a pool of light, confetti
+  falling (CPUParticles2D, gold, red, white), a gold frame glowing warm; the starburst with "-50% OFF" on the corner
+  beating like a heart; the full price struck through, "SAVE 195", the gold the same; the sale's price on a bigger
+  button that shines and pulses; the three picks with their own starbursts; in the grid a sale outfit's card in a gold
+  frame with its starburst, the sale's price, the old one struck. Reduce motion: no confetti, stars or beating.
+- The hero window (champion_window.gd): the strip's price "◆ 195  -50%", "WEEKLY SALE -50% · was 390 gems", the BUY
+  box at the sale's price; the shop's confirm says "Weekly sale: 50% off."
+- The live server must have this code before a sale buy online sticks: until Kevin deploys it the server doesn't know
+  buy_sale and the app undoes the buy ("The server didn't accept that change"). Full-price buys work either way; an
+  older app pays full price (buy_skin), as it shows.
+- The ui content pack changes (the three pictures): ui-4ce52e383562.pck (40.7 MB) built and uploaded to the
+  content-packs branch (f854891); players download the ui pack again once.
+- tests/weekly_sale_test.gd (in the suite): the sale, its prices, buy_sale replayed on a server copy, the grace and
+  its end, refusals, the shop's ribbon, starbursts, prices, struck price and buying from the stage.
+- tests/app_scroll_test.gd looks for its mid-shop button down to 700 px (the ribbon moved the featured one to ~616).
+- The quick suite: 100 of 101 passed (weekly_sale_test among them), app_scroll_test failed on the moved button; with
+  the window widened it, app_flow_test and weekly_sale_test pass.
+- This week's sale (from 2026-10-19): Mammoth Hunter Barbarian -50 % (375), Lionguard Knight -35 % (490), Wolfstalker
+  Ranger -25 % (565); next week Geode Golem, Golden Rose Duelist, Privateer Musketeer.
+- Version 0.31.203, versionCode 289, SERVER_BUILD 0.31.203.
