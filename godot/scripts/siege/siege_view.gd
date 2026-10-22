@@ -11,6 +11,8 @@ const PATH_TEX := preload("res://assets/terrain/path.png")       # (the castle f
 const DIRT_TEX := preload("res://assets/terrain/dirt.png")       # 0.31.126: the map's dirt paths (tools/make_dirt_texture.py)
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 const WeaponFx = preload("res://scripts/siege/weapon_fx.gd")
+const SpellFx = preload("res://scripts/siege/spell_fx.gd")      # 0.31.201: the abilities' effects
+var fxs = null                                                   # (SpellFx, a child; made in setup_steps)
 const EyeFx = preload("res://scripts/siege/eye_fx.gd")         # 0.31.192: the Necromancer's glowing, smoking eyes
 const WyrmBody = preload("res://scripts/siege/wyrm_body.gd")   # 0.31.166: the Grave Wyrm (a body without a rig)
 const Foliage = preload("res://scripts/siege/foliage.gd")      # 0.31.173: the Meshy trees and bushes
@@ -192,6 +194,10 @@ func setup_steps(s) -> Array:
 	# (build_times); the parts are independent, in this order. The world draws, and its pipelines compile, as it grows.
 	sim = s
 	build_times = {}
+	if fxs == null:
+		fxs = SpellFx.new()
+		fxs.view = self
+		add_child(fxs)
 	my_side = int(sim.by_id.get(player_id, {}).get("team", 0))
 	if my_side != _kit_side:
 		_kit_merged.clear()                 # (their tint was for the other side)
@@ -3182,6 +3188,8 @@ func sync(dt: float) -> void:
 		_sync_falling(dt)                          # 0.31.172: a tower's broken-off pieces
 	if prof_on: tp = _pv("moba", tp)
 	_step_fx()
+	if fxs != null:
+		fxs.step(dt)                               # 0.31.201: the abilities' effects
 	if prof_on: tp = _pv("fx", tp)
 	_update_camera(dt)
 	if prof_on: tp = _pv("camera", tp)
@@ -3616,61 +3624,17 @@ func _moba_fx(e: Dictionary) -> void:
 	var a: Dictionary = actors.get(str(e.get("id", "")), {})
 	match str(e.k):
 		"ult":
-			var col := Color(str(ULT_COL.get(str(e.ult), "#ffffff")))
+			# 0.31.201: each ultimate its own look (spell_fx.gd ult); the Ranger's arrows still fall here (_sync_rains)
 			var at: Vector3 = (a.root as Node3D).position if not a.is_empty() and is_instance_valid(a.root) else _ground(e.pos)
-			match str(e.ult):
-				"knight", "priest", "necromancer":
-					ring_at(at, col, 2.0 * float(sim.moba.BULWARK_R) - 0.4 if str(e.ult) == "knight" else 3.0, 0.8)
-					for id in e.get("ids", []):
-						var oa: Dictionary = actors.get(str(id), {})
-						if oa.is_empty() or not is_instance_valid(oa.root):
-							continue
-						var op: Vector3 = (oa.root as Node3D).position
-						ring_at(op, col, 2.0, 0.7)
-						for i in 6:
-							spark(op + Vector3(randf_range(-0.5, 0.5), 0.3 + randf() * 2.0, randf_range(-0.5, 0.5)), col)
-				"barbarian", "berserker":
-					for i in 2:
-						ring_at(at, col, 3.0 + 2.0 * i, 0.5 + 0.2 * i)
-					for i in 12:
-						spark(at + Vector3(randf_range(-0.7, 0.7), 0.4 + randf() * 1.8, randf_range(-0.7, 0.7)), col)
-					shake(0.25)
-				"rogue":
-					for p2 in [e.get("from", e.pos), e.get("to", e.pos)]:
-						var q := _ground(p2, 0.2)
-						for i in 10:
-							spark(q + Vector3(randf_range(-0.6, 0.6), randf() * 1.8, randf_range(-0.6, 0.6)), col)
-					ring_at(_ground(e.get("to", e.pos)), col, 2.4, 0.5)
-				"ranger":
-					var c2: Vector2 = e.get("c", e.pos)              # 0.31.160: was "at", the event's time stamp (the phone log's script error)
-					ring_at(_ground(c2), col, 2.0 * float(e.get("r", 4.5)) - 0.4, float(e.get("dur", 2.0)))
-					_rain_fx.append({"at":c2, "r":float(e.get("r", 4.5)), "until":_time + float(e.get("dur", 2.0)), "next":_time})
-				"mage", "crusader":
-					var r := float(e.get("r", 6.0))
-					for i in 3:
-						ring_at(at, col, 2.0 * r - 0.4 - i * 1.5, 0.5 + 0.15 * i)
-					if str(e.ult) == "mage":
-						_pack_explosion("light", at + Vector3(0, 0.6, 0), 1.6)
-					shockwave(at + Vector3(0, 0.3, 0), r)
-					for i in 16:
-						var ang := randf() * TAU
-						spark(at + Vector3(cos(ang) * r * 0.7, 0.4 + randf(), sin(ang) * r * 0.7), col)
-					shake(0.45)
-				"assassin", "sniper", "archmage":
-					ring_at(at, col, 2.6, 0.6)
-					for i in 8:
-						spark(at + Vector3(randf_range(-0.5, 0.5), 0.4 + randf() * 1.6, randf_range(-0.5, 0.5)), col)
-				_:
-					var sp := str(e.get("spell", ""))      # 0.31.168: the six new heroes' (moba_kits.gd ult)
-					if sp != "":
-						if not a.is_empty() and NEW_ULT_CLIP.has(sp):
-							_play(a, str(NEW_ULT_CLIP[sp]), 1.2, 0.45)
-						_new_spell_fx(sp, e, a, at, Color(str(SPELL_COL.get(sp, "#ffffff"))))
+			var sp := str(e.get("spell", ""))
+			if sp != "" and not a.is_empty() and NEW_ULT_CLIP.has(sp):
+				_play(a, str(NEW_ULT_CLIP[sp]), 1.2, 0.45)
+			if str(e.ult) == "ranger":
+				var c2: Vector2 = e.get("c", e.pos)
+				_rain_fx.append({"at":c2, "r":float(e.get("r", 4.5)), "until":_time + float(e.get("dur", 2.0)), "next":_time})
+			fxs.ult(str(e.ult), e, a, at)
 		"flurry_hit":
-			var fp := _ground(e.pos, 0.2)
-			for i in 6:
-				spark(fp + Vector3(randf_range(-0.5, 0.5), 0.3 + randf() * 1.5, randf_range(-0.5, 0.5)), Color("#9a6bff"))
-			ring_at(fp, Color("#9a6bff"), 1.4, 0.35)
+			fxs.event(e)
 		"lord_slam":
 			var lp := _ground(e.pos, 0.2)
 			ring_at(lp, Color("#c9a6ff"), 2.0 * float(sim.moba.LORD_SLAM_R) - 0.4, 0.5)
@@ -3791,66 +3755,11 @@ func _kit_fx(e: Dictionary) -> void:
 			if not a.is_empty() and SPELL_CLIP.has(sp):
 				_play(a, str(SPELL_CLIP[sp]), 1.4 if sp != "charge" else 1.8, 0.45)
 			var at: Vector3 = (a.root as Node3D).position if shown else _ground(e.pos)
-			match sp:
-				"rally", "dazzle", "consecrate":
-					var r := float(e.get("r", 4.0))
-					for i in 2:
-						ring_at(at, col, 2.0 * r - 0.4 - 1.2 * i, 0.55 + 0.15 * i)
-					for i in 10:
-						var ang := randf() * TAU
-						spark(at + Vector3(cos(ang) * r * 0.6, 0.3 + randf() * 1.2, sin(ang) * r * 0.6), col)
-					if sp == "dazzle":
-						_pack_explosion("light", at + Vector3(0, 1.2, 0), 0.7)
-				"bash", "charge", "tumble", "leap", "bloodlust", "frenzy", "manashield", "poison", "trap":
-					ring_at(at, col, 2.2, 0.45)
-					for i in 6:
-						spark(at + Vector3(randf_range(-0.5, 0.5), 0.3 + randf() * 1.4, randf_range(-0.5, 0.5)), col)
-				"shadowstep", "blink":
-					for p2 in [e.get("from", e.pos), e.get("to", e.pos)]:
-						var q := _ground(p2, 0.2)
-						for i in 8:
-							spark(q + Vector3(randf_range(-0.5, 0.5), randf() * 1.8, randf_range(-0.5, 0.5)), col)
-						ring_at(q, col, 1.8, 0.4)
-				"knives":
-					var d2: Vector2 = e.get("dir", Vector2(0, 1))
-					var r2 := float(e.get("r", 5.0))
-					for i in 14:
-						var off := d2.rotated(randf_range(-0.7, 0.7)) * randf_range(0.8, r2)
-						spark(_ground((e.pos as Vector2) + off, 0.9 + randf() * 0.4), col)
-				"caltrops", "pillar":
-					var c2: Vector2 = e.get("c", e.pos)
-					for i in 8:
-						spark(_ground(c2 + Vector2(randf_range(-1.2, 1.2), randf_range(-1.2, 1.2)), 0.2 + randf() * 0.6), col)
-				"holylight", "boneshield", "curse", "mark":
-					var tu: Dictionary = sim.by_id.get(str(e.get("target", "")), {})
-					if not tu.is_empty():
-						var tp := _ground(tu.pos, 0.1)
-						ring_at(tp, col, 2.4, 0.6)
-						for i in (14 if sp == "holylight" else 8):
-							spark(tp + Vector3(randf_range(-0.4, 0.4), randf() * (3.2 if sp == "holylight" else 1.8), randf_range(-0.4, 0.4)), col)
-				_:
-					_new_spell_fx(sp, e, a, at, col)        # 0.31.168: the six new heroes'
-		"slam":
-			var sp2 := _ground(e.pos, 0.2)
-			var r3 := float(e.get("r", 2.5))
-			ring_at(sp2, Color("#e0c9a0"), 2.0 * r3, 0.5)
-			shockwave(sp2, r3)
-			for i in 10:
-				spark(sp2 + Vector3(randf_range(-r3, r3) * 0.6, 0.2 + randf() * 0.8, randf_range(-r3, r3) * 0.6), Color("#c8b89a"))
-			var me: Dictionary = sim.by_id.get(player_id, {})
-			if not me.is_empty() and (me.pos as Vector2).distance_to(e.pos) < 12.0:
-				shake(0.25)
-		"pillar":
-			var pp := _ground(e.c, 0.2)
-			_pack_explosion("light", pp + Vector3(0, 0.8, 0), 1.3)
-			ring_at(pp, Color("#ff8a3a"), 2.0 * float(e.r), 0.55)
-			for i in 12:
-				spark(pp + Vector3(randf_range(-1.0, 1.0), randf() * 3.0, randf_range(-1.0, 1.0)), Color("#ffb04a"))
+			fxs.cast(sp, e, a, at, str(e.get("hid", "")))     # 0.31.201: each its own look (spell_fx.gd)
+		"slam", "pillar", "burst", "zap", "riposte":
+			fxs.event(e)                               # 0.31.201 (spell_fx.gd event)
 		"trap_snap":
-			var tp2 := _ground(e.pos, 0.15)
-			ring_at(tp2, Color("#a08060"), 1.6, 0.4)
-			for i in 6:
-				spark(tp2 + Vector3(randf_range(-0.3, 0.3), randf() * 0.6, randf_range(-0.3, 0.3)), Color("#d8d0c0"))
+			fxs.event(e)
 			if _trap_nodes.has(int(e.trap)):
 				(_trap_nodes[int(e.trap)] as Node3D).queue_free()
 				_trap_nodes.erase(int(e.trap))
@@ -3858,115 +3767,6 @@ func _kit_fx(e: Dictionary) -> void:
 			if _trap_nodes.has(int(e.trap)):
 				(_trap_nodes[int(e.trap)] as Node3D).queue_free()
 				_trap_nodes.erase(int(e.trap))
-		"burst":                                        # 0.31.168: the Musketeer's keg goes off, the Druid's roots burst up
-			var bp := _ground(e.c, 0.2)
-			var br := float(e.get("r", 2.0))
-			if str(e.spell) == "keg":
-				_pack_explosion("light", bp + Vector3(0, 0.5, 0), 1.2)
-				ring_at(bp, Color("#ff9a3a"), 2.0 * br, 0.5)
-				shockwave(bp, br)
-				var me2: Dictionary = sim.by_id.get(player_id, {})
-				if not me2.is_empty() and (me2.pos as Vector2).distance_to(e.c) < 12.0:
-					shake(0.25)
-			else:
-				ring_at(bp, Color("#6fbf3a"), 2.0 * br, 0.7)
-				for i in 12:
-					var ang := randf() * TAU
-					spark(bp + Vector3(cos(ang) * br * 0.5, randf() * 1.6, sin(ang) * br * 0.5), Color("#7fd24a"))
-				_vines(bp, br)
-		"zap":                                          # 0.31.168: a THUNDERSTORM bolt
-			var zp := _ground(e.c, 0.1)
-			_bolt_line(zp + Vector3(randf_range(-1.0, 1.0), 9.0, randf_range(-1.0, 1.0)), zp + Vector3(0, 0.4, 0), Color("#cfe6ff"), 0.3, 1.6)
-			ring_at(zp, Color("#7fb8ff"), 1.6, 0.35)
-			for i in 5:
-				spark(zp + Vector3(randf_range(-0.4, 0.4), randf() * 0.8, randf_range(-0.4, 0.4)), Color("#dff0ff"))
-		"riposte":                                      # 0.31.168: the Duelist answers
-			var rp := _ground(e.pos, 1.0)
-			ring_at(rp - Vector3(0, 0.9, 0), Color("#ffe27a"), 1.8, 0.4)
-			for i in 8:
-				spark(rp + Vector3(randf_range(-0.4, 0.4), randf_range(-0.4, 0.6), randf_range(-0.4, 0.4)), Color("#fff4c0"))
-
-# ---------- 0.31.168: the six new heroes' spells and ultimates ----------
-func _new_spell_fx(sp: String, e: Dictionary, a: Dictionary, at: Vector3, col: Color) -> void:
-	# each cast's burst (the ultimates come here too: _moba_fx "ult", e.spell their id)
-	match sp:
-		"boulder", "feint", "smokeroll", "vault", "thrust", "stoneskin", "riposte", "rejuv", "barkskin":
-			var tu: Dictionary = sim.by_id.get(str(e.get("target", "")), {})
-			var tp: Vector3 = _ground(tu.pos, 0.1) if not tu.is_empty() else at
-			ring_at(tp, col, 2.2 if sp != "stoneskin" else 2.8, 0.5)
-			for i in (12 if sp in ["stoneskin", "barkskin", "rejuv"] else 6):
-				spark(tp + Vector3(randf_range(-0.5, 0.5), 0.3 + randf() * 1.6, randf_range(-0.5, 0.5)), col)
-			if sp == "smokeroll":
-				_pack_explosion("light", at + Vector3(0, 0.4, 0), 0.5)
-		"quake":
-			var r := float(e.get("r", 4.0))
-			ring_at(at, col, 2.0 * r - 0.4, 0.5)
-			shockwave(at, r)
-			for i in 12:
-				var ang := randf() * TAU
-				spark(at + Vector3(cos(ang) * r * 0.6, 0.2 + randf() * 0.6, sin(ang) * r * 0.6), Color("#8f8a7c"))
-			_shake_near(e.pos, 10.0, 0.25)
-		"sweep", "gust", "buckshot":
-			var d: Vector2 = e.get("dir", Vector2(0, 1))
-			var r2 := float(e.get("r", 4.0))
-			var spread: float = {"sweep":1.0, "gust":0.8, "buckshot":0.45}[sp]
-			for i in (16 if sp != "sweep" else 12):
-				var off := d.rotated(randf_range(-spread, spread)) * randf_range(0.8, r2)
-				spark(_ground((e.pos as Vector2) + off, 0.6 + randf() * 0.8), col)
-			if sp == "buckshot":
-				var mz := _ground((e.pos as Vector2) + d * 1.0, 1.3)
-				_pack_explosion("light", mz, 0.35)
-		"impale":
-			var d2: Vector2 = e.get("dir", Vector2(0, 1))
-			for i in 10:
-				spark(_ground((e.pos as Vector2) + d2 * (float(i) / 10.0) * float(e.get("len", 6.0)), 1.0), col)
-		"chain":
-			var pts: Array = e.get("pts", [])
-			for i in range(pts.size() - 1):
-				var pa := _ground(pts[i], 1.3)
-				var pb := _ground(pts[i + 1], 1.1)
-				_bolt_line(pa, pb, Color("#dff0ff"), 0.45, 0.6)
-				for j in 4:
-					spark(pb + Vector3(randf_range(-0.3, 0.3), randf_range(-0.3, 0.5), randf_range(-0.3, 0.3)), col)
-		"static", "keg", "entangle":
-			var c2: Vector2 = e.get("c", e.pos)
-			if sp == "keg":
-				_lob(at + Vector3(0, 1.4, 0), _ground(c2, 0.3), float(e.get("delay", 0.8)), Color("#6a4a2a"))
-			else:
-				for i in 8:
-					spark(_ground(c2 + Vector2(randf_range(-1.2, 1.2), randf_range(-1.2, 1.2)), 0.2 + randf() * 0.6), col)
-		"landslide":
-			for i in 2:
-				ring_at(at, col, 3.0 + 2.0 * i, 0.5 + 0.2 * i)
-			for i in 14:
-				spark(at + Vector3(randf_range(-0.8, 0.8), 0.2 + randf() * 1.2, randf_range(-0.8, 0.8)), Color("#8f8a7c"))
-			_shake_near(e.pos, 12.0, 0.3)
-		"dragondive":
-			ring_at(at, col, 2.6, 0.5)
-			for i in 10:
-				spark(at + Vector3(randf_range(-0.5, 0.5), 0.3 + randf() * 2.2, randf_range(-0.5, 0.5)), col)
-			ring_at(_ground(e.get("to", e.pos), 0.15), Color("#ff3a2a"), 5.0, 0.9)      # where he'll come down
-		"challenge":
-			var tu2: Dictionary = sim.by_id.get(str(e.get("target", "")), {})
-			if not tu2.is_empty():
-				for i in 2:
-					ring_at(_ground(tu2.pos, 0.1), col, 2.4 + 1.6 * i, 0.6 + 0.2 * i)
-		"thunderstorm":
-			var c3: Vector2 = e.get("c", e.pos)
-			ring_at(_ground(c3, 0.15), col, 2.0 * float(e.get("r", 5.0)) - 0.4, 0.8)
-		"quickdraw":
-			for p2 in e.get("pts", []):
-				var tp2 := _ground(p2, 1.1)
-				_bolt_line(at + Vector3(0, 1.3, 0), tp2, Color("#fff0c8"), 0.18, 0.15)
-				ring_at(tp2 - Vector3(0, 1.0, 0), col, 1.8, 0.4)
-			_pack_explosion("light", at + Vector3(0, 1.3, 0), 0.4)
-		"wildgrowth":
-			for i in 2:
-				ring_at(at, col, 2.0 * float(e.get("r", 7.0)) - 0.4 - 1.5 * i, 0.7 + 0.2 * i)
-			_vines(at, float(e.get("r", 7.0)) * 0.6)
-			for i in 16:
-				var ang2 := randf() * TAU
-				spark(at + Vector3(cos(ang2) * 3.0, 0.3 + randf() * 1.6, sin(ang2) * 3.0), col)
 
 func _shake_near(p: Vector2, r: float, k: float) -> void:
 	var me: Dictionary = sim.by_id.get(player_id, {})
@@ -4039,60 +3839,23 @@ func _sync_kits() -> void:
 	var kits = sim.moba.kits
 	var t: float = sim.time
 	var my := _my_team()
-	# zones: a ring for each, its colour; a pillar's warning circle until it erupts
+	# zones (0.31.201: each its own ground, spell_fx.gd zone -- holy rays, lightning, smoke, the grove)
 	var live := {}
 	for z in kits.zones:
 		var zid := int(z.zid)
 		live[zid] = true
 		if not _zone_nodes.has(zid):
-			# its edge (a ring) and a faint disc over the ground it covers
-			var zc := Color(str(SPELL_COL.get(str(z.spell), "#ffffff")))
-			var mi := MeshInstance3D.new()
-			mi.mesh = _ring_mesh(float(z.r), 0.16)
-			zc.a = 0.9
-			mi.material_override = _fx_mat(zc)
-			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-			mi.position = _ground(z.at, 0.12)
-			mi.scale = Vector3(1.0, 0.4, 1.0)
-			var disc := MeshInstance3D.new()
-			var cm := CylinderMesh.new()
-			cm.top_radius = float(z.r)
-			cm.bottom_radius = float(z.r)
-			cm.height = 0.02
-			cm.radial_segments = 32
-			disc.mesh = cm
-			zc.a = 0.16 if not z.has("delay_at") else 0.3
-			disc.material_override = _unshaded(zc)
-			disc.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-			mi.add_child(disc)
-			add_child(mi)
-			_zone_nodes[zid] = mi
-		var zn: MeshInstance3D = _zone_nodes[zid]
-		if z.has("delay_at"):
-			zn.rotation.y = _time * 2.0
-		elif not low_fx and _time >= _kit_next and randf() < 0.5:
-			var ang := randf() * TAU
-			var rr := sqrt(randf()) * float(z.r)
-			spark(_ground((z.at as Vector2) + Vector2(cos(ang), sin(ang)) * rr, 0.2), Color(str(SPELL_COL.get(str(z.spell), "#ffffff"))))
+			_zone_nodes[zid] = fxs.zone(z)
 	for z in _zone_nodes.keys():
 		if not live.has(z):
-			(_zone_nodes[z] as Node3D).queue_free()
+			fxs.release("zone:%d" % int(z))
 			_zone_nodes.erase(z)
 	# your side's traps
 	for tr in kits.traps:
 		if int(tr.team) != my or _trap_nodes.has(int(tr.id)):
 			continue
-		var tm := MeshInstance3D.new()
-		tm.mesh = _ring_mesh(0.45, 0.16)
-		tm.material_override = _unshaded(Color(0.55, 0.45, 0.32, 0.9), false)
-		tm.position = _ground(tr.at, 0.05)
-		tm.scale = Vector3(1.0, 0.5, 1.0)
-		add_child(tm)
-		_trap_nodes[int(tr.id)] = tm
-	# what lasts on heroes: shields, slows, marks, poison
-	var spark_now := _time >= _kit_next
-	if spark_now:
-		_kit_next = _time + 0.15
+		_trap_nodes[int(tr.id)] = fxs.trap_node(_ground(tr.at, 0.05), TEAM_COLORS[vt(my)])
+	# what lasts on heroes: shields, slows, marks, skins, parries, poison, dashes, the ultimates' auras (spell_fx.gd)
 	for id in actors:
 		var u: Dictionary = sim.by_id.get(str(id), {})
 		if u.is_empty() or not bool(u.get("hero", false)):
@@ -4100,62 +3863,8 @@ func _sync_kits() -> void:
 		var a: Dictionary = actors[id]
 		if not is_instance_valid(a.root):
 			continue
-		var marks: Dictionary = _kit_marks.get(id, {})
 		var vis: bool = (a.root as Node3D).visible and sim.alive(u)
-		_kit_mark(a, marks, "shield", vis and float(u.get("shield", 0.0)) > 0.0 and t < float(u.get("shield_until", -1.0)))
-		_kit_mark(a, marks, "slow", vis and t < float(u.get("slow_until", -1.0)))
-		_kit_mark(a, marks, "amp", vis and t < float(u.get("amp_until", -1.0)))
-		_kit_mark(a, marks, "skin", vis and t < float(u.get("skin_until", -1.0)))       # 0.31.168: STONESKIN, BARKSKIN
-		_kit_mark(a, marks, "parry", vis and u.has("riposte"))                          # 0.31.168: RIPOSTE
-		_kit_marks[id] = marks
-		if vis and spark_now and u.has("dots") and not low_fx:
-			spark((a.root as Node3D).position + Vector3(randf_range(-0.3, 0.3), 0.6 + randf() * 1.2, randf_range(-0.3, 0.3)), Color("#7dff6a"))
-		if vis and u.state == "dash" and not low_fx:
-			spark((a.root as Node3D).position + Vector3(randf_range(-0.3, 0.3), 0.3 + randf() * 0.8, randf_range(-0.3, 0.3)), Color("#e0d0b0"))
-
-func _kit_mark(a: Dictionary, marks: Dictionary, kind: String, on: bool) -> void:
-	var n = marks.get(kind)
-	if on and (n == null or not is_instance_valid(n)):
-		var mi := MeshInstance3D.new()
-		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		match kind:
-			"shield":
-				var sm := SphereMesh.new()
-				sm.radius = 0.95
-				sm.height = 2.3
-				sm.radial_segments = 16
-				sm.rings = 8
-				mi.mesh = sm
-				mi.material_override = _unshaded(Color(0.45, 0.75, 1.0, 0.22))
-				mi.position = Vector3(0, 1.0, 0)
-			"slow":
-				mi.mesh = _ring_mesh(0.7, 0.1)
-				mi.material_override = _fx_mat(Color(0.7, 0.9, 1.0, 0.8))
-				mi.position = Vector3(0, 0.1, 0)
-			"amp":
-				mi.mesh = _ring_mesh(0.85, 0.08)
-				mi.material_override = _fx_mat(Color(1.0, 0.3, 0.3, 0.85))
-				mi.position = Vector3(0, 0.14, 0)
-			"skin":
-				var sk := SphereMesh.new()
-				sk.radius = 0.85
-				sk.height = 2.1
-				sk.radial_segments = 10
-				sk.rings = 6
-				mi.mesh = sk
-				mi.material_override = _unshaded(Color(0.62, 0.52, 0.36, 0.3))
-				mi.position = Vector3(0, 1.0, 0)
-			"parry":
-				mi.mesh = _ring_mesh(0.6, 0.06)
-				mi.material_override = _fx_mat(Color(1.0, 0.9, 0.5, 0.9))
-				mi.position = Vector3(0, 1.1, 0.0)
-				mi.rotation.x = PI * 0.5
-		(a.root as Node3D).add_child(mi)
-		marks[kind] = mi
-	elif not on and n != null:
-		if is_instance_valid(n):
-			(n as Node3D).queue_free()
-		marks.erase(kind)
+		fxs.sync_unit(str(id), u, a, vis)
 
 # ---------- the Grave Wyrm's soul-fire (0.31.166) ----------
 # A pale cyan-green flame poured from its jaws along the breath's line: a GPU particle stream (the smoke puff sprite, added
@@ -4281,27 +3990,7 @@ func _sync_rains() -> void:
 		_fx.append({"node":arrow, "at":_time, "life":0.32, "kind":"fall", "p0":to + Vector3(randf_range(-1.0, 1.0), 9.0, randf_range(-1.0, 1.0)), "p1":to})
 
 func _sync_auras() -> void:
-	# a buffed or ult-boosted hero glows: a spark of its colour every so often
-	if low_fx or _time < _aura_at:
-		return
-	_aura_at = _time + 0.22
-	var t: float = sim.time
-	for u in sim.units:
-		if not bool(u.get("hero", false)) or not sim.alive(u):
-			continue
-		var a: Dictionary = actors.get(str(u.id), {})
-		if a.is_empty() or not is_instance_valid(a.root) or not (a.root as Node3D).visible:
-			continue
-		var cols := []
-		if t < float(u.get("dr_until", -1.0)): cols.append(AURA_COL.dr)
-		if t < float(u.get("bl_until", -1.0)): cols.append(AURA_COL.bl)
-		if t < float(u.get("ud_until", -1.0)): cols.append(AURA_COL.ud)
-		var b: Dictionary = u.get("buffs", {})
-		for k in ["arcane", "ember", "lord"]:
-			if t < float(b.get(k, -1.0)):
-				cols.append(AURA_COL[k])
-		for c in cols:
-			spark((a.root as Node3D).position + Vector3(randf_range(-0.45, 0.45), 0.2 + randf() * 1.8, randf_range(-0.45, 0.45)), Color(str(c)))
+	pass                                           # (0.31.201: spell_fx.gd sync_unit, from _sync_kits)
 
 func _tower_shot(e: Dictionary) -> void:
 	var tw: Dictionary = sim.moba.towers[int(e.tw)]
@@ -4371,8 +4060,10 @@ func on_event(e: Dictionary) -> void:
 				var cb: Array = look.combo
 				clip = str(cb[int(e.get("combo", 0)) % cb.size()])
 			_play(a, clip, 1.7, 0.55)
-			if e.ability == "spin":
-				ring_at(a.root.position, Color("#ffcf7a"), 2.8, 0.45)
+			if e.kind == "ability":
+				var qu: Dictionary = sim.by_id.get(str(e.id), {})
+				if not qu.is_empty() and (a.root as Node3D).visible:
+					fxs.q(sim.ability_of(qu), a, qu)        # 0.31.201: the old classes' Q, each its own look
 		"blocked":                                                        # 0.31.62: the shield takes it
 			if not a.is_empty():
 				_play(a, "m/Melee_Block_Hit", 1.6, 0.3)
@@ -4406,35 +4097,20 @@ func on_event(e: Dictionary) -> void:
 		"vanish":
 			if sim.by_id.has(str(e.id)):
 				sim.by_id[str(e.id)]["vanish_until"] = float(e.until)
-			if not a.is_empty():
-				for i in 10:
-					spark((a.root as Node3D).position + Vector3(randf_range(-0.5, 0.5), 0.3 + randf() * 1.4, randf_range(-0.5, 0.5)), Color(0.35, 0.3, 0.45))
+			if not a.is_empty() and (a.root as Node3D).visible:
+				fxs.q("vanish", a, sim.by_id[str(e.id)])
 		"unvanish":
 			if sim.by_id.has(str(e.id)):
 				sim.by_id[str(e.id)]["vanish_until"] = sim.time
 		"meteor_warn":
 			_meteor_warn(e.pos, float(e.delay), int(e.team))
+			fxs.event(e)
 		"meteor_hit":
 			_recent_blasts.append([e.pos, _time])
 			_meteor_hit(e.pos, float(e.burn))
-		"pierce_hit":
-			var ph := Vector3(e.pos.x, Sim.height_at(e.pos) + 1.1, e.pos.y)
-			for i in 6:
-				spark(ph, Color(0.85, 0.95, 1.0))
-		"nova":
-			if not a.is_empty():
-				ring_at(a.root.position, Color("#ff8a3a"), Sim.NOVA_R, 0.55)
-		"resurrect":                                          # 0.31.1: a High Priest brings someone back
-			var rp := Vector3(e.pos.x, Sim.height_at(e.pos) + 0.1, e.pos.y)
-			ring_at(rp, Color("#fff1a8"), 1.6, 0.9)
-			for i in 14:
-				spark(rp + Vector3(randf_range(-0.5, 0.5), randf() * 2.4, randf_range(-0.5, 0.5)), Color("#fff1a8"))
-		"sanctuary":
-			if not a.is_empty():
-				ring_at(a.root.position, Color("#fff1a8"), Sim.SANCTUARY_R, 0.7)
-		"boom":
-			ring_at(Vector3(e.pos.x, Sim.height_at(Vector2(e.pos.x, e.pos.y)) + 0.2, e.pos.y), Color("#ff8a3a"), 1.6, 0.4)
-			spark(Vector3(e.pos.x, 0.6, e.pos.y), Color("#ffb04a"))
+			fxs.event(e)
+		"pierce_hit", "nova", "resurrect", "sanctuary", "boom", "block_up", "dodge", "proj":
+			fxs.event(e)                                          # 0.31.201: spell_fx.gd event
 		"gate_hit":
 			var g: Dictionary = sim.gates[int(e.gate)]
 			var gp: Vector2 = g.c + (Vector2(randf_range(-1.0, 1.0), 0.0))
@@ -4543,6 +4219,7 @@ func _sync_projectiles() -> void:
 			if bool(p.get("big", false)):
 				node.scale = Vector3.ONE * 2.2             # 0.31.157: the Ranger's DEADEYE
 			proj_nodes[p.id] = node
+			fxs.proj_trail(node, p)                        # 0.31.201: what it leaves behind it
 		# Offline the sim ticks at 30 Hz while frames run at 60: draw it where it is *now*.
 		var at: Vector2 = p.pos + (p.vel as Vector2) * proj_lead
 		var y := 1.2 + Sim.height_at(at)
@@ -5646,6 +5323,7 @@ var _meteors_fx: Array = []
 func _meteor_warn(p2: Vector2, delay: float, team: int) -> void:
 	var at := Vector3(p2.x, Sim.height_at(p2), p2.y)
 	var ring := _decal(at + Vector3(0.0, 0.05, 0.0), Sim.METEOR_R, Color(1.0, 0.35, 0.15), 0.6)
+	ring.visible = false                                        # (0.31.201: spell_fx.gd draws the warning, runes turning)
 	var rock := MeshInstance3D.new()
 	var sm := SphereMesh.new()
 	sm.radius = 0.9
@@ -5662,6 +5340,7 @@ func _meteor_warn(p2: Vector2, delay: float, team: int) -> void:
 	var from := at + Vector3(7.0, 28.0, 5.0)
 	rock.position = from
 	add_child(rock)
+	fxs.meteor_trail(rock)                                      # 0.31.201: fire and smoke streaming off it
 	_meteors_fx.append({"ring":ring, "rock":rock, "from":from, "to":at, "t0":_time, "dur":delay})
 
 func _meteor_hit(p2: Vector2, burn: float) -> void:
@@ -5682,8 +5361,7 @@ func _sync_meteor_fx(dt: float) -> void:
 			var k := clampf((_time - float(m.t0)) / maxf(float(m.dur), 0.01), 0.0, 1.0)
 			if is_instance_valid(m.rock):
 				(m.rock as Node3D).position = (m.from as Vector3).lerp(m.to, k * k)
-				if randf() < dt * 40.0:
-					spark((m.rock as Node3D).position, Color(1.0, 0.6, 0.2))
+				pass
 			if is_instance_valid(m.ring):
 				(m.ring as Node3D).scale = Vector3(1.0, 0.15, 1.0) * (0.8 + 0.2 * sin(_time * 18.0))
 			if k >= 1.0:
@@ -5696,9 +5374,7 @@ func _sync_meteor_fx(dt: float) -> void:
 			if _time >= float(m.until):
 				_meteors_fx.remove_at(i)
 				continue
-			if randf() < dt * 22.0:                       # the burning ground
-				var off := Vector3(randf_range(-1, 1), 0.0, randf_range(-1, 1)).normalized() * randf() * Sim.METEOR_R * 0.8
-				spark((m.burn_at as Vector3) + off, [Color(1.0, 0.5, 0.15), Color(1.0, 0.8, 0.25), Color(0.6, 0.2, 0.08)][randi() % 3])
+			pass                                          # (0.31.201: the burning ground is spell_fx.gd's fire disc)
 
 
 var _recent_blasts: Array = []        # [pos, time]: items appearing next to one pop higher
