@@ -3,7 +3,8 @@
 me a zip file with everything like graphic art, what the game is about ect that I can give to it so it posts on
 socials").
 
-Builds <out>/Fatebound-Social-Kit/ and <out>/Fatebound-Social-Kit.zip:
+Builds <out>/Fatebound-Social-Kit/ and its zips (Muse takes 100 MB a file: three, each with all of the text --
+the art, the vertical video, the landscape video -- PARTS):
   START_HERE.md, links.md, game/ (overview.md, champions.md, facts.json), brand/ (voice.md, rules.md, profiles.md),
   posts/ (post_ideas.md, posts.json), assets.json (every picture and video: what it shows, its alt text, where it fits),
   art/ (logo, icon, banners, key art, post-sized key art, the 18 champions and their 18 outfits, the roster, the
@@ -46,6 +47,12 @@ NUNITO = os.path.join(LISTING, "tools", "fonts", "Nunito-ExtraBold.ttf")
 ROLES_ART = os.path.join(GODOT, "assets", "ui", "roles")
 HERALD_ART = os.path.join(GODOT, "assets", "ui", "tutorial")
 NAME = "Fatebound-Social-Kit"
+# the zips (each under --zip-limit MB, with all of the text): (name, the folders of pictures and videos it has)
+PARTS = [
+    ("Fatebound-Social-Kit-1-of-3-art", ["art/"]),
+    ("Fatebound-Social-Kit-2-of-3-vertical-video", ["video/vertical/"]),
+    ("Fatebound-Social-Kit-3-of-3-landscape-video", ["video/landscape/"]),
+]
 INK = (8, 14, 30)
 SCROLL_INK = (62, 38, 16)            # the scroll's writing (tutorial.gd INK_TEXT)
 WHITE = (255, 255, 255)
@@ -858,6 +865,7 @@ def main():
     ap.add_argument("--rec", default="", help="trailer 8's recordings (for the stills)")
     ap.add_argument("--no-video", action="store_true")
     ap.add_argument("--video-from", default="", help="a kit built before: take its video/ as it is (no encoding)")
+    ap.add_argument("--zip-limit", type=float, default=99.0, help="MB: each zip must be under this (Muse takes 100)")
     a = ap.parse_args()
     KIT = os.path.join(a.out, NAME)
     if os.path.exists(KIT):
@@ -897,21 +905,45 @@ def main():
             if m.endswith(".mp4") and (a.no_video or not (a.trailer or a.video_from)):
                 continue
             assert os.path.exists(os.path.join(KIT, m)), (p["id"], m)
+    # the zips: Kevin's bot takes 100 MB a file -- so the kit goes in parts, each with all of the text, and the
+    # pictures and videos split between them by folder (unzipped into one place they make the whole kit again)
+    for e in assets:
+        e["zip"] = next(n for (n, pre) in PARTS if any(e["file"].startswith(x) for x in pre))
     json.dump({"note": "Every picture and video in the kit: what it shows, its alt text, where it fits best. 'kind' "
                        "says how it was made: the store screenshots show the game as it plays; the gameplay stills and "
                        "the trailer are staged in the game's own engine and filmed with cinematic cameras, without the "
                        "on-screen controls; the champion and outfit cards are the game's own champion window with its "
-                       "buttons hidden.", "assets": assets},
+                       "buttons hidden. 'zip' says which of the kit's zips has the file.", "assets": assets},
               open(os.path.join(KIT, "assets.json"), "w"), indent=2, ensure_ascii=False)
-    z = os.path.join(a.out, NAME + ".zip")
-    with zipfile.ZipFile(z, "w", zipfile.ZIP_DEFLATED) as zf:
+    with open(os.path.join(KIT, "START_HERE.md"), "a") as f:
+        f.write("\n## The kit comes in %d zips\n\nEach one has all of the text (this file, the rules, the posts, "
+                "`assets.json`); the pictures and videos are split between them. Unzip them all into the same place to "
+                "get the whole kit. `assets.json` says which zip has each file (`zip`).\n\n| Zip | Has |\n|---|---|\n"
+                % len(PARTS))
+        for (n, pre) in PARTS:
+            f.write("| `%s.zip` | %s |\n" % (n, ", ".join("`%s`" % x for x in pre)))
+    text = []
+    for dp, _, fs in os.walk(KIT):
+        for fn in fs:
+            rel = os.path.relpath(os.path.join(dp, fn), KIT).replace(os.sep, "/")
+            if not rel.startswith(("art/", "video/")):
+                text.append(rel)
+    for (n, pre) in PARTS:
+        z = os.path.join(a.out, n + ".zip")
+        files = sorted(text)
         for dp, _, fs in os.walk(KIT):
-            for f in sorted(fs):
-                full = os.path.join(dp, f)
-                arc = os.path.relpath(full, a.out)
-                comp = zipfile.ZIP_STORED if f.endswith((".mp4", ".jpg", ".png")) else zipfile.ZIP_DEFLATED
-                zf.write(full, arc, compress_type=comp)
-    print("kit", KIT, len(assets), "assets", "zip", z, os.path.getsize(z) // (1024 * 1024), "MB")
+            for fn in fs:
+                rel = os.path.relpath(os.path.join(dp, fn), KIT).replace(os.sep, "/")
+                if any(rel.startswith(x) for x in pre):
+                    files.append(rel)
+        with zipfile.ZipFile(z, "w", zipfile.ZIP_DEFLATED) as zf:
+            for rel in files:
+                comp = zipfile.ZIP_STORED if rel.endswith((".mp4", ".jpg", ".png")) else zipfile.ZIP_DEFLATED
+                zf.write(os.path.join(KIT, rel), NAME + "/" + rel, compress_type=comp)
+        mb = os.path.getsize(z) / (1024 * 1024)
+        print("zip", z, len(files), "files", "%.1f MB" % mb)
+        assert mb < a.zip_limit, (z, mb)
+    print("kit", KIT, len(assets), "assets")
 
 
 if __name__ == "__main__":

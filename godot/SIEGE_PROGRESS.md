@@ -6474,3 +6474,6 @@ graphic art, what the game is about ect that I can give to it so it posts on soc
   towers, pronouns for the four champions whose stories give none, "illustrated" not "painted" key art). The zip: 141
   files, 186 MB (the trailer at 8 Mbps, the clips 6, the vertical ones 4; the vertical logo and tagline step aside for
   the trailer's own title).
+- Kevin: "100mb limit" (Muse's upload). The kit now comes in three zips, each with all of the text and under 99 MB
+  (build_muse_kit.py PARTS, --zip-limit): 1 the art (65 MB), 2 the vertical video (43 MB), 3 the landscape video
+  (79 MB). Unzipped into one place they make the whole kit; START_HERE.md lists them, assets.json says which has a file.
