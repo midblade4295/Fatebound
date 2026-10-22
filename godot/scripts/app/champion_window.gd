@@ -381,7 +381,9 @@ func _skin_tile(parent: Node, id: String, acc: Color) -> void:
 	if state != "":
 		sl = UI2.text(b, state, 10, Color("#9dff8a") if worn else Color("#cfe9ff"), Color(0, 0, 0, 0.8), 3)
 	else:
-		sl = UI2.text(b, "◆ %d" % int(Eco.SKINS[id].gems), 11, Color("#e8ccff"), Color("#1e0a45"), 3)
+		var o := Eco.skin_offer(id, p.now())                 # 0.31.203: the weekly sale's price, and its cut
+		sl = UI2.text(b, ("◆ %d  -%d%%" % [int(o.gems), int(o.off)]) if int(o.off) > 0 else "◆ %d" % int(o.gems), 11,
+			Color("#ffd2c4") if int(o.off) > 0 else Color("#e8ccff"), Color("#4a0306") if int(o.off) > 0 else Color("#1e0a45"), 3)
 	sl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	sl.position = Vector2(0, 97)
 	sl.size = Vector2(92, 14)
@@ -416,10 +418,13 @@ func _skin_action(acc: Color) -> void:
 			_render(), "champ_wear", 15, 42.0, 12.0)
 		b.disabled = worn
 	else:
-		var gems := int(Eco.SKINS[preview].gems)
-		var gold := int(Eco.SKINS[preview].get("gold", 0))
+		var o := Eco.skin_offer(preview, p.now())             # 0.31.203: the weekly sale's price when it's on it
+		var gems := int(o.gems)
+		var gold := int(o.gold)
 		b = UI2.button(r, UI.grouped(gems), "purple", _ask_buy, "champ_buy", 16, 42.0, 12.0, GEM)
 		b.disabled = int(p.d.gems) < gems and (gold <= 0 or int(p.d.gold) < gold)      # (0.31.189: or the gold)
+		if int(o.off) > 0:
+			UI2.body(v, "WEEKLY SALE  -%d%%  ·  was %s gems" % [int(o.off), UI.grouped(int(o.was_gems))], 10, Color("#ff9c8a"), false)
 		if gold > 0:
 			UI2.body(v, "or %s gold" % UI.grouped(gold), 10, Color("#ffd86b"), false)
 	b.custom_minimum_size.x = 112
@@ -535,9 +540,12 @@ func _ask_buy() -> void:
 	if id == "" or p.owns_skin(id):
 		return
 	var sk: Dictionary = Eco.SKINS[id]
-	var gold := int(sk.get("gold", 0))
+	var o := Eco.skin_offer(id, p.now())                     # 0.31.203: at the weekly sale's price when it's on it
+	var gems := int(o.gems)
+	var gold := int(o.gold)
 	var with_hero: bool = not p.owns_hero(hero)
-	var box := _overlay("BUY %s?" % str(sk.name).to_upper(), "%s gems%s. Worn at once.%s" % [UI.grouped(int(sk.gems)),
+	var box := _overlay("BUY %s?" % str(sk.name).to_upper(), "%s%s gems%s. Worn at once.%s" % [
+		("Weekly sale: %d%% off. " % int(o.off)) if int(o.off) > 0 else "", UI.grouped(gems),
 		(" or %s gold" % UI.grouped(gold)) if gold > 0 else "",
 		(" %s comes with it -- the %s is yours too." % [Champions.short_of(hero), str(Moba.HEROES[hero].name)]) if with_hero else ""])
 	var done := func(r: Dictionary) -> void:
@@ -550,10 +558,10 @@ func _ask_buy() -> void:
 		else:
 			app.sfx("error")
 			app.toast(str(r.get("error", "Can't buy")), UI.RED)
-	var bg := UI2.button(box, "BUY  %s" % UI.grouped(int(sk.gems)), "purple", func(): done.call(p.buy_skin(id)), "champ_buy_yes", 17, 46.0, 14.0, GEM)
-	bg.disabled = int(p.d.gems) < int(sk.gems)
+	var bg := UI2.button(box, "BUY  %s" % UI.grouped(gems), "purple", func(): done.call(p.buy_outfit(id, false)), "champ_buy_yes", 17, 46.0, 14.0, GEM)
+	bg.disabled = int(p.d.gems) < gems
 	if gold > 0:                                       # 0.31.189 (Kevin: "Frostbound for gold")
-		var bo := UI2.button(box, "BUY  %s" % UI.grouped(gold), "gold", func(): done.call(p.buy_skin_gold(id)), "champ_buy_gold", 17, 46.0, 14.0, COIN)
+		var bo := UI2.button(box, "BUY  %s" % UI.grouped(gold), "gold", func(): done.call(p.buy_outfit(id, true)), "champ_buy_gold", 17, 46.0, 14.0, COIN)
 		bo.disabled = int(p.d.gold) < gold
 	UI2.button(box, "CANCEL", "grey", func():
 		app.sfx("menuClose")

@@ -43,6 +43,7 @@ const OPS := {
 	"buy_hero_gems": [TYPE_STRING], "use_shard": [TYPE_STRING], "melt_shard": [TYPE_STRING], "use_token": [TYPE_STRING],
 	"buy_skin": [TYPE_STRING], "wear_skin": [TYPE_STRING, TYPE_STRING],    # 0.31.186: hero skins
 	"buy_skin_gold": [TYPE_STRING],                              # 0.31.189: a rare outfit (Frostbound) for gold
+	"buy_sale": [TYPE_STRING, TYPE_INT, TYPE_BOOL],              # 0.31.203: an outfit on the weekly sale (id, week, gold)
 }
 
 func _rec(op: String, args: Array) -> void:
@@ -635,15 +636,61 @@ func buy_skin(id: String) -> Dictionary:
 	if int(d.gems) < gems:
 		return {"ok":false, "error":"Not enough gems"}
 	d.gems -= gems
+	var with_hero := _got_skin(id)
+	save()
+	_rec("buy_skin", [id])
+	return {"ok":true, "hero":with_hero}
+
+func _got_skin(id: String) -> bool:
+	# an outfit bought: his, worn at once, and (League's way) his hero too if still locked -> whether the hero came with it
 	(d.skins as Array).append(id)
 	var hid := str(Eco.SKINS[id].hero)
 	var with_hero := not owns_hero(hid)
 	if with_hero:
 		_own_hero(hid)
 	d.skin_on[hid] = id
+	return with_hero
+
+func buy_outfit(id: String, gold := false) -> Dictionary:
+	# 0.31.203: what every BUY button calls -- the weekly sale's price when the outfit is on it, else the full price
+	var o := Eco.skin_offer(id, now())
+	if int(o.off) > 0:
+		return buy_sale(id, int(o.week), gold)
+	return buy_skin_gold(id) if gold else buy_skin(id)
+
+func buy_sale(id: String, week: int, gold: bool) -> Dictionary:
+	# 0.31.203 (Kevin: "For featured outfits, let's make them discounted"): an outfit at its weekly-sale price. `week`
+	# is the sale the buyer saw (Eco.week_index): this week's, or last week's for Eco.SALE_GRACE after it ended (a buy
+	# still on its way, or made offline just before midnight). Gems, or (gold) the rare line's gold price, discounted.
+	if not Eco.SKINS.has(id):
+		return {"ok":false, "error":"Not for sale"}
+	if owns_skin(id):
+		return {"ok":false, "error":"Already yours"}
+	var t := now()
+	var cur := Eco.week_index(t)
+	if week != cur and not (week == cur - 1 and t < Eco.week_start(t) + Eco.SALE_GRACE):
+		return {"ok":false, "error":"That sale has ended"}
+	var off := Eco.sale_off_week(id, week)
+	if off <= 0:
+		return {"ok":false, "error":"Not on sale"}
+	var sk: Dictionary = Eco.SKINS[id]
+	var price := 0
+	if gold:
+		if int(sk.get("gold", 0)) <= 0:
+			return {"ok":false, "error":"Not for gold"}
+		price = Eco.sale_price(int(sk.gold), off, Eco.SALE_GOLD_STEP)
+		if int(d.gold) < price:
+			return {"ok":false, "error":"Not enough gold"}
+		d.gold -= price
+	else:
+		price = Eco.sale_price(int(sk.gems), off, Eco.SALE_GEM_STEP)
+		if int(d.gems) < price:
+			return {"ok":false, "error":"Not enough gems"}
+		d.gems -= price
+	var with_hero := _got_skin(id)
 	save()
-	_rec("buy_skin", [id])
-	return {"ok":true, "hero":with_hero}
+	_rec("buy_sale", [id, week, gold])
+	return {"ok":true, "hero":with_hero, "off":off, "price":price, "gold":gold}
 
 func buy_skin_gold(id: String) -> Dictionary:
 	# 0.31.189 (Kevin: "Frostbound for gold"): an outfit that has a gold price (Eco.SKINS "gold": the rare line) for gold --
@@ -656,12 +703,7 @@ func buy_skin_gold(id: String) -> Dictionary:
 	if int(d.gold) < gold:
 		return {"ok":false, "error":"Not enough gold"}
 	d.gold -= gold
-	(d.skins as Array).append(id)
-	var hid := str(Eco.SKINS[id].hero)
-	var with_hero := not owns_hero(hid)
-	if with_hero:
-		_own_hero(hid)
-	d.skin_on[hid] = id
+	var with_hero := _got_skin(id)
 	save()
 	_rec("buy_skin_gold", [id])
 	return {"ok":true, "hero":with_hero}

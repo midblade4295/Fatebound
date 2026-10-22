@@ -134,6 +134,8 @@ run outfits_test         OUTFITS_PASS             150
 run economy_balance_test ECONOMY_BALANCE_PASS   120 --resolution 420x933
 run league_iap_test      LEAGUE_IAP_PASS          120
 run skins_test           SKINS_PASS               120
+# The weekly sale (0.31.203): the featured three at 50/35/25 % off, buy_sale replayed on the server, its end, the shop
+run weekly_sale_test     WEEKLY_SALE_PASS         150 --resolution 420x933
 run champions_test       CHAMPIONS_PASS           200
 run content_test         CONTENT_PASS             120
 # Class quests (0.31.97): the table, counting per class worn, claiming in order, the screens; and the in-match tracking.

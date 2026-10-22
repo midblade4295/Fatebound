@@ -376,9 +376,51 @@ static func item(id: String) -> Dictionary:
 
 const FEATURED_OUTFITS := 3
 
+# 0.31.203 (Kevin: "For featured outfits, let's make them discounted. A new set of on sale skins will rotate once per
+# week"): the week's featured outfits are the WEEKLY SALE -- each at its own discount (SALE_OFF, in the order of the
+# week's picks), in gems and, for the rare line, in gold too. Bought with the "buy_sale" op (Profile.buy_sale), which
+# names the week whose sale the buyer saw: this week's, or last week's for SALE_GRACE after it ended (a buy still on its
+# way to the server, or made offline just before midnight on Sunday).
+const SALE_OFF := [50, 35, 25]
+const SALE_GRACE := 86400
+const SALE_GEM_STEP := 5                                   # sale prices round to these
+const SALE_GOLD_STEP := 500
+
+static func week_start(unix: int) -> int:
+	# the Monday 00:00 UTC that began this week
+	return (week_index(unix) * 7 - 3) * 86400
+
+static func sale_off_week(id: String, week: int) -> int:
+	# an outfit's discount (percent) in that week's sale; 0 when it isn't in it
+	var i := featured_outfits_week(week).find(id)
+	return int(SALE_OFF[i]) if i >= 0 and i < SALE_OFF.size() else 0
+
+static func sale_off(id: String, unix: int) -> int:
+	return sale_off_week(id, week_index(unix))
+
+static func sale_price(full: int, off: int, step: int) -> int:
+	if off <= 0 or full <= 0:
+		return full
+	return maxi(step, int(round(full * (100 - off) / 100.0 / step)) * step)
+
+static func skin_offer(id: String, unix: int) -> Dictionary:
+	# what an outfit costs now: gems, gold (0: not for gold), off (%, 0: full price), was_gems / was_gold (the full
+	# prices), week (the sale's, for the op)
+	var sk: Dictionary = SKINS.get(id, {})
+	var w := week_index(unix)
+	var off := sale_off_week(id, w)
+	var full_gems := int(sk.get("gems", 0))
+	var full_gold := int(sk.get("gold", 0))
+	return {"gems": sale_price(full_gems, off, SALE_GEM_STEP), "gold": sale_price(full_gold, off, SALE_GOLD_STEP),
+		"off": off, "was_gems": full_gems, "was_gold": full_gold, "week": w}
+
 static func featured_outfits(unix: int) -> Array:
+	return featured_outfits_week(week_index(unix))
+
+static func featured_outfits_week(w: int) -> Array:
 	# 0.31.188: the shop's featured outfits this week (Monday 00:00 UTC) -- a fixed shuffle of every outfit, three a week
-	# in turn so each comes round; a hero's own set first in the shuffle's draw (they're the new ones)
+	# in turn so each comes round; a hero's own set first in the shuffle's draw (they're the new ones). 0.31.203: the
+	# week's sale, by week number (Profile.buy_sale checks last week's too)
 	var pool: Array = SKINS.keys()
 	pool.sort()
 	if pool.is_empty():
@@ -390,7 +432,6 @@ static func featured_outfits(unix: int) -> Array:
 		order.append(pool.pop_at(rng.randi() % pool.size()))
 	order.sort_custom(func(a, b): return SKINS[a].has("weapon") and not SKINS[b].has("weapon"))
 	var out := []
-	var w := week_index(unix)
 	var n := mini(FEATURED_OUTFITS, order.size())
 	for i in n:
 		out.append(order[(w * n + i) % order.size()])
