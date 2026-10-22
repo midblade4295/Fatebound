@@ -2089,7 +2089,9 @@ static func market_heroes(app, root: VBoxContainer) -> void:
 			var tw := ring.create_tween().set_loops(4)
 			tw.tween_property(ring, "modulate:a", 0.25, 0.4).set_trans(Tween.TRANS_SINE)
 			tw.tween_property(ring, "modulate:a", 1.0, 0.4).set_trans(Tween.TRANS_SINE)
-			ring.get_tree().create_timer(0.12).timeout.connect(func():
+			var glide := ring.create_tween()               # (bound to the ring: gone with the page if you leave first)
+			glide.tween_interval(0.12)
+			glide.tween_callback(func():
 				var sc: ScrollContainer = app.content_scroll
 				if is_instance_valid(lit) and is_instance_valid(sc):
 					var to := maxi(0, sc.scroll_vertical + int(lit.global_position.y - sc.global_position.y) - 90)
@@ -2393,7 +2395,9 @@ static func locker(app, root: VBoxContainer) -> void:
 				outfits.append(str(id))
 	var titles: Array = _earned_titles(p)
 	var ban := banner(root, UI2.V2 + "art_armory.webp", "ARMORY", 176.0)
-	var hold := UI2.chip(ban, "%d HEROES  ·  %d OUTFITS  ·  %d TITLES" % [heroes.size(), outfits.size(), titles.size()],
+	var free: Array = Champions.ORDER.filter(func(h): return not p.owns_hero(str(h)) and p.can_play_hero(str(h)))   # 0.31.205
+	var hold := UI2.chip(ban, "%d HEROES%s  ·  %d OUTFITS  ·  %d TITLES" % [heroes.size(), (" +%d FREE" % free.size()) if not free.is_empty() else "",
+		outfits.size(), titles.size()],
 		Color(0.03, 0.02, 0.1, 0.8), UI2.CREAM, Color(UI2.GOLD, 0.6))
 	hold.position = Vector2(12, 12)
 	if not view_low(app):
@@ -2405,7 +2409,7 @@ static func locker(app, root: VBoxContainer) -> void:
 	var tabs := HBoxContainer.new()
 	tabs.add_theme_constant_override("separation", 8)
 	root.add_child(tabs)
-	for t in [["heroes", "HEROES", heroes.size(), UI2.icon_path("crown")], ["outfits", "OUTFITS", outfits.size(), UI2.icon_path("helmet")],
+	for t in [["heroes", "HEROES", heroes.size() + free.size(), UI2.icon_path("crown")], ["outfits", "OUTFITS", outfits.size(), UI2.icon_path("helmet")],
 			["titles", "TITLES", titles.size(), UI2.icon_path("scroll")]]:
 		var tid: String = t[0]
 		var on: bool = str(app.locker_tab) == tid
@@ -2520,12 +2524,17 @@ const ROLE_ORDER := ["tank", "fighter", "assassin", "mage", "marksman", "support
 
 static func locker_champions(app, root: VBoxContainer) -> void:
 	# 0.31.204: the Armory's HEROES -- the heroes you own, by role (a role with none of yours left out); the ones you
-	# don't are in the Market's HEROES (a way there under them)
+	# don't are in the Market's HEROES (a way there under them). 0.31.205 (Kevin: "Make the heros that are free for the
+	# week show up in players armory"): and this week's free ones among them, FREE THIS WEEK on their cards (yours to
+	# play until Monday; to keep, the Market)
 	var p = app.profile
 	var Kits = load("res://scripts/siege/moba_kits.gd")          # (loaded here, not at boot: the 5v5's)
 	var order: Array = Champions.ORDER
 	var mine: Array = order.filter(func(h): return p.owns_hero(str(h)))
-	var top := UI2.center(UI2.body(root, "%d of %d heroes yours  ·  tap one for his story, his outfits and a closer look" % [mine.size(), order.size()], 11, UI2.SOFT))
+	var free: Array = order.filter(func(h): return not p.owns_hero(str(h)) and p.can_play_hero(str(h)))
+	var shown: Array = order.filter(func(h): return p.can_play_hero(str(h)))
+	var top := UI2.center(UI2.body(root, "%d of %d heroes yours%s  ·  tap one for his story, his outfits and a closer look" % [mine.size(), order.size(),
+		("  ·  %d free this week" % free.size()) if not free.is_empty() else ""], 11, UI2.SOFT))
 	top.custom_minimum_size.x = 10
 	var inv := ""
 	if int(p.d.get("tokens", 0)) > 0:
@@ -2537,7 +2546,7 @@ static func locker_champions(app, root: VBoxContainer) -> void:
 		var ic := UI2.chip(root, inv + "  ·  use them in the Market", Color("#173a1e"), Color("#c9f7bd"), Color("#6be07c"))
 		ic.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	for role in ROLE_ORDER:
-		var hs: Array = mine.filter(func(h): return Kits.role_of(str(h)) == role)
+		var hs: Array = shown.filter(func(h): return Kits.role_of(str(h)) == role)
 		if hs.is_empty():
 			continue
 		var rh := HBoxContainer.new()
@@ -2667,7 +2676,10 @@ static func champion_card(app, grid: Node, hid: String) -> Button:
 	v.add_child(st)
 	# (0.31.204: the Armory has only yours -- the outfit he wears; 0.31.187-0.31.203 YOURS, or his price and a padlock)
 	var wk: String = p.worn_skin(hid)
-	UI2.body(st, (str(Eco.SKINS[wk].set).to_upper() if wk != "" else "ORIGINAL LOOK"), 9, Color("#e8ccff") if wk != "" else Color(1, 1, 1, 0.7), false)
+	if not owned and plays:                          # 0.31.205: this week's free one
+		UI2.body(st, "FREE THIS WEEK", 9, Color("#9dff8a"), false)
+	else:
+		UI2.body(st, (str(Eco.SKINS[wk].set).to_upper() if wk != "" else "ORIGINAL LOOK"), 9, Color("#e8ccff") if wk != "" else Color(1, 1, 1, 0.7), false)
 	var chips := VBoxContainer.new()                # (stacked down the left: the skins' count is on the right)
 	chips.add_theme_constant_override("separation", 3)
 	chips.position = Vector2(6, 6)

@@ -90,19 +90,34 @@ func _init() -> void:
 	p.save()
 	var mine: Array = Champions.ORDER.filter(func(h): return p.owns_hero(str(h)))
 	var locked: Array = Champions.ORDER.filter(func(h): return not p.owns_hero(str(h)))
+	var free: Array = locked.filter(func(h): return p.can_play_hero(str(h)))          # 0.31.205: this week's free ones
 
 	# ---- 1. the Armory's HEROES
 	check(app.tab_buttons["locker"].label.text == "ARMORY", "the tab bar says ARMORY")
 	press("tab_locker")
 	await frames()
 	check(app.tab == "locker" and str(app.locker_tab) == "heroes" and has(app.content, "ARMORY")
-		and has(app.content, "%d HEROES  ·  2 OUTFITS" % mine.size()), "the Armory: its hall, what you hold on it")
-	check(btn("locker_tab_heroes") != null and btn("locker_tab_heroes").text == "HEROES %d" % mine.size()
+		and has(app.content, "%d HEROES +%d FREE  ·  2 OUTFITS" % [mine.size(), free.size()]), "the Armory: its hall, what you hold on it (and this week's free ones)")
+	check(free.size() == 2 and btn("locker_tab_heroes") != null and btn("locker_tab_heroes").text == "HEROES %d" % (mine.size() + free.size())
 		and btn("locker_tab_outfits").text == "OUTFITS 2" and btn("locker_tab_titles") != null, "HEROES / OUTFITS / TITLES with their counts")
 	var cards := keys("champ_")
-	check(cards.size() == mine.size() and locked.all(func(h): return not cards.has(str(h))), "only your heroes (%d), none of the %d locked" % [cards.size(), locked.size()])
-	check(not has(app.content, "50,000") and not has(app.content, "FREE") and btn("champ_knight") != null
-		and texts(btn("champ_knight")).has("LIONGUARD"), "no prices, no FREE; the Knight's card says the outfit he wears")
+	check(cards.size() == mine.size() + free.size() and free.all(func(h): return cards.has(str(h)))
+		and locked.all(func(h): return free.has(h) or not cards.has(str(h))), "your heroes (%d) and this week's free ones (%s), none of the others" % [mine.size(), free])
+	check(not has(app.content, "50,000") and not has(app.content, "50K") and btn("champ_knight") != null
+		and texts(btn("champ_knight")).has("LIONGUARD"), "no prices; the Knight's card says the outfit he wears")
+	var fc := btn("champ_" + str(free[0]))
+	check(fc != null and texts(fc).has("FREE THIS WEEK") and texts(fc).has("FREE"), "a free one's card: FREE THIS WEEK (0.31.205, Kevin: \"Make the heros that are free for the week show up in players armory\")")
+	press("champ_" + str(free[0]))
+	await frames(3)
+	check(app.modal is ChampWindow and btn("champ_unlock") == null and btn("champ_to_market") != null and btn("champ_play") != null,
+		"his window from the Armory: PLAY, and OWN IN MARKET (not UNLOCK: heroes are bought in the Market)")
+	press("champ_to_market")
+	await frames()
+	var lit: Array = app.content.find_children("*", "Panel", true, false).filter(func(n): return n.has_meta("hero_focus_ring"))
+	check(not is_instance_valid(app.modal) and app.tab == "shop" and str(app.shop_tab) == "heroes" and lit.size() == 1
+		and lit[0].get_parent() == btn("hero_look_" + str(free[0])).get_parent(), "OWN IN MARKET: the Market's HEROES, his card lit")
+	press("tab_locker")
+	await frames()
 	check(btn("armory_to_heroes") != null and btn("armory_to_heroes").text.contains("%d MORE HERO" % locked.size()), "MORE HEROES IN THE MARKET")
 
 	# ---- 2. OUTFITS

@@ -268,7 +268,7 @@ func _render() -> void:
 	if owned:
 		var yl := UI2.text(top, "YOURS", 18, Color("#9dff8a"), Color("#0a2006"), 5)
 		yl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	elif not pr.is_empty():
+	elif not pr.is_empty() and not owned_only:          # (0.31.205: from the Armory, the Market says his price)
 		var pv := VBoxContainer.new()
 		pv.add_theme_constant_override("separation", 0)
 		pv.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -284,7 +284,14 @@ func _render() -> void:
 	var sp := Control.new()
 	sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	top.add_child(sp)
-	if not owned and not pr.is_empty():
+	if not owned and not pr.is_empty() and owned_only:
+		# 0.31.205: a free one from the Armory -- he's kept in the Market (heroes are bought there, 0.31.204)
+		var mb := UI2.button(top, "OWN IN MARKET", "gold", func():
+			app.sfx("tab")
+			app.open_market("heroes", hero), "champ_to_market", 15, 46.0, 14.0, "res://assets/ui/v2/icons/stall.png")
+		mb.custom_minimum_size.x = 150
+		UI2.sweep(mb)
+	elif not owned and not pr.is_empty():
 		var ub := UI2.button(top, "UNLOCK", "gold", open_chooser, "champ_unlock", 17, 46.0, 14.0)
 		ub.custom_minimum_size.x = 120
 		UI2.sweep(ub)

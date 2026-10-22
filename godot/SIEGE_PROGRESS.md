@@ -6666,3 +6666,19 @@ them".
 - Version 0.31.204, versionCode 290, SERVER_BUILD 0.31.204.
 - Preview APK: build/Fatebound-Siege-0.31.204-fatebound.apk (33,047,516 bytes, Vulkan only, preview key), sha256
   573f7dec33becfa5d30e230683a900801b2e0fc9344ebe8fc2ba38a02626662f. Sent to Kevin with the shots.
+
+## 0.31.205 — this week's free heroes in the Armory
+Kevin: "Make the heros that are free for the week show up in players armory".
+- The Armory's HEROES (screens.gd locker_champions): your heroes and this week's free ones (Profile.can_play_hero), by
+  role; a free one's card says FREE THIS WEEK under his name (and FREE / NEW on its corner, as before). The banner
+  "12 HEROES +2 FREE", the tab "HEROES 14", "12 of 18 heroes yours · 2 free this week". MORE HEROES IN THE MARKET still
+  counts every one you don't own (the free ones are sold there too).
+- His window from the Armory: PLAY, and OWN IN MARKET in UNLOCK's place (the Market's HEROES with his card lit --
+  heroes are bought there, 0.31.204); his price is left to the Market (it pushed PLAY off the screen). From the Market
+  it's as before (UNLOCK).
+- The Market's lit card glides to itself on a tween of its ring (was a tree timer: leaving the Market within 0.12 s
+  called it with the page gone).
+- armory_market_test and champions_test: the free ones in the Armory, OWN IN MARKET. Run: armory_market, champions,
+  moba_ui, app_flow, quest, app_scroll, lb_prizes, weekly_sale, parse_all -- all pass (not the whole suite: the change
+  is the Armory's heroes and the hero window).
+- No pack, no server change. Version 0.31.205, versionCode 291, SERVER_BUILD 0.31.205.

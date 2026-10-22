@@ -179,8 +179,9 @@ func _process(delta: float) -> bool:
 				for r in Kits.ROLE_ORDER:
 					if has_text(app.content, str(Kits.ROLE_NAMES[r])):
 						roles += 1
-				check(n == mine.size() and others == 0 and mine.size() < 18 and roles == 6,
-					"only the heroes you own, under the six roles (%d cards, %d not yours)" % [n, others])
+				var free: int = Moba.HERO_ORDER.filter(func(h): return not p.owns_hero(str(h)) and p.can_play_hero(str(h))).size()
+				check(n == mine.size() and others == free and free > 0 and mine.size() < 18 and roles == 6,
+					"the heroes you own and this week's free ones (0.31.205), under the six roles (%d yours, %d free)" % [n, others])
 				check(has_text(btn("champ_knight"), "ALDRIC") and has_text(btn("champ_knight"), "ORIGINAL LOOK") and btn("armory_to_heroes") != null,
 					"a card: his name and the look he wears; MORE HEROES IN THE MARKET")
 				_shot("champ_locker")
