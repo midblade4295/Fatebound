@@ -6519,3 +6519,41 @@ should be looking towards the green glow instead of away. When barbarian blows h
   hitting on the slam. 68 s (was 76); -14.4 LUFS, -1.5 dB peak. 1080p 91 MB, 720p 39 MB, the 20 MB version 19 MB.
 - tools/trailer9_edit.py (CUTS can punch in; the dark cue starts under the shaking however short); tools/trailer9_script.md
   has the new story, trims and credits. The rework cost 48,424 credits (keyframes 7,826, videos 40,597); 158,375 in all.
+
+## 0.31.201 — every ability its own effect
+Kevin: "I want every ability to have much better special effects in the game. Every one of them should have its own
+unique look and I want them especially the ultimates to look exciting".
+- scripts/siege/spell_fx.gd, a child of the view, draws every cast and everything that lasts: the 18 heroes' Q, W, E and
+  ultimates (72 recipes), the old classes' Q (block, spin, lunge, volley, nova, sanctuary; hammer, whirlwind, vanish,
+  pierce, meteor, resurrect), the one-off events (a pillar's eruption, a landing, a keg or roots bursting, a storm's
+  bolt, a riposte, a flurry's strike, a trap snapping, a fireball landing, a dodge) and what lasts on heroes and on the
+  ground (shields as bubbles, slows as frost, marks and curses, stone and bark skins, a parry's glints, poison, a dash's
+  trail, the ultimates' auras and the jungle buffs; the zones: holy ground, caltrops, a static field, smoke, the grove,
+  a storm, the fire pillar's and the roots' warnings; the Sniper's traps as iron jaws).
+- The pieces it's built from: bursts and streams of sprites (GPU particles; the painted sprites of assets/vfx/weapon
+  and new procedural ones in assets/vfx/spell -- a sparkle, a star, a ring, a streak, shards, cracks, rays, a swirl, a
+  2x2 atlas of runes -- from tools/build_spell_vfx.py; drawn by fx_sprite.gdshader in the spell's colour; rocks as lit
+  mesh particles, knives as glints along their flight; dust, shadow and gun smoke mixed over the scene, not added),
+  flashes, ground discs fitted to the terrain (fx_ground.gdshader: a soft disc, a turning sprite, fire, lightning,
+  dappled light, a rim alone for the waves; fx_scorch.gdshader darkens the ground under fire and broken earth so the
+  light has something to stand out from), pillars, cones and sheets of light (fx_beam.gdshader, noise scrolling along
+  them), lightning with a white core, a glow and branches, shells round a hero (fx_shell.gdshader: glass, crust,
+  energy, a dome), trails behind dashes, thrown things and the meteors (fire and smoke streaming off the rock).
+- The ultimates: BULWARK a golden dome over them all; WAR CRY a roar of fire and three shock rings; EXECUTE out of
+  the dark, crossed slashes; ARROW RAIN the sky darkening with arrows over spinning rays; INFERNO a wall of fire running
+  out over scorched ground, three waves of flames; GRACE a pillar of light on every hero; JUDGMENT a pillar from heaven
+  and a shockwave; UNDYING a dark red halo and crescents circling him for its 5 s; FLURRY and GRAND CHALLENGE a slash
+  (purple / golden lightning) at each strike; DEADEYE the muzzle flash and a beam across the field; METEORS a rune
+  circle on the ground and flaming rocks; LEGION soul pillars where the dead rise; LANDSLIDE rocks and dust storming
+  off him; DRAGON DIVE fire up and fire down with cracked ground; THUNDERSTORM a dark cloud, lightning on an electric
+  field; QUICKDRAW tracers to every target; WILD GROWTH the grove, leaves and light.
+- siege_view.gd hands the casts over (_kit_fx, _moba_fx, on_event, _sync_kits, _sync_projectiles, _meteor_warn); its
+  old rings-and-sparks recipes, the kit marks and the aura sparks are gone. Camera shakes as before, more of them.
+- tools/fx_gallery.gd: review shots of a hero's four casts, each caught four times after the cast (HERO, CASTS, AT,
+  OUT); tools/fx_probe.gd a bare scene for one piece. Every hero's sheet reviewed; the light toned down twice (the
+  additive light over the bright ground whites out fast: slimmer pillars, gold not white, dimmer discs, denser
+  particles for what lasts).
+- Version 0.31.201, versionCode 287, SERVER_BUILD 0.31.201. No preview APK from here (no preview keystore or Android
+  SDK in this workspace).
+- Verified: suite all passed (100, --quick; the runner's 25-minute wrapper cut it off at the analytics tests, those
+  three were run on their own), human soak stalls=0.
