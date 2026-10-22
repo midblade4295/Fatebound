@@ -6504,3 +6504,18 @@ of Warcraft trailers are" / "Just have music and sound effects".
   peak. 1080p 93 MB, 720p 31 MB.
 - 109,951 credits in all (keyframes 27,736, videos 71,708, music 2,370, the test 8,137). The plan's cap ran out
   mid-run; Kevin topped up for the last four shots.
+
+## Trailer 9 rework: Kevin's notes on five shots and the ending (tools only, no build)
+Kevin (with screenshots): "The wizard shouldn't be holding a shield. The archer is walking with a bow that knocked. The
+barbarian spawns a sword when fighting knight and knight does weird animation during scene. The knight and barbarian
+should be looking towards the green glow instead of away. When barbarian blows horn the smoke doesn't come out of horn."
+/ "Also the end scene with king needs a better flow along with game title coming in".
+- Re-shot: the horn (its mist from the bell); the duel as a close-up of the locked blades from a new keyframe on full Veo
+  3.1 (a Veo 3.1 Fast re-take of the wide duel still grew a sword and morphed the knight's shield and plume); the shaking
+  ground from behind them, facing the green column (new keyframe); the block (the Priest young and beardless) and a new
+  stand where the mage holds only her staff (new keyframe); the breach with the archer's bow lowered (new keyframe).
+- The ending: the King's second bite cut out (a 1.25x punch-in for the crown and the gulp); no black and no lightning:
+  trailer 8's title run from the moment the logo flies in, straight after the gulp, cue B swelling under his stare and
+  hitting on the slam. 68 s (was 76); -14.4 LUFS, -1.5 dB peak. 1080p 91 MB, 720p 39 MB, the 20 MB version 19 MB.
+- tools/trailer9_edit.py (CUTS can punch in; the dark cue starts under the shaking however short); tools/trailer9_script.md
+  has the new story, trims and credits. The rework cost 48,424 credits (keyframes 7,826, videos 40,597); 158,375 in all.
