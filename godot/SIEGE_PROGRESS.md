@@ -6477,3 +6477,12 @@ graphic art, what the game is about ect that I can give to it so it posts on soc
 - Kevin: "100mb limit" (Muse's upload). The kit now comes in three zips, each with all of the text and under 99 MB
   (build_muse_kit.py PARTS, --zip-limit): 1 the art (65 MB), 2 the vertical video (43 MB), 3 the landscape video
   (79 MB). Unzipped into one place they make the whole kit; START_HERE.md lists them, assets.json says which has a file.
+
+## Trailer 9, the CGI trailer: plan and one test shot (tools only, no build)
+Kevin: "Was thinking of doing a full trailer with cgi" -- "Yes" to a shot list and one test shot. tools/trailer9_script.md:
+a 60 s cinematic, 11 AI-generated shots each started from the game's own pictures (made into a cinematic keyframe,
+then animated), the Herald's narration (two new lines), trailer 8's score and real title, "Not actual gameplay footage"
+on the title card; the costs per model (one shot: Runway Gen-4.5 3,636 credits, Veo 3.1 Fast 7,271, Seedance 2.5
+16,803, Veo 3.1 19,390). The test shot, the Grave Wyrm (flow "Fatebound trailer 9 (CGI)"): the game's still
+(art_sources/trailer9/refs/wyrm_still.jpg, public so the flow can fetch it) -> 2 keyframes (gpt-image-2.5-sunburst,
+866 credits) -> 8 s of video (Veo 3.1 Fast, 7,271). 8,137 credits spent.

@@ -45,3 +45,9 @@ Plus a keyframe (an image edit) for each shot. Trailer 8 cost 4,567 credits in a
 The game's Wyrm still (art_sources/trailer9/refs/wyrm_still.jpg, from trailer 8's recording) -> a cinematic keyframe
 (gpt-image-2.5-sunburst edit, the creature and the pit kept) -> 8 s of video (Veo 3.1 Fast). On the flow "Fatebound
 trailer 9 (CGI)".
+
+Made (Kevin: "Yes"): two keyframes (866 credits; the second picked: the Wyrm bigger in frame) and the 8 s clip
+(7,271): 8,137 credits ($1.48) in all. The Wyrm turns to the lens, spreads its wings, stalks forward and roars, a
+burst of green soul-fire filling the frame. On-model enough to read as the Grave Wyrm, but the video model adds bone
+detail the game's faceted Wyrm doesn't have. Its own sound (bone creaks, wing beat, roar) peaks at -1 dB. Waiting on
+Kevin's verdict before any more shots.
