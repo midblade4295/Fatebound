@@ -6621,3 +6621,5 @@ make the graphic of the features look very eye catching. Use eleven or meshy if 
 - This week's sale (from 2026-10-19): Mammoth Hunter Barbarian -50 % (375), Lionguard Knight -35 % (490), Wolfstalker
   Ranger -25 % (565); next week Geode Golem, Golden Rose Duelist, Privateer Musketeer.
 - Version 0.31.203, versionCode 289, SERVER_BUILD 0.31.203.
+- Preview APK: build/Fatebound-Siege-0.31.203-fatebound.apk (33,035,228 bytes, Vulkan only, preview key), sha256
+  7d7dc73ab0e12c9ad34280cc09b1089f800ea56744e10da364c52b353d5dcff1. Sent to Kevin with the shots.
