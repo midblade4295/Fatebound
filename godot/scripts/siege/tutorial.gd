@@ -24,6 +24,10 @@ extends Control
 # since players met him in the UI training. Also in training talk about how to teleport back to base and it heals
 # you"): he opens knowing you (scripts/app/herald_intro.gd introduced him), the Rift's line calls back to the King's
 # chair, and the recall's lines say HOME teleports you back to the castle and the castle heals you.
+# 0.31.206 (Kevin: "Also teach players about how wards work in the training"): after the jungle, WARD -- the fog of war
+# (you see only what your side's heroes, minions, towers and wards see), the brush (whoever's in it is hidden from
+# outside unless a ward of yours is in it too), then walk into the brush nearest you and tap WARD; done: a ward watches
+# 90 s unseen by the enemy, you carry two and they come back (moba_vision.gd). Voiced like the rest.
 const Sim = preload("res://scripts/siege/siege_sim.gd")
 const VisualTheme = preload("res://scripts/ui/visual_theme.gd")
 const UI2 = preload("res://scripts/app/ui2.gd")
@@ -50,6 +54,8 @@ const LANE_THEIRS := Vector2(0.0, -3.0)      # ...theirs, walking south: they me
 const LANE_KINDS := ["melee", "melee", "melee", "caster", "caster", "caster"]
 const TOWER_KINDS := ["melee", "melee", "melee", "melee", "caster", "caster"]
 const CAMP_WEAK := 0.6            # the tutorial's Grave Archers: "a bit under the weather"
+const WARD_NEAR := 14.0           # 0.31.206: the ward step's brush farther than this -> a hop to WARD_HOP m short of it
+const WARD_HOP := 7.0
 
 # Each step: talk (lines before the task), task (shown as the objective), done (lines once it's done). A line is
 # [voice id, caption, the Herald's pose]. "@pay": the last line, by whether the tutorial's gold is still to be paid.
@@ -90,6 +96,11 @@ const STEPS := [
 		["t5_jg_2", "Our Grave Archers are just over there. Go and clear the camp. They do hit back, so keep that shield handy.", "hanging"]],
 		"task":"Clear the Grave Archers camp",
 		"done":[["t5_jg_done", "Cleared! That's the jungle: a team that takes its camps out-earns one that doesn't. Free gold. Well. Paid for in bruises.", "hold"]]},
+	{"id":"ward", "talk":[
+		["t5_ward_1", "See that grey murk out there? That's the fog of war. We only see what our heroes, minions, towers and wards can see. Anything else could be an enemy. Or a very large bush.", "peeking"],
+		["t5_ward_2", "Speaking of bushes: that tall grass is brush. Anyone in it is invisible from outside, unless there's a ward in there with them. Walk into the brush, then tap WARD.", "pointing"]],
+		"task":"Walk into the brush and tap WARD",
+		"done":[["t5_ward_done", "A ward! It watches for ninety seconds, and the enemy can't see it. You carry two, and they grow back. Put them where trouble comes from. Which, around here, is everywhere.", "leaning"]]},
 	{"id":"tower", "talk":[
 		["t5_tw_1", "Now, towers. They guard each lane and shoot whatever wanders in. Only basic attacks hurt them, and only from inside their range. No sniping. I checked.", "peeking"],
 		["t5_tw_2", "Golden rule: minions first. A tower shoots minions before heroes, unless you hit one of their heroes right under it. More paperwork, and here we are. Hit it three times.", "lying"]],
@@ -128,6 +139,7 @@ var _ours: Array = []         # the tower step's minions of ours
 var _camp: Dictionary = {}
 var _tw: Dictionary = {}
 var _tw_hits := 0
+var _brush: Dictionary = {}   # 0.31.206: the ward step's brush patch (moba_vision.gd brushes: {id, p, r})
 var _shield_t := 0.0
 var _w_done := false
 var _e_done := false
@@ -505,6 +517,31 @@ func _enter_step() -> void:
 					if not mob.is_empty():
 						mob.max_hp = float(mob.max_hp) * CAMP_WEAK
 						mob.hp = float(mob.max_hp)
+		"ward":
+			# the brush patch of ours nearest you (you're by our Grave Archers: one at the jungle's way in)
+			_brush = {}
+			var best := INF
+			for b in sim.moba.vision.brushes:
+				var ours: bool = ((b.p as Vector2).y > 0.0) == (t == 0)
+				var dd: float = (me.pos as Vector2).distance_to(b.p)
+				if ours and dd < best:
+					best = dd
+					_brush = b
+			if not _brush.is_empty() and best > WARD_NEAR:
+				# far off (home, or wandering): paperwork again -- you, along the way to it, with it in sight
+				var pts := PackedVector2Array([me.pos])
+				pts.append_array(sim.find_path(t, me.pos, _brush.p))
+				pts.append(_brush.p)
+				var left := WARD_HOP
+				var at: Vector2 = _brush.p
+				for i in range(pts.size() - 1, 0, -1):
+					var seg: float = pts[i].distance_to(pts[i - 1])
+					if seg >= left:
+						at = pts[i].lerp(pts[i - 1], left / seg)
+						break
+					left -= seg
+					at = pts[i - 1]
+				_hop(at)
 		"tower":
 			_tw = {}
 			for tw in sim.moba.towers:
@@ -525,6 +562,8 @@ func _enter_task() -> void:
 			_start = me.pos
 		"lane":
 			_lh0 = int(me.get("lh", 0))
+		"ward":
+			me["ward_ch"] = maxf(float(me.get("ward_ch", 0.0)), 1.0)     # (a charge to put down, whatever was used)
 		"abilities":
 			_shield_t = 0.0
 			_w_done = false
@@ -586,6 +625,13 @@ func on_event(e: Dictionary) -> void:
 		"tower_hit":
 			if str(e.get("by", "")) == str(me.id) and not _tw.is_empty() and int(e.get("tw", -1)) == int(_tw.id):
 				_tw_hits += 1
+		"ward":
+			if mine and str(STEPS[step].id) == "ward":
+				if sim.moba.vision.brush_at(e.get("pos", me.pos)) >= 0:
+					_complete_task()
+				else:
+					me["ward_ch"] = float(me.get("ward_ch", 0.0)) + 1.0     # (that one's on the house)
+					_say_note("That's open ground. Into the brush first, then WARD.")
 
 func _say_note(t: String) -> void:
 	_note = t
@@ -620,6 +666,8 @@ func task_done() -> bool:
 			return false                               # (its "recall_done")
 		"shop":
 			return false                               # (a "buy")
+		"ward":
+			return false                               # (a "ward" in a brush)
 		"abilities":
 			return _shield_t >= SHIELD_FOR and _w_done and _e_done and (me.get("picks", []) as Array).is_empty()
 		"jungle":
@@ -739,6 +787,13 @@ func task_info() -> Dictionary:
 			if (me.pos as Vector2).distance_to(_camp.p) < 7.0:
 				info2["button"] = "attack"
 			return info2
+		"ward":
+			if _brush.is_empty():
+				return {}
+			var info4 := {"pos": _brush.p, "label": "BRUSH", "ring": float(_brush.r)}
+			if sim.moba.vision.brush_at(me.pos) >= 0:
+				info4["button"] = "ward"
+			return info4
 		"tower":
 			if _tw.is_empty():
 				return {}

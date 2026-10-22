@@ -764,8 +764,8 @@ func _buttons() -> Array:
 		return []
 	var br := Vector2(size.x, size.y)
 	# 0.31.167 5V5 (Kevin: "class roles like League of Legends"): Q, W, E and R in an arc round ATTACK (Wild Rift's
-	# layout), DODGE and WARD above them; on the narrowest screen (420 wide) Q and W reach as far left as the old
-	# ABILITY did. The Crusader's W is his shield, held (it was its own BLOCK button).
+	# layout), DODGE and WARD above them (0.31.206: HOME over DODGE); on the narrowest screen (420 wide) Q and W reach as
+	# far left as the old ABILITY did. The Crusader's W is his shield, held (it was its own BLOCK button).
 	var crus: bool = me.cls == "knight" and bool(me.get("up", false))
 	return [
 		{"id":"attack", "c":br + Vector2(-78, -108), "r":46.0},
@@ -775,7 +775,9 @@ func _buttons() -> Array:
 		{"id":"ult", "c":br + Vector2(-66, -218), "r":36.0},
 		{"id":"dodge", "c":br + Vector2(-46, -300), "r":28.0},
 		{"id":"ward", "c":br + Vector2(-122, -306), "r":24.0},
-		{"id":"recall", "c":br + Vector2(-198, -300), "r":24.0},     # 0.31.181: home to the fountain
+		# 0.31.181: home to the fountain. 0.31.206 (Kevin: "Put the teleport button above the dodge button"): over DODGE
+		# (was at the row's left end, over W)
+		{"id":"recall", "c":br + Vector2(-46, -364), "r":24.0},
 	]
 
 func _modal_open() -> bool:

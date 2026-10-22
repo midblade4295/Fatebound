@@ -90,3 +90,8 @@ Edward, two takes each, 1,568 credits; take a of each kept (vo/<id>.mp3 replaced
 0.31.204 (Kevin: "redo the locker menu. Change the name to armory"): intro_script.json's tour_locker says "Your Armory"
 now and was voiced again: eleven_v4, Edward (goT3UYdM9bhm0n2lmKQx), two takes, 210 credits; take a kept (pocketsphinx
 heard more of its line; neither clipped) as vo/tour_locker.mp3. The id stays tour_locker (the tab keeps its id).
+
+0.31.206 (Kevin: "Also teach players about how wards work in the training"): script.json's t5_ward_1 (the fog of war),
+t5_ward_2 (the brush; walk in and tap WARD) and t5_ward_done (90 s, unseen, two charges that come back), after the
+jungle's lines: eleven_v4, Edward (goT3UYdM9bhm0n2lmKQx), two takes each, 1,010 credits; take b of each kept
+(pocketsphinx heard a few more of its words; none clipped) as vo/t5_ward_*.mp3.

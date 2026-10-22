@@ -8,6 +8,7 @@ extends SceneTree
 #    Herald talks (the HUD's buttons too), and steps during a task; you can't fall;
 #  - each task done the way a player does it: walk; two last hits on the wave put down for it; the scoreboard; HOME (a
 #    hit cancels it, then home); a buy at the shop; Q held, W, E and the upgrade cards; the Grave Archers cleared;
+#    (0.31.206) a ward: on open ground it's refused (the charge back), in the brush it's done;
 #    three hits on their outer tower with our minions under it; then the talk to the end, which leaves the match
 #    ("tutorial" -- nothing to pay here: no profile).
 #   godot --headless --path godot -s res://tests/tutorial_test.gd
@@ -70,7 +71,7 @@ func _run() -> void:
 			missing.append(l[0])
 		if text.is_empty() or str(text.get(str(l[0]), "")) != str(l[1]):
 			differ.append(l[0])
-	check(lines.size() == 33 and missing.is_empty(), "%d lines, every one voiced (missing %s)" % [lines.size(), str(missing)])
+	check(lines.size() == 36 and missing.is_empty(), "%d lines, every one voiced (missing %s)" % [lines.size(), str(missing)])
 	check(differ.is_empty(), "the captions are the recorded script's (differ: %s)" % str(differ))
 	var bad := []
 	var small := []
@@ -188,6 +189,29 @@ func _run() -> void:
 		s._damage(me, mob, 99999.0)
 	await _frames(4)
 	check(tut.phase == "done", "cleared: done")
+	# ---- ward (0.31.206, Kevin: "Also teach players about how wards work in the training")
+	await _talk_through(tut)
+	var br: Dictionary = tut._brush
+	var vis = s.moba.vision
+	check(str(tut.STEPS[tut.step].id) == "ward" and not br.is_empty() and ((br.p as Vector2).y > 0.0) == (int(me.team) == 0)
+		and float(me.ward_ch) >= 1.0 and (me.pos as Vector2).distance_to(br.p) <= Tut.WARD_NEAR and vis.brush_at(me.pos) < 0,
+		"ward: a brush of ours (you were at the castle: a hop to %.0f m short of it), a charge to put down" % (me.pos as Vector2).distance_to(br.p))
+	var info: Dictionary = tut.task_info()
+	check(info.get("label", "") == "BRUSH" and not info.has("button"), "...the way to the brush shown")
+	var open := (br.p as Vector2) + Vector2(float(br.r) + 4.0, 0.0)
+	if vis.brush_at(open) >= 0:
+		open = (br.p as Vector2) - Vector2(float(br.r) + 4.0, 0.0)
+	me.pos = open
+	var ch0 := float(me.ward_ch)
+	s.act("you", "ward")
+	await _frames(3)
+	check(tut.phase == "task" and float(me.ward_ch) >= ch0 - 0.01 and tut.note_label.visible, "a ward on open ground: not it (the charge back, a word from him)")
+	me.pos = br.p
+	await _frames(2)
+	check(tut.task_info().get("button", "") == "ward", "in the brush: TAP on WARD")
+	s.act("you", "ward")
+	await _frames(3)
+	check(tut.phase == "done" and vis.wards.any(func(w): return int(w.brush) == int(br.id) and int(w.team) == int(me.team)), "a ward in the brush: done")
 	# ---- tower
 	await _talk_through(tut)
 	var tw: Dictionary = tut._tw
