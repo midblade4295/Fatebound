@@ -52,10 +52,11 @@ func _process(d: float) -> bool:
 	if frames == 18:
 		app.show_tab("shop")
 	if frames == 20:
-		# a button in the middle of the shop: a drag that starts on it scrolls and doesn't press it
+		# a button in the middle of the shop: a drag that starts on it scrolls and doesn't press it (0.31.202: the jump bar
+		# pushed the featured outfit down; its tap-to-open button is centred near 527 px)
 		for c in sc.find_children("*", "Button", true, false):
 			var r: Rect2 = (c as Control).get_global_rect()
-			if (c as Control).is_visible_in_tree() and r.get_center().y > 330 and r.get_center().y < 520 and r.size.x > 40:
+			if (c as Control).is_visible_in_tree() and r.get_center().y > 330 and r.get_center().y < 600 and r.size.x > 40:
 				play_btn = c
 				break
 		pp = play_btn.get_global_rect().get_center()

@@ -6558,3 +6558,28 @@ unique look and I want them especially the ultimates to look exciting".
 - Verified: suite all passed (100, --quick; the runner's 25-minute wrapper cut it off at the analytics tests, those
   three were run on their own), human soak stalls=0. Preview APK: build/Fatebound-Siege-0.31.201-fatebound.apk (33 MB,
   preview key from the handoff folder, ANDROID_HOME=/root/android-sdk; Vulkan only, BASE OK), sha256 8d179b95...c8e6f6d07a.
+
+## 0.31.202 — the shop, spruced up
+Kevin: "Let's spruce up and beautify the shop menu" (the menu's SHOP tab, the MARKET -- his pick over the match's item
+shop). Everything it sells, every price and every button stays; the look and the way round it change (screens.gd):
+- The banner: gems twinkling over the painted stall, a shine sweeping across it.
+- A jump bar under it: FEATURED / OUTFITS / GEMS glide the page to each (_scroll_to).
+- The week's outfit: rays and a glow of its rarity turning behind him, a pool of light at his feet, stars winking, a
+  dark wash under the words, the frame glowing its rarity, "FEATURED · RARE" with a crown, a shine over its price; the
+  countdown in a chip with an hourglass; the three picks as little cards (him over his own place, gold on the one
+  showing).
+- The outfits by role, the Locker's order (TANK ... SUPPORT): a row of the six roles' coins that jump to each, then a
+  role's name, its heroes, its sets on top and its Frostbound line under -- was one wall of 36 cards.
+- A new outfit card: the hero in it standing in his own place (Champions.card_art; frosted over with a glaze and a few
+  winking stars for the Frostbound line), a glow of its rarity behind him (a set: turning rays too), his shadow, the
+  set's name (smaller when long) and the hero's in his colour, small corner tags (EPIC / RARE; + HERO, OWNED ✓,
+  WORN), "or 40K" as a coin chip, a gold frame and a gold WORN button on the one he wears.
+- Gem packs: the starter pack floats and shines, a "ONE-TIME OFFER" tag; the best-value pack shines; the closing
+  "chests are earned by playing · never sold" in a chip with a chest.
+- tests/app_flow_test.gd: the GEMS jump scrolls down to the gem packs, the role coins are there. tests/app_scroll_test.gd
+  looks for its mid-shop button down to 600 px (the jump bar pushed the featured outfit's button to ~527). tools/shop_shot.gd
+  (review shots of the match's item shop, made while choosing which shop).
+- Version 0.31.202, versionCode 288, SERVER_BUILD 0.31.202. No content pack changed (the art used is in the base or
+  already in the packs); the protocol is unchanged.
+- The quick suite: 99 of 100 passed on the first run, app_scroll_test failed on the moved button; with the window
+  widened it and app_flow_test pass.
