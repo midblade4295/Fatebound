@@ -6905,3 +6905,12 @@ Kevin: "Make it so more rooms can be created".
 - Needs the server redeploy (Kevin's): server/siege_server.gd (with 0.31.209's). How many rooms depends on the server's
   cores: its start-up line says ("N rooms of 10 players ... K cores, rooms on worker threads"); one core stays at 6.
   server/deploy/fatebound-siege.env.example documents SIEGE_MAX_ROOMS / SIEGE_LOAD_LIMIT / SIEGE_THREADS.
+- For Kevin's server (Google Cloud e2-standard-2: 2 vCPU = the two hyperthreads of ONE physical core, Xeon 2.2 GHz;
+  7.7 GiB): the room's price is now the DEAREST room measured lately, not the average (a match costs more as it grows,
+  so a burst of new, cheap matches could have opened more rooms than the cores carry once grown), starting a fresh
+  server at 20% of a core (ROOM_COST_START) and fading slowly (COST_FADE) toward what's measured, never below 12.5%.
+  Twelve phones at once on this 2-core box: 7 rooms open, the other 5 "full"; grown, the 7 cost ~215 ms/s each here
+  (the bench's phones on the same cores), 23-55 frames/s -- the dearest then holds new rooms to about 6. Expect about
+  that on the e2-standard-2 too (hyperthreads share one core; its clock is lower): more rooms there need more cores
+  (e2-standard-4: two physical cores). The room tests (match_rooms, next_match, join_friend, rejoin, idle, rooms_load,
+  online_five) pass.

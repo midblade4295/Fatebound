@@ -166,7 +166,8 @@ const ROOMS_PER_CORE := 6            # 0.31.209 (Kevin: "Make it so more rooms c
                                      # (tools/rooms_bench.gd), so 6 leave a core's last quarter to the main loop
 const MAX_ROOMS_CAP := 128           # SIEGE_MAX_ROOMS at most
 const LOAD_LIMIT := 0.75             # 0.31.209: no new room when the rooms' work would take more than this share of the cores
-const ROOM_COST := 0.125             # 0.31.209: a room's share of a core at least (a 5v5 room, minions out: ~125 ms/s)
+const ROOM_COST := 0.125             # 0.31.209: a room's share of a core at least (a 5v5 room, minions out: ~125 ms/s here)
+const ROOM_COST_START := 0.2         # ...and before any is measured (a fresh server: a grown room on a slower core, say)
 const IDLE_BOT := 45.0               # 0.31.119: s without input before a bot plays for them (SIEGE_IDLE_BOT)
 const IDLE_KICK := 180.0             # ...and before they're removed (SIEGE_IDLE_KICK)
 const CLOSE_IDLE := 4006
@@ -197,6 +198,7 @@ class Room:
 	var snap_bytes := PackedByteArray()
 	var w_step := 0
 	var w_snap := 0
+	var ld_work := 0                  # microseconds of it over the load window (_load_tick)
 
 var tcp := TCPServer.new()
 var clients := {}                    # cid -> {ws, unit, name, hello, room, move, hold, joined_at, msgs, msg_clock}
@@ -208,7 +210,8 @@ var max_rooms := clampi(OS.get_processor_count() * ROOMS_PER_CORE, MAX_ROOMS, MA
 var threads_on := true               # 0.31.209: rooms step on worker threads (SIEGE_THREADS=0: all on the main loop, as before)
 var load_limit := LOAD_LIMIT         # (SIEGE_LOAD_LIMIT)
 var load_share := 0.0                # 0.31.209: the rooms' work over the last LOAD_WINDOW s, as a share of every core
-var room_cost := ROOM_COST           # 0.31.209: a running room's share of a core, as measured (never below ROOM_COST)
+var room_cost := ROOM_COST_START     # 0.31.209: a running room's share of a core, as measured (never below ROOM_COST)
+var room_cost_seen := ROOM_COST_START  # the dearest room measured lately (fading by COST_FADE a window)
 var host := "127.0.0.1"
 var port := Net.DEFAULT_PORT
 var max_players := Net.TEAM_SIZE * 2   # humans in one room (0.31.169: the 5v5's ten heroes; 32 for Siege's 16 a side)
@@ -404,6 +407,7 @@ func _process(delta: float) -> bool:
 	for r in stepping:
 		_after_step(r)
 		work += r.w_step + r.w_snap
+		r.ld_work += r.w_step + r.w_snap
 	_load_tick(delta, work, stepping.size())
 	for rid in rooms.keys():
 		var r: Room = rooms[rid]
@@ -643,7 +647,7 @@ func _pick_room(party: String, prefer: Room = null) -> Room:
 		if _now() - _full_logged > 30.0:
 			_full_logged = _now()
 			_log("no new room: %d rooms at %d%% of a core each would be %d%% of the %d cores (limit %d%%; now %d%%)" % [rooms.size() + 1,
-				int(room_cost * 100.0), int(_projected(rooms.size() + 1) * 100.0), OS.get_processor_count(), int(load_limit * 100.0), int(load_share * 100.0)])
+				int(round(room_cost * 100.0)), int(round(_projected(rooms.size() + 1) * 100.0)), OS.get_processor_count(), int(load_limit * 100.0), int(load_share * 100.0)])
 		return null
 	var nr := Room.new()
 	nr.id = next_room
@@ -1346,27 +1350,31 @@ static func skin_on(looks, hero: String) -> String:
 	return ""
 
 # 0.31.209: how busy the rooms keep the machine -- their work (sim steps and snapshots, on every core) over LOAD_WINDOW s,
-# as a share of all the cores; _pick_room opens no room above load_limit
-# and from it what a running room costs (room_cost); a new room opens only while the rooms, it among them, would stay
-# within load_limit at that cost (a room in its countdown counted as running -- it soon is; a match costs more as it
-# goes on, its minions out, so the cost is the measured one or ROOM_COST, the larger).
+# as a share of all the cores (load_share) -- and what a room costs (room_cost); a new room opens only while the rooms,
+# it among them, would stay within load_limit at that cost (a room in its countdown counted as running -- it soon is).
+# A match costs more as it goes on (its minions out, its heroes' kits), so a room's cost is the DEAREST room measured
+# lately, not the average: a burst of new matches, cheap at first, mustn't open more rooms than the cores can carry
+# once they're grown. It starts at ROOM_COST_START, fades slowly (COST_FADE a window: about a third in half an hour)
+# toward what's measured and never goes below ROOM_COST. On two hyperthreads of one core (Google's e2-standard-2) a room's measured time grows while the other
+# thread works too -- so the cost and the load read higher there, and fewer rooms open: as it should be.
 const LOAD_WINDOW := 3.0
+const COST_FADE := 0.998
 var _ld_work := 0
 var _ld_t := 0.0
-var _ld_rooms := 0.0
 var _full_logged := -100.0
-func _load_tick(delta: float, work_us: int, stepping: int) -> void:
+func _load_tick(delta: float, work_us: int, _stepping: int) -> void:
 	_ld_work += work_us
 	_ld_t += delta
-	_ld_rooms += stepping * delta
 	if _ld_t >= LOAD_WINDOW:
-		var per_s := _ld_work / 1000000.0 / _ld_t          # (core-seconds of work a second)
-		load_share = per_s / _cores()
-		var avg := _ld_rooms / _ld_t
-		room_cost = maxf(ROOM_COST, per_s / avg) if avg >= 1.0 else ROOM_COST
+		load_share = _ld_work / 1000000.0 / _ld_t / _cores()
+		var dearest := 0.0
+		for r in rooms.values():
+			dearest = maxf(dearest, r.ld_work / 1000000.0 / _ld_t)
+			r.ld_work = 0
+		room_cost_seen = maxf(room_cost_seen * COST_FADE, dearest)
+		room_cost = maxf(ROOM_COST, room_cost_seen)
 		_ld_work = 0
 		_ld_t = 0.0
-		_ld_rooms = 0.0
 
 func _cores() -> float:
 	return maxf(1.0, float(OS.get_processor_count()))

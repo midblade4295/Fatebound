@@ -3,7 +3,7 @@ extends SceneTree
 #   A :8141  rooms of one phone (SIEGE_MAX_PLAYERS=1), the default cap: "status" says it -- 6 a core (at least 6);
 #            five phones, five rooms, five matches stepping at once (on the cores) -- each phone gets its own match's
 #            snapshots at the full rate (20 a second), its clock running, none of another's; "status" says the load
-#   B :8142  SIEGE_LOAD_LIMIT just over one room's share of the cores (ROOM_COST): the first phone gets a room, the
+#   B :8142  SIEGE_LOAD_LIMIT just over one room's share of the cores (ROOM_COST_START): the first phone gets a room, the
 #            second is turned away "full" (bye full, 4002) though SIEGE_MAX_ROOMS is 8 -- one more room would keep the
 #            cores busier than the limit
 #   godot --headless --path godot -s res://tests/rooms_load_test.gd
@@ -42,9 +42,9 @@ func _server(port: int, env: Dictionary) -> void:
 	pids.append(pid)
 
 func _init() -> void:
-	_server(PA, {})
-	# B: room for one room's cost, not two
-	var lim := 1.5 * Server.ROOM_COST / maxf(1.0, float(OS.get_processor_count()))
+	_server(PA, {"SIEGE_LOAD_LIMIT":"4"})                  # (A: five rooms whatever this machine's cores)
+	# B: room for one room's cost (before any is measured: ROOM_COST_START), not two
+	var lim := 1.5 * Server.ROOM_COST_START / maxf(1.0, float(OS.get_processor_count()))
 	notes.lim = lim
 	_server(PB, {"SIEGE_MAX_ROOMS":"8", "SIEGE_LOAD_LIMIT":"%.5f" % lim})
 
