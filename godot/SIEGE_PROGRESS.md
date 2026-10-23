@@ -6704,3 +6704,50 @@ Kevin: "Put the teleport button above the dodge button" and "Also teach players 
 - The quick suite: all 102 passed. Version 0.31.206, versionCode 292, SERVER_BUILD 0.31.206 (no server change).
 - Preview APK: build/Fatebound-Siege-0.31.206-fatebound.apk (33,051,612 bytes, Vulkan only, preview key), sha256
   cb2197b6376013e77609450801b64067b6c60cf0a828a888dbdaf8e8f7dcb28b. Sent to Kevin with the lesson's shots.
+
+## 0.31.207 — the match's hitches, and shots that fly smoothly online
+Kevin: "The match keeps getting stutters. Also the projectiles aren't smooth when traveling" (his phone's log, an
+online 5v5 on 0.31.206: 30 fps, the GPU ~20 ms a frame; long frames at the first fights -- 0:23 a 319 ms frame, 0:35-0:36
+344 and 350 ms -- and whenever a crowd of bodies came: each minion wave (0:15, 0:45, 1:15) and the camps (0:31), the view
+62-78 ms in one frame).
+- What made them (tools/hitch_bench.gd, new: a 5v5 of bots, you one, every frame timed; each long one listed with what
+  was new in it -- spell_fx's particle and sprite materials, the engine's pipeline compiles by kind, nodes, bodies, the
+  pool, the camera, the events): the 0.31.201 spell looks build their particle shaders and materials the first time
+  each is cast, and none were in the match's warm-up; and a wave's 36 minions (the camps' 36 monsters) were 36 bodies
+  built in one frame.
+- The loading card (siege_mode.gd _warm_step), after its tour of the keeps with the camera back on you:
+  - every look of this match's heroes once, on your own hero, a look a frame (spell_fx.gd warm_jobs): each hero's
+    casts (W, E, the new heroes' Q), an old class's Q, the ultimate; the one-off events (with the Barbarian's,
+    Dragoon's, Golem's and Duelist's landings and strikes); the lasting states (shield, frost, mark, stone, parry,
+    poison, a dash's trail, the ultimates' auras, the jungle buffs); the zones; a trap; each projectile's trail;
+  - the jungle's six monsters' bodies beside you (siege_view.gd warm_bodies);
+  - two waves' minion bodies into a pool, four a frame (prefill_minions), the first of each kind and side drawn;
+  - a fight's own looks (warm_fight): a hit's spark, numbers and blood, a pool of it, a pooled body falling and its
+    weapons flying;
+  - then all of it gone before the card lifts (spell_fx clear_all, siege_view warm_end; what the view made for a look
+    -- smoke, blasts, roots -- hidden till its timer frees it). The card waits for every job (its 10 s limit as
+    before); about a second longer on the phone. The log's "warm-up" line says the looks shown and bodies pooled.
+- The minion pool (siege_view.gd): a minion's body, its minion gone, waits hidden (its animation off) in a pool by
+  kind and side (at most 30 each) for the next one, and comes out alive -- placed, its ring up, its weapons back in
+  its hands, idle. Any other body still to build waits its turn, three a frame (BUILD_PER_FRAME; heroes never wait).
+- Shots online (siege_net.gd): a projectile slid from its last position to its newest on the render clock, which runs
+  75 ms behind the newest snapshot -- past each 50 ms step -- so each snapshot it jumped ahead and stopped, and it
+  vanished a snapshot short of what it hit. Now each keeps its positions with their server times (PROJ_HIST 6, as the
+  heroes' net_hist) and is drawn on that same clock: between the samples round it; before the first, eased out of
+  the hand along its flight; past the newest, on along it (at most 0.25 s); one that hit flies on to the impact and
+  goes when it gets there. The client only: no server change.
+- tests/fx_warm_test.gd (new): the card waits for every job then lifts; nothing it showed is left (no effect live or
+  held, the pooled bodies hidden, no loose weapons or blood, the view's hidden); the match clock waited; then all 18
+  heroes' looks played on you and cleared, no errors. tests/minion_pool_test.gd (new): the prefill's 78 bodies (and
+  no more), the first of each kind and side shown then put away; no frame builds more than three; the first two waves
+  out of the pool (72) with none built for the second; bodies back from the pool alive, those waiting hidden.
+  tests/net_interp_test.gd: the arrow on the render clock -- each frame's step its speed's (0.37 m at 60 fps) within
+  15 %, reaching its target (the old slide stepped 0.00 to 1.47 m).
+- Unchanged: the 30 fps cap and the 50 % 3D resolution (Kevin's lock, 0.31.163).
+- The bench, 75 s, the same seed: without the card's warm-up 11 long frames in 360 (worst 4.0x the median), 5 particle
+  and 9 sprite materials made mid-match; with it 5 in 448 (worst 3.6x), 2 and 1 (values only: their shaders made on
+  the card), 72 of the minions' bodies from the pool. What's left there: two pipelines drawn late (0:22, 0:33; not
+  found yet -- the next phone log will say whether they show) and the camps' 36 monsters, three a frame at 0:30.
+- The quick suite: all 104 passed. Version 0.31.207, versionCode 293, SERVER_BUILD 0.31.207 (no server change).
+- Preview APK: build/Fatebound-Siege-0.31.207-fatebound.apk (33,063,900 bytes, Vulkan only, preview key), sha256
+  8fa8f95df65e608bbb99ee0452f42cee62cfa3f06d6972d8f0a38b244bedb62d. Sent to Kevin.
