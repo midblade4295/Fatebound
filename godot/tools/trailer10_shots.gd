@@ -19,6 +19,11 @@ extends SceneTree
 # match music is off (the edit lays the theme under the whole trailer).
 #   RUN=<run> OUT_DIR=<dir>  [SNAP=t1,t2,...: PNG stills at those seconds of the take, no Movie Maker needed]
 # Prints REC_START <frame> when the take begins (the edit trims to it) and SHOT_DONE when it's over.
+# AD_SAFE=1 (TikTok's ad review, Oct 23 2026: the cut was rejected for "FIRST WIN +150", "16 HEROES +1 FREE" and the loot
+# line -- "guaranteed free in-game rewards tied to user actions"): no rewards or freebies anywhere on screen -- every hero
+# owned (no FREE badges, no prices, no "+1 FREE"), the day's first win and the Discord gift already claimed (no FIRST
+# WIN tab, no JOIN OUR DISCORD +100), Home's chest row, the clan's CLAN CHEST and its "gets the Clan Chest" line hidden,
+# and the King take's results without the rewards (SPOILS OF WAR, chests earned, quests). tools/trailer10_edit.py --ad.
 const App = preload("res://scripts/app/siege_app.gd")
 const Screens = preload("res://scripts/app/screens.gd")
 const Eco = preload("res://scripts/meta/economy.gd")
@@ -28,6 +33,7 @@ const Sim = preload("res://scripts/siege/siege_sim.gd")
 const Loading = preload("res://scripts/siege/loading_screen.gd")
 const TitleScreen = preload("res://scripts/app/title_screen.gd")
 const Audio = preload("res://scripts/native_audio.gd")
+const Champions = preload("res://scripts/meta/champions.gd")
 
 const APP_RUNS := ["home", "armory", "golem", "outfit", "clan", "play", "chest"]
 const MATCH_RUNS := ["hook", "chair", "lane", "fight", "death", "tower", "wyrm", "king"]
@@ -78,6 +84,7 @@ class Touches extends Control:
 				draw_arc(p, 18.0 + 8.0 * (1.0 - a), 0.0, TAU, 48, Color(1, 1, 1, 0.7 * a), 2.0, true)
 
 var run := "home"
+var ad_safe := OS.get_environment("AD_SAFE") == "1"
 var out_dir := "/tmp/trailer10"
 var snaps: Array = []
 var frames := 0
@@ -168,10 +175,17 @@ func _seed_profile() -> void:
 		if not (p.d.skins as Array).has(id):
 			(p.d.skins as Array).append(id)
 	p.d.settings["moba_hero"] = ME
-	for k in ["royal", "gold", "silver", "wooden"]:
-		p.add_chest(k, {})
-	p.d.chests.slots[0].start = p.now() - 999999
-	p.d.chests.slots[1].start = p.now() - 3600
+	if ad_safe:
+		for h in Champions.ORDER:                      # every hero yours: no FREE, no prices, no "+1 FREE"
+			if not (p.d.heroes as Array).has(str(h)):
+				(p.d.heroes as Array).append(str(h))
+		p.d.discord = true                             # (no JOIN OUR DISCORD and its +100 gems)
+		p.d.first_win_day = Eco.day_key(p.now())       # (no FIRST WIN +150 under PLAY)
+	if not ad_safe:                                    # (AD_SAFE: no chests in the row -- and the row itself hidden)
+		for k in ["royal", "gold", "silver", "wooden"]:
+			p.add_chest(k, {})
+		p.d.chests.slots[0].start = p.now() - 999999
+		p.d.chests.slots[1].start = p.now() - 3600
 	p.save()
 
 func _social(with_clan: bool) -> void:
@@ -458,6 +472,8 @@ func _process(delta: float) -> bool:
 		_steer()
 		_auto_fire()
 		_keep_sturdy()
+	if ad_safe and app != null:
+		_ad_scrub(root)
 	for sn in snaps:
 		if absf(t - float(sn)) < 0.5 / 30.0:
 			_snap_next = "%s/%s_%05.2f.png" % [out_dir, run, float(sn)]
@@ -465,6 +481,20 @@ func _process(delta: float) -> bool:
 		print("SHOT_DONE ", run)
 		quit(0)
 	return false
+
+func _ad_scrub(n: Node) -> void:
+	# AD_SAFE: whatever speaks of rewards, hidden every frame (screens are rebuilt): Home's chest row (its plates, the
+	# chests in 3D, their buttons, the empty slots' WIN TO EARN / EMPTY), the clan's CLAN CHEST and any line about it
+	if n is CanvasItem and (n as CanvasItem).visible:
+		var hide := n.has_meta("chest_plate") or n.has_meta("clan_chest_tier") or n.has_meta("empty_slot") \
+			or (n.get_script() != null and str(n.get_script().resource_path).ends_with("chest_row.gd")) \
+			or (n is BaseButton and str(n.get_meta("action_key", "")).begins_with("chest_")) \
+			or (n is Label and ("clan chest" in (n as Label).text.to_lower() or (n as Label).text.strip_edges() in ["WIN TO EARN", "EMPTY"]))
+		if hide:
+			(n as CanvasItem).visible = false
+			return
+	for c in n.get_children():
+		_ad_scrub(c)
 
 var _settle := 0
 func _ready_to_roll() -> bool:
@@ -823,6 +853,8 @@ func _stage_king() -> void:
 	sturdy["you"] = 0.6
 
 func _take_king() -> void:
+	if ad_safe:
+		_after(4.0, func(): mode.profile = null)      # (AD_SAFE: the results without what the match paid)
 	var king: Vector2 = s().moba.king_pos(1)
 	_walk(king + Vector2(-2.2, 6.0), 0.8)
 	_after(0.9, func(): auto_attack = true)

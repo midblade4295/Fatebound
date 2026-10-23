@@ -9,7 +9,7 @@ into the trailer and mixes it: the game's own sound from each take, the Royal He
 ElevenLabs v4, his voice), and the game's theme (assets/music/match.ogg) under it all, dipping under him. No captions:
 the only words on screen are the game's own. The plan is in tools/trailer10_script.md.
 
-    python3 tools/trailer10_edit.py --rec <dir of <run>.avi + <run>.log> --out <mp4> [--preview] [--only a:b]
+    python3 tools/trailer10_edit.py --rec <dir of <run>.avi + <run>.log> --out <mp4> [--preview] [--only a:b] [--ad]
 
 1080 x 1920, 30 fps, H.264 + AAC, -14 LUFS (--preview: 540 x 960, quicker). Needs numpy, scipy, ffmpeg.
 """
@@ -134,6 +134,17 @@ GAME_LUFS = -21.0                   # each take's own sound, levelled
 GAME_GAIN = {"title": 3.0, "lobby": -2.0}
 MUSIC_GAIN = -6.0
 MUSIC_END = "title"                 # the theme fades out into the title (its own jingle and slam take over)
+
+
+def use_ad():
+    # --ad: the cut for TikTok's ads (Oct 23 2026, rejected: "FIRST WIN +150", "16 HEROES +1 FREE" and the loot line at
+    # 1:06-1:11 -- "guaranteed free in-game rewards tied to user actions"): no chest shot and no "Win, and there's loot"
+    # (line 18), from takes recorded with AD_SAFE=1 (trailer10_shots.gd: no rewards or freebies on screen)
+    global SHOTS, VO
+    keep = [i for i, d in enumerate(SHOTS) if d[0] != "chest"]
+    remap = {old: new for new, old in enumerate(keep)}
+    SHOTS = [SHOTS[i] for i in keep]
+    VO = [(k, remap[si], off, g) for (k, si, off, g) in VO if si in remap and k != 18]
 
 
 def shot_frames(d):
@@ -281,7 +292,10 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--preview", action="store_true")
     ap.add_argument("--times", action="store_true", help="print where each shot and line falls, and stop")
+    ap.add_argument("--ad", action="store_true", help="the ad cut (TikTok's review): no chest, no loot line; AD_SAFE takes")
     a = ap.parse_args()
+    if a.ad:
+        use_ad()
     tl, total = timeline()
     if a.times:
         for i, (d, at, nf) in enumerate(tl):

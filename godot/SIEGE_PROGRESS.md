@@ -6948,3 +6948,13 @@ Kevin: "So maybe I should reenable the join in progress system so players can ge
   third room is allowed; Z "full" though room 1 has a seat, its match past the window), tests/late_join_test.gd (new,
   8143: PLAY AGAIN and a hello late-joined into a young match with one room allowed; "full" past the window).
 - Needs the server redeploy (Kevin's): server/siege_server.gd.
+
+## Trailer 10 -- the ad cut for TikTok (tools only, no build)
+TikTok's ad review rejected the gameplay trailer ("Data Theft": "FIRST WIN +150" and "16 HEROES+1 FREE · 3 OUTFITS·0
+TITLES" on screen with the audio at 1:06-1:11 about loot -- "guaranteed free in-game rewards tied to user actions").
+- tools/trailer10_shots.gd AD_SAFE=1: no rewards or freebies on screen -- every hero owned, the day's first win and the
+  Discord gift claimed, Home's chest row (and WIN TO EARN / EMPTY) hidden, the clan's CLAN CHEST and its line hidden, the
+  King take's results without what the match paid (the mode's profile let go just before the end).
+- tools/trailer10_edit.py --ad: no chest shot, no loot line; the King's VICTORY (its rewards-free results) into the title.
+- Re-recorded with AD_SAFE: home, armory, clan, play, king. Fatebound-Trailer-10-ad.mp4 (1080 x 1920, 74.4 s, 138 MB)
+  and -ad-20MB.mp4 (720 x 1280, 19.3 MB). The original trailer is unchanged.

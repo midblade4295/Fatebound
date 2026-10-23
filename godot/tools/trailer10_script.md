@@ -54,3 +54,13 @@ the game's theme (assets/music/match.ogg) runs under it all, dipping under him.
 - Takes used: the Herald's take 2 for every line but "They always poke the Grave Wyrm." and "Fatebound." (take 1).
 - ElevenLabs (flow "Fatebound trailer 10 (vertical gameplay, the Herald)", R7eUCVBIbKvO8oU4Aa1b): the read, two takes,
   2,042 credits (estimated first); the word timings, 0.
+
+## The ad cut (TikTok ads, Oct 23 2026)
+TikTok's ad review rejected the trailer: the on-screen "FIRST WIN +150" and "16 HEROES +1 FREE · 3 OUTFITS · 0 TITLES"
+with the Herald's loot line at 1:06-1:11 read as "guaranteed free in-game rewards tied to user actions". The ad cut
+(74.4 s) shows no rewards or freebies anywhere: Home, the Armory, the clan, PLAY's hero window and the King take re-recorded
+with `AD_SAFE=1` (every hero owned -- no FREE badges, prices or "+1 FREE"; the first win and the Discord gift claimed --
+no FIRST WIN tab, no JOIN OUR DISCORD +100; Home's chest row hidden, WIN TO EARN with it; the clan's CLAN CHEST and its
+"gets the Clan Chest" line hidden; the results without SPOILS OF WAR, the chests earned and the quests), and
+`trailer10_edit.py --ad` drops the chest shot and "Win, and there's loot. Lovely, shiny loot." -- the King's VICTORY
+goes straight to the title. Every other take and line as before.
