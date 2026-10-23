@@ -5,8 +5,8 @@ extends SceneTree
 # focus on watching gameplay instead of reading").
 #
 # Takes of the real game as a player sees it on the phone, one a process, each recorded by Movie Maker in 9:16
-# (tools/trailer8_render.sh with SCRIPT=res://tools/trailer10_shots.gd, 1080 x 1920), then cut and mixed by
-# tools/trailer10_edit.py under the Royal Herald (tools/trailer10_script.md).
+# (tools/trailer10_render.sh <run>: 1080 x 1920, the game's own 420 x 780 design size stretched to it as on a phone),
+# then cut and mixed by tools/trailer10_edit.py under the Royal Herald (tools/trailer10_script.md).
 #  - The app's own screens: Home, the Armory, a champion's window, the clan, PLAY's hero window, a chest -- the real app
 #    with a mid-game profile, never the live server (SIEGE_URL unreachable; the friends and the clan are sample data, as
 #    the server's answers would have them: tools/store4_app.gd's), and the title screen and the loading screen as players
@@ -33,7 +33,7 @@ const APP_RUNS := ["home", "armory", "golem", "outfit", "clan", "play", "chest"]
 const MATCH_RUNS := ["hook", "chair", "lane", "fight", "death", "tower", "wyrm", "king"]
 const LENGTH := {"home": 5.5, "armory": 5.0, "golem": 4.5, "outfit": 5.5, "clan": 5.5, "play": 5.0, "chest": 5.0,
 	"lobby": 6.0, "title": 6.5,
-	"hook": 4.5, "chair": 4.0, "lane": 6.0, "fight": 6.5, "death": 6.0, "tower": 6.0, "wyrm": 7.5, "king": 8.0}
+	"hook": 6.2, "chair": 4.0, "lane": 6.0, "fight": 6.5, "death": 6.0, "tower": 6.0, "wyrm": 7.5, "king": 8.0}
 const NOW := 1795000000                  # (mid-November 2026, as the store screenshots)
 const ME := "stormcaller"                # your hero all trailer long, in the outfit you'll pick for him
 const MY_SKIN := "stormcaller_stormforged"
@@ -673,7 +673,7 @@ func _stage_fight() -> void:
 	s().moba.swap_hero(foe, "barbarian")
 	_level(foe, 5)
 	foe.max_hp = float(s().stat(foe, "hp"))
-	foe.hp = 200.0
+	foe.hp = 280.0
 	_place(foe, Vector2(-1.0, -1.5), Vector2(0.0, 6.0))
 	foe.bot = false
 	_place(_u("you"), Vector2(0.5, 7.0), Vector2(0.0, -2.0))
