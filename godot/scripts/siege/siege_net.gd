@@ -200,6 +200,36 @@ static func _word(s: String, digits: bool) -> bool:
 			return false
 	return true
 
+# App builds ("0.31.209-fatebound"; server 0.31.84-minbuild's minimum app build). 0.31.209: here rather than in the
+# server, so the app checks the server's minimum ("ver" says "min_build") at launch, before any match.
+static func parse_build(b: String) -> Array:
+	var head := b.strip_edges().split("-", true, 1)[0] if b.strip_edges() != "" else ""
+	if head == "":
+		return []
+	var out := []
+	for part in head.split("."):
+		if not part.is_valid_int():
+			return []
+		out.append(part.to_int())
+	return out
+
+# -1 a < b, 0 equal, 1 a > b (missing parts count as 0: 0.31 == 0.31.0).
+static func compare_builds(a: Array, b: Array) -> int:
+	for i in maxi(a.size(), b.size()):
+		var x: int = a[i] if i < a.size() else 0
+		var y: int = b[i] if i < b.size() else 0
+		if x != y:
+			return -1 if x < y else 1
+	return 0
+
+# True only when both are readable and `build` is older than `minimum`. Unknown builds and "no minimum" pass.
+static func build_too_old(build: String, minimum: String) -> bool:
+	var m := parse_build(minimum)
+	var b := parse_build(build)
+	if m.is_empty() or b.is_empty():
+		return false
+	return compare_builds(b, m) < 0
+
 static func version_verdict(server_v: int, client_v: int = VERSION) -> String:
 	if server_v < 0:
 		return "unknown"

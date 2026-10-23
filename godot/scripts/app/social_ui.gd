@@ -85,7 +85,7 @@ static func ago(secs: int) -> String:
 static func status_text(c: Dictionary) -> String:
 	match str(c.get("st", "offline")):
 		"online": return "Online"
-		"match": return "In a match"
+		"match": return "In the lobby" if int(c.get("jn", 0)) == 1 else "In a match"   # 0.31.209: (a lobby can be joined)
 	var seen := int(c.get("seen", 0))
 	return "Last seen " + ago(int(Time.get_unix_time_from_system()) - seen) if seen > 0 else "Offline"
 
@@ -287,7 +287,7 @@ static func _fill_card(app, ov: Control, v: VBoxContainer, c0: Dictionary) -> vo
 				why = "OFFLINE"
 			elif full:
 				why = "PARTY FULL"
-			if st == "match" and not social.in_my_party(pid) and app.has_method("join_friend"):
+			if social.can_join(c) and not social.in_my_party(pid) and app.has_method("join_friend"):   # 0.31.209: its countdown only
 				# 0.31.120 (Kevin: "make so it's a join match option")
 				UI2.button(v, "JOIN THEIR MATCH", "green", func():
 					_close(app, ov)

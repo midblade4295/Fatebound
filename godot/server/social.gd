@@ -11,6 +11,8 @@ extends RefCounted
 #            connect. Nothing from a player you blocked ever reaches you.
 #   friends  "add" sends a request, or accepts theirs; "decline"; "unfriend" (also takes back a request). 100 friends.
 #            Each friend is "online" (the app is up), "match" (in a match on this server) or "offline" (+ last seen).
+#            0.31.209: a "match" card carries "jn":1 while that match can still be joined (its lobby's countdown, its
+#            results -- siege_server's joinable); no JOIN into a match in progress. "me" says "jn":1 (the cards carry it).
 #   block    their chat is hidden from you; they can't friend or invite you (a request to you looks sent to them but
 #            never arrives); unfriends.
 #   report   a line in reports.jsonl in the state directory: who, about whom, why, their last lines -- for the developer.
@@ -81,6 +83,7 @@ var eco = null             # eco_accounts.gd
 var send_fn: Callable = func(_cid, _msg): pass
 var close_fn: Callable = func(_cid): pass
 var in_match_fn: Callable = func(_acct) -> bool: return false
+var joinable_fn: Callable = func(_acct) -> bool: return false   # 0.31.209: their match can still be joined (its countdown)
 var log_fn: Callable = func(_s): pass
 var event_fn: Callable = func(_acct, _ev, _p): pass   # 0.31.118: usage statistics (server/analytics.gd) -- never the text
 var rank_fn: Callable = func(_acct) -> int: return 0   # 0.31.120: this week's leaderboard rank (0: not on it)
@@ -421,6 +424,8 @@ func _read_name(pid: String) -> void:
 func _card(pid: String) -> Dictionary:
 	var u: Dictionary = users.get(pid, {})
 	var c := {"pid":pid, "n":str(u.get("name", "Player")), "tt":str(u.get("title", "")), "st":status_of(pid), "seen":int(u.get("seen", 0))}
+	if str(c.st) == "match" and bool(joinable_fn.call(str(u.acct))):
+		c["jn"] = 1                                      # 0.31.209: in a lobby's countdown -- JOIN (a running match: no)
 	var ct := tag_of(pid)
 	if ct != "":
 		c["ct"] = ct                                     # 0.31.134: their clan's tag
@@ -435,7 +440,7 @@ func crest_of(pid: String) -> String:
 
 func _me_msg(pid: String) -> Dictionary:
 	var u: Dictionary = users[pid]
-	var m := {"t":"so", "k":"me", "pid":pid, "n":str(u.name), "tt":str(u.get("title", "")), "max":CHAT_MAX}
+	var m := {"t":"so", "k":"me", "pid":pid, "n":str(u.name), "tt":str(u.get("title", "")), "max":CHAT_MAX, "jn":1}   # 0.31.209: cards say "jn"
 	if clans != null:
 		m["clans"] = 1
 		m["ct"] = tag_of(pid)

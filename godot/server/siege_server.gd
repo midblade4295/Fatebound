@@ -39,7 +39,12 @@ extends SceneTree
 # in main menu"): a player who says hello waits in the lobby -- the first one starts a LOBBY_TIME countdown, everyone
 # who arrives before it runs out joins with them, and the "lobby" message (every half second) tells the waiting
 # players who is coming and how long is left. At zero they're seated: a new match if none is running (or only bots are
-# left in it), else into the running one (in results, they go into the next one with everyone). A "status" message (no hello) is answered with
+# left in it); in results, they go into the next one with everyone. 0.31.209 (Kevin: "Make it so players cannot join a
+# match in progress. Every player can only join when the countdown is happening"): a match with players in it is never
+# joined -- a hello goes only to a room that takes players (_open: before its first match, on its results, or only bots
+# left), a new room if none does, else "full"; Friends > JOIN is answered "playing" while the friend's match runs; PLAY
+# AGAIN once the next match is running goes into a lobby's countdown instead (_requeue). A rejoin still goes back onto
+# its own held seat. Friends see whether a friend's match can be joined ("jn" on their card). A "status" message (no hello) is answered with
 # the player counts (the asker then closes) -- the menu's "players online". Both are additive: an older app ignores
 # "lobby" (it just waits for its welcome) and never asks for "status"; this app against an older server gets its
 # welcome at once and no count (so the protocol version stays).
@@ -140,7 +145,7 @@ const LOBBY_TIME := 20.0             # the join countdown (0.31.82)
 const HELLO_TIMEOUT := 10.0
 const IAP_TIMEOUT := 40.0              # a purchase check may take a token request and an API call
 const REFUSE_CLOSE_DELAY := 0.25     # s between a "bye"/"ver" reply and closing the socket
-const SERVER_BUILD := "0.31.208"      # this server's game version; the probe says it by default (identifies as current)
+const SERVER_BUILD := "0.31.209"      # this server's game version; the probe says it by default (identifies as current)
 const MIN_BUILD_FILE := "/etc/fatebound-siege/min_build"
 const MIN_BUILD_RELOAD := 10.0       # s between re-reads of the min-build file
 const UPDATE_MSG := "A new version of Fatebound is out. Update now on Google Play to keep playing online."
@@ -278,6 +283,7 @@ func _init() -> void:
 			if c.hello and str(c.get("acct", "")) == acct:
 				return true
 		return false
+	social.joinable_fn = joinable                           # 0.31.209: JOIN only while their match is in its countdown
 	social.clans = Clans.new(social.state, social)          # 0.31.134: clans ride the social socket
 	_log("social: %d players known, %d clans, %d global chat lines kept" % [social.users.size(), social.clans.clans.size(),
 		(social.hist.get("global", []) as Array).size()])
@@ -306,32 +312,14 @@ func _init() -> void:
 # ---------------- minimum app build ----------------
 # "0.31.78-fatebound" -> [0, 31, 78]; anything without a leading dotted number -> [] (unknown).
 static func parse_build(b: String) -> Array:
-	var head := b.strip_edges().split("-", true, 1)[0] if b.strip_edges() != "" else ""
-	if head == "":
-		return []
-	var out := []
-	for part in head.split("."):
-		if not part.is_valid_int():
-			return []
-		out.append(part.to_int())
-	return out
+	return Net.parse_build(b)                  # 0.31.209: in siege_net.gd -- the app checks the minimum at launch too
 
-# -1 a < b, 0 equal, 1 a > b (missing parts count as 0: 0.31 == 0.31.0).
 static func compare_builds(a: Array, b: Array) -> int:
-	for i in maxi(a.size(), b.size()):
-		var x: int = a[i] if i < a.size() else 0
-		var y: int = b[i] if i < b.size() else 0
-		if x != y:
-			return -1 if x < y else 1
-	return 0
+	return Net.compare_builds(a, b)
 
 # True only when both are readable and `build` is older than `minimum`. Unknown builds and "no minimum" pass.
 static func build_too_old(build: String, minimum: String) -> bool:
-	var m := parse_build(minimum)
-	var b := parse_build(build)
-	if m.is_empty() or b.is_empty():
-		return false
-	return compare_builds(b, m) < 0
+	return Net.build_too_old(build, minimum)
 
 func _set_min_build(v: String, src: String) -> void:
 	v = v.strip_edges()
@@ -571,18 +559,33 @@ func _members(r: Room) -> Array:
 func _room_humans(r: Room) -> int:
 	return _members(r).size()
 
-func _pick_room(party: String) -> Room:
-	# the party's room (while it has space), else the busiest room with space, else a new one; null = every room is full
+func _open(r: Room) -> bool:
+	# 0.31.209 (Kevin: "players cannot join a match in progress ... only join when the countdown is happening"): a room
+	# takes players only while no match with players in it runs -- before its first, on its results (they go into the
+	# next one together), or with only bots left in it (a fresh one starts when the countdown ends). A held seat (a
+	# player who may rejoin) counts as a player.
+	return r.sim == null or r.sim.ended or (_seated_count(r) == 0 and r.held.is_empty())
+
+func _has_space(r: Room) -> bool:
+	return _room_humans(r) + r.held.size() < max_players
+
+func _pick_room(party: String, prefer: Room = null) -> Room:
+	# A room that takes players (_open): `prefer` (PLAY AGAIN: their own; they're already counted in it), else the party's,
+	# else the busiest, else a new one; null = every room is full or has a match of players running
+	if prefer != null and _open(prefer) and _room_humans(prefer) + prefer.held.size() <= max_players:
+		return prefer
 	if party != "":
 		for cid in clients:
 			var o: Dictionary = clients[cid]
 			if o.hello and str(o.get("party", "")) == party:
 				var pr := _room_of(o)
-				if pr != null and _room_humans(pr) + pr.held.size() < max_players:
+				if pr != null and _open(pr) and _has_space(pr):
 					return pr
 	var best: Room = null
 	var best_n := -1
 	for r in rooms.values():
+		if not _open(r):
+			continue
 		var n: int = _room_humans(r) + r.held.size()
 		if n < max_players and n > best_n:
 			best = r
@@ -676,9 +679,11 @@ func _handle(cid: int, msg: Dictionary) -> void:
 						var o: Dictionary = clients[ocid]
 						if o.hello and str(o.get("acct", "")) == ta:
 							var tr := _room_of(o)
-							if tr != null and _room_humans(tr) + tr.held.size() < max_players:
+							if tr != null and _open(tr) and _has_space(tr):
 								r = tr
 								join_acct = ta
+							elif tr != null and not _open(tr):
+								why = "playing"                   # 0.31.209: their match has started -- no joining it
 							elif tr != null:
 								why = "full"
 							break
@@ -729,21 +734,25 @@ func _handle(cid: int, msg: Dictionary) -> void:
 		"again":
 			# 0.31.122 (Kevin: "make it so the game doesn't automatically put player back in a new game because they could be
 			# looking at score card"): PLAY AGAIN on the results. While the results are up: into the next match when it
-			# starts; once it's running (they stayed on the scores): seated in it now.
+			# starts. 0.31.209 (Kevin: "players cannot join a match in progress"): later -- the next match already running
+			# (they stayed on the scores), or none started for want of players -- into a lobby's countdown: their own room's
+			# when it takes players, else another (_requeue); every room playing or full: "full".
 			var ra := _room_of(c)
 			if not c.hello or ra == null or bool(c.get("queued", false)) or c.has("close_at"):
 				return
 			c.erase("results_at")
-			if ra.sim != null and ra.sim.ended:
+			if ra.sim != null and ra.sim.ended and (ra.ended_at < 0.0 or _now() - ra.ended_at <= restart_after):
 				c.again = true
-			elif not bool(c.get("after", false)) and c.unit != "" and ra.sim != null and ra.sim.by_id.has(c.unit):
+			elif not bool(c.get("after", false)) and c.unit != "" and ra.sim != null and not ra.sim.ended and ra.sim.by_id.has(c.unit):
 				return                                     # (already playing)
 			else:
-				c.after = false
-				c.erase("again")
-				if ra.sim == null:
-					_new_match(ra)
-				_seat(ra, cid)
+				var to := _pick_room(str(c.get("party", "")), ra)
+				if to == null:
+					_send(cid, {"t":"bye", "why":"full"})
+					_refuse(cid, 4002, "full")
+					_log("%s: PLAY AGAIN, but every room is playing or full (%d rooms)" % [c.name, rooms.size()])
+					return
+				_requeue(cid, to)
 		"status":
 			# 0.31.82: the menu's "players online" -- answered without a hello; the asker closes (or we do in 2 s: a
 			# close right behind the answer can reach the phone in the same read, and the WebSocket drops the answer)
@@ -1200,12 +1209,18 @@ func _run_lobby(r: Room, delta: float) -> void:
 		var restart := (r.ended_at if r.ended_at >= 0.0 else now) + restart_after
 		r.wave_end = maxf(r.wave_end, restart)
 	elif now >= r.wave_end:
-		if r.sim == null or _seated_count(r) == 0:
-			_new_match(r)                      # (a bots-only match left running by players who quit: a fresh one)
-		for cid in waiting:
-			_seat(r, cid)
-		r.wave_end = -1.0
-		return
+		if not _open(r):
+			# 0.31.209: never into a match with players in it (a guard: nobody is put in such a room's lobby) -- they go
+			# into the next one with everyone, at the restart
+			r.wave_end = now + 1.0
+		else:
+			if r.sim == null or _seated_count(r) == 0:
+				_new_match(r)                  # (a bots-only match left running by players who quit: a fresh one)
+			for cid in waiting:
+				_seat(r, cid)
+			r.wave_end = -1.0
+			_presence_room(r)                  # (their friends: the match has started, no JOIN)
+			return
 	r.lobby_clock += delta
 	if r.lobby_clock >= 0.5:
 		r.lobby_clock = 0.0
@@ -1233,6 +1248,41 @@ func _send_lobby(r: Room, waiting: Array) -> void:
 	for i in waiting.size():
 		msg["me"] = i
 		_send(waiting[i], msg)
+
+func _requeue(cid: int, r: Room) -> void:
+	# 0.31.209: into room r's lobby (PLAY AGAIN after the next match had started, or none did): seated when its countdown
+	# ends, with everyone who joins it meanwhile -- never into a match in progress
+	var c: Dictionary = clients[cid]
+	c.erase("again")
+	c.after = false
+	c.unit = ""
+	c.queued = true
+	if int(c.get("room", 0)) != r.id:
+		_log("%s: PLAY AGAIN -> room %d's lobby (room %d is playing)" % [c.name, r.id, int(c.get("room", 0))])
+		c.room = r.id
+	if r.wave_end < 0.0:
+		r.wave_end = _now() + lobby_time
+	r.lobby_clock = 1.0                            # (tell everyone waiting at once)
+	if social != null and c.has("acct"):
+		social.acct_changed(str(c.acct))
+
+func _presence_room(r: Room) -> void:
+	# 0.31.209: whether the room's match can be joined changed (its countdown ended, its match ended): the players'
+	# friends see it on their cards ("jn")
+	if social == null:
+		return
+	for cid in _members(r):
+		if clients[cid].has("acct"):
+			social.acct_changed(str(clients[cid].acct))
+
+func joinable(acct: String) -> bool:
+	# 0.31.209: the account is in a room whose match can still be joined (its countdown, its results) and has space
+	for cid in clients:
+		var c: Dictionary = clients[cid]
+		if c.hello and str(c.get("acct", "")) == acct:
+			var r := _room_of(c)
+			return r != null and _open(r) and _has_space(r)
+	return false
 
 static func skin_on(looks, hero: String) -> String:
 	# 0.31.208: of the outfits a player wears (their hello's "lk" {"_sk": "knight_frost,golem_frost"}), the one made for
@@ -1492,14 +1542,17 @@ func _run_match(r: Room, delta: float) -> bool:
 			for cid in _members(r):                       # 0.31.122: their results are up until they say otherwise
 				if bool(clients[cid].get("ask_next", false)) and not bool(clients[cid].get("queued", false)):
 					clients[cid].results_at = r.ended_at
+			_presence_room(r)                             # 0.31.209: (its next match can be joined now)
 		elif Time.get_ticks_msec() / 1000.0 - r.ended_at > restart_after:
 			# The next match. 0.31.122: an app that asks for it (ask_next) goes in only once its player pressed PLAY AGAIN;
 			# the others stay on their results. Older apps and players waiting in the lobby go in as before. Nobody wants
-			# it yet: no new match until somebody does.
+			# it yet: no new match until somebody does. 0.31.209: players in its lobby go in when its countdown ends (the
+			# rest with them) -- whoever comes in while it runs joins at its start, never later.
 			var mem := _members(r)
 			var go := mem.filter(func(cid): return not bool(clients[cid].get("ask_next", false)) or bool(clients[cid].get("again", false)) \
 				or bool(clients[cid].get("queued", false)))
-			if not go.is_empty():
+			var counting := r.wave_end >= 0.0 and _now() < r.wave_end and not _queued(r).is_empty()
+			if not go.is_empty() and not counting:
 				_new_match(r)
 				for cid in mem:
 					clients[cid].unit = ""
@@ -1509,6 +1562,7 @@ func _run_match(r: Room, delta: float) -> bool:
 					clients[cid].erase("again")
 					clients[cid].after = false
 					_seat(r, cid)
+				_presence_room(r)                         # 0.31.209: (started: no JOIN)
 				return true
 	_idle_tick(r, delta)
 	# Apply held inputs, then step at a fixed 30 Hz.

@@ -78,11 +78,16 @@ var home_fixed := false                # 0.31.112: Home fits the screen and does
 # server its protocol at start-up and on resume (VersionCheck); a refused connect reports it too (siege_mode
 # version_mismatch). Server newer -> the blocking Update screen (UpdateScreen) and online play stays locked.
 # Server older (a build published before the server deploy) -> "Servers are updating", nothing blocked.
+# 0.31.209 (Kevin: "if there's an update, the message will post right when player launches game instead of having to
+# enter a match"): the start-up check also compares this build with the server's minimum app build (the "ver" answer's
+# "min_build", the server's min-build file) -- older: the Update screen at once (behind the title, so it's there as the
+# title lifts), not only when PLAY's hello is turned away.
 var update_required := false
 var server_updating := false
 var server_version := -1
 var server_five := -1                      # 0.31.170: the server's online 5v5 -- -1 not known yet, 1 there, 0 not (an older
                                            # server: PLAY is a match against bots, as in 0.31.164-0.31.169)
+var server_min_build := ""                 # 0.31.209: the oldest app build the server lets in ("ver" says; "" none)
 var update_screen: Control = null
 # Tests may set these before the node enters the tree. Headless (tests, tools) skips the start-up check unless asked.
 var version_check := DisplayServer.get_name() != "headless"
@@ -1888,6 +1893,7 @@ func check_server_version() -> void:
 	_version_checker.done.connect(_on_server_version)
 	_version_checker.answered.connect(func(m: Dictionary):
 		server_five = 1 if int(m.get("five", 0)) >= Net.FIVE else 0
+		server_min_build = str(m.get("min_build", ""))
 		if analytics != null:
 			analytics.server_ok = int(m.get("an", 0)) == 1)
 	add_child(_version_checker)
@@ -1896,6 +1902,12 @@ func _on_server_version(server_v: int) -> void:
 	_version_checker = null
 	if analytics != null:
 		analytics.set_net(server_v >= 0)
+	if server_v == Net.VERSION and Net.build_too_old(Diag.BUILD, server_min_build):
+		# 0.31.209 (Kevin: "if there's an update, the message will post right when player launches game instead of having
+		# to enter a match"): the same protocol, but this build is older than the server's minimum ("ver" says it). The
+		# server turns such an app away only at its hello, as if it were one protocol ahead -- the same verdict, now.
+		print("VERSION_CHECK build %s older than the server's minimum %s" % [Diag.BUILD, server_min_build])
+		server_v = Net.VERSION + 1
 	apply_server_version(server_v)
 
 func apply_server_version(server_v: int) -> void:

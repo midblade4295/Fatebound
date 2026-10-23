@@ -1,9 +1,12 @@
 extends SceneTree
 # 0.31.120 (Kevin: watch a friend's match -- "make so it's a join match option"): the REAL server (port 8106, rooms of 3,
-# at most 2) and the real app for Bob.
-#   - Cara (Alice's friend) asks to join Alice while Alice's match is full: "full", and she's put in the other match
-#   - Bob's app: Friends shows Alice "in a match" with JOIN; JOIN starts a match that goes into Alice's room -- her match,
-#     on her side -- even though the other room is busier (the usual pick)
+# at most 3) and the real app for Bob. 0.31.209 (Kevin: "Make it so players cannot join a match in progress. Every player
+# can only join when the countdown is happening"): JOIN only while the friend's match is in its countdown (8 s here).
+#   - Alice says hello: her friends' cards say she's in a match that can be joined ("jn")
+#   - Bob's app: Friends shows Alice with JOIN; JOIN starts a match that goes into Alice's countdown -- her match, on her
+#     side
+#   - the countdown over: her card no longer says "jn" (Bob's app would show PLAYING, no JOIN)
+#   - Cara (Alice's friend) asks to join her now: "playing" -- not into it; a lobby of her own instead
 #   - Eve, not Alice's friend, asking to join her: refused ("gone"), the usual room
 #   godot --headless --path godot -s res://tests/join_friend_test.gd
 const App = preload("res://scripts/app/siege_app.gd")
@@ -37,9 +40,9 @@ func _init() -> void:
 	DirAccess.make_dir_recursive_absolute(sd)
 	OS.set_environment("SIEGE_PORT", str(port))
 	OS.set_environment("SIEGE_HOST", "127.0.0.1")
-	OS.set_environment("SIEGE_LOBBY", "0.5")
+	OS.set_environment("SIEGE_LOBBY", "8")
 	OS.set_environment("SIEGE_MAX_PLAYERS", "3")
-	OS.set_environment("SIEGE_MAX_ROOMS", "2")
+	OS.set_environment("SIEGE_MAX_ROOMS", "3")
 	OS.set_environment("STATE_DIRECTORY", sd)
 	OS.set_environment("SIEGE_MIN_BUILD", "off")
 	OS.set_environment("SIEGE_URL", url)
@@ -93,6 +96,16 @@ func hello(name: String, who := "", join := "") -> Dictionary:
 	if join != "":
 		h["join"] = join
 	return h
+
+func _alice_pres(from: int) -> Array:
+	# Cara's social socket: what she's been told of Alice since `from` (her card in "pres")
+	var out := []
+	var l: Array = inbox.sC
+	for i in range(from, l.size()):
+		var m: Dictionary = l[i]
+		if str(m.get("k", "")) == "pres" and str(m.get("c", {}).get("pid", "")) == str(pids.A):
+			out.append(m.c)
+	return out
 
 func _find(node: Node, pred: Callable) -> Array:
 	var out := []
@@ -152,38 +165,9 @@ func _process(delta: float) -> bool:
 				notes.at = t_phase
 			elif st == 2 and t_phase - float(notes.at) > 0.6:
 				shut("sB")                                   # (Bob's app has its own social connection)
-				for n in ["pA", "X1", "X2", "Z1"]:
-					open(n)
-				_go("fill")
-			elif t_phase > 10.0:
-				check(false, "friends within 10 s")
-				_finish()
-		"fill":
-			send_once("pA", hello("Alice", "A"))
-			if not welcome("pA").is_empty():
-				send_once("X1", hello("X1"))
-				send_once("X2", hello("X2"))
-			if not welcome("X2").is_empty() and not welcome("X1").is_empty():
-				send_once("Z1", hello("Z1"))
-			if not welcome("Z1").is_empty():
-				check(int(welcome("X1").match) == int(welcome("pA").match) and int(welcome("Z1").match) != int(welcome("pA").match),
-					"Alice's match full (Alice, X1, X2); Z1 in the other one")
-				open("pC")
-				_go("cara")
-			elif t_phase > 12.0:
-				check(false, "the rooms filled within 12 s")
-				_finish()
-		"cara":
-			send_once("pC", hello("Cara", "C", str(pids.A)))
-			if not welcome("pC").is_empty():
-				var jr := got("pC", "joinr")
-				check(not jr.is_empty() and str(jr[0].why) == "full" and int(welcome("pC").match) == int(welcome("Z1").match),
-					"Cara asks to join Alice while her match is full: full, put in the other match")
-				shut("X1")
-				shut("X2")
 				_go("bob_app")
 			elif t_phase > 10.0:
-				check(false, "Cara seated within 10 s")
+				check(false, "friends within 10 s")
 				_finish()
 		"bob_app":
 			if t_phase > 0.8:
@@ -200,33 +184,73 @@ func _process(delta: float) -> bool:
 				app.legacy_path = base + "-none.json"
 				root.add_child(app)
 				app.social.set_active(true)
+				_go("bob_ready")
+		"bob_ready":
+			if app.social.online() and app.social.friends.any(func(f): return str(f.pid) == str(pids.A)):
+				check(app.social.has_jn, "the server says friends' cards carry \"jn\"")
+				open("pA")
+				notes.pres_mark = (inbox.sC as Array).size()
+				_go("alice")
+			elif t_phase > 15.0:
+				check(false, "Bob's app online with Alice in its friends within 15 s")
+				_finish()
+		"alice":
+			send_once("pA", hello("Alice", "A"))
+			var pres := _alice_pres(int(notes.pres_mark))
+			if not got("pA", "lobby").is_empty() and not pres.is_empty() and str(pres[-1].st) == "match":
+				check(int(pres[-1].get("jn", 0)) == 1, "Alice in her countdown: her friends' cards say she's in a match that can be joined (jn)")
 				_go("bob_friends")
+			elif t_phase > 10.0:
+				check(false, "Alice in a lobby, her friends told, within 10 s (%s)" % str(pres))
+				_finish()
 		"bob_friends":
 			var ok := false
-			if app.social.online():
-				for f in app.social.friends:
-					if str(f.pid) == str(pids.A) and str(f.st) == "match":
-						ok = true
+			for f in app.social.friends:
+				if str(f.pid) == str(pids.A) and app.social.can_join(f):
+					ok = true
 			if ok:
 				app.profile.server_mode = true
 				app.open_friends()
 				var jb := _find(app.modal, func(n): return n is Button and str(n.get_meta("action_key", "")) == "friend_join_" + str(pids.A))
-				check(app.modal is FriendsPanel and jb.size() == 1, "Bob's Friends: Alice is in a match, with JOIN")
+				check(app.modal is FriendsPanel and jb.size() == 1, "Bob's Friends: Alice in a match's countdown, with JOIN")
 				if jb.size() == 1:
 					(jb[0] as Button).pressed.emit()
 				check(app.siege != null and str(app.siege.party_join) == str(pids.A), "JOIN starts a match aimed at Alice's")
+				notes.pres_mark = (inbox.sC as Array).size()
 				_go("bob_join")
-			elif t_phase > 15.0:
-				check(false, "Bob's app sees Alice in a match within 15 s")
+			elif t_phase > 6.0:
+				check(false, "Bob's app sees Alice's match can be joined within 6 s")
 				_finish()
 		"bob_join":
-			if app.siege != null and app.siege.net_state == "playing" and app.siege.sim != null:
-				check(app.siege.net_match == int(welcome("pA").match), "Bob is in Alice's match (%d), not the busier one" % app.siege.net_match)
+			if app.siege != null and app.siege.net_state == "playing" and app.siege.sim != null and not welcome("pA").is_empty():
+				check(app.siege.net_match == int(welcome("pA").match), "Bob is in Alice's match (%d), from her countdown" % app.siege.net_match)
 				check(str(app.siege.hud.player_id).left(1) == str(welcome("pA").you).left(1), "on Alice's side (%s, %s)" % [app.siege.hud.player_id, welcome("pA").you])
+				_go("started")
+			elif t_phase > 20.0:
+				check(false, "Bob seated within 20 s (%s)" % (app.siege.net_state if app.siege != null else "no match"))
+				_finish()
+		"started":
+			var pres := _alice_pres(int(notes.pres_mark))
+			if not pres.is_empty() and str(pres[-1].st) == "match" and int(pres[-1].get("jn", 0)) == 0:
+				check(true, "the countdown over: Alice's card no longer says jn (no JOIN into a match in progress)")
+				var card: Dictionary = pres[-1]
+				var friends_panel_join: bool = app.social.can_join(card)
+				check(not friends_panel_join, "...so Bob's app would show PLAYING, not JOIN")
+				open("pC")
+				_go("cara")
+			elif t_phase > 6.0:
+				check(false, "Alice's card without jn once her match started, within 6 s (%s)" % str(pres))
+				_finish()
+		"cara":
+			send_once("pC", hello("Cara", "C", str(pids.A)))
+			if not got("pC", "lobby").is_empty() or not welcome("pC").is_empty():
+				var jr := got("pC", "joinr")
+				check(not jr.is_empty() and str(jr[0].why) == "playing", "Cara asks to join Alice while her match runs: \"playing\" (%s)" % str(jr))
+				check(welcome("pC").is_empty() or int(welcome("pC").match) != int(welcome("pA").match), "...not put in it: a lobby of her own")
 				open("pE")
 				_go("eve")
-			elif t_phase > 30.0:
-				check(false, "Bob seated within 30 s (%s)" % (app.siege.net_state if app.siege != null else "no match"))
+			elif t_phase > 10.0:
+				check(false, "Cara answered within 10 s")
 				_finish()
 		"eve":
 			send_once("pE", hello("Eve", "E", str(pids.A)))

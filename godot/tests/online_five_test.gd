@@ -7,7 +7,8 @@ extends SceneTree
 #     gets it; no side has a hero twice. (The sold hero: the first not free this week, so the test holds any week.)
 #  3. Every phone's mirror, brought up from its keyframe and the snapshots after it, holds exactly what every other
 #     phone's does at the same snapshot (units coming and going, every key the snapshot carries, towers, Kings, gates,
-#     camps, zones, traps, wards, projectiles); Erin, who comes in mid-match, too.
+#     camps, zones, traps, wards, projectiles). 0.31.209 (Kevin: "players cannot join a match in progress"): Erin, who
+#     asks mid-match, is not put in it -- a lobby of her own (no match running there), never a snapshot of it.
 #  4. Alice's buttons through the server: an item bought in her keep and sold back, a ward, bad arguments ignored, her
 #     stick moves her.
 #  5. The real game client (SiegeMode) as the Archmage: its hero, its view, its WARD and SHOP buttons through the server.
@@ -57,7 +58,7 @@ func _init() -> void:
 	DirAccess.make_dir_recursive_absolute(sd)
 	OS.set_environment("SIEGE_PORT", str(port))
 	OS.set_environment("SIEGE_HOST", "127.0.0.1")
-	OS.set_environment("SIEGE_LOBBY", "1.5")
+	OS.set_environment("SIEGE_LOBBY", "4")      # (0.31.209: the game client says hello in the same countdown)
 	OS.set_environment("SIEGE_TEST_MATCH_S", "40")
 	OS.set_environment("SIEGE_IDLE_BOT", "600")
 	OS.set_environment("SIEGE_IDLE_KICK", "900")
@@ -360,21 +361,24 @@ func _process(delta: float) -> bool:
 				_open("erin", _hello("Erin", {"hero":"priest"}))
 				_go("erin")
 		"erin":
-			if socks.erin.sim != null and int(socks.erin.n) >= 5:
-				check(bool(socks.erin.kf), "Erin comes in mid-match: a keyframe first")
-				check(str(_me("erin").get("hid", "")) != "", "...seated on a hero (%s)" % str(_me("erin").get("hid", "")))
+			var el := _got("erin", "lobby")
+			if not el.is_empty() and t_phase > 1.0:
+				check(socks.erin.welcome.is_empty() or int(socks.erin.welcome.get("match", -1)) != int(socks.alice.welcome.match),
+					"Erin asks mid-match: not put in it -- a lobby's countdown (0.31.209)")
+				check(not bool(el[0].get("running", true)), "...her lobby: no match running there (a new one at zero)")
+				check(socks.erin.sim == null or int(socks.erin.welcome.get("match", -1)) != int(socks.alice.welcome.match), "...never a snapshot of Alice's match")
 				_go("match")
 			elif t_phase > 15.0:
-				check(false, "Erin seated within 15 s")
+				check(false, "Erin in a lobby within 15 s")
 				_go("match")
 		"match":
 			if socks.alice.sim.ended and not notes.has("ended_at"):
 				notes.ended_at = t_phase
 			var ended: bool = socks.alice.sim.ended
-			if ended and ["bob", "carl", "erin"].all(func(n): return socks[n].sim != null and socks[n].sim.ended) \
+			if ended and ["bob", "carl"].all(func(n): return socks[n].sim != null and socks[n].sim.ended) \
 					and (mode.sim.ended or t_phase - float(notes.get("ended_at", t_phase)) > 3.0):
 				var w := int(socks.alice.sim.winner)
-				check(["bob", "carl", "erin"].all(func(n): return int(socks[n].sim.winner) == w), "the match ends on every phone with the same winner (%d)" % w)
+				check(["bob", "carl"].all(func(n): return int(socks[n].sim.winner) == w), "the match ends on every phone with the same winner (%d)" % w)
 				check(mode.sim != null and mode.sim.ended and int(mode.sim.winner) == w, "...and on the game client (%s, %s at %.1f s)" % [str(mode.sim.ended),
 					mode.net_state, mode.sim.time])
 				check(socks.alice.sim.units.size() > 10, "minions marched (%d units at the end)" % socks.alice.sim.units.size())

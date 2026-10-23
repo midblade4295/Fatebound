@@ -183,7 +183,8 @@ func _ready() -> void:
 	var t_hud := Time.get_ticks_msec()
 	hud = Hud.new()
 	hud.diag = diag
-	add_child(hud)
+	hud.player_name = player_name          # 0.31.209 (Kevin: "make sure players name goes on match scoreboard correctly"):
+	add_child(hud)                         # my row on the live scoreboard said "Player" until the match ended
 	ready_times["hud"] = Time.get_ticks_msec() - t_hud
 	hud.leave_requested.connect(func(): exited.emit())
 	hud.replay_requested.connect(func():
@@ -434,7 +435,7 @@ func _net_fail(why: String) -> void:
 	hud.toast(why, VisualTheme.RED)
 	if is_instance_valid(lobby):
 		lobby.fail(why)
-	if sim == null:
+	if sim == null or (again_sent > 0 and sim.ended):   # (0.31.209: or after PLAY AGAIN -- nothing left to show)
 		# Nothing to show: go back home after the message is readable. (A method, not a lambda: the app may free
 		# this node first, e.g. for the Update screen, and a freed method target is simply not called.)
 		get_tree().create_timer(2.5).timeout.connect(_net_exit)
@@ -570,8 +571,13 @@ func _build_online_match(msg: Dictionary) -> void:
 	net_state = "playing"
 	diag.write("NET welcome match=%d you=%s players=%d" % [net_match, me_id, int(msg.get("players", 1))])
 	hud.toast("Online: %d player%s" % [int(msg.get("players", 1)), "" if int(msg.get("players", 1)) == 1 else "s"], VisualTheme.GOLD)
+	hud.player_name = player_name                      # 0.31.209: my row on the scoreboard (not "Player")
 	if is_instance_valid(lobby):
-		_lobby_to_card()
+		if _warm_done:
+			lobby.queue_free()                         # 0.31.209: a PLAY AGAIN lobby: the match is built -- straight in
+			lobby = null
+		else:
+			_lobby_to_card()
 
 func _lobby_to_card() -> void:
 	# 0.31.208: at the welcome the lobby stays up as the loading card -- the same heroes on the plaza, PREPARING THE
@@ -694,6 +700,15 @@ func _net_process(delta: float) -> void:
 					diag.write("NET lobby left=%.1f names=%d online=%d running=%s" % [float(msg.get("left", 0)), (msg.get("names", []) as Array).size(), int(msg.get("online", 0)), str(msg.get("running", false))])
 				if sim == null and is_instance_valid(lobby):
 					lobby.update(msg)
+				elif sim != null and sim.ended:
+					# 0.31.209 (Kevin: "players cannot join a match in progress"): PLAY AGAIN once the next match had
+					# started puts us in a lobby's countdown instead -- its screen, over the old match, until the welcome
+					if not is_instance_valid(lobby):
+						lobby = _loading_screen()
+						lobby.leave.connect(func(): exited.emit())
+						add_child(lobby)
+						diag.write("NET lobby after PLAY AGAIN left=%.1f" % float(msg.get("left", 0)))
+					lobby.update(msg)
 			"pn":                                             # 0.31.86: the live players' names, by unit
 				var pn: Variant = msg.get("n", {})
 				net_names = pn if pn is Dictionary else {}
@@ -725,9 +740,11 @@ func _net_process(delta: float) -> void:
 					sim.by_id[hud.player_id].task = msg.get("task", {})
 			"joinr":                                          # 0.31.120: the friend's match couldn't take me
 				var jw := str(msg.get("why", ""))
-				hud.toast("Their match is full -- you're in another one" if jw == "full" else "They've left that match -- you're in another one", Color("#f2d18d"))
+				# 0.31.209: "playing" -- it had started (no joining a match in progress)
+				var jt: String = {"full":"Their match is full", "playing":"Their match has already started"}.get(jw, "They've left that match")
+				hud.toast(jt + " -- you're in another one", Color("#f2d18d"))
 				if is_instance_valid(lobby) and lobby.has_method("note"):
-					lobby.note("Their match is full" if jw == "full" else "They've left that match")
+					lobby.note(jt)
 			"idle":                                           # 0.31.119: a bot plays for me until I move (or I'm removed)
 				if bool(msg.get("on", false)):
 					hud.idle_kick_at = Time.get_ticks_msec() / 1000.0 + float(msg.get("kick_in", 120.0))
@@ -1270,8 +1287,8 @@ class SocketCloser extends Node:
 
 func request_leave() -> void:
 	# Android back button: open the pause panel rather than quitting a match outright.
-	if sim == null:
-		exited.emit()                      # (0.31.82: still in the lobby -- nothing to pause)
+	if sim == null or is_instance_valid(lobby):
+		exited.emit()                      # (0.31.82: still in the lobby -- nothing to pause; 0.31.209: or a PLAY AGAIN lobby)
 	elif hud.result_panel != null:
 		exited.emit()
 	else:

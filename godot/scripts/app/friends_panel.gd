@@ -235,10 +235,12 @@ func _render() -> void:
 				app.sfx("confirm")
 				if not social.invite(cp):
 					_fail(), 80.0)
-		elif str(c.st) == "match":
+		elif social.can_join(c):
 			_small(r, "JOIN", "green", "friend_join_" + cp, func():      # 0.31.120: into their match
 				app.sfx("confirm")
 				app.join_friend(cp), 80.0)
+		elif str(c.st) == "match":
+			_tag(r, "PLAYING", UI2.MUTED)                 # 0.31.209: their match has started -- no joining it midway
 	# ---- 0.31.196: clanmates online who aren't friends -- they can be invited too (a party of 5)
 	if social.has_lfg and social.in_clan():
 		var mates: Array = []

@@ -60,6 +60,7 @@ var clan_query := ""
 var clan_infos := {}                    # clan id -> its card (clan_info), "_at": clock
 var league := {}                        # 0.31.196: the last clan_league answer ({"week", "ends", "list", "me", "last"}, "_at")
 var has_lfg := false                    # 0.31.196: the server has LFG and parties of 5 ("me" said so)
+var has_jn := false                     # 0.31.209: a friend's card says whether their match can be joined ("jn")
 var _ws: WebSocketPeer = null
 var _clock := 0.0
 var _next_try := 0.0
@@ -173,6 +174,7 @@ func _on(m: Dictionary) -> void:
 			me = {"pid":str(m.get("pid", "")), "n":str(m.get("n", "")), "tt":str(m.get("tt", "")), "max":int(m.get("max", 120)), "ct":str(m.get("ct", ""))}
 			has_clans = int(m.get("clans", 0)) == 1
 			has_lfg = int(m.get("lfg", 0)) == 1
+			has_jn = int(m.get("jn", 0)) == 1
 			me["cc"] = str(m.get("cc", ""))
 			var was := state
 			state = "online"
@@ -405,6 +407,11 @@ func lfg_call(pid: String) -> Dictionary:
 
 func clan_party_max() -> int:
 	return int(party.get("max", 5 if has_lfg else 4))
+
+func can_join(c: Dictionary) -> bool:
+	# 0.31.209 (Kevin: "players cannot join a match in progress"): a friend's match can be joined only in its countdown --
+	# the card says so ("jn"); an older server doesn't, and JOIN shows for any match as before
+	return str(c.get("st", "")) == "match" and (not has_jn or int(c.get("jn", 0)) == 1)
 
 func clan_find(q: String, house := "") -> bool:
 	return _send({"k":"clan_find", "q":q.strip_edges(), "house":house})

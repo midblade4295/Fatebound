@@ -6844,3 +6844,41 @@ for server".
   tools/test_analytics_report.py (spending in the fixture, the excluded account's left out); ANALYTICS.md.
 - Needs the server redeploy (Kevin's): server/eco_accounts.gd, server/siege_server.gd, scripts/meta/analytics_events.gd
   (install_siege_server.sh already copies them). Phones don't change: the app's builds stay 0.31.208.
+
+## 0.31.209 — no joining a match in progress, your name on the scoreboard, the Update screen at launch
+Kevin: "Make it so players cannot join a match in progress. Every player can only join when the countdown is happening.
+Also make sure players name goes on match scoreboard correctly" -- "Also make it so if there's an update, the message will
+post right when player launches game instead of having to enter a match".
+- No joining a match in progress (server/siege_server.gd): a room takes players only while no match with players in it
+  runs (_open: before its first match, on its results -- they go into the next one together -- or with only bots left,
+  a fresh match at the countdown's end; a held seat counts as a player). A hello goes to such a room (the party's, else
+  the busiest), else a new room, else "full" -- never into a running match, though it has bot seats. Friends > JOIN goes
+  into the friend's room only in its countdown; while their match runs: {"t":"joinr", "why":"playing"} and a lobby of
+  their own. PLAY AGAIN once the next match is already running (they stayed on the scores), or when none started for
+  want of players: into a lobby's countdown (_requeue: their own room's if it takes players, else another or a new one;
+  every room playing or full: "full"). A room's next match waits for its lobby's countdown when someone came in during
+  the results, so they start together. A rejoin still goes straight back onto its own held seat.
+- Friends see it: a friend's card says "jn":1 while their match can still be joined (social.gd, siege_server joinable;
+  pushed when a countdown ends and when a match ends); "me" says "jn":1. The app (scripts/meta/social.gd can_join):
+  JOIN only then; in a running match "PLAYING" (Friends) / "IN A MATCH" (the card); the card's status "In the lobby".
+  An older server: JOIN as before.
+- The game client: "playing" -> "Their match has already started -- you're in another one"; a PLAY AGAIN lobby shows the
+  loading screen's countdown over the old match until the welcome (then straight in), LEAVE/back go Home; "full" after
+  PLAY AGAIN goes Home.
+- The scoreboard: your own row said "Player" for the whole match -- the HUD only learned your name when the match ended
+  (siege_mode set hud.player_name at the results). It's set when the match starts (and at each online welcome); the
+  live board also keeps every row's name up to date while open (names arriving, a player leaving).
+- The Update screen at launch: the app's start-up check asked the server only its protocol, and an update is the
+  server's minimum app build (its min-build file) -- which only the hello checked, so the screen came up on PLAY. The
+  check now compares this build with the "ver" answer's "min_build" (Net.build_too_old, moved from the server into
+  siege_net.gd) and puts the Update screen up at once: under the title, there as it lifts. The live server already
+  sends "min_build", so this works without a deploy -- from this build on (older builds still find out on PLAY).
+- Tests: the quick suite, all 106 passed. Changed for the rule: match_rooms_test (one countdown, one match; the fourth gets
+  a room of its own; both rooms playing: "full" with a seat free; a bots-only room takes players again, a fresh match),
+  join_friend_test (Alice's card "jn" in her countdown, Bob's JOIN into it, "jn" gone once it starts, Cara "playing"),
+  next_match_test (everyone in one countdown; the scoreboard names "Gamer" and "Pat"; PLAY AGAIN while the next match
+  runs -> the lobby screen, then a new match with P3; P3's PLAY AGAIN after the restart time -> a countdown the game
+  joins), online_five_test (Erin, asking mid-match, gets a lobby of her own), min_build_test (the Update screen at
+  launch from the start-up check).
+- Needs the server redeploy (Kevin's): server/siege_server.gd, server/social.gd, scripts/siege/siege_net.gd. versionCode
+  295, 0.31.209-fatebound (SERVER_BUILD 0.31.209).

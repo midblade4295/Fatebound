@@ -2271,7 +2271,7 @@ func _board_row(v: VBoxContainer, u: Dictionary, side: int) -> Dictionary:
 	nb.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	h.add_child(nb)
 	var who := display_name(u)                     # (0.31.177: a bot by its name: "Bot Alfred")
-	_bl(nb, who, 12, Color.WHITE, BOARD_W.name, HORIZONTAL_ALIGNMENT_LEFT, false)
+	var who_l := _bl(nb, who, 12, Color.WHITE, BOARD_W.name, HORIZONTAL_ALIGNMENT_LEFT, false)
 	var hr := HBoxContainer.new()
 	hr.add_theme_constant_override("separation", 3)
 	nb.add_child(hr)
@@ -2307,7 +2307,7 @@ func _board_row(v: VBoxContainer, u: Dictionary, side: int) -> Dictionary:
 	var gold := _bl(h, "", 13, Color("#ffd65a"), 0.0, HORIZONTAL_ALIGNMENT_RIGHT)
 	gold.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	return {"por": por, "resp": resp, "lv": lv, "k": kk, "d": dd, "a": aa, "cs": cs, "slots": slots, "gold": gold,
-		"bounty_box": bbox, "bounty": bty}
+		"bounty_box": bbox, "bounty": bty, "who": who_l}
 
 func _refresh_board() -> void:
 	if board_panel == null or sim == null or sim.moba == null:
@@ -2332,6 +2332,9 @@ func _refresh_board() -> void:
 		if u.is_empty():
 			continue
 		var r: Dictionary = _board_rows[id]
+		var nm := display_name(u)                  # 0.31.209: the names kept up to date (players' names arriving, one leaving)
+		if (r.who as Label).text != nm:
+			(r.who as Label).text = nm
 		var down: bool = not sim.alive(u)
 		(r.por as TextureRect).modulate = Color(0.42, 0.42, 0.46) if down else Color.WHITE
 		(r.resp as Label).text = str(int(ceil(maxf(0.0, float(u.get("respawn_at", 0.0)) - sim.time)))) if down else ""

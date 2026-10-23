@@ -9,8 +9,10 @@ extends SceneTree
 #     min_build) BEFORE close 4001 "version:<VERSION+1>"; 0.31.84 (vc33), a newer build and a hello WITHOUT a build
 #     (tools) are let in; the menu's "ver" still answers the real protocol; "status" carries build/min_build.
 #  3. B's file is changed to "off" -> a 0.31.78 hello is let in (no restart, no code change).
-#  4. The real app against A: the start-up version check sees the same protocol (no screen); PLAY online is refused
-#     -> the full-screen Update screen (update_required, server_version VERSION+1, UPDATE opens Google Play).
+#  4. The real app against A: 0.31.209 (Kevin: "if there's an update, the message will post right when player launches
+#     game instead of having to enter a match") -- the start-up version check reads the server's minimum ("ver"'s
+#     "min_build") and puts the full-screen Update screen up at once, before any match (update_required, server_version
+#     VERSION+1). Taken down by hand: PLAY online is refused -> the same screen (UPDATE opens Google Play), still locked.
 #  5. The real app against B (min 0.31.84 == this build): PLAY online connects (lobby), no Update screen.
 const Net = preload("res://scripts/siege/siege_net.gd")
 const Server = preload("res://server/siege_server.gd")
@@ -181,9 +183,17 @@ func _process(delta: float) -> bool:
 				root.add_child(app)
 				phase = "app_startup"; t = 0.0
 		"app_startup":
-			if t > 3.0:
-				check(not is_instance_valid(app.update_screen) and not app.update_required and app.server_version == Net.VERSION,
-					"start-up check: same protocol -> no screen yet (server_version %d)" % app.server_version)
+			if is_instance_valid(app.update_screen) or t > 6.0:
+				var us0 = app.update_screen
+				check(is_instance_valid(us0) and app.update_required and app.server_version == Net.VERSION + 1 and app.siege == null,
+					"start-up check: this build is older than the server's minimum (%s) -> the Update screen at launch, before any match (server_version %d, %.1f s)" % [
+					app.server_min_build, app.server_version, t])
+				check(is_instance_valid(us0) and us0.is_visible_in_tree() and us0.get_index() == app.get_child_count() - 1, "...over everything")
+				check(app.server_min_build != "" and Net.build_too_old(Diag.BUILD, app.server_min_build), "...the minimum the 'ver' answer gave (%s)" % app.server_min_build)
+				# the hello's refusal (an older server's "ver" says no minimum): taken down, PLAY online gets it the old way
+				app.hide_update_screen()
+				app.update_required = false
+				app.server_version = -1
 				app.start_match(true)
 				phase = "app_refused"; t = 0.0
 		"app_refused":
