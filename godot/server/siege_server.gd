@@ -7,7 +7,9 @@ extends SceneTree
 #
 #   godot --headless --path <project> -s res://server/siege_server.gd
 # Env: SIEGE_HOST (default 127.0.0.1 — keep it on loopback behind Caddy), SIEGE_PORT (8082),
-#      SIEGE_MAX_PLAYERS (10: humans in one match room), SIEGE_MAX_ROOMS (6: matches at once, 0.31.119),
+#      SIEGE_MAX_PLAYERS (10: humans in one match room), SIEGE_MAX_ROOMS (matches at once, 0.31.119; 0.31.209: by
+#      default 6 a CPU core, at least 6, at most 128), SIEGE_THREADS (0.31.209: "0" = every room on the main loop),
+#      SIEGE_LOAD_LIMIT (0.31.209: 0.75 -- no new room past this share of the cores, see _room_fits),
 #      SIEGE_LOG (1 = log joins/leaves/match results to stdout),
 #      SIEGE_LOBBY (seconds of the join countdown, default 20),
 #      SIEGE_MIN_BUILD (oldest app build allowed online, e.g. 0.31.84; "off"/empty = no minimum). Without it the
@@ -88,6 +90,11 @@ extends SceneTree
 # across rooms ("match" in the welcome). "status" counts every room (+ "rooms"); the lobby message's "in_match" and
 # "running" are its own room's, "online" the whole server's. Additive: the protocol stays 35, and an app sees no
 # difference except that it isn't turned away.
+# 0.31.209 (Kevin: "Make it so more rooms can be created"): the rooms' matches step on every core (_step_rooms: a worker
+# thread a room, the main loop keeping the sockets, seats and sends) -- on one core about seven 5v5 rooms filled it and
+# every match stuttered. SIEGE_MAX_ROOMS defaults to 6 a core (6 on one, 12 on two, 24 on four...), and a room opens only
+# while the rooms would keep the cores within SIEGE_LOAD_LIMIT at what a room is measured to cost (_room_fits); else
+# "full", as before. "status" adds "max_rooms" and "load" (% of the cores). tools/rooms_bench.gd measures a machine.
 #
 # 0.31.119 (idle players): a seated player who gives no input (no movement, no attack/ability/block, no action, no quick
 # chat) for IDLE_BOT s of live match time -- time dead, in the lobby, on the results screen or building the match on the
@@ -123,6 +130,8 @@ extends SceneTree
 # their argument (Net.ACTIONS, Net.clean_arg: a pick, the ultimate, W/E, a ward, the shop). "ver", "status", the lobby
 # and the welcome answer "five":1. The protocol stays 35 (the economy, leaderboard and version check send it too).
 const Sim = preload("res://scripts/siege/siege_sim.gd")
+const Land = preload("res://scripts/siege/siege_land.gd")     # 0.31.209: (_warm_statics)
+const Keep = preload("res://scripts/siege/keep.gd")
 const Net = preload("res://scripts/siege/siege_net.gd")
 const IapVerify = preload("res://server/iap_verify.gd")
 const IapVerifyApple = preload("res://server/iap_verify_apple.gd")     # 0.31.131: App Store purchases (the iOS port)
@@ -151,7 +160,13 @@ const MIN_BUILD_RELOAD := 10.0       # s between re-reads of the min-build file
 const UPDATE_MSG := "A new version of Fatebound is out. Update now on Google Play to keep playing online."
 const MAX_MSGS_PER_SEC := 90         # per client; beyond this, messages are dropped
 const MAX_ROOMS := 6                 # 0.31.119: matches at once (SIEGE_MAX_ROOMS). 0.31.151: 6 (was 4) -- a full Siege room
-                                     # was ~9% of a CPU core and ~350 kB/s out
+                                     # was ~9% of a CPU core and ~350 kB/s out. 0.31.209: the least -- see ROOMS_PER_CORE
+const ROOMS_PER_CORE := 6            # 0.31.209 (Kevin: "Make it so more rooms can be created"): rooms by default a CPU core
+                                     # (the rooms step on every core now); a 5v5 room is ~125-150 ms of work a second
+                                     # (tools/rooms_bench.gd), so 6 leave a core's last quarter to the main loop
+const MAX_ROOMS_CAP := 128           # SIEGE_MAX_ROOMS at most
+const LOAD_LIMIT := 0.75             # 0.31.209: no new room when the rooms' work would take more than this share of the cores
+const ROOM_COST := 0.125             # 0.31.209: a room's share of a core at least (a 5v5 room, minions out: ~125 ms/s)
 const IDLE_BOT := 45.0               # 0.31.119: s without input before a bot plays for them (SIEGE_IDLE_BOT)
 const IDLE_KICK := 180.0             # ...and before they're removed (SIEGE_IDLE_KICK)
 const CLOSE_IDLE := 4006
@@ -176,6 +191,12 @@ class Room:
 	var names_dirty := false          # a seat changed: send the players' names (0.31.86)
 	var paid_match := -1              # the match whose results went to the accounts
 	var held := {}                    # 0.31.120: rejoin token -> a dropped player's seat ({"c": their client, "until", "drop_at"})
+	# 0.31.209: a frame's step (_step_room, maybe on a worker thread): the players with a ledger, the snapshot built, the
+	# microseconds it took
+	var step_mem: Array = []
+	var snap_bytes := PackedByteArray()
+	var w_step := 0
+	var w_snap := 0
 
 var tcp := TCPServer.new()
 var clients := {}                    # cid -> {ws, unit, name, hello, room, move, hold, joined_at, msgs, msg_clock}
@@ -183,7 +204,11 @@ var next_cid := 1
 var rooms := {}                      # 0.31.119: room id -> Room
 var next_room := 1
 var match_counter := 0               # match ids, unique across rooms
-var max_rooms := MAX_ROOMS
+var max_rooms := clampi(OS.get_processor_count() * ROOMS_PER_CORE, MAX_ROOMS, MAX_ROOMS_CAP)   # 0.31.209: by the cores
+var threads_on := true               # 0.31.209: rooms step on worker threads (SIEGE_THREADS=0: all on the main loop, as before)
+var load_limit := LOAD_LIMIT         # (SIEGE_LOAD_LIMIT)
+var load_share := 0.0                # 0.31.209: the rooms' work over the last LOAD_WINDOW s, as a share of every core
+var room_cost := ROOM_COST           # 0.31.209: a running room's share of a core, as measured (never below ROOM_COST)
 var host := "127.0.0.1"
 var port := Net.DEFAULT_PORT
 var max_players := Net.TEAM_SIZE * 2   # humans in one room (0.31.169: the 5v5's ten heroes; 32 for Siege's 16 a side)
@@ -219,7 +244,10 @@ func _init() -> void:
 	if OS.has_environment("SIEGE_MAX_PLAYERS"):
 		max_players = clampi(int(OS.get_environment("SIEGE_MAX_PLAYERS")), 1, Net.TEAM_SIZE * 2)
 	if OS.has_environment("SIEGE_MAX_ROOMS"):
-		max_rooms = clampi(int(OS.get_environment("SIEGE_MAX_ROOMS")), 1, 64)
+		max_rooms = clampi(int(OS.get_environment("SIEGE_MAX_ROOMS")), 1, MAX_ROOMS_CAP)
+	threads_on = OS.get_environment("SIEGE_THREADS") != "0"
+	if OS.has_environment("SIEGE_LOAD_LIMIT"):
+		load_limit = clampf(float(OS.get_environment("SIEGE_LOAD_LIMIT")), 0.0, 4.0)
 	log_on = OS.get_environment("SIEGE_LOG") != "0"
 	if OS.has_environment("SIEGE_LOBBY"):
 		lobby_time = clampf(float(OS.get_environment("SIEGE_LOBBY")), 0.0, 120.0)
@@ -256,8 +284,10 @@ func _init() -> void:
 		printerr("SIEGE_SERVER listen failed on %s:%d (%s)" % [host, port, error_string(err)])
 		quit(1)
 		return
-	_log("SIEGE_SERVER listening on %s:%d (protocol %d, build %s, %d rooms of %d players, min build %s)" % [host, port, Net.VERSION,
-		SERVER_BUILD, max_rooms, max_players, min_build if min_build != "" else "off"])
+	_log("SIEGE_SERVER listening on %s:%d (protocol %d, build %s, %d rooms of %d players, min build %s; %d cores, rooms on %s)" % [host, port, Net.VERSION,
+		SERVER_BUILD, max_rooms, max_players, min_build if min_build != "" else "off", OS.get_processor_count(),
+		"worker threads" if threads_on else "the main loop"])
+	_warm_statics()
 	iap = IapVerify.new()
 	iap.log_fn = _log
 	root.add_child.call_deferred(iap)
@@ -358,11 +388,25 @@ func _process(delta: float) -> bool:
 		_min_build_clock = 0.0
 		_reload_min_build()
 	var ran := false
+	var stepping := []
 	for rid in rooms.keys():
 		var r: Room = rooms[rid]
 		_run_lobby(r, delta)
-		if _run_match(r, delta):
+		var how := _run_match(r, delta)
+		if how > 0:
 			ran = true
+		if how == 2:
+			stepping.append(r)
+	# 0.31.209: every room's match steps (and builds its snapshot) at once, a room a worker thread; then, here, what they
+	# send and pay
+	_step_rooms(stepping)
+	var work := 0
+	for r in stepping:
+		_after_step(r)
+		work += r.w_step + r.w_snap
+	_load_tick(delta, work, stepping.size())
+	for rid in rooms.keys():
+		var r: Room = rooms[rid]
 		if r.names_dirty:
 			r.names_dirty = false
 			_send_names(r)
@@ -593,6 +637,13 @@ func _pick_room(party: String, prefer: Room = null) -> Room:
 	if best != null:
 		return best
 	if rooms.size() >= max_rooms:
+		return null
+	if not _room_fits():
+		# 0.31.209: one more room would keep the cores busier than load_limit -- every match would stutter
+		if _now() - _full_logged > 30.0:
+			_full_logged = _now()
+			_log("no new room: %d rooms at %d%% of a core each would be %d%% of the %d cores (limit %d%%; now %d%%)" % [rooms.size() + 1,
+				int(room_cost * 100.0), int(_projected(rooms.size() + 1) * 100.0), OS.get_processor_count(), int(load_limit * 100.0), int(load_share * 100.0)])
 		return null
 	var nr := Room.new()
 	nr.id = next_room
@@ -1294,6 +1345,48 @@ static func skin_on(looks, hero: String) -> String:
 			return id
 	return ""
 
+# 0.31.209: how busy the rooms keep the machine -- their work (sim steps and snapshots, on every core) over LOAD_WINDOW s,
+# as a share of all the cores; _pick_room opens no room above load_limit
+# and from it what a running room costs (room_cost); a new room opens only while the rooms, it among them, would stay
+# within load_limit at that cost (a room in its countdown counted as running -- it soon is; a match costs more as it
+# goes on, its minions out, so the cost is the measured one or ROOM_COST, the larger).
+const LOAD_WINDOW := 3.0
+var _ld_work := 0
+var _ld_t := 0.0
+var _ld_rooms := 0.0
+var _full_logged := -100.0
+func _load_tick(delta: float, work_us: int, stepping: int) -> void:
+	_ld_work += work_us
+	_ld_t += delta
+	_ld_rooms += stepping * delta
+	if _ld_t >= LOAD_WINDOW:
+		var per_s := _ld_work / 1000000.0 / _ld_t          # (core-seconds of work a second)
+		load_share = per_s / _cores()
+		var avg := _ld_rooms / _ld_t
+		room_cost = maxf(ROOM_COST, per_s / avg) if avg >= 1.0 else ROOM_COST
+		_ld_work = 0
+		_ld_t = 0.0
+		_ld_rooms = 0.0
+
+func _cores() -> float:
+	return maxf(1.0, float(OS.get_processor_count()))
+
+func _projected(n_rooms: int) -> float:
+	return n_rooms * room_cost / _cores()
+
+func _room_fits() -> bool:
+	return _projected(rooms.size() + 1) <= load_limit + 0.0001
+
+func _warm_statics() -> void:
+	# 0.31.209: the map's shapes the sim works out once and keeps (static, filled on first use) -- worked out here, on the
+	# main loop, before any room steps on a worker thread, so no two threads ever fill one at once
+	Land.edge_loop()
+	Land.ridges()
+	Land.paths()
+	Land.trails()
+	Keep.ring()
+	Sim._outside_cells()
+
 func _status() -> Dictionary:
 	var in_match := 0
 	var waiting := 0
@@ -1309,6 +1402,7 @@ func _status() -> Dictionary:
 			running = true
 	return {"t":"status", "v":Net.VERSION, "online":_human_count(), "in_match":in_match, "waiting":waiting,
 		"lobby":lobby, "running":running, "slots":Net.TEAM_SIZE * 2, "max":max_players * max_rooms, "rooms":rooms.size(),
+		"max_rooms":max_rooms, "load":int(round(load_share * 100.0)),           # 0.31.209
 		"build":SERVER_BUILD, "min_build":min_build, "eco":1, "social":1, "an":1, "lb":1, "ref":1, "diag":1, "clans":1, "five":Net.FIVE,
 		"chatting":social.online.size() if social != null else 0}
 
@@ -1331,8 +1425,8 @@ func _team_humans(r: Room, team: int) -> int:
 
 # ---------------- paying a match (0.31.108) ----------------
 func _ledger_events(r: Room, evs: Array) -> void:
-	for cid in _members(r):
-		var c: Dictionary = clients[cid]
+	# (0.31.209: the room's players with a ledger, listed on the main loop -- this runs on a worker thread)
+	for c in r.step_mem:
 		if c.has("ledger"):
 			for e in evs:
 				c.ledger.on_event(e)
@@ -1340,8 +1434,7 @@ func _ledger_events(r: Room, evs: Array) -> void:
 func _ledger_track(r: Room, delta: float) -> void:
 	if r.sim == null or r.sim.ended:
 		return
-	for cid in _members(r):
-		var c: Dictionary = clients[cid]
+	for c in r.step_mem:
 		if c.has("ledger") and c.unit != "" and r.sim.by_id.has(c.unit) and str(c.ledger.uid) == c.unit:
 			c.ledger.track(r.sim.by_id[c.unit], delta)
 
@@ -1517,8 +1610,9 @@ func _results_tick(r: Room) -> void:
 			_refuse(cid, 1000, "done")
 			_log("%s left on the results for %.0f s: let go (room %d)" % [c.name, keep, r.id])
 
-func _run_match(r: Room, delta: float) -> bool:
-	# -> true when the room's match ran this frame
+func _run_match(r: Room, delta: float) -> int:
+	# -> 0: the room's match didn't run this frame; 1: it ran (a new match seated); 2: it steps this frame (its inputs
+	# applied here; _step_rooms steps it, _after_step sends what it built)
 	_results_tick(r)
 	var humans: int = _members(r).filter(func(cid): return not bool(clients[cid].get("after", false))).size() + r.held.size()
 	# (a held seat keeps the match going for its player; one still on the last match's results doesn't -- 0.31.122)
@@ -1529,10 +1623,10 @@ func _run_match(r: Room, delta: float) -> bool:
 			elif Time.get_ticks_msec() / 1000.0 - r.empty_since > idle_stop:
 				_log("match %d stopped (room %d, no players)" % [r.match_id, r.id])
 				r.sim = null
-		return false
+		return 0
 	r.empty_since = -1.0
 	if r.sim == null:
-		return false
+		return 0
 	var sim = r.sim
 	if sim.ended:
 		if r.ended_at < 0.0:
@@ -1563,7 +1657,7 @@ func _run_match(r: Room, delta: float) -> bool:
 					clients[cid].after = false
 					_seat(r, cid)
 				_presence_room(r)                         # 0.31.209: (started: no JOIN)
-				return true
+				return 1
 	_idle_tick(r, delta)
 	# Apply held inputs, then step at a fixed 30 Hz.
 	for cid in _members(r):
@@ -1594,6 +1688,38 @@ func _run_match(r: Room, delta: float) -> bool:
 				if sim.can_act(u):
 					sim.act(c.unit, "attack")
 	r.accum = minf(r.accum + delta, TICK * 6)
+	r.snap_accum += delta
+	r.step_mem = []
+	for cid in _members(r):
+		if clients[cid].has("ledger"):
+			r.step_mem.append(clients[cid])
+	return 2
+
+func _step_rooms(list: Array) -> void:
+	# 0.31.209 (Kevin: "Make it so more rooms can be created"): the rooms' matches step at once, each on a worker thread
+	# (WorkerThreadPool: as many as the machine has cores), the main loop waiting -- one core used to run them all, and a
+	# 5v5 room is ~125-150 ms of work a second, so seven or eight rooms filled it and every match stuttered
+	# (tools/rooms_bench.gd). Nothing else runs meanwhile: messages, seats and sends stay on the main loop, before and after.
+	if list.is_empty():
+		return
+	if list.size() == 1 or not threads_on:
+		for r in list:
+			_step_room(r)
+		return
+	_stepping = list
+	var gid := WorkerThreadPool.add_group_task(_step_nth, list.size(), -1, true, "fatebound rooms")
+	WorkerThreadPool.wait_for_group_task_completion(gid)
+	_stepping = []
+
+var _stepping: Array = []
+func _step_nth(i: int) -> void:
+	_step_room(_stepping[i])
+
+func _step_room(r: Room) -> void:
+	# A room's frame of match: the sim at a fixed 30 Hz, its events to the players' ledgers, and the snapshot when one is
+	# due (built and compressed once for everyone). Maybe on a worker thread: it touches only this room -- its sim, its
+	# events, its players' ledgers (step_mem) -- and reads the server's settings.
+	var sim = r.sim
 	var t_step := Time.get_ticks_usec()
 	while r.accum >= TICK and not sim.ended:
 		r.accum -= TICK
@@ -1606,49 +1732,59 @@ func _run_match(r: Room, delta: float) -> bool:
 			if not test_score.is_empty():
 				sim.score = test_score.duplicate()
 			sim._finish("time")
-	_st_step += Time.get_ticks_usec() - t_step
 	if sim.ended:
 		var evs2: Array = sim.drain_events()
 		_ledger_events(r, evs2)
 		r.pending_events.append_array(evs2)
-		_pay_match(r)
-	r.snap_accum += delta
+	r.w_step = Time.get_ticks_usec() - t_step
+	r.w_snap = 0
+	r.snap_bytes = PackedByteArray()
 	if r.snap_accum >= 1.0 / Net.SNAP_HZ:
 		r.snap_accum = minf(r.snap_accum - 1.0 / Net.SNAP_HZ, 1.0 / Net.SNAP_HZ)
 		var events := r.pending_events
 		r.pending_events = []
 		var t_snap := Time.get_ticks_usec()
-		var base := Net.snapshot(sim, "", events)      # built once, shared by every player
-		_st_snap += Time.get_ticks_usec() - t_snap
-		var t_send := Time.get_ticks_usec()
-		# 0.31.23: encoded and compressed ONCE and sent to everyone (before, every player's copy was encoded and compressed
-		# separately). (0.31.169: Siege's private bit -- the player's task, an "m" message -- went with Siege.)
-		var bytes := Net.encode(base, true)
-		var kf_bytes := PackedByteArray()
-		for cid in _members(r):
-			var c: Dictionary = clients[cid]
-			if bool(c.get("queued", false)) or bool(c.get("after", false)):
-				continue                               # (still in the lobby: no match to show yet; 0.31.122: or still on the last one's results)
-			if bool(c.get("resync", false)):
-				# 0.31.170: a snapshot didn't go (or the seat's keyframe): this one carries everything instead
-				if kf_bytes.is_empty():
-					kf_bytes = Net.encode(Net.keyframe(sim), true)
-				if _send_raw(cid, kf_bytes) == OK:
-					c.erase("resync")
-					c.resyncs = int(c.get("resyncs", 0)) + 1
-				_st_bytes += kf_bytes.size()
-			else:
-				if _send_raw(cid, bytes) != OK:
-					c.resync = true
-				_st_bytes += bytes.size()
-			var me: Dictionary = sim.by_id.get(c.unit, {})
-			if not me.is_empty():
-				# 0.31.87: the health they've healed, for the Merciful title (at most once a second, when it changed)
-				var healed := int(me.get("healed", 0.0))
-				if healed != int(c.get("heal_sent", 0)) and _now() - float(c.get("heal_at", -10.0)) >= 1.0:
-					c.heal_sent = healed
-					c.heal_at = _now()
-					_send(cid, {"t":"st", "heal":healed})
-		_st_send += Time.get_ticks_usec() - t_send
-		_st_snaps += 1
-	return true
+		# built once, shared by every player; 0.31.23: encoded and compressed ONCE and sent to everyone (before, every
+		# player's copy was encoded and compressed separately)
+		r.snap_bytes = Net.encode(Net.snapshot(sim, "", events), true)
+		r.w_snap = Time.get_ticks_usec() - t_snap
+
+func _after_step(r: Room) -> void:
+	# Back on the main loop after _step_rooms: the match paid if it ended, the snapshot sent.
+	var sim = r.sim
+	_st_step += r.w_step
+	_st_snap += r.w_snap
+	if sim.ended:
+		_pay_match(r)
+	if r.snap_bytes.is_empty():
+		return
+	var bytes := r.snap_bytes
+	r.snap_bytes = PackedByteArray()
+	var t_send := Time.get_ticks_usec()
+	var kf_bytes := PackedByteArray()
+	for cid in _members(r):
+		var c: Dictionary = clients[cid]
+		if bool(c.get("queued", false)) or bool(c.get("after", false)):
+			continue                               # (still in the lobby: no match to show yet; 0.31.122: or still on the last one's results)
+		if bool(c.get("resync", false)):
+			# 0.31.170: a snapshot didn't go (or the seat's keyframe): this one carries everything instead
+			if kf_bytes.is_empty():
+				kf_bytes = Net.encode(Net.keyframe(sim), true)
+			if _send_raw(cid, kf_bytes) == OK:
+				c.erase("resync")
+				c.resyncs = int(c.get("resyncs", 0)) + 1
+			_st_bytes += kf_bytes.size()
+		else:
+			if _send_raw(cid, bytes) != OK:
+				c.resync = true
+			_st_bytes += bytes.size()
+		var me: Dictionary = sim.by_id.get(c.unit, {})
+		if not me.is_empty():
+			# 0.31.87: the health they've healed, for the Merciful title (at most once a second, when it changed)
+			var healed := int(me.get("healed", 0.0))
+			if healed != int(c.get("heal_sent", 0)) and _now() - float(c.get("heal_at", -10.0)) >= 1.0:
+				c.heal_sent = healed
+				c.heal_at = _now()
+				_send(cid, {"t":"st", "heal":healed})
+	_st_send += Time.get_ticks_usec() - t_send
+	_st_snaps += 1

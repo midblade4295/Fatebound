@@ -6882,3 +6882,26 @@ post right when player launches game instead of having to enter a match".
   launch from the start-up check).
 - Needs the server redeploy (Kevin's): server/siege_server.gd, server/social.gd, scripts/siege/siege_net.gd. versionCode
   295, 0.31.209-fatebound (SERVER_BUILD 0.31.209).
+
+## Server: more rooms -- the rooms on every core (0.31.209 server; no app change)
+Kevin: "Make it so more rooms can be created".
+- Why there were six: the server ran every room's match on one thread. Measured (tools/rooms_bench.gd, new: N rooms of
+  one phone each, the server's SIEGE_STATS and memory): a 5v5 room is ~125-150 ms of work a second once its minions are
+  out (sim ~90, snapshot ~35); 4 rooms 590 ms/s at 57 frames/s, 8 rooms 980 ms/s at 9.5 frames/s (worst frame 147 ms):
+  past about seven, every match stuttered. Memory isn't the limit (175 MB with one room, 183 with eight; ten phones in a
+  room cost no more than one).
+- Now the rooms step at once, a room a worker thread (siege_server.gd _step_rooms: WorkerThreadPool, as many threads as
+  cores): each room's sim steps, its events go to its players' ledgers and its snapshot is built and compressed there;
+  messages, seats, payment and sends stay on the main loop, before and after (nothing else runs while they step). The
+  map's static shapes are worked out at start-up (_warm_statics) so no two threads fill one at once. Eight rooms on this
+  2-core box (the bench's phones on it too): 42 frames/s at the worst, worst frame 73 ms (was 9.5 / 147).
+- The cap: SIEGE_MAX_ROOMS defaults to 6 a core (6 on one core as before, 12 on two, 24 on four; at most 128). And a room
+  opens only while the rooms, it included, would keep the cores within SIEGE_LOAD_LIMIT (0.75) at what a room is
+  measured to cost (never below 12.5% of a core) -- else "full" as before, logged at most every 30 s. "status" adds
+  "max_rooms" and "load" (% of the cores busy). SIEGE_THREADS=0 puts every room back on the main loop.
+- Tests: the quick suite, all 107 passed. tests/rooms_load_test.gd (new: the default cap by the cores; five rooms
+  stepping at once, each phone its match's snapshots at the full 20 a second and its clock running; status rooms and
+  load; a load limit with room for one: the second phone "full" though 8 rooms are allowed).
+- Needs the server redeploy (Kevin's): server/siege_server.gd (with 0.31.209's). How many rooms depends on the server's
+  cores: its start-up line says ("N rooms of 10 players ... K cores, rooms on worker threads"); one core stays at 6.
+  server/deploy/fatebound-siege.env.example documents SIEGE_MAX_ROOMS / SIEGE_LOAD_LIMIT / SIEGE_THREADS.
