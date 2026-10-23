@@ -46,7 +46,11 @@ extends SceneTree
 # joined -- a hello goes only to a room that takes players (_open: before its first match, on its results, or only bots
 # left), a new room if none does, else "full"; Friends > JOIN is answered "playing" while the friend's match runs; PLAY
 # AGAIN once the next match is running goes into a lobby's countdown instead (_requeue). A rejoin still goes back onto
-# its own held seat. Friends see whether a friend's match can be joined ("jn" on their card). A "status" message (no hello) is answered with
+# its own held seat. Friends see whether a friend's match can be joined ("jn" on their card). Then (Kevin: "Hybrid with
+# 5min window"): only when no room can take a player in its countdown -- every room playing, no new one fitting the cap
+# or the cores -- a hello or PLAY AGAIN takes a bot's seat in a running match still in its first JOIN_WINDOW s (5
+# minutes; SIEGE_JOIN_WINDOW) at once (_late_room: the friend's, the party's, else the youngest; _late_seat), before
+# "full". A "status" message (no hello) is answered with
 # the player counts (the asker then closes) -- the menu's "players online". Both are additive: an older app ignores
 # "lobby" (it just waits for its welcome) and never asks for "status"; this app against an older server gets its
 # welcome at once and no count (so the protocol version stays).
@@ -166,6 +170,8 @@ const ROOMS_PER_CORE := 6            # 0.31.209 (Kevin: "Make it so more rooms c
                                      # (tools/rooms_bench.gd), so 6 leave a core's last quarter to the main loop
 const MAX_ROOMS_CAP := 128           # SIEGE_MAX_ROOMS at most
 const LOAD_LIMIT := 0.75             # 0.31.209: no new room when the rooms' work would take more than this share of the cores
+const JOIN_WINDOW := 300.0           # 0.31.209 (Kevin: "Hybrid with 5min window"): s of match time a running match may
+                                     # still take a player -- only when no room can take them in a countdown
 const ROOM_COST := 0.125             # 0.31.209: a room's share of a core at least (a 5v5 room, minions out: ~125 ms/s here)
 const ROOM_COST_START := 0.2         # ...and before any is measured (a fresh server: a grown room on a slower core, say)
 const IDLE_BOT := 45.0               # 0.31.119: s without input before a bot plays for them (SIEGE_IDLE_BOT)
@@ -209,6 +215,7 @@ var match_counter := 0               # match ids, unique across rooms
 var max_rooms := clampi(OS.get_processor_count() * ROOMS_PER_CORE, MAX_ROOMS, MAX_ROOMS_CAP)   # 0.31.209: by the cores
 var threads_on := true               # 0.31.209: rooms step on worker threads (SIEGE_THREADS=0: all on the main loop, as before)
 var load_limit := LOAD_LIMIT         # (SIEGE_LOAD_LIMIT)
+var join_window := JOIN_WINDOW       # 0.31.209: (SIEGE_JOIN_WINDOW)
 var load_share := 0.0                # 0.31.209: the rooms' work over the last LOAD_WINDOW s, as a share of every core
 var room_cost := ROOM_COST_START     # 0.31.209: a running room's share of a core, as measured (never below ROOM_COST)
 var room_cost_seen := ROOM_COST_START  # the dearest room measured lately (fading by COST_FADE a window)
@@ -251,6 +258,8 @@ func _init() -> void:
 	threads_on = OS.get_environment("SIEGE_THREADS") != "0"
 	if OS.has_environment("SIEGE_LOAD_LIMIT"):
 		load_limit = clampf(float(OS.get_environment("SIEGE_LOAD_LIMIT")), 0.0, 4.0)
+	if OS.has_environment("SIEGE_JOIN_WINDOW"):
+		join_window = clampf(float(OS.get_environment("SIEGE_JOIN_WINDOW")), 0.0, 1200.0)
 	log_on = OS.get_environment("SIEGE_LOG") != "0"
 	if OS.has_environment("SIEGE_LOBBY"):
 		lobby_time = clampf(float(OS.get_environment("SIEGE_LOBBY")), 0.0, 120.0)
@@ -736,10 +745,13 @@ func _handle(cid: int, msg: Dictionary) -> void:
 						party = social.party_for(acct)    # 0.31.111: seated with their party
 			var r: Room = null
 			var join_acct := ""
+			var friend_room: Room = null                  # 0.31.209: their friend's room, when it couldn't take them
+			var friend_acct := ""
+			var why := ""
 			var jp := str(msg.get("join", ""))
 			if jp != "" and acct != "" and social != null:
 				# 0.31.120: into a friend's match (Friends > JOIN)
-				var why := "gone"
+				why = "gone"
 				var me_pid := Social.pid_of(acct)
 				if social.users.has(jp) and social.users.has(me_pid) and (social.users[me_pid].get("friends", []) as Array).has(jp):
 					var ta := str(social.users[jp].acct)
@@ -750,15 +762,24 @@ func _handle(cid: int, msg: Dictionary) -> void:
 							if tr != null and _open(tr) and _has_space(tr):
 								r = tr
 								join_acct = ta
-							elif tr != null and not _open(tr):
-								why = "playing"                   # 0.31.209: their match has started -- no joining it
 							elif tr != null:
-								why = "full"
+								friend_room = tr
+								friend_acct = ta
+								why = "playing" if not _open(tr) else "full"   # 0.31.209: "playing" -- their match has started
 							break
-				if r == null:
-					_send(cid, {"t":"joinr", "ok":false, "why":why})
 			if r == null:
 				r = _pick_room(party)
+			var late := false
+			if r == null:
+				# 0.31.209 (Kevin: "Hybrid with 5min window"): no room can take them in its countdown (every room playing
+				# and no new one fits the cap or the cores): a seat in a running match still in its first join_window s --
+				# their friend's, their party's, else the youngest -- rather than "full"
+				r = _late_room(party, friend_room)
+				late = r != null
+				if late and r == friend_room:
+					join_acct = friend_acct
+			if why != "" and join_acct == "":
+				_send(cid, {"t":"joinr", "ok":false, "why":why})
 			if r == null:
 				_send(cid, {"t":"bye", "why":"full"})
 				_refuse(cid, 4002, "full")
@@ -791,6 +812,9 @@ func _handle(cid: int, msg: Dictionary) -> void:
 				hero = ""
 			c.hero = hero
 			c.ask_next = bool(msg.get("ask_next", false))  # 0.31.122: the phone says when it wants the next match (PLAY AGAIN)
+			if late:
+				_late_seat(cid, r)                         # 0.31.209: (no countdown -- the match is on)
+				return
 			c.queued = true                                # 0.31.82: into the lobby; seated when the countdown ends
 			if r.wave_end < 0.0:
 				r.wave_end = _now() + lobby_time
@@ -815,12 +839,16 @@ func _handle(cid: int, msg: Dictionary) -> void:
 				return                                     # (already playing)
 			else:
 				var to := _pick_room(str(c.get("party", "")), ra)
-				if to == null:
+				if to != null:
+					_requeue(cid, to)
+					return
+				var lr := _late_room(str(c.get("party", "")), ra, true)   # 0.31.209: the hybrid -- a young match's seat
+				if lr == null:
 					_send(cid, {"t":"bye", "why":"full"})
 					_refuse(cid, 4002, "full")
 					_log("%s: PLAY AGAIN, but every room is playing or full (%d rooms)" % [c.name, rooms.size()])
 					return
-				_requeue(cid, to)
+				_late_seat(cid, lr)
 		"status":
 			# 0.31.82: the menu's "players online" -- answered without a hello; the asker closes (or we do in 2 s: a
 			# close right behind the answer can reach the phone in the same read, and the WebSocket drops the answer)
@@ -1316,6 +1344,48 @@ func _send_lobby(r: Room, waiting: Array) -> void:
 	for i in waiting.size():
 		msg["me"] = i
 		_send(waiting[i], msg)
+
+func _late_ok(r: Room, counted := false) -> bool:
+	# 0.31.209: room r's match can take a player now -- running, in its first join_window s of match time, a seat free
+	# (`counted`: the player is one of the room's already)
+	if r == null or r.sim == null or r.sim.ended or r.sim.time >= join_window:
+		return false
+	var n := _room_humans(r) + r.held.size()
+	return n <= max_players if counted else n < max_players
+
+func _late_room(party: String, prefer: Room = null, counted := false) -> Room:
+	# 0.31.209 (Kevin: "Hybrid with 5min window"): only when no room can take a player in its countdown (_pick_room gave
+	# none): a running match still in its first join_window s with a seat free -- `prefer` (their friend's room, or on
+	# PLAY AGAIN their own), else their party's, else the youngest; null = none (then "full")
+	if _late_ok(prefer, counted):
+		return prefer
+	if party != "":
+		for ocid in clients:
+			var o: Dictionary = clients[ocid]
+			if o.hello and str(o.get("party", "")) == party:
+				var pr := _room_of(o)
+				if _late_ok(pr):
+					return pr
+	var best: Room = null
+	for r in rooms.values():
+		if _late_ok(r) and (best == null or r.sim.time < best.sim.time):
+			best = r
+	return best
+
+func _late_seat(cid: int, r: Room) -> void:
+	# 0.31.209: seated at once in room r's running match (_late_room): a bot's seat, its hero's level, gold and items kept
+	# (moba.swap_hero), the match as it stands in a keyframe -- no countdown
+	var c: Dictionary = clients[cid]
+	c.erase("again")
+	c.after = false
+	c.unit = ""
+	c.queued = false
+	if int(c.get("room", 0)) != r.id:
+		c.room = r.id
+	_log("late join %s: room %d's match %d at %.0f s (no room for a countdown)" % [c.name, r.id, r.match_id, r.sim.time])
+	_seat(r, cid)
+	if social != null and c.has("acct"):
+		social.acct_changed(str(c.acct))
 
 func _requeue(cid: int, r: Room) -> void:
 	# 0.31.209: into room r's lobby (PLAY AGAIN after the next match had started, or none did): seated when its countdown

@@ -1,15 +1,16 @@
 extends SceneTree
 # 0.31.119 (Kevin: "Do all" -- 1. more than one match at a time): the REAL server (port 8102) with rooms of 3 players and at
 # most 2 rooms (SIEGE_MAX_PLAYERS=3, SIEGE_MAX_ROOMS=2), real time. 0.31.209 (Kevin: "Make it so players cannot join a
-# match in progress. Every player can only join when the countdown is happening"): a room takes players only in its
-# countdown (lobby 2.5 s here), never while a match of players runs in it.
+# match in progress. Every player can only join when the countdown is happening"; then "Hybrid with 5min window"): a
+# room takes players in its countdown (lobby 2.5 s here); a running match only when no countdown room can be had, and
+# only in its first SIEGE_JOIN_WINDOW s (6 here).
 #   - three players in one countdown: room 1, one match; its lobby said no match was running
 #   - the fourth (A, in a party with B) can't join room 1's match: room 2 opens (a countdown); B, in A's countdown, goes
 #     to A's room (the party), on A's side
-#   - both rooms playing: the next one (Y) is turned away as "full" (bye full, 4002) although room 2 has a seat free --
-#     never into a match in progress
+#   - both rooms playing and no third allowed: Y takes the free seat in room 2's young match at once (no lobby)
+#   - X1 leaves room 1, but its match is past the join window: Z is "full" (bye full, 4002) with that seat free
 #   - "status" counts every room (online 5, rooms 2, max 6); a room's names ("pn") are only its own players
-#   - room 1's players all leave: its match is only bots -- it takes players again: Z gets a fresh match, not m1
+#   - room 1's players all leave: its match is only bots -- it takes players again: W gets a fresh match, not m1
 #   - everyone leaves: the rooms close (SIEGE_IDLE_STOP=2 here)
 #   godot --headless --path godot -s res://tests/match_rooms_test.gd
 const Net = preload("res://scripts/siege/siege_net.gd")
@@ -38,6 +39,7 @@ func _init() -> void:
 	OS.set_environment("SIEGE_PORT", str(port))
 	OS.set_environment("SIEGE_HOST", "127.0.0.1")
 	OS.set_environment("SIEGE_LOBBY", "2.5")
+	OS.set_environment("SIEGE_JOIN_WINDOW", "6")
 	OS.set_environment("SIEGE_MAX_PLAYERS", "3")
 	OS.set_environment("SIEGE_MAX_ROOMS", "2")
 	OS.set_environment("SIEGE_IDLE_STOP", "2")
@@ -191,24 +193,38 @@ func _process(delta: float) -> bool:
 				check(str(welcome("B").you).left(1) == str(welcome("A").you).left(1), "...on A's side (%s, %s)" % [welcome("A").you, welcome("B").you])
 				notes.m2 = m2
 				open("Y")
-				open("status")
 				_go("playing")
 			elif t_phase > 12.0:
 				check(false, "A and B seated within 12 s (%s)" % str(inbox.A.map(func(m): return m.t)))
 				_finish()
 		"playing":
 			send_once("Y", hello("Yankee"))
-			var ws: WebSocketPeer = socks.Y
-			if ws.get_ready_state() == WebSocketPeer.STATE_CLOSED:
-				var bye := got("Y", "bye")
-				check(not bye.is_empty() and str(bye[0].why) == "full" and ws.get_close_code() == 4002 and welcome("Y").is_empty() and got("Y", "lobby").is_empty(),
-					"both rooms playing: Y is \"full\" (%d) though room 2 has a seat -- never into a match in progress" % ws.get_close_code())
-				socks.erase("Y")
-				_go("status")
-			elif t_phase > 10.0:
-				check(false, "Y refused within 10 s (welcome %s)" % str(welcome("Y")))
+			if not welcome("Y").is_empty():
+				check(int(welcome("Y").match) == int(notes.m2) and got("Y", "lobby").is_empty(),
+					"both rooms playing, no third allowed: Y takes room 2's free seat in its young match at once, no countdown (match %d)" % int(welcome("Y").match))
+				shut("X1")
+				_go("window")
+			elif (socks.Y as WebSocketPeer).get_ready_state() == WebSocketPeer.STATE_CLOSED or t_phase > 10.0:
+				check(false, "Y late-joined room 2 within 10 s (bye %s)" % str(got("Y", "bye")))
 				_finish()
+		"window":
+			if t_phase > 7.0 and not socks.has("Z"):
+				open("Z")                                     # (both matches now past the 6 s window)
+			if socks.has("Z"):
+				send_once("Z", hello("Zulu"))
+				var ws: WebSocketPeer = socks.Z
+				if ws.get_ready_state() == WebSocketPeer.STATE_CLOSED:
+					var bye := got("Z", "bye")
+					check(not bye.is_empty() and str(bye[0].why) == "full" and ws.get_close_code() == 4002 and welcome("Z").is_empty(),
+						"X1 gone from room 1, but its match is past the join window: Z is \"full\" (%d) with that seat free" % ws.get_close_code())
+					socks.erase("Z")
+					_go("status")
+				elif not welcome("Z").is_empty() or t_phase > 17.0:
+					check(false, "Z refused within 10 s (welcome %s)" % str(welcome("Z")))
+					_finish()
 		"status":
+			if not socks.has("status"):
+				open("status")
 			send_once("status", {"t":"status"})
 			if not got("status", "status").is_empty():
 				var st: Dictionary = got("status", "status")[0]
@@ -217,29 +233,30 @@ func _process(delta: float) -> bool:
 				# names: each player sees only their own room's players
 				var pn := got("A", "pn")
 				var names: Array = (pn[pn.size() - 1].n as Dictionary).values() if not pn.is_empty() else []
-				check(names == ["Player", "Player"], "A's names are its own room's: %s" % str(names))      # (an account's name is its own)
-				for x in ["X1", "X2", "X3"]:
+				names.sort()
+				check(names == ["Player", "Player", "Yankee"], "A's names are its own room's: %s" % str(names))      # (an account's name is its own)
+				for x in ["X2", "X3"]:
 					shut(x)
 				_go("bots_only")
 			elif t_phase > 10.0:
 				check(false, "a status answer within 10 s")
 				_finish()
 		"bots_only":
-			if t_phase > 0.4 and not socks.has("Z"):
-				open("Z")
-			if socks.has("Z"):
-				send_once("Z", hello("Zulu"))
-				if not welcome("Z").is_empty():
-					var mz := int(welcome("Z").match)
-					check(mz != int(notes.m1) and mz != int(notes.m2) and not got("Z", "lobby").is_empty(),
-						"room 1's players gone (only bots left): Z, after a countdown, gets a fresh match (%d), not m1's" % mz)
+			if t_phase > 0.4 and not socks.has("W"):
+				open("W")
+			if socks.has("W"):
+				send_once("W", hello("Whiskey"))
+				if not welcome("W").is_empty():
+					var mw := int(welcome("W").match)
+					check(mw != int(notes.m1) and mw != int(notes.m2) and not got("W", "lobby").is_empty(),
+						"room 1's players gone (only bots left): W, after a countdown, gets a fresh match (%d), not m1's" % mw)
 					for n in socks.keys():
 						shut(n)
 					open("status2")
 					sent.erase("status2")
 					_go("close")
 				elif t_phase > 10.0:
-					check(false, "Z seated within 10 s")
+					check(false, "W seated within 10 s")
 					_finish()
 		"close":
 			if t_phase > 5.0:

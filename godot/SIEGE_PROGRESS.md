@@ -6931,3 +6931,20 @@ Kevin: "give me the total players supported online and total players supported i
 - Tests: match_rooms, rooms_load, net_load and social pass.
 - Needs the server redeploy (Kevin's): server/siege_server.gd and server/deploy/fatebound-siege.service (the installer
   copies it and reloads systemd).
+
+## Server: the hybrid -- a young match's seat when no countdown room can be had (0.31.209 server; no app change)
+Kevin: "So maybe I should reenable the join in progress system so players can get into matches easier and it'd allow
+60 player to be actively in matches on current server" -> "Hybrid with 5min window".
+- Countdown first, as 0.31.209 made it: a hello goes to a room in its countdown (or a new one) whenever one can be had.
+  Only when none can -- every room playing and no new one fitting SIEGE_MAX_ROOMS or the cores (_room_fits) -- does
+  it take a bot's seat in a running match still in its first JOIN_WINDOW s (300: 5 minutes of match time;
+  SIEGE_JOIN_WINDOW), at once, no countdown (_late_room: the friend's room on Friends > JOIN, the party's, else the
+  youngest; _late_seat -> _seat: the bot's hero keeps its level, gold and items, the match in a keyframe). PLAY AGAIN
+  likewise when no lobby can be had (its own room's young match first). Else "full", as before. Friends' "jn" stays
+  countdown-only; a JOIN answered "playing" isn't sent when the fallback puts them in that friend's match after all.
+- So at peak the rooms the cores allow fill toward 10 players each (6 rooms on the e2-standard-2: up to 60 in matches)
+  instead of turning players away while most seats are bots.
+- Tests: the quick suite, all 108 passed. match_rooms_test (join window 6 s: Y takes room 2's free seat at once when no
+  third room is allowed; Z "full" though room 1 has a seat, its match past the window), tests/late_join_test.gd (new,
+  8143: PLAY AGAIN and a hello late-joined into a young match with one room allowed; "full" past the window).
+- Needs the server redeploy (Kevin's): server/siege_server.gd.

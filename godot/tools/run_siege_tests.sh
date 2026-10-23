@@ -90,6 +90,8 @@ run net_load_test        NET_LOAD_PASS            120
 run match_rooms_test     MATCH_ROOMS_PASS         120
 # More rooms (0.31.209): the rooms step on worker threads, the cap by the cores, no room past the load limit (8141, 8142)
 run rooms_load_test      ROOMS_LOAD_PASS          120
+# Late joins (0.31.209, "Hybrid with 5min window"): a running match only when no countdown room can be had (8143)
+run late_join_test       LATE_JOIN_PASS           120
 # Idle players (0.31.119): a bot takes over, input gives it back, removal (real server on 8103 + the real client)
 run idle_test            IDLE_PASS                120
 # Rejoin after a dropped connection (0.31.120): real server on 8105 + the real client
