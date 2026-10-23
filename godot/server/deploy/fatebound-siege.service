@@ -30,6 +30,9 @@ ProtectSystem=strict
 ProtectHome=yes
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 MemoryMax=512M
+# 0.31.209: every phone holds a socket (two in a match: its social one and the match's); systemd's default soft limit
+# on open files is 1024, which Godot doesn't raise -- so about a thousand sockets was the server's ceiling
+LimitNOFILE=65536
 
 [Install]
 WantedBy=multi-user.target

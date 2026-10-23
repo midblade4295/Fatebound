@@ -429,9 +429,22 @@ func _process(delta: float) -> bool:
 	return false
 
 # ---------------- connections ----------------
+const ACCEPT_PER_FRAME := 64          # 0.31.209: new sockets taken a frame at most (a burst waits a frame, the matches don't)
+var _nofile_logged := -100.0
+
 func _accept() -> void:
-	while tcp.is_connection_available():
+	var taken := 0
+	while tcp.is_connection_available() and taken < ACCEPT_PER_FRAME:
+		taken += 1
 		var conn := tcp.take_connection()
+		if conn == null:
+			# 0.31.209: the process is out of open files (systemd's default soft limit is 1024; the service file raises it):
+			# the waiting connection can't be taken, and is_connection_available stays true -- this loop used to spin
+			# here forever, writing "p_stream.is_null()" errors (52 MB of log in 8 s) while every match stood still
+			if _now() - _nofile_logged > 60.0:
+				_nofile_logged = _now()
+				_log("WARNING: can't take a new connection (%d sockets open) -- out of open files? (LimitNOFILE)" % clients.size())
+			break
 		var ws := WebSocketPeer.new()
 		ws.inbound_buffer_size = Net.MAX_PACKET
 		ws.outbound_buffer_size = 1 << 20

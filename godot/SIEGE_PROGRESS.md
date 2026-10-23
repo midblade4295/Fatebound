@@ -6914,3 +6914,20 @@ Kevin: "Make it so more rooms can be created".
   that on the e2-standard-2 too (hyperthreads share one core; its clock is lower): more rooms there need more cores
   (e2-standard-4: two physical cores). The room tests (match_rooms, next_match, join_friend, rejoin, idle, rooms_load,
   online_five) pass.
+
+## Server: players online -- the open-file limit, and a freeze at it (0.31.209 server; no app change)
+Kevin: "give me the total players supported online and total players supported in active matches".
+- Measured (tools/online_bench.gd, new: accounts over the eco socket, then their social sockets -- what every app keeps
+  open while it's up -- held idle): a player in the menus costs the server ~0.03% of a core (480 online: 15.8% of a
+  core, 1.3% with one) and almost no memory (174 -> 178 MB). All the sockets are polled by the main loop (one thread).
+  A player in a match holds two sockets (the social one and the match's).
+- The ceiling was the open-file limit: systemd gives a service a soft limit of 1024 open files and Godot doesn't raise
+  it, so ~1,000 sockets was the most. Worse, at the limit the server froze: TCPServer kept saying a connection was
+  waiting, take_connection() returned null, and _accept looped on it forever ("p_stream.is_null()", 52 MB of log in
+  8 s; 1,100 sockets against a 1024 limit here). Now: the service file sets LimitNOFILE=65536 (all 1,100 open), and
+  _accept takes at most 64 new sockets a frame and stops at a null (one warning a minute: "out of open files?").
+- Social's own cap (social.gd MAX_CONNS) is 4,000. The bench's 240 accounts per run is the server's NEW_PER_HOUR; two
+  sockets an account (MAX_CONN_PER_PLAYER) made 480.
+- Tests: match_rooms, rooms_load, net_load and social pass.
+- Needs the server redeploy (Kevin's): server/siege_server.gd and server/deploy/fatebound-siege.service (the installer
+  copies it and reloads systemd).
