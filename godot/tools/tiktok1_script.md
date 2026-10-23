@@ -3,7 +3,7 @@
 Kevin: "I want a short CGI video that will make people on tiktok want to watch right off the bat. Something that could get
 a lot of views on tiktok" -- picked "King's snack" (a comedy loop) at about 15 s.
 
-A vertical 9:16 short (1080 x 1920, 30 fps, -14 LUFS, 14.05 s) built to hold a scroller from the first frame and to loop.
+A vertical 9:16 short (1080 x 1920, 30 fps, -14 LUFS, 14.03 s) built to hold a scroller from the first frame and to loop.
 The caption **"POV: you're the boss in a 5v5"** is on screen from the first frame through every shot (TikTok's style, high
 in the frame, clear of the app's tabs, buttons and caption):
 - **0.0 s** -- the hook: an extreme close-up of the round King, napkin tucked in, happily biting a giant turkey leg.
@@ -12,9 +12,9 @@ in the frame, clear of the app's tabs, buttons and caption):
   him down the red carpet through the dust (quickened 1.25x so it reads as a charge).
 - **6.4 s** -- caught: frozen, his crown slides off and clangs (~7.1 s), one huge GULP (~7.9 s), his eyes dart, a nervous
   beat, then a sheepish grin with a bead of sweat as he offers them the turkey leg (~10.6 s).
-- **12.15 s** -- the game's title slams in (12.31 s) over his blurred offer -- trailer 8's cue B hitting with the game's
+- **12.13 s** -- the game's title slams in (12.29 s) over his blurred offer -- trailer 8's cue B hitting with the game's
   title slam -- then 5V5 HERO BATTLES and "Not actual gameplay footage".
-- **14.05 s** -- the loop: straight back to him happily biting, so a viewer sees the start again before they've scrolled.
+- **14.03 s** -- the loop: straight back to him happily biting, so a viewer sees the start again before they've scrolled.
 
 ## How it was made
 The shots are AI video (ElevenLabs flow "Fatebound TikTok 1 (King's snack)", CyljrhTEJWMnaZtlqT3D; Veo 3.1 Fast, 9:16 at

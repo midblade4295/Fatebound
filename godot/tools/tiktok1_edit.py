@@ -55,11 +55,13 @@ def ff(args):
 
 
 def timeline():
-    # -> [(shot, from, to, where it starts in the cut, speed)], the cut's length
+    # -> [(shot, from, to, where it starts in the cut, speed, its frames)], the cut's length -- each shot a whole number of
+    # frames, so the picture and the sound line up to the frame all the way to the title's slam
     t, out = 0.0, []
     for v, a, b, sp in CUTS:
-        out.append((v, a, b, t, sp))
-        t += (b - a) / sp
+        n = int(round((b - a) / sp * FPS))
+        out.append((v, a, b, t, sp, n))
+        t += n / FPS
     return out, t
 
 
@@ -155,7 +157,7 @@ def picture(shots, work, W, H, preview, clean):
     tl, end = timeline()
     cap = os.path.join(work, "caption.png")
     caption_png(W, H, cap)
-    for i, (v, a, b, at, sp) in enumerate(tl):
+    for i, (v, a, b, at, sp, nf) in enumerate(tl):
         seg = os.path.join(work, "seg%02d.mp4" % i)
         src = os.path.join(shots, v + ".mp4")
         vf = "setpts=PTS/%.4f,scale=%d:%d:flags=lanczos%s,fps=%d,format=yuv420p" % (sp, W, H, "" if preview else ",unsharp=5:5:0.5:5:5:0.0", FPS)
@@ -167,12 +169,12 @@ def picture(shots, work, W, H, preview, clean):
                      "[0:v]%s[v];[1:v]format=rgba[c];[v][c]overlay=0:0:enable='lt(t,%.3f)',format=yuv420p" % (vf, until)]
         else:
             args += ["-vf", vf]
-        ff(args + ["-an", "-c:v", "libx264", "-preset", "veryfast" if preview else "slow", "-crf", "20" if preview else "14", seg])
+        ff(args + ["-frames:v", str(nf), "-an", "-c:v", "libx264", "-preset", "veryfast" if preview else "slow", "-crf", "20" if preview else "14", seg])
         segs.append(seg)
     # the title card from the King's last frame
-    v, a, b, at, sp = tl[-1]
+    v, a, b, at, sp, nf = tl[-1]
     last = os.path.join(work, "last.png")
-    ff(["-ss", "%.3f" % (b - 1.0 / FPS), "-i", os.path.join(shots, v + ".mp4"), "-frames:v", "1", last])
+    ff(["-ss", "%.3f" % (a + (nf - 1) / FPS * sp), "-i", os.path.join(shots, v + ".mp4"), "-frames:v", "1", last])
     segs.append(end_card(last, W, H, work, preview))
     lst = os.path.join(work, "segs.txt")
     open(lst, "w").write("".join("file '%s'\n" % s for s in segs))
@@ -195,7 +197,7 @@ def sound(shots, out, total):
     fx = np.zeros((n, 2), np.float32)
     mus = np.zeros((n, 2), np.float32)
     tl, end = timeline()
-    for (v, a, b, at, sp) in tl:
+    for (v, a, b, at, sp, nf) in tl:
         x = shot_audio(os.path.join(shots, v + ".mp4"), a, b, sp)
         lv = T8.lufs(x) if np.abs(x).max() > 1e-4 else SHOT_LUFS
         g = SHOT_LUFS - lv if np.isfinite(lv) else 0.0
@@ -232,7 +234,7 @@ def main():
     pic, total = picture(a.shots, work, W, H, a.preview, a.clean)
     aud = os.path.join(work, "sound.m4a")
     sound(a.shots, aud, total)
-    ff(["-i", pic, "-i", aud, "-c:v", "copy", "-c:a", "copy", "-shortest", "-movflags", "+faststart", a.out])
+    ff(["-i", pic, "-i", aud, "-map", "0:v", "-map", "1:a", "-c:v", "copy", "-c:a", "copy", "-movflags", "+faststart", a.out])
     print("cut", a.out, "%.2f s" % total)
 
 

@@ -6793,13 +6793,13 @@ are wearing in the loading screen".
 ## TikTok 1 — "The King's snack" (tools only, no build)
 Kevin: "I want a short CGI video that will make people on tiktok want to watch right off the bat. Something that could get
 a lot of views on tiktok" -- picked the King's snack loop at about 15 s.
-- A 14.05 s vertical short (1080 x 1920, 30 fps, -14 LUFS): the King biting a turkey leg -- BOOM, the doors blow in -- his
+- A 14.03 s vertical short (1080 x 1920, 30 fps, -14 LUFS): the King biting a turkey leg -- BOOM, the doors blow in -- his
   view of the five heroes charging -- his crown falls, GULP, he sheepishly offers them the leg -- the title slams in -- and
   it loops. "POV: you're the boss in a 5v5" over every shot; a --clean version without it.
 - AI video (ElevenLabs flow CyljrhTEJWMnaZtlqT3D, Veo 3.1 Fast 9:16 720p with its own sound) from keyframes made from
   trailer 9's King and heroes (gpt-image-2.5-sunburst). The first shot 3 grew the crown back after dropping it; re-shot
   between a start and an end frame. About 24,430 credits in all (tools/tiktok1_script.md has the shots and the tally).
-- tools/tiktok1_edit.py (new): the cut (per-shot trims and speeds), the caption, the title card (trailer 9's logo layers,
+- tools/tiktok1_edit.py (new): the cut (per-shot trims and speeds, each a whole number of frames so the sound stays on the picture), the caption, the title card (trailer 9's logo layers,
   a flash and shake on the slam, the tagline, "Not actual gameplay footage"), the mix (each shot's sound levelled,
   trailer 8's cue B hitting with the title slam). tools/tiktok1_script.md (new): the beats, the shots, posting notes.
   The videos aren't committed; sent to Kevin.
