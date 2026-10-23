@@ -37,7 +37,7 @@ V2 = os.path.join(GODOT, "assets", "ui", "v2")
 CUTS = [
     ("v1", 0.0, 3.4, 1.0),      # the King bites -- BOOM (1.27 s in) -- he freezes
     ("v2", 0.0, 3.75, 1.25),    # his view: the five charge through the broken doors at him (quickened: a charge)
-    ("v3", 0.0, 5.6, 1.0),      # caught: the crown falls, the gulp, he offers them the turkey leg
+    ("v3", 0.0, 5.75, 1.0),     # caught: the crown falls (0.7 s), GULP (1.5 s), a nervous beat, he offers them the turkey leg (4.2 s)
 ]
 END_T = 1.9                 # the title card
 SLAM_IN = 0.16              # the logo lands this long into the card (the slam)
