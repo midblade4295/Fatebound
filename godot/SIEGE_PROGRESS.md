@@ -6803,3 +6803,24 @@ a lot of views on tiktok" -- picked the King's snack loop at about 15 s.
   a flash and shake on the slam, the tagline, "Not actual gameplay footage"), the mix (each shot's sound levelled,
   trailer 8's cue B hitting with the title slam). tools/tiktok1_script.md (new): the beats, the shots, posting notes.
   The videos aren't committed; sent to Kevin.
+
+## Trailer 10 — the vertical gameplay trailer, told by the Herald (tools only, no build)
+Kevin: "Now make a gameplay trailer that shows the actual game off from a players perspective. Make the trailer
+vertical. Make it voiced by herald and make very funny. Show how the game flow goes and also show some other things like
+guilds, heros, how battles go ect. Do not put captions so players can focus on watching gameplay instead of reading".
+- Fatebound-Trailer-10-vertical: 78.8 s, 1080x1920 at 30 fps, -14 LUFS. The real game as a phone shows it (the game's
+  420 x 780 design size stretched to the frame): a teamfight and DOUBLE KILL as the hook, rewound like a tape; then the
+  flow -- Home, our King on his chair, the Armory's heroes, the Golem's window, the Stormcaller's outfits, the clan's
+  camp and members, PLAY and the hero window, the loading screen as the players drop in, the lane, a fight to FIRST
+  BLOOD, dying under a tower, a tower falling, the Grave Wyrm, the King and VICTORY (you the MVP), a chest, and the
+  app's own title slam with TAP TO START. No captions: only the game's own words.
+- The Royal Herald narrates (ElevenLabs v4, his voice; 20 lines from one read of the script, two takes, cut by their
+  word timings; tools/trailer10_script.md) between the game's own calls; the theme (match.ogg) under it all.
+- tools/trailer10_shots.gd (new): the takes -- the app with sample friends and clan (never the live server), offline
+  5v5s staged in motion with the HUD, the game's camera and fog of war, the start-of-match call silenced; every press
+  through the HUD's own touch path or the button's own press, and a fingertip drawn where the screen is touched.
+  tools/trailer10_render.sh (new): Movie Maker at 1080 x 1920 keeping the design size. tools/trailer10_edit.py (new):
+  the cut and the mix.
+- Seen while making it: on a 16:9 screen (the design size 439 x 780 there) PLAY's 5V5 hero window is taller than the
+  screen and doesn't scroll -- BATTLE is below the bottom edge. Taller phones (19.5:9, 20:9) show it.
+- ElevenLabs: 2,042 credits (the read, two takes; estimated first). The video isn't committed; sent to Kevin.

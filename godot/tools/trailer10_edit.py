@@ -92,41 +92,43 @@ def vo_line(k):
 # ---------- the cut: (run, from, to [seconds of the take], speed, look) one after another ----------
 # look: "" as recorded; "rewind": played backwards, fast, like a tape rewinding
 SHOTS = [
-    ("hook", 0.0, 3.9, 1.0, ""),
-    ("hook", 0.9, 3.9, 4.0, "rewind"),
-    ("home", 0.6, 4.6, 1.0, ""),
-    ("chair", 0.2, 3.2, 1.0, ""),
-    ("armory", 0.2, 4.0, 1.0, ""),
-    ("golem", 0.3, 3.9, 1.0, ""),
-    ("outfit", 0.5, 5.4, 1.0, ""),
-    ("clan", 0.2, 5.3, 1.0, ""),
-    ("play", 0.3, 2.7, 1.0, ""),
-    ("lobby", 0.1, 3.6, 1.0, ""),
-    ("lane", 0.4, 5.6, 1.0, ""),
-    ("fight", 0.2, 6.2, 1.0, ""),
-    ("death", 0.3, 5.8, 1.0, ""),
-    ("tower", 0.2, 5.6, 1.0, ""),
-    ("wyrm", 0.3, 7.3, 1.0, ""),
-    ("king", 0.5, 7.8, 1.0, ""),
-    ("chest", 0.3, 4.8, 1.0, ""),
-    ("title", 0.0, 6.4, 1.0, ""),
+    ("hook", 0.0, 5.3, 1.0, ""),           # 0  the teamfight: your static field, your storm -- a kill, DOUBLE KILL
+    ("hook", 1.0, 5.3, 6.0, "rewind"),     # 1  ...backwards, like a tape
+    ("home", 0.3, 4.7, 1.0, ""),           # 2  Home
+    ("chair", 0.25, 4.15, 1.0, ""),        # 3  our King on his chair
+    ("armory", 0.25, 1.75, 1.0, ""),       # 4  the Armory: the tanks (knights)
+    ("armory", 1.75, 3.6, 2.5, ""),        # 5  ...a flick down the list
+    ("armory", 3.6, 4.6, 1.0, ""),         # 6  ...the mages (wizards)
+    ("golem", 0.3, 4.5, 1.0, ""),          # 7  the Golem's window
+    ("outfit", 0.5, 5.5, 1.0, ""),         # 8  the Stormcaller's outfits tapped in turn
+    ("clan", 0.2, 5.2, 1.0, ""),           # 9  the clan's camp, its members
+    ("play", 0.3, 2.2, 1.0, ""),           # 10 PLAY -> the hero window, your Stormcaller tapped
+    ("lobby", 0.4, 3.9, 1.0, ""),          # 11 the players joining
+    ("lane", 0.3, 4.9, 1.0, ""),           # 12 up the middle lane behind the minions
+    ("fight", 0.0, 5.3, 1.0, ""),          # 13 their Barbarian: Q W E R -- FIRST BLOOD
+    ("death", 0.3, 4.7, 1.0, ""),          # 14 under their tower: slain
+    ("tower", 1.2, 5.4, 1.0, ""),          # 15 their tower falls
+    ("wyrm", 0.3, 6.9, 1.0, ""),           # 16 the Grave Wyrm
+    ("king", 0.0, 6.0, 1.0, ""),           # 17 the King -- VICTORY
+    ("chest", 0.3, 4.7, 1.0, ""),          # 18 a chest
+    ("title", 0.0, 6.1, 1.0, ""),          # 19 the title slams onto the wall, TAP TO START
 ]
 # the Herald's lines: (line, shot index, seconds into that shot, gain dB)
 VO = [
-    (1, 0, 2.0, 0.0), (2, 1, 0.05, 0.0),
-    (3, 2, 0.15, 0.0), (4, 3, 0.1, 0.0),
-    (5, 4, 0.3, 0.0), (6, 5, 0.1, 0.0),
-    (7, 6, 0.2, 0.0),
-    (8, 7, 0.2, 0.0),
-    (9, 8, 0.2, 0.0), (10, 9, 1.2, 0.0),
-    (11, 10, 0.4, 0.0),
-    (12, 11, 0.1, 0.0),
-    (13, 12, 0.6, 0.0),
-    (14, 13, 0.3, 0.0),
-    (15, 14, 0.2, 0.0), (16, 14, 4.6, 0.0),
-    (17, 15, 0.3, 0.0),
-    (18, 16, 0.4, 0.0),
-    (19, 17, 0.75, 1.0), (20, 17, 2.0, 0.0),
+    (1, 0, 1.95, 0.0), (2, 1, 0.0, 0.0),
+    (3, 2, 1.25, 0.0), (4, 3, 0.95, 0.0),
+    (5, 4, 0.25, 0.0), (6, 7, 0.25, 0.0),
+    (7, 8, 0.1, 0.0),
+    (8, 9, 0.15, 0.0),
+    (9, 10, 0.0, 0.0), (10, 11, 1.9, 0.0),
+    (11, 12, 0.2, 0.0),
+    (12, 13, 0.1, 0.0),
+    (13, 14, 0.6, 0.0),
+    (14, 15, 0.4, 1.5),
+    (15, 16, 0.2, 3.0), (16, 16, 4.3, 1.0),        # (his whisper: up a little)
+    (17, 17, 0.1, 3.0),
+    (18, 18, 0.3, 0.0),
+    (19, 19, 0.8, 1.0), (20, 19, 2.3, 0.0),
 ]
 GAME_LUFS = -21.0                   # each take's own sound, levelled
 GAME_GAIN = {"title": 3.0, "lobby": -2.0}
@@ -193,7 +195,8 @@ def take_audio(rec, run, a, b, sp, look):
     tmp = os.path.join(rec, ".t10_%s.wav" % run)
     af = []
     if look == "rewind":
-        af = ["areverse", "atempo=2.0", "atempo=%.3f" % (sp / 2.0)]
+        # backwards, and up in pitch as it speeds: a tape rewinding (3x by its rate, the rest by tempo)
+        af = ["aresample=%d" % SR, "areverse", "asetrate=%d" % (SR * 3), "aresample=%d" % SR, "atempo=%.3f" % (sp / 3.0)]
     elif sp != 1.0:
         af = ["atempo=%.3f" % sp]
     ff(["-ss", "%.4f" % avi_t(rec, run, a), "-t", "%.4f" % (b - a), "-i", os.path.join(rec, run + ".avi"), "-vn",
@@ -250,11 +253,14 @@ def sound(rec, out, total):
         spans.append((at, at + len(ln) / SR))
     # under him: the theme dips in the voice band and a little overall, the game's sound dips in the voice band
     vb = T8.band(music, 800, 4000)
-    music = music - vb + vb * T8.ramp_env(n, spans, -10.0, 0.25)[:, None]
+    music = music - vb + vb * T8.ramp_env(n, spans, -12.0, 0.25)[:, None]
     music *= T8.ramp_env(n, spans, -4.0, 0.25)[:, None]
     gb = T8.band(game, 800, 4000)
-    game = game - gb + gb * T8.ramp_env(n, spans, -7.0, 0.2)[:, None]
+    game = game - gb + gb * T8.ramp_env(n, spans, -9.0, 0.2)[:, None]
     mix = music * (10.0 ** (MUSIC_GAIN / 20.0)) + game + vo * 1.5
+    if os.environ.get("T10_STEMS"):                        # (to measure him against the rest)
+        T8.write_wav(out + ".vo.wav", vo * 1.5)
+        T8.write_wav(out + ".bed.wav", music * (10.0 ** (MUSIC_GAIN / 20.0)) + game)
     end = int(total * SR)
     mix = mix[:end]
     tail = int(0.5 * SR)

@@ -244,6 +244,21 @@ func _drag_scroll(sc: ScrollContainer, by: float, dur: float, at: Vector2) -> vo
 			touches.move(8, at - Vector2(0.0, by * e * 0.55)))
 	_after(dur + 0.03, func(): touches.release(8))
 
+func _scroll_to_key(key: String, dur: float) -> void:
+	# a thumb dragging the list the button is in until the button is on the screen
+	var b := _find_key(key)
+	if b == null:
+		return
+	var sc: Node = b.get_parent()
+	while sc != null and not (sc is ScrollContainer):
+		sc = sc.get_parent()
+	if sc == null:
+		return
+	var vh: float = root.get_visible_rect().size.y
+	var need: float = b.get_global_rect().end.y - (vh - 30.0)
+	if need > 0.0:
+		_drag_scroll(sc, need, dur, Vector2(root.get_visible_rect().size.x * 0.55, vh * 0.72))
+
 func _after(dt: float, f: Callable) -> void:
 	plan.append([t + dt, f])
 
@@ -527,9 +542,12 @@ func _set_play() -> void:
 	app.show_tab("home")
 
 func _take_play() -> void:
-	# PLAY -> the hero window (your Stormcaller picked) -> BATTLE -> the match's loading card
+	# PLAY -> the hero window: your Stormcaller tapped, the window dragged down to BATTLE (below the fold on a 9:16
+	# screen), BATTLE -> the match
 	_after(0.5, func(): _tap_key("play"))
-	_after(2.3, func(): _tap_key("moba_battle"))
+	_after(1.3, func(): _tap_key("moba_hero_stormcaller"))
+	_after(1.75, func(): _scroll_to_key("moba_battle", 0.6))
+	_after(2.65, func(): _tap_key("moba_battle"))
 
 func _set_chest() -> void:
 	app.show_tab("home")
@@ -567,6 +585,7 @@ func _take_title() -> void:
 # ---------- match takes ----------
 func _common(time_s: float, kills: Array, gold: float, items: Array, lv: int) -> void:
 	_dress(time_s, kills, gold, items)
+	mode._ann_flags["start"] = true               # (the Herald's start-of-match call: the trailer's Herald talks over these)
 	var sm = s().moba
 	sm.wave_at = INF                              # (no waves but the take's own)
 	sm.first_blood = time_s > 120.0               # (mid-match: the first kill was long ago)
@@ -783,7 +802,7 @@ func _stage_king() -> void:
 	for g in s().gates:
 		if int(g.team) == 1 and int(g.get("lane", 1)) == 1:
 			g.hp = 0.0
-	(sm.kings[1] as Dictionary).hp = float((sm.kings[1] as Dictionary).max_hp) * 0.11
+	(sm.kings[1] as Dictionary).hp = float((sm.kings[1] as Dictionary).max_hp) * 0.145     # (down ~4 s in: the Herald first)
 	for u in _heroes(1):
 		u.pos = Vector2(-38.0, -12.0)                 # (out of the way: their fountain is right behind the King)
 	var me0 := _u("you")
