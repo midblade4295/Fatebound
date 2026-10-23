@@ -33,16 +33,16 @@ SOUNDS = os.path.join(GODOT, "assets", "sounds")
 NUNITO = os.path.join(GODOT, "store-listing", "tools", "fonts", "Nunito-ExtraBold.ttf")
 V2 = os.path.join(GODOT, "assets", "ui", "v2")
 
-# ---------- the cut: (shot, its first second used, its last) ----------
+# ---------- the cut: (shot, its first second used, its last, its speed) ----------
 CUTS = [
-    ("v1", 0.0, 3.4),       # the King bites -- BOOM -- he freezes
-    ("v2", 0.0, 3.0),       # his view: the five charge through the broken doors at him
-    ("v3", 0.0, 5.6),       # caught: the crown slides off, the gulp, he offers them the turkey leg
+    ("v1", 0.0, 3.4, 1.0),      # the King bites -- BOOM (1.27 s in) -- he freezes
+    ("v2", 0.0, 3.75, 1.25),    # his view: the five charge through the broken doors at him (quickened: a charge)
+    ("v3", 0.0, 5.6, 1.0),      # caught: the crown falls, the gulp, he offers them the turkey leg
 ]
 END_T = 1.9                 # the title card
 SLAM_IN = 0.16              # the logo lands this long into the card (the slam)
 CAPTION = ["POV: you're the boss", "in a 5v5"]
-CAPTION_T = 3.4             # on from the first frame until the doors have blown in
+CAPTION_T = None            # on from the first frame through every shot (None), or until this second of the cut
 TAGLINE = "5V5 HERO BATTLES"
 NOTE = "Not actual gameplay footage"
 SHOT_LUFS = -20.0
@@ -55,10 +55,11 @@ def ff(args):
 
 
 def timeline():
+    # -> [(shot, from, to, where it starts in the cut, speed)], the cut's length
     t, out = 0.0, []
-    for v, a, b in CUTS:
-        out.append((v, a, b, t))
-        t += b - a
+    for v, a, b, sp in CUTS:
+        out.append((v, a, b, t, sp))
+        t += (b - a) / sp
     return out, t
 
 
@@ -154,21 +155,22 @@ def picture(shots, work, W, H, preview, clean):
     tl, end = timeline()
     cap = os.path.join(work, "caption.png")
     caption_png(W, H, cap)
-    for i, (v, a, b, at) in enumerate(tl):
+    for i, (v, a, b, at, sp) in enumerate(tl):
         seg = os.path.join(work, "seg%02d.mp4" % i)
         src = os.path.join(shots, v + ".mp4")
-        vf = "scale=%d:%d:flags=lanczos%s,fps=%d,format=yuv420p" % (W, H, "" if preview else ",unsharp=5:5:0.5:5:5:0.0", FPS)
+        vf = "setpts=PTS/%.4f,scale=%d:%d:flags=lanczos%s,fps=%d,format=yuv420p" % (sp, W, H, "" if preview else ",unsharp=5:5:0.5:5:5:0.0", FPS)
         args = ["-ss", "%.3f" % a, "-t", "%.3f" % (b - a), "-i", src]
-        if not clean and at < CAPTION_T:
-            # the caption over the opening (to CAPTION_T, however the cut falls)
+        if not clean and (CAPTION_T is None or at < CAPTION_T):
+            # the caption over the shots (to CAPTION_T, however the cut falls; the title card has none)
+            until = 1e6 if CAPTION_T is None else CAPTION_T - at
             args += ["-i", cap, "-filter_complex",
-                     "[0:v]%s[v];[1:v]format=rgba[c];[v][c]overlay=0:0:enable='lt(t,%.3f)',format=yuv420p" % (vf, CAPTION_T - at)]
+                     "[0:v]%s[v];[1:v]format=rgba[c];[v][c]overlay=0:0:enable='lt(t,%.3f)',format=yuv420p" % (vf, until)]
         else:
             args += ["-vf", vf]
         ff(args + ["-an", "-c:v", "libx264", "-preset", "veryfast" if preview else "slow", "-crf", "20" if preview else "14", seg])
         segs.append(seg)
     # the title card from the King's last frame
-    v, a, b, at = tl[-1]
+    v, a, b, at, sp = tl[-1]
     last = os.path.join(work, "last.png")
     ff(["-ss", "%.3f" % (b - 1.0 / FPS), "-i", os.path.join(shots, v + ".mp4"), "-frames:v", "1", last])
     segs.append(end_card(last, W, H, work, preview))
@@ -179,9 +181,10 @@ def picture(shots, work, W, H, preview, clean):
     return out, end + END_T
 
 
-def shot_audio(path, a, b):
+def shot_audio(path, a, b, sp=1.0):
     tmp = path + ".wav"
-    ff(["-ss", "%.3f" % a, "-t", "%.3f" % (b - a), "-i", path, "-vn", "-ac", "2", "-ar", str(SR), "-c:a", "pcm_f32le", tmp])
+    ff(["-ss", "%.3f" % a, "-t", "%.3f" % (b - a), "-i", path, "-vn", "-ac", "2", "-ar", str(SR)]
+       + (["-af", "atempo=%.4f" % sp] if sp != 1.0 else []) + ["-c:a", "pcm_f32le", tmp])
     x = T8.load(tmp)
     os.remove(tmp)
     return x
@@ -192,8 +195,8 @@ def sound(shots, out, total):
     fx = np.zeros((n, 2), np.float32)
     mus = np.zeros((n, 2), np.float32)
     tl, end = timeline()
-    for (v, a, b, at) in tl:
-        x = shot_audio(os.path.join(shots, v + ".mp4"), a, b)
+    for (v, a, b, at, sp) in tl:
+        x = shot_audio(os.path.join(shots, v + ".mp4"), a, b, sp)
         lv = T8.lufs(x) if np.abs(x).max() > 1e-4 else SHOT_LUFS
         g = SHOT_LUFS - lv if np.isfinite(lv) else 0.0
         T8.place(fx, T8.fade(x * (10.0 ** (g / 20.0)), 0.01, 0.04), at, SHOT_GAIN.get(v, 0.0))
