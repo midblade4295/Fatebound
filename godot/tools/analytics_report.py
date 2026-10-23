@@ -13,7 +13,9 @@ Reads <dir>/analytics/YYYY-MM-DD.jsonl and .jsonl.gz (one event a line, written 
      by day in --tz, as a table and as a JSON array
 then: WAU/MAU, new players a day, D1/D7/D30 retention, the tutorial funnel, match completion and length (online/bots),
 win rate by class, session length, purchase conversion (test purchases left out), social use, update screens by build,
-crash-free sessions, opt-outs, dropped events. --json writes the same numbers under the same keys.
+crash-free sessions, opt-outs, dropped events, and (0.31.208, server) gold and gem spending -- what players bought with
+the game's currencies (heroes, outfits, the pass, chest skips, clans), from the server's own "spend" events. --json
+writes the same numbers under the same keys.
 
 Left out: the accounts listed in --exclude-file (one id a line, # comments) and every event from a build ending
 "-probe" (the deploy's probe); an account seen only through those is not counted anywhere.
@@ -324,6 +326,8 @@ def build(events, accounts, now, days, tz, tz_name, info):
                        for r in sorted(by_prod.values(), key=lambda r: (-r["purchases"], r["product"]))],
     }
 
+    out["spending"] = spending(pe, period, period_active)
+
     # ---- social: share of the day's active players who used it (averaged over days with players) and of the period
     groups = {"chat": ("chat_send",), "friends": ("friend_add", "friend_accept"),
               "party": ("party_create", "party_join", "party_invite"), "quick_chat": ("quick_chat",),
@@ -396,6 +400,69 @@ def build(events, accounts, now, days, tz, tz_name, info):
     return out
 
 
+SPEND_CATS = ("hero", "outfit", "pass", "chest", "clan", "other")
+
+
+def spending(pe, period, period_active):
+    """0.31.208 (server): gold and gem spending in the period -- the server's "spend" events (server/eco_accounts.gd
+    spend_props: written when it replayed a buy, so the amounts are what the balances moved)"""
+    sp = [e for e in pe if e["ev"] == "spend" and e["src"] == "s"]
+    spenders = {e["acct"] for e in sp}
+    gold = sum(_n0(e["p"].get("gold")) for e in sp)
+    gems = sum(_n0(e["p"].get("gems")) for e in sp)
+
+    def tally(rows):
+        return {"buys": len(rows), "gold": sum(_n0(e["p"].get("gold")) for e in rows),
+                "gems": sum(_n0(e["p"].get("gems")) for e in rows), "players": len({e["acct"] for e in rows})}
+    by_cat = {}
+    for c in SPEND_CATS:
+        by_cat[c] = tally([e for e in sp if str(e["p"].get("cat", "other")) == c])
+    for e in sp:                                          # (a category this report doesn't know yet)
+        c = str(e["p"].get("cat", "other"))
+        if c not in by_cat:
+            by_cat[c] = tally([x for x in sp if str(x["p"].get("cat", "other")) == c])
+    items = {}
+    for e in sp:
+        k = (str(e["p"].get("cat", "other")), str(e["p"].get("item", "") or "-"))
+        r = items.setdefault(k, {"cat": k[0], "item": k[1], "buys": 0, "gold": 0, "gems": 0, "players": set(),
+                                 "for_gold": 0, "for_gems": 0, "on_sale": 0, "with_hero": 0})
+        r["buys"] += 1
+        g, m = _n0(e["p"].get("gold")), _n0(e["p"].get("gems"))
+        r["gold"] += g
+        r["gems"] += m
+        r["players"].add(e["acct"])
+        r["for_gold"] += 1 if g > 0 else 0
+        r["for_gems"] += 1 if m > 0 else 0
+        r["on_sale"] += 1 if _n0(e["p"].get("off")) > 0 else 0
+        r["with_hero"] += 1 if _truthy(e["p"].get("hero")) else 0
+    by_item = [{"cat": r["cat"], "item": r["item"], "buys": r["buys"], "gold": r["gold"], "gems": r["gems"],
+                "players": len(r["players"]), "for_gold": r["for_gold"], "for_gems": r["for_gems"], "on_sale": r["on_sale"],
+                "with_hero": r["with_hero"]}
+               for r in sorted(items.values(), key=lambda r: (SPEND_CATS.index(r["cat"]) if r["cat"] in SPEND_CATS else 99,
+                                                               -r["buys"], r["item"]))]
+    passes = [e for e in sp if str(e["p"].get("cat", "")) == "pass"]
+    premium = [e for e in passes if str(e["p"].get("item", "")) == "premium"]
+    skips = [e for e in passes if str(e["p"].get("item", "")) == "tiers"]
+    days = []
+    for d in period:
+        rows = [e for e in sp if day_utc(e["t"]) == d]
+        days.append({"day": d.isoformat(), "buys": len(rows), "gold": sum(_n0(e["p"].get("gold")) for e in rows),
+                     "gems": sum(_n0(e["p"].get("gems")) for e in rows), "players": len({e["acct"] for e in rows})})
+    return {
+        "buys": len(sp), "players": len(spenders), "pct_of_active": pct(len(spenders), len(period_active)),
+        "gold": gold, "gems": gems,
+        "by_category": by_cat,
+        "by_item": by_item,
+        "pass": {"premium": len(premium), "premium_players": len({e["acct"] for e in premium}),
+                 "tier_skips": len(skips), "tiers_skipped": sum(_n0(e["p"].get("n")) for e in skips),
+                 "gems": sum(_n0(e["p"].get("gems")) for e in passes)},
+        "by_day": days,
+        "left_after_median": {"gold": _median([_num(e["p"].get("gold_left")) for e in sp]),
+                              "gems": _median([_num(e["p"].get("gems_left")) for e in sp])},
+        "level_median": _median([_num(e["p"].get("lvl")) for e in sp]),
+    }
+
+
 def _builds(pe):
     b = {}
     for e in pe:
@@ -413,6 +480,12 @@ def _num(v):
         return float(v)
     except (TypeError, ValueError):
         return None
+
+
+def _n0(v):
+    # a number as an int, 0 when it's missing or not a number
+    n = _num(v)
+    return int(n) if n is not None and n == n else 0
 
 
 def _truthy(v):
@@ -480,6 +553,27 @@ def text(r):
              % (p["purchases"], p["payers"], _fmt(p["conversion_pct"], "%"), p["payers_all_time"], _fmt(p["conversion_all_time_pct"], "%"), p["test_purchases_left_out"]))
     for b in p["by_product"]:
         L.append("  %-16s %4d purchases  %4d payers" % (b["product"], b["purchases"], b["payers"]))
+    sd = r["spending"]
+    L.append("Gold and gem spending (the server's count of each buy): %d buys by %d players (%s of active in period): %s gold, %s gems"
+             % (sd["buys"], sd["players"], _fmt(sd["pct_of_active"], "%"), "{:,}".format(sd["gold"]), "{:,}".format(sd["gems"])))
+    L.append("  by kind: " + "  ".join("%s %d (%s gold, %s gems, %d players)" % (k, v["buys"], "{:,}".format(v["gold"]), "{:,}".format(v["gems"]), v["players"])
+                                      for k, v in sd["by_category"].items() if v["buys"]))
+    for it in sd["by_item"]:
+        extra = []
+        if it["on_sale"]:
+            extra.append("%d on sale" % it["on_sale"])
+        if it["with_hero"]:
+            extra.append("%d brought the hero" % it["with_hero"])
+        L.append("  %-7s %-26s %4d buys  %4d players  gold %9s (%d)  gems %7s (%d)%s"
+                 % (it["cat"], it["item"], it["buys"], it["players"], "{:,}".format(it["gold"]), it["for_gold"],
+                    "{:,}".format(it["gems"]), it["for_gems"], ("  " + ", ".join(extra)) if extra else ""))
+    ps = sd["pass"]
+    L.append("  the pass: premium %d (%d players), tier skips %d (%d tiers), %s gems in all"
+             % (ps["premium"], ps["premium_players"], ps["tier_skips"], ps["tiers_skipped"], "{:,}".format(ps["gems"])))
+    L.append("  by day (UTC, today first): gold %s  gems %s  buys %s" % (json.dumps([x["gold"] for x in sd["by_day"]]),
+             json.dumps([x["gems"] for x in sd["by_day"]]), json.dumps([x["buys"] for x in sd["by_day"]])))
+    L.append("  left after a buy (median): %s gold, %s gems; buyers' level (median) %s"
+             % (_fmt(sd["left_after_median"]["gold"]), _fmt(sd["left_after_median"]["gems"]), _fmt(sd["level_median"])))
     so = r["social"]
     L.append("Social (players, % of active in period, avg daily % of DAU): " + "  ".join(
         "%s %d (%s, %s)" % (k, v["players"], _fmt(v["pct_of_active"], "%"), _fmt(v["avg_daily_pct_of_dau"], "%")) for k, v in so.items()))

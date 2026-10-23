@@ -284,6 +284,7 @@ func _init() -> void:
 	analytics = Analytics.new()
 	analytics.log_fn = _log
 	social.event_fn = func(acct: String, ev: String, p: Dictionary): analytics.server_event(acct, ev, p)
+	eco.spend_fn = func(acct: String, p: Dictionary, build: String): analytics.server_event(acct, "spend", p, build)   # 0.31.208 (server): gold and gem spending
 	_log("analytics: %s (%d accounts opted out)" % [analytics.dir, analytics.opted.size()])
 	leaderboard = Leaderboard.new()
 	leaderboard.log_fn = _log

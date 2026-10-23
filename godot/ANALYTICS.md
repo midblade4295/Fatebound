@@ -30,7 +30,23 @@ Python 3 standard library only. Test: `python3 godot/tools/test_analytics_report
 | Phone: queue, sessions, sending, opt-out | `scripts/meta/analytics.gd` (a child of SiegeApp) |
 | Phone hooks | `scripts/app/siege_app.gd` (sessions, match_join, shop_view, update_screen, level_up), `siege/siege_mode.gd` (VS BOTS matches, tutorial start/complete/skip), `siege/tutorial.gd` (steps), `app/screens.gd` (forge, the Settings toggle), `app/chest_open.gd` |
 | Server: checks, files, rotation | `server/analytics.gd` |
-| Server hooks | `server/siege_server.gd` (`an` socket, session_online, online match_start/finish/quit, quick_chat, purchase_verified, update_screen on a min_build refusal), `server/social.gd` (chat_send, friend_add/accept, party_create/invite/join) |
+| Server hooks | `server/siege_server.gd` (`an` socket, session_online, online match_start/finish/quit, quick_chat, purchase_verified, update_screen on a min_build refusal), `server/social.gd` (chat_send, friend_add/accept, party_create/invite/join), `server/eco_accounts.gd` (spend: gold and gems spent, below) |
+
+## Gold and gem spending (0.31.208, server)
+
+Kevin: "Gold and gem spending: buying heroes, outfits or the pass with in-game currency to have tracking system for
+server". Every op the server replays for an account (`server/eco_accounts.gd` handle) that takes gold or gems -- and the
+gold the server takes itself for a clan (`pay_gold`) -- is a `spend` event (src `s`, the ops' app build), props from
+`spend_props`: `cat` hero | outfit | pass | chest | clan | other; `item` the hero / outfit id, `premium` / `tiers`, the
+chest's kind, `clan`; `op` (buy_hero, buy_hero_gems, use_shard, buy_skin, buy_skin_gold, buy_sale, buy_premium,
+skip_tiers, skip_chest, pay_gold); `gold`, `gems` what it cost (what the balances moved -- the server's replay, not the
+phone's word); `gold_left`, `gems_left`; `lvl`; and as it applies `hero` (an outfit that brought its locked hero),
+`off` (a sale's % off), `n` (tiers skipped), `season`. A buy that fails, an op sent again, gold coming in (a melted
+shard, a reward): no spend. An account with the statistics off: none (as every server event).
+`tools/analytics_report.py` adds them up: buys, players and their share of the period's actives, gold and gems; by kind;
+by item (paid in gold / in gems, on sale, brought the hero); the pass (premium, tier skips, tiers); by day; the median
+left after a buy and the buyers' level. No account id in the report; a player's own lines are in the day files
+(`"ev":"spend"`, their account id) for support.
 
 ## Protocol (stays 35)
 
@@ -68,5 +84,6 @@ Python 3 standard library only. Test: `python3 godot/tools/test_analytics_report
 
 ## Tests
 
-`tests/analytics_client_test.gd`, `tests/analytics_server_test.gd`, `tests/analytics_events_test.gd` (real server on
+`tests/spend_tracking_test.gd` (0.31.208, server: every kind of spend, the ones that aren't, opt-out, the real server
+on 8133), `tests/analytics_client_test.gd`, `tests/analytics_server_test.gd`, `tests/analytics_events_test.gd` (real server on
 port 8100, the probe included), `tools/test_analytics_report.py`. All in `tools/run_siege_tests.sh`.

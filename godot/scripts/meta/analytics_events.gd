@@ -51,6 +51,9 @@ const SERVER := {
 	"clan_request": [],
 	"clan_invite": [],
 	"clan_leave": [],
+	# 0.31.208, server (Kevin: "Gold and gem spending ... tracking system for server"): gold or gems an account spent, as the
+	# server replayed it (server/eco_accounts.gd spend_props): what on, what it cost, what was left
+	"spend": ["cat", "item", "op", "gold", "gems", "gold_left", "gems_left", "lvl", "hero", "off", "n", "season"],
 }
 
 static func clean_props(allowed: Array, p: Variant) -> Dictionary:

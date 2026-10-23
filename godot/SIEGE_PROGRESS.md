@@ -6824,3 +6824,23 @@ guilds, heros, how battles go ect. Do not put captions so players can focus on w
 - Seen while making it: on a 16:9 screen (the design size 439 x 780 there) PLAY's 5V5 hero window is taller than the
   screen and doesn't scroll -- BATTLE is below the bottom edge. Taller phones (19.5:9, 20:9) show it.
 - ElevenLabs: 2,042 credits (the read, two takes; estimated first). The video isn't committed; sent to Kevin.
+
+## Server: gold and gem spending tracked (0.31.208 server; no app change, no build)
+Kevin: "I want Gold and gem spending: buying heroes, outfits or the pass with in-game currency to have tracking system
+for server".
+- Every op the server replays for an account (server/eco_accounts.gd handle -- the server's own copy of each buy, so the
+  amounts are what the balances moved, not the phone's word) that takes gold or gems is a "spend" in the usage
+  statistics (server/analytics.gd, analytics/YYYY-MM-DD.jsonl, src "s", the ops' build); so is the gold the server takes
+  itself for a clan (pay_gold). Its props (eco_accounts.gd spend_props, analytics_events.gd SERVER "spend"): cat hero |
+  outfit | pass | chest | clan | other; item (the hero, the outfit, "premium" / "tiers", the chest's kind, "clan"); op;
+  gold and gems it cost; gold_left / gems_left; lvl; and as it applies hero (an outfit that brought its locked hero),
+  off (a sale's % off), n (tiers skipped), season. A failed buy, an op sent again, gold coming in, an outfit worn: no
+  spend. An account with the statistics off: nothing (as every server event). No name, key or token.
+- tools/analytics_report.py: a "Gold and gem spending" section -- buys, players (and their share of the period's
+  actives), gold and gems; by kind; by item (paid in gold / gems, on sale, brought the hero); the pass (premium, tier
+  skips, tiers); by day; the median left after a buy and the buyers' level (--json: "spending"). Aggregates only.
+- Tests: the quick suite, all 106 passed. tests/spend_tracking_test.gd (new: each kind of spend with its amounts, balances and build; the ones that
+  aren't; the clan's gold; opt-out; no key or name; the real server on 8133 writing a hero bought over the eco socket);
+  tools/test_analytics_report.py (spending in the fixture, the excluded account's left out); ANALYTICS.md.
+- Needs the server redeploy (Kevin's): server/eco_accounts.gd, server/siege_server.gd, scripts/meta/analytics_events.gd
+  (install_siege_server.sh already copies them). Phones don't change: the app's builds stay 0.31.208.

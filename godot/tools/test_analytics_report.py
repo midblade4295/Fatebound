@@ -5,7 +5,8 @@ Builds a state directory by hand (day files plain and gzipped, account files, a 
 duplicate line) whose numbers are known, runs the report as of 2026-10-12 18:00 UTC and checks: the headline comes
 first, total unique and active ever, daily actives by UTC day and by Pacific day, WAU/MAU, new players, D1/D7/D30,
 the tutorial funnel, match completion and win rate by class, session length (4 h cap), purchase conversion without
-test purchases, social use, update screens, crash-free, opt-outs, dropped events; the text and the JSON agree; no
+test purchases, social use, update screens, crash-free, opt-outs, dropped events, gold and gem spending (0.31.208,
+server: by kind, by item, the pass, by day, what was left); the text and the JSON agree; no
 account id appears anywhere in the report; and the fixture has no IP, token, order, name or chat text field.
 Prints ANALYTICS_REPORT_PASS.
   python3 godot/tools/test_analytics_report.py
@@ -85,6 +86,8 @@ def main():
             ev(B, "match_start", "2026-10-01T12:02:00Z", {"match": "y1", "mode": "bots", "class": "ranger"}),
             ev(B, "match_quit", "2026-10-01T12:03:00Z", {"match": "y1", "mode": "bots", "quit_at_s": 60, "class": "ranger", "class0": "ranger"}),
             ev(B, "purchase_verified", "2026-10-01T12:04:00Z", {"product": "gems_80", "test": True}, src="s"),
+            ev(B, "spend", "2026-10-01T12:04:30Z", {"cat": "hero", "item": "dragoon", "op": "buy_hero_gems", "gold": 0, "gems": 600,
+                                                   "gold_left": 300, "gems_left": 20, "lvl": 4}, src="s"),
             ev(B, "session_end", "2026-10-01T12:05:00Z", {"dur_s": 120}),
             ev(B, "opt_out", "2026-10-01T12:06:00Z"),
         ],
@@ -97,6 +100,12 @@ def main():
         ],
         "2026-10-06": [
             ev(C, "chat_send", "2026-10-06T20:00:00Z", {"kind": "global"}, src="s"),
+            ev(C, "spend", "2026-10-06T20:01:00Z", {"cat": "outfit", "item": "knight_lion", "op": "buy_sale", "gold": 0, "gems": 490,
+                                                   "gold_left": 52000, "gems_left": 10, "lvl": 20, "hero": False, "off": 35}, src="s"),
+            ev(C, "spend", "2026-10-06T20:02:00Z", {"cat": "outfit", "item": "mage_frost", "op": "buy_skin_gold", "gold": 40000, "gems": 0,
+                                                   "gold_left": 12000, "gems_left": 10, "lvl": 20, "hero": False}, src="s"),
+            ev(C, "spend", "2026-10-06T20:03:00Z", {"cat": "clan", "item": "clan", "op": "pay_gold", "gold": 5000, "gems": 0,
+                                                   "gold_left": 7000, "gems_left": 10, "lvl": 20}, src="s"),
             ev(C, "match_finish", "2026-10-06T20:10:00Z", {"match": "1-2", "mode": "online", "dur_s": 300, "result": "win", "team_n": 2, "class": "mage", "class0": "worker"}, src="s"),
             ev(C, "session_end", "2026-10-06T20:20:00Z", {"dur_s": 20000, "lost": True}),
         ],
@@ -104,6 +113,10 @@ def main():
             ev(A, "match_start", "2026-10-08T10:00:00Z", {"match": "1-3", "mode": "online", "class": "worker"}, src="s"),
             ev(A, "match_finish", "2026-10-08T10:08:00Z", {"match": "1-3", "mode": "online", "dur_s": 480, "result": "loss", "team_n": 3, "class": "mage+", "class0": "worker"}, src="s"),
             ev(A, "purchase_verified", "2026-10-08T10:09:00Z", {"product": "gems_80", "test": False}, src="s"),
+            ev(A, "spend", "2026-10-08T10:10:00Z", {"cat": "hero", "item": "golem", "op": "buy_hero", "gold": 25000, "gems": 0,
+                                                   "gold_left": 1200, "gems_left": 3048, "lvl": 12}, src="s"),
+            ev(A, "spend", "2026-10-08T10:11:00Z", {"cat": "outfit", "item": "stormcaller_stormforged", "op": "buy_skin", "gold": 0,
+                                                   "gems": 750, "gold_left": 1200, "gems_left": 2298, "lvl": 12, "hero": True}, src="s"),
             ev(A, "update_screen", "2026-10-08T09:00:00Z", {"from_build": "0.31.116", "need": "0.31.118"}),
             ev(A, "update_screen", "2026-10-08T09:01:00Z", {"from_build": "0.31.116", "need": "0.31.118"}, src="s"),
         ],
@@ -114,6 +127,14 @@ def main():
             ev(P, "error", "2026-10-12T17:00:00Z", {"kind": "probe", "n": 0}, b="0.31.118-probe"),
             ev(X, "session_start", "2026-10-12T17:00:00Z", {"cold": True, "safe_boot": False, "net": "online"}),
             ev(X, "purchase_verified", "2026-10-12T17:01:00Z", {"product": "gems_6500", "test": False}, src="s"),
+            ev(X, "spend", "2026-10-12T17:02:00Z", {"cat": "hero", "item": "druid", "op": "buy_hero", "gold": 25000, "gems": 0,
+                                                   "gold_left": 0, "gems_left": 0, "lvl": 9}, src="s"),
+            ev(A, "spend", "2026-10-12T17:07:00Z", {"cat": "pass", "item": "premium", "op": "buy_premium", "gold": 0, "gems": 950,
+                                                   "gold_left": 1200, "gems_left": 1348, "lvl": 13, "season": 1}, src="s"),
+            ev(A, "spend", "2026-10-12T17:08:00Z", {"cat": "pass", "item": "tiers", "op": "skip_tiers", "gold": 0, "gems": 1000,
+                                                   "gold_left": 1200, "gems_left": 348, "lvl": 13, "n": 10, "season": 1}, src="s"),
+            ev(A, "spend", "2026-10-12T17:09:00Z", {"cat": "chest", "item": "gold", "op": "skip_chest", "gold": 0, "gems": 48,
+                                                   "gold_left": 1200, "gems_left": 300, "lvl": 13}, src="s"),
         ],
     }
     for day, lines in days.items():
@@ -187,6 +208,28 @@ def main():
     check(p["purchases"] == 1 and p["payers"] == 1 and p["conversion_pct"] == 33.3 and p["test_purchases_left_out"] == 1
           and p["by_product"] == [{"product": "gems_80", "purchases": 1, "payers": 1}] and p["payers_all_time"] == 1,
           "purchases: 1 payer of 3 active (33.3%%), the test one left out, the excluded account's left out: %s" % p)
+    sd = r["spending"]
+    bc = {k: (v["buys"], v["gold"], v["gems"], v["players"]) for k, v in sd["by_category"].items()}
+    check(sd["buys"] == 9 and sd["players"] == 3 and sd["pct_of_active"] == 100.0 and sd["gold"] == 70000 and sd["gems"] == 3838,
+          "spending: 9 buys by 3 players (100%% of active), 70,000 gold, 3,838 gems; the excluded account's left out: %s"
+          % {k: sd[k] for k in ("buys", "players", "pct_of_active", "gold", "gems")})
+    check(bc == {"hero": (2, 25000, 600, 2), "outfit": (3, 40000, 1240, 2), "pass": (2, 0, 1950, 1), "chest": (1, 0, 48, 1),
+                 "clan": (1, 5000, 0, 1), "other": (0, 0, 0, 0)}, "spending by kind: %s" % bc)
+    bi = {(x["cat"], x["item"]): x for x in sd["by_item"]}
+    check(bi[("outfit", "knight_lion")]["on_sale"] == 1 and bi[("outfit", "stormcaller_stormforged")]["with_hero"] == 1
+          and bi[("hero", "golem")]["for_gold"] == 1 and bi[("hero", "dragoon")]["for_gems"] == 1 and ("hero", "druid") not in bi,
+          "spending by item: the sale, the outfit that brought its hero, gold / gems")
+    check([x["cat"] for x in sd["by_item"]] == ["hero", "hero", "outfit", "outfit", "outfit", "pass", "pass", "chest", "clan"],
+          "items in kind order: %s" % [x["cat"] for x in sd["by_item"]])
+    check(sd["pass"] == {"premium": 1, "premium_players": 1, "tier_skips": 1, "tiers_skipped": 10, "gems": 1950},
+          "the pass: premium 1, a tier skip of 10 tiers, 1,950 gems: %s" % sd["pass"])
+    sdd = {x["day"]: (x["buys"], x["gold"], x["gems"]) for x in sd["by_day"]}
+    check(sdd["2026-10-12"] == (3, 0, 1998) and sdd["2026-10-08"] == (2, 25000, 750) and sdd["2026-10-06"] == (3, 45000, 490)
+          and sdd["2026-10-01"] == (1, 0, 600) and sd["by_day"][0]["day"] == "2026-10-12", "spending by day: %s" % {k: v for k, v in sdd.items() if v[0]})
+    check(sd["left_after_median"] == {"gold": 1200, "gems": 300} and sd["level_median"] == 13,
+          "left after a buy (median 1,200 gold, 300 gems), level 13: %s %s" % (sd["left_after_median"], sd["level_median"]))
+    check("Gold and gem spending (the server's count of each buy): 9 buys by 3 players (100.0% of active in period): 70,000 gold, 3,838 gems" in txt
+          and "the pass: premium 1 (1 players), tier skips 1 (10 tiers), 1,950 gems in all" in txt, "the text's spending is the JSON's")
     so = r["social"]
     check(so["chat"]["players"] == 1 and so["chat"]["pct_of_active"] == 33.3 and so["friends"]["players"] == 1
           and so["party"]["players"] == 0 and so["chat"]["by_kind"] == {"global": 1}, "social: chat 1, friends 1, party 0")

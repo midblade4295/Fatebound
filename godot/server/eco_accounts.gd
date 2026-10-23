@@ -16,6 +16,11 @@ extends RefCounted
 # (link_new / link_use: 8 characters, 10 minutes, once), the Game Center player linked to an account (gc_links.json:
 # a hash of the teamPlayerID, never the id itself), extra keys for an account's other phones (meta.keys, hashes), and
 # deleting an account (delete_account) from the app.
+# 0.31.208, server (Kevin: "Gold and gem spending: buying heroes, outfits or the pass with in-game currency to have tracking
+# system for server"): every op that took gold or gems -- as this server replayed it, so the amounts are the real ones --
+# and the gold the server takes itself (a clan) are told to spend_fn with what they bought and what it cost
+# (spend_props); siege_server.gd writes them to the usage statistics (server/analytics.gd "spend"), and
+# tools/analytics_report.py adds them up.
 const Profile = preload("res://scripts/meta/profile.gd")
 const Eco = preload("res://scripts/meta/economy.gd")
 const Net = preload("res://scripts/siege/siege_net.gd")
@@ -59,6 +64,11 @@ var gc_path := ""
 # fresh one (Profile.defaults: named "Player", so the Herald's welcome asks the name -- scripts/app/herald_intro.gd).
 var wiped_at := 0
 var _made: Array = []                # when the last new accounts were made (the hourly limit)
+# (0.31.208, server) a spend (acct, its props -- spend_props, the app build the op came from)
+var spend_fn: Callable = func(_acct: String, _p: Dictionary, _build: String): pass
+const SPEND_CAT := {"buy_hero":"hero", "buy_hero_gems":"hero", "use_shard":"hero",
+	"buy_skin":"outfit", "buy_skin_gold":"outfit", "buy_sale":"outfit",
+	"buy_premium":"pass", "skip_tiers":"pass", "skip_chest":"chest", "pay_gold":"clan"}
 
 func _init(state_dir := "") -> void:
 	state = state_dir
@@ -313,9 +323,16 @@ func handle(msg: Dictionary) -> Dictionary:
 			if s <= int(e.meta.seq):
 				results.append({"s":s, "ok":true, "dup":true})       # (sent again after a lost answer: done already)
 				continue
-			var r: Dictionary = _match(e, o) if str(o.get("op", "")) == "match" else p.apply_op(str(o.get("op", "")), o.get("a", []))
+			var op := str(o.get("op", ""))
+			var g0 := int(p.d.gold)
+			var m0 := int(p.d.gems)
+			var pre := spend_pre(p, op, o.get("a", []))
+			var r: Dictionary = _match(e, o) if op == "match" else p.apply_op(op, o.get("a", []))
 			e.meta.seq = s
 			results.append({"s":s, "ok":bool(r.get("ok", false)), "error":str(r.get("error", ""))})
+			if bool(r.get("ok", false)) and op != "match" and (int(p.d.gold) < g0 or int(p.d.gems) < m0):
+				spend_fn.call(e.id, spend_props(op, o.get("a", []), r, g0 - int(p.d.gold), m0 - int(p.d.gems), p.d, pre),
+					str(msg.get("build", "")).left(40))
 	if bool(msg.get("ticket", false)):
 		out["ticket"] = _ticket(e)
 	e.meta.rev = int(e.meta.get("rev", 0)) + 1
@@ -453,7 +470,46 @@ func pay_gold(id: String, amount: int, why: String) -> bool:
 	e.meta.rev = int(e.meta.get("rev", 0)) + 1
 	_save_meta(e)
 	log_fn.call("account %s paid %d gold (%s)" % [id, amount, why])
+	spend_fn.call(id, spend_props("pay_gold", [why], r, amount, 0, p.d, {}), "")
 	return true
+
+# ---------------- what was spent (0.31.208, server) ----------------
+static func spend_pre(p, op: String, args: Variant) -> Dictionary:
+	# what an op will spend on, read before it runs (afterwards the chest is open, the pass's offer moved on)
+	var a: Array = args if args is Array else []
+	match op:
+		"skip_tiers":
+			return {"tiers":int(p.skip_offer().tiers)}
+		"skip_chest":
+			if a.size() == 1 and (a[0] is int or a[0] is float) and is_finite(float(a[0])):
+				var ix: int = p.chest_index(int(a[0]))
+				if ix >= 0:
+					return {"chest":str(p.d.chests.slots[ix].kind)}
+	return {}
+
+static func spend_props(op: String, args: Variant, r: Dictionary, gold: int, gems: int, d: Dictionary, pre: Dictionary) -> Dictionary:
+	# a spend for the statistics (analytics_events.gd SERVER "spend"): cat hero | outfit | pass | chest | clan | other;
+	# item the hero, the outfit, "premium" / "tiers", the chest's kind, "clan"; gold and gems it cost; what was left;
+	# the level; and as it applies: hero (an outfit that brought its hero), off (a sale's % off), n (tiers), season
+	var a: Array = args if args is Array else []
+	var first := str(a[0]).left(40) if not a.is_empty() and a[0] is String else ""
+	var out := {"cat":str(SPEND_CAT.get(op, "other")), "op":op, "item":first, "gold":maxi(gold, 0), "gems":maxi(gems, 0),
+		"gold_left":int(d.get("gold", 0)), "gems_left":int(d.get("gems", 0)), "lvl":int(d.get("level", 1))}
+	match op:
+		"buy_skin", "buy_skin_gold", "buy_sale":
+			out["hero"] = bool(r.get("hero", false))
+			if op == "buy_sale":
+				out["off"] = int(r.get("off", 0))
+		"buy_premium":
+			out.item = "premium"
+			out["season"] = int((d.get("pass", {}) as Dictionary).get("season", 0))
+		"skip_tiers":
+			out.item = "tiers"
+			out["n"] = int(pre.get("tiers", 0))
+			out["season"] = int((d.get("pass", {}) as Dictionary).get("season", 0))
+		"skip_chest":
+			out.item = str(pre.get("chest", ""))
+	return out
 
 # ---------------- clans (0.31.196: server/clans.gd) ----------------
 func grant_clan_reward(id: String, week: String, r: Dictionary) -> bool:
