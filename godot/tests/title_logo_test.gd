@@ -204,14 +204,14 @@ func _loading_screens() -> void:
 	check(texs.has("res://assets/branding/splash.png") and texs.has("res://assets/branding/title_logo.webp"),
 		"the download screen: the castle wall and the title, from the base build (%s)" % str(texs))
 	cl.free()
-	# the match's warm-up cover
+	# the match's warm-up cover (0.31.208: the loading screen -- its courtyard painting, not the castle wall)
 	var sm := Control.new()
 	sm.set_script(load("res://scripts/siege/siege_mode.gd"))
 	sm._cover_show()
 	var cover: Control = sm._cover
-	var walls := cover.find_children("*", "TextureRect", false, false).filter(func(n): return (n as TextureRect).texture != null and (n as TextureRect).texture.resource_path.ends_with("bg_title_wall.webp"))
+	var walls := cover.find_children("*", "TextureRect", false, false).filter(func(n): return (n as TextureRect).texture != null and (n as TextureRect).texture.resource_path.ends_with("bg_loading.webp"))
 	var logos := cover.find_children("*", "", true, false).filter(func(n): return n.get_script() == TitleLogo)
-	check(walls.size() == 1 and logos.size() == 1, "the warm-up cover: the castle wall and the title")
+	check(walls.size() == 1 and logos.size() == 1, "the warm-up cover: the loading screen's painting and the title")
 	sm.free()
 	# the boot splash
 	var img := str(ProjectSettings.get_setting("application/boot_splash/image", ""))

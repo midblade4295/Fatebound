@@ -10,7 +10,7 @@ const Diag = preload("res://scripts/siege/siege_diag.gd")
 const Net = preload("res://scripts/siege/siege_net.gd")
 const Eco = preload("res://scripts/meta/economy.gd")
 const VisualTheme = preload("res://scripts/ui/visual_theme.gd")
-const Lobby = preload("res://scripts/siege/lobby_panel.gd")
+const Loading = preload("res://scripts/siege/loading_screen.gd")   # 0.31.208: the lobby and the loading card, one screen
 const Moba = preload("res://scripts/siege/moba.gd")
 
 signal exited
@@ -420,8 +420,7 @@ func _start_online() -> void:
 	_net_started = Time.get_ticks_msec() / 1000.0
 	diag.write("NET connect %s err=%d" % [net_url, err])
 	hud.toast("Connecting to the server...", Color("#f2d18d"))
-	lobby = Lobby.new()
-	lobby.audio = audio
+	lobby = _loading_screen()
 	lobby.leave.connect(func(): exited.emit())
 	add_child(lobby)
 	if err != OK:
@@ -572,9 +571,16 @@ func _build_online_match(msg: Dictionary) -> void:
 	diag.write("NET welcome match=%d you=%s players=%d" % [net_match, me_id, int(msg.get("players", 1))])
 	hud.toast("Online: %d player%s" % [int(msg.get("players", 1)), "" if int(msg.get("players", 1)) == 1 else "s"], VisualTheme.GOLD)
 	if is_instance_valid(lobby):
-		_cover_show()                      # the card straight over the lobby (the warm-up keeps it up; tests drop it)
-		lobby.queue_free()
-		lobby = null
+		_lobby_to_card()
+
+func _lobby_to_card() -> void:
+	# 0.31.208: at the welcome the lobby stays up as the loading card -- the same heroes on the plaza, PREPARING THE
+	# BATTLEFIELD (the warm-up keeps it up; tests drop it)
+	if _cover != null and _cover != lobby:
+		_cover.queue_free()
+	lobby.loading()
+	_cover = lobby
+	lobby = null
 
 func _net_process(delta: float) -> void:
 	if ws == null:
@@ -958,71 +964,41 @@ func _on_action_online(kind: String) -> void:
 				play.call("coin" if ok2 else "error")
 
 # ---- Warm-up cover (Round 16, Kevin: the 3D world showed black for a few seconds at match start: the
-# phone compiling the scene's shader pipelines). A FATEBOUND card covers the first moments while the
+# phone compiling the scene's shader pipelines). A loading card covers the first moments while the
 # camera visits the key places so their materials compile behind it; it lifts once the engine's
 # pipeline-compilation counters have been still for WARM_STILL (never before WARM_MIN, at most
 # WARM_MAX). Offline the match clock waits. Skipped under scripted main loops (tests, render tools).
+# 0.31.208: the card is the loading screen (loading_screen.gd: the heroes on the plaza), not the castle wall's.
 const WARM_MIN := 0.6
 const WARM_MAX := 10.0
 const WARM_STILL := 0.5
-const _LOGO_FONT = preload("res://assets/fonts/LilitaOne-Regular.ttf")
-const _TitleLogo = preload("res://scripts/app/title_logo.gd")
-const _COVER_WALL := "res://assets/ui/v2/bg_title_wall.webp"
 var _warm: Dictionary = {}
 var _warm_done := false
 var warm_max := WARM_MAX                   # (tools/hitch_bench.gd: longer, for a desktop's software renderer)
-var _cover: ColorRect = null
-var _cover_sub: Label = null
+var _cover: Control = null             # 0.31.208: the loading screen (loading_screen.gd), as the card
 var _cover_t := 0.0
 
+func _loading_screen() -> Control:
+	# 0.31.208: the loading screen, with my hero on its plaza in the outfit I wear on him
+	var ls: Control = Loading.new()
+	ls.audio = audio
+	ls.my_hero = _hero()
+	ls.my_skin = str(_skins().get(_hero(), ""))
+	ls.my_name = ("[%s] " % clan_tag if clan_tag != "" else "") + Net.title_text(player_name, my_title())
+	return ls
+
 func _cover_show() -> void:
-	# The FATEBOUND card over everything (the staged start builds the world behind it; the warm-up keeps it up).
+	# The loading card over everything (the staged start builds the world behind it; the warm-up keeps it up).
+	# 0.31.208: the loading screen (loading_screen.gd) in its loading state; the card on the castle wall until then.
 	if _cover != null:
 		return
-	var cover := ColorRect.new()
-	cover.color = Color("#120c07")
-	cover.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	cover.mouse_filter = Control.MOUSE_FILTER_STOP
-	cover.z_index = 100
-	# 0.31.139 (Kevin: the title "in a startup screen and any loading screens"): the title screen's castle wall behind it,
-	# and the title itself, its flags waving and its rift crackling (title_logo.gd; text if the ui pack's art isn't there)
-	if ResourceLoader.exists(_COVER_WALL):
-		var wall := TextureRect.new()
-		wall.texture = load(_COVER_WALL)
-		wall.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		wall.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-		wall.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		wall.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		cover.add_child(wall)
-	var box := VBoxContainer.new()
-	box.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
-	box.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	box.grow_vertical = Control.GROW_DIRECTION_BOTH
-	box.alignment = BoxContainer.ALIGNMENT_CENTER
-	box.add_theme_constant_override("separation", 14)
-	cover.add_child(box)
-	var lw := 340.0
-	var title := _TitleLogo.new()
-	title.custom_minimum_size = Vector2(lw, lw * _TitleLogo.aspect())
-	title.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	box.add_child(title)
-	var sub := Label.new()
-	sub.text = "Preparing the battlefield"
-	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	sub.add_theme_font_override("font", VisualTheme.BOLD_FONT)
-	sub.add_theme_font_size_override("font_size", 18)
-	sub.add_theme_color_override("font_color", Color("#f0e4c8"))
-	sub.add_theme_color_override("font_outline_color", Color(0.05, 0.02, 0.0, 0.9))   # (0.31.139: over the wall)
-	sub.add_theme_constant_override("outline_size", 6)
-	box.add_child(sub)
-	add_child(cover)
-	_cover = cover
-	_cover_sub = sub
+	var ls := _loading_screen()
+	ls.loading()
+	add_child(ls)
+	_cover = ls
 
 func _cover_tick(delta: float) -> void:
-	_cover_t += delta
-	if _cover_sub != null:
-		_cover_sub.text = "Preparing the battlefield" + ".".repeat(1 + int(_cover_t * 3.0) % 3)
+	_cover_t += delta                  # (the loading screen moves its own dots)
 
 func _warm_begin() -> void:
 	_warm_done = true
@@ -1087,7 +1063,7 @@ func _warm_step(delta: float) -> bool:
 	else:
 		w.still = float(w.still) + delta
 	_cover_tick(delta)
-	var cover: ColorRect = w.cover
+	var cover: Control = w.cover
 	if float(w.fade) < 0.0:
 		var jobs_done: bool = (w.fx as Array).is_empty() and (w.pool as Array).is_empty() and (w.fight as Array).is_empty()
 		if (int(w.i) > spots.size() * 2 and jobs_done and float(w.t) >= WARM_MIN and float(w.still) >= WARM_STILL) or float(w.t) >= warm_max:
@@ -1101,7 +1077,6 @@ func _warm_step(delta: float) -> bool:
 	if float(w.fade) >= 0.3:
 		cover.queue_free()
 		_cover = null
-		_cover_sub = null
 		_warm = {}
 		return false
 	return float(w.fade) < 0.15

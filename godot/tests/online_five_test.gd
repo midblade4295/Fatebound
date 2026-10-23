@@ -251,7 +251,7 @@ func _process(delta: float) -> bool:
 		"play":
 			_open("alice", _hello("Alice", {"acct":accts.alice.acct, "key":accts.alice.key, "hero":SOLD}))
 			_open("bob", _hello("Bob", {"acct":accts.bob.acct, "key":accts.bob.key, "hero":SOLD}))
-			_open("carl", _hello("Carl", {"hero":FREE}))
+			_open("carl", _hello("Carl", {"hero":FREE, "lk":{"_sk":"knight_lion,%s_frost" % FREE}}))
 			mode = Mode.new()
 			mode.online = true
 			mode.net_url = "ws://127.0.0.1:%d/fatebound/siege/ws" % port
@@ -261,10 +261,32 @@ func _process(delta: float) -> bool:
 			root.add_child(mode)
 			_go("seated")
 		"seated":
+			# 0.31.208: the game client's loading screen, while it waits: its own hero (the Archmage) on the plaza
+			if is_instance_valid(mode.lobby) and not notes.has("screen_me"):
+				var mine: Array = (mode.lobby.figs as Dictionary).values().filter(func(f): return bool(f.me))
+				if not mine.is_empty():
+					notes.screen_me = 1 if str(mine[0].hero) == "archmage" else 0
 			var lob := _got("alice", "lobby")
 			if not lob.is_empty() and not notes.has("lobby_five"):
 				notes.lobby_five = true
 				check(int(lob[0].get("five", 0)) == Net.FIVE, "the lobby says five:1")
+			# 0.31.208: the lobby carries each one's hero ("hr") and the outfit worn on him ("sk") for the loading screen
+			var full: Array = lob.filter(func(m): return (m.get("names", []) as Array).has("Carl") and (m.get("names", []) as Array).has("Alice"))
+			if not full.is_empty() and not notes.has("lobby_heroes"):
+				notes.lobby_heroes = true
+				var m: Dictionary = full[-1]
+				var nm: Array = m.names
+				var hr: Array = m.get("hr", [])
+				var sk: Array = m.get("sk", [])
+				check(hr.size() == nm.size() and sk.size() == nm.size(), "the lobby: a hero and an outfit beside each name (%s / %s)" % [str(hr), str(sk)])
+				if hr.size() == nm.size() and sk.size() == nm.size():
+					var ci := nm.find("Carl")
+					var ai := nm.find("Alice")
+					check(str(hr[ci]) == FREE and str(sk[ci]) == "%s_frost" % FREE, "Carl: %s in the outfit he wears on him (%s, not his Knight's)" % [FREE, sk[ci]])
+					check(str(hr[ai]) == SOLD and str(sk[ai]) == "", "Alice: the %s she bought, no outfit (%s)" % [SOLD, sk[ai]])
+					var bi := nm.find("Bob")
+					if bi >= 0:
+						check(str(hr[bi]) == "", "Bob asked for a hero he doesn't own: none in the lobby (his seat's own)")
 			var all_in: bool = ["alice", "bob", "carl"].all(func(n): return socks[n].sim != null and int(socks[n].n) >= 3)
 			if all_in and mode.net_state == "playing" and mode.sim != null and not _mode_me().is_empty():
 				var wa: Dictionary = socks.alice.welcome
@@ -276,6 +298,8 @@ func _process(delta: float) -> bool:
 					"Bob asked for it without owning it: he plays his seat's own hero (%s)" % wb.hero)
 				check(str(socks.carl.welcome.hero) == FREE and str(_me("carl").get("hid", "")) == FREE, "Carl (no account) plays %s, free this week" % FREE)
 				check(str(mode.sim.by_id[mode.hud.player_id].get("hid", "")) == "archmage", "the game client plays the Archmage it picked")
+				check(notes.has("lobby_heroes"), "a lobby with Alice and Carl in it, their heroes beside their names")
+				check(int(notes.get("screen_me", 0)) == 1, "the game client's loading screen showed its Archmage on the plaza while it waited")
 				for t in 2:
 					var hids: Array = socks.alice.sim.units.filter(func(u): return bool(u.get("hero", false)) and int(u.team) == t).map(func(u): return str(u.hid))
 					var uniq := {}

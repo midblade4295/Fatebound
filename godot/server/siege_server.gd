@@ -60,6 +60,9 @@ extends SceneTree
 # Net.QC_GAP s. "ver"/"status" answer "social":1.
 # 0.31.134 (Crown War step 1): clans (server/clans.gd) on the same social socket; "pn" carries "ct":{unit id: clan tag}
 # and the lobby "ct" beside its names, so the tag shows before a player's name; "ver"/"status" answer "clans":1.
+# 0.31.208 (Kevin: the loading screen shows each player's character "along with cosmetics they are wearing"): the lobby
+# carries "hr" (the hero each picked; "" for the seat's own) and "sk" (the outfit they wear on him; "") beside its names.
+# Additive: an older app ignores them; this app against an older server shows only its own hero.
 # (0.31.135-0.31.168: Crown War's battles had rooms of their own here -- gone with Crown War in 0.31.169.) Tests:
 # SIEGE_TEST_SCORE ("blue:red", set when SIEGE_TEST_MATCH_S ends a match).
 #
@@ -137,7 +140,7 @@ const LOBBY_TIME := 20.0             # the join countdown (0.31.82)
 const HELLO_TIMEOUT := 10.0
 const IAP_TIMEOUT := 40.0              # a purchase check may take a token request and an API call
 const REFUSE_CLOSE_DELAY := 0.25     # s between a "bye"/"ver" reply and closing the socket
-const SERVER_BUILD := "0.31.207"      # this server's game version; the probe says it by default (identifies as current)
+const SERVER_BUILD := "0.31.208"      # this server's game version; the probe says it by default (identifies as current)
 const MIN_BUILD_FILE := "/etc/fatebound-siege/min_build"
 const MIN_BUILD_RELOAD := 10.0       # s between re-reads of the min-build file
 const UPDATE_MSG := "A new version of Fatebound is out. Update now on Google Play to keep playing online."
@@ -1212,18 +1215,33 @@ func _send_lobby(r: Room, waiting: Array) -> void:
 	var titles := []
 	var tags := []
 	var crests := []                           # 0.31.196
+	var heroes := []                           # 0.31.208: the hero each picked and the outfit he wears on him
+	var skins := []
 	for cid in waiting:
 		names.append(clients[cid].name)
+		var hero := str(clients[cid].get("hero", ""))
+		heroes.append(hero)
+		skins.append(skin_on(clients[cid].get("looks", {}), hero))
 		titles.append(str(clients[cid].get("title", "")))
 		tags.append(social.clans.tag_of_acct(str(clients[cid].get("acct", ""))) if social != null and social.clans != null else "")
 		crests.append(social.clans.crest_of_acct(str(clients[cid].get("acct", ""))) if social != null and social.clans != null else "")
 	var msg := {"t":"lobby", "left":maxf(0.0, r.wave_end - _now()), "wait":lobby_time,
-		"names":names, "tt":titles, "ct":tags, "cc":crests,
+		"names":names, "tt":titles, "ct":tags, "cc":crests, "hr":heroes, "sk":skins,
 		"in_match":_seated_count(r), "online":_human_count(), "slots":Net.TEAM_SIZE * 2,
 		"running":r.sim != null and not r.sim.ended and _seated_count(r) > 0, "match":r.match_id, "five":Net.FIVE}   # (running: they join it)
 	for i in waiting.size():
 		msg["me"] = i
 		_send(waiting[i], msg)
+
+static func skin_on(looks, hero: String) -> String:
+	# 0.31.208: of the outfits a player wears (their hello's "lk" {"_sk": "knight_frost,golem_frost"}), the one made for
+	# this hero ("" if none, or no hero)
+	if hero == "" or not (looks is Dictionary):
+		return ""
+	for id in str((looks as Dictionary).get("_sk", "")).split(",", false):
+		if Eco.SKINS.has(id) and str(Eco.SKINS[id].hero) == hero:
+			return id
+	return ""
 
 func _status() -> Dictionary:
 	var in_match := 0
