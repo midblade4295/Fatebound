@@ -78,23 +78,40 @@ var leave_btn: Button
 var status_box: VBoxContainer
 var joined_n := 0                     # (tests: heroes that dropped in)
 
+var _built := false                   # the stage and the words (built the frame after the painting: PLAY stays quick)
+var _pending: Dictionary = {}         # a lobby message before then
+var _fail_why := ""
+
 func _init() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	z_index = 50                                   # over the HUD (100 as the loading card: loading())
 	_build_bg()
-	_build_stage()
-	_build_ui()
+	_build_top()
 
 func _ready() -> void:
+	_build_rest.call_deferred()
+
+func _build_rest() -> void:
+	# the plaza's stage and the countdown, then whatever came before them; my hero drops in
+	if _built or not is_inside_tree():
+		return
+	_build_stage()
+	_build_status()
+	_built = true
 	resized.connect(_resize)
 	_resize()
 	if state == "loading":
 		_apply_loading()
-	_add_me.call_deferred()                        # (the painting up this frame; my hero built after it -- he drops in)
-
-func _add_me() -> void:
-	if my_hero != "" and figs.is_empty() and is_inside_tree():
+	elif state == "failed":
+		_apply_fail()
+	if not _pending.is_empty():
+		var m := _pending
+		_pending = {}
+		update(m)
+	if note_text != "":
+		sub_lbl.text = note_text
+	if my_hero != "" and figs.is_empty():
 		_set_lineup([{"key":"me", "name":my_name if my_name != "" else "You", "hero":my_hero, "skin":my_skin, "me":true}])
 
 # ---------------- the painting ----------------
@@ -550,7 +567,7 @@ func _place_plates() -> void:
 		pc.position = Vector2(sp.x - pc.size.x * 0.5, sp.y - (pc.size.y if back else -2.0)).round()
 
 # ---------------- the words ----------------
-func _build_ui() -> void:
+func _build_top() -> void:
 	# the title over the sky
 	var top := VBoxContainer.new()
 	top.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
@@ -565,6 +582,8 @@ func _build_ui() -> void:
 	logo.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	top.add_child(logo)
 	UI2.center(UI2.text(top, "5 VS 5", 16, Color("#ffe9c4"), Color("#2a1206"), 5))
+
+func _build_status() -> void:
 	# the countdown and who's coming, under the plaza's ring
 	status_box = VBoxContainer.new()
 	status_box.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
@@ -630,7 +649,10 @@ func _sfx(cue: String) -> void:
 # ---------------- server messages ----------------
 func update(msg: Dictionary) -> void:
 	# A "lobby" message: {left, wait, names, me, online, in_match, slots, running, tt, ct, hr, sk}
-	if state == "loading":
+	if state == "loading" or state == "failed":
+		return
+	if not _built:
+		_pending = msg
 		return
 	state = "lobby"
 	wait = maxf(1.0, float(msg.get("wait", wait)))
@@ -685,10 +707,15 @@ func note(t: String) -> void:
 
 func fail(why: String) -> void:
 	state = "failed"
+	_fail_why = why
+	if _built:
+		_apply_fail()
+
+func _apply_fail() -> void:
 	title.text = "CAN'T JOIN"
 	title.add_theme_color_override("font_color", Color("#ff6b5e"))
 	number.text = ""
-	mode_lbl.text = why
+	mode_lbl.text = _fail_why
 	sub_lbl.text = "Back to the menu..."
 	ring.queue_redraw()
 
@@ -696,7 +723,8 @@ func loading() -> void:
 	# the battle's being built behind this (siege_mode's loading card): no countdown, no LEAVE
 	state = "loading"
 	z_index = 100
-	_apply_loading()
+	if _built:
+		_apply_loading()
 
 func _apply_loading() -> void:
 	number.text = ""                               # (the ring spins)
@@ -711,6 +739,8 @@ func _apply_loading() -> void:
 # ---------------- clock ----------------
 func _process(delta: float) -> void:
 	_spin += delta
+	if not _built:
+		return
 	if state == "lobby":
 		left = maxf(0.0, left - delta)
 		var sec := int(ceil(left))

@@ -992,10 +992,12 @@ func _cover_show() -> void:
 	# 0.31.208: the loading screen (loading_screen.gd) in its loading state; the card on the castle wall until then.
 	if _cover != null:
 		return
+	var t_card := Time.get_ticks_msec()
 	var ls := _loading_screen()
 	ls.loading()
 	add_child(ls)
 	_cover = ls
+	ready_times["card"] = Time.get_ticks_msec() - t_card
 
 func _cover_tick(delta: float) -> void:
 	_cover_t += delta                  # (the loading screen moves its own dots)
