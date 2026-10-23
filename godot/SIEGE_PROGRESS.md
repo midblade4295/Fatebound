@@ -6751,3 +6751,41 @@ online 5v5 on 0.31.206: 30 fps, the GPU ~20 ms a frame; long frames at the first
 - The quick suite: all 104 passed. Version 0.31.207, versionCode 293, SERVER_BUILD 0.31.207 (no server change).
 - Preview APK: build/Fatebound-Siege-0.31.207-fatebound.apk (33,063,900 bytes, Vulkan only, preview key), sha256
   8fa8f95df65e608bbb99ee0452f42cee62cfa3f06d6972d8f0a38b244bedb62d. Sent to Kevin.
+
+## 0.31.208 — the new loading screen: the players' heroes in their outfits
+Kevin: "Make a all new loading screen graphic and as players join it'll show their character along with cosmetics they
+are wearing in the loading screen".
+- The painting: a castle courtyard at dusk -- two gate towers with the blue lion's and the red crown's banners, braziers,
+  a road to a castle far off, a sunset with a golden seam of light, and in front a stone plaza with a gold ring, left
+  empty for the heroes. ElevenLabs gpt-image-2.5-sunburst, 9:16 2K, four takes, 1,100 credits; take c used
+  (assets/ui/v2/bg_loading.webp; the takes and the prompt in art_sources/loading). The ui pack: ui-0a55ab55fecc.pck
+  uploaded to content-packs (5511e6d).
+- scripts/siege/loading_screen.gd (new; lobby_panel.gd and the castle-wall card are gone): one screen from PLAY to the
+  battle. The title over the sky; on the plaza, in 3D (its own SubViewport at 3/4 of the screen's pixels, lit like the
+  painting -- the sunset behind, the braziers either side), each player coming to the battle: their hero in the outfit
+  they wear on him (View.make_body with the outfit -- its texture and weapons), a name plate under him (the outfit's
+  name in gold, or the hero's), you in the middle on a gold ring with YOU. A joining hero leaps in from above (the rig's
+  Spawn_Air from its top, on top of a 4 m drop) and lands with a ring of gold racing out and a streak of light; a flip
+  for each new one; one who leaves shrinks away. Up to five in a row (the camera backs off to fit them; one or two
+  stand tall); six to ten: a second row behind, between them and a step up, the camera higher.
+  - connecting: you alone, the ring spinning; lobby: the countdown (the last five tick), the players on the server,
+    whether a battle's running; failed: CAN'T JOIN; loading: PREPARING THE BATTLEFIELD with the ring spinning, no LEAVE.
+  - The painting and the title show the frame PLAY is tapped (as quick as the old card: 71-89 ms here, in
+    ready_times "card"); the stage and the countdown the frame after, then your hero drops in.
+  - At the welcome the lobby itself becomes the match's loading card (siege_mode.gd _lobby_to_card): the same heroes
+    stay while the battle builds and warms behind it, then it fades. Offline (and the training) the card is this
+    screen with your hero on it.
+- The server (siege_server.gd _send_lobby): the lobby carries "hr" (each one's hero; "" for the seat's own) and "sk"
+  (the outfit they wear on him, from their hello's looks -- the account's when signed in) beside the names. Additive.
+  Until it's deployed, the phone shows its own hero and the others as shadows ("joining...").
+- Tests: loading_screen_test (new: the painting and title; you in your outfit, the body wearing it; three joining with
+  their heroes and outfits, you in the middle, landings, a flip only for a new one; one leaving; an outfit not made for
+  that hero not worn; seven in two rows; an unknown hero a shadow; an older server's names-only lobby; the loading state;
+  offline the match's card, lifting once warmed; online the lobby becoming the card). online_five_test: the lobby's
+  heroes and outfits against the real server (Carl's Frostbound outfit on his free hero, not his Knight's; Alice's bought
+  hero; Bob, who asked for one he doesn't own, none), and the game client's screen showing its Archmage while it waited.
+  title_logo_test: the warm-up cover is the new screen. tools/loading_shots.gd (new): the screen's states as PNGs.
+- The quick suite: all 105 passed. Version 0.31.208, versionCode 294, SERVER_BUILD 0.31.208 (the server changed: the
+  lobby's "hr"/"sk" -- Kevin's deploy; until then the others show as shadows).
+- Preview APK: build/Fatebound-Siege-0.31.208-fatebound.apk (33,076,194 bytes, Vulkan only, preview key), sha256
+  6a401602243139941d7309f63be1511f6c4f6fcc851a47f1349b0a0f8085351f. Sent to Kevin with the screen's shots.
