@@ -89,10 +89,13 @@ func _init() -> void:
 func _ready() -> void:
 	resized.connect(_resize)
 	_resize()
-	if my_hero != "" and figs.is_empty():
-		_set_lineup([{"key":"me", "name":my_name if my_name != "" else "You", "hero":my_hero, "skin":my_skin, "me":true}])
 	if state == "loading":
 		_apply_loading()
+	_add_me.call_deferred()                        # (the painting up this frame; my hero built after it -- he drops in)
+
+func _add_me() -> void:
+	if my_hero != "" and figs.is_empty() and is_inside_tree():
+		_set_lineup([{"key":"me", "name":my_name if my_name != "" else "You", "hero":my_hero, "skin":my_skin, "me":true}])
 
 # ---------------- the painting ----------------
 func _build_bg() -> void:
