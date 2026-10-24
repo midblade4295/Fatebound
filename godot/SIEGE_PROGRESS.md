@@ -7060,3 +7060,22 @@ Kevin: "Now I want new higher quality app store screenshots. Here is the app sto
   the app in use: the key art has no phone -- if review objects, drop it from the App Store set.
 - Kevin: "Can you remove the confetti" -> off on every shot (store5_compose.py SHOTS "confetti": False; confetti() kept);
   all three sets rebuilt from the kept inputs.
+
+## 0.31.212 listing — the heycatch.ai listing audit's fixes (store text + screenshot 1; no app change)
+Kevin pasted the audit (Fatebound, early traction: launched 2026-10-21, 10+ installs, no ratings). Done from it:
+- Title (D1 12/20, findings D1.1 primary keyword in the title, D1.4 truncation): `Fatebound: 5v5 MOBA Battles` (27)
+  -- MOBA, the audience's search word, inside the first 19 characters. Short description untouched (the audit praises it).
+- Full description (D4 8/8, left as it was but for the action plan's two adds): "Built by Kevin, solo developer at Vellic
+  Games." after the opener (D5.6/D4.1); a SUPPORT THE GAME section (D8.2): free to play, gems the only thing sold
+  (packs from 80, the one-time Starter Pack), what gems buy with their prices from the code (champions 450 gems or 25,000
+  gold -- 600/50,000 in their first two weeks; outfits 750 gems, Frostbound 390 or 40,000 gold, weekly sales, an outfit
+  bringing its locked champion; the premium Siege Pass 950 gems a 4-week season, Hero Token at tier 1, 30 tiers;
+  skips), and "Nothing for sale makes a champion stronger in a match" -- checked: every gem sink in profile.gd (heroes,
+  outfits, sales, premium, tier and chest skips); no "no pay-to-win" (README rule 3). 2,238 -> 3,186 characters.
+  The "Outfits are cosmetic only" bullet moved into the new section.
+- Screenshot 1 (D3.1): the audit's own headline, FAST 5V5 / MOBA BATTLES, in the other seven's place and type, in place
+  of the title logo (store5_compose.py keyart), on all three sets and fastlane's copy.
+- fastlane title.txt and full_description.txt, STORE_LISTING.md, listing.json (name, description, lengths, screenshot 1)
+  and README_FOR_AI.md updated. Flagged for Kevin (not doable from here): the promo video (D3.5: 15-30 s landscape
+  gameplay on YouTube; trailer 10's ad cut is 74 s portrait), a developer website with a founder bio and photo (D5.6),
+  localized listings (D6.1), the off-store distribution plays (D5.3/D5.6), D2.2, D3.4, D5.4, D7.3, D8.4.

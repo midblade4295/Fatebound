@@ -51,16 +51,17 @@ branch `claude/siege-dev-r6-local`). The app icon is 0.31.211's (the King in fro
 | `tools/fonts/` | The game's fonts as TTF (Cinzel Black, Nunito ExtraBold) + their SIL OFL licenses |
 
 ## 2. The listing (en-US)
-- **App name** (≤30): `Fatebound: 5v5 Hero Battles` — 27 chars (the Play listing still says "Fatebound: Siege" until saved)
+- **App name** (≤30): `Fatebound: 5v5 MOBA Battles` — 27 chars (0.31.212: the heycatch.ai listing audit's D1.1 -- the primary keyword in the title)
 - **Short description** (≤80): 77 chars — see `listing/STORE_LISTING.md`
-- **Full description** (≤4000): 2,238 chars — see `listing/STORE_LISTING.md`
+- **Full description** (≤4000): 3,186 chars — see `listing/STORE_LISTING.md` (0.31.212: a founder line after the opener and a SUPPORT THE GAME section -- what's sold and what gems buy -- from the audit's action plan)
 - **App Store**: subtitle, promotional text and keywords — see `listing/STORE_LISTING.md` → App Store extras
 
-Screenshot headlines, in order (0.31.212; the same 8 on both stores): the key art (the heroes and the title) · TEAM UP FOR
+Screenshot headlines, in order (0.31.212; the same 8 on both stores): FAST 5V5 MOBA BATTLES (the heroes together, no phone) · TEAM UP FOR
 5V5 HERO BATTLES · PICK FROM 18 CHAMPIONS · PUSH THE LANES AND TOPPLE THEIR KING · SLAY THE GRAVE WYRM · DRESS UP IN
 36 OUTFITS · BUILD YOUR CLAN · SQUAD UP WITH FRIENDS (`listing/listing.json` → `phone_screenshots`,
 `app_store_screenshots`). Apple wants screenshots to show the app in use: if review objects to the key art (no phone),
-drop it from the App Store set -- the other seven all show the game.
+drop it from the App Store set -- the other seven all show the game. (The heycatch.ai audit's D3.1: it had no headline;
+since 0.31.212 it carries FAST 5V5 MOBA BATTLES in place of the title logo.)
 
 ## 3. Fill it in — Play Console (manual)
 1. Play Console → the app (**`com.fatebound.game`**) → **Grow users → Store presence → Main store listing**.

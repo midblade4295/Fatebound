@@ -44,7 +44,7 @@ TARGETS = {"play": (2560, 1440), "iphone": (2868, 1320), "ipad": (2732, 2048)}
 #  SKIN_LINES Frostbound (18) = 36; clan: clans (camp, Clan Chest, Clan League); squad: social.gd PARTY_MAX 5.
 SHOTS = [
     {"key": "keyart", "raw": "", "bg": "feature", "tint": (40, 90, 200), "glow": (120, 190, 255), "confetti": False,
-     "lines": ("", ""), "logo": True,
+     "lines": ("FAST 5V5", "MOBA BATTLES"), "logo": False,
      "heroes": [["king", 1.085, 0.47, 1.08], ["dragoon", 1.47, 0.36, 0.95], ["knight", 0.74, 0.55, 1.05],
                 ["barbarian", 0.36, 0.57, 1.1], ["stormcaller", 1.8, 0.56, 1.12]]},
     {"key": "teamfight", "raw": "teamfight", "bg": "feature", "tint": (30, 90, 220), "glow": (130, 200, 255),

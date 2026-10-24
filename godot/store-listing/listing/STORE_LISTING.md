@@ -1,15 +1,17 @@
-# Fatebound — Google Play and App Store listing (0.31.200, the 5v5)
+# Fatebound — Google Play and App Store listing (0.31.200, the 5v5; 0.31.212: the heycatch.ai listing audit's fixes)
 
 ## App name (max 30) — 27 characters
-Fatebound: 5v5 Hero Battles
+Fatebound: 5v5 MOBA Battles
 
-(The Play listing is still "Fatebound: Siege" until this is saved in the Play Console; the game itself is FATEBOUND.)
+(0.31.212, the audit's D1.1: the title carries the primary search keyword, MOBA. The game itself is FATEBOUND.)
 
 ## Short description (max 80) — 77 characters
 Fast 5v5 hero battles! Pick a champion, push the lanes and topple their King.
 
-## Full description (max 4000) — 2238 characters
+## Full description (max 4000) — 3186 characters
 Their King sits on a very comfortable chair. Knock him off it.
+
+Built by Kevin, solo developer at Vellic Games.
 
 Fatebound is a fast 5v5 hero battle game (a MOBA) made for your phone. Pick a champion, team up with four others, push down three lanes past the enemy towers and topple their King before they topple yours. Every match is a fresh fight of up to 20 minutes.
 
@@ -46,7 +48,14 @@ COLLECT AND CUSTOMIZE
 • 36 outfits: a set made for every champion with its own weapon, plus the Frostbound line
 • Win chests full of gold, gems and hero shards
 • Level up the Siege Pass, finish daily orders and champion quests, and win weekly leaderboard prizes
-• Outfits are cosmetic only
+
+SUPPORT THE GAME
+Fatebound is free to play. What's sold for real money is gems (packs from 80 gems), plus a one-time Starter Pack of 500 gems, 3,000 gold and a Hero Token. Gems buy:
+• Champions: 450 gems, or 25,000 gold won in matches (600 gems or 50,000 gold in a new champion's first two weeks)
+• Outfits: 750 gems for a champion's own set, or 390 gems for a Frostbound outfit (also sold for 40,000 gold). Featured outfits are discounted each week, and an outfit for a champion you don't have yet brings the champion with it
+• The Siege Pass premium track: 950 gems a season (4 weeks). It opens with a Hero Token for any locked champion, then adds chests, gems, gold and hero shards across 30 tiers. The free track is open to everyone
+• Skips for chest timers and Siege Pass tiers
+Nothing for sale makes a champion stronger in a match. Outfits are cosmetic only, and every champion can be won with gold you earn by playing.
 
 Your King is counting on you. He's also eating. Mostly eating.
 
@@ -68,8 +77,8 @@ Your King is counting on you. He's also eating. Mostly eating.
 | `app_store/iphone_6_9in/01_keyart.jpg` … `08_squad.jpg` | App Store iPhone 6.9" screenshots, in this order | 2868 × 1320 (landscape) |
 | `app_store/ipad_13in/01_keyart.jpg` … `08_squad.jpg` | App Store iPad 13" screenshots, in this order | 2732 × 2048 (landscape) |
 
-Headlines, in order (0.31.212, in Clash Royale's manner: a hero, a two-line headline, the game on a phone): the key art
-(the heroes and the title) · TEAM UP FOR 5V5 HERO BATTLES · PICK FROM 18 CHAMPIONS · PUSH THE LANES AND TOPPLE THEIR
+Headlines, in order (0.31.212, in Clash Royale's manner: a hero, a two-line headline, the game on a phone): FAST 5V5
+MOBA BATTLES (the heroes together, no phone; the audit's D3.1) · TEAM UP FOR 5V5 HERO BATTLES · PICK FROM 18 CHAMPIONS · PUSH THE LANES AND TOPPLE THEIR
 KING · SLAY THE GRAVE WYRM · DRESS UP IN 36 OUTFITS · BUILD YOUR CLAN · SQUAD UP WITH FRIENDS
 
 The game on each phone is a real render of build 0.31.199 (the HUD as it plays, or the game's own engine with a camera

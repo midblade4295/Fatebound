@@ -1,8 +1,8 @@
 {
  "language": "en-US",
- "app_name": "Fatebound: 5v5 Hero Battles",
+ "app_name": "Fatebound: 5v5 MOBA Battles",
  "short_description": "Fast 5v5 hero battles! Pick a champion, push the lanes and topple their King.",
- "full_description": "Their King sits on a very comfortable chair. Knock him off it.\n\nFatebound is a fast 5v5 hero battle game (a MOBA) made for your phone. Pick a champion, team up with four others, push down three lanes past the enemy towers and topple their King before they topple yours. Every match is a fresh fight of up to 20 minutes.\n\nPICK YOUR CHAMPION\n• 18 champions in six roles: tanks, fighters, assassins, mages, marksmen and supports\n• Every champion has three abilities, plus an ultimate that unlocks at level 6\n• Level up during the match and choose an upgrade card each time\n• 12 champions are yours from the start and two more are free each week. Unlock the rest with the gold you win in matches\n\nTAKE THE RIFT\n• Three lanes, three towers in each, and two more guarding the King\n• Minion waves march down every lane. Land the last hit and the gold is yours\n• Clear jungle camps for gold, experience and powerful buffs\n• Slay the Grave Wyrm, or bring down the Bone Lord and send him marching for your side\n• Buy items in the shop and build them into bigger ones\n• Tap HOME to teleport back to your castle and heal up\n• Place wards to see through the fog of war\n• Every knockout pays, and every death feeds the other team. First Blood, multi-kills, shutdowns and Aces\n\nPLAY YOUR WAY\n• Online 5v5 matches, with bots filling any empty seats\n• Or play a match against bots whenever you like\n• Party up with friends and clanmates, up to five together\n• Learn the ropes from the Royal Herald in a funny, fully voiced tutorial\n\nJOIN A CLAN\n• Choose your crest and grow your clan's camp from a single tent to a great hall\n• Earn clan points in every match for the weekly Clan Chest, and climb the Clan League\n• Ask your clan for hero shards, and give yours to clanmates\n• Call for players with Looking For Group and jump straight into a party\n• Chat with your clan, your party and everyone online\n\nCOLLECT AND CUSTOMIZE\n• 36 outfits: a set made for every champion with its own weapon, plus the Frostbound line\n• Win chests full of gold, gems and hero shards\n• Level up the Siege Pass, finish daily orders and champion quests, and win weekly leaderboard prizes\n• Outfits are cosmetic only\n\nYour King is counting on you. He's also eating. Mostly eating.",
+ "full_description": "Their King sits on a very comfortable chair. Knock him off it.\n\nBuilt by Kevin, solo developer at Vellic Games.\n\nFatebound is a fast 5v5 hero battle game (a MOBA) made for your phone. Pick a champion, team up with four others, push down three lanes past the enemy towers and topple their King before they topple yours. Every match is a fresh fight of up to 20 minutes.\n\nPICK YOUR CHAMPION\n• 18 champions in six roles: tanks, fighters, assassins, mages, marksmen and supports\n• Every champion has three abilities, plus an ultimate that unlocks at level 6\n• Level up during the match and choose an upgrade card each time\n• 12 champions are yours from the start and two more are free each week. Unlock the rest with the gold you win in matches\n\nTAKE THE RIFT\n• Three lanes, three towers in each, and two more guarding the King\n• Minion waves march down every lane. Land the last hit and the gold is yours\n• Clear jungle camps for gold, experience and powerful buffs\n• Slay the Grave Wyrm, or bring down the Bone Lord and send him marching for your side\n• Buy items in the shop and build them into bigger ones\n• Tap HOME to teleport back to your castle and heal up\n• Place wards to see through the fog of war\n• Every knockout pays, and every death feeds the other team. First Blood, multi-kills, shutdowns and Aces\n\nPLAY YOUR WAY\n• Online 5v5 matches, with bots filling any empty seats\n• Or play a match against bots whenever you like\n• Party up with friends and clanmates, up to five together\n• Learn the ropes from the Royal Herald in a funny, fully voiced tutorial\n\nJOIN A CLAN\n• Choose your crest and grow your clan's camp from a single tent to a great hall\n• Earn clan points in every match for the weekly Clan Chest, and climb the Clan League\n• Ask your clan for hero shards, and give yours to clanmates\n• Call for players with Looking For Group and jump straight into a party\n• Chat with your clan, your party and everyone online\n\nCOLLECT AND CUSTOMIZE\n• 36 outfits: a set made for every champion with its own weapon, plus the Frostbound line\n• Win chests full of gold, gems and hero shards\n• Level up the Siege Pass, finish daily orders and champion quests, and win weekly leaderboard prizes\n\nSUPPORT THE GAME\nFatebound is free to play. What's sold for real money is gems (packs from 80 gems), plus a one-time Starter Pack of 500 gems, 3,000 gold and a Hero Token. Gems buy:\n• Champions: 450 gems, or 25,000 gold won in matches (600 gems or 50,000 gold in a new champion's first two weeks)\n• Outfits: 750 gems for a champion's own set, or 390 gems for a Frostbound outfit (also sold for 40,000 gold). Featured outfits are discounted each week, and an outfit for a champion you don't have yet brings the champion with it\n• The Siege Pass premium track: 950 gems a season (4 weeks). It opens with a Hero Token for any locked champion, then adds chests, gems, gold and hero shards across 30 tiers. The free track is open to everyone\n• Skips for chest timers and Siege Pass tiers\nNothing for sale makes a champion stronger in a match. Outfits are cosmetic only, and every champion can be won with gold you earn by playing.\n\nYour King is counting on you. He's also eating. Mostly eating.",
  "lengths": {
   "app_name": [
    27,
@@ -13,7 +13,7 @@
    80
   ],
   "full_description": [
-   2238,
+   3186,
    4000
   ]
  },
@@ -22,8 +22,8 @@
    "order": 1,
    "file": "graphics/phone_screenshots/01_keyart.jpg",
    "fastlane": "fastlane/metadata/android/en-US/images/phoneScreenshots/1_keyart.jpg",
-   "headline": "",
-   "shows": "key art, no phone: the Barbarian, the Knight, the King, the Dragoon and the Stormcaller together over the FATEBOUND title, the Rift blurred behind",
+   "headline": "FAST 5V5 / MOBA BATTLES",
+   "shows": "the Barbarian, the Knight, the King, the Dragoon and the Stormcaller together, the Rift blurred behind, the headline in the corner (no phone)",
    "size": "2560x1440 RGB JPEG (16:9 landscape)"
   },
   {
@@ -132,8 +132,8 @@
     "order": 1,
     "iphone_6_9in": "graphics/app_store/iphone_6_9in/01_keyart.jpg",
     "ipad_13in": "graphics/app_store/ipad_13in/01_keyart.jpg",
-    "headline": "",
-    "shows": "key art, no phone: the Barbarian, the Knight, the King, the Dragoon and the Stormcaller together over the FATEBOUND title, the Rift blurred behind"
+    "headline": "FAST 5V5 / MOBA BATTLES",
+    "shows": "the Barbarian, the Knight, the King, the Dragoon and the Stormcaller together, the Rift blurred behind, the headline in the corner (no phone)"
    },
    {
     "order": 2,
