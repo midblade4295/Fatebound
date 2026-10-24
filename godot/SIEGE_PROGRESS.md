@@ -7154,3 +7154,5 @@ Godot has none, so this is the guide's plain-HTTP route ("Send to HeyCatch direc
   line. The name button clips its row too, so a long name + tag + title stops short of INVITE / JOIN.
 - parse_all, app_flow, social_ui, clans_ui, join_friend, referral pass. Version 0.31.213, versionCode 299;
   SERVER_BUILD 0.31.213 (kept equal for min_build_test).
+- Preview APK: build/Fatebound-Siege-0.31.213-fatebound.apk (32 MB, preview key, code only), sha256
+  cdce331acef608b73e3069e1b1ed246ac910a7c5e7c376480bb1156db229417f.
