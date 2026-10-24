@@ -6958,3 +6958,16 @@ TITLES" on screen with the audio at 1:06-1:11 about loot -- "guaranteed free in-
 - tools/trailer10_edit.py --ad: no chest shot, no loot line; the King's VICTORY (its rewards-free results) into the title.
 - Re-recorded with AD_SAFE: home, armory, clan, play, king. Fatebound-Trailer-10-ad.mp4 (1080 x 1920, 74.4 s, 138 MB)
   and -ad-20MB.mp4 (720 x 1280, 19.3 MB). The original trailer is unchanged.
+
+## Discord emojis and stickers (tools only, no build)
+Kevin: "Make me a set of discord emojis and stickers".
+- tools/render_discord.gd: the game's own heroes (siege_view.gd make_body, the KayKit animations, the outfit icons'
+  light) on a transparent background -- each hero's bust, fifteen full-body poses (four of them animated: 16-20 frames
+  across the animation), the King. tools/discord_pack.py cuts, outlines and captions them (Lilita One, the game's ink):
+  36 emojis (128 x 128 PNG: the eighteen heroes' heads, the King, gold, gems, loot, crown, KO, battle, trophy, castle,
+  the Herald's horn, the Royal and wooden chests, ACE / QUADRA / PENTA KILL -- the game's art -- and GG, GL, WP) and
+  15 stickers (320 x 320 PNG, a white die-cut border; LET'S GO!, ON MY WAY, ANGRY ROCK and PRESS EVERY BUTTON animated
+  APNG, one shared 256-colour palette, all under Discord's 512 KB): GG, LET'S GO!, DOUBLE KILL and FIRST BLOOD (the
+  kill banners), ON MY WAY, RIP, ANGRY ROCK, PRESS EVERY BUTTON, NEED HEALS?, SNEAKY, BLOCKED, TOUCH GRASS, 1V1 ME,
+  PROTECT THE KING, BRAVE LITTLE LAD. README.txt: names, each sticker's emoji tag and description, the five for an
+  unboosted server.
