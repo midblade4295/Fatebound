@@ -7142,3 +7142,15 @@ Godot has none, so this is the guide's plain-HTTP route ("Send to HeyCatch direc
   to a third party (privacy.html untouched); press "I've installed" on HeyCatch's Install page.
 - Quick suite 109/109. Preview APK: build/Fatebound-Siege-0.31.212-fatebound.apk (32 MB, preview key, code only -- no
   new content packs), sha256 874abc833aa13605fe279e6c6a91d66151076d9ae2432532ba2459da4363d9a8.
+
+## 0.31.213 — two visual fixes from Kevin's screenshots ("Fixed these visual issues")
+- Home's PLAY: a pale box flashed past the plaque's right end. Its shine (UI2.sweep) was clipped to the button's box,
+  and the plaque art has see-through corners around its end gems, so at the end of each pass the band showed there.
+  UI2.sweep has `masked` (the control's own alpha clips it: CanvasItem.CLIP_CHILDREN_AND_DRAW); PLAY's shine now runs
+  on the plaque art, masked (the plain fallback button, no art, as before). Checked with the band held at the right
+  end: before the box, after none -- the rim and the gem catch the light, nothing past them.
+- Friends: a friend's clan tag ran down the row a letter a line ("[ L I O N ]"), pushing the name and "Last seen" out
+  of the FRIENDS box. The tag was a wrapping label in the name row (UI.label's default), squeezed to no width; now one
+  line. The name button clips its row too, so a long name + tag + title stops short of INVITE / JOIN.
+- parse_all, app_flow, social_ui, clans_ui, join_friend, referral pass. Version 0.31.213, versionCode 299;
+  SERVER_BUILD 0.31.213 (kept equal for min_build_test).

@@ -196,8 +196,11 @@ static func when_ready(c: Node, f: Callable) -> void:
 	else:
 		c.ready.connect(f, CONNECT_ONE_SHOT)
 
-static func sweep(c: Control, period := 3.2, width := 70.0, alpha := 0.55) -> void:
-	# A light band that sweeps across the control every few seconds (clipped to it).
+static func sweep(c: Control, period := 3.2, width := 70.0, alpha := 0.55, masked := false) -> void:
+	# A light band that sweeps across the control every few seconds (clipped to it). 0.31.213 masked: only where c itself
+	# draws (c a picture with see-through edges, e.g. Home's PLAY plaque: the band showed as a pale box past its ends)
+	if masked:
+		c.clip_children = CanvasItem.CLIP_CHILDREN_AND_DRAW
 	var clip := Control.new()
 	clip.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	clip.offset_left = 4

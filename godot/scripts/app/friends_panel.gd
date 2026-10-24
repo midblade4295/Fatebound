@@ -81,6 +81,7 @@ func _person(parent: Node, c: Dictionary, crown := false) -> HBoxContainer:
 	nb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	nb.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	nb.clip_text = true
+	nb.clip_contents = true                  # (0.31.213: a long name, tag and title are cut at the row's end, not drawn over its buttons)
 	nb.custom_minimum_size = Vector2(0, 44)
 	for st_name in ["normal", "hover", "pressed", "focus", "hover_pressed"]:
 		nb.add_theme_stylebox_override(st_name, StyleBoxEmpty.new())
@@ -101,7 +102,11 @@ func _person(parent: Node, c: Dictionary, crown := false) -> HBoxContainer:
 	UI2.text(top, str(c.get("n", "Player")), 15, Color.WHITE)
 	if str(c.get("ct", "")) != "":
 		SocialUI.crest(top, str(c.get("cc", "")), 18.0)            # 0.31.196: their clan's crest
-		UI.label(top, "[%s]" % str(c.ct), 12, UI2.SOFT, UI.HEAVY_FONT).size_flags_vertical = Control.SIZE_SHRINK_CENTER   # 0.31.134
+		# 0.31.134; 0.31.213 (Kevin's screenshot: "[LION]" down the row a letter a line, pushing the name out of the box):
+		# one line -- a wrapping label in a row is squeezed to nothing and wraps at every letter
+		var ctl := UI.label(top, "[%s]" % str(c.ct), 12, UI2.SOFT, UI.HEAVY_FONT)
+		ctl.autowrap_mode = TextServer.AUTOWRAP_OFF
+		ctl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	SocialUI.title_label(top, str(c.get("tt", "")), 11)
 	var sl := UI.label(v, SocialUI.status_text(c), 11, SocialUI.ST_COL.get(str(c.get("st", "offline")), UI2.MUTED).lightened(0.25), UI.HEAVY_FONT)
 	sl.autowrap_mode = TextServer.AUTOWRAP_OFF

@@ -209,7 +209,12 @@ static func home(app, root: VBoxContainer) -> void:
 	pl.position = face.position + Vector2(0, 1)
 	pl.size = face.size
 	pl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	UI2.sweep(play, 3.4, 60.0, 0.4)
+	# (0.31.213, Kevin's screenshot: the shine, clipped only to the button's box, showed as a pale box past the plaque's
+	# right end at the end of each pass -- now only on the plaque itself)
+	if art.texture != null:
+		UI2.sweep(art, 3.4, 60.0, 0.4, true)
+	else:
+		UI2.sweep(play, 3.4, 60.0, 0.4)
 	UI2.pulse(play, 0.022, 1.1)
 	if fw_open:
 		# 0.31.119: the first win of the day (it was the FIRST WIN medallion); 0.31.194 a dark tab hanging under PLAY
