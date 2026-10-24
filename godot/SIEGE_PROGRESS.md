@@ -7058,3 +7058,5 @@ Kevin: "Now I want new higher quality app store screenshots. Here is the app sto
   headlines against the game (18 champions, 36 outfits, parties of 5, the King falls -> the match is won). listing.json
   (screenshots, app icon, rendered_from), STORE_LISTING.md and README_FOR_AI.md updated. Apple wants screenshots to show
   the app in use: the key art has no phone -- if review objects, drop it from the App Store set.
+- Kevin: "Can you remove the confetti" -> off on every shot (store5_compose.py SHOTS "confetti": False; confetti() kept);
+  all three sets rebuilt from the kept inputs.

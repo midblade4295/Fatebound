@@ -4,7 +4,7 @@ reference"): landscape store screenshots in Clash Royale's manner -- a hero big 
 tools/meshy_hd.py, rendered by tools/render_app_icon.gd), a two-line headline in the corner below him, and on the right
 the real game on a phone-shaped card (the raw renders of tools/store4_match.gd / store4_app.gd, as they are: the HUD
 and screens untouched), over the game's own world blurred (landscape renders of store4_match.gd, CINE=1) and tinted,
-with a light behind the hero and the team colours' confetti. The first is the key art: the heroes together and the
+with a light behind the hero (the team colours' confetti: off, Kevin asked). The first is the key art: the heroes together and the
 title, no phone.
 
 In (--art): store_<hero>_wide.png or .webp (render_app_icon.gd's store_* shots, square, RGBA) for each SHOTS hero;
@@ -35,36 +35,37 @@ LOGO = os.path.join(GODOT, "assets", "ui", "v2")
 TARGETS = {"play": (2560, 1440), "iphone": (2868, 1320), "ipad": (2732, 2048)}
 
 # key, the raw render on the phone ("" none), the backdrop scene, its tint, the glow behind the hero, the confetti,
-# the headline's two lines, and the heroes: [render, x, y, height] -- the render's middle at (x, y), its full square
+# the headline's two lines (Kevin, 0.31.212: "Can you remove the confetti" -- off on every shot; confetti() kept), and
+# the heroes: [render, x, y, height] -- the render's middle at (x, y), its full square
 # `height` tall, all in units of the canvas height (x from the left edge; on wider canvases the hero keeps to the left
 # and the phone to the right). Every claim checked against the game's code (0.31.211):
 #  teamfight: 5v5 online (siege_server) or offline against bots; champions: Champions.ORDER (18); king: the King falls
 #  -> the match is won (moba.gd hit_king); wyrm: the Grave Wyrm (moba.gd camps); outfits: economy.gd OUTFITS (18) +
 #  SKIN_LINES Frostbound (18) = 36; clan: clans (camp, Clan Chest, Clan League); squad: social.gd PARTY_MAX 5.
 SHOTS = [
-    {"key": "keyart", "raw": "", "bg": "feature", "tint": (40, 90, 200), "glow": (120, 190, 255), "confetti": True,
+    {"key": "keyart", "raw": "", "bg": "feature", "tint": (40, 90, 200), "glow": (120, 190, 255), "confetti": False,
      "lines": ("", ""), "logo": True,
      "heroes": [["king", 1.085, 0.47, 1.08], ["dragoon", 1.47, 0.36, 0.95], ["knight", 0.74, 0.55, 1.05],
                 ["barbarian", 0.36, 0.57, 1.1], ["stormcaller", 1.8, 0.56, 1.12]]},
     {"key": "teamfight", "raw": "teamfight", "bg": "feature", "tint": (30, 90, 220), "glow": (130, 200, 255),
-     "confetti": True, "lines": ("TEAM UP FOR", "5V5 HERO BATTLES"),
+     "confetti": False, "lines": ("TEAM UP FOR", "5V5 HERO BATTLES"),
      "heroes": [["stormcaller", 0.56, 0.57, 1.55]]},
     {"key": "champions", "raw": "champion", "bg": "tower", "tint": (230, 150, 40), "glow": (255, 220, 140),
-     "confetti": True, "lines": ("PICK FROM", "18 CHAMPIONS"),
+     "confetti": False, "lines": ("PICK FROM", "18 CHAMPIONS"),
      "heroes": [["barbarian", 0.33, 0.55, 1.28], ["mage", 1.08, 0.53, 1.28], ["knight", 0.67, 0.59, 1.32]]},
-    {"key": "king", "raw": "king", "bg": "king", "tint": (120, 60, 200), "glow": (255, 220, 150), "confetti": True,
+    {"key": "king", "raw": "king", "bg": "king", "tint": (120, 60, 200), "glow": (255, 220, 150), "confetti": False,
      "lines": ("PUSH THE LANES AND", "TOPPLE THEIR KING"),
      "heroes": [["king", 0.55, 0.52, 1.5]]},
     {"key": "wyrm", "raw": "wyrm", "bg": "wyrm", "tint": (20, 160, 140), "glow": (150, 255, 220), "confetti": False,
      "lines": ("SLAY THE", "GRAVE WYRM"),
      "heroes": [["dragoon", 0.66, 0.5, 1.8]]},
-    {"key": "outfit", "raw": "outfit", "bg": "tower", "tint": (200, 60, 120), "glow": (255, 170, 210), "confetti": True,
+    {"key": "outfit", "raw": "outfit", "bg": "tower", "tint": (200, 60, 120), "glow": (255, 170, 210), "confetti": False,
      "lines": ("DRESS UP IN", "36 OUTFITS"),
      "heroes": [["mage", 0.55, 0.5, 1.45]]},
-    {"key": "clan", "raw": "clan", "bg": "king", "tint": (200, 110, 40), "glow": (255, 200, 130), "confetti": True,
+    {"key": "clan", "raw": "clan", "bg": "king", "tint": (200, 110, 40), "glow": (255, 200, 130), "confetti": False,
      "lines": ("BUILD", "YOUR CLAN"),
      "heroes": [["barbarian", 0.55, 0.5, 1.45]]},
-    {"key": "squad", "raw": "home", "bg": "feature", "tint": (40, 140, 90), "glow": (170, 255, 190), "confetti": True,
+    {"key": "squad", "raw": "home", "bg": "feature", "tint": (40, 140, 90), "glow": (170, 255, 190), "confetti": False,
      "lines": ("SQUAD UP", "WITH FRIENDS"),
      "heroes": [["knight", 0.55, 0.52, 1.45]]},
 ]
