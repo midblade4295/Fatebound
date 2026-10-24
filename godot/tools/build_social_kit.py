@@ -8,8 +8,8 @@ art_sources/app_icon/icon.png (the game's icon), with the title logo (assets/ui/
   banners/  x_header_1500x500, youtube_banner_2560x1440, facebook_cover_1640x624, twitch_banner_1200x480,
             discord_server_banner_960x540, discord_profile_banner_680x240, share_card_1200x630 (link previews),
             key_art_1920x1080 (with the title and the tagline), key_art_clean_1920x1080 (the art as painted)
-  icons/    avatar_<n>.png (1080, 800, 512, 400, 256: the icon, square; every site's round crop keeps the crown, both
-            faces and the clash), icon_square_1024.png, logo_transparent_1400.png and logo_transparent_700.png (the
+  icons/    avatar_<n>.png (1080, 800, 512, 400, 256: the icon, square; every site's round crop keeps the King's crown
+            and face -- 0.31.210's 3D icon), icon_square_1024.png, logo_transparent_1400.png and logo_transparent_700.png (the
             title, see-through)
   preview.jpg  all of them on one sheet
 
@@ -239,8 +239,8 @@ def banner(art, bare, lg, spec):
 
 
 def avatar(icon, n):
-    # the icon as it is: it was drawn for round masks (Android's), so a round crop keeps the crown, both faces and the
-    # clash
+    # the icon as it is: it is framed for round masks (Android's), so a round crop keeps the King's crown and face
+    # (0.31.210; until then the Knight and Barbarian's clash)
     return icon.resize((n, n), Image.LANCZOS)
 
 

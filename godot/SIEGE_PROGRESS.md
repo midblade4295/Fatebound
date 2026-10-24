@@ -6977,3 +6977,31 @@ Kevin: "Do the nagle" (after a comment suggesting UDP/WebRTC). Traced with strac
 algorithm off by itself -- the server's accepted socket (setsockopt TCP_NODELAY 1 at accept) and the phone's, both on
 ws:// and wss:// (right after the TCP connect, before TLS) -- and Caddy in between is Go, whose TCP connections default
 to no delay. Our code never needed set_no_delay; nothing changed.
+
+## 0.31.210 — a 3D game icon: the King, rendered from his own model
+Kevin: "I want a new game icon that is a 3d design that doesn't look like "ai slop" that I got feedback with" (0.31.200's
+icon was a gpt-image-2 painting: two chibis clashing over a sparkling ice-and-fire rift). Four options rendered from the
+game's real models, no image generation (King on blue, on blue + red, on gold; the Knight on blue) -> "1 King, blue".
+- tools/render_app_icon.gd (new): the King's model (and the heroes, View.make_body + a frame of their animation) lit like
+  a studio portrait on the desktop renderer (Forward+: SSAO, a warm key with soft ultra shadows, a cool fill, a rim in
+  the backdrop's hue, a soft sky for the gold to reflect), smooth shading (each vertex's normal the mean of every face at
+  its position: the Meshy meshes are split along their UV seams), clear background, MSAA 8x; every shot also rendered
+  1.5x wider (<id>_wide.png) for the adaptive icon's 108 dp layer. Framing knobs CAM/AIM/FOV/TURN/AT/ANIM/ATS.
+- tools/clean_king_texture.py (new): his Meshy texture is 512 px with lighting smeared in -- blotchy in a close-up. Redrawn
+  at 2048 in his own 12-colour palette (the smears given to the colour around them; his painted shading flattened so the
+  lights shade him), his face and hands kept as painted (sharpened), plus a roughness/metal map: the crown, scepter and
+  chain are gold metal, the gems glassy. art_sources/app_icon/king_clean/. The game's King is unchanged.
+- tools/build_app_icon.py (rewritten): from art_sources/app_icon/render/king_wide.png and a radial studio backdrop
+  (#3f86de lit behind his head to #0c1f4a): the adaptive icon is now two real layers -- foreground.png the King
+  (see-through), background.png the backdrop, both over the whole 108 dp, so the launchers' parallax moves him against it
+  (0.31.200's had everything in the back layer); icon.png 192, the Play icon 512, the App Store's 1024, and
+  art_sources/app_icon/icon.png (1024 flat). monochrome.png (the themed icon's crown) unchanged -- it is his crown.
+- The social kit's avatars and square icon (store-listing/social/icons, preview.jpg) rebuilt from it
+  (tools/build_social_kit.py; the banners are the painted key art, unchanged).
+- Checked: each file's size and format; the adaptive layers composited in circle, squircle and rounded-square masks and
+  with a parallax shift; the icon at 192/96/64/48 px on a dark home screen (the crown and the white beard read at 48).
+- Version 0.31.210, versionCode 296; SERVER_BUILD 0.31.210 (min_build_test keeps it equal to the app's build -- the
+  server's code is otherwise unchanged, so redeploying it is optional). Preview APK:
+  build/Fatebound-Siege-0.31.210-fatebound.apk (its launcher layers checked in the APK's res/mipmap-*). Tests:
+  min_build, diag_send, analytics_client, analytics_events, spend_tracking passed. The Play listing's icon (store-listing/graphics/app_icon_512x512.png)
+  and the App Store's change only when they are uploaded there.
