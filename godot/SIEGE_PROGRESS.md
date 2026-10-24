@@ -6971,3 +6971,9 @@ Kevin: "Make me a set of discord emojis and stickers".
   kill banners), ON MY WAY, RIP, ANGRY ROCK, PRESS EVERY BUTTON, NEED HEALS?, SNEAKY, BLOCKED, TOUCH GRASS, 1V1 ME,
   PROTECT THE KING, BRAVE LITTLE LAD. README.txt: names, each sticker's emoji tag and description, the five for an
   unboosted server.
+
+## Nagle's algorithm: already off everywhere (checked, no change)
+Kevin: "Do the nagle" (after a comment suggesting UDP/WebRTC). Traced with strace: Godot's WebSocketPeer turns Nagle's
+algorithm off by itself -- the server's accepted socket (setsockopt TCP_NODELAY 1 at accept) and the phone's, both on
+ws:// and wss:// (right after the TCP connect, before TLS) -- and Caddy in between is Go, whose TCP connections default
+to no delay. Our code never needed set_no_delay; nothing changed.
