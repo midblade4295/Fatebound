@@ -28,6 +28,16 @@ Add these fields to the existing `match_quit` usage event (keep existing fields
 backward compatible). Make sure it is emitted even when the match then ends with
 no humans left. Add a test covering the new fields.
 
+## Task: in-match shop purchase logging
+
+We also need to know whether new players actually buy upgrades from the match shop.
+
+- Each upgrade bought with match gold becomes a usage event (e.g. `match_shop_buy`)
+  with: item, cost, match time (elapsed seconds), and the player's hero.
+- Add per-player totals to `match_quit` **and** the match-end record:
+  items bought, gold spent, unspent gold.
+- Extend the test to cover the purchase event and the new totals.
+
 ## Constraints
 
 - Run `python3 godot/tools/content_packs.py check`; it must print `CONTENT OK` before any build.
