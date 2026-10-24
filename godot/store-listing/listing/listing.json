@@ -20,67 +20,67 @@
  "phone_screenshots": [
   {
    "order": 1,
-   "file": "graphics/phone_screenshots/01_teamfight.png",
-   "headline": "5V5 HERO BATTLES",
-   "subline": "Team up and take the Rift, online or against bots",
-   "shows": "gameplay with the real HUD: a 5v5 fight in the river, your Stormcaller's storm finishing two of theirs -- the DOUBLE KILL banner and the kill feed",
-   "size": "1080x1920 RGB PNG (9:16, no alpha)"
+   "file": "graphics/phone_screenshots/01_keyart.jpg",
+   "fastlane": "fastlane/metadata/android/en-US/images/phoneScreenshots/1_keyart.jpg",
+   "headline": "",
+   "shows": "key art, no phone: the Barbarian, the Knight, the King, the Dragoon and the Stormcaller together over the FATEBOUND title, the Rift blurred behind",
+   "size": "2560x1440 RGB JPEG (16:9 landscape)"
   },
   {
    "order": 2,
-   "file": "graphics/phone_screenshots/02_champion.png",
-   "headline": "18 CHAMPIONS",
-   "subline": "Tanks, fighters, assassins, mages, marksmen and supports",
-   "shows": "the Stormcaller's champion window: Torvald Stormcrown in 3D in his Stormforged outfit over his painted place, his outfits and story",
-   "size": "1080x1920 RGB PNG (9:16, no alpha)"
+   "file": "graphics/phone_screenshots/02_teamfight.jpg",
+   "fastlane": "fastlane/metadata/android/en-US/images/phoneScreenshots/2_teamfight.jpg",
+   "headline": "TEAM UP FOR / 5V5 HERO BATTLES",
+   "shows": "the Stormcaller big on the left; on the phone, gameplay with the real HUD: a 5v5 fight in the river, his storm finishing two of theirs -- DOUBLE KILL",
+   "size": "2560x1440 RGB JPEG (16:9 landscape)"
   },
   {
    "order": 3,
-   "file": "graphics/phone_screenshots/03_king.png",
-   "headline": "TOPPLE THEIR KING",
-   "subline": "Push the lanes, break the towers, take the throne",
-   "shows": "in-engine, no HUD: four of ours on their King on his throne in the open keep",
-   "size": "1080x1920 RGB PNG (9:16, no alpha)"
+   "file": "graphics/phone_screenshots/03_champions.jpg",
+   "fastlane": "fastlane/metadata/android/en-US/images/phoneScreenshots/3_champions.jpg",
+   "headline": "PICK FROM / 18 CHAMPIONS",
+   "shows": "the Barbarian, the Knight and the Mage; on the phone, the Stormcaller's champion window (his outfits and story)",
+   "size": "2560x1440 RGB JPEG (16:9 landscape)"
   },
   {
    "order": 4,
-   "file": "graphics/phone_screenshots/04_wyrm.png",
-   "headline": "SLAY THE GRAVE WYRM",
-   "subline": "Epic monsters, jungle camps and buffs that turn the fight",
-   "shows": "in-engine, no HUD: the Grave Wyrm risen in its pit, its soul-fire pouring",
-   "size": "1080x1920 RGB PNG (9:16, no alpha)"
+   "file": "graphics/phone_screenshots/04_king.jpg",
+   "fastlane": "fastlane/metadata/android/en-US/images/phoneScreenshots/4_king.jpg",
+   "headline": "PUSH THE LANES AND / TOPPLE THEIR KING",
+   "shows": "the King; on the phone, four of ours on their King on his throne in the open keep (in-engine, no HUD)",
+   "size": "2560x1440 RGB JPEG (16:9 landscape)"
   },
   {
    "order": 5,
-   "file": "graphics/phone_screenshots/05_outfit.png",
-   "headline": "36 OUTFITS",
-   "subline": "A set made for every champion, plus the Frostbound line",
-   "shows": "the Mage's champion window in the Phoenix outfit (Elara Flintwick's library)",
-   "size": "1080x1920 RGB PNG (9:16, no alpha)"
+   "file": "graphics/phone_screenshots/05_wyrm.jpg",
+   "fastlane": "fastlane/metadata/android/en-US/images/phoneScreenshots/5_wyrm.jpg",
+   "headline": "SLAY THE / GRAVE WYRM",
+   "shows": "the Dragoon leaping, halberd out; on the phone, the Grave Wyrm risen in its pit (in-engine, no HUD)",
+   "size": "2560x1440 RGB JPEG (16:9 landscape)"
   },
   {
    "order": 6,
-   "file": "graphics/phone_screenshots/06_clan.png",
-   "headline": "BUILD YOUR CLAN",
-   "subline": "A camp that grows, a weekly Clan Chest and the Clan League",
-   "shows": "the clan camp at its last stage (the Iron Wolves, level 8): CLAN CHEST, SHARDS, CHAT / MEMBERS / LEAGUE / CLAN, LOOKING FOR GROUP",
-   "size": "1080x1920 RGB PNG (9:16, no alpha)"
+   "file": "graphics/phone_screenshots/06_outfit.jpg",
+   "fastlane": "fastlane/metadata/android/en-US/images/phoneScreenshots/6_outfit.jpg",
+   "headline": "DRESS UP IN / 36 OUTFITS",
+   "shows": "the Mage; on the phone, the Mage's champion window with her outfits (Phoenix Mage on show)",
+   "size": "2560x1440 RGB JPEG (16:9 landscape)"
   },
   {
    "order": 7,
-   "file": "graphics/phone_screenshots/07_home.png",
-   "headline": "SQUAD UP",
-   "subline": "Parties of five with friends and clanmates",
-   "shows": "Home, the champions' camp, in a party of three (PLAY x3), chests in the slots",
-   "size": "1080x1920 RGB PNG (9:16, no alpha)"
+   "file": "graphics/phone_screenshots/07_clan.jpg",
+   "fastlane": "fastlane/metadata/android/en-US/images/phoneScreenshots/7_clan.jpg",
+   "headline": "BUILD / YOUR CLAN",
+   "shows": "the Barbarian; on the phone, the clan window: crest, level, League, the camp, the Clan Chest",
+   "size": "2560x1440 RGB JPEG (16:9 landscape)"
   },
   {
    "order": 8,
-   "file": "graphics/phone_screenshots/08_tutorial.png",
-   "headline": "LEARN FROM THE HERALD",
-   "subline": "A funny, fully voiced tutorial gets you battle-ready",
-   "shows": "the 5v5 tutorial: the Royal Herald's first line on his scroll over our keep",
-   "size": "1080x1920 RGB PNG (9:16, no alpha)"
+   "file": "graphics/phone_screenshots/08_squad.jpg",
+   "fastlane": "fastlane/metadata/android/en-US/images/phoneScreenshots/8_squad.jpg",
+   "headline": "SQUAD UP / WITH FRIENDS",
+   "shows": "the Knight; on the phone, Home with a party of three and the chests",
+   "size": "2560x1440 RGB JPEG (16:9 landscape)"
   }
  ],
  "feature_graphic": {
@@ -92,19 +92,21 @@
   "file": "graphics/app_icon_512x512.png",
   "ios": "ios/app_icon_1024.png",
   "size": "512x512 32-bit PNG (Play); 1024x1024 RGB PNG (App Store)",
-  "shows": "0.31.200: a chibi Knight (blue, icy) and Barbarian (bear hood, fiery) clashing sword on axe over the logo's lightning rift, the golden crown above",
-  "source": "art_sources/app_icon/icon.png (concept A1, Kevin's pick; A1-C2 in art_sources/app_icon/concepts), built by godot/tools/build_app_icon.py"
+  "shows": "0.31.211: the King (rebuilt in high detail) in 3D in front of his throne, the keep blurred behind",
+  "source": "art_sources/app_icon/render (godot/tools/render_app_icon.gd, shot king_hd), built by godot/tools/build_app_icon.py"
  },
  "rendered_from": {
   "repo": "github.com/midblade4295/Fatebound",
   "branch": "claude/siege-dev-r6-local",
-  "game_build": "0.31.199-fatebound (versionCode 285)",
+  "game_build": "0.31.211-fatebound (versionCode 297); the phone insets are 0.31.199's renders",
   "tools": [
-   "tools/store4_match.gd (5v5 moments, with the real HUD or a camera of their own)",
+   "tools/store4_match.gd (5v5 moments with the real HUD or their own camera; CINE=1 landscape backdrops)",
    "tools/store4_app.gd (the app's screens)",
-   "tools/store4_compose.py (captions, devices, the feature graphic)"
+   "tools/meshy_hd.py (the heroes and the King rebuilt in high detail for the art, from views of the game's models)",
+   "tools/render_app_icon.gd (store_* shots: the hero art)",
+   "tools/store5_compose.py (the landscape screenshots: backdrop, hero, headline, phone)"
   ],
-  "note": "real renders of the game; names and the clan are sample data (no server); the 3D at full resolution (phones draw it at 50 %)"
+  "note": "the phone shows the real game (real renders: names and the clan are sample data, no server); the big hero art is the game's own characters rebuilt in more detail than the phone's in-match models (Meshy, from views of those models)"
  },
  "android_packages": {
   "com.fatebound.game": "export preset 'Android Play Store' (the Play package)",
@@ -122,81 +124,65 @@
  },
  "app_store_screenshots": {
   "sizes": {
-   "iphone_6_9in": "1320x2868 RGB JPEG (quality 95)",
-   "ipad_13in": "2048x2732 RGB JPEG (quality 95)"
+   "iphone_6_9in": "2868x1320 RGB JPEG (landscape)",
+   "ipad_13in": "2732x2048 RGB JPEG (landscape)"
   },
   "shots": [
    {
     "order": 1,
-    "iphone_6_9in": "graphics/app_store/iphone_6_9in/01_teamfight.jpg",
-    "ipad_13in": "graphics/app_store/ipad_13in/01_teamfight.jpg",
-    "headline": "5V5 HERO BATTLES",
-    "subline": "Team up and take the Rift, online or against bots",
-    "shows": "gameplay with the real HUD: a 5v5 fight in the river, your Stormcaller's storm finishing two of theirs -- the DOUBLE KILL banner and the kill feed"
+    "iphone_6_9in": "graphics/app_store/iphone_6_9in/01_keyart.jpg",
+    "ipad_13in": "graphics/app_store/ipad_13in/01_keyart.jpg",
+    "headline": "",
+    "shows": "key art, no phone: the Barbarian, the Knight, the King, the Dragoon and the Stormcaller together over the FATEBOUND title, the Rift blurred behind"
    },
    {
     "order": 2,
-    "iphone_6_9in": "graphics/app_store/iphone_6_9in/02_champion.jpg",
-    "ipad_13in": "graphics/app_store/ipad_13in/02_champion.jpg",
-    "headline": "18 CHAMPIONS",
-    "subline": "Tanks, fighters, assassins, mages, marksmen and supports",
-    "shows": "the Stormcaller's champion window: Torvald Stormcrown in 3D in his Stormforged outfit over his painted place, his outfits and story"
+    "iphone_6_9in": "graphics/app_store/iphone_6_9in/02_teamfight.jpg",
+    "ipad_13in": "graphics/app_store/ipad_13in/02_teamfight.jpg",
+    "headline": "TEAM UP FOR / 5V5 HERO BATTLES",
+    "shows": "the Stormcaller big on the left; on the phone, gameplay with the real HUD: a 5v5 fight in the river, his storm finishing two of theirs -- DOUBLE KILL"
    },
    {
     "order": 3,
-    "iphone_6_9in": "graphics/app_store/iphone_6_9in/03_king.jpg",
-    "ipad_13in": "graphics/app_store/ipad_13in/03_king.jpg",
-    "headline": "TOPPLE THEIR KING",
-    "subline": "Push the lanes, break the towers, take the throne",
-    "shows": "in-engine, no HUD: four of ours on their King on his throne in the open keep"
+    "iphone_6_9in": "graphics/app_store/iphone_6_9in/03_champions.jpg",
+    "ipad_13in": "graphics/app_store/ipad_13in/03_champions.jpg",
+    "headline": "PICK FROM / 18 CHAMPIONS",
+    "shows": "the Barbarian, the Knight and the Mage; on the phone, the Stormcaller's champion window (his outfits and story)"
    },
    {
     "order": 4,
-    "iphone_6_9in": "graphics/app_store/iphone_6_9in/04_wyrm.jpg",
-    "ipad_13in": "graphics/app_store/ipad_13in/04_wyrm.jpg",
-    "headline": "SLAY THE GRAVE WYRM",
-    "subline": "Epic monsters, jungle camps and buffs that turn the fight",
-    "shows": "in-engine, no HUD: the Grave Wyrm risen in its pit, its soul-fire pouring"
+    "iphone_6_9in": "graphics/app_store/iphone_6_9in/04_king.jpg",
+    "ipad_13in": "graphics/app_store/ipad_13in/04_king.jpg",
+    "headline": "PUSH THE LANES AND / TOPPLE THEIR KING",
+    "shows": "the King; on the phone, four of ours on their King on his throne in the open keep (in-engine, no HUD)"
    },
    {
     "order": 5,
-    "iphone_6_9in": "graphics/app_store/iphone_6_9in/05_outfit.jpg",
-    "ipad_13in": "graphics/app_store/ipad_13in/05_outfit.jpg",
-    "headline": "36 OUTFITS",
-    "subline": "A set made for every champion, plus the Frostbound line",
-    "shows": "the Mage's champion window in the Phoenix outfit (Elara Flintwick's library)"
+    "iphone_6_9in": "graphics/app_store/iphone_6_9in/05_wyrm.jpg",
+    "ipad_13in": "graphics/app_store/ipad_13in/05_wyrm.jpg",
+    "headline": "SLAY THE / GRAVE WYRM",
+    "shows": "the Dragoon leaping, halberd out; on the phone, the Grave Wyrm risen in its pit (in-engine, no HUD)"
    },
    {
     "order": 6,
-    "iphone_6_9in": "graphics/app_store/iphone_6_9in/06_clan.jpg",
-    "ipad_13in": "graphics/app_store/ipad_13in/06_clan.jpg",
-    "headline": "BUILD YOUR CLAN",
-    "subline": "A camp that grows, a weekly Clan Chest and the Clan League",
-    "shows": "the clan camp at its last stage (the Iron Wolves, level 8): CLAN CHEST, SHARDS, CHAT / MEMBERS / LEAGUE / CLAN, LOOKING FOR GROUP"
+    "iphone_6_9in": "graphics/app_store/iphone_6_9in/06_outfit.jpg",
+    "ipad_13in": "graphics/app_store/ipad_13in/06_outfit.jpg",
+    "headline": "DRESS UP IN / 36 OUTFITS",
+    "shows": "the Mage; on the phone, the Mage's champion window with her outfits (Phoenix Mage on show)"
    },
    {
     "order": 7,
-    "iphone_6_9in": "graphics/app_store/iphone_6_9in/07_home.jpg",
-    "ipad_13in": "graphics/app_store/ipad_13in/07_home.jpg",
-    "headline": "SQUAD UP",
-    "subline": "Parties of five with friends and clanmates",
-    "shows": "Home, the champions' camp, in a party of three (PLAY x3), chests in the slots"
+    "iphone_6_9in": "graphics/app_store/iphone_6_9in/07_clan.jpg",
+    "ipad_13in": "graphics/app_store/ipad_13in/07_clan.jpg",
+    "headline": "BUILD / YOUR CLAN",
+    "shows": "the Barbarian; on the phone, the clan window: crest, level, League, the camp, the Clan Chest"
    },
    {
     "order": 8,
-    "iphone_6_9in": "graphics/app_store/iphone_6_9in/08_tutorial.jpg",
-    "ipad_13in": "graphics/app_store/ipad_13in/08_tutorial.jpg",
-    "headline": "LEARN FROM THE HERALD",
-    "subline": "A funny, fully voiced tutorial gets you battle-ready",
-    "shows": "the 5v5 tutorial: the Royal Herald's first line on his scroll over our keep"
-   },
-   {
-    "order": 9,
-    "iphone_6_9in": "graphics/app_store/iphone_6_9in/09_chest.jpg",
-    "ipad_13in": "graphics/app_store/ipad_13in/09_chest.jpg",
-    "headline": "OPEN CHESTS",
-    "subline": "Gold, gems and hero shards",
-    "shows": "a Royal Chest opened: a Dragoon shard, gold and gems"
+    "iphone_6_9in": "graphics/app_store/iphone_6_9in/08_squad.jpg",
+    "ipad_13in": "graphics/app_store/ipad_13in/08_squad.jpg",
+    "headline": "SQUAD UP / WITH FRIENDS",
+    "shows": "the Knight; on the phone, Home with a party of three and the chests"
    }
   ]
  },

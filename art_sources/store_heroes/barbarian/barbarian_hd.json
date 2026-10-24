@@ -1,0 +1,25 @@
+{
+ "settings": {
+  "ai_model": "latest",
+  "geometry_resolution": "2k",
+  "should_remesh": false,
+  "should_texture": true,
+  "enable_pbr": true,
+  "texture_resolution": "4k",
+  "image_enhancement": true,
+  "remove_lighting": true,
+  "pose_mode": "",
+  "target_formats": [
+   "glb"
+  ]
+ },
+ "inputs": [
+  "barbarian_input_front.png",
+  "barbarian_input_right.png",
+  "barbarian_input_back.png",
+  "barbarian_input_left.png"
+ ],
+ "task": "01a16c04-d5d5-72fc-9126-ed2f32c0a2d2",
+ "status": "SUCCEEDED",
+ "credits": 35
+}

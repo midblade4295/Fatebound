@@ -7026,3 +7026,35 @@ it's more detail".
   192/96/64/48 px (the crown and beard read at 48).
 - Version 0.31.211, versionCode 297; SERVER_BUILD 0.31.211 (kept equal for min_build_test; no server change, redeploy
   optional). Preview APK: build/Fatebound-Siege-0.31.211-fatebound.apk.
+
+## 0.31.212 store screenshots — landscape, Clash Royale's manner, HD heroes (no app change)
+Kevin: "Now I want new higher quality app store screenshots. Here is the app store page for clash Royale for reference"
+-> "Rebuild 5 heroes in HD".
+- The set (8, the same on both stores, store-listing/graphics): the key art (the Barbarian, the Knight, the King, the
+  Dragoon and the Stormcaller over the FATEBOUND title), then TEAM UP FOR 5V5 HERO BATTLES (Stormcaller), PICK FROM 18
+  CHAMPIONS (Barbarian, Knight, Mage), PUSH THE LANES AND TOPPLE THEIR KING (the King), SLAY THE GRAVE WYRM (Dragoon), DRESS
+  UP IN 36 OUTFITS (Mage), BUILD YOUR CLAN (Barbarian), SQUAD UP WITH FRIENDS (Knight). Each: the game's world blurred and
+  tinted (landscape in-engine backdrops: store4_match.gd CINE=1 feature/king/wyrm/tower at 2868x1320), a light behind the
+  hero, paper confetti in the team colours (the out-of-focus ones only between the hero and the phone, never on a face),
+  the hero big on the left, a two-line headline in Lilita One (white, dark outline, drop shadow; no yellow), and the real
+  game on a phone-shaped card with a glowing rim (0.31.199's raw renders, HUD and screens as they are). Play 2560x1440
+  (phone_screenshots/ and fastlane's phoneScreenshots/), App Store iPhone 6.9" 2868x1320 and iPad 13" 2732x2048, all
+  landscape JPEG; the heroes scale to each canvas (the key art's group by its width, sides cut a little on iPad; with a
+  phone, less than in proportion and never past the phone), headlines shrink to fit left of the phone. The 0.31.199
+  portrait set is gone from the folders (git history; store4_compose.py still makes it).
+- The heroes in HD: tools/meshy_hd.py (tools/meshy_king.py generalised): Meshy 7.1 multi-image-to-3D from four
+  orthographic views of the game's model posed for the shot (render_app_icon.gd VIEWS=1 ONLY=<hero>: Knight chop wind-up,
+  Barbarian axe across, Mage spellcasting, Stormcaller in Stormforged casting, Dragoon mid-leap), 2k geometry, no remesh,
+  4k PBR textures; <hero>_views.json keeps the posed body's height and place so the HD model comes back the same size.
+  ~800k triangles each. 6 x 35 = 210 credits (the Mage twice: in the first pose his staff hid his face in the front view
+  and Meshy invented one -- re-posed); balance 256 -> 46. art_sources/store_heroes/<hero>/: the inputs, the task, the
+  thumbnail; the GLBs (~50 MB each) are .gitignored -- `meshy_hd.py fetch art_sources/store_heroes/<hero> <hero>`
+  downloads one again from its task.
+- render_app_icon.gd: shots store_<hero> (hd:<hero> models, full length from a little below and to their right, rimmed
+  in the shot's colour; the Dragoon from his left, mirrored in the picture), _hd() loads any HD model with its fit, a
+  shot's "skin", VIEWS for any shot. tools/store5_compose.py (new) builds the set; its inputs are kept as WebP in
+  store-listing/graphics/raw_renders/store5 (art 3072, backdrops 2868x1320), so the set rebuilds without rendering.
+- Checked: every image looked at on all three canvases (faces, crops, confetti, text fit), sizes and formats; the
+  headlines against the game (18 champions, 36 outfits, parties of 5, the King falls -> the match is won). listing.json
+  (screenshots, app icon, rendered_from), STORE_LISTING.md and README_FOR_AI.md updated. Apple wants screenshots to show
+  the app in use: the key art has no phone -- if review objects, drop it from the App Store set.

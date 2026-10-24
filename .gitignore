@@ -22,3 +22,6 @@ __pycache__/
 godot/addons/GodotApplePlugins*/
 godot/addons/FateboundNotifyIOS/
 godot/ios_plugins/fatebound_notify/bin/
+# The store art's HD heroes (godot/tools/meshy_hd.py, ~50 MB each): fetched again from Meshy by their task
+# (meshy_hd.py fetch art_sources/store_heroes/<name> <name>); their renders and inputs are kept
+art_sources/store_heroes/*/*_hd.glb

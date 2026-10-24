@@ -1,0 +1,25 @@
+{
+ "settings": {
+  "ai_model": "latest",
+  "geometry_resolution": "2k",
+  "should_remesh": false,
+  "should_texture": true,
+  "enable_pbr": true,
+  "texture_resolution": "4k",
+  "image_enhancement": true,
+  "remove_lighting": true,
+  "pose_mode": "",
+  "target_formats": [
+   "glb"
+  ]
+ },
+ "inputs": [
+  "stormcaller_input_front.png",
+  "stormcaller_input_right.png",
+  "stormcaller_input_back.png",
+  "stormcaller_input_left.png"
+ ],
+ "task": "01a16c04-d2ea-744c-8882-6a5e21682e75",
+ "status": "SUCCEEDED",
+ "credits": 35
+}

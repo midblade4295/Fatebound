@@ -63,16 +63,19 @@ Your King is counting on you. He's also eating. Mostly eating.
 ## Graphics (`../graphics/`)
 | File | Use | Size |
 |---|---|---|
-| `phone_screenshots/01_teamfight.png` … `08_tutorial.png` | Google Play phone screenshots, in this order | 1080 × 1920 (9:16) |
+| `phone_screenshots/01_keyart.jpg` … `08_squad.jpg` | Google Play phone screenshots, in this order | 2560 × 1440 (16:9 landscape) |
 | `feature_graphic_1024x500.png` | Google Play feature graphic (required) | 1024 × 500 |
-| `app_store/iphone_6_9in/01_teamfight.jpg` … `09_chest.jpg` | App Store iPhone 6.9" screenshots, in this order | 1320 × 2868 |
-| `app_store/ipad_13in/01_teamfight.jpg` … `09_chest.jpg` | App Store iPad 13" screenshots, in this order | 2048 × 2732 |
+| `app_store/iphone_6_9in/01_keyart.jpg` … `08_squad.jpg` | App Store iPhone 6.9" screenshots, in this order | 2868 × 1320 (landscape) |
+| `app_store/ipad_13in/01_keyart.jpg` … `08_squad.jpg` | App Store iPad 13" screenshots, in this order | 2732 × 2048 (landscape) |
 
-Captions, in order: 5V5 HERO BATTLES · 18 CHAMPIONS · TOPPLE THEIR KING · SLAY THE GRAVE WYRM · 36 OUTFITS ·
-BUILD YOUR CLAN · SQUAD UP · LEARN FROM THE HERALD (· OPEN CHESTS, App Store only: Play takes 8)
+Headlines, in order (0.31.212, in Clash Royale's manner: a hero, a two-line headline, the game on a phone): the key art
+(the heroes and the title) · TEAM UP FOR 5V5 HERO BATTLES · PICK FROM 18 CHAMPIONS · PUSH THE LANES AND TOPPLE THEIR
+KING · SLAY THE GRAVE WYRM · DRESS UP IN 36 OUTFITS · BUILD YOUR CLAN · SQUAD UP WITH FRIENDS
 
-Every image is a real render of build 0.31.199 (the 5v5; the HUD as it plays, or the game's own engine with a camera of
-its own). Regenerate with `godot/tools/store4_match.gd`, `store4_app.gd` and `store4_compose.py` (`../README_FOR_AI.md`
+The game on each phone is a real render of build 0.31.199 (the HUD as it plays, or the game's own engine with a camera
+of its own); the backdrops are the game's world (in-engine, blurred); the big heroes are the game's own characters
+rebuilt in more detail than their in-match models (Meshy, from views of those models). Regenerate with
+`godot/tools/store4_match.gd`, `store4_app.gd`, `render_app_icon.gd` and `store5_compose.py` (`../README_FOR_AI.md`
 section 5). The text above is the 5v5's (0.31.200), every line checked against the game's code (`listing.json` → `game_facts`).
 
 ## Check before publishing

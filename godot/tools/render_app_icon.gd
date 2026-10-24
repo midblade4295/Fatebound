@@ -24,8 +24,25 @@ const SHOTS := {
 		"rim":"#9fd0ff", "set":"throne"},
 	"king_hd": {"hero":"king_hd", "turn":-12.0, "cam":Vector3(0.45, 1.8, 4.4), "aim":Vector3(0.02, 2.1, 0.0), "fov":21.0,
 		"rim":"#9fd0ff", "set":"throne"},
-	"knight": {"hero":"knight", "anim":"m/Melee_1H_Attack_Chop", "at":0.38, "turn":-40.0,
+	"knight": {"hero":"knight", "anim":"m/Melee_1H_Attack_Chop", "at":0.35, "turn":-40.0,
 		"cam":Vector3(0.4, 1.2, 3.8), "aim":Vector3(-0.05, 1.45, 0.0), "fov":28.0, "rim":"#9fd0ff"},
+	"barbarian": {"hero":"barbarian", "anim":"m/Melee_2H_Attack_Chop", "at":0.25, "turn":-25.0,
+		"cam":Vector3(0.3, 1.2, 3.9), "aim":Vector3(0.0, 1.45, 0.0), "fov":28.0, "rim":"#ffd29a"},
+	"mage": {"hero":"mage", "anim":"r/Ranged_Magic_Spellcasting", "at":0.3, "turn":-25.0,
+		"cam":Vector3(0.3, 1.2, 3.9), "aim":Vector3(0.0, 1.45, 0.0), "fov":28.0, "rim":"#9fd0ff"},
+	"stormcaller": {"hero":"stormcaller", "skin":"stormcaller_stormforged", "anim":"r/Ranged_Magic_Spellcasting", "at":0.35, "turn":-25.0,
+		"cam":Vector3(0.3, 1.2, 3.9), "aim":Vector3(0.0, 1.45, 0.0), "fov":28.0, "rim":"#9fd0ff"},
+	"dragoon": {"hero":"dragoon", "anim":"mb/Jump_Full_Short", "at":0.38, "turn":-25.0,
+		"cam":Vector3(0.3, 1.2, 3.9), "aim":Vector3(0.0, 1.45, 0.0), "fov":28.0, "rim":"#9fd0ff"},
+	# 0.31.212, the store screenshots (tools/store5_compose.py): the HD heroes (tools/meshy_hd.py), full length, from a
+	# little below and to their right so they look across the picture to the phone (the Dragoon from his left -- his
+	# halberd -- and mirrored in the picture), rimmed in the shot's colour
+	"store_knight": {"hero":"hd:knight", "cam":Vector3(-1.5, 0.75, 6.4), "aim":Vector3(0.05, 1.25, 0.0), "fov":19.0, "rim":"#a8ffc0"},
+	"store_barbarian": {"hero":"hd:barbarian", "cam":Vector3(-1.5, 0.7, 6.0), "aim":Vector3(0.18, 1.05, -0.28), "fov":19.0, "rim":"#ffd08a"},
+	"store_mage": {"hero":"hd:mage", "cam":Vector3(-1.5, 0.7, 6.2), "aim":Vector3(-0.14, 1.15, 0.17), "fov":19.0, "rim":"#ffb0e0"},
+	"store_stormcaller": {"hero":"hd:stormcaller", "cam":Vector3(-1.5, 0.7, 6.2), "aim":Vector3(-0.18, 1.18, 0.4), "fov":19.0, "rim":"#8fe0ff"},
+	"store_dragoon": {"hero":"hd:dragoon", "cam":Vector3(2.2, 0.8, 6.2), "aim":Vector3(-0.2, 1.2, 0.6), "fov":21.0, "rim":"#9fffe0"},
+	"store_king": {"hero":"king_hd", "cam":Vector3(-1.4, 0.95, 6.6), "aim":Vector3(0.0, 1.35, 0.0), "fov":21.0, "rim":"#ffd590"},
 }
 # "set": what stands behind him (rendered on its own, <id>_bg_wide.png, opaque: tools/build_app_icon.py blurs it like a
 # lens would; SET=0 skips it) -- "throne": his own corner of the keep as the game lays it out (keep.gd: the throne 1.6 m behind him,
@@ -146,12 +163,21 @@ func _clear() -> void:
 		holder.remove_child(c)
 		c.queue_free()
 
-func _king_hd() -> Node3D:
-	# tools/meshy_king.py's King (art_sources/app_icon/king_hd/king_hd.glb: 824k triangles, 4k PBR textures), loaded
-	# straight from the file (it is not one of the game's assets), 2.6 m tall like the game's, his feet at 0
+func _hd_path(hero: String) -> String:
+	# the HD models (tools/meshy_hd.py): "king_hd" -> art_sources/app_icon/king_hd/king_hd.glb, "hd:<shot>" ->
+	# art_sources/store_heroes/<shot>/<shot>_hd.glb
+	if hero == "king_hd":
+		return "res://../art_sources/app_icon/king_hd/king_hd.glb"
+	var n := hero.substr(3)
+	return "res://../art_sources/store_heroes/%s/%s_hd.glb" % [n, n]
+
+func _hd(hero: String) -> Node3D:
+	# an HD model, loaded straight from its file (it is not one of the game's assets), sized and placed as the posed body
+	# it was made from (<name>_views.json: its height and where it stood, from VIEWS=1); the King 2.6 m, feet at 0
+	var path := _hd_path(hero)
 	var doc := GLTFDocument.new()
 	var st := GLTFState.new()
-	if doc.append_from_file(ProjectSettings.globalize_path("res://../art_sources/app_icon/king_hd/king_hd.glb"), st) != OK:
+	if doc.append_from_file(ProjectSettings.globalize_path(path), st) != OK:
 		return null
 	var m: Node3D = doc.generate_scene(st)
 	var box := AABB()
@@ -160,19 +186,25 @@ func _king_hd() -> Node3D:
 		var b: AABB = (mi as MeshInstance3D).get_aabb()
 		box = b if first else box.merge(b)
 		first = false
-	var k := View.KING_HEIGHT / box.size.y
+	var fit := {"height": View.KING_HEIGHT, "bottom": 0.0, "x": 0.0, "z": 0.0}
+	var jp := ProjectSettings.globalize_path(path.get_base_dir().path_join(path.get_file().replace("_hd.glb", "_views.json")))
+	if FileAccess.file_exists(jp):
+		var j = JSON.parse_string(FileAccess.get_file_as_string(jp))
+		if j is Dictionary:
+			fit.merge(j, true)
+	var k := float(fit.height) / box.size.y
 	var root := Node3D.new()
 	m.scale = Vector3.ONE * k
-	m.position = Vector3(-box.get_center().x * k, -box.position.y * k, -box.get_center().z * k)
+	m.position = Vector3(float(fit.x) - box.get_center().x * k, float(fit.bottom) - box.position.y * k, float(fit.z) - box.get_center().z * k)
 	root.add_child(m)
 	return root
 
-func _add(hero: String, anim: String, at: float, turn: float, pos: Vector3) -> bool:
+func _add(hero: String, anim: String, at: float, turn: float, pos: Vector3, skin := "") -> bool:
 	var body: Node3D
-	if hero == "king_hd":
-		body = _king_hd()
+	if hero == "king_hd" or hero.begins_with("hd:"):
+		body = _hd(hero)
 		if body == null:
-			print("ICON_NO_KING_HD (run tools/meshy_king.py)")
+			print("ICON_NO_HD ", hero, " (run tools/meshy_hd.py)")
 			return false
 		holder.add_child(body)
 		body.position = pos
@@ -188,7 +220,7 @@ func _add(hero: String, anim: String, at: float, turn: float, pos: Vector3) -> b
 		if OS.get_environment("CLEAN") != "0":
 			_clean_king(body)
 	else:
-		var made: Dictionary = View.make_body(hero, {})
+		var made: Dictionary = View.make_body(hero, {"skin": skin} if skin != "" else {})
 		if made.is_empty():
 			return false
 		body = made.body
@@ -352,28 +384,47 @@ func _build_set(kind: String) -> void:
 	floor.material_override = fm
 	stage.add_child(floor)
 
-func _views() -> void:
-	# VIEWS=1: the King from the front, his right, the back and his left, full length, orthographic, flat light, for
-	# Meshy's multi-image-to-3D (tools/meshy_king.py: a far more detailed King for the icon): king_view_<n>.png
+func _views(id: String) -> void:
+	# VIEWS=1 ONLY=<shot>: the shot's body in its pose from the front, its right, the back and its left, full length,
+	# orthographic, flat light, for Meshy's multi-image-to-3D (tools/meshy_hd.py: a far more detailed model for the store
+	# art and the icon): <shot>_view_<v>.png, and <shot>_views.json -- how tall it stands and where (metres), so the HD
+	# model comes back the same size in the same place
+	var s: Dictionary = SHOTS[id]
 	rim.light_energy = 0.0
 	rim2.light_energy = 0.0
 	cam.projection = Camera3D.PROJECTION_ORTHOGONAL
-	cam.size = 2.95 * MARGIN
+	var tall := 2.95 if str(s.hero) == "king" else 4.6
+	var cy := 1.32 if str(s.hero) == "king" else 1.7
+	cam.size = tall * MARGIN
+	var fit := {}
 	for v in [["front", 0.0], ["right", 90.0], ["back", 180.0], ["left", -90.0]]:
 		_clear()
-		_add("king", "", 0.0, float(v[1]), Vector3.ZERO)
-		cam.transform = Transform3D(Basis.IDENTITY, Vector3(0.0, 1.32, 8.0))
+		_add(str(s.hero), str(s.get("anim", "")), float(s.get("at", 0.3)), float(v[1]), Vector3.ZERO, str(s.get("skin", "")))
+		cam.transform = Transform3D(Basis.IDENTITY, Vector3(0.0, cy, 8.0))
 		for i in 4:
 			await process_frame
 		await RenderingServer.frame_post_draw
-		vp.get_texture().get_image().save_png(out_dir.path_join("king_view_%s.png" % v[0]))
-		print("ICON_DONE king_view_", v[0])
-	print("ICON_ALL_DONE")
+		var img := vp.get_texture().get_image()
+		img.save_png(out_dir.path_join("%s_view_%s.png" % [id, v[0]]))
+		var r := img.get_used_rect()                               # (the body's pixels: the background is clear)
+		var mpp := cam.size / float(img.get_height())              # metres a pixel
+		var ox := -cam.size * 0.5 * float(img.get_width()) / float(img.get_height())
+		if v[0] == "front":
+			fit["height"] = r.size.y * mpp
+			fit["bottom"] = cy + cam.size * 0.5 - float(r.end.y) * mpp
+			fit["x"] = ox + (r.position.x + r.size.x * 0.5) * mpp
+		elif v[0] == "right":                                       # (turned 90: its +Z is now to the camera's right)
+			fit["z"] = ox + (r.position.x + r.size.x * 0.5) * mpp
+		print("ICON_DONE ", id, "_view_", v[0])
+	var f := FileAccess.open(out_dir.path_join("%s_views.json" % id), FileAccess.WRITE)
+	f.store_string(JSON.stringify(fit))
+	f.close()
+	print("ICON_ALL_DONE ", fit)
 	quit(0)
 
 func _run() -> void:
 	if OS.get_environment("VIEWS") == "1":
-		await _views()
+		await _views(str(only[0]) if not only.is_empty() else "king")
 		return
 	for id in SHOTS:
 		if not only.is_empty() and not only.has(id):
@@ -387,11 +438,11 @@ func _run() -> void:
 		for at in ats:
 			_clear()
 			var turn := float(OS.get_environment("TURN")) if OS.has_environment("TURN") else float(s.get("turn", 0.0))
-			if not _add(str(s.hero), anim, float(at), turn, Vector3.ZERO):
+			if not _add(str(s.hero), anim, float(at), turn, Vector3.ZERO, str(s.get("skin", ""))):
 				print("ICON_FAIL ", id)
 				break
 			for w in s.get("with", []):
-				_add(str(w.hero), str(w.get("anim", "")), float(w.get("at", 0.3)), float(w.get("turn", 0.0)), w.get("pos", Vector3.ZERO))
+				_add(str(w.hero), str(w.get("anim", "")), float(w.get("at", 0.3)), float(w.get("turn", 0.0)), w.get("pos", Vector3.ZERO), str(w.get("skin", "")))
 			var pos := _v3(OS.get_environment("CAM"), s.cam) if OS.has_environment("CAM") else s.cam as Vector3
 			var aim := _v3(OS.get_environment("AIM"), s.aim) if OS.has_environment("AIM") else s.aim as Vector3
 			var fov := float(OS.get_environment("FOV")) if OS.has_environment("FOV") else float(s.fov)

@@ -1,0 +1,25 @@
+{
+ "settings": {
+  "ai_model": "latest",
+  "geometry_resolution": "2k",
+  "should_remesh": false,
+  "should_texture": true,
+  "enable_pbr": true,
+  "texture_resolution": "4k",
+  "image_enhancement": true,
+  "remove_lighting": true,
+  "pose_mode": "",
+  "target_formats": [
+   "glb"
+  ]
+ },
+ "inputs": [
+  "mage_input_front.png",
+  "mage_input_right.png",
+  "mage_input_back.png",
+  "mage_input_left.png"
+ ],
+ "task": "01a16c25-2e91-71e0-8caf-1246939493b0",
+ "status": "SUCCEEDED",
+ "credits": 35
+}

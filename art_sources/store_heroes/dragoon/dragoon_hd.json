@@ -1,0 +1,25 @@
+{
+ "settings": {
+  "ai_model": "latest",
+  "geometry_resolution": "2k",
+  "should_remesh": false,
+  "should_texture": true,
+  "enable_pbr": true,
+  "texture_resolution": "4k",
+  "image_enhancement": true,
+  "remove_lighting": true,
+  "pose_mode": "",
+  "target_formats": [
+   "glb"
+  ]
+ },
+ "inputs": [
+  "dragoon_input_front.png",
+  "dragoon_input_right.png",
+  "dragoon_input_back.png",
+  "dragoon_input_left.png"
+ ],
+ "task": "01a16c04-d0bd-76c4-a6df-d02dcdd2fbc4",
+ "status": "SUCCEEDED",
+ "credits": 35
+}
