@@ -7140,3 +7140,5 @@ Godot has none, so this is the guide's plain-HTTP route ("Send to HeyCatch direc
   still wait for Kevin's go to deploy).
 - For Kevin: the privacy policy and Play's Data safety (App Store privacy too) must now name HeyCatch -- usage events go
   to a third party (privacy.html untouched); press "I've installed" on HeyCatch's Install page.
+- Quick suite 109/109. Preview APK: build/Fatebound-Siege-0.31.212-fatebound.apk (32 MB, preview key, code only -- no
+  new content packs), sha256 874abc833aa13605fe279e6c6a91d66151076d9ae2432532ba2459da4363d9a8.
