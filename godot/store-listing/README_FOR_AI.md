@@ -73,6 +73,9 @@ since 0.31.212 it carries FAST 5V5 MOBA BATTLES in place of the title logo.)
    - Feature graphic — `graphics/feature_graphic_1024x500.png`.
    - Phone screenshots — `graphics/phone_screenshots/01_keyart.jpg` through `08_squad.jpg`, in that order.
    - Tablet screenshots — none provided (optional; skip unless Kevin asks).
+   - Promo video (the heycatch.ai audit's D3.5) — a YouTube URL: Kevin uploads `Fatebound-Promo-Video.mp4` (made by
+     `godot/tools/promo_video.py`, 1920×1080, 29 s, gameplay from the first frame; not kept in the repo) to YouTube as
+     Unlisted (not Private: Play can't show a private video) and pastes its link in the Promo video field.
 4. **Save** the draft. Do **not** send for review / publish (rule 1).
 
 ## 4. Fill it in — fastlane supply (automated, listing only)

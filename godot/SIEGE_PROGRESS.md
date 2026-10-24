@@ -7079,3 +7079,16 @@ Kevin pasted the audit (Fatebound, early traction: launched 2026-10-21, 10+ inst
   and README_FOR_AI.md updated. Flagged for Kevin (not doable from here): the promo video (D3.5: 15-30 s landscape
   gameplay on YouTube; trailer 10's ad cut is 74 s portrait), a developer website with a founder bio and photo (D5.6),
   localized listings (D6.1), the off-store distribution plays (D5.3/D5.6), D2.2, D3.4, D5.4, D7.3, D8.4.
+
+## 0.31.212 promo video -- the audit's D3.5 (no app change)
+Kevin: "Make the new gameplay video" -> "Build how the audit says" (D3.5: 15-30 s of gameplay, a team fight or First Blood,
+the first 2 seconds gameplay action, not a logo intro; for Play's promo video field, a YouTube link).
+- tools/promo_video.py (new): 1920 x 1080 landscape, 29.1 s, 30 fps, H.264 + AAC, -14.1 LUFS (peak -0.5 dB). trailer
+  10's AD_SAFE takes (the real game, HUD and sound as they play) on a phone-shaped card in the middle from frame 0:
+  the team fight and DOUBLE KILL (5.3 s), the lane (3.3), FIRST BLOOD (4.0), a tower falling (3.4), the Grave Wyrm (4.5),
+  their King toppled and VICTORY (5.6); around it the store screenshots' look -- the footage blurred behind, a two-line
+  headline left (TEAM UP FOR 5V5 HERO BATTLES, PUSH THE LANES, CLAIM FIRST BLOOD, BREAK THEIR TOWERS, SLAY THE GRAVE WYRM,
+  TOPPLE THEIR KING), the shot's HD hero right sliding in; a 3 s end card crossfaded from the last shot (the heroes, the
+  title, FAST 5V5 MOBA BATTLES). Sound: each take's own (levelled) and the theme under it.
+- The mp4 isn't committed (20 MB); sent to Kevin. store-listing/README_FOR_AI.md: upload it to YouTube as Unlisted and
+  paste the link in Play Console's Promo video field.
