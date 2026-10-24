@@ -1,0 +1,25 @@
+{
+ "settings": {
+  "ai_model": "latest",
+  "geometry_resolution": "2k",
+  "should_remesh": false,
+  "should_texture": true,
+  "enable_pbr": true,
+  "texture_resolution": "4k",
+  "image_enhancement": true,
+  "remove_lighting": true,
+  "pose_mode": "",
+  "target_formats": [
+   "glb"
+  ]
+ },
+ "inputs": [
+  "king_input_front.png",
+  "king_input_right.png",
+  "king_input_back.png",
+  "king_input_left.png"
+ ],
+ "task": "01a16beb-0d68-75b0-92c0-1e515c26c218",
+ "status": "SUCCEEDED",
+ "credits": 35
+}

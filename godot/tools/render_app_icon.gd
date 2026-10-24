@@ -4,23 +4,32 @@ extends SceneTree
 # real thing: the heroes as the game builds them (siege_view.gd make_body, his outfit, a frame of his KayKit animation),
 # the King's own model, lit like a studio portrait (a warm key with soft shadows, a fill, a rim light in the background's
 # colour so the silhouette separates) and rendered with the desktop renderer's ambient occlusion, on a clear background:
-# tools/build_app_icon.py puts the background behind it and makes the launcher, Play and App Store icons.
+# tools/build_app_icon.py puts the background behind it and makes the launcher, Play and App Store icons. 0.31.211
+# (Kevin: "Seems a bit plain with the solid blue background. Also maybe if you can make the king higher triangle count so
+# it's more detail"): the icon's shot is "king_hd" -- Meshy's far more detailed King (tools/meshy_king.py, from this
+# tool's VIEWS=1 renders of his own model) in front of his throne ("set").
 #   Xvfb :98 -screen 0 1080x1920x24 &
 #   DISPLAY=:98 godot --rendering-method forward_plus --path godot -s res://tools/render_app_icon.gd
 #   OUT_DIR=<dir> (default /tmp/fb_icon)  ONLY=id1,id2  SIZE=2048
 #   (one shot's framing, to try it: ONLY=<id> CAM=x,y,z AIM=x,y,z FOV=deg TURN=deg AT=0..1)
 const View = preload("res://scripts/siege/siege_view.gd")
 const Stage = preload("res://scripts/siege/asset_cache.gd")
+const CastleKit = preload("res://scripts/siege/castle_kit.gd")
 
-# id -> what's in it: "hero" (a hero id, or "king"), "skin" (an outfit, "" his own), "anim"/"at" (a frame of an
+# id -> what's in it: "hero" (a hero id, "king" -- the game's model -- or "king_hd"), "skin" (an outfit, "" his own), "anim"/"at" (a frame of an
 # animation, 0..1 of its length), "turn" (degrees about his up axis), the camera ("cam", "aim", "fov") and the rim
 # light's colour ("rim": the background's hue, lighter). "with": more bodies in the shot, each {hero, anim, at, turn, pos}.
 const SHOTS := {
 	"king": {"hero":"king", "turn":-12.0, "cam":Vector3(0.45, 1.8, 4.4), "aim":Vector3(0.02, 2.1, 0.0), "fov":21.0,
-		"rim":"#9fd0ff"},
+		"rim":"#9fd0ff", "set":"throne"},
+	"king_hd": {"hero":"king_hd", "turn":-12.0, "cam":Vector3(0.45, 1.8, 4.4), "aim":Vector3(0.02, 2.1, 0.0), "fov":21.0,
+		"rim":"#9fd0ff", "set":"throne"},
 	"knight": {"hero":"knight", "anim":"m/Melee_1H_Attack_Chop", "at":0.38, "turn":-40.0,
 		"cam":Vector3(0.4, 1.2, 3.8), "aim":Vector3(-0.05, 1.45, 0.0), "fov":28.0, "rim":"#9fd0ff"},
 }
+# "set": what stands behind him (rendered on its own, <id>_bg_wide.png, opaque: tools/build_app_icon.py blurs it like a
+# lens would; SET=0 skips it) -- "throne": his own corner of the keep as the game lays it out (keep.gd: the throne 1.6 m behind him,
+# the Royal kit's canopy behind it, the banners either side, the statues, the curtain wall 11 m back, the sky)
 # the launchers' adaptive icons show the middle 72 dp of a 108 dp layer and move it about: each shot is rendered that
 # much wider (<id>_wide.png, MARGIN x the size, the same picture in its middle) for the foreground layer, and its middle
 # is <id>.png -- the square icon (Play, App Store, the legacy launcher icon)
@@ -34,6 +43,10 @@ var cam: Camera3D
 var holder: Node3D
 var rim: OmniLight3D
 var rim2: DirectionalLight3D
+var stage: Node3D
+var env: Environment
+var sky_studio: Sky
+var sky_day: Sky
 
 func _initialize() -> void:
 	out_dir = OS.get_environment("OUT_DIR") if OS.has_environment("OUT_DIR") else out_dir
@@ -52,7 +65,7 @@ func _initialize() -> void:
 	vp.screen_space_aa = Viewport.SCREEN_SPACE_AA_DISABLED
 	vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	root.add_child(vp)
-	var env := Environment.new()
+	env = Environment.new()
 	env.background_mode = Environment.BG_CLEAR_COLOR
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = Color("#c9d2e8")
@@ -75,6 +88,15 @@ func _initialize() -> void:
 	sm.sun_angle_max = 0.0
 	sky.sky_material = sm
 	env.sky = sky
+	sky_studio = sky
+	sky_day = Sky.new()                              # (the set's sky: the keep's afternoon)
+	var dm := ProceduralSkyMaterial.new()
+	dm.sky_top_color = Color("#3f7fd8")
+	dm.sky_horizon_color = Color("#b8d6f2")
+	dm.ground_horizon_color = Color("#b8d6f2")
+	dm.ground_bottom_color = Color("#8a8070")
+	dm.sun_angle_max = 0.0
+	sky_day.sky_material = dm
 	env.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
 	var we := WorldEnvironment.new()
 	we.environment = env
@@ -108,6 +130,8 @@ func _initialize() -> void:
 	vp.add_child(cam)
 	holder = Node3D.new()
 	vp.add_child(holder)
+	stage = Node3D.new()
+	vp.add_child(stage)
 	_run()
 
 func _num(k: String, dflt: float) -> float:
@@ -122,8 +146,38 @@ func _clear() -> void:
 		holder.remove_child(c)
 		c.queue_free()
 
+func _king_hd() -> Node3D:
+	# tools/meshy_king.py's King (art_sources/app_icon/king_hd/king_hd.glb: 824k triangles, 4k PBR textures), loaded
+	# straight from the file (it is not one of the game's assets), 2.6 m tall like the game's, his feet at 0
+	var doc := GLTFDocument.new()
+	var st := GLTFState.new()
+	if doc.append_from_file(ProjectSettings.globalize_path("res://../art_sources/app_icon/king_hd/king_hd.glb"), st) != OK:
+		return null
+	var m: Node3D = doc.generate_scene(st)
+	var box := AABB()
+	var first := true
+	for mi in m.find_children("*", "MeshInstance3D", true, false):
+		var b: AABB = (mi as MeshInstance3D).get_aabb()
+		box = b if first else box.merge(b)
+		first = false
+	var k := View.KING_HEIGHT / box.size.y
+	var root := Node3D.new()
+	m.scale = Vector3.ONE * k
+	m.position = Vector3(-box.get_center().x * k, -box.position.y * k, -box.get_center().z * k)
+	root.add_child(m)
+	return root
+
 func _add(hero: String, anim: String, at: float, turn: float, pos: Vector3) -> bool:
 	var body: Node3D
+	if hero == "king_hd":
+		body = _king_hd()
+		if body == null:
+			print("ICON_NO_KING_HD (run tools/meshy_king.py)")
+			return false
+		holder.add_child(body)
+		body.position = pos
+		body.rotation.y = deg_to_rad(turn)
+		return true
 	if hero == "king":
 		var packed := Stage.scene("res://assets/kings/king_blue_fat.glb")
 		if packed == null:
@@ -247,7 +301,80 @@ func _no_normal_map(body: Node3D) -> void:
 				c.normal_enabled = false
 				m.set_surface_override_material(s, c)
 
+func _prop(model: String, pos: Vector3, height: float, turn_deg := 0.0) -> Node3D:
+	# a Royal kit piece (blue's), its feet at pos, height metres tall, its front to the camera (+Z) turned by turn_deg
+	var root := CastleKit.piece(model, 0)
+	var size: Vector3 = root.get_meta("size")
+	root.position = pos
+	root.rotation.y = deg_to_rad(turn_deg)
+	root.scale = Vector3.ONE * (height / size.y)
+	stage.add_child(root)
+	return root
+
+func _build_set(kind: String) -> void:
+	for c in stage.get_children():
+		stage.remove_child(c)
+		c.queue_free()
+	if kind != "throne":
+		return
+	# (keep.gd, from the King at (0, 99) looking at the gates: here he is at the origin looking at +Z)
+	var throne: Node3D = (Stage.scene("res://assets/props/throne.glb") as PackedScene).instantiate()
+	throne.position = Vector3(0.0, 0.0, -1.6)
+	stage.add_child(throne)
+	var velvet := StandardMaterial3D.new()                         # (the blue side's velvet, as siege_view.gd)
+	velvet.albedo_color = Color("#2d58b8")
+	velvet.roughness = 0.85
+	for mi in throne.find_children("*", "MeshInstance3D", true, false):
+		var m: MeshInstance3D = mi
+		for si in m.mesh.get_surface_count():
+			var sm := m.mesh.surface_get_material(si)
+			if sm != null and str(sm.resource_name) == "Velvet":
+				m.set_surface_override_material(si, velvet)
+	var canopy := CastleKit.piece("royal_throne_canopy", 0)
+	canopy.position = Vector3(0.0, 0.0, -2.15)
+	canopy.scale = Vector3.ONE * 1.75
+	stage.add_child(canopy)
+	_prop("royal_banner", Vector3(-3.4, 0.0, -2.6), 3.4)
+	_prop("royal_banner", Vector3(3.4, 0.0, -2.6), 3.4)
+	_prop("royal_statue", Vector3(-7.6, 0.0, -5.2), 2.6, 25.0)
+	_prop("royal_statue", Vector3(7.6, 0.0, -5.2), 2.6, -25.0)
+	_prop("royal_topiary", Vector3(-10.6, 0.0, -0.5), 2.2)
+	_prop("royal_topiary", Vector3(10.6, 0.0, -0.5), 2.2)
+	for i in range(-3, 4):
+		_prop("royal_wall", Vector3(i * 8.0, 0.0, -11.0), 2.9)
+	var floor := MeshInstance3D.new()                              # (the court's pale paving)
+	var pm := PlaneMesh.new()
+	pm.size = Vector2(80.0, 80.0)
+	floor.mesh = pm
+	var fm := StandardMaterial3D.new()
+	fm.albedo_color = Color("#d8cdb6")
+	fm.roughness = 0.9
+	floor.material_override = fm
+	stage.add_child(floor)
+
+func _views() -> void:
+	# VIEWS=1: the King from the front, his right, the back and his left, full length, orthographic, flat light, for
+	# Meshy's multi-image-to-3D (tools/meshy_king.py: a far more detailed King for the icon): king_view_<n>.png
+	rim.light_energy = 0.0
+	rim2.light_energy = 0.0
+	cam.projection = Camera3D.PROJECTION_ORTHOGONAL
+	cam.size = 2.95 * MARGIN
+	for v in [["front", 0.0], ["right", 90.0], ["back", 180.0], ["left", -90.0]]:
+		_clear()
+		_add("king", "", 0.0, float(v[1]), Vector3.ZERO)
+		cam.transform = Transform3D(Basis.IDENTITY, Vector3(0.0, 1.32, 8.0))
+		for i in 4:
+			await process_frame
+		await RenderingServer.frame_post_draw
+		vp.get_texture().get_image().save_png(out_dir.path_join("king_view_%s.png" % v[0]))
+		print("ICON_DONE king_view_", v[0])
+	print("ICON_ALL_DONE")
+	quit(0)
+
 func _run() -> void:
+	if OS.get_environment("VIEWS") == "1":
+		await _views()
+		return
 	for id in SHOTS:
 		if not only.is_empty() and not only.has(id):
 			continue
@@ -274,10 +401,27 @@ func _run() -> void:
 			rim.light_color = rc
 			rim2.light_color = rc
 			rim.position = aim + Vector3(1.6, 1.4, -2.2)
+			var name: String = id if ats.size() == 1 else "%s_%.2f" % [id, float(at)]
+			var setk := str(s.get("set", ""))
+			if setk != "" and OS.get_environment("SET") != "0":
+				_build_set(setk)
+				holder.visible = false
+				vp.transparent_bg = false
+				env.background_mode = Environment.BG_SKY
+				env.sky = sky_day
+				for i in 4:
+					await process_frame
+				await RenderingServer.frame_post_draw
+				vp.get_texture().get_image().save_png(out_dir.path_join("%s_bg_wide.png" % name))
+				print("ICON_DONE ", name, " (set)")
+				_build_set("")
+				holder.visible = true
+				vp.transparent_bg = true
+				env.background_mode = Environment.BG_CLEAR_COLOR
+				env.sky = sky_studio
 			for i in 4:
 				await process_frame
 			await RenderingServer.frame_post_draw
-			var name: String = id if ats.size() == 1 else "%s_%.2f" % [id, float(at)]
 			var img := vp.get_texture().get_image()
 			img.save_png(out_dir.path_join("%s_wide.png" % name))
 			var o := (img.get_width() - size) / 2

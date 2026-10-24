@@ -7005,3 +7005,24 @@ game's real models, no image generation (King on blue, on blue + red, on gold; t
   build/Fatebound-Siege-0.31.210-fatebound.apk (its launcher layers checked in the APK's res/mipmap-*). Tests:
   min_build, diag_send, analytics_client, analytics_events, spend_tracking passed. The Play listing's icon (store-listing/graphics/app_icon_512x512.png)
   and the App Store's change only when they are uploaded there.
+
+## 0.31.211 — the icon: a far more detailed King, in front of his throne
+Kevin: "Seems a bit plain with the solid blue background. Also maybe if you can make the king higher triangle count so
+it's more detail".
+- A new King for the icon only (tools/meshy_king.py, new): Meshy 7.1 multi-image-to-3D from four views of the game's own
+  King (render_app_icon.gd VIEWS=1: front, right, back, left, orthographic, flat light, his cleaned textures), 2k geometry,
+  no remesh, 4k PBR textures guided by the same views: 824k triangles against the game's 10.4k, a 4k texture against
+  512 px -- the crown's jewels round, the beard in locks, the ermine and the chain sculpted. 35 Meshy credits (291 -> 256).
+  art_sources/app_icon/king_hd/ (king_hd.glb 38 MB, the inputs, the task). The game's King is unchanged.
+- render_app_icon.gd: shot "king_hd" loads that GLB straight from art_sources (GLTFDocument, scaled to the King's 2.6 m);
+  a shot's "set" is rendered as its own pass behind him (<id>_bg_wide.png, the same camera, opaque): "throne" lays out
+  his corner of the keep as keep.gd does -- the throne 1.6 m behind him in the blue side's velvet, the Royal kit's
+  canopy, banners, statues and topiaries, the curtain wall 11 m back, a day sky.
+- build_app_icon.py: the backdrop is that throne room, blurred like a lens (1/110 of the width), a touch richer and
+  darkened toward the corners; the adaptive icon's back layer is the throne room, its front the King, so the launchers'
+  parallax moves him against a real room. Same outputs (launcher 192/432 layers, Play 512, App Store 1024, the flat
+  1024 in art_sources) and the social kit's avatars rebuilt.
+- Checked: the layers in circle and squircle masks with a parallax shift, the full 108 dp layer, the icon at
+  192/96/64/48 px (the crown and beard read at 48).
+- Version 0.31.211, versionCode 297; SERVER_BUILD 0.31.211 (kept equal for min_build_test; no server change, redeploy
+  optional). Preview APK: build/Fatebound-Siege-0.31.211-fatebound.apk.
