@@ -4,7 +4,7 @@ extends RefCounted
 # it logs) and the server (server/analytics.gd: what it keeps -- anything else is dropped). Props are numbers, true/false
 # or short words made by the game's own code: never a name, a chat line, a token or an order id.
 
-const MAX_PROPS := 12
+const MAX_PROPS := 32                # (0.31.212: 12 -> 32 for the server's match_quit -- still only the listed keys)
 const MAX_STR := 40
 
 # sent by the phone ({"t":"an"} batches)
@@ -35,8 +35,19 @@ const CLIENT := {
 const SERVER := {
 	"session_online": [],
 	"match_start": ["match", "mode", "class"],
-	"match_finish": ["match", "mode", "dur_s", "result", "team_n", "class", "class0"],
-	"match_quit": ["match", "mode", "quit_at_s", "class", "class0"],
+	# 0.31.212 (NEW_PLAYER_RETENTION_HANDOFF.md): the player's upgrades from the match's shop -- items bought, the gold
+	# they cost, the gold left unspent
+	"match_finish": ["match", "mode", "dur_s", "result", "team_n", "class", "class0", "items", "gold_spent", "gold_left"],
+	# 0.31.212 (the same): the match as the player left it. why: the drop's reason ("left" = quit on purpose, "closed" /
+	# "silent" = the connection went, "idle", ...); held: their seat waited for them and they never came back (let go
+	# when the wait ran out or the match ended); rejoins: times they came back to this seat; match_s: the match's clock
+	# at the leave; team 0 blue / 1 red, the rest from their side: score (Kings toppled), kills (the team's), k/d/a
+	# (theirs), each King's HP in percent, and their shop totals
+	"match_quit": ["match", "mode", "quit_at_s", "class", "class0", "why", "held", "rejoins", "match_s", "hero", "team", "lvl",
+		"score_us", "score_them", "kills_us", "kills_them", "k", "d", "a", "king_us_pct", "king_them_pct",
+		"items", "gold_spent", "gold_left"],
+	# 0.31.212 (the same): an upgrade a player bought with the match's gold (a bot's buys are not counted)
+	"match_shop_buy": ["match", "mode", "item", "cost", "match_s", "hero", "gold_left"],
 	"purchase_verified": ["product", "test", "store"],     # 0.31.131: store "google" | "apple"
 	"chat_send": ["kind"],
 	"friend_add": [],

@@ -395,9 +395,67 @@ def build(events, accounts, now, days, tz, tz_name, info):
             k = str(e["p"].get("tab", "?"))
             shop[k] = shop.get(k, 0) + 1
     out["shop_views"] = shop
+    out["online_quits"] = online_quits(pe)
+    out["match_shop"] = match_shop(pe)
     out["builds"] = _builds(pe)
     out["excluded"] = dict(info)
     return out
+
+
+def online_quits(pe):
+    """0.31.212 (server, NEW_PLAYER_RETENTION_HANDOFF.md): online matches left before their end, as the player left them --
+    the server's match_quit with its new props (older lines, without them, are left out here)"""
+    q = [e for e in pe if e["ev"] == "match_quit" and e["src"] == "s" and e["p"].get("mode") == "online" and "match_s" in e["p"]]
+    why = {}
+    for e in q:
+        k = str(e["p"].get("why", "?"))
+        why[k] = why.get(k, 0) + 1
+    side = {"behind": 0, "even": 0, "ahead": 0}
+    for e in q:
+        us, them = _n0(e["p"].get("kills_us")), _n0(e["p"].get("kills_them"))
+        side["behind" if us < them else ("ahead" if us > them else "even")] += 1
+    med = lambda k: _median([e["p"].get(k) for e in q])
+    return {"quits": len(q), "players": len({e["acct"] for e in q}), "by_why": dict(sorted(why.items(), key=lambda kv: (-kv[1], kv[0]))),
+            "held": sum(1 for e in q if _truthy(e["p"].get("held"))), "match_s_median": med("match_s"), "kills": side,
+            "kda_median": {"k": med("k"), "d": med("d"), "a": med("a")},
+            "king_pct_median": {"us": med("king_us_pct"), "them": med("king_them_pct")},
+            "bought_nothing": sum(1 for e in q if _n0(e["p"].get("items")) == 0), "items_median": med("items"),
+            "gold_left_median": med("gold_left")}
+
+
+def match_shop(pe):
+    """0.31.212 (server, the same): upgrades players bought with a match's gold (match_shop_buy), and per online match the
+    totals on its match_finish / match_quit (older lines, without them, are left out)"""
+    b = [e for e in pe if e["ev"] == "match_shop_buy" and e["src"] == "s"]
+    items = {}
+    for e in b:
+        k = str(e["p"].get("item", "") or "-")
+        r = items.setdefault(k, {"item": k, "buys": 0, "gold": 0, "players": set()})
+        r["buys"] += 1
+        r["gold"] += _n0(e["p"].get("cost"))
+        r["players"].add(e["acct"])
+    first = {}
+    for e in b:
+        k = (e["acct"], str(e["p"].get("match", "")))
+        s = _num(e["p"].get("match_s"))
+        if s is not None and (k not in first or s < first[k]):
+            first[k] = s
+    ends = {"finished": [e for e in pe if e["ev"] == "match_finish" and e["src"] == "s" and "items" in e["p"]],
+            "quit": [e for e in pe if e["ev"] == "match_quit" and e["src"] == "s" and "items" in e["p"]]}
+    per = {}
+    for k, rows in ends.items():
+        n = len(rows)
+        w = sum(1 for e in rows if _n0(e["p"].get("items")) > 0)
+        per[k] = {"matches": n, "with_buy": w, "pct": pct(w, n), "items_median": _median([e["p"].get("items") for e in rows]),
+                  "gold_spent_median": _median([e["p"].get("gold_spent") for e in rows]),
+                  "gold_left_median": _median([e["p"].get("gold_left") for e in rows])}
+    n_all = per["finished"]["matches"] + per["quit"]["matches"]
+    w_all = per["finished"]["with_buy"] + per["quit"]["with_buy"]
+    return {"buys": len(b), "players": len({e["acct"] for e in b}), "gold": sum(_n0(e["p"].get("cost")) for e in b),
+            "by_item": [{"item": r["item"], "buys": r["buys"], "gold": r["gold"], "players": len(r["players"])}
+                        for r in sorted(items.values(), key=lambda r: (-r["buys"], r["item"]))],
+            "first_buy_s_median": _median(list(first.values())),
+            "matches": n_all, "with_buy": w_all, "with_buy_pct": pct(w_all, n_all), "finished": per["finished"], "quit": per["quit"]}
 
 
 SPEND_CATS = ("hero", "outfit", "pass", "chest", "clan", "other")
@@ -545,6 +603,23 @@ def text(r):
     L.append("Win rate by class (the class they finished as):")
     for c in m["win_rate_by_class"]:
         L.append("  %-12s %5d matches  %s wins  (%d draws)" % (c["class"], c["matches"], _fmt(c["win_pct"], "%"), c["draws"]))
+    oq = r["online_quits"]
+    L.append("Online quits as they left them (servers from 0.31.212): %d by %d players; why %s; seat held (never came back) %d"
+             % (oq["quits"], oq["players"], json.dumps(oq["by_why"]), oq["held"]))
+    L.append("  left at (median) %s of the match; their side's kills behind %d, even %d, ahead %d; K/D/A (median) %s/%s/%s;"
+             " Kings' HP (median) theirs %s, the enemy's %s; bought nothing %d, items (median) %s, gold left (median) %s"
+             % (_dur(oq["match_s_median"]), oq["kills"]["behind"], oq["kills"]["even"], oq["kills"]["ahead"],
+                _fmt(oq["kda_median"]["k"]), _fmt(oq["kda_median"]["d"]), _fmt(oq["kda_median"]["a"]),
+                _fmt(oq["king_pct_median"]["us"], "%"), _fmt(oq["king_pct_median"]["them"], "%"), oq["bought_nothing"],
+                _fmt(oq["items_median"]), _fmt(oq["gold_left_median"])))
+    ms = r["match_shop"]
+    L.append("Match shop (online, servers from 0.31.212): %d upgrades bought by %d players, %s gold; matches with a buy %d of %d (%s)"
+             " -- finished %d of %d, quit %d of %d; items a match (median) finished %s, quit %s; first buy at (median) %s"
+             % (ms["buys"], ms["players"], "{:,}".format(ms["gold"]), ms["with_buy"], ms["matches"], _fmt(ms["with_buy_pct"], "%"),
+                ms["finished"]["with_buy"], ms["finished"]["matches"], ms["quit"]["with_buy"], ms["quit"]["matches"],
+                _fmt(ms["finished"]["items_median"]), _fmt(ms["quit"]["items_median"]), _dur(ms["first_buy_s_median"])))
+    if ms["by_item"]:
+        L.append("  by item: " + "  ".join("%s %d (%d players)" % (x["item"], x["buys"], x["players"]) for x in ms["by_item"]))
     s = r["session_length"]
     L.append("Sessions: %d ended, avg %s, median %s (capped at 4 h); %d starts, %d online"
              % (s["sessions"], _dur(s["avg_s"]), _dur(s["median_s"]), s["starts"], s["online_starts"]))

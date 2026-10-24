@@ -43,3 +43,17 @@ We also need to know whether new players actually buy upgrades from the match sh
 - Run `python3 godot/tools/content_packs.py check`; it must print `CONTENT OK` before any build.
 - Server deploys need Kevin's approval.
 - Never commit `override.cfg` or any key / service-account JSON. Never force-push.
+
+## Done (Claude, 0.31.212 server -- not deployed: needs Kevin's approval)
+
+- `match_quit` (server, online): old props kept; adds `why`, `held`, `rejoins`, `match_s`, `hero`, `team`, `lvl`,
+  `score_us`/`score_them`, `kills_us`/`kills_them`, `k`/`d`/`a`, `king_us_pct`/`king_them_pct`, `items`, `gold_spent`,
+  `gold_left` -- the match as the player left it. Written at the leave; a held seat (connection lost) when it's let go,
+  also when the match ends first (then no `match_finish` for them).
+- `match_shop_buy`: `match`, `mode`, `item`, `cost`, `match_s`, `hero`, `gold_left`, one per upgrade a player bought.
+  `match_finish` adds `items`, `gold_spent`, `gold_left`.
+- Server log lines: `leave` / `let go` carry the same stats; `shop` per buy; `paid` the shop totals; `match ... end` and
+  `stopped (no players)` how the match stood.
+- `tools/analytics_report.py`: "Online quits as they left them" and "Match shop" sections.
+- Tests: `tests/analytics_events_test.gd`, `tools/test_analytics_report.py`. Details: `ANALYTICS.md`, `SIEGE_PROGRESS.md`.
+- No app change (VS BOTS matches are the phone's and log as before). `content_packs.py check`: CONTENT OK.

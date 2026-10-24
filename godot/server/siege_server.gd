@@ -585,20 +585,23 @@ func _drop(cid: int, why: String) -> void:
 		r.names_dirty = true           # (their name goes off the battlefield)
 	var hold: bool = r != null and sim != null and not sim.ended and c.hello and not bool(c.get("queued", false)) and c.unit != "" \
 		and sim.by_id.has(c.unit) and str(c.get("rj", "")) != "" and not bool(c.get("left", false)) and why in ["closed", "handshake timeout", "silent"]
+	# 0.31.212 (NEW_PLAYER_RETENTION_HANDOFF.md): left a match before it ended -- the match as they left it (match_quit)
+	var q := {}
+	if c.hello and sim != null and not sim.ended and c.unit != "" and not bool(c.get("queued", false)) and sim.by_id.has(c.unit) \
+			and c.has("seated_at"):
+		q = _quit_props(sim, c, why)
 	if hold:
-		# 0.31.120: the seat waits for them (a bot plays it meanwhile); match_quit only if they don't come back
+		# 0.31.120: the seat waits for them (a bot plays it meanwhile); match_quit only if they don't come back (as they
+		# left, 0.31.212 -- not as the bot left it)
 		var keep := c.duplicate()
 		keep.erase("ws")
-		r.held[str(c.rj)] = {"c":keep, "until":_now() + rejoin_hold, "drop_at":_now()}
+		r.held[str(c.rj)] = {"c":keep, "until":_now() + rejoin_hold, "drop_at":_now(), "q":q}
 		_log("hold %s's seat %s for %.0f s (room %d)" % [c.name, c.unit, rejoin_hold, r.id])
-	elif c.hello and c.has("acct") and analytics != null and sim != null and not sim.ended and c.unit != "" \
-			and not bool(c.get("queued", false)) and sim.by_id.has(c.unit) and c.has("seated_at"):
-		# 0.31.118: left a match before it ended
-		analytics.server_event(str(c.acct), "match_quit", {"match":str(c.get("match_key", "")), "mode":"online",
-			"quit_at_s":int(_now() - float(c.seated_at)), "class":class_of(sim.by_id[c.unit]), "class0":str(c.get("class0", ""))},
-			str(c.get("build", "")))
+	elif not q.is_empty() and c.has("acct") and analytics != null:
+		analytics.server_event(str(c.acct), "match_quit", q, str(c.get("build", "")))      # (0.31.118)
 	if c.hello:
-		_log("leave %s (%s) unit=%s room=%d players=%d" % [c.name, why, c.unit, int(c.get("room", 0)), _human_count() - 1])
+		_log("leave %s (%s) unit=%s room=%d players=%d%s" % [c.name, why, c.unit, int(c.get("room", 0)), _human_count() - 1,
+			"" if q.is_empty() else ": " + _quit_line(q)])
 	clients.erase(cid)
 	if social != null:
 		if c.has("social"):
@@ -1013,7 +1016,10 @@ func _handle(cid: int, msg: Dictionary) -> void:
 			if a != "" and a in Net.ACTIONS:
 				var ca: Array = Net.clean_arg(a, msg.get("arg", null))       # 0.31.170: the 5v5's take one (a pick, W/E, an item)
 				if bool(ca[0]):
-					r.sim.act(c.unit, a, ca[1])
+					var me: Dictionary = r.sim.by_id.get(c.unit, {})
+					var cost: int = r.sim.moba.price(me, str(ca[1])) if a == "shop_buy" and r.sim.moba != null and not me.is_empty() else 0
+					if r.sim.act(c.unit, a, ca[1]) and a == "shop_buy":
+						_shop_bought(r, c, me, str(ca[1]), cost)          # 0.31.212 (its price before: components owned count)
 
 func _eco_op(cid: int, op: String, msg: Dictionary) -> void:
 	# 0.31.132 (the iOS port, IOS_PORT_SPEC_FOR_CLAUDE.md §4, §6), one per socket like any "eco":
@@ -1145,6 +1151,9 @@ func _seat(r: Room, cid: int) -> void:
 	c.idle = false
 	c.idle_s = -LOAD_GRACE                 # (counts from the phone's first input message, or after the grace)
 	c.got_in = false
+	c.shop_n = 0                           # 0.31.212: this match's upgrades bought (a rejoin keeps them) and their gold
+	c.shop_gold = 0
+	c.rejoins = 0
 	if seat != "":
 		var su: Dictionary = sim.by_id[seat]
 		if hero != "" and str(su.get("hid", "")) != hero and not _hero_played(r, int(su.team), hero):
@@ -1538,8 +1547,10 @@ func _pay_match(r: Room) -> void:
 	var payees := []
 	for cid in _members(r):
 		payees.append(clients[cid])
+	var away := []
 	for k in r.held:
 		payees.append(r.held[k].c)                     # 0.31.120: dropped a moment ago: still paid for the match
+		away.append(r.held[k].c)                       # (0.31.212: but they left it -- their match_quit when the seat's let go)
 	for c in payees:
 		if not c.has("acct") or not c.has("ledger") or c.unit == "" or not sim.by_id.has(c.unit) or str(c.ledger.uid) != c.unit:
 			continue
@@ -1562,11 +1573,15 @@ func _pay_match(r: Room) -> void:
 			social.clans.add_match(str(c.acct), me, won, draw, mates)
 		if referrals != null:
 			referrals.check(str(c.acct), eco)                 # 0.31.120: level 5 with a friend's code
-		if analytics != null:
+		if analytics != null and not away.any(func(o): return is_same(o, c)):
 			analytics.server_event(str(c.acct), "match_finish", {"match":str(c.get("match_key", match_key(r))), "mode":"online",
 				"dur_s":int(_now() - float(c.get("seated_at", _now()))), "result":"win" if won else ("draw" if draw else "loss"),
-				"team_n":_team_humans(r, int(u.team)), "class":class_of(u), "class0":str(c.get("class0", ""))}, str(c.get("build", "")))
-		_log("paid %s (%s): %s, %d gold" % [str(c.acct), c.name, "win" if won else ("draw" if draw else "loss"), int(res.get("rewards", {}).get("gold", 0))])
+				"team_n":_team_humans(r, int(u.team)), "class":class_of(u), "class0":str(c.get("class0", "")),
+				"items":int(c.get("shop_n", 0)), "gold_spent":int(c.get("shop_gold", 0)), "gold_left":int(float(u.get("gold", 0.0)))},
+				str(c.get("build", "")))
+		_log("paid %s (%s): %s, %d gold; shop: %d bought, %d gold spent, %d left%s" % [str(c.acct), c.name,
+			"win" if won else ("draw" if draw else "loss"), int(res.get("rewards", {}).get("gold", 0)), int(c.get("shop_n", 0)),
+			int(c.get("shop_gold", 0)), int(float(u.get("gold", 0.0))), " (away: seat held)" if away.any(func(o): return is_same(o, c)) else ""])
 
 # ---------------- rejoin (0.31.120) ----------------
 func _rejoin(cid: int, msg: Dictionary) -> bool:
@@ -1592,7 +1607,9 @@ func _rejoin(cid: int, msg: Dictionary) -> bool:
 				if rr.sim != null and not rr.sim.ended and float(rr.held[rj].until) >= _now():
 					found = rr.held[rj].c
 					room = rr
-				rr.held.erase(rj)
+					rr.held.erase(rj)
+				else:
+					_release_hold(rr, rj)                 # (0.31.212: too late -- their match_quit, as _expire_holds would)
 				break
 	if found.is_empty():
 		return false
@@ -1605,6 +1622,7 @@ func _rejoin(cid: int, msg: Dictionary) -> bool:
 	c.hello = true
 	c.queued = false
 	c.left = false
+	c.rejoins = int(c.get("rejoins", 0)) + 1          # 0.31.212 (for match_quit)
 	c.move = Vector2.ZERO
 	c.idle = false
 	c.idle_s = -LOAD_GRACE
@@ -1629,13 +1647,69 @@ func _expire_holds(r: Room) -> void:
 		var h: Dictionary = r.held[k]
 		if float(h.until) >= _now() and r.sim != null and not r.sim.ended:
 			continue
-		r.held.erase(k)
-		var c: Dictionary = h.c
-		if r.sim != null and not r.sim.ended and c.has("acct") and analytics != null and c.has("seated_at") and r.sim.by_id.has(c.unit):
-			analytics.server_event(str(c.acct), "match_quit", {"match":str(c.get("match_key", "")), "mode":"online",
-				"quit_at_s":int(float(h.drop_at) - float(c.seated_at)), "class":class_of(r.sim.by_id[c.unit]), "class0":str(c.get("class0", ""))},
-				str(c.get("build", "")))
-		_log("seat %s of %s let go (room %d)" % [str(c.get("unit", "")), str(c.get("name", "")), r.id])
+		_release_hold(r, k)
+
+func _release_hold(r: Room, k: String) -> void:
+	# a held seat nobody came back for: let go when its wait ran out, the match ended (they were paid for it, as left
+	# there) or a new one starts. 0.31.212: its match_quit either way -- as they left it, when the seat was held -- so a
+	# match a player didn't see the end of is always a quit, never a finish (before: only when the wait ran out first)
+	var h: Dictionary = r.held[k]
+	r.held.erase(k)
+	var c: Dictionary = h.c
+	var q: Dictionary = h.get("q", {})
+	if not q.is_empty():
+		q.held = true
+		q.rejoins = int(c.get("rejoins", 0))
+		if c.has("acct") and analytics != null:
+			analytics.server_event(str(c.acct), "match_quit", q, str(c.get("build", "")))
+	_log("seat %s of %s let go (room %d)%s" % [str(c.get("unit", "")), str(c.get("name", "")), r.id,
+		"" if q.is_empty() else ": left " + _quit_line(q)])
+
+# ---------------- leave and shop statistics (0.31.212) ----------------
+# NEW_PLAYER_RETENTION_HANDOFF.md (Codex, from 0.31.211's logs: new players, the only human against 9 bots, quit their
+# first matches; "Score, kills, and King HP were not logged ... We could not tell whether these players were losing" and
+# "We also need to know whether new players actually buy upgrades from the match shop")
+func _quit_props(sim, c: Dictionary, why: String) -> Dictionary:
+	# match_quit's props: the match as the player leaves it, from their side (analytics_events.gd SERVER.match_quit)
+	var u: Dictionary = sim.by_id[c.unit]
+	var t := clampi(int(u.team), 0, 1)
+	var p := {"match":str(c.get("match_key", "")), "mode":"online", "quit_at_s":int(_now() - float(c.seated_at)),
+		"class":class_of(u), "class0":str(c.get("class0", "")), "why":why, "held":false, "rejoins":int(c.get("rejoins", 0)),
+		"match_s":int(sim.time), "hero":str(u.get("hid", "")), "team":t, "lvl":int(u.get("level", 1)),
+		"score_us":int(sim.score[t]), "score_them":int(sim.score[1 - t]), "kills_us":int(sim.kills[t]), "kills_them":int(sim.kills[1 - t]),
+		"k":int(u.get("kills", 0)), "d":int(u.get("deaths", 0)), "a":int(u.get("assists", 0)),
+		"king_us_pct":_king_pct(sim, t), "king_them_pct":_king_pct(sim, 1 - t),
+		"items":int(c.get("shop_n", 0)), "gold_spent":int(c.get("shop_gold", 0)), "gold_left":int(float(u.get("gold", 0.0)))}
+	return p
+
+static func _king_pct(sim, t: int) -> int:
+	if sim.moba == null or not (sim.moba.kings[t] as Dictionary).has("hp"):
+		return -1
+	return clampi(roundi(100.0 * sim.moba.king_frac(t)), 0, 100)
+
+static func _quit_line(q: Dictionary) -> String:
+	# (the server log's)
+	return "at %d s (%d s in), %s L%d %s, K/D/A %d/%d/%d, kills %d-%d, score %d-%d, Kings %d%% vs %d%%, shop %d bought (%d gold), %d gold left%s" % [
+		int(q.match_s), int(q.quit_at_s), str(q.hero if str(q.hero) != "" else q["class"]), int(q.lvl), "blue" if int(q.team) == 0 else "red",
+		int(q.k), int(q.d), int(q.a), int(q.kills_us), int(q.kills_them), int(q.score_us), int(q.score_them),
+		int(q.king_us_pct), int(q.king_them_pct), int(q.items), int(q.gold_spent), int(q.gold_left),
+		(", %d rejoin%s" % [int(q.rejoins), "" if int(q.rejoins) == 1 else "s"]) if int(q.rejoins) > 0 else ""]
+
+static func _match_line(sim) -> String:
+	# the match as it stands (the end and stop lines): its clock, kills, Kings toppled, each King's HP
+	return "at %d s, kills %d-%d, score %d-%d, Kings %d%% vs %d%%" % [int(sim.time), int(sim.kills[0]), int(sim.kills[1]),
+		int(sim.score[0]), int(sim.score[1]), _king_pct(sim, 0), _king_pct(sim, 1)]
+
+func _shop_bought(r: Room, c: Dictionary, u: Dictionary, item: String, cost: int) -> void:
+	# a player bought an upgrade with the match's gold (a bot's buys never come through here): their match's totals, and
+	# one match_shop_buy
+	c.shop_n = int(c.get("shop_n", 0)) + 1
+	c.shop_gold = int(c.get("shop_gold", 0)) + cost
+	var left := int(float(u.get("gold", 0.0)))
+	if analytics != null and c.has("acct"):
+		analytics.server_event(str(c.acct), "match_shop_buy", {"match":str(c.get("match_key", "")), "mode":"online", "item":item,
+			"cost":cost, "match_s":int(r.sim.time), "hero":str(u.get("hid", "")), "gold_left":left}, str(c.get("build", "")))
+	_log("shop %s (%s): %s for %d gold at %d s, %d left (room %d)" % [c.name, str(u.get("hid", c.unit)), item, cost, int(r.sim.time), left, r.id])
 
 # ---------------- idle players (0.31.119) ----------------
 func _active(r: Room, cid: int) -> void:
@@ -1686,7 +1760,8 @@ func _new_match(r: Room) -> void:
 	r.snap_accum = 0.0
 	r.ended_at = -1.0
 	r.pending_events.clear()
-	r.held.clear()                                    # (a seat in the last match is no seat in this one)
+	for k in r.held.keys():                           # (a seat in the last match is no seat in this one)
+		_release_hold(r, k)                           # (0.31.212: with its match_quit -- a guard, they're let go at the end)
 	_log("match %d start (room %d, seed %d)" % [r.match_id, r.id, r.match_seed])
 
 func _results_tick(r: Room) -> void:
@@ -1712,7 +1787,8 @@ func _run_match(r: Room, delta: float) -> int:
 			if r.empty_since < 0.0:
 				r.empty_since = Time.get_ticks_msec() / 1000.0
 			elif Time.get_ticks_msec() / 1000.0 - r.empty_since > idle_stop:
-				_log("match %d stopped (room %d, no players)" % [r.match_id, r.id])
+				_log("match %d stopped (room %d, no players)%s" % [r.match_id, r.id,
+					"" if r.sim.ended else ": " + _match_line(r.sim)])     # (0.31.212: how it stood)
 				r.sim = null
 		return 0
 	r.empty_since = -1.0
@@ -1722,7 +1798,8 @@ func _run_match(r: Room, delta: float) -> int:
 	if sim.ended:
 		if r.ended_at < 0.0:
 			r.ended_at = Time.get_ticks_msec() / 1000.0
-			_log("match %d end (room %d) winner=%d reason=%s score=%s" % [r.match_id, r.id, sim.winner, sim.end_reason, str(sim.score)])
+			_log("match %d end (room %d) winner=%d reason=%s score=%s (%s)" % [r.match_id, r.id, sim.winner, sim.end_reason, str(sim.score),
+				_match_line(sim)])
 			_pay_match(r)
 			for cid in _members(r):                       # 0.31.122: their results are up until they say otherwise
 				if bool(clients[cid].get("ask_next", false)) and not bool(clients[cid].get("queued", false)):

@@ -11,6 +11,11 @@ extends SceneTree
 #   - an online match left early: match_quit (quit_at_s); a full online match with B on A's side (a party):
 #     match_start and match_finish with the result, team_n 2 and the length; quick chat; a verified purchase
 #     (SIEGE_IAP_FAKE: product, test -- no token, no order id)
+#   - 0.31.212 (NEW_PLAYER_RETENTION_HANDOFF.md): the match as A left it on match_quit (why, the match's clock, hero,
+#     team, level, both sides' score and kills, A's K/D/A, both Kings' HP, A's shop totals); a seat held for A (the
+#     connection lost, not a quit) whose match ends with nobody in it: match_quit then (held), and no match_finish; one
+#     match_shop_buy per upgrade A bought (item, cost, the match's clock, hero, gold left) -- not for a buy refused --
+#     and A's totals on match_finish; B's buys: nothing (opted out)
 #   - an app below the minimum build: the server's update_screen for A, nothing for B
 #   - B: not one line. Every id unique. No line has an IP address, a name, chat text, a token, an order id or a key.
 #   godot --headless --path godot -s res://tests/analytics_events_test.gd
@@ -59,6 +64,8 @@ func _init() -> void:
 	OS.set_environment("SIEGE_IAP_FAKE", "1")
 	OS.set_environment("STATE_DIRECTORY", state)
 	OS.set_environment("SIEGE_MIN_BUILD", "0.31.100")
+	OS.set_environment("SIEGE_REJOIN_HOLD", "12")       # 0.31.212: longer than the match -- it ends while A's seat waits
+	OS.set_environment("SIEGE_RESTART", "1")
 	pid = OS.create_process(OS.get_executable_path(), ["--headless", "--path", ProjectSettings.globalize_path("res://"), "-s", "res://server/siege_server.gd"])
 	check(pid > 0, "server process started")
 
@@ -227,10 +234,15 @@ func _process(delta: float) -> bool:
 				open("m_a")
 				_go("quit_match")
 		"quit_match":
-			# A plays a little and leaves before the end
+			# A plays a little, buys a Long Sword (350 of the 500 a hero starts with) and tries for a Bloodthirster (1,900:
+			# refused), and leaves before the end (a clean close: "left")
 			send_once("m_a", hello("m_a", pa))
-			if not got("m_a", "welcome").is_empty() and got("m_a", "s").size() >= 10:
-				(socks.m_a as WebSocketPeer).close()
+			if not got("m_a", "welcome").is_empty() and got("m_a", "s").size() >= 10 and not notes.has("q_buy"):
+				say("m_a", {"t":"in", "a":"shop_buy", "arg":"sword"})
+				say("m_a", {"t":"in", "a":"shop_buy", "arg":"bloodthirster"})
+				notes.q_buy = t
+			elif notes.has("q_buy") and t - float(notes.q_buy) > 0.6:
+				(socks.m_a as WebSocketPeer).close()        # (after the buys are in: a closed socket's packets aren't read)
 				socks.erase("m_a")
 				_go("quit_wait")
 			elif t_phase > 15.0:
@@ -238,6 +250,20 @@ func _process(delta: float) -> bool:
 				_finish()
 		"quit_wait":
 			if t_phase > 1.0:
+				open("m_h")
+				_go("hold_match")
+		"hold_match":
+			# A's connection goes (not a quit): the seat waits 12 s, the 6 s match ends first with nobody in it
+			send_once("m_h", hello("m_h", pa))
+			if not got("m_h", "welcome").is_empty() and got("m_h", "s").size() >= 10:
+				(socks.m_h as WebSocketPeer).close(4000, "gone")
+				socks.erase("m_h")
+				_go("hold_wait")
+			elif t_phase > 15.0:
+				check(false, "A seated again within 15 s")
+				_finish()
+		"hold_wait":
+			if t_phase > 8.0:
 				open("m_a")
 				open("m_b")
 				_go("match")
@@ -246,7 +272,12 @@ func _process(delta: float) -> bool:
 			send_once("m_b", hello("m_b", pb, Diag.BUILD, true))
 			if not got("m_a", "welcome").is_empty() and not notes.has("qc") and got("m_a", "s").size() >= 5:
 				say("m_a", {"t":"qc", "i":0})
+				say("m_a", {"t":"in", "a":"shop_buy", "arg":"boots"})     # (0.31.212: 300 gold)
+				say("m_a", {"t":"in", "a":"shop_buy", "arg":"boots"})     # (a second pair: refused)
 				notes.qc = true
+			if not got("m_b", "welcome").is_empty() and not notes.has("b_buy") and got("m_b", "s").size() >= 5:
+				say("m_b", {"t":"in", "a":"shop_buy", "arg":"cloth"})     # (B is opted out: not written)
+				notes.b_buy = true
 			if ended("m_a"):
 				check(not got("m_b", "welcome").is_empty(), "B played the match too")
 				(socks.m_a as WebSocketPeer).close()
@@ -305,14 +336,45 @@ func _check_file() -> void:
 	var ms: Array = of.call("match_start", "s")
 	var mq: Array = of.call("match_quit", "s")
 	var mf: Array = of.call("match_finish", "s")
-	check(ms.size() == 2 and ms.all(func(l): return str(l.p.mode) == "online" and str(l.p.class) != "" and str(l.p.match).contains("-")),
+	check(ms.size() == 3 and ms.all(func(l): return str(l.p.mode) == "online" and str(l.p.class) != "" and str(l.p.match).contains("-")),
 		"the server's match_start, one per match played: %s" % str(ms.map(func(l): return l.p)))
-	check(mq.size() == 1 and int(mq[0].p.quit_at_s) >= 0 and int(mq[0].p.quit_at_s) <= 10 and str(mq[0].p.match) == str(ms[0].p.match) if mq.size() == 1 and ms.size() == 2 else false,
+	check(mq.size() == 2 and int(mq[0].p.quit_at_s) >= 0 and int(mq[0].p.quit_at_s) <= 10 and str(mq[0].p.match) == str(ms[0].p.match) if mq.size() == 2 and ms.size() == 3 else false,
 		"leaving early: match_quit with quit_at_s (%s)" % str(mq.map(func(l): return l.p)))
+	# 0.31.212 (NEW_PLAYER_RETENTION_HANDOFF.md): the match as A left it
+	var q0: Dictionary = mq[0].p if mq.size() == 2 else {}
+	var q1: Dictionary = mq[1].p if mq.size() == 2 else {}
+	var qkeys := ["match", "mode", "quit_at_s", "class", "class0", "why", "held", "rejoins", "match_s", "hero", "team", "lvl", "score_us",
+		"score_them", "kills_us", "kills_them", "k", "d", "a", "king_us_pct", "king_them_pct", "items", "gold_spent", "gold_left"]
+	check(qkeys.all(func(k): return q0.has(k)) and q0.size() == qkeys.size(), "match_quit carries all %d props (%s)" % [qkeys.size(), str(q0.keys())])
+	check(str(q0.get("why", "")) == "left" and q0.get("held", true) == false and int(q0.get("rejoins", -1)) == 0
+		and int(q0.get("match_s", -1)) >= 0 and int(q0.get("match_s", 99)) <= 10 and str(q0.get("hero", "")) != "" and str(q0.get("hero", "")) == str(q0.get("class", "-"))
+		and int(q0.get("team", -1)) in [0, 1] and int(q0.get("lvl", 0)) >= 1,
+		"match_quit: why left (a clean close), not held, the match's clock, A's hero, team and level (%s)" % str(q0))
+	check(int(q0.get("score_us", -1)) == 0 and int(q0.get("score_them", -1)) == 0 and int(q0.get("kills_us", -1)) >= 0 and int(q0.get("kills_them", -1)) >= 0
+		and int(q0.get("k", -1)) >= 0 and int(q0.get("d", -1)) >= 0 and int(q0.get("a", -1)) >= 0
+		and int(q0.get("king_us_pct", -1)) == 100 and int(q0.get("king_them_pct", -1)) == 100,
+		"match_quit: both sides' score and kills, A's K/D/A, both Kings' HP (100% this early)")
+	check(int(q0.get("items", -1)) == 1 and int(q0.get("gold_spent", -1)) == 350 and int(q0.get("gold_left", -1)) >= 150 and int(q0.get("gold_left", 999)) < 200,
+		"match_quit: A's shop -- 1 bought (the Long Sword), 350 gold spent, the rest left (%d; the Bloodthirster refused)" % int(q0.get("gold_left", -1)))
+	check(str(q1.get("match", "")) == str(ms[1].p.match) and str(q1.get("why", "")) == "closed" and q1.get("held", false) == true
+		and int(q1.get("items", -1)) == 0 and int(q1.get("gold_spent", -1)) == 0 and int(q1.get("king_us_pct", -1)) >= 0 and int(q1.get("quit_at_s", 99)) <= 10
+		if ms.size() == 3 else false,
+		"a seat held (the connection lost) whose match ended with nobody in it: match_quit then, held, as A left it (%s)" % str(q1))
 	var f0: Dictionary = mf[0].p if mf.size() == 1 else {}
 	check(mf.size() == 1 and str(f0.get("result", "")) in ["win", "loss", "draw"] and int(f0.get("team_n", 0)) == 2 and int(f0.get("dur_s", -1)) >= 3
-		and int(f0.get("dur_s", 99)) <= 20 and str(f0.get("class0", "")) != "" and str(f0.get("match", "")) == str(ms[1].p.match) if ms.size() == 2 else false,
-		"the full match: match_finish with result, team_n 2 (B on A's side), length, classes: %s" % str(f0))
+		and int(f0.get("dur_s", 99)) <= 20 and str(f0.get("class0", "")) != "" and str(f0.get("match", "")) == str(ms[2].p.match) if ms.size() == 3 else false,
+		"the full match: match_finish with result, team_n 2 (B on A's side), length, classes -- none for the held seat's: %s" % str(f0))
+	check(int(f0.get("items", -1)) == 1 and int(f0.get("gold_spent", -1)) == 300 and int(f0.get("gold_left", -1)) >= 200 and int(f0.get("gold_left", 999)) < 300,
+		"match_finish: A's shop -- 1 bought (Boots; the second pair refused), 300 gold spent, the rest left (%d)" % int(f0.get("gold_left", -1)))
+	var sb: Array = of.call("match_shop_buy", "s")
+	var sb0: Dictionary = sb[0].p if sb.size() == 2 else {}
+	var sb1: Dictionary = sb[1].p if sb.size() == 2 else {}
+	check(sb.size() == 2 and str(sb0.get("item", "")) == "sword" and int(sb0.get("cost", 0)) == 350 and str(sb0.get("match", "")) == str(ms[0].p.match)
+		and str(sb0.get("hero", "")) == str(q0.get("hero", "-")) and int(sb0.get("match_s", -1)) >= 0 and int(sb0.get("match_s", 99)) <= 10
+		and int(sb0.get("gold_left", -1)) >= 150 and int(sb0.get("gold_left", 999)) < 200 and str(sb0.get("mode", "")) == "online"
+		and str(sb1.get("item", "")) == "boots" and int(sb1.get("cost", 0)) == 300 and str(sb1.get("match", "")) == str(ms[2].p.match)
+		and str(sb1.get("hero", "")) == str(f0.get("class", "-")) if ms.size() == 3 else false,
+		"match_shop_buy: one per upgrade bought (item, cost, the match's clock, hero, gold left), none for a refused one: %s" % str(sb.map(func(l): return l.p)))
 	check(of.call("quick_chat", "s").size() == 1 and int(of.call("quick_chat", "s")[0].p.i) == 0, "quick chat: one event, its index")
 	var pv: Array = of.call("purchase_verified", "s")
 	# (0.31.131: and which store -- "google" here, "apple" for the App Store)

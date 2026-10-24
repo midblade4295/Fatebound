@@ -107,11 +107,25 @@ def main():
             ev(C, "spend", "2026-10-06T20:03:00Z", {"cat": "clan", "item": "clan", "op": "pay_gold", "gold": 5000, "gems": 0,
                                                    "gold_left": 7000, "gems_left": 10, "lvl": 20}, src="s"),
             ev(C, "match_finish", "2026-10-06T20:10:00Z", {"match": "1-2", "mode": "online", "dur_s": 300, "result": "win", "team_n": 2, "class": "mage", "class0": "worker"}, src="s"),
+            # 0.31.212: an online match C left behind on kills, a Boots bought first
+            ev(C, "match_start", "2026-10-06T20:11:00Z", {"match": "1-4", "mode": "online", "class": "golem"}, src="s"),
+            ev(C, "match_shop_buy", "2026-10-06T20:11:40Z", {"match": "1-4", "mode": "online", "item": "boots", "cost": 300, "match_s": 40,
+                                                            "hero": "golem", "gold_left": 200}, src="s"),
+            ev(C, "match_quit", "2026-10-06T20:16:00Z", {"match": "1-4", "mode": "online", "quit_at_s": 290, "class": "golem", "class0": "golem",
+                                                        "why": "left", "held": False, "rejoins": 0, "match_s": 300, "hero": "golem", "team": 0,
+                                                        "lvl": 5, "score_us": 0, "score_them": 0, "kills_us": 3, "kills_them": 9, "k": 1, "d": 4,
+                                                        "a": 1, "king_us_pct": 80, "king_them_pct": 100, "items": 1, "gold_spent": 300,
+                                                        "gold_left": 900}, src="s"),
             ev(C, "session_end", "2026-10-06T20:20:00Z", {"dur_s": 20000, "lost": True}),
         ],
         "2026-10-08": [
             ev(A, "match_start", "2026-10-08T10:00:00Z", {"match": "1-3", "mode": "online", "class": "worker"}, src="s"),
-            ev(A, "match_finish", "2026-10-08T10:08:00Z", {"match": "1-3", "mode": "online", "dur_s": 480, "result": "loss", "team_n": 3, "class": "mage+", "class0": "worker"}, src="s"),
+            ev(A, "match_shop_buy", "2026-10-08T10:00:30Z", {"match": "1-3", "mode": "online", "item": "sword", "cost": 350, "match_s": 30,
+                                                            "hero": "mage", "gold_left": 150}, src="s"),
+            ev(A, "match_shop_buy", "2026-10-08T10:03:20Z", {"match": "1-3", "mode": "online", "item": "ruby", "cost": 400, "match_s": 200,
+                                                            "hero": "mage", "gold_left": 90}, src="s"),
+            ev(A, "match_finish", "2026-10-08T10:08:00Z", {"match": "1-3", "mode": "online", "dur_s": 480, "result": "loss", "team_n": 3, "class": "mage+", "class0": "worker",
+                                                          "items": 2, "gold_spent": 750, "gold_left": 340}, src="s"),
             ev(A, "purchase_verified", "2026-10-08T10:09:00Z", {"product": "gems_80", "test": False}, src="s"),
             ev(A, "spend", "2026-10-08T10:10:00Z", {"cat": "hero", "item": "golem", "op": "buy_hero", "gold": 25000, "gems": 0,
                                                    "gold_left": 1200, "gems_left": 3048, "lvl": 12}, src="s"),
@@ -123,6 +137,12 @@ def main():
         "2026-10-12": [
             dup,
             ev(A, "friend_add", "2026-10-12T17:05:00Z", src="s"),
+            # 0.31.212: a seat held for A (the phone went quiet) that A never came back to, ahead on kills, nothing bought
+            ev(A, "match_quit", "2026-10-12T17:04:00Z", {"match": "1-5", "mode": "online", "quit_at_s": 690, "class": "mage", "class0": "mage",
+                                                        "why": "silent", "held": True, "rejoins": 1, "match_s": 700, "hero": "mage", "team": 1,
+                                                        "lvl": 9, "score_us": 0, "score_them": 0, "kills_us": 10, "kills_them": 8, "k": 3, "d": 2,
+                                                        "a": 5, "king_us_pct": 100, "king_them_pct": 60, "items": 0, "gold_spent": 0,
+                                                        "gold_left": 2400}, src="s"),
             ev(A, "error", "2026-10-12T17:06:00Z", {"kind": "boot_stuck"}),
             ev(P, "error", "2026-10-12T17:00:00Z", {"kind": "probe", "n": 0}, b="0.31.118-probe"),
             ev(X, "session_start", "2026-10-12T17:00:00Z", {"cold": True, "safe_boot": False, "net": "online"}),
@@ -198,8 +218,21 @@ def main():
     m = r["matches"]
     check(m["bots"]["finished"] == 1 and m["bots"]["quit"] == 1 and m["bots"]["completion_pct"] == 50.0 and m["bots"]["avg_len_s"] == 600,
           "bots: 1 finished 1 quit = 50%%, 10 min: %s" % m["bots"])
-    check(m["online"]["finished"] == 2 and m["online"]["quit"] == 0 and m["online"]["completion_pct"] == 100.0 and m["online"]["avg_len_s"] == 390,
-          "online: 2 finished = 100%%, avg 6m30: %s" % m["online"])
+    check(m["online"]["finished"] == 2 and m["online"]["quit"] == 2 and m["online"]["completion_pct"] == 50.0 and m["online"]["avg_len_s"] == 390,
+          "online: 2 finished, 2 quit = 50%%, avg 6m30: %s" % m["online"])
+    oq = r["online_quits"]
+    check(oq["quits"] == 2 and oq["players"] == 2 and oq["by_why"] == {"left": 1, "silent": 1} and oq["held"] == 1 and oq["match_s_median"] == 500
+          and oq["kills"] == {"behind": 1, "even": 0, "ahead": 1} and oq["kda_median"] == {"k": 2, "d": 3, "a": 3}
+          and oq["king_pct_median"] == {"us": 90, "them": 80} and oq["bought_nothing"] == 1 and oq["items_median"] == 0.5
+          and oq["gold_left_median"] == 1650, "0.31.212 online quits as they left them: why, held, kills behind/ahead, K/D/A, Kings, shop: %s" % oq)
+    ms_ = r["match_shop"]
+    check(ms_["buys"] == 3 and ms_["players"] == 2 and ms_["gold"] == 1050 and [x["item"] for x in ms_["by_item"]] == ["boots", "ruby", "sword"]
+          and ms_["first_buy_s_median"] == 35 and ms_["matches"] == 3 and ms_["with_buy"] == 2 and ms_["with_buy_pct"] == 66.7
+          and ms_["finished"]["matches"] == 1 and ms_["finished"]["items_median"] == 2 and ms_["quit"]["matches"] == 2
+          and ms_["quit"]["with_buy"] == 1 and ms_["quit"]["items_median"] == 0.5,
+          "0.31.212 match shop: 3 buys by 2 players, 1,050 gold, first buy at 35 s, 2 of 3 matches with a buy (the old finish left out): %s" % ms_)
+    check("Online quits as they left them (servers from 0.31.212): 2 by 2 players" in txt and "behind 1, even 0, ahead 1" in txt
+          and "matches with a buy 2 of 3 (66.7%)" in txt and "by item: boots 1 (1 players)" in txt, "the text's quits and match shop are the JSON's")
     wc = {c["class"]: (c["matches"], c["win_pct"]) for c in m["win_rate_by_class"]}
     check(wc == {"knight": (1, 100.0), "mage": (2, 50.0)}, "win rate by class (mage+ counts as mage): %s" % wc)
     s = r["session_length"]

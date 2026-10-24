@@ -7092,3 +7092,31 @@ the first 2 seconds gameplay action, not a logo intro; for Play's promo video fi
   title, FAST 5V5 MOBA BATTLES). Sound: each take's own (levelled) and the theme under it.
 - The mp4 isn't committed (20 MB); sent to Kevin. store-listing/README_FOR_AI.md: upload it to YouTube as Unlisted and
   paste the link in Play Console's Promo video field.
+
+## 0.31.212 server -- leave telemetry and match-shop buys (NEW_PLAYER_RETENTION_HANDOFF.md; no app change)
+Codex's handoff (from 0.31.211's logs: two new players, each the only human against 9 bots, quit all 4 first online
+matches; "Score, kills, and King HP were not logged ... We could not tell whether these players were losing"; "whether
+new players actually buy upgrades from the match shop"). Server only: needs a server redeploy (Kevin's approval), no
+app build (SERVER_BUILD stays 0.31.211; VS BOTS matches -- the phone's -- unchanged).
+- match_quit (server, online) keeps its props and adds the match as the player left it, taken at the drop
+  (siege_server.gd _quit_props): why (left / closed / silent / handshake timeout / idle), held, rejoins, match_s, hero,
+  team, lvl, score_us/them, kills_us/them, k/d/a, king_us_pct/king_them_pct, items, gold_spent, gold_left. A leave
+  writes it at once (a match that then ends with nobody in it stops without a word -- this is the record). A held seat
+  writes it when it's let go (_release_hold: the wait ran out, the match ended, a new match, or a rejoin too late),
+  as they left it, not as the bot played it since -- and a held seat at the match's end is now a quit, not a finish
+  (still paid; before, match_quit only when the wait ran out first).
+- match_shop_buy (new, server): each upgrade a player bought (the "in" handler, its price taken before the buy, so
+  the components they owned come off): match, mode, item, cost, match_s, hero, gold_left. A refused buy, a bot's buy:
+  none. The player's totals (c.shop_n / shop_gold, reset at _seat, kept by a rejoin) go on match_quit and match_finish
+  (items, gold_spent, gold_left).
+- Server log: leave and let-go lines end with the same ("at 1 s (0 s in), dragoon L1 blue, K/D/A 0/0/0, kills 0-0,
+  score 0-0, Kings 100% vs 100%, shop 1 bought (350 gold), 150 gold left"); a "shop" line per buy; "paid" lines carry
+  the shop totals ("(away: seat held)" for a held seat); "match ... end" and "stopped (no players)" how the match stood.
+- analytics_events.gd: SERVER match_quit / match_finish extended, match_shop_buy added, MAX_PROPS 12 -> 32.
+- tools/analytics_report.py: "Online quits as they left them" (why, held, when, kills behind/even/ahead, K/D/A, Kings'
+  HP, bought nothing) and "Match shop" (buys, players, gold, matches with a buy finished / quit, first buy, by item).
+- Tests: analytics_events_test (real server): A buys a Long Sword (and a refused Bloodthirster) and leaves -> match_quit
+  with all 24 props (why left, 1 bought, 350 spent, 150 left); A's connection goes with a 12 s hold in a 6 s match ->
+  match_quit when the match ends with nobody in it (held, why closed) and no match_finish; the full match: Boots (a
+  second pair refused) -> match_finish 1 / 300 / 200; match_shop_buy for the two buys only; B's (opted out): nothing.
+  test_analytics_report.py: the two new sections.
