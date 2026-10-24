@@ -222,6 +222,7 @@ run analytics_client_test ANALYTICS_CLIENT_PASS   60
 run analytics_server_test ANALYTICS_SERVER_PASS   90
 run analytics_events_test ANALYTICS_EVENTS_PASS   150
 run spend_tracking_test   SPEND_TRACKING_PASS     120     # 0.31.208, server: gold and gem spending (real server on 8133)
+run heycatch_test         HEYCATCH_PASS           60      # 0.31.212: HeyCatch's batches, against a stand-in on 8141
 t0=$SECONDS
 if timeout 120 python3 tools/test_analytics_report.py > /tmp/siege_test_analytics_report.log 2>&1 && grep -q ANALYTICS_REPORT_PASS /tmp/siege_test_analytics_report.log; then
   printf "PASS  %-22s %4ds\n" "analytics_report (py)" $((SECONDS - t0))

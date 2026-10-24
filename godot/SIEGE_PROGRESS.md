@@ -7120,3 +7120,23 @@ app build (SERVER_BUILD stays 0.31.211; VS BOTS matches -- the phone's -- unchan
   match_quit when the match ends with nobody in it (held, why closed) and no match_finish; the full match: Boots (a
   second pair refused) -> match_finish 1 / 300 / 200; match_shop_buy for the two buys only; B's (opted out): nothing.
   test_analytics_report.py: the two new sections.
+
+## 0.31.212 — HeyCatch analytics (the phone)
+Kevin: "Set up HeyCatch analytics in this project following https://heycatch.ai/agents.md exactly - my project key is
+hck_pk_C3_tEJ-...". agents.md covers web and React Native (@heycatch/sdk, JavaScript only) and sends native apps to
+/agents-native.md (Kevin pasted it). Its ingest speaks PostHog's protocol; Swift / Kotlin / Flutter use PostHog's SDK.
+Godot has none, so this is the guide's plain-HTTP route ("Send to HeyCatch directly"): scripts/meta/heycatch.gd.
+- POST https://in.heycatch.ai/batch/ (standard PostHog capture JSON), HeyCatch's write-only token as api_key, every
+  event's properties with heycatch_project_key and $groups.project = the project key.
+- Fed by Analytics.log_ev (each event the phone logs for our server, its props as allowed), $screen on each tab and a
+  match / the tutorial (siege_app show_tab, start_match), purchase_completed on a granted purchase (_on_iap_granted),
+  $identify once an account exists (anon_ id joined to fb_ + 20 hex of a SHA-256 of the account id -- never the id
+  itself). Flushed every 10 s / 50 events and on going to the background; over an hour old: dropped; 5xx retried.
+- Gated: the Settings toggle ("Share anonymous usage stats"; off: nothing more, not even opt_out) and the real OS
+  (Android, iOS); desktop runs and tests send nothing unless HEYCATCH=1.
+- tests/heycatch_test.gd (stand-in ingest on 8141; in run_siege_tests.sh); tools/heycatch_verify.gd ran the real app
+  (fresh profile, our server out of reach) against the real ingest: 2 batches, both 200 -- the project has events.
+- Version 0.31.212, versionCode 298; SERVER_BUILD 0.31.212 (kept equal for min_build_test; the server changes above
+  still wait for Kevin's go to deploy).
+- For Kevin: the privacy policy and Play's Data safety (App Store privacy too) must now name HeyCatch -- usage events go
+  to a third party (privacy.html untouched); press "I've installed" on HeyCatch's Install page.

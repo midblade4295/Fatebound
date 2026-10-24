@@ -17,6 +17,8 @@ extends Node
 # Settings > "Share anonymous usage stats" (settings.analytics, on by default): off clears the queue, sends one
 # opt_out event (nothing else) and logs nothing more; the match and social hellos then carry "an_off" so the server
 # writes nothing for this account either. No device id, ad id, IP, name, chat text or Play Games id is ever logged.
+# 0.31.212 (Kevin: "Set up HeyCatch analytics"): each event logged also goes to HeyCatch (hc: scripts/meta/heycatch.gd),
+# under the same toggle -- off, nothing more goes there either.
 const Net = preload("res://scripts/siege/siege_net.gd")
 const Platform = preload("res://scripts/meta/platform.gd")       # 0.31.132: session_start's "plat"
 const Diag = preload("res://scripts/siege/siege_diag.gd")
@@ -52,6 +54,7 @@ var _beat := 0.0
 var _pending_start := {}                  # session_start waiting for the network's answer
 var _pending_at := 0.0
 var _errs: ErrCount = null
+var hc: Node = null                       # 0.31.212: HeyCatch (scripts/meta/heycatch.gd) -- each event logged goes there too
 
 class ErrCount:
 	# script errors this session (the app's watch_errors): only how many, never the text or a path
@@ -165,6 +168,8 @@ func log_ev(ev: String, props := {}, sid_over := "", ts_over := -1) -> void:
 		return
 	var e := {"id":hex(8), "ev":ev, "ts":ts_over if ts_over >= 0 else now(), "sid":sid_over if sid_over != "" else sid,
 		"b":Diag.BUILD.left(40), "p":Events.clean_props(Events.CLIENT[ev], props)}
+	if hc != null and enabled():
+		hc.capture(ev, e.p, int(e.ts))           # 0.31.212 (not opt_out: off means nothing more goes there)
 	var line := JSON.stringify(e)
 	queue.append(e)
 	bytes += line.length() + 1
@@ -185,6 +190,8 @@ func set_enabled(on: bool) -> void:
 	# Settings: off -- everything waiting goes, one opt_out goes up, nothing more is logged
 	if on:
 		return
+	if hc != null:
+		hc.clear()                               # 0.31.212: HeyCatch's waiting events go too
 	queue.clear()
 	bytes = 0
 	dropped = 0

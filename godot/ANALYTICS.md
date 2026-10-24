@@ -28,9 +28,36 @@ Python 3 standard library only. Test: `python3 godot/tools/test_analytics_report
 |---|---|
 | The events and the props each may carry (the allow-list, shared) | `scripts/meta/analytics_events.gd` |
 | Phone: queue, sessions, sending, opt-out | `scripts/meta/analytics.gd` (a child of SiegeApp) |
+| Phone: HeyCatch (0.31.212, below) | `scripts/meta/heycatch.gd` (a child of SiegeApp; Analytics.hc) |
 | Phone hooks | `scripts/app/siege_app.gd` (sessions, match_join, shop_view, update_screen, level_up), `siege/siege_mode.gd` (VS BOTS matches, tutorial start/complete/skip), `siege/tutorial.gd` (steps), `app/screens.gd` (forge, the Settings toggle), `app/chest_open.gd` |
 | Server: checks, files, rotation | `server/analytics.gd` |
 | Server hooks | `server/siege_server.gd` (`an` socket, session_online, online match_start/finish/quit, match_shop_buy, quick_chat, purchase_verified, update_screen on a min_build refusal), `server/social.gd` (chat_send, friend_add/accept, party_create/invite/join), `server/eco_accounts.gd` (spend: gold and gems spent, below) |
+
+## HeyCatch (0.31.212, the phone)
+
+Kevin: "Set up HeyCatch analytics in this project following https://heycatch.ai/agents.md exactly" (project key
+`hck_pk_C3_tEJ-...`, the dashboard's). agents.md is for web and React Native; a native app goes to its
+`/agents-native.md` (Kevin pasted it): HeyCatch's ingest speaks PostHog's protocol, Swift / Kotlin / Flutter put
+PostHog's SDK on it. A Godot game has none of those SDKs, so `scripts/meta/heycatch.gd` takes that guide's plain-HTTP
+route: `POST https://in.heycatch.ai/batch/`, the standard PostHog capture format, HeyCatch's write-only ingest token
+(`phc_oiDt...`, the same for every app: not a secret) as `api_key`, and on every event's properties the project key
+as `heycatch_project_key` and as `$groups.project` (without them an event "belongs to no project").
+- What goes: every event the phone logs for our own server (Analytics.log_ev hands it over with its allowed props),
+  `$screen` (`$screen_name`: the tab -- home, shop, pass, locker, alliance, settings, quests -- or match_online,
+  match_bots, tutorial), `purchase_completed` (`product`) when a purchase is granted, one `$identify` when the phone
+  first has an account. Props: also `$lib` fatebound-godot, `$app_version` (the build), `$os`.
+- distinct_id: never the account id (half of how the account signs in): `fb_` + 20 hex of SHA-256("fatebound-heycatch:"
+  + id); before the account exists a random `anon_` id, joined to it by the `$identify` (`$anon_distinct_id`). Kept in
+  `<profile>.heycatch.json`. No name, chat text, email, device or ad id.
+- When: Settings > "Share anonymous usage stats" on (off: what's waiting goes, nothing more -- not even opt_out); on a
+  phone only (Android, iOS -- the real OS, not a test's Platform.forced); a desktop run only with `HEYCATCH=1`
+  (`HEYCATCH=0`: never). In memory, every 10 s or 50 events and at once when the app goes to the background; an event
+  over an hour old is dropped (the guide: long-held events can be dropped). 2xx accepted; 4xx (not 408/429) dropped;
+  no answer / 5xx: again after 5, 15, 30, 60, 120 s.
+- `tests/heycatch_test.gd` (a stand-in ingest on 8141); `tools/heycatch_verify.gd` runs the real app against the real
+  ingest (`HEYCATCH=1`, through `HTTPS_PROXY` with `HEYCATCH_CA` when the machine has one) and prints what it answered.
+- Kevin's to do: the privacy policy and Play's Data safety form (and App Store privacy) -- usage events now also go to
+  HeyCatch, a third party; then press "I've installed" on the dashboard's Install page.
 
 ## Leaving an online match, and its shop (0.31.212, server)
 

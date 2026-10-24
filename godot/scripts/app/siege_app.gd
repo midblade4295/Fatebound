@@ -43,6 +43,7 @@ const SocialUI = preload("res://scripts/app/social_ui.gd")
 const LbFetch = preload("res://scripts/meta/lb_fetch.gd")
 const Notify = preload("res://scripts/meta/notify.gd")
 const Analytics = preload("res://scripts/meta/analytics.gd")
+const HeyCatch = preload("res://scripts/meta/heycatch.gd")
 const Diag = preload("res://scripts/siege/siege_diag.gd")
 const TitleScreen = preload("res://scripts/app/title_screen.gd")
 
@@ -150,6 +151,7 @@ var eco_sync: Node = null
 var account_link: Node = null          # 0.31.132: transfer code, Game Center link, account deletion (account_link.gd)
 var _gc_tries := 0
 var analytics: Node = null              # 0.31.118: usage statistics to our own server (scripts/meta/analytics.gd)
+var heycatch: Node = null               # 0.31.212: and to HeyCatch (scripts/meta/heycatch.gd: phones only, the same toggle)
 var notify = Notify.new()                # 0.31.119: "your chest is ready" notifications (the Play build's plugin)
 var eco_autostart := DisplayServer.get_name() != "headless" or OS.has_environment("FB_ECO")
 var eco_url := OS.get_environment("SIEGE_URL") if OS.has_environment("SIEGE_URL") else Net.DEFAULT_URL
@@ -246,6 +248,10 @@ func _ready() -> void:
 	analytics.auto_start = eco_autostart
 	analytics.setup(profile)
 	add_child(analytics)
+	heycatch = HeyCatch.new()
+	heycatch.setup(profile)
+	add_child(heycatch)
+	analytics.hc = heycatch
 	analytics.watch_errors()
 	analytics.begin_session(true, safe_boot)
 	analytics.note_level(int(profile.d.level))
@@ -1153,6 +1159,8 @@ func show_tab(id: String) -> void:
 		close_modal()                          # (a window's button that goes to another tab, e.g. the pass summary)
 	if analytics != null and id in ["shop", "pass"] and (tab != id or siege != null):
 		analytics.log_ev("shop_view", {"tab":id})
+	if heycatch != null:
+		heycatch.screen(id)                          # 0.31.212: a screen view (the tab; not the same one twice in a row)
 	tab = id
 	profile.refresh()
 	for t in tab_buttons:
@@ -1616,6 +1624,8 @@ func start_match(online: bool, follow := false) -> void:
 	if analytics != null and not pending_tutorial:
 		analytics.log_ev("match_join", {"mode":"online" if online else "bots",
 			"party_n":social.party_size() if social != null and social.online() and social.in_party() else 1})
+	if heycatch != null:
+		heycatch.screen("tutorial" if pending_tutorial and not online else ("match_online" if online else "match_bots"))
 	siege = _later(SIEGE_MODE).new()
 	siege.online = online
 	siege.tutorial = pending_tutorial and not online
@@ -1973,6 +1983,8 @@ func _on_iap_granted(product: String, g: Dictionary) -> void:
 	# 0.31.90: a confirmed purchase landed in the profile
 	if bool(g.get("again", false)):
 		return
+	if heycatch != null:
+		heycatch.capture("purchase_completed", {"product":product})      # 0.31.212: a business outcome (HeyCatch only)
 	sfx("gemPack" if int(g.get("gems", 0)) > 0 else "purchase")       # 0.31.110: gems pouring out
 	var bits := ["+%s gems" % UI.compact(int(g.get("gems", 0)))]
 	if int(g.get("gold", 0)) > 0:
@@ -2006,6 +2018,8 @@ func _notification(what: int) -> void:
 	elif what == NOTIFICATION_APPLICATION_PAUSED:
 		if analytics != null:
 			analytics.end_session()                # 0.31.118: a session is a time in the foreground
+		if heycatch != null:
+			heycatch.flush()                       # 0.31.212: (session_end with it)
 		if notify != null and profile != null:
 			notify.on_background(profile)          # 0.31.119: a chest that finishes while we're away says so
 		if audio != null and audio.has_method("stop"):
