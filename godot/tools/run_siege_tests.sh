@@ -78,7 +78,7 @@ run tower_rules_test     TOWER_RULES_PASS         400
 run kill_rules_test      KILL_RULES_PASS          200
 run kill_banner_test     KILL_BANNER_PASS         400
 run recall_test          RECALL_PASS              300
-run tutorial_test        TUTORIAL_PASS            400
+run training_test        TRAINING_PASS            400
 run herald_intro_test    HERALD_INTRO_PASS        120
 run priest_test          PRIEST_PASS              200
 run multikill_test       MULTIKILL_PASS           60

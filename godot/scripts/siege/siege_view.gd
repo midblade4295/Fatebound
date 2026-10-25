@@ -3474,12 +3474,17 @@ func _build_moba() -> void:
 		node.rotation.y = atan2(d.x, d.y)
 		add_child(node)
 		var top: Vector3 = node.position + Basis(Vector3.UP, node.rotation.y) * Towers.brazier(tier)
-		var ring := MeshInstance3D.new()
-		ring.mesh = _ring_mesh(sim.moba.TOWER_RANGE, 0.16)
-		ring.scale = Vector3(1, 0.15, 1)
-		ring.material_override = _unshaded(Color(1.0, 0.85, 0.5, 0.55))
-		ring.position = Vector3(tw.p.x, gy + 0.08, tw.p.y)
-		ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		# its range on the ground near it (0.31.217: Honor of Kings' -- a decal laid on the ground, a strong rim and a faint
+		# fill, its colour by what it's doing: tower_ring; a thin torus floating at its foot until then)
+		var ring := Decal.new()
+		var rr: float = float(sim.moba.TOWER_RANGE)
+		ring.size = Vector3(rr * 2.0 + 0.4, 4.0, rr * 2.0 + 0.4)
+		ring.position = Vector3(tw.p.x, gy + 0.5, tw.p.y)
+		ring.texture_albedo = _range_tex()
+		ring.albedo_mix = 1.0
+		ring.upper_fade = 0.3
+		ring.lower_fade = 0.3
+		ring.modulate = RING_COLORS.yellow
 		ring.visible = false
 		add_child(ring)
 		var fire := _beacon_fire(top - Vector3(0, 0.25, 0))
@@ -3491,6 +3496,46 @@ func _build_moba() -> void:
 		var tmi: MeshInstance3D = node.get_meta("mesh", null)
 		if tmi != null:
 			Towers.chunks(Towers.kind_of(tier), tmi.mesh)      # (the pieces made now, not in the middle of a fight)
+
+# 0.31.217 (Honor of Kings' tower ring, Kevin's recording): near an enemy tower its range shows -- yellow; red when it's
+# shooting you; green when it's shooting one of yours (a minion walked in first: safe to hit it)
+const RING_COLORS := {"yellow": Color(1.0, 0.86, 0.3, 0.9), "red": Color(1.0, 0.18, 0.12, 1.0), "green": Color(0.3, 1.0, 0.42, 0.9)}
+static var _range_img: ImageTexture = null
+
+static func _range_tex() -> ImageTexture:
+	# a white ring with soft edges round a faint disc (the decal tints it)
+	if _range_img != null:
+		return _range_img
+	var n := 128                                   # (one small texture for all of them, made once: ~16k pixels)
+	var data := PackedByteArray()
+	data.resize(n * n * 4)
+	var c := float(n - 1) * 0.5
+	var i := 0
+	for y in n:
+		for x in n:
+			var d := Vector2(float(x) - c, float(y) - c).length() / c
+			var a := 0.0
+			if d <= 1.0:
+				a = 0.07 + 0.88 * clampf((d - 0.93) / 0.03, 0.0, 1.0) * clampf((1.0 - d) / 0.025, 0.0, 1.0)
+			data[i] = 255
+			data[i + 1] = 255
+			data[i + 2] = 255
+			data[i + 3] = int(a * 255.0)
+			i += 4
+	_range_img = ImageTexture.create_from_image(Image.create_from_data(n, n, false, Image.FORMAT_RGBA8, data))
+	return _range_img
+
+func tower_ring(tw: Dictionary, me: Dictionary) -> String:
+	if bool(tw.dead) or me.is_empty() or int(tw.team) == int(me.team) or not sim.alive(me) \
+			or (me.pos as Vector2).distance_to(tw.p) > float(sim.moba.TOWER_RANGE) + 5.0:
+		return ""
+	var tg := str(tw.get("target", ""))
+	if tg == str(me.id):
+		return "red"
+	var tu: Dictionary = sim.by_id.get(tg, {}) if tg != "" else {}
+	if not tu.is_empty() and int(tu.get("team", -1)) == int(me.team) and sim.alive(tu):
+		return "green"
+	return "yellow"
 
 func _tower_stage(tw: Dictionary, mt: Dictionary, stage: int, animate: bool) -> void:
 	# A tower's look at a stage (towers.gd): that stage's cells hidden in its mesh and, when it happens before your
@@ -3652,13 +3697,11 @@ func _sync_moba() -> void:
 		if absf(dm - float(mt.dmg)) > 0.01 and mt.mesh != null:
 			mt.dmg = dm
 			(mt.mesh as MeshInstance3D).set_instance_shader_parameter("dmg", dm)
-		var ring: MeshInstance3D = mt.ring
-		var show: bool = not bool(tw.dead) and not me.is_empty() and int(tw.team) != int(me.team) and sim.alive(me) \
-			and (me.pos as Vector2).distance_to(tw.p) <= float(sim.moba.TOWER_RANGE) + 5.0
-		ring.visible = show
-		if show:
-			var on_me: bool = str(tw.target) == str(me.id)
-			(ring.material_override as StandardMaterial3D).albedo_color = Color(1.0, 0.2, 0.15, 0.8) if on_me else Color(1.0, 0.85, 0.5, 0.45)
+		var ring: Decal = mt.ring
+		var rs := tower_ring(tw, me)
+		ring.visible = rs != ""
+		if rs != "":
+			ring.modulate = RING_COLORS[rs]
 	for i in range(_tshots.size() - 1, -1, -1):
 		var sh: Dictionary = _tshots[i]
 		var k := clampf((_time - float(sh.t0)) / float(sh.flight), 0.0, 1.0)
@@ -4329,7 +4372,7 @@ func _tower_down(e: Dictionary) -> void:
 	var gy := Sim.height_at(tw.p)
 	var at := Vector3(tw.p.x, gy, tw.p.y)
 	if not mt.is_empty():
-		(mt.ring as MeshInstance3D).visible = false
+		(mt.ring as Node3D).visible = false
 		if int(mt.stage) < 4:
 			_tower_stage(tw, mt, 4, int(mt.stage) >= 0)
 	_pack_explosion("heavy", at + Vector3(0, 2.0, 0), 1.6)

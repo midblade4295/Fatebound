@@ -20,6 +20,7 @@ Out:
   assets/ui/tutorial/scroll_<pose>.png  cut out of its white ground, cropped; and scripts/siege/tutorial_poses.gd: each
                                         one's size, its parchment and the clear part of it for the text (its pixels)
   assets/sounds/recall_start.wav, recall_done.wav   cut and levelled as tools/build_hero_sfx.py does the heroes'
+  assets/vo/training/<id>.ogg   (0.31.217) the training's helper, Kael (art_sources/training), as the tutorial's
 
   python3 tools/build_tutorial_assets.py      (numpy, scipy, pillow, ffmpeg)
 """
@@ -52,18 +53,19 @@ RECALL = {
 }
 
 
-def vo():
-    os.makedirs(VO, exist_ok=True)
-    lines = json.load(open(os.path.join(SRC, "script.json")))
+def vo(src_dir=SRC, out_dir=VO, intro=True):
+    os.makedirs(out_dir, exist_ok=True)
+    lines = json.load(open(os.path.join(src_dir, "script.json")))
     # (0.31.198) and the first-run intro's (scripts/app/herald_intro.gd): [id, the spoken prompt, tags and all]
-    lines += [[lid, "", text] for lid, text in json.load(open(os.path.join(SRC, "intro_script.json")))]
+    if intro:
+        lines += [[lid, "", text] for lid, text in json.load(open(os.path.join(src_dir, "intro_script.json")))]
     # trim: silence (below -45 dB) off the start, and off the end by reversing; loudness to -16 LUFS; tiny fades
     af = ("silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.05,areverse,"
           "silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.12,areverse,"
           "loudnorm=I=-16:TP=-1.5:LRA=11,afade=t=in:d=0.01")
     for lid, _tag, _text in lines:
-        src = os.path.join(SRC, "vo", lid + ".mp3")
-        out = os.path.join(VO, lid + ".ogg")
+        src = os.path.join(src_dir, "vo", lid + ".mp3")
+        out = os.path.join(out_dir, lid + ".ogg")
         if os.path.exists(out) and os.path.getmtime(out) >= os.path.getmtime(src) and "force" not in ARGS:
             continue                          # (0.31.198: built already -- vorbis isn't byte-stable, so no churn)
         subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", src, "-af", af, "-ac", "1", "-ar", "44100",
@@ -206,9 +208,13 @@ def sounds():
 
 
 if __name__ == "__main__":
-    which = ARGS or ["vo", "poses", "sounds"]
+    which = ARGS or ["vo", "poses", "sounds", "training"]
     if "vo" in which:
         vo()
+    if "training" in which:
+        # (0.31.217) the Honor of Kings style training's helper, Kael the Dragoon, in the Herald's voice
+        # (art_sources/training: script.json, vo/<id>.mp3) -> assets/vo/training/<id>.ogg, made the same way
+        vo(os.path.join(os.path.dirname(GODOT), "art_sources", "training"), os.path.join(GODOT, "assets", "vo", "training"), False)
     if "poses" in which:
         poses()
     if "sounds" in which:

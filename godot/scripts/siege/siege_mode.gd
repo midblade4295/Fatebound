@@ -39,11 +39,12 @@ var fps_cap := FPS_CAP
 var low_fx := false
 var hq_gfx := true          # High-quality graphics (Settings): shadows, glow, smoother edges
 var replay_hero := ""       # 0.31.164: PLAY AGAIN after a 5v5 -- siege_app starts the next one (with its own ticket)
-var tutorial := false       # 0.31.181: the 5v5 tutorial (scripts/siege/tutorial.gd): a quiet match against bots, the
-var tutorial_ui = null      #   Herald over it (the app's start_tutorial); no ticket, no match rewards -- its own gold once
+var tutorial := false       # 0.31.181: the tutorial (0.31.217: the training, scripts/siege/training.gd -- Kael the
+var tutorial_ui = null      #   Dragoon at your side; the app's start_training); no ticket, no match rewards -- its own gold once
+var training := 1           # 0.31.217: which -- 1 the basics (a quiet Rift), 2 the 5v5 battle (a real match, Kael beside you)
 var _tut_done := false
 var _tut_t0 := 0
-const Tutorial = preload("res://scripts/siege/tutorial.gd")
+const Training = preload("res://scripts/siege/training.gd")
 var audio: Node = null
 var profile = null       # scripts/meta/profile.gd — rewards, challenges and cosmetics
 var rewards: Dictionary = {}
@@ -1206,6 +1207,10 @@ func _process(delta: float) -> void:
 		me.merge(title_summary(), true)
 		var won: bool = sim.winner == int(me.team)
 		var draw: bool = sim.winner == -1
+		if tutorial and tutorial_ui != null:
+			tutorial_ui.match_over(won)              # 0.31.217: the training's own end -- no match rewards
+			_result_sounds(won, draw)
+			return
 		match_result = {}
 		if profile != null:
 			match_result = profile.apply_match(me, won, draw, online)
@@ -1246,8 +1251,9 @@ func tutorial_pays() -> bool:
 	return profile != null and not bool(profile.d.get("tutorial_done", false))
 
 func _tutorial_begin() -> void:
-	tutorial_ui = Tutorial.new()
-	tutorial_ui.name = "Tutorial"
+	tutorial_ui = Training.new()
+	tutorial_ui.name = "Training"
+	tutorial_ui.which = training
 	hud.add_child(tutorial_ui)
 	hud.move_child(tutorial_ui, 1)       # over the HUD's drawing, under its pause button, panels and banners
 	tutorial_ui.begin(self)
@@ -1278,7 +1284,7 @@ func note_leaving() -> void:
 		return
 	if tutorial and not _tut_done and tutorial_ui != null:
 		analytics.log_ev("tutorial_skip", {"dur_s":(Time.get_ticks_msec() - _tut_t0) / 1000, "step":int(tutorial_ui.step),
-			"id":str(tutorial_ui.STEPS[int(tutorial_ui.step)].id)})
+			"id":str(tutorial_ui.step_id())})
 	if not online and _an_match != "" and sim != null and not sim.ended:
 		analytics.log_ev("match_quit", {"match":_an_match, "mode":"bots", "quit_at_s":int(sim.time),
 			"class":class_of(sim.by_id.get(hud.player_id, {})), "class0":_an_class0})
@@ -1689,8 +1695,8 @@ func _ann_file(key: String) -> String:
 
 func _announce_tick() -> void:
 	# the queue, and the clock-driven calls (start, last minute, ten seconds, the end)
-	if sim == null or tutorial:
-		return                              # (0.31.181: the tutorial's Herald does the talking)
+	if sim == null or (tutorial and training == 1):
+		return                              # (0.31.181: the tutorial's Herald does the talking; 0.31.217: training 1's Kael)
 	var now := _ann_clock
 	if not _ann_queue.is_empty() and now >= _herald_until:
 		var item: Array = _ann_queue.pop_front()

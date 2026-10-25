@@ -27,10 +27,11 @@ const DAILY_REWARD := "res://scripts/app/daily_reward.gd"
 const STARTER_OFFER := "res://scripts/app/starter_offer.gd"         # 0.31.214: Home's Starter Pack window
 const UPDATE_SCREEN := "res://scripts/app/update_screen.gd"
 const MOBA_PANEL := "res://scripts/app/moba_panel.gd"              # 0.31.155: 5V5 (the test)
+const TRAINING_PICK := "res://scripts/app/training_pick.gd"        # 0.31.217: TRAINING (which, and a hero of three)
 const CHAMPION_WINDOW := "res://scripts/app/champion_window.gd"    # 0.31.187: a champion's own window (the Locker)
 const HERALD_INTRO := "res://scripts/app/herald_intro.gd"          # 0.31.198: the Royal Herald's welcome
 const LATER := [SIEGE_MODE, CLAN_PANEL, CHAT_PANEL, FRIENDS_PANEL, ORDERS_PANEL, DAILY_REWARD, LEADERBOARD_PANEL, UPDATE_SCREEN,
-	MOBA_PANEL, CHAMPION_WINDOW, HERALD_INTRO, STARTER_OFFER]
+	MOBA_PANEL, CHAMPION_WINDOW, HERALD_INTRO, STARTER_OFFER, TRAINING_PICK]
 const Audio = preload("res://scripts/native_audio.gd")
 const Assets = preload("res://scripts/siege/asset_cache.gd")
 const Net = preload("res://scripts/siege/siege_net.gd")
@@ -1127,7 +1128,7 @@ func open_home_menu() -> void:
 	_menu_row(v, "trophy", "RANKS", "This week's leaderboard", 0, "side_ranks", func():
 		sfx("menuOpen")
 		open_leaderboard())
-	var tr := _menu_row(v, "horn", "TUTORIAL", ("Learn the basics  ·  +%d gold" % TUTORIAL_GOLD) if not tdone else "Play the basics again", 0,
+	var tr := _menu_row(v, "horn", "TRAINING", ("Learn with Kael  ·  +%d gold" % TUTORIAL_GOLD) if not tdone else "The basics, or a 5v5 with Kael", 0,
 		"tutorial_start", func():
 			close_modal()
 			sfx("confirm")
@@ -1586,16 +1587,29 @@ func start_moba(hero: String) -> void:
 
 var pending_moba := ""                    # 0.31.155: the hero the next match is a 5v5 with
 var pending_tutorial := false             # 0.31.181: the next match is the tutorial
+var pending_training := 1                 # 0.31.217: ...which training
 
 func start_tutorial() -> void:
-	# 0.31.181 (Kevin: "create a tutorial walking player through the basics of a match ... Make it voiced and make it
-	# humorous and sarcastic"): the 5v5 tutorial -- a quiet match against bots on this phone as the Knight, the Royal
-	# Herald walking you through it (scripts/siege/tutorial.gd). No ticket (nothing in it is paid like a match); its
-	# own gold, once, when it's finished (Profile.finish_tutorial)
+	# 0.31.181 (Kevin: "create a tutorial walking player through the basics of a match"): the tutorial. 0.31.217 (Kevin,
+	# with Honor of Kings' training: "Here is how I want the training to go in fatebound"): the TRAINING window first --
+	# which of the two and a hero of three (training_pick.gd) -- then start_training
+	if siege != null:
+		return
+	close_modal()
+	var m = _later(TRAINING_PICK).new()
+	add_child(m)
+	modal = m
+	m.open(self)
+
+func start_training(which: int, hid: String) -> void:
+	# a match against bots on this phone with Kael the Dragoon (scripts/siege/training.gd): 1 the basics on a quiet
+	# Rift, 2 a real 5v5. No ticket (nothing in it is paid like a match); its own gold, once, when one's finished
+	# (Profile.finish_tutorial)
 	if siege != null:
 		return
 	pending_tutorial = true
-	pending_moba = "knight"
+	pending_training = clampi(which, 1, 2)
+	pending_moba = hid if hid in ["knight", "mage", "ranger"] else "knight"       # (training_pick.gd HEROES)
 	start_match(false, true)
 	pending_tutorial = false
 var _flush_wait := false
@@ -1702,6 +1716,7 @@ func start_match(online: bool, follow := false) -> void:
 	siege = _later(SIEGE_MODE).new()
 	siege.online = online
 	siege.tutorial = pending_tutorial and not online
+	siege.training = pending_training             # 0.31.217
 	if pending_moba != "":
 		siege.moba_hero = pending_moba              # 0.31.155 (start_moba: through the tutorial's door, a full 5v5)
 		pending_moba = ""
@@ -1762,10 +1777,10 @@ func _end_match() -> void:
 	elif server_updating:
 		toast(SERVER_UPDATING, UI.GOLD)
 	elif note == "tutorial_paid":
-		toast("Tutorial complete! +%d gold" % TUTORIAL_GOLD, UI.GOLD)        # 0.31.181
+		toast("Training complete! +%d gold" % TUTORIAL_GOLD, UI.GOLD)        # 0.31.181 (0.31.217: the training)
 		sfx("claim")
 	elif note == "tutorial":
-		toast("Tutorial complete!", UI.GOLD)
+		toast("Training complete!", UI.GOLD)
 	elif note == "idle":
 		notice("REMOVED FOR BEING IDLE", "You didn't move or attack for 3 minutes, so a bot took your place. Nothing was paid for that match.")
 	elif note == "no_five" and replay != "":

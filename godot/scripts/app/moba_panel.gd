@@ -105,7 +105,7 @@ func open(a) -> void:
 	_kit.add_theme_constant_override("separation", 3)
 	left.add_child(_kit)
 	# (0.31.175: the match said shorter -- the stage took its room; 0.31.216 shorter still -- the kit's under the stage)
-	UI2.body(left, "Five a side, bots in the empty seats. Break a lane, its gate and the two King towers, then defeat their King.",
+	UI2.body(left, "Five a side, bots in the empty seats. Break a lane's three towers, then defeat their King.",     # (0.31.217)
 		9, UI2.SOFT)
 	var ph := UI.row(body, 8)
 	UI2.text(ph, "PICK YOUR HERO", 16, UI2.GOLD)

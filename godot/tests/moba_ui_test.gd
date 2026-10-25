@@ -102,11 +102,21 @@ func _process(delta: float) -> bool:
 				press("home_menu")                       # 0.31.194: the TUTORIAL is in the top bar's menu
 				check(btn("tutorial_start") != null, "the menu has the TUTORIAL")
 				press("tutorial_start")
+				_go("fresh_pick")
+		"fresh_pick":
+			# 0.31.217: the TRAINING window -- which (THE BASICS first for a new player) and a hero of three, then BATTLE
+			if t_phase > 0.4:
+				check(btn("training_1") != null and btn("training_2") != null and btn("training_hero_knight") != null
+					and btn("training_hero_mage") != null and btn("training_hero_ranger") != null and app.modal != null and int(app.modal.which) == 1,
+					"TRAINING: the two trainings (THE BASICS picked) and three heroes")
+				press("training_hero_mage")
+				press("training_go")
 				_go("fresh_tutorial")
 		"fresh_tutorial":
 			if t_phase > 0.5:
-				check(app.siege != null and bool(app.siege.tutorial) and not bool(app.siege.online) and str(app.siege.moba_hero) == "knight",
-					"TUTORIAL: the tutorial's match, offline, as the Knight (no ticket asked)")
+				check(app.siege != null and bool(app.siege.tutorial) and not bool(app.siege.online) and str(app.siege.moba_hero) == "mage"
+					and int(app.siege.training) == 1,
+					"BATTLE: training 1's match, offline, as the Mage (no ticket asked)")
 				app.queue_free()
 				app = null
 				_go("boot")
@@ -208,15 +218,19 @@ func _process(delta: float) -> bool:
 			if t_phase > 0.6:
 				var s = app.siege
 				var me: Dictionary = s.sim.by_id["you"]
-				check(s.hud.shop_open() and btn("shop_item_sword") != null and btn("shop_item_bloodthirster") != null and btn("shop_slot_0") != null,
-					"tapped: the shop -- your slots, the small items and the big ones")
+				check(s.hud.shop_open() and btn("shop_item_sword") != null and btn("shop_item_archon") != null and btn("shop_slot_0") != null
+					and btn("shop_tab_0") != null and btn("shop_tab_4") != null and btn("shop_item_bloodthirster") == null,
+					"tapped: the shop -- your slots, RECOMMENDED (the Archmage's list: no Bloodthirster) and the other tabs")
+				press("shop_tab_1")                      # 0.31.217: Honor of Kings' tabs
+				check(btn("shop_item_bloodthirster") != null and btn("shop_item_tome") == null, "ATTACK: the attack items, the Bloodthirster among them")
+				press("shop_tab_0")
 				var g0 := int(me.gold)
 				press("shop_item_sword")
 				s.hud._refresh_shop(me)
 				check(has_text(s.hud.shop_panel, "LONG SWORD") and has_text(s.hud.shop_panel, "BUY · 350"), "a Long Sword picked: what it gives, BUY · 350")
 				# 0.31.175: every item its painted icon and its name on its cell; the armory painted over the shop
 				var painted := Moba.ITEM_ORDER.all(func(x): return ItemIcon.texture(str(x)) != null)
-				check(painted and has_text(s.hud.shop_panel, "Bloodthirster") and s.hud._shop_pick_icon.item == "sword"
+				check(painted and has_text(s.hud.shop_panel, "Archon Staff") and s.hud._shop_pick_icon.item == "sword"
 					and s.hud.shop_panel.find_children("*", "TextureRect", true, false).any(func(t): return t.texture != null and str(t.texture.resource_path).ends_with("shop_banner.webp")),
 					"the shop in paint: each item's icon and name, the armory across the top, the picked item's icon")
 				press("shop_act")

@@ -721,7 +721,7 @@ func on_event(e: Dictionary) -> void:
 	match str(e.k):
 		"level":
 			if str(e.get("id", "")) == str(player_id):
-				toast("LEVEL %d!  PICK AN UPGRADE" % int(e.level), VisualTheme.GOLD)
+				toast("LEVEL %d!  TAP + TO LEARN A SKILL" % int(e.level), VisualTheme.GOLD)     # (0.31.217: skill points; PICK AN UPGRADE until then)
 		"tower_immune":
 			toast("That tower is protected -- take the one in front of it first", Color("#ffcf7a"))
 		"tower_far":                                     # 0.31.179: hit from outside its range
@@ -886,6 +886,11 @@ func _touch(index: int, pos: Vector2, pressed: bool) -> void:
 		for sp in learn_spots(me_l):                # 0.31.217: a + over a skill
 			if pos.distance_to(sp.c) <= float(sp.r) + 8.0:
 				action_pressed.emit("learn_" + str(sp.slot))
+				get_viewport().set_input_as_handled()
+				return
+		for q in quick_rects(me_l):                # 0.31.217: the quick-buy
+			if (q.r as Rect2).grow(4.0).has_point(pos):
+				action_pressed.emit("shop_buy:" + str(q.id))
 				get_viewport().set_input_as_handled()
 				return
 		if shop_rect().grow(6.0).has_point(pos):
@@ -1595,7 +1600,7 @@ func _king_status(me: Dictionary) -> String:
 		return "OUR KING IS UNDER ATTACK!"
 	if sim.moba.king_open(1 - int(me.team)):
 		return "Their King is open -- defeat him!"
-	return "Defeat their King -- he's guarded until both his towers fall"
+	return "Defeat their King -- he's guarded until a lane's three towers fall"
 
 func _draw_king_marker(me: Dictionary) -> void:
 	# 0.31.156: point to the King to defeat, theirs, when he is off-screen
@@ -1759,10 +1764,12 @@ func _draw_button(b: Dictionary, me: Dictionary) -> void:
 
 
 func _lock_label(me: Dictionary, slot: String) -> String:
-	# 0.31.217: a skill not learnt -- "+" when a point can go on it now, else the level it needs ("LV 4")
+	# 0.31.217: a skill not learnt -- "LEARN" when a point can go on it now; the level it needs ("LV 4") until you're
+	# there; there but no point left: "NEXT LV" (the next level's point)
 	if sim.moba.can_learn(me, slot):
 		return "LEARN"
-	return "LV %d" % int(sim.moba.rank_need(slot, 1))
+	var need := int(sim.moba.rank_need(slot, 1))
+	return "LV %d" % need if int(me.get("level", 1)) < need else "NEXT LV"
 
 # 0.31.171: the ability icons (tools/build_ability_icons.py): <hero>_<q|w|e|r>.png, loaded once (a missing one: the
 # button's name, as before)
@@ -1794,7 +1801,7 @@ func _pie(c: Vector2, r: float, frac: float, color: Color) -> void:
 	draw_colored_polygon(pts, color)
 
 # ---------- 5V5: gold, the shop, the jungle's timers (0.31.157) ----------
-# Under the towers line: your gold and SHOP (tap: the shop; it glows while you can buy -- in your castle or while down),
+# Under the towers line: your gold and SHOP (tap: the shop; it glows while you can afford the quick-buy -- 0.31.217),
 # your six item slots, the buffs you carry. The shop: your items (tap one to sell it), the basic and the big items (tap
 # one: what it gives, what it's built from, its price -- less what you own of it -- and BUY). Over a cleared camp in
 # view: when it's back.
@@ -1818,6 +1825,47 @@ var _coin_tex: Texture2D = null
 func shop_open() -> bool:
 	return shop_panel != null and shop_panel.visible
 
+const SHOP_TABS := ["RECOMMENDED", "ATTACK", "MAGIC", "DEFENSE", "MOVEMENT"]
+var _shop_tab := 0                             # 0.31.217: the shop's tab (SHOP_TABS)
+var _shop_tabs: Array = []
+var _shop_grid: GridContainer = null
+var _shop_hint: Label = null
+
+func shop_tab_items(me: Dictionary) -> Array:
+	# the items the tab shows: RECOMMENDED your hero's list (each once, in order), else Moba.ITEM_TABS's
+	if _shop_tab <= 0:
+		var out := []
+		for id in sim.moba.build_of(me):
+			if not out.has(str(id)):
+				out.append(str(id))
+		return out
+	return Moba.ITEM_TABS[_shop_tab - 1][1]
+
+func _fill_shop_grid() -> void:
+	if _shop_grid == null:
+		return
+	var me: Dictionary = sim.by_id.get(player_id, {})
+	for c in _shop_grid.get_children():
+		_shop_grid.remove_child(c)
+		c.queue_free()
+	_shop_cells = {}
+	for id in shop_tab_items(me):
+		_item_cell(_shop_grid, str(id))
+	_shop_hint.text = "Your hero's build, in the order to buy it" if _shop_tab == 0 else "Big items are built from the small ones you own"
+	for i in _shop_tabs.size():
+		var tb: Button = _shop_tabs[i]
+		var on := i == _shop_tab
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.36, 0.24, 0.08, 0.98) if on else Color(0.08, 0.07, 0.1, 0.92)
+		sb.border_color = Color("#ffd65a") if on else Color("#4a4f5c")
+		sb.set_border_width_all(2 if on else 1)
+		sb.set_corner_radius_all(8)
+		for st in ["normal", "hover", "pressed", "focus", "hover_pressed"]:
+			tb.add_theme_stylebox_override(st, sb)
+		tb.add_theme_color_override("font_color", Color("#ffe9a6") if on else Color("#b8b0a0"))
+		tb.add_theme_color_override("font_hover_color", Color("#ffe9a6") if on else Color("#d8d0c0"))
+	_shop_key = ""
+
 func shop_rect() -> Rect2:
 	return Rect2(MAP_RECT.position.x + 54.0, MAP_RECT.end.y + 12.0, 140, 36)   # (0.31.216: beside your level, under the map; 70, 90 until then)
 
@@ -1827,6 +1875,8 @@ func open_shop() -> void:
 	close_board()
 	if shop_panel == null:
 		_build_shop()
+	_shop_tab = 0                                  # (0.31.217: it opens on RECOMMENDED)
+	_fill_shop_grid()
 	_shop_key = ""
 	shop_panel.visible = true
 	_center(shop_panel, true)
@@ -2011,18 +2061,35 @@ func _build_shop() -> void:
 			_shop_key = "")
 		slots.add_child(sb)
 		_shop_slots.append({"button":sb, "icon":ic})
-	for group in [["BASIC", Moba.ITEM_ORDER.filter(func(x): return not Moba.ITEMS[x].has("from"))],
-			["BIG ITEMS · built from the small ones you own", Moba.ITEM_ORDER.filter(func(x): return Moba.ITEMS[x].has("from"))]]:
-		UI2.body(lv, str(group[0]), 10, UI2.MUTED, false)
-		var g := GridContainer.new()
-		g.columns = 5
-		g.add_theme_constant_override("h_separation", 5)
-		g.add_theme_constant_override("v_separation", 5)
-		var cc := CenterContainer.new()
-		cc.add_child(g)
-		lv.add_child(cc)
-		for id in group[1]:
-			_item_cell(g, str(id))
+	# 0.31.217 (Honor of Kings' shop): tabs -- RECOMMENDED (your hero's list, in the order to buy it), ATTACK, MAGIC,
+	# DEFENSE, MOVEMENT -- over one grid (the small items, then the big ones built from them; BASIC and BIG until then)
+	var tabs := HBoxContainer.new()
+	tabs.add_theme_constant_override("separation", 4)
+	lv.add_child(tabs)
+	_shop_tabs = []
+	for i in SHOP_TABS.size():
+		var tb := Button.new()
+		tb.text = str(SHOP_TABS[i])
+		tb.focus_mode = Control.FOCUS_NONE
+		tb.custom_minimum_size = Vector2(0, 26)
+		tb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		tb.add_theme_font_override("font", _bold)
+		tb.add_theme_font_size_override("font_size", 10)
+		tb.set_meta("action_key", "shop_tab_%d" % i)
+		var ti := i
+		tb.pressed.connect(func():
+			_shop_tab = ti
+			_fill_shop_grid())
+		tabs.add_child(tb)
+		_shop_tabs.append(tb)
+	_shop_hint = UI2.body(lv, "", 10, UI2.MUTED, false)
+	_shop_grid = GridContainer.new()
+	_shop_grid.columns = 5
+	_shop_grid.add_theme_constant_override("h_separation", 5)
+	_shop_grid.add_theme_constant_override("v_separation", 5)
+	var cc := CenterContainer.new()
+	cc.add_child(_shop_grid)
+	lv.add_child(cc)
 	var nrow := HBoxContainer.new()
 	nrow.alignment = BoxContainer.ALIGNMENT_CENTER
 	nrow.add_theme_constant_override("separation", 8)
@@ -2079,7 +2146,7 @@ func _refresh_shop(me: Dictionary) -> void:
 	_shop_key = key
 	var gold := int(float(me.get("gold", 0.0)))
 	_shop_gold.text = "%d" % gold
-	_shop_where.text = "In your castle -- tap an item, then BUY" if sim.alive(me) and here else ("You're down -- you can shop now" if here else "You can buy in your own castle, or while you're down")
+	_shop_where.text = "Tap an item, then BUY -- anywhere, any time" if here else "You can't shop now"      # (0.31.217: anywhere)
 	_shop_where.add_theme_color_override("font_color", Color("#9fe07a") if here else Color("#ffb07a"))
 	for i in _shop_slots.size():
 		var sl: Dictionary = _shop_slots[i]
@@ -2502,9 +2569,11 @@ func _draw_gold_and_items(me: Dictionary) -> void:
 		_ci.draw_style_box(_slot_styles[1 if i < inv.size() else 0], q)
 		if i < inv.size():
 			ItemIcon.draw_item(_ci, str(inv[i]), q.get_center(), q.size.x - 4.0)
-	# the buffs: a pill each, its colour, its time
+	_draw_quick_buy(me)
+	# the buffs: a pill each, its colour, its time (0.31.217: under the quick-buy)
 	var x := MAP_RECT.position.x
-	var y := item_slot_rect(0).end.y + 8.0
+	var qr := quick_rects(me)
+	var y: float = ((qr[-1].r as Rect2).end.y if not qr.is_empty() else item_slot_rect(0).end.y) + 8.0
 	var b: Dictionary = me.get("buffs", {})
 	var pills := []
 	for k in ["arcane", "ember", "lord"]:
@@ -2535,6 +2604,57 @@ func _draw_gold_and_items(me: Dictionary) -> void:
 		_text(pr.position + Vector2(16, 13), txt, 10, col.lightened(0.25), _bold, HORIZONTAL_ALIGNMENT_LEFT, tw + 4.0)
 		x += pr.size.x + 6.0
 
+# 0.31.217 (Honor of Kings' quick-buy, Kevin: "the shop system"): on the left under your items, the next two things on
+# your hero's list -- its icon, its name, its price; lit when you can afford it, a tap buys it there and then
+func quick_rects(me: Dictionary) -> Array:
+	var out := []
+	if sim == null or sim.moba == null or me.is_empty() or not bool(me.get("hero", false)):
+		return out
+	var y := item_slot_rect(0).end.y + 8.0
+	for id in sim.moba.next_buys(me, 2):
+		var h := 40.0 if out.is_empty() else 32.0
+		out.append({"id": str(id), "r": Rect2(MAP_RECT.position.x, y, 132.0, h)})
+		y += h + 4.0
+	return out
+
+var _qb_styles: Array = []
+
+func _draw_quick_buy(me: Dictionary) -> void:
+	if _qb_styles.is_empty():
+		for lit in [false, true]:
+			var st := StyleBoxFlat.new()
+			st.bg_color = Color(0.2, 0.13, 0.04, 0.9) if lit else Color(0.03, 0.05, 0.07, 0.72)
+			st.border_color = Color("#ffd65a") if lit else Color(VisualTheme.GOLD_DARK, 0.55)
+			st.set_border_width_all(2 if lit else 1)
+			st.set_corner_radius_all(8)
+			st.anti_aliasing = true
+			_qb_styles.append(st)
+	var gold := float(me.get("gold", 0.0))
+	var first := true
+	for q in quick_rects(me):
+		var r: Rect2 = q.r
+		var id := str(q.id)
+		var pr: int = sim.moba.price(me, id)
+		var can: bool = sim.moba.buy_why(me, id) == ""
+		_ci.draw_style_box(_qb_styles[1 if can else 0], r)      # (its glow per frame: _draw_shop_pulse)
+		var isz := r.size.y - 8.0
+		ItemIcon.draw_item(_ci, id, r.position + Vector2(4.0 + isz * 0.5, r.size.y * 0.5), isz)
+		var tx := r.position.x + isz + 10.0
+		_text(Vector2(tx, r.position.y + (15.0 if first else 13.0)), str(Moba.ITEMS[id].name), 10 if first else 9,
+			Color("#f2e6cf") if can else Color("#a8a090"), _bold, HORIZONTAL_ALIGNMENT_LEFT, r.end.x - tx - 4.0)
+		var py := r.position.y + (31.0 if first else 26.0)
+		if _coin_tex != null:
+			_ci.draw_texture_rect(_coin_tex, Rect2(Vector2(tx, py - 10.0), Vector2(11, 11)), false)
+		_text(Vector2(tx + 13.0, py), str(pr), 11 if first else 10, Color("#ffd65a") if can else Color("#c0a070"), _bold, HORIZONTAL_ALIGNMENT_LEFT, 50)
+		if not can and pr > 0:                         # how near you are to it
+			var bw := r.size.x - (tx - r.position.x) - 52.0
+			var bx := tx + 48.0
+			_ci.draw_rect(Rect2(bx, py - 6.0, bw, 4.0), Color(0, 0, 0, 0.5))
+			_ci.draw_rect(Rect2(bx, py - 6.0, bw * clampf(gold / float(pr), 0.0, 1.0), 4.0), Color("#c99a3a"))
+		elif can:
+			_text(Vector2(r.end.x - 34.0, py), "BUY", 10, Color("#ffe9a6"), _bold, HORIZONTAL_ALIGNMENT_LEFT, 32)
+		first = false
+
 func item_slot_rect(i: int) -> Rect2:
 	return Rect2(MAP_RECT.position.x + 22.0 * float(i), MAP_RECT.end.y + 62.0, 20.0, 20.0)      # (0.31.216: 12 + 31 i, 140)
 
@@ -2543,7 +2663,8 @@ var _slot_styles: Array = []
 var _pill_style: StyleBoxFlat = null
 
 func _draw_shop_pulse(me: Dictionary) -> void:
-	if sim.moba.can_shop(me):
+	var nb: Array = sim.moba.next_buys(me, 1) if not me.is_empty() else []
+	if not nb.is_empty() and sim.moba.buy_why(me, str(nb[0])) == "":   # (0.31.217: you can afford the next one; in your castle until then)
 		var pulse := 0.5 + 0.5 * sin(_time * 4.0)
 		if _pulse_style == null:
 			_pulse_style = StyleBoxFlat.new()
@@ -2553,6 +2674,9 @@ func _draw_shop_pulse(me: Dictionary) -> void:
 			_pulse_style.anti_aliasing = true
 		_pulse_style.border_color = Color(1.0, 0.86, 0.4, 0.25 + 0.45 * pulse)
 		draw_style_box(_pulse_style, shop_rect().grow(3.0))
+		var qr := quick_rects(me)
+		if not qr.is_empty():                       # (0.31.217: and the quick-buy's card)
+			draw_style_box(_pulse_style, (qr[0].r as Rect2).grow(2.0 + 2.0 * pulse))
 	_draw_king_alert(me)
 
 var _pulse_style: StyleBoxFlat = null

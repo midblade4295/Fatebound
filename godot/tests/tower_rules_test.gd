@@ -54,6 +54,7 @@ static func _king_case(hero: String, seed_v: int, dist: float, open: bool) -> Di
 	var s = _fresh(hero, seed_v)
 	var me: Dictionary = s.by_id["you"]
 	me.level = 18
+	me.rk = {"q":3, "w":3, "e":3, "r":2}          # (0.31.217: every skill learnt)
 	if open:
 		for t2 in s.moba.towers:                # (0.31.217: a lane broken -- its three towers; the King towers until then)
 			if int(t2.team) == 1 and int(t2.lane) == 1:
@@ -129,6 +130,7 @@ func _init() -> void:
 	s = _fresh("golem", 70)
 	me = s.by_id["you"]
 	me.level = 18
+	me.rk = {"q":3, "w":3, "e":3, "r":2}          # (0.31.217: every skill learnt)
 	tw = _at_tower(s, me, Moba.TOWER_R + 1.0)
 	hp0 = float(tw.hp)
 	check(s.moba.kits.spell(me, "e"), "a Golem's QUAKE beside it")

@@ -332,6 +332,11 @@ const ITEMS := {
 }
 const ITEM_ORDER := ["sword", "ruby", "dagger", "boots", "tome", "fang", "bead", "cloth",
 	"bloodthirster", "titan", "phantom", "archon", "thorn", "greaves", "relic"]
+# 0.31.217: the shop's tabs, as Honor of Kings' (RECOMMENDED is the hero's own list, BUILDS)
+const ITEM_TABS := [["ATTACK", ["sword", "dagger", "fang", "bloodthirster", "phantom"]],
+	["MAGIC", ["tome", "archon", "relic"]],
+	["DEFENSE", ["ruby", "cloth", "bead", "titan", "thorn"]],
+	["MOVEMENT", ["boots", "greaves"]]]
 const BUILDS := {
 	"knight": ["boots", "ruby", "cloth", "thorn", "greaves", "sword", "fang", "bloodthirster", "bead", "titan"],
 	"barbarian": ["sword", "boots", "fang", "bloodthirster", "greaves", "ruby", "cloth", "thorn", "bead", "titan"],
@@ -873,7 +878,7 @@ func step(dt: float) -> void:
 		s.units.erase(u)
 		s.by_id.erase(u.id)
 	if s.profile: tv = s._p("m.units", tv)
-	# the bots shop when they're home or down; the Lord: a side's bots go when they're ahead
+	# the bots shop (anywhere since 0.31.217; home or down until then); the Lord: a side's bots go when they're ahead
 	_shop_clock += dt
 	if _shop_clock >= 1.0:
 		_shop_clock = 0.0
@@ -2086,6 +2091,7 @@ func mod_damage(src: Dictionary, dst: Dictionary, amount: float) -> float:
 	if not src.is_empty():
 		if str(src.get("atk", "")) == "ability" and bool(src.get("hero", false)) and not src.has("kq"):
 			a *= rank_power(src, "q")                   # 0.31.217: a class's Q, stronger by its rank
+		a *= float(src.get("m_out", 1.0))              # 0.31.217: the training's helper and its foes hit softer
 		if t < float(src.get("bl_until", -1.0)):
 			a *= WARCRY_DMG
 		if t < float(src.get("ud_until", -1.0)):
@@ -2413,8 +2419,26 @@ func item_stats(u: Dictionary) -> Dictionary:
 	return out
 
 func can_shop(u: Dictionary) -> bool:
-	# in your own castle, or while down
-	return bool(u.get("hero", false)) and (not s.alive(u) or s.in_castle(u.pos, int(u.team)))
+	# 0.31.217 (Honor of Kings, Kevin: "play this way with ... the shop system"): anywhere, alive or down (in your own
+	# castle or while down until then)
+	return bool(u.get("hero", false))
+
+func build_of(u: Dictionary) -> Array:
+	return BUILDS.get(str(u.get("hid", "")), BUILDS.get(str(u.get("cls", "knight")), BUILDS.knight))
+
+func next_buys(u: Dictionary, n := 2) -> Array:
+	# 0.31.217: the quick-buy -- the next n things on the hero's list it hasn't bought (counting what went into bigger
+	# items), in order; the bots buy the first of them
+	var out := []
+	var seen := {}
+	for id in build_of(u):
+		seen[id] = int(seen.get(id, 0)) + 1
+		if (u.get("bought", []) as Array).count(id) >= int(seen[id]):
+			continue
+		out.append(str(id))
+		if out.size() >= n:
+			break
+	return out
 
 func _comps_owned(u: Dictionary, id: String) -> Array:
 	# the inventory slots this item would be built from (each component once)
@@ -2484,14 +2508,9 @@ func sell(u: Dictionary, slot: int) -> bool:
 
 func _bot_shop(u: Dictionary) -> void:
 	# the next thing on its class's list it hasn't bought (counting what went into bigger items); saves up for it
-	var build: Array = BUILDS.get(str(u.get("hid", "")), BUILDS.get(str(u.cls), BUILDS.knight))
-	var seen := {}
-	for id in build:
-		seen[id] = int(seen.get(id, 0)) + 1
-		if (u.bought as Array).count(id) >= int(seen[id]):
-			continue
-		buy(u, str(id))
-		return
+	var nb := next_buys(u, 1)
+	if not nb.is_empty():
+		buy(u, str(nb[0]))
 
 # ======================================================================================================================
 # 0.31.157 THE JUNGLE

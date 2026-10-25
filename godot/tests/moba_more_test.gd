@@ -10,7 +10,7 @@ extends SceneTree
 #  2. GOLD: 500 to start, a trickle every second from the first wave, the last hit on a minion, a knockout (and the
 #     helpers' share), a tower (0.31.158, League's: the side's heroes near share the local gold -- more for the match's
 #     first tower -- and everyone on the side gets the global);
-#  3. THE SHOP: only in your castle or while down; an item's stats count at once; a big item is built from the small
+#  3. THE SHOP: anywhere (0.31.217; only in your castle or while down until then) and its quick-buy; an item's stats count at once; a big item is built from the small
 #     ones you own (they come off its price and leave your slots); one pair of boots; six slots; selling gives 70 % back;
 #  4. THE JUNGLE: the camps come at 0:30 (the Bone Lord at 5:00), monsters of team 2 that stand still until hit; towers
 #     and lane minions leave them alone; hit, the camp fights back -- while its target stays inside the leash -- and
@@ -322,11 +322,11 @@ func _shop() -> void:
 	var me: Dictionary = s.by_id["you"]
 	me.gold = 5000.0
 	me.pos = P0
-	check(not s.act("you", "shop_buy", "sword") and s.moba.buy_why(me, "sword") == "where", "outside your castle: no buying")
-	me.pos = Sim.spawn(0)
+	# 0.31.217 (Honor of Kings): anywhere -- out in the lane too (only in your castle or while down until then)
 	var dmg0 := float(s.stat(me, "dmg"))
+	check(s.moba.can_shop(me) and s.moba.next_buys(me, 2) == ["boots", "ruby"], "the quick-buy: the Knight's list's first two (%s)" % str(s.moba.next_buys(me, 2)))
 	check(s.act("you", "shop_buy", "sword") and int(me.gold) == 5000 - 350 and is_equal_approx(float(s.stat(me, "dmg")), dmg0 * 1.12),
-		"in your castle: a Long Sword (-350 gold, +12 % damage)")
+		"out in the lane: a Long Sword (-350 gold, +12 % damage)")
 	check(s.moba.price(me, "bloodthirster") == 1900 - 350, "the Bloodthirster costs %d with the sword you own" % s.moba.price(me, "bloodthirster"))
 	s.act("you", "shop_buy", "bloodthirster")
 	check(me.items == ["bloodthirster"] and int(me.gold) == 5000 - 1900, "...bought: the sword went into it")

@@ -10,7 +10,7 @@ extends SceneTree
 #    announced;
 #  - what Fatebound is, then the tour: PLAY, the chests, SHOP, PASS, ARMORY (0.31.204: was the LOCKER), ALLIANCE, the menu -- each one found on
 #    Home, the shade open over it, the scroll out of its way (at the top for what's below);
-#  - the offer: I'LL WING IT closes him (Home, no tutorial); SHOW ME HOW starts the tutorial.
+#  - the offer: I'LL WING IT closes him (Home, no tutorial); SHOW ME HOW opens the TRAINING window (0.31.217), BATTLE starts it.
 #   godot --headless --path godot -s res://tests/herald_intro_test.gd
 const App = preload("res://scripts/app/siege_app.gd")
 const Intro = preload("res://scripts/app/herald_intro.gd")
@@ -187,7 +187,10 @@ func _process(d: float) -> bool:
 			check(it.step == "yes" and it.lines_said[-1] == "intro_yes", "SHOW ME HOW: a recruit with sense")
 			it.shown = 9999.0
 			it.next()
-			check(app.modal == null and app.siege != null, "...and the tutorial starts")
+			check(app.modal != null and app.modal.has_method("_refresh") and int(app.modal.which) == 1 and btn("training_go") != null,
+				"...the TRAINING window: THE BASICS, a hero of three (0.31.217)")
+			press("training_go")
+			check(app.modal == null and app.siege != null and int(app.siege.training) == 1, "...BATTLE: the training starts")
 			_later(1.0)
 		5:
 			print("HERALD_INTRO_PASS" if fails.is_empty() else "HERALD_INTRO_FAIL %s" % str(fails))

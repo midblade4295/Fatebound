@@ -7275,3 +7275,29 @@ is won -> "3 towers a lane, then the king (crystal)"; skills -> "HoK + buttons";
   their lowest skill. Each button shows its rank pips and a word for what it does (DAMAGE, CONTROL, MOBILITY...); an
   unlearnt one says LEARN or the level it opens at. The "learn" action is online too (protocol 37). The stat cards on
   level-up are gone (growth a level 8%). Tests: moba_test, moba_more_test, moba_kits_test, moba_ui_test, tower_look_test.
+- Shop (moba.gd, siege_hud.gd): buy anywhere, alive or down (your castle or down until now). The quick-buy: on the
+  left under your items, the next two things on your hero's list (BUILDS) -- icon, name, price; lit and glowing when
+  you can afford it, a tap buys it there and then (a bar shows how near you are when you can't). The shop opens on
+  tabs, as Honor of Kings': RECOMMENDED (your hero's list in buying order), ATTACK, MAGIC, DEFENSE, MOVEMENT. The bots
+  buy anywhere too. The level-up toast says TAP + TO LEARN A SKILL.
+- Tower ring (siege_view.gd): near an enemy tower its range is laid on the ground (a decal: a strong rim, a faint
+  fill) -- yellow; red when it's shooting you; green when it's shooting one of yours (safe to hit it). A thin floating
+  torus until now.
+- THE TRAINING (training.gd, training_pick.gd; tutorial.gd's match is retired -- the Herald's first-run intro still
+  uses its scroll). The menu's TRAINING (and the intro's SHOW ME HOW, Settings' HOW TO PLAY) opens a window: TRAINING 1
+  THE BASICS or TRAINING 2 5V5 BATTLE, and a hero of three (Knight top, Mage middle, Archer bottom), Kael beside them.
+  In the match Kael Wyrmlance the Dragoon (one of our bots, swapped and driven by the training) fights at your side
+  and talks in the Herald's voice: his line in a bar at the top (portrait, key words gold) while the match runs, the
+  task in a box at the top right, quips in a bubble over his head, a white hand on what to tap, a marching dotted
+  path. Training 1 on a quiet Rift (you take half damage and can't fall): TUTORIAL 1/5 follow him, 2/5 a wave, 3/5 a
+  skill learnt with the + and an enemy hero, 4/5 level 2 and the second skill, two heroes, level 3 and a rank 2, 5/5
+  level 4, the ultimate and three heroes to use it on; the quick-buy; CHALLENGE 1/3 their outer tower (our army sent
+  in; "let our minions walk in first", "its ring is red"), 2/3 the high ground (the inner one taken with the outer),
+  3/3 the King -> VICTORY, TRAINING 1 COMPLETE (+250 gold once). Training 2 a real match: the map tour first (the
+  match waiting; the lanes, minions, towers, how it's won, each lane's heroes -- lit on a big map), then "To the
+  bottom lane. Follow me!" (by your hero's place), MISSION 1/4..4/4 (an outer, inner, high ground tower, the King),
+  the towers' lesson the first time you're by one (the match waits; a card of the ring's colours), HOME when you're
+  hurt, the quick-buy when you can afford it, the King when he's open. No match rewards in either.
+  Voice: 58 lines, ElevenLabs eleven_v4, the Herald's voice (Edward), two takes a line, take 1 used, 4,886 credits
+  (art_sources/training; tools/build_tutorial_assets.py training -> assets/vo/training). Tests: training_test (both
+  played through; replaces tutorial_test), moba_ui_test (the window), herald_intro_test, moba_more_test (the shop).
