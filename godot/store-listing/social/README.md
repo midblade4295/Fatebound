@@ -4,7 +4,17 @@ Banners and profile icons for the game's social accounts (Kevin: "Give me social
 icon"). Every banner is the painted key art (`art_sources/social/key_art.png`) with the FATEBOUND title, top centre, and
 the Knight and the Barbarian clashing under it. `preview.jpg` shows them all.
 
-## Banners (`banners/`)
+## X, 0.31.214 (`x/`) -- the 3D set, use these for X
+Kevin: "Make me a new X banner and pfp". Made only from renders of the game's own models (no painting): the HD heroes,
+the game's world out of focus, the icon's King and throne room; the title in the game's font (`tools/build_x_kit.py`).
+| File | Where it goes |
+|---|---|
+| `x/x_header_1500x500.png` | X header (`x_header_3000x1000.png`: the same, twice the size, for a sharper upload). Five heroes with the King in the middle; FATEBOUND and FAST 5V5 MOBA BATTLES on the left, clear of where X puts your profile picture |
+| `x/pfp_king_400.png` (also 800, 1080) | X profile picture: the app icon's King, closer, his face and crown filling X's round crop -- the account looks like the app |
+| `x/pfp_knight_*.png`, `x/pfp_stormcaller_*.png` | Two other heroes the same way, if you'd rather |
+| `x/preview.jpg` | The header with the King's picture where X puts it, and the three round |
+
+## Banners (`banners/`, 0.31.200: the painted key art)
 | File | Where it goes | Notes |
 |---|---|---|
 | `x_header_1500x500.png` | X (Twitter) header | Your avatar covers the bottom-left corner; nothing important is there |

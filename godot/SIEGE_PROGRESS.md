@@ -7181,3 +7181,14 @@ look like AI made it".
 - Version 0.31.214, versionCode 300; SERVER_BUILD 0.31.214 (kept equal for min_build_test).
 - Preview APK: build/Fatebound-Siege-0.31.214-fatebound.apk (32 MB, preview key), sha256
   d329c036f87d4aca7083d34a3084ac7b2d5cb3905609465a92e9921e069f2131.
+
+## 0.31.214 social — a new X header and profile picture (no app change)
+Kevin: "Make me a new X banner and pfp". The old ones (tools/build_social_kit.py, 0.31.200) are the painted key art and
+title -- the look the icon was redone to leave. tools/build_x_kit.py (new) makes them from the game's own renders only:
+- store-listing/social/x/x_header_1500x500.png (+ 3000x1000): the five HD heroes (Barbarian, Knight, Dragoon, King,
+  Stormcaller -- the store screenshots' renders, kept in store-listing/graphics/raw_renders/store5/art) over the game's
+  world out of focus in blue, a darker wash on the left under FATEBOUND (Lilita One, white, dark outline), the
+  game's ice-to-fire bar and FAST 5V5 MOBA BATTLES -- above X's profile picture in the bottom-left corner.
+- pfp_king_{400,800,1080}.png: the icon's King and throne room (art_sources/app_icon/render), closer -- face and crown
+  fill the round crop, so the account and the app match; pfp_knight_* and pfp_stormcaller_* as alternatives.
+- preview.jpg: the header with the profile picture where X puts it, and the three round. README updated.
