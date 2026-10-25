@@ -4,7 +4,7 @@ extends SceneTree
 # was a painting (tools/home_camp.py, gpt-image: six chibi champions round a fire). This builds the same idea from the
 # game's real pieces and renders it with the desktop renderer (soft shadows, ambient occlusion, bloom):
 #   - the castle at dusk: the Royal kit's gatehouse between two towers and its walls (scripts/siege/castle_kit.gd, the
-#     blue side's), the keep's banners, firs and oaks of the 5v5 map either side (assets/meshy/foliage);
+#     blue side's), the keep's banners;
 #   - the war camp in front of it: the War kit's tents, braziers, supplies and weapon rack; the Royal banners;
 #   - the campfire: a ring of the forest kit's rocks round crossed logs, its light the scene's warm key;
 #   - the heroes round it: the HD Knight, Barbarian, Mage and Stormcaller (tools/meshy_hd.py, from the game's own models)
@@ -101,11 +101,11 @@ func _env() -> void:
 	sky.sky_material = sm
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color("#4a5690")
+	env.ambient_light_color = Color("#46507a")
 	env.ambient_light_energy = _num("AMBIENT", 0.2) * View.VULKAN_AMBIENT
 	env.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
 	env.tonemap_mode = Environment.TONE_MAPPER_ACES
-	env.tonemap_exposure = _num("EXPOSURE", 1.0) * View.VULKAN_EXPOSURE
+	env.tonemap_exposure = _num("EXPOSURE", 1.05) * View.VULKAN_EXPOSURE
 	env.tonemap_white = 6.0
 	env.ssao_enabled = true
 	env.ssao_radius = 0.6
@@ -226,13 +226,7 @@ func _castle() -> void:
 		_piece("war_brazier", Vector3(x, 0, z + 3.2), 1.6)
 		_lamps3.append(Vector3(x, 1.6 * 0.95, z + 3.2))
 		_omni(Vector3(x, 1.9, z + 3.6), Color("#ff9a45"), 2.2, 6.0)
-	# the woods either side, darker further off
-	for i in 16:
-		var side := -1.0 if i % 2 == 0 else 1.0
-		var x := side * rng.randf_range(13.0, 30.0)
-		var zz := rng.randf_range(-36.0, -10.0)
-		var kind: String = ["tree_fir", "tree_oak", "tree_fir", "tree_mossy"][rng.randi() % 4]
-		_scene("res://assets/meshy/foliage/%s.glb" % kind, Vector3(x, 0, zz), rng.randf_range(2.6, 4.2), rng.randf() * 360.0)
+	# (no woods: in this narrow picture the trees only showed as dark wedges at its edges)
 
 # ---------------- the camp ----------------
 func _camp() -> void:
@@ -294,7 +288,7 @@ func _campfire() -> void:
 	coals.material_override = em
 	coals.position = Vector3(0, 0.02, 0)
 	vp.add_child(coals)
-	_omni(Vector3(0, 1.0, 0.2), Color("#ff8c3a"), _num("FIRE", 9.0), 11.0, true)     # the fire: the camp's key light
+	_omni(Vector3(0, 1.0, 0.2), Color("#ff8c3a"), _num("FIRE", 10.5), 11.0, true)     # the fire: the camp's key light
 	_omni(Vector3(0, 0.4, 1.2), Color("#ff7a2a"), 1.6, 5.0)                          # (its glow low on the ground)
 	points["fire3"] = Vector3(0, 0.9, 0)
 	points["fire_base3"] = Vector3(0, 0.25, 0.35)
@@ -353,9 +347,9 @@ func _heroes() -> void:
 	# a little in front of the one inside it, so all five show)
 	_hero("king", Vector3(0.05, 0, -2.6), 0.0)
 	_hero("mage", Vector3(-1.0, 0, -1.6), 22.0)
-	_hero("stormcaller", Vector3(1.02, 0, -1.65), -22.0)
+	_hero("barbarian", Vector3(1.05, 0, -1.7), -24.0)
 	_hero("knight", Vector3(-1.44, 0, 1.0), 42.0)
-	_hero("barbarian", Vector3(1.46, 0, 1.0), -42.0)
+	_hero("stormcaller", Vector3(1.5, 0, 1.0), -40.0)
 
 # ---------------- what camp_scene.gd needs ----------------
 func _px(p: Vector3) -> Vector2:
