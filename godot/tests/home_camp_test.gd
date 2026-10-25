@@ -4,9 +4,11 @@ extends SceneTree
 #  - the backdrop is the camp painting (bg_camp.webp), as wide as the screen and reaching from the top to near the bottom
 #    on 16:9 to 21:9 phones, standing so the champions' feet are just over the PLAY plaque (never hidden under it);
 #  - alive: the fire's tongues sway and its light flickers on the painting (the shader's clock and flicker run), the
-#    lanterns flicker, embers and smoke rise, the Necromancer's eyes and skull and the Mage's orb breathe and send off
-#    wisps, the windows dim now and then, the stars twinkle, a star falls, the fireflies wander; Reduce Motion holds it
-#    all still (no particles, no fireflies, the shader's motion 0); a safe start sends no particles;
+#    lanterns flicker, embers and smoke rise, the magic breathes and sparkles, the windows dim now and then, the stars
+#    twinkle, a star falls, the fireflies wander; Reduce Motion holds it all still (no particles, no fireflies, the
+#    shader's motion 0); a safe start sends no particles;
+#  - 0.31.215: the picture is the 3D render (tools/render_home_camp.gd): the Mage's gem and the Stormcaller's crystal
+#    are the magic; no lit windows, lamps or pennants in view (the checks follow the scene's lists)
 #  - in the app: Home's backdrop is the camp (no 3D heroes); no side buttons; the top row is the 5v5 pill and JOIN OUR
 #    DISCORD side by side; PLAY is the new plaque with FIRST WIN as a tab under it, above the chest panels (each with its
 #    name), all on screen; the top bar's menu button opens ORDERS, QUESTS, RANKS and the TUTORIAL; its badge counts
@@ -159,11 +161,11 @@ func _checks_scene() -> void:
 			bad += " %s:%s" % [str(sz), why]
 		s.get_parent().queue_free()
 	check(bad == "", "the camp covers the screen as wide as it is, from the top to near the bottom, the champions' feet over PLAY%s" % bad)
-	check(phone.paint_layer.get_child_count() > 40 and phone.embers != null and phone.smoke != null and phone.wisps.size() == 4
+	check(phone.paint_layer.get_child_count() > 20 and phone.embers != null and phone.smoke != null and phone.wisps.size() == CampScene.MAGIC.size()
 		and phone._tongues.size() == CampScene.TONGUES.size() and phone._lamps.size() == CampScene.LAMPS.size()
 		and phone._windows.size() == CampScene.WINDOWS.size(), "the fire, the lamps, the magic, the windows and the sky are laid on it")
 	var m := phone.art.material as ShaderMaterial
-	check(int(m.get_shader_parameter("cloth_n")) == 2 and int(m.get_shader_parameter("pennant_n")) == CampScene.PENNANTS.size()
+	check(int(m.get_shader_parameter("cloth_n")) == CampScene.BANNERS.size() and int(m.get_shader_parameter("pennant_n")) == CampScene.PENNANTS.size()
 		and int(m.get_shader_parameter("lamp_n")) == CampScene.LAMPS.size(), "the shader has the banners, the pennants and the lamps")
 
 func _checks_alive() -> void:
@@ -176,21 +178,21 @@ func _checks_alive() -> void:
 		return n
 	check(moved.call(snap.tongues, now.tongues) == now.tongues.size() and float(now.clock) > float(snap.clock) + 1.0
 		and float(now.flick) != float(snap.flick), "the fire's tongues sway, its light flickers (the shader's clock runs: %.2f)" % float(now.clock))
-	check(moved.call(snap.lamps, now.lamps) == now.lamps.size(), "every lantern, torch and candle flickers")
-	check(moved.call(snap.pulses, now.pulses) >= now.pulses.size() - 1, "the eyes, the skull and the orb breathe")
+	check(moved.call(snap.lamps, now.lamps) == now.lamps.size(), "every lantern, torch and candle flickers (%d)" % now.lamps.size())
+	check(now.pulses.size() > 0 and moved.call(snap.pulses, now.pulses) >= now.pulses.size() - 1, "the magic breathes")
 	check(moved.call(snap.stars, now.stars) > now.stars.size() / 2, "the stars twinkle")
 	check(phone.flies != null and phone.flies.flies.size() >= 10 and moved.call(snap.flies, now.flies) == now.flies.size(), "fireflies wander the camp")
 	check(phone._shooting.made >= 1, "a star falls")
 	check(phone.embers.emitting and phone.smoke.emitting and Array(phone.wisps).all(func(w): return (w as CPUParticles2D).emitting),
-		"embers and smoke rise off the fire, wisps off the eyes, the skull and the book")
-	var dim := false
-	for i in 200:                                           # (a window dims when someone passes: run its timer down)
+		"embers and smoke rise off the fire, sparkles off the magic")
+	var dim := CampScene.WINDOWS.is_empty()
+	for i in (0 if dim else 200):                           # (a window dims when someone passes: run its timer down)
 		phone._windows[0][2] = 0.0
 		phone._process(0.05)
 		if float(phone._windows[0][3]) > 0.0:
 			dim = true
 			break
-	check(dim, "a window dims now and then")
+	check(dim, "a window dims now and then (if the picture has lit windows: %d)" % CampScene.WINDOWS.size())
 	var st: Dictionary = snap.still
 	var now_s := _snapshot(still)
 	check(st.tongues == now_s.tongues and st.lamps == now_s.lamps and st.pulses == now_s.pulses and st.stars == now_s.stars

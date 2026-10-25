@@ -14,35 +14,36 @@ extends Control
 # tall enough to need it), standing so the champions' feet are just over the PLAY plaque. Reduce Motion (`calm`): the
 # glows hold still, no particles, nothing moves. A safe start (`lite`): the painting and its still glows only.
 # (0.31.138-0.31.193: the war room -- home_scene.gd, war_room.gd: a painted tower room and the live war table in 3D.)
+# 0.31.215 (Kevin: "I want the home screen as good of quality as the clan screen. The home screen looks very AI
+# generated." -> "Real 3D heroes in camp"): the picture is now a 3D render of the game's own models
+# (tools/render_home_camp.gd) -- the Royal kit's castle at dusk, the War kit's tents and braziers, the HD Knight, Mage,
+# King, Barbarian and Stormcaller round a campfire, a sky with stars and the moon -- in place of the painting (0.31.194-
+# 0.31.214, tools/home_camp.py). Over it, as before: the fire's flames, halo, embers and smoke and its light flickering
+# on the picture, stars twinkling and falling, fireflies, the banners rippling; the magic is the Mage's blue gem and the
+# Stormcaller's crystal, glowing and sparkling (the painting's Necromancer, his eyes and skull, and its lit windows are
+# gone with it).
 const UI2 = preload("res://scripts/app/ui2.gd")
 const CampShader = preload("res://scripts/app/camp.gdshader")
 const ART := "res://assets/ui/v2/bg_camp.webp"
 const PAINT := Vector2(1024.0, 2048.0)
-const FEET_Y := 1268.0                 # the lowest champion's boots (the Musketeer's), down the painting
+const FEET_Y := 1281.0                 # the nearest heroes' boots (the Knight's, the Stormcaller's), down the picture
 const FEET_OVER := 6.0                 # ... this far (screen px) under PLAY's top at most: the plaque hides no more of them
 const COVER_TO := 100.0                # the painting reaches at least this far (screen px) from the screen's bottom
-const FIRE := Vector2(500.0, 860.0)    # the campfire's flames (their middle)
-const FIRE_BASE := Vector2(500.0, 938.0)
+const FIRE := Vector2(512.0, 1110.0)   # the campfire's flames (their middle)
+const FIRE_BASE := Vector2(512.0, 1190.0)
 # the flames' tongues over the painted fire: [x off the base, width, height, phase]
 const TONGUES := [[-36.0, 44.0, 96.0, 0.0], [-15.0, 56.0, 150.0, 1.9], [8.0, 62.0, 172.0, 3.7], [30.0, 50.0, 118.0, 5.1],
 	[46.0, 34.0, 74.0, 2.6], [-50.0, 30.0, 64.0, 4.4]]
-# the lanterns and torches (and the candle): [where, size, light's reach (0: none)]
-const LAMPS := [[Vector2(240, 560), 1.0, 150.0], [Vector2(772, 495), 1.0, 150.0], [Vector2(486, 540), 0.8, 110.0],
-	[Vector2(596, 540), 0.8, 110.0], [Vector2(48, 1063), 0.6, 90.0], [Vector2(342, 1640), 1.1, 160.0]]
-const EYES := [Vector2(187, 972), Vector2(247, 972)]    # the Necromancer's
-const SKULL := Vector2(332, 1025)      # the green skull in his hand
-const ORB := Vector2(445, 717)         # the Mage's spell orb
-const BOOK := Vector2(395, 762)        # ... and his open book
-const WINDOWS := [Vector2(350, 400), Vector2(480, 325), Vector2(653, 281), Vector2(650, 369), Vector2(461, 437),
-	Vector2(805, 334), Vector2(720, 407), Vector2(422, 438), Vector2(583, 413), Vector2(609, 258), Vector2(387, 461)]
-const SKY := Rect2(0.0, 0.0, 1024.0, 230.0)     # where the stars are (and the falling ones go)
-const CAMP := Rect2(60.0, 470.0, 900.0, 800.0)  # where the fireflies wander
-const BANNERS := [Vector4(140, 300, 238, 545), Vector4(822, 325, 908, 548)]
-const PENNANTS := [Vector4(468, 152, 504, 192), Vector4(655, 112, 699, 148), Vector4(367, 240, 401, 274),
-	Vector4(598, 162, 624, 192), Vector4(800, 207, 838, 242)]
+# the braziers and torches you can see: [where, size, light's reach (0: none)]
+const LAMPS := []
+# the magic glowing on the heroes: [where, colour, size] -- the Mage's blue gem, the Stormcaller's crystal
+const MAGIC := [[Vector2(212, 862), Color(0.45, 0.8, 1.0), 1.0], [Vector2(722, 800), Color(0.55, 0.95, 1.0), 1.1]]
+const WINDOWS := []                    # (the castle's windows are dark at dusk in the render)
+const SKY := Rect2(0.0, 0.0, 1024.0, 300.0)     # where the stars twinkle (and the falling ones go): above the spires
+const CAMP := Rect2(40.0, 760.0, 944.0, 520.0)  # where the fireflies wander
+const BANNERS := [Vector4(100, 490, 230, 690), Vector4(795, 490, 915, 690)]
+const PENNANTS := []
 const FLAME := Color(1.0, 0.62, 0.26)
-const GREEN := Color(0.55, 1.0, 0.35)
-const BLUE := Color(0.45, 0.8, 1.0)
 
 var calm := false
 var lite := false
@@ -53,13 +54,13 @@ var art: TextureRect
 var room = null                         # (the war room's 3D; the camp has none -- siege_app reads it)
 var embers: CPUParticles2D
 var smoke: CPUParticles2D
-var wisps: Array = []                   # the green ones (eyes, skull) and the blue ones (the book)
+var wisps: Array = []                   # the magic's sparkles (one stream each)
 var flies: Node2D
 var _fire_halo: TextureRect
 var _fire_heart: TextureRect
 var _tongues: Array = []                # [TextureRect, phase, height]
 var _lamps: Array = []                  # {core, halo, phase, a}
-var _pulses: Array = []                 # [TextureRect, base alpha, rate, phase, depth] (eyes, skull, orb)
+var _pulses: Array = []                 # [TextureRect, base alpha, rate, phase, depth] (the magic's glows)
 var _windows: Array = []                # [TextureRect, base alpha, next dim, dim until]
 var _stars: Array = []                  # [TextureRect, rate, phase]
 var _shooting: Node2D
@@ -161,11 +162,14 @@ func _ready() -> void:
 	for i in LAMPS.size():
 		if float(LAMPS[i][2]) > 0.0:
 			lamps.append(Vector4(LAMPS[i][0].x, LAMPS[i][0].y, float(LAMPS[i][2]), 1.7 * i))
-	m.set_shader_parameter("lamps", lamps)
+	if not lamps.is_empty():                       # (0.31.215: the render may have none in view)
+		m.set_shader_parameter("lamps", lamps)
 	m.set_shader_parameter("lamp_n", lamps.size())
-	m.set_shader_parameter("cloth", BANNERS)
+	if not BANNERS.is_empty():
+		m.set_shader_parameter("cloth", BANNERS)
 	m.set_shader_parameter("cloth_n", BANNERS.size())
-	m.set_shader_parameter("pennants", PENNANTS)
+	if not PENNANTS.is_empty():
+		m.set_shader_parameter("pennants", PENNANTS)
 	m.set_shader_parameter("pennant_n", PENNANTS.size())
 	art.material = m
 	paint_layer.add_child(art)
@@ -311,40 +315,26 @@ func _lamp(at: Vector2, s: float, i: int) -> void:
 	core.position = at - core.pivot_offset + Vector2(0, core.size.y * 0.35)
 	_lamps.append({"core": core, "halo": halo, "phase": randf() * TAU + i * 1.37, "a": halo.modulate.a})
 
-# ---------------- the magic: the Necromancer's eyes and skull, the Mage's orb ----------------
+# ---------------- the magic: the Mage's gem, the Stormcaller's crystal ----------------
 func _build_magic() -> void:
-	for e in EYES:
-		_pulses.append([_glow(paint_layer, e, Vector2(54, 44), Color(GREEN, 0.55)), 0.55, 1.3, 0.0, 0.35])
-		_pulses.append([_glow(paint_layer, e, Vector2(14, 12), Color(0.9, 1.0, 0.8, 0.7)), 0.7, 1.3, 0.0, 0.2])
-	_pulses.append([_glow(paint_layer, SKULL, Vector2(120, 120), Color(GREEN, 0.45)), 0.45, 0.9, 1.1, 0.4])
-	_pulses.append([_glow(paint_layer, ORB, Vector2(90, 90), Color(BLUE, 0.6)), 0.6, 1.7, 0.4, 0.4])
-	_pulses.append([_glow(paint_layer, ORB, Vector2(26, 26), Color(0.9, 0.97, 1.0, 0.8)), 0.8, 1.7, 0.4, 0.25])
-	_pulses.append([_glow(paint_layer, BOOK, Vector2(130, 70), Color(BLUE, 0.16)), 0.16, 1.7, 0.8, 0.5])
-	for at in [EYES[0], EYES[1], SKULL]:
-		var w := _particles(at + Vector2(0, -6), 6 if at != SKULL else 10, 1.8, [Color(GREEN, 0.0), Color(GREEN, 0.6),
-			Color(0.4, 0.9, 0.3, 0.3), Color(0.3, 0.8, 0.2, 0.0)])
-		w.emission_shape = CPUParticles2D.EMISSION_SHAPE_SPHERE
-		w.emission_sphere_radius = 8.0 if at != SKULL else 18.0
-		w.direction = Vector2(0.5 if at != SKULL else 0.1, -1.0)
-		w.spread = 30.0
-		w.gravity = Vector2(4, -10)
-		w.initial_velocity_min = 8.0
-		w.initial_velocity_max = 20.0
-		w.scale_amount_min = 0.35
-		w.scale_amount_max = 0.8
-		wisps.append(w)
-	var sp := _particles(BOOK + Vector2(0, -16), 12, 2.0, [Color(BLUE, 0.0), Color(0.8, 0.95, 1.0, 0.9), Color(BLUE, 0.5),
-		Color(BLUE, 0.0)])
-	sp.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
-	sp.emission_rect_extents = Vector2(44, 8)
-	sp.direction = Vector2(0, -1)
-	sp.spread = 25.0
-	sp.gravity = Vector2(0, -6)
-	sp.initial_velocity_min = 10.0
-	sp.initial_velocity_max = 26.0
-	sp.scale_amount_min = 0.15
-	sp.scale_amount_max = 0.35
-	wisps.append(sp)
+	for i in MAGIC.size():
+		var at: Vector2 = MAGIC[i][0]
+		var col: Color = MAGIC[i][1]
+		var sz: float = MAGIC[i][2]
+		_pulses.append([_glow(paint_layer, at, Vector2(96, 96) * sz, Color(col, 0.5)), 0.5, 1.5 + 0.3 * i, 0.7 * i, 0.4])
+		_pulses.append([_glow(paint_layer, at, Vector2(24, 24) * sz, Color(0.9, 0.97, 1.0, 0.75)), 0.75, 1.5 + 0.3 * i, 0.7 * i, 0.25])
+		var sp := _particles(at + Vector2(0, -6), 9, 1.9, [Color(col, 0.0), Color(0.85, 0.97, 1.0, 0.9), Color(col, 0.5),
+			Color(col, 0.0)])
+		sp.emission_shape = CPUParticles2D.EMISSION_SHAPE_SPHERE
+		sp.emission_sphere_radius = 14.0 * sz
+		sp.direction = Vector2(0, -1)
+		sp.spread = 30.0
+		sp.gravity = Vector2(0, -8)
+		sp.initial_velocity_min = 10.0
+		sp.initial_velocity_max = 24.0
+		sp.scale_amount_min = 0.15
+		sp.scale_amount_max = 0.35
+		wisps.append(sp)
 
 # ---------------- layout ----------------
 func place(play_top: float) -> void:

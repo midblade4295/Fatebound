@@ -23,6 +23,37 @@ const Stage = preload("res://scripts/siege/asset_cache.gd")
 const CastleKit = preload("res://scripts/siege/castle_kit.gd")
 
 const PAINT := Vector2i(1024, 2048)
+# the dusk sky (a sky shader: no picture): indigo overhead into violet and a warm band at the horizon; stars, more and
+# brighter higher up, each its own size; the moon up on the right with a soft halo
+const SKY_SHADER := """
+shader_type sky;
+float hash(vec3 p) {
+	p = fract(p * 0.3183099 + vec3(0.11, 0.17, 0.13));
+	p *= 17.0;
+	return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+}
+void sky() {
+	vec3 d = EYEDIR;
+	float h = d.y;
+	// (colours given as sRGB, made linear -- the sky shader's COLOR is linear)
+	vec3 col = mix(pow(vec3(0.5, 0.21, 0.37), vec3(2.2)), pow(vec3(0.17, 0.07, 0.24), vec3(2.2)), smoothstep(0.0, 0.16, h));
+	col = mix(col, pow(vec3(0.03, 0.04, 0.15), vec3(2.2)), smoothstep(0.12, 0.55, h));
+	vec3 g = d * 260.0;
+	vec3 cell = floor(g);
+	float r = hash(cell);
+	if (r > 0.982 && h > 0.06) {
+		vec3 c = cell + vec3(hash(cell + 1.3), hash(cell + 2.7), hash(cell + 4.1));
+		float k = (r - 0.982) / 0.018;
+		float s = smoothstep(0.18 + 0.25 * k, 0.0, length(g - c));
+		col += vec3(1.0, 0.95, 0.88) * s * (0.25 + 1.4 * k) * smoothstep(0.06, 0.3, h);
+	}
+	vec3 md = normalize(vec3(0.167, 0.211, -1.0));
+	float m = dot(d, md);
+	col += vec3(1.0, 0.96, 0.86) * smoothstep(0.99978, 0.99985, m) * 1.6;
+	col += pow(vec3(0.6, 0.55, 0.85), vec3(2.2)) * pow(max(m, 0.0), 2500.0) * 0.35;
+	COLOR = col;
+}
+"""
 
 var out := "/tmp/home_camp.png"
 var ss := 1.5
@@ -90,14 +121,9 @@ func _env() -> void:
 	var env := Environment.new()
 	env.background_mode = Environment.BG_SKY
 	var sky := Sky.new()
-	var sm := ProceduralSkyMaterial.new()           # dusk: deep indigo overhead, violet, a warm band low down
-	sm.sky_top_color = Color("#070a26")
-	sm.sky_horizon_color = Color("#7a3560")
-	sm.sky_curve = 0.06
-	sm.ground_horizon_color = Color("#2a1830")
-	sm.ground_bottom_color = Color("#0a0812")
-	sm.sun_angle_max = 0.0
-	sm.sky_energy_multiplier = 1.0
+	var sm := ShaderMaterial.new()                  # dusk: deep indigo overhead, violet, a warm band low down; stars; a moon
+	sm.shader = Shader.new()
+	sm.shader.code = SKY_SHADER
 	sky.sky_material = sm
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
@@ -237,21 +263,21 @@ func _camp() -> void:
 	for x in [-2.6, 2.6]:
 		var b := _piece("royal_banner", Vector3(x, 0, -8.6), 4.6, 0.0)
 		_banners3.append(b)
-	for x in [-2.9, 2.9]:
-		_piece("war_brazier", Vector3(x, 0, -4.4), 1.4)
-		_lamps3.append(Vector3(x, 1.4 * 0.95, -4.4))
-		_omni(Vector3(x, 1.7, -4.1), Color("#ff9a45"), 2.4, 6.0)
+	for x in [-2.1, 2.1]:                              # (in the gaps between the heroes)
+		_piece("war_brazier", Vector3(x, 0, -5.0), 1.4)
+		_lamps3.append(Vector3(x, 1.4 * 0.95, -5.0))
+		_omni(Vector3(x, 1.7, -4.7), Color("#ff9a45"), 2.4, 6.0)
 
 # ---------------- the campfire ----------------
 func _campfire() -> void:
 	var stone := StandardMaterial3D.new()
-	stone.albedo_color = Color("#77706a")
+	stone.albedo_color = Color("#4f4a46")
 	stone.roughness = 0.92
 	for i in 12:                                       # (a ring of rounded stones)
 		var a := TAU * i / 12.0 + rng.randf_range(-0.08, 0.08)
 		var st := MeshInstance3D.new()
 		var sp := SphereMesh.new()
-		var r := rng.randf_range(0.12, 0.16)
+		var r := rng.randf_range(0.1, 0.13)
 		sp.radius = r
 		sp.height = r * 1.3
 		st.mesh = sp
