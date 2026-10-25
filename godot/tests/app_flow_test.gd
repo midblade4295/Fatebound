@@ -104,10 +104,12 @@ func _process(d: float) -> bool:
 			check(app.home_fixed == (float(Screens.home_layout(hh).needed) <= hh + 1.0) and (app._scroll_target() == null) == app.home_fixed \
 				and btn("side_moba") == null and btn("side_ranks") == null and btn("home_menu") != null,
 				"Home scrolls only when the screen is too short (%.0f px here); no 5V5 (0.31.164: 5v5 only); no side buttons (0.31.194: the menu)" % hh)
-			for h in [723.0, 700.0, 680.0]:
+			# (0.31.216: landscape -- 294 px on a 20:9 phone, more on 16:9 and tablets; PLAY beside the chests, its foot at
+			# theirs)
+			for h in [294.0, 310.0, 444.0]:
 				var l: Dictionary = Screens.home_layout(h)
-				check(float(l.needed) <= h + 1.0 and float(l.play) >= Screens.PLAY_MIN \
-					and float(l.chests) >= float(l.play) + Screens.PLAQUE_H + Screens.FW_HANG + Screens.PLAY_GAP - 0.5, "Home fits %.0f px without scrolling: %s" % [h, str(l)])
+				check(float(l.needed) <= h + 1.0 and float(l.chests) >= Screens.PLAY_MIN \
+					and absf(float(l.play) + Screens.PLAQUE_H - (float(l.chests) + Screens.CHEST_H)) <= 4.0, "Home fits %.0f px without scrolling: %s" % [h, str(l)])
 			press("home_menu")
 			check(btn("tutorial_start") != null and btn("side_ranks") != null and btn("side_quests") != null,
 				"the menu: RANKS (0.31.170: online), TUTORIAL (0.31.181: the 5v5's), QUESTS, ORDERS")

@@ -220,9 +220,8 @@ func setup_steps(s) -> Array:
 			["keep 1", func():
 				_build_keep(1)
 				_merge_kit(1)],
-			["towers", func():
-				_build_moba()                       # 0.31.155 5V5: the lane towers
-				_build_ground_marks()],             # 0.31.216: the carved stone on the ground
+			["towers", _build_moba],                # 0.31.155 5V5: the lane towers
+			["ground marks", _build_ground_marks],  # 0.31.216: the carved stone on the ground (a step of its own)
 			["edge scenery", _build_edge_scenery],
 			["oracles+warm", func():
 				for tm in 2:
@@ -3850,7 +3849,9 @@ const MARK_CIRCLES := [[Vector2(0.0, 0.0), 8.5], [Vector2(0.0, 41.0), 6.0], [Vec
 const MARK_RING := 6.4                 # a tower's ring, across (its hole ~2.4 m: the tower's foot stands in it)
 
 func _build_ground_marks() -> void:
-	var h := func(p: Vector2) -> float: return Land.terrain_height(p)
+	# (the ground's own height: the ridges' rock, where a mark runs under it, hides it -- and the build step is a quarter
+	# of the time terrain_height's took)
+	var h := func(p: Vector2) -> float: return Land.ground_height(p, false)
 	var spots := []
 	for c in MARK_CIRCLES:
 		spots.append(["circle.png", c[0], float(c[1])])

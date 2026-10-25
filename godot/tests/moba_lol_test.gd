@@ -118,7 +118,7 @@ func _fog() -> void:
 	_run(s, 0.3)
 	check(s.nearest_enemy(b1, 40.0).get("id", "") == "r1", "...seen: he can")
 	# brush
-	var bp := Vector2(14.0, -42.5)                         # one of red's brush patches (0.31.165: the Rift's)
+	var bp: Vector2 = -(Vision.BRUSH_BLUE[0][0] as Vector2)   # one of red's brush patches (0.31.216: the HoK map's)
 	var bid: int = v.brush_at(bp)
 	check(bid >= 0 and v.brush_at(bp + Vector2(0, 5)) < 0, "red's side has its brush patches (%d in all)" % v.brushes.size())
 	r1.pos = bp

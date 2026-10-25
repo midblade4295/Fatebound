@@ -111,8 +111,8 @@ static func decal_material(pic: String, tint: Vector3) -> ShaderMaterial:
 	return _decal_mats[pic]
 
 static func decal_mesh(c: Vector2, size: float, height: Callable, lift := 0.05) -> ArrayMesh:
-	# A size x size grid centred on c, every 0.5 m, each point just above the ground (height: Vector2 -> float).
-	var n := maxi(4, int(ceil(size / 0.5)))
+	# A size x size grid centred on c, every 0.75 m or less, each point just above the ground (height: Vector2 -> float).
+	var n := maxi(4, int(ceil(size / 0.75)))
 	var verts := PackedVector3Array()
 	var uvs := PackedVector2Array()
 	var norms := PackedVector3Array()

@@ -249,14 +249,20 @@ func _start_staged() -> void:
 func _start_steps() -> Array:
 	# The match's start as steps (each one timed into ready_times / View.build_times).
 	var steps := []
+	# (0.31.216: the field, the 5v5 and the view in three steps -- the Honor of Kings map's nav grid is bigger, and the
+	# three in one frame went past 400 ms on a slow phone)
+	var seed_value := int(Time.get_unix_time_from_system()) & 0x7fffffff if match_seed < 0 else match_seed
 	steps.append(func():
 		var t_sim := Time.get_ticks_msec()
 		sim = Sim.new()
-		var seed_value := int(Time.get_unix_time_from_system()) & 0x7fffffff if match_seed < 0 else match_seed
 		team_size = 5
 		sim.setup(team_size, seed_value)
+		ready_times["sim.setup"] = Time.get_ticks_msec() - t_sim)
+	steps.append(func():
+		var t_moba := Time.get_ticks_msec()
 		sim.setup_moba(_hero(), seed_value)
-		ready_times["sim.setup"] = Time.get_ticks_msec() - t_sim
+		ready_times["sim.setup_moba"] = Time.get_ticks_msec() - t_moba)
+	steps.append(func():
 		view = View.new()
 		view.low_fx = low_fx
 		view.hq_gfx = hq_gfx

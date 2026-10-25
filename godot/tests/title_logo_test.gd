@@ -201,7 +201,7 @@ func _loading_screens() -> void:
 	cl.set_script(load("res://scripts/app/content_loader.gd"))
 	cl._build_ui()
 	var texs := cl.find_children("*", "TextureRect", true, false).map(func(n): return (n as TextureRect).texture.resource_path if (n as TextureRect).texture else "")
-	check(texs.has("res://assets/branding/splash.png") and texs.has("res://assets/branding/title_logo.webp"),
+	check(texs.has("res://assets/branding/splash_land.png") and texs.has("res://assets/branding/title_logo.webp"),     # (0.31.216: landscape)
 		"the download screen: the castle wall and the title, from the base build (%s)" % str(texs))
 	cl.free()
 	# the match's warm-up cover (0.31.208: the loading screen -- its courtyard painting, not the castle wall)

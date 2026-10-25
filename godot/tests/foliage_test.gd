@@ -139,10 +139,14 @@ func _process(_d: float) -> bool:
 			var q := Vector2((p as Vector3).x, (p as Vector3).z)
 			if q.distance_to(b.p) <= float(b.r):
 				inside += 1
-				if absf((p as Vector3).y - (Sim.height_at(q) - 0.05)) < 0.03:
-					aground += 1
 		if inside < 4:
 			thin += 1
+	for p in brush_pts:
+		# (0.31.216: the grass clumps at a patch's foot stand up to 0.35 m past its edge)
+		var q := Vector2((p as Vector3).x, (p as Vector3).z)
+		var near: bool = mode.sim.moba.vision.brushes.any(func(b): return q.distance_to(b.p) <= float(b.r) + 0.5)
+		if near and absf((p as Vector3).y - (Sim.height_at(q) - 0.05)) < 0.03:
+			aground += 1
 	check(thin == 0, "every brush patch filled (%d patches, %d with under 4 plants)" % [mode.sim.moba.vision.brushes.size(), thin])
 	check(aground == brush_pts.size(), "the brush on the ground (%d of %d)" % [aground, brush_pts.size()])
 	print("FOLIAGE_%s" % ("PASS" if fails.is_empty() else "FAIL %s" % str(fails)))
