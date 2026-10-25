@@ -55,10 +55,10 @@ func _initialize() -> void:
 	_campfire()
 	_heroes()
 	cam = Camera3D.new()
-	cam.fov = _num("FOV", 58.0)
+	cam.fov = _num("FOV", 48.0)
 	cam.far = 400.0
 	vp.add_child(cam)
-	cam.look_at_from_position(_v3("CAM", Vector3(0.0, 3.4, 10.5)), _v3("AIM", Vector3(0.0, 2.6, -4.0)), Vector3.UP)
+	cam.look_at_from_position(_v3("CAM", Vector3(0.0, 1.7, 8.5)), _v3("AIM", Vector3(0.0, 0.58, -2.0)), Vector3.UP)
 
 func _process(_d: float) -> bool:
 	frames += 1
@@ -91,22 +91,22 @@ func _env() -> void:
 	env.background_mode = Environment.BG_SKY
 	var sky := Sky.new()
 	var sm := ProceduralSkyMaterial.new()           # dusk: deep indigo overhead, violet, a warm band low down
-	sm.sky_top_color = Color("#0d1036")
-	sm.sky_horizon_color = Color("#b4587a")
-	sm.sky_curve = 0.09
-	sm.ground_horizon_color = Color("#3a2440")
+	sm.sky_top_color = Color("#070a26")
+	sm.sky_horizon_color = Color("#7a3560")
+	sm.sky_curve = 0.06
+	sm.ground_horizon_color = Color("#2a1830")
 	sm.ground_bottom_color = Color("#0a0812")
 	sm.sun_angle_max = 0.0
 	sm.sky_energy_multiplier = 1.0
 	sky.sky_material = sm
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color("#5d6aa8")
-	env.ambient_light_energy = _num("AMBIENT", 0.32) * View.VULKAN_AMBIENT
+	env.ambient_light_color = Color("#4a5690")
+	env.ambient_light_energy = _num("AMBIENT", 0.2) * View.VULKAN_AMBIENT
 	env.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
-	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	env.tonemap_exposure = _num("EXPOSURE", 0.95) * View.VULKAN_EXPOSURE
-	env.tonemap_white = 4.0
+	env.tonemap_mode = Environment.TONE_MAPPER_ACES
+	env.tonemap_exposure = _num("EXPOSURE", 1.0) * View.VULKAN_EXPOSURE
+	env.tonemap_white = 6.0
 	env.ssao_enabled = true
 	env.ssao_radius = 0.6
 	env.ssao_intensity = 1.6
@@ -118,8 +118,8 @@ func _env() -> void:
 	env.glow_hdr_threshold = 1.1
 	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SOFTLIGHT
 	env.fog_enabled = true                             # dusk haze: the castle further off than the camp
-	env.fog_light_color = Color("#4b3a6e")
-	env.fog_density = _num("FOG", 0.012)
+	env.fog_light_color = Color("#2a2140")
+	env.fog_density = _num("FOG", 0.004)
 	env.fog_sky_affect = 0.0
 	env.fog_height = 6.0
 	env.fog_height_density = 0.15
@@ -130,7 +130,7 @@ func _env() -> void:
 func _lights() -> void:
 	var moon := DirectionalLight3D.new()               # the last of the dusk: cool, from behind left, high
 	moon.light_color = Color("#9fb4ff")
-	moon.light_energy = _num("MOON", 0.55)
+	moon.light_energy = _num("MOON", 0.7)
 	moon.rotation_degrees = Vector3(-38, 150, 0)
 	moon.shadow_enabled = true
 	moon.shadow_blur = 2.0
@@ -163,29 +163,29 @@ func _ground() -> void:
 	var m := StandardMaterial3D.new()
 	var tex: Texture2D = Stage.texture("res://assets/meshy/castle/floors/war_earth.jpg")
 	m.albedo_texture = tex
-	m.albedo_color = Color("#b9a58e")
+	m.albedo_color = Color("#8a7660")
 	m.uv1_scale = Vector3(40, 40, 1)
 	m.roughness = 0.95
 	g.material_override = m
 	vp.add_child(g)
-	# a paved square round the fire and up to the gate (the court's stone)
+	# a paved road from the camp up to the gate (the court's stone)
 	var court := MeshInstance3D.new()
 	var cm := PlaneMesh.new()
-	cm.size = Vector2(10, 26)
+	cm.size = Vector2(5, 22)
 	court.mesh = cm
 	var c := StandardMaterial3D.new()
 	c.albedo_texture = Stage.texture("res://assets/meshy/castle/floors/royal_court.jpg")
-	c.albedo_color = Color("#a49c94")
-	c.uv1_scale = Vector3(3, 7, 1)
+	c.albedo_color = Color("#7c746c")
+	c.uv1_scale = Vector3(1.5, 5, 1)
 	c.roughness = 0.9
 	court.material_override = c
-	court.position = Vector3(0, 0.01, -9.0)
+	court.position = Vector3(0, 0.01, -22.0)
 	vp.add_child(court)
 	# grass tufts and pebbles about the camp
 	for i in 70:
 		var x := rng.randf_range(-14.0, 14.0)
 		var z := rng.randf_range(-14.0, 6.0)
-		if absf(x) < 4.6 and z > -20.0:
+		if absf(x) < 3.2 and z > -5.0:
 			continue
 		_scene("res://assets/kaykit/forest/Grass_%d_%s_Color1.gltf" % [rng.randi_range(1, 2), ["A", "B", "C"][rng.randi() % 3]],
 			Vector3(x, 0, z), rng.randf_range(0.8, 1.5), rng.randf() * 360.0)
@@ -213,14 +213,14 @@ func _piece(model: String, at: Vector3, height: float, turn := 0.0) -> Node3D:
 	return p
 
 func _castle() -> void:
-	var z := -24.0
-	_piece("royal_gatehouse", Vector3(0, 0, z), 11.0)
-	_piece("royal_tower", Vector3(-11.5, 0, z + 0.5), 13.5)
-	_piece("royal_tower", Vector3(11.5, 0, z + 0.5), 13.5)
+	var z := -32.0
+	_piece("royal_gatehouse", Vector3(0, 0, z), 10.0)
+	_piece("royal_tower", Vector3(-11.5, 0, z + 0.5), 12.0)
+	_piece("royal_tower", Vector3(11.5, 0, z + 0.5), 12.0)
 	for x in [-6.4, 6.4, -17.5, 17.5]:
-		_piece("royal_wall", Vector3(x, 0, z), 6.6)
-	_piece("royal_tower", Vector3(-23.0, 0, z + 2.0), 11.0)
-	_piece("royal_tower", Vector3(23.0, 0, z + 2.0), 11.0)
+		_piece("royal_wall", Vector3(x, 0, z), 6.0)
+	_piece("royal_tower", Vector3(-23.0, 0, z + 2.0), 10.0)
+	_piece("royal_tower", Vector3(23.0, 0, z + 2.0), 10.0)
 	# torches either side of the gate
 	for x in [-3.6, 3.6]:
 		_piece("war_brazier", Vector3(x, 0, z + 3.2), 1.6)
@@ -230,33 +230,44 @@ func _castle() -> void:
 	for i in 16:
 		var side := -1.0 if i % 2 == 0 else 1.0
 		var x := side * rng.randf_range(13.0, 30.0)
-		var zz := rng.randf_range(-30.0, -8.0)
+		var zz := rng.randf_range(-36.0, -10.0)
 		var kind: String = ["tree_fir", "tree_oak", "tree_fir", "tree_mossy"][rng.randi() % 4]
 		_scene("res://assets/meshy/foliage/%s.glb" % kind, Vector3(x, 0, zz), rng.randf_range(2.6, 4.2), rng.randf() * 360.0)
 
 # ---------------- the camp ----------------
 func _camp() -> void:
-	_piece("war_tent", Vector3(-7.4, 0, -7.0), 3.4, 28.0)
-	_piece("war_tent", Vector3(7.6, 0, -7.6), 3.4, -30.0)
-	_piece("war_supplies", Vector3(-5.6, 0, -3.2), 1.5, 60.0)
-	_piece("war_weapon_rack", Vector3(5.9, 0, -3.8), 1.8, -55.0)
-	_piece("war_dummy", Vector3(9.5, 0, -2.0), 2.0, -40.0)
-	for x in [-4.3, 4.3]:
-		var b := _piece("royal_banner", Vector3(x, 0, -5.6), 4.4, 0.0)
+	_piece("war_tent", Vector3(-3.5, 0, -7.6), 3.2, 35.0)
+	_piece("war_tent", Vector3(3.6, 0, -7.9), 3.2, -35.0)
+	_piece("war_supplies", Vector3(-3.4, 0, -3.6), 1.3, 70.0)
+	_piece("war_weapon_rack", Vector3(3.5, 0, -3.9), 1.7, -60.0)
+	for x in [-2.6, 2.6]:
+		var b := _piece("royal_banner", Vector3(x, 0, -8.6), 4.6, 0.0)
 		_banners3.append(b)
-	for x in [-6.2, 6.2]:
-		_piece("war_brazier", Vector3(x, 0, -0.6), 1.5)
-		_lamps3.append(Vector3(x, 1.5 * 0.95, -0.6))
-		_omni(Vector3(x, 1.8, -0.4), Color("#ff9a45"), 2.6, 6.5)
+	for x in [-2.9, 2.9]:
+		_piece("war_brazier", Vector3(x, 0, -4.4), 1.4)
+		_lamps3.append(Vector3(x, 1.4 * 0.95, -4.4))
+		_omni(Vector3(x, 1.7, -4.1), Color("#ff9a45"), 2.4, 6.0)
 
 # ---------------- the campfire ----------------
 func _campfire() -> void:
-	for i in 10:
-		var a := TAU * i / 10.0
-		var r := _scene("res://assets/kaykit/forest/Rock_1_%s_Color1.gltf" % ["A", "B", "C", "D", "E"][i % 5],
-			Vector3(cos(a) * 0.95, 0.0, sin(a) * 0.95), rng.randf_range(0.28, 0.36), rng.randf() * 360.0)
+	var stone := StandardMaterial3D.new()
+	stone.albedo_color = Color("#77706a")
+	stone.roughness = 0.92
+	for i in 12:                                       # (a ring of rounded stones)
+		var a := TAU * i / 12.0 + rng.randf_range(-0.08, 0.08)
+		var st := MeshInstance3D.new()
+		var sp := SphereMesh.new()
+		var r := rng.randf_range(0.15, 0.2)
+		sp.radius = r
+		sp.height = r * 1.3
+		st.mesh = sp
+		st.material_override = stone
+		st.position = Vector3(cos(a) * 0.82, r * 0.42, sin(a) * 0.82)
+		st.rotation = Vector3(rng.randf_range(-0.2, 0.2), rng.randf() * TAU, rng.randf_range(-0.2, 0.2))
+		st.scale = Vector3(rng.randf_range(1.0, 1.35), 1.0, rng.randf_range(0.9, 1.2))
+		vp.add_child(st)
 	var bark := StandardMaterial3D.new()
-	bark.albedo_color = Color("#5a3a22")
+	bark.albedo_color = Color("#4a2e1a")
 	bark.roughness = 0.95
 	for i in 4:
 		var log := MeshInstance3D.new()
@@ -283,7 +294,7 @@ func _campfire() -> void:
 	coals.material_override = em
 	coals.position = Vector3(0, 0.02, 0)
 	vp.add_child(coals)
-	_omni(Vector3(0, 1.0, 0.2), Color("#ff8c3a"), _num("FIRE", 7.5), 12.0, true)     # the fire: the camp's key light
+	_omni(Vector3(0, 1.0, 0.2), Color("#ff8c3a"), _num("FIRE", 9.0), 11.0, true)     # the fire: the camp's key light
 	_omni(Vector3(0, 0.4, 1.2), Color("#ff7a2a"), 1.6, 5.0)                          # (its glow low on the ground)
 	points["fire3"] = Vector3(0, 0.9, 0)
 	points["fire_base3"] = Vector3(0, 0.25, 0.35)
@@ -317,6 +328,16 @@ func _hd(path: String) -> Node3D:
 	return r
 
 func _hero(name: String, at: Vector3, turn: float) -> void:
+	points["feet_" + name] = at
+	if OS.get_environment("NOHD") == "1":             # (framing: a 2 m capsule for each)
+		var c := MeshInstance3D.new()
+		var cm := CapsuleMesh.new()
+		cm.height = 2.6 if name == "king" else 2.0
+		cm.radius = 0.45
+		c.mesh = cm
+		c.position = at + Vector3(0, cm.height * 0.5, 0)
+		vp.add_child(c)
+		return
 	var path := "res://../art_sources/app_icon/king_hd/king_hd.glb" if name == "king" else "res://../art_sources/store_heroes/%s/%s_hd.glb" % [name, name]
 	var h := _hd(path)
 	if h != null:
@@ -326,11 +347,13 @@ func _hero(name: String, at: Vector3, turn: float) -> void:
 
 func _heroes() -> void:
 	# round the fire, facing out to us a little turned to it; the King behind the fire
-	_hero("king", Vector3(0.15, 0, -2.9), 0.0)
-	_hero("mage", Vector3(-3.0, 0, -2.2), 32.0)
-	_hero("stormcaller", Vector3(3.1, 0, -2.3), -30.0)
-	_hero("knight", Vector3(-2.2, 0, 0.6), 28.0)
-	_hero("barbarian", Vector3(2.4, 0, 0.7), -26.0)
+	# (a V: the King at the back behind the fire, two either side of it, two nearest us out at the sides, cut by the
+	# picture's edges as a painter would frame them)
+	_hero("king", Vector3(0.1, 0, -2.5), 0.0)
+	_hero("mage", Vector3(-1.35, 0, -1.3), 25.0)
+	_hero("stormcaller", Vector3(1.4, 0, -1.4), -25.0)
+	_hero("knight", Vector3(-1.5, 0, 1.3), 40.0)
+	_hero("barbarian", Vector3(1.55, 0, 1.3), -40.0)
 
 # ---------------- what camp_scene.gd needs ----------------
 func _px(p: Vector3) -> Vector2:
