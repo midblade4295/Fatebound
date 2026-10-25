@@ -24,12 +24,13 @@ const CLAN_PANEL := "res://scripts/app/clan_panel.gd"                # 0.31.134:
 const ORDERS_PANEL := "res://scripts/app/orders_panel.gd"
 const LEADERBOARD_PANEL := "res://scripts/app/leaderboard_panel.gd"
 const DAILY_REWARD := "res://scripts/app/daily_reward.gd"
+const STARTER_OFFER := "res://scripts/app/starter_offer.gd"         # 0.31.214: Home's Starter Pack window
 const UPDATE_SCREEN := "res://scripts/app/update_screen.gd"
 const MOBA_PANEL := "res://scripts/app/moba_panel.gd"              # 0.31.155: 5V5 (the test)
 const CHAMPION_WINDOW := "res://scripts/app/champion_window.gd"    # 0.31.187: a champion's own window (the Locker)
 const HERALD_INTRO := "res://scripts/app/herald_intro.gd"          # 0.31.198: the Royal Herald's welcome
 const LATER := [SIEGE_MODE, CLAN_PANEL, CHAT_PANEL, FRIENDS_PANEL, ORDERS_PANEL, DAILY_REWARD, LEADERBOARD_PANEL, UPDATE_SCREEN,
-	MOBA_PANEL, CHAMPION_WINDOW, HERALD_INTRO]
+	MOBA_PANEL, CHAMPION_WINDOW, HERALD_INTRO, STARTER_OFFER]
 const Audio = preload("res://scripts/native_audio.gd")
 const Assets = preload("res://scripts/siege/asset_cache.gd")
 const Net = preload("res://scripts/siege/siege_net.gd")
@@ -2082,6 +2083,16 @@ func chest_started() -> void:
 		func():
 			profile.d.settings["notify"] = false
 			profile.save())
+
+func open_starter() -> void:
+	# 0.31.214: the Starter Pack's window (Home's offer card)
+	close_modal()
+	var m = _later(STARTER_OFFER).new()
+	add_child(m)
+	modal = m
+	m.open(self)
+	if heycatch != null:
+		heycatch.screen("starter_offer")
 
 func open_daily() -> void:
 	# 0.31.119: the DAILY REWARD card

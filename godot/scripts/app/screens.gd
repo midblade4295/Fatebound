@@ -173,6 +173,9 @@ static func home(app, root: VBoxContainer) -> void:
 		_online_pill(app, top, Rect2(0, ROW_Y, left_w, ROW_H), not discord)
 	if discord:
 		_discord_button(app, top, Rect2(w - DISCORD_W, ROW_Y, DISCORD_W, ROW_H))
+	# --- 0.31.214: the Starter Pack, until it's bought, on the camp's left under the top row
+	if not bool(p.d.iap.starter):
+		starter_tile(app, top, Vector2(0.0, ROW_Y + ROW_H + 8.0))
 	# --- PLAY: always the Siege server (0.31.79); the bots fill any empty slots. 0.31.145: it opens the 5v5's heroes.
 	var py: float = lay.play
 	var px := (w - PLAQUE_W) * 0.5
@@ -226,6 +229,71 @@ static func home(app, root: VBoxContainer) -> void:
 		# 0.31.70: the last start never reached the menu, so this one skipped the background loading
 		app.set_meta("safe_note", true)
 		app.toast("The game got stuck starting last time -- please tap Settings > SEND TO DEVELOPER", UI.GOLD)
+
+# 0.31.214 (Kevin: "Show the starter pack on the front page and make sure it's eye-catching and has pretty graphics that
+# doesn't look like AI made it"): its picture is a 3D render (tools/render_starter_pack.gd) -- the game's own gold chest
+# thrown open on a heap of gold coins and blue gems, a Hero Token leaning on it: what's in the pack
+const STARTER_ART := "res://assets/ui/v2/offer/starter_pack.webp"
+const STARTER_W := 112.0
+const STARTER_H := 152.0
+
+static func starter_tile(app, top: Control, at: Vector2) -> Control:
+	# Home's offer: a warm card under a breathing glow, light turning behind the chest as it bobs out of the card's top,
+	# sparkles winking on it, STARTER PACK on a red ribbon, a shine passing; the price under it, beating
+	# (buys at once); anywhere else on it: the offer's window (siege_app.open_starter)
+	var t := Control.new()
+	t.name = "StarterTile"
+	t.position = at
+	t.size = Vector2(STARTER_W, STARTER_H)
+	t.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	top.add_child(t)
+	UI2.glow(t, Rect2(-30, -10, STARTER_W + 60, STARTER_H + 30), Color(1.0, 0.58, 0.18, 0.6))
+	var card := Button.new()                       # (the whole card is the button to the window)
+	card.name = "StarterCard"
+	card.flat = true
+	card.focus_mode = Control.FOCUS_NONE
+	for st_name in ["normal", "hover", "pressed", "focus", "hover_pressed", "disabled"]:
+		card.add_theme_stylebox_override(st_name, StyleBoxEmpty.new())
+	card.position = Vector2(0, 30)
+	card.size = Vector2(STARTER_W, STARTER_H - 30)
+	card.set_meta("action_key", "home_starter")
+	card.pressed.connect(func():
+		app.sfx("menuOpen")
+		app.open_starter())
+	t.add_child(card)
+	UI2.plate(card, "ember", 16.0, "gold")
+	var clip := Control.new()                      # (the light stays inside the card)
+	clip.clip_contents = true
+	clip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	clip.position = Vector2(4, 4)
+	clip.size = card.size - Vector2(8, 8)
+	card.add_child(clip)
+	var ry := UI2.rays(clip, 210.0, Color(1.0, 0.86, 0.5), 22.0, 0.5)
+	ry.position = Vector2(clip.size.x * 0.5 - 105.0, 20.0 - 105.0)
+	UI2.sweep(card, 3.8, 50.0, 0.35)
+	var art := TextureRect.new()                   # (out of the card's top: the chest is bigger than its box)
+	art.name = "StarterArt"
+	art.texture = UI2.tex(STARTER_ART)
+	art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	art.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	art.size = Vector2(STARTER_W + 24.0, 108.0)
+	art.position = Vector2(-12.0, -8.0)
+	art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	t.add_child(art)
+	UI2.bob(art, 3.0, 1.6)
+	var tw_box := Control.new()
+	tw_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tw_box.position = Vector2(4, 4)
+	tw_box.size = Vector2(STARTER_W - 8, 92)
+	t.add_child(tw_box)
+	_twinkles(tw_box, 4, Color(1.0, 0.95, 0.75), Rect2(0.12, 0.25, 0.76, 0.6), 16.0)
+	var rb := UI2.ribbon(t, "STARTER PACK", "", STARTER_W + 22.0, 24.0, [Color("#f0503c"), Color("#7c120b")])
+	rb.position = Vector2(-11.0, 92.0)
+	var b := _iap_button(app, t, "starter_pack", Vector2(7.0, STARTER_H - 37.0), Vector2(STARTER_W - 14.0, 31.0))
+	b.name = "StarterBuy"
+	UI2.pulse(b, 0.045, 0.8)
+	return t
 
 static func _first_win_tab(parent: Control) -> Control:
 	# 0.31.194: FIRST WIN +150 and a coin, white and gold on a dark tab with a gold rim (B2's)
@@ -1446,8 +1514,8 @@ static func gem_packs(app, root: Node) -> Control:
 		UI2.plate(sc, "ember", 18.0, "orange")
 		var ry := UI2.rays(sc, 200.0, Color(1.0, 0.8, 0.4), 26.0, 0.35)
 		ry.position = Vector2(-40, -40)
-		var gi := UI2.img(sc, "res://assets/ui/packs/gem_pack_2.png", 96.0)
-		gi.position = Vector2(12, 16)
+		var gi := UI2.img(sc, STARTER_ART, 110.0)           # (0.31.214: the pack's own picture, as on Home)
+		gi.position = Vector2(4, 18)
 		UI2.bob(gi, 4.0, 1.4)                                       # (0.31.202: it floats, it shines, it says once)
 		_twinkles(sc, 5, Color(0.8, 0.95, 1.0), Rect2(0.04, 0.1, 0.24, 0.7), 18.0)
 		UI2.sweep(sc, 3.6, 80.0, 0.3)
