@@ -7192,3 +7192,25 @@ title -- the look the icon was redone to leave. tools/build_x_kit.py (new) makes
 - pfp_king_{400,800,1080}.png: the icon's King and throne room (art_sources/app_icon/render), closer -- face and crown
   fill the round crop, so the account and the app match; pfp_knight_* and pfp_stormcaller_* as alternatives.
 - preview.jpg: the header with the profile picture where X puts it, and the three round. README updated.
+
+## 0.31.215 — Home's camp as a 3D render of the game's own heroes
+Kevin: "I want the home screen as good of quality as the clan screen. The home screen looks very AI generated." Asked:
+real 3D heroes in the camp, clan-style scenery with no heroes, or one big live hero -> "Real 3D heroes in camp".
+- tools/render_home_camp.gd (new; Forward+, soft shadows, ambient occlusion, bloom): the Royal kit's gatehouse, towers,
+  walls and banners (castle_kit.gd, the blue side's) 32 m back at dusk; the War kit's tents, supplies, weapon rack and
+  braziers; a campfire of rounded stones and crossed logs on glowing coals, its light the warm key; round it in a V the
+  HD Knight, Mage, King (behind the fire), Barbarian and Stormcaller (tools/meshy_hd.py's, from the game's own models),
+  the front pair cut by the picture's edges; a sky shader (no picture): indigo to violet with a warm band, stars, the
+  moon. An eye-level camera (1.75 m, 9 m back) so the heroes stand tall against the castle and sky. 1024 x 2048 like
+  the painting, 24 px higher than rendered (the boots clear PLAY on 360 x 780). It prints the points camp_scene.gd uses.
+- assets/ui/v2/bg_camp.webp is that render (the painting -- tools/home_camp.py, gpt-image -- is in git history; its
+  tool now says it would write the painting back).
+- scripts/app/camp_scene.gd: the fire's flames, halo, embers and smoke, its flicker on the picture, the stars and the
+  falling star, the fireflies and the banners' ripple on the render's points; the magic is the Mage's blue gem and the
+  Stormcaller's crystal (a breathing glow, sparkles rising); the painting's Necromancer eyes and skull, the Mage's book,
+  the lit windows, lanterns and pennants are gone with it (none in view; empty lists are skipped).
+- tests/home_camp_test.gd follows the scene's lists (magic, lamps, windows, banners). Quick suite: 109 passed;
+  match_audio_test failed once in the run (no combat near the player in its window) and passed 4 of 4 alone, as the
+  runner runs it -- a timing flake, nothing in it changed.
+- ui pack rebuilt and uploaded (ui-3df44b010df0.pck, content-packs df50cb7). Version 0.31.215, versionCode 301;
+  SERVER_BUILD 0.31.215.
