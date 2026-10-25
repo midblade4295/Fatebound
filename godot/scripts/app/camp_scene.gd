@@ -26,22 +26,22 @@ const UI2 = preload("res://scripts/app/ui2.gd")
 const CampShader = preload("res://scripts/app/camp.gdshader")
 const ART := "res://assets/ui/v2/bg_camp.webp"
 const PAINT := Vector2(1024.0, 2048.0)
-const FEET_Y := 1281.0                 # the nearest heroes' boots (the Knight's, the Stormcaller's), down the picture
+const FEET_Y := 1257.0                 # the nearest heroes' boots (the Knight's, the Stormcaller's), down the picture
 const FEET_OVER := 6.0                 # ... this far (screen px) under PLAY's top at most: the plaque hides no more of them
 const COVER_TO := 100.0                # the painting reaches at least this far (screen px) from the screen's bottom
-const FIRE := Vector2(512.0, 1110.0)   # the campfire's flames (their middle)
-const FIRE_BASE := Vector2(512.0, 1190.0)
+const FIRE := Vector2(512.0, 1086.0)   # the campfire's flames (their middle)
+const FIRE_BASE := Vector2(512.0, 1166.0)
 # the flames' tongues over the painted fire: [x off the base, width, height, phase]
 const TONGUES := [[-36.0, 44.0, 96.0, 0.0], [-15.0, 56.0, 150.0, 1.9], [8.0, 62.0, 172.0, 3.7], [30.0, 50.0, 118.0, 5.1],
 	[46.0, 34.0, 74.0, 2.6], [-50.0, 30.0, 64.0, 4.4]]
 # the braziers and torches you can see: [where, size, light's reach (0: none)]
 const LAMPS := []
 # the magic glowing on the heroes: [where, colour, size] -- the Mage's blue gem, the Stormcaller's crystal
-const MAGIC := [[Vector2(212, 862), Color(0.45, 0.8, 1.0), 1.0], [Vector2(722, 800), Color(0.55, 0.95, 1.0), 1.1]]
+const MAGIC := [[Vector2(212, 838), Color(0.45, 0.8, 1.0), 1.0], [Vector2(722, 776), Color(0.55, 0.95, 1.0), 1.1]]
 const WINDOWS := []                    # (the castle's windows are dark at dusk in the render)
-const SKY := Rect2(0.0, 0.0, 1024.0, 300.0)     # where the stars twinkle (and the falling ones go): above the spires
-const CAMP := Rect2(40.0, 760.0, 944.0, 520.0)  # where the fireflies wander
-const BANNERS := [Vector4(100, 490, 230, 690), Vector4(795, 490, 915, 690)]
+const SKY := Rect2(0.0, 0.0, 1024.0, 280.0)     # where the stars twinkle (and the falling ones go): above the spires
+const CAMP := Rect2(40.0, 736.0, 944.0, 520.0)  # where the fireflies wander
+const BANNERS := [Vector4(100, 466, 230, 666), Vector4(795, 466, 915, 666)]
 const PENNANTS := []
 const FLAME := Color(1.0, 0.62, 0.26)
 

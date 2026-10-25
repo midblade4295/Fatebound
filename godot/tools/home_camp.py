@@ -7,6 +7,9 @@ Sources (ElevenLabs, flow "Fatebound home 0.31.194"), in art_sources/home_camp/:
                            reference; 1024 x 2048)
   play_plaque_green.png    the PLAY plaque in B2's style, its face blank, on flat green (gpt-image-2)
 
+0.31.215: bg_camp.webp is now tools/render_home_camp.gd's 3D render (Kevin: "The home screen looks very AI generated") --
+running this writes the painting back over it (and the PLAY plaque again): only to bring the painting back.
+
 Writes:
   assets/ui/v2/bg_camp.webp        the painting (scripts/app/camp_scene.gd lays it out and brings it to life)
   assets/ui/v2/play_plaque.webp    the PLAY plaque, keyed out and cropped, PLAQUE_W wide (its enamel face: printed, as

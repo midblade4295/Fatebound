@@ -23,6 +23,7 @@ const Stage = preload("res://scripts/siege/asset_cache.gd")
 const CastleKit = preload("res://scripts/siege/castle_kit.gd")
 
 const PAINT := Vector2i(1024, 2048)
+const SHIFT_UP := 24
 # the dusk sky (a sky shader: no picture): indigo overhead into violet and a warm band at the horizon; stars, more and
 # brighter higher up, each its own size; the moon up on the right with a soft halo
 const SKY_SHADER := """
@@ -97,6 +98,14 @@ func _process(_d: float) -> bool:
 		var img := vp.get_texture().get_image()
 		img.convert(Image.FORMAT_RGB8)
 		img.resize(PAINT.x, PAINT.y, Image.INTERPOLATE_LANCZOS)
+		if SHIFT_UP > 0:
+			# (the whole picture SHIFT_UP px higher: the sky's top rows go, the ground's last row is carried down -- so
+			# the heroes' boots stay over PLAY on the shortest phones, home_camp_test)
+			var sh := Image.create(PAINT.x, PAINT.y, false, Image.FORMAT_RGB8)
+			sh.blit_rect(img, Rect2i(0, SHIFT_UP, PAINT.x, PAINT.y - SHIFT_UP), Vector2i.ZERO)
+			for y in range(PAINT.y - SHIFT_UP, PAINT.y):
+				sh.blit_rect(img, Rect2i(0, PAINT.y - 1, PAINT.x, 1), Vector2i(0, y))
+			img = sh
 		img.save_png(out)
 		print("HOME_CAMP_RENDER ", out)
 		if OS.has_environment("WEBP"):
@@ -380,7 +389,7 @@ func _heroes() -> void:
 # ---------------- what camp_scene.gd needs ----------------
 func _px(p: Vector3) -> Vector2:
 	var v := cam.unproject_position(p)
-	return v / ss
+	return v / ss - Vector2(0, SHIFT_UP)
 
 func _points() -> void:
 	var out_p := {}
