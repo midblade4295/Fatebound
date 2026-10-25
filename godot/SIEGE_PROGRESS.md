@@ -7214,3 +7214,5 @@ real 3D heroes in the camp, clan-style scenery with no heroes, or one big live h
   runner runs it -- a timing flake, nothing in it changed.
 - ui pack rebuilt and uploaded (ui-3df44b010df0.pck, content-packs df50cb7). Version 0.31.215, versionCode 301;
   SERVER_BUILD 0.31.215.
+- Preview APK: build/Fatebound-Siege-0.31.215-fatebound.apk (32 MB, preview key), sha256
+  5bc5368c2489fe4d7e083515c3c752a704f438cb4d4ac3fec0a29e4240a1a326.
