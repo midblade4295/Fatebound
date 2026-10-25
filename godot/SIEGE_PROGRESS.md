@@ -7179,3 +7179,5 @@ look like AI made it".
 - tests/starter_offer_test.gd (in run_siege_tests.sh): the card, its picture, the window and its contents, ✕, the
   Shop's card, bought -> the window closes and the card goes. Quick suite 109/109 before it; content check OK.
 - Version 0.31.214, versionCode 300; SERVER_BUILD 0.31.214 (kept equal for min_build_test).
+- Preview APK: build/Fatebound-Siege-0.31.214-fatebound.apk (32 MB, preview key), sha256
+  d329c036f87d4aca7083d34a3084ac7b2d5cb3905609465a92e9921e069f2131.
