@@ -26,10 +26,12 @@ const EVERY := 0.2                                         # seconds between vis
 # blue's brush patches [centre, radius] (red's are the point mirror). 0.31.165, the Rift: beside each side lane (outside
 # it), at the jungle's ways in -- from the river, from the middle lane, inside the buff camps' pockets -- and outside the
 # side lanes by the keep.
-const BRUSH_BLUE := [[Vector2(-51.0, 22.0), 2.8], [Vector2(-50.5, 46.0), 2.6], [Vector2(-40.5, 9.5), 2.6],
-	[Vector2(-14.0, 11.0), 2.6], [Vector2(-31.0, 41.0), 2.4], [Vector2(-14.0, 42.5), 2.4], [Vector2(-33.0, 82.0), 2.4],
-	[Vector2(51.0, 26.0), 2.8], [Vector2(50.5, 50.0), 2.6], [Vector2(40.5, 12.0), 2.6], [Vector2(14.0, 15.0), 2.6],
-	[Vector2(30.5, 43.5), 2.4], [Vector2(14.5, 43.0), 2.4], [Vector2(33.0, 82.0), 2.4]]
+# 0.31.216 (the Honor of Kings square): beside the side lanes on their outer side (two a lane) and at the side lane's
+# corner, at the jungle's ways in from the river and the middle lane, by the camps.
+const BRUSH_BLUE := [[Vector2(-59.04, 44.9), 2.8], [Vector2(-74.6, 29.34), 2.6], [Vector2(-69.3, 12.73), 2.6], [Vector2(-19.8, 22.63), 2.4],
+	[Vector2(-7.07, 12.73), 2.6], [Vector2(-46.67, 18.38), 2.4], [Vector2(-25.46, 7.07), 2.6], [Vector2(-21.21, 63.64), 2.4],
+	[Vector2(59.04, 44.9), 2.8], [Vector2(74.6, 29.34), 2.6], [Vector2(69.3, 12.73), 2.6], [Vector2(19.8, 22.63), 2.4],
+	[Vector2(7.07, 12.73), 2.6], [Vector2(46.67, 18.38), 2.4], [Vector2(25.46, 7.07), 2.6], [Vector2(21.21, 63.64), 2.4]]
 const BRUSH_MID := []                                      # (the Siege field's: one on the island's east end)
 
 var m                                                      # moba.gd

@@ -1,41 +1,56 @@
 extends RefCounted
-# The Rift (0.31.165, Kevin: "I think we need to design a new map now to accommodate the games new play style" ->
-# "Replace it", "112 x 220 m, 3 towers per lane", "Open keep with 3 gates", "A new epic monster"): the 5v5's field.
-# Each side's keep (keep.gd) at its end; three lanes from its gates -- the middle straight down the field, the two side
-# lanes out along the edges -- three towers a lane (moba.gd); a shallow river across the middle with stone fords where
-# the lanes cross it and a pool on either side round a rocky island: the pits, the Bone Lord's (west) and the Grave
-# Wyrm's (east), each walled with a mouth toward either bank; the jungle between the lanes on each half, its camps in
-# pockets of rock ridges and tree lines, brush (moba_vision.gd) at its ways in.
+# The Rift. 0.31.216 (Kevin, with Honor of Kings screenshots: "The game needs to change from vertical to horizontal and
+# the map needs to be redone like the attached image"): Honor of Kings' square -- seen from the landscape camera (yawed
+# 45 degrees, siege_view.gd CAM_YAW) blue's keep sits in the bottom-left corner and red's in the top-right, the middle
+# lane runs corner to corner, the two side lanes run along the edges and turn at the other two corners, the river runs
+# from the top-left corner to the bottom-right one past the two pits, and the jungle fills the four quarters between,
+# its camps in pockets of curved rock walls. In world coordinates that square is a diamond: the keeps at the ends of the
+# y axis (keep.gd), the middle lane straight down it, the river across it along x, the side lanes' corners at (+-88.6, 0)
+# where they ford the river. The square is HOK_HALF * 2 = 156 m a side (about the 112 x 220 m Rift's area).
+# Until 0.31.216 (0.31.165, Kevin: "112 x 220 m, 3 towers per lane", "Open keep with 3 gates", "A new epic monster"): a
+# long field seen from a portrait camera, the side lanes straight along its long edges.
+# Each side's keep (keep.gd) at its end; three lanes from its gates; three towers a lane (moba.gd); a shallow river
+# with stone fords where the lanes cross it and a pool on either side round a rocky island: the pits, the Bone Lord's
+# (west) and the Grave Wyrm's (east), each walled with a mouth toward either bank; the jungle between the lanes on each
+# half, its camps in pockets of rock ridges and tree lines, brush (moba_vision.gd) at its ways in.
 # Pure static data + functions: the sim turns it into walls / nav / heights, the view into terrain. Everything is
 # defined for blue's half (+y) and point-mirrored for red: (x, y) -> (-x, -y). (Until 0.31.165 this file was the Siege
 # field: a valley with a lake, an island tower, two bridges, hills and five outposts.)
+# The layout was drawn in the Honor of Kings frame (u right, v up: x = (u - v) / sqrt 2, y = (-u - v) / sqrt 2) --
+# tools/hok_layout.py, which writes the constants below.
 
 const Keep = preload("res://scripts/siege/keep.gd")
 
-const HALF_W := 56.0             # (44 on the Siege field)
-const HALF_L := 110.0            # (70)
+const HOK_HALF := 78.0          # the square's half side, in the Honor of Kings frame
+const HOK_L := HOK_HALF * 1.4142135   # its half diagonal: the diamond's corners (+-HOK_L, 0) and (0, +-HOK_L)
+const HALF_W := 111.0            # the diamond's bounding box (56 x 110 on the long Rift; 44 x 70 on the Siege field)
+const HALF_L := 110.0            # (the keeps' back walls are the ends, as on the long Rift)
 
 # ---------------- the lanes ----------------
 # World points from blue's gate to red's (moba.gd walks them; red walks them backwards). Point symmetric: lane 0
 # backwards and mirrored is lane 2; the middle is its own mirror. Each leaves its gate straight out through the wall.
+# 0.31.216: lane 0 (west) is Honor of Kings' top lane -- up the left edge, round the top-left corner (SIDE_CORNER_X,
+# where it fords the river), along the top to red's gate; lane 2 the bottom lane.
 const LANES := [
-	[Vector2(-12.1, 89.0), Vector2(-16.4, 86.5), Vector2(-22.0, 83.0), Vector2(-28.5, 78.6), Vector2(-35.0, 73.4),
-		Vector2(-40.5, 67.0), Vector2(-44.3, 60.0), Vector2(-46.0, 52.0), Vector2(-46.0, 26.0), Vector2(-46.0, 0.0),
-		Vector2(-46.0, -26.0), Vector2(-46.0, -52.0), Vector2(-44.3, -60.0), Vector2(-40.5, -67.0), Vector2(-35.0, -73.4),
-		Vector2(-28.5, -78.6), Vector2(-22.0, -83.0), Vector2(-16.4, -86.5), Vector2(-12.1, -89.0)],
-	[Vector2(0.0, 82.1), Vector2(0.0, 74.0), Vector2(0.0, 50.0), Vector2(0.0, 26.0), Vector2(0.0, 0.0),
-		Vector2(0.0, -26.0), Vector2(0.0, -50.0), Vector2(0.0, -74.0), Vector2(0.0, -82.1)],
-	[Vector2(12.1, 89.0), Vector2(16.4, 86.5), Vector2(22.0, 83.0), Vector2(28.5, 78.6), Vector2(35.0, 73.4),
-		Vector2(40.5, 67.0), Vector2(44.3, 60.0), Vector2(46.0, 52.0), Vector2(46.0, 26.0), Vector2(46.0, 0.0),
-		Vector2(46.0, -26.0), Vector2(46.0, -52.0), Vector2(44.3, -60.0), Vector2(40.5, -67.0), Vector2(35.0, -73.4),
-		Vector2(28.5, -78.6), Vector2(22.0, -83.0), Vector2(16.4, -86.5), Vector2(12.1, -89.0)],
+	[Vector2(-9.9, 86.13), Vector2(-19.73, 76.3), Vector2(-33.87, 62.15), Vector2(-48.01, 48.01), Vector2(-62.15, 33.87),
+		Vector2(-76.3, 19.73), Vector2(-83.3, 12.73), Vector2(-87.2, 6.89), Vector2(-88.57, 0.0), Vector2(-87.2, -6.89),
+		Vector2(-83.3, -12.73), Vector2(-76.3, -19.73), Vector2(-62.15, -33.87), Vector2(-48.01, -48.01), Vector2(-33.87, -62.15),
+		Vector2(-19.73, -76.3), Vector2(-9.9, -86.13)],
+	[Vector2(0.0, 82.02), Vector2(0.0, 56.57), Vector2(0.0, 28.28), Vector2(0.0, 0.0), Vector2(0.0, -28.28),
+		Vector2(0.0, -56.57), Vector2(0.0, -82.02)],
+	[Vector2(9.9, 86.13), Vector2(19.73, 76.3), Vector2(33.87, 62.15), Vector2(48.01, 48.01), Vector2(62.15, 33.87),
+		Vector2(76.3, 19.73), Vector2(83.3, 12.73), Vector2(87.2, 6.89), Vector2(88.57, 0.0), Vector2(87.2, -6.89),
+		Vector2(83.3, -12.73), Vector2(76.3, -19.73), Vector2(62.15, -33.87), Vector2(48.01, -48.01), Vector2(33.87, -62.15),
+		Vector2(19.73, -76.3), Vector2(9.9, -86.13)],
 ]
 
 # ---------------- the river, its fords and the pits ----------------
-const RIVER_AMP := 4.0
+const RIVER_AMP := 0.0          # (4 until 0.31.216: straight now, so each half's jungle is the other's mirror across the
+                                 # middle lane as well as the point mirror; the banks wander instead, RIVER_WANDER)
 const RIVER_K := 0.07
 const RIVER_HW := 4.5            # half-width of the water away from the pools
-const POOL_X := 26.0             # the pits: a pool on the river at x = -POOL_X (the Bone Lord) and +POOL_X (the Wyrm)
+const RIVER_WANDER := 0.9        # 0.31.216: the banks swell and narrow by this much (even in x: both halves match)
+const POOL_X := 42.0             # (26 until 0.31.216) the pits: a pool on the river at x = -POOL_X (the Bone Lord) and +POOL_X (the Wyrm)
 const POOL_EXTRA := 7.5          # the pool's extra half-width at its middle (Gaussian in x)
 const POOL_SIGMA := 9.0
 const LAKE_EXTRA := POOL_EXTRA   # (the view's ripples reach the widest water)
@@ -46,7 +61,8 @@ const WATER_Y := -0.45
 const BED_Y := -0.58             # shallow: wading is a little slower (Sim.move_mult), nothing more
 const FORD_Y := -0.4             # the fords' stones stand just out of the water: no wading on a lane
 # [x, half-width] -- across the whole river at that x: the three lanes, and a causeway out to each pit's two mouths
-const FORDS := [[0.0, 3.4], [46.0, 3.4], [-46.0, 3.4], [POOL_X, PIT_MOUTH], [-POOL_X, PIT_MOUTH]]
+const SIDE_CORNER_X := 88.57     # the side lanes' corners, on the river
+const FORDS := [[0.0, 3.4], [SIDE_CORNER_X, 3.4], [-SIDE_CORNER_X, 3.4], [POOL_X, PIT_MOUTH], [-POOL_X, PIT_MOUTH]]
 
 static func river_c(x: float) -> float:
 	# Odd in x, so the river is its own point mirror: c(-x) = -c(x).
@@ -55,7 +71,8 @@ static func river_c(x: float) -> float:
 static func river_hw(x: float) -> float:
 	# Even in x, so the banks stay point-symmetric: a pool round each pit.
 	var d := absf(x) - POOL_X
-	return RIVER_HW + POOL_EXTRA * exp(-(d / POOL_SIGMA) * (d / POOL_SIGMA))
+	return RIVER_HW + RIVER_WANDER * cos(0.13 * x) * cos(0.051 * x + 0.4 * sin(0.21 * x)) \
+		+ POOL_EXTRA * exp(-(d / POOL_SIGMA) * (d / POOL_SIGMA))
 
 static func river_off(p: Vector2) -> float:
 	# How far p is out of the river band (negative: in the band, island or not).
@@ -85,17 +102,17 @@ static func on_ford(p: Vector2, margin := 0.0) -> bool:
 # ---------------- the field's edge ----------------
 # Blue's chain, from the river on the east round the keep to the river on the west; red's is its point mirror, and the
 # two close the loop out past the field edge where the river leaves. It meets the keep's wall either side (no wall
-# behind the keep: the keep's own).
+# behind the keep: the keep's own). 0.31.216: the square's two edges by blue's corner (x + y = HOK_L, y - x = HOK_L),
+# the keep filling the corner between them; the river leaves at the other two corners.
 const EDGE_BLUE := [
-	Vector2(57.5, 2.5), Vector2(55.0, 9.0), Vector2(55.5, 24.0), Vector2(54.6, 40.0), Vector2(55.2, 56.0),
-	Vector2(53.4, 66.5), Vector2(48.0, 77.5), Vector2(39.0, 86.5), Vector2(28.0, 94.5), Vector2(17.5, 100.5),
-	Vector2(11.9, 104.3), Vector2(8.72, 108.45), Vector2(3.93, 110.68), Vector2(0.0, 111.2), Vector2(-3.93, 110.68),
-	Vector2(-8.72, 108.45), Vector2(-11.9, 104.3),
-	Vector2(-17.5, 100.5), Vector2(-28.0, 94.5), Vector2(-39.0, 86.5), Vector2(-48.0, 77.5), Vector2(-53.4, 66.5),
-	Vector2(-55.2, 56.0), Vector2(-54.6, 40.0), Vector2(-55.5, 24.0), Vector2(-55.0, 9.0), Vector2(-57.5, 8.0),
+	Vector2(101.31, 9.0), Vector2(86.31, 24.0), Vector2(70.31, 40.0), Vector2(54.31, 56.0), Vector2(38.31, 72.0),
+	Vector2(24.31, 86.0), Vector2(15.0, 95.3), Vector2(14.28, 101.2), Vector2(9.77, 107.64), Vector2(3.93, 110.68),
+	Vector2(0.0, 111.2), Vector2(-3.93, 110.68), Vector2(-9.77, 107.64), Vector2(-14.28, 101.2), Vector2(-15.0, 95.3),
+	Vector2(-24.31, 86.0), Vector2(-38.31, 72.0), Vector2(-54.31, 56.0), Vector2(-70.31, 40.0), Vector2(-86.31, 24.0),
+	Vector2(-101.31, 9.0), Vector2(-108.81, 1.5),
 ]
 const EDGE_R := 0.6
-const EDGE_SKIP := [10, 11, 12, 13, 14, 15]   # the runs round behind the keep, just outside its wall (its wall is the edge there)
+const EDGE_SKIP := [6, 7, 8, 9, 10, 11, 12, 13]   # the runs round behind the keep, just outside its wall (its wall is the edge there)
 
 static var _loop: PackedVector2Array = PackedVector2Array()
 static func edge_loop() -> PackedVector2Array:
@@ -113,7 +130,7 @@ static func inside_field(p: Vector2) -> bool:
 
 static func edge_dist(p: Vector2) -> float:
 	# Signed distance to the field's edge: + outside, - inside. Far inside: a cheap constant.
-	if absf(p.x) < 46.0 and absf(p.y) < 72.0:
+	if absf(p.x) + absf(p.y) < HOK_L - 16.0:
 		return -8.0
 	var lp := edge_loop()
 	var best := INF
@@ -131,20 +148,16 @@ const RISE_H := 6.5               # the rock walls round the field
 # Blue half; red's are the point mirror. Each a line of points the units can't cross (r: its half-thickness), drawn as
 # a ridge of rocks ("rock") or a stand of trees ("trees"). Clear of the lanes, the towers (>= 3 m) and the camps.
 const RIDGES_BLUE := [
-	# the west jungle (blue's Arcane Wraith, Bone Pack, Grave Archers)
-	{"pts": [Vector2(-36.5, 14.0), Vector2(-35.5, 26.0), Vector2(-36.0, 37.0)], "r": 1.3, "look": "rock"},
-	{"pts": [Vector2(-31.5, 33.5), Vector2(-26.0, 36.0), Vector2(-18.5, 33.5)], "r": 1.3, "look": "rock"},
-	{"pts": [Vector2(-8.5, 22.0), Vector2(-9.0, 36.0)], "r": 1.2, "look": "trees"},
-	{"pts": [Vector2(-35.0, 55.5), Vector2(-27.0, 59.5), Vector2(-19.0, 57.5)], "r": 1.3, "look": "trees"},
-	{"pts": [Vector2(-9.0, 49.0), Vector2(-9.5, 61.0)], "r": 1.2, "look": "rock"},
-	{"pts": [Vector2(-25.5, 63.5), Vector2(-23.5, 68.5)], "r": 1.2, "look": "rock"},
-	# the east jungle (blue's Ember Brute, Bone Pack, Grave Archers)
-	{"pts": [Vector2(36.5, 18.0), Vector2(35.5, 30.0), Vector2(36.0, 41.0)], "r": 1.3, "look": "rock"},
-	{"pts": [Vector2(19.0, 36.0), Vector2(26.0, 39.0), Vector2(31.0, 37.2)], "r": 1.3, "look": "rock"},
-	{"pts": [Vector2(10.0, 22.0), Vector2(10.0, 36.0)], "r": 1.2, "look": "trees"},
-	{"pts": [Vector2(19.0, 57.5), Vector2(27.0, 60.5), Vector2(35.0, 56.5)], "r": 1.3, "look": "trees"},
-	{"pts": [Vector2(10.0, 49.0), Vector2(10.5, 61.0)], "r": 1.2, "look": "rock"},
-	{"pts": [Vector2(23.5, 63.5), Vector2(25.5, 68.5)], "r": 1.2, "look": "rock"},
+	{"pts": [Vector2(-41.7, 26.5), Vector2(-39.8, 30.15), Vector2(-36.54, 32.65), Vector2(-32.53, 33.54), Vector2(-28.51, 32.65)], "r": 1.7, "look": "rock"},
+	{"pts": [Vector2(-41.01, 46.67), Vector2(-33.23, 48.79), Vector2(-26.87, 46.67)], "r": 1.5, "look": "rock"},
+	{"pts": [Vector2(-19.1, 56.05), Vector2(-15.21, 54.64), Vector2(-12.55, 51.46), Vector2(-11.83, 47.39)], "r": 1.4, "look": "trees"},
+	{"pts": [Vector2(-8.49, 28.28), Vector2(-9.9, 21.21), Vector2(-14.85, 16.26)], "r": 1.5, "look": "rock"},
+	{"pts": [Vector2(-64.82, 11.12), Vector2(-66.47, 14.42), Vector2(-66.47, 18.11), Vector2(-64.82, 21.41)], "r": 1.4, "look": "trees"},
+	{"pts": [Vector2(41.7, 26.5), Vector2(39.8, 30.15), Vector2(36.54, 32.65), Vector2(32.53, 33.54), Vector2(28.51, 32.65)], "r": 1.7, "look": "rock"},
+	{"pts": [Vector2(41.01, 46.67), Vector2(33.23, 48.79), Vector2(26.87, 46.67)], "r": 1.5, "look": "rock"},
+	{"pts": [Vector2(19.1, 56.05), Vector2(15.21, 54.64), Vector2(12.55, 51.46), Vector2(11.83, 47.39)], "r": 1.4, "look": "trees"},
+	{"pts": [Vector2(8.49, 28.28), Vector2(9.9, 21.21), Vector2(14.85, 16.26)], "r": 1.5, "look": "rock"},
+	{"pts": [Vector2(64.82, 11.12), Vector2(66.47, 14.42), Vector2(66.47, 18.11), Vector2(64.82, 21.41)], "r": 1.4, "look": "trees"},
 ]
 const PIT_ROCK_LOOK := "rock"
 
@@ -202,14 +215,16 @@ static func ridge_dist(p: Vector2) -> Vector2:
 # trails to the Bone Packs went through the end of the outer rock ridges; the Packs' trails to the middle lane through
 # the tree lines (now round their river ends); the Archers' trail brushed the tree line's end.
 const TRAILS_BLUE := [
-	[Vector2(-45.0, 9.0), Vector2(-39.0, 7.5), Vector2(-33.0, 10.5), Vector2(-31.0, 16.0), Vector2(-31.0, 20.0)],
-	[Vector2(-31.0, 20.0), Vector2(-24.0, 23.0), Vector2(-16.0, 21.5), Vector2(-10.5, 16.5), Vector2(-4.0, 15.0)],
-	[Vector2(-37.0, 44.0), Vector2(-30.0, 45.0), Vector2(-24.0, 46.0), Vector2(-14.0, 44.0), Vector2(-4.0, 44.0)],
-	[Vector2(-24.0, 46.0), Vector2(-16.0, 51.0), Vector2(-13.8, 57.5), Vector2(-14.0, 63.0), Vector2(-14.0, 70.0)],
-	[Vector2(45.0, 10.0), Vector2(39.0, 9.5), Vector2(33.0, 13.0), Vector2(31.0, 19.0), Vector2(32.0, 24.0)],
-	[Vector2(32.0, 24.0), Vector2(25.0, 25.0), Vector2(17.0, 21.5), Vector2(11.0, 16.5), Vector2(4.0, 16.0)],
-	[Vector2(37.0, 48.0), Vector2(30.0, 48.0), Vector2(24.0, 48.0), Vector2(15.0, 45.0), Vector2(5.0, 44.0)],
-	[Vector2(24.0, 48.0), Vector2(16.0, 53.0), Vector2(15.0, 62.0), Vector2(14.0, 70.0)],
+	[Vector2(-31.75, 60.03), Vector2(-25.46, 53.74), Vector2(-19.8, 48.08), Vector2(-12.73, 41.01), Vector2(-2.83, 36.77), Vector2(2.83, 31.11)],
+	[Vector2(-19.8, 48.08), Vector2(-18.38, 32.53), Vector2(-32.53, 24.04)],
+	[Vector2(-32.53, 24.04), Vector2(-25.46, 16.97), Vector2(-14.14, 11.31), Vector2(-1.41, 7.07)],
+	[Vector2(-61.45, 30.33), Vector2(-59.4, 22.63), Vector2(-58.69, 16.26), Vector2(-49.99, 15.49), Vector2(-44.05, 13.51), Vector2(-42.07, 12.66)],
+	[Vector2(-32.53, 24.04), Vector2(-42.43, 19.8), Vector2(-52.33, 18.38), Vector2(-58.69, 16.26)],
+	[Vector2(31.75, 60.03), Vector2(25.46, 53.74), Vector2(19.8, 48.08), Vector2(12.73, 41.01), Vector2(2.83, 36.77), Vector2(-2.83, 31.11)],
+	[Vector2(19.8, 48.08), Vector2(18.38, 32.53), Vector2(32.53, 24.04)],
+	[Vector2(32.53, 24.04), Vector2(25.46, 16.97), Vector2(14.14, 11.31), Vector2(1.41, 7.07)],
+	[Vector2(61.45, 30.33), Vector2(59.4, 22.63), Vector2(58.69, 16.26), Vector2(49.99, 15.49), Vector2(44.05, 13.51), Vector2(42.07, 12.66)],
+	[Vector2(32.53, 24.04), Vector2(42.43, 19.8), Vector2(52.33, 18.38), Vector2(58.69, 16.26)],
 ]
 const PATH_HALF_W := 2.1
 const TRAIL_HALF := 1.3          # a trail is narrower than a lane (its distance is pushed out by the difference)
@@ -262,6 +277,7 @@ static func path_wobble(p: Vector2) -> float:
 	return slow + rag
 
 const APRON_BLEND := 2.2
+const PIT_APRON_IN := 3.0       # the pit arena's trodden earth stops this far inside its rim (2.6 until 0.31.216)
 
 static func smooth_min(a: float, b: float, k: float) -> float:
 	if a == INF:
@@ -276,7 +292,7 @@ static func ground_dist(p: Vector2, d_path: float) -> float:
 	# Siege field's towers had patches of earth here)
 	var best := d_path
 	for i in 2:
-		best = smooth_min(best, maxf(0.0, p.distance_to(pit_c(i)) - (PIT_R - 2.6)), APRON_BLEND)
+		best = smooth_min(best, maxf(0.0, p.distance_to(pit_c(i)) - (PIT_R - PIT_APRON_IN)), APRON_BLEND)
 	return best
 
 static func path_r(d: float, p: Vector2) -> float:
@@ -360,7 +376,7 @@ static func ledge_rim(p: Vector2) -> Vector2:
 static func bake_key() -> String:
 	# Changes whenever the land's shape data changes: the baked cache (tools/bake_land.gd) is only trusted when it matches.
 	var parts := [HALF_W, HALF_L, RIVER_AMP, RIVER_K, RIVER_HW, POOL_X, POOL_EXTRA, POOL_SIGMA, PIT_R, PIT_MOUTH, BED_Y,
-		FORD_Y, FORDS, EDGE_BLUE, RIDGES_BLUE, LANES, TRAILS_BLUE, TRAIL_HALF, BAKE_MARGIN, BAKE_STEP, "rift-v1", PATH_STEP,
+		FORD_Y, FORDS, EDGE_BLUE, RIDGES_BLUE, LANES, TRAILS_BLUE, TRAIL_HALF, BAKE_MARGIN, BAKE_STEP, "hok-v1", RIVER_WANDER, PIT_APRON_IN, PATH_STEP,
 		PATH_FADE, PATH_CORE, Keep.C, Keep.R, Keep.ZONE, RIDGE_H]
 	return str(hash(str(parts)))
 

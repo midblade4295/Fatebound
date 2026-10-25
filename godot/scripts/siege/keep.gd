@@ -12,14 +12,16 @@ extends RefCounted
 #      /       ( fountain )        \        y 104.5
 #     |          [King]             |       y  99
 #     |     [T]           [T]       |       y  90.5   King towers
-#     [gate]                   [gate]       west / east: -150 and -30 degrees round C (toward the side lanes)
-#        '-.______[gate]______.-'          middle: -90 degrees (down the middle lane)
+#     [gate]                   [gate]       west / east: -135 and -45 degrees round C (toward the side lanes; -150 / -30
+#        '-.______[gate]______.-'          until 0.31.216)        middle: -90 degrees (down the middle lane)
+# 0.31.216 (the Honor of Kings square, siege_land.gd): the keep fills blue's corner, its back wall the corner itself; seen
+# from the yawed camera its side gates face straight up and straight right, along the square's edges.
 
 const C := Vector2(0.0, 96.0)        # the ring's middle
 const R := 14.0                      # the wall's line (its faces WALL_R either side: the sim's walls are 1 m thick)
 const BACK := 110.0                  # C.y + R: the back of the wall is the field's end
 # the gates, by lane (moba.gd LANES: 0 west, 1 middle, 2 east): their angle round C (-PI/2 faces the middle of the field)
-const GATE_ANG := [-5.0 * PI / 6.0, -0.5 * PI, -PI / 6.0]
+const GATE_ANG := [-0.75 * PI, -0.5 * PI, -0.25 * PI]
 const GATE_SIDE := ["west", "middle", "east"]
 const GATE_HALF := 1.75              # half the doorway: two minions abreast and a hero beside them (1.3 on the Siege castles)
 const GATE_PIECE := 3.2              # the walls either side of a gate end this far from its middle (the gatehouse covers them)

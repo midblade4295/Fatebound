@@ -96,9 +96,10 @@ const LANE_NAMES := ["west", "middle", "east"]
 # towers per lane"): tier 1 outer, 2 inner, 3 the gate's (League's inhibitor turret), and tier 4 the two King towers in the
 # keep (lane -1: League's nexus turrets). Each lane's tier n can't be hurt while its tier n - 1 stands; the gate at a
 # lane's end while its tier 3 does; the King towers while all three gates stand; the King while a King tower does.
-const TOWERS_BLUE := [[0, 1, Vector2(-42.3, 34.0)], [0, 2, Vector2(-40.8, 57.0)], [0, 3, Vector2(-23.1, 77.6)],
+# 0.31.216 (the Honor of Kings square): the side lanes' towers along the square's edges, on the lane's inner side.
+const TOWERS_BLUE := [[0, 1, Vector2(-73.04, 16.48)], [0, 2, Vector2(-44.76, 44.76)], [0, 3, Vector2(-17.89, 71.63)],
 	[1, 1, Vector2(4.0, 30.0)], [1, 2, Vector2(4.0, 54.0)], [1, 3, Vector2(4.0, 74.5)],
-	[2, 1, Vector2(42.3, 34.0)], [2, 2, Vector2(40.8, 57.0)], [2, 3, Vector2(23.1, 77.6)],
+	[2, 1, Vector2(73.04, 16.48)], [2, 2, Vector2(44.76, 44.76)], [2, 3, Vector2(17.89, 71.63)],
 	[-1, 4, Keep.KING_TOWERS[0]], [-1, 4, Keep.KING_TOWERS[1]]]
 
 # 0.31.158 (Kevin: "Balance the minions better, the game ended up have tons of priests. Also minions need to work like
@@ -340,15 +341,17 @@ const LORD_FIRST := 300.0                                   # the Bone Lord rise
 # blue's camps (red's are the point mirror). 0.31.165, the Rift: in each jungle quadrant of blue's half a Bone Pack near
 # the river, a Grave Archers near the keep, and a buff camp in the middle -- the Arcane Wraith on the west, the Ember
 # Brute on the east -- each in its pocket of ridges (siege_land.gd RIDGES_BLUE); the Bone Lord in the west pit.
+# 0.31.216 (the Honor of Kings square): the same three in each quarter -- the Archers by the keep, the buff in the
+# middle of the quarter, the Pack out by the river toward the side lane's corner.
 const CAMPS_BLUE := [
-	{"kind":"pack", "p":Vector2(-30.0, 21.0)},
-	{"kind":"archers", "p":Vector2(-14.5, 69.0)},
-	{"kind":"arcane", "p":Vector2(-24.0, 46.5)},
-	{"kind":"pack", "p":Vector2(30.0, 25.0)},
-	{"kind":"archers", "p":Vector2(15.5, 68.0)},
-	{"kind":"ember", "p":Vector2(25.0, 48.0)},
+	{"kind":"pack", "p":Vector2(-58.69, 16.26)},
+	{"kind":"archers", "p":Vector2(-19.8, 48.08)},
+	{"kind":"arcane", "p":Vector2(-32.53, 24.04)},
+	{"kind":"pack", "p":Vector2(58.69, 16.26)},
+	{"kind":"archers", "p":Vector2(19.8, 48.08)},
+	{"kind":"ember", "p":Vector2(32.53, 24.04)},
 ]
-const BOSS_P := Vector2(-Land.POOL_X, -3.877)               # the west pit's island (Land.pit_c(0); the island until 0.31.165)
+const BOSS_P := Vector2(-Land.POOL_X, 0.0)                  # the west pit's island (Land.pit_c(0); the island until 0.31.165)
 const CAMP_KINDS := {
 	"pack": {"name":"Bone Pack", "mobs":[["warrior", Vector2(0, 0)], ["minion", Vector2(-1.7, 1.2)], ["minion", Vector2(1.7, 1.2)]], "respawn":75.0},
 	"archers": {"name":"Grave Archers", "mobs":[["archer", Vector2(-1.3, 0)], ["archer", Vector2(1.3, 0)], ["minion", Vector2(0, 1.5)]], "respawn":75.0},
@@ -403,7 +406,7 @@ const BUFF_NAMES := {"arcane":"ARCANE", "ember":"EMBER", "lord":"LORD'S BLESSING
 # A side's bots go for it when it's up and they have the edge (_epic_call), gathering WYRM_GATHER at the pit's rim first.
 # Tuned on whole bot matches: with health 14 and damage 0.8 (a buff monster's; the Lord's 26 and 1.9), the bots take it
 # three or four times a match, the first at about 4:30-7:00 (at 20 and 1.5, one at 14-17 min).
-const WYRM_P := Vector2(26.0, 3.877)                         # the east pit's island (Land.pit_c(1))
+const WYRM_P := Vector2(Land.POOL_X, 0.0)                    # the east pit's island (Land.pit_c(1))
 const WYRM_FIRST := 180.0
 const WYRM_BACK := 180.0
 const WYRM_HIDE := 0.06
