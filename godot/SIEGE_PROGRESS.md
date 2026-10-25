@@ -7156,3 +7156,26 @@ Godot has none, so this is the guide's plain-HTTP route ("Send to HeyCatch direc
   SERVER_BUILD 0.31.213 (kept equal for min_build_test).
 - Preview APK: build/Fatebound-Siege-0.31.213-fatebound.apk (32 MB, preview key, code only), sha256
   cdce331acef608b73e3069e1b1ed246ac910a7c5e7c376480bb1156db229417f.
+
+## 0.31.214 — the Starter Pack on Home, 3D art
+Kevin: "Show the starter pack on the front page and make sure it's eye-catching and has pretty graphics that doesn't
+look like AI made it".
+- The picture is a 3D render, made the way the app icon is (tools/render_starter_pack.gd, Forward+ with soft shadows and
+  ambient occlusion): the game's own gold chest (assets/ui/v2/chests/gold.scn) with its lid thrown open on a heap of
+  ~800 gold coins (a milled disc, built in code), five blue gems on the heap and three spilled (a brilliant cut, flat
+  facets, built in code), a pool of coins in front, and a Hero Token leaning on it (purple enamel, gold rim, a gold
+  star). Lit like a product shot: warm key, cool fill, a gold light in the chest, two rims, a cool spark for the
+  gems. assets/ui/v2/offer/starter_pack.webp (1024 px), and the window's three icons from the same light (SHOT=gems,
+  gold, token). No generated images.
+- Home (screens.gd starter_tile): while the pack isn't bought, a card on the camp's left under the top row -- a warm
+  glow breathing behind it, light turning inside, the chest bobbing out of its top, sparkles, STARTER PACK on a red
+  ribbon, a shine passing, the price button beating (buys at once). The card opens the STARTER PACK window
+  (scripts/app/starter_offer.gd, siege_app.open_starter): the picture big under turning light, ONE-TIME OFFER, 500
+  GEMS / 3,000 GOLD / HERO TOKEN (the numbers from Net.IAP), "A Hero Token unlocks any hero you don't have yet. Once per
+  player.", the price on a shining button; it closes itself once the pack is bought, and Home's card goes.
+  HeyCatch: a "starter_offer" screen view when it opens.
+- The Shop's starter card (GEMS) shows the same picture (was gem_pack_2.png).
+- ui pack rebuilt and uploaded (ui-2d9604efa39a.pck, content-packs 81f3143): players download the ui pack again once.
+- tests/starter_offer_test.gd (in run_siege_tests.sh): the card, its picture, the window and its contents, ✕, the
+  Shop's card, bought -> the window closes and the card goes. Quick suite 109/109 before it; content check OK.
+- Version 0.31.214, versionCode 300; SERVER_BUILD 0.31.214 (kept equal for min_build_test).
