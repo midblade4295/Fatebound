@@ -4,18 +4,18 @@
  "packs": [
   {
    "name": "ui",
-   "file": "ui-3df44b010df0.pck",
-   "size": 40868556,
-   "sha256": "2d922972a5c9b260804c059e7c6129a6acc071d96c5cb3fce20d9707789c823e",
-   "inputs": "3df44b010df02bbab647e9f8bc4acf2dfd9a06657c7c9bd70e48592b0dcbbe2b",
+   "file": "ui-1ac91f2ca4b7.pck",
+   "size": 41247500,
+   "sha256": "ef6e3b3f3dd1c21f395e90151406192a03fcec4f4391934c786b85fb78a66946",
+   "inputs": "1ac91f2ca4b78360d1923398ae420ae5bd53bd826740046314186159829ddcb1",
    "probe": "res://assets/ui/abilities/archmage_e.png"
   },
   {
    "name": "world",
-   "file": "world-d3f2d89dd9aa.pck",
-   "size": 32334576,
-   "sha256": "e42c80be12209c636075af31d3c517df190d6a88d40fcba50134e6f50e6f11fc",
-   "inputs": "d3f2d89dd9aa28599fdf6cc7163fa580eab24225922548f536956fbd39bef6b5",
+   "file": "world-b95cbcd00aed.pck",
+   "size": 52482976,
+   "sha256": "e12102d442eefcb409f5817bcd78e886fa676ee44d5ce474ccc40c3dfef2622e",
+   "inputs": "b95cbcd00aed42a323dfdb42d30d0f8054935f17d2a21b647bd30bdae005c43a",
    "probe": "res://assets/kaykit/anim/Rig_Medium_CombatMelee.glb"
   },
   {

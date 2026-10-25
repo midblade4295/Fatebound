@@ -7249,4 +7249,11 @@ app"; ElevenLabs budget -> "2 each, ~10k credits"; rocks -> "Sculpted in code".
   the band of the painting from its banners to the fire (the painting darkened either side), its spots and medallions
   one row; the Herald's scroll no taller than 72 % of the screen; splash_land.png.
 - Tests follow (landscape sizes, the brush as cards, the camp's checks).
-- In progress: the full suite, the content packs and the APK (next commit).
+- Full suite: 105 passed; 5 failed and were fixed (app_flow_test, foliage_test, title_logo_test, moba_lol_test: the
+  portrait layout's and the old map's numbers; staged_start_test: the start's first frame 500-615 ms -- the field, the
+  5v5 and the view now three steps, the ground marks their own and 206 -> 18 ms; longest frame 300-345 ms).
+- ui and world packs rebuilt and uploaded (ui-1ac91f2ca4b7.pck, world-b95cbcd00aed.pck; content-packs fae13f5).
+  Version 0.31.216, versionCode 302; SERVER_BUILD 0.31.216; protocol 36 -- the server must be redeployed (and
+  min_build set to 0.31.216) before this build can play.
+- Preview APK: build/Fatebound-Siege-0.31.216-fatebound.apk (33 MB, preview key, userLandscape), sha256
+  91a41c3afbab3173abcd9c5e8bc18fc5a5d18ac6d9a698c32b9f29947bdf2ed1.
