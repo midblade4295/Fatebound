@@ -7258,7 +7258,7 @@ app"; ElevenLabs budget -> "2 each, ~10k credits"; rocks -> "Sculpted in code".
 - Preview APK: build/Fatebound-Siege-0.31.216-fatebound.apk (33 MB, preview key, userLandscape), sha256
   91a41c3afbab3173abcd9c5e8bc18fc5a5d18ac6d9a698c32b9f29947bdf2ed1.
 
-## 0.31.217 (in progress) — Honor of Kings play and training
+## 0.31.217 — Honor of Kings play and training
 Kevin (a 12-minute recording of Honor of Kings' first launch: its two training matches): "Here is how I want the
 training to go in fatebound. The helper will be another character and voiced by the herald. I also want fatebound to
 play this way with the map, the towers, the abilities, the shop system ect." Asked: the helper -> "Dragoon"; how a match
@@ -7301,3 +7301,13 @@ is won -> "3 towers a lane, then the king (crystal)"; skills -> "HoK + buttons";
   Voice: 58 lines, ElevenLabs eleven_v4, the Herald's voice (Edward), two takes a line, take 1 used, 4,886 credits
   (art_sources/training; tools/build_tutorial_assets.py training -> assets/vo/training). Tests: training_test (both
   played through; replaces tutorial_test), moba_ui_test (the window), herald_intro_test, moba_more_test (the shop).
+- Also: an unlearnt skill whose level you've reached says NEXT LV (no point left); the 5v5 window's rules line and the
+  HUD's King line say a lane's three towers; tower_rules_test learns every skill for its level-18 heroes.
+- Full suite: 110 passed (tower_rules_test and moba_ui_test fixed on the way: the skills to learn, the shop's tabs).
+- audio pack rebuilt and uploaded (audio-6c9749d871b4.pck: the training's voice; content-packs b19cb32); CONTENT OK.
+  Version 0.31.217, versionCode 303; SERVER_BUILD 0.31.217; protocol 37 -- the server must be redeployed (and
+  min_build set to 0.31.217) before this build can play online (Kevin's approval).
+- Preview APK: build/Fatebound-Siege-0.31.217-fatebound.apk (33 MB, preview key), sha256
+  dd28e9f9cfe01f9f2fda306d85c40b4f4fc593638b7b6dbe90d050e2bf3e3609.
+- Not done, for Kevin to decide: Honor of Kings' "You got New Hero" at the end of training 1 (a paid hero costs 25,000
+  gold here, so it isn't given).
