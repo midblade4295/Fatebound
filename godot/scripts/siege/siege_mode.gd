@@ -883,6 +883,13 @@ func _act(action: String, arg: Variant = null) -> void:
 		return
 	sim.act(hud.player_id, action, arg)
 
+func _learn_hint(me: Dictionary, slot: String) -> String:
+	# 0.31.217: why a skill can't be used yet -- not learnt: tap its +, or the level it needs
+	var name := "Your ultimate" if slot == "r" else slot.to_upper()
+	if sim.moba.can_learn(me, slot):
+		return "%s isn't learnt yet -- tap the + over it" % name
+	return "%s can be learnt at level %d" % [name, sim.moba.rank_need(slot, 1)]
+
 func _on_action(kind: String) -> void:
 	if online and kind not in ["attack", "ability", "dodge"]:
 		_on_action_online(kind)
@@ -891,6 +898,9 @@ func _on_action(kind: String) -> void:
 		"attack": _act("attack")
 		"ability":
 			var me_q: Dictionary = sim.by_id.get(hud.player_id, {}) if sim != null else {}
+			if sim != null and sim.moba != null and not me_q.is_empty() and me_q.has("rk") and sim.moba.rank(me_q, "q") <= 0:
+				hud.toast(_learn_hint(me_q, "q"), Color("#ffcf7a"))      # 0.31.217: not learnt yet
+				return
 			if sim != null and not me_q.is_empty() and me_q.has("kq") and not online:
 				# 0.31.168: a new hero's Q is a kit spell -- say why when it can't go (CHAIN, ROOTS need someone near)
 				if not sim.act(hud.player_id, "ability") and float(me_q.get("cd_ability", 0.0)) <= 0.0 and sim.can_act(me_q):
@@ -902,18 +912,22 @@ func _on_action(kind: String) -> void:
 			if sim != null and sim.act(hud.player_id, "pick", int(kind.right(1))):
 				if audio != null and audio.has_method("play"):
 					audio.play("equip")
+		"learn_q", "learn_w", "learn_e", "learn_r":      # 0.31.217: a skill point (the + over a skill)
+			if sim != null and sim.act(hud.player_id, "learn", kind.right(1)):
+				if audio != null and audio.has_method("play"):
+					audio.play("equip")
 		"ult":                                           # 0.31.157 5V5: the ultimate
 			if sim != null and not sim.act(hud.player_id, "ult"):
 				var me_u: Dictionary = sim.by_id.get(hud.player_id, {})
 				if not me_u.is_empty() and sim.moba.ult_rank(me_u) == 0:
-					hud.toast("Your ultimate comes at level %d" % sim.moba.ULT_LEVEL, Color("#ffcf7a"))
+					hud.toast(_learn_hint(me_u, "r"), Color("#ffcf7a"))
 				elif not me_u.is_empty() and float(me_u.get("ult_cd", 0.0)) <= 0.0 and sim.can_act(me_u):
 					hud.toast("No enemy in reach", Color("#ffcf7a"))         # (EXECUTE, FLURRY: they need someone near)
 		"w", "e":                                        # 0.31.167 5V5: W and E
 			if sim != null and not sim.act(hud.player_id, "spell", kind):
 				var me_s: Dictionary = sim.by_id.get(hud.player_id, {})
 				if not me_s.is_empty() and not sim.moba.kits.unlocked(me_s, kind):
-					hud.toast("%s comes at level %d" % [kind.to_upper(), int(sim.moba.kits.UNLOCK[kind])], Color("#ffcf7a"))
+					hud.toast(_learn_hint(me_s, kind), Color("#ffcf7a"))
 				elif not me_s.is_empty() and float(me_s.get("cd_" + kind, 0.0)) <= 0.0 and sim.can_act(me_s):
 					hud.toast("No enemy hero in reach", Color("#ffcf7a"))       # (SHADOW STEP, MARK, CURSE need one)
 		"recall":                                        # 0.31.181: home to the fountain
@@ -954,14 +968,18 @@ func _on_action_online(kind: String) -> void:
 			picks.pop_front()                            # (shown at once; the server's count follows)
 			_act("pick", int(kind.right(1)))
 			play.call("equip")
+		"learn_q", "learn_w", "learn_e", "learn_r":      # 0.31.217
+			if sim.moba.can_learn(me, kind.right(1)):
+				_act("learn", kind.right(1))
+				play.call("equip")
 		"ult":
 			if sim.moba.ult_rank(me) == 0:
-				hud.toast("Your ultimate comes at level %d" % sim.moba.ULT_LEVEL, Color("#ffcf7a"))
+				hud.toast(_learn_hint(me, "r"), Color("#ffcf7a"))
 			elif float(me.get("ult_cd", 0.0)) <= 0.0 and sim.can_act(me):
 				_act("ult")
 		"w", "e":
 			if not sim.moba.kits.unlocked(me, kind):
-				hud.toast("%s comes at level %d" % [kind.to_upper(), int(sim.moba.kits.UNLOCK[kind])], Color("#ffcf7a"))
+				hud.toast(_learn_hint(me, kind), Color("#ffcf7a"))
 			elif float(me.get("cd_" + kind, 0.0)) <= 0.0 and sim.can_act(me):
 				_act("spell", kind)
 		"recall":                                        # 0.31.181

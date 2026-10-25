@@ -27,7 +27,30 @@ const ROLE_OF := {"knight":"tank", "crusader":"tank", "barbarian":"fighter", "be
 	"assassin":"assassin", "ranger":"marksman", "sniper":"marksman", "mage":"mage", "archmage":"mage", "priest":"support",
 	"necromancer":"support",
 	"golem":"tank", "dragoon":"fighter", "duelist":"assassin", "stormcaller":"mage", "musketeer":"marksman", "druid":"support"}
-const UNLOCK := {"q":1, "w":2, "e":3}
+const UNLOCK := {"q":1, "w":2, "e":3}           # (until 0.31.217: the levels Q, W and E came at; skill points since)
+# 0.31.217 (Honor of Kings labels each skill under its button: Damage, Enhance, Crowd Control ...): what a skill is for
+const TAG_OF := {
+	"block":"DEFENSE", "spin":"DAMAGE", "lunge":"MOBILITY", "volley":"DAMAGE", "nova":"DAMAGE", "sanctuary":"HEAL",
+	"hammer":"DAMAGE", "whirlwind":"DAMAGE", "vanish":"STEALTH", "pierce":"DAMAGE", "meteor":"DAMAGE",
+	"resurrect":"REVIVE", "barkskin":"DEFENSE", "bash":"CONTROL", "blink":"MOBILITY", "bloodlust":"ENHANCE",
+	"boneshield":"DEFENSE", "boulder":"CONTROL", "buckshot":"DAMAGE", "caltrops":"CONTROL", "chain":"CONTROL",
+	"challenge":"CONTROL", "charge":"MOBILITY", "consecrate":"DAMAGE", "curse":"DEBUFF", "dazzle":"CONTROL",
+	"dragondive":"MOBILITY", "entangle":"CONTROL", "feint":"MOBILITY", "frenzy":"ENHANCE", "gust":"CONTROL",
+	"holylight":"HEAL", "impale":"DAMAGE", "keg":"DAMAGE", "knives":"DAMAGE", "landslide":"CONTROL", "leap":"MOBILITY",
+	"manashield":"DEFENSE", "mark":"DEBUFF", "missiles":"DAMAGE", "pillar":"CONTROL", "poison":"ENHANCE",
+	"quake":"CONTROL", "quickdraw":"ENHANCE", "rally":"DEFENSE", "rejuv":"HEAL", "riposte":"DEFENSE",
+	"shadowstep":"MOBILITY", "smokeroll":"MOBILITY", "snare":"CONTROL", "static":"DAMAGE", "stoneskin":"DEFENSE",
+	"sweep":"DAMAGE", "thrust":"DAMAGE", "thunderstorm":"DAMAGE", "trap":"CONTROL", "tumble":"MOBILITY",
+	"vault":"MOBILITY", "wildgrowth":"HEAL",
+}
+
+static func tag(hid: String, slot: String, class_ability := "") -> String:
+	# the word under a skill's button
+	if slot == "r":
+		return "ULTIMATE"
+	var k := kit(hid, slot)
+	var id := str(k.get("id", class_ability if slot == "q" else ""))
+	return str(TAG_OF.get(id, "SKILL"))
 
 # hid -> {"q": what the class's ability is, "w": {...}, "e": {...}}. A W/E: id (the effect), name, short (the button),
 # cd (s), text, and its numbers.
@@ -190,7 +213,8 @@ func cd(u: Dictionary, slot: String) -> float:
 	return float(u.get(cd_key(slot), 0.0))
 
 func unlocked(u: Dictionary, slot: String) -> bool:
-	return int(u.get("level", 1)) >= int(UNLOCK.get(slot, 1))
+	# 0.31.217: learnt -- a skill point spent on it (moba.learn); by level (UNLOCK) until then
+	return m.rank(u, slot) > 0 if m != null else int(u.get("level", 1)) >= int(UNLOCK.get(slot, 1))
 
 func can_cast(u: Dictionary, slot: String) -> bool:
 	var k := kit(str(u.get("hid", "")), slot)
@@ -245,16 +269,19 @@ func spell(u: Dictionary, slot: String) -> bool:
 	if not can_cast(u, slot) or not s.can_act(u) or u.has("dance") or int(u.get("tower", -1)) >= 0:
 		return false
 	var ev := {"id":u.id, "team":int(u.team), "hid":str(u.hid), "slot":slot, "spell":str(k.id), "pos":u.pos}
-	u[cd_key(slot)] = float(k.cd)                 # (before the cast: LUNGE's dash may hand half of it back)
+	u[cd_key(slot)] = float(k.cd) * m.rank_cd(u, slot)        # (before the cast: LUNGE's dash may hand half of it back)
+	_pk = m.rank_power(u, slot)                   # 0.31.217: its rank's strength
 	if not _cast(u, k, ev):
 		u[cd_key(slot)] = 0.0
 		return false
 	s._event("spell", ev)
 	return true
 
+var _pk := 1.0                                    # 0.31.217: the casting skill's rank strength (spell sets it)
+
 func _cast(u: Dictionary, k: Dictionary, ev: Dictionary) -> bool:
-	var dmg := float(s.stat(u, "dmg"))
-	var mhp := float(u.max_hp)
+	var dmg := float(s.stat(u, "dmg")) * _pk
+	var mhp := float(u.max_hp) * _pk
 	match str(k.id):
 		"bash":
 			_dash(u, _move_dir(u), float(k.dist), {"dmg":dmg * float(k.dmg), "stun":float(k.stun), "first":true})

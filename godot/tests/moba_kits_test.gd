@@ -3,7 +3,8 @@ extends SceneTree
 # of Legends and heroes of the storm have" -> League's six roles, three abilities and the ultimate:
 #  1. every hero has a role -- two of the twelve each of TANK, FIGHTER, ASSASSIN, MAGE, MARKSMAN, SUPPORT -- and a kit:
 #     Q (his class's ability), W and E;
-#  2. W comes at level 2, E at 3; a cast goes on its recharge (abilities' speed counts);
+#  2. W comes at level 2, E at 3 (0.31.217: learnt with the level's skill point, as the bots learn); a cast goes on its
+#     recharge (abilities' speed counts);
 #  3. each of the 24 W/E does what it says, on a scene: a hero of each against an enemy hero 3 m off, a hurt ally beside;
 #  4. shields take hits first, slows slow, marks and curses make hits land harder, poison ticks, a fallen hero keeps
 #     nothing;
@@ -58,6 +59,7 @@ func _to_level(s, u: Dictionary, lv: int) -> void:
 	while int(u.level) < lv:
 		s.moba.add_xp(u, s.moba.need(int(u.level)))
 	u.picks = []
+	s.moba._bot_learn(u)                        # (0.31.217: the skill points spent as a bot spends them -- Q W E R Q ...)
 
 func _init() -> void:
 	_roles()

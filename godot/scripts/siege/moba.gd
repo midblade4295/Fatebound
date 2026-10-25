@@ -133,7 +133,8 @@ const MINION_SPD := 0.88
 const MINION_GONE := 3.0                                    # a fallen minion's body, then it's gone
 const HERO_HP := 1.8                                        # heroes outlast minions
 const LEVEL_MAX := 10
-const LEVEL_GROW := 0.06                                    # +6 % health and damage a level
+const LEVEL_GROW := 0.08                                    # +8 % health and damage a level (0.31.217: +6 % and a card
+                                                            # of upgrades a level until then)
 const XP_BASE := 60.0
 const XP_STEP := 30.0
 const MINION_XP := 15.0
@@ -199,8 +200,16 @@ const MATCH_5V5 := 1200.0                                   # 0.31.165: 20 minut
 const KING_GUARD := 14.0                                    # enemies this near: he's under attack (bots come to help)
 
 # ---------- 0.31.157: ultimates ----------
-const ULT_LEVEL := 6
-const ULT_RANK2 := 9                                        # stronger (RANK2_POWER) and quicker back (RANK2_CD)
+const ULT_LEVEL := 4                                        # 0.31.217 (Honor of Kings): learnable from level 4 (6 until then)
+const ULT_RANK2 := 8                                        # its second rank from 8: stronger (RANK2_POWER), quicker back (RANK2_CD)
+# 0.31.217 SKILL POINTS (Kevin, Honor of Kings: "HoK + buttons"): a point a level (one at level 1); spend it with a +
+# on a skill to learn or upgrade it. Q, W and E up to rank 3 -- rank n from level 2n - 1 -- each rank past the first
+# RANK_POWER stronger and RANK_CD quicker back; the ultimate rank 1 from ULT_LEVEL, rank 2 from ULT_RANK2. Ten
+# points, eleven ranks: one skill stays short of its last. Bots spend theirs at once (_bot_learn). (Until then Q, W, E
+# and R came at levels 1, 2, 3 and 6 on their own, and each level dealt a card of three stat upgrades to pick from.)
+const SKILL_MAX := {"q":3, "w":3, "e":3, "r":2}
+const RANK_POWER := 0.2
+const RANK_CD := 0.1
 const RANK2_POWER := 1.35
 const RANK2_CD := 0.75
 const ULTS := {
@@ -622,6 +631,8 @@ func _make_hero(u: Dictionary, hid: String, lane: int, king_runner: bool) -> voi
 	u["xp"] = 0.0
 	u["picks"] = []
 	u["ups"] = {}
+	u["rk"] = {"q":0, "w":0, "e":0, "r":0}          # 0.31.217: the skills' ranks (0: not learnt)
+	u["sp"] = 1                                     # ...and the points to spend: one at level 1
 	u["ult_cd"] = 0.0
 	u["gold"] = float(GOLD_START)
 	u["gold_total"] = 0.0
@@ -632,6 +643,8 @@ func _make_hero(u: Dictionary, hid: String, lane: int, king_runner: bool) -> voi
 	hero_of[u.id] = hid
 	_apply(u)
 	s._respawn(u, true)
+	if bool(u.get("bot", false)):
+		_bot_learn(u)
 
 func swap_hero(u: Dictionary, hid: String) -> void:
 	# 0.31.170 (online): a player takes this seat as their own hero -- its place, level, gold, items and upgrades stay
@@ -713,15 +726,71 @@ func add_xp(u: Dictionary, x: float) -> void:
 	while int(u.level) < LEVEL_MAX and float(u.xp) >= need(int(u.level)):
 		u.xp = float(u.xp) - need(int(u.level))
 		u.level = int(u.level) + 1
-		(u.picks as Array).append(_offer(u))
+		u["sp"] = int(u.get("sp", 0)) + 1          # 0.31.217: a skill point (a card of upgrades until then)
 		_apply(u)
 		s._event("level", {"id":u.id, "team":u.team, "level":int(u.level)})
-		if int(u.level) == ULT_LEVEL or int(u.level) == ULT_RANK2:
-			s._event("ult_ready", {"id":u.id, "team":u.team, "rank":ult_rank(u)})     # 0.31.157: unlocked / stronger
 		if u.bot:
-			pick(u, rng.randi_range(0, 2))
+			_bot_learn(u)
 	if int(u.level) >= LEVEL_MAX:
 		u.xp = 0.0
+
+# ---------- 0.31.217: skill points ----------
+func rank(u: Dictionary, slot: String) -> int:
+	return int((u.get("rk", {}) as Dictionary).get(slot, 0))
+
+func rank_need(slot: String, r: int) -> int:
+	# the level rank r of a skill needs
+	if slot == "r":
+		return ULT_LEVEL if r <= 1 else ULT_RANK2
+	return 2 * r - 1
+
+func can_learn(u: Dictionary, slot: String) -> bool:
+	if not bool(u.get("hero", false)) or int(u.get("sp", 0)) <= 0 or not SKILL_MAX.has(slot):
+		return false
+	var r := rank(u, slot)
+	return r < int(SKILL_MAX[slot]) and int(u.get("level", 1)) >= rank_need(slot, r + 1)
+
+func learnable(u: Dictionary) -> Array:
+	var out := []
+	for slot in ["q", "w", "e", "r"]:
+		if can_learn(u, slot):
+			out.append(slot)
+	return out
+
+func learn(u: Dictionary, slot: String) -> bool:
+	if not can_learn(u, slot):
+		return false
+	u.sp = int(u.sp) - 1
+	var rk: Dictionary = u.rk
+	rk[slot] = int(rk.get(slot, 0)) + 1
+	u["rk"] = rk.duplicate()                       # (a new dictionary: the online snapshot sees the change)
+	s._event("learn", {"id":u.id, "team":int(u.team), "slot":slot, "rank":int(rk[slot])})
+	if slot == "r":
+		s._event("ult_ready", {"id":u.id, "team":u.team, "rank":ult_rank(u)})     # 0.31.157: unlocked / stronger
+	return true
+
+func _bot_learn(u: Dictionary) -> void:
+	# the ultimate whenever it can; else the lowest of Q, W, E (Q first): Q W E R Q W E R Q W
+	while int(u.get("sp", 0)) > 0:
+		var opts := learnable(u)
+		if opts.is_empty():
+			return
+		if opts.has("r"):
+			learn(u, "r")
+			continue
+		var best := str(opts[0])
+		for o in opts:
+			if rank(u, str(o)) < rank(u, best):
+				best = str(o)
+		learn(u, best)
+
+func rank_power(u: Dictionary, slot: String) -> float:
+	# a learnt skill's strength by its rank (1 at rank 1)
+	return 1.0 + RANK_POWER * float(maxi(0, rank(u, slot) - 1))
+
+func rank_cd(u: Dictionary, slot: String) -> float:
+	# ...and its recharge time, as a share of rank 1's
+	return 1.0 - RANK_CD * float(maxi(0, rank(u, slot) - 1))
 
 func _offer(u: Dictionary) -> Array:
 	var pool := []
@@ -1790,8 +1859,7 @@ func _enemy_gate_down(team: int) -> bool:
 # 0.31.157 ULTIMATES (Kevin: "Build the other 3 mechanics now")
 # ======================================================================================================================
 func ult_rank(u: Dictionary) -> int:
-	var lv := int(u.get("level", 1))
-	return 0 if lv < ULT_LEVEL else (1 if lv < ULT_RANK2 else 2)
+	return rank(u, "r")                            # 0.31.217: learnt (by level, 6 and 9, until then)
 
 func ult_info(u: Dictionary) -> Dictionary:
 	return ULTS.get(str(u.get("hid", "")), {})
@@ -2016,6 +2084,8 @@ func mod_damage(src: Dictionary, dst: Dictionary, amount: float) -> float:
 	var a := amount
 	var t: float = s.time
 	if not src.is_empty():
+		if str(src.get("atk", "")) == "ability" and bool(src.get("hero", false)) and not src.has("kq"):
+			a *= rank_power(src, "q")                   # 0.31.217: a class's Q, stronger by its rank
 		if t < float(src.get("bl_until", -1.0)):
 			a *= WARCRY_DMG
 		if t < float(src.get("ud_until", -1.0)):

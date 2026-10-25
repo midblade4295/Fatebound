@@ -802,6 +802,35 @@ func _buttons() -> Array:
 		{"id":"recall", "c":br + Vector2(-372, -34), "r":23.0},
 	]
 
+# 0.31.217 (Kevin, Honor of Kings: "HoK + buttons"): a gold + over each skill a point can go on (Honor of Kings' learn /
+# upgrade), out from the arc's middle; tapped: "learn_<slot>"
+const SLOT_OF := {"ability":"q", "w":"w", "block":"w", "e":"e", "ult":"r"}
+
+func learn_spots(me: Dictionary) -> Array:
+	var out := []
+	if me.is_empty() or sim == null or sim.moba == null or int(me.get("sp", 0)) <= 0:
+		return out
+	var a := Vector2(size.x, size.y) + Vector2(-80, -80)
+	for b in _buttons():
+		var slot := str(SLOT_OF.get(str(b.id), ""))
+		if slot == "" or not sim.moba.can_learn(me, slot):
+			continue
+		var c: Vector2 = b.c
+		var out_dir := (c - a).normalized()
+		out.append({"slot": slot, "c": c + out_dir * (float(b.r) + 17.0), "r": 14.0})
+	return out
+
+func _draw_learn(me: Dictionary) -> void:
+	for sp in learn_spots(me):
+		var c: Vector2 = sp.c
+		var pulse := 0.5 + 0.5 * sin(_time * 6.0)
+		draw_circle(c, 14.0 + 4.0 * pulse, Color(1.0, 0.82, 0.3, 0.22))
+		draw_circle(c + Vector2(0, 2), 13.0, Color(0, 0, 0, 0.45))
+		draw_circle(c, 13.0, Color("#1a2a44"))
+		draw_arc(c, 13.0, 0, TAU, 32, Color("#ffd65a"), 2.5, true)
+		draw_line(c - Vector2(6, 0), c + Vector2(6, 0), Color("#ffe9a6"), 3.0)
+		draw_line(c - Vector2(0, 6), c + Vector2(0, 6), Color("#ffe9a6"), 3.0)
+
 func _modal_open() -> bool:
 	return paused() or tut_modal or (result_panel != null and result_panel.visible) \
 		or (score_panel != null and is_instance_valid(score_panel) and score_panel.visible) or shop_open() or board_open()
@@ -851,6 +880,12 @@ func _touch(index: int, pos: Vector2, pressed: bool) -> void:
 		for i in 3:
 			if pick_rect(i).has_point(pos) and _picks_open():
 				action_pressed.emit("pick%d" % i)
+				get_viewport().set_input_as_handled()
+				return
+		var me_l: Dictionary = sim.by_id.get(player_id, {})
+		for sp in learn_spots(me_l):                # 0.31.217: a + over a skill
+			if pos.distance_to(sp.c) <= float(sp.r) + 8.0:
+				action_pressed.emit("learn_" + str(sp.slot))
 				get_viewport().set_input_as_handled()
 				return
 		if shop_rect().grow(6.0).has_point(pos):
@@ -1056,6 +1091,7 @@ func _draw_hud() -> void:
 	# Combat buttons.
 	for b in _buttons():
 		_draw_button(b, me)
+	_draw_learn(me)                                # 0.31.217
 	_draw_recall(me)
 	if prof_on: tq = _ph("stick+buttons", tq)
 
@@ -1605,11 +1641,11 @@ func _draw_button(b: Dictionary, me: Dictionary) -> void:
 			# 0.31.167 5V5: W and E -- locked until their level (LV 2 / LV 3), then their name and recharge
 			var k: Dictionary = sim.moba.kits.kit(str(me.get("hid", "")), str(b.id))
 			var unl: bool = sim.moba.kits.unlocked(me, str(b.id))
-			label = str(k.get("short", k.get("name", "—"))) if unl else "LV %d" % int(sim.moba.kits.UNLOCK[str(b.id)])
+			label = str(k.get("short", k.get("name", "—"))) if unl else _lock_label(me, str(b.id))
 			col = Color("#1f4a33") if str(b.id) == "w" else Color("#4a2a1a")
 			rim = Color("#9ff0b8") if str(b.id) == "w" else Color("#ffc08a")
 			cd = float(me.get("cd_" + str(b.id), 0.0))
-			cd_max = maxf(0.1, float(k.get("cd", 1.0)))
+			cd_max = maxf(0.1, float(k.get("cd", 1.0)) * sim.moba.rank_cd(me, str(b.id)))
 			ready = unl and cd <= 0.0 and sim.alive(me)
 			badge = str(b.id).to_upper()
 			icon = ability_icon(str(me.get("hid", "")), str(b.id))
@@ -1628,13 +1664,17 @@ func _draw_button(b: Dictionary, me: Dictionary) -> void:
 				var kq: Dictionary = sim.moba.kits.kit(str(me.get("hid", "")), "q")
 				label = str(kq.get("short", kq.get("name", label)))
 				cd_max = maxf(0.1, float(kq.get("cd", cd_max)))
-			ready = ab != "" and cd <= 0.0
+			cd_max *= sim.moba.rank_cd(me, "q")
+			ready = ab != "" and cd <= 0.0 and sim.moba.rank(me, "q") > 0
 			icon = ability_icon(str(me.get("hid", "")), "q")
+			locked = sim.moba.rank(me, "q") <= 0               # 0.31.217: not learnt yet
+			if locked:
+				label = _lock_label(me, "q")
 		"ult":
 			# 0.31.157 5V5: the ultimate -- locked until level 6 (LV 6), its name once it's yours, a glow when it's ready
 			var info: Dictionary = sim.moba.ult_info(me)
 			var unlocked: bool = sim.moba.ult_rank(me) > 0
-			label = str(info.get("short", info.get("name", "ULT"))) if unlocked else "LV %d" % sim.moba.ULT_LEVEL
+			label = str(info.get("short", info.get("name", "ULT"))) if unlocked else _lock_label(me, "r")
 			col = Color("#7a3208")
 			rim = Color("#ffd65a")
 			cd = float(me.get("ult_cd", 0.0))
@@ -1705,7 +1745,24 @@ func _draw_button(b: Dictionary, me: Dictionary) -> void:
 			_text(c + Vector2(0, -r + 13), badge, 10, Color(1, 1, 1, 0.75) if ready else Color(1, 1, 1, 0.35), _bold)
 		else:
 			_text(c + Vector2(0, -r + 12), badge, 11, Color("#ffe9a6"), _bold)
+	var slot := str(SLOT_OF.get(str(b.id), ""))
+	if slot != "" and sim.moba != null:
+		# 0.31.217 (Honor of Kings): the skill's ranks as pips along its foot, and what it's for under it
+		var mx := int(sim.moba.SKILL_MAX.get(slot, 0))
+		var rk := int(sim.moba.rank(me, slot))
+		for i in mx:
+			var pc := c + Vector2((float(i) - float(mx - 1) * 0.5) * 9.0, r - 5.0)
+			draw_circle(pc, 3.4, Color(0, 0, 0, 0.6))
+			draw_circle(pc, 2.6, Color("#ffd65a") if i < rk else Color(1, 1, 1, 0.18))
+		var tg: String = sim.moba.kits.tag(str(me.get("hid", "")), slot, str(sim.ability_of(me)) if slot == "q" else "")
+		_text(c + Vector2(0, r + 13.0), tg, 9, Color(1, 1, 1, 0.82) if rk > 0 else Color(1, 1, 1, 0.45), _bold)
 
+
+func _lock_label(me: Dictionary, slot: String) -> String:
+	# 0.31.217: a skill not learnt -- "+" when a point can go on it now, else the level it needs ("LV 4")
+	if sim.moba.can_learn(me, slot):
+		return "LEARN"
+	return "LV %d" % int(sim.moba.rank_need(slot, 1))
 
 # 0.31.171: the ability icons (tools/build_ability_icons.py): <hero>_<q|w|e|r>.png, loaded once (a missing one: the
 # button's name, as before)

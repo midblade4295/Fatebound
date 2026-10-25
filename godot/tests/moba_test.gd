@@ -187,15 +187,18 @@ func _init() -> void:
 	var l = _new("knight", 9)
 	var you: Dictionary = l.by_id["you"]
 	var dmg1 := float(l.stat(you, "dmg"))
+	# (0.31.217, Honor of Kings: a skill point a level, spent with a + -- a card of three upgrades until then)
+	check(int(you.sp) == 1 and l.moba.rank(you, "q") == 0, "level 1: a skill point to spend, nothing learnt")
 	l.moba.add_xp(you, Moba.XP_BASE + 1.0)
-	check(int(you.level) == 2 and (you.picks as Array).size() == 1 and (you.picks[0] as Array).size() == 3, "a level: 3 upgrades offered")
+	check(int(you.level) == 2 and int(you.sp) == 2 and (you.picks as Array).is_empty(), "a level: another skill point (no cards)")
 	check(float(l.stat(you, "dmg")) > dmg1, "...and a little more damage")
-	var offer: Array = you.picks[0]
-	var k := str(offer[0])
-	check(l.act("you", "pick", 0) and int(you.ups.get(k, 0)) == 1 and (you.picks as Array).is_empty(), "a pick (%s) applies" % k)
+	check(l.act("you", "learn", "q") and l.moba.rank(you, "q") == 1 and int(you.sp) == 1, "a point on Q: learnt")
+	check(not l.act("you", "learn", "q"), "...rank 2 of Q needs level 3")
+	check(not l.act("you", "learn", "r"), "...the ultimate needs level %d" % Moba.ULT_LEVEL)
+	check(l.act("you", "learn", "w") and int(you.sp) == 0, "a point on W")
 	var bot: Dictionary = l.by_id["b2"]
 	l.moba.add_xp(bot, Moba.XP_BASE * 3.0)
-	check(int(bot.level) >= 2 and (bot.picks as Array).is_empty() and not (bot.ups as Dictionary).is_empty(), "bots pick by themselves")
+	check(int(bot.level) >= 2 and int(bot.sp) == 0 and l.moba.rank(bot, "q") >= 1, "bots spend theirs by themselves")
 	_clear_minions(l)
 	_park_heroes(l)
 	var mn: Dictionary = _add_minion(l, 1, "ranger", you.pos + Vector2(2, 0))

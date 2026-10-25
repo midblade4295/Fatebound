@@ -7268,3 +7268,10 @@ is won -> "3 towers a lane, then the king (crystal)"; skills -> "HoK + buttons";
   tower is down). A lane broken brings that lane's super minions (its gate did). The kill feed calls the third tower
   "high ground", and a toast says when a King opens. The view shows the gates swung open. Protocol 37. Tests follow
   (moba_test, moba_more_test, moba_lol_test, tower_rules_test, hud_top_test); a bot match ends by the King at 14:53.
+- Skills (moba.gd, moba_kits.gd, siege_hud.gd, siege_mode.gd): Honor of Kings' skill points replace the level-up
+  cards. A hero starts with one point and gets one a level; a gold + sits over each skill it can learn, and a tap
+  learns it. Q, W and E go to rank 3 (rank n at level 2n-1), the ultimate opens at level 4 and its second rank at 8.
+  Each rank past the first adds 20% power and takes 10% off the cooldown. Bots learn the ultimate when they can, else
+  their lowest skill. Each button shows its rank pips and a word for what it does (DAMAGE, CONTROL, MOBILITY...); an
+  unlearnt one says LEARN or the level it opens at. The "learn" action is online too (protocol 37). The stat cards on
+  level-up are gone (growth a level 8%). Tests: moba_test, moba_more_test, moba_kits_test, moba_ui_test, tower_look_test.

@@ -47,7 +47,7 @@ const QC_GAP := 2.0              # s between one player's quick chats
 const STATES := ["idle", "move", "wind", "recover", "dodge", "dead", "dash"]
 # Actions a client may ask for (anything else is ignored by the server), and what each takes (clean_arg). 0.31.170: the
 # 5v5's -- a level-up pick, the ultimate, W and E, a ward, the shop.
-const ACTIONS := ["attack", "ability", "block", "dodge", "pick", "ult", "spell", "ward", "shop_buy", "shop_sell", "recall"]
+const ACTIONS := ["attack", "ability", "block", "dodge", "pick", "ult", "spell", "ward", "shop_buy", "shop_sell", "recall", "learn"]   # (0.31.217: learn, a skill point)
 const FIVE := 1                  # 0.31.170: the online 5v5 (the hello's "five", the server's answers' "five")
 
 static func clean_arg(action: String, arg: Variant) -> Array:
@@ -57,6 +57,8 @@ static func clean_arg(action: String, arg: Variant) -> Array:
 			return [true, int(arg)] if (arg is int or arg is float) and int(arg) >= 0 and int(arg) <= 2 else [false, null]
 		"spell":
 			return [true, str(arg)] if arg is String and str(arg) in ["w", "e"] else [false, null]
+		"learn":
+			return [true, str(arg)] if arg is String and str(arg) in ["q", "w", "e", "r"] else [false, null]
 		"shop_buy":
 			return [true, str(arg)] if arg is String and str(arg).length() <= 24 and _word(str(arg), true) else [false, null]
 		"shop_sell":

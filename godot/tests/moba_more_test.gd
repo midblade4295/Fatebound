@@ -67,6 +67,7 @@ func _to_level(s, u: Dictionary, lv: int) -> void:
 	while int(u.level) < lv:
 		s.moba.add_xp(u, s.moba.need(int(u.level)))
 	u.picks = []
+	s.moba._bot_learn(u)                        # (0.31.217: the skill points spent as a bot spends them -- R first)
 
 func _tough(u: Dictionary) -> void:
 	u.max_hp = 100000.0
@@ -93,16 +94,19 @@ func _ult_scene(hero: String) -> Array:
 	return [s, me]
 
 func _ultimates() -> void:
-	# none before 6, unlocked at 6
+	# none before ULT_LEVEL; learnt with a skill point from then (0.31.217, Honor of Kings: level 4; 6 on its own until then)
 	var s0 = _new("knight", 3)
 	_quiet(s0)
 	var y0: Dictionary = s0.by_id["you"]
-	check(not s0.act("you", "ult") and s0.moba.ult_rank(y0) == 0, "no ultimate before level 6")
 	var evs := []
-	while int(y0.level) < 6:
+	while int(y0.level) < Moba.ULT_LEVEL - 1:
 		s0.moba.add_xp(y0, s0.moba.need(int(y0.level)))
-		evs.append_array(s0.drain_events())
-	check(evs.any(func(e): return e.k == "ult_ready" and str(e.id) == "you") and s0.moba.ult_rank(y0) == 1, "level 6: the ultimate is ready")
+	check(not s0.act("you", "learn", "r") and not s0.act("you", "ult") and s0.moba.ult_rank(y0) == 0, "no ultimate before level %d" % Moba.ULT_LEVEL)
+	s0.moba.add_xp(y0, s0.moba.need(int(y0.level)))
+	s0.drain_events()
+	check(s0.act("you", "learn", "r"), "level %d: a point on the ultimate" % Moba.ULT_LEVEL)
+	evs.append_array(s0.drain_events())
+	check(evs.any(func(e): return e.k == "ult_ready" and str(e.id) == "you") and s0.moba.ult_rank(y0) == 1, "...it's ready")
 	# BULWARK
 	var r: Array = _ult_scene("knight")
 	var s = r[0]
@@ -260,7 +264,7 @@ func _ultimates() -> void:
 	me = r[1]
 	_to_level(s, me, Moba.ULT_RANK2)
 	s.act("you", "ult")
-	check(s.moba.ult_rank(me) == 2 and is_equal_approx(float(me.ult_cd), float(Moba.ULTS.mage.cd) * Moba.RANK2_CD), "level 9: rank II, back sooner (%.0f s)" % float(me.ult_cd))
+	check(s.moba.ult_rank(me) == 2 and is_equal_approx(float(me.ult_cd), float(Moba.ULTS.mage.cd) * Moba.RANK2_CD), "level %d: rank II, back sooner (%.0f s)" % [Moba.ULT_RANK2, float(me.ult_cd)])
 
 # ---------------------------------------------------------------- 2. gold
 func _gold() -> void:

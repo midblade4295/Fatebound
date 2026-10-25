@@ -529,6 +529,8 @@ func act(id: String, action: String, arg: Variant = null) -> bool:
 		recall_cancel(u)                             # (0.31.181: fighting ends a recall)
 	if not u.is_empty() and not ended and moba != null and action in ["shop_buy", "shop_sell"]:
 		return moba.buy(u, str(arg)) if action == "shop_buy" else moba.sell(u, int(arg))     # (0.31.157: down too)
+	if not u.is_empty() and not ended and moba != null and action == "learn":
+		return moba.learn(u, str(arg))                # 0.31.217: a skill point on Q, W, E or R (down too)
 	if u.is_empty() or ended or not alive(u):
 		return false
 	match action:
@@ -537,6 +539,8 @@ func act(id: String, action: String, arg: Variant = null) -> bool:
 		"ability":
 			if moba != null and u.has("kq"):
 				return moba.kits.spell(u, "q")           # 0.31.168: a new hero's Q is a kit spell
+			if moba != null and bool(u.get("hero", false)) and moba.rank(u, "q") <= 0:
+				return false                             # 0.31.217: not learnt yet
 			match ability_of(u):
 				"block": return _block(u)
 				"whirlwind": return _whirl(u)
@@ -1068,7 +1072,8 @@ func _step_unit(u: Dictionary, dt: float) -> void:
 	if recalling(u):
 		_step_recall(u)                          # 0.31.181: a hero on his way home
 	u.cd_dodge = maxf(0.0, u.cd_dodge - dt)
-	u.cd_ability = maxf(0.0, u.cd_ability - dt * float(u.get("m_cdr", 1.0)))     # (0.31.155: a 5v5 hero's faster recharge)
+	u.cd_ability = maxf(0.0, u.cd_ability - dt * float(u.get("m_cdr", 1.0)) \
+		/ (moba.rank_cd(u, "q") if moba != null and u.has("rk") else 1.0))       # (0.31.155: a 5v5 hero's faster recharge; 0.31.217: and Q's rank)
 	_step_beam(u, dt)
 	_step_whirl(u, dt)
 	if u.stun > 0.0:

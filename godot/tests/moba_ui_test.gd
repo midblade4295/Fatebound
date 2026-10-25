@@ -187,14 +187,16 @@ func _process(delta: float) -> bool:
 				check(str(app.profile.d.settings.get("moba_hero", "")) == "archmage", "the pick kept on the phone")
 				check(s.moba_hero == "archmage" and not s.online and s.sim.moba != null and me.cls == "mage" and me.up
 					and s.sim.units.size() == 10, "BATTLE: an offline 5v5, you the Archmage")
-				# a level up: three upgrades on the screen; tap the second
+				# 0.31.217 (Honor of Kings): a level up -- a skill point; a + over each skill it can go on; tap W's
 				s.sim.moba.add_xp(me, Moba.XP_BASE + 1.0)
-				var offer: Array = (me.picks as Array)[0]
-				var r: Rect2 = s.hud.pick_rect(1)
-				s.hud._touch(0, r.get_center(), true)
-				s.hud._touch(0, r.get_center(), false)
-				check(int(me.level) == 2 and (me.picks as Array).is_empty() and int((me.ups as Dictionary).get(str(offer[1]), 0)) == 1,
-					"level 2: three upgrades on the screen; the second tapped (%s) applies" % str(offer[1]))
+				var spots: Array = s.hud.learn_spots(me)
+				var wsp: Array = spots.filter(func(x): return str(x.slot) == "w")
+				check(int(me.level) == 2 and int(me.sp) == 2 and spots.size() == 3 and wsp.size() == 1 and (me.picks as Array).is_empty(),
+					"level 2: two skill points, a + over Q, W and E (%d)" % spots.size())
+				if wsp.size() == 1:
+					s.hud._touch(0, wsp[0].c, true)
+					s.hud._touch(0, wsp[0].c, false)
+				check(s.sim.moba.rank(me, "w") == 1 and int(me.sp) == 1, "W's + tapped: W learnt, a point left")
 				# the shop: the gold pill tapped
 				var ub: Array = s.hud._buttons().filter(func(b): return str(b.id) == "ult")
 				check(ub.size() == 1 and s.sim.moba.ult_rank(me) == 0, "the ULT button, locked (LV %d)" % Moba.ULT_LEVEL)
@@ -227,8 +229,7 @@ func _process(delta: float) -> bool:
 				var s = app.siege
 				var me: Dictionary = s.sim.by_id["you"]
 				s.sim.moba.add_xp(me, 99999.0)
-				while not (me.picks as Array).is_empty():
-					s.sim.moba.pick(me, 0)
+				s.sim.moba._bot_learn(me)                 # (0.31.217: every point spent)
 				me.pos = Vector2(-20.0, 38.0)
 				me.face = s.sim.angle_of(Vector2(0, -1))
 				me.state = "idle"
@@ -340,12 +341,11 @@ func _process(delta: float) -> bool:
 			if t_phase > 0.5 and t_phase < 0.6:
 				var s0 = app.siege
 				var y0: Dictionary = s0.sim.by_id["you"]
-				for k in 2:
-					(y0.picks as Array).append(s0.sim.moba._offer(y0))     # (picks waiting, for the picture)
+				y0["sp"] = int(y0.get("sp", 0)) + 1                   # (0.31.217: a point waiting, for the picture)
 			if t_phase > 3.0:
 				_shot("moba_match")
 				var s = app.siege
-				check(s.hud._picks_open() and has_moba_status(s), "picks waiting on the screen; LEVEL and TOWERS under your health")
+				check(not s.hud.learn_spots(s.sim.by_id["you"]).is_empty() and has_moba_status(s), "a skill point waiting: a + on the screen; LEVEL and TOWERS under your health")
 				s.sim._finish("time")
 				_go("end")
 		"end":
@@ -360,7 +360,7 @@ func _process(delta: float) -> bool:
 func has_moba_status(s) -> bool:
 	# (drawn, not nodes: the HUD's status draws from these)
 	var me: Dictionary = s.sim.by_id["you"]
-	return int(me.level) >= 2 and s.sim.moba.towers.size() == 22        # (0.31.165: the Rift's eleven a side)
+	return int(me.level) >= 2 and s.sim.moba.towers.size() == 18        # (0.31.217: nine a side -- three a lane, no King towers)
 
 func _finish() -> bool:
 	print("MOBA_UI_PASS" if fails.is_empty() else "MOBA_UI_FAIL %s" % str(fails))

@@ -89,7 +89,7 @@ func _process(_d: float) -> bool:
 			var to: Vector2 = s.throne(1 - int(tw.team)) - (tw.p as Vector2)
 			if Vector2(front.x, front.z).normalized().dot(to.normalized()) > 0.99:
 				faced += 1
-		check(drawn == s.moba.towers.size() and drawn == 22, "every tower drawn from its model (%d of %d)" % [drawn, s.moba.towers.size()])
+		check(drawn == s.moba.towers.size() and drawn == 18, "every tower drawn from its model (%d of %d)" % [drawn, s.moba.towers.size()])
 		check(faced == drawn, "each facing the other side's keep (%d)" % faced)
 		var mt3: Dictionary = v.moba_towers[tw_id]
 		var tw3: Dictionary = s.moba.towers[tw_id]
