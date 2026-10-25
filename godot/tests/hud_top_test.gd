@@ -50,7 +50,7 @@ func _process(_d: float) -> bool:
 	for tw in s.moba.towers:
 		if int(tw.team) == 1 - t and not bool(tw.dead):
 			n_them += 1
-	check(hud.towers_standing(1 - t) == n_them and n_them == 10 and hud.towers_standing(t) == 11, "towers standing: %d of theirs, %d of yours" % [hud.towers_standing(1 - t), hud.towers_standing(t)])
+	check(hud.towers_standing(1 - t) == n_them and n_them == 8 and hud.towers_standing(t) == 9, "towers standing: %d of theirs, %d of yours" % [hud.towers_standing(1 - t), hud.towers_standing(t)])   # (0.31.217: 9 a side)
 	var k1: Array = hud._top_key(me)
 	check(k1 != k0 and k1.has(7), "a knockout and a tower down redraw the bar")
 	# level and XP
@@ -87,8 +87,8 @@ func _process(_d: float) -> bool:
 	foe.pos = s.moba.king_pos(t) + Vector2(2, 0)
 	s.step()                                                  # (who's near whom: the sim's grid, kept as it steps)
 	check(not hud.king_alert(me), "an enemy at your King, his towers standing: no alert")
-	for tw in s.moba.towers:
-		if int(tw.team) == t and int(tw.tier) == 4:
+	for tw in s.moba.towers:                          # (0.31.217: a lane of his broken -- its three towers)
+		if int(tw.team) == t and int(tw.lane) == 1:
 			tw.dead = true
 	foe.pos = s.moba.king_pos(t) + Vector2(2, 0)
 	s.step()

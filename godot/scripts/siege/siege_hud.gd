@@ -728,7 +728,7 @@ func on_event(e: Dictionary) -> void:
 			if str(e.get("by", "")) == str(player_id):
 				toast("Too far -- step into the tower's range to hurt it", Color("#ffcf7a"))
 		"king_immune":
-			toast("Their King is protected until both his towers fall", Color("#ffcf7a"))
+			toast("Their King is protected until one of their lanes falls -- all three of its towers", Color("#ffcf7a"))   # (0.31.217)
 		"king_down":
 			toast("THEIR KING IS DEFEATED!" if int(e.get("team", -1)) != int(me.team) else "OUR KING HAS FALLEN", VisualTheme.GOLD if int(e.get("team", -1)) != int(me.team) else VisualTheme.RED)
 		"ult_ready":                                     # 0.31.157 5V5
@@ -1266,7 +1266,10 @@ func _kf_event(e: Dictionary, me: Dictionary) -> void:
 		"tower_down":
 			var ours_t := int(e.get("team", -1)) == int(me.team)
 			_kf_add([["%s %s %s tower fell" % ["Our" if ours_t else "Their", str(sim.moba.LANE_NAMES[int(e.lane)]),
-				"outer" if int(e.tier) == 1 else "inner"], VisualTheme.RED if ours_t else VisualTheme.GOLD]], false)
+				["outer", "inner", "high ground"][clampi(int(e.tier) - 1, 0, 2)]], VisualTheme.RED if ours_t else VisualTheme.GOLD]], false)
+			if int(e.get("tier", 0)) == 3:                 # 0.31.217: a lane broken -- that side's King can be hit now
+				toast("THEIR KING IS OPEN -- break him to win!" if not ours_t else "OUR KING IS EXPOSED -- defend him!",
+					VisualTheme.GOLD if not ours_t else VisualTheme.RED)
 		"death":
 			if bool(e.get("minion", false)) or bool(e.get("mon", false)):
 				return                                     # (0.31.155: minions fall all the time; 0.31.157: so do monsters)

@@ -18,15 +18,17 @@ extends RefCounted
 #   minion in range; an enemy hero who hurts one of its heroes in range becomes its target at once (call for help);
 #   otherwise heroes only when no minion is in range. Shots home in (no dodging); on a hero each shot in a row hits
 #   harder (+40 %, up to 3 times), on a minion a share of its health (a Knight 45 %, the others 70 %). A lane's tower
-#   can't be damaged while the one before it stands; a keep's gate can't be damaged while the third tower of the lane
-#   that ends at it stands; the King towers while all three gates stand. Without your minions near it a tower takes a third of the damage (backdoor protection).
+#   can't be damaged while the one before it stands. Without your minions near it a tower takes a third of the damage
+#   (backdoor protection). 0.31.217 (Kevin, Honor of Kings: "3 towers a lane, then the king (crystal)"): the keeps' gates
+#   stand open and there are no King towers -- a lane's three towers, then the King (until then the third tower opened
+#   that lane's gate, the gates the two King towers, and those the King).
 #   Only basic attacks (and arrows / fire) hurt towers.
 # - The heart is the King (0.31.156, Kevin: "Have the enemy king be the "heart" and players will have to defeat him"):
-#   each King sits on his own throne, KING_HP of health, untouchable until both his King towers are down (0.31.165;
-#   until then one of his castle's front gates); then he can be hit (basic attacks, arrows, fire) and he fights back -- a slam round him every KING_EVERY s. Left
+#   each King sits on his own throne, KING_HP of health, untouchable until the third tower of one of his lanes is down
+#   (Honor of Kings' crystal; 0.31.217 -- both his King towers until then); then he can be hit (basic attacks, arrows, fire) and he fights back -- a slam round him every KING_EVERY s. Left
 #   alone a while he heals. Defeat theirs and the match is won; at time (15 minutes since 0.31.157), the side that did more to the other's
-#   King wins, then more towers down, then hero knockouts. No rescues, no lifting. When an enemy gate is down two of
-#   each side's bots go for that keep's King towers, then the King; bots near their own King under attack defend him.
+#   King wins, then more towers down, then hero knockouts. No rescues, no lifting. When an enemy King is open two of
+#   each side's bots go for him; bots near their own King under attack defend him.
 # - 0.31.157 (Kevin: "Build the other 3 mechanics now" -- the ultimates, the jungle, the gold shop):
 #   * ULTIMATES: at level ULT_LEVEL every hero gets his own (ULTS; the ULT button), stronger from ULT_RANK2. Bots use
 #     theirs when it's worth it (_bot_ult).
@@ -99,8 +101,8 @@ const LANE_NAMES := ["west", "middle", "east"]
 # 0.31.216 (the Honor of Kings square): the side lanes' towers along the square's edges, on the lane's inner side.
 const TOWERS_BLUE := [[0, 1, Vector2(-73.04, 16.48)], [0, 2, Vector2(-44.76, 44.76)], [0, 3, Vector2(-17.89, 71.63)],
 	[1, 1, Vector2(4.0, 30.0)], [1, 2, Vector2(4.0, 54.0)], [1, 3, Vector2(4.0, 74.5)],
-	[2, 1, Vector2(73.04, 16.48)], [2, 2, Vector2(44.76, 44.76)], [2, 3, Vector2(17.89, 71.63)],
-	[-1, 4, Keep.KING_TOWERS[0]], [-1, 4, Keep.KING_TOWERS[1]]]
+	[2, 1, Vector2(73.04, 16.48)], [2, 2, Vector2(44.76, 44.76)], [2, 3, Vector2(17.89, 71.63)]]
+# (0.31.217: no King towers -- Kevin: "3 towers a lane, then the king (crystal)"; tier 4, lane -1, until then)
 
 # 0.31.158 (Kevin: "Balance the minions better, the game ended up have tons of priests. Also minions need to work like
 # LoL"): League's waves -- 3 melee (Knights) and 3 casters (Archers); a siege minion (a battle-mage: tanky, ranged fire)
@@ -176,7 +178,6 @@ const GOLD_TOWER_LOCAL := 200                               # shared by the side
 const GOLD_TOWER_GLOBAL := [0, 50, 25, 25, 25]              # every hero of the side, by tier (League's bounties: outer 50, the rest 25)
 const GOLD_FIRST_TOWER := 150                               # the match's first tower: on top, for the local share
 const TOWER_LOCAL_R := 18.0
-const GATE_BACK := 180.0                                    # a broken gate stands again after this (League's inhibitor: 5 min)
 const HELP_FOR := 2.0
 const UPGRADES := {
 	"dmg":{"name":"+15% DAMAGE"}, "hp":{"name":"+15% HEALTH"}, "spd":{"name":"+8% SPEED"}, "as":{"name":"+12% ATTACK SPEED"},
@@ -512,6 +513,8 @@ func begin(sim, my_hero: String, seed_value: int) -> void:
 	for g in s.gates:                     # 0.31.157: the gates (League's inhibitors) a little easier to break
 		g.hp = GATE_HP_5V5
 		g.max_hp = GATE_HP_5V5
+	s.open_gates = true                   # 0.31.217 (Honor of Kings): the gates stand open -- the King is the crystal
+	s._update_gate_nav()
 	for t in 2:                           # the Kings, home on their thrones: the hearts
 		var o: Dictionary = s.oracles[t]
 		o.state = "home"
@@ -755,13 +758,6 @@ func step(dt: float) -> void:
 		for t in 2:
 			for l in 3:
 				_spawn_wave(t, l)
-	for g in s.gates:                                  # 0.31.158: a broken gate stands again (League's inhibitor)
-		if bool(g.get("broken", false)) and s.time >= float(g.get("broken_at", INF)) + GATE_BACK:
-			g.broken = false
-			g.hp = float(g.max_hp)
-			g.erase("broken_at")
-			s._update_gate_nav()
-			s._event("gate_rebuilt", {"gate":int(g.id), "team":int(g.team)})
 	var tv := Time.get_ticks_usec() if s.profile else 0
 	_step_towers(dt)
 	if s.profile: tv = s._p("m.towers", tv)
@@ -825,7 +821,7 @@ func step(dt: float) -> void:
 func wave_kinds(t: int, l: int, n: int) -> Array:
 	# League's wave n (1-based) in lane l for side t, front to back: super(s), melee, siege, casters
 	var sup := 0
-	if _lane_gate_down(t, l):
+	if _lane_gate_down(t, l):                       # (0.31.217: the lane's third enemy tower down -- its gate until then)
 		sup = 2 if _gates_down(1 - t) >= 2 else 1
 	var siege := false
 	if sup == 0:
@@ -842,9 +838,11 @@ func wave_kinds(t: int, l: int, n: int) -> Array:
 	return out
 
 func _gates_down(team: int) -> int:
+	# 0.31.217: how many of this side's lanes are broken -- their third tower down (the gates stand open now; until then
+	# the gates broken)
 	var n := 0
-	for g in s.gates:
-		if int(g.team) == team and not s.gate_blocks(g):
+	for tw in towers:
+		if int(tw.team) == team and int(tw.tier) == 3 and bool(tw.dead):
 			n += 1
 	return n
 
@@ -927,9 +925,11 @@ func place_minions(t: int, l: int, kinds: Array, at: Vector2) -> Array:
 	return ids
 
 func _lane_gate_down(t: int, l: int) -> bool:
-	# the enemy castle's gate at the end of team t's lane l is down
-	var g := _gate_at(1 - t, wp(t, l, lane_len(l) - 1))
-	return not g.is_empty() and not s.gate_blocks(g)
+	# team t's lane l is broken: the enemy's third tower in it down (0.31.217; the enemy gate at its end until then)
+	for tw in towers:
+		if int(tw.team) == 1 - t and int(tw.lane) == l and int(tw.tier) == 3 and bool(tw.dead):
+			return true
+	return false
 
 func wp(t: int, l: int, i: int) -> Vector2:
 	# point i of lane l walked by team t (red walks it backwards)
@@ -946,8 +946,6 @@ func vulnerable(tw: Dictionary) -> bool:
 		return false
 	if int(tw.tier) == 1:
 		return true
-	if int(tw.tier) == 4:                              # 0.31.165: a King tower, once a gate of its keep is down
-		return _gates_down(int(tw.team)) > 0
 	for o in towers:
 		if int(o.team) == int(tw.team) and int(o.lane) == int(tw.lane) and int(o.tier) == int(tw.tier) - 1 and not bool(o.dead):
 			return false
@@ -1204,20 +1202,12 @@ func king_pos(t: int) -> Vector2:
 	return s.oracles[t].pos
 
 func king_open(t: int) -> bool:
-	# hittable once both King towers of his keep are down (0.31.165; until then once a gate of his castle was)
+	# 0.31.217 (Honor of Kings' crystal): hittable once one of his lanes is broken -- its third tower down (both King
+	# towers of his keep until then, 0.31.165; before that once a gate of his castle was)
 	if bool(kings[t].dead):
 		return false
-	for tw in towers:
-		if int(tw.team) == t and int(tw.tier) == 4 and not bool(tw.dead):
-			return false
-	return true
+	return _gates_down(t) > 0
 
-func king_towers_up(t: int) -> Array:
-	var out := []
-	for tw in towers:
-		if int(tw.team) == t and int(tw.tier) == 4 and not bool(tw.dead):
-			out.append(tw)
-	return out
 
 func king_frac(t: int) -> float:
 	return float(kings[t].hp) / float(kings[t].max_hp)
@@ -1639,27 +1629,18 @@ func _think_hero(u: Dictionary) -> void:
 	if not th.is_empty() and (u.pos as Vector2).distance_to(king_pos(int(u.team))) < 45.0 and u.hp > u.max_hp * 0.35:
 		_fight_h(u, th)
 		return
-	# their keep open (a gate of it down): the King runners go for its King towers, then the King once they're down
-	# (0.31.165; until then the King himself once a gate was down) -- their heroes in the way first
+	# their King open (a lane of theirs broken, 0.31.217): the King runners go for him -- their heroes in the way first
+	# (until then the King towers first, once a gate was down)
 	var eteam := 1 - int(u.team)
-	var kts: Array = king_towers_up(eteam) if _gates_down(eteam) > 0 else []
-	if (king_open(eteam) or not kts.is_empty()) and ((bool(u.get("kr", false)) and u.hp > u.max_hp * 0.45) \
+	if king_open(eteam) and ((bool(u.get("kr", false)) and u.hp > u.max_hp * 0.45) \
 			or (_end_push(int(u.team)) and u.hp > u.max_hp * 0.35)):
 		for o in units_near(u.pos, reach + 3.0):
 			if int(o.team) == eteam and s.alive(o) and bool(o.get("hero", false)) and (o.pos as Vector2).distance_to(u.pos) < reach + 3.0 \
 					and can_see(int(u.team), o):
 				_fight_h(u, o)
 				return
-		if king_open(eteam):
-			_hit_point(u, king_pos(eteam), KING_R)
-			return
-		var kt: Dictionary = kts[0]
-		for o in kts:
-			if (o.p as Vector2).distance_to(u.pos) < (kt.p as Vector2).distance_to(u.pos):
-				kt = o
-		if str(kt.target) != str(u.id) or _our_minions_near(int(u.team), kt.p) or u.hp > u.max_hp * 0.7:
-			_hit_structure(u, kt)
-			return
+		_hit_point(u, king_pos(eteam), KING_R)
+		return
 	# 0.31.157: the ultimate when it's worth it (before running home: GRACE, BULWARK, UNDYING are for hard moments)
 	if _bot_ult(u) or kits.bot_spells(u):              # (0.31.167: W and E too)
 		return

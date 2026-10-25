@@ -17,7 +17,7 @@ extends SceneTree
 #     walks home and heals when he's gone; a camp cleared: gold and XP, back after its time; the buff camps' big one
 #     gives its buff (ARCANE: quicker recharges; EMBER: harder hits), which goes to whoever knocks its holder out; the
 #     Bone Lord gives his killers' whole side gold and his blessing (their minions come out stronger) -- and (0.31.158)
-#     marches for them down the middle lane; an enemy gate down at a lane's end: that lane's waves bring a super minion
+#     marches for them down the middle lane; an enemy lane's high ground tower down: that lane's waves bring a super minion
 #     (League's inhibitor);
 #  5. whole matches, bots on both sides: they buy, use their ultimates, clear camps.
 #   godot --headless --path godot -s res://tests/moba_more_test.gd
@@ -470,13 +470,12 @@ func _jungle() -> void:
 	var newm: Array = j.units.filter(func(u): return bool(u.get("minion", false)) and not bool(u.get("summon", false)) and not bool(u.get("lordling", false)) and int(u.team) == 0 and j.alive(u))
 	var up := 1.0 + Moba.MINION_UP * floorf(float(j.time) / Moba.MINION_UP_EVERY)
 	check(not newm.is_empty() and newm.all(func(u): return is_equal_approx(float(u.m_hp), float(Moba.MINION_KIND_HP[str(u.mk)]) * up * Moba.LORD_MINION)), "...their minions come out stronger")
-	# League's inhibitor: their gate at a lane's end down -> that lane's minions come out super
+	# their high ground tower in a lane down -> that lane's minions come out super (0.31.217, Honor of Kings; League's
+	# inhibitor -- the gate at the lane's end -- until then)
 	var sp = _new("knight", 12)
 	sp.moba.wave_at = INF
-	var rg: Dictionary = sp.moba._gate_at(1, sp.moba.wp(0, 0, Moba.LANES[0].size() - 1))
-	rg.broken = true
-	rg.hp = 0.0
-	sp._update_gate_nav()
+	var rg: Dictionary = sp.moba.towers.filter(func(o): return int(o.team) == 1 and int(o.lane) == 0 and int(o.tier) == 3)[0]
+	rg.dead = true
 	sp.moba.wave_at = sp.time
 	_run(sp, 0.2)
 	var w0: Array = sp.units.filter(func(u): return bool(u.get("minion", false)) and int(u.team) == 0 and int(u.lane) == 0)
@@ -485,7 +484,7 @@ func _jungle() -> void:
 	check(not rg.is_empty() and sup0.size() == 1 and str(sup0[0].mk) == "super" and str(sup0[0].cls) == "barbarian"
 		and is_equal_approx(float(sup0[0].m_hp), float(Moba.MINION_KIND_HP.super)) and w0.size() == 7 and not w0.any(func(u): return str(u.mk) == "siege")
 		and w1.all(func(u): return not bool(u.get("super", false))),
-		"their west gate down: the waves of the lanes that end there bring a super minion (in place of the siege one), the east lane's don't")
+		"their west high ground tower down: that lane's waves bring a super minion (in place of the siege one), the east lane's don't")
 
 # ---------------------------------------------------------------- 4b. the Grave Wyrm (0.31.166)
 func _hide(h: Dictionary) -> float:

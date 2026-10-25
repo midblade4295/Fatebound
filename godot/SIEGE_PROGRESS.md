@@ -7257,3 +7257,14 @@ app"; ElevenLabs budget -> "2 each, ~10k credits"; rocks -> "Sculpted in code".
   min_build set to 0.31.216) before this build can play.
 - Preview APK: build/Fatebound-Siege-0.31.216-fatebound.apk (33 MB, preview key, userLandscape), sha256
   91a41c3afbab3173abcd9c5e8bc18fc5a5d18ac6d9a698c32b9f29947bdf2ed1.
+
+## 0.31.217 (in progress) — Honor of Kings play and training
+Kevin (a 12-minute recording of Honor of Kings' first launch: its two training matches): "Here is how I want the
+training to go in fatebound. The helper will be another character and voiced by the herald. I also want fatebound to
+play this way with the map, the towers, the abilities, the shop system ect." Asked: the helper -> "Dragoon"; how a match
+is won -> "3 towers a lane, then the king (crystal)"; skills -> "HoK + buttons"; the shop -> "Anywhere + quick-buy".
+- Rules (moba.gd, siege_sim.gd): the keeps' gates stand open to everyone (open_gates) and the two King towers are gone
+  -- a lane's outer, inner and high ground towers, then the King (Honor of Kings' crystal: open once any lane's third
+  tower is down). A lane broken brings that lane's super minions (its gate did). The kill feed calls the third tower
+  "high ground", and a toast says when a King opens. The view shows the gates swung open. Protocol 37. Tests follow
+  (moba_test, moba_more_test, moba_lol_test, tower_rules_test, hud_top_test); a bot match ends by the King at 14:53.

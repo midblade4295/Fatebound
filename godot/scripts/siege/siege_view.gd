@@ -2377,7 +2377,7 @@ func _sync_castle(dt: float) -> void:
 		var gn: Dictionary = gate_nodes.get(g.id, {})
 		if gn.is_empty():
 			continue
-		var broken: bool = not sim.gate_blocks(g)
+		var broken: bool = bool(g.broken) or float(g.hp) <= 0.0      # (0.31.217: an open gate isn't a broken one)
 		# (0.31.78: transforms and visibility are set only when they change -- a closed gate's doors were re-posed every
 		# frame, every tree re-scaled, every stockpile piece re-shown: each a transform update for the renderer)
 		if broken != bool(gn.broken):
@@ -2385,7 +2385,7 @@ func _sync_castle(dt: float) -> void:
 			(gn.rubble as Node3D).visible = broken
 			for d in gn.doors:
 				(d.node as Node3D).visible = not broken
-		var want := 1.0 if (g.open and not broken) else 0.0
+		var want := 1.0 if ((g.open or bool(sim.open_gates)) and not broken) else 0.0
 		var was := float(gn.open)
 		gn.open = move_toward(was, want, dt * 2.5)
 		if float(gn.open) != was:

@@ -55,8 +55,8 @@ static func _king_case(hero: String, seed_v: int, dist: float, open: bool) -> Di
 	var me: Dictionary = s.by_id["you"]
 	me.level = 18
 	if open:
-		for t2 in s.moba.towers:
-			if int(t2.team) == 1 and int(t2.tier) == 4:
+		for t2 in s.moba.towers:                # (0.31.217: a lane broken -- its three towers; the King towers until then)
+			if int(t2.team) == 1 and int(t2.lane) == 1:
 				t2.dead = true
 	var kp: Vector2 = s.moba.king_pos(1)
 	var side := 1.0 if kp.y < 0.0 else -1.0

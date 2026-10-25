@@ -87,6 +87,7 @@ var net_sync := {}              # 0.31.170: online -- what the players were last
 var obstacles: Array = []      # circles: trees, rocks, ruin, buildings  {p, r, kind, team?}
 var walls: Array = []          # segments {a, b, r, team, kind}
 var gates: Array = []          # {id, team, a, b, c, hp, max_hp, broken, open}
+var open_gates := false        # 0.31.217 (the 5v5, Honor of Kings' rules): the keeps' gates stand open to everyone
 # The shove of the killing blow (0.31.20): callers set it before _damage; _kill sends it with the death so bodies,
 # weapons and hats go the way the blow went. Reset after every _damage.
 var _next_push := Vector3.ZERO
@@ -391,7 +392,7 @@ func _free_cell(grid: AStarGrid2D, c: Vector2i) -> Vector2i:
 	return c
 
 func gate_blocks(g: Dictionary) -> bool:
-	return not g.broken and g.hp > 0.0
+	return not open_gates and not g.broken and g.hp > 0.0
 
 static func lets_out(g: Dictionary, p: Vector2) -> bool:
 	# Castle gates are one-way for the enemy (Round 29, Kevin: he couldn't get back out of their castle in the
@@ -1507,7 +1508,7 @@ func _step_world(dt: float) -> void:
 	for g in gates:
 		if not gate_look:
 			continue
-		var open := false
+		var open := open_gates                        # (0.31.217: open for good -- no swing, no sound)
 		if gate_blocks(g):
 			# (0.31.165: in a 5v5 only the units near it -- six gates, 80-130 units)
 			var near: Array = moba.units_near(g.c, GATE_OPEN_RADIUS) if moba != null else units
@@ -1523,7 +1524,8 @@ func _step_world(dt: float) -> void:
 						break
 		if open != g.open:
 			g.open = open
-			_event("gate_open" if open else "gate_close", {"gate":g.id, "team":g.team})
+			if not open_gates:
+				_event("gate_open" if open else "gate_close", {"gate":g.id, "team":g.team})
 	if profile: tw0 = _p("w.gates", tw0)
 	_step_meteors(dt)
 	if profile: tw0 = _p("w.meteors", tw0)

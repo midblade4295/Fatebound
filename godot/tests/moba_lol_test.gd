@@ -12,8 +12,8 @@ extends SceneTree
 #     to heroes, League's target priority (the call for help first, then minions before heroes), not what they can't
 #     see; gold by kind;
 #  3. THE TOWERS: League's targets (siege and super minions first, melee, casters, heroes last), a share of a minion's
-#     health a shot by kind, Warming Up cooling off 5 s after the last hero shot, plates until 7:00, a broken gate stands
-#     again after GATE_BACK;
+#     health a shot by kind, Warming Up cooling off 5 s after the last hero shot, plates until 7:00, the gates open
+#     (0.31.217; a broken gate stood again after GATE_BACK until then);
 #  4. THE CAMPS' PATIENCE: chased outside the leash they don't give up at once -- patience drains, then a soft reset
 #     (walking home, healing a little a second, a blow from inside the leash brings them back), then a hard reset
 #     (untouchable, quicker healing) -- no instant full heal;
@@ -210,6 +210,9 @@ func _minions() -> void:
 	# kinds, sizes, upgrades
 	var s2 = _new("knight", 44)
 	_quiet(s2)
+	for tw in s2.moba.towers:                  # (0.31.217: the high ground towers standing -- down, a lane brings super minions)
+		if int(tw.tier) == 3:
+			tw.dead = false
 	s2.time = 200.0
 	s2.moba.waves = 2
 	s2.moba.wave_at = s2.time
@@ -334,19 +337,9 @@ func _towers() -> void:
 	t.time = Moba.PLATES_UNTIL + 1.0
 	t.moba.hit_tower(you, int(tw.id), (float(tw.max_hp) / float(Moba.PLATES) + 2.0) / t.moba.tower_mult(you))
 	check(int(tw.get("plates", 0)) == 1 and float(tw.hp) < hp0, "after 7:00 no more plates")
-	# a broken gate stands again
+	# (0.31.217, Honor of Kings: the gates stand open -- no broken gate standing again, as League's inhibitor did until then)
 	var g = _new("knight", 47)
-	_quiet(g)
-	var rg: Dictionary = g.moba._gate_at(1, g.moba.wp(0, 0, Moba.LANES[0].size() - 1))
-	rg.broken = true
-	rg.hp = 0.0
-	rg["broken_at"] = g.time
-	g._update_gate_nav()
-	evs = _run(g, Moba.GATE_BACK - 2.0)
-	check(bool(rg.broken), "a broken gate stays down ...")
-	evs = _run(g, 3.0)
-	check(not bool(rg.broken) and float(rg.hp) == float(rg.max_hp) and evs.any(func(e): return e.k == "gate_rebuilt"),
-		"...and stands again %d s later (League's inhibitor)" % int(Moba.GATE_BACK))
+	check(g.open_gates and g.gates.all(func(gg): return not g.gate_blocks(gg)), "the keeps' gates stand open (Honor of Kings: no inhibitors)")
 
 # ---------------------------------------------------------------- 4. the camps' patience
 func _camps() -> void:

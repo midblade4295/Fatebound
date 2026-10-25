@@ -68,10 +68,10 @@ func _init() -> void:
 		"you: the Archmage (%d health: the class's x1.15 x%.1f)" % [int(me.max_hp), Moba.HERO_HP])
 	var blue: Array = s.units.filter(func(u): return int(u.team) == 0).map(func(u): return str(u.hid))
 	check(blue.size() == 5 and blue.all(func(h): return blue.count(h) == 1), "no two heroes the same on a side (%s)" % str(blue))
-	# (0.31.165, the Rift: three towers a lane and two King towers in the keep -- six a side until then)
-	check(s.moba.towers.size() == 22 and s.moba.towers.filter(func(t): return int(t.team) == 0).size() == 11
-		and s.moba.towers.filter(func(t): return int(t.tier) == 4).size() == 4
-		and s.obstacles.filter(func(o): return str(o.kind) == "moba_tower").size() == 22, "eleven towers a side (three a lane, two King towers), solid")
+	# (0.31.217, Honor of Kings: three towers a lane, no King towers -- 0.31.165-216 two King towers in the keep too)
+	check(s.moba.towers.size() == 18 and s.moba.towers.filter(func(t): return int(t.team) == 0).size() == 9
+		and s.moba.towers.filter(func(t): return int(t.tier) == 4).is_empty()
+		and s.obstacles.filter(func(o): return str(o.kind) == "moba_tower").size() == 18, "nine towers a side (three a lane), solid")
 	var paired := true
 	for tw in s.moba.towers:
 		if int(tw.team) != 0:
@@ -173,29 +173,16 @@ func _init() -> void:
 	ohp = float(tw.hp)
 	t.moba.hit_tower(bh, int(tw.id), 100.0)
 	check(is_equal_approx(float(tw.hp), ohp - 100.0 * bm), "...with our minion near: all of it")
-	# gates
-	var red_gate: Dictionary = {}
-	for g in t.gates:
-		if int(g.team) == 1 and str(g.get("kind", "")) != "jail" and (g.c as Vector2).distance_to(t.moba.wp(0, 0, Moba.LANES[0].size() - 1)) < 6.0:
-			red_gate = g
-	var ghp := float(red_gate.hp)
-	t._damage_gate(bh, red_gate, 200.0)
-	check(not red_gate.is_empty() and float(red_gate.hp) == ghp, "their gate at the end of the west lane can't be hurt while its towers stand")
+	# 0.31.217 (Honor of Kings): the gates stand open; a lane's three towers, then the King
+	check(t.open_gates and t.gates.all(func(g): return not t.gate_blocks(g)), "the keeps' gates stand open to everyone")
 	var third: Dictionary = t.moba.towers.filter(func(o): return int(o.team) == 1 and int(o.lane) == 0 and int(o.tier) == 3)[0]
+	var thp := float(third.hp)
 	t.moba.hit_tower(bh, int(tw.id), 100000.0)
 	t.moba.hit_tower(bh, int(inner.id), 100000.0)
-	t._damage_gate(bh, red_gate, 200.0)
-	check(bool(tw.dead) and bool(inner.dead) and float(red_gate.hp) == ghp, "outer, then inner tower down; the gate still can't be hurt (0.31.165: a third tower)")
-	var kts: Array = t.moba.towers.filter(func(o): return int(o.team) == 1 and int(o.tier) == 4)
-	var khp := float(kts[0].hp)
+	check(bool(tw.dead) and bool(inner.dead) and not t.moba.king_open(1), "outer, then inner tower down; their King still shut")
 	t.moba.hit_tower(bh, int(third.id), 100000.0)
-	t._damage_gate(bh, red_gate, 200.0)
-	check(bool(third.dead) and float(red_gate.hp) == ghp - 200.0, "...the third down: now the gate takes damage")
+	check(bool(third.dead) and thp > 0.0 and t.moba.king_open(1), "...the third (high ground) down: their King is open")
 	check(t.moba.towers_down(1) == 3, "three of red's towers down")
-	t.moba.hit_tower(bh, int(kts[0].id), 100.0)
-	check(float(kts[0].hp) == khp and not t.moba.vulnerable(kts[0]), "a King tower can't be hurt while the keep's gates stand")
-	t._damage_gate(bh, red_gate, 100000.0)
-	check(not t.gate_blocks(red_gate) and t.moba.vulnerable(kts[0]) and t.moba.vulnerable(kts[1]), "...a gate down: both can")
 	# --- 4. levels
 	var l = _new("knight", 9)
 	var you: Dictionary = l.by_id["you"]
@@ -239,20 +226,17 @@ func _init() -> void:
 	att.hp = 1.0e6
 	att.max_hp = 1.0e6
 	kk.moba.hit_king(att, 1, 300.0)
-	check(float(kk.moba.kings[1].hp) == Moba.KING_HP and not kk.moba.king_open(1), "while his King towers stand he can't be hurt")
-	var rg: Dictionary = kk.gates.filter(func(g): return int(g.team) == 1 and str(g.get("kind", "")) != "jail")[0]
-	rg.broken = true
-	rg.hp = 0.0
-	kk._update_gate_nav()
+	check(float(kk.moba.kings[1].hp) == Moba.KING_HP and not kk.moba.king_open(1), "while every lane of his stands he can't be hurt")
+	# (0.31.217: a lane's three towers, then the King -- Honor of Kings' crystal; his two King towers until then)
+	for tier in [1, 2]:
+		var tw2: Dictionary = kk.moba.towers.filter(func(o): return int(o.team) == 1 and int(o.lane) == 2 and int(o.tier) == tier)[0]
+		kk.moba.hit_tower(att, int(tw2.id), 100000.0)
 	kk.moba.hit_king(att, 1, 300.0)
-	check(not kk.moba.king_open(1) and float(kk.moba.kings[1].hp) == Moba.KING_HP, "a gate of his down: still not (0.31.165)")
-	var rkt: Array = kk.moba.towers.filter(func(o): return int(o.team) == 1 and int(o.tier) == 4)
-	kk.moba.hit_tower(att, int(rkt[0].id), 100000.0)
+	check(not kk.moba.king_open(1) and float(kk.moba.kings[1].hp) == Moba.KING_HP, "a lane's outer and inner towers down: still not")
+	var hg: Dictionary = kk.moba.towers.filter(func(o): return int(o.team) == 1 and int(o.lane) == 2 and int(o.tier) == 3)[0]
+	kk.moba.hit_tower(att, int(hg.id), 100000.0)
 	kk.moba.hit_king(att, 1, 300.0)
-	check(bool(rkt[0].dead) and not kk.moba.king_open(1) and float(kk.moba.kings[1].hp) == Moba.KING_HP, "one King tower down: still not")
-	kk.moba.hit_tower(att, int(rkt[1].id), 100000.0)
-	kk.moba.hit_king(att, 1, 300.0)
-	check(kk.moba.king_open(1) and float(kk.moba.kings[1].hp) == Moba.KING_HP - 300.0, "both down: he takes the hit")
+	check(kk.moba.king_open(1) and float(kk.moba.kings[1].hp) == Moba.KING_HP - 300.0, "its high ground tower down: he takes the hit")
 	att.pos = kk.moba.king_pos(1) + Vector2(2.0, 0.0)
 	var hp0 := float(att.hp)
 	var slams := 0
