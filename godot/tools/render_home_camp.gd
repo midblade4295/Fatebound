@@ -58,7 +58,7 @@ func _initialize() -> void:
 	cam.fov = _num("FOV", 48.0)
 	cam.far = 400.0
 	vp.add_child(cam)
-	cam.look_at_from_position(_v3("CAM", Vector3(0.0, 1.7, 8.5)), _v3("AIM", Vector3(0.0, 0.58, -2.0)), Vector3.UP)
+	cam.look_at_from_position(_v3("CAM", Vector3(0.0, 1.75, 9.0)), _v3("AIM", Vector3(0.0, 0.6, -2.0)), Vector3.UP)
 
 func _process(_d: float) -> bool:
 	frames += 1
@@ -257,12 +257,12 @@ func _campfire() -> void:
 		var a := TAU * i / 12.0 + rng.randf_range(-0.08, 0.08)
 		var st := MeshInstance3D.new()
 		var sp := SphereMesh.new()
-		var r := rng.randf_range(0.15, 0.2)
+		var r := rng.randf_range(0.12, 0.16)
 		sp.radius = r
 		sp.height = r * 1.3
 		st.mesh = sp
 		st.material_override = stone
-		st.position = Vector3(cos(a) * 0.82, r * 0.42, sin(a) * 0.82)
+		st.position = Vector3(cos(a) * 0.68, r * 0.42, sin(a) * 0.68)
 		st.rotation = Vector3(rng.randf_range(-0.2, 0.2), rng.randf() * TAU, rng.randf_range(-0.2, 0.2))
 		st.scale = Vector3(rng.randf_range(1.0, 1.35), 1.0, rng.randf_range(0.9, 1.2))
 		vp.add_child(st)
@@ -272,19 +272,19 @@ func _campfire() -> void:
 	for i in 4:
 		var log := MeshInstance3D.new()
 		var cm := CylinderMesh.new()
-		cm.top_radius = 0.1
-		cm.bottom_radius = 0.12
-		cm.height = 1.25
+		cm.top_radius = 0.075
+		cm.bottom_radius = 0.09
+		cm.height = 0.95
 		log.mesh = cm
 		log.material_override = bark
 		var a := TAU * i / 4.0 + 0.4
 		log.rotation = Vector3(deg_to_rad(62), a, 0)
-		log.position = Vector3(cos(a) * 0.18, 0.32, sin(a) * 0.18)
+		log.position = Vector3(cos(a) * 0.14, 0.24, sin(a) * 0.14)
 		vp.add_child(log)
 	var coals := MeshInstance3D.new()                  # the bed of embers, glowing
 	var sm := SphereMesh.new()
-	sm.radius = 0.55
-	sm.height = 0.3
+	sm.radius = 0.45
+	sm.height = 0.24
 	coals.mesh = sm
 	var em := StandardMaterial3D.new()
 	em.albedo_color = Color("#3a1606")
@@ -349,11 +349,13 @@ func _heroes() -> void:
 	# round the fire, facing out to us a little turned to it; the King behind the fire
 	# (a V: the King at the back behind the fire, two either side of it, two nearest us out at the sides, cut by the
 	# picture's edges as a painter would frame them)
-	_hero("king", Vector3(0.1, 0, -2.5), 0.0)
-	_hero("mage", Vector3(-1.35, 0, -1.3), 25.0)
-	_hero("stormcaller", Vector3(1.4, 0, -1.4), -25.0)
-	_hero("knight", Vector3(-1.5, 0, 1.3), 40.0)
-	_hero("barbarian", Vector3(1.55, 0, 1.3), -40.0)
+	# (on the picture, as fractions of its half-width: the King 0, the middle pair +-0.43, the front pair +-0.8 -- each
+	# a little in front of the one inside it, so all five show)
+	_hero("king", Vector3(0.05, 0, -2.6), 0.0)
+	_hero("mage", Vector3(-1.0, 0, -1.6), 22.0)
+	_hero("stormcaller", Vector3(1.02, 0, -1.65), -22.0)
+	_hero("knight", Vector3(-1.44, 0, 1.0), 42.0)
+	_hero("barbarian", Vector3(1.46, 0, 1.0), -42.0)
 
 # ---------------- what camp_scene.gd needs ----------------
 func _px(p: Vector3) -> Vector2:
