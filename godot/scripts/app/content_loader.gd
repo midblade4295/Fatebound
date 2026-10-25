@@ -437,7 +437,7 @@ func _build_ui() -> void:
 	# 0.31.139 (Kevin: put the title "in a startup screen and any loading screens"): the title screen's castle wall and
 	# the title itself (both in the base build: no pack is here yet -- tools/build_title_art.py)
 	var bg := TextureRect.new()
-	bg.texture = load("res://assets/branding/splash.png")
+	bg.texture = load("res://assets/branding/splash_land.png")       # (0.31.216: the landscape band of the wall)
 	bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	bg.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)

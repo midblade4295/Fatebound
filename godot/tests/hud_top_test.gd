@@ -70,8 +70,10 @@ func _process(_d: float) -> bool:
 		for b in [bar, shop, med, slots, btns]:
 			if a != b and a.intersects(b):
 				clean = false
-	check(clean and slots.end.y + 30.0 < hud.KF_TOP and slots.end.x < hud.size.x * 0.5 and hud.clock_rect().position.y < bar.position.y,
-		"bar, medallion, shop, slots and the buttons apart; all above the kill feed (slots end %.0f)" % slots.end.y)
+	# (0.31.216, landscape: the map's column on the left, the kill feed on the right under the buttons)
+	check(clean and slots.end.x < hud.size.x * 0.5 and hud.KF_TOP > btns.end.y and btns.position.x > hud.size.x * 0.5
+		and hud.clock_rect().position.y < bar.position.y and not hud.MAP_RECT.intersects(shop) and not hud.MAP_RECT.intersects(med),
+		"bar, map, medallion, shop, slots and the buttons apart; the kill feed under the buttons (slots end %.0f)" % slots.end.y)
 	hud._touch(0, shop.get_center(), true)
 	hud._touch(0, shop.get_center(), false)
 	check(hud.shop_open(), "the gold button tapped: the shop")

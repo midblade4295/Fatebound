@@ -18,6 +18,8 @@ var _vp: SubViewport
 var _chest: Node3D
 var _t := 0.0
 var _open_t := -1.0
+var _title: Label                    # 0.31.216: the chest's name and odds (they fade as the reward shows)
+var _odds: Label
 var _rays: TextureRect
 var _rays2: TextureRect
 var _prompt: Control
@@ -57,20 +59,29 @@ func _ready() -> void:
 	create_tween().tween_property(self, "modulate:a", 1.0, 0.2)
 	_rays = UI2.rays(self, 900.0, cs[3], 46.0, 0.34)
 	for i in 8:
-		_twinkle(Vector2(randf_range(30, 390), randf_range(170, 640)), randf_range(8, 14), randf_range(0.0, 2.0))
+		var vs := get_viewport_rect().size
+		_twinkle(Vector2(randf_range(0.05, 0.95) * vs.x, randf_range(0.12, 0.9) * vs.y), randf_range(8, 14), randf_range(0.0, 2.0))
 	var def: Dictionary = Eco.CHESTS[kind]
 	var title := UI2.text(self, str(def.name).to_upper(), 36, cs[2], UI2.INK, 9)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.anchor_left = 0.58
 	title.anchor_right = 1.0
-	title.offset_top = 64 + _safe()
-	title.offset_bottom = 110 + _safe()
+	title.anchor_top = 0.5
+	title.anchor_bottom = 0.5
+	title.offset_right = -16
+	title.offset_top = -150
+	title.offset_bottom = -104
+	_title = title
 	var odds := UI2.body(self, Eco.chest_odds(kind), 11, Color("#e8dcff"))
 	odds.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	odds.anchor_left = 0.58
 	odds.anchor_right = 1.0
-	odds.offset_left = 24
-	odds.offset_right = -24
-	odds.offset_top = 112 + _safe()
-	odds.offset_bottom = 150 + _safe()
+	odds.anchor_top = 0.5
+	odds.anchor_bottom = 0.5
+	odds.offset_right = -16
+	odds.offset_top = -102
+	odds.offset_bottom = -50
+	_odds = odds
 	# the chest
 	_stage = Control.new()
 	_stage.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -114,21 +125,23 @@ func _ready() -> void:
 	add_child(_prompt)
 	var tt := UI2.text(_prompt, "TAP TO OPEN", 26, Color.WHITE, UI2.INK, 7)
 	tt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	tt.anchor_top = 1.0
-	tt.anchor_bottom = 1.0
+	tt.anchor_left = 0.58
+	tt.anchor_top = 0.5
+	tt.anchor_bottom = 0.5
 	tt.anchor_right = 1.0
-	tt.offset_top = -200
-	tt.offset_bottom = -166
+	tt.offset_right = -16
+	tt.offset_top = -30
+	tt.offset_bottom = 4
 	UI2.pulse(tt, 0.06, 0.7)
 	var ob := UI2.button(_prompt, "OPEN", "gold", open, "chest_modal_open", 32, 66.0, 20.0)
-	ob.anchor_left = 0.5
-	ob.anchor_right = 0.5
-	ob.anchor_top = 1.0
-	ob.anchor_bottom = 1.0
-	ob.offset_left = -125
-	ob.offset_right = 125
-	ob.offset_top = -138
-	ob.offset_bottom = -72
+	ob.anchor_left = 0.79
+	ob.anchor_right = 0.79
+	ob.anchor_top = 0.5
+	ob.anchor_bottom = 0.5
+	ob.offset_left = -115
+	ob.offset_right = 115
+	ob.offset_top = 22
+	ob.offset_bottom = 88
 	UI2.sweep(ob)
 	var close := UI2.button(_prompt, "✕", "ghost", func():
 		app.sfx("menuClose")
@@ -141,13 +154,21 @@ func _ready() -> void:
 func _safe() -> float:
 	return float(app.safe_top) if app != null else 0.0
 
+# 0.31.216 (landscape): the chest on the left, the words and OPEN on the right; opened, it moves aside (left) and its
+# reward stands in the middle, the amounts and COLLECT on the right (one column down the screen in portrait)
+func _chest_at() -> Vector2:
+	return Vector2(size.x * 0.34, size.y * 0.54)
+
+func _card_at() -> Vector2:
+	return Vector2(size.x * 0.5, size.y * 0.5 + 8.0)
+
 func _layout() -> void:
 	var r := Chest3D.viewport_ratio(self)
 	_vp.size = Vector2i(int(340 * r), int(340 * r))
-	var c := Vector2(size.x * 0.5, size.y * 0.5 + 20)
+	var c := _chest_at()
 	if _open_t < 0.0:
 		_stage.position = c - Vector2(170, 170)
-	_rays.position = c - _rays.size * 0.5
+		_rays.position = c - _rays.size * 0.5
 
 func _twinkle(at: Vector2, px: float, delay: float) -> void:
 	var t := TextureRect.new()
@@ -192,12 +213,15 @@ func _process(delta: float) -> void:
 	if was < 0.45 and _open_t >= 0.45:
 		_burst()
 	if was < 1.3 and _open_t >= 1.3:
-		var c := Vector2(size.x * 0.5, size.y * 0.5 + 20)
+		var c := Vector2(size.x * 0.17, size.y * 0.6)            # (aside: the reward takes the middle)
 		var tw := create_tween().set_parallel()
-		tw.tween_property(_stage, "position", c - Vector2(170, 170) + Vector2(0, 150), 0.55).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
+		tw.tween_property(_stage, "position", c - Vector2(170, 170), 0.55).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
 		_stage.pivot_offset = Vector2(170, 170)
 		tw.tween_property(_stage, "scale", Vector2.ONE * 0.62, 0.55).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
-		tw.tween_property(_rays, "position", c - _rays.size * 0.5 + Vector2(0, -60), 0.55)
+		tw.tween_property(_rays, "position", _card_at() - _rays.size * 0.5, 0.55)
+		for l in [_title, _odds]:
+			if l != null:
+				tw.tween_property(l, "modulate:a", 0.0, 0.3)
 	if was < 1.45 and _open_t >= 1.45:
 		_show_rewards()
 
@@ -214,8 +238,8 @@ func _burst() -> void:
 	ft.tween_property(_flash, "color:a", 0.0, 0.7)
 	ft.tween_callback(_flash.queue_free)
 	_rays2 = UI2.rays(self, 760.0, cs[3], 18.0, 0.0)
-	var c := Vector2(size.x * 0.5, size.y * 0.5 + 20)
-	_rays2.position = c - _rays2.size * 0.5 + Vector2(0, -60)
+	var c := _chest_at()
+	_rays2.position = _card_at() - _rays2.size * 0.5
 	move_child(_rays2, 2)
 	create_tween().tween_property(_rays2, "modulate:a", 0.7, 0.4)
 	# coins and gems spray out of the chest
@@ -253,10 +277,10 @@ func _show_rewards() -> void:
 	_reveal.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_reveal)
 	var shard := str(result.get("shard", ""))
-	var top := 168.0 + _safe()
+	var top := _card_at().y - 119.0
 	var card := Control.new()
 	card.size = Vector2(210, 238)
-	card.position = Vector2((size.x - 210) * 0.5, top)
+	card.position = Vector2(_card_at().x - 105.0, top)
 	card.pivot_offset = card.size * 0.5
 	_reveal.add_child(card)
 	var rar := "common"
@@ -325,11 +349,12 @@ func _show_rewards() -> void:
 	# 0.31.110: the card's sound by what it holds -- a shard an epic's swell, gold the coin
 	app.sfx("revealEpic" if shard != "" else "coin")
 	# gold and gems
+	var right_x := _card_at().x + 125.0                  # (0.31.216: the column right of the card)
 	var chips := HBoxContainer.new()
 	chips.add_theme_constant_override("separation", 8)
 	chips.alignment = BoxContainer.ALIGNMENT_CENTER
-	chips.position = Vector2(20, top + 256)
-	chips.size = Vector2(size.x - 40, 60)
+	chips.position = Vector2(right_x, _card_at().y - 74.0)
+	chips.size = Vector2(size.x - 16.0 - right_x, 60)
 	_reveal.add_child(chips)
 	var amounts := []
 	if shard != "":
@@ -341,7 +366,7 @@ func _show_rewards() -> void:
 	for a in amounts:
 		var f := UI2.frame(chips, "night", 6, 16.0, "gold")
 		var pc := f.get_parent() as Control
-		pc.custom_minimum_size = Vector2(112 if narrow else 150, 58)
+		pc.custom_minimum_size = Vector2(98 if narrow else 150, 58)
 		var r := HBoxContainer.new()
 		r.add_theme_constant_override("separation", 6)
 		r.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -356,13 +381,8 @@ func _show_rewards() -> void:
 	# actions
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 10)
-	row.anchor_top = 1.0
-	row.anchor_bottom = 1.0
-	row.anchor_right = 1.0
-	row.offset_left = 16
-	row.offset_right = -16
-	row.offset_top = -100
-	row.offset_bottom = -36
+	row.position = Vector2(right_x + 10.0, _card_at().y + 4.0)
+	row.size = Vector2(size.x - 26.0 - right_x - 10.0, 62)
 	_reveal.add_child(row)
 	var cb := UI2.button(row, "COLLECT", "green", _close, "chest_collect", 26, 62.0, 18.0)
 	cb.size_flags_horizontal = Control.SIZE_EXPAND_FILL

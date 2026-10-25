@@ -30,8 +30,10 @@ const SPACING := 1.45                 # metres between heroes in a row
 const ROW_MAX := 5
 const BACK_Z := -1.7                  # the second row: behind, between, on the step
 const BACK_Y := 0.8
-const STAGE_TOP := 0.22               # the 3D stage's band of the screen (of its height)
-const STAGE_BOTTOM := 0.74
+const STAGE_TOP := 0.03               # the 3D stage's band of the screen (of its height; 0.22-0.74 in portrait)
+const STAGE_BOTTOM := 0.84
+const CAM_MIN := 10.0                 # the camera at least this far back (7.2 in portrait: the band was narrower)
+const SIDE_W := 200.0                 # 0.31.216 (landscape): the countdown's column on the left, the words and LEAVE's on the right
 const VFOV := 30.0
 const DROP_H := 4.0                   # a joining hero drops from this high...
 const DROP_T := 0.37                  # ...in this long: the second half of his own leap in (the rig's Spawn_Air, from
@@ -243,7 +245,7 @@ func _fit() -> void:
 	var width := float(per_row - 1) * SPACING + (1.9 if per_row == 1 else 3.1) + (SPACING * 0.5 if n > ROW_MAX else 0.0)
 	var aspect := float(viewport.size.x) / maxf(1.0, float(viewport.size.y))
 	var half_h := tan(deg_to_rad(VFOV) * 0.5) * aspect
-	_cam_want = clampf(width / (2.0 * half_h), 7.2, 16.0)
+	_cam_want = clampf(width / (2.0 * half_h), CAM_MIN, 16.0)
 	_vis_w = 2.0 * _cam_want * half_h                # (the plaza's width across the screen at the heroes)
 	_cam_z_want = BACK_Z * 0.35 if n > ROW_MAX else 0.0
 	_cam_lift_want = 1.1 if n > ROW_MAX else 0.0
@@ -564,44 +566,48 @@ func _place_plates() -> void:
 		if cam.is_position_behind(anchor_p):
 			continue
 		var sp := cam.unproject_position(anchor_p) * scale_v + stage_tex.position
-		pc.position = Vector2(sp.x - pc.size.x * 0.5, sp.y - (pc.size.y if back else -2.0)).round()
+		pc.position = Vector2(sp.x - pc.size.x * 0.5, maxf(4.0, sp.y - (pc.size.y if back else -2.0))).round()   # (on the screen)
 
 # ---------------- the words ----------------
 func _build_top() -> void:
-	# the title over the sky
+	# the title over the sky (0.31.216, landscape: in the top-left corner; across the top in portrait)
 	var top := VBoxContainer.new()
-	top.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-	top.offset_top = 34
+	top.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+	top.offset_top = 6
+	top.offset_left = 14
 	top.alignment = BoxContainer.ALIGNMENT_BEGIN
-	top.add_theme_constant_override("separation", 0)
+	top.add_theme_constant_override("separation", -4)
 	top.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(top)
-	var lw := 300.0
+	var lw := SIDE_W
 	var logo := TitleLogo.new()
 	logo.custom_minimum_size = Vector2(lw, lw * TitleLogo.aspect())
 	logo.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	top.add_child(logo)
-	UI2.center(UI2.text(top, "5 VS 5", 16, Color("#ffe9c4"), Color("#2a1206"), 5))
+	UI2.center(UI2.text(top, "5 VS 5", 15, Color("#ffe9c4"), Color("#2a1206"), 5))
 
 func _build_status() -> void:
-	# the countdown and who's coming, under the plaza's ring
+	# the countdown and who's coming: 0.31.216 (landscape) a column on the left beside the plaza's heroes -- the ring over
+	# the words; what's going on and LEAVE in the bottom-right corner (under the plaza's ring, one column, in portrait)
 	status_box = VBoxContainer.new()
-	status_box.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
-	status_box.offset_top = -250
-	status_box.offset_bottom = -22
-	status_box.offset_left = 16
-	status_box.offset_right = -16
-	status_box.alignment = BoxContainer.ALIGNMENT_END
+	status_box.anchor_top = 0.5
+	status_box.anchor_bottom = 0.5
+	status_box.offset_left = 14
+	status_box.offset_right = 14 + SIDE_W
+	status_box.offset_top = -44
+	status_box.offset_bottom = 130
+	status_box.alignment = BoxContainer.ALIGNMENT_BEGIN
 	status_box.add_theme_constant_override("separation", 6)
 	status_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(status_box)
-	var row := HBoxContainer.new()
+	var row := VBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	row.add_theme_constant_override("separation", 12)
+	row.add_theme_constant_override("separation", 4)
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	status_box.add_child(row)
 	ring = Control.new()
-	ring.custom_minimum_size = Vector2(78, 78)
+	ring.custom_minimum_size = Vector2(72, 72)
+	ring.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(ring)
 	ring.draw.connect(_draw_ring)
@@ -614,8 +620,12 @@ func _build_status() -> void:
 	words.add_theme_constant_override("separation", 2)
 	words.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(words)
-	title = UI2.text(words, "FINDING A BATTLE", 24, Color.WHITE, Color("#2a1206"))
+	title = UI2.text(words, "FINDING A BATTLE", 20, Color.WHITE, Color("#2a1206"))
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	title.custom_minimum_size.x = SIDE_W
 	var cr := HBoxContainer.new()
+	cr.alignment = BoxContainer.ALIGNMENT_CENTER
 	cr.add_theme_constant_override("separation", 7)
 	cr.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	words.add_child(cr)
@@ -632,11 +642,21 @@ func _build_status() -> void:
 	dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	cr.add_child(dot)
 	count_lbl = UI2.text(cr, "5 vs 5", 17, Color("#8cf0a8"), Color("#0b2a14"))
-	mode_lbl = UI2.center(UI2.body(status_box, "Connecting to the server...", 13, Color("#fff4d6")))
-	sub_lbl = UI2.center(UI2.body(status_box, "bots fill the empty slots", 11, Color("#b9c2dd")))
+	var foot := VBoxContainer.new()
+	foot.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
+	foot.offset_left = -14 - SIDE_W
+	foot.offset_right = -14
+	foot.offset_top = -150
+	foot.offset_bottom = -10
+	foot.alignment = BoxContainer.ALIGNMENT_END
+	foot.add_theme_constant_override("separation", 6)
+	foot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(foot)
+	mode_lbl = UI2.center(UI2.body(foot, "Connecting to the server...", 13, Color("#fff4d6")))
+	sub_lbl = UI2.center(UI2.body(foot, "bots fill the empty slots", 11, Color("#b9c2dd")))
 	var lc := CenterContainer.new()
 	lc.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	status_box.add_child(lc)
+	foot.add_child(lc)
 	leave_btn = UI2.button(lc, "LEAVE", "grey", func():
 		_sfx("menuClose")
 		leave.emit(), "lobby_leave", 17, 44.0)
@@ -732,7 +752,7 @@ func _apply_loading() -> void:
 	leave_btn.visible = false
 	leave_btn.disabled = true
 	title.text = "PREPARING THE BATTLEFIELD"
-	title.add_theme_font_size_override("font_size", 20)
+	title.add_theme_font_size_override("font_size", 18)
 	mode_lbl.visible = false
 	sub_lbl.visible = false
 

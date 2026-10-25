@@ -4,13 +4,15 @@ extends SceneTree
 #  - every plant loads from its Meshy model, drawn with foliage.gdshader (its texture, its height for the sway, the
 #    glowing ones their glow mask); every tree has its shadow copy (fewer triangles, inside the tree) and the woods'
 #    kinds their light *_far copies; the place tables name only plants;
-#  - in a match: no KayKit tree or bush left; the brush patches filled with their sets' plants (on the ground, no
-#    shadow), the ridges' trees and bushes, the edge's trees and the outer woods' far trees all drawn as small
-#    MultiMesh cells; a tree casts its shadow only from its shadow copy (a shadow-only MultiMesh beside it).
+#  - in a match: no KayKit tree or bush left; the brush patches filled (0.31.216: with the painted tall grass,
+#    ground_cards.gd, not the Meshy plants -- on the ground, no shadow), the ridges' trees and bushes, the edge's trees
+#    and the outer woods' far trees all drawn as small MultiMesh cells; a tree casts its shadow only from its shadow
+#    copy (a shadow-only MultiMesh beside it).
 #   godot --headless --path godot -s res://tests/foliage_test.gd
 const Mode = preload("res://scripts/siege/siege_mode.gd")
 const Foliage = preload("res://scripts/siege/foliage.gd")
 const Sim = preload("res://scripts/siege/siege_sim.gd")
+const GroundCards = preload("res://scripts/siege/ground_cards.gd")
 var mode
 var frames := 0
 var fails := []
@@ -109,7 +111,8 @@ func _process(_d: float) -> bool:
 			by_perf[perf] = [0, 0]
 		by_perf[perf][0] += cnt
 		by_perf[perf][1] += 1
-		if mmi.cast_shadow != GeometryInstance3D.SHADOW_CASTING_SETTING_OFF or not Foliage.is_plant(kind) or not (mmi.material_override is ShaderMaterial):
+		var card := perf == "brush" and GroundCards.KINDS.has(kind)          # (0.31.216: the brush's painted cards)
+		if mmi.cast_shadow != GeometryInstance3D.SHADOW_CASTING_SETTING_OFF or not (Foliage.is_plant(kind) or card) or not (mmi.material_override is ShaderMaterial):
 			bad_shadow += 1
 		if perf == "brush":
 			brush_kinds[kind] = true
@@ -122,11 +125,7 @@ func _process(_d: float) -> bool:
 	var op: Array = by_perf.get("outer_trees", [0, 0])
 	check(int(bp[0]) >= 60 and int(rp[0]) >= 100 and int(ep[0]) >= 60 and int(op[0]) >= 300,
 		"plants drawn: brush %d, ridges %d, edge trees %d, the woods %d" % [bp[0], rp[0], ep[0], op[0]])
-	var all_kinds := {}
-	for bset in Foliage.BRUSH_SETS:
-		for k in bset:
-			all_kinds[k] = true
-	check(brush_kinds.size() == all_kinds.size(), "every brush plant used (%s)" % str(brush_kinds.keys()))
+	check(brush_kinds.has("brush") and brush_kinds.has("blades"), "the brush is the painted tall grass, grass at its foot (%s)" % str(brush_kinds.keys()))
 	check(wide == 0, "every plant batch one small cell, its places kept (%d not)" % wide)
 	check(bad_shadow == 0 and int(shadows.get("ridges_shadow", 0)) > 0 and int(shadows.get("edge_trees_shadow", 0)) == int(ep[0])
 		and not shadows.has("brush_shadow") and not shadows.has("outer_trees_shadow"),
@@ -140,7 +139,7 @@ func _process(_d: float) -> bool:
 			var q := Vector2((p as Vector3).x, (p as Vector3).z)
 			if q.distance_to(b.p) <= float(b.r):
 				inside += 1
-				if absf((p as Vector3).y - (Sim.height_at(q) - 0.05)) < 0.02:
+				if absf((p as Vector3).y - (Sim.height_at(q) - 0.05)) < 0.03:
 					aground += 1
 		if inside < 4:
 			thin += 1

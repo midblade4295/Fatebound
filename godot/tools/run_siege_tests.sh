@@ -142,29 +142,29 @@ run apple_iap_test       APPLE_IAP_PASS           150
 run account_move_test    ACCOUNT_MOVE_PASS        150
 run preload_queue_test   PRELOAD_QUEUE_PASS       240
 run outfits_test         OUTFITS_PASS             150
-run economy_balance_test ECONOMY_BALANCE_PASS   120 --resolution 420x933
+run economy_balance_test ECONOMY_BALANCE_PASS   120 --resolution 933x420
 run league_iap_test      LEAGUE_IAP_PASS          120
 run skins_test           SKINS_PASS               120
 # The weekly sale (0.31.203): the featured three at 50/35/25 % off, buy_sale replayed on the server, its end, the shop
-run weekly_sale_test     WEEKLY_SALE_PASS         150 --resolution 420x933
+run weekly_sale_test     WEEKLY_SALE_PASS         150 --resolution 933x420
 # The Armory and the Market's HEROES (0.31.204): only what you own in the Armory, heroes bought in the Market, the picker
-run armory_market_test   ARMORY_MARKET_PASS       150 --resolution 420x933
+run armory_market_test   ARMORY_MARKET_PASS       150 --resolution 933x420
 run champions_test       CHAMPIONS_PASS           200
 run content_test         CONTENT_PASS             120
 # Class quests (0.31.97): the table, counting per class worn, claiming in order, the screens; and the in-match tracking.
-run quest_test           QUEST_PASS               150 --resolution 420x933
+run quest_test           QUEST_PASS               150 --resolution 933x420
 run quest_track_test     QUEST_TRACK_PASS         120 --fixed-fps 30
 # Weapon grips (0.31.104): bow strings on the archer's side, one-handers held at the end of the handle.
 run weapon_grip_test     WEAPON_GRIP_PASS         120
 # The Necromancer's glowing, smoking eyes (0.31.192).
 run necro_eyes_test      NECRO_EYES_PASS          120
 # Currency flies into the top bar's counters (0.31.105), and the Ember counter.
-run reward_fly_test      REWARD_FLY_PASS          120 --fixed-fps 30 --resolution 420x933
+run reward_fly_test      REWARD_FLY_PASS          120 --fixed-fps 30 --resolution 933x420
 # The shop's tiered pack art and the five gold offers (0.31.106).
-run shop_packs_test      SHOP_PACKS_PASS          120 --resolution 420x933
+run shop_packs_test      SHOP_PACKS_PASS          120 --resolution 933x420
 # Siege Pass tier skips (0.31.107).
-run tier_skip_test       TIER_SKIP_PASS           120 --resolution 420x933
-run play_games_test      PLAY_GAMES_PASS          120 --resolution 420x933
+run tier_skip_test       TIER_SKIP_PASS           120 --resolution 933x420
+run play_games_test      PLAY_GAMES_PASS          120 --resolution 933x420
 # The server keeps the accounts (0.31.108): ops replayed, tickets, imports held, purchases once; end to end on port 8093.
 run eco_server_test      ECO_SERVER_PASS          120
 # The economy review's fixes (0.31.108): pass swaps, Silver gems, vault, waiting reward chests, prices, op replay.

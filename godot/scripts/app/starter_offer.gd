@@ -28,7 +28,8 @@ func open(a) -> void:
 	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(center)
 	var holder := MarginContainer.new()
-	var cw := minf(372.0, app.size.x - 20.0)
+	# 0.31.216 (landscape): the picture on the left, what's in it and the price on the right (one column in portrait)
+	var cw := minf(660.0, app.size.x - 40.0)
 	holder.custom_minimum_size = Vector2(cw, 0)
 	center.add_child(holder)
 	var v := UI2.frame(holder, "ember", 14, 22.0, "gold")
@@ -40,13 +41,22 @@ func open(a) -> void:
 	tl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	var x := UI2.button(head, "✕", "ghost", func(): _close(), "starter_close", 18, 40.0, 12.0)
 	x.custom_minimum_size.x = 44
+	var cols := HBoxContainer.new()
+	cols.add_theme_constant_override("separation", 16)
+	v.add_child(cols)
 	# the picture
-	var aw := cw - 40.0
+	var aw := roundf(minf(300.0, cw * 0.46))
 	var ah := roundf(aw * 0.81)
 	var stage := Control.new()
 	stage.custom_minimum_size = Vector2(aw, ah)
 	stage.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	v.add_child(stage)
+	stage.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	cols.add_child(stage)
+	var side := VBoxContainer.new()
+	side.add_theme_constant_override("separation", 10)
+	side.alignment = BoxContainer.ALIGNMENT_CENTER
+	side.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	cols.add_child(side)
 	var well := Control.new()                      # (a dark well the light turns in)
 	well.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	well.clip_contents = true
@@ -80,19 +90,19 @@ func open(a) -> void:
 	var items := HBoxContainer.new()
 	items.add_theme_constant_override("separation", 8)
 	items.alignment = BoxContainer.ALIGNMENT_CENTER
-	v.add_child(items)
+	side.add_child(items)
 	# (the three in the picture's own light: tools/render_starter_pack.gd SHOT=gems | gold | token)
 	_item(items, UI2.V2 + "offer/gems.webp", "%d" % int(sp.gems), "GEMS", Color("#8fd0ff"))
 	_item(items, UI2.V2 + "offer/gold.webp", UI.grouped(int(sp.get("gold", 0))), "GOLD", UI2.GOLD)
 	_item(items, UI2.V2 + "offer/token.webp", "HERO", "TOKEN", Color("#e2b8ff"))
-	UI2.center(UI2.body(v, "A Hero Token unlocks any hero you don't have yet. Once per player.", 12, Color("#ffe9c7")))
+	UI2.center(UI2.body(side, "A Hero Token unlocks any hero you don't have yet. Once per player.", 12, Color("#ffe9c7")))
 	# the price
 	var bl = app.billing
 	var live: bool = bl != null and bl.active()
 	var label := Platform.store_button()
 	if live:
 		label = "…" if str(bl.busy) == "starter_pack" else str(bl.price("starter_pack"))
-	var b := UI2.button(v, label, "green" if live else "grey", func():
+	var b := UI2.button(side, label, "green" if live else "grey", func():
 		app.sfx("tap")
 		if bl != null:
 			bl.buy("starter_pack")

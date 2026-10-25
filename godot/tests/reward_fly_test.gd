@@ -7,7 +7,7 @@ extends SceneTree
 #    up as they do, and ends on the profile's amount;
 #  - spending shows at once; a restored save and a gain during a match don't fly (the match's gains fly on the way back);
 #  - the new art: the Meshy coin / diamond / ember icons and their turning strips.
-#   godot --headless --fixed-fps 30 --resolution 420x933 --path godot -s res://tests/reward_fly_test.gd
+#   godot --headless --fixed-fps 30 --resolution 933x420 --path godot -s res://tests/reward_fly_test.gd
 const App = preload("res://scripts/app/siege_app.gd")
 const UI = preload("res://scripts/app/ui.gd")
 const RewardFly = preload("res://scripts/app/reward_fly.gd")

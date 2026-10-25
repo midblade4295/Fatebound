@@ -39,6 +39,7 @@ const INK_HINT := Color("#8c241e")
 const SCROLL_SIDE := 18.0                      # the parchment at most the screen less this each side
 const SCROLL_FIT := 4.0                        # ...and all of the Herald on the screen, this from its edges
 const SCROLL_BOTTOM := 32.0                    # the parchment's foot this above the screen's (TAP TO CONTINUE under it)
+const SCROLL_TALL := 0.72                      # 0.31.216: the Herald and his parchment no taller than this of the screen
 const LINE_GAP := -3                           # the writing's lines a little closer than the font's own
 const TEXT_PX := [17, 16, 15, 14, 13, 12]
 const TYPE_CPS := 42.0
@@ -262,6 +263,7 @@ static func scroll_rects(p: String, view: Vector2) -> Dictionary:
 	var pr: Rect2 = g.parch
 	var tr: Rect2 = g.text
 	var k := minf((view.x - 2.0 * SCROLL_SIDE) / pr.size.x, (view.x - 2.0 * SCROLL_FIT) / sz.x)
+	k = minf(k, view.y * SCROLL_TALL / sz.y)         # (0.31.216: landscape -- no taller than this of the screen, him and all)
 	var x := view.x * 0.5 - (pr.position.x + pr.size.x * 0.5) * k
 	x = clampf(x, SCROLL_FIT - 0.0, view.x - SCROLL_FIT - sz.x * k) if sz.x * k <= view.x - 2.0 * SCROLL_FIT else x
 	var y := minf(view.y - SCROLL_BOTTOM - pr.end.y * k, view.y - 2.0 - sz.y * k)     # (his feet on the screen too)

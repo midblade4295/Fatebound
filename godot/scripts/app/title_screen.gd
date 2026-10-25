@@ -48,8 +48,9 @@ const SOUNDS := {                                          # name -> [file, loud
 }
 const PAINT := Vector2(1152.0, 2560.0)
 const TORCHES := [Vector2(121, 832), Vector2(1028, 830)]   # the painted torches' flames
-const LOGO_AT := 0.22                  # the title's middle, this far down the screen (over the torches)
-const LOGO_W := 330.0                  # at most this wide (screen px)
+const LOGO_AT := 0.3                   # the title's middle, this far down the screen (0.22 in portrait, over the torches)
+const TORCH_Y := 980.0                 # 0.31.216: the torches' row down the painting -- at the middle of the landscape screen
+const LOGO_W := 400.0                  # at most this wide (screen px; 330 in portrait)
 const IGNITE := [0.05, 0.16]           # the torches flare alight
 const START := 0.22                    # the title sets off no sooner than this (and not before the game is ready)...
 const FLIGHT := 0.36                   # ...and hits the wall this long after
@@ -272,7 +273,9 @@ func _lay() -> void:
 	stage.size = size
 	stage.pivot_offset = Vector2(w * 0.5, h * LOGO_AT)    # (the punch-in zooms on the title)
 	k = maxf(w / PAINT.x, h / PAINT.y)
-	origin = Vector2((w - PAINT.x * k) * 0.5, (h - PAINT.y * k) * 0.5)
+	# 0.31.216 (landscape): the band of the wall with the torches and the banners' tails across the screen's middle (the
+	# whole tall wall, centred, in portrait)
+	origin = Vector2((w - PAINT.x * k) * 0.5, clampf(h * 0.5 - TORCH_Y * k, h - PAINT.y * k, 0.0))
 	paint.position = origin
 	paint.scale = Vector2(k, k)
 	var lw := minf(w - 36.0, LOGO_W) / k

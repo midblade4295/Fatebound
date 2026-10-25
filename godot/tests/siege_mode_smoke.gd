@@ -4,7 +4,7 @@ var mode
 var frames := 0
 func _init() -> void:
 	mode = Mode.new()
-	mode.size = Vector2(420, 780)
+	mode.size = Vector2(780, 420)
 	root.add_child(mode)
 func _process(delta: float) -> bool:
 	frames += 1

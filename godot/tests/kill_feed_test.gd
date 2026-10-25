@@ -41,7 +41,7 @@ func _init() -> void:
 	hud.player_id = "b2"
 	hud.player_name = "Kevin"
 	root.add_child(hud)
-	hud.size = Vector2(420, 933)
+	hud.size = Vector2(933, 420)
 	var me: Dictionary = sim.by_id["b2"]
 	for u in sim.units:
 		if not bool(u.get("hero", false)) or str(u.id) == "b2":

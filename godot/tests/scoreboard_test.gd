@@ -39,7 +39,7 @@ func _init() -> void:
 	hud.player_name = "Kevin"
 	hud.net_names = {"r3":"Rival", "b4":"Buddy"}
 	root.add_child(hud)
-	hud.size = Vector2(420, 933)
+	hud.size = Vector2(933, 420)
 
 func _put(id: String, vals: Dictionary) -> void:
 	for k in vals:

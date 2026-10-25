@@ -4,7 +4,7 @@ config/icon="res://assets/branding/icon.png"
 config/description="Fatebound native game client — Play testing build."
 run/main_scene="res://scenes/Boot.tscn"
 boot_splash/bg_color=Color(0.07, 0.04, 0.06, 1)
-boot_splash/image="res://assets/branding/splash.png"
+boot_splash/image="res://assets/branding/splash_land.png"
 boot_splash/stretch_mode=4
 
 [autoload]
@@ -12,13 +12,13 @@ boot_splash/stretch_mode=4
 BootGuard="*res://scripts/app/boot_guard.gd"
 
 [display]
-window/size/viewport_width=420
-window/size/viewport_height=780
-window/size/window_width_override=420
-window/size/window_height_override=780
+window/size/viewport_width=760
+window/size/viewport_height=420
+window/size/window_width_override=1520
+window/size/window_height_override=840
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
-window/handheld/orientation=1
+window/handheld/orientation=4
 
 [rendering]
 textures/vram_compression/import_etc2_astc=true

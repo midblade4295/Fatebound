@@ -82,10 +82,10 @@ func _run() -> void:
 		if not Tut.Poses.POSES.has(pz) or not ResourceLoader.exists(Tut.POSE_PATH % pz):
 			bad.append("%s:%s" % [l[0], pz])
 			continue
-		var r: Dictionary = Tut.scroll_rects(pz, Vector2(420, 933))
+		var r: Dictionary = Tut.scroll_rects(pz, Vector2(933, 420))        # (0.31.216: landscape)
 		var px: int = Tut.fit_px(str(l[1]), (r.text as Rect2).size)
 		var hgt: float = Tut.text_height(str(l[1]), (r.text as Rect2).size.x, px)
-		if px < 13 or hgt > (r.text as Rect2).size.y or not Rect2(0, 0, 420, 933).encloses((r.art as Rect2).grow(-1.0)):
+		if px < 13 or hgt > (r.text as Rect2).size.y or not Rect2(0, 0, 933, 420).encloses((r.art as Rect2).grow(-1.0)):
 			small.append("%s:%s %dpx" % [l[0], pz, px])
 	check(bad.is_empty() and used.size() == 8, "every line posed, all 8 poses used (%s)" % str(bad))
 	check(small.is_empty(), "every line fits its scroll at 13 px or more, the Herald all on the screen (%s)" % str(small))

@@ -8,18 +8,17 @@ uniform sampler2D grass_tex : source_color, filter_linear_mipmap, repeat_enable;
 uniform sampler2D rock_tex : source_color, filter_linear_mipmap, repeat_enable;
 uniform sampler2D path_mask : filter_linear, repeat_disable;
 uniform vec4 mask_rect;
-uniform float grass_scale = 16.0;
+uniform float grass_scale = 9.0;
 uniform float rock_scale = 4.0;
 uniform vec3 tint = vec3(1.0);
 uniform float grass_sat = 1.0;
-uniform float band_strength = 1.0;
 // 0.31.14 (Kevin: "make the grass blend better in certain spots"): the field's look carried over, so the seam between
 // the baked terrain and this land doesn't show as a straight edge -- the same drifting cloud shadows, the same rock
 // (triplanar, tinted, macro-jittered, mossy on top), and the meadow variation only from 10 m out.
 uniform sampler2D cloud_tex : filter_linear_mipmap, repeat_enable;
 uniform float cloud_strength = 0.0;
 uniform sampler2D macro_tex : filter_linear_mipmap, repeat_enable;
-uniform vec3 rock_col = vec3(0.78, 0.80, 0.78);
+uniform vec3 rock_col = vec3(1.0);
 
 varying vec3 wpos;
 varying vec3 wnorm;
@@ -33,9 +32,7 @@ void fragment() {
 	vec2 rmin = mask_rect.xy;
 	vec2 q = clamp(wpos.xz, rmin, rmin + mask_rect.zw);
 	float d = length(wpos.xz - q);
-	float band = mix(texture(path_mask, (q - rmin) / mask_rect.zw).a, 0.5, smoothstep(0.0, 12.0, d));
-	vec3 g = texture(grass_tex, wpos.xz / grass_scale).rgb;
-	g *= mix(vec3(1.0) - band_strength * vec3(0.18, 0.14, 0.14), vec3(1.0) + band_strength * vec3(0.08, 0.07, 0.02), band);
+	vec3 g = texture(grass_tex, wpos.xz / grass_scale).rgb;      // (0.31.216: the painted lawn; the bands are gone)
 	g *= mix(1.0, 0.94 + 0.06 * sin(wpos.x * 0.013 + wpos.z * 0.011), smoothstep(4.0, 14.0, d));   // broad meadow variation
 	float gl = dot(g, vec3(0.299, 0.587, 0.114));
 	g = mix(vec3(gl), g, grass_sat);

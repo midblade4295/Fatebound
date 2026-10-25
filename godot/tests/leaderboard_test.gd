@@ -212,7 +212,7 @@ func _process(delta: float) -> bool:
 			app.profile_path = base + "-profile.json"
 			app.legacy_path = base + "-none.json"
 			root.add_child(app)
-			app.size = Vector2(420, 933)
+			app.size = Vector2(933, 420)
 			_go("home")
 		"home":
 			if t_phase > 1.0:

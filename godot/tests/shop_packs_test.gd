@@ -5,7 +5,7 @@ extends SceneTree
 # gem as they grow, the biggest marked BEST VALUE, and the two new offers bought like the rest. 0.31.185 (Kevin: "I want
 # the same IAP system as league of legends"): no gold offers any more -- League never sells its earned currency; the
 # gem packs stay, each with its picture.
-#   godot --headless --resolution 420x933 --path godot -s res://tests/shop_packs_test.gd
+#   godot --headless --resolution 933x420 --path godot -s res://tests/shop_packs_test.gd
 const App = preload("res://scripts/app/siege_app.gd")
 const Eco = preload("res://scripts/meta/economy.gd")
 var fails: Array = []

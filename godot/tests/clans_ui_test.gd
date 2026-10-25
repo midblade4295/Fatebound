@@ -306,7 +306,7 @@ func _process(delta: float) -> bool:
 					"her clan: the camp with its name and level, the CLAN CHEST and SHARDS, CHAT / MEMBERS / LEAGUE / CLAN, LOOKING FOR GROUP, FRIENDS, close")
 				var cp = app.modal.camp
 				check(cp is ClanCamp and int(cp.stage) == 1 and str(cp.code) == "3.5.1" and cp.crests.size() == 1 and cp.size.is_equal_approx(app.modal.size)
-					and cp.size.y > 600.0, "the camp fills the screen (%s): stage 1, its banner with the crest on it" % str(cp.size if cp != null else ""))
+					and cp.size.y >= 400.0, "the camp fills the screen (%s): stage 1, its banner with the crest on it" % str(cp.size if cp != null else ""))
 				check(has_text(app.modal, "0 / 60 pts"), "the Clan Chest on the ground: 0 / 60 points")
 				_shot("clan_mine")
 				press("clan_open_chest")

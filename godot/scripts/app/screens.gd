@@ -17,6 +17,10 @@ const Champions = preload("res://scripts/meta/champions.gd")       # 0.31.187: w
 const PRIVACY_URL := "https://136-113-125-3.sslip.io/fatebound/privacy.html"
 
 # ---------------- shared bits ----------------
+static func grid_cols(app, card_w: float, gap := 10.0) -> int:
+	# 0.31.216 (landscape): a grid of cards as many across as the screen area takes (3 to 7)
+	return clampi(int((float(app.content_w()) + gap) / (card_w + gap)), 3, 7)
+
 static func section(root: Node, text: String, right := "", icon := "") -> void:
 	var r := UI.row(root, 8)
 	if icon != "":
@@ -90,7 +94,7 @@ const PLAQUE_FACE := Rect2(0.13, 0.18, 0.74, 0.7)    # the enamel face, as fract
 const FW_H := 26.0             # the FIRST WIN tab under PLAY ...
 const FW_HANG := 14.0          # ... hanging this far below the plaque
 const PLAY_GAP := 6.0          # between PLAY (its tab) and the chests
-const PLAY_MIN := 260.0        # (on a short screen PLAY goes no higher: Home scrolls a little instead)
+const PLAY_MIN := 186.0        # (on a short screen the chests go no higher: Home scrolls a little instead; 260 for PLAY in portrait)
 const CHEST_H := 104.0         # a chest's panel: its name, the chest in 3D, its button
 const CHEST_FILL := [Color("#3b2717"), Color("#140b05")]     # the panels' dark wood (top, bottom)
 
@@ -108,13 +112,11 @@ static func discord_press(app) -> void:
 		app.rebuild()                                # (Home's button goes; Settings' loses its +100)
 
 static func home_layout(h: float) -> Dictionary:
-	# the chests on the bottom edge, PLAY (and its tab) just over them; on a short screen PLAY goes no higher than
-	# PLAY_MIN and Home scrolls a little
-	var chest_y := h - CHEST_H - 4.0
-	var play := chest_y - PLAY_GAP - FW_HANG - PLAQUE_H
-	if play < PLAY_MIN:
-		play = PLAY_MIN
-		chest_y = play + PLAQUE_H + FW_HANG + PLAY_GAP
+	# 0.31.216 (landscape, Honor of Kings' lobby): the chests along the bottom on the left, PLAY at the bottom right (its
+	# FIRST WIN tab over it), the camp's heroes over the chests in the middle; on a short screen the chests go no higher
+	# than PLAY_MIN and Home scrolls a little. (Portrait until then: the chests on the bottom edge, PLAY over them.)
+	var chest_y := maxf(PLAY_MIN, h - CHEST_H - 4.0)
+	var play := chest_y + CHEST_H - PLAQUE_H - 2.0
 	return {"play": play, "chests": chest_y, "needed": chest_y + CHEST_H + 4.0}
 
 static func menu_counts(app) -> Dictionary:
@@ -133,7 +135,7 @@ static func home(app, root: VBoxContainer) -> void:
 	var p = app.profile
 	var d: Dictionary = p.d
 	app.hero_show()
-	var w: float = maxf(300.0, app.size.x - 24.0)
+	var w: float = maxf(300.0, app.content_w())
 	var avail: float = app.home_height()
 	var lay := home_layout(avail)
 	app.home_fixed = float(lay.needed) <= avail + 1.0
@@ -175,10 +177,14 @@ static func home(app, root: VBoxContainer) -> void:
 		_discord_button(app, top, Rect2(w - DISCORD_W, ROW_Y, DISCORD_W, ROW_H))
 	# --- 0.31.214: the Starter Pack, until it's bought, on the camp's left under the top row
 	if not bool(p.d.iap.starter):
-		starter_tile(app, top, Vector2(0.0, ROW_Y + ROW_H + 8.0))
+		# (0.31.216: landscape -- between the top row and the chests, smaller on a short screen)
+		var st_y := ROW_Y + ROW_H + 8.0
+		var st := starter_tile(app, top, Vector2(0.0, st_y))
+		var st_k := clampf((float(lay.chests) - 4.0 - st_y) / STARTER_H, 0.72, 1.0)
+		st.scale = Vector2(st_k, st_k)
 	# --- PLAY: always the Siege server (0.31.79); the bots fill any empty slots. 0.31.145: it opens the 5v5's heroes.
 	var py: float = lay.play
-	var px := (w - PLAQUE_W) * 0.5
+	var px := w - PLAQUE_W                        # (0.31.216: bottom right; centred over the chests in portrait)
 	UI2.glow(top, Rect2(px - 34, py - 12, PLAQUE_W + 68, PLAQUE_H + 30), Color(1.0, 0.55, 0.15, 0.5))
 	var play := Button.new()
 	play.flat = true
@@ -222,9 +228,10 @@ static func home(app, root: VBoxContainer) -> void:
 	if fw_open:
 		# 0.31.119: the first win of the day (it was the FIRST WIN medallion); 0.31.194 a dark tab hanging under PLAY
 		var tag := _first_win_tab(top)
-		tag.position = Vector2((w - tag.size.x) * 0.5, py + PLAQUE_H + FW_HANG - FW_H)
+		tag.position = Vector2(px + (PLAQUE_W - tag.size.x) * 0.5, py - FW_H + 6.0)      # (0.31.216: over PLAY)
+		top.move_child(tag, 0)
 	# --- chests, on the bottom edge
-	chests_row(app, top, w, float(lay.chests))
+	chests_row(app, top, minf(w - PLAQUE_W - 14.0, 4.0 * 118.0), float(lay.chests))     # (0.31.216: left of PLAY)
 	if bool(app.get("safe_boot")) and not bool(app.get_meta("safe_note", false)):
 		# 0.31.70: the last start never reached the menu, so this one skipped the background loading
 		app.set_meta("safe_note", true)
@@ -705,8 +712,11 @@ static func pass_card(app, root: Node) -> void:
 		UI2.sweep(b)
 
 # ---------------- PASS ----------------
+const BANNER_MAX := 124.0      # 0.31.216: landscape -- a banner no taller than this (210 and so in portrait)
+
 static func banner(root: Node, art: String, title: String, h := 210.0, title_color := UI2.GOLD) -> Control:
 	# 0.31.79: a gold-framed painted banner at the top of a tab, its title over the bottom of the art.
+	h = minf(h, BANNER_MAX)
 	var c := Control.new()
 	c.custom_minimum_size = Vector2(0, h)
 	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -747,13 +757,13 @@ static func banner(root: Node, art: String, title: String, h := 210.0, title_col
 	clip.offset_top = 4
 	clip.offset_right = -4
 	clip.offset_bottom = -4
-	var tl := UI2.text(c, title, 40, title_color, UI2.INK, 10)
+	var tl := UI2.text(c, title, 36, title_color, UI2.INK, 9)
 	tl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	tl.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
-	tl.offset_top = -78
-	tl.offset_bottom = -30
+	tl.offset_top = -80                           # (0.31.216: higher on the shorter banner: a ribbon fits under it)
+	tl.offset_bottom = -36
 	for i in 3:
-		var sp := UI2.glow(c, Rect2(randf_range(20, 360), randf_range(20, h - 90), 12, 12), Color(1, 0.95, 0.8, 0.9))
+		var sp := UI2.glow(c, Rect2(randf_range(20, 360), randf_range(14, maxf(16.0, h - 90)), 12, 12), Color(1, 0.95, 0.8, 0.9))
 		sp.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return c
 
@@ -1712,7 +1722,7 @@ static func featured_outfit(app, root: Node, id: String) -> void:
 		# the hall sized and slid so its pedestal (at 30.5 % across, 63.5 % down the picture) is under his feet
 		var cx := fc.size.x * 0.31
 		var feet := fc.size.y * SALE_FEET
-		var ah := maxf(fc.size.y, feet / 0.635)
+		var ah := maxf(maxf(fc.size.y, feet / 0.635), fc.size.x * 9.0 / 16.0)   # (0.31.216: and as wide as a landscape card)
 		var aw := ah * 16.0 / 9.0
 		art.size = Vector2(aw, ah)
 		art.position = Vector2(clampf(cx - 0.305 * aw, fc.size.x - aw, 0.0), minf(0.0, feet - 0.635 * ah))
@@ -1842,7 +1852,7 @@ static func skin_grid(app, root: Node) -> void:
 		rs.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		rs.custom_minimum_size.x = 10
 		var grid := GridContainer.new()
-		grid.columns = 3
+		grid.columns = grid_cols(app, 128.0)          # (0.31.216: as many as the landscape screen takes; 3 in portrait)
 		grid.add_theme_constant_override("h_separation", 10)
 		grid.add_theme_constant_override("v_separation", 12)
 		root.add_child(grid)
@@ -2126,7 +2136,7 @@ static func market_heroes(app, root: VBoxContainer) -> void:
 		rs.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		rs.custom_minimum_size.x = 10
 		var grid := GridContainer.new()
-		grid.columns = 3
+		grid.columns = grid_cols(app, 128.0)          # (0.31.216: as many as the landscape screen takes; 3 in portrait)
 		grid.add_theme_constant_override("h_separation", 10)
 		grid.add_theme_constant_override("v_separation", 12)
 		root.add_child(grid)
@@ -2548,7 +2558,7 @@ static func armory_outfits(app, root: VBoxContainer, outfits: Array) -> void:
 			worn += 1
 	UI2.center(UI2.body(root, "%d yours  ·  %d worn  ·  tap WORN for his own look again" % [outfits.size(), worn], 11, UI2.SOFT))
 	var grid := GridContainer.new()
-	grid.columns = 3
+	grid.columns = grid_cols(app, 128.0)          # (0.31.216: as many as the landscape screen takes; 3 in portrait)
 	grid.add_theme_constant_override("h_separation", 10)
 	grid.add_theme_constant_override("v_separation", 12)
 	root.add_child(grid)
@@ -2636,7 +2646,7 @@ static func locker_champions(app, root: VBoxContainer) -> void:
 		rs.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		rs.custom_minimum_size.x = 10
 		var grid := GridContainer.new()
-		grid.columns = 3
+		grid.columns = grid_cols(app, 128.0)          # (0.31.216: as many as the landscape screen takes; 3 in portrait)
 		grid.add_theme_constant_override("h_separation", 8)
 		grid.add_theme_constant_override("v_separation", 8)
 		root.add_child(grid)
@@ -3049,7 +3059,7 @@ static func settings(app, root: VBoxContainer) -> void:
 	UI2.divider(car, "CAREER", 20)
 	var st: Dictionary = d.stats
 	var grid := GridContainer.new()
-	grid.columns = 4
+	grid.columns = 8 if app.content_w() > 700.0 else 6          # (0.31.216: two rows across the landscape screen; 4 in portrait)
 	grid.add_theme_constant_override("h_separation", 8)
 	grid.add_theme_constant_override("v_separation", 8)
 	car.add_child(grid)

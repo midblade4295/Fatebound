@@ -295,6 +295,23 @@ static func ground_dist(p: Vector2, d_path: float) -> float:
 		best = smooth_min(best, maxf(0.0, p.distance_to(pit_c(i)) - (PIT_R - PIT_APRON_IN)), APRON_BLEND)
 	return best
 
+# 0.31.216: the lanes are paved (Honor of Kings' flagstones; terrain.gdshader draws them from the mask's A), wider than
+# the trodden track the minions keep to -- the slabs reach LANE_PAVE_HALF either side of the line, their edge wandering
+# a little less than a trail's.
+const LANE_PAVE_HALF := 2.9
+
+static func lane_pave(d: float, p: Vector2) -> float:
+	# the mask's A for a point d metres from a lane's line: 1 on the paving, 0.5 at its edge, 0 a metre out; it stops
+	# short of the keeps' walls (their gatehouses have their own floors)
+	var a := 1.0 - clampf((d - 0.5 * path_wobble(p) - LANE_PAVE_HALF + 0.5) / 1.0, 0.0, 1.0)
+	return a * _smooth(Keep.R + 0.6, Keep.R + 2.6, keep_dist(p))
+
+static func dist_to_lanes(p: Vector2) -> float:
+	var best := INF
+	for pl in paths():
+		best = minf(best, _dist_line(p, pl))
+	return best
+
 static func path_r(d: float, p: Vector2) -> float:
 	# the mask's R for a point d metres from the nearest centre line: 1 on the track's middle, 0.5 at its edge
 	return 1.0 - clampf((d - path_wobble(p) - PATH_CORE) / PATH_FADE, 0.0, 1.0)
@@ -376,7 +393,7 @@ static func ledge_rim(p: Vector2) -> Vector2:
 static func bake_key() -> String:
 	# Changes whenever the land's shape data changes: the baked cache (tools/bake_land.gd) is only trusted when it matches.
 	var parts := [HALF_W, HALF_L, RIVER_AMP, RIVER_K, RIVER_HW, POOL_X, POOL_EXTRA, POOL_SIGMA, PIT_R, PIT_MOUTH, BED_Y,
-		FORD_Y, FORDS, EDGE_BLUE, RIDGES_BLUE, LANES, TRAILS_BLUE, TRAIL_HALF, BAKE_MARGIN, BAKE_STEP, "hok-v1", RIVER_WANDER, PIT_APRON_IN, PATH_STEP,
+		FORD_Y, FORDS, EDGE_BLUE, RIDGES_BLUE, LANES, TRAILS_BLUE, TRAIL_HALF, BAKE_MARGIN, BAKE_STEP, "hok-v1", RIVER_WANDER, PIT_APRON_IN, LANE_PAVE_HALF, "paved-v1", PATH_STEP,
 		PATH_FADE, PATH_CORE, Keep.C, Keep.R, Keep.ZONE, RIDGE_H]
 	return str(hash(str(parts)))
 

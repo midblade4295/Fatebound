@@ -3,7 +3,7 @@ extends SceneTree
 # gems"): 10 tiers for 1000 gems, keeping the progress into the current tier; their rewards then wait to be claimed;
 # near the end only what's left (and its price); none when complete or without the gems; never a way to make gems;
 # and on the pass screen through its button and the confirm.
-#   godot --headless --resolution 420x933 --path godot -s res://tests/tier_skip_test.gd
+#   godot --headless --resolution 933x420 --path godot -s res://tests/tier_skip_test.gd
 const App = preload("res://scripts/app/siege_app.gd")
 const Eco = preload("res://scripts/meta/economy.gd")
 var fails: Array = []

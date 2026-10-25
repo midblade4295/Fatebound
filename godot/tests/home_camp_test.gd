@@ -9,9 +9,11 @@ extends SceneTree
 #    shader's motion 0); a safe start sends no particles;
 #  - 0.31.215: the picture is the 3D render (tools/render_home_camp.gd): the Mage's gem and the Stormcaller's crystal
 #    are the magic; no lit windows, lamps or pennants in view (the checks follow the scene's lists)
+#  - 0.31.216 (landscape, Honor of Kings' lobby): the picture is 2048 x 1024 and covers the screen, centred on the area
+#    beside the tab rail, the heroes' feet over the chests; PLAY at the bottom right with FIRST WIN over it, the chest
+#    panels along the bottom to its left (each with its name), all on screen over the chat line;
 #  - in the app: Home's backdrop is the camp (no 3D heroes); no side buttons; the top row is the 5v5 pill and JOIN OUR
-#    DISCORD side by side; PLAY is the new plaque with FIRST WIN as a tab under it, above the chest panels (each with its
-#    name), all on screen; the top bar's menu button opens ORDERS, QUESTS, RANKS and the TUTORIAL; its badge counts
+#    DISCORD side by side; the top bar's menu button opens ORDERS, QUESTS, RANKS and the TUTORIAL; its badge counts
 #    what's ready (a "!" and a glow until the tutorial's played);
 #  - (kept) each empty chest slot shows a dim chest; the players online line (0.31.140).
 #   godot --headless --path godot -s res://tests/home_camp_test.gd
@@ -21,7 +23,7 @@ const Screens = preload("res://scripts/app/screens.gd")
 const Eco = preload("res://scripts/meta/economy.gd")
 
 var app
-var phone                                # the camp as a 420 x 933 phone lays it out
+var phone                                # the camp as a 933 x 420 phone lays it out
 var still                                # ... with reduce motion
 var bare                                 # ... on a safe start
 var fails: Array = []
@@ -48,7 +50,7 @@ func btn(key: String) -> Button:
 			return n
 	return null
 
-func _scene(calm: bool, safe: bool, sz := Vector2(420, 933)) -> Control:
+func _scene(calm: bool, safe: bool, sz := Vector2(933, 420)) -> Control:
 	var box := Control.new()
 	box.size = sz
 	root.add_child(box)
@@ -72,9 +74,9 @@ func _init() -> void:
 	bare = _scene(false, true)
 
 func _play_top(w: float, h: float) -> float:
-	# PLAY's top on a phone this size (siege_app.home_play_top, no notch)
-	var hh := h - (6.0 + App.TOP_H) - float(App.ChatTicker.H) - App.TAB_H - 30.0
-	return 6.0 + App.TOP_H + 4.0 + float(Screens.home_layout(hh).play)
+	# where the heroes stand on a phone this size (siege_app.home_play_top, no notch: 0.31.216, the chests' top)
+	var hh := h - (4.0 + App.TOP_H) - float(App.ChatTicker.H) - 20.0
+	return 4.0 + App.TOP_H + 4.0 + float(Screens.home_layout(hh).chests)
 
 func _process(d: float) -> bool:
 	t += d
@@ -83,7 +85,7 @@ func _process(d: float) -> bool:
 			return false
 		step = 1
 		for s in [phone, still, bare]:
-			s.place(_play_top(420.0, 933.0))
+			s.place(_play_top(933.0, 420.0))
 		phone._shooting.wait = 0.3                              # (a star falls soon)
 		# three chests: one ready, one unlocking, one waiting its turn; the fourth slot empty
 		var p = app.profile
@@ -143,24 +145,26 @@ func _checks_scene() -> void:
 	check(tex != null and tex.get_size() == CampScene.PAINT, "the camp painting is there (%s)" % str(tex.get_size() if tex != null else null))
 	# laid out on phones from 16:9 to 21:9, 360 and 420 wide
 	var bad := ""
-	for sz in [Vector2(420, 933), Vector2(360, 780), Vector2(360, 800), Vector2(360, 840), Vector2(420, 747), Vector2(360, 640)]:
+	for sz in [Vector2(933, 420), Vector2(780, 360), Vector2(800, 360), Vector2(840, 360), Vector2(747, 420), Vector2(640, 360)]:
 		var s: Control = _scene(false, true, sz)
+		s.inset_left = App.RAIL_W
 		var pt := _play_top(sz.x, sz.y)
 		s.place(pt)
 		var feet: float = s.origin.y + CampScene.FEET_Y * s.k
 		var why := ""
 		if s.origin.y > 0.01 or s.origin.x > 0.01 or s.origin.x + CampScene.PAINT.x * s.k < sz.x - 0.01:
 			why += " leaves a gap (origin %s)" % str(s.origin)
-		if s.painting_bottom() < sz.y - CampScene.COVER_TO - 0.5:
+		if s.painting_bottom() < sz.y - 0.5:
 			why += " stops at %.0f" % s.painting_bottom()
 		if feet > pt + CampScene.FEET_OVER + 0.5:
-			why += " the feet (%.0f) go under PLAY (%.0f)" % [feet, pt]
-		if s.k > sz.x / CampScene.PAINT.x * 1.12:
-			why += " too wide (k %.3f)" % s.k
+			why += " the feet (%.0f) go under the chests (%.0f)" % [feet, pt]
+		var fire_x: float = s.origin.x + CampScene.FIRE.x * s.k
+		if absf(fire_x - (App.RAIL_W + (sz.x - App.RAIL_W) * 0.5)) > 40.0:
+			why += " the fire off the middle (%.0f)" % fire_x
 		if why != "":
 			bad += " %s:%s" % [str(sz), why]
 		s.get_parent().queue_free()
-	check(bad == "", "the camp covers the screen as wide as it is, from the top to near the bottom, the champions' feet over PLAY%s" % bad)
+	check(bad == "", "the camp covers the screen, the fire in the middle of the screen area, the heroes' feet over the chests%s" % bad)
 	check(phone.paint_layer.get_child_count() > 20 and phone.embers != null and phone.smoke != null and phone.wisps.size() == CampScene.MAGIC.size()
 		and phone._tongues.size() == CampScene.TONGUES.size() and phone._lamps.size() == CampScene.LAMPS.size()
 		and phone._windows.size() == CampScene.WINDOWS.size(), "the fire, the lamps, the magic, the windows and the sky are laid on it")
@@ -231,16 +235,21 @@ func _checks_app() -> void:
 	var tag: Control = app.content.find_child("FirstWinTag", true, false)
 	check(play != null and art != null and art.texture != null and art.texture.get_size() == Vector2(760, 255) and has_text(play, "PLAY"),
 		"PLAY is the new plaque (the orange enamel, the gold frame, the gems)")
-	check(tag != null and has_text(tag, "FIRST WIN") and tag.global_position.y > play.global_position.y + play.size.y * 0.5
-		and tag.get_global_rect().end.y < play.global_position.y + play.size.y + Screens.FW_HANG + 1.0, "FIRST WIN hangs under PLAY as a tab")
+	check(tag != null and has_text(tag, "FIRST WIN") and tag.get_global_rect().end.y <= play.global_position.y + 8.0
+		and tag.get_global_rect().end.y > play.global_position.y - 2.0 and play.get_global_rect().end.x > app.size.x - 40.0,
+		"PLAY at the bottom right, FIRST WIN as a tab over it")
 	var names: Array = app.content.find_children("ChestName", "Label", true, false)
 	var lowest := 0.0
 	for n in app.content.find_children("*", "Control", true, false):
 		if (n as Control).is_visible_in_tree() and (n as Control).has_meta("action_key") and str(n.get_meta("action_key")).begins_with("chest_"):
 			lowest = maxf(lowest, (n as Control).get_global_rect().end.y)
 	var chat_top: float = app.chat_ticker.global_position.y
-	check(names.size() == app.profile.chests().size() and lowest > play.global_position.y + play.size.y and lowest <= chat_top + 1.0,
-		"the chests on their panels, each with its name, under PLAY and over the chat line (%d named; the lowest button ends at %.0f, the chat at %.0f)"
+	var rightmost := 0.0
+	for n in app.content.find_children("*", "Control", true, false):
+		if n.has_meta("chest_plate"):
+			rightmost = maxf(rightmost, (n as Control).get_global_rect().end.x)
+	check(names.size() == app.profile.chests().size() and rightmost < play.global_position.x and lowest <= chat_top + 1.0,
+		"the chests on their panels, each with its name, left of PLAY and over the chat line (%d named; the lowest button ends at %.0f, the chat at %.0f)"
 		% [names.size(), lowest, chat_top])
 	# ---- empty chest slots
 	var ghosts: Array = app.content.find_children("*", "TextureRect", true, false).filter(func(n): return n.has_meta("empty_slot") and n.is_visible_in_tree())

@@ -50,6 +50,16 @@ var _block_held := false            # 0.31.61: the Crusader's shield button
 var _pressed_at := {}
 var _toast := ""
 const KillBanner = preload("res://scripts/siege/kill_banner.gd")
+const Minimap = preload("res://scripts/siege/minimap.gd")
+const View = preload("res://scripts/siege/siege_view.gd")
+var minimap: Control = null              # 0.31.216 (minimap.gd)
+# 0.31.216 (Kevin: "The game needs to change from vertical to horizontal", Honor of Kings' HUD): the landscape layout --
+# the map top-left with your level, gold-and-shop and items under it; the score bar small in the top middle; pause and
+# quick chat top-right with the kill feed under them; the stick anywhere on the left half; ATTACK bottom-right with Q,
+# W, E and R in an arc round it and DODGE, WARD and HOME in a row to their left.
+const MAP_RECT := Rect2(8, 8, 132, 132)
+const BAR_W := 470.0
+const BAR_H := 46.0
 var kill_banner: Control = null         # 0.31.180: the kill banners (kill_banner.gd; until then a DOUBLE KILL label of yours)
 var tut_modal := false                   # 0.31.181: the tutorial's Herald is talking -- the match's buttons and stick wait
 var _toast_at := -10.0
@@ -109,6 +119,11 @@ func _ready() -> void:
 	_top_layer.draw.connect(_draw_top_layer)
 	add_child(_top_layer)
 	move_child(_top_layer, 0)
+	minimap = Minimap.new()                        # 0.31.216: the landscape HUD's map, top-left
+	minimap.name = "Minimap"
+	minimap.hud = self
+	add_child(minimap)
+	move_child(minimap, 1)
 	kill_banner = KillBanner.new()                 # 0.31.180: over the match and the buttons, under the panels
 	kill_banner.name = "KillBanner"
 	kill_banner.hud = self
@@ -119,10 +134,13 @@ func _ready() -> void:
 	ready_times["hud _ready total"] = Time.get_ticks_msec() - t0
 
 func _layout() -> void:
-	pause_btn.position = Vector2(size.x - 52, 78)
-	qc_btn.position = Vector2(size.x - 104, 75)            # (left of the pause button, clear of the gate and post pips)
+	pause_btn.position = Vector2(size.x - 52, 8)
+	qc_btn.position = Vector2(size.x - 104, 5)             # (left of the pause button)
 	if qc_panel != null:
-		qc_panel.position = Vector2(size.x - qc_panel.size.x - 10, 126)
+		qc_panel.position = Vector2(size.x - qc_panel.size.x - 10, 58)
+	if minimap != null:
+		minimap.position = MAP_RECT.position
+		minimap.size = MAP_RECT.size
 
 # ---------------- quick chat (0.31.111) ----------------
 func _toggle_qc() -> void:
@@ -172,7 +190,7 @@ func add_ping(unit: String, i: int, name: String) -> void:
 func _draw_pings() -> void:
 	_pings = _pings.filter(func(p): return _time - float(p.at) < PING_LIFE)
 	_feed = _feed.filter(func(f): return _time - float(f.at) < FEED_LIFE)
-	var vp := Rect2(Vector2(10, 150), size - Vector2(20, 300))
+	var vp := Rect2(Vector2(MAP_RECT.end.x + 10.0, 70), size - Vector2(MAP_RECT.end.x + 160.0, 170))     # (0.31.216: landscape)
 	for p in _pings:
 		if not unit_world.is_valid() or not project.is_valid():
 			break
@@ -198,6 +216,8 @@ func _draw_pings() -> void:
 			# off the screen: on its edge, toward them, with an arrow
 			var me3: Vector3 = unit_world.call(player_id)
 			var dir := Vector2(w3.x - me3.x, w3.z - me3.z) if me3 != Vector3.INF else Vector2(0, -1)
+			var up := View.screen_up(int(sim.by_id.get(player_id, {}).get("team", 0)))     # (0.31.216: the yawed camera)
+			dir = Vector2(dir.dot(Vector2(-up.y, up.x)), -dir.dot(up))
 			dir = dir.normalized() if dir.length() > 0.01 else Vector2(0, -1)
 			var c := vp.get_center()
 			var k := minf(absf(vp.size.x * 0.5 / maxf(absf(dir.x), 0.001)), absf(vp.size.y * 0.5 / maxf(absf(dir.y), 0.001)))
@@ -220,7 +240,7 @@ func _draw_pings() -> void:
 			draw_colored_polygon(PackedVector2Array([tip2, tip2 - arrow * 11.0 + side, tip2 - arrow * 11.0 - side]), Color(col, a))
 		draw_string_outline(_bold, r.position + Vector2(11, 20), txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, 4, Color(0, 0, 0, 0.7 * a))
 		draw_string(_bold, r.position + Vector2(11, 20), txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color(col.lightened(0.25), a))
-	var y := 210.0                                          # (under the gate / post row and the toast)
+	var y := MAP_RECT.end.y + 128.0                         # (0.31.216: under the map's column on the left; 210 in portrait)
 	for f in _feed:
 		var a2 := clampf((FEED_LIFE - (_time - float(f.at))) * 1.5, 0.0, 1.0)
 		var q2: Dictionary = NetT.QUICK_CHAT[int(f.i)]
@@ -767,17 +787,19 @@ func _buttons() -> Array:
 	# layout), DODGE and WARD above them (0.31.206: HOME over DODGE); on the narrowest screen (420 wide) Q and W reach as
 	# far left as the old ABILITY did. The Crusader's W is his shield, held (it was its own BLOCK button).
 	var crus: bool = me.cls == "knight" and bool(me.get("up", false))
+	# 0.31.216, landscape (Honor of Kings' layout): Q, W, E and R in an arc round ATTACK; DODGE, WARD and HOME in a row
+	# along the bottom to their left. (Portrait until then: the arc reached 364 px up the screen.)
+	var a := br + Vector2(-80, -80)
 	return [
-		{"id":"attack", "c":br + Vector2(-78, -108), "r":46.0},
-		{"id":"ability", "c":br + Vector2(-178, -58), "r":32.0},
-		{"id":"block" if crus else "w", "c":br + Vector2(-188, -146), "r":32.0},
-		{"id":"e", "c":br + Vector2(-148, -226), "r":32.0},
-		{"id":"ult", "c":br + Vector2(-66, -218), "r":36.0},
-		{"id":"dodge", "c":br + Vector2(-46, -300), "r":28.0},
-		{"id":"ward", "c":br + Vector2(-122, -306), "r":24.0},
-		# 0.31.181: home to the fountain. 0.31.206 (Kevin: "Put the teleport button above the dodge button"): over DODGE
-		# (was at the row's left end, over W)
-		{"id":"recall", "c":br + Vector2(-46, -364), "r":24.0},
+		{"id":"attack", "c":a, "r":46.0},
+		{"id":"ability", "c":a + Vector2.from_angle(deg_to_rad(184.0)) * 108.0, "r":31.0},
+		{"id":"block" if crus else "w", "c":a + Vector2.from_angle(deg_to_rad(216.0)) * 108.0, "r":31.0},
+		{"id":"e", "c":a + Vector2.from_angle(deg_to_rad(248.0)) * 108.0, "r":31.0},
+		{"id":"ult", "c":a + Vector2.from_angle(deg_to_rad(282.0)) * 112.0, "r":35.0},
+		{"id":"dodge", "c":br + Vector2(-262, -34), "r":25.0},
+		{"id":"ward", "c":br + Vector2(-318, -34), "r":23.0},
+		# 0.31.181: home to the fountain (0.31.206: over DODGE; 0.31.216: at the row's left end, as Honor of Kings' Recall)
+		{"id":"recall", "c":br + Vector2(-372, -34), "r":23.0},
 	]
 
 func _modal_open() -> bool:
@@ -848,7 +870,7 @@ func _touch(index: int, pos: Vector2, pressed: bool) -> void:
 				action_pressed.emit(b.id)
 				get_viewport().set_input_as_handled()
 				return
-		if pos.x < size.x * 0.58 and pos.y > 150.0 and not _stick_active:
+		if pos.x < size.x * 0.5 and not MAP_RECT.grow(6.0).has_point(pos) and pos.y > 60.0 and not _stick_active:
 			_touches[index] = "stick"
 			_stick_active = true
 			_stick_origin = pos
@@ -1000,7 +1022,7 @@ func _draw_hud() -> void:
 	if age < 2.6 and _toast != "":
 		var c := _toast_color
 		c.a = clampf(2.6 - age, 0.0, 1.0)
-		_text(Vector2(w * 0.5, 284), _toast, 18, c, _bold)     # (0.31.157 5V5: under the kill feed, clear of the gold)
+		_text(Vector2(w * 0.5, size.y * 0.34), _toast, 18, c, _bold)     # (0.31.216: a third down the screen; 284 in portrait)
 	_draw_kill_feed()
 	_draw_idle(me)
 	_draw_rejoin()
@@ -1028,7 +1050,7 @@ func _draw_hud() -> void:
 		var knob := _stick_origin + (_stick_pos - _stick_origin).limit_length(60.0)
 		draw_circle(knob, 26, Color(1, 1, 1, 0.35))
 	elif _touchscreen:
-		var home := Vector2(96, size.y - 120)
+		var home := Vector2(120, size.y - 110)
 		draw_arc(home, 62, 0, TAU, 40, Color(1, 1, 1, 0.14), 2.0, true)
 		_text(home + Vector2(0, 6), "MOVE", 12, Color(1, 1, 1, 0.35), _bold)
 	# Combat buttons.
@@ -1046,11 +1068,13 @@ func _draw_top(me: Dictionary) -> void:
 	_draw_moba_status(me)
 
 func score_bar_rect() -> Rect2:
-	return Rect2(8, 8, size.x - 16, 62)
+	# 0.31.216: small, in the top middle (the whole width until then)
+	var w := minf(BAR_W, size.x - 2.0 * (MAP_RECT.end.x + 8.0) - 110.0)
+	return Rect2(size.x * 0.5 - w * 0.5, 6, w, BAR_H)
 
 func clock_rect() -> Rect2:
 	# the clock's plate in the middle of the bar, standing a little proud of it
-	return Rect2(size.x * 0.5 - 58.0, 4.0, 116.0, 70.0)
+	return Rect2(size.x * 0.5 - 46.0, 3.0, 92.0, BAR_H + 6.0)
 
 func towers_standing(t: int) -> int:
 	var n := 0
@@ -1100,43 +1124,40 @@ func _draw_score_bar(me: Dictionary) -> void:
 	_ci.draw_style_box(_wash_styles[0], Rect2(inner.position, Vector2(cr.position.x - inner.position.x + 4.0, inner.size.y)))
 	_ci.draw_style_box(_wash_styles[1], Rect2(Vector2(cr.end.x - 4.0, inner.position.y), Vector2(inner.end.x - cr.end.x + 4.0, inner.size.y)))
 	for side in 2:
+		# 0.31.216: one row a side -- the King's crown and health, then the towers he still has and the side's knockouts
 		var team := t if side == 0 else 1 - t
 		var right := side == 1
-		var x0 := inner.position.x + 8.0 if not right else inner.end.x - 8.0
+		var x0 := inner.position.x + 6.0 if not right else inner.end.x - 6.0
 		var sgn := 1.0 if not right else -1.0
-		# the King: his crown (lit gold when he's open to be beaten) and his health
-		var crown := Rect2(Vector2(x0 if not right else x0 - 28.0, inner.position.y + 1.0), Vector2(28, 28))
+		var cy := inner.get_center().y
+		var crown := Rect2(Vector2(x0 if not right else x0 - 26.0, cy - 13.0), Vector2(26, 26))
 		if right and sim.moba.king_open(team):
-			_ci.draw_circle(crown.get_center(), 17.0, Color(1.0, 0.82, 0.3, 0.35))
+			_ci.draw_circle(crown.get_center(), 15.0, Color(1.0, 0.82, 0.3, 0.35))
 		_icon_at("crown", crown)
 		var pct := "%d%%" % int(ceil(sim.moba.king_frac(team) * 100.0))
 		var col := VisualTheme.GOLD
 		if sim.moba.king_frac(team) < 0.995:
 			col = Color("#ffe9a8") if not right else Color("#ffd0b8")
-		_text(Vector2(x0 + sgn * 32.0 - (80.0 if right else 0.0), inner.position.y + 24.0), pct, 22, col, _title,
-			HORIZONTAL_ALIGNMENT_RIGHT if right else HORIZONTAL_ALIGNMENT_LEFT, 80.0)
-		# the towers he still has and the side's knockouts
-		var y := inner.position.y + 32.0
+		_text(Vector2(x0 + sgn * 29.0 - (56.0 if right else 0.0), cy + 7.0), pct, 18, col, _title,
+			HORIZONTAL_ALIGNMENT_RIGHT if right else HORIZONTAL_ALIGNMENT_LEFT, 56.0)
 		var parts := [["castle", str(towers_standing(team))], ["swords", str(int(sim.kills[team]))]]
-		var x := x0
+		var x := x0 + sgn * 92.0
 		for pi in parts.size():
 			var part: Array = parts[pi]
 			var txt := str(part[1])
 			var tw := _bold.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x
-			var ir := Rect2(Vector2(x if not right else x - 18.0, y), Vector2(18, 18))
 			if right:
-				ir.position.x = x - 18.0
-				_icon_at(str(part[0]), ir)
-				_text(Vector2(x - 22.0 - tw, y + 15.0), txt, 15, Color("#eef3f6"), _bold, HORIZONTAL_ALIGNMENT_LEFT, tw + 4.0)
-				x -= 22.0 + tw + 12.0
+				_icon_at(str(part[0]), Rect2(Vector2(x - 17.0, cy - 9.0), Vector2(17, 17)))
+				_text(Vector2(x - 21.0 - tw, cy + 6.0), txt, 15, Color("#eef3f6"), _bold, HORIZONTAL_ALIGNMENT_LEFT, tw + 4.0)
+				x -= 21.0 + tw + 10.0
 			else:
-				_icon_at(str(part[0]), ir)
-				_text(Vector2(x + 22.0, y + 15.0), txt, 15, Color("#eef3f6"), _bold, HORIZONTAL_ALIGNMENT_LEFT, tw + 4.0)
-				x += 22.0 + tw + 12.0
+				_icon_at(str(part[0]), Rect2(Vector2(x, cy - 9.0), Vector2(17, 17)))
+				_text(Vector2(x + 21.0, cy + 6.0), txt, 15, Color("#eef3f6"), _bold, HORIZONTAL_ALIGNMENT_LEFT, tw + 4.0)
+				x += 21.0 + tw + 10.0
 	# the clock
 	_ci.draw_style_box(_clock_style, cr)
 	var left := maxf(0.0, float(sim.match_time) - sim.time)
-	_text(Vector2(cr.get_center().x, cr.position.y + 46.0), "%d:%02d" % [int(left) / 60, int(left) % 60], 30,
+	_text(Vector2(cr.get_center().x, cr.position.y + 36.0), "%d:%02d" % [int(left) / 60, int(left) % 60], 24,
 		Color("#eef3f6") if left > 60 else VisualTheme.RED, _title)
 
 func king_alert(me: Dictionary) -> bool:
@@ -1159,7 +1180,7 @@ func _draw_king_alert(me: Dictionary) -> void:
 	_alert_style.border_color = Color(1.0, 0.25, 0.2, 0.45 + 0.5 * pulse)
 	draw_style_box(_alert_style, half)
 	draw_rect(half.grow(-2.0), Color(1.0, 0.15, 0.1, 0.12 * pulse))
-	_text(Vector2(size.x * 0.5, 90.0), "KING UNDER ATTACK!", 13, Color(1.0, 0.45, 0.38, 0.65 + 0.35 * pulse), _bold)
+	_text(Vector2(size.x * 0.5, score_bar_rect().end.y + 18.0), "KING UNDER ATTACK!", 13, Color(1.0, 0.45, 0.38, 0.65 + 0.35 * pulse), _bold)
 
 var _alert_style: StyleBoxFlat = null
 
@@ -1199,7 +1220,7 @@ var _idle_style: StyleBox = null
 const KF_MAX := 4
 const KF_LIFE := 6.0
 const KF_PX := 12
-const KF_TOP := 202.0                 # (under the toast; the quick-chat lines are on the left at the same height)
+const KF_TOP := 74.0                  # (0.31.216: under pause and quick chat on the right; 202 in portrait)
 const KF_STEP := 19.0
 var kill_feed: Array = []                  # newest first: {"parts": [[text, colour], ...], "at": _time, "me": I'm in it}
 var kill_feed_on := true                   # (a match can turn it off)
@@ -1315,7 +1336,7 @@ func xp_frac(me: Dictionary) -> float:
 	return clampf(float(me.get("xp", 0.0)) / float(sim.moba.need(lv)), 0.0, 1.0)
 
 func level_center() -> Vector2:
-	return Vector2(36, 108)
+	return Vector2(MAP_RECT.position.x + 24.0, MAP_RECT.end.y + 30.0)       # (0.31.216: under the map; 36, 108 until then)
 
 func _draw_moba_status(me: Dictionary) -> void:
 	var c := level_center()
@@ -1339,7 +1360,7 @@ func _picks_open() -> bool:
 func pick_rect(i: int) -> Rect2:
 	var w := minf(124.0, (size.x - 40.0) / 3.0)
 	var x0 := (size.x - (w * 3.0 + 16.0)) * 0.5
-	return Rect2(x0 + (w + 8.0) * float(i), 312.0, w, 52.0)
+	return Rect2(x0 + (w + 8.0) * float(i), score_bar_rect().end.y + 30.0, w, 48.0)     # (0.31.216: 312 in portrait)
 
 var _pick_style: StyleBox = null
 
@@ -1351,7 +1372,7 @@ func _draw_picks(me: Dictionary) -> void:
 	if _pick_style == null:
 		_pick_style = VisualTheme.panel(Color(0.08, 0.05, 0.16, 0.92), VisualTheme.GOLD, 10, 6)
 	var pulse := 0.75 + 0.25 * sin(_time * 5.0)
-	_text(Vector2(size.x * 0.5, 304.0), "LEVEL %d · CHOOSE ONE%s" % [int(me.level) - picks.size() + 1, "  (+%d more)" % (picks.size() - 1) if picks.size() > 1 else ""],
+	_text(Vector2(size.x * 0.5, score_bar_rect().end.y + 22.0), "LEVEL %d · CHOOSE ONE%s" % [int(me.level) - picks.size() + 1, "  (+%d more)" % (picks.size() - 1) if picks.size() > 1 else ""],
 		13, Color(1.0, 0.85, 0.4, pulse), _bold)
 	for i in offer.size():
 		var r := pick_rect(i)
@@ -1738,7 +1759,7 @@ func shop_open() -> bool:
 	return shop_panel != null and shop_panel.visible
 
 func shop_rect() -> Rect2:
-	return Rect2(70, 90, 150, 38)          # (0.31.178: beside your level; 12, 174 until then)
+	return Rect2(MAP_RECT.position.x + 54.0, MAP_RECT.end.y + 12.0, 140, 36)   # (0.31.216: beside your level, under the map; 70, 90 until then)
 
 func open_shop() -> void:
 	if sim == null or sim.moba == null:
@@ -1826,14 +1847,15 @@ func _coin() -> Texture2D:
 	return _coin_tex
 
 func _build_shop() -> void:
-	shop_panel = _panel(400)
+	# 0.31.216 (landscape): the items on the left, your slots and the picked item's card on the right (one column until then)
+	shop_panel = _panel(minf(740.0, size.x - 24.0))
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 6)
 	shop_panel.add_child(v)
 	# 0.31.175 (Kevin: "make these menus better looking and more high quality"): the keep's armory painted across the
 	# top (ElevenLabs; tools/build_menu_icons.py), SHOP and your gold over it
 	var hdr := Panel.new()
-	hdr.custom_minimum_size = Vector2(0, 84)
+	hdr.custom_minimum_size = Vector2(0, 50)
 	hdr.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var hs := StyleBoxFlat.new()
 	hs.bg_color = Color(0.06, 0.04, 0.03)
@@ -1874,8 +1896,8 @@ func _build_shop() -> void:
 	hdr.add_child(rim)
 	var hrow := HBoxContainer.new()
 	hrow.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
-	hrow.offset_top = -40
-	hrow.offset_bottom = -6
+	hrow.offset_top = -38
+	hrow.offset_bottom = -4
 	hrow.offset_left = 12
 	hrow.offset_right = -12
 	hrow.add_theme_constant_override("separation", 6)
@@ -1891,12 +1913,27 @@ func _build_shop() -> void:
 	gc.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hrow.add_child(gc)
 	_shop_gold = UI2.text(hrow, "", 22, Color("#ffd65a"))
-	_shop_where = _label(v, "", 11, Color("#d4cbbb"))
-	UI2.body(v, "YOUR ITEMS · tap one to sell it", 10, UI2.MUTED, false)
-	var slots := HBoxContainer.new()
-	slots.add_theme_constant_override("separation", 6)
-	slots.alignment = BoxContainer.ALIGNMENT_CENTER
-	v.add_child(slots)
+	var cols := HBoxContainer.new()
+	cols.add_theme_constant_override("separation", 12)
+	v.add_child(cols)
+	var lv := VBoxContainer.new()
+	lv.add_theme_constant_override("separation", 5)
+	lv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	cols.add_child(lv)
+	var rv := VBoxContainer.new()
+	rv.add_theme_constant_override("separation", 6)
+	rv.custom_minimum_size = Vector2(240, 0)
+	cols.add_child(rv)
+	_shop_where = _label(rv, "", 11, Color("#d4cbbb"))
+	_shop_where.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	UI2.body(rv, "YOUR ITEMS · tap one to sell it", 10, UI2.MUTED, false)
+	var slots := GridContainer.new()
+	slots.columns = 3
+	slots.add_theme_constant_override("h_separation", 6)
+	slots.add_theme_constant_override("v_separation", 6)
+	var scc := CenterContainer.new()
+	scc.add_child(slots)
+	rv.add_child(scc)
 	_shop_slots = []
 	for i in Moba.ITEM_SLOTS:
 		var sb := Button.new()
@@ -1916,20 +1953,20 @@ func _build_shop() -> void:
 		_shop_slots.append({"button":sb, "icon":ic})
 	for group in [["BASIC", Moba.ITEM_ORDER.filter(func(x): return not Moba.ITEMS[x].has("from"))],
 			["BIG ITEMS · built from the small ones you own", Moba.ITEM_ORDER.filter(func(x): return Moba.ITEMS[x].has("from"))]]:
-		UI2.body(v, str(group[0]), 10, UI2.MUTED, false)
+		UI2.body(lv, str(group[0]), 10, UI2.MUTED, false)
 		var g := GridContainer.new()
-		g.columns = 4
+		g.columns = 5
 		g.add_theme_constant_override("h_separation", 5)
 		g.add_theme_constant_override("v_separation", 5)
 		var cc := CenterContainer.new()
 		cc.add_child(g)
-		v.add_child(cc)
+		lv.add_child(cc)
 		for id in group[1]:
 			_item_cell(g, str(id))
 	var nrow := HBoxContainer.new()
 	nrow.alignment = BoxContainer.ALIGNMENT_CENTER
 	nrow.add_theme_constant_override("separation", 8)
-	v.add_child(nrow)
+	rv.add_child(nrow)
 	_shop_pick_icon = ItemIcon.new()
 	_shop_pick_icon.custom_minimum_size = Vector2(40, 40)
 	_shop_pick_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -1937,11 +1974,16 @@ func _build_shop() -> void:
 	_shop_name = _label(nrow, "", 17, UI2.GOLD, _bold)
 	_shop_name.custom_minimum_size = Vector2(0, 0)
 	_shop_name.autowrap_mode = TextServer.AUTOWRAP_OFF
-	_shop_stats = _label(v, "", 12, Color.WHITE)
-	_shop_from = _label(v, "", 11, Color("#d4cbbb"))
-	_shop_act = _button(v, "BUY", "gold", func(): _shop_action())
+	_shop_stats = _label(rv, "", 12, Color.WHITE)
+	_shop_stats.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_shop_from = _label(rv, "", 11, Color("#d4cbbb"))
+	_shop_from.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	var gap := Control.new()
+	gap.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	rv.add_child(gap)
+	_shop_act = _button(rv, "BUY", "gold", func(): _shop_action())
 	_shop_act.set_meta("action_key", "shop_act")
-	var cb := _button(v, "CLOSE", "secondary", func(): close_shop())
+	var cb := _button(rv, "CLOSE", "secondary", func(): close_shop())
 	cb.set_meta("action_key", "shop_close")
 
 func _shop_action() -> void:
@@ -2101,6 +2143,7 @@ func open_board() -> void:
 	board_panel.reset_size()
 	board_panel.position = Vector2((size.x - board_panel.size.x) * 0.5, score_bar_rect().end.y + 6.0)
 	var fit := minf(1.0, (size.y - board_panel.position.y - 8.0) / maxf(1.0, board_panel.size.y))
+	fit = minf(fit, (size.x - 12.0) / maxf(1.0, board_panel.size.x))      # (0.31.216: the two sides side by side)
 	board_panel.pivot_offset = Vector2(board_panel.size.x * 0.5, 0)
 	board_panel.scale = Vector2.ONE * fit
 
@@ -2159,7 +2202,7 @@ func _build_board() -> void:
 	ps.content_margin_top = 12
 	ps.content_margin_bottom = 12
 	board_panel.add_theme_stylebox_override("panel", ps)
-	board_panel.custom_minimum_size = Vector2(minf(size.x - 12.0, 440.0), 0)
+	board_panel.custom_minimum_size = Vector2(0, 0)          # (0.31.216: as wide as the two sides; 440 at most in portrait)
 	board_panel.visible = false
 	board_panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(board_panel)
@@ -2180,11 +2223,20 @@ func _build_board() -> void:
 	_board_heads = []
 	var me: Dictionary = sim.by_id.get(player_id, {})
 	var my_team := int(me.get("team", 0))
+	# 0.31.216 (landscape, Honor of Kings' scoreboard): your side on the left, theirs on the right (one under the other
+	# in portrait)
+	var sides := HBoxContainer.new()
+	sides.add_theme_constant_override("separation", 12)
+	v.add_child(sides)
 	for side in [my_team, 1 - my_team]:
-		_board_heads.append(_board_head(v, side, side == my_team))
+		var sv := VBoxContainer.new()
+		sv.add_theme_constant_override("separation", 3)
+		sv.custom_minimum_size.x = 420.0
+		sides.add_child(sv)
+		_board_heads.append(_board_head(sv, side, side == my_team))
 		var cols := HBoxContainer.new()
 		cols.add_theme_constant_override("separation", 6)
-		v.add_child(cols)
+		sv.add_child(cols)
 		var pad := Control.new()
 		pad.custom_minimum_size = Vector2(4, 0)
 		cols.add_child(pad)
@@ -2193,7 +2245,7 @@ func _build_board() -> void:
 		var gl := _bl(cols, "GOLD", 9, Color("#a9b2d6"), 0.0, HORIZONTAL_ALIGNMENT_RIGHT, false)
 		gl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		for u in board_heroes(side):
-			_board_rows[str(u.id)] = _board_row(v, u, side)
+			_board_rows[str(u.id)] = _board_row(sv, u, side)
 
 func _board_head(v: VBoxContainer, side: int, mine: bool) -> Dictionary:
 	var pc := PanelContainer.new()
@@ -2391,7 +2443,7 @@ func _draw_gold_and_items(me: Dictionary) -> void:
 		if i < inv.size():
 			ItemIcon.draw_item(_ci, str(inv[i]), q.get_center(), q.size.x - 4.0)
 	# the buffs: a pill each, its colour, its time
-	var x := 12.0
+	var x := MAP_RECT.position.x
 	var y := item_slot_rect(0).end.y + 8.0
 	var b: Dictionary = me.get("buffs", {})
 	var pills := []
@@ -2407,8 +2459,8 @@ func _draw_gold_and_items(me: Dictionary) -> void:
 		var txt := str(pl[0])
 		var col: Color = pl[1]
 		var tw := _bold.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 10).x
-		if x + tw + 22.0 > size.x * 0.62 and x > 12.0:
-			x = 12.0
+		if x + tw + 22.0 > MAP_RECT.end.x + 70.0 and x > MAP_RECT.position.x:
+			x = MAP_RECT.position.x
 			y += 22.0
 		var pr := Rect2(x, y, tw + 22.0, 18.0)
 		if _pill_style == null:
@@ -2424,7 +2476,7 @@ func _draw_gold_and_items(me: Dictionary) -> void:
 		x += pr.size.x + 6.0
 
 func item_slot_rect(i: int) -> Rect2:
-	return Rect2(12.0 + 31.0 * float(i), 140.0, 28.0, 28.0)
+	return Rect2(MAP_RECT.position.x + 22.0 * float(i), MAP_RECT.end.y + 62.0, 20.0, 20.0)      # (0.31.216: 12 + 31 i, 140)
 
 var _shop_styles: Array = []
 var _slot_styles: Array = []
@@ -2456,7 +2508,7 @@ func _draw_camp_timers() -> void:
 		if not on_screen.call(w):
 			continue
 		var sp: Vector2 = project.call(w)
-		if sp.y < 230.0:
+		if sp.y < 70.0 or MAP_RECT.grow(8.0).has_point(sp):
 			continue
 		sp.x = clampf(sp.x, 70.0, size.x - 70.0)
 		var left := maxf(0.0, float(camp.next) - float(sim.time))

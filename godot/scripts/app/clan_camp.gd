@@ -27,6 +27,9 @@ const FIRE_SIZE := [1.05, 0.85, 0.75, 1.3]         # (stage 3's fire is under th
 const CREST_W := 0.74                              # a banner's crest, of its width
 const FLIES := Rect2(80.0, 1000.0, 860.0, 420.0)
 const SKY := Rect2(0.0, 0.0, 1024.0, 560.0)        # where the stars are (and the falling ones go)
+# 0.31.216 (landscape): the band of the (portrait) painting a wide screen shows -- its banners down to just under the
+# fire, as tall as the screen; either side of it the painting again, wider, dark and soft (back)
+const BAND := Rect2(0.0, 640.0, 1024.0, 640.0)
 
 var stage := 1
 var code := ""
@@ -34,6 +37,7 @@ var frame := ""
 var calm := false
 var layer: Control
 var art: TextureRect
+var back: TextureRect                              # 0.31.216: the painting behind it all, darkened (landscape's sides)
 var crests: Array = []
 var _halo: TextureRect
 var _heart: TextureRect
@@ -52,6 +56,13 @@ func setup(st: int, crest_code: String, fr := "", reduce_motion := false) -> voi
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	clip_contents = true
+	back = TextureRect.new()
+	back.texture = UI2.tex("res://assets/ui/clans/camp_%d.webp" % stage)
+	back.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	back.stretch_mode = TextureRect.STRETCH_SCALE
+	back.modulate = Color(0.32, 0.3, 0.38)
+	back.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(back)
 	layer = Control.new()
 	layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.size = PAINT
@@ -172,6 +183,15 @@ func _fit() -> void:
 		return
 	k = maxf(size.x / PAINT.x, size.y / PAINT.y)
 	origin = ((size - PAINT * k) * 0.5).round()
+	if size.x > size.y:
+		# 0.31.216 (landscape): the band from the banners to the fire, as tall as the screen; the darkened painting on
+		# the sides (cover-scaled about the same band)
+		var kb := maxf(size.x / PAINT.x, size.y / BAND.size.y)
+		back.size = PAINT * kb
+		back.position = Vector2((size.x - PAINT.x * kb) * 0.5, clampf(size.y * 0.5 - BAND.get_center().y * kb, size.y - PAINT.y * kb, 0.0))
+		k = minf(k, size.y / BAND.size.y)
+		origin = Vector2((size.x - PAINT.x * k) * 0.5, -BAND.position.y * k).round()
+	back.visible = size.x > size.y and PAINT.x * k < size.x - 0.5
 	layer.position = origin
 	layer.scale = Vector2(k, k)
 

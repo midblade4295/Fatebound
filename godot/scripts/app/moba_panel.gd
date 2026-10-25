@@ -33,7 +33,7 @@ const LOCK := "res://assets/ui/menu/lock.png"
 const STAGE_H := 136.0
 
 const CARD_W := 54.0
-const CARD_H := 72.0
+const CARD_H := 64.0          # (72 in portrait)
 const LOOK := {"knight":"knight", "barbarian":"barbarian", "rogue":"rogue", "ranger":"ranger", "mage":"mage", "priest":"priest",
 	"crusader":"crusader", "berserker":"berserker", "assassin":"assassin", "sniper":"sniper", "archmage":"archmage", "necromancer":"necromancer",
 	"golem":"golem", "dragoon":"dragoon", "duelist":"duelist", "stormcaller":"stormcaller", "musketeer":"musketeer", "druid":"druid"}
@@ -79,18 +79,34 @@ func open(a) -> void:
 	hero = saved if Moba.HEROES.has(saved) and _plays(saved) else "knight"
 	var w := SocialUI.window(self, "5V5", "swords", func():
 		app.sfx("menuClose")
-		app.close_modal(), 56.0 + float(app.safe_top), 24.0)
-	var body: VBoxContainer = w.body
+		app.close_modal(), 6.0 + float(app.safe_top), 8.0)       # (0.31.216: the whole screen, as Honor of Kings' hero select)
+	var sheet: VBoxContainer = w.body
+	# 0.31.216 (landscape, Honor of Kings' hero select): the picked hero on his stage and his kit on the left, the heroes to
+	# pick from and BATTLE on the right (one column in portrait)
+	var cols := HBoxContainer.new()
+	cols.add_theme_constant_override("separation", 12)
+	cols.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	sheet.add_child(cols)
+	var left := VBoxContainer.new()
+	left.add_theme_constant_override("separation", 6)
+	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	left.size_flags_stretch_ratio = 0.85
+	cols.add_child(left)
+	var body := VBoxContainer.new()
+	body.add_theme_constant_override("separation", 8)
+	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	cols.add_child(body)
 	# (0.31.155-0.31.163: "TEST MODE" -- 0.31.164, Kevin: "5v5 only": it's the game's match now, PLAY opens this)
 	# (0.31.165: the Rift -- three towers a lane, a keep with a gate at each lane's end and two King towers inside;
 	# 0.31.166: the Grave Wyrm)
 	# (0.31.170: online -- the players in the match and bots in the seats nobody has taken)
-	_build_stage(body)
-	# (0.31.175: the same, said shorter -- the stage took its room)
-	UI2.body(body, "Five heroes a side -- players, and bots in the empty seats. Minions march down three lanes, past three towers "
-		+ "each, to a gate of the keep. Level up to 10 near the fighting (W at 2, E at 3, ULTIMATE at 6), earn gold, buy items "
-		+ "in your keep. Jungle camps give gold and buffs; the Bone Lord blesses your side, each Grave Wyrm slain toughens "
-		+ "it. Break a lane, its gate and the two King towers, then defeat their King.", 10, UI2.SOFT)
+	_build_stage(left)
+	_kit = VBoxContainer.new()
+	_kit.add_theme_constant_override("separation", 3)
+	left.add_child(_kit)
+	# (0.31.175: the match said shorter -- the stage took its room; 0.31.216 shorter still -- the kit's under the stage)
+	UI2.body(left, "Five a side, bots in the empty seats. Break a lane, its gate and the two King towers, then defeat their King.",
+		9, UI2.SOFT)
 	var ph := UI.row(body, 8)
 	UI2.text(ph, "PICK YOUR HERO", 16, UI2.GOLD)
 	_inv = UI2.body(ph, "", 10, Color("#c9f7bd"))
@@ -105,25 +121,27 @@ func open(a) -> void:
 	_grid.add_theme_constant_override("h_separation", 4)
 	_grid.add_theme_constant_override("v_separation", 5)
 	holder.add_child(_grid)
-	_kit = VBoxContainer.new()
-	_kit.add_theme_constant_override("separation", 3)
-	_kit.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	body.add_child(_kit)
+	var gap := Control.new()
+	gap.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	body.add_child(gap)
 	var foot := UI.row(body, 8)
-	_go = UI2.button(foot, "BATTLE", "orange", _on_go, "moba_battle", 22, 56.0, 16.0)
+	_go = UI2.button(foot, "BATTLE", "orange", _on_go, "moba_battle", 22, 52.0, 16.0)
 	_go.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	UI2.sweep(_go)
-	_side = UI2.button(foot, "MARKET", "gold", _to_market, "moba_side_market", 16, 56.0, 16.0, "res://assets/ui/v2/icons/stall.png")
+	_side = UI2.button(foot, "MARKET", "gold", _to_market, "moba_side_market", 16, 52.0, 16.0, "res://assets/ui/v2/icons/stall.png")
 	_side.custom_minimum_size.x = 120
-	_melt = UI2.button(foot, "MELT", "green", func(): _unlock_by("melt"), "moba_melt_shard", 15, 56.0, 16.0, COIN)
+	_melt = UI2.button(foot, "MELT", "green", func(): _unlock_by("melt"), "moba_melt_shard", 15, 52.0, 16.0, COIN)
 	_melt.custom_minimum_size.x = 132
 	_render()
 
 func _build_stage(body: VBoxContainer) -> void:
+	# (0.31.216: on the left of the window, as tall as it can be)
 	# 0.31.175: the picked hero, in 3D and idling, on the dais of the painted champions' hall; his name, role badge,
 	# what the role does, and the price while he's locked, on the hall's dark right side
 	var st := Panel.new()
 	st.custom_minimum_size = Vector2(0, STAGE_H)
+	st.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	st.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(0.04, 0.03, 0.06)

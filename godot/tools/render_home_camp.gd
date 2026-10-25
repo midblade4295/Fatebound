@@ -11,9 +11,9 @@ extends SceneTree
 #     and the King behind the fire;
 #   - a dusk sky (indigo to a warm horizon); the stars, the fire's flames, embers and smoke, the braziers' and torches'
 #     flicker are drawn live over it by scripts/app/camp_scene.gd.
-# Writes assets/ui/v2/bg_camp.webp (1024 x 2048, as the painting was) and prints the points camp_scene.gd needs, in the
-# picture's px (CAMP_POINTS {...}): the fire, its base, the lamps (braziers), the feet line, the sky and camp areas,
-# the banners' cloth.
+# Writes assets/ui/v2/bg_camp.webp (2048 x 1024 since 0.31.216: the landscape app; 1024 x 2048 as the painting was until
+# then) and prints the points camp_scene.gd needs, in the picture's px (CAMP_POINTS {...}): the fire, its base, the lamps
+# (braziers), the feet line, the sky and camp areas, the banners' cloth, the heroes' magic.
 #   Xvfb :98 -screen 0 1280x1280x24 &
 #   DISPLAY=:98 godot --rendering-method forward_plus --path godot -s res://tools/render_home_camp.gd
 #   OUT=<png> (default /tmp/home_camp.png)  WEBP=res://assets/ui/v2/bg_camp.webp  SS=1.5 (supersampling)
@@ -22,8 +22,8 @@ const View = preload("res://scripts/siege/siege_view.gd")
 const Stage = preload("res://scripts/siege/asset_cache.gd")
 const CastleKit = preload("res://scripts/siege/castle_kit.gd")
 
-const PAINT := Vector2i(1024, 2048)
-const SHIFT_UP := 24
+const PAINT := Vector2i(2048, 1024)   # (0.31.216, landscape: 1024 x 2048 until then)
+const SHIFT_UP := 0                   # (24 in portrait: the boots over PLAY on the shortest phones)
 # the dusk sky (a sky shader: no picture): indigo overhead into violet and a warm band at the horizon; stars, more and
 # brighter higher up, each its own size; the moon up on the right with a soft halo
 const SKY_SHADER := """
@@ -87,10 +87,10 @@ func _initialize() -> void:
 	_campfire()
 	_heroes()
 	cam = Camera3D.new()
-	cam.fov = _num("FOV", 48.0)
+	cam.fov = _num("FOV", 31.0)          # (vertical; 48 for the portrait picture)
 	cam.far = 400.0
 	vp.add_child(cam)
-	cam.look_at_from_position(_v3("CAM", Vector3(0.0, 1.75, 9.0)), _v3("AIM", Vector3(0.0, 0.6, -2.0)), Vector3.UP)
+	cam.look_at_from_position(_v3("CAM", Vector3(0.0, 2.1, 8.8)), _v3("AIM", Vector3(0.0, 0.15, -1.6)), Vector3.UP)
 
 func _process(_d: float) -> bool:
 	frames += 1
@@ -380,11 +380,12 @@ func _heroes() -> void:
 	# picture's edges as a painter would frame them)
 	# (on the picture, as fractions of its half-width: the King 0, the middle pair +-0.43, the front pair +-0.8 -- each
 	# a little in front of the one inside it, so all five show)
-	_hero("king", Vector3(0.05, 0, -2.6), 0.0)
-	_hero("mage", Vector3(-1.0, 0, -1.6), 22.0)
-	_hero("barbarian", Vector3(1.05, 0, -1.7), -24.0)
-	_hero("knight", Vector3(-1.44, 0, 1.0), 42.0)
-	_hero("stormcaller", Vector3(1.5, 0, 1.0), -40.0)
+	# 0.31.216, landscape: an arc right round the fire, the King at its back, the others either side and nearer us
+	_hero("king", Vector3(0.05, 0, -2.5), 0.0)
+	_hero("mage", Vector3(-1.5, 0, -1.35), 20.0)
+	_hero("barbarian", Vector3(1.55, 0, -1.4), -20.0)
+	_hero("knight", Vector3(-2.75, 0, 0.25), 38.0)
+	_hero("stormcaller", Vector3(2.8, 0, 0.2), -38.0)
 
 # ---------------- what camp_scene.gd needs ----------------
 func _px(p: Vector3) -> Vector2:

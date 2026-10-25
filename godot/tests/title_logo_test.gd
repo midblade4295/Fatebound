@@ -67,11 +67,11 @@ func _init() -> void:
 	app.legacy_path = base + "-none.json"
 	root.add_child(app)
 	still = TitleScreen.new(null, true)
-	still.size = Vector2(420, 933)
+	still.size = Vector2(933, 420)
 	root.add_child(still)
 	still.home_ready()                       # (a game behind it, ready: the show plays)
 	waiting = TitleScreen.new(null, false)
-	waiting.size = Vector2(420, 933)
+	waiting.size = Vector2(933, 420)
 	waiting.done.connect(func(): waiting_gone = true)
 	root.add_child(waiting)
 
@@ -215,5 +215,5 @@ func _loading_screens() -> void:
 	sm.free()
 	# the boot splash
 	var img := str(ProjectSettings.get_setting("application/boot_splash/image", ""))
-	check(img == "res://assets/branding/splash.png" and FileAccess.file_exists(img) and int(ProjectSettings.get_setting("application/boot_splash/stretch_mode", 0)) == 4,
+	check(img == "res://assets/branding/splash_land.png" and FileAccess.file_exists(img) and int(ProjectSettings.get_setting("application/boot_splash/stretch_mode", 0)) == 4,
 		"the boot splash is the castle wall, covering the screen")

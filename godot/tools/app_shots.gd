@@ -1,12 +1,13 @@
 extends SceneTree
 const Screens = preload("res://scripts/app/screens.gd")
 # Dev tool: screenshots of the Siege app screens with a realistic mid-game test profile.
-#   Xvfb :98 -screen 0 480x1000x24 & DISPLAY=:98 SHOT_DIR=/tmp/shots \
-#   godot --rendering-method mobile --fixed-fps 30 --resolution 420x933 --path godot -s res://tools/app_shots.gd
+#   Xvfb :98 -screen 0 1920x1080x24 & DISPLAY=:98 SHOT_DIR=/tmp/shots \
+#   godot --rendering-method mobile --fixed-fps 30 --resolution 1600x720 --path godot -s res://tools/app_shots.gd
 # Env: SHOT_DIR (default /tmp/shots), SHOT_TABS (comma list, default all), SHOT_SCROLL (px to
 # scroll each screen down for a second shot named <tab>_2), SHOT_SWING (0.31.113: with SHOT_TABS=home and --fixed-fps 30,
 # this many frames of Home after its shot, one every 2nd frame: home_swing_NN), SHOT_MENU=1 (0.31.139: Home with the
-# level shield's menu open), SHOT_HOME_MENU=1 (0.31.194: Home with the top bar's menu open).
+# level shield's menu open), SHOT_HOME_MENU=1 (0.31.194: Home with the top bar's menu open), SHOT_OPEN=<the app's
+# method> (0.31.216: Home with that window open: open_starter, open_social, open_chat, open_leaderboard ...).
 const App = preload("res://scripts/app/siege_app.gd")
 const Eco = preload("res://scripts/meta/economy.gd")
 const Profile = preload("res://scripts/meta/profile.gd")
@@ -131,6 +132,8 @@ func _process(_d: float) -> bool:
 			Screens.open_pass_item(app, int(app.profile.d.pass.season), int(pd[0]), pd[1] == "prem")
 		if frames == base_f + 12 and tabs[i] == "shop" and OS.has_environment("SHOT_PREVIEW"):
 			app.open_champion(str(Eco.SKINS[OS.get_environment("SHOT_PREVIEW")].hero), OS.get_environment("SHOT_PREVIEW"))     # 0.31.188: an outfit
+		if frames == base_f + 12 and tabs[i] == "home" and OS.has_environment("SHOT_OPEN"):
+			app.call(OS.get_environment("SHOT_OPEN"))      # 0.31.216: any of the app's windows (open_starter, open_social ...)
 		if frames == base_f + 12 and tabs[i] == "home" and OS.has_environment("SHOT_ORDERS"):
 			app.open_orders()                            # 0.31.112: the ORDERS window
 		if frames == base_f + 12 and tabs[i] == "home" and OS.has_environment("SHOT_MOBA"):

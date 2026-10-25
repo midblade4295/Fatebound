@@ -4,10 +4,11 @@ extends Control
 const UI = preload("res://scripts/app/ui.gd")
 const UI2 = preload("res://scripts/app/ui2.gd")
 
-const BAR := 46.0
-# 0.31.122 (Kevin: "The icons at bottom block chat"): the open tab's raised tile and its bobbing icon stand up to ~18 px
-# over the tab bar, so the chat line sits GAP above the bar instead of on it (the gap shows Home behind it)
-const GAP := 22.0
+const BAR := 42.0
+# 0.31.122 (Kevin: "The icons at bottom block chat"): the open tab's raised tile and its bobbing icon stood up to ~18 px
+# over the tab bar, so the chat line sat 22 px above it; 0.31.216 (landscape) the tabs are on a rail at the left, so the
+# line sits just over the screen's bottom edge (clear of the gesture bar)
+const GAP := 8.0
 const H := BAR + GAP
 var app
 var _name: Label
@@ -43,7 +44,7 @@ func setup(a) -> void:
 	r.offset_bottom = -GAP
 	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(r)
-	UI2.icon(r, "chat", 34.0).size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	UI2.icon(r, "chat", 32.0).size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_name = UI.label(r, "", 14, UI2.GOLD, UI.HEAVY_FONT)
 	_name.autowrap_mode = TextServer.AUTOWRAP_OFF
 	_name.size_flags_vertical = Control.SIZE_SHRINK_CENTER

@@ -678,9 +678,9 @@ func _render_full() -> void:
 	var cw := CenterContainer.new()
 	cw.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	head.add_child(cw)
-	var big := SocialUI.crest(cw, str(c.get("cc", "")), 84.0, str(c.get("fr", "")))
+	var big := SocialUI.crest(cw, str(c.get("cc", "")), 60.0, str(c.get("fr", "")))       # (84 in portrait)
 	big.set_meta("clan_crest_big", true)
-	var nl := UI2.text(head, str(c.get("name", "")), 26, Color.WHITE)
+	var nl := UI2.text(head, str(c.get("name", "")), 24, Color.WHITE)
 	nl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	nl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var sub := "[%s]  ·  %s" % [str(c.get("tag", "")), "STARTER CLAN" if hc else "LEVEL %d" % lv]
@@ -742,18 +742,17 @@ func _render_full() -> void:
 		chest.set_meta("clan_chest_tier", tier)
 		if tier == 0:
 			(chest.get_meta("icon") as Control).modulate = Color(0.62, 0.62, 0.7, 0.9)
-	var gsp := Control.new()
-	gsp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	gsp.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	ground.add_child(gsp)
+	# ---- CHAT, MEMBERS, LEAGUE, CLAN between them (0.31.216, landscape: one row; a row of their own under it in
+	# portrait)
+	var med := UI.row(ground, 6)
+	med.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	med.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	med.size_flags_stretch_ratio = 4.0
 	var others := (c.get("asks", []) as Array).filter(func(a): return str(a.get("pid", "")) != me_pid)
 	var can_give := others.filter(func(a): return app.profile.giftable_shards(str(a.get("h", ""))) > 0).size()
 	var mine_ask: Dictionary = social.my_ask()
 	var sline := "You asked: %s" % _hero(str(mine_ask.h)) if not mine_ask.is_empty() else ("%d open" % others.size() if not others.is_empty() else "Ask your clan")
 	_spot(ground, UI2.icon_path("scroll"), "SHARDS", sline, -1.0, can_give if can_give > 0 else 0, "clan_open_shards", func(): _open_sheet("shards"))
-	# ---- CHAT, MEMBERS, LEAGUE, CLAN
-	var med := UI.row(col, 6)
-	med.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var unread := int(social.unread.get("clan", 0))
 	_medallion(med, "chat", "CHAT", unread, "clan_chat", func():
 		app.sfx("menuOpen")
@@ -920,7 +919,7 @@ func _open_sheet(id: String, again := false) -> void:
 	mc.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	mc.add_theme_constant_override("margin_left", 8)
 	mc.add_theme_constant_override("margin_right", 8)
-	mc.add_theme_constant_override("margin_top", int(maxf(150.0, size.y * 0.2) + float(app.safe_top)))
+	mc.add_theme_constant_override("margin_top", int(54.0 + float(app.safe_top)))     # (0.31.216: under the top row; under the name in portrait)
 	mc.add_theme_constant_override("margin_bottom", 10)
 	_sheet_layer.add_child(mc)
 	var body := UI2.frame(mc, "night", 12, 20.0, "gold")

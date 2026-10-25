@@ -55,10 +55,10 @@ static func audit(sim, img: Image = null, mask_path := Land.MASK_RES) -> Diction
 			var p := Vector2(-Sim.HALF_W + (i + 0.5) / ppm, -Sim.HALF_L + (j + 0.5) / ppm)
 			var mx := int((p.x - rect.position.x) * ppm)
 			var my := int((p.y - rect.position.y) * ppm)
-			var r := mask.get_pixel(clampi(mx, 0, mask.get_width() - 1), clampi(my, 0, mask.get_height() - 1)).r
+			var mp := mask.get_pixel(clampi(mx, 0, mask.get_width() - 1), clampi(my, 0, mask.get_height() - 1))
 			var inside := Land.inside_field(p)
 			var col := Color(0.35, 0.62, 0.3) if inside else Color(0.25, 0.25, 0.25)
-			var dirt := r >= 0.5 and inside
+			var dirt := (mp.r >= 0.5 or mp.a >= 0.5) and inside          # (0.31.216: the lanes' paving is A)
 			if dirt:
 				col = Color(0.62, 0.45, 0.26)
 				dirt_px += 1

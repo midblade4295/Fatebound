@@ -25,25 +25,26 @@ extends Control
 const UI2 = preload("res://scripts/app/ui2.gd")
 const CampShader = preload("res://scripts/app/camp.gdshader")
 const ART := "res://assets/ui/v2/bg_camp.webp"
-const PAINT := Vector2(1024.0, 2048.0)
-const FEET_Y := 1257.0                 # the nearest heroes' boots (the Knight's, the Stormcaller's), down the picture
+const PAINT := Vector2(2048.0, 1024.0)   # (0.31.216: landscape; 1024 x 2048 until then)
+const FEET_Y := 614.6                 # the nearest heroes' boots (the Knight's, the Stormcaller's), down the picture
 const FEET_OVER := 6.0                 # ... this far (screen px) under PLAY's top at most: the plaque hides no more of them
 const COVER_TO := 100.0                # the painting reaches at least this far (screen px) from the screen's bottom
-const FIRE := Vector2(512.0, 1086.0)   # the campfire's flames (their middle)
-const FIRE_BASE := Vector2(512.0, 1166.0)
+const FIRE := Vector2(1024.0, 419.9)   # the campfire's flames (their middle)
+const FIRE_BASE := Vector2(1024.0, 567.7)
 # the flames' tongues over the painted fire: [x off the base, width, height, phase]
 const TONGUES := [[-36.0, 44.0, 96.0, 0.0], [-15.0, 56.0, 150.0, 1.9], [8.0, 62.0, 172.0, 3.7], [30.0, 50.0, 118.0, 5.1],
 	[46.0, 34.0, 74.0, 2.6], [-50.0, 30.0, 64.0, 4.4]]
 # the braziers and torches you can see: [where, size, light's reach (0: none)]
-const LAMPS := []
+const LAMPS := [[Vector2(843, 200), 0.75, 90.0]]   # (the left brazier; the others stand behind the heroes' heads)
 # the magic glowing on the heroes: [where, colour, size] -- the Mage's blue gem, the Stormcaller's crystal
-const MAGIC := [[Vector2(212, 838), Color(0.45, 0.8, 1.0), 1.0], [Vector2(722, 776), Color(0.55, 0.95, 1.0), 1.1]]
+const MAGIC := [[Vector2(664, 310), Color(0.45, 0.8, 1.0), 1.6], [Vector2(1447, 268), Color(0.55, 0.95, 1.0), 1.7]]
 const WINDOWS := []                    # (the castle's windows are dark at dusk in the render)
-const SKY := Rect2(0.0, 0.0, 1024.0, 280.0)     # where the stars twinkle (and the falling ones go): above the spires
-const CAMP := Rect2(40.0, 736.0, 944.0, 520.0)  # where the fireflies wander
-const BANNERS := [Vector4(100, 466, 230, 666), Vector4(795, 466, 915, 666)]
+const SKY := Rect2(0.0, 0.0, 2048.0, 190.0)     # where the stars twinkle (and the falling ones go): above the walls
+const CAMP := Rect2(120.0, 263.8, 1808.0, 350.7)  # where the fireflies wander
+const BANNERS := [Vector4(677, -74, 803, 219), Vector4(1251, -74, 1362, 219)]
 const PENNANTS := []
 const FLAME := Color(1.0, 0.62, 0.26)
+const FIRE_K := 1.35                   # 0.31.216: the fire's size against the portrait picture's (its flames, glows, embers)
 
 var calm := false
 var lite := false
@@ -247,7 +248,7 @@ func _build_sky() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 194
 	for i in 18:
-		var at := Vector2(rng.randf_range(20.0, 1004.0), rng.randf_range(10.0, SKY.end.y))
+		var at := Vector2(rng.randf_range(SKY.position.x + 20.0, SKY.end.x - 20.0), rng.randf_range(SKY.position.y + 10.0, SKY.end.y))
 		var st := _glow(paint_layer, at, Vector2.ONE * rng.randf_range(9.0, 16.0), Color(0.95, 0.93, 1.0, 0.0 if not calm else 0.35))
 		_stars.append([st, rng.randf_range(0.4, 1.2), rng.randf() * TAU])
 	_shooting = FallingStar.new()
@@ -266,8 +267,9 @@ func _build_windows() -> void:
 
 # ---------------- the campfire ----------------
 func _build_fire() -> void:
-	_fire_halo = _glow(paint_layer, FIRE + Vector2(0, 30), Vector2(520, 420), Color(1.0, 0.5, 0.18, 0.32))
-	smoke = _particles(FIRE + Vector2(0, -90), 14, 4.5, [Color(0.35, 0.3, 0.32, 0.0), Color(0.35, 0.3, 0.32, 0.16),
+	var fk := FIRE_K                                 # (0.31.216: the fire's size in the picture against the portrait one's)
+	_fire_halo = _glow(paint_layer, FIRE + Vector2(0, 30) * fk, Vector2(520, 420) * fk, Color(1.0, 0.5, 0.18, 0.32))
+	smoke = _particles(FIRE + Vector2(0, -90) * fk, 14, 4.5, [Color(0.35, 0.3, 0.32, 0.0), Color(0.35, 0.3, 0.32, 0.16),
 		Color(0.3, 0.28, 0.32, 0.1), Color(0.3, 0.28, 0.32, 0.0)], false)
 	smoke.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
 	smoke.emission_rect_extents = Vector2(18, 6)
@@ -280,17 +282,17 @@ func _build_fire() -> void:
 	smoke.scale_amount_max = 3.6
 	smoke.scale_amount_curve = _rising_curve()
 	for tg in TONGUES:
-		var w: float = tg[1]
-		var h: float = tg[2]
+		var w: float = float(tg[1]) * fk
+		var h: float = float(tg[2]) * fk
 		var t := _glow(paint_layer, Vector2.ZERO, Vector2(w, h), Color(1.0, 0.55, 0.16, 0.85))
 		t.pivot_offset = Vector2(w * 0.5, h * 0.92)
-		t.position = FIRE_BASE + Vector2(float(tg[0]), 0.0) - t.pivot_offset
+		t.position = FIRE_BASE + Vector2(float(tg[0]) * fk, 0.0) - t.pivot_offset
 		_tongues.append([t, float(tg[3]), h])
-	_fire_heart = _glow(paint_layer, FIRE_BASE + Vector2(0, -34), Vector2(84, 74), Color(1.0, 0.92, 0.62, 0.8))
-	embers = _particles(FIRE_BASE + Vector2(0, -40), 26, 2.6, [Color(1.0, 0.95, 0.7, 1.0), Color(1.0, 0.7, 0.25, 1.0),
+	_fire_heart = _glow(paint_layer, FIRE_BASE + Vector2(0, -34) * fk, Vector2(84, 74) * fk, Color(1.0, 0.92, 0.62, 0.8))
+	embers = _particles(FIRE_BASE + Vector2(0, -40) * fk, 26, 2.6, [Color(1.0, 0.95, 0.7, 1.0), Color(1.0, 0.7, 0.25, 1.0),
 		Color(1.0, 0.4, 0.1, 0.8), Color(0.9, 0.2, 0.05, 0.0)])
 	embers.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
-	embers.emission_rect_extents = Vector2(36, 18)
+	embers.emission_rect_extents = Vector2(36, 18) * fk
 	embers.direction = Vector2(0, -1)
 	embers.spread = 22.0
 	embers.gravity = Vector2(0, -30)
@@ -337,16 +339,21 @@ func _build_magic() -> void:
 		wisps.append(sp)
 
 # ---------------- layout ----------------
+var inset_left := 0.0                    # 0.31.216: the app's tab rail (and the notch) on the left: the camp centres on the rest
+
 func place(play_top: float) -> void:
-	# the painting as wide as the screen (wider if it'd stop too high), standing so the champions' feet are just over
-	# PLAY -- but never ending more than COVER_TO over the screen's bottom, nor leaving a gap at its top
+	# 0.31.216 (landscape): the picture covering the screen, centred on the screen area beside the tab rail, standing so
+	# the heroes' feet are just over play_top (Home's chests) -- but never leaving a gap at an edge. (Portrait until then:
+	# as wide as the screen, the feet just over PLAY.)
 	var w := size.x
 	var h := size.y
 	if w <= 0.0 or h <= 0.0:
 		return
-	k = maxf(w / PAINT.x, (h - COVER_TO) / PAINT.y)
-	var lo := minf(0.0, (h - COVER_TO) - PAINT.y * k)
-	origin = Vector2((w - PAINT.x * k) * 0.5, clampf(play_top + FEET_OVER - FEET_Y * k, lo, 0.0))
+	var cx := inset_left + (w - inset_left) * 0.5
+	k = maxf(w / PAINT.x, h / PAINT.y)
+	k = maxf(k, minf(k * 1.05, 2.0 * cx / PAINT.x))   # (a wide phone: a touch bigger, so the fire can move over toward cx)
+	origin = Vector2(clampf(cx - PAINT.x * k * 0.5, w - PAINT.x * k, 0.0),
+		clampf(play_top + FEET_OVER - FEET_Y * k, h - PAINT.y * k, 0.0))
 	paint_layer.position = origin
 	paint_layer.scale = Vector2(k, k)
 

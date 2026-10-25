@@ -25,8 +25,9 @@ const Fx = preload("res://scripts/app/champion_fx.gd")
 const MobaPanel = preload("res://scripts/app/moba_panel.gd")
 const COIN := "res://assets/ui/currency/coin.png"
 const GEM := "res://assets/ui/currency/gem.png"
-const STAGE_TOP := 0.13            # the 3D stage, as fractions of the window's height (his feet land on the painting's
-const STAGE_BOTTOM := 0.6          # open ground, about half way down)
+const STAGE_TOP := 0.16            # the 3D stage, as fractions of the window's height (0.13-0.6, the panel under it, in
+const STAGE_BOTTOM := 0.98         # portrait)
+const SPLIT := 0.5                 # 0.31.216 (landscape, Honor of Kings' hero page): him on the left, the panel on the right
 
 var app
 var hero := "knight"
@@ -70,8 +71,8 @@ func open(a, hid: String, show_skin := "__worn", only_owned := false) -> void:
 		tw.tween_property(_bg, "scale", Vector2.ONE * 1.05, 9.0).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 		tw.tween_property(_bg, "scale", Vector2.ONE, 9.0).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT))
 	# his colour: a dark band at the top for the name, the bottom into the panel, his colour at the edges
-	add_child(_shade([[0.0, Color(0, 0, 0, 0.72)], [0.16, Color(0, 0, 0, 0.0)], [0.5, Color(0, 0, 0, 0.0)],
-		[0.62, Color(acc.darkened(0.85), 0.88)], [1.0, Color(0.01, 0.01, 0.03, 0.97)]], true))
+	add_child(_shade([[0.0, Color(0, 0, 0, 0.72)], [0.2, Color(0, 0, 0, 0.0)], [0.8, Color(0, 0, 0, 0.0)],
+		[1.0, Color(acc.darkened(0.85), 0.6)]], true))
 	add_child(_shade([[0.0, Color(acc, 0.22)], [0.18, Color(acc, 0.0)], [0.82, Color(acc, 0.0)], [1.0, Color(acc, 0.22)]], false))
 	# ---- his effects behind him
 	fx = ch.get("fx", [])
@@ -80,7 +81,7 @@ func open(a, hid: String, show_skin := "__worn", only_owned := false) -> void:
 	# ---- he stands there in 3D
 	var stage := Control.new()
 	stage.anchor_left = 0.0
-	stage.anchor_right = 1.0
+	stage.anchor_right = SPLIT
 	stage.anchor_top = STAGE_TOP
 	stage.anchor_bottom = STAGE_BOTTOM
 	stage.clip_contents = true
@@ -95,7 +96,7 @@ func open(a, hid: String, show_skin := "__worn", only_owned := false) -> void:
 	for add in [true, false]:
 		_fx_layer(true, add)
 	var zs: Control = Control.new()                  # (the zoom buttons and hint over the stage, above the front effects)
-	zs.anchor_right = 1.0
+	zs.anchor_right = SPLIT
 	zs.anchor_top = STAGE_TOP
 	zs.anchor_bottom = STAGE_BOTTOM
 	zs.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -110,9 +111,9 @@ func open(a, hid: String, show_skin := "__worn", only_owned := false) -> void:
 	var head := VBoxContainer.new()
 	head.add_theme_constant_override("separation", 0)
 	head.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	head.anchor_right = 1.0
+	head.anchor_right = SPLIT
 	head.offset_left = 14
-	head.offset_right = -64
+	head.offset_right = -8
 	head.offset_top = 10.0 + float(app.safe_top)
 	add_child(head)
 	var rr := HBoxContainer.new()
@@ -145,12 +146,13 @@ func open(a, hid: String, show_skin := "__worn", only_owned := false) -> void:
 	x.offset_bottom = 54.0 + float(app.safe_top)
 	# ---- the panel: status and UNLOCK / PLAY, SKINS, the story, the kit
 	var panel := Control.new()
+	panel.anchor_left = SPLIT
 	panel.anchor_right = 1.0
-	panel.anchor_top = STAGE_BOTTOM
+	panel.anchor_top = 0.0
 	panel.anchor_bottom = 1.0
-	panel.offset_left = 8
+	panel.offset_left = 4
 	panel.offset_right = -8
-	panel.offset_top = -4
+	panel.offset_top = 62.0 + float(app.safe_top)          # (under the ✕)
 	panel.offset_bottom = -8
 	add_child(panel)
 	UI2.plate(panel, "glass", 20.0, "gold", {"fill_top": Color(acc.darkened(0.82), 0.82), "fill_bottom": Color(0.02, 0.02, 0.05, 0.92),
@@ -204,7 +206,7 @@ func _fx_layer(in_front: bool, add: bool) -> void:
 	f.name = "ChampionFx_%s_%s" % ["front" if in_front else "back", "light" if add else "laid"]
 	add_child(f)
 	# (round him: the stage's middle, about his chest -- his feet are 78 % down the stage)
-	f.setup(fx, in_front, add, Vector2(0.5, STAGE_TOP + (STAGE_BOTTOM - STAGE_TOP) * 0.6))
+	f.setup(fx, in_front, add, Vector2(SPLIT * 0.5, STAGE_TOP + (STAGE_BOTTOM - STAGE_TOP) * 0.6))
 
 func _look() -> Dictionary:
 	# the outfit shown -- its body and its own weapon (0.31.188); {} his own look

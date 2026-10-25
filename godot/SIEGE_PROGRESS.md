@@ -7216,3 +7216,37 @@ real 3D heroes in the camp, clan-style scenery with no heroes, or one big live h
   SERVER_BUILD 0.31.215.
 - Preview APK: build/Fatebound-Siege-0.31.215-fatebound.apk (32 MB, preview key), sha256
   5bc5368c2489fe4d7e083515c3c752a704f438cb4d4ac3fec0a29e4240a1a326.
+
+## 0.31.216 — Honor of Kings: landscape, the square map, painted ground, new grass and rocks
+Kevin (five Honor of Kings screenshots): "I want to make fatebound more like it. The game needs to change from vertical
+to horizontal and the map needs to be redone like the attached image. Also use eleven to draw detailed paint on ground.
+Also need new models for grass and rock formations". Asked: landscape for the whole app or the match only -> "Whole
+app"; ElevenLabs budget -> "2 each, ~10k credits"; rocks -> "Sculpted in code".
+- The map (commit d8fa454; siege_land.gd, moba.gd, moba_vision.gd, keep.gd; tools/hok_layout.py writes the layout):
+  Honor of Kings' square, ~156 m a side -- blue keep bottom-left, red top-right; the middle lane on the diagonal, the
+  two side lanes along the edges; the river corner to corner past the two pits (the Bone Lord's, the Grave Wyrm's);
+  the jungle's camps, ridges, trails and 16 brush patches in the four quarters, the east the west's mirror across the
+  middle lane. Same rules, towers, camps and keeps. Protocol 36: the server must be redeployed with this build.
+- The camera turned 45 degrees (siege_view.gd CAM_YAW), so the diamond in world space is the screen's square, your keep
+  bottom-left whichever side you're on; the stick moves along the screen (screen_to_world).
+- Ground paint (ElevenLabs gpt-image, flow vYVqqB4Jge1iGZhyhezw; tools/ground_paint.py keys and tiles them; about 15.7k
+  credits): grass (two), flagstone lanes, dirt trails, rock, the river bed; the carved stone circles on the lanes and
+  pits, the ring round every tower's foot; sheets of grass clumps, tall brush and flowers. terrain.gdshader: the baked
+  mask's alpha is the lanes' paving (tools/bake_land.gd), the flagstones with a cut edge into the grass.
+- Grass and brush (ground_cards.gd/.gdshader): painted cards in MultiMeshes, swaying; the brush tall lavender-tipped
+  grass, three crossed cards. Rocks (rock_sculpt.gd, rock_formation.gdshader): boulders sculpted in code along the
+  ridges -- noisy icospheres, flat-shaded, triplanar stone, moss on their tops.
+- The match HUD (siege_hud.gd, minimap.gd): Honor of Kings' layout -- the minimap top-left (the painted plan baked with
+  the terrain, turned to your view), the score bar at the top, the stick bottom-left, the ability arc bottom-right; the
+  shop two columns; the live scoreboard your side and theirs side by side.
+- The app (project.godot: sensor landscape, 760 x 420 "expand"): the tabs on a wooden rail down the left (siege_app.gd),
+  the screens beside it; windows too tall are drawn smaller to fit (_fit_modal). Home: the camp re-rendered wide
+  (tools/render_home_camp.gd, 2048 x 1024; camp_scene.gd's points), the chests along the bottom, PLAY bottom-right with
+  FIRST WIN over it, the Starter Pack between the top row and the chests. The hero select is Honor of Kings' -- him on
+  his stage with his kit on the left, the grid and BATTLE on the right, the whole screen; the champion window him on the
+  left, the panel on the right; the loading screen the logo top-left, the countdown left, LEAVE bottom-right, the
+  heroes across the middle; the chest opening the chest left, its reward in the middle, COLLECT right; the clan camp
+  the band of the painting from its banners to the fire (the painting darkened either side), its spots and medallions
+  one row; the Herald's scroll no taller than 72 % of the screen; splash_land.png.
+- Tests follow (landscape sizes, the brush as cards, the camp's checks).
+- In progress: the full suite, the content packs and the APK (next commit).

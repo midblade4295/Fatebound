@@ -220,7 +220,9 @@ func setup_steps(s) -> Array:
 			["keep 1", func():
 				_build_keep(1)
 				_merge_kit(1)],
-			["towers", _build_moba],                  # 0.31.155 5V5: the lane towers
+			["towers", func():
+				_build_moba()                       # 0.31.155 5V5: the lane towers
+				_build_ground_marks()],             # 0.31.216: the carved stone on the ground
 			["edge scenery", _build_edge_scenery],
 			["oracles+warm", func():
 				for tm in 2:
@@ -456,8 +458,8 @@ uniform float rip_half = 34.0;
 uniform vec2 rip_texel = vec2(0.001953, 0.019231);
 uniform float rip_strength = 28.0;
 uniform float wake_tint = 4.5;            // crests lighter, troughs darker: how the wakes show without foam
-uniform vec3 deep_col : source_color = vec3(0.05, 0.27, 0.42);
-uniform vec3 shallow_col : source_color = vec3(0.24, 0.62, 0.66);
+uniform vec3 deep_col : source_color = vec3(0.05, 0.33, 0.40);
+uniform vec3 shallow_col : source_color = vec3(0.26, 0.66, 0.62);
 uniform vec3 sky_col : source_color = vec3(0.62, 0.80, 0.95);
 uniform float glint = 0.0;
 uniform float wave_height = 1.5;          // 0.31.21: the surface rises and falls with the simulated waves
@@ -495,11 +497,11 @@ void fragment() {
 	float depth = smoothstep(0.02, 0.4, edge);
 	vec3 col = mix(shallow_col, deep_col, depth);
 	float fres = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 4.0);
-	col = mix(col, sky_col, clamp(fres * 0.5, 0.0, 0.5));      // was up to 0.75: a lake-wide sheet read as white
+	col = mix(col, sky_col, clamp(fres * 0.3, 0.0, 0.25));     // (0.31.216: 0.5 -- the river bed shows through now)
 	// No foam (Round 34, Kevin). The wakes read as light crests and dark troughs instead.
 	col *= 1.0 + clamp(h, -0.12, 0.12) * wake_tint;
 	ALBEDO = col;
-	ALPHA = mix(0.58, 0.86, depth);
+	ALPHA = mix(0.38, 0.66, depth);              // (0.31.216: 0.58 .. 0.86: the painted river bed shows through)
 	ROUGHNESS = 0.16;                 // 0.30.11: was 0.05 / 0.75 -- the sun's glare spread white over the wide lake
 	SPECULAR = 0.35;
 	float sg = texture(ripples, wpos.xz * 0.19 + vec2(-TIME * 0.09, TIME * 0.05)).r * texture(ripples, wpos.xz * 0.13 + vec2(TIME * 0.07, -TIME * 0.04)).r;
@@ -936,7 +938,7 @@ func _build_lighting() -> void:
 	# Single directional light: the Compatibility renderer can add a per-object pass for each extra
 	# directional light, so the old cool fill light is folded into ambient instead.
 	camera = Camera3D.new()
-	camera.fov = 50.0
+	camera.fov = CAM_FOV
 	camera.near = 0.3
 	camera.far = 190.0
 	add_child(camera)
@@ -956,26 +958,29 @@ func _mesh_of(path: String) -> Dictionary:
 
 static var _terrain_meshes: Array = []
 static var _terrain_mat: ShaderMaterial = null
+const PAINT := "res://assets/terrain/paint/"            # 0.31.216: the painted ground, plants and decals (tools/ground_paint.py)
+const PAINT_TINT := Vector3(0.66, 0.68, 0.70)
 static var _water_mat: ShaderMaterial = null
 
 static func _terrain_material() -> ShaderMaterial:
 	if _terrain_mat == null:
 		var m := ShaderMaterial.new()
 		m.shader = load("res://scripts/siege/terrain.gdshader")
-		m.set_shader_parameter("grass_tex", Stage.texture("res://assets/terrain/grass.png"))
-		m.set_shader_parameter("path_tex", DIRT_TEX)
-		m.set_shader_parameter("rock_tex", Stage.texture("res://assets/terrain/rock.png"))
+		# 0.31.216 (Kevin: "use eleven to draw detailed paint on ground"): the ground ElevenLabs painted
+		# (tools/ground_paint.py) -- two lawns, the lanes' flagstones, the jungle's earth, the cliff rock, the river bed
+		m.set_shader_parameter("grass_tex", Stage.texture(PAINT + "grass.webp"))
+		m.set_shader_parameter("grass2_tex", Stage.texture(PAINT + "grass2.webp"))
+		m.set_shader_parameter("lane_tex", Stage.texture(PAINT + "lane.webp"))
+		m.set_shader_parameter("path_tex", Stage.texture(PAINT + "dirt.webp"))
+		m.set_shader_parameter("rock_tex", Stage.texture(PAINT + "rock.webp"))
+		m.set_shader_parameter("bed_tex", Stage.texture(PAINT + "riverbed.webp"))
 		m.set_shader_parameter("path_mask", ImageTexture.create_from_image(load(Land.MASK_RES)))
 		var r := Land.bake_rect()
 		m.set_shader_parameter("mask_rect", Vector4(r.position.x, r.position.y, r.size.x, r.size.y))
-		# The battle view's Vulkan compensation (exposure x1.55) brightens everything; a neutral
-		# (not yellowish) darkening keeps the grass a true green.
-		# Measured against Kevin's references (grass hue ~111 deg, sat ~138, value ~190 of 255):
-		# slightly darker and bluer than neutral.
-		# Re-measured for the painted grass (0.14.4) against Kevin's references.
-		m.set_shader_parameter("tint", Vector3(0.64, 0.73, 0.80))
-		m.set_shader_parameter("grass_sat", 0.95)
-		m.set_shader_parameter("band_strength", 1.6)     # between the 1x (faint) and 3x (bold) tests
+		# The battle view's Vulkan compensation (exposure x1.55) brightens everything; a neutral darkening keeps the
+		# painting's own colours (0.31.216: re-set for the painted ground; the Fat Princess grass took 0.64/0.73/0.80).
+		m.set_shader_parameter("tint", PAINT_TINT)
+		m.set_shader_parameter("grass_sat", 1.0)
 		var mt := NoiseTexture2D.new()
 		mt.width = 256
 		mt.height = 256
@@ -1060,7 +1065,7 @@ func _build_outer_land() -> void:
 		var tm: ShaderMaterial = _terrain_material()
 		_outer_mat = ShaderMaterial.new()
 		_outer_mat.shader = load("res://scripts/siege/outer_land.gdshader")
-		for k in ["grass_tex", "rock_tex", "path_mask", "mask_rect", "grass_scale", "rock_scale", "tint", "grass_sat", "band_strength",
+		for k in ["grass_tex", "rock_tex", "path_mask", "mask_rect", "grass_scale", "rock_scale", "tint", "grass_sat",
 				"cloud_tex", "cloud_strength", "macro_tex", "rock_col"]:
 			_outer_mat.set_shader_parameter(k, tm.get_shader_parameter(k))
 	for m in _outer_meshes:
@@ -1134,8 +1139,9 @@ func _build_outer_trees() -> void:
 		_plant_batch(kind, per[kind], GeometryInstance3D.SHADOW_CASTING_SETTING_OFF, "outer_trees", 24.0)
 
 static func _make_terrain_meshes() -> Array:
-	# One mesh per 32 m band (tight AABBs -> off-screen bands are culled), vertices every
-	# BAKE_STEP metres straight from the baked height map, normals by central differences.
+	# One mesh per 32 m square (tight AABBs -> off-screen squares are culled; 0.31.216: squares, the yawed landscape
+	# camera sees a diagonal of the map -- 32 m bands across its whole width until then), vertices every BAKE_STEP
+	# metres straight from the baked height map, normals by central differences.
 	var img: Image = load(Land.HEIGHT_RES)
 	var nx := img.get_width()
 	var nz := img.get_height()
@@ -1147,31 +1153,35 @@ static func _make_terrain_meshes() -> Array:
 	var j0 := 0
 	while j0 < nz - 1:
 		var j1 := mini(nz - 1, j0 + band)
-		var verts := PackedVector3Array()
-		var norms := PackedVector3Array()
-		var idx := PackedInt32Array()
-		for j in range(j0, j1 + 1):
-			for i in nx:
-				var y := h[j * nx + i]
-				verts.append(Vector3(r.position.x + i * st, y, r.position.y + j * st))
-				var hl := h[j * nx + maxi(i - 1, 0)]
-				var hr := h[j * nx + mini(i + 1, nx - 1)]
-				var hd := h[maxi(j - 1, 0) * nx + i]
-				var hu := h[mini(j + 1, nz - 1) * nx + i]
-				norms.append(Vector3(hl - hr, 2.0 * st, hd - hu).normalized())
-		var rows := j1 - j0 + 1
-		for jj in rows - 1:
-			for i in nx - 1:
-				var a := jj * nx + i
-				idx.append_array([a, a + 1, a + nx, a + 1, a + nx + 1, a + nx])
-		var arr := []
-		arr.resize(Mesh.ARRAY_MAX)
-		arr[Mesh.ARRAY_VERTEX] = verts
-		arr[Mesh.ARRAY_NORMAL] = norms
-		arr[Mesh.ARRAY_INDEX] = idx
-		var am := ArrayMesh.new()
-		am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
-		out.append(am)
+		var i0 := 0
+		while i0 < nx - 1:
+			var i1 := mini(nx - 1, i0 + band)
+			var cols := i1 - i0 + 1
+			var verts := PackedVector3Array()
+			var norms := PackedVector3Array()
+			var idx := PackedInt32Array()
+			for j in range(j0, j1 + 1):
+				for i in range(i0, i1 + 1):
+					var y := h[j * nx + i]
+					verts.append(Vector3(r.position.x + i * st, y, r.position.y + j * st))
+					var hl := h[j * nx + maxi(i - 1, 0)]
+					var hr := h[j * nx + mini(i + 1, nx - 1)]
+					var hd := h[maxi(j - 1, 0) * nx + i]
+					var hu := h[mini(j + 1, nz - 1) * nx + i]
+					norms.append(Vector3(hl - hr, 2.0 * st, hd - hu).normalized())
+			for jj in j1 - j0:
+				for ii in cols - 1:
+					var a := jj * cols + ii
+					idx.append_array([a, a + 1, a + cols, a + 1, a + cols + 1, a + cols])
+			var arr := []
+			arr.resize(Mesh.ARRAY_MAX)
+			arr[Mesh.ARRAY_VERTEX] = verts
+			arr[Mesh.ARRAY_NORMAL] = norms
+			arr[Mesh.ARRAY_INDEX] = idx
+			var am := ArrayMesh.new()
+			am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
+			out.append(am)
+			i0 = i1
 		j0 = j1
 	return out
 
@@ -1198,7 +1208,7 @@ func _build_water() -> void:
 		var sh := Shader.new()
 		sh.code = """
 shader_type spatial;
-render_mode cull_disabled;
+render_mode cull_disabled, blend_mix, depth_draw_opaque;
 uniform sampler2D ripples : filter_linear_mipmap, repeat_enable;
 uniform float glint = 0.0;
 void fragment() {
@@ -1207,11 +1217,12 @@ void fragment() {
 	float b = texture(ripples, w * 0.21 - vec2(TIME * 0.03, 0.0)).r;
 	float n = a * 0.6 + b * 0.4;
 	float shore = 1.0 - smoothstep(0.0, 0.16, min(UV2.y, 1.0 - UV2.y));
-	vec3 deep = vec3(0.10, 0.42, 0.72);
-	vec3 shallow = vec3(0.22, 0.66, 0.86);
+	vec3 deep = vec3(0.06, 0.36, 0.44);            // (0.31.216: teal over the painted bed; was a solid blue)
+	vec3 shallow = vec3(0.24, 0.64, 0.62);
 	vec3 col = mix(deep, shallow, smoothstep(0.35, 0.75, n));
 	col *= 1.0 - shore * 0.18;                     // no foam (Round 34): the banks just shade a little
 	ALBEDO = col;
+	ALPHA = mix(0.5, 0.72, smoothstep(0.0, 0.4, min(UV2.y, 1.0 - UV2.y)));
 	ROUGHNESS = 0.18;
 	SPECULAR = 0.35;                  // 0.30.11: was 0.6 (see the high-quality water)
 	// Sun glints (High-quality graphics): sparse sparkles where two scrolling layers line up; bright enough to glow.
@@ -1292,8 +1303,11 @@ static func _foliage_ok(p: Vector2, mask: Image, obstacles: Array, allow_slope :
 	var px := Vector2i(clampi(int((p.x - r.position.x) * Land.MASK_PPM), 0, mask.get_width() - 1),
 		clampi(int((p.y - r.position.y) * Land.MASK_PPM), 0, mask.get_height() - 1))
 	var mk := mask.get_pixelv(px)
-	if mk.r > 0.46:
-		return false                          # on a dirt path (0.31.126: R is 0.5 at the track's edge)
+	if mk.r > 0.46 or mk.a > 0.4:
+		return false                          # on a dirt path (0.31.126: R is 0.5 at the track's edge), on a lane's paving
+	var rd := Land.ridge_dist(p)
+	if rd.x < rd.y + 1.1:
+		return false                          # (0.31.216) under a rock formation, which stands wider than its wall
 	if not allow_slope and mk.g > 0.3:
 		return false                          # on a ledge rim / cliff band
 	for ob in obstacles:
@@ -1307,92 +1321,97 @@ static func _foliage_xf(p: Vector2, rng: RandomNumberGenerator, s0: float, s1: f
 	return Transform3D(b, Vector3(p.x, y - 0.03, p.y))
 
 func _plan_foliage() -> Dictionary:
+	# 0.31.216 (Kevin: "need new models for grass"): the painted grass clumps and flower patches (ground_cards.gd) --
+	# clumps lining both edges of every lane's paving, clusters across the fields and the jungle, flowers lying in the
+	# grass. {kind: [Transform3D...], kind + "_c": [Color...] (INSTANCE_CUSTOM)}. Seeded: the same every match (and baked
+	# into the start-up cache by tools/bake_land.gd). (KayKit's grass tufts and the Blender flowers until then.)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 707
 	var mask: Image = load(Land.MASK_RES)
 	var obs: Array = sim.obstacles
-	var out := {}
-	for k in TUFTS + FLOWERS:
-		out[k] = []
-	var tuft := func(p: Vector2, allow_slope := false):
-		if _foliage_ok(p, mask, obs, allow_slope):
-			out[TUFTS[rng.randi() % TUFTS.size()]].append(_foliage_xf(p, rng, 1.2, 1.7))
-	# 1. Both edges of every path (the grassy borders of the references). 0.31.126: the dirt track's edge wanders
-	# (Land.path_wobble), so a tuft goes where the mask says the grass starts: R just under the edge's 0.5.
-	var edge_r := func(p: Vector2) -> float:
-		var r := Land.bake_rect()
-		var px := Vector2i(clampi(int((p.x - r.position.x) * Land.MASK_PPM), 0, mask.get_width() - 1),
-			clampi(int((p.y - r.position.y) * Land.MASK_PPM), 0, mask.get_height() - 1))
-		return mask.get_pixelv(px).r
+	var brushes: Array = []
+	if sim.moba != null and sim.moba.vision != null:
+		brushes = sim.moba.vision.brushes
+	var out := {"blades": [], "blades_c": [], "flowers": [], "flowers_c": []}
+	var clump := func(p: Vector2, s0: float, s1: float) -> void:
+		if _foliage_ok(p, mask, obs) and not _in_brush(p, brushes, 0.3):
+			out.blades.append(_foliage_xf(p, rng, s0, s1))
+			out.blades_c.append(GroundCards.custom(rng.randi() % 8, rng))
+	# 1. Both edges of every lane's paving: where the slabs stop (the mask's A just under 0.5) the grass grows long.
 	for pl in Land.paths():
-		for i in range(pl.size() - 1):                  # (the smoothed paths have a point every PATH_STEP m)
+		for i in range(pl.size() - 1):
 			var a: Vector2 = pl[i]
 			var b: Vector2 = pl[i + 1]
 			var d := (b - a).normalized()
 			var n := Vector2(-d.y, d.x)
 			for side in [-1.0, 1.0]:
-				if rng.randf() < 0.55:
-					var base := a + d * rng.randf_range(0.0, a.distance_to(b))
-					var off := Land.PATH_HALF_W - 0.6
-					while off < Land.PATH_HALF_W + 1.4 and float(edge_r.call(base + n * side * off)) > 0.44:
-						off += 0.1                         # out to where the grass starts
-					tuft.call(base + n * side * (off + rng.randf_range(0.0, 0.35)))
-
-	# 3. Clumps across the fields.
-	for c in int(520.0 * Sim.HALF_W * Sim.HALF_L / (44.0 * 70.0)):     # (520 on the 88 x 140 m Siege field: as dense on the Rift)
+				if rng.randf() < 0.7:
+					var q: Vector2 = a + d * rng.randf_range(0.0, a.distance_to(b)) + n * float(side) * (Land.LANE_PAVE_HALF + rng.randf_range(0.1, 0.9))
+					clump.call(q, 0.75, 1.1)
+	# 2. Clusters across the fields and the jungle.
+	var area := Sim.HALF_W * Sim.HALF_L
+	for c in int(area * 0.042):
 		var cp := Vector2(rng.randf_range(-Sim.HALF_W, Sim.HALF_W), rng.randf_range(-Sim.HALF_L, Sim.HALF_L))
-		for k in rng.randi_range(2, 5):
-			tuft.call(cp + Vector2(rng.randf_range(-0.8, 0.8), rng.randf_range(-0.8, 0.8)))
-	# 4. Flower clusters.
-	for c in 230:
-		var cp := Vector2(rng.randf_range(-Sim.HALF_W, Sim.HALF_W), rng.randf_range(-Sim.HALF_L, Sim.HALF_L))
-		var col: String = FLOWERS[[0, 0, 0, 1, 1, 1, 2, 2, 3][rng.randi() % 9]]
-		for k in rng.randi_range(2, 4):
-			var fp := cp + Vector2(rng.randf_range(-0.7, 0.7), rng.randf_range(-0.7, 0.7))
-			if _foliage_ok(fp, mask, obs):
-				out[col].append(_foliage_xf(fp, rng, 2.0, 2.6))
+		if not Land.inside_field(cp):
+			continue
+		for k in rng.randi_range(3, 7):
+			clump.call(cp + Vector2(rng.randf_range(-1.1, 1.1), rng.randf_range(-1.1, 1.1)), 0.6, 1.0)
+	# 3. Flower patches.
+	for c in int(area * 0.02):
+		var fp := Vector2(rng.randf_range(-Sim.HALF_W, Sim.HALF_W), rng.randf_range(-Sim.HALF_L, Sim.HALF_L))
+		if Land.inside_field(fp) and _foliage_ok(fp, mask, obs) and not _in_brush(fp, brushes, 0.6):
+			var xf := _foliage_xf(fp, rng, 0.75, 1.15)
+			xf.origin.y = Land.terrain_height(fp) + 0.02
+			out.flowers.append(xf)
+			out.flowers_c.append(GroundCards.custom(rng.randi() % 9, rng))
 	return out
 
+static func _in_brush(p: Vector2, brushes: Array, margin: float) -> bool:
+	for b in brushes:
+		if p.distance_to(b.p) < float(b.r) + margin:
+			return true
+	return false
+
+const GroundCards = preload("res://scripts/siege/ground_cards.gd")
+
 func _build_foliage() -> void:
-	if _foliage.is_empty():
+	# One MultiMesh per kind and FOLIAGE_CELL square, so off-screen squares are culled (0.31.216: squares, not 32 m bands
+	# across the whole map: the yawed camera sees a diagonal of the map).
+	if _foliage.is_empty() or not _foliage.has("blades"):
 		_foliage = _plan_foliage()
-	for kind in _foliage:
-		var xfs: Array = _foliage[kind]
-		if low_fx:
-			# "Reduce effects": every other instance.
-			xfs = xfs.filter(func(_x): return true).slice(0, xfs.size(), 2)
-		var src: Dictionary
-		if kind in FLOWERS:
-			src = _mesh_of("res://assets/terrain/flower_%s.glb" % kind)
-		else:
-			src = _mesh_of(FOREST + kind + ".gltf")
-		if src.is_empty():
-			continue
-		# One MultiMesh per 32 m band so off-screen bands are culled.
-		var bands := {}
-		for xf in xfs:
-			var bkey := int(floor((xf.origin.z + Sim.HALF_L) / 32.0))
-			if not bands.has(bkey):
-				bands[bkey] = []
-			bands[bkey].append(xf)
-		for bkey in bands:
+	for kind in ["blades", "flowers"]:
+		var xfs: Array = _foliage.get(kind, [])
+		var cs: Array = _foliage.get(kind + "_c", [])
+		var cells := {}
+		for i in xfs.size():
+			if low_fx and i % 2 == 1:
+				continue                                  # "Reduce effects": every other one
+			var o: Vector3 = (xfs[i] as Transform3D).origin
+			var key := Vector2i(int(floor(o.x / FOLIAGE_CELL)), int(floor(o.z / FOLIAGE_CELL)))
+			if not cells.has(key):
+				cells[key] = []
+			cells[key].append(i)
+		for key in cells:
+			var ids: Array = cells[key]
 			var mm := MultiMesh.new()
 			mm.transform_format = MultiMesh.TRANSFORM_3D
-			mm.mesh = src.mesh
-			mm.instance_count = bands[bkey].size()
-			for i in mm.instance_count:
-				mm.set_instance_transform(i, bands[bkey][i])
+			mm.use_custom_data = true
+			mm.mesh = GroundCards.mesh(kind)
+			mm.instance_count = ids.size()
+			for j in ids.size():
+				mm.set_instance_transform(j, xfs[ids[j]])
+				mm.set_instance_custom_data(j, cs[ids[j]])
 			var mmi := MultiMeshInstance3D.new()
 			mmi.multimesh = mm
+			mmi.material_override = GroundCards.material(kind, PAINT_TINT * CARD_LIGHT)
 			mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			mmi.set_meta("perf", "foliage")
 			mmi.set_meta("perf_kind", kind)
-			mmi.visibility_range_end = 70.0          # bands far up-screen are tiny anyway
-			if kind in TUFTS:
-				mmi.material_override = _tuft_material(src.material)
-			else:
-				mm.mesh = _cheap_flower_mesh(src.mesh)
+			mmi.visibility_range_end = 70.0
 			add_child(mmi)
+
+const FOLIAGE_CELL := 24.0
+const CARD_LIGHT := 1.32               # the painted cards stand in the light (the ground's tint is for a surface facing up)
 
 static var _tuft_mat: StandardMaterial3D = null
 static var _tuft_wind: ShaderMaterial = null
@@ -2073,18 +2092,16 @@ func _keep_prop(t: int, model: String, spot: Vector2, turn_deg: float, height: f
 	return root
 
 static var _keep_floor_mats: Dictionary = {}
+const KEEP_PAVE_M := 6.0
 
 func _keep_floor(t: int, cen: Vector2) -> void:
 	# the kit's courtyard paving over the whole keep (under the wall's foot), the cloud shadows drifting over it too
 	if not _keep_floor_mats.has(t):
-		var tex: Texture2D = PATH_TEX
-		var tint := Color(0.86, 0.84, 0.8)
-		var uv := 1.0
-		if CASTLE_KITS:
-			var f: Array = CastleKit.kit(t).floors.court
-			tex = Stage.texture(CastleKit.DIR + "floors/%s.jpg" % f[0])
-			tint = f[2]
-			uv = FLOOR_TILE / float(f[1])
+		# 0.31.216: the royal paving ElevenLabs painted (tools/ground_paint.py: cream and gold sandstone, carved tiles here
+		# and there), KEEP_PAVE_M metres a tile; the castle kit's court floor until then
+		var tex: Texture2D = Stage.texture(PAINT + "keep.webp")
+		var tint := Color(0.9, 0.88, 0.86)
+		var uv := FLOOR_TILE / KEEP_PAVE_M
 		if _cast_static:
 			_keep_floor_mats[t] = _cloud_floor_material(tex, tint, uv)
 		else:
@@ -2182,7 +2199,7 @@ static func _plan_ridges() -> Dictionary:
 							out[Foliage.pick(rng, Foliage.RIDGE_BUSHES)].append(Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled(
 								Vector3.ONE * bs), Vector3(bq.x, Land.ground_height(bq, false) - 0.05, bq.y)))
 					t += rng.randf_range(1.8, 2.4)
-				else:
+				elif not SCULPTED_ROCKS:
 					var s2 := (2.0 * r + 0.4) * rng.randf_range(0.95, 1.2)
 					var sy := rng.randf_range(0.75, 1.05)
 					out[RIDGE_ROCKS[rng.randi() % RIDGE_ROCKS.size()]].append(Transform3D(
@@ -2194,10 +2211,37 @@ static func _plan_ridges() -> Dictionary:
 							out[RIDGE_SMALL[rng.randi() % RIDGE_SMALL.size()]].append(Transform3D(
 								Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3.ONE * ss), Vector3(sq.x, Land.ground_height(sq, false) - 0.08, sq.y)))
 					t += rng.randf_range(1.1, 1.5) * r
+				else:
+					break                                  # (0.31.216: rock_sculpt.gd builds the rock walls)
 	return out
+
+# 0.31.216 (Kevin: "need new models for grass and rock formations"; sculpted in code): the rock walls and the pits'
+# rims are Honor of Kings' chunky blue-grey formations (rock_sculpt.gd, rock_formation.gdshader), not KayKit's rocks
+const SCULPTED_ROCKS := true
+const RockSculpt = preload("res://scripts/siege/rock_sculpt.gd")
+static var _rock_mat: ShaderMaterial = null
+
+static func _rock_material() -> ShaderMaterial:
+	if _rock_mat == null:
+		_rock_mat = ShaderMaterial.new()
+		_rock_mat.shader = load("res://scripts/siege/rock_formation.gdshader")
+		_rock_mat.set_shader_parameter("rock_tex", Stage.texture(PAINT + "rock.webp"))
+		_rock_mat.set_shader_parameter("moss_tex", Stage.texture(PAINT + "grass.webp"))
+		_rock_mat.set_shader_parameter("macro_tex", _terrain_material().get_shader_parameter("macro_tex"))
+		_rock_mat.set_shader_parameter("tint", PAINT_TINT * 1.12)
+	return _rock_mat
 
 func _build_ridges() -> void:
 	# One MultiMesh per model and 32 m band (off-screen bands are culled); they cast shadows like the keeps do.
+	if SCULPTED_ROCKS:
+		for m in RockSculpt.meshes():
+			var mi := MeshInstance3D.new()
+			mi.mesh = m
+			mi.material_override = _rock_material()
+			mi.cast_shadow = _cast()
+			mi.set_meta("perf", "ridges")
+			mi.set_meta("perf_kind", "sculpted")
+			add_child(mi)
 	if _ridge_plan.is_empty():
 		_ridge_plan = _plan_ridges()
 	for kind in _ridge_plan:
@@ -2293,6 +2337,8 @@ func _build_fords() -> void:
 	for f in Land.FORDS:
 		var fx := float(f[0])
 		var hw := float(f[1])
+		if absf(fx) < 1.0 or absf(absf(fx) - Land.SIDE_CORNER_X) < 1.0:
+			continue                               # (0.31.216: a lane's ford is its paving, laid through the water)
 		var c := Land.river_c(fx)
 		var reach := Land.river_hw(fx) + 0.6
 		var y := c - reach
@@ -2318,7 +2364,7 @@ func _build_fords() -> void:
 	mmi.multimesh = mm
 	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	var sm := StandardMaterial3D.new()                   # pale, water-worn stone (the forest rocks' grey read as a dark cobble patch)
-	sm.albedo_color = Color("#b9b2a2")
+	sm.albedo_color = Color("#8d949a")             # (0.31.216: the lanes' grey-blue slabs; #b9b2a2 until then)
 	sm.roughness = 0.9
 	mmi.material_override = sm
 	mmi.set_meta("perf", "fords")
@@ -3740,33 +3786,97 @@ func _sync_fog() -> void:
 	(_fog.tex as ImageTexture).set_image(img)
 
 func _build_brush() -> void:
-	# The brush you hide in (moba_vision.gd's patches): each patch one of foliage.gd's BRUSH_SETS (tall grass, a leafy
-	# thicket or an enchanted one) filling its circle. 0.31.173: the Meshy bushes (were KayKit's, a smaller grid).
+	# The brush you hide in (moba_vision.gd's patches). 0.31.216 (Kevin: "need new models for grass"): Honor of Kings' tall
+	# lavender-tipped grass painted by ElevenLabs (ground_cards.gd BRUSH), thick enough to fill its circle -- a ring of
+	# tall clumps round its edge, more through the middle -- with the field's grass clumps at its foot. (0.31.173: the
+	# Meshy bushes and grasses of foliage.gd's BRUSH_SETS; KayKit's before.)
 	if sim.moba == null or sim.moba.vision == null:
 		return
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 158
-	var per := {}
+	var n := 0
 	for b in sim.moba.vision.brushes:
 		var c: Vector2 = b.p
 		var rad: float = b.r
-		var bset: Dictionary = Foliage.BRUSH_SETS[rng.randi() % Foliage.BRUSH_SETS.size()]
-		var step := 1.6                             # (1.15 with KayKit's smaller bushes)
-		var zi := -rad
-		while zi <= rad:
-			var xi := -rad
-			while xi <= rad:
-				var q := c + Vector2(xi, zi) + Vector2(rng.randf_range(-0.35, 0.35), rng.randf_range(-0.35, 0.35))
-				if q.distance_to(c) <= rad - 0.5:              # (the bigger plants' edges ~ the patch's)
-					var kind := Foliage.pick(rng, bset)
-					if not per.has(kind):
-						per[kind] = []
-					var xf := Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3.ONE * Foliage.brush_scale(rng, kind)), Vector3(q.x, Sim.height_at(q) - 0.05, q.y))
-					(per[kind] as Array).append(xf)
-				xi += step
-			zi += step
-	for kind in per:
-		_plant_batch(kind, per[kind], GeometryInstance3D.SHADOW_CASTING_SETTING_OFF, "brush")
+		var tall := []
+		var tall_c := []
+		var low := []
+		var low_c := []
+		var ring := int(ceil(TAU * (rad - 0.4) / 0.95))
+		for k in ring:
+			var a := TAU * (float(k) + rng.randf_range(-0.3, 0.3)) / ring
+			tall.append(_brush_xf(c + Vector2.from_angle(a) * (rad - 0.45) * rng.randf_range(0.9, 1.05), rng, 2.0, 2.5))
+			tall_c.append(GroundCards.custom(rng.randi() % 2, rng))
+		var inner := int(rad * rad * 1.1)
+		for k in inner:
+			var q := c + Vector2.from_angle(rng.randf() * TAU) * sqrt(rng.randf()) * (rad - 0.9)
+			tall.append(_brush_xf(q, rng, 2.1, 2.6))
+			tall_c.append(GroundCards.custom(rng.randi() % 2, rng))
+		for k in int(ring * 0.8):
+			var q := c + Vector2.from_angle(rng.randf() * TAU) * (rad + rng.randf_range(-0.1, 0.35))
+			low.append(_brush_xf(q, rng, 0.6, 0.9))
+			low_c.append(GroundCards.custom(rng.randi() % 8, rng))
+		# one MultiMesh a patch and kind (Brush_*: tests/moba_ui_test.gd, foliage_test.gd count them)
+		for pair in [["brush", tall, tall_c], ["blades", low, low_c]]:
+			var mm := MultiMesh.new()
+			mm.transform_format = MultiMesh.TRANSFORM_3D
+			mm.use_custom_data = true
+			mm.mesh = GroundCards.mesh(str(pair[0]))
+			mm.instance_count = (pair[1] as Array).size()
+			for i in mm.instance_count:
+				mm.set_instance_transform(i, pair[1][i])
+				mm.set_instance_custom_data(i, pair[2][i])
+			var mmi := MultiMeshInstance3D.new()
+			mmi.name = "Brush_%s_%d" % [str(pair[0]), n]
+			mmi.multimesh = mm
+			mmi.material_override = GroundCards.material(str(pair[0]), PAINT_TINT * CARD_LIGHT)
+			mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			mmi.set_meta("perf", "brush")
+			mmi.set_meta("perf_kind", str(pair[0]))
+			mmi.set_meta("places", pair[1])
+			add_child(mmi)
+		n += 1
+
+static func _brush_xf(q: Vector2, rng: RandomNumberGenerator, s0: float, s1: float) -> Transform3D:
+	var sc := rng.randf_range(s0, s1)
+	var b := Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(sc * rng.randf_range(0.9, 1.2), sc, sc * rng.randf_range(0.9, 1.2)))
+	return Transform3D(b, Vector3(q.x, Sim.height_at(q) - 0.06, q.y))
+
+# 0.31.216 (Kevin: "use eleven to draw detailed paint on ground"): carved stone circles where Honor of Kings has them --
+# the river's crossing in the middle, the pits' floors, the lanes outside each keep's gates and halfway down the
+# middle lane and the side lanes -- and a ring of carved stone round every tower's foot (ground_cards.gd decals).
+const MARK_CIRCLES := [[Vector2(0.0, 0.0), 8.5], [Vector2(0.0, 41.0), 6.0], [Vector2(-60.0, 33.0), 6.0],
+	[Vector2(60.0, 33.0), 6.0]]
+const MARK_RING := 6.4                 # a tower's ring, across (its hole ~2.4 m: the tower's foot stands in it)
+
+func _build_ground_marks() -> void:
+	var h := func(p: Vector2) -> float: return Land.terrain_height(p)
+	var spots := []
+	for c in MARK_CIRCLES:
+		spots.append(["circle.png", c[0], float(c[1])])
+		if (c[0] as Vector2).length() > 0.1:
+			spots.append(["circle.png", -(c[0] as Vector2), float(c[1])])
+	for i in 2:
+		spots.append(["circle.png", Land.pit_c(i), Land.PIT_R * 1.9])
+	for t in 2:
+		for g in Keep.GATE_ANG.size():
+			var gc: Vector2 = Keep.gate_c(g)
+			var out := (gc - Keep.C).normalized()
+			spots.append(["circle.png", Sim._m(t, gc + out * 6.2), 5.2])
+	if sim.moba != null:
+		for tw in sim.moba.towers:
+			spots.append(["ring.png", tw.p, MARK_RING])
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 216
+	for sp in spots:
+		var mi := MeshInstance3D.new()
+		mi.mesh = GroundCards.decal_mesh(sp[1], float(sp[2]), h)
+		var m: ShaderMaterial = GroundCards.decal_material(str(sp[0]), PAINT_TINT * 1.05).duplicate()
+		m.set_shader_parameter("spin", rng.randf() * TAU)
+		mi.material_override = m
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mi.set_meta("perf", "marks")
+		add_child(mi)
 
 func _sync_wards() -> void:
 	if sim.moba == null or sim.moba.vision == null:
@@ -4730,6 +4840,26 @@ func snap_camera() -> void:
 	# Jump straight to the player next frame (after a teleport) instead of gliding across the map.
 	_cam_target = Vector3.ZERO
 
+# 0.31.216: the landscape camera (Honor of Kings'): its turn round the map, its tilt, how far it stands from the point it
+# looks at, how far ahead of you (up the screen) that point is, its field of view (vertical, 16:9 .. 21:9 phones
+# showing more or less across). (Until 0.31.216: portrait, looking straight up the field, 38 m up and 30 m back, fov 50.)
+const CAM_YAW := PI / 4.0           # the screen's up, for blue: the world's -y (up the field) turned this far toward -x
+const CAM_PITCH := 0.9076         # 52 degrees
+const CAM_DIST := 22.0
+const CAM_AHEAD := 2.0
+const CAM_FOV := 34.0
+
+static func screen_up(team: int) -> Vector2:
+	# the world direction (x, z) the top of the screen looks along: blue's keep bottom-left, red's top-right
+	var u := Vector2(0.0, -1.0).rotated(-CAM_YAW)
+	return u if team == 0 else -u
+
+static func screen_to_world(v: Vector2, team: int) -> Vector2:
+	# a direction on the screen (x right, y down) as a world direction (x, z)
+	var up := screen_up(team)
+	var right := Vector2(-up.y, up.x)
+	return right * v.x - up * v.y
+
 func _update_camera(dt: float) -> void:
 	if cam_override.size() == 2:
 		camera.position = cam_override[0]
@@ -4751,11 +4881,13 @@ func _update_camera(dt: float) -> void:
 					focus = (pb as Node3D).global_position
 					focus.y = 0.0
 					break
-	# Look up-field (toward the enemy keep) so more of what's ahead is on screen.
-	var ahead := -1.0 if me.get("team", 0) == 0 else 1.0
-	var target := focus + Vector3(0, 0, ahead * 3.2)
+	# 0.31.216 (Kevin: "The game needs to change from vertical to horizontal", Honor of Kings' camera): landscape, turned
+	# CAM_YAW so the square map sits square on the screen -- your keep bottom-left, theirs top-right (red's view turned
+	# half way round, as before) -- looking down at CAM_PITCH, a little ahead of you (up the screen).
+	var up := screen_up(int(me.get("team", 0)))
+	var target := focus + Vector3(up.x, 0.0, up.y) * CAM_AHEAD
 	_cam_target = target if _cam_target == Vector3.ZERO else _cam_target.lerp(target, 1.0 - exp(-dt * 6.0))
-	camera.position = _cam_target + Vector3(0, 38.0, -ahead * 30.0)
+	camera.position = _cam_target + Vector3(-up.x, 0.0, -up.y) * CAM_DIST * cos(CAM_PITCH) + Vector3(0.0, CAM_DIST * sin(CAM_PITCH), 0.0)
 	camera.look_at(_cam_target, Vector3.UP)
 	if _shake > 0.01:
 		# Short camera shake for the tantrum shockwave.

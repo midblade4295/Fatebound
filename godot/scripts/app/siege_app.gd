@@ -125,12 +125,18 @@ var menu_button: Control                # 0.31.194: that button, in the top bar
 var menu_badge: Control                 # ... and its count of what's waiting in the menu
 var home_scene: Control                # Home's camp (camp_scene.gd; 0.31.138-0.31.193 the war room)
 var safe_top := 0.0
+var safe_left := 0.0                   # 0.31.216: landscape -- the notch is on a side
+var safe_right := 0.0
 var xp_holder: Control
 var pass_badge: Control
 var alliance_badge: Control
 var _tab_tweens := {}
-const TOP_H := 56.0                    # the top bar
-const TAB_H := 72.0                    # the tab bar
+const TOP_H := 52.0                    # the top bar (56 in portrait)
+const TAB_H := 72.0                    # a tab's tile (the tab bar's height in portrait)
+# 0.31.216 (Kevin: "The game needs to change from vertical to horizontal", Honor of Kings): the app is landscape -- the
+# top bar across the top, the tabs down a wooden rail on the left (RAIL_W), the screens beside it; the notch's side
+# inset (safe_left / safe_right) kept clear.
+const RAIL_W := 84.0
 const FADE_COLOR := Color("#0d1627")
 var _toast: Label
 var _toast_box: PanelContainer
@@ -163,6 +169,7 @@ var online_refs := {}                  # Home's "players online" pill: {main, su
 var social: Node = null
 var social_autostart := DisplayServer.get_name() != "headless" or OS.has_environment("FB_SOCIAL")
 var chat_ticker: Control = null
+var body: HBoxContainer = null         # 0.31.216: the tab rail and the screen area beside it
 var _invite_banner: Control = null
 var social_tab := "friends"            # 0.31.134: FRIENDS or CLAN, the one the social window opened on last
 var _social_name := ""
@@ -457,6 +464,9 @@ func _build_hero() -> void:
 	# out so the champions' feet are just over PLAY. (0.31.138-0.31.193: the war room, its table and heroes in 3D.)
 	# Scrolls away with a parallax as the menu is scrolled.
 	safe_top = _safe_top()
+	var sides := _safe_sides()
+	safe_left = sides.x
+	safe_right = sides.y
 	hero_layer = Control.new()
 	hero_layer.anchor_right = 1.0
 	hero_layer.anchor_bottom = 1.0             # 0.31.117: the whole screen (was 650 + safe_top: the painting stopped under
@@ -474,6 +484,7 @@ func _build_hero() -> void:
 	home_scene.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	hero_layer.add_child(home_scene)
 	var lay := func():
+		home_scene.inset_left = RAIL_W + safe_left
 		home_scene.place(home_play_top())
 	hero_layer.resized.connect(lay)
 	lay.call()
@@ -489,6 +500,7 @@ func hero_show(_cls := "", _look := {}) -> void:
 	# (Home builds call this:) the camp laid out again, now that the chat line and the tab bar are there to measure
 	# from. (0.31.79-0.31.193 Home's heroes in 3D, in what's equipped: the camp's champions are painted.)
 	if home_scene != null:
+		home_scene.inset_left = RAIL_W + safe_left
 		home_scene.place(home_play_top())
 
 func _on_scroll(v: float) -> void:
@@ -504,12 +516,28 @@ func _safe_top() -> float:
 		return 0.0
 	return clampf(float(safe.position.y) * logical.y / window.y, 0.0, 60.0)
 
+func _safe_sides() -> Vector2:
+	# 0.31.216: the notch's inset on the left and the right, in logical pixels (landscape)
+	var safe := DisplayServer.get_display_safe_area()
+	var window := Vector2(DisplayServer.window_get_size())
+	var logical := get_viewport().get_visible_rect().size
+	if window.x <= 0 or safe.size.x <= 0:
+		return Vector2.ZERO
+	var k := logical.x / window.x
+	return Vector2(clampf(float(safe.position.x) * k, 0.0, 60.0), clampf((window.x - float(safe.end.x)) * k, 0.0, 60.0))
+
+func content_w() -> float:
+	# 0.31.216: the screens' width -- the screen less the tab rail, the notch and the list's margins
+	return size.x - RAIL_W - safe_left - safe_right - 24.0
+
 func _build_chrome() -> void:
 	chrome = VBoxContainer.new()
 	chrome.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	chrome.offset_left = safe_left
+	chrome.offset_right = -safe_right
 	chrome.add_theme_constant_override("separation", 0)
 	add_child(chrome)
-	UI.spacer(chrome, 6.0 + safe_top)
+	UI.spacer(chrome, 4.0 + safe_top)
 	# --- top bar: level shield, name + XP, gold and gems (0.31.79 look)
 	var top := Control.new()
 	top.custom_minimum_size = Vector2(0, TOP_H)
@@ -575,6 +603,19 @@ func _build_chrome() -> void:
 	gold_label = _pill(bar, "coin")
 	gems_label = _pill(bar, "gem")
 	# (0.31.105-0.31.183 an Embers counter too: 0.31.184, Kevin: "Maybe let's have the two currency so it's more simple")
+	# --- the rail on the left, the screen area beside it (0.31.216: the tab bar was across the bottom)
+	body = HBoxContainer.new()
+	body.add_theme_constant_override("separation", 0)
+	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	chrome.add_child(body)
+	var rail := Control.new()
+	rail.name = "TabRail"
+	rail.custom_minimum_size = Vector2(RAIL_W, 0)
+	body.add_child(rail)
+	var screen_col := VBoxContainer.new()
+	screen_col.add_theme_constant_override("separation", 0)
+	screen_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	body.add_child(screen_col)
 	# --- screen area ---
 	content_scroll = ScrollContainer.new()
 	content_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -582,13 +623,13 @@ func _build_chrome() -> void:
 	# Drag-scrolling is done by _input below; the built-in one never saw drags that started on a
 	# card or button (they stop the event) and would fight ours where it did.
 	content_scroll.scroll_deadzone = 1000000
-	chrome.add_child(content_scroll)
+	screen_col.add_child(content_scroll)
 	var margin := MarginContainer.new()
 	margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	for side in ["left", "right"]:
 		margin.add_theme_constant_override("margin_" + side, 12)
 	margin.add_theme_constant_override("margin_top", 4)
-	margin.add_theme_constant_override("margin_bottom", 26)
+	margin.add_theme_constant_override("margin_bottom", 16)
 	content_scroll.add_child(margin)
 	content = VBoxContainer.new()
 	content.add_theme_constant_override("separation", 14)
@@ -596,11 +637,10 @@ func _build_chrome() -> void:
 	margin.add_child(content)
 	# --- the chat line over the tab bar, Home only (0.31.111; set up once the social side exists)
 	chat_ticker = ChatTicker.new()
-	chrome.add_child(chat_ticker)
-	# --- tab bar: dark wood with a gold edge; the open tab is a raised gold-framed tile (0.31.79)
-	var tb := Control.new()
-	tb.custom_minimum_size = Vector2(0, TAB_H)
-	chrome.add_child(tb)
+	screen_col.add_child(chat_ticker)
+	# --- the tab rail: dark wood with a gold edge on its right; the open tab is a raised gold-framed tile (0.31.79; a
+	# bar across the bottom until 0.31.216)
+	var tb := rail
 	var wood := TextureRect.new()
 	wood.texture = UI2.tex(UI2.V2 + "tex_wood.webp")
 	wood.stretch_mode = TextureRect.STRETCH_TILE
@@ -610,28 +650,40 @@ func _build_chrome() -> void:
 	wood.modulate = Color(0.62, 0.5, 0.42)
 	wood.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	tb.add_child(wood)
-	_band(tb, Color(0.08, 0.03, 0.0, 0.1), Color(0.05, 0.02, 0.0, 0.7), true, TAB_H)
+	var shade := TextureRect.new()                  # (darker toward the screen side)
+	shade.texture = _grad(Color(0.05, 0.02, 0.0, 0.1), Color(0.05, 0.02, 0.0, 0.6), 8, 64)
+	shade.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	shade.stretch_mode = TextureRect.STRETCH_SCALE
+	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tb.add_child(shade)
 	var edge := ColorRect.new()
 	edge.color = Color("#2a1604")
+	edge.anchor_left = 1.0
 	edge.anchor_right = 1.0
-	edge.offset_top = -3
-	edge.offset_bottom = 3
+	edge.anchor_bottom = 1.0
+	edge.offset_left = -3
+	edge.offset_right = 3
 	edge.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	tb.add_child(edge)
 	var gold_edge := TextureRect.new()
 	gold_edge.texture = _grad(Color("#fff0b0"), Color("#b9761b"), 4, 16)
 	gold_edge.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	gold_edge.stretch_mode = TextureRect.STRETCH_SCALE
+	gold_edge.anchor_left = 1.0
 	gold_edge.anchor_right = 1.0
-	gold_edge.offset_top = -2
-	gold_edge.offset_bottom = 2
+	gold_edge.anchor_bottom = 1.0
+	gold_edge.offset_left = -2
+	gold_edge.offset_right = 1
 	gold_edge.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	tb.add_child(gold_edge)
-	var trow := HBoxContainer.new()
+	var trow := VBoxContainer.new()
 	trow.add_theme_constant_override("separation", 0)
 	trow.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	trow.offset_left = 4
-	trow.offset_right = -4
+	trow.offset_top = 4
+	trow.offset_bottom = -6
+	trow.offset_left = 2
+	trow.offset_right = -5
 	tb.add_child(trow)
 	for t in TABS:
 		tab_buttons[t[0]] = _tab_button(trow, t[0], t[1], t[2])
@@ -704,9 +756,9 @@ func _tab_button(parent: Node, id: String, text: String, icon_name: String) -> D
 	b.focus_mode = Control.FOCUS_NONE
 	for st_name in ["normal", "hover", "pressed", "focus"]:
 		b.add_theme_stylebox_override(st_name, StyleBoxEmpty.new())
-	b.custom_minimum_size = Vector2(0, TAB_H)
+	b.custom_minimum_size = Vector2(0, 52)
 	b.set_meta("action_key", "tab_" + id)
-	UI.grow(b)
+	b.size_flags_vertical = Control.SIZE_EXPAND_FILL            # (0.31.216: a tile of the rail)
 	b.pressed.connect(func():
 		if id == "alliance":
 			sfx("menuOpen")                    # (0.31.139: the friends and clan window, over the screen you're on)
@@ -717,17 +769,17 @@ func _tab_button(parent: Node, id: String, text: String, icon_name: String) -> D
 	parent.add_child(b)
 	var plate := Control.new()                    # the raised tile of the open tab
 	plate.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	plate.offset_top = -18
-	plate.offset_left = 1
-	plate.offset_right = -1
-	plate.offset_bottom = -3
+	plate.offset_top = 2
+	plate.offset_left = 2
+	plate.offset_right = 10                       # (0.31.216: it stands out over the rail's edge toward the screen)
+	plate.offset_bottom = -2
 	plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	plate.visible = false
 	b.add_child(plate)
 	UI2.plate(plate, "royal", 16.0, "gold")
 	var halo := UI2.glow(plate, Rect2(0, 0, 10, 10), Color(1.0, 0.86, 0.45, 0.55))
 	plate.resized.connect(func():
-		halo.size = Vector2(plate.size.x * 1.1, 56)
+		halo.size = Vector2(plate.size.x * 1.1, plate.size.y * 0.8)
 		halo.position = Vector2(plate.size.x * -0.05, 2))
 	var ic := TextureRect.new()
 	ic.texture = UI2.tex(UI2.icon_path(icon_name))
@@ -738,8 +790,8 @@ func _tab_button(parent: Node, id: String, text: String, icon_name: String) -> D
 	var l := UI2.text(b, text, 11, Color("#f1dfba"), Color(0.1, 0.04, 0.0, 0.9), 3, false)
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	l.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
-	l.offset_top = -22
-	l.offset_bottom = -6
+	l.offset_top = -19
+	l.offset_bottom = -4
 	return {"button":b, "icon":ic, "label":l, "plate":plate}
 
 func _style_tab(tb: Dictionary, on: bool) -> void:
@@ -747,10 +799,10 @@ func _style_tab(tb: Dictionary, on: bool) -> void:
 	var ic: TextureRect = tb.icon
 	var l: Label = tb.label
 	(tb.plate as Control).visible = on
-	var px := 52.0 if on else 38.0
+	var px := 40.0 if on else 32.0
 	var place := func():
 		ic.size = Vector2(px, px)
-		ic.position = Vector2((b.size.x - px) * 0.5, -8.0 if on else 6.0)
+		ic.position = Vector2((b.size.x - px) * 0.5 + (4.0 if on else 0.0), maxf(2.0, (b.size.y - 18.0 - px) * 0.5))
 	if b.resized.is_connected(tb.get("place", func(): pass)):
 		b.resized.disconnect(tb.place)
 	tb["place"] = place
@@ -758,16 +810,17 @@ func _style_tab(tb: Dictionary, on: bool) -> void:
 	place.call()
 	ic.modulate = Color.WHITE if on else Color(0.92, 0.88, 0.84)
 	l.add_theme_color_override("font_color", Color.WHITE if on else Color("#d8c7a8"))     # (0.31.195: white, not gold)
-	l.add_theme_font_size_override("font_size", 13 if on else 10)
+	l.add_theme_font_size_override("font_size", 12 if on else 10)
 	l.add_theme_constant_override("outline_size", 4 if on else 3)
 	var key := str(b.get_meta("action_key"))
 	if _tab_tweens.has(key) and is_instance_valid(_tab_tweens[key]):
 		(_tab_tweens[key] as Tween).kill()
 	_tab_tweens.erase(key)
 	if on and is_inside_tree():
+		var y0 := ic.position.y
 		var tw := ic.create_tween().set_loops()
-		tw.tween_property(ic, "position:y", -12.0, 1.1).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-		tw.tween_property(ic, "position:y", -8.0, 1.1).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		tw.tween_property(ic, "position:y", y0 - 3.0, 1.1).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		tw.tween_property(ic, "position:y", y0, 1.1).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 		_tab_tweens[key] = tw
 
 func refresh_top() -> void:
@@ -907,7 +960,7 @@ func open_player_menu() -> void:
 	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	m.add_child(dim)
 	var holder := Control.new()
-	holder.position = Vector2(8, 6.0 + safe_top + TOP_H - 2.0)
+	holder.position = Vector2(8, 4.0 + safe_top + TOP_H - 2.0)
 	holder.size = Vector2(minf(250.0, size.x - 16.0), 10)
 	m.add_child(holder)
 	var v := UI2.frame(holder, "night", 10, 16.0, "gold")
@@ -1055,7 +1108,7 @@ func open_home_menu() -> void:
 	var pw := minf(290.0, size.x - 16.0)
 	var holder := Control.new()
 	var bx := menu_button.global_position.x + menu_button.size.x * 0.5 if menu_button != null else size.x - 120.0
-	holder.position = Vector2(clampf(bx - pw * 0.62, 8.0, size.x - 8.0 - pw), 6.0 + safe_top + TOP_H - 2.0)
+	holder.position = Vector2(clampf(bx - pw * 0.62, 8.0, size.x - 8.0 - pw), 4.0 + safe_top + TOP_H - 2.0)
 	holder.size = Vector2(pw, 10)
 	m.add_child(holder)
 	var v := UI2.frame(holder, "night", 10, 16.0, "gold")
@@ -1147,13 +1200,14 @@ func paint_alliance() -> void:
 
 func home_play_top() -> float:
 	# where PLAY's top is on the screen (the camp stands the champions' feet just over it)
-	return 6.0 + safe_top + TOP_H + 4.0 + float(Screens.home_layout(home_height()).play)
+	# (0.31.216: the chests' top -- the heroes stand over the chests in landscape; PLAY's top in portrait)
+	return 4.0 + safe_top + TOP_H + 4.0 + float(Screens.home_layout(home_height()).chests)
 
 func home_height() -> float:
 	# the height Home has to fill: the screen less the top bar, the chat line, the tab bar and the list's margins
 	var vh := get_viewport_rect().size.y
 	var ticker := float(ChatTicker.H) if chat_ticker != null else 0.0
-	return vh - (6.0 + safe_top + TOP_H) - ticker - TAB_H - 30.0
+	return vh - (4.0 + safe_top + TOP_H) - ticker - 20.0       # (0.31.216: no tab bar under it -- the rail is beside it)
 
 func show_tab(id: String) -> void:
 	if is_instance_valid(modal):
@@ -1450,6 +1504,24 @@ func _process(_delta: float) -> void:
 		_toast_box.modulate.a = clampf(left / 0.5, 0.0, 1.0)
 		if left <= 0.0:
 			_toast_box.visible = false
+	_fit_modal()
+
+func _fit_modal() -> void:
+	# 0.31.216: landscape -- a window card (a CenterContainer's) taller or wider than the screen is drawn smaller to fit
+	# it whole, about its middle; nothing changes for one that fits
+	if not is_instance_valid(modal):
+		return
+	for c in modal.get_children():
+		if c is CenterContainer and c.get_child_count() > 0:
+			var card := c.get_child(0) as Control
+			if card == null:
+				continue
+			var need := card.get_combined_minimum_size()
+			var avail := size - Vector2(16.0 + safe_left + safe_right, 12.0)
+			var k := clampf(minf(avail.y / maxf(need.y, 1.0), avail.x / maxf(need.x, 1.0)), 0.5, 1.0)
+			if absf(card.scale.x - k) > 0.005 or card.pivot_offset != need * 0.5:
+				card.pivot_offset = need * 0.5
+				card.scale = Vector2(k, k)
 
 # ---------------- matches ----------------
 const TUTORIAL_GOLD := Eco.TUTORIAL_GOLD

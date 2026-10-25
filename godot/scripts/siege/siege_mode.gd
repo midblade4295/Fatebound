@@ -807,10 +807,11 @@ func _move_input() -> Vector2:
 	# The stick in world terms. 0.31.85 (Kevin: "When on the other team ... controls are inverted"): the camera looks up
 	# the field from your own castle, so on the red team (online) it is turned half way round from blue's -- the
 	# stick's screen directions are the opposite world directions there.
+	# 0.31.216: the landscape camera is turned (siege_view.gd CAM_YAW): the stick's screen directions are the world's
+	# turned with it.
 	var v: Vector2 = hud.move_vector()
-	if sim != null and int(sim.by_id.get(hud.player_id, {}).get("team", 0)) == 1:
-		v = -v
-	return v
+	var team := int(sim.by_id.get(hud.player_id, {}).get("team", 0)) if sim != null else 0
+	return View.screen_to_world(v, team)
 
 func _restart() -> void:
 	if is_instance_valid(view):

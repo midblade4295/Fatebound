@@ -17,7 +17,7 @@ func _init() -> void:
 	rng.seed = int(OS.get_environment("SEED")) if OS.has_environment("SEED") else 5
 	mode = Mode.new()
 	mode.moba_hero = "knight"
-	mode.size = Vector2(420, 780)
+	mode.size = Vector2(780, 420)
 	root.add_child(mode)
 func touch(index: int, pos: Vector2, pressed: bool) -> void:
 	var e := InputEventScreenTouch.new()

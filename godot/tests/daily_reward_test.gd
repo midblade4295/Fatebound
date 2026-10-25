@@ -42,7 +42,7 @@ func _init() -> void:
 	app.legacy_path = base + "-none.json"
 	app.daily_auto = true
 	root.add_child(app)
-	app.size = Vector2(420, 933)
+	app.size = Vector2(933, 420)
 
 func _part1() -> void:
 	var p = Profile.new("user://dailytest-p1-%d.json" % Time.get_ticks_usec(), "user://none.json")
