@@ -10,7 +10,7 @@ namespace Fatebound.GUI
 {
     public enum ProcessModeEnum { Inherit, Pausable, WhenPaused, Always, Disabled }
 
-    public class Node
+    public class Node : IGodotObject
     {
         public const int NOTIFICATION_ENTER_TREE = 10, NOTIFICATION_EXIT_TREE = 11, NOTIFICATION_READY = 13,
             NOTIFICATION_PAUSED = 14, NOTIFICATION_UNPAUSED = 15, NOTIFICATION_PROCESS = 17, NOTIFICATION_PARENTED = 18,
@@ -39,6 +39,24 @@ namespace Fatebound.GUI
         Dictionary<string, object> _meta;
         HashSet<string> _groups;
         public Node Owner;
+        static ulong _nextId = 1;
+        readonly ulong _instanceId = _nextId++;
+        internal Viewport vpCache;
+        internal bool internalProcessOn;
+        /// <summary>Position in SceneTree.TreeOrder() (valid after it was last rebuilt).</summary>
+        internal int treeIndex;
+        int _ovr = -1;
+
+        /// <summary>get_instance_id().</summary>
+        public ulong GetInstanceId() => _instanceId;
+        /// <summary>get_class(): the engine class this node is (a game class reports the framework class it extends).</summary>
+        public string GetClass()
+        {
+            for (var t = GetType(); t != null; t = t.BaseType)
+                if (t.Namespace == typeof(Node).Namespace) return t.Name;
+            return "Node";
+        }
+        public static implicit operator Var(Node n) => n == null ? Var.Nil : Var.Of(n);
 
         public event Action TreeEntered, TreeExiting, TreeExited, Ready, Renamed;
         public event Action<Node> ChildEnteredTree, ChildExitingTree;
@@ -83,7 +101,8 @@ namespace Fatebound.GUI
         /// <summary>All children including internal ones, in draw order (for the viewport's walks).</summary>
         internal List<Node> AllChildren => children;
 
-        public virtual Viewport GetViewport() => GetTree()?.Root;
+        /// <summary>The nearest Viewport above (cached while in the tree, as Godot's data.viewport).</summary>
+        public virtual Viewport GetViewport() => vpCache ?? GetTree()?.Root;
 
         public void AddChild(Node child, bool forceReadableName = false, InternalMode internalMode = InternalMode.Disabled)
         {
@@ -148,7 +167,7 @@ namespace Fatebound.GUI
             ChildOrderChanged?.Invoke();
         }
 
-        public void Reparent(Node newParent, bool keepGlobalTransform = true)
+        public virtual void Reparent(Node newParent, bool keepGlobalTransform = true)
         {
             Parent?.RemoveChild(this);
             newParent.AddChild(this);
@@ -166,6 +185,7 @@ namespace Fatebound.GUI
         internal void PropagateEnterTree(SceneTree tree)
         {
             _tree = tree;
+            vpCache = this as Viewport ?? Parent?.vpCache ?? (Parent is Viewport pv ? pv : null);
             tree.Register(this);
             _Notification(NOTIFICATION_ENTER_TREE);
             OnEnterTree();
@@ -201,6 +221,7 @@ namespace Fatebound.GUI
             Parent?.ChildExitingTree?.Invoke(this);
             _readyNotified = false;
             _tree = null;
+            vpCache = null;
         }
 
         internal void PropagateAfterExitTree()
@@ -333,6 +354,10 @@ namespace Fatebound.GUI
 
         public void Notification(int what) => _Notification(what);
 
+        /// <summary>Godot's _set for stored properties with dynamic names ("bones/3/rest", "surface_material_override/0"):
+        /// the baked-scene loader calls it first; true = handled (see Resource.SetStoredProperty).</summary>
+        public virtual bool SetStoredProperty(string name, Var value) => false;
+
         internal void CallProcess(double delta) => _Process(delta);
         internal void CallPhysicsProcess(double delta) => _PhysicsProcess(delta);
         internal void CallInput(InputEvent e) => _Input(e);
@@ -341,7 +366,13 @@ namespace Fatebound.GUI
         static readonly Dictionary<Type, int> _overrides = new Dictionary<Type, int>();
         int Overrides()
         {
-            var t = GetType();
+            if (_ovr >= 0) return _ovr;
+            _ovr = TypeOverrides(GetType());
+            return _ovr;
+        }
+
+        static int TypeOverrides(Type t)
+        {
             lock (_overrides)
             {
                 if (_overrides.TryGetValue(t, out var f)) return f;
@@ -370,11 +401,16 @@ namespace Fatebound.GUI
         public bool IsPhysicsProcessing() => _physicsOn ?? (Overrides() & 2) != 0;
         public bool IsProcessingInput() => _inputOn ?? (Overrides() & 4) != 0;
         public bool IsProcessingUnhandledInput() => _unhandledOn ?? (Overrides() & 8) != 0;
-        public void SetProcess(bool on) => _processOn = on;
-        public void SetPhysicsProcess(bool on) => _physicsOn = on;
-        public void SetProcessInput(bool on) => _inputOn = on;
-        public void SetProcessUnhandledInput(bool on) => _unhandledOn = on;
-        public void SetProcessInternal(bool on) { }
+        public void SetProcess(bool on) { if (_processOn != on) { _processOn = on; _tree?.MarkProcessDirty(); } }
+        public void SetPhysicsProcess(bool on) { if (_physicsOn != on) { _physicsOn = on; _tree?.MarkProcessDirty(); } }
+        public void SetProcessInput(bool on) { if (_inputOn != on) { _inputOn = on; _tree?.MarkProcessDirty(); } }
+        public void SetProcessUnhandledInput(bool on) { if (_unhandledOn != on) { _unhandledOn = on; _tree?.MarkProcessDirty(); } }
+        /// <summary>Internal processing (the engine's own per-frame work: particles' timing, animation players...),
+        /// separate from the script's _process.</summary>
+        public void SetProcessInternal(bool on) { if (internalProcessOn != on) { internalProcessOn = on; _tree?.MarkProcessDirty(); } }
+        public bool IsProcessingInternal() => internalProcessOn;
+        protected virtual void InternalProcess(double delta) { }
+        internal void CallInternalProcess(double delta) => InternalProcess(delta);
 
         /// <summary>can_process(): not paused out (process_mode against SceneTree.paused).</summary>
         public bool CanProcess()
@@ -490,9 +526,16 @@ namespace Fatebound.GUI
         public double Now { get; private set; }
         public event Action ProcessFrame, PhysicsFrame;
 
-        readonly List<Node> _nodes = new List<Node>();
-        bool _nodesDirty = true;
+        bool _nodesDirty = true, _procDirty = true;
+        int _nodeCount;
         readonly List<Node> _ordered = new List<Node>();
+        readonly List<Node> _proc = new List<Node>(), _phys = new List<Node>(), _input = new List<Node>(), _unhandled = new List<Node>();
+        readonly List<CanvasItem> _redraw = new List<CanvasItem>();
+        CanvasItem[] _redrawScratch = new CanvasItem[64];
+        Node[] _scratch = new Node[256];
+#if FB3D
+        internal readonly List<Node3D> xformChangeList = new List<Node3D>();
+#endif
         readonly List<Action> _deferred = new List<Action>();
         readonly List<Node> _deleteQueue = new List<Node>();
         readonly List<SceneTreeTimer> _timers = new List<SceneTreeTimer>();
@@ -511,11 +554,14 @@ namespace Fatebound.GUI
             Root.PropagateReady();
         }
 
-        internal void Register(Node n) { _nodes.Add(n); _nodesDirty = true; }
-        internal void Unregister(Node n) { _nodes.Remove(n); _nodesDirty = true; }
-        internal void MarkOrderDirty() => _nodesDirty = true;
+        internal void Register(Node n) { _nodeCount++; _nodesDirty = true; _procDirty = true; }
+        internal void Unregister(Node n) { _nodeCount--; _nodesDirty = true; _procDirty = true; }
+        internal void MarkOrderDirty() { _nodesDirty = true; _procDirty = true; }
+        internal void MarkProcessDirty() => _procDirty = true;
+        public int GetNodeCount() => _nodeCount;
 
-        /// <summary>Every node in tree order (parents before children, siblings in order).</summary>
+        /// <summary>Every node in tree order (parents before children, siblings in order). Rebuilt only after the
+        /// tree changed; don't change the tree while walking it (copy it first).</summary>
         public List<Node> TreeOrder()
         {
             if (_nodesDirty)
@@ -529,9 +575,106 @@ namespace Fatebound.GUI
 
         void Walk(Node n)
         {
+            n.treeIndex = _ordered.Count;
             _ordered.Add(n);
-            for (int i = 0; i < n.children.Count; i++) Walk(n.children[i]);
+            var c = n.children;
+            for (int i = 0; i < c.Count; i++) Walk(c[i]);
         }
+
+        void RebuildProcessLists()
+        {
+            if (!_procDirty) return;
+            var order = TreeOrder();
+            _proc.Clear(); _phys.Clear(); _input.Clear(); _unhandled.Clear();
+            bool prio = false;
+            for (int i = 0; i < order.Count; i++)
+            {
+                var n = order[i];
+                if (n.IsProcessing() || n.internalProcessOn) { _proc.Add(n); if (n.ProcessPriority != 0) prio = true; }
+                if (n.IsPhysicsProcessing()) _phys.Add(n);
+                if (n.IsProcessingInput()) _input.Add(n);
+                if (n.IsProcessingUnhandledInput()) _unhandled.Add(n);
+            }
+            if (prio) StableByPriority(_proc);
+            _procDirty = false;
+        }
+
+        static void StableByPriority(List<Node> l)
+        {
+            var idx = new Dictionary<Node, int>(l.Count);
+            for (int i = 0; i < l.Count; i++) idx[l[i]] = i;
+            l.Sort((a, b) => a.ProcessPriority != b.ProcessPriority ? a.ProcessPriority.CompareTo(b.ProcessPriority) : idx[a].CompareTo(idx[b]));
+        }
+
+        /// <summary>A copy of a list in a reused buffer (what Godot's process groups iterate: nodes added meanwhile wait
+        /// for the next frame, removed ones are skipped by their checks).</summary>
+        int Snapshot(List<Node> l)
+        {
+            if (_scratch.Length < l.Count) _scratch = new Node[Math.Max(l.Count, _scratch.Length * 2)];
+            l.CopyTo(_scratch);
+            return l.Count;
+        }
+
+        /// <summary>_input then (if not handled) the GUI, then _unhandled_input: in reverse tree order, as Godot.</summary>
+        internal void DispatchInput(InputEvent ev, Viewport vp, bool unhandled)
+        {
+            RebuildProcessLists();
+            var l = unhandled ? _unhandled : _input;
+            var arr = l.ToArray();
+            for (int i = arr.Length - 1; i >= 0 && !vp.IsInputHandled(); i--)
+            {
+                var n = arr[i];
+                if (!n.IsInsideTree() || n.IsFreed || !n.CanProcess()) continue;
+                if (unhandled) { if (n.IsProcessingUnhandledInput()) Safe(() => n.CallUnhandledInput(ev)); }
+                else if (n.IsProcessingInput()) Safe(() => n.CallInput(ev));
+            }
+        }
+
+        /// <summary>queue_redraw(): the item's _draw runs before the frame is drawn.</summary>
+        internal void QueueRedrawItem(CanvasItem ci)
+        {
+            if (ci.inRedrawQueue) return;
+            ci.inRedrawQueue = true;
+            _redraw.Add(ci);
+        }
+
+        /// <summary>Runs the queued redraws (hidden items wait until they're shown). True if any drew.</summary>
+        internal bool ProcessRedraws()
+        {
+            bool any = false;
+            for (int pass = 0; pass < 4 && _redraw.Count > 0; pass++)
+            {
+                int n = _redraw.Count;
+                if (_redrawScratch.Length < n) _redrawScratch = new CanvasItem[Math.Max(n, _redrawScratch.Length * 2)];
+                _redraw.CopyTo(_redrawScratch);
+                _redraw.Clear();
+                for (int i = 0; i < n; i++)
+                {
+                    var ci = _redrawScratch[i];
+                    _redrawScratch[i] = null;
+                    ci.inRedrawQueue = false;
+                    if (ci.drawDirty && ci.IsInsideTree() && !ci.IsFreed && ci.IsVisibleInTree()) { ci.Redraw(); any = true; }
+                }
+            }
+            return any;
+        }
+
+#if FB3D
+        /// <summary>NOTIFICATION_TRANSFORM_CHANGED to every Node3D whose global transform changed (and asked to hear
+        /// it), as SceneTree::flush_transform_notifications.</summary>
+        public void FlushTransformNotifications()
+        {
+            for (int i = 0; i < xformChangeList.Count; i++)
+            {
+                var n = xformChangeList[i];
+                if (!n.inXformChangeList) continue;
+                Safe(n.DeliverTransformChanged);
+            }
+            xformChangeList.Clear();
+        }
+#else
+        public void FlushTransformNotifications() { }
+#endif
 
         public void Defer(Action a) { lock (_deferred) _deferred.Add(a); }
         public bool HasDeferred { get { lock (_deferred) return _deferred.Count > 0; } }
@@ -619,20 +762,39 @@ namespace Fatebound.GUI
             {
                 _physicsAcc -= step;
                 ticks++;
+                FlushTransformNotifications();
                 PhysicsFrame?.Invoke();
-                var order = TreeOrder().ToArray();
-                foreach (var n in order)
-                    if (n.IsInsideTree() && n.IsPhysicsProcessing() && n.CanProcess()) Safe(() => n.CallPhysicsProcess(step * TimeScale));
+                RebuildProcessLists();
+                int n = Snapshot(_phys);
+                double pd = step * TimeScale;
+                for (int i = 0; i < n; i++)
+                {
+                    var nd = _scratch[i];
+                    _scratch[i] = null;
+                    if (nd.IsInsideTree() && !nd.IsFreed && nd.IsPhysicsProcessing() && nd.CanProcess()) Safe(nd, pd, _physCall);
+                }
                 FlushDeferred();
+                FlushTransformNotifications();
             }
             if (ticks == 8) _physicsAcc = 0;
             ProcessFrame?.Invoke();
             FlushDeferred();
-            var nodes = TreeOrder().ToArray();
-            if (HasPriorities(nodes)) Array.Sort(nodes, (a, b) => a.ProcessPriority.CompareTo(b.ProcessPriority));
-            foreach (var n in nodes)
-                if (n.IsInsideTree() && n.IsProcessing() && n.CanProcess()) Safe(() => n.CallProcess(scaled));
+            FlushTransformNotifications();
+            RebuildProcessLists();
+            {
+                // tree order (process_priority first): each node's internal processing, then its _process
+                int n = Snapshot(_proc);
+                for (int i = 0; i < n; i++)
+                {
+                    var nd = _scratch[i];
+                    _scratch[i] = null;
+                    if (!nd.IsInsideTree() || nd.IsFreed || !nd.CanProcess()) continue;
+                    if (nd.internalProcessOn) Safe(nd, scaled, _internalCall);
+                    if (nd.IsProcessing() && nd.IsInsideTree()) Safe(nd, scaled, _procCall);
+                }
+            }
             FlushDeferred();
+            FlushTransformNotifications();
             for (int i = 0; i < _timers.Count; i++)
             {
                 var t = _timers[i];
@@ -650,6 +812,7 @@ namespace Fatebound.GUI
             }
             _tweens.RemoveAll(t => !t.IsValid());
             FlushDeferred();
+            FlushTransformNotifications();
             if (_deleteQueue.Count > 0)
             {
                 var del = _deleteQueue.ToArray();
@@ -659,16 +822,22 @@ namespace Fatebound.GUI
             Root.UpdateLayout();
         }
 
-        static bool HasPriorities(Node[] nodes)
-        {
-            foreach (var n in nodes) if (n.ProcessPriority != 0) return true;
-            return false;
-        }
 
         internal static void Safe(Action a)
         {
             try { a(); }
             catch (Exception ex) { GD_Log.Error(ex.ToString()); }
+        }
+
+        // (no closure per node per frame)
+        static readonly Action<Node, double> _procCall = (n, d) => n.CallProcess(d);
+        static readonly Action<Node, double> _physCall = (n, d) => n.CallPhysicsProcess(d);
+        static readonly Action<Node, double> _internalCall = (n, d) => n.CallInternalProcess(d);
+
+        static void Safe(Node n, double d, Action<Node, double> a)
+        {
+            try { a(n, d); }
+            catch (Exception ex) { GD_Log.Error(n.Name + ": " + ex); }
         }
     }
 

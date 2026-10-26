@@ -1,0 +1,14 @@
+{
+    "name": "Fatebound.Game",
+    "rootNamespace": "Fatebound.Game",
+    "references": ["Fatebound.Sim", "Fatebound.GUI"],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": true
+}

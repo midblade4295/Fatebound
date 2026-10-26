@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Fatebound.Game: the ported GDScript (no engine references) -->
+  <ItemGroup>
+    <ProjectReference Include="Sim.csproj" />
+    <ProjectReference Include="GUI.csproj" />
+    <Compile Include="../../Assets/Fatebound/Game/**/*.cs" />
+  </ItemGroup>
+</Project>

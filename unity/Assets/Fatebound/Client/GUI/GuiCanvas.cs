@@ -1,6 +1,10 @@
 // Fatebound (Unity port): runs the GUI framework inside Unity. Owns the SceneTree, feeds it touches/mouse/keys the way
-// Godot's Android/desktop input arrives, iterates it once a frame and draws its render batches through a Screen Space
-// Overlay canvas (one CanvasRenderer per batch, mesh vertices in screen pixels, the Fatebound/GUI shader).
+// Godot's Android/desktop input arrives, iterates it once a frame and draws its render batches.
+// Drawing: Godot's 2D renderer works in sRGB values (colours, textures and blending, no linear conversion), so the
+// batches are drawn into a raw RGBA8 texture the size of the screen (one mesh per batch, vertices in screen pixels, the
+// Fatebound/GUI shader or a ported canvas shader), from a command buffer run when the screen camera starts -- after
+// the 3D viewports' cameras have rendered this frame's images the GUI shows. One CanvasRenderer on an overlay canvas
+// then puts that texture on the screen (Fatebound/GUIComposite).
 using System.Collections.Generic;
 using Fatebound.GUI;
 using Fatebound.Sim;
@@ -11,6 +15,9 @@ using UInput = UnityEngine.Input;
 using Shader = UnityEngine.Shader;
 using Texture = UnityEngine.Texture;
 using Material = UnityEngine.Material;
+using Time = UnityEngine.Time;
+using Mesh = UnityEngine.Mesh;
+using UnityEngine.Rendering;
 
 namespace Fatebound.Client
 {
@@ -20,8 +27,18 @@ namespace Fatebound.Client
         public static GuiCanvas Instance { get; private set; }
         public SceneTree Tree { get; private set; }
         Canvas _canvas;
-        readonly List<CanvasRenderer> _renderers = new List<CanvasRenderer>();
+        CanvasRenderer _composite;
+        Mesh _compositeQuad;
+        Material _compositeMat;
+        Camera _screenCam;
+        RenderTexture _gui;
+        CommandBuffer _cmd;
+        bool _cmdReady;
         readonly List<Mesh> _meshes = new List<Mesh>();
+        readonly List<MaterialPropertyBlock> _props = new List<MaterialPropertyBlock>();
+
+        /// <summary>Godot's rendering/environment/defaults/default_clear_color: the window's clear colour (sRGB).</summary>
+        public static Col ClearColor = new Col(0.3f, 0.3f, 0.3f, 1f);
         readonly Dictionary<(CanvasBlendMode, int), Material> _materials = new Dictionary<(CanvasBlendMode, int), Material>();
         Shader _shader;
         UnityEngine.Texture2D _white;
@@ -45,7 +62,10 @@ namespace Fatebound.Client
         void Awake()
         {
             Instance = this;
+            _platform = new UnityPlatform();
+            PlatformHost.Init(_platform);
             ResourceLoader.Host = new UnityGuiHost();
+            AudioServer.Host = new UnityAudio();
             Fatebound.Sim.GD.PrintSink = s => Debug.Log(s);
             Fatebound.Sim.GD.ErrorSink = s => Debug.LogError(s);
             Fatebound.Sim.GD.WarningSink = s => Debug.LogWarning(s);
@@ -53,8 +73,30 @@ namespace Fatebound.Client
             _canvas.renderMode = RenderMode.ScreenSpaceOverlay;
             _canvas.sortingOrder = 100;
             _canvas.pixelPerfect = false;
-            _canvas.additionalShaderChannels = AdditionalCanvasShaderChannels.TexCoord1 | AdditionalCanvasShaderChannels.TexCoord2 | AdditionalCanvasShaderChannels.TexCoord3;
+            var cgo = new GameObject("gui", typeof(RectTransform));
+            cgo.transform.SetParent(transform, false);
+            var rt = (RectTransform)cgo.transform;
+            rt.anchorMin = rt.anchorMax = Vector2.zero;
+            rt.pivot = Vector2.zero;
+            rt.anchoredPosition = Vector2.zero;
+            rt.sizeDelta = Vector2.zero;
+            _composite = cgo.AddComponent<CanvasRenderer>();
+            _compositeQuad = new Mesh { hideFlags = HideFlags.DontSave };
+            _compositeMat = new Material(Shader.Find("Hidden/Fatebound/GUIComposite") ?? Resources.Load<Shader>("Shaders/FateboundGUIComposite")) { hideFlags = HideFlags.DontSave };
             _shader = Shader.Find("Fatebound/GUI") ?? Resources.Load<Shader>("Shaders/FateboundGUI");
+            // the screen: a camera that draws nothing (its clear is covered by the GUI's image) and hosts the overlay
+            var sc = new GameObject("screen");
+            sc.transform.SetParent(transform, false);
+            _screenCam = sc.AddComponent<Camera>();
+            _screenCam.cullingMask = 0;
+            _screenCam.clearFlags = CameraClearFlags.SolidColor;
+            _screenCam.backgroundColor = Color.black;
+            _screenCam.depth = 0;
+            _screenCam.allowHDR = false;
+            _screenCam.allowMSAA = false;
+            _screenCam.useOcclusionCulling = false;
+            _cmd = new CommandBuffer { name = "Fatebound GUI" };
+            RenderPipelineManager.beginCameraRendering += OnBeginCamera;
             _white = UnityEngine.Texture2D.whiteTexture;
             _screen = new Vector2Int(Screen.width, Screen.height);
             Tree = new SceneTree(new Vec2(760, 420));
@@ -71,7 +113,11 @@ namespace Fatebound.Client
             };
             GInput.HideKeyboardHook = () => { if (_keyboard != null) _keyboard.active = false; _keyboard = null; _editing = null; };
             DisplayServer.KeepScreenOnHook = on => Screen.sleepTimeout = on ? SleepTimeout.NeverSleep : SleepTimeout.SystemSetting;
+            _renderer3D = new UnityRenderer3D();
         }
+
+        UnityRenderer3D _renderer3D;
+        UnityPlatform _platform;
 
         void UpdateSafeArea()
         {
@@ -190,14 +236,33 @@ namespace Fatebound.Client
                 Tree.Root.SetWindowSize(new Vec2(Screen.width, Screen.height));
                 UpdateSafeArea();
             }
+            _platform.Tick();
             FeedInput();
             Tree.Iterate(Time.unscaledDeltaTime);
             if (Tree.QuitRequested) Application.Quit(Tree.QuitCode);
         }
 
+        void OnDestroy()
+        {
+            RenderPipelineManager.beginCameraRendering -= OnBeginCamera;
+            if (_gui != null) { _gui.Release(); Destroy(_gui); }
+        }
+
+        void OnBeginCamera(ScriptableRenderContext ctx, Camera cam)
+        {
+            if (cam != _screenCam || !_cmdReady) return;
+            ctx.ExecuteCommandBuffer(_cmd);
+            ctx.Submit();
+            _cmdReady = false;
+        }
+
         void LateUpdate()
         {
+            Shader.SetGlobalFloat("_FB_Time", (float)(Time.realtimeSinceStartupAsDouble % 3600.0));
             RenderingServer.RaiseFramePreDraw();
+            // the 3D worlds' changes to their Unity objects, the viewports' cameras (they render into their textures
+            // before the screen camera, whose overlay canvas then draws the GUI with them)
+            _renderer3D.Frame(Time.unscaledDeltaTime);
             Draw(Tree.Root.Render());
         }
 
@@ -215,6 +280,11 @@ namespace Fatebound.Client
                 switch (b.blend)
                 {
                     case CanvasBlendMode.Add: mat.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha); mat.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.One); break;
+                    case CanvasBlendMode.Sub:
+                        mat.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
+                        mat.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.One);
+                        mat.SetFloat("_BlendOp", (float)UnityEngine.Rendering.BlendOp.ReverseSubtract);
+                        break;
                     case CanvasBlendMode.Mul: mat.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.DstColor); mat.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.Zero); break;
                     case CanvasBlendMode.PremultAlpha: mat.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.One); mat.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha); break;
                     default: mat.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha); mat.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha); break;
@@ -232,57 +302,69 @@ namespace Fatebound.Client
 
         void Draw(List<RenderBatch> batches)
         {
-            float h = Screen.height;
-            while (_renderers.Count < batches.Count)
+            int w = Mathf.Max(1, Screen.width), h = Mathf.Max(1, Screen.height);
+            if (_gui == null || _gui.width != w || _gui.height != h)
             {
-                var go = new GameObject("batch" + _renderers.Count, typeof(RectTransform));
-                go.transform.SetParent(transform, false);
-                var rt = (RectTransform)go.transform;
-                rt.anchorMin = rt.anchorMax = Vector2.zero;
-                rt.pivot = Vector2.zero;
-                rt.anchoredPosition = Vector2.zero;
-                rt.sizeDelta = Vector2.zero;
-                var cr = go.AddComponent<CanvasRenderer>();
-                _renderers.Add(cr);
-                _meshes.Add(new Mesh { hideFlags = HideFlags.DontSave });
-                _meshes[_meshes.Count - 1].MarkDynamic();
+                if (_gui != null) { _gui.Release(); Destroy(_gui); }
+                _gui = new RenderTexture(w, h, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.Linear) { name = "gui", filterMode = FilterMode.Point };
+                _gui.Create();
+                _compositeQuad.Clear();
+                _compositeQuad.SetVertices(new List<Vector3> { new Vector3(0, 0), new Vector3(0, h), new Vector3(w, h), new Vector3(w, 0) });
+                _compositeQuad.SetUVs(0, new List<Vector2> { new Vector2(0, 0), new Vector2(0, 1), new Vector2(1, 1), new Vector2(1, 0) });
+                _compositeQuad.SetColors(new List<Color32> { Color.white, Color.white, Color.white, Color.white });
+                _compositeQuad.SetTriangles(new[] { 0, 1, 2, 0, 2, 3 }, 0);
+                _composite.SetMesh(_compositeQuad);
+                _composite.materialCount = 1;
+                _composite.SetMaterial(_compositeMat, 0);
             }
-            for (int i = 0; i < _renderers.Count; i++)
+            _composite.SetTexture(_gui);
+
+            _cmd.Clear();
+            _cmd.SetRenderTarget(_gui, RenderBufferLoadAction.DontCare, RenderBufferStoreAction.Store);
+            _cmd.ClearRenderTarget(false, true, new Color(ClearColor.r, ClearColor.g, ClearColor.b, ClearColor.a));
+            _cmd.SetViewProjectionMatrices(Matrix4x4.identity, GL.GetGPUProjectionMatrix(Matrix4x4.Ortho(0, w, 0, h, -1, 1), true));
+            _cmd.SetGlobalVector("_FB_CanvasSize", new Vector4(w, h, 1f / w, 1f / h));
+            while (_meshes.Count < batches.Count)
             {
-                var cr = _renderers[i];
-                if (i >= batches.Count)
-                {
-                    if (cr.gameObject.activeSelf) cr.gameObject.SetActive(false);
-                    continue;
-                }
-                if (!cr.gameObject.activeSelf) cr.gameObject.SetActive(true);
+                var m = new Mesh { hideFlags = HideFlags.DontSave };
+                m.MarkDynamic();
+                _meshes.Add(m);
+                _props.Add(new MaterialPropertyBlock());
+            }
+            float fh = h;
+            for (int i = 0; i < batches.Count; i++)
+            {
                 var b = batches[i];
+                if (b.verts.Count == 0 || b.indices.Count == 0) continue;
                 _pos.Clear(); _col.Clear(); _uv0.Clear(); _uv1.Clear(); _idx.Clear();
                 float mode = b.mode == DrawMode.SdfText ? 1f : 0f;
                 foreach (var v in b.verts)
                 {
-                    _pos.Add(new Vector3(v.x, h - v.y, 0));
+                    _pos.Add(new Vector3(v.x, fh - v.y, 0));
                     var c = v.c;
                     _col.Add(new Color32((byte)(Mathf.Clamp01(c.r) * 255f + 0.5f), (byte)(Mathf.Clamp01(c.g) * 255f + 0.5f), (byte)(Mathf.Clamp01(c.b) * 255f + 0.5f), (byte)(Mathf.Clamp01(c.a) * 255f + 0.5f)));
                     _uv0.Add(new Vector4(v.u, 1f - v.v, mode, b.aux));
-                    _uv1.Add(new Vector4(v.cx0, h - v.cy1, v.cx1, h - v.cy0));
+                    _uv1.Add(new Vector4(v.cx0, fh - v.cy1, v.cx1, fh - v.cy0));
                 }
                 _idx.AddRange(b.indices);
                 var mesh = _meshes[i];
                 mesh.Clear();
-                mesh.indexFormat = _pos.Count > 65000 ? UnityEngine.Rendering.IndexFormat.UInt32 : UnityEngine.Rendering.IndexFormat.UInt16;
+                mesh.indexFormat = _pos.Count > 65000 ? IndexFormat.UInt32 : IndexFormat.UInt16;
                 mesh.SetVertices(_pos);
                 mesh.SetColors(_col);
                 mesh.SetUVs(0, _uv0);
                 mesh.SetUVs(1, _uv1);
                 mesh.SetTriangles(_idx, 0, false);
-                cr.SetMesh(mesh);
                 Texture tex = b.texture?.GetHandle() as Texture ?? _white;
                 if (b.repeat && tex.wrapMode != TextureWrapMode.Repeat) tex.wrapMode = TextureWrapMode.Repeat;
-                cr.materialCount = 1;
-                cr.SetMaterial(MaterialFor(b), 0);
-                cr.SetTexture(tex);
+                var mpb = _props[i];
+                mpb.Clear();
+                mpb.SetTexture("_MainTex", tex);
+                mpb.SetFloat("_SrgbTex", tex.isDataSRGB ? 1f : 0f);
+                mpb.SetFloat("_AlphaTex", tex is UnityEngine.Texture2D t2 && t2.format == TextureFormat.Alpha8 ? 1f : 0f);
+                _cmd.DrawMesh(mesh, Matrix4x4.identity, MaterialFor(b), 0, 0, mpb);
             }
+            _cmdReady = true;
             RenderingServer.RaiseFramePostDraw();
         }
     }

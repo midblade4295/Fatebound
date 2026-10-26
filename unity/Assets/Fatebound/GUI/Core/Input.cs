@@ -336,8 +336,8 @@ namespace Fatebound.GUI
         public static int TouchCount => _touchPos.Count;
     }
 
-    /// <summary>DisplayServer bits the UI reads (safe area, virtual keyboard, screen size/scale).</summary>
-    public static class DisplayServer
+    /// <summary>DisplayServer bits the UI reads (safe area, virtual keyboard, screen size/scale). (More in GUI/Services/Display.cs.)</summary>
+    public static partial class DisplayServer
     {
         public static Rect2 SafeArea = new Rect2(0, 0, 0, 0);
         public static Vec2 ScreenSize = new Vec2(1920, 1080);

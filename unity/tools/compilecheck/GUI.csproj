@@ -3,5 +3,8 @@
   <ItemGroup>
     <ProjectReference Include="Sim.csproj" />
     <Compile Include="../../Assets/Fatebound/GUI/**/*.cs" />
+    <!-- zstd for PackedByteArray.compress (GUI/Services/Bytes.cs), vendored in Assets/Plugins/ZstdSharp -->
+    <Reference Include="ZstdSharp"><HintPath>../../Assets/Plugins/ZstdSharp/ZstdSharp.dll</HintPath></Reference>
+    <Reference Include="System.Runtime.CompilerServices.Unsafe"><HintPath>../../Assets/Plugins/ZstdSharp/System.Runtime.CompilerServices.Unsafe.dll</HintPath></Reference>
   </ItemGroup>
 </Project>

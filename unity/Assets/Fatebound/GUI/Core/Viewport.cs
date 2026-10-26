@@ -57,6 +57,128 @@ namespace Fatebound.GUI
 
         public override Viewport GetViewport() => this;
 
+#if FB3D
+        // ---------- 3D: the world this viewport shows and its camera ----------
+        World3D _ownWorld, _world3d;
+        bool _ownWorld3D, _transparentBg;
+        int _msaa3d, _screenAa;
+        double _scaling3dScale = 1.0;
+        readonly List<Camera3D> _cameras = new List<Camera3D>();
+        Camera3D _camera;
+        /// <summary>The renderer's data for this viewport (its render texture, camera...).</summary>
+        public object BackendData;
+        public enum Msaa { Disabled = 0, X2 = 1, X4 = 2, X8 = 3 }
+        public const int MSAA_DISABLED = 0, MSAA_2X = 1, MSAA_4X = 2, MSAA_8X = 3;
+        public const int SCREEN_SPACE_AA_DISABLED = 0, SCREEN_SPACE_AA_FXAA = 1;
+        public const int SCALING_3D_MODE_BILINEAR = 0, SCALING_3D_MODE_FSR = 1;
+        public bool HandleInputLocally = true;
+        public bool Disable3D;
+        public int Scaling3DMode;
+        public double MeshLodThreshold = 1.0;
+        public bool UseDebanding, UseOcclusionCulling;
+        public int PositionalShadowAtlasSize = 2048;
+
+        public bool OwnWorld3D
+        {
+            get => _ownWorld3D;
+            set
+            {
+                if (_ownWorld3D == value) return;
+                _ownWorld3D = value;
+                _ownWorld = value ? new World3D() : null;
+                RenderSync.MarkViewport(this);
+            }
+        }
+
+        /// <summary>world_3d: set one to share it between viewports.</summary>
+        public World3D World3D
+        {
+            get => _world3d;
+            set { _world3d = value; RenderSync.MarkViewport(this); }
+        }
+
+        public bool TransparentBg { get => _transparentBg; set { _transparentBg = value; RenderSync.MarkViewport(this); } }
+        public int Msaa3D { get => _msaa3d; set { _msaa3d = value; RenderSync.MarkViewport(this); } }
+        public int ScreenSpaceAa { get => _screenAa; set { _screenAa = value; RenderSync.MarkViewport(this); } }
+        public double Scaling3DScale { get => _scaling3dScale; set { _scaling3dScale = value; RenderSync.MarkViewport(this); } }
+
+        static World3D _defaultWorld;
+
+        /// <summary>find_world_3d(): its own world, the one set, else its parent viewport's (the root has the default).</summary>
+        public World3D FindWorld3D()
+        {
+            if (_ownWorld != null) return _ownWorld;
+            if (_world3d != null) return _world3d;
+            var pv = Parent?.GetViewport();
+            if (pv != null && pv != this) return pv.FindWorld3D();
+            return _world3d = _defaultWorld ?? (_defaultWorld = new World3D());
+        }
+
+        public World3D GetWorld3D() => _world3d;
+
+        /// <summary>The size the 3D view renders at (the window's pixels for the root, the size for a SubViewport).</summary>
+        public virtual Vec2 Get3DSize() => _windowSize;
+        /// <summary>Viewport coordinates to the camera's (the root's stretch).</summary>
+        public Vec2 GetCameraCoords(Vec2 p) => StretchTransform.Xform(p);
+        public Vec2 GetCameraRectSize() => Get3DSize();
+
+        public Camera3D GetCamera3D() => _camera;
+
+        internal bool Camera3DAdd(Camera3D c)
+        {
+            if (_cameras.Contains(c)) return false;
+            _cameras.Add(c);
+            return _cameras.Count == 1;
+        }
+
+        internal void Camera3DRemove(Camera3D c) => _cameras.Remove(c);
+
+        internal void Camera3DSet(Camera3D c)
+        {
+            if (_camera == c) return;
+            var old = _camera;
+            _camera = c;
+            old?.BecameCurrent(false);
+            c?.BecameCurrent(true);
+            RenderSync.MarkViewport(this);
+        }
+
+        internal void Camera3DMakeNextCurrent(Camera3D exclude)
+        {
+            foreach (var c in _cameras)
+            {
+                if (c == exclude || !c.IsInsideTree()) continue;
+                if (_camera != null) return;
+                c.MakeCurrent();
+                return;
+            }
+        }
+
+        protected override void OnEnterTree()
+        {
+            base.OnEnterTree();
+            RenderSync.MarkViewport(this);
+        }
+
+        protected override void OnExitTree()
+        {
+            RenderSync.RemovedViewport(this);
+            base.OnExitTree();
+        }
+
+        /// <summary>The ViewportTexture showing this viewport (get_texture()).</summary>
+        public ViewportTexture GetTexture()
+        {
+            if (_tex == null) _tex = new ViewportTexture { viewport = this };
+            var sz = Get3DSize();
+            _tex.width = (int)sz.x;
+            _tex.height = (int)sz.y;
+            return _tex;
+        }
+
+#endif
+        ViewportTexture _tex;
+
         // ---------- size / stretch ----------
         /// <summary>Sets the window size in device pixels; canvas_items stretch with aspect expand.</summary>
         public void SetWindowSize(Vec2 px)
@@ -150,22 +272,10 @@ namespace Fatebound.GUI
             var tree = GetTree();
             if (tree != null)
             {
-                var nodes = tree.TreeOrder().ToArray();
-                for (int i = nodes.Length - 1; i >= 0 && !_handled; i--)
-                {
-                    var n = nodes[i];
-                    if (n.IsInsideTree() && n.IsProcessingInput() && n.CanProcess())
-                        SceneTree.Safe(() => n.CallInput(ev));
-                }
+                tree.DispatchInput(ev, this, false);
                 if (!_handled) GuiInputEvent(ev);
                 else GuiCleanup(ev);
-                if (!_handled)
-                    for (int i = nodes.Length - 1; i >= 0 && !_handled; i--)
-                    {
-                        var n = nodes[i];
-                        if (n.IsInsideTree() && n.IsProcessingUnhandledInput() && n.CanProcess())
-                            SceneTree.Safe(() => n.CallUnhandledInput(ev));
-                    }
+                if (!_handled) tree.DispatchInput(ev, this, true);
             }
             _ = prevHandled;
         }
@@ -183,15 +293,13 @@ namespace Fatebound.GUI
         List<Control> SortedRoots()
         {
             var o = new List<Control>(_roots);
-            var order = GetTree()?.TreeOrder();
-            var index = new Dictionary<Node, int>();
-            if (order != null) for (int i = 0; i < order.Count; i++) index[order[i]] = i;
+            GetTree()?.TreeOrder();                       // (fresh tree indices)
             int Layer(Control c) => c.GetCanvasLayerNode()?.Layer ?? 0;
             o.Sort((a, b) =>
             {
                 int la = Layer(a), lb = Layer(b);
                 if (la != lb) return la.CompareTo(lb);
-                return (index.TryGetValue(a, out var ia) ? ia : 0).CompareTo(index.TryGetValue(b, out var ib) ? ib : 0);
+                return a.treeIndex.CompareTo(b.treeIndex);
             });
             return o;
         }
@@ -456,9 +564,7 @@ namespace Fatebound.GUI
             MainThread.Flush();
             StyleBox.CurrentOversampling = _scale;
             var tree = GetTree();
-            if (tree != null)
-                foreach (var n in tree.TreeOrder().ToArray())
-                    if (n is CanvasItem ci && ci.drawDirty && ci.IsVisibleInTree()) ci.Redraw();
+            tree?.ProcessRedraws();
             _canvasDirty = false;
             // Canvases: the main one (layer 0) and each CanvasLayer, by layer then tree order.
             var canvases = new List<(int layer, int order, Node owner, List<CanvasItem> roots)>();
@@ -469,6 +575,7 @@ namespace Fatebound.GUI
             {
                 foreach (var n in tree.TreeOrder())
                 {
+                    if (n.GetViewport() != this) continue;                // (a SubViewport's canvas is drawn into its texture)
                     if (n is CanvasLayer cl && !layers.ContainsKey(cl)) layers[cl] = new List<CanvasItem>();
                     if (!(n is CanvasItem ci) || ci.GetParentItem() != null) continue;
                     var layer = ci.GetCanvasLayerNode();
@@ -595,24 +702,86 @@ namespace Fatebound.GUI
             for (int pass = 0; pass < 8; pass++)
             {
                 tree.FlushDeferred();
-                bool any = false;
-                foreach (var n in tree.TreeOrder().ToArray())
-                    if (n is CanvasItem ci && ci.drawDirty && ci.IsInsideTree() && ci.IsVisibleInTree()) { ci.Redraw(); any = true; }
+                bool any = tree.ProcessRedraws();
                 if (!any && !tree.HasDeferred) break;
             }
         }
     }
 
-    /// <summary>A SubViewport: the host renders its 3D content into `Texture`.</summary>
-    public class SubViewport : Node
+#if FB3D
+    /// <summary>Godot's SubViewport: its own canvas and 3D view (its world, or its parent's), rendered by the host into
+    /// a texture (get_texture()) that a TextureRect shows.</summary>
+    public class SubViewport : Viewport
     {
         public enum UpdateMode { Disabled = 0, Once = 1, WhenVisible = 2, WhenParentVisible = 3, Always = 4 }
-        public const UpdateMode UPDATE_DISABLED = UpdateMode.Disabled, UPDATE_ONCE = UpdateMode.Once, UPDATE_WHEN_VISIBLE = UpdateMode.WhenVisible, UPDATE_ALWAYS = UpdateMode.Always;
-        public Vec2i Size = new Vec2i(512, 512);
-        public UpdateMode RenderTargetUpdateMode = UpdateMode.WhenVisible;
-        public bool TransparentBg;
-        public bool OwnWorld3D;
-        readonly ViewportTexture _tex = new ViewportTexture();
-        public ViewportTexture GetTexture() { _tex.width = Size.x; _tex.height = Size.y; return _tex; }
+        public enum ClearModeEnum { Always = 0, Never = 1, Once = 2 }
+        public const UpdateMode UPDATE_DISABLED = UpdateMode.Disabled, UPDATE_ONCE = UpdateMode.Once, UPDATE_WHEN_VISIBLE = UpdateMode.WhenVisible,
+            UPDATE_WHEN_PARENT_VISIBLE = UpdateMode.WhenParentVisible, UPDATE_ALWAYS = UpdateMode.Always;
+        public const ClearModeEnum CLEAR_MODE_ALWAYS = ClearModeEnum.Always, CLEAR_MODE_NEVER = ClearModeEnum.Never, CLEAR_MODE_ONCE = ClearModeEnum.Once;
+
+        Vec2i _size = new Vec2i(512, 512);
+        UpdateMode _update = UpdateMode.WhenVisible;
+        ClearModeEnum _clear = ClearModeEnum.Always;
+        public Vec2i Size2DOverride;
+        public bool Size2DOverrideStretch;
+        /// <summary>Bumped by UPDATE_ONCE requests: the renderer draws one frame when it sees a new value.</summary>
+        public int UpdateOnceCounter { get; private set; }
+
+        public SubViewport()
+        {
+            SetVisibleSize(new Vec2(_size.x, _size.y));
+        }
+
+        public new Vec2i Size
+        {
+            get => _size;
+            set
+            {
+                _size = new Vec2i(Math.Max(1, value.x), Math.Max(1, value.y));
+                SetVisibleSize(new Vec2(_size.x, _size.y));
+                RenderSync.MarkViewport(this);
+            }
+        }
+
+        public UpdateMode RenderTargetUpdateMode
+        {
+            get => _update;
+            set
+            {
+                _update = value;
+                if (value == UpdateMode.Once) UpdateOnceCounter++;
+                RenderSync.MarkViewport(this);
+            }
+        }
+
+        public ClearModeEnum RenderTargetClearMode { get => _clear; set { _clear = value; RenderSync.MarkViewport(this); } }
+
+        public override Vec2 Get3DSize() => new Vec2(_size.x, _size.y);
+
+        /// <summary>Whether the host should draw it this frame (UPDATE_WHEN_VISIBLE: when the controls showing it are).</summary>
+        public bool ShouldRender()
+        {
+            switch (_update)
+            {
+                case UpdateMode.Disabled: return false;
+                case UpdateMode.Always: return true;
+                case UpdateMode.Once: return true;
+                default: return IsVisibleForUpdate();
+            }
+        }
+
+        bool IsVisibleForUpdate()
+        {
+            // a SubViewport shown by a texture: visible when its parent control (a SubViewportContainer, or the
+            // control it lives under) is visible
+            for (var p = Parent; p != null; p = p.Parent)
+            {
+                if (p is CanvasItem ci) return ci.IsVisibleInTree();
+                if (p is Node3D n3) return n3.IsVisibleInTree();
+                if (p is Viewport) return true;
+            }
+            return true;
+        }
     }
+#endif
 }

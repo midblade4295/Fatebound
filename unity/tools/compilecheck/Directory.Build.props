@@ -15,7 +15,7 @@
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <NoWarn>CS0162;CS0168;CS0169;CS0219;CS0414;CS0649;CS0067;CS8981;CS1998</NoWarn>
-    <DefineConstants>UNITY_6000_0_OR_NEWER;UNITY_6000_3_OR_NEWER;UNITY_2023_1_OR_NEWER;UNITY_2022_1_OR_NEWER;UNITY_2021_1_OR_NEWER;UNITY_ANDROID;CSHARP_7_3_OR_NEWER;ENABLE_LEGACY_INPUT_MANAGER;$(ExtraDefines)</DefineConstants>
+    <DefineConstants>UNITY_6000_0_OR_NEWER;UNITY_6000_3_OR_NEWER;UNITY_2023_1_OR_NEWER;UNITY_2022_1_OR_NEWER;UNITY_2021_1_OR_NEWER;UNITY_ANDROID;CSHARP_7_3_OR_NEWER;ENABLE_LEGACY_INPUT_MANAGER;FB3D;$(ExtraDefines)</DefineConstants>
     <OutputType>Library</OutputType>
     <BaseIntermediateOutputPath>/tmp/fb-cc/obj/$(MSBuildProjectName)/</BaseIntermediateOutputPath>
     <OutputPath>/tmp/fb-cc/bin/$(MSBuildProjectName)/</OutputPath>

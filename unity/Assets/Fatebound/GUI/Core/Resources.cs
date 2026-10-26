@@ -14,6 +14,11 @@ namespace Fatebound.GUI
         public void EmitChanged() { version++; Changed?.Invoke(); }
         public int version;
         public virtual Resource Duplicate(bool deep = false) => (Resource)MemberwiseClone();
+
+        /// <summary>Godot's _set for stored properties with dynamic names ("tracks/0/keys", "bones/3/rest",
+        /// "bind/2/pose"...): the baked-asset loader calls it first; true = handled. Plain properties are set by name
+        /// (snake_case -> the C# property) when this returns false.</summary>
+        public virtual bool SetStoredProperty(string name, Fatebound.Sim.Var value) => false;
     }
 
     /// <summary>What the engine side provides: file bytes and GPU textures by res:// path, and texture uploads.</summary>
@@ -77,7 +82,14 @@ namespace Fatebound.GUI
                 case ".woff":
                     return FontFile.LoadFromHost(path);
                 case ".gdshader":
-                    return new ShaderResource(path);
+                    return Shader.Get(path);
+                // audio: the clip itself is loaded by the host on first use (AudioStream.Clip, main thread)
+                case ".ogg":
+                    return new AudioStreamOggVorbis();
+                case ".mp3":
+                    return new AudioStreamMP3();
+                case ".wav":
+                    return new AudioStreamWAV();
                 case ".png":
                 case ".jpg":
                 case ".jpeg":
@@ -94,13 +106,6 @@ namespace Fatebound.GUI
                     return null;
             }
         }
-    }
-
-    /// <summary>A .gdshader loaded with load(): the Shader it names.</summary>
-    public sealed class ShaderResource : Resource
-    {
-        public readonly Shader Shader;
-        public ShaderResource(string path) { Shader = Shader.Get(path); }
     }
 
     // ---------- textures ----------
@@ -229,13 +234,22 @@ namespace Fatebound.GUI
     }
 
     /// <summary>A SubViewport's render target as seen by the UI (the host fills the handle).</summary>
+    /// <summary>A viewport's picture (SubViewport.get_texture()): the renderer sets `handle` to its render texture.</summary>
     public sealed class ViewportTexture : Texture2D
     {
         public int width = 1, height = 1;
         public object handle;
+        public Viewport viewport;
+        /// <summary>Asks the host for the viewport's current texture (the Unity renderer resolves it from BackendData).</summary>
+        public static Func<ViewportTexture, object> Resolve;
+#if FB3D
+        public override int GetWidth() => viewport is SubViewport sv ? sv.Size.x : viewport != null ? (int)viewport.Get3DSize().x : width;
+        public override int GetHeight() => viewport is SubViewport sv ? sv.Size.y : viewport != null ? (int)viewport.Get3DSize().y : height;
+#else
         public override int GetWidth() => width;
         public override int GetHeight() => height;
-        public override object GetHandle() => handle;
+#endif
+        public override object GetHandle() => Resolve != null ? Resolve(this) ?? handle : handle;
     }
 
     public sealed class PlaceholderTexture2D : Texture2D

@@ -1,0 +1,18 @@
+{
+    "name": "Fatebound.Editor",
+    "rootNamespace": "Fatebound.EditorTools",
+    "references": [
+        "Fatebound.Sim",
+        "Fatebound.GUI",
+        "Fatebound.Client"
+    ],
+    "includePlatforms": ["Editor"],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

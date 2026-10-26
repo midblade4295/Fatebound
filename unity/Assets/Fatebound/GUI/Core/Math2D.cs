@@ -6,7 +6,7 @@ using Fatebound.Sim;
 
 namespace Fatebound.GUI
 {
-    public struct Rect2 : IEquatable<Rect2>
+    public partial struct Rect2 : IEquatable<Rect2>
     {
         public Vec2 position, size;
 
@@ -93,7 +93,7 @@ namespace Fatebound.GUI
     }
 
     /// <summary>Godot's Color (float RGBA). Named Col so it never clashes with UnityEngine.Color.</summary>
-    public struct Col : IEquatable<Col>
+    public partial struct Col : IEquatable<Col>
     {
         public float r, g, b, a;
 
@@ -334,7 +334,7 @@ namespace Fatebound.GUI
     }
 
     /// <summary>Godot's Transform2D: columns x, y (the basis) and origin.</summary>
-    public struct Xform2 : IEquatable<Xform2>
+    public partial struct Xform2 : IEquatable<Xform2>
     {
         public Vec2 x, y, origin;
 

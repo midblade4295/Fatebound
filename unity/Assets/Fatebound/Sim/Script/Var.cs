@@ -363,6 +363,9 @@ namespace Fatebound.Sim
                 return Bad(op.ToString(), a, b);
             }
             if (op == '+' && tb == VT.String && ta != VT.Obj) return string.Concat(GFormat.Str(a), (string)b._o);
+            // (a vector with a Basis / Transform / Quaternion / Projection...: those types implement the operator)
+            if ((ta == VT.Obj && a._o is IGodotValue gva && gva.GodotOp(op, b, true, out var rv))
+                || (tb == VT.Obj && b._o is IGodotValue gvb && gvb.GodotOp(op, a, false, out rv))) return rv;
             if (ta == VT.Vec2 || tb == VT.Vec2) return Vec2Arith(op, a, b);
             if (ta == VT.Vec2i || tb == VT.Vec2i) return Vec2iArith(op, a, b);
             if (ta == VT.Vec3 || tb == VT.Vec3) return Vec3Arith(op, a, b);

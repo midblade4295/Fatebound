@@ -20,6 +20,7 @@ namespace Fatebound.GUI
         bool _showBehindParent;
         internal readonly DrawList drawList = new DrawList();
         internal bool drawDirty = true;
+        internal bool inRedrawQueue;
         bool _drawing;
         public GMaterial Material;
         public bool UseParentMaterial;
@@ -57,6 +58,7 @@ namespace Fatebound.GUI
             _Notification(NOTIFICATION_VISIBILITY_CHANGED);
             VisibilityChanged?.Invoke();
             if (!v) Hidden?.Invoke();
+            if (v && drawDirty) GetTree()?.QueueRedrawItem(this);
             foreach (var c in children)
                 if (c is CanvasItem ci && ci._visible && !ci.TopLevel) ci.PropagateVisibilityChanged(v);
         }
@@ -168,6 +170,7 @@ namespace Fatebound.GUI
         {
             if (_drawing) return;
             drawDirty = true;
+            if (IsInsideTree()) GetTree()?.QueueRedrawItem(this);
             GetViewport()?.MarkCanvasDirty();
         }
 
@@ -205,6 +208,7 @@ namespace Fatebound.GUI
         protected override void OnEnterTree()
         {
             drawDirty = true;
+            GetTree()?.QueueRedrawItem(this);
             GetViewport()?.MarkCanvasDirty();
         }
 
@@ -538,10 +542,16 @@ namespace Fatebound.GUI
     }
 
     // ---------- materials ----------
-    public abstract class GMaterial
+    /// <summary>Godot's Material (a Resource): render_priority, next_pass. Subclasses bump `version` (EmitChanged) when a
+    /// property changes so the renderer rebuilds its material.</summary>
+    public abstract class GMaterial : Resource
     {
-        public int version;
-        public void EmitChanged() => version++;
+        int _renderPriority;
+        GMaterial _nextPass;
+        public const int RENDER_PRIORITY_MAX = 127, RENDER_PRIORITY_MIN = -128;
+        public int RenderPriority { get => _renderPriority; set { _renderPriority = value; EmitChanged(); } }
+        public GMaterial NextPass { get => _nextPass; set { _nextPass = value; EmitChanged(); } }
+        public virtual Shader GetShader() => null;
     }
 
     public enum CanvasBlendMode { Mix = 0, Add = 1, Sub = 2, Mul = 3, PremultAlpha = 4 }
@@ -555,11 +565,13 @@ namespace Fatebound.GUI
     }
 
     /// <summary>A Godot shader by path ("res://scripts/app/ui_skin.gdshader"); the host maps it to its own port.</summary>
-    public sealed class Shader
+    /// <summary>Godot's Shader: a .gdshader (load()/preload() give the one per path) or one built in code
+    /// (Shader.new() + code). The renderer finds its Unity port by path or by code (Client ShaderRegistry).</summary>
+    public sealed class Shader : Resource
     {
-        public readonly string ResourcePath;
         public string Code;
-        public Shader(string path) { ResourcePath = path; }
+        public Shader() { }
+        public Shader(string path) { ResourcePath = path ?? ""; }
         static readonly Dictionary<string, Shader> _cache = new Dictionary<string, Shader>();
 
         public static Shader Get(string path)
@@ -580,11 +592,23 @@ namespace Fatebound.GUI
 
         public void SetShaderParameter(string name, object value)
         {
-            _params[name] = value;
-            version++;
+            if (value is Var v) value = v.Obj;
+            if (value == null) _params.Remove(name);
+            else _params[name] = value;
+            EmitChanged();
         }
 
+        public void SetShaderParameter(string name, Var value) => SetShaderParameter(name, value.Obj);
+
         public object GetShaderParameter(string name) => _params.TryGetValue(name, out var v) ? v : null;
+        public override Shader GetShader() => Shader;
+
+        public override Resource Duplicate(bool deep = false)
+        {
+            var m = new ShaderMaterial { Shader = Shader, RenderPriority = RenderPriority, NextPass = NextPass };
+            foreach (var kv in _params) m._params[kv.Key] = kv.Value;
+            return m;
+        }
     }
 
     /// <summary>The RenderingServer calls the UI code makes on a canvas item.</summary>

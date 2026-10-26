@@ -46,3 +46,40 @@ editor in its workspace); grokbot opens it in Unity 6000.3.27f1 and builds the A
   Client/GUI/UnityGuiHost.cs loads res:// files from Resources; Shaders/Resources/Shaders/FateboundGUI.shader shades
   the batches (clip rect, SDF text, hairlines). Touch feeds Godot's emulated mouse, Escape/back goes to
   NOTIFICATION_WM_GO_BACK_REQUEST (the tree never quits on back; the game handles it).
+
+## Step 2b -- the GDScript runtime (commit 480bea2)
+- `Sim/Script/`: Var (Godot's Variant semantics: int/float distinct, cross-type ==, deep container equality, Godot
+  truthiness), GDict (ordered), GArray, str()/%/sprintf exact, Godot's hash(), JSON (key order, float parsing),
+  String methods. tools/parity/runtime.sh: 512 lines identical to Godot.
+
+## Step 3 -- the engine services, Godot's math, skeletal animation, the 3D facade, the renderer
+- Math (Sim/Core: Vec2/2i/3/3i/4/4i, Basis, Quat, Xform3, Aabb, Plane, Projection; GUI/Core/Math2DGodot.cs: Rect2,
+  Color, Transform2D additions + OKHSL): tools/parity/math.sh, 18,093 lines identical.
+- Services (GUI/Services: OS, Engine, Time, FileAccess/DirAccess (user:// = the app's files dir), ConfigFile,
+  PackedByteArray encode/compress (zlib/gzip/zstd -- vendored ZstdSharp in Assets/Plugins), Crypto/hashing, RegEx,
+  threads, WebSocketPeer, HTTPRequest; Sim/Script/GMarshal.cs var_to_bytes/bytes_to_var/var_to_str):
+  tools/parity/services.sh, 1128 lines identical. The device answers come from an IPlatform host (PlatformHost.Init):
+  Client/Core/UnityPlatform.cs answers as Godot's Android build (getFilesDir, Build.MODEL, ANDROID_ID, locale).
+- Audio (GUI/Services/Audio.cs + Client/Core/UnityAudio.cs): AudioStream (.wav/.ogg/.mp3) and AudioStreamPlayer with
+  Godot's playback rules (polyphony 1, finished from internal process, paused outside the tree), AudioSources.
+- Skeletal animation (GUI/Scene3D: Skeleton3D + SkeletonModifier3D, BoneAttachment3D, Animation, AnimationLibrary,
+  AnimationMixer/Player): tools/parity/anim.sh, 5057 lines identical (synthetic rig + the Meshy knight's real clips).
+- The 3D scene facade (GUI/Scene3D, under the FB3D define -- set for Fatebound.GUI by its csc.rsp): Node3D with
+  Godot's dirty-flag transforms, MeshInstance3D/MultiMesh/Sprite3D/lights/Camera3D (camera_3d.cpp's projection,
+  unproject), Environment, meshes (ArrayMesh, primitives, SurfaceTool, ImmediateMesh), StandardMaterial3D,
+  ParticleProcessMaterial, textures (curves, gradients, noise), GPUParticles3D simulated on the CPU (a port of
+  particles.glsl + the ParticleProcessMaterial shader).
+- The Unity renderer (Client/Render3D): a pull model -- facade nodes mark themselves dirty, UnityRenderer3D.Frame()
+  syncs GameObjects once a frame; Godot -> Unity mirrors X (Conv.cs); meshes/materials cached and rebuilt on change;
+  skinned meshes driven by the skeleton's skin transforms; MultiMesh and particles drawn instanced; each World3D on
+  its own layer; each 3D viewport a camera into an HDR texture (32-bit float RGB like Godot Mobile's RGB10A2)
+  followed by Godot Mobile's post chain (PostChain + Fatebound/Post: glow gather/down/up, filmic/ACES/Reinhard
+  tonemap, glow blend modes, adjustments, the [0, 2] range of Godot's buffer) into the sRGB texture the GUI shows.
+  Shaders: FateboundCommon3D.hlsl (Godot's forward lighting, omni falloff, fog, billboards) and
+  FateboundStandard3D (BaseMaterial3D as uniforms).
+- The GUI now draws in Godot's 2D colour space: batches go into a raw RGBA8 texture through a command buffer when the
+  screen camera starts (after the viewport cameras), blended on sRGB values like Godot's 2D renderer, and one overlay
+  quad (Fatebound/GUIComposite) puts it on the screen.
+- Unity project setup: Editor/BuildScript.cs (URP asset, player settings -- Vulkan, IL2CPP ARM64, linear, sensor
+  landscape -- and the Android build, `-executeMethod Fatebound.EditorTools.BuildScript.BuildAndroid`),
+  Editor/AssetImport.cs (texture/audio import settings from Godot's .import sidecars), link.xml.

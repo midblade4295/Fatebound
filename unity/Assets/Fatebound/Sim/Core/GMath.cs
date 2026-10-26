@@ -10,7 +10,7 @@ using System;
 
 namespace Fatebound.Sim
 {
-    public struct Vec2 : IEquatable<Vec2>
+    public partial struct Vec2 : IEquatable<Vec2>
     {
         public float x, y;
         public Vec2(float x, float y) { this.x = x; this.y = y; }
@@ -111,7 +111,7 @@ namespace Fatebound.Sim
         }
     }
 
-    public struct Vec2i : IEquatable<Vec2i>
+    public partial struct Vec2i : IEquatable<Vec2i>
     {
         public int x, y;
         public Vec2i(int x, int y) { this.x = x; this.y = y; }
@@ -124,7 +124,7 @@ namespace Fatebound.Sim
         public override string ToString() => "(" + x + ", " + y + ")";
     }
 
-    public struct Vec3 : IEquatable<Vec3>
+    public partial struct Vec3 : IEquatable<Vec3>
     {
         public float x, y, z;
         public Vec3(float x, float y, float z) { this.x = x; this.y = y; this.z = z; }

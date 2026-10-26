@@ -4,6 +4,7 @@
     <Reference Include="$(UnityRef)/Managed/UnityEngine/UnityEngine.dll"><Private>false</Private></Reference>
     <ProjectReference Include="Sim.csproj" />
     <ProjectReference Include="GUI.csproj" />
+    <ProjectReference Include="Game.csproj" />
     <Compile Include="../../Assets/Fatebound/Client/**/*.cs" />
   </ItemGroup>
 </Project>

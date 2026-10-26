@@ -1,0 +1,9 @@
+<!-- IL2CPP stripping: the port builds Godot objects by class/property name (baked scenes, the Variant marshaller),
+     so nothing of the Fatebound assemblies or the zstd library may be removed. -->
+<linker>
+  <assembly fullname="Fatebound.Sim" preserve="all"/>
+  <assembly fullname="Fatebound.GUI" preserve="all"/>
+  <assembly fullname="Fatebound.Client" preserve="all"/>
+  <assembly fullname="Fatebound.Game" preserve="all"/>
+  <assembly fullname="ZstdSharp" preserve="all"/>
+</linker>

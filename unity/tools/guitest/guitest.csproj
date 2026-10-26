@@ -10,9 +10,11 @@
     <NoWarn>CS0162;CS0168;CS0169;CS0219;CS0414;CS0649;CS0067;CS8981</NoWarn>
     <BaseIntermediateOutputPath>/tmp/fb-guitest/obj/</BaseIntermediateOutputPath>
     <OutputPath>/tmp/fb-guitest/bin/</OutputPath>
+    <DefineConstants>$(DefineConstants);FB3D</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../Assets/Fatebound/Sim/**/*.cs" />
     <Compile Include="../../Assets/Fatebound/GUI/**/*.cs" />
+    <Reference Include="ZstdSharp"><HintPath>../../Assets/Plugins/ZstdSharp/ZstdSharp.dll</HintPath></Reference>
   </ItemGroup>
 </Project>

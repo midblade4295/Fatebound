@@ -28,6 +28,16 @@ namespace GuiTest
                 case "runtime":
                     RuntimeTest.Run();
                     return 0;
+                case "anim":
+                    AnimTest.Run(args);
+                    return 0;
+                case "services":
+                case "services-gen":
+                    ServicesTest.Run(cmd == "services-gen");
+                    return 0;
+                case "math":
+                    MathTest.Run();
+                    return 0;
                 case "fonts":
                     foreach (var fp in Fonts)
                     {
@@ -75,7 +85,7 @@ namespace GuiTest
                     var r = new SoftRaster((int)tree.Root.GetWindowSize().x, (int)tree.Root.GetWindowSize().y, new Col(0.3f, 0.3f, 0.3f, 1f));
                     r.Draw(batches);
                     Png.Save(args[2], r.ToImage());
-                    if (Environment.GetEnvironmentVariable("ATLAS") != null)
+                    if (System.Environment.GetEnvironmentVariable("ATLAS") != null)
                         for (int pi = 0; pi < GlyphAtlas.Shared.Pages.Count; pi++)
                         {
                             var pg = GlyphAtlas.Shared.Pages[pi].img;

@@ -72,7 +72,7 @@ namespace Fatebound.GUI
 
         public CPUParticles2D()
         {
-            _seed = (uint)Environment.TickCount;
+            _seed = (uint)System.Environment.TickCount;
         }
 
         public int Amount
