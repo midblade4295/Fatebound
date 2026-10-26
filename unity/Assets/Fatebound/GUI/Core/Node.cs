@@ -574,6 +574,35 @@ namespace Fatebound.GUI
 
         public void Quit(int code = 0) { QuitRequested = true; QuitCode = code; }
 
+        /// <summary>Godot quits on Android's back button unless this is off; the game handles back itself (siege_app's
+        /// NOTIFICATION_WM_GO_BACK_REQUEST closes windows, then quits from Home), so the port leaves it off.</summary>
+        public bool QuitOnGoBack = false;
+
+        /// <summary>propagate_notification from the root (window events: go-back, focus, pause/resume).</summary>
+        public void PropagateNotification(int what)
+        {
+            foreach (var n in TreeOrder().ToArray())
+                if (n.IsInsideTree()) Safe(() => n._Notification(what));
+        }
+
+        /// <summary>Android's back button.</summary>
+        public void GoBackRequest()
+        {
+            PropagateNotification(Node.NOTIFICATION_WM_GO_BACK_REQUEST);
+            if (QuitOnGoBack) Quit();
+        }
+
+        public Node CurrentScene;
+
+        /// <summary>change_scene_to_node: the old scene is freed at the end of the frame.</summary>
+        public void ChangeSceneToNode(Node scene)
+        {
+            var old = CurrentScene;
+            CurrentScene = scene;
+            if (old != null) old.QueueFree();
+            Defer(() => Root.AddChild(scene));
+        }
+
         /// <summary>One frame: input events first (the host queues them), physics ticks, process, timers, tweens,
         /// deferred calls, deletions, then the layout settles and dirty canvas items redraw.</summary>
         public void Iterate(double delta)

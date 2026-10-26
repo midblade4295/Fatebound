@@ -1,0 +1,14 @@
+{
+    "name": "Fatebound.Client",
+    "rootNamespace": "Fatebound.Client",
+    "references": ["Fatebound.Sim", "Fatebound.GUI", "glTFast"],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

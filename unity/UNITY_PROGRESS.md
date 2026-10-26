@@ -41,3 +41,8 @@ editor in its workspace); grokbot opens it in Unity 6000.3.27f1 and builds the A
   are near pixel-identical.
 - Assets: tools/sync_assets.py mirrors godot/assets + content into Assets/Resources/res/ (webp -> png, svg -> png via
   Godot, fonts -> .bytes for the TrueType reader); .res/.scn/.tscn are baked separately (to do).
+- Unity side of the GUI: Client/GUI/GuiCanvas.cs runs the SceneTree each frame (Update -> Iterate, LateUpdate ->
+  Render) and draws its batches on a Screen Space Overlay canvas, one CanvasRenderer per batch;
+  Client/GUI/UnityGuiHost.cs loads res:// files from Resources; Shaders/Resources/Shaders/FateboundGUI.shader shades
+  the batches (clip rect, SDF text, hairlines). Touch feeds Godot's emulated mouse, Escape/back goes to
+  NOTIFICATION_WM_GO_BACK_REQUEST (the tree never quits on back; the game handles it).
