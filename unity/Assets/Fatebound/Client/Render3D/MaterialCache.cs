@@ -279,12 +279,90 @@ namespace Fatebound.Client
                         if (mpb != null) mpb.SetTexture(id, u); else mat.SetTexture(id, u);
                         break;
                     }
-                case float[] fa:
+                case Projection pj:
                     {
-                        if (mpb != null) mpb.SetFloatArray(id, fa); else mat.SetFloatArray(id, fa);
+                        // mat4, Godot's column layout
+                        var m = new Matrix4x4(new Vector4(pj.x.x, pj.x.y, pj.x.z, pj.x.w), new Vector4(pj.y.x, pj.y.y, pj.y.z, pj.y.w),
+                            new Vector4(pj.z.x, pj.z.y, pj.z.z, pj.z.w), new Vector4(pj.w.x, pj.w.y, pj.w.z, pj.w.w));
+                        if (mpb != null) mpb.SetMatrix(id, m); else mat.SetMatrix(id, m);
                         break;
                     }
+                default:
+                    SetArray(mat, mpb, id, value);
+                    break;
             }
+        }
+
+        // Uniform arrays (float x[N], vec2/3/4 x[N]): Unity fixes an array's length the first time it's set, so every
+        // array goes up padded to ARRAY_PAD (more than any the game declares; the shader reads its own N).
+        const int ARRAY_PAD = 64;
+        static readonly float[] _fpad = new float[ARRAY_PAD];
+        static readonly Vector4[] _vpad = new Vector4[ARRAY_PAD];
+
+        static void SetArray(Material mat, MaterialPropertyBlock mpb, int id, object value)
+        {
+            System.Collections.IEnumerable items;
+            switch (value)
+            {
+                case string _: return;
+                case System.Collections.IEnumerable e: items = e; break;
+                default: return;
+            }
+            // floats or vectors? (decided by the first element)
+            int n = 0;
+            bool vectors = false, decided = false;
+            foreach (var raw in items)
+            {
+                if (n >= ARRAY_PAD) break;
+                object it = raw is Var vv ? vv.Obj : raw;
+                Vector4 v4;
+                float f;
+                bool isVec = ToVector(it, out v4);
+                bool isNum = !isVec && ToFloat(it, out f);
+                if (!decided) { vectors = isVec; decided = true; }
+                if (vectors) _vpad[n] = isVec ? v4 : Vector4.zero;
+                else _fpad[n] = ToFloat(it, out f) ? f : 0f;
+                n++;
+            }
+            if (!decided) return;
+            if (vectors)
+            {
+                for (int i = n; i < ARRAY_PAD; i++) _vpad[i] = Vector4.zero;
+                if (mpb != null) mpb.SetVectorArray(id, _vpad); else mat.SetVectorArray(id, _vpad);
+            }
+            else
+            {
+                for (int i = n; i < ARRAY_PAD; i++) _fpad[i] = 0f;
+                if (mpb != null) mpb.SetFloatArray(id, _fpad); else mat.SetFloatArray(id, _fpad);
+            }
+        }
+
+        static bool ToVector(object o, out Vector4 v)
+        {
+            switch (o)
+            {
+                case Vec2 a: v = new Vector4(a.x, a.y, 0, 0); return true;
+                case Vec3 b: v = new Vector4(b.x, b.y, b.z, 0); return true;
+                case Vec4 c: v = new Vector4(c.x, c.y, c.z, c.w); return true;
+                case Col d: v = new Vector4(d.r, d.g, d.b, d.a); return true;
+                case Quat q: v = new Vector4(q.x, q.y, q.z, q.w); return true;
+            }
+            v = default;
+            return false;
+        }
+
+        static bool ToFloat(object o, out float f)
+        {
+            switch (o)
+            {
+                case float a: f = a; return true;
+                case double b: f = (float)b; return true;
+                case int c: f = c; return true;
+                case long d: f = d; return true;
+                case bool e: f = e ? 1f : 0f; return true;
+            }
+            f = 0f;
+            return false;
         }
 
         static void Set(Material m, MaterialPropertyBlock p, int id, float v) { if (p != null) p.SetFloat(id, v); else m.SetFloat(id, v); }

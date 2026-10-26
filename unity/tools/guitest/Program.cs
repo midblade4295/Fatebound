@@ -43,6 +43,7 @@ namespace GuiTest
                 case "mesh":
                     MeshTest.Run(args);
                     return 0;
+                case "physics": return PhysicsTest.Run();
                 case "particles":
                     ParticlesTest.RunAll();
                     return 0;

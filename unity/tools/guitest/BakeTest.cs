@@ -30,7 +30,7 @@ namespace GuiTest
         static HashSet<object> _dumped;
 
         static void P(string k, string v) => Console.WriteLine(k + "|" + v);
-        static string S(object v) => v is Resource r ? Rid(r) : v is Enum e ? Convert.ToInt64(e).ToString() : GD.Str(Var.Of(v));
+        static string S(object v) => v == null ? "-" : v is Resource r ? Rid(r) : v is Enum e ? Convert.ToInt64(e).ToString() : GD.Str(Var.Of(v));
 
         static string Md5(byte[] b)
         {
@@ -91,7 +91,13 @@ namespace GuiTest
             GC.Collect();                   // (drop the cached ones: the requests below load on workers)
             GC.WaitForPendingFinalizers();
             var t0 = DateTime.UtcNow;
-            int bad = 0;
+            int bad = 0, off0 = BakedLoader.FilesDecodedOffMain;
+            var t1 = DateTime.UtcNow;
+            foreach (var path in paths) { var once = BakedLoader.Load(path); }
+            Console.Error.WriteLine("decode: " + paths.Length + " files on the main thread in " + (int)(DateTime.UtcNow - t1).TotalMilliseconds + " ms");
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            t0 = DateTime.UtcNow;
             const string Missing = "res://assets/no_such_model.glb";
             ResourceLoader.LoadThreadedRequest(Missing);
             foreach (var path in paths) ResourceLoader.LoadThreadedRequest(path);
@@ -108,7 +114,8 @@ namespace GuiTest
             { bad++; Console.Error.WriteLine("threaded load of a missing file: not FAILED"); }
             if (ResourceLoader.LoadThreadedGetStatus(Missing) != ResourceLoader.THREAD_LOAD_INVALID_RESOURCE) { bad++; Console.Error.WriteLine("status after get: not INVALID_RESOURCE"); }
             if (ResourceLoader.Exists(Missing)) { bad++; Console.Error.WriteLine("exists: true for a missing file"); }
-            Console.Error.WriteLine("threaded: " + paths.Length + " paths, " + bad + " problems, " + (int)(DateTime.UtcNow - t0).TotalMilliseconds + " ms");
+            Console.Error.WriteLine("threaded: " + paths.Length + " paths, " + (BakedLoader.FilesDecodedOffMain - off0) + " decoded on workers, " + bad + " problems, " +
+                (int)(DateTime.UtcNow - t0).TotalMilliseconds + " ms");
             foreach (var u in BakedLoader.Unmapped) Console.Error.WriteLine("unmapped: " + u);
             return bad == 0 ? 0 : 1;
         }

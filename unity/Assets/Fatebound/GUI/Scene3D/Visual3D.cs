@@ -98,7 +98,7 @@ namespace Fatebound.GUI
     {
         Mesh _mesh;
         Skin _skin;
-        string _skeletonPath = "..";
+        string _skeletonPath = "";      // (Godot 4.7: an empty NodePath by default -- ".." was Godot 3; the bake omits defaults)
         readonly List<GMaterial> _surfaceOverride = new List<GMaterial>();
         internal Skeleton3D skeletonNode;
         bool _listening;

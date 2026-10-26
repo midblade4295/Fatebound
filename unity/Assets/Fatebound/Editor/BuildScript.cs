@@ -84,7 +84,10 @@ namespace Fatebound.EditorTools
             Set(so, "m_MSAA", p => p.intValue = 1);                                 // per viewport (render textures)
             Set(so, "m_RenderScale", p => p.floatValue = 1f);
             Set(so, "m_RequireDepthTexture", p => p.boolValue = false);
-            Set(so, "m_RequireOpaqueTexture", p => p.boolValue = false);
+            // the opaque texture: the shockwave shader reads the screen behind it (Godot's hint_screen_texture), at half
+            // resolution (a low-frequency distortion; Godot's copy is mipmapped and sampled at mip 0)
+            Set(so, "m_RequireOpaqueTexture", p => p.boolValue = true);
+            Set(so, "m_OpaqueDownsampling", p => p.intValue = 1);
             Set(so, "m_MainLightRenderingMode", p => p.intValue = 1);               // per pixel
             Set(so, "m_MainLightShadowsSupported", p => p.boolValue = true);
             Set(so, "m_MainLightShadowmapResolution", p => p.intValue = 2048);

@@ -35,7 +35,8 @@ extends SceneTree
 # Special cases:
 #   ArrayMesh: "_surfaces" (Godot's GPU-packed blob) and "shadow_mesh" (a depth-only copy the port doesn't draw) are
 #     not stored; instead "surfaces": [{"primitive": int, "format": surface_get_format (flags: custom formats, 8 bone
-#     weights...), "arrays": surface_get_arrays(i) (ARRAY_MAX entries, decompressed), "blend_shapes":
+#     weights...), "aabb": the surface's AABB as Godot keeps it (computed at import from the uncompressed vertices, blend
+#     shapes included), "arrays": surface_get_arrays(i) (ARRAY_MAX entries, decompressed), "blend_shapes":
 #     surface_get_blend_shape_arrays(i) (if any), "material": value (if any), "name": surface_get_name(i) (if set)}].
 #     LODs are not stored (the port draws LOD 0).
 #   Textures that are files (res://assets/x.png, imported by Godot from the glb next to it): {"@ext": their path} (the
@@ -295,8 +296,11 @@ func _enc_res(r: Resource, main: bool):
 
 func _surfaces(m: ArrayMesh) -> Array:
 	var out := []
+	var packed: Array = m.get("_surfaces")          # (only for each surface's AABB: Godot's, from the uncompressed import)
 	for i in m.get_surface_count():
 		var s := {"primitive": m.surface_get_primitive_type(i), "format": m.surface_get_format(i), "arrays": m.surface_get_arrays(i)}
+		if i < packed.size() and packed[i] is Dictionary and packed[i].has("aabb"):
+			s["aabb"] = packed[i]["aabb"]
 		var bs := m.surface_get_blend_shape_arrays(i)
 		if not bs.is_empty():
 			s["blend_shapes"] = bs

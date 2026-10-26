@@ -98,6 +98,9 @@ namespace Fatebound.GUI
         }
 
         public bool TransparentBg { get => _transparentBg; set { _transparentBg = value; RenderSync.MarkViewport(this); } }
+        bool _hdr2d;
+        /// <summary>use_hdr_2d: the canvas is drawn into a float target (values outside 0..1 kept, as the ripple sim needs).</summary>
+        public bool UseHdr2D { get => _hdr2d; set { _hdr2d = value; RenderSync.MarkViewport(this); } }
         public int Msaa3D { get => _msaa3d; set { _msaa3d = value; RenderSync.MarkViewport(this); } }
         public int ScreenSpaceAa { get => _screenAa; set { _screenAa = value; RenderSync.MarkViewport(this); } }
         public double Scaling3DScale { get => _scaling3dScale; set { _scaling3dScale = value; RenderSync.MarkViewport(this); } }

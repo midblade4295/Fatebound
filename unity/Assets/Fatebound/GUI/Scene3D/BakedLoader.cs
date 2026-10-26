@@ -14,7 +14,7 @@
 //                (scenes: the tree Godot's instantiate() gives, pre-order).
 //   Objects inside values: {"@res": i} (resources[i]), {"@ext": "res://path", "@type"} (a resource with its own file:
 //   load()ed -- textures, other baked files), {"@node": "path from the scene root"}.
-//   ArrayMesh "surfaces": [{"primitive", "format", "arrays" (surface_get_arrays), "blend_shapes"?, "material"?, "name"?}].
+//   ArrayMesh "surfaces": [{"primitive", "format", "aabb", "arrays" (surface_get_arrays), "blend_shapes"?, "material"?, "name"?}].
 //   _baked/manifest.json lists every baked path (ResourceLoader.exists answers from it).
 //
 // Building: every resource of the file is created (by Godot class name: the facade's classes carry Godot's names; a
@@ -202,9 +202,16 @@ namespace Fatebound.GUI
             public string[] groups;
         }
 
+        static int _decoded, _decodedOffMain;
+        /// <summary>Files decoded so far, and how many of them on a worker thread (tests).</summary>
+        public static int FilesDecoded => _decoded;
+        public static int FilesDecodedOffMain => _decodedOffMain;
+
         /// <summary>Loads a baked file (ResourceLoader.LoadUncached: any thread). Null (and an error) when it's missing.</summary>
         public static Resource Load(string path)
         {
+            System.Threading.Interlocked.Increment(ref _decoded);
+            if (!PlatformHost.IsMainThread) System.Threading.Interlocked.Increment(ref _decodedOffMain);
             byte[] bytes = ResourceLoader.ReadHostFile(path);
             if (bytes == null)
             {
@@ -289,6 +296,7 @@ namespace Fatebound.GUI
                     foreach (var b in s["blend_shapes"].AsArr() ?? new GArray())
                         if (b.AsArr() is GArray ba) surf.BlendShapes.Add(Mesh.SurfaceFromArrays(prim, ba, fmt));
                 }
+                if (s.Has("aabb") && Resolve(ctx, s["aabb"]).Obj is Aabb box) surf.Aabb = box;     // (Godot's: blend shapes included)
                 if (s.Has("material")) surf.Material = Resolve(ctx, s["material"]).Obj as GMaterial;
                 if (s.Has("name")) surf.Name = s["name"].AsString();
                 m.AddSurface(surf);

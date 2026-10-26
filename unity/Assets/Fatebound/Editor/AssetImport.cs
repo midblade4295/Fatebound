@@ -5,6 +5,8 @@
 //    mipmaps/generate, clamped unless mipmapped
 //  * normal maps (compress/normal_map=1, or "normal" in the name) linear; everything else sRGB
 //  * textures the game reads on the CPU (Image.get_pixel: assets/war_land) readable
+//  * _baked/*.png (textures tools/bake took out of a scene file; no sidecar): as Godot imports a scene's textures for 3D
+//    (VRAM compressed, mipmaps, repeat); "_normal" in the name (used as a normal map) -> linear
 // Audio: music streams, the rest decompresses on load (Godot's AudioStreamOggVorbis / WAV behave the same to the game).
 using System.Collections.Generic;
 using System.IO;
@@ -51,7 +53,8 @@ namespace Fatebound.EditorTools
             g.TryGetValue("compress/mode", out var mode);
             g.TryGetValue("mipmaps/generate", out var mips);
             g.TryGetValue("compress/normal_map", out var normal);
-            bool vram = mode == "2";
+            // textures embedded in a glb/scene, written out by tools/bake: Godot imported them for 3D
+            bool vram = mode == "2" || assetPath.StartsWith(RES + "_baked/");
             bool mip = vram || mips == "true";
             bool isNormal = normal == "1" || Path.GetFileNameWithoutExtension(assetPath).ToLowerInvariant().Contains("normal");
 

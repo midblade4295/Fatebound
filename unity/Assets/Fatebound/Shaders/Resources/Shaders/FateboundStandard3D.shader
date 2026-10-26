@@ -146,7 +146,7 @@ Shader "Fatebound/Standard3D"
             o.tangentWS = float4(TransformObjectToWorldDir(v.tangentOS.xyz), v.tangentOS.w * GetOddNegativeScale());
         }
         o.uv = v.uv * _UV1Scale.xy + _UV1Offset.xy;
-        if (mode == 3) o.uv = FB_ParticleAnimUV(o.uv, UNITY_ACCESS_INSTANCED_PROP(FBPerInstance, _InstCustom).z, _ParticlesAnim.x, _ParticlesAnim.y, _ParticlesAnim.z);
+                if ((int)_Billboard == 3) o.uv = FB_ParticleAnimUV(o.uv, UNITY_ACCESS_INSTANCED_PROP(FBPerInstance, _InstCustom).z, _ParticlesAnim.x, _ParticlesAnim.y, _ParticlesAnim.z);
         float4 c = v.color;
         if (_VertexColorSrgb > 0.5) c.rgb = SRGBToLinear(c.rgb);
         o.color = c * UNITY_ACCESS_INSTANCED_PROP(FBPerInstance, _InstColor);
@@ -299,7 +299,7 @@ Shader "Fatebound/Standard3D"
             #endif
                 o.positionCS = ApplyShadowClamping(TransformWorldToHClip(ApplyShadowBias(positionWS, normalWS, lightDirectionWS)));
                 o.uv = v.uv * _UV1Scale.xy + _UV1Offset.xy;
-        if (mode == 3) o.uv = FB_ParticleAnimUV(o.uv, UNITY_ACCESS_INSTANCED_PROP(FBPerInstance, _InstCustom).z, _ParticlesAnim.x, _ParticlesAnim.y, _ParticlesAnim.z);
+                if ((int)_Billboard == 3) o.uv = FB_ParticleAnimUV(o.uv, UNITY_ACCESS_INSTANCED_PROP(FBPerInstance, _InstCustom).z, _ParticlesAnim.x, _ParticlesAnim.y, _ParticlesAnim.z);
                 o.color = v.color;
                 return o;
             }
@@ -336,7 +336,7 @@ Shader "Fatebound/Standard3D"
                 o.positionWS = FB_StdWorldPosition(v);
                 o.positionCS = TransformWorldToHClip(o.positionWS);
                 o.uv = v.uv * _UV1Scale.xy + _UV1Offset.xy;
-        if (mode == 3) o.uv = FB_ParticleAnimUV(o.uv, UNITY_ACCESS_INSTANCED_PROP(FBPerInstance, _InstCustom).z, _ParticlesAnim.x, _ParticlesAnim.y, _ParticlesAnim.z);
+                if ((int)_Billboard == 3) o.uv = FB_ParticleAnimUV(o.uv, UNITY_ACCESS_INSTANCED_PROP(FBPerInstance, _InstCustom).z, _ParticlesAnim.x, _ParticlesAnim.y, _ParticlesAnim.z);
                 o.color = v.color;
                 return o;
             }

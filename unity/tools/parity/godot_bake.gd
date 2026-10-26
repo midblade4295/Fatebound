@@ -83,7 +83,9 @@ func _init() -> void:
 func walk(n: Node, root: Node) -> void:
 	var path := rel(root, n)
 	p("node|" + path, n.get_class() + "|owner=" + (rel(root, n.owner) if n.owner != null else "-") + "|children=" + str(n.get_child_count()))
-	var metas: Array = n.get_meta_list()
+	var metas: Array = []
+	for k in n.get_meta_list():
+		metas.append(String(k))
 	metas.sort()
 	for k in metas:
 		p("meta|" + path + "|" + k, n.get_meta(k))

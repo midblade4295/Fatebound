@@ -394,7 +394,13 @@ namespace Fatebound.GUI
         {
             Rect2 ra = aa ? r.Grow(-FEATHER_SIZE * 0.25f) : r;
             Vec2 p = ra.position, s = ra.size;
-            Quad(p, new Vec2(p.x + s.x, p.y), p + s, new Vec2(p.x, p.y + s.y), color, color, color, color);
+            // (a plain rect's UV runs 0..1 across it, as Godot's rect command gives a canvas shader)
+            int bq = Begin(null, DrawMode.Normal, 0f);
+            V(p, new Vec2(0f, 0f), color); V(new Vec2(p.x + s.x, p.y), new Vec2(1f, 0f), color);
+            V(p + s, new Vec2(1f, 1f), color); V(new Vec2(p.x, p.y + s.y), new Vec2(0f, 1f), color);
+            idx.Add(bq); idx.Add(bq + 1); idx.Add(bq + 2);
+            idx.Add(bq); idx.Add(bq + 2); idx.Add(bq + 3);
+            End();
             if (!aa) return;
             float border = FEATHER_SIZE;
             float size = Math.Min(s.x, s.y);

@@ -111,7 +111,7 @@ namespace Fatebound.Sim
                 return ((long)v).ToString(CultureInfo.InvariantCulture) + (trailing ? ".0" : "");
             int decimals = 6;
             float a = Math.Abs(v);
-            if (a > 10) decimals -= (int)Math.Floor(Math.Log10(a));
+            if (a > 10) decimals -= (int)Math.Floor(MathF.Log10(a));    // (float log10, as Godot's std::log10(float): 99.99998 -> "100.0")
             return Num(v, decimals);
         }
 

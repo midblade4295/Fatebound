@@ -114,6 +114,7 @@ namespace Fatebound.Client
             _renderer3D = new UnityRenderer3D();
             new UnityPhysics3D();           // the 3D physics backend: registers itself as PhysicsServer3D.Backend
             CanvasShaderMaterial = sm => _renderer3D.Materials.GetCanvas(sm);
+            InlineShaders.Register();
         }
 
         UnityRenderer3D _renderer3D;

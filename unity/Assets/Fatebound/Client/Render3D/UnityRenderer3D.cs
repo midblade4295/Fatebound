@@ -615,9 +615,11 @@ namespace Fatebound.Client
         /// sRGB values, Godot's 2D colour space (the post chain encodes the 3D picture into it).</summary>
         static void EnsureLdr(VpData d, int w, int h)
         {
-            if (d.Ldr != null && d.Ldr.width == w && d.Ldr.height == h) return;
+            // (use_hdr_2d: a half-float target, values kept as the canvas shader writes them)
+            var fmt = d.Vp.UseHdr2D ? RenderTextureFormat.ARGBHalf : RenderTextureFormat.ARGB32;
+            if (d.Ldr != null && d.Ldr.width == w && d.Ldr.height == h && d.Ldr.format == fmt) return;
             Free(ref d.Ldr);
-            d.Ldr = new RenderTexture(w, h, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.Linear) { name = "vp " + d.Vp.Name, filterMode = FilterMode.Bilinear };
+            d.Ldr = new RenderTexture(w, h, 0, fmt, RenderTextureReadWrite.Linear) { name = "vp " + d.Vp.Name, filterMode = FilterMode.Bilinear };
             d.Ldr.Create();
         }
 

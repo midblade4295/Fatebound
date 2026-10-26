@@ -57,7 +57,12 @@ namespace Fatebound.Client
 
         static readonly List<Vector3> _v = new List<Vector3>(), _n = new List<Vector3>();
         static readonly List<Vector4> _t = new List<Vector4>(), _c0 = new List<Vector4>();
-        static readonly List<Color> _col = new List<Color>();
+        static readonly List<Color32> _col = new List<Color32>();
+
+        /// <summary>Godot stores vertex colours as RGBA8, truncated (rendering_server.cpp: uint8_t(CLAMP(c * 255))).</summary>
+        static Color32 C8(Col c) => new Color32(B8(c.r), B8(c.g), B8(c.b), B8(c.a));
+        static byte B8(float v) => (byte)Math.Max(0.0, Math.Min(255.0, v * 255.0));
+        static readonly Color32 White8 = new Color32(255, 255, 255, 255);
         static readonly List<Vector2> _uv = new List<Vector2>(), _uv2 = new List<Vector2>();
         static readonly List<int> _idx = new List<int>();
 
@@ -111,7 +116,7 @@ namespace Fatebound.Client
                             _t.Add(new Vector4(-s.Tangents[i * 4], s.Tangents[i * 4 + 1], s.Tangents[i * 4 + 2], -s.Tangents[i * 4 + 3]));
                         else _t.Add(new Vector4(-1f, 0f, 0f, -1f));
                     }
-                if (hasC) for (int i = 0; i < vc; i++) _col.Add(s.Colors != null && i < s.Colors.Length ? Conv.Color(s.Colors[i]) : Color.white);
+                for (int i = 0; i < vc; i++) _col.Add(s.Colors != null && i < s.Colors.Length ? C8(s.Colors[i]) : White8);
                 if (hasUv) for (int i = 0; i < vc; i++) { var u = s.Uv != null && i < s.Uv.Length ? s.Uv[i] : Vec2.Zero; _uv.Add(new Vector2(u.x, u.y)); }
                 if (hasUv2) for (int i = 0; i < vc; i++) { var u = s.Uv2 != null && i < s.Uv2.Length ? s.Uv2[i] : Vec2.Zero; _uv2.Add(new Vector2(u.x, u.y)); }
                 for (int c = 0; c < 4; c++)
@@ -156,7 +161,8 @@ namespace Fatebound.Client
             mesh.SetVertices(_v);
             if (hasN) mesh.SetNormals(_n);
             if (hasT) mesh.SetTangents(_t);
-            if (hasC) mesh.SetColors(_col);
+            // (always: Godot binds white for a mesh without colours, and shaders read COLOR regardless)
+            mesh.SetColors(_col);
             if (hasUv) mesh.SetUVs(0, _uv);
             if (hasUv2) mesh.SetUVs(1, _uv2);
             for (int c = 0; c < 4; c++) if (custom[c] != null) mesh.SetUVs(2 + c, custom[c]);
