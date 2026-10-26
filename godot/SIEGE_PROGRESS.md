@@ -7344,3 +7344,49 @@ weapon 2,900-4,100, and every one of them cast a real shadow. His 0.31.162 log (
   81173c2fa01edfe2535cb4ab2595041020c6e3649fc3c4c6b9ab3ebe20df71f5.
 - Next, by his phone's log (fps, gpu3d, the 3D's shadow triangles): the heroes' bodies (~10,350 each, ten on the
   field), the trees' shadow copies, the glow.
+
+## 0.31.219 — performance: the sim off the main thread, lighter animation and HUD, the phone measures the GPU
+Kevin's 0.31.218 log (a 5v5 against bots, t=241-403 s): 23 fps (15-32), the graphics chip ~28 ms a frame (gpu3d 21.6 +
+gpuhud 6.3), the game's own code ~22 ms (sim 12.6, view 8.3, HUD 5.4 -- 6-7 while alive). The shadow triangles 215k ->
+62k (0.31.218's cut), but the frame CPU-bound: at 27 fps (37 ms) with the GPU at 24 ms the main thread was the limit.
+(The log's proc= was Performance's TIME_PROCESS: the WORST frame's process time in each second, not its mean.)
+Headless (this machine, 330 s into the bench match): animation advance 0.047 ms a body a frame, but switching a
+player's `active` off and on rebuilt its caches -- 0.25-0.75 ms each time (81 clips), and the view did it whenever a
+body crossed the screen's edge or the fog and for every minion taken from the pool (36 a wave).
+- siege_mode.gd: the sim's ticks run on a WorkerThreadPool task while the engine draws the frame
+  (RenderingServer.frame_pre_draw .. frame_post_draw: every script's _process and _draw is done, only the engine's C++
+  runs, and the sim touches nothing of the engine's). The view shows the ticks a frame later (eased anyway); events a
+  frame later; proj_lead counts the ticks still to run. Headless (no drawing) or FB_SIM_SYNC: in _process as before.
+  sim_join at the next _process (a frame without drawing runs its due ticks there), in _on_action and _exit_tree; a
+  new match drops the old one's due ticks. Diag: sim = the task's time, simwait = the main thread's wait for it.
+- tests/async_sim_test.gd (new, in the suite): a bot 5v5 from one seed 20 s with ticks in _process and 20 s with them
+  async (the draw signals sent by hand) -- every unit's place, health and state the same; 599 tasks on a worker thread.
+- siege_view.gd: anim_run/anim_running -- a body's animation paused by its process mode (keeps its caches; 0.006 ms
+  to resume), never switched off. Lane minions and small monsters (the blob-shadow bodies) animated at 30 Hz
+  (ANIM_LOD_HZ: their players in manual mode, stepped by sync every other frame at 60 fps, spread over the frames).
+  bars() skips bodies off the screen (sync's frustum test, a["onscr"]). Blood: only drops in the air and marks on the
+  ground stepped (were all 60 + 114 every frame). Water waves stepped at most 30 times a second (tuned at the 30 cap;
+  at 60 they ran twice as fast) and not at all after 6 s still. Loose weapons kicked every other frame at 60 fps.
+- siege_hud.gd: the stick, the skill buttons and their + marks on their own layer (BtnLayer, over the HUD's drawing),
+  drawn again at most 30 times a second and at once on any touch. Button icons and recharge pies drawn from circles
+  made once (draw_set_transform) -- 40 sines and cosines a button a frame were the largest part of a button.
+  Headless: stick+buttons 0.69 -> 0.54 ms a draw (and half the draws at 60 fps), bars 0.49 -> 0.29.
+- siege_mode.gd: the vignette drawn inside the 3D view's own 2D layer (at its 50 %: a quarter of the pixels it blended
+  over the 1440x3200 screen; the same look).
+- training: the overlay goes over the buttons' layer (training_test checks it).
+- siege_diag.gd: ph_proc / ph_draw / ph_other on each STAT line (the main thread's frame: scripts and the engine's
+  per-node work / the engine drawing / input, physics, the sim's wait and the cap's sleep); procmax/physmax (renamed);
+  one second in ten a PARTS line -- the sim's, the view's and the HUD's parts in ms a frame.
+- gpu_probe.gd (new): a test build's 5v5 against bots, from 40 s: each of none (the noise), shadows, hard shadows,
+  glow, MSAA, fog, 40 % resolution, plain ground, plants, the outer land, vignette, HUD (only while you're down) off for
+  2 s, then on for 2 s -- the graphics chip's 3D and screen time each way, as PROBE lines and a PROBE SUMMARY. Two
+  rounds (~100 s). Off online, in the training, headless, with FB_NO_PROBE.
+- Checks: a bot 5v5 at a fixed 60 fps, 20 s -- clip changes 0.27 and run<->idle 0.12 per body-second, the same with the
+  ticks async as in _process. Under the real renderer (Xvfb): a task every frame, simwait ~0, the probe's lines written.
+- Full suite: 111 passed (async_sim_test new). CONTENT OK (no pack changed). Version 0.31.219, versionCode 305;
+  SERVER_BUILD 0.31.219 (no server change: protocol 37 -- the redeploy for 0.31.217 still waits for Kevin).
+- Preview APK: build/Fatebound-Siege-0.31.219-fatebound.apk (33 MB, preview key), sha256
+  97691b158c8718e7dd3c2999da1f0d73d1287f8dd3a2978956dfe6eccffa470b.
+- Next, by his phone's log: ph_proc / ph_draw / simwait say how much of the sim the drawing hides and what the engine's
+  own work costs; PARTS which script parts to cut; PROBE SUMMARY which graphics feature costs the chip most.
+
