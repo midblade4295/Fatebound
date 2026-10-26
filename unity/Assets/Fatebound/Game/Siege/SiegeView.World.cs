@@ -55,7 +55,7 @@ namespace Fatebound.Game
         public static Image _BloodImage(int seed_v, bool pool)
         {
             var n = 128;
-            var img = Image.Create(n, n, false, Image.FORMAT_RGBA8);
+            var img = Image.Create(n, n, false, ImageFormat.RGBA8);
             var rng = new Rng();
             rng.Seed = (ulong)seed_v;
             var c = new Vector2(n, n) * 0.5;
