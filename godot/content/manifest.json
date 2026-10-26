@@ -28,10 +28,10 @@
   },
   {
    "name": "minions",
-   "file": "minions-243914255b31.pck",
-   "size": 38605964,
-   "sha256": "bd5369635f4bc79e363616532cdd8c2fb17d13c5d8f91f82597175122e847467",
-   "inputs": "243914255b31c3385f0a1da396ae11110957d7d89543929dcf3aef95c432e451",
+   "file": "minions-b84af8079a11.pck",
+   "size": 37789676,
+   "sha256": "f1e9e8a964feb26ab540b9486e67eb8043896a25075256e679ac8278f28f8618",
+   "inputs": "b84af8079a11d9135cd333b9674b90523cfc73a75c60565da5dc3c817dcf0d76",
    "probe": "res://assets/meshy/minion_caster/rigged.glb"
   },
   {
@@ -44,10 +44,10 @@
   },
   {
    "name": "weapons",
-   "file": "weapons-b2f2b5a13db1.pck",
-   "size": 17745928,
-   "sha256": "4112b420a84e0b46d8afed91ff32c93adee15c21a6e454fe3e61b2b6c611ba17",
-   "inputs": "b2f2b5a13db1cbdae31314f8eb85488067d40136aaa4a7f0bf055c017f604b76",
+   "file": "weapons-4b0485d8029e.pck",
+   "size": 17606056,
+   "sha256": "c1bcd9d9873273ad93e6bf81c0533e61a498a2132ee164dfff5c48e305adf282",
+   "inputs": "4b0485d8029e8cc70641fa3d610e22f42f12bd2d956af4f1606f6e5d35f58cc1",
    "probe": "res://assets/meshy/weapons/acolyte_wand.glb"
   },
   {

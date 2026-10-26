@@ -848,7 +848,10 @@ func _apply_hq(env: Environment, sun: DirectionalLight3D) -> void:
 	# left the upper half (field, trees, rocks, bridges) unshadowed. tests/battle_bench.gd with MSAA 2x: one pass to
 	# 75 m costs +4 % over 45 m (two splits to 80 m +7 %) -- the 21 fps was MSAA 4x, not shadow reach.
 	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL
-	sun.directional_shadow_max_distance = 75.0
+	# 0.31.218 (Kevin: "Honor of kings gives me 120fps solid"): 50 m -- the landscape camera (0.31.216) is nearer: the
+	# ground at the screen's far corners is ~34 m from it, so 75 m drew the shadows of everything up to 40 m past the
+	# screen (half the shadow pass's triangles at the middle lane; and the map's 2048 px spread over it)
+	sun.directional_shadow_max_distance = 50.0
 	sun.shadow_bias = 0.03
 	sun.shadow_normal_bias = 1.1
 	sun.shadow_blur = 1.3
@@ -3258,6 +3261,14 @@ func _ensure_actor(u: Dictionary) -> Dictionary:
 	a.body = made.body
 	a.player = made.player
 	a["pool_key"] = pk                            # (0.31.207: back to the pool when it goes)
+	if _blob_only(u):
+		# 0.31.218 (Kevin: "Honor of kings gives me 120fps solid. This game I can hardly hit 30"): a lane minion or a
+		# small camp monster casts no real shadow (each one was drawn twice, the second time into the sun's shadow map)
+		# -- a soft dark blob on the ground under it instead, as Honor of Kings' minions have
+		for mi in made.body.find_children("*", "MeshInstance3D", true, false):
+			(mi as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		if not a.has("blob") or not is_instance_valid(a.blob):
+			a["blob"] = _blob_shadow(root, 0.95 * float(u.get("mscale", 1.0)))
 	_cape_setup(a)
 	a.cls = u.cls
 	a.up = u.up
@@ -3277,6 +3288,45 @@ func _ensure_actor(u: Dictionary) -> Dictionary:
 	if float(a.big) > 0.0:
 		(a.ring as MeshInstance3D).mesh = _ring_mesh(float(a.big), 0.22)
 	return a
+
+const BLOB_LOOKS := ["skel_minion", "skel_warrior", "skel_rogue"]      # (the buff monsters, the Lord and the Wyrm keep theirs)
+static var _blob_mesh: QuadMesh = null
+
+func _blob_only(u: Dictionary) -> bool:
+	return bool(u.get("minion", false)) or (u.has("mon") and str(u.get("look", "")) in BLOB_LOOKS)
+
+func _blob_shadow(root: Node3D, size: float) -> MeshInstance3D:
+	# a flat quad on the ground under the unit, a radial gradient from a soft dark middle to nothing (one mesh and
+	# material for all of them)
+	if _blob_mesh == null:
+		var g := Gradient.new()
+		g.set_color(0, Color(0.02, 0.03, 0.06, 0.5))
+		g.set_color(1, Color(0.02, 0.03, 0.06, 0.0))
+		g.add_point(0.55, Color(0.02, 0.03, 0.06, 0.32))
+		var gt := GradientTexture2D.new()
+		gt.gradient = g
+		gt.fill = GradientTexture2D.FILL_RADIAL
+		gt.fill_from = Vector2(0.5, 0.5)
+		gt.fill_to = Vector2(1.0, 0.5)
+		gt.width = 64
+		gt.height = 64
+		var m := StandardMaterial3D.new()
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		m.albedo_texture = gt
+		m.cull_mode = BaseMaterial3D.CULL_DISABLED
+		_blob_mesh = QuadMesh.new()
+		_blob_mesh.orientation = PlaneMesh.FACE_Y
+		_blob_mesh.size = Vector2(1, 1)
+		_blob_mesh.material = m
+	var mi := MeshInstance3D.new()
+	mi.mesh = _blob_mesh
+	mi.scale = Vector3(size, 1.0, size)
+	mi.position.y = 0.04
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mi.name = "Blob"
+	root.add_child(mi)
+	return mi
 
 func _play(a: Dictionary, clip: String, speed := 1.0, busy := 0.0) -> void:
 	var player: AnimationPlayer = a.player
@@ -3405,6 +3455,8 @@ func sync(dt: float) -> void:
 			if absf(angle_difference(ry, float(u.face))) > 0.0005:
 				root.rotation.y = lerp_angle(ry, float(u.face), rot_k)
 		(a.ring as MeshInstance3D).visible = u.state != "dead"
+		if a.has("blob"):
+			(a.blob as Node3D).visible = u.state != "dead"         # (0.31.218: its blob shadow goes with its ring)
 		if prof_on: tu = _pv("a.place+fog", tu)
 		var show := root.visible and (planes.is_empty() or _on_screen(newp, planes, 1.8 if float(a.get("big", 0.0)) <= 0.0 else 5.0))
 		if show or not alive_u or bool(a.dead):

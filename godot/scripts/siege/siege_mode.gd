@@ -32,7 +32,9 @@ const TUTORIAL_GOLD := 250
 # No RESOLUTION button any more, no heat guard stepping it (set_render_scale stays for the benches).
 const RENDER_SCALE := 0.5
 var render_scale := RENDER_SCALE
-const FPS_CAP := 30         # hard-locked, no fps options (Round 32; 60 for one test build, 0.31.162) -- the sim ticks at 30 Hz
+const FPS_CAP := 60         # 0.31.218 (Kevin, after the triangles were cut: "Honor of kings gives me 120fps solid"): 60 (30
+                            # since Round 32, 60 for one test build in 0.31.162) -- the sim still ticks at 30 Hz; the
+                            # view eases each body between its ticks
 var _prev_max_fps := 0
 var _prev_physics_tps := 60
 var fps_cap := FPS_CAP

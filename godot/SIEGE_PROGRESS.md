@@ -7311,3 +7311,36 @@ is won -> "3 towers a lane, then the king (crystal)"; skills -> "HoK + buttons";
   dd28e9f9cfe01f9f2fda306d85c40b4f4fc593638b7b6dbe90d050e2bf3e3609.
 - Not done, for Kevin to decide: Honor of Kings' "You got New Hero" at the end of training 1 (a paid hero costs 25,000
   gold here, so it isn't given).
+
+## 0.31.218 — performance: lighter minions, blob shadows, a shorter shadow reach, 60 fps
+Kevin: "What's your thoughts on changing the engine to unity" -- then "Performance. Honor of kings gives me 120fps
+solid. This game I can hardly hit 30" -- asked for the plan (minions first, a 60 fps test build): "Yes".
+Where the frame goes (llvmpipe at 960x540, a bot 5v5 at 3:20, you by the biggest bunch of minions -- tools in the
+scratchpad: fight_prims, tri_census, cam_reach): ~188k triangles drawn and ~181k more into the sun's shadow map, 132 +
+67 draw calls, 7.5 minions on the screen. Every Meshy body ~10,350 triangles (minions and heroes alike), a minion's
+weapon 2,900-4,100, and every one of them cast a real shadow. His 0.31.162 log (the 60 cap) had the graphics chip at
+22-27 ms a frame at 50 % resolution, ~14 ms of it the same at any resolution: the triangles.
+- tools/simplify_models.py (new): the four lane minions' bodies and their five weapons cut with meshoptimizer's
+  gltfpack (npm gltfpack 0.24.0), rig, names, material and texture kept, the texture's seams respected (an aggressive
+  cut to a fixed share smeared the paint: speckled minions -- checked side by side, not taken): bodies 10,320-10,383 ->
+  4,136-7,091, weapons 2,926-4,055 -> 1,173-3,179. From the full models at 7ef3e48 (git show), so a rerun starts there.
+- siege_view.gd: a lane minion or a small camp monster (Bone Pack, Grave Archers) casts no real shadow -- a soft dark
+  blob on the ground under it (one quad mesh and gradient for all, hidden with its ring when it dies); heroes, towers,
+  the buff monsters, the Lord and the Wyrm keep theirs. The sun's shadows reach 50 m (75 since Round 36, for the old
+  portrait camera 38 m up): the landscape camera's farthest ground is ~34 m away, so 75 drew the shadows of things up
+  to 40 m off the screen (at the middle lane 57k -> 29k shadow triangles; no visible change, the shadows a bit
+  crisper).
+- The lane fight's frame: view 188k -> 141k triangles, shadow 181k -> 76k (before the shorter reach); 369k -> 217k.
+- siege_mode.gd: FPS_CAP 60 (30 since 0.31.163, Kevin's lock after the 0.31.162 test); the physics with it. The sim
+  still ticks at 30 Hz; the view already eases every body toward its place each frame (frame-rate independent), the
+  projectiles are drawn ahead by the time since the tick.
+- tests/siege_guard_smoke.gd: the cap 60.
+- Full suite: 109 passed; staged_start_test failed once at the suite's end (its longest build frame 437 ms over 400,
+  sim.setup 247 ms -- nothing here touches it) and passed twice alone (313, 320 ms).
+- minions and weapons packs rebuilt and uploaded (minions-b84af8079a11.pck, weapons-4b0485d8029e.pck; content-packs
+  115567a); CONTENT OK. Version 0.31.218, versionCode 304; SERVER_BUILD 0.31.218 (no server change: protocol 37 as
+  0.31.217 -- the redeploy for 0.31.217 still waits for Kevin).
+- Preview APK: build/Fatebound-Siege-0.31.218-fatebound.apk (33 MB, preview key), sha256
+  81173c2fa01edfe2535cb4ab2595041020c6e3649fc3c4c6b9ab3ebe20df71f5.
+- Next, by his phone's log (fps, gpu3d, the 3D's shadow triangles): the heroes' bodies (~10,350 each, ten on the
+  field), the trees' shadow copies, the glow.
