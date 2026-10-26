@@ -591,9 +591,22 @@ void fragment() {
 		_rip_vp.append(vp)
 		_rip_mat.append(m)
 
+# 0.31.219: the wave field stepped at most RIP_HZ times a second -- its speed and damping were tuned at the 30 fps cap
+# (Round 33-34); at 60 fps it ran twice as fast, and an extra pass on the graphics chip every frame -- and not at all
+# once it has been still for RIP_REST seconds (no one wading, no blast: flat again by then), till someone wades in.
+const RIP_HZ := 30.0
+const RIP_REST := 6.0
+var _rip_acc := 0.0
+var _rip_quiet := 0.0
+
 func _sync_ripples(dt: float) -> void:
 	if _rip_vp.is_empty() or _water_mat == null:
 		return
+	_rip_acc += dt
+	if _rip_acc < 1.0 / RIP_HZ - 0.002:
+		return
+	dt = minf(_rip_acc, 0.1)
+	_rip_acc = 0.0
 	var drops := []
 	for u in sim.units:
 		if not sim.alive(u) or _fogged(u):
@@ -625,6 +638,9 @@ func _sync_ripples(dt: float) -> void:
 			_rip_kicks.remove_at(i)
 	if drops.size() > 16:
 		drops.resize(16)
+	_rip_quiet = 0.0 if not drops.is_empty() else _rip_quiet + dt
+	if _rip_quiet > RIP_REST:
+		return                                     # (still: nothing to step)
 	var cur := _rip_i % 2
 	var other := 1 - cur
 	var m: ShaderMaterial = _rip_mat[cur]
@@ -761,6 +777,8 @@ func _blood_mark(list: Array, idx: int, p: Vector2, radius: float, grow: float, 
 	m.grow = grow
 	mi.scale = Vector3.ONE * (m.r0 * 2.0)
 	(mi.material_override as StandardMaterial3D).albedo_color = BLOOD_COL
+	if not mi.visible or not _marks_live.has(m):
+		_marks_live.append(m)                     # 0.31.219: _sync_blood steps only the marks on the ground
 	mi.visible = true
 
 func blood_hit(target: Vector2, from: Vector2, dmg: float) -> void:
@@ -781,6 +799,7 @@ func blood_hit(target: Vector2, from: Vector2, dmg: float) -> void:
 		d.size = randf_range(0.13, 0.24)
 		d["g"] = y0 - 1.0                           # 0.31.160: the ground under the hit, looked up once (they land within ~2 m)
 		d.on = true
+		_drops_any = true
 		(d.mi as MeshInstance3D).position = d.p
 		(d.mi as MeshInstance3D).visible = true
 
@@ -790,35 +809,46 @@ func blood_pool(p: Vector2) -> void:
 	_blood_mark(_pools, _pool_i, p, randf_range(1.45, 1.8), 3.0, POOL_LIFE)
 	_pool_i = (_pool_i + 1) % POOL_MAX
 
+# 0.31.219 (Kevin's 0.31.218 log: the view ~8 ms a frame on his phone): only the drops in the air and the marks on the
+# ground are stepped -- all 60 drops and 114 marks were gone through every frame, most of them unused
+var _drops_any := false
+var _marks_live: Array = []
+
 func _sync_blood(dt: float) -> void:
-	for d in _drops:
-		if not bool(d.on):
+	if _drops_any:
+		var flying := 0
+		for d in _drops:
+			if not bool(d.on):
+				continue
+			d.v += Vector3(0.0, -9.8, 0.0) * dt
+			d.p += d.v * dt
+			if d.p.y <= float(d.get("g", 0.0)) + 0.03:
+				d.on = false
+				(d.mi as MeshInstance3D).visible = false
+				_blood_mark(_splats, _splat_i, Vector2(d.p.x, d.p.z), float(d.size), 0.0, SPLAT_LIFE * 0.8)
+				_splat_i = (_splat_i + 1) % SPLAT_MAX
+			else:
+				flying += 1
+				(d.mi as MeshInstance3D).position = d.p
+		_drops_any = flying > 0
+	for i in range(_marks_live.size() - 1, -1, -1):
+		var m: Dictionary = _marks_live[i]
+		var mi: MeshInstance3D = m.mi
+		if not is_instance_valid(mi) or not mi.visible:
+			_marks_live.remove_at(i)
 			continue
-		d.v += Vector3(0.0, -9.8, 0.0) * dt
-		d.p += d.v * dt
-		if d.p.y <= float(d.get("g", 0.0)) + 0.03:
-			d.on = false
-			(d.mi as MeshInstance3D).visible = false
-			_blood_mark(_splats, _splat_i, Vector2(d.p.x, d.p.z), float(d.size), 0.0, SPLAT_LIFE * 0.8)
-			_splat_i = (_splat_i + 1) % SPLAT_MAX
-		else:
-			(d.mi as MeshInstance3D).position = d.p
-	for list in [_splats, _pools]:
-		for m in list:
-			var mi: MeshInstance3D = m.mi
-			if not mi.visible:
-				continue
-			var age: float = _time - float(m.born)
-			if age > float(m.life) + BLOOD_FADE:
-				mi.visible = false
-				continue
-			if float(m.grow) > 0.0 and age < float(m.grow):
-				var k := 1.0 - pow(1.0 - age / float(m.grow), 3.0)          # spreads fast, then slows
-				mi.scale = Vector3.ONE * lerpf(float(m.r0), float(m.r1), k) * 2.0
-			if age > float(m.life):
-				var c := BLOOD_COL
-				c.a = 1.0 - (age - float(m.life)) / BLOOD_FADE
-				(mi.material_override as StandardMaterial3D).albedo_color = c
+		var age: float = _time - float(m.born)
+		if age > float(m.life) + BLOOD_FADE:
+			mi.visible = false
+			_marks_live.remove_at(i)
+			continue
+		if float(m.grow) > 0.0 and age < float(m.grow):
+			var k := 1.0 - pow(1.0 - age / float(m.grow), 3.0)          # spreads fast, then slows
+			mi.scale = Vector3.ONE * lerpf(float(m.r0), float(m.r1), k) * 2.0
+		if age > float(m.life):
+			var c := BLOOD_COL
+			c.a = 1.0 - (age - float(m.life)) / BLOOD_FADE
+			(mi.material_override as StandardMaterial3D).albedo_color = c
 
 # ---------- world ----------
 var _hq_cached := -1
@@ -3039,8 +3069,7 @@ func _pool_put(a: Dictionary) -> bool:
 	if a.get("rag") != null:
 		_ragdoll_end(a)                           # (its bones back to the animation)
 	(a.root as Node3D).visible = false
-	if is_instance_valid(a.player):
-		(a.player as AnimationPlayer).active = false
+	anim_run(a.player, false)
 	list.append(a)
 	_minion_pool[k] = list
 	return true
@@ -3072,8 +3101,7 @@ func _pool_take(k: String, u: Dictionary) -> Dictionary:
 				if w is Node3D:
 					(w as Node3D).visible = true
 	(a.ring as MeshInstance3D).visible = true
-	if is_instance_valid(a.player):
-		(a.player as AnimationPlayer).active = true
+	anim_run(a.player, true)
 	_play(a, str(LOOKS.get(str(a.mlook) if str(a.get("mlook", "")) != "" else u.cls, LOOKS.knight).idle))
 	pool_reused += 1
 	return a
@@ -3123,8 +3151,7 @@ func _warm_show(a: Dictionary) -> void:
 	var root: Node3D = a.root
 	root.position = (me.root as Node3D).position + Vector3(randf_range(-3.0, 3.0), 0.0, randf_range(-3.0, 3.0))
 	root.visible = true
-	if is_instance_valid(a.player):
-		(a.player as AnimationPlayer).active = true
+	anim_run(a.player, true)
 	_pool_shown.append(a)
 
 func warm_fight() -> Array:
@@ -3160,8 +3187,7 @@ func warm_end() -> void:
 		if a.get("rag") != null:
 			_ragdoll_end(a)
 		(a.root as Node3D).visible = false
-		if is_instance_valid(a.player):
-			(a.player as AnimationPlayer).active = false
+		anim_run(a.player, false)
 	_pool_shown.clear()
 	for d in _debris:
 		if is_instance_valid(d.node):
@@ -3269,6 +3295,12 @@ func _ensure_actor(u: Dictionary) -> Dictionary:
 			(mi as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		if not a.has("blob") or not is_instance_valid(a.blob):
 			a["blob"] = _blob_shadow(root, 0.95 * float(u.get("mscale", 1.0)))
+		# 0.31.219: ... and is animated ANIM_LOD_HZ times a second, not every frame (its player stepped by sync)
+		if is_instance_valid(a.get("player")):
+			var ap := a.player as AnimationPlayer
+			ap.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL
+			a["lod_anim"] = true
+			a["adt"] = randf() / ANIM_LOD_HZ             # (spread over the frames: not all on the same one)
 	_cape_setup(a)
 	a.cls = u.cls
 	a.up = u.up
@@ -3347,6 +3379,26 @@ func _play(a: Dictionary, clip: String, speed := 1.0, busy := 0.0) -> void:
 # (so no skeleton update or skinning upload either); they resume the moment they come into view.
 var anim_cull := true
 var anim_active := 0
+const ANIM_LOD_HZ := 30.0
+
+# 0.31.219 (Kevin's 0.31.218 log: 23 fps in a 5v5, the CPU the limit): a player is paused by its process mode, not by
+# switching it off -- AnimationMixer.active = false throws away its caches (every track of its 81 clips bound again
+# when it's switched back on: 0.25-0.75 ms here a time, a few times that on the phone), and the view switched it each
+# time a body crossed the screen's edge or the fog, and for every minion taken from the pool (a wave: 36). A paused
+# player keeps them (switching back: ~0.006 ms).
+static func anim_run(player: Variant, on: bool) -> void:
+	if player == null or not is_instance_valid(player):
+		return
+	var ap := player as AnimationPlayer
+	if not ap.active:
+		ap.active = true                       # (an older body switched off: on once, for good)
+	var pm := Node.PROCESS_MODE_INHERIT if on else Node.PROCESS_MODE_DISABLED
+	if ap.process_mode != pm:
+		ap.process_mode = pm
+
+static func anim_running(player: Variant) -> bool:
+	return player != null and is_instance_valid(player) and (player as AnimationPlayer).active \
+		and (player as AnimationPlayer).process_mode != Node.PROCESS_MODE_DISABLED
 
 func _on_screen(p: Vector3, planes: Array, r := 1.8) -> bool:
 	# Bounding sphere (1.8 m; 0.31.166: a big body's own) against the camera frustum planes.
@@ -3412,8 +3464,8 @@ func sync(dt: float) -> void:
 				if fv:
 					a["snap"] = true
 			if not fv:
-				if is_instance_valid(a.player) and (a.player as AnimationPlayer).active:
-					(a.player as AnimationPlayer).active = false
+				if anim_running(a.player):
+					anim_run(a.player, false)
 				if prof_on: tu = _pv("a.place+fog", tu)
 				continue
 		var up: Vector2 = u.pos
@@ -3459,6 +3511,7 @@ func sync(dt: float) -> void:
 			(a.blob as Node3D).visible = u.state != "dead"         # (0.31.218: its blob shadow goes with its ring)
 		if prof_on: tu = _pv("a.place+fog", tu)
 		var show := root.visible and (planes.is_empty() or _on_screen(newp, planes, 1.8 if float(a.get("big", 0.0)) <= 0.0 else 5.0))
+		a["onscr"] = show                          # (0.31.219: bars() skips the bodies off the screen)
 		if show or not alive_u or bool(a.dead):
 			_sync_vanish(a, u)
 			if prof_on: tu = _pv("a.vanish", tu)
@@ -3467,10 +3520,18 @@ func sync(dt: float) -> void:
 			if a.get("cape") != null:
 				_cape_step(a, dt)
 		if is_instance_valid(a.player):
-			if (a.player as AnimationPlayer).active != show:
-				(a.player as AnimationPlayer).active = show
+			anim_run(a.player, show)
 			if show:
 				anim_active += 1
+				if bool(a.get("lod_anim", false)):
+					# 0.31.219: a minion's or small monster's animation 30 times a second (at 60 fps: every other
+					# frame) -- each animated body costs the engine its animation, its skeleton and its skinning; a
+					# lane fight shows twenty of them, each ~40 px tall
+					var adt := float(a.get("adt", 0.0)) + dt
+					if adt >= 1.0 / ANIM_LOD_HZ - 0.002:
+						(a.player as AnimationPlayer).advance(adt)
+						adt = 0.0
+					a["adt"] = adt
 	if prof_on: tp = _pv("actors", tp)
 	for id in actors.keys():
 		if not seen.has(id):
@@ -5015,6 +5076,8 @@ func bars() -> Array:
 		var a: Dictionary = actors.get(u.id, {})
 		if a.is_empty() or not is_instance_valid(a.root) or not (a.root as Node3D).visible:
 			continue                                    # (0.31.158: in the fog -- no bar either)
+		if not bool(a.get("onscr", true)):
+			continue                                    # 0.31.219: off the screen (sync's frustum test: its bar with it)
 		var c: Color = MY_BAR if u.id == player_id else TEAM_COLORS[vt(int(u.team))]
 		var bar := {"pos": (a.root as Node3D).position + Vector3(0, 2.7 * float(u.get("mscale", 1.0)), 0), "fill": clampf(u.hp / maxf(1.0, u.max_hp), 0.0, 1.0), "color": c}
 		if u.has("mon") and float(u.get("mscale", 1.0)) > 1.0:
@@ -5291,10 +5354,15 @@ func _blast_bodies(at2: Vector2, radius: float, speed: float) -> void:
 		(rb as RigidBody3D).linear_velocity += dir2 * f2 + Vector3(0.0, f2 * 0.8, 0.0)
 		(rb as RigidBody3D).angular_velocity += Vector3(randf_range(-8, 8), randf_range(-8, 8), randf_range(-8, 8))
 
+var _kick_skip := false
+
 func _kick_debris() -> void:
 	# loose weapons are kicked along by whoever walks into them
 	if _debris.is_empty():
 		return
+	_kick_skip = not _kick_skip
+	if _kick_skip and Engine.get_frames_per_second() > 40:
+		return                                     # (0.31.219: every other frame at 60 fps -- each walker against each weapon)
 	# (0.31.160: each actor's place once a frame -- it was looked up for every weapon on the ground, for every actor)
 	var walkers := []
 	for a in actors.values():

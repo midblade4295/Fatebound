@@ -15,7 +15,7 @@ const BOOT_PREV_PATH := "user://boot_diag_prev.log"
 # rotate it out of boot_diag_prev.log before anyone could copy it).
 const BOOT_STUCK_PATH := "user://boot_diag_stuck.log"
 const Platform = preload("res://scripts/meta/platform.gd")
-const BUILD := "0.31.218-fatebound"
+const BUILD := "0.31.219-fatebound"
 
 class ErrorCapture:
 	extends Logger
@@ -66,6 +66,28 @@ func _times_text() -> String:
 # (rcpu3d: culling, building the draw lists) -- every frame, as mean/max on each STAT line beside sim/view/hud. The
 # engine's own per-pass timings (shadows, opaque, glow...) are only for its editor profiler, not a phone build.
 var _measured_vp := RID()
+
+# 0.31.219: where each frame's time goes on the main thread -- ph_proc: every script's _process and _draw and the
+# engine's own per-node work (the animation players, the skeletons); ph_draw: the engine drawing the frame on the main
+# thread (culling, the draw lists, handing them to the graphics driver, waiting for it); ph_other: the rest till the
+# next frame (input, physics, the wait for the sim's ticks -- simwait -- and the 60 fps cap's sleep). The old proc= was
+# Performance's TIME_PROCESS: the WORST frame's process time in each second (not its mean) -- procmax= now.
+var _ph_start := 0
+var _ph_pre := 0
+var _ph_post := 0
+
+func _on_process_frame() -> void:
+	var now := Time.get_ticks_usec()
+	if _ph_post > 0:
+		add_time("ph_other", now - _ph_post)
+	_ph_start = now
+	_ph_pre = 0
+
+func _on_pre_draw() -> void:
+	var now := Time.get_ticks_usec()
+	if _ph_start > 0:
+		add_time("ph_proc", now - _ph_start)
+	_ph_pre = now
 
 func _sample_render() -> void:
 	if mode == null or mode.viewport == null or not is_instance_valid(mode.viewport):
@@ -122,6 +144,11 @@ func start_early() -> void:
 	OS.add_logger(_logger)
 	_beat_ms = Time.get_ticks_msec()
 	RenderingServer.frame_post_draw.connect(_on_frame_drawn)
+	if mode != null:
+		RenderingServer.frame_pre_draw.connect(_on_pre_draw)
+		var tree := Engine.get_main_loop() as SceneTree
+		if tree != null:
+			tree.process_frame.connect(_on_process_frame)
 	_watchdog = Thread.new()
 	_watchdog.start(_watch)
 
@@ -133,6 +160,11 @@ func _exit_tree() -> void:
 		_watchdog.wait_to_finish()
 	if RenderingServer.frame_post_draw.is_connected(_on_frame_drawn):
 		RenderingServer.frame_post_draw.disconnect(_on_frame_drawn)
+	if RenderingServer.frame_pre_draw.is_connected(_on_pre_draw):
+		RenderingServer.frame_pre_draw.disconnect(_on_pre_draw)
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree != null and tree.process_frame.is_connected(_on_process_frame):
+		tree.process_frame.disconnect(_on_process_frame)
 	if _measured_vp.is_valid() and is_inside_tree():
 		RenderingServer.viewport_set_measure_render_time(get_viewport().get_viewport_rid(), false)
 	if _logger != null:
@@ -171,6 +203,10 @@ func _on_frame_drawn() -> void:
 	# If a stall's last phase is "frame drawn" or "hud draw", the main thread finished our code and
 	# hung inside rendering/the GPU driver rather than in game logic.
 	mark("frame drawn")
+	var now := Time.get_ticks_usec()
+	if _ph_pre > 0 and mode != null:
+		add_time("ph_draw", now - _ph_pre)
+	_ph_post = now if mode != null else 0
 
 func _watch() -> void:
 	while true:
@@ -221,13 +257,51 @@ func _process(delta: float) -> void:
 			me.get("cls", "?"), me.get("state", "?"), me.get("hp", 0.0), me.get("carrying", false),
 			mode.view._fx.size() if mode.view != null else -1, s.projectiles.size(),
 			mode.view._ragdolls.size() if mode.view != null else -1, mode.view._debris.size() if mode.view != null else -1, s.units.size()]
-	write("STAT fps=%d worst=%.0fms %s %s proc=%.1fms phys=%.1fms mem=%.1fMB vmem=%.1fMB tex=%.1fMB draws=%d prims=%d objs=%d nodes=%d ev=%d %s" % [fps, _worst_ms, _times_text(), _viewport_text(),
+	write("STAT fps=%d worst=%.0fms %s %s procmax=%.1fms physmax=%.1fms mem=%.1fMB vmem=%.1fMB tex=%.1fMB draws=%d prims=%d objs=%d nodes=%d ev=%d %s" % [fps, _worst_ms, _times_text(), _viewport_text(),
 		Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0, Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0, smem, vmem,
 		Performance.get_monitor(Performance.RENDER_TEXTURE_MEM_USED) / 1048576.0,
 		Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME), Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME),
 		Performance.get_monitor(Performance.OBJECT_COUNT), Performance.get_monitor(Performance.OBJECT_NODE_COUNT), _events, state])
 	_worst_ms = 0.0
 	_events = 0
+	_parts_second()
+
+# 0.31.219: one second in every ten, the sim's, the view's and the HUD's own parts timed (their prof dictionaries:
+# tests/moba_bench.gd's breakdown) and written as a PARTS line in ms a frame -- which part to cut, measured on the phone.
+# (Off the other nine: the view's are per body, a few hundred clock reads a frame.)
+var _parts_n := 0
+var _parts_from := 0
+var _parts_mine := false
+
+func _parts_second() -> void:
+	if mode == null or mode.sim == null or not is_instance_valid(mode.view) or not is_instance_valid(mode.hud):
+		return
+	_parts_n += 1
+	if _parts_n % 10 == 9 and not mode.view.prof_on:      # (not while a bench has them on)
+		_parts_mine = true
+		mode.sim.profile = true
+		mode.sim.prof = {}
+		mode.view.prof_on = true
+		mode.view.prof = {}
+		mode.hud.prof_on = true
+		mode.hud.prof = {}
+		_parts_from = Engine.get_process_frames()
+	elif _parts_mine:
+		_parts_mine = false
+		var frames := maxi(1, Engine.get_process_frames() - _parts_from)
+		var out := PackedStringArray()
+		for pr in [["sim", mode.sim.prof], ["view", mode.view.prof], ["hud", mode.hud.prof]]:
+			var pd: Dictionary = pr[1]
+			var keys: Array = pd.keys()
+			keys.sort_custom(func(x, y): return int(pd[x]) > int(pd[y]))
+			var t := PackedStringArray()
+			for k in keys:
+				t.append("%s=%.2f" % [k, float(pd[k]) / 1000.0 / frames])
+			out.append("%s: %s" % [pr[0], " ".join(t)])
+		write("PARTS (ms a frame, %d frames) %s" % [frames, " | ".join(out)])
+		mode.sim.profile = false
+		mode.view.prof_on = false
+		mode.hud.prof_on = false
 
 # Android log capture. Only warnings and above (*:W) from the main, system and crash buffers, so
 # window/touch chatter (VRI, InsetsController, ... all Info/Debug) can't crowd out a crash report.

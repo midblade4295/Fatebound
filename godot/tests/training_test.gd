@@ -96,7 +96,9 @@ func _training1() -> void:
 	var me: Dictionary = s.by_id["you"]
 	var t := int(me.team)
 	var kael: Dictionary = trn.kael
-	check(trn.get_parent() == hud and trn.get_index() == 1, "the training over the HUD, under its buttons")
+	# (0.31.219: over the HUD's drawing and its buttons' layer -- the hand points at them -- under its pause button)
+	check(trn.get_parent() == hud and trn.get_index() == hud.btn_layer.get_index() + 1 and trn.get_index() < hud.pause_btn.get_index(),
+		"the training over the HUD and its buttons' layer, under its pause button (%d, layer %d, pause %d)" % [trn.get_index(), hud.btn_layer.get_index(), hud.pause_btn.get_index()])
 	check(not kael.is_empty() and str(kael.hid) == "dragoon" and str(kael.bot_name) == "Kael" and not bool(kael.bot) and int(kael.team) == t,
 		"one of ours is Kael the Dragoon, driven by the training")
 	var held := true

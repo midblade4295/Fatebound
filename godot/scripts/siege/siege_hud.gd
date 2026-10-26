@@ -119,11 +119,22 @@ func _ready() -> void:
 	_top_layer.draw.connect(_draw_top_layer)
 	add_child(_top_layer)
 	move_child(_top_layer, 0)
+	# 0.31.219 (Kevin's 0.31.218 log: the HUD 5-7 ms a frame on his phone, the stick and the buttons nearly half of it):
+	# the stick, the skill buttons and their + marks on a layer of their own, drawn again at most 30 times a second (a
+	# recharge's sweep, a glow's pulse) -- and at once on any touch -- not at every frame of 60. Over the HUD's own drawing,
+	# as they were drawn last.
+	btn_layer = Control.new()
+	btn_layer.name = "BtnLayer"
+	btn_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	btn_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	btn_layer.draw.connect(_draw_btn_layer)
+	add_child(btn_layer)
+	move_child(btn_layer, 1)
 	minimap = Minimap.new()                        # 0.31.216: the landscape HUD's map, top-left
 	minimap.name = "Minimap"
 	minimap.hud = self
 	add_child(minimap)
-	move_child(minimap, 1)
+	move_child(minimap, 2)
 	kill_banner = KillBanner.new()                 # 0.31.180: over the match and the buttons, under the panels
 	kill_banner.name = "KillBanner"
 	kill_banner.hud = self
@@ -824,12 +835,12 @@ func _draw_learn(me: Dictionary) -> void:
 	for sp in learn_spots(me):
 		var c: Vector2 = sp.c
 		var pulse := 0.5 + 0.5 * sin(_time * 6.0)
-		draw_circle(c, 14.0 + 4.0 * pulse, Color(1.0, 0.82, 0.3, 0.22))
-		draw_circle(c + Vector2(0, 2), 13.0, Color(0, 0, 0, 0.45))
-		draw_circle(c, 13.0, Color("#1a2a44"))
-		draw_arc(c, 13.0, 0, TAU, 32, Color("#ffd65a"), 2.5, true)
-		draw_line(c - Vector2(6, 0), c + Vector2(6, 0), Color("#ffe9a6"), 3.0)
-		draw_line(c - Vector2(0, 6), c + Vector2(0, 6), Color("#ffe9a6"), 3.0)
+		_ci.draw_circle(c, 14.0 + 4.0 * pulse, Color(1.0, 0.82, 0.3, 0.22))
+		_ci.draw_circle(c + Vector2(0, 2), 13.0, Color(0, 0, 0, 0.45))
+		_ci.draw_circle(c, 13.0, Color("#1a2a44"))
+		_ci.draw_arc(c, 13.0, 0, TAU, 32, Color("#ffd65a"), 2.5, true)
+		_ci.draw_line(c - Vector2(6, 0), c + Vector2(6, 0), Color("#ffe9a6"), 3.0)
+		_ci.draw_line(c - Vector2(0, 6), c + Vector2(0, 6), Color("#ffe9a6"), 3.0)
 
 func _modal_open() -> bool:
 	return paused() or tut_modal or (result_panel != null and result_panel.visible) \
@@ -838,6 +849,7 @@ func _modal_open() -> bool:
 func _input(event: InputEvent) -> void:
 	if sim == null:
 		return
+	_btn_dirty = true                              # (0.31.219: the buttons drawn again at once -- a press, the stick)
 	if event is InputEventScreenTouch:
 		_touch(event.index, make_input_local(event).position, event.pressed)
 	elif event is InputEventScreenDrag:
@@ -982,6 +994,8 @@ func _process(delta: float) -> void:
 		if tk != _top_parts:
 			_top_parts = tk
 			_top_layer.queue_redraw()
+	if btn_layer != null and (_btn_dirty or _time - _btn_at >= 1.0 / BTN_HZ - 0.002):
+		btn_layer.queue_redraw()
 	queue_redraw()
 
 func _text(pos: Vector2, text: String, size_px: int, color: Color, font: Font = null, align := HORIZONTAL_ALIGNMENT_CENTER, width := -1.0) -> void:
@@ -994,6 +1008,10 @@ func _text(pos: Vector2, text: String, size_px: int, color: Color, font: Font = 
 
 # ---------- the top layer (0.31.160) ----------
 var _top_layer: Control = null
+var btn_layer: Control = null
+const BTN_HZ := 30.0
+var _btn_dirty := true
+var _btn_at := -1.0
 var _ci: CanvasItem = self                    # what _text and the top's drawing draw on: the HUD, or the top layer
 var _top_parts: Array = []
 
@@ -1081,24 +1099,39 @@ func _draw_hud() -> void:
 	if me.state == "dead":
 		_text(Vector2(w * 0.5, size.y * 0.45), "RESPAWNING IN %d" % int(ceil(me.respawn_at - sim.time)), 22, VisualTheme.GOLD, _title)
 		return
-	if _modal_open():
+	# (the stick and the buttons: their own layer -- _draw_btn_layer)
+
+func _draw_btn_layer() -> void:
+	_btn_at = _time
+	_btn_dirty = false
+	if sim == null:
 		return
+	var me: Dictionary = sim.by_id.get(player_id, {})
+	if me.is_empty() or me.state == "dead" or _modal_open():
+		return
+	var t0 := Time.get_ticks_usec()
+	_ci = btn_layer
 	# Stick.
 	if _stick_active:
-		draw_circle(_stick_origin, 62, Color(1, 1, 1, 0.08))
-		draw_arc(_stick_origin, 62, 0, TAU, 40, Color(1, 1, 1, 0.3), 2.0, true)
+		_ci.draw_circle(_stick_origin, 62, Color(1, 1, 1, 0.08))
+		_ci.draw_arc(_stick_origin, 62, 0, TAU, 40, Color(1, 1, 1, 0.3), 2.0, true)
 		var knob := _stick_origin + (_stick_pos - _stick_origin).limit_length(60.0)
-		draw_circle(knob, 26, Color(1, 1, 1, 0.35))
+		_ci.draw_circle(knob, 26, Color(1, 1, 1, 0.35))
 	elif _touchscreen:
 		var home := Vector2(120, size.y - 110)
-		draw_arc(home, 62, 0, TAU, 40, Color(1, 1, 1, 0.14), 2.0, true)
+		_ci.draw_arc(home, 62, 0, TAU, 40, Color(1, 1, 1, 0.14), 2.0, true)
 		_text(home + Vector2(0, 6), "MOVE", 12, Color(1, 1, 1, 0.35), _bold)
 	# Combat buttons.
 	for b in _buttons():
 		_draw_button(b, me)
 	_draw_learn(me)                                # 0.31.217
 	_draw_recall(me)
-	if prof_on: tq = _ph("stick+buttons", tq)
+	_ci = self
+	var dt := Time.get_ticks_usec() - t0
+	if prof_on:
+		prof["stick+buttons"] = int(prof.get("stick+buttons", 0)) + dt
+	if diag != null:
+		diag.add_time("hud", dt)
 
 func _draw_top(me: Dictionary) -> void:
 	# the scoreboard and, under it, your level, gold and items -- on the top layer (0.31.160). 0.31.178 (Kevin: "Clean up
@@ -1233,9 +1266,9 @@ func _draw_recall(me: Dictionary) -> void:
 	var f := clampf(1.0 - left / Sim.RECALL_TIME, 0.0, 1.0)
 	var w := minf(200.0, size.x * 0.5)
 	var r := Rect2(Vector2(size.x * 0.5 - w * 0.5, size.y * 0.6), Vector2(w, 10.0))
-	draw_rect(r.grow(2.0), Color(0.04, 0.03, 0.1, 0.8))
-	draw_rect(Rect2(r.position, Vector2(w * f, r.size.y)), Color("#b9a8ff"))
-	draw_rect(r.grow(2.0), Color("#6d5ed0"), false, 1.5)
+	_ci.draw_rect(r.grow(2.0), Color(0.04, 0.03, 0.1, 0.8))
+	_ci.draw_rect(Rect2(r.position, Vector2(w * f, r.size.y)), Color("#b9a8ff"))
+	_ci.draw_rect(r.grow(2.0), Color("#6d5ed0"), false, 1.5)
 	_text(Vector2(size.x * 0.5, r.position.y - 6.0), "RECALLING  %.1f" % left, 13, Color("#e6deff"), _bold)
 
 func _draw_idle(me: Dictionary) -> void:
@@ -1687,7 +1720,7 @@ func _draw_button(b: Dictionary, me: Dictionary) -> void:
 			ready = unlocked and cd <= 0.0
 			if ready:
 				var pulse := 0.5 + 0.5 * sin(_time * 5.0)
-				draw_arc(c, r + 5.0 + 3.0 * pulse, 0, TAU, 48, Color(1.0, 0.84, 0.35, 0.35 + 0.4 * pulse), 4.0, true)
+				_ci.draw_arc(c, r + 5.0 + 3.0 * pulse, 0, TAU, 48, Color(1.0, 0.84, 0.35, 0.35 + 0.4 * pulse), 4.0, true)
 			badge = "R II" if unlocked and sim.moba.ult_rank(me) >= 2 else "R"
 			icon = ability_icon(str(me.get("hid", "")), "r")
 			locked = not unlocked
@@ -1716,24 +1749,24 @@ func _draw_button(b: Dictionary, me: Dictionary) -> void:
 			ready = sim.alive(me) and not sim.recalling(me)
 			if sim.recalling(me):
 				var left := maxf(0.0, float(me.recall_until) - float(sim.time))
-				draw_arc(c, r + 4.0, -PI * 0.5, -PI * 0.5 + TAU * (1.0 - left / Sim.RECALL_TIME), 40, Color("#d8ccff"), 4.0, true)
+				_ci.draw_arc(c, r + 4.0, -PI * 0.5, -PI * 0.5 + TAU * (1.0 - left / Sim.RECALL_TIME), 40, Color("#d8ccff"), 4.0, true)
 	var pressed: bool = _time - float(_pressed_at.get(b.id, -10.0)) < 0.12 or (b.id == "attack" and _attack_held)
 	var body := col.lightened(0.15) if pressed else col
 	if not ready:
 		body = body.darkened(0.45)
-	draw_circle(c + Vector2(0, 4), r, Color(0, 0, 0, 0.45))
-	draw_circle(c, r, body)
+	_ci.draw_circle(c + Vector2(0, 4), r, Color(0, 0, 0, 0.45))
+	_ci.draw_circle(c, r, body)
 	if icon != null:
 		# 0.31.171: the icon in the circle -- dimmed while it recharges or is locked, the time left over it
 		var lit := Color(1, 1, 1) if ready else (Color(0.3, 0.3, 0.34) if locked else Color(0.5, 0.5, 0.54))
 		_icon_circle(c, r - 1.5, icon, lit)
 		if pressed:
-			draw_circle(c, r - 1.5, Color(1, 1, 1, 0.18))
+			_ci.draw_circle(c, r - 1.5, Color(1, 1, 1, 0.18))
 		if cd > 0.0 and not locked and cd / cd_max > 0.01:
 			_pie(c, r - 1.5, cd / cd_max, Color(0, 0, 0, 0.45))
-	draw_arc(c, r, 0, TAU, 48, rim if ready else rim.darkened(0.5), 3.0, true)
+	_ci.draw_arc(c, r, 0, TAU, 48, rim if ready else rim.darkened(0.5), 3.0, true)
 	if cd > 0.0:
-		draw_arc(c, r - 6, -PI * 0.5, -PI * 0.5 + TAU * (cd / cd_max), 40, Color(1, 1, 1, 0.55), 5.0, true)
+		_ci.draw_arc(c, r - 6, -PI * 0.5, -PI * 0.5 + TAU * (cd / cd_max), 40, Color(1, 1, 1, 0.55), 5.0, true)
 	if icon == null:
 		_text(c + Vector2(0, 6), label, 15 if r > 40 else (12 if r > 30 else 11), Color("#fffaf0") if ready else Color("#8a939a"), _bold)
 	elif locked:
@@ -1743,8 +1776,8 @@ func _draw_button(b: Dictionary, me: Dictionary) -> void:
 	if badge != "":
 		if str(b.id) == "ward":
 			var bc := c + Vector2(r * 0.72, -r * 0.72)
-			draw_circle(bc, 9.0, Color("#0d2a33"))
-			draw_arc(bc, 9.0, 0, TAU, 24, rim, 1.5, true)
+			_ci.draw_circle(bc, 9.0, Color("#0d2a33"))
+			_ci.draw_arc(bc, 9.0, 0, TAU, 24, rim, 1.5, true)
 			_text(bc + Vector2(0, 4), badge, 11, Color("#dff7ff"), _bold)
 		elif str(b.id) in ["ability", "w", "e"]:
 			_text(c + Vector2(0, -r + 13), badge, 10, Color(1, 1, 1, 0.75) if ready else Color(1, 1, 1, 0.35), _bold)
@@ -1757,8 +1790,8 @@ func _draw_button(b: Dictionary, me: Dictionary) -> void:
 		var rk := int(sim.moba.rank(me, slot))
 		for i in mx:
 			var pc := c + Vector2((float(i) - float(mx - 1) * 0.5) * 9.0, r - 5.0)
-			draw_circle(pc, 3.4, Color(0, 0, 0, 0.6))
-			draw_circle(pc, 2.6, Color("#ffd65a") if i < rk else Color(1, 1, 1, 0.18))
+			_ci.draw_circle(pc, 3.4, Color(0, 0, 0, 0.6))
+			_ci.draw_circle(pc, 2.6, Color("#ffd65a") if i < rk else Color(1, 1, 1, 0.18))
 		var tg: String = sim.moba.kits.tag(str(me.get("hid", "")), slot, str(sim.ability_of(me)) if slot == "q" else "")
 		_text(c + Vector2(0, r + 13.0), tg, 9, Color(1, 1, 1, 0.82) if rk > 0 else Color(1, 1, 1, 0.45), _bold)
 
@@ -1783,22 +1816,42 @@ static func ability_icon(hid: String, slot: String) -> Texture2D:
 		_icons[key] = load(p) if hid != "" and ResourceLoader.exists(p) else null
 	return _icons[key]
 
-func _icon_circle(c: Vector2, r: float, tex: Texture2D, tint: Color) -> void:
-	var pts := PackedVector2Array()
-	var uvs := PackedVector2Array()
+# 0.31.219: the unit circle's points made once (they were 40 sines and cosines a button a frame, the largest part of a
+# button's drawing): an icon or a recharge's pie is drawn from them, placed and sized by the canvas transform
+static var _unit_ring := PackedVector2Array()
+static var _unit_uvs := PackedVector2Array()
+static var _pie_ring := PackedVector2Array()       # (41 points clockwise from the top: the pie's rim)
+
+static func _rings_made() -> void:
+	if not _unit_ring.is_empty():
+		return
 	for i in 40:
 		var d := Vector2.from_angle(TAU * float(i) / 40.0)
-		pts.append(c + d * r)
-		uvs.append(Vector2(0.5, 0.5) + d * 0.5)
-	draw_polygon(pts, PackedColorArray([tint]), uvs, tex)
+		_unit_ring.append(d)
+		_unit_uvs.append(Vector2(0.5, 0.5) + d * 0.5)
+	for i in 41:
+		_pie_ring.append(Vector2.from_angle(-PI * 0.5 + TAU * float(i) / 40.0))
+
+func _icon_circle(c: Vector2, r: float, tex: Texture2D, tint: Color) -> void:
+	_rings_made()
+	_ci.draw_set_transform(c, 0.0, Vector2(r, r))
+	_ci.draw_polygon(_unit_ring, PackedColorArray([tint]), _unit_uvs, tex)
+	_ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 func _pie(c: Vector2, r: float, frac: float, color: Color) -> void:
-	# the part still recharging, clockwise from the top
-	var n := maxi(3, int(40.0 * clampf(frac, 0.0, 1.0)) + 1)
-	var pts := PackedVector2Array([c])
-	for i in n + 1:
-		pts.append(c + Vector2.from_angle(-PI * 0.5 + TAU * clampf(frac, 0.0, 1.0) * float(i) / float(n)) * r)
-	draw_colored_polygon(pts, color)
+	# the part still recharging, clockwise from the top: the rim's whole steps, then the exact end
+	_rings_made()
+	var f := clampf(frac, 0.0, 1.0)
+	var k := int(40.0 * f)
+	var pts := PackedVector2Array([Vector2.ZERO])
+	pts.append_array(_pie_ring.slice(0, k + 1))
+	if float(k) < 40.0 * f:
+		pts.append(Vector2.from_angle(-PI * 0.5 + TAU * f))
+	if pts.size() < 3:
+		return
+	_ci.draw_set_transform(c, 0.0, Vector2(r, r))
+	_ci.draw_colored_polygon(pts, color)
+	_ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 # ---------- 5V5: gold, the shop, the jungle's timers (0.31.157) ----------
 # Under the towers line: your gold and SHOP (tap: the shop; it glows while you can afford the quick-buy -- 0.31.217),

@@ -123,6 +123,71 @@ var diag
 var _accum := 0.0
 var _result_shown := false
 
+# 0.31.219 (Kevin's 0.31.218 log: 23 fps in a 5v5; the phone's CPU the limit -- the sim's ticks ~11 ms a frame, the
+# view's ~8, the HUD's ~6, and the engine's own drawing on top): the sim's ticks run on a worker thread while the
+# engine draws the frame -- launched when the drawing starts (RenderingServer.frame_pre_draw: every script's _process
+# and _draw is done by then) and waited for when it ends (frame_post_draw: before the next frame's input, physics or
+# scripts can touch the sim). Nothing else runs in that window but the engine's own C++ (culling, the draw lists, the
+# graphics driver), and the sim touches nothing of the engine's, so the two never meet. The view shows the ticks a
+# frame later (they are eased between anyway); the events come the frame after too. Headless no frame is drawn: the
+# ticks run in _process as before (and with FB_SIM_SYNC set).
+var async_sim := DisplayServer.get_name() != "headless" and not OS.has_environment("FB_SIM_SYNC")
+var _sim_due := 0                     # ticks to run while this frame is drawn
+var _sim_task := -1                   # the WorkerThreadPool task running them
+var _sim_task_us := 0                 # its own time (the diag's "sim"; "simwait": the main thread's wait for it)
+var sim_hooked := false
+const GpuProbe = preload("res://scripts/siege/gpu_probe.gd")
+var probe: Node = null
+var vignette: Control = null
+var sim_tasks := 0                    # (tests: tasks launched, and the thread the last one ran on)
+var sim_task_thread := 0
+
+func _sim_hook(on: bool) -> void:
+	if on == sim_hooked:
+		return
+	sim_hooked = on
+	if on:
+		RenderingServer.frame_pre_draw.connect(_sim_launch)
+		RenderingServer.frame_post_draw.connect(sim_join)
+	else:
+		if RenderingServer.frame_pre_draw.is_connected(_sim_launch):
+			RenderingServer.frame_pre_draw.disconnect(_sim_launch)
+		if RenderingServer.frame_post_draw.is_connected(sim_join):
+			RenderingServer.frame_post_draw.disconnect(sim_join)
+
+func _sim_launch() -> void:
+	if _sim_due <= 0 or sim == null or _sim_task >= 0 or not is_inside_tree():
+		return
+	var n := _sim_due
+	_sim_due = 0
+	_sim_task = WorkerThreadPool.add_task(_sim_run.bind(sim, n), true, "sim ticks")
+	sim_tasks += 1
+
+func _sim_run(s, n: int) -> void:
+	var t0 := Time.get_ticks_usec()
+	sim_task_thread = OS.get_thread_caller_id()
+	for i in n:
+		s.step(Sim.TICK)
+	_sim_task_us = Time.get_ticks_usec() - t0
+
+func sim_join() -> void:
+	# the ticks launched for this frame done (and any a frame without drawing left due: run here)
+	if _sim_task >= 0:
+		var tw := Time.get_ticks_usec()
+		WorkerThreadPool.wait_for_task_completion(_sim_task)
+		_sim_task = -1
+		if diag != null:
+			diag.add_time("sim", _sim_task_us)
+			diag.add_time("simwait", Time.get_ticks_usec() - tw)
+	if _sim_due > 0 and sim != null:
+		var n := _sim_due
+		_sim_due = 0
+		var t0 := Time.get_ticks_usec()
+		for i in n:
+			sim.step(Sim.TICK)
+		if diag != null:
+			diag.add_time("sim", Time.get_ticks_usec() - t0)
+
 static var ready_times := {}      # ms per start-up step of the last match (diag / tools)
 
 func _ready() -> void:
@@ -166,6 +231,8 @@ func _ready() -> void:
 	tex.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(tex)
 	# 0.31.14 atmosphere: a soft vignette over the 3D view (under the HUD) draws the eye in and deepens the corners.
+	# 0.31.219: drawn inside the 3D view (its 2D layer, over the finished 3D picture) -- at its 50 % resolution, a quarter
+	# of the pixels it blended over the whole 1440x3200 screen (the same look: the picture is stretched with it)
 	var vig := TextureRect.new()
 	var gt := GradientTexture2D.new()
 	gt.fill = GradientTexture2D.FILL_RADIAL
@@ -182,7 +249,8 @@ func _ready() -> void:
 	vig.stretch_mode = TextureRect.STRETCH_SCALE
 	vig.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	vig.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(vig)
+	viewport.add_child(vig)
+	vignette = vig
 	var t_hud := Time.get_ticks_msec()
 	hud = Hud.new()
 	hud.diag = diag
@@ -257,6 +325,7 @@ func _start_steps() -> Array:
 	var seed_value := int(Time.get_unix_time_from_system()) & 0x7fffffff if match_seed < 0 else match_seed
 	steps.append(func():
 		var t_sim := Time.get_ticks_msec()
+		_sim_due = 0                       # (0.31.219: the last match's ticks still due, if any, aren't this one's)
 		sim = Sim.new()
 		team_size = 5
 		sim.setup(team_size, seed_value)
@@ -291,7 +360,15 @@ func _start_steps() -> Array:
 			analytics.log_ev("match_start", {"match":_an_match, "mode":"5v5", "class":_an_class0})
 		_title_reset()
 		if tutorial:
-			_tutorial_begin())
+			_tutorial_begin()
+		if is_instance_valid(probe):
+			probe.queue_free()
+		probe = null
+		if GpuProbe.wanted(self):
+			probe = GpuProbe.new()             # 0.31.219: the graphics chip's cost of each part, measured on the phone
+			probe.name = "GpuProbe"
+			probe.mode = self
+			add_child(probe))
 	return steps
 
 func _hero() -> String:
@@ -894,6 +971,7 @@ func _learn_hint(me: Dictionary, slot: String) -> String:
 	return "%s can be learnt at level %d" % [name, sim.moba.rank_need(slot, 1)]
 
 func _on_action(kind: String) -> void:
+	sim_join()                             # (0.31.219: a no-op -- the ticks end with each frame's drawing; for safety)
 	if online and kind not in ["attack", "ability", "dodge"]:
 		_on_action_online(kind)
 		return
@@ -1142,6 +1220,8 @@ func _warm_clear() -> void:
 	_warm["fight"] = []
 
 func _process(delta: float) -> void:
+	sim_join()                             # 0.31.219 (done already at the end of the last frame's drawing, unless none was)
+	_sim_hook(async_sim and sim != null and not online)
 	if not _build_queue.is_empty():
 		_cover_tick(delta)
 		_build_step()                      # the staged start: one step per frame behind the card
@@ -1184,8 +1264,12 @@ func _process(delta: float) -> void:
 		var t_sim := Time.get_ticks_usec()
 		while _accum >= Sim.TICK:
 			_accum -= Sim.TICK
-			sim.step(Sim.TICK)
-		diag.add_time("sim", Time.get_ticks_usec() - t_sim)
+			if async_sim:
+				_sim_due += 1                    # (run while this frame is drawn: _sim_launch)
+			else:
+				sim.step(Sim.TICK)
+		if not async_sim:
+			diag.add_time("sim", Time.get_ticks_usec() - t_sim)
 		for e in sim.drain_events():
 			diag.mark("event " + str(e.k))
 			diag.event()
@@ -1196,7 +1280,8 @@ func _process(delta: float) -> void:
 			if tutorial_ui != null:
 				tutorial_ui.on_event(e)
 	diag.mark("view.sync")
-	view.proj_lead = 0.0 if online else _accum          # online, projectiles interpolate (Net)
+	view.proj_lead = 0.0 if online else _accum + _sim_due * Sim.TICK   # online, projectiles interpolate (Net); (0.31.219:
+	                                                                   # and the ticks still to run, while it's drawn)
 	var t_view := Time.get_ticks_usec()
 	view.sync(delta)
 	diag.add_time("view", Time.get_ticks_usec() - t_view)
@@ -1257,7 +1342,8 @@ func _tutorial_begin() -> void:
 	tutorial_ui.name = "Training"
 	tutorial_ui.which = training
 	hud.add_child(tutorial_ui)
-	hud.move_child(tutorial_ui, 1)       # over the HUD's drawing, under its pause button, panels and banners
+	# over the HUD's drawing and its buttons' layer (0.31.219), under its pause button, panels and banners
+	hud.move_child(tutorial_ui, hud.btn_layer.get_index() + 1 if hud.btn_layer != null else 1)
 	tutorial_ui.begin(self)
 	_tut_t0 = Time.get_ticks_msec()
 	if analytics != null:
@@ -1298,6 +1384,9 @@ func set_fps_cap(v: int) -> void:
 		diag.write("FPS CAP %d" % v)
 
 func _exit_tree() -> void:
+	_sim_due = 0                           # (leaving: nothing more to run -- only what's running waited for)
+	sim_join()
+	_sim_hook(false)
 	Engine.max_fps = _prev_max_fps
 	Engine.physics_ticks_per_second = _prev_physics_tps
 	if ws != null:

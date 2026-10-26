@@ -134,7 +134,8 @@ func _process(_d: float) -> bool:
 		for k in view._minion_pool:
 			for a in view._minion_pool[k]:
 				_check(not (a.root as Node3D).visible, "a pooled body hidden (%s)" % k)
-				_check(not is_instance_valid(a.player) or not (a.player as AnimationPlayer).active, "a pooled body's animation off (%s)" % k)
+				# (0.31.219: paused by its process mode -- switching it off would throw its caches away)
+				_check(not view.anim_running(a.player), "a pooled body's animation paused (%s)" % k)
 		if fails.is_empty():
 			print("MINION_POOL_PASS")
 			quit(0)
