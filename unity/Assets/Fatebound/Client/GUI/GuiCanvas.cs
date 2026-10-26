@@ -46,8 +46,9 @@ namespace Fatebound.Client
         {
             Instance = this;
             ResourceLoader.Host = new UnityGuiHost();
-            GD_Log.Sink = s => Debug.Log(s);
-            GD_Log.ErrorSink = s => Debug.LogError(s);
+            Fatebound.Sim.GD.PrintSink = s => Debug.Log(s);
+            Fatebound.Sim.GD.ErrorSink = s => Debug.LogError(s);
+            Fatebound.Sim.GD.WarningSink = s => Debug.LogWarning(s);
             _canvas = gameObject.AddComponent<Canvas>();
             _canvas.renderMode = RenderMode.ScreenSpaceOverlay;
             _canvas.sortingOrder = 100;

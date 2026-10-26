@@ -672,13 +672,12 @@ namespace Fatebound.GUI
         }
     }
 
-    /// <summary>print / push_error / push_warning: the host routes these to its log.</summary>
+    /// <summary>print / push_error / push_warning from the framework: through Fatebound.Sim.GD's sinks (the host points
+    /// those at its log).</summary>
     public static class GD_Log
     {
-        public static Action<string> Sink = s => Console.WriteLine(s);
-        public static Action<string> ErrorSink = s => Console.Error.WriteLine(s);
-        public static void Print(params object[] parts) => Sink(string.Concat(Array.ConvertAll(parts, p => p is double d ? Fatebound.Sim.GD.FloatStr(d) : (p?.ToString() ?? "<null>"))));
-        public static void Error(string s) => ErrorSink("ERROR: " + s);
-        public static void Warning(string s) => Sink("WARNING: " + s);
+        public static void Print(params object[] parts) => Fatebound.Sim.GD.PrintSink?.Invoke(string.Concat(Array.ConvertAll(parts, p => Fatebound.Sim.GFormat.Str(Fatebound.Sim.Var.Of(p)))));
+        public static void Error(string s) => Fatebound.Sim.GD.ErrorSink?.Invoke(s);
+        public static void Warning(string s) => Fatebound.Sim.GD.WarningSink?.Invoke(s);
     }
 }

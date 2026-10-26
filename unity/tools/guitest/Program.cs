@@ -25,6 +25,9 @@ namespace GuiTest
             string cmd = args.Length > 0 ? args[0] : "help";
             switch (cmd)
             {
+                case "runtime":
+                    RuntimeTest.Run();
+                    return 0;
                 case "fonts":
                     foreach (var fp in Fonts)
                     {

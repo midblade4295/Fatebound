@@ -38,7 +38,7 @@ namespace Fatebound.Sim
         public bool Equals(Vec2 o) => this == o;
         public override bool Equals(object o) => o is Vec2 v && this == v;
         public override int GetHashCode() => x.GetHashCode() * 31 + y.GetHashCode();
-        public override string ToString() => "(" + GD.FloatStr(x) + ", " + GD.FloatStr(y) + ")";
+        public override string ToString() => "(" + GFormat.NumRealF(x) + ", " + GFormat.NumRealF(y) + ")";
 
         public float Length() => MathF.Sqrt(x * x + y * y);
         public float LengthSquared() => x * x + y * y;
@@ -149,7 +149,7 @@ namespace Fatebound.Sim
     }
 
     /// <summary>Godot's Math:: and GDScript's global functions, on doubles unless named F.</summary>
-    public static class GD
+    public static partial class GD
     {
         public const double PI = Math.PI;
         public const double TAU = Math.PI * 2.0;
@@ -241,15 +241,8 @@ namespace Fatebound.Sim
             0.5f * ((from * 2.0f) + (-pre + to) * w + (2.0f * pre - 5.0f * from + 4.0f * to - post) * (w * w)
                 + (-pre + 3.0f * from - 3.0f * to + post) * (w * w * w));
 
-        /// <summary>GDScript's str() of a float: Godot's shortest round-trip text ("1.0", "0.5", "inf").</summary>
-        public static string FloatStr(double v)
-        {
-            if (double.IsPositiveInfinity(v)) return "inf";
-            if (double.IsNegativeInfinity(v)) return "-inf";
-            if (double.IsNaN(v)) return "nan";
-            if (v == Math.Floor(v) && Math.Abs(v) < 1e15) return ((long)v).ToString() + ".0";
-            return v.ToString("R", System.Globalization.CultureInfo.InvariantCulture);
-        }
+        /// <summary>GDScript's str() of a float: String::num_real ("1.0", "0.5", "0.33333333333333", "inf").</summary>
+        public static string FloatStr(double v) => GFormat.NumReal(v, true);
     }
 
     /// <summary>Godot's String::hash (djb2, additive): GDScript's hash(some_string).</summary>
