@@ -120,14 +120,12 @@ func _ready() -> void:
 	add_child(_top_layer)
 	move_child(_top_layer, 0)
 	# 0.31.219 (Kevin's 0.31.218 log: the HUD 5-7 ms a frame on his phone, the stick and the buttons nearly half of it):
-	# the stick, the skill buttons and their + marks on a layer of their own, drawn again at most 30 times a second (a
-	# recharge's sweep, a glow's pulse) -- and at once on any touch -- not at every frame of 60. Over the HUD's own drawing,
-	# as they were drawn last.
+	# the stick, the skill buttons and their + marks on a layer of their own, over the HUD's own drawing (as they were
+	# drawn last). 0.31.220: each on a canvas item of its own, drawn again only when what it shows changes (_btn_tick).
 	btn_layer = Control.new()
 	btn_layer.name = "BtnLayer"
 	btn_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	btn_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	btn_layer.draw.connect(_draw_btn_layer)
 	add_child(btn_layer)
 	move_child(btn_layer, 1)
 	minimap = Minimap.new()                        # 0.31.216: the landscape HUD's map, top-left
@@ -831,17 +829,16 @@ func learn_spots(me: Dictionary) -> Array:
 		out.append({"slot": slot, "c": c + out_dir * (float(b.r) + 17.0), "r": 14.0})
 	return out
 
-func _draw_learn(me: Dictionary) -> void:
-	for sp in learn_spots(me):
+func _draw_learn(spots: Array) -> void:
+	var pulse := 0.5 + 0.5 * sin(floorf(_time * 15.0) / 15.0 * 6.0)
+	for sp in spots:
 		var c: Vector2 = sp.c
-		var pulse := 0.5 + 0.5 * sin(_time * 6.0)
 		_ci.draw_circle(c, 14.0 + 4.0 * pulse, Color(1.0, 0.82, 0.3, 0.22))
 		_ci.draw_circle(c + Vector2(0, 2), 13.0, Color(0, 0, 0, 0.45))
 		_ci.draw_circle(c, 13.0, Color("#1a2a44"))
 		_ci.draw_arc(c, 13.0, 0, TAU, 32, Color("#ffd65a"), 2.5, true)
 		_ci.draw_line(c - Vector2(6, 0), c + Vector2(6, 0), Color("#ffe9a6"), 3.0)
 		_ci.draw_line(c - Vector2(0, 6), c + Vector2(0, 6), Color("#ffe9a6"), 3.0)
-
 func _modal_open() -> bool:
 	return paused() or tut_modal or (result_panel != null and result_panel.visible) \
 		or (score_panel != null and is_instance_valid(score_panel) and score_panel.visible) or shop_open() or board_open()
@@ -849,7 +846,6 @@ func _modal_open() -> bool:
 func _input(event: InputEvent) -> void:
 	if sim == null:
 		return
-	_btn_dirty = true                              # (0.31.219: the buttons drawn again at once -- a press, the stick)
 	if event is InputEventScreenTouch:
 		_touch(event.index, make_input_local(event).position, event.pressed)
 	elif event is InputEventScreenDrag:
@@ -994,8 +990,8 @@ func _process(delta: float) -> void:
 		if tk != _top_parts:
 			_top_parts = tk
 			_top_layer.queue_redraw()
-	if btn_layer != null and (_btn_dirty or _time - _btn_at >= 1.0 / BTN_HZ - 0.002):
-		btn_layer.queue_redraw()
+	if btn_layer != null:
+		_btn_tick(me)
 	queue_redraw()
 
 func _text(pos: Vector2, text: String, size_px: int, color: Color, font: Font = null, align := HORIZONTAL_ALIGNMENT_CENTER, width := -1.0) -> void:
@@ -1009,9 +1005,9 @@ func _text(pos: Vector2, text: String, size_px: int, color: Color, font: Font = 
 # ---------- the top layer (0.31.160) ----------
 var _top_layer: Control = null
 var btn_layer: Control = null
-const BTN_HZ := 30.0
-var _btn_dirty := true
-var _btn_at := -1.0
+var _btn_nodes := {}                          # "attack", "ability", ..., "recall" (HOME), "stick", "learn", "recall_bar" -> Control
+var _btn_st := {}                             # the same -> what it shows (drawn from this)
+var btn_draws := 0                            # (tests: canvas items drawn again)
 var _ci: CanvasItem = self                    # what _text and the top's drawing draw on: the HUD, or the top layer
 var _top_parts: Array = []
 
@@ -1099,37 +1095,100 @@ func _draw_hud() -> void:
 	if me.state == "dead":
 		_text(Vector2(w * 0.5, size.y * 0.45), "RESPAWNING IN %d" % int(ceil(me.respawn_at - sim.time)), 22, VisualTheme.GOLD, _title)
 		return
-	# (the stick and the buttons: their own layer -- _draw_btn_layer)
+	# (the stick and the buttons: their own layer -- _btn_tick)
 
-func _draw_btn_layer() -> void:
-	_btn_at = _time
-	_btn_dirty = false
-	if sim == null:
-		return
-	var me: Dictionary = sim.by_id.get(player_id, {})
-	if me.is_empty() or me.state == "dead" or _modal_open():
-		return
+func _btn_node(id: String) -> Control:
+	var n: Control = _btn_nodes.get(id)
+	if n == null:
+		n = Control.new()
+		n.name = "Btn_" + id
+		n.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		n.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		n.draw.connect(_draw_btn_item.bind(id))
+		btn_layer.add_child(n)
+		_btn_nodes[id] = n
+	return n
+
+func _btn_item(id: String, st: Dictionary, key: Variant) -> void:
+	# shown, and drawn again if what it shows changed
+	var n := _btn_node(id)
+	if not n.visible:
+		n.visible = true
+	if not n.has_meta("key") or n.get_meta("key") != key:
+		n.set_meta("key", key)
+		_btn_st[id] = st
+		n.queue_redraw()
+
+func _btn_tick(me: Dictionary) -> void:
 	var t0 := Time.get_ticks_usec()
-	_ci = btn_layer
+	var show := not me.is_empty() and str(me.get("state", "")) != "dead" and not _modal_open()
+	if btn_layer.visible != show:
+		btn_layer.visible = show
+	if not show:
+		return
+	var seen := {}
 	# Stick.
-	if _stick_active:
-		_ci.draw_circle(_stick_origin, 62, Color(1, 1, 1, 0.08))
-		_ci.draw_arc(_stick_origin, 62, 0, TAU, 40, Color(1, 1, 1, 0.3), 2.0, true)
-		var knob := _stick_origin + (_stick_pos - _stick_origin).limit_length(60.0)
-		_ci.draw_circle(knob, 26, Color(1, 1, 1, 0.35))
-	elif _touchscreen:
-		var home := Vector2(120, size.y - 110)
-		_ci.draw_arc(home, 62, 0, TAU, 40, Color(1, 1, 1, 0.14), 2.0, true)
-		_text(home + Vector2(0, 6), "MOVE", 12, Color(1, 1, 1, 0.35), _bold)
+	var stick := {"active":_stick_active, "o":_stick_origin.round(), "knob":(_stick_origin + (_stick_pos - _stick_origin).limit_length(60.0)).round(),
+		"touch":_touchscreen, "h":size.y}
+	_btn_item("stick", stick, stick.values())
+	seen["stick"] = true
 	# Combat buttons.
 	for b in _buttons():
-		_draw_button(b, me)
-	_draw_learn(me)                                # 0.31.217
-	_draw_recall(me)
+		var st := _button_state(b, me)
+		_btn_item(str(b.id), st, _button_key(st))
+		seen[str(b.id)] = true
+	# 0.31.217: the + over a skill a point can go on (pulsing, at 15 steps a second)
+	var spots := learn_spots(me)
+	var lk := [floorf(_time * 15.0) if not spots.is_empty() else -1.0]
+	for sp in spots:
+		lk.append(sp.c)
+	_btn_item("learn", {"spots":spots}, lk)
+	seen["learn"] = true
+	# 0.31.181: RECALLING and its bar while you channel home
+	var rc := {}
+	if sim.moba != null and sim.recalling(me):
+		var left := maxf(0.0, float(me.recall_until) - float(sim.time))
+		rc = {"left":snappedf(left, 0.1), "w":size}
+	_btn_item("recall_bar", rc, rc.values())
+	seen["recall_bar"] = true
+	for id in _btn_nodes:
+		if not seen.has(id) and (_btn_nodes[id] as Control).visible:
+			(_btn_nodes[id] as Control).visible = false
+	var dt := Time.get_ticks_usec() - t0
+	if prof_on:
+		prof["buttons.state"] = int(prof.get("buttons.state", 0)) + dt
+	if diag != null:
+		diag.add_time("hud", dt)
+
+func _draw_btn_item(id: String) -> void:
+	var st: Dictionary = _btn_st.get(id, {})
+	var n: Control = _btn_nodes.get(id)
+	if n == null:
+		return
+	var t0 := Time.get_ticks_usec()
+	btn_draws += 1
+	_ci = n
+	match id:
+		"stick":
+			if bool(st.get("active", false)):
+				_ci.draw_circle(st.o, 62, Color(1, 1, 1, 0.08))
+				_ci.draw_arc(st.o, 62, 0, TAU, 40, Color(1, 1, 1, 0.3), 2.0, true)
+				_ci.draw_circle(st.knob, 26, Color(1, 1, 1, 0.35))
+			elif bool(st.get("touch", false)):
+				var home := Vector2(120, size.y - 110)
+				_ci.draw_arc(home, 62, 0, TAU, 40, Color(1, 1, 1, 0.14), 2.0, true)
+				_text(home + Vector2(0, 6), "MOVE", 12, Color(1, 1, 1, 0.35), _bold)
+		"learn":
+			_draw_learn(st.get("spots", []))
+		"recall_bar":
+			_draw_recall(st)
+		_:
+			if not st.is_empty():
+				_draw_button(st)
 	_ci = self
 	var dt := Time.get_ticks_usec() - t0
 	if prof_on:
-		prof["stick+buttons"] = int(prof.get("stick+buttons", 0)) + dt
+		prof["buttons.draw"] = int(prof.get("buttons.draw", 0)) + dt
 	if diag != null:
 		diag.add_time("hud", dt)
 
@@ -1258,11 +1317,11 @@ func _draw_king_alert(me: Dictionary) -> void:
 
 var _alert_style: StyleBoxFlat = null
 
-func _draw_recall(me: Dictionary) -> void:
+func _draw_recall(rc: Dictionary) -> void:
 	# 0.31.181: "RECALLING" and its bar under you while you channel home
-	if sim.moba == null or not sim.recalling(me):
+	if rc.is_empty():
 		return
-	var left := maxf(0.0, float(me.recall_until) - float(sim.time))
+	var left: float = rc.left
 	var f := clampf(1.0 - left / Sim.RECALL_TIME, 0.0, 1.0)
 	var w := minf(200.0, size.x * 0.5)
 	var r := Rect2(Vector2(size.x * 0.5 - w * 0.5, size.y * 0.6), Vector2(w, 10.0))
@@ -1270,7 +1329,6 @@ func _draw_recall(me: Dictionary) -> void:
 	_ci.draw_rect(Rect2(r.position, Vector2(w * f, r.size.y)), Color("#b9a8ff"))
 	_ci.draw_rect(r.grow(2.0), Color("#6d5ed0"), false, 1.5)
 	_text(Vector2(size.x * 0.5, r.position.y - 6.0), "RECALLING  %.1f" % left, 13, Color("#e6deff"), _bold)
-
 func _draw_idle(me: Dictionary) -> void:
 	# 0.31.119: "A BOT IS PLAYING FOR YOU" while the server's bot holds my unit (I gave no input for a while)
 	if idle_kick_at < 0.0 or not bool(me.get("bot", false)):
@@ -1653,7 +1711,11 @@ func _draw_king_marker(me: Dictionary) -> void:
 	draw_colored_polygon(PackedVector2Array([tip, edge - dir * 6 + side, edge - dir * 6 - side]), col)
 	_text(edge - dir * 22 + Vector2(0, 5), "KING", 11, col, _bold)
 
-func _draw_button(b: Dictionary, me: Dictionary) -> void:
+# 0.31.220 (Kevin's 0.31.219 log: the stick and the buttons 3.8-5 ms a frame on his phone, drawn again every frame at
+# his 15-30 fps): what a button shows is worked out each frame (_button_state) and drawn again only when that changes
+# (_button_key: its label, state, the recharge's sweep in 60 steps, the countdown's text, the ult's pulse at 15 a
+# second...) -- each button on its own canvas item under btn_layer, so a recharging Q redraws alone.
+func _button_state(b: Dictionary, me: Dictionary) -> Dictionary:
 	var c: Vector2 = b.c
 	var r: float = b.r
 	var label := ""
@@ -1665,6 +1727,8 @@ func _draw_button(b: Dictionary, me: Dictionary) -> void:
 	var badge := ""                                  # (a small mark drawn over the button: the ult's rank, ward charges)
 	var icon: Texture2D = null                       # 0.31.171: Q, W, E and R show their painted icon (assets/ui/abilities)
 	var locked := false
+	var pulse := -1.0                                # (the ult's glow when it's ready)
+	var recall := -1.0                               # (HOME's ring while it channels: the share done)
 	match str(b.id):
 		"attack":
 			label = "ATTACK"
@@ -1719,8 +1783,7 @@ func _draw_button(b: Dictionary, me: Dictionary) -> void:
 			cd_max = maxf(1.0, float(sim.moba.ult_max_cd(me)))
 			ready = unlocked and cd <= 0.0
 			if ready:
-				var pulse := 0.5 + 0.5 * sin(_time * 5.0)
-				_ci.draw_arc(c, r + 5.0 + 3.0 * pulse, 0, TAU, 48, Color(1.0, 0.84, 0.35, 0.35 + 0.4 * pulse), 4.0, true)
+				pulse = 0.5 + 0.5 * sin(floorf(_time * 15.0) / 15.0 * 5.0)
 			badge = "R II" if unlocked and sim.moba.ult_rank(me) >= 2 else "R"
 			icon = ability_icon(str(me.get("hid", "")), "r")
 			locked = not unlocked
@@ -1749,8 +1812,47 @@ func _draw_button(b: Dictionary, me: Dictionary) -> void:
 			ready = sim.alive(me) and not sim.recalling(me)
 			if sim.recalling(me):
 				var left := maxf(0.0, float(me.recall_until) - float(sim.time))
-				_ci.draw_arc(c, r + 4.0, -PI * 0.5, -PI * 0.5 + TAU * (1.0 - left / Sim.RECALL_TIME), 40, Color("#d8ccff"), 4.0, true)
+				recall = clampf(1.0 - left / Sim.RECALL_TIME, 0.0, 1.0)
 	var pressed: bool = _time - float(_pressed_at.get(b.id, -10.0)) < 0.12 or (b.id == "attack" and _attack_held)
+	var frac := clampf(cd / cd_max, 0.0, 1.0) if cd > 0.0 else 0.0
+	frac = ceilf(frac * 60.0) / 60.0                     # (the sweep in 60 steps)
+	var cd_text := ""
+	if icon != null and not locked and cd > 0.0 and str(b.id) != "ward":
+		cd_text = str(ceili(cd)) if cd >= 1.0 else "%.1f" % cd
+	var st := {"id":str(b.id), "c":c, "r":r, "label":label, "col":col, "rim":rim, "cd":cd, "frac":frac, "cd_text":cd_text,
+		"ready":ready, "badge":badge, "icon":icon, "locked":locked, "pressed":pressed, "pulse":pulse,
+		"recall":floorf(recall * 60.0) / 60.0 if recall >= 0.0 else -1.0, "slot":"", "mx":0, "rk":0, "tag":""}
+	var slot := str(SLOT_OF.get(str(b.id), ""))
+	if slot != "" and sim.moba != null:
+		st.slot = slot
+		st.mx = int(sim.moba.SKILL_MAX.get(slot, 0))
+		st.rk = int(sim.moba.rank(me, slot))
+		st.tag = sim.moba.kits.tag(str(me.get("hid", "")), slot, str(sim.ability_of(me)) if slot == "q" else "")
+	return st
+
+func _button_key(st: Dictionary) -> Array:
+	return [st.c, st.r, st.label, st.col, st.rim, st.frac, st.cd > 0.0, st.cd_text, st.ready, st.badge,
+		st.icon.get_instance_id() if st.icon != null else 0, st.locked, st.pressed, st.pulse, st.recall, st.mx, st.rk, st.tag]
+
+func _draw_button(st: Dictionary) -> void:
+	var id: String = st.id
+	var c: Vector2 = st.c
+	var r: float = st.r
+	var label: String = st.label
+	var col: Color = st.col
+	var rim: Color = st.rim
+	var cd: float = st.cd
+	var frac: float = st.frac
+	var ready: bool = st.ready
+	var badge: String = st.badge
+	var icon: Texture2D = st.icon
+	var locked: bool = st.locked
+	var pressed: bool = st.pressed
+	if float(st.pulse) >= 0.0:
+		var pulse: float = st.pulse
+		_ci.draw_arc(c, r + 5.0 + 3.0 * pulse, 0, TAU, 48, Color(1.0, 0.84, 0.35, 0.35 + 0.4 * pulse), 4.0, true)
+	if float(st.recall) >= 0.0:
+		_ci.draw_arc(c, r + 4.0, -PI * 0.5, -PI * 0.5 + TAU * float(st.recall), 40, Color("#d8ccff"), 4.0, true)
 	var body := col.lightened(0.15) if pressed else col
 	if not ready:
 		body = body.darkened(0.45)
@@ -1762,38 +1864,36 @@ func _draw_button(b: Dictionary, me: Dictionary) -> void:
 		_icon_circle(c, r - 1.5, icon, lit)
 		if pressed:
 			_ci.draw_circle(c, r - 1.5, Color(1, 1, 1, 0.18))
-		if cd > 0.0 and not locked and cd / cd_max > 0.01:
-			_pie(c, r - 1.5, cd / cd_max, Color(0, 0, 0, 0.45))
+		if cd > 0.0 and not locked and frac > 0.01:
+			_pie(c, r - 1.5, frac, Color(0, 0, 0, 0.45))
 	_ci.draw_arc(c, r, 0, TAU, 48, rim if ready else rim.darkened(0.5), 3.0, true)
 	if cd > 0.0:
-		_ci.draw_arc(c, r - 6, -PI * 0.5, -PI * 0.5 + TAU * (cd / cd_max), 40, Color(1, 1, 1, 0.55), 5.0, true)
+		_ci.draw_arc(c, r - 6, -PI * 0.5, -PI * 0.5 + TAU * frac, 40, Color(1, 1, 1, 0.55), 5.0, true)
 	if icon == null:
 		_text(c + Vector2(0, 6), label, 15 if r > 40 else (12 if r > 30 else 11), Color("#fffaf0") if ready else Color("#8a939a"), _bold)
 	elif locked:
 		_text(c + Vector2(0, 6), label, 12 if r > 30 else 11, Color("#c9d0d6"), _bold)          # LV 2 / LV 3 / LV 6
-	elif cd > 0.0 and str(b.id) != "ward":
-		_text(c + Vector2(0, 7), str(ceili(cd)) if cd >= 1.0 else "%.1f" % cd, 18 if r > 33 else 16, Color("#fffaf0"), _bold)
+	elif str(st.cd_text) != "":
+		_text(c + Vector2(0, 7), str(st.cd_text), 18 if r > 33 else 16, Color("#fffaf0"), _bold)
 	if badge != "":
-		if str(b.id) == "ward":
+		if id == "ward":
 			var bc := c + Vector2(r * 0.72, -r * 0.72)
 			_ci.draw_circle(bc, 9.0, Color("#0d2a33"))
 			_ci.draw_arc(bc, 9.0, 0, TAU, 24, rim, 1.5, true)
 			_text(bc + Vector2(0, 4), badge, 11, Color("#dff7ff"), _bold)
-		elif str(b.id) in ["ability", "w", "e"]:
+		elif id in ["ability", "w", "e"]:
 			_text(c + Vector2(0, -r + 13), badge, 10, Color(1, 1, 1, 0.75) if ready else Color(1, 1, 1, 0.35), _bold)
 		else:
 			_text(c + Vector2(0, -r + 12), badge, 11, Color("#ffe9a6"), _bold)
-	var slot := str(SLOT_OF.get(str(b.id), ""))
-	if slot != "" and sim.moba != null:
+	if str(st.slot) != "":
 		# 0.31.217 (Honor of Kings): the skill's ranks as pips along its foot, and what it's for under it
-		var mx := int(sim.moba.SKILL_MAX.get(slot, 0))
-		var rk := int(sim.moba.rank(me, slot))
+		var mx: int = st.mx
+		var rk: int = st.rk
 		for i in mx:
 			var pc := c + Vector2((float(i) - float(mx - 1) * 0.5) * 9.0, r - 5.0)
 			_ci.draw_circle(pc, 3.4, Color(0, 0, 0, 0.6))
 			_ci.draw_circle(pc, 2.6, Color("#ffd65a") if i < rk else Color(1, 1, 1, 0.18))
-		var tg: String = sim.moba.kits.tag(str(me.get("hid", "")), slot, str(sim.ability_of(me)) if slot == "q" else "")
-		_text(c + Vector2(0, r + 13.0), tg, 9, Color(1, 1, 1, 0.82) if rk > 0 else Color(1, 1, 1, 0.45), _bold)
+		_text(c + Vector2(0, r + 13.0), str(st.tag), 9, Color(1, 1, 1, 0.82) if rk > 0 else Color(1, 1, 1, 0.45), _bold)
 
 
 func _lock_label(me: Dictionary, slot: String) -> String:

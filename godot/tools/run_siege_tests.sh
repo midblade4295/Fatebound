@@ -80,6 +80,7 @@ run kill_banner_test     KILL_BANNER_PASS         400
 run recall_test          RECALL_PASS              300
 run training_test        TRAINING_PASS            400
 run async_sim_test       ASYNC_SIM_PASS           300 --fixed-fps 30
+run hud_buttons_test     HUD_BUTTONS_PASS         300 --fixed-fps 30
 run herald_intro_test    HERALD_INTRO_PASS        120
 run priest_test          PRIEST_PASS              200
 run multikill_test       MULTIKILL_PASS           60

@@ -56,14 +56,41 @@ func setup(moba) -> void:
 			u["ward_ch"] = float(WARD_CHARGES)
 	_update()
 
-func brush_at(p: Vector2) -> int:
-	for b in brushes:
-		if p.distance_squared_to(b.p) <= float(b.r) * float(b.r):
-			return int(b.id)
-	return -1
+# 0.31.220 (Kevin's 0.31.219 log: vision 0.9-2.3 ms a frame of the sim on his phone -- every 0.2 s each side's sources
+# against every enemy, each looked up against all 32 brush patches): the patches in a coarse grid (BCELL), the sight
+# sources in another (VCELL, at least the widest sight) -- each unit tested against the patches and sources near it.
+# The same answers.
+const BCELL := 6.0
+const VCELL := 18.0                                        # (>= SIGHT_CASTLE, the widest)
+var _bgrid := {}                                           # Vector2i -> [brush, ...] (each patch in every cell it touches)
+var epoch := 0                                             # (the view's fog: redrawn when this changes)
 
-func sources(team: int) -> Array:
-	# what gives side `team` sight: [position, radius, brush] each
+func _brush_grid() -> void:
+	_bgrid = {}
+	for b in brushes:
+		var p: Vector2 = b.p
+		var r := float(b.r)
+		for cx in range(floori((p.x - r) / BCELL), floori((p.x + r) / BCELL) + 1):
+			for cy in range(floori((p.y - r) / BCELL), floori((p.y + r) / BCELL) + 1):
+				var k := Vector2i(cx, cy)
+				if not _bgrid.has(k):
+					_bgrid[k] = []
+				(_bgrid[k] as Array).append(b)
+
+func brush_at(p: Vector2) -> int:
+	if _bgrid.is_empty():
+		_brush_grid()
+	var lst = _bgrid.get(Vector2i(floori(p.x / BCELL), floori(p.y / BCELL)))
+	if lst == null:
+		return -1
+	var best := -1
+	for b in lst:
+		if p.distance_squared_to(b.p) <= float(b.r) * float(b.r) and (best < 0 or int(b.id) < best):
+			best = int(b.id)                               # (the lowest id, as the list's first match was)
+	return best
+
+func sources(team: int, ub: Dictionary = {}) -> Array:
+	# what gives side `team` sight: [position, radius, brush] each (ub: unit id -> its brush, when known)
 	var out := []
 	for u in s.units:
 		if int(u.team) != team or not s.alive(u):
@@ -73,7 +100,7 @@ func sources(team: int) -> Array:
 			r = SIGHT_HERO if bool(u.get("hero", false)) else SIGHT_BIG
 		elif not bool(u.get("minion", false)):
 			continue
-		out.append([u.pos, r, brush_at(u.pos)])
+		out.append([u.pos, r, int(ub[u.id]) if ub.has(u.id) else brush_at(u.pos)])
 	for tw in m.towers:
 		if int(tw.team) == team and not bool(tw.dead):
 			out.append([tw.p, SIGHT_TOWER, -1])
@@ -104,8 +131,17 @@ func step(dt: float) -> void:
 
 func _update() -> void:
 	var ub := {}
+	for u in s.units:
+		if s.alive(u):
+			ub[u.id] = brush_at(u.pos)
 	for t in 2:
-		var src := sources(t)
+		var src := sources(t, ub)
+		var grid := {}
+		for sr in src:
+			var k := Vector2i(floori((sr[0] as Vector2).x / VCELL), floori((sr[0] as Vector2).y / VCELL))
+			if not grid.has(k):
+				grid[k] = []
+			(grid[k] as Array).append(sr)
 		var vis := {}
 		for u in s.units:
 			if int(u.team) == t or not s.alive(u):
@@ -113,16 +149,29 @@ func _update() -> void:
 			if s.time < float(u.get("rev_until", -1.0)):
 				vis[u.id] = true
 				continue
-			if not ub.has(u.id):
-				ub[u.id] = brush_at(u.pos)
 			var b: int = ub[u.id]
 			var p: Vector2 = u.pos
-			for sr in src:
-				var r: float = sr[1]
-				if p.distance_squared_to(sr[0]) <= r * r and (b < 0 or int(sr[2]) == b):
-					vis[u.id] = true
+			var cx := floori(p.x / VCELL)
+			var cy := floori(p.y / VCELL)
+			var hit := false
+			for dx in 3:
+				for dy in 3:
+					var lst = grid.get(Vector2i(cx + dx - 1, cy + dy - 1))
+					if lst == null:
+						continue
+					for sr in lst:
+						var r: float = sr[1]
+						if p.distance_squared_to(sr[0]) <= r * r and (b < 0 or int(sr[2]) == b):
+							hit = true
+							break
+					if hit:
+						break
+				if hit:
 					break
+			if hit:
+				vis[u.id] = true
 		seen[t] = vis
+	epoch += 1
 
 func can_see(team: int, u: Dictionary) -> bool:
 	if team < 0 or team > 1 or int(u.get("team", -1)) == team:

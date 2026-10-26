@@ -15,7 +15,7 @@ const BOOT_PREV_PATH := "user://boot_diag_prev.log"
 # rotate it out of boot_diag_prev.log before anyone could copy it).
 const BOOT_STUCK_PATH := "user://boot_diag_stuck.log"
 const Platform = preload("res://scripts/meta/platform.gd")
-const BUILD := "0.31.219-fatebound"
+const BUILD := "0.31.220-fatebound"
 
 class ErrorCapture:
 	extends Logger
@@ -75,11 +75,13 @@ var _measured_vp := RID()
 var _ph_start := 0
 var _ph_pre := 0
 var _ph_post := 0
+var last_ph := [0, 0, 0]                  # 0.31.220: the last frame's ph_proc, ph_draw, ph_other in us (gpu_probe.gd)
 
 func _on_process_frame() -> void:
 	var now := Time.get_ticks_usec()
 	if _ph_post > 0:
 		add_time("ph_other", now - _ph_post)
+		last_ph[2] = now - _ph_post
 	_ph_start = now
 	_ph_pre = 0
 
@@ -87,6 +89,7 @@ func _on_pre_draw() -> void:
 	var now := Time.get_ticks_usec()
 	if _ph_start > 0:
 		add_time("ph_proc", now - _ph_start)
+		last_ph[0] = now - _ph_start
 	_ph_pre = now
 
 func _sample_render() -> void:
@@ -206,6 +209,7 @@ func _on_frame_drawn() -> void:
 	var now := Time.get_ticks_usec()
 	if _ph_pre > 0 and mode != null:
 		add_time("ph_draw", now - _ph_pre)
+		last_ph[1] = now - _ph_pre
 	_ph_post = now if mode != null else 0
 
 func _watch() -> void:
@@ -369,7 +373,9 @@ static func read_logs(tail := 120) -> String:
 		var keep := PackedStringArray()
 		for i in lines.size():
 			var l: String = lines[i]
-			if i == 0 or i >= lines.size() - tail or l.contains("STALL") or l.contains("ERROR") or l.contains("RECOVERED") or l.contains("SESSION") or l.contains("BOOT"):
+			# (0.31.220: and every PROBE line -- the graphics test runs early in a match, before the tail)
+			if i == 0 or i >= lines.size() - tail or l.contains("STALL") or l.contains("ERROR") or l.contains("RECOVERED") or l.contains("SESSION") or l.contains("BOOT") \
+					or l.contains("PROBE"):
 				keep.append(l)
 		out += "==== %s (%d lines) ====\n%s\n" % [p.get_file(), lines.size(), "\n".join(keep)]
 	var lc := logcat_tail(120)

@@ -12,7 +12,8 @@ const OFF_T := 2.0
 const ON_T := 2.0
 const SETTLE := 0.6          # (the first part of each half not measured: the change shows a frame or two late)
 const ROUNDS := 2
-const TESTS := ["none", "shadows", "hard_shadows", "glow", "msaa", "fog", "scale40", "terrain_plain", "plants", "outer", "vignette", "hud"]
+const TESTS := ["none", "shadows", "hard_shadows", "glow", "msaa", "fog", "scale40", "terrain_plain", "plants", "outer", "vignette",
+	"anim", "particles", "minimap", "hud"]
 const DEAD_ONLY := ["hud"]
 const PLANT_KINDS := ["ridges", "edge_trees", "brush", "foliage", "fords"]
 const OUTER_KINDS := ["outer_land", "outer_trees"]
@@ -22,7 +23,7 @@ var _queue: Array = []
 var _cur := ""
 var _half := ""              # "off" | "on"
 var _t := 0.0
-var _acc := [0.0, 0.0, 0, 0.0]   # gpu3d, gpuhud, frames, seconds
+var _acc := [0.0, 0.0, 0, 0.0, 0.0, 0.0, 0.0]   # gpu3d, gpuhud, frames, seconds; ph_proc, ph_draw, ph_other (ms sums)
 var _off := []
 var _results := {}           # test -> [[saves3d, saveshud], ...]
 var _restore: Callable
@@ -61,12 +62,16 @@ func _process(delta: float) -> void:
 		_acc[1] += RenderingServer.viewport_get_measured_render_time_gpu(root)
 		_acc[2] += 1
 		_acc[3] += delta
+		var ph: Array = mode.diag.last_ph if mode.diag != null and "last_ph" in mode.diag else [0, 0, 0]
+		_acc[4] += float(ph[0]) / 1000.0
+		_acc[5] += float(ph[1]) / 1000.0
+		_acc[6] += float(ph[2]) / 1000.0
 	if _half == "off" and _t >= OFF_T:
 		_off = _acc.duplicate()
 		_undo()
 		_half = "on"
 		_t = 0.0
-		_acc = [0.0, 0.0, 0, 0.0]
+		_acc = [0.0, 0.0, 0, 0.0, 0.0, 0.0, 0.0]
 	elif _half == "on" and _t >= ON_T:
 		_report(_cur, _off, _acc)
 		_cur = ""
@@ -87,7 +92,7 @@ func _next() -> void:
 		_cur = name
 		_half = "off"
 		_t = 0.0
-		_acc = [0.0, 0.0, 0, 0.0]
+		_acc = [0.0, 0.0, 0, 0.0, 0.0, 0.0, 0.0]
 		return
 	if _queue.is_empty() or _queue.all(func(n): return n in DEAD_ONLY) and float(mode.sim.time) > _start + 600.0:
 		_finish()
@@ -161,6 +166,30 @@ func _apply(name: String) -> bool:
 				return false
 			vg.visible = false
 			_restore = func(): vg.visible = true
+		"anim":
+			view.anim_freeze = true                  # (every body's animation still for a moment: what animating costs)
+			_restore = func(): view.anim_freeze = false
+		"particles":
+			var stopped := []
+			for n in view.find_children("*", "GPUParticles3D", true, false):
+				var gp := n as GPUParticles3D
+				if gp.emitting:
+					gp.emitting = false
+					gp.restart()
+					gp.emitting = false
+					stopped.append(gp)
+			if stopped.is_empty():
+				return false
+			_restore = func():
+				for gp in stopped:
+					if is_instance_valid(gp):
+						gp.emitting = true
+		"minimap":
+			var mm: CanvasItem = mode.hud.minimap if "minimap" in mode.hud else null
+			if mm == null or not mm.visible:
+				return false
+			mm.visible = false
+			_restore = func(): mm.visible = true
 		"hud":
 			var h: CanvasItem = mode.hud
 			if not h.visible:
@@ -196,8 +225,12 @@ func _report(name: String, off: Array, on: Array) -> void:
 	var r: Array = _results.get(name, [])
 	r.append([n3 - o3, nh - oh])
 	_results[name] = r
-	_write("PROBE %s: off gpu3d %.1f gpuhud %.1f ms %.0f fps | on gpu3d %.1f gpuhud %.1f ms %.0f fps | it costs %.1f + %.1f ms" % [name,
-		o3, oh, float(off[2]) / maxf(0.01, float(off[3])), n3, nh, float(on[2]) / maxf(0.01, float(on[3])), n3 - o3, nh - oh])
+	var op := [float(off[4]) / fo, float(off[5]) / fo, float(off[6]) / fo]
+	var np := [float(on[4]) / fn, float(on[5]) / fn, float(on[6]) / fn]
+	r[r.size() - 1].append_array([np[0] - op[0], np[1] - op[1], np[2] - op[2]])
+	_write("PROBE %s: off gpu3d %.1f gpuhud %.1f cpu %.1f/%.1f/%.1f ms %.0f fps | on gpu3d %.1f gpuhud %.1f cpu %.1f/%.1f/%.1f ms %.0f fps | gpu %.1f + %.1f, cpu proc %.1f draw %.1f other %.1f ms" % [name,
+		o3, oh, op[0], op[1], op[2], float(off[2]) / maxf(0.01, float(off[3])), n3, nh, np[0], np[1], np[2], float(on[2]) / maxf(0.01, float(on[3])),
+		n3 - o3, nh - oh, np[0] - op[0], np[1] - op[1], np[2] - op[2]])
 
 func _finish() -> void:
 	_done = true
@@ -206,13 +239,13 @@ func _finish() -> void:
 		var r: Array = _results.get(name, [])
 		if r.is_empty():
 			continue
-		var s3 := 0.0
-		var sh := 0.0
+		var sums := [0.0, 0.0, 0.0, 0.0, 0.0]
 		for x in r:
-			s3 += float(x[0])
-			sh += float(x[1])
-		parts.append("%s %.1f+%.1f" % [name, s3 / r.size(), sh / r.size()])
-	_write("PROBE SUMMARY (ms of graphics chip a frame, 3D + screen, mean of %d rounds): %s" % [ROUNDS, ", ".join(parts)])
+			for i in mini(5, (x as Array).size()):
+				sums[i] += float(x[i])
+		var k := float(r.size())
+		parts.append("%s gpu %.1f+%.1f cpu %.1f/%.1f/%.1f" % [name, sums[0] / k, sums[1] / k, sums[2] / k, sums[3] / k, sums[4] / k])
+	_write("PROBE SUMMARY (ms a frame each costs, mean of the rounds run -- gpu: 3D + screen; cpu: process / drawing / other): %s" % ", ".join(parts))
 
 func _write(line: String) -> void:
 	if mode != null and mode.diag != null:
@@ -220,5 +253,5 @@ func _write(line: String) -> void:
 
 func _exit_tree() -> void:
 	_undo()                                # (a test running as the match ends: everything back as it was)
-	if not _done and not _results.is_empty():
-		_finish()
+	if not _results.is_empty():
+		_finish()                          # (0.31.220: again at the match's end -- the log sent is its last lines)

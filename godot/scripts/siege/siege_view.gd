@@ -3070,6 +3070,7 @@ func _pool_put(a: Dictionary) -> bool:
 		_ragdoll_end(a)                           # (its bones back to the animation)
 	(a.root as Node3D).visible = false
 	anim_run(a.player, false)
+	(a.root as Node).process_mode = Node.PROCESS_MODE_DISABLED   # 0.31.220: its skeleton, attachments, eyes: no per-frame work
 	list.append(a)
 	_minion_pool[k] = list
 	return true
@@ -3080,6 +3081,7 @@ func _pool_take(k: String, u: Dictionary) -> Dictionary:
 		return {}
 	var a: Dictionary = list.pop_back()
 	var root: Node3D = a.root
+	root.process_mode = Node.PROCESS_MODE_INHERIT
 	var p := Vector3(u.pos.x, Sim.height_at(u.pos), u.pos.y)
 	root.position = p
 	root.rotation = Vector3(0.0, float(u.get("face", 0.0)), 0.0)
@@ -3151,6 +3153,7 @@ func _warm_show(a: Dictionary) -> void:
 	var root: Node3D = a.root
 	root.position = (me.root as Node3D).position + Vector3(randf_range(-3.0, 3.0), 0.0, randf_range(-3.0, 3.0))
 	root.visible = true
+	root.process_mode = Node.PROCESS_MODE_INHERIT
 	anim_run(a.player, true)
 	_pool_shown.append(a)
 
@@ -3188,6 +3191,7 @@ func warm_end() -> void:
 			_ragdoll_end(a)
 		(a.root as Node3D).visible = false
 		anim_run(a.player, false)
+		(a.root as Node).process_mode = Node.PROCESS_MODE_DISABLED
 	_pool_shown.clear()
 	for d in _debris:
 		if is_instance_valid(d.node):
@@ -3380,6 +3384,7 @@ func _play(a: Dictionary, clip: String, speed := 1.0, busy := 0.0) -> void:
 var anim_cull := true
 var anim_active := 0
 const ANIM_LOD_HZ := 30.0
+var anim_freeze := false                   # (0.31.220, gpu_probe.gd: every body's animation paused for a moment)
 
 # 0.31.219 (Kevin's 0.31.218 log: 23 fps in a 5v5, the CPU the limit): a player is paused by its process mode, not by
 # switching it off -- AnimationMixer.active = false throws away its caches (every track of its 81 clips bound again
@@ -3434,6 +3439,7 @@ func sync(dt: float) -> void:
 	var seen := {}
 	_built_now = 0                                 # 0.31.207: bodies built this frame (BUILD_PER_FRAME)
 	var planes: Array = camera.get_frustum() if anim_cull and is_instance_valid(camera) and camera.is_inside_tree() else []
+	_planes = planes
 	anim_active = 0
 	# 0.31.160 (Kevin's phone log: the 5v5's view 12-16 ms a frame): per actor, only what changed -- the ground height
 	# looked up again only when the unit moved (Sim.height_at is ~6 us), the transform written only while it's still
@@ -3520,8 +3526,8 @@ func sync(dt: float) -> void:
 			if a.get("cape") != null:
 				_cape_step(a, dt)
 		if is_instance_valid(a.player):
-			anim_run(a.player, show)
-			if show:
+			anim_run(a.player, show and not anim_freeze)
+			if show and not anim_freeze:
 				anim_active += 1
 				if bool(a.get("lod_anim", false)):
 					# 0.31.219: a minion's or small monster's animation 30 times a second (at 60 fps: every other
@@ -3790,7 +3796,16 @@ func _tower_smoke(at: Vector3) -> GPUParticles3D:
 	add_child(ps)
 	return ps
 
+var _planes: Array = []                    # (this frame's camera frustum, from sync)
+var _fire_clock := 0.0
+
 func _sync_moba() -> void:
+	# 0.31.220: a tower's flame (and a burning tower's smoke and fire) simulated only near the screen -- each is a GPU
+	# particle system the graphics chip steps every frame, seen or not (18 towers' flames always on); 5 times a second
+	_fire_clock -= get_process_delta_time()
+	var fire_tick := _fire_clock <= 0.0
+	if fire_tick:
+		_fire_clock = 0.2
 	_sync_rains()
 	_sync_auras()
 	_sync_breaths()
@@ -3810,6 +3825,12 @@ func _sync_moba() -> void:
 		if absf(dm - float(mt.dmg)) > 0.01 and mt.mesh != null:
 			mt.dmg = dm
 			(mt.mesh as MeshInstance3D).set_instance_shader_parameter("dmg", dm)
+		if fire_tick:
+			var near := _planes.is_empty() or _on_screen(mt.top, _planes, 7.0)
+			for fk in ["fire", "smoke", "flames"]:
+				var f = mt.get(fk)
+				if f != null and is_instance_valid(f) and (f as GPUParticles3D).emitting != near:
+					(f as GPUParticles3D).emitting = near
 		var ring: Decal = mt.ring
 		var rs := tower_ring(tw, me)
 		ring.visible = rs != ""
@@ -3911,6 +3932,12 @@ func _sync_fog() -> void:
 	(_fog.decal as Decal).visible = fog_on
 	if _time - float(_fog.at) < FOG_EVERY or not fog_on:
 		return
+	# 0.31.220: and only when the sim's sight has changed (moba_vision.gd's epoch: every 0.2 s) -- it was drawn again
+	# every 0.15 s from the same sight
+	var ep: int = int(sim.moba.vision.get("epoch")) if sim.moba.vision.get("epoch") != null else -1
+	if ep >= 0 and ep == int(_fog.get("ep", -2)):
+		return
+	_fog["ep"] = ep
 	_fog.at = _time
 	var img: Image = _fog.img
 	var w: int = _fog.w
@@ -5364,15 +5391,27 @@ func _kick_debris() -> void:
 	if _kick_skip and Engine.get_frames_per_second() > 40:
 		return                                     # (0.31.219: every other frame at 60 fps -- each walker against each weapon)
 	# (0.31.160: each actor's place once a frame -- it was looked up for every weapon on the ground, for every actor)
-	var walkers := []
+	# (0.31.220: the walkers in 2 m cells -- each weapon looks only at those in the cells round it, not at all ~70)
+	var cells := {}
 	for a in actors.values():
 		if not (a.get("dead", false) or a.get("rag") != null) and (a.root as Node3D).visible:
-			walkers.append(a)
+			var ap0: Vector3 = (a.root as Node3D).position
+			var ck := Vector2i(floori(ap0.x / 2.0), floori(ap0.z / 2.0))
+			if not cells.has(ck):
+				cells[ck] = []
+			(cells[ck] as Array).append(a)
 	for db in _debris:
 		var rb = db.node
 		if not is_instance_valid(rb):
 			continue
 		var wp: Vector3 = (rb as Node3D).position         # (both the view's children: its own space)
+		var walkers := []
+		var wc := Vector2i(floori(wp.x / 2.0), floori(wp.z / 2.0))
+		for dx in 3:
+			for dz in 3:
+				var lst = cells.get(Vector2i(wc.x + dx - 1, wc.y + dz - 1))
+				if lst != null:
+					walkers.append_array(lst)
 		for a in walkers:
 			var ap: Vector3 = (a.root as Node3D).position
 			var d := Vector2(wp.x - ap.x, wp.z - ap.z)

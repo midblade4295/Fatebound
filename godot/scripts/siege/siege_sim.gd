@@ -95,6 +95,7 @@ var rng := RandomNumberGenerator.new()
 var nav: Array = []            # AStarGrid2D per team
 var nav_version := 0
 const AI_EVERY := 0.15            # seconds between a bot's decisions (_think; _unstick_check counts in these)
+const MINION_AI_EVERY := 0.3      # 0.31.220: a 5v5's minions and monsters (_ai_every)
 const AI_SPREAD := 5              # the bots' first decisions fall on this many consecutive ticks (0.15 s = 4.5 ticks)
 var _next_proj := 1
 var _basic_by := ""                  # 0.31.167: whose basic attack is landing right now (POISON BLADES), else ""
@@ -1037,7 +1038,9 @@ func step(dt: float = TICK) -> void:
 	# same tick before -- a 10-20 ms spike every 0.15 s, with the path searches, where the other ticks took 2 ms).
 	for u in units:
 		if u.bot and time >= float(u.think_at):
-			u.think_at = time + AI_EVERY
+			var every := _ai_every(u)
+			u.think_at = time + every
+			u["ai_dt"] = every
 			_think(u)
 		elif u.bot and u.cls == "knight" and not projectiles.is_empty() and alive(u) and not blocking(u) and not u.has("kq"):
 			_shield_reflex(u)                        # (a Knight or a Crusader: the shield between decisions too)
@@ -1578,11 +1581,20 @@ func _nav_to(u: Dictionary, goal: Vector2, stop := 0.5) -> void:
 	var d: Vector2 = target - u.pos
 	u.move = d.normalized() if d.length() > 0.05 else Vector2.ZERO
 
+func _ai_every(u: Dictionary) -> float:
+	# 0.31.220 (Kevin's 0.31.219 log: the bots' decisions 3.5-8 ms a frame of the sim on his phone, most of them the
+	# lane minions' and the camps'): a 5v5's minions and monsters decide every MINION_AI_EVERY (League's minions every
+	# quarter second or so); the heroes every AI_EVERY as before
+	if moba != null and (bool(u.get("minion", false)) or u.has("mon")) and not bool(u.get("hero", false)):
+		return MINION_AI_EVERY
+	return AI_EVERY
+
 func _unstick_check(u: Dictionary) -> void:
 	# If a bot wanted to move but barely did, sidestep for a moment.
-	u.unstick = maxf(0.0, u.unstick - AI_EVERY)
-	if u.move.length() > 0.1 and u.pos.distance_to(u.last_pos) < 0.1:
-		u.stuck_t += AI_EVERY
+	var every := float(u.get("ai_dt", AI_EVERY))         # (0.31.220: the time since its last decision)
+	u.unstick = maxf(0.0, u.unstick - every)
+	if u.move.length() > 0.1 and u.pos.distance_to(u.last_pos) < 0.1 * every / AI_EVERY:
+		u.stuck_t += every
 		if u.stuck_t >= 0.75:
 			var side := 1.0 if rng.randf() < 0.5 else -1.0
 			u.unstick_dir = (Vector2(-u.move.y, u.move.x) * side - u.move * 0.3).normalized()
