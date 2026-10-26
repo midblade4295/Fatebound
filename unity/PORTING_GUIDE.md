@@ -215,6 +215,9 @@ Everything the game instantiates exists in Fatebound.GUI with Godot's name (`Lab
   `NormalizedChecked` is Godot's), `Xform2(rot, pos)` / `Rotated` / `GetRotation` / `AffineInverse` (the exact Godot
   versions are `FromRotation`, `RotatedExact`, `RotatedLocalExact`, `GetRotationExact`, `AffineInverseExact`),
   `Col.Html`/`ToHtml` (`HtmlExact`/`ToHtmlExact`), `Col.FromHsv` (`FromHsvExact`). Use the exact versions in game code.
+- **String lengths**: Godot counts code points, C# UTF-16 units (they differ for emoji). GStr's Substr/Left/Right/
+  Find/RFind/UnicodeAt/Lpad/Rpad count code points like Godot; for `length()` of text a player can type (names,
+  chat, clan text) use `GStr.Length(s)`, not `s.Length`.
 - **Untyped dictionaries from JSON hold floats**: `int(d.hp)` -> `(int)d["hp"]` (truncates like GDScript).
 
 ## Team porting notes (several agents port at once)

@@ -226,6 +226,7 @@ namespace Fatebound.Client
 
         void OnApplicationFocus(bool focus)
         {
+            Tree?.Root.SendWindowFocus(focus);
             Tree?.PropagateNotification(focus ? Node.NOTIFICATION_APPLICATION_FOCUS_IN : Node.NOTIFICATION_APPLICATION_FOCUS_OUT);
         }
 

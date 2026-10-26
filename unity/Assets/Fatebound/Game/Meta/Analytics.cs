@@ -351,6 +351,8 @@ namespace Fatebound.Game
                         bytes += GStr.Length(ln) + 1;
                     }
                 }
+                if (f != null)
+                    f.Close();                                  // (Godot closes it as `f` goes out of scope)
             }
             meta = new GDict();
             if (meta_path != "" && FileAccess.FileExists(meta_path))

@@ -13,10 +13,47 @@ namespace Fatebound.Sim
 {
     public static class GStr
     {
+        // ------------------------------------------------------------------ code points
+        // Godot's String holds Unicode code points (char32_t); C#'s holds UTF-16 units. They only differ for characters
+        // outside the BMP (emoji, in player names and chat): indices and lengths here are in code points, as Godot's,
+        // with a fast path when the string has no surrogates.
+        static bool Wide(string s)
+        {
+            for (int i = 0; i < s.Length; i++) if (char.IsSurrogate(s[i])) return true;
+            return false;
+        }
+
+        /// <summary>The UTF-16 index of code point cp (s.Length past the end).</summary>
+        static int U16(string s, int cp)
+        {
+            int i = 0;
+            for (int n = 0; n < cp && i < s.Length; n++)
+                i += char.IsHighSurrogate(s[i]) && i + 1 < s.Length && char.IsLowSurrogate(s[i + 1]) ? 2 : 1;
+            return i;
+        }
+
+        /// <summary>The code point index of UTF-16 index u16.</summary>
+        static int Cp(string s, int u16)
+        {
+            int n = 0;
+            for (int i = 0; i < u16 && i < s.Length; n++)
+                i += char.IsHighSurrogate(s[i]) && i + 1 < s.Length && char.IsLowSurrogate(s[i + 1]) ? 2 : 1;
+            return n;
+        }
+
         // ------------------------------------------------------------------ slicing
         /// <summary>substr(from, chars): "" when from is out of range; chars -1 to the end.</summary>
         public static string Substr(this string s, int from, int chars = -1)
         {
+            if (Wide(s))
+            {
+                int len = Length(s);
+                if (chars == -1) chars = len - from;
+                if (len == 0 || from < 0 || from >= len || chars <= 0) return "";
+                if (from + chars > len) chars = len - from;
+                int a = U16(s, from), b = U16(s, from + chars);
+                return s.Substring(a, b - a);
+            }
             if (chars == -1) chars = s.Length - from;
             if (s.Length == 0 || from < 0 || from >= s.Length || chars <= 0) return "";
             if (from + chars > s.Length) chars = s.Length - from;
@@ -26,23 +63,33 @@ namespace Fatebound.Sim
         /// <summary>left(n): the first n characters; negative n drops that many from the end.</summary>
         public static string Left(this string s, int n)
         {
-            if (n < 0) n = s.Length + n;
+            int len = Wide(s) ? Length(s) : s.Length;
+            if (n < 0) n = len + n;
             if (n <= 0) return "";
-            if (n >= s.Length) return s;
-            return s.Substring(0, n);
+            if (n >= len) return s;
+            return s.Substring(0, len == s.Length ? n : U16(s, n));
         }
 
         /// <summary>right(n): the last n characters; negative n drops that many from the start.</summary>
         public static string Right(this string s, int n)
         {
-            if (n < 0) n = s.Length + n;
+            int len = Wide(s) ? Length(s) : s.Length;
+            if (n < 0) n = len + n;
             if (n <= 0) return "";
-            if (n >= s.Length) return s;
-            return s.Substring(s.Length - n);
+            if (n >= len) return s;
+            return s.Substring(len == s.Length ? s.Length - n : U16(s, len - n));
         }
 
         public static int Find(this string s, string what, int from = 0)
         {
+            if (Wide(s))
+            {
+                int len = Length(s);
+                if (from < 0 || from >= len && what.Length > 0) return -1;
+                if (what.Length == 0) return -1;
+                int r = s.IndexOf(what, U16(s, from), StringComparison.Ordinal);
+                return r < 0 ? -1 : Cp(s, r);
+            }
             if (from < 0 || from >= s.Length && what.Length > 0) return -1;
             if (what.Length == 0) return -1;
             return s.IndexOf(what, from, StringComparison.Ordinal);
@@ -57,6 +104,15 @@ namespace Fatebound.Sim
         public static int RFind(this string s, string what, int from = -1)
         {
             if (what.Length == 0) return -1;
+            if (Wide(s) || Wide(what))
+            {
+                int len = Length(s), wl = Length(what);
+                if (from < 0) from = len - wl;
+                else if (from > len - wl) from = len - wl;
+                if (from < 0) return -1;
+                int r = s.LastIndexOf(what, Math.Min(s.Length - 1, U16(s, from) + what.Length - 1), StringComparison.Ordinal);
+                return r < 0 ? -1 : Cp(s, r);
+            }
             if (from < 0) from = s.Length - what.Length;
             else if (from > s.Length - what.Length) from = s.Length - what.Length;
             if (from < 0) return -1;
@@ -203,13 +259,31 @@ namespace Fatebound.Sim
 
         public static string Reverse(this string s)
         {
+            if (Wide(s))
+            {
+                // (by code point, as Godot: a surrogate pair stays in order)
+                var cps = new List<string>();
+                for (int i = 0; i < s.Length; i++)
+                {
+                    if (char.IsHighSurrogate(s[i]) && i + 1 < s.Length && char.IsLowSurrogate(s[i + 1])) { cps.Add(s.Substring(i, 2)); i++; }
+                    else cps.Add(s.Substring(i, 1));
+                }
+                cps.Reverse();
+                return string.Concat(cps);
+            }
             var a = s.ToCharArray();
             Array.Reverse(a);
             return new string(a);
         }
 
-        /// <summary>unicode_at(i): the code at i (0 past the end).</summary>
-        public static int UnicodeAt(this string s, int i) => (uint)i < (uint)s.Length ? s[i] : 0;
+        /// <summary>unicode_at(i): the code point at i (0 past the end).</summary>
+        public static int UnicodeAt(this string s, int i)
+        {
+            if (!Wide(s)) return (uint)i < (uint)s.Length ? s[i] : 0;
+            if (i < 0 || i >= Length(s)) return 0;
+            int u = U16(s, i);
+            return char.IsHighSurrogate(s[u]) && u + 1 < s.Length && char.IsLowSurrogate(s[u + 1]) ? char.ConvertToUtf32(s[u], s[u + 1]) : s[u];
+        }
 
         /// <summary>length() in Unicode code points (C#'s Length counts UTF-16 units; equal for anything but emoji).</summary>
         public static int Length(string s)
@@ -228,14 +302,14 @@ namespace Fatebound.Sim
         // ------------------------------------------------------------------ padding
         public static string Lpad(string s, int min, string ch = " ")
         {
-            int n = min - s.Length;
+            int n = min - Length(s);
             if (n <= 0) return s;
             return ch.Repeat(n) + s;
         }
 
         public static string Rpad(string s, int min, string ch = " ")
         {
-            int n = min - s.Length;
+            int n = min - Length(s);
             if (n <= 0) return s;
             return s + ch.Repeat(n);
         }

@@ -26,28 +26,28 @@ namespace Fatebound.Game
         public static readonly Color BRASS_LIGHT = Color.FromCode("#f0cf82");
         public static readonly Color BRASS_DARK = Color.FromCode("#6f4f1e");
 
-        public static StyleBox Panel(Color? bg_ = null, Color? stroke_ = null, int radius = 12, int padding = 12)
+        public static StyleBox Panel(Color? bg = null, Color? stroke = null, int radius = 12, int padding = 12)
         {
-            Color bg = bg_ ?? SURFACE;
-            Color stroke = stroke_ ?? GOLD_DARK;
+            Color bg_ = bg ?? SURFACE;
+            Color stroke_ = stroke ?? GOLD_DARK;
             // Framed panels get the beveled brass rim; borderless fills (bars, tracks) stay flat.
-            if (padding > 0 && stroke.a > 0.05)
+            if (padding > 0 && stroke_.a > 0.05)
             {
                 var brass = new Brass();
-                brass.top = new Color(bg.Lightened(0.06), bg.a);
-                brass.bottom = new Color(bg.Darkened(0.35), bg.a);
-                var saturated = stroke.S > 0.35 && (stroke.H < 0.06 || stroke.H > 0.18);
-                brass.rim_light = saturated ? stroke.Lightened(0.25) : BRASS_LIGHT;
-                brass.rim_dark = saturated ? stroke.Darkened(0.45) : BRASS_DARK;
-                brass.rim_light.a = (float)GD.Maxf(0.6, stroke.a);
-                brass.rim_dark.a = (float)GD.Maxf(0.6, stroke.a);
+                brass.top = new Color(bg_.Lightened(0.06), bg_.a);
+                brass.bottom = new Color(bg_.Darkened(0.35), bg_.a);
+                var saturated = stroke_.S > 0.35 && (stroke_.H < 0.06 || stroke_.H > 0.18);
+                brass.rim_light = saturated ? stroke_.Lightened(0.25) : BRASS_LIGHT;
+                brass.rim_dark = saturated ? stroke_.Darkened(0.45) : BRASS_DARK;
+                brass.rim_light.a = (float)GD.Maxf(0.6, stroke_.a);
+                brass.rim_dark.a = (float)GD.Maxf(0.6, stroke_.a);
                 brass.radius = radius;
                 brass.SetContentMarginAll(padding + 2);
                 return brass;
             }
             var style = new StyleBoxFlat();
-            style.BgColor = bg;
-            style.BorderColor = stroke;
+            style.BgColor = bg_;
+            style.BorderColor = stroke_;
             style.SetBorderWidthAll(1);
             style.BorderWidthTop = 2;
             style.SetCornerRadiusAll(radius);
