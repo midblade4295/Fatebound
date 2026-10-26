@@ -299,10 +299,8 @@ namespace Fatebound.Client
             if (skel == null || d.Skinned == null || !d.Skinned.enabled) return;
             if (d.PoseVersion == skel.PoseVersion) return;
             d.PoseVersion = skel.PoseVersion;
-            var skin = mi.Skin;
-            if (skin != null) skel.GetSkinTransforms(skin, d.SkinXf);
-            else
-                for (int i = 0; i < d.SkinXf.Length; i++) d.SkinXf[i] = skel.GetBoneGlobalPose(i);
+            // (a null skin: the skeleton's rest skin, as Godot creates one for a MeshInstance3D without a skin)
+            skel.GetSkinTransforms(mi.Skin, d.SkinXf);
             // bone transforms are children of the mesh's GameObject: relative to the mesh instance (Godot's skinning
             // applies the instance transform after the skin transforms)
             for (int i = 0; i < d.Bones.Length; i++) Conv.Apply(d.Bones[i], d.SkinXf[i]);

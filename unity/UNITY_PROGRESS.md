@@ -40,7 +40,9 @@ editor in its workspace); grokbot opens it in Unity 6000.3.27f1 and builds the A
   spec with a software rasteriser (the same shading the Unity shader does); side by side with Godot's render the two
   are near pixel-identical.
 - Assets: tools/sync_assets.py mirrors godot/assets + content into Assets/Resources/res/ (webp -> png, svg -> png via
-  Godot, fonts -> .bytes for the TrueType reader); .res/.scn/.tscn are baked separately (to do).
+  Godot, fonts -> .bytes for the TrueType reader). The scenes and resources (.glb .gltf .scn .tscn .res .tres) are
+  baked by tools/bake/bake.sh (Godot headless: what load()/instantiate() give, as data) into <path>.bytes and rebuilt
+  by GUI/Scene3D/BakedLoader.cs; tools/parity/bake.sh diffs Godot's and the port's view of them.
 - Unity side of the GUI: Client/GUI/GuiCanvas.cs runs the SceneTree each frame (Update -> Iterate, LateUpdate ->
   Render) and draws its batches on a Screen Space Overlay canvas, one CanvasRenderer per batch;
   Client/GUI/UnityGuiHost.cs loads res:// files from Resources; Shaders/Resources/Shaders/FateboundGUI.shader shades

@@ -200,10 +200,10 @@ namespace Fatebound.Game
         public TextureRect _Shade(GArray stops, bool vertical)
         {
             var g = new Gradient();
-            g.SetOffsets(stops.Map(s => (double)s[0]).ToFloats());
+            g.SetOffsets(stops.Map(st => (double)st[0]).ToFloats());
             var cols = new List<Color>();
-            foreach (var s in stops.Map(s => s[1]))
-                cols.Add((Color)s);
+            foreach (var cv in stops.Map(st => st[1]))
+                cols.Add((Color)cv);
             g.SetColors(cols);
             var gt = new GradientTexture2D();
             gt.Gradient = g;

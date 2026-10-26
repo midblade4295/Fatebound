@@ -26,7 +26,13 @@ global usings, no `record struct`, no raw string literals, no `required`.
 - `const UI = preload("res://scripts/app/ui.gd")` -> a using alias at the top of the file:
   `using UI = Fatebound.Game.Ui;` (then `UI.Label(...)` reads as in the .gd). Same for every script preload.
 - `preload("res://x.png")` / `load(...)` of a resource -> `ResourceLoader.Load<Texture2D>("res://x.png")` (const ->
-  `static readonly`). Scenes: `ResourceLoader.Load<PackedScene>(...)` then `.Instantiate()`.
+  `static readonly`). Scenes: `ResourceLoader.Load<PackedScene>(...)` then `.Instantiate()` (.glb/.gltf/.scn/.tscn/.res/
+  .tres come from the bake, unity/tools/bake/bake.sh -> GUI/Scene3D/BakedLoader.cs: the same node tree and resources
+  Godot gives). `ResourceLoader.load_threaded_request/_get_status/_get` and `THREAD_LOAD_*` keep their names
+  (`LoadThreadedRequest`...). A baked resource with a script (`extends Resource`, e.g. terrain_cache.gd in cache.res)
+  is created as the ported class `Fatebound.Game.<PascalCased file name>` (fields set by their GDScript names) --
+  until that class exists it loads as a `BakedScriptResource` (`.Get("key")`); `BakedLoader.RegisterScript(path,
+  factory)` overrides the naming rule.
 
 ### The standard header
 ```csharp

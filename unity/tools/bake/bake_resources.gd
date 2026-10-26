@@ -276,6 +276,8 @@ func _enc_res(r: Resource, main: bool):
 	if r is Script:
 		_warn("built-in script in %s: not stored" % file_path)
 		return null
+	if r.resource_local_to_scene:
+		_warn("local-to-scene resource (%s) in %s: shared by every instance in the port" % [r.get_class(), file_path])
 	var hint := cur_prop
 	res_index[r] = -1
 	var e := {"class": r.get_class()}
