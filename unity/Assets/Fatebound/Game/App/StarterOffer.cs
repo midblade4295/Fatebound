@@ -111,23 +111,23 @@ namespace Fatebound.Game
             _Item(items, UI2.V2 + "offer/token.webp", "HERO", "TOKEN", new Color("#e2b8ff"));
             UI2.Center(UI2.Body(side, "A Hero Token unlocks any hero you don't have yet. Once per player.", 12, new Color("#ffe9c7")));
             // the price
-            // (app.billing is billing.gd or billing_ios.gd -- one face, reached by name as the .gd's untyped `bl` does)
-            object bl = app.billing;
-            bool live = bl != null && (bool)GObject.Call(bl, "active");
+            // (app.billing is billing.gd or billing_ios.gd -- one face: StoreBilling's IStoreBilling)
+            var bl = app.billing as IStoreBilling;
+            bool live = bl != null && bl.Active();
             var label = Platform.StoreButton();
             if (live)
-                label = GD.Str(GObject.Get(bl, "busy")) == "starter_pack" ? "…" : GD.Str(GObject.Call(bl, "price", "starter_pack"));
+                label = GD.Str(bl.busy) == "starter_pack" ? "…" : GD.Str(bl.Price("starter_pack"));
             var b = UI2.Button(side, label, live ? "green" : "grey", () =>
             {
                 app.Sfx("tap");
                 if (bl != null)
-                    GObject.Call(bl, "buy", "starter_pack");
+                    bl.Buy("starter_pack");
                 else
                     app.Toast(GD.Fmt("Gem packs are sold in the %s version of Fatebound", Platform.StoreShort()), UI.RED);
             }, "starter_buy", 22, 56.0, 16.0);
             b.SizeFlagsHorizontal = Control.SIZE_EXPAND_FILL;
             if (live)
-                b.Disabled = !(bool)GObject.Call(bl, "can_buy", "starter_pack");
+                b.Disabled = !bl.CanBuy("starter_pack");
             UI2.Sweep(b);
         }
 
