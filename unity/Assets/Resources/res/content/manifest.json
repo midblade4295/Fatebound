@@ -1,0 +1,78 @@
+{
+ "format": 1,
+ "url": "https://raw.githubusercontent.com/midblade4295/Fatebound/content-packs/",
+ "packs": [
+  {
+   "name": "ui",
+   "file": "ui-1ac91f2ca4b7.pck",
+   "size": 41247500,
+   "sha256": "ef6e3b3f3dd1c21f395e90151406192a03fcec4f4391934c786b85fb78a66946",
+   "inputs": "1ac91f2ca4b78360d1923398ae420ae5bd53bd826740046314186159829ddcb1",
+   "probe": "res://assets/ui/abilities/archmage_e.png"
+  },
+  {
+   "name": "world",
+   "file": "world-b95cbcd00aed.pck",
+   "size": 52482976,
+   "sha256": "e12102d442eefcb409f5817bcd78e886fa676ee44d5ce474ccc40c3dfef2622e",
+   "inputs": "b95cbcd00aed42a323dfdb42d30d0f8054935f17d2a21b647bd30bdae005c43a",
+   "probe": "res://assets/kaykit/anim/Rig_Medium_CombatMelee.glb"
+  },
+  {
+   "name": "heroes",
+   "file": "heroes-dd14433830ca.pck",
+   "size": 55050716,
+   "sha256": "a479546bc335b57296294fcfd75f1696273b302b010f3af0c9ba73354c8adbe8",
+   "inputs": "dd14433830ca80462bd598b3b1cd05a6cb065122a85b7e8669bef1a5f44ddb43",
+   "probe": "res://assets/meshy/archmage/rigged.glb"
+  },
+  {
+   "name": "minions",
+   "file": "minions-b84af8079a11.pck",
+   "size": 37789676,
+   "sha256": "f1e9e8a964feb26ab540b9486e67eb8043896a25075256e679ac8278f28f8618",
+   "inputs": "b84af8079a11d9135cd333b9674b90523cfc73a75c60565da5dc3c817dcf0d76",
+   "probe": "res://assets/meshy/minion_caster/rigged.glb"
+  },
+  {
+   "name": "champions",
+   "file": "champions-5520b94c2332.pck",
+   "size": 25639768,
+   "sha256": "045094fa0b97bac5b9624eff79a25bc925177aa4ae644b2f49677ab05fd08be5",
+   "inputs": "5520b94c23329828e36473172a0b3abd7812f39bf05cb5c95e7fc1b0fc0f940e",
+   "probe": "res://assets/meshy/dragoon/rigged.glb"
+  },
+  {
+   "name": "weapons",
+   "file": "weapons-4b0485d8029e.pck",
+   "size": 17606056,
+   "sha256": "c1bcd9d9873273ad93e6bf81c0533e61a498a2132ee164dfff5c48e305adf282",
+   "inputs": "4b0485d8029e8cc70641fa3d610e22f42f12bd2d956af4f1606f6e5d35f58cc1",
+   "probe": "res://assets/meshy/weapons/acolyte_wand.glb"
+  },
+  {
+   "name": "skins",
+   "file": "skins-0b26f6b39e76.pck",
+   "size": 29217728,
+   "sha256": "a0f6940475695b77007536e61a2ec3a138086e7cd9fb92db604bab0845104ba4",
+   "inputs": "0b26f6b39e765c51ac1dc2e849a12c51e633d1a041a2ed92db7c09935bb9355b",
+   "probe": "res://assets/skins/archmage_frost.jpg"
+  },
+  {
+   "name": "war",
+   "file": "war-397af6e0c831.pck",
+   "size": 8837728,
+   "sha256": "19219adfa469c2a0e57f58c42928914110be1c330d809dcb4fe767aa28422ee8",
+   "inputs": "397af6e0c831ab51190e0efc36d1ce90a2c6e69a189e3cf4b1b04ee0afa6b02a",
+   "probe": "res://assets/meshy/war/abbey.glb"
+  },
+  {
+   "name": "audio",
+   "file": "audio-6c9749d871b4.pck",
+   "size": 16337028,
+   "sha256": "04837d9dc00a1cde0888484c8b29aef5a12e5012d607e8ea4cc5acfb6897a7e7",
+   "inputs": "6c9749d871b43904272afa151748a29d54224d9286642041b80aa8b771ebd219",
+   "probe": "res://assets/music/match.ogg"
+  }
+ ]
+}

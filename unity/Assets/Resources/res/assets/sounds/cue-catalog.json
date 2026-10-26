@@ -1,0 +1,494 @@
+{
+  "original_design": true,
+  "sample_rate": 32000,
+  "format": "16-bit mono WAV preview; runtime uses floating-point PCM and its own mixer",
+  "cues": [
+    {
+      "cue": "tap",
+      "seconds": 0.14,
+      "peak": 0.88,
+      "rms": 0.1641,
+      "source": "0.31.109: ElevenLabs sound effects, cut/layered/levelled by tools/build_menu_sfx.py (sources in art_sources/menu_sfx)"
+    },
+    {
+      "cue": "menuOpen",
+      "seconds": 1.18,
+      "peak": 0.42,
+      "rms": 0.0436,
+      "source": "0.31.110: ElevenLabs sound effects, cut/layered/levelled by tools/build_menu_sfx.py (sources in art_sources/menu_sfx)"
+    },
+    {
+      "cue": "menuClose",
+      "seconds": 0.33,
+      "peak": 0.9,
+      "rms": 0.0871,
+      "source": "0.31.109: ElevenLabs sound effects, cut/layered/levelled by tools/build_menu_sfx.py (sources in art_sources/menu_sfx)"
+    },
+    {
+      "cue": "confirm",
+      "seconds": 0.54,
+      "peak": 0.58,
+      "rms": 0.0654,
+      "source": "0.31.109: ElevenLabs sound effects, cut/layered/levelled by tools/build_menu_sfx.py (sources in art_sources/menu_sfx)"
+    },
+    {
+      "cue": "equip",
+      "seconds": 0.72,
+      "peak": 0.69,
+      "rms": 0.0723,
+      "source": "0.31.109: ElevenLabs sound effects, cut/layered/levelled by tools/build_menu_sfx.py (sources in art_sources/menu_sfx)"
+    },
+    {
+      "cue": "purchase",
+      "seconds": 0.84,
+      "peak": 0.84,
+      "rms": 0.1013,
+      "source": "0.31.109: ElevenLabs sound effects, cut/layered/levelled by tools/build_menu_sfx.py (sources in art_sources/menu_sfx)"
+    },
+    {
+      "cue": "error",
+      "seconds": 0.29,
+      "peak": 0.92,
+      "rms": 0.1077,
+      "source": "0.31.109: ElevenLabs sound effects, cut/layered/levelled by tools/build_menu_sfx.py (sources in art_sources/menu_sfx)"
+    },
+    {
+      "cue": "roll",
+      "seconds": 1.05,
+      "peak": 0.72,
+      "rms": 0.14594144831620895
+    },
+    {
+      "cue": "land",
+      "seconds": 0.23,
+      "peak": 0.72,
+      "rms": 0.16147549753567506
+    },
+    {
+      "cue": "sword",
+      "seconds": 0.37,
+      "peak": 0.72,
+      "rms": 0.13887172256041694
+    },
+    {
+      "cue": "axe",
+      "seconds": 0.46,
+      "peak": 0.72,
+      "rms": 0.12915787983571564
+    },
+    {
+      "cue": "bow",
+      "seconds": 0.35,
+      "peak": 0.72,
+      "rms": 0.17352962066722444
+    },
+    {
+      "cue": "magic",
+      "seconds": 0.5,
+      "peak": 0.72,
+      "rms": 0.13673084159287363
+    },
+    {
+      "cue": "hit",
+      "seconds": 0.26,
+      "peak": 0.72,
+      "rms": 0.12345128307325924
+    },
+    {
+      "cue": "crit",
+      "seconds": 0.65,
+      "peak": 0.72,
+      "rms": 0.11606754905747221
+    },
+    {
+      "cue": "shield",
+      "seconds": 0.5,
+      "peak": 0.72,
+      "rms": 0.10908877857901077
+    },
+    {
+      "cue": "shieldBreak",
+      "seconds": 0.63,
+      "peak": 0.72,
+      "rms": 0.10144061557839777
+    },
+    {
+      "cue": "hurt",
+      "seconds": 0.24,
+      "peak": 0.72,
+      "rms": 0.11561532470932269
+    },
+    {
+      "cue": "ko",
+      "seconds": 0.7,
+      "peak": 0.72,
+      "rms": 0.12233589219334591
+    },
+    {
+      "cue": "barrage",
+      "seconds": 0.95,
+      "peak": 0.72,
+      "rms": 0.1422875077964675
+    },
+    {
+      "cue": "bulwark",
+      "seconds": 1.05,
+      "peak": 0.72,
+      "rms": 0.16295648601794144
+    },
+    {
+      "cue": "horn",
+      "seconds": 1.25,
+      "peak": 0.72,
+      "rms": 0.1959288660428554
+    },
+    {
+      "cue": "surge",
+      "seconds": 1.2,
+      "peak": 0.72,
+      "rms": 0.14715030917283217
+    },
+    {
+      "cue": "shadow",
+      "seconds": 0.68,
+      "peak": 0.72,
+      "rms": 0.12671013026936653
+    },
+    {
+      "cue": "rampage",
+      "seconds": 1.15,
+      "peak": 0.72,
+      "rms": 0.1394861802849108
+    },
+    {
+      "cue": "meteor",
+      "seconds": 1.35,
+      "peak": 0.72,
+      "rms": 0.13444257862803138
+    },
+    {
+      "cue": "volley",
+      "seconds": 0.9,
+      "peak": 0.72,
+      "rms": 0.14447886438807409
+    },
+    {
+      "cue": "coin",
+      "seconds": 0.49,
+      "peak": 0.56,
+      "rms": 0.0622,
+      "source": "0.31.109: ElevenLabs sound effects, cut/layered/levelled by tools/build_menu_sfx.py (sources in art_sources/menu_sfx)"
+    },
+    {
+      "cue": "gift",
+      "seconds": 0.63,
+      "peak": 0.56,
+      "rms": 0.13592209540569142
+    },
+    {
+      "cue": "energy",
+      "seconds": 0.48,
+      "peak": 0.72,
+      "rms": 0.18420178304476797
+    },
+    {
+      "cue": "level",
+      "seconds": 1.1,
+      "peak": 0.56,
+      "rms": 0.14871926035252322
+    },
+    {
+      "cue": "flip",
+      "seconds": 0.18,
+      "peak": 0.94,
+      "rms": 0.1068,
+      "source": "0.31.109: ElevenLabs sound effects, cut/layered/levelled by tools/build_menu_sfx.py (sources in art_sources/menu_sfx)"
+    },
+    {
+      "cue": "chestReady",
+      "seconds": 0.64,
+      "peak": 0.56,
+      "rms": 0.0949739727898165
+    },
+    {
+      "cue": "chest",
+      "seconds": 1.1,
+      "peak": 0.56,
+      "rms": 0.13433682034715472
+    },
+    {
+      "cue": "countdown",
+      "seconds": 0.24,
+      "peak": 0.85,
+      "rms": 0.1096,
+      "source": "0.31.109: ElevenLabs sound effects, cut/layered/levelled by tools/build_menu_sfx.py (sources in art_sources/menu_sfx)"
+    },
+    {
+      "cue": "tension",
+      "seconds": 0.72,
+      "peak": 0.72,
+      "rms": 0.21920093206428018
+    },
+    {
+      "cue": "miss",
+      "seconds": 0.3,
+      "peak": 0.72,
+      "rms": 0.15587218601041203
+    },
+    {
+      "cue": "matchStart",
+      "seconds": 1.4,
+      "peak": 0.61,
+      "rms": 0.1253,
+      "source": "0.31.109: ElevenLabs sound effects, cut/layered/levelled by tools/build_menu_sfx.py (sources in art_sources/menu_sfx)"
+    },
+    {
+      "cue": "victory",
+      "seconds": 1.65,
+      "peak": 0.72,
+      "rms": 0.17515482639553423
+    },
+    {
+      "cue": "defeat",
+      "seconds": 1.15,
+      "peak": 0.72,
+      "rms": 0.16229364645179106
+    },
+    {
+      "cue": "parry",
+      "seconds": 0.56,
+      "peak": 0.72,
+      "rms": 0.10278144175705939
+    },
+    {
+      "cue": "hammerThrow",
+      "seconds": 0.92,
+      "peak": 0.56,
+      "rms": 0.14150662051021448,
+      "source": "0.30.7: mixed from ElevenLabs SFX layers (two hammer-swing whooshes + a spinning whirr, eleven_text_to_sound_v2), saturated for phone speakers, a synthesized air swish pulsing at the spin rate, doppler pitch fall on the whirr; 44.1 kHz"
+    },
+    {
+      "cue": "gem",
+      "seconds": 0.61,
+      "peak": 0.5,
+      "rms": 0.0563,
+      "source": "0.31.109: ElevenLabs sound effects, cut/layered/levelled by tools/build_menu_sfx.py (sources in art_sources/menu_sfx)"
+    },
+    {
+      "cue": "ember",
+      "seconds": 0.46,
+      "peak": 0.52,
+      "rms": 0.0692,
+      "source": "0.31.109: ElevenLabs sound effects, cut/layered/levelled by tools/build_menu_sfx.py (sources in art_sources/menu_sfx)"
+    },
+    {
+      "cue": "chestOpen",
+      "seconds": 1.35,
+      "peak": 0.58,
+      "rms": 0.0965,
+      "source": "0.31.109: ElevenLabs sound effects, cut/layered/levelled by tools/build_menu_sfx.py (sources in art_sources/menu_sfx)"
+    },
+    {
+      "cue": "forge",
+      "seconds": 0.8,
+      "peak": 0.73,
+      "rms": 0.0743,
+      "source": "0.31.109: ElevenLabs sound effects, cut/layered/levelled by tools/build_menu_sfx.py (sources in art_sources/menu_sfx)"
+    },
+    {
+      "cue": "claim",
+      "seconds": 1.18,
+      "peak": 0.53,
+      "rms": 0.0997,
+      "source": "0.31.109: ElevenLabs sound effects, cut/layered/levelled by tools/build_menu_sfx.py (sources in art_sources/menu_sfx)"
+    },
+    {
+      "cue": "tab",
+      "seconds": 0.25,
+      "peak": 0.93,
+      "rms": 0.0907,
+      "source": "0.31.110: ElevenLabs sound effects, cut/layered/levelled by tools/build_menu_sfx.py (sources in art_sources/menu_sfx)"
+    },
+    {
+      "cue": "toggle",
+      "seconds": 0.14,
+      "peak": 0.94,
+      "rms": 0.1157,
+      "source": "0.31.110: ElevenLabs sound effects, cut/layered/levelled by tools/build_menu_sfx.py (sources in art_sources/menu_sfx)"
+    },
+    {
+      "cue": "slider",
+      "seconds": 0.04,
+      "peak": 0.86,
+      "rms": 0.0837,
+      "source": "0.31.110: ElevenLabs sound effects, cut/layered/levelled by tools/build_menu_sfx.py (sources in art_sources/menu_sfx)"
+    },
+    {
+      "cue": "unlock",
+      "seconds": 0.75,
+      "peak": 0.89,
+      "rms": 0.0651,
+      "source": "0.31.110: ElevenLabs sound effects, cut/layered/levelled by tools/build_menu_sfx.py (sources in art_sources/menu_sfx)"
+    },
+    {
+      "cue": "premium",
+      "seconds": 0.83,
+      "peak": 0.64,
+      "rms": 0.1046,
+      "source": "0.31.110: ElevenLabs sound effects, cut/layered/levelled by tools/build_menu_sfx.py (sources in art_sources/menu_sfx)"
+    },
+    {
+      "cue": "tierUp",
+      "seconds": 0.78,
+      "peak": 0.45,
+      "rms": 0.0861,
+      "source": "0.31.110: ElevenLabs sound effects, cut/layered/levelled by tools/build_menu_sfx.py (sources in art_sources/menu_sfx)"
+    },
+    {
+      "cue": "revealRare",
+      "seconds": 1.31,
+      "peak": 0.54,
+      "rms": 0.0728,
+      "source": "0.31.110: ElevenLabs sound effects, cut/layered/levelled by tools/build_menu_sfx.py (sources in art_sources/menu_sfx)"
+    },
+    {
+      "cue": "revealEpic",
+      "seconds": 0.83,
+      "peak": 0.63,
+      "rms": 0.0711,
+      "source": "0.31.110: ElevenLabs sound effects, cut/layered/levelled by tools/build_menu_sfx.py (sources in art_sources/menu_sfx)"
+    },
+    {
+      "cue": "revealLegendary",
+      "seconds": 1.43,
+      "peak": 0.55,
+      "rms": 0.0965,
+      "source": "0.31.110: ElevenLabs sound effects, cut/layered/levelled by tools/build_menu_sfx.py (sources in art_sources/menu_sfx)"
+    },
+    {
+      "cue": "gemPack",
+      "seconds": 1.46,
+      "peak": 0.63,
+      "rms": 0.084,
+      "source": "0.31.110: ElevenLabs sound effects, cut/layered/levelled by tools/build_menu_sfx.py (sources in art_sources/menu_sfx)"
+    },
+    {
+      "cue": "levelUp",
+      "seconds": 1.38,
+      "peak": 0.5,
+      "rms": 0.0948,
+      "source": "0.31.110: ElevenLabs sound effects, cut/layered/levelled by tools/build_menu_sfx.py (sources in art_sources/menu_sfx)"
+    },
+    {
+      "cue": "resultWin",
+      "seconds": 1.63,
+      "peak": 0.52,
+      "rms": 0.099,
+      "source": "0.31.110: ElevenLabs sound effects, cut/layered/levelled by tools/build_menu_sfx.py (sources in art_sources/menu_sfx)"
+    },
+    {
+      "cue": "resultLose",
+      "seconds": 1.35,
+      "peak": 0.48,
+      "rms": 0.0667,
+      "source": "0.31.110: ElevenLabs sound effects, cut/layered/levelled by tools/build_menu_sfx.py (sources in art_sources/menu_sfx)"
+    },
+    {
+      "cue": "ping",
+      "seconds": 0.55,
+      "peak": 0.69,
+      "rms": 0.0643,
+      "source": "0.31.111: ElevenLabs sound effects, cut/layered/levelled by tools/build_menu_sfx.py (sources in art_sources/menu_sfx)"
+    },
+    {
+      "cue": "chatPop",
+      "seconds": 0.46,
+      "peak": 0.54,
+      "rms": 0.052,
+      "source": "0.31.111: ElevenLabs sound effects, cut/layered/levelled by tools/build_menu_sfx.py (sources in art_sources/menu_sfx)"
+    }
+  ],
+  "demo_timeline": [
+    {
+      "at_seconds": 0,
+      "cue": "menuOpen"
+    },
+    {
+      "at_seconds": 0.55,
+      "cue": "tap"
+    },
+    {
+      "at_seconds": 0.92,
+      "cue": "equip"
+    },
+    {
+      "at_seconds": 1.49,
+      "cue": "purchase"
+    },
+    {
+      "at_seconds": 2.34,
+      "cue": "roll"
+    },
+    {
+      "at_seconds": 3.64,
+      "cue": "land"
+    },
+    {
+      "at_seconds": 4.12,
+      "cue": "sword"
+    },
+    {
+      "at_seconds": 4.74,
+      "cue": "axe"
+    },
+    {
+      "at_seconds": 5.45,
+      "cue": "bow"
+    },
+    {
+      "at_seconds": 6.05,
+      "cue": "magic"
+    },
+    {
+      "at_seconds": 6.8,
+      "cue": "hit"
+    },
+    {
+      "at_seconds": 7.31,
+      "cue": "crit"
+    },
+    {
+      "at_seconds": 8.21,
+      "cue": "shield"
+    },
+    {
+      "at_seconds": 8.96,
+      "cue": "shieldBreak"
+    },
+    {
+      "at_seconds": 9.84,
+      "cue": "barrage"
+    },
+    {
+      "at_seconds": 11.04,
+      "cue": "bulwark"
+    },
+    {
+      "at_seconds": 12.34,
+      "cue": "horn"
+    },
+    {
+      "at_seconds": 13.84,
+      "cue": "surge"
+    },
+    {
+      "at_seconds": 15.29,
+      "cue": "meteor"
+    },
+    {
+      "at_seconds": 16.89,
+      "cue": "victory"
+    }
+  ],
+  "note_0_31_109": "The menu cues listed with a source were replaced in 0.31.109 (44.1 kHz 16-bit stereo); the rest are the original designs."
+}
