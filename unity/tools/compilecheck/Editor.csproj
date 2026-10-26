@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <Reference Include="$(UnityRef)/Managed/UnityEngine/UnityEngine.*Module.dll"><Private>false</Private></Reference>
+    <Reference Include="$(UnityRef)/Managed/UnityEngine/UnityEditor.*Module.dll"><Private>false</Private></Reference>
+    <Reference Include="$(UnityRef)/Managed/UnityEngine/UnityEngine.dll"><Private>false</Private></Reference>
+    <Reference Include="$(UnityRef)/Managed/UnityEditor.dll"><Private>false</Private></Reference>
+    <ProjectReference Include="Sim.csproj" />
+    <ProjectReference Include="Client.csproj" />
+    <Compile Include="../../Assets/Fatebound/Editor/**/*.cs" />
+  </ItemGroup>
+</Project>

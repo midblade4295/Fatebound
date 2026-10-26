@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Fatebound.Sim: no engine references (shared with the .NET server and simtest) -->
+  <ItemGroup>
+    <Compile Include="../../Assets/Fatebound/Sim/**/*.cs" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,26 @@
+<Project>
+  <!-- Compile-checks the Unity scripts outside Unity (no editor here) with Unity's own reference assemblies,
+       .NET Standard 2.1, C# 9, what Unity 6 compiles player scripts with. UNITY_REF points at an extracted
+       Unity 6000.3 editor's Editor/Data folder (tools/fetch_unity_refs.sh). -->
+  <PropertyGroup>
+    <UnityRef Condition="'$(UNITY_REF)' == ''">/root/unity-ref/Editor/Data</UnityRef>
+    <UnityRef Condition="'$(UNITY_REF)' != ''">$(UNITY_REF)</UnityRef>
+    <UnityPkgs Condition="'$(UNITY_PKGS)' == ''">/root/unity-pkgs</UnityPkgs>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <Nullable>disable</Nullable>
+    <DisableImplicitFrameworkReferences>true</DisableImplicitFrameworkReferences>
+    <NoStdLib>true</NoStdLib>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <NoWarn>CS0162;CS0168;CS0169;CS0219;CS0414;CS0649;CS0067;CS8981;CS1998</NoWarn>
+    <DefineConstants>UNITY_6000_0_OR_NEWER;UNITY_6000_3_OR_NEWER;UNITY_2023_1_OR_NEWER;UNITY_2022_1_OR_NEWER;UNITY_2021_1_OR_NEWER;UNITY_ANDROID;CSHARP_7_3_OR_NEWER;ENABLE_LEGACY_INPUT_MANAGER;$(ExtraDefines)</DefineConstants>
+    <OutputType>Library</OutputType>
+    <BaseIntermediateOutputPath>/tmp/fb-cc/obj/$(MSBuildProjectName)/</BaseIntermediateOutputPath>
+    <OutputPath>/tmp/fb-cc/bin/$(MSBuildProjectName)/</OutputPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="netstandard"><HintPath>$(UnityRef)/NetStandard/ref/2.1.0/netstandard.dll</HintPath><Private>false</Private></Reference>
+  </ItemGroup>
+</Project>

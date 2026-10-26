@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <Reference Include="$(UnityRef)/Managed/UnityEngine/UnityEngine.*Module.dll"><Private>false</Private></Reference>
+    <Reference Include="$(UnityRef)/Managed/UnityEngine/UnityEngine.dll"><Private>false</Private></Reference>
+    <ProjectReference Include="Sim.csproj" />
+    <Compile Include="../../Assets/Fatebound/Client/**/*.cs" />
+  </ItemGroup>
+</Project>

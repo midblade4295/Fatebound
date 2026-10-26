@@ -1,0 +1,27 @@
+# Unity (Fatebound's port). Library/ etc. are rebuilt by the editor on import.
+/Library/
+/Temp/
+/Obj/
+/Build/
+/Builds/
+/Logs/
+/UserSettings/
+/MemoryCaptures/
+/Recordings/
+*.csproj
+*.sln
+*.suo
+*.user
+*.pidb
+*.booproj
+*.apk
+*.aab
+*.keystore
+*.jks
+crashlytics-build.properties
+# the compile-check and simtest outputs
+/tools/simtest/bin/
+/tools/simtest/obj/
+
+# keep the compile-check and test projects (tools/)
+!/tools/**/*.csproj
