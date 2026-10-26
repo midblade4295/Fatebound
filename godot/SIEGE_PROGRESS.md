@@ -7449,3 +7449,29 @@ three).
 - Preview APK: build/Fatebound-Siege-0.31.221-fatebound.apk (33 MB, preview key), sha256
   97f7a58dcc515e8f55bde37d2e0d6a015c6c8d7fb5779adbf39091581e8bde6b.
 
+## 0.31.222 — hard-edged shadows (Kevin's pick), the graphics test off, pipeline compiles in the log
+Kevin's 0.31.221 log: the training's 5v5 (training 2: "PROBE ready: 30 tests from 40 s (training 2)"); t=290-359
+40.2 fps mean (max 56), ~22-26 in its last big fight (280k triangles, 124k into the shadow map, 340 draws, gpu3d
+25-43 ms); a 2.3 s freeze at t=355 (STALL, rcpu3d 2,256 ms: a shader pipeline compiled on first use mid-fight).
+The probe's two rounds (fps with the thing on vs off, the most robust of its numbers -- its own "none" control moved
+±4-5 fps; the CPU phases trade time between themselves as the graphics chip's waits move): soft shadow edges ~6 fps,
+50 % vs 40 % resolution ~7, shadows at all ~4, the land beyond the field ~3, the always-on particles ~2.5, plants and
+the minimap ~1.5 each; glow, MSAA, fog, the vignette, animation (paused: no CPU saved) and the ground's paint ~0.
+Asked which look changes are fine: Kevin chose only "Hard-edged shadows" (not the lower resolution, the lighter outer
+land or fewer particles).
+- siege_view.gd: SHADOW_QUALITY = SHADOW_QUALITY_HARD (was SOFT_LOW): one sample, the hardware's 2x2 blend at the edge.
+  Checked in a lane fight: crisp tree and hero shadows, no stair-stepping at this zoom.
+- gpu_probe.gd: ON = false -- off unless FB_PROBE is set (it switches things off mid-match); its soft-shadow test now
+  switches the soft filter ON against the hard one.
+- siege_diag.gd: pso= on each STAT line that had shader pipeline compiles (c/m/s/d/sp: canvas, mesh, surface, draw,
+  specialization) with that second's event kinds (ev=, e.g. ult/dragon_dive) -- what brought a look the warm-up hadn't
+  shown; Diag.event(e) takes the event.
+- Full suite: 111 passed; staged_start_test again over its 400 ms line at the suite's end (425 ms; sim.setup 229) and
+  under it alone (388, 370) -- the third time; its margin on this machine is thin.
+- CONTENT OK. Version 0.31.222, versionCode 308; SERVER_BUILD 0.31.222 (no server change).
+- Preview APK: build/Fatebound-Siege-0.31.222-fatebound.apk (33 MB, preview key), sha256
+  1f36f3030dfd6983d1535cc98c91bd688581b8522ce26fdee5b078f02d34b84d.
+- Next (no change to the look): fewer, bigger draw batches -- the plants' MultiMesh cells (~1,400 instances visible:
+  outer trees 279 cells, edge trees 100 + their shadow copies 100, ridges 88 + 40, foliage 85, brush 64, terrain 64)
+  and each unit's ~7 pieces; then the per-unit work (sim, view sync) in compiled code.
+
