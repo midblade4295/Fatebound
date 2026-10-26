@@ -5,12 +5,13 @@ using Fatebound.Sim;
 using Fatebound.GUI;
 using Vector2 = Fatebound.Sim.Vec2;
 using Color = Fatebound.GUI.Col;
-using Land = Fatebound.Sim.Land;
-using Keep = Fatebound.Sim.Keep;
-using View = Fatebound.Game.SiegeView;
 
 namespace Fatebound.Game
 {
+    using Land = Fatebound.Sim.Land;
+    using Keep = Fatebound.Sim.Keep;
+    using View = Fatebound.Game.SiegeView;
+
     // The match's minimap (0.31.216, Kevin: "make fatebound more like [Honor of Kings]" -- the landscape HUD's map in the
     // top-left corner). The field as the camera sees it: the square, your keep bottom-left (siege_view.gd screen_up) --
     // the painted plan tools/bake_land.gd bakes (assets/terrain/minimap.png), turned to the view. Over it: the towers

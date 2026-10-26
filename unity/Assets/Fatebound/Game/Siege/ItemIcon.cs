@@ -6,10 +6,11 @@ using Fatebound.GUI;
 using Vector2 = Fatebound.Sim.Vec2;
 using Color = Fatebound.GUI.Col;
 using Transform2D = Fatebound.GUI.Xform2;
-using Moba = Fatebound.Sim.Moba;
 
 namespace Fatebound.Game
 {
+    using Moba = Fatebound.Sim.Moba;
+
     // 0.31.157 5V5: an item's glyph (scripts/siege/moba.gd ITEMS), drawn, not an image -- the shop's cells and slots use this
     // Control; the HUD's item slots call draw_item() on its own canvas. 0.31.175 (Kevin: "make these menus better looking
     // and more high quality"): each item its own painted icon (assets/ui/items/<id>.png, tools/build_menu_icons.py); the

@@ -20,10 +20,11 @@ using Fatebound.GUI;
 using Vector2 = Fatebound.Sim.Vec2;
 using Vector2i = Fatebound.Sim.Vec2i;
 using Vector3 = Fatebound.Sim.Vec3;
-using Sim = Fatebound.Sim.SiegeSim;
 
 namespace Fatebound.Game
 {
+    using Sim = Fatebound.Sim.SiegeSim;
+
     // Fatebound's online protocol, shared by the headless server (server/siege_server.gd) and the phone (siege_mode.gd).
     // The server runs the real sim; clients keep a mirror sim (the same map and heroes from setup() + setup_moba()) brought to
     // each snapshot, so the view and HUD draw an online match as they draw one against bots. (0.31.170: the online 5v5 --
