@@ -7,7 +7,7 @@ using Fatebound.Sim;
 
 namespace Fatebound.GUI
 {
-    public class Container : Control
+    public partial class Container : Control
     {
         bool _pendingSort;
         public event Action SortChildren, PreSortChildren;
@@ -125,7 +125,7 @@ namespace Fatebound.GUI
         protected static Vec2 CeilV(Vec2 v) => new Vec2(CeilF(v.x), CeilF(v.y));
     }
 
-    public class BoxContainer : Container
+    public partial class BoxContainer : Container
     {
         public enum AlignmentMode { Begin = 0, Center = 1, End = 2 }
         public const AlignmentMode ALIGNMENT_BEGIN = AlignmentMode.Begin, ALIGNMENT_CENTER = AlignmentMode.Center, ALIGNMENT_END = AlignmentMode.End;
@@ -310,10 +310,10 @@ namespace Fatebound.GUI
         }
     }
 
-    public class HBoxContainer : BoxContainer { public HBoxContainer() { vertical = false; } }
-    public class VBoxContainer : BoxContainer { public VBoxContainer() { vertical = true; } }
+    public partial class HBoxContainer : BoxContainer { public HBoxContainer() { vertical = false; } }
+    public partial class VBoxContainer : BoxContainer { public VBoxContainer() { vertical = true; } }
 
-    public class GridContainer : Container
+    public partial class GridContainer : Container
     {
         int _columns = 1;
         public int Columns { get => _columns; set { _columns = Math.Max(1, value); QueueSort(); UpdateMinimumSize(); } }
@@ -517,7 +517,7 @@ namespace Fatebound.GUI
         }
     }
 
-    public class CenterContainer : Container
+    public partial class CenterContainer : Container
     {
         bool _topLeft;
         public bool UseTopLeft { get => _topLeft; set { if (_topLeft == value) return; _topLeft = value; UpdateMinimumSize(); QueueSort(); } }
@@ -552,7 +552,7 @@ namespace Fatebound.GUI
         }
     }
 
-    public class MarginContainer : Container
+    public partial class MarginContainer : Container
     {
         int ML => GetThemeConstant("margin_left");
         int MT => GetThemeConstant("margin_top");
@@ -596,7 +596,7 @@ namespace Fatebound.GUI
         }
     }
 
-    public class PanelContainer : Container
+    public partial class PanelContainer : Container
     {
         public PanelContainer() { MouseFilter = MouseFilterEnum.Stop; }
 
@@ -641,14 +641,14 @@ namespace Fatebound.GUI
     }
 
     /// <summary>Panel: a Control that draws its "panel" stylebox.</summary>
-    public class Panel : Control
+    public partial class Panel : Control
     {
         public Panel() { MouseFilter = MouseFilterEnum.Stop; }
         protected override void OnDraw() => GetThemeStylebox("panel")?.Draw(drawList, new Rect2(Vec2.Zero, Size));
     }
 
     /// <summary>Range: value, min, max, step, page (Godot's Range; named so it does not clash with System.Range).</summary>
-    public class RangeControl : Control
+    public partial class RangeControl : Control
     {
         double _min, _max = 100, _step = 1, _page, _value;
         public bool Rounded, AllowGreater, AllowLesser, ExpEdit;
@@ -704,7 +704,7 @@ namespace Fatebound.GUI
         }
     }
 
-    public class ScrollBar : RangeControl
+    public partial class ScrollBar : RangeControl
     {
         protected bool vertical;
         public const double PAGE_DIVISOR = 8.0;
@@ -777,10 +777,10 @@ namespace Fatebound.GUI
         }
     }
 
-    public class VScrollBar : ScrollBar { public VScrollBar() { vertical = true; } }
-    public class HScrollBar : ScrollBar { public HScrollBar() { vertical = false; } }
+    public partial class VScrollBar : ScrollBar { public VScrollBar() { vertical = true; } }
+    public partial class HScrollBar : ScrollBar { public HScrollBar() { vertical = false; } }
 
-    public class ScrollContainer : Container
+    public partial class ScrollContainer : Container
     {
         public enum ScrollMode { Disabled = 0, Auto = 1, ShowAlways = 2, ShowNever = 3, Reserve = 4, MaximizeFirst = 5 }
         public const ScrollMode SCROLL_MODE_DISABLED = ScrollMode.Disabled, SCROLL_MODE_AUTO = ScrollMode.Auto, SCROLL_MODE_SHOW_ALWAYS = ScrollMode.ShowAlways,
@@ -1044,7 +1044,7 @@ namespace Fatebound.GUI
     }
 
     /// <summary>A separator line.</summary>
-    public class HSeparator : Control
+    public partial class HSeparator : Control
     {
         public HSeparator() { MouseFilter = MouseFilterEnum.Ignore; }
         public override Vec2 GetMinimumSize() => new Vec2(0, GetThemeConstant("separation"));

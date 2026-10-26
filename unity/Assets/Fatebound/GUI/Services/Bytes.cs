@@ -12,7 +12,7 @@ using Fatebound.Sim;
 namespace Fatebound.GUI
 {
     /// <summary>PackedByteArray methods on byte[] (the port's PackedByteArray).</summary>
-    public static class PackedBytes
+    public static partial class PackedBytes
     {
         static bool Bad(byte[] b, long offset, int size, string fn)
         {
@@ -188,7 +188,7 @@ namespace Fatebound.GUI
 
     /// <summary>Godot's Compression with its default levels (zlib/gzip: Z_DEFAULT_COMPRESSION, zstd: 3). Returns null
     /// on failure (the callers turn that into Godot's empty array).</summary>
-    public static class GCompression
+    public static partial class GCompression
     {
         public const int MODE_FASTLZ = 0, MODE_DEFLATE = 1, MODE_ZSTD = 2, MODE_GZIP = 3, MODE_BROTLI = 4;
         public static int ZstdLevel = 3;

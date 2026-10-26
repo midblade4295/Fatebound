@@ -8,7 +8,7 @@ namespace Fatebound.GUI
 {
     public enum ThemeDataType { Color = 0, Constant = 1, Font = 2, FontSize = 3, Icon = 4, StyleBox = 5 }
 
-    public sealed class Theme : Resource
+    public sealed partial class Theme : Resource
     {
         readonly Dictionary<(string, string), object>[] _items = new Dictionary<(string, string), object>[6];
         readonly Dictionary<string, string> _variations = new Dictionary<string, string>();

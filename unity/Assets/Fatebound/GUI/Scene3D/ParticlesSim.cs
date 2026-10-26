@@ -340,6 +340,55 @@ namespace Fatebound.GUI
         /// <summary>false when Godot skips the system (inactive and not emitting).</summary>
         public bool Active;
 
+        Xform3 _emissionXf = Xform3.IDENTITY;
+        bool _updated;
+
+        /// <summary>Godot's capture_aabb() (particles_get_current_aabb): the box around every particle whose flags are
+        /// non-zero -- live ones, and dead ones from cycle 1 on, which keep their last transform -- in the node's local
+        /// space, grown by the longest axis of the draw passes' meshes. Empty before the first process step.</summary>
+        public Aabb CaptureAabb()
+        {
+            if (!_updated) return new Aabb();   // (Godot: no particle buffer yet, an error and AABB())
+            Xform3 inv = _emissionXf.AffineInverse();
+            var aabb = new Aabb();
+            bool first = true;
+            for (int i = 0; i < _p.Length; i++)
+            {
+                if (_p[i].flags == 0) continue;
+                var pos = new Vec3(_p[i].xform.c3.x, _p[i].xform.c3.y, _p[i].xform.c3.z);
+                if (!_node.LocalCoords) pos = inv.Xform(pos);
+                if (first) { aabb.position = pos; first = false; }
+                else aabb = aabb.ExpandTo(pos);
+            }
+            float longest = 0;
+            for (int i = 0; i < _node.DrawPasses; i++)
+            {
+                var mesh = _node.GetDrawPassMesh(i);
+                if (mesh != null) longest = Math.Max(ServerMeshAabb(mesh).GetLongestAxisSize(), longest);
+            }
+            return aabb.Grow(longest);
+        }
+
+        /// <summary>mesh_get_aabb as the RenderingServer keeps it: the custom AABB when set, else the surfaces' boxes,
+        /// each started at its first vertex with CMP_EPSILON size (RenderingServer::_surface_set_data).</summary>
+        static Aabb ServerMeshAabb(Mesh m)
+        {
+            Aabb custom = m is PrimitiveMesh pm ? pm.CustomAabb : (m is ArrayMesh am ? am.CustomAabb : new Aabb());
+            if (custom != new Aabb()) return custom;
+            var small = new Vec3((float)GD.CMP_EPSILON, (float)GD.CMP_EPSILON, (float)GD.CMP_EPSILON);
+            var aabb = new Aabb();
+            var ss = m.GetSurfaces();
+            for (int i = 0; i < ss.Count; i++)
+            {
+                var vs = ss[i].Vertices;
+                if (vs == null || vs.Length == 0) continue;
+                var sa = new Aabb(vs[0], small);
+                for (int k = 1; k < vs.Length; k++) sa = sa.ExpandTo(vs[k]);
+                aabb = i == 0 ? sa : aabb.Merge(sa);
+            }
+            return aabb;
+        }
+
         public ParticlesSim(GPUParticles3D node)
         {
             _node = node;
@@ -386,6 +435,8 @@ namespace Fatebound.GUI
                 _emitterVelocity = v;
             }
             _prevPos = g.origin;
+            _emissionXf = g;
+            _updated = true;
             _havePrevPos = true;
             _time += frameDelta;
 

@@ -16,7 +16,7 @@ using IOFileAccess = System.IO.FileAccess;
 
 namespace Fatebound.GUI
 {
-    public sealed class FileAccess : IDisposable
+    public sealed partial class FileAccess : IDisposable
     {
         public const int READ = 1, WRITE = 2, READ_WRITE = 3, WRITE_READ = 7;
         public const int COMPRESSION_FASTLZ = 0, COMPRESSION_DEFLATE = 1, COMPRESSION_ZSTD = 2, COMPRESSION_GZIP = 3, COMPRESSION_BROTLI = 4;
@@ -459,7 +459,7 @@ namespace Fatebound.GUI
     }
 
     /// <summary>Godot's DirAccess: listing a folder and the static file operations.</summary>
-    public sealed class DirAccess
+    public sealed partial class DirAccess
     {
         [ThreadStatic] static int _lastOpenError;
 
@@ -697,7 +697,7 @@ namespace Fatebound.GUI
 
     /// <summary>Godot's ProjectSettings: the settings the game reads (from godot/project.godot, plus the engine defaults
     /// it asks for) and the res:// / user:// path conversions.</summary>
-    public static class ProjectSettings
+    public static partial class ProjectSettings
     {
         /// <summary>Where res:// would be on disk ("" in an exported game: res:// paths then globalize to themselves
         /// without the prefix, as Godot does).</summary>

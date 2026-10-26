@@ -10,7 +10,7 @@ using Fatebound.Sim;
 
 namespace Fatebound.GUI
 {
-    public sealed class RegExMatch
+    public sealed partial class RegExMatch
     {
         internal string subject = "";
         internal int[] starts = Array.Empty<int>(), ends = Array.Empty<int>();
@@ -45,7 +45,7 @@ namespace Fatebound.GUI
         public int GetEnd(string name) { int id = Find(name); return id < 0 ? -1 : ends[id]; }
     }
 
-    public sealed class RegEx
+    public sealed partial class RegEx
     {
         Regex _re;
         string _pattern = "";

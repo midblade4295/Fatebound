@@ -71,13 +71,20 @@ namespace Fatebound.Client
             var cus = d.Sim.Custom;
             bool local = d.Sim.LocalCoords;
             var g = local ? p.GlobalTransform : Xform3.IDENTITY;
+            int drawn = 0;
             for (int i = 0; i < n; i++)
             {
-                d.Matrices[i] = Conv.Matrix(local ? g * xf[i] : xf[i]);
+                // an inactive slot has a zero basis (Godot also moves it to -INF so even a billboard vanishes): skip it
+                var b = xf[i].basis;
+                if (b.x == Vec3.Zero && b.y == Vec3.Zero && b.z == Vec3.Zero) continue;
+                d.Matrices[drawn] = Conv.Matrix(local ? g * xf[i] : xf[i]);
                 var c = cols[i];
-                d.Colors[i] = new Vector4(c.r, c.g, c.b, c.a);
-                d.Custom[i] = new Vector4(cus[i * 4], cus[i * 4 + 1], cus[i * 4 + 2], cus[i * 4 + 3]);
+                d.Colors[drawn] = new Vector4(c.r, c.g, c.b, c.a);
+                d.Custom[drawn] = new Vector4(cus[i * 4], cus[i * 4 + 1], cus[i * 4 + 2], cus[i * 4 + 3]);
+                drawn++;
             }
+            n = drawn;
+            if (n == 0) return;
             if (d.Props == null) d.Props = new MaterialPropertyBlock();
             var rp = new RenderParams
             {

@@ -9,7 +9,7 @@ using Fatebound.Sim;
 
 namespace Fatebound.GUI
 {
-    public struct RVert
+    public partial struct RVert
     {
         public float x, y, u, v;
         public Col c;
@@ -17,7 +17,7 @@ namespace Fatebound.GUI
         public float cx0, cy0, cx1, cy1;
     }
 
-    public sealed class RenderBatch
+    public sealed partial class RenderBatch
     {
         public Texture2D texture;
         public GMaterial material;
@@ -30,7 +30,7 @@ namespace Fatebound.GUI
         public readonly List<int> indices = new List<int>();
     }
 
-    public class Viewport : Node
+    public partial class Viewport : Node
     {
         public Vec2 BaseSize = new Vec2(760, 420);
         Vec2 _windowSize = new Vec2(760, 420);
@@ -711,7 +711,7 @@ namespace Fatebound.GUI
 #if FB3D
     /// <summary>Godot's SubViewport: its own canvas and 3D view (its world, or its parent's), rendered by the host into
     /// a texture (get_texture()) that a TextureRect shows.</summary>
-    public class SubViewport : Viewport
+    public partial class SubViewport : Viewport
     {
         public enum UpdateMode { Disabled = 0, Once = 1, WhenVisible = 2, WhenParentVisible = 3, Always = 4 }
         public enum ClearModeEnum { Always = 0, Never = 1, Once = 2 }

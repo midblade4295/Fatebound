@@ -13,7 +13,7 @@ using SysChain = System.Security.Cryptography.X509Certificates.X509Chain;
 
 namespace Fatebound.GUI
 {
-    public sealed class HashingContext
+    public sealed partial class HashingContext
     {
         public const int HASH_MD5 = 0, HASH_SHA1 = 1, HASH_SHA256 = 2;
 
@@ -53,7 +53,7 @@ namespace Fatebound.GUI
         }
     }
 
-    public sealed class Crypto
+    public sealed partial class Crypto
     {
         static readonly RandomNumberGenerator Rng = RandomNumberGenerator.Create();
 
@@ -99,7 +99,7 @@ namespace Fatebound.GUI
     }
 
     /// <summary>A private/public key (not available in the port: load fails).</summary>
-    public sealed class CryptoKey
+    public sealed partial class CryptoKey
     {
         public int Load(string path, bool publicOnly = false) => GD.ERR_UNAVAILABLE;
         public int LoadFromString(string key, bool publicOnly = false) => GD.ERR_UNAVAILABLE;
@@ -109,7 +109,7 @@ namespace Fatebound.GUI
     }
 
     /// <summary>Godot's X509Certificate: a PEM chain of certificates.</summary>
-    public sealed class X509Certificate
+    public sealed partial class X509Certificate
     {
         internal readonly List<SysCert> Certs = new List<SysCert>();
 
@@ -167,7 +167,7 @@ namespace Fatebound.GUI
     }
 
     /// <summary>Godot's TLSOptions: how a client verifies the server (the system's roots, a given chain, or not at all).</summary>
-    public sealed class TLSOptions
+    public sealed partial class TLSOptions
     {
         X509Certificate _trusted;
         string _commonName = "";

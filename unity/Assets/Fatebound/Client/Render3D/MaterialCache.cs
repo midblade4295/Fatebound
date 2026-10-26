@@ -69,6 +69,14 @@ namespace Fatebound.Client
             return e.Mat;
         }
 
+        /// <summary>A canvas_item ShaderMaterial's Unity material, or null when its shader has no Unity port (the GUI
+        /// then draws the item with its plain material, as a missing shader would show in Godot).</summary>
+        public Material GetCanvas(ShaderMaterial sm)
+        {
+            if (sm == null || ShaderRegistry.Find(sm.Shader) == null) return null;
+            return Get(sm);
+        }
+
         void Build(Entry e, GMaterial m)
         {
             switch (m)
@@ -84,13 +92,23 @@ namespace Fatebound.Client
         // ------------------------------------------------------------------ BaseMaterial3D
         static Texture Tex(Texture2D t) => t?.GetHandle() as Texture;
 
+        // the material's sampler (BaseMaterial3D texture_filter / texture_repeat) for the textures it binds; Unity keeps
+        // sampler state on the texture, so the last material to bind a shared texture decides (they agree in the game)
+        static bool _repeat = true;
+        static int _filter = 3;
+
         static void SetTex(Material mat, string prop, Texture2D t, Texture fallback)
         {
             var u = Tex(t);
             mat.SetTexture(prop, u != null ? u : fallback);
             if (u != null)
             {
-                u.wrapMode = TextureWrapMode.Repeat;
+                u.wrapMode = _repeat ? TextureWrapMode.Repeat : TextureWrapMode.Clamp;
+                // Godot: 0 nearest, 1 linear, 2 nearest+mipmaps, 3 linear+mipmaps, 4/5 the anisotropic versions
+                var fm = _filter == 0 || _filter == 2 || _filter == 4 ? FilterMode.Point : (_filter == 1 ? FilterMode.Bilinear : FilterMode.Trilinear);
+                if (u.mipmapCount <= 1 && fm == FilterMode.Trilinear) fm = FilterMode.Bilinear;
+                u.filterMode = fm;
+                u.anisoLevel = _filter >= 4 ? 4 : 1;
             }
         }
 
@@ -113,6 +131,8 @@ namespace Fatebound.Client
             var white = UnityEngine.Texture2D.whiteTexture;
             var ac = b.AlbedoColor;
             mat.SetColor("_Color", new Color(ac.r, ac.g, ac.b, ac.a));          // (sRGB -> linear by Unity, as Godot's source_color)
+            _repeat = b.TextureRepeat;
+            _filter = b.TextureFilter;
             SetTex(mat, "_MainTex", b.AlbedoTexture, white);
             mat.SetVector("_UV1Scale", new Vector4(b.Uv1Scale.x, b.Uv1Scale.y, b.Uv1Scale.z, 0));
             mat.SetVector("_UV1Offset", new Vector4(b.Uv1Offset.x, b.Uv1Offset.y, b.Uv1Offset.z, 0));
@@ -145,6 +165,7 @@ namespace Fatebound.Client
             mat.SetFloat("_ReceiveShadows", b.DisableReceiveShadows ? 0 : 1);
             mat.SetFloat("_Billboard", (int)b.BillboardMode);
             mat.SetFloat("_BillboardKeepScale", b.BillboardKeepScale ? 1 : 0);
+            mat.SetVector("_ParticlesAnim", new Vector4(Math.Max(1, b.ParticlesAnimHFrames), Math.Max(1, b.ParticlesAnimVFrames), b.ParticlesAnimLoop ? 1 : 0, 0));
             mat.SetFloat("_Grow", b.Grow ? (float)b.GrowAmount : 0f);
             mat.SetFloat("_DistanceFade", (int)b.DistanceFadeMode);
             mat.SetFloat("_DistanceFadeMin", (float)b.DistanceFadeMinDistance);

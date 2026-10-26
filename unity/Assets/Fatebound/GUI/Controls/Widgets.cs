@@ -10,7 +10,7 @@ using Fatebound.Sim;
 namespace Fatebound.GUI
 {
     // ======================================================================================== Label
-    public class Label : Control
+    public partial class Label : Control
     {
         string _text = "";
         AutowrapMode _autowrap = AutowrapMode.Off;
@@ -432,7 +432,7 @@ namespace Fatebound.GUI
     }
 
     /// <summary>LabelSettings resource.</summary>
-    public sealed class LabelSettings : Resource
+    public sealed partial class LabelSettings : Resource
     {
         public Font Font;
         public int FontSize = 16;
@@ -446,7 +446,7 @@ namespace Fatebound.GUI
     }
 
     // ======================================================================================== Buttons
-    public sealed class ButtonGroup : Resource
+    public sealed partial class ButtonGroup : Resource
     {
         internal readonly List<BaseButton> buttons = new List<BaseButton>();
         public bool AllowUnpress;
@@ -456,7 +456,7 @@ namespace Fatebound.GUI
         public List<BaseButton> GetButtons() => new List<BaseButton>(buttons);
     }
 
-    public class BaseButton : Control
+    public partial class BaseButton : Control
     {
         public enum DrawModeEnum { Normal = 0, Pressed = 1, Hover = 2, Disabled = 3, HoverPressed = 4 }
         public enum ActionModeEnum { ButtonPress = 0, ButtonRelease = 1 }
@@ -662,7 +662,7 @@ namespace Fatebound.GUI
         }
     }
 
-    public class Button : BaseButton
+    public partial class Button : BaseButton
     {
         string _text = "";
         Texture2D _icon;
@@ -892,7 +892,7 @@ namespace Fatebound.GUI
         }
     }
 
-    public class TextureButton : BaseButton
+    public partial class TextureButton : BaseButton
     {
         public Texture2D TextureNormal, TexturePressed, TextureHover, TextureDisabled, TextureFocused;
         public bool IgnoreTextureSize;
@@ -924,7 +924,7 @@ namespace Fatebound.GUI
     }
 
     // ======================================================================================== Textures, rects
-    public class TextureRect : Control
+    public partial class TextureRect : Control
     {
         public enum ExpandModeEnum { KeepSize = 0, IgnoreSize = 1, FitWidth = 2, FitWidthProportional = 3, FitHeight = 4, FitHeightProportional = 5 }
         public enum StretchModeEnum { Scale = 0, Tile = 1, Keep = 2, KeepCentered = 3, KeepAspect = 4, KeepAspectCentered = 5, KeepAspectCovered = 6 }
@@ -1028,7 +1028,7 @@ namespace Fatebound.GUI
         }
     }
 
-    public class ColorRect : Control
+    public partial class ColorRect : Control
     {
         Col _color = Col.WHITE;
         public Col Color { get => _color; set { if (_color == value) return; _color = value; QueueRedraw(); } }
@@ -1037,7 +1037,7 @@ namespace Fatebound.GUI
         protected override void OnDraw() => drawList.AddRect(new Rect2(Vec2.Zero, Size), _color, false);
     }
 
-    public class NinePatchRect : Control
+    public partial class NinePatchRect : Control
     {
         public Texture2D Texture;
         public bool DrawCenter = true;
@@ -1055,7 +1055,7 @@ namespace Fatebound.GUI
         }
     }
 
-    public class ReferenceRect : Control
+    public partial class ReferenceRect : Control
     {
         public Col BorderColor = new Col(1f, 0f, 0f, 1f);
         public double BorderWidth = 1;
@@ -1068,7 +1068,7 @@ namespace Fatebound.GUI
     }
 
     // ======================================================================================== Ranges
-    public class ProgressBar : RangeControl
+    public partial class ProgressBar : RangeControl
     {
         public enum FillModeEnum { BeginToEnd = 0, EndToBegin = 1, TopToBottom = 2, BottomToTop = 3 }
         public FillModeEnum FillMode = FillModeEnum.BeginToEnd;
@@ -1144,7 +1144,7 @@ namespace Fatebound.GUI
         }
     }
 
-    public class Slider : RangeControl
+    public partial class Slider : RangeControl
     {
         protected bool vertical;
         public bool Editable = true;
@@ -1238,11 +1238,11 @@ namespace Fatebound.GUI
         }
     }
 
-    public class HSlider : Slider { public HSlider() { vertical = false; SizeFlagsVertical = SizeFlags.ShrinkBegin; } }
-    public class VSlider : Slider { public VSlider() { vertical = true; SizeFlagsHorizontal = SizeFlags.ShrinkBegin; } }
+    public partial class HSlider : Slider { public HSlider() { vertical = false; SizeFlagsVertical = SizeFlags.ShrinkBegin; } }
+    public partial class VSlider : Slider { public VSlider() { vertical = true; SizeFlagsHorizontal = SizeFlags.ShrinkBegin; } }
 
     // ======================================================================================== LineEdit
-    public class LineEdit : Control
+    public partial class LineEdit : Control
     {
         string _text = "";
         public string PlaceholderText = "";
@@ -1396,7 +1396,7 @@ namespace Fatebound.GUI
 
     // ======================================================================================== RichTextLabel
     /// <summary>The RichTextLabel the game uses: [color=..], [b], [i] BBCode, word-wrapped, fit_content.</summary>
-    public class RichTextLabel : Control
+    public partial class RichTextLabel : Control
     {
         string _text = "";
         public bool BbcodeEnabled;

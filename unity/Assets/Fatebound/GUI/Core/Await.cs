@@ -6,7 +6,7 @@ using System.Runtime.CompilerServices;
 
 namespace Fatebound.GUI
 {
-    public static class Await
+    public static partial class Await
     {
         /// <summary>await get_tree().process_frame</summary>
         public static SignalAwaitable ProcessFrame() =>
@@ -36,7 +36,7 @@ namespace Fatebound.GUI
         public SignalAwaitable(Action<Action> add, Action<Action> remove) { _add = add; _remove = remove; }
         public Awaiter GetAwaiter() => new Awaiter(_add, _remove);
 
-        public sealed class Awaiter : INotifyCompletion
+        public sealed partial class Awaiter : INotifyCompletion
         {
             readonly Action<Action> _add, _remove;
             bool _done;
@@ -64,7 +64,7 @@ namespace Fatebound.GUI
         public SignalAwaitable(Action<Action<T>> add, Action<Action<T>> remove) { _add = add; _remove = remove; }
         public Awaiter GetAwaiter() => new Awaiter(_add, _remove);
 
-        public sealed class Awaiter : INotifyCompletion
+        public sealed partial class Awaiter : INotifyCompletion
         {
             readonly Action<Action<T>> _add, _remove;
             bool _done;

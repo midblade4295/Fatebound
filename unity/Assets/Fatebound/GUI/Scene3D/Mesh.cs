@@ -269,6 +269,24 @@ namespace Fatebound.GUI
         }
 
         public override Aabb GetAabb() => CustomAabb.size != Vec3.Zero ? CustomAabb : base.GetAabb();
+
+        // ---- blend shapes by name (each surface's MeshSurface.BlendShapes hold their arrays, in this order)
+        public readonly List<string> BlendShapeNames = new List<string>();
+        public int GetBlendShapeCount() => BlendShapeNames.Count;
+        public string GetBlendShapeName(int i) => (uint)i < (uint)BlendShapeNames.Count ? BlendShapeNames[i] : "";
+        public void SetBlendShapeName(int i, string n) { if ((uint)i < (uint)BlendShapeNames.Count) BlendShapeNames[i] = n ?? ""; }
+        public void AddBlendShape(string n) => BlendShapeNames.Add(n ?? "");
+        public void ClearBlendShapes() => BlendShapeNames.Clear();
+
+        /// <summary>Godot's stored "_blend_shape_names" (the baked-asset loader; the surfaces arrive separately).</summary>
+        public override bool SetStoredProperty(string name, Var value)
+        {
+            if (name != "_blend_shape_names") return false;
+            BlendShapeNames.Clear();
+            if (value.Obj is string[] names) BlendShapeNames.AddRange(names);
+            else if (value.AsArr() is GArray a) foreach (var n in a) BlendShapeNames.Add(n.AsString());
+            return true;
+        }
     }
 }
 

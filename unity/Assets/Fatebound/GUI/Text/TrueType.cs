@@ -7,7 +7,7 @@ using System.Collections.Generic;
 
 namespace Fatebound.GUI
 {
-    public sealed class TrueTypeFace
+    public sealed partial class TrueTypeFace
     {
         readonly byte[] d;
         readonly Dictionary<string, (int off, int len)> _tables = new Dictionary<string, (int, int)>();
@@ -362,7 +362,7 @@ namespace Fatebound.GUI
         }
 
         // ---------- outlines ----------
-        public struct Pt { public float x, y; public bool on; }
+        public partial struct Pt { public float x, y; public bool on; }
 
         /// <summary>The glyph's contours in font units (y up), composite glyphs flattened.</summary>
         public List<List<Pt>> Outline(int glyph)
@@ -471,7 +471,7 @@ namespace Fatebound.GUI
     }
 
     /// <summary>Signed distance fields from TrueType outlines (quadratic splines flattened to segments).</summary>
-    public static class SdfRaster
+    public static partial class SdfRaster
     {
         /// <summary>Renders glyph `contours` (font units, y up) scaled by `scale` px/unit into a w×h byte field whose
         /// origin pixel (0,0) is at font coordinates (ox, oy) (top-left, y down in the bitmap). 128 = the edge,

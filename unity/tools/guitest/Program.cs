@@ -31,12 +31,23 @@ namespace GuiTest
                 case "anim":
                     AnimTest.Run(args);
                     return 0;
+                case "bake":
+                    return BakeTest.Run(args.Skip(1).ToArray());
                 case "services":
                 case "services-gen":
                     ServicesTest.Run(cmd == "services-gen");
                     return 0;
                 case "math":
                     MathTest.Run();
+                    return 0;
+                case "mesh":
+                    MeshTest.Run(args);
+                    return 0;
+                case "particles":
+                    ParticlesTest.RunAll();
+                    return 0;
+                case "particles-parity":
+                    ParticlesTest.Parity(args[1]);
                     return 0;
                 case "fonts":
                     foreach (var fp in Fonts)

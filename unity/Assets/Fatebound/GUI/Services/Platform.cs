@@ -65,7 +65,7 @@ namespace Fatebound.GUI
 
     /// <summary>IPlatform in plain .NET, answering as Godot's headless desktop build does (display "headless", window
     /// 0x0, refresh rate -1). Subclass and override for a real device.</summary>
-    public class DefaultPlatform : IPlatform
+    public partial class DefaultPlatform : IPlatform
     {
         readonly string _userDir;
         string _clipboard = "";
@@ -234,7 +234,7 @@ namespace Fatebound.GUI
     }
 
     /// <summary>The current IPlatform (a DefaultPlatform until the host sets its own).</summary>
-    public static class PlatformHost
+    public static partial class PlatformHost
     {
         static IPlatform _host;
         static int _mainThread;

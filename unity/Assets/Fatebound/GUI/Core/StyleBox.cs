@@ -8,7 +8,7 @@ using Fatebound.Sim;
 
 namespace Fatebound.GUI
 {
-    public abstract class StyleBox : Resource
+    public abstract partial class StyleBox : Resource
     {
         /// <summary>The canvas oversampling while items redraw (TextServer::get_current_drawn_item_oversampling).</summary>
         public static float CurrentOversampling = 1f;
@@ -52,12 +52,12 @@ namespace Fatebound.GUI
         }
     }
 
-    public sealed class StyleBoxEmpty : StyleBox
+    public sealed partial class StyleBoxEmpty : StyleBox
     {
         public override void Draw(DrawList ci, Rect2 rect) { }
     }
 
-    public sealed class StyleBoxFlat : StyleBox
+    public sealed partial class StyleBoxFlat : StyleBox
     {
         Col _bg = new Col(0.6f, 0.6f, 0.6f, 1f);
         Col _border = new Col(0.8f, 0.8f, 0.8f, 1f);
@@ -356,7 +356,7 @@ namespace Fatebound.GUI
         }
     }
 
-    public sealed class StyleBoxTexture : StyleBox
+    public sealed partial class StyleBoxTexture : StyleBox
     {
         public enum AxisStretchMode { Stretch = 0, Tile = 1, TileFit = 2 }
         public Texture2D Texture;
@@ -393,7 +393,7 @@ namespace Fatebound.GUI
         }
     }
 
-    public sealed class StyleBoxLine : StyleBox
+    public sealed partial class StyleBoxLine : StyleBox
     {
         public Col Color = new Col(0f, 0f, 0f, 1f);
         public float GrowBegin = 1f, GrowEnd = 1f;

@@ -9,7 +9,7 @@ using Fatebound.Sim;
 
 namespace Fatebound.GUI
 {
-    public sealed class ConfigFile
+    public sealed partial class ConfigFile
     {
         sealed class OMap<T>
         {

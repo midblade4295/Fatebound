@@ -7,7 +7,7 @@ using Fatebound.Sim;
 
 namespace Fatebound.GUI
 {
-    public struct GVertex
+    public partial struct GVertex
     {
         public float x, y, u, v;
         public Col c;
@@ -20,7 +20,7 @@ namespace Fatebound.GUI
     /// a distance field; aux = outline width in px), or hairlines (Godot's width &lt; 0 lines: one device pixel).</summary>
     public enum DrawMode : byte { Normal = 0, SdfText = 1, Hairline = 2 }
 
-    public struct DrawSegment
+    public partial struct DrawSegment
     {
         public Texture2D tex;
         public DrawMode mode;
@@ -30,7 +30,7 @@ namespace Fatebound.GUI
         public bool hasXform;
     }
 
-    public sealed class DrawList
+    public sealed partial class DrawList
     {
         public const float FEATHER_SIZE = 1.25f;
         const float CMP_EPSILON = 0.00001f;

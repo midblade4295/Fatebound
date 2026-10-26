@@ -8,13 +8,14 @@ Every res:// path keeps its place under Assets/Resources/res/ (res://assets/ui/x
 Assets/Resources/res/assets/ui/x.png), so the game code's paths still work: the host strips the
 extension and calls Resources.Load (Client/Core/UnityGuiHost.cs).
 
-  .png .jpg .wav .ogg .mp3 .json .glb  copied as they are
-  .gltf + .bin                         copied (glTFast imports both)
+  .png .jpg .wav .ogg .mp3 .json      copied as they are
   .webp                                -> .png (Pillow)
   .svg                                 -> .png (rasterised by Godot at the scale Godot imported it)
   .ttf .otf .woff2                     -> <name>.ttf.bytes / <name>.woff2.bytes (TrueType bytes as a TextAsset;
                                           woff2 decompressed with fontTools). The GUI reads fonts itself.
-  .res .scn .tscn                      skipped here: tools/bake_godot_resources.gd turns them into .glb / .json
+  .glb .gltf .bin .res .scn .tscn .tres  not copied: tools/bake/bake.sh bakes what Godot loads from them into
+                                       <path>.bytes (+ _baked/: embedded textures, manifest.json), which this script
+                                       keeps (GUI/Scene3D/BakedLoader.cs reads them)
 Godot's .import sidecars are not copied; Editor/AssetImport.cs sets the Unity import settings per folder.
 """
 import io
@@ -27,8 +28,10 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 GODOT = os.path.join(ROOT, "godot")
 DEST = os.path.join(ROOT, "unity", "Assets", "Resources", "res")
 SOURCES = ["assets", "content"]
-COPY = {".png", ".jpg", ".jpeg", ".wav", ".ogg", ".mp3", ".json", ".glb", ".gltf", ".bin", ".txt"}
-SKIP = {".import", ".uid", ".res", ".scn", ".tscn", ".tres", ".md", ".gdignore", ".gdshader"}
+COPY = {".png", ".jpg", ".jpeg", ".wav", ".ogg", ".mp3", ".json", ".txt"}
+SKIP = {".import", ".uid", ".res", ".scn", ".tscn", ".tres", ".md", ".gdignore", ".gdshader", ".glb", ".gltf", ".bin"}
+# the bake's outputs (tools/bake): never stale here
+BAKED = tuple(e + ".bytes" for e in (".glb", ".gltf", ".scn", ".tscn", ".res", ".tres"))
 FONT = {".ttf", ".otf", ".woff2", ".woff"}
 CHECK = "--check" in sys.argv
 GODOT_BIN = os.environ.get("GODOT", "/root/godot/Godot_v4.7.2-stable_linux.x86_64")
@@ -142,13 +145,14 @@ def main():
             buf = io.BytesIO()
             f.save(buf)
             write(osb, buf.getvalue())
-    # Remove files whose source is gone (but keep baked outputs: *_baked.*, *.json written by the bake).
+    # Remove files whose source is gone (and the .glb/.gltf/.bin copies of earlier syncs), keeping the bake's outputs:
+    # <path>.<glb|gltf|scn|tscn|res|tres>.bytes and everything under _baked/.
     stale = 0
     if os.path.isdir(DEST):
         for dirpath, _, files in os.walk(DEST):
             for name in files:
                 p = os.path.join(dirpath, name)
-                if p.endswith(".meta") or "/baked/" in p or name.endswith("_baked.glb"):
+                if p.endswith(".meta") or "/_baked/" in p or name.lower().endswith(BAKED):
                     continue
                 if p not in wanted:
                     stale += 1

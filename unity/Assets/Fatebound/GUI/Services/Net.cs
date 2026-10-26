@@ -26,7 +26,7 @@ using Fatebound.Sim;
 
 namespace Fatebound.GUI
 {
-    public sealed class WebSocketPeer
+    public sealed partial class WebSocketPeer
     {
         public const int STATE_CONNECTING = 0, STATE_OPEN = 1, STATE_CLOSING = 2, STATE_CLOSED = 3;
         public const int WRITE_MODE_TEXT = 0, WRITE_MODE_BINARY = 1;
@@ -311,7 +311,7 @@ namespace Fatebound.GUI
     }
 
     /// <summary>Godot's HTTPClient constants (the HTTPRequest node does the requests).</summary>
-    public sealed class HTTPClient
+    public sealed partial class HTTPClient
     {
         public const int METHOD_GET = 0, METHOD_HEAD = 1, METHOD_POST = 2, METHOD_PUT = 3, METHOD_DELETE = 4, METHOD_OPTIONS = 5,
             METHOD_TRACE = 6, METHOD_CONNECT = 7, METHOD_PATCH = 8;
@@ -339,7 +339,7 @@ namespace Fatebound.GUI
     }
 
     /// <summary>Godot's HTTPRequest node over HttpClient.</summary>
-    public class HTTPRequest : Node
+    public partial class HTTPRequest : Node
     {
         public const int RESULT_SUCCESS = 0, RESULT_CHUNKED_BODY_SIZE_MISMATCH = 1, RESULT_CANT_CONNECT = 2, RESULT_CANT_RESOLVE = 3,
             RESULT_CONNECTION_ERROR = 4, RESULT_TLS_HANDSHAKE_ERROR = 5, RESULT_NO_RESPONSE = 6, RESULT_BODY_SIZE_LIMIT_EXCEEDED = 7,

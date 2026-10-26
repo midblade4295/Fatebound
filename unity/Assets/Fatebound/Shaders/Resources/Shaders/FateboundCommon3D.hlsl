@@ -303,4 +303,45 @@ float3 FB_ApplyNormalMap(float3 normalWS, float3 tangentWS, float3 binormalWS, f
     return normalize(lerp(normalWS, tangentWS * xy.x + binormalWS * xy.y + normalWS * z, depth));
 }
 
+// ---- Decals (Godot's Decal node, as scene_forward_mobile.glsl applies them: before lighting, to the albedo) ----
+// The renderer sets, per camera, the nearest FB_MAX_DECALS decals of its world: _FB_DecalXf maps a Unity world point
+// to Godot's uv_local (xz 0..1 across the box, y -1..1 bottom to top), _FB_DecalModulate is the modulate (linear rgb,
+// alpha * distance fade), _FB_DecalParams (albedo_mix, upper_fade, lower_fade, normal_fade), _FB_DecalUp the box's up
+// axis in Unity world. A shader calls FB_ApplyDecals on its albedo with the geometric (vertex) normal.
+#define FB_MAX_DECALS 4
+float4 _FB_DecalCount;
+float4x4 _FB_DecalXf[FB_MAX_DECALS];
+float4 _FB_DecalModulate[FB_MAX_DECALS];
+float4 _FB_DecalParams[FB_MAX_DECALS];
+float4 _FB_DecalUp[FB_MAX_DECALS];
+TEXTURE2D(_FB_DecalTex0); TEXTURE2D(_FB_DecalTex1); TEXTURE2D(_FB_DecalTex2); TEXTURE2D(_FB_DecalTex3);
+SamplerState sampler_FB_linear_clamp;
+
+float4 FB_DecalSample(int i, float2 uv)
+{
+    float2 u = FB_UV(uv);
+    if (i == 0) return SAMPLE_TEXTURE2D_LOD(_FB_DecalTex0, sampler_FB_linear_clamp, u, 0);
+    if (i == 1) return SAMPLE_TEXTURE2D_LOD(_FB_DecalTex1, sampler_FB_linear_clamp, u, 0);
+    if (i == 2) return SAMPLE_TEXTURE2D_LOD(_FB_DecalTex2, sampler_FB_linear_clamp, u, 0);
+    return SAMPLE_TEXTURE2D_LOD(_FB_DecalTex3, sampler_FB_linear_clamp, u, 0);
+}
+
+float3 FB_ApplyDecals(float3 albedo, float3 positionWS, float3 geoNormalWS)
+{
+    int n = (int)_FB_DecalCount.x;
+    [unroll] for (int i = 0; i < FB_MAX_DECALS; i++)
+    {
+        if (i >= n) break;
+        float3 uvl = mul(_FB_DecalXf[i], float4(positionWS, 1.0)).xyz;
+        if (any(uvl < float3(0.0, -1.0, 0.0)) || any(uvl > float3(1.0, 1.0, 1.0))) continue;
+        float4 prm = _FB_DecalParams[i];
+        float fade = pow(1.0 - abs(uvl.y), uvl.y > 0.0 ? prm.y : prm.z);
+        if (prm.w > 0.0) fade *= smoothstep(prm.w, 1.0, dot(normalize(geoNormalWS), _FB_DecalUp[i].xyz) * 0.5 + 0.5);
+        float4 da = FB_DecalSample(i, uvl.xz) * _FB_DecalModulate[i];
+        da.a *= fade;
+        albedo = lerp(albedo, da.rgb, da.a * prm.x);
+    }
+    return albedo;
+}
+
 #endif

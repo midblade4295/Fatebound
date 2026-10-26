@@ -325,6 +325,11 @@ namespace Fatebound.GUI
 
         /// <summary>Noise::_get_image for one slice: Godot's L8 bytes.</summary>
         public byte[] GetImageL8(int width, int height, bool invert = false, bool in3dSpace = false, bool normalize = true)
+            => ImageL8(width, height, 1, invert, in3dSpace, normalize);
+
+        /// <summary>_get_image's first slice of `depth`: normalizing takes the min / max over every slice (slice d
+        /// samples z = d in 3D space), which get_seamless_image's extra skirt slice changes.</summary>
+        byte[] ImageL8(int width, int height, int depth, bool invert, bool in3dSpace, bool normalize)
         {
             if (width <= 0 || height <= 0) { GD.PushError("Condition \"p_width <= 0 || p_height <= 0 || p_depth <= 0\" is true."); return null; }
             var data = new byte[width * height];
@@ -333,14 +338,15 @@ namespace Fatebound.GUI
                 var values = new float[width * height];
                 float minVal = float.MaxValue, maxVal = -float.MaxValue;
                 int idx = 0;
-                for (int y = 0; y < height; y++)
-                    for (int x = 0; x < width; x++)
-                    {
-                        values[idx] = in3dSpace ? Noise3(x, y, 0) : Noise2(x, y);
-                        if (values[idx] > maxVal) maxVal = values[idx];
-                        if (values[idx] < minVal) minVal = values[idx];
-                        idx++;
-                    }
+                for (int d = 0; d < depth; d++)
+                    for (int y = 0; y < height; y++)
+                        for (int x = 0; x < width; x++)
+                        {
+                            float v = in3dSpace ? Noise3(x, y, d) : Noise2(x, y);
+                            if (d == 0) values[idx++] = v;
+                            if (v > maxVal) maxVal = v;
+                            if (v < minVal) minVal = v;
+                        }
                 idx = 0;
                 for (int y = 0; y < height; y++)
                     for (int x = 0; x < width; x++)
@@ -396,7 +402,8 @@ namespace Fatebound.GUI
             int skirtHeight = (int)Math.Max(1f, height * blendSkirt);
             int srcWidth = width + skirtWidth;
             int srcHeight = height + skirtHeight;
-            byte[] src = GetImageL8(srcWidth, srcHeight, invert, in3dSpace, normalize);
+            int skirtDepth = (int)Math.Max(1f, 1 * blendSkirt);
+            byte[] src = ImageL8(srcWidth, srcHeight, 1 + skirtDepth, invert, in3dSpace, normalize);
             if (blendSkirt < 0) { GD.PushError("Condition \"p_blend_skirt < 0\" is true."); return null; }
 
             int halfWidth = (int)(width * 0.5);

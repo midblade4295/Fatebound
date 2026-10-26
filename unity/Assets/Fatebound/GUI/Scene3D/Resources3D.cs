@@ -30,6 +30,25 @@ namespace Fatebound.GUI
         public Xform3 GetBindPose(int i) => _binds[i].Pose;
         public void SetBindPose(int i, Xform3 p) { var b = _binds[i]; b.Pose = p; _binds[i] = b; EmitChanged(); }
 
+        /// <summary>Godot's stored properties (Skin::_set) for the baked-asset loader: "bind_count", "bind/N/bone",
+        /// "bind/N/name", "bind/N/pose".</summary>
+        public override bool SetStoredProperty(string name, Var value)
+        {
+            if (name == "bind_count") { SetBindCount(value.AsInt()); return true; }
+            if (!name.StartsWith("bind/")) return false;
+            int s = name.IndexOf('/', 5);
+            if (s < 0) return false;
+            int i = (int)GStr.ToInt(name.Substring(5, s - 5));
+            if ((uint)i >= (uint)_binds.Count) { GD.PushError("Index p_index = " + i + " is out of bounds (bind_count = " + _binds.Count + ")."); return false; }
+            switch (name.Substring(s + 1))
+            {
+                case "bone": SetBindBone(i, value.AsInt()); return true;
+                case "name": SetBindName(i, value.AsString()); return true;
+                case "pose": SetBindPose(i, AnimVar.ToXform3(value)); return true;
+            }
+            return false;
+        }
+
         public override Resource Duplicate(bool deep = false)
         {
             var s = new Skin { ResourceName = ResourceName };

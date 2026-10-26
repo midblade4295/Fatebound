@@ -21,7 +21,7 @@ namespace Fatebound.GUI
         Key0 = 48, Key1, Key2, Key3, Key4, Key5, Key6, Key7, Key8, Key9,
     }
 
-    public abstract class InputEvent
+    public abstract partial class InputEvent
     {
         public const int DEVICE_ID_EMULATION = -1;
         public int Device;
@@ -47,20 +47,20 @@ namespace Fatebound.GUI
         public override string ToString() => GetType().Name;
     }
 
-    public abstract class InputEventWithModifiers : InputEvent
+    public abstract partial class InputEventWithModifiers : InputEvent
     {
         public bool ShiftPressed, CtrlPressed, AltPressed, MetaPressed;
         public bool IsShiftPressed() => ShiftPressed;
     }
 
-    public abstract class InputEventMouse : InputEventWithModifiers
+    public abstract partial class InputEventMouse : InputEventWithModifiers
     {
         public Vec2 Position, GlobalPosition;
         public MouseButtonMask ButtonMask;
         public MouseButtonMask GetButtonMask() => ButtonMask;
     }
 
-    public sealed class InputEventMouseButton : InputEventMouse
+    public sealed partial class InputEventMouseButton : InputEventMouse
     {
         public MouseButton ButtonIndex;
         public bool Pressed, DoubleClick, Canceled;
@@ -76,7 +76,7 @@ namespace Fatebound.GUI
         }
     }
 
-    public sealed class InputEventMouseMotion : InputEventMouse
+    public sealed partial class InputEventMouseMotion : InputEventMouse
     {
         public Vec2 Relative, ScreenRelative, Velocity, ScreenVelocity, Tilt;
         public double Pressure;
@@ -92,7 +92,7 @@ namespace Fatebound.GUI
         }
     }
 
-    public sealed class InputEventScreenTouch : InputEvent
+    public sealed partial class InputEventScreenTouch : InputEvent
     {
         public int Index;
         public Vec2 Position;
@@ -108,7 +108,7 @@ namespace Fatebound.GUI
         }
     }
 
-    public sealed class InputEventScreenDrag : InputEvent
+    public sealed partial class InputEventScreenDrag : InputEvent
     {
         public int Index;
         public Vec2 Position, Relative, ScreenRelative, Velocity, ScreenVelocity, Tilt;
@@ -125,7 +125,7 @@ namespace Fatebound.GUI
         }
     }
 
-    public sealed class InputEventKey : InputEventWithModifiers
+    public sealed partial class InputEventKey : InputEventWithModifiers
     {
         public Key Keycode, PhysicalKeycode, KeyLabel;
         public int Unicode;
@@ -135,7 +135,7 @@ namespace Fatebound.GUI
         public override bool IsActionType() => true;
     }
 
-    public sealed class InputEventAction : InputEvent
+    public sealed partial class InputEventAction : InputEvent
     {
         public string Action = "";
         public bool Pressed;
@@ -144,7 +144,7 @@ namespace Fatebound.GUI
         public override bool IsActionType() => true;
     }
 
-    public sealed class InputEventMagnifyGesture : InputEventWithModifiers
+    public sealed partial class InputEventMagnifyGesture : InputEventWithModifiers
     {
         public Vec2 Position;
         public double Factor = 1.0;
@@ -157,7 +157,7 @@ namespace Fatebound.GUI
         }
     }
 
-    public sealed class InputEventPanGesture : InputEventWithModifiers
+    public sealed partial class InputEventPanGesture : InputEventWithModifiers
     {
         public Vec2 Position, Delta;
 
@@ -170,7 +170,7 @@ namespace Fatebound.GUI
     }
 
     /// <summary>The project's input actions (Godot's built-in ui_* plus anything the game adds).</summary>
-    public static class InputMap
+    public static partial class InputMap
     {
         static readonly Dictionary<string, List<Func<InputEvent, bool>>> _actions = new Dictionary<string, List<Func<InputEvent, bool>>>
         {
@@ -198,7 +198,7 @@ namespace Fatebound.GUI
     }
 
     /// <summary>Godot's Input singleton.</summary>
-    public static class Input
+    public static partial class Input
     {
         public static bool EmulateMouseFromTouch = true;
         public static bool EmulateTouchFromMouse = false;

@@ -8,7 +8,7 @@ using Fatebound.Sim;
 
 namespace Fatebound.GUI
 {
-    public sealed class Thread
+    public sealed partial class Thread
     {
         public const int PRIORITY_LOW = 0, PRIORITY_NORMAL = 1, PRIORITY_HIGH = 2;
 
@@ -64,7 +64,7 @@ namespace Fatebound.GUI
     }
 
     /// <summary>Godot's Mutex: recursive (the same thread may lock it again).</summary>
-    public sealed class Mutex
+    public sealed partial class Mutex
     {
         readonly object _o = new object();
         public void Lock() => Monitor.Enter(_o);
@@ -77,7 +77,7 @@ namespace Fatebound.GUI
         }
     }
 
-    public sealed class Semaphore
+    public sealed partial class Semaphore
     {
         readonly SemaphoreSlim _s = new SemaphoreSlim(0, int.MaxValue);
         public void Wait() => _s.Wait();
@@ -87,7 +87,7 @@ namespace Fatebound.GUI
 
     /// <summary>Godot's WorkerThreadPool on the .NET thread pool. Task ids start at 1; a waited task is forgotten
     /// (waiting again is ERR_INVALID_PARAMETER, as Godot).</summary>
-    public static class WorkerThreadPool
+    public static partial class WorkerThreadPool
     {
         static long _next = 1;
         static readonly Dictionary<long, Task> _tasks = new Dictionary<long, Task>();

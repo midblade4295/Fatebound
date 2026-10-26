@@ -12,7 +12,7 @@ namespace Fatebound.GUI
     public enum TransitionType { Linear = 0, Sine = 1, Quint = 2, Quart = 3, Quad = 4, Expo = 5, Elastic = 6, Cubic = 7, Circ = 8, Bounce = 9, Back = 10, Spring = 11 }
     public enum EaseType { In = 0, Out = 1, InOut = 2, OutIn = 3 }
 
-    public sealed class Tween
+    public sealed partial class Tween
     {
         public const TransitionType TRANS_LINEAR = TransitionType.Linear, TRANS_SINE = TransitionType.Sine, TRANS_QUINT = TransitionType.Quint,
             TRANS_QUART = TransitionType.Quart, TRANS_QUAD = TransitionType.Quad, TRANS_EXPO = TransitionType.Expo, TRANS_ELASTIC = TransitionType.Elastic,
@@ -414,7 +414,7 @@ namespace Fatebound.GUI
         }
     }
 
-    public abstract class Tweener
+    public abstract partial class Tweener
     {
         internal Tween tween;
         protected double elapsed;
@@ -425,7 +425,7 @@ namespace Fatebound.GUI
         protected void Finish() { finished = true; Finished?.Invoke(); }
     }
 
-    public sealed class PropertyTweener : Tweener
+    public sealed partial class PropertyTweener : Tweener
     {
         readonly object _target;
         readonly string _path;
@@ -511,7 +511,7 @@ namespace Fatebound.GUI
         }
     }
 
-    public sealed class IntervalTweener : Tweener
+    public sealed partial class IntervalTweener : Tweener
     {
         readonly double _duration;
         internal IntervalTweener(double d) { _duration = d; }
@@ -527,7 +527,7 @@ namespace Fatebound.GUI
         }
     }
 
-    public sealed class CallbackTweener : Tweener
+    public sealed partial class CallbackTweener : Tweener
     {
         readonly Action _cb;
         double _delay;
@@ -552,7 +552,7 @@ namespace Fatebound.GUI
         }
     }
 
-    public sealed class MethodTweener : Tweener
+    public sealed partial class MethodTweener : Tweener
     {
         readonly Action<object> _cb;
         readonly object _from, _to;
@@ -592,7 +592,7 @@ namespace Fatebound.GUI
     }
 
     /// <summary>GDScript property paths on C# objects: "self_modulate" -&gt; SelfModulate, "modulate:a" -&gt; Modulate.a.</summary>
-    public static class PropertyPath
+    public static partial class PropertyPath
     {
         static readonly Dictionary<(Type, string), MemberInfo> _members = new Dictionary<(Type, string), MemberInfo>();
 

@@ -41,6 +41,7 @@ namespace Fatebound.Client
         readonly List<VpData> _viewports = new List<VpData>();
         readonly HashSet<MeshData> _skinned = new HashSet<MeshData>();
         readonly HashSet<MultiMeshData> _multimeshes = new HashSet<MultiMeshData>();
+        readonly HashSet<DecalData> _decals = new HashSet<DecalData>();
         readonly Stack<int> _freeLayers = new Stack<int>();
         int _sharedLayer = 31;
 
@@ -88,6 +89,12 @@ namespace Fatebound.Client
             public Light Light;
         }
 
+        public sealed class DecalData : NodeData
+        {
+            public Decal Node;
+            public bool Visible;
+        }
+
         public sealed class SpriteData : NodeData
         {
             public MeshFilter Filter;
@@ -104,6 +111,8 @@ namespace Fatebound.Client
             public WorldData World;
             public int OnceSeen = -1;
             public Environment Env;
+            /// <summary>This frame: the camera renders the 3D picture / the canvas is drawn into the texture.</summary>
+            public bool Rendered3D, Draw2D;
         }
 
         public UnityRenderer3D()
@@ -155,6 +164,7 @@ namespace Fatebound.Client
                 case MultiMeshInstance3D mm: SyncMultiMesh(mm, wd, bits); break;
                 case GPUParticles3D p: ParticlesBridge.Sync(this, p, wd, bits); break;
                 case Sprite3D s: SyncSprite(s, wd, bits); break;
+                case Decal dc: SyncDecal(dc, wd, bits); break;
                 case Light3D l: SyncLight(l, wd, bits); break;
                 case Camera3D _: break;           // read each frame through its viewport
                 default:
@@ -184,6 +194,7 @@ namespace Fatebound.Client
             {
                 case MeshData md: _skinned.Remove(md); break;
                 case MultiMeshData mm: _multimeshes.Remove(mm); break;
+                case DecalData dd: _decals.Remove(dd); break;
                 case SpriteData sd: if (sd.Quad != null) Object.Destroy(sd.Quad); break;
             }
             if (data is NodeData d && d.Go != null) Object.Destroy(d.Go);
@@ -474,6 +485,82 @@ namespace Fatebound.Client
             q.RecalculateBounds();
         }
 
+        // ------------------------------------------------------------------ decals
+        void SyncDecal(Decal dc, WorldData wd, RenderDirty bits)
+        {
+            var d = dc.BackendData as DecalData;
+            if (d == null)
+            {
+                d = new DecalData { Node = dc, World = wd };
+                dc.BackendData = d;
+                _decals.Add(d);
+            }
+            d.Visible = dc.IsVisibleInTree();
+        }
+
+        static readonly Matrix4x4[] _decalXf = new Matrix4x4[4];
+        static readonly Vector4[] _decalMod = new Vector4[4], _decalPrm = new Vector4[4], _decalUp = new Vector4[4];
+        static readonly int[] _decalTexId = { Shader.PropertyToID("_FB_DecalTex0"), Shader.PropertyToID("_FB_DecalTex1"), Shader.PropertyToID("_FB_DecalTex2"), Shader.PropertyToID("_FB_DecalTex3") };
+        readonly List<(float dist, DecalData d)> _decalPick = new List<(float, DecalData)>();
+        static readonly Matrix4x4 MirrorX = Matrix4x4.Scale(new Vector3(-1f, 1f, 1f));
+
+        /// <summary>Godot's decal buffer for one camera (texture_storage.cpp update_decal_buffer): its world's visible
+        /// decals with an albedo texture, nearest first, up to FB_MAX_DECALS.</summary>
+        void SetDecals(VpData vd, Xform3 camXf)
+        {
+            _decalPick.Clear();
+            foreach (var d in _decals)
+            {
+                if (!d.Visible || d.World != vd.World || d.Node.TextureAlbedo == null) continue;
+                if ((d.Node.CullMask & (vd.Vp.GetCamera3D()?.CullMask ?? 0xFFFFFu)) == 0) continue;
+                float dist = (float)camXf.origin.DistanceTo(d.Node.GlobalTransform.origin);
+                _decalPick.Add((dist, d));
+            }
+            _decalPick.Sort((a, b) => a.dist.CompareTo(b.dist));
+            int n = Math.Min(4, _decalPick.Count);
+            for (int i = 0; i < n; i++)
+            {
+                var dc = _decalPick[i].d.Node;
+                // uv_local = inverse(xform * scale(extents) * uv_xform) * point, uv_xform = scale (2,1,2) + origin (-1,0,-1)
+                var ext = dc.Size * 0.5f;
+                var scale = new Xform3(Basis.FromScale(ext), Vec3.Zero);
+                var uvx = new Xform3(Basis.FromScale(new Vec3(2f, 1f, 2f)), new Vec3(-1f, 0f, -1f));
+                var toDecal = (dc.GlobalTransform * scale * uvx).AffineInverse();
+                // (the shader's point is Unity's: mirror it back to Godot's first)
+                _decalXf[i] = GodotMatrix(toDecal) * MirrorX;
+                var m = new Color(dc.Modulate.r, dc.Modulate.g, dc.Modulate.b, 1f).linear;
+                _decalMod[i] = new Vector4(m.r, m.g, m.b, dc.Modulate.a);
+                _decalPrm[i] = new Vector4((float)dc.AlbedoMix, (float)dc.UpperFade, (float)dc.LowerFade, (float)dc.NormalFade);
+                var up = dc.GlobalTransform.basis.GetColumn(1).Normalized();
+                var uu = Conv.Dir(up);
+                _decalUp[i] = new Vector4(uu.x, uu.y, uu.z, 0f);
+                var tex = dc.TextureAlbedo.GetHandle() as Texture;
+                if (tex != null) { tex.wrapMode = TextureWrapMode.Clamp; if (tex.filterMode == FilterMode.Point) tex.filterMode = FilterMode.Bilinear; }
+                Shader.SetGlobalTexture(_decalTexId[i], tex != null ? tex : UnityEngine.Texture2D.blackTexture);
+            }
+            Shader.SetGlobalVector("_FB_DecalCount", new Vector4(n, 0, 0, 0));
+            if (n > 0)
+            {
+                Shader.SetGlobalMatrixArray("_FB_DecalXf", _decalXf);
+                Shader.SetGlobalVectorArray("_FB_DecalModulate", _decalMod);
+                Shader.SetGlobalVectorArray("_FB_DecalParams", _decalPrm);
+                Shader.SetGlobalVectorArray("_FB_DecalUp", _decalUp);
+            }
+        }
+
+        /// <summary>A Godot transform as a 4x4 matrix in Godot's own space (no mirroring).</summary>
+        static Matrix4x4 GodotMatrix(Xform3 t)
+        {
+            var m = Matrix4x4.identity;
+            for (int c = 0; c < 3; c++)
+            {
+                var col = t.basis.GetColumn(c);
+                m.SetColumn(c, new Vector4(col.x, col.y, col.z, 0f));
+            }
+            m.SetColumn(3, new Vector4(t.origin.x, t.origin.y, t.origin.z, 1f));
+            return m;
+        }
+
         // ------------------------------------------------------------------ viewports
         public void SyncViewport(Viewport vp)
         {
@@ -497,21 +584,6 @@ namespace Fatebound.Client
                 _viewports.Add(d);
                 _byCamera[d.Camera] = d;
             }
-            var size = vp.Get3DSize();
-            int w = Math.Max(1, (int)size.x), h = Math.Max(1, (int)size.y);
-            int msaa = vp.Msaa3D == Viewport.MSAA_2X ? 2 : vp.Msaa3D == Viewport.MSAA_4X ? 4 : vp.Msaa3D == Viewport.MSAA_8X ? 8 : 1;
-            // the scene buffer: 32-bit float RGB like Godot Mobile's 32-bit RGB10A2 (same bandwidth), half floats when the
-            // viewport is transparent (alpha) or the GPU can't
-            var fmt = vp.TransparentBg || !SystemInfo.SupportsRenderTextureFormat(RenderTextureFormat.RGB111110Float) ? RenderTextureFormat.ARGBHalf : RenderTextureFormat.RGB111110Float;
-            if (d.Hdr == null || d.Hdr.width != w || d.Hdr.height != h || d.Hdr.antiAliasing != msaa || d.Hdr.format != fmt)
-            {
-                if (d.Hdr != null) { d.Hdr.Release(); Object.Destroy(d.Hdr); }
-                if (d.Ldr != null) { d.Ldr.Release(); Object.Destroy(d.Ldr); }
-                d.Hdr = new RenderTexture(w, h, 24, fmt) { antiAliasing = msaa, name = "vp-hdr" };
-                d.Hdr.Create();
-                d.Ldr = new RenderTexture(w, h, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB) { name = "vp", filterMode = FilterMode.Bilinear };
-                d.Ldr.Create();
-            }
             d.World = World(vp.FindWorld3D());
         }
 
@@ -520,28 +592,76 @@ namespace Fatebound.Client
             if (!(data is VpData d)) return;
             _viewports.Remove(d);
             _byCamera.Remove(d.Camera);
-            if (d.Hdr != null) { d.Hdr.Release(); Object.Destroy(d.Hdr); }
-            if (d.Ldr != null) { d.Ldr.Release(); Object.Destroy(d.Ldr); }
+            Free(ref d.Hdr);
+            Free(ref d.Ldr);
             if (d.Go != null) Object.Destroy(d.Go);
+            if (vp.BackendData == d) vp.BackendData = null;
+        }
+
+        /// <summary>Every viewport in the tree (the GUI draws the SubViewports' canvases into their textures).</summary>
+        public IReadOnlyList<VpData> Viewports => _viewports;
+
+        public VpData RootData(Viewport root) => root?.BackendData as VpData;
+
+        static void Free(ref RenderTexture rt)
+        {
+            if (rt == null) return;
+            rt.Release();
+            Object.Destroy(rt);
+            rt = null;
+        }
+
+        /// <summary>The viewport's texture (what ViewportTexture shows and its canvas is drawn into): raw RGBA8 holding
+        /// sRGB values, Godot's 2D colour space (the post chain encodes the 3D picture into it).</summary>
+        static void EnsureLdr(VpData d, int w, int h)
+        {
+            if (d.Ldr != null && d.Ldr.width == w && d.Ldr.height == h) return;
+            Free(ref d.Ldr);
+            d.Ldr = new RenderTexture(w, h, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.Linear) { name = "vp " + d.Vp.Name, filterMode = FilterMode.Bilinear };
+            d.Ldr.Create();
+        }
+
+        /// <summary>The 3D scene buffer: 32-bit float RGB like Godot Mobile's 32-bit RGB10A2 (same bandwidth), half floats
+        /// when the viewport is transparent (alpha) or the GPU can't.</summary>
+        static void EnsureHdr(VpData d, int w, int h)
+        {
+            var vp = d.Vp;
+            int msaa = vp.Msaa3D == Viewport.MSAA_2X ? 2 : vp.Msaa3D == Viewport.MSAA_4X ? 4 : vp.Msaa3D == Viewport.MSAA_8X ? 8 : 1;
+            var fmt = vp.TransparentBg || !SystemInfo.SupportsRenderTextureFormat(RenderTextureFormat.RGB111110Float) ? RenderTextureFormat.ARGBHalf : RenderTextureFormat.RGB111110Float;
+            if (d.Hdr != null && d.Hdr.width == w && d.Hdr.height == h && d.Hdr.antiAliasing == msaa && d.Hdr.format == fmt) return;
+            Free(ref d.Hdr);
+            d.Hdr = new RenderTexture(w, h, 24, fmt) { antiAliasing = msaa, name = "vp-hdr " + vp.Name };
+            d.Hdr.Create();
         }
 
         void UpdateCamera(VpData d)
         {
             var vp = d.Vp;
-            var cam3d = vp.GetCamera3D();
-            bool render = cam3d != null && vp.IsInsideTree() && !vp.Disable3D && d.World != null;
-            if (render && vp is SubViewport sv)
+            bool isRoot = vp.Parent == null;
+            bool inTree = vp.IsInsideTree();
+            // this frame's update (SubViewport.render_target_update_mode; the root always draws)
+            bool should = inTree;
+            if (should && vp is SubViewport sv)
             {
-                render = sv.ShouldRender();
+                should = sv.ShouldRender();
                 if (sv.RenderTargetUpdateMode == SubViewport.UpdateMode.Once)
                 {
-                    render = d.OnceSeen != sv.UpdateOnceCounter;
+                    should = d.OnceSeen != sv.UpdateOnceCounter;
                     d.OnceSeen = sv.UpdateOnceCounter;
                 }
             }
+            var cam3d = vp.GetCamera3D();
+            d.World = World(vp.FindWorld3D());
+            bool render = should && cam3d != null && !vp.Disable3D && d.World != null;
+            var size = vp.Get3DSize();
+            int w = Math.Max(1, (int)size.x), h = Math.Max(1, (int)size.y);
+            d.Rendered3D = render;
+            d.Draw2D = should && !isRoot;
+            if (render || d.Draw2D) EnsureLdr(d, w, h);
             var cam = d.Camera;
             cam.enabled = render;
             if (!render) return;
+            EnsureHdr(d, w, h);
             Conv.Apply(d.Go.transform, cam3d.GetCameraTransform());
             cam.projectionMatrix = Conv.Projection(cam3d.GetCameraProjection());
             cam.nearClipPlane = (float)cam3d.Near;
@@ -589,6 +709,8 @@ namespace Fatebound.Client
             }
             else Shader.SetGlobalVector("_FB_FogColor", Vector4.zero);
             Shader.SetGlobalFloat("_FB_Time", (float)(Time.realtimeSinceStartupAsDouble % 3600.0));
+            var c3 = d.Vp.GetCamera3D();
+            SetDecals(d, c3 != null ? c3.GetCameraTransform() : Xform3.IDENTITY);
             if (cam.clearFlags == CameraClearFlags.Skybox) RenderSettings.skybox = Materials.ForSky(env.Sky);
         }
 

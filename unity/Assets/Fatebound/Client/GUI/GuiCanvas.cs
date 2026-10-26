@@ -34,8 +34,6 @@ namespace Fatebound.Client
         RenderTexture _gui;
         CommandBuffer _cmd;
         bool _cmdReady;
-        readonly List<Mesh> _meshes = new List<Mesh>();
-        readonly List<MaterialPropertyBlock> _props = new List<MaterialPropertyBlock>();
 
         /// <summary>Godot's rendering/environment/defaults/default_clear_color: the window's clear colour (sRGB).</summary>
         public static Col ClearColor = new Col(0.3f, 0.3f, 0.3f, 1f);
@@ -114,6 +112,8 @@ namespace Fatebound.Client
             GInput.HideKeyboardHook = () => { if (_keyboard != null) _keyboard.active = false; _keyboard = null; _editing = null; };
             DisplayServer.KeepScreenOnHook = on => Screen.sleepTimeout = on ? SleepTimeout.NeverSleep : SleepTimeout.SystemSetting;
             _renderer3D = new UnityRenderer3D();
+            new UnityPhysics3D();           // the 3D physics backend: registers itself as PhysicsServer3D.Backend
+            CanvasShaderMaterial = sm => _renderer3D.Materials.GetCanvas(sm);
         }
 
         UnityRenderer3D _renderer3D;
@@ -294,11 +294,10 @@ namespace Fatebound.Client
             return mat;
         }
 
-        readonly List<Vector3> _pos = new List<Vector3>();
-        readonly List<Color32> _col = new List<Color32>();
-        readonly List<Vector4> _uv0 = new List<Vector4>();
-        readonly List<Vector4> _uv1 = new List<Vector4>();
-        readonly List<int> _idx = new List<int>();
+
+        readonly CanvasDrawer _rootDrawer = new CanvasDrawer();
+        readonly Dictionary<Viewport, CanvasDrawer> _vpDrawers = new Dictionary<Viewport, CanvasDrawer>();
+        readonly List<Viewport> _vpGone = new List<Viewport>();
 
         void Draw(List<RenderBatch> batches)
         {
@@ -318,52 +317,34 @@ namespace Fatebound.Client
                 _composite.SetMaterial(_compositeMat, 0);
             }
             _composite.SetTexture(_gui);
-
             _cmd.Clear();
-            _cmd.SetRenderTarget(_gui, RenderBufferLoadAction.DontCare, RenderBufferStoreAction.Store);
-            _cmd.ClearRenderTarget(false, true, new Color(ClearColor.r, ClearColor.g, ClearColor.b, ClearColor.a));
-            _cmd.SetViewProjectionMatrices(Matrix4x4.identity, GL.GetGPUProjectionMatrix(Matrix4x4.Ortho(0, w, 0, h, -1, 1), true));
-            _cmd.SetGlobalVector("_FB_CanvasSize", new Vector4(w, h, 1f / w, 1f / h));
-            while (_meshes.Count < batches.Count)
+            var clear = new Color(ClearColor.r, ClearColor.g, ClearColor.b, ClearColor.a);
+
+            // SubViewports first: their 2D canvas goes into their texture, over the 3D picture their camera rendered
+            // this frame (Godot draws a viewport's canvas after its 3D), before the root canvas samples them
+            foreach (var d in _renderer3D.Viewports)
             {
-                var m = new Mesh { hideFlags = HideFlags.DontSave };
-                m.MarkDynamic();
-                _meshes.Add(m);
-                _props.Add(new MaterialPropertyBlock());
+                if (!d.Draw2D || d.Ldr == null) continue;
+                var vp = d.Vp;
+                var vb = vp.Render();
+                if (!_vpDrawers.TryGetValue(vp, out var drawer)) _vpDrawers[vp] = drawer = new CanvasDrawer();
+                Color? vclear = null;
+                if (!d.Rendered3D) vclear = vp.TransparentBg ? new Color(0, 0, 0, 0) : clear;
+                if (vb.Count == 0 && vclear == null) continue;
+                drawer.Record(_cmd, d.Ldr, d.Ldr.width, d.Ldr.height, vb, vclear, MaterialFor, _white);
             }
-            float fh = h;
-            for (int i = 0; i < batches.Count; i++)
+            _vpGone.Clear();
+            foreach (var kv in _vpDrawers) if (!kv.Key.IsInsideTree()) _vpGone.Add(kv.Key);
+            foreach (var vp in _vpGone) { _vpDrawers[vp].Release(); _vpDrawers.Remove(vp); }
+
+            // the root: its own 3D (if a camera renders in the root viewport) under the GUI, else the clear colour
+            var root = _renderer3D.RootData(Tree.Root);
+            if (root != null && root.Rendered3D && root.Ldr != null && root.Ldr.width == w && root.Ldr.height == h)
             {
-                var b = batches[i];
-                if (b.verts.Count == 0 || b.indices.Count == 0) continue;
-                _pos.Clear(); _col.Clear(); _uv0.Clear(); _uv1.Clear(); _idx.Clear();
-                float mode = b.mode == DrawMode.SdfText ? 1f : 0f;
-                foreach (var v in b.verts)
-                {
-                    _pos.Add(new Vector3(v.x, fh - v.y, 0));
-                    var c = v.c;
-                    _col.Add(new Color32((byte)(Mathf.Clamp01(c.r) * 255f + 0.5f), (byte)(Mathf.Clamp01(c.g) * 255f + 0.5f), (byte)(Mathf.Clamp01(c.b) * 255f + 0.5f), (byte)(Mathf.Clamp01(c.a) * 255f + 0.5f)));
-                    _uv0.Add(new Vector4(v.u, 1f - v.v, mode, b.aux));
-                    _uv1.Add(new Vector4(v.cx0, fh - v.cy1, v.cx1, fh - v.cy0));
-                }
-                _idx.AddRange(b.indices);
-                var mesh = _meshes[i];
-                mesh.Clear();
-                mesh.indexFormat = _pos.Count > 65000 ? IndexFormat.UInt32 : IndexFormat.UInt16;
-                mesh.SetVertices(_pos);
-                mesh.SetColors(_col);
-                mesh.SetUVs(0, _uv0);
-                mesh.SetUVs(1, _uv1);
-                mesh.SetTriangles(_idx, 0, false);
-                Texture tex = b.texture?.GetHandle() as Texture ?? _white;
-                if (b.repeat && tex.wrapMode != TextureWrapMode.Repeat) tex.wrapMode = TextureWrapMode.Repeat;
-                var mpb = _props[i];
-                mpb.Clear();
-                mpb.SetTexture("_MainTex", tex);
-                mpb.SetFloat("_SrgbTex", tex.isDataSRGB ? 1f : 0f);
-                mpb.SetFloat("_AlphaTex", tex is UnityEngine.Texture2D t2 && t2.format == TextureFormat.Alpha8 ? 1f : 0f);
-                _cmd.DrawMesh(mesh, Matrix4x4.identity, MaterialFor(b), 0, 0, mpb);
+                _cmd.CopyTexture(root.Ldr, _gui);
+                _rootDrawer.Record(_cmd, _gui, w, h, batches, null, MaterialFor, _white);
             }
+            else _rootDrawer.Record(_cmd, _gui, w, h, batches, clear, MaterialFor, _white);
             _cmdReady = true;
             RenderingServer.RaiseFramePostDraw();
         }

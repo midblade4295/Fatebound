@@ -210,3 +210,28 @@ Everything the game instantiates exists in Fatebound.GUI with Godot's name (`Lab
   versions are `FromRotation`, `RotatedExact`, `RotatedLocalExact`, `GetRotationExact`, `AffineInverseExact`),
   `Col.Html`/`ToHtml` (`HtmlExact`/`ToHtmlExact`), `Col.FromHsv` (`FromHsvExact`). Use the exact versions in game code.
 - **Untyped dictionaries from JSON hold floats**: `int(d.hp)` -> `(int)d["hp"]` (truncates like GDScript).
+
+## Team porting notes (several agents port at once)
+- **Ownership**: port only the .gd files you were given; never edit another porter's C# files. Calls into files
+  that aren't ported yet are fine if you follow the naming rules (they resolve when those land). Compile errors from
+  files that aren't yours: ignore them (filter the compiler output for your files).
+- **The facade** (Fatebound.GUI / Fatebound.Sim) is shared: don't restructure it. If a Godot API the game uses is
+  missing, add it only when it's small and you've checked Godot's behaviour in /home/claude/godot-src, in a NEW file
+  `GUI/Missing/<YourArea>_<Class>.cs` as a `partial` extension or extension methods where the class allows it (most
+  facade classes are `partial`; if one isn't, list the member in your report instead). List every addition.
+- **The simulation is already C#** (Fatebound.Sim, verified tick-for-tick against the GDScript): don't port
+  siege_sim.gd, moba.gd, moba_kits.gd, moba_vision.gd, siege_land.gd, keep.gd. Their preloads map to
+  `using Sim = Fatebound.Sim.SiegeSim;`, `Moba = Fatebound.Sim.Moba`, `MobaKits = Fatebound.Sim.MobaKits`,
+  `MobaVision = Fatebound.Sim.MobaVision`, `Land = Fatebound.Sim.Land` (siege_land.gd), `Keep = Fatebound.Sim.Keep`.
+  The sim keeps GDScript's names for fields/constants and PascalCases methods (`Sim.height_at(p)` ->
+  `Sim.HeightAt(p)`), but a unit is a typed class (`Fatebound.Sim.Unit`, Unit.g.cs) with the dictionary's keys as
+  fields: `u.hp` -> `u.hp`, `u.get("k", d)` -> the typed field (or `u.Get("k")` for a dynamic key). Read
+  Sim/SiegeSim.cs, Moba*.cs, Types.cs and Unit.g.cs for the exact shapes before translating code that reads the sim.
+- **Autoload**: `BootGuard` (app/boot_guard.gd) is added to the root as "BootGuard" by GameMain;
+  `get_node_or_null("/root/BootGuard")` works as is.
+- **Class names that collide with Godot's**: app/skin.gd is `Fatebound.Game.Skin` (Godot's 3D skin resource is
+  `Fatebound.GUI.Skin` -- write it fully qualified if a game file needs it); meta/platform.gd is
+  `Fatebound.Game.Platform`. app/ui.gd is `Ui`, app/ui2.gd `Ui2`, app/chest3d.gd `Chest3d`, scripts/native_audio.gd
+  `NativeAudio` (Game/NativeAudio.cs). siege/terrain_cache.gd has `class_name SiegeTerrainCache`: name the C# class
+  `TerrainCache` and other files refer to it by that name.
+- Files go under Assets/Fatebound/Game/<App|Meta|Siege|UI>/ mirroring godot/scripts/<app|meta|siege|ui>/.

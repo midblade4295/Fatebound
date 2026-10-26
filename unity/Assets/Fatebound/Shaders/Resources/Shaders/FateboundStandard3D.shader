@@ -192,6 +192,7 @@ Shader "Fatebound/Standard3D"
                 float3 albedo = _Color.rgb * tex.rgb;
                 float alpha = _Color.a * tex.a;
                 if (_VertexColor > 0.5) { albedo *= i.color.rgb; alpha *= i.color.a; }
+                albedo = FB_ApplyDecals(albedo, i.positionWS, i.normalWS);
                 int alphaMode = (int)_AlphaMode;
                 if (alphaMode == 2) clip(alpha - _AlphaScissor);
                 if (alphaMode == 3)

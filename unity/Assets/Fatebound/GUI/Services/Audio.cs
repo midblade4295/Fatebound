@@ -29,7 +29,7 @@ namespace Fatebound.GUI
         void DestroyVoice(object voice);
     }
 
-    public abstract class AudioStream : Resource
+    public abstract partial class AudioStream : Resource
     {
         object _clip;
         double _length = -1;
@@ -59,7 +59,7 @@ namespace Fatebound.GUI
         public virtual bool IsMonophonic() => false;
     }
 
-    public sealed class AudioStreamOggVorbis : AudioStream
+    public sealed partial class AudioStreamOggVorbis : AudioStream
     {
         public bool Loop;
         public double LoopOffset;
@@ -68,7 +68,7 @@ namespace Fatebound.GUI
         internal override bool Looping => Loop;
     }
 
-    public sealed class AudioStreamMP3 : AudioStream
+    public sealed partial class AudioStreamMP3 : AudioStream
     {
         public bool Loop;
         public double LoopOffset;
@@ -77,7 +77,7 @@ namespace Fatebound.GUI
         internal override bool Looping => Loop;
     }
 
-    public sealed class AudioStreamWAV : AudioStream
+    public sealed partial class AudioStreamWAV : AudioStream
     {
         public const int LOOP_DISABLED = 0, LOOP_FORWARD = 1, LOOP_PINGPONG = 2, LOOP_BACKWARD = 3;
         public const int FORMAT_8_BITS = 0, FORMAT_16_BITS = 1, FORMAT_IMA_ADPCM = 2, FORMAT_QOA = 3;
@@ -90,7 +90,7 @@ namespace Fatebound.GUI
     }
 
     /// <summary>Godot's AudioServer, as far as the game reaches it: the Master bus.</summary>
-    public static class AudioServer
+    public static partial class AudioServer
     {
         public static IAudioHost Host;
         static readonly List<string> _buses = new List<string> { "Master" };
@@ -125,7 +125,7 @@ namespace Fatebound.GUI
         }
     }
 
-    public class AudioStreamPlayer : Node
+    public partial class AudioStreamPlayer : Node
     {
         public const int MIX_TARGET_STEREO = 0, MIX_TARGET_SURROUND = 1, MIX_TARGET_CENTER = 2;
         public const int PLAYBACK_TYPE_DEFAULT = 0, PLAYBACK_TYPE_STREAM = 1, PLAYBACK_TYPE_SAMPLE = 2;

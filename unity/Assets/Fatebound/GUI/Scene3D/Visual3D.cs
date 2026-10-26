@@ -189,6 +189,44 @@ namespace Fatebound.GUI
         public GMaterial GetSurfaceOverrideMaterial(int surface) =>
             surface >= 0 && surface < _surfaceOverride.Count ? _surfaceOverride[surface] : null;
 
+        // ---- blend shape weights (Godot's blend_shape_properties; kept for the game code -- the renderer doesn't morph)
+        readonly Dictionary<string, float> _blendShapeValues = new Dictionary<string, float>();
+
+        public int FindBlendShapeByName(string name) => _mesh is ArrayMesh am ? am.BlendShapeNames.IndexOf(name) : -1;
+
+        public double GetBlendShapeValue(int i)
+        {
+            string n = _mesh is ArrayMesh am && (uint)i < (uint)am.BlendShapeNames.Count ? am.BlendShapeNames[i] : null;
+            return n != null && _blendShapeValues.TryGetValue(n, out var v) ? v : 0.0;
+        }
+
+        public void SetBlendShapeValue(int i, double value)
+        {
+            if (!(_mesh is ArrayMesh am) || (uint)i >= (uint)am.BlendShapeNames.Count) { GD.PushError("Index p_blend_shape = " + i + " is out of bounds."); return; }
+            _blendShapeValues[am.BlendShapeNames[i]] = (float)value;
+            MarkRender(RenderDirty.Base);
+        }
+
+        /// <summary>Godot's stored properties (MeshInstance3D::_set) for the baked-asset loader:
+        /// "surface_material_override/N" and "blend_shapes/name".</summary>
+        public override bool SetStoredProperty(string name, Var value)
+        {
+            if (name.StartsWith("surface_material_override/"))
+            {
+                int i = (int)GStr.ToInt(name.Substring(26));
+                ResizeOverrides();
+                if ((uint)i < (uint)_surfaceOverride.Count) SetSurfaceOverrideMaterial(i, value.Obj as GMaterial);
+                else if (value.Obj != null) GD.PushError("Index p_surface = " + i + " is out of bounds.");
+                return true;
+            }
+            if (name.StartsWith("blend_shapes/"))
+            {
+                _blendShapeValues[name.Substring(13)] = (float)value.AsFloat();
+                return true;
+            }
+            return base.SetStoredProperty(name, value);
+        }
+
         /// <summary>get_active_material(surface): the override, else the surface override, else the mesh's own.</summary>
         public GMaterial GetActiveMaterial(int surface)
         {

@@ -10,7 +10,7 @@ namespace Fatebound.GUI
 {
     public enum ProcessModeEnum { Inherit, Pausable, WhenPaused, Always, Disabled }
 
-    public class Node : IGodotObject
+    public partial class Node : IGodotObject
     {
         public const int NOTIFICATION_ENTER_TREE = 10, NOTIFICATION_EXIT_TREE = 11, NOTIFICATION_READY = 13,
             NOTIFICATION_PAUSED = 14, NOTIFICATION_UNPAUSED = 15, NOTIFICATION_PROCESS = 17, NOTIFICATION_PARENTED = 18,
@@ -450,6 +450,8 @@ namespace Fatebound.GUI
         public T GetMeta<T>(string key, T dflt = default) => _meta != null && _meta.TryGetValue(key, out var v) && v is T t ? t : dflt;
         public bool HasMeta(string key) => _meta != null && _meta.ContainsKey(key);
         public void RemoveMeta(string key) => _meta?.Remove(key);
+        /// <summary>get_meta_list() (added for the baked-asset parity check).</summary>
+        public string[] GetMetaList() => _meta == null ? Array.Empty<string>() : new List<string>(_meta.Keys).ToArray();
 
         public void AddToGroup(string g)
         {
@@ -463,7 +465,7 @@ namespace Fatebound.GUI
         public override string ToString() => Name + ":<" + GetType().Name + ">";
     }
 
-    public sealed class SceneTreeTimer
+    public sealed partial class SceneTreeTimer
     {
         public double TimeLeft;
         public bool ProcessAlways, IgnoreTimeScale;
@@ -474,7 +476,7 @@ namespace Fatebound.GUI
     }
 
     /// <summary>The Timer node (one-shot or repeating).</summary>
-    public class Timer : Node
+    public partial class Timer : Node
     {
         public double WaitTime = 1.0;
         public bool OneShot;
@@ -515,7 +517,7 @@ namespace Fatebound.GUI
 
     /// <summary>The scene tree: owns the root viewport, runs a frame (input, process, timers, tweens, deferred calls,
     /// deletions, layout), as Godot's main loop iteration does.</summary>
-    public class SceneTree
+    public partial class SceneTree
     {
         public static SceneTree Current;
         public Viewport Root { get; private set; }
@@ -762,6 +764,9 @@ namespace Fatebound.GUI
             {
                 _physicsAcc -= step;
                 ticks++;
+#if FB3D
+                PhysicsServer3D.FlushQueries(this);     // main.cpp: bodies take the last step's state (flush_queries)...
+#endif
                 FlushTransformNotifications();
                 PhysicsFrame?.Invoke();
                 RebuildProcessLists();
@@ -775,6 +780,9 @@ namespace Fatebound.GUI
                 }
                 FlushDeferred();
                 FlushTransformNotifications();
+#if FB3D
+                PhysicsServer3D.Step(this, pd);         // ...and the spaces step after _physics_process (end_sync + step)
+#endif
             }
             if (ticks == 8) _physicsAcc = 0;
             ProcessFrame?.Invoke();
@@ -843,7 +851,7 @@ namespace Fatebound.GUI
 
     /// <summary>print / push_error / push_warning from the framework: through Fatebound.Sim.GD's sinks (the host points
     /// those at its log).</summary>
-    public static class GD_Log
+    public static partial class GD_Log
     {
         public static void Print(params object[] parts) => Fatebound.Sim.GD.PrintSink?.Invoke(string.Concat(Array.ConvertAll(parts, p => Fatebound.Sim.GFormat.Str(Fatebound.Sim.Var.Of(p)))));
         public static void Error(string s) => Fatebound.Sim.GD.ErrorSink?.Invoke(s);

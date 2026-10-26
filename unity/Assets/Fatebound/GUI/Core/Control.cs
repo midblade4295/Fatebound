@@ -25,7 +25,7 @@ namespace Fatebound.GUI
     public enum CursorShape { Arrow = 0, Ibeam = 1, PointingHand = 2, Cross = 3, Wait = 4, Busy = 5, Drag = 6, CanDrop = 7, Forbidden = 8, Move = 13 }
     public enum LayoutDirectionEnum { Inherited = 0, ApplicationLocale = 1, Ltr = 2, Rtl = 3 }
 
-    public class Control : CanvasItem
+    public partial class Control : CanvasItem
     {
         // ---------- GDScript constant names (Control.SIZE_EXPAND_FILL ...) ----------
         public const SizeFlags SIZE_SHRINK_BEGIN = SizeFlags.ShrinkBegin, SIZE_FILL = SizeFlags.Fill, SIZE_EXPAND = SizeFlags.Expand,

@@ -10,7 +10,7 @@ namespace Fatebound.GUI
     public enum TextureFilterMode { ParentNode = 0, Nearest = 1, Linear = 2, NearestWithMipmaps = 3, LinearWithMipmaps = 4 }
     public enum TextureRepeatMode { ParentNode = 0, Disabled = 1, Enabled = 2, Mirror = 3 }
 
-    public abstract class CanvasItem : Node
+    public abstract partial class CanvasItem : Node
     {
         bool _visible = true;
         Col _modulate = Col.WHITE, _selfModulate = Col.WHITE;
@@ -375,7 +375,7 @@ namespace Fatebound.GUI
     }
 
     /// <summary>Godot's Node2D: position, rotation, scale, skew.</summary>
-    public class Node2D : CanvasItem
+    public partial class Node2D : CanvasItem
     {
         Vec2 _pos, _scale = Vec2.One;
         double _rot, _skew;
@@ -429,7 +429,7 @@ namespace Fatebound.GUI
         public Vec2 ToGlobal(Vec2 local) => GetGlobalTransform().Xform(local);
     }
 
-    public class Sprite2D : Node2D
+    public partial class Sprite2D : Node2D
     {
         Texture2D _tex;
         public Texture2D Texture { get => _tex; set { _tex = value; QueueRedraw(); } }
@@ -472,7 +472,7 @@ namespace Fatebound.GUI
         }
     }
 
-    public class Polygon2D : Node2D
+    public partial class Polygon2D : Node2D
     {
         public Vec2[] Polygon = new Vec2[0];
         public Col Color = Col.WHITE;
@@ -508,7 +508,7 @@ namespace Fatebound.GUI
     }
 
     /// <summary>A separate canvas drawn above (layer &gt; 0) or below the main one, with its own transform.</summary>
-    public class CanvasLayer : Node
+    public partial class CanvasLayer : Node
     {
         int _layer = 1;
         bool _visible = true;
@@ -544,7 +544,7 @@ namespace Fatebound.GUI
     // ---------- materials ----------
     /// <summary>Godot's Material (a Resource): render_priority, next_pass. Subclasses bump `version` (EmitChanged) when a
     /// property changes so the renderer rebuilds its material.</summary>
-    public abstract class GMaterial : Resource
+    public abstract partial class GMaterial : Resource
     {
         int _renderPriority;
         GMaterial _nextPass;
@@ -556,7 +556,7 @@ namespace Fatebound.GUI
 
     public enum CanvasBlendMode { Mix = 0, Add = 1, Sub = 2, Mul = 3, PremultAlpha = 4 }
 
-    public sealed class CanvasItemMaterial : GMaterial
+    public sealed partial class CanvasItemMaterial : GMaterial
     {
         public CanvasBlendMode BlendMode = CanvasBlendMode.Mix;
         public bool ParticlesAnimation;
@@ -567,7 +567,7 @@ namespace Fatebound.GUI
     /// <summary>A Godot shader by path ("res://scripts/app/ui_skin.gdshader"); the host maps it to its own port.</summary>
     /// <summary>Godot's Shader: a .gdshader (load()/preload() give the one per path) or one built in code
     /// (Shader.new() + code). The renderer finds its Unity port by path or by code (Client ShaderRegistry).</summary>
-    public sealed class Shader : Resource
+    public sealed partial class Shader : Resource
     {
         public string Code;
         public Shader() { }
@@ -584,7 +584,7 @@ namespace Fatebound.GUI
         }
     }
 
-    public sealed class ShaderMaterial : GMaterial
+    public sealed partial class ShaderMaterial : GMaterial
     {
         public Shader Shader;
         readonly Dictionary<string, object> _params = new Dictionary<string, object>();
@@ -612,7 +612,7 @@ namespace Fatebound.GUI
     }
 
     /// <summary>The RenderingServer calls the UI code makes on a canvas item.</summary>
-    public static class RenderingServer
+    public static partial class RenderingServer
     {
         public static void CanvasItemAddPolygon(DrawList ci, IList<Vec2> points, IList<Col> colors, IList<Vec2> uvs = null, Texture2D texture = null) =>
             ci.AddPolygon(points, colors, uvs, texture);

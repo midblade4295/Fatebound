@@ -42,7 +42,7 @@ namespace Fatebound.GUI
     public enum OverrunFlags { NoTrim = 0, Trim = 1, TrimWordOnly = 2, AddEllipsis = 4, EnforceEllipsis = 8, JustificationAware = 16 }
 
     /// <summary>The TextServer namespace constants the UI code refers to (TextServer.AUTOWRAP_WORD_SMART ...).</summary>
-    public static class TextServer
+    public static partial class TextServer
     {
         public const AutowrapMode AUTOWRAP_OFF = AutowrapMode.Off;
         public const AutowrapMode AUTOWRAP_ARBITRARY = AutowrapMode.Arbitrary;
@@ -70,7 +70,7 @@ namespace Fatebound.GUI
     }
 
     // ---------- fonts ----------
-    public abstract class Font : Resource
+    public abstract partial class Font : Resource
     {
         public const int SUBPIXEL_HALF_MAX_SIZE = 20;
 
@@ -236,7 +236,7 @@ namespace Fatebound.GUI
         }
     }
 
-    public sealed class FontFile : Font
+    public sealed partial class FontFile : Font
     {
         public TrueTypeFace Face;
         readonly List<FontFile> _rids = new List<FontFile>();
@@ -345,7 +345,7 @@ namespace Fatebound.GUI
     }
 
     /// <summary>FontVariation: a base font with extra spacing / emboldening.</summary>
-    public sealed class FontVariation : Font
+    public sealed partial class FontVariation : Font
     {
         public Font BaseFont;
         public float spacingTop, spacingBottom, spacingGlyph, spacingSpace, variationEmbolden;
@@ -358,7 +358,7 @@ namespace Fatebound.GUI
     }
 
     // ---------- the SDF atlas ----------
-    public sealed class GlyphSlot
+    public sealed partial class GlyphSlot
     {
         public AtlasPage page;
         public Vec2 uv0, uv1;
@@ -366,7 +366,7 @@ namespace Fatebound.GUI
         public float ox, oy, w, h;
     }
 
-    public sealed class AtlasPage : CpuTexture
+    public sealed partial class AtlasPage : CpuTexture
     {
         public readonly Image img;
         public AtlasPage(int size) { img = Image.CreateAlpha(size, size); linearFilter = true; }
@@ -377,7 +377,7 @@ namespace Fatebound.GUI
         public override Image GetImage() => img;
     }
 
-    public sealed class GlyphAtlas
+    public sealed partial class GlyphAtlas
     {
         public const float BASE = 48f;
         public const float SPREAD = 8f;
@@ -446,7 +446,7 @@ namespace Fatebound.GUI
     }
 
     // ---------- shaped text ----------
-    public struct ShapedGlyph
+    public partial struct ShapedGlyph
     {
         public int start, end, count, repeat;
         public float advance, xOff, yOff;
@@ -456,7 +456,7 @@ namespace Fatebound.GUI
         public int cp;
     }
 
-    public sealed class ShapedText
+    public sealed partial class ShapedText
     {
         public List<ShapedGlyph> glyphs = new List<ShapedGlyph>();
         public int rangeStart, rangeEnd;
@@ -871,7 +871,7 @@ namespace Fatebound.GUI
     }
 
     /// <summary>Shared helpers for multi-line text (Font.draw_multiline_string, RichTextLabel).</summary>
-    public static class TextLayout
+    public static partial class TextLayout
     {
         public static List<ShapedText> Paragraphs(string text, Font font, int size, float width, LineBreakFlags flags)
         {
@@ -887,7 +887,7 @@ namespace Fatebound.GUI
     }
 
     /// <summary>ThemeDB: the project-wide fallback font and size.</summary>
-    public static class ThemeDB
+    public static partial class ThemeDB
     {
         static Font _fallback;
         public static int FallbackFontSize = 16;

@@ -7,7 +7,7 @@ using Fatebound.Sim;
 
 namespace Fatebound.GUI
 {
-    public class CPUParticles2D : Node2D
+    public partial class CPUParticles2D : Node2D
     {
         public enum EmissionShapeEnum { Point = 0, Sphere = 1, SphereSurface = 2, Rectangle = 3, Points = 4, DirectedPoints = 5, Ring = 6 }
         public const EmissionShapeEnum EMISSION_SHAPE_POINT = EmissionShapeEnum.Point, EMISSION_SHAPE_SPHERE = EmissionShapeEnum.Sphere,

@@ -6,7 +6,8 @@
 // Godot's Mobile renderer keeps the scene in an RGB10A2 buffer holding colour / 2: every value it reads is clamped
 // to [0, 2] -- reproduced here (FB_BUF) on the scene and on every glow level, so highlights glow as they did.
 // Pixel addressing is by SV_Position like Godot's gl_FragCoord (memory rows on every API: no flips needed).
-// The output is linear; the viewport's texture is sRGB, so the hardware encodes it as Godot's convert_to_srgb did.
+// The output is sRGB-encoded (Godot's convert_to_srgb) into the viewport's raw RGBA8 texture: Godot's 2D colour space,
+// where the viewport's own canvas is drawn on top and the GUI samples it.
 Shader "Hidden/Fatebound/Post"
 {
     HLSLINCLUDE
@@ -258,9 +259,9 @@ Shader "Hidden/Fatebound/Post"
                     color.rgb = linear_to_srgb(color.rgb);
                     color.rgb = lerp(0.5, color.rgb, _Bcs.y);
                     color.rgb = lerp(dot(1.0, color.rgb) * (1.0 / 3.0), color.rgb, _Bcs.z);
-                    color.rgb = srgb_to_linear(saturate(color.rgb));    // (the sRGB target encodes it back)
+                    color.rgb = saturate(color.rgb);
                 }
-                else color.rgb = saturate(color.rgb);
+                else color.rgb = linear_to_srgb(saturate(color.rgb));     // convert_to_srgb
                 if (_Transparent < 0.5) color.a = 1.0;
                 return color;
             }

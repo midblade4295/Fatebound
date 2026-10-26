@@ -7,7 +7,7 @@ using Fatebound.Sim;
 
 namespace Fatebound.GUI
 {
-    public static class Time
+    public static partial class Time
     {
         public const int MONTH_JANUARY = 1, MONTH_FEBRUARY = 2, MONTH_MARCH = 3, MONTH_APRIL = 4, MONTH_MAY = 5, MONTH_JUNE = 6,
             MONTH_JULY = 7, MONTH_AUGUST = 8, MONTH_SEPTEMBER = 9, MONTH_OCTOBER = 10, MONTH_NOVEMBER = 11, MONTH_DECEMBER = 12;

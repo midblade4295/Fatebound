@@ -6,7 +6,7 @@ using Fatebound.Sim;
 
 namespace Fatebound.GUI
 {
-    public class Resource
+    public partial class Resource
     {
         public string ResourcePath = "";
         public string ResourceName = "";
@@ -34,7 +34,7 @@ namespace Fatebound.GUI
         void ReleaseTexture(object handle);
     }
 
-    public static class ResourceLoader
+    public static partial class ResourceLoader
     {
         public static IGuiHost Host;
         static readonly Dictionary<string, WeakReference<Resource>> _cache = new Dictionary<string, WeakReference<Resource>>();
@@ -47,7 +47,15 @@ namespace Fatebound.GUI
             return path;
         }
 
-        public static bool Exists(string path) => Host != null && Host.FileExists(Normalize(path));
+        public static bool Exists(string path)
+        {
+            path = Normalize(path);
+#if FB3D
+            // baked scenes/resources: answered from the bake's manifest (the host would load the whole file to tell)
+            if (BakedLoader.Handles(path)) { bool? b = BakedLoader.InManifest(path); if (b.HasValue) return b.Value; }
+#endif
+            return Host != null && Host.FileExists(path);
+        }
 
         /// <summary>load(path): cached like Godot's resource cache.</summary>
         public static Resource Load(string path)
@@ -58,6 +66,7 @@ namespace Fatebound.GUI
                 if (_pinned.TryGetValue(path, out var p)) return p;
                 if (_cache.TryGetValue(path, out var w) && w.TryGetTarget(out var r)) return r;
             }
+            if (JoinThreadLoad(path, out var threaded)) return threaded;       // (being loaded by load_threaded_request)
             Resource res = LoadUncached(path);
             if (res == null) return null;
             res.ResourcePath = path;
@@ -74,6 +83,14 @@ namespace Fatebound.GUI
         static Resource LoadUncached(string path)
         {
             string ext = System.IO.Path.GetExtension(path).ToLowerInvariant();
+#if FB3D
+            // .glb .gltf .scn .tscn .res .tres: baked by tools/bake (any thread: the bytes come through the main thread)
+            if (BakedLoader.Handles(path)) return BakedLoader.Load(path);
+#endif
+            bool texture = ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".webp" || ext == ".svg" || ext == ".bmp" || ext == ".tga";
+            // off the main thread (a threaded load's dependency): textures resolve on first use, the rest via the main thread
+            if (!PlatformHost.IsMainThread)
+                return texture ? new LoadedTexture(path) : OnMainThread(() => LoadUncached(path));
             switch (ext)
             {
                 case ".ttf":
@@ -109,7 +126,7 @@ namespace Fatebound.GUI
     }
 
     // ---------- textures ----------
-    public abstract class Texture2D : Resource
+    public abstract partial class Texture2D : Resource
     {
         public abstract int GetWidth();
         public abstract int GetHeight();
@@ -127,18 +144,41 @@ namespace Fatebound.GUI
         public bool linearFilter = true;
     }
 
-    public sealed class LoadedTexture : Texture2D
+    public sealed partial class LoadedTexture : Texture2D
     {
-        readonly int _w, _h;
-        readonly object _handle;
+        int _w, _h;
+        object _handle;
+        volatile bool _pending;
         public LoadedTexture(string path, int w, int h, object handle) { ResourcePath = path; _w = w; _h = h; _handle = handle; }
-        public override int GetWidth() => _w;
-        public override int GetHeight() => _h;
-        public override object GetHandle() => _handle;
+
+        /// <summary>A texture loaded off the main thread (a threaded load's dependency): the host loads it on first use
+        /// (on the main thread; a use from another thread waits for it there).</summary>
+        public LoadedTexture(string path) { ResourcePath = path; _pending = true; }
+
+        void Resolve()
+        {
+            if (!_pending) return;
+            lock (this)
+            {
+                if (!_pending) return;
+                string path = ResourcePath;
+                ResourceLoader.OnMainThread(() =>
+                {
+                    if (ResourceLoader.Host == null || !ResourceLoader.Host.LoadTexture(path, out _w, out _h, out _handle))
+                        GD_Log.Error("load: no texture " + path);
+                    return true;
+                });
+                _pending = false;
+            }
+        }
+
+        public override int GetWidth() { Resolve(); return _w; }
+        public override int GetHeight() { Resolve(); return _h; }
+        public override object GetHandle() { Resolve(); return _handle; }
     }
 
     /// <summary>A texture whose pixels live on the CPU (ImageTexture, gradients, glyph atlases): uploaded when changed.</summary>
-    public abstract class CpuTexture : Texture2D
+    public abstract partial class CpuTexture : Texture2D
     {
         object _handle;
         int _uploaded = -1;
@@ -172,7 +212,7 @@ namespace Fatebound.GUI
     }
 
     /// <summary>Work that must run on the main thread (texture release from a finalizer).</summary>
-    public static class MainThread
+    public static partial class MainThread
     {
         static readonly List<(Action<object>, object)> _q = new List<(Action<object>, object)>();
         public static void Post(Action<object> a, object arg) { lock (_q) _q.Add((a, arg)); }
@@ -190,7 +230,7 @@ namespace Fatebound.GUI
         }
     }
 
-    public sealed class ImageTexture : CpuTexture
+    public sealed partial class ImageTexture : CpuTexture
     {
         Image _src;
         public static ImageTexture CreateFromImage(Image img)
@@ -208,7 +248,7 @@ namespace Fatebound.GUI
         public void SetSizeOverride(Vec2 s) { }
     }
 
-    public sealed class AtlasTexture : Texture2D
+    public sealed partial class AtlasTexture : Texture2D
     {
         public Texture2D atlas;
         public Rect2 region;
@@ -235,7 +275,7 @@ namespace Fatebound.GUI
 
     /// <summary>A SubViewport's render target as seen by the UI (the host fills the handle).</summary>
     /// <summary>A viewport's picture (SubViewport.get_texture()): the renderer sets `handle` to its render texture.</summary>
-    public sealed class ViewportTexture : Texture2D
+    public sealed partial class ViewportTexture : Texture2D
     {
         public int width = 1, height = 1;
         public object handle;
@@ -252,7 +292,7 @@ namespace Fatebound.GUI
         public override object GetHandle() => Resolve != null ? Resolve(this) ?? handle : handle;
     }
 
-    public sealed class PlaceholderTexture2D : Texture2D
+    public sealed partial class PlaceholderTexture2D : Texture2D
     {
         public Vec2 Size = new Vec2(1, 1);
         public override int GetWidth() => (int)Size.x;
@@ -261,10 +301,10 @@ namespace Fatebound.GUI
     }
 
     // ---------- Image ----------
-    public enum ImageFormat { L8 = 0, LA8 = 1, R8 = 2, RG8 = 3, RGB8 = 4, RGBA8 = 5, RGBAF = 11 }
+    public enum ImageFormat { L8 = 0, LA8 = 1, R8 = 2, RG8 = 3, RGB8 = 4, RGBA8 = 5, RF = 8, RGBAF = 11 }
 
     /// <summary>Godot's Image, kept as RGBA floats-free bytes (every format stored as RGBA8).</summary>
-    public sealed class Image : Resource
+    public sealed partial class Image : Resource
     {
         public int Width, Height;
         public byte[] Data;
@@ -320,6 +360,7 @@ namespace Fatebound.GUI
             if (x < 0 || y < 0 || x >= Width || y >= Height) return;
             if (AlphaOnly) { Data[y * Width + x] = B(c.a); return; }
             int i = (y * Width + x) * 4;
+            if (Format == ImageFormat.RF) { WriteRF(i, c.r); return; }      // (baked FORMAT_RF images: raw floats, see SetStoredProperty)
             Data[i] = B(c.r); Data[i + 1] = B(c.g); Data[i + 2] = B(c.b); Data[i + 3] = B(c.a);
         }
 
@@ -330,6 +371,7 @@ namespace Fatebound.GUI
             if (x < 0 || y < 0 || x >= Width || y >= Height) return new Col(0f, 0f, 0f, 0f);
             if (AlphaOnly) return new Col(1f, 1f, 1f, Data[y * Width + x] / 255f);
             int i = (y * Width + x) * 4;
+            if (Format == ImageFormat.RF) return new Col(BitConverter.ToSingle(Data, i), 0f, 0f, 1f);
             return new Col(Data[i] / 255f, Data[i + 1] / 255f, Data[i + 2] / 255f, Data[i + 3] / 255f);
         }
 
@@ -348,6 +390,52 @@ namespace Fatebound.GUI
         }
 
         public bool IsEmpty() => Data == null || Width == 0 || Height == 0;
+
+        void WriteRF(int i, float v)
+        {
+            byte[] b = BitConverter.GetBytes(v);
+            Data[i] = b[0]; Data[i + 1] = b[1]; Data[i + 2] = b[2]; Data[i + 3] = b[3];
+        }
+
+        /// <summary>Godot's stored "data" ({width, height, format (Image::format_names), mipmaps, data}) -- the baked-asset
+        /// loader (Image resources: assets/terrain/height.res, pathmask.res, the cache's blood splats). 8-bit formats become
+        /// RGBA8 as everywhere in this Image; FORMAT_RF ("RFloat", the height map) keeps its raw floats (get_data() is what
+        /// Godot's is: the game reads it with to_float32_array()). Mipmaps are dropped (only the base level is kept).</summary>
+        public override bool SetStoredProperty(string name, Var value)
+        {
+            if (name != "data") return false;
+            var d = value.AsDict();
+            if (d == null || !d.Has("width") || !d.Has("height") || !d.Has("format") || !d.Has("data")) { GD_Log.Error("Image: bad stored data."); return true; }
+            int w = d["width"].AsInt(), h = d["height"].AsInt();
+            var bytes = d["data"].Obj as byte[] ?? Array.Empty<byte>();
+            string f = d["format"].AsString();
+            AlphaOnly = false;
+            Width = w;
+            Height = h;
+            switch (f)
+            {
+                case "RFloat":
+                    Format = ImageFormat.RF;
+                    Data = new byte[w * h * 4];
+                    Array.Copy(bytes, Data, Math.Min(bytes.Length, Data.Length));
+                    break;
+                case "Lum8": case "LumAlpha8": case "Red8": case "RGB8": case "RGBA8":
+                {
+                    var fmt = f == "Lum8" ? ImageFormat.L8 : f == "LumAlpha8" ? ImageFormat.LA8 : f == "Red8" ? ImageFormat.R8 : f == "RGB8" ? ImageFormat.RGB8 : ImageFormat.RGBA8;
+                    var img = CreateFromData(w, h, false, fmt, bytes);
+                    Data = img.Data;
+                    Format = ImageFormat.RGBA8;
+                    break;
+                }
+                default:
+                    GD_Log.Error("Image: stored format " + f + " is not supported by the port.");
+                    Data = new byte[w * h * 4];
+                    Format = ImageFormat.RGBA8;
+                    break;
+            }
+            EmitChanged();
+            return true;
+        }
         public void GenerateMipmaps() { }
         public void Convert(ImageFormat f) { }
 
@@ -388,7 +476,7 @@ namespace Fatebound.GUI
     }
 
     // ---------- Gradient, Curve ----------
-    public sealed class Gradient : Resource
+    public sealed partial class Gradient : Resource
     {
         public enum InterpolationModeEnum { Linear = 0, Constant = 1, Cubic = 2 }
         public float[] Offsets = { 0f, 1f };
@@ -487,47 +575,381 @@ namespace Fatebound.GUI
         }
     }
 
-    public sealed class Curve : Resource
+    /// <summary>Godot's Curve (scene/resources/curve.cpp): points kept inside the value and domain ranges, the cubic
+    /// Bezier with tangents a third of the way, linear tangent modes, the baked cache (bake_resolution 100).</summary>
+    public sealed partial class Curve : Resource
     {
-        public struct Point { public float x, y, leftTangent, rightTangent; }
-        public readonly List<Point> Points = new List<Point>();
-        public double MinValue = 0, MaxValue = 1;
+        public const int TANGENT_FREE = 0, TANGENT_LINEAR = 1, TANGENT_MODE_COUNT = 2;
+        const float MIN_X_RANGE = 0.01f, MIN_Y_RANGE = 0.01f, CMP_EPSILON = 0.00001f;
 
-        public int AddPoint(Vec2 p, double left = 0, double right = 0)
+        public partial struct Point
         {
-            var pt = new Point { x = p.x, y = p.y, leftTangent = (float)left, rightTangent = (float)right };
-            int i = 0;
-            while (i < Points.Count && Points[i].x <= p.x) i++;
-            Points.Insert(i, pt);
-            EmitChanged();
+            public float x, y, leftTangent, rightTangent;
+            public int leftMode, rightMode;
+        }
+
+        public readonly List<Point> Points = new List<Point>();
+        float _minValue = 0f, _maxValue = 1f, _minDomain = 0f, _maxDomain = 1f;
+        int _bakeResolution = 100;
+        float[] _baked = Array.Empty<float>();
+        bool _bakedDirty = true;
+        public event Action RangeChanged, DomainChanged;
+
+        void MarkDirty() { _bakedDirty = true; EmitChanged(); }
+
+        public double MinValue
+        {
+            get => _minValue;
+            set
+            {
+                _minValue = Math.Min((float)value, _maxValue - MIN_Y_RANGE);
+                foreach (var p in Points) _minValue = Math.Min(_minValue, p.y);
+                RangeChanged?.Invoke();
+            }
+        }
+
+        public double MaxValue
+        {
+            get => _maxValue;
+            set
+            {
+                _maxValue = Math.Max((float)value, _minValue + MIN_Y_RANGE);
+                foreach (var p in Points) _maxValue = Math.Max(_maxValue, p.y);
+                RangeChanged?.Invoke();
+            }
+        }
+
+        public double MinDomain
+        {
+            get => _minDomain;
+            set
+            {
+                _minDomain = Math.Min((float)value, _maxDomain - MIN_X_RANGE);
+                if (Points.Count > 0 && _minDomain > Points[0].x) _minDomain = Points[0].x;
+                MarkDirty();
+                DomainChanged?.Invoke();
+            }
+        }
+
+        public double MaxDomain
+        {
+            get => _maxDomain;
+            set
+            {
+                _maxDomain = Math.Max((float)value, _minDomain + MIN_X_RANGE);
+                if (Points.Count > 0 && _maxDomain < Points[Points.Count - 1].x) _maxDomain = Points[Points.Count - 1].x;
+                MarkDirty();
+                DomainChanged?.Invoke();
+            }
+        }
+
+        public double GetValueRange() => _maxValue - _minValue;
+        public double GetDomainRange() => _maxDomain - _minDomain;
+
+        public int BakeResolution
+        {
+            get => _bakeResolution;
+            set
+            {
+                if (value < 1 || value > 1000) { GD_Log.Error("Curve: bake resolution out of range."); return; }
+                _bakeResolution = value;
+                _bakedDirty = true;
+            }
+        }
+
+        public int PointCount
+        {
+            get => Points.Count;
+            set
+            {
+                int n = Math.Max(0, value);
+                if (n < Points.Count) Points.RemoveRange(n, Points.Count - n);
+                else while (Points.Count < n) Points.Add(new Point());
+                MarkDirty();
+            }
+        }
+
+        public int GetPointCount() => Points.Count;
+
+        int AddPointInternal(Vec2 pos, float left, float right, int leftMode, int rightMode, bool markDirty)
+        {
+            // Points must remain within the given value and domain ranges.
+            float px = Math.Max(_minDomain, Math.Min(_maxDomain, pos.x));
+            float py = Math.Max(_minValue, Math.Min(_maxValue, pos.y));
+            var pt = new Point { x = px, y = py, leftTangent = left, rightTangent = right, leftMode = leftMode, rightMode = rightMode };
+            int ret;
+            if (Points.Count == 0)
+            {
+                Points.Add(pt);
+                ret = 0;
+            }
+            else if (Points.Count == 1)
+            {
+                float diff = px - Points[0].x;
+                if (diff > 0) { Points.Add(pt); ret = 1; }
+                else { Points.Insert(0, pt); ret = 0; }
+            }
+            else
+            {
+                int i = GetIndex(px);
+                if (i == 0 && px < Points[0].x) { Points.Insert(0, pt); ret = 0; }
+                else { ++i; Points.Insert(i, pt); ret = i; }
+            }
+            UpdateAutoTangents(ret);
+            if (markDirty) MarkDirty();
+            return ret;
+        }
+
+        public int AddPoint(Vec2 position, double leftTangent = 0, double rightTangent = 0, int leftMode = TANGENT_FREE, int rightMode = TANGENT_FREE)
+            => AddPointInternal(position, (float)leftTangent, (float)rightTangent, leftMode, rightMode, true);
+
+        public int GetIndex(double offset)
+        {
+            // Lower-bound float binary search.
+            float o = (float)offset;
+            int imin = 0, imax = Points.Count - 1;
+            while (imax - imin > 1)
+            {
+                int m = (imin + imax) / 2;
+                float a = Points[m].x, b = Points[m + 1].x;
+                if (a < o && b < o) imin = m;
+                else if (a > o) imax = m;
+                else return m;
+            }
+            // Will happen if the offset is out of bounds.
+            if (o > Points[imax].x) return imax;
+            return imin;
+        }
+
+        public void CleanDupes()
+        {
+            bool dirty = false;
+            for (int i = 1; i < Points.Count; ++i)
+            {
+                float diff = Points[i - 1].x - Points[i].x;
+                if (diff <= CMP_EPSILON) { Points.RemoveAt(i); --i; dirty = true; }
+            }
+            if (dirty) MarkDirty();
+        }
+
+        bool Bad(int i)
+        {
+            if (i >= 0 && i < Points.Count) return false;
+            GD_Log.Error("Curve: index " + i + " out of range (" + Points.Count + ").");
+            return true;
+        }
+
+        static float Slope(Point from, Point to)
+        {
+            // (to - from).normalized(), then y / x -- as Godot computes it
+            float dx = to.x - from.x, dy = to.y - from.y;
+            float l = (float)Math.Sqrt(dx * dx + dy * dy);
+            if (l != 0f) { dx /= l; dy /= l; }
+            return dy / dx;
+        }
+
+        public void SetPointLeftTangent(int i, double t)
+        {
+            if (Bad(i)) return;
+            var p = Points[i]; p.leftTangent = (float)t; p.leftMode = TANGENT_FREE; Points[i] = p;
+            MarkDirty();
+        }
+
+        public void SetPointRightTangent(int i, double t)
+        {
+            if (Bad(i)) return;
+            var p = Points[i]; p.rightTangent = (float)t; p.rightMode = TANGENT_FREE; Points[i] = p;
+            MarkDirty();
+        }
+
+        public void SetPointLeftMode(int i, int mode)
+        {
+            if (Bad(i)) return;
+            var p = Points[i];
+            p.leftMode = mode;
+            if (i > 0 && mode == TANGENT_LINEAR) p.leftTangent = Slope(p, Points[i - 1]);
+            Points[i] = p;
+            MarkDirty();
+        }
+
+        public void SetPointRightMode(int i, int mode)
+        {
+            if (Bad(i)) return;
+            var p = Points[i];
+            p.rightMode = mode;
+            if (i + 1 < Points.Count && mode == TANGENT_LINEAR) p.rightTangent = Slope(p, Points[i + 1]);
+            Points[i] = p;
+            MarkDirty();
+        }
+
+        public double GetPointLeftTangent(int i) => Bad(i) ? 0 : Points[i].leftTangent;
+        public double GetPointRightTangent(int i) => Bad(i) ? 0 : Points[i].rightTangent;
+        public int GetPointLeftMode(int i) => Bad(i) ? TANGENT_FREE : Points[i].leftMode;
+        public int GetPointRightMode(int i) => Bad(i) ? TANGENT_FREE : Points[i].rightMode;
+        public Vec2 GetPointPosition(int i) => Bad(i) ? Vec2.Zero : new Vec2(Points[i].x, Points[i].y);
+
+        public void RemovePoint(int i)
+        {
+            if (Bad(i)) return;
+            Points.RemoveAt(i);
+            MarkDirty();
+        }
+
+        public void ClearPoints()
+        {
+            if (Points.Count == 0) return;
+            Points.Clear();
+            MarkDirty();
+        }
+
+        public void SetPointValue(int i, double y)
+        {
+            if (Bad(i)) return;
+            var p = Points[i]; p.y = (float)y; Points[i] = p;
+            UpdateAutoTangents(i);
+            MarkDirty();
+        }
+
+        public int SetPointOffset(int index, double offset)
+        {
+            if (Bad(index)) return -1;
+            var p = Points[index];
+            Points.RemoveAt(index);
+            int i = AddPointInternal(new Vec2((float)offset, p.y), p.leftTangent, p.rightTangent, p.leftMode, p.rightMode, false);
+            if (index != i && index < Points.Count) UpdateAutoTangents(index);
+            UpdateAutoTangents(i);
+            MarkDirty();
             return i;
         }
 
-        public double Sample(double x)
+        void UpdateAutoTangents(int index)
         {
-            if (Points.Count == 0) return 0;
-            if (Points.Count == 1 || x <= Points[0].x) return Points[0].y;
-            if (x >= Points[Points.Count - 1].x) return Points[Points.Count - 1].y;
-            int i = 0;
-            while (i < Points.Count - 2 && x > Points[i + 1].x) i++;
-            var a = Points[i];
-            var b = Points[i + 1];
-            float d = b.x - a.x;
-            if (d <= 0) return a.y;
-            float t = (float)((x - a.x) / d);
-            float y0 = a.y, y1 = a.y + a.rightTangent * d / 3f, y2 = b.y - b.leftTangent * d / 3f, y3 = b.y;
-            float omt = 1f - t;
-            return omt * omt * omt * y0 + 3f * omt * omt * t * y1 + 3f * omt * t * t * y2 + t * t * t * y3;
+            var p = Points[index];
+            if (index > 0)
+            {
+                if (p.leftMode == TANGENT_LINEAR) p.leftTangent = Slope(p, Points[index - 1]);
+                var q = Points[index - 1];
+                if (q.rightMode == TANGENT_LINEAR) { q.rightTangent = Slope(p, q); Points[index - 1] = q; }
+            }
+            if (index + 1 < Points.Count)
+            {
+                if (p.rightMode == TANGENT_LINEAR) p.rightTangent = Slope(p, Points[index + 1]);
+                var q = Points[index + 1];
+                if (q.leftMode == TANGENT_LINEAR) { q.leftTangent = Slope(p, q); Points[index + 1] = q; }
+            }
+            Points[index] = p;
         }
 
-        public double SampleBaked(double x) => Sample(x);
+        public double Sample(double offset)
+        {
+            if (Points.Count == 0) return 0;
+            if (Points.Count == 1) return Points[0].y;
+            int i = GetIndex(offset);
+            if (i == Points.Count - 1) return Points[i].y;
+            float local = (float)offset - Points[i].x;
+            if (i == 0 && local <= 0) return Points[0].y;
+            return SampleLocalNoCheck(i, local);
+        }
+
+        public double SampleLocalNoCheck(int index, double localOffset)
+        {
+            var a = Points[index];
+            var b = Points[index + 1];
+            // Control points are chosen at equal distances.
+            float d = b.x - a.x;
+            if (Math.Abs(d) < CMP_EPSILON) return b.y;
+            float t = (float)localOffset / d;
+            d /= 3f;
+            float yac = a.y + d * a.rightTangent;
+            float ybc = b.y - d * b.leftTangent;
+            // Math::bezier_interpolate
+            float omt = 1f - t, omt2 = omt * omt, omt3 = omt2 * omt, t2 = t * t, t3 = t2 * t;
+            return a.y * omt3 + yac * omt2 * t * 3f + ybc * omt * t2 * 3f + b.y * t3;
+        }
+
+        public void Bake()
+        {
+            _baked = new float[_bakeResolution];
+            for (int i = 1; i < _bakeResolution - 1; ++i)
+            {
+                float x = (float)GetDomainRange() * i / (float)(_bakeResolution - 1) + _minDomain;
+                _baked[i] = (float)Sample(x);
+            }
+            if (Points.Count != 0)
+            {
+                _baked[0] = Points[0].y;
+                _baked[_baked.Length - 1] = Points[Points.Count - 1].y;
+            }
+            _bakedDirty = false;
+        }
+
+        public double SampleBaked(double offset)
+        {
+            if (double.IsNaN(offset) || double.IsInfinity(offset)) { GD_Log.Error("Offset is non-finite"); return 0; }
+            if (_bakedDirty) Bake();
+            if (_baked.Length == 0) return Points.Count == 0 ? 0 : Points[0].y;
+            if (_baked.Length == 1) return _baked[0];
+            float fi = ((float)offset - _minDomain) / (float)GetDomainRange() * (_baked.Length - 1);
+            int i = (int)Math.Floor(fi);
+            if (i < 0) { i = 0; fi = 0; }
+            else if (i >= _baked.Length) { i = _baked.Length - 1; fi = 0; }
+            if (i + 1 < _baked.Length)
+            {
+                float t = fi - i;
+                return _baked[i] + (_baked[i + 1] - _baked[i]) * t;
+            }
+            return _baked[_baked.Length - 1];
+        }
+
+        /// <summary>Godot's stored properties (Curve::set_data / set_limits / point_count) -- the baked-asset loader:
+        /// "_data" = [position, left_tangent, right_tangent, left_mode, right_mode] per point, set as is (Godot doesn't
+        /// re-sort or clamp here); "_limits" = [min_value, max_value, min_domain, max_domain].</summary>
+        public override bool SetStoredProperty(string name, Var value)
+        {
+            switch (name)
+            {
+                case "_data":
+                {
+                    var a = value.AsArr();
+                    if (a == null || a.Size() % 5 != 0) { GD_Log.Error("Curve: bad _data."); return true; }
+                    Points.Clear();
+                    for (int i = 0; i < a.Size(); i += 5)
+                    {
+                        var p = a[i].AsVec2();
+                        Points.Add(new Point { x = p.x, y = p.y, leftTangent = (float)a[i + 1].AsFloat(), rightTangent = (float)a[i + 2].AsFloat(),
+                            leftMode = a[i + 3].AsInt(), rightMode = a[i + 4].AsInt() });
+                    }
+                    MarkDirty();
+                    return true;
+                }
+                case "_limits":
+                {
+                    var a = value.AsArr();
+                    if (a == null || a.Size() != 4) { _minValue = 0; _maxValue = 1; _minDomain = 0; _maxDomain = 1; return true; }
+                    _minValue = (float)a[0].AsFloat();
+                    _maxValue = (float)a[1].AsFloat();
+                    _minDomain = (float)a[2].AsFloat();
+                    _maxDomain = (float)a[3].AsFloat();
+                    _bakedDirty = true;
+                    return true;
+                }
+                case "point_count":
+                    PointCount = value.AsInt();
+                    return true;
+                case "bake_resolution":
+                    BakeResolution = value.AsInt();
+                    return true;
+            }
+            return false;
+        }
     }
 
-    public sealed class GradientTexture1D : CpuTexture
+    public sealed partial class GradientTexture1D : CpuTexture
     {
         Gradient _g;
         int _w = 256;
-        public bool UseHdr;
+        bool _hdr;
+        public bool UseHdr { get => _hdr; set { _hdr = value; MarkDirty(); } }
         public Gradient Gradient { get => _g; set { if (_g != null) _g.Changed -= MarkDirty; _g = value; if (_g != null) _g.Changed += MarkDirty; MarkDirty(); } }
         public int Width { get => _w; set { _w = Math.Max(1, value); MarkDirty(); } }
         public override int GetWidth() => _w;
@@ -541,7 +963,7 @@ namespace Fatebound.GUI
         }
     }
 
-    public sealed class GradientTexture2D : CpuTexture
+    public sealed partial class GradientTexture2D : CpuTexture
     {
         public enum FillEnum { Linear = 0, Radial = 1, Square = 2, Conic = 3 }
         public enum RepeatEnum { None = 0, Repeat = 1, Mirror = 2 }
@@ -615,7 +1037,7 @@ namespace Fatebound.GUI
     }
 
     /// <summary>A texture built from a lambda over an Image (noise, procedural UI art).</summary>
-    public sealed class ProceduralTexture : CpuTexture
+    public sealed partial class ProceduralTexture : CpuTexture
     {
         readonly Func<Image> _make;
         readonly int _w, _h;

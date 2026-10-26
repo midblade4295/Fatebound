@@ -15,7 +15,7 @@ using Fatebound.Sim;
 namespace Fatebound.GUI
 {
     /// <summary>Godot's Logger: override _LogError / _LogMessage and register with OS.AddLogger.</summary>
-    public class Logger
+    public partial class Logger
     {
         public const int ERROR_TYPE_ERROR = 0, ERROR_TYPE_WARNING = 1, ERROR_TYPE_SCRIPT = 2, ERROR_TYPE_SHADER = 3;
 
@@ -24,7 +24,7 @@ namespace Fatebound.GUI
         public virtual void _LogMessage(string message, bool error) { }
     }
 
-    public static class OS
+    public static partial class OS
     {
         // ------------------------------------------------------------------ the device
         public static string GetName() => PlatformHost.Host.OSName;
@@ -203,7 +203,7 @@ namespace Fatebound.GUI
         }
     }
 
-    public static class Engine
+    public static partial class Engine
     {
         // ------------------------------------------------------------------ frames
         public static long GetProcessFrames() => SceneTree.Current != null ? (long)SceneTree.Current.Frame : 0;
@@ -332,7 +332,7 @@ namespace Fatebound.GUI
 
     /// <summary>Godot's ClassDB as a registry: the host registers the classes (iOS StoreKit / Game Center stand-ins...)
     /// game code looks up by name. Nothing is registered by default.</summary>
-    public static class ClassDB
+    public static partial class ClassDB
     {
         sealed class Entry
         {
@@ -377,7 +377,7 @@ namespace Fatebound.GUI
     }
 
     /// <summary>Godot's Performance monitors: the numbers come from the host (PlatformHost.Host.GetMonitor).</summary>
-    public static class Performance
+    public static partial class Performance
     {
         public const int TIME_FPS = 0, TIME_PROCESS = 1, TIME_PHYSICS_PROCESS = 2, TIME_NAVIGATION_PROCESS = 3, MEMORY_STATIC = 4,
             MEMORY_STATIC_MAX = 5, MEMORY_MESSAGE_BUFFER_MAX = 6, OBJECT_COUNT = 7, OBJECT_RESOURCE_COUNT = 8, OBJECT_NODE_COUNT = 9,
