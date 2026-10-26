@@ -7427,3 +7427,25 @@ from 40 s into the match.
 - Next, by his log: if simwait stays large, the tick split in two (decisions and moves while the engine animates,
   after every script that reads the sim; the rest while it draws); the PROBE SUMMARY for the graphics chip.
 
+## 0.31.221 — the graphics test in every match, off-screen bodies every 4th frame
+Kevin's 0.31.220 log (t=249-357 s; no note): **34.7 fps (29-41), from 22.5** in 0.31.219; worst frame 45 ms (64).
+The main thread ~29 ms: ph_proc 14.7 (26.5), ph_draw 10.5 (7.9), ph_other 3.9 (12.9) with simwait 2.2 (9.7); the sim
+8.2 ms a frame on the worker (16.5); the view 6.9 (10.4), the HUD 0.9 (2.9); the graphics chip 23.3 (gpu3d 18.9 +
+gpuhud 4.4; 28.6). The scene a little lighter (152k triangles, 55k into the shadow map; 167k / 84k). The processor
+still sets the pace (29 ms vs 16.6 for 60), the graphics chip close behind. No PROBE line again: the probe was off in a
+training's 5v5 (mode.tutorial) -- most likely what he played (his hero the Mage both times, one of the training's
+three).
+- gpu_probe.gd: off_reason / wanted -- on in every match but the first training (its lessons): a training's 5v5, a
+  5v5 against bots, online; "PROBE ready: N tests from 40 s (against bots / training 2 / online)" or "PROBE off:
+  <why>" written as the match starts (kept in the copy with the other PROBE lines).
+- siege_mode.gd: _probe_begin, from the offline start's last step and the online match's build.
+- siege_view.gd: a living body well off the screen (its place 2.5 m past the frustum test's sphere) placed every
+  OFF_EVERY = 4th frame -- straight to its place, turned to its facing, its animation paused -- the easing, turning
+  and animating only near the screen; coming back on it eases from there. (Each move is a transform for the renderer:
+  the root, its meshes, ring, blob, held weapons.)
+- Full suite: 111 passed; staged_start_test failed once at the suite's end (its longest build frame 418 ms over 400,
+  sim.setup 197 ms -- as in 0.31.218) and passed twice alone (366, 357 ms). CONTENT OK. Version 0.31.221,
+  versionCode 307; SERVER_BUILD 0.31.221 (no server change).
+- Preview APK: build/Fatebound-Siege-0.31.221-fatebound.apk (33 MB, preview key), sha256
+  97f7a58dcc515e8f55bde37d2e0d6a015c6c8d7fb5779adbf39091581e8bde6b.
+
