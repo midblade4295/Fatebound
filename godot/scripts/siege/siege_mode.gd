@@ -361,15 +361,21 @@ func _start_steps() -> Array:
 		_title_reset()
 		if tutorial:
 			_tutorial_begin()
-		if is_instance_valid(probe):
-			probe.queue_free()
-		probe = null
-		if GpuProbe.wanted(self):
-			probe = GpuProbe.new()             # 0.31.219: the graphics chip's cost of each part, measured on the phone
-			probe.name = "GpuProbe"
-			probe.mode = self
-			add_child(probe))
+		_probe_begin())
 	return steps
+
+func _probe_begin() -> void:
+	# 0.31.219: the graphics chip's (0.31.220: and the processor's) cost of each part, measured on the phone
+	if is_instance_valid(probe):
+		probe.queue_free()
+	probe = null
+	if GpuProbe.wanted(self):
+		probe = GpuProbe.new()
+		probe.name = "GpuProbe"
+		probe.mode = self
+		add_child(probe)
+	elif diag != null and GpuProbe.off_reason(self) != "headless":
+		diag.write("PROBE off: " + GpuProbe.off_reason(self))
 
 func _hero() -> String:
 	# the hero of an offline match (a 5v5 against bots): the one picked, else the Knight
@@ -654,6 +660,7 @@ func _build_online_match(msg: Dictionary) -> void:
 	hud.rejoin_until = -1.0
 	_result_shown = false
 	_title_reset()
+	_probe_begin()                                       # 0.31.220: online too
 	net_state = "playing"
 	diag.write("NET welcome match=%d you=%s players=%d" % [net_match, me_id, int(msg.get("players", 1))])
 	hud.toast("Online: %d player%s" % [int(msg.get("players", 1)), "" if int(msg.get("players", 1)) == 1 else "s"], VisualTheme.GOLD)

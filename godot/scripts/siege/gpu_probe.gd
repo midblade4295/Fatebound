@@ -5,7 +5,8 @@ extends Node
 # (gpu3d) and on the screen (gpuhud), switches it back and measures again right after: the difference is that thing's
 # cost, in the same fight. Two rounds of every test from START seconds into a 5v5 against bots, each written to the
 # match log as a PROBE line and summed up at the end (PROBE SUMMARY). The ones that would hide what you're playing
-# with (the HUD) wait until you're down. Off (never made) online, in the training, headless, or with FB_NO_PROBE.
+# with (the HUD) wait until you're down. Off (never made) in the first training, headless, or with FB_NO_PROBE (0.31.220;
+# online and in the training's 5v5 too until then).
 const View = preload("res://scripts/siege/siege_view.gd")
 const START := 40.0          # match seconds before the first test (the first waves are fighting by then)
 const OFF_T := 2.0
@@ -30,9 +31,21 @@ var _restore: Callable
 var _plain: Shader = null
 var _done := false
 
+# 0.31.220: in every match but the first training (its lessons) -- Kevin's 0.31.219 and 0.31.220 logs had no PROBE
+# line at all (a training's 5v5, or an online one, had it off); whether it runs, and why not, is written as it starts
+static func off_reason(m) -> String:
+	if DisplayServer.get_name() == "headless":
+		return "headless"
+	if OS.has_environment("FB_NO_PROBE"):
+		return "FB_NO_PROBE"
+	if RenderingServer.get_rendering_device() == null:
+		return "no RenderingDevice (%s)" % RenderingServer.get_current_rendering_method()
+	if m.tutorial and int(m.training) == 1:
+		return "the first training"
+	return ""
+
 static func wanted(m) -> bool:
-	return not m.online and not m.tutorial and DisplayServer.get_name() != "headless" and not OS.has_environment("FB_NO_PROBE") \
-		and RenderingServer.get_rendering_device() != null
+	return off_reason(m) == ""
 
 var _start := START
 
@@ -41,6 +54,8 @@ func _ready() -> void:
 		_start = float(OS.get_environment("FB_PROBE_START"))       # (tools)
 	for r in ROUNDS:
 		_queue.append_array(TESTS)
+	_write("PROBE ready: %d tests from %.0f s into the match (%s)" % [_queue.size(), _start,
+		"online" if mode.online else ("training %d" % int(mode.training) if mode.tutorial else "against bots")])
 
 func _sim_ok() -> bool:
 	return mode != null and mode.sim != null and is_instance_valid(mode.view) and not mode.sim.ended

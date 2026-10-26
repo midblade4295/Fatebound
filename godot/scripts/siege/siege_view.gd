@@ -3384,6 +3384,9 @@ func _play(a: Dictionary, clip: String, speed := 1.0, busy := 0.0) -> void:
 var anim_cull := true
 var anim_active := 0
 const ANIM_LOD_HZ := 30.0
+const OFF_EVERY := 4                       # (0.31.220: a body off the screen placed every 4th frame)
+var _frame_n := 0
+var _off_n := 0
 var anim_freeze := false                   # (0.31.220, gpu_probe.gd: every body's animation paused for a moment)
 
 # 0.31.219 (Kevin's 0.31.218 log: 23 fps in a 5v5, the CPU the limit): a player is paused by its process mode, not by
@@ -3447,6 +3450,8 @@ func sync(dt: float) -> void:
 	# cape left alone while the body isn't drawn (in the fog, or off the screen; the dead and the just-respawned
 	# always). A body hidden in the fog isn't moved at all: it snaps to its place when it's seen again.
 	var my_team := _my_team()
+	_frame_n += 1
+	_off_n = 0
 	var pos_k := 1.0 - exp(-dt * 22.0)
 	var rot_k := 1.0 - exp(-dt * 18.0)
 	for u in sim.units:
@@ -3483,6 +3488,25 @@ func sync(dt: float) -> void:
 			a["gp"] = up
 			a["gy"] = gy
 		var target := Vector3(up.x, gy, up.y)
+		# 0.31.220 (Kevin's 0.31.219 log: the view's bodies 3-6 ms a frame on his phone, two-thirds of them off the
+		# screen): a living body well off the screen is placed every OFF_EVERY-th frame (straight to its place, turned
+		# to its facing), its animation paused -- the easing, turning and animating only for what can be seen. Coming
+		# back on, it eases from there (a few frames old, still off the edge).
+		var rad := 1.8 if float(a.get("big", 0.0)) <= 0.0 else 5.0
+		if alive_u and not bool(a.dead) and not planes.is_empty() and u.state != "dash" and not _on_screen(target, planes, rad + 2.5):
+			a["onscr"] = false
+			_off_n += 1
+			if (_frame_n + int(a.get("off_ph", -1))) % OFF_EVERY == 0 or not a.has("off_ph"):
+				if not a.has("off_ph"):
+					a["off_ph"] = _off_n % OFF_EVERY
+				if root.position != target:
+					root.position = target
+				if absf(angle_difference(root.rotation.y, float(u.face))) > 0.0005:
+					root.rotation.y = float(u.face)
+			if is_instance_valid(a.player) and anim_running(a.player):
+				anim_run(a.player, false)
+			if prof_on: tu = _pv("a.place+fog", tu)
+			continue
 		if u.state == "dash" and u.has("dash") and bool(u.dash.get("leap", false)):
 			# 0.31.168: a leap arcs (LEAP, VAULT, DRAGON DIVE): up and down over the dash, higher the longer it is
 			var dd: Dictionary = u.dash
@@ -3516,7 +3540,7 @@ func sync(dt: float) -> void:
 		if a.has("blob"):
 			(a.blob as Node3D).visible = u.state != "dead"         # (0.31.218: its blob shadow goes with its ring)
 		if prof_on: tu = _pv("a.place+fog", tu)
-		var show := root.visible and (planes.is_empty() or _on_screen(newp, planes, 1.8 if float(a.get("big", 0.0)) <= 0.0 else 5.0))
+		var show := root.visible and (planes.is_empty() or _on_screen(newp, planes, rad))
 		a["onscr"] = show                          # (0.31.219: bars() skips the bodies off the screen)
 		if show or not alive_u or bool(a.dead):
 			_sync_vanish(a, u)
