@@ -7390,3 +7390,40 @@ body crossed the screen's edge or the fog and for every minion taken from the po
 - Next, by his phone's log: ph_proc / ph_draw / simwait say how much of the sim the drawing hides and what the engine's
   own work costs; PARTS which script parts to cut; PROBE SUMMARY which graphics feature costs the chip most.
 
+## 0.31.220 — performance: buttons drawn on change, lighter bot decisions and sight, the probe kept in the log
+Kevin's 0.31.219 log (a 5v5 against bots, t=342-451 s; his note: none): 22.5 fps (14-38) -- no gain on 0.31.218's 23.2
+(a busier stretch: 167k triangles drawn, 84k into the shadow map, against 143k / 62k). The main thread's frame ~47 ms:
+ph_proc 26.5 (the view 10.4, the HUD ~3, the rest ~12: the engine's per-node work -- animation, skeletons, particles --
+and the other scripts), ph_draw 7.9, ph_other 12.9 of which simwait 9.7: the sim's ticks took ~16.5 ms a frame on the
+worker (~12 a tick) and the drawing's window is ~8. The graphics chip ~28.6 ms (gpu3d 23.1 + gpuhud 5.5: 0.8 less on
+the screen since the vignette went into the 3D view). PARTS (ms a frame): sim think 3.3-8.3, units 2.6-7.3, moba 2.5-5.9,
+separate 2.3-5.7 (push-out 1.2-3.0), vision 0.9-2.3; view actors 2.7-6.5 (place+fog 1.4-3.1, ensure 0.8-2.9), moba
+1.3-2.0, shocks+debris 0.8-1.8, ripples 0.7-1.4, castle 0.7-1.2, blood 0.6-1.0; HUD stick+buttons 3.8-5.1 (!), bars
+1.0-1.5. The PROBE lines weren't in the copy he sent: Diag.read_logs keeps a log's last 200 lines, and the probe ran
+from 40 s into the match.
+- siege_hud.gd: each skill button, the stick, the + marks and the recall bar on a canvas item of its own under
+  btn_layer, drawn again only when what it shows changes (_button_state / _button_key: label, state, the recharge's
+  sweep in 60 steps, the countdown's text, the ult's glow at 15 a second, HOME's ring...); the layer hidden while you're
+  down or a panel is open. Headless: a second standing still -- 15 redraws (the ult's glow); Q recharging -- 10.
+- tests/hud_buttons_test.gd (new, in the suite).
+- siege_sim.gd: a 5v5's minions and monsters decide every MINION_AI_EVERY 0.3 s (heroes 0.15 as before);
+  _unstick_check counts the time since a bot's last decision.
+- moba_vision.gd: the brush patches in a 6 m grid and the sight sources in an 18 m one (the widest sight) -- each unit
+  tested against those near it (the same answers: the lowest-numbered patch, any source in reach); every unit's
+  patch looked up once an update; an epoch for the view.
+- siege_view.gd: the fog of war drawn again when the sim's sight changes (the epoch, every 0.2 s), not every 0.15 s; a
+  tower's flame (and a burning tower's smoke and fire) only simulated near the screen (GPU particles: stepped by the
+  graphics chip every frame, seen or not); a pooled minion's whole body process-disabled (skeleton, attachments);
+  loose weapons look only at the walkers in the 2 m cells round them; anim_freeze (the probe).
+- siege_diag.gd: read_logs keeps every PROBE line; last_ph (the last frame's ph_proc / ph_draw / ph_other).
+- gpu_probe.gd: each PROBE line has the CPU's phases too (process / drawing / other, each half); new tests: anim
+  (every body's animation paused), particles (every GPU particle system stopped), minimap (hidden); the SUMMARY again
+  when the match ends (so it's in the copy's last lines).
+- Full suite: 112 passed (hud_buttons_test new). CONTENT OK (no pack changed). Version 0.31.220, versionCode 306;
+  SERVER_BUILD 0.31.220 (no server change: protocol 37 -- the redeploy for 0.31.217 still waits for Kevin; the sim's
+  minion decisions and vision grid reach the server only with it).
+- Preview APK: build/Fatebound-Siege-0.31.220-fatebound.apk (33 MB, preview key), sha256
+  f623e0b8c7cccb049e8f12e213bac4b92016a25290e4c09d559538a31edc4cbd.
+- Next, by his log: if simwait stays large, the tick split in two (decisions and moves while the engine animates,
+  after every script that reads the sim; the rest while it draws); the PROBE SUMMARY for the graphics chip.
+
