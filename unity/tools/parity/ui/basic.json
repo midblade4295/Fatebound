@@ -1,0 +1,50 @@
+{
+  "size": [760, 420],
+  "frames": 5,
+  "root": {
+    "type": "Control", "name": "root",
+    "call": [["set_anchors_and_offsets_preset", 15]],
+    "children": [
+      {"type": "ColorRect", "name": "bg", "props": {"color": "#202838"}, "call": [["set_anchors_and_offsets_preset", 15]]},
+      {"type": "MarginContainer", "name": "margin",
+       "theme": {"constant": {"margin_left": 12, "margin_right": 12, "margin_top": 8, "margin_bottom": 8}},
+       "call": [["set_anchors_and_offsets_preset", 15]],
+       "children": [
+        {"type": "VBoxContainer", "name": "col", "theme": {"constant": {"separation": 10}}, "children": [
+          {"type": "Label", "name": "title", "props": {"text": "FATEBOUND", "horizontal_alignment": 1},
+           "theme": {"font": {"font": "res://assets/fonts/LilitaOne-Regular.ttf"}, "font_size": {"font_size": 32},
+                     "color": {"font_color": "#f2d18d", "font_outline_color": "#000000"}, "constant": {"outline_size": 8}}},
+          {"type": "HBoxContainer", "name": "row", "theme": {"constant": {"separation": 6}}, "children": [
+            {"type": "Button", "name": "play", "props": {"text": "PLAY", "size_flags_horizontal": 3},
+             "theme": {"font": {"font": "res://assets/fonts/Nunito-ExtraBold.woff2"}, "font_size": {"font_size": 18},
+                       "stylebox": {"normal": {"type": "StyleBoxFlat", "bg_color": "#e2571a", "content_margin_left": 14, "content_margin_right": 14,
+                                               "content_margin_top": 6, "content_margin_bottom": 8, "call": [["set_corner_radius_all", 10], ["set_border_width_all", 2]],
+                                               "border_color": "#ffe6a6"}}}},
+            {"type": "Button", "name": "shop", "props": {"text": "Shop", "size_flags_horizontal": 3, "size_flags_stretch_ratio": 0.5}},
+            {"type": "Button", "name": "x", "props": {"text": "X"}}
+          ]},
+          {"type": "PanelContainer", "name": "card",
+           "theme": {"stylebox": {"panel": {"type": "StyleBoxFlat", "bg_color": "#091d27", "border_color": "#ad8651", "shadow_size": 7,
+                                            "shadow_color": [0, 0, 0, 0.5], "content_margin_left": 12, "content_margin_top": 10, "content_margin_right": 12,
+                                            "content_margin_bottom": 10, "call": [["set_corner_radius_all", 12], ["set_border_width_all", 1]], "border_width_top": 2}}},
+           "children": [
+            {"type": "VBoxContainer", "name": "inner", "children": [
+              {"type": "Label", "name": "body", "props": {"text": "Lead your champion through the Rift: capture towers, slay the jungle beasts and bring down the enemy King before they reach yours.", "autowrap_mode": 3},
+               "theme": {"font": {"font": "res://assets/fonts/Nunito-Bold.woff2"}, "font_size": {"font_size": 14}}},
+              {"type": "Label", "name": "small", "props": {"text": "v0.31.222 · build 4", "horizontal_alignment": 2},
+               "theme": {"font_size": {"font_size": 11}, "color": {"font_color": "#9aa4b0"}}},
+              {"type": "ProgressBar", "name": "xp", "props": {"value": 37, "show_percentage": true}}
+            ]}
+          ]},
+          {"type": "GridContainer", "name": "grid", "props": {"columns": 3, "size_flags_vertical": 3}, "children": [
+            {"type": "Label", "props": {"text": "Kills"}}, {"type": "Label", "props": {"text": "12", "size_flags_horizontal": 3, "horizontal_alignment": 1}}, {"type": "Label", "props": {"text": "Gold 1,234"}},
+            {"type": "Label", "props": {"text": "Deaths"}}, {"type": "ColorRect", "props": {"color": "#40c080", "custom_minimum_size": [20, 20]}}, {"type": "Label", "props": {"text": "-"}},
+            {"type": "CenterContainer", "props": {"size_flags_vertical": 3}, "children": [{"type": "Label", "props": {"text": "centered"}}]}
+          ]}
+        ]}
+      ]},
+      {"type": "Label", "name": "corner", "props": {"text": "TOP RIGHT"}, "call": [["set_anchors_and_offsets_preset", 1, 0, 6]]},
+      {"type": "Panel", "name": "badge", "props": {"custom_minimum_size": [40, 40]}, "call": [["set_anchors_and_offsets_preset", 3, 0, 10]]}
+    ]
+  }
+}

@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Runs the GUI framework outside Unity: font metrics against Godot's, layout dumps, and a software
+       rasteriser that renders screens to PNG (dotnet run, project unity/tools/guitest, args: help). -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <NoWarn>CS0162;CS0168;CS0169;CS0219;CS0414;CS0649;CS0067;CS8981</NoWarn>
+    <BaseIntermediateOutputPath>/tmp/fb-guitest/obj/</BaseIntermediateOutputPath>
+    <OutputPath>/tmp/fb-guitest/bin/</OutputPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../Assets/Fatebound/Sim/**/*.cs" />
+    <Compile Include="../../Assets/Fatebound/GUI/**/*.cs" />
+  </ItemGroup>
+</Project>

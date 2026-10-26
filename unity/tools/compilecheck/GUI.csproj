@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Fatebound.GUI: Godot's UI semantics in plain C# (no engine references) -->
+  <ItemGroup>
+    <ProjectReference Include="Sim.csproj" />
+    <Compile Include="../../Assets/Fatebound/GUI/**/*.cs" />
+  </ItemGroup>
+</Project>
