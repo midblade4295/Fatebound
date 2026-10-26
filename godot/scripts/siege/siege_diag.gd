@@ -15,7 +15,7 @@ const BOOT_PREV_PATH := "user://boot_diag_prev.log"
 # rotate it out of boot_diag_prev.log before anyone could copy it).
 const BOOT_STUCK_PATH := "user://boot_diag_stuck.log"
 const Platform = preload("res://scripts/meta/platform.gd")
-const BUILD := "0.31.221-fatebound"
+const BUILD := "0.31.222-fatebound"
 
 class ErrorCapture:
 	extends Logger
@@ -106,6 +106,24 @@ func _sample_render() -> void:
 	add_time("gpuhud", int(RenderingServer.viewport_get_measured_render_time_gpu(root) * 1000.0))
 	add_time("rcpu3d", int(RenderingServer.viewport_get_measured_render_time_cpu(v3) * 1000.0))
 
+# 0.31.222 (Kevin's 0.31.221 log: a 2.3 s freeze in the training's last fight -- the 3D view's CPU time 2,256 ms, a
+# shader pipeline compiled on first use): the pipelines compiled in each second, by kind (canvas/mesh/surface/draw/
+# specialization), on every STAT line that had any -- which moment brought a new look the warm-up hadn't shown
+const PSO_KINDS := [["c", RenderingServer.RENDERING_INFO_PIPELINE_COMPILATIONS_CANVAS], ["m", RenderingServer.RENDERING_INFO_PIPELINE_COMPILATIONS_MESH],
+	["s", RenderingServer.RENDERING_INFO_PIPELINE_COMPILATIONS_SURFACE], ["d", RenderingServer.RENDERING_INFO_PIPELINE_COMPILATIONS_DRAW],
+	["sp", RenderingServer.RENDERING_INFO_PIPELINE_COMPILATIONS_SPECIALIZATION]]
+var _pso_last := {}
+
+func _pso_text() -> String:
+	var parts := PackedStringArray()
+	for k in PSO_KINDS:
+		var n := RenderingServer.get_rendering_info(k[1])
+		var d := n - int(_pso_last.get(k[0], n))
+		_pso_last[k[0]] = n
+		if d > 0:
+			parts.append("%s%d" % [k[0], d])
+	return "pso=" + "/".join(parts) if not parts.is_empty() else ""
+
 func _viewport_text() -> String:
 	# Draw calls/triangles split by the 3D SubViewport vs the HUD canvas.
 	if mode == null or mode.viewport == null:
@@ -191,8 +209,17 @@ func mark(phase: String) -> void:
 	_phase = phase
 	_mutex.unlock()
 
-func event() -> void:
+var _ev_kinds := {}                       # 0.31.222: this second's event kinds (written with a pipeline compile)
+
+func event(e: Dictionary = {}) -> void:
 	_events += 1
+	if not e.is_empty() and _ev_kinds.size() < 24:
+		var k := str(e.get("k", "?"))
+		for f in ["spell", "ult", "kind"]:
+			if e.has(f):
+				k += "/" + str(e[f])
+				break
+		_ev_kinds[k] = true
 
 func _capture_logcat(label: String) -> void:
 	write("LOGCAT BEGIN (%s)" % label)
@@ -261,6 +288,10 @@ func _process(delta: float) -> void:
 			me.get("cls", "?"), me.get("state", "?"), me.get("hp", 0.0), me.get("carrying", false),
 			mode.view._fx.size() if mode.view != null else -1, s.projectiles.size(),
 			mode.view._ragdolls.size() if mode.view != null else -1, mode.view._debris.size() if mode.view != null else -1, s.units.size()]
+	var pso := _pso_text()
+	if pso != "":
+		state = pso + " ev=" + ",".join(PackedStringArray(_ev_kinds.keys())) + " " + state
+	_ev_kinds.clear()
 	write("STAT fps=%d worst=%.0fms %s %s procmax=%.1fms physmax=%.1fms mem=%.1fMB vmem=%.1fMB tex=%.1fMB draws=%d prims=%d objs=%d nodes=%d ev=%d %s" % [fps, _worst_ms, _times_text(), _viewport_text(),
 		Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0, Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0, smem, vmem,
 		Performance.get_monitor(Performance.RENDER_TEXTURE_MEM_USED) / 1048576.0,

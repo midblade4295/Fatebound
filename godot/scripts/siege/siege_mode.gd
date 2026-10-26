@@ -374,7 +374,7 @@ func _probe_begin() -> void:
 		probe.name = "GpuProbe"
 		probe.mode = self
 		add_child(probe)
-	elif diag != null and GpuProbe.off_reason(self) != "headless":
+	elif diag != null and GpuProbe.off_reason(self) not in ["headless", "not asked for"]:
 		diag.write("PROBE off: " + GpuProbe.off_reason(self))
 
 func _hero() -> String:
@@ -774,7 +774,7 @@ func _net_process(delta: float) -> void:
 				if _net_rt < 0.0:
 					_net_rt = _net_latest - _net_delay
 				for e in msg.get("e", []):
-					diag.event()
+					diag.event(e)
 					_count(e)
 					# an effect of my own that I already showed when I pressed the button: don't show it twice
 					if str(e.get("id", "")) == hud.player_id and _pred_fx.has(str(e.k)) and Time.get_ticks_msec() / 1000.0 - float(_pred_fx[str(e.k)]) < 0.6:
@@ -1279,7 +1279,7 @@ func _process(delta: float) -> void:
 			diag.add_time("sim", Time.get_ticks_usec() - t_sim)
 		for e in sim.drain_events():
 			diag.mark("event " + str(e.k))
-			diag.event()
+			diag.event(e)
 			_count(e)
 			view.on_event(e)
 			hud.on_event(e)

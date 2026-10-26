@@ -867,6 +867,8 @@ func _cast() -> GeometryInstance3D.ShadowCastingSetting:
 	# grass, decals and effects never do (they only receive).
 	return GeometryInstance3D.SHADOW_CASTING_SETTING_ON if _hq() else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
+const SHADOW_QUALITY := RenderingServer.SHADOW_QUALITY_HARD
+
 func _apply_hq(env: Environment, sun: DirectionalLight3D) -> void:
 	# Round 30 (Kevin: "increase the graphical fidelity -- lighting, shadows"). The Mobile renderer has no SSAO,
 	# SSR or GI, so: real sun shadows (castles, buildings, trees, units, Kings; grass and flowers stay out),
@@ -891,7 +893,9 @@ func _apply_hq(env: Environment, sun: DirectionalLight3D) -> void:
 	# about as bright as before, shade ~40 % of it, tinted cool blue.
 	sun.light_energy = 1.45
 	RenderingServer.directional_shadow_atlas_set_size(2048, true)
-	RenderingServer.directional_soft_shadow_filter_set_quality(RenderingServer.SHADOW_QUALITY_SOFT_LOW)
+	# 0.31.222 (Kevin's phone, gpu_probe.gd: the soft filter cost ~6 fps in a lane fight -- every lit pixel sampling the
+	# shadow map several times; Kevin: "Hard-edged shadows"): one sample, the hardware's 2x2 blend at the edge
+	RenderingServer.directional_soft_shadow_filter_set_quality(SHADOW_QUALITY)
 	env.ambient_light_color = Color("#a9bcd8")
 	env.ambient_light_energy *= 0.75
 	env.glow_enabled = true

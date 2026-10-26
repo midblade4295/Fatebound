@@ -33,7 +33,13 @@ var _done := false
 
 # 0.31.220: in every match but the first training (its lessons) -- Kevin's 0.31.219 and 0.31.220 logs had no PROBE
 # line at all (a training's 5v5, or an online one, had it off); whether it runs, and why not, is written as it starts
+# 0.31.222: its rounds done on Kevin's phone (0.31.221's log), off unless asked for (FB_PROBE, or ON) -- it switches
+# things off mid-match
+const ON := false
+
 static func off_reason(m) -> String:
+	if not ON and not OS.has_environment("FB_PROBE"):
+		return "not asked for"
 	if DisplayServer.get_name() == "headless":
 		return "headless"
 	if OS.has_environment("FB_NO_PROBE"):
@@ -126,8 +132,9 @@ func _apply(name: String) -> bool:
 				sun.shadow_enabled = false
 				_restore = func(): sun.shadow_enabled = true
 			else:
-				RenderingServer.directional_soft_shadow_filter_set_quality(RenderingServer.SHADOW_QUALITY_HARD)
-				_restore = func(): RenderingServer.directional_soft_shadow_filter_set_quality(RenderingServer.SHADOW_QUALITY_SOFT_LOW)
+				# (0.31.222: the match's own filter is hard now -- this measures the soft one it had, switched ON)
+				RenderingServer.directional_soft_shadow_filter_set_quality(RenderingServer.SHADOW_QUALITY_SOFT_LOW)
+				_restore = func(): RenderingServer.directional_soft_shadow_filter_set_quality(View.SHADOW_QUALITY)
 		"glow", "fog":
 			var env := _env()
 			if env == null:
