@@ -65,8 +65,9 @@ namespace Fatebound.Client
             ResourceLoader.Host = new UnityGuiHost();
             AudioServer.Host = new UnityAudio();
             Fatebound.Sim.GD.PrintSink = s => Debug.Log(s);
-            Fatebound.Sim.GD.ErrorSink = s => Debug.LogError(s);
-            Fatebound.Sim.GD.WarningSink = s => Debug.LogWarning(s);
+            Fatebound.Sim.GD.ErrorSink = s => { _fromGame = true; try { Debug.LogError(s); } finally { _fromGame = false; } };
+            Fatebound.Sim.GD.WarningSink = s => { _fromGame = true; try { Debug.LogWarning(s); } finally { _fromGame = false; } };
+            Application.logMessageReceived += OnUnityLog;
             _canvas = gameObject.AddComponent<Canvas>();
             _canvas.renderMode = RenderMode.ScreenSpaceOverlay;
             _canvas.sortingOrder = 100;
@@ -120,6 +121,23 @@ namespace Fatebound.Client
 
         UnityRenderer3D _renderer3D;
         UnityPlatform _platform;
+
+        // Unity's own errors and warnings (shaders, render textures, the client's exceptions) into the game's loggers, so
+        // they reach the match log Kevin sends (siege_diag's ERROR / WARNING lines); the first few of each.
+        [System.ThreadStatic] static bool _fromGame;
+        static readonly Dictionary<string, int> _unitySeen = new Dictionary<string, int>();
+
+        static void OnUnityLog(string message, string stack, LogType type)
+        {
+            if (_fromGame || type == LogType.Log) return;
+            string key = message.Length > 200 ? message.Substring(0, 200) : message;
+            _unitySeen.TryGetValue(key, out int n);
+            _unitySeen[key] = n + 1;
+            if (n >= 3) return;
+            string text = "Unity " + type + ": " + message;
+            if (type == LogType.Exception && !string.IsNullOrEmpty(stack)) text += "\n" + stack;
+            OS.LogHostMessage(text, type == LogType.Warning);
+        }
 
         void UpdateSafeArea()
         {
@@ -262,6 +280,9 @@ namespace Fatebound.Client
 
         void LateUpdate()
         {
+            // URP sets the quality level's MSAA to its asset's (2, so viewports can have theirs) when it starts: the
+            // screen itself stays single-sampled as before (only the GUI's one quad is drawn on it)
+            if (QualitySettings.antiAliasing > 1) QualitySettings.antiAliasing = 0;
             Shader.SetGlobalFloat("_FB_Time", (float)(Time.realtimeSinceStartupAsDouble % 3600.0));
             RenderingServer.RaiseFramePreDraw();
             // the 3D worlds' changes to their Unity objects, the viewports' cameras (they render into their textures

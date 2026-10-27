@@ -81,7 +81,10 @@ namespace Fatebound.EditorTools
             }
             var so = new SerializedObject(asset);
             Set(so, "m_SupportsHDR", p => p.boolValue = true);
-            Set(so, "m_MSAA", p => p.intValue = 1);                                 // per viewport (render textures)
+            // MSAA: per viewport, by its render texture's sample count -- URP takes a camera's from its target texture, but
+            // only while the asset's own is above 1 (otherwise it renders single-sampled into the multisampled texture:
+            // the match's 2x viewport came out empty, Kevin's first build). The screen stays single-sampled (GuiCanvas).
+            Set(so, "m_MSAA", p => p.intValue = 2);
             Set(so, "m_RenderScale", p => p.floatValue = 1f);
             Set(so, "m_RequireDepthTexture", p => p.boolValue = false);
             // the opaque texture: the shockwave shader reads the screen behind it (Godot's hint_screen_texture), at half

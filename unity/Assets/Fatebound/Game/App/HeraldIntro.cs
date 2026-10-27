@@ -596,6 +596,16 @@ namespace Fatebound.Game
             choice_box.Size = new Vector2(w, 0);
             choice_box.ResetSize();
             choice_box.Position = new Vector2((Size.x - w) * 0.5, top - choice_box.Size.y - 18.0);
+            // (Unity port, Kevin: "Training text gets cutoff" -- in landscape the Herald stands so tall that above him the
+            // choice ran off the top of the screen, SHOW ME HOW half gone; the same in Godot 0.31.222. Then it goes
+            // beside him instead: over the right of the parchment, clear of his figure on its left)
+            double min_y = 12.0 + (app != null ? (double)app.safe_top : 0.0);
+            if (choice_box.Position.y < min_y)
+            {
+                Rect2 parch = (Rect2)r["parch"];
+                double cy = GD.Maxf(min_y, parch.position.y + dy - choice_box.Size.y - 18.0);
+                choice_box.Position = new Vector2(parch.End.x - choice_box.Size.x - 24.0, cy + _y_off);
+            }
         }
 
         // the ring round what the tour shows, an arrow at it and its name

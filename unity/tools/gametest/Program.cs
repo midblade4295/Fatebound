@@ -16,6 +16,7 @@
 //   tapat <x> <y>              tap at logical (760x420-space) coordinates
 //   type <text>                type into the focused (else the first visible) text field; submit: press its Enter
 //   tree                       print the visible controls (class, name, text, rect)
+//   cam                        each 3D camera, its environment, and how many of its world's meshes it sees
 // SIEGE_URL=ws://127.0.0.1:<port>/ plays against a local server (godot --headless --path godot -s
 // res://server/siege_server.gd with SIEGE_HOST=127.0.0.1 SIEGE_PORT=<port>): only loopback hosts are let through, and
 // the game runs in real time (as GT_REALTIME=1 does), the server's clock being the wall's.
@@ -205,6 +206,9 @@ namespace GameTest
                         Run(0.1);
                         break;
                     }
+                    case "cam":
+                        CamReport();
+                        break;
                     case "tree":
                         foreach (var c in All())
                         {
@@ -309,6 +313,44 @@ namespace GameTest
                 if (label == null) label = c;
             }
             return label;
+        }
+
+        /// <summary>cam: each viewport with a 3D camera -- the camera, the world's environment, how many visible meshes
+        /// its world has and how many of them are in the camera's frustum (what the Unity renderer would draw).</summary>
+        static void CamReport()
+        {
+            var stack = new Stack<Node>();
+            stack.Push(_tree.Root);
+            var vps = new List<Viewport>();
+            var meshes = new List<MeshInstance3D>();
+            while (stack.Count > 0)
+            {
+                var n = stack.Pop();
+                if (n is Viewport v) vps.Add(v);
+                if (n is MeshInstance3D mi) meshes.Add(mi);
+                foreach (var k in n.GetChildren(true)) stack.Push(k);
+            }
+            foreach (var vp in vps)
+            {
+                var cam = vp.GetCamera3D();
+                if (cam == null) continue;
+                var w = vp.FindWorld3D();
+                var xf = cam.GetCameraTransform();
+                var env = cam.Environment ?? w?.Environment ?? w?.FallbackEnvironment;
+                int inWorld = 0, visible = 0, inFrustum = 0;
+                foreach (var m in meshes)
+                {
+                    if (m.RenderWorld != w) continue;
+                    inWorld++;
+                    if (!m.IsVisibleInTree() || m.Mesh == null) continue;
+                    visible++;
+                    if (cam.IsPositionInFrustum(m.GlobalTransform.origin)) inFrustum++;
+                }
+                Log($"CAM viewport {vp.Name} {vp.Get3DSize()} update={(vp is SubViewport sv ? sv.RenderTargetUpdateMode.ToString() : "root")} disable3d={vp.Disable3D}"
+                    + $" camera {cam.Name} pos {xf.origin} fwd {-xf.basis.GetColumn(2)} fov {cam.Fov:F1} near {cam.Near} far {cam.Far}"
+                    + $" | env {(env == null ? "none" : "bg=" + env.BackgroundMode + (env.Sky != null ? " sky" : ""))}"
+                    + $" | meshes in its world {inWorld}, visible {visible}, centre in the frustum {inFrustum}");
+            }
         }
 
         /// <summary>The middle of the part of the control that's on the screen (where a finger would go).</summary>

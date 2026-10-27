@@ -628,6 +628,8 @@ namespace Fatebound.Client
             var vp = d.Vp;
             int msaa = vp.Msaa3D == Viewport.MSAA_2X ? 2 : vp.Msaa3D == Viewport.MSAA_4X ? 4 : vp.Msaa3D == Viewport.MSAA_8X ? 8 : 1;
             var fmt = vp.TransparentBg || !SystemInfo.SupportsRenderTextureFormat(RenderTextureFormat.RGB111110Float) ? RenderTextureFormat.ARGBHalf : RenderTextureFormat.RGB111110Float;
+            // (as many samples as the GPU takes for that format: 1 when it takes none)
+            if (msaa > 1) msaa = Math.Max(1, SystemInfo.GetRenderTextureSupportedMSAASampleCount(new RenderTextureDescriptor(w, h, fmt, 24) { msaaSamples = msaa }));
             if (d.Hdr != null && d.Hdr.width == w && d.Hdr.height == h && d.Hdr.antiAliasing == msaa && d.Hdr.format == fmt) return;
             Free(ref d.Hdr);
             d.Hdr = new RenderTexture(w, h, 24, fmt) { antiAliasing = msaa, name = "vp-hdr " + vp.Name };
@@ -668,6 +670,7 @@ namespace Fatebound.Client
             cam.farClipPlane = (float)cam3d.Far;
             cam.cullingMask = 1 << d.World.Layer;
             cam.targetTexture = d.Hdr;
+            cam.allowMSAA = d.Hdr.antiAliasing > 1;
             var env = cam3d.Environment ?? d.World.World.Environment ?? d.World.World.FallbackEnvironment;
             d.Env = env;
             bool transparent = vp.TransparentBg;

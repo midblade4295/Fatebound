@@ -148,6 +148,10 @@ namespace Fatebound.GUI
             }
         }
 
+        /// <summary>An error or warning from the host engine itself (not from the game's print / push_error): handed to
+        /// the loggers as Godot hands them its own engine errors.</summary>
+        public static void LogHostMessage(string message, bool warning) => Dispatch(message, warning ? 2 : 1);
+
         public static void RemoveLogger(Logger logger)
         {
             lock (_loggers) _loggers.Remove(logger);
