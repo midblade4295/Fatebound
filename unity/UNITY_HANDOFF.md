@@ -16,7 +16,10 @@ logs below are what I need back to make them.
   from Godot by `tools/bake/bake.sh`). The first import takes a while (several hundred MB of textures and audio).
 
 ## Build
-1. Open `unity/` in Unity 6000.3.27f1 (Android Build Support + IL2CPP installed) -- or skip to step 3.
+1. Open `unity/` in Unity 6000.3.27f1 (Android Build Support + IL2CPP installed) -- or skip to step 3. The editor
+   needs an activated license on the build machine (a Unity Personal license through Unity Hub, or
+   `-manualLicenseFile` / `-username -password -serial` for a headless machine); a batch build without one stops
+   at "No valid Unity Editor license found".
 2. Menu **Fatebound > Setup Project** (creates the URP asset in `Assets/Fatebound/Settings/`, the player settings,
    `Assets/Fatebound/Boot.unity`). The build step runs it too.
 3. Command line:
@@ -32,6 +35,9 @@ logs below are what I need back to make them.
    - `FB_KEYSTORE`, `FB_KEYSTORE_PASS`, `FB_KEY_ALIAS`, `FB_KEY_PASS` -- default is Unity's debug key. **Don't sign
      with the Play upload key, and don't upload to Play:** this is a test build.
    - `FB_DEVELOPMENT=1` -- a development build (adds the profiler and stack traces; useful for the first run).
+
+Expect the first import to take a while: about 380 MB of textures, audio and baked scenes in `Assets/Resources`
+(all of it goes into the APK -- a sideload test build, not a Play upload).
 
 ## What I need back
 - `build.log` (Unity's log of the import and build), even when it succeeds -- shader compile warnings are in it.
