@@ -423,7 +423,7 @@ void fragment() {
                 _Word(txt, _lg, 24, cr.position + new Vector2(34, 26), Color.WHITE, a);
                 var sub = GD.Fmt("%d BOUNTY", (int)cur["bounty"]);
                 var sw = bold.GetStringSize(sub, HorizontalAlignment.Left, -1, 10).x;
-                _Word(sub, bold, 10, new Vector2(-sw * 0.5, cr.GetEnd().y + 13.0), Color.FromCode("#e8dcc0"), a);
+                _Word(sub, bold, 10, new Vector2(-sw * 0.5, cr.End.y + 13.0), Color.FromCode("#e8dcc0"), a);
             }
         }
 
@@ -555,7 +555,7 @@ void fragment() {
 
         public void _Ember(Rect2 ar, Color col)
         {
-            var p = new Vector2(_rng.RandfRange(ar.position.x + ar.size.x * 0.1, ar.GetEnd().x - ar.size.x * 0.1), _rng.RandfRange(ar.position.y + ar.size.y * 0.4, ar.GetEnd().y));
+            var p = new Vector2(_rng.RandfRange(ar.position.x + ar.size.x * 0.1, ar.End.x - ar.size.x * 0.1), _rng.RandfRange(ar.position.y + ar.size.y * 0.4, ar.End.y));
             _Add(GDict.Of("kind", "ember", "p", p, "v", new Vector2(_rng.RandfRange(-20.0, 20.0), _rng.RandfRange(-90.0, -40.0)), "life", _rng.RandfRange(1.0, 1.8),
                 "size", _rng.RandfRange(2.5, 4.5), "col", col, "g", -10.0));
         }
@@ -597,7 +597,7 @@ void fragment() {
                     {
                         case "first_blood":
                             _drip_t = 0.09;
-                            _Add(GDict.Of("kind", "drip", "p", new Vector2(_rng.RandfRange(ar.position.x + ar.size.x * 0.12, ar.GetEnd().x - ar.size.x * 0.12), ar.GetEnd().y - ar.size.y * 0.16),
+                            _Add(GDict.Of("kind", "drip", "p", new Vector2(_rng.RandfRange(ar.position.x + ar.size.x * 0.12, ar.End.x - ar.size.x * 0.12), ar.End.y - ar.size.y * 0.16),
                                 "v", new Vector2(0.0, _rng.RandfRange(10.0, 40.0)), "life", _rng.RandfRange(0.8, 1.3), "size", _rng.RandfRange(2.0, 3.5),
                                 "col", new Color(0.75, 0.03, 0.06), "g", 380.0));
                             break;

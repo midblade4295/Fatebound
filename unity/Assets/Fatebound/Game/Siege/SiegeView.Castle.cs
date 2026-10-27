@@ -19,11 +19,8 @@ namespace Fatebound.Game
 {
     using Stage = Fatebound.Game.AssetCache;
     using Land = Fatebound.Sim.Land;
-    using CastleKit = Fatebound.Game.CastleKit;
     using Keep = Fatebound.Sim.Keep;
     using Sim = Fatebound.Sim.SiegeSim;
-    using Foliage = Fatebound.Game.Foliage;
-    using RockSculpt = Fatebound.Game.RockSculpt;
 
     public partial class SiegeView
     {
@@ -42,7 +39,7 @@ namespace Fatebound.Game
                 if (kind == "glow_src" || kind == "glow_dst")
                 {
                     var gt = new GradientTexture2D();
-                    gt.Fill = GradientTexture2D.FILL_RADIAL;
+                    gt.Fill = GradientTexture2D.FillEnum.Radial;
                     gt.FillFrom = new Vector2(0.5, 0.5);
                     gt.FillTo = new Vector2(1.0, 0.5);
                     var gr = new Gradient();

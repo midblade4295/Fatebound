@@ -25,15 +25,8 @@ namespace Fatebound.Game
     using Eco = Fatebound.Game.Economy;
     using Stage = Fatebound.Game.AssetCache;
     using Land = Fatebound.Sim.Land;
-    using CastleKit = Fatebound.Game.CastleKit;
     using Keep = Fatebound.Sim.Keep;
     using Sim = Fatebound.Sim.SiegeSim;
-    using WeaponFx = Fatebound.Game.WeaponFx;
-    using SpellFx = Fatebound.Game.SpellFx;
-    using EyeFx = Fatebound.Game.EyeFx;
-    using WyrmBody = Fatebound.Game.WyrmBody;
-    using Foliage = Fatebound.Game.Foliage;
-    using Towers = Fatebound.Game.Towers;
 
     public partial class SiegeView : Node3D
     {
@@ -371,7 +364,21 @@ namespace Fatebound.Game
             if (_cloud_floor_shader == null)
             {
                 _cloud_floor_shader = new Shader();
-                _cloud_floor_shader.Code = GDSHADER_L284;
+                _cloud_floor_shader.Code = "\n" +
+                    "shader_type spatial;\n" +
+                    "render_mode specular_disabled;\n" +
+                    "uniform sampler2D tex : source_color, filter_linear_mipmap, repeat_enable;\n" +
+                    "uniform sampler2D cloud_tex : filter_linear_mipmap, repeat_enable;\n" +
+                    "uniform vec4 tint_col : source_color;\n" +
+                    "uniform float cloud_strength = 0.2;\n" +
+                    "uniform float uv_scale = 1.0;\n" +
+                    "varying vec3 wpos;\n" +
+                    "void vertex() { wpos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz; }\n" +
+                    "void fragment() {\n" +
+                    "\tfloat cl = smoothstep(0.46, 0.74, texture(cloud_tex, wpos.xz / 95.0 + vec2(TIME * 0.006, TIME * 0.0035)).r);\n" +
+                    "\tALBEDO = texture(tex, UV * uv_scale).rgb * tint_col.rgb * (1.0 - cloud_strength * cl);\n" +
+                    "\tROUGHNESS = 0.95;\n" +
+                    "}\n";
             }
             var m = new ShaderMaterial();
             m.Shader = _cloud_floor_shader;
@@ -398,7 +405,7 @@ namespace Fatebound.Game
             g.SetColor(1, new Color(1, 1, 1, 0));
             var t = new GradientTexture2D();
             t.Gradient = g;
-            t.Fill = GradientTexture2D.FILL_RADIAL;
+            t.Fill = GradientTexture2D.FillEnum.Radial;
             t.FillFrom = new Vector2(0.5, 0.5);
             t.FillTo = new Vector2(1.0, 0.5);
             t.Width = 64;
@@ -546,7 +553,64 @@ namespace Fatebound.Game
         public ShaderMaterial _WaterHqMaterial()
         {
             var sh = new Shader();
-            sh.Code = GDSHADER_L451;
+            sh.Code = "\n" +
+                "shader_type spatial;\n" +
+                "render_mode cull_disabled, blend_mix, depth_draw_opaque;\n" +
+                "uniform sampler2D ripples : filter_linear_mipmap, repeat_enable;\n" +
+                "uniform sampler2D rip_tex : filter_linear, repeat_disable;\n" +
+                "uniform float rip_half = 34.0;\n" +
+                "uniform vec2 rip_texel = vec2(0.001953, 0.019231);\n" +
+                "uniform float rip_strength = 28.0;\n" +
+                "uniform float wake_tint = 4.5;            // crests lighter, troughs darker: how the wakes show without foam\n" +
+                "uniform vec3 deep_col : source_color = vec3(0.05, 0.33, 0.40);\n" +
+                "uniform vec3 shallow_col : source_color = vec3(0.26, 0.66, 0.62);\n" +
+                "uniform vec3 sky_col : source_color = vec3(0.62, 0.80, 0.95);\n" +
+                "uniform float glint = 0.0;\n" +
+                "uniform float wave_height = 1.5;          // 0.31.21: the surface rises and falls with the simulated waves\n" +
+                "varying vec3 wpos;\n" +
+                "void vertex() {\n" +
+                "\twpos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;\n" +
+                "\tvec2 ruv = vec2((wpos.x + rip_half) / (2.0 * rip_half), UV.y);\n" +
+                "\tfloat inside = step(0.0, ruv.x) * step(ruv.x, 1.0);\n" +
+                "\tfloat h = textureLod(rip_tex, ruv, 0.0).r * inside;\n" +
+                "\th = (isnan(h) || isinf(h)) ? 0.0 : h;\n" +
+                "\tfloat edge = smoothstep(0.0, 0.1, UV2.y) * smoothstep(1.0, 0.9, UV2.y);     // held at the banks\n" +
+                "\tVERTEX.y += h * wave_height * edge;\n" +
+                "\twpos.y += h * wave_height * edge;\n" +
+                "}\n" +
+                "float detail(vec2 p) {\n" +
+                "\treturn texture(ripples, p * 0.11 + vec2(-TIME * 0.035, 0.0)).r * 0.6\n" +
+                "\t\t+ texture(ripples, p * 0.23 + vec2(-TIME * 0.05, TIME * 0.02)).r * 0.4;\n" +
+                "}\n" +
+                "void fragment() {\n" +
+                "\t// Flowing detail (the river runs toward -x) from finite differences of two scrolling layers.\n" +
+                "\tfloat e = 0.2;\n" +
+                "\tfloat d0 = detail(wpos.xz);\n" +
+                "\tvec2 slope = vec2(detail(wpos.xz + vec2(e, 0.0)) - d0, detail(wpos.xz + vec2(0.0, e)) - d0) / e * 0.22;\n" +
+                "\t// The simulated waves.\n" +
+                "\tvec2 ruv = vec2((wpos.x + rip_half) / (2.0 * rip_half), UV.y);\n" +
+                "\tfloat inside = step(0.0, ruv.x) * step(ruv.x, 1.0);\n" +
+                "\tfloat h = texture(rip_tex, ruv).r * inside;\n" +
+                "\tfloat hx = (texture(rip_tex, ruv + vec2(rip_texel.x, 0.0)).r - texture(rip_tex, ruv - vec2(rip_texel.x, 0.0)).r) * inside;\n" +
+                "\tfloat hz = (texture(rip_tex, ruv + vec2(0.0, rip_texel.y)).r - texture(rip_tex, ruv - vec2(0.0, rip_texel.y)).r) * inside;\n" +
+                "\tif (isnan(h + hx + hz) || isinf(h + hx + hz)) { h = 0.0; hx = 0.0; hz = 0.0; }\n" +
+                "\tslope += clamp(vec2(hx, hz) * rip_strength, vec2(-1.5), vec2(1.5));\n" +
+                "\tvec3 wn = normalize(vec3(-slope.x, 1.0, -slope.y));\n" +
+                "\tNORMAL = normalize((VIEW_MATRIX * vec4(wn, 0.0)).xyz);\n" +
+                "\tfloat edge = min(UV2.y, 1.0 - UV2.y);\n" +
+                "\tfloat depth = smoothstep(0.02, 0.4, edge);\n" +
+                "\tvec3 col = mix(shallow_col, deep_col, depth);\n" +
+                "\tfloat fres = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 4.0);\n" +
+                "\tcol = mix(col, sky_col, clamp(fres * 0.3, 0.0, 0.25));     // (0.31.216: 0.5 -- the river bed shows through now)\n" +
+                "\t// No foam (Round 34, Kevin). The wakes read as light crests and dark troughs instead.\n" +
+                "\tcol *= 1.0 + clamp(h, -0.12, 0.12) * wake_tint;\n" +
+                "\tALBEDO = col;\n" +
+                "\tALPHA = mix(0.38, 0.66, depth);              // (0.31.216: 0.58 .. 0.86: the painted river bed shows through)\n" +
+                "\tROUGHNESS = 0.16;                 // 0.30.11: was 0.05 / 0.75 -- the sun's glare spread white over the wide lake\n" +
+                "\tSPECULAR = 0.35;\n" +
+                "\tfloat sg = texture(ripples, wpos.xz * 0.19 + vec2(-TIME * 0.09, TIME * 0.05)).r * texture(ripples, wpos.xz * 0.13 + vec2(TIME * 0.07, -TIME * 0.04)).r;\n" +
+                "\tEMISSION = vec3(1.0, 0.97, 0.88) * smoothstep(0.58, 0.64, sg) * glint;\n" +
+                "}\n";
             var m = new ShaderMaterial();
             m.Shader = sh;
             var nt = new NoiseTexture2D();
@@ -588,7 +652,33 @@ namespace Fatebound.Game
         public void _BuildRipples()
         {
             var sh = new Shader();
-            sh.Code = GDSHADER_L547;
+            sh.Code = "\n" +
+                "shader_type canvas_item;\n" +
+                "render_mode blend_disabled;\n" +
+                "uniform sampler2D prev : filter_nearest, repeat_disable;\n" +
+                "uniform vec2 texel;\n" +
+                "uniform vec2 cell_m;\n" +
+                "uniform vec4 drops[16];\n" +
+                "uniform int drop_count = 0;\n" +
+                "uniform float damping = 0.989;            // wakes trail longer (Round 34)\n" +
+                "void fragment() {\n" +
+                "\tvec4 p = texture(prev, UV);\n" +
+                "\tfloat n = texture(prev, UV + vec2(texel.x, 0.0)).r + texture(prev, UV - vec2(texel.x, 0.0)).r\n" +
+                "\t\t+ texture(prev, UV + vec2(0.0, texel.y)).r + texture(prev, UV - vec2(0.0, texel.y)).r;\n" +
+                "\tfloat h = (n * 0.5 - p.g) * damping;\n" +
+                "\tfor (int i = 0; i < 16; i++) {\n" +
+                "\t\tif (i >= drop_count) { break; }\n" +
+                "\t\tvec2 d = (UV - drops[i].xy) / texel * cell_m;\n" +
+                "\t\tfloat r = drops[i].z;\n" +
+                "\t\th += drops[i].w * exp(-dot(d, d) / (r * r));\n" +
+                "\t}\n" +
+                "\th *= smoothstep(0.0, 0.03, UV.y) * smoothstep(1.0, 0.97, UV.y);\n" +
+                "\t// 0.30.11: the lake made the simulated patch 5x bigger. A bad cell (NaN/inf) would spread and the water would\n" +
+                "\t// render white (Kevin's screenshot): clamp and scrub every step.\n" +
+                "\th = (isnan(h) || isinf(h)) ? 0.0 : clamp(h, -0.6, 0.6);\n" +
+                "\tfloat pr = (isnan(p.r) || isinf(p.r)) ? 0.0 : clamp(p.r, -0.6, 0.6);\n" +
+                "\tCOLOR = vec4(h, pr, 0.0, 1.0);\n" +
+                "}\n";
             for (int k = 0; k < 2; k++)
             {
                 var vp = new SubViewport();

@@ -14,6 +14,7 @@ using Diag = Fatebound.Game.SiegeDiag;
 using Net = Fatebound.Game.SiegeNet;
 using Platform = Fatebound.Game.Platform;          // 0.31.130: Google Play or the App Store
 using Champions = Fatebound.Game.Champions;       // 0.31.187: who the eighteen are (the Locker)
+using Kits = Fatebound.Sim.MobaKits;              // (screens.gd loads moba_kits.gd inside skin_grid / market_heroes / locker_champions)
 
 namespace Fatebound.Game
 {
@@ -290,7 +291,7 @@ namespace Fatebound.Game
             }
             // --- chests, on the bottom edge
             ChestsRow(app, top, GD.Minf(w - PLAQUE_W - 14.0, 4.0 * 118.0), (double)lay["chests"]);     // (0.31.216: left of PLAY)
-            if ((bool)Var.Of(app.safe_boot) && !(bool)Var.Of(app.GetMeta("safe_note", false)))
+            if (app.safe_boot && !(bool)Var.Of(app.GetMeta("safe_note", false)))
             {
                 // 0.31.70: the last start never reached the menu, so this one skipped the background loading
                 app.SetMeta("safe_note", true);
@@ -1693,6 +1694,2430 @@ namespace Fatebound.Game
             return l;
         }
 
-        // @@CONTINUE@@
+        public static void _ScrollTo(SiegeApp app, Node node)
+        {
+            // glide the page so `node` sits at the top (the shop's jump bar and role coins)
+            ScrollContainer sc = app.content_scroll;
+            if (!GD.IsInstanceValid(sc) || node == null || !GD.IsInstanceValid(node))
+                return;
+            var to = GD.Maxi(0, sc.ScrollVertical + (int)((double)(node as Control).GlobalPosition.y - sc.GlobalPosition.y) - 8);
+            var tw = sc.CreateTween();
+            tw.TweenProperty(sc, "scroll_vertical", to, 0.45).SetTrans(Tween.TRANS_CUBIC).SetEase(Tween.EASE_OUT);
+        }
+
+        public static void _Twinkles(Control parent, int n, Color col, Rect2 area, double px = 22.0)
+        {
+            // little four-point stars winking on and off over a picture (area: fractions of the parent), each on its own beat
+            for (int i = 0; i < n; i++)
+            {
+                var t = new TextureRect();
+                t.Texture = UI2.Tex("res://assets/vfx/spell/sparkle.png");
+                t.ExpandMode = TextureRect.EXPAND_IGNORE_SIZE;
+                double sz = px * GD.RandfRange(0.6, 1.2);
+                t.Size = new Vector2(sz, sz);
+                t.PivotOffset = t.Size * 0.5;
+                t.Modulate = new Color(col, 0.0);
+                t.MouseFilter = Control.MOUSE_FILTER_IGNORE;
+                var mat = new CanvasItemMaterial();
+                mat.BlendMode = CanvasBlendMode.Add;
+                t.Material = mat;
+                parent.AddChild(t);
+                double fx = GD.RandfRange(area.position.x, area.position.x + area.size.x);
+                double fy = GD.RandfRange(area.position.y, area.position.y + area.size.y);
+                Action place = () => t.Position = new Vector2(parent.Size.x * fx, parent.Size.y * fy) - t.Size * 0.5;
+                parent.Resized += place;
+                UI2.WhenReady(t, () =>
+                {
+                    place();
+                    var tw = t.CreateTween().SetLoops();
+                    tw.TweenInterval(GD.RandfRange(0.2, 3.0));
+                    tw.TweenProperty(t, "modulate:a", 1.0, 0.35).SetTrans(Tween.TRANS_SINE);
+                    tw.Parallel().TweenProperty(t, "rotation", GD.DegToRad(45.0), 0.7);
+                    tw.TweenProperty(t, "modulate:a", 0.0, 0.45).SetTrans(Tween.TRANS_SINE);
+                    tw.TweenProperty(t, "rotation", 0.0, 0.01);
+                    tw.TweenInterval(GD.RandfRange(1.5, 3.5));
+                });
+            }
+        }
+
+        public static void _FeatThumb(SiegeApp app, Node row, string id, int i, bool on)
+        {
+            // one of the week's three: him in it over his own place, a gold frame on the one showing
+            GDict sk = Eco.SKINS[id].D;
+            var hid = GD.Str(sk["hero"]);
+            var rc = Color.FromCode(GD.Str(Eco.RARITY_COLOR.Get(GD.Str(sk["rarity"]), "#c47bff")));
+            var tb = new Button();
+            tb.Flat = true;
+            tb.FocusMode = Control.FOCUS_NONE;
+            foreach (var st_name in new[] { "normal", "hover", "pressed", "focus" })
+                tb.AddThemeStyleboxOverride(st_name, new StyleBoxEmpty());
+            tb.CustomMinimumSize = new Vector2(76, 76);
+            tb.SetMeta("action_key", GD.Fmt("feat_%d", i));
+            tb.Pressed += () =>
+            {
+                app.Sfx("tap");
+                app.SetMeta("shop_feat", i);
+                app.Rebuild();
+            };
+            row.AddChild(tb);
+            var pane = new Panel();
+            var sb = new StyleBoxFlat();
+            sb.BgColor = Champions.Accent(hid).Darkened(0.75);
+            sb.SetCornerRadiusAll(16);
+            pane.AddThemeStyleboxOverride("panel", sb);
+            pane.ClipChildren = CanvasItem.CLIP_CHILDREN_AND_DRAW;
+            pane.SetAnchorsAndOffsetsPreset(Control.PRESET_FULL_RECT);
+            pane.MouseFilter = Control.MOUSE_FILTER_IGNORE;
+            tb.AddChild(pane);
+            var art = new TextureRect();
+            art.Texture = UI2.Tex(Champions.CardArt(hid));
+            art.ExpandMode = TextureRect.EXPAND_IGNORE_SIZE;
+            art.StretchMode = TextureRect.STRETCH_KEEP_ASPECT_COVERED;
+            art.SetAnchorsAndOffsetsPreset(Control.PRESET_FULL_RECT);
+            art.Modulate = on ? new Color(1, 1, 1) : new Color(0.55, 0.55, 0.65);
+            art.MouseFilter = Control.MOUSE_FILTER_IGNORE;
+            pane.AddChild(art);
+            var ti = UI2.Img(pane, GD.Fmt("res://assets/ui/skins/%s.png", id), 70.0);
+            ti.Position = new Vector2(3, 6);
+            if (!on)
+                ti.Modulate = new Color(0.75, 0.75, 0.82);
+            var rim = new Panel();
+            var rs = new StyleBoxFlat();
+            rs.DrawCenter = false;
+            rs.BorderColor = on ? UI2.GOLD : new Color(rc, 0.8);
+            rs.SetBorderWidthAll(on ? 3 : 2);
+            rs.SetCornerRadiusAll(16);
+            if (on)
+            {
+                rs.ShadowColor = new Color(1.0, 0.82, 0.3, 0.6);
+                rs.ShadowSize = 8;
+            }
+            rim.AddThemeStyleboxOverride("panel", rs);
+            rim.SetAnchorsAndOffsetsPreset(Control.PRESET_FULL_RECT);
+            rim.MouseFilter = Control.MOUSE_FILTER_IGNORE;
+            tb.AddChild(rim);
+            var off = Eco.SaleOff(id, (int)app.profile.Now());        // 0.31.203: its discount on the corner
+            if (off > 0)
+            {
+                var bd = _SaleBadge(tb, off, 42.0, true);
+                bd.Position = new Vector2(46, -14);
+            }
+        }
+
+        public static Control GemPacks(SiegeApp app, Node root)
+        {
+            // 0.31.90 (Kevin: in-app purchases): gems for real money, Google Play only. The starter pack first while it can still
+            // be bought, then the five packs, priced in the player's currency once Google has answered. (0.31.202: returns its
+            // heading -- the shop's GEMS jump)
+            // (app.billing is billing.gd or billing_ios.gd -- one face: StoreBilling's IStoreBilling)
+            var bl = app.billing as IStoreBilling;
+            bool live = bl != null && bl.Active();
+            // (0.31.130: the App Store on iOS; the same words otherwise)
+            var head = UI2.Divider(root, "GEM PACKS", 22, GD.Fmt(live ? "%s  ·  gems never change damage" : "in the %s version", Platform.StoreShort()));
+            var p = app.profile;
+            if (!(bool)p.d["iap"]["starter"])
+            {
+                var sc = new Control();
+                sc.CustomMinimumSize = new Vector2(0, 132);
+                root.AddChild(sc);
+                UI2.Plate(sc, "ember", 18.0, "orange");
+                var ry = UI2.Rays(sc, 200.0, new Color(1.0, 0.8, 0.4), 26.0, 0.35);
+                ry.Position = new Vector2(-40, -40);
+                var gi = UI2.Img(sc, STARTER_ART, 110.0);           // (0.31.214: the pack's own picture, as on Home)
+                gi.Position = new Vector2(4, 18);
+                UI2.Bob(gi, 4.0, 1.4);                                       // (0.31.202: it floats, it shines, it says once)
+                _Twinkles(sc, 5, new Color(0.8, 0.95, 1.0), new Rect2(0.04, 0.1, 0.24, 0.7), 18.0);
+                UI2.Sweep(sc, 3.6, 80.0, 0.3);
+                var once = UI2.Chip(sc, "ONE-TIME OFFER", new Color("#e8443a"), Color.WHITE, new Color("#3a0805"));
+                once.AnchorLeft = 1.0;
+                once.AnchorRight = 1.0;
+                once.GrowHorizontal = Control.GROW_DIRECTION_BEGIN;
+                once.OffsetRight = -10;
+                once.OffsetLeft = -120;
+                once.OffsetTop = -9;
+                once.OffsetBottom = 9;
+                var v = new VBoxContainer();
+                v.AddThemeConstantOverride("separation", 2);
+                v.SetAnchorsAndOffsetsPreset(Control.PRESET_FULL_RECT);
+                v.OffsetLeft = 120;
+                v.OffsetRight = -12;
+                v.OffsetTop = 10;
+                v.OffsetBottom = -52;
+                v.MouseFilter = Control.MOUSE_FILTER_IGNORE;
+                sc.AddChild(v);
+                UI2.Text(v, "STARTER PACK", 20, UI2.GOLD, UI2.INK, 5);
+                GDict sp = Net.IAP["starter_pack"].D;
+                UI2.Body(v, GD.Fmt("%d gems  ·  %s gold  ·  a Hero Token (any hero)  ·  once per player", (int)sp["gems"], UI.Grouped((int)sp.Get("gold", 0))),
+                    12, new Color("#ffe9c7"));            // (0.31.108-0.31.187: an epic weapon)
+                var sb = _IapButton(app, sc, "starter_pack", Vector2.ZERO, Vector2.ZERO);
+                sb.SetAnchorsAndOffsetsPreset(Control.PRESET_BOTTOM_WIDE);
+                sb.OffsetLeft = 120;
+                sb.OffsetRight = -12;
+                sb.OffsetTop = -48;
+                sb.OffsetBottom = -10;
+            }
+            // 0.31.108: a "play_only" pack (gems_14000) shows once Google Play knows its price; then it is the best value
+            var shown = new GArray();
+            foreach (var pid in Net.IAP)
+            {
+                GDict pk0 = Net.IAP[pid].D;
+                if ((bool)pk0.Get("once", false))
+                    continue;
+                if ((bool)pk0.Get("play_only", false) && !(app.billing != null && (app.billing as IStoreBilling).prices.Has(pid)))
+                    continue;
+                shown.Append(pid);
+            }
+            var grids = new List<GridContainer>();
+            foreach (var cols in new[] { 3, GD.Maxi(2, shown.Size() - 3) })
+            {
+                var grid = new GridContainer();
+                grid.Columns = cols;
+                grid.AddThemeConstantOverride("h_separation", 8);
+                grid.AddThemeConstantOverride("v_separation", 10);
+                root.AddChild(grid);
+                grids.Add(grid);
+            }
+            var size_ix = 0;
+            foreach (var pid0 in shown)
+            {
+                string pid = GD.Str(pid0);
+                GDict pk = Net.IAP[pid].D;
+                GridContainer grid = grids[size_ix < 3 ? 0 : 1];
+                var c = new Control();
+                var big = size_ix >= 3;
+                UI.Grow(c);
+                grid.AddChild(c);
+                UI2.Plate(c, big ? "purple" : "royal", 18.0, big ? "gold" : "blue");
+                var art_px = PackArt(c, GD.Fmt("res://assets/ui/packs/gem_pack_%d.png", GD.Mini(size_ix + 1, 6)), GD.Mini(size_ix + 1, 5), big,
+                    new Color(0.55, 0.85, 1.0));
+                var gl = UI2.Text(c, UI.Compact((int)pk["gems"]), big ? 21 : 19, Color.WHITE, UI2.INK, 5);
+                gl.HorizontalAlignment = HorizontalAlignment.Center;
+                gl.SetAnchorsAndOffsetsPreset(Control.PRESET_TOP_WIDE);
+                gl.OffsetTop = art_px + 8.0;
+                gl.OffsetBottom = art_px + 32.0;
+                var b = _IapButton(app, c, pid, Vector2.ZERO, Vector2.ZERO);
+                b.SetAnchorsAndOffsetsPreset(Control.PRESET_BOTTOM_WIDE);
+                b.OffsetLeft = 6;
+                b.OffsetRight = -6;
+                b.OffsetTop = -40;
+                b.OffsetBottom = -6;
+                var tag = GD.Str(pk.Get("tag", ""));
+                if (tag == "BEST VALUE" && pid != shown[shown.Size() - 1])
+                    tag = "";                                    // (a bigger pack is the best value)
+                if (tag == "BEST VALUE")
+                    UI2.Sweep(c, 3.0, 70.0, 0.32);                          // (0.31.202: the best value shines)
+                if (tag != "")
+                {
+                    var tg = UI2.Chip(c, tag, tag == "BEST VALUE" ? new Color("#e8443a") : new Color("#2f7de1"), Color.WHITE, new Color("#170a05"));
+                    tg.AnchorLeft = 0.5;
+                    tg.AnchorRight = 0.5;
+                    tg.OffsetLeft = -46;
+                    tg.OffsetRight = 46;
+                    tg.OffsetTop = -10;
+                    tg.OffsetBottom = 8;
+                }
+                size_ix += 1;
+            }
+            if (StoreBilling.CanRestore(bl as Node))
+            {
+                // 0.31.130: the App Store requires a way to get a bought-once item (the starter pack) back on a new phone
+                // (only billing_ios.gd has restore() and `restoring`: can_restore says it's that one)
+                var rb = UI2.Button(root, (bl as BillingIos).restoring ? "…" : "RESTORE PURCHASES", "grey", () =>
+                {
+                    app.Sfx("tap");
+                    (bl as BillingIos).Restore();
+                }, "iap_restore", 14, 38.0);
+                rb.Disabled = (bl as BillingIos).restoring || GD.Str(bl.busy) != "";
+            }
+            return head;
+        }
+
+        public static double PackArt(Control c, string path, int tier, bool big, Color shine)
+        {
+            // 0.31.106 (Kevin: "Make new art for the higher tier packs so it shows more the higher the pack is. Add fun things
+            // to art for higher packs"): each tier its own picture, bigger as it goes (a gem, a heap, a pouch, a chest, a royal
+            // hoard with a crown and a baby dragon; a stack ... a barrel, a mine cart with a grinning mimic). The top two shine
+            // (a soft glow); the top one also has turning rays and bobs. Sets the tile's height; returns the art's size.
+            var px = !big ? 104.0 : 132.0;
+            c.CustomMinimumSize = new Vector2(0, px + 84.0);
+            if (tier >= 4)
+            {
+                var gw = UI2.Glow(c, new Rect2(0, 0, 10, 10), new Color(shine, tier == 5 ? 0.5 : 0.32));
+                c.Resized += () =>
+                {
+                    gw.Size = new Vector2(px, px) * 1.25;
+                    gw.Position = new Vector2(((double)c.Size.x - gw.Size.x) * 0.5, 6.0 + (px - gw.Size.y) * 0.5);
+                };
+            }
+            if (tier >= 5)
+            {
+                var ry = UI2.Rays(c, px * 1.6, shine.Lerp(Color.WHITE, 0.4), 22.0, 0.42);
+                c.Resized += () => ry.Position = new Vector2(((double)c.Size.x - ry.Size.x) * 0.5, 6.0 + (px - ry.Size.y) * 0.5);
+            }
+            var gi = UI2.Img(c, path, px);
+            c.Resized += () => gi.Position = new Vector2((c.Size.x - px) * 0.5, 6.0);
+            if (tier >= 5)
+            {
+                UI2.WhenReady(gi, () =>
+                {
+                    var tw = gi.CreateTween().SetLoops();
+                    tw.TweenProperty(gi, "position:y", 1.0, 1.3).SetTrans(Tween.TRANS_SINE).SetEase(Tween.EASE_IN_OUT);
+                    tw.TweenProperty(gi, "position:y", 9.0, 1.3).SetTrans(Tween.TRANS_SINE).SetEase(Tween.EASE_IN_OUT);
+                });
+            }
+            return px;
+        }
+
+        public static Button _IapButton(SiegeApp app, Control parent, string pid, Vector2 at, Vector2 sz)
+        {
+            var bl = app.billing as IStoreBilling;
+            bool live = bl != null && bl.Active();
+            var label = Platform.StoreButton();                // "PLAY STORE" (0.31.130: "APP STORE" on iOS)
+            if (live)
+                label = GD.Str(bl.busy) == pid ? "…" : GD.Str(bl.Price(pid));
+            var b = UI2.Button(parent, label, live ? "green" : "grey", () =>
+            {
+                app.Sfx("tap");
+                if (bl != null)
+                    bl.Buy(pid);
+                else
+                    app.Toast(GD.Fmt("Gem packs are sold in the %s version of Fatebound", Platform.StoreShort()), UI.RED);
+            }, "iap_" + pid, 15, 34.0, 11.0);
+            if (sz != Vector2.ZERO)
+            {
+                b.Position = at;
+                b.Size = sz;
+            }
+            if (live)
+                b.Disabled = !bl.CanBuy(pid);
+            return b;
+        }
+
+        // ---------------- hero skins (0.31.186, League's way) ----------------
+        // Every skin (Eco.SKINS): the hero in it (assets/ui/skins/<id>.png, tools/render_skin_icons.gd), its name, its gems --
+        // BUY asks first (a skin of a locked hero brings him: "+ HERO" on the card); one you own WEAR / WORN (tap WORN: his own
+        // look again). The hero window has the same choice beside the hero.
+        public static void FeaturedOutfit(SiegeApp app, Node root, string id)
+        {
+            // 0.31.188: one of the week's outfits big -- the hero in it, turning, in front of his own place (Champions.art), its
+            // name, his name, its price; tap: his window with it on (preview, buy, wear)
+            // 0.31.203 (Kevin: "For featured outfits, let's make them discounted ... make the graphic of the features look very
+            // eye catching"): the WEEKLY SALE's stage -- a treasure hall, its curtains drawn back (ElevenLabs art), him on its
+            // pedestal under the light, rays of his rarity turning behind him, confetti falling, the red-and-gold starburst with
+            // the discount beating on the corner, the full price struck through and the sale's on a shining button
+            var p = app.profile;
+            GDict sk = Eco.SKINS[id].D;
+            var hid = GD.Str(sk["hero"]);
+            var offer = Eco.SkinOffer(id, p.Now());
+            var off = (int)offer["off"];
+            bool owned = p.OwnsSkin(id);
+            var low = ViewLow(app);
+            var fc = new Control();
+            fc.CustomMinimumSize = new Vector2(0, 300);
+            root.AddChild(fc);
+            var stage = new Panel();
+            var sb = new StyleBoxFlat();
+            sb.BgColor = new Color(0.12, 0.02, 0.03);
+            sb.SetCornerRadiusAll(20);
+            stage.AddThemeStyleboxOverride("panel", sb);
+            stage.ClipChildren = CanvasItem.CLIP_CHILDREN_AND_DRAW;
+            stage.SetAnchorsAndOffsetsPreset(Control.PRESET_FULL_RECT);
+            stage.MouseFilter = Control.MOUSE_FILTER_IGNORE;
+            fc.AddChild(stage);
+            var art = new TextureRect();
+            art.Texture = UI2.Tex(SALE + "sale_stage.webp");
+            art.ExpandMode = TextureRect.EXPAND_IGNORE_SIZE;
+            art.StretchMode = TextureRect.STRETCH_SCALE;
+            art.MouseFilter = Control.MOUSE_FILTER_IGNORE;
+            stage.AddChild(art);
+            var rcol = Color.FromCode(GD.Str(Eco.RARITY_COLOR.Get(GD.Str(sk["rarity"]), "#c47bff")));
+            var warm = rcol.Lerp(new Color(1.0, 0.8, 0.35), 0.45);
+            // a dark wash on the right for the words (0.31.202), deeper now the hall behind is bright
+            var wash = new TextureRect();
+            var wg = new Gradient();
+            wg.SetColor(0, new Color(0.1, 0.0, 0.02, 0.0));
+            wg.SetColor(1, new Color(0.1, 0.0, 0.02, 0.82));
+            var wt = new GradientTexture2D();
+            wt.Gradient = wg;
+            wt.FillFrom = new Vector2(0.4, 0.5);
+            wt.FillTo = new Vector2(0.75, 0.5);
+            wt.Width = 64;
+            wt.Height = 4;
+            wash.Texture = wt;
+            wash.ExpandMode = TextureRect.EXPAND_IGNORE_SIZE;
+            wash.StretchMode = TextureRect.STRETCH_SCALE;
+            wash.SetAnchorsAndOffsetsPreset(Control.PRESET_FULL_RECT);
+            wash.MouseFilter = Control.MOUSE_FILTER_IGNORE;
+            stage.AddChild(wash);
+            var rays = UI2.Rays(stage, 340.0, warm, 24.0, 0.5);
+            var halo = UI2.Glow(stage, new Rect2(0, 0, 240, 240), new Color(warm, 0.5));
+            var pool = UI2.Glow(stage, new Rect2(0, 0, 210, 48), new Color(1.0, 0.86, 0.5, 0.65), false);
+            fc.Resized += () =>
+            {
+                // the hall sized and slid so its pedestal (at 30.5 % across, 63.5 % down the picture) is under his feet
+                double cx = fc.Size.x * 0.31;
+                double feet = fc.Size.y * SALE_FEET;
+                var ah = GD.Maxf(GD.Maxf(fc.Size.y, feet / 0.635), fc.Size.x * 9.0 / 16.0);   // (0.31.216: and as wide as a landscape card)
+                var aw = ah * 16.0 / 9.0;
+                art.Size = new Vector2(aw, ah);
+                art.Position = new Vector2(GD.Clampf(cx - 0.305 * aw, fc.Size.x - aw, 0.0), GD.Minf(0.0, feet - 0.635 * ah));
+                rays.Position = new Vector2(cx - 170.0, fc.Size.y * 0.42 - 170.0);
+                halo.Position = new Vector2(cx - 120.0, fc.Size.y * 0.42 - 120.0);
+                pool.Position = new Vector2(cx - 105.0, feet - 24.0);
+            };
+            var sh = new Showcase();
+            sh.plinth = false;
+            sh.SetAnchorsAndOffsetsPreset(Control.PRESET_FULL_RECT);
+            sh.AnchorRight = 0.62;
+            sh.MouseFilter = Control.MOUSE_FILTER_IGNORE;
+            stage.AddChild(sh);
+            sh.ShowLook(hid, GDict.Of("skin", id));
+            if (!low)
+            {
+                _Confetti(stage);
+                _Twinkles(stage, 7, rcol.Lerp(Color.WHITE, 0.6), new Rect2(0.05, 0.1, 0.5, 0.75), 20.0);
+            }
+            var rim = new Panel();
+            var rs = new StyleBoxFlat();
+            rs.DrawCenter = false;
+            rs.BorderColor = UI2.GOLD;                                // (0.31.203: the sale's gold; 0.31.202 its rarity)
+            rs.SetBorderWidthAll(3);
+            rs.SetCornerRadiusAll(20);
+            rs.ShadowColor = new Color(1.0, 0.55, 0.15, 0.55);
+            rs.ShadowSize = 12;
+            rim.AddThemeStyleboxOverride("panel", rs);
+            rim.SetAnchorsAndOffsetsPreset(Control.PRESET_FULL_RECT);
+            rim.MouseFilter = Control.MOUSE_FILTER_IGNORE;
+            fc.AddChild(rim);
+            var cap = new VBoxContainer();
+            cap.AddThemeConstantOverride("separation", 3);
+            cap.AnchorLeft = 0.56;
+            cap.AnchorRight = 1.0;
+            cap.OffsetTop = 16;
+            cap.OffsetRight = -12;
+            cap.MouseFilter = Control.MOUSE_FILTER_IGNORE;
+            fc.AddChild(cap);
+            UI2.IconChip(cap, UI2.IconPath("crown"), GD.Str(sk["rarity"]).ToUpperInvariant() + "  ·  " + GD.Str(Eco.SKIN_HEROES.Get(hid, hid)).ToUpperInvariant(),
+                rcol, new Color("#120a02"));
+            var nl = UI2.Text(cap, GD.Str(sk["set"]).ToUpperInvariant(), 24, Color.WHITE, new Color("#3a0306"), 6);
+            nl.AutowrapMode = TextServer.AUTOWRAP_WORD_SMART;
+            UI2.Body(cap, GD.Fmt("%s, the %s", Champions.NameOf(hid), GD.Str(Eco.SKIN_HEROES.Get(hid, hid))), 11, Champions.Accent(hid).Lightened(0.45));
+            if (!owned && off > 0)
+            {
+                // the full price struck through, and what you keep
+                var was = new HBoxContainer();
+                was.AddThemeConstantOverride("separation", 5);
+                was.MouseFilter = Control.MOUSE_FILTER_IGNORE;
+                cap.AddChild(was);
+                UI2.Img(was, "res://assets/ui/currency/gem.png", 16.0);
+                _Struck(was, UI.Grouped((int)offer["was_gems"]), 15, new Color(0.82, 0.8, 0.88));
+                UI2.Chip(was, GD.Fmt("SAVE %s", UI.Grouped((int)offer["was_gems"] - (int)offer["gems"])), new Color("#1f7a34"), Color.WHITE, new Color("#9dff8a", 0.6));
+            }
+            if (!owned && (int)offer["gold"] > 0)                    // 0.31.189: a rare outfit -- or gold (0.31.203: on sale too)
+            {
+                var gr = new HBoxContainer();
+                gr.AddThemeConstantOverride("separation", 4);
+                gr.MouseFilter = Control.MOUSE_FILTER_IGNORE;
+                cap.AddChild(gr);
+                UI2.Body(gr, "or", 11, new Color("#ffd86b"), false);
+                if (off > 0)
+                    _Struck(gr, UI.Grouped((int)offer["was_gold"]), 11, new Color(0.8, 0.78, 0.7));
+                UI2.Body(gr, GD.Fmt("%s gold", UI.Grouped((int)offer["gold"])), 11, new Color("#ffd86b"), false);
+            }
+            UI2.Body(cap, "Tap to see it on him", 10, new Color(1, 1, 1, 0.65));
+            var tap = new Button();
+            tap.Flat = true;
+            tap.FocusMode = Control.FOCUS_NONE;
+            foreach (var st_name in new[] { "normal", "hover", "pressed", "focus" })
+                tap.AddThemeStyleboxOverride(st_name, new StyleBoxEmpty());
+            tap.SetAnchorsAndOffsetsPreset(Control.PRESET_FULL_RECT);
+            tap.SetMeta("action_key", "feat_open");
+            tap.Pressed += () => app.OpenChampion(hid, id);
+            fc.AddChild(tap);
+            Button b;
+            if (owned)
+            {
+                bool worn = p.WornSkin(hid) == id;
+                b = UI2.Button(fc, worn ? "WORN" : "WEAR", worn ? "grey" : "blue", () =>
+                {
+                    p.WearSkin(hid, p.WornSkin(hid) == id ? "" : id);
+                    app.Sfx("equip");
+                    app.Rebuild();
+                }, "feat_wear", 16, 44.0, 12.0);
+            }
+            else
+            {
+                b = UI2.Button(fc, UI.Grouped((int)offer["gems"]), "purple", () => BuySkin(app, id), "feat_buy", 19, 48.0, 13.0,
+                    "res://assets/ui/currency/gem.png");
+                b.Disabled = !CanBuySkin(p, id);
+                if (!b.Disabled)
+                {
+                    UI2.Sweep(b, 2.0, 50.0, 0.5);
+                    if (!low)
+                        UI2.Pulse(b, 0.035, 0.7);
+                }
+            }
+            b.AnchorLeft = 0.58;
+            b.AnchorRight = 1.0;
+            b.AnchorTop = 1.0;
+            b.AnchorBottom = 1.0;
+            b.OffsetRight = -12;
+            b.OffsetTop = -62;
+            b.OffsetBottom = -12;
+            if (off > 0)
+            {
+                var bd = _SaleBadge(fc, off, 104.0, low);
+                bd.Position = new Vector2(-12, -16);
+            }
+        }
+
+        public static void SkinGrid(SiegeApp app, Node root)
+        {
+            // 0.31.202: the outfits by role, the Locker's order (TANK ... SUPPORT) -- a row of the six roles' coins first, each
+            // jumping to its own; a role: its name, its heroes, then three to a row: their sets on top, the Frostbound line under
+            // (Kits = Fatebound.Sim.MobaKits: the .gd loads moba_kits.gd here, not at boot: the 5v5's)
+            var heads = new GDict();
+            var coins = new HBoxContainer();
+            coins.Alignment = BoxContainer.ALIGNMENT_CENTER;
+            coins.AddThemeConstantOverride("separation", 6);
+            root.AddChild(coins);
+            foreach (var role in ROLE_ORDER)
+            {
+                string rl = GD.Str(role);
+                _RoleCoin(coins, rl, GD.Str(Kits.ROLE_NAMES.GetValueOrDefault(rl, rl)), () =>
+                {
+                    app.Sfx("tap");
+                    _ScrollTo(app, heads.Get(rl).As<Node>());
+                });
+            }
+            foreach (var role in ROLE_ORDER)
+            {
+                GArray heroes = Champions.ORDER.Filter(h => Kits.RoleOf(GD.Str(h)) == role && !Eco.SkinsOf(GD.Str(h)).IsEmpty());
+                if (heroes.IsEmpty())
+                    continue;
+                var rh = new HBoxContainer();
+                rh.AddThemeConstantOverride("separation", 8);
+                root.AddChild(rh);
+                heads[role] = Var.Of(rh);
+                var bp = GD.Fmt("res://assets/ui/roles/%s.png", role);
+                if (ResourceLoader.Exists(bp))
+                {
+                    var bi = UI2.Img(rh, bp, 30.0);
+                    bi.SizeFlagsVertical = Control.SIZE_SHRINK_CENTER;
+                }
+                var rt = UI2.Text(rh, GD.Str(Kits.ROLE_NAMES.GetValueOrDefault(GD.Str(role), GD.Str(role))), 19, UI2.GOLD, UI2.INK, 5);
+                rt.SizeFlagsVertical = Control.SIZE_SHRINK_CENTER;
+                var names = heroes.Map(h => GD.Str(Eco.SKIN_HEROES.Get(GD.Str(h), h)));
+                var rs = UI2.Body(rh, GStr.Join("  ·  ", names), 10, UI2.SOFT, true);
+                rs.SizeFlagsHorizontal = Control.SIZE_EXPAND_FILL;
+                rs.SizeFlagsVertical = Control.SIZE_SHRINK_CENTER;
+                var rsm = rs.CustomMinimumSize;
+                rsm.x = 10;
+                rs.CustomMinimumSize = rsm;
+                var grid = new GridContainer();
+                grid.Columns = GridCols(app, 128.0);          // (0.31.216: as many as the landscape screen takes; 3 in portrait)
+                grid.AddThemeConstantOverride("h_separation", 10);
+                grid.AddThemeConstantOverride("v_separation", 12);
+                root.AddChild(grid);
+                var ids = new GArray();
+                foreach (var frost in new[] { false, true })
+                {
+                    foreach (var h in heroes)
+                    {
+                        foreach (var id in Eco.SkinsOf(GD.Str(h)))
+                        {
+                            if (Eco.SKIN_LINES.Has(GD.Str(Eco.SKINS[id].D.Get("line", ""))) == frost)
+                                ids.Append(GD.Str(id));
+                        }
+                    }
+                }
+                foreach (var id in ids)
+                    OutfitCard(app, grid, GD.Str(id));
+            }
+        }
+
+        public static Button _RoleCoin(Node row, string role, string label, Action on_press)
+        {
+            // a round button with the role's emblem and its name under it (the shop's jump to that role)
+            var b = new Button();
+            b.Flat = true;
+            b.FocusMode = Control.FOCUS_NONE;
+            foreach (var st_name in new[] { "normal", "hover", "pressed", "focus" })
+                b.AddThemeStyleboxOverride(st_name, new StyleBoxEmpty());
+            b.CustomMinimumSize = new Vector2(58, 64);
+            b.SetMeta("action_key", "shop_role_" + role);
+            b.Pressed += on_press;
+            row.AddChild(b);
+            var disc = new Control();
+            disc.Position = new Vector2(6, 0);
+            disc.Size = new Vector2(46, 46);
+            disc.MouseFilter = Control.MOUSE_FILTER_IGNORE;
+            b.AddChild(disc);
+            UI2.Plate(disc, "royal", 23.0, "gold", GDict.Of("rim", 2.0));
+            var ic = UI2.Img(disc, GD.Fmt("res://assets/ui/roles/%s.png", role), 34.0);
+            ic.Position = new Vector2(6, 6);
+            var l = UI.Label(b, label, 9, UI2.CREAM, UI.HEAVY_FONT);
+            l.AutowrapMode = TextServer.AUTOWRAP_OFF;
+            l.HorizontalAlignment = HorizontalAlignment.Center;
+            l.AddThemeColorOverride("font_outline_color", UI2.INK);
+            l.AddThemeConstantOverride("outline_size", 3);
+            l.Position = new Vector2(-4, 48);
+            l.Size = new Vector2(66, 14);
+            l.MouseFilter = Control.MOUSE_FILTER_IGNORE;
+            return b;
+        }
+
+        public static TextureRect _GradRect(Control parent, GArray stops, Vector2? from = null, Vector2? to = null)
+        {
+            // a full-size gradient over the parent: stops = [[offset, Color], ...]
+            var from_ = from ?? new Vector2(0, 0);
+            var to_ = to ?? new Vector2(0, 1);
+            var g = new Gradient();
+            var offs = new List<double>();
+            var cols = new List<Color>();
+            foreach (var st in stops)
+            {
+                offs.Add((float)(double)st[0]);
+                cols.Add((Color)st[1]);
+            }
+            g.SetOffsets(offs);
+            g.SetColors(cols);
+            var gt = new GradientTexture2D();
+            gt.Gradient = g;
+            gt.FillFrom = from_;
+            gt.FillTo = to_;
+            gt.Width = 4;
+            gt.Height = 64;
+            var t = new TextureRect();
+            t.Texture = gt;
+            t.ExpandMode = TextureRect.EXPAND_IGNORE_SIZE;
+            t.StretchMode = TextureRect.STRETCH_SCALE;
+            t.SetAnchorsAndOffsetsPreset(Control.PRESET_FULL_RECT);
+            t.MouseFilter = Control.MOUSE_FILTER_IGNORE;
+            parent.AddChild(t);
+            return t;
+        }
+
+        public static Control OutfitCard(SiegeApp app, Node grid, string id, bool armory = false)
+        {
+            // 0.31.202: one outfit -- the hero in it standing in his own place (Champions.card_art; the Frostbound line's
+            // frosted over), a glow of its rarity behind him (a set: turning rays too), its rarity and whether you own it or wear
+            // it, the set's name and the hero's, "or 40K" gold for the Frostbound line; tap the picture: his window with it on;
+            // the button: its gems (BUY asks first), WEAR, WORN
+            var p = app.profile;
+            GDict sk = Eco.SKINS[id].D;
+            var hid = GD.Str(sk["hero"]);
+            var rar = GD.Str(sk["rarity"]);
+            bool frost = Eco.SKIN_LINES.Has(GD.Str(sk.Get("line", "")));
+            var rc = Color.FromCode(GD.Str(Eco.RARITY_COLOR.Get(rar, "#c47bff")));
+            bool owned = p.OwnsSkin(id);
+            bool worn = owned && p.WornSkin(hid) == id;
+            Color acc = Champions.Accent(hid);
+            var offer = Eco.SkinOffer(id, p.Now());                 // 0.31.203: the weekly sale's price when it's on it
+            bool sale = (int)offer["off"] > 0 && !owned;
+            var c = new Control();
+            c.CustomMinimumSize = new Vector2(0, 226);
+            UI.Grow(c);
+            grid.AddChild(c);
+            var pane = new Panel();
+            var sb = new StyleBoxFlat();
+            sb.BgColor = rc.Darkened(0.82);
+            sb.SetCornerRadiusAll(16);
+            pane.AddThemeStyleboxOverride("panel", sb);
+            pane.ClipChildren = CanvasItem.CLIP_CHILDREN_AND_DRAW;
+            pane.SetAnchorsAndOffsetsPreset(Control.PRESET_FULL_RECT);
+            pane.MouseFilter = Control.MOUSE_FILTER_IGNORE;
+            c.AddChild(pane);
+            var art = new TextureRect();
+            art.Texture = UI2.Tex(Champions.CardArt(hid));
+            art.ExpandMode = TextureRect.EXPAND_IGNORE_SIZE;
+            art.StretchMode = TextureRect.STRETCH_KEEP_ASPECT_COVERED;
+            art.SetAnchorsAndOffsetsPreset(Control.PRESET_FULL_RECT);
+            art.OffsetBottom = -52;
+            art.Modulate = frost ? new Color(0.62, 0.8, 1.0) : new Color(0.92, 0.88, 1.0);
+            art.MouseFilter = Control.MOUSE_FILTER_IGNORE;
+            pane.AddChild(art);
+            if (frost)
+                _GradRect(pane, GArray.Of(GArray.Of(0.0, new Color(0.85, 0.95, 1.0, 0.45)), GArray.Of(0.35, new Color(0.7, 0.88, 1.0, 0.0))));       // (a frost glaze)
+            TextureRect rays = null;
+            if (!frost)
+                rays = UI2.Rays(pane, 190.0, rc.Lerp(Color.WHITE, 0.3), 28.0, 0.38);
+            var halo = UI2.Glow(pane, new Rect2(0, 0, 150, 150), new Color(rc, !frost ? 0.55 : 0.42), false);
+            var pool = UI2.Glow(pane, new Rect2(0, 0, 110, 26), new Color(0, 0, 0, 0.55), false);        // (his shadow)
+            var ti = UI2.Img(pane, GD.Fmt("res://assets/ui/skins/%s.png", id), 128.0);
+            _GradRect(pane, GArray.Of(GArray.Of(0.0, new Color(0, 0, 0, 0)), GArray.Of(0.48, new Color(0, 0, 0, 0)), GArray.Of(0.7, new Color(rc.Darkened(0.85), 0.9)),
+                GArray.Of(1.0, new Color(rc.Darkened(0.88), 1.0))));
+            c.Resized += () =>
+            {
+                double cx = c.Size.x * 0.5;
+                ti.Position = new Vector2(cx - 64.0, 14.0);
+                halo.Position = new Vector2(cx - 75.0, 4.0);
+                pool.Position = new Vector2(cx - 55.0, 128.0);
+                if (rays != null)
+                    rays.Position = new Vector2(cx - 95.0, 78.0 - 95.0);
+            };
+            if (frost && !ViewLow(app))
+                _Twinkles(pane, 3, new Color(0.85, 0.95, 1.0), new Rect2(0.1, 0.08, 0.8, 0.5), 14.0);
+            var rim = new Panel();
+            var rs = new StyleBoxFlat();
+            rs.DrawCenter = false;
+            rs.BorderColor = worn ? UI2.GOLD : rc;
+            rs.SetBorderWidthAll(worn ? 3 : 2);
+            rs.SetCornerRadiusAll(16);
+            rs.ShadowColor = worn ? new Color(UI2.GOLD, 0.55) : new Color(rc, 0.3);
+            rs.ShadowSize = worn ? 7 : 4;
+            rim.AddThemeStyleboxOverride("panel", rs);
+            rim.SetAnchorsAndOffsetsPreset(Control.PRESET_FULL_RECT);
+            rim.MouseFilter = Control.MOUSE_FILTER_IGNORE;
+            c.AddChild(rim);
+            // its rarity (left), and the hero coming with it / owned / worn (right)
+            var tag = _CardTag(c, rar.ToUpperInvariant(), rc.Darkened(0.15), rc.Darkened(0.7));
+            tag.Position = new Vector2(6, 6);
+            var right = "";
+            var rfill = new Color("#2f8a3e");
+            if (worn)
+            {
+                right = "WORN";
+                rfill = new Color("#b8861c");
+            }
+            else if (owned && !armory)                     // (0.31.204: in the Armory everything is yours)
+                right = "OWNED ✓";
+            else if (!p.OwnsHero(hid))
+                right = "+ HERO";
+            if (right != "" && sale)
+            {
+                var hc = _CardTag(c, right, rfill, rfill.Darkened(0.7));       // (the corner is the sale's: under the rarity)
+                hc.Position = new Vector2(6, 24);
+            }
+            else if (right != "")
+            {
+                var hc = _CardTag(c, right, rfill, rfill.Darkened(0.7));
+                hc.AnchorLeft = 1.0;
+                hc.AnchorRight = 1.0;
+                hc.GrowHorizontal = Control.GROW_DIRECTION_BEGIN;
+                hc.OffsetRight = -6;
+                hc.OffsetLeft = -60;
+                hc.OffsetTop = 6;
+                hc.OffsetBottom = 22;
+            }
+            // the names over the foot of the picture
+            var v = new VBoxContainer();
+            v.AddThemeConstantOverride("separation", 0);
+            v.SetAnchorsAndOffsetsPreset(Control.PRESET_BOTTOM_WIDE);
+            v.OffsetTop = -100;
+            v.OffsetBottom = -46;
+            v.OffsetLeft = 4;
+            v.OffsetRight = -4;
+            v.Alignment = BoxContainer.ALIGNMENT_END;
+            v.MouseFilter = Control.MOUSE_FILTER_IGNORE;
+            c.AddChild(v);
+            var set_name = GD.Str(sk["set"]).ToUpperInvariant();
+            var nl = UI2.Text(v, set_name, set_name.Length <= 10 ? 14 : (set_name.Length <= 12 ? 12 : 11), Color.WHITE, UI2.INK, 4);
+            nl.HorizontalAlignment = HorizontalAlignment.Center;
+            nl.AutowrapMode = TextServer.AUTOWRAP_OFF;
+            nl.ClipText = true;
+            var hl = UI.Label(v, GD.Str(Eco.SKIN_HEROES.Get(hid, hid)).ToUpperInvariant(), 10, acc.Lerp(Color.WHITE, 0.45), UI.HEAVY_FONT);
+            hl.HorizontalAlignment = HorizontalAlignment.Center;
+            hl.AutowrapMode = TextServer.AUTOWRAP_OFF;
+            hl.AddThemeColorOverride("font_outline_color", new Color(0, 0, 0, 0.8));
+            hl.AddThemeConstantOverride("outline_size", 3);
+            if (!owned && (int)offer["gold"] > 0)                 // 0.31.189: or gold (0.31.203: the sale's)
+            {
+                var gc = UI2.IconChip(v, "res://assets/ui/currency/coin.png", GD.Fmt("or %dK", (int)offer["gold"] / 1000), new Color(0.18, 0.12, 0.02, 0.85),
+                    new Color("#ffd86b"), new Color("#ffd86b", 0.5));
+                gc.SizeFlagsHorizontal = Control.SIZE_SHRINK_CENTER;
+            }
+            else if (sale)                                            // what it was, struck through
+            {
+                var wr = new HBoxContainer();
+                wr.Alignment = BoxContainer.ALIGNMENT_CENTER;
+                wr.AddThemeConstantOverride("separation", 3);
+                wr.MouseFilter = Control.MOUSE_FILTER_IGNORE;
+                v.AddChild(wr);
+                UI2.Img(wr, "res://assets/ui/currency/gem.png", 12.0);
+                _Struck(wr, GD.Str((int)offer["was_gems"]), 11, new Color(0.8, 0.78, 0.86));
+            }
+            var look = new Button();                         // 0.31.188: tap the card -- his window with it on
+            look.Flat = true;
+            look.FocusMode = Control.FOCUS_NONE;
+            foreach (var st_name in new[] { "normal", "hover", "pressed", "focus" })
+                look.AddThemeStyleboxOverride(st_name, new StyleBoxEmpty());
+            look.SetAnchorsAndOffsetsPreset(Control.PRESET_FULL_RECT);
+            look.OffsetBottom = -46;
+            look.SetMeta("action_key", "skin_look_" + id);
+            look.Pressed += () => app.OpenChampion(hid, id, armory);
+            c.AddChild(look);
+            Button b;
+            if (owned)
+            {
+                b = UI2.Button(c, worn ? "WORN" : "WEAR", worn ? "gold" : "blue", () =>
+                {
+                    p.WearSkin(hid, p.WornSkin(hid) == id ? "" : id);
+                    app.Sfx("equip");
+                    app.Rebuild();
+                }, "skin_wear_" + id, 13, 34.0, 11.0);
+            }
+            else
+            {
+                b = UI2.Button(c, GD.Str((int)offer["gems"]), "purple", () => BuySkin(app, id), "skin_buy_" + id, 14, 34.0, 11.0,
+                    "res://assets/ui/currency/gem.png");
+                b.Disabled = !CanBuySkin(p, id);
+            }
+            b.SetAnchorsAndOffsetsPreset(Control.PRESET_BOTTOM_WIDE);
+            b.OffsetLeft = 7;
+            b.OffsetRight = -7;
+            b.OffsetTop = -42;
+            b.OffsetBottom = -7;
+            if (sale)
+            {
+                rs.BorderColor = new Color("#ffcf4a");                   // (a sale: a gold frame, glowing warm)
+                rs.ShadowColor = new Color(1.0, 0.5, 0.15, 0.5);
+                rs.ShadowSize = 7;
+                var bd = _SaleBadge(c, (int)offer["off"], 50.0, ViewLow(app));
+                c.Resized += () => bd.Position = new Vector2(c.Size.x - 40.0, -10.0);
+            }
+            return c;
+        }
+
+        // ---------------- the Market's HEROES (0.31.204) ----------------
+        public static void MarketHeroes(SiegeApp app, VBoxContainer root)
+        {
+            // 0.31.204 (Kevin: "put a hero tab in the market that shows heroes that player doesn't own and that's where they will
+            // purchase them"): every hero you don't own, by role (TANK ... SUPPORT), on cards like the outfits' -- him in his
+            // own place, FREE THIS WEEK / NEW / a shard of him, his gold and gem price, UNLOCK (gold, gems, a shard, a Hero Token;
+            // asked first); tap the picture: his window (story, kit, outfits). Once he's yours he's in the Armory. The 5v5
+            // picker's GET IN MARKET lands here with his card lit (app.open_market("heroes", hid)).
+            var p = app.profile;
+            // (Kits = Fatebound.Sim.MobaKits: the .gd loads moba_kits.gd here, not at boot: the 5v5's)
+            GArray locked = Champions.ORDER.Filter(h => !p.OwnsHero(GD.Str(h)));
+            UI2.Divider(root, "HEROES", 22, "yours for good  ·  gold or gems  ·  then he's in your Armory");
+            var inv = "";
+            if ((int)p.d.Get("tokens", 0) > 0)
+                inv = GD.Fmt("HERO TOKEN x%d", (int)p.d["tokens"]);
+            var nsh = p.d.Get("shards", new GArray()).A.Size();
+            if (nsh > 0)
+                inv += (inv != "" ? "  ·  " : "") + GD.Fmt("◆ SHARD%s %d", nsh > 1 ? "S" : "", nsh);
+            if (inv != "" && !locked.IsEmpty())
+            {
+                var ic = UI2.Chip(root, inv, new Color("#173a1e"), new Color("#c9f7bd"), new Color("#6be07c"));
+                ic.SizeFlagsHorizontal = Control.SIZE_SHRINK_CENTER;
+            }
+            if (locked.IsEmpty())
+            {
+                // every hero is yours
+                var box = UI2.Frame(root, "night", 16, 18.0, "gold");
+                box.AddThemeConstantOverride("separation", 6);
+                var cr = UI2.Img(box, UI2.IconPath("crown"), 64.0);
+                cr.SizeFlagsHorizontal = Control.SIZE_SHRINK_CENTER;
+                UI2.Center(UI2.Text(box, "EVERY HERO IS YOURS", 22, Color.WHITE));
+                UI2.Center(UI2.Body(box, GD.Fmt("All %d of them -- they're waiting in your Armory.", Champions.ORDER.Size()), 12, UI2.SOFT));
+                var ab = UI2.Button(box, "OPEN THE ARMORY", "gold", () =>
+                {
+                    app.Sfx("tab");
+                    app.locker_tab = "heroes";
+                    app.ShowTab("locker");
+                }, "market_to_armory", 15, 42.0, 12.0);
+                ab.SizeFlagsHorizontal = Control.SIZE_SHRINK_CENTER;
+                return;
+            }
+            GArray free = Eco.FreeHeroes(p.Now()).Filter(h => !p.OwnsHero(GD.Str(h)));
+            if (!free.IsEmpty())
+            {
+                var fc = UI2.Chip(root, GD.Fmt("FREE THIS WEEK: %s  ·  play them in battle, own them here", GStr.Join(", ", free.Map(h => Champions.ShortOf(GD.Str(h)).ToUpperInvariant()))),
+                    new Color("#1f6a2e"), Color.WHITE, new Color("#9dff8a", 0.6));
+                fc.SizeFlagsHorizontal = Control.SIZE_SHRINK_CENTER;
+            }
+            var focus = GD.Str(Var.Of(app.GetMeta("shop_hero_focus", "")));
+            if (app.HasMeta("shop_hero_focus"))
+                app.RemoveMeta("shop_hero_focus");
+            Control lit = null;
+            foreach (var role in ROLE_ORDER)
+            {
+                GArray hs = locked.Filter(h => Kits.RoleOf(GD.Str(h)) == role);
+                if (hs.IsEmpty())
+                    continue;
+                var rh = new HBoxContainer();
+                rh.AddThemeConstantOverride("separation", 8);
+                root.AddChild(rh);
+                var bp = GD.Fmt("res://assets/ui/roles/%s.png", role);
+                if (ResourceLoader.Exists(bp))
+                    UI2.Img(rh, bp, 30.0).SizeFlagsVertical = Control.SIZE_SHRINK_CENTER;
+                UI2.Text(rh, GD.Str(Kits.ROLE_NAMES.GetValueOrDefault(GD.Str(role), GD.Str(role))), 19, UI2.GOLD, UI2.INK, 5).SizeFlagsVertical = Control.SIZE_SHRINK_CENTER;
+                var rs = UI2.Body(rh, GD.Str(Kits.ROLE_TEXT.GetValueOrDefault(GD.Str(role), "")), 10, UI2.SOFT, true);
+                rs.SizeFlagsHorizontal = Control.SIZE_EXPAND_FILL;
+                rs.SizeFlagsVertical = Control.SIZE_SHRINK_CENTER;
+                var rsm = rs.CustomMinimumSize;
+                rsm.x = 10;
+                rs.CustomMinimumSize = rsm;
+                var grid = new GridContainer();
+                grid.Columns = GridCols(app, 128.0);          // (0.31.216: as many as the landscape screen takes; 3 in portrait)
+                grid.AddThemeConstantOverride("h_separation", 10);
+                grid.AddThemeConstantOverride("v_separation", 12);
+                root.AddChild(grid);
+                foreach (var hid in hs)
+                {
+                    var c = HeroOfferCard(app, grid, GD.Str(hid));
+                    if (GD.Str(hid) == focus)
+                        lit = c;
+                }
+                if (hs.Size() < 3)                                  // (keep the cards a third wide)
+                {
+                    for (int i = 0; i < 3 - hs.Size(); i++)
+                    {
+                        var gap = new Control();
+                        UI.Grow(gap);
+                        grid.AddChild(gap);
+                    }
+                }
+            }
+            if (lit != null)
+            {
+                // from the 5v5 picker: glide to his card and light it up
+                var ring = new Panel();
+                var rs2 = new StyleBoxFlat();
+                rs2.DrawCenter = false;
+                rs2.BorderColor = new Color("#fff3ad");
+                rs2.SetBorderWidthAll(4);
+                rs2.SetCornerRadiusAll(18);
+                rs2.ShadowColor = new Color(1.0, 0.8, 0.3, 0.8);
+                rs2.ShadowSize = 14;
+                ring.AddThemeStyleboxOverride("panel", rs2);
+                ring.SetAnchorsAndOffsetsPreset(Control.PRESET_FULL_RECT);
+                ring.OffsetLeft = -3;
+                ring.OffsetTop = -3;
+                ring.OffsetRight = 3;
+                ring.OffsetBottom = 3;
+                ring.MouseFilter = Control.MOUSE_FILTER_IGNORE;
+                ring.SetMeta("hero_focus_ring", true);
+                lit.AddChild(ring);
+                UI2.WhenReady(ring, () =>
+                {
+                    var tw = ring.CreateTween().SetLoops(4);
+                    tw.TweenProperty(ring, "modulate:a", 0.25, 0.4).SetTrans(Tween.TRANS_SINE);
+                    tw.TweenProperty(ring, "modulate:a", 1.0, 0.4).SetTrans(Tween.TRANS_SINE);
+                    var glide = ring.CreateTween();               // (bound to the ring: gone with the page if you leave first)
+                    glide.TweenInterval(0.12);
+                    glide.TweenCallback(() =>
+                    {
+                        ScrollContainer sc = app.content_scroll;
+                        if (GD.IsInstanceValid(lit) && GD.IsInstanceValid(sc))
+                        {
+                            var to = GD.Maxi(0, sc.ScrollVertical + (int)((double)lit.GlobalPosition.y - sc.GlobalPosition.y) - 90);
+                            sc.CreateTween().TweenProperty(sc, "scroll_vertical", to, 0.45).SetTrans(Tween.TRANS_CUBIC).SetEase(Tween.EASE_OUT);
+                        }
+                    });
+                });
+            }
+        }
+
+        public static Control HeroOfferCard(SiegeApp app, Node grid, string hid)
+        {
+            // 0.31.204: one hero for sale -- him (in his own look) in his own place (Champions.card_art), a glow of his colour, his
+            // name and class, FREE THIS WEEK / NEW / ◆ shard tags, his price in gold and in gems, UNLOCK (asked first: each way);
+            // tap the picture: his window
+            var p = app.profile;
+            Color acc = Champions.Accent(hid);
+            GDict pr = p.HeroPrice(hid);
+            bool plays = p.CanPlayHero(hid);
+            var c = new Control();
+            c.CustomMinimumSize = new Vector2(0, 244);
+            UI.Grow(c);
+            grid.AddChild(c);
+            var pane = new Panel();
+            var sb = new StyleBoxFlat();
+            sb.BgColor = acc.Darkened(0.82);
+            sb.SetCornerRadiusAll(16);
+            pane.AddThemeStyleboxOverride("panel", sb);
+            pane.ClipChildren = CanvasItem.CLIP_CHILDREN_AND_DRAW;
+            pane.SetAnchorsAndOffsetsPreset(Control.PRESET_FULL_RECT);
+            pane.MouseFilter = Control.MOUSE_FILTER_IGNORE;
+            c.AddChild(pane);
+            var art = new TextureRect();
+            art.Texture = UI2.Tex(Champions.CardArt(hid));
+            art.ExpandMode = TextureRect.EXPAND_IGNORE_SIZE;
+            art.StretchMode = TextureRect.STRETCH_KEEP_ASPECT_COVERED;
+            art.SetAnchorsAndOffsetsPreset(Control.PRESET_FULL_RECT);
+            art.OffsetBottom = -70;
+            art.MouseFilter = Control.MOUSE_FILTER_IGNORE;
+            pane.AddChild(art);
+            var rays = UI2.Rays(pane, 190.0, acc.Lerp(new Color(1.0, 0.9, 0.6), 0.4), 30.0, 0.32);
+            var halo = UI2.Glow(pane, new Rect2(0, 0, 150, 150), new Color(acc.Lerp(Color.WHITE, 0.2), 0.5), false);
+            var pool = UI2.Glow(pane, new Rect2(0, 0, 110, 26), new Color(0, 0, 0, 0.55), false);
+            var ti = UI2.Img(pane, GD.Fmt("res://assets/ui/skins/default_%s.png", hid), 128.0);
+            _GradRect(pane, GArray.Of(GArray.Of(0.0, new Color(0, 0, 0, 0)), GArray.Of(0.42, new Color(0, 0, 0, 0)), GArray.Of(0.62, new Color(acc.Darkened(0.85), 0.92)),
+                GArray.Of(1.0, new Color(acc.Darkened(0.9), 1.0))));
+            c.Resized += () =>
+            {
+                double cx = c.Size.x * 0.5;
+                ti.Position = new Vector2(cx - 64.0, 14.0);
+                halo.Position = new Vector2(cx - 75.0, 4.0);
+                pool.Position = new Vector2(cx - 55.0, 128.0);
+                rays.Position = new Vector2(cx - 95.0, 78.0 - 95.0);
+            };
+            var rim = new Panel();
+            var rs = new StyleBoxFlat();
+            rs.DrawCenter = false;
+            rs.BorderColor = acc.Lerp(Color.WHITE, 0.15);
+            rs.SetBorderWidthAll(2);
+            rs.SetCornerRadiusAll(16);
+            rs.ShadowColor = new Color(acc, 0.35);
+            rs.ShadowSize = 5;
+            rim.AddThemeStyleboxOverride("panel", rs);
+            rim.SetAnchorsAndOffsetsPreset(Control.PRESET_FULL_RECT);
+            rim.MouseFilter = Control.MOUSE_FILTER_IGNORE;
+            c.AddChild(rim);
+            // tags down the left: FREE this week, NEW (at his launch price), ◆ a shard of him
+            var tags = new VBoxContainer();
+            tags.AddThemeConstantOverride("separation", 3);
+            tags.Position = new Vector2(6, 6);
+            tags.MouseFilter = Control.MOUSE_FILTER_IGNORE;
+            c.AddChild(tags);
+            if (plays)
+                _CardTag(tags, "FREE", new Color("#2f8a3e"), new Color("#0a2006"));          // (this week's: the chip over the list says so)
+            if (Eco.Launching(hid, p.Now()))
+                _CardTag(tags, "NEW", new Color("#d9682a"), new Color("#3a1402"));
+            if (p.ShardsOf(hid) > 0)
+                _CardTag(tags, "◆ SHARD", new Color("#1f6a2e"), new Color("#6be07c"));
+            var nsk = Eco.SkinsOf(hid).Size();
+            if (nsk > 0)
+            {
+                var oc = _CardTag(c, GD.Fmt("%d OUTFIT%s", nsk, nsk == 1 ? "" : "S"), new Color(0.08, 0.04, 0.16, 0.85), new Color("#c47bff"));
+                oc.AnchorLeft = 1.0;
+                oc.AnchorRight = 1.0;
+                oc.GrowHorizontal = Control.GROW_DIRECTION_BEGIN;
+                oc.OffsetRight = -6;
+                oc.OffsetLeft = -60;
+                oc.OffsetTop = 6;
+                oc.OffsetBottom = 22;
+            }
+            // his name, his class, his prices
+            var v = new VBoxContainer();
+            v.AddThemeConstantOverride("separation", 0);
+            v.SetAnchorsAndOffsetsPreset(Control.PRESET_BOTTOM_WIDE);
+            v.OffsetTop = -118;
+            v.OffsetBottom = -44;
+            v.OffsetLeft = 4;
+            v.OffsetRight = -4;
+            v.Alignment = BoxContainer.ALIGNMENT_END;
+            v.MouseFilter = Control.MOUSE_FILTER_IGNORE;
+            c.AddChild(v);
+            var nm = Champions.ShortOf(hid).ToUpperInvariant();
+            var nl = UI2.Text(v, nm, nm.Length <= 8 ? 16 : 13, Color.WHITE, acc.Darkened(0.75), 5);
+            nl.HorizontalAlignment = HorizontalAlignment.Center;
+            nl.ClipText = true;
+            var cl = UI.Label(v, GD.Str(Eco.SKIN_HEROES.Get(hid, hid)).ToUpperInvariant(), 10, acc.Lerp(Color.WHITE, 0.5), UI.HEAVY_FONT);
+            cl.HorizontalAlignment = HorizontalAlignment.Center;
+            cl.AddThemeColorOverride("font_outline_color", new Color(0, 0, 0, 0.8));
+            cl.AddThemeConstantOverride("outline_size", 3);
+            if (!pr.IsEmpty())
+            {
+                var prow = new HBoxContainer();
+                prow.Alignment = BoxContainer.ALIGNMENT_CENTER;
+                prow.AddThemeConstantOverride("separation", 3);
+                prow.MouseFilter = Control.MOUSE_FILTER_IGNORE;
+                v.AddChild(prow);
+                UI2.Img(prow, "res://assets/ui/currency/coin.png", 15.0).SizeFlagsVertical = Control.SIZE_SHRINK_CENTER;
+                UI2.Text(prow, _ShortGold((int)pr["gold"]), 13, UI2.GOLD, new Color("#201002"), 3);
+                UI2.Body(prow, "or", 9, UI2.SOFT, false).SizeFlagsVertical = Control.SIZE_SHRINK_CENTER;
+                UI2.Img(prow, "res://assets/ui/currency/gem.png", 15.0).SizeFlagsVertical = Control.SIZE_SHRINK_CENTER;
+                UI2.Text(prow, GD.Str((int)pr["gems"]), 13, new Color("#cfe9ff"), new Color("#0a1238"), 3);
+            }
+            var look = new Button();                         // tap the picture: his window
+            look.Flat = true;
+            look.FocusMode = Control.FOCUS_NONE;
+            foreach (var st_name in new[] { "normal", "hover", "pressed", "focus" })
+                look.AddThemeStyleboxOverride(st_name, new StyleBoxEmpty());
+            look.SetAnchorsAndOffsetsPreset(Control.PRESET_FULL_RECT);
+            look.OffsetBottom = -46;
+            look.SetMeta("action_key", "hero_look_" + hid);
+            look.Pressed += () => app.OpenChampion(hid);
+            c.AddChild(look);
+            var b = UI2.Button(c, "UNLOCK", "gold", () => BuyHero(app, hid), "hero_unlock_" + hid, 14, 36.0, 11.0);
+            b.Disabled = !CanUnlockHero(p, hid);
+            if (!b.Disabled)
+                UI2.Sweep(b, 3.0, 40.0, 0.4);
+            b.SetAnchorsAndOffsetsPreset(Control.PRESET_BOTTOM_WIDE);
+            b.OffsetLeft = 7;
+            b.OffsetRight = -7;
+            b.OffsetTop = -42;
+            b.OffsetBottom = -7;
+            return c;
+        }
+
+        public static string _ShortGold(int n)
+        {
+            // 6,300 / 50K / 1.5K
+            if (n >= 10000)
+                return n % 1000 == 0 ? GD.Fmt("%dK", n / 1000) : GD.Fmt("%.1fK", n / 1000.0);
+            return UI.Grouped(n);
+        }
+
+        public static bool CanUnlockHero(Profile p, string hid)
+        {
+            // any of the ways: his gold, his gems, a shard of him and its gold, a Hero Token
+            GDict pr = p.HeroPrice(hid);
+            if (pr.IsEmpty() || p.OwnsHero(hid))
+                return false;
+            return (int)p.d["gold"] >= (int)pr["gold"] || (int)p.d["gems"] >= (int)pr["gems"] || (int)p.d.Get("tokens", 0) > 0
+                || (p.ShardsOf(hid) > 0 && (int)p.d["gold"] >= Eco.ShardUnlockGold(hid, p.Now()));
+        }
+
+        public static void BuyHero(SiegeApp app, string hid)
+        {
+            // 0.31.204: UNLOCK <NAME>? -- each way (the 5v5 window's chooser, 0.31.185), those you can't pay dimmed; CANCEL
+            var p = app.profile;
+            GDict pr = p.HeroPrice(hid);
+            if (pr.IsEmpty() || p.OwnsHero(hid))
+                return;
+            Action<GDict> done = (GDict r) =>
+            {
+                if ((bool)r.Get("ok", false))
+                {
+                    app.Sfx("purchase");
+                    app.Toast(GD.Fmt("%s joins you! He's in your Armory.", Champions.NameOf(hid)), UI2.GOLD);
+                    app.RefreshTop();
+                }
+                else
+                {
+                    app.Sfx("error");
+                    app.Toast(GD.Str(r.Get("error", "Can't unlock")), UI.RED);
+                }
+                app.Rebuild();
+            };
+            var opts = GArray.Of(
+                new GDict { { "text", GD.Fmt("%s GOLD", UI.Grouped((int)pr["gold"])) }, { "style", "gold" }, { "key", "hero_buy_gold" }, { "enabled", (int)p.d["gold"] >= (int)pr["gold"] },
+                    { "call", (Action)(() => done(p.BuyHero(hid))) } },
+                new GDict { { "text", GD.Fmt("%s GEMS", UI.Grouped((int)pr["gems"])) }, { "style", "premium" }, { "key", "hero_buy_gems" }, { "enabled", (int)p.d["gems"] >= (int)pr["gems"] },
+                    { "call", (Action)(() => done(p.BuyHeroGems(hid))) } });
+            if (p.ShardsOf(hid) > 0)
+            {
+                var sg = Eco.ShardUnlockGold(hid, p.Now());
+                opts.Append(new GDict { { "text", GD.Fmt("SHARD + %s GOLD", UI.Grouped(sg)) }, { "style", "claim" }, { "key", "hero_buy_shard" }, { "enabled", (int)p.d["gold"] >= sg },
+                    { "call", (Action)(() => done(p.UseShard(hid))) } });
+            }
+            if ((int)p.d.Get("tokens", 0) > 0)
+            {
+                opts.Append(new GDict { { "text", "HERO TOKEN" }, { "style", "primary" }, { "key", "hero_buy_token" }, { "enabled", true },
+                    { "call", (Action)(() => done(p.UseToken(hid))) } });
+            }
+            app.Choose(GD.Fmt("UNLOCK %s?", Champions.NameOf(hid).ToUpperInvariant()), GD.Fmt("The %s, yours for good.%s", GD.Str(Eco.SKIN_HEROES.Get(hid, hid)),
+                Eco.Launching(hid, p.Now()) ? "  Launch price for now." : ""), opts);
+        }
+
+        public static PanelContainer _CardTag(Control parent, string s, Color fill, Color border)
+        {
+            // a small corner tag on a card (EPIC, RARE, + HERO, OWNED, WORN)
+            var pc = new PanelContainer();
+            var sb = new StyleBoxFlat();
+            sb.BgColor = fill;
+            sb.BorderColor = border;
+            sb.SetBorderWidthAll(1);
+            sb.SetCornerRadiusAll(7);
+            sb.ContentMarginLeft = 5;
+            sb.ContentMarginRight = 5;
+            sb.ContentMarginTop = 0;
+            sb.ContentMarginBottom = 1;
+            pc.AddThemeStyleboxOverride("panel", sb);
+            pc.MouseFilter = Control.MOUSE_FILTER_IGNORE;
+            parent.AddChild(pc);
+            var l = UI.Label(pc, s, 9, Color.WHITE, UI.HEAVY_FONT);
+            l.AutowrapMode = TextServer.AUTOWRAP_OFF;
+            l.HorizontalAlignment = HorizontalAlignment.Center;
+            return pc;
+        }
+
+        public static bool ViewLow(SiegeApp app)
+        {
+            // fewer extras on "reduce motion" (Settings)
+            return app.profile != null && (bool)app.profile.d.Get("settings", new GDict()).D.Get("reduce_motion", false);
+        }
+
+        public static bool CanBuySkin(Profile p, string id)
+        {
+            // the gems for it -- or (0.31.189: a rare outfit) the gold. 0.31.203: at the weekly sale's price when it's on it
+            var o = Eco.SkinOffer(id, p.Now());
+            return (int)p.d["gems"] >= (int)o["gems"] || ((int)o["gold"] > 0 && (int)p.d["gold"] >= (int)o["gold"]);
+        }
+
+        public static void BuySkin(SiegeApp app, string id)
+        {
+            // BUY asks first; Profile.buy_outfit takes the weekly sale's price when the outfit is on it (0.31.203)
+            var p = app.profile;
+            GDict sk = Eco.SKINS[id].D;
+            var o = Eco.SkinOffer(id, p.Now());
+            var hid = GD.Str(sk["hero"]);
+            bool with_hero = !p.OwnsHero(hid);
+            Action<GDict> bought = (GDict r) =>
+            {
+                if ((bool)r.Get("ok", false))
+                {
+                    app.Sfx("purchase");
+                    app.Toast(GD.Fmt("%s is yours%s", GD.Str(sk["name"]), (bool)r.Get("hero", false) ? GD.Fmt(" -- and the %s", GD.Str(Eco.SKIN_HEROES.Get(hid, hid))) : ""), UI.GOLD);
+                    app.RefreshTop();
+                }
+                else
+                {
+                    app.Sfx("error");
+                    app.Toast(GD.Str(r.Get("error", "Can't buy")), UI.RED);
+                }
+                app.Rebuild();
+            };
+            var tail = GD.Fmt("%s Worn at once -- change it in the shop or the hero window.", with_hero ? GD.Fmt(" The %s comes with it.", GD.Str(Eco.SKIN_HEROES.Get(hid, hid))) : "");
+            var sale = (int)o["off"] > 0 ? GD.Fmt("Weekly sale: %d%% off. ", (int)o["off"]) : "";
+            if ((int)o["gold"] > 0)
+            {
+                // 0.31.189 (Kevin: "Frostbound for gold"): gems or gold
+                app.Choose(GD.Fmt("BUY %s?", GD.Str(sk["name"]).ToUpperInvariant()), GD.Fmt("%s%s gems or %s gold.%s", sale, UI.Grouped((int)o["gems"]), UI.Grouped((int)o["gold"]), tail), GArray.Of(
+                    new GDict { { "text", GD.Fmt("%s GEMS", UI.Grouped((int)o["gems"])) }, { "style", "premium" }, { "key", "modal_yes" }, { "enabled", (int)p.d["gems"] >= (int)o["gems"] },
+                        { "call", (Action)(() => bought(p.BuyOutfit(id, false))) } },
+                    new GDict { { "text", GD.Fmt("%s GOLD", UI.Grouped((int)o["gold"])) }, { "style", "gold" }, { "key", "modal_gold" }, { "enabled", (int)p.d["gold"] >= (int)o["gold"] },
+                        { "call", (Action)(() => bought(p.BuyOutfit(id, true))) } }));
+                return;
+            }
+            app.Confirm(GD.Fmt("BUY %s?", GD.Str(sk["name"]).ToUpperInvariant()), GD.Fmt("%s%d gems.%s", sale, (int)o["gems"], tail), "BUY", "premium", () =>
+                bought(p.BuyOutfit(id, false)));
+        }
+
+        public static bool IsEquipped(Profile p, string id)
+        {
+            // a title worn (0.31.188: titles are all there is to equip)
+            return Eco.Item(id).Get("kind", "") == "title" && GD.Str(p.d["title"]) == id;
+        }
+
+        public static void Equip(SiegeApp app, string id)
+        {
+            if (app.profile.Equip(id)["ok"])
+            {
+                app.Sfx("equip");
+                app.Toast(GD.Fmt("Equipped %s", GD.Str(Eco.Item(id)["name"])), UI.CYAN);
+            }
+            app.Rebuild();
+        }
+
+        // ---------------- LOCKER ----------------
+        public static Button _ClassCoin(Node parent, string cls, bool on, string key, Action on_press, string label = "", double px = 48.0)
+        {
+            // A round class button with the class's render in it (gold when selected).
+            var b = new Button();
+            b.Flat = true;
+            b.FocusMode = Control.FOCUS_NONE;
+            foreach (var st_name in new[] { "normal", "hover", "pressed", "focus" })
+                b.AddThemeStyleboxOverride(st_name, new StyleBoxEmpty());
+            b.CustomMinimumSize = new Vector2(px, px + (label != "" ? 14.0 : 0.0));
+            b.SetMeta("action_key", key);
+            b.Pressed += on_press;
+            parent.AddChild(b);
+            var disc = new Control();
+            disc.Size = new Vector2(px, px);
+            disc.MouseFilter = Control.MOUSE_FILTER_IGNORE;
+            b.AddChild(disc);
+            if (on)
+                UI2.Skin(disc, UI2.ButtonParams("gold", px * 0.5, 3.0).Merged(GDict.Of("glow", 7.0, "glow_color", new Color(1.0, 0.84, 0.35, 0.8)), true));
+            else
+                UI2.Plate(disc, "royal", px * 0.5, "gold", GDict.Of("rim", 2.0, "dim", 0.15));
+            var clip = new Control();
+            clip.Position = new Vector2(3, 3);
+            clip.Size = new Vector2(px - 6, px - 6);
+            clip.ClipContents = true;
+            clip.MouseFilter = Control.MOUSE_FILTER_IGNORE;
+            disc.AddChild(clip);
+            var t = new TextureRect();
+            var portrait = GD.Fmt("res://assets/ui/skins/default_%s.png", cls);
+            t.Texture = UI2.Tex(ResourceLoader.Exists(portrait) ? portrait : GD.Fmt("res://assets/ui/icons/default_%s.png", cls));
+            t.ExpandMode = TextureRect.EXPAND_IGNORE_SIZE;
+            t.StretchMode = TextureRect.STRETCH_KEEP_ASPECT_COVERED;
+            t.Position = new Vector2(-px * 0.1, -px * 0.04);
+            t.Size = new Vector2(px * 1.1, px * 1.1);
+            t.MouseFilter = Control.MOUSE_FILTER_IGNORE;
+            clip.AddChild(t);
+            if (label != "")
+            {
+                var l = UI2.Text(b, label, 9, on ? UI2.CYAN : Color.WHITE, UI2.INK, 3, false);
+                l.HorizontalAlignment = HorizontalAlignment.Center;
+                l.Position = new Vector2(-10, px + 1);
+                l.Size = new Vector2(px + 20, 12);
+            }
+            return b;
+        }
+
+        public static void Locker(SiegeApp app, VBoxContainer root)
+        {
+            // 0.31.79: the vault -- the class picker, the hero on the vault's pedestal, the nameplate and the weapons as cards.
+            // 0.31.187 (Kevin: "give every champion a unique name ... a short background story. Put all this in a revamped locker
+            // tab"): CHAMPIONS first (the eighteen by role: tap one for his own window, champion_window.gd), then TITLES.
+            // (0.31.187: ARMORY, the vault and its weapons -- gone with the weapons, 0.31.188: an outfit is his whole look.)
+            // 0.31.204 (Kevin: "Now redo the locker menu. Change the name to armory and only put in there what the player owns"):
+            // the ARMORY (the tab keeps its id "locker") -- a painted armory hall (ElevenLabs) with what you hold on it, then
+            // three tabs: HEROES (yours, by role; tap one: his window with only his outfits you own), OUTFITS (yours: WEAR /
+            // WORN) and TITLES (earned: EQUIP). Nothing to buy and nothing locked: the Market sells heroes and outfits (a way
+            // there when there's more to get); a title you haven't earned isn't shown, only how many are left.
+            var p = app.profile;
+            GArray heroes = Champions.ORDER.Filter(h => p.OwnsHero(GD.Str(h)));
+            GArray outfits = new GArray();
+            foreach (var h in Champions.ORDER)
+            {
+                foreach (var id in Eco.SkinsOf(GD.Str(h)))
+                {
+                    if (p.OwnsSkin(GD.Str(id)))
+                        outfits.Append(GD.Str(id));
+                }
+            }
+            GArray titles = _EarnedTitles(p);
+            var ban = Banner(root, UI2.V2 + "art_armory.webp", "ARMORY", 176.0);
+            GArray free = Champions.ORDER.Filter(h => !p.OwnsHero(GD.Str(h)) && p.CanPlayHero(GD.Str(h)));   // 0.31.205
+            var hold = UI2.Chip(ban, GD.Fmt("%d HEROES%s  ·  %d OUTFITS  ·  %d TITLES", heroes.Size(), !free.IsEmpty() ? GD.Fmt(" +%d FREE", free.Size()) : "",
+                outfits.Size(), titles.Size()),
+                new Color(0.03, 0.02, 0.1, 0.8), UI2.CREAM, new Color(UI2.GOLD, 0.6));
+            hold.Position = new Vector2(12, 12);
+            if (!ViewLow(app))
+                _Twinkles(ban, 6, new Color(1.0, 0.86, 0.5), new Rect2(0.1, 0.1, 0.8, 0.5));
+            if (GD.Str(app.locker_tab) == "champions")
+                app.locker_tab = "heroes";                     // (0.31.187-0.31.203's name for it)
+            if (!GArray.Of("heroes", "outfits", "titles").Has(GD.Str(app.locker_tab)))
+                app.locker_tab = "heroes";
+            var tabs = new HBoxContainer();
+            tabs.AddThemeConstantOverride("separation", 8);
+            root.AddChild(tabs);
+            foreach (var t in GArray.Of(GArray.Of("heroes", "HEROES", heroes.Size() + free.Size(), UI2.IconPath("crown")), GArray.Of("outfits", "OUTFITS", outfits.Size(), UI2.IconPath("helmet")),
+                    GArray.Of("titles", "TITLES", titles.Size(), UI2.IconPath("scroll"))))
+            {
+                string tid = GD.Str(t[0]);
+                bool on = GD.Str(app.locker_tab) == tid;
+                var tb0 = UI2.Button(tabs, GD.Fmt("%s %d", GD.Str(t[1]), (int)t[2]), on ? "gold" : "blue", () =>
+                {
+                    if (GD.Str(app.locker_tab) == tid)
+                        return;
+                    app.locker_tab = tid;
+                    app.Sfx("tab");
+                    app.content_scroll.ScrollVertical = 0;
+                    app.Rebuild();
+                }, "locker_tab_" + tid, 14, 40.0, 12.0, GD.Str(t[3]));
+                tb0.SizeFlagsHorizontal = Control.SIZE_EXPAND_FILL;
+            }
+            switch (GD.Str(app.locker_tab))
+            {
+                case "outfits":
+                    ArmoryOutfits(app, root, outfits);
+                    break;
+                case "titles":
+                    ArmoryTitles(app, root, titles);
+                    break;
+                default:
+                    LockerChampions(app, root);
+                    break;
+            }
+        }
+
+        public static GArray _EarnedTitles(Profile p)
+        {
+            // the titles you hold, in the Locker's old order: for everyone, then each class's, then the leaderboard's
+            var out_ = new GArray();
+            var secs = GArray.Of("");
+            secs.AppendArray(Eco.HERO_CLASSES);
+            foreach (var sec in secs)
+            {
+                var ids = new GArray();
+                foreach (var id in Eco.TITLE_GOALS)
+                {
+                    if (GD.Str(Eco.TITLE_GOALS[id]["cls"]) == GD.Str(sec) && p.Owns(GD.Str(id)))
+                        ids.Append(id);
+                }
+                ids.SortCustom((a, b) => Eco.TITLE_RARITY_ORDER.Find(GD.Str(Eco.CATALOG[a]["rarity"])) < Eco.TITLE_RARITY_ORDER.Find(GD.Str(Eco.CATALOG[b]["rarity"])));
+                out_.AppendArray(ids);
+            }
+            foreach (var id in Eco.PRIZE_TITLES)
+            {
+                if (p.Owns(GD.Str(id)))
+                    out_.Append(id);
+            }
+            return out_;
+        }
+
+        public static void _ToMarket(SiegeApp app, Node root, string text, string tab_id, string key)
+        {
+            // a way from the Armory to what the Market has (0.31.204)
+            var b = UI2.Button(root, text, "purple", () =>
+            {
+                app.Sfx("tab");
+                app.OpenMarket(tab_id);
+            }, key, 13, 38.0, 12.0, UI2.IconPath("stall"));
+            b.SizeFlagsHorizontal = Control.SIZE_SHRINK_CENTER;
+        }
+
+        public static void _ArmoryEmpty(Node root, string icon, string head, string line)
+        {
+            var box = UI2.Frame(root, "night", 16, 18.0, "gold");
+            box.AddThemeConstantOverride("separation", 6);
+            var ic = UI2.Img(box, UI2.IconPath(icon), 56.0);
+            ic.SizeFlagsHorizontal = Control.SIZE_SHRINK_CENTER;
+            UI2.Center(UI2.Text(box, head, 20, Color.WHITE));
+            var l = UI2.Center(UI2.Body(box, line, 12, UI2.SOFT));
+            var lm = l.CustomMinimumSize;
+            lm.x = 10;
+            l.CustomMinimumSize = lm;
+        }
+
+        public static void ArmoryOutfits(SiegeApp app, VBoxContainer root, GArray outfits)
+        {
+            // 0.31.204: the outfits you own, his heroes' order -- WEAR / WORN on each (tap WORN: his own look again); tap the
+            // picture: his window in it
+            var p = app.profile;
+            var more = Eco.SKINS.Size() - outfits.Size();
+            if (outfits.IsEmpty())
+            {
+                _ArmoryEmpty(root, "helmet", "NO OUTFITS YET", "A whole new look and weapon for a hero -- the Market has them, and a few are on sale this week.");
+                _ToMarket(app, root, "BROWSE OUTFITS IN THE MARKET  ▸", "outfits", "armory_to_outfits");
+                return;
+            }
+            var worn = 0;
+            foreach (var id in outfits)
+            {
+                if (p.WornSkin(GD.Str(Eco.SKINS[id]["hero"])) == GD.Str(id))
+                    worn += 1;
+            }
+            UI2.Center(UI2.Body(root, GD.Fmt("%d yours  ·  %d worn  ·  tap WORN for his own look again", outfits.Size(), worn), 11, UI2.SOFT));
+            var grid = new GridContainer();
+            grid.Columns = GridCols(app, 128.0);          // (0.31.216: as many as the landscape screen takes; 3 in portrait)
+            grid.AddThemeConstantOverride("h_separation", 10);
+            grid.AddThemeConstantOverride("v_separation", 12);
+            root.AddChild(grid);
+            foreach (var id in outfits)
+                OutfitCard(app, grid, GD.Str(id), true);
+            if (outfits.Size() % 3 != 0)
+            {
+                for (int i = 0; i < 3 - outfits.Size() % 3; i++)
+                {
+                    var gap = new Control();
+                    UI.Grow(gap);
+                    grid.AddChild(gap);
+                }
+            }
+            if (more > 0)
+                _ToMarket(app, root, GD.Fmt("%d MORE IN THE MARKET  ▸", more), "outfits", "armory_to_outfits");
+        }
+
+        public static void ArmoryTitles(SiegeApp app, VBoxContainer root, GArray titles)
+        {
+            // 0.31.204: NO TITLE, then every title you've earned (EQUIP / WORN); the ones still to earn aren't shown -- how many
+            var p = app.profile;
+            UI2.Divider(root, "TITLES", 20, "shown next to your name");
+            var none = UI2.Frame(root, "night", 10, 14.0, "gold");
+            var nr = UI.Row(none, 8);
+            UI.Grow(UI2.Text(nr, "NO TITLE", 15, Color.WHITE));
+            var ne = UI2.Button(nr, GD.Str(p.d["title"]) == "" ? "EQUIPPED" : "EQUIP", GD.Str(p.d["title"]) == "" ? "grey" : "blue", () =>
+            {
+                p.Unequip("", "title");
+                app.Rebuild();
+            }, "equip_default_title", 13, 34.0, 11.0);
+            ne.Disabled = GD.Str(p.d["title"]) == "";
+            var nem = ne.CustomMinimumSize;
+            nem.x = 104;
+            ne.CustomMinimumSize = nem;
+            foreach (var id in titles)
+                LockerRow(app, root, GD.Str(id));
+            var left = 0;
+            foreach (var id in Eco.TITLE_GOALS)
+            {
+                if (!p.Owns(GD.Str(id)) && !Eco.Retired(Eco.TITLE_GOALS[id].D))
+                    left += 1;
+            }
+            foreach (var id in Eco.PRIZE_TITLES)
+            {
+                if (!p.Owns(GD.Str(id)))
+                    left += 1;
+            }
+            if (titles.IsEmpty())
+                _ArmoryEmpty(root, "scroll", "NO TITLES YET", "Titles are earned by playing -- win, take towers, climb the weekly leaderboard.");
+            if (left > 0)
+                UI2.Center(UI2.Body(root, GD.Fmt("%d more to earn by playing", left), 11, UI2.SOFT));
+        }
+
+        // ---------------- the Locker's CHAMPIONS (0.31.187) ----------------
+        // The eighteen by role (League's six: a row of three each -- the class, its upgrade, the new hero), each a card: his own
+        // place painted behind him (Champions.card_art), him in the skin he wears, his name and class, and where he stands with
+        // you: yours (a tick), FREE this week, NEW at his launch price, or his price and a padlock; ◆ when you hold his shard, and
+        // how many skins he has. Tap: his window (champion_window.gd).
+        public static readonly GArray ROLE_ORDER = GArray.Of("tank", "fighter", "assassin", "mage", "marksman", "support");
+
+        public static void LockerChampions(SiegeApp app, VBoxContainer root)
+        {
+            // 0.31.204: the Armory's HEROES -- the heroes you own, by role (a role with none of yours left out); the ones you
+            // don't are in the Market's HEROES (a way there under them). 0.31.205 (Kevin: "Make the heros that are free for the
+            // week show up in players armory"): and this week's free ones among them, FREE THIS WEEK on their cards (yours to
+            // play until Monday; to keep, the Market)
+            var p = app.profile;
+            // (Kits = Fatebound.Sim.MobaKits: the .gd loads moba_kits.gd here, not at boot: the 5v5's)
+            GArray order = Champions.ORDER;
+            GArray mine = order.Filter(h => p.OwnsHero(GD.Str(h)));
+            GArray free = order.Filter(h => !p.OwnsHero(GD.Str(h)) && p.CanPlayHero(GD.Str(h)));
+            GArray shown = order.Filter(h => p.CanPlayHero(GD.Str(h)));
+            var top = UI2.Center(UI2.Body(root, GD.Fmt("%d of %d heroes yours%s  ·  tap one for his story, his outfits and a closer look", mine.Size(), order.Size(),
+                !free.IsEmpty() ? GD.Fmt("  ·  %d free this week", free.Size()) : ""), 11, UI2.SOFT));
+            var topm = top.CustomMinimumSize;
+            topm.x = 10;
+            top.CustomMinimumSize = topm;
+            var inv = "";
+            if ((int)p.d.Get("tokens", 0) > 0)
+                inv = GD.Fmt("HERO TOKEN x%d", (int)p.d["tokens"]);
+            var nsh = p.d.Get("shards", new GArray()).A.Size();
+            if (nsh > 0)
+                inv += (inv != "" ? "  ·  " : "") + GD.Fmt("◆ SHARD%s %d", nsh > 1 ? "S" : "", nsh);
+            if (inv != "")
+            {
+                var ic = UI2.Chip(root, inv + "  ·  use them in the Market", new Color("#173a1e"), new Color("#c9f7bd"), new Color("#6be07c"));
+                ic.SizeFlagsHorizontal = Control.SIZE_SHRINK_CENTER;
+            }
+            foreach (var role in ROLE_ORDER)
+            {
+                GArray hs = shown.Filter(h => Kits.RoleOf(GD.Str(h)) == role);
+                if (hs.IsEmpty())
+                    continue;
+                var rh = new HBoxContainer();
+                rh.AddThemeConstantOverride("separation", 8);
+                root.AddChild(rh);
+                var bp = GD.Fmt("res://assets/ui/roles/%s.png", role);
+                if (ResourceLoader.Exists(bp))
+                {
+                    var bi = UI2.Img(rh, bp, 30.0);
+                    bi.SizeFlagsVertical = Control.SIZE_SHRINK_CENTER;
+                }
+                var rt = UI2.Text(rh, GD.Str(Kits.ROLE_NAMES.GetValueOrDefault(GD.Str(role), GD.Str(role))), 19, UI2.GOLD, UI2.INK, 5);
+                rt.SizeFlagsVertical = Control.SIZE_SHRINK_CENTER;
+                var rs = UI2.Body(rh, GD.Str(Kits.ROLE_TEXT.GetValueOrDefault(GD.Str(role), "")), 10, UI2.SOFT, true);
+                rs.SizeFlagsHorizontal = Control.SIZE_EXPAND_FILL;
+                rs.SizeFlagsVertical = Control.SIZE_SHRINK_CENTER;
+                var rsm = rs.CustomMinimumSize;
+                rsm.x = 10;
+                rs.CustomMinimumSize = rsm;
+                var grid = new GridContainer();
+                grid.Columns = GridCols(app, 128.0);          // (0.31.216: as many as the landscape screen takes; 3 in portrait)
+                grid.AddThemeConstantOverride("h_separation", 8);
+                grid.AddThemeConstantOverride("v_separation", 8);
+                root.AddChild(grid);
+                foreach (var hid in hs)
+                    ChampionCard(app, grid, GD.Str(hid));
+                if (hs.Size() < 3)                                  // (keep the cards a third wide)
+                {
+                    for (int i = 0; i < 3 - hs.Size(); i++)
+                    {
+                        var gap = new Control();
+                        gap.SizeFlagsHorizontal = Control.SIZE_EXPAND_FILL;
+                        grid.AddChild(gap);
+                    }
+                }
+            }
+            var more = order.Size() - mine.Size();
+            if (more > 0)
+                _ToMarket(app, root, GD.Fmt("%d MORE HERO%s IN THE MARKET  ▸", more, more == 1 ? "" : "ES"), "heroes", "armory_to_heroes");
+        }
+
+        public static Button ChampionCard(SiegeApp app, Node grid, string hid)
+        {
+            var p = app.profile;
+            Color acc = Champions.Accent(hid);
+            bool owned = p.OwnsHero(hid);
+            bool plays = p.CanPlayHero(hid);
+            var b = new Button();
+            b.Flat = true;
+            b.FocusMode = Control.FOCUS_NONE;
+            foreach (var st_name in new[] { "normal", "hover", "pressed", "focus" })
+                b.AddThemeStyleboxOverride(st_name, new StyleBoxEmpty());
+            b.CustomMinimumSize = new Vector2(0, 196);
+            b.SizeFlagsHorizontal = Control.SIZE_EXPAND_FILL;
+            b.SetMeta("action_key", "champ_" + hid);
+            b.Pressed += () => app.OpenChampion(hid, "__worn", true);     // (0.31.204: the Armory's -- his outfits you own)
+            grid.AddChild(b);
+            // the card: his place (cover), clipped to the rounded frame, darker toward the bottom for the name
+            var card = new Panel();
+            card.SetAnchorsAndOffsetsPreset(Control.PRESET_FULL_RECT);
+            card.MouseFilter = Control.MOUSE_FILTER_IGNORE;
+            card.ClipChildren = CanvasItem.CLIP_CHILDREN_AND_DRAW;
+            var sb = new StyleBoxFlat();
+            sb.BgColor = acc.Darkened(0.8);
+            sb.SetCornerRadiusAll(14);
+            card.AddThemeStyleboxOverride("panel", sb);
+            b.AddChild(card);
+            var art = new TextureRect();
+            var ap = Champions.CardArt(hid);
+            art.Texture = ResourceLoader.Exists(ap) ? ResourceLoader.Load<Texture2D>(ap) : null;
+            art.ExpandMode = TextureRect.EXPAND_IGNORE_SIZE;
+            art.StretchMode = TextureRect.STRETCH_KEEP_ASPECT_COVERED;
+            art.SetAnchorsAndOffsetsPreset(Control.PRESET_FULL_RECT);
+            art.MouseFilter = Control.MOUSE_FILTER_IGNORE;
+            if (!plays)
+                art.Modulate = new Color(0.62, 0.62, 0.7);
+            card.AddChild(art);
+            var g = new Gradient();
+            g.SetOffsets(new[] { 0.0, 0.5, 1.0 });
+            g.SetColors(new[] { new Color(0, 0, 0, 0.0), new Color(0, 0, 0, 0.1), new Color(acc.Darkened(0.85), 0.95) });
+            var gt = new GradientTexture2D();
+            gt.Gradient = g;
+            gt.Width = 4;
+            gt.Height = 64;
+            gt.FillTo = new Vector2(0, 1);
+            var shade = new TextureRect();
+            shade.Texture = gt;
+            shade.ExpandMode = TextureRect.EXPAND_IGNORE_SIZE;
+            shade.StretchMode = TextureRect.STRETCH_SCALE;
+            shade.SetAnchorsAndOffsetsPreset(Control.PRESET_FULL_RECT);
+            shade.MouseFilter = Control.MOUSE_FILTER_IGNORE;
+            card.AddChild(shade);
+            // him, in the skin he wears
+            string worn = p.WornSkin(hid);
+            var pp = worn != "" ? GD.Fmt("res://assets/ui/skins/%s.png", worn) : GD.Fmt("res://assets/ui/skins/default_%s.png", hid);
+            var por = new TextureRect();
+            por.Texture = ResourceLoader.Exists(pp) ? ResourceLoader.Load<Texture2D>(pp) : null;
+            por.ExpandMode = TextureRect.EXPAND_IGNORE_SIZE;
+            por.StretchMode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED;
+            por.AnchorRight = 1.0;
+            por.OffsetLeft = 4;
+            por.OffsetRight = -4;
+            por.OffsetTop = 22;
+            por.OffsetBottom = 142;
+            por.MouseFilter = Control.MOUSE_FILTER_IGNORE;
+            if (!plays)
+                por.Modulate = new Color(0.7, 0.7, 0.78);
+            card.AddChild(por);
+            var rim = new Panel();
+            var rs = new StyleBoxFlat();
+            rs.DrawCenter = false;
+            rs.BorderColor = owned ? acc : new Color(acc.Darkened(0.25), 0.8);
+            rs.SetBorderWidthAll(owned ? 3 : 2);
+            rs.SetCornerRadiusAll(14);
+            rim.AddThemeStyleboxOverride("panel", rs);
+            rim.SetAnchorsAndOffsetsPreset(Control.PRESET_FULL_RECT);
+            rim.MouseFilter = Control.MOUSE_FILTER_IGNORE;
+            b.AddChild(rim);
+            // his name and class
+            var v = new VBoxContainer();
+            v.AddThemeConstantOverride("separation", -2);
+            v.AnchorTop = 1.0;
+            v.AnchorBottom = 1.0;
+            v.AnchorRight = 1.0;
+            v.OffsetTop = -56;
+            v.OffsetBottom = -6;
+            v.MouseFilter = Control.MOUSE_FILTER_IGNORE;
+            b.AddChild(v);
+            var nl = UI2.Text(v, Champions.ShortOf(hid).ToUpperInvariant(), 17, Color.WHITE, acc.Darkened(0.75), 5);
+            nl.HorizontalAlignment = HorizontalAlignment.Center;
+            var cl = UI2.Body(v, GD.Str(Eco.SKIN_HEROES.Get(hid, hid)).ToUpperInvariant(), 9, acc.Lightened(0.5), false);
+            cl.HorizontalAlignment = HorizontalAlignment.Center;
+            // where he stands with you
+            var st = new HBoxContainer();
+            st.AddThemeConstantOverride("separation", 3);
+            st.Alignment = BoxContainer.ALIGNMENT_CENTER;
+            st.MouseFilter = Control.MOUSE_FILTER_IGNORE;
+            v.AddChild(st);
+            // (0.31.204: the Armory has only yours -- the outfit he wears; 0.31.187-0.31.203 YOURS, or his price and a padlock)
+            string wk = p.WornSkin(hid);
+            if (!owned && plays)                          // 0.31.205: this week's free one
+                UI2.Body(st, "FREE THIS WEEK", 9, new Color("#9dff8a"), false);
+            else
+                UI2.Body(st, (wk != "" ? GD.Str(Eco.SKINS[wk]["set"]).ToUpperInvariant() : "ORIGINAL LOOK"), 9, wk != "" ? new Color("#e8ccff") : new Color(1, 1, 1, 0.7), false);
+            var chips = new VBoxContainer();                // (stacked down the left: the skins' count is on the right)
+            chips.AddThemeConstantOverride("separation", 3);
+            chips.Position = new Vector2(6, 6);
+            chips.MouseFilter = Control.MOUSE_FILTER_IGNORE;
+            b.AddChild(chips);
+            if (!owned && plays)
+                UI2.Chip(chips, "FREE", new Color("#2f8a3e"), Color.WHITE, new Color("#0a2006"));
+            if (Eco.Launching(hid, p.Now()))
+                UI2.Chip(chips, "NEW", new Color("#d9682a"), Color.WHITE, new Color("#3a1402"));
+            if (!owned && p.ShardsOf(hid) > 0)
+                UI2.Chip(chips, "◆", new Color("#173a1e"), new Color("#9dff8a"), new Color("#6be07c"));
+            var nsk = Eco.SkinsOf(hid).Filter(id => p.OwnsSkin(GD.Str(id))).Size();     // (0.31.204: the ones you own)
+            if (nsk > 0)
+            {
+                var sc = UI2.Chip(b, GD.Fmt("%d OUTFIT%s", nsk, nsk == 1 ? "" : "S"), new Color(0.05, 0.03, 0.12, 0.8), new Color("#e8ccff"), new Color("#c47bff"));
+                sc.AnchorLeft = 1.0;
+                sc.AnchorRight = 1.0;
+                sc.OffsetLeft = -62;
+                sc.OffsetRight = -6;
+                sc.OffsetTop = 6;
+                sc.OffsetBottom = 22;
+                sc.MouseFilter = Control.MOUSE_FILTER_IGNORE;
+            }
+            return b;
+        }
+
+        // + / − zoom buttons and the hint over an interactive showcase (the pass item view, 0.31.48; the locker, 0.31.64)
+        public static void ZoomControls(Control stage, Showcase sh, string prefix)
+        {
+            var zc = new VBoxContainer();
+            zc.AddThemeConstantOverride("separation", 10);
+            zc.SetAnchorsAndOffsetsPreset(Control.PRESET_CENTER_RIGHT);
+            zc.OffsetLeft = -58;
+            zc.OffsetRight = -12;
+            zc.OffsetTop = -50;
+            zc.OffsetBottom = 50;
+            stage.AddChild(zc);
+            foreach (var zb in GArray.Of(GArray.Of("+", 1.3, prefix + "_zoom_in"), GArray.Of("−", 1.0 / 1.3, prefix + "_zoom_out")))
+            {
+                double zf = (double)zb[1];
+                var b = UI2.Button(zc, GD.Str(zb[0]), "blue", () => sh.ZoomBy(zf), GD.Str(zb[2]), 24, 44.0, 22.0);
+                b.CustomMinimumSize = new Vector2(44, 44);
+                b.AddThemeFontOverride("font", UI.HEAVY_FONT);
+            }
+            var hint = UI2.Chip(stage, "DRAG TO TURN  ·  PINCH TO ZOOM", new Color(0.02, 0.03, 0.1, 0.75), new Color(1, 1, 1, 0.85), new Color(UI2.GOLD, 0.5));
+            hint.AnchorLeft = 0.5;
+            hint.AnchorRight = 0.5;
+            hint.AnchorTop = 1.0;
+            hint.AnchorBottom = 1.0;
+            hint.OffsetLeft = -100;
+            hint.OffsetRight = 100;
+            hint.OffsetTop = -30;
+            hint.OffsetBottom = -10;
+        }
+
+        public static void LockerRow(SiegeApp app, Node root, string id)
+        {
+            // A title card (0.31.87, Kevin picked the looks): the rarity's panel and rim, the name exactly as it shows over the
+            // head (punctuated, the title in its rarity's colour), what earns it and how far along it is; EQUIP once earned.
+            var p = app.profile;
+            var it = Eco.Item(id);
+            var rar = GD.Str(it["rarity"]);
+            GDict goal = Eco.TITLE_GOALS.Get(id, Eco.PRIZE_TITLES.Get(id, new GDict())).D;     // (0.31.120: the leaderboard's titles)
+            var c = UI2.Frame(root, _RarPanel(rar), 8, 16.0, _RarRim(rar), GDict.Of("pattern_mix", 0.0));
+            var pc = c.GetParent() as Control;
+            if (rar == "legendary")
+                UI2.Sweep(pc, 2.6, 60.0, 0.3);
+            var r = UI.Row(c, 10);
+            var ic = new Control();
+            ic.CustomMinimumSize = new Vector2(48, 48);
+            ic.SizeFlagsVertical = Control.SIZE_SHRINK_CENTER;
+            r.AddChild(ic);
+            if (GArray.Of("epic", "legendary").Has(rar))
+            {
+                var rays = UI2.Rays(ic, 80.0, rar == "legendary" ? new Color(1, 0.85, 0.45) : new Color(0.8, 0.6, 1.0), 14.0, 0.5);
+                rays.Position = new Vector2(24, 24) - new Vector2(40, 40);
+            }
+            var icn = UI2.Icon(ic, GD.Str(GDict.Of("common", "scroll", "rare", "banner", "epic", "trophy", "legendary", "crown").Get(rar, "scroll")), 46.0);
+            icn.Position = new Vector2(1, 1);
+            var v = new VBoxContainer();
+            v.AddThemeConstantOverride("separation", 2);
+            UI.Grow(v);
+            r.AddChild(v);
+            bool owned = p.Owns(id);
+            var top = UI.Row(v, 6);
+            UI2.Chip(top, rar.ToUpperInvariant(), Color.FromCode(GD.Str(Eco.RARITY_COLOR.Get(rar, "#b8c4c9"))), new Color("#120a02"));
+            UI2.Body(top, owned ? "EARNED" : "LOCKED", 10, owned ? new Color("#8cf0a8") : new Color(1, 1, 1, 0.6), false);
+            var nm = new HBoxContainer();
+            nm.AddThemeConstantOverride("separation", 0);
+            v.AddChild(nm);
+            foreach (var part in Net.TitleParts(GD.Str(p.d["name"]), id))
+                UI2.Text(nm, GD.Str(part[0]), 17, part[1] ? _RarTint(rar).Lightened(0.25) : Color.WHITE, new Color("#120a02"), 5);
+            UI2.Body(v, GD.Str(goal.Get("task", "")), 11, new Color(1, 1, 1, 0.82), false);
+            int n = (int)goal.Get("n", 1);
+            int have = owned ? n : (Eco.PRIZE_TITLES.Has(id) ? 0 : GD.Mini(n, p.TitleProgress(id)));
+            var pr = UI.Row(v, 6);
+            var gold = rar == "legendary";
+            UI2.Bar(pr, (double)have, (double)n, gold ? new Color("#fff3ad") : new Color("#b6f3ff"), gold ? new Color("#f0a024") : new Color("#36b9ea"), 10.0);
+            UI2.Body(pr, GD.Fmt("%s / %s", _Thousands(have), _Thousands(n)), 11, Color.WHITE, false);
+            if (owned)
+            {
+                bool eq = IsEquipped(p, id);
+                var b = UI2.Button(r, eq ? "WORN" : "EQUIP", eq ? "grey" : "green", () => Equip(app, id), "equip_" + id, 13, 40.0, 12.0);
+                b.Disabled = eq;
+                var bm = b.CustomMinimumSize;
+                bm.x = 74;
+                b.CustomMinimumSize = bm;
+                b.SizeFlagsVertical = Control.SIZE_SHRINK_CENTER;
+            }
+        }
+
+        public static string _Thousands(int n)
+        {
+            var s = GD.Str(GD.Absi(n));
+            var out_ = "";
+            while (s.Length > 3)
+            {
+                out_ = "," + s.Substr(s.Length - 3) + out_;
+                s = s.Substr(0, s.Length - 3);
+            }
+            return (n < 0 ? "-" : "") + s + out_;
+        }
+
+        // ---------------- SETTINGS ----------------
+        public static void PlayGamesCard(SiegeApp app, VBoxContainer root)
+        {
+            if (Platform.IsIos())
+            {
+                GameCenterCard(app, root);                       // 0.31.130
+                return;
+            }
+            var gp = UI2.Frame(root, "night", 12, 18.0, "gold");
+            UI2.Divider(gp, "GOOGLE PLAY", 20);
+            // (app.play_games is play_games.gd or game_center.gd -- one face: GameServices' IGameServices)
+            var pg = app.play_games as IGameServices;
+            var st = pg != null ? GD.Str(pg.state) : "off";
+            var line = "";
+            switch (st)
+            {
+                case "off":
+                    line = "Sign in with Google Play to keep your progress in your Google account and take it to a new phone. Available in the Google Play version of Fatebound.";
+                    break;
+                case "out":
+                    line = "Not signed in. Sign in to keep your progress in your Google account and take it to a new phone.";
+                    break;
+                case "signing":
+                    line = "Signing in to Google Play...";
+                    break;
+                case "checking":
+                    line = "Checking your Google Play save...";
+                    break;
+                case "synced":
+                {
+                    var who = GD.Str(pg.player);
+                    line = GD.Fmt("Signed in%s. Your progress is backed up to your Google account%s.", who != "" ? " as " + who : "", _Ago(app, (int)pg.LastBackup()));
+                    break;
+                }
+                case "ask":
+                    line = "Google Play has different progress from this phone. Choose which one to keep.";
+                    break;
+                case "error":
+                    line = (GD.Str(pg.why) != "" ? GD.Str(pg.why) : "Couldn't reach Google Play saves") + ". Your progress on this phone is safe.";
+                    break;
+            }
+            UI2.Body(gp, line, 12, UI2.SOFT);
+            switch (st)
+            {
+                case "out":
+                    UI2.Button(gp, "SIGN IN WITH GOOGLE PLAY", "blue", () =>
+                    {
+                        app.Sfx("confirm");
+                        pg.SignIn();
+                    }, "play_sign_in", 15, 44.0);
+                    break;
+                case "synced":
+                    UI2.Button(gp, "BACK UP NOW", "green", () =>
+                    {
+                        app.Sfx("confirm");
+                        pg.BackUpNow();
+                    }, "play_backup", 15, 44.0);
+                    UI2.Button(gp, "ACHIEVEMENTS", "gold", () =>                // 0.31.119: Google Play Games' own screen
+                    {
+                        app.Sfx("menuOpen");
+                        pg.ShowAchievements();
+                    }, "play_achievements", 15, 44.0);
+                    break;
+                case "ask":
+                    UI2.Button(gp, "CHOOSE", "gold", () =>
+                    {
+                        app.AskCloud();
+                    }, "play_choose", 15, 44.0);
+                    break;
+                case "error":
+                    UI2.Button(gp, "TRY AGAIN", "blue", () =>
+                    {
+                        app.Sfx("confirm");
+                        pg.BackUpNow();
+                    }, "play_retry", 15, 44.0);
+                    break;
+            }
+        }
+
+        public static void GameCenterCard(SiegeApp app, VBoxContainer root)
+        {
+            // 0.31.130 (the iOS port): Game Center -- signed in (achievements) or where to sign in. Apple allows no in-app sign-in
+            // once a player has declined, so it points to iOS Settings. The progress itself is the Fatebound account's.
+            var gp = UI2.Frame(root, "night", 12, 18.0, "gold");
+            UI2.Divider(gp, "GAME CENTER", 20);
+            var pg = app.play_games as IGameServices;
+            var st = pg != null ? GD.Str(pg.state) : "off";
+            var line = "";
+            switch (st)
+            {
+                case "off":
+                    line = "Game Center isn't available in this build.";
+                    break;
+                case "signing":
+                    line = "Signing in to Game Center...";
+                    break;
+                case "synced":
+                {
+                    var who = GD.Str(pg.player);
+                    line = GD.Fmt("Game Center: signed in%s. Achievements are kept in Game Center.", who != "" ? " as " + who : "");
+                    break;
+                }
+                default:
+                    line = "Not signed in. Sign in from iOS Settings > Game Center to earn achievements.";
+                    break;
+            }
+            UI2.Body(gp, line, 12, UI2.SOFT);
+            if (st == "synced")
+            {
+                UI2.Button(gp, "ACHIEVEMENTS", "gold", () =>                    // Apple's own screen
+                {
+                    app.Sfx("menuOpen");
+                    pg.ShowAchievements();
+                }, "gc_achievements", 15, 44.0);
+            }
+        }
+
+        public static void AccountCard(SiegeApp app, VBoxContainer root)
+        {
+            // 0.31.132 (the iOS port, IOS_PORT_SPEC_FOR_CLAUDE.md §4, §6): the Fatebound account -- the progress itself -- moved
+            // between phones with a one-time code (Android and iPhone alike), and deleted from here (App Store 5.1.1(v)).
+            var al = app.account_link;
+            if (al == null)
+                return;
+            var ac = UI2.Frame(root, "night", 12, 18.0, "gold");
+            UI2.Divider(ac, "ACCOUNT", 20);
+            bool has = al.HasAccount();
+            UI2.Body(ac, has ? ("Your progress is kept in your Fatebound account on our server. Take it to another phone, Android or "
+                + "iPhone, with a one-time code.") : "Your account is made the first time the game reaches our server.", 12, UI2.SOFT);
+            var mv = UI2.Button(ac, "MOVE TO ANOTHER PHONE", "blue", () =>
+            {
+                app.Sfx("confirm");
+                app.ShowMoveCode();
+            }, "move_new", 15, 44.0);
+            mv.Disabled = !has;
+            UI2.Button(ac, "ENTER A CODE", "green", () =>
+            {
+                app.Sfx("confirm");
+                app.EnterMoveCode();
+            }, "move_enter", 15, 44.0);
+            var dl = UI2.Button(ac, "DELETE ACCOUNT", "red", () =>
+            {
+                app.AskDeleteAccount();
+            }, "account_delete", 13, 38.0);
+            dl.Disabled = !has;
+        }
+
+        public static string _Ago(SiegeApp app, int at)
+        {
+            if (at <= 0)
+                return "";
+            int s = GD.Maxi(0, (int)app.profile.Now() - at);
+            if (s < 60)
+                return " (just now)";
+            if (s < 3600)
+                return GD.Fmt(" (%d min ago)", s / 60);
+            if (s < 86400)
+                return GD.Fmt(" (%d h ago)", s / 3600);
+            return GD.Fmt(" (%d days ago)", s / 86400);
+        }
+
+        public static void Settings(SiegeApp app, VBoxContainer root)
+        {
+            // 0.31.79: a wooden sign with a turning gear, the profile on parchment, the career in tiles with the 3D icons, then
+            // sound, graphics, the old game's progress and help.
+            var p = app.profile;
+            GDict d = p.d;
+            var sign = new Control();
+            sign.CustomMinimumSize = new Vector2(0, 66);
+            root.AddChild(sign);
+            var board = new HBoxContainer();
+            board.Alignment = BoxContainer.ALIGNMENT_CENTER;
+            board.AddThemeConstantOverride("separation", 10);
+            board.MouseFilter = Control.MOUSE_FILTER_IGNORE;
+            sign.AddChild(board);
+            sign.Resized += () =>
+            {
+                board.Size = new Vector2(260, 60);
+                board.Position = new Vector2(((double)sign.Size.x - 260.0) * 0.5, 2);
+            };
+            UI2.Plate(board, "wood", 14.0, "gold", GDict.Of("rim", 4.0));
+            var gear = UI2.Icon(board, "gear", 42.0);
+            gear.SizeFlagsVertical = Control.SIZE_SHRINK_CENTER;
+            UI2.Spin(gear, 14.0);
+            UI2.Text(board, "SETTINGS", 30, UI2.GOLD).SizeFlagsVertical = Control.SIZE_SHRINK_CENTER;
+            // Profile (parchment)
+            var prof = UI2.Frame(root, "parch", 12, 16.0, "brown");
+            var ink = new Color("#3b2412");
+            var top = UI.Row(prof, 10);
+            var shc = new Control();
+            shc.CustomMinimumSize = new Vector2(48, 54);
+            top.AddChild(shc);
+            var sht = new TextureRect();
+            sht.Texture = UI2.Tex(UI2.V2 + "shield.svg");
+            sht.ExpandMode = TextureRect.EXPAND_IGNORE_SIZE;
+            sht.StretchMode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED;
+            sht.SetAnchorsAndOffsetsPreset(Control.PRESET_FULL_RECT);
+            shc.AddChild(sht);
+            var lvl = UI2.Text(shc, GD.Str((int)d["level"]), 22, Color.WHITE, new Color("#0e1433"), 5);
+            lvl.HorizontalAlignment = HorizontalAlignment.Center;
+            lvl.SetAnchorsAndOffsetsPreset(Control.PRESET_FULL_RECT);
+            lvl.OffsetBottom = -6;
+            var nv = new VBoxContainer();
+            UI.Grow(nv);
+            top.AddChild(nv);
+            var yl = UI.Label(nv, "YOUR NAME", 10, new Color("#7a5530"), UI.HEAVY_FONT);
+            yl.AutowrapMode = TextServer.AUTOWRAP_OFF;
+            var nr = UI.Row(nv, 8);
+            var name_edit = new LineEdit();
+            name_edit.Text = GD.Str(d["name"]);
+            name_edit.MaxLength = 24;          // capped to 16 after trimming spaces (see SAVE)
+            name_edit.PlaceholderText = "Your name";
+            name_edit.AddThemeFontOverride("font", UI.HEAVY_FONT);
+            name_edit.AddThemeFontSizeOverride("font_size", 16);
+            name_edit.AddThemeColorOverride("font_color", ink);
+            var es = new StyleBoxFlat();
+            es.BgColor = new Color("#fffaf0");
+            es.BorderColor = new Color("#5d3a1c");
+            es.SetBorderWidthAll(3);
+            es.SetCornerRadiusAll(10);
+            es.ContentMarginLeft = 10;
+            es.ContentMarginRight = 10;
+            es.ContentMarginTop = 6;
+            es.ContentMarginBottom = 6;
+            name_edit.AddThemeStyleboxOverride("normal", es);
+            name_edit.AddThemeStyleboxOverride("focus", es);
+            UI.Grow(name_edit);
+            nr.AddChild(name_edit);
+            var sv = UI2.Button(nr, "SAVE", "green", () =>
+            {
+                var nm = name_edit.Text.StripEdges().Left(16);
+                if (nm == "")
+                    nm = "Player";
+                p.SetName(nm);                             // (0.31.108: an op, so the server has it too)
+                app.Sfx("confirm");
+                app.Toast("Name saved", UI.CYAN);
+                app.RefreshTop();
+            }, "save_name", 16, 40.0, 11.0);
+            var svm = sv.CustomMinimumSize;
+            svm.x = 76;
+            sv.CustomMinimumSize = svm;
+            var xr = UI.Row(prof, 8);
+            var xl = UI.Label(xr, GD.Fmt("LEVEL %d", (int)d["level"]), 11, ink, UI.HEAVY_FONT);
+            xl.AutowrapMode = TextServer.AUTOWRAP_OFF;
+            UI2.Bar(xr, (int)d["xp"], Eco.LevelXp((int)d["level"]), new Color("#b6f3ff"), new Color("#2b8fd6"), 12.0);
+            var xv = UI.Label(xr, GD.Fmt("%d / %d XP", (int)d["xp"], Eco.LevelXp((int)d["level"])), 11, ink, UI.HEAVY_FONT);
+            xv.AutowrapMode = TextServer.AUTOWRAP_OFF;
+            // Google Play (0.31.102, Kevin: "Google play account linking to the game"): sign in, and the progress kept there
+            PlayGamesCard(app, root);
+            AccountCard(app, root);                               // 0.31.132: the account between phones
+            // Career
+            var car = UI2.Frame(root, "royal", 12, 18.0, "gold");
+            UI2.Divider(car, "CAREER", 20);
+            GDict st = d["stats"].D;
+            var grid = new GridContainer();
+            grid.Columns = app.ContentW() > 700.0 ? 8 : 6;          // (0.31.216: two rows across the landscape screen; 4 in portrait)
+            grid.AddThemeConstantOverride("h_separation", 8);
+            grid.AddThemeConstantOverride("v_separation", 8);
+            car.AddChild(grid);
+            var wins = (int)st["wins"];
+            var matches = (int)st["matches"];
+            // (0.31.164, 5v5 only: towers, last hits and jungle camps where King rescues, gathering and fish were)
+            var tiles = GArray.Of(GArray.Of("swords", UI.Compact(matches), "MATCHES"), GArray.Of("trophy", UI.Compact(wins), "WINS"), GArray.Of("castle", UI.Compact((int)st.Get("towers", 0)), "TOWERS"),
+                GArray.Of("skull", UI.Compact((int)st["kills"]), "KNOCKOUTS"), GArray.Of("anvil", UI.Compact((int)st["gates"] * 100), "TOWER DMG"), GArray.Of("helmet", UI.Compact((int)st.Get("lh", 0)), "LAST HITS"),
+                GArray.Of("horn", UI.Compact((int)st.Get("camps", 0)), "CAMPS"), GArray.Of("banner", matches > 0 ? GD.Fmt("%d%%", (int)GD.Round(100.0 * wins / matches)) : "--", "WIN RATE"));
+            var i = 0;
+            foreach (var tdef in tiles)
+            {
+                var tc = new VBoxContainer();
+                tc.AddThemeConstantOverride("separation", 0);
+                tc.Alignment = BoxContainer.ALIGNMENT_CENTER;
+                tc.CustomMinimumSize = new Vector2(0, 96);
+                UI.Grow(tc);
+                grid.AddChild(tc);
+                UI2.Plate(tc, "glass", 14.0);
+                var ic = UI2.Icon(tc, GD.Str(tdef[0]), 42.0);
+                ic.SizeFlagsHorizontal = Control.SIZE_SHRINK_CENTER;
+                UI2.Bob(ic, 2.5, 1.3 + (i % 3) * 0.2, i * 0.15);
+                UI2.Center(UI2.Text(tc, GD.Str(tdef[1]), 19, Color.WHITE));
+                UI2.Center(UI2.Body(tc, GD.Str(tdef[2]), 9, UI2.MUTED, false));
+                i += 1;
+            }
+            // Sound
+            var au = UI2.Frame(root, "night", 12, 18.0, "gold");
+            UI2.Divider(au, "SOUND", 20);
+            foreach (var pair in GArray.Of(GArray.Of("master", "Master"), GArray.Of("sfx", "Effects"), GArray.Of("music", "Music")))
+            {
+                string key = GD.Str(pair[0]);
+                var row = UI.Row(au, 10);
+                var ll = UI2.Text(row, GD.Str(pair[1]).ToUpperInvariant(), 14, Color.WHITE);
+                var llm = ll.CustomMinimumSize;
+                llm.x = 76;
+                ll.CustomMinimumSize = llm;
+                var sl = new HSlider();
+                sl.MinValue = 0.0;
+                sl.MaxValue = 1.0;
+                sl.Step = 0.05;
+                sl.Value = (double)d["settings"].D.Get(key, 1.0);       // 0.31.110 (Kevin): every slider at 100% by default
+                sl.SetMeta("action_key", "slider_" + key);
+                sl.SizeFlagsVertical = Control.SIZE_SHRINK_CENTER;
+                UI2.StyleSlider(sl);
+                UI.Grow(sl);
+                row.AddChild(sl);
+                var pv = UI2.Text(row, GD.Fmt("%d%%", (int)GD.Round(sl.Value * 100)), 14, UI2.GOLD);
+                var pvm = pv.CustomMinimumSize;
+                pvm.x = 44;
+                pv.CustomMinimumSize = pvm;
+                pv.HorizontalAlignment = HorizontalAlignment.Right;
+                sl.ValueChanged += (double v) =>
+                {
+                    pv.Text = GD.Fmt("%d%%", (int)GD.Round(v * 100));
+                    d["settings"].D[key] = v;
+                    p.Save();
+                    app._ApplyAudio();
+                    app.Sfx("slider");                 // 0.31.110: a tiny tick a step, at the new level
+                };
+            }
+            // 0.31.120 (Kevin: phone vibration): a buzz when you're hit, knock someone out, fall, or a King is rescued
+            UI2.Toggle(au, "Vibration", "A buzz each time you knock out an enemy", (bool)d["settings"].D.Get("vibrate", true), "vibrate", (bool on) =>
+            {
+                app.Sfx("toggle");
+                d["settings"].D["vibrate"] = on;
+                p.Save();
+                if (on)
+                    Input.VibrateHandheld(60, 0.7);
+            });
+            // Social (0.31.111)
+            var sx = UI2.Frame(root, "night", 12, 18.0, "gold");
+            UI2.Divider(sx, "SOCIAL", 20);
+            UI2.Toggle(sx, "Global chat", "Everyone online; friends and party chat stay on", (bool)d["settings"].D.Get("chat_global", true), "chat_global", (bool on) =>
+            {
+                app.Sfx("toggle");
+                d["settings"].D["chat_global"] = on;
+                p.Save();
+                if (app.social != null)
+                    app.social.SetShowGlobal(on);
+            });
+            var soc2 = app.social;
+            if (soc2 != null && soc2.Online())
+            {
+                var fc = UI.Row(sx, 8);
+                var fcl = UI2.Body(fc, GD.Fmt("Your friend code: %s", Social.CodeOf(GD.Str(soc2.me.Get("pid", "")))), 13, UI2.SOFT, false);
+                fcl.SizeFlagsHorizontal = Control.SIZE_EXPAND_FILL;
+                fcl.SizeFlagsVertical = Control.SIZE_SHRINK_CENTER;
+                var fb = UI2.Button(fc, "FRIENDS", "blue", () =>
+                {
+                    app.Sfx("menuOpen");
+                    app.OpenFriends();
+                }, "settings_friends", 13, 36.0, 11.0);
+                var fbm = fb.CustomMinimumSize;
+                fbm.x = 100;
+                fb.CustomMinimumSize = fbm;
+            }
+            UI2.Body(sx, "Tap a name in the chat to add a friend, block or report them.", 11, UI2.MUTED);
+            // 0.31.124 (Kevin: "Add the discord link to the game" + "give a reward for joining the discord")
+            var cx = UI2.Frame(root, "night", 12, 18.0, "gold");
+            cx.Name = "CommunityCard";
+            UI2.Divider(cx, "COMMUNITY", 20);
+            var claimed = (bool)d.Get("discord", false);
+            UI2.Body(cx, "Join the Fatebound Discord: news, updates, events and other players to team up with." +
+                (claimed ? "" : GD.Fmt(" Joining gives you %d gems, once.", Eco.DISCORD_GEMS)), 12, UI2.SOFT);
+            var dlabel = claimed ? "JOIN OUR DISCORD" : GD.Fmt("JOIN OUR DISCORD  ·  +%d GEMS", Eco.DISCORD_GEMS);
+            UI2.Button(cx, dlabel, "discord", () => DiscordPress(app), "discord", 15, 46.0);
+            // 0.31.118 (Kevin's analytics spec): usage statistics to our own server, on by default, off here
+            var px = UI2.Frame(root, "night", 12, 18.0, "gold");
+            UI2.Divider(px, "PRIVACY", 20);
+            UI2.Toggle(px, "Share anonymous usage stats", "Sessions, matches and menu use -- never your name or chat", (bool)d["settings"].D.Get("analytics", true), "analytics", (bool on) =>
+            {
+                app.Sfx("toggle");
+                d["settings"].D["analytics"] = on;
+                p.Save();
+                if (app.analytics != null)
+                    app.analytics.SetEnabled(on);
+            });
+            UI2.Body(px, "Only to Fatebound's own server, tied to your game account's random id. Kept 90 days, never sold or shared.", 11, UI2.MUTED);
+            // 0.31.119: notifications (the Play build's plugin; the preview APK has none)
+            var nx = UI2.Frame(root, "night", 12, 18.0, "gold");
+            UI2.Divider(nx, "NOTIFICATIONS", 20);
+            var nt = app.notify;
+            bool can_notify = nt != null && nt.Available();
+            var ntb = UI2.Toggle(nx, "Chest ready", can_notify ? "A notification when a chest has finished unlocking" : "Not in this version of the app",
+                (bool)d["settings"].D.Get("notify", true) && can_notify, "notify", (bool on) =>
+                {
+                    app.Sfx("toggle");
+                    d["settings"].D["notify"] = on;
+                    d["settings"].D["notify_asked"] = true;
+                    p.Save();
+                    if (on && nt != null && !nt.HasPermission())
+                        nt.RequestPermission();
+                });
+            ntb.Disabled = !can_notify;
+            if (!can_notify)
+                ntb.Modulate = new Color(1, 1, 1, 0.45);
+            // Graphics
+            var gx = UI2.Frame(root, "night", 12, 18.0, "gold");
+            UI2.Divider(gx, "GRAPHICS", 20);
+            // (0.31.163, Kevin: "Remove both": no High-quality graphics toggle -- always on, siege_app ignores a saved "off")
+            UI2.Toggle(gx, "Reduce effects", "Smoother on older phones", (bool)d["settings"].D.Get("reduce_motion", false), "reduce_motion", (bool on) =>
+            {
+                app.Sfx("toggle");
+                d["settings"].D["reduce_motion"] = on;
+                p.Save();
+            });
+            // (0.31.123, Kevin: "Remove the progress from old version in the settings since Google play saves progress now":
+            // the old version's paste-in import card is gone; a legacy save on the phone is still carried over by itself, once --
+            // Profile.import_legacy at first launch)
+            // Help
+            // 0.31.120 (Kevin: SEND TO DEVELOPER): the log straight to the developer's server, asked every time
+            UI2.Button(root, "SEND TO DEVELOPER", "orange", () => app.OpenSendDiag(), "send_diag", 15, 44.0);
+            var help = new HBoxContainer();
+            help.AddThemeConstantOverride("separation", 10);
+            root.AddChild(help);
+            if (Diag.HasLogs())
+            {
+                UI.Grow(UI2.Button(help, "COPY DIAGNOSTICS", "blue", () =>
+                {
+                    DisplayServer.ClipboardSet(Diag.ReadLogs());
+                    app.Toast("Diagnostics copied", UI.CYAN);
+                }, "copy_diag", 13, 40.0));
+            }
+            UI.Grow(UI2.Button(help, "PRIVACY POLICY", "blue", () => OS.ShellOpen(PRIVACY_URL), "privacy", 13, 40.0));
+            // (0.31.112-0.31.163: HOW TO PLAY (TUTORIAL) -- Siege's walkthrough; gone with Siege, 0.31.164.) 0.31.181: the 5v5's
+            UI2.Button(root, "HOW TO PLAY (TUTORIAL)", "blue", () =>
+            {
+                app.Sfx("confirm");
+                app.StartTutorial();
+            }, "settings_tutorial", 14, 44.0);
+            var ver = UI2.Body(root, GD.Fmt("Fatebound %s", Diag.BUILD), 11, UI2.MUTED);
+            ver.HorizontalAlignment = HorizontalAlignment.Center;
+        }
+
+        // ---------------- QUESTS (0.31.97, Kevin: "Build the quest system and I want quests for each class") ----------------
+        // Every class has one quest (Eco.QUESTS): three steps claimed in order (0.31.188: the last pays gems and a Royal chest --
+        // it gave the class's legendary weapon). The class picker shows a badge where a step is ready and a tick where the quest
+        // is done; the hero stands in his own place in the outfit he wears (turn and zoom him); each step shows its task, how far
+        // along it is, what it pays and CLAIM when it can be claimed.
+        public const string QUEST_ICON = "res://assets/ui/v2/icons/quest.png";
+
+        public static string QuestIconName()
+        {
+            return ResourceLoader.Exists(QUEST_ICON) ? "quest" : "crown";
+        }
+
+        public static HBoxContainer _RewardChips(Node parent, GDict r, Color? ink = null)
+        {
+            // the reward of a quest step as small pictures with their amounts
+            var ink_ = ink ?? Color.WHITE;
+            var row = new HBoxContainer();
+            row.AddThemeConstantOverride("separation", 8);
+            row.MouseFilter = Control.MOUSE_FILTER_IGNORE;
+            parent.AddChild(row);
+            var parts = new GArray();
+            foreach (var k in GArray.Of("gold", "gems", "chest"))
+            {
+                if (r.Has(k))
+                    parts.Append(GDict.Of(k, r[k]));
+            }
+            foreach (var part0 in parts)
+            {
+                GDict part = part0.D;
+                var rt = RewardText(part);
+                var cell = new HBoxContainer();
+                cell.AddThemeConstantOverride("separation", 3);
+                row.AddChild(cell);
+                if (GD.Str(rt[3]) != "")
+                    UI2.Img(cell, GD.Str(rt[3]), 22.0).SizeFlagsVertical = Control.SIZE_SHRINK_CENTER;
+                var t = GD.Str(rt[1]);
+                if (part.Has("gold") || part.Has("gems"))
+                    t = GD.Fmt("+%d", (int)part.Values()[0]);
+                UI2.Body(cell, t, 11, ink_ == Color.WHITE ? (Color)rt[2] : ink_, false).SizeFlagsVertical = Control.SIZE_SHRINK_CENTER;
+            }
+            return row;
+        }
+
+        public static string QuestFirst(Profile p)
+        {
+            // the class to open the Quests screen on: one with a step ready, else the one played most, else the Knight
+            foreach (var cls in Eco.QUESTS)
+            {
+                if (p.QuestReady(GD.Str(cls)) && GD.Str(cls) != "worker")
+                    return GD.Str(cls);
+            }
+            var best = "knight";
+            var most = 0;
+            foreach (var cls in Eco.QUESTS)
+            {
+                if (GD.Str(cls) == "worker")
+                    continue;
+                var n = (int)p.d["stats"].D.Get(Eco.QuestKey(GD.Str(cls), "matches"), 0);
+                if (n > most)
+                {
+                    most = n;
+                    best = GD.Str(cls);
+                }
+            }
+            return best;
+        }
+
+        public static void ClaimQuest(SiegeApp app, string cls)
+        {
+            var p = app.profile;
+            GDict res = p.ClaimQuest(cls);
+            if (!(bool)res.Get("ok", false))
+                return;
+            bool last = (int)res["step"] + 1 >= Eco.QUESTS[cls]["steps"].A.Size();
+            app.Sfx(last ? "revealLegendary" : "claim");      // 0.31.110: the quest's end gets the golden choir
+            app.RefreshTop();
+            var bits = new GArray();
+            foreach (var k in GArray.Of("gold", "gems"))
+            {
+                if ((int)res["reward"].D.Get(k, 0) > 0)
+                    bits.Append(GD.Fmt("+%d %s", (int)res["reward"][k], GDict.Of("gold", "gold", "gems", "gems")[k]));
+            }
+            if (res["reward"].D.Has("chest"))
+                bits.Append(GD.Fmt("a %s", GD.Str(Eco.CHESTS[GD.Str(res["reward"]["chest"])]["name"])));
+            app.Toast(GD.Fmt(last ? "Quest complete! %s" : GD.Fmt("Quest step %d done: %s", (int)res["step"] + 1, "%s"), GStr.Join(", ", bits)), UI.GOLD);
+            app.Rebuild();
+        }
+
+        public static void Quests(SiegeApp app, VBoxContainer root)
+        {
+            var p = app.profile;
+            // the sign
+            var sign = new Control();
+            sign.CustomMinimumSize = new Vector2(0, 66);
+            root.AddChild(sign);
+            var board = new HBoxContainer();
+            board.Alignment = BoxContainer.ALIGNMENT_CENTER;
+            board.AddThemeConstantOverride("separation", 10);
+            board.MouseFilter = Control.MOUSE_FILTER_IGNORE;
+            sign.AddChild(board);
+            sign.Resized += () =>
+            {
+                board.Size = new Vector2(230, 60);
+                board.Position = new Vector2(((double)sign.Size.x - 230.0) * 0.5, 2);
+            };
+            UI2.Plate(board, "wood", 14.0, "gold", GDict.Of("rim", 4.0));
+            UI2.Icon(board, QuestIconName(), 46.0).SizeFlagsVertical = Control.SIZE_SHRINK_CENTER;
+            UI2.Text(board, "QUESTS", 28, UI2.GOLD).SizeFlagsVertical = Control.SIZE_SHRINK_CENTER;
+            var back = UI2.Button(sign, "", "ghost", () =>
+            {
+                app.Sfx("menuClose");
+                app.ShowTab("home");
+            }, "quests_back", 14, 40.0, 12.0);
+            back.Position = new Vector2(0, 12);
+            back.Size = new Vector2(46, 40);
+            UI.Icon(back, "home", 22, Color.WHITE).Position = new Vector2(12, 7);
+            UI2.Center(UI2.Body(root, "Every class has a quest. Finish its three steps for gold, gems and a Royal chest.", 12, UI2.SOFT));
+            // class picker: a badge where a step is ready, a tick where the quest is done
+            string cls = Eco.QUESTS.Has(GD.Str(app.quest_cls)) && GD.Str(app.quest_cls) != "worker" ? app.quest_cls : QuestFirst(p);
+            app.quest_cls = cls;
+            var rail = UI2.Frame(root, "glass", 8, 18.0);
+            foreach (var row_classes in new[] { Eco.HERO_CLASSES, Eco.UP_CLASSES })             // (0.31.164: no Worker -- Siege's)
+            {
+                var rr = new HBoxContainer();
+                rr.Alignment = BoxContainer.ALIGNMENT_CENTER;
+                rr.AddThemeConstantOverride("separation", 4);
+                rail.AddChild(rr);
+                foreach (var c0 in row_classes)
+                {
+                    string c = GD.Str(c0);
+                    var cb = _ClassCoin(rr, c, cls == c, "quest_" + c, () =>
+                    {
+                        app.quest_cls = c;
+                        app.Sfx("tap");
+                        app.Rebuild();
+                    }, "", 38.0);
+                    if (p.QuestReady(c))
+                        UI2.Badge(cb, "!", new Vector2(2, -4));
+                    else if (p.QuestDone(c))
+                    {
+                        var tick = UI2.Chip(cb, "✔", new Color("#2f9e55"), Color.WHITE, new Color(1, 1, 1, 0.6));
+                        tick.Position = new Vector2(16, -4);
+                        tick.MouseFilter = Control.MOUSE_FILTER_IGNORE;
+                    }
+                }
+            }
+            GDict q = Eco.QUESTS[cls].D;
+            int step = p.QuestStep(cls);
+            bool done = p.QuestDone(cls);
+            // the hero, in his own place (0.31.188; it was the hero holding the legendary)
+            var hero = new Control();
+            hero.CustomMinimumSize = new Vector2(0, 300);
+            root.AddChild(hero);
+            var stage = new Control();
+            stage.SetAnchorsAndOffsetsPreset(Control.PRESET_FULL_RECT);
+            stage.OffsetLeft = 5;
+            stage.OffsetTop = 5;
+            stage.OffsetRight = -5;
+            stage.OffsetBottom = -5;
+            stage.ClipContents = true;
+            hero.AddChild(stage);
+            UI2.Plate(hero, "ember", 22.0, "orange", GDict.Of("rim", 4.0));
+            var art = new TextureRect();
+            var ap = Champions.Art(cls);
+            art.Texture = ResourceLoader.Exists(ap) ? ResourceLoader.Load<Texture2D>(ap) : null;
+            art.ExpandMode = TextureRect.EXPAND_IGNORE_SIZE;
+            art.StretchMode = TextureRect.STRETCH_KEEP_ASPECT_COVERED;
+            art.SetAnchorsAndOffsetsPreset(Control.PRESET_FULL_RECT);
+            art.OffsetTop = -110;
+            art.OffsetBottom = 90;
+            art.MouseFilter = Control.MOUSE_FILTER_IGNORE;
+            stage.AddChild(art);
+            var sh = new Showcase();
+            sh.interactive = true;
+            sh.plinth = false;
+            sh.SetAnchorsAndOffsetsPreset(Control.PRESET_FULL_RECT);
+            stage.AddChild(sh);
+            sh.ShowLook(cls, p.LookFor(cls));
+            ZoomControls(stage, sh, "quests");
+            if (done)
+            {
+                var tag = UI2.Chip(stage, "QUEST COMPLETE", new Color("#2f9e55"), Color.WHITE, new Color(UI2.GOLD, 0.6));
+                tag.Position = new Vector2(10, 8);
+                tag.MouseFilter = Control.MOUSE_FILTER_IGNORE;
+            }
+            // the nameplate: who he is
+            var np = UI2.Frame(root, "ember", 8, 16.0, "orange");
+            var nm = UI2.Text(np, Champions.NameOf(cls).ToUpperInvariant(), 24, new Color("#ffd27a"), new Color("#3d1602"), 6);
+            nm.HorizontalAlignment = HorizontalAlignment.Center;
+            UI2.Sweep(np.GetParent() as Control, 2.6, 60.0, 0.3);
+            var sub = GD.Fmt("%s  ·  QUEST %s", GD.Str(Eco.CLASS_NAMES[cls]).ToUpperInvariant(), done ? "COMPLETE" : GD.Fmt("STEP %d OF %d", step + 1, q["steps"].A.Size()));
+            UI2.Center(UI2.Body(np, sub, 11, new Color("#ffe7c8"), false));
+            var note = Eco.QuestNote(cls);
+            if (note != "")
+                UI2.Center(UI2.Body(np, note, 10, new Color(1, 1, 1, 0.7), false));
+            // the steps
+            for (int i = 0; i < q["steps"].A.Size(); i++)
+                QuestStepCard(app, root, cls, i);
+        }
+
+        public static void QuestStepCard(SiegeApp app, Node root, string cls, int i)
+        {
+            var p = app.profile;
+            GDict q = Eco.QUESTS[cls].D;
+            GDict s = q["steps"][i].D;
+            int step = p.QuestStep(cls);
+            var claimed = i < step;
+            var current = i == step;
+            var n = (int)s["n"];
+            int have = claimed ? n : GD.Mini(n, Eco.QuestProgress(p.d["stats"].D, cls, i));
+            bool ready = current && have >= n;
+            bool last = i == q["steps"].A.Size() - 1;
+            var c = UI2.Frame(root, ready ? "royal" : (last && !claimed ? "ember" : "night"), 8, 16.0,
+                ready ? "gold" : (last ? "orange" : "silver"), GDict.Of("pattern_mix", 0.0, "dim", claimed ? 0.3 : 0.0));
+            if (ready)
+                UI2.Sweep(c.GetParent() as Control, 2.2, 60.0, 0.35);
+            var r = UI.Row(c, 10);
+            // the step's number (a tick once claimed)
+            var disc = new Control();
+            disc.CustomMinimumSize = new Vector2(40, 40);
+            disc.SizeFlagsVertical = Control.SIZE_SHRINK_CENTER;
+            r.AddChild(disc);
+            UI2.Plate(disc, !claimed ? "royal" : "night", 20.0, (current || claimed) ? "gold" : "silver", GDict.Of("rim", 2.0));
+            var dl = UI2.Text(disc, claimed ? "✔" : GD.Str(i + 1), 18, current ? UI2.CYAN : Color.WHITE, UI2.INK, 4);
+            dl.HorizontalAlignment = HorizontalAlignment.Center;
+            dl.VerticalAlignment = VerticalAlignment.Center;
+            dl.SetAnchorsAndOffsetsPreset(Control.PRESET_FULL_RECT);
+            var v = new VBoxContainer();
+            v.AddThemeConstantOverride("separation", 3);
+            UI.Grow(v);
+            r.AddChild(v);
+            UI2.Text(v, GD.Str(s["task"]), 14, !claimed ? Color.WHITE : new Color(1, 1, 1, 0.65), UI2.INK, 4).AutowrapMode = TextServer.AUTOWRAP_WORD_SMART;
+            var pr = UI.Row(v, 6);
+            bool gold = last;
+            UI2.Bar(pr, (double)have, (double)n, gold ? new Color("#fff3ad") : new Color("#b6f3ff"), gold ? new Color("#f0a024") : new Color("#36b9ea"), 10.0);
+            UI2.Body(pr, GD.Fmt("%s / %s", _Thousands(have), _Thousands(n)), 11, Color.WHITE, false);
+            var rw = UI.Row(v, 6);
+            UI2.Body(rw, claimed ? "CLAIMED" : (!last ? "REWARD" : "FINAL REWARD"), 9, claimed ? new Color("#8cf0a8") : new Color(1, 1, 1, 0.6), false);
+            _RewardChips(rw, Eco.QuestReward(cls, i));
+            if (ready)
+            {
+                var b = UI2.Button(r, "CLAIM", "gold", () => ClaimQuest(app, cls), "quest_claim_" + cls, 14, 42.0, 12.0);
+                var bm = b.CustomMinimumSize;
+                bm.x = 80;
+                b.CustomMinimumSize = bm;
+                b.SizeFlagsVertical = Control.SIZE_SHRINK_CENTER;
+                UI2.Pulse(b, 0.03, 1.0);
+            }
+            else if (i > step)
+                UI2.Body(r, GD.Fmt("after step %d", (i)), 10, new Color(1, 1, 1, 0.5), false).SizeFlagsVertical = Control.SIZE_SHRINK_CENTER;
+        }
     }
 }

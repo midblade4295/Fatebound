@@ -21,8 +21,6 @@ namespace Fatebound.Game
     using Land = Fatebound.Sim.Land;
     using Keep = Fatebound.Sim.Keep;
     using Sim = Fatebound.Sim.SiegeSim;
-    using Foliage = Fatebound.Game.Foliage;
-    using GroundCards = Fatebound.Game.GroundCards;
 
     public partial class SiegeView
     {
@@ -741,7 +739,29 @@ namespace Fatebound.Game
             if (_water_mat == null)
             {
                 var sh = new Shader();
-                sh.Code = GDSHADER_L1245;
+                sh.Code = "\n" +
+                    "shader_type spatial;\n" +
+                    "render_mode cull_disabled, blend_mix, depth_draw_opaque;\n" +
+                    "uniform sampler2D ripples : filter_linear_mipmap, repeat_enable;\n" +
+                    "uniform float glint = 0.0;\n" +
+                    "void fragment() {\n" +
+                    "\tvec2 w = UV * vec2(18.0, 1.0);\n" +
+                    "\tfloat a = texture(ripples, w * 0.35 + vec2(TIME * 0.05, TIME * 0.02)).r;\n" +
+                    "\tfloat b = texture(ripples, w * 0.21 - vec2(TIME * 0.03, 0.0)).r;\n" +
+                    "\tfloat n = a * 0.6 + b * 0.4;\n" +
+                    "\tfloat shore = 1.0 - smoothstep(0.0, 0.16, min(UV2.y, 1.0 - UV2.y));\n" +
+                    "\tvec3 deep = vec3(0.06, 0.36, 0.44);            // (0.31.216: teal over the painted bed; was a solid blue)\n" +
+                    "\tvec3 shallow = vec3(0.24, 0.64, 0.62);\n" +
+                    "\tvec3 col = mix(deep, shallow, smoothstep(0.35, 0.75, n));\n" +
+                    "\tcol *= 1.0 - shore * 0.18;                     // no foam (Round 34): the banks just shade a little\n" +
+                    "\tALBEDO = col;\n" +
+                    "\tALPHA = mix(0.5, 0.72, smoothstep(0.0, 0.4, min(UV2.y, 1.0 - UV2.y)));\n" +
+                    "\tROUGHNESS = 0.18;\n" +
+                    "\tSPECULAR = 0.35;                  // 0.30.11: was 0.6 (see the high-quality water)\n" +
+                    "\t// Sun glints (High-quality graphics): sparse sparkles where two scrolling layers line up; bright enough to glow.\n" +
+                    "\tfloat sg = texture(ripples, w * 1.3 + vec2(-TIME * 0.09, TIME * 0.05)).r * texture(ripples, w * 0.9 + vec2(TIME * 0.07, -TIME * 0.04)).r;\n" +
+                    "\tEMISSION = vec3(1.0, 0.97, 0.88) * smoothstep(0.58, 0.64, sg) * glint;      // sparse: only the brightest crossings\n" +
+                    "}\n";
                 var m = new ShaderMaterial();
                 m.Shader = sh;
                 var nt = new NoiseTexture2D();
@@ -989,7 +1009,26 @@ namespace Fatebound.Game
                 if (_tuft_wind == null)
                 {
                     var sh = new Shader();
-                    sh.Code = GDSHADER_L1459;
+                    sh.Code = "\n" +
+                        "shader_type spatial;\n" +
+                        "render_mode cull_disabled, vertex_lighting, specular_disabled;\n" +
+                        "uniform sampler2D albedo_tex : source_color, filter_linear_mipmap;\n" +
+                        "uniform vec4 albedo_col : source_color = vec4(1.0);\n" +
+                        "uniform bool use_tex = false;\n" +
+                        "void vertex() {\n" +
+                        "\tvec3 wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;\n" +
+                        "\tfloat h = clamp(VERTEX.y / 0.5, 0.0, 1.0);\n" +
+                        "\tfloat gust = sin(TIME * 1.3 + wp.x * 0.18 + wp.z * 0.11) * 0.5 + 0.5;\n" +
+                        "\tfloat flutter = sin(TIME * 4.2 + wp.x * 1.3 + wp.z * 0.9);\n" +
+                        "\tfloat sway = (gust * 0.10 + flutter * 0.025) * h;\n" +
+                        "\tVERTEX.x += sway;\n" +
+                        "\tVERTEX.z += sway * 0.5;\n" +
+                        "}\n" +
+                        "void fragment() {\n" +
+                        "\tvec3 c = albedo_col.rgb;\n" +
+                        "\tif (use_tex) { c *= texture(albedo_tex, UV).rgb; }\n" +
+                        "\tALBEDO = c;\n" +
+                        "}\n";
                     var m = new ShaderMaterial();
                     m.Shader = sh;
                     var sm = @base as StandardMaterial3D;

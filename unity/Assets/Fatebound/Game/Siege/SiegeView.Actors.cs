@@ -21,9 +21,6 @@ namespace Fatebound.Game
     using Eco = Fatebound.Game.Economy;
     using Stage = Fatebound.Game.AssetCache;
     using Sim = Fatebound.Sim.SiegeSim;
-    using WeaponFx = Fatebound.Game.WeaponFx;
-    using EyeFx = Fatebound.Game.EyeFx;
-    using WyrmBody = Fatebound.Game.WyrmBody;
 
     public partial class SiegeView
     {
@@ -1151,7 +1148,7 @@ namespace Fatebound.Game
                 g.AddPoint(0.55, new Color(0.02, 0.03, 0.06, 0.32));
                 var gt = new GradientTexture2D();
                 gt.Gradient = g;
-                gt.Fill = GradientTexture2D.FILL_RADIAL;
+                gt.Fill = GradientTexture2D.FillEnum.Radial;
                 gt.FillFrom = new Vector2(0.5, 0.5);
                 gt.FillTo = new Vector2(1.0, 0.5);
                 gt.Width = 64;
