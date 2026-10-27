@@ -127,6 +127,29 @@ namespace Fatebound.Client
             RenderPipelineManager.endCameraRendering += OnEndCamera;
         }
 
+        bool _reported;
+
+        /// <summary>Which of the port's shaders this GPU can't run (a shader that failed to compile for it): into the boot
+        /// log, so a phone's log says what a build log would.</summary>
+        static void ReportShaders()
+        {
+            try
+            {
+                var all = Resources.LoadAll<UnityEngine.Shader>("Shaders");
+                int bad = 0;
+                foreach (var sh in all)
+                {
+                    if (sh.isSupported) continue;
+                    bad++;
+                    Debug.LogError("Fatebound shader not supported on this GPU: " + sh.name + " (" + sh.passCount + " passes)");
+                }
+                var post = UnityEngine.Shader.Find("Hidden/Fatebound/Post");
+                Debug.LogWarning("Fatebound shaders: " + (all.Length - bad) + " of " + all.Length + " supported (" + SystemInfo.graphicsDeviceType
+                    + "); the post shader " + (post == null ? "missing" : post.passCount + " passes"));
+            }
+            catch (Exception e) { Debug.LogException(e); }
+        }
+
         // ------------------------------------------------------------------ worlds
         WorldData World(World3D w)
         {
@@ -377,9 +400,11 @@ namespace Fatebound.Client
         }
 
         static Vector4[] _slice = new Vector4[1023];
+        /// <summary>The batch's per-instance values in a 1023-long array: Unity fixes a property block array's length the
+        /// first time it is set, so every set is the full length (a shorter first set capped the bigger batches).</summary>
         static Vector4[] Slice(Vector4[] a, int start, int count)
         {
-            if (start == 0 && count == a.Length) return a;
+            if (start == 0 && count == _slice.Length && a.Length == _slice.Length) return a;
             Array.Copy(a, start, _slice, 0, count);
             return _slice;
         }
@@ -714,7 +739,15 @@ namespace Fatebound.Client
             Shader.SetGlobalFloat("_FB_Time", (float)(Time.realtimeSinceStartupAsDouble % 3600.0));
             var c3 = d.Vp.GetCamera3D();
             SetDecals(d, c3 != null ? c3.GetCameraTransform() : Xform3.IDENTITY);
-            if (cam.clearFlags == CameraClearFlags.Skybox) RenderSettings.skybox = Materials.ForSky(env.Sky);
+            if (cam.clearFlags == CameraClearFlags.Skybox)
+            {
+                // (an exception here would stop URP drawing the camera at all: the match came out grey)
+                Material sky = null;
+                try { sky = Materials.ForSky(env.Sky); }
+                catch (Exception e) { Debug.LogException(e); }
+                if (sky != null) RenderSettings.skybox = sky;
+                else { cam.clearFlags = CameraClearFlags.SolidColor; cam.backgroundColor = new Color(DefaultClearColor.r, DefaultClearColor.g, DefaultClearColor.b, 1f); }
+            }
         }
 
         void OnEndCamera(ScriptableRenderContext ctx, Camera cam)
@@ -727,6 +760,8 @@ namespace Fatebound.Client
         /// <summary>Once a frame, after the SceneTree's iteration and before the GUI is drawn.</summary>
         public void Frame(double delta)
         {
+            // (on the first frame: by then the game's loggers are listening)
+            if (!_reported) { _reported = true; ReportShaders(); }
             RenderSync.Flush();
             foreach (var d in _skinned) UpdateSkin(d);
             foreach (var m in _multimeshes) DrawMultiMesh(m);

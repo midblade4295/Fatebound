@@ -460,6 +460,7 @@ namespace Fatebound.Client
             if (!_skies.TryGetValue(sky, out var mat))
             {
                 var sh = Shader.Find("Fatebound/ProceduralSky") ?? Resources.Load<Shader>("Shaders/FateboundSky");
+                if (sh == null) { Debug.LogError("Fatebound: no sky shader (Fatebound/ProceduralSky)"); return null; }
                 mat = new Material(sh) { name = "sky", hideFlags = HideFlags.DontSave };
                 _skies.Add(sky, mat);
             }

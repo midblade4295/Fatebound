@@ -11,7 +11,6 @@
 Shader "Hidden/Fatebound/Post"
 {
     HLSLINCLUDE
-    #pragma target 3.5
     Texture2D _Source;
     Texture2D _Blend;
     SamplerState sampler_linear_clamp;
@@ -52,6 +51,7 @@ Shader "Hidden/Fatebound/Post"
         Pass
         {
             HLSLPROGRAM
+            #pragma target 3.5
             #pragma vertex vert
             #pragma fragment frag
             float4 frag(V2F i) : SV_Target
@@ -81,6 +81,7 @@ Shader "Hidden/Fatebound/Post"
         Pass
         {
             HLSLPROGRAM
+            #pragma target 3.5
             #pragma vertex vert
             #pragma fragment frag
             float4 frag(V2F i) : SV_Target
@@ -103,6 +104,7 @@ Shader "Hidden/Fatebound/Post"
         Pass
         {
             HLSLPROGRAM
+            #pragma target 3.5
             #pragma vertex vert
             #pragma fragment frag
             float4 frag(V2F i) : SV_Target
@@ -142,19 +144,20 @@ Shader "Hidden/Fatebound/Post"
         Pass
         {
             HLSLPROGRAM
+            #pragma target 3.5
             #pragma vertex vert
             #pragma fragment frag
 
-            float3 linear_to_srgb(float3 color)
+            // (written per channel with plain selects: the shader compilers Unity uses for Vulkan and GLES don't all take a
+            // bool vector as lerp's weight)
+            float linear_to_srgb1(float c)
             {
-                const float3 a = 0.055;
-                return lerp((1.0 + a) * pow(max(color, 0.0), 1.0 / 2.4) - a, 12.92 * color, color < 0.0031308);
+                return c < 0.0031308 ? 12.92 * c : 1.055 * pow(max(c, 0.0), 1.0 / 2.4) - 0.055;
             }
 
-            float3 srgb_to_linear(float3 color)
+            float3 linear_to_srgb(float3 color)
             {
-                const float3 a = 0.055;
-                return lerp(pow(max((color + a) * (1.0 / (1.0 + a)), 0.0), 2.4), color * (1.0 / 12.92), color < 0.04045);
+                return float3(linear_to_srgb1(color.r), linear_to_srgb1(color.g), linear_to_srgb1(color.b));
             }
 
             float3 tonemap_reinhard(float3 color)
@@ -202,7 +205,7 @@ Shader "Hidden/Fatebound/Post"
             float3 apply_tonemapping(float3 color)
             {
                 if (_Tonemapper < 0.5) return color;
-                color = max(0.0, color);
+                color = max(float3(0.0, 0.0, 0.0), color);
                 if (_Tonemapper < 1.5) return tonemap_reinhard(color);
                 if (_Tonemapper < 2.5) return tonemap_filmic(color);
                 return tonemap_aces(color);
@@ -213,12 +216,12 @@ Shader "Hidden/Fatebound/Post"
                 if (_GlowMode < 0.5) return color + glow;                          // additive
                 if (_GlowMode < 1.5)                                               // screen
                 {
-                    glow = clamp(glow, 0.0, white);
+                    glow = clamp(glow, float3(0.0, 0.0, 0.0), float3(white, white, white));
                     return color + glow - (color * glow / white);
                 }
                 if (_GlowMode < 2.5)                                               // softlight
                 {
-                    glow = clamp(glow, 0.0, 1.0);
+                    glow = saturate(glow);
                     color.r = color.r > 1.0 ? color.r : color.r + glow.r * ((color.r <= 0.25 ? ((16.0 * color.r - 12.0) * color.r + 4.0) * color.r : sqrt(color.r)) - color.r);
                     color.g = color.g > 1.0 ? color.g : color.g + glow.g * ((color.g <= 0.25 ? ((16.0 * color.g - 12.0) * color.g + 4.0) * color.g : sqrt(color.g)) - color.g);
                     color.b = color.b > 1.0 ? color.b : color.b + glow.b * ((color.b <= 0.25 ? ((16.0 * color.b - 12.0) * color.b + 4.0) * color.b : sqrt(color.b)) - color.b);
@@ -257,8 +260,9 @@ Shader "Hidden/Fatebound/Post"
                 {
                     color.rgb = color.rgb * _Bcs.x;
                     color.rgb = linear_to_srgb(color.rgb);
-                    color.rgb = lerp(0.5, color.rgb, _Bcs.y);
-                    color.rgb = lerp(dot(1.0, color.rgb) * (1.0 / 3.0), color.rgb, _Bcs.z);
+                    color.rgb = lerp(float3(0.5, 0.5, 0.5), color.rgb, _Bcs.y);
+                    float grey = (color.r + color.g + color.b) * (1.0 / 3.0);
+                    color.rgb = lerp(float3(grey, grey, grey), color.rgb, _Bcs.z);
                     color.rgb = saturate(color.rgb);
                 }
                 else color.rgb = linear_to_srgb(saturate(color.rgb));     // convert_to_srgb

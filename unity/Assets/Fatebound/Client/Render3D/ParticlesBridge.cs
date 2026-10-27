@@ -121,9 +121,10 @@ namespace Fatebound.Client
 
         static readonly Vector4[] _slice = new Vector4[1023], _slice2 = new Vector4[1023];
 
+        /// <summary>The batch's values in a 1023-long array (Unity fixes a property block array's length when it is first
+        /// set: a first, smaller particle count capped every later batch).</summary>
         static Vector4[] Slice(Vector4[] a, int start, int count, bool second = false)
         {
-            if (start == 0 && count == a.Length) return a;
             var dst = second ? _slice2 : _slice;
             Array.Copy(a, start, dst, 0, count);
             return dst;

@@ -90,11 +90,39 @@ namespace Fatebound.Client
             cmd.DrawProcedural(Matrix4x4.identity, Mat, pass, MeshTopology.Triangles, 3, 1);
         }
 
+        static int _usable = -1;
+
+        /// <summary>Whether the post shader runs here (compiled for this GPU, all four passes). If not, say so once (the match
+        /// log) and copy the scene straight into the viewport's texture instead, so the 3D still shows.</summary>
+        static bool Usable
+        {
+            get
+            {
+                if (_usable < 0)
+                {
+                    var sh = Mat.shader;
+                    _usable = sh != null && sh.isSupported && Mat.passCount >= 4 ? 1 : 0;
+                    if (_usable == 0)
+                        Debug.LogError("Fatebound post shader can't run here (" + (sh == null ? "missing" : sh.name + ", supported " + sh.isSupported + ", "
+                            + Mat.passCount + " passes") + "): the 3D is copied without glow or tonemapping");
+                }
+                return _usable == 1;
+            }
+        }
+
         public static void Render(ScriptableRenderContext ctx, RenderTexture hdr, RenderTexture ldr, Environment env, bool transparent)
         {
             if (hdr == null || ldr == null) return;
             var cmd = _cmd ??= new CommandBuffer { name = "Fatebound post" };
             cmd.Clear();
+            if (!Usable)
+            {
+                cmd.Blit(hdr, ldr);
+                ctx.ExecuteCommandBuffer(cmd);
+                cmd.Clear();
+                ctx.Submit();
+                return;
+            }
             int w = hdr.width, h = hdr.height;
             bool glow = env != null && env.GlowEnabled && Render(cmd, hdr, env, w, h);
 
