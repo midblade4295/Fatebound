@@ -135,16 +135,33 @@ namespace Fatebound.Client
         {
             try
             {
+                // by the list of the port's shader files the build writes (BuildScript: Resources/fb_shaders.txt), so even a
+                // shader that came out nameless is named by its file
+                var list = Resources.Load<TextAsset>("fb_shaders");
+                var paths = list != null ? list.text.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries) : Array.Empty<string>();
                 var all = Resources.LoadAll<UnityEngine.Shader>("Shaders");
                 int bad = 0;
-                foreach (var sh in all)
+                if (paths.Length > 0)
                 {
-                    if (sh.isSupported) continue;
-                    bad++;
-                    Debug.LogError("Fatebound shader not supported on this GPU: " + sh.name + " (" + sh.passCount + " passes)");
+                    foreach (var raw in paths)
+                    {
+                        string path = raw.Trim();
+                        var sh = Resources.Load<UnityEngine.Shader>(path);
+                        if (sh != null && sh.isSupported) continue;
+                        bad++;
+                        Debug.LogError("Fatebound shader not supported on this GPU: " + path + (sh == null ? " (didn't load)" : " (\"" + sh.name + "\")"));
+                    }
                 }
+                else
+                    foreach (var sh in all)
+                    {
+                        if (sh.isSupported) continue;
+                        bad++;
+                        Debug.LogError("Fatebound shader not supported on this GPU: " + sh.name + " (" + sh.passCount + " passes)");
+                    }
                 var post = UnityEngine.Shader.Find("Hidden/Fatebound/Post");
-                Debug.LogWarning("Fatebound shaders: " + (all.Length - bad) + " of " + all.Length + " supported (" + SystemInfo.graphicsDeviceType
+                int total = paths.Length > 0 ? paths.Length : all.Length;
+                Debug.LogWarning("Fatebound shaders: " + (total - bad) + " of " + total + " supported (" + SystemInfo.graphicsDeviceType
                     + "); the post shader " + (post == null ? "missing" : post.passCount + " passes"));
             }
             catch (Exception e) { Debug.LogException(e); }

@@ -234,6 +234,7 @@ namespace Fatebound.Client
 
         public static void SetParam(Material mat, MaterialPropertyBlock mpb, string name, object value)
         {
+            name = ShaderRegistry.UnityName(name);
             var shader = mat != null ? mat.shader : null;
             int id = Shader.PropertyToID(name);
             switch (value)

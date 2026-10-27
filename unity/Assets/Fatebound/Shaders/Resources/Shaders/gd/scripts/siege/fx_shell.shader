@@ -8,7 +8,7 @@ Shader "Fatebound/gd/scripts/siege/fx_shell"
 {
     Properties
     {
-        color ("color", Color) = (0.5, 0.8, 1.0, 1.0)
+        gd_color ("color", Color) = (0.5, 0.8, 1.0, 1.0)
         style ("style", Float) = 0
         energy ("energy", Float) = 1
         fade ("fade", Float) = 1
@@ -20,7 +20,7 @@ Shader "Fatebound/gd/scripts/siege/fx_shell"
     #include "../../../FateboundCommon3D.hlsl"
 
     CBUFFER_START(UnityPerMaterial)
-        float4 color;
+        float4 gd_color;   // (Godot: color -- a ShaderLab keyword as a property name, so renamed: MaterialCache maps it)
         float style;
         float energy;
         float fade;
@@ -80,7 +80,7 @@ Shader "Fatebound/gd/scripts/siege/fx_shell"
         float n = shell_noise(i.uv * float2(6.0, 3.0) + float2(TIME * 0.3 * speed, -TIME * 0.7 * speed)) * 0.6
             + shell_noise(i.uv * float2(13.0, 7.0) - TIME * 0.5 * speed) * 0.4;
         float a = 0.0;
-        float3 col = color.rgb;
+        float3 col = gd_color.rgb;
         int st = (int)style;
         if (st == 0)
         {
@@ -102,7 +102,7 @@ Shader "Fatebound/gd/scripts/siege/fx_shell"
         }
         a *= 0.9 + 0.1 * sin(TIME * 4.0 * speed);
         float3 albedo = FB_ApplyDecals(col * energy, i.positionWS, normalize(i.normalWS));
-        return float4(albedo, clamp(a * fade * color.a, 0.0, 1.0));
+        return float4(albedo, clamp(a * fade * gd_color.a, 0.0, 1.0));
     }
     ENDHLSL
 

@@ -40,6 +40,7 @@ namespace Fatebound.EditorTools
             SetupUrp();
             SetupPlayer();
             SetupBootScene();
+            WriteShaderList();
             AssetDatabase.SaveAssets();
             Debug.Log("Fatebound: project set up");
         }
@@ -156,6 +157,23 @@ namespace Fatebound.EditorTools
             // the app icon: Godot's config/icon
             var icon = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Resources/res/assets/branding/icon.png");
             if (icon != null) PlayerSettings.SetIcons(NamedBuildTarget.Unknown, new[] { icon }, IconKind.Any);
+        }
+
+        /// <summary>Resources/fb_shaders.txt: the Resources paths of the port's shader files (UnityRenderer3D reports any the
+        /// phone's GPU can't run, by file).</summary>
+        static void WriteShaderList()
+        {
+            const string ROOT = "Assets/Fatebound/Shaders/Resources/";
+            var lines = new System.Collections.Generic.List<string>();
+            foreach (var f in Directory.GetFiles(ROOT, "*.shader", SearchOption.AllDirectories))
+            {
+                string rel = f.Replace('\\', '/').Substring(ROOT.Length);
+                lines.Add(rel.Substring(0, rel.Length - ".shader".Length));
+            }
+            lines.Sort(StringComparer.Ordinal);
+            Directory.CreateDirectory("Assets/Resources");
+            File.WriteAllText("Assets/Resources/fb_shaders.txt", string.Join("\n", lines) + "\n");
+            AssetDatabase.ImportAsset("Assets/Resources/fb_shaders.txt");
         }
 
         static void SetupBootScene()

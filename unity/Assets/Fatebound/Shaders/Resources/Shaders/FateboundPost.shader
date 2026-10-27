@@ -221,11 +221,11 @@ Shader "Hidden/Fatebound/Post"
                 }
                 if (_GlowMode < 2.5)                                               // softlight
                 {
+                    // (as vectors: the per-channel form, after a second tonemap call, crashed FXC -- the compiler Unity runs
+                    // for Vulkan -- so the tonemap pass was dropped from the build and the 3D came out untonemapped)
                     glow = saturate(glow);
-                    color.r = color.r > 1.0 ? color.r : color.r + glow.r * ((color.r <= 0.25 ? ((16.0 * color.r - 12.0) * color.r + 4.0) * color.r : sqrt(color.r)) - color.r);
-                    color.g = color.g > 1.0 ? color.g : color.g + glow.g * ((color.g <= 0.25 ? ((16.0 * color.g - 12.0) * color.g + 4.0) * color.g : sqrt(color.g)) - color.g);
-                    color.b = color.b > 1.0 ? color.b : color.b + glow.b * ((color.b <= 0.25 ? ((16.0 * color.b - 12.0) * color.b + 4.0) * color.b : sqrt(color.b)) - color.b);
-                    return color;
+                    float3 d = color <= 0.25 ? ((16.0 * color - 12.0) * color + 4.0) * color : sqrt(max(color, 0.0));
+                    return color > 1.0 ? color : color + glow * (d - color);
                 }
                 return glow;                                                       // replace
             }

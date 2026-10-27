@@ -7,7 +7,7 @@ Shader "Fatebound/gd/scripts/siege/fx_beam"
 {
     Properties
     {
-        color ("color", Color) = (1.0, 0.8, 0.4, 1.0)
+        gd_color ("color", Color) = (1.0, 0.8, 0.4, 1.0)
         energy ("energy", Float) = 1
         fade ("fade", Float) = 1
         grow ("grow", Float) = 1
@@ -24,7 +24,7 @@ Shader "Fatebound/gd/scripts/siege/fx_beam"
     #include "../../../FateboundCommon3D.hlsl"
 
     CBUFFER_START(UnityPerMaterial)
-        float4 color;
+        float4 gd_color;   // (Godot: color -- a ShaderLab keyword as a property name, so renamed: MaterialCache maps it)
         float energy;
         float fade;
         float grow;
@@ -101,9 +101,9 @@ Shader "Fatebound/gd/scripts/siege/fx_beam"
             a += core * 0.3 * smoothstep(0.0, fade_root, y) * (1.0 - smoothstep(1.0 - fade_end, 1.0, y));
         }
         a *= 1.0 - smoothstep(grow - 0.05, grow + 0.02, y);
-        float3 col = lerp(color.rgb, 1.0, smoothstep(0.8, 1.0, n) * 0.3);
+        float3 col = lerp(gd_color.rgb, 1.0, smoothstep(0.8, 1.0, n) * 0.3);
         float3 albedo = FB_ApplyDecals(col * energy, i.positionWS, FB_SideNormal(normalize(i.normalWS), IS_FRONT_VFACE(frontFace, 1.0, -1.0)));
-        return float4(albedo, clamp(a * fade * color.a, 0.0, 1.0));
+        return float4(albedo, clamp(a * fade * gd_color.a, 0.0, 1.0));
     }
     ENDHLSL
 

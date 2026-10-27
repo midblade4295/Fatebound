@@ -7,7 +7,7 @@ Shader "Fatebound/gd/scripts/siege/fx_scorch"
 {
     Properties
     {
-        color ("color", Color) = (0.05, 0.02, 0.0, 1.0)
+        gd_color ("color", Color) = (0.05, 0.02, 0.0, 1.0)
         fade ("fade", Float) = 1
         grow ("grow", Float) = 1
         strength ("strength", Float) = 0.5
@@ -18,7 +18,7 @@ Shader "Fatebound/gd/scripts/siege/fx_scorch"
     #include "../../../FateboundCommon3D.hlsl"
 
     CBUFFER_START(UnityPerMaterial)
-        float4 color;
+        float4 gd_color;   // (Godot: color -- a ShaderLab keyword as a property name, so renamed: MaterialCache maps it)
         float fade;
         float grow;
         float strength;
@@ -76,8 +76,8 @@ Shader "Fatebound/gd/scripts/siege/fx_scorch"
         float n = scorch_noise(c * 6.0) * 0.5 + scorch_noise(c * 13.0) * 0.5;
         float a = (1.0 - smoothstep(0.45, 1.0, r + (n - 0.5) * 0.3)) * strength;
         a *= 1.0 - smoothstep(grow - 0.08, grow + 0.02, r);
-        float3 albedo = FB_ApplyDecals(color.rgb, i.positionWS, FB_SideNormal(normalize(i.normalWS), IS_FRONT_VFACE(frontFace, 1.0, -1.0)));
-        return float4(albedo, clamp(a * fade * color.a, 0.0, 1.0));
+        float3 albedo = FB_ApplyDecals(gd_color.rgb, i.positionWS, FB_SideNormal(normalize(i.normalWS), IS_FRONT_VFACE(frontFace, 1.0, -1.0)));
+        return float4(albedo, clamp(a * fade * gd_color.a, 0.0, 1.0));
     }
     ENDHLSL
 

@@ -27,3 +27,6 @@ crashlytics-build.properties
 !/tools/**/*.csproj
 tools/gametest/obj/
 tools/shadercheck/tmp/
+tools/shadercheck/fxc/*.exe
+/Assets/Resources/fb_shaders.txt
+/Assets/Resources/fb_shaders.txt.meta

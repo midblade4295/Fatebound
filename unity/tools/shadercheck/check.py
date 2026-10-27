@@ -72,10 +72,74 @@ def variants(prog, stage):
     return out
 
 
+# FBFXC=1: compile with FXC instead (D3DCompiler_47.dll, Unity's first stage for Vulkan / GLES / Metal: its bytecode then
+# goes through HLSLcc) -- fxc/fxcrun.exe (built with x86_64-w64-mingw32-gcc from fxc/fxcrun.c) run under Wine, with the
+# DLL from the Unity editor (Editor/Data/Tools/D3DCompiler_47.dll) beside it in FB_FXC_DIR (default /root/tools).
+FXC = os.environ.get("FBFXC", "") not in ("", "0")
+FXC_DIR = os.environ.get("FB_FXC_DIR", "/root/tools")
+# (CG programs under FXC: Unity's own CGIncludes, from the same editor -- setup.sh puts them beside the DLL)
+CGINC_FXC = os.environ.get("FB_UNITY_CGINC", os.path.join(FXC_DIR, "Editor/Data/Resources/CGIncludes"))
+WINE_ENV = dict(os.environ, WINEDEBUG="-all", WINEPREFIX=os.environ.get("WINEPREFIX", "/root/.wine-fxc"))
+
+
+def preprocess_fxc(path, fn, stage, defs, cg):
+    # Unity preprocesses a program itself and hands FXC the result: DXC's preprocessor (clang's) stands in for Unity's
+    # here (FXC's own chokes on the URP includes' empty function-like macros); FXC then compiles the expanded source
+    pre = fn + ".pre.hlsl"
+    pargs = [DXC, "-P", "-Fi", pre, "-I", os.path.dirname(os.path.abspath(path)), "-I", INC]
+    if cg:
+        pargs += ["-I", CGINC_FXC if os.path.isdir(CGINC_FXC) else CGINC]
+    for d in ("UNITY_COMPILER_HLSL", "UNITY_COMPILER_HLSLCC"):
+        pargs += ["-D", d + "=1"]
+    for a in FBAPI.split(","):
+        pargs += ["-D", a]
+    pargs += ["-D", "SHADER_TARGET=35", "-D", "UNITY_VERSION=60003",
+              "-D", "SHADER_STAGE_VERTEX=1" if stage == "vs" else "SHADER_STAGE_FRAGMENT=1"]
+    for d in defs:
+        pargs += ["-D", d + "=1"]
+        if d == "INSTANCING_ON":
+            pargs += ["-D", "UNITY_DONT_INSTANCE_OBJECT_MATRICES=1"]
+    pargs.append(fn)
+    r = subprocess.run(pargs, env=ENV, capture_output=True, text=True)
+    return pre, r.returncode, r.stderr
+
+
+def run_fxc_batch(jobs):
+    """jobs: [(file, entry, target)] -> [(rc, messages)], one Wine process for all (restarted after a crash: FXC
+    crashing on a program is itself a result -- Unity then drops that pass from the build)."""
+    results = []
+    i = 0
+    while i < len(jobs):
+        lst = os.path.join(TMP, "fxc_jobs.txt")
+        with open(lst, "w") as f:
+            for (fn, entry, target) in jobs[i:]:
+                f.write("%s\t%s\t%s\n" % (fn, entry, target))
+        r = subprocess.run(["/usr/lib/wine/wine64", os.path.join(FXC_DIR, "fxcrun.exe"), "@" + lst], env=WINE_ENV,
+                           capture_output=True, text=True, cwd=FXC_DIR)
+        out = r.stdout.replace("\r", "")
+        done = 0
+        msg = []
+        for line in out.split("\n"):
+            m = re.match(r"### (\d+) rc=(\d)", line)
+            if m:
+                results.append((int(m.group(2)), "\n".join(msg)))
+                msg = []
+                done += 1
+            else:
+                msg.append(line)
+        i += done
+        if i < len(jobs):
+            results.append((1, "\n".join(msg) + "\nerror: FXC crashed on this program (Unity then drops the pass from the build)"))
+            i += 1
+    return results
+
+
 def compile_one(path, src, entry, stage, defs, cg):
     fn = os.path.join(TMP, os.path.basename(path) + "." + entry + "." + stage + ".hlsl")
     with open(fn, "w") as f:
         f.write(src)
+    if FXC:
+        return preprocess_fxc(path, fn, stage, defs, cg)
     args = [DXC, "-T", ("vs_6_0" if stage == "vs" else "ps_6_0"), "-E", entry, "-HV", "2018",
             "-I", os.path.dirname(os.path.abspath(path)), "-I", INC, "-Wno-conversion",
             "-Wno-unused-value", "-Wno-ignored-attributes", "-Wno-parentheses-equality", "-Wno-sign-compare", "-Wno-for-redefinition",
@@ -92,9 +156,41 @@ def compile_one(path, src, entry, stage, defs, cg):
     return r.returncode, r.stderr
 
 
+# ShaderLab's own words (case-insensitive): a property named like one stops Unity parsing the whole shader, which then
+# imports nameless and draws pink on the device (fx_*.shader's "color" did) -- the ports call such uniforms gd_<name>
+SHADERLAB_WORDS = set(w.lower() for w in """Float Int Integer Range Color Vector Any Shader Properties SubShader Pass Tags LOD
+    Cull ZTest ZWrite ZClip Offset Blend BlendOp AlphaToMask ColorMask Conservative Stencil Name UsePass GrabPass Fallback
+    CustomEditor Category Fog Lighting Material SetTexture Combine AlphaTest SeparateSpecular ColorMaterial BindChannels Bind
+    Mode Density On Off Front Back Less Greater LEqual GEqual Equal NotEqual Always Never One Zero Add Sub RevSub Min Max Ref
+    ReadMask WriteMask Comp PassOp FailOp ZFailOp Keep Replace Invert Primary Texture Previous Constant Lerp Double Quad Alpha
+    Ambient Diffuse Specular Shininess Emission Matrix Vertex Normal Tangent Dependency True False Global Exp Exp2 Linear
+    Multiply Screen Overlay Darken Lighten Clear Copy Set Or Xor""".split())
+
+
+def lint_properties(path, text):
+    m = re.search(r"\bProperties\s*\{", text)
+    if not m:
+        return 0
+    depth, i = 0, text.index("{", m.start())
+    for j in range(i, len(text)):
+        depth += 1 if text[j] == "{" else -1 if text[j] == "}" else 0
+        if depth == 0:
+            break
+    bad = 0
+    for line in text[i + 1:j].splitlines():
+        p = re.match(r"\s*((?:\[[^\]]*\]\s*)*)([A-Za-z_]\w*)\s*\(", line)
+        if p and p.group(2).lower() in SHADERLAB_WORDS:
+            print("FAIL %s: property '%s' is a ShaderLab keyword (Unity can't parse the shader)" % (os.path.basename(path), p.group(2)))
+            bad += 1
+    return bad
+
+
 def check(path):
     text = open(path).read()
+    if lint_properties(path, text):
+        return False
     includes = []
+    pending = []
     fails = 0
     n = 0
     compiled = 0
@@ -105,17 +201,30 @@ def check(path):
             includes.append(body)
             continue
         n += 1
-        if cg and VULKAN:
+        if cg and VULKAN and not FXC:
             print("skip %s pass#%d (CG program: D3D11 path only)" % (os.path.basename(path), n))
             continue
         prog = "\n".join(includes) + "\n" + body
         if cg:
-            prog = "#include \"fb_dxc_shim.hlsl\"\n#include \"HLSLSupport.cginc\"\n#include \"UnityShaderVariables.cginc\"\n" + prog
+            shim = "" if FXC else "#include \"fb_dxc_shim.hlsl\"\n"     # (FXC takes the DX9-style samplers itself)
+            prog = shim + "#include \"HLSLSupport.cginc\"\n#include \"UnityShaderVariables.cginc\"\n" + prog
         entries = (("vs", re.search(r"#pragma\s+vertex\s+(\w+)", body)), ("ps", re.search(r"#pragma\s+fragment\s+(\w+)", body)))
         for stage, ent in entries:
             if not ent:
                 continue
-            for defs in variants(body, stage):
+            for k, defs in enumerate(variants(body, stage)):
+                if FXC:
+                    # (each variant's expanded source kept under its own name for the batch)
+                    fn_v = os.path.join(TMP, "%s.p%d.%s.%s.v%d.hlsl" % (os.path.basename(path), n, ent.group(1), stage, k))
+                    with open(fn_v, "w") as f:
+                        f.write(prog)
+                    pre, rc, err = preprocess_fxc(path, fn_v, stage, defs, cg)
+                    if rc != 0:
+                        pending.append(("FAIL %s pass#%d %s %s %s (preprocess)" % (os.path.basename(path), n, stage, ent.group(1), defs), None, err))
+                    else:
+                        pending.append(("FAIL %s pass#%d %s %s %s" % (os.path.basename(path), n, stage, ent.group(1), defs),
+                                        (pre, ent.group(1), "vs_5_0" if stage == "vs" else "ps_5_0"), ""))
+                    continue
                 rc, err = compile_one(path, prog, ent.group(1), stage, defs, cg)
                 compiled += 1
                 if rc != 0:
@@ -125,7 +234,19 @@ def check(path):
                         lines = err.splitlines()
                         keep = [l for i, l in enumerate(lines) if "error" in l or (i > 0 and "error" in lines[i - 1])]
                         print("\n".join(keep[:20]))
-    print(("ok   " if fails == 0 else "FAIL ") + "%s (%d programs, %d compiles%s)" % (path, n, compiled, ", %d failed" % fails if fails else ""))
+    if FXC and pending:
+        jobs = [p[1] for p in pending if p[1] is not None]
+        res = iter(run_fxc_batch(jobs))
+        for label, job, err in pending:
+            rc, msg = (1, err) if job is None else next(res)
+            compiled += 1
+            if rc != 0:
+                fails += 1
+                if fails <= 3:
+                    print(label)
+                    keep = [l for l in msg.splitlines() if "error" in l]
+                    print("\n".join(keep[:12]))
+    print(("ok   " if fails == 0 else "FAIL ") + "%s (%d programs, %d compiles%s)" % (path, n, compiled, ", %d failed" % fails if fails else ""), flush=True)
     return fails == 0
 
 

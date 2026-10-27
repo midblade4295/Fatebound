@@ -22,7 +22,8 @@
 //    where the two joint frames coincide (Godot's rest pose by definition) and put back. Cone: twist about frame X
 //    (angular X limit +-twist_span), swing cone about Y/Z (+-swing_span). Hinge: about frame Z, made the angular X axis;
 //    Jolt's reference shift turns lower/upper into a symmetric +-limit (sign conventions can't flip an elbow). Pin:
-//    position only. Slider / 6DOF: not built (warned once). Jointed bodies keep colliding, as in Jolt.
+//    position only. Slider / 6DOF: not built (warned once). A ragdoll's bones don't collide with each other (Jolt's
+//    do; PhysX makes the overlapping capsules jitter -- IgnoreWithinRagdolls).
 using System;
 using System.Collections.Generic;
 using Fatebound.GUI;
@@ -52,8 +53,8 @@ namespace Fatebound.Client
         /// joints and keep colliding, as in Jolt, whose position correction is gentler); Jolt-like speeds.</summary>
         public static float MaxDepenetrationVelocity = 3f;
         /// <summary>Jolt keeps the bodies of a PhysicalBone3D joint colliding (joint_disable_collisions_between_bodies
-        /// is never called); PhysX joints don't by default.</summary>
-        public static bool JointBodiesCollide = true;
+        /// is never called); here they don't, nor any two bones of one ragdoll (IgnoreWithinRagdolls).</summary>
+        public static bool JointBodiesCollide = false;
 
         sealed class World
         {
@@ -660,6 +661,28 @@ namespace Fatebound.Client
             return m;
         }
 
+        /// <summary>The bones of one ragdoll (one PhysicalBoneSimulator3D) don't collide with each other. Jolt lets them
+        /// (Godot never disables a PhysicalBone3D joint's collisions) and resolves the overlap of neighbouring capsules
+        /// at a joint gently; PhysX fights it against the joint every step and the ragdoll jitters and flies about
+        /// (Kevin, the first Unity builds: "ragdolls are acting sporadic").</summary>
+        static void IgnoreWithinRagdolls(World w)
+        {
+            var groups = new Dictionary<Node, List<Collider>>();
+            foreach (var b in w.Bodies)
+            {
+                if (!(b.Node is PhysicalBone3D pb) || b.Go == null) continue;
+                var owner = pb.GetParent();
+                if (owner == null) continue;
+                if (!groups.TryGetValue(owner, out var list)) groups[owner] = list = new List<Collider>();
+                foreach (var g in b.ShapeGos)
+                    if (g != null && g.TryGetComponent<Collider>(out var c)) list.Add(c);
+            }
+            foreach (var list in groups.Values)
+                for (int i = 0; i < list.Count; i++)
+                    for (int j = i + 1; j < list.Count; j++)
+                        if (list[i].attachedRigidbody != list[j].attachedRigidbody) Physics.IgnoreCollision(list[i], list[j], true);
+        }
+
         // ------------------------------------------------------------------ step
         public void Step(double delta)
         {
@@ -671,11 +694,15 @@ namespace Fatebound.Client
                 var w = _worldList[wi];
                 if (w.Bodies.Count == 0 || !w.Physics.IsValid()) continue;
                 var bodies = w.Bodies;
+                bool boneShapes = false;
                 for (int i = 0; i < bodies.Count; i++)
                 {
                     var b = bodies[i];
-                    if (b.ShapesDirty) BuildShapes(b);
+                    if (!b.ShapesDirty) continue;
+                    BuildShapes(b);
+                    if (b.Node is PhysicalBone3D) boneShapes = true;
                 }
+                if (boneShapes) IgnoreWithinRagdolls(w);
                 for (int i = 0; i < bodies.Count; i++)
                 {
                     var b = bodies[i];

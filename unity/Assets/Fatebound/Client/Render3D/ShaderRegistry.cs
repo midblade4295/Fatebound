@@ -1,3 +1,4 @@
+using System;
 // Ported Godot shaders: a .gdshader at res://<path>.gdshader is the Unity shader "Fatebound/gd/<path>" (its file in
 // Shaders/Resources/Shaders/gd/<path>.shader, so a build includes it). A shader made from code at run time
 // (Shader.new() + code) is looked up by its code text, whitespace-normalised: the shader ports register those with
@@ -45,6 +46,27 @@ namespace Fatebound.Client
             return p;
         }
 
+        // A Godot uniform named like a ShaderLab keyword (ShaderLab's are case-insensitive: "color" is the Color property
+        // type) can't be a property of the port -- Unity fails to parse the whole shader, which then draws pink
+        // (fx_beam / fx_ground / fx_scorch / fx_shell's "color", Kevin's first match: "spell effects are just pink").
+        // The ports call such a uniform gd_<name>; the materials' parameters are set under that name.
+        static readonly HashSet<string> _shaderLabWords = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "Float", "Int", "Integer", "Range", "Color", "Vector", "Any", "Shader", "Properties", "SubShader", "Pass", "Tags", "LOD",
+            "Cull", "ZTest", "ZWrite", "ZClip", "Offset", "Blend", "BlendOp", "AlphaToMask", "ColorMask", "Conservative", "Stencil",
+            "Name", "UsePass", "GrabPass", "Fallback", "CustomEditor", "Category", "Fog", "Lighting", "Material", "SetTexture",
+            "Combine", "AlphaTest", "SeparateSpecular", "ColorMaterial", "BindChannels", "Bind", "Mode", "Density", "On", "Off",
+            "Front", "Back", "Less", "Greater", "LEqual", "GEqual", "Equal", "NotEqual", "Always", "Never", "One", "Zero", "Add",
+            "Sub", "RevSub", "Min", "Max", "Ref", "ReadMask", "WriteMask", "Comp", "PassOp", "FailOp", "ZFailOp", "Keep", "Replace",
+            "Invert", "Primary", "Texture", "Previous", "Constant", "Lerp", "Double", "Quad", "Alpha", "Ambient", "Diffuse",
+            "Specular", "Shininess", "Emission", "Matrix", "Vertex", "Normal", "Tangent", "Dependency", "True", "False", "Global",
+            "Exp", "Exp2", "Linear", "Multiply", "Screen", "Overlay", "Darken", "Lighten", "Clear", "Copy", "Set", "Or", "Xor",
+        };
+
+        /// <summary>The port's name for a Godot uniform (gd_&lt;name&gt; where the name is a ShaderLab keyword).</summary>
+        public static string UnityName(string godotName) =>
+            godotName != null && _shaderLabWords.Contains(godotName) ? "gd_" + godotName : godotName;
+
         public static Shader Find(GShader s)
         {
             if (s == null) return null;
@@ -69,6 +91,13 @@ namespace Fatebound.Client
                 return null;
             }
             _resolved[s] = sh;
+            // (a port this GPU can't run draws pink: the match log says which game shader it is)
+            if (!sh.isSupported)
+            {
+                string key = !string.IsNullOrEmpty(s.ResourcePath) ? s.ResourcePath : ("inline shader " + name);
+                if (_missing.Add("unsupported " + key))
+                    Debug.LogError("Fatebound: the port of " + key + " (" + (name ?? "?") + ") doesn't run on this GPU: drawn pink");
+            }
             return sh;
         }
 
