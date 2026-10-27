@@ -60,7 +60,10 @@ namespace Fatebound.Client
         {
             cmd.SetRenderTarget(target, clear.HasValue ? RenderBufferLoadAction.DontCare : RenderBufferLoadAction.Load, RenderBufferStoreAction.Store);
             if (clear.HasValue) cmd.ClearRenderTarget(false, true, clear.Value);
-            cmd.SetViewProjectionMatrices(Matrix4x4.identity, GL.GetGPUProjectionMatrix(Matrix4x4.Ortho(0, w, 0, h, -1, 1), true));
+            // (an OpenGL-style projection: the command buffer adapts it to the device and the render target itself --
+            // GL.GetGPUProjectionMatrix here as well flipped the picture a second time: Kevin's first Unity build,
+            // the whole screen upside down)
+            cmd.SetViewProjectionMatrices(Matrix4x4.identity, Matrix4x4.Ortho(0, w, 0, h, -1, 1));
             cmd.SetGlobalVector(ID_CanvasSize, new Vector4(w, h, 1f / w, 1f / h));
             while (_meshes.Count < batches.Count)
             {
