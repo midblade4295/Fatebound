@@ -51,6 +51,14 @@ namespace Fatebound.GUI
         public static Func<RID, bool, double> MeasuredRenderTimeHook;
         public static Action<RID, bool> MeasureRenderTimeHook;
         public static string VideoAdapterVendor = "", VideoAdapterName = "", VideoAdapterApiVersion = "";
+        /// <summary>(the port's, not Godot's) The renderer's own timings of the last frame it drew, handed to the callback
+        /// as (label, microseconds) each: what its draw step spent where (siege_diag adds them to its STAT lines).</summary>
+        public static Action<Action<string, long>> HostFrameTimesHook;
+        /// <summary>(the port's) The renderer's notes for a STAT line (the display's rate, the garbage collector's).</summary>
+        public static Func<string> HostStatTextHook;
+
+        public static void HostFrameTimes(Action<string, long> add) => HostFrameTimesHook?.Invoke(add);
+        public static string HostStatText() => HostStatTextHook?.Invoke() ?? "";
 
         static readonly System.Collections.Generic.HashSet<RID> _measured = new System.Collections.Generic.HashSet<RID>();
 

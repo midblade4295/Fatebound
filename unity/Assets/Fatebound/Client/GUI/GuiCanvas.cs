@@ -288,7 +288,10 @@ namespace Fatebound.Client
             // the 3D worlds' changes to their Unity objects, the viewports' cameras (they render into their textures
             // before the screen camera, whose overlay canvas then draws the GUI with them)
             _renderer3D.Frame(Time.unscaledDeltaTime);
-            Draw(Tree.Root.Render());
+            long t = UnityRenderStats.Now;
+            var batches = Tree.Root.Render();
+            t = UnityRenderStats.Lap(UnityRenderStats.GUI, t);
+            Draw(batches, t);
         }
 
         Material MaterialFor(RenderBatch b)
@@ -324,7 +327,7 @@ namespace Fatebound.Client
         readonly Dictionary<Viewport, CanvasDrawer> _vpDrawers = new Dictionary<Viewport, CanvasDrawer>();
         readonly List<Viewport> _vpGone = new List<Viewport>();
 
-        void Draw(List<RenderBatch> batches)
+        void Draw(List<RenderBatch> batches, long t0)
         {
             int w = Mathf.Max(1, Screen.width), h = Mathf.Max(1, Screen.height);
             if (_gui == null || _gui.width != w || _gui.height != h)
@@ -371,6 +374,7 @@ namespace Fatebound.Client
             }
             else _rootDrawer.Record(_cmd, _gui, w, h, batches, clear, MaterialFor, _white);
             _cmdReady = true;
+            UnityRenderStats.Lap(UnityRenderStats.REC, t0);
             RenderingServer.RaiseFramePostDraw();
         }
     }

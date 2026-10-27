@@ -138,6 +138,8 @@ namespace Fatebound.Game
             AddTime("gpu3d", GD.Int(RenderingServer.ViewportGetMeasuredRenderTimeGpu(v3) * 1000.0));
             AddTime("gpuhud", GD.Int(RenderingServer.ViewportGetMeasuredRenderTimeGpu(root) * 1000.0));
             AddTime("rcpu3d", GD.Int(RenderingServer.ViewportGetMeasuredRenderTimeCpu(v3) * 1000.0));
+            // (the Unity port: its draw step's parts -- d_* -- and Unity's own main-thread times -- u_* -- the same way)
+            RenderingServer.HostFrameTimes(AddTime);
         }
 
         // 0.31.222 (Kevin's 0.31.221 log: a 2.3 s freeze in the training's last fight -- the 3D view's CPU time 2,256 ms, a
@@ -379,7 +381,11 @@ namespace Fatebound.Game
             if (pso != "")
                 state = pso + " ev=" + GStr.Join(",", _ev_kinds.Keys()) + " " + state;
             _ev_kinds.Clear();
-            Write(GD.Fmt("STAT fps=%d worst=%.0fms %s %s procmax=%.1fms physmax=%.1fms mem=%.1fMB vmem=%.1fMB tex=%.1fMB draws=%d prims=%d objs=%d nodes=%d ev=%d %s", fps, _worst_ms, _TimesText(), _ViewportText(),
+            var vt = _ViewportText();
+            var host = RenderingServer.HostStatText();         // (the port's: the display's rate, the garbage collector)
+            if (host != "")
+                vt = vt == "" ? host : vt + " " + host;
+            Write(GD.Fmt("STAT fps=%d worst=%.0fms %s %s procmax=%.1fms physmax=%.1fms mem=%.1fMB vmem=%.1fMB tex=%.1fMB draws=%d prims=%d objs=%d nodes=%d ev=%d %s", fps, _worst_ms, _TimesText(), vt,
                 Performance.GetMonitor(Performance.TIME_PROCESS) * 1000.0, Performance.GetMonitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0, smem, vmem,
                 Performance.GetMonitor(Performance.RENDER_TEXTURE_MEM_USED) / 1048576.0,
                 Performance.GetMonitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME), Performance.GetMonitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME),

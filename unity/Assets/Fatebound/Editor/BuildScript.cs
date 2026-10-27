@@ -141,7 +141,9 @@ namespace Fatebound.EditorTools
             PlayerSettings.Android.minSdkVersion = AndroidSdkVersions.AndroidApiLevel25;
             PlayerSettings.Android.targetSdkVersion = AndroidSdkVersions.AndroidApiLevelAuto;
             PlayerSettings.Android.forceInternetPermission = true;
-            PlayerSettings.Android.optimizedFramePacing = true;
+            // (off: on, Kevin's first match log never passed 30 fps -- Swappy holds a frame that misses 16.7 ms to 30, where
+            // Godot's FIFO showed 35-40; UnityPlatform.MaxFps)
+            PlayerSettings.Android.optimizedFramePacing = false;
             PlayerSettings.Android.startInFullscreen = true;
             PlayerSettings.Android.renderOutsideSafeArea = true;
             PlayerSettings.defaultInterfaceOrientation = UIOrientation.AutoRotation;

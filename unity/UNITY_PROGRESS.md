@@ -116,3 +116,20 @@ editor in its workspace); grokbot opens it in Unity 6000.3.27f1 and builds the A
 - The river didn't react: a material's parameters set after its mesh was built never reached Unity (the wave
   texture rip_tex, and every fade or tint done through a material) -- materials are now refreshed in place each frame.
 - Unity's own errors reach the match log, and the boot log lists any shader the GPU can't run, by file.
+
+## Step 6 -- frame rate: the 30 fps ceiling, an on-screen counter, the draw step split in the log
+Kevin's first match log on the port (a training 5v5, 68-115 units): 27.6 fps (19-30) -- never over 30, in either
+match that session, quiet stretches included (Godot 0.31.220/221: 34.7 and 40.2 fps, peaks to 56). The graphics chip
+~22 ms a frame (Godot ~23, the same 1600x720); the game's code far lighter than in Godot (sim 1.0 ms vs 8.2, view 3.5
+vs 6.9); ph_draw ~20 ms (Godot ~10) and the worst frame each second ~58 ms (Godot ~45).
+- The ceiling: Optimized Frame Pacing (Swappy) was on in the build script -- it holds a frame that misses 60's 16.7 ms
+  to 30, and Unity can report a 30 Hz display under it (and UnityPlatform clamped the 60 cap to the reported rate).
+  Off now; Application.targetFrameRate is the cap itself (60; no cap: the display's fastest mode, as Android's
+  default target is 30), set again if anything resets it.
+- FpsCounter (Game/App): the frame rate over everything, top right (left of a match's pause button), each half
+  second, green from 55 / amber from 30 / red below.
+- The match log's STAT lines: the port's draw step in parts (d_sync, d_mat, d_skin, d_mm, d_cam, d_part, d_sweep,
+  d_gui, d_rec), URP's own rendering on the main thread (u_urp: after LateUpdate, so in ph_other), Unity's main-thread
+  frame and its wait for the present (u_main, u_wait), the display (hz, modes, target), and the garbage collector
+  (gc: collections that second; alloc: KB a frame, where the player counts it) -- RenderingServer.HostFrameTimes /
+  HostStatText, from Client/Core/UnityRenderStats.cs.

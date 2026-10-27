@@ -148,7 +148,12 @@ namespace Fatebound.Client
         /// <summary>Godot's Engine.get_frames_per_second(): frames counted over each second.</summary>
         public override double FramesPerSecond => _fps;
 
-        /// <summary>Godot's max_fps (0 = no cap: Vulkan's FIFO vsync caps at the display rate) as Unity's frame rate.</summary>
+        /// <summary>Godot's max_fps (0 = no cap: Vulkan's FIFO vsync caps at the display rate) as Unity's frame rate.
+        /// The cap itself, not clamped to the refresh rate Unity reports: Kevin's first match log (the 60 fps cap) never
+        /// went over 30 fps -- the build's Optimized Frame Pacing on, under which Unity can report a 30 Hz display (and
+        /// so a target of 30) and holds a frame that misses 60's 16.7 ms to 30 (a whole second refresh). Android shows
+        /// a frame at the display's next refresh anyway, so a target over its rate costs nothing. No cap: the display's
+        /// fastest mode (Android's default target, -1, is 30). Kept: Tick sets it again if anything resets it.</summary>
         public override int MaxFps
         {
             get => _maxFps;
@@ -156,9 +161,28 @@ namespace Fatebound.Client
             {
                 _maxFps = Math.Max(0, value);
                 QualitySettings.vSyncCount = 0;
-                int display = Mathf.Max(30, Mathf.RoundToInt((float)RefreshRate));
-                Application.targetFrameRate = _maxFps > 0 ? Math.Min(_maxFps, display) : display;
+                _target = _maxFps > 0 ? _maxFps : Math.Max(60, FastestRefresh());
+                Application.targetFrameRate = _target;
             }
+        }
+
+        int _target;
+
+        /// <summary>The display's fastest refresh rate (its modes', Hz).</summary>
+        public static int FastestRefresh()
+        {
+            double best = Screen.currentResolution.refreshRateRatio.value;
+            foreach (var r in Screen.resolutions) best = Math.Max(best, r.refreshRateRatio.value);
+            return Mathf.RoundToInt((float)best);
+        }
+
+        /// <summary>For the match log: the refresh rate now, the display's modes' rates, Unity's frame-rate target.</summary>
+        public static string DisplayText()
+        {
+            var rates = new System.Collections.Generic.SortedSet<int>();
+            foreach (var r in Screen.resolutions) rates.Add(Mathf.RoundToInt((float)r.refreshRateRatio.value));
+            return "hz=" + Mathf.RoundToInt((float)Screen.currentResolution.refreshRateRatio.value) + " modes=" + string.Join("/", rates)
+                + " target=" + Application.targetFrameRate;
         }
 
         public override Vec2i WindowSize => new Vec2i(Screen.width, Screen.height);
@@ -193,6 +217,7 @@ namespace Fatebound.Client
         /// <summary>Once a frame (GuiCanvas): counts frames for FramesPerSecond.</summary>
         public void Tick()
         {
+            if (_target > 0 && Application.targetFrameRate != _target) Application.targetFrameRate = _target;
             _frames++;
             double now = Time.realtimeSinceStartupAsDouble;
             if (_fpsTime == 0) _fpsTime = now;

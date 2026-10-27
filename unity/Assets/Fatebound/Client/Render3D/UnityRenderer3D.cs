@@ -779,14 +779,23 @@ namespace Fatebound.Client
         {
             // (on the first frame: by then the game's loggers are listening)
             if (!_reported) { _reported = true; ReportShaders(); }
+            // (each part timed for the match log: UnityRenderStats' d_*)
+            long t = UnityRenderStats.Now;
             RenderSync.Flush();
+            t = UnityRenderStats.Lap(UnityRenderStats.SYNC, t);
             Materials.Refresh();
+            t = UnityRenderStats.Lap(UnityRenderStats.MAT, t);
             foreach (var d in _skinned) UpdateSkin(d);
+            t = UnityRenderStats.Lap(UnityRenderStats.SKIN, t);
             foreach (var m in _multimeshes) DrawMultiMesh(m);
+            t = UnityRenderStats.Lap(UnityRenderStats.MM, t);
             for (int i = 0; i < _viewports.Count; i++) UpdateCamera(_viewports[i]);
+            t = UnityRenderStats.Lap(UnityRenderStats.CAM, t);
             ParticlesBridge.Frame(this, delta);
+            t = UnityRenderStats.Lap(UnityRenderStats.PART, t);
             Meshes.Sweep();
             Materials.Sweep();
+            UnityRenderStats.Lap(UnityRenderStats.SWEEP, t);
         }
     }
 }

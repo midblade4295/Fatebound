@@ -3,7 +3,7 @@
 // content_loader.gd) becomes the current scene. Called once by the Unity client after it created the SceneTree.
 // The two scenes are one scripted node each, built here (ResourceLoader.RegisterScene) rather than baked:
 // content_loader.gd changes to scenes/Main.tscn (a full-rect Control named "Main" running siege_app.gd) and reloads
-// Boot.tscn when a content pack won't mount.
+// Boot.tscn when a content pack won't mount. The port adds its frame-rate counter (FpsCounter) over them.
 using Fatebound.GUI;
 
 namespace Fatebound.Game
@@ -32,6 +32,7 @@ namespace Fatebound.Game
             var boot = ResourceLoader.Load<PackedScene>(BOOT_SCENE).Instantiate();
             tree.Root.AddChild(boot);
             tree.CurrentScene = boot;
+            tree.Root.AddChild(new FpsCounter());      // (the port's test builds: the frame rate on screen)
         }
     }
 }
