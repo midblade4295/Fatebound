@@ -92,6 +92,8 @@ namespace Fatebound.Client
                 mpb.SetFloat(ID_SrgbTex, tex.isDataSRGB ? 1f : 0f);
                 mpb.SetFloat(ID_AlphaTex, tex is UnityEngine.Texture2D t2 && t2.format == TextureFormat.Alpha8 ? 1f : 0f);
                 cmd.DrawMesh(mesh, Matrix4x4.identity, materialFor(b), 0, 0, mpb);
+                UnityRenderStats.CanvasDraws++;
+                UnityRenderStats.CanvasPrimitives += b.indices.Count / 3;
             }
             _lastH = h;
         }

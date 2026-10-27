@@ -85,3 +85,22 @@ editor in its workspace); grokbot opens it in Unity 6000.3.27f1 and builds the A
 - Unity project setup: Editor/BuildScript.cs (URP asset, player settings -- Vulkan, IL2CPP ARM64, linear, sensor
   landscape -- and the Android build, `-executeMethod Fatebound.EditorTools.BuildScript.BuildAndroid`),
   Editor/AssetImport.cs (texture/audio import settings from Godot's .import sidecars), link.xml.
+
+## Step 4 -- the game translated, compiling, and run headless
+- All of the game's GDScript outside the sim (godot/scripts/app, meta, ui, siege -- the sim was already C#) is in
+  `Assets/Fatebound/Game` (Fatebound.Game, engine-free), with what it needed from the engine added to the facade
+  (GUI/Missing, Sim/Missing: one file per area, each saying what it adds). The last pieces: siege_mode.gd's sound
+  (SiegeMode.Sound.cs), Node.duplicate (a ragdoll's dropped weapons), reload_current_scene with the two scenes built in
+  code (GameMain registers scenes/Boot.tscn and scenes/Main.tscn), RichTextLabel.visible_characters, Land.bake_key
+  (Godot's own value for the frozen land: 633754923, the key in the baked cache.res).
+- Every assembly compiles against Unity 6000.3's references (tools/compilecheck: Sim, GUI, Game, Client, Editor).
+- tools/gametest runs the whole game off the device (no renderer, no physics backend, the network cut off) from a
+  script of taps, with screenshots of the 2D layers. Runs so far, no exception in any: the first start (title, the
+  Herald's naming, the tutorial offer, the training picker, training 1 for a minute, training 2 -- a full offline 5v5
+  -- for 12 game minutes), and Home -> daily reward -> PLAY -> an online 5v5 against godot/server/siege_server.gd run
+  on loopback. The game's work per frame there (sim, view, HUD, on a desktop CPU): about 1 ms, plus about 1.3 ms
+  building the 2D draw lists.
+- Found on the way, the same in Godot 0.31.222 (the port matches it): on a 20:9 phone the Herald's SHOW ME HOW button
+  sits half off the top of the screen (herald_intro.gd puts the choice above the art, which is 102 px from the top).
+- The match log's render numbers come from Unity now (Client/Core/UnityRenderStats.cs): gpu3d is the frame's GPU time
+  (FrameTimingManager), draw calls and triangles the frame's (ProfilerRecorder), the adapter SystemInfo's.

@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Runs the whole game headless outside Unity (Program.cs says how): dotnet run -c Release, project unity/tools/gametest. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <NoWarn>CS0162;CS0168;CS0169;CS0219;CS0414;CS0649;CS0067;CS8981;CS0108;CS0114</NoWarn>
+    <BaseIntermediateOutputPath>/tmp/fb-gametest/obj/</BaseIntermediateOutputPath>
+    <OutputPath>/tmp/fb-gametest/bin/</OutputPath>
+    <DefineConstants>$(DefineConstants);FB3D</DefineConstants>
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../Assets/Fatebound/Sim/**/*.cs" />
+    <Compile Include="../../Assets/Fatebound/GUI/**/*.cs" />
+    <Compile Include="../../Assets/Fatebound/Game/**/*.cs" />
+    <Compile Include="../guitest/TestHost.cs;../guitest/Png.cs;../guitest/SoftRaster.cs" />
+    <Reference Include="ZstdSharp"><HintPath>../../Assets/Plugins/ZstdSharp/ZstdSharp.dll</HintPath></Reference>
+  </ItemGroup>
+</Project>

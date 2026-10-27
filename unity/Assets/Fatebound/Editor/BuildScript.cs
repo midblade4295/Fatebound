@@ -147,6 +147,7 @@ namespace Fatebound.EditorTools
             PlayerSettings.allowedAutorotateToPortraitUpsideDown = false;
             PlayerSettings.MTRendering = true;
             PlayerSettings.gpuSkinning = true;
+            PlayerSettings.enableFrameTimingStats = true;        // (the match log's gpu3d / rcpu3d: UnityRenderStats)
             PlayerSettings.runInBackground = false;
             PlayerSettings.SplashScreen.backgroundColor = new Color(0.07f, 0.04f, 0.06f, 1f);   // Godot's boot_splash/bg_color
             // the app icon: Godot's config/icon

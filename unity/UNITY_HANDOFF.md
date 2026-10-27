@@ -2,8 +2,10 @@
 
 Kevin asked for the whole game rebuilt in Unity. This folder (`unity/` on branch `claude/unity-port`) is the Unity
 project. It was written without a Unity editor: every C# file compiles against Unity 6000.3's reference assemblies,
-but the shaders, the URP setup and the APK have never been built. Expect a first round of fixes; the logs below are
-what I need back to make them.
+every shader compiles with Unity's shader compiler (DXC) for Vulkan, and the game itself has been run headless off
+the device (first start, the trainings, a 12-minute offline 5v5, an online 5v5 against the server run locally) with
+no exception. But Unity itself, the URP setup and the APK have never been built: expect a first round of fixes. The
+logs below are what I need back to make them.
 
 ## What it is
 - Unity **6000.3.27f1**, URP 17.3 (`Packages/manifest.json`), Android, IL2CPP ARM64, Vulkan only, linear colour.
@@ -47,3 +49,5 @@ what I need back to make them.
   stripping, that file is where to look.
 - Platform plugins (Google Play Billing, Play Games, notifications) are not wired yet: the game runs as if they
   were absent.
+- It installs as its own app (`com.fatebound.unityport`): it starts like a fresh install (the Herald asks for a name),
+  and its account on the server is a new one.

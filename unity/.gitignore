@@ -25,3 +25,4 @@ crashlytics-build.properties
 
 # keep the compile-check and test projects (tools/)
 !/tools/**/*.csproj
+tools/gametest/obj/

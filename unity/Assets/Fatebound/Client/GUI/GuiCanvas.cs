@@ -101,6 +101,7 @@ namespace Fatebound.Client
             Tree.Root.BaseSize = new Vec2(760, 420);
             Tree.Root.SetWindowSize(new Vec2(Screen.width, Screen.height));
             UpdateSafeArea();
+            UnityRenderStats.Install(Tree);
             UInput.multiTouchEnabled = true;
             GInput.TouchscreenAvailable = UInput.touchSupported;
             GInput.VibrateHook = (ms, amp) => { if (Application.isMobilePlatform) Handheld.Vibrate(); };
@@ -239,6 +240,7 @@ namespace Fatebound.Client
                 UpdateSafeArea();
             }
             _platform.Tick();
+            UnityRenderStats.Frame();
             FeedInput();
             Tree.Iterate(Time.unscaledDeltaTime);
             if (Tree.QuitRequested) Application.Quit(Tree.QuitCode);

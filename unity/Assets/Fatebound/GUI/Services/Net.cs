@@ -125,6 +125,7 @@ namespace Fatebound.GUI
 
         async Task Run(ClientWebSocket ws, Uri uri, int gen, CancellationToken ct)
         {
+            if (!NetworkPolicy.Allowed(uri)) { Post(gen, Ev.Error); return; }
             try { await ws.ConnectAsync(uri, ct).ConfigureAwait(false); }
             catch (Exception) { Post(gen, Ev.Error); return; }
             Post(gen, Ev.Open, reason: ws.SubProtocol ?? "");
@@ -449,6 +450,7 @@ namespace Fatebound.GUI
             Stream file = null;
             try
             {
+                if (!NetworkPolicy.Allowed(uri)) throw new HttpRequestException("blocked by NetworkPolicy");
                 using (var client = new HttpClient(handler) { Timeout = System.Threading.Timeout.InfiniteTimeSpan })
                 using (var req = new HttpRequestMessage(new HttpMethod(HTTPClient.MethodName(method)), uri))
                 {
@@ -604,5 +606,13 @@ namespace Fatebound.GUI
             if (_job != null) CancelRequest();
             base._ExitTree();
         }
+    }
+
+    /// <summary>Which hosts the game may reach (null: all). For tools that run the game off the device: the headless
+    /// test run keeps it off the real servers (a blocked request fails as an unreachable host would).</summary>
+    public static class NetworkPolicy
+    {
+        public static Func<Uri, bool> Allow;
+        public static bool Allowed(Uri uri) => Allow == null || Allow(uri);
     }
 }
