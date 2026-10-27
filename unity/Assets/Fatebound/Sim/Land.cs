@@ -15,7 +15,7 @@ namespace Fatebound.Sim
         public int pit = -1;
     }
 
-    public static class Land
+    public static partial class Land
     {
         public const double HOK_HALF = 78.0;
         public const double HOK_L = HOK_HALF * 1.4142135;

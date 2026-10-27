@@ -54,6 +54,10 @@ namespace Fatebound.GUI
 
         static readonly System.Collections.Generic.HashSet<RID> _measured = new System.Collections.Generic.HashSet<RID>();
 
+        /// <summary>get_rendering_device(): Godot's RenderingDevice, which this port has none of (Unity draws): null, as
+        /// under Godot's Compatibility renderer. (gpu_probe.gd stays off: "no RenderingDevice".)</summary>
+        public static object GetRenderingDevice() => null;
+
         public static long GetRenderingInfo(int info) => RenderingInfoHook?.Invoke(info) ?? 0;
         public static int ViewportGetRenderInfo(RID viewport, int type, int info) => ViewportRenderInfoHook?.Invoke(viewport, type, info) ?? 0;
 

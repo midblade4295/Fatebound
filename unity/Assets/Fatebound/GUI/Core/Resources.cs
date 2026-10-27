@@ -50,6 +50,7 @@ namespace Fatebound.GUI
         public static bool Exists(string path)
         {
             path = Normalize(path);
+            lock (_codeScenes) if (_codeScenes.ContainsKey(path)) return true;
 #if FB3D
             // baked scenes/resources: answered from the bake's manifest (the host would load the whole file to tell)
             if (BakedLoader.Handles(path)) { bool? b = BakedLoader.InManifest(path); if (b.HasValue) return b.Value; }
@@ -80,8 +81,23 @@ namespace Fatebound.GUI
 
         public static T Load<T>(string path) where T : Resource => Load(path) as T;
 
+        static readonly Dictionary<string, Func<Node>> _codeScenes = new Dictionary<string, Func<Node>>();
+
+        /// <summary>A scene the port builds in code rather than bakes (scenes/Boot.tscn, scenes/Main.tscn: one scripted node
+        /// each): load(path) gives a PackedScene whose instantiate() calls make, and the node it makes has path as its
+        /// scene_file_path (SceneTree.reload_current_scene).</summary>
+        public static void RegisterScene(string path, Func<Node> make)
+        {
+            lock (_codeScenes) _codeScenes[Normalize(path)] = make;
+        }
+
         static Resource LoadUncached(string path)
         {
+#if FB3D
+            Func<Node> make;
+            lock (_codeScenes) _codeScenes.TryGetValue(path, out make);
+            if (make != null) return PackedScene.FromCode(path, make);
+#endif
             string ext = System.IO.Path.GetExtension(path).ToLowerInvariant();
 #if FB3D
             // .glb .gltf .scn .tscn .res .tres: baked by tools/bake (any thread: the bytes come through the main thread)

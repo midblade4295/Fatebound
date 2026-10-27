@@ -544,6 +544,8 @@ namespace Fatebound.GUI
         readonly List<Tween> _tweens = new List<Tween>();
         double _physicsAcc;
         public double PhysicsTicksPerSecond = 60.0;
+        /// <summary>This frame's process step (time-scaled): Node.get_process_delta_time().</summary>
+        public double ProcessDelta { get; private set; }
         public bool QuitRequested { get; private set; }
         public int QuitCode;
 
@@ -755,6 +757,7 @@ namespace Fatebound.GUI
             Frame++;
             Now += delta;
             double scaled = delta * TimeScale;
+            ProcessDelta = scaled;
             Root.FlushInput();
             FlushDeferred();
             _physicsAcc += delta;

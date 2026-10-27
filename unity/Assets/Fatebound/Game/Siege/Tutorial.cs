@@ -747,7 +747,7 @@ namespace Fatebound.Game
             me.move = Vector2.ZERO;
             var e = new Ev { { "k", "recall_done" }, { "id", GD.Str(me.id) }, { "from", from }, { "to", p }, { "tut", true } };
             if (mode != null && mode.view != null)
-                mode.view.OnEvent(e);
+                mode.view.OnEvent(SiegeNet.WireEvent(e));
             if (mode != null)
                 mode._EventSound(e);
         }

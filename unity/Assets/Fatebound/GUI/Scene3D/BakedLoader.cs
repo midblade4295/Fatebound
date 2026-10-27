@@ -44,8 +44,20 @@ namespace Fatebound.GUI
         public const int GEN_EDIT_STATE_DISABLED = 0, GEN_EDIT_STATE_INSTANCE = 1, GEN_EDIT_STATE_MAIN = 2, GEN_EDIT_STATE_MAIN_INHERITED = 3;
         internal BakedLoader.NodeEntry[] nodes = Array.Empty<BakedLoader.NodeEntry>();
 
-        public bool CanInstantiate() => nodes.Length > 0;
-        public Node Instantiate(int editState = GEN_EDIT_STATE_DISABLED) => BakedLoader.Instantiate(this);
+        Func<Node> _make;
+        string _makePath = "";
+
+        /// <summary>A scene built in code (ResourceLoader.RegisterScene).</summary>
+        internal static PackedScene FromCode(string path, Func<Node> make) => new PackedScene { _make = make, _makePath = path };
+
+        public bool CanInstantiate() => _make != null || nodes.Length > 0;
+        public Node Instantiate(int editState = GEN_EDIT_STATE_DISABLED)
+        {
+            if (_make == null) return BakedLoader.Instantiate(this);
+            var n = _make();
+            if (n != null) n.SceneFilePath = _makePath;
+            return n;
+        }
         public T Instantiate<T>(int editState = GEN_EDIT_STATE_DISABLED) where T : Node => Instantiate(editState) as T;
         /// <summary>Nodes the scene creates (SceneState.get_node_count()).</summary>
         public int GetNodeCount() => nodes.Length;

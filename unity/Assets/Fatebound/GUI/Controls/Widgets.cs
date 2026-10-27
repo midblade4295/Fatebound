@@ -1416,6 +1416,28 @@ namespace Fatebound.GUI
         public void AppendText(string bbcode) => Text = _text + bbcode;
         public void Clear() => Text = "";
 
+        // visible_characters / visible_ratio, as Godot's default VC_CHARS_BEFORE_SHAPING: the text is cut to its first
+        // N characters before it's laid out (it looks like the text being typed)
+        int _visibleChars = -1;
+        public int VisibleCharacters
+        {
+            get => _visibleChars;
+            set { if (_visibleChars == value) return; _visibleChars = value; QueueRedraw(); if (FitContent) UpdateMinimumSize(); }
+        }
+
+        public double VisibleRatio
+        {
+            get { int total = GetTotalCharacterCount(); return _visibleChars < 0 || total == 0 ? 1.0 : Math.Min(1.0, _visibleChars / (double)total); }
+            set => VisibleCharacters = value >= 1 ? -1 : (int)(GetTotalCharacterCount() * value);
+        }
+
+        public int GetTotalCharacterCount()
+        {
+            int n = 0;
+            foreach (var sp in _spans) n += sp.text.Length;
+            return n;
+        }
+
         public string GetParsedText()
         {
             var sb = new StringBuilder();
@@ -1474,12 +1496,20 @@ namespace Fatebound.GUI
             int line = 0;
             float asc = (float)font.GetAscent(fs), desc = (float)font.GetDescent(fs);
             Col def = GetThemeColor("default_color");
+            int left = _visibleChars;
             foreach (var sp in _spans)
             {
+                if (left == 0) break;
+                string text = sp.text;
+                if (left > 0)
+                {
+                    if (text.Length > left) text = text.Substring(0, left);
+                    left -= text.Length;
+                }
                 // split on spaces keeping them, wrap by words
                 var parts = new List<string>();
                 var cur = new StringBuilder();
-                foreach (char ch in sp.text)
+                foreach (char ch in text)
                 {
                     if (ch == '\n') { if (cur.Length > 0) parts.Add(cur.ToString()); cur.Clear(); parts.Add("\n"); continue; }
                     cur.Append(ch);

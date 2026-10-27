@@ -5,6 +5,7 @@
 //  - SceneTree.auto_accept_quit (stored: the Unity host reads it for a window close request)
 //  - SceneTree.get_nodes_in_group (the group's nodes in tree order, as Godot sorts a group before handing it out)
 //  - SceneTree.get_script() (the port's tree never has a script attached: null -- the .gd's "not under tests and tools")
+//  - SceneTree.reload_current_scene, Node.scene_file_path, Node.get_process_delta_time
 //  - Node.NOTIFICATION_WM_CLOSE_REQUEST (1006)
 using System.Collections.Generic;
 using Fatebound.Sim;
@@ -44,10 +45,25 @@ namespace Fatebound.GUI
         }
 
         public object GetScript() => null;
+
+        /// <summary>reload_current_scene(): change_scene_to_file of the current scene's scene_file_path (ERR_UNCONFIGURED
+        /// without a current scene; ERR_CANT_OPEN when it has no file).</summary>
+        public int ReloadCurrentScene()
+        {
+            if (CurrentScene == null) return GD.ERR_UNCONFIGURED;
+            string path = CurrentScene.SceneFilePath ?? "";
+            if (path == "") return GD.ERR_CANT_OPEN;
+            return ChangeSceneToFile(path);
+        }
     }
 
     public partial class Node
     {
         public const int NOTIFICATION_WM_CLOSE_REQUEST = 1006;
+        /// <summary>scene_file_path: the scene file this node was instantiated from ("" when it wasn't).</summary>
+        public string SceneFilePath = "";
+
+        /// <summary>get_process_delta_time(): this frame's process step.</summary>
+        public double GetProcessDeltaTime() => GetTree()?.ProcessDelta ?? 0.0;
     }
 }

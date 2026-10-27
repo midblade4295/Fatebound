@@ -18,7 +18,6 @@ namespace Fatebound.Game
     using View = Fatebound.Game.SiegeView;
     using Eco = Fatebound.Game.Economy;
     using Moba = Fatebound.Sim.Moba;
-    using TitleLogo = Fatebound.Game.TitleLogo;
 
     // 0.31.208 (Kevin: "Make a all new loading screen graphic and as players join it'll show their character along with
     // cosmetics they are wearing in the loading screen"): the match's loading screen -- one screen from PLAY until the battle
@@ -703,7 +702,7 @@ namespace Fatebound.Game
             AddChild(top);
             var lw = SIDE_W;
             var logo = new TitleLogo();
-            logo.CustomMinimumSize = new Vector2(lw, lw * TitleLogo.Aspect());
+            logo.CustomMinimumSize = new Vector2((float)lw, (float)(lw * TitleLogo.Aspect()));
             logo.SizeFlagsHorizontal = Control.SIZE_SHRINK_CENTER;
             top.AddChild(logo);
             UI2.Center(UI2.Text(top, "5 VS 5", 15, new Color("#ffe9c4"), new Color("#2a1206"), 5));

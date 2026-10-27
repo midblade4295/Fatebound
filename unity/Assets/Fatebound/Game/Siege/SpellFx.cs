@@ -1276,6 +1276,9 @@ namespace Fatebound.Game
         // ======================================================================================================================
         // the casts
         // ======================================================================================================================
+        /// <summary>(the view's on_event hands its events as Dictionaries)</summary>
+        public void Cast(string sp, GDict e, GDict a, Vector3 at, string hid) => Cast(sp, SiegeNet.ToEv(Var.Of(e)), a, at, hid);
+
         public void Cast(string sp, Ev e, GDict a, Vector3 at, string hid)
         {
             // a W or an E (moba_kits.gd "spell"; the new heroes' Q too), at: the caster's place now
@@ -1736,6 +1739,8 @@ namespace Fatebound.Game
         // ======================================================================================================================
         // the ultimates
         // ======================================================================================================================
+        public void Ult(string hid, GDict e, GDict a, Vector3 at) => Ult(hid, SiegeNet.ToEv(Var.Of(e)), a, at);
+
         public void Ult(string hid, Ev e, GDict a, Vector3 at)
         {
             var p2 = new Vector2(at.x, at.z);
@@ -2128,6 +2133,8 @@ namespace Fatebound.Game
                     break;
             }
         }
+
+        public void Event(GDict e) => Event(SiegeNet.ToEv(Var.Of(e)));
 
         public void Event(Ev e)
         {
