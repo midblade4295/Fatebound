@@ -780,6 +780,7 @@ namespace Fatebound.Client
             // (on the first frame: by then the game's loggers are listening)
             if (!_reported) { _reported = true; ReportShaders(); }
             RenderSync.Flush();
+            Materials.Refresh();
             foreach (var d in _skinned) UpdateSkin(d);
             foreach (var m in _multimeshes) DrawMultiMesh(m);
             for (int i = 0; i < _viewports.Count; i++) UpdateCamera(_viewports[i]);

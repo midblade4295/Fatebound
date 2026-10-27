@@ -104,3 +104,15 @@ editor in its workspace); grokbot opens it in Unity 6000.3.27f1 and builds the A
   sits half off the top of the screen (herald_intro.gd puts the choice above the art, which is 102 px from the top).
 - The match log's render numbers come from Unity now (Client/Core/UnityRenderStats.cs): gpu3d is the frame's GPU time
   (FrameTimingManager), draw calls and triangles the frame's (ProfilerRecorder), the adapter SystemInfo's.
+
+## Step 5 -- the first builds on Kevin's phone (S21 Ultra, Adreno 660, Vulkan)
+- Upside down: the GUI's projection was flipped twice (CommandBuffer.SetViewProjectionMatrices adapts it itself).
+- Grey matches: the match's sky had no shader (an exception in URP's camera setup every frame); the match viewport's
+  MSAA needs URP's own MSAA on (the asset's 2, the screen kept at 1).
+- Dark matches, pink spell effects: FXC (Unity's first compiler stage for Vulkan) crashed on the post shader's
+  tonemap pass; fx_beam/ground/scorch/shell had a property named 'color', a ShaderLab keyword. tools/shadercheck now
+  compiles with FXC itself (FBFXC=1, Wine) and lints property names: all 41 shaders run on the phone.
+- Ragdolls: a ragdoll's bones don't collide with each other (PhysX fought the overlapping capsules at the joints).
+- The river didn't react: a material's parameters set after its mesh was built never reached Unity (the wave
+  texture rip_tex, and every fade or tint done through a material) -- materials are now refreshed in place each frame.
+- Unity's own errors reach the match log, and the boot log lists any shader the GPU can't run, by file.

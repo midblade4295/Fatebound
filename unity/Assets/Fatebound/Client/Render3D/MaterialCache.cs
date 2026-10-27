@@ -126,7 +126,9 @@ namespace Fatebound.Client
 
         void BuildStandard(Entry e, BaseMaterial3D b)
         {
-            if (e.Mat == null || e.Mat.shader != Standard) e.Mat = new Material(Standard) { name = "std", hideFlags = HideFlags.DontSave };
+            // (a material in use is changed in place: the renderers holding it see the change)
+            if (e.Mat == null) e.Mat = new Material(Standard) { name = "std", hideFlags = HideFlags.DontSave };
+            else if (e.Mat.shader != Standard) e.Mat.shader = Standard;
             var mat = e.Mat;
             var white = UnityEngine.Texture2D.whiteTexture;
             var ac = b.AlbedoColor;
@@ -220,7 +222,8 @@ namespace Fatebound.Client
         {
             var shader = ShaderRegistry.Find(sm.Shader);
             if (shader == null) shader = Standard;
-            if (e.Mat == null || e.Mat.shader != shader) e.Mat = new Material(shader) { name = string.IsNullOrEmpty(sm.Shader?.ResourcePath) ? "shader" : sm.Shader.ResourcePath, hideFlags = HideFlags.DontSave };
+            if (e.Mat == null) e.Mat = new Material(shader) { name = string.IsNullOrEmpty(sm.Shader?.ResourcePath) ? "shader" : sm.Shader.ResourcePath, hideFlags = HideFlags.DontSave };
+            else if (e.Mat.shader != shader) e.Mat.shader = shader;
             var mat = e.Mat;
             ShaderRegistry.ApplyDefaults(mat, sm.Shader);
             foreach (var kv in sm.Params) SetParam(mat, kv.Key, kv.Value);
@@ -479,6 +482,22 @@ namespace Fatebound.Client
                 mat.SetFloat("_SunCurve", (float)p.SunCurve);
             }
             return mat;
+        }
+
+        /// <summary>Once a frame: every material whose facade material changed since it was built is brought up to date in
+        /// place. Meshes take their materials only when they're (re)built, so without this a material's parameters set
+        /// from the game afterwards never arrived -- the river's wave texture (rip_tex, set each step of the ripples:
+        /// Kevin, "when running through it the water does not react"), and every effect faded or tinted through its
+        /// material.</summary>
+        public void Refresh()
+        {
+            for (int i = 0; i < _all.Count; i++)
+            {
+                var e = _all[i];
+                if (e.Mat == null || !e.Source.TryGetTarget(out var m) || e.Version == m.version) continue;
+                e.Version = m.version;
+                Build(e, m);
+            }
         }
 
         public void Sweep()
