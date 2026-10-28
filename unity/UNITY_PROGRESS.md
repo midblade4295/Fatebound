@@ -133,3 +133,11 @@ vs 6.9); ph_draw ~20 ms (Godot ~10) and the worst frame each second ~58 ms (Godo
   frame and its wait for the present (u_main, u_wait), the display (hz, modes, target), and the garbage collector
   (gc: collections that second; alloc: KB a frame, where the player counts it) -- RenderingServer.HostFrameTimes /
   HostStatText, from Client/Core/UnityRenderStats.cs.
+
+## Step 7 -- the test tools from any checkout
+- tools/gametest and tools/guitest had this machine's checkout path written in (/home/claude/midblade4295/fatebound),
+  so a fresh clone elsewhere found no res:// files (missing fonts, then a NullReferenceException at start).
+  TestHost.Root is now the checkout the tools were built from (the source file's own path), or FB_REPO if set.
+- Checked in a fresh cloud container: the five assemblies compile against 6000.3.27f1's references (0 errors,
+  0 warnings), all 41 shaders pass check.py on the Vulkan/mobile and D3D11 paths, gametest boots to the Herald's
+  intro with 0 exceptions and 0 errors, guitest fonts runs.

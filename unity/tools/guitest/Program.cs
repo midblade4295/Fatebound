@@ -10,7 +10,7 @@ namespace GuiTest
 {
     public static class Program
     {
-        public static string Repo = "/home/claude/midblade4295/fatebound";
+        public static string Repo = TestHost.Root;
 
         static readonly string[] Fonts = { "res://assets/fonts/LilitaOne-Regular.ttf", "res://assets/fonts/Nunito-Bold.woff2", "res://assets/fonts/Nunito-ExtraBold.woff2",
             "res://assets/fonts/Cinzel-Black.woff2", "res://assets/fonts/DejaVuSans.ttf", "" };

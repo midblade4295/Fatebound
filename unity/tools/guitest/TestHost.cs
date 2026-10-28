@@ -3,13 +3,16 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Runtime.CompilerServices;
 using Fatebound.GUI;
 
 namespace GuiTest
 {
     public sealed class TestHost : IGuiHost
     {
-        public static readonly string Root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../home/claude/midblade4295/fatebound"));
+        // The repo checkout these tools were built from (this file is unity/tools/guitest/TestHost.cs); FB_REPO overrides.
+        public static readonly string Root = System.Environment.GetEnvironmentVariable("FB_REPO") is string r && r != "" ? r : RepoOf();
+        static string RepoOf([CallerFilePath] string self = "") => Path.GetFullPath(Path.Combine(Path.GetDirectoryName(self), "../../.."));
         public readonly string ResDir;
         public readonly string Cache = "/tmp/fb-guitest/cache";
         readonly Dictionary<string, RgbaImage> _images = new Dictionary<string, RgbaImage>();

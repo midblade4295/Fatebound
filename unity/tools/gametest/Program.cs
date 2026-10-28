@@ -72,7 +72,7 @@ namespace GameTest
 
     public static class Program
     {
-        public const string Repo = "/home/claude/midblade4295/fatebound";
+        public static readonly string Repo = TestHost.Root;
         static SceneTree _tree;
         static double _t;
         static int _errors, _exceptions, _warnings, _failed, _frames;

@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "/home/claude/midblade4295/fatebound/unity/tools/guitest/guitest.csproj": {}
+    "/tmp/claude-0/-home-user-Fatebound/4d222187-ef28-5f36-97d9-9c712044dc59/scratchpad/unity-port/unity/tools/guitest/guitest.csproj": {}
   },
   "projects": {
-    "/home/claude/midblade4295/fatebound/unity/tools/guitest/guitest.csproj": {
+    "/tmp/claude-0/-home-user-Fatebound/4d222187-ef28-5f36-97d9-9c712044dc59/scratchpad/unity-port/unity/tools/guitest/guitest.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "/home/claude/midblade4295/fatebound/unity/tools/guitest/guitest.csproj",
+        "projectUniqueName": "/tmp/claude-0/-home-user-Fatebound/4d222187-ef28-5f36-97d9-9c712044dc59/scratchpad/unity-port/unity/tools/guitest/guitest.csproj",
         "projectName": "guitest",
-        "projectPath": "/home/claude/midblade4295/fatebound/unity/tools/guitest/guitest.csproj",
+        "projectPath": "/tmp/claude-0/-home-user-Fatebound/4d222187-ef28-5f36-97d9-9c712044dc59/scratchpad/unity-port/unity/tools/guitest/guitest.csproj",
         "packagesPath": "/root/.nuget/packages/",
-        "outputPath": "/home/claude/midblade4295/fatebound/unity/tools/guitest/obj/",
+        "outputPath": "/tmp/claude-0/-home-user-Fatebound/4d222187-ef28-5f36-97d9-9c712044dc59/scratchpad/unity-port/unity/tools/guitest/obj/",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "/root/.nuget/NuGet/NuGet.Config"
@@ -32,11 +32,6 @@
           "warnAsError": [
             "NU1605"
           ]
-        },
-        "restoreAuditProperties": {
-          "enableAudit": "true",
-          "auditLevel": "low",
-          "auditMode": "direct"
         }
       },
       "frameworks": {
@@ -58,7 +53,7 @@
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "/root/.dotnet/sdk/8.0.427/PortableRuntimeIdentifierGraph.json"
+          "runtimeIdentifierGraphPath": "/usr/lib/dotnet/sdk/8.0.132/PortableRuntimeIdentifierGraph.json"
         }
       }
     }
