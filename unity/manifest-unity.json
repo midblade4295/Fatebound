@@ -1,0 +1,154 @@
+{
+ "format": 1,
+ "unity": "6000.3.27f1",
+ "target": "Android/ASTC",
+ "app_code": 1,
+ "built": 1793464043,
+ "url": "https://raw.githubusercontent.com/midblade4295/Fatebound/content-packs/unity/",
+ "packs": [
+  {
+   "name": "ui_1",
+   "file": "ui_1-a8da7dd09b41.bundle",
+   "size": 79097562,
+   "sha256": "658db0e757fda7417dbe437991843c65817ad6c6447b5c0edc776d70823cb81a",
+   "inputs": "a8da7dd09b4114ece47530e10c6da025f42f09cbb43e7e32b94f66ca42c707cb",
+   "probe": "res/assets/ui/clans/emblem_tower",
+   "assets": 186
+  },
+  {
+   "name": "ui_2",
+   "file": "ui_2-044c1e9aa79c.bundle",
+   "size": 62403289,
+   "sha256": "e189889043c235fb3983d09057792bc450ee9713bac6b7a9730def5a917e367d",
+   "inputs": "044c1e9aa79ca799ec633980758680c6a795a7c57f3007e5f620cf92e710806c",
+   "probe": "res/assets/ui/v2/shield_pass",
+   "assets": 138
+  },
+  {
+   "name": "terrain_1",
+   "file": "terrain_1-7e9e3b25086b.bundle",
+   "size": 9603985,
+   "sha256": "91f60428d5dd72f9516b5f32ed58fa4cd0c19158602cf471df5ffd56dfeaff62",
+   "inputs": "7e9e3b25086b9b948ca71e0ed39d6a184829c58740ad2934689073045d563cc1",
+   "probe": "res/assets/terrain/minimap",
+   "assets": 13
+  },
+  {
+   "name": "terrain_2",
+   "file": "terrain_2-ef36cd7fc6ed.bundle",
+   "size": 17157753,
+   "sha256": "8c23951898dcf2036e0d770efbb4f6ac8ec908db1dd63b56cc277ed35cb49d24",
+   "inputs": "ef36cd7fc6ed4ccb0cd8b090af9f18937b5d42ff4a4efad1e92e6b1833307c8c",
+   "probe": "res/assets/terrain/paint/carpet_red",
+   "assets": 17
+  },
+  {
+   "name": "characters",
+   "file": "characters-bac0b20f71ed.bundle",
+   "size": 37391161,
+   "sha256": "4bb1df4a49a57387c843bfc70c173c990ab64de08fe457693da10af16db71818",
+   "inputs": "bac0b20f71eddb694c766e10acd1a341387f27de87f36e903400619abdf45612",
+   "probe": "res/assets/kaykit/LICENSE-skeletons-1.0",
+   "assets": 237
+  },
+  {
+   "name": "heroes_1",
+   "file": "heroes_1-9fd6d7c16814.bundle",
+   "size": 24123696,
+   "sha256": "8d32e81eda5858811ae42e50cfbc6b41b2afb787cb3189596b0181609cf66823",
+   "inputs": "9fd6d7c16814ad2d96728fce5ffb01b3b8420682355c2d9c3f1c807bc2f7537c",
+   "probe": "res/assets/meshy/assassin/rig",
+   "assets": 45
+  },
+  {
+   "name": "heroes_2",
+   "file": "heroes_2-bd6954bba416.bundle",
+   "size": 24166424,
+   "sha256": "f15103cb5622302e838fab745bf7dba2cbab3f8d1d8882448d2466f97c4eb48b",
+   "inputs": "bd6954bba41673a0f37dd8f816dd00c4643f5be2ae0dc8721f86a90f99093eb5",
+   "probe": "res/assets/meshy/knight/rig",
+   "assets": 45
+  },
+  {
+   "name": "heroes_3",
+   "file": "heroes_3-0e8f205efadb.bundle",
+   "size": 55331441,
+   "sha256": "6e3f83955a7801a21ee41e01f97dec2f573dbd05c5dc7800641e37ed629f243c",
+   "inputs": "0e8f205efadb6380cb6391f48b57214f98d1533c6728ff5f981af901993952b8",
+   "probe": "res/assets/meshy/minion_siege/rig",
+   "assets": 49
+  },
+  {
+   "name": "heroes_4",
+   "file": "heroes_4-7a20668c1859.bundle",
+   "size": 23235582,
+   "sha256": "154d5728de08512e2b63714f25ad12ebd390a874a792b90abbc17eb100380288",
+   "inputs": "7a20668c1859d932facded4fd445729c26c991575d4ff8da266b5fe734cb1c5f",
+   "probe": "res/assets/meshy/rogue/rig",
+   "assets": 45
+  },
+  {
+   "name": "heroes_5",
+   "file": "heroes_5-ac51c213f25a.bundle",
+   "size": 14152125,
+   "sha256": "cd13bf519b110487efb58c80c6ab1a49b0ef085e02249f9bf2d27631b26c8e8c",
+   "inputs": "ac51c213f25a9e895df1821219f65242798411bf4e3091009756ccd3a281b94d",
+   "probe": "res/assets/meshy/worker/rig",
+   "assets": 27
+  },
+  {
+   "name": "world_1",
+   "file": "world_1-1d4f08ea9ab7.bundle",
+   "size": 49928142,
+   "sha256": "708f7071c4de9067494277c89083249ff99d4e2c03542d0d619e0b83b172ae3c",
+   "inputs": "1d4f08ea9ab71346f2fb452cf2491ab42db1cd845121819df15f71cb7f5e12ea",
+   "probe": "res/assets/meshy/castle/royal_banner_glow",
+   "assets": 160
+  },
+  {
+   "name": "world_2",
+   "file": "world_2-7bb8548acb2c.bundle",
+   "size": 21055947,
+   "sha256": "9b57ef6764e6c1ecaf56508393e2ef4d3a405a50df9ef7479e679d0adde5035a",
+   "inputs": "7bb8548acb2c7f3e98fd0ebd766bc43b0563afbf4f0d5cefa3377623b7611650",
+   "probe": "res/assets/meshy/towers/tower_lane_glow",
+   "assets": 68
+  },
+  {
+   "name": "world_3",
+   "file": "world_3-7e9425059e22.bundle",
+   "size": 32574496,
+   "sha256": "3726a5fa3d50183bf257a07e2ab7900a0df17b4254465710e7e63124cfa32fa4",
+   "inputs": "7e9425059e22d7219c3635287413d1574681354d40302a10e860f03a3cbd864f",
+   "probe": "res/assets/meshy/weapons/duelist_rapier_0",
+   "assets": 161
+  },
+  {
+   "name": "fx_1",
+   "file": "fx_1-e1422f9f4060.bundle",
+   "size": 2096134,
+   "sha256": "7def1bd70cb185860ea59312f5233abcccb35f765ef2d23265545e5adf00f703",
+   "inputs": "e1422f9f4060f719bc565526d00335ea346a5789df9e93d5c2fa4acb5ad8eb24",
+   "probe": "fx/eric/Pike",
+   "assets": 51
+  },
+  {
+   "name": "fx_2",
+   "file": "fx_2-904d4f901d91.bundle",
+   "size": 25411144,
+   "sha256": "cb4db2d5d2cf6ed00f1682dc3b5e4845c6f7c6c77f7c4d82f334d2ccb88bca6d",
+   "inputs": "904d4f901d913554bd47c39d9e559456339a709ab7dea4141f29f76ee0b6a98d",
+   "probe": "fx/upp/SmokeEffect",
+   "assets": 87
+  },
+  {
+   "name": "audio",
+   "file": "audio-623908f550ca.bundle",
+   "size": 10106631,
+   "sha256": "b2df9b6193b6bab98f6bf506d676841d4d28df7825582223c9c90ec7b872c858",
+   "inputs": "623908f550ca1b6f8cd705dd648d8845c539b991f25911f546f631ebf6b6edbe",
+   "probe": "res/assets/sounds/slider",
+   "assets": 349
+  }
+ ]
+}
