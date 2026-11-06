@@ -17,7 +17,7 @@
 <body>
 <main>
 <h1>Fatebound Privacy Policy</h1>
-<p class="meta">Effective 22 September 2026, updated 24 October 2026<br>Developer: midblade4295<br>App: Fatebound (package com.fatebound.game)</p>
+<p class="meta">Effective 22 September 2026, updated 5 November 2026<br>Developer: midblade4295<br>App: Fatebound (package com.fatebound.game)</p>
 
 <p>This page is the privacy policy for the Fatebound mobile game published by midblade4295 on Google Play and the Apple App Store.</p>
 
@@ -28,7 +28,7 @@
 <p>Fatebound is a dice arena game. Progress is stored on your device and, when the device is online, may also sync to the same LEGIONARY / Shardfall Firebase project so your games share one player id.</p>
 
 <h2>Information we collect</h2>
-<p>We do not collect your real name, email, phone number, precise location, photos, or contacts.</p>
+<p>We do not collect your real name, email, phone number, precise location, photos, or contacts. (Your in-game name is the name you choose in the game; see "Who is online" below.)</p>
 <p>We may store:</p>
 <ul>
 <li>A random player id (same format as Shardfall, kept on the device)</li>
@@ -36,7 +36,8 @@
 <li>Game save data (gold, relics, map state, settings)</li>
 <li>For in-app purchases: the Google Play purchase token, product and order id; on iPhone, Apple's signed transaction (product, transaction id and a random token that ties the purchase to your game account)</li>
 <li>If you use Game Center on iPhone: a one-way hash of your Game Center player id, kept with your game account so it can be restored (see "Game Center")</li>
-<li>Anonymous usage statistics, unless you turn them off (see "Usage statistics" below)</li>
+<li>Anonymous usage statistics, including which screens of the game you open, unless you turn them off (see "Usage statistics" below)</li>
+<li>Your approximate location (country and state or region only), worked out on our game server from your IP address when you connect; the IP address itself is not stored (see "Approximate location" below)</li>
 <li>Diagnostics reports, only when you choose to send one (see "Sending a problem report" below)</li>
 </ul>
 
@@ -80,10 +81,10 @@
 <h2>Usage statistics</h2>
 <p>To see how the game is played and to find problems, the game sends our own game server anonymous usage events. Our server receives them, and from version 0.31.212 the phone app also sends usage statistics to HeyCatch, a third-party analytics processor (see "Usage statistics (HeyCatch)" below). There is no advertising network involved.</p>
 <ul>
-<li>What is sent: when a session starts and ends and how long it lasted; tutorial progress; matches played, their mode, result and length, and the hero you played; level-ups; use of the forge, chests and shop; daily rewards claimed; purchases the server verified (the product only); use of chat, friends and parties (counts only, never the text of a message); update screens; whether the phone is Android or iPhone; and start-up problems (for example the game failing to start, with no file paths or other device data).</li>
-<li>It is tied only to your random game account id. We do not store your IP address, device id or advertising id with it, nor your name, chat text, purchase token or order id.</li>
+<li>What is sent: when a session starts and ends and how long it lasted; tutorial progress; matches played, their mode, result and length, and the hero you played; level-ups; use of the forge, chests and shop; daily rewards claimed; purchases the server verified (the product only); use of chat, friends and parties (counts only, never the text of a message); update screens; screen views (which screen or popup of the game was open, the one before it, and how many seconds it was open); whether the phone is Android or iPhone; and start-up problems (for example the game failing to start, with no file paths or other device data).</li>
+<li>It is tied only to your random game account id. When you connect, it also records your approximate location (country and state or region; see "Approximate location"). We do not store your IP address, device id or advertising id with it, nor your name, chat text, purchase token or order id.</li>
 <li>The copy on our server is not shared with anyone or sold. It is kept for 90 days and then deleted. It is used only to improve the game and fix problems.</li>
-<li>Turn it off at any time in Settings &rarr; "Share anonymous usage stats". The game then deletes the events still waiting on your device, tells the server once that you opted out, and sends nothing more; the server stops recording anything for your account.</li>
+<li>Turn it off at any time in Settings &rarr; "Share anonymous usage stats". The game then deletes the events still waiting on your device, tells the server once that you opted out, and sends nothing more; the server stops recording anything for your account, including screen views, and no longer looks up your approximate location.</li>
 <li>To have the statistics for your account deleted sooner, email us with your player id (see "Retention and deletion").</li>
 </ul>
 
@@ -92,11 +93,23 @@
 <ul>
 <li>What is sent: app interactions (screens you open, tutorial progress, match and shop events, session length and the other usage events listed above); purchase history (the product id of a completed purchase, with no price paid, purchase token or order id); the app version; and the operating system and platform (Android or iOS).</li>
 <li>It is tied to a pseudonymous user id: a salted one-way hash of your game account id (never the account id itself), or a random id before your game account exists, which is linked to the hashed id once it does.</li>
-<li>It does not include your name, email, chat messages, device id or advertising id.</li>
+<li>It does not include your name, email, chat messages, location, IP address, device id or advertising id.</li>
 <li>It is used only for analytics and to improve the game. It is not used for advertising or to track you across other apps or websites, and we do not sell it.</li>
 <li>It is on by default. Turn it off at any time in Settings &rarr; "Share anonymous usage stats"; the app then stops sending to HeyCatch (and to our server).</li>
 <li>HeyCatch processes this data under its own terms and privacy policy. To ask us to delete it, email <a href="mailto:vellicgames@gmail.com">vellicgames@gmail.com</a>.</li>
 </ul>
+
+<h2>Approximate location</h2>
+<p>When the app connects to our game server, the server works out your approximate location &mdash; the country and the state or region only, never a city, street or precise position &mdash; from the IP address of the connection. The lookup is done on our own server with an offline database (no one else is asked). The IP address itself is not stored: it is not written to usage statistics, your account, logs or the online list.</p>
+<ul>
+<li>It is used for analytics (to see where players come from) and is shown to the developer in the server's list of who is online (see below).</li>
+<li>It is kept in the usage statistics on our own server (for 90 days, like the rest of them). It is not shared with anyone, sold, or sent to HeyCatch.</li>
+<li>It is off when usage statistics are off: with Settings &rarr; "Share anonymous usage stats" turned off, no location is looked up or stored.</li>
+</ul>
+<p>IP Geolocation by <a href="https://db-ip.com">DB-IP</a>.</p>
+
+<h2>Who is online (server list)</h2>
+<p>Our game server keeps a list, seen only by the developer, of the players online right now: each player's in-game name, the screen of the game they are on, their approximate location (country and state or region), their app version and how long they have been online. It is rewritten every 30 seconds and is not kept as a history. With "Share anonymous usage stats" turned off, you are listed by in-game name only, without your screen or location.</p>
 
 <h2>Sending a problem report</h2>
 <p>Settings &rarr; "Send to developer" sends a problem report to our own game server, only when you tap Send (the game shows what it sends first). The report contains the game's own log from this phone (what the game was doing, its errors and warnings, frame times and memory use), the app version, your phone model, Android or iOS version and graphics chip, your in-game name, your game account id if you have one, and anything you type about the problem. It does not contain chat messages, purchase details, your contacts, files or anything from other apps. Your IP address is used only for a moment, in memory, to limit how many reports can be sent, and is not stored. Reports are read only by the developer to fix problems, are not shared or sold, and the server keeps only the most recent ones (older reports are deleted automatically). To have a report deleted sooner, email us with the report number the game showed you. "Copy diagnostics" in Settings copies the same log to your clipboard instead, without sending anything.</p>
@@ -117,7 +130,7 @@
 <p>Settings &rarr; "Join our Discord" opens our community's invite link in your browser or the Discord app, and gives a one-time gift of gems in the game for it (recorded on your game server account so it is given only once). The game sends nothing to Discord; what you share there is covered by Discord's own privacy policy.</p>
 
 <h2>Sharing</h2>
-<p>We do not sell personal information. Usage statistics on our own game server are not shared; the usage statistics described in "Usage statistics (HeyCatch)" are sent to HeyCatch, which processes them for us for analytics only. Cloud saves live in our Firebase project. Google Play processes installs and purchases under Google’s policies.</p>
+<p>We do not sell personal information. Usage statistics on our own game server (including your approximate location) are not shared; the usage statistics described in "Usage statistics (HeyCatch)" are sent to HeyCatch, which processes them for us for analytics only. Cloud saves live in our Firebase project. Google Play processes installs and purchases under Google’s policies.</p>
 
 <h2>Children</h2>
 <p>Fatebound is general-audience fantasy combat. We do not knowingly collect a child’s real-world identity. There is no email sign-up.</p>
