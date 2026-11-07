@@ -2,8 +2,8 @@
  "format": 1,
  "unity": "6000.3.27f1",
  "target": "Android/ASTC",
- "app_code": 317,
- "built": 1794010814,
+ "app_code": 318,
+ "built": 1794031217,
  "url": "https://raw.githubusercontent.com/midblade4295/Fatebound/content-packs/unity/",
  "packs": [
   {
@@ -44,12 +44,12 @@
   },
   {
    "name": "ui_4",
-   "file": "ui_4-8efd3fadf9c9.bundle",
-   "size": 43383214,
-   "sha256": "8bbbf565db5f6ceea04a00252eb68daeaa768062cae66456ef7d9324787d2236",
-   "inputs": "8efd3fadf9c96a305f8c981ce0ad4758fc71afc3a5fe74d6adc80203ae2f6996",
+   "file": "ui_4-935b722478b1.bundle",
+   "size": 45826882,
+   "sha256": "a46a993eca8d37051eb936cd0ce2890cb96c5c11c7c4dcd30ca01fcb9a966e4f",
+   "inputs": "935b722478b134dd676cc87310660510d0bff14f9a94ac7a7001a38377f908bb",
    "probe": "res/assets/ui/v2/shield_pass",
-   "assets": 56
+   "assets": 57
   },
   {
    "name": "terrain_1",
@@ -305,10 +305,10 @@
   },
   {
    "name": "audio",
-   "file": "audio-20a4f150df60.bundle",
-   "size": 11360300,
-   "sha256": "f052b1a845ac2728df6b507895dbc7e83d8d01e9a78154ae0e3f083e5013d9a4",
-   "inputs": "20a4f150df6098151d8d634eb53f56c7c6b8d6438b0b5ebd942200dd2b5fdfab",
+   "file": "audio-642dbee407b2.bundle",
+   "size": 11361871,
+   "sha256": "cd4dbb2c78067c19abdedf8a1d4725f3699eb334ae3c9be93c80a358306f47b8",
+   "inputs": "642dbee407b2bd4d2b4c6771c7c4341e020fc0cf3b5f037b1b7e5c16243b3d3b",
    "probe": "res/assets/sounds/slider",
    "assets": 427
   }
