@@ -2,8 +2,8 @@
  "format": 1,
  "unity": "6000.3.27f1",
  "target": "Android/ASTC",
- "app_code": 318,
- "built": 1794031217,
+ "app_code": 319,
+ "built": 1794073209,
  "url": "https://raw.githubusercontent.com/midblade4295/Fatebound/content-packs/unity/",
  "packs": [
   {
@@ -170,10 +170,10 @@
   },
   {
    "name": "heroes_8",
-   "file": "heroes_8-ffa7d92856fb.bundle",
-   "size": 31598244,
-   "sha256": "452be1baf69fe93b99a65df6315dc66ba344d5356890c1eac4b5e10b64ac2e61",
-   "inputs": "ffa7d92856fb92545707fbc640f269adb49dcbd6a047cde7dd5e8e02efdae156",
+   "file": "heroes_8-05ed52a5bb3e.bundle",
+   "size": 31597636,
+   "sha256": "6f8da0b1c3eb36d6a8c47cc82ca50a06f0aca64df166d30c98ef1140951da389",
+   "inputs": "05ed52a5bb3e760e923b46a068717784a5d97578c8350936615c77d0e55f58f4",
    "probe": "res/assets/meshy/knight/rig",
    "assets": 40
   },
