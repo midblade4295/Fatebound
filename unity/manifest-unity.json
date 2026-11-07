@@ -2,8 +2,8 @@
  "format": 1,
  "unity": "6000.3.27f1",
  "target": "Android/ASTC",
- "app_code": 319,
- "built": 1794073209,
+ "app_code": 320,
+ "built": 1794083667,
  "url": "https://raw.githubusercontent.com/midblade4295/Fatebound/content-packs/unity/",
  "packs": [
   {
@@ -35,12 +35,12 @@
   },
   {
    "name": "ui_3",
-   "file": "ui_3-b320cd09d5e1.bundle",
-   "size": 42423324,
-   "sha256": "ad417ac6f1d829e9f97dbcfa145d424962bcf5fa7b7b4374a10e2d04a9b3ec3b",
-   "inputs": "b320cd09d5e1da574b39c2852dfdafb70ef7f1ba5a68f79eeafd3f0c3ab711aa",
+   "file": "ui_3-ea7bfeaed243.bundle",
+   "size": 42907687,
+   "sha256": "95c6eb96b079af8ca7a9097b59306576e5a11dad9a51d189890d27d8fcac02c7",
+   "inputs": "ea7bfeaed243bee2e7f6a78ef7b5e98de46ade9afba98bc6a8f0e1a0ab5007c9",
    "probe": "res/assets/ui/kit/btn_square_green",
-   "assets": 154
+   "assets": 158
   },
   {
    "name": "ui_4",
