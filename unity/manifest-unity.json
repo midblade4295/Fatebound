@@ -2,8 +2,8 @@
  "format": 1,
  "unity": "6000.3.27f1",
  "target": "Android/ASTC",
- "app_code": 321,
- "built": 1794107000,
+ "app_code": 322,
+ "built": 1794160408,
  "url": "https://raw.githubusercontent.com/midblade4295/Fatebound/content-packs/unity/",
  "packs": [
   {
@@ -16,22 +16,13 @@
    "assets": 149
   },
   {
-   "name": "ui_2a",
-   "file": "ui_2a-dc10781c3d46.bundle",
-   "size": 48591791,
-   "sha256": "a282e5ecf4974bc540ac8d180c3c1ee1c683af1d2940af5e824d431d5b5ff37b",
-   "inputs": "dc10781c3d46d46dfe96f3e19609c5ca34637f781db07e823ca0523a1c52e138",
-   "probe": "res/assets/ui/champions/cards/assassin",
-   "assets": 60
-  },
-  {
-   "name": "ui_2b",
-   "file": "ui_2b-7da7f54dd40a.bundle",
-   "size": 38597428,
-   "sha256": "60af5f3d4fbb593c848af7071d54e80f0c5b1d157033f6a0e6fcdbb5a8d41bb1",
-   "inputs": "7da7f54dd40ae7a478b3cc9097cb942317a8098a75b44c096e6637a5de7d8009",
+   "name": "ui_2",
+   "file": "ui_2-84e767b620a4.bundle",
+   "size": 82334650,
+   "sha256": "bb03a1e9ea7eb3d1a90042212ab190dd8e26ba754e6ea58a96190c38ecc36cae",
+   "inputs": "84e767b620a486d5c4ddd4afd4c7dcf497ca650b7ab327d615baf4d16d625875",
    "probe": "res/assets/ui/clans/emblem_tower",
-   "assets": 72
+   "assets": 132
   },
   {
    "name": "ui_3",
@@ -44,10 +35,10 @@
   },
   {
    "name": "ui_4",
-   "file": "ui_4-935b722478b1.bundle",
-   "size": 45826882,
-   "sha256": "a46a993eca8d37051eb936cd0ce2890cb96c5c11c7c4dcd30ca01fcb9a966e4f",
-   "inputs": "935b722478b134dd676cc87310660510d0bff14f9a94ac7a7001a38377f908bb",
+   "file": "ui_4-1e3d51d7a9d2.bundle",
+   "size": 45949510,
+   "sha256": "d387605b68f74d57afb882770d02b991129ef7675bf521d25074afc2bc53faaa",
+   "inputs": "1e3d51d7a9d2a51fd6a9aad8f55c18028fc27729df10d0002af145ae7916a8ae",
    "probe": "res/assets/ui/v2/shield_pass",
    "assets": 57
   },
@@ -305,12 +296,12 @@
   },
   {
    "name": "audio",
-   "file": "audio-642dbee407b2.bundle",
-   "size": 11361871,
-   "sha256": "cd4dbb2c78067c19abdedf8a1d4725f3699eb334ae3c9be93c80a358306f47b8",
-   "inputs": "642dbee407b2bd4d2b4c6771c7c4341e020fc0cf3b5f037b1b7e5c16243b3d3b",
+   "file": "audio-b14f79ba6547.bundle",
+   "size": 13313487,
+   "sha256": "fd58223c3eac43a496c1e2141e30e8dd2fc229446cbef1c2b7371926edbbd7bf",
+   "inputs": "b14f79ba654735fb8eaa53e9879f1fd0aecb0e41843ccd0b45058744a5130b5c",
    "probe": "res/assets/sounds/slider",
-   "assets": 427
+   "assets": 471
   }
  ]
 }
