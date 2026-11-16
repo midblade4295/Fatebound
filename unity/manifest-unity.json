@@ -2,8 +2,8 @@
  "format": 1,
  "unity": "6000.3.27f1",
  "target": "Android/ASTC",
- "app_code": 324,
- "built": 1794816039,
+ "app_code": 325,
+ "built": 1794842231,
  "url": "https://raw.githubusercontent.com/midblade4295/Fatebound/content-packs/unity/",
  "packs": [
   {
@@ -35,10 +35,10 @@
   },
   {
    "name": "ui_4",
-   "file": "ui_4-45c553e66a20.bundle",
-   "size": 52036766,
-   "sha256": "828b1abb6d70d8e3b578d95169bcad1df7f250268d9cf8a9d57b59fc2a052b27",
-   "inputs": "45c553e66a208ee5c169f6ed5ea0b7fb147ccc743ffa2e5e257a514f9c28a8dc",
+   "file": "ui_4-c7c269fe69f3.bundle",
+   "size": 53461553,
+   "sha256": "7b8e81914e3879ef0873f334942a89648875cee8ed0b588ef28ba8d6a22a01aa",
+   "inputs": "c7c269fe69f3f25bd7fa2417868db1daba7d69565f8944635d4965ec2e5d4b50",
    "probe": "res/assets/ui/v2/shield_pass",
    "assets": 59
   },
