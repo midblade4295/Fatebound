@@ -2,36 +2,36 @@
  "format": 1,
  "unity": "6000.3.27f1",
  "target": "Android/ASTC",
- "app_code": 325,
- "built": 1794842231,
+ "app_code": 327,
+ "built": 1794889583,
  "url": "https://raw.githubusercontent.com/midblade4295/Fatebound/content-packs/unity/",
  "packs": [
   {
    "name": "ui_1",
-   "file": "ui_1-9dc5ccaba10d.bundle",
-   "size": 60885834,
-   "sha256": "1b0f7dadf3e399d107d96296829e60946ac9c93d960cd246b8ecfadf33a7c08b",
-   "inputs": "9dc5ccaba10d152415b6212347581d93baabad1c943dd8a6779be7bf7418a622",
+   "file": "ui_1-2b534407fa4d.bundle",
+   "size": 63485530,
+   "sha256": "c32ff073b1e79078e4e544d0a019cdc7ea6d0fba1455011652315ab64fca2989",
+   "inputs": "2b534407fa4dbe9dff50523d49bb0b0093bb4febf1548d8975728ef3c71ba105",
    "probe": "res/assets/ui/abilities/huntress_e",
-   "assets": 149
+   "assets": 154
   },
   {
    "name": "ui_2",
-   "file": "ui_2-84e767b620a4.bundle",
-   "size": 82334650,
-   "sha256": "bb03a1e9ea7eb3d1a90042212ab190dd8e26ba754e6ea58a96190c38ecc36cae",
-   "inputs": "84e767b620a486d5c4ddd4afd4c7dcf497ca650b7ab327d615baf4d16d625875",
+   "file": "ui_2-97a642339f45.bundle",
+   "size": 82361228,
+   "sha256": "285b1969d58d1666b9a0f7d1f48e6bd3c0ad2e0e0eba6c135122fec177bfe940",
+   "inputs": "97a642339f45c47fdb2e193229cb8e00951777b2ef701bc89359d6f97f883407",
    "probe": "res/assets/ui/clans/emblem_tower",
-   "assets": 132
+   "assets": 119
   },
   {
    "name": "ui_3",
-   "file": "ui_3-ea7bfeaed243.bundle",
-   "size": 42907687,
-   "sha256": "95c6eb96b079af8ca7a9097b59306576e5a11dad9a51d189890d27d8fcac02c7",
-   "inputs": "ea7bfeaed243bee2e7f6a78ef7b5e98de46ade9afba98bc6a8f0e1a0ab5007c9",
-   "probe": "res/assets/ui/kit/btn_square_green",
-   "assets": 158
+   "file": "ui_3-5c636aef8958.bundle",
+   "size": 50313304,
+   "sha256": "d48f8925fb2db3762944f43b82bf6266e41355c1c898c2c7e12e93f30362f2f1",
+   "inputs": "5c636aef8958793ce5aa31b0ec4a052d71908d3a34787bbd9ff9bd24a2f2209b",
+   "probe": "res/assets/ui/items/knife",
+   "assets": 211
   },
   {
    "name": "ui_4",
@@ -71,21 +71,21 @@
   },
   {
    "name": "characters_2a",
-   "file": "characters_2a-14d39061b31a.bundle",
-   "size": 70607861,
-   "sha256": "94d5496bb0d26aa1d73d27b6e0695222f22d0d0b8e1d56dd523291fa9ec3d768",
-   "inputs": "14d39061b31a106b9786aa074f2bc96165c42cc515f393735ebc6e59ad80a37a",
+   "file": "characters_2a-9f5708c2a928.bundle",
+   "size": 73026051,
+   "sha256": "1e117d5d5ba2a3c7432dd8064992c26ec65044df1b802f7bf024d99d309a37d8",
+   "inputs": "9f5708c2a928f232fea0ab24996e1dc790c9f4980a95f08b896b2006bfaee551",
    "probe": "res/assets/skins/huntress_shadowmoon",
-   "assets": 30
+   "assets": 31
   },
   {
    "name": "characters_2b",
-   "file": "characters_2b-463589f1f84a.bundle",
-   "size": 70285712,
-   "sha256": "06acfbeaf45e84b252a488246ce0d6042aee57a025e8a9efda6bdc56828992f5",
-   "inputs": "463589f1f84af2d85d32c13ad898292eb57ddc2b7d26e6729c2f6246d33a23d0",
+   "file": "characters_2b-b2f6b8cdf58d.bundle",
+   "size": 72671893,
+   "sha256": "2c5fc49fc44a1c527643474e478821e59c225d5afd645f57e7ed6560c5644123",
+   "inputs": "b2f6b8cdf58dc61a0283324b016f7e8a09afdf50a4cd42f254f671c0e5b0cec8",
    "probe": "res/assets/skins/naiad_coral",
-   "assets": 30
+   "assets": 31
   },
   {
    "name": "characters_3",
@@ -152,93 +152,93 @@
   },
   {
    "name": "heroes_7",
-   "file": "heroes_7-fe177aa7c499.bundle",
-   "size": 32497221,
-   "sha256": "15ee4c27053278d2e1fa9092a3287d60890a8d4d483da1b7713c818c7f4befe9",
-   "inputs": "fe177aa7c49930b53a26d4b3b53df4bf53a7c9b541a391c6748548d9d9f06d68",
-   "probe": "res/assets/meshy/grete/rig",
+   "file": "heroes_7-5d508b97830d.bundle",
+   "size": 36226570,
+   "sha256": "491ae44a54b07f91f343f91fb542a20785d4d252d3825d81079c65ce30eb2205",
+   "inputs": "5d508b97830d170a0608ae5a3c780014d92f78893360946034bef3cb5c8d2e0c",
+   "probe": "res/assets/meshy/fizzwick/rig",
    "assets": 40
   },
   {
    "name": "heroes_8",
-   "file": "heroes_8-05ed52a5bb3e.bundle",
-   "size": 31597636,
-   "sha256": "6f8da0b1c3eb36d6a8c47cc82ca50a06f0aca64df166d30c98ef1140951da389",
-   "inputs": "05ed52a5bb3e760e923b46a068717784a5d97578c8350936615c77d0e55f58f4",
+   "file": "heroes_8-9074723bb598.bundle",
+   "size": 30283445,
+   "sha256": "0f0b751289d722272e736f7f7f3ddd9e283647ff835a238438abbc9eb4d183c7",
+   "inputs": "9074723bb5987c4736e253d9c01cefdc51987cbf88774f76e28b60edee8e1bc5",
    "probe": "res/assets/meshy/knight/rig",
    "assets": 40
   },
   {
    "name": "heroes_9",
-   "file": "heroes_9-5590bb8a98b7.bundle",
-   "size": 30807312,
-   "sha256": "36693a5f1a36a1772e26b99eaa03e0f4b185339c9b62af458e4f9dab70e9662c",
-   "inputs": "5590bb8a98b75aa9d765aff33919af824832e0e2e425bf9a24c369647e528dc1",
+   "file": "heroes_9-7c5c03e91def.bundle",
+   "size": 34196051,
+   "sha256": "f41d86416dcebbd8c7b400bd55c3e481125672c4fae06e61e4facfe6ce690da9",
+   "inputs": "7c5c03e91def86c4c2690fa98d7572ea6771c1ba75dd8fd415caeabc90d5f471",
    "probe": "res/assets/meshy/mage/rig",
-   "assets": 56
+   "assets": 49
   },
   {
    "name": "heroes_10",
-   "file": "heroes_10-e45cb358f7a0.bundle",
-   "size": 27483135,
-   "sha256": "3a16ab3a39e03cd5b7c378e0fb4ad7b488341fc6a815c40be1c33e3f3517c082",
-   "inputs": "e45cb358f7a0fa5053ff9b7032c88b28a60377ebb75a7f57b08ae6c07dc27e77",
+   "file": "heroes_10-1220f1d1c3c5.bundle",
+   "size": 28889364,
+   "sha256": "9e83de8b9407d057610b820f0df5e1bafcbc7f02a567c16e309cd2d5834a4c02",
+   "inputs": "1220f1d1c3c58091545a571e35b8d1ccc2cac993fca7772eaa22ead6f360eb40",
+   "probe": "res/assets/meshy/minion_siege/rig",
+   "assets": 47
+  },
+  {
+   "name": "heroes_11",
+   "file": "heroes_11-045e0ab55d3d.bundle",
+   "size": 26068504,
+   "sha256": "d0de81ca93e4dcfc4d14100fb7061c10d66f3222f32d0fff1a56fad50a1198cd",
+   "inputs": "045e0ab55d3d6852650149156e532a1221735f961b76c96e8cd686fa6ea7434a",
    "probe": "res/assets/meshy/musketeer/rig",
    "assets": 40
   },
   {
-   "name": "heroes_11",
-   "file": "heroes_11-3dbf65a899df.bundle",
-   "size": 27468785,
-   "sha256": "344027535dda912170543d55b1c04f3707eb9cc93d7db2757e7c63c068f07afa",
-   "inputs": "3dbf65a899dfc133f2e49e0dc027e49f7dc15715b5df693de57fab56cb504527",
+   "name": "heroes_12",
+   "file": "heroes_12-b291b260d4fe.bundle",
+   "size": 27330009,
+   "sha256": "40bdcacd76029b61cf7b5ab37a749a003b5af7448527e4780bf4689c9240c118",
+   "inputs": "b291b260d4feaf614cb79983a6137c88fe5a0c1093610291fb1692ec0eedf1d2",
    "probe": "res/assets/meshy/necromancer/rig",
    "assets": 40
   },
   {
-   "name": "heroes_12",
-   "file": "heroes_12-327ba64d76a2.bundle",
-   "size": 25316458,
-   "sha256": "0cd86f1dd99892c4e3f782381633eacc668b2a5b2b71441df41fcb1ffc607f3b",
-   "inputs": "327ba64d76a2930128718780d92e37bb9d22b0dcbdfa726e3f2b7c47b5476f0a",
+   "name": "heroes_13",
+   "file": "heroes_13-ca607bdfbc4f.bundle",
+   "size": 24860876,
+   "sha256": "bb45616a00940bbea021fe8de513c0c7b87fd7e8e35188cf6ebb085188ffd5b1",
+   "inputs": "ca607bdfbc4f67b206d3d1f535d9983ee192d6edfb138190e44600fc48035dba",
    "probe": "res/assets/meshy/priest/rig",
    "assets": 40
   },
   {
-   "name": "heroes_13",
-   "file": "heroes_13-851c5141d73d.bundle",
-   "size": 30492343,
-   "sha256": "edeb6d030fcfa4269f1050c6390e8099600d90e38adbcd834d865f2f96d66c21",
-   "inputs": "851c5141d73d273ebe1f70f9348db1410fe623dc7a90eba41d6729dacfcbffd3",
-   "probe": "res/assets/meshy/ranger/rig",
-   "assets": 40
-  },
-  {
    "name": "heroes_14",
-   "file": "heroes_14-e1097e46827d.bundle",
-   "size": 28972196,
-   "sha256": "71b3632aaae8ef3e44ad0f267e16251b61b14c7b0de3028d71761c677793b0f7",
-   "inputs": "e1097e46827dcadc17c99efe63f2305ce1e8aa460945ac7ef10200e0d411ae18",
+   "file": "heroes_14-c7dcf6afd9c3.bundle",
+   "size": 29542479,
+   "sha256": "49efd07b0184ed595a556fa98ec4613138ce4f4a8c9ee143e562cbca916e46ca",
+   "inputs": "c7dcf6afd9c3dc218461b85455ae0a17feac917d26bcf854afcb007d268348f6",
    "probe": "res/assets/meshy/rogue/rig",
    "assets": 40
   },
   {
    "name": "heroes_15",
-   "file": "heroes_15-4946986b353a.bundle",
-   "size": 29364910,
-   "sha256": "4f260370c4df46976ea37a9a1b2abc46d88b5ecb4fc50a8e47c654562254f752",
-   "inputs": "4946986b353a356542a44920c52b15b1aa789fbdc2681e8d200737195569bf35",
-   "probe": "res/assets/meshy/sniper/rig",
+   "file": "heroes_15-2f3ca7a66c4e.bundle",
+   "size": 31049762,
+   "sha256": "f79408a585854b9904ee1b9f36421a87a7763235b8c6d886b687f476995996b0",
+   "inputs": "2f3ca7a66c4e5644f6ca3076444382e40b19abc05def8ab35eea3315404158c7",
+   "probe": "res/assets/meshy/sela/rig",
    "assets": 40
   },
   {
    "name": "heroes_16",
-   "file": "heroes_16-8b99a496e10f.bundle",
-   "size": 16424658,
-   "sha256": "5315063e50054f9352f0c8469c7aa5301e813970c5b5b93bfa968f8375d0cec2",
-   "inputs": "8b99a496e10f4a80c5ce3e183beeac055096c78449a0ac35d1ea98968f2a61e5",
+   "file": "heroes_16-441c532c5f4e.bundle",
+   "size": 31492758,
+   "sha256": "b6a172abb7badc76aeed0e615d596cd7f9375a6e667cfb935d8ef2c3cb09c422",
+   "inputs": "441c532c5f4e68362f17c578c4093e568cf47c3db022c7bab9daadc6c462fceb",
    "probe": "res/assets/meshy/worker/rig",
-   "assets": 28
+   "assets": 48
   },
   {
    "name": "world_1",
@@ -260,12 +260,12 @@
   },
   {
    "name": "world_3",
-   "file": "world_3-94b949b73870.bundle",
-   "size": 38069316,
-   "sha256": "400bf6ec7a8bbade3d32061cf6ad19fa3f1f1c222984686713d60956f6cb0bbd",
-   "inputs": "94b949b73870f94ab6b462f9a4ac744afdb0608db964044f1f8b04d2d3ac4c50",
+   "file": "world_3-918346feac83.bundle",
+   "size": 39377046,
+   "sha256": "5af92fa287e90e8b338edf86ec9502be7d4b44f18eb23c2ff4f2418f10605839",
+   "inputs": "918346feac8300207c46e21dbca146f88669d89d0fdac3dc53a895c2c7650599",
    "probe": "res/assets/meshy/weapons/crescent_staff_0",
-   "assets": 202
+   "assets": 208
   },
   {
    "name": "world_4",
@@ -296,12 +296,12 @@
   },
   {
    "name": "audio",
-   "file": "audio-b14f79ba6547.bundle",
-   "size": 13313487,
-   "sha256": "fd58223c3eac43a496c1e2141e30e8dd2fc229446cbef1c2b7371926edbbd7bf",
-   "inputs": "b14f79ba654735fb8eaa53e9879f1fd0aecb0e41843ccd0b45058744a5130b5c",
+   "file": "audio-e67bf5f1e100.bundle",
+   "size": 13352188,
+   "sha256": "cf79e90857e9868a8a8cfa1c74fc58a3746267aed7578466bd52a1fcfac3de1c",
+   "inputs": "e67bf5f1e100b0d40cbcb793d65314b46cfdf3557c04fc5a313535644a8a4a24",
    "probe": "res/assets/sounds/slider",
-   "assets": 471
+   "assets": 476
   }
  ]
 }
