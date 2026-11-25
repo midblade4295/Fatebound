@@ -52,6 +52,9 @@ var _chunk_mesh: BoxMesh
 var _ring_tex: GradientTexture2D
 var _chimney_clock: float = 0.0
 var _sun: DirectionalLight3D
+var _rim: DirectionalLight3D
+var _fill: DirectionalLight3D
+var _env: Environment
 var _warm: Node3D                  # one of everything, drawn out of sight for a moment at the start
 var _warm_frames: int = 0
 var _stock_plan: Array = []        # [card_id, arm, team, men]: figures to keep built ahead of time
@@ -180,6 +183,7 @@ func _build_environment() -> void:
 	env.glow_bloom = 0.04
 	env.glow_hdr_threshold = 0.95
 	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SOFTLIGHT
+	_env = env
 	var we := WorldEnvironment.new()
 	we.environment = env
 	add_child(we)
@@ -207,6 +211,7 @@ func _build_environment() -> void:
 	fill.light_energy = 0.34
 	fill.rotation_degrees = Vector3(-42.0, 12.0, 0.0)
 	fill.shadow_enabled = false
+	_fill = fill
 	add_child(fill)
 
 	var rim := DirectionalLight3D.new()             # crisp cool rim from behind the field
@@ -214,6 +219,7 @@ func _build_environment() -> void:
 	rim.light_energy = 0.42
 	rim.rotation_degrees = Vector3(-30.0, 168.0, 0.0)     # from beyond the far end, back toward the camera
 	rim.shadow_enabled = false
+	_rim = rim
 	add_child(rim)
 
 	camera = Camera3D.new()
@@ -538,6 +544,22 @@ func warm_up(cards: Dictionary) -> void:
 	puff(mid, -0.2, 0.05, 0.1)
 	_light_flash(to_world(mid, 0.2), 0.01, 0.5, 0.1)
 	_warm_frames = 6
+
+
+## What each quality level (see quality.gd) switches off in the 3D scene.
+func set_quality(level: int) -> void:
+	if _env != null:
+		_env.glow_enabled = level < 1
+	if _rim != null:
+		_rim.visible = level < 2
+	if _fill != null:
+		_fill.visible = level < 5
+	if arena != null:
+		arena.set_tree_shadows(level < 3)
+		arena.set_plain_ground(level >= 4)
+		arena.set_extras(level < 5)
+	if _sun != null:
+		_sun.shadow_enabled = level < 4
 
 
 ## True while warm_up() still has things on show or figures left to build for the first deploys.

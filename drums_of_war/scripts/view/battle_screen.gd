@@ -7,6 +7,7 @@ const Bot = preload("res://scripts/sim/bot.gd")
 const World = preload("res://scripts/view/battle_world.gd")
 const Kit = preload("res://scripts/view/ui_kit.gd")
 const CardView = preload("res://scripts/view/card_view.gd")
+const Quality = preload("res://scripts/view/quality.gd")
 
 const DECK := ["line_infantry", "skirmishers", "militia", "scouts", "heavy_cavalry", "field_gun", "fire", "rally"]
 
@@ -88,10 +89,12 @@ var _fps_last: int = 0
 var _fps_worst: float = 0.0
 var _fps_text: String = ""
 var show_fps: bool = true
+var quality: Quality
 
 
 func _ready() -> void:
 	kit = Kit.new()
+	quality = Quality.new()
 	texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED      # the wood grain tiles
 	cards = Sim.load_cards()
 	if match_seed == 0:
@@ -172,10 +175,7 @@ func _layout() -> void:
 	hud_y = tray.position.y
 	banner = Rect2(ox + 50.0, top + 14.0, 440.0, 42.0)
 	plaque = Rect2(ox + 210.0, top + 8.0, 120.0, 56.0)
-	# A phone screen has more pixels than this scene needs: draw the 3D view at no more than
-	# about 960 across and let the screen scale it up. The HUD stays at full sharpness.
-	var wide := float(mini(DisplayServer.window_get_size().x, DisplayServer.window_get_size().y))
-	get_viewport().scaling_3d_scale = clampf(960.0 / maxf(wide, 1.0), 0.67, 1.0)
+	quality.apply(world, get_viewport())
 	# The field fits between the banner and the tray; its near edge tucks just under the tray.
 	var field_top := plaque.end.y + 12.0
 	world.field_rect_design = Rect2(22.0, field_top, screen.x - 44.0, hud_y + 8.0 - field_top)
@@ -257,6 +257,9 @@ func _on_press(p: Vector2) -> void:
 	if sim.phase == Sim.PHASE_OVER:
 		start_match(match_seed + 1)
 		return
+	if show_fps and _fps_rect().has_point(p):
+		quality.restart(world, get_viewport())       # tap the readout: judge quality afresh from the top
+		return
 	_press_slot = _card_at(p)
 	_press_at = p
 
@@ -284,6 +287,10 @@ func _on_release(p: Vector2) -> void:
 		selected = -1
 
 
+func _fps_rect() -> Rect2:
+	return Rect2(ox + 22.0, plaque.end.y + 2.0, 200.0, 26.0)
+
+
 ## Frames a second, and the longest single frame in the last second (a hitch shows there even
 ## when the average looks fine). Measured in real time, so hit-stop does not distort it.
 func _count_frames() -> void:
@@ -293,7 +300,11 @@ func _count_frames() -> void:
 	_fps_last = now
 	_fps_frames += 1
 	if now - _fps_since >= 1000:
-		_fps_text = "%d FPS   worst %d ms" % [int(round(_fps_frames * 1000.0 / maxf(1.0, float(now - _fps_since)))), int(_fps_worst)]
+		var fps := _fps_frames * 1000.0 / maxf(1.0, float(now - _fps_since))
+		# Judge the frame rate only while a battle is actually running in front of the player.
+		if not world.warming() and _curtain <= 0.0 and sim.phase != Sim.PHASE_OVER:
+			quality.report(fps, world, get_viewport())
+		_fps_text = "%d FPS   worst %d ms   Q%d" % [int(round(fps)), int(_fps_worst), quality.level]
 		_fps_frames = 0
 		_fps_since = now
 		_fps_worst = 0.0

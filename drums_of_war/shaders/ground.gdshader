@@ -8,6 +8,7 @@
 shader_type spatial;
 uniform sampler2D noise : filter_linear_mipmap, repeat_enable;
 uniform vec2 worn[6];
+uniform bool plain = false;         // slow devices: skip the pebbles, cloud shadow and dappled light
 varying vec3 wp;
 void vertex() { wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz; }
 void fragment() {
@@ -49,7 +50,7 @@ void fragment() {
 	// Banks of sand and gravel, then the darker bed under the water.
 	// The bank: grass thins to sand before the ground even drops, then sand and pebbles down
 	// to the waterline, so the meadow and the creek blend instead of meeting at a line.
-	float n4 = texture(noise, wp.xz * 2.3).r;
+	float n4 = plain ? n3 : texture(noise, wp.xz * 2.3).r;
 	float near_water = 1.0 - smoothstep(1.25, 2.1 + (n2 - 0.5) * 0.7, abs(wp.z));
 	col = mix(col, vec3(0.74, 0.67, 0.47), near_water * 0.55);
 	float bank = smoothstep(-0.01, -0.2, wp.y);
@@ -59,11 +60,13 @@ void fragment() {
 	col = mix(col, sand, bank);
 	col = mix(col, vec3(0.3, 0.33, 0.27) * (0.8 + 0.4 * n3), smoothstep(-0.55, -1.05, wp.y));
 	// Slow cloud shadow across everything, and dappled sun where the woods overhang the edges.
-	float cloud = texture(noise, wp.xz * 0.011 + TIME * vec2(0.008, 0.004)).r;
-	col *= mix(0.9, 1.04, smoothstep(0.34, 0.66, cloud));
-	float dapple = texture(noise, wp.xz * 0.5 + TIME * vec2(0.012, 0.007)).r;
-	float shade_edge = clamp(smoothstep(6.6, 10.0, abs(wp.x)) + smoothstep(15.0, 19.0, abs(wp.z)), 0.0, 1.0);
-	col *= mix(1.0, mix(0.72, 1.16, smoothstep(0.42, 0.6, dapple)), shade_edge);
+	if (!plain) {
+		float cloud = texture(noise, wp.xz * 0.011 + TIME * vec2(0.008, 0.004)).r;
+		col *= mix(0.9, 1.04, smoothstep(0.34, 0.66, cloud));
+		float dapple = texture(noise, wp.xz * 0.5 + TIME * vec2(0.012, 0.007)).r;
+		float shade_edge = clamp(smoothstep(6.6, 10.0, abs(wp.x)) + smoothstep(15.0, 19.0, abs(wp.z)), 0.0, 1.0);
+		col *= mix(1.0, mix(0.72, 1.16, smoothstep(0.42, 0.6, dapple)), shade_edge);
+	}
 	// The colours above are written as seen on screen. Flat ground takes the full sun, the fill
 	// and the sky at once, so it is laid in a little under and the lighting brings it back up.
 	ALBEDO = pow(col, vec3(2.2)) * 0.66;

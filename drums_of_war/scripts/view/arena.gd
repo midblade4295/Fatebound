@@ -27,6 +27,9 @@ const LEAVES := [Color("c8291a"), Color("e2531a"), Color("f08a1c"), Color("f6c22
 
 var _structure_spots: Array = []  # Vector2 (x, z) of each structure, for worn earth and clearings
 var _rng: GsRng
+var _shadow_trees: Array = []     # the tree meshes that cast real shadows
+var _ground_mat: ShaderMaterial
+var _extras: Array = []           # falling leaves and motes: pretty, and the first to go on a slow device
 
 
 # ==========================================================================================
@@ -75,6 +78,24 @@ func build(structure_spots: Array) -> void:
 	_build_harvest()
 	_build_leaves()
 	_build_light_effects()
+
+
+## Whether the trees are drawn into the sun's shadow map (their soft pools on the ground stay).
+func set_tree_shadows(on: bool) -> void:
+	for mi: MeshInstance3D in _shadow_trees:
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if on else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+
+## The ground without its moving cloud shadow, dappled light and pebbles: three fewer texture
+## reads on every pixel of grass.
+func set_plain_ground(on: bool) -> void:
+	if _ground_mat != null:
+		_ground_mat.set_shader_parameter("plain", on)
+
+
+func set_extras(on: bool) -> void:
+	for node: Node3D in _extras:
+		node.visible = on
 
 
 func _leaf_colour() -> Color:
@@ -144,6 +165,7 @@ func _build_ground() -> void:
 		worn.append(_structure_spots[i] if i < _structure_spots.size() else Vector2(999, 999))
 	mat.set_shader_parameter("worn", worn)
 	ground.material_override = mat
+	_ground_mat = mat
 	add_child(ground)
 
 
@@ -474,6 +496,8 @@ func _plant(model: String, pos: Vector3, tall: float, shadow: bool = true, detai
 		mi.material_override = _foliage_mats[model]
 		if not shadow:
 			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		else:
+			_shadow_trees.append(mi)
 		mi.lod_bias = detail              # trees behind the front rank are half hidden: fewer triangles
 		mi.set_instance_shader_parameter("leaf_col", tint)
 		mi.set_instance_shader_parameter("sway", _rng.range_f(0.0, TAU))
@@ -570,6 +594,9 @@ func _tree_shade(spots: Array) -> void:
 	var plane := PlaneMesh.new()
 	plane.size = Vector2(1.0, 1.0)
 	mm.mesh = plane
+	# Only the two ranks nearest the field: further back the ground is hidden under canopy,
+	# and every pool is a see-through sheet the screen has to blend.
+	spots = spots.filter(func(s: Array) -> bool: return int(s[4]) < 2)
 	mm.instance_count = spots.size()
 	for i in spots.size():
 		var size: float = float(spots[i][2]) * 1.15
@@ -730,41 +757,12 @@ func _build_leaves() -> void:
 	p.color_ramp = fade
 	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(p)
+	_extras.append(p)
 
 
 # --- Light -----------------------------------------------------------------------------------
 
 func _build_light_effects() -> void:
-	# Shafts of low sun slanting in over the eastern woods: faint additive sheets that shimmer.
-	var beam := ShaderMaterial.new()
-	beam.shader = Shader.new()
-	beam.shader.code = """
-shader_type spatial;
-render_mode unshaded, blend_add, cull_disabled, depth_draw_never, shadows_disabled;
-uniform sampler2D noise : filter_linear_mipmap, repeat_enable;
-instance uniform float seed = 0.0;
-void fragment() {
-	float across = 1.0 - abs(UV.x * 2.0 - 1.0);
-	float along = smoothstep(0.0, 0.15, UV.y) * (1.0 - smoothstep(0.55, 1.0, UV.y));
-	float shimmer = texture(noise, vec2(UV.x * 0.6 + seed, UV.y * 0.25 + TIME * 0.01 + seed)).r;
-	ALBEDO = vec3(1.0, 0.82, 0.5);
-	ALPHA = across * across * along * (0.35 + 0.65 * shimmer) * 0.04;
-}
-"""
-	beam.set_shader_parameter("noise", _noise(0.03, 51))
-	var sheet := PlaneMesh.new()
-	sheet.size = Vector2(5.0, 30.0)
-	for i in 6:
-		var mi := MeshInstance3D.new()
-		mi.mesh = sheet
-		mi.material_override = beam
-		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		# Each sheet runs from high over the right-hand woods down across the field.
-		mi.position = Vector3(4.0 + _rng.range_f(-1.5, 1.5), 3.2, -15.0 + i * 6.0 + _rng.range_f(-1.0, 1.0))
-		mi.rotation = Vector3(0.0, deg_to_rad(62.0 + _rng.range_f(-6.0, 6.0)), deg_to_rad(-14.0))
-		mi.set_instance_shader_parameter("seed", _rng.next_f() * 10.0)
-		add_child(mi)
-
 	# Motes in the sunlight: tiny bright specks drifting over the grass.
 	var speck := StandardMaterial3D.new()
 	speck.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -795,3 +793,4 @@ void fragment() {
 	motes.color_ramp = glow
 	motes.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(motes)
+	_extras.append(motes)
