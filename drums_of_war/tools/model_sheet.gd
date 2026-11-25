@@ -5,7 +5,8 @@ extends SceneTree
 ##   xvfb-run -a $GODOT --rendering-method mobile --resolution 1280x720 --path drums_of_war -s tools/model_sheet.gd
 ## Environment: SHEET_OUT (default res://captures/model_sheet.png), SHEET_NAMES (comma list),
 ## SHEET_CLIP (animation clip to pose rigged characters in), SHEET_TIME (seconds into the clip),
-## SHEET_FRONT (set to view the models from the front), SHEET_MUSKET (set to put muskets in hands).
+## SHEET_FRONT (set to view the models from the front), SHEET_MUSKET (a drill position number
+## from musket_drill.gd, to put muskets in hands).
 
 const Models = preload("res://scripts/view/models.gd")
 
@@ -58,8 +59,10 @@ func _initialize() -> void:
 			var node := Models.make(name, team)
 			if node == null:
 				continue
-			if OS.has_environment("SHEET_MUSKET"):
-				Models._attach_musket(node, name)
+			if OS.has_environment("SHEET_MUSKET") and node.find_child("Skeleton3D", true, false) != null:
+				Models._attach_musket(node)
+				if node.has_meta("drill"):
+					node.get_meta("drill").snap_drill(int(OS.get_environment("SHEET_MUSKET")))
 			if name in ["farmhouse", "battery", "bridge", "fence"]:
 				Models.fit_footprint(node, float(SIZES[name]), float(SIZES[name]))
 			else:

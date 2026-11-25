@@ -5,6 +5,7 @@ extends Node3D
 
 const Sim = preload("res://scripts/sim/battle_sim.gd")
 const Models = preload("res://scripts/view/models.gd")
+const Drill = preload("res://scripts/view/musket_drill.gd").Drill
 
 const COL_BLUE := Color("2456c9")
 const COL_RED := Color("c81e3a")
@@ -36,6 +37,7 @@ var _puff_mesh: MultiMeshInstance3D
 var _flashes: Array = []              # {node, age, life}
 var _materials: Dictionary = {}
 var _time: float = 0.0
+var cheering_side: int = -1      # the winners, once the match is over
 
 
 # ==========================================================================================
@@ -46,6 +48,12 @@ func to_world(p: Vector2, height: float = 0.0) -> Vector3:
 	if local_side == 0:
 		return Vector3(p.x - Sim.FIELD_W * 0.5, height, Sim.FIELD_H * 0.5 - p.y)
 	return Vector3(Sim.FIELD_W * 0.5 - p.x, height, p.y - Sim.FIELD_H * 0.5)
+
+
+## Height of the ground a regiment stands on at a field position: 0 on grass, raised over the
+## bridge, lowered where a ford is waded.
+func ground_height(_p: Vector2) -> float:
+	return 0.0
 
 
 func dir_to_world(d: Vector2) -> Vector3:
@@ -457,6 +465,7 @@ func reset(new_sim: Sim) -> void:
 			node.scale = Vector3.ONE
 			node.position.y = 0.0
 			_structure_dead[s.id] = false
+	cheering_side = -1
 
 
 func _process(delta: float) -> void:
@@ -618,6 +627,8 @@ func on_event(e: Dictionary) -> void:
 				puff(pos + Vector2(cos(i * 0.9), sin(i * 0.9)) * 0.9, 0.6 + 0.12 * (i % 4), 1.1, 3.4)
 		"destroyed_regiment":
 			puff(pos, 0.5, 0.6, 1.4)
+		"over":
+			cheering_side = int(e["winner"])
 
 
 # ==========================================================================================
@@ -641,6 +652,8 @@ class RegimentView extends RefCounted:
 	var anim: String = ""
 	var uses_model: bool = false
 	var phase: float = 0.0
+	var fire_hold: float = 0.0
+	var moving_for: float = 0.0
 
 	func _init(w: Node3D, r: Sim.Regiment) -> void:
 		world = w
@@ -680,18 +693,27 @@ class RegimentView extends RefCounted:
 	## The regiment has left the rules: its remaining men fall, then the node goes.
 	func release() -> void:
 		for s: Node3D in soldiers:
-			if uses_model:
-				Models.play(s, "death", true)
-			world.drop_soldier(s, uses_model)
+			_fall(s)
 		soldiers.clear()
 		root.queue_free()
 
+	func _fall(s: Node3D) -> void:
+		if uses_model:
+			Models.play(s, "death_forward" if (soldiers.size() + int(phase * 3.0)) % 2 == 0 else "death", true)
+		if s.has_meta("drill"):
+			s.get_meta("drill").snap_drill(Drill.DROPPED)
+		world.drop_soldier(s, uses_model)
+
+	## A volley has just gone off: muskets are level at that instant, then kick.
 	func fire_kick() -> void:
 		kick = 1.0
-		if uses_model:
-			for s: Node3D in soldiers:
-				Models.play(s, "fire", true)
-			anim = "fire"
+		fire_hold = 0.34
+		for i in soldiers.size():
+			var s: Node3D = soldiers[i]
+			if s.has_meta("drill"):
+				var d = s.get_meta("drill")
+				d.snap_drill(Drill.AIM)
+				d.set_drill(Drill.RECOIL, 0.05 + 0.02 * i)
 
 	func _offsets(r: Sim.Regiment, n: int) -> Array:
 		var out: Array = []
@@ -725,31 +747,54 @@ class RegimentView extends RefCounted:
 	func sync(r: Sim.Regiment, delta: float) -> void:
 		# Losses: the surplus men fall where they stand.
 		while soldiers.size() > maxi(r.men, 0):
-			var gone: Node3D = soldiers.pop_back()
-			if uses_model:
-				Models.play(gone, "death", true)
-			world.drop_soldier(gone, uses_model)
+			_fall(soldiers.pop_back())
 		var k := 1.0 - exp(-16.0 * delta)
 		var moved := r.pos.distance_to(last_pos)
 		last_pos = r.pos
 		shown_pos = shown_pos.lerp(r.pos, k)
-		root.position = world.to_world(shown_pos)
+		root.position = world.to_world(shown_pos, world.ground_height(shown_pos))
 		var want: Vector3 = world.dir_to_world(r.facing)
 		shown_dir = shown_dir.slerp(want, 1.0 - exp(-9.0 * delta)) if shown_dir.length() > 0.01 and want.length() > 0.01 else want
 		if shown_dir.length() > 0.01:
 			root.rotation.y = atan2(-shown_dir.x, -shown_dir.z)
 		ring.visible = r.state != Sim.ST_ROUT
 		kick = maxf(0.0, kick - delta * 4.0)
-		var moving := moved > 0.0005
-		var want_anim := "idle"
-		if r.state == Sim.ST_ROUT:
-			want_anim = "run"
+		fire_hold = maxf(0.0, fire_hold - delta)
+		# The rules tick 20 times a second, so "moved this frame" flickers; smooth it.
+		moving_for = minf(moving_for + delta, 0.3) if moved > 0.0005 else maxf(moving_for - delta, 0.0)
+		var moving := moving_for > 0.08
+		var routed := r.state == Sim.ST_ROUT
+		var won: bool = world.cheering_side == r.side
+
+		# What the body does, and what the musket does.
+		var clip := "idle_calm"
+		var drill := Drill.PORT
+		if routed:
+			clip = "panic"
+			drill = Drill.NONE
+		elif won:
+			clip = "cheer"
+		elif r.in_melee and arm != "cavalry":
+			drill = Drill.CHARGE
+		elif r.state == Sim.ST_SQUARE or r.state == Sim.ST_FORMING:
+			clip = "kneel"
+			drill = Drill.CHARGE
 		elif moving:
-			want_anim = "run" if arm == "cavalry" else "walk"
-		if uses_model and want_anim != anim and kick <= 0.0:
-			anim = want_anim
+			clip = "run" if arm == "cavalry" else "march"
+			drill = Drill.SHOULDER
+		elif r.reload > 0.0 and r.def.has("reload"):
+			var since := float(r.def["reload"]) - r.reload
+			if since < 0.32:
+				drill = Drill.RECOIL
+			elif r.reload < 0.55:
+				drill = Drill.AIM            # coming up to the shoulder for the next volley
+			else:
+				drill = Drill.LOAD
+		if uses_model and clip != anim:
+			anim = clip
 			for s: Node3D in soldiers:
 				Models.play(s, anim, false)
+
 		var offs := _offsets(r, soldiers.size())
 		var t: float = world._time
 		for i in soldiers.size():
@@ -761,7 +806,20 @@ class RegimentView extends RefCounted:
 			if r.formation == "square":
 				face = atan2(-target.x, -target.z)
 			s.rotation.y = lerp_angle(s.rotation.y, face, 1.0 - exp(-8.0 * delta))
-			if not uses_model:
+			if s.has_meta("drill"):
+				var d = s.get_meta("drill")
+				if fire_hold <= 0.0:
+					d.set_drill(drill, 0.04 * i + 0.03 * ((i * 7 + int(phase)) % 3))
+				d.jab = (0.5 + 0.5 * sin(t * 8.0 + i * 1.7)) if r.in_melee else 0.0
+			if s.has_meta("gallop"):
+				# Mounted models: the shader works the legs; the whole figure pitches a little.
+				var g: float = s.get_meta("gallop_now", 0.0)
+				g = lerpf(g, 1.0 if (moving or routed) else 0.0, 1.0 - exp(-6.0 * delta))
+				s.set_meta("gallop_now", g)
+				for mi: MeshInstance3D in s.get_meta("gallop"):
+					mi.set_instance_shader_parameter("gallop", g)
+				s.rotation.x = kick * 0.1
+			elif not uses_model:
 				# Stand-in figures move like toys: hop when marching, rock back when firing.
 				var hop := 0.0
 				if moving:

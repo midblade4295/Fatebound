@@ -5,6 +5,8 @@ extends RefCounted
 ##
 ## team 0 is the local player's army (Union blue); team 1 is the enemy (Confederate crimson).
 
+const MusketDrill = preload("res://scripts/view/musket_drill.gd")
+
 const DIR := "res://assets/models/"
 
 # card id -> [team 0 model, team 1 model]
@@ -23,8 +25,11 @@ const SHARED_CLIPS := "u_line"     # rigged characters without clips of their ow
 const YAW := {"u_line": 180.0, "c_line": 180.0, "u_skirm": 180.0, "c_skirm": 180.0, "u_militia": 180.0,
 		"c_militia": 180.0, "u_cav": 180.0, "c_cav": 180.0, "cannon": -90.0, "battery": -90.0,
 		"bridge": 90.0, "fence": 90.0}
-const CLIPS := ["idle", "walk", "run", "fire", "death"]
-const LOOPING := ["idle", "walk", "run"]
+const CLIPS := ["idle", "walk", "run", "fire", "death", "idle_calm", "march", "panic", "death_forward", "hit", "cheer", "stab", "kneel"]
+const LOOPING := ["idle", "walk", "run", "idle_calm", "march", "panic", "cheer"]
+# What to play when a character has no clip of that name.
+const FALLBACK := {"idle_calm": "idle", "march": "walk", "panic": "run", "death_forward": "death",
+		"hit": "idle", "cheer": "idle", "stab": "idle", "kneel": "idle"}
 
 const SKIN := Color("f2c49b")
 const BLACK := Color("1c1c22")
@@ -206,14 +211,12 @@ static func play(soldier: Node3D, clip: String, restart: bool) -> void:
 	var player: AnimationPlayer = soldier.get_meta("player")
 	var full := "a/" + clip
 	if not player.has_animation(full):
-		full = "a/idle"
+		full = "a/" + String(FALLBACK.get(clip, "idle"))
 		if not player.has_animation(full):
 			return
 	if restart:
 		player.stop()
-	player.play(full, 0.12)
-	if clip == "fire" and player.has_animation("a/idle"):
-		player.queue("a/idle")
+	player.play(full, 0.2)
 
 
 ## One man (or one mounted man) for a card: the generated model if there is one, else a stand-in.
@@ -228,7 +231,7 @@ static func make_soldier(card_id: String, arm: String, team: int, world: Node3D)
 			var rigged: bool = made.find_child("Skeleton3D", true, false) != null
 			var lib := _library(model_name) if rigged else null
 			if rigged and arm == "infantry":
-				_attach_musket(made, model_name)
+				_attach_musket(made)
 			if lib != null:
 				var inner: Node3D = made.get_node("Model")
 				var player: AnimationPlayer = inner.find_child("AnimationPlayer", true, false)
@@ -240,53 +243,83 @@ static func make_soldier(card_id: String, arm: String, team: int, world: Node3D)
 						player.remove_animation_library(existing)
 				player.add_animation_library("a", lib)
 				made.set_meta("player", player)
-				play(made, "idle", false)
+				play(made, "idle_calm", false)
 				player.seek(randf() * 1.5, true)
+				player.speed_scale = randf_range(0.93, 1.07)     # so a rank is not a row of clones
+			elif arm == "cavalry":
+				_apply_gallop(made)
 			return made
 	return _stand_in_soldier(card_id, arm, team, height)
 
 
-## Where a bone sits in skeleton space at a moment of a clip, worked out from the clip's tracks
-## (bones the clip does not move keep their rest pose).
-static func _clip_pose(skeleton: Skeleton3D, anim: Animation, bone: int, time: float) -> Transform3D:
-	var chain: Array = []
-	var b := bone
-	while b >= 0:
-		chain.push_front(b)
-		b = skeleton.get_bone_parent(b)
-	var out := Transform3D.IDENTITY
-	for index: int in chain:
-		var rest := skeleton.get_bone_rest(index)
-		var pos := rest.origin
-		var rot := rest.basis.get_rotation_quaternion()
-		var bone_name := skeleton.get_bone_name(index)
-		for track in anim.get_track_count():
-			var path := anim.track_get_path(track)
-			if path.get_subname_count() == 0 or String(path.get_subname(0)) != bone_name:
-				continue
-			if anim.track_get_type(track) == Animation.TYPE_ROTATION_3D:
-				rot = anim.rotation_track_interpolate(track, time)
-			elif anim.track_get_type(track) == Animation.TYPE_POSITION_3D:
-				pos = anim.position_track_interpolate(track, time)
-		out = out * Transform3D(Basis(rot), pos)
-	return out
+## Mounted figures are single unrigged models, so their legs are worked by a vertex shader:
+## everything below the belly swings fore and aft, front and hind pairs out of step, while the
+## body bobs and rocks. The regiment view sets "gallop" (0 standing, 1 at full stretch).
+const GALLOP_SHADER := """
+shader_type spatial;
+uniform sampler2D albedo_tex : source_color, filter_linear_mipmap;
+uniform float y_min;
+uniform float y_size;
+uniform float z_mid;
+uniform float x_half;
+instance uniform float gallop = 0.0;
+instance uniform float phase = 0.0;
+void vertex() {
+	float h = (VERTEX.y - y_min) / y_size;
+	float leg = (1.0 - smoothstep(0.1, 0.34, h)) * (1.0 - smoothstep(0.45, 0.8, abs(VERTEX.x) / x_half));
+	float front = step(z_mid, VERTEX.z);
+	float t = TIME * 13.0 + phase;
+	float stride = t + front * 1.9 + sign(VERTEX.x) * 0.5;
+	VERTEX.z += sin(stride) * leg * 0.15 * y_size * gallop;
+	VERTEX.y += max(0.0, cos(stride)) * leg * 0.06 * y_size * gallop;
+	float body = 1.0 - leg;
+	VERTEX.y += (sin(t) * 0.5 + 0.5) * 0.04 * y_size * gallop * body;
+	VERTEX.y += (VERTEX.z - z_mid) * sin(t + 0.9) * 0.07 * gallop * body;
+}
+void fragment() {
+	ALBEDO = texture(albedo_tex, UV).rgb;
+	ROUGHNESS = 0.85;
+}
+"""
+
+static var _gallop_shader: Shader = null
 
 
-## Puts the musket in a rigged character's hands. It is fixed to the rear hand so that, at the
-## start of the firing clip, it lies level through both hands and points the way he faces.
-static func _attach_musket(made: Node3D, model_name: String = SHARED_CLIPS) -> void:
+static func _apply_gallop(made: Node3D) -> void:
+	if _gallop_shader == null:
+		_gallop_shader = Shader.new()
+		_gallop_shader.code = GALLOP_SHADER
+	var meshes: Array = []
+	for mi: MeshInstance3D in made.find_children("*", "MeshInstance3D", true, false):
+		if mi.mesh == null or mi.mesh.get_surface_count() == 0:
+			continue
+		var base := mi.mesh.surface_get_material(0)
+		if not (base is BaseMaterial3D) or (base as BaseMaterial3D).albedo_texture == null:
+			continue
+		var box := mi.mesh.get_aabb()
+		var mat := ShaderMaterial.new()
+		mat.shader = _gallop_shader
+		mat.set_shader_parameter("albedo_tex", (base as BaseMaterial3D).albedo_texture)
+		mat.set_shader_parameter("y_min", box.position.y)
+		mat.set_shader_parameter("y_size", box.size.y)
+		mat.set_shader_parameter("z_mid", box.get_center().z)
+		mat.set_shader_parameter("x_half", box.size.x * 0.5)
+		mi.material_override = mat
+		mi.set_instance_shader_parameter("phase", randf() * TAU)
+		mi.set_instance_shader_parameter("gallop", 0.0)
+		meshes.append(mi)
+	if not meshes.is_empty():
+		made.set_meta("gallop", meshes)
+
+
+## Gives a rigged character a musket and the modifier that makes him hold it (musket_drill.gd).
+static func _attach_musket(made: Node3D) -> void:
 	var skeleton: Skeleton3D = made.find_child("Skeleton3D", true, false)
-	var lib := _library(model_name)
 	var musket := make("musket", 0)
-	if skeleton == null or musket == null or lib == null or not lib.has_animation("fire"):
+	if skeleton == null or musket == null:
 		return
-	var left := skeleton.find_bone("LeftHand")
-	var right := skeleton.find_bone("RightHand")
-	var fore := skeleton.find_bone("RightForeArm")
-	if left < 0 or right < 0 or fore < 0:
-		return
-	# Work in the model's own space (Y up, facing +Z), not the skeleton's, whose axes and
-	# units depend on how the rig was exported.
+	# Skeleton space to the model's own space (Y up, facing +Z); the rigs use centimetre bones
+	# under a 0.01 armature.
 	var to_model := Transform3D.IDENTITY
 	var n: Node = skeleton
 	var model_root: Node = made.get_node("Model")
@@ -294,33 +327,17 @@ static func _attach_musket(made: Node3D, model_name: String = SHARED_CLIPS) -> v
 		if n is Node3D:
 			to_model = (n as Node3D).transform * to_model
 		n = n.get_parent()
-	var fire := lib.get_animation("fire")
-	var rear_bone := left
-	var g_rear := to_model * _clip_pose(skeleton, fire, left, 0.15)
-	var g_front := to_model * _clip_pose(skeleton, fire, right, 0.15)
-	if g_front.origin.z < g_rear.origin.z:
-		var swap := g_rear
-		g_rear = g_front
-		g_front = swap
-		rear_bone = right
-	var forearm := (to_model * skeleton.get_bone_global_rest(right).origin).distance_to(to_model * skeleton.get_bone_global_rest(fore).origin)
-	if forearm < 0.0001:
-		return
-	var length := forearm * 5.2
-	fit_footprint(musket, length, 100000.0)          # the model lies along X, bayonet tip at -X
-	var through := g_front.origin - g_rear.origin
-	var dir := Vector3(through.x * 0.15, through.y * 0.3, maxf(through.z, forearm)).normalized()
-	var x_axis := -dir
-	var up := (Vector3.UP - dir * dir.y).normalized()
-	var basis := Basis(x_axis, up, x_axis.cross(up))
+	fit_footprint(musket, MusketDrill.LENGTH, 100000.0)     # the model lies along X, bayonet tip at -X
 	var thickness := bounds(musket).size.y
-	# The rear hand holds the musket about a quarter of the way along from the butt.
-	var wanted := Transform3D(basis, g_rear.origin + dir * (length * 0.25) - up * (thickness * 0.5))
-	var attach := BoneAttachment3D.new()
-	attach.bone_name = skeleton.get_bone_name(rear_bone)
-	skeleton.add_child(attach)
-	attach.add_child(musket)
-	musket.transform = g_rear.affine_inverse() * wanted
+	skeleton.add_child(musket)
+	var drill := MusketDrill.new()
+	skeleton.add_child(drill)
+	if drill.setup(skeleton, to_model, musket, thickness):
+		made.set_meta("drill", drill)
+	else:
+		drill.queue_free()
+		musket.queue_free()
+
 
 # ==========================================================================================
 # Stand-in figures built from primitives
