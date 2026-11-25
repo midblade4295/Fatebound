@@ -1,0 +1,42 @@
+{
+  "line_infantry": {
+    "name": "Line Infantry", "type": "unit", "arm": "infantry", "cost": 3,
+    "men": 6, "hp_per_man": 60, "speed": 1.4, "morale": 100,
+    "range": 6.0, "volley_dmg": 22, "reload": 3.2, "melee_dps": 10,
+    "can_square": true, "loose": false
+  },
+  "skirmishers": {
+    "name": "Skirmishers", "type": "unit", "arm": "infantry", "cost": 2,
+    "men": 4, "hp_per_man": 45, "speed": 1.7, "morale": 80,
+    "range": 7.5, "volley_dmg": 20, "reload": 2.8, "melee_dps": 5,
+    "can_square": false, "loose": true
+  },
+  "militia": {
+    "name": "Militia", "type": "unit", "arm": "infantry", "cost": 2,
+    "men": 8, "hp_per_man": 40, "speed": 1.4, "morale": 55,
+    "range": 4.5, "volley_dmg": 14, "reload": 3.6, "melee_dps": 7,
+    "can_square": false, "loose": false
+  },
+  "scouts": {
+    "name": "Scouts", "type": "unit", "arm": "cavalry", "cost": 3,
+    "men": 3, "hp_per_man": 90, "speed": 3.2, "morale": 90,
+    "melee_dps": 30, "charge_dmg": 40, "charge_shock": 35
+  },
+  "heavy_cavalry": {
+    "name": "Heavy Cavalry", "type": "unit", "arm": "cavalry", "cost": 5,
+    "men": 3, "hp_per_man": 160, "speed": 2.4, "morale": 110,
+    "melee_dps": 40, "charge_dmg": 90, "charge_shock": 60
+  },
+  "field_gun": {
+    "name": "Field Gun", "type": "unit", "arm": "artillery", "cost": 4,
+    "men": 3, "hp_per_man": 50, "speed": 0.0, "morale": 70,
+    "range": 12.0, "reload": 4.0, "shot_dmg": 150,
+    "canister_dmg": 220, "canister_range": 4.0, "melee_dps": 4, "life": 35.0
+  },
+  "fire": {
+    "name": "Fire!", "type": "order", "cost": 2, "radius": 3.0
+  },
+  "rally": {
+    "name": "Rally", "type": "order", "cost": 2, "radius": 4.0, "morale_restore": 50
+  }
+}
