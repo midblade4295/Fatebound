@@ -462,6 +462,8 @@ func _damage_structure(s: Structure, amount: float) -> void:
 	if s.dead or phase == PHASE_OVER:
 		return
 	s.hp -= amount
+	if amount >= 8.0:
+		events.append({"type": "struct_hit", "pos": s.pos, "amount": amount, "id": s.id, "side": s.side})
 	if s.hp > 0.0:
 		return
 	s.hp = 0.0
@@ -747,6 +749,9 @@ func _damage(t: Regiment, amount: float, from: Vector2) -> void:
 		amount *= ROUT_DAMAGE_MULT
 	t.hp -= amount
 	t.since_hit = 0.0
+	if amount >= 8.0:
+		# For the view only: where a blow landed, how hard, and where it came from.
+		events.append({"type": "hit", "pos": t.pos, "from": from, "amount": amount, "id": t.id, "side": t.side, "of": t.max_hp})
 	if t.hp <= 0.0:
 		t.hp = 0.0
 		t.men = 0

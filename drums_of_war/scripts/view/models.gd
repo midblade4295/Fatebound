@@ -25,7 +25,7 @@ const SHARED_CLIPS := "u_line"     # rigged characters without clips of their ow
 const YAW := {"u_line": 180.0, "c_line": 180.0, "u_skirm": 180.0, "c_skirm": 180.0, "u_militia": 180.0,
 		"c_militia": 180.0, "u_cav": 180.0, "c_cav": 180.0, "cannon": -90.0, "battery": -90.0,
 		"bridge": 90.0, "fence": 90.0}
-const CLIPS := ["idle", "walk", "run", "fire", "death", "idle_calm", "march", "panic", "death_forward", "hit", "cheer", "stab", "kneel"]
+const CLIPS := ["idle", "walk", "run", "fire", "death", "idle_calm", "march", "panic", "death_forward", "hit", "cheer", "stab", "kneel", "knockback"]
 const LOOPING := ["idle", "walk", "run", "idle_calm", "march", "panic", "cheer"]
 # What to play when a character has no clip of that name.
 const FALLBACK := {"idle_calm": "idle", "march": "walk", "panic": "run", "death_forward": "death",
@@ -203,6 +203,13 @@ static func _keep_in_place(anim: Animation) -> void:
 		for key in anim.track_get_key_count(track):
 			var v: Vector3 = anim.track_get_key_value(track, key)
 			anim.track_set_key_value(track, key, Vector3(first.x, v.y, first.z))
+
+
+## Whether this figure has a clip of exactly that name (not a fallback).
+static func has_clip(soldier: Node3D, clip: String) -> bool:
+	if soldier == null or not soldier.has_meta("player"):
+		return false
+	return (soldier.get_meta("player") as AnimationPlayer).has_animation("a/" + clip)
 
 
 static func play(soldier: Node3D, clip: String, restart: bool) -> void:

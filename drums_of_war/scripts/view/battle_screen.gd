@@ -70,6 +70,9 @@ var _laid_out: bool = false
 var art_h: float = 64.0             # height of a card's portrait; taller screens get more
 var card_size: Vector2 = Vector2(104.0, 112.0)
 var _vignette: GradientTexture2D
+var _bar_lag: Dictionary = {}       # id -> the strength a bar still shows as "just lost"
+var _bar_flash: Dictionary = {}     # id -> seconds of white flash left on a bar
+var _melee_clock: float = 0.0
 
 
 func _ready() -> void:
@@ -98,6 +101,8 @@ func start_match(seed_value: int) -> void:
 	auto_bot = Bot.new(local_side, seed_value + 99) if autoplay else null
 	world.reset(sim)
 	words.clear()
+	_bar_lag.clear()
+	_bar_flash.clear()
 	selected = -1
 	acc = 0.0
 	notice = ""
@@ -154,6 +159,17 @@ func _process(delta: float) -> void:
 	words = words.filter(func(w: Dictionary) -> bool: return float(w["age"]) < float(w["life"]))
 	if notice_time > 0.0:
 		notice_time -= delta
+	_melee_clock -= delta
+	if _melee_clock <= 0.0 and sim.phase != Sim.PHASE_OVER:
+		for r: Sim.Regiment in sim.regiments:
+			if r.in_melee and r.state != Sim.ST_ROUT:
+				_sfx("melee", -5.0, 0.5)
+				_melee_clock = randf_range(0.7, 1.1)
+				break
+	for id in _bar_flash.keys():
+		_bar_flash[id] = float(_bar_flash[id]) - delta
+		if float(_bar_flash[id]) <= 0.0:
+			_bar_flash.erase(id)
 	queue_redraw()
 
 
@@ -281,9 +297,25 @@ func _take_events() -> void:
 				for s: Sim.Structure in sim.structures:
 					if s.pos.distance_to(pos) < 0.01:
 						from_structure = true
-				_sfx("redoubt_gun" if from_structure else "cannon", -5.0 if from_structure else -1.0, 0.1)
+				if from_structure:
+					_sfx("redoubt_gun", -4.0, 0.1)
+				else:
+					_sfx("cannon_big" if _stream("cannon_big") != null else "cannon", 0.0, 0.1)
+					_buzz(22)
 			"canister":
-				_sfx("canister")
+				_sfx("canister", 1.0)
+				_buzz(28)
+			"hit":
+				var amount := float(e["amount"])
+				_bar_flash[e["id"]] = 0.12
+				if amount >= 130.0:
+					_sfx("hit_shot", -1.0, 0.18)
+				elif amount >= 45.0:
+					_sfx("hit_volley", -4.0, 0.14)
+			"struct_hit":
+				_bar_flash[e["id"]] = 0.12
+				if float(e["amount"]) >= 30.0:
+					_sfx("hit_structure", -3.0, 0.22)
 			"deploy":
 				_sfx("deploy", -4.0)
 			"rout":
@@ -298,6 +330,8 @@ func _take_events() -> void:
 			"charge":
 				_word(pos, "CHARGE!", Color("ff8a1f"))
 				_sfx("charge", -2.0, 0.6)
+				_sfx("charge_hit", 0.0, 0.3)
+				_buzz(45)
 			"repelled":
 				_word(pos, "REPELLED", COL_PAPER)
 				_sfx("repelled", -2.0, 0.5)
@@ -306,7 +340,8 @@ func _take_events() -> void:
 				_sfx("order")
 			"destroyed":
 				_word(pos, "DESTROYED", Color("ff8a1f"))
-				_sfx("destroyed")
+				_sfx("destroyed", 1.0)
+				_buzz(130)
 			"overtime":
 				notice = "OVERTIME: first structure to fall decides it"
 				notice_time = 3.0
@@ -321,8 +356,19 @@ func _take_events() -> void:
 	sim.events.clear()
 
 
+## A short buzz in the hand for the heavy moments. Does nothing where there is no vibrator.
+func _buzz(milliseconds: int) -> void:
+	if OS.has_feature("mobile"):
+		Input.vibrate_handheld(milliseconds)
+
+
 func _word(pos: Vector2, text: String, colour: Color) -> void:
-	words.append({"pos": pos, "age": 0.0, "life": 1.1, "text": text, "colour": colour})
+	# Callouts raised at the same spot in quick succession stack upward instead of piling up.
+	var row := 0
+	for w: Dictionary in words:
+		if float(w["age"]) < 0.7 and Vector2(w["pos"]).distance_to(pos) < 2.2:
+			row = maxi(row, int(w["row"]) + 1)
+	words.append({"pos": pos, "age": 0.0, "life": 1.1, "text": text, "colour": colour, "row": row})
 
 
 # ==========================================================================================
@@ -481,34 +527,45 @@ func _draw_deploy_zone() -> void:
 		draw_circle(pointer, 4.0, ring)
 
 
+## A strength bar that shows the piece just knocked off it: the lost part lingers pale for a
+## moment and then drains, so a heavy hit reads as a chunk and a light one as a nibble.
+func _strength_bar(id: int, at: Vector2, width: float, height: float, fraction: float, colour: Color) -> void:
+	var lag: float = maxf(float(_bar_lag.get(id, fraction)), fraction)
+	lag = maxf(fraction, lag - get_process_delta_time() * 0.55)
+	_bar_lag[id] = lag
+	draw_rect(Rect2(at - Vector2(1.5, 1.5), Vector2(width + 3.0, height + 3.0)), Color(0.07, 0.05, 0.04))
+	if lag > fraction + 0.002:
+		draw_rect(Rect2(at, Vector2(width * lag, height)), Color(1.0, 0.95, 0.8))
+	var fill := Color(1, 1, 1) if _bar_flash.has(id) else colour
+	draw_rect(Rect2(at, Vector2(width * fraction, height)), fill)
+	draw_rect(Rect2(at, Vector2(width * fraction, maxf(1.0, height * 0.35))), Color(1, 1, 1, 0.28))
+
+
 func _draw_structure_bar(s: Sim.Structure) -> void:
 	if s.dead:
 		return
 	var p := to_screen(s.pos, 0.0) + Vector2(0, 14.0 if s.side == local_side else -64.0)
 	if s.kind == "redoubt":
 		p = to_screen(s.pos, 0.0) + Vector2(0, 26.0 if s.side == local_side else -46.0)
-	var w := 54.0 if s.kind == "hq" else 44.0
-	var col := team_colour(s.side)
-	draw_rect(Rect2(p + Vector2(-w * 0.5, 0), Vector2(w, 8)), COL_INK)
-	draw_rect(Rect2(p + Vector2(-w * 0.5 + 1, 1), Vector2((w - 2) * s.hp / s.max_hp, 6)), col.lightened(0.3))
+	var w := 58.0 if s.kind == "hq" else 46.0
+	_strength_bar(s.id, p + Vector2(-w * 0.5, 0), w, 7.0, s.hp / s.max_hp, team_colour(s.side).lightened(0.3))
 
 
 func _draw_regiment_bars(r: Sim.Regiment) -> void:
 	var tall := 3.5 if r.arm == "cavalry" else 2.6
 	var p := to_screen(r.pos, tall)
-	var w := 30.0
+	var w := 32.0
 	var top := p + Vector2(-w * 0.5, -6.0)
-	var col := team_colour(r.side)
-	draw_rect(Rect2(top - Vector2(1, 1), Vector2(w + 2, 11)), COL_INK)
-	draw_rect(Rect2(top, Vector2(w * r.hp / r.max_hp, 4)), col.lightened(0.35))
-	draw_rect(Rect2(top + Vector2(0, 5), Vector2(w * maxf(r.morale, 0.0) / r.morale_max, 4)), COL_BRASS)
+	_strength_bar(r.id, top, w, 5.0, r.hp / r.max_hp, team_colour(r.side).lightened(0.35))
+	draw_rect(Rect2(top + Vector2(-1.5, 6.5), Vector2(w + 3.0, 5.0)), Color(0.07, 0.05, 0.04))
+	draw_rect(Rect2(top + Vector2(0, 7.0), Vector2(w * maxf(r.morale, 0.0) / r.morale_max, 3.0)), COL_BRASS)
 	if r.reload > 0.0 and r.def.has("reload") and r.state != Sim.ST_ROUT:
 		var frac := clampf(r.reload / float(r.def["reload"]), 0.0, 1.0)
-		var c := p + Vector2(w * 0.5 + 8.0, -1.0)
-		draw_circle(c, 6.0, COL_INK)
-		draw_arc(c, 3.6, -PI * 0.5, -PI * 0.5 + TAU * (1.0 - frac), 16, COL_PAPER, 2.5)
+		var c := p + Vector2(w * 0.5 + 9.0, 0.0)
+		draw_circle(c, 6.5, Color(0.07, 0.05, 0.04))
+		draw_arc(c, 3.8, -PI * 0.5, -PI * 0.5 + TAU * (1.0 - frac), 16, COL_CREAM, 2.5)
 	if r.state == Sim.ST_FORMING:
-		draw_arc(to_screen(r.pos, 0.6), 18.0, 0.0, TAU * (1.0 - r.form_timer / Sim.SQUARE_FORM_TIME_RELOADING), 24, COL_PAPER, 2.5)
+		draw_arc(to_screen(r.pos, 0.6), 18.0, 0.0, TAU * (1.0 - r.form_timer / Sim.SQUARE_FORM_TIME_RELOADING), 24, COL_CREAM, 2.5)
 
 
 func _draw_words() -> void:
@@ -516,7 +573,7 @@ func _draw_words() -> void:
 		var t := float(e["age"]) / float(e["life"])
 		# Pops in large, settles, then lifts away as it fades.
 		var pop := 1.0 + 0.45 * maxf(0.0, 1.0 - t * 7.0)
-		var p := to_screen(e["pos"], 1.6) + Vector2(0, -10.0 - 30.0 * t * t)
+		var p := to_screen(e["pos"], 1.6) + Vector2(0, -10.0 - 30.0 * t * t - 25.0 * int(e["row"]))
 		_outlined(p, e["text"], int(23.0 * pop), Color(e["colour"], 1.0 - pow(t, 4.0)))
 
 

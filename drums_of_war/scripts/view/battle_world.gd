@@ -41,6 +41,15 @@ var _materials: Dictionary = {}
 var _time: float = 0.0
 var cheering_side: int = -1      # the winners, once the match is over
 var _lamps: Dictionary = {}
+var _shake: float = 0.0            # 0..1, how hard the camera is being rattled
+var _cam_base: Transform3D
+var _hitstop_until: int = 0        # real-time milliseconds; 0 when time is running normally
+var _lights: Array = []            # a small pool of lights for muzzle flashes
+var _chunks: Array = []            # flung clods and splinters: {node, vel, age, life}
+var _jolts: Dictionary = {}        # structure id -> how hard it is still shuddering
+var _hit_flash: StandardMaterial3D
+var _chunk_mesh: BoxMesh
+var _ring_tex: GradientTexture2D
 var _chimney_clock: float = 0.0
 
 
@@ -220,6 +229,7 @@ func fit_camera() -> void:
 		if absf(per_unit) > 0.01:
 			look_z += clampf((field_rect_design.get_center().y - box.get_center().y) / per_unit * -1.0, -4.0, 4.0) * 0.8
 	camera.look_at_from_position(Vector3(0, 0, look_z) + back * dist, Vector3(0, 0, look_z), Vector3.UP)
+	_cam_base = camera.transform
 
 
 func _build_arena() -> void:
@@ -252,6 +262,16 @@ func _build_arena() -> void:
 			lamp.position = Vector3(0.0, 1.6, 2.6)
 			node.add_child(lamp)
 			_lamps[s.id] = lamp
+
+
+## A white wash laid over a figure for an instant when it is struck.
+func hit_flash_material() -> StandardMaterial3D:
+	if _hit_flash == null:
+		_hit_flash = StandardMaterial3D.new()
+		_hit_flash.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_hit_flash.albedo_color = Color(1.0, 0.97, 0.9, 0.72)
+		_hit_flash.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	return _hit_flash
 
 
 var _ring_material: ShaderMaterial = null
@@ -424,12 +444,13 @@ func _build_puffs() -> void:
 shader_type spatial;
 render_mode unshaded, blend_mix, depth_draw_never, shadows_disabled;
 varying float fade;
-void vertex() { fade = COLOR.a; }
+varying vec3 tint;
+void vertex() { fade = COLOR.a; tint = COLOR.rgb; }
 void fragment() {
 	float facing = clamp(dot(NORMAL, VIEW), 0.0, 1.0);
 	vec3 up = (INV_VIEW_MATRIX * vec4(NORMAL, 0.0)).xyz;
 	float lit = clamp(up.y * 0.55 + 0.5 + up.x * 0.2, 0.0, 1.0);
-	ALBEDO = mix(vec3(0.5, 0.5, 0.6), vec3(1.0, 0.97, 0.9), lit);
+	ALBEDO = mix(vec3(0.5, 0.5, 0.6), vec3(1.0, 0.97, 0.9), lit) * tint;
 	ALPHA = fade * smoothstep(0.02, 0.62, facing);
 }
 """
@@ -461,6 +482,13 @@ func reset(new_sim: Sim) -> void:
 			node.position.y = 0.0
 			_structure_dead[s.id] = false
 	cheering_side = -1
+	_shake = 0.0
+	_hitstop_until = 0
+	Engine.time_scale = 1.0
+	for c: Dictionary in _chunks:
+		c["node"].queue_free()
+	_chunks.clear()
+	_jolts.clear()
 
 
 func _process(delta: float) -> void:
@@ -493,6 +521,7 @@ func _process(delta: float) -> void:
 				_puffs.append({"pos": w, "vel": Vector3(0.45, 0.7, 0.0), "age": 0.0, "life": 3.2, "size": 0.55})
 	for id in _lamps:
 		_lamps[id].visible = not _structure_dead.get(id, false)
+	_update_impact(delta)
 	_update_contact_shadows()
 	_update_leaving(delta)
 	_update_puffs(delta)
@@ -506,6 +535,10 @@ func _update_leaving(delta: float) -> void:
 		var t := float(e["age"])
 		if not bool(e["animated"]):
 			node.rotation.x = lerpf(node.rotation.x, -PI * 0.5, 1.0 - exp(-9.0 * delta))
+		var vel: Vector3 = e["vel"]
+		if vel.length_squared() > 0.0001:
+			node.position += vel * delta
+			e["vel"] = vel * exp(-3.5 * delta)
 		if t > 1.1:
 			node.position.y -= delta * 0.6
 	var keep: Array = []
@@ -517,22 +550,171 @@ func _update_leaving(delta: float) -> void:
 	_leaving = keep
 
 
-func drop_soldier(node: Node3D, animated: bool) -> void:
+## A man leaves his regiment and falls. impulse throws the body along the blow that felled him.
+func drop_soldier(node: Node3D, animated: bool, impulse: Vector3 = Vector3.ZERO) -> void:
 	var at := node.global_transform
 	node.get_parent().remove_child(node)
 	add_child(node)
 	node.global_transform = at
-	_leaving.append({"node": node, "age": 0.0, "animated": animated})
+	if node.has_meta("meshes"):
+		for mi: MeshInstance3D in node.get_meta("meshes"):
+			if is_instance_valid(mi):
+				mi.material_overlay = null
+	_leaving.append({"node": node, "age": 0.0, "animated": animated, "vel": impulse})
+
+
+# --- Impact: shake, hit-stop, flashes of light, flung debris ---------------------------------
+
+## Rattles the camera. amount is 0..1; the strongest recent shake wins.
+func shake(amount: float) -> void:
+	_shake = minf(1.0, maxf(_shake, amount))
+
+
+## Freezes the action for a few hundredths of a second so a heavy blow registers.
+func hitstop(milliseconds: int) -> void:
+	Engine.time_scale = 0.06
+	_hitstop_until = maxi(_hitstop_until, Time.get_ticks_msec() + milliseconds)
+
+
+func _light_flash(at: Vector3, energy: float, reach: float, life: float) -> void:
+	var light: OmniLight3D = null
+	for l: Dictionary in _lights:
+		if float(l["age"]) >= float(l["life"]):
+			light = l["node"]
+			l["age"] = 0.0
+			l["life"] = life
+			l["energy"] = energy
+			break
+	if light == null:
+		if _lights.size() >= 5:
+			return
+		light = OmniLight3D.new()
+		light.light_color = Color("ffb35a")
+		light.shadow_enabled = false
+		add_child(light)
+		_lights.append({"node": light, "age": 0.0, "life": life, "energy": energy})
+	light.position = at
+	light.omni_range = reach
+	light.light_energy = energy
+	light.visible = true
+
+
+## Flings clods of earth or splinters of wood from a point, in roughly one direction.
+func debris(field_pos: Vector2, count: int, colour: Color, toward: Vector3 = Vector3.ZERO, height: float = 0.2) -> void:
+	if _chunk_mesh == null:
+		_chunk_mesh = BoxMesh.new()
+		_chunk_mesh.size = Vector3(0.16, 0.12, 0.2)
+	var origin := to_world(field_pos, height)
+	for i in count:
+		if _chunks.size() >= 70:
+			return
+		var mi := MeshInstance3D.new()
+		mi.mesh = _chunk_mesh
+		mi.material_override = _mat(colour.darkened(0.25 * randf()))
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mi.position = origin + Vector3(randf_range(-0.4, 0.4), 0.0, randf_range(-0.4, 0.4))
+		mi.scale = Vector3.ONE * randf_range(0.6, 1.6)
+		mi.rotation = Vector3(randf() * TAU, randf() * TAU, randf() * TAU)
+		add_child(mi)
+		var vel := Vector3(randf_range(-2.2, 2.2), randf_range(3.5, 7.0), randf_range(-2.2, 2.2)) + toward * randf_range(1.5, 4.0)
+		_chunks.append({"node": mi, "vel": vel, "age": 0.0, "life": randf_range(0.6, 1.0)})
+
+
+## An expanding ring on the ground: the shock of a gun going off or a charge going home.
+func ring_burst(field_pos: Vector2, radius: float, colour: Color, life: float = 0.32) -> void:
+	if _ring_tex == null:
+		var g := Gradient.new()
+		g.offsets = PackedFloat32Array([0.0, 0.66, 0.84, 0.94, 1.0])
+		g.colors = PackedColorArray([Color(1, 1, 1, 0), Color(1, 1, 1, 0), Color(1, 1, 1, 1), Color(1, 1, 1, 0.3), Color(1, 1, 1, 0)])
+		_ring_tex = GradientTexture2D.new()
+		_ring_tex.gradient = g
+		_ring_tex.fill = GradientTexture2D.FILL_RADIAL
+		_ring_tex.fill_from = Vector2(0.5, 0.5)
+		_ring_tex.fill_to = Vector2(1.0, 0.5)
+		_ring_tex.width = 128
+		_ring_tex.height = 128
+	var mi := MeshInstance3D.new()
+	var plane := PlaneMesh.new()
+	plane.size = Vector2(radius * 2.0, radius * 2.0)
+	mi.mesh = plane
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.albedo_texture = _ring_tex
+	m.albedo_color = colour
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mi.material_override = m
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mi.position = to_world(field_pos, ground_height(field_pos) + 0.09)
+	mi.scale = Vector3.ONE * 0.15
+	add_child(mi)
+	_flashes.append({"node": mi, "age": 0.0, "life": life, "mat": m, "grow": true})
+
+
+func _update_impact(delta: float) -> void:
+	if _hitstop_until > 0 and Time.get_ticks_msec() >= _hitstop_until:
+		_hitstop_until = 0
+		Engine.time_scale = 1.0
+	# Camera shake: a fast jitter in the camera's own plane, dying away.
+	_shake = maxf(0.0, _shake - delta * 2.4)
+	if camera != null:
+		var power := _shake * _shake * 0.85
+		var t := _time * 47.0
+		camera.transform = _cam_base
+		if power > 0.0005:
+			camera.position += _cam_base.basis.x * (sin(t) + sin(t * 2.3)) * 0.5 * power \
+					+ _cam_base.basis.y * (cos(t * 1.7) + sin(t * 3.1)) * 0.5 * power
+	for l: Dictionary in _lights:
+		l["age"] = float(l["age"]) + delta
+		var k := 1.0 - float(l["age"]) / float(l["life"])
+		var node: OmniLight3D = l["node"]
+		node.visible = k > 0.0
+		node.light_energy = float(l["energy"]) * maxf(k, 0.0)
+	var keep: Array = []
+	for c: Dictionary in _chunks:
+		c["age"] = float(c["age"]) + delta
+		var mi: MeshInstance3D = c["node"]
+		if float(c["age"]) >= float(c["life"]):
+			mi.queue_free()
+			continue
+		var vel: Vector3 = c["vel"]
+		vel.y -= 18.0 * delta
+		mi.position += vel * delta
+		if mi.position.y < 0.05:
+			mi.position.y = 0.05
+			vel = Vector3(vel.x * 0.4, -vel.y * 0.3, vel.z * 0.4)
+		mi.rotation += Vector3(7.0, 5.0, 3.0) * delta
+		c["vel"] = vel
+		keep.append(c)
+	_chunks = keep
+	for id in _jolts.keys():
+		var j: float = _jolts[id] - delta * 3.5
+		var node3: Node3D = _structures[id]
+		if j <= 0.0 or _structure_dead.get(id, false):
+			_jolts.erase(id)
+			node3.rotation.x = 0.0
+			node3.rotation.z = 0.0
+		else:
+			_jolts[id] = j
+			node3.rotation.z = sin(_time * 55.0) * 0.035 * j
+			node3.rotation.x = cos(_time * 43.0) * 0.025 * j
 
 
 # --- Effects --------------------------------------------------------------------------------
 
-func puff(field_pos: Vector2, height: float, size: float, life: float) -> void:
+func puff(field_pos: Vector2, height: float, size: float, life: float, colour: Color = COL_SMOKE) -> void:
 	if _puffs.size() >= MAX_PUFFS:
 		_puffs.pop_front()
 	var w := to_world(field_pos, height)
 	_puffs.append({"pos": w, "vel": Vector3(0.35 + sin(w.z * 3.1) * 0.15, 0.32 + cos(w.x * 2.3) * 0.1, 0.0),
-			"age": 0.0, "life": life, "size": size})
+			"age": 0.0, "life": life, "size": size, "col": colour})
+
+
+## A burst of kicked-up dust where something struck the ground.
+func dust(field_pos: Vector2, amount: int, size: float) -> void:
+	for i in amount:
+		var off := Vector2(randf_range(-0.5, 0.5), randf_range(-0.5, 0.5))
+		puff(field_pos + off, 0.25 + 0.2 * randf(), size * randf_range(0.7, 1.2), randf_range(0.7, 1.2), Color(0.78, 0.66, 0.46))
 
 
 func _update_puffs(delta: float) -> void:
@@ -550,7 +732,7 @@ func _update_puffs(delta: float) -> void:
 		var t := float(p["age"]) / float(p["life"])
 		var grow := float(p["size"]) * (0.55 + 1.1 * (1.0 - pow(1.0 - t, 2.0)))
 		mm.set_instance_transform(i, Transform3D(Basis().scaled(Vector3.ONE * grow), p["pos"]))
-		mm.set_instance_color(i, Color(COL_SMOKE, 0.95 * (1.0 - t * t)))
+		mm.set_instance_color(i, Color(p.get("col", COL_SMOKE), 0.95 * (1.0 - t * t)))
 
 
 func flash(field_pos: Vector2, height: float, size: float) -> void:
@@ -572,12 +754,12 @@ func flash(field_pos: Vector2, height: float, size: float) -> void:
 	_flashes.append({"node": mi, "age": 0.0, "life": 0.14, "mat": m})
 
 
-func tracer(from: Vector2, to: Vector2, wide: bool) -> void:
+func tracer(from: Vector2, to: Vector2, wide: bool, thickness: float = 0.12, life: float = 0.2) -> void:
 	var a := to_world(from, 0.7)
 	var b := to_world(to, 0.5)
 	var mi := MeshInstance3D.new()
 	var bm := BoxMesh.new()
-	bm.size = Vector3(0.5 if wide else 0.12, 0.12, a.distance_to(b))
+	bm.size = Vector3(0.5 if wide else thickness, thickness, a.distance_to(b))
 	mi.mesh = bm
 	var m := StandardMaterial3D.new()
 	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -587,7 +769,7 @@ func tracer(from: Vector2, to: Vector2, wide: bool) -> void:
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(mi)
 	mi.look_at_from_position((a + b) * 0.5, b, Vector3.UP)
-	_flashes.append({"node": mi, "age": 0.0, "life": 0.2, "mat": m})
+	_flashes.append({"node": mi, "age": 0.0, "life": life, "mat": m})
 
 
 func _update_flashes(delta: float) -> void:
@@ -600,8 +782,25 @@ func _update_flashes(delta: float) -> void:
 			continue
 		var m: StandardMaterial3D = f["mat"]
 		m.albedo_color.a = 1.0 - t
+		if f.has("grow"):
+			(f["node"] as Node3D).scale = Vector3.ONE * lerpf(0.15, 1.0, 1.0 - pow(1.0 - t, 3.0))
 		keep.append(f)
 	_flashes = keep
+
+
+func _regiment_at(field_pos: Vector2, slack: float = 0.25) -> RegimentView:
+	for id in _regiments:
+		var rv: RegimentView = _regiments[id]
+		if rv.last_pos.distance_to(field_pos) < slack:
+			return rv
+	return null
+
+
+func _is_structure_at(field_pos: Vector2) -> bool:
+	for s: Sim.Structure in sim.structures:
+		if s.pos.distance_to(field_pos) < 0.05:
+			return true
+	return false
 
 
 ## Called by the battle screen for each rules event.
@@ -609,37 +808,95 @@ func on_event(e: Dictionary) -> void:
 	var pos: Vector2 = e.get("pos", Vector2.ZERO)
 	match e["type"]:
 		"volley":
-			var dir: Vector2 = (Vector2(e["to"]) - pos).normalized()
+			var target: Vector2 = e["to"]
+			var dir: Vector2 = (target - pos).normalized()
 			var across := Vector2(-dir.y, dir.x)
 			var men := mini(int(e.get("men", 4)), 6)
 			for i in men:
-				var at := pos + across * ((i - (men - 1) * 0.5) * SOLDIER_SPACING) + dir * 0.55
-				puff(at, 0.75, 0.42, 2.4)
-				puff(at + dir * 0.3, 0.9, 0.3, 1.8)
-			flash(pos + dir * 0.6, 0.75, 0.7)
-			for id in _regiments:
-				var rv: RegimentView = _regiments[id]
-				if rv.last_pos.distance_to(pos) < 0.05:
-					rv.fire_kick()
+				var at := pos + across * ((i - (men - 1) * 0.5) * SOLDIER_SPACING) + dir * 0.75
+				puff(at, 1.5, 0.5, 2.4)
+				puff(at + dir * 0.4, 1.65, 0.36, 1.8)
+				flash(at, 1.5, 0.55)
+				# A streak from each musket to its mark, gone in a blink.
+				tracer(at, target + across * randf_range(-0.7, 0.7), false, 0.05, 0.09)
+			_light_flash(to_world(pos + dir * 0.9, 1.6), 5.0, 5.5, 0.12)
+			shake(0.07)
+			var firing := _regiment_at(pos, 0.05)
+			if firing != null:
+				firing.fire_kick()
 		"cannon", "canister":
 			var to: Vector2 = e["to"]
 			var d2: Vector2 = (to - pos).normalized()
-			for i in 6:
-				puff(pos + d2 * (0.7 + 0.28 * i), 0.8 + 0.06 * i, 0.85 - 0.08 * i, 3.0)
-			flash(pos + d2 * 0.8, 0.8, 1.2)
-			tracer(pos + d2 * 0.8, to, e["type"] == "canister")
+			var from_works := _is_structure_at(pos)
+			for i in 8:
+				puff(pos + d2 * (1.0 + 0.32 * i), 1.0 + 0.08 * i, 1.1 - 0.09 * i, 3.2)
+			flash(pos + d2 * 1.1, 1.0, 1.9)
+			_light_flash(to_world(pos + d2 * 1.2, 1.4), 11.0, 11.0, 0.18)
+			ring_burst(pos + d2 * 0.6, 2.6, Color(1, 0.95, 0.8, 0.9), 0.3)
+			shake(0.16 if from_works else 0.36)
+			if e["type"] == "canister":
+				var side := Vector2(-d2.y, d2.x)
+				for k in 7:
+					tracer(pos + d2 * 1.1, to + side * (k - 3) * 0.45, false, 0.07, 0.12)
+			else:
+				tracer(pos + d2 * 1.1, to, false, 0.16, 0.16)
+				# Roundshot skips along the ground, kicking up earth at each bounce.
+				var reach := pos.distance_to(to)
+				var along := 3.0
+				while along < reach:
+					var bounce := pos + d2 * along
+					if not Sim.in_creek(bounce.y):
+						dust(bounce, 2, 0.7)
+						debris(bounce, 2, Color("6b5233"), dir_to_world(d2))
+					along += randf_range(2.4, 3.6)
+			var gunner := _regiment_at(pos, 0.05)
+			if gunner != null:
+				gunner.kick = 1.0
+		"hit":
+			var struck: RegimentView = _regiments.get(e["id"])
+			var amount := float(e["amount"])
+			if struck != null:
+				struck.take_hit(e["from"], amount, float(e["of"]))
+			if amount >= 40.0:
+				dust(pos, 2 if amount < 120.0 else 4, 0.6 if amount < 120.0 else 0.9)
+				debris(pos, 2 if amount < 120.0 else 5, Color("6b5233"), dir_to_world((pos - Vector2(e["from"])).normalized()))
+			if amount >= 120.0:
+				shake(0.2)
+		"struct_hit":
+			_jolts[e["id"]] = 1.0
+			var heavy := float(e["amount"]) >= 60.0
+			debris(pos, 5 if heavy else 2, Color("8a5a2e"), Vector3.ZERO, 1.2)
+			dust(pos, 3 if heavy else 1, 0.8)
+			if heavy:
+				shake(0.22)
+		"charge":
+			shake(0.5)
+			hitstop(70)
+			ring_burst(pos, 3.4, Color(1, 1, 1, 0.9), 0.35)
+			dust(pos, 9, 1.0)
+			debris(pos, 8, Color("6b5233"))
+		"repelled":
+			shake(0.24)
+			ring_burst(pos, 2.4, Color(1.0, 0.9, 0.5, 0.9), 0.28)
+			for i in 5:
+				flash(pos + Vector2(randf_range(-0.8, 0.8), randf_range(-0.8, 0.8)), 1.3, 0.3)
 		"destroyed":
+			shake(0.85)
+			hitstop(110)
+			ring_burst(pos, 6.0, Color(1.0, 0.85, 0.55, 0.95), 0.5)
+			_light_flash(to_world(pos, 2.0), 14.0, 14.0, 0.3)
+			debris(pos, 18, Color("8a5a2e"), Vector3.ZERO, 1.5)
+			dust(pos, 8, 1.3)
 			for i in 14:
 				puff(pos + Vector2(cos(i * 0.9), sin(i * 0.9)) * 0.9, 0.6 + 0.12 * (i % 4), 1.1, 3.4)
 		"destroyed_regiment":
-			puff(pos, 0.5, 0.6, 1.4)
+			dust(pos, 4, 0.9)
 		"over":
 			cheering_side = int(e["winner"])
 		"rally":
-			for id in _regiments:
-				var rallied: RegimentView = _regiments[id]
-				if rallied.last_pos.distance_to(pos) < 0.2:
-					rallied.pulse = 1.0
+			var rallied := _regiment_at(pos)
+			if rallied != null:
+				rallied.pulse = 1.0
 
 
 # ==========================================================================================
@@ -665,6 +922,12 @@ class RegimentView extends RefCounted:
 	var phase: float = 0.0
 	var fire_hold: float = 0.0
 	var pulse: float = 0.0            # the ring flares when the regiment arrives or rallies
+	var flash_time: float = 0.0       # the figures flash white for an instant when struck
+	var hit_hold: float = 0.0         # while the flinch clip plays
+	var struck_dir: Vector3 = Vector3.ZERO
+	var struck_power: float = 0.0
+	var struck_age: float = 9.0
+	var flash_was_on: bool = false
 	var moving_for: float = 0.0
 
 	func _init(w: Node3D, r: Sim.Regiment) -> void:
@@ -702,6 +965,8 @@ class RegimentView extends RefCounted:
 			root.add_child(s)
 			soldiers.append(s)
 		uses_model = soldiers.size() > 0 and soldiers[0].has_meta("player")
+		for s: Node3D in soldiers:
+			s.set_meta("meshes", s.find_children("*", "MeshInstance3D", true, false))
 
 	## The regiment has left the rules: its remaining men fall, then the node goes.
 	func release() -> void:
@@ -711,11 +976,38 @@ class RegimentView extends RefCounted:
 		root.queue_free()
 
 	func _fall(s: Node3D) -> void:
+		# A man felled by a heavy blow in the last instant is thrown along it.
+		var thrown := struck_age < 0.25 and struck_power > 0.55
 		if uses_model:
-			Models.play(s, "death_forward" if (soldiers.size() + int(phase * 3.0)) % 2 == 0 else "death", true)
+			if thrown and Models.has_clip(s, "knockback"):
+				Models.play(s, "knockback", true)
+			else:
+				Models.play(s, "death_forward" if (soldiers.size() + int(phase * 3.0)) % 2 == 0 else "death", true)
 		if s.has_meta("drill"):
 			s.get_meta("drill").snap_drill(Drill.DROPPED)
-		world.drop_soldier(s, uses_model)
+		var impulse := Vector3.ZERO
+		if struck_age < 0.25:
+			impulse = struck_dir * (1.2 + 4.5 * struck_power) * randf_range(0.6, 1.1)
+		world.drop_soldier(s, uses_model, impulse)
+
+	## A blow has landed: the men flash white, are shoved back along it, and flinch.
+	func take_hit(from: Vector2, amount: float, max_hp: float) -> void:
+		var power := clampf(amount / maxf(70.0, max_hp * 0.4), 0.15, 1.0)
+		var away := last_pos - from
+		struck_dir = world.dir_to_world(away.normalized()) if away.length() > 0.01 else Vector3.ZERO
+		struck_power = power
+		struck_age = 0.0
+		flash_time = 0.09
+		var local := root.global_transform.basis.inverse() * struck_dir
+		for s: Node3D in soldiers:
+			s.position += local * (0.12 + 0.34 * power) * randf_range(0.5, 1.0)
+			s.rotation.x = -0.3 * power * randf_range(0.5, 1.0) * signf(local.z if absf(local.z) > 0.1 else 1.0)
+			s.rotation.z = randf_range(-0.22, 0.22) * power
+		if uses_model and power > 0.3 and hit_hold <= 0.0 and fire_hold <= 0.0 and Models.has_clip(soldiers[0] if not soldiers.is_empty() else null, "hit"):
+			hit_hold = 0.5
+			for s: Node3D in soldiers:
+				Models.play(s, "hit", true)
+			anim = "hit"
 
 	## A volley has just gone off: muskets are level at that instant, then kick.
 	func fire_kick() -> void:
@@ -775,6 +1067,17 @@ class RegimentView extends RefCounted:
 		ring.set_instance_shader_parameter("pulse", pulse)
 		kick = maxf(0.0, kick - delta * 4.0)
 		fire_hold = maxf(0.0, fire_hold - delta)
+		struck_age += delta
+		hit_hold = maxf(0.0, hit_hold - delta)
+		if flash_time > 0.0 or flash_was_on:
+			flash_time -= delta
+			var on := flash_time > 0.0
+			if on != flash_was_on:
+				flash_was_on = on
+				for s: Node3D in soldiers:
+					for mi: MeshInstance3D in s.get_meta("meshes", []):
+						if is_instance_valid(mi):
+							mi.material_overlay = world.hit_flash_material() if on else null
 		# The rules tick 20 times a second, so "moved this frame" flickers; smooth it.
 		moving_for = minf(moving_for + delta, 0.3) if moved > 0.0005 else maxf(moving_for - delta, 0.0)
 		var moving := moving_for > 0.08
@@ -805,7 +1108,7 @@ class RegimentView extends RefCounted:
 				drill = Drill.AIM            # coming up to the shoulder for the next volley
 			else:
 				drill = Drill.LOAD
-		if uses_model and clip != anim:
+		if uses_model and clip != anim and hit_hold <= 0.0:
 			anim = clip
 			for s: Node3D in soldiers:
 				Models.play(s, anim, false)
@@ -821,6 +1124,10 @@ class RegimentView extends RefCounted:
 			if r.formation == "square":
 				face = atan2(-target.x, -target.z)
 			s.rotation.y = lerp_angle(s.rotation.y, face, 1.0 - exp(-8.0 * delta))
+			if uses_model:
+				# Recover from the shove of a hit.
+				s.rotation.x = lerpf(s.rotation.x, 0.0, 1.0 - exp(-9.0 * delta))
+				s.rotation.z = lerpf(s.rotation.z, 0.0, 1.0 - exp(-9.0 * delta))
 			if s.has_meta("drill"):
 				var d = s.get_meta("drill")
 				if fire_hold <= 0.0:
