@@ -4,7 +4,8 @@ extends SceneTree
 ##   xvfb-run -a $GODOT --rendering-method mobile --fixed-fps 30 --resolution 540x960 \
 ##       --path drums_of_war -s tools/capture.gd
 ## Environment: CAPTURE_DIR (default res://captures), CAPTURE_SEED (default 7),
-## CAPTURE_TIMES (match seconds, default "14,32,55").
+## CAPTURE_TIMES (match seconds, default "14,32,55"), CAPTURE_LOOK ("field_x,field_y,distance"
+## for a close-up instead of the game camera).
 
 const Sim = preload("res://scripts/sim/battle_sim.gd")
 
@@ -31,6 +32,12 @@ func _initialize() -> void:
 
 func _process(_delta: float) -> bool:
 	var sim: Sim = screen.sim
+	if OS.has_environment("CAPTURE_LOOK"):
+		# Close-up for checking models: "field_x,field_y,distance".
+		var parts := OS.get_environment("CAPTURE_LOOK").split(",")
+		var target: Vector3 = screen.world.to_world(Vector2(float(parts[0]), float(parts[1])), 0.6)
+		var d := float(parts[2])
+		screen.world.camera.look_at_from_position(target + Vector3(d * 0.25, d * 0.55, d), target, Vector3.UP)
 	if next_shot >= times.size() or sim.phase == Sim.PHASE_OVER:
 		_save("end")
 		quit(0)
