@@ -201,16 +201,246 @@
    "file_bytes": 3640916,
    "credits": 3,
    "note": "One-shot. Has root motion: the body ends lying about 1 m behind the start (-Z)."
+  },
+  "idle_calm": {
+   "file": "anim_idle_calm.glb",
+   "action_id": 252,
+   "action_name": "Idle 12",
+   "library_key": "Idle_12",
+   "clip_name_in_glb": "Armature|Idle_12|baselayer",
+   "animation_task_id": "01a2114e-7761-73fb-b81f-775ad86e25ff",
+   "duration_s": 6.033,
+   "hips_travel_xyz": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "hips_yaw_start_deg": -4.2,
+   "start_end_pose_gap_m": 0.0,
+   "loops": true,
+   "file_bytes": 555296,
+   "credits": 3,
+   "note": "Relaxed upright stand, feet about 0.21 m apart (anim_idle is 0.45 m), very subtle side-to-side weight sway (head moves about 1 cm). Closes exactly."
+  },
+  "march": {
+   "file": "anim_march.glb",
+   "action_id": 672,
+   "action_name": "Spear Walk",
+   "library_key": "Spear_Walk_inplace",
+   "clip_name_in_glb": "Armature|Spear_Walk_inplace|baselayer",
+   "animation_task_id": "01a21150-117e-724a-8e84-9e3aeea46587",
+   "duration_s": 1.133,
+   "hips_travel_xyz": [
+    0.001,
+    -0.004,
+    0.001
+   ],
+   "hips_yaw_start_deg": 0.5,
+   "start_end_pose_gap_m": 0.035,
+   "loops": true,
+   "file_bytes": 425216,
+   "credits": 3,
+   "note": "Brisk upright purposeful walk in place, chest out, two steps per 1.13 s cycle, hips face straight ahead."
+  },
+  "panic": {
+   "file": "anim_panic.glb",
+   "action_id": 660,
+   "action_name": "Run Fast 4",
+   "library_key": "run_fast_4_inplace",
+   "clip_name_in_glb": "Armature|run_fast_4_inplace|baselayer",
+   "animation_task_id": "01a2114e-7aca-7343-a147-0a56397b8b9e",
+   "duration_s": 0.7,
+   "hips_travel_xyz": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "hips_yaw_start_deg": 23.9,
+   "start_end_pose_gap_m": 0.0,
+   "loops": true,
+   "file_bytes": 413708,
+   "credits": 3,
+   "note": "Fast run in place with high back-kick and a lot of torso twist (about 43 degrees of hip yaw). A plain fast run: the scared look would have to come from the arms."
+  },
+  "death_forward": {
+   "file": "anim_death_forward.glb",
+   "action_id": 188,
+   "action_name": "Fall Dead from Abdominal Injury",
+   "library_key": "Fall_Dead_from_Abdominal_Injury",
+   "clip_name_in_glb": "Armature|Fall_Dead_from_Abdominal_Injury|baselayer",
+   "animation_task_id": "01a2114e-7bc9-717f-a9ab-9838a83cd28e",
+   "duration_s": 3.533,
+   "hips_travel_xyz": [
+    -0.002,
+    -0.586,
+    0.906
+   ],
+   "hips_yaw_start_deg": -42.9,
+   "start_end_pose_gap_m": 1.778,
+   "loops": false,
+   "file_bytes": 488976,
+   "credits": 3,
+   "note": "One-shot. Doubles over, drops to the knees, then tips forward and ends curled on the side/front. Root motion: hips end about 0.9 m ahead (+Z) of the start; the game pins hips x/z so it plays in place."
+  },
+  "hit": {
+   "file": "anim_hit.glb",
+   "action_id": 171,
+   "action_name": "Hit Reaction to Waist",
+   "library_key": "Hit_Reaction_to_Waist",
+   "clip_name_in_glb": "Armature|Hit_Reaction_to_Waist|baselayer",
+   "animation_task_id": "01a2114e-7cb4-71bf-b9f1-2be2a93d7126",
+   "duration_s": 1.667,
+   "hips_travel_xyz": [
+    0.0,
+    -0.001,
+    0.0
+   ],
+   "hips_yaw_start_deg": -46.4,
+   "start_end_pose_gap_m": 0.002,
+   "loops": false,
+   "file_bytes": 439320,
+   "credits": 3,
+   "note": "One-shot heavy hit: torso twists away, then folds deeply at the waist (head drops to about 1.1 m at 0.8 s) and recovers to the exact start pose by about 1.45 s. Starts and ends in a side-on guard stance (hips yawed about 46 degrees, feet staggered), not the idle stance."
+  },
+  "stab": {
+   "file": "anim_stab.glb",
+   "action_id": 214,
+   "action_name": "Punch Forward with Both Fists",
+   "library_key": "Punch_Forward_with_Both_Fists",
+   "clip_name_in_glb": "Armature|Punch_Forward_with_Both_Fists|baselayer",
+   "animation_task_id": "01a2114e-7eac-7458-8473-135680ec188f",
+   "duration_s": 3.5,
+   "hips_travel_xyz": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "hips_yaw_start_deg": -62.2,
+   "start_end_pose_gap_m": 0.001,
+   "loops": false,
+   "file_bytes": 488092,
+   "credits": 3,
+   "note": "One-shot two-handed forward jab with a lunge step, returns to the exact start pose. Long wind-up: the thrust lands at about 1.75 to 2.2 s of 3.5 s. Starts side-on (hips yawed about 62 degrees). The hips step about 0.44 m forward and back; the game pins hips x/z."
+  },
+  "cheer": {
+   "file": "anim_cheer.glb",
+   "action_id": 303,
+   "action_name": "Cheer with Both Hands",
+   "library_key": "Cheer_with_Both_Hands",
+   "clip_name_in_glb": "Armature|Cheer_with_Both_Hands|baselayer",
+   "animation_task_id": "01a2114e-7db6-70a0-9ba5-d2b10c935271",
+   "duration_s": 2.967,
+   "hips_travel_xyz": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "hips_yaw_start_deg": 0.2,
+   "start_end_pose_gap_m": 0.001,
+   "loops": true,
+   "file_bytes": 473900,
+   "credits": 3,
+   "note": "Both arms raised with a small knee bounce and back arch; closes exactly. The cheer is carried by the arms, so arm IK has to be off for it to read."
+  },
+  "kneel": {
+   "file": "anim_kneel.glb",
+   "action_id": 365,
+   "action_name": "Kneel on One Knee and Stand",
+   "library_key": "Kneel_on_One_Knee_and_Stand",
+   "clip_name_in_glb": "Armature|Kneel_on_One_Knee_and_Stand_reversed|baselayer",
+   "animation_task_id": "01a2114e-80e8-7219-a3f8-201b5324736b",
+   "duration_s": 2.567,
+   "hips_travel_xyz": [
+    -0.15,
+    -0.379,
+    -0.185
+   ],
+   "hips_yaw_start_deg": -22.5,
+   "start_end_pose_gap_m": 0.489,
+   "loops": false,
+   "file_bytes": 463236,
+   "credits": 3,
+   "note": "One-shot: stands, then goes down on one knee and ends kneeling, torso hunched and head bowed, one hand toward the ground. Nearly still for the first 0.9 s.",
+   "edited": "The library only has the opposite direction (kneeling, then standing up). This file is that clip REVERSED in time, with the hips track shifted so the first (standing) key sits at world x=0, z=-0.055. Play it backwards to stand up again. Kneeling end pose sits about 0.15 m left and 0.19 m behind the start (the game pins hips x/z)."
+  },
+  "knockback": {
+   "file": "anim_knockback.glb",
+   "action_id": 187,
+   "action_name": "Knock Down",
+   "library_key": "Knock_Down",
+   "clip_name_in_glb": "Armature|Knock_Down|baselayer",
+   "animation_task_id": "01a2139c-17d5-72b8-b2d8-bba6c6fcb1dd",
+   "duration_s": 2.533,
+   "hips_travel_xyz": [
+    0.039,
+    -0.633,
+    -0.633
+   ],
+   "hips_yaw_start_deg": -3.5,
+   "start_end_pose_gap_m": 1.671,
+   "loops": false,
+   "file_bytes": 462324,
+   "credits": 3,
+   "note": "One-shot: thrown up and backward off the feet (hips rise to about 1.5 m at 0.5 s), flips legs-up, lands flat on the back at about 1.0 s with arms spread, then settles. Lands about 0.63 m behind the start (-Z); the game pins hips x/z.",
+   "edited": "The library clip starts 1.24 m behind and 0.2 m to the side of the origin; the hips track was shifted so the first key sits at world x=0, z=-0.055. Motion otherwise untouched."
+  },
+  "hit_light": {
+   "file": "anim_hit_light.glb",
+   "action_id": 179,
+   "action_name": "Hit Reaction 1",
+   "library_key": "Hit_Reaction_1",
+   "clip_name_in_glb": "Armature|Hit_Reaction_1|baselayer",
+   "animation_task_id": "01a2139c-1b7f-7337-a26a-b972bedfea83",
+   "duration_s": 1.233,
+   "hips_travel_xyz": [
+    0.0,
+    -0.001,
+    0.0
+   ],
+   "hips_yaw_start_deg": -46.4,
+   "start_end_pose_gap_m": 0.001,
+   "loops": false,
+   "file_bytes": 427840,
+   "credits": 3,
+   "note": "EXTRA, not asked for: a shorter, lighter flinch (ducks the head and crunches forward, feet planted) that returns to the exact start pose. Same side-on guard stance as anim_hit, so the two swap cleanly. Rename to anim_hit.glb if the heavy one is too much."
   }
  },
  "animation_files_note": "Each anim_*.glb is a full copy of the skinned, textured character with one clip; all share the same skeleton as u_line.glb.",
  "unused_free_clips": "The rigging task also returned basic walking_man and running clips (in place, looping) at no extra cost; raw copies are in the scratchpad at meshy_work/downloads/u_line/rig/.",
- "meshy_credits": 48,
+ "meshy_credits": 93,
  "meshy_credits_breakdown": {
   "image_to_3d": 15,
   "rigging": 5,
   "library animations (idle, walk, run, fire_kneel, death)": 15,
   "text_to_motion (fire)": 10,
-  "retarget fire": 3
+  "retarget fire": 3,
+  "phase 3 library animations (15 tasks, 10 kept)": 45
+ },
+ "phase3_clips": {
+  "added": "2026-11-25",
+  "roles": [
+   "idle_calm",
+   "march",
+   "panic",
+   "death_forward",
+   "hit",
+   "stab",
+   "cheer",
+   "kneel",
+   "knockback",
+   "hit_light"
+  ],
+  "textures": "stripped to 4 px with tools/prepare_model.py --strip-textures",
+  "credits": {
+   "clips kept (10 x 3)": 30,
+   "candidates tried and not used (5 x 3)": 15
+  },
+  "not_used": {
+   "march": "652 Proud Strut (in place): slow 4.5 s swagger with 35 degrees of hip sway",
+   "kneel": "258 Crouchlookaroundbow: a two-footed squat, not a kneel",
+   "hit": "177 Gunshot Reaction (3 s, leans far back twice, does not return to its start pose); 178 Hit Reaction (sidesteps 0.87 m and stays there)",
+   "knockback": "182 Shot and Blown Back (stands for a second, then travels 4 m)"
+  },
+  "raw_copies": "full-texture originals of every clip, used or not, are in the scratchpad at meshy_work/downloads/u_line/anim3, anim4 and final"
  }
 }

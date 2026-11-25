@@ -1,0 +1,60 @@
+{
+ "asset": "tree_pine",
+ "file": "tree_pine.glb",
+ "generated": "2026-11-25",
+ "meshy": {
+  "endpoint": "POST /openapi/v1/image-to-3d",
+  "model_type": "smart-topology",
+  "ai_model": "meshy-t2.5",
+  "texture_model": "meshy-n1",
+  "texture_resolution": "2k",
+  "note": "Smart Topology generates directly at target_polycount (no remesh pass); base colour only, no PBR maps.",
+  "task_ids": {
+   "image_to_3d": "01a21150-b12f-75ce-bdf9-8bcc2a427c98"
+  }
+ },
+ "requested_triangles": 2500,
+ "actual_triangles": 2628,
+ "vertices": 1994,
+ "file_bytes": 2676576,
+ "texture": {
+  "count": 1,
+  "resolution": [
+   2048,
+   2048
+  ],
+  "maps": "base colour only, embedded at full size (not shrunk)"
+ },
+ "units": "GLB own units (unitless, Meshy normalises the longest side to about 0.95; NOT metres). Origin is the bounding-box centre, not the ground: lift by -bbox_min[1] to stand it on y=0.",
+ "bbox_min": [
+  -0.2732,
+  -0.4758,
+  -0.2898
+ ],
+ "bbox_max": [
+  0.2693,
+  0.4758,
+  0.2888
+ ],
+ "bbox_size": [
+  0.5425,
+  0.9517,
+  0.5786
+ ],
+ "up_axis": "+Y",
+ "orientation": "Y up. No meaningful front. Tall conifer.",
+ "single_object": true,
+ "ground_plane": false,
+ "reference_image": {
+  "file": "ref.png",
+  "tool": "Meshy POST /openapi/v1/image-to-image",
+  "model": "nano-banana-2-1",
+  "aspect": "1:1",
+  "style_reference": "tree/ref.png",
+  "task_id": "01a2114f-1c3b-73e1-ad00-59144a606868",
+  "prompt": "Use the reference image only for its art style: the same stylized chunky clay-like 3D toy look, smooth soft clumpy foliage shapes with no thin leaves or thin branches, bright saturated colours, plain pure white background, flat even studio lighting, no ground, no grass, no base, no cast shadow. Create a NEW image of ONE single object for 3D modelling, whole object in frame, centred, front view: a tall stylized conifer (pine/fir tree): a straight short brown trunk and five or six stacked, overlapping, chunky rounded tiers of dark green boughs that get smaller toward a pointed top, like a toy Christmas tree without decorations. Much taller than it is wide.",
+  "credits": 4
+ },
+ "meshy_credits": 15,
+ "meshy_credits_note": "image-to-3D only; the reference image cost 4 more."
+}

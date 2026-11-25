@@ -18,6 +18,7 @@ enum Drill {
 	LOAD,       # butt on the ground, right hand working the ramrod
 	CHARGE,     # levelled at the hip, bayonet forward
 	DROPPED,    # lying where it fell
+	RAISED,     # held high in one hand: a cheer
 }
 
 const LENGTH := 1.3          # musket with bayonet, metres
@@ -111,6 +112,9 @@ func _target(which: int) -> Array:
 			return [0.0, Vector3(mid.x + 0.1, 0.03, mid.z + 0.3), Vector3(-0.05, 1.0, -0.1), Vector3(0, 0, 1), 1.0, 1.0]
 		Drill.CHARGE:
 			return [GRIP_T, _shoulder_r + Vector3(0.03, -0.43, 0.1 + 0.3 * jab), Vector3(0.2, 0.05, 1.0), Vector3.UP, 1.0, 1.0]
+		Drill.RAISED:
+			var pump := 0.07 * sin(_clock * 9.0)
+			return [GRIP_T, _shoulder_r + Vector3(-0.08, 0.52 + pump, 0.1), Vector3(0.18, 1.0, 0.05), Vector3(0, 0, 1), 1.0, 0.0]
 		Drill.DROPPED:
 			return [0.5, Vector3(mid.x - 0.25, 0.04, mid.z + 0.3), Vector3(0.9, 0.0, 0.4), Vector3.UP, 0.0, 0.0]
 		_:      # PORT, and NONE keeps the musket where PORT would have it while it fades

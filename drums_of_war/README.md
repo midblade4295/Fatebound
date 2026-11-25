@@ -75,6 +75,8 @@ match goes to one minute of sudden-death overtime.
   in code; the wood grain is a generated noise texture.
 - `scripts/view/battle_world.gd`: the 3D battlefield: structures, regiments in formation, smoke,
   flashes, lighting, and the camera that fits the field to whatever shape the screen is.
+  It also makes blows land: camera shake, a brief hit-stop, muzzle light, shot streaks, shock
+  rings, flung earth and splinters, struck figures flashing white and being shoved or thrown.
 - `scripts/view/arena.gd`: the scenery, set in autumn: ground sculpted with a real creek channel,
   water, grass tufts and reeds, wheat, woods in fall colours, leaf litter and falling leaves,
   pumpkins and hay bales, drifting cloud shadow, sunbeams and motes, stepping stones. Units wade the fords and climb the
@@ -99,8 +101,11 @@ match goes to one minute of sudden-death overtime.
 2. Image-to-3D at a set triangle count, then auto-rigging for characters.
 3. `tools/prepare_model.py` shrinks textures (and writes the crimson texture for structures);
    `models.gd` turns each model to face forward, scales it, and puts a musket in infantry hands.
-4. Animation clips (idle, walk, run, fire, death) were made once, for the Union line
-   infantryman. Every other rigged character borrows them, because the rigs share one skeleton.
+4. Animation clips were made once, for the Union line infantryman, from the generator's
+   library: a calm idle, march, run, panicked run, flinch, bayonet thrust, kneel, cheer,
+   knockback and two falls. Every other rigged character borrows them, because the rigs share
+   one skeleton. `models.gd` trims each library clip to its useful stretch and sets its pace.
+5. Arms and musket are not animated by the clips at all: `musket_drill.gd` places them.
 
 Cavalry are single unrigged models. A vertex shader swings everything below the horse's belly
 fore and aft and rocks the body, which reads as a gallop at game distance; a real gait needs a
@@ -113,9 +118,7 @@ is pinned to the top and bottom, clear of a notch or gesture bar, and the camera
 
 The other ten cards of the 18-card launch deck, smoke as a rule (it is a visual effect only),
 deck building, a menu, and online play. Known rough edges in this stage: the sounds were chosen
-by measurement and have not been listened to; the body clips under the musket drill are still
-the first set (a wide-stance idle, a plain walk); every tree is the one tree model in different
-sizes and fall colours (reference images for an oak, pine, birch, bush and log are in `assets/models/`
-but their models have not been made); the HUD is still plain. The Android APK builds
+by measurement and have not been listened to; the cavalry crash sound is a stand-in mixed from other takes; the flinch and thrust clips
+start from a side-on stance, so bodies swivel slightly into them. The Android APK builds
 and is signed, but has not been run on a physical phone, and nothing here has been profiled on
 one. Balance is the stage 1 first pass, tuned on bot-versus-bot matches.

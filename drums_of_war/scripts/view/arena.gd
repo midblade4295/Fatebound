@@ -322,7 +322,8 @@ func _build_bridge_and_stones() -> void:
 	stones.multimesh = mm
 	stones.material_override = _colour_mat(Color("9a978c"), 0.7)
 	add_child(stones)
-	_scatter_model("rocks", [Vector3(-12.5, 0, 1.6), Vector3(11.8, 0, -1.8), Vector3(-3.2, 0, 1.75), Vector3(3.4, 0, -1.7),
+	# Boulders on the banks, but only beyond the field: nothing here may look like an obstacle.
+	_scatter_model("rocks", [Vector3(-12.5, 0, 1.6), Vector3(11.8, 0, -1.8), Vector3(-10.6, 0, -1.9), Vector3(10.4, 0, 1.8),
 			Vector3(-15.5, 0, -2.2), Vector3(15.8, 0, 2.0)], 1.5, 2.3)
 
 
@@ -514,6 +515,10 @@ func _plant(model: String, pos: Vector3, tall: float) -> bool:
 		_foliage_shader = Shader.new()
 		_foliage_shader.code = FOLIAGE_SHADER
 	var leaf := _leaf_colour().lerp(_leaf_colour(), _rng.next_f() * 0.35)
+	if model == "tree_pine":
+		leaf = Color("2f5f2c").lerp(Color("3f7434"), _rng.next_f())       # evergreens stay green
+	elif model == "bush" and _rng.next_f() < 0.45:
+		leaf = Color("4d7d2c").lerp(Color("7c9a34"), _rng.next_f())
 	var shade := _rng.range_f(0.8, 1.05)
 	var tint := Vector3(pow(leaf.r, 2.2), pow(leaf.g, 2.2), pow(leaf.b, 2.2)) * shade
 	for mi: MeshInstance3D in node.find_children("*", "MeshInstance3D", true, false):

@@ -1,0 +1,60 @@
+{
+ "asset": "bush",
+ "file": "bush.glb",
+ "generated": "2026-11-25",
+ "meshy": {
+  "endpoint": "POST /openapi/v1/image-to-3d",
+  "model_type": "smart-topology",
+  "ai_model": "meshy-t2.5",
+  "texture_model": "meshy-n1",
+  "texture_resolution": "2k",
+  "note": "Smart Topology generates directly at target_polycount (no remesh pass); base colour only, no PBR maps.",
+  "task_ids": {
+   "image_to_3d": "01a21150-ba48-7477-bf05-dcbc338e154a"
+  }
+ },
+ "requested_triangles": 1200,
+ "actual_triangles": 1236,
+ "vertices": 958,
+ "file_bytes": 2823368,
+ "texture": {
+  "count": 1,
+  "resolution": [
+   2048,
+   2048
+  ],
+  "maps": "base colour only, embedded at full size (not shrunk)"
+ },
+ "units": "GLB own units (unitless, Meshy normalises the longest side to about 0.95; NOT metres). Origin is the bounding-box centre, not the ground: lift by -bbox_min[1] to stand it on y=0.",
+ "bbox_min": [
+  -0.4827,
+  -0.2639,
+  -0.4377
+ ],
+ "bbox_max": [
+  0.4802,
+  0.2625,
+  0.4392
+ ],
+ "bbox_size": [
+  0.9629,
+  0.5264,
+  0.877
+ ],
+ "up_axis": "+Y",
+ "orientation": "Y up. No meaningful front. Low and wide.",
+ "single_object": true,
+ "ground_plane": false,
+ "reference_image": {
+  "file": "ref.png",
+  "tool": "Meshy POST /openapi/v1/image-to-image",
+  "model": "nano-banana-2-1",
+  "aspect": "1:1",
+  "style_reference": "tree/ref.png",
+  "task_id": "01a2114f-2400-7639-8b62-24ef5bf33790",
+  "prompt": "Use the reference image only for its art style: the same stylized chunky clay-like 3D toy look, smooth soft clumpy foliage shapes with no thin leaves or thin branches, bright saturated colours, plain pure white background, flat even studio lighting, no ground, no grass, no base, no cast shadow. Create a NEW image of ONE single object for 3D modelling, whole object in frame, centred, front view: a low, round, leafy bush with no visible trunk, made of soft clumpy green lobes, dotted with a few small simple white flowers and yellow flowers. Wider than it is tall.",
+  "credits": 4
+ },
+ "meshy_credits": 15,
+ "meshy_credits_note": "image-to-3D only; the reference image cost 4 more."
+}

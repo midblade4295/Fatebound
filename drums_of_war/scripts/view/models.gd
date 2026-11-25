@@ -27,6 +27,12 @@ const YAW := {"u_line": 180.0, "c_line": 180.0, "u_skirm": 180.0, "c_skirm": 180
 		"bridge": 90.0, "fence": 90.0}
 const CLIPS := ["idle", "walk", "run", "fire", "death", "idle_calm", "march", "panic", "death_forward", "hit", "cheer", "stab", "kneel", "knockback"]
 const LOOPING := ["idle", "walk", "run", "idle_calm", "march", "panic", "cheer"]
+# The part of a library clip that is actually wanted, in seconds [from, to], and how it repeats.
+# The thrust has a long wind-up, the kneel a still second before it starts, the flinch a slow
+# recovery; the game plays only the useful stretch.
+const TRIM := {"stab": [1.5, 2.25], "kneel": [0.9, 2.57], "hit": [0.0, 1.0]}
+const PINGPONG := ["stab"]             # played forward then back, so the thrust repeats smoothly
+const SPEED := {"hit": 1.7, "stab": 1.25, "kneel": 1.6, "knockback": 1.15, "panic": 1.15}
 # What to play when a character has no clip of that name.
 const FALLBACK := {"idle_calm": "idle", "march": "walk", "panic": "run", "death_forward": "death",
 		"hit": "idle", "cheer": "idle", "stab": "idle", "kneel": "idle"}
@@ -156,7 +162,12 @@ static func _library(name: String) -> AnimationLibrary:
 					best = a
 			if best != null:
 				var copy: Animation = best.duplicate()
-				copy.loop_mode = Animation.LOOP_LINEAR if clip in LOOPING else Animation.LOOP_NONE
+				if TRIM.has(clip):
+					copy = _trimmed(copy, float(TRIM[clip][0]), float(TRIM[clip][1]))
+				if clip in PINGPONG:
+					copy.loop_mode = Animation.LOOP_PINGPONG
+				else:
+					copy.loop_mode = Animation.LOOP_LINEAR if clip in LOOPING else Animation.LOOP_NONE
 				_keep_in_place(copy)
 				lib.add_animation(clip, copy)
 				found += 1
@@ -167,6 +178,29 @@ static func _library(name: String) -> AnimationLibrary:
 	else:
 		_libraries[name] = lib if found > 0 else null
 	return _libraries[name]
+
+
+## A new clip holding only the stretch of a clip between two times, resampled 30 times a second.
+static func _trimmed(src: Animation, from: float, to: float) -> Animation:
+	var out := Animation.new()
+	to = minf(to, src.length)
+	out.length = maxf(0.05, to - from)
+	for track in src.get_track_count():
+		var kind := src.track_get_type(track)
+		if kind != Animation.TYPE_POSITION_3D and kind != Animation.TYPE_ROTATION_3D and kind != Animation.TYPE_SCALE_3D:
+			continue
+		var t := out.add_track(kind)
+		out.track_set_path(t, src.track_get_path(track))
+		var steps := int(ceil(out.length * 30.0))
+		for i in steps + 1:
+			var at := minf(from + i / 30.0, to)
+			if kind == Animation.TYPE_POSITION_3D:
+				out.position_track_insert_key(t, at - from, src.position_track_interpolate(track, at))
+			elif kind == Animation.TYPE_ROTATION_3D:
+				out.rotation_track_insert_key(t, at - from, src.rotation_track_interpolate(track, at))
+			else:
+				out.scale_track_insert_key(t, at - from, src.scale_track_interpolate(track, at))
+	return out
 
 
 ## The shared clips with only what transfers between characters: bone rotations, and the hips'
@@ -223,7 +257,8 @@ static func play(soldier: Node3D, clip: String, restart: bool) -> void:
 			return
 	if restart:
 		player.stop()
-	player.play(full, 0.2)
+	var pace: float = float(SPEED.get(clip, 1.0)) * float(soldier.get_meta("pace", 1.0))
+	player.play(full, 0.16, pace)
 
 
 ## One man (or one mounted man) for a card: the generated model if there is one, else a stand-in.
@@ -252,7 +287,8 @@ static func make_soldier(card_id: String, arm: String, team: int, world: Node3D)
 				made.set_meta("player", player)
 				play(made, "idle_calm", false)
 				player.seek(randf() * 1.5, true)
-				player.speed_scale = randf_range(0.93, 1.07)     # so a rank is not a row of clones
+				made.set_meta("pace", randf_range(0.93, 1.07))    # so a rank is not a row of clones
+				play(made, "idle_calm", false)
 			elif arm == "cavalry":
 				_apply_gallop(made)
 			return made

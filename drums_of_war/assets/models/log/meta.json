@@ -1,0 +1,60 @@
+{
+ "asset": "log",
+ "file": "log.glb",
+ "generated": "2026-11-25",
+ "meshy": {
+  "endpoint": "POST /openapi/v1/image-to-3d",
+  "model_type": "smart-topology",
+  "ai_model": "meshy-t2.5",
+  "texture_model": "meshy-n1",
+  "texture_resolution": "2k",
+  "note": "Smart Topology generates directly at target_polycount (no remesh pass); base colour only, no PBR maps.",
+  "task_ids": {
+   "image_to_3d": "01a21153-454c-73e9-a386-37ef1d60992d"
+  }
+ },
+ "requested_triangles": 1000,
+ "actual_triangles": 1048,
+ "vertices": 793,
+ "file_bytes": 2631384,
+ "texture": {
+  "count": 1,
+  "resolution": [
+   2048,
+   2048
+  ],
+  "maps": "base colour only, embedded at full size (not shrunk)"
+ },
+ "units": "GLB own units (unitless, Meshy normalises the longest side to about 0.95; NOT metres). Origin is the bounding-box centre, not the ground: lift by -bbox_min[1] to stand it on y=0.",
+ "bbox_min": [
+  -0.4788,
+  -0.4363,
+  -0.3567
+ ],
+ "bbox_max": [
+  0.4788,
+  0.4333,
+  0.3538
+ ],
+ "bbox_size": [
+  0.9575,
+  0.8696,
+  0.7104
+ ],
+ "up_axis": "+Y",
+ "orientation": "Y up. Log lies along X; pale cut end with rings faces +X, the other cut end (plain tan) faces -X; branch stub on top.",
+ "single_object": true,
+ "ground_plane": false,
+ "reference_image": {
+  "file": "ref.png",
+  "tool": "Meshy POST /openapi/v1/image-to-image",
+  "model": "nano-banana-2-1",
+  "aspect": "1:1",
+  "style_reference": "tree/ref.png",
+  "task_id": "01a21152-c200-70c3-ad47-db9cece73bdb",
+  "prompt": "Use the reference image only for its art style: the same stylized chunky clay-like 3D toy look, the same warm brown bark as the reference trunk, bright saturated colours, plain pure white background, flat even studio lighting, no ground, no grass, no base, no cast shadow. Create a NEW image of ONE single object for 3D modelling, whole object in frame, centred: a short, thick fallen tree trunk (a log) lying horizontally, seen in three-quarter view so the round cut end faces the viewer on the right and shows pale cream wood with clear concentric tree rings. Chunky brown bark with a few soft grooves, one short stubby branch stump, and thick soft cushions of bright green moss draped over the top. No leaves, no mushrooms, no other objects.",
+  "credits": 4
+ },
+ "meshy_credits": 15,
+ "meshy_credits_note": "image-to-3D only; the reference image cost 4 more."
+}

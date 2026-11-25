@@ -1,0 +1,60 @@
+{
+ "asset": "tree_birch",
+ "file": "tree_birch.glb",
+ "generated": "2026-11-25",
+ "meshy": {
+  "endpoint": "POST /openapi/v1/image-to-3d",
+  "model_type": "smart-topology",
+  "ai_model": "meshy-t2.5",
+  "texture_model": "meshy-n1",
+  "texture_resolution": "2k",
+  "note": "Smart Topology generates directly at target_polycount (no remesh pass); base colour only, no PBR maps.",
+  "task_ids": {
+   "image_to_3d": "01a21150-b5de-71a1-9ed5-df1b69cee335"
+  }
+ },
+ "requested_triangles": 2500,
+ "actual_triangles": 2579,
+ "vertices": 1972,
+ "file_bytes": 2598896,
+ "texture": {
+  "count": 1,
+  "resolution": [
+   2048,
+   2048
+  ],
+  "maps": "base colour only, embedded at full size (not shrunk)"
+ },
+ "units": "GLB own units (unitless, Meshy normalises the longest side to about 0.95; NOT metres). Origin is the bounding-box centre, not the ground: lift by -bbox_min[1] to stand it on y=0.",
+ "bbox_min": [
+  -0.2507,
+  -0.4758,
+  -0.1995
+ ],
+ "bbox_max": [
+  0.2527,
+  0.4768,
+  0.1965
+ ],
+ "bbox_size": [
+  0.5034,
+  0.9526,
+  0.396
+ ],
+ "up_axis": "+Y",
+ "orientation": "Y up. Slim trunk; canopy is wider along X than Z.",
+ "single_object": true,
+ "ground_plane": false,
+ "reference_image": {
+  "file": "ref.png",
+  "tool": "Meshy POST /openapi/v1/image-to-image",
+  "model": "nano-banana-2-1",
+  "aspect": "1:1",
+  "style_reference": "tree/ref.png",
+  "task_id": "01a2114f-2066-77c2-9e9a-496d650634ec",
+  "prompt": "Use the reference image only for its art style: the same stylized chunky clay-like 3D toy look, smooth soft clumpy foliage shapes with no thin leaves or thin branches, bright saturated colours, plain pure white background, flat even studio lighting, no ground, no grass, no base, no cast shadow. Create a NEW image of ONE single object for 3D modelling, whole object in frame, centred, front view: a slim birch tree: a tall, fairly thin pale cream-white trunk with a few dark bark marks, and a smaller, lighter, airy canopy made of a few soft clumpy lobes in bright yellow-green and lime. Taller and slimmer than the reference tree.",
+  "credits": 4
+ },
+ "meshy_credits": 15,
+ "meshy_credits_note": "image-to-3D only; the reference image cost 4 more."
+}

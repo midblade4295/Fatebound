@@ -1,0 +1,60 @@
+{
+ "asset": "tree_oak",
+ "file": "tree_oak.glb",
+ "generated": "2026-11-25",
+ "meshy": {
+  "endpoint": "POST /openapi/v1/image-to-3d",
+  "model_type": "smart-topology",
+  "ai_model": "meshy-t2.5",
+  "texture_model": "meshy-n1",
+  "texture_resolution": "2k",
+  "note": "Smart Topology generates directly at target_polycount (no remesh pass); base colour only, no PBR maps.",
+  "task_ids": {
+   "image_to_3d": "01a21150-ac1a-7565-86a9-8452db7ad90a"
+  }
+ },
+ "requested_triangles": 3500,
+ "actual_triangles": 3698,
+ "vertices": 2634,
+ "file_bytes": 3577688,
+ "texture": {
+  "count": 1,
+  "resolution": [
+   2048,
+   2048
+  ],
+  "maps": "base colour only, embedded at full size (not shrunk)"
+ },
+ "units": "GLB own units (unitless, Meshy normalises the longest side to about 0.95; NOT metres). Origin is the bounding-box centre, not the ground: lift by -bbox_min[1] to stand it on y=0.",
+ "bbox_min": [
+  -0.4788,
+  -0.4592,
+  -0.4749
+ ],
+ "bbox_max": [
+  0.4778,
+  0.4583,
+  0.4744
+ ],
+ "bbox_size": [
+  0.9565,
+  0.9175,
+  0.9492
+ ],
+ "up_axis": "+Y",
+ "orientation": "Y up. No meaningful front. Broad canopy, wider than tall.",
+ "single_object": true,
+ "ground_plane": false,
+ "reference_image": {
+  "file": "ref.png",
+  "tool": "Meshy POST /openapi/v1/image-to-image",
+  "model": "nano-banana-2-1",
+  "aspect": "1:1",
+  "style_reference": "tree/ref.png",
+  "task_id": "01a2114f-17fc-7172-a7c5-1398c244cbdb",
+  "prompt": "Use the reference image only for its art style: the same stylized chunky clay-like 3D toy look, smooth soft clumpy foliage shapes with no thin leaves or thin branches, bright saturated colours, plain pure white background, flat even studio lighting, no ground, no grass, no base, no cast shadow. Create a NEW image of ONE single object for 3D modelling, whole object in frame, centred, front view: a big broad oak tree with a very thick short gnarled brown trunk that splits into two or three fat boughs, and a wide, lush, layered, rounded canopy made of many large soft clumpy lobes in several different greens (deep green, mid green, bright yellow-green). Wider than it is tall.",
+  "credits": 4
+ },
+ "meshy_credits": 15,
+ "meshy_credits_note": "image-to-3D only; the reference image cost 4 more."
+}

@@ -1,0 +1,63 @@
+{
+ "asset": "rocks",
+ "file": "rocks.glb",
+ "generated": "2026-11-25",
+ "meshy": {
+  "endpoint": "POST /openapi/v1/image-to-3d",
+  "model_type": "smart-topology",
+  "ai_model": "meshy-t2.5",
+  "texture_model": "meshy-n1",
+  "texture_resolution": "2k",
+  "note": "Smart Topology generates directly at target_polycount (no remesh pass); base colour only, no PBR maps.",
+  "task_ids": {
+   "image_to_3d": "01a213a0-e8be-7662-ae95-499a24bdf3b0"
+  }
+ },
+ "requested_triangles": 1200,
+ "actual_triangles": 1252,
+ "vertices": 909,
+ "file_bytes": 2282620,
+ "texture": {
+  "count": 1,
+  "resolution": [
+   2048,
+   2048
+  ],
+  "maps": "base colour only, embedded at full size (not shrunk)"
+ },
+ "units": "GLB own units (unitless, Meshy normalises the longest side to about 0.95; NOT metres). Origin is the bounding-box centre, not the ground: lift by -bbox_min[1] to stand it on y=0.",
+ "bbox_min": [
+  -0.3743,
+  -0.3503,
+  -0.4827
+ ],
+ "bbox_max": [
+  0.3748,
+  0.3479,
+  0.4827
+ ],
+ "bbox_size": [
+  0.749,
+  0.6982,
+  0.9653
+ ],
+ "up_axis": "+Y",
+ "orientation": "Y up. Three boulders in a row-ish cluster, longest along Z. The side that matches the reference image (all three boulders visible) faces -X.",
+ "single_object": true,
+ "ground_plane": false,
+ "reference_image": {
+  "file": "ref.png",
+  "tool": "ElevenLabs creative flow TO77lHbC2290C0TmYbB7 (one call, four variations)",
+  "model": "gpt-image-2.5-sunburst",
+  "aspect": "16:9 1280x720, padded to a white 1024 square",
+  "style_reference": null,
+  "chosen_generation_id": "9kFtqpUZOy5xsD8W3EIq",
+  "prompt": "Reference image for 3D modelling of ONE single object: a small cluster of exactly three smooth rounded boulders of different sizes (one large, one medium, one small) nestled tightly together and touching, forming one compact chunky shape. Stylized 3D CGI game-asset look, smooth slightly clay-like surfaces, bright saturated toy-like colours, chunky simple shapes. The stones are warm light grey with a few soft carved grooves. Thick, puffy, bright lime-green moss blobs sit draped over the tops of the boulders like soft cushions, clearly separate from the grey stone. Three-quarter view from slightly above. No grass, no ground, no base, no pebbles, no plants, no flowers. The whole cluster is in frame, centred, with margin all around. Plain pure white background, flat even studio lighting, no cast shadow, no other objects, no text. Family-friendly."
+ },
+ "meshy_credits": 15,
+ "earlier_attempt": {
+  "route": "Meshy text-to-3D (preview 01a2114d-70a9-7278-a2f7-585bb41ec7a5 + refine 01a2114f-0121-72e0-a6d9-30b3e28c6eee), 15 credits, made by the earlier helper",
+  "why_not_used": "came out as four dull grey-brown boulders with only faint olive smudges for moss, off-style next to the other scenery",
+  "file": "scratchpad meshy_work/downloads/t3d/rocks_ref.glb (1230 triangles)"
+ }
+}

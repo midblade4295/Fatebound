@@ -1092,7 +1092,9 @@ class RegimentView extends RefCounted:
 			drill = Drill.NONE
 		elif won:
 			clip = "cheer"
+			drill = Drill.RAISED
 		elif r.in_melee and arm != "cavalry":
+			clip = "stab"
 			drill = Drill.CHARGE
 		elif r.state == Sim.ST_SQUARE or r.state == Sim.ST_FORMING:
 			clip = "kneel"
