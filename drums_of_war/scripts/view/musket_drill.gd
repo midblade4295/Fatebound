@@ -127,7 +127,20 @@ func _on_musket(t: float) -> Vector3:
 	return Vector3(LENGTH * 0.5 - t * LENGTH, _thick * 0.5, 0.0)
 
 
+static var profile: bool = false     # set by a profiling script to total the time spent here
+static var spent_usec: int = 0
+
+
 func _process_modification_with_delta(delta: float) -> void:
+	if not profile:
+		_hold(delta)
+		return
+	var began := Time.get_ticks_usec()
+	_hold(delta)
+	spent_usec += Time.get_ticks_usec() - began
+
+
+func _hold(delta: float) -> void:
 	if not _ready_done or musket == null:
 		return
 	var sk := get_skeleton()

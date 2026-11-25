@@ -40,14 +40,14 @@ func _init() -> void:
 	if enabled:
 		var file := ConfigFile.new()
 		if file.load(PATH) == OK:
-			level = clampi(int(file.get_value("quality", "level_v4", 0)), 0, MAX_LEVEL)
+			level = clampi(int(file.get_value("quality", "level_v5", 0)), 0, MAX_LEVEL)
 
 
 func _save() -> void:
 	if not enabled:
 		return
 	var file := ConfigFile.new()
-	file.set_value("quality", "level_v4", level)
+	file.set_value("quality", "level_v5", level)
 	file.save(PATH)
 
 
@@ -57,9 +57,11 @@ func apply(world: Node, viewport: Viewport) -> void:
 	var dense := mini(size.x, size.y) >= 1300
 	if OS.has_environment("DRUMS_DENSE"):
 		dense = true                    # for trying the dense-screen settings on a desktop
-	viewport.msaa_3d = Viewport.MSAA_2X if level < 1 and not dense else Viewport.MSAA_DISABLED
 	viewport.scaling_3d_scale = 1.0
-	viewport.mesh_lod_threshold = float(LOD_PIXELS[level])
+	viewport.msaa_3d = Viewport.MSAA_2X if level < 1 and not dense else Viewport.MSAA_DISABLED
+	# On a dense screen a triangle a few pixels across is far too small to see: let models
+	# drop to a coarser level sooner there.
+	viewport.mesh_lod_threshold = float(LOD_PIXELS[level]) * (1.6 if dense else 1.0)
 	RenderingServer.directional_soft_shadow_filter_set_quality(
 			RenderingServer.SHADOW_QUALITY_SOFT_VERY_LOW if level < 2 else RenderingServer.SHADOW_QUALITY_HARD)
 	world.set_quality(level, level < 1 and not dense)

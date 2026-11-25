@@ -49,7 +49,7 @@ mkdir -p build
 echo "Importing..."
 "$GODOT" --headless --editor --path . --import >/dev/null 2>&1 || true
 echo "Exporting ${ver}..."
-"$GODOT" --headless --path . --export-debug "Android Preview" "$HERE/build/unsigned.apk" >build/export.log 2>&1 \
+"$GODOT" --headless --path . --export-release "Android Preview" "$HERE/build/unsigned.apk" >build/export.log 2>&1 \
   || { tail -20 build/export.log; exit 1; }
 [ -s build/unsigned.apk ] || { echo "Export produced no APK:" >&2; tail -20 build/export.log; exit 1; }
 "$ZIPALIGN" -f -p 4 build/unsigned.apk build/aligned.apk

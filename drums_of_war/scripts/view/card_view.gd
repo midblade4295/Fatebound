@@ -32,6 +32,7 @@ var offset: Vector2 = Vector2.ZERO   # displacement from the resting place
 var halo: float = 0.0            # amber glow, 0..1
 var fade: float = 1.0
 
+var _drawn: int = 0
 var _moves: Tween
 var _pulse: Tween
 var _lift_tween: Tween
@@ -46,7 +47,11 @@ func _ready() -> void:
 
 
 func _process(_delta: float) -> void:
-	queue_redraw()
+	# Redraw only when something about the card's look has changed: most frames nothing has.
+	var now := hash([card_id, affordable, selected, dragging, lift, tilt, swell, shrink, offset, halo, fade, size])
+	if now != _drawn:
+		_drawn = now
+		queue_redraw()
 
 
 func _restart(old: Tween) -> Tween:

@@ -96,6 +96,9 @@ match goes to one minute of sudden-death overtime.
   Per-pixel work is rationed, because a phone screen can have 4.6 million pixels: the fill
   and rim light come from a painted sky rather than two more lights, the porch lamps are
   painted by the ground shader, and the ground's five noises are read from two textures.
+  The processor side is rationed too: the HUD's fixed furniture and its readouts are separate
+  nodes redrawn only when they change, cards redraw only while they move, and in a crowded
+  battle each soldier's skeleton is stepped every second or third frame, staggered.
 - `scripts/view/bench.gd`: a cost meter that runs on the device. Tap the FPS readout: it turns
   each part of the picture off in turn, reads the engine's GPU and CPU render timers with and
   without it, and lists what each part costs per frame, heaviest first.

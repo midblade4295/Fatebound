@@ -47,6 +47,8 @@ var _hitstop_until: int = 0        # real-time milliseconds; 0 when time is runn
 var _lights: Array = []            # a small pool of glow discs for muzzle flashes
 var _glow_material: ShaderMaterial
 var script_usec: int = 0           # time spent in _process since the battle screen last read it
+var frame_no: int = 0
+var anim_stride: int = 1           # every man's clip is stepped once in this many frames
 var _chunks: Array = []            # flung clods and splinters: {node, vel, age, life}
 var _jolts: Dictionary = {}        # structure id -> how hard it is still shuddering
 var _hit_flash: StandardMaterial3D
@@ -650,6 +652,14 @@ func _step(delta: float) -> void:
 	if sim == null:
 		return
 	_time += delta
+	frame_no += 1
+	# Animating a skeleton is the dearest thing the processor does here. A small fight gets
+	# every frame; as the field fills, each man is stepped every second, then every third,
+	# frame (by a correspondingly longer step), staggered so the work is spread evenly.
+	var men := 0
+	for r: Sim.Regiment in sim.regiments:
+		men += r.men
+	anim_stride = 1 if men <= 20 else (2 if men <= 60 else 3)
 	if _warm_frames > 0:
 		_warm_frames -= 1
 		_keep_stock(8)
@@ -720,6 +730,7 @@ func drop_soldier(node: Node3D, animated: bool, impulse: Vector3 = Vector3.ZERO)
 	node.get_parent().remove_child(node)
 	add_child(node)
 	node.global_transform = at
+	Models.free_run(node)
 	if node.has_meta("meshes"):
 		for mi: MeshInstance3D in node.get_meta("meshes"):
 			if is_instance_valid(mi):
@@ -1152,7 +1163,7 @@ class RegimentView extends RefCounted:
 			var meshes: Array = s.find_children("*", "MeshInstance3D", true, false)
 			s.set_meta("meshes", meshes)
 			for mi: MeshInstance3D in meshes:
-				mi.lod_bias = 0.5             # a man a few dozen pixels tall does not need every triangle
+				mi.lod_bias = 0.4             # a man a few dozen pixels tall does not need every triangle
 
 	## The regiment has left the rules: its remaining men fall, then the node goes.
 	func release() -> void:
@@ -1303,9 +1314,13 @@ class RegimentView extends RefCounted:
 
 		var offs := _offsets(r, soldiers.size())
 		var t: float = world._time
+		var stride: int = world.anim_stride
+		var turn: int = world.frame_no + int(phase)
 		for i in soldiers.size():
 			var s: Node3D = soldiers[i]
 			var target: Vector3 = offs[i]
+			if uses_model and (turn + i) % stride == 0:
+				Models.step(s, delta * stride)
 			s.position = s.position.lerp(Vector3(target.x, s.position.y, target.z), 1.0 - exp(-7.0 * delta))
 			# In a square every man faces outward.
 			var face := 0.0

@@ -245,6 +245,25 @@ static func _keep_in_place(anim: Animation) -> void:
 			anim.track_set_key_value(track, key, Vector3(first.x, v.y, first.z))
 
 
+## Moves a figure's clip, and the hands that hold its musket, on by dt seconds.
+static func step(soldier: Node3D, dt: float) -> void:
+	if not soldier.has_meta("player"):
+		return
+	(soldier.get_meta("player") as AnimationPlayer).advance(dt)
+	if soldier.has_meta("skeleton"):
+		(soldier.get_meta("skeleton") as Skeleton3D).advance(dt)
+
+
+## Hands a figure's animation back to the engine to run every frame (a man who has fallen out
+## of his regiment has nobody stepping him).
+static func free_run(soldier: Node3D) -> void:
+	if not soldier.has_meta("player"):
+		return
+	(soldier.get_meta("player") as AnimationPlayer).callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_IDLE
+	if soldier.has_meta("skeleton"):
+		(soldier.get_meta("skeleton") as Skeleton3D).modifier_callback_mode_process = Skeleton3D.MODIFIER_CALLBACK_MODE_PROCESS_IDLE
+
+
 ## Whether this figure has a clip of exactly that name (not a fallback).
 static func has_clip(soldier: Node3D, clip: String) -> bool:
 	if soldier == null or not soldier.has_meta("player"):
@@ -339,6 +358,13 @@ static func _build_soldier(card_id: String, arm: String, team: int, world: Node3
 						player.remove_animation_library(existing)
 				player.add_animation_library("a", lib)
 				made.set_meta("player", player)
+				# The regiment view steps the clip and the skeleton itself (see step()), so that in
+				# a crowded battle each man can be animated every second or third frame.
+				player.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL
+				var skeleton: Skeleton3D = made.find_child("Skeleton3D", true, false)
+				if skeleton != null:
+					skeleton.modifier_callback_mode_process = Skeleton3D.MODIFIER_CALLBACK_MODE_PROCESS_MANUAL
+					made.set_meta("skeleton", skeleton)
 				play(made, "idle_calm", false)
 				player.seek(randf() * 1.5, true)
 				made.set_meta("pace", randf_range(0.93, 1.07))    # so a rank is not a row of clones

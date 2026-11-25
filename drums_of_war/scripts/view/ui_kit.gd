@@ -26,6 +26,7 @@ var font: Font
 var font_bold: FontVariation
 var wood: NoiseTexture2D
 var _boxes: Dictionary = {}
+var _ramps: Dictionary = {}
 
 
 func _init() -> void:
@@ -205,18 +206,32 @@ func framed_bar(c: CanvasItem, at: Vector2, width: float, height: float, fractio
 	var w := width * clampf(fraction, 0.0, 1.0)
 	if w <= 0.5:
 		return
-	var slices := 10
-	for i in slices:
-		var t0 := float(i) / slices
-		var body := deep.lerp(hot, smoothstep(0.55, 1.0, t0 + 0.5 / slices))
-		if flash:
-			body = Color(1, 1, 1)
-		var piece := Rect2(at + Vector2(w * t0, 0), Vector2(w / slices + 0.5, height))
-		c.draw_rect(piece, body)
-		c.draw_rect(Rect2(piece.position, Vector2(piece.size.x, height * 0.5)), body.lightened(0.3))
-		c.draw_rect(Rect2(piece.position + Vector2(0, height * 0.74), Vector2(piece.size.x, height * 0.26)), body.darkened(0.28))
+	# The fill is one stretched gradient texture and four overlays, not a stack of slices: this
+	# is drawn for every structure every frame.
+	var body := Rect2(at, Vector2(w, height))
+	if flash:
+		c.draw_rect(body, Color(1, 1, 1))
+	else:
+		c.draw_texture_rect(_ramp(deep, hot), body, false)
+	c.draw_rect(Rect2(at, Vector2(w, height * 0.5)), Color(1, 1, 1, 0.2))
+	c.draw_rect(Rect2(at + Vector2(0, height * 0.74), Vector2(w, height * 0.26)), Color(0, 0, 0, 0.24))
 	c.draw_rect(Rect2(at + Vector2(1.0, height * 0.14), Vector2(maxf(0.0, w - 2.0), maxf(1.0, height * 0.18))), Color(1, 1, 1, 0.5))      # gloss
 	c.draw_rect(Rect2(at + Vector2(w - 1.0, 0), Vector2(1.0, height)), Color(1, 1, 1, 0.45))
+
+
+## A left-to-right colour ramp: deep for the first half, running to hot at the leading end.
+func _ramp(deep: Color, hot: Color) -> GradientTexture2D:
+	var key := deep.to_html() + hot.to_html()
+	if not _ramps.has(key):
+		var g := Gradient.new()
+		g.offsets = PackedFloat32Array([0.0, 0.55, 1.0])
+		g.colors = PackedColorArray([deep, deep, hot])
+		var t := GradientTexture2D.new()
+		t.gradient = g
+		t.width = 64
+		t.height = 4
+		_ramps[key] = t
+	return _ramps[key]
 
 
 # --- Panels ------------------------------------------------------------------------------------

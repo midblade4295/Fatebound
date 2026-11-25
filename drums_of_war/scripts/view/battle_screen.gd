@@ -56,6 +56,9 @@ var words: Array = []               # floating words over the field: {pos, age, 
 var kit: Kit
 var hand_cards: Array = []          # the four CardView nodes, one per hand slot
 var _overlay: Control               # draws the result plate above the cards
+var _chrome: Node2D                 # the banner and tray, redrawn only when the layout changes
+var _readouts: Node2D               # the clock, Powder and notices, redrawn only when they change
+var _stamp: int = 0
 var _press_slot: int = -1           # the card under the finger when it went down
 var _press_at: Vector2 = Vector2.ZERO
 var _dragging: bool = false
@@ -93,6 +96,8 @@ var quality: Quality
 var bench: Bench
 var _hud_hidden: bool = false
 var _script_usec: int = 0
+var draw_usec: int = 0              # of which drawing the HUD, and running the rules (for profiling)
+var sim_usec: int = 0
 var script_ms: float = 0.0          # this screen's and the world's script time per frame, last second
 
 
@@ -110,6 +115,15 @@ func _ready() -> void:
 	world.local_side = local_side
 	add_child(world)
 	_setup_audio()
+	# Drawing order: this node's own drawing (strength bars and callouts over the field), then
+	# the HUD's fixed furniture, then its readouts, then the cards, then the overlay.
+	_chrome = Node2D.new()
+	_chrome.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
+	_chrome.draw.connect(_draw_chrome)
+	add_child(_chrome)
+	_readouts = Node2D.new()
+	_readouts.draw.connect(_draw_readouts)
+	add_child(_readouts)
 	for i in Sim.HAND_SIZE:
 		var card := CardView.new()
 		card.kit = kit
@@ -185,6 +199,8 @@ func _layout() -> void:
 	var field_top := plaque.end.y + 12.0
 	world.field_rect_design = Rect2(22.0, field_top, screen.x - 44.0, hud_y + 8.0 - field_top)
 	world.fit_camera()
+	_chrome.queue_redraw()
+	_readouts.queue_redraw()
 	for i in hand_cards.size():
 		var home := _card_rect(i)
 		(hand_cards[i] as CardView).position = home.position
@@ -201,6 +217,10 @@ func _step(delta: float) -> void:
 	_layout()
 	_clock += delta
 	_count_frames()
+	var stamp := _readout_stamp()
+	if stamp != _stamp:
+		_stamp = stamp
+		_readouts.queue_redraw()
 	if world.warming():
 		_overlay.visible = true
 		_overlay.queue_redraw()
@@ -216,6 +236,7 @@ func _step(delta: float) -> void:
 		return
 	acc += delta
 	var steps := 0
+	var sim_began := Time.get_ticks_usec()
 	while acc >= Sim.DT and steps < 6:
 		acc -= Sim.DT
 		steps += 1
@@ -226,6 +247,7 @@ func _step(delta: float) -> void:
 		_take_events()
 	if steps == 6:
 		acc = 0.0
+	sim_usec += Time.get_ticks_usec() - sim_began
 	for w: Dictionary in words:
 		w["age"] = float(w["age"]) + delta
 	words = words.filter(func(w: Dictionary) -> bool: return float(w["age"]) < float(w["life"]))
@@ -313,6 +335,8 @@ func _on_release(p: Vector2) -> void:
 ## For the cost meter: draws nothing of the HUD and hides the cards, to see what they cost.
 func set_hud_hidden(hidden: bool) -> void:
 	_hud_hidden = hidden
+	_chrome.visible = not hidden
+	_readouts.visible = not hidden
 	for card: CardView in hand_cards:
 		card.visible = not hidden
 
@@ -561,6 +585,7 @@ func _draw() -> void:
 	var began := Time.get_ticks_usec()
 	_draw_all()
 	_script_usec += Time.get_ticks_usec() - began
+	draw_usec += Time.get_ticks_usec() - began
 
 
 func _draw_all() -> void:
@@ -571,12 +596,6 @@ func _draw_all() -> void:
 	for r: Sim.Regiment in sim.regiments:
 		_draw_regiment_bars(r)
 	_draw_words()
-	_draw_top_bar()
-	_draw_hud()
-	if show_fps and _fps_text != "":
-		var at := Vector2(ox + 30.0, plaque.end.y + 18.0)
-		draw_string_outline(kit.font_bold, at, _fps_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, 4, Color(0, 0, 0, 0.8))
-		draw_string(kit.font_bold, at, _fps_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color("d8ff8a"))
 
 
 func _text(pos: Vector2, text: String, size: int, colour: Color, align: int = HORIZONTAL_ALIGNMENT_CENTER, width: float = 200.0, bold: bool = false) -> void:
@@ -682,68 +701,95 @@ func _draw_words() -> void:
 		_outlined(p, e["text"], int(23.0 * pop), Color(e["colour"], 1.0 - pow(t, 4.0)))
 
 
-func _draw_top_bar() -> void:
-	var enemy := 1 - local_side
-	kit.banner(self, banner, plaque)
+## The HUD's fixed furniture: the banner, the tray and their lettering. Drawn on its own node
+## and only when the layout changes, so the dozens of shapes that make up the wood and brass are
+## not rebuilt sixty times a second.
+func _draw_chrome() -> void:
+	var c: CanvasItem = _chrome
+	kit.banner(c, banner, plaque)
 	var base := banner.position.y + 27.0
-	_text(Vector2(banner.position.x + 32.0, base + 1.5), "ENEMY", 15, Color(0, 0, 0, 0.55), HORIZONTAL_ALIGNMENT_LEFT, 120.0, true)
-	_text(Vector2(banner.position.x + 32.0, base), "ENEMY", 15, Color("f29080"), HORIZONTAL_ALIGNMENT_LEFT, 120.0, true)
-	_text(Vector2(banner.end.x - 32.0, base + 1.5), "YOU", 15, Color(0, 0, 0, 0.55), HORIZONTAL_ALIGNMENT_RIGHT, 120.0, true)
-	_text(Vector2(banner.end.x - 32.0, base), "YOU", 15, Color("8ab8ff"), HORIZONTAL_ALIGNMENT_RIGHT, 120.0, true)
+	kit.text(c, Vector2(banner.position.x + 32.0, base + 1.5), "ENEMY", 15, Color(0, 0, 0, 0.55), HORIZONTAL_ALIGNMENT_LEFT, 120.0, true)
+	kit.text(c, Vector2(banner.position.x + 32.0, base), "ENEMY", 15, Color("f29080"), HORIZONTAL_ALIGNMENT_LEFT, 120.0, true)
+	kit.text(c, Vector2(banner.end.x - 32.0, base + 1.5), "YOU", 15, Color(0, 0, 0, 0.55), HORIZONTAL_ALIGNMENT_RIGHT, 120.0, true)
+	kit.text(c, Vector2(banner.end.x - 32.0, base), "YOU", 15, Color("8ab8ff"), HORIZONTAL_ALIGNMENT_RIGHT, 120.0, true)
+	kit.tray(c, tray)
+	var column := ox + 75.0                 # the centre line of NEXT and POWDER, left of the cards
+	kit.text(c, Vector2(column, hud_y + 24.0), "NEXT", 12, Color(0, 0, 0, 0.5), HORIZONTAL_ALIGNMENT_CENTER, 70.0, true)
+	kit.text(c, Vector2(column, hud_y + 23.0), "NEXT", 12, COL_CREAM, HORIZONTAL_ALIGNMENT_CENTER, 70.0, true)
+	kit.text(c, Vector2(column, _trough().position.y - 3.0), "POWDER", 11, COL_CREAM, HORIZONTAL_ALIGNMENT_CENTER, 70.0, true)
+
+
+func _trough() -> Rect2:
+	return Rect2(ox + CARD_X0 - 4.0, hud_y + 13.0 + card_size.y + 8.0, CARD_STEP * 3.0 + CARD_W + 8.0, POWDER_H)
+
+
+## Everything on the HUD that changes: the clock, the batteries taken, the next card, the Powder
+## and the notices. A stamp of all of it; the readouts are redrawn only when the stamp changes.
+func _readout_stamp() -> int:
+	var hand: Array = sim.hand(local_side)
+	var have: float = sim.powder[local_side]
+	var cheapest := 99.0
+	for i in hand.size():
+		cheapest = minf(cheapest, float(cards[hand[i]]["cost"]))
+	var ready := have + 0.0001 >= cheapest
+	return hash([int(ceil(sim.time_left())), sim.phase, sim.double_powder(), sim.redoubts_lost(0), sim.redoubts_lost(1),
+			sim.next_card(local_side), int(have * 24.0), ready, int(_clock * 8.0) if ready else 0, selected,
+			notice if notice_time > 0.0 else "", int(clampf(notice_time, 0.0, 1.0) * 12.0), _fps_text, show_fps])
+
+
+func _draw_readouts() -> void:
+	var c: CanvasItem = _readouts
+	var enemy := 1 - local_side
 	# Batteries taken: an inset slot for each, lit in the taker's colour.
 	for i in 2:
 		for mine in 2:
 			var x := banner.position.x + 96.0 + i * 20.0 if mine == 0 else banner.end.x - 112.0 - (1 - i) * 20.0
 			var slot := Rect2(x, banner.position.y + 13.0, 16.0, 16.0)
 			var lost := i < (sim.redoubts_lost(enemy) if mine == 0 else sim.redoubts_lost(local_side))
-			draw_rect(slot.grow(1.5), COL_BRASS_DARK)
-			draw_rect(slot, Color("1a110a"))
-			draw_rect(Rect2(slot.position, Vector2(slot.size.x, 3.0)), Color(0, 0, 0, 0.5))
+			c.draw_rect(slot.grow(1.5), COL_BRASS_DARK)
+			c.draw_rect(slot, Color("1a110a"))
+			c.draw_rect(Rect2(slot.position, Vector2(slot.size.x, 3.0)), Color(0, 0, 0, 0.5))
 			if lost:
-				draw_rect(slot.grow(-2.0), COL_BLUE.lightened(0.25) if mine == 0 else COL_RED.lightened(0.15))
-				draw_rect(Rect2(slot.position + Vector2(2, 2), Vector2(slot.size.x - 4.0, 3.0)), Color(1, 1, 1, 0.35))
+				c.draw_rect(slot.grow(-2.0), COL_BLUE.lightened(0.25) if mine == 0 else COL_RED.lightened(0.15))
+				c.draw_rect(Rect2(slot.position + Vector2(2, 2), Vector2(slot.size.x - 4.0, 3.0)), Color(1, 1, 1, 0.35))
 	var left := int(ceil(sim.time_left()))
 	var clock := "%d:%02d" % [left / 60, left % 60]
 	var clock_col := COL_CREAM
 	if sim.phase == Sim.PHASE_OVERTIME or (left <= 10 and sim.phase == Sim.PHASE_REGULAR):
 		clock_col = Color("ff9a3c")
 	var mid := plaque.get_center()
-	_text(mid + Vector2(0, 13.0), clock, 31, Color(0, 0, 0, 0.6), HORIZONTAL_ALIGNMENT_CENTER, 200.0, true)
-	_text(mid + Vector2(0, 11.0), clock, 31, clock_col, HORIZONTAL_ALIGNMENT_CENTER, 200.0, true)
+	kit.text(c, mid + Vector2(0, 13.0), clock, 31, Color(0, 0, 0, 0.6), HORIZONTAL_ALIGNMENT_CENTER, 200.0, true)
+	kit.text(c, mid + Vector2(0, 11.0), clock, 31, clock_col, HORIZONTAL_ALIGNMENT_CENTER, 200.0, true)
 	if sim.phase == Sim.PHASE_OVERTIME:
-		_outlined(Vector2(mid.x, plaque.end.y + 26.0), "OVERTIME", 16, Color("ff9a3c"))
+		kit.outlined(c, Vector2(mid.x, plaque.end.y + 26.0), "OVERTIME", 16, Color("ff9a3c"))
 	elif sim.double_powder() and sim.phase != Sim.PHASE_OVER:
-		_outlined(Vector2(mid.x, plaque.end.y + 26.0), "DOUBLE POWDER", 16, COL_AMBER)
+		kit.outlined(c, Vector2(mid.x, plaque.end.y + 26.0), "DOUBLE POWDER", 16, COL_AMBER)
 	if notice_time > 0.0:
 		var a := clampf(notice_time, 0.0, 1.0)
 		var centre := Vector2(screen.x * 0.5, (plaque.end.y + hud_y) * 0.5)
-		draw_style_box(_box("notice", Color(0.1, 0.06, 0.03, 0.82), 8.0, 2.0, COL_BRASS_MID), Rect2(centre.x - 210.0, centre.y - 20.0, 420.0, 40.0))
-		_text(centre + Vector2(0, 6), notice, 15, Color(COL_CREAM, a), HORIZONTAL_ALIGNMENT_CENTER, 400.0, true)
-
-
-func _draw_hud() -> void:
-	kit.tray(self, tray)
+		c.draw_style_box(_box("notice", Color(0.1, 0.06, 0.03, 0.82), 8.0, 2.0, COL_BRASS_MID), Rect2(centre.x - 210.0, centre.y - 20.0, 420.0, 40.0))
+		kit.text(c, centre + Vector2(0, 6), notice, 15, Color(COL_CREAM, a), HORIZONTAL_ALIGNMENT_CENTER, 400.0, true)
+	# The next card, small, at the left. (The four in hand are nodes of their own, card_view.gd.)
 	var hand: Array = sim.hand(local_side)
 	var have: float = sim.powder[local_side]
-	var column := ox + 75.0                 # the centre line of NEXT and POWDER, left of the cards
-	# The next card, small, at the left.
+	var column := ox + 75.0
 	var next_id := sim.next_card(local_side)
-	_text(Vector2(column, hud_y + 24.0), "NEXT", 12, Color(0, 0, 0, 0.5), HORIZONTAL_ALIGNMENT_CENTER, 70.0, true)
-	_text(Vector2(column, hud_y + 23.0), "NEXT", 12, COL_CREAM, HORIZONTAL_ALIGNMENT_CENTER, 70.0, true)
 	if next_id != "":
-		kit.mini_card(self, _next_rect(), _art(next_id), String(cards[next_id]["name"]))
-	# The four cards in hand are nodes of their own (card_view.gd) and draw themselves above this.
+		kit.mini_card(c, _next_rect(), _art(next_id), String(cards[next_id]["name"]))
 	var cheapest := 99.0
 	for i in hand.size():
 		cheapest = minf(cheapest, float(cards[hand[i]]["cost"]))
 	# Powder: the count at the left, and a trough of ten charges under the cards.
-	var trough := Rect2(ox + CARD_X0 - 4.0, hud_y + 13.0 + card_size.y + 8.0, CARD_STEP * 3.0 + CARD_W + 8.0, POWDER_H)
+	var trough := _trough()
 	var ready := have + 0.0001 >= cheapest
 	var spend := int(cards[hand[selected]]["cost"]) if selected >= 0 and selected < hand.size() else 0
-	kit.powder_bar(self, trough, have, int(Sim.POWDER_MAX), ready, 0.5 + 0.5 * sin(_clock * 4.0), spend)
-	_text(Vector2(column, trough.position.y - 3.0), "POWDER", 11, COL_CREAM, HORIZONTAL_ALIGNMENT_CENTER, 70.0, true)
-	_text(Vector2(column, trough.end.y + 0.5), "%d" % int(have), 24, Color(0, 0, 0, 0.6), HORIZONTAL_ALIGNMENT_CENTER, 70.0, true)
-	_text(Vector2(column, trough.end.y - 1.5), "%d" % int(have), 24, COL_AMBER if ready else COL_CREAM, HORIZONTAL_ALIGNMENT_CENTER, 70.0, true)
+	kit.powder_bar(c, trough, have, int(Sim.POWDER_MAX), ready, 0.5 + 0.5 * sin(_clock * 4.0), spend)
+	kit.text(c, Vector2(column, trough.end.y + 0.5), "%d" % int(have), 24, Color(0, 0, 0, 0.6), HORIZONTAL_ALIGNMENT_CENTER, 70.0, true)
+	kit.text(c, Vector2(column, trough.end.y - 1.5), "%d" % int(have), 24, COL_AMBER if ready else COL_CREAM, HORIZONTAL_ALIGNMENT_CENTER, 70.0, true)
+	if show_fps and _fps_text != "":
+		var at := Vector2(ox + 30.0, plaque.end.y + 18.0)
+		c.draw_string_outline(kit.font_bold, at, _fps_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, 4, Color(0, 0, 0, 0.8))
+		c.draw_string(kit.font_bold, at, _fps_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color("d8ff8a"))
 
 
 func _art(card_id: String) -> Texture2D:
